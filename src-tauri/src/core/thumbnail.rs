@@ -93,7 +93,7 @@ impl ThumbnailManager {
         Ok(format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&webp_data)))
     }
 
-    /// 加载图片（支持 JXL、AVIF 等特殊格式）
+    /// 加载图片（支持 JXL 等特殊格式）
     fn load_image_with_format_support(&self, image_path: &Path) -> Result<DynamicImage, String> {
         // 读取文件
         let image_data = fs::read(image_path)
@@ -106,12 +106,6 @@ impl ThumbnailManager {
             // JXL 格式处理
             if ext_lower == "jxl" {
                 return self.decode_jxl_image(&image_data);
-            }
-            
-            // AVIF 格式处理
-            if ext_lower == "avif" {
-                return image::load_from_memory_with_format(&image_data, ImageFormat::Avif)
-                    .map_err(|e| format!("加载 AVIF 图片失败: {}", e));
             }
         }
 

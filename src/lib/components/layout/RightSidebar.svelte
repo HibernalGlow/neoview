@@ -4,13 +4,22 @@
 	 * 右侧边栏组件 - 垂直图标风格，支持拖拽排序和自动隐藏
 	 */
 	import { Info, FileText, GripVertical } from '@lucide/svelte';
-	import { activeRightPanel, setActiveRightPanel } from '$lib/stores';
+	import { activeRightPanel, setActiveRightPanel, rightSidebarWidth } from '$lib/stores';
 	import type { RightPanelType } from '$lib/stores';
 	import ImagePropertiesPanel from '$lib/components/panels/ImagePropertiesPanel.svelte';
 	import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
 
+	interface Props {
+		onResize?: (width: number) => void;
+	}
+
+	let { onResize }: Props = $props();
+
 	let isVisible = $state(false); // 默认隐藏
 	let hideTimer: number | null = null;
+	let isResizing = $state(false);
+	let startX = 0;
+	let startWidth = 0;
 
 	let tabs = $state([
 		{ value: 'info', label: '信息', icon: Info },
@@ -66,9 +75,39 @@
 
 	// 鼠标离开侧边栏区域
 	function handleMouseLeave() {
-		hideTimer = setTimeout(() => {
-			isVisible = false;
-		}, 500) as unknown as number;
+		if (!isResizing) {
+			hideTimer = setTimeout(() => {
+				isVisible = false;
+			}, 500) as unknown as number;
+		}
+	}
+
+	// 拖拽调整宽度
+	function handleResizeStart(e: MouseEvent) {
+		isResizing = true;
+		startX = e.clientX;
+		startWidth = $rightSidebarWidth;
+		
+		document.addEventListener('mousemove', handleResizeMove);
+		document.addEventListener('mouseup', handleResizeEnd);
+		e.preventDefault();
+	}
+
+	function handleResizeMove(e: MouseEvent) {
+		if (!isResizing) return;
+		
+		const deltaX = startX - e.clientX; // 注意：右侧边栏方向相反
+		const newWidth = Math.max(200, Math.min(600, startWidth + deltaX));
+		
+		if (onResize) {
+			onResize(newWidth);
+		}
+	}
+
+	function handleResizeEnd() {
+		isResizing = false;
+		document.removeEventListener('mousemove', handleResizeMove);
+		document.removeEventListener('mouseup', handleResizeEnd);
 	}
 
 	// 从 localStorage 加载排序
@@ -104,6 +143,15 @@
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}
 >
+	<!-- 可拖拽的调整条（跟随侧边栏一起隐藏） -->
+	<div
+		class="absolute top-0 bottom-0 left-0 w-1 cursor-col-resize group {isResizing ? 'bg-primary' : 'hover:bg-primary/50 bg-border'} transition-colors"
+		onmousedown={handleResizeStart}
+		role="separator"
+		aria-label="调整侧边栏宽度"
+		tabindex="0"
+	></div>
+
 	<!-- 面板内容 -->
 	<div class="flex-1 overflow-hidden">
 		{#if $activeRightPanel === 'info'}

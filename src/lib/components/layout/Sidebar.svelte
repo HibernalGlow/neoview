@@ -4,15 +4,24 @@
 	 * 侧边栏组件 - 垂直图标风格，支持拖拽排序和自动隐藏
 	 */
 	import { Folder, History, Bookmark, Info, Image as ImageIcon, List, GripVertical } from '@lucide/svelte';
-	import { activePanel, setActivePanel } from '$lib/stores';
+	import { activePanel, setActivePanel, sidebarWidth } from '$lib/stores';
 	import type { PanelType } from '$lib/stores';
 	import FileBrowser from '$lib/components/panels/FileBrowser.svelte';
 	import HistoryPanel from '$lib/components/panels/HistoryPanel.svelte';
 	import BookmarkPanel from '$lib/components/panels/BookmarkPanel.svelte';
 	import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
 
+	interface Props {
+		onResize?: (width: number) => void;
+	}
+
+	let { onResize }: Props = $props();
+
 	let isVisible = $state(false); // 默认隐藏
 	let hideTimer: number | null = null;
+	let isResizing = $state(false);
+	let startX = 0;
+	let startWidth = 0;
 
 	let tabs = $state([
 		{ value: 'folder', label: '文件夹', icon: Folder },
@@ -72,9 +81,39 @@
 
 	// 鼠标离开侧边栏区域
 	function handleMouseLeave() {
-		hideTimer = setTimeout(() => {
-			isVisible = false;
-		}, 500) as unknown as number;
+		if (!isResizing) {
+			hideTimer = setTimeout(() => {
+				isVisible = false;
+			}, 500) as unknown as number;
+		}
+	}
+
+	// 拖拽调整宽度
+	function handleResizeStart(e: MouseEvent) {
+		isResizing = true;
+		startX = e.clientX;
+		startWidth = $sidebarWidth;
+		
+		document.addEventListener('mousemove', handleResizeMove);
+		document.addEventListener('mouseup', handleResizeEnd);
+		e.preventDefault();
+	}
+
+	function handleResizeMove(e: MouseEvent) {
+		if (!isResizing) return;
+		
+		const deltaX = e.clientX - startX;
+		const newWidth = Math.max(200, Math.min(600, startWidth + deltaX));
+		
+		if (onResize) {
+			onResize(newWidth);
+		}
+	}
+
+	function handleResizeEnd() {
+		isResizing = false;
+		document.removeEventListener('mousemove', handleResizeMove);
+		document.removeEventListener('mouseup', handleResizeEnd);
 	}
 
 	// 从 localStorage 加载排序
@@ -166,4 +205,13 @@
 			<InfoPanel />
 		{/if}
 	</div>
+
+	<!-- 可拖拽的调整条（跟随侧边栏一起隐藏） -->
+	<div
+		class="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize group {isResizing ? 'bg-primary' : 'hover:bg-primary/50 bg-border'} transition-colors"
+		onmousedown={handleResizeStart}
+		role="separator"
+		aria-label="调整侧边栏宽度"
+		tabindex="0"
+	></div>
 </div>

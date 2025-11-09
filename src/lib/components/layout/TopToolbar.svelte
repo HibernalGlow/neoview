@@ -1,8 +1,9 @@
 <script lang="ts">
 	/**
 	 * Top Toolbar Component
-	 * 顶部工具栏 - 自动隐藏，包含面包屑和图片操作按钮
+	 * 顶部工具栏 - 自动隐藏，包含标题栏、面包屑和图片操作按钮
 	 */
+	import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewWindow';
 	import { Button } from '$lib/components/ui/button';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { 
@@ -13,7 +14,9 @@
 		rotateClockwise,
 		rotationAngle,
 		viewMode,
-		toggleViewMode
+		toggleViewMode,
+		toggleSidebar,
+		toggleRightSidebar
 	} from '$lib/stores';
 	import PathBar from '../ui/PathBar.svelte';
 	import {
@@ -27,9 +30,16 @@
 		Maximize2,
 		X,
 		Folder,
-		FileArchive
+		FileArchive,
+		Menu,
+		Minimize,
+		Maximize,
+		Settings,
+		PanelRightOpen
 	} from '@lucide/svelte';
 
+	const appWindow = getCurrentWebviewWindow();
+	
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
 
@@ -85,6 +95,42 @@
 	function handleClose() {
 		bookStore.closeBook();
 	}
+
+	async function openSettings() {
+		try {
+			const existingWindow = await WebviewWindow.getByLabel('settings');
+			if (existingWindow) {
+				await existingWindow.setFocus();
+				return;
+			}
+		} catch (e) {}
+
+		try {
+			const settingsWindow = new WebviewWindow('settings', {
+				url: '/settings.html',
+				title: '设置',
+				width: 900,
+				height: 700,
+				center: true,
+				resizable: true,
+				decorations: false
+			});
+		} catch (error) {
+			console.error('Failed to create settings window:', error);
+		}
+	}
+
+	async function minimizeWindow() {
+		await appWindow.minimize();
+	}
+
+	async function maximizeWindow() {
+		await appWindow.toggleMaximize();
+	}
+
+	async function closeWindow() {
+		await appWindow.close();
+	}
 </script>
 
 <div
@@ -94,6 +140,44 @@
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}
 >
+	<!-- 标题栏（窗口控制） -->
+	<div
+		data-tauri-drag-region
+		class="h-8 bg-secondary/95 backdrop-blur-sm flex items-center justify-between px-2 select-none border-b"
+	>
+		<!-- 左侧：菜单和应用名 -->
+		<div class="flex items-center gap-1">
+			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={toggleSidebar}>
+				<Menu class="h-4 w-4" />
+			</Button>
+			<span class="text-sm font-semibold ml-2">NeoView</span>
+		</div>
+
+		<!-- 中间：功能按钮 -->
+		<div class="flex items-center gap-1">
+			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={toggleRightSidebar} title="右侧边栏">
+				<PanelRightOpen class="h-4 w-4" />
+			</Button>
+			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={openSettings} title="设置">
+				<Settings class="h-4 w-4" />
+			</Button>
+		</div>
+
+		<!-- 右侧：窗口控制按钮 -->
+		<div class="flex items-center gap-1">
+			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={minimizeWindow}>
+				<Minimize class="h-3 w-3" />
+			</Button>
+			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={maximizeWindow}>
+				<Maximize class="h-3 w-3" />
+			</Button>
+			<Button variant="ghost" size="icon" class="h-6 w-6 hover:bg-destructive" onclick={closeWindow}>
+				<X class="h-4 w-4" />
+			</Button>
+		</div>
+	</div>
+
+	<!-- 工具栏（图片操作） -->
 	<div class="bg-secondary/95 backdrop-blur-sm border-b shadow-lg">
 		<div class="px-4 py-2 flex items-center justify-between gap-4">
 			<!-- 左侧：关闭按钮 + 面包屑导航 -->

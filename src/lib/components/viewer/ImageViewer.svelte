@@ -68,7 +68,7 @@
 			imageData = data;
 
 			// 双页模式：加载下一页
-			if (viewMode === 'double' && bookStore.canNextPage) {
+			if ($viewMode === 'double' && bookStore.canNextPage) {
 				const nextPage = bookStore.currentPageIndex + 1;
 				const nextPageInfo = currentBook.pages[nextPage];
 				

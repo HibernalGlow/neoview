@@ -227,18 +227,20 @@
 			: 'translate-y-full'}"
 		onmouseenter={handleMouseEnter}
 		onmouseleave={handleMouseLeave}
+		role="toolbar"
+		aria-label="缩略图工具栏"
+		tabindex="-1"
 	>
 		<div class="bg-secondary/95 backdrop-blur-sm border-t shadow-lg overflow-hidden" style="height: {$bottomThumbnailBarHeight}px;">
 			<!-- 拖拽手柄 -->
-			<div
-				class="h-2 flex items-center justify-center cursor-ns-resize hover:bg-primary/20 transition-colors"
+			<button
+				type="button"
+				class="h-2 flex items-center justify-center cursor-ns-resize hover:bg-primary/20 transition-colors w-full"
 				onmousedown={handleResizeStart}
-				role="separator"
 				aria-label="拖拽调整缩略图栏高度"
-				tabindex="0"
 			>
 				<GripHorizontal class="h-3 w-3 text-muted-foreground" />
-			</div>
+			</button>
 
 			<!-- 控制按钮 -->
 			<div class="px-2 pb-1 flex justify-center gap-2">
@@ -278,7 +280,7 @@
 			</div>
 
 			<div class="px-2 pb-2 h-[calc(100%-theme(spacing.8))] overflow-hidden">
-				<div class="flex gap-2 overflow-x-auto h-full pb-1 items-center" onscroll={handleScroll}>
+				<div class="flex gap-2 overflow-x-auto h-full pb-1 items-center" onscroll={handleScroll} role="list" aria-label="页面缩略图列表">
 					{#each bookStore.currentBook.pages as page, index (page.path)}
 						<button
 							class="flex-shrink-0 rounded overflow-hidden border-2 {index ===

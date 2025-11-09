@@ -21,7 +21,7 @@
   let currentArchivePath = $state('');
   let selectedIndex = $state(-1);
   let fileListContainer = $state<HTMLDivElement | undefined>(undefined);
-  let contextMenu = $state<{ x: number; y: number; item: FsItem | null }>({ x: 0, y: 0, item: null });
+  let contextMenu = $state<{ x: number; y: number; item: FsItem | null; direction: 'up' | 'down' }>({ x: 0, y: 0, item: null, direction: 'down' });
   let copyToSubmenu = $state<{ show: boolean; x: number; y: number }>({ show: false, x: 0, y: 0 });
   let clipboardItem = $state<{ path: string; operation: 'copy' | 'cut' } | null>(null);
 
@@ -312,14 +312,35 @@
    */
   function showContextMenu(e: MouseEvent, item: FsItem) {
     e.preventDefault();
-    contextMenu = { x: e.clientX, y: e.clientY, item };
+    
+    // 获取视口高度
+    const viewportHeight = window.innerHeight;
+    const viewportMiddle = viewportHeight / 2;
+    
+    let menuY = e.clientY;
+    let menuDirection = 'down'; // 默认向下展开
+    
+    // 如果点击位置在视口中线以下，则向上翻转菜单
+    if (e.clientY > viewportMiddle) {
+      menuDirection = 'up';
+      // 向上翻转时，需要调整Y坐标，让菜单底部对齐点击位置
+      // 这里使用预估的菜单高度，实际渲染后可以进一步调整
+      menuY = e.clientY - 250; // 预估菜单高度约250px
+    }
+    
+    contextMenu = { 
+      x: e.clientX, 
+      y: menuY, 
+      item,
+      direction: menuDirection
+    };
   }
 
   /**
    * 隐藏右键菜单
    */
   function hideContextMenu() {
-    contextMenu = { x: 0, y: 0, item: null };
+    contextMenu = { x: 0, y: 0, item: null, direction: 'down' };
     copyToSubmenu.show = false;
   }
 
@@ -656,7 +677,14 @@
    */
   function showCopyToSubmenu(e: MouseEvent) {
     e.stopPropagation();
-    copyToSubmenu = { show: true, x: contextMenu.x + 150, y: contextMenu.y };
+    let submenuY = contextMenu.y;
+    
+    // 如果主菜单是向上展开的，子菜单也需要相应调整位置
+    if (contextMenu.direction === 'up') {
+      submenuY = contextMenu.y + 200; // 调整子菜单位置，使其与主菜单项对齐
+    }
+    
+    copyToSubmenu = { show: true, x: contextMenu.x + 150, y: submenuY };
   }
 
   /**
@@ -998,7 +1026,7 @@
   {#if contextMenu.item}
     <div
       class="context-menu fixed bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50 min-w-[180px]"
-      style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
+      style="left: {contextMenu.x}px; top: {contextMenu.y}px; transform-origin: {contextMenu.direction === 'up' ? 'bottom' : 'top'};"
       onmouseleave={hideContextMenu}
     >
       <!-- 添加到书签 -->

@@ -106,7 +106,9 @@
 			hideTimer = null;
 		}
 		isVisible = true;
-		onVisibilityChange(true);
+		if (onVisibilityChange) {
+			onVisibilityChange(true);
+		}
 	}
 
 	// 鼠标离开
@@ -114,7 +116,9 @@
 		if (!isResizing && !isPinned) {
 			hideTimer = setTimeout(() => {
 				isVisible = false;
-				onVisibilityChange(false);
+				if (onVisibilityChange) {
+					onVisibilityChange(false);
+				}
 			}, 500) as unknown as number;
 		}
 	}

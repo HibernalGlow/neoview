@@ -25,6 +25,10 @@
 	function handleTabChange(value: string) {
 		setActiveRightPanel(value as RightPanelType);
 	}
+
+	function handleVisibilityChange(visible: boolean) {
+		isVisible = visible;
+	}
 </script>
 
 <BaseSidebar
@@ -35,6 +39,7 @@
 	activeTabStore={activeRightPanel}
 	tabs={tabs}
 	onTabChange={handleTabChange}
+	onVisibilityChange={handleVisibilityChange}
 	{onResize}
 	storageKey="right-sidebar"
 >

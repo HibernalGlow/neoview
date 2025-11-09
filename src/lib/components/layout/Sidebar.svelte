@@ -31,6 +31,10 @@
 	function handleTabChange(value: string) {
 		setActivePanel(value as PanelType);
 	}
+
+	function handleVisibilityChange(visible: boolean) {
+		isVisible = visible;
+	}
 </script>
 
 <BaseSidebar
@@ -41,6 +45,7 @@
 	activeTabStore={activePanel}
 	tabs={tabs}
 	onTabChange={handleTabChange}
+	onVisibilityChange={handleVisibilityChange}
 	{onResize}
 	storageKey="sidebar"
 >

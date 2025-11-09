@@ -200,7 +200,7 @@ impl FsManager {
             let ext = ext.to_string_lossy().to_lowercase();
             matches!(
                 ext.as_str(),
-                "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "avif" | "tiff" | "tif"
+                "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "avif" | "jxl" | "tiff" | "tif"
             )
         } else {
             false

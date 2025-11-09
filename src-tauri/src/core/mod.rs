@@ -3,12 +3,14 @@
 
 pub mod book_manager;
 pub mod image_loader;
+pub mod image_cache;
 pub mod fs_manager;
 pub mod thumbnail;
 pub mod archive;
 
 pub use book_manager::BookManager;
 pub use image_loader::ImageLoader;
+// ImageCache 仅供内部使用
 pub use fs_manager::FsManager;
 pub use thumbnail::ThumbnailManager;
 pub use archive::ArchiveManager;

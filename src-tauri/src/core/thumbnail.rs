@@ -1,0 +1,186 @@
+use std::fs;
+use std::path::{Path, PathBuf};
+use image::{DynamicImage, ImageFormat};
+use std::io::Cursor;
+use base64::{Engine as _, engine::general_purpose};
+
+/// 缩略图管理器
+pub struct ThumbnailManager {
+    /// 缩略图缓存目录
+    cache_dir: PathBuf,
+    /// 缩略图尺寸
+    size: u32,
+}
+
+impl ThumbnailManager {
+    /// 创建新的缩略图管理器
+    pub fn new(cache_dir: PathBuf, size: u32) -> Result<Self, String> {
+        // 确保缓存目录存在
+        fs::create_dir_all(&cache_dir)
+            .map_err(|e| format!("创建缓存目录失败: {}", e))?;
+
+        Ok(Self {
+            cache_dir,
+            size,
+        })
+    }
+
+    /// 获取缩略图缓存路径
+    fn get_cache_path(&self, image_path: &Path) -> PathBuf {
+        // 使用原文件路径的哈希值作为缓存文件名
+        let hash = {
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+            let mut hasher = DefaultHasher::new();
+            image_path.to_string_lossy().hash(&mut hasher);
+            hasher.finish()
+        };
+
+        self.cache_dir.join(format!("{}.webp", hash))
+    }
+
+    /// 生成缩略图（返回 base64 编码）
+    pub fn generate_thumbnail(&self, image_path: &Path) -> Result<String, String> {
+        // 检查缓存
+        let cache_path = self.get_cache_path(image_path);
+        
+        if cache_path.exists() {
+            // 检查缓存是否过期（原文件是否更新）
+            if let (Ok(cache_meta), Ok(source_meta)) = (
+                fs::metadata(&cache_path),
+                fs::metadata(image_path)
+            ) {
+                if let (Ok(cache_time), Ok(source_time)) = (
+                    cache_meta.modified(),
+                    source_meta.modified()
+                ) {
+                    if cache_time >= source_time {
+                        // 缓存有效，直接读取
+                        return self.read_thumbnail_from_cache(&cache_path);
+                    }
+                }
+            }
+        }
+
+        // 生成新缩略图
+        self.generate_and_cache_thumbnail(image_path, &cache_path)
+    }
+
+    /// 从缓存读取缩略图
+    fn read_thumbnail_from_cache(&self, cache_path: &Path) -> Result<String, String> {
+        let data = fs::read(cache_path)
+            .map_err(|e| format!("读取缓存失败: {}", e))?;
+
+        Ok(format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&data)))
+    }
+
+    /// 生成并缓存缩略图
+    fn generate_and_cache_thumbnail(&self, image_path: &Path, cache_path: &Path) -> Result<String, String> {
+        // 加载图片
+        let img = image::open(image_path)
+            .map_err(|e| format!("打开图片失败: {}", e))?;
+
+        // 生成缩略图
+        let thumbnail = img.thumbnail(self.size, self.size);
+
+        // 编码为 WebP
+        let webp_data = self.encode_webp(&thumbnail)?;
+
+        // 保存到缓存
+        fs::write(cache_path, &webp_data)
+            .map_err(|e| format!("保存缓存失败: {}", e))?;
+
+        // 返回 base64
+        Ok(format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&webp_data)))
+    }
+
+    /// 编码为 WebP 格式
+    fn encode_webp(&self, img: &DynamicImage) -> Result<Vec<u8>, String> {
+        let mut buffer = Vec::new();
+        let mut cursor = Cursor::new(&mut buffer);
+
+        // 转换为 RGBA8
+        let rgba = img.to_rgba8();
+        let (width, height) = rgba.dimensions();
+
+        // 使用 PNG 格式作为临时方案（因为 image crate 不直接支持 WebP 编码）
+        // 实际项目中应该使用 webp crate
+        image::write_buffer_with_format(
+            &mut cursor,
+            rgba.as_raw(),
+            width,
+            height,
+            image::ColorType::Rgba8,
+            ImageFormat::Png,
+        ).map_err(|e| format!("编码图片失败: {}", e))?;
+
+        Ok(buffer)
+    }
+
+    /// 清除过期缓存（可选的后台任务）
+    pub fn cleanup_cache(&self, max_age_days: u64) -> Result<usize, String> {
+        use std::time::{SystemTime, Duration};
+
+        let max_age = Duration::from_secs(max_age_days * 24 * 60 * 60);
+        let now = SystemTime::now();
+        let mut removed_count = 0;
+
+        let entries = fs::read_dir(&self.cache_dir)
+            .map_err(|e| format!("读取缓存目录失败: {}", e))?;
+
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
+            let path = entry.path();
+
+            if let Ok(metadata) = fs::metadata(&path) {
+                if let Ok(modified) = metadata.modified() {
+                    if let Ok(age) = now.duration_since(modified) {
+                        if age > max_age {
+                            if fs::remove_file(&path).is_ok() {
+                                removed_count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(removed_count)
+    }
+
+    /// 获取缓存大小
+    pub fn get_cache_size(&self) -> Result<u64, String> {
+        let mut total_size = 0u64;
+
+        let entries = fs::read_dir(&self.cache_dir)
+            .map_err(|e| format!("读取缓存目录失败: {}", e))?;
+
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
+            if let Ok(metadata) = entry.metadata() {
+                total_size += metadata.len();
+            }
+        }
+
+        Ok(total_size)
+    }
+
+    /// 清空所有缓存
+    pub fn clear_all_cache(&self) -> Result<usize, String> {
+        let mut removed_count = 0;
+
+        let entries = fs::read_dir(&self.cache_dir)
+            .map_err(|e| format!("读取缓存目录失败: {}", e))?;
+
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
+            let path = entry.path();
+            
+            if fs::remove_file(&path).is_ok() {
+                removed_count += 1;
+            }
+        }
+
+        Ok(removed_count)
+    }
+}

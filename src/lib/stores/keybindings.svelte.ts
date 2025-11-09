@@ -334,14 +334,15 @@ class KeyBindingsStore {
 
 	// 格式化绑定为显示文本
 	formatBinding(binding: InputBinding): string {
+		if (!binding) return '';
 		switch (binding.type) {
 			case 'keyboard':
-				return (binding as KeyBinding).key;
+				return (binding as KeyBinding).key || '';
 			case 'mouse':
 				const mouse = binding as MouseGesture;
-				return `${mouse.button || 'left'} ${mouse.gesture}`;
+				return `${mouse.button || 'left'} ${mouse.gesture || ''}`;
 			case 'touch':
-				return (binding as TouchGesture).gesture;
+				return (binding as TouchGesture).gesture || '';
 			default:
 				return '';
 		}

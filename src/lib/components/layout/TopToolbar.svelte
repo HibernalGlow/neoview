@@ -39,7 +39,8 @@
 		Settings,
 		Pin,
 		PinOff,
-		GripHorizontal
+		GripHorizontal,
+		ExternalLink
 	} from '@lucide/svelte';
 
 	const appWindow = getCurrentWebviewWindow();
@@ -182,6 +183,12 @@
 	async function closeWindow() {
 		await appWindow.close();
 	}
+
+	function openStandaloneViewer() {
+		const url = `${window.location.origin}/standalone/viewer`;
+		const features = 'width=1200,height=800,resizable=yes,scrollbars=yes,status=yes,toolbar=no,menubar=no,location=no';
+		window.open(url, 'NeoView 独立查看器', features);
+	}
 </script>
 
 <div
@@ -223,6 +230,10 @@
 
 			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={openSettings} title="设置">
 				<Settings class="h-4 w-4" />
+			</Button>
+
+			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={openStandaloneViewer} title="在独立窗口中打开查看器">
+				<ExternalLink class="h-4 w-4" />
 			</Button>
 		</div>
 

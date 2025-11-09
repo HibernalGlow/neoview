@@ -3,7 +3,7 @@
 	 * NeoView - Base Sidebar Component
 	 * 可复用的侧边栏基础组件 - 支持自动隐藏、钉住、拖拽调整、Tab排序
 	 */
-	import { Pin, PinOff } from '@lucide/svelte';
+	import { Pin, PinOff, ExternalLink } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import type { Writable } from 'svelte/store';
 	import type { Snippet } from 'svelte';
@@ -29,6 +29,7 @@
 		onResize?: (width: number) => void;
 		onTabChange: (value: string) => void;
 		onVisibilityChange: (visible: boolean) => void;
+		onOpenInNewWindow?: (panel: string) => void;
 		
 		// 插槽内容
 		children: Snippet;
@@ -50,6 +51,7 @@
 		onResize,
 		onTabChange,
 		onVisibilityChange,
+		onOpenInNewWindow,
 		children,
 		minWidth = 200,
 		maxWidth = 600,
@@ -63,6 +65,9 @@
 	let startWidth = 0;
 	let draggedIndex = $state<number | null>(null);
 	let dragOverIndex = $state<number | null>(null);
+	let contextMenuVisible = $state(false);
+	let contextMenuPosition = $state({ x: 0, y: 0 });
+	let selectedTab = $state<Tab | null>(null);
 
 	const isPinned = $derived($pinnedStore);
 	const width = $derived($widthStore);
@@ -159,6 +164,47 @@
 		pinnedStore.update(p => !p);
 	}
 
+	// 在新窗口中打开
+	function openInNewWindow(panel: string) {
+		if (onOpenInNewWindow) {
+			onOpenInNewWindow(panel);
+		}
+	}
+
+	// 右键菜单处理
+	function handleContextMenu(e: MouseEvent, tab: Tab) {
+		e.preventDefault();
+		selectedTab = tab;
+		contextMenuPosition = { x: e.clientX, y: e.clientY };
+		contextMenuVisible = true;
+	}
+
+	// 关闭右键菜单
+	function closeContextMenu() {
+		contextMenuVisible = false;
+		selectedTab = null;
+	}
+
+	// 在新窗口中打开标签页
+	function openTabInNewWindow() {
+		if (selectedTab && onOpenInNewWindow) {
+			onOpenInNewWindow(`${position}-${selectedTab.value}`);
+		}
+		closeContextMenu();
+	}
+
+	// 全局点击事件监听
+	$effect(() => {
+		function handleClickOutside() {
+			closeContextMenu();
+		}
+		
+		if (contextMenuVisible) {
+			document.addEventListener('click', handleClickOutside);
+			return () => document.removeEventListener('click', handleClickOutside);
+		}
+	});
+
 	// Tab 拖拽排序
 	function handleDragStart(e: DragEvent, index: number) {
 		draggedIndex = index;
@@ -249,11 +295,28 @@
 	onmouseleave={handleMouseLeave}
 	role="complementary"
 >
-	{#if position === 'left'}
+	<!-- 右键菜单 -->
+{#if contextMenuVisible && selectedTab}
+	<div
+		class="fixed bg-popover border rounded-md shadow-lg py-1 z-50 min-w-[150px]"
+		style="left: {contextMenuPosition.x}px; top: {contextMenuPosition.y}px;"
+		onclick={(e) => e.stopPropagation()}
+	>
+		<button
+			class="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center gap-2"
+			onclick={openTabInNewWindow}
+		>
+			<ExternalLink class="h-4 w-4" />
+			在独立窗口中打开
+		</button>
+	</div>
+{/if}
+
+{#if position === 'left'}
 		<!-- 左侧布局：图标栏 | 内容 | 拖拽条 -->
 		<div class={iconBarClass}>
 			<!-- 钉住按钮 -->
-			<div class="p-1 border-b">
+			<div class="p-1 border-b space-y-1">
 				<Button
 					variant={isPinned ? 'default' : 'ghost'}
 					size="icon"
@@ -266,6 +329,15 @@
 					{:else}
 						<PinOff class="h-4 w-4" />
 					{/if}
+				</Button>
+				<Button
+					variant="ghost"
+					size="icon"
+					class="h-10 w-10"
+					onclick={() => openInNewWindow(position)}
+					title="在独立窗口中打开"
+				>
+					<ExternalLink class="h-4 w-4" />
 				</Button>
 			</div>
 
@@ -280,6 +352,7 @@
 					ondrop={handleDrop}
 					class="relative group h-14 flex items-center justify-center hover:bg-accent transition-colors cursor-move {activeTab === tab.value ? `bg-accent ${activeTabBorderClass}` : ''} {dragOverIndex === index && draggedIndex !== index ? 'border-t-2 border-blue-500' : ''}"
 					onclick={() => onTabChange(tab.value)}
+					oncontextmenu={(e) => handleContextMenu(e, tab)}
 					title={tab.label}
 				>
 					<div class="absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover:opacity-50 bg-muted-foreground transition-opacity"></div>
@@ -320,7 +393,7 @@
 
 		<div class={iconBarClass}>
 			<!-- 钉住按钮 -->
-			<div class="p-1 border-b">
+			<div class="p-1 border-b space-y-1">
 				<Button
 					variant={isPinned ? 'default' : 'ghost'}
 					size="icon"
@@ -333,6 +406,15 @@
 					{:else}
 						<PinOff class="h-4 w-4" />
 					{/if}
+				</Button>
+				<Button
+					variant="ghost"
+					size="icon"
+					class="h-10 w-10"
+					onclick={() => openInNewWindow(position)}
+					title="在独立窗口中打开"
+				>
+					<ExternalLink class="h-4 w-4" />
 				</Button>
 			</div>
 
@@ -347,6 +429,7 @@
 					ondrop={handleDrop}
 					class="relative group h-14 flex items-center justify-center hover:bg-accent transition-colors cursor-move {activeTab === tab.value ? `bg-accent ${activeTabBorderClass}` : ''} {dragOverIndex === index && draggedIndex !== index ? 'border-t-2 border-blue-500' : ''}"
 					onclick={() => onTabChange(tab.value)}
+					oncontextmenu={(e) => handleContextMenu(e, tab)}
 					title={tab.label}
 				>
 					<div class="absolute right-0 top-0 bottom-0 w-1 opacity-0 group-hover:opacity-50 bg-muted-foreground transition-opacity"></div>

@@ -8,7 +8,7 @@
 	import { loadImageFromArchive } from '$lib/api/filesystem';
 	import { bottomThumbnailBarPinned, bottomThumbnailBarHeight } from '$lib/stores';
 	import { Button } from '$lib/components/ui/button';
-	import { Image as ImageIcon, Pin, PinOff, GripHorizontal } from '@lucide/svelte';
+	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, ExternalLink } from '@lucide/svelte';
 
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
@@ -50,6 +50,12 @@
 
 	function togglePin() {
 		bottomThumbnailBarPinned.update(p => !p);
+	}
+
+	function openInNewWindow() {
+		const url = `${window.location.origin}/standalone/bottom-thumbnails`;
+		const features = 'width=1200,height=300,resizable=yes,scrollbars=yes,status=yes,toolbar=no,menubar=no,location=no';
+		window.open(url, '缩略图栏', features);
 	}
 
 	function handleResizeStart(e: MouseEvent) {
@@ -215,8 +221,8 @@
 				<GripHorizontal class="h-3 w-3 text-muted-foreground" />
 			</div>
 
-			<!-- 钉住按钮 -->
-			<div class="px-2 pb-1 flex justify-center">
+			<!-- 控制按钮 -->
+			<div class="px-2 pb-1 flex justify-center gap-2">
 				<Button
 					variant={$bottomThumbnailBarPinned ? 'default' : 'ghost'}
 					size="sm"
@@ -229,6 +235,16 @@
 						<PinOff class="h-3 w-3 mr-1" />
 					{/if}
 					<span class="text-xs">{$bottomThumbnailBarPinned ? '已钉住' : '钉住'}</span>
+				</Button>
+				<Button
+					variant="ghost"
+					size="sm"
+					class="h-6"
+					onclick={openInNewWindow}
+					title="在独立窗口中打开"
+				>
+					<ExternalLink class="h-3 w-3 mr-1" />
+					<span class="text-xs">独立窗口</span>
 				</Button>
 			</div>
 

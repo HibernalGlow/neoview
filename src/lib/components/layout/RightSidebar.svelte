@@ -170,23 +170,6 @@
 
 	<!-- 面板内容 -->
 	<div class="flex-1 overflow-hidden flex flex-col">
-		<!-- 钉住按钮 -->
-		<div class="p-2 border-b flex justify-center">
-			<Button
-				variant={$rightSidebarPinned ? 'default' : 'ghost'}
-				size="sm"
-				class="h-8"
-				onclick={togglePin}
-			>
-				{#if $rightSidebarPinned}
-					<Pin class="h-3 w-3 mr-1" />
-				{:else}
-					<PinOff class="h-3 w-3 mr-1" />
-				{/if}
-				<span class="text-xs">{$rightSidebarPinned ? '已钉住' : '钉住'}</span>
-			</Button>
-		</div>
-
 		<div class="flex-1 overflow-hidden">
 			{#if $activeRightPanel === 'info'}
 				<InfoPanel />
@@ -202,6 +185,22 @@
 
 	<!-- 垂直图标标签栏（右侧，可拖拽） -->
 	<div class="w-12 flex flex-col border-l bg-secondary/30">
+		<!-- 钉住按钮 -->
+		<div class="p-1 border-b">
+			<Button
+				variant={$rightSidebarPinned ? 'default' : 'ghost'}
+				size="icon"
+				class="h-10 w-10"
+				onclick={togglePin}
+				title={$rightSidebarPinned ? '松开右侧边栏（自动隐藏）' : '钉住右侧边栏（始终显示）'}
+			>
+				{#if $rightSidebarPinned}
+					<Pin class="h-4 w-4" />
+				{:else}
+					<PinOff class="h-4 w-4" />
+				{/if}
+			</Button>
+		</div>
 		{#each tabs as tab, index (tab.value)}
 			{@const IconComponent = tab.icon}
 			<button

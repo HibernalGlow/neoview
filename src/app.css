@@ -108,4 +108,19 @@
 	body {
 		@apply bg-background text-foreground;
 	}
+	
+	/* 隐藏所有滚动条 */
+	* {
+		scrollbar-width: none; /* Firefox */
+		-ms-overflow-style: none; /* IE and Edge */
+	}
+	
+	*::-webkit-scrollbar {
+		display: none; /* Chrome, Safari, Opera */
+	}
+	
+	/* 确保主窗口不显示滚动条 */
+	html, body {
+		overflow: hidden;
+	}
 }

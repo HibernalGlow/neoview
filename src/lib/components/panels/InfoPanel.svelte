@@ -162,9 +162,23 @@
 					</div>
 				</div>
 			{:else}
-				<div class="text-center py-8 text-muted-foreground">
-					<Info class="h-12 w-12 mx-auto mb-2 opacity-50" />
-					<p>暂无图像信息</p>
+				<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
+					<div class="relative mb-4">
+						<Info class="h-16 w-16 opacity-30" />
+						<div class="absolute inset-0 flex items-center justify-center">
+							<div class="h-2 w-2 bg-muted-foreground rounded-full animate-pulse"></div>
+						</div>
+					</div>
+					<div class="text-center space-y-2">
+						<p class="text-lg font-medium">暂无图像信息</p>
+						<p class="text-sm opacity-70">打开图像文件后查看详细信息</p>
+						<div class="mt-4 p-3 bg-muted/50 rounded-lg text-xs space-y-1">
+							<p class="font-medium text-foreground">支持格式：</p>
+							<p>• 图像：JPG, PNG, GIF, WebP, AVIF</p>
+							<p>• 文档：PDF, CBZ, CBR</p>
+							<p>• 视频：MP4, WebM (缩略图)</p>
+						</div>
+					</div>
 				</div>
 			{/if}
 		</div>

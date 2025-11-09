@@ -106,9 +106,23 @@
 	<div class="flex-1 overflow-auto">
 		<div class="p-2 space-y-2">
 			{#if history.length === 0}
-				<div class="text-center py-8 text-muted-foreground">
-					<Clock class="h-12 w-12 mx-auto mb-2 opacity-50" />
-					<p>暂无历史记录</p>
+				<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
+					<div class="relative mb-4">
+						<Clock class="h-16 w-16 opacity-30" />
+						<div class="absolute inset-0 flex items-center justify-center">
+							<div class="h-2 w-2 bg-muted-foreground rounded-full animate-pulse"></div>
+						</div>
+					</div>
+					<div class="text-center space-y-2">
+						<p class="text-lg font-medium">暂无历史记录</p>
+						<p class="text-sm opacity-70">浏览过的文件将在这里显示</p>
+						<div class="mt-4 p-3 bg-muted/50 rounded-lg text-xs space-y-1">
+							<p class="font-medium text-foreground">提示：</p>
+							<p>• 自动记录浏览过的文件和页码</p>
+							<p>• 支持快速跳转到上次阅读位置</p>
+							<p>• 按时间排序，最近访问的在前</p>
+						</div>
+					</div>
 				</div>
 			{:else}
 				{#each history as entry, index (entry.path + entry.timestamp)}

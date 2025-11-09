@@ -124,9 +124,33 @@
 	<div class="flex-1 overflow-auto">
 		<div class="p-2 space-y-2">
 			{#if filteredBookmarks.length === 0}
-				<div class="text-center py-8 text-muted-foreground">
-					<Bookmark class="h-12 w-12 mx-auto mb-2 opacity-50" />
-					<p>{searchQuery ? '未找到匹配的书签' : '暂无书签'}</p>
+				<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
+					<div class="relative mb-4">
+						<Bookmark class="h-16 w-16 opacity-30" />
+						{#if !searchQuery}
+							<div class="absolute -top-1 -right-1">
+								<Star class="h-4 w-4 text-yellow-400 fill-yellow-400 animate-pulse" />
+							</div>
+						{/if}
+					</div>
+					<div class="text-center space-y-2">
+						<p class="text-lg font-medium">
+							{searchQuery ? '未找到匹配的书签' : '暂无书签'}
+						</p>
+						<p class="text-sm opacity-70">
+							{searchQuery 
+								? `尝试其他关键词：${searchQuery}` 
+								: '标记重要页面，方便快速访问'}
+						</p>
+						{#if !searchQuery}
+							<div class="mt-4 p-3 bg-muted/50 rounded-lg text-xs space-y-1">
+								<p class="font-medium text-foreground">提示：</p>
+								<p>• 按 Ctrl+D 快速添加当前页到书签</p>
+								<p>• 为书签添加星标，置顶重要内容</p>
+								<p>• 使用搜索功能快速定位书签</p>
+							</div>
+						{/if}
+					</div>
 				</div>
 			{:else}
 				{#each filteredBookmarks as bookmark (bookmark.id)}

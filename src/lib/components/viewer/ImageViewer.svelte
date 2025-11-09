@@ -13,12 +13,16 @@
 	import { loadImage } from '$lib/api/fs';
 	import { loadImageFromArchive } from '$lib/api/filesystem';
 	import { FileSystemAPI } from '$lib/api';
+	import { decodeImage, createThumbnail, isFormatSupported } from '$lib/decoders';
+	import { decoderSettings } from '$lib/stores/decoder.svelte';
 
 
 	let imageData = $state<string | null>(null);
 	let imageData2 = $state<string | null>(null); // 双页模式的第二张图
 	let loading = $state(false);
 	let error = $state<string | null>(null);
+	let decodeProgress = $state<number>(0);
+	let useFrontendDecode = $state(decoderSettings.useFrontendDecode); // 是否使用前端解码
 
 	// 监听当前页面变化
 	$effect(() => {
@@ -39,18 +43,33 @@
 		error = null;
 		imageData = null;
 		imageData2 = null;
+		decodeProgress = 0;
 
 		try {
 			// 加载当前页
-			let data: string;
+			let rawData: ArrayBuffer;
 			if (currentBook.type === 'archive') {
 				console.log('Loading image from archive:', currentPage.path);
-				data = await loadImageFromArchive(currentBook.path, currentPage.path);
+				rawData = await loadImageFromArchive(currentBook.path, currentPage.path);
 			} else {
 				console.log('Loading image from file system:', currentPage.path);
-				data = await loadImage(currentPage.path);
+				rawData = await loadImage(currentBook.path);
 			}
-			imageData = data;
+
+			// 检查文件扩展名，决定是否使用前端解码
+			const extension = currentPage.path.split('.').pop()?.toLowerCase() || '';
+			const needsFrontendDecode = ['avif', 'heif', 'heic', 'webp', 'jxl'].includes(extension);
+
+			if (useFrontendDecode && needsFrontendDecode) {
+				// 使用前端解码
+				console.log('Decoding image with frontend decoder:', extension);
+				imageData = await decodeImage(rawData, { format: extension });
+			} else {
+				// 使用后端解码（转换为 base64）
+				const base64 = btoa(String.fromCharCode(...new Uint8Array(rawData)));
+				const mimeType = getMimeType(extension);
+				imageData = `data:${mimeType};base64,${base64}`;
+			}
 
 			// 双页模式：加载下一页
 			if (viewMode === 'double' && bookStore.canNextPage) {
@@ -58,13 +77,23 @@
 				const nextPageInfo = currentBook.pages[nextPage];
 				
 				if (nextPageInfo) {
-					let data2: string;
+					let rawData2: ArrayBuffer;
 					if (currentBook.type === 'archive') {
-						data2 = await loadImageFromArchive(currentBook.path, nextPageInfo.path);
+						rawData2 = await loadImageFromArchive(currentBook.path, nextPageInfo.path);
 					} else {
-						data2 = await loadImage(nextPageInfo.path);
+						rawData2 = await loadImage(nextPageInfo.path);
 					}
-					imageData2 = data2;
+
+					const extension2 = nextPageInfo.path.split('.').pop()?.toLowerCase() || '';
+					const needsFrontendDecode2 = ['avif', 'heif', 'heic', 'webp', 'jxl'].includes(extension2);
+
+					if (useFrontendDecode && needsFrontendDecode2) {
+						imageData2 = await decodeImage(rawData2, { format: extension2 });
+					} else {
+						const base64 = btoa(String.fromCharCode(...new Uint8Array(rawData2)));
+						const mimeType = getMimeType(extension2);
+						imageData2 = `data:${mimeType};base64,${base64}`;
+					}
 				}
 			}
 		} catch (err) {
@@ -72,7 +101,26 @@
 			console.error('Failed to load image:', err);
 		} finally {
 			loading = false;
+			decodeProgress = 0;
 		}
+	}
+
+	// 获取 MIME 类型
+	function getMimeType(extension: string): string {
+		const mimeMap: Record<string, string> = {
+			'avif': 'image/avif',
+			'heif': 'image/heif',
+			'heic': 'image/heic',
+			'webp': 'image/webp',
+			'jxl': 'image/jxl',
+			'jpg': 'image/jpeg',
+			'jpeg': 'image/jpeg',
+			'png': 'image/png',
+			'gif': 'image/gif',
+			'bmp': 'image/bmp',
+			'svg': 'image/svg+xml'
+		};
+		return mimeMap[extension.toLowerCase()] || 'image/jpeg';
 	}
 
 	async function handleNextPage() {
@@ -154,7 +202,16 @@
 	<!-- 图像显示区域 -->
 	<div class="image-container flex-1 flex items-center justify-center overflow-auto" data-viewer="true">
 		{#if loading}
-			<div class="text-white">Loading...</div>
+			<div class="text-white">
+				{#if decodeProgress > 0}
+					<div class="mb-2">Decoding: {Math.round(decodeProgress)}%</div>
+					<div class="w-64 bg-gray-700 rounded-full h-2">
+						<div class="bg-blue-500 h-2 rounded-full transition-all" style="width: {decodeProgress}%"></div>
+					</div>
+				{:else}
+					Loading...
+				{/if}
+			</div>
 		{:else if error}
 			<div class="text-red-500">Error: {error}</div>
 		{:else if imageData}

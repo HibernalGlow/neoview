@@ -135,8 +135,16 @@ export async function listArchiveContents(archivePath: string): Promise<FsItem[]
 export async function loadImageFromArchive(
   archivePath: string,
   filePath: string
-): Promise<string> {
-  return await invoke<string>('load_image_from_archive', { archivePath, filePath });
+): Promise<ArrayBuffer> {
+  const base64 = await invoke<string>('load_image_from_archive', { archivePath, filePath });
+  // 移除 data URL 前缀
+  const base64Data = base64.replace(/^data:[^;]+;base64,/, '');
+  const binaryString = atob(base64Data);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
 }
 
 /**

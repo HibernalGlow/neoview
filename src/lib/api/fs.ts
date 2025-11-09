@@ -5,8 +5,16 @@
 
 import { invoke } from '@tauri-apps/api/core';
 
-export async function loadImage(path: string): Promise<string> {
-	return await invoke<string>('load_image', { path });
+export async function loadImage(path: string): Promise<ArrayBuffer> {
+	const base64 = await invoke<string>('load_image', { path });
+	// 移除 data URL 前缀
+	const base64Data = base64.replace(/^data:[^;]+;base64,/, '');
+	const binaryString = atob(base64Data);
+	const bytes = new Uint8Array(binaryString.length);
+	for (let i = 0; i < binaryString.length; i++) {
+		bytes[i] = binaryString.charCodeAt(i);
+	}
+	return bytes.buffer;
 }
 
 export async function getImageDimensions(path: string): Promise<[number, number]> {

@@ -68,6 +68,30 @@ class BookStore {
   // === Actions ===
 
   /**
+   * 打开 Book (自动检测类型)
+   */
+  async openBook(path: string) {
+    try {
+      console.log('📖 Opening book:', path);
+      this.state.loading = true;
+      this.state.error = '';
+
+      // 使用通用的 openBook API (它会自动检测类型)
+      const book = await bookApi.openBook(path);
+      console.log('✅ Book opened:', book.name, 'with', book.totalPages, 'pages');
+
+      this.state.currentBook = book;
+      this.state.viewerOpen = true;
+    } catch (err) {
+      console.error('❌ Error opening book:', err);
+      this.state.error = String(err);
+      this.state.currentBook = null;
+    } finally {
+      this.state.loading = false;
+    }
+  }
+
+  /**
    * 打开文件夹作为 Book
    */
   async openDirectoryAsBook(path: string) {

@@ -8,7 +8,7 @@
 	import { loadImageFromArchive } from '$lib/api/filesystem';
 	import { bottomThumbnailBarPinned, bottomThumbnailBarHeight } from '$lib/stores';
 	import { Button } from '$lib/components/ui/button';
-	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, ExternalLink } from '@lucide/svelte';
+	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, ExternalLink, Minus } from '@lucide/svelte';
 
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
@@ -16,6 +16,7 @@
 	let isResizing = $state(false);
 	let resizeStartY = 0;
 	let resizeStartHeight = 0;
+	let showProgressBar = $state(false);
 
 	// 响应钉住状态
 	$effect(() => {
@@ -50,6 +51,10 @@
 
 	function togglePin() {
 		bottomThumbnailBarPinned.update(p => !p);
+	}
+
+	function toggleProgressBar() {
+		showProgressBar = !showProgressBar;
 	}
 
 	function openInNewWindow() {
@@ -249,6 +254,16 @@
 					<ExternalLink class="h-3 w-3 mr-1" />
 					<span class="text-xs">独立窗口</span>
 				</Button>
+				<Button
+					variant={showProgressBar ? 'default' : 'ghost'}
+					size="sm"
+					class="h-6"
+					onclick={toggleProgressBar}
+					title="显示阅读进度条"
+				>
+					<Minus class="h-3 w-3 mr-1" />
+					<span class="text-xs">进度条</span>
+				</Button>
 			</div>
 
 			<div class="px-2 pb-2 h-[calc(100%-theme(spacing.8))] overflow-hidden">
@@ -291,5 +306,14 @@
 				</div>
 			</div>
 		</div>
-	</div>
+	
+	<!-- 阅读进度条 -->
+	{#if showProgressBar && bookStore.currentBook}
+		<div class="fixed bottom-0 left-0 right-0 h-1 z-[49] pointer-events-none">
+			<div class="h-full bg-primary transition-all duration-300" 
+					 style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%;">
+			</div>
+		</div>
+	{/if}
+</div>
 {/if}

@@ -3,12 +3,13 @@
 	 * NeoView - Main Layout Component
 	 * 主布局组件
 	 */
-	import { sidebarOpen, sidebarWidth } from '$lib/stores';
+	import { sidebarOpen, sidebarWidth, rightSidebarOpen, rightSidebarWidth } from '$lib/stores';
 	import { sidebars, setPanelSidebarSize, leftPanels, rightPanels, bottomPanels, activePanel } from '$lib/stores/panels.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import TitleBar from './TitleBar.svelte';
 	import StatusBar from './StatusBar.svelte';
 	import Sidebar from './Sidebar.svelte';
+	import RightSidebar from './RightSidebar.svelte';
 	import ResizablePanel from '../ui/ResizablePanel.svelte';
 	import ImageViewer from '../viewer/ImageViewer.svelte';
 
@@ -16,6 +17,10 @@
 
 	function handleSidebarResize(width: number) {
 		sidebarWidth.set(width);
+	}
+
+	function handleRightSidebarResize(width: number) {
+		rightSidebarWidth.set(width);
 	}
 </script>
 
@@ -48,6 +53,19 @@
 				{@render children?.()}
 			{/if}
 		</div>
+
+		<!-- 右侧边栏 -->
+		{#if $rightSidebarOpen}
+			<ResizablePanel
+				minWidth={200}
+				maxWidth={600}
+				defaultWidth={$rightSidebarWidth}
+				side="right"
+				onResize={handleRightSidebarResize}
+			>
+				<RightSidebar />
+			</ResizablePanel>
+		{/if}
 	</div>
 
 	<!-- 状态栏 -->

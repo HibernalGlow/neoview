@@ -12,16 +12,18 @@
   "app": {
     "windows": [
       {
-        "title": "tauri2-svelte5-shadcn",
-        "width": 800,
-        "height": 600,
+        "title": "NeoView",
+        "width": 1200,
+        "height": 800,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "decorations": false
       }
     ],
     "security": {
       "csp": null
-    }
+    },
+    "withGlobalTauri": true
   },
   "bundle": {
     "active": true,

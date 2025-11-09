@@ -9,6 +9,12 @@ import { writable } from 'svelte/store';
 export const sidebarOpen = writable<boolean>(true);
 export const sidebarWidth = writable<number>(250);
 
+// 右侧边栏状态
+export const rightSidebarOpen = writable<boolean>(false);
+export const rightSidebarWidth = writable<number>(250);
+export type RightPanelType = 'info' | 'properties' | null;
+export const activeRightPanel = writable<RightPanelType>(null);
+
 // 全屏状态
 export const isFullscreen = writable<boolean>(false);
 
@@ -31,6 +37,23 @@ export const zoomLevel = writable<number>(1.0);
  */
 export function toggleSidebar() {
 	sidebarOpen.update((open) => !open);
+}
+
+/**
+ * 切换右侧边栏
+ */
+export function toggleRightSidebar() {
+	rightSidebarOpen.update((open) => !open);
+}
+
+/**
+ * 设置右侧激活面板
+ */
+export function setActiveRightPanel(panel: RightPanelType) {
+	activeRightPanel.set(panel);
+	if (panel) {
+		rightSidebarOpen.set(true);
+	}
 }
 
 /**

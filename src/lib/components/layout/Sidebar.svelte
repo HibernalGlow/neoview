@@ -1,36 +1,95 @@
 <script lang="ts">
 	/**
 	 * NeoView - Sidebar Component
-	 * 侧边栏组件 - 垂直图标风格
+	 * 侧边栏组件 - 垂直图标风格，支持拖拽排序
 	 */
-	import { Folder, History, Bookmark, Info, Image as ImageIcon, List } from '@lucide/svelte';
+	import { Folder, History, Bookmark, Info, Image as ImageIcon, List, GripVertical } from '@lucide/svelte';
 	import { activePanel, setActivePanel } from '$lib/stores';
 	import type { PanelType } from '$lib/stores';
 	import FileBrowser from '$lib/components/panels/FileBrowser.svelte';
 
-	const tabs = [
+	let tabs = $state([
 		{ value: 'folder', label: '文件夹', icon: Folder },
 		{ value: 'history', label: '历史记录', icon: History },
 		{ value: 'bookmark', label: '书签', icon: Bookmark },
 		{ value: 'thumbnail', label: '缩略图', icon: ImageIcon },
 		{ value: 'playlist', label: '播放列表', icon: List },
 		{ value: 'info', label: '信息', icon: Info }
-	] as const;
+	]);
+
+	let draggedIndex = $state<number | null>(null);
+	let dragOverIndex = $state<number | null>(null);
+
+	function handleDragStart(index: number) {
+		draggedIndex = index;
+	}
+
+	function handleDragOver(e: DragEvent, index: number) {
+		e.preventDefault();
+		dragOverIndex = index;
+	}
+
+	function handleDragEnd() {
+		if (draggedIndex !== null && dragOverIndex !== null && draggedIndex !== dragOverIndex) {
+			const newTabs = [...tabs];
+			const [draggedItem] = newTabs.splice(draggedIndex, 1);
+			newTabs.splice(dragOverIndex, 0, draggedItem);
+			tabs = newTabs;
+			
+			// 保存到 localStorage
+			localStorage.setItem('sidebar-tabs-order', JSON.stringify(tabs.map(t => t.value)));
+		}
+		draggedIndex = null;
+		dragOverIndex = null;
+	}
+
+	function handleDrop(e: DragEvent) {
+		e.preventDefault();
+		handleDragEnd();
+	}
+
+	// 从 localStorage 加载排序
+	$effect(() => {
+		const savedOrder = localStorage.getItem('sidebar-tabs-order');
+		if (savedOrder) {
+			try {
+				const order = JSON.parse(savedOrder) as string[];
+				const orderedTabs = order
+					.map(value => tabs.find(t => t.value === value))
+					.filter(Boolean) as typeof tabs;
+				if (orderedTabs.length === tabs.length) {
+					tabs = orderedTabs;
+				}
+			} catch (e) {
+				console.error('Failed to load sidebar order:', e);
+			}
+		}
+	});
 </script>
 
 <div class="h-full flex bg-background">
-	<!-- 垂直图标标签栏 -->
+	<!-- 垂直图标标签栏（可拖拽） -->
 	<div class="w-12 flex flex-col border-r bg-secondary/30">
-		{#each tabs as tab}
+		{#each tabs as tab, index (tab.value)}
 			{@const IconComponent = tab.icon}
 			<button
-				class="relative group h-14 flex items-center justify-center hover:bg-accent transition-colors {$activePanel ===
+				draggable={true}
+				ondragstart={() => handleDragStart(index)}
+				ondragover={(e) => handleDragOver(e, index)}
+				ondragend={handleDragEnd}
+				ondrop={handleDrop}
+				class="relative group h-14 flex items-center justify-center hover:bg-accent transition-colors cursor-move {$activePanel ===
 				tab.value
 					? 'bg-accent border-l-2 border-primary'
+					: ''} {dragOverIndex === index && draggedIndex !== index
+					? 'border-t-2 border-blue-500'
 					: ''}"
 				onclick={() => setActivePanel(tab.value as PanelType)}
 				title={tab.label}
 			>
+				<!-- 拖拽手柄 -->
+				<div class="absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover:opacity-50 bg-muted-foreground transition-opacity"></div>
+				
 				<IconComponent class="h-5 w-5" />
 				
 				<!-- 悬停提示 -->

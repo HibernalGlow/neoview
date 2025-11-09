@@ -263,6 +263,7 @@ class KeyBindingsStore {
 	// 根据键盘按键查找操作
 	findActionByKey(key: string): string | null {
 		for (const binding of this.bindings) {
+			if (!binding.bindings) continue;
 			const keyBinding = binding.bindings.find(
 				b => b.type === 'keyboard' && (b as KeyBinding).key === key
 			);
@@ -276,6 +277,7 @@ class KeyBindingsStore {
 	// 根据鼠标手势查找操作
 	findActionByMouseGesture(gesture: string, button: 'left' | 'right' | 'middle' = 'left'): string | null {
 		for (const binding of this.bindings) {
+			if (!binding.bindings) continue;
 			const mouseBinding = binding.bindings.find(
 				b => b.type === 'mouse' && 
 					(b as MouseGesture).gesture === gesture &&
@@ -291,6 +293,7 @@ class KeyBindingsStore {
 	// 根据触摸手势查找操作
 	findActionByTouchGesture(gesture: string): string | null {
 		for (const binding of this.bindings) {
+			if (!binding.bindings) continue;
 			const touchBinding = binding.bindings.find(
 				b => b.type === 'touch' && (b as TouchGesture).gesture === gesture
 			);

@@ -8,11 +8,13 @@
 	import { Label } from '$lib/components/ui/label';
 	import { keyBindingsStore, type InputBinding, type KeyBinding, type MouseGesture, type TouchGesture } from '$lib/stores/keybindings.svelte';
 	import { Keyboard, Mouse, Hand, Plus, Trash2, Search, RotateCcw } from '@lucide/svelte';
+	import GestureVisualizer from './GestureVisualizer.svelte';
 
 	let searchQuery = $state('');
 	let editingAction = $state<string | null>(null);
 	let editingType = $state<'keyboard' | 'mouse' | 'touch' | null>(null);
 	let capturedInput = $state('');
+	let showGestureVisualizer = $state(false);
 
 	// 过滤操作
 	const filteredActions = $derived(
@@ -34,6 +36,10 @@
 		editingAction = action;
 		editingType = type;
 		capturedInput = '';
+		
+		if (type === 'mouse' || type === 'touch') {
+			showGestureVisualizer = true;
+		}
 	}
 
 	// 取消编辑
@@ -41,6 +47,7 @@
 		editingAction = null;
 		editingType = null;
 		capturedInput = '';
+		showGestureVisualizer = false;
 	}
 
 	// 键盘按键捕获
@@ -86,6 +93,19 @@
 			keyBindingsStore.addBinding(editingAction, binding);
 			cancelEditing();
 		}
+	}
+
+	// 处理手势完成
+	function handleGestureComplete(gesture: string) {
+		capturedInput = gesture;
+		showGestureVisualizer = false;
+		saveBinding();
+	}
+
+	// 处理手势取消
+	function handleGestureCancel() {
+		showGestureVisualizer = false;
+		cancelEditing();
 	}
 
 	// 删除绑定
@@ -275,47 +295,24 @@
 	</div>
 
 	<!-- 编辑对话框 -->
-	{#if editingAction && editingType}
+	{#if editingAction && editingType && editingType === 'keyboard'}
 		<div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
 			<div class="bg-background border rounded-lg p-6 max-w-md w-full mx-4 space-y-4">
 				<div class="space-y-2">
 					<h4 class="font-semibold flex items-center gap-2">
-						{#if editingType === 'keyboard'}
-							<Keyboard class="h-4 w-4 text-blue-500" />
-							添加键盘按键
-						{:else if editingType === 'mouse'}
-							<Mouse class="h-4 w-4 text-green-500" />
-							添加鼠标手势
-						{:else}
-							<Hand class="h-4 w-4 text-purple-500" />
-							添加触摸手势
-						{/if}
+						<Keyboard class="h-4 w-4 text-blue-500" />
+						添加键盘按键
 					</h4>
 					<p class="text-sm text-muted-foreground">
-						{#if editingType === 'keyboard'}
-							按下任意键或组合键
-						{:else if editingType === 'mouse'}
-							输入手势代码（例如：L=左，R=右，U=上，D=下）
-						{:else}
-							输入触摸手势（例如：swipe-left, pinch-in）
-						{/if}
+						按下任意键或组合键
 					</p>
 				</div>
 
-				{#if editingType === 'keyboard'}
-					<div class="p-4 border rounded-lg bg-muted/50 text-center">
-						<div class="text-lg font-mono font-semibold">
-							{capturedInput || '等待按键...'}
-						</div>
+				<div class="p-4 border rounded-lg bg-muted/50 text-center">
+					<div class="text-lg font-mono font-semibold">
+						{capturedInput || '等待按键...'}
 					</div>
-				{:else}
-					<Input
-						type="text"
-						placeholder="输入手势代码"
-						bind:value={capturedInput}
-						class="font-mono"
-					/>
-				{/if}
+				</div>
 
 				<div class="flex justify-end gap-2">
 					<Button variant="outline" onclick={cancelEditing}>取消</Button>
@@ -323,5 +320,14 @@
 				</div>
 			</div>
 		</div>
+	{/if}
+
+	<!-- 手势可视化器 -->
+	{#if showGestureVisualizer && editingAction && (editingType === 'mouse' || editingType === 'touch')}
+		<GestureVisualizer
+			type={editingType}
+			onGestureComplete={handleGestureComplete}
+			onCancel={handleGestureCancel}
+		/>
 	{/if}
 </div>

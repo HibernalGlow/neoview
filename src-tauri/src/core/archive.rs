@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::{Read, Cursor};
 use std::path::Path;
+use std::sync::Arc;
 use zip::ZipArchive;
 use serde::{Deserialize, Serialize};
 use base64::{Engine as _, engine::general_purpose};
@@ -19,6 +20,8 @@ pub struct ArchiveEntry {
 pub struct ArchiveManager {
     /// 支持的图片格式
     image_extensions: Vec<String>,
+    /// 图片缓存
+    cache: Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
 }
 
 impl ArchiveManager {
@@ -37,6 +40,7 @@ impl ArchiveManager {
                 "tiff".to_string(),
                 "tif".to_string(),
             ],
+            cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         }
     }
 
@@ -112,27 +116,49 @@ impl ArchiveManager {
         Ok(buffer)
     }
 
-    /// 从 ZIP 压缩包中加载图片（返回 base64）
+    /// 从 ZIP 压缩包中加载图片（返回 base64，带缓存）
     pub fn load_image_from_zip(
         &self,
         archive_path: &Path,
         file_path: &str,
     ) -> Result<String, String> {
-        let data = self.extract_file_from_zip(archive_path, file_path)?;
-
-        // 对于 JXL 格式，需要先解码再重新编码为通用格式
-        if let Some(ext) = Path::new(file_path).extension() {
-            if ext.to_string_lossy().to_lowercase() == "jxl" {
-                return self.load_jxl_from_zip(&data);
+        // 创建缓存键：压缩包路径 + 文件路径
+        let cache_key = format!("{}::{}", archive_path.display(), file_path);
+        
+        // 检查缓存
+        if let Ok(cache) = self.cache.lock() {
+            if let Some(cached_data) = cache.get(&cache_key) {
+                return Ok(cached_data.clone());
             }
         }
 
-        // 检测图片类型
-        let mime_type = self.detect_image_mime_type(file_path);
+        let data = self.extract_file_from_zip(archive_path, file_path)?;
 
-        // 编码为 base64
-        let base64_data = general_purpose::STANDARD.encode(&data);
-        Ok(format!("data:{};base64,{}", mime_type, base64_data))
+        // 对于 JXL 格式，需要先解码再重新编码为通用格式
+        let result = if let Some(ext) = Path::new(file_path).extension() {
+            if ext.to_string_lossy().to_lowercase() == "jxl" {
+                self.load_jxl_from_zip(&data)?
+            } else {
+                // 检测图片类型
+                let mime_type = self.detect_image_mime_type(file_path);
+                // 编码为 base64
+                let base64_data = general_purpose::STANDARD.encode(&data);
+                format!("data:{};base64,{}", mime_type, base64_data)
+            }
+        } else {
+            // 检测图片类型
+            let mime_type = self.detect_image_mime_type(file_path);
+            // 编码为 base64
+            let base64_data = general_purpose::STANDARD.encode(&data);
+            format!("data:{};base64,{}", mime_type, base64_data)
+        };
+
+        // 添加到缓存
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.insert(cache_key, result.clone());
+        }
+
+        Ok(result)
     }
 
     /// 从压缩包中加载 JXL 图片并转换为 PNG
@@ -244,13 +270,23 @@ impl ArchiveManager {
         }
     }
 
-    /// 生成压缩包内图片的缩略图
+    /// 生成压缩包内图片的缩略图（带缓存）
     pub fn generate_thumbnail_from_zip(
         &self,
         archive_path: &Path,
         file_path: &str,
         max_size: u32,
     ) -> Result<String, String> {
+        // 创建缓存键：压缩包路径 + 文件路径 + 缩略图大小
+        let cache_key = format!("{}::{}::thumb_{}", archive_path.display(), file_path, max_size);
+        
+        // 检查缓存
+        if let Ok(cache) = self.cache.lock() {
+            if let Some(cached_data) = cache.get(&cache_key) {
+                return Ok(cached_data.clone());
+            }
+        }
+
         // 提取图片数据
         let data = self.extract_file_from_zip(archive_path, file_path)?;
 
@@ -278,7 +314,14 @@ impl ArchiveManager {
             .map_err(|e| format!("编码缩略图失败: {}", e))?;
 
         // 返回 base64
-        Ok(format!("data:image/png;base64,{}", general_purpose::STANDARD.encode(&buffer)))
+        let result = format!("data:image/png;base64,{}", general_purpose::STANDARD.encode(&buffer));
+
+        // 添加到缓存
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.insert(cache_key, result.clone());
+        }
+
+        Ok(result)
     }
 
     /// 解码 JXL 图像（辅助方法）
@@ -342,5 +385,29 @@ impl ArchiveManager {
 impl Default for ArchiveManager {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl ArchiveManager {
+    /// 清除缓存
+    pub fn clear_cache(&self) {
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.clear();
+        }
+    }
+
+    /// 预加载压缩包中的所有图片
+    pub fn preload_all_images(&self, archive_path: &Path) -> Result<usize, String> {
+        let entries = self.list_zip_contents(archive_path)?;
+        let image_entries: Vec<_> = entries.iter().filter(|e| e.is_image).collect();
+        
+        let mut loaded_count = 0;
+        for entry in image_entries {
+            if self.load_image_from_zip(archive_path, &entry.path).is_ok() {
+                loaded_count += 1;
+            }
+        }
+        
+        Ok(loaded_count)
     }
 }

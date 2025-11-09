@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Folder, File, Image, Trash2, RefreshCw, FileArchive, FolderOpen } from '@lucide/svelte';
+  import { Folder, File, Image, Trash2, RefreshCw, FileArchive, FolderOpen, Home, ChevronLeft, ChevronRight, ChevronUp, CheckSquare, Grid3x3, List, MoreVertical } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import { FileSystemAPI } from '$lib/api';
   import type { FsItem } from '$lib/types';
@@ -7,6 +7,8 @@
   import * as BookAPI from '$lib/api/book';
   import PathBar from '../ui/PathBar.svelte';
   import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
+  import { NavigationHistory } from '$lib/utils/navigationHistory';
+  import { Button } from '$lib/components/ui/button';
 
   // 使用全局状态
   let currentPath = $state('');
@@ -17,8 +19,17 @@
   let isArchiveView = $state(false);
   let currentArchivePath = $state('');
   let selectedIndex = $state(-1);
-  let fileListContainer: HTMLDivElement | undefined;
+  let fileListContainer = $state<HTMLDivElement | undefined>(undefined);
   let contextMenu = $state<{ x: number; y: number; item: FsItem | null }>({ x: 0, y: 0, item: null });
+
+  // 导航历史管理器
+  let navigationHistory = new NavigationHistory();
+  
+  // UI 模式状态
+  let isCheckMode = $state(false);
+  let isDeleteMode = $state(false);
+  let viewMode = $state<'list' | 'thumbnails'>('list'); // 列表 or 缩略图视图
+  let selectedItems = $state<Set<string>>(new Set());
 
   // 订阅全局状态 - 使用 Svelte 5 的响应式
   $effect(() => {
@@ -68,11 +79,78 @@
       const homepage = localStorage.getItem(HOMEPAGE_STORAGE_KEY);
       if (homepage) {
         console.log('📍 加载主页路径:', homepage);
+        navigationHistory.setHomepage(homepage);
         loadDirectory(homepage);
       }
     } catch (err) {
       console.error('❌ 加载主页路径失败:', err);
     }
+  }
+
+  /**
+   * 导航到主页
+   */
+  function goHome() {
+    const homepage = navigationHistory.getHomepage();
+    if (homepage) {
+      navigateToDirectory(homepage);
+    }
+  }
+
+  /**
+   * 后退
+   */
+  function goBackInHistory() {
+    const path = navigationHistory.back();
+    if (path) {
+      loadDirectoryWithoutHistory(path);
+    }
+  }
+
+  /**
+   * 前进
+   */
+  function goForwardInHistory() {
+    const path = navigationHistory.forward();
+    if (path) {
+      loadDirectoryWithoutHistory(path);
+    }
+  }
+
+  /**
+   * 切换勾选模式
+   */
+  function toggleCheckMode() {
+    isCheckMode = !isCheckMode;
+    if (!isCheckMode) {
+      selectedItems.clear();
+    }
+  }
+
+  /**
+   * 切换删除模式
+   */
+  function toggleDeleteMode() {
+    isDeleteMode = !isDeleteMode;
+  }
+
+  /**
+   * 切换视图模式
+   */
+  function toggleViewMode() {
+    viewMode = viewMode === 'list' ? 'thumbnails' : 'list';
+  }
+
+  /**
+   * 切换项目选中状态
+   */
+  function toggleItemSelection(path: string) {
+    if (selectedItems.has(path)) {
+      selectedItems.delete(path);
+    } else {
+      selectedItems.add(path);
+    }
+    selectedItems = selectedItems; // 触发响应式更新
   }
 
   // 组件挂载时添加全局点击事件和加载主页
@@ -118,9 +196,17 @@
   }
 
   /**
-   * 加载目录内容
+   * 加载目录内容（添加到历史记录）
    */
   async function loadDirectory(path: string) {
+    await loadDirectoryWithoutHistory(path);
+    navigationHistory.push(path);
+  }
+
+  /**
+   * 加载目录内容（不添加历史记录，用于前进/后退）
+   */
+  async function loadDirectoryWithoutHistory(path: string) {
     console.log('📂 loadDirectory called with path:', path);
     
     fileBrowserStore.setLoading(true);
@@ -129,6 +215,9 @@
     fileBrowserStore.setArchiveView(false);
     fileBrowserStore.setSelectedIndex(-1);
     fileBrowserStore.setCurrentPath(path);
+    
+    // 清空选择
+    selectedItems.clear();
 
     try {
       console.log('🔄 Calling FileSystemAPI.browseDirectory...');
@@ -497,41 +586,134 @@
   />
 
   <!-- 工具栏 -->
-  <div class="flex items-center gap-2 border-b p-2 bg-white">
-    <button
-      onclick={selectFolder}
-      class="flex items-center gap-2 rounded bg-blue-500 px-3 py-1.5 text-sm text-white hover:bg-blue-600 transition-colors"
-    >
-      <FolderOpen class="h-4 w-4" />
-      选择文件夹
-    </button>
-
-    {#if currentPath || isArchiveView}
-      <button
-        onclick={goBack}
-        class="rounded p-1.5 hover:bg-gray-100 transition-colors"
-        title="返回上一级 (Backspace)"
+  <div class="flex items-center gap-1 border-b px-2 py-1.5 bg-background/50">
+    <!-- 左侧：导航按钮 -->
+    <div class="flex items-center gap-1">
+      <Button
+        variant="ghost"
+        size="icon"
+        class="h-8 w-8"
+        onclick={goHome}
+        disabled={!navigationHistory.getHomepage()}
+        title="主页"
       >
-        ←
-      </button>
+        <Home class="h-4 w-4" />
+      </Button>
 
-      <button
+      <Button
+        variant="ghost"
+        size="icon"
+        class="h-8 w-8"
+        onclick={goBackInHistory}
+        disabled={!navigationHistory.canGoBack()}
+        title="后退"
+      >
+        <ChevronLeft class="h-4 w-4" />
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="icon"
+        class="h-8 w-8"
+        onclick={goForwardInHistory}
+        disabled={!navigationHistory.canGoForward()}
+        title="前进"
+      >
+        <ChevronRight class="h-4 w-4" />
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="icon"
+        class="h-8 w-8"
+        onclick={goBack}
+        disabled={!currentPath && !isArchiveView}
+        title="上一级 (Backspace)"
+      >
+        <ChevronUp class="h-4 w-4" />
+      </Button>
+
+      <div class="w-px h-6 bg-border mx-1"></div>
+
+      <Button
+        variant="ghost"
+        size="icon"
+        class="h-8 w-8"
+        onclick={selectFolder}
+        title="选择文件夹"
+      >
+        <FolderOpen class="h-4 w-4" />
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="icon"
+        class="h-8 w-8"
         onclick={refresh}
-        class="rounded p-1.5 hover:bg-gray-100 transition-colors"
+        disabled={!currentPath && !isArchiveView}
         title="刷新 (F5)"
       >
         <RefreshCw class="h-4 w-4" />
-      </button>
+      </Button>
+    </div>
 
-      <div class="flex-1"></div>
+    <div class="flex-1"></div>
 
+    <!-- 右侧：操作按钮 -->
+    <div class="flex items-center gap-1">
       {#if isArchiveView}
-        <div class="flex items-center gap-2 text-sm text-gray-600">
-          <FileArchive class="h-4 w-4 text-purple-500" />
-          <span>压缩包模式</span>
+        <div class="flex items-center gap-1.5 px-2 text-xs text-muted-foreground">
+          <FileArchive class="h-3.5 w-3.5 text-purple-500" />
+          <span>压缩包</span>
         </div>
+        <div class="w-px h-6 bg-border mx-1"></div>
       {/if}
-    {/if}
+
+      <Button
+        variant={isCheckMode ? 'default' : 'ghost'}
+        size="icon"
+        class="h-8 w-8"
+        onclick={toggleCheckMode}
+        title={isCheckMode ? '退出勾选模式' : '勾选模式'}
+      >
+        <CheckSquare class="h-4 w-4" />
+      </Button>
+
+      <Button
+        variant={isDeleteMode ? 'destructive' : 'ghost'}
+        size="icon"
+        class="h-8 w-8"
+        onclick={toggleDeleteMode}
+        title={isDeleteMode ? '退出删除模式' : '删除模式'}
+      >
+        <Trash2 class="h-4 w-4" />
+      </Button>
+
+      <div class="w-px h-6 bg-border mx-1"></div>
+
+      <Button
+        variant={viewMode === 'list' ? 'default' : 'ghost'}
+        size="icon"
+        class="h-8 w-8"
+        onclick={toggleViewMode}
+        title={viewMode === 'list' ? '切换到缩略图视图' : '切换到列表视图'}
+      >
+        {#if viewMode === 'list'}
+          <List class="h-4 w-4" />
+        {:else}
+          <Grid3x3 class="h-4 w-4" />
+        {/if}
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="icon"
+        class="h-8 w-8"
+        title="更多选项"
+      >
+        <MoreVertical class="h-4 w-4" />
+      </Button>
+    </div>
   </div>
 
   <!-- 错误提示 -->
@@ -582,13 +764,50 @@
       <div class="grid grid-cols-1 gap-2">
         {#each items as item, index (item.path)}
           <div
-            class="flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors {selectedIndex === index ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}"
+            class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors {selectedIndex === index ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}"
             onclick={() => {
-              fileBrowserStore.setSelectedIndex(index);
-              openFile(item);
+              if (!isCheckMode && !isDeleteMode) {
+                fileBrowserStore.setSelectedIndex(index);
+                openFile(item);
+              }
             }}
             oncontextmenu={(e) => showContextMenu(e, item)}
           >
+            <!-- 勾选框（勾选模式） -->
+            {#if isCheckMode}
+              <button
+                class="flex-shrink-0"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  toggleItemSelection(item.path);
+                }}
+              >
+                <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {selectedItems.has(item.path) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 hover:border-blue-400'}">
+                  {#if selectedItems.has(item.path)}
+                    <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                    </svg>
+                  {/if}
+                </div>
+              </button>
+            {/if}
+
+            <!-- 删除按钮（删除模式） -->
+            {#if isDeleteMode && !isArchiveView}
+              <button
+                class="flex-shrink-0"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  deleteItem(item.path);
+                }}
+                title="删除"
+              >
+                <div class="h-5 w-5 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors">
+                  <Trash2 class="h-3 w-3 text-white" />
+                </div>
+              </button>
+            {/if}
+
             <!-- 图标/缩略图 -->
             <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center">
               {#if item.isDir}
@@ -615,22 +834,6 @@
                 {formatSize(item.size, item.isDir)} · {formatDate(item.modified)}
               </div>
             </div>
-
-            <!-- 操作按钮 -->
-            {#if !isArchiveView}
-              <div class="flex gap-1">
-                <button
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    deleteItem(item.path);
-                  }}
-                  class="rounded p-1 hover:bg-red-50"
-                  title="删除"
-                >
-                  <Trash2 class="h-4 w-4 text-red-500" />
-                </button>
-              </div>
-            {/if}
           </div>
         {/each}
       </div>

@@ -22,7 +22,7 @@
 		isVisible: boolean;
 		pinnedStore: Writable<boolean>;
 		widthStore: Writable<number>;
-		activeTabStore: Writable<string>;
+		activeTabStore: Writable<string | null>;
 		tabs: Tab[];
 		
 		// 回调函数
@@ -66,7 +66,7 @@
 
 	const isPinned = $derived($pinnedStore);
 	const width = $derived($widthStore);
-	const activeTab = $derived($activeTabStore);
+	const activeTab = $derived($activeTabStore || '');
 
 	// 响应钉住状态
 	$effect(() => {

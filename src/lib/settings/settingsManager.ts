@@ -119,7 +119,7 @@ const defaultSettings: NeoViewSettings = {
     leftSidebarVisible: true,
     rightSidebarVisible: false,
     bottomPanelVisible: false,
-    autoHideToolbar: false
+    autoHideToolbar: true
   },
   bindings: {
     mouse: {

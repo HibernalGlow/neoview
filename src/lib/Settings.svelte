@@ -60,8 +60,8 @@
 	async function exportSettings() {
 		try {
 			// 使用字符串拼接来避免 vite 在预解析阶段静态解析 @tauri-apps 包
-			const { save } = await import('@tauri-apps' + '/api/dialog');
-			const { writeTextFile } = await import('@tauri-apps' + '/api/fs');
+			const { save } = await import(/* @vite-ignore */ '@tauri-apps' + '/api/dialog');
+			const { writeTextFile } = await import(/* @vite-ignore */ '@tauri-apps' + '/api/fs');
 			const json = settingsManager.exportSettings();
 			const path = await save({ defaultPath: 'UserSetting.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
 			if (path) {
@@ -77,8 +77,8 @@
 	// 导入设置（支持来自 rule/ 或 neoview-tauri 的 UserSetting.json）
 	async function importSettings() {
 		try {
-			const { open } = await import('@tauri-apps' + '/api/dialog');
-			const { readTextFile } = await import('@tauri-apps' + '/api/fs');
+			const { open } = await import(/* @vite-ignore */ '@tauri-apps' + '/api/dialog');
+			const { readTextFile } = await import(/* @vite-ignore */ '@tauri-apps' + '/api/fs');
 			const selected = await open({ filters: [{ name: 'JSON', extensions: ['json'] }], multiple: false });
 			if (selected && typeof selected === 'string') {
 				const content = await readTextFile(selected);
@@ -99,8 +99,8 @@
 	// 便捷导入：尝试从 repo 下的 rule/UserSetting.json 导入（若存在）
 	async function importFromRule() {
 		try {
-			const { open } = await import('@tauri-apps' + '/api/dialog');
-			const { readTextFile } = await import('@tauri-apps' + '/api/fs');
+			const { open } = await import(/* @vite-ignore */ '@tauri-apps' + '/api/dialog');
+			const { readTextFile } = await import(/* @vite-ignore */ '@tauri-apps' + '/api/fs');
 			// 使用 open 对话框并设置默认路径到 repo 下的 rule 目录
 			const defaultPath = '../rule/UserSetting.json';
 			const selected = await open({ defaultPath, filters: [{ name: 'JSON', extensions: ['json'] }], multiple: false });

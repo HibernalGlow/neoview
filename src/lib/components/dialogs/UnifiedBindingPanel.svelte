@@ -204,7 +204,7 @@
 
 								<!-- 绑定列表 -->
 								<div class="space-y-2">
-									{#if binding.bindings.length > 0}
+									{#if binding.bindings && binding.bindings.length > 0}
 										<div class="flex flex-wrap gap-2">
 											{#each binding.bindings as inputBinding, index}
 												{@const Icon = getBindingIcon(inputBinding.type)}

@@ -8,6 +8,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Settings, Keyboard, Palette, Zap, Mouse, Hand } from '@lucide/svelte';
 	import KeyBindingPanel from './KeyBindingPanel.svelte';
+	import UnifiedBindingPanel from './UnifiedBindingPanel.svelte';
 	import ViewerSettingsPanel from './ViewerSettingsPanel.svelte';
 	import MouseSettingsPanel from './MouseSettingsPanel.svelte';
 	import GestureSettingsPanel from './GestureSettingsPanel.svelte';
@@ -61,11 +62,11 @@
 				{:else if activeTab === 'viewer'}
 					<ViewerSettingsPanel />
 				{:else if activeTab === 'keyboard'}
-					<KeyBindingPanel />
+					<UnifiedBindingPanel />
 				{:else if activeTab === 'mouse'}
-					<MouseSettingsPanel />
+					<UnifiedBindingPanel />
 				{:else if activeTab === 'gesture'}
-					<GestureSettingsPanel />
+					<UnifiedBindingPanel />
 				{:else if activeTab === 'performance'}
 					<div class="space-y-4">
 						<h3 class="text-lg font-semibold">性能设置</h3>

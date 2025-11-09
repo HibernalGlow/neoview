@@ -221,6 +221,10 @@ class KeyBindingsStore {
 	addBinding(action: string, binding: InputBinding) {
 		const actionBinding = this.bindings.find(b => b.action === action);
 		if (actionBinding) {
+			// 确保 bindings 数组存在
+			if (!actionBinding.bindings) {
+				actionBinding.bindings = [];
+			}
 			// 检查是否已存在相同绑定
 			const exists = actionBinding.bindings.some(b => 
 				JSON.stringify(b) === JSON.stringify(binding)
@@ -235,7 +239,7 @@ class KeyBindingsStore {
 	// 移除绑定
 	removeBinding(action: string, bindingIndex: number) {
 		const actionBinding = this.bindings.find(b => b.action === action);
-		if (actionBinding && actionBinding.bindings[bindingIndex]) {
+		if (actionBinding && actionBinding.bindings && actionBinding.bindings[bindingIndex]) {
 			actionBinding.bindings.splice(bindingIndex, 1);
 			this.saveToStorage();
 		}

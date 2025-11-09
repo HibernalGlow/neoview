@@ -7,7 +7,8 @@
 	import ImageViewer from '$lib/components/viewer/ImageViewer.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { open } from '@tauri-apps/plugin-dialog';
-	import { bookStore } from '$lib/stores';
+	import { bookStore, zoomIn, zoomOut, resetZoom, toggleSidebar, toggleFullscreen, rotateClockwise, toggleViewMode } from '$lib/stores';
+	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { FolderOpen } from '@lucide/svelte';
 
 	let loading = $state(false);
@@ -30,7 +31,108 @@
 			loading = false;
 		}
 	}
+
+// 全局按键处理：根据 keyBindingsStore 的配置查找操作并分发
+function isTypingInInput(event: Event) {
+	const el = event.target as HTMLElement | null;
+	if (!el) return false;
+	const tag = el.tagName?.toLowerCase();
+	const editable = el.getAttribute && (el.getAttribute('contenteditable') === 'true');
+	return tag === 'input' || tag === 'textarea' || editable;
+}
+
+function formatKeyCombo(e: KeyboardEvent) {
+	const parts: string[] = [];
+	if (e.ctrlKey) parts.push('Ctrl');
+	if (e.shiftKey) parts.push('Shift');
+	if (e.altKey) parts.push('Alt');
+
+	// Map some special keys to consistent names used in keybindings
+	const keyMap: Record<string, string> = {
+		' ': 'Space',
+		'+': 'Plus',
+		'ArrowUp': 'ArrowUp',
+		'ArrowDown': 'ArrowDown',
+		'ArrowLeft': 'ArrowLeft',
+		'ArrowRight': 'ArrowRight'
+	};
+
+	const keyName = keyMap[e.key] || e.key;
+	parts.push(keyName);
+	return parts.join('+');
+}
+
+async function dispatchAction(action: string) {
+	switch (action) {
+		case 'nextPage':
+			await bookStore.nextPage();
+			break;
+		case 'prevPage':
+			await bookStore.previousPage();
+			break;
+		case 'firstPage':
+			await bookStore.firstPage();
+			break;
+		case 'lastPage':
+			await bookStore.lastPage();
+			break;
+		case 'zoomIn':
+			zoomIn();
+			break;
+		case 'zoomOut':
+			zoomOut();
+			break;
+		case 'fitWindow':
+		case 'zoom_reset':
+		case 'actualSize':
+			resetZoom();
+			break;
+		case 'fullscreen':
+			toggleFullscreen();
+			break;
+		case 'toggleSidebar':
+			toggleSidebar();
+			break;
+		case 'toggleBookMode':
+			toggleViewMode();
+			break;
+		case 'rotate':
+			rotateClockwise();
+			break;
+		case 'openFile':
+			try {
+				const selected = await open({ multiple: false });
+				if (selected) await bookStore.openBook(selected as string);
+			} catch (err) {
+				console.error('openFile action failed', err);
+			}
+			break;
+		case 'closeFile':
+			await bookStore.closeBook();
+			break;
+		case 'deleteFile':
+			// 删除需要额外确认/实现，这里调用 bookStore.closeBook() 作为占位
+			await bookStore.closeBook();
+			break;
+		default:
+			console.warn('未实现的快捷操作：', action);
+	}
+}
+
+function handleGlobalKeydown(e: KeyboardEvent) {
+	// 不在输入框时响应
+	if (isTypingInInput(e)) return;
+
+	const combo = formatKeyCombo(e);
+	const action = keyBindingsStore.findActionByKey(combo);
+	if (action) {
+		e.preventDefault();
+		dispatchAction(action);
+	}
+}
 </script>
+
+<svelte:window onkeydown={handleGlobalKeydown} />
 
 <MainLayout>
 	<div class="h-full w-full flex items-center justify-center">

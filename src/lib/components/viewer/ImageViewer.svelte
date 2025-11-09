@@ -13,11 +13,14 @@
 	import { loadImage } from '$lib/api/fs';
 	import { loadImageFromArchive } from '$lib/api/filesystem';
 	import { Button } from '$lib/components/ui/button';
-	import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, X } from '@lucide/svelte';
+	import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, X, Grid, Maximize2, PanelLeft } from '@lucide/svelte';
 
 	let imageData = $state<string | null>(null);
+	let imageData2 = $state<string | null>(null); // 双页模式的第二张图
 	let loading = $state(false);
 	let error = $state<string | null>(null);
+	let viewMode = $state<'single' | 'double' | 'panorama'>('single'); // 视图模式
+	let showThumbnails = $state(false); // 是否显示缩略图栏
 
 	// 监听当前页面变化
 	$effect(() => {
@@ -36,22 +39,36 @@
 
 		loading = true;
 		error = null;
+		imageData = null;
+		imageData2 = null;
 
 		try {
+			// 加载当前页
 			let data: string;
-			
-			// 根据 book 类型加载图片
 			if (currentBook.type === 'archive') {
-				// 从压缩包加载
 				console.log('Loading image from archive:', currentPage.path);
 				data = await loadImageFromArchive(currentBook.path, currentPage.path);
 			} else {
-				// 从文件系统加载
 				console.log('Loading image from file system:', currentPage.path);
 				data = await loadImage(currentPage.path);
 			}
-			
 			imageData = data;
+
+			// 双页模式：加载下一页
+			if (viewMode === 'double' && bookStore.canNextPage) {
+				const nextPage = bookStore.currentPageIndex + 1;
+				const nextPageInfo = currentBook.pages[nextPage];
+				
+				if (nextPageInfo) {
+					let data2: string;
+					if (currentBook.type === 'archive') {
+						data2 = await loadImageFromArchive(currentBook.path, nextPageInfo.path);
+					} else {
+						data2 = await loadImage(nextPageInfo.path);
+					}
+					imageData2 = data2;
+				}
+			}
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load image';
 			console.error('Failed to load image:', err);
@@ -63,7 +80,14 @@
 	async function handleNextPage() {
 		if (!bookStore.canNextPage) return;
 		try {
-			await bookStore.nextPage();
+			// 双页模式：跳过两页
+			if (viewMode === 'double') {
+				const currentIndex = bookStore.currentPageIndex;
+				const targetIndex = Math.min(currentIndex + 2, bookStore.totalPages - 1);
+				await bookStore.navigateToPage(targetIndex);
+			} else {
+				await bookStore.nextPage();
+			}
 		} catch (err) {
 			console.error('Failed to go to next page:', err);
 		}
@@ -72,7 +96,14 @@
 	async function handlePreviousPage() {
 		if (!bookStore.canPreviousPage) return;
 		try {
-			await bookStore.previousPage();
+			// 双页模式：后退两页
+			if (viewMode === 'double') {
+				const currentIndex = bookStore.currentPageIndex;
+				const targetIndex = Math.max(currentIndex - 2, 0);
+				await bookStore.navigateToPage(targetIndex);
+			} else {
+				await bookStore.previousPage();
+			}
 		} catch (err) {
 			console.error('Failed to go to previous page:', err);
 		}
@@ -80,6 +111,22 @@
 
 	function handleClose() {
 		bookStore.closeBook();
+	}
+
+	function toggleViewMode() {
+		if (viewMode === 'single') {
+			viewMode = 'double';
+		} else if (viewMode === 'double') {
+			viewMode = 'panorama';
+		} else {
+			viewMode = 'single';
+		}
+		// 重新加载当前页以适应新模式
+		loadCurrentImage();
+	}
+
+	function toggleThumbnails() {
+		showThumbnails = !showThumbnails;
 	}
 
 	// 执行命令
@@ -152,6 +199,22 @@
 				<ZoomIn class="h-5 w-5" />
 			</Button>
 
+			<!-- 视图模式切换 -->
+			<Button variant="ghost" size="icon" onclick={toggleViewMode} title="切换视图模式">
+				{#if viewMode === 'single'}
+					<PanelLeft class="h-5 w-5" />
+				{:else if viewMode === 'double'}
+					<Grid class="h-5 w-5" />
+				{:else}
+					<Maximize2 class="h-5 w-5" />
+				{/if}
+			</Button>
+
+			<!-- 缩略图切换 -->
+			<Button variant="ghost" size="icon" onclick={toggleThumbnails} title="缩略图">
+				<Grid class="h-5 w-5" />
+			</Button>
+
 			<Button variant="ghost" size="icon" onclick={handleNextPage} disabled={!bookStore.canNextPage}>
 				<ChevronRight class="h-5 w-5" />
 			</Button>
@@ -165,14 +228,74 @@
 		{:else if error}
 			<div class="text-red-500">Error: {error}</div>
 		{:else if imageData}
-			<img
-				src={imageData}
-				alt="Current page"
-				class="max-w-full max-h-full object-contain"
-				style="transform: scale({$zoomLevel}); transition: transform 0.2s;"
-			/>
+			<!-- 单页模式 -->
+			{#if viewMode === 'single'}
+				<img
+					src={imageData}
+					alt="Current page"
+					class="max-w-full max-h-full object-contain"
+					style="transform: scale({$zoomLevel}); transition: transform 0.2s;"
+				/>
+			<!-- 双页模式 -->
+			{:else if viewMode === 'double'}
+				<div class="flex gap-4 items-center justify-center">
+					<img
+						src={imageData}
+						alt="Current page"
+						class="max-w-[45%] max-h-full object-contain"
+						style="transform: scale({$zoomLevel}); transition: transform 0.2s;"
+					/>
+					{#if imageData2}
+						<img
+							src={imageData2}
+							alt="Next page"
+							class="max-w-[45%] max-h-full object-contain"
+							style="transform: scale({$zoomLevel}); transition: transform 0.2s;"
+						/>
+					{/if}
+				</div>
+			<!-- 全景模式 -->
+			{:else if viewMode === 'panorama'}
+				<img
+					src={imageData}
+					alt="Current page"
+					class="w-full h-full object-contain"
+					style="transform: scale({$zoomLevel}); transition: transform 0.2s;"
+				/>
+			{/if}
 		{:else}
 			<div class="text-white/50">No image to display</div>
 		{/if}
 	</div>
+
+	<!-- 缩略图底栏 -->
+	{#if showThumbnails && bookStore.currentBook}
+		<div class="bg-secondary/80 border-t p-2">
+			<div class="flex gap-2 overflow-x-auto">
+				{#each bookStore.currentBook.pages as page, index (page.path)}
+					<button
+						class="flex-shrink-0 w-16 h-16 rounded overflow-hidden border-2 {index === bookStore.currentPageIndex ? 'border-primary' : 'border-transparent'} hover:border-primary/50 transition-colors"
+						onclick={() => bookStore.navigateToPage(index)}
+						title="Page {index + 1}"
+					>
+						<img
+							src={page.thumbnail || ''}
+							alt="Page {index + 1}"
+							class="w-full h-full object-cover"
+							onerror={(e) => {
+								const target = e.target as HTMLImageElement;
+								target.style.display = 'none';
+								if (target.nextElementSibling) {
+									(target.nextElementSibling as HTMLElement).style.display = 'flex';
+								}
+							}}
+						/>
+						<div class="w-full h-full flex items-center justify-center bg-gray-700 text-xs text-gray-300" style="display:none;">
+							{index + 1}
+						</div>
+					</button>
+				{/each}
+			</div>
+		</div>
+	{/if}
 </div>

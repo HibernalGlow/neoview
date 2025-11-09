@@ -2,7 +2,13 @@
   /**
    * 路径面包屑导航栏
    */
-  import { ChevronRight, Home, FolderOpen } from '@lucide/svelte';
+  import { ChevronRight, Home, FolderOpen, HomeIcon } from '@lucide/svelte';
+  import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuTrigger,
+    ContextMenuItem,
+  } from '$lib/components/ui/context-menu';
 
   interface Breadcrumb {
     name: string;
@@ -13,12 +19,14 @@
     currentPath: string;
     isArchive?: boolean;
     onNavigate?: (path: string) => void;
+    onSetHomepage?: (path: string) => void;
   }
 
   let {
     currentPath = $bindable(''),
     isArchive = false,
-    onNavigate
+    onNavigate,
+    onSetHomepage
   }: Props = $props();
 
   /**
@@ -70,6 +78,10 @@
   function handleNavigate(path: string) {
     onNavigate?.(path);
   }
+
+  function handleSetHomepage(path: string) {
+    onSetHomepage?.(path);
+  }
 </script>
 
 <div class="flex items-center gap-1 px-4 py-2 bg-gray-50 border-b overflow-x-auto">
@@ -87,13 +99,23 @@
 
     <!-- 面包屑路径 -->
     {#each breadcrumbs as breadcrumb, index}
-      <button
-        class="px-2 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap {index === breadcrumbs.length - 1 ? 'text-blue-600' : 'text-gray-700 hover:bg-gray-200'}"
-        onclick={() => handleNavigate(breadcrumb.path)}
-        title={breadcrumb.path}
-      >
-        {breadcrumb.name}
-      </button>
+      <ContextMenu>
+        <ContextMenuTrigger>
+          <button
+            class="px-2 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap {index === breadcrumbs.length - 1 ? 'text-blue-600' : 'text-gray-700 hover:bg-gray-200'}"
+            onclick={() => handleNavigate(breadcrumb.path)}
+            title={breadcrumb.path}
+          >
+            {breadcrumb.name}
+          </button>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem onclick={() => handleSetHomepage(breadcrumb.path)}>
+            <HomeIcon class="h-4 w-4 mr-2" />
+            设置为主页
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
       
       {#if index < breadcrumbs.length - 1}
         <ChevronRight class="h-4 w-4 text-gray-400 flex-shrink-0" />

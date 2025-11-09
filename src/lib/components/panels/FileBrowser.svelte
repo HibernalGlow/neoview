@@ -44,7 +44,38 @@
     return unsubscribe;
   });
 
-  // 组件挂载时添加全局点击事件
+  // 主页路径的本地存储键
+  const HOMEPAGE_STORAGE_KEY = 'neoview-homepage-path';
+
+  /**
+   * 设置主页路径
+   */
+  function setHomepage(path: string) {
+    try {
+      localStorage.setItem(HOMEPAGE_STORAGE_KEY, path);
+      console.log('✅ 主页路径已设置:', path);
+      // TODO: 可以添加 toast 通知
+    } catch (err) {
+      console.error('❌ 保存主页路径失败:', err);
+    }
+  }
+
+  /**
+   * 加载主页路径
+   */
+  function loadHomepage() {
+    try {
+      const homepage = localStorage.getItem(HOMEPAGE_STORAGE_KEY);
+      if (homepage) {
+        console.log('📍 加载主页路径:', homepage);
+        loadDirectory(homepage);
+      }
+    } catch (err) {
+      console.error('❌ 加载主页路径失败:', err);
+    }
+  }
+
+  // 组件挂载时添加全局点击事件和加载主页
   onMount(() => {
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -54,6 +85,9 @@
     };
     
     document.addEventListener('click', handleClick);
+    
+    // 加载主页
+    loadHomepage();
     
     return () => {
       document.removeEventListener('click', handleClick);
@@ -459,6 +493,7 @@
     bind:currentPath={currentPath} 
     isArchive={isArchiveView}
     onNavigate={handlePathNavigate}
+    onSetHomepage={setHomepage}
   />
 
   <!-- 工具栏 -->

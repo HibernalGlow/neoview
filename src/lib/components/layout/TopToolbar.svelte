@@ -288,7 +288,12 @@
 			</div>
 		</div>
 	</div>
-
-	<!-- 触发区域 -->
-	<div class="h-2 bg-transparent"></div>
 </div>
+
+<!-- 触发区域（独立于工具栏，始终存在） -->
+<div
+	class="fixed top-0 left-0 right-0 h-4 z-[49]"
+	onmouseenter={handleMouseEnter}
+	role="presentation"
+	aria-label="顶部工具栏触发区域"
+></div>

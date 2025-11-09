@@ -14,6 +14,9 @@
 	import { loadImageFromArchive } from '$lib/api/filesystem';
 	import { FileSystemAPI } from '$lib/api';
 
+	// 进度条状态
+	let showProgressBar = $state(false);
+
 
 	let imageData = $state<string | null>(null);
 	let imageData2 = $state<string | null>(null); // 双页模式的第二张图
@@ -28,6 +31,18 @@
 		} else {
 			imageData = null;
 		}
+	});
+
+	// 监听进度条状态变化
+	$effect(() => {
+		const handleProgressBarState = (e: CustomEvent) => {
+			showProgressBar = e.detail.show;
+		};
+		
+		window.addEventListener('progressBarStateChange', handleProgressBarState as EventListener);
+		return () => {
+			window.removeEventListener('progressBarStateChange', handleProgressBarState as EventListener);
+		};
 	});
 
 	async function loadCurrentImage() {
@@ -150,7 +165,7 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="image-viewer-container h-full w-full flex flex-col bg-black" data-viewer="true">
+<div class="image-viewer-container h-full w-full flex flex-col bg-black relative" data-viewer="true">
 	<!-- 图像显示区域 -->
 	<div class="image-container flex-1 flex items-center justify-center overflow-auto" data-viewer="true">
 		{#if loading}
@@ -197,4 +212,13 @@
 			<div class="text-white/50">No image to display</div>
 		{/if}
 	</div>
+	
+	<!-- Viewer底部进度条 -->
+	{#if showProgressBar && bookStore.currentBook}
+		<div class="absolute bottom-0 left-0 right-0 h-1 pointer-events-none">
+			<div class="h-full transition-all duration-300 opacity-70" 
+					 style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%; background-color: #FDFBF7;">
+			</div>
+		</div>
+	{/if}
 </div>

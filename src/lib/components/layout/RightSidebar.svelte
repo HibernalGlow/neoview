@@ -146,11 +146,12 @@
 </script>
 
 <!-- 鼠标触发区域（右侧隐形条） -->
-{#if !isVisible}
+{#if !isVisible && !$rightSidebarPinned}
 	<div
-		class="fixed right-0 top-0 bottom-0 w-2 z-40"
+		class="fixed right-0 top-0 bottom-0 w-[4px] z-50 hover:bg-primary/20 transition-colors"
 		onmouseenter={handleMouseEnter}
 		role="presentation"
+		aria-label="显示右侧边栏"
 	></div>
 {/if}
 

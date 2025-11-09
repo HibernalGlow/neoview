@@ -30,9 +30,15 @@ const initialState: FileBrowserState = {
 
 function createFileBrowserStore() {
   const { subscribe, set, update } = writable<FileBrowserState>(initialState);
+  let currentState = initialState;
+
+  subscribe(state => {
+    currentState = state;
+  });
 
   return {
     subscribe,
+    getState: () => currentState,
     setCurrentPath: (path: string) => update(state => ({ ...state, currentPath: path })),
     setItems: (items: FsItem[]) => update(state => ({ ...state, items })),
     setLoading: (loading: boolean) => update(state => ({ ...state, loading })),

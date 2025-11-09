@@ -1,9 +1,10 @@
 <script lang="ts">
   import { Folder, File, Image, Trash2, RefreshCw, FileArchive, FolderOpen } from '@lucide/svelte';
+  import { onMount } from 'svelte';
   import { FileSystemAPI } from '$lib/api';
   import type { FsItem } from '$lib/types';
-  import { openBook } from '$lib/stores/book.svelte';
-  import { navigateToImage } from '$lib/api';
+  import { bookStore } from '$lib/stores/book.svelte';
+  import * as BookAPI from '$lib/api/book';
   import PathBar from '../ui/PathBar.svelte';
   import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 
@@ -17,10 +18,19 @@
   let currentArchivePath = $state('');
   let selectedIndex = $state(-1);
   let fileListContainer: HTMLDivElement | undefined;
+  let contextMenu = $state<{ x: number; y: number; item: FsItem | null }>({ x: 0, y: 0, item: null });
 
-  // 订阅全局状态
+  // 订阅全局状态 - 使用 Svelte 5 的响应式
   $effect(() => {
     const unsubscribe = fileBrowserStore.subscribe(state => {
+      console.log('📊 Store state updated:', {
+        currentPath: state.currentPath,
+        itemsCount: state.items.length,
+        loading: state.loading,
+        error: state.error,
+        isArchiveView: state.isArchiveView
+      });
+      
       currentPath = state.currentPath;
       items = state.items;
       loading = state.loading;
@@ -30,20 +40,45 @@
       selectedIndex = state.selectedIndex;
       thumbnails = state.thumbnails;
     });
-
+    
     return unsubscribe;
+  });
+
+  // 组件挂载时添加全局点击事件
+  onMount(() => {
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.context-menu')) {
+        hideContextMenu();
+      }
+    };
+    
+    document.addEventListener('click', handleClick);
+    
+    return () => {
+      document.removeEventListener('click', handleClick);
+    };
   });
 
   /**
    * 选择文件夹
    */
   async function selectFolder() {
+    console.log('📂 selectFolder called');
     try {
+      console.log('🔄 Calling FileSystemAPI.selectFolder...');
       const path = await FileSystemAPI.selectFolder();
+      console.log('✅ Selected path:', path);
+      
       if (path) {
+        console.log('📂 Loading selected directory...');
         await loadDirectory(path);
+        console.log('✅ Directory loaded successfully');
+      } else {
+        console.log('⚠️ No folder selected');
       }
     } catch (err) {
+      console.error('❌ Error in selectFolder:', err);
       fileBrowserStore.setError(String(err));
     }
   }
@@ -117,6 +152,19 @@
   }
 
   /**
+   * 加载单个缩略图
+   */
+  async function loadThumbnail(path: string) {
+    try {
+      const thumbnail = await FileSystemAPI.generateFileThumbnail(path);
+      fileBrowserStore.addThumbnail(path, thumbnail);
+    } catch (err) {
+      // 不支持的图片格式或其他错误，静默失败
+      console.debug('Failed to load thumbnail:', err);
+    }
+  }
+
+  /**
    * 加载压缩包内图片的缩略图
    */
   async function loadArchiveThumbnail(filePath: string) {
@@ -128,8 +176,42 @@
       );
       fileBrowserStore.addThumbnail(filePath, thumbnail);
     } catch (err) {
-      console.error('Failed to load archive thumbnail:', err);
+      // 不支持的图片格式或其他错误，静默失败
+      console.debug('Failed to load archive thumbnail:', err);
     }
+  }
+
+  /**
+   * 显示右键菜单
+   */
+  function showContextMenu(e: MouseEvent, item: FsItem) {
+    e.preventDefault();
+    contextMenu = { x: e.clientX, y: e.clientY, item };
+  }
+
+  /**
+   * 隐藏右键菜单
+   */
+  function hideContextMenu() {
+    contextMenu = { x: 0, y: 0, item: null };
+  }
+
+  /**
+   * 浏览压缩包内容
+   */
+  async function browseArchive(item: FsItem) {
+    console.log('📦 Browsing archive:', item.path);
+    await loadArchive(item.path);
+    hideContextMenu();
+  }
+
+  /**
+   * 作为书籍打开压缩包
+   */
+  async function openArchiveAsBook(item: FsItem) {
+    console.log('📦 Opening archive as book:', item.path);
+    await bookStore.openBook(item.path);
+    hideContextMenu();
   }
 
   /**
@@ -147,8 +229,11 @@
     
     try {
       if (item.isDir) {
-        // 📁 文件夹：只能浏览,不能作为 book 打开
-        console.log('📁 Opening directory:', item.path);
+        // 📁 文件夹：浏览或作为 book 打开
+        console.log('📁 Folder clicked:', item.path);
+        
+        // 右键 = 浏览,左键 = 作为 book 打开 (先实现浏览,后续添加上下文菜单)
+        // 目前默认行为: 浏览
         await navigateToDirectory(item.path);
         console.log('✅ Directory navigation completed');
       } else {
@@ -157,21 +242,23 @@
         console.log('Is archive:', isArchive);
         
         if (isArchive) {
-          // 📦 压缩包：只能浏览内容,暂时不能作为 book 打开
-          console.log('📦 Loading archive contents (browse only):', item.path);
-          await loadArchive(item.path);
-          console.log('✅ Archive loaded for browsing');
-        } else if (item.isImage) {
-          // 🖼️ 图片：暂时注释掉作为 book 打开
-          console.log('🖼️ Image clicked, but book opening is temporarily disabled:', item.path);
-          console.log('⚠️ To enable: uncomment openImage() and openImageFromArchive()');
+          // 📦 压缩包：作为 book 打开
+          console.log('📦 Archive clicked as book:', item.path);
           
-          // TODO: 等文件夹导航修复后再启用
-          // if (isArchiveView) {
-          //   await openImageFromArchive(item.path);
-          // } else {
-          //   await openImage(item.path);
-          // }
+          // 打开压缩包作为书籍
+          await bookStore.openBook(item.path);
+          console.log('✅ Archive opened as book');
+        } else if (item.isImage) {
+          // 🖼️ 图片：打开查看
+          console.log('🖼️ Image clicked:', item.path);
+          
+          if (isArchiveView) {
+            // 从压缩包中打开图片
+            await openImageFromArchive(item.path);
+          } else {
+            // 从文件系统打开图片
+            await openImage(item.path);
+          }
         } else {
           console.log('⚠️ Unknown file type, ignoring');
         }
@@ -187,10 +274,14 @@
    */
   async function openImageFromArchive(filePath: string) {
     try {
-      await openBook(currentArchivePath);
+      console.log('📦 Opening image from archive:', filePath);
+      // 打开整个压缩包作为 book
+      await bookStore.openArchiveAsBook(currentArchivePath);
       // 跳转到指定图片
-      await navigateToImage(filePath);
+      await BookAPI.navigateToImage(filePath);
+      console.log('✅ Image opened from archive');
     } catch (err) {
+      console.error('❌ Error opening image from archive:', err);
       fileBrowserStore.setError(String(err));
     }
   }
@@ -223,17 +314,7 @@
     }
   }
 
-  /**
-   * 加载单个缩略图
-   */
-  async function loadThumbnail(path: string) {
-    try {
-      const thumbnail = await FileSystemAPI.generateFileThumbnail(path);
-      fileBrowserStore.addThumbnail(path, thumbnail);
-    } catch (err) {
-      console.error('Failed to load thumbnail:', err);
-    }
-  }
+  
 
   /**
    * 导航到目录
@@ -252,16 +333,21 @@
    */
   async function openImage(path: string) {
     try {
+      console.log('🖼️ Opening image:', path);
       // 获取图片所在的目录
       const lastBackslash = path.lastIndexOf('\\');
       const lastSlash = path.lastIndexOf('/');
       const lastSeparator = Math.max(lastBackslash, lastSlash);
       const parentDir = lastSeparator > 0 ? path.substring(0, lastSeparator) : path;
       
-      await openBook(parentDir);
+      console.log('📁 Parent directory:', parentDir);
+      // 打开整个文件夹作为 book
+      await bookStore.openDirectoryAsBook(parentDir);
       // 跳转到指定图片
-      await navigateToImage(path);
+      await BookAPI.navigateToImage(path);
+      console.log('✅ Image opened');
     } catch (err) {
+      console.error('❌ Error opening image:', err);
       fileBrowserStore.setError(String(err));
     }
   }
@@ -466,6 +552,7 @@
               fileBrowserStore.setSelectedIndex(index);
               openFile(item);
             }}
+            oncontextmenu={(e) => showContextMenu(e, item)}
           >
             <!-- 图标/缩略图 -->
             <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center">
@@ -513,5 +600,50 @@
         {/each}
       </div>
     </div>
+  {/if}
+
+  <!-- 右键菜单 -->
+  {#if contextMenu.item}
+    <div
+      class="context-menu fixed bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50"
+      style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
+      onmouseleave={hideContextMenu}
+    >
+      {#if contextMenu.item.name.endsWith('.zip') || contextMenu.item.name.endsWith('.cbz') || contextMenu.item.name.endsWith('.rar') || contextMenu.item.name.endsWith('.cbr')}
+        <!-- 压缩包选项 -->
+        <button
+          class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+          onclick={() => openArchiveAsBook(contextMenu.item!)}
+        >
+          <FolderOpen class="h-4 w-4" />
+          作为书籍打开
+        </button>
+        <button
+          class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+          onclick={() => browseArchive(contextMenu.item!)}
+        >
+          <Folder class="h-4 w-4" />
+          浏览内容
+        </button>
+        <div class="border-t border-gray-200 my-1"></div>
+      {/if}
+      
+      <!-- 通用选项 -->
+      <button
+        class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+        onclick={() => {
+          navigator.clipboard.writeText(contextMenu.item!.path);
+          hideContextMenu();
+        }}
+      >
+        复制路径
+      </button>
+    </div>
+    
+    <!-- 点击其他地方关闭菜单 -->
+    <div
+      class="fixed inset-0 z-40"
+      onclick={hideContextMenu}
+    ></div>
   {/if}
 </div>

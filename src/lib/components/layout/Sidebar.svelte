@@ -22,6 +22,7 @@
 	<div class="border-b">
 		<div class="flex items-center h-10">
 			{#each tabs as tab}
+				{@const IconComponent = tab.icon}
 				<button
 					class="flex-1 flex items-center justify-center gap-2 h-full hover:bg-accent transition-colors {$activePanel ===
 					tab.value
@@ -29,7 +30,7 @@
 						: ''}"
 					onclick={() => setActivePanel(tab.value as PanelType)}
 				>
-					<svelte:component this={tab.icon} class="h-4 w-4" />
+					<IconComponent class="h-4 w-4" />
 					<span class="text-sm">{tab.label}</span>
 				</button>
 			{/each}

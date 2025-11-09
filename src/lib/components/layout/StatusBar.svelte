@@ -1,19 +1,19 @@
 <script lang="ts">
 	/**
 	 * NeoView - Status Bar Component
-	 * 状态栏组件
+	 * 状态栏组件 (Svelte 5 Runes)
 	 */
-	import { currentBook, currentPageIndex, totalPages } from '$lib/stores';
+	import { bookStore } from '$lib/stores/book.svelte';
 	import { zoomLevel } from '$lib/stores';
 </script>
 
 <div class="h-6 bg-secondary/30 flex items-center justify-between px-3 text-xs border-t">
 	<!-- 左侧：书籍信息 -->
 	<div class="flex items-center gap-4">
-		{#if $currentBook}
-			<span class="font-medium">{$currentBook.name}</span>
+		{#if bookStore.currentBook}
+			<span class="font-medium">{bookStore.currentBook.name}</span>
 			<span class="text-muted-foreground">
-				Page {$currentPageIndex + 1} / {$totalPages}
+				Page {bookStore.currentPageIndex + 1} / {bookStore.totalPages}
 			</span>
 		{:else}
 			<span class="text-muted-foreground">No book opened</span>

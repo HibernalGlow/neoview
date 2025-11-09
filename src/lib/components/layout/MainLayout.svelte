@@ -4,10 +4,12 @@
 	 * 主布局组件
 	 */
 	import { sidebarOpen, sidebarWidth } from '$lib/stores';
+	import { bookStore } from '$lib/stores/book.svelte';
 	import TitleBar from './TitleBar.svelte';
 	import StatusBar from './StatusBar.svelte';
 	import Sidebar from './Sidebar.svelte';
 	import ResizablePanel from '../ui/ResizablePanel.svelte';
+	import ImageViewer from '../viewer/ImageViewer.svelte';
 
 	let { children } = $props();
 
@@ -37,7 +39,13 @@
 
 		<!-- 主显示区域 -->
 		<div class="flex-1 overflow-hidden">
-			{@render children?.()}
+			{#if bookStore.viewerOpen}
+				<!-- 图片查看器 -->
+				<ImageViewer />
+			{:else}
+				<!-- 默认内容 -->
+				{@render children?.()}
+			{/if}
 		</div>
 	</div>
 

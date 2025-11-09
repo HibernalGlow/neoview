@@ -1,18 +1,19 @@
 <script lang="ts">
 	/**
 	 * NeoView - Image Viewer Component
-	 * 图像查看器主组件
+	 * 图像查看器主组件 (Svelte 5 Runes)
 	 */
-	import { currentPage, nextPage, previousPage, canNextPage, canPreviousPage } from '$lib/stores';
+	import { bookStore } from '$lib/stores/book.svelte';
 	import { zoomLevel, zoomIn, zoomOut, resetZoom } from '$lib/stores';
 	import {
 		keyBindings,
 		generateKeyCombo,
 		findCommandByKeys
 	} from '$lib/stores/keyboard.svelte';
-	import { loadImage } from '$lib/api';
+	import { loadImage } from '$lib/api/fs';
+	import { loadImageFromArchive } from '$lib/api/filesystem';
 	import { Button } from '$lib/components/ui/button';
-	import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw } from '@lucide/svelte';
+	import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, X } from '@lucide/svelte';
 
 	let imageData = $state<string | null>(null);
 	let loading = $state(false);
@@ -20,7 +21,8 @@
 
 	// 监听当前页面变化
 	$effect(() => {
-		if ($currentPage) {
+		const currentPage = bookStore.currentPage;
+		if (currentPage) {
 			loadCurrentImage();
 		} else {
 			imageData = null;
@@ -28,13 +30,27 @@
 	});
 
 	async function loadCurrentImage() {
-		if (!$currentPage) return;
+		const currentPage = bookStore.currentPage;
+		const currentBook = bookStore.currentBook;
+		if (!currentPage || !currentBook) return;
 
 		loading = true;
 		error = null;
 
 		try {
-			const data = await loadImage($currentPage.path);
+			let data: string;
+			
+			// 根据 book 类型加载图片
+			if (currentBook.type === 'archive') {
+				// 从压缩包加载
+				console.log('Loading image from archive:', currentPage.path);
+				data = await loadImageFromArchive(currentBook.path, currentPage.path);
+			} else {
+				// 从文件系统加载
+				console.log('Loading image from file system:', currentPage.path);
+				data = await loadImage(currentPage.path);
+			}
+			
 			imageData = data;
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load image';
@@ -45,21 +61,25 @@
 	}
 
 	async function handleNextPage() {
-		if (!$canNextPage) return;
+		if (!bookStore.canNextPage) return;
 		try {
-			await nextPage();
+			await bookStore.nextPage();
 		} catch (err) {
 			console.error('Failed to go to next page:', err);
 		}
 	}
 
 	async function handlePreviousPage() {
-		if (!$canPreviousPage) return;
+		if (!bookStore.canPreviousPage) return;
 		try {
-			await previousPage();
+			await bookStore.previousPage();
 		} catch (err) {
 			console.error('Failed to go to previous page:', err);
 		}
+	}
+
+	function handleClose() {
+		bookStore.closeBook();
 	}
 
 	// 执行命令
@@ -97,31 +117,45 @@
 
 <div class="h-full w-full flex flex-col bg-black">
 	<!-- 工具栏 -->
-	<div class="bg-secondary/50 p-2 flex items-center justify-center gap-2">
-		<Button
-			variant="ghost"
-			size="icon"
-			onclick={handlePreviousPage}
-			disabled={!$canPreviousPage}
-		>
-			<ChevronLeft class="h-5 w-5" />
-		</Button>
+	<div class="bg-secondary/50 p-2 flex items-center justify-between">
+		<div class="flex items-center gap-2">
+			<Button variant="ghost" size="icon" onclick={handleClose}>
+				<X class="h-5 w-5" />
+			</Button>
+			
+			{#if bookStore.currentBook}
+				<span class="text-sm text-muted-foreground">
+					{bookStore.currentBook.name} - Page {bookStore.currentPageIndex + 1} / {bookStore.totalPages}
+				</span>
+			{/if}
+		</div>
+		
+		<div class="flex items-center gap-2">
+			<Button
+				variant="ghost"
+				size="icon"
+				onclick={handlePreviousPage}
+				disabled={!bookStore.canPreviousPage}
+			>
+				<ChevronLeft class="h-5 w-5" />
+			</Button>
 
-		<Button variant="ghost" size="icon" onclick={zoomOut}>
-			<ZoomOut class="h-5 w-5" />
-		</Button>
+			<Button variant="ghost" size="icon" onclick={zoomOut}>
+				<ZoomOut class="h-5 w-5" />
+			</Button>
 
-		<Button variant="ghost" size="icon" onclick={resetZoom}>
-			<span class="text-sm font-mono">{($zoomLevel * 100).toFixed(0)}%</span>
-		</Button>
+			<Button variant="ghost" size="icon" onclick={resetZoom}>
+				<span class="text-sm font-mono">{($zoomLevel * 100).toFixed(0)}%</span>
+			</Button>
 
-		<Button variant="ghost" size="icon" onclick={zoomIn}>
-			<ZoomIn class="h-5 w-5" />
-		</Button>
+			<Button variant="ghost" size="icon" onclick={zoomIn}>
+				<ZoomIn class="h-5 w-5" />
+			</Button>
 
-		<Button variant="ghost" size="icon" onclick={handleNextPage} disabled={!$canNextPage}>
-			<ChevronRight class="h-5 w-5" />
-		</Button>
+			<Button variant="ghost" size="icon" onclick={handleNextPage} disabled={!bookStore.canNextPage}>
+				<ChevronRight class="h-5 w-5" />
+			</Button>
+		</div>
 	</div>
 
 	<!-- 图像显示区域 -->

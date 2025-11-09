@@ -1,128 +1,244 @@
 /**
  * NeoView - Book Store
- * 书籍状态管理 Store
+ * 书籍状态管理 Store (Svelte 5 Runes)
  */
 
-import { writable, derived, get } from 'svelte/store';
-import type { BookInfo } from '../types';
+import type { BookInfo, Page } from '../types';
 import * as bookApi from '../api/book';
 
-// 当前打开的书籍
-export const currentBook = writable<BookInfo | null>(null);
-
-// 当前页面索引
-export const currentPageIndex = derived(currentBook, ($book) => $book?.currentPage ?? 0);
-
-// 总页数
-export const totalPages = derived(currentBook, ($book) => $book?.totalPages ?? 0);
-
-// 是否有书籍打开
-export const hasBook = derived(currentBook, ($book) => $book !== null);
-
-// 是否可以翻到下一页
-export const canNextPage = derived(
-	[currentBook],
-	([$book]) => $book !== null && $book.currentPage < $book.totalPages - 1
-);
-
-// 是否可以翻到上一页
-export const canPreviousPage = derived(
-	[currentBook],
-	([$book]) => $book !== null && $book.currentPage > 0
-);
-
-// 当前页面信息
-export const currentPage = derived(currentBook, ($book) => {
-	if (!$book || $book.pages.length === 0) return null;
-	return $book.pages[$book.currentPage];
-});
-
-/**
- * 打开书籍
- */
-export async function openBook(path: string) {
-	try {
-		const book = await bookApi.openBook(path);
-		currentBook.set(book);
-		return book;
-	} catch (error) {
-		console.error('Failed to open book:', error);
-		throw error;
-	}
+interface BookState {
+  currentBook: BookInfo | null;
+  loading: boolean;
+  error: string;
+  viewerOpen: boolean;
 }
 
-/**
- * 关闭书籍
- */
-export async function closeBook() {
-	try {
-		await bookApi.closeBook();
-		currentBook.set(null);
-	} catch (error) {
-		console.error('Failed to close book:', error);
-		throw error;
-	}
+class BookStore {
+  private state = $state<BookState>({
+    currentBook: null,
+    loading: false,
+    error: '',
+    viewerOpen: false,
+  });
+
+  // === Getters ===
+  get currentBook() {
+    return this.state.currentBook;
+  }
+
+  get loading() {
+    return this.state.loading;
+  }
+
+  get error() {
+    return this.state.error;
+  }
+
+  get viewerOpen() {
+    return this.state.viewerOpen;
+  }
+
+  get currentPage(): Page | null {
+    if (!this.state.currentBook) return null;
+    return this.state.currentBook.pages[this.state.currentBook.currentPage] || null;
+  }
+
+  get currentPageIndex(): number {
+    return this.state.currentBook?.currentPage ?? 0;
+  }
+
+  get totalPages(): number {
+    return this.state.currentBook?.totalPages ?? 0;
+  }
+
+  get hasBook(): boolean {
+    return this.state.currentBook !== null;
+  }
+
+  get canNextPage(): boolean {
+    const book = this.state.currentBook;
+    return book !== null && book.currentPage < book.totalPages - 1;
+  }
+
+  get canPreviousPage(): boolean {
+    const book = this.state.currentBook;
+    return book !== null && book.currentPage > 0;
+  }
+
+  // === Actions ===
+
+  /**
+   * 打开文件夹作为 Book
+   */
+  async openDirectoryAsBook(path: string) {
+    try {
+      console.log('📖 Opening directory as book:', path);
+      this.state.loading = true;
+      this.state.error = '';
+
+      // 使用通用的 openBook API (它会自动检测类型)
+      const book = await bookApi.openBook(path);
+      console.log('✅ Book opened:', book.name, 'with', book.totalPages, 'pages');
+
+      this.state.currentBook = book;
+      this.state.viewerOpen = true;
+    } catch (err) {
+      console.error('❌ Error opening directory as book:', err);
+      this.state.error = String(err);
+      this.state.currentBook = null;
+    } finally {
+      this.state.loading = false;
+    }
+  }
+
+  /**
+   * 打开压缩包作为 Book
+   */
+  async openArchiveAsBook(path: string) {
+    try {
+      console.log('📦 Opening archive as book:', path);
+      this.state.loading = true;
+      this.state.error = '';
+
+      // 使用通用的 openBook API (它会自动检测类型)
+      const book = await bookApi.openBook(path);
+      console.log('✅ Book opened:', book.name, 'with', book.totalPages, 'pages');
+
+      this.state.currentBook = book;
+      this.state.viewerOpen = true;
+    } catch (err) {
+      console.error('❌ Error opening archive as book:', err);
+      this.state.error = String(err);
+      this.state.currentBook = null;
+    } finally {
+      this.state.loading = false;
+    }
+  }
+
+  /**
+   * 关闭当前 Book
+   */
+  async closeBook() {
+    try {
+      console.log('📕 Closing book');
+      await bookApi.closeBook();
+      this.state.currentBook = null;
+      this.state.viewerOpen = false;
+      this.state.error = '';
+    } catch (err) {
+      console.error('❌ Error closing book:', err);
+      this.state.error = String(err);
+    }
+  }
+
+  /**
+   * 翻到指定页
+   */
+  async navigateToPage(index: number) {
+    if (!this.state.currentBook) return;
+
+    const maxIndex = this.state.currentBook.totalPages - 1;
+    if (index < 0 || index > maxIndex) {
+      console.warn('⚠️ Page index out of range:', index);
+      return;
+    }
+
+    try {
+      console.log(`📄 Navigating to page ${index + 1}/${this.state.currentBook.totalPages}`);
+      await bookApi.navigateToPage(index);
+      
+      // 更新本地状态
+      this.state.currentBook.currentPage = index;
+    } catch (err) {
+      console.error('❌ Error navigating to page:', err);
+      this.state.error = String(err);
+    }
+  }
+
+  /**
+   * 下一页
+   */
+  async nextPage() {
+    if (!this.canNextPage) {
+      console.log('📘 Already on last page');
+      return;
+    }
+
+    try {
+      const newIndex = await bookApi.nextPage();
+      if (this.state.currentBook) {
+        this.state.currentBook.currentPage = newIndex;
+      }
+      return newIndex;
+    } catch (err) {
+      console.error('❌ Error going to next page:', err);
+      this.state.error = String(err);
+    }
+  }
+
+  /**
+   * 上一页
+   */
+  async previousPage() {
+    if (!this.canPreviousPage) {
+      console.log('📘 Already on first page');
+      return;
+    }
+
+    try {
+      const newIndex = await bookApi.previousPage();
+      if (this.state.currentBook) {
+        this.state.currentBook.currentPage = newIndex;
+      }
+      return newIndex;
+    } catch (err) {
+      console.error('❌ Error going to previous page:', err);
+      this.state.error = String(err);
+    }
+  }
+
+  /**
+   * 第一页
+   */
+  async firstPage() {
+    await this.navigateToPage(0);
+  }
+
+  /**
+   * 最后一页
+   */
+  async lastPage() {
+    if (!this.state.currentBook) return;
+    await this.navigateToPage(this.state.currentBook.totalPages - 1);
+  }
+
+  /**
+   * 刷新当前书籍信息
+   */
+  async refreshCurrentBook() {
+    try {
+      const book = await bookApi.getCurrentBook();
+      this.state.currentBook = book;
+    } catch (err) {
+      console.error('❌ Error refreshing book:', err);
+      this.state.error = String(err);
+    }
+  }
+
+  /**
+   * 设置错误信息
+   */
+  setError(message: string) {
+    this.state.error = message;
+  }
+
+  /**
+   * 清除错误信息
+   */
+  clearError() {
+    this.state.error = '';
+  }
 }
 
-/**
- * 导航到指定页面
- */
-export async function navigateToPage(pageIndex: number) {
-	try {
-		await bookApi.navigateToPage(pageIndex);
-		const book = get(currentBook);
-		if (book) {
-			currentBook.set({ ...book, currentPage: pageIndex });
-		}
-	} catch (error) {
-		console.error('Failed to navigate to page:', error);
-		throw error;
-	}
-}
-
-/**
- * 下一页
- */
-export async function nextPage() {
-	try {
-		const newIndex = await bookApi.nextPage();
-		const book = get(currentBook);
-		if (book) {
-			currentBook.set({ ...book, currentPage: newIndex });
-		}
-		return newIndex;
-	} catch (error) {
-		console.error('Failed to go to next page:', error);
-		throw error;
-	}
-}
-
-/**
- * 上一页
- */
-export async function previousPage() {
-	try {
-		const newIndex = await bookApi.previousPage();
-		const book = get(currentBook);
-		if (book) {
-			currentBook.set({ ...book, currentPage: newIndex });
-		}
-		return newIndex;
-	} catch (error) {
-		console.error('Failed to go to previous page:', error);
-		throw error;
-	}
-}
-
-/**
- * 刷新当前书籍信息
- */
-export async function refreshCurrentBook() {
-	try {
-		const book = await bookApi.getCurrentBook();
-		currentBook.set(book);
-	} catch (error) {
-		console.error('Failed to refresh book:', error);
-		throw error;
-	}
-}
+// 导出单例
+export const bookStore = new BookStore();

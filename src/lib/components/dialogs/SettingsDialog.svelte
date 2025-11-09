@@ -33,6 +33,7 @@
 			<!-- 左侧标签栏 -->
 			<div class="w-48 border-r pr-4">
 				{#each tabs as tab}
+					{@const IconComponent = tab.icon}
 					<button
 						class="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-accent transition-colors {activeTab ===
 						tab.value
@@ -40,7 +41,7 @@
 							: ''}"
 						onclick={() => (activeTab = tab.value)}
 					>
-						<svelte:component this={tab.icon} class="h-5 w-5" />
+						<IconComponent class="h-5 w-5" />
 						<span>{tab.label}</span>
 					</button>
 				{/each}

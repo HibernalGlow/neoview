@@ -7,7 +7,7 @@
 	import ImageViewer from '$lib/components/viewer/ImageViewer.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { open } from '@tauri-apps/plugin-dialog';
-	import { openBook } from '$lib/stores';
+	import { bookStore } from '$lib/stores';
 	import { FolderOpen } from '@lucide/svelte';
 
 	let loading = $state(false);
@@ -22,7 +22,7 @@
 			});
 
 			if (selected) {
-				await openBook(selected);
+				await bookStore.openBook(selected);
 			}
 		} catch (error) {
 			console.error('Failed to open folder:', error);

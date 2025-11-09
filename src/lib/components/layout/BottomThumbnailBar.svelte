@@ -135,16 +135,22 @@
 </script>
 
 {#if bookStore.currentBook}
+	<!-- 缩略图栏触发区域（独立，位于状态栏上方） -->
 	<div
-		class="absolute bottom-0 left-0 right-0 z-50 transition-transform duration-300 {isVisible
+		class="fixed bottom-6 left-0 right-0 h-3 z-[48]"
+		onmouseenter={handleMouseEnter}
+		role="presentation"
+		aria-label="底部缩略图栏触发区域"
+	></div>
+
+	<!-- 缩略图栏内容 -->
+	<div
+		class="absolute bottom-6 left-0 right-0 z-50 transition-transform duration-300 {isVisible
 			? 'translate-y-0'
 			: 'translate-y-full'}"
 		onmouseenter={handleMouseEnter}
 		onmouseleave={handleMouseLeave}
 	>
-		<!-- 触发区域 -->
-		<div class="h-2 bg-transparent"></div>
-
 		<div class="bg-secondary/95 backdrop-blur-sm border-t shadow-lg">
 			<div class="p-2">
 				<div class="flex gap-2 overflow-x-auto pb-1" onscroll={handleScroll}>

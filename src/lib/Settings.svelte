@@ -18,7 +18,12 @@
 		{ value: 'performance', label: '性能', icon: Zap }
 	];
 
-	let activeTab = $state('general');
+	let activeTab = $state<string>('general');
+
+	function switchTab(tabValue: string) {
+		console.log('🔄 切换到标签页:', tabValue);
+		activeTab = tabValue;
+	}
 
 	async function minimizeWindow() {
 		await appWindow.minimize();
@@ -66,7 +71,8 @@
 					tab.value
 						? 'bg-primary text-primary-foreground'
 						: ''}"
-					onclick={() => (activeTab = tab.value)}
+					onclick={() => switchTab(tab.value)}
+					type="button"
 				>
 					<IconComponent class="h-5 w-5" />
 					<span class="font-medium">{tab.label}</span>

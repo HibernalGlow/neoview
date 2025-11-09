@@ -14,6 +14,7 @@
 		rotateClockwise,
 		rotationAngle,
 		viewMode,
+		setViewMode,
 		toggleViewMode,
 		toggleSidebar,
 		toggleRightSidebar
@@ -25,9 +26,9 @@
 		ZoomIn,
 		ZoomOut,
 		RotateCw,
-		PanelLeft,
-		Grid,
-		Maximize2,
+		RectangleVertical,
+		Columns2,
+		PanelsTopLeft,
 		X,
 		Folder,
 		FileArchive,
@@ -260,26 +261,39 @@
 				<!-- 分隔线 -->
 				<div class="w-px h-6 bg-border mx-1"></div>
 
-				<!-- 视图模式切换 -->
+				<!-- 视图模式切换 - 独立按钮 -->
 				<Button
-					variant="ghost"
+					variant={$viewMode === 'single' ? 'default' : 'ghost'}
 					size="icon"
 					class="h-8 w-8"
-					onclick={toggleViewMode}
-					title="切换视图模式: {$viewMode === 'single'
-						? '单页'
-						: $viewMode === 'double'
-							? '双页'
-							: '全景'}"
+					onclick={() => setViewMode('single')}
+					title="单页模式"
 				>
-					{#if $viewMode === 'single'}
-						<PanelLeft class="h-4 w-4" />
-					{:else if $viewMode === 'double'}
-						<Grid class="h-4 w-4" />
-					{:else}
-						<Maximize2 class="h-4 w-4" />
-					{/if}
+					<RectangleVertical class="h-4 w-4" />
 				</Button>
+
+				<Button
+					variant={$viewMode === 'double' ? 'default' : 'ghost'}
+					size="icon"
+					class="h-8 w-8"
+					onclick={() => setViewMode('double')}
+					title="双页模式"
+				>
+					<Columns2 class="h-4 w-4" />
+				</Button>
+
+				<Button
+					variant={$viewMode === 'panorama' ? 'default' : 'ghost'}
+					size="icon"
+					class="h-8 w-8"
+					onclick={() => setViewMode('panorama')}
+					title="全景模式（显示相邻图片）"
+				>
+					<PanelsTopLeft class="h-4 w-4" />
+				</Button>
+
+				<!-- 分隔线 -->
+				<div class="w-px h-6 bg-border mx-1"></div>
 
 				<!-- 旋转按钮 -->
 				<Button variant="ghost" size="icon" class="h-8 w-8" onclick={rotateClockwise} title="旋转 90°">

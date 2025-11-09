@@ -300,11 +300,23 @@
 	<div
 		class="fixed bg-popover border rounded-md shadow-lg py-1 z-50 min-w-[150px]"
 		style="left: {contextMenuPosition.x}px; top: {contextMenuPosition.y}px;"
+		role="menu"
 		onclick={(e) => e.stopPropagation()}
+		onkeydown={(e) => {
+			if (e.key === 'Escape') {
+				closeContextMenu();
+			} else if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				openTabInNewWindow();
+			}
+		}}
+		tabindex="-1"
 	>
 		<button
 			class="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center gap-2"
 			onclick={openTabInNewWindow}
+			role="menuitem"
+			type="button"
 		>
 			<ExternalLink class="h-4 w-4" />
 			在独立窗口中打开
@@ -370,20 +382,20 @@
 			{/if}
 		</div>
 
-		<div
+		<button
+			type="button"
 			class={resizeHandleClass}
 			onmousedown={handleResizeStart}
-			role="separator"
 			aria-label="调整侧边栏宽度"
-		></div>
+		></button>
 	{:else}
 		<!-- 右侧布局：拖拽条 | 内容 | 图标栏 -->
-		<div
+		<button
+			type="button"
 			class={resizeHandleClass}
 			onmousedown={handleResizeStart}
-			role="separator"
 			aria-label="调整侧边栏宽度"
-		></div>
+		></button>
 
 		<div class="flex-1 overflow-hidden">
 			{#if children}

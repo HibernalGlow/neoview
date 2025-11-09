@@ -16,7 +16,7 @@
 	let isResizing = $state(false);
 	let resizeStartY = 0;
 	let resizeStartHeight = 0;
-	let showProgressBar = $state(false);
+	let showProgressBar = $state(true);
 
 	// 响应钉住状态
 	$effect(() => {

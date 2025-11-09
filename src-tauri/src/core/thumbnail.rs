@@ -76,9 +76,8 @@ impl ThumbnailManager {
 
     /// 生成并缓存缩略图
     fn generate_and_cache_thumbnail(&self, image_path: &Path, cache_path: &Path) -> Result<String, String> {
-        // 加载图片
-        let img = image::open(image_path)
-            .map_err(|e| format!("打开图片失败: {}", e))?;
+        // 加载图片 - 支持 JXL、AVIF 等格式
+        let img = self.load_image_with_format_support(image_path)?;
 
         // 生成缩略图
         let thumbnail = img.thumbnail(self.size, self.size);
@@ -92,6 +91,89 @@ impl ThumbnailManager {
 
         // 返回 base64
         Ok(format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&webp_data)))
+    }
+
+    /// 加载图片（支持 JXL、AVIF 等特殊格式）
+    fn load_image_with_format_support(&self, image_path: &Path) -> Result<DynamicImage, String> {
+        // 读取文件
+        let image_data = fs::read(image_path)
+            .map_err(|e| format!("读取图片文件失败: {}", e))?;
+
+        // 检查文件扩展名
+        if let Some(ext) = image_path.extension().and_then(|e| e.to_str()) {
+            let ext_lower = ext.to_lowercase();
+            
+            // JXL 格式处理
+            if ext_lower == "jxl" {
+                return self.decode_jxl_image(&image_data);
+            }
+            
+            // AVIF 格式处理
+            if ext_lower == "avif" {
+                return image::load_from_memory_with_format(&image_data, ImageFormat::Avif)
+                    .map_err(|e| format!("加载 AVIF 图片失败: {}", e));
+            }
+        }
+
+        // 其他格式使用标准加载
+        image::load_from_memory(&image_data)
+            .map_err(|e| format!("加载图片失败: {}", e))
+    }
+
+    /// 解码 JXL 图像
+    fn decode_jxl_image(&self, image_data: &[u8]) -> Result<DynamicImage, String> {
+        use jxl_oxide::JxlImage;
+        
+        let mut reader = Cursor::new(image_data);
+        let jxl_image = JxlImage::builder()
+            .read(&mut reader)
+            .map_err(|e| format!("Failed to decode JXL: {}", e))?;
+        
+        let render = jxl_image.render_frame(0)
+            .map_err(|e| format!("Failed to render JXL frame: {}", e))?;
+        
+        let fb = render.image_all_channels();
+        let width = fb.width() as u32;
+        let height = fb.height() as u32;
+        let channels = fb.channels();
+        let float_buf = fb.buf();
+        
+        // 根据通道数创建对应的图像
+        if channels == 1 {
+            let gray_data: Vec<u8> = float_buf
+                .iter()
+                .map(|&v| (v.clamp(0.0, 1.0) * 255.0) as u8)
+                .collect();
+            
+            let gray_img = image::GrayImage::from_raw(width, height, gray_data)
+                .ok_or_else(|| "Failed to create gray image from JXL data".to_string())?;
+            Ok(DynamicImage::ImageLuma8(gray_img))
+        } else if channels == 3 {
+            let rgb_data: Vec<u8> = float_buf
+                .iter()
+                .map(|&v| (v.clamp(0.0, 1.0) * 255.0) as u8)
+                .collect();
+            
+            let rgb_img = image::RgbImage::from_raw(width, height, rgb_data)
+                .ok_or_else(|| "Failed to create RGB image from JXL data".to_string())?;
+            Ok(DynamicImage::ImageRgb8(rgb_img))
+        } else {
+            let rgba_data: Vec<u8> = float_buf
+                .chunks(channels)
+                .flat_map(|chunk| {
+                    vec![
+                        (chunk[0].clamp(0.0, 1.0) * 255.0) as u8,
+                        (chunk[1].clamp(0.0, 1.0) * 255.0) as u8,
+                        (chunk[2].clamp(0.0, 1.0) * 255.0) as u8,
+                        (chunk.get(3).copied().unwrap_or(1.0).clamp(0.0, 1.0) * 255.0) as u8,
+                    ]
+                })
+                .collect();
+            
+            let rgba_img = image::RgbaImage::from_raw(width, height, rgba_data)
+                .ok_or_else(|| "Failed to create RGBA image from JXL data".to_string())?;
+            Ok(DynamicImage::ImageRgba8(rgba_img))
+        }
     }
 
     /// 编码为 WebP 格式

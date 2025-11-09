@@ -304,3 +304,103 @@ pub async fn is_supported_archive(path: String) -> Result<bool, String> {
     let path = PathBuf::from(path);
     Ok(crate::core::archive::ArchiveManager::is_supported_archive(&path))
 }
+
+// ===== 文件操作命令 =====
+
+/// 复制文件或文件夹
+#[tauri::command]
+pub async fn copy_path(
+    from: String,
+    to: String,
+    state: State<'_, FsState>,
+) -> Result<(), String> {
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    let from_path = PathBuf::from(from);
+    let to_path = PathBuf::from(to);
+    fs_manager.copy(&from_path, &to_path)
+}
+
+/// 移动文件或文件夹
+#[tauri::command]
+pub async fn move_path(
+    from: String,
+    to: String,
+    state: State<'_, FsState>,
+) -> Result<(), String> {
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    let from_path = PathBuf::from(from);
+    let to_path = PathBuf::from(to);
+    fs_manager.move_item(&from_path, &to_path)
+}
+
+/// 在系统默认程序中打开文件
+#[tauri::command]
+pub async fn open_with_system(path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", &path])
+            .spawn()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
+    }
+    
+    Ok(())
+}
+
+/// 在文件管理器中显示文件
+#[tauri::command]
+pub async fn show_in_file_manager(path: String) -> Result<(), String> {
+    let path = PathBuf::from(path);
+    
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg("/select,")
+            .arg(path.to_string_lossy().as_ref())
+            .spawn()
+            .map_err(|e| format!("Failed to show in file manager: {}", e))?;
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(path.to_string_lossy().as_ref())
+            .spawn()
+            .map_err(|e| format!("Failed to show in file manager: {}", e))?;
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        // 对于 Linux，尝试打开包含文件的目录
+        let parent = path.parent()
+            .ok_or_else(|| "Cannot get parent directory".to_string())?;
+            
+        std::process::Command::new("xdg-open")
+            .arg(parent.to_string_lossy().as_ref())
+            .spawn()
+            .map_err(|e| format!("Failed to show in file manager: {}", e))?;
+    }
+    
+    Ok(())
+}

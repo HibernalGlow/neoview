@@ -9,6 +9,7 @@
   import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
   import { NavigationHistory } from '$lib/utils/navigationHistory';
   import { Button } from '$lib/components/ui/button';
+  import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 
   // 使用全局状态
   let currentPath = $state('');
@@ -21,6 +22,8 @@
   let selectedIndex = $state(-1);
   let fileListContainer = $state<HTMLDivElement | undefined>(undefined);
   let contextMenu = $state<{ x: number; y: number; item: FsItem | null }>({ x: 0, y: 0, item: null });
+  let copyToSubmenu = $state<{ show: boolean; x: number; y: number }>({ show: false, x: 0, y: 0 });
+  let clipboardItem = $state<{ path: string; operation: 'copy' | 'cut' } | null>(null);
 
   // 导航历史管理器
   let navigationHistory = new NavigationHistory();
@@ -317,6 +320,7 @@
    */
   function hideContextMenu() {
     contextMenu = { x: 0, y: 0, item: null };
+    copyToSubmenu.show = false;
   }
 
   /**
@@ -573,6 +577,156 @@
       items = [];
       isArchiveView = false;
     }
+  }
+
+  // ===== 右键菜单功能 =====
+
+  /**
+   * 添加到书签
+   */
+  function addToBookmark(item: FsItem) {
+    bookmarkStore.add(item);
+    hideContextMenu();
+  }
+
+  /**
+   * 在资源管理器中打开
+   */
+  async function openInExplorer(item: FsItem) {
+    try {
+      await FileSystemAPI.showInFileManager(item.path);
+    } catch (err) {
+      fileBrowserStore.setError(String(err));
+    }
+    hideContextMenu();
+  }
+
+  /**
+   * 在外部应用中打开
+   */
+  async function openWithExternalApp(item: FsItem) {
+    try {
+      await FileSystemAPI.openWithSystem(item.path);
+    } catch (err) {
+      fileBrowserStore.setError(String(err));
+    }
+    hideContextMenu();
+  }
+
+  /**
+   * 剪切文件
+   */
+  function cutItem(item: FsItem) {
+    clipboardItem = { path: item.path, operation: 'cut' };
+    hideContextMenu();
+  }
+
+  /**
+   * 复制文件
+   */
+  function copyItem(item: FsItem) {
+    clipboardItem = { path: item.path, operation: 'copy' };
+    hideContextMenu();
+  }
+
+  /**
+   * 粘贴文件
+   */
+  async function pasteItem() {
+    if (!clipboardItem || !currentPath) return;
+
+    try {
+      const targetPath = `${currentPath}/${clipboardItem.path.split(/[\\/]/).pop()}`;
+      
+      if (clipboardItem.operation === 'cut') {
+        await FileSystemAPI.movePath(clipboardItem.path, targetPath);
+      } else {
+        await FileSystemAPI.copyPath(clipboardItem.path, targetPath);
+      }
+      
+      clipboardItem = null;
+      await refresh();
+    } catch (err) {
+      fileBrowserStore.setError(String(err));
+    }
+  }
+
+  /**
+   * 显示复制到子菜单
+   */
+  function showCopyToSubmenu(e: MouseEvent) {
+    e.stopPropagation();
+    copyToSubmenu = { show: true, x: contextMenu.x + 150, y: contextMenu.y };
+  }
+
+  /**
+   * 复制到指定文件夹
+   */
+  async function copyToFolder(targetPath: string) {
+    if (!contextMenu.item) return;
+
+    try {
+      const fileName = contextMenu.item.path.split(/[\\/]/).pop();
+      const targetFilePath = `${targetPath}/${fileName}`;
+      await FileSystemAPI.copyPath(contextMenu.item.path, targetFilePath);
+      await refresh();
+    } catch (err) {
+      fileBrowserStore.setError(String(err));
+    }
+    hideContextMenu();
+    copyToSubmenu.show = false;
+  }
+
+  /**
+   * 删除文件
+   */
+  async function deleteItemFromMenu(item: FsItem) {
+    if (!confirm(`确定要删除 "${item.name}" 吗？`)) return;
+
+    try {
+      await FileSystemAPI.moveToTrash(item.path);
+      await refresh();
+    } catch (err) {
+      fileBrowserStore.setError(String(err));
+    }
+    hideContextMenu();
+  }
+
+  /**
+   * 移动到文件夹
+   */
+  async function moveToFolder() {
+    if (!contextMenu.item) return;
+
+    try {
+      const targetPath = await FileSystemAPI.selectFolder();
+      if (targetPath) {
+        const fileName = contextMenu.item.path.split(/[\\/]/).pop();
+        const targetFilePath = `${targetPath}/${fileName}`;
+        await FileSystemAPI.movePath(contextMenu.item.path, targetFilePath);
+        await refresh();
+      }
+    } catch (err) {
+      fileBrowserStore.setError(String(err));
+    }
+    hideContextMenu();
+  }
+
+  /**
+   * 重命名
+   */
+  async function renameItem(item: FsItem) {
+    const newName = prompt('请输入新名称:', item.name);
+    if (!newName || newName === item.name) return;
+
+    try {
+      const newPath = item.path.replace(item.name, newName);
+      await FileSystemAPI.renamePath(item.path, newPath);
+      await refresh();
+    } catch (err) {
+      fileBrowserStore.setError(String(err));
+    }
+    hideContextMenu();
   }
 </script>
 
@@ -843,11 +997,142 @@
   <!-- 右键菜单 -->
   {#if contextMenu.item}
     <div
-      class="context-menu fixed bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50"
+      class="context-menu fixed bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50 min-w-[180px]"
       style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
       onmouseleave={hideContextMenu}
     >
+      <!-- 添加到书签 -->
+      <button
+        class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+        onclick={() => addToBookmark(contextMenu.item!)}
+      >
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+        </svg>
+        添加到书签
+      </button>
+
+      <div class="border-t border-gray-200 my-1"></div>
+
+      <!-- 在资源管理器中打开 -->
+      <button
+        class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+        onclick={() => openInExplorer(contextMenu.item!)}
+      >
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+        </svg>
+        在资源管理器中打开
+      </button>
+
+      <!-- 在外部应用中打开 -->
+      <button
+        class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+        onclick={() => openWithExternalApp(contextMenu.item!)}
+      >
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        </svg>
+        在外部应用中打开
+      </button>
+
+      <div class="border-t border-gray-200 my-1"></div>
+
+      <!-- 剪切 -->
+      <button
+        class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+        onclick={() => cutItem(contextMenu.item!)}
+      >
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
+        </svg>
+        剪切
+      </button>
+
+      <!-- 复制 -->
+      <button
+        class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+        onclick={() => copyItem(contextMenu.item!)}
+      >
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+        复制
+      </button>
+
+      <!-- 复制到文件夹（二级菜单） -->
+      <div class="relative">
+        <button
+          class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center justify-between gap-2"
+          onclick={showCopyToSubmenu}
+        >
+          <div class="flex items-center gap-2">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            复制到文件夹
+          </div>
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+
+        <!-- 复制到子菜单 -->
+        {#if copyToSubmenu.show}
+          <div
+            class="fixed bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-[60] min-w-[150px]"
+            style="left: {copyToSubmenu.x}px; top: {copyToSubmenu.y}px;"
+          >
+            <!-- 这里可以添加常用目标文件夹 -->
+            <button
+              class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100"
+              onclick={() => {
+                const targetPath = prompt('请输入目标文件夹路径:');
+                if (targetPath) copyToFolder(targetPath);
+              }}
+            >
+              选择文件夹...
+            </button>
+            <!-- 可以添加更多预设文件夹选项 -->
+          </div>
+        {/if}
+      </div>
+
+      <div class="border-t border-gray-200 my-1"></div>
+
+      <!-- 删除 -->
+      <button
+        class="w-full px-4 py-2 text-left text-sm hover:bg-red-50 text-red-600 flex items-center gap-2"
+        onclick={() => deleteItemFromMenu(contextMenu.item!)}
+      >
+        <Trash2 class="h-4 w-4" />
+        删除
+      </button>
+
+      <!-- 移动到文件夹 -->
+      <button
+        class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+        onclick={moveToFolder}
+      >
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+        </svg>
+        移动到文件夹(E)
+      </button>
+
+      <!-- 重命名 -->
+      <button
+        class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+        onclick={() => renameItem(contextMenu.item!)}
+      >
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        </svg>
+        重命名(M)
+      </button>
+
       {#if contextMenu.item.name.endsWith('.zip') || contextMenu.item.name.endsWith('.cbz') || contextMenu.item.name.endsWith('.rar') || contextMenu.item.name.endsWith('.cbr')}
+        <div class="border-t border-gray-200 my-1"></div>
         <!-- 压缩包选项 -->
         <button
           class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
@@ -863,8 +1148,9 @@
           <Folder class="h-4 w-4" />
           浏览内容
         </button>
-        <div class="border-t border-gray-200 my-1"></div>
       {/if}
+
+      <div class="border-t border-gray-200 my-1"></div>
       
       <!-- 通用选项 -->
       <button
@@ -874,6 +1160,9 @@
           hideContextMenu();
         }}
       >
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+        </svg>
         复制路径
       </button>
     </div>

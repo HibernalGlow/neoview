@@ -78,6 +78,11 @@ pub fn run() {
             commands::get_images_from_archive,
             commands::generate_archive_thumbnail,
             commands::is_supported_archive,
+            // File operation commands
+            commands::fs_commands::copy_path,
+            commands::fs_commands::move_path,
+            commands::fs_commands::open_with_system,
+            commands::fs_commands::show_in_file_manager,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

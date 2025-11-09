@@ -160,3 +160,33 @@ export async function generateArchiveThumbnail(
 export async function isSupportedArchive(path: string): Promise<boolean> {
   return await invoke<boolean>('is_supported_archive', { path });
 }
+
+// ===== 文件操作 API =====
+
+/**
+ * 复制文件或文件夹
+ */
+export async function copyPath(from: string, to: string): Promise<void> {
+  await invoke('copy_path', { from, to });
+}
+
+/**
+ * 移动文件或文件夹
+ */
+export async function movePath(from: string, to: string): Promise<void> {
+  await invoke('move_path', { from, to });
+}
+
+/**
+ * 在系统默认程序中打开文件
+ */
+export async function openWithSystem(path: string): Promise<void> {
+  await invoke('open_with_system', { path });
+}
+
+/**
+ * 在文件管理器中显示文件
+ */
+export async function showInFileManager(path: string): Promise<void> {
+  await invoke('show_in_file_manager', { path });
+}

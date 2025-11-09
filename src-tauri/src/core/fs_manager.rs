@@ -325,6 +325,80 @@ impl FsManager {
         self.validate_path(path)?;
         Err("当前平台不支持回收站功能".to_string())
     }
+
+    /// 复制文件或目录
+    pub fn copy(&self, from: &Path, to: &Path) -> Result<(), String> {
+        self.validate_path(from)?;
+        
+        // 验证目标路径的父目录
+        if let Some(parent) = to.parent() {
+            self.validate_path(parent)?;
+        }
+
+        if from.is_file() {
+            // 复制文件
+            fs::copy(from, to)
+                .map_err(|e| format!("复制文件失败: {}", e))?;
+            Ok(())
+        } else if from.is_dir() {
+            // 复制目录（递归）
+            self.copy_directory(from, to)
+        } else {
+            Err("源路径不存在".to_string())
+        }
+    }
+
+    /// 递归复制目录
+    fn copy_directory(&self, from: &Path, to: &Path) -> Result<(), String> {
+        // 创建目标目录
+        fs::create_dir_all(to)
+            .map_err(|e| format!("创建目标目录失败: {}", e))?;
+
+        // 读取源目录内容
+        let entries = fs::read_dir(from)
+            .map_err(|e| format!("读取源目录失败: {}", e))?;
+
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
+            let from_path = entry.path();
+            let to_path = to.join(entry.file_name());
+
+            if from_path.is_file() {
+                // 复制文件
+                fs::copy(&from_path, &to_path)
+                    .map_err(|e| format!("复制文件失败: {}", e))?;
+            } else if from_path.is_dir() {
+                // 递归复制子目录
+                self.copy_directory(&from_path, &to_path)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// 移动文件或目录
+    pub fn move_item(&self, from: &Path, to: &Path) -> Result<(), String> {
+        self.validate_path(from)?;
+        
+        // 验证目标路径的父目录
+        if let Some(parent) = to.parent() {
+            self.validate_path(parent)?;
+        }
+
+        // 尝试使用系统重命名（在同一文件系统上更快）
+        if let Err(_) = fs::rename(from, to) {
+            // 如果重命名失败（跨文件系统），则使用复制+删除
+            self.copy(from, to)?;
+            if from.is_file() {
+                fs::remove_file(from)
+                    .map_err(|e| format!("删除源文件失败: {}", e))?;
+            } else {
+                fs::remove_dir_all(from)
+                    .map_err(|e| format!("删除源目录失败: {}", e))?;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Default for FsManager {

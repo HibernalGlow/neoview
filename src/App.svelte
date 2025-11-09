@@ -63,43 +63,62 @@ function formatKeyCombo(e: KeyboardEvent) {
 }
 
 async function dispatchAction(action: string) {
+	console.log('执行操作:', action);
+	
+	// 添加调试信息
+	keyBindingsStore.debugBindings();
+	
 	switch (action) {
 		case 'nextPage':
+			console.log('执行下一页操作');
 			await bookStore.nextPage();
 			break;
 		case 'prevPage':
+			console.log('执行上一页操作');
 			await bookStore.previousPage();
 			break;
 		case 'firstPage':
+			console.log('执行第一页操作');
 			await bookStore.firstPage();
 			break;
 		case 'lastPage':
+			console.log('执行最后一页操作');
 			await bookStore.lastPage();
 			break;
 		case 'zoomIn':
+			console.log('执行放大操作');
 			zoomIn();
 			break;
 		case 'zoomOut':
+			console.log('执行缩小操作');
 			zoomOut();
 			break;
 		case 'fitWindow':
-		case 'zoom_reset':
+			console.log('执行适应窗口操作');
+			resetZoom();
+			break;
 		case 'actualSize':
+			console.log('执行实际大小操作');
 			resetZoom();
 			break;
 		case 'fullscreen':
+			console.log('执行全屏操作');
 			toggleFullscreen();
 			break;
 		case 'toggleSidebar':
+			console.log('执行切换侧边栏操作');
 			toggleSidebar();
 			break;
 		case 'toggleBookMode':
+			console.log('执行切换书籍模式操作');
 			toggleViewMode();
 			break;
 		case 'rotate':
+			console.log('执行旋转操作');
 			rotateClockwise();
 			break;
 		case 'openFile':
+			console.log('执行打开文件操作');
 			try {
 				const selected = await open({ multiple: false });
 				if (selected) await bookStore.openBook(selected as string);
@@ -108,9 +127,11 @@ async function dispatchAction(action: string) {
 			}
 			break;
 		case 'closeFile':
-			await bookStore.closeBook();
+			console.log('执行关闭文件操作');
+			await bookStore.closeFile();
 			break;
 		case 'deleteFile':
+			console.log('执行删除文件操作');
 			// 删除需要额外确认/实现，这里调用 bookStore.closeBook() 作为占位
 			await bookStore.closeBook();
 			break;
@@ -124,7 +145,9 @@ function handleGlobalKeydown(e: KeyboardEvent) {
 	if (isTypingInInput(e)) return;
 
 	const combo = formatKeyCombo(e);
+	console.log('按键按下:', combo); // 调试信息
 	const action = keyBindingsStore.findActionByKey(combo);
+	console.log('找到的操作:', action); // 调试信息
 	if (action) {
 		e.preventDefault();
 		dispatchAction(action);

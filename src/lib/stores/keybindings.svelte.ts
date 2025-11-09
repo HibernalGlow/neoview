@@ -350,6 +350,22 @@ class KeyBindingsStore {
 				return '';
 		}
 	}
+
+	// 调试方法：打印所有绑定
+	debugBindings() {
+		console.log('=== 当前所有绑定 ===');
+		this.bindings.forEach(binding => {
+			console.log(`操作: ${binding.action} (${binding.name})`);
+			if (binding.bindings && binding.bindings.length > 0) {
+				binding.bindings.forEach(b => {
+					console.log(`  - ${this.formatBinding(b)}`);
+				});
+			} else {
+				console.log('  - 无绑定');
+			}
+		});
+		console.log('================');
+	}
 }
 
 // 导出单例

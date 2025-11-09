@@ -201,6 +201,13 @@ class BookStore {
   }
 
   /**
+   * 上一页 (别名)
+   */
+  async prevPage() {
+    return await this.previousPage();
+  }
+
+  /**
    * 上一页
    */
   async previousPage() {
@@ -234,6 +241,20 @@ class BookStore {
   async lastPage() {
     if (!this.state.currentBook) return;
     await this.navigateToPage(this.state.currentBook.totalPages - 1);
+  }
+
+  /**
+   * 跳转到指定页 (别名)
+   */
+  async goToPage(index: number) {
+    await this.navigateToPage(index);
+  }
+
+  /**
+   * 关闭书籍 (别名)
+   */
+  async closeFile() {
+    await this.closeBook();
   }
 
   /**

@@ -5,6 +5,7 @@ use std::time::SystemTime;
 
 /// 文件系统项（文件或目录）
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FsItem {
     pub name: String,
     pub path: String,

@@ -41,11 +41,10 @@
     try {
       const path = await FileSystemAPI.selectFolder();
       if (path) {
-        currentPath = path;
         await loadDirectory(path);
       }
     } catch (err) {
-      error = String(err);
+      fileBrowserStore.setError(String(err));
     }
   }
 
@@ -148,29 +147,31 @@
     
     try {
       if (item.isDir) {
-        // 打开目录
+        // 📁 文件夹：只能浏览,不能作为 book 打开
         console.log('📁 Opening directory:', item.path);
         await navigateToDirectory(item.path);
         console.log('✅ Directory navigation completed');
       } else {
-        // 检查是否为压缩包(仅对文件进行检查)
+        // 检查是否为压缩包
         const isArchive = await FileSystemAPI.isSupportedArchive(item.path);
         console.log('Is archive:', isArchive);
         
         if (isArchive) {
-          // 打开压缩包
-          console.log('📦 Loading archive:', item.path);
+          // 📦 压缩包：只能浏览内容,暂时不能作为 book 打开
+          console.log('📦 Loading archive contents (browse only):', item.path);
           await loadArchive(item.path);
-          console.log('✅ Archive loaded');
+          console.log('✅ Archive loaded for browsing');
         } else if (item.isImage) {
-          // 打开图片
-          console.log('🖼️ Opening image:', item.path);
-          if (isArchiveView) {
-            await openImageFromArchive(item.path);
-          } else {
-            await openImage(item.path);
-          }
-          console.log('✅ Image opened');
+          // 🖼️ 图片：暂时注释掉作为 book 打开
+          console.log('🖼️ Image clicked, but book opening is temporarily disabled:', item.path);
+          console.log('⚠️ To enable: uncomment openImage() and openImageFromArchive()');
+          
+          // TODO: 等文件夹导航修复后再启用
+          // if (isArchiveView) {
+          //   await openImageFromArchive(item.path);
+          // } else {
+          //   await openImage(item.path);
+          // }
         } else {
           console.log('⚠️ Unknown file type, ignoring');
         }
@@ -190,7 +191,7 @@
       // 跳转到指定图片
       await navigateToImage(filePath);
     } catch (err) {
-      error = String(err);
+      fileBrowserStore.setError(String(err));
     }
   }
 
@@ -261,7 +262,7 @@
       // 跳转到指定图片
       await navigateToImage(path);
     } catch (err) {
-      error = String(err);
+      fileBrowserStore.setError(String(err));
     }
   }
 
@@ -275,7 +276,7 @@
       await FileSystemAPI.moveToTrash(path);
       await loadDirectory(currentPath);
     } catch (err) {
-      error = String(err);
+      fileBrowserStore.setError(String(err));
     }
   }
 

@@ -43,15 +43,15 @@
 
 	<!-- 左侧边栏（悬浮，始终可用） -->
 	<div class="absolute left-0 top-0 bottom-0 z-40 pointer-events-none">
-		<div class="h-full pointer-events-auto" style="width: {$sidebarOpen ? $sidebarWidth : 0}px; max-width: 100vw;">
-			<Sidebar onResize={handleSidebarResize} />
+		<div class="h-full pointer-events-auto">
+			<Sidebar onResize={handleSidebarResize} bind:isVisible={$sidebarOpen} />
 		</div>
 	</div>
 
 	<!-- 右侧边栏（悬浮，始终可用） -->
 	<div class="absolute right-0 top-0 bottom-0 z-40 pointer-events-none">
-		<div class="h-full pointer-events-auto" style="width: {$rightSidebarOpen ? $rightSidebarWidth : 0}px; max-width: 100vw;">
-			<RightSidebar onResize={handleRightSidebarResize} />
+		<div class="h-full pointer-events-auto">
+			<RightSidebar onResize={handleRightSidebarResize} bind:isVisible={$rightSidebarOpen} />
 		</div>
 	</div>
 </div>

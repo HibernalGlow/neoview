@@ -12,11 +12,10 @@
 
 	interface Props {
 		onResize?: (width: number) => void;
+		isVisible: boolean;
 	}
 
-	let { onResize }: Props = $props();
-
-	let isVisible = $state(false);
+	let { onResize, isVisible = $bindable() }: Props = $props();
 
 	const tabs = [
 		{ value: 'info', label: '信息', icon: Info },
@@ -25,10 +24,6 @@
 
 	function handleTabChange(value: string) {
 		setActiveRightPanel(value as RightPanelType);
-	}
-
-	function handleVisibilityChange(visible: boolean) {
-		isVisible = visible;
 	}
 </script>
 
@@ -40,7 +35,6 @@
 	activeTabStore={activeRightPanel}
 	tabs={tabs}
 	onTabChange={handleTabChange}
-	onVisibilityChange={handleVisibilityChange}
 	{onResize}
 	storageKey="right-sidebar"
 >

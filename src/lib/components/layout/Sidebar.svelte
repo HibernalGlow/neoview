@@ -14,11 +14,10 @@
 
 	interface Props {
 		onResize?: (width: number) => void;
+		isVisible: boolean;
 	}
 
-	let { onResize }: Props = $props();
-
-	let isVisible = $state(false);
+	let { onResize, isVisible = $bindable() }: Props = $props();
 
 	const tabs = [
 		{ value: 'folder', label: '文件夹', icon: Folder },
@@ -32,10 +31,6 @@
 	function handleTabChange(value: string) {
 		setActivePanel(value as PanelType);
 	}
-
-	function handleVisibilityChange(visible: boolean) {
-		isVisible = visible;
-	}
 </script>
 
 <BaseSidebar
@@ -46,7 +41,6 @@
 	activeTabStore={activePanel}
 	tabs={tabs}
 	onTabChange={handleTabChange}
-	onVisibilityChange={handleVisibilityChange}
 	{onResize}
 	storageKey="sidebar"
 >

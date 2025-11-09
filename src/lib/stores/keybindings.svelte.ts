@@ -42,10 +42,14 @@ const defaultBindings: ActionBinding[] = [
 		description: '翻到下一页',
 		bindings: [
 			{ type: 'keyboard', key: 'ArrowRight' },
+			{ type: 'keyboard', key: 'd' },
+			{ type: 'keyboard', key: 'R' },
 			{ type: 'keyboard', key: 'Space' },
 			{ type: 'keyboard', key: 'PageDown' },
 			{ type: 'mouse', gesture: 'L', button: 'left' },
+			{ type: 'mouse', gesture: 'wheel-down', button: 'middle', action: 'wheel' }, // 鼠标滚轮下
 			{ type: 'mouse', gesture: 'click', button: 'middle', action: 'click' }, // 中键单击
+			{ type: 'mouse', gesture: 'R', button: 'right' }, // 右键 R
 			{ type: 'touch', gesture: 'swipe-left' }
 		]
 	},
@@ -56,9 +60,12 @@ const defaultBindings: ActionBinding[] = [
 		description: '翻到上一页',
 		bindings: [
 			{ type: 'keyboard', key: 'ArrowLeft' },
+			{ type: 'keyboard', key: 'a' },
 			{ type: 'keyboard', key: 'Backspace' },
 			{ type: 'keyboard', key: 'PageUp' },
 			{ type: 'mouse', gesture: 'R', button: 'left' },
+			{ type: 'mouse', gesture: 'wheel-up', button: 'middle', action: 'wheel' }, // 鼠标滚轮上
+			{ type: 'mouse', gesture: 'L', button: 'right' }, // 右键 L
 			{ type: 'touch', gesture: 'swipe-right' }
 		]
 	},

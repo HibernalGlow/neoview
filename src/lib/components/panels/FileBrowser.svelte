@@ -313,23 +313,46 @@
   function showContextMenu(e: MouseEvent, item: FsItem) {
     e.preventDefault();
     
-    // 获取视口高度
+    // 获取视口尺寸
+    const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const viewportMiddle = viewportHeight / 2;
     
+    let menuX = e.clientX;
     let menuY = e.clientY;
     let menuDirection = 'down'; // 默认向下展开
+    
+    // 确保菜单不超出视口右侧
+    const menuWidth = 180; // 预估菜单宽度
+    if (e.clientX + menuWidth > viewportWidth) {
+      menuX = viewportWidth - menuWidth - 10; // 留10px边距
+    }
+    
+    // 确保菜单不超出视口左侧
+    if (menuX < 10) {
+      menuX = 10;
+    }
     
     // 如果点击位置在视口中线以下，则向上翻转菜单
     if (e.clientY > viewportMiddle) {
       menuDirection = 'up';
       // 向上翻转时，需要调整Y坐标，让菜单底部对齐点击位置
-      // 这里使用预估的菜单高度，实际渲染后可以进一步调整
-      menuY = e.clientY - 250; // 预估菜单高度约250px
+      // 使用70vh的最大高度来计算位置
+      const maxMenuHeight = viewportHeight * 0.7;
+      menuY = e.clientY - Math.min(250, maxMenuHeight); // 预估菜单高度或最大高度
+    }
+    
+    // 确保菜单不超出视口顶部或底部
+    const maxMenuHeight = viewportHeight * 0.7;
+    if (menuDirection === 'down' && menuY + maxMenuHeight > viewportHeight) {
+      menuY = viewportHeight - maxMenuHeight - 10;
+    }
+    if (menuDirection === 'up' && menuY < 10) {
+      menuY = 10;
     }
     
     contextMenu = { 
-      x: e.clientX, 
+      x: menuX, 
       y: menuY, 
       item,
       direction: menuDirection
@@ -677,14 +700,43 @@
    */
   function showCopyToSubmenu(e: MouseEvent) {
     e.stopPropagation();
+    
+    // 获取视口尺寸
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    let submenuX = contextMenu.x + 150; // 子菜单在主菜单右侧
     let submenuY = contextMenu.y;
+    
+    // 确保子菜单不超出视口右侧
+    const submenuWidth = 150;
+    if (submenuX + submenuWidth > viewportWidth) {
+      // 如果右侧放不下，放在左侧
+      submenuX = contextMenu.x - submenuWidth - 10;
+    }
+    
+    // 确保子菜单不超出视口左侧
+    if (submenuX < 10) {
+      submenuX = 10;
+    }
     
     // 如果主菜单是向上展开的，子菜单也需要相应调整位置
     if (contextMenu.direction === 'up') {
       submenuY = contextMenu.y + 200; // 调整子菜单位置，使其与主菜单项对齐
     }
     
-    copyToSubmenu = { show: true, x: contextMenu.x + 150, y: submenuY };
+    // 确保子菜单不超出视口底部
+    const maxSubmenuHeight = viewportHeight * 0.5;
+    if (submenuY + maxSubmenuHeight > viewportHeight) {
+      submenuY = viewportHeight - maxSubmenuHeight - 10;
+    }
+    
+    // 确保子菜单不超出视口顶部
+    if (submenuY < 10) {
+      submenuY = 10;
+    }
+    
+    copyToSubmenu = { show: true, x: submenuX, y: submenuY };
   }
 
   /**
@@ -1025,7 +1077,7 @@
   <!-- 右键菜单 -->
   {#if contextMenu.item}
     <div
-      class="context-menu fixed bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50 min-w-[180px]"
+      class="context-menu fixed bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50 min-w-[180px] max-h-[70vh] overflow-y-auto"
       style="left: {contextMenu.x}px; top: {contextMenu.y}px; transform-origin: {contextMenu.direction === 'up' ? 'bottom' : 'top'};"
       onmouseleave={hideContextMenu}
     >
@@ -1108,7 +1160,7 @@
         <!-- 复制到子菜单 -->
         {#if copyToSubmenu.show}
           <div
-            class="fixed bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-[60] min-w-[150px]"
+            class="fixed bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-[60] min-w-[150px] max-h-[50vh] overflow-y-auto"
             style="left: {copyToSubmenu.x}px; top: {copyToSubmenu.y}px;"
           >
             <!-- 这里可以添加常用目标文件夹 -->

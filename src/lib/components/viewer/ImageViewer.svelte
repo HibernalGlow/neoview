@@ -150,9 +150,9 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="h-full w-full flex flex-col bg-black">
+<div class="image-viewer-container h-full w-full flex flex-col bg-black" data-viewer="true">
 	<!-- 图像显示区域 -->
-	<div class="flex-1 flex items-center justify-center overflow-auto">
+	<div class="image-container flex-1 flex items-center justify-center overflow-auto" data-viewer="true">
 		{#if loading}
 			<div class="text-white">Loading...</div>
 		{:else if error}

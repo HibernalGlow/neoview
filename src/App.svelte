@@ -154,13 +154,22 @@ function handleGlobalKeydown(e: KeyboardEvent) {
 	}
 }
 
-// 处理鼠标滚轮事件
+// 处理鼠标滚轮事件 - 只在特定组件上处理
 function handleGlobalWheel(e: WheelEvent) {
 	// 不在输入框时响应
 	if (isTypingInInput(e)) return;
 
+	// 检查鼠标是否在ImageViewer上
+	const target = e.target as HTMLElement;
+	const isOverViewer = target.closest('.image-viewer-container') || 
+						 target.closest('[data-viewer="true"]') ||
+						 target.closest('.image-container');
+
+	// 只有在ImageViewer上才处理滚轮事件
+	if (!isOverViewer) return;
+
 	const direction = e.deltaY < 0 ? 'up' : 'down';
-	console.log('鼠标滚轮:', direction); // 调试信息
+	console.log('鼠标滚轮:', direction, '在viewer上'); // 调试信息
 	const action = keyBindingsStore.findActionByMouseWheel(direction);
 	console.log('找到的操作:', action); // 调试信息
 	if (action) {

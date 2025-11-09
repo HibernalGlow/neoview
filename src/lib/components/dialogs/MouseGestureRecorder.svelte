@@ -77,12 +77,8 @@
 		if (points.length > 1) {
 			analyzeGesture();
 			
-			// 延迟完成录制
-			setTimeout(() => {
-				if (currentGesture) {
-					onComplete(currentGesture, dragButton, 'gesture');
-				}
-			}, 300);
+			// 标记为已完成，不自动保存
+			// 用户需要手动点击"使用此手势"按钮
 		}
 	}
 

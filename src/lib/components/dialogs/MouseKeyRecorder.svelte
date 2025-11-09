@@ -72,12 +72,8 @@
 		
 		console.log('检测到滚轮操作:', wheelDirection);
 		
-		// 延迟完成录制
-		setTimeout(() => {
-			if (recordedOperation) {
-				onComplete(recordedOperation.gesture, recordedOperation.button, recordedOperation.action);
-			}
-		}, 500);
+		// 标记为已完成，不自动保存
+		// 用户需要手动点击"使用此操作"按钮
 	}
 
 	// 处理鼠标按下
@@ -98,12 +94,8 @@
 		
 		console.log('检测到鼠标按下:', button);
 		
-		// 延迟完成录制
-		setTimeout(() => {
-			if (recordedOperation && recordedOperation.action === 'press') {
-				onComplete(recordedOperation.gesture, recordedOperation.button, recordedOperation.action);
-			}
-		}, 300);
+		// 标记为已完成，不自动保存
+		// 用户需要手动点击"使用此操作"按钮
 	}
 
 	// 处理鼠标点击
@@ -127,11 +119,8 @@
 				};
 				console.log('检测到双击:', button);
 				
-				setTimeout(() => {
-					if (recordedOperation) {
-						onComplete(recordedOperation.gesture, recordedOperation.button, recordedOperation.action);
-					}
-				}, 300);
+				// 标记为已完成，不自动保存
+				// 用户需要手动点击"使用此操作"按钮
 			}
 		} else {
 			clickCount = 1;
@@ -144,11 +133,8 @@
 				};
 				console.log('检测到单击:', button);
 				
-				setTimeout(() => {
-					if (recordedOperation && recordedOperation.action === 'click') {
-						onComplete(recordedOperation.gesture, recordedOperation.button, recordedOperation.action);
-					}
-				}, 300);
+				// 标记为已完成，不自动保存
+				// 用户需要手动点击"使用此操作"按钮
 			}
 		}
 		

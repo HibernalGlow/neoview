@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
 	 * NeoView - Sidebar Component
-	 * 侧边栏组件 - 垂直图标风格，支持拖拽排序
+	 * 侧边栏组件 - 垂直图标风格，支持拖拽排序和自动隐藏
 	 */
 	import { Folder, History, Bookmark, Info, Image as ImageIcon, List, GripVertical } from '@lucide/svelte';
 	import { activePanel, setActivePanel } from '$lib/stores';
@@ -10,6 +10,9 @@
 	import HistoryPanel from '$lib/components/panels/HistoryPanel.svelte';
 	import BookmarkPanel from '$lib/components/panels/BookmarkPanel.svelte';
 	import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
+
+	let isVisible = $state(true); // 默认显示，可以设置为 false 实现自动隐藏
+	let hideTimer: number | null = null;
 
 	let tabs = $state([
 		{ value: 'folder', label: '文件夹', icon: Folder },
@@ -58,6 +61,23 @@
 		handleDragEnd();
 	}
 
+	// 鼠标进入侧边栏区域
+	function handleMouseEnter() {
+		if (hideTimer) {
+			clearTimeout(hideTimer);
+			hideTimer = null;
+		}
+		isVisible = true;
+	}
+
+	// 鼠标离开侧边栏区域
+	function handleMouseLeave() {
+		// 如果需要自动隐藏，取消注释以下代码
+		// hideTimer = setTimeout(() => {
+		// 	isVisible = false;
+		// }, 1000) as unknown as number;
+	}
+
 	// 从 localStorage 加载排序
 	$effect(() => {
 		const savedOrder = localStorage.getItem('sidebar-tabs-order');
@@ -77,7 +97,20 @@
 	});
 </script>
 
-<div class="h-full flex bg-background">
+<!-- 鼠标触发区域（左侧隐形条） -->
+{#if !isVisible}
+	<div
+		class="fixed left-0 top-0 bottom-0 w-2 z-40"
+		onmouseenter={handleMouseEnter}
+		role="presentation"
+	></div>
+{/if}
+
+<div 
+	class="h-full flex bg-background transition-transform duration-300 {isVisible ? 'translate-x-0' : '-translate-x-full'}"
+	onmouseenter={handleMouseEnter}
+	onmouseleave={handleMouseLeave}
+>
 	<!-- 垂直图标标签栏（可拖拽） -->
 	<div class="w-12 flex flex-col border-r bg-secondary/30">
 		{#each tabs as tab, index (tab.value)}

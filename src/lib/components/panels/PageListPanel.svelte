@@ -10,7 +10,28 @@
 	interface PageInfo {
 		index: number;
 		name: string;
-		width: number;
+		width: number;E:
+        1Hub
+        EH
+        waittouplooad
+        [冬扇草堂 (冬扇)]
+        3. 单行本
+        选择文件夹
+        ←
+        
+        [2013] もう堕ちるしかない [4K掃圖組].zip
+        126.7 MB · 2025/9/26 02:47:32
+        
+        [2017] もう堕ちるしかない 新装版 [日原版].zip
+        113.2 MB · 2025/9/26 02:47:33
+        
+        [2017] 快楽人形イデオロギー [4K掃圖組].zip
+        205.8 MB · 2025/9/26 02:47:30
+        
+        
+        D:
+        Comics
+        Volume 1
 		height: number;
 		size: string;
 	}

@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
 	 * NeoView - Main Layout Component
-	 * 主布局组件
+	 * 主布局组件 - 集成自动隐藏功能
 	 */
 	import { sidebarOpen, sidebarWidth, rightSidebarOpen, rightSidebarWidth } from '$lib/stores';
 	import { sidebars, setPanelSidebarSize, leftPanels, rightPanels, bottomPanels, activePanel } from '$lib/stores/panels.svelte';
@@ -10,6 +10,8 @@
 	import StatusBar from './StatusBar.svelte';
 	import Sidebar from './Sidebar.svelte';
 	import RightSidebar from './RightSidebar.svelte';
+	import AutoHideTopbar from './AutoHideTopbar.svelte';
+	import AutoHideThumbnailBar from './AutoHideThumbnailBar.svelte';
 	import ResizablePanel from '../ui/ResizablePanel.svelte';
 	import ImageViewer from '../viewer/ImageViewer.svelte';
 
@@ -44,10 +46,16 @@
 		{/if}
 
 		<!-- 主显示区域 -->
-		<div class="flex-1 overflow-hidden">
+		<div class="flex-1 overflow-hidden relative">
 			{#if bookStore.viewerOpen}
+				<!-- 自动隐藏顶部工具栏（面包屑 + 图片操作） -->
+				<AutoHideTopbar />
+				
 				<!-- 图片查看器 -->
 				<ImageViewer />
+				
+				<!-- 自动隐藏底部缩略图栏 -->
+				<AutoHideThumbnailBar />
 			{:else}
 				<!-- 默认内容 -->
 				{@render children?.()}

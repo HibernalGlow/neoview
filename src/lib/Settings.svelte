@@ -6,19 +6,15 @@
 	import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 	import { Button } from '$lib/components/ui/button';
 	import { Settings, Keyboard, Palette, Zap, Mouse, Hand, X, Minimize, Info } from '@lucide/svelte';
-	import KeyBindingPanel from '$lib/components/dialogs/KeyBindingPanel.svelte';
 	import ViewerSettingsPanel from '$lib/components/dialogs/ViewerSettingsPanel.svelte';
-	import MouseSettingsPanel from '$lib/components/dialogs/MouseSettingsPanel.svelte';
-	import GestureSettingsPanel from '$lib/components/dialogs/GestureSettingsPanel.svelte';
+	import UnifiedBindingPanel from '$lib/components/dialogs/UnifiedBindingPanel.svelte';
 
 	const appWindow = getCurrentWebviewWindow();
 
 	const tabs = [
 		{ value: 'general', label: '通用', icon: Settings },
 		{ value: 'viewer', label: '查看器', icon: Palette },
-		{ value: 'keyboard', label: '快捷键', icon: Keyboard },
-		{ value: 'mouse', label: '鼠标', icon: Mouse },
-		{ value: 'gesture', label: '手势', icon: Hand },
+		{ value: 'bindings', label: '操作绑定', icon: Keyboard },
 		{ value: 'performance', label: '性能', icon: Zap }
 	];
 
@@ -146,12 +142,8 @@
 				</div>
 			{:else if activeTab === 'viewer'}
 				<ViewerSettingsPanel />
-			{:else if activeTab === 'keyboard'}
-				<KeyBindingPanel />
-			{:else if activeTab === 'mouse'}
-				<MouseSettingsPanel />
-			{:else if activeTab === 'gesture'}
-				<GestureSettingsPanel />
+			{:else if activeTab === 'bindings'}
+				<UnifiedBindingPanel />
 			{:else if activeTab === 'performance'}
 				<div class="p-6 space-y-6">
 					<div class="space-y-2">

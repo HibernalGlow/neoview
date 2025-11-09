@@ -11,7 +11,7 @@
 	import BookmarkPanel from '$lib/components/panels/BookmarkPanel.svelte';
 	import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
 
-	let isVisible = $state(true); // 默认显示，可以设置为 false 实现自动隐藏
+	let isVisible = $state(false); // 默认隐藏
 	let hideTimer: number | null = null;
 
 	let tabs = $state([
@@ -72,10 +72,9 @@
 
 	// 鼠标离开侧边栏区域
 	function handleMouseLeave() {
-		// 如果需要自动隐藏，取消注释以下代码
-		// hideTimer = setTimeout(() => {
-		// 	isVisible = false;
-		// }, 1000) as unknown as number;
+		hideTimer = setTimeout(() => {
+			isVisible = false;
+		}, 500) as unknown as number;
 	}
 
 	// 从 localStorage 加载排序

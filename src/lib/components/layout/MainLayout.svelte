@@ -31,22 +31,9 @@
 	<TitleBar />
 
 	<!-- 主内容区域 -->
-	<div class="flex-1 flex overflow-hidden">
-		<!-- 可调整大小的侧边栏 -->
-		{#if $sidebarOpen}
-			<ResizablePanel
-				minWidth={200}
-				maxWidth={600}
-				defaultWidth={$sidebarWidth}
-				side="left"
-				onResize={handleSidebarResize}
-			>
-				<Sidebar />
-			</ResizablePanel>
-		{/if}
-
-		<!-- 主显示区域 -->
-		<div class="flex-1 overflow-hidden relative">
+	<div class="flex-1 relative overflow-hidden">
+		<!-- 主显示区域（全屏） -->
+		<div class="absolute inset-0 overflow-hidden">
 			{#if bookStore.viewerOpen}
 				<!-- 自动隐藏顶部工具栏（面包屑 + 图片操作） -->
 				<AutoHideTopbar />
@@ -62,17 +49,34 @@
 			{/if}
 		</div>
 
-		<!-- 右侧边栏 -->
+		<!-- 左侧边栏（悬浮） -->
+		{#if $sidebarOpen}
+			<div class="absolute left-0 top-0 bottom-0 z-40" style="width: {$sidebarWidth}px;">
+				<ResizablePanel
+					minWidth={200}
+					maxWidth={600}
+					defaultWidth={$sidebarWidth}
+					side="left"
+					onResize={handleSidebarResize}
+				>
+					<Sidebar />
+				</ResizablePanel>
+			</div>
+		{/if}
+
+		<!-- 右侧边栏（悬浮） -->
 		{#if $rightSidebarOpen}
-			<ResizablePanel
-				minWidth={200}
-				maxWidth={600}
-				defaultWidth={$rightSidebarWidth}
-				side="right"
-				onResize={handleRightSidebarResize}
-			>
-				<RightSidebar />
-			</ResizablePanel>
+			<div class="absolute right-0 top-0 bottom-0 z-40" style="width: {$rightSidebarWidth}px;">
+				<ResizablePanel
+					minWidth={200}
+					maxWidth={600}
+					defaultWidth={$rightSidebarWidth}
+					side="right"
+					onResize={handleRightSidebarResize}
+				>
+					<RightSidebar />
+				</ResizablePanel>
+			</div>
 		{/if}
 	</div>
 

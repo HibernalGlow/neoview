@@ -231,33 +231,39 @@
 
 									<!-- 添加绑定按钮 -->
 									<div class="flex gap-2">
-										<Button
-											variant="outline"
-											size="sm"
-											class="h-7"
-											onclick={() => startEditing(binding.action, 'keyboard')}
+										<button
+											class="inline-flex items-center justify-center gap-1 h-7 px-3 text-xs rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
+											onclick={(e) => {
+												e.preventDefault();
+												e.stopPropagation();
+												startEditing(binding.action, 'keyboard');
+											}}
 										>
-											<Keyboard class="h-3 w-3 mr-1" />
+											<Keyboard class="h-3 w-3" />
 											添加按键
-										</Button>
-										<Button
-											variant="outline"
-											size="sm"
-											class="h-7"
-											onclick={() => startEditing(binding.action, 'mouse')}
+										</button>
+										<button
+											class="inline-flex items-center justify-center gap-1 h-7 px-3 text-xs rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
+											onclick={(e) => {
+												e.preventDefault();
+												e.stopPropagation();
+												startEditing(binding.action, 'mouse');
+											}}
 										>
-											<Mouse class="h-3 w-3 mr-1" />
+											<Mouse class="h-3 w-3" />
 											添加手势
-										</Button>
-										<Button
-											variant="outline"
-											size="sm"
-											class="h-7"
-											onclick={() => startEditing(binding.action, 'touch')}
+										</button>
+										<button
+											class="inline-flex items-center justify-center gap-1 h-7 px-3 text-xs rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
+											onclick={(e) => {
+												e.preventDefault();
+												e.stopPropagation();
+												startEditing(binding.action, 'touch');
+											}}
 										>
-											<Hand class="h-3 w-3 mr-1" />
+											<Hand class="h-3 w-3" />
 											添加触摸
-										</Button>
+										</button>
 									</div>
 								</div>
 							</div>

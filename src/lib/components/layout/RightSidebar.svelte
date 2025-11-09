@@ -1,13 +1,16 @@
 <script lang="ts">
 	/**
 	 * NeoView - Right Sidebar Component
-	 * 右侧边栏组件 - 垂直图标风格，支持拖拽排序
+	 * 右侧边栏组件 - 垂直图标风格，支持拖拽排序和自动隐藏
 	 */
 	import { Info, FileText, GripVertical } from '@lucide/svelte';
 	import { activeRightPanel, setActiveRightPanel } from '$lib/stores';
 	import type { RightPanelType } from '$lib/stores';
 	import ImagePropertiesPanel from '$lib/components/panels/ImagePropertiesPanel.svelte';
 	import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
+
+	let isVisible = $state(false); // 默认隐藏
+	let hideTimer: number | null = null;
 
 	let tabs = $state([
 		{ value: 'info', label: '信息', icon: Info },
@@ -52,6 +55,22 @@
 		handleDragEnd();
 	}
 
+	// 鼠标进入侧边栏区域
+	function handleMouseEnter() {
+		if (hideTimer) {
+			clearTimeout(hideTimer);
+			hideTimer = null;
+		}
+		isVisible = true;
+	}
+
+	// 鼠标离开侧边栏区域
+	function handleMouseLeave() {
+		hideTimer = setTimeout(() => {
+			isVisible = false;
+		}, 500) as unknown as number;
+	}
+
 	// 从 localStorage 加载排序
 	$effect(() => {
 		const savedOrder = localStorage.getItem('right-sidebar-tabs-order');
@@ -71,7 +90,20 @@
 	});
 </script>
 
-<div class="h-full flex bg-background">
+<!-- 鼠标触发区域（右侧隐形条） -->
+{#if !isVisible}
+	<div
+		class="fixed right-0 top-0 bottom-0 w-2 z-40"
+		onmouseenter={handleMouseEnter}
+		role="presentation"
+	></div>
+{/if}
+
+<div 
+	class="h-full flex bg-background transition-transform duration-300 {isVisible ? 'translate-x-0' : 'translate-x-full'}"
+	onmouseenter={handleMouseEnter}
+	onmouseleave={handleMouseLeave}
+>
 	<!-- 面板内容 -->
 	<div class="flex-1 overflow-hidden">
 		{#if $activeRightPanel === 'info'}

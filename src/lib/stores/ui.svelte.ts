@@ -32,6 +32,13 @@ export const themeMode = writable<ThemeMode>('system');
 // 缩放级别
 export const zoomLevel = writable<number>(1.0);
 
+// 旋转角度 (0, 90, 180, 270)
+export const rotationAngle = writable<number>(0);
+
+// 视图模式
+export type ViewMode = 'single' | 'double' | 'panorama';
+export const viewMode = writable<ViewMode>('single');
+
 /**
  * 切换侧边栏
  */
@@ -103,4 +110,36 @@ export function zoomOut() {
  */
 export function resetZoom() {
 	zoomLevel.set(1.0);
+}
+
+/**
+ * 旋转图片 (顺时针90度)
+ */
+export function rotateClockwise() {
+	rotationAngle.update((angle) => (angle + 90) % 360);
+}
+
+/**
+ * 重置旋转
+ */
+export function resetRotation() {
+	rotationAngle.set(0);
+}
+
+/**
+ * 切换视图模式
+ */
+export function toggleViewMode() {
+	viewMode.update((mode) => {
+		if (mode === 'single') return 'double';
+		if (mode === 'double') return 'panorama';
+		return 'single';
+	});
+}
+
+/**
+ * 设置视图模式
+ */
+export function setViewMode(mode: ViewMode) {
+	viewMode.set(mode);
 }

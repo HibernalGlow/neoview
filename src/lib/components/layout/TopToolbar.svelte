@@ -5,10 +5,20 @@
 	 */
 	import { Button } from '$lib/components/ui/button';
 	import { bookStore } from '$lib/stores/book.svelte';
-	import { zoomLevel, zoomIn, zoomOut, resetZoom } from '$lib/stores';
+	import { 
+		zoomLevel, 
+		zoomIn, 
+		zoomOut, 
+		resetZoom, 
+		rotateClockwise,
+		rotationAngle,
+		viewMode,
+		toggleViewMode
+	} from '$lib/stores';
 	import PathBar from '../ui/PathBar.svelte';
 	import {
 		ChevronLeft,
+		ChevronRight,
 		ZoomIn,
 		ZoomOut,
 		RotateCw,
@@ -22,7 +32,6 @@
 
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
-	let viewMode = $state<'single' | 'double' | 'panorama'>('single');
 
 	function showToolbar() {
 		isVisible = true;
@@ -46,7 +55,7 @@
 	async function handlePreviousPage() {
 		if (!bookStore.canPreviousPage) return;
 		try {
-			if (viewMode === 'double') {
+			if ($viewMode === 'double') {
 				const currentIndex = bookStore.currentPageIndex;
 				const targetIndex = Math.max(currentIndex - 2, 0);
 				await bookStore.navigateToPage(targetIndex);
@@ -61,7 +70,7 @@
 	async function handleNextPage() {
 		if (!bookStore.canNextPage) return;
 		try {
-			if (viewMode === 'double') {
+			if ($viewMode === 'double') {
 				const currentIndex = bookStore.currentPageIndex;
 				const targetIndex = Math.min(currentIndex + 2, bookStore.totalPages - 1);
 				await bookStore.navigateToPage(targetIndex);
@@ -71,17 +80,6 @@
 		} catch (err) {
 			console.error('Failed to navigate to next page:', err);
 		}
-	}
-
-	function toggleViewMode() {
-		if (viewMode === 'single') {
-			viewMode = 'double';
-		} else if (viewMode === 'double') {
-			viewMode = 'panorama';
-		} else {
-			viewMode = 'single';
-		}
-		// TODO: 通知 ImageViewer 更新视图模式
 	}
 
 	function handleClose() {
@@ -184,15 +182,15 @@
 					size="icon"
 					class="h-8 w-8"
 					onclick={toggleViewMode}
-					title="切换视图模式: {viewMode === 'single'
+					title="切换视图模式: {$viewMode === 'single'
 						? '单页'
-						: viewMode === 'double'
+						: $viewMode === 'double'
 							? '双页'
 							: '全景'}"
 				>
-					{#if viewMode === 'single'}
+					{#if $viewMode === 'single'}
 						<PanelLeft class="h-4 w-4" />
-					{:else if viewMode === 'double'}
+					{:else if $viewMode === 'double'}
 						<Grid class="h-4 w-4" />
 					{:else}
 						<Maximize2 class="h-4 w-4" />
@@ -200,7 +198,7 @@
 				</Button>
 
 				<!-- 旋转按钮 -->
-				<Button variant="ghost" size="icon" class="h-8 w-8" title="旋转">
+				<Button variant="ghost" size="icon" class="h-8 w-8" onclick={rotateClockwise} title="旋转 90°">
 					<RotateCw class="h-4 w-4" />
 				</Button>
 			</div>

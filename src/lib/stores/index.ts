@@ -7,3 +7,4 @@ export * from './book.svelte';
 export * from './ui.svelte';
 export * from './keyboard.svelte';
 export * from './fileBrowser.svelte';
+export * from './panels.svelte';

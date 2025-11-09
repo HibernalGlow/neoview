@@ -4,7 +4,12 @@
  */
 
 import { writable, derived } from 'svelte/store';
-import type { KeyBinding, GestureBinding } from '../types/keyboard';
+import type {
+	KeyBinding,
+	GestureBinding,
+	MouseGestureBinding,
+	MouseWheelBinding
+} from '../types/keyboard';
 
 // 默认键盘快捷键绑定
 const defaultKeyBindings: KeyBinding[] = [
@@ -70,18 +75,51 @@ const defaultKeyBindings: KeyBinding[] = [
 	}
 ];
 
-// 默认手势绑定
+// 默认触摸手势绑定
 const defaultGestureBindings: GestureBinding[] = [
-	{ gesture: 'swipe-right', command: 'previous_page', description: '上一页' },
-	{ gesture: 'swipe-left', command: 'next_page', description: '下一页' },
-	{ gesture: 'swipe-up', command: 'toggle_sidebar', description: '显示/隐藏侧边栏' },
-	{ gesture: 'pinch-out', command: 'zoom_in', description: '放大' },
-	{ gesture: 'pinch-in', command: 'zoom_out', description: '缩小' }
+	{ gesture: 'swipe-right', command: 'previous_page', description: '上一页', category: 'navigation' },
+	{ gesture: 'swipe-left', command: 'next_page', description: '下一页', category: 'navigation' },
+	{ gesture: 'swipe-up', command: 'toggle_sidebar', description: '显示/隐藏侧边栏', category: 'view' },
+	{ gesture: 'pinch-out', command: 'zoom_in', description: '放大', category: 'zoom' },
+	{ gesture: 'pinch-in', command: 'zoom_out', description: '缩小', category: 'zoom' },
+	{ gesture: 'rotate-clockwise', command: 'rotate_right', description: '向右旋转', category: 'transform' },
+	{ gesture: 'rotate-counter-clockwise', command: 'rotate_left', description: '向左旋转', category: 'transform' },
+	{ gesture: 'two-finger-swipe-up', command: 'first_page', description: '第一页', category: 'navigation' },
+	{ gesture: 'two-finger-swipe-down', command: 'last_page', description: '最后一页', category: 'navigation' },
+	{ gesture: 'three-finger-swipe-left', command: 'close_book', description: '关闭书籍', category: 'file' },
+	{ gesture: 'double-tap', command: 'toggle_fullscreen', description: '全屏切换', category: 'view' },
+	{ gesture: 'long-press', command: 'show_context_menu', description: '显示菜单', category: 'view' }
+];
+
+// 默认鼠标手势绑定 (右键拖拽)
+const defaultMouseGestureBindings: MouseGestureBinding[] = [
+	{ pattern: 'L', command: 'previous_page', description: '向左 - 上一页', category: 'navigation' },
+	{ pattern: 'R', command: 'next_page', description: '向右 - 下一页', category: 'navigation' },
+	{ pattern: 'U', command: 'first_page', description: '向上 - 第一页', category: 'navigation' },
+	{ pattern: 'D', command: 'last_page', description: '向下 - 最后一页', category: 'navigation' },
+	{ pattern: 'UR', command: 'rotate_right', description: '右上 - 向右旋转', category: 'transform' },
+	{ pattern: 'UL', command: 'rotate_left', description: '左上 - 向左旋转', category: 'transform' },
+	{ pattern: 'RU', command: 'zoom_in', description: '右上 - 放大', category: 'zoom' },
+	{ pattern: 'RD', command: 'zoom_out', description: '右下 - 缩小', category: 'zoom' },
+	{ pattern: 'RL', command: 'close_book', description: '右左 - 关闭书籍', category: 'file' },
+	{ pattern: 'DR', command: 'toggle_fullscreen', description: '下右 - 全屏', category: 'view' }
+];
+
+// 默认鼠标滚轮绑定
+const defaultMouseWheelBindings: MouseWheelBinding[] = [
+	{ direction: 'up', command: 'previous_page', description: '滚轮向上 - 上一页' },
+	{ direction: 'down', command: 'next_page', description: '滚轮向下 - 下一页' },
+	{ direction: 'up', modifiers: { ctrl: true }, command: 'zoom_in', description: 'Ctrl+滚轮向上 - 放大' },
+	{ direction: 'down', modifiers: { ctrl: true }, command: 'zoom_out', description: 'Ctrl+滚轮向下 - 缩小' },
+	{ direction: 'up', modifiers: { shift: true }, command: 'rotate_left', description: 'Shift+滚轮向上 - 向左旋转' },
+	{ direction: 'down', modifiers: { shift: true }, command: 'rotate_right', description: 'Shift+滚轮向下 - 向右旋转' }
 ];
 
 // Store
 export const keyBindings = writable<KeyBinding[]>(defaultKeyBindings);
 export const gestureBindings = writable<GestureBinding[]>(defaultGestureBindings);
+export const mouseGestureBindings = writable<MouseGestureBinding[]>(defaultMouseGestureBindings);
+export const mouseWheelBindings = writable<MouseWheelBinding[]>(defaultMouseWheelBindings);
 
 // 当前正在录制的快捷键
 export const recordingCommand = writable<string | null>(null);

@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::State;
+use base64::Engine;
 use crate::core::{FsManager, ThumbnailManager, ArchiveManager};
 
 /// 文件系统状态
@@ -153,6 +154,28 @@ pub async fn generate_file_thumbnail(
     thumbnail_manager.generate_thumbnail(&path)
 }
 
+/// 从图片数据生成缩略图（用于压缩包内图片）
+#[tauri::command]
+pub async fn generate_thumbnail_from_data(
+    image_data: String,
+    max_size: u32,
+    state: State<'_, FsState>,
+) -> Result<String, String> {
+    let thumbnail_manager = state.thumbnail_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    // 解码 base64 数据
+    let base64_data = image_data.split(',').nth(1)
+        .ok_or_else(|| "Invalid image data format".to_string())?;
+    
+    let image_bytes = base64::engine::general_purpose::STANDARD
+        .decode(base64_data)
+        .map_err(|e| format!("Failed to decode base64: {}", e))?;
+
+    // 生成缩略图
+    thumbnail_manager.generate_thumbnail_from_bytes(&image_bytes, max_size)
+}
+
 /// 创建目录
 #[tauri::command]
 pub async fn create_directory(
@@ -228,6 +251,8 @@ pub async fn clear_thumbnail_cache(
 
     thumbnail_manager.clear_all_cache()
 }
+
+
 
 /// 清理过期缓存
 #[tauri::command]

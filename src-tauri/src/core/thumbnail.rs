@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use image::{DynamicImage, ImageFormat};
+use image::{DynamicImage, ImageFormat, GenericImageView};
 use std::io::Cursor;
 use base64::{Engine as _, engine::general_purpose};
 
@@ -36,7 +36,7 @@ impl ThumbnailManager {
             hasher.finish()
         };
 
-        self.cache_dir.join(format!("{}.webp", hash))
+        self.cache_dir.join(format!("{}.jpg", hash))
     }
 
     /// 生成缩略图（返回 base64 编码）
@@ -66,12 +66,28 @@ impl ThumbnailManager {
         self.generate_and_cache_thumbnail(image_path, &cache_path)
     }
 
+    /// 从字节数据生成缩略图（用于压缩包内图片）
+    pub fn generate_thumbnail_from_bytes(&self, image_data: &[u8], max_size: u32) -> Result<String, String> {
+        // 加载图片
+        let img = image::load_from_memory(image_data)
+            .map_err(|e| format!("加载图片失败: {}", e))?;
+
+        // 生成等比例缩略图
+        let thumbnail = self.resize_keep_aspect_ratio(&img, max_size);
+
+        // 编码为 JPEG
+        let jpeg_data = self.encode_jpeg(&thumbnail)?;
+
+        // 返回 base64
+        Ok(format!("data:image/jpeg;base64,{}", general_purpose::STANDARD.encode(&jpeg_data)))
+    }
+
     /// 从缓存读取缩略图
     fn read_thumbnail_from_cache(&self, cache_path: &Path) -> Result<String, String> {
         let data = fs::read(cache_path)
             .map_err(|e| format!("读取缓存失败: {}", e))?;
 
-        Ok(format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&data)))
+        Ok(format!("data:image/jpeg;base64,{}", general_purpose::STANDARD.encode(&data)))
     }
 
     /// 生成并缓存缩略图
@@ -79,18 +95,18 @@ impl ThumbnailManager {
         // 加载图片 - 支持 JXL、AVIF 等格式
         let img = self.load_image_with_format_support(image_path)?;
 
-        // 生成缩略图
-        let thumbnail = img.thumbnail(self.size, self.size);
+        // 生成等比例缩略图
+        let thumbnail = self.resize_keep_aspect_ratio(&img, self.size);
 
-        // 编码为 WebP
-        let webp_data = self.encode_webp(&thumbnail)?;
+        // 编码为 JPEG
+        let jpeg_data = self.encode_jpeg(&thumbnail)?;
 
         // 保存到缓存
-        fs::write(cache_path, &webp_data)
+        fs::write(cache_path, &jpeg_data)
             .map_err(|e| format!("保存缓存失败: {}", e))?;
 
         // 返回 base64
-        Ok(format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&webp_data)))
+        Ok(format!("data:image/jpeg;base64,{}", general_purpose::STANDARD.encode(&jpeg_data)))
     }
 
     /// 加载图片（支持 JXL 等特殊格式）
@@ -176,25 +192,47 @@ impl ThumbnailManager {
         }
     }
 
-    /// 编码为 WebP 格式
-    fn encode_webp(&self, img: &DynamicImage) -> Result<Vec<u8>, String> {
+    /// 等比例缩放图片
+    fn resize_keep_aspect_ratio(&self, img: &DynamicImage, max_size: u32) -> DynamicImage {
+        let (width, height) = img.dimensions();
+        
+        // 如果图片尺寸小于等于最大尺寸，直接返回
+        if width <= max_size && height <= max_size {
+            return img.clone();
+        }
+        
+        // 计算缩放比例
+        let scale = if width > height {
+            max_size as f32 / width as f32
+        } else {
+            max_size as f32 / height as f32
+        };
+        
+        let new_width = (width as f32 * scale).round() as u32;
+        let new_height = (height as f32 * scale).round() as u32;
+        
+        // 使用 Lanczos3 滤波器获得更好的缩放质量
+        img.resize(new_width, new_height, image::imageops::FilterType::Lanczos3)
+    }
+
+    /// 编码为 JPEG 格式
+    fn encode_jpeg(&self, img: &DynamicImage) -> Result<Vec<u8>, String> {
         let mut buffer = Vec::new();
         let mut cursor = Cursor::new(&mut buffer);
 
-        // 转换为 RGBA8
-        let rgba = img.to_rgba8();
-        let (width, height) = rgba.dimensions();
+        // 转换为 RGB8（JPEG不支持透明度）
+        let rgb = img.to_rgb8();
+        let (width, height) = rgb.dimensions();
 
-        // 使用 PNG 格式作为临时方案（因为 image crate 不直接支持 WebP 编码）
-        // 实际项目中应该使用 webp crate
+        // 编码为 JPEG，质量设置为85（在质量和文件大小之间取得良好平衡）
         image::write_buffer_with_format(
             &mut cursor,
-            rgba.as_raw(),
+            rgb.as_raw(),
             width,
             height,
-            image::ColorType::Rgba8,
-            ImageFormat::Png,
-        ).map_err(|e| format!("编码图片失败: {}", e))?;
+            image::ColorType::Rgb8,
+            ImageFormat::Jpeg,
+        ).map_err(|e| format!("编码JPEG失败: {}", e))?;
 
         Ok(buffer)
     }
@@ -265,4 +303,6 @@ impl ThumbnailManager {
 
         Ok(removed_count)
     }
+
+    
 }

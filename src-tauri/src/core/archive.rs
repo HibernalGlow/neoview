@@ -5,6 +5,7 @@ use std::sync::Arc;
 use zip::ZipArchive;
 use serde::{Deserialize, Serialize};
 use base64::{Engine as _, engine::general_purpose};
+use image::{DynamicImage, GenericImageView};
 
 /// 压缩包内的文件项
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -303,18 +304,14 @@ impl ArchiveManager {
                 .map_err(|e| format!("加载图片失败: {}", e))?
         };
 
-        // 生成缩略图
-        let thumbnail = img.thumbnail(max_size, max_size);
+        // 生成等比例缩略图
+        let thumbnail = self.resize_keep_aspect_ratio(&img, max_size);
 
-        // 编码为 PNG
-        let mut buffer = Vec::new();
-        let mut cursor = Cursor::new(&mut buffer);
-        
-        thumbnail.write_to(&mut cursor, image::ImageFormat::Png)
-            .map_err(|e| format!("编码缩略图失败: {}", e))?;
+        // 编码为 JPEG
+        let jpeg_data = self.encode_jpeg(&thumbnail)?;
 
         // 返回 base64
-        let result = format!("data:image/png;base64,{}", general_purpose::STANDARD.encode(&buffer));
+        let result = format!("data:image/jpeg;base64,{}", general_purpose::STANDARD.encode(&jpeg_data));
 
         // 添加到缓存
         if let Ok(mut cache) = self.cache.lock() {
@@ -322,6 +319,51 @@ impl ArchiveManager {
         }
 
         Ok(result)
+    }
+
+    /// 等比例缩放图片
+    fn resize_keep_aspect_ratio(&self, img: &image::DynamicImage, max_size: u32) -> image::DynamicImage {
+        let (width, height) = img.dimensions();
+        
+        // 如果图片尺寸小于等于最大尺寸，直接返回
+        if width <= max_size && height <= max_size {
+            return img.clone();
+        }
+        
+        // 计算缩放比例
+        let scale = if width > height {
+            max_size as f32 / width as f32
+        } else {
+            max_size as f32 / height as f32
+        };
+        
+        let new_width = (width as f32 * scale).round() as u32;
+        let new_height = (height as f32 * scale).round() as u32;
+        
+        // 使用 Lanczos3 滤波器获得更好的缩放质量
+        img.resize(new_width, new_height, image::imageops::FilterType::Lanczos3)
+    }
+
+    /// 编码为 JPEG 格式
+    fn encode_jpeg(&self, img: &image::DynamicImage) -> Result<Vec<u8>, String> {
+        let mut buffer = Vec::new();
+        let mut cursor = Cursor::new(&mut buffer);
+
+        // 转换为 RGB8（JPEG不支持透明度）
+        let rgb = img.to_rgb8();
+        let (width, height) = rgb.dimensions();
+
+        // 编码为 JPEG
+        image::write_buffer_with_format(
+            &mut cursor,
+            rgb.as_raw(),
+            width,
+            height,
+            image::ColorType::Rgb8,
+            image::ImageFormat::Jpeg,
+        ).map_err(|e| format!("编码JPEG失败: {}", e))?;
+
+        Ok(buffer)
     }
 
     /// 解码 JXL 图像（辅助方法）

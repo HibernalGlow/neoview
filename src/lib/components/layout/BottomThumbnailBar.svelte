@@ -12,7 +12,7 @@
 
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
-	let thumbnails = $state<Record<number, string>>({});
+	let thumbnails = $state<Record<number, {url: string, width: number, height: number}>>({});
 	let isResizing = $state(false);
 	let resizeStartY = 0;
 	let resizeStartHeight = 0;
@@ -103,7 +103,7 @@
 	}
 
 	// 在前端从 base64 生成缩略图
-	function generateThumbnailFromBase64(base64Data: string, maxSize: number = 128): Promise<string> {
+	function generateThumbnailFromBase64(base64Data: string, maxSize: number = 128): Promise<{url: string, width: number, height: number}> {
 		return new Promise((resolve, reject) => {
 			const img = new Image();
 			img.onload = () => {
@@ -114,6 +114,7 @@
 					return;
 				}
 
+				// 等比例缩放
 				let width = img.width;
 				let height = img.height;
 				if (width > height) {
@@ -132,13 +133,13 @@
 				canvas.height = height;
 				ctx.drawImage(img, 0, 0, width, height);
 
-				try {
-					const thumbnailData = canvas.toDataURL('image/webp', 0.8);
-					resolve(thumbnailData);
-				} catch (err) {
-					const thumbnailData = canvas.toDataURL('image/jpeg', 0.8);
-					resolve(thumbnailData);
-				}
+				// 直接使用 JPEG 格式
+				const thumbnailData = canvas.toDataURL('image/jpeg', 0.85);
+				resolve({
+					url: thumbnailData,
+					width: width,
+					height: height
+				});
 			};
 			img.onerror = () => reject(new Error('Failed to load image'));
 			img.src = base64Data;
@@ -252,22 +253,24 @@
 				<div class="flex gap-2 overflow-x-auto h-full pb-1" onscroll={handleScroll}>
 					{#each bookStore.currentBook.pages as page, index (page.path)}
 						<button
-							class="flex-shrink-0 w-20 h-28 rounded overflow-hidden border-2 {index ===
+							class="flex-shrink-0 rounded overflow-hidden border-2 {index ===
 							bookStore.currentPageIndex
 								? 'border-primary'
 								: 'border-transparent'} hover:border-primary/50 transition-colors relative group"
+							style="width: {thumbnails[index]?.width || 80}px; height: {thumbnails[index]?.height || 112}px;"
 							onclick={() => bookStore.navigateToPage(index)}
 							title="Page {index + 1}"
 						>
 							{#if index in thumbnails}
 								<img
-									src={thumbnails[index]}
+									src={thumbnails[index].url}
 									alt="Page {index + 1}"
-									class="w-full h-full object-cover"
+									class="w-full h-full object-contain"
 								/>
 							{:else}
 								<div
 									class="w-full h-full flex flex-col items-center justify-center bg-muted text-xs text-muted-foreground"
+									style="min-width: 80px; min-height: 112px;"
 								>
 									<ImageIcon class="h-6 w-6 mb-1" />
 									<span class="font-mono">{index + 1}</span>

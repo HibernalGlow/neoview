@@ -65,6 +65,7 @@ pub fn run() {
             commands::browse_directory,
             commands::get_images_in_directory,
             commands::generate_file_thumbnail,
+            commands::generate_thumbnail_from_data,
             commands::create_directory,
             commands::delete_path,
             commands::rename_path,

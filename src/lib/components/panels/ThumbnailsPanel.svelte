@@ -107,10 +107,14 @@
 					<div
 						class="{gridSizes[
 							gridSize
-						]} rounded bg-muted flex items-center justify-center overflow-hidden"
+						]} rounded bg-muted flex items-center justify-center overflow-hidden relative"
 					>
 						{#if thumb.imageUrl}
-							<img src={thumb.imageUrl} alt={thumb.name} class="w-full h-full object-cover" />
+							<img 
+								src={thumb.imageUrl} 
+								alt={thumb.name} 
+								class="absolute inset-0 w-full h-full object-contain" 
+							/>
 						{:else}
 							<!-- 占位图标 -->
 							<ImageIcon class="h-8 w-8 text-muted-foreground" />

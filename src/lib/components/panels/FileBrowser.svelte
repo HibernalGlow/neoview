@@ -546,6 +546,27 @@
   }
 
   /**
+   * 清理缩略图缓存
+   */
+  async function clearThumbnailCache() {
+    if (!confirm('确定要清理所有缩略图缓存吗？这将重新生成所有缩略图。')) return;
+
+    try {
+      const count = await FileSystemAPI.clearThumbnailCache();
+      console.log(`✅ 已清理 ${count} 个缓存文件`);
+      // 刷新当前目录以重新生成缩略图
+      if (currentPath) {
+        await loadDirectory(currentPath);
+      }
+    } catch (err) {
+      console.error('❌ 清理缓存失败:', err);
+      fileBrowserStore.setError(String(err));
+    }
+  }
+
+  
+
+  /**
    * 格式化文件大小
    */
   function formatSize(bytes: number, isDir: boolean): string {
@@ -942,9 +963,10 @@
         variant="ghost"
         size="icon"
         class="h-8 w-8"
-        title="更多选项"
+        onclick={clearThumbnailCache}
+        title="清理缩略图缓存"
       >
-        <MoreVertical class="h-4 w-4" />
+        <Trash2 class="h-4 w-4" />
       </Button>
     </div>
   </div>

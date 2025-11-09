@@ -99,6 +99,8 @@ export async function clearThumbnailCache(): Promise<number> {
   return await invoke<number>('clear_thumbnail_cache');
 }
 
+
+
 /**
  * 清理过期缓存
  */

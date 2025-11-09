@@ -51,6 +51,13 @@ export async function generateFileThumbnail(path: string): Promise<string> {
 }
 
 /**
+ * 从图片数据生成缩略图（用于压缩包内图片）
+ */
+export async function generateThumbnailFromData(imageData: string, maxSize: number = 256): Promise<string> {
+  return await invoke<string>('generate_thumbnail_from_data', { imageData, maxSize });
+}
+
+/**
  * 创建目录
  */
 export async function createDirectory(path: string): Promise<void> {

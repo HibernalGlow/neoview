@@ -291,15 +291,14 @@
   }
 
   /**
-   * 加载压缩包内图片的缩略图
+   * 加载压缩包内图片的缩略图 - 完全使用单张图片逻辑
    */
   async function loadArchiveThumbnail(filePath: string) {
     try {
-      const thumbnail = await FileSystemAPI.generateArchiveThumbnail(
-        currentArchivePath,
-        filePath,
-        256
-      );
+      // 从压缩包中提取图片数据
+      const imageData = await FileSystemAPI.loadImageFromArchive(currentArchivePath, filePath);
+      // 使用新的API从图片数据生成缩略图
+      const thumbnail = await FileSystemAPI.generateThumbnailFromData(imageData);
       fileBrowserStore.addThumbnail(filePath, thumbnail);
     } catch (err) {
       // 不支持的图片格式或其他错误，静默失败

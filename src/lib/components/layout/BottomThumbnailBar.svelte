@@ -103,7 +103,7 @@
 	}
 
 	// 在前端从 base64 生成缩略图
-	function generateThumbnailFromBase64(base64Data: string, maxSize: number = 128): Promise<{url: string, width: number, height: number}> {
+	function generateThumbnailFromBase64(base64Data: string, maxHeight: number = $bottomThumbnailBarHeight - 40): Promise<{url: string, width: number, height: number}> {
 		return new Promise((resolve, reject) => {
 			const img = new Image();
 			img.onload = () => {
@@ -114,19 +114,12 @@
 					return;
 				}
 
-				// 等比例缩放
+				// 根据容器高度自适应调整缩略图大小
 				let width = img.width;
 				let height = img.height;
-				if (width > height) {
-					if (width > maxSize) {
-						height = (height * maxSize) / width;
-						width = maxSize;
-					}
-				} else {
-					if (height > maxSize) {
-						width = (width * maxSize) / height;
-						height = maxSize;
-					}
+				if (height > maxHeight) {
+					width = (width * maxHeight) / height;
+					height = maxHeight;
 				}
 
 				canvas.width = width;
@@ -160,7 +153,7 @@
 				fullImageData = await loadImage(page.path);
 			}
 
-			const thumbnail = await generateThumbnailFromBase64(fullImageData, 128);
+			const thumbnail = await generateThumbnailFromBase64(fullImageData);
 			thumbnails = { ...thumbnails, [pageIndex]: thumbnail };
 		} catch (err) {
 			console.error(`Failed to load thumbnail for page ${pageIndex}:`, err);
@@ -190,6 +183,15 @@
 	$effect(() => {
 		const currentBook = bookStore.currentBook;
 		thumbnails = {};
+	});
+
+	// 当高度变化时重新生成缩略图
+	$effect(() => {
+		const currentBook = bookStore.currentBook;
+		if (currentBook && Object.keys(thumbnails).length > 0) {
+			// 重新加载当前可见的缩略图以适应新高度
+			loadVisibleThumbnails();
+		}
 	});
 </script>
 
@@ -250,14 +252,14 @@
 			</div>
 
 			<div class="px-2 pb-2 h-[calc(100%-theme(spacing.8))] overflow-hidden">
-				<div class="flex gap-2 overflow-x-auto h-full pb-1" onscroll={handleScroll}>
+				<div class="flex gap-2 overflow-x-auto h-full pb-1 items-center" onscroll={handleScroll}>
 					{#each bookStore.currentBook.pages as page, index (page.path)}
 						<button
 							class="flex-shrink-0 rounded overflow-hidden border-2 {index ===
 							bookStore.currentPageIndex
 								? 'border-primary'
 								: 'border-transparent'} hover:border-primary/50 transition-colors relative group"
-							style="width: {thumbnails[index]?.width || 80}px; height: {thumbnails[index]?.height || 112}px;"
+							style="width: auto; height: {$bottomThumbnailBarHeight - 40}px; min-width: 60px; max-width: 120px;"
 							onclick={() => bookStore.navigateToPage(index)}
 							title="Page {index + 1}"
 						>
@@ -266,11 +268,12 @@
 									src={thumbnails[index].url}
 									alt="Page {index + 1}"
 									class="w-full h-full object-contain"
+									style="object-position: center;"
 								/>
 							{:else}
 								<div
 									class="w-full h-full flex flex-col items-center justify-center bg-muted text-xs text-muted-foreground"
-									style="min-width: 80px; min-height: 112px;"
+									style="min-width: 60px; max-width: 120px;"
 								>
 									<ImageIcon class="h-6 w-6 mb-1" />
 									<span class="font-mono">{index + 1}</span>
@@ -279,7 +282,7 @@
 
 							<!-- 页码标签 -->
 							<div
-								class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[10px] text-center py-0.5 font-mono opacity-0 group-hover:opacity-100 transition-opacity"
+								class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[10px] text-center py-0.5 font-mono"
 							>
 								{index + 1}
 							</div>

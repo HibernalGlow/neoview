@@ -153,9 +153,62 @@ function handleGlobalKeydown(e: KeyboardEvent) {
 		dispatchAction(action);
 	}
 }
+
+// 处理鼠标滚轮事件
+function handleGlobalWheel(e: WheelEvent) {
+	// 不在输入框时响应
+	if (isTypingInInput(e)) return;
+
+	const direction = e.deltaY < 0 ? 'up' : 'down';
+	console.log('鼠标滚轮:', direction); // 调试信息
+	const action = keyBindingsStore.findActionByMouseWheel(direction);
+	console.log('找到的操作:', action); // 调试信息
+	if (action) {
+		e.preventDefault();
+		dispatchAction(action);
+	}
+}
+
+// 处理鼠标点击事件
+function handleGlobalMouseClick(e: MouseEvent) {
+	// 不在输入框时响应
+	if (isTypingInInput(e)) return;
+
+	const button = e.button === 0 ? 'left' : e.button === 1 ? 'middle' : 'right';
+	const clickType = e.detail === 2 ? 'double-click' : 'click';
+	
+	console.log('鼠标点击:', button, clickType); // 调试信息
+	const action = keyBindingsStore.findActionByMouseClick(button, clickType);
+	console.log('找到的操作:', action); // 调试信息
+	if (action) {
+		e.preventDefault();
+		dispatchAction(action);
+	}
+}
+
+// 处理鼠标按下事件
+function handleGlobalMouseDown(e: MouseEvent) {
+	// 不在输入框时响应
+	if (isTypingInInput(e)) return;
+
+	const button = e.button === 0 ? 'left' : e.button === 1 ? 'middle' : 'right';
+	
+	// 检查是否有按键绑定（不是手势）
+	const action = keyBindingsStore.findActionByMouseGesture('press', button, 'press');
+	console.log('鼠标按下:', button, '找到的操作:', action); // 调试信息
+	if (action) {
+		e.preventDefault();
+		dispatchAction(action);
+	}
+}
 </script>
 
-<svelte:window onkeydown={handleGlobalKeydown} />
+<svelte:window 
+	onkeydown={handleGlobalKeydown}
+	onwheel={handleGlobalWheel}
+	onclick={handleGlobalMouseClick}
+	onmousedown={handleGlobalMouseDown}
+/>
 
 <MainLayout>
 	<div class="h-full w-full flex items-center justify-center">

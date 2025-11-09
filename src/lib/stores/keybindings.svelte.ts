@@ -12,8 +12,9 @@ export interface KeyBinding {
 
 export interface MouseGesture {
 	type: 'mouse';
-	gesture: string; // 例如: 'L', 'R', 'U', 'D', 'LD'
+	gesture: string; // 例如: 'L', 'R', 'U', 'D', 'LD', 'wheel-up', 'wheel-down', 'click', 'double-click'
 	button?: 'left' | 'right' | 'middle';
+	action?: 'press' | 'click' | 'double-click' | 'wheel'; // 动作类型
 }
 
 export interface TouchGesture {
@@ -44,6 +45,7 @@ const defaultBindings: ActionBinding[] = [
 			{ type: 'keyboard', key: 'Space' },
 			{ type: 'keyboard', key: 'PageDown' },
 			{ type: 'mouse', gesture: 'L', button: 'left' },
+			{ type: 'mouse', gesture: 'click', button: 'middle', action: 'click' }, // 中键单击
 			{ type: 'touch', gesture: 'swipe-left' }
 		]
 	},
@@ -90,7 +92,7 @@ const defaultBindings: ActionBinding[] = [
 		bindings: [
 			{ type: 'keyboard', key: 'Plus' },
 			{ type: 'keyboard', key: 'Ctrl+Plus' },
-			{ type: 'keyboard', key: 'Ctrl+Wheel' }, // 鼠标滚轮
+			{ type: 'mouse', gesture: 'wheel-up', button: 'middle', action: 'wheel' }, // 鼠标滚轮上
 			{ type: 'mouse', gesture: 'U', button: 'right' },
 			{ type: 'touch', gesture: 'pinch-out' }
 		]
@@ -103,6 +105,7 @@ const defaultBindings: ActionBinding[] = [
 		bindings: [
 			{ type: 'keyboard', key: 'Minus' },
 			{ type: 'keyboard', key: 'Ctrl+Minus' },
+			{ type: 'mouse', gesture: 'wheel-down', button: 'middle', action: 'wheel' }, // 鼠标滚轮下
 			{ type: 'mouse', gesture: 'D', button: 'right' },
 			{ type: 'touch', gesture: 'pinch-in' }
 		]
@@ -275,19 +278,30 @@ class KeyBindingsStore {
 	}
 
 	// 根据鼠标手势查找操作
-	findActionByMouseGesture(gesture: string, button: 'left' | 'right' | 'middle' = 'left'): string | null {
+	findActionByMouseGesture(gesture: string, button: 'left' | 'right' | 'middle' = 'left', action?: string): string | null {
 		for (const binding of this.bindings) {
 			if (!binding.bindings) continue;
 			const mouseBinding = binding.bindings.find(
 				b => b.type === 'mouse' && 
 					(b as MouseGesture).gesture === gesture &&
-					((b as MouseGesture).button || 'left') === button
+					((b as MouseGesture).button || 'left') === button &&
+					(!action || (b as MouseGesture).action === action)
 			);
 			if (mouseBinding) {
 				return binding.action;
 			}
 		}
 		return null;
+	}
+
+	// 根据鼠标滚轮查找操作
+	findActionByMouseWheel(direction: 'up' | 'down'): string | null {
+		return this.findActionByMouseGesture(`wheel-${direction}`, 'middle', 'wheel');
+	}
+
+	// 根据鼠标点击查找操作
+	findActionByMouseClick(button: 'left' | 'right' | 'middle', clickType: 'click' | 'double-click' = 'click'): string | null {
+		return this.findActionByMouseGesture(clickType, button, clickType);
 	}
 
 	// 根据触摸手势查找操作
@@ -343,7 +357,26 @@ class KeyBindingsStore {
 				return (binding as KeyBinding).key || '';
 			case 'mouse':
 				const mouse = binding as MouseGesture;
-				return `${mouse.button || 'left'} ${mouse.gesture || ''}`;
+				let buttonText = '';
+				switch (mouse.button) {
+					case 'left': buttonText = '左键'; break;
+					case 'right': buttonText = '右键'; break;
+					case 'middle': buttonText = '中键'; break;
+					default: buttonText = '左键';
+				}
+				
+				let gestureText = '';
+				if (mouse.gesture?.startsWith('wheel-')) {
+					gestureText = mouse.gesture === 'wheel-up' ? '滚轮上' : '滚轮下';
+				} else if (mouse.gesture === 'click') {
+					gestureText = '单击';
+				} else if (mouse.gesture === 'double-click') {
+					gestureText = '双击';
+				} else if (mouse.gesture) {
+					gestureText = mouse.gesture;
+				}
+				
+				return `${buttonText} ${gestureText}`;
 			case 'touch':
 				return (binding as TouchGesture).gesture || '';
 			default:

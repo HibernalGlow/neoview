@@ -9,12 +9,15 @@
 	import { keyBindingsStore, type InputBinding, type KeyBinding, type MouseGesture, type TouchGesture } from '$lib/stores/keybindings.svelte';
 	import { Keyboard, Mouse, Hand, Plus, Trash2, Search, RotateCcw } from '@lucide/svelte';
 	import GestureVisualizer from './GestureVisualizer.svelte';
+	import MouseRecordingArea from './MouseRecordingArea.svelte';
 
 	let searchQuery = $state('');
 	let editingAction = $state<string | null>(null);
 	let editingType = $state<'keyboard' | 'mouse' | 'touch' | null>(null);
 	let capturedInput = $state('');
 	let showGestureVisualizer = $state(false);
+	let showMouseOptions = $state(false);
+	let showMouseRecordingArea = $state(false);
 
 	// 过滤操作
 	const filteredActions = $derived(
@@ -37,7 +40,10 @@
 		editingType = type;
 		capturedInput = '';
 		
-		if (type === 'mouse' || type === 'touch') {
+		if (type === 'mouse') {
+			// 显示鼠标录制区域
+			showMouseRecordingArea = true;
+		} else if (type === 'touch') {
 			showGestureVisualizer = true;
 		}
 	}
@@ -48,6 +54,8 @@
 		editingType = null;
 		capturedInput = '';
 		showGestureVisualizer = false;
+		showMouseOptions = false;
+		showMouseRecordingArea = false;
 	}
 
 	// 键盘按键捕获
@@ -85,7 +93,7 @@
 			if (editingType === 'keyboard') {
 				binding = { type: 'keyboard', key: capturedInput };
 			} else if (editingType === 'mouse') {
-				binding = { type: 'mouse', gesture: capturedInput, button: 'left' };
+				binding = { type: 'mouse', gesture: capturedInput.gesture, button: capturedInput.button, action: capturedInput.action };
 			} else {
 				binding = { type: 'touch', gesture: capturedInput };
 			}
@@ -93,6 +101,24 @@
 			keyBindingsStore.addBinding(editingAction, binding);
 			cancelEditing();
 		}
+	}
+
+	// 处理鼠标选项选择
+	function handleMouseOption(gesture: string, button: 'left' | 'right' | 'middle', action: string) {
+		capturedInput = { gesture, button, action };
+		saveBinding();
+	}
+
+	// 处理鼠标录制完成
+	function handleMouseRecordingComplete(gesture: string, button: string, action: string) {
+		capturedInput = { gesture, button, action: button as 'left' | 'right' | 'middle', action };
+		showMouseRecordingArea = false;
+		saveBinding();
+	}
+
+	// 处理鼠标录制取消
+	function handleMouseRecordingCancel() {
+		showMouseRecordingArea = false;
 	}
 
 	// 处理手势完成
@@ -271,7 +297,7 @@
 											}}
 										>
 											<Mouse class="h-3 w-3" />
-											添加手势
+											录制鼠标
 										</button>
 										<button
 											class="inline-flex items-center justify-center gap-1 h-7 px-3 text-xs rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -322,8 +348,16 @@
 		</div>
 	{/if}
 
+	<!-- 鼠标录制区域 -->
+	{#if showMouseRecordingArea && editingAction && editingType === 'mouse'}
+		<MouseRecordingArea
+			onComplete={handleMouseRecordingComplete}
+			onCancel={handleMouseRecordingCancel}
+		/>
+	{/if}
+
 	<!-- 手势可视化器 -->
-	{#if showGestureVisualizer && editingAction && (editingType === 'mouse' || editingType === 'touch')}
+	{#if showGestureVisualizer && editingAction && editingType === 'touch'}
 		<GestureVisualizer
 			type={editingType}
 			onGestureComplete={handleGestureComplete}

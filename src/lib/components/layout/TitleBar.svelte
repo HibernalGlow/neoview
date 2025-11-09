@@ -3,15 +3,44 @@
 	 * NeoView - Title Bar Component
 	 * 标题栏组件
 	 */
-	import { Window } from '@tauri-apps/api/window';
+	import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewWindow';
 	import { Button } from '$lib/components/ui/button';
 	import { Menu, Minimize, Maximize, X, Settings } from '@lucide/svelte';
 	import { toggleSidebar } from '$lib/stores';
-	import SettingsDialog from '../dialogs/SettingsDialog.svelte';
 
-	const appWindow = Window.getCurrent();
+	const appWindow = getCurrentWebviewWindow();
 
-	let settingsOpen = $state(false);
+	async function openSettings() {
+		try {
+			// 检查设置窗口是否已存在
+			const existingWindow = await WebviewWindow.getByLabel('settings');
+			if (existingWindow) {
+				await existingWindow.setFocus();
+				return;
+			}
+		} catch (e) {
+			// 窗口不存在，继续创建
+		}
+
+		try {
+			// 创建新的设置窗口
+			const settingsWindow = new WebviewWindow('settings', {
+				url: '/settings.html',
+				title: '设置',
+				width: 900,
+				height: 700,
+				center: true,
+				resizable: true,
+				decorations: false
+			});
+
+			console.log('Settings window created');
+		} catch (error) {
+			console.error('Failed to create settings window:', error);
+			// 如果创建窗口失败，暂时使用 alert 提示
+			alert('设置窗口功能即将推出！当前可在主界面使用快捷键和手势功能。');
+		}
+	}
 
 	async function minimizeWindow() {
 		await appWindow.minimize();
@@ -40,7 +69,7 @@
 
 	<!-- 中间：设置按钮 -->
 	<div class="flex items-center gap-1">
-		<Button variant="ghost" size="icon" class="h-6 w-6" onclick={() => (settingsOpen = true)}>
+		<Button variant="ghost" size="icon" class="h-6 w-6" onclick={openSettings}>
 			<Settings class="h-4 w-4" />
 		</Button>
 	</div>
@@ -58,6 +87,3 @@
 		</Button>
 	</div>
 </div>
-
-<!-- 设置对话框 -->
-<SettingsDialog bind:open={settingsOpen} />

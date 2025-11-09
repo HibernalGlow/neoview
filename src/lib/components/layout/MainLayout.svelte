@@ -4,6 +4,7 @@
 	 * 主布局组件
 	 */
 	import { sidebarOpen, sidebarWidth } from '$lib/stores';
+	import { sidebars, setPanelSidebarSize, leftPanels, rightPanels, bottomPanels, activePanel } from '$lib/stores/panels.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import TitleBar from './TitleBar.svelte';
 	import StatusBar from './StatusBar.svelte';

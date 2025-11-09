@@ -8,12 +8,8 @@
 	import { Label } from '$lib/components/ui/label';
 	import { Switch } from '$lib/components/ui/switch';
 	import { Separator } from '$lib/components/ui/separator';
-	import {
-		mouseGestureBindings,
-		mouseWheelBindings,
-		type MouseGestureBinding,
-		type MouseWheelBinding
-	} from '$lib/stores';
+	import { mouseGestureBindings, mouseWheelBindings } from '$lib/stores';
+	import type { MouseGestureBinding, MouseWheelBinding } from '$lib/types/keyboard';
 	import { RotateCcw, Trash2, Plus } from '@lucide/svelte';
 
 	// 设置状态

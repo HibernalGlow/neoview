@@ -16,7 +16,7 @@ export const isFullscreen = writable<boolean>(false);
 export const isLoading = writable<boolean>(false);
 
 // 当前激活的面板
-export type PanelType = 'folder' | 'history' | 'bookmark' | 'info' | null;
+export type PanelType = 'folder' | 'history' | 'bookmark' | 'info' | 'thumbnails' | 'playlist' | 'thumbnail' | null;
 export const activeUIPanel = writable<PanelType>('folder');
 
 // 主题模式

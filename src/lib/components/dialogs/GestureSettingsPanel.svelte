@@ -8,7 +8,8 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import { Input } from '$lib/components/ui/input';
 	import { Separator } from '$lib/components/ui/separator';
-	import { gestureBindings, type GestureBinding } from '$lib/stores';
+	import { gestureBindings } from '$lib/stores';
+	import type { GestureBinding } from '$lib/types/keyboard';
 	import { RotateCcw, Trash2, Plus, Info } from '@lucide/svelte';
 
 	// 设置状态

@@ -7,6 +7,9 @@
 	import { activePanel, setActivePanel } from '$lib/stores';
 	import type { PanelType } from '$lib/stores';
 	import FileBrowser from '$lib/components/panels/FileBrowser.svelte';
+	import HistoryPanel from '$lib/components/panels/HistoryPanel.svelte';
+	import BookmarkPanel from '$lib/components/panels/BookmarkPanel.svelte';
+	import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
 
 	let tabs = $state([
 		{ value: 'folder', label: '文件夹', icon: Folder },
@@ -20,12 +23,19 @@
 	let draggedIndex = $state<number | null>(null);
 	let dragOverIndex = $state<number | null>(null);
 
-	function handleDragStart(index: number) {
+	function handleDragStart(e: DragEvent, index: number) {
 		draggedIndex = index;
+		if (e.dataTransfer) {
+			e.dataTransfer.effectAllowed = 'move';
+			e.dataTransfer.setData('text/plain', String(index));
+		}
 	}
 
 	function handleDragOver(e: DragEvent, index: number) {
 		e.preventDefault();
+		if (e.dataTransfer) {
+			e.dataTransfer.dropEffect = 'move';
+		}
 		dragOverIndex = index;
 	}
 
@@ -74,7 +84,7 @@
 			{@const IconComponent = tab.icon}
 			<button
 				draggable={true}
-				ondragstart={() => handleDragStart(index)}
+				ondragstart={(e) => handleDragStart(e, index)}
 				ondragover={(e) => handleDragOver(e, index)}
 				ondragend={handleDragEnd}
 				ondrop={handleDrop}
@@ -107,15 +117,9 @@
 		{#if $activePanel === 'folder'}
 			<FileBrowser />
 		{:else if $activePanel === 'history'}
-			<div class="p-4">
-				<h3 class="text-lg font-semibold mb-2">历史记录</h3>
-				<p class="text-sm text-muted-foreground">即将推出...</p>
-			</div>
+			<HistoryPanel />
 		{:else if $activePanel === 'bookmark'}
-			<div class="p-4">
-				<h3 class="text-lg font-semibold mb-2">书签</h3>
-				<p class="text-sm text-muted-foreground">即将推出...</p>
-			</div>
+			<BookmarkPanel />
 		{:else if $activePanel === 'thumbnail'}
 			<div class="p-4">
 				<h3 class="text-lg font-semibold mb-2">缩略图</h3>
@@ -127,10 +131,7 @@
 				<p class="text-sm text-muted-foreground">即将推出...</p>
 			</div>
 		{:else if $activePanel === 'info'}
-			<div class="p-4">
-				<h3 class="text-lg font-semibold mb-2">信息</h3>
-				<p class="text-sm text-muted-foreground">即将推出...</p>
-			</div>
+			<InfoPanel />
 		{/if}
 	</div>
 </div>

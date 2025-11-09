@@ -255,8 +255,8 @@
 
 	const containerClass = $derived(
 		position === 'left'
-			? `h-full flex bg-background transition-transform duration-300 ${isVisible ? 'translate-x-0' : '-translate-x-full'}`
-			: `h-full flex bg-background transition-transform duration-300 ${isVisible ? 'translate-x-0' : 'translate-x-full'}`
+			? `h-full flex bg-background transition-all duration-300 ${isVisible ? 'translate-x-0' : '-translate-x-full'} ${!isVisible ? 'opacity-0 pointer-events-none' : ''} border-0`
+			: `h-full flex bg-background transition-all duration-300 ${isVisible ? 'translate-x-0' : 'translate-x-full'} ${!isVisible ? 'opacity-0 pointer-events-none' : ''} border-0`
 	);
 
 	const resizeHandleClass = $derived(

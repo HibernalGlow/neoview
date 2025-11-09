@@ -46,7 +46,7 @@ export const sidebarPinned = writable<boolean>(false);
 export const rightSidebarPinned = writable<boolean>(false);
 
 // 边栏高度（用于上下边栏）
-export const topToolbarHeight = writable<number>(120);
+export const topToolbarHeight = writable<number>(80);
 export const bottomThumbnailBarHeight = writable<number>(140);
 
 /**

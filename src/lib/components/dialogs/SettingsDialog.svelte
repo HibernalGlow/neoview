@@ -6,9 +6,11 @@
 	import { Dialog } from '$lib/components/ui/dialog';
 	import { Tabs } from '$lib/components/ui/tabs';
 	import { Button } from '$lib/components/ui/button';
-	import { Settings, Keyboard, Palette, Zap } from '@lucide/svelte';
+	import { Settings, Keyboard, Palette, Zap, Mouse, Hand } from '@lucide/svelte';
 	import KeyBindingPanel from './KeyBindingPanel.svelte';
 	import ViewerSettingsPanel from './ViewerSettingsPanel.svelte';
+	import MouseSettingsPanel from './MouseSettingsPanel.svelte';
+	import GestureSettingsPanel from './GestureSettingsPanel.svelte';
 
 	let { open = $bindable(false) } = $props();
 
@@ -16,6 +18,8 @@
 		{ value: 'general', label: '通用', icon: Settings },
 		{ value: 'viewer', label: '查看器', icon: Palette },
 		{ value: 'keyboard', label: '快捷键', icon: Keyboard },
+		{ value: 'mouse', label: '鼠标', icon: Mouse },
+		{ value: 'gesture', label: '手势', icon: Hand },
 		{ value: 'performance', label: '性能', icon: Zap }
 	];
 
@@ -58,6 +62,10 @@
 					<ViewerSettingsPanel />
 				{:else if activeTab === 'keyboard'}
 					<KeyBindingPanel />
+				{:else if activeTab === 'mouse'}
+					<MouseSettingsPanel />
+				{:else if activeTab === 'gesture'}
+					<GestureSettingsPanel />
 				{:else if activeTab === 'performance'}
 					<div class="space-y-4">
 						<h3 class="text-lg font-semibold">性能设置</h3>

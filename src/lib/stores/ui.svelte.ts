@@ -17,7 +17,7 @@ export const isLoading = writable<boolean>(false);
 
 // 当前激活的面板
 export type PanelType = 'folder' | 'history' | 'bookmark' | 'info' | null;
-export const activePanel = writable<PanelType>('folder');
+export const activeUIPanel = writable<PanelType>('folder');
 
 // 主题模式
 export type ThemeMode = 'light' | 'dark' | 'system';
@@ -44,7 +44,7 @@ export function toggleFullscreen() {
  * 设置激活的面板
  */
 export function setActivePanel(panel: PanelType) {
-	activePanel.set(panel);
+	activeUIPanel.set(panel);
 }
 
 /**

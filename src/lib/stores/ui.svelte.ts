@@ -39,6 +39,16 @@ export const rotationAngle = writable<number>(0);
 export type ViewMode = 'single' | 'double' | 'panorama';
 export const viewMode = writable<ViewMode>('single');
 
+// 边栏钉住状态（钉住时不自动隐藏）
+export const topToolbarPinned = writable<boolean>(false);
+export const bottomThumbnailBarPinned = writable<boolean>(false);
+export const sidebarPinned = writable<boolean>(false);
+export const rightSidebarPinned = writable<boolean>(false);
+
+// 边栏高度（用于上下边栏）
+export const topToolbarHeight = writable<number>(120);
+export const bottomThumbnailBarHeight = writable<number>(140);
+
 /**
  * 切换侧边栏
  */

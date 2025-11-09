@@ -6,7 +6,6 @@
 	import { sidebarOpen, sidebarWidth, rightSidebarOpen, rightSidebarWidth } from '$lib/stores';
 	import { sidebars, setPanelSidebarSize, leftPanels, rightPanels, bottomPanels, activePanel } from '$lib/stores/panels.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
-	import StatusBar from './StatusBar.svelte';
 	import Sidebar from './Sidebar.svelte';
 	import RightSidebar from './RightSidebar.svelte';
 	import TopToolbar from './TopToolbar.svelte';
@@ -41,9 +40,6 @@
 
 	<!-- 自动隐藏底部缩略图栏 -->
 	<BottomThumbnailBar />
-
-	<!-- 自动隐藏状态栏 -->
-	<StatusBar />
 
 	<!-- 左侧边栏（悬浮，始终可用） -->
 	<div class="absolute left-0 top-0 bottom-0 z-40 pointer-events-none">

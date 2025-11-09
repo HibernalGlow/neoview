@@ -3,9 +3,10 @@
 	 * NeoView - Right Sidebar Component
 	 * 右侧边栏组件 - 垂直图标风格，支持拖拽排序和自动隐藏
 	 */
-	import { Info, FileText, GripVertical } from '@lucide/svelte';
-	import { activeRightPanel, setActiveRightPanel, rightSidebarWidth } from '$lib/stores';
+	import { Info, FileText, GripVertical, Pin, PinOff } from '@lucide/svelte';
+	import { activeRightPanel, setActiveRightPanel, rightSidebarWidth, rightSidebarPinned } from '$lib/stores';
 	import type { RightPanelType } from '$lib/stores';
+	import { Button } from '$lib/components/ui/button';
 	import ImagePropertiesPanel from '$lib/components/panels/ImagePropertiesPanel.svelte';
 	import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
 
@@ -20,6 +21,17 @@
 	let isResizing = $state(false);
 	let startX = 0;
 	let startWidth = 0;
+
+	// 响应钉住状态
+	$effect(() => {
+		if ($rightSidebarPinned) {
+			isVisible = true;
+			if (hideTimer) {
+				clearTimeout(hideTimer);
+				hideTimer = null;
+			}
+		}
+	});
 
 	let tabs = $state([
 		{ value: 'info', label: '信息', icon: Info },
@@ -75,7 +87,7 @@
 
 	// 鼠标离开侧边栏区域
 	function handleMouseLeave() {
-		if (!isResizing) {
+		if (!isResizing && !$rightSidebarPinned) {
 			hideTimer = setTimeout(() => {
 				isVisible = false;
 			}, 500) as unknown as number;
@@ -108,6 +120,10 @@
 		isResizing = false;
 		document.removeEventListener('mousemove', handleResizeMove);
 		document.removeEventListener('mouseup', handleResizeEnd);
+	}
+
+	function togglePin() {
+		rightSidebarPinned.update(p => !p);
 	}
 
 	// 从 localStorage 加载排序
@@ -153,16 +169,35 @@
 	></div>
 
 	<!-- 面板内容 -->
-	<div class="flex-1 overflow-hidden">
-		{#if $activeRightPanel === 'info'}
-			<InfoPanel />
-		{:else if $activeRightPanel === 'properties'}
-			<ImagePropertiesPanel />
-		{:else}
-			<div class="p-4 text-center text-muted-foreground">
-				<p>选择一个面板</p>
-			</div>
-		{/if}
+	<div class="flex-1 overflow-hidden flex flex-col">
+		<!-- 钉住按钮 -->
+		<div class="p-2 border-b flex justify-center">
+			<Button
+				variant={$rightSidebarPinned ? 'default' : 'ghost'}
+				size="sm"
+				class="h-8"
+				onclick={togglePin}
+			>
+				{#if $rightSidebarPinned}
+					<Pin class="h-3 w-3 mr-1" />
+				{:else}
+					<PinOff class="h-3 w-3 mr-1" />
+				{/if}
+				<span class="text-xs">{$rightSidebarPinned ? '已钉住' : '钉住'}</span>
+			</Button>
+		</div>
+
+		<div class="flex-1 overflow-hidden">
+			{#if $activeRightPanel === 'info'}
+				<InfoPanel />
+			{:else if $activeRightPanel === 'properties'}
+				<ImagePropertiesPanel />
+			{:else}
+				<div class="p-4 text-center text-muted-foreground">
+					<p>选择一个面板</p>
+				</div>
+			{/if}
+		</div>
 	</div>
 
 	<!-- 垂直图标标签栏（右侧，可拖拽） -->

@@ -6,16 +6,34 @@
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { loadImage } from '$lib/api/fs';
 	import { loadImageFromArchive } from '$lib/api/filesystem';
-	import { Image as ImageIcon } from '@lucide/svelte';
+	import { bottomThumbnailBarPinned, bottomThumbnailBarHeight } from '$lib/stores';
+	import { Button } from '$lib/components/ui/button';
+	import { Image as ImageIcon, Pin, PinOff, GripHorizontal } from '@lucide/svelte';
 
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
 	let thumbnails = $state<Record<number, string>>({});
+	let isResizing = $state(false);
+	let resizeStartY = 0;
+	let resizeStartHeight = 0;
+
+	// 响应钉住状态
+	$effect(() => {
+		if ($bottomThumbnailBarPinned) {
+			isVisible = true;
+			if (hideTimeout) clearTimeout(hideTimeout);
+		}
+	});
 
 	function showThumbnails() {
 		isVisible = true;
 		if (hideTimeout) clearTimeout(hideTimeout);
 		loadVisibleThumbnails();
+		if (!$bottomThumbnailBarPinned) {
+			hideTimeout = setTimeout(() => {
+				isVisible = false;
+			}, 2000) as unknown as number;
+		}
 	}
 
 	function handleMouseEnter() {
@@ -23,11 +41,45 @@
 	}
 
 	function handleMouseLeave() {
+		if ($bottomThumbnailBarPinned || isResizing) return;
 		if (hideTimeout) clearTimeout(hideTimeout);
 		hideTimeout = setTimeout(() => {
 			isVisible = false;
 		}, 500) as unknown as number;
 	}
+
+	function togglePin() {
+		bottomThumbnailBarPinned.update(p => !p);
+	}
+
+	function handleResizeStart(e: MouseEvent) {
+		isResizing = true;
+		resizeStartY = e.clientY;
+		resizeStartHeight = $bottomThumbnailBarHeight;
+		e.preventDefault();
+	}
+
+	function handleResizeMove(e: MouseEvent) {
+		if (!isResizing) return;
+		const deltaY = resizeStartY - e.clientY; // 反向，因为是从底部拖拽
+		const newHeight = Math.max(80, Math.min(400, resizeStartHeight + deltaY));
+		bottomThumbnailBarHeight.set(newHeight);
+	}
+
+	function handleResizeEnd() {
+		isResizing = false;
+	}
+
+	$effect(() => {
+		if (isResizing) {
+			window.addEventListener('mousemove', handleResizeMove);
+			window.addEventListener('mouseup', handleResizeEnd);
+			return () => {
+				window.removeEventListener('mousemove', handleResizeMove);
+				window.removeEventListener('mouseup', handleResizeEnd);
+			};
+		}
+	});
 
 	async function loadVisibleThumbnails() {
 		const currentBook = bookStore.currentBook;
@@ -135,9 +187,9 @@
 </script>
 
 {#if bookStore.currentBook}
-	<!-- 缩略图栏触发区域（独立，位于状态栏上方） -->
+	<!-- 缩略图栏触发区域（独立） -->
 	<div
-		class="fixed bottom-6 left-0 right-0 h-3 z-[48]"
+		class="fixed bottom-0 left-0 right-0 h-4 z-[48]"
 		onmouseenter={handleMouseEnter}
 		role="presentation"
 		aria-label="底部缩略图栏触发区域"
@@ -145,15 +197,43 @@
 
 	<!-- 缩略图栏内容 -->
 	<div
-		class="absolute bottom-6 left-0 right-0 z-50 transition-transform duration-300 {isVisible
+		class="absolute bottom-0 left-0 right-0 z-50 transition-transform duration-300 {isVisible
 			? 'translate-y-0'
 			: 'translate-y-full'}"
 		onmouseenter={handleMouseEnter}
 		onmouseleave={handleMouseLeave}
 	>
-		<div class="bg-secondary/95 backdrop-blur-sm border-t shadow-lg">
-			<div class="p-2">
-				<div class="flex gap-2 overflow-x-auto pb-1" onscroll={handleScroll}>
+		<div class="bg-secondary/95 backdrop-blur-sm border-t shadow-lg overflow-hidden" style="height: {$bottomThumbnailBarHeight}px;">
+			<!-- 拖拽手柄 -->
+			<div
+				class="h-2 flex items-center justify-center cursor-ns-resize hover:bg-primary/20 transition-colors"
+				onmousedown={handleResizeStart}
+				role="separator"
+				aria-label="拖拽调整缩略图栏高度"
+				tabindex="0"
+			>
+				<GripHorizontal class="h-3 w-3 text-muted-foreground" />
+			</div>
+
+			<!-- 钉住按钮 -->
+			<div class="px-2 pb-1 flex justify-center">
+				<Button
+					variant={$bottomThumbnailBarPinned ? 'default' : 'ghost'}
+					size="sm"
+					class="h-6"
+					onclick={togglePin}
+				>
+					{#if $bottomThumbnailBarPinned}
+						<Pin class="h-3 w-3 mr-1" />
+					{:else}
+						<PinOff class="h-3 w-3 mr-1" />
+					{/if}
+					<span class="text-xs">{$bottomThumbnailBarPinned ? '已钉住' : '钉住'}</span>
+				</Button>
+			</div>
+
+			<div class="px-2 pb-2 h-[calc(100%-theme(spacing.8))] overflow-hidden">
+				<div class="flex gap-2 overflow-x-auto h-full pb-1" onscroll={handleScroll}>
 					{#each bookStore.currentBook.pages as page, index (page.path)}
 						<button
 							class="flex-shrink-0 w-20 h-28 rounded overflow-hidden border-2 {index ===

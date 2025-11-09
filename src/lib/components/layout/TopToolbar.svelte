@@ -17,7 +17,8 @@
 		setViewMode,
 		toggleViewMode,
 		toggleSidebar,
-		toggleRightSidebar
+		topToolbarPinned,
+		topToolbarHeight
 	} from '$lib/stores';
 	import PathBar from '../ui/PathBar.svelte';
 	import {
@@ -36,20 +37,35 @@
 		Minimize,
 		Maximize,
 		Settings,
-		PanelRightOpen
+		Pin,
+		PinOff,
+		GripHorizontal
 	} from '@lucide/svelte';
 
 	const appWindow = getCurrentWebviewWindow();
 	
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
+	let isResizing = $state(false);
+	let resizeStartY = 0;
+	let resizeStartHeight = 0;
+
+	// 响应钉住状态
+	$effect(() => {
+		if ($topToolbarPinned) {
+			isVisible = true;
+			if (hideTimeout) clearTimeout(hideTimeout);
+		}
+	});
 
 	function showToolbar() {
 		isVisible = true;
 		if (hideTimeout) clearTimeout(hideTimeout);
-		hideTimeout = setTimeout(() => {
-			isVisible = false;
-		}, 2000) as unknown as number;
+		if (!$topToolbarPinned) {
+			hideTimeout = setTimeout(() => {
+				isVisible = false;
+			}, 2000) as unknown as number;
+		}
 	}
 
 	function handleMouseEnter() {
@@ -57,11 +73,45 @@
 	}
 
 	function handleMouseLeave() {
+		if ($topToolbarPinned || isResizing) return;
 		if (hideTimeout) clearTimeout(hideTimeout);
 		hideTimeout = setTimeout(() => {
 			isVisible = false;
 		}, 500) as unknown as number;
 	}
+
+	function togglePin() {
+		topToolbarPinned.update(p => !p);
+	}
+
+	function handleResizeStart(e: MouseEvent) {
+		isResizing = true;
+		resizeStartY = e.clientY;
+		resizeStartHeight = $topToolbarHeight;
+		e.preventDefault();
+	}
+
+	function handleResizeMove(e: MouseEvent) {
+		if (!isResizing) return;
+		const deltaY = e.clientY - resizeStartY;
+		const newHeight = Math.max(80, Math.min(400, resizeStartHeight + deltaY));
+		topToolbarHeight.set(newHeight);
+	}
+
+	function handleResizeEnd() {
+		isResizing = false;
+	}
+
+	$effect(() => {
+		if (isResizing) {
+			window.addEventListener('mousemove', handleResizeMove);
+			window.addEventListener('mouseup', handleResizeEnd);
+			return () => {
+				window.removeEventListener('mousemove', handleResizeMove);
+				window.removeEventListener('mouseup', handleResizeEnd);
+			};
+		}
+	});
 
 	async function handlePreviousPage() {
 		if (!bookStore.canPreviousPage) return;
@@ -156,9 +206,21 @@
 
 		<!-- 中间：功能按钮 -->
 		<div class="flex items-center gap-1">
-			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={toggleRightSidebar} title="右侧边栏">
-				<PanelRightOpen class="h-4 w-4" />
+			<!-- 钉住按钮 -->
+			<Button
+				variant={$topToolbarPinned ? 'default' : 'ghost'}
+				size="icon"
+				class="h-6 w-6"
+				onclick={togglePin}
+				title={$topToolbarPinned ? '松开工具栏（自动隐藏）' : '钉住工具栏（始终显示）'}
+			>
+				{#if $topToolbarPinned}
+					<Pin class="h-4 w-4" />
+				{:else}
+					<PinOff class="h-4 w-4" />
+				{/if}
 			</Button>
+
 			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={openSettings} title="设置">
 				<Settings class="h-4 w-4" />
 			</Button>
@@ -179,8 +241,8 @@
 	</div>
 
 	<!-- 工具栏（图片操作） -->
-	<div class="bg-secondary/95 backdrop-blur-sm border-b shadow-lg">
-		<div class="px-4 py-2 flex items-center justify-between gap-4">
+	<div class="bg-secondary/95 backdrop-blur-sm border-b shadow-lg overflow-hidden" style="height: {$topToolbarHeight}px;">
+		<div class="px-4 py-2 flex items-center justify-between gap-4 h-full overflow-y-auto">
 			<!-- 左侧：关闭按钮 + 面包屑导航 -->
 			<div class="flex items-center gap-2 flex-1 min-w-0">
 				<Button variant="ghost" size="icon" class="h-8 w-8 flex-shrink-0" onclick={handleClose}>
@@ -300,6 +362,17 @@
 					<RotateCw class="h-4 w-4" />
 				</Button>
 			</div>
+		</div>
+
+		<!-- 拖拽手柄 -->
+		<div
+			class="h-2 flex items-center justify-center cursor-ns-resize hover:bg-primary/20 transition-colors"
+			onmousedown={handleResizeStart}
+			role="separator"
+			aria-label="拖拽调整工具栏高度"
+			tabindex="0"
+		>
+			<GripHorizontal class="h-3 w-3 text-muted-foreground" />
 		</div>
 	</div>
 </div>

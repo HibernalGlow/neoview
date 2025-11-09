@@ -3,9 +3,10 @@
 	 * NeoView - Sidebar Component
 	 * 侧边栏组件 - 垂直图标风格，支持拖拽排序和自动隐藏
 	 */
-	import { Folder, History, Bookmark, Info, Image as ImageIcon, List, GripVertical } from '@lucide/svelte';
-	import { activePanel, setActivePanel, sidebarWidth } from '$lib/stores';
+	import { Folder, History, Bookmark, Info, Image as ImageIcon, List, GripVertical, Pin, PinOff } from '@lucide/svelte';
+	import { activePanel, setActivePanel, sidebarWidth, sidebarPinned } from '$lib/stores';
 	import type { PanelType } from '$lib/stores';
+	import { Button } from '$lib/components/ui/button';
 	import FileBrowser from '$lib/components/panels/FileBrowser.svelte';
 	import HistoryPanel from '$lib/components/panels/HistoryPanel.svelte';
 	import BookmarkPanel from '$lib/components/panels/BookmarkPanel.svelte';
@@ -22,6 +23,17 @@
 	let isResizing = $state(false);
 	let startX = 0;
 	let startWidth = 0;
+
+	// 响应钉住状态
+	$effect(() => {
+		if ($sidebarPinned) {
+			isVisible = true;
+			if (hideTimer) {
+				clearTimeout(hideTimer);
+				hideTimer = null;
+			}
+		}
+	});
 
 	let tabs = $state([
 		{ value: 'folder', label: '文件夹', icon: Folder },
@@ -81,11 +93,15 @@
 
 	// 鼠标离开侧边栏区域
 	function handleMouseLeave() {
-		if (!isResizing) {
+		if (!isResizing && !$sidebarPinned) {
 			hideTimer = setTimeout(() => {
 				isVisible = false;
 			}, 500) as unknown as number;
 		}
+	}
+
+	function togglePin() {
+		sidebarPinned.update(p => !p);
 	}
 
 	// 拖拽调整宽度
@@ -151,6 +167,23 @@
 >
 	<!-- 垂直图标标签栏（可拖拽） -->
 	<div class="w-12 flex flex-col border-r bg-secondary/30">
+		<!-- 钉住按钮 -->
+		<div class="p-1 border-b">
+			<Button
+				variant={$sidebarPinned ? 'default' : 'ghost'}
+				size="icon"
+				class="h-10 w-10"
+				onclick={togglePin}
+				title={$sidebarPinned ? '松开侧边栏（自动隐藏）' : '钉住侧边栏（始终显示）'}
+			>
+				{#if $sidebarPinned}
+					<Pin class="h-4 w-4" />
+				{:else}
+					<PinOff class="h-4 w-4" />
+				{/if}
+			</Button>
+		</div>
+
 		{#each tabs as tab, index (tab.value)}
 			{@const IconComponent = tab.icon}
 			<button

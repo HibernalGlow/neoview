@@ -9,15 +9,16 @@
 	import { keyBindingsStore, type InputBinding, type KeyBinding, type MouseGesture, type TouchGesture } from '$lib/stores/keybindings.svelte';
 	import { Keyboard, Mouse, Hand, Plus, Trash2, Search, RotateCcw } from '@lucide/svelte';
 	import GestureVisualizer from './GestureVisualizer.svelte';
-	import MouseRecordingArea from './MouseRecordingArea.svelte';
+	import MouseGestureRecorder from './MouseGestureRecorder.svelte';
+	import MouseKeyRecorder from './MouseKeyRecorder.svelte';
 
 	let searchQuery = $state('');
 	let editingAction = $state<string | null>(null);
 	let editingType = $state<'keyboard' | 'mouse' | 'touch' | null>(null);
 	let capturedInput = $state('');
 	let showGestureVisualizer = $state(false);
-	let showMouseOptions = $state(false);
-	let showMouseRecordingArea = $state(false);
+	let showMouseGestureRecorder = $state(false);
+	let showMouseKeyRecorder = $state(false);
 
 	// 过滤操作
 	const filteredActions = $derived(
@@ -41,8 +42,8 @@
 		capturedInput = '';
 		
 		if (type === 'mouse') {
-			// 显示鼠标录制区域
-			showMouseRecordingArea = true;
+			// 显示鼠标选项对话框
+			showMouseOptions = true;
 		} else if (type === 'touch') {
 			showGestureVisualizer = true;
 		}
@@ -54,8 +55,8 @@
 		editingType = null;
 		capturedInput = '';
 		showGestureVisualizer = false;
-		showMouseOptions = false;
-		showMouseRecordingArea = false;
+		showMouseGestureRecorder = false;
+		showMouseKeyRecorder = false;
 	}
 
 	// 键盘按键捕获
@@ -109,16 +110,28 @@
 		saveBinding();
 	}
 
-	// 处理鼠标录制完成
-	function handleMouseRecordingComplete(gesture: string, button: string, action: string) {
+	// 处理鼠标手势录制完成
+	function handleMouseGestureComplete(gesture: string, button: string, action: string) {
 		capturedInput = { gesture, button, action: button as 'left' | 'right' | 'middle', action };
-		showMouseRecordingArea = false;
+		showMouseGestureRecorder = false;
 		saveBinding();
 	}
 
-	// 处理鼠标录制取消
-	function handleMouseRecordingCancel() {
-		showMouseRecordingArea = false;
+	// 处理鼠标手势录制取消
+	function handleMouseGestureCancel() {
+		showMouseGestureRecorder = false;
+	}
+
+	// 处理鼠标按键录制完成
+	function handleMouseKeyComplete(gesture: string, button: string, action: string) {
+		capturedInput = { gesture, button, action: button as 'left' | 'right' | 'middle', action };
+		showMouseKeyRecorder = false;
+		saveBinding();
+	}
+
+	// 处理鼠标按键录制取消
+	function handleMouseKeyCancel() {
+		showMouseKeyRecorder = false;
 	}
 
 	// 处理手势完成
@@ -293,11 +306,28 @@
 											onclick={(e) => {
 												e.preventDefault();
 												e.stopPropagation();
-												startEditing(binding.action, 'mouse');
+												editingAction = binding.action;
+												editingType = 'mouse';
+												capturedInput = '';
+												showMouseGestureRecorder = true;
 											}}
 										>
 											<Mouse class="h-3 w-3" />
-											录制鼠标
+											手势
+										</button>
+										<button
+											class="inline-flex items-center justify-center gap-1 h-7 px-3 text-xs rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
+											onclick={(e) => {
+												e.preventDefault();
+												e.stopPropagation();
+												editingAction = binding.action;
+												editingType = 'mouse';
+												capturedInput = '';
+												showMouseKeyRecorder = true;
+											}}
+										>
+											<Mouse class="h-3 w-3" />
+											按键
 										</button>
 										<button
 											class="inline-flex items-center justify-center gap-1 h-7 px-3 text-xs rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -348,11 +378,19 @@
 		</div>
 	{/if}
 
-	<!-- 鼠标录制区域 -->
-	{#if showMouseRecordingArea && editingAction && editingType === 'mouse'}
-		<MouseRecordingArea
-			onComplete={handleMouseRecordingComplete}
-			onCancel={handleMouseRecordingCancel}
+	<!-- 鼠标手势录制器 -->
+	{#if showMouseGestureRecorder && editingAction && editingType === 'mouse'}
+		<MouseGestureRecorder
+			onComplete={handleMouseGestureComplete}
+			onCancel={handleMouseGestureCancel}
+		/>
+	{/if}
+
+	<!-- 鼠标按键录制器 -->
+	{#if showMouseKeyRecorder && editingAction && editingType === 'mouse'}
+		<MouseKeyRecorder
+			onComplete={handleMouseKeyComplete}
+			onCancel={handleMouseKeyCancel}
 		/>
 	{/if}
 

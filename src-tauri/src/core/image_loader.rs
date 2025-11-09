@@ -38,18 +38,12 @@ impl ImageLoader {
         let image_data = fs::read(path_obj)
             .map_err(|e| format!("Failed to read image file: {}", e))?;
 
-        // 检查是否为 JXL 或 AVIF 文件 - 需要解码为 PNG
+        // 检查是否为 JXL 文件 - 需要解码为 PNG
         if let Some(ext) = path_obj.extension().and_then(|e| e.to_str()) {
             let ext_lower = ext.to_lowercase();
-            if ext_lower == "jxl" || ext_lower == "avif" {
-                // 解码图像
-                let img = if ext_lower == "jxl" {
-                    self.decode_jxl_image(&image_data)?
-                } else {
-                    // AVIF 使用 image crate 的内置支持
-                    image::load_from_memory_with_format(&image_data, ImageFormat::Avif)
-                        .map_err(|e| format!("Failed to decode AVIF: {}", e))?
-                };
+            if ext_lower == "jxl" {
+                // JXL 解码图像（浏览器不原生支持，需要转换）
+                let img = self.decode_jxl_image(&image_data)?;
                 
                 // 编码为 PNG
                 let mut png_data = Vec::new();

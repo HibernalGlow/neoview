@@ -854,7 +854,7 @@ balanced-match@^1.0.0:
   resolved "https://registry.npmmirror.com/balanced-match/-/balanced-match-1.0.2.tgz#e83e3a7e3f300b34cb9d87f615fa0cbf357690ee"
   integrity sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==
 
-bits-ui@^2.11.0:
+bits-ui@^2.14.2:
   version "2.14.2"
   resolved "https://registry.npmmirror.com/bits-ui/-/bits-ui-2.14.2.tgz#8daf46afdbfef0934377164b984073458f71aac6"
   integrity sha512-YqpAJj/nRTZjf7IlgUC3QlepVZ7YFiAQWpZaYUOAZFW5Py+g5DYkhEDTdNFI5SReo7l1rct/nRpMK4pfL9Xffw==

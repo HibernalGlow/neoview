@@ -8,6 +8,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import { Tabs, TabsContent, TabsList, TabsTrigger } from '$lib/components/ui/tabs';
 	import { Switch } from '$lib/components/ui/switch';
+	import * as Select from '$lib/components/ui/select';
 
 	// 设置状态
 	let settings = $state({
@@ -42,30 +43,79 @@
 
 	// 快捷键绑定
 	let keyBindings = $state([
-		{ action: 'nextPage', key: 'ArrowRight', description: '下一页' },
-		{ action: 'prevPage', key: 'ArrowLeft', description: '上一页' },
-		{ action: 'zoomIn', key: 'Plus', description: '放大' },
-		{ action: 'zoomOut', key: 'Minus', description: '缩小' },
-		{ action: 'fullscreen', key: 'F11', description: '全屏' },
-		{ action: 'openFile', key: 'Ctrl+O', description: '打开文件' },
-		{ action: 'closeBook', key: 'Ctrl+W', description: '关闭书籍' },
+		{ action: 'nextPage', key: 'ArrowRight', description: '下一页', category: '导航' },
+		{ action: 'prevPage', key: 'ArrowLeft', description: '上一页', category: '导航' },
+		{ action: 'firstPage', key: 'Home', description: '第一页', category: '导航' },
+		{ action: 'lastPage', key: 'End', description: '最后一页', category: '导航' },
+		{ action: 'zoomIn', key: 'Ctrl++', description: '放大', category: '缩放' },
+		{ action: 'zoomOut', key: 'Ctrl+-', description: '缩小', category: '缩放' },
+		{ action: 'zoomReset', key: 'Ctrl+0', description: '重置缩放', category: '缩放' },
+		{ action: 'fullscreen', key: 'F11', description: '全屏', category: '视图' },
+		{ action: 'openFile', key: 'Ctrl+O', description: '打开文件', category: '文件' },
+		{ action: 'closeBook', key: 'Ctrl+W', description: '关闭书籍', category: '文件' },
+		{ action: 'toggleSidebar', key: 'F2', description: '切换侧边栏', category: '视图' },
 	]);
 
 	// 正在编辑的快捷键
 	let editingKeyIndex = $state<number | null>(null);
+	let capturedKeys = $state<Set<string>>(new Set());
 
-	function handleKeyCapture(event: KeyboardEvent, index: number) {
+	// 改进的按键捕获（参考 NeeView 的实现）
+	function handleKeyDown(event: KeyboardEvent, index: number) {
 		event.preventDefault();
 		event.stopPropagation();
+
+		// 捕获修饰键状态
+		const ctrl = event.ctrlKey;
+		const shift = event.shiftKey;
+		const alt = event.altKey;
 		
-		const key = event.key;
-		const modifiers = [];
-		if (event.ctrlKey) modifiers.push('Ctrl');
-		if (event.shiftKey) modifiers.push('Shift');
-		if (event.altKey) modifiers.push('Alt');
+		// 忽略单独的修饰键
+		if (['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) {
+			return;
+		}
+
+		// 格式化按键名称
+		let keyName = event.key;
 		
-		const keyString = modifiers.length > 0 ? `${modifiers.join('+')}+${key}` : key;
+		// 特殊键名映射（与 NeeView 一致）
+		const keyMap: Record<string, string> = {
+			' ': 'Space',
+			'+': 'Plus',
+			'-': 'Minus',
+			'=': 'Equal',
+			'ArrowUp': 'Up',
+			'ArrowDown': 'Down',
+			'ArrowLeft': 'Left',
+			'ArrowRight': 'Right',
+		};
+		
+		if (keyMap[keyName]) {
+			keyName = keyMap[keyName];
+		} else if (keyName.length === 1) {
+			// 字母/数字大写
+			keyName = keyName.toUpperCase();
+		}
+
+		// 构建快捷键字符串
+		const modifiers: string[] = [];
+		if (ctrl) modifiers.push('Ctrl');
+		if (shift) modifiers.push('Shift');
+		if (alt) modifiers.push('Alt');
+		
+		const keyString = modifiers.length > 0 
+			? `${modifiers.join('+')}+${keyName}`
+			: keyName;
+
 		keyBindings[index].key = keyString;
+		editingKeyIndex = null;
+	}
+
+	function startEditKey(index: number) {
+		editingKeyIndex = index;
+	}
+
+	function cancelEditKey() {
 		editingKeyIndex = null;
 	}
 
@@ -125,12 +175,18 @@
 			<TabsContent value="display" class="p-4 space-y-6">
 				<div class="space-y-2">
 					<Label>图像缩放模式</Label>
-					<select bind:value={settings.display.imageScaling} class="w-full px-3 py-2 rounded-md border bg-background">
-						<option value="fit">适应窗口</option>
-						<option value="width">适应宽度</option>
-						<option value="height">适应高度</option>
-						<option value="original">原始大小</option>
-					</select>
+					<Select.Root
+						selected={{ value: settings.display.imageScaling, label: settings.display.imageScaling === 'fit' ? '适应窗口' : settings.display.imageScaling === 'width' ? '适应宽度' : settings.display.imageScaling === 'height' ? '适应高度' : '原始大小' }}
+						onSelectedChange={(v) => v && (settings.display.imageScaling = v.value as any)}
+					>
+						<Select.Trigger class="w-full" />
+						<Select.Content>
+							<Select.Item value="fit">适应窗口</Select.Item>
+							<Select.Item value="width">适应宽度</Select.Item>
+							<Select.Item value="height">适应高度</Select.Item>
+							<Select.Item value="original">原始大小</Select.Item>
+						</Select.Content>
+					</Select.Root>
 				</div>
 
 				<div class="space-y-2">
@@ -158,67 +214,111 @@
 			<TabsContent value="operation" class="p-4 space-y-6">
 				<div class="space-y-2">
 					<Label>鼠标滚轮动作</Label>
-					<select bind:value={settings.operation.mouseWheelAction} class="w-full px-3 py-2 rounded-md border bg-background">
-						<option value="zoom">缩放</option>
-						<option value="page">翻页</option>
-					</select>
+					<Select.Root
+						selected={{ value: settings.operation.mouseWheelAction, label: settings.operation.mouseWheelAction === 'zoom' ? '缩放' : '翻页' }}
+						onSelectedChange={(v) => v && (settings.operation.mouseWheelAction = v.value as any)}
+					>
+						<Select.Trigger class="w-full" />
+						<Select.Content>
+							<Select.Item value="zoom">缩放</Select.Item>
+							<Select.Item value="page">翻页</Select.Item>
+						</Select.Content>
+					</Select.Root>
 				</div>
 
 				<div class="space-y-2">
 					<Label>双击动作</Label>
-					<select bind:value={settings.operation.doubleClickAction} class="w-full px-3 py-2 rounded-md border bg-background">
-						<option value="fullscreen">全屏</option>
-						<option value="close">关闭</option>
-						<option value="none">无</option>
-					</select>
+					<Select.Root
+						selected={{ value: settings.operation.doubleClickAction, label: settings.operation.doubleClickAction === 'fullscreen' ? '全屏' : settings.operation.doubleClickAction === 'close' ? '关闭' : '无' }}
+						onSelectedChange={(v) => v && (settings.operation.doubleClickAction = v.value as any)}
+					>
+						<Select.Trigger class="w-full" />
+						<Select.Content>
+							<Select.Item value="fullscreen">全屏</Select.Item>
+							<Select.Item value="close">关闭</Select.Item>
+							<Select.Item value="none">无</Select.Item>
+						</Select.Content>
+					</Select.Root>
 				</div>
 
 				<div class="space-y-2">
 					<Label>右键动作</Label>
-					<select bind:value={settings.operation.rightClickAction} class="w-full px-3 py-2 rounded-md border bg-background">
-						<option value="menu">菜单</option>
-						<option value="back">返回</option>
-						<option value="none">无</option>
-					</select>
+					<Select.Root
+						selected={{ value: settings.operation.rightClickAction, label: settings.operation.rightClickAction === 'menu' ? '菜单' : settings.operation.rightClickAction === 'back' ? '返回' : '无' }}
+						onSelectedChange={(v) => v && (settings.operation.rightClickAction = v.value as any)}
+					>
+						<Select.Trigger class="w-full" />
+						<Select.Content>
+							<Select.Item value="menu">菜单</Select.Item>
+							<Select.Item value="back">返回</Select.Item>
+							<Select.Item value="none">无</Select.Item>
+						</Select.Content>
+					</Select.Root>
 				</div>
 			</TabsContent>
 
 			<!-- 快捷键设置 -->
 			<TabsContent value="keyboard" class="p-4">
-				<div class="space-y-2">
-					<div class="flex items-center justify-between py-2 border-b font-semibold">
-						<span class="w-1/3">动作</span>
-						<span class="w-1/3">快捷键</span>
-						<span class="w-1/3">说明</span>
-					</div>
-					{#each keyBindings as binding, index (binding.action)}
-						<div class="flex items-center justify-between py-2 border-b">
-							<span class="w-1/3 text-sm">{binding.action}</span>
-							<div class="w-1/3">
-								{#if editingKeyIndex === index}
-									<Input
-										value={binding.key}
-										placeholder="按下按键..."
-										onkeydown={(e) => handleKeyCapture(e, index)}
-										onfocus={(e) => {
-											const target = e.target as HTMLInputElement;
-											if (target) target.select();
-										}}
-										class="h-8"
-										autofocus
-									/>
-								{:else}
-									<Button
-										variant="outline"
-										size="sm"
-										onclick={() => (editingKeyIndex = index)}
-										class="h-8"
-									>
-										{binding.key}
-									</Button>
-								{/if}
+				<div class="space-y-4">
+					<!-- 快捷键分组显示（参考 NeeView） -->
+					{#each [...new Set(keyBindings.map(k => k.category))] as category}
+						<div class="space-y-2">
+							<h4 class="font-semibold text-sm text-muted-foreground px-2">{category}</h4>
+							<div class="space-y-1">
+								{#each keyBindings.filter(k => k.category === category) as binding, index}
+									{@const globalIndex = keyBindings.indexOf(binding)}
+									<div class="flex items-center gap-3 py-2 px-2 rounded-md hover:bg-accent/50 transition-colors">
+										<div class="flex-1">
+											<div class="text-sm font-medium">{binding.description}</div>
+											<div class="text-xs text-muted-foreground">{binding.action}</div>
+										</div>
+										<div class="flex items-center gap-2">
+											{#if editingKeyIndex === globalIndex}
+												<div class="relative">
+													<Input
+														value="等待按键..."
+														onkeydown={(e) => handleKeyDown(e, globalIndex)}
+														onfocus={(e) => {
+															const target = e.target as HTMLInputElement;
+															if (target) target.select();
+														}}
+														class="h-9 w-48 text-center font-mono"
+														autofocus
+													/>
+													<Button
+														variant="ghost"
+														size="sm"
+														onclick={cancelEditKey}
+														class="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+													>
+														×
+													</Button>
+												</div>
+											{:else}
+												<Button
+													variant="outline"
+													size="sm"
+													onclick={() => startEditKey(globalIndex)}
+													class="h-9 min-w-[120px] font-mono"
+												>
+													{binding.key || '未设置'}
+												</Button>
+												<Button
+													variant="ghost"
+													size="sm"
+													onclick={() => {
+														keyBindings[globalIndex].key = '';
+													}}
+													class="h-9 px-3"
+													title="清除快捷键"
+												>
+													清除
+												</Button>
+											{/if}
+										</div>
+									</div>
+								{/each}
 							</div>
-							<span class="w-1/3 text-sm text-muted-foreground">{binding.description}</span>
 						</div>
 					{/each}
 				</div>

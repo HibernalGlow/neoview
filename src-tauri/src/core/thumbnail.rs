@@ -107,6 +107,12 @@ impl ThumbnailManager {
             if ext_lower == "jxl" {
                 return self.decode_jxl_image(&image_data);
             }
+            
+            // AVIF 格式处理 - 显式指定格式
+            if ext_lower == "avif" {
+                return image::load_from_memory_with_format(&image_data, ImageFormat::Avif)
+                    .map_err(|e| format!("加载 AVIF 图片失败: {}", e));
+            }
         }
 
         // 其他格式使用标准加载

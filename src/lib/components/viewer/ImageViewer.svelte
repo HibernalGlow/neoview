@@ -22,7 +22,14 @@
 	let error = $state<string | null>(null);
 	let viewMode = $state<'single' | 'double' | 'panorama'>('single'); // 视图模式
 	let showThumbnails = $state(false); // 是否显示缩略图栏
-	let thumbnails = $state<Map<number, string>>(new Map()); // 缓存缩略图
+	let thumbnails = $state<Record<number, string>>({}); // 缓存缩略图
+
+	// 监听书籍变化，清空缩略图缓存
+	$effect(() => {
+		const currentBook = bookStore.currentBook;
+		// 当书籍变化时，清空缩略图
+		thumbnails = {};
+	});
 
 	// 监听当前页面变化
 	$effect(() => {
@@ -149,10 +156,59 @@
 		const end = Math.min(currentBook.pages.length - 1, bookStore.currentPageIndex + 5);
 
 		for (let i = start; i <= end; i++) {
-			if (!thumbnails.has(i)) {
+			if (!(i in thumbnails)) {
 				loadThumbnail(i);
 			}
 		}
+	}
+
+	// 在前端从 base64 生成缩略图
+	function generateThumbnailFromBase64(base64Data: string, maxSize: number = 128): Promise<string> {
+		return new Promise((resolve, reject) => {
+			const img = new Image();
+			img.onload = () => {
+				// 创建 canvas
+				const canvas = document.createElement('canvas');
+				const ctx = canvas.getContext('2d');
+				if (!ctx) {
+					reject(new Error('Cannot get canvas context'));
+					return;
+				}
+
+				// 计算缩略图尺寸（保持宽高比）
+				let width = img.width;
+				let height = img.height;
+				if (width > height) {
+					if (width > maxSize) {
+						height = (height * maxSize) / width;
+						width = maxSize;
+					}
+				} else {
+					if (height > maxSize) {
+						width = (width * maxSize) / height;
+						height = maxSize;
+					}
+				}
+
+				canvas.width = width;
+				canvas.height = height;
+
+				// 绘制缩略图
+				ctx.drawImage(img, 0, 0, width, height);
+
+				// 转换为 base64 (WebP 格式，质量 80%)
+				try {
+					const thumbnailData = canvas.toDataURL('image/webp', 0.8);
+					resolve(thumbnailData);
+				} catch (err) {
+					// 如果 WebP 不支持，使用 JPEG
+					const thumbnailData = canvas.toDataURL('image/jpeg', 0.8);
+					resolve(thumbnailData);
+				}
+			};
+			img.onerror = () => reject(new Error('Failed to load image'));
+			img.src = base64Data;
+		});
 	}
 
 	// 加载单个缩略图
@@ -164,22 +220,24 @@
 		
 		try {
 			const page = currentBook.pages[pageIndex];
-			let thumbnail: string;
+			let fullImageData: string;
 
+			// 先加载完整图片
 			if (currentBook.type === 'archive') {
-				console.log(`📦 Loading archive thumbnail for: ${page.path}`);
-				thumbnail = await FileSystemAPI.generateArchiveThumbnail(
-					currentBook.path,
-					page.path,
-					128 // 缩略图大小
-				);
+				console.log(`📦 Loading image for thumbnail from archive: ${page.path}`);
+				fullImageData = await loadImageFromArchive(currentBook.path, page.path);
 			} else {
-				console.log(`📁 Loading file thumbnail for: ${page.path}`);
-				thumbnail = await FileSystemAPI.generateFileThumbnail(page.path);
+				console.log(`📁 Loading image for thumbnail from file: ${page.path}`);
+				fullImageData = await loadImage(page.path);
 			}
 
-			console.log(`✅ Thumbnail loaded for page ${pageIndex}, size: ${thumbnail.length}`);
-			thumbnails.set(pageIndex, thumbnail);
+			// 在前端生成缩略图
+			console.log(`🎨 Generating thumbnail in browser for page ${pageIndex}`);
+			const thumbnail = await generateThumbnailFromBase64(fullImageData, 128);
+
+			console.log(`✅ Thumbnail generated for page ${pageIndex}, original: ${fullImageData.length}, thumbnail: ${thumbnail.length}`);
+			// 使用响应式赋值触发更新
+			thumbnails = { ...thumbnails, [pageIndex]: thumbnail };
 		} catch (err) {
 			console.error(`❌ Failed to load thumbnail for page ${pageIndex}:`, err);
 		}
@@ -340,7 +398,7 @@
 					const containerRect = container.getBoundingClientRect();
 					
 					if (rect.left >= containerRect.left - 100 && rect.right <= containerRect.right + 100) {
-						if (!thumbnails.has(i)) {
+						if (!(i in thumbnails)) {
 							loadThumbnail(i);
 						}
 					}
@@ -352,9 +410,9 @@
 						onclick={() => bookStore.navigateToPage(index)}
 						title="Page {index + 1}"
 					>
-						{#if thumbnails.has(index)}
+						{#if index in thumbnails}
 							<img
-								src={thumbnails.get(index)}
+								src={thumbnails[index]}
 								alt="Page {index + 1}"
 								class="w-full h-full object-cover"
 							/>

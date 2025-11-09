@@ -216,8 +216,8 @@
 	<!-- Viewer底部进度条 -->
 	{#if showProgressBar && bookStore.currentBook}
 		<div class="absolute bottom-0 left-0 right-0 h-1 pointer-events-none">
-			<div class="h-full transition-all duration-300 opacity-70" 
-					 style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%; background-color: #FDFBF7;">
+			<div class="h-full bg-primary transition-all duration-300 opacity-70" 
+					 style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%;">
 			</div>
 		</div>
 	{/if}

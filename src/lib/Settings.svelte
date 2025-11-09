@@ -1,27 +1,38 @@
 <script lang="ts">
 	/**
-	 * NeoView - Settings Window
-	 * 设置窗口主组件 - 多标签页设计
+	 * NeoView - Enhanced Settings Window
+	 * 完整设置窗口：与 settingsManager 绑定，支持导入/导出（UserSetting.json / rule / neoview-tauri）
 	 */
 	import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+	// 使用动态导入以避免在非 Tauri 环境下 vite 预解析失败
 	import { Button } from '$lib/components/ui/button';
-	import { Settings, Keyboard, Palette, Zap, Mouse, Hand, X, Minimize, Info } from '@lucide/svelte';
+	import { Settings, Keyboard, Palette, Zap, Mouse, X, Minimize, Info, Download, Upload, RotateCcw, Save as SaveIcon, Monitor, Archive } from '@lucide/svelte';
 	import ViewerSettingsPanel from '$lib/components/dialogs/ViewerSettingsPanel.svelte';
 	import UnifiedBindingPanel from '$lib/components/dialogs/UnifiedBindingPanel.svelte';
+	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
 
 	const appWindow = getCurrentWebviewWindow();
 
 	const tabs = [
 		{ value: 'general', label: '通用', icon: Settings },
-		{ value: 'viewer', label: '查看器', icon: Palette },
-		{ value: 'bindings', label: '操作绑定', icon: Keyboard },
-		{ value: 'performance', label: '性能', icon: Zap }
+		{ value: 'system', label: '系统', icon: Monitor },
+		{ value: 'image', label: '图片', icon: Palette },
+		{ value: 'archive', label: '压缩包', icon: Archive },
+		{ value: 'view', label: '视图', icon: Settings },
+		{ value: 'book', label: '书籍', icon: Settings },
+		{ value: 'theme', label: '外观', icon: Palette },
+		{ value: 'performance', label: '性能', icon: Zap },
+		{ value: 'panels', label: '面板', icon: Settings },
+		{ value: 'bindings', label: '操作绑定', icon: Keyboard }
 	];
 
 	let activeTab = $state<string>('general');
+	let currentSettings = $state<NeoViewSettings>(settingsManager.getSettings());
+
+	// 订阅外部设置变化
+	settingsManager.addListener((s) => (currentSettings = s));
 
 	function switchTab(tabValue: string) {
-		console.log('🔄 切换到标签页:', tabValue);
 		activeTab = tabValue;
 	}
 
@@ -34,8 +45,79 @@
 	}
 
 	function saveSettings() {
-		// TODO: 实现设置保存逻辑
-		alert('设置已保存');
+		settingsManager.updateSettings(currentSettings);
+		console.log('✅ 设置已保存');
+	}
+
+	function resetToDefaults() {
+		if (confirm('确定要重置所有设置为默认值吗？此操作不可撤销。')) {
+			settingsManager.resetToDefaults();
+			currentSettings = settingsManager.getSettings();
+		}
+	}
+
+	// 导出设置（打开保存对话框，默认名 UserSetting.json，可选择 neoview-tauri 目录）
+	async function exportSettings() {
+		try {
+			// 使用字符串拼接来避免 vite 在预解析阶段静态解析 @tauri-apps 包
+			const { save } = await import('@tauri-apps' + '/api/dialog');
+			const { writeTextFile } = await import('@tauri-apps' + '/api/fs');
+			const json = settingsManager.exportSettings();
+			const path = await save({ defaultPath: 'UserSetting.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
+			if (path) {
+				await writeTextFile(path, json);
+				alert('导出成功：' + path);
+			}
+		} catch (err) {
+			console.error(err);
+			alert('导出失败：' + err);
+		}
+	}
+
+	// 导入设置（支持来自 rule/ 或 neoview-tauri 的 UserSetting.json）
+	async function importSettings() {
+		try {
+			const { open } = await import('@tauri-apps' + '/api/dialog');
+			const { readTextFile } = await import('@tauri-apps' + '/api/fs');
+			const selected = await open({ filters: [{ name: 'JSON', extensions: ['json'] }], multiple: false });
+			if (selected && typeof selected === 'string') {
+				const content = await readTextFile(selected);
+				const ok = settingsManager.importSettings(content);
+				if (ok) {
+					currentSettings = settingsManager.getSettings();
+					alert('导入成功');
+				} else {
+					alert('导入失败：文件格式错误');
+				}
+			}
+		} catch (err) {
+			console.error(err);
+			alert('导入失败：' + err);
+		}
+	}
+
+	// 便捷导入：尝试从 repo 下的 rule/UserSetting.json 导入（若存在）
+	async function importFromRule() {
+		try {
+			const { open } = await import('@tauri-apps' + '/api/dialog');
+			const { readTextFile } = await import('@tauri-apps' + '/api/fs');
+			// 使用 open 对话框并设置默认路径到 repo 下的 rule 目录
+			const defaultPath = '../rule/UserSetting.json';
+			const selected = await open({ defaultPath, filters: [{ name: 'JSON', extensions: ['json'] }], multiple: false });
+			if (selected && typeof selected === 'string') {
+				const content = await readTextFile(selected);
+				const ok = settingsManager.importSettings(content);
+				if (ok) {
+					currentSettings = settingsManager.getSettings();
+					alert('从 rule 导入成功');
+				} else {
+					alert('导入失败：格式不支持');
+				}
+			}
+		} catch (err) {
+			console.warn('从 rule 导入失败：', err);
+			alert('从 rule 导入失败，请手动选择文件。');
+		}
 	}
 </script>
 
@@ -146,7 +228,7 @@
 						</div>
 					</div>
 				</div>
-			{:else if activeTab === 'viewer'}
+			{:else if activeTab === 'viewer' || activeTab === 'image'}
 				<ViewerSettingsPanel />
 			{:else if activeTab === 'bindings'}
 				<UnifiedBindingPanel />

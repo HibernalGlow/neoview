@@ -12,6 +12,7 @@
 	} from '$lib/stores/keyboard.svelte';
 	import { loadImage } from '$lib/api/fs';
 	import { loadImageFromArchive } from '$lib/api/filesystem';
+	import { FileSystemAPI } from '$lib/api';
 	import { Button } from '$lib/components/ui/button';
 	import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, X, Grid, Maximize2, PanelLeft } from '@lucide/svelte';
 
@@ -21,12 +22,17 @@
 	let error = $state<string | null>(null);
 	let viewMode = $state<'single' | 'double' | 'panorama'>('single'); // 视图模式
 	let showThumbnails = $state(false); // 是否显示缩略图栏
+	let thumbnails = $state<Map<number, string>>(new Map()); // 缓存缩略图
 
 	// 监听当前页面变化
 	$effect(() => {
 		const currentPage = bookStore.currentPage;
 		if (currentPage) {
 			loadCurrentImage();
+			// 如果缩略图栏打开，加载可见的缩略图
+			if (showThumbnails) {
+				loadVisibleThumbnails();
+			}
 		} else {
 			imageData = null;
 		}
@@ -127,6 +133,56 @@
 
 	function toggleThumbnails() {
 		showThumbnails = !showThumbnails;
+		// 如果打开缩略图栏，预加载当前可见的缩略图
+		if (showThumbnails) {
+			loadVisibleThumbnails();
+		}
+	}
+
+	// 加载可见的缩略图
+	async function loadVisibleThumbnails() {
+		const currentBook = bookStore.currentBook;
+		if (!currentBook) return;
+
+		// 预加载当前页前后各5页的缩略图
+		const start = Math.max(0, bookStore.currentPageIndex - 5);
+		const end = Math.min(currentBook.pages.length - 1, bookStore.currentPageIndex + 5);
+
+		for (let i = start; i <= end; i++) {
+			if (!thumbnails.has(i)) {
+				loadThumbnail(i);
+			}
+		}
+	}
+
+	// 加载单个缩略图
+	async function loadThumbnail(pageIndex: number) {
+		const currentBook = bookStore.currentBook;
+		if (!currentBook || !currentBook.pages[pageIndex]) return;
+
+		console.log(`🖼️ Loading thumbnail for page ${pageIndex}`);
+		
+		try {
+			const page = currentBook.pages[pageIndex];
+			let thumbnail: string;
+
+			if (currentBook.type === 'archive') {
+				console.log(`📦 Loading archive thumbnail for: ${page.path}`);
+				thumbnail = await FileSystemAPI.generateArchiveThumbnail(
+					currentBook.path,
+					page.path,
+					128 // 缩略图大小
+				);
+			} else {
+				console.log(`📁 Loading file thumbnail for: ${page.path}`);
+				thumbnail = await FileSystemAPI.generateFileThumbnail(page.path);
+			}
+
+			console.log(`✅ Thumbnail loaded for page ${pageIndex}, size: ${thumbnail.length}`);
+			thumbnails.set(pageIndex, thumbnail);
+		} catch (err) {
+			console.error(`❌ Failed to load thumbnail for page ${pageIndex}:`, err);
+		}
 	}
 
 	// 执行命令
@@ -271,28 +327,42 @@
 	<!-- 缩略图底栏 -->
 	{#if showThumbnails && bookStore.currentBook}
 		<div class="bg-secondary/80 border-t p-2">
-			<div class="flex gap-2 overflow-x-auto">
+			<div class="flex gap-2 overflow-x-auto" onscroll={(e) => {
+				const container = e.target as HTMLElement;
+				// 滚动时加载可见的缩略图
+				const scrollLeft = container.scrollLeft;
+				const containerWidth = container.clientWidth;
+				
+				// 计算可见的缩略图范围
+				const thumbnailElements = container.querySelectorAll('button');
+				thumbnailElements.forEach((el, i) => {
+					const rect = el.getBoundingClientRect();
+					const containerRect = container.getBoundingClientRect();
+					
+					if (rect.left >= containerRect.left - 100 && rect.right <= containerRect.right + 100) {
+						if (!thumbnails.has(i)) {
+							loadThumbnail(i);
+						}
+					}
+				});
+			}}>
 				{#each bookStore.currentBook.pages as page, index (page.path)}
 					<button
 						class="flex-shrink-0 w-16 h-16 rounded overflow-hidden border-2 {index === bookStore.currentPageIndex ? 'border-primary' : 'border-transparent'} hover:border-primary/50 transition-colors"
 						onclick={() => bookStore.navigateToPage(index)}
 						title="Page {index + 1}"
 					>
-						<img
-							src={page.thumbnail || ''}
-							alt="Page {index + 1}"
-							class="w-full h-full object-cover"
-							onerror={(e) => {
-								const target = e.target as HTMLImageElement;
-								target.style.display = 'none';
-								if (target.nextElementSibling) {
-									(target.nextElementSibling as HTMLElement).style.display = 'flex';
-								}
-							}}
-						/>
-						<div class="w-full h-full flex items-center justify-center bg-gray-700 text-xs text-gray-300" style="display:none;">
-							{index + 1}
-						</div>
+						{#if thumbnails.has(index)}
+							<img
+								src={thumbnails.get(index)}
+								alt="Page {index + 1}"
+								class="w-full h-full object-cover"
+							/>
+						{:else}
+							<div class="w-full h-full flex items-center justify-center bg-gray-700 text-xs text-gray-300">
+								{index + 1}
+							</div>
+						{/if}
 					</button>
 				{/each}
 			</div>

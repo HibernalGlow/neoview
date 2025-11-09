@@ -26,6 +26,6 @@ tauri-plugin-log = "2"
 tauri-plugin-dialog = "2.4"
 thiserror = "2.0.12"
 base64 = "0.22"
-image = { version = "0.25", features = ["png", "jpeg", "webp"] }
+image = { version = "0.24", features = ["png", "jpeg", "webp", "avif"] }
 zip = "2.2"
 walkdir = "2.5"

@@ -352,11 +352,11 @@ pub async fn generate_archive_thumbnail_old(
     max_size: u32,
     state: State<'_, FsState>,
 ) -> Result<String, String> {
-    let archive_manager = state.archive_manager.lock()
+    let thumbnail_manager = state.thumbnail_manager.lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
 
     let path = PathBuf::from(archive_path);
-    archive_manager.generate_thumbnail_from_zip(&path, &file_path, max_size)
+    thumbnail_manager.generate_thumbnail_from_archive(&path, &file_path, max_size)
 }
 
 /// 检查是否为支持的压缩包

@@ -356,6 +356,31 @@ impl ThumbnailManager {
         self.generate_thumbnail_from_bytes(&image_data, max_size)
     }
 
+    /// 从压缩包内文件生成缩略图
+    pub fn generate_thumbnail_from_archive(&self, archive_path: &Path, file_path: &str, max_size: u32) -> Result<String, String> {
+        // 创建缓存键：压缩包路径 + 文件路径
+        let cache_key = format!("{}::{}", archive_path.display(), file_path);
+
+        // 首先检查数据库缓存
+        if let Ok(Some(cached_data)) = self.database.get_thumbnail(&cache_key) {
+            return Ok(cached_data);
+        }
+
+        // 从压缩包提取图片数据
+        let archive_manager = crate::core::archive::ArchiveManager::new();
+        let image_data = archive_manager.extract_file_from_zip(archive_path, file_path)
+            .map_err(|e| format!("从压缩包提取图片失败: {}", e))?;
+
+        // 生成缩略图
+        let thumbnail_data = self.generate_thumbnail_from_bytes(&image_data, max_size)?;
+
+        // 存储到数据库
+        self.database.store_thumbnail(&cache_key, &thumbnail_data)
+            .map_err(|e| format!("存储缩略图失败: {}", e))?;
+
+        Ok(thumbnail_data)
+    }
+
     /// 清空所有缓存
     pub fn clear_all_cache(&self) -> Result<(), String> {
         self.database.clear_all()
@@ -366,5 +391,70 @@ impl ThumbnailManager {
     pub fn optimize_database(&self) -> Result<(), String> {
         self.database.optimize()
             .map_err(|e| format!("优化数据库失败: {}", e))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_thumbnail_database_basic() {
+        // 创建临时数据库路径
+        let temp_dir = std::env::temp_dir();
+        let db_path = temp_dir.join("test_thumbnails_basic.db");
+
+        // 清理可能存在的旧文件
+        let _ = std::fs::remove_file(&db_path);
+
+        // 创建数据库
+        let db = ThumbnailDatabase::new(&db_path).unwrap();
+
+        // 创建一个临时文件用于测试
+        let temp_file = temp_dir.join("test_image_basic.jpg");
+        let _ = std::fs::write(&temp_file, b"fake image data");
+
+        // 测试存储和获取
+        let test_data = "data:image/jpeg;base64,test_data";
+
+        // 存储缩略图
+        db.store_thumbnail(temp_file.to_str().unwrap(), test_data).unwrap();
+
+        // 短暂等待确保文件操作完成
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        // 获取缩略图
+        let retrieved = db.get_thumbnail(temp_file.to_str().unwrap()).unwrap();
+        assert_eq!(retrieved, Some(test_data.to_string()));
+
+        // 测试不存在的键
+        let not_found = db.get_thumbnail("nonexistent.jpg").unwrap();
+        assert_eq!(not_found, None);
+
+        // 清理
+        let _ = std::fs::remove_file(&db_path);
+        let _ = std::fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn test_thumbnail_manager_creation() {
+        // 创建临时数据库路径
+        let temp_dir = std::env::temp_dir();
+        let db_path = temp_dir.join("test_manager_creation.db");
+
+        // 清理可能存在的旧文件
+        if db_path.exists() {
+            let _ = std::fs::remove_file(&db_path);
+        }
+
+        // 创建缩略图管理器
+        let _manager = ThumbnailManager::new(&db_path, 256).unwrap();
+
+        // 验证数据库文件已创建
+        assert!(db_path.exists());
+
+        // 清理
+        let _ = std::fs::remove_file(&db_path);
     }
 }

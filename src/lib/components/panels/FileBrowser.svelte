@@ -31,6 +31,9 @@
   let copyToSubmenu = $state<{ show: boolean; x: number; y: number }>({ show: false, x: 0, y: 0 });
   let clipboardItem = $state<{ path: string; operation: 'copy' | 'cut' } | null>(null);
 
+  // 缩略图加载会话管理 - 用于取消过期的加载任务
+  let currentThumbnailLoadId = $state(0);
+
   // 导航历史管理器
   let navigationHistory = new NavigationHistory();
   
@@ -320,6 +323,10 @@
   async function loadDirectoryWithoutHistory(path: string) {
     console.log('📂 loadDirectory called with path:', path);
     
+    // 递增加载ID，取消之前的缩略图加载任务
+    currentThumbnailLoadId++;
+    const loadId = currentThumbnailLoadId;
+    
     fileBrowserStore.setLoading(true);
     fileBrowserStore.setError('');
     fileBrowserStore.clearThumbnails();
@@ -337,10 +344,10 @@
       
       fileBrowserStore.setItems(loadedItems);
       
-      // 异步加载缩略图
+      // 异步加载缩略图 - 只在当前加载ID仍然有效时加载
       for (const item of loadedItems) {
-        if (item.isImage) {
-          loadThumbnail(item.path);
+        if (item.isImage && loadId === currentThumbnailLoadId) {
+          loadThumbnail(item.path, loadId);
         }
       }
     } catch (err) {
@@ -358,6 +365,10 @@
   async function loadArchive(path: string) {
     console.log('📦 loadArchive called with path:', path);
     
+    // 递增加载ID，取消之前的缩略图加载任务
+    currentThumbnailLoadId++;
+    const loadId = currentThumbnailLoadId;
+    
     fileBrowserStore.setLoading(true);
     fileBrowserStore.setError('');
     fileBrowserStore.clearThumbnails();
@@ -370,10 +381,10 @@
       
       fileBrowserStore.setItems(loadedItems);
       
-      // 异步加载压缩包内图片的缩略图
+      // 异步加载压缩包内图片的缩略图 - 只在当前加载ID仍然有效时加载
       for (const item of loadedItems) {
-        if (item.isImage) {
-          loadArchiveThumbnail(item.path);
+        if (item.isImage && loadId === currentThumbnailLoadId) {
+          loadArchiveThumbnail(item.path, loadId);
         }
       }
     } catch (err) {
@@ -388,10 +399,19 @@
   /**
    * 加载单个缩略图
    */
-  async function loadThumbnail(path: string) {
+  async function loadThumbnail(path: string, loadId: number) {
+    // 检查加载ID是否仍然有效
+    if (loadId !== currentThumbnailLoadId) {
+      return; // 加载任务已被取消
+    }
+    
     try {
       const thumbnail = await FileSystemAPI.generateFileThumbnail(path);
-      fileBrowserStore.addThumbnail(path, thumbnail);
+      
+      // 再次检查加载ID是否仍然有效（防止在await期间被取消）
+      if (loadId === currentThumbnailLoadId) {
+        fileBrowserStore.addThumbnail(path, thumbnail);
+      }
     } catch (err) {
       // 不支持的图片格式或其他错误，静默失败
       console.debug('Failed to load thumbnail:', err);
@@ -399,15 +419,22 @@
   }
 
   /**
-   * 加载压缩包内图片的缩略图 - 完全使用单张图片逻辑
+   * 加载压缩包内图片的缩略图 - 直接让后端生成缩略图
    */
-  async function loadArchiveThumbnail(filePath: string) {
+  async function loadArchiveThumbnail(filePath: string, loadId: number) {
+    // 检查加载ID是否仍然有效
+    if (loadId !== currentThumbnailLoadId) {
+      return; // 加载任务已被取消
+    }
+    
     try {
-      // 从压缩包中提取图片数据
-      const imageData = await FileSystemAPI.loadImageFromArchive(currentArchivePath, filePath);
-      // 使用新的API从图片数据生成缩略图
-      const thumbnail = await FileSystemAPI.generateThumbnailFromData(imageData);
-      fileBrowserStore.addThumbnail(filePath, thumbnail);
+      // 直接调用后端API从压缩包生成缩略图，避免前端处理图片数据
+      const thumbnail = await FileSystemAPI.generateArchiveFileThumbnail(currentArchivePath, filePath);
+      
+      // 再次检查加载ID是否仍然有效（防止在await期间被取消）
+      if (loadId === currentThumbnailLoadId) {
+        fileBrowserStore.addThumbnail(filePath, thumbnail);
+      }
     } catch (err) {
       // 不支持的图片格式或其他错误，静默失败
       console.debug('Failed to load archive thumbnail:', err);

@@ -166,8 +166,23 @@ function handleGlobalWheel(e: WheelEvent) {
 						 target.closest('[data-viewer="true"]') ||
 						 target.closest('.image-container');
 
-	// 只有在ImageViewer上才处理滚轮事件
-	if (!isOverViewer) return;
+	// 检查是否在拖拽区域（通过鼠标位置判断）
+	const rect = target.getBoundingClientRect();
+	const x = e.clientX;
+	const y = e.clientY;
+	
+	// 获取侧边栏宽度
+	const sidebarWidth = 280; // 默认宽度
+	const rightSidebarWidth = 300; // 默认宽度
+	
+	// 检查是否在左侧拖拽区域
+	const isOverLeftResize = x >= sidebarWidth && x <= sidebarWidth + 8;
+	// 检查是否在右侧拖拽区域
+	const windowWidth = window.innerWidth;
+	const isOverRightResize = x >= windowWidth - rightSidebarWidth - 8 && x <= windowWidth - rightSidebarWidth;
+
+	// 只有在ImageViewer上且不在拖拽区域才处理滚轮事件
+	if (!isOverViewer || isOverLeftResize || isOverRightResize) return;
 
 	const direction = e.deltaY < 0 ? 'up' : 'down';
 	console.log('鼠标滚轮:', direction, '在viewer上'); // 调试信息

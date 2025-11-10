@@ -62,6 +62,8 @@
 			document.removeEventListener('mouseup', handleLeftResizeEnd);
 		};
 	});
+
+	
 </script>
 
 <div class="h-screen w-screen relative bg-background">
@@ -83,7 +85,7 @@
 	<BottomThumbnailBar />
 
 	<!-- 左侧边栏（悬浮，始终可用） -->
-	<div class="absolute left-0 top-0 bottom-0 z-40 pointer-events-none">
+	<div class="absolute left-0 top-0 bottom-0 z-[55] pointer-events-none">
 		<div class="h-full pointer-events-auto">
 			<Sidebar onResize={handleSidebarResize} bind:isVisible={$sidebarOpen} />
 		</div>
@@ -92,14 +94,14 @@
 	<!-- 左侧边栏拖拽区域 - 独立层 -->
 	{#if $sidebarOpen}
 		<div
-			class="absolute top-0 bottom-0 z-[70] cursor-col-resize"
+			class="absolute top-0 bottom-0 z-[45] cursor-col-resize"
 			style="left: {$sidebarWidth}px; width: 8px;"
 			onmousedown={handleLeftResizeStart}
 		></div>
 	{/if}
 
 	<!-- 右侧边栏（悬浮，始终可用） -->
-	<div class="absolute right-0 top-0 bottom-0 z-40 pointer-events-none">
+	<div class="absolute right-0 top-0 bottom-0 z-[55] pointer-events-none">
 		<div class="h-full pointer-events-auto">
 			<RightSidebar onResize={handleRightSidebarResize} bind:isVisible={$rightSidebarOpen} />
 		</div>
@@ -108,7 +110,7 @@
 	<!-- 右侧边栏拖拽区域 - 独立层 -->
 	{#if $rightSidebarOpen}
 		<div
-			class="absolute top-0 bottom-0 z-[70] cursor-col-resize"
+			class="absolute top-0 bottom-0 z-[45] cursor-col-resize"
 			style="right: {$rightSidebarWidth}px; width: 8px;"
 			onmousedown={handleRightResizeStart}
 		></div>

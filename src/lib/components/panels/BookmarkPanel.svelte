@@ -6,6 +6,7 @@
 	import { Bookmark, X, Star, Folder as FolderIcon } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
 
 	interface BookmarkEntry {
 		id: string;
@@ -64,7 +65,15 @@
 	}
 
 	function getFileName(path: string): string {
-		return path.split(/[\\/]/).pop() || path;
+		return path.split(/[\/]/).pop() || path;
+	}
+
+	/**
+	 * 处理书签排序
+	 */
+	function handleBookmarkSort(sortedBookmarks: BookmarkEntry[]) {
+		bookmarks = sortedBookmarks;
+		saveBookmarks();
 	}
 
 	// 加载书签
@@ -108,9 +117,15 @@
 				<Bookmark class="h-5 w-5" />
 				<h3 class="font-semibold">书签</h3>
 			</div>
-			<Button size="sm" onclick={addBookmark}>
-				添加
-			</Button>
+			<div class="flex items-center gap-2">
+				<BookmarkSortPanel 
+					bookmarks={bookmarks} 
+					onSort={handleBookmarkSort}
+				/>
+				<Button size="sm" onclick={addBookmark}>
+					添加
+				</Button>
+			</div>
 		</div>
 		<Input
 			type="search"

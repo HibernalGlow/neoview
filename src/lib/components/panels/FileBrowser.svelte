@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Folder, File, Image, Trash2, RefreshCw, FileArchive, FolderOpen, Home, ChevronLeft, ChevronRight, ChevronUp, CheckSquare, Grid3x3, List, MoreVertical, Search, ChevronDown, Settings, AlertCircle } from '@lucide/svelte';
+  import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
   import { onMount } from 'svelte';
   import { FileSystemAPI } from '$lib/api';
   import type { FsItem } from '$lib/types';
@@ -38,7 +39,7 @@
 
   // 搜索功能状态
   let searchQuery = $state('');
-  let searchHistory = $state<string[]>([]);
+  let searchHistory = $state<{ query: string; timestamp: number }[]>([]);
   let showSearchHistory = $state(false);
   let showSearchSettings = $state(false);
   let searchSettings = $state({
@@ -648,6 +649,13 @@
     }
   }
 
+  /**
+   * 处理排序
+   */
+  function handleSort(sortedItems: FsItem[]) {
+    fileBrowserStore.setItems(sortedItems);
+  }
+
   
 
   /**
@@ -671,6 +679,20 @@
     if (!timestamp) return '-';
     const date = new Date(timestamp * 1000);
     return date.toLocaleString();
+  }
+
+  /**
+   * 格式化搜索历史时间戳
+   */
+  function formatSearchHistoryTime(timestamp: number): string {
+    const date = new Date(timestamp);
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const seconds = date.getSeconds().toString().padStart(2, '0');
+    
+    return `${month}月${day}日 ${hours}:${minutes}:${seconds}`;
   }
 
   /**
@@ -922,7 +944,15 @@
     try {
       const saved = localStorage.getItem('neoview-search-history');
       if (saved) {
-        searchHistory = JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        // 兼容旧版本数据结构
+        if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string') {
+          // 旧版本：字符串数组，转换为新格式
+          searchHistory = (parsed as string[]).map(query => ({ query, timestamp: Date.now() - 86400000 })); // 默认昨天
+        } else {
+          // 新版本：对象数组
+          searchHistory = parsed;
+        }
       }
     } catch (err) {
       console.error('加载搜索历史失败:', err);
@@ -947,9 +977,9 @@
     if (!query.trim()) return;
     
     // 移除已存在的相同查询
-    searchHistory = searchHistory.filter(item => item !== query);
+    searchHistory = searchHistory.filter(item => item.query !== query);
     // 添加到开头
-    searchHistory.unshift(query);
+    searchHistory.unshift({ query, timestamp: Date.now() });
     // 限制历史记录数量
     searchHistory = searchHistory.slice(0, 20);
     
@@ -1001,10 +1031,10 @@
   /**
    * 选择搜索历史
    */
-  function selectSearchHistory(query: string) {
-    searchQuery = query;
+  function selectSearchHistory(item: { query: string; timestamp: number }) {
+    searchQuery = item.query;
     showSearchHistory = false;
-    searchFiles(query);
+    searchFiles(item.query);
   }
   
   /**
@@ -1150,6 +1180,12 @@
         {/if}
       </Button>
 
+      <!-- 排序面板 -->
+      <SortPanel 
+        items={items} 
+        onSort={handleSort}
+      />
+
       <Button
         variant="ghost"
         size="icon"
@@ -1174,9 +1210,25 @@
           bind:value={searchQuery}
           oninput={handleSearchInput}
           onfocus={handleSearchFocus}
-          class="w-full pl-10 pr-20 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          class="w-full pl-10 pr-24 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
           disabled={!currentPath || isArchiveView}
         />
+        
+        <!-- 清空按钮 -->
+        {#if searchQuery}
+          <button
+            class="absolute right-16 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
+            onclick={() => {
+              searchQuery = '';
+              searchResults = [];
+            }}
+            title="清空搜索"
+          >
+            <svg class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        {/if}
         
         <!-- 搜索历史按钮 -->
         <button
@@ -1209,28 +1261,31 @@
       <!-- 搜索历史下拉 -->
       {#if showSearchHistory}
         <div class="search-history absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
-          {#each searchHistory as query (query)}
+          {#each searchHistory as item (item.query)}
             <div
               class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center justify-between group cursor-pointer"
-              onclick={() => selectSearchHistory(query)}
+              onclick={() => selectSearchHistory(item)}
             >
-              <div class="flex items-center gap-2">
-                <Search class="h-4 w-4 text-gray-400" />
-                <span>{query}</span>
+              <div class="flex items-center gap-2 flex-1 min-w-0">
+                <Search class="h-4 w-4 text-gray-400 flex-shrink-0" />
+                <span class="truncate">{item.query}</span>
               </div>
-              <button
-                class="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  searchHistory = searchHistory.filter(item => item !== query);
-                  saveSearchHistory();
-                }}
-                title="删除"
-              >
-                <svg class="h-3 w-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-400">{formatSearchHistoryTime(item.timestamp)}</span>
+                <button
+                  class="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded flex-shrink-0"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    searchHistory = searchHistory.filter(historyItem => historyItem.query !== item.query);
+                    saveSearchHistory();
+                  }}
+                  title="删除"
+                >
+                  <svg class="h-3 w-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
           {/each}
           {#if searchHistory.length > 0}

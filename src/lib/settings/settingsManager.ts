@@ -31,6 +31,12 @@ export interface NeoViewSettings {
     showGrid: boolean;
     showInfoBar: boolean;
     backgroundColor: string;
+    mouseCursor: {
+      autoHide: boolean;
+      hideDelay: number; // seconds
+      showMovementThreshold: number; // pixels
+      showOnButtonClick: boolean;
+    };
   };
   book: {
     autoPageTurnInterval: number;
@@ -102,7 +108,13 @@ const defaultSettings: NeoViewSettings = {
     defaultZoomMode: 'fit',
     showGrid: false,
     showInfoBar: true,
-    backgroundColor: '#000000'
+    backgroundColor: '#000000',
+    mouseCursor: {
+      autoHide: true,
+      hideDelay: 1.0,
+      showMovementThreshold: 26,
+      showOnButtonClick: true
+    }
   },
   book: {
     autoPageTurnInterval: 3,

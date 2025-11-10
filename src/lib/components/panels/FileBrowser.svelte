@@ -145,6 +145,19 @@
         console.log(`    修改时间: ${item.modified ? new Date(item.modified * 1000).toLocaleString() : '未知'}`);
         console.log(`    是否图片: ${item.is_image ? '是' : '否'}`);
       });
+
+      // 搜索完成后自动应用默认排序（路径升序）
+      if (searchResults.length > 0) {
+        const sorted = [...searchResults].sort((a, b) => {
+          // 文件夹始终在前面
+          if (a.is_dir !== b.is_dir) {
+            return a.is_dir ? -1 : 1;
+          }
+          // 按路径升序排序
+          return a.path.localeCompare(b.path, undefined, { numeric: true });
+        });
+        searchResults = sorted;
+      }
     } catch (err) {
       console.error('❌ 搜索失败:', err);
       console.error('错误详情:', err);
@@ -653,7 +666,13 @@
    * 处理排序
    */
   function handleSort(sortedItems: FsItem[]) {
-    fileBrowserStore.setItems(sortedItems);
+    if (searchQuery && searchResults.length > 0) {
+      // 如果正在显示搜索结果，则排序搜索结果
+      searchResults = sortedItems;
+    } else {
+      // 否则排序普通文件列表
+      fileBrowserStore.setItems(sortedItems);
+    }
   }
 
   
@@ -1182,7 +1201,7 @@
 
       <!-- 排序面板 -->
       <SortPanel 
-        items={items} 
+        items={searchQuery && searchResults.length > 0 ? searchResults : items} 
         onSort={handleSort}
       />
 

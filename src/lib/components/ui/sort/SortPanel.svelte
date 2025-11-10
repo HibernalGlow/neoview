@@ -11,15 +11,16 @@
   } = $props();
 
   // 排序选项
-  type SortField = 'name' | 'modified' | 'size' | 'type';
+  type SortField = 'name' | 'modified' | 'size' | 'type' | 'path';
   type SortOrder = 'asc' | 'desc';
 
-  let sortField: SortField = 'name';
+  let sortField: SortField = 'path';
   let sortOrder: SortOrder = 'asc';
   let showSortMenu = $state(false);
 
   // 排序配置
   const sortOptions = [
+    { field: 'path' as SortField, label: '路径', icon: Folder },
     { field: 'name' as SortField, label: '名称', icon: Type },
     { field: 'modified' as SortField, label: '修改时间', icon: Calendar },
     { field: 'size' as SortField, label: '大小', icon: HardDrive },
@@ -50,6 +51,9 @@
       let comparison = 0;
 
       switch (sortField) {
+        case 'path':
+          comparison = a.path.localeCompare(b.path, undefined, { numeric: true });
+          break;
         case 'name':
           comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
           break;

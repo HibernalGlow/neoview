@@ -162,11 +162,19 @@
 			<div class="space-y-2 min-h-[300px]">
 				{#each sidebarManagement.waitingArea as panel}
 					<div 
-						class="bg-card border rounded-md p-3 cursor-move hover:bg-accent/50 transition-colors"
-						draggable="true"
-						ondragstart={(e) => handleDragStart(e, panel, 'waitingArea')}
+						class="bg-card border rounded-md p-3 hover:bg-accent/50 transition-colors"
 					>
 						<div class="flex items-center gap-2">
+							<!-- 拖拽手柄 -->
+							<div 
+								class="cursor-grab active:cursor-grabbing p-1 hover:bg-accent/50 rounded"
+								draggable="true"
+								ondragstart={(e) => handleDragStart(e, panel, 'waitingArea')}
+							>
+								<svg class="w-4 h-4 text-muted-foreground" fill="currentColor" viewBox="0 0 20 20">
+									<path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+								</svg>
+							</div>
 							<span class="text-lg">{panel.icon}</span>
 							<div>
 								<div class="font-medium text-sm">{panel.name}</div>
@@ -194,11 +202,19 @@
 			<div class="space-y-2 min-h-[300px]">
 				{#each sidebarManagement.leftSidebar as panel}
 					<div 
-						class="bg-card border rounded-md p-3 cursor-move hover:bg-accent/50 transition-colors"
-						draggable="true"
-						ondragstart={(e) => handleDragStart(e, panel, 'leftSidebar')}
+						class="bg-card border rounded-md p-3 hover:bg-accent/50 transition-colors"
 					>
 						<div class="flex items-center gap-2">
+							<!-- 拖拽手柄 -->
+							<div 
+								class="cursor-grab active:cursor-grabbing p-1 hover:bg-accent/50 rounded"
+								draggable="true"
+								ondragstart={(e) => handleDragStart(e, panel, 'leftSidebar')}
+							>
+								<svg class="w-4 h-4 text-muted-foreground" fill="currentColor" viewBox="0 0 20 20">
+									<path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+								</svg>
+							</div>
 							<span class="text-lg">{panel.icon}</span>
 							<div>
 								<div class="font-medium text-sm">{panel.name}</div>
@@ -226,11 +242,19 @@
 			<div class="space-y-2 min-h-[300px]">
 				{#each sidebarManagement.rightSidebar as panel}
 					<div 
-						class="bg-card border rounded-md p-3 cursor-move hover:bg-accent/50 transition-colors"
-						draggable="true"
-						ondragstart={(e) => handleDragStart(e, panel, 'rightSidebar')}
+						class="bg-card border rounded-md p-3 hover:bg-accent/50 transition-colors"
 					>
 						<div class="flex items-center gap-2">
+							<!-- 拖拽手柄 -->
+							<div 
+								class="cursor-grab active:cursor-grabbing p-1 hover:bg-accent/50 rounded"
+								draggable="true"
+								ondragstart={(e) => handleDragStart(e, panel, 'rightSidebar')}
+							>
+								<svg class="w-4 h-4 text-muted-foreground" fill="currentColor" viewBox="0 0 20 20">
+									<path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+								</svg>
+							</div>
 							<span class="text-lg">{panel.icon}</span>
 							<div>
 								<div class="font-medium text-sm">{panel.name}</div>

@@ -17,6 +17,7 @@
 	let resizeStartY = 0;
 	let resizeStartHeight = 0;
 	let showProgressBar = $state(true);
+	let isHovering = $state(false); // 追踪鼠标是否在悬停区域或工具栏上
 
 	// 响应钉住状态
 	$effect(() => {
@@ -45,15 +46,21 @@
 	}
 
 	function handleMouseEnter() {
+		isHovering = true;
 		showThumbnails();
 	}
 
 	function handleMouseLeave() {
+		isHovering = false;
 		if ($bottomThumbnailBarPinned || isResizing) return;
 		if (hideTimeout) clearTimeout(hideTimeout);
+		// 增加延迟时间，避免鼠标在触发区域和工具栏之间移动时过早隐藏
 		hideTimeout = setTimeout(() => {
-			isVisible = false;
-		}, 500) as unknown as number;
+			// 只有在鼠标真正离开两个区域后才隐藏
+			if (!isHovering) {
+				isVisible = false;
+			}
+		}, 1000) as unknown as number;
 	}
 
 	function togglePin() {
@@ -214,15 +221,16 @@
 {#if bookStore.currentBook}
 	<!-- 缩略图栏触发区域（独立） -->
 	<div
-		class="fixed bottom-0 left-0 right-0 h-4 z-[48]"
+		class="fixed bottom-0 left-0 right-0 h-4 z-[57]"
 		onmouseenter={handleMouseEnter}
+		onmouseleave={handleMouseLeave}
 		role="presentation"
 		aria-label="底部缩略图栏触发区域"
 	></div>
 
 	<!-- 缩略图栏内容 -->
 	<div
-		class="absolute bottom-0 left-0 right-0 z-50 transition-transform duration-300 {isVisible
+		class="absolute bottom-0 left-0 right-0 z-[58] transition-transform duration-300 {isVisible
 			? 'translate-y-0'
 			: 'translate-y-full'}"
 		onmouseenter={handleMouseEnter}

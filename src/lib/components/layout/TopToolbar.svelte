@@ -56,6 +56,7 @@
 	let isResizing = $state(false);
 	let resizeStartY = 0;
 	let resizeStartHeight = 0;
+	let isHovering = $state(false); // 追踪鼠标是否在悬停区域或工具栏上
 
 	// 响应钉住状态
 	$effect(() => {
@@ -76,15 +77,21 @@
 	}
 
 	function handleMouseEnter() {
+		isHovering = true;
 		showToolbar();
 	}
 
 	function handleMouseLeave() {
+		isHovering = false;
 		if ($topToolbarPinned || isResizing) return;
 		if (hideTimeout) clearTimeout(hideTimeout);
+		// 增加延迟时间，避免鼠标在触发区域和工具栏之间移动时过早隐藏
 		hideTimeout = setTimeout(() => {
-			isVisible = false;
-		}, 500) as unknown as number;
+			// 只有在鼠标真正离开两个区域后才隐藏
+			if (!isHovering) {
+				isVisible = false;
+			}
+		}, 1000) as unknown as number;
 	}
 
 	function togglePin() {
@@ -198,9 +205,7 @@
 </script>
 
 <div
-	class="absolute top-0 left-0 right-0 z-[55] transition-transform duration-300 {isVisible
-		? 'translate-y-0'
-		: '-translate-y-full'}"
+	class="absolute top-0 left-0 right-0 z-[58] transition-transform duration-300 {isVisible
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}
 >
@@ -431,8 +436,9 @@
 
 <!-- 触发区域（独立于工具栏，始终存在） -->
 <div
-	class="fixed top-0 left-0 right-0 h-4 z-[58]"
+	class="fixed top-0 left-0 right-0 h-4 z-[57]"
 	onmouseenter={handleMouseEnter}
+	onmouseleave={handleMouseLeave}
 	role="presentation"
 	aria-label="顶部工具栏触发区域"
 ></div>

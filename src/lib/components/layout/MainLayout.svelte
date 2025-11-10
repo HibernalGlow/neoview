@@ -151,7 +151,7 @@
 	<BottomThumbnailBar />
 
 	<!-- 左侧边栏（悬浮，始终可用） -->
-	<div class="absolute left-0 top-0 bottom-0 z-[55] pointer-events-none">
+	<div class="absolute left-0 top-0 bottom-0 z-[55] {$sidebarOpen ? 'pointer-events-auto' : 'pointer-events-none'}">
 		<!-- 只在图标栏区域（约48px宽）响应悬停 -->
 		<div class="absolute left-0 top-0 bottom-0 w-12 pointer-events-auto">
 			<Sidebar onResize={handleSidebarResize} bind:isVisible={$sidebarOpen} />

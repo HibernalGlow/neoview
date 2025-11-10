@@ -46,7 +46,8 @@
 		PinOff,
 		GripHorizontal,
 		ExternalLink,
-		Eye
+		Eye,
+		Code
 	} from '@lucide/svelte';
 
 	const appWindow = getCurrentWebviewWindow();
@@ -202,6 +203,14 @@
 		await appWindow.close();
 	}
 
+	async function openDevTools() {
+		try {
+			await appWindow.openDevtools();
+		} catch (error) {
+			console.error('Failed to open dev tools:', error);
+		}
+	}
+
 	function openStandaloneViewer() {
 		const url = `${window.location.origin}/standalone/viewer`;
 		const features = 'width=1200,height=800,resizable=yes,scrollbars=yes,status=yes,toolbar=no,menubar=no,location=no';
@@ -251,6 +260,10 @@
 
 			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={openStandaloneViewer} title="在独立窗口中打开查看器">
 				<ExternalLink class="h-4 w-4" />
+			</Button>
+
+			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={openDevTools} title="打开开发者工具">
+				<Code class="h-4 w-4" />
 			</Button>
 		</div>
 

@@ -68,7 +68,7 @@ export const sidebarPinned = writable<boolean>(loadFromStorage('sidebarPinned', 
 export const rightSidebarPinned = writable<boolean>(loadFromStorage('rightSidebarPinned', false));
 
 // 边栏高度（用于上下边栏）
-export const topToolbarHeight = writable<number>(loadFromStorage('topToolbarHeight', 80));
+export const topToolbarHeight = writable<number>(loadFromStorage('topToolbarHeight', 60));
 export const bottomThumbnailBarHeight = writable<number>(loadFromStorage('bottomThumbnailBarHeight', 140));
 
 // 订阅并保存变化

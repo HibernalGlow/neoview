@@ -336,12 +336,8 @@
       
       fileBrowserStore.setItems(loadedItems);
       
-      // 异步加载缩略图
-      for (const item of loadedItems) {
-        if (item.isImage) {
-          loadThumbnail(item.path);
-        }
-      }
+      // 异步加载缩略图 - 只为压缩包内的图片加载，不为单个图片文件加载
+      // 单个图片文件的缩略图加载已被移除
     } catch (err) {
       console.error('❌ Error loading directory:', err);
       fileBrowserStore.setError(String(err));
@@ -1488,18 +1484,12 @@
               </button>
             {/if}
 
-            <!-- 图标/缩略图 -->
+            <!-- 图标 -->
             <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center">
               {#if item.isDir}
                 <Folder class="h-8 w-8 text-blue-500 transition-colors group-hover:text-blue-600" />
               {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
                 <FileArchive class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600" />
-              {:else if item.isImage && thumbnails.has(item.path)}
-                <img
-                  src={thumbnails.get(item.path)}
-                  alt={item.name}
-                  class="h-12 w-12 rounded object-cover transition-opacity hover:opacity-80"
-                />
               {:else if item.isImage}
                 <Image class="h-8 w-8 text-green-500 transition-colors group-hover:text-green-600" />
               {:else}
@@ -1669,18 +1659,12 @@
               </button>
             {/if}
 
-            <!-- 图标/缩略图 -->
+            <!-- 图标 -->
             <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center">
               {#if item.isDir}
                 <Folder class="h-8 w-8 text-blue-500 transition-colors group-hover:text-blue-600" />
               {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
                 <FileArchive class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600" />
-              {:else if item.isImage && thumbnails.has(item.path)}
-                <img
-                  src={thumbnails.get(item.path)}
-                  alt={item.name}
-                  class="h-12 w-12 rounded object-cover transition-opacity hover:opacity-80"
-                />
               {:else if item.isImage}
                 <Image class="h-8 w-8 text-green-500 transition-colors group-hover:text-green-600" />
               {:else}

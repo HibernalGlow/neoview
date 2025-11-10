@@ -268,7 +268,7 @@
 
 	<!-- 拖拽调整大小的分隔条 -->
 	<div
-		class="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize group {isResizing ? 'bg-blue-500' : 'hover:bg-blue-400 bg-gray-200'} transition-colors z-10"
+		class="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize group {isResizing ? 'bg-blue-500' : 'hover:bg-blue-400 bg-gray-200'} transition-colors z-50"
 		onmousedown={handleMouseDown}
 	>
 		<!-- 拖拽区域（加大点击区域） -->

@@ -43,6 +43,7 @@
 	let startWidth = 0;
 
 	function handleMouseDown(e: MouseEvent) {
+		console.log('[RightSidebar] handleMouseDown called', e.clientX, $rightSidebarWidth);
 		isResizing = true;
 		startX = e.clientX;
 		startWidth = $rightSidebarWidth;
@@ -52,14 +53,23 @@
 	function handleMouseMove(e: MouseEvent) {
 		if (!isResizing) return;
 
-		const delta = startX - e.clientX; // 右侧边栏，方向相反
+		const delta = startX - e.clientX; // 右侧边栏，向左拖拽时delta为正（增加宽度）
 		const newWidth = Math.max(200, Math.min(600, startWidth + delta));
+		
+		console.log('[RightSidebar] handleMouseMove', { 
+			clientX: e.clientX, 
+			startX, 
+			delta, 
+			startWidth, 
+			newWidth 
+		});
 		
 		rightSidebarWidth.set(newWidth);
 		onResize?.(newWidth);
 	}
 
 	function handleMouseUp() {
+		console.log('[RightSidebar] handleMouseUp called, isResizing was:', isResizing);
 		isResizing = false;
 	}
 
@@ -106,10 +116,12 @@
 
 	// 全局鼠标事件
 	$effect(() => {
+		console.log('[RightSidebar] Setting up global mouse event listeners');
 		document.addEventListener('mousemove', handleMouseMove);
 			document.addEventListener('mouseup', handleMouseUp);
 
 			return () => {
+				console.log('[RightSidebar] Cleaning up global mouse event listeners');
 				document.removeEventListener('mousemove', handleMouseMove);
 				document.removeEventListener('mouseup', handleMouseUp);
 			};
@@ -123,19 +135,23 @@
 >
 	<div
 		class="relative flex h-full"
-		style="--sidebar-width: {$rightSidebarWidth}px;"
+		style="--sidebar-width: {$rightSidebarWidth}px; width: {$rightSidebarWidth}px;"
 	>
-		<Sidebar.Provider bind:open={localRightSidebarOpen} onOpenChange={(v) => {
-			localRightSidebarOpen = v;
-			rightSidebarOpen.set(v);
-		}}>
+		<Sidebar.Provider 
+			bind:open={localRightSidebarOpen} 
+			onOpenChange={(v) => {
+				localRightSidebarOpen = v;
+				rightSidebarOpen.set(v);
+			}}
+			style="--sidebar-width: {$rightSidebarWidth}px;"
+		>
 		<Sidebar.Root
 			side="right"
 			collapsible="offcanvas"
 			class="overflow-hidden [&>[data-sidebar=sidebar]]:flex-row-reverse"
 		>
 			<!-- 一级菜单 - 图标模式 -->
-			<Sidebar.Root collapsible="none" class="!w-[calc(var(--sidebar-width-icon)_+_1px)] border-l">
+			<Sidebar.Root collapsible="none" class="!w-[calc(var(--sidebar-width-icon)_+_1px)] border-l" style="width: calc(var(--sidebar-width-icon) + 1px);">
 				<Sidebar.Header>
 					<Sidebar.Menu>
 						<Sidebar.MenuItem>
@@ -183,7 +199,7 @@
 			</Sidebar.Root>
 
 			<!-- 二级菜单 - 内容面板 -->
-			<Sidebar.Root collapsible="none" class="hidden flex-1 md:flex">
+			<Sidebar.Root collapsible="none" class="hidden flex-1 md:flex" style="width: calc(var(--sidebar-width) - var(--sidebar-width-icon) - 1px);">
 				<Sidebar.Header class="gap-3.5 border-b p-4">
 					<div class="flex w-full items-center justify-between">
 						<div class="text-foreground text-base font-medium">
@@ -220,14 +236,17 @@
 			</Sidebar.Root>
 		</Sidebar.Root>
 	</Sidebar.Provider>
+	</div>
 
-		<!-- 拖拽调整大小的分隔条 -->
-		<div
-			class="absolute top-0 bottom-0 left-0 w-1 cursor-col-resize group {isResizing ? 'bg-blue-500' : 'hover:bg-blue-400 bg-gray-200'} transition-colors z-10"
-			onmousedown={handleMouseDown}
-		>
-			<!-- 拖拽区域（加大点击区域） -->
-			<div class="absolute top-0 bottom-0 -left-1 -right-1"></div>
-		</div>
+	<!-- 拖拽调整大小的分隔条 - 移到外部 -->
+	<div
+		class="absolute top-0 bottom-0 left-0 w-4 cursor-col-resize group {isResizing ? 'bg-blue-500' : 'hover:bg-blue-400 bg-red-500'} transition-colors z-[60]"
+		onmousedown={handleMouseDown}
+		onmouseenter={() => console.log('[RightSidebar] Mouse entered resize handle')}
+		onmouseleave={() => console.log('[RightSidebar] Mouse left resize handle')}
+		style="border-left: 2px solid red;"
+	>
+		<!-- 拖拽区域（加大点击区域） -->
+		<div class="absolute top-0 bottom-0 -left-2 -right-2 bg-yellow-200 opacity-30"></div>
 	</div>
 </HoverWrapper>

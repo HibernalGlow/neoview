@@ -21,6 +21,53 @@
 	function handleRightSidebarResize(width: number) {
 		rightSidebarWidth.set(width);
 	}
+
+	// 右侧边栏拖拽调整大小
+	let isResizingRight = $state(false);
+	let startRightX = 0;
+	let startRightWidth = 0;
+
+	function handleRightResizeStart(e: MouseEvent) {
+		console.log('[MainLayout] Right resize start', e.clientX, $rightSidebarWidth);
+		isResizingRight = true;
+		startRightX = e.clientX;
+		startRightWidth = $rightSidebarWidth;
+		e.preventDefault();
+	}
+
+	function handleRightResizeMove(e: MouseEvent) {
+		if (!isResizingRight) return;
+
+		const delta = startRightX - e.clientX;
+		const newWidth = Math.max(200, Math.min(600, startRightWidth + delta));
+		
+		console.log('[MainLayout] Right resize move', { 
+			clientX: e.clientX, 
+			startRightX, 
+			delta, 
+			startRightWidth, 
+			newWidth 
+		});
+		
+		rightSidebarWidth.set(newWidth);
+		handleRightSidebarResize(newWidth);
+	}
+
+	function handleRightResizeEnd() {
+		console.log('[MainLayout] Right resize end, was resizing:', isResizingRight);
+		isResizingRight = false;
+	}
+
+	// 全局鼠标事件
+	$effect(() => {
+		document.addEventListener('mousemove', handleRightResizeMove);
+		document.addEventListener('mouseup', handleRightResizeEnd);
+
+		return () => {
+			document.removeEventListener('mousemove', handleRightResizeMove);
+			document.removeEventListener('mouseup', handleRightResizeEnd);
+		};
+	});
 </script>
 
 <div class="h-screen w-screen relative bg-background">
@@ -54,4 +101,15 @@
 			<RightSidebar onResize={handleRightSidebarResize} bind:isVisible={$rightSidebarOpen} />
 		</div>
 	</div>
+
+	<!-- 右侧边栏拖拽区域 - 独立层 -->
+	{#if $rightSidebarOpen}
+		<div
+			class="absolute top-0 bottom-0 z-[70] cursor-col-resize"
+			style="right: {$rightSidebarWidth}px; width: 8px; background: rgba(59, 130, 246, 0.3); border-left: 2px solid red;"
+			onmousedown={handleRightResizeStart}
+			onmouseenter={() => console.log('[MainLayout] Mouse entered right resize handle')}
+			onmouseleave={() => console.log('[MainLayout] Mouse left right resize handle')}
+		></div>
+	{/if}
 </div>

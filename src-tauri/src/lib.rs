@@ -84,6 +84,16 @@ pub fn run() {
             commands::fs_commands::move_path,
             commands::fs_commands::open_with_system,
             commands::fs_commands::show_in_file_manager,
+            commands::fs_commands::search_files,
+            // Index commands
+            commands::fs_commands::initialize_file_index,
+            commands::fs_commands::build_file_index,
+            commands::fs_commands::get_index_stats,
+            commands::fs_commands::clear_file_index,
+            commands::fs_commands::search_in_index,
+            commands::fs_commands::get_indexed_paths,
+            commands::fs_commands::is_path_indexed,
+            commands::fs_commands::get_index_progress,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

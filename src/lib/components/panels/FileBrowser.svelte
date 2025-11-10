@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Folder, File, Image, Trash2, RefreshCw, FileArchive, FolderOpen, Home, ChevronLeft, ChevronRight, ChevronUp, CheckSquare, Grid3x3, List, MoreVertical } from '@lucide/svelte';
+  import { Folder, File, Image, Trash2, RefreshCw, FileArchive, FolderOpen, Home, ChevronLeft, ChevronRight, ChevronUp, CheckSquare, Grid3x3, List, MoreVertical, Search, ChevronDown, Settings, AlertCircle } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import { FileSystemAPI } from '$lib/api';
   import type { FsItem } from '$lib/types';
@@ -33,6 +33,20 @@
   let isDeleteMode = $state(false);
   let viewMode = $state<'list' | 'thumbnails'>('list'); // 列表 or 缩略图视图
   let selectedItems = $state<Set<string>>(new Set());
+
+  
+
+  // 搜索功能状态
+  let searchQuery = $state('');
+  let searchHistory = $state<string[]>([]);
+  let showSearchHistory = $state(false);
+  let showSearchSettings = $state(false);
+  let searchSettings = $state({
+    includeSubfolders: true,
+    showHistoryOnFocus: true
+  });
+  let searchResults = $state<FsItem[]>([]);
+  let isSearching = $state(false);
 
   // 订阅全局状态 - 使用 Svelte 5 的响应式
   $effect(() => {
@@ -100,6 +114,66 @@
     }
   }
 
+  
+  
+  /**
+   * 执行搜索（使用 ripgrep）
+   */
+  async function performSearch(query: string) {
+    if (!query.trim()) {
+      searchResults = [];
+      return;
+    }
+
+    isSearching = true;
+    try {
+      const options = {
+        includeSubfolders: searchSettings.includeSubfolders,
+        maxResults: 100,
+      };
+      
+      searchResults = await FileSystemAPI.searchFiles(currentPath, query, options);
+      console.log(`✅ 搜索完成，找到 ${searchResults.length} 个结果`);
+      console.log('搜索结果详情:', searchResults);
+      
+      // 显示每个结果的详细信息
+      searchResults.forEach((item, index) => {
+        console.log(`[${index + 1}] ${item.is_dir ? '📁' : '📄'} ${item.name}`);
+        console.log(`    路径: ${item.path}`);
+        console.log(`    大小: ${formatFileSize(item.size, item.is_dir)}`);
+        console.log(`    修改时间: ${item.modified ? new Date(item.modified * 1000).toLocaleString() : '未知'}`);
+        console.log(`    是否图片: ${item.is_image ? '是' : '否'}`);
+      });
+    } catch (err) {
+      console.error('❌ 搜索失败:', err);
+      console.error('错误详情:', err);
+      fileBrowserStore.setError(String(err));
+      searchResults = [];
+    } finally {
+      isSearching = false;
+    }
+  }
+  
+  /**
+   * 格式化文件大小
+   */
+  function formatFileSize(bytes: number, isDir: boolean): string {
+    if (isDir) {
+      return `${bytes} 项`;
+    }
+    
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let size = bytes;
+    let unitIndex = 0;
+    
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex++;
+    }
+    
+    return `${size.toFixed(2)} ${units[unitIndex]}`;
+  }
+
   /**
    * 后退
    */
@@ -163,12 +237,19 @@
       if (!target.closest('.context-menu')) {
         hideContextMenu();
       }
+      if (!target.closest('.search-history') && !target.closest('.search-settings')) {
+        showSearchHistory = false;
+        showSearchSettings = false;
+      }
     };
     
     document.addEventListener('click', handleClick);
     
     // 加载主页
     loadHomepage();
+    
+    // 加载搜索历史
+    loadSearchHistory();
     
     return () => {
       document.removeEventListener('click', handleClick);
@@ -828,6 +909,110 @@
     }
     hideContextMenu();
   }
+
+  // ===== 搜索功能 =====
+
+  /**
+   * 加载搜索历史
+   */
+  function loadSearchHistory() {
+    try {
+      const saved = localStorage.getItem('neoview-search-history');
+      if (saved) {
+        searchHistory = JSON.parse(saved);
+      }
+    } catch (err) {
+      console.error('加载搜索历史失败:', err);
+    }
+  }
+
+  /**
+   * 保存搜索历史
+   */
+  function saveSearchHistory() {
+    try {
+      localStorage.setItem('neoview-search-history', JSON.stringify(searchHistory));
+    } catch (err) {
+      console.error('保存搜索历史失败:', err);
+    }
+  }
+
+  /**
+   * 添加搜索历史
+   */
+  function addSearchHistory(query: string) {
+    if (!query.trim()) return;
+    
+    // 移除已存在的相同查询
+    searchHistory = searchHistory.filter(item => item !== query);
+    // 添加到开头
+    searchHistory.unshift(query);
+    // 限制历史记录数量
+    searchHistory = searchHistory.slice(0, 20);
+    
+    saveSearchHistory();
+  }
+
+  /**
+   * 清除搜索历史
+   */
+  function clearSearchHistory() {
+    searchHistory = [];
+    saveSearchHistory();
+    showSearchHistory = false;
+  }
+
+  /**
+   * 搜索文件
+   */
+  async function searchFiles(query: string) {
+    if (!query.trim()) {
+      searchResults = [];
+      return;
+    }
+
+    addSearchHistory(query);
+    await performSearch(query);
+  }
+
+  /**
+   * 处理搜索输入
+   */
+  function handleSearchInput(e: Event) {
+    const target = e.target as HTMLInputElement;
+    searchQuery = target.value;
+    
+    // 实时搜索
+    if (searchQuery.trim()) {
+      const timeout = setTimeout(() => {
+        searchFiles(searchQuery);
+      }, 300);
+      
+      // 清除之前的超时
+      return () => clearTimeout(timeout);
+    } else {
+      searchResults = [];
+    }
+  }
+
+  /**
+   * 选择搜索历史
+   */
+  function selectSearchHistory(query: string) {
+    searchQuery = query;
+    showSearchHistory = false;
+    searchFiles(query);
+  }
+  
+  /**
+   * 处理搜索框聚焦
+   */
+  function handleSearchFocus() {
+    if (searchSettings.showHistoryOnFocus && searchHistory.length > 0) {
+      showSearchHistory = true;
+    }
+    showSearchSettings = false;
+  }
 </script>
 
 <div class="flex h-full flex-col">
@@ -971,6 +1156,125 @@
     </div>
   </div>
 
+  <!-- 搜索栏 -->
+  <div class="flex items-center gap-2 border-b px-2 py-2 bg-background/30">
+    <div class="relative flex-1">
+      <!-- 搜索输入框 -->
+      <div class="relative">
+        <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <input
+          type="text"
+          placeholder="搜索当前目录下的文件..."
+          bind:value={searchQuery}
+          oninput={handleSearchInput}
+          onfocus={handleSearchFocus}
+          class="w-full pl-10 pr-20 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          disabled={!currentPath || isArchiveView}
+        />
+        
+        <!-- 搜索历史按钮 -->
+        <button
+          class="absolute right-8 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
+          onclick={() => {
+            showSearchHistory = !showSearchHistory;
+            showSearchSettings = false;
+          }}
+          disabled={searchHistory.length === 0}
+          title="搜索历史"
+        >
+          <ChevronDown class="h-4 w-4 text-gray-500" />
+        </button>
+        
+        <!-- 搜索设置按钮 -->
+        <button
+          class="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
+          onclick={(e) => {
+            e.stopPropagation();
+            console.log('搜索设置按钮被点击');
+            showSearchSettings = !showSearchSettings;
+            showSearchHistory = false;
+          }}
+          title="搜索设置"
+        >
+          <MoreVertical class="h-4 w-4 text-gray-500" />
+        </button>
+      </div>
+      
+      <!-- 搜索历史下拉 -->
+      {#if showSearchHistory}
+        <div class="search-history absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+          {#each searchHistory as query (query)}
+            <div
+              class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center justify-between group cursor-pointer"
+              onclick={() => selectSearchHistory(query)}
+            >
+              <div class="flex items-center gap-2">
+                <Search class="h-4 w-4 text-gray-400" />
+                <span>{query}</span>
+              </div>
+              <button
+                class="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  searchHistory = searchHistory.filter(item => item !== query);
+                  saveSearchHistory();
+                }}
+                title="删除"
+              >
+                <svg class="h-3 w-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          {/each}
+          {#if searchHistory.length > 0}
+            <div class="border-t border-gray-200 p-2">
+              <button
+                class="w-full px-3 py-1 text-xs text-gray-500 hover:bg-gray-100 rounded"
+                onclick={clearSearchHistory}
+              >
+                清除搜索历史
+              </button>
+            </div>
+          {:else}
+            <div class="p-3 text-center text-sm text-gray-500">
+              暂无搜索历史
+            </div>
+          {/if}
+        </div>
+      {/if}
+      
+      <!-- 搜索设置下拉 -->
+      {#if showSearchSettings}
+        <div class="search-settings absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[200px] p-2">
+          <div class="space-y-3">
+            <div class="pb-2">
+              <h4 class="text-xs font-semibold text-gray-700 mb-2">搜索选项</h4>
+              
+              <label class="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  bind:checked={searchSettings.includeSubfolders}
+                  class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span>搜索子文件夹</span>
+              </label>
+              
+              <label class="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  bind:checked={searchSettings.showHistoryOnFocus}
+                  class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span>聚焦时显示历史</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      {/if}
+    </div>
+  </div>
+
   <!-- 错误提示 -->
   {#if error}
     <div class="m-2 rounded bg-red-50 p-3 text-sm text-red-600">
@@ -984,6 +1288,108 @@
       <div class="flex flex-col items-center gap-3">
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
         <div class="text-sm text-gray-500">加载中...</div>
+      </div>
+    </div>
+  {:else if isSearching}
+    <div class="flex flex-1 items-center justify-center">
+      <div class="flex flex-col items-center gap-3">
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        <div class="text-sm text-gray-500">搜索中...</div>
+      </div>
+    </div>
+  {:else if searchQuery && searchResults.length === 0}
+    <div class="flex flex-1 items-center justify-center">
+      <div class="text-center text-gray-400">
+        <Search class="mx-auto mb-2 h-16 w-16 opacity-50" />
+        <p class="text-sm">未找到匹配的文件</p>
+        <p class="text-xs text-gray-500 mt-1">搜索词: "{searchQuery}"</p>
+      </div>
+    </div>
+  {:else if searchQuery && searchResults.length > 0}
+    <!-- 搜索结果列表 -->
+    <div 
+      bind:this={fileListContainer}
+      class="flex-1 overflow-y-auto p-2 focus:outline-none" 
+      tabindex="0" 
+      onkeydown={handleKeydown}
+      onclick={() => fileListContainer?.focus()}
+    >
+      <div class="mb-3 text-sm text-gray-600 px-2">
+        找到 {searchResults.length} 个结果 (搜索: "{searchQuery}")
+      </div>
+      <div class="grid grid-cols-1 gap-2">
+        {#each searchResults as item, index (item.path)}
+          <div
+            class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors hover:bg-gray-50 border-gray-200"
+            onclick={() => openSearchResult(item)}
+            oncontextmenu={(e) => showContextMenu(e, item)}
+          >
+            <!-- 勾选框（勾选模式） -->
+            {#if isCheckMode}
+              <button
+                class="flex-shrink-0"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  toggleItemSelection(item.path);
+                }}
+              >
+                <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {selectedItems.has(item.path) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 hover:border-blue-400'}">
+                  {#if selectedItems.has(item.path)}
+                    <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                    </svg>
+                  {/if}
+                </div>
+              </button>
+            {/if}
+
+            <!-- 删除按钮（删除模式） -->
+            {#if isDeleteMode && !isArchiveView}
+              <button
+                class="flex-shrink-0"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  deleteItem(item.path);
+                }}
+                title="删除"
+              >
+                <div class="h-5 w-5 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors">
+                  <Trash2 class="h-3 w-3 text-white" />
+                </div>
+              </button>
+            {/if}
+
+            <!-- 图标/缩略图 -->
+            <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center">
+              {#if item.isDir}
+                <Folder class="h-8 w-8 text-blue-500 transition-colors group-hover:text-blue-600" />
+              {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
+                <FileArchive class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600" />
+              {:else if item.isImage && thumbnails.has(item.path)}
+                <img
+                  src={thumbnails.get(item.path)}
+                  alt={item.name}
+                  class="h-12 w-12 rounded object-cover transition-opacity hover:opacity-80"
+                />
+              {:else if item.isImage}
+                <Image class="h-8 w-8 text-green-500 transition-colors group-hover:text-green-600" />
+              {:else}
+                <File class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500" />
+              {/if}
+            </div>
+
+            <!-- 信息 -->
+            <div class="min-w-0 flex-1">
+              <div class="truncate font-medium">{item.name}</div>
+              <div class="text-xs text-gray-500">
+                {item.path}
+              </div>
+              <div class="text-xs text-gray-500">
+                {formatSize(item.size, item.isDir)} · {formatDate(item.modified)}
+              </div>
+            </div>
+          </div>
+        {/each}
       </div>
     </div>
   {:else if items.length === 0 && currentPath}
@@ -1271,7 +1677,14 @@
     <!-- 点击其他地方关闭菜单 -->
     <div
       class="fixed inset-0 z-40"
-      onclick={hideContextMenu}
+      onclick={(e) => {
+        // 确保点击的不是搜索设置按钮或其子元素
+        if (!e.target.closest('.search-settings') && 
+            !e.target.closest('button[title="搜索设置"]') &&
+            !e.target.closest('.search-history')) {
+          hideContextMenu();
+        }
+      }}
     ></div>
   {/if}
 </div>

@@ -199,3 +199,17 @@ export async function openWithSystem(path: string): Promise<void> {
 export async function showInFileManager(path: string): Promise<void> {
   await invoke('show_in_file_manager', { path });
 }
+
+/**
+ * 搜索文件
+ */
+export async function searchFiles(
+  path: string,
+  query: string,
+  options: {
+    includeSubfolders?: boolean;
+    maxResults?: number;
+  } = {}
+): Promise<FsItem[]> {
+  return await invoke<FsItem[]>('search_files', { path, query, options });
+}

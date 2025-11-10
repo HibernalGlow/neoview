@@ -429,3 +429,250 @@ pub async fn show_in_file_manager(path: String) -> Result<(), String> {
     
     Ok(())
 }
+
+/// 搜索文件（使用 fd）
+#[tauri::command]
+pub async fn search_files(
+    path: String,
+    query: String,
+    options: Option<SearchOptions>,
+) -> Result<Vec<crate::core::fs_manager::FsItem>, String> {
+    use std::process::Command;
+    
+    let search_options = options.unwrap_or_default();
+    let include_subfolders = search_options.include_subfolders.unwrap_or(true);
+    let max_results = search_options.max_results.unwrap_or(100);
+    
+    // 构建 fd 命令
+    let mut cmd = Command::new("fd");
+    cmd.arg("-t")                     // 指定类型
+        .arg("f")                     // 只搜索文件
+        .arg("-a")                    // 输出绝对路径
+        .arg("-F")                    // 固定字符串匹配（不使用正则）
+        .arg("-u")                    // 包含被忽略和隐藏的文件
+        .arg(&query)                  // 搜索查询
+        .arg(&path);                  // 搜索路径
+    
+    // 如果不包含子文件夹，添加 --maxdepth 1
+    if !include_subfolders {
+        cmd.arg("--maxdepth").arg("1");
+    }
+    
+    // 添加调试信息
+    println!("执行 fd 搜索: 查询='{}', 路径='{}', 包含子文件夹={}", query, path, include_subfolders);
+    
+    // 执行命令
+    let output = cmd.output()
+        .map_err(|e| format!("执行 fd 失败: {}", e))?;
+    
+    // 输出调试信息
+    println!("fd 退出码: {}", output.status);
+    if !output.stderr.is_empty() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        println!("fd stderr: {}", stderr);
+    }
+    
+    if !output.status.success() {
+        return Err(format!("fd 错误: 退出码 {}", output.status.code().unwrap_or(-1)));
+    }
+    
+    // 解析输出（fd 输出的是纯文本路径，每行一个）
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    println!("fd stdout: {}", stdout);
+    let mut results = Vec::new();
+    
+    for line in stdout.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        
+        println!("找到文件: {}", line.trim());
+        
+        let path = line.trim();
+        
+        // 获取文件元数据
+        let path_buf = PathBuf::from(path);
+        if let Ok(metadata) = std::fs::metadata(&path_buf) {
+            let name = path_buf.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("Unknown")
+                .to_string();
+            
+            let is_dir = metadata.is_dir();
+            let size = if is_dir {
+                // 对于目录，计算子项数量
+                std::fs::read_dir(&path_buf)
+                    .map(|entries| entries.count() as u64)
+                    .unwrap_or(0)
+            } else {
+                metadata.len()
+            };
+            
+            let modified = metadata.modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs());
+            
+            let is_image = !is_dir && is_image_file(&path_buf);
+            
+            results.push(crate::core::fs_manager::FsItem {
+                name,
+                path: path.to_string(),
+                is_dir,
+                size,
+                modified,
+                is_image,
+            });
+            
+            // 限制结果数量
+            if results.len() >= max_results {
+                break;
+            }
+        }
+    }
+    
+    Ok(results)
+}
+
+/// 检查文件是否为图片
+fn is_image_file(path: &Path) -> bool {
+    if let Some(ext) = path.extension() {
+        let ext = ext.to_string_lossy().to_lowercase();
+        matches!(
+            ext.as_str(),
+            "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "avif" | "jxl" | "tiff" | "tif"
+        )
+    } else {
+        false
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchOptions {
+    pub include_subfolders: Option<bool>,
+    pub max_results: Option<usize>,
+}
+
+/// 初始化文件索引
+#[tauri::command]
+pub async fn initialize_file_index(
+    state: State<'_, FsState>,
+) -> Result<(), String> {
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    fs_manager.initialize_indexer()
+}
+
+/// 构建文件索引
+#[tauri::command]
+pub async fn build_file_index(
+    path: String,
+    recursive: bool,
+    state: State<'_, FsState>,
+) -> Result<(), String> {
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    let path = PathBuf::from(path);
+    fs_manager.build_index(&path, recursive)
+}
+
+/// 获取索引统计信息
+#[tauri::command]
+pub async fn get_index_stats(
+    state: State<'_, FsState>,
+) -> Result<crate::core::file_indexer::IndexStats, String> {
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    fs_manager.get_index_stats()
+}
+
+/// 清除文件索引
+#[tauri::command]
+pub async fn clear_file_index(
+    state: State<'_, FsState>,
+) -> Result<(), String> {
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    fs_manager.clear_index()
+}
+
+/// 在索引中搜索文件
+#[tauri::command]
+pub async fn search_in_index(
+    query: String,
+    max_results: Option<usize>,
+    options: Option<IndexSearchOptions>,
+    state: State<'_, FsState>,
+) -> Result<Vec<crate::core::fs_manager::FsItem>, String> {
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    let max_results = max_results.unwrap_or(100);
+    let search_options = options.map(|o| crate::core::file_indexer::SearchOptions {
+        include_subfolders: o.include_subfolders.unwrap_or(true),
+        images_only: o.images_only.unwrap_or(false),
+        folders_only: o.folders_only.unwrap_or(false),
+        min_size: o.min_size,
+        max_size: o.max_size,
+        modified_after: o.modified_after,
+        modified_before: o.modified_before,
+    });
+
+    fs_manager.search_in_index(&query, max_results, search_options.as_ref())
+}
+
+/// 获取索引中的路径列表
+#[tauri::command]
+pub async fn get_indexed_paths(
+    path: Option<String>,
+    recursive: Option<bool>,
+    state: State<'_, FsState>,
+) -> Result<Vec<String>, String> {
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    let recursive = recursive.unwrap_or(false);
+    
+    fs_manager.get_indexed_paths(path.as_deref(), recursive)
+}
+
+/// 检查路径是否已被索引
+#[tauri::command]
+pub async fn is_path_indexed(
+    path: String,
+    state: State<'_, FsState>,
+) -> Result<bool, String> {
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    fs_manager.is_path_indexed(&path)
+}
+
+/// 获取索引进度
+#[tauri::command]
+pub async fn get_index_progress(
+    state: State<'_, FsState>,
+) -> Result<crate::core::file_indexer::IndexProgress, String> {
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    fs_manager.get_index_progress()
+}
+
+/// 索引搜索选项
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IndexSearchOptions {
+    pub include_subfolders: Option<bool>,
+    pub images_only: Option<bool>,
+    pub folders_only: Option<bool>,
+    pub min_size: Option<u64>,
+    pub max_size: Option<u64>,
+    pub modified_after: Option<u64>,
+    pub modified_before: Option<u64>,
+}

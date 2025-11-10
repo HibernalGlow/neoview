@@ -7,6 +7,7 @@ pub mod image_cache;
 pub mod fs_manager;
 pub mod thumbnail;
 pub mod archive;
+pub mod file_indexer;
 
 pub use book_manager::BookManager;
 pub use image_loader::ImageLoader;
@@ -14,3 +15,4 @@ pub use image_loader::ImageLoader;
 pub use fs_manager::FsManager;
 pub use thumbnail::ThumbnailManager;
 pub use archive::ArchiveManager;
+pub use file_indexer::FileIndexer;

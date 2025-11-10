@@ -1,8 +1,4 @@
-// Prevents additional console window on Windows in release, DO NOT REMOVE!!
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
 use clap::{Parser, Subcommand};
-use std::env;
 use std::path::PathBuf;
 
 /// NeoView - 图像查看器
@@ -53,6 +49,9 @@ fn main() {
     }
 }
 
+use app_lib::core::{ThumbnailManager, ArchiveManager};
+use walkdir::WalkDir;
+
 /// 预处理缩略图
 fn preprocess_thumbnails(
     root_path: &PathBuf,
@@ -60,57 +59,74 @@ fn preprocess_thumbnails(
     recursive: bool,
     verbose: bool,
 ) -> Result<(), String> {
-    use std::fs;
-    use walkdir::WalkDir;
-    use app_lib::core::{ThumbnailManager, ArchiveManager};
+    println!("开始预处理缩略图...");
+    println!("路径: {}", root_path.display());
+    println!("最大尺寸: {}", max_size);
+    println!("递归: {}", recursive);
+    println!("详细输出: {}", verbose);
+    println!();
 
-    if verbose {
-        println!("开始预处理缩略图...");
-        println!("路径: {}", root_path.display());
-        println!("尺寸: {}x{}", max_size, max_size);
-        println!("递归: {}", recursive);
-    }
-
-    // 创建缩略图管理器
     let cache_dir = dirs::cache_dir()
-        .unwrap_or_else(|| PathBuf::from(".cache"))
+        .ok_or("无法获取缓存目录")?
         .join("neoview")
         .join("thumbnails");
+
     let thumbnail_manager = ThumbnailManager::new(cache_dir, max_size)
         .map_err(|e| format!("创建缩略图管理器失败: {}", e))?;
-
-    let archive_manager = ArchiveManager::new();
+    let _archive_manager = ArchiveManager::new();
 
     let mut processed = 0;
     let mut skipped = 0;
     let mut errors = 0;
 
-    // 遍历目录
     let walker = if recursive {
         WalkDir::new(root_path).into_iter()
     } else {
-        WalkDir::new(root_path).max_depth(1).into_iter()
+        walkdir::WalkDir::new(root_path).max_depth(1).into_iter()
     };
 
     for entry in walker {
-        let entry = entry.map_err(|e| format!("读取目录条目失败: {}", e))?;
+        let entry = entry.map_err(|e| format!("遍历目录失败: {}", e))?;
         let path = entry.path();
 
-        // 跳过目录本身
-        if path == root_path {
+        // 跳过目录（除非是根目录）
+        if path.is_dir() && path != root_path {
             continue;
         }
 
-        let file_name = path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("unknown");
-
         if verbose {
-            print!("处理: {} ... ", file_name);
+            println!("处理: {}", path.display());
         }
 
+        // 检查是否为图片文件
+        if let Some(ext) = path.extension() {
+            let ext = ext.to_string_lossy().to_lowercase();
+            if matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "gif" | "bmp" | "tiff" | "webp" | "avif" | "jxl") {
+                match thumbnail_manager.generate_thumbnail(path) {
+                    Ok(_) => {
+                        processed += 1;
+                        if verbose {
+                            println!("✓");
+                        }
+                    }
+                    Err(e) => {
+                        if e.contains("缩略图已存在") {
+                            skipped += 1;
+                            if verbose {
+                                println!("跳过 (已存在)");
+                            }
+                        } else {
+                            errors += 1;
+                            if verbose {
+                                println!("✗ ({})", e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
         // 检查是否为文件夹
-        if path.is_dir() {
+        else if path.is_dir() && path != root_path {
             match thumbnail_manager.generate_folder_thumbnail_force(path, max_size) {
                 Ok(_) => {
                     processed += 1;
@@ -159,10 +175,9 @@ fn preprocess_thumbnails(
         }
     }
 
-    println!("\n预处理完成!");
-    println!("处理成功: {}", processed);
-    println!("跳过: {}", skipped);
-    println!("错误: {}", errors);
+    println!();
+    println!("预处理完成!");
+    println!("处理: {}, 跳过: {}, 错误: {}", processed, skipped, errors);
 
     Ok(())
 }

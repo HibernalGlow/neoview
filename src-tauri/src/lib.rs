@@ -3,7 +3,7 @@
 
 mod commands;
 mod models;
-mod core;
+pub mod core;
 
 use std::sync::Mutex;
 use std::path::PathBuf;
@@ -66,6 +66,8 @@ pub fn run() {
             commands::get_images_in_directory,
             commands::generate_file_thumbnail,
             commands::generate_thumbnail_from_data,
+            commands::generate_folder_thumbnail,
+            commands::generate_archive_thumbnail,
             commands::create_directory,
             commands::delete_path,
             commands::rename_path,

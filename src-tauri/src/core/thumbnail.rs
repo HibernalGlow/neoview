@@ -304,5 +304,86 @@ impl ThumbnailManager {
         Ok(removed_count)
     }
 
+    /// 生成文件夹缩略图（强制生成，跳过缓存检查）
+    pub fn generate_folder_thumbnail_force(&self, folder_path: &Path, max_size: u32) -> Result<String, String> {
+        // 读取文件夹内容
+        let entries = fs::read_dir(folder_path)
+            .map_err(|e| format!("读取文件夹失败: {}", e))?;
+
+        // 查找第一张图片文件
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
+            let path = entry.path();
+
+            // 检查是否为图片文件
+            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                let ext_lower = ext.to_lowercase();
+                if matches!(ext_lower.as_str(), "jpg" | "jpeg" | "png" | "gif" | "bmp" | "tiff" | "webp" | "avif" | "jxl") {
+                    // 找到第一张图片，生成缩略图并强制保存
+                    let cache_path = self.get_cache_path(&path);
+                    return self.generate_and_cache_thumbnail(&path, &cache_path);
+                }
+            }
+        }
+
+        // 如果没有找到图片，查找压缩包
+        let entries = fs::read_dir(folder_path)
+            .map_err(|e| format!("读取文件夹失败: {}", e))?;
+
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
+            let path = entry.path();
+
+            // 检查是否为支持的压缩包
+            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                let ext_lower = ext.to_lowercase();
+                if matches!(ext_lower.as_str(), "zip" | "cbz" | "rar" | "cbr" | "7z" | "cb7") {
+                    // 尝试从压缩包生成缩略图
+                    return self.generate_archive_thumbnail_force(&path, max_size);
+                }
+            }
+        }
+
+        Err("文件夹中未找到可用的图片或压缩包".to_string())
+    }
+
+    /// 生成压缩包缩略图（强制生成，跳过缓存检查）
+    pub fn generate_archive_thumbnail_force(&self, archive_path: &Path, max_size: u32) -> Result<String, String> {
+        use crate::core::archive::ArchiveManager;
+
+        let archive_manager = ArchiveManager::new();
+
+        // 获取压缩包内容
+        let contents = archive_manager.list_zip_contents(archive_path)?;
+
+        // 查找第一张图片
+        for item in contents {
+            if item.is_image {
+                // 从压缩包中提取图片数据
+                let image_data = archive_manager.extract_file_from_zip(archive_path, &item.path)?;
+                // 生成缩略图并强制保存
+                let thumbnail = self.resize_keep_aspect_ratio(&self.load_image_with_format_support_from_bytes(&image_data)?, max_size);
+                let jpeg_data = self.encode_jpeg(&thumbnail)?;
+                
+                // 强制保存到缓存
+                let cache_path = self.get_cache_path(archive_path);
+                fs::write(&cache_path, &jpeg_data)
+                    .map_err(|e| format!("保存缓存失败: {}", e))?;
+
+                // 返回 base64
+                return Ok(format!("data:image/jpeg;base64,{}", general_purpose::STANDARD.encode(&jpeg_data)));
+            }
+        }
+
+        Err("压缩包中未找到图片文件".to_string())
+    }
+
+    /// 从字节数据加载图片（支持特殊格式）
+    fn load_image_with_format_support_from_bytes(&self, image_data: &[u8]) -> Result<DynamicImage, String> {
+        // 检查文件扩展名（这里我们不知道扩展名，所以尝试标准加载）
+        // 对于JXL格式，我们可能需要额外的处理，但这里简化处理
+        image::load_from_memory(image_data)
+            .map_err(|e| format!("加载图片失败: {}", e))
+    }
     
 }

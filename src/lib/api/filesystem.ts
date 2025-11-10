@@ -51,6 +51,20 @@ export async function generateFileThumbnail(path: string): Promise<string> {
 }
 
 /**
+ * 生成文件夹缩略图
+ */
+export async function generateFolderThumbnail(path: string, maxSize: number = 256): Promise<string> {
+  return await invoke<string>('generate_folder_thumbnail', { folderPath: path, maxSize });
+}
+
+/**
+ * 生成压缩包缩略图
+ */
+export async function generateArchiveThumbnail(path: string, maxSize: number = 256): Promise<string> {
+  return await invoke<string>('generate_archive_thumbnail', { archivePath: path, maxSize });
+}
+
+/**
  * 从图片数据生成缩略图（用于压缩包内图片）
  */
 export async function generateThumbnailFromData(imageData: string, maxSize: number = 256): Promise<string> {
@@ -149,14 +163,14 @@ export async function getImagesFromArchive(archivePath: string): Promise<string[
 }
 
 /**
- * 生成压缩包内图片的缩略图
+ * 生成压缩包内指定图片的缩略图
  */
-export async function generateArchiveThumbnail(
+export async function generateArchiveFileThumbnail(
   archivePath: string,
   filePath: string,
   maxSize: number = 256
 ): Promise<string> {
-  return await invoke<string>('generate_archive_thumbnail', { 
+  return await invoke<string>('generate_archive_thumbnail_old', { 
     archivePath, 
     filePath, 
     maxSize 

@@ -8,6 +8,7 @@
   import { bookStore } from '$lib/stores/book.svelte';
   import * as BookAPI from '$lib/api/book';
   import PathBar from '../ui/PathBar.svelte';
+  import FolderArchiveThumbnail from '../ui/FolderArchiveThumbnail.svelte';
   import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
   import { NavigationHistory } from '$lib/utils/navigationHistory';
   import { Button } from '$lib/components/ui/button';
@@ -1489,23 +1490,19 @@
             {/if}
 
             <!-- 图标/缩略图 -->
-            <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center">
-              {#if item.isDir}
-                <Folder class="h-8 w-8 text-blue-500 transition-colors group-hover:text-blue-600" />
-              {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
-                <FileArchive class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600" />
-              {:else if item.isImage && thumbnails.has(item.path)}
-                <img
-                  src={thumbnails.get(item.path)}
-                  alt={item.name}
-                  class="h-12 w-12 rounded object-cover transition-opacity hover:opacity-80"
-                />
-              {:else if item.isImage}
-                <Image class="h-8 w-8 text-green-500 transition-colors group-hover:text-green-600" />
-              {:else}
-                <File class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500" />
-              {/if}
-            </div>
+            {#if item.isDir || item.name.endsWith('.zip') || item.name.endsWith('.cbz') || item.name.endsWith('.rar') || item.name.endsWith('.cbr')}
+              <FolderArchiveThumbnail {item} size={48} />
+            {:else if item.isImage && thumbnails.has(item.path)}
+              <img
+                src={thumbnails.get(item.path)}
+                alt={item.name}
+                class="h-12 w-12 rounded object-cover transition-opacity hover:opacity-80"
+              />
+            {:else if item.isImage}
+              <Image class="h-8 w-8 text-green-500 transition-colors group-hover:text-green-600" />
+            {:else}
+              <File class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500" />
+            {/if}
 
             <!-- 信息 -->
             <div class="min-w-0 flex-1">
@@ -1670,23 +1667,19 @@
             {/if}
 
             <!-- 图标/缩略图 -->
-            <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center">
-              {#if item.isDir}
-                <Folder class="h-8 w-8 text-blue-500 transition-colors group-hover:text-blue-600" />
-              {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
-                <FileArchive class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600" />
-              {:else if item.isImage && thumbnails.has(item.path)}
-                <img
-                  src={thumbnails.get(item.path)}
-                  alt={item.name}
-                  class="h-12 w-12 rounded object-cover transition-opacity hover:opacity-80"
-                />
-              {:else if item.isImage}
-                <Image class="h-8 w-8 text-green-500 transition-colors group-hover:text-green-600" />
-              {:else}
-                <File class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500" />
-              {/if}
-            </div>
+            {#if item.isDir || item.name.endsWith('.zip') || item.name.endsWith('.cbz') || item.name.endsWith('.rar') || item.name.endsWith('.cbr')}
+              <FolderArchiveThumbnail {item} size={48} />
+            {:else if item.isImage && thumbnails.has(item.path)}
+              <img
+                src={thumbnails.get(item.path)}
+                alt={item.name}
+                class="h-12 w-12 rounded object-cover transition-opacity hover:opacity-80"
+              />
+            {:else if item.isImage}
+              <Image class="h-8 w-8 text-green-500 transition-colors group-hover:text-green-600" />
+            {:else}
+              <File class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500" />
+            {/if}
 
             <!-- 信息 -->
             <div class="min-w-0 flex-1">

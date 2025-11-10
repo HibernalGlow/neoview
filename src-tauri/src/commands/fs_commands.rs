@@ -308,9 +308,37 @@ pub async fn get_images_from_archive(
     archive_manager.get_images_from_zip(&path)
 }
 
-/// 生成压缩包内图片的缩略图
+/// 生成文件夹缩略图
+#[tauri::command]
+pub async fn generate_folder_thumbnail(
+    folder_path: String,
+    max_size: u32,
+    state: State<'_, FsState>,
+) -> Result<String, String> {
+    let thumbnail_manager = state.thumbnail_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    let path = PathBuf::from(folder_path);
+    thumbnail_manager.generate_folder_thumbnail_force(&path, max_size)
+}
+
+/// 生成压缩包缩略图
 #[tauri::command]
 pub async fn generate_archive_thumbnail(
+    archive_path: String,
+    max_size: u32,
+    state: State<'_, FsState>,
+) -> Result<String, String> {
+    let thumbnail_manager = state.thumbnail_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    let path = PathBuf::from(archive_path);
+    thumbnail_manager.generate_archive_thumbnail_force(&path, max_size)
+}
+
+/// 生成压缩包内图片的缩略图
+#[tauri::command]
+pub async fn generate_archive_thumbnail_old(
     archive_path: String,
     file_path: String,
     max_size: u32,

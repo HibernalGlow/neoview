@@ -265,7 +265,7 @@ impl ArchiveManager {
     pub fn is_supported_archive(path: &Path) -> bool {
         if let Some(ext) = path.extension() {
             let ext = ext.to_string_lossy().to_lowercase();
-            matches!(ext.as_str(), "zip" | "cbz")
+            matches!(ext.as_str(), "zip" | "cbz" | "rar" | "cbr" | "7z" | "cb7")
         } else {
             false
         }

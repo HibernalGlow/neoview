@@ -272,7 +272,7 @@
 
 	<!-- 拖拽调整大小的分隔条 -->
 	<div
-		class="absolute top-0 bottom-0 right-0 w-4 cursor-col-resize group hover:bg-accent/50 transition-colors z-50"
+		class="absolute top-0 bottom-0 right-0 w-4 cursor-col-resize transition-colors z-50"
 		onmousedown={handleMouseDown}
 	>
 		<!-- 拖拽区域（加大点击区域） -->

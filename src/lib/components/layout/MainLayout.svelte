@@ -92,7 +92,7 @@
 	<!-- 左侧边栏拖拽区域 - 独立层 -->
 	{#if $sidebarOpen}
 		<div
-			class="absolute top-0 bottom-0 z-[70] cursor-col-resize hover:bg-accent/50"
+			class="absolute top-0 bottom-0 z-[70] cursor-col-resize"
 			style="left: {$sidebarWidth}px; width: 8px;"
 			onmousedown={handleLeftResizeStart}
 		></div>
@@ -108,7 +108,7 @@
 	<!-- 右侧边栏拖拽区域 - 独立层 -->
 	{#if $rightSidebarOpen}
 		<div
-			class="absolute top-0 bottom-0 z-[70] cursor-col-resize hover:bg-accent/50"
+			class="absolute top-0 bottom-0 z-[70] cursor-col-resize"
 			style="right: {$rightSidebarWidth}px; width: 8px;"
 			onmousedown={handleRightResizeStart}
 		></div>

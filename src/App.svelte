@@ -6,6 +6,7 @@
 	import MainLayout from '$lib/components/layout/MainLayout.svelte';
 	import ImageViewer from '$lib/components/viewer/ImageViewer.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { bookStore, zoomIn, zoomOut, resetZoom, toggleSidebar, toggleFullscreen, rotateClockwise, toggleViewMode } from '$lib/stores';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
@@ -219,7 +220,8 @@ function handleGlobalMouseDown(e: MouseEvent) {
 	onmousedown={handleGlobalMouseDown}
 />
 
-<MainLayout>
+<Tooltip.Provider>
+	<MainLayout>
 	<div class="h-full w-full flex items-center justify-center">
 		<ImageViewer />
 		
@@ -234,3 +236,4 @@ function handleGlobalMouseDown(e: MouseEvent) {
 		</div> -->
 	</div>
 </MainLayout>
+</Tooltip.Provider>

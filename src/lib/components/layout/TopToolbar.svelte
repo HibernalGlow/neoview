@@ -5,6 +5,11 @@
 	 */
 	import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewWindow';
 	import { Button } from '$lib/components/ui/button';
+	import * as Separator from '$lib/components/ui/separator';
+	import * as Tooltip from '$lib/components/ui/tooltip';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import * as Progress from '$lib/components/ui/progress';
+	
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { 
 		zoomLevel, 
@@ -40,7 +45,8 @@
 		Pin,
 		PinOff,
 		GripHorizontal,
-		ExternalLink
+		ExternalLink,
+		Eye
 	} from '@lucide/svelte';
 
 	const appWindow = getCurrentWebviewWindow();
@@ -270,108 +276,143 @@
 				{/if}
 			</div>
 
-			<!-- 中间：页码信息 -->
+			<!-- 中间：页码信息和进度 -->
 			{#if bookStore.currentBook}
-				<div class="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
+				<div class="flex items-center gap-3 text-sm text-muted-foreground whitespace-nowrap">
 					{#if bookStore.currentBook.type === 'archive'}
 						<FileArchive class="h-3 w-3" />
 					{:else}
 						<Folder class="h-3 w-3" />
 					{/if}
-					<span>
+					<span class="font-mono text-xs">
 						{bookStore.currentPageIndex + 1} / {bookStore.totalPages}
 					</span>
+					<Progress.Root class="w-20 h-2">
+						<Progress.Progress value={((bookStore.currentPageIndex + 1) / bookStore.totalPages) * 100} />
+					</Progress.Root>
 				</div>
 			{/if}
 
 			<!-- 右侧：图片操作按钮 -->
 			<div class="flex items-center gap-1 flex-shrink-0">
 				<!-- 导航按钮 -->
-				<Button
-					variant="ghost"
-					size="icon"
-					class="h-8 w-8"
-					onclick={handlePreviousPage}
-					disabled={!bookStore.canPreviousPage}
-					title="上一页"
-				>
-					<ChevronLeft class="h-4 w-4" />
-				</Button>
+				<Tooltip.Root>
+					<Tooltip.Trigger asChild>
+						<Button
+							variant="ghost"
+							size="icon"
+							class="h-8 w-8"
+							onclick={handlePreviousPage}
+							disabled={!bookStore.canPreviousPage}
+						>
+							<ChevronLeft class="h-4 w-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>上一页</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
 
-				<Button
-					variant="ghost"
-					size="icon"
-					class="h-8 w-8"
-					onclick={handleNextPage}
-					disabled={!bookStore.canNextPage}
-					title="下一页"
-				>
-					<ChevronRight class="h-4 w-4" />
-				</Button>
+				<Tooltip.Root>
+					<Tooltip.Trigger asChild>
+						<Button
+							variant="ghost"
+							size="icon"
+							class="h-8 w-8"
+							onclick={handleNextPage}
+							disabled={!bookStore.canNextPage}
+						>
+							<ChevronRight class="h-4 w-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>下一页</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
 
 				<!-- 分隔线 -->
-				<div class="w-px h-6 bg-border mx-1"></div>
+				<Separator.Root orientation="vertical" class="h-6 mx-1" />
 
 				<!-- 缩放按钮 -->
-				<Button variant="ghost" size="icon" class="h-8 w-8" onclick={zoomOut} title="缩小">
-					<ZoomOut class="h-4 w-4" />
-				</Button>
+				<Tooltip.Root>
+					<Tooltip.Trigger asChild>
+						<Button variant="ghost" size="icon" class="h-8 w-8" onclick={zoomOut}>
+							<ZoomOut class="h-4 w-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>缩小</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
 
-				<Button
-					variant="ghost"
-					size="sm"
-					class="h-8 px-2 font-mono text-xs"
-					onclick={resetZoom}
-					title="重置缩放"
-				>
-					{($zoomLevel * 100).toFixed(0)}%
-				</Button>
+				<Tooltip.Root>
+					<Tooltip.Trigger asChild>
+						<Button
+							variant="ghost"
+							size="sm"
+							class="h-8 px-2 font-mono text-xs"
+							onclick={resetZoom}
+						>
+							{($zoomLevel * 100).toFixed(0)}%
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>重置缩放</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
 
-				<Button variant="ghost" size="icon" class="h-8 w-8" onclick={zoomIn} title="放大">
-					<ZoomIn class="h-4 w-4" />
-				</Button>
-
-				<!-- 分隔线 -->
-				<div class="w-px h-6 bg-border mx-1"></div>
-
-				<!-- 视图模式切换 - 独立按钮 -->
-				<Button
-					variant={$viewMode === 'single' ? 'default' : 'ghost'}
-					size="icon"
-					class="h-8 w-8"
-					onclick={() => setViewMode('single')}
-					title="单页模式"
-				>
-					<RectangleVertical class="h-4 w-4" />
-				</Button>
-
-				<Button
-					variant={$viewMode === 'double' ? 'default' : 'ghost'}
-					size="icon"
-					class="h-8 w-8"
-					onclick={() => setViewMode('double')}
-					title="双页模式"
-				>
-					<Columns2 class="h-4 w-4" />
-				</Button>
-
-				<Button
-					variant={$viewMode === 'panorama' ? 'default' : 'ghost'}
-					size="icon"
-					class="h-8 w-8"
-					onclick={() => setViewMode('panorama')}
-					title="全景模式（显示相邻图片）"
-				>
-					<PanelsTopLeft class="h-4 w-4" />
-				</Button>
+				<Tooltip.Root>
+					<Tooltip.Trigger asChild>
+						<Button variant="ghost" size="icon" class="h-8 w-8" onclick={zoomIn}>
+							<ZoomIn class="h-4 w-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>放大</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
 
 				<!-- 分隔线 -->
-				<div class="w-px h-6 bg-border mx-1"></div>
+				<Separator.Root orientation="vertical" class="h-6 mx-1" />
+
+				<!-- 视图模式切换 - 下拉菜单 -->
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger asChild>
+						<Button variant="outline" size="sm" class="h-8 px-3">
+							<Eye class="h-4 w-4 mr-2" />
+							{#if $viewMode === 'single'}单页{:else if $viewMode === 'double'}双页{:else}全景{/if}
+						</Button>
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content class="w-48">
+						<DropdownMenu.Item onclick={() => setViewMode('single')} class={$viewMode === 'single' ? 'bg-accent' : ''}>
+							<RectangleVertical class="h-4 w-4 mr-2" />
+							<span>单页模式</span>
+						</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={() => setViewMode('double')} class={$viewMode === 'double' ? 'bg-accent' : ''}>
+							<Columns2 class="h-4 w-4 mr-2" />
+							<span>双页模式</span>
+						</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={() => setViewMode('panorama')} class={$viewMode === 'panorama' ? 'bg-accent' : ''}>
+							<PanelsTopLeft class="h-4 w-4 mr-2" />
+							<span>全景模式</span>
+						</DropdownMenu.Item>
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
+
+				<!-- 分隔线 -->
+				<Separator.Root orientation="vertical" class="h-6 mx-1" />
 
 				<!-- 旋转按钮 -->
-				<Button variant="ghost" size="icon" class="h-8 w-8" onclick={rotateClockwise} title="旋转 90°">
-					<RotateCw class="h-4 w-4" />
-				</Button>
+				<Tooltip.Root>
+					<Tooltip.Trigger asChild>
+						<Button variant="ghost" size="icon" class="h-8 w-8" onclick={rotateClockwise}>
+							<RotateCw class="h-4 w-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>旋转 90°</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
 			</div>
 		</div>
 

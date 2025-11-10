@@ -240,13 +240,10 @@
 
 	<!-- 拖拽调整大小的分隔条 - 移到外部 -->
 	<div
-		class="absolute top-0 bottom-0 left-0 w-4 cursor-col-resize group {isResizing ? 'bg-blue-500' : 'hover:bg-blue-400 bg-red-500'} transition-colors z-[60]"
+		class="absolute top-0 bottom-0 left-0 w-4 cursor-col-resize group hover:bg-accent/50 transition-colors z-[60]"
 		onmousedown={handleMouseDown}
-		onmouseenter={() => console.log('[RightSidebar] Mouse entered resize handle')}
-		onmouseleave={() => console.log('[RightSidebar] Mouse left resize handle')}
-		style="border-left: 2px solid red;"
 	>
 		<!-- 拖拽区域（加大点击区域） -->
-		<div class="absolute top-0 bottom-0 -left-2 -right-2 bg-yellow-200 opacity-30"></div>
+		<div class="absolute top-0 bottom-0 -left-2 -right-2"></div>
 	</div>
 </HoverWrapper>

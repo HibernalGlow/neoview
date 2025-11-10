@@ -22,50 +22,44 @@
 		rightSidebarWidth.set(width);
 	}
 
-	// 右侧边栏拖拽调整大小
-	let isResizingRight = $state(false);
-	let startRightX = 0;
-	let startRightWidth = 0;
+	// 左侧边栏拖拽调整大小
+	let isResizingLeft = $state(false);
+	let startLeftX = 0;
+	let startLeftWidth = 0;
 
-	function handleRightResizeStart(e: MouseEvent) {
-		console.log('[MainLayout] Right resize start', e.clientX, $rightSidebarWidth);
-		isResizingRight = true;
-		startRightX = e.clientX;
-		startRightWidth = $rightSidebarWidth;
+	function handleLeftResizeStart(e: MouseEvent) {
+		isResizingLeft = true;
+		startLeftX = e.clientX;
+		startLeftWidth = $sidebarWidth;
 		e.preventDefault();
 	}
 
-	function handleRightResizeMove(e: MouseEvent) {
-		if (!isResizingRight) return;
+	function handleLeftResizeMove(e: MouseEvent) {
+		if (!isResizingLeft) return;
 
-		const delta = startRightX - e.clientX;
-		const newWidth = Math.max(200, Math.min(600, startRightWidth + delta));
+		const delta = e.clientX - startLeftX;
+		const newWidth = Math.max(200, Math.min(600, startLeftWidth + delta));
 		
-		console.log('[MainLayout] Right resize move', { 
-			clientX: e.clientX, 
-			startRightX, 
-			delta, 
-			startRightWidth, 
-			newWidth 
-		});
-		
-		rightSidebarWidth.set(newWidth);
-		handleRightSidebarResize(newWidth);
+		sidebarWidth.set(newWidth);
+		handleSidebarResize(newWidth);
 	}
 
-	function handleRightResizeEnd() {
-		console.log('[MainLayout] Right resize end, was resizing:', isResizingRight);
-		isResizingRight = false;
+	function handleLeftResizeEnd() {
+		isResizingLeft = false;
 	}
 
 	// 全局鼠标事件
 	$effect(() => {
 		document.addEventListener('mousemove', handleRightResizeMove);
+		document.addEventListener('mousemove', handleLeftResizeMove);
 		document.addEventListener('mouseup', handleRightResizeEnd);
+		document.addEventListener('mouseup', handleLeftResizeEnd);
 
 		return () => {
 			document.removeEventListener('mousemove', handleRightResizeMove);
+			document.removeEventListener('mousemove', handleLeftResizeMove);
 			document.removeEventListener('mouseup', handleRightResizeEnd);
+			document.removeEventListener('mouseup', handleLeftResizeEnd);
 		};
 	});
 </script>
@@ -95,6 +89,15 @@
 		</div>
 	</div>
 
+	<!-- 左侧边栏拖拽区域 - 独立层 -->
+	{#if $sidebarOpen}
+		<div
+			class="absolute top-0 bottom-0 z-[70] cursor-col-resize hover:bg-accent/50"
+			style="left: {$sidebarWidth}px; width: 8px;"
+			onmousedown={handleLeftResizeStart}
+		></div>
+	{/if}
+
 	<!-- 右侧边栏（悬浮，始终可用） -->
 	<div class="absolute right-0 top-0 bottom-0 z-40 pointer-events-none">
 		<div class="h-full pointer-events-auto">
@@ -105,11 +108,9 @@
 	<!-- 右侧边栏拖拽区域 - 独立层 -->
 	{#if $rightSidebarOpen}
 		<div
-			class="absolute top-0 bottom-0 z-[70] cursor-col-resize"
-			style="right: {$rightSidebarWidth}px; width: 8px; background: rgba(59, 130, 246, 0.3); border-left: 2px solid red;"
+			class="absolute top-0 bottom-0 z-[70] cursor-col-resize hover:bg-accent/50"
+			style="right: {$rightSidebarWidth}px; width: 8px;"
 			onmousedown={handleRightResizeStart}
-			onmouseenter={() => console.log('[MainLayout] Mouse entered right resize handle')}
-			onmouseleave={() => console.log('[MainLayout] Mouse left right resize handle')}
 		></div>
 	{/if}
 </div>

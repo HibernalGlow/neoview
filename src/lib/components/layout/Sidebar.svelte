@@ -154,19 +154,23 @@
 >
 	<div
 		class="relative flex h-full"
-		style="--sidebar-width: {$sidebarWidth}px;"
+		style="--sidebar-width: {$sidebarWidth}px; width: {$sidebarWidth}px;"
 	>
-		<Sidebar.Provider bind:open={localSidebarOpen} onOpenChange={(v) => {
-		localSidebarOpen = v;
-		sidebarOpen.set(v);
-	}}>
+		<Sidebar.Provider 
+			bind:open={localSidebarOpen} 
+			onOpenChange={(v) => {
+				localSidebarOpen = v;
+				sidebarOpen.set(v);
+			}}
+			style="--sidebar-width: {$sidebarWidth}px;"
+		>
 			<Sidebar.Root
 				side="left"
 				collapsible="offcanvas"
 				class="overflow-hidden [&>[data-sidebar=sidebar]]:flex-row"
 			>
 			<!-- 一级菜单 - 图标模式 -->
-			<Sidebar.Root collapsible="none" class="!w-[calc(var(--sidebar-width-icon)_+_1px)] border-r">
+			<Sidebar.Root collapsible="none" class="!w-[calc(var(--sidebar-width-icon)_+_1px)] border-r" style="width: calc(var(--sidebar-width-icon) + 1px);">
 				<Sidebar.Header>
 					<Sidebar.Menu>
 						<Sidebar.MenuItem>
@@ -214,7 +218,7 @@
 			</Sidebar.Root>
 
 			<!-- 二级菜单 - 内容面板 -->
-			<Sidebar.Root collapsible="none" class="hidden flex-1 md:flex">
+			<Sidebar.Root collapsible="none" class="hidden flex-1 md:flex" style="width: calc(var(--sidebar-width) - var(--sidebar-width-icon) - 1px);">
 				<Sidebar.Header class="gap-3.5 border-b p-4">
 					<div class="flex w-full items-center justify-between">
 						<div class="text-foreground text-base font-medium">
@@ -268,11 +272,11 @@
 
 	<!-- 拖拽调整大小的分隔条 -->
 	<div
-		class="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize group {isResizing ? 'bg-blue-500' : 'hover:bg-blue-400 bg-gray-200'} transition-colors z-50"
+		class="absolute top-0 bottom-0 right-0 w-4 cursor-col-resize group hover:bg-accent/50 transition-colors z-50"
 		onmousedown={handleMouseDown}
 	>
 		<!-- 拖拽区域（加大点击区域） -->
-			<div class="absolute top-0 bottom-0 -left-1 -right-1"></div>
-		</div>
+		<div class="absolute top-0 bottom-0 -left-2 -right-2"></div>
 	</div>
+</div>
 </HoverWrapper>

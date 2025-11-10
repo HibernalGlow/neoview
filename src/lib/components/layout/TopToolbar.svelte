@@ -95,7 +95,7 @@
 				if (hoverCount <= 0) {
 					isVisible = false;
 				}
-			}, 2000) as unknown as number;
+			}, 300) as unknown as number;
 		}
 	}
 

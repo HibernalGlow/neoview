@@ -1,77 +1,233 @@
 <script lang="ts">
 	/**
-	 * NeoView - Right Sidebar Component (Refactored)
-	 * 右侧边栏组件 - 使用 BaseSidebar
+	 * NeoView - Right Sidebar Component (shadcn-svelte 重构)
+	 * 右侧边栏组件 - 使用 shadcn-svelte Sidebar 结构
 	 */
-	import { Info, FileText } from '@lucide/svelte';
-	import { activeRightPanel, setActiveRightPanel, rightSidebarWidth, rightSidebarPinned } from '$lib/stores';
+	import { Info, FileText, Pin, PinOff } from '@lucide/svelte';
+	import { activeRightPanel, setActiveRightPanel, rightSidebarWidth, rightSidebarPinned, rightSidebarOpen } from '$lib/stores';
 	import type { RightPanelType } from '$lib/stores';
-	import BaseSidebar from './BaseSidebar.svelte';
+	import * as Sidebar from '$lib/components/ui/sidebar';
 	import ImagePropertiesPanel from '$lib/components/panels/ImagePropertiesPanel.svelte';
 	import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
+	import { Button } from '$lib/components/ui/button';
+	import HoverWrapper from './HoverWrapper.svelte';
 
 	interface Props {
 		onResize?: (width: number) => void;
-		isVisible: boolean;
 	}
 
-	let { onResize, isVisible = $bindable() }: Props = $props();
+	let { onResize }: Props = $props();
+	let isVisible = $state($rightSidebarOpen);
+	let localRightSidebarOpen = $state($rightSidebarOpen);
 
-	const tabs = [
-		{ value: 'info', label: '信息', icon: Info },
-		{ value: 'properties', label: '属性', icon: FileText }
+	const navMain = [
+		{
+			title: '信息',
+			url: '#',
+			icon: Info,
+			value: 'info'
+		},
+		{
+			title: '属性',
+			url: '#',
+			icon: FileText,
+			value: 'properties'
+		}
 	];
 
-	function handleTabChange(value: string) {
-		setActiveRightPanel(value as RightPanelType);
+	let activeItem = $state(navMain[0]);
+
+	// 拖拽调整大小
+	let isResizing = $state(false);
+	let startX = 0;
+	let startWidth = 0;
+
+	function handleMouseDown(e: MouseEvent) {
+		isResizing = true;
+		startX = e.clientX;
+		startWidth = $rightSidebarWidth;
+		e.preventDefault();
 	}
 
+	function handleMouseMove(e: MouseEvent) {
+		if (!isResizing) return;
+
+		const delta = startX - e.clientX; // 右侧边栏，方向相反
+		const newWidth = Math.max(200, Math.min(600, startWidth + delta));
+		
+		rightSidebarWidth.set(newWidth);
+		onResize?.(newWidth);
+	}
+
+	function handleMouseUp() {
+		isResizing = false;
+	}
+
+	// 钉住/取消钉住
+	function togglePin() {
+		rightSidebarPinned.set(!$rightSidebarPinned);
+	}
+
+	// 悬停显示/隐藏逻辑 - 使用 HoverWrapper 管理
 	function handleVisibilityChange(visible: boolean) {
-		isVisible = visible;
-	}
-
-	function handleOpenInNewWindow(panel: string) {
-		// 打开独立窗口
-		if (panel === 'right') {
-			// 打开整个右侧边栏
-			openStandaloneWindow('right-sidebar', '右侧边栏', 800, 600);
-		} else {
-			// 打开特定面板
-			const panelName = panel.replace('right-', '');
-			const panelInfo = tabs.find(t => t.value === panelName);
-			if (panelInfo) {
-				openStandaloneWindow(panel, panelInfo.label, 400, 600);
-			}
+		if (!$rightSidebarPinned) {
+			localRightSidebarOpen = visible;
+			rightSidebarOpen.set(visible);
 		}
 	}
 
-	function openStandaloneWindow(id: string, title: string, width: number, height: number) {
-		const url = `${window.location.origin}/standalone/${id}`;
-		const features = `width=${width},height=${height},resizable=yes,scrollbars=yes,status=yes,toolbar=no,menubar=no,location=no`;
-		window.open(url, title, features);
+	function handleTabChange(item: typeof navMain[0]) {
+		activeItem = item;
+		
+		// 设置活动面板
+		setActiveRightPanel(item.value as RightPanelType);
 	}
+
+	// 响应 activeRightPanel 变化
+	$effect(() => {
+		const currentActive = navMain.find(nav => nav.value === $activeRightPanel);
+		if (currentActive) {
+			activeItem = currentActive;
+		}
+	});
+
+	// 响应钉住状态
+	$effect(() => {
+		if ($rightSidebarPinned) {
+			localRightSidebarOpen = true;
+			rightSidebarOpen.set(true);
+		}
+	});
+
+	// 同步本地状态与store
+	$effect(() => {
+		localRightSidebarOpen = $rightSidebarOpen;
+	});
+
+	// 全局鼠标事件
+	$effect(() => {
+		document.addEventListener('mousemove', handleMouseMove);
+			document.addEventListener('mouseup', handleMouseUp);
+
+			return () => {
+				document.removeEventListener('mousemove', handleMouseMove);
+				document.removeEventListener('mouseup', handleMouseUp);
+			};
+		});
 </script>
 
-<BaseSidebar
-	position="right"
-	bind:isVisible
-	pinnedStore={rightSidebarPinned}
-	widthStore={rightSidebarWidth}
-	activeTabStore={activeRightPanel}
-	tabs={tabs}
-	onTabChange={handleTabChange}
+<HoverWrapper 
+	bind:isVisible 
+	pinned={$rightSidebarPinned} 
 	onVisibilityChange={handleVisibilityChange}
-	onOpenInNewWindow={handleOpenInNewWindow}
-	{onResize}
-	storageKey="right-sidebar"
 >
-	{#if $activeRightPanel === 'info'}
-		<InfoPanel />
-	{:else if $activeRightPanel === 'properties'}
-		<ImagePropertiesPanel />
-	{:else}
-		<div class="p-4 text-center text-muted-foreground">
-			<p>选择一个面板</p>
+	<div
+		class="relative flex h-full"
+		style="--sidebar-width: {$rightSidebarWidth}px;"
+	>
+		<Sidebar.Provider bind:open={localRightSidebarOpen} onOpenChange={(v) => {
+			localRightSidebarOpen = v;
+			rightSidebarOpen.set(v);
+		}}>
+		<Sidebar.Root
+			side="right"
+			collapsible="offcanvas"
+			class="overflow-hidden [&>[data-sidebar=sidebar]]:flex-row-reverse"
+		>
+			<!-- 一级菜单 - 图标模式 -->
+			<Sidebar.Root collapsible="none" class="!w-[calc(var(--sidebar-width-icon)_+_1px)] border-l">
+				<Sidebar.Header>
+					<Sidebar.Menu>
+						<Sidebar.MenuItem>
+							<Sidebar.MenuButton size="lg" class="md:h-8 md:p-0">
+								{#snippet child({ props })}
+									<div class="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+										<Info class="size-4" />
+									</div>
+									<div class="grid flex-1 text-left text-sm leading-tight">
+										<span class="truncate font-medium">信息</span>
+										<span class="truncate text-xs">面板</span>
+									</div>
+								{/snippet}
+							</Sidebar.MenuButton>
+						</Sidebar.MenuItem>
+					</Sidebar.Menu>
+				</Sidebar.Header>
+				
+				<Sidebar.Content>
+					<Sidebar.Group>
+						<Sidebar.GroupContent class="px-1.5 md:px-0">
+							<Sidebar.Menu>
+								{#each navMain as item (item.value)}
+									<Sidebar.MenuItem>
+										<Sidebar.MenuButton
+											tooltipContentProps={{
+												hidden: false,
+											}}
+											onclick={() => handleTabChange(item)}
+											isActive={$activeRightPanel === item.value}
+											class="px-2.5 md:px-2"
+										>
+											{#snippet tooltipContent()}
+												{item.title}
+											{/snippet}
+											<item.icon />
+											<span>{item.title}</span>
+										</Sidebar.MenuButton>
+									</Sidebar.MenuItem>
+								{/each}
+							</Sidebar.Menu>
+						</Sidebar.GroupContent>
+					</Sidebar.Group>
+				</Sidebar.Content>
+			</Sidebar.Root>
+
+			<!-- 二级菜单 - 内容面板 -->
+			<Sidebar.Root collapsible="none" class="hidden flex-1 md:flex">
+				<Sidebar.Header class="gap-3.5 border-b p-4">
+					<div class="flex w-full items-center justify-between">
+						<div class="text-foreground text-base font-medium">
+							{activeItem.title}
+						</div>
+						<div class="flex items-center gap-2">
+							<Button variant="ghost" size="sm" onclick={togglePin}>
+								{#if $rightSidebarPinned}
+									<PinOff class="h-4 w-4" />
+								{:else}
+									<Pin class="h-4 w-4" />
+								{/if}
+							</Button>
+							<Sidebar.Trigger asChild>
+								<Button variant="ghost" size="sm">
+									×
+								</Button>
+							</Sidebar.Trigger>
+						</div>
+					</div>
+				</Sidebar.Header>
+				
+				<Sidebar.Content>
+					<Sidebar.Group class="px-0">
+						<Sidebar.GroupContent>
+							{#if activeItem.value === 'info'}
+								<InfoPanel />
+							{:else if activeItem.value === 'properties'}
+								<ImagePropertiesPanel />
+							{/if}
+						</Sidebar.GroupContent>
+					</Sidebar.Group>
+				</Sidebar.Content>
+			</Sidebar.Root>
+		</Sidebar.Root>
+	</Sidebar.Provider>
+
+		<!-- 拖拽调整大小的分隔条 -->
+		<div
+			class="absolute top-0 bottom-0 left-0 w-1 cursor-col-resize group {isResizing ? 'bg-blue-500' : 'hover:bg-blue-400 bg-gray-200'} transition-colors z-10"
+			onmousedown={handleMouseDown}
+		>
+			<!-- 拖拽区域（加大点击区域） -->
+			<div class="absolute top-0 bottom-0 -left-1 -right-1"></div>
 		</div>
-	{/if}
-</BaseSidebar>
+	</div>
+</HoverWrapper>

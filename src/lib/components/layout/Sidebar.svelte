@@ -1,97 +1,278 @@
 <script lang="ts">
 	/**
-	 * NeoView - Sidebar Component (Refactored)
-	 * 左侧边栏组件 - 使用 BaseSidebar
+	 * NeoView - Sidebar Component (shadcn-svelte 二级菜单重构 + 原生交互)
+	 * 左侧边栏组件 - 使用 shadcn-svelte Sidebar 二级菜单结构，恢复拖拽和悬停逻辑
 	 */
-	import { Folder, History, Bookmark, Info, Image as ImageIcon, List } from '@lucide/svelte';
-	import { activePanel, setActivePanelTab, sidebarWidth, sidebarPinned } from '$lib/stores';
+	import { Folder, History, Bookmark, Info, Image as ImageIcon, List, Pin, PinOff } from '@lucide/svelte';
+	import { activePanel, setActivePanelTab, sidebarWidth, sidebarPinned, sidebarOpen } from '$lib/stores';
 	import type { PanelType } from '$lib/stores';
-	import BaseSidebar from './BaseSidebar.svelte';
+	import * as Sidebar from '$lib/components/ui/sidebar';
 	import FileBrowser from '$lib/components/panels/FileBrowser.svelte';
 	import HistoryPanel from '$lib/components/panels/HistoryPanel.svelte';
 	import BookmarkPanel from '$lib/components/panels/BookmarkPanel.svelte';
 	import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
+	import { Button } from '$lib/components/ui/button';
+	import HoverWrapper from './HoverWrapper.svelte';
 
 	interface Props {
 		onResize?: (width: number) => void;
-		isVisible: boolean;
 	}
 
-	let { onResize, isVisible = $bindable() }: Props = $props();
+	let { onResize }: Props = $props();
+	let isVisible = $state($sidebarOpen);
+	let localSidebarOpen = $state($sidebarOpen);
 
-	const tabs = [
-		{ value: 'folder', label: '文件夹', icon: Folder },
-		{ value: 'history', label: '历史记录', icon: History },
-		{ value: 'bookmark', label: '书签', icon: Bookmark },
-		{ value: 'thumbnail', label: '缩略图', icon: ImageIcon },
-		{ value: 'playlist', label: '播放列表', icon: List },
-		{ value: 'info', label: '信息', icon: Info }
+	const sidebar = Sidebar.useSidebar();
+
+	const navMain = [
+		{
+			title: '文件夹',
+			url: '#',
+			icon: Folder,
+			value: 'folder'
+		},
+		{
+			title: '历史记录',
+			url: '#',
+			icon: History,
+			value: 'history'
+		},
+		{
+			title: '书签',
+			url: '#',
+			icon: Bookmark,
+			value: 'bookmark'
+		},
+		{
+			title: '缩略图',
+			url: '#',
+			icon: ImageIcon,
+			value: 'thumbnail'
+		},
+		{
+			title: '播放列表',
+			url: '#',
+			icon: List,
+			value: 'playlist'
+		},
+		{
+			title: '信息',
+			url: '#',
+			icon: Info,
+			value: 'info'
+		}
 	];
 
-	function handleTabChange(value: string) {
-		setActivePanelTab(value as PanelType);
+	let activeItem = $state(navMain[0]);
+
+	// 拖拽调整大小
+	let isResizing = $state(false);
+	let startX = 0;
+	let startWidth = 0;
+
+	function handleMouseDown(e: MouseEvent) {
+		isResizing = true;
+		startX = e.clientX;
+		startWidth = $sidebarWidth;
+		e.preventDefault();
 	}
 
+	function handleMouseMove(e: MouseEvent) {
+		if (!isResizing) return;
+
+		const delta = e.clientX - startX;
+		const newWidth = Math.max(200, Math.min(600, startWidth + delta));
+		
+		sidebarWidth.set(newWidth);
+		onResize?.(newWidth);
+	}
+
+	function handleMouseUp() {
+		isResizing = false;
+	}
+
+	// 钉住/取消钉住
+	function togglePin() {
+		sidebarPinned.set(!$sidebarPinned);
+	}
+
+	// 悬停显示/隐藏逻辑 - 使用 HoverWrapper 管理
 	function handleVisibilityChange(visible: boolean) {
-		isVisible = visible;
-	}
-
-	function handleOpenInNewWindow(panel: string) {
-		// 打开独立窗口
-		if (panel === 'left') {
-			// 打开整个左侧边栏
-			openStandaloneWindow('left-sidebar', '左侧边栏', 800, 600);
-		} else {
-			// 打开特定面板
-			const panelName = panel.replace('left-', '');
-			const panelInfo = tabs.find(t => t.value === panelName);
-			if (panelInfo) {
-				openStandaloneWindow(panel, panelInfo.label, 400, 600);
-			}
+		if (!$sidebarPinned) {
+			localSidebarOpen = visible;
+			sidebarOpen.set(visible);
 		}
 	}
 
-	function openStandaloneWindow(id: string, title: string, width: number, height: number) {
-		const url = `${window.location.origin}/standalone/${id}`;
-		const features = `width=${width},height=${height},resizable=yes,scrollbars=yes,status=yes,toolbar=no,menubar=no,location=no`;
-		window.open(url, title, features);
+	function handleTabChange(item: typeof navMain[0]) {
+		activeItem = item;
+		
+		// 设置活动面板
+		setActivePanelTab(item.value as PanelType);
+		
+		// 确保侧边栏打开
+		sidebar.setOpen(true);
 	}
+
+	// 响应 activePanel 变化
+	$effect(() => {
+		const currentActive = navMain.find(nav => nav.value === $activePanel);
+		if (currentActive) {
+			activeItem = currentActive;
+		}
+	});
+
+	// 响应钉住状态
+	$effect(() => {
+		if ($sidebarPinned) {
+			localSidebarOpen = true;
+			sidebarOpen.set(true);
+		}
+	});
+
+	// 同步本地状态与store
+	$effect(() => {
+		localSidebarOpen = $sidebarOpen;
+	});
+
+	// 全局鼠标事件
+	$effect(() => {
+		document.addEventListener('mousemove', handleMouseMove);
+		document.addEventListener('mouseup', handleMouseUp);
+
+		return () => {
+			document.removeEventListener('mousemove', handleMouseMove);
+			document.removeEventListener('mouseup', handleMouseUp);
+		};
+	});
 </script>
 
-<BaseSidebar
-	position="left"
-	bind:isVisible
-	pinnedStore={sidebarPinned}
-	widthStore={sidebarWidth}
-	activeTabStore={activePanel}
-	tabs={tabs}
-	onTabChange={handleTabChange}
+<HoverWrapper 
+	bind:isVisible 
+	pinned={$sidebarPinned} 
 	onVisibilityChange={handleVisibilityChange}
-	onOpenInNewWindow={handleOpenInNewWindow}
-	{onResize}
-	storageKey="sidebar"
 >
-	{#if $activePanel === 'folder'}
-		<FileBrowser />
-	{:else if $activePanel === 'history'}
-		<HistoryPanel />
-	{:else if $activePanel === 'bookmark'}
-		<BookmarkPanel />
-	{:else if $activePanel === 'thumbnail'}
-		<div class="p-4 text-center text-muted-foreground">
-			<p>缩略图面板</p>
-			<p class="text-xs mt-2">开发中...</p>
+	<div
+		class="relative flex h-full"
+		style="--sidebar-width: {$sidebarWidth}px;"
+	>
+		<Sidebar.Provider bind:open={localSidebarOpen} onOpenChange={(v) => {
+		localSidebarOpen = v;
+		sidebarOpen.set(v);
+	}}>
+			<Sidebar.Root
+				side="left"
+				collapsible="offcanvas"
+				class="overflow-hidden [&>[data-sidebar=sidebar]]:flex-row"
+			>
+			<!-- 一级菜单 - 图标模式 -->
+			<Sidebar.Root collapsible="none" class="!w-[calc(var(--sidebar-width-icon)_+_1px)] border-r">
+				<Sidebar.Header>
+					<Sidebar.Menu>
+						<Sidebar.MenuItem>
+							<Sidebar.MenuButton size="lg" class="md:h-8 md:p-0">
+								{#snippet child({ props })}
+									<div class="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+										<Folder class="size-4" />
+									</div>
+									<div class="grid flex-1 text-left text-sm leading-tight">
+										<span class="truncate font-medium">NeoView</span>
+										<span class="truncate text-xs">Image Viewer</span>
+									</div>
+								{/snippet}
+							</Sidebar.MenuButton>
+						</Sidebar.MenuItem>
+					</Sidebar.Menu>
+				</Sidebar.Header>
+				
+				<Sidebar.Content>
+					<Sidebar.Group>
+						<Sidebar.GroupContent class="px-1.5 md:px-0">
+							<Sidebar.Menu>
+								{#each navMain as item (item.value)}
+									<Sidebar.MenuItem>
+										<Sidebar.MenuButton
+											tooltipContentProps={{
+												hidden: false,
+											}}
+											onclick={() => handleTabChange(item)}
+											isActive={$activePanel === item.value}
+											class="px-2.5 md:px-2"
+										>
+											{#snippet tooltipContent()}
+												{item.title}
+											{/snippet}
+											<item.icon />
+											<span>{item.title}</span>
+										</Sidebar.MenuButton>
+									</Sidebar.MenuItem>
+								{/each}
+							</Sidebar.Menu>
+						</Sidebar.GroupContent>
+					</Sidebar.Group>
+				</Sidebar.Content>
+			</Sidebar.Root>
+
+			<!-- 二级菜单 - 内容面板 -->
+			<Sidebar.Root collapsible="none" class="hidden flex-1 md:flex">
+				<Sidebar.Header class="gap-3.5 border-b p-4">
+					<div class="flex w-full items-center justify-between">
+						<div class="text-foreground text-base font-medium">
+							{activeItem.title}
+						</div>
+						<div class="flex items-center gap-2">
+							<Button variant="ghost" size="sm" onclick={togglePin}>
+								{#if $sidebarPinned}
+									<PinOff class="h-4 w-4" />
+								{:else}
+									<Pin class="h-4 w-4" />
+								{/if}
+							</Button>
+							<Sidebar.Trigger asChild>
+								<Button variant="ghost" size="sm">
+									×
+								</Button>
+							</Sidebar.Trigger>
+						</div>
+					</div>
+				</Sidebar.Header>
+				
+				<Sidebar.Content>
+					<Sidebar.Group class="px-0">
+						<Sidebar.GroupContent>
+							{#if activeItem.value === 'folder'}
+								<FileBrowser />
+							{:else if activeItem.value === 'history'}
+								<HistoryPanel />
+							{:else if activeItem.value === 'bookmark'}
+								<BookmarkPanel />
+							{:else if activeItem.value === 'thumbnail'}
+								<div class="p-4">
+									<h3 class="text-lg font-semibold mb-4">缩略图面板</h3>
+									<p class="text-sm text-muted-foreground">缩略图功能正在开发中...</p>
+								</div>
+							{:else if activeItem.value === 'playlist'}
+								<div class="p-4">
+									<h3 class="text-lg font-semibold mb-4">播放列表</h3>
+									<p class="text-sm text-muted-foreground">播放列表功能正在开发中...</p>
+								</div>
+							{:else if activeItem.value === 'info'}
+								<InfoPanel />
+							{/if}
+						</Sidebar.GroupContent>
+					</Sidebar.Group>
+				</Sidebar.Content>
+			</Sidebar.Root>
+		</Sidebar.Root>
+	</Sidebar.Provider>
+
+	<!-- 拖拽调整大小的分隔条 -->
+	<div
+		class="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize group {isResizing ? 'bg-blue-500' : 'hover:bg-blue-400 bg-gray-200'} transition-colors z-10"
+		onmousedown={handleMouseDown}
+	>
+		<!-- 拖拽区域（加大点击区域） -->
+			<div class="absolute top-0 bottom-0 -left-1 -right-1"></div>
 		</div>
-	{:else if $activePanel === 'playlist'}
-		<div class="p-4 text-center text-muted-foreground">
-			<p>播放列表面板</p>
-			<p class="text-xs mt-2">开发中...</p>
-		</div>
-	{:else if $activePanel === 'info'}
-		<InfoPanel />
-	{:else}
-		<div class="p-4 text-center text-muted-foreground">
-			<p>选择一个面板</p>
-		</div>
-	{/if}
-</BaseSidebar>
+	</div>
+</HoverWrapper>

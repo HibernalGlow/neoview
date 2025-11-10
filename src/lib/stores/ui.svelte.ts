@@ -5,8 +5,8 @@
 
 import { writable } from 'svelte/store';
 
-// 侧边栏状态
-export const sidebarOpen = writable<boolean>(true);
+// 侧边栏状态 - 默认隐藏
+export const sidebarOpen = writable<boolean>(false);
 export const sidebarWidth = writable<number>(250);
 
 // 右侧边栏状态

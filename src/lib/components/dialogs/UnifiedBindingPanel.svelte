@@ -6,19 +6,21 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { keyBindingsStore, type InputBinding, type KeyBinding, type MouseGesture, type TouchGesture } from '$lib/stores/keybindings.svelte';
-	import { Keyboard, Mouse, Hand, Plus, Trash2, Search, RotateCcw } from '@lucide/svelte';
+	import { keyBindingsStore, type InputBinding, type KeyBinding, type MouseGesture, type TouchGesture, type AreaClick } from '$lib/stores/keybindings.svelte';
+	import { Keyboard, Mouse, Hand, Plus, Trash2, Search, RotateCcw, Target } from '@lucide/svelte';
 	import GestureVisualizer from './GestureVisualizer.svelte';
 	import MouseGestureRecorder from './MouseGestureRecorder.svelte';
 	import MouseKeyRecorder from './MouseKeyRecorder.svelte';
+	import AreaClickRecorder from './AreaClickRecorder.svelte';
 
 	let searchQuery = $state('');
 	let editingAction = $state<string | null>(null);
-	let editingType = $state<'keyboard' | 'mouse' | 'touch' | null>(null);
+	let editingType = $state<'keyboard' | 'mouse' | 'touch' | 'area' | null>(null);
 	let capturedInput = $state('');
 	let showGestureVisualizer = $state(false);
 	let showMouseGestureRecorder = $state(false);
 	let showMouseKeyRecorder = $state(false);
+	let showAreaClickRecorder = $state(false);
 
 	// 过滤操作
 	const filteredActions = $derived(
@@ -36,7 +38,7 @@
 	const categories = $derived(keyBindingsStore.getCategories());
 
 	// 开始编辑
-	function startEditing(action: string, type: 'keyboard' | 'mouse' | 'touch') {
+	function startEditing(action: string, type: 'keyboard' | 'mouse' | 'touch' | 'area') {
 		editingAction = action;
 		editingType = type;
 		capturedInput = '';
@@ -46,6 +48,8 @@
 			showMouseOptions = true;
 		} else if (type === 'touch') {
 			showGestureVisualizer = true;
+		} else if (type === 'area') {
+			showAreaClickRecorder = true;
 		}
 	}
 
@@ -57,6 +61,7 @@
 		showGestureVisualizer = false;
 		showMouseGestureRecorder = false;
 		showMouseKeyRecorder = false;
+		showAreaClickRecorder = false;
 	}
 
 	// 键盘按键捕获
@@ -95,6 +100,8 @@
 				binding = { type: 'keyboard', key: capturedInput };
 			} else if (editingType === 'mouse') {
 				binding = { type: 'mouse', gesture: capturedInput.gesture, button: capturedInput.button, action: capturedInput.action };
+			} else if (editingType === 'area') {
+				binding = { type: 'area', area: capturedInput.area, button: capturedInput.button, action: capturedInput.action };
 			} else {
 				binding = { type: 'touch', gesture: capturedInput };
 			}
@@ -102,6 +109,19 @@
 			keyBindingsStore.addBinding(editingAction, binding);
 			cancelEditing();
 		}
+	}
+
+	// 处理区域点击录制完成
+	function handleAreaClickComplete(area: string, button: string, action: string) {
+		capturedInput = { area, button: button as 'left' | 'right' | 'middle', action: action as 'click' | 'double-click' | 'press' };
+		showAreaClickRecorder = false;
+		saveBinding();
+	}
+
+	// 处理区域点击录制取消
+	function handleAreaClickCancel() {
+		showAreaClickRecorder = false;
+		cancelEditing();
 	}
 
 	// 处理鼠标选项选择
@@ -168,6 +188,8 @@
 				return Mouse;
 			case 'touch':
 				return Hand;
+			case 'area':
+				return Target;
 			default:
 				return Keyboard;
 		}
@@ -182,6 +204,8 @@
 				return 'text-green-500';
 			case 'touch':
 				return 'text-purple-500';
+			case 'area':
+				return 'text-orange-500';
 			default:
 				return 'text-muted-foreground';
 		}
@@ -228,6 +252,10 @@
 				<div class="flex items-center gap-1">
 					<Hand class="h-3 w-3 text-purple-500" />
 					<span>触摸</span>
+				</div>
+				<div class="flex items-center gap-1">
+					<Target class="h-3 w-3 text-orange-500" />
+					<span>区域</span>
 				</div>
 			</div>
 			<Button variant="outline" size="sm" onclick={resetAll}>
@@ -289,7 +317,7 @@
 									{/if}
 
 									<!-- 添加绑定按钮 -->
-									<div class="flex gap-2">
+									<div class="flex gap-2 flex-wrap">
 										<button
 											class="inline-flex items-center justify-center gap-1 h-7 px-3 text-xs rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
 											onclick={(e) => {
@@ -340,6 +368,17 @@
 											<Hand class="h-3 w-3" />
 											添加触摸
 										</button>
+										<button
+											class="inline-flex items-center justify-center gap-1 h-7 px-3 text-xs rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
+											onclick={(e) => {
+												e.preventDefault();
+												e.stopPropagation();
+												startEditing(binding.action, 'area');
+											}}
+										>
+											<Target class="h-3 w-3" />
+											区域点击
+										</button>
 									</div>
 								</div>
 							</div>
@@ -383,6 +422,14 @@
 		<MouseGestureRecorder
 			onComplete={handleMouseGestureComplete}
 			onCancel={handleMouseGestureCancel}
+		/>
+	{/if}
+
+	<!-- 区域点击录制器 -->
+	{#if showAreaClickRecorder && editingAction && editingType === 'area'}
+		<AreaClickRecorder
+			onComplete={handleAreaClickComplete}
+			onCancel={handleAreaClickCancel}
 		/>
 	{/if}
 

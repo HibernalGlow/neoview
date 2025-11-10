@@ -166,6 +166,20 @@ function handleGlobalMouseClick(e: MouseEvent) {
 	const clickType = e.detail === 2 ? 'double-click' : 'click';
 	
 	console.log('鼠标点击:', button, clickType); // 调试信息
+	
+	// 首先检查是否是区域点击
+	const area = keyBindingsStore.calculateClickArea(e.clientX, e.clientY, window.innerWidth, window.innerHeight);
+	console.log('点击区域:', area); // 调试信息
+	
+	const areaAction = keyBindingsStore.findActionByAreaClick(area, button, clickType);
+	if (areaAction) {
+		console.log('找到的区域操作:', areaAction); // 调试信息
+		e.preventDefault();
+		dispatchAction(areaAction);
+		return;
+	}
+	
+	// 如果没有区域绑定，检查普通鼠标点击绑定
 	const action = keyBindingsStore.findActionByMouseClick(button, clickType);
 	console.log('找到的操作:', action); // 调试信息
 	if (action) {
@@ -180,6 +194,18 @@ function handleGlobalMouseDown(e: MouseEvent) {
 	if (isTypingInInput(e)) return;
 
 	const button = e.button === 0 ? 'left' : e.button === 1 ? 'middle' : 'right';
+	
+	// 首先检查是否是区域点击
+	const area = keyBindingsStore.calculateClickArea(e.clientX, e.clientY, window.innerWidth, window.innerHeight);
+	console.log('鼠标按下区域:', area); // 调试信息
+	
+	const areaAction = keyBindingsStore.findActionByAreaClick(area, button, 'press');
+	if (areaAction) {
+		console.log('找到的区域按下操作:', areaAction); // 调试信息
+		e.preventDefault();
+		dispatchAction(areaAction);
+		return;
+	}
 	
 	// 检查是否有按键绑定（不是手势）
 	const action = keyBindingsStore.findActionByMouseGesture('press', button, 'press');

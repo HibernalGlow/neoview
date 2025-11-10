@@ -3,7 +3,15 @@
  * 参考 NeeView 设计：一个操作可以绑定多个输入方式
  */
 
-export type InputType = 'keyboard' | 'mouse' | 'touch';
+export type InputType = 'keyboard' | 'mouse' | 'touch' | 'area';
+
+export type ViewArea = 
+	| 'top-left'
+	| 'top-center'
+	| 'top-right'
+	| 'bottom-left'
+	| 'bottom-center'
+	| 'bottom-right';
 
 export interface KeyBinding {
 	type: 'keyboard';
@@ -22,7 +30,14 @@ export interface TouchGesture {
 	gesture: string; // 例如: 'swipe-left', 'pinch', 'two-finger-tap'
 }
 
-export type InputBinding = KeyBinding | MouseGesture | TouchGesture;
+export interface AreaClick {
+	type: 'area';
+	area: ViewArea; // 点击的视图区域
+	button?: 'left' | 'right' | 'middle'; // 鼠标按键
+	action?: 'click' | 'double-click' | 'press'; // 动作类型
+}
+
+export type InputBinding = KeyBinding | MouseGesture | TouchGesture | AreaClick;
 
 export interface ActionBinding {
 	action: string; // 操作ID，例如: 'nextPage'
@@ -50,7 +65,9 @@ const defaultBindings: ActionBinding[] = [
 			{ type: 'mouse', gesture: 'wheel-down', button: 'middle', action: 'wheel' }, // 鼠标滚轮下
 			{ type: 'mouse', gesture: 'click', button: 'middle', action: 'click' }, // 中键单击
 			{ type: 'mouse', gesture: 'R', button: 'right' }, // 右键 R
-			{ type: 'touch', gesture: 'swipe-left' }
+			{ type: 'touch', gesture: 'swipe-left' },
+			{ type: 'area', area: 'top-right', button: 'left', action: 'click' }, // 左键点击右上区域
+			{ type: 'area', area: 'bottom-right', button: 'left', action: 'click' } // 左键点击右下区域
 		]
 	},
 	{
@@ -66,7 +83,9 @@ const defaultBindings: ActionBinding[] = [
 			{ type: 'mouse', gesture: 'R', button: 'left' },
 			{ type: 'mouse', gesture: 'wheel-up', button: 'middle', action: 'wheel' }, // 鼠标滚轮上
 			{ type: 'mouse', gesture: 'L', button: 'right' }, // 右键 L
-			{ type: 'touch', gesture: 'swipe-right' }
+			{ type: 'touch', gesture: 'swipe-right' },
+			{ type: 'area', area: 'top-left', button: 'left', action: 'click' }, // 左键点击左上区域
+			{ type: 'area', area: 'bottom-left', button: 'left', action: 'click' } // 左键点击左下区域
 		]
 	},
 	{
@@ -101,7 +120,9 @@ const defaultBindings: ActionBinding[] = [
 			{ type: 'keyboard', key: 'Ctrl+Plus' },
 			{ type: 'mouse', gesture: 'wheel-up', button: 'middle', action: 'wheel' }, // 鼠标滚轮上
 			{ type: 'mouse', gesture: 'U', button: 'right' },
-			{ type: 'touch', gesture: 'pinch-out' }
+			{ type: 'touch', gesture: 'pinch-out' },
+			{ type: 'area', area: 'top-center', button: 'left', action: 'click' }, // 左键点击中上区域
+			{ type: 'area', area: 'top-center', button: 'right', action: 'click' } // 右键点击中上区域
 		]
 	},
 	{
@@ -114,7 +135,9 @@ const defaultBindings: ActionBinding[] = [
 			{ type: 'keyboard', key: 'Ctrl+Minus' },
 			{ type: 'mouse', gesture: 'wheel-down', button: 'middle', action: 'wheel' }, // 鼠标滚轮下
 			{ type: 'mouse', gesture: 'D', button: 'right' },
-			{ type: 'touch', gesture: 'pinch-in' }
+			{ type: 'touch', gesture: 'pinch-in' },
+			{ type: 'area', area: 'bottom-center', button: 'left', action: 'click' }, // 左键点击中下区域
+			{ type: 'area', area: 'bottom-center', button: 'right', action: 'click' } // 右键点击中下区域
 		]
 	},
 	{
@@ -325,6 +348,48 @@ class KeyBindingsStore {
 		return null;
 	}
 
+	// 根据区域点击查找操作
+	findActionByAreaClick(area: ViewArea, button: 'left' | 'right' | 'middle' = 'left', action: 'click' | 'double-click' | 'press' = 'click'): string | null {
+		for (const binding of this.bindings) {
+			if (!binding.bindings) continue;
+			const areaBinding = binding.bindings.find(
+				b => b.type === 'area' && 
+					(b as AreaClick).area === area &&
+					((b as AreaClick).button || 'left') === button &&
+					((b as AreaClick).action || 'click') === action
+			);
+			if (areaBinding) {
+				return binding.action;
+			}
+		}
+		return null;
+	}
+
+	// 根据坐标计算点击区域
+	calculateClickArea(x: number, y: number, width: number, height: number): ViewArea {
+		const centerX = width / 2;
+		const centerY = height / 2;
+		const isTop = y < centerY;
+		const isBottom = y >= centerY;
+		
+		// 将水平分为三等分
+		const leftThird = width / 3;
+		const rightThird = (width * 2) / 3;
+		const isLeft = x < leftThird;
+		const isCenter = x >= leftThird && x < rightThird;
+		const isRight = x >= rightThird;
+		
+		if (isTop && isLeft) return 'top-left';
+		if (isTop && isCenter) return 'top-center';
+		if (isTop && isRight) return 'top-right';
+		if (isBottom && isLeft) return 'bottom-left';
+		if (isBottom && isCenter) return 'bottom-center';
+		if (isBottom && isRight) return 'bottom-right';
+		
+		// 默认返回中心区域
+		return 'top-center';
+	}
+
 	// 保存到 localStorage
 	private saveToStorage() {
 		try {
@@ -386,6 +451,35 @@ class KeyBindingsStore {
 				return `${buttonText} ${gestureText}`;
 			case 'touch':
 				return (binding as TouchGesture).gesture || '';
+			case 'area':
+				const area = binding as AreaClick;
+				let areaButtonText = '';
+				switch (area.button) {
+					case 'left': areaButtonText = '左键'; break;
+					case 'right': areaButtonText = '右键'; break;
+					case 'middle': areaButtonText = '中键'; break;
+					default: areaButtonText = '左键';
+				}
+				
+				let areaText = '';
+				switch (area.area) {
+					case 'top-left': areaText = '左上'; break;
+					case 'top-center': areaText = '中上'; break;
+					case 'top-right': areaText = '右上'; break;
+					case 'bottom-left': areaText = '左下'; break;
+					case 'bottom-center': areaText = '中下'; break;
+					case 'bottom-right': areaText = '右下'; break;
+				}
+				
+				let actionText = '';
+				switch (area.action) {
+					case 'click': actionText = '点击'; break;
+					case 'double-click': actionText = '双击'; break;
+					case 'press': actionText = '按住'; break;
+					default: actionText = '点击';
+				}
+				
+				return `${areaButtonText} ${areaText} ${actionText}`;
 			default:
 				return '';
 		}

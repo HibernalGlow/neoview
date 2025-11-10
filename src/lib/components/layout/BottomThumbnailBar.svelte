@@ -8,7 +8,7 @@
 	import { loadImageFromArchive } from '$lib/api/filesystem';
 	import { bottomThumbnailBarPinned, bottomThumbnailBarHeight } from '$lib/stores';
 	import { Button } from '$lib/components/ui/button';
-	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, ExternalLink, Minus } from '@lucide/svelte';
+	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, ExternalLink, Minus, Target } from '@lucide/svelte';
 
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
@@ -18,6 +18,7 @@
 	let resizeStartHeight = 0;
 	let showProgressBar = $state(true);
 	let hoverCount = $state(0); // 追踪悬停区域的计数
+	let showAreaOverlay = $state(false); // 显示区域覆盖层
 
 	// 响应钉住状态
 	$effect(() => {
@@ -69,6 +70,14 @@
 		// 通知ImageViewer进度条状态变化
 		window.dispatchEvent(new CustomEvent('progressBarStateChange', {
 			detail: { show: showProgressBar }
+		}));
+	}
+
+	function toggleAreaOverlay() {
+		showAreaOverlay = !showAreaOverlay;
+		// 通知主窗口显示/隐藏区域覆盖层
+		window.dispatchEvent(new CustomEvent('areaOverlayToggle', {
+			detail: { show: showAreaOverlay }
 		}));
 	}
 
@@ -279,6 +288,16 @@
 				>
 					<Minus class="h-3 w-3 mr-1" />
 					<span class="text-xs">进度条</span>
+				</Button>
+				<Button
+					variant={showAreaOverlay ? 'default' : 'ghost'}
+					size="sm"
+					class="h-6"
+					onclick={toggleAreaOverlay}
+					title="显示/隐藏6区域点击测试"
+				>
+					<Target class="h-3 w-3 mr-1" />
+					<span class="text-xs">区域</span>
 				</Button>
 			</div>
 

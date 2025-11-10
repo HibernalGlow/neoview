@@ -11,6 +11,7 @@
 	import TopToolbar from './TopToolbar.svelte';
 	import BottomThumbnailBar from './BottomThumbnailBar.svelte';
 	import ImageViewer from '../viewer/ImageViewer.svelte';
+	import AreaOverlay from '../ui/AreaOverlay.svelte';
 
 	let { children } = $props();
 
@@ -26,6 +27,9 @@
 	let isResizingLeft = $state(false);
 	let startLeftX = 0;
 	let startLeftWidth = 0;
+
+	// 区域覆盖层状态
+	let showAreaOverlay = $state(false);
 
 	function handleLeftResizeStart(e: MouseEvent) {
 		isResizingLeft = true;
@@ -46,6 +50,42 @@
 
 	function handleLeftResizeEnd() {
 		isResizingLeft = false;
+	}
+
+	// 监听区域覆盖层切换事件
+	$effect(() => {
+		const handleAreaOverlayToggle = (e: CustomEvent) => {
+			showAreaOverlay = e.detail.show;
+		};
+
+		window.addEventListener('areaOverlayToggle', handleAreaOverlayToggle as EventListener);
+		return () => {
+			window.removeEventListener('areaOverlayToggle', handleAreaOverlayToggle as EventListener);
+		};
+	});
+
+	// 处理区域操作事件
+	function handleAreaAction(e: CustomEvent) {
+		const { action } = e.detail;
+		console.log('执行区域操作:', action);
+		
+		// 这里可以根据action执行相应的操作
+		// 例如：翻页、缩放等
+		switch (action) {
+			case 'nextPage':
+				bookStore.nextPage();
+				break;
+			case 'prevPage':
+				bookStore.prevPage();
+				break;
+			case 'zoomIn':
+				bookStore.zoomIn();
+				break;
+			case 'zoomOut':
+				bookStore.zoomOut();
+				break;
+			// 其他操作...
+		}
 	}
 
 	// 全局鼠标事件
@@ -117,4 +157,7 @@
 			onmousedown={handleRightResizeStart}
 		></div>
 	{/if}
+
+	<!-- 区域覆盖层 -->
+	<AreaOverlay bind:show={showAreaOverlay} onareaAction={handleAreaAction} />
 </div>

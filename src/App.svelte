@@ -8,7 +8,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { open } from '@tauri-apps/plugin-dialog';
-	import { bookStore, zoomIn, zoomOut, resetZoom, toggleSidebar, toggleFullscreen, rotateClockwise, toggleViewMode } from '$lib/stores';
+	import { bookStore, zoomIn, zoomOut, resetZoom, toggleSidebar, toggleFullscreen, rotateClockwise, toggleViewMode, sidebarOpen, rightSidebarOpen } from '$lib/stores';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { FolderOpen } from '@lucide/svelte';
 
@@ -162,6 +162,22 @@ function handleGlobalMouseClick(e: MouseEvent) {
 	// 不在输入框时响应
 	if (isTypingInInput(e)) return;
 
+	// 检查点击是否在上下栏区域内
+	const target = e.target as HTMLElement;
+	const isInTopToolbar = target.closest('[data-top-toolbar]') || target.closest('.top-toolbar') || e.clientY < 80;
+	const isInBottomBar = target.closest('[data-bottom-bar]') || target.closest('.bottom-thumbnail-bar') || e.clientY > window.innerHeight - 160;
+	
+	// 如果任一边栏打开，或点击在上下栏区域内，则不处理区域点击
+	if ($sidebarOpen || $rightSidebarOpen || isInTopToolbar || isInBottomBar) {
+		console.log('边栏已打开或点击在上下栏区域内，禁用全局区域点击响应', { 
+			sidebarOpen: $sidebarOpen, 
+			rightSidebarOpen: $rightSidebarOpen, 
+			isInTopToolbar, 
+			isInBottomBar 
+		});
+		return;
+	}
+
 	const button = e.button === 0 ? 'left' : e.button === 1 ? 'middle' : 'right';
 	const clickType = e.detail === 2 ? 'double-click' : 'click';
 	
@@ -192,6 +208,22 @@ function handleGlobalMouseClick(e: MouseEvent) {
 function handleGlobalMouseDown(e: MouseEvent) {
 	// 不在输入框时响应
 	if (isTypingInInput(e)) return;
+
+	// 检查点击是否在上下栏区域内
+	const target = e.target as HTMLElement;
+	const isInTopToolbar = target.closest('[data-top-toolbar]') || target.closest('.top-toolbar') || e.clientY < 80;
+	const isInBottomBar = target.closest('[data-bottom-bar]') || target.closest('.bottom-thumbnail-bar') || e.clientY > window.innerHeight - 160;
+	
+	// 如果任一边栏打开，或点击在上下栏区域内，则不处理区域点击
+	if ($sidebarOpen || $rightSidebarOpen || isInTopToolbar || isInBottomBar) {
+		console.log('边栏已打开或点击在上下栏区域内，禁用全局区域按下响应', { 
+			sidebarOpen: $sidebarOpen, 
+			rightSidebarOpen: $rightSidebarOpen, 
+			isInTopToolbar, 
+			isInBottomBar 
+		});
+		return;
+	}
 
 	const button = e.button === 0 ? 'left' : e.button === 1 ? 'middle' : 'right';
 	

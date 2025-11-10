@@ -6,7 +6,7 @@
 	import { keyBindingsStore, type ViewArea } from '$lib/stores/keybindings.svelte';
 	import { createEventDispatcher } from 'svelte';
 
-	let { show = $bindable(false) } = $props();
+	let { show = $bindable(false), sidebarOpen = false, rightSidebarOpen = false } = $props();
 	const dispatch = createEventDispatcher();
 
 	// 区域配置
@@ -21,6 +21,12 @@
 
 	// 处理区域点击
 	function handleAreaClick(area: ViewArea, event: MouseEvent) {
+		// 如果任一边栏打开，则不处理区域点击
+		if (sidebarOpen || rightSidebarOpen) {
+			console.log('边栏已打开，禁用区域点击响应');
+			return;
+		}
+		
 		// 获取按键信息
 		const button = event.button === 0 ? 'left' : event.button === 1 ? 'middle' : 'right';
 		const clickType = event.detail === 2 ? 'double-click' : 'click';
@@ -39,6 +45,12 @@
 
 	// 处理右键菜单
 	function handleContextMenu(event: MouseEvent) {
+		// 如果任一边栏打开，则不处理右键菜单
+		if (sidebarOpen || rightSidebarOpen) {
+			console.log('边栏已打开，禁用区域右键响应');
+			return;
+		}
+		
 		event.preventDefault();
 		const area = (event.currentTarget as HTMLElement).dataset.area as ViewArea;
 		console.log(`右键点击区域: ${area}`);
@@ -69,12 +81,12 @@
 </script>
 
 {#if show}
-	<div class="area-overlay fixed inset-0 z-[100] pointer-events-none">
+	<div class="area-overlay fixed inset-0 z-[50] pointer-events-none">
 		<!-- 半透明背景 -->
 		<div class="absolute inset-0 bg-black/20 pointer-events-none"></div>
 		
-		<!-- 6区域网格 -->
-		<div class="absolute inset-4 grid grid-cols-3 grid-rows-2 gap-2 pointer-events-auto">
+		<!-- 6区域网格 - 根据边栏状态决定是否响应点击 -->
+		<div class="absolute inset-4 grid grid-cols-3 grid-rows-2 gap-2 {sidebarOpen || rightSidebarOpen ? 'pointer-events-none' : 'pointer-events-auto'}">
 			{#each areas as area}
 				<div
 					class="border-2 border-white/60 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center cursor-pointer transition-all duration-200 hover:scale-105 hover:border-white/80 {area.gridClass}"

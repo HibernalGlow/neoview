@@ -185,5 +185,10 @@
 	{/if}
 
 	<!-- 区域覆盖层 -->
-	<AreaOverlay bind:show={showAreaOverlay} onareaAction={handleAreaAction} />
+	<AreaOverlay 
+		bind:show={showAreaOverlay} 
+		onareaAction={handleAreaAction} 
+		sidebarOpen={$sidebarOpen}
+		rightSidebarOpen={$rightSidebarOpen}
+	/>
 </div>

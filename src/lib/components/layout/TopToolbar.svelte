@@ -8,7 +8,7 @@
 	import * as Separator from '$lib/components/ui/separator';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import * as Progress from '$lib/components/ui/progress';
+	// Progress component removed — not used in this toolbar
 	
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { 
@@ -298,9 +298,7 @@
 					<span class="font-mono text-xs">
 						{bookStore.currentPageIndex + 1} / {bookStore.totalPages}
 					</span>
-					<Progress.Root class="w-20 h-2">
-						<Progress.Progress value={((bookStore.currentPageIndex + 1) / bookStore.totalPages) * 100} />
-					</Progress.Root>
+					<!-- progress removed: not needed in top toolbar -->
 				</div>
 			{/if}
 

@@ -44,20 +44,84 @@ preprocess_thumbnails.bat --help
 ./preprocess_thumbnails.sh --help
 ```
 
-### 直接使用 Cargo
+### Python版本
 
 ```bash
-# 进入 src-tauri 目录
-cd src-tauri
-
 # 基本用法
-cargo run --release -- preprocess --path "/path/to/images"
+python thumbnail_preprocessor.py "D:\Images"
 
-# 完整参数示例
-cargo run --release -- preprocess --path "/path/to/images" --size 256 --recursive --verbose
+# 递归处理子目录
+python thumbnail_preprocessor.py "D:\Images" --recursive
+
+# 自定义尺寸并显示详细进度
+python thumbnail_preprocessor.py "D:\Images" --size 128 --recursive --verbose
+
+# 指定自定义缓存目录
+python thumbnail_preprocessor.py "D:\Images" --cache-dir "D:\MyCache"
+
+# 查看帮助
+python thumbnail_preprocessor.py --help
 ```
 
+### Python版本批处理脚本
+
+#### Windows
+
+```bash
+# 基本用法
+preprocess_thumbnails_py.bat "D:\Images"
+
+# 递归处理子目录
+preprocess_thumbnails_py.bat "D:\Images" --recursive
+
+# 自定义尺寸并显示详细进度
+preprocess_thumbnails_py.bat "D:\Images" --size 128 --recursive --verbose
+
+# 指定自定义缓存目录
+preprocess_thumbnails_py.bat "D:\Images" --cache-dir "D:\MyCache"
+```
+
+#### Linux/macOS
+
+```bash
+# 基本用法
+./preprocess_thumbnails_py.sh "/home/user/Images"
+
+# 递归处理子目录
+./preprocess_thumbnails_py.sh "/home/user/Images" --recursive
+
+# 自定义尺寸并显示详细进度
+./preprocess_thumbnails_py.sh "/home/user/Images" --size 128 --recursive --verbose
+
+# 指定自定义缓存目录
+./preprocess_thumbnails_py.sh "/home/user/Images" --cache-dir "/tmp/cache"
+```
+
+## Python版本依赖
+
+在使用Python版本之前，需要安装所需的依赖包：
+
+```bash
+pip install -r requirements.txt
+```
+
+### 依赖包说明
+
+- **Pillow**: 图像处理库，支持多种图片格式
+- **rarfile**: RAR压缩包处理
+- **py7zr**: 7Z压缩包处理
+- **platformdirs**: 跨平台目录管理
+
+## 缓存位置
+
+缩略图缓存在系统缓存目录中：
+- **Windows**: `%LOCALAPPDATA%\neoview\thumbnails\`
+- **Linux**: `~/.cache/neoview/thumbnails/`
+- **macOS**: `~/Library/Caches/neoview/thumbnails/`
+
 ## 参数说明
+
+### Rust版本参数
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
@@ -65,6 +129,16 @@ cargo run --release -- preprocess --path "/path/to/images" --size 256 --recursiv
 | `size` | 缩略图最大尺寸（像素） | 256 |
 | `recursive` | 是否递归处理子目录 | false |
 | `verbose` | 是否显示详细进度 | false |
+
+### Python版本参数
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `path` | 要处理的目录路径 | 必需 |
+| `--size` | 缩略图最大尺寸（像素） | 256 |
+| `--recursive` | 是否递归处理子目录 | false |
+| `--verbose` | 是否显示详细进度 | false |
+| `--cache-dir` | 自定义缓存目录路径 | 系统缓存目录 |
 
 ## 处理逻辑
 

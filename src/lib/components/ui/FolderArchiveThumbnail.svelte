@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import type { FsItem } from '$lib/types';
   import { FileSystemAPI } from '$lib/api';
+  import { thumbnailQueue } from '$lib/stores/thumbnailQueue';
 
   interface Props {
     item: FsItem;
@@ -52,25 +53,6 @@
     }
   }
 
-  onMount(() => {
-    // 检查缓存
-    const cached = cache.get(item.path);
-    if (cached) {
-      thumbnail = cached;
-      return;
-    }
-
-    // 尝试从预缓存的缩略图获取（通过后端API）
-    loadPrecachedThumbnail();
-
-    // 如果没有预缓存，则动态生成
-    if (item.isDir) {
-      loadFolderThumbnail();
-    } else if (item.name.endsWith('.zip') || item.name.endsWith('.cbz') || item.name.endsWith('.rar') || item.name.endsWith('.cbr')) {
-      loadArchiveThumbnail();
-    }
-  });
-
   async function loadPrecachedThumbnail() {
     try {
       // 尝试从后端获取预缓存的缩略图
@@ -85,6 +67,28 @@
       console.debug('预缓存缩略图不存在:', err);
     }
   }
+
+  onMount(() => {
+    // 检查缓存
+    const cached = cache.get(item.path);
+    if (cached) {
+      thumbnail = cached;
+      return;
+    }
+
+    // 使用队列管理器来限制并发数量
+    thumbnailQueue.add(async () => {
+      // 尝试从预缓存的缩略图获取（通过后端API）
+      await loadPrecachedThumbnail();
+
+      // 如果没有预缓存，则动态生成
+      if (item.isDir) {
+        await loadFolderThumbnail();
+      } else if (item.name.endsWith('.zip') || item.name.endsWith('.cbz') || item.name.endsWith('.rar') || item.name.endsWith('.cbr')) {
+        await loadArchiveThumbnail();
+      }
+    });
+  });
 </script>
 
 <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center">

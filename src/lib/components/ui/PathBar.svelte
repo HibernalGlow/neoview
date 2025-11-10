@@ -31,7 +31,7 @@
   }: Props = $props();
 
   /**
-   * 获取路径的面包屑导航
+   * 获取路径的面包屑导航 - 保持原有顺序（从根到当前）
    */
   function getBreadcrumbs(path: string): BreadcrumbItem[] {
     if (!path) return [];
@@ -85,7 +85,7 @@
   }
 </script>
 
-<div class="flex items-center gap-1 px-2 py-1 bg-gray-50 border-b overflow-x-auto whitespace-nowrap">
+<div class="flex items-center gap-1 px-2 py-1 bg-gray-50 border-b overflow-x-auto whitespace-nowrap justify-end">
   {#if currentPath}
     <Breadcrumb.Root>
       <Breadcrumb.List class="flex items-center gap-1 flex-nowrap whitespace-nowrap">

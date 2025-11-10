@@ -1,8 +1,9 @@
 <script lang="ts">
   /**
-   * 路径面包屑导航栏
+   * 路径面包屑导航栏 - 使用 shadcn-svelte Breadcrumb 重构
    */
-  import { ChevronRight, Home, FolderOpen, HomeIcon } from '@lucide/svelte';
+  import { Home, FolderOpen, HomeIcon } from '@lucide/svelte';
+  import * as Breadcrumb from '$lib/components/ui/breadcrumb';
   import {
     ContextMenu,
     ContextMenuContent,
@@ -10,7 +11,7 @@
     ContextMenuItem,
   } from '$lib/components/ui/context-menu';
 
-  interface Breadcrumb {
+  interface BreadcrumbItem {
     name: string;
     path: string;
   }
@@ -32,15 +33,15 @@
   /**
    * 获取路径的面包屑导航
    */
-  function getBreadcrumbs(path: string): Breadcrumb[] {
+  function getBreadcrumbs(path: string): BreadcrumbItem[] {
     if (!path) return [];
     
     // 检测路径分隔符
     const hasBackslash = path.includes('\\');
     const separator = hasBackslash ? '\\' : '/';
     
-    const parts = path.split(/[/\\]/).filter(Boolean);
-    const breadcrumbs: Breadcrumb[] = [];
+    const parts = path.split(/[\\/]/).filter(Boolean);
+    const breadcrumbs: BreadcrumbItem[] = [];
     
     if (parts.length === 0) return breadcrumbs;
     
@@ -85,42 +86,51 @@
 </script>
 
 <div class="flex items-center gap-1 px-4 py-2 bg-gray-50 border-b overflow-x-auto">
-  <!-- 主页图标 -->
-  <button
-    class="p-1 rounded hover:bg-gray-200 transition-colors flex-shrink-0"
-    onclick={() => handleNavigate('')}
-    title="主页"
-  >
-    <Home class="h-4 w-4 text-gray-600" />
-  </button>
-
   {#if currentPath}
-    <ChevronRight class="h-4 w-4 text-gray-400 flex-shrink-0" />
+    <Breadcrumb.Root>
+      <Breadcrumb.List>
+        <!-- 主页 -->
+        <Breadcrumb.Item>
+          <ContextMenu>
+            <ContextMenuTrigger>
+              <Breadcrumb.Link href="#" onclick={() => handleNavigate('')}>
+                <Home class="h-4 w-4 text-gray-600" />
+              </Breadcrumb.Link>
+            </ContextMenuTrigger>
+            <ContextMenuContent>
+              <ContextMenuItem onclick={() => handleSetHomepage('')}>
+                <HomeIcon class="h-4 w-4 mr-2" />
+                设置为主页
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
+        </Breadcrumb.Item>
 
-    <!-- 面包屑路径 -->
-    {#each breadcrumbs as breadcrumb, index}
-      <ContextMenu>
-        <ContextMenuTrigger>
-          <button
-            class="px-2 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap {index === breadcrumbs.length - 1 ? 'text-blue-600' : 'text-gray-700 hover:bg-gray-200'}"
-            onclick={() => handleNavigate(breadcrumb.path)}
-            title={breadcrumb.path}
-          >
-            {breadcrumb.name}
-          </button>
-        </ContextMenuTrigger>
-        <ContextMenuContent>
-          <ContextMenuItem onclick={() => handleSetHomepage(breadcrumb.path)}>
-            <HomeIcon class="h-4 w-4 mr-2" />
-            设置为主页
-          </ContextMenuItem>
-        </ContextMenuContent>
-      </ContextMenu>
-      
-      {#if index < breadcrumbs.length - 1}
-        <ChevronRight class="h-4 w-4 text-gray-400 flex-shrink-0" />
-      {/if}
-    {/each}
+        <!-- 面包屑路径 -->
+        {#each breadcrumbs as breadcrumb, index}
+          <Breadcrumb.Separator />
+          <Breadcrumb.Item>
+            <ContextMenu>
+              <ContextMenuTrigger>
+                {#if index === breadcrumbs.length - 1}
+                  <Breadcrumb.Page>{breadcrumb.name}</Breadcrumb.Page>
+                {:else}
+                  <Breadcrumb.Link href="#" onclick={() => handleNavigate(breadcrumb.path)}>
+                    {breadcrumb.name}
+                  </Breadcrumb.Link>
+                {/if}
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem onclick={() => handleSetHomepage(breadcrumb.path)}>
+                  <HomeIcon class="h-4 w-4 mr-2" />
+                  设置为主页
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
+          </Breadcrumb.Item>
+        {/each}
+      </Breadcrumb.List>
+    </Breadcrumb.Root>
   {:else}
     <div class="text-sm text-gray-500 flex items-center gap-2">
       <FolderOpen class="h-4 w-4" />

@@ -270,7 +270,7 @@
 
 	<!-- 工具栏（图片操作） -->
 	<div class="bg-secondary/95 backdrop-blur-sm border-b shadow-lg overflow-hidden" style="height: {$topToolbarHeight}px;">
-		<div class="px-4 py-2 flex items-center justify-between gap-4 h-full overflow-y-auto">
+	<div class="px-2 py-1 flex items-center justify-between gap-2 h-full overflow-y-auto">
 			<!-- 左侧：关闭按钮 + 面包屑导航 -->
 			<div class="flex items-center gap-2 flex-1 min-w-0">
 				<Button variant="ghost" size="icon" class="h-8 w-8 flex-shrink-0" onclick={handleClose}>

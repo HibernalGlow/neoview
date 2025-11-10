@@ -85,7 +85,7 @@
   }
 </script>
 
-<div class="flex items-center gap-1 px-4 py-2 bg-gray-50 border-b overflow-x-auto whitespace-nowrap">
+<div class="flex items-center gap-1 px-2 py-1 bg-gray-50 border-b overflow-x-auto whitespace-nowrap">
   {#if currentPath}
     <Breadcrumb.Root>
       <Breadcrumb.List class="flex items-center gap-1 flex-nowrap whitespace-nowrap">

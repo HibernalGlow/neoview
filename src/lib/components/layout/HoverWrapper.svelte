@@ -22,6 +22,7 @@
 	}: Props = $props();
 
 	let hideTimer: number | null = null;
+	let isContextMenuOpen = $state(false);
 
 	// 悬停显示/隐藏逻辑
 	function handleMouseEnter() {
@@ -36,11 +37,38 @@
 	}
 
 	function handleMouseLeave() {
-		if (!pinned) {
+		if (!pinned && !isContextMenuOpen) {
 			hideTimer = setTimeout(() => {
-				isVisible = false;
-				onVisibilityChange?.(false);
+				if (!isContextMenuOpen) {
+					isVisible = false;
+					onVisibilityChange?.(false);
+				}
 			}, hideDelay) as unknown as number;
+		}
+	}
+
+	// 处理右键菜单
+	function handleContextMenu(e: MouseEvent) {
+		if (!pinned) {
+			isContextMenuOpen = true;
+			if (hideTimer) {
+				clearTimeout(hideTimer);
+				hideTimer = null;
+			}
+		}
+	}
+
+	// 监听右键菜单关闭
+	function handleContextMenuClose() {
+		if (isContextMenuOpen) {
+			isContextMenuOpen = false;
+			// 给一个小延迟，确保鼠标已经移出
+			setTimeout(() => {
+				if (!pinned && !document.querySelector(':hover')?.closest('[data-hover-wrapper]')) {
+					isVisible = false;
+					onVisibilityChange?.(false);
+				}
+			}, 100);
 		}
 	}
 
@@ -56,6 +84,30 @@
 		}
 	});
 
+	// 监听全局点击事件以检测右键菜单关闭
+	$effect(() => {
+		const handleGlobalClick = () => {
+			if (isContextMenuOpen) {
+				handleContextMenuClose();
+			}
+		};
+
+		const handleGlobalContextMenu = (e: MouseEvent) => {
+			// 如果右键点击不在当前组件内，关闭之前的右键菜单状态
+			if (!e.target?.closest('[data-hover-wrapper="true"]')) {
+				isContextMenuOpen = false;
+			}
+		};
+
+		document.addEventListener('click', handleGlobalClick);
+		document.addEventListener('contextmenu', handleGlobalContextMenu);
+
+		return () => {
+			document.removeEventListener('click', handleGlobalClick);
+			document.removeEventListener('contextmenu', handleGlobalContextMenu);
+		};
+	});
+
 	// 清理定时器
 	$effect(() => {
 		return () => {
@@ -68,8 +120,11 @@
 
 <div
 	class="relative flex h-full"
+	data-hover-wrapper="true"
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}
+	oncontextmenu={handleContextMenu}
+	onclick={handleContextMenuClose}
 >
 	{@render children?.()}
 </div>

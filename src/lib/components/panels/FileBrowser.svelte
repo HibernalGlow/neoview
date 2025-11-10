@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { Folder, File, Image, Trash2, RefreshCw, FileArchive, FolderOpen, Home, ChevronLeft, ChevronRight, ChevronUp, CheckSquare, Grid3x3, List, MoreVertical, Search, ChevronDown, Settings, AlertCircle } from '@lucide/svelte';
+  import { Folder, File, Image, Trash2, RefreshCw, FileArchive, FolderOpen, Home, ChevronLeft, ChevronRight, ChevronUp, CheckSquare, Grid3x3, List, MoreVertical, Search, ChevronDown, Settings, AlertCircle, Bookmark, Star } from '@lucide/svelte';
   import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
+  import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
   import { onMount } from 'svelte';
   import { FileSystemAPI } from '$lib/api';
   import type { FsItem } from '$lib/types';
@@ -23,6 +24,7 @@
   let selectedIndex = $state(-1);
   let fileListContainer = $state<HTMLDivElement | undefined>(undefined);
   let contextMenu = $state<{ x: number; y: number; item: FsItem | null; direction: 'up' | 'down' }>({ x: 0, y: 0, item: null, direction: 'down' });
+  let bookmarkContextMenu = $state<{ x: number; y: number; bookmark: any | null }>({ x: 0, y: 0, bookmark: null });
   let copyToSubmenu = $state<{ show: boolean; x: number; y: number }>({ show: false, x: 0, y: 0 });
   let clipboardItem = $state<{ path: string; operation: 'copy' | 'cut' } | null>(null);
 
@@ -48,6 +50,11 @@
   });
   let searchResults = $state<FsItem[]>([]);
   let isSearching = $state(false);
+
+  // 书签相关 - 使用 bookmarkStore
+  function loadBookmarks() {
+    // 空函数，因为书签功能已迁移到独立 tab
+  }
 
   // 订阅全局状态 - 使用 Svelte 5 的响应式
   $effect(() => {
@@ -457,10 +464,44 @@
   }
 
   /**
+   * 显示书签右键菜单
+   */
+  function showBookmarkContextMenu(e: MouseEvent, bookmark: any) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // 获取视口尺寸
+    const viewportWidth = window.innerWidth;
+    
+    let menuX = e.clientX;
+    let menuY = e.clientY;
+    
+    // 确保菜单不超出视口右侧
+    const menuWidth = 180;
+    if (e.clientX + menuWidth > viewportWidth) {
+      menuX = viewportWidth - menuWidth - 10;
+    }
+    
+    // 确保菜单不超出视口左侧
+    if (menuX < 10) {
+      menuX = 10;
+    }
+    
+    // 确保菜单不超出视口底部
+    const maxMenuHeight = viewportHeight * 0.7;
+    if (menuY + maxMenuHeight > viewportHeight) {
+      menuY = viewportHeight - maxMenuHeight - 10;
+    }
+    
+    bookmarkContextMenu = { x: menuX, y: menuY, bookmark };
+  }
+
+  /**
    * 隐藏右键菜单
    */
   function hideContextMenu() {
     contextMenu = { x: 0, y: 0, item: null, direction: 'down' };
+    bookmarkContextMenu = { x: 0, y: 0, bookmark: null };
     copyToSubmenu.show = false;
   }
 
@@ -677,6 +718,8 @@
 
   
 
+  
+
   /**
    * 格式化文件大小
    */
@@ -775,6 +818,7 @@
    */
   function addToBookmark(item: FsItem) {
     bookmarkStore.add(item);
+    loadBookmarks(); // 立即刷新书签列表
     hideContextMenu();
   }
 
@@ -1163,6 +1207,8 @@
         <div class="w-px h-6 bg-border mx-1"></div>
       {/if}
 
+      <div class="w-px h-6 bg-border mx-1"></div>
+
       <Button
         variant={isCheckMode ? 'default' : 'ghost'}
         size="icon"
@@ -1362,7 +1408,8 @@
     </div>
   {/if}
 
-  <!-- 加载状态 -->
+  
+    <!-- 加载状态 -->
   {#if loading}
     <div class="flex flex-1 items-center justify-center">
       <div class="flex flex-col items-center gap-3">
@@ -1591,11 +1638,11 @@
       <!-- 添加到书签 -->
       <button
         class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-        onclick={() => addToBookmark(contextMenu.item!)}
+        onclick={() => {
+          addToBookmark(contextMenu.item!);
+        }}
       >
-        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-        </svg>
+        <Bookmark class="h-4 w-4" />
         添加到书签
       </button>
 
@@ -1749,6 +1796,53 @@
       >
         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+        </svg>
+        复制路径
+      </button>
+    </div>
+    
+    <!-- 点击其他地方关闭菜单 -->
+    <div
+      class="fixed inset-0 z-40"
+      onclick={(e) => {
+        // 确保点击的不是搜索设置按钮或其子元素
+        if (!e.target.closest('.search-settings') && 
+            !e.target.closest('button[title="搜索设置"]') &&
+            !e.target.closest('.search-history')) {
+          hideContextMenu();
+        }
+      }}
+    ></div>
+  {/if}
+
+  <!-- 书签右键菜单 -->
+  {#if bookmarkContextMenu.bookmark}
+    <div
+      class="fixed bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50 min-w-[150px]"
+      style="left: {bookmarkContextMenu.x}px; top: {bookmarkContextMenu.y}px;"
+    >
+      <!-- 删除书签 -->
+      <button
+        class="w-full px-4 py-2 text-left text-sm hover:bg-red-50 text-red-600 flex items-center gap-2"
+        onclick={() => {
+          removeBookmark(bookmarkContextMenu.bookmark!.id);
+          hideContextMenu();
+        }}
+      >
+        <Trash2 class="h-4 w-4" />
+        删除书签
+      </button>
+
+      <!-- 复制路径 -->
+      <button
+        class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+        onclick={() => {
+          navigator.clipboard.writeText(bookmarkContextMenu.bookmark!.path);
+          hideContextMenu();
+        }}
+      >
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
         </svg>
         复制路径
       </button>

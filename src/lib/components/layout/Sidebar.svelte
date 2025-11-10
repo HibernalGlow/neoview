@@ -4,7 +4,7 @@
 	 * 左侧边栏组件 - 使用 BaseSidebar
 	 */
 	import { Folder, History, Bookmark, Info, Image as ImageIcon, List } from '@lucide/svelte';
-	import { activePanel, setActivePanel, sidebarWidth, sidebarPinned } from '$lib/stores';
+	import { activePanel, setActivePanelTab, sidebarWidth, sidebarPinned } from '$lib/stores';
 	import type { PanelType } from '$lib/stores';
 	import BaseSidebar from './BaseSidebar.svelte';
 	import FileBrowser from '$lib/components/panels/FileBrowser.svelte';
@@ -29,7 +29,7 @@
 	];
 
 	function handleTabChange(value: string) {
-		setActivePanel(value as PanelType);
+		setActivePanelTab(value as PanelType);
 	}
 
 	function handleVisibilityChange(visible: boolean) {

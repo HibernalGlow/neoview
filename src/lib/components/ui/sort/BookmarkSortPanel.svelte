@@ -5,7 +5,7 @@
     id: string;
     path: string;
     name: string;
-    page: number;
+    isDir: boolean;
     timestamp: number;
     starred: boolean;
   }
@@ -19,7 +19,7 @@
   } = $props();
 
   // 排序选项
-  type SortField = 'name' | 'timestamp' | 'page' | 'starred';
+  type SortField = 'name' | 'timestamp' | 'path' | 'starred';
   type SortOrder = 'asc' | 'desc';
 
   let sortField: SortField = 'timestamp';
@@ -28,9 +28,9 @@
 
   // 排序配置
   const sortOptions = [
-    { field: 'name' as SortField, label: '名称', icon: Type },
     { field: 'timestamp' as SortField, label: '添加时间', icon: Calendar },
-    { field: 'page' as SortField, label: '页码', icon: Hash },
+    { field: 'path' as SortField, label: '路径', icon: Type },
+    { field: 'name' as SortField, label: '名称', icon: Type },
     { field: 'starred' as SortField, label: '星标', icon: Star }
   ];
 
@@ -45,11 +45,11 @@
         case 'name':
           comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
           break;
+        case 'path':
+          comparison = a.path.localeCompare(b.path, undefined, { numeric: true });
+          break;
         case 'timestamp':
           comparison = a.timestamp - b.timestamp;
-          break;
-        case 'page':
-          comparison = a.page - b.page;
           break;
         case 'starred':
           // 星标的书签排在前面

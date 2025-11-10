@@ -1,23 +1,17 @@
 <script lang="ts">
 	/**
 	 * NeoView - Bookmark Panel Component
-	 * 书签面板 - 参考 NeeView BookmarkPanel.cs
+	 * 书签面板 - 使用 bookmarkStore
 	 */
-	import { Bookmark, X, Star, Folder as FolderIcon } from '@lucide/svelte';
+	import { Bookmark, X, Star, Folder as FolderIcon, FileArchive, File } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
+	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
+	import type { FsItem } from '$lib/types';
+	import { FileSystemAPI } from '$lib/api';
 
-	interface BookmarkEntry {
-		id: string;
-		path: string;
-		name: string;
-		page: number;
-		timestamp: number;
-		starred: boolean;
-	}
-
-	let bookmarks = $state<BookmarkEntry[]>([]);
+	let bookmarks: any[] = $state([]);
 	let searchQuery = $state('');
 
 	let filteredBookmarks = $derived(bookmarks.filter(
@@ -26,86 +20,74 @@
 			b.path.toLowerCase().includes(searchQuery.toLowerCase())
 	));
 
-	function addBookmark() {
-		const name = prompt('输入书签名称:');
-		if (!name) return;
-
-		const newBookmark: BookmarkEntry = {
-			id: Date.now().toString(),
-			path: 'C:\\Path\\To\\File',
-			name,
-			page: 1,
-			timestamp: Date.now(),
-			starred: false
-		};
-
-		bookmarks = [newBookmark, ...bookmarks];
-		saveBookmarks();
-	}
-
 	function removeBookmark(id: string) {
-		bookmarks = bookmarks.filter((b) => b.id !== id);
-		saveBookmarks();
+		bookmarkStore.remove(id);
+		loadBookmarks();
 	}
 
-	function toggleStar(id: string) {
-		bookmarks = bookmarks.map((b) =>
-			b.id === id ? { ...b, starred: !b.starred } : b
-		);
-		saveBookmarks();
-	}
-
-	function openBookmark(bookmark: BookmarkEntry) {
-		// TODO: 实现打开书签
-		console.log('Opening bookmark:', bookmark);
-	}
-
-	function saveBookmarks() {
-		localStorage.setItem('neoview-bookmarks', JSON.stringify(bookmarks));
+	async function openBookmark(bookmark: any) {
+		try {
+			if (bookmark.type === 'folder') {
+				// 使用 FileSystemAPI 打开文件夹
+				const items = await FileSystemAPI.browseDirectory(bookmark.path);
+				console.log('打开文件夹:', bookmark.path, '包含', items.length, '个项目');
+				// TODO: 集成到主界面的导航系统
+			} else {
+				// 检查是否为压缩包
+				const isArchive = await FileSystemAPI.isSupportedArchive(bookmark.path);
+				if (isArchive) {
+					console.log('打开压缩包:', bookmark.path);
+					// TODO: 集成到书籍查看器
+				} else {
+					console.log('打开文件:', bookmark.path);
+					// 使用系统默认应用打开
+					await FileSystemAPI.openWithSystem(bookmark.path);
+				}
+			}
+		} catch (err) {
+			console.error('打开书签失败:', err);
+		}
 	}
 
 	function getFileName(path: string): string {
-		return path.split(/[\/]/).pop() || path;
+		return path.split(/[\/\\]/).pop() || path;
 	}
 
 	/**
 	 * 处理书签排序
 	 */
-	function handleBookmarkSort(sortedBookmarks: BookmarkEntry[]) {
-		bookmarks = sortedBookmarks;
-		saveBookmarks();
+	function handleBookmarkSort(sortedBookmarks: any[]) {
+		// 更新 bookmarkStore 中的顺序
+		const allBookmarks = bookmarkStore.getAll();
+		const newOrder = sortedBookmarks.map(sorted => 
+			allBookmarks.find(b => b.id === sorted.id)
+		).filter(Boolean);
+		
+		// 清空并重新添加以保持新顺序
+		bookmarkStore.clear();
+		newOrder.forEach(bookmark => {
+			bookmarkStore.add({
+				name: bookmark.name,
+				path: bookmark.path,
+				isDir: bookmark.type === 'folder',
+				isImage: false,
+				size: 0,
+				modified: 0
+			} as FsItem);
+		});
+		
+		loadBookmarks();
 	}
 
-	// 加载书签
+	function loadBookmarks() {
+		bookmarks = bookmarkStore.getAll();
+	}
+
+	// 加载书签并订阅更新
 	$effect(() => {
-		const saved = localStorage.getItem('neoview-bookmarks');
-		if (saved) {
-			try {
-				bookmarks = JSON.parse(saved);
-			} catch (e) {
-				console.error('Failed to load bookmarks:', e);
-			}
-		} else {
-			// 示例数据
-			bookmarks = [
-				{
-					id: '1',
-					path: 'C:\\Images\\Favorites\\Collection 1',
-					name: '收藏集 1',
-					page: 10,
-					timestamp: Date.now() - 3600000,
-					starred: true
-				},
-				{
-					id: '2',
-					path: 'D:\\Manga\\Series\\Volume 5.zip',
-					name: '漫画系列 - 第5卷',
-					page: 45,
-					timestamp: Date.now() - 86400000,
-					starred: false
-				}
-			];
-		}
+		loadBookmarks();
+		const unsubscribe = bookmarkStore.subscribe(loadBookmarks);
+		return unsubscribe;
 	});
 </script>
 
@@ -122,9 +104,7 @@
 					bookmarks={bookmarks} 
 					onSort={handleBookmarkSort}
 				/>
-				<Button size="sm" onclick={addBookmark}>
-					添加
-				</Button>
+				<!-- 添加按钮已移除，通过文件浏览器右键菜单添加 -->
 			</div>
 		</div>
 		<Input
@@ -160,9 +140,9 @@
 						{#if !searchQuery}
 							<div class="mt-4 p-3 bg-muted/50 rounded-lg text-xs space-y-1">
 								<p class="font-medium text-foreground">提示：</p>
-								<p>• 按 Ctrl+D 快速添加当前页到书签</p>
-								<p>• 为书签添加星标，置顶重要内容</p>
+								<p>• 右键点击文件或文件夹添加到书签</p>
 								<p>• 使用搜索功能快速定位书签</p>
+								<p>• 点击书签快速访问收藏内容</p>
 							</div>
 						{/if}
 					</div>
@@ -176,40 +156,25 @@
 						<div class="flex items-start gap-3">
 							<!-- 图标 -->
 							<div class="flex-shrink-0 w-12 h-12 bg-secondary rounded flex items-center justify-center">
-								<FolderIcon class="h-6 w-6 text-muted-foreground" />
+								{#if bookmark.type === 'folder'}
+									<FolderIcon class="h-6 w-6 text-blue-500" />
+								{:else if bookmark.name.endsWith('.zip') || bookmark.name.endsWith('.cbz')}
+									<FileArchive class="h-6 w-6 text-purple-500" />
+								{:else}
+									<File class="h-6 w-6 text-gray-400" />
+								{/if}
 							</div>
 
 							<!-- 信息 -->
 							<div class="flex-1 min-w-0">
-								<div class="flex items-center gap-2">
-									<div class="font-medium truncate" title={bookmark.name}>
-										{bookmark.name}
-									</div>
-									<div
-										role="button"
-										tabindex="0"
-										onclick={(e) => {
-											e.stopPropagation();
-											toggleStar(bookmark.id);
-										}}
-										onkeydown={(e) => {
-											if (e.key === 'Enter' || e.key === ' ') {
-												e.stopPropagation();
-												toggleStar(bookmark.id);
-											}
-										}}
-										class="flex-shrink-0 cursor-pointer hover:bg-accent/50 rounded p-1"
-									>
-										<Star
-											class="h-4 w-4 {bookmark.starred ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}"
-										/>
-									</div>
+								<div class="font-medium truncate" title={bookmark.name}>
+									{bookmark.name}
 								</div>
 								<div class="text-xs text-muted-foreground truncate mt-1" title={bookmark.path}>
 									{getFileName(bookmark.path)}
 								</div>
 								<div class="text-xs text-muted-foreground mt-1">
-									页码: {bookmark.page}
+									{bookmark.createdAt ? new Date(bookmark.createdAt).toLocaleDateString() : ''}
 								</div>
 							</div>
 

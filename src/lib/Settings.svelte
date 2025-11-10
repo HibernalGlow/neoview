@@ -313,38 +313,52 @@
 								{#if currentSettings.view.mouseCursor.autoHide}
 									<!-- 隐藏时间 -->
 									<div class="space-y-2">
-										<label class="flex items-center justify-between">
+										<div class="flex items-center justify-between">
 											<span class="text-sm">隐藏时间（秒）</span>
-											<span class="text-xs text-muted-foreground">{currentSettings.view.mouseCursor.hideDelay.toFixed(1)}</span>
-										</label>
+											<div class="flex items-center gap-2">
+												<input 
+													type="number" 
+													min="0.5" 
+													max="5.0" 
+													step="0.1" 
+													bind:value={currentSettings.view.mouseCursor.hideDelay}
+													class="w-16 px-2 py-1 text-sm border rounded-md"
+												/>
+												<span class="text-xs text-muted-foreground">秒</span>
+											</div>
+										</div>
 										<input 
 											type="range" 
 											min="0.5" 
 											max="5.0" 
 											step="0.1" 
-											value={currentSettings.view.mouseCursor.hideDelay}
-											oninput={(e) => {
-												currentSettings.view.mouseCursor.hideDelay = parseFloat(e.target.value);
-											}}
+											bind:value={currentSettings.view.mouseCursor.hideDelay}
 											class="w-full max-w-xs" 
 										/>
 									</div>
 
 									<!-- 重新显示的移动距离 -->
 									<div class="space-y-2">
-										<label class="flex items-center justify-between">
-											<span class="text-sm">重新显示的移动距离（像素）</span>
-											<span class="text-xs text-muted-foreground">{currentSettings.view.mouseCursor.showMovementThreshold}</span>
-										</label>
+										<div class="flex items-center justify-between">
+											<span class="text-sm">重新显示的移动距离</span>
+											<div class="flex items-center gap-2">
+												<input 
+													type="number" 
+													min="5" 
+													max="100" 
+													step="1" 
+													bind:value={currentSettings.view.mouseCursor.showMovementThreshold}
+													class="w-16 px-2 py-1 text-sm border rounded-md"
+												/>
+												<span class="text-xs text-muted-foreground">像素</span>
+											</div>
+										</div>
 										<input 
 											type="range" 
 											min="5" 
 											max="100" 
 											step="1" 
-											value={currentSettings.view.mouseCursor.showMovementThreshold}
-											oninput={(e) => {
-												currentSettings.view.mouseCursor.showMovementThreshold = parseInt(e.target.value);
-											}}
+											bind:value={currentSettings.view.mouseCursor.showMovementThreshold}
 											class="w-full max-w-xs" 
 										/>
 									</div>

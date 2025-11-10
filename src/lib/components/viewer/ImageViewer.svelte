@@ -14,15 +14,64 @@
 	import { loadImageFromArchive } from '$lib/api/filesystem';
 	import { FileSystemAPI } from '$lib/api';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
+	import { settingsManager } from '$lib/settings/settingsManager';
 
 	// 进度条状态
 	let showProgressBar = $state(true);
 
+	// 鼠标光标隐藏相关
+	let cursorVisible = $state(true);
+	let hideCursorTimeout: number | null = null;
+	let lastMousePosition = $state({ x: 0, y: 0 });
+	let settings = $state(settingsManager.getSettings());
+
+	// 订阅设置变化
+	settingsManager.addListener((s) => {
+		settings = s;
+	});
 
 	let imageData = $state<string | null>(null);
 	let imageData2 = $state<string | null>(null); // 双页模式的第二张图
 	let loading = $state(false);
 	let error = $state<string | null>(null);
+
+	// 鼠标光标隐藏功能
+	function showCursor() {
+		if (!settings.view.mouseCursor || !settings.view.mouseCursor.autoHide) return;
+		
+		cursorVisible = true;
+		if (hideCursorTimeout) {
+			clearTimeout(hideCursorTimeout);
+			hideCursorTimeout = null;
+		}
+		
+		// 设置新的隐藏定时器
+		hideCursorTimeout = setTimeout(() => {
+			cursorVisible = false;
+		}, settings.view.mouseCursor.hideDelay * 1000);
+	}
+
+	function handleMouseMove(e: MouseEvent) {
+		if (!settings.view.mouseCursor || !settings.view.mouseCursor.autoHide) return;
+		
+		const currentX = e.clientX;
+		const currentY = e.clientY;
+		
+		// 检查移动距离是否超过阈值
+		const deltaX = Math.abs(currentX - lastMousePosition.x);
+		const deltaY = Math.abs(currentY - lastMousePosition.y);
+		const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+		
+		if (distance >= settings.view.mouseCursor.showMovementThreshold) {
+			lastMousePosition = { x: currentX, y: currentY };
+			showCursor();
+		}
+	}
+
+	function handleMouseClick() {
+		if (!settings.view.mouseCursor || !settings.view.mouseCursor.autoHide || !settings.view.mouseCursor.showOnButtonClick) return;
+		showCursor();
+	}
 
 	// 监听当前页面变化
 	$effect(() => {
@@ -192,7 +241,14 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="image-viewer-container h-full w-full flex flex-col bg-black relative" data-viewer="true" onwheel={handleWheel}>
+<div 
+		class="image-viewer-container h-full w-full flex flex-col bg-black relative" 
+		data-viewer="true" 
+		onwheel={handleWheel}
+		onmousemove={handleMouseMove}
+		onclick={handleMouseClick}
+		style:cursor={cursorVisible ? 'default' : 'none'}
+	>
 	<!-- 图像显示区域 -->
 	<div class="image-container flex-1 flex items-center justify-center overflow-auto" data-viewer="true">
 		{#if loading}

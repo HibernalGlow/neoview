@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { Folder, File, Image, Trash2, RefreshCw, FileArchive, FolderOpen, Home, ChevronLeft, ChevronRight, ChevronUp, CheckSquare, Grid3x3, List, MoreVertical } from '@lucide/svelte';
+  import { Folder, File, Image, Trash2, RefreshCw, FileArchive, FolderOpen, Home, ChevronLeft, ChevronRight, ChevronUp, CheckSquare, Grid3x3, List, MoreVertical, Search, ChevronDown, Settings, Database, Trash, AlertCircle } from '@lucide/svelte';
   import { onMount } from 'svelte';
-  import { FileSystemAPI } from '$lib/api';
+  import { FileSystemAPI, IndexAPI } from '$lib/api';
   import type { FsItem } from '$lib/types';
   import { bookStore } from '$lib/stores/book.svelte';
   import * as BookAPI from '$lib/api/book';
@@ -10,6 +10,7 @@
   import { NavigationHistory } from '$lib/utils/navigationHistory';
   import { Button } from '$lib/components/ui/button';
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
+  import type { IndexStats } from '$lib/api/file_index';
 
   // 使用全局状态
   let currentPath = $state('');
@@ -33,6 +34,39 @@
   let isDeleteMode = $state(false);
   let viewMode = $state<'list' | 'thumbnails'>('list'); // 列表 or 缩略图视图
   let selectedItems = $state<Set<string>>(new Set());
+
+  // 搜索功能状态
+  let searchQuery = $state('');
+  let searchHistory = $state<string[]>([]);
+  let showSearchHistory = $state(false);
+  let showSearchSettings = $state(false);
+  let searchSettings = $state({
+    includeSubfolders: false,
+    showHistoryOnFocus: true
+  });
+  let searchResults = $state<FsItem[]>([]);
+  let isSearching = $state(false);
+
+  // 索引功能状态
+  let indexStats = $state<IndexStats | null>(null);
+  let showIndexSettings = $state(false);
+  let isBuildingIndex = $state(false);
+  let indexEnabled = $state(true);
+  let indexProgress = $state<IndexProgress | null>(null);
+  
+  // 索引搜索选项
+  let indexSearchOptions = $state({
+    includeSubfolders: true,
+    imagesOnly: false,
+    foldersOnly: false,
+    minSize: undefined as number | undefined,
+    maxSize: undefined as number | undefined,
+    modifiedAfter: undefined as number | undefined,
+    modifiedBefore: undefined as number | undefined,
+  });
+  
+  // 是否使用索引搜索
+  let useIndexSearch = $state(true);
 
   // 订阅全局状态 - 使用 Svelte 5 的响应式
   $effect(() => {
@@ -100,6 +134,215 @@
     }
   }
 
+  // 初始化索引
+  onMount(async () => {
+    try {
+      await IndexAPI.initializeFileIndex();
+      await updateIndexStats();
+    } catch (err) {
+      console.error('初始化索引失败:', err);
+    }
+  });
+
+  /**
+   * 更新索引统计信息
+   */
+  async function updateIndexStats() {
+    try {
+      indexStats = await IndexAPI.getIndexStats();
+    } catch (err) {
+      console.error('获取索引统计失败:', err);
+      indexStats = null;
+    }
+  }
+
+  /**
+   * 构建索引
+   */
+  async function buildIndex(recursive: boolean = true) {
+    if (!currentPath) return;
+    
+    isBuildingIndex = true;
+    let progressInterval: number;
+    
+    try {
+      // 开始监控进度
+      progressInterval = setInterval(async () => {
+        try {
+          indexProgress = await IndexAPI.getIndexProgress();
+        } catch (err) {
+          console.error('获取索引进度失败:', err);
+        }
+      }, 500);
+      
+      await IndexAPI.buildFileIndex(currentPath, recursive);
+      await updateIndexStats();
+      console.log('✅ 索引构建完成');
+    } catch (err) {
+      console.error('❌ 构建索引失败:', err);
+      fileBrowserStore.setError(String(err));
+    } finally {
+      isBuildingIndex = false;
+      clearInterval(progressInterval);
+      // 最后更新一次进度
+      try {
+        indexProgress = await IndexAPI.getIndexProgress();
+      } catch (err) {
+        console.error('获取最终进度失败:', err);
+      }
+    }
+  }
+
+  /**
+   * 清除索引
+   */
+  async function clearIndex() {
+    try {
+      await IndexAPI.clearFileIndex();
+      await updateIndexStats();
+      console.log('✅ 索引已清除');
+    } catch (err) {
+      console.error('❌ 清除索引失败:', err);
+      fileBrowserStore.setError(String(err));
+    }
+  }
+  
+  /**
+   * 使用索引执行搜索
+   */
+  async function performIndexSearch(query: string) {
+    if (!query.trim()) {
+      searchResults = [];
+      return;
+    }
+    
+    isSearching = true;
+    try {
+      const options = {
+        includeSubfolders: indexSearchOptions.includeSubfolders,
+        imagesOnly: indexSearchOptions.imagesOnly,
+        foldersOnly: indexSearchOptions.foldersOnly,
+        minSize: indexSearchOptions.minSize,
+        maxSize: indexSearchOptions.maxSize,
+        modifiedAfter: indexSearchOptions.modifiedAfter,
+        modifiedBefore: indexSearchOptions.modifiedBefore,
+      };
+      
+      searchResults = await IndexAPI.searchInIndex(query, 100, options);
+      console.log(`✅ 索引搜索完成，找到 ${searchResults.length} 个结果`);
+    } catch (err) {
+      console.error('❌ 索引搜索失败:', err);
+      fileBrowserStore.setError(String(err));
+      searchResults = [];
+    } finally {
+      isSearching = false;
+    }
+  }
+  
+  /**
+   * 打开搜索结果中的项目
+   */
+  async function openSearchResult(item: FsItem) {
+    if (item.is_dir) {
+      // 如果是文件夹，导航到该文件夹
+      await loadDirectory(item.path);
+      // 清空搜索
+      searchQuery = '';
+      searchResults = [];
+    } else if (item.is_image) {
+      // 如果是图片，打开查看
+      await openImage(item.path);
+    } else {
+      // 其他文件类型，尝试用系统默认程序打开
+      try {
+        await FileSystemAPI.openWithSystem(item.path);
+      } catch (err) {
+        console.error('无法打开文件:', err);
+        fileBrowserStore.setError(String(err));
+      }
+    }
+  }
+  
+  /**
+   * 执行搜索（根据设置选择使用索引或文件系统搜索）
+   */
+  async function performSearch(query: string) {
+    if (useIndexSearch && indexStats && (indexStats.totalFiles > 0 || indexStats.totalDirs > 0)) {
+      await performIndexSearch(query);
+    } else {
+      // 回退到文件系统搜索
+      await performFileSystemSearch(query);
+    }
+  }
+  
+  /**
+   * 文件系统搜索（原有方法）
+   */
+  async function performFileSystemSearch(query: string) {
+    if (!query.trim()) {
+      searchResults = [];
+      return;
+    }
+
+    isSearching = true;
+    try {
+      // 获取所有已索引的路径进行搜索
+      const indexedPaths = await IndexAPI.getIndexedPaths(undefined, true);
+      let allResults: FsItem[] = [];
+      
+      // 搜索所有已索引的路径
+      for (const path of indexedPaths) {
+        try {
+          const options = {
+            includeSubfolders: searchSettings.includeSubfolders,
+            maxResults: 100,
+          };
+          
+          const results = await FileSystemAPI.searchFiles(path, query, options);
+          allResults = allResults.concat(results);
+        } catch (err) {
+          console.error(`搜索路径 ${path} 失败:`, err);
+        }
+      }
+      
+      // 如果没有索引路径，使用当前路径
+      if (indexedPaths.length === 0 && currentPath) {
+        const options = {
+          includeSubfolders: searchSettings.includeSubfolders,
+          maxResults: 100,
+        };
+        
+        allResults = await FileSystemAPI.searchFiles(currentPath, query, options);
+      }
+      
+      // 去重并排序
+      const uniqueResults = new Map<string, FsItem>();
+      allResults.forEach(item => {
+        if (!uniqueResults.has(item.path)) {
+          uniqueResults.set(item.path, item);
+        }
+      });
+      
+      searchResults = Array.from(uniqueResults.values());
+      
+      // 排序：目录优先，然后按名称
+      searchResults.sort((a, b) => {
+        if (a.is_dir !== b.is_dir) {
+          return a.is_dir ? -1 : 1;
+        }
+        return a.name.localeCompare(b.name);
+      });
+      
+      console.log(`✅ 文件系统搜索完成，找到 ${searchResults.length} 个结果`);
+    } catch (err) {
+      console.error('❌ 文件系统搜索失败:', err);
+      fileBrowserStore.setError(String(err));
+      searchResults = [];
+    } finally {
+      isSearching = false;
+    }
+  }
+
   /**
    * 后退
    */
@@ -163,12 +406,19 @@
       if (!target.closest('.context-menu')) {
         hideContextMenu();
       }
+      if (!target.closest('.search-history') && !target.closest('.search-settings')) {
+        showSearchHistory = false;
+        showSearchSettings = false;
+      }
     };
     
     document.addEventListener('click', handleClick);
     
     // 加载主页
     loadHomepage();
+    
+    // 加载搜索历史
+    loadSearchHistory();
     
     return () => {
       document.removeEventListener('click', handleClick);
@@ -828,6 +1078,110 @@
     }
     hideContextMenu();
   }
+
+  // ===== 搜索功能 =====
+
+  /**
+   * 加载搜索历史
+   */
+  function loadSearchHistory() {
+    try {
+      const saved = localStorage.getItem('neoview-search-history');
+      if (saved) {
+        searchHistory = JSON.parse(saved);
+      }
+    } catch (err) {
+      console.error('加载搜索历史失败:', err);
+    }
+  }
+
+  /**
+   * 保存搜索历史
+   */
+  function saveSearchHistory() {
+    try {
+      localStorage.setItem('neoview-search-history', JSON.stringify(searchHistory));
+    } catch (err) {
+      console.error('保存搜索历史失败:', err);
+    }
+  }
+
+  /**
+   * 添加搜索历史
+   */
+  function addSearchHistory(query: string) {
+    if (!query.trim()) return;
+    
+    // 移除已存在的相同查询
+    searchHistory = searchHistory.filter(item => item !== query);
+    // 添加到开头
+    searchHistory.unshift(query);
+    // 限制历史记录数量
+    searchHistory = searchHistory.slice(0, 20);
+    
+    saveSearchHistory();
+  }
+
+  /**
+   * 清除搜索历史
+   */
+  function clearSearchHistory() {
+    searchHistory = [];
+    saveSearchHistory();
+    showSearchHistory = false;
+  }
+
+  /**
+   * 搜索文件
+   */
+  async function searchFiles(query: string) {
+    if (!query.trim()) {
+      searchResults = [];
+      return;
+    }
+
+    addSearchHistory(query);
+    await performSearch(query);
+  }
+
+  /**
+   * 处理搜索输入
+   */
+  function handleSearchInput(e: Event) {
+    const target = e.target as HTMLInputElement;
+    searchQuery = target.value;
+    
+    // 实时搜索
+    if (searchQuery.trim()) {
+      const timeout = setTimeout(() => {
+        searchFiles(searchQuery);
+      }, 300);
+      
+      // 清除之前的超时
+      return () => clearTimeout(timeout);
+    } else {
+      searchResults = [];
+    }
+  }
+
+  /**
+   * 选择搜索历史
+   */
+  function selectSearchHistory(query: string) {
+    searchQuery = query;
+    showSearchHistory = false;
+    searchFiles(query);
+  }
+  
+  /**
+   * 处理搜索框聚焦
+   */
+  function handleSearchFocus() {
+    if (searchSettings.showHistoryOnFocus && searchHistory.length > 0) {
+      showSearchHistory = true;
+    }
+    showSearchSettings = false;
+  }
 </script>
 
 <div class="flex h-full flex-col">
@@ -971,6 +1325,239 @@
     </div>
   </div>
 
+  <!-- 搜索栏 -->
+  <div class="flex items-center gap-2 border-b px-2 py-2 bg-background/30">
+    <div class="relative flex-1">
+      <!-- 搜索输入框 -->
+      <div class="relative">
+        <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <input
+          type="text"
+          placeholder="搜索当前目录下的文件..."
+          bind:value={searchQuery}
+          oninput={handleSearchInput}
+          onfocus={handleSearchFocus}
+          class="w-full pl-10 pr-20 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          disabled={!currentPath || isArchiveView}
+        />
+        
+        <!-- 搜索历史按钮 -->
+        <button
+          class="absolute right-8 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
+          onclick={() => {
+            showSearchHistory = !showSearchHistory;
+            showSearchSettings = false;
+          }}
+          disabled={searchHistory.length === 0}
+          title="搜索历史"
+        >
+          <ChevronDown class="h-4 w-4 text-gray-500" />
+        </button>
+        
+        <!-- 搜索设置按钮 -->
+        <button
+          class="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
+          onclick={(e) => {
+            e.stopPropagation();
+            console.log('搜索设置按钮被点击');
+            showSearchSettings = !showSearchSettings;
+            showSearchHistory = false;
+          }}
+          title="搜索设置"
+        >
+          <MoreVertical class="h-4 w-4 text-gray-500" />
+        </button>
+      </div>
+      
+      <!-- 搜索历史下拉 -->
+      {#if showSearchHistory}
+        <div class="search-history absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+          {#each searchHistory as query (query)}
+            <div
+              class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center justify-between group cursor-pointer"
+              onclick={() => selectSearchHistory(query)}
+            >
+              <div class="flex items-center gap-2">
+                <Search class="h-4 w-4 text-gray-400" />
+                <span>{query}</span>
+              </div>
+              <button
+                class="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  searchHistory = searchHistory.filter(item => item !== query);
+                  saveSearchHistory();
+                }}
+                title="删除"
+              >
+                <svg class="h-3 w-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          {/each}
+          {#if searchHistory.length > 0}
+            <div class="border-t border-gray-200 p-2">
+              <button
+                class="w-full px-3 py-1 text-xs text-gray-500 hover:bg-gray-100 rounded"
+                onclick={clearSearchHistory}
+              >
+                清除搜索历史
+              </button>
+            </div>
+          {:else}
+            <div class="p-3 text-center text-sm text-gray-500">
+              暂无搜索历史
+            </div>
+          {/if}
+        </div>
+      {/if}
+      
+      <!-- 搜索设置下拉 -->
+      {#if showSearchSettings}
+        <div class="search-settings absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[250px] p-2">
+          <div class="space-y-3">
+            <div class="border-b pb-2">
+              <h4 class="text-xs font-semibold text-gray-700 mb-2">搜索选项</h4>
+              
+              <!-- 索引搜索开关 -->
+              <label class="flex items-center gap-2 text-sm mb-2">
+                <input
+                  type="checkbox"
+                  bind:checked={useIndexSearch}
+                  disabled={!indexStats || (indexStats.totalFiles === 0 && indexStats.totalDirs === 0)}
+                  class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                />
+                <span class="flex items-center gap-1">
+                  <Database class="h-3 w-3" />
+                  使用索引搜索
+                </span>
+              </label>
+              
+              {#if useIndexSearch && indexStats}
+                <div class="ml-6 space-y-1 mb-2">
+                  <label class="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      bind:checked={indexSearchOptions.includeSubfolders}
+                      class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>包含子文件夹</span>
+                  </label>
+                  <label class="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      bind:checked={indexSearchOptions.imagesOnly}
+                      class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>仅图片</span>
+                  </label>
+                  <label class="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      bind:checked={indexSearchOptions.foldersOnly}
+                      class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>仅文件夹</span>
+                  </label>
+                </div>
+              {:else if !useIndexSearch}
+                <label class="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    bind:checked={searchSettings.includeSubfolders}
+                    class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>搜索子文件夹</span>
+                </label>
+              {/if}
+              
+              <label class="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  bind:checked={searchSettings.showHistoryOnFocus}
+                  class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span>聚焦时显示历史</span>
+              </label>
+            </div>
+            
+            <div class="border-b pb-2">
+              <h4 class="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                <Database class="h-3 w-3" />
+                索引设置
+              </h4>
+              
+              {#if indexStats}
+                <div class="text-xs text-gray-600 mb-2 space-y-1">
+                  <div>文件: {indexStats.totalFiles}</div>
+                  <div>目录: {indexStats.totalDirs}</div>
+                  <div>图片: {indexStats.totalImages}</div>
+                  <div class="text-xs text-gray-400">
+                    更新: {new Date(indexStats.lastUpdated * 1000).toLocaleString()}
+                  </div>
+                </div>
+              {:else}
+                <div class="text-xs text-gray-500 mb-2">无索引数据</div>
+              {/if}
+              
+              <div class="space-y-1">
+                <button
+                  class="w-full px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 flex items-center justify-center gap-1"
+                  onclick={() => buildIndex(true)}
+                  disabled={isBuildingIndex || !currentPath}
+                >
+                  {#if isBuildingIndex}
+                    <RefreshCw class="h-3 w-3 animate-spin" />
+                    {#if indexProgress?.isRunning}
+                      {indexProgress.processedFiles}/{indexProgress.totalFiles || '?'}
+                    {:else}
+                      构建中...
+                    {/if}
+                  {:else}
+                    <Database class="h-3 w-3" />
+                    构建索引
+                  {/if}
+                </button>
+                
+                <button
+                  class="w-full px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50 flex items-center justify-center gap-1"
+                  onclick={clearIndex}
+                  disabled={!indexStats || indexStats.totalFiles === 0}
+                >
+                  <Trash class="h-3 w-3" />
+                  清除索引
+                </button>
+              
+              <!-- 索引进度详情 -->
+              {#if isBuildingIndex && indexProgress}
+                <div class="mt-2 p-2 bg-gray-50 rounded text-xs">
+                  <div class="font-medium text-gray-700 mb-1">索引进度</div>
+                  <div class="space-y-1">
+                    <div>已处理: {indexProgress.processedFiles} 个文件</div>
+                    {#if indexProgress.totalFiles > 0}
+                      <div>总计: 约 {indexProgress.totalFiles} 个文件</div>
+                      <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                        <div 
+                          class="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
+                          style="width: {Math.round((indexProgress.processedFiles / indexProgress.totalFiles) * 100)}%"
+                        ></div>
+                      </div>
+                    {/if}
+                    <div class="text-gray-500 truncate">
+                      当前: {indexProgress.currentPath}
+                    </div>
+                  </div>
+                </div>
+              {/if}
+              </div>
+            </div>
+          </div>
+        </div>
+      {/if}
+    </div>
+  </div>
+
   <!-- 错误提示 -->
   {#if error}
     <div class="m-2 rounded bg-red-50 p-3 text-sm text-red-600">
@@ -984,6 +1571,108 @@
       <div class="flex flex-col items-center gap-3">
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
         <div class="text-sm text-gray-500">加载中...</div>
+      </div>
+    </div>
+  {:else if isSearching}
+    <div class="flex flex-1 items-center justify-center">
+      <div class="flex flex-col items-center gap-3">
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        <div class="text-sm text-gray-500">搜索中...</div>
+      </div>
+    </div>
+  {:else if searchQuery && searchResults.length === 0}
+    <div class="flex flex-1 items-center justify-center">
+      <div class="text-center text-gray-400">
+        <Search class="mx-auto mb-2 h-16 w-16 opacity-50" />
+        <p class="text-sm">未找到匹配的文件</p>
+        <p class="text-xs text-gray-500 mt-1">搜索词: "{searchQuery}"</p>
+      </div>
+    </div>
+  {:else if searchQuery && searchResults.length > 0}
+    <!-- 搜索结果列表 -->
+    <div 
+      bind:this={fileListContainer}
+      class="flex-1 overflow-y-auto p-2 focus:outline-none" 
+      tabindex="0" 
+      onkeydown={handleKeydown}
+      onclick={() => fileListContainer?.focus()}
+    >
+      <div class="mb-3 text-sm text-gray-600 px-2">
+        找到 {searchResults.length} 个结果 (搜索: "{searchQuery}")
+      </div>
+      <div class="grid grid-cols-1 gap-2">
+        {#each searchResults as item, index (item.path)}
+          <div
+            class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors hover:bg-gray-50 border-gray-200"
+            onclick={() => openSearchResult(item)}
+            oncontextmenu={(e) => showContextMenu(e, item)}
+          >
+            <!-- 勾选框（勾选模式） -->
+            {#if isCheckMode}
+              <button
+                class="flex-shrink-0"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  toggleItemSelection(item.path);
+                }}
+              >
+                <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {selectedItems.has(item.path) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 hover:border-blue-400'}">
+                  {#if selectedItems.has(item.path)}
+                    <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                    </svg>
+                  {/if}
+                </div>
+              </button>
+            {/if}
+
+            <!-- 删除按钮（删除模式） -->
+            {#if isDeleteMode && !isArchiveView}
+              <button
+                class="flex-shrink-0"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  deleteItem(item.path);
+                }}
+                title="删除"
+              >
+                <div class="h-5 w-5 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors">
+                  <Trash2 class="h-3 w-3 text-white" />
+                </div>
+              </button>
+            {/if}
+
+            <!-- 图标/缩略图 -->
+            <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center">
+              {#if item.isDir}
+                <Folder class="h-8 w-8 text-blue-500 transition-colors group-hover:text-blue-600" />
+              {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
+                <FileArchive class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600" />
+              {:else if item.isImage && thumbnails.has(item.path)}
+                <img
+                  src={thumbnails.get(item.path)}
+                  alt={item.name}
+                  class="h-12 w-12 rounded object-cover transition-opacity hover:opacity-80"
+                />
+              {:else if item.isImage}
+                <Image class="h-8 w-8 text-green-500 transition-colors group-hover:text-green-600" />
+              {:else}
+                <File class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500" />
+              {/if}
+            </div>
+
+            <!-- 信息 -->
+            <div class="min-w-0 flex-1">
+              <div class="truncate font-medium">{item.name}</div>
+              <div class="text-xs text-gray-500">
+                {item.path}
+              </div>
+              <div class="text-xs text-gray-500">
+                {formatSize(item.size, item.isDir)} · {formatDate(item.modified)}
+              </div>
+            </div>
+          </div>
+        {/each}
       </div>
     </div>
   {:else if items.length === 0 && currentPath}
@@ -1271,7 +1960,14 @@
     <!-- 点击其他地方关闭菜单 -->
     <div
       class="fixed inset-0 z-40"
-      onclick={hideContextMenu}
+      onclick={(e) => {
+        // 确保点击的不是搜索设置按钮或其子元素
+        if (!e.target.closest('.search-settings') && 
+            !e.target.closest('button[title="搜索设置"]') &&
+            !e.target.closest('.search-history')) {
+          hideContextMenu();
+        }
+      }}
     ></div>
   {/if}
 </div>

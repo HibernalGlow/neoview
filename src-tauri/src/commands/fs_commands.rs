@@ -429,3 +429,143 @@ pub async fn show_in_file_manager(path: String) -> Result<(), String> {
     
     Ok(())
 }
+
+/// 搜索文件
+#[tauri::command]
+pub async fn search_files(
+    path: String,
+    query: String,
+    options: Option<crate::core::fs_manager::SearchOptions>,
+    state: State<'_, FsState>,
+) -> Result<Vec<crate::core::fs_manager::FsItem>, String> {
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    let path = PathBuf::from(path);
+    let search_options = options.unwrap_or_default();
+    
+    fs_manager.search_files(&path, &query, &search_options)
+}
+
+/// 初始化文件索引
+#[tauri::command]
+pub async fn initialize_file_index(
+    state: State<'_, FsState>,
+) -> Result<(), String> {
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    fs_manager.initialize_indexer()
+}
+
+/// 构建文件索引
+#[tauri::command]
+pub async fn build_file_index(
+    path: String,
+    recursive: bool,
+    state: State<'_, FsState>,
+) -> Result<(), String> {
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    let path = PathBuf::from(path);
+    fs_manager.build_index(&path, recursive)
+}
+
+/// 获取索引统计信息
+#[tauri::command]
+pub async fn get_index_stats(
+    state: State<'_, FsState>,
+) -> Result<crate::core::file_indexer::IndexStats, String> {
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    fs_manager.get_index_stats()
+}
+
+/// 清除文件索引
+#[tauri::command]
+pub async fn clear_file_index(
+    state: State<'_, FsState>,
+) -> Result<(), String> {
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    fs_manager.clear_index()
+}
+
+/// 在索引中搜索文件
+#[tauri::command]
+pub async fn search_in_index(
+    query: String,
+    max_results: Option<usize>,
+    options: Option<IndexSearchOptions>,
+    state: State<'_, FsState>,
+) -> Result<Vec<crate::core::fs_manager::FsItem>, String> {
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    let max_results = max_results.unwrap_or(100);
+    let search_options = options.map(|o| crate::core::file_indexer::SearchOptions {
+        include_subfolders: o.include_subfolders.unwrap_or(true),
+        images_only: o.images_only.unwrap_or(false),
+        folders_only: o.folders_only.unwrap_or(false),
+        min_size: o.min_size,
+        max_size: o.max_size,
+        modified_after: o.modified_after,
+        modified_before: o.modified_before,
+    });
+
+    fs_manager.search_in_index(&query, max_results, search_options.as_ref())
+}
+
+/// 获取索引中的路径列表
+#[tauri::command]
+pub async fn get_indexed_paths(
+    path: Option<String>,
+    recursive: Option<bool>,
+    state: State<'_, FsState>,
+) -> Result<Vec<String>, String> {
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    let recursive = recursive.unwrap_or(false);
+    
+    fs_manager.get_indexed_paths(path.as_deref(), recursive)
+}
+
+/// 检查路径是否已被索引
+#[tauri::command]
+pub async fn is_path_indexed(
+    path: String,
+    state: State<'_, FsState>,
+) -> Result<bool, String> {
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    fs_manager.is_path_indexed(&path)
+}
+
+/// 获取索引进度
+#[tauri::command]
+pub async fn get_index_progress(
+    state: State<'_, FsState>,
+) -> Result<crate::core::file_indexer::IndexProgress, String> {
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    fs_manager.get_index_progress()
+}
+
+/// 索引搜索选项
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IndexSearchOptions {
+    pub include_subfolders: Option<bool>,
+    pub images_only: Option<bool>,
+    pub folders_only: Option<bool>,
+    pub min_size: Option<u64>,
+    pub max_size: Option<u64>,
+    pub modified_after: Option<u64>,
+    pub modified_before: Option<u64>,
+}

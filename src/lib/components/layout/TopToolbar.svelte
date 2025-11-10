@@ -56,7 +56,7 @@
 	let isResizing = $state(false);
 	let resizeStartY = 0;
 	let resizeStartHeight = 0;
-	let isHovering = $state(false); // 追踪鼠标是否在悬停区域或工具栏上
+	let hoverCount = $state(0); // 追踪悬停区域的计数
 
 	// 响应钉住状态
 	$effect(() => {
@@ -67,31 +67,36 @@
 	});
 
 	function showToolbar() {
+		console.log('showToolbar called, setting isVisible to true');
 		isVisible = true;
-		if (hideTimeout) clearTimeout(hideTimeout);
-		if (!$topToolbarPinned) {
-			hideTimeout = setTimeout(() => {
-				isVisible = false;
-			}, 2000) as unknown as number;
+		if (hideTimeout) {
+			console.log('Clearing existing timeout');
+			clearTimeout(hideTimeout);
 		}
+		// 不要在这里设置定时器，让 handleMouseLeave 来处理
 	}
 
 	function handleMouseEnter() {
-		isHovering = true;
+		hoverCount++;
+		console.log('TopToolbar handleMouseEnter, hoverCount:', hoverCount);
 		showToolbar();
 	}
 
 	function handleMouseLeave() {
-		isHovering = false;
+		hoverCount--;
+		console.log('TopToolbar handleMouseLeave, hoverCount:', hoverCount);
 		if ($topToolbarPinned || isResizing) return;
 		if (hideTimeout) clearTimeout(hideTimeout);
-		// 增加延迟时间，避免鼠标在触发区域和工具栏之间移动时过早隐藏
-		hideTimeout = setTimeout(() => {
-			// 只有在鼠标真正离开两个区域后才隐藏
-			if (!isHovering) {
-				isVisible = false;
-			}
-		}, 1000) as unknown as number;
+		// 只有当计数为0时（即鼠标离开了所有相关区域）才开始延迟隐藏
+		if (hoverCount <= 0) {
+			console.log('Setting hide timeout for TopToolbar');
+			hideTimeout = setTimeout(() => {
+				console.log('Timeout triggered, hoverCount:', hoverCount);
+				if (hoverCount <= 0) {
+					isVisible = false;
+				}
+			}, 2000) as unknown as number;
+		}
 	}
 
 	function togglePin() {
@@ -206,12 +211,13 @@
 
 <div
 	class="absolute top-0 left-0 right-0 z-[58] transition-transform duration-300 {isVisible
+		? 'translate-y-0'
+		: '-translate-y-full'}"
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}
 >
 	<!-- 标题栏（窗口控制） -->
 	<div
-		data-tauri-drag-region
 		class="h-8 bg-secondary/95 backdrop-blur-sm flex items-center justify-between px-2 select-none border-b"
 	>
 		<!-- 左侧：菜单和应用名 -->

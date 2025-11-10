@@ -17,7 +17,7 @@
 	let resizeStartY = 0;
 	let resizeStartHeight = 0;
 	let showProgressBar = $state(true);
-	let isHovering = $state(false); // 追踪鼠标是否在悬停区域或工具栏上
+	let hoverCount = $state(0); // 追踪悬停区域的计数
 
 	// 响应钉住状态
 	$effect(() => {
@@ -38,29 +38,26 @@
 		isVisible = true;
 		if (hideTimeout) clearTimeout(hideTimeout);
 		loadVisibleThumbnails();
-		if (!$bottomThumbnailBarPinned) {
-			hideTimeout = setTimeout(() => {
-				isVisible = false;
-			}, 2000) as unknown as number;
-		}
+		// 不要在这里设置定时器，让 handleMouseLeave 来处理
 	}
 
 	function handleMouseEnter() {
-		isHovering = true;
+		hoverCount++;
 		showThumbnails();
 	}
 
 	function handleMouseLeave() {
-		isHovering = false;
+		hoverCount--;
 		if ($bottomThumbnailBarPinned || isResizing) return;
 		if (hideTimeout) clearTimeout(hideTimeout);
-		// 增加延迟时间，避免鼠标在触发区域和工具栏之间移动时过早隐藏
-		hideTimeout = setTimeout(() => {
-			// 只有在鼠标真正离开两个区域后才隐藏
-			if (!isHovering) {
-				isVisible = false;
-			}
-		}, 1000) as unknown as number;
+		// 只有当计数为0时（即鼠标离开了所有相关区域）才开始延迟隐藏
+		if (hoverCount <= 0) {
+			hideTimeout = setTimeout(() => {
+				if (hoverCount <= 0) {
+					isVisible = false;
+				}
+			}, 2000) as unknown as number;
+		}
 	}
 
 	function togglePin() {

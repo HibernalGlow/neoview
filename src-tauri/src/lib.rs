@@ -28,9 +28,9 @@ pub fn run() {
             // 初始化文件系统管理器、缩略图管理器和压缩包管理器
             let fs_manager = FsManager::new();
             let cache_dir = app.path().app_cache_dir()
-                .unwrap_or_else(|_| PathBuf::from(".cache"))
-                .join("thumbnails");
-            let thumbnail_manager = ThumbnailManager::new(cache_dir, 256)
+                .unwrap_or_else(|_| PathBuf::from(".cache"));
+            let db_path = cache_dir.join("thumbnails.db");
+            let thumbnail_manager = ThumbnailManager::new(&db_path, 256)
                 .expect("Failed to create thumbnail manager");
             let archive_manager = ArchiveManager::new();
             
@@ -68,6 +68,8 @@ pub fn run() {
             commands::generate_thumbnail_from_data,
             commands::generate_folder_thumbnail,
             commands::generate_archive_thumbnail,
+            commands::fs_commands::generate_folder_thumbnail_cached,
+            commands::fs_commands::generate_archive_thumbnail_cached,
             commands::create_directory,
             commands::delete_path,
             commands::rename_path,
@@ -75,6 +77,7 @@ pub fn run() {
             commands::get_thumbnail_cache_size,
             commands::clear_thumbnail_cache,
             commands::cleanup_thumbnail_cache,
+            commands::reinitialize_thumbnail_database,
             // Archive commands
             commands::list_archive_contents,
             commands::load_image_from_archive,

@@ -1,10 +1,11 @@
 # NeoView 缩略图预处理器
 
-NeoView 支持预处理文件夹和压缩包的缩略图，以提升浏览时的性能。
+NeoView 支持预处理文件夹和压缩包的缩略图，以提升浏览时的性能。缩略图以 base64 格式存储在 SQLite 数据库中。
 
 ## 功能特性
 
 - 🚀 **预缓存缩略图**：提前生成并缓存缩略图，避免实时生成时的卡顿
+- 🗄️ **SQLite 数据库存储**：使用 SQLite 数据库存储缩略图数据，支持高效查询和索引
 - 📁 **智能查找**：自动从文件夹中查找第一张图片，或从压缩包中提取第一张图片
 - 🔄 **批量处理**：支持批量处理整个目录树
 - 📊 **进度显示**：实时显示处理进度和统计信息
@@ -68,7 +69,7 @@ python thumbnail_preprocessor.py --help
 #### Windows
 
 ```bash
-# 基本用法
+# 基本用法（缩略图默认保存到 D:\scoop\apps\neoview\thumb）
 preprocess_thumbnails_py.bat "D:\Images"
 
 # 递归处理子目录
@@ -84,7 +85,7 @@ preprocess_thumbnails_py.bat "D:\Images" --cache-dir "D:\MyCache"
 #### Linux/macOS
 
 ```bash
-# 基本用法
+# 基本用法（缩略图默认保存到系统缓存目录）
 ./preprocess_thumbnails_py.sh "/home/user/Images"
 
 # 递归处理子目录
@@ -114,10 +115,15 @@ pip install -r requirements.txt
 
 ## 缓存位置
 
-缩略图缓存在系统缓存目录中：
-- **Windows**: `%LOCALAPPDATA%\neoview\thumbnails\`
-- **Linux**: `~/.cache/neoview/thumbnails/`
-- **macOS**: `~/Library/Caches/neoview/thumbnails/`
+缩略图以base64编码格式存储在SQLite数据库中：
+- **数据库文件**: `thumbnails.db`
+- **默认位置**: `D:\scoop\apps\neoview\thumb\thumbnails.db`
+
+可以通过 `--cache-dir` 参数自定义数据库目录：
+```bash
+# 使用自定义数据库目录
+python thumbnail_preprocessor.py "D:\Images" --cache-dir "E:\MyThumbnails"
+```
 
 ## 参数说明
 
@@ -138,7 +144,7 @@ pip install -r requirements.txt
 | `--size` | 缩略图最大尺寸（像素） | 256 |
 | `--recursive` | 是否递归处理子目录 | false |
 | `--verbose` | 是否显示详细进度 | false |
-| `--cache-dir` | 自定义缓存目录路径 | 系统缓存目录 |
+| `--cache-dir` | 自定义数据库目录路径 | `D:\scoop\apps\neoview\thumb` |
 
 ## 处理逻辑
 
@@ -173,10 +179,15 @@ pip install -r requirements.txt
 
 ## 缓存位置
 
-缩略图缓存在系统缓存目录中：
-- **Windows**: `%LOCALAPPDATA%\neoview\thumbnails\`
-- **Linux**: `~/.cache/neoview/thumbnails/`
-- **macOS**: `~/Library/Caches/neoview/thumbnails/`
+缩略图以base64编码格式存储在SQLite数据库中：
+- **数据库文件**: `thumbnails.db`
+- **默认位置**: `D:\scoop\apps\neoview\thumb\thumbnails.db`
+
+可以通过 `--cache-dir` 参数自定义数据库目录：
+```bash
+# 使用自定义数据库目录
+python thumbnail_preprocessor.py "D:\Images" --cache-dir "E:\MyThumbnails"
+```
 
 ## 注意事项
 
@@ -198,10 +209,13 @@ pip install -r requirements.txt
 如果需要清除所有缓存的缩略图：
 
 ```bash
-# 删除缓存目录
-# Windows
-rmdir /s "%LOCALAPPDATA%\neoview\thumbnails"
+# 删除数据库文件
+# Windows (默认位置)
+del "D:\scoop\apps\neoview\thumb\thumbnails.db"
 
-# Linux/macOS
-rm -rf ~/.cache/neoview/thumbnails
+# Linux/macOS (系统缓存目录)
+rm -f ~/.cache/neoview/thumbnails.db
+
+# 或删除自定义位置的数据库文件
+rm -f /path/to/your/custom/cache/thumbnails.db
 ```

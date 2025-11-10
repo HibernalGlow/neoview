@@ -29,6 +29,9 @@ import rarfile
 import py7zr
 import tempfile
 import shutil
+import sqlite3
+import base64
+import time
 
 
 class ThumbnailPreprocessor:
@@ -36,7 +39,9 @@ class ThumbnailPreprocessor:
 
     # 支持的图片格式
     IMAGE_EXTENSIONS = {
-        '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.avif', '.jxl', '.tiff', '.tif'
+        '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.avif',
+        # '.jxl', 
+        '.tiff', '.tif'
     }
 
     # 支持的压缩包格式
@@ -49,16 +54,20 @@ class ThumbnailPreprocessor:
         初始化预处理器
 
         Args:
-            cache_dir: 缓存目录路径
+            cache_dir: 缩略图数据库目录路径
             max_size: 缩略图最大尺寸
             verbose: 是否显示详细输出
         """
         self.cache_dir = pathlib.Path(cache_dir)
+        self.db_path = self.cache_dir / "thumbnails.db"
         self.max_size = max_size
         self.verbose = verbose
 
         # 确保缓存目录存在
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+        # 初始化数据库
+        self.init_database()
 
         # 统计信息
         self.stats = {
@@ -66,6 +75,156 @@ class ThumbnailPreprocessor:
             'skipped': 0,
             'errors': 0
         }
+
+    def init_database(self):
+        """初始化数据库和表"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS thumbnails (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    hash TEXT NOT NULL UNIQUE,
+                    file_path TEXT NOT NULL,
+                    file_name TEXT NOT NULL,
+                    thumbnail_data TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    file_modified INTEGER NOT NULL
+                )
+            ''')
+            
+            # 创建索引
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_hash ON thumbnails(hash)')
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_file_path ON thumbnails(file_path)')
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_updated_at ON thumbnails(updated_at)')
+
+    def calculate_hash(self, file_path: str) -> str:
+        """计算文件路径的哈希值"""
+        return hashlib.sha256(file_path.encode('utf-8')).hexdigest()
+
+    def get_file_modified_time(self, file_path: pathlib.Path) -> int:
+        """获取文件的修改时间"""
+        try:
+            return int(file_path.stat().st_mtime)
+        except OSError:
+            return 0
+
+    def store_thumbnail(self, file_path: str, thumbnail_data: str):
+        """存储缩略图到数据库"""
+        hash_value = self.calculate_hash(file_path)
+        file_name = pathlib.Path(file_path).name
+        file_modified = self.get_file_modified_time(pathlib.Path(file_path))
+        now = int(time.time())
+        
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute('''
+                INSERT OR REPLACE INTO thumbnails
+                (hash, file_path, file_name, thumbnail_data, created_at, updated_at, file_modified)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (hash_value, file_path, file_name, thumbnail_data, now, now, file_modified))
+
+    def get_thumbnail(self, file_path: str) -> Optional[str]:
+        """从数据库获取缩略图"""
+        hash_value = self.calculate_hash(file_path)
+        
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute('''
+                SELECT thumbnail_data, file_modified FROM thumbnails WHERE hash = ?
+            ''', (hash_value,))
+            
+            row = cursor.fetchone()
+            if row:
+                stored_data, stored_modified = row
+                # 检查文件是否仍然存在且未修改
+                file_path_obj = pathlib.Path(file_path)
+                if file_path_obj.exists():
+                    current_modified = self.get_file_modified_time(file_path_obj)
+                    if current_modified <= stored_modified:
+                        return stored_data
+                # 文件已修改或不存在，删除缓存记录
+                self.delete_thumbnail(file_path)
+        
+        return None
+
+    def delete_thumbnail(self, file_path: str):
+        """删除缩略图缓存"""
+        hash_value = self.calculate_hash(file_path)
+        
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute('DELETE FROM thumbnails WHERE hash = ?', (hash_value,))
+
+    def cleanup_expired_cache(self) -> int:
+        """清理过期缓存"""
+        cleaned_count = 0
+        
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute('SELECT id, file_path, file_modified FROM thumbnails')
+            
+            to_delete = []
+            for row in cursor:
+                thumbnail_id, file_path, stored_modified = row
+                file_path_obj = pathlib.Path(file_path)
+                
+                # 检查文件是否存在
+                if not file_path_obj.exists():
+                    to_delete.append(thumbnail_id)
+                    cleaned_count += 1
+                    continue
+                
+                # 检查文件修改时间
+                current_modified = self.get_file_modified_time(file_path_obj)
+                if current_modified > stored_modified:
+                    to_delete.append(thumbnail_id)
+                    cleaned_count += 1
+            
+            # 批量删除过期记录
+            for thumbnail_id in to_delete:
+                conn.execute('DELETE FROM thumbnails WHERE id = ?', (thumbnail_id,))
+        
+        return cleaned_count
+
+    def get_cache_stats(self) -> Tuple[int, int]:
+        """获取缓存统计信息"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute('SELECT COUNT(*), COALESCE(SUM(LENGTH(thumbnail_data)), 0) FROM thumbnails')
+            count, size = cursor.fetchone()
+            return count, size
+
+    def clear_all_cache(self):
+        """清空所有缓存"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute('DELETE FROM thumbnails')
+
+    def generate_thumbnail_from_file(self, image_path: pathlib.Path) -> Optional[str]:
+        """从图片文件生成缩略图"""
+        try:
+            with Image.open(image_path) as img:
+                # 转换为RGB（去除透明度）
+                if img.mode in ('RGBA', 'LA', 'P'):
+                    # 创建白色背景
+                    background = Image.new('RGB', img.size, (255, 255, 255))
+                    if img.mode == 'P':
+                        img = img.convert('RGBA')
+                    background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                    img = background
+                elif img.mode != 'RGB':
+                    img = img.convert('RGB')
+
+                # 生成缩略图
+                thumbnail = self.resize_image(img, self.max_size)
+
+                # 转换为base64
+                import io
+                buffer = io.BytesIO()
+                thumbnail.save(buffer, 'JPEG', quality=85)
+                thumbnail_bytes = buffer.getvalue()
+                
+                return f"data:image/jpeg;base64,{base64.b64encode(thumbnail_bytes).decode('ascii')}"
+
+        except Exception as e:
+            if self.verbose:
+                print(f"✗ 处理图片失败 {image_path.name}: {e}")
+
+        return None
 
     def get_cache_path(self, file_path: pathlib.Path) -> pathlib.Path:
         """获取缓存文件路径（基于文件路径的哈希值）"""
@@ -231,17 +390,14 @@ class ThumbnailPreprocessor:
     def process_archive_file(self, archive_path: pathlib.Path) -> Optional[str]:
         """处理压缩包文件"""
         try:
-            # 检查缓存
-            cache_path = self.get_cache_path(archive_path)
-            if cache_path.exists():
-                # 检查缓存是否过期
-                cache_mtime = cache_path.stat().st_mtime
-                archive_mtime = archive_path.stat().st_mtime
-
-                if cache_mtime >= archive_mtime:
-                    if self.verbose:
-                        print(f"✓ 缓存有效: {archive_path.name}")
-                    return str(cache_path)
+            # 检查数据库缓存
+            path_str = str(archive_path)
+            cached_data = self.get_thumbnail(path_str)
+            if cached_data:
+                if self.verbose:
+                    print(f"✓ 缓存有效: {archive_path.name}")
+                self.stats['skipped'] += 1
+                return cached_data
 
             # 根据文件类型提取第一张图片
             image_data = None
@@ -256,35 +412,14 @@ class ThumbnailPreprocessor:
 
             if image_data:
                 # 从图片数据生成缩略图
-                with tempfile.NamedTemporaryFile(delete=False) as tmp:
-                    tmp.write(image_data)
-                    tmp.flush()
-
-                    try:
-                        with Image.open(tmp.name) as img:
-                            # 转换为RGB
-                            if img.mode in ('RGBA', 'LA', 'P'):
-                                background = Image.new('RGB', img.size, (255, 255, 255))
-                                if img.mode == 'P':
-                                    img = img.convert('RGBA')
-                                background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
-                                img = background
-                            elif img.mode != 'RGB':
-                                img = img.convert('RGB')
-
-                            # 生成缩略图
-                            thumbnail = self.resize_image(img, self.max_size)
-
-                            # 保存为JPEG
-                            thumbnail.save(cache_path, 'JPEG', quality=85)
-
-                            if self.verbose:
-                                print(f"✓ 生成缩略图: {archive_path.name}")
-                            return str(cache_path)
-
-                    finally:
-                        # 清理临时文件
-                        os.unlink(tmp.name)
+                thumbnail_data = self.generate_thumbnail_from_bytes(image_data)
+                if thumbnail_data:
+                    # 存储到数据库
+                    self.store_thumbnail(path_str, thumbnail_data)
+                    
+                    if self.verbose:
+                        print(f"✓ 生成缩略图: {archive_path.name}")
+                    return thumbnail_data
 
             else:
                 if self.verbose:
@@ -301,27 +436,14 @@ class ThumbnailPreprocessor:
     def process_folder(self, folder_path: pathlib.Path) -> Optional[str]:
         """处理文件夹"""
         try:
-            # 检查缓存
-            cache_path = self.get_cache_path(folder_path)
-            if cache_path.exists():
-                # 检查缓存是否过期（检查文件夹中是否有更新的文件）
-                cache_mtime = cache_path.stat().st_mtime
-
-                # 检查文件夹中的文件修改时间
-                folder_needs_update = False
-                for item in folder_path.rglob('*'):
-                    if item.is_file():
-                        try:
-                            if item.stat().st_mtime > cache_mtime:
-                                folder_needs_update = True
-                                break
-                        except (OSError, PermissionError):
-                            continue
-
-                if not folder_needs_update:
-                    if self.verbose:
-                        print(f"✓ 缓存有效: {folder_path.name}/")
-                    return str(cache_path)
+            # 检查数据库缓存
+            path_str = str(folder_path)
+            cached_data = self.get_thumbnail(path_str)
+            if cached_data:
+                if self.verbose:
+                    print(f"✓ 缓存有效: {folder_path.name}/")
+                self.stats['skipped'] += 1
+                return cached_data
 
             # 查找第一张图片文件
             image_files = []
@@ -336,17 +458,20 @@ class ThumbnailPreprocessor:
 
             # 优先处理图片文件
             if image_files:
-                result = self.process_image_file(image_files[0])
-                if result:
-                    self.stats['processed'] += 1
-                return result
+                thumbnail_data = self.generate_thumbnail_from_file(image_files[0])
+                if thumbnail_data:
+                    self.store_thumbnail(path_str, thumbnail_data)
+                    if self.verbose:
+                        print(f"✓ 生成缩略图: {folder_path.name}/")
+                    return thumbnail_data
 
             # 如果没有图片，尝试处理压缩包
             if archive_files:
                 result = self.process_archive_file(archive_files[0])
                 if result:
-                    self.stats['processed'] += 1
-                return result
+                    # 复制压缩包的缩略图到文件夹缓存
+                    self.store_thumbnail(path_str, result)
+                    return result
 
             # 没有找到可用的图片
             if self.verbose:
@@ -390,7 +515,9 @@ class ThumbnailPreprocessor:
                 print(f"处理: {item.name}{'/' if item.is_dir() else ''} ... ", end='', flush=True)
 
             if item.is_dir():
-                self.process_folder(item)
+                result = self.process_folder(item)
+                if result:
+                    self.stats['processed'] += 1
             else:  # 压缩包
                 result = self.process_archive_file(item)
                 if result:
@@ -412,7 +539,7 @@ def main():
 示例:
   python thumbnail_preprocessor.py "D:\\Images" --recursive --verbose
   python thumbnail_preprocessor.py "/home/user/Images" --size 128
-  python thumbnail_preprocessor.py "D:\\Comics" --cache-dir "./cache"
+  python thumbnail_preprocessor.py "D:\\Comics" --cache-dir "C:\\MyCache\\thumbnails"
         """
     )
 
@@ -431,18 +558,14 @@ def main():
     )
     parser.add_argument(
         '--cache-dir',
-        help='缓存目录路径 (默认: 系统缓存目录/neoview/thumbnails)'
+        default=r'D:\scoop\apps\neoview\thumb',
+        help='缓存目录路径 (默认: D:\\scoop\\apps\\neoview\\thumb)'
     )
 
     args = parser.parse_args()
 
     # 确定缓存目录
-    if args.cache_dir:
-        cache_dir = args.cache_dir
-    else:
-        # 使用系统缓存目录
-        import platformdirs
-        cache_dir = platformdirs.user_cache_dir("neoview") / "thumbnails"
+    cache_dir = args.cache_dir
 
     # 创建预处理器
     processor = ThumbnailPreprocessor(

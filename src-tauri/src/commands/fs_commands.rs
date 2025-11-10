@@ -230,31 +230,38 @@ pub async fn move_to_trash(
     fs_manager.move_to_trash(&path)
 }
 
-/// 获取缓存大小
+/// 获取缩略图缓存大小
 #[tauri::command]
 pub async fn get_thumbnail_cache_size(
     state: State<'_, FsState>,
 ) -> Result<u64, String> {
     let thumbnail_manager = state.thumbnail_manager.lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .map_err(|e| format!("获取缩略图管理器锁失败: {}", e))?;
 
-    thumbnail_manager.get_cache_size()
+    let (_, size) = thumbnail_manager.get_cache_stats()
+        .map_err(|e| format!("获取缓存统计失败: {}", e))?;
+
+    Ok(size)
 }
 
 /// 清空缩略图缓存
 #[tauri::command]
 pub async fn clear_thumbnail_cache(
     state: State<'_, FsState>,
-) -> Result<usize, String> {
+) -> Result<u64, String> {
     let thumbnail_manager = state.thumbnail_manager.lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .map_err(|e| format!("获取缩略图管理器锁失败: {}", e))?;
+
+    let (count, _) = thumbnail_manager.get_cache_stats()
+        .map_err(|e| format!("获取缓存统计失败: {}", e))?;
 
     thumbnail_manager.clear_all_cache()
+        .map_err(|e| format!("清空缓存失败: {}", e))?;
+
+    Ok(count as u64)
 }
 
-
-
-/// 清理过期缓存
+/// 清理过期缩略图缓存
 #[tauri::command]
 pub async fn cleanup_thumbnail_cache(
     max_age_days: u64,
@@ -263,7 +270,8 @@ pub async fn cleanup_thumbnail_cache(
     let thumbnail_manager = state.thumbnail_manager.lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
 
-    thumbnail_manager.cleanup_cache(max_age_days)
+    thumbnail_manager.cleanup_expired_cache()
+        .map_err(|e| format!("清理过期缓存失败: {}", e))
 }
 
 // ===== 压缩包相关命令 =====
@@ -703,4 +711,44 @@ pub struct IndexSearchOptions {
     pub max_size: Option<u64>,
     pub modified_after: Option<u64>,
     pub modified_before: Option<u64>,
+}
+
+/// 生成文件夹缩略图（带缓存检查）
+#[tauri::command]
+pub async fn generate_folder_thumbnail_cached(
+    folder_path: String,
+    max_size: u32,
+    state: State<'_, FsState>,
+) -> Result<String, String> {
+    let thumbnail_manager = state.thumbnail_manager.lock()
+        .map_err(|e| format!("获取缩略图管理器锁失败: {}", e))?;
+
+    thumbnail_manager.generate_folder_thumbnail(&folder_path, max_size)
+}
+
+/// 生成压缩包缩略图（带缓存检查）
+#[tauri::command]
+pub async fn generate_archive_thumbnail_cached(
+    archive_path: String,
+    max_size: u32,
+    state: State<'_, FsState>,
+) -> Result<String, String> {
+    let thumbnail_manager = state.thumbnail_manager.lock()
+        .map_err(|e| format!("获取缩略图管理器锁失败: {}", e))?;
+
+    thumbnail_manager.generate_archive_thumbnail(&archive_path, max_size)
+}
+
+/// 重新初始化缩略图数据库路径
+#[tauri::command]
+pub async fn reinitialize_thumbnail_database(
+    db_path: String,
+    state: State<'_, FsState>,
+) -> Result<(), String> {
+    let mut thumbnail_manager = state.thumbnail_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    let path = PathBuf::from(db_path);
+    thumbnail_manager.reinitialize_database(&path)
+        .map_err(|e| format!("重新初始化数据库失败: {}", e))
 }

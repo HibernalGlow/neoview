@@ -87,7 +87,7 @@
       } else if (item.name.endsWith('.zip') || item.name.endsWith('.cbz') || item.name.endsWith('.rar') || item.name.endsWith('.cbr')) {
         await loadArchiveThumbnail();
       }
-    });
+    }, item.name, item.isDir ? 'folder' : 'archive');
   });
 </script>
 

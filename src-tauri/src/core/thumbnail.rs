@@ -1,69 +1,55 @@
+use std::path::Path;
 use std::fs;
-use std::path::{Path, PathBuf};
 use image::{DynamicImage, ImageFormat, GenericImageView};
 use std::io::Cursor;
 use base64::{Engine as _, engine::general_purpose};
+use crate::core::ThumbnailDatabase;
 
 /// 缩略图管理器
 pub struct ThumbnailManager {
-    /// 缩略图缓存目录
-    cache_dir: PathBuf,
+    /// 缩略图数据库
+    database: ThumbnailDatabase,
     /// 缩略图尺寸
     size: u32,
 }
 
 impl ThumbnailManager {
     /// 创建新的缩略图管理器
-    pub fn new(cache_dir: PathBuf, size: u32) -> Result<Self, String> {
-        // 确保缓存目录存在
-        fs::create_dir_all(&cache_dir)
-            .map_err(|e| format!("创建缓存目录失败: {}", e))?;
+    pub fn new(db_path: &Path, size: u32) -> Result<Self, String> {
+        let database = ThumbnailDatabase::new(db_path)
+            .map_err(|e| format!("创建缩略图数据库失败: {}", e))?;
 
         Ok(Self {
-            cache_dir,
+            database,
             size,
         })
     }
 
-    /// 获取缩略图缓存路径
-    fn get_cache_path(&self, image_path: &Path) -> PathBuf {
-        // 使用原文件路径的哈希值作为缓存文件名
-        let hash = {
-            use std::collections::hash_map::DefaultHasher;
-            use std::hash::{Hash, Hasher};
-            let mut hasher = DefaultHasher::new();
-            image_path.to_string_lossy().hash(&mut hasher);
-            hasher.finish()
-        };
-
-        self.cache_dir.join(format!("{}.jpg", hash))
+    /// 重新初始化数据库路径
+    pub fn reinitialize_database(&mut self, db_path: &Path) -> Result<(), String> {
+        let database = ThumbnailDatabase::new(db_path)
+            .map_err(|e| format!("重新创建缩略图数据库失败: {}", e))?;
+        self.database = database;
+        Ok(())
     }
 
     /// 生成缩略图（返回 base64 编码）
     pub fn generate_thumbnail(&self, image_path: &Path) -> Result<String, String> {
-        // 检查缓存
-        let cache_path = self.get_cache_path(image_path);
-        
-        if cache_path.exists() {
-            // 检查缓存是否过期（原文件是否更新）
-            if let (Ok(cache_meta), Ok(source_meta)) = (
-                fs::metadata(&cache_path),
-                fs::metadata(image_path)
-            ) {
-                if let (Ok(cache_time), Ok(source_time)) = (
-                    cache_meta.modified(),
-                    source_meta.modified()
-                ) {
-                    if cache_time >= source_time {
-                        // 缓存有效，直接读取
-                        return self.read_thumbnail_from_cache(&cache_path);
-                    }
-                }
-            }
+        let path_str = image_path.to_string_lossy();
+
+        // 首先检查数据库缓存
+        if let Ok(Some(cached_data)) = self.database.get_thumbnail(&path_str) {
+            return Ok(cached_data);
         }
 
         // 生成新缩略图
-        self.generate_and_cache_thumbnail(image_path, &cache_path)
+        let thumbnail_data = self.generate_and_cache_thumbnail(image_path)?;
+
+        // 存储到数据库
+        self.database.store_thumbnail(&path_str, &thumbnail_data)
+            .map_err(|e| format!("存储缩略图失败: {}", e))?;
+
+        Ok(thumbnail_data)
     }
 
     /// 从字节数据生成缩略图（用于压缩包内图片）
@@ -91,7 +77,7 @@ impl ThumbnailManager {
     }
 
     /// 生成并缓存缩略图
-    fn generate_and_cache_thumbnail(&self, image_path: &Path, cache_path: &Path) -> Result<String, String> {
+    fn generate_and_cache_thumbnail(&self, image_path: &Path) -> Result<String, String> {
         // 加载图片 - 支持 JXL、AVIF 等格式
         let img = self.load_image_with_format_support(image_path)?;
 
@@ -100,10 +86,6 @@ impl ThumbnailManager {
 
         // 编码为 JPEG
         let jpeg_data = self.encode_jpeg(&thumbnail)?;
-
-        // 保存到缓存
-        fs::write(cache_path, &jpeg_data)
-            .map_err(|e| format!("保存缓存失败: {}", e))?;
 
         // 返回 base64
         Ok(format!("data:image/jpeg;base64,{}", general_purpose::STANDARD.encode(&jpeg_data)))
@@ -237,74 +219,17 @@ impl ThumbnailManager {
         Ok(buffer)
     }
 
-    /// 清除过期缓存（可选的后台任务）
-    pub fn cleanup_cache(&self, max_age_days: u64) -> Result<usize, String> {
-        use std::time::{SystemTime, Duration};
-
-        let max_age = Duration::from_secs(max_age_days * 24 * 60 * 60);
-        let now = SystemTime::now();
-        let mut removed_count = 0;
-
-        let entries = fs::read_dir(&self.cache_dir)
-            .map_err(|e| format!("读取缓存目录失败: {}", e))?;
-
-        for entry in entries {
-            let entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
-            let path = entry.path();
-
-            if let Ok(metadata) = fs::metadata(&path) {
-                if let Ok(modified) = metadata.modified() {
-                    if let Ok(age) = now.duration_since(modified) {
-                        if age > max_age {
-                            if fs::remove_file(&path).is_ok() {
-                                removed_count += 1;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(removed_count)
+    /// 清理过期缩略图缓存
+    pub fn cleanup_expired_cache(&self) -> Result<usize, String> {
+        self.database.cleanup_expired()
+            .map_err(|e| format!("清理过期缓存失败: {}", e))
     }
 
-    /// 获取缓存大小
-    pub fn get_cache_size(&self) -> Result<u64, String> {
-        let mut total_size = 0u64;
-
-        let entries = fs::read_dir(&self.cache_dir)
-            .map_err(|e| format!("读取缓存目录失败: {}", e))?;
-
-        for entry in entries {
-            let entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
-            if let Ok(metadata) = entry.metadata() {
-                total_size += metadata.len();
-            }
-        }
-
-        Ok(total_size)
+    /// 获取缓存统计信息
+    pub fn get_cache_stats(&self) -> Result<(usize, u64), String> {
+        self.database.get_stats()
+            .map_err(|e| format!("获取缓存统计失败: {}", e))
     }
-
-    /// 清空所有缓存
-    pub fn clear_all_cache(&self) -> Result<usize, String> {
-        let mut removed_count = 0;
-
-        let entries = fs::read_dir(&self.cache_dir)
-            .map_err(|e| format!("读取缓存目录失败: {}", e))?;
-
-        for entry in entries {
-            let entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
-            let path = entry.path();
-            
-            if fs::remove_file(&path).is_ok() {
-                removed_count += 1;
-            }
-        }
-
-        Ok(removed_count)
-    }
-
-    /// 生成文件夹缩略图（强制生成，跳过缓存检查）
     pub fn generate_folder_thumbnail_force(&self, folder_path: &Path, max_size: u32) -> Result<String, String> {
         // 读取文件夹内容
         let entries = fs::read_dir(folder_path)
@@ -320,8 +245,7 @@ impl ThumbnailManager {
                 let ext_lower = ext.to_lowercase();
                 if matches!(ext_lower.as_str(), "jpg" | "jpeg" | "png" | "gif" | "bmp" | "tiff" | "webp" | "avif" | "jxl") {
                     // 找到第一张图片，生成缩略图并强制保存
-                    let cache_path = self.get_cache_path(&path);
-                    return self.generate_and_cache_thumbnail(&path, &cache_path);
+                    return self.generate_and_cache_thumbnail(&path);
                 }
             }
         }
@@ -361,17 +285,18 @@ impl ThumbnailManager {
             if item.is_image {
                 // 从压缩包中提取图片数据
                 let image_data = archive_manager.extract_file_from_zip(archive_path, &item.path)?;
-                // 生成缩略图并强制保存
+                // 生成缩略图
                 let thumbnail = self.resize_keep_aspect_ratio(&self.load_image_with_format_support_from_bytes(&image_data)?, max_size);
                 let jpeg_data = self.encode_jpeg(&thumbnail)?;
                 
-                // 强制保存到缓存
-                let cache_path = self.get_cache_path(archive_path);
-                fs::write(&cache_path, &jpeg_data)
-                    .map_err(|e| format!("保存缓存失败: {}", e))?;
+                // 存储到数据库
+                let base64_data = format!("data:image/jpeg;base64,{}", general_purpose::STANDARD.encode(&jpeg_data));
+                let path_str = archive_path.to_string_lossy().to_string();
+                self.database.store_thumbnail(&path_str, &base64_data)
+                    .map_err(|e| format!("存储缩略图失败: {}", e))?;
 
                 // 返回 base64
-                return Ok(format!("data:image/jpeg;base64,{}", general_purpose::STANDARD.encode(&jpeg_data)));
+                return Ok(base64_data);
             }
         }
 
@@ -385,5 +310,61 @@ impl ThumbnailManager {
         image::load_from_memory(image_data)
             .map_err(|e| format!("加载图片失败: {}", e))
     }
-    
+
+    /// 生成文件夹缩略图
+    pub fn generate_folder_thumbnail(&self, folder_path: &str, max_size: u32) -> Result<String, String> {
+        // 检查数据库缓存
+        if let Ok(Some(cached_data)) = self.database.get_thumbnail(folder_path) {
+            return Ok(cached_data);
+        }
+
+        // 扫描文件夹中的图片
+        let folder_path = Path::new(folder_path);
+        let thumbnail_data = self.generate_folder_thumbnail_force(folder_path, max_size)?;
+
+        // 存储到数据库
+        self.database.store_thumbnail(folder_path.to_string_lossy().as_ref(), &thumbnail_data)
+            .map_err(|e| format!("存储文件夹缩略图失败: {}", e))?;
+
+        Ok(thumbnail_data)
+    }
+
+    /// 生成压缩包缩略图
+    pub fn generate_archive_thumbnail(&self, archive_path: &str, max_size: u32) -> Result<String, String> {
+        // 检查数据库缓存
+        if let Ok(Some(cached_data)) = self.database.get_thumbnail(archive_path) {
+            return Ok(cached_data);
+        }
+
+        // 从压缩包中提取图片
+        let archive_path_obj = Path::new(archive_path);
+        let thumbnail_data = self.generate_archive_thumbnail_force(archive_path_obj, max_size)?;
+
+        // 存储到数据库
+        self.database.store_thumbnail(archive_path, &thumbnail_data)
+            .map_err(|e| format!("存储压缩包缩略图失败: {}", e))?;
+
+        Ok(thumbnail_data)
+    }
+
+    /// 从base64图片数据生成缩略图
+    pub fn generate_thumbnail_from_bytes_base64(&self, image_data_base64: &str, max_size: u32) -> Result<String, String> {
+        // 解码base64数据
+        let image_data = general_purpose::STANDARD.decode(image_data_base64)
+            .map_err(|e| format!("解码base64图片数据失败: {}", e))?;
+
+        self.generate_thumbnail_from_bytes(&image_data, max_size)
+    }
+
+    /// 清空所有缓存
+    pub fn clear_all_cache(&self) -> Result<(), String> {
+        self.database.clear_all()
+            .map_err(|e| format!("清空缓存失败: {}", e))
+    }
+
+    /// 优化数据库
+    pub fn optimize_database(&self) -> Result<(), String> {
+        self.database.optimize()
+            .map_err(|e| format!("优化数据库失败: {}", e))
+    }
 }

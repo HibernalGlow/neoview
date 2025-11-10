@@ -81,6 +81,11 @@ export interface NeoViewSettings {
     random: boolean;
     fadeTransition: boolean;
   };
+  thumbnails: {
+    cacheDirectory: string;
+    maxConcurrentTasks: number;
+    enableLogging: boolean;
+  };
 }
 
 const defaultSettings: NeoViewSettings = {
@@ -158,6 +163,11 @@ const defaultSettings: NeoViewSettings = {
     loop: false,
     random: false,
     fadeTransition: true
+  },
+  thumbnails: {
+    cacheDirectory: 'D:\\scoop\\apps\\neoview\\thumb',
+    maxConcurrentTasks: 10,
+    enableLogging: true
   }
 };
 

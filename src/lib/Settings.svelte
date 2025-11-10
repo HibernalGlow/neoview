@@ -6,7 +6,7 @@
 	import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 	// 使用动态导入以避免在非 Tauri 环境下 vite 预解析失败
 	import { Button } from '$lib/components/ui/button';
-	import { Settings, Keyboard, Palette, Zap, Mouse, X, Minimize, Info, Download, Upload, RotateCcw, Save as SaveIcon, Monitor, Archive, Eye, BookOpen, Layout, PanelLeft } from '@lucide/svelte';
+	import { Settings, Keyboard, Palette, Zap, Mouse, X, Minimize, Info, Download, Upload, RotateCcw, Save as SaveIcon, Monitor, Archive, Eye, BookOpen, Layout, PanelLeft, Image } from '@lucide/svelte';
 	import ViewerSettingsPanel from '$lib/components/dialogs/ViewerSettingsPanel.svelte';
 	import UnifiedBindingPanel from '$lib/components/dialogs/UnifiedBindingPanel.svelte';
 	import SidebarManagementPanel from '$lib/components/panels/SidebarManagementPanel.svelte';
@@ -19,6 +19,7 @@
 		{ value: 'system', label: '系统', icon: Monitor },
 		{ value: 'image', label: '图片', icon: Palette },
 		{ value: 'archive', label: '压缩包', icon: Archive },
+		{ value: 'thumbnails', label: '缩略图', icon: Image },
 		{ value: 'view', label: '视图', icon: Eye },
 		{ value: 'book', label: '书籍', icon: BookOpen },
 		{ value: 'theme', label: '外观', icon: Layout },
@@ -66,8 +67,27 @@
 		await appWindow.close();
 	}
 
-	function saveSettings() {
+	async function saveSettings() {
+		// 获取之前的设置以检测变化
+		const previousSettings = settingsManager.getSettings();
+		
+		// 保存设置
 		settingsManager.updateSettings(currentSettings);
+		
+		// 检查缩略图缓存目录是否改变
+		if (previousSettings.thumbnails.cacheDirectory !== currentSettings.thumbnails.cacheDirectory) {
+			try {
+				// 重新初始化缩略图数据库
+				const { invoke } = await import(/* @vite-ignore */ '@tauri-apps' + '/api/core');
+				const dbPath = `${currentSettings.thumbnails.cacheDirectory}/thumbnails.db`;
+				await invoke('reinitialize_thumbnail_database', { dbPath });
+				console.log('✅ 缩略图数据库路径已更新');
+			} catch (error) {
+				console.error('❌ 更新缩略图数据库路径失败:', error);
+				alert('缩略图数据库路径更新失败，请检查目录权限。');
+			}
+		}
+		
 		console.log('✅ 设置已保存');
 	}
 
@@ -372,6 +392,58 @@
 									</div>
 								{/if}
 							</div>
+						</div>
+					</div>
+				</div>
+			{:else if activeTab === 'thumbnails'}
+				<div class="p-6 space-y-6">
+					<div class="space-y-2">
+						<h3 class="text-lg font-semibold flex items-center gap-2">
+							<Image class="h-5 w-5" />
+							缩略图设置
+						</h3>
+						<p class="text-sm text-muted-foreground">配置文件夹和压缩包缩略图的生成和缓存选项</p>
+					</div>
+
+					<div class="space-y-4">
+						<!-- 缓存目录 -->
+						<div class="space-y-2">
+							<h4 class="text-sm font-semibold">缩略图数据库位置</h4>
+							<p class="text-xs text-muted-foreground">缩略图数据库文件的存储目录</p>
+							<input 
+								type="text" 
+								class="w-full max-w-md px-3 py-2 text-sm border rounded-md font-mono" 
+								bind:value={currentSettings.thumbnails.cacheDirectory}
+								placeholder="D:\scoop\apps\neoview\thumb"
+							/>
+							<p class="text-xs text-muted-foreground">数据库文件将保存在此目录中，命名为 thumbnails.db。更改此设置将重新初始化数据库。</p>
+						</div>
+
+						<!-- 并发任务数 -->
+						<div class="space-y-2">
+							<h4 class="text-sm font-semibold">最大并发任务数</h4>
+							<p class="text-xs text-muted-foreground">同时处理缩略图的最大数量</p>
+							<div class="flex items-center gap-2">
+								<input 
+									type="range" 
+									min="1" 
+									max="20" 
+									step="1" 
+									bind:value={currentSettings.thumbnails.maxConcurrentTasks}
+									class="w-full max-w-xs" 
+								/>
+								<span class="text-sm font-mono min-w-[2rem]">{currentSettings.thumbnails.maxConcurrentTasks}</span>
+							</div>
+						</div>
+
+						<!-- 日志记录 -->
+						<div class="space-y-2">
+							<h4 class="text-sm font-semibold">日志记录</h4>
+							<label class="flex items-center gap-2">
+								<input type="checkbox" class="rounded" bind:checked={currentSettings.thumbnails.enableLogging} />
+								<span class="text-sm">启用缩略图处理日志</span>
+							</label>
+							<p class="text-xs text-muted-foreground">在控制台显示缩略图生成进度和错误信息</p>
 						</div>
 					</div>
 				</div>

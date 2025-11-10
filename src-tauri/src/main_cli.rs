@@ -71,7 +71,7 @@ fn preprocess_thumbnails(
         .join("neoview")
         .join("thumbnails");
 
-    let thumbnail_manager = ThumbnailManager::new(cache_dir, max_size)
+    let thumbnail_manager = ThumbnailManager::new(&cache_dir, max_size)
         .map_err(|e| format!("创建缩略图管理器失败: {}", e))?;
     let _archive_manager = ArchiveManager::new();
 

@@ -26,6 +26,7 @@
 		topToolbarHeight
 	} from '$lib/stores';
 	import PathBar from '../ui/PathBar.svelte';
+	import ThumbnailStatus from '../ui/ThumbnailStatus.svelte';
 	import {
 		ChevronLeft,
 		ChevronRight,
@@ -299,6 +300,14 @@
 						{bookStore.currentPageIndex + 1} / {bookStore.totalPages}
 					</span>
 					<!-- progress removed: not needed in top toolbar -->
+
+					<!-- 缩略图处理状态 -->
+					<ThumbnailStatus />
+				</div>
+			{:else}
+				<!-- 当没有打开书籍时也显示缩略图状态 -->
+				<div class="flex items-center">
+					<ThumbnailStatus />
 				</div>
 			{/if}
 

@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { Folder, File, Image, Trash2, RefreshCw, FileArchive, FolderOpen, Home, ChevronLeft, ChevronRight, ChevronUp, CheckSquare, Grid3x3, List, MoreVertical, Search, ChevronDown, Settings, AlertCircle } from '@lucide/svelte';
+  import { Folder, File, Image, Trash2, RefreshCw, FileArchive, FolderOpen, Home, ChevronLeft, ChevronRight, ChevronUp, CheckSquare, Grid3x3, List, MoreVertical, Search, ChevronDown, Settings, AlertCircle, Bookmark, Star } from '@lucide/svelte';
   import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
+  import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
   import { onMount } from 'svelte';
   import { FileSystemAPI } from '$lib/api';
   import type { FsItem } from '$lib/types';
@@ -32,6 +33,7 @@
   // UI 模式状态
   let isCheckMode = $state(false);
   let isDeleteMode = $state(false);
+  let isBookmarkMode = $state(false);
   let viewMode = $state<'list' | 'thumbnails'>('list'); // 列表 or 缩略图视图
   let selectedItems = $state<Set<string>>(new Set());
 
@@ -48,6 +50,19 @@
   });
   let searchResults = $state<FsItem[]>([]);
   let isSearching = $state(false);
+
+  // 书签相关
+  interface BookmarkEntry {
+    id: string;
+    path: string;
+    name: string;
+    isDir: boolean;
+    timestamp: number;
+    starred: boolean;
+  }
+
+  let bookmarks = $state<BookmarkEntry[]>([]);
+  let bookmarkSearchQuery = $state('');
 
   // 订阅全局状态 - 使用 Svelte 5 的响应式
   $effect(() => {
@@ -675,6 +690,122 @@
     }
   }
 
+  // ===== 书签功能 =====
+
+  /**
+   * 切换书签模式
+   */
+  function toggleBookmarkMode() {
+    isBookmarkMode = !isBookmarkMode;
+    if (isBookmarkMode) {
+      loadBookmarks();
+    }
+  }
+
+  /**
+   * 加载书签
+   */
+  function loadBookmarks() {
+    try {
+      const saved = localStorage.getItem('neoview-bookmarks');
+      if (saved) {
+        bookmarks = JSON.parse(saved);
+      }
+    } catch (err) {
+      console.error('加载书签失败:', err);
+    }
+  }
+
+  /**
+   * 保存书签
+   */
+  function saveBookmarks() {
+    try {
+      localStorage.setItem('neoview-bookmarks', JSON.stringify(bookmarks));
+    } catch (err) {
+      console.error('保存书签失败:', err);
+    }
+  }
+
+  /**
+   * 添加书签
+   */
+  function addBookmark(item: FsItem) {
+    const newBookmark: BookmarkEntry = {
+      id: Date.now().toString(),
+      path: item.path,
+      name: item.name,
+      isDir: item.is_dir,
+      timestamp: Date.now(),
+      starred: false
+    };
+
+    // 检查是否已存在
+    const existingIndex = bookmarks.findIndex(b => b.path === item.path);
+    if (existingIndex >= 0) {
+      // 如果已存在，更新时间戳
+      bookmarks[existingIndex].timestamp = newBookmark.timestamp;
+    } else {
+      // 否则添加新书签
+      bookmarks.unshift(newBookmark);
+    }
+
+    saveBookmarks();
+  }
+
+  /**
+   * 移除书签
+   */
+  function removeBookmark(id: string) {
+    bookmarks = bookmarks.filter(b => b.id !== id);
+    saveBookmarks();
+  }
+
+  /**
+   * 切换星标
+   */
+  function toggleBookmarkStar(id: string) {
+    bookmarks = bookmarks.map(b => 
+      b.id === id ? { ...b, starred: !b.starred } : b
+    );
+    saveBookmarks();
+  }
+
+  /**
+   * 打开书签
+   */
+  async function openBookmark(bookmark: BookmarkEntry) {
+    if (bookmark.isDir) {
+      await navigateToDirectory(bookmark.path);
+    } else {
+      await openFile({
+        name: bookmark.name,
+        path: bookmark.path,
+        is_dir: false,
+        isImage: false, // 需要根据实际情况判断
+        size: 0,
+        modified: 0
+      } as FsItem);
+    }
+    isBookmarkMode = false;
+  }
+
+  /**
+   * 处理书签排序
+   */
+  function handleBookmarkSort(sortedBookmarks: BookmarkEntry[]) {
+    bookmarks = sortedBookmarks;
+    saveBookmarks();
+  }
+
+  /**
+   * 获取过滤后的书签
+   */
+  let filteredBookmarks = $derived(bookmarks.filter(
+    b => b.name.toLowerCase().includes(bookmarkSearchQuery.toLowerCase()) ||
+         b.path.toLowerCase().includes(bookmarkSearchQuery.toLowerCase())
+  ));
+
   
 
   /**
@@ -1163,6 +1294,18 @@
         <div class="w-px h-6 bg-border mx-1"></div>
       {/if}
 
+      <div class="w-px h-6 bg-border mx-1"></div>
+
+      <Button
+        variant={isBookmarkMode ? 'default' : 'ghost'}
+        size="icon"
+        class="h-8 w-8"
+        onclick={toggleBookmarkMode}
+        title={isBookmarkMode ? '退出书签模式' : '书签模式'}
+      >
+        <Bookmark class="h-4 w-4" />
+      </Button>
+
       <Button
         variant={isCheckMode ? 'default' : 'ghost'}
         size="icon"
@@ -1362,7 +1505,104 @@
     </div>
   {/if}
 
-  <!-- 加载状态 -->
+  <!-- 书签模式 -->
+  {#if isBookmarkMode}
+    <div class="flex-1 overflow-y-auto p-2">
+      <!-- 书签标题栏和搜索 -->
+      <div class="mb-4 p-3 bg-gray-50 rounded-lg">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <Bookmark class="h-5 w-5 text-blue-500" />
+            <h3 class="font-semibold">书签列表</h3>
+            <span class="text-sm text-gray-500">({bookmarks.length})</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <BookmarkSortPanel 
+              bookmarks={bookmarks} 
+              onSort={handleBookmarkSort}
+            />
+          </div>
+        </div>
+        <input
+          type="text"
+          placeholder="搜索书签..."
+          bind:value={bookmarkSearchQuery}
+          class="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      <!-- 书签列表 -->
+      {#if filteredBookmarks.length === 0}
+        <div class="flex flex-col items-center justify-center py-12 text-gray-400">
+          <Bookmark class="h-16 w-16 opacity-30 mb-4" />
+          <p class="text-lg font-medium">
+            {bookmarkSearchQuery ? '未找到匹配的书签' : '暂无书签'}
+          </p>
+          <p class="text-sm opacity-70 mt-2">
+            {bookmarkSearchQuery 
+              ? `尝试其他关键词：${bookmarkSearchQuery}` 
+              : '右键点击文件或文件夹选择"添加到书签"'}
+          </p>
+        </div>
+      {:else}
+        <div class="grid grid-cols-1 gap-2">
+          {#each filteredBookmarks as bookmark (bookmark.id)}
+            <div
+              class="group flex items-center gap-3 rounded border p-3 cursor-pointer transition-colors hover:bg-gray-50 border-gray-200"
+              onclick={() => openBookmark(bookmark)}
+            >
+              <!-- 图标 -->
+              <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center">
+                {#if bookmark.isDir}
+                  <Folder class="h-8 w-8 text-blue-500" />
+                {:else if bookmark.name.endsWith('.zip') || bookmark.name.endsWith('.cbz')}
+                  <FileArchive class="h-8 w-8 text-purple-500" />
+                {:else}
+                  <File class="h-8 w-8 text-gray-400" />
+                {/if}
+              </div>
+
+              <!-- 信息 -->
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <div class="font-medium truncate">{bookmark.name}</div>
+                  <button
+                    class="flex-shrink-0 p-1 hover:bg-gray-200 rounded transition-colors"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      toggleBookmarkStar(bookmark.id);
+                    }}
+                    title={bookmark.starred ? "取消星标" : "添加星标"}
+                  >
+                    <Star class="h-4 w-4 {bookmark.starred ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}" />
+                  </button>
+                </div>
+                <div class="text-xs text-gray-500 truncate">{bookmark.path}</div>
+                <div class="text-xs text-gray-400">
+                  {formatSearchHistoryTime(bookmark.timestamp)}
+                </div>
+              </div>
+
+              <!-- 删除按钮 -->
+              <button
+                class="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  removeBookmark(bookmark.id);
+                }}
+                title="删除书签"
+              >
+                <svg class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {:else}
+    <!-- 加载状态 -->
   {#if loading}
     <div class="flex flex-1 items-center justify-center">
       <div class="flex flex-col items-center gap-3">
@@ -1580,6 +1820,7 @@
       </div>
     </div>
   {/if}
+  {/if}
 
   <!-- 右键菜单 -->
   {#if contextMenu.item}
@@ -1591,11 +1832,12 @@
       <!-- 添加到书签 -->
       <button
         class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-        onclick={() => addToBookmark(contextMenu.item!)}
+        onclick={() => {
+          addBookmark(contextMenu.item!);
+          hideContextMenu();
+        }}
       >
-        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-        </svg>
+        <Bookmark class="h-4 w-4" />
         添加到书签
       </button>
 

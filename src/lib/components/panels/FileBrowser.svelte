@@ -237,7 +237,10 @@
       if (!target.closest('.context-menu')) {
         hideContextMenu();
       }
-      if (!target.closest('.search-history') && !target.closest('.search-settings')) {
+      // 只有当点击的不是搜索框、搜索历史或搜索设置时才隐藏
+      if (!target.closest('.search-history') && 
+          !target.closest('.search-settings') && 
+          !target.closest('input[placeholder*="搜索"]')) {
         showSearchHistory = false;
         showSearchSettings = false;
       }
@@ -1008,9 +1011,12 @@
    * 处理搜索框聚焦
    */
   function handleSearchFocus() {
-    if (searchSettings.showHistoryOnFocus && searchHistory.length > 0) {
-      showSearchHistory = true;
-    }
+    // 添加一个小延迟，确保点击事件不会立即隐藏历史记录
+    setTimeout(() => {
+      if (searchSettings.showHistoryOnFocus && searchHistory.length > 0) {
+        showSearchHistory = true;
+      }
+    }, 10);
     showSearchSettings = false;
   }
 </script>

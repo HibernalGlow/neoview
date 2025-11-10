@@ -237,6 +237,7 @@
 
 	<!-- 缩略图栏内容 -->
 	<div
+		data-bottom-bar="true"
 		class="absolute bottom-0 left-0 right-0 z-[58] transition-transform duration-300 {isVisible
 			? 'translate-y-0'
 			: 'translate-y-full'}"

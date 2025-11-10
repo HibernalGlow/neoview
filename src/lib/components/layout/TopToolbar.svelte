@@ -219,6 +219,7 @@
 </script>
 
 <div
+	data-top-toolbar="true"
 	class="absolute top-0 left-0 right-0 z-[58] transition-transform duration-300 {isVisible
 		? 'translate-y-0'
 		: '-translate-y-full'}"

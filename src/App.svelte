@@ -164,8 +164,8 @@ function handleGlobalMouseClick(e: MouseEvent) {
 
 	// 检查点击是否在上下栏区域内
 	const target = e.target as HTMLElement;
-	const isInTopToolbar = target.closest('[data-top-toolbar]') || target.closest('.top-toolbar') || e.clientY < 80;
-	const isInBottomBar = target.closest('[data-bottom-bar]') || target.closest('.bottom-thumbnail-bar') || e.clientY > window.innerHeight - 160;
+	const isInTopToolbar = target.closest('[data-top-toolbar]') !== null;
+	const isInBottomBar = target.closest('[data-bottom-bar]') !== null;
 	
 	// 如果任一边栏打开，或点击在上下栏区域内，则不处理区域点击
 	if ($sidebarOpen || $rightSidebarOpen || isInTopToolbar || isInBottomBar) {
@@ -173,7 +173,9 @@ function handleGlobalMouseClick(e: MouseEvent) {
 			sidebarOpen: $sidebarOpen, 
 			rightSidebarOpen: $rightSidebarOpen, 
 			isInTopToolbar, 
-			isInBottomBar 
+			isInBottomBar,
+			targetElement: target.tagName,
+			targetClass: target.className
 		});
 		return;
 	}
@@ -211,8 +213,8 @@ function handleGlobalMouseDown(e: MouseEvent) {
 
 	// 检查点击是否在上下栏区域内
 	const target = e.target as HTMLElement;
-	const isInTopToolbar = target.closest('[data-top-toolbar]') || target.closest('.top-toolbar') || e.clientY < 80;
-	const isInBottomBar = target.closest('[data-bottom-bar]') || target.closest('.bottom-thumbnail-bar') || e.clientY > window.innerHeight - 160;
+	const isInTopToolbar = target.closest('[data-top-toolbar]') !== null;
+	const isInBottomBar = target.closest('[data-bottom-bar]') !== null;
 	
 	// 如果任一边栏打开，或点击在上下栏区域内，则不处理区域点击
 	if ($sidebarOpen || $rightSidebarOpen || isInTopToolbar || isInBottomBar) {
@@ -220,7 +222,9 @@ function handleGlobalMouseDown(e: MouseEvent) {
 			sidebarOpen: $sidebarOpen, 
 			rightSidebarOpen: $rightSidebarOpen, 
 			isInTopToolbar, 
-			isInBottomBar 
+			isInBottomBar,
+			targetElement: target.tagName,
+			targetClass: target.className
 		});
 		return;
 	}

@@ -10,18 +10,19 @@ use image::{GenericImageView, ImageFormat};
 use super::image_cache::ImageCache;
 use threadpool::ThreadPool;
 
+#[derive(Clone)]
 pub struct ImageLoader {
     /// 图像缓存
     cache: Arc<ImageCache>,
     /// 线程池用于多线程解码
-    thread_pool: ThreadPool,
+    pub thread_pool: Arc<ThreadPool>,
 }
 
 impl ImageLoader {
     pub fn new(cache_size_mb: usize, num_threads: usize) -> Self {
         Self { 
             cache: Arc::new(ImageCache::new(cache_size_mb)),
-            thread_pool: ThreadPool::new(num_threads),
+            thread_pool: Arc::new(ThreadPool::new(num_threads)),
         }
     }
 
@@ -32,7 +33,7 @@ impl ImageLoader {
 
     /// 更新线程数
     pub fn update_thread_count(&mut self, num_threads: usize) {
-        self.thread_pool = ThreadPool::new(num_threads);
+        self.thread_pool = Arc::new(ThreadPool::new(num_threads));
     }
 
     /// 加载图像文件为 base64 (带缓存)

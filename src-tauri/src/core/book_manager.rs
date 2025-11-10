@@ -31,36 +31,58 @@ impl BookManager {
 
     /// 预加载页面
     pub fn preload_pages(&self, image_loader: &super::ImageLoader) {
+        // 限制预加载数量，避免过度占用资源
+        if self.preload_size > 20 {
+            println!("Warning: Preload size {} is too large, limiting to 20", self.preload_size);
+            return;
+        }
+        
         if let Some(book) = &self.current_book {
             let current_page = book.current_page;
             let total_pages = book.total_pages;
             
             // 计算需要预加载的页面范围
+            let preload_count = std::cmp::min(self.preload_size, 20);
             let start = current_page.saturating_sub(1);
-            let end = (current_page + self.preload_size).min(total_pages - 1);
+            let end = (current_page + preload_count).min(total_pages - 1);
             
             // 清理旧的预加载缓存
             if let Ok(mut cache) = self.preload_cache.lock() {
                 cache.retain(|&page_idx, _| {
-                    // 保留当前页和即将预加载的页面
-                    page_idx >= start && page_idx <= end
+                    // 只保留当前页和前后1页
+                    page_idx >= current_page.saturating_sub(1) && page_idx <= current_page + 1
                 });
             }
             
-            // 预加载新页面
+            // 预加载新页面（限制并发数）
             for page_idx in start..=end {
+                if page_idx == current_page {
+                    continue; // 跳过当前页
+                }
+                
                 if let Some(page) = book.pages.get(page_idx) {
                     let path = page.path.clone();
-                    let _cache = Arc::clone(&self.preload_cache);
+                    let cache_clone = Arc::clone(&self.preload_cache);
                     
-                    // 使用线程池异步加载
-                    // 注意：这里需要访问 image_loader，可能需要调整架构
-                    // 暂时使用同步加载
-                    if let Ok(image_data) = image_loader.load_image_as_base64(&path) {
-                        if let Ok(mut cache) = self.preload_cache.lock() {
-                            cache.insert(page_idx, image_data);
+                    // 检查是否已经在缓存中
+                    if let Ok(cache) = self.preload_cache.lock() {
+                        if cache.contains_key(&page_idx) {
+                            continue;
                         }
                     }
+                    
+                    // 获取线程池引用
+                    let thread_pool = Arc::clone(&image_loader.thread_pool);
+                    let image_loader_ref = image_loader.clone();
+                    
+                    // 异步加载，避免阻塞
+                    thread_pool.execute(move || {
+                        if let Ok(image_data) = image_loader_ref.load_image_as_base64(&path) {
+                            if let Ok(mut cache) = cache_clone.lock() {
+                                cache.insert(page_idx, image_data);
+                            }
+                        }
+                    });
                 }
             }
         }

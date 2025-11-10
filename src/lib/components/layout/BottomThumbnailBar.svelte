@@ -121,9 +121,12 @@
 		const currentBook = bookStore.currentBook;
 		if (!currentBook) return;
 
-		// 预加载当前页前后各5页的缩略图
-		const start = Math.max(0, bookStore.currentPageIndex - 5);
-		const end = Math.min(currentBook.pages.length - 1, bookStore.currentPageIndex + 5);
+		// 动态计算预加载范围，确保至少显示6页
+		const preloadRange = Math.max(5, Math.floor(($bottomThumbnailBarHeight - 40) / 60)); // 基于高度计算
+		const start = Math.max(0, bookStore.currentPageIndex - preloadRange);
+		const end = Math.min(currentBook.pages.length - 1, bookStore.currentPageIndex + preloadRange);
+
+		console.log(`Loading thumbnails from ${start} to ${end} (total: ${end - start + 1})`);
 
 		for (let i = start; i <= end; i++) {
 			if (!(i in thumbnails)) {
@@ -194,13 +197,16 @@
 		const container = e.target as HTMLElement;
 		const thumbnailElements = container.querySelectorAll('button');
 
+		// 加载所有可见的缩略图，包括缓冲区
 		thumbnailElements.forEach((el, i) => {
 			const rect = el.getBoundingClientRect();
 			const containerRect = container.getBoundingClientRect();
 
+			// 扩大可见范围，提前加载即将进入视野的缩略图
+			const buffer = 200; // 200px 缓冲区
 			if (
-				rect.left >= containerRect.left - 100 &&
-				rect.right <= containerRect.right + 100
+				rect.left >= containerRect.left - buffer &&
+				rect.right <= containerRect.right + buffer
 			) {
 				if (!(i in thumbnails)) {
 					loadThumbnail(i);

@@ -28,6 +28,11 @@
 	let startLeftX = 0;
 	let startLeftWidth = 0;
 
+	// 右侧边栏拖拽调整大小
+	let isResizingRight = $state(false);
+	let startRightX = 0;
+	let startRightWidth = 0;
+
 	// 区域覆盖层状态
 	let showAreaOverlay = $state(false);
 
@@ -50,6 +55,27 @@
 
 	function handleLeftResizeEnd() {
 		isResizingLeft = false;
+	}
+
+	function handleRightResizeStart(e: MouseEvent) {
+		isResizingRight = true;
+		startRightX = e.clientX;
+		startRightWidth = $rightSidebarWidth;
+		e.preventDefault();
+	}
+
+	function handleRightResizeMove(e: MouseEvent) {
+		if (!isResizingRight) return;
+
+		const delta = startRightX - e.clientX; // 右侧边栏，向左拖拽时delta为正（增加宽度）
+		const newWidth = Math.max(200, Math.min(600, startRightWidth + delta));
+		
+		rightSidebarWidth.set(newWidth);
+		handleRightSidebarResize(newWidth);
+	}
+
+	function handleRightResizeEnd() {
+		isResizingRight = false;
 	}
 
 	// 监听区域覆盖层切换事件

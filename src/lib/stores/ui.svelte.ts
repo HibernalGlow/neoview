@@ -5,49 +5,90 @@
 
 import { writable } from 'svelte/store';
 
+// 从本地存储加载状态
+function loadFromStorage<T>(key: string, defaultValue: T): T {
+	try {
+		const saved = localStorage.getItem(`neoview-ui-${key}`);
+		if (saved) {
+			return JSON.parse(saved);
+		}
+	} catch (e) {
+		console.error(`Failed to load ${key} from storage:`, e);
+	}
+	return defaultValue;
+}
+
+// 保存状态到本地存储
+function saveToStorage<T>(key: string, value: T) {
+	try {
+		localStorage.setItem(`neoview-ui-${key}`, JSON.stringify(value));
+	} catch (e) {
+		console.error(`Failed to save ${key} to storage:`, e);
+	}
+}
+
 // 侧边栏状态 - 默认隐藏
-export const sidebarOpen = writable<boolean>(false);
-export const sidebarWidth = writable<number>(250);
+export const sidebarOpen = writable<boolean>(loadFromStorage('sidebarOpen', false));
+export const sidebarWidth = writable<number>(loadFromStorage('sidebarWidth', 250));
 
 // 右侧边栏状态
-export const rightSidebarOpen = writable<boolean>(false);
-export const rightSidebarWidth = writable<number>(250);
+export const rightSidebarOpen = writable<boolean>(loadFromStorage('rightSidebarOpen', false));
+export const rightSidebarWidth = writable<number>(loadFromStorage('rightSidebarWidth', 250));
 export type RightPanelType = 'info' | 'properties' | null;
-export const activeRightPanel = writable<RightPanelType>(null);
+export const activeRightPanel = writable<RightPanelType>(loadFromStorage('activeRightPanel', null));
 
 // 全屏状态
-export const isFullscreen = writable<boolean>(false);
+export const isFullscreen = writable<boolean>(loadFromStorage('isFullscreen', false));
 
 // 加载状态
 export const isLoading = writable<boolean>(false);
 
 // 当前激活的面板
 export type PanelType = 'folder' | 'history' | 'bookmark' | 'info' | 'thumbnails' | 'playlist' | 'thumbnail' | null;
-export const activeUIPanel = writable<PanelType>('folder');
+export const activeUIPanel = writable<PanelType>(loadFromStorage('activeUIPanel', 'folder'));
 
 // 主题模式
 export type ThemeMode = 'light' | 'dark' | 'system';
-export const themeMode = writable<ThemeMode>('system');
+export const themeMode = writable<ThemeMode>(loadFromStorage('themeMode', 'system'));
 
 // 缩放级别
-export const zoomLevel = writable<number>(1.0);
+export const zoomLevel = writable<number>(loadFromStorage('zoomLevel', 1.0));
 
 // 旋转角度 (0, 90, 180, 270)
-export const rotationAngle = writable<number>(0);
+export const rotationAngle = writable<number>(loadFromStorage('rotationAngle', 0));
 
 // 视图模式
 export type ViewMode = 'single' | 'double' | 'panorama';
-export const viewMode = writable<ViewMode>('single');
+export const viewMode = writable<ViewMode>(loadFromStorage('viewMode', 'single'));
 
 // 边栏钉住状态（钉住时不自动隐藏）
-export const topToolbarPinned = writable<boolean>(false);
-export const bottomThumbnailBarPinned = writable<boolean>(false);
-export const sidebarPinned = writable<boolean>(false);
-export const rightSidebarPinned = writable<boolean>(false);
+export const topToolbarPinned = writable<boolean>(loadFromStorage('topToolbarPinned', false));
+export const bottomThumbnailBarPinned = writable<boolean>(loadFromStorage('bottomThumbnailBarPinned', false));
+export const sidebarPinned = writable<boolean>(loadFromStorage('sidebarPinned', false));
+export const rightSidebarPinned = writable<boolean>(loadFromStorage('rightSidebarPinned', false));
 
 // 边栏高度（用于上下边栏）
-export const topToolbarHeight = writable<number>(80);
-export const bottomThumbnailBarHeight = writable<number>(140);
+export const topToolbarHeight = writable<number>(loadFromStorage('topToolbarHeight', 80));
+export const bottomThumbnailBarHeight = writable<number>(loadFromStorage('bottomThumbnailBarHeight', 140));
+
+// 订阅并保存变化
+sidebarOpen.subscribe((value) => saveToStorage('sidebarOpen', value));
+sidebarWidth.subscribe((value) => saveToStorage('sidebarWidth', value));
+rightSidebarOpen.subscribe((value) => saveToStorage('rightSidebarOpen', value));
+rightSidebarWidth.subscribe((value) => saveToStorage('rightSidebarWidth', value));
+activeRightPanel.subscribe((value) => saveToStorage('activeRightPanel', value));
+isFullscreen.subscribe((value) => saveToStorage('isFullscreen', value));
+activeUIPanel.subscribe((value) => saveToStorage('activeUIPanel', value));
+themeMode.subscribe((value) => saveToStorage('themeMode', value));
+zoomLevel.subscribe((value) => saveToStorage('zoomLevel', value));
+rotationAngle.subscribe((value) => saveToStorage('rotationAngle', value));
+viewMode.subscribe((value) => saveToStorage('viewMode', value));
+topToolbarPinned.subscribe((value) => saveToStorage('topToolbarPinned', value));
+bottomThumbnailBarPinned.subscribe((value) => saveToStorage('bottomThumbnailBarPinned', value));
+sidebarPinned.subscribe((value) => saveToStorage('sidebarPinned', value));
+rightSidebarPinned.subscribe((value) => saveToStorage('rightSidebarPinned', value));
+topToolbarHeight.subscribe((value) => saveToStorage('topToolbarHeight', value));
+bottomThumbnailBarHeight.subscribe((value) => saveToStorage('bottomThumbnailBarHeight', value));
 
 /**
  * 切换侧边栏

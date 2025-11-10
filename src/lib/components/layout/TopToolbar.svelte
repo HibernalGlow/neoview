@@ -228,11 +228,12 @@
 >
 	<!-- 标题栏（窗口控制） -->
 	<div
+		data-tauri-drag-region
 		class="h-8 bg-secondary/95 backdrop-blur-sm flex items-center justify-between px-2 select-none border-b"
 	>
 		<!-- 左侧：菜单和应用名 -->
 		<div class="flex items-center gap-1">
-			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={toggleSidebar}>
+			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={toggleSidebar} style="pointer-events: auto;">
 				<Menu class="h-4 w-4" />
 			</Button>
 			<span class="text-sm font-semibold ml-2">NeoView</span>
@@ -245,6 +246,7 @@
 				variant={$topToolbarPinned ? 'default' : 'ghost'}
 				size="icon"
 				class="h-6 w-6"
+				style="pointer-events: auto;"
 				onclick={togglePin}
 				title={$topToolbarPinned ? '松开工具栏（自动隐藏）' : '钉住工具栏（始终显示）'}
 			>
@@ -255,28 +257,28 @@
 				{/if}
 			</Button>
 
-			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={openSettings} title="设置">
+			<Button variant="ghost" size="icon" class="h-6 w-6" style="pointer-events: auto;" onclick={openSettings} title="设置">
 				<Settings class="h-4 w-4" />
 			</Button>
 
-			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={openStandaloneViewer} title="在独立窗口中打开查看器">
+			<Button variant="ghost" size="icon" class="h-6 w-6" style="pointer-events: auto;" onclick={openStandaloneViewer} title="在独立窗口中打开查看器">
 				<ExternalLink class="h-4 w-4" />
 			</Button>
 
-			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={openDevTools} title="打开开发者工具">
+			<Button variant="ghost" size="icon" class="h-6 w-6" style="pointer-events: auto;" onclick={openDevTools} title="打开开发者工具">
 				<Code class="h-4 w-4" />
 			</Button>
 		</div>
 
 		<!-- 右侧：窗口控制按钮 -->
 		<div class="flex items-center gap-1">
-			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={minimizeWindow}>
+			<Button variant="ghost" size="icon" class="h-6 w-6" style="pointer-events: auto;" onclick={minimizeWindow}>
 				<Minimize class="h-3 w-3" />
 			</Button>
-			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={maximizeWindow}>
+			<Button variant="ghost" size="icon" class="h-6 w-6" style="pointer-events: auto;" onclick={maximizeWindow}>
 				<Maximize class="h-3 w-3" />
 			</Button>
-			<Button variant="ghost" size="icon" class="h-6 w-6 hover:bg-destructive" onclick={closeWindow}>
+			<Button variant="ghost" size="icon" class="h-6 w-6 hover:bg-destructive" style="pointer-events: auto;" onclick={closeWindow}>
 				<X class="h-4 w-4" />
 			</Button>
 		</div>

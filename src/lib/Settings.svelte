@@ -6,7 +6,7 @@
 	import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 	// 使用动态导入以避免在非 Tauri 环境下 vite 预解析失败
 	import { Button } from '$lib/components/ui/button';
-	import { Settings, Keyboard, Palette, Zap, Mouse, X, Minimize, Info, Download, Upload, RotateCcw, Save as SaveIcon, Monitor, Archive } from '@lucide/svelte';
+	import { Settings, Keyboard, Palette, Zap, Mouse, X, Minimize, Info, Download, Upload, RotateCcw, Save as SaveIcon, Monitor, Archive, Eye, BookOpen, Layout, PanelLeft } from '@lucide/svelte';
 	import ViewerSettingsPanel from '$lib/components/dialogs/ViewerSettingsPanel.svelte';
 	import UnifiedBindingPanel from '$lib/components/dialogs/UnifiedBindingPanel.svelte';
 	import SidebarManagementPanel from '$lib/components/panels/SidebarManagementPanel.svelte';
@@ -19,11 +19,11 @@
 		{ value: 'system', label: '系统', icon: Monitor },
 		{ value: 'image', label: '图片', icon: Palette },
 		{ value: 'archive', label: '压缩包', icon: Archive },
-		{ value: 'view', label: '视图', icon: Settings },
-		{ value: 'book', label: '书籍', icon: Settings },
-		{ value: 'theme', label: '外观', icon: Palette },
+		{ value: 'view', label: '视图', icon: Eye },
+		{ value: 'book', label: '书籍', icon: BookOpen },
+		{ value: 'theme', label: '外观', icon: Layout },
 		{ value: 'performance', label: '性能', icon: Zap },
-		{ value: 'panels', label: '边栏管理', icon: Settings },
+		{ value: 'panels', label: '边栏管理', icon: PanelLeft },
 		{ value: 'bindings', label: '操作绑定', icon: Keyboard }
 	];
 

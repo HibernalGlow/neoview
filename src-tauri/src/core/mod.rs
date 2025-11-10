@@ -15,4 +15,5 @@ pub use image_loader::ImageLoader;
 pub use fs_manager::FsManager;
 pub use thumbnail::ThumbnailManager;
 pub use archive::ArchiveManager;
-pub use file_indexer::FileIndexer;
+// FileIndexer 暂时未使用，注释掉以避免警告
+// pub use file_indexer::FileIndexer;

@@ -472,7 +472,7 @@ impl FileIndexer {
         if let Ok(index) = self.index.lock() {
             let mut paths = Vec::new();
             
-            for (path, entry) in index.iter() {
+            for (_path, entry) in index.iter() {
                 // 如果指定了父路径，只返回该路径下的内容
                 if let Some(parent) = parent_path {
                     if !entry.path.starts_with(parent) {

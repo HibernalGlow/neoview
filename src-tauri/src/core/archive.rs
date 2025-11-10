@@ -5,7 +5,7 @@ use std::sync::Arc;
 use zip::ZipArchive;
 use serde::{Deserialize, Serialize};
 use base64::{Engine as _, engine::general_purpose};
-use image::{DynamicImage, GenericImageView};
+use image::GenericImageView;
 
 /// 压缩包内的文件项
 #[derive(Debug, Clone, Serialize, Deserialize)]

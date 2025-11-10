@@ -2,6 +2,7 @@
 //! 书籍管理相关的 Tauri 命令
 
 use crate::core::BookManager;
+use crate::core::ImageLoader;
 use crate::models::BookInfo;
 use std::sync::Mutex;
 use tauri::State;
@@ -33,22 +34,41 @@ pub async fn get_current_book(
 #[tauri::command]
 pub async fn navigate_to_page(
     page_index: usize,
-    state: State<'_, Mutex<BookManager>>,
+    book_state: State<'_, Mutex<BookManager>>,
+    image_state: State<'_, Mutex<ImageLoader>>,
 ) -> Result<(), String> {
-    let mut manager = state.lock().map_err(|e| e.to_string())?;
-    manager.navigate_to_page(page_index)
+    let mut manager = book_state.lock().map_err(|e| e.to_string())?;
+    let image_loader = image_state.lock().map_err(|e| e.to_string())?;
+    manager.navigate_to_page(page_index)?;
+    // 触发预加载
+    manager.preload_pages(&*image_loader);
+    Ok(())
 }
 
 #[tauri::command]
-pub async fn next_page(state: State<'_, Mutex<BookManager>>) -> Result<usize, String> {
-    let mut manager = state.lock().map_err(|e| e.to_string())?;
-    manager.next_page()
+pub async fn next_page(
+    book_state: State<'_, Mutex<BookManager>>,
+    image_state: State<'_, Mutex<ImageLoader>>,
+) -> Result<usize, String> {
+    let mut manager = book_state.lock().map_err(|e| e.to_string())?;
+    let image_loader = image_state.lock().map_err(|e| e.to_string())?;
+    let page = manager.next_page()?;
+    // 触发预加载
+    manager.preload_pages(&*image_loader);
+    Ok(page)
 }
 
 #[tauri::command]
-pub async fn previous_page(state: State<'_, Mutex<BookManager>>) -> Result<usize, String> {
-    let mut manager = state.lock().map_err(|e| e.to_string())?;
-    manager.previous_page()
+pub async fn previous_page(
+    book_state: State<'_, Mutex<BookManager>>,
+    image_state: State<'_, Mutex<ImageLoader>>,
+) -> Result<usize, String> {
+    let mut manager = book_state.lock().map_err(|e| e.to_string())?;
+    let image_loader = image_state.lock().map_err(|e| e.to_string())?;
+    let page = manager.previous_page()?;
+    // 触发预加载
+    manager.preload_pages(&*image_loader);
+    Ok(page)
 }
 
 #[tauri::command]

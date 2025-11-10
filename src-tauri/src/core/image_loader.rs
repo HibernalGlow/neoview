@@ -8,17 +8,31 @@ use std::io::Cursor;
 use std::sync::Arc;
 use image::{GenericImageView, ImageFormat};
 use super::image_cache::ImageCache;
+use threadpool::ThreadPool;
 
 pub struct ImageLoader {
     /// 图像缓存
     cache: Arc<ImageCache>,
+    /// 线程池用于多线程解码
+    thread_pool: ThreadPool,
 }
 
 impl ImageLoader {
-    pub fn new(cache_size_mb: usize) -> Self {
+    pub fn new(cache_size_mb: usize, num_threads: usize) -> Self {
         Self { 
-            cache: Arc::new(ImageCache::new(cache_size_mb))
+            cache: Arc::new(ImageCache::new(cache_size_mb)),
+            thread_pool: ThreadPool::new(num_threads),
         }
+    }
+
+    /// 更新缓存大小
+    pub fn update_cache_size(&mut self, cache_size_mb: usize) {
+        self.cache = Arc::new(ImageCache::new(cache_size_mb));
+    }
+
+    /// 更新线程数
+    pub fn update_thread_count(&mut self, num_threads: usize) {
+        self.thread_pool = ThreadPool::new(num_threads);
     }
 
     /// 加载图像文件为 base64 (带缓存)
@@ -330,6 +344,6 @@ impl ImageLoader {
 
 impl Default for ImageLoader {
     fn default() -> Self {
-        Self::new(512) // 默认 512MB 缓存
+        Self::new(512, 4) // 默认 512MB 缓存，4个线程
     }
 }

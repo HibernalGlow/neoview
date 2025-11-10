@@ -94,6 +94,9 @@ pub fn run() {
             commands::fs_commands::get_indexed_paths,
             commands::fs_commands::is_path_indexed,
             commands::fs_commands::get_index_progress,
+            // Performance commands
+            commands::get_performance_settings,
+            commands::save_performance_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

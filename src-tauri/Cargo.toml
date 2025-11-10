@@ -30,3 +30,4 @@ image = { version = "0.25", features = ["png", "jpeg", "webp", "avif"] }
 jxl-oxide = { version = "0.12.2", features = ["image"] }
 zip = "2.2"
 walkdir = "2.5"
+threadpool = "1.8"

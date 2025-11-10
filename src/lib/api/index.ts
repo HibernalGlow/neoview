@@ -6,5 +6,6 @@
 export * from './book';
 export * from './image';
 export * from './fs';
+export * from './performance';
 export * as FileSystemAPI from './filesystem';
 export * as IndexAPI from './file_index';

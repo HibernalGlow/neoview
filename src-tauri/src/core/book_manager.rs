@@ -4,15 +4,74 @@
 use crate::models::{BookInfo, BookType, Page};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 pub struct BookManager {
     current_book: Option<BookInfo>,
+    /// 预加载的页面缓存
+    preload_cache: Arc<Mutex<HashMap<usize, String>>>,
+    /// 预加载数量
+    preload_size: usize,
 }
 
 impl BookManager {
     pub fn new() -> Self {
         Self {
             current_book: None,
+            preload_cache: Arc::new(Mutex::new(HashMap::new())),
+            preload_size: 3,
+        }
+    }
+
+    /// 设置预加载数量
+    pub fn set_preload_size(&mut self, size: usize) {
+        self.preload_size = size;
+    }
+
+    /// 预加载页面
+    pub fn preload_pages(&self, image_loader: &super::ImageLoader) {
+        if let Some(book) = &self.current_book {
+            let current_page = book.current_page;
+            let total_pages = book.total_pages;
+            
+            // 计算需要预加载的页面范围
+            let start = current_page.saturating_sub(1);
+            let end = (current_page + self.preload_size).min(total_pages - 1);
+            
+            // 清理旧的预加载缓存
+            if let Ok(mut cache) = self.preload_cache.lock() {
+                cache.retain(|&page_idx, _| {
+                    // 保留当前页和即将预加载的页面
+                    page_idx >= start && page_idx <= end
+                });
+            }
+            
+            // 预加载新页面
+            for page_idx in start..=end {
+                if let Some(page) = book.pages.get(page_idx) {
+                    let path = page.path.clone();
+                    let _cache = Arc::clone(&self.preload_cache);
+                    
+                    // 使用线程池异步加载
+                    // 注意：这里需要访问 image_loader，可能需要调整架构
+                    // 暂时使用同步加载
+                    if let Ok(image_data) = image_loader.load_image_as_base64(&path) {
+                        if let Ok(mut cache) = self.preload_cache.lock() {
+                            cache.insert(page_idx, image_data);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// 获取预加载的页面
+    pub fn get_preloaded_page(&self, page_index: usize) -> Option<String> {
+        if let Ok(cache) = self.preload_cache.lock() {
+            cache.get(&page_index).cloned()
+        } else {
+            None
         }
     }
 

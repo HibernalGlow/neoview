@@ -11,6 +11,7 @@
 	import UnifiedBindingPanel from '$lib/components/dialogs/UnifiedBindingPanel.svelte';
 	import SidebarManagementPanel from '$lib/components/panels/SidebarManagementPanel.svelte';
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
+	import { getPerformanceSettings, savePerformanceSettings, type PerformanceSettings } from '$lib/api/performance';
 
 	const appWindow = getCurrentWebviewWindow();
 
@@ -29,6 +30,14 @@
 
 	let activeTab = $state<string>('general');
 	let currentSettings = $state<NeoViewSettings>(settingsManager.getSettings());
+	let performanceSettings = $state<PerformanceSettings>({
+		cache_memory_size: 512,
+		preload_enabled: true,
+		preload_size: 3,
+		gpu_acceleration: true,
+		multi_threaded_rendering: true,
+		decoding_threads: 4
+	});
 
 	// 订阅外部设置变化
 	settingsManager.addListener((s) => {
@@ -54,6 +63,18 @@
 		};
 	}
 
+	// 加载性能设置
+	async function loadPerformanceSettings() {
+		try {
+			performanceSettings = await getPerformanceSettings();
+		} catch (err) {
+			console.error('Failed to load performance settings:', err);
+		}
+	}
+
+	// 组件挂载时加载性能设置
+	loadPerformanceSettings();
+
 	function switchTab(tabValue: string) {
 		activeTab = tabValue;
 	}
@@ -69,6 +90,15 @@
 	function saveSettings() {
 		settingsManager.updateSettings(currentSettings);
 		console.log('✅ 设置已保存');
+	}
+
+	async function savePerformanceSettingsAndApply() {
+		try {
+			await savePerformanceSettings(performanceSettings);
+		} catch (err) {
+			console.error('Failed to save performance settings:', err);
+			alert('保存性能设置失败');
+		}
 	}
 
 	function resetToDefaults() {
@@ -398,9 +428,16 @@
 							<div class="space-y-2">
 								<label class="flex items-center justify-between">
 									<span class="text-sm">图像缓存大小</span>
-									<span class="text-xs text-muted-foreground">512 MB</span>
+									<span class="text-xs text-muted-foreground">{performanceSettings.cache_memory_size} MB</span>
 								</label>
-								<input type="range" min="128" max="2048" value="512" step="128" class="w-full" />
+								<input 
+									type="range" 
+									min="128" 
+									max="2048" 
+									step="128" 
+									bind:value={performanceSettings.cache_memory_size}
+									class="w-full" 
+								/>
 							</div>
 						</div>
 
@@ -408,28 +445,48 @@
 						<div class="space-y-2">
 							<h4 class="text-sm font-semibold">预加载</h4>
 							<label class="flex items-center gap-2">
-								<input type="checkbox" class="rounded" checked />
+								<input 
+									type="checkbox" 
+									class="rounded" 
+									bind:checked={performanceSettings.preload_enabled}
+								/>
 								<span class="text-sm">启用页面预加载</span>
 							</label>
-							<div class="space-y-2">
-								<label class="flex items-center justify-between">
-									<span class="text-sm">预加载页面数</span>
-									<span class="text-xs text-muted-foreground">3</span>
-								</label>
-								<input type="range" min="1" max="10" value="3" class="w-full" />
-							</div>
+							{#if performanceSettings.preload_enabled}
+								<div class="space-y-2">
+									<label class="flex items-center justify-between">
+										<span class="text-sm">预加载页面数</span>
+										<span class="text-xs text-muted-foreground">{performanceSettings.preload_size}</span>
+									</label>
+									<input 
+										type="range" 
+										min="1" 
+										max="10" 
+										bind:value={performanceSettings.preload_size}
+										class="w-full"
+									/>
+								</div>
+							{/if}
 						</div>
 
 						<!-- GPU 加速 -->
 						<div class="space-y-2">
 							<h4 class="text-sm font-semibold">硬件加速</h4>
 							<label class="flex items-center gap-2">
-								<input type="checkbox" class="rounded" checked />
+								<input 
+									type="checkbox" 
+									class="rounded" 
+									bind:checked={performanceSettings.gpu_acceleration}
+								/>
 								<span class="text-sm">启用 GPU 渲染</span>
 							</label>
 							<label class="flex items-center gap-2">
-								<input type="checkbox" class="rounded" />
-								<span class="text-sm">使用硬件解码</span>
+								<input 
+									type="checkbox" 
+									class="rounded"
+									disabled
+								/>
+								<span class="text-sm text-muted-foreground">使用硬件解码（暂未实现）</span>
 							</label>
 						</div>
 
@@ -439,9 +496,18 @@
 							<div class="space-y-2">
 								<label class="flex items-center justify-between">
 									<span class="text-sm">解码线程数</span>
-									<span class="text-xs text-muted-foreground">4</span>
+									<span class="text-xs text-muted-foreground">{performanceSettings.decoding_threads}</span>
 								</label>
-								<input type="range" min="1" max="16" value="4" class="w-full" />
+								<input 
+									type="range" 
+									min="1" 
+									max="16" 
+									bind:value={performanceSettings.decoding_threads}
+									class="w-full"
+								/>
+								<p class="text-xs text-muted-foreground">
+									{performanceSettings.multi_threaded_rendering ? '多线程解码已启用' : '单线程解码'}
+								</p>
 							</div>
 						</div>
 					</div>
@@ -454,11 +520,14 @@
 	<div class="h-14 border-t flex items-center justify-between px-4 gap-2 bg-secondary/30">
 		<div class="flex items-center gap-2 text-xs text-muted-foreground">
 			<Info class="h-3 w-3" />
-			<span>更改将自动保存</span>
+			<span>普通设置将自动保存，性能设置需要重启应用</span>
 		</div>
 		<div class="flex gap-2">
 			<Button variant="outline" onclick={closeWindow}>关闭</Button>
-			<Button onclick={saveSettings}>应用</Button>
+			<Button onclick={saveSettings}>应用普通设置</Button>
+			{#if activeTab === 'performance'}
+				<Button onclick={savePerformanceSettingsAndApply}>应用性能设置</Button>
+			{/if}
 		</div>
 	</div>
 </div>

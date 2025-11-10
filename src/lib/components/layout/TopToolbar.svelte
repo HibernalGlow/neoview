@@ -198,7 +198,7 @@
 </script>
 
 <div
-	class="absolute top-0 left-0 right-0 z-50 transition-transform duration-300 {isVisible
+	class="absolute top-0 left-0 right-0 z-[55] transition-transform duration-300 {isVisible
 		? 'translate-y-0'
 		: '-translate-y-full'}"
 	onmouseenter={handleMouseEnter}
@@ -431,7 +431,7 @@
 
 <!-- 触发区域（独立于工具栏，始终存在） -->
 <div
-	class="fixed top-0 left-0 right-0 h-4 z-[49]"
+	class="fixed top-0 left-0 right-0 h-4 z-[58]"
 	onmouseenter={handleMouseEnter}
 	role="presentation"
 	aria-label="顶部工具栏触发区域"

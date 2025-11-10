@@ -219,7 +219,7 @@
 {#if bookStore.currentBook}
 	<!-- 缩略图栏触发区域（独立） -->
 	<div
-		class="fixed bottom-0 left-0 right-0 h-4 z-[48]"
+		class="fixed bottom-0 left-0 right-0 h-4 z-[55]"
 		onmouseenter={handleMouseEnter}
 		role="presentation"
 		aria-label="底部缩略图栏触发区域"
@@ -227,7 +227,7 @@
 
 	<!-- 缩略图栏内容 -->
 	<div
-		class="absolute bottom-0 left-0 right-0 z-50 transition-transform duration-300 {isVisible
+		class="absolute bottom-0 left-0 right-0 z-[60] transition-transform duration-300 {isVisible
 			? 'translate-y-0'
 			: 'translate-y-full'}"
 		onmouseenter={handleMouseEnter}

@@ -13,6 +13,7 @@
 	import { loadImage } from '$lib/api/fs';
 	import { loadImageFromArchive } from '$lib/api/filesystem';
 	import { FileSystemAPI } from '$lib/api';
+	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 
 	// 进度条状态
 	let showProgressBar = $state(true);
@@ -28,10 +29,36 @@
 		const currentPage = bookStore.currentPage;
 		if (currentPage) {
 			loadCurrentImage();
-		} else {
-			imageData = null;
 		}
 	});
+
+	// 处理鼠标滚轮事件
+	function handleWheel(e: WheelEvent) {
+		// 不在输入框时响应
+		const target = e.target as HTMLElement;
+		if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.getAttribute('contenteditable') === 'true') {
+			return;
+		}
+
+		const direction = e.deltaY < 0 ? 'up' : 'down';
+		console.log('ImageViewer 鼠标滚轮:', direction); // 调试信息
+		const action = keyBindingsStore.findActionByMouseWheel(direction);
+		console.log('找到的操作:', action); // 调试信息
+		if (action) {
+			e.preventDefault();
+			// 执行操作
+			switch (action) {
+				case 'nextPage':
+					bookStore.nextPage();
+					break;
+				case 'prevPage':
+					bookStore.previousPage();
+					break;
+				default:
+					console.warn('未实现的滚轮操作：', action);
+			}
+		}
+	}
 
 	// 监听进度条状态变化
 	$effect(() => {
@@ -165,9 +192,9 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="image-viewer-container h-full w-full flex flex-col bg-black relative z-[50]" data-viewer="true">
+<div class="image-viewer-container h-full w-full flex flex-col bg-black relative" data-viewer="true" onwheel={handleWheel}>
 	<!-- 图像显示区域 -->
-	<div class="image-container flex-1 flex items-center justify-center overflow-auto z-[50]" data-viewer="true">
+	<div class="image-container flex-1 flex items-center justify-center overflow-auto" data-viewer="true">
 		{#if loading}
 			<div class="text-white">Loading...</div>
 		{:else if error}

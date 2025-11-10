@@ -8,12 +8,7 @@
 	import { loadImageFromArchive } from '$lib/api/filesystem';
 	import { bottomThumbnailBarPinned, bottomThumbnailBarHeight } from '$lib/stores';
 	import { Button } from '$lib/components/ui/button';
-	import * as Separator from '$lib/components/ui/separator';
-	import * as Tooltip from '$lib/components/ui/tooltip';
-	import * as Progress from '$lib/components/ui/progress';
-	import * as ScrollArea from '$lib/components/ui/scroll-area';
-	import * as Tabs from '$lib/components/ui/tabs';
-	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, ExternalLink, Minus, Settings, Layers } from '@lucide/svelte';
+	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, ExternalLink, Minus } from '@lucide/svelte';
 
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
@@ -219,7 +214,7 @@
 {#if bookStore.currentBook}
 	<!-- 缩略图栏触发区域（独立） -->
 	<div
-		class="fixed bottom-0 left-0 right-0 h-4 z-[55]"
+		class="fixed bottom-0 left-0 right-0 h-4 z-[48]"
 		onmouseenter={handleMouseEnter}
 		role="presentation"
 		aria-label="底部缩略图栏触发区域"
@@ -227,183 +222,109 @@
 
 	<!-- 缩略图栏内容 -->
 	<div
-		class="absolute bottom-0 left-0 right-0 z-[60] transition-transform duration-300 {isVisible
+		class="absolute bottom-0 left-0 right-0 z-50 transition-transform duration-300 {isVisible
 			? 'translate-y-0'
 			: 'translate-y-full'}"
 		onmouseenter={handleMouseEnter}
 		onmouseleave={handleMouseLeave}
-		role="toolbar"
-		aria-label="缩略图工具栏"
-		tabindex="-1"
 	>
 		<div class="bg-secondary/95 backdrop-blur-sm border-t shadow-lg overflow-hidden" style="height: {$bottomThumbnailBarHeight}px;">
 			<!-- 拖拽手柄 -->
-		<Tooltip.Root>
-			<Tooltip.Trigger asChild>
-				<button
-					type="button"
-					class="h-2 flex items-center justify-center cursor-ns-resize hover:bg-primary/20 transition-colors w-full"
-					onmousedown={handleResizeStart}
-					aria-label="拖拽调整缩略图栏高度"
+			<div
+				class="h-2 flex items-center justify-center cursor-ns-resize hover:bg-primary/20 transition-colors"
+				onmousedown={handleResizeStart}
+				role="separator"
+				aria-label="拖拽调整缩略图栏高度"
+				tabindex="0"
+			>
+				<GripHorizontal class="h-3 w-3 text-muted-foreground" />
+			</div>
+
+			<!-- 控制按钮 -->
+			<div class="px-2 pb-1 flex justify-center gap-2">
+				<Button
+					variant={$bottomThumbnailBarPinned ? 'default' : 'ghost'}
+					size="sm"
+					class="h-6"
+					onclick={togglePin}
 				>
-					<GripHorizontal class="h-3 w-3 text-muted-foreground" />
-				</button>
-			</Tooltip.Trigger>
-			<Tooltip.Content>
-				<p>拖拽调整高度</p>
-			</Tooltip.Content>
-		</Tooltip.Root>
+					{#if $bottomThumbnailBarPinned}
+						<Pin class="h-3 w-3 mr-1" />
+					{:else}
+						<PinOff class="h-3 w-3 mr-1" />
+					{/if}
+					<span class="text-xs">{$bottomThumbnailBarPinned ? '已钉住' : '钉住'}</span>
+				</Button>
+				<Button
+					variant="ghost"
+					size="sm"
+					class="h-6"
+					onclick={openInNewWindow}
+					title="在独立窗口中打开"
+				>
+					<ExternalLink class="h-3 w-3 mr-1" />
+					<span class="text-xs">独立窗口</span>
+				</Button>
+				<Button
+					variant={showProgressBar ? 'default' : 'ghost'}
+					size="sm"
+					class="h-6"
+					onclick={toggleProgressBar}
+					title="显示阅读进度条"
+				>
+					<Minus class="h-3 w-3 mr-1" />
+					<span class="text-xs">进度条</span>
+				</Button>
+			</div>
 
-			<!-- 控制区域 - 使用 Tabs -->
-			<Tabs.Root class="w-full" value="thumbnails">
-				<Tabs.List class="grid w-full grid-cols-3 h-8">
-					<Tabs.Trigger value="thumbnails" class="text-xs">
-						<Layers class="h-3 w-3 mr-1" />
-						缩略图
-					</Tabs.Trigger>
-					<Tabs.Trigger value="settings" class="text-xs">
-						<Settings class="h-3 w-3 mr-1" />
-						设置
-					</Tabs.Trigger>
-					<Tabs.Trigger value="progress" class="text-xs">
-						<Minus class="h-3 w-3 mr-1" />
-						进度
-					</Tabs.Trigger>
-				</Tabs.List>
-
-				<Tabs.Content value="thumbnails" class="mt-2">
-					<div class="px-2 pb-2 h-[calc(100%-theme(spacing.12))] overflow-hidden">
-						<ScrollArea.Root class="h-full w-full">
-							<ScrollArea.Viewport class="h-full w-full">
-								<div class="flex gap-2 pb-1 items-center" role="list" aria-label="页面缩略图列表">
-									{#each bookStore.currentBook.pages as page, index (page.path)}
-										<Tooltip.Root>
-											<Tooltip.Trigger asChild>
-												<button
-													class="flex-shrink-0 rounded overflow-hidden border-2 {index ===
-														bookStore.currentPageIndex
-														? 'border-primary'
-														: 'border-transparent'} hover:border-primary/50 transition-colors relative group"
-													style="width: auto; height: {$bottomThumbnailBarHeight - 60}px; min-width: 60px; max-width: 120px;"
-													onclick={() => bookStore.navigateToPage(index)}
-												>
-													{#if index in thumbnails}
-														<img
-															src={thumbnails[index].url}
-															alt="Page {index + 1}"
-															class="w-full h-full object-contain"
-															style="object-position: center;"
-														/>
-													{:else}
-														<div
-															class="w-full h-full flex flex-col items-center justify-center bg-muted text-xs text-muted-foreground"
-															style="min-width: 60px; max-width: 120px;"
-														>
-															<ImageIcon class="h-6 w-6 mb-1" />
-															<span class="font-mono">{index + 1}</span>
-														</div>
-													{/if}
-
-													<!-- 页码标签 -->
-													<div
-														class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[10px] text-center py-0.5 font-mono"
-													>
-														{index + 1}
-													</div>
-												</button>
-											</Tooltip.Trigger>
-											<Tooltip.Content>
-												<p>第 {index + 1} 页</p>
-											</Tooltip.Content>
-										</Tooltip.Root>
-									{/each}
+			<div class="px-2 pb-2 h-[calc(100%-theme(spacing.8))] overflow-hidden">
+				<div class="flex gap-2 overflow-x-auto h-full pb-1 items-center" onscroll={handleScroll}>
+					{#each bookStore.currentBook.pages as page, index (page.path)}
+						<button
+							class="flex-shrink-0 rounded overflow-hidden border-2 {index ===
+							bookStore.currentPageIndex
+								? 'border-primary'
+								: 'border-transparent'} hover:border-primary/50 transition-colors relative group"
+							style="width: auto; height: {$bottomThumbnailBarHeight - 40}px; min-width: 60px; max-width: 120px;"
+							onclick={() => bookStore.navigateToPage(index)}
+							title="Page {index + 1}"
+						>
+							{#if index in thumbnails}
+								<img
+									src={thumbnails[index].url}
+									alt="Page {index + 1}"
+									class="w-full h-full object-contain"
+									style="object-position: center;"
+								/>
+							{:else}
+								<div
+									class="w-full h-full flex flex-col items-center justify-center bg-muted text-xs text-muted-foreground"
+									style="min-width: 60px; max-width: 120px;"
+								>
+									<ImageIcon class="h-6 w-6 mb-1" />
+									<span class="font-mono">{index + 1}</span>
 								</div>
-							</ScrollArea.Viewport>
-							<ScrollArea.Scrollbar orientation="horizontal" class="flex h-2.5 touch-none select-none bg-transparent p-0.5 transition-colors">
-								<ScrollArea.Thumb class="relative flex h-full flex-1 rounded-full bg-border hover:bg-primary/20" />
-							</ScrollArea.Scrollbar>
-						</ScrollArea.Root>
-				</div>
-			</Tabs.Content>
+							{/if}
 
-				<Tabs.Content value="settings" class="mt-2">
-					<div class="px-4 py-2 space-y-3">
-						<div class="flex items-center justify-between">
-							<span class="text-sm font-medium">钉住状态</span>
-							<Button
-								variant={$bottomThumbnailBarPinned ? 'default' : 'outline'}
-								size="sm"
-								onclick={togglePin}
+							<!-- 页码标签 -->
+							<div
+								class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[10px] text-center py-0.5 font-mono"
 							>
-								{#if $bottomThumbnailBarPinned}
-									<Pin class="h-3 w-3 mr-1" />
-									已钉住
-								{:else}
-									<PinOff class="h-3 w-3 mr-1" />
-									自动隐藏
-								{/if}
-							</Button>
-						</div>
-						<Separator.Root />
-						<div class="flex items-center justify-between">
-							<span class="text-sm font-medium">独立窗口</span>
-							<Tooltip.Root>
-								<Tooltip.Trigger asChild>
-									<Button variant="outline" size="sm" onclick={openInNewWindow}>
-										<ExternalLink class="h-3 w-3 mr-1" />
-										打开
-									</Button>
-								</Tooltip.Trigger>
-								<Tooltip.Content>
-									<p>在独立窗口中打开缩略图栏</p>
-								</Tooltip.Content>
-							</Tooltip.Root>
-						</div>
-					</div>
-			</Tabs.Content>
-
-				<Tabs.Content value="progress" class="mt-2">
-					<div class="px-4 py-2 space-y-3">
-						<div class="space-y-2">
-							<div class="flex items-center justify-between text-sm">
-								<span>阅读进度</span>
-								<span class="font-mono">{bookStore.currentPageIndex + 1} / {bookStore.totalPages}</span>
+								{index + 1}
 							</div>
-							<Progress.Root class="w-full h-2">
-								<Progress.Progress value={((bookStore.currentPageIndex + 1) / bookStore.totalPages) * 100} />
-							</Progress.Root>
-						</div>
-						<Separator.Root />
-						<div class="flex items-center justify-between">
-							<span class="text-sm font-medium">显示进度条</span>
-							<Button
-								variant={showProgressBar ? 'default' : 'outline'}
-								size="sm"
-								onclick={toggleProgressBar}
-							>
-								{#if showProgressBar}
-									<Minus class="h-3 w-3 mr-1" />
-									显示中
-								{:else}
-									<Minus class="h-3 w-3 mr-1" />
-									隐藏
-								{/if}
-							</Button>
-						</div>
-					</div>
-			</Tabs.Content>
-			</Tabs.Root>
-
-			
+						</button>
+					{/each}
+				</div>
+			</div>
 		</div>
 	
 	<!-- 阅读进度条 -->
 	{#if showProgressBar && bookStore.currentBook}
 		<!-- 底部进度条 -->
 		<div class="fixed bottom-0 left-0 right-0 h-1 z-[51] pointer-events-none">
-			<Progress.Root class="h-full w-full">
-				<Progress.Progress value={((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100} class="h-full" />
-			</Progress.Root>
+			<div class="h-full bg-primary transition-all duration-300" 
+					 style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%;">
+			</div>
 		</div>
 	{/if}
 </div>

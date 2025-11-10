@@ -9,6 +9,7 @@
 	import { Settings, Keyboard, Palette, Zap, Mouse, X, Minimize, Info, Download, Upload, RotateCcw, Save as SaveIcon, Monitor, Archive } from '@lucide/svelte';
 	import ViewerSettingsPanel from '$lib/components/dialogs/ViewerSettingsPanel.svelte';
 	import UnifiedBindingPanel from '$lib/components/dialogs/UnifiedBindingPanel.svelte';
+	import SidebarManagementPanel from '$lib/components/panels/SidebarManagementPanel.svelte';
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
 
 	const appWindow = getCurrentWebviewWindow();
@@ -22,7 +23,7 @@
 		{ value: 'book', label: '书籍', icon: Settings },
 		{ value: 'theme', label: '外观', icon: Palette },
 		{ value: 'performance', label: '性能', icon: Zap },
-		{ value: 'panels', label: '面板', icon: Settings },
+		{ value: 'panels', label: '边栏管理', icon: Settings },
 		{ value: 'bindings', label: '操作绑定', icon: Keyboard }
 	];
 
@@ -232,6 +233,8 @@
 				<ViewerSettingsPanel />
 			{:else if activeTab === 'bindings'}
 				<UnifiedBindingPanel />
+			{:else if activeTab === 'panels'}
+				<SidebarManagementPanel />
 			{:else if activeTab === 'performance'}
 				<div class="p-6 space-y-6">
 					<div class="space-y-2">

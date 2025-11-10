@@ -8,6 +8,7 @@
 	import { loadImageFromArchive } from '$lib/api/filesystem';
 	import { bottomThumbnailBarPinned, bottomThumbnailBarHeight } from '$lib/stores';
 	import { Button } from '$lib/components/ui/button';
+	import * as Progress from '$lib/components/ui/progress';
 	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, ExternalLink, Minus, Target } from '@lucide/svelte';
 
 	let isVisible = $state(false);
@@ -346,9 +347,12 @@
 	{#if showProgressBar && bookStore.currentBook}
 		<!-- 底部进度条 -->
 		<div class="fixed bottom-0 left-0 right-0 h-1 z-[51] pointer-events-none">
-			<div class="h-full bg-primary transition-all duration-300" 
-					 style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%;">
-			</div>
+			<Progress.Root 
+				value={((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}
+				class="h-full"
+			>
+				<Progress.Indicator class="h-full bg-primary transition-all duration-300" />
+			</Progress.Root>
 		</div>
 	{/if}
 </div>

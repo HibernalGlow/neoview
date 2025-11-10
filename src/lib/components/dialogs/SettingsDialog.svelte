@@ -34,47 +34,50 @@
 			<Dialog.Description>配置 NeoView 的各项设置</Dialog.Description>
 		</Dialog.Header>
 
-		<div class="flex h-full">
-			<!-- 左侧标签栏 -->
-			<div class="w-48 border-r pr-4">
+		<Tabs.Root bind:value={activeTab} class="flex h-full">
+			<Tabs.List class="w-48 flex-col h-full border-r pr-4 bg-transparent">
 				{#each tabs as tab}
 					{@const IconComponent = tab.icon}
-					<button
-						class="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-accent transition-colors {activeTab ===
-						tab.value
-							? 'bg-accent'
-							: ''}"
-						onclick={() => (activeTab = tab.value)}
-					>
+					<Tabs.Trigger value={tab.value} class="w-full justify-start gap-3">
 						<IconComponent class="h-5 w-5" />
 						<span>{tab.label}</span>
-					</button>
+					</Tabs.Trigger>
 				{/each}
-			</div>
+			</Tabs.List>
 
 			<!-- 右侧内容区 -->
 			<div class="flex-1 pl-6 overflow-auto">
-				{#if activeTab === 'general'}
+				<Tabs.Content value="general">
 					<div class="space-y-4">
 						<h3 class="text-lg font-semibold">通用设置</h3>
 						<p class="text-sm text-muted-foreground">即将推出...</p>
 					</div>
-				{:else if activeTab === 'viewer'}
+				</Tabs.Content>
+				
+				<Tabs.Content value="viewer">
 					<ViewerSettingsPanel />
-				{:else if activeTab === 'keyboard'}
+				</Tabs.Content>
+				
+				<Tabs.Content value="keyboard">
 					<UnifiedBindingPanel />
-				{:else if activeTab === 'mouse'}
+				</Tabs.Content>
+				
+				<Tabs.Content value="mouse">
 					<UnifiedBindingPanel />
-				{:else if activeTab === 'gesture'}
+				</Tabs.Content>
+				
+				<Tabs.Content value="gesture">
 					<UnifiedBindingPanel />
-				{:else if activeTab === 'performance'}
+				</Tabs.Content>
+				
+				<Tabs.Content value="performance">
 					<div class="space-y-4">
 						<h3 class="text-lg font-semibold">性能设置</h3>
 						<p class="text-sm text-muted-foreground">即将推出...</p>
 					</div>
-				{/if}
+				</Tabs.Content>
 			</div>
-		</div>
+		</Tabs.Root>
 
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (open = false)}>关闭</Button>

@@ -4,6 +4,7 @@
 	 * 信息面板 - 显示当前图像/书籍详细信息
 	 */
 	import { Info, Image as ImageIcon, FileText, Calendar, HardDrive } from '@lucide/svelte';
+	import * as Separator from '$lib/components/ui/separator';
 
 	interface ImageInfo {
 		filename: string;
@@ -104,7 +105,7 @@
 					</div>
 				</div>
 
-				<div class="border-t"></div>
+				<Separator.Root />
 			{/if}
 
 			<!-- 图像信息 -->
@@ -141,7 +142,7 @@
 					</div>
 				</div>
 
-				<div class="border-t"></div>
+				<Separator.Root />
 
 				<!-- 时间信息 -->
 				<div class="space-y-3">

@@ -11,6 +11,8 @@
   import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
   import { NavigationHistory } from '$lib/utils/navigationHistory';
   import { Button } from '$lib/components/ui/button';
+  import * as Input from '$lib/components/ui/input';
+  import * as ContextMenu from '$lib/components/ui/context-menu';
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 
   // 使用全局状态
@@ -1269,13 +1271,12 @@
       <!-- 搜索输入框 -->
       <div class="relative">
         <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <input
-          type="text"
+        <Input.Root
           placeholder="搜索当前目录下的文件..."
           bind:value={searchQuery}
           oninput={handleSearchInput}
           onfocus={handleSearchFocus}
-          class="w-full pl-10 pr-24 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          class="pl-10 pr-24"
           disabled={!currentPath || isArchiveView}
         />
         
@@ -1446,11 +1447,12 @@
       </div>
       <div class="grid grid-cols-1 gap-2">
         {#each searchResults as item, index (item.path)}
-          <div
-            class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors hover:bg-gray-50 border-gray-200"
-            onclick={() => openSearchResult(item)}
-            oncontextmenu={(e) => showContextMenu(e, item)}
-          >
+          <ContextMenu.Root>
+            <ContextMenu.Trigger asChild>
+              <div
+                class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors hover:bg-gray-50 border-gray-200"
+                onclick={() => openSearchResult(item)}
+              >
             <!-- 勾选框（勾选模式） -->
             {#if isCheckMode}
               <button
@@ -1515,7 +1517,77 @@
                 {formatSize(item.size, item.isDir)} · {formatDate(item.modified)}
               </div>
             </div>
-          </div>
+              </ContextMenu.Trigger>
+              <ContextMenu.Content>
+                <ContextMenu.Item onclick={() => addToBookmark(item)}>
+                  <Bookmark class="h-4 w-4 mr-2" />
+                  添加到书签
+                </ContextMenu.Item>
+                <ContextMenu.Separator />
+                <ContextMenu.Item onclick={() => openInExplorer(item)}>
+                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                  </svg>
+                  在资源管理器中打开
+                </ContextMenu.Item>
+                <ContextMenu.Item onclick={() => openWithExternalApp(item)}>
+                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                  在外部应用中打开
+                </ContextMenu.Item>
+                <ContextMenu.Separator />
+                <ContextMenu.Item onclick={() => cutItem(item)}>
+                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
+                  </svg>
+                  剪切
+                </ContextMenu.Item>
+                <ContextMenu.Item onclick={() => copyItem(item)}>
+                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  复制
+                </ContextMenu.Item>
+                <ContextMenu.Separator />
+                <ContextMenu.Item onclick={() => deleteItemFromMenu(item)} class="text-red-600 focus:text-red-600">
+                  <Trash2 class="h-4 w-4 mr-2" />
+                  删除
+                </ContextMenu.Item>
+                <ContextMenu.Item onclick={moveToFolder}>
+                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                  </svg>
+                  移动到文件夹(E)
+                </ContextMenu.Item>
+                <ContextMenu.Item onclick={() => renameItem(item)}>
+                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  重命名(M)
+                </ContextMenu.Item>
+                {#if item.name.endsWith('.zip') || item.name.endsWith('.cbz') || item.name.endsWith('.rar') || item.name.endsWith('.cbr')}
+                  <ContextMenu.Separator />
+                  <ContextMenu.Item onclick={() => openArchiveAsBook(item)}>
+                    <FolderOpen class="h-4 w-4 mr-2" />
+                    作为书籍打开
+                  </ContextMenu.Item>
+                  <ContextMenu.Item onclick={() => browseArchive(item)}>
+                    <Folder class="h-4 w-4 mr-2" />
+                    浏览内容
+                  </ContextMenu.Item>
+                {/if}
+                <ContextMenu.Separator />
+                <ContextMenu.Item onclick={() => {
+                  navigator.clipboard.writeText(item.path);
+                }}>
+                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                  复制路径
+                </ContextMenu.Item>
+              </ContextMenu.Content>
+            </ContextMenu.Root>
         {/each}
       </div>
     </div>
@@ -1551,16 +1623,17 @@
     >
       <div class="grid grid-cols-1 gap-2">
         {#each items as item, index (item.path)}
-          <div
-            class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors {selectedIndex === index ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}"
-            onclick={() => {
-              if (!isCheckMode && !isDeleteMode) {
-                fileBrowserStore.setSelectedIndex(index);
-                openFile(item);
-              }
-            }}
-            oncontextmenu={(e) => showContextMenu(e, item)}
-          >
+          <ContextMenu.Root>
+            <ContextMenu.Trigger asChild>
+              <div
+                class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors {selectedIndex === index ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}"
+                onclick={() => {
+                  if (!isCheckMode && !isDeleteMode) {
+                    fileBrowserStore.setSelectedIndex(index);
+                    openFile(item);
+                  }
+                }}
+              >
             <!-- 勾选框（勾选模式） -->
             {#if isCheckMode}
               <button
@@ -1622,243 +1695,84 @@
                 {formatSize(item.size, item.isDir)} · {formatDate(item.modified)}
               </div>
             </div>
-          </div>
-        {/each}
+              </div>
+            </ContextMenu.Trigger>
+            <ContextMenu.Content>
+                <ContextMenu.Item onclick={() => addToBookmark(item)}>
+                  <Bookmark class="h-4 w-4 mr-2" />
+                  添加到书签
+                </ContextMenu.Item>
+                <ContextMenu.Separator />
+                <ContextMenu.Item onclick={() => openInExplorer(item)}>
+                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                  </svg>
+                  在资源管理器中打开
+                </ContextMenu.Item>
+                <ContextMenu.Item onclick={() => openWithExternalApp(item)}>
+                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                  在外部应用中打开
+                </ContextMenu.Item>
+                <ContextMenu.Separator />
+                <ContextMenu.Item onclick={() => cutItem(item)}>
+                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
+                  </svg>
+                  剪切
+                </ContextMenu.Item>
+                <ContextMenu.Item onclick={() => copyItem(item)}>
+                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  复制
+                </ContextMenu.Item>
+                <ContextMenu.Separator />
+                <ContextMenu.Item onclick={() => deleteItemFromMenu(item)} class="text-red-600 focus:text-red-600">
+                  <Trash2 class="h-4 w-4 mr-2" />
+                  删除
+                </ContextMenu.Item>
+                <ContextMenu.Item onclick={moveToFolder}>
+                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                  </svg>
+                  移动到文件夹(E)
+                </ContextMenu.Item>
+                <ContextMenu.Item onclick={() => renameItem(item)}>
+                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  重命名(M)
+                </ContextMenu.Item>
+                {#if item.name.endsWith('.zip') || item.name.endsWith('.cbz') || item.name.endsWith('.rar') || item.name.endsWith('.cbr')}
+                  <ContextMenu.Separator />
+                  <ContextMenu.Item onclick={() => openArchiveAsBook(item)}>
+                    <FolderOpen class="h-4 w-4 mr-2" />
+                    作为书籍打开
+                  </ContextMenu.Item>
+                  <ContextMenu.Item onclick={() => browseArchive(item)}>
+                    <Folder class="h-4 w-4 mr-2" />
+                    浏览内容
+                  </ContextMenu.Item>
+                {/if}
+                <ContextMenu.Separator />
+                <ContextMenu.Item onclick={() => {
+                  navigator.clipboard.writeText(item.path);
+                }}>
+                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                  复制路径
+                </ContextMenu.Item>
+              </ContextMenu.Content>
+            </ContextMenu.Root>
+          {/each}
       </div>
     </div>
   {/if}
 
-  <!-- 右键菜单 -->
-  {#if contextMenu.item}
-    <div
-      class="context-menu fixed bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50 min-w-[180px] max-h-[70vh] overflow-y-auto"
-      style="left: {contextMenu.x}px; top: {contextMenu.y}px; transform-origin: {contextMenu.direction === 'up' ? 'bottom' : 'top'};"
-      onmouseleave={hideContextMenu}
-    >
-      <!-- 添加到书签 -->
-      <button
-        class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-        onclick={() => {
-          addToBookmark(contextMenu.item!);
-        }}
-      >
-        <Bookmark class="h-4 w-4" />
-        添加到书签
-      </button>
+  
 
-      <div class="border-t border-gray-200 my-1"></div>
-
-      <!-- 在资源管理器中打开 -->
-      <button
-        class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-        onclick={() => openInExplorer(contextMenu.item!)}
-      >
-        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-        </svg>
-        在资源管理器中打开
-      </button>
-
-      <!-- 在外部应用中打开 -->
-      <button
-        class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-        onclick={() => openWithExternalApp(contextMenu.item!)}
-      >
-        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-        </svg>
-        在外部应用中打开
-      </button>
-
-      <div class="border-t border-gray-200 my-1"></div>
-
-      <!-- 剪切 -->
-      <button
-        class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-        onclick={() => cutItem(contextMenu.item!)}
-      >
-        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
-        </svg>
-        剪切
-      </button>
-
-      <!-- 复制 -->
-      <button
-        class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-        onclick={() => copyItem(contextMenu.item!)}
-      >
-        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-        </svg>
-        复制
-      </button>
-
-      <!-- 复制到文件夹（二级菜单） -->
-      <div class="relative">
-        <button
-          class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center justify-between gap-2"
-          onclick={showCopyToSubmenu}
-        >
-          <div class="flex items-center gap-2">
-            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-            复制到文件夹
-          </div>
-          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-
-        <!-- 复制到子菜单 -->
-        {#if copyToSubmenu.show}
-          <div
-            class="fixed bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-[60] min-w-[150px] max-h-[50vh] overflow-y-auto"
-            style="left: {copyToSubmenu.x}px; top: {copyToSubmenu.y}px;"
-          >
-            <!-- 这里可以添加常用目标文件夹 -->
-            <button
-              class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100"
-              onclick={() => {
-                const targetPath = prompt('请输入目标文件夹路径:');
-                if (targetPath) copyToFolder(targetPath);
-              }}
-            >
-              选择文件夹...
-            </button>
-            <!-- 可以添加更多预设文件夹选项 -->
-          </div>
-        {/if}
-      </div>
-
-      <div class="border-t border-gray-200 my-1"></div>
-
-      <!-- 删除 -->
-      <button
-        class="w-full px-4 py-2 text-left text-sm hover:bg-red-50 text-red-600 flex items-center gap-2"
-        onclick={() => deleteItemFromMenu(contextMenu.item!)}
-      >
-        <Trash2 class="h-4 w-4" />
-        删除
-      </button>
-
-      <!-- 移动到文件夹 -->
-      <button
-        class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-        onclick={moveToFolder}
-      >
-        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-        </svg>
-        移动到文件夹(E)
-      </button>
-
-      <!-- 重命名 -->
-      <button
-        class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-        onclick={() => renameItem(contextMenu.item!)}
-      >
-        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-        </svg>
-        重命名(M)
-      </button>
-
-      {#if contextMenu.item.name.endsWith('.zip') || contextMenu.item.name.endsWith('.cbz') || contextMenu.item.name.endsWith('.rar') || contextMenu.item.name.endsWith('.cbr')}
-        <div class="border-t border-gray-200 my-1"></div>
-        <!-- 压缩包选项 -->
-        <button
-          class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-          onclick={() => openArchiveAsBook(contextMenu.item!)}
-        >
-          <FolderOpen class="h-4 w-4" />
-          作为书籍打开
-        </button>
-        <button
-          class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-          onclick={() => browseArchive(contextMenu.item!)}
-        >
-          <Folder class="h-4 w-4" />
-          浏览内容
-        </button>
-      {/if}
-
-      <div class="border-t border-gray-200 my-1"></div>
-      
-      <!-- 通用选项 -->
-      <button
-        class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-        onclick={() => {
-          navigator.clipboard.writeText(contextMenu.item!.path);
-          hideContextMenu();
-        }}
-      >
-        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-        </svg>
-        复制路径
-      </button>
-    </div>
-    
-    <!-- 点击其他地方关闭菜单 -->
-    <div
-      class="fixed inset-0 z-40"
-      onclick={(e) => {
-        // 确保点击的不是搜索设置按钮或其子元素
-        if (!e.target.closest('.search-settings') && 
-            !e.target.closest('button[title="搜索设置"]') &&
-            !e.target.closest('.search-history')) {
-          hideContextMenu();
-        }
-      }}
-    ></div>
-  {/if}
-
-  <!-- 书签右键菜单 -->
-  {#if bookmarkContextMenu.bookmark}
-    <div
-      class="fixed bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50 min-w-[150px]"
-      style="left: {bookmarkContextMenu.x}px; top: {bookmarkContextMenu.y}px;"
-    >
-      <!-- 删除书签 -->
-      <button
-        class="w-full px-4 py-2 text-left text-sm hover:bg-red-50 text-red-600 flex items-center gap-2"
-        onclick={() => {
-          removeBookmark(bookmarkContextMenu.bookmark!.id);
-          hideContextMenu();
-        }}
-      >
-        <Trash2 class="h-4 w-4" />
-        删除书签
-      </button>
-
-      <!-- 复制路径 -->
-      <button
-        class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-        onclick={() => {
-          navigator.clipboard.writeText(bookmarkContextMenu.bookmark!.path);
-          hideContextMenu();
-        }}
-      >
-        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-        </svg>
-        复制路径
-      </button>
-    </div>
-    
-    <!-- 点击其他地方关闭菜单 -->
-    <div
-      class="fixed inset-0 z-40"
-      onclick={(e) => {
-        // 确保点击的不是搜索设置按钮或其子元素
-        if (!e.target.closest('.search-settings') && 
-            !e.target.closest('button[title="搜索设置"]') &&
-            !e.target.closest('.search-history')) {
-          hideContextMenu();
-        }
-      }}
-    ></div>
-  {/if}
+  
 </div>

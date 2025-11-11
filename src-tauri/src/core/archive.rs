@@ -117,6 +117,11 @@ impl ArchiveManager {
         Ok(buffer)
     }
 
+    /// 从压缩包中提取文件（统一接口）
+    pub fn extract_file(&self, archive_path: &Path, file_path: &str) -> Result<Vec<u8>, String> {
+        self.extract_file_from_zip(archive_path, file_path)
+    }
+
     /// 从 ZIP 压缩包中加载图片（返回 base64，带缓存）
     pub fn load_image_from_zip(
         &self,

@@ -47,7 +47,45 @@ export async function getImagesInDirectory(
  * 生成文件缩略图
  */
 export async function generateFileThumbnail(path: string): Promise<string> {
-  return await invoke<string>('generate_file_thumbnail', { path });
+  console.log('🖼️ FileSystemAPI: 生成文件缩略图:', path);
+  try {
+    const result = await invoke<string>('generate_file_thumbnail_new', { path });
+    console.log('✅ FileSystemAPI: 文件缩略图生成成功:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ FileSystemAPI: 文件缩略图生成失败:', path, error);
+    throw error;
+  }
+}
+
+/**
+ * 生成文件夹缩略图
+ */
+export async function generateFolderThumbnail(path: string): Promise<string> {
+  console.log('📁 FileSystemAPI: 生成文件夹缩略图:', path);
+  try {
+    const result = await invoke<string>('generate_folder_thumbnail', { path });
+    console.log('✅ FileSystemAPI: 文件夹缩略图生成成功:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ FileSystemAPI: 文件夹缩略图生成失败:', path, error);
+    throw error;
+  }
+}
+
+/**
+ * 初始化缩略图管理器
+ */
+export async function init_thumbnail_manager(
+  thumbnailPath: string,
+  rootPath: string,
+  size?: number
+): Promise<void> {
+  return await invoke<void>('init_thumbnail_manager', { 
+    thumbnailPath, 
+    rootPath, 
+    size 
+  });
 }
 
 /**
@@ -98,8 +136,6 @@ export async function getThumbnailCacheSize(): Promise<number> {
 export async function clearThumbnailCache(): Promise<number> {
   return await invoke<number>('clear_thumbnail_cache');
 }
-
-
 
 /**
  * 清理过期缓存
@@ -212,4 +248,48 @@ export async function searchFiles(
   } = {}
 ): Promise<FsItem[]> {
   return await invoke<FsItem[]>('search_files', { path, query, options });
+}
+
+// ===== 缩略图相关 API =====
+
+/**
+ * 获取缩略图URL（不生成新的）
+ */
+export async function getThumbnailUrl(path: string): Promise<string | null> {
+  return await invoke<string | null>('get_thumbnail_url', { path });
+}
+
+/**
+ * 获取缩略图信息（包括尺寸等）
+ */
+export async function getThumbnailInfo(path: string): Promise<any | null> {
+  return await invoke<any | null>('get_thumbnail_info', { path });
+}
+
+/**
+ * 清理过期缩略图
+ */
+export async function cleanupThumbnails(days?: number): Promise<number> {
+  return await invoke<number>('cleanup_thumbnails', { days });
+}
+
+/**
+ * 获取缩略图统计信息
+ */
+export async function getThumbnailStats(): Promise<any> {
+  return await invoke<any>('get_thumbnail_stats');
+}
+
+/**
+ * 清空所有缩略图
+ */
+export async function clearAllThumbnails(): Promise<number> {
+  return await invoke<number>('clear_all_thumbnails');
+}
+
+/**
+ * 预加载缩略图
+ */
+export async function preloadThumbnails(paths: string[]): Promise<string[]> {
+  return await invoke<string[]>('preload_thumbnails', { paths });
 }

@@ -22,3 +22,5 @@ dist-ssr
 /src-tauri/gen/schemas
 *.ymll
 __pycache__/thumbnail_preprocessor.cpython-311.pyc
+temp/*
+temp/test_images/test_image.png

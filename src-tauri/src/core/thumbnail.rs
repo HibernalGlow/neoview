@@ -3,67 +3,159 @@ use std::path::{Path, PathBuf};
 use image::{DynamicImage, ImageFormat, GenericImageView};
 use std::io::Cursor;
 use base64::{Engine as _, engine::general_purpose};
+use chrono::{DateTime, Utc};
+use crate::core::thumbnail_db::{ThumbnailDatabase, ThumbnailRecord};
+
+/// 缩略图信息
+#[derive(Debug, Clone)]
+pub struct ThumbnailInfo {
+    pub url: String,
+    pub width: u32,
+    pub height: u32,
+    pub file_size: u64,
+    pub created_at: DateTime<Utc>,
+    pub is_folder: bool,
+}
 
 /// 缩略图管理器
 pub struct ThumbnailManager {
-    /// 缩略图缓存目录
-    cache_dir: PathBuf,
+    /// 缩略图数据库
+    db: ThumbnailDatabase,
     /// 缩略图尺寸
     size: u32,
+    /// 根目录，用于计算相对路径
+    root_dir: PathBuf,
 }
 
 impl ThumbnailManager {
     /// 创建新的缩略图管理器
-    pub fn new(cache_dir: PathBuf, size: u32) -> Result<Self, String> {
-        // 确保缓存目录存在
-        fs::create_dir_all(&cache_dir)
-            .map_err(|e| format!("创建缓存目录失败: {}", e))?;
+    pub fn new(thumbnail_root: PathBuf, root_dir: PathBuf, size: u32) -> Result<Self, String> {
+        // 创建数据库
+        let db = ThumbnailDatabase::new(thumbnail_root.clone())
+            .map_err(|e| format!("创建缩略图数据库失败: {}", e))?;
 
         Ok(Self {
-            cache_dir,
+            db,
             size,
+            root_dir,
         })
     }
 
-    /// 获取缩略图缓存路径
-    fn get_cache_path(&self, image_path: &Path) -> PathBuf {
-        // 使用原文件路径的哈希值作为缓存文件名
-        let hash = {
-            use std::collections::hash_map::DefaultHasher;
-            use std::hash::{Hash, Hasher};
-            let mut hasher = DefaultHasher::new();
-            image_path.to_string_lossy().hash(&mut hasher);
-            hasher.finish()
-        };
-
-        self.cache_dir.join(format!("{}.jpg", hash))
+    /// 获取相对路径
+    pub fn get_relative_path(&self, full_path: &Path) -> Result<PathBuf, String> {
+        // 尝试获取相对于根目录的路径
+        match full_path.strip_prefix(&self.root_dir) {
+            Ok(relative) => Ok(relative.to_path_buf()),
+            Err(_) => {
+                // 如果不在根目录下，使用完整路径作为相对路径
+                println!("⚠️ 路径 {} 不在根目录 {} 下，使用完整路径", full_path.display(), self.root_dir.display());
+                Ok(full_path.to_path_buf())
+            }
+        }
     }
 
-    /// 生成缩略图（返回 base64 编码）
-    pub fn generate_thumbnail(&self, image_path: &Path) -> Result<String, String> {
-        // 检查缓存
-        let cache_path = self.get_cache_path(image_path);
+    /// 规范化路径字符串，统一使用正斜杠
+    fn normalize_path_string(path: &Path) -> String {
+        path.to_string_lossy().replace('\\', "/")
+    }
+
+    /// 预加载缩略图到内存缓存
+    pub fn preload_thumbnails_to_cache(&self, cache: &crate::core::image_cache::ImageCache) -> Result<usize, String> {
+        println!("🔄 开始预加载缩略图到内存缓存...");
         
-        if cache_path.exists() {
-            // 检查缓存是否过期（原文件是否更新）
-            if let (Ok(cache_meta), Ok(source_meta)) = (
-                fs::metadata(&cache_path),
-                fs::metadata(image_path)
-            ) {
-                if let (Ok(cache_time), Ok(source_time)) = (
-                    cache_meta.modified(),
-                    source_meta.modified()
-                ) {
-                    if cache_time >= source_time {
-                        // 缓存有效，直接读取
-                        return self.read_thumbnail_from_cache(&cache_path);
-                    }
+        // 获取数据库中的所有缩略图记录
+        let records = self.db.get_all_thumbnails()
+            .map_err(|e| format!("获取数据库记录失败: {}", e))?;
+        
+        let mut loaded_count = 0;
+        
+        for record in records {
+            // 构建完整的缩略图文件路径
+            let date_folder = record.created_at.format("%Y/%m/%d").to_string();
+            let thumbnail_path = self.db.thumbnail_root
+                .join(date_folder)
+                .join(&record.thumbnail_name);
+            
+            // 检查文件是否存在
+            if thumbnail_path.exists() {
+                let thumbnail_url = format!("file://{}", thumbnail_path.to_string_lossy());
+                
+                // 添加到内存缓存
+                cache.set(record.relative_path.clone(), thumbnail_url);
+                loaded_count += 1;
+            }
+        }
+        
+        println!("✅ 预加载完成，共加载 {} 个缩略图", loaded_count);
+        Ok(loaded_count)
+    }
+
+    /// 获取缩略图信息（包括尺寸等）
+    pub fn get_thumbnail_info(&self, full_path: &Path) -> Result<Option<ThumbnailInfo>, String> {
+        println!("🔍 ThumbnailManager::get_thumbnail_info - 完整路径: {}", full_path.display());
+        let relative_path = self.get_relative_path(full_path)?;
+        // 统一使用正斜杠作为路径分隔符，确保数据库查询一致
+        let relative_str = relative_path.to_string_lossy().replace('\\', "/");
+        println!("🔍 标准化相对路径: {}", relative_str);
+        
+        if let Ok(Some(record)) = self.db.find_by_relative_path(&relative_str) {
+            println!("✅ 数据库中找到记录: {}", record.thumbnail_name);
+            // 使用创建日期构建正确路径
+            let date_folder = record.created_at.format("%Y/%m/%d").to_string();
+            let thumbnail_path = self.db.thumbnail_root
+                .join(date_folder)
+                .join(&record.thumbnail_name);
+            if thumbnail_path.exists() {
+                println!("✅ 缩略图文件存在: {}", thumbnail_path.display());
+                Ok(Some(ThumbnailInfo {
+                    url: format!("file://{}", thumbnail_path.to_string_lossy()),
+                    width: record.width,
+                    height: record.height,
+                    file_size: record.file_size,
+                    created_at: record.created_at,
+                    is_folder: record.is_folder,
+                }))
+            } else {
+                println!("❌ 缩略图文件不存在: {}", thumbnail_path.display());
+                Ok(None)
+            }
+        } else {
+            println!("❌ 数据库中未找到记录");
+            Ok(None)
+        }
+    }
+
+    /// 生成缩略图（返回文件URL）
+    pub fn generate_thumbnail(&self, image_path: &Path) -> Result<String, String> {
+        // 获取相对路径
+        let relative_path = self.get_relative_path(image_path)?;
+        let relative_str = relative_path.to_string_lossy();
+        
+        // 获取源文件修改时间
+        let source_meta = fs::metadata(image_path)
+            .map_err(|e| format!("获取文件元数据失败: {}", e))?;
+        let source_modified = source_meta.modified()
+            .map_err(|e| format!("获取修改时间失败: {}", e))?
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| format!("时间转换失败: {}", e))?
+            .as_secs() as i64;
+
+        // 检查数据库中是否已有有效缩略图
+        if let Ok(Some(record)) = self.db.find_by_relative_path(&relative_str) {
+            if record.source_modified == source_modified {
+                // 缩略图有效，使用创建日期构建正确路径
+                let date_folder = record.created_at.format("%Y/%m/%d").to_string();
+                let thumbnail_path = self.db.thumbnail_root
+                    .join(date_folder)
+                    .join(&record.thumbnail_name);
+                if thumbnail_path.exists() {
+                    return Ok(format!("file://{}", thumbnail_path.to_string_lossy()));
                 }
             }
         }
 
         // 生成新缩略图
-        self.generate_and_cache_thumbnail(image_path, &cache_path)
+        self.generate_and_save_thumbnail(image_path, &relative_path, source_modified, false)
     }
 
     /// 从字节数据生成缩略图（用于压缩包内图片）
@@ -75,38 +167,77 @@ impl ThumbnailManager {
         // 生成等比例缩略图
         let thumbnail = self.resize_keep_aspect_ratio(&img, max_size);
 
-        // 编码为 JPEG
-        let jpeg_data = self.encode_jpeg(&thumbnail)?;
+        // 编码为 WebP
+        let webp_data = self.encode_webp(&thumbnail)?;
 
         // 返回 base64
-        Ok(format!("data:image/jpeg;base64,{}", general_purpose::STANDARD.encode(&jpeg_data)))
+        Ok(format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&webp_data)))
     }
 
-    /// 从缓存读取缩略图
-    fn read_thumbnail_from_cache(&self, cache_path: &Path) -> Result<String, String> {
-        let data = fs::read(cache_path)
-            .map_err(|e| format!("读取缓存失败: {}", e))?;
-
-        Ok(format!("data:image/jpeg;base64,{}", general_purpose::STANDARD.encode(&data)))
-    }
-
-    /// 生成并缓存缩略图
-    fn generate_and_cache_thumbnail(&self, image_path: &Path, cache_path: &Path) -> Result<String, String> {
+    /// 生成并保存缩略图到文件系统
+    pub fn generate_and_save_thumbnail(
+        &self,
+        image_path: &Path,
+        relative_path: &Path,
+        source_modified: i64,
+        is_folder: bool,
+    ) -> Result<String, String> {
         // 加载图片 - 支持 JXL、AVIF 等格式
-        let img = self.load_image_with_format_support(image_path)?;
+        let img = if is_folder {
+            // 文件夹缩略图需要特殊处理
+            return self.generate_folder_thumbnail(image_path, relative_path, source_modified);
+        } else {
+            self.load_image_with_format_support(image_path)?
+        };
 
         // 生成等比例缩略图
         let thumbnail = self.resize_keep_aspect_ratio(&img, self.size);
 
-        // 编码为 JPEG
-        let jpeg_data = self.encode_jpeg(&thumbnail)?;
+        // 编码为 WebP
+        let webp_data = self.encode_webp(&thumbnail)?;
 
-        // 保存到缓存
-        fs::write(cache_path, &jpeg_data)
-            .map_err(|e| format!("保存缓存失败: {}", e))?;
+        // 获取保存路径
+        let now = Utc::now();
+        let thumbnail_path = self.db.get_thumbnail_path(relative_path, &now);
+        
+        // 确保目录存在
+        if let Some(parent) = thumbnail_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("创建缩略图目录失败: {}", e))?;
+        }
 
-        // 返回 base64
-        Ok(format!("data:image/jpeg;base64,{}", general_purpose::STANDARD.encode(&jpeg_data)))
+        // 保存文件
+        fs::write(&thumbnail_path, &webp_data)
+            .map_err(|e| format!("保存缩略图失败: {}", e))?;
+
+        // 获取文件信息
+        let (width, height) = thumbnail.dimensions();
+        let file_size = webp_data.len() as u64;
+        let thumbnail_name = thumbnail_path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(&ThumbnailDatabase::hash_path(relative_path))
+            .to_string();
+
+        // 创建数据库记录
+        // 统一使用正斜杠作为路径分隔符，确保数据库查询一致
+        let relative_path_str = relative_path.to_string_lossy().replace('\\', "/");
+        let record = ThumbnailRecord {
+            relative_path: relative_path_str,
+            thumbnail_name,
+            created_at: now,
+            source_modified,
+            is_folder,
+            width,
+            height,
+            file_size,
+        };
+
+        // 保存到数据库
+        self.db.upsert_thumbnail(record)
+            .map_err(|e| format!("保存数据库记录失败: {}", e))?;
+
+        // 返回文件URL
+        Ok(format!("file://{}", thumbnail_path.to_string_lossy()))
     }
 
     /// 加载图片（支持 JXL 等特殊格式）
@@ -215,93 +346,282 @@ impl ThumbnailManager {
         img.resize(new_width, new_height, image::imageops::FilterType::Lanczos3)
     }
 
-    /// 编码为 JPEG 格式
-    fn encode_jpeg(&self, img: &DynamicImage) -> Result<Vec<u8>, String> {
+    /// 编码为 WebP 格式
+    fn encode_webp(&self, img: &DynamicImage) -> Result<Vec<u8>, String> {
         let mut buffer = Vec::new();
         let mut cursor = Cursor::new(&mut buffer);
 
-        // 转换为 RGB8（JPEG不支持透明度）
-        let rgb = img.to_rgb8();
-        let (width, height) = rgb.dimensions();
+        // WebP 支持透明度，使用 RGBA8
+        let rgba = img.to_rgba8();
+        let (width, height) = rgba.dimensions();
 
-        // 编码为 JPEG，质量设置为85（在质量和文件大小之间取得良好平衡）
+        // 编码为 WebP，质量设置为85（在质量和文件大小之间取得良好平衡）
         image::write_buffer_with_format(
             &mut cursor,
-            rgb.as_raw(),
+            rgba.as_raw(),
             width,
             height,
-            image::ColorType::Rgb8,
-            ImageFormat::Jpeg,
-        ).map_err(|e| format!("编码JPEG失败: {}", e))?;
+            image::ColorType::Rgba8,
+            ImageFormat::WebP,
+        ).map_err(|e| format!("编码WebP失败: {}", e))?;
 
         Ok(buffer)
     }
 
-    /// 清除过期缓存（可选的后台任务）
-    pub fn cleanup_cache(&self, max_age_days: u64) -> Result<usize, String> {
-        use std::time::{SystemTime, Duration};
+    /// 生成文件夹缩略图
+    fn generate_folder_thumbnail(
+        &self,
+        folder_path: &Path,
+        relative_path: &Path,
+        source_modified: i64,
+    ) -> Result<String, String> {
+        // 查找文件夹中的第一个图片或压缩包
+        let first_image = self.find_first_image_in_folder(folder_path)?;
+        
+        if let Some(image_path) = first_image {
+            // 检查是否为压缩包内的图片
+            let img = if image_path.to_string_lossy().contains("__archive__") {
+                // 从压缩包中提取图片
+                self.extract_image_from_archive(&image_path)?
+            } else {
+                // 直接加载图片文件
+                self.load_image_with_format_support(&image_path)?
+            };
+            
+            let thumbnail = self.resize_keep_aspect_ratio(&img, self.size);
+            let webp_data = self.encode_webp(&thumbnail)?;
 
-        let max_age = Duration::from_secs(max_age_days * 24 * 60 * 60);
-        let now = SystemTime::now();
-        let mut removed_count = 0;
+            // 获取保存路径
+            let now = Utc::now();
+            let thumbnail_path = self.db.get_thumbnail_path(relative_path, &now);
+            
+            // 确保目录存在
+            if let Some(parent) = thumbnail_path.parent() {
+                fs::create_dir_all(parent)
+                    .map_err(|e| format!("创建缩略图目录失败: {}", e))?;
+            }
 
-        let entries = fs::read_dir(&self.cache_dir)
-            .map_err(|e| format!("读取缓存目录失败: {}", e))?;
+            // 保存文件
+            fs::write(&thumbnail_path, &webp_data)
+                .map_err(|e| format!("保存缩略图失败: {}", e))?;
 
-        for entry in entries {
-            let entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
-            let path = entry.path();
+            // 获取文件信息
+            let (width, height) = thumbnail.dimensions();
+            let file_size = webp_data.len() as u64;
+            let thumbnail_name = thumbnail_path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(&ThumbnailDatabase::hash_path(relative_path))
+                .to_string();
 
-            if let Ok(metadata) = fs::metadata(&path) {
-                if let Ok(modified) = metadata.modified() {
-                    if let Ok(age) = now.duration_since(modified) {
-                        if age > max_age {
-                            if fs::remove_file(&path).is_ok() {
-                                removed_count += 1;
-                            }
+            // 创建数据库记录
+            // 统一使用正斜杠作为路径分隔符，确保数据库查询一致
+            let relative_path_str = relative_path.to_string_lossy().replace('\\', "/");
+            let record = ThumbnailRecord {
+                relative_path: relative_path_str,
+                thumbnail_name,
+                created_at: now,
+                source_modified,
+                is_folder: true,
+                width,
+                height,
+                file_size,
+            };
+
+            // 保存到数据库
+            self.db.upsert_thumbnail(record)
+                .map_err(|e| format!("保存数据库记录失败: {}", e))?;
+
+            // 返回文件URL
+            Ok(format!("file://{}", thumbnail_path.to_string_lossy()))
+        } else {
+            Err("文件夹中没有找到图片或压缩包".to_string())
+        }
+    }
+
+    /// 查找文件夹中的第一个图片或压缩包（递归查找子目录）
+    fn find_first_image_in_folder(&self, folder_path: &Path) -> Result<Option<PathBuf>, String> {
+        if !folder_path.is_dir() {
+            return Err("路径不是文件夹".to_string());
+        }
+
+        // 使用广度优先搜索，优先查找浅层目录
+        let mut dirs_to_check = vec![folder_path.to_path_buf()];
+        
+        while let Some(current_dir) = dirs_to_check.pop() {
+            let entries = fs::read_dir(&current_dir)
+                .map_err(|e| format!("读取目录失败: {}", e))?;
+            let mut entries_vec: Vec<_> = entries
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| format!("读取条目失败: {}", e))?;
+            
+            // 按名称排序，确保结果一致
+            entries_vec.sort_by(|a, b| {
+                a.path()
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .cmp(&b.path().file_name().and_then(|n| n.to_str()))
+            });
+
+            // 首先查找图片文件
+            for entry in entries_vec.iter() {
+                let path = entry.path();
+                
+                // 跳过隐藏文件
+                if let Some(name) = path.file_name() {
+                    if name.to_string_lossy().starts_with('.') {
+                        continue;
+                    }
+                }
+
+                if path.is_file() && self.is_image_file(&path) {
+                    return Ok(Some(path));
+                }
+            }
+
+            // 如果没有图片，查找压缩包
+            for entry in entries_vec.iter() {
+                let path = entry.path();
+                
+                // 跳过隐藏文件
+                if let Some(name) = path.file_name() {
+                    if name.to_string_lossy().starts_with('.') {
+                        continue;
+                    }
+                }
+
+                if path.is_file() && self.is_archive_file(&path) {
+                    // 尝试从压缩包中获取第一张图片
+                    if let Ok(first_image) = self.get_first_image_from_archive(&path) {
+                        return Ok(Some(first_image));
+                    }
+                }
+            }
+
+            // 将子目录添加到待检查列表（为了广度优先）
+            for entry in entries_vec.iter() {
+                let path = entry.path();
+                if path.is_dir() {
+                    // 跳过隐藏目录
+                    if let Some(name) = path.file_name() {
+                        if !name.to_string_lossy().starts_with('.') {
+                            dirs_to_check.insert(0, path); // 插入到开头，保持广度优先
                         }
                     }
                 }
             }
         }
 
-        Ok(removed_count)
+        Ok(None)
     }
 
-    /// 获取缓存大小
-    pub fn get_cache_size(&self) -> Result<u64, String> {
-        let mut total_size = 0u64;
+    /// 从压缩包中获取第一张图片
+    fn get_first_image_from_archive(&self, archive_path: &Path) -> Result<PathBuf, String> {
+        use crate::core::archive::ArchiveManager;
+        
+        let archive_manager = ArchiveManager::new();
+        let entries = archive_manager.list_zip_contents(archive_path)
+            .map_err(|e| format!("列出压缩包内容失败: {}", e))?;
 
-        let entries = fs::read_dir(&self.cache_dir)
-            .map_err(|e| format!("读取缓存目录失败: {}", e))?;
+        // 对条目按名称排序
+        let mut sorted_entries = entries;
+        sorted_entries.sort_by(|a, b| a.name.cmp(&b.name));
 
-        for entry in entries {
-            let entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
-            if let Ok(metadata) = entry.metadata() {
-                total_size += metadata.len();
+        for entry in sorted_entries {
+            if !entry.is_dir && self.is_image_file(&Path::new(&entry.name)) {
+                // 返回压缩包路径和内部图片路径的组合
+                // 这将在生成文件夹缩略图时被特殊处理
+                let combined_path = archive_path.join("__archive__").join(&entry.name);
+                return Ok(combined_path);
             }
         }
 
-        Ok(total_size)
+        Err("压缩包中没有找到图片".to_string())
+    }
+
+    /// 检查文件是否为图片
+    fn is_image_file(&self, path: &Path) -> bool {
+        if let Some(ext) = path.extension() {
+            let ext = ext.to_string_lossy().to_lowercase();
+            matches!(
+                ext.as_str(),
+                "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "avif" | "jxl" | "tiff" | "tif"
+            )
+        } else {
+            false
+        }
+    }
+
+    /// 检查文件是否为压缩包
+    fn is_archive_file(&self, path: &Path) -> bool {
+        if let Some(ext) = path.extension() {
+            let ext = ext.to_string_lossy().to_lowercase();
+            matches!(
+                ext.as_str(),
+                "zip" | "rar" | "7z" | "cbz" | "cbr" | "cb7"
+            )
+        } else {
+            false
+        }
+    }
+
+    /// 获取缓存统计信息
+    pub fn get_cache_stats(&self) -> Result<crate::core::thumbnail_db::ThumbnailStats, String> {
+        self.db.get_stats()
+            .map_err(|e| format!("获取缓存统计失败: {}", e))
     }
 
     /// 清空所有缓存
     pub fn clear_all_cache(&self) -> Result<usize, String> {
+        let records = self.db.get_all_thumbnails()
+            .map_err(|e| format!("获取缩略图列表失败: {}", e))?;
+        
         let mut removed_count = 0;
-
-        let entries = fs::read_dir(&self.cache_dir)
-            .map_err(|e| format!("读取缓存目录失败: {}", e))?;
-
-        for entry in entries {
-            let entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
-            let path = entry.path();
-            
-            if fs::remove_file(&path).is_ok() {
-                removed_count += 1;
+        
+        for record in records {
+            let thumbnail_path = self.db.thumbnail_root.join(&record.thumbnail_name);
+            if thumbnail_path.exists() {
+                if fs::remove_file(&thumbnail_path).is_ok() {
+                    removed_count += 1;
+                }
             }
         }
-
+        
+        // 清空数据库
+        
+        self.db.conn.execute("DELETE FROM thumbnails", [])
+            .map_err(|e| format!("清空数据库失败: {}", e))?;
+        
         Ok(removed_count)
+    }
+
+    /// 清除过期缓存
+    pub fn cleanup_expired(&self, max_age_days: u32) -> Result<usize, String> {
+        self.db.cleanup_expired(max_age_days)
+            .map_err(|e| format!("清理过期缩略图失败: {}", e))
+    }
+
+    /// 从压缩包中提取图片
+    fn extract_image_from_archive(&self, combined_path: &Path) -> Result<DynamicImage, String> {
+        use crate::core::archive::ArchiveManager;
+        
+        // 解析组合路径：archive_path/__archive__/image_path
+        let path_str = combined_path.to_string_lossy();
+        let parts: Vec<&str> = path_str.split("__archive__").collect();
+        
+        if parts.len() != 2 {
+            return Err("无效的压缩包路径格式".to_string());
+        }
+        
+        let archive_path = Path::new(parts[0]);
+        let image_path_in_archive = parts[1].trim_start_matches(['/', '\\']);
+        
+        let archive_manager = ArchiveManager::new();
+        let image_data = archive_manager.extract_file(archive_path, image_path_in_archive)
+            .map_err(|e| format!("从压缩包提取图片失败: {}", e))?;
+        
+        // 加载提取的图片数据
+        image::load_from_memory(&image_data)
+            .map_err(|e| format!("加载压缩包内图片失败: {}", e))
     }
 
     

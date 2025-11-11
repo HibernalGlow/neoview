@@ -336,8 +336,23 @@
       
       fileBrowserStore.setItems(loadedItems);
       
-      // 异步加载缩略图 - 只为压缩包内的图片加载，不为单个图片文件加载
-      // 单个图片文件的缩略图加载已被移除
+      // 异步加载缩略图
+      console.log('🖼️ 开始加载缩略图，项目总数:', loadedItems.length);
+      const imageCount = loadedItems.filter(item => item.isImage).length;
+      const folderCount = loadedItems.filter(item => item.is_dir).length;
+      console.log('📊 图片数量:', imageCount, '文件夹数量:', folderCount);
+      
+      for (const item of loadedItems) {
+        if (item.is_dir) {
+          // 为文件夹生成缩略图
+          console.log('📁 准备为文件夹生成缩略图:', item.path);
+          loadFolderThumbnail(item.path);
+        } else if (item.isImage) {
+          // 为图片文件生成缩略图
+          console.log('🖼️ 准备为图片生成缩略图:', item.path);
+          loadThumbnail(item.path);
+        }
+      }
     } catch (err) {
       console.error('❌ Error loading directory:', err);
       fileBrowserStore.setError(String(err));
@@ -390,6 +405,19 @@
     } catch (err) {
       // 不支持的图片格式或其他错误，静默失败
       console.debug('Failed to load thumbnail:', err);
+    }
+  }
+
+  /**
+   * 加载文件夹缩略图
+   */
+  async function loadFolderThumbnail(path: string) {
+    try {
+      const thumbnail = await FileSystemAPI.generateFolderThumbnail(path);
+      fileBrowserStore.addThumbnail(path, thumbnail);
+    } catch (err) {
+      // 文件夹缩略图生成失败，静默失败
+      console.debug('Failed to load folder thumbnail:', err);
     }
   }
 
@@ -1484,9 +1512,16 @@
               </button>
             {/if}
 
-            <!-- 图标 -->
-            <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center">
-              {#if item.isDir}
+            <!-- 图标或缩略图 -->
+            <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded">
+              {#if thumbnails.has(item.path)}
+                <!-- 显示缩略图 -->
+                <img 
+                  src={thumbnails.get(item.path)} 
+                  alt={item.name}
+                  class="h-full w-full object-cover transition-transform group-hover:scale-105"
+                />
+              {:else if item.isDir}
                 <Folder class="h-8 w-8 text-blue-500 transition-colors group-hover:text-blue-600" />
               {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
                 <FileArchive class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600" />
@@ -1659,9 +1694,16 @@
               </button>
             {/if}
 
-            <!-- 图标 -->
-            <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center">
-              {#if item.isDir}
+            <!-- 图标或缩略图 -->
+            <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded">
+              {#if thumbnails.has(item.path)}
+                <!-- 显示缩略图 -->
+                <img 
+                  src={thumbnails.get(item.path)} 
+                  alt={item.name}
+                  class="h-full w-full object-cover transition-transform group-hover:scale-105"
+                />
+              {:else if item.isDir}
                 <Folder class="h-8 w-8 text-blue-500 transition-colors group-hover:text-blue-600" />
               {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
                 <FileArchive class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600" />

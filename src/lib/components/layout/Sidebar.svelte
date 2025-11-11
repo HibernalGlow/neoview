@@ -10,6 +10,7 @@
 	import FileBrowser from '$lib/components/panels/FileBrowser.svelte';
 	import HistoryPanel from '$lib/components/panels/HistoryPanel.svelte';
 	import BookmarkPanel from '$lib/components/panels/BookmarkPanel.svelte';
+	import ThumbnailsPanel from '$lib/components/panels/ThumbnailsPanel.svelte';
 	import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import HoverWrapper from './HoverWrapper.svelte';
@@ -251,10 +252,7 @@
 							{:else if activeItem.value === 'bookmark'}
 								<BookmarkPanel />
 							{:else if activeItem.value === 'thumbnail'}
-								<div class="p-4">
-									<h3 class="text-lg font-semibold mb-4">缩略图面板</h3>
-									<p class="text-sm text-muted-foreground">缩略图功能正在开发中...</p>
-								</div>
+								<ThumbnailsPanel />
 							{:else if activeItem.value === 'playlist'}
 								<div class="p-4">
 									<h3 class="text-lg font-semibold mb-4">播放列表</h3>

@@ -5,25 +5,32 @@
 	 */
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
-	import { Image as ImageIcon, Grid3x3, Grid2x2, LayoutGrid } from '@lucide/svelte';
+	import { Image as ImageIcon, Grid3x3, Grid2x2, LayoutGrid, Loader2, AlertCircle, TestTube, CheckCircle, XCircle } from '@lucide/svelte';
+	import { invoke } from '@tauri-apps/api/core';
+	import { onMount } from 'svelte';
+	import { bookStore } from '$lib/stores/book.svelte';
+	import { runThumbnailTests } from '$lib/utils/thumbnail-test';
 
 	interface Thumbnail {
 		index: number;
 		name: string;
-		imageUrl: string; // base64 or url
+		imageUrl: string; // file:// URL or base64
+		loading: boolean;
+		error: boolean;
+		pagePath: string; // 页面路径
 	}
 
-	// 模拟数据 - 实际应从 store 获取并动态生成缩略图
-	let thumbnails = $state<Thumbnail[]>(
-		Array.from({ length: 20 }, (_, i) => ({
-			index: i + 1,
-			name: `page_${String(i + 1).padStart(3, '0')}.jpg`,
-			imageUrl: '' // 实际应调用 Tauri 命令生成缩略图
-		}))
-	);
+	// 缩略图数据 - 从 store 获取并动态生成缩略图
+	let thumbnails = $state<Thumbnail[]>([]);
+	let currentPath = $state<string>(''); // 当前查看的路径
 
 	let currentPage = $state(1);
 	let gridSize = $state<'small' | 'medium' | 'large'>('medium');
+
+	// 测试相关状态
+	let isTesting = $state(false);
+	let testResults = $state<any[]>([]);
+	let showTestResults = $state(false);
 
 	// 缩略图尺寸
 	const gridSizes = {
@@ -32,15 +39,119 @@
 		large: 'w-36 h-52'
 	};
 
+	async function loadThumbnails(path: string) {
+		currentPath = path;
+		
+		if (!bookStore.currentBook || !bookStore.currentBook.pages) {
+			thumbnails = [];
+			return;
+		}
+		
+		try {
+			// 从当前书籍获取页面列表
+			const pages = bookStore.currentBook.pages;
+			
+			thumbnails = pages.map((page: any, index: number) => ({
+				index: index + 1,
+				name: page.name || `Page ${index + 1}`,
+				imageUrl: '', // 将在 loadThumbnail 中加载
+				loading: true,
+				error: false,
+				pagePath: page.path
+			}));
+			
+			// 并行加载缩略图
+			loadAllThumbnails();
+		} catch (error) {
+			console.error('加载缩略图失败:', error);
+		}
+	}
+
+	async function loadThumbnail(thumb: Thumbnail, filePath: string) {
+		thumb.loading = true;
+		thumb.error = false;
+		
+		try {
+			// 调用 Tauri 命令生成缩略图
+			const thumbnailUrl = await invoke('generate_file_thumbnail_new', { filePath });
+			thumb.imageUrl = thumbnailUrl;
+		} catch (error) {
+			console.error(`生成缩略图失败 ${filePath}:`, error);
+			thumb.error = true;
+		} finally {
+			thumb.loading = false;
+		}
+	}
+
+	async function loadAllThumbnails() {
+		// 限制并发加载的缩略图数量
+		const concurrency = 6;
+		const chunks = [];
+		
+		for (let i = 0; i < thumbnails.length; i += concurrency) {
+			chunks.push(thumbnails.slice(i, i + concurrency));
+		}
+		
+		for (const chunk of chunks) {
+			await Promise.all(
+				chunk.map((thumb) => {
+					return loadThumbnail(thumb, thumb.pagePath);
+				})
+			);
+		}
+	}
+
 	function goToPage(index: number) {
 		currentPage = index;
-		// TODO: 发送事件到主视图切换页面
-		console.log('跳转到页面', index);
+		// 跳转到指定页面
+		bookStore.navigateToPage(index - 1);
 	}
 
 	function setGridSize(size: 'small' | 'medium' | 'large') {
 		gridSize = size;
 	}
+
+	async function runTests() {
+		isTesting = true;
+		showTestResults = true;
+		testResults = []; // 重置结果
+
+		try {
+			const results = await runThumbnailTests();
+			testResults = results || [];
+		} catch (error) {
+			console.error('测试运行失败:', error);
+			testResults = [{
+				name: '测试执行失败',
+				success: false,
+				message: error instanceof Error ? error.message : '未知错误',
+				duration: 0
+			}];
+		} finally {
+			isTesting = false;
+		}
+	}
+
+	// 初始化缩略图管理器
+	onMount(async () => {
+		try {
+			// 初始化缩略图管理器
+			await invoke('init_thumbnail_manager', {
+				thumbnailPath: 'D:\\temp\\neoview_thumbnails',
+				rootPath: 'D:\\',
+				size: 256
+			});
+		} catch (error) {
+			console.error('初始化缩略图管理器失败:', error);
+		}
+	});
+
+	// 监听当前书籍变化
+	$effect(() => {
+		if (bookStore.currentBook && bookStore.currentBook.path) {
+			loadThumbnails(bookStore.currentBook.path);
+		}
+	});
 </script>
 
 <div class="h-full flex flex-col bg-background">
@@ -51,6 +162,21 @@
 				<LayoutGrid class="h-4 w-4" />
 				缩略图 ({thumbnails.length})
 			</h3>
+			<Button
+				variant="outline"
+				size="sm"
+				class="h-7 px-2 text-xs"
+				onclick={runTests}
+				disabled={isTesting}
+			>
+				{#if isTesting}
+					<Loader2 class="h-3 w-3 mr-1 animate-spin" />
+					测试中...
+				{:else}
+					<TestTube class="h-3 w-3 mr-1" />
+					测试
+				{/if}
+			</Button>
 		</div>
 
 		<!-- 网格尺寸控制 -->
@@ -86,6 +212,43 @@
 		</div>
 	</div>
 
+	<!-- 测试结果 -->
+	{#if showTestResults && testResults.length > 0}
+		<div class="px-3 pb-2 border-b">
+			<div class="flex items-center justify-between mb-2">
+				<h4 class="text-xs font-semibold">测试结果</h4>
+				<Button
+					variant="ghost"
+					size="sm"
+					class="h-5 px-2 text-xs"
+					onclick={() => showTestResults = false}
+				>
+					关闭
+				</Button>
+			</div>
+			<div class="space-y-1 max-h-32 overflow-y-auto">
+				{#each testResults as result}
+					<div class="flex items-center gap-2 text-xs">
+						{#if result.success}
+							<CheckCircle class="h-3 w-3 text-green-500 flex-shrink-0" />
+						{:else}
+							<XCircle class="h-3 w-3 text-red-500 flex-shrink-0" />
+						{/if}
+						<span class="truncate">{result.name}</span>
+						{#if result.duration}
+							<span class="text-muted-foreground ml-auto">({result.duration}ms)</span>
+						{/if}
+					</div>
+					{#if !result.success && result.message}
+						<div class="text-xs text-red-600 ml-5 truncate">
+							{result.message}
+						</div>
+					{/if}
+				{/each}
+			</div>
+		</div>
+	{/if}
+
 	<!-- 缩略图网格 -->
 	<div class="flex-1 overflow-y-auto p-2">
 		<div
@@ -109,11 +272,19 @@
 							gridSize
 						]} rounded bg-muted flex items-center justify-center overflow-hidden relative"
 					>
-						{#if thumb.imageUrl}
+						{#if thumb.loading}
+							<Loader2 class="h-6 w-6 text-muted-foreground animate-spin" />
+						{:else if thumb.error}
+							<AlertCircle class="h-6 w-6 text-destructive" />
+						{:else if thumb.imageUrl}
 							<img 
 								src={thumb.imageUrl} 
 								alt={thumb.name} 
 								class="absolute inset-0 w-full h-full object-contain" 
+								onerror={() => {
+									thumb.error = true;
+									thumb.loading = false;
+								}}
 							/>
 						{:else}
 							<!-- 占位图标 -->

@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use tauri::Manager;
 use core::{BookManager, ImageLoader, FsManager, ThumbnailManager, ArchiveManager};
 use commands::fs_commands::FsState;
+use commands::thumbnail_commands::ThumbnailManagerState;
 
 #[allow(clippy::missing_panics_doc)]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -25,25 +26,46 @@ pub fn run() {
                 )?;
             }
             
-            // 初始化文件系统管理器、缩略图管理器和压缩包管理器
+            // 初始化文件系统管理器和压缩包管理器
             let fs_manager = FsManager::new();
-            let cache_dir = app.path().app_cache_dir()
-                .unwrap_or_else(|_| PathBuf::from(".cache"))
-                .join("thumbnails");
-            let thumbnail_manager = ThumbnailManager::new(cache_dir, 256)
-                .expect("Failed to create thumbnail manager");
             let archive_manager = ArchiveManager::new();
             
             app.manage(FsState {
                 fs_manager: Mutex::new(fs_manager),
-                thumbnail_manager: Mutex::new(thumbnail_manager),
+                thumbnail_manager: Mutex::new(ThumbnailManager::new(
+                    PathBuf::from(".cache/thumbnails"),
+                    PathBuf::from("."),
+                    256
+                ).expect("Failed to create thumbnail manager")),
                 archive_manager: Mutex::new(archive_manager),
             });
+            
+            // 初始化新的缩略图管理器状态
+            let thumbnail_path = app.path().app_data_dir()
+                .unwrap_or_else(|_| {
+                    // 如果无法获取应用数据目录，使用当前目录
+                    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+                })
+                .join("thumbnails");
+            
+            // 确保缩略图目录存在
+            std::fs::create_dir_all(&thumbnail_path)
+                .expect("Failed to create thumbnail directory");
+            
+            // 获取当前目录作为根目录
+            let root_path = std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."));
+            
+            println!("📁 缩略图路径: {}", thumbnail_path.display());
+            println!("📂 根目录路径: {}", root_path.display());
+            
+            // 缩略图管理器将在前端初始化，这里只创建目录
             
             Ok(())
         })
         .manage(Mutex::new(BookManager::new()))
         .manage(Mutex::new(ImageLoader::default()))
+        .manage(ThumbnailManagerState::default())
         .invoke_handler(tauri::generate_handler![
             // Book commands
             commands::open_book,
@@ -97,6 +119,17 @@ pub fn run() {
             // Performance commands
             commands::get_performance_settings,
             commands::save_performance_settings,
+            // Thumbnail commands (new)
+            commands::init_thumbnail_manager,
+            commands::generate_file_thumbnail_new,
+            commands::generate_folder_thumbnail,
+            commands::get_thumbnail_info,
+            commands::get_thumbnails_for_path,
+            commands::get_thumbnail_url,
+            commands::cleanup_thumbnails,
+            commands::get_thumbnail_stats,
+            commands::clear_all_thumbnails,
+            commands::preload_thumbnails,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -238,7 +238,7 @@ pub async fn get_thumbnail_cache_size(
     let thumbnail_manager = state.thumbnail_manager.lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
 
-    thumbnail_manager.get_cache_size()
+    thumbnail_manager.get_cache_stats().map(|s| s.total_size as u64)
 }
 
 /// 清空缩略图缓存
@@ -263,7 +263,7 @@ pub async fn cleanup_thumbnail_cache(
     let thumbnail_manager = state.thumbnail_manager.lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
 
-    thumbnail_manager.cleanup_cache(max_age_days)
+    thumbnail_manager.cleanup_expired(max_age_days as u32)
 }
 
 // ===== 压缩包相关命令 =====

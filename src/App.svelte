@@ -11,8 +11,32 @@
 	import { bookStore, zoomIn, zoomOut, resetZoom, toggleSidebar, toggleFullscreen, rotateClockwise, toggleViewMode, sidebarOpen, rightSidebarOpen } from '$lib/stores';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { FolderOpen } from '@lucide/svelte';
+	import { init_thumbnail_manager } from '$lib/api';
+	import { onMount } from 'svelte';
 
 	let loading = $state(false);
+
+	// 初始化缩略图管理器
+	onMount(async () => {
+		try {
+			console.log('🔧 初始化缩略图管理器...');
+			
+			// 使用统一的缩略图路径
+			const thumbnailPath = 'D:\\temp\\neoview_thumbnails_test';
+			
+			// 设置根目录为系统根目录，这样可以处理任何路径
+			const rootPath = 'C:\\';
+			
+			console.log('📁 缩略图路径:', thumbnailPath);
+			console.log('📂 根目录路径:', rootPath);
+			console.log('⚠️ 使用系统根目录，支持任意路径的缩略图生成');
+			
+			await init_thumbnail_manager(thumbnailPath, rootPath, 256);
+			console.log('✅ 缩略图管理器初始化成功');
+		} catch (error) {
+			console.error('❌ 缩略图管理器初始化失败:', error);
+		}
+	});
 
 	async function handleOpenFolder() {
 		try {

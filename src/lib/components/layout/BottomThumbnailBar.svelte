@@ -231,7 +231,7 @@
 	});
 </script>
 
-{#if bookStore.currentBook}
+{#if bookStore.currentBook && bookStore.currentBook.pages.length > 0}
 	<!-- 缩略图栏触发区域（独立） -->
 	<div
 		class="fixed bottom-0 left-0 right-0 h-4 z-[57]"

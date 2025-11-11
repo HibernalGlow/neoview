@@ -8,12 +8,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// 缓存项
 #[derive(Clone)]
 struct CacheEntry {
-    /// 图片数据 (base64)
+    /// 图片数据 (base64 或文件URL)
     data: String,
     /// 最后访问时间
     last_access: u64,
     /// 文件大小
     size: usize,
+    /// 是否为文件URL（而不是base64）
+    is_file_url: bool,
 }
 
 /// 图像缓存管理器
@@ -56,6 +58,7 @@ impl ImageCache {
     /// 添加图片到缓存
     pub fn set(&self, path: String, data: String) {
         let size = data.len();
+        let is_file_url = data.starts_with("file://");
         let entry = CacheEntry {
             data: data.clone(),
             last_access: SystemTime::now()
@@ -63,6 +66,7 @@ impl ImageCache {
                 .unwrap()
                 .as_secs(),
             size,
+            is_file_url,
         };
 
         // 检查是否需要清理缓存
@@ -117,6 +121,85 @@ impl ImageCache {
             *current_size -= removed.size;
         }
     }
+
+    /// 检查文件URL是否仍然有效
+    pub fn validate_file_url(&self, path: &str) -> bool {
+        if let Ok(cache) = self.cache.lock() {
+            if let Some(entry) = cache.get(path) {
+                if entry.is_file_url {
+                    // 检查文件是否存在
+                    if let Ok(url) = url::Url::parse(&entry.data) {
+                        if let Ok(file_path) = url.to_file_path() {
+                            return std::path::Path::new(&file_path).exists();
+                        }
+                    }
+                    // 文件不存在，移除缓存
+                    drop(cache);
+                    self.remove(path);
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    /// 获取缓存项的详细信息
+    pub fn get_entry_info(&self, path: &str) -> Option<CacheEntryInfo> {
+        if let Ok(cache) = self.cache.lock() {
+            cache.get(path).map(|entry| CacheEntryInfo {
+                size: entry.size,
+                last_access: entry.last_access,
+                is_file_url: entry.is_file_url,
+            })
+        } else {
+            None
+        }
+    }
+
+    /// 批量验证文件URL
+    pub fn validate_all_file_urls(&self) -> usize {
+        let mut invalid_count = 0;
+        let mut paths_to_remove = Vec::new();
+        
+        if let Ok(cache) = self.cache.lock() {
+            for (path, entry) in cache.iter() {
+                if entry.is_file_url {
+                    if let Ok(url) = url::Url::parse(&entry.data) {
+                        if let Ok(file_path) = url.to_file_path() {
+                            if !std::path::Path::new(&file_path).exists() {
+                                paths_to_remove.push(path.clone());
+                                invalid_count += 1;
+                            }
+                        } else {
+                            paths_to_remove.push(path.clone());
+                            invalid_count += 1;
+                        }
+                    } else {
+                        paths_to_remove.push(path.clone());
+                        invalid_count += 1;
+                    }
+                }
+            }
+        }
+        
+        // 移除无效的缓存项
+        for path in paths_to_remove {
+            self.remove(&path);
+        }
+        
+        invalid_count
+    }
+}
+
+/// 缓存项信息
+#[derive(Debug, Clone)]
+pub struct CacheEntryInfo {
+    /// 数据大小
+    pub size: usize,
+    /// 最后访问时间
+    pub last_access: u64,
+    /// 是否为文件URL
+    pub is_file_url: bool,
 }
 
 impl Default for ImageCache {

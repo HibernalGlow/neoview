@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 use tauri::command;
 use std::time::Duration;
 use crate::core::thumbnail::ThumbnailManager;
+use crate::core::thumbnail_queue::ThumbnailQueue;
 use crate::core::fs_manager::FsItem;
 use crate::core::image_cache::ImageCache;
 
@@ -18,13 +19,15 @@ fn normalize_path_string<S: AsRef<str>>(s: S) -> String {
 pub struct ThumbnailManagerState {
     pub manager: Arc<Mutex<Option<ThumbnailManager>>>,
     pub cache: Arc<Mutex<ImageCache>>,
+    pub queue: Arc<Mutex<Option<Arc<ThumbnailQueue>>>>,
 }
 
 impl Default for ThumbnailManagerState {
     fn default() -> Self {
         Self {
             manager: Arc::new(Mutex::new(None)),
-            cache: Arc::new(Mutex::new(ImageCache::new(512))), // 512MB 缓存
+            cache: Arc::new(Mutex::new(ImageCache::new(1024))), // 1024MB 缓存
+            queue: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -85,6 +88,13 @@ pub async fn init_thumbnail_manager(
         *manager_guard = Some(manager);
     }
 
+    // 启动后台优先队列（去重 + worker pool）
+    if let Ok(mut queue_guard) = state.queue.lock() {
+        // create queue with 4 workers
+        let q = ThumbnailQueue::start(state.manager.clone(), state.cache.clone(), 4);
+        *queue_guard = Some(q);
+    }
+
     Ok(())
 }
 
@@ -130,6 +140,28 @@ pub async fn generate_file_thumbnail_new(
     }
 
     // 生成新缩略图
+    // 首选使用后台优先队列（若存在）入队处理并等待结果（去重/优先）
+    if let Ok(qguard) = state.queue.lock() {
+        if let Some(ref q) = *qguard {
+            println!("📥 将文件缩略图任务入队（普通）: {}", path.display());
+            match q.enqueue(path.clone(), false, false) {
+                Ok(url) => {
+                    println!("✅ 文件缩略图生成成功(队列): {}", url);
+                    // 添加到缓存
+                    if let Ok(cache) = state.cache.lock() {
+                        cache.set(cache_key.clone(), url.clone());
+                    }
+                    return Ok(url);
+                }
+                Err(e) => {
+                    println!("⚠️ 队列生成失败，降级到即时生成: {}", e);
+                    // 继续到后续的即时生成分支
+                }
+            }
+        }
+    }
+
+    // 回退：即时生成（无队列或队列失败）
     if let Ok(manager_guard) = state.manager.lock() {
         if let Some(ref manager) = *manager_guard {
             println!("📸 正在生成新的缩略图...");
@@ -189,6 +221,28 @@ pub async fn generate_folder_thumbnail(
     }
 
     // 生成新缩略图
+    // 首选使用后台优先队列（若存在）入队处理并等待结果（去重/优先）
+    if let Ok(qguard) = state.queue.lock() {
+        if let Some(ref q) = *qguard {
+            println!("📥 将文件夹缩略图任务入队（优先）: {}", path.display());
+            match q.enqueue(path.clone(), true, true) {
+                Ok(url) => {
+                    println!("✅ 文件夹缩略图生成成功(队列): {}", url);
+                    // 添加到缓存
+                    if let Ok(cache) = state.cache.lock() {
+                        cache.set(cache_key.clone(), url.clone());
+                    }
+                    return Ok(url);
+                }
+                Err(e) => {
+                    println!("⚠️ 队列生成失败，降级到即时生成: {}", e);
+                    // 继续到后续的即时生成分支
+                }
+            }
+        }
+    }
+
+    // 回退：即时生成（无队列或队列失败）
     if let Ok(manager_guard) = state.manager.lock() {
         if let Some(ref manager) = *manager_guard {
             println!("📁 正在生成新的文件夹缩略图...");

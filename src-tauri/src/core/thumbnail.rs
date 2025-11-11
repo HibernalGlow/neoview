@@ -457,6 +457,7 @@ impl ThumbnailManager {
         relative_path: &Path,
         source_modified: i64,
     ) -> Result<String, String> {
+        println!("📁 ThumbnailManager::generate_folder_thumbnail start: {}", folder_path.display());
         // 查找文件夹中的第一个图片或压缩包
         let first_image = self.find_first_image_in_folder(folder_path)?;
         
@@ -540,6 +541,7 @@ impl ThumbnailManager {
         let mut dirs_to_check = vec![folder_path.to_path_buf()];
         
         while let Some(current_dir) = dirs_to_check.pop() {
+            println!("🔎 scanning dir: {} (to_check={})", current_dir.display(), dirs_to_check.len());
             let entries = fs::read_dir(&current_dir)
                 .map_err(|e| format!("读取目录失败: {}", e))?;
             let mut entries_vec: Vec<_> = entries
@@ -566,6 +568,7 @@ impl ThumbnailManager {
                 }
 
                 if path.is_file() && self.is_image_file(&path) {
+                    println!("🎯 found image file for folder thumb: {}", path.display());
                     return Ok(Some(path));
                 }
             }
@@ -582,6 +585,7 @@ impl ThumbnailManager {
                 }
 
                 if path.is_file() && self.is_archive_file(&path) {
+                    println!("📦 found archive candidate: {}", path.display());
                     // 尝试从压缩包中获取第一张图片
                     match self.get_first_image_from_archive(&path) {
                         Ok(first_image) => return Ok(Some(first_image)),
@@ -718,8 +722,30 @@ impl ThumbnailManager {
             .map_err(|e| format!("从压缩包提取图片失败: {}", e))?;
         
         // 加载提取的图片数据
-        image::load_from_memory(&image_data)
-            .map_err(|e| format!("加载压缩包内图片失败: {}", e))
+        // 首先尝试通用加载（更安全，避免 AVIF 崩溃）
+        match image::load_from_memory(&image_data) {
+            Ok(img) => Ok(img),
+            Err(e) => {
+                println!("⚠️ 压缩包内图片通用加载失败: {}, 尝试检测格式", e);
+                // 如果通用加载失败，尝试检测文件格式并指定格式加载
+                if let Some(ext) = Path::new(image_path_in_archive).extension() {
+                    let ext_lower = ext.to_string_lossy().to_lowercase();
+                    if ext_lower == "avif" {
+                        match image::load_from_memory_with_format(&image_data, ImageFormat::Avif) {
+                            Ok(img) => {
+                                println!("✅ 压缩包内 AVIF 指定格式加载成功");
+                                return Ok(img);
+                            },
+                            Err(e2) => {
+                                println!("❌ 压缩包内 AVIF 指定格式加载失败: {}", e2);
+                                return Err(format!("压缩包内 AVIF 解码失败: {} ; {}", e, e2));
+                            }
+                        }
+                    }
+                }
+                Err(format!("加载压缩包内图片失败: {}", e))
+            }
+        }
     }
 
     

@@ -40,7 +40,7 @@ impl ThumbnailQueue {
         let queue = Arc::new(Self { high_tx, normal_tx, pending: pending.clone() });
 
         // spawn workers
-        for _ in 0..worker_count {
+        for i in 0..worker_count {
             let mgr = manager_guard.clone();
             let _cache = cache_guard.clone();
             let high_r = high_rx.clone();
@@ -48,11 +48,12 @@ impl ThumbnailQueue {
             let pending_clone = pending.clone();
 
             thread::spawn(move || {
+                println!("🧰 ThumbnailQueue worker {} started", i);
                 loop {
                     // 优先取高优先级任务（非阻塞尝试）
                     let mut task_opt: Option<Task> = None;
 
-                    if let Ok(mut hr) = high_r.lock() {
+                    if let Ok(hr) = high_r.lock() {
                         match hr.try_recv() {
                             Ok(t) => task_opt = Some(t),
                             Err(mpsc::TryRecvError::Empty) => {},
@@ -66,11 +67,10 @@ impl ThumbnailQueue {
                             match nr.try_recv() {
                                 Ok(t) => task_opt = Some(t),
                                 Err(mpsc::TryRecvError::Empty) => {
-                                    // 阻塞等待普通队列的新任务
-                                    match nr.recv() {
-                                        Ok(t2) => task_opt = Some(t2),
-                                        Err(_) => break,
-                                    }
+                                    // 释放锁后短暂休眠，然后重新开始循环（优先检查高优先级队列）
+                                    drop(nr);
+                                    std::thread::sleep(std::time::Duration::from_millis(40));
+                                    continue; // 重新开始循环，优先检查高优先级队列
                                 }
                                 Err(mpsc::TryRecvError::Disconnected) => break,
                             }
@@ -78,6 +78,7 @@ impl ThumbnailQueue {
                     }
 
                     if let Some(t) = task_opt {
+                        println!("⬇️ Worker {} picked task: key={} path={}", i, t.key, t.path.display());
                         // 处理任务：调用 manager 生成缩略图
                         let key = t.key.clone();
                         let result = (|| {
@@ -104,11 +105,18 @@ impl ThumbnailQueue {
                             if let Some(vec) = map.remove(&key) {
                                 responders = vec;
                             }
+                            println!("🔁 Worker {} finished task {} - responders:{} pending_entries:{}", i, key, responders.len(), map.len());
+                        } else {
+                            println!("⚠️ Worker {} could not lock pending map to pop responders for key={}", i, key);
                         }
 
                         for r in responders {
                             // ignore send errors
                             let _ = r.send(result.clone());
+                        }
+                        match result {
+                            Ok(ref url) => println!("✅ Worker {} generated thumbnail for {} -> {}", i, key, url),
+                            Err(ref e) => println!("❌ Worker {} failed to generate thumbnail for {}: {}", i, key, e),
                         }
                     } else {
                         // no task and channels probably closed
@@ -131,11 +139,17 @@ impl ThumbnailQueue {
         // dedup logic: if already pending, append responder and return rx
         let mut should_send = true;
         if let Ok(mut map) = self.pending.lock() {
+            // capture size before/after to avoid simultaneous immutable borrow while holding a mutable borrow
+            let _pending_before = map.len();
             if let Some(vec) = map.get_mut(&key) {
                 vec.push(tx);
+                let pending_after = map.len();
+                println!("➕ enqueue deduped: {} (append responder). pending now={}", key, pending_after);
                 should_send = false;
             } else {
                 map.insert(key.clone(), vec![tx]);
+                let pending_after = map.len();
+                println!("➕ enqueue new: {} (will send task). pending now={}", key, pending_after);
             }
         }
 
@@ -155,6 +169,7 @@ impl ThumbnailQueue {
                         for r in vec { let _ = r.send(Err("队列发送失败".to_string())); }
                     }
                 }
+                println!("❌ enqueue send failed for key={}", key);
                 return Err("队列发送失败".to_string());
             }
         }

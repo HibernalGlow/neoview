@@ -57,6 +57,7 @@ impl ArchiveManager {
 
     /// 读取 ZIP 压缩包内容列表
     pub fn list_zip_contents(&self, archive_path: &Path) -> Result<Vec<ArchiveEntry>, String> {
+        println!("📦 ArchiveManager::list_zip_contents start: {}", archive_path.display());
         let file = File::open(archive_path)
             .map_err(|e| format!("打开压缩包失败: {}", e))?;
 
@@ -82,6 +83,8 @@ impl ArchiveManager {
                 is_image,
             });
         }
+
+        println!("📦 ArchiveManager::list_zip_contents end: {} entries", entries.len());
 
         // 排序：目录优先，然后按名称
         entries.sort_by(|a, b| {

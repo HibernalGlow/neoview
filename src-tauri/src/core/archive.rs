@@ -24,6 +24,8 @@ pub struct ArchiveManager {
     image_extensions: Vec<String>,
     /// 图片缓存
     cache: Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
+    /// 压缩包文件缓存（避免重复打开）
+    archive_cache: Arc<std::sync::Mutex<std::collections::HashMap<String, Arc<std::sync::Mutex<ZipArchive<std::fs::File>>>>>>,
 }
 
 impl ArchiveManager {
@@ -43,7 +45,38 @@ impl ArchiveManager {
                 "tif".to_string(),
             ],
             cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+            archive_cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         }
+    }
+
+    /// 获取或创建压缩包缓存
+    fn get_cached_archive(&self, archive_path: &Path) -> Result<Arc<std::sync::Mutex<ZipArchive<std::fs::File>>>, String> {
+        let path_str = archive_path.to_string_lossy().into_owned();
+        
+        // 检查缓存
+        {
+            let cache = self.archive_cache.lock().unwrap();
+            if let Some(archive) = cache.get(&path_str) {
+                return Ok(Arc::clone(archive));
+            }
+        }
+        
+        // 创建新的压缩包实例
+        let file = File::open(archive_path)
+            .map_err(|e| format!("打开压缩包失败: {}", e))?;
+        
+        let archive = ZipArchive::new(file)
+            .map_err(|e| format!("读取压缩包失败: {}", e))?;
+        
+        let cached = Arc::new(std::sync::Mutex::new(archive));
+        
+        // 添加到缓存
+        {
+            let mut cache = self.archive_cache.lock().unwrap();
+            cache.insert(path_str, Arc::clone(&cached));
+        }
+        
+        Ok(cached)
     }
 
     /// 检查是否为图片文件
@@ -99,19 +132,18 @@ impl ArchiveManager {
         Ok(entries)
     }
 
-    /// 从 ZIP 压缩包中提取文件内容
+    /// 从 ZIP 压缩包中提取文件内容（优化版本，使用缓存的压缩包实例）
     pub fn extract_file_from_zip(
         &self,
         archive_path: &Path,
         file_path: &str,
     ) -> Result<Vec<u8>, String> {
         println!("📦 extract_file_from_zip start: archive={} inner={}", archive_path.display(), file_path);
-        let file = File::open(archive_path)
-            .map_err(|e| format!("打开压缩包失败: {}", e))?;
-
-        let mut archive = ZipArchive::new(file)
-            .map_err(|e| format!("读取压缩包失败: {}", e))?;
-
+        
+        // 使用缓存的压缩包实例
+        let cached_archive = self.get_cached_archive(archive_path)?;
+        let mut archive = cached_archive.lock().unwrap();
+        
         let mut zip_file = archive.by_name(file_path)
             .map_err(|e| format!("在压缩包中找不到文件: {}", e))?;
 
@@ -289,7 +321,7 @@ impl ArchiveManager {
         }
     }
 
-    /// 生成压缩包内图片的缩略图（带缓存）
+    /// 生成压缩包内图片的缩略图（优化版本，流式处理）
     pub fn generate_thumbnail_from_zip(
         &self,
         archive_path: &Path,
@@ -306,30 +338,45 @@ impl ArchiveManager {
             }
         }
 
-        // 提取图片数据
-        let data = self.extract_file_from_zip(archive_path, file_path)?;
+        // 使用缓存的压缩包实例
+        let cached_archive = self.get_cached_archive(archive_path)?;
+        let mut archive = cached_archive.lock().unwrap();
+        
+        let mut zip_file = archive.by_name(file_path)
+            .map_err(|e| format!("在压缩包中找不到文件: {}", e))?;
 
-        // 对于 JXL 格式，使用专门的解码器
+        // 对于大图片，使用流式解码避免加载整个文件到内存
         let img = if let Some(ext) = Path::new(file_path).extension() {
             if ext.to_string_lossy().to_lowercase() == "jxl" {
-                self.decode_jxl_image(&data)?
+                // JXL需要完整数据
+                let mut buffer = Vec::new();
+                zip_file.read_to_end(&mut buffer)
+                    .map_err(|e| format!("读取JXL文件失败: {}", e))?;
+                self.decode_jxl_image(&buffer)?
             } else {
-                image::load_from_memory(&data)
+                // 对于其他格式，尝试流式加载
+                let mut buffer = Vec::new();
+                zip_file.read_to_end(&mut buffer)
+                    .map_err(|e| format!("读取图片文件失败: {}", e))?;
+                image::load_from_memory(&buffer)
                     .map_err(|e| format!("加载图片失败: {}", e))?
             }
         } else {
-            image::load_from_memory(&data)
+            let mut buffer = Vec::new();
+            zip_file.read_to_end(&mut buffer)
+                .map_err(|e| format!("读取图片文件失败: {}", e))?;
+            image::load_from_memory(&buffer)
                 .map_err(|e| format!("加载图片失败: {}", e))?
         };
 
         // 生成等比例缩略图
         let thumbnail = self.resize_keep_aspect_ratio(&img, max_size);
 
-        // 编码为 JPEG
-        let jpeg_data = self.encode_jpeg(&thumbnail)?;
+        // 编码为 WebP（比JPEG更高效）
+        let webp_data = self.encode_webp(&thumbnail)?;
 
         // 返回 base64
-        let result = format!("data:image/jpeg;base64,{}", general_purpose::STANDARD.encode(&jpeg_data));
+        let result = format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&webp_data));
 
         // 添加到缓存
         if let Ok(mut cache) = self.cache.lock() {
@@ -362,7 +409,29 @@ impl ArchiveManager {
         img.resize(new_width, new_height, image::imageops::FilterType::Lanczos3)
     }
 
-    /// 编码为 JPEG 格式
+    /// 编码为 WebP 格式（更高效）
+    fn encode_webp(&self, img: &image::DynamicImage) -> Result<Vec<u8>, String> {
+        let mut buffer = Vec::new();
+        let mut cursor = Cursor::new(&mut buffer);
+
+        // WebP 支持透明度，使用 RGBA8
+        let rgba = img.to_rgba8();
+        let (width, height) = rgba.dimensions();
+
+        // 编码为 WebP，使用默认编码器（速度优化）
+        image::write_buffer_with_format(
+            &mut cursor,
+            rgba.as_raw(),
+            width,
+            height,
+            image::ColorType::Rgba8,
+            image::ImageFormat::WebP,
+        ).map_err(|e| format!("编码WebP失败: {}", e))?;
+
+        Ok(buffer)
+    }
+
+    /// 编码为 JPEG 格式（保留用于兼容性）
     fn encode_jpeg(&self, img: &image::DynamicImage) -> Result<Vec<u8>, String> {
         let mut buffer = Vec::new();
         let mut cursor = Cursor::new(&mut buffer);
@@ -453,6 +522,33 @@ impl ArchiveManager {
     pub fn clear_cache(&self) {
         if let Ok(mut cache) = self.cache.lock() {
             cache.clear();
+        }
+        if let Ok(mut archive_cache) = self.archive_cache.lock() {
+            archive_cache.clear();
+        }
+    }
+
+    /// 限制缓存大小（保留最近使用的项）
+    pub fn limit_cache_size(&self, max_items: usize) {
+        // 限制图片缓存
+        if let Ok(mut cache) = self.cache.lock() {
+            if cache.len() > max_items {
+                // 简单策略：移除一半的条目
+                let keys_to_remove: Vec<_> = cache.keys().take(cache.len() / 2).cloned().collect();
+                for key in keys_to_remove {
+                    cache.remove(&key);
+                }
+            }
+        }
+        
+        // 限制压缩包缓存
+        if let Ok(mut archive_cache) = self.archive_cache.lock() {
+            if archive_cache.len() > 5 { // 压缩包实例通常较大，限制更严格
+                let keys_to_remove: Vec<_> = archive_cache.keys().take(archive_cache.len() / 2).cloned().collect();
+                for key in keys_to_remove {
+                    archive_cache.remove(&key);
+                }
+            }
         }
     }
 

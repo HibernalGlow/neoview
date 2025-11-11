@@ -8,7 +8,7 @@ mod commands;
 mod core;
 mod models;
 
-use commands::{default, book_commands, fs_commands, image_commands, thumbnail_commands};
+
 use tauri::Manager;
 use std::sync::Mutex;
 use std::path::PathBuf;

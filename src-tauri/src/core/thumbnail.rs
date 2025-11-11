@@ -624,12 +624,15 @@ impl ThumbnailManager {
             }
         };
 
+        println!("📦 get_first_image_from_archive: archive={} entries_total={}", archive_path.display(), entries.len());
+
         // 对条目按名称排序
         let mut sorted_entries = entries;
         sorted_entries.sort_by(|a, b| a.name.cmp(&b.name));
 
         for entry in sorted_entries {
             if !entry.is_dir && self.is_image_file(&Path::new(&entry.name)) {
+                println!("📷 selected archive inner file for thumb: {} -> {}", archive_path.display(), entry.name);
                 // 返回压缩包路径和内部图片路径的组合
                 // 这将在生成文件夹缩略图时被特殊处理
                 let combined_path = archive_path.join("__archive__").join(&entry.name);
@@ -731,16 +734,31 @@ impl ThumbnailManager {
                 if let Some(ext) = Path::new(image_path_in_archive).extension() {
                     let ext_lower = ext.to_string_lossy().to_lowercase();
                     if ext_lower == "avif" {
+                        // 尝试用 image 指定格式加载
                         match image::load_from_memory_with_format(&image_data, ImageFormat::Avif) {
                             Ok(img) => {
                                 println!("✅ 压缩包内 AVIF 指定格式加载成功");
                                 return Ok(img);
                             },
                             Err(e2) => {
-                                println!("❌ 压缩包内 AVIF 指定格式加载失败: {}", e2);
-                                return Err(format!("压缩包内 AVIF 解码失败: {} ; {}", e, e2));
+                                println!("❌ 压缩包内 AVIF 指定格式加载失败: {}，尝试通过 FFmpeg 处理", e2);
+                                // 写临时文件并使用 ffmpeg 解码（复用文件路径解码逻辑）
+                                let mut tmp = std::env::temp_dir();
+                                let filename = format!("neoview_archive_avif_{}_{}.avif", chrono::Utc::now().timestamp_nanos(), std::process::id());
+                                tmp.push(filename);
+                                if let Err(write_err) = std::fs::write(&tmp, &image_data) {
+                                    return Err(format!("写入临时 AVIF 文件失败: {} ; 原始错误: {}", write_err, e));
+                                }
+                                let conv = self.convert_avif_using_ffmpeg(&tmp);
+                                // 清理临时文件（忽略错误）
+                                let _ = std::fs::remove_file(&tmp);
+                                return conv.map_err(|ce| format!("压缩包内 AVIF 解码失败: {} ; 原始错误: {}", ce, e));
                             }
                         }
+                    } else if ext_lower == "jxl" {
+                        // 使用 JXL 解码器直接解码内存数据
+                        println!("🔧 压缩包内 JXL 文件，使用专用解码器: {}", image_path_in_archive);
+                        return self.decode_jxl_image(&image_data);
                     }
                 }
                 Err(format!("加载压缩包内图片失败: {}", e))

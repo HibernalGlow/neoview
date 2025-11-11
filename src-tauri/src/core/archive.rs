@@ -104,6 +104,7 @@ impl ArchiveManager {
         archive_path: &Path,
         file_path: &str,
     ) -> Result<Vec<u8>, String> {
+        println!("📦 extract_file_from_zip start: archive={} inner={}", archive_path.display(), file_path);
         let file = File::open(archive_path)
             .map_err(|e| format!("打开压缩包失败: {}", e))?;
 
@@ -116,6 +117,8 @@ impl ArchiveManager {
         let mut buffer = Vec::new();
         zip_file.read_to_end(&mut buffer)
             .map_err(|e| format!("读取文件失败: {}", e))?;
+
+        println!("📦 extract_file_from_zip end: read_bytes={} archive={} inner={}", buffer.len(), archive_path.display(), file_path);
 
         Ok(buffer)
     }

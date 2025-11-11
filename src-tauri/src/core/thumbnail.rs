@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use image::{DynamicImage, ImageFormat, GenericImageView};
 use std::io::Cursor;
 use std::process::Command;
+
 use base64::{Engine as _, engine::general_purpose};
 use chrono::{DateTime, Utc};
 use crate::core::thumbnail_db::{ThumbnailDatabase, ThumbnailRecord};
@@ -233,7 +234,7 @@ impl ThumbnailManager {
         } else if self.is_archive_file(image_path) {
             println!("📦 generate_and_save_thumbnail: detected archive file: {}", image_path.display());
             println!("📦 archive branch: listing images in archive: {}", image_path.display());
-            // 从压缩包中获取第一张图片并加载到内存
+            // 从压缩包中获取第一张图片并直接在内存中处理
             use crate::core::archive::ArchiveManager;
             let archive_manager = ArchiveManager::new();
             let images = archive_manager.get_images_from_zip(image_path)
@@ -246,31 +247,19 @@ impl ThumbnailManager {
             let data = archive_manager.extract_file(image_path, first)
                 .map_err(|e| format!("从压缩包提取文件失败: {}", e))?;
 
-            // 将提取的数据写为临时文件（保留扩展名），然后通过现有的文件加载/转换流程处理
-            let ext = Path::new(first).extension().and_then(|e| e.to_str()).unwrap_or("bin");
-            let mut tmp = std::env::temp_dir();
-            let filename = format!("neoview_archive_extracted_{}_{}.{}", chrono::Utc::now().timestamp_nanos(), std::process::id(), ext);
-            tmp.push(filename);
-            println!("📦 write temp extracted file: {} (bytes={})", tmp.display(), data.len());
-            std::fs::write(&tmp, &data).map_err(|e| format!("写入临时文件失败: {}", e))?;
-            println!("🔧 load_image_with_format_support from temp: {}", tmp.display());
-            let img = match self.load_image_with_format_support(&tmp) {
+            // 直接在内存中处理图片数据，不写入临时文件
+            println!("🔧 loading image from memory: {} (bytes={})", first, data.len());
+            let img = match self.load_image_from_memory(&data, Path::new(first)) {
                 Ok(i) => {
                     let (w, h) = i.dimensions();
-                    println!("✅ loaded image from temp: {} ({}x{})", tmp.display(), w, h);
+                    println!("✅ loaded image from memory: {} ({}x{})", first, w, h);
                     i
                 }
                 Err(e) => {
-                    // 清理临时文件后返回错误
-                    let _ = std::fs::remove_file(&tmp);
-                    println!("❌ load_image_with_format_support failed for temp {}: {}", tmp.display(), e);
+                    println!("❌ load_image_from_memory failed for {}: {}", first, e);
                     return Err(format!("从压缩包加载图片失败: {}", e));
                 }
             };
-            // 清理临时文件
-            if std::fs::remove_file(&tmp).is_ok() {
-                println!("🧹 removed temp file: {}", tmp.display());
-            }
             img
         } else if self.is_video_file(image_path) {
             println!("🎬 generate_and_save_thumbnail: detected video file: {}", image_path.display());
@@ -399,9 +388,9 @@ impl ThumbnailManager {
                 return self.decode_jxl_image(&image_data);
             }
             
-            // AVIF 格式处理 — 直接使用 FFmpeg 进行解码以避免本地解码器不稳定
+            // AVIF 格式处理 - 直接在内存中解码
             if ext_lower == "avif" {
-                return self.convert_avif_using_ffmpeg(image_path);
+                return self.decode_avif_image(&image_data);
             }
         }
 
@@ -466,31 +455,15 @@ impl ThumbnailManager {
         }
     }
 
-    /// 使用 FFmpeg 将 AVIF 转换为 PNG（通过 stdout），然后由 image 加载
-    fn convert_avif_using_ffmpeg(&self, image_path: &Path) -> Result<DynamicImage, String> {
-        // ffmpeg -i input.avif -f image2pipe -vcodec png pipe:1
-        let output = Command::new("ffmpeg")
-            .arg("-hide_banner")
-            .arg("-loglevel")
-            .arg("error")
-            .arg("-i")
-            .arg(image_path.as_os_str())
-            .arg("-f")
-            .arg("image2pipe")
-            .arg("-vcodec")
-            .arg("png")
-            .arg("pipe:1")
-            .output()
-            .map_err(|e| format!("启动 FFmpeg 失败: {}", e))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("FFmpeg 转换失败: {}", stderr));
-        }
-
-        image::load_from_memory(&output.stdout)
-            .map_err(|e| format!("从 FFmpeg 输出加载图片失败: {}", e))
+    /// 解码 AVIF 图像（直接在内存中处理）
+    fn decode_avif_image(&self, image_data: &[u8]) -> Result<DynamicImage, String> {
+        // 使用 libavif 或 image-rs 的 AVIF 支持直接解码
+        // 这里使用 image crate 的内置 AVIF 解码功能
+        image::load_from_memory_with_format(image_data, ImageFormat::Avif)
+            .map_err(|e| format!("Failed to decode AVIF: {}", e))
     }
+
+    
 
     /// 等比例缩放图片
     fn resize_keep_aspect_ratio(&self, img: &DynamicImage, max_size: u32) -> DynamicImage {
@@ -515,7 +488,7 @@ impl ThumbnailManager {
         img.resize(new_width, new_height, image::imageops::FilterType::Lanczos3)
     }
 
-    // 已移除对系统工具（ImageMagick/FFmpeg）的 AVIF 回退转换。若 native 解码失败，则返回错误。
+    // 直接在内存中处理所有图片格式，不再使用外部工具
 
     /// 编码为 WebP 格式
     fn encode_webp(&self, img: &DynamicImage) -> Result<Vec<u8>, String> {
@@ -871,7 +844,7 @@ impl ThumbnailManager {
             .map_err(|e| format!("清理过期缩略图失败: {}", e))
     }
 
-    /// 从压缩包中提取图片
+    /// 从压缩包中提取图片（直接在内存中处理）
     fn extract_image_from_archive(&self, combined_path: &Path) -> Result<DynamicImage, String> {
         println!("📦 extract_image_from_archive start: {}", combined_path.display());
         use crate::core::archive::ArchiveManager;
@@ -891,25 +864,34 @@ impl ThumbnailManager {
         let image_data = archive_manager.extract_file(archive_path, image_path_in_archive)
             .map_err(|e| format!("从压缩包提取图片失败: {}", e))?;
 
-        // 将提取的字节写为临时文件并通过已有的文件加载/转换流程处理（统一 AVIF/JXL/FFmpeg 路径）
-        let ext = Path::new(image_path_in_archive).extension().and_then(|e| e.to_str()).unwrap_or("bin");
-        let mut tmp = std::env::temp_dir();
-    let filename = format!("neoview_archive_extracted_{}_{}.{}", chrono::Utc::now().timestamp_nanos(), std::process::id(), ext);
-        tmp.push(filename);
-        std::fs::write(&tmp, &image_data).map_err(|e| format!("写入临时文件失败: {}", e))?;
-
-        let img = match self.load_image_with_format_support(&tmp) {
-            Ok(i) => i,
-            Err(e) => {
-                let _ = std::fs::remove_file(&tmp);
-                return Err(format!("压缩包内图片加载失败: {}", e));
-            }
-        };
-
-        // 清理临时文件
-        let _ = std::fs::remove_file(&tmp);
+        // 直接在内存中处理图片数据
+        println!("🔧 loading image from memory: {} (bytes={})", image_path_in_archive, image_data.len());
+        let img = self.load_image_from_memory(&image_data, Path::new(image_path_in_archive))
+            .map_err(|e| format!("压缩包内图片加载失败: {}", e))?;
 
         Ok(img)
+    }
+
+    /// 从内存中的字节数据加载图片（支持 JXL、AVIF 等特殊格式）
+    fn load_image_from_memory(&self, image_data: &[u8], file_path: &Path) -> Result<DynamicImage, String> {
+        // 检查文件扩展名
+        if let Some(ext) = file_path.extension().and_then(|e| e.to_str()) {
+            let ext_lower = ext.to_lowercase();
+            
+            // JXL 格式处理
+            if ext_lower == "jxl" {
+                return self.decode_jxl_image(image_data);
+            }
+            
+            // AVIF 格式处理 - 直接在内存中解码
+            if ext_lower == "avif" {
+                return self.decode_avif_image(image_data);
+            }
+        }
+
+        // 其他格式使用标准加载
+        image::load_from_memory(image_data)
+            .map_err(|e| format!("加载图片失败: {}", e))
     }
 
     

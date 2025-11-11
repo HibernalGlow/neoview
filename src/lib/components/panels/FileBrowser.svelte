@@ -16,6 +16,36 @@
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
   import { convertFileSrc } from '@tauri-apps/api/core';
 
+  /**
+   * 将后端返回的本地路径规范化并转换为前端可用的 asset URL。
+   * - 如果是 asset:, data:, http(s): 原样返回
+   * - 如果是 file:// 前缀，去掉前缀再转换
+   * - 返回 convertFileSrc(...) 的结果
+   */
+  function toAssetUrl(maybePath: string) {
+    if (!maybePath) return maybePath;
+    const s = String(maybePath);
+    // 已经是可直接使用的 URL
+    if (s.startsWith('asset://') || s.startsWith('data:') || s.startsWith('http://') || s.startsWith('https://')) {
+      return s;
+    }
+
+    // 去掉 file:// 或 file:/// 前缀
+    let cleaned = s.replace(/^file:\/+/i, '');
+    // 如果是 /C:/... 这种形式（来自 file:///C:/...），去掉前导斜杠
+    if (/^\/[A-Za-z]:/.test(cleaned)) {
+      cleaned = cleaned.slice(1);
+    }
+
+    // 注意：不要对 cleaned 做 encodeURIComponent，否则会导致 asset 后端路径匹配失败
+    try {
+      return convertFileSrc(cleaned);
+    } catch (e) {
+      console.error('toAssetUrl: convertFileSrc failed', e, cleaned);
+      return cleaned;
+    }
+  }
+
   // 使用全局状态
   let currentPath = $state('');
   let items = $state<FsItem[]>([]);
@@ -404,8 +434,8 @@
       const thumbnail = await FileSystemAPI.generateFileThumbnail(path);
       console.log('📸 缩略图生成成功:', thumbnail);
       
-      // 使用 convertFileSrc 转换本地文件路径
-      const thumbnailUrl = convertFileSrc(thumbnail);
+  // 使用 toAssetUrl 进行规范化并转换为 asset URL
+  const thumbnailUrl = toAssetUrl(thumbnail);
       console.log('🔄 转换后的缩略图URL:', thumbnailUrl);
       fileBrowserStore.addThumbnail(path, thumbnailUrl);
     } catch (err) {
@@ -422,8 +452,8 @@
       const thumbnail = await FileSystemAPI.generateFolderThumbnail(path);
       console.log('📸 文件夹缩略图生成成功:', thumbnail);
       
-      // 使用 convertFileSrc 转换本地文件路径
-      const thumbnailUrl = convertFileSrc(thumbnail);
+  // 使用 toAssetUrl 进行规范化并转换为 asset URL
+  const thumbnailUrl = toAssetUrl(thumbnail);
       console.log('🔄 转换后的缩略图URL:', thumbnailUrl);
       fileBrowserStore.addThumbnail(path, thumbnailUrl);
     } catch (err) {

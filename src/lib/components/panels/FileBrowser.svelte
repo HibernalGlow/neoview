@@ -464,16 +464,9 @@
    */
   async function loadArchiveThumbnail(filePath: string) {
     try {
-      // 尝试优先使用后端的提取到临时文件并调度缩略图生成的接口（避免返回 base64）
-      // 该接口会返回本地临时文件路径，我们再调用 generateThumbForExtracted 来获取缩略图
-      const local = await FileSystemAPI.extractArchiveInnerAndScheduleThumb(currentArchivePath, filePath);
-      if (local) {
-        const thumbPath = await FileSystemAPI.generateThumbForExtracted(local);
-        fileBrowserStore.addThumbnail(filePath, thumbPath);
-        return;
-      }
-      // 如果没有返回本地路径，回退到旧的 base64 路径处理（兼容性保底）
+      // 从压缩包中提取图片数据
       const imageData = await FileSystemAPI.loadImageFromArchive(currentArchivePath, filePath);
+      // 使用新的API从图片数据生成缩略图
       const thumbnail = await FileSystemAPI.generateThumbnailFromData(imageData);
       fileBrowserStore.addThumbnail(filePath, thumbnail);
     } catch (err) {

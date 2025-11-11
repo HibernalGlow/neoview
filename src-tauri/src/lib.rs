@@ -8,7 +8,7 @@ mod commands;
 mod core;
 mod models;
 
-use commands::*;
+use commands::{default, book_commands, fs_commands, image_commands, thumbnail_commands};
 use tauri::Manager;
 use std::sync::Mutex;
 use std::path::PathBuf;
@@ -128,11 +128,6 @@ pub fn run() {
             commands::get_thumbnail_stats,
             commands::clear_all_thumbnails,
             commands::preload_thumbnails,
-            // Archive/temp helpers
-            commands::extract_archive_images,
-            commands::extract_archive_inner,
-            commands::extract_archive_inner_schedule_thumb,
-            commands::generate_thumb_for_extracted,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

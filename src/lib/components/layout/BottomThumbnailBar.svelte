@@ -5,10 +5,8 @@
 	 */
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { loadImage } from '$lib/api/fs';
-	import { loadImageFromArchive, extractArchiveInnerAndScheduleThumb, extractArchiveImages, generateThumbForExtracted, getThumbnailUrl } from '$lib/api/filesystem';
-	import { toAssetUrl } from '$lib/utils/assetProxy';
+	import { loadImageFromArchive } from '$lib/api/filesystem';
 	import { bottomThumbnailBarPinned, bottomThumbnailBarHeight } from '$lib/stores';
-	import { settingsManager } from '$lib/settings/settingsManager';
 	import { Button } from '$lib/components/ui/button';
 	import * as Progress from '$lib/components/ui/progress';
 	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, ExternalLink, Minus, Target } from '@lucide/svelte';
@@ -16,8 +14,6 @@
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
 	let thumbnails = $state<Record<number, {url: string, width: number, height: number}>>({});
-	// 临时存放已批量提取的本地文件路径（archive 情况）
-	let extractedPaths = $state<Record<number, string>>({});
 	let isResizing = $state(false);
 	let resizeStartY = 0;
 	let resizeStartHeight = 0;
@@ -46,12 +42,6 @@
 		loadVisibleThumbnails();
 		// 不要在这里设置定时器，让 handleMouseLeave 来处理
 	}
-
-	// 读取设置并响应变化（用于预加载页数等）
-	let settings = $state(settingsManager.getSettings());
-	settingsManager.addListener((s) => {
-		settings = s;
-	});
 
 	function handleMouseEnter() {
 		hoverCount++;
@@ -131,53 +121,16 @@
 		const currentBook = bookStore.currentBook;
 		if (!currentBook) return;
 
-		// 优先使用设置中的预加载页数；否则基于高度计算一个合理的范围
-		const settingPreload = settings?.book?.preloadPages ?? null;
-		const autoRange = Math.max(5, Math.floor(($bottomThumbnailBarHeight - 40) / 60)); // 基于高度计算
-		const preloadRange = settingPreload !== null ? Math.max(settingPreload, 1) : autoRange;
+		// 动态计算预加载范围，确保至少显示6页
+		const preloadRange = Math.max(5, Math.floor(($bottomThumbnailBarHeight - 40) / 60)); // 基于高度计算
 		const start = Math.max(0, bookStore.currentPageIndex - preloadRange);
 		const end = Math.min(currentBook.pages.length - 1, bookStore.currentPageIndex + preloadRange);
 
 		console.log(`Loading thumbnails from ${start} to ${end} (total: ${end - start + 1})`);
 
-		// 如果是压缩包类型，批量提取一段范围以减少重复解压开销
-		if (currentBook.type === 'archive') {
-			try {
-				const count = end - start + 1;
-				console.log(`Batch extracting archive images ${start}..${end} (count=${count})`);
-				const extracted = await extractArchiveImages(currentBook.path, start, count);
-				// extracted 对应顺序与 pages[start..end]
-				for (let i = start; i <= end; i++) {
-					const relIdx = i - start;
-					const page = currentBook.pages[i];
-					if (!page) continue;
-					const local = extracted[relIdx];
-					if (local) {
-						extractedPaths = { ...extractedPaths, [i]: local };
-						// 优先尝试从缩略图数据库获取已有缩略图
-						const existing = await getThumbnailUrl(local).catch(() => null);
-						if (existing) {
-							const url = toAssetUrl(existing) || existing;
-							thumbnails = { ...thumbnails, [i]: { url, width: 0, height: 0 } };
-						} else {
-							const thumbPath = await generateThumbForExtracted(local, $bottomThumbnailBarHeight - 40);
-							const url = toAssetUrl(thumbPath) || thumbPath;
-							thumbnails = { ...thumbnails, [i]: { url, width: 0, height: 0 } };
-						}
-					}
-				}
-			} catch (err) {
-				console.error('批量提取压缩包缩略图失败:', err);
-				// 退回到逐项加载（保守策略）
-				for (let i = start; i <= end; i++) {
-					if (!(i in thumbnails)) loadThumbnail(i);
-				}
-			}
-		} else {
-			for (let i = start; i <= end; i++) {
-				if (!(i in thumbnails)) {
-					loadThumbnail(i);
-				}
+		for (let i = start; i <= end; i++) {
+			if (!(i in thumbnails)) {
+				loadThumbnail(i);
 			}
 		}
 	}
@@ -228,34 +181,13 @@
 			let fullImageData: string;
 
 			if (currentBook.type === 'archive') {
-				// 如果已通过批量提取得到本地文件路径，优先使用它
-				const prelocal = extractedPaths[pageIndex];
-				let local: string | null = null;
-				if (prelocal) {
-					local = prelocal;
-				} else {
-					// 回退到单条提取并异步调度缩略图
-					local = await extractArchiveInnerAndScheduleThumb(currentBook.path, page.path).catch(() => null);
-				}
-				if (local) {
-					// 优先尝试从缩略图数据库获取已有缩略图
-					const existing = await getThumbnailUrl(local).catch(() => null);
-					if (existing) {
-						const url = toAssetUrl(existing) || existing;
-						thumbnails = { ...thumbnails, [pageIndex]: { url, width: 0, height: 0 } };
-					} else {
-						const thumbPath = await generateThumbForExtracted(local, $bottomThumbnailBarHeight - 40);
-						const url = toAssetUrl(thumbPath) || thumbPath;
-						thumbnails = { ...thumbnails, [pageIndex]: { url, width: 0, height: 0 } };
-					}
-				} else {
-					console.error('无法从压缩包提取图片用于缩略图', pageIndex);
-				}
+				fullImageData = await loadImageFromArchive(currentBook.path, page.path);
 			} else {
-				const fullImageData = await loadImage(page.path);
-				const thumbnail = await generateThumbnailFromBase64(fullImageData);
-				thumbnails = { ...thumbnails, [pageIndex]: thumbnail };
+				fullImageData = await loadImage(page.path);
 			}
+
+			const thumbnail = await generateThumbnailFromBase64(fullImageData);
+			thumbnails = { ...thumbnails, [pageIndex]: thumbnail };
 		} catch (err) {
 			console.error(`Failed to load thumbnail for page ${pageIndex}:`, err);
 		}
@@ -287,11 +219,6 @@
 	$effect(() => {
 		const currentBook = bookStore.currentBook;
 		thumbnails = {};
-		extractedPaths = {};
-		// 默认启用预加载：书籍打开/切换时立即加载可见范围的缩略图
-		if (currentBook) {
-			loadVisibleThumbnails();
-		}
 	});
 
 	// 当高度变化时重新生成缩略图

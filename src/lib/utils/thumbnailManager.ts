@@ -1,7 +1,7 @@
 import { FileSystemAPI } from '$lib/api';
 import { toAssetUrl } from '$lib/utils/assetProxy';
 
-type Job = { path: string; isFolder: boolean; isArchive?: boolean; innerPath?: string };
+type Job = { path: string; isFolder: boolean; isArchive?: boolean };
 
 let _queue: Job[] = [];
 // 将_generating 从 Set 改为 Map，记录每个正在生成的 path 对应的 epoch
@@ -67,14 +67,12 @@ export function toRelativeKey(absPath: string): string {
   }
 }
 
-export function enqueueArchiveThumbnail(path: string, innerPath?: string) {
+export function enqueueArchiveThumbnail(path: string) {
   if (!path) return;
-  // Use a combined identifier for generating/dedup checks so that archive+innerPath are treated separately
-  const id = innerPath ? `${path}||${innerPath}` : path;
-  if (_generating.get(id) === _epoch) return;
-  if (_queue.findIndex(x => (x.innerPath ? `${x.path}||${x.innerPath}` : x.path) === id) !== -1) return;
+  if (_generating.get(path) === _epoch) return;
+  if (_queue.findIndex(x => x.path === path) !== -1) return;
 
-  _queue.push({ path, isFolder: false, isArchive: true, innerPath });
+  _queue.push({ path, isFolder: false, isArchive: true });
   processQueue();
 }
 
@@ -88,34 +86,23 @@ async function processQueue() {
 
     const job = _queue.shift();
     if (!job) break;
-  const { path, isFolder } = job;
-  const id = job.innerPath ? `${path}||${job.innerPath}` : path;
-  if (_generating.get(id) === _epoch) continue;
+    const { path, isFolder } = job;
+    if (_generating.get(path) === _epoch) continue;
 
-  const jobEpoch = _epoch; // 捕获当前 epoch，任务完成时用于判断是否仍然有效
-  _generating.set(id, jobEpoch);
+    const jobEpoch = _epoch; // 捕获当前 epoch，任务完成时用于判断是否仍然有效
+    _generating.set(path, jobEpoch);
 
     (async () => {
       try {
         let thumbnail: string | null = null;
         if (job.isArchive) {
-          // 对于压缩包：如果 job.innerPath 存在则直接按 innerPath 提取单文件，
-          // 否则提取首图（兼容旧行为）。提取后生成本地缩略图文件，然后使用 toAssetUrl 转换为前端可用 URL。
+          // 对于压缩包：尝试读取压缩包内第一张图片并生成缩略图
           try {
-            if (job.innerPath) {
-              const local = await FileSystemAPI.extractArchiveInner(path, job.innerPath);
-              if (local) {
-                const thumbPath = await FileSystemAPI.generateThumbForExtracted(local);
-                thumbnail = toAssetUrl(thumbPath) || thumbPath;
-              }
-            } else {
-              const idx = 0; // 默认提取首图；更高级的策略可传递索引到队列
-              const paths = await FileSystemAPI.extractArchiveImages(path, idx, 1);
-              if (paths && paths.length > 0) {
-                const local = paths[0];
-                const thumbPath = await FileSystemAPI.generateThumbForExtracted(local);
-                thumbnail = toAssetUrl(thumbPath) || thumbPath;
-              }
+            const entries = await FileSystemAPI.listArchiveContents(path);
+            const firstImage = (entries || []).find((e: any) => e && (e.is_image === true || e.isImage === true));
+            if (firstImage) {
+              const imageData = await FileSystemAPI.loadImageFromArchive(path, firstImage.path);
+              thumbnail = await FileSystemAPI.generateThumbnailFromData(imageData);
             }
           } catch (e) {
             console.debug('thumbnailManager: archive thumbnail generation failed for', path, e);
@@ -129,8 +116,7 @@ async function processQueue() {
         // 在调用回调之前检查任务 epoch 是否仍然有效（切换目录会递增 epoch，使旧任务失效）
         if (thumbnail && _addThumbnailCb && jobEpoch === _epoch) {
           const converted = toAssetUrl(thumbnail) || String(thumbnail || '');
-          const baseKey = toRelativeKey(path);
-          const key = job.innerPath ? `${baseKey}||${job.innerPath}` : baseKey;
+          const key = toRelativeKey(path);
           // 可见日志，确保前端能观察到回调被触发与最终 URL
           console.log('thumbnailManager: addThumbnail callback ->', { key, raw: thumbnail, converted });
           _addThumbnailCb(key, converted);
@@ -142,7 +128,7 @@ async function processQueue() {
           console.debug('thumbnailManager: failed to generate thumbnail for', path, e);
         } finally {
           // 仅删除 map 条目（不论 epoch）以释放占位
-          _generating.delete(id);
+          _generating.delete(path);
           setTimeout(() => processQueue(), 0);
         }
     })();

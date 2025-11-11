@@ -11,8 +11,7 @@
 		findCommandByKeys
 	} from '$lib/stores/keyboard.svelte';
 	import { loadImage } from '$lib/api/fs';
-	import { loadImageFromArchive, extractArchiveInnerAndScheduleThumb } from '$lib/api/filesystem';
-	import { toAssetUrl } from '$lib/utils/assetProxy';
+	import { loadImageFromArchive } from '$lib/api/filesystem';
 	import { FileSystemAPI } from '$lib/api';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
@@ -134,22 +133,15 @@
 
 		try {
 			// 加载当前页
-			let dataUrl: string | null = null;
+			let data: string;
 			if (currentBook.type === 'archive') {
-				console.log('Extracting image from archive (by innerPath):', currentPage.path);
-				// 直接按 inner path 提取
-				const local = await extractArchiveInnerAndScheduleThumb(currentBook.path, currentPage.path);
-				if (local) {
-					dataUrl = toAssetUrl(local);
-				} else {
-					throw new Error('无法从压缩包提取图片');
-				}
+				console.log('Loading image from archive:', currentPage.path);
+				data = await loadImageFromArchive(currentBook.path, currentPage.path);
 			} else {
 				console.log('Loading image from file system:', currentPage.path);
-				const local = await loadImage(currentPage.path);
-				dataUrl = toAssetUrl(local) || local;
+				data = await loadImage(currentPage.path);
 			}
-			imageData = dataUrl;
+			imageData = data;
 
 			// 双页模式：加载下一页
 			if ($viewMode === 'double' && bookStore.canNextPage) {
@@ -157,15 +149,13 @@
 				const nextPageInfo = currentBook.pages[nextPage];
 				
 				if (nextPageInfo) {
-					let data2Url: string | null = null;
+					let data2: string;
 					if (currentBook.type === 'archive') {
-						const local2 = await extractArchiveInnerAndScheduleThumb(currentBook.path, nextPageInfo.path);
-						if (local2) data2Url = toAssetUrl(local2);
+						data2 = await loadImageFromArchive(currentBook.path, nextPageInfo.path);
 					} else {
-						const local2 = await loadImage(nextPageInfo.path);
-						data2Url = toAssetUrl(local2) || local2;
+						data2 = await loadImage(nextPageInfo.path);
 					}
-					imageData2 = data2Url;
+					imageData2 = data2;
 				}
 			}
 		} catch (err) {

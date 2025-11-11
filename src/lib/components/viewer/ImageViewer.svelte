@@ -77,8 +77,22 @@
 	$effect(() => {
 		const currentPage = bookStore.currentPage;
 		if (currentPage) {
+			bookStore.setCurrentImage(currentPage);
 			loadCurrentImage();
 		}
+	});
+
+	// 监听超分完成事件
+	$effect(() => {
+		const handleUpscaleComplete = (e: CustomEvent) => {
+			const { imageData } = e.detail;
+			bookStore.setUpscaledImage(imageData);
+		};
+
+		window.addEventListener('upscale-complete', handleUpscaleComplete as EventListener);
+		return () => {
+			window.removeEventListener('upscale-complete', handleUpscaleComplete as EventListener);
+		};
 	});
 
 	// 处理鼠标滚轮事件
@@ -259,7 +273,7 @@
 			<!-- 单页模式 -->
 			{#if $viewMode === 'single'}
 				<img
-					src={imageData}
+					src={bookStore.upscaledImageData || imageData}
 					alt="Current page"
 					class="max-w-full max-h-full object-contain"
 					style="transform: scale({$zoomLevel}) rotate({$rotationAngle}deg); transition: transform 0.2s;"
@@ -268,7 +282,7 @@
 			{:else if $viewMode === 'double'}
 				<div class="flex gap-4 items-center justify-center">
 					<img
-						src={imageData}
+						src={bookStore.upscaledImageData || imageData}
 						alt="Current page"
 						class="max-w-[45%] max-h-full object-contain"
 						style="transform: scale({$zoomLevel}) rotate({$rotationAngle}deg); transition: transform 0.2s;"
@@ -285,7 +299,7 @@
 			<!-- 全景模式 -->
 			{:else if $viewMode === 'panorama'}
 				<img
-					src={imageData}
+					src={bookStore.upscaledImageData || imageData}
 					alt="Current page"
 					class="w-full h-full object-contain"
 					style="transform: scale({$zoomLevel}) rotate({$rotationAngle}deg); transition: transform 0.2s;"

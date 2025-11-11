@@ -15,6 +15,8 @@ use std::path::PathBuf;
 use core::{BookManager, ImageLoader, FsManager, ThumbnailManager, ArchiveManager};
 use commands::fs_commands::FsState;
 use commands::thumbnail_commands::ThumbnailManagerState;
+use commands::upscale_commands::UpscaleManagerState;
+use std::sync::Arc;
 
 #[allow(clippy::missing_panics_doc)]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -58,6 +60,12 @@ pub fn run() {
             println!("📂 根目录路径: {}", root_path.display());
             
             // 缩略图管理器将在前端初始化，这里只创建目录
+            
+            // 初始化超分管理器
+            let upscale_manager = core::upscale::UpscaleManager::new(thumbnail_path.clone());
+            app.manage(UpscaleManagerState {
+                manager: Arc::new(Mutex::new(Some(upscale_manager))),
+            });
             
             Ok(())
         })
@@ -129,6 +137,13 @@ pub fn run() {
             commands::get_thumbnail_stats,
             commands::clear_all_thumbnails,
             commands::preload_thumbnails,
+            // Upscale commands
+            commands::init_upscale_manager,
+            commands::check_upscale_availability,
+            commands::get_upscale_save_path,
+            commands::upscale_image,
+            commands::get_upscale_cache_stats,
+            commands::cleanup_upscale_cache,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -11,6 +11,8 @@ interface BookState {
   loading: boolean;
   error: string;
   viewerOpen: boolean;
+  currentImage: Page | null;
+  upscaledImageData: string | null;
 }
 
 class BookStore {
@@ -19,6 +21,8 @@ class BookStore {
     loading: false,
     error: '',
     viewerOpen: false,
+    currentImage: null,
+    upscaledImageData: null,
   });
 
   // === Getters ===
@@ -36,6 +40,14 @@ class BookStore {
 
   get viewerOpen() {
     return this.state.viewerOpen;
+  }
+
+  get currentImage() {
+    return this.state.currentImage;
+  }
+
+  get upscaledImageData() {
+    return this.state.upscaledImageData;
   }
 
   get currentPage(): Page | null {
@@ -140,19 +152,29 @@ class BookStore {
   }
 
   /**
-   * 关闭当前 Book
+   * 关闭查看器
    */
-  async closeBook() {
-    try {
-      console.log('📕 Closing book');
-      await bookApi.closeBook();
-      this.state.currentBook = null;
-      this.state.viewerOpen = false;
-      this.state.error = '';
-    } catch (err) {
-      console.error('❌ Error closing book:', err);
-      this.state.error = String(err);
-    }
+  closeViewer() {
+    this.state.viewerOpen = false;
+    this.state.currentBook = null;
+    this.state.currentImage = null;
+    this.state.upscaledImageData = null;
+  }
+
+  /**
+   * 设置当前图片
+   */
+  setCurrentImage(page: Page | null) {
+    this.state.currentImage = page;
+    // 切换图片时清除超分结果
+    this.state.upscaledImageData = null;
+  }
+
+  /**
+   * 设置超分图片数据
+   */
+  setUpscaledImage(data: string | null) {
+    this.state.upscaledImageData = data;
   }
 
   /**

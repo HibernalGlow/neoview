@@ -51,7 +51,8 @@ impl ArchiveManager {
 
     /// 获取或创建压缩包缓存
     fn get_cached_archive(&self, archive_path: &Path) -> Result<Arc<std::sync::Mutex<ZipArchive<std::fs::File>>>, String> {
-        let path_str = archive_path.to_string_lossy().into_owned();
+        // 规范化缓存键，统一使用正斜杠，避免 Windows 上的 "\\"/"/" 差异导致命中失败
+        let path_str = archive_path.to_string_lossy().replace('\\', "/");
         
         // 检查缓存
         {
@@ -174,7 +175,10 @@ impl ArchiveManager {
         file_path: &str,
     ) -> Result<String, String> {
         // 创建缓存键：压缩包路径 + 文件路径
-        let cache_key = format!("{}::{}", archive_path.display(), file_path);
+        // 规范化 archive_path 和 file_path（统一使用正斜杠），避免 Windows 上的分隔符差异
+        let archive_key = archive_path.to_string_lossy().replace('\\', "/");
+        let inner_key = file_path.replace('\\', "/");
+        let cache_key = format!("{}::{}", archive_key, inner_key);
         
         // 检查缓存
         if let Ok(cache) = self.cache.lock() {
@@ -329,7 +333,10 @@ impl ArchiveManager {
         max_size: u32,
     ) -> Result<String, String> {
         // 创建缓存键：压缩包路径 + 文件路径 + 缩略图大小
-        let cache_key = format!("{}::{}::thumb_{}", archive_path.display(), file_path, max_size);
+        // 规范化路径部分以保证一致性
+        let archive_key = archive_path.to_string_lossy().replace('\\', "/");
+        let inner_key = file_path.replace('\\', "/");
+        let cache_key = format!("{}::{}::thumb_{}", archive_key, inner_key, max_size);
         
         // 检查缓存
         if let Ok(cache) = self.cache.lock() {

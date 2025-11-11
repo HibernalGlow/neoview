@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::command;
+use std::time::Duration;
 use crate::core::thumbnail::ThumbnailManager;
 use crate::core::fs_manager::FsItem;
 use crate::core::image_cache::ImageCache;
@@ -21,6 +22,35 @@ impl Default for ThumbnailManagerState {
             cache: Arc::new(Mutex::new(ImageCache::new(512))), // 512MB 缓存
         }
     }
+}
+
+/// 等待缩略图管理器初始化，最多等待 max_wait_ms 毫秒
+async fn ensure_manager_ready(
+    state: &tauri::State<'_, ThumbnailManagerState>,
+    max_wait_ms: u64,
+) -> Result<(), String> {
+    let mut waited = 0u64;
+    let step = 50u64; // 每次休眠 50ms
+
+    loop {
+        match state.manager.lock() {
+            Ok(manager_guard) => {
+                if manager_guard.is_some() {
+                    return Ok(());
+                }
+            }
+            Err(_) => return Err("无法获取缩略图管理器锁".to_string()),
+        }
+
+        if waited >= max_wait_ms {
+            break;
+        }
+
+    std::thread::sleep(Duration::from_millis(step));
+        waited += step;
+    }
+
+    Err("缩略图管理器未初始化".to_string())
 }
 
 /// 初始化缩略图管理器
@@ -63,14 +93,11 @@ pub async fn generate_file_thumbnail_new(
     let path = PathBuf::from(file_path);
     
     // 检查缩略图管理器是否已初始化
-    if let Ok(manager_guard) = state.manager.lock() {
-        if manager_guard.is_none() {
-            println!("❌ 缩略图管理器未初始化");
-            return Err("缩略图管理器未初始化".to_string());
-        }
-    } else {
-        println!("❌ 无法获取缩略图管理器锁");
-        return Err("无法获取缩略图管理器".to_string());
+    
+    // 等待管理器初始化（最多 5 秒）
+    if let Err(e) = ensure_manager_ready(&state, 5000).await {
+        println!("❌ {}", e);
+        return Err(e);
     }
     
     // 首先检查缓存
@@ -132,14 +159,11 @@ pub async fn generate_folder_thumbnail(
     let path = PathBuf::from(folder_path);
     
     // 检查缩略图管理器是否已初始化
-    if let Ok(manager_guard) = state.manager.lock() {
-        if manager_guard.is_none() {
-            println!("❌ 缩略图管理器未初始化");
-            return Err("缩略图管理器未初始化".to_string());
-        }
-    } else {
-        println!("❌ 无法获取缩略图管理器锁");
-        return Err("无法获取缩略图管理器".to_string());
+    
+    // 等待管理器初始化（最多 5 秒）
+    if let Err(e) = ensure_manager_ready(&state, 5000).await {
+        println!("❌ {}", e);
+        return Err(e);
     }
     
     // 首先检查缓存

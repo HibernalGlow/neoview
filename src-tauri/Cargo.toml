@@ -26,7 +26,7 @@ tauri-plugin-log = "2"
 tauri-plugin-dialog = "2.4"
 thiserror = "2.0.12"
 base64 = "0.22"
-image = { version = "0.25", features = ["png", "jpeg", "webp", "avif", "avif-native", "gif", "bmp", "ico", "tiff", "tga"] }
+image = { version = "0.25", features = ["png", "jpeg", "webp", "avif", "gif", "bmp", "ico", "tiff", "tga"] }
 jxl-oxide = { version = "0.12.2", features = ["image"] }
 zip = "2.2"
 walkdir = "2.5"

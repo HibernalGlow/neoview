@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use image::{DynamicImage, ImageFormat, GenericImageView};
 use std::io::Cursor;
+use std::process::Command;
 use base64::{Engine as _, engine::general_purpose};
 use chrono::{DateTime, Utc};
 use crate::core::thumbnail_db::{ThumbnailDatabase, ThumbnailRecord};
@@ -136,7 +137,8 @@ impl ThumbnailManager {
     pub fn generate_thumbnail(&self, image_path: &Path) -> Result<String, String> {
         // 获取相对路径
     let relative_path = self.get_relative_path(image_path)?;
-    let relative_str = relative_path.to_string_lossy();
+    // 统一使用正斜杠作为路径分隔符，确保与数据库中存储的 bookpath 字段一致
+    let relative_str = relative_path.to_string_lossy().replace('\\', "/");
         
         // 获取源文件修改时间
         let source_meta = fs::metadata(image_path)
@@ -147,14 +149,15 @@ impl ThumbnailManager {
             .map_err(|e| format!("时间转换失败: {}", e))?
             .as_secs() as i64;
 
-        // 检查数据库中是否已有有效缩略图
+        // 检查数据库中是否已有缩略图（不再强制要求 source_modified 相同）
         if let Ok(Some(record)) = self.db.find_by_bookpath(&relative_str) {
-            if record.source_modified == source_modified {
-                // 缩略图有效，使用创建日期构建正确路径
-                let thumbnail_path = self.db.thumbnail_root.join(&record.relative_thumb_path);
-                if thumbnail_path.exists() {
-                    return Ok(format!("file://{}", thumbnail_path.to_string_lossy()));
+            // 直接使用记录中的 relative_thumb_path 构建完整路径
+            let thumbnail_path = self.db.thumbnail_root.join(&record.relative_thumb_path);
+            if thumbnail_path.exists() {
+                if record.source_modified != source_modified {
+                    println!("⚠️ 源文件修改时间不同（数据库: {} vs 当前: {}），但使用已有缩略图: {}", record.source_modified, source_modified, thumbnail_path.display());
                 }
+                return Ok(format!("file://{}", thumbnail_path.to_string_lossy()));
             }
         }
 
@@ -270,28 +273,9 @@ impl ThumbnailManager {
                 return self.decode_jxl_image(&image_data);
             }
             
-            // AVIF 格式处理
+            // AVIF 格式处理 — 直接使用 FFmpeg 进行解码以避免本地解码器不稳定
             if ext_lower == "avif" {
-                // AVIF 格式可能需要特殊处理
-                // 首先尝试使用 AVIF 格式加载
-                match image::load_from_memory_with_format(&image_data, ImageFormat::Avif) {
-                    Ok(img) => return Ok(img),
-                    Err(e) => {
-                        println!("⚠️ AVIF 格式加载失败: {}, 尝试通用加载", e);
-                        // 如果 AVIF 格式加载失败，尝试通用加载
-                        match image::load_from_memory(&image_data) {
-                            Ok(img) => {
-                                println!("✅ 通用加载成功");
-                                return Ok(img);
-                            },
-                            Err(e2) => {
-                                println!("❌ 通用加载也失败: {}", e2);
-                                // 不再使用系统转换作为回退，改为返回错误，让调用方决定策略
-                                return Err(format!("AVIF 解码失败: {} ; {}", e, e2));
-                            }
-                        }
-                    }
-                }
+                return self.convert_avif_using_ffmpeg(image_path);
             }
         }
 
@@ -354,6 +338,32 @@ impl ThumbnailManager {
                 .ok_or_else(|| "Failed to create RGBA image from JXL data".to_string())?;
             Ok(DynamicImage::ImageRgba8(rgba_img))
         }
+    }
+
+    /// 使用 FFmpeg 将 AVIF 转换为 PNG（通过 stdout），然后由 image 加载
+    fn convert_avif_using_ffmpeg(&self, image_path: &Path) -> Result<DynamicImage, String> {
+        // ffmpeg -i input.avif -f image2pipe -vcodec png pipe:1
+        let output = Command::new("ffmpeg")
+            .arg("-hide_banner")
+            .arg("-loglevel")
+            .arg("error")
+            .arg("-i")
+            .arg(image_path.as_os_str())
+            .arg("-f")
+            .arg("image2pipe")
+            .arg("-vcodec")
+            .arg("png")
+            .arg("pipe:1")
+            .output()
+            .map_err(|e| format!("启动 FFmpeg 失败: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("FFmpeg 转换失败: {}", stderr));
+        }
+
+        image::load_from_memory(&output.stdout)
+            .map_err(|e| format!("从 FFmpeg 输出加载图片失败: {}", e))
     }
 
     /// 等比例缩放图片

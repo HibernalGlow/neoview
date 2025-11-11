@@ -676,3 +676,137 @@ pub struct IndexSearchOptions {
     pub modified_after: Option<u64>,
     pub modified_before: Option<u64>,
 }
+
+/// 获取未索引的文件和文件夹
+#[tauri::command]
+pub async fn get_unindexed_files(
+    root_path: String,
+    state: State<'_, FsState>,
+) -> Result<UnindexedFilesResult, String> {
+    println!("🔍 开始扫描未索引文件: {}", root_path);
+    
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    let root_path = PathBuf::from(root_path);
+    
+    // 检查根路径是否存在
+    if !root_path.exists() {
+        return Err(format!("根路径不存在: {}", root_path.display()));
+    }
+    
+    println!("📁 根路径存在，开始扫描...");
+    
+    // 获取所有文件和文件夹
+    let mut files = Vec::new();
+    let mut folders = Vec::new();
+    
+    // 递归扫描目录
+    scan_directory(&root_path, &mut files, &mut folders, &fs_manager)?;
+    
+    println!("📊 扫描完成: 找到 {} 个文件, {} 个文件夹", files.len(), folders.len());
+    
+    // 过滤掉已索引的项目（只获取未索引的）
+    let mut unindexed_files = Vec::new();
+    let mut unindexed_folders = Vec::new();
+    
+    for file in files {
+        let path_str = file.to_string_lossy();
+        match fs_manager.is_path_indexed(&path_str) {
+            Ok(is_indexed) => {
+                if !is_indexed {
+                    unindexed_files.push(path_str.to_string());
+                }
+            }
+            Err(e) => {
+                println!("⚠️ 检查索引状态失败 {}: {}", path_str, e);
+                // 如果检查失败，假设未索引
+                unindexed_files.push(path_str.to_string());
+            }
+        }
+    }
+    
+    for folder in folders {
+        let path_str = folder.to_string_lossy();
+        match fs_manager.is_path_indexed(&path_str) {
+            Ok(is_indexed) => {
+                if !is_indexed {
+                    unindexed_folders.push(path_str.to_string());
+                }
+            }
+            Err(e) => {
+                println!("⚠️ 检查索引状态失败 {}: {}", path_str, e);
+                // 如果检查失败，假设未索引
+                unindexed_folders.push(path_str.to_string());
+            }
+        }
+    }
+    
+    println!("✅ 过滤完成: 未索引文件 {} 个, 未索引文件夹 {} 个", 
+             unindexed_files.len(), unindexed_folders.len());
+    
+    Ok(UnindexedFilesResult {
+        files: unindexed_files,
+        folders: unindexed_folders,
+    })
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnindexedFilesResult {
+    pub files: Vec<String>,
+    pub folders: Vec<String>,
+}
+
+fn scan_directory(
+    dir: &Path,
+    files: &mut Vec<PathBuf>,
+    folders: &mut Vec<PathBuf>,
+    fs_manager: &FsManager,
+) -> Result<(), String> {
+    let dir_name = dir.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("未知");
+    
+    println!("📂 扫描目录: {}", dir.display());
+    
+    let entries = std::fs::read_dir(dir)
+        .map_err(|e| format!("读取目录失败 {}: {}", dir.display(), e))?;
+    
+    let mut file_count = 0;
+    let mut folder_count = 0;
+    
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
+        let path = entry.path();
+        
+        // 跳过隐藏文件和系统目录
+        if let Some(name) = path.file_name() {
+            let name_str = name.to_string_lossy();
+            if name_str.starts_with('.') || name_str == "$RECYCLE.BIN" || name_str == "System Volume Information" {
+                continue;
+            }
+        }
+        
+        if path.is_dir() {
+            // 添加文件夹
+            folders.push(path.clone());
+            folder_count += 1;
+            
+            // 递归扫描子目录
+            scan_directory(&path, files, folders, fs_manager)?;
+        } else if path.is_file() {
+            // 检查是否为图片文件
+            if is_image_file(&path) {
+                files.push(path);
+                file_count += 1;
+            }
+        }
+    }
+    
+    if file_count > 0 || folder_count > 0 {
+        println!("  📊 {} - 文件: {}, 文件夹: {}", dir_name, file_count, folder_count);
+    }
+    
+    Ok(())
+}

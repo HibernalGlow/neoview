@@ -5,8 +5,10 @@
 	 */
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
-	import { Image as ImageIcon, Grid3x3, Grid2x2, LayoutGrid, Loader2, AlertCircle, TestTube, CheckCircle, XCircle } from '@lucide/svelte';
+	import * as Progress from '$lib/components/ui/progress';
+	import { Image as ImageIcon, Grid3x3, Grid2x2, LayoutGrid, Loader2, AlertCircle, TestTube, CheckCircle, XCircle, Database, Play, FolderOpen } from '@lucide/svelte';
 	import { invoke } from '@tauri-apps/api/core';
+	import { open } from '@tauri-apps/plugin-dialog';
 	import { onMount } from 'svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { runThumbnailTests } from '$lib/utils/thumbnail-test';
@@ -31,6 +33,14 @@
 	let isTesting = $state(false);
 	let testResults = $state<any[]>([]);
 	let showTestResults = $state(false);
+
+	// 索引相关状态
+	let isIndexing = $state(false);
+	let indexingProgress = $state(0);
+	let indexingTotal = $state(0);
+	let indexingCurrent = $state('');
+	let showIndexingProgress = $state(false);
+	let selectedFolder = $state(''); // 选择的文件夹路径
 
 	// 缩略图尺寸
 	const gridSizes = {
@@ -132,6 +142,120 @@
 		}
 	}
 
+	async function selectFolder() {
+		try {
+			const selected = await open({
+				directory: true,
+				multiple: false,
+				title: '选择要索引的文件夹'
+			});
+			
+			if (selected) {
+				selectedFolder = selected;
+				console.log('选择的文件夹:', selectedFolder);
+			}
+		} catch (error) {
+			console.error('选择文件夹失败:', error);
+		}
+	}
+
+	async function startIndexing() {
+		if (!selectedFolder) {
+			console.error('请先选择要索引的文件夹');
+			return;
+		}
+
+		isIndexing = true;
+		showIndexingProgress = true;
+		indexingProgress = 0;
+		indexingTotal = 0;
+		indexingCurrent = '准备中...';
+
+		try {
+			console.log('🚀 开始获取未索引文件列表...');
+			indexingCurrent = '扫描文件中...';
+			
+			// 获取需要索引的文件和文件夹列表
+			const result = await invoke('get_unindexed_files', {
+				rootPath: selectedFolder // 使用选择的文件夹路径
+			});
+			
+			console.log('📋 获取到索引结果:', result);
+			
+			const { files, folders } = result as { files: string[], folders: string[] };
+			const allItems = [...files, ...folders];
+			indexingTotal = allItems.length;
+			
+			console.log(`📁 找到 ${files.length} 个文件, ${folders.length} 个文件夹, 总计 ${indexingTotal} 个项目`);
+			
+			if (indexingTotal === 0) {
+				indexingCurrent = '没有需要索引的项目';
+				console.log('✅ 所有文件已索引完成');
+				return;
+			}
+
+			indexingCurrent = '开始生成缩略图...';
+			console.log('⚡ 开始批量生成缩略图...');
+
+			// 批量处理 - 并发处理提高速度
+			const batchSize = 5; // 每批处理5个
+			let successCount = 0;
+			let errorCount = 0;
+
+			for (let i = 0; i < allItems.length; i += batchSize) {
+				const batch = allItems.slice(i, i + batchSize);
+				console.log(`📦 处理批次 ${Math.floor(i/batchSize) + 1}/${Math.ceil(allItems.length/batchSize)}, 包含 ${batch.length} 个项目`);
+				
+				// 并发处理当前批次
+				const promises = batch.map(async (item) => {
+					const fileName = item.split('\\').pop() || item;
+					indexingCurrent = fileName;
+					
+					try {
+						console.log(`🖼️ 生成缩略图: ${fileName}`);
+						// 调用后端生成缩略图
+						await invoke('generate_file_thumbnail_new', { filePath: item });
+						console.log(`✅ 缩略图生成成功: ${fileName}`);
+						return { success: true, item };
+					} catch (error) {
+						console.error(`❌ 索引失败 ${fileName}:`, error);
+						return { success: false, item, error };
+					}
+				});
+
+				// 等待当前批次完成
+				const results = await Promise.all(promises);
+				
+				// 统计结果
+				results.forEach(result => {
+					if (result.success) {
+						successCount++;
+					} else {
+						errorCount++;
+					}
+				});
+
+				// 更新进度
+				indexingProgress = Math.min(i + batchSize, allItems.length);
+				
+				// 添加小延迟避免界面卡顿
+				await new Promise(resolve => setTimeout(resolve, 50));
+			}
+
+			console.log(`🎉 索引完成! 成功: ${successCount}, 失败: ${errorCount}`);
+			indexingCurrent = `索引完成 (成功: ${successCount}, 失败: ${errorCount})`;
+		} catch (error) {
+			console.error('💥 索引过程出错:', error);
+			indexingCurrent = `索引出错: ${error instanceof Error ? error.message : '未知错误'}`;
+		} finally {
+			isIndexing = false;
+			// 3秒后隐藏进度条
+			setTimeout(() => {
+				showIndexingProgress = false;
+			}, 3000);
+		}
+	}
+
 	// 初始化缩略图管理器
 	onMount(async () => {
 		try {
@@ -162,22 +286,70 @@
 				<LayoutGrid class="h-4 w-4" />
 				缩略图 ({thumbnails.length})
 			</h3>
-			<Button
-				variant="outline"
-				size="sm"
-				class="h-7 px-2 text-xs"
-				onclick={runTests}
-				disabled={isTesting}
-			>
-				{#if isTesting}
-					<Loader2 class="h-3 w-3 mr-1 animate-spin" />
-					测试中...
-				{:else}
-					<TestTube class="h-3 w-3 mr-1" />
-					测试
-				{/if}
-			</Button>
+			<div class="flex items-center gap-1">
+				<Button
+					variant="outline"
+					size="sm"
+					class="h-7 px-2 text-xs"
+					onclick={selectFolder}
+					disabled={isIndexing}
+					title="选择要索引的文件夹"
+				>
+					<FolderOpen class="h-3 w-3 mr-1" />
+					选择文件夹
+				</Button>
+				<Button
+					variant="outline"
+					size="sm"
+					class="h-7 px-2 text-xs"
+					onclick={startIndexing}
+					disabled={isIndexing || !selectedFolder}
+				>
+					{#if isIndexing}
+						<Loader2 class="h-3 w-3 mr-1 animate-spin" />
+						索引中...
+					{:else}
+						<Database class="h-3 w-3 mr-1" />
+						一键索引
+					{/if}
+				</Button>
+				<Button
+					variant="outline"
+					size="sm"
+					class="h-7 px-2 text-xs"
+					onclick={runTests}
+					disabled={isTesting}
+				>
+					{#if isTesting}
+						<Loader2 class="h-3 w-3 mr-1 animate-spin" />
+						测试中...
+					{:else}
+						<TestTube class="h-3 w-3 mr-1" />
+						测试
+					{/if}
+				</Button>
+			</div>
 		</div>
+
+		<!-- 选择的文件夹显示 -->
+		{#if selectedFolder}
+			<div class="text-[10px] text-muted-foreground truncate px-1">
+				📁 {selectedFolder}
+			</div>
+		{/if}
+
+		<!-- 索引进度条 -->
+		{#if showIndexingProgress && isIndexing}
+			<div class="space-y-1">
+				<div class="flex items-center justify-between text-[10px] text-muted-foreground">
+					<span>正在索引: {indexingCurrent}</span>
+					<span>{indexingProgress}/{indexingTotal}</span>
+				</div>
+				<Progress.Root value={(indexingProgress / indexingTotal) * 100} class="h-2">
+					<Progress.Indicator class="h-full bg-primary transition-all duration-300" />
+				</Progress.Root>
+			</div>
+		{/if}
 
 		<!-- 网格尺寸控制 -->
 		<div class="flex items-center gap-1">

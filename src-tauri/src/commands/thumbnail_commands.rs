@@ -5,10 +5,12 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::command;
 use std::time::Duration;
+use base64::Engine;
 use crate::core::thumbnail::ThumbnailManager;
 use crate::core::thumbnail_queue::ThumbnailQueue;
 use crate::core::fs_manager::FsItem;
 use crate::core::image_cache::ImageCache;
+use serde_json::Value as JsonValue;
 
 // 简单的路径规范化，保持与 ThumbnailManager 中的 normalize_path_string 行为一致
 fn normalize_path_string<S: AsRef<str>>(s: S) -> String {
@@ -677,4 +679,77 @@ pub async fn generate_thumb_for_extracted(
         .map_err(|e| format!("生成缩略图失败: {}", e))?;
 
     Ok(thumb)
+}
+
+/// 按压缩包内部路径提取单个文件到临时目录（接受 camelCase 或 snake_case 参数名），返回本地绝对路径（不带 file://）
+#[command]
+pub async fn extract_archive_inner(
+    args: JsonValue,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<String, String> {
+    use std::path::PathBuf;
+    use crate::core::archive::ArchiveManager;
+
+    // 支持多种命名：archivePath / archive_path ; innerPath / inner_path
+    let archive_path = args.get("archivePath")
+        .or_else(|| args.get("archive_path"))
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "missing archive path".to_string())?;
+
+    let inner_path = args.get("innerPath")
+        .or_else(|| args.get("inner_path"))
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "missing inner path".to_string())?;
+
+    println!("📦 extract_archive_inner: archive={} inner={}", archive_path, inner_path);
+
+    // 等待管理器初始化（最多 5 秒）
+    if let Err(e) = ensure_manager_ready(&state, 5000).await {
+        println!("❌ {}", e);
+        return Err(e);
+    }
+
+    // 获取 thumbnail_root 用于作为 ArchiveManager 的 cache 根
+    let thumbnail_root = {
+        let manager_guard = state.manager.lock().map_err(|_| "无法获取缩略图管理器锁".to_string())?;
+        if let Some(ref manager) = *manager_guard {
+            manager.thumbnail_root_path()
+        } else {
+            return Err("缩略图管理器未初始化".to_string());
+        }
+    };
+
+    let archive_manager = ArchiveManager::new_with_cache_root(thumbnail_root);
+
+    // 优先尝试直接提取指定 inner
+    let mut cache_dir = archive_manager.get_temp_cache_dir()?;
+    let key = ArchiveManager::md5_key(&PathBuf::from(archive_path), inner_path);
+    let ext = std::path::Path::new(inner_path).extension().and_then(|e| e.to_str()).map(|s| s.to_lowercase()).unwrap_or_else(|| "bin".to_string());
+    let out_path = cache_dir.join(format!("{}.{}", key, ext));
+
+    if !out_path.exists() {
+        let data = archive_manager.extract_file(&PathBuf::from(archive_path), inner_path)
+            .map_err(|e| format!("直接提取失败: {}", e))?;
+        if ext == "jxl" {
+            match archive_manager.load_jxl_from_zip(&data) {
+                Ok(data_url) => {
+                    if let Some(pos) = data_url.find(',') {
+                        let b64 = &data_url[pos+1..];
+                        if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64) {
+                            let out_png = cache_dir.join(format!("{}.png", key));
+                            std::fs::write(&out_png, &bytes).map_err(|e| format!("写入 JXL 转 PNG 失败: {}", e))?;
+                            return Ok(out_png.to_string_lossy().to_string());
+                        }
+                    }
+                    return Err("JXL 转换失败".to_string());
+                }
+                Err(e) => return Err(format!("JXL 解码失败: {}", e)),
+            }
+        } else {
+            std::fs::write(&out_path, &data).map_err(|e| format!("写入提取文件失败: {}", e))?;
+            return Ok(out_path.to_string_lossy().to_string());
+        }
+    }
+
+    Ok(out_path.to_string_lossy().to_string())
 }

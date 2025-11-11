@@ -63,7 +63,7 @@ impl ThumbnailQueue {
 
                     // 如果没有高优先级任务，尝试从普通队列获取（先非阻塞，再阻塞等待）
                     if task_opt.is_none() {
-                        if let Ok(mut nr) = normal_r.lock() {
+                        if let Ok(nr) = normal_r.lock() {
                             match nr.try_recv() {
                                 Ok(t) => task_opt = Some(t),
                                 Err(mpsc::TryRecvError::Empty) => {

@@ -73,7 +73,7 @@ impl ArchiveManager {
     }
 
     /// 获取临时缓存目录（用于提取 archive 内文件）
-    fn get_temp_cache_dir(&self) -> Result<PathBuf, String> {
+    pub fn get_temp_cache_dir(&self) -> Result<PathBuf, String> {
         let mut dir = self.cache_root.clone();
         dir.push("neoview_archive_cache");
         fs::create_dir_all(&dir).map_err(|e| format!("创建临时缓存目录失败: {}", e))?;
@@ -81,7 +81,7 @@ impl ArchiveManager {
     }
 
     /// 计算 md5 key（基于 archive 绝对路径 + 内部路径）
-    fn md5_key(archive_path: &Path, inner: &str) -> String {
+    pub fn md5_key(archive_path: &Path, inner: &str) -> String {
         let s = format!("{}::{}", archive_path.display(), inner);
         format!("{:x}", md5::compute(s.as_bytes()))
     }
@@ -347,7 +347,7 @@ impl ArchiveManager {
     }
 
     /// 从压缩包中加载 JXL 图片并转换为 PNG
-    fn load_jxl_from_zip(&self, image_data: &[u8]) -> Result<String, String> {
+    pub fn load_jxl_from_zip(&self, image_data: &[u8]) -> Result<String, String> {
         use jxl_oxide::JxlImage;
         use std::io::Cursor;
         

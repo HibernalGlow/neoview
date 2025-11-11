@@ -214,6 +214,14 @@ export async function generateThumbForExtracted(localPath: string, maxSize: numb
 }
 
 /**
+ * 按 innerPath 提取单个压缩包内部文件并返回本地路径（不带 file://）
+ */
+export async function extractArchiveInner(archivePath: string, innerPath: string): Promise<string> {
+  // The backend command expects a single `args` parameter (Json) containing archivePath/innerPath.
+  return await invoke<string>('extract_archive_inner', { args: { archivePath, innerPath } });
+}
+
+/**
  * 生成压缩包内图片的缩略图
  */
 export async function generateArchiveThumbnail(

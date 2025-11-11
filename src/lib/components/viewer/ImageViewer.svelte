@@ -11,7 +11,7 @@
 		findCommandByKeys
 	} from '$lib/stores/keyboard.svelte';
 	import { loadImage } from '$lib/api/fs';
-	import { loadImageFromArchive, extractArchiveImages } from '$lib/api/filesystem';
+	import { loadImageFromArchive, extractArchiveInner } from '$lib/api/filesystem';
 	import { toAssetUrl } from '$lib/utils/assetProxy';
 	import { FileSystemAPI } from '$lib/api';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
@@ -136,13 +136,10 @@
 			// 加载当前页
 			let dataUrl: string | null = null;
 			if (currentBook.type === 'archive') {
-				console.log('Extracting image from archive (file-based):', currentPage.path);
-				// 使用当前页索引作为 archive 内的 start 索引，提取 single 图像
-				const idx = bookStore.currentPageIndex || 0;
-				const paths = await extractArchiveImages(currentBook.path, idx, 1);
-				if (paths && paths.length > 0) {
-					// paths 返回不带 file:// 的本地绝对路径
-					const local = paths[0];
+				console.log('Extracting image from archive (by innerPath):', currentPage.path);
+				// 直接按 inner path 提取
+				const local = await extractArchiveInner(currentBook.path, currentPage.path);
+				if (local) {
 					dataUrl = toAssetUrl(local);
 				} else {
 					throw new Error('无法从压缩包提取图片');
@@ -162,11 +159,8 @@
 				if (nextPageInfo) {
 					let data2Url: string | null = null;
 					if (currentBook.type === 'archive') {
-						const nidx = bookStore.currentPageIndex + 1;
-						const paths2 = await extractArchiveImages(currentBook.path, nidx, 1);
-						if (paths2 && paths2.length > 0) {
-							data2Url = toAssetUrl(paths2[0]);
-						}
+						const local2 = await extractArchiveInner(currentBook.path, nextPageInfo.path);
+						if (local2) data2Url = toAssetUrl(local2);
 					} else {
 						const local2 = await loadImage(nextPageInfo.path);
 						data2Url = toAssetUrl(local2) || local2;

@@ -8,7 +8,7 @@ mod commands;
 mod core;
 mod models;
 
-use commands::{default, book_commands, fs_commands, image_commands, thumbnail_commands};
+use commands::*;
 use tauri::Manager;
 use std::sync::Mutex;
 use std::path::PathBuf;
@@ -130,6 +130,7 @@ pub fn run() {
             commands::preload_thumbnails,
             // Archive/temp helpers
             commands::extract_archive_images,
+            commands::extract_archive_inner,
             commands::generate_thumb_for_extracted,
         ])
         .run(tauri::generate_context!())

@@ -5,7 +5,7 @@
 	 */
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { loadImage } from '$lib/api/fs';
-	import { loadImageFromArchive, extractArchiveImages, generateThumbForExtracted } from '$lib/api/filesystem';
+	import { loadImageFromArchive, extractArchiveInner, generateThumbForExtracted } from '$lib/api/filesystem';
 	import { toAssetUrl } from '$lib/utils/assetProxy';
 	import { bottomThumbnailBarPinned, bottomThumbnailBarHeight } from '$lib/stores';
 	import { Button } from '$lib/components/ui/button';
@@ -182,11 +182,9 @@
 			let fullImageData: string;
 
 			if (currentBook.type === 'archive') {
-				// 提取单张图片到临时目录
-				const paths = await extractArchiveImages(currentBook.path, pageIndex, 1);
-				if (paths && paths.length > 0) {
-					const local = paths[0];
-					// 为已提取文件生成缩略图（返回本地路径）
+				// 直接按 inner path 提取并生成缩略图
+				const local = await extractArchiveInner(currentBook.path, page.path);
+				if (local) {
 					const thumbPath = await generateThumbForExtracted(local, $bottomThumbnailBarHeight - 40);
 					const url = toAssetUrl(thumbPath) || thumbPath;
 					thumbnails = { ...thumbnails, [pageIndex]: { url, width: 0, height: 0 } };

@@ -749,7 +749,7 @@ impl ThumbnailManager {
                                 println!("❌ 压缩包内 AVIF 指定格式加载失败: {}，尝试通过 FFmpeg 处理", e2);
                                 // 写临时文件并使用 ffmpeg 解码（复用文件路径解码逻辑）
                                 let mut tmp = std::env::temp_dir();
-                                let filename = format!("neoview_archive_avif_{}_{}.avif", chrono::Utc::now().timestamp_nanos(), std::process::id());
+                                let filename = format!("neoview_archive_avif_{}_{}.avif", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0), std::process::id());
                                 tmp.push(filename);
                                 if let Err(write_err) = std::fs::write(&tmp, &image_data) {
                                     return Err(format!("写入临时 AVIF 文件失败: {} ; 原始错误: {}", write_err, e));

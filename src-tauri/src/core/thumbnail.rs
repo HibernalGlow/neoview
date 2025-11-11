@@ -583,8 +583,9 @@ impl ThumbnailManager {
 
                 if path.is_file() && self.is_archive_file(&path) {
                     // 尝试从压缩包中获取第一张图片
-                    if let Ok(first_image) = self.get_first_image_from_archive(&path) {
-                        return Ok(Some(first_image));
+                    match self.get_first_image_from_archive(&path) {
+                        Ok(first_image) => return Ok(Some(first_image)),
+                        Err(e) => println!("⚠️ 无法从压缩包获取图片: {} -> {}", path.display(), e),
                     }
                 }
             }
@@ -611,8 +612,13 @@ impl ThumbnailManager {
         use crate::core::archive::ArchiveManager;
         
         let archive_manager = ArchiveManager::new();
-        let entries = archive_manager.list_zip_contents(archive_path)
-            .map_err(|e| format!("列出压缩包内容失败: {}", e))?;
+        let entries = match archive_manager.list_zip_contents(archive_path) {
+            Ok(e) => e,
+            Err(err) => {
+                println!("⚠️ 读取压缩包内容失败: {} -> {}", archive_path.display(), err);
+                return Err(format!("读取压缩包内容失败: {}", err));
+            }
+        };
 
         // 对条目按名称排序
         let mut sorted_entries = entries;

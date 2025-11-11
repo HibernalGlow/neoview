@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::{Read, Cursor};
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Instant;
 use zip::ZipArchive;
 use serde::{Deserialize, Serialize};
 use base64::{Engine as _, engine::general_purpose};
@@ -115,10 +116,16 @@ impl ArchiveManager {
             .map_err(|e| format!("在压缩包中找不到文件: {}", e))?;
 
         let mut buffer = Vec::new();
+        let start = Instant::now();
         zip_file.read_to_end(&mut buffer)
             .map_err(|e| format!("读取文件失败: {}", e))?;
 
-        println!("📦 extract_file_from_zip end: read_bytes={} archive={} inner={}", buffer.len(), archive_path.display(), file_path);
+        let elapsed = start.elapsed();
+        // try to get compressed size if available
+        let compressed = zip_file.compressed_size();
+        let uncompressed = buffer.len() as u64;
+        let ratio = if uncompressed > 0 { (compressed as f64) / (uncompressed as f64) } else { 0.0 };
+        println!("📦 extract_file_from_zip end: read_bytes={} compressed={} ratio={:.3} elapsed_ms={} archive={} inner={}", uncompressed, compressed, ratio, elapsed.as_millis(), archive_path.display(), file_path);
 
         Ok(buffer)
     }

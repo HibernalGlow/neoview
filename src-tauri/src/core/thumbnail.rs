@@ -232,6 +232,7 @@ impl ThumbnailManager {
             return self.generate_folder_thumbnail(image_path, relative_path, source_modified);
         } else if self.is_archive_file(image_path) {
             println!("📦 generate_and_save_thumbnail: detected archive file: {}", image_path.display());
+            println!("📦 archive branch: listing images in archive: {}", image_path.display());
             // 从压缩包中获取第一张图片并加载到内存
             use crate::core::archive::ArchiveManager;
             let archive_manager = ArchiveManager::new();
@@ -245,26 +246,32 @@ impl ThumbnailManager {
             let data = archive_manager.extract_file(image_path, first)
                 .map_err(|e| format!("从压缩包提取文件失败: {}", e))?;
 
-            // 若为 JXL/AVIF 等需要特殊处理的格式，尝试相应解码路径
-            if let Some(ext) = Path::new(first).extension().and_then(|e| e.to_str()) {
-                let ext_l = ext.to_lowercase();
-                if ext_l == "jxl" {
-                    self.decode_jxl_image(&data)?
-                } else if ext_l == "avif" {
-                    // 写临时文件并使用 ffmpeg 解码（复用 convert_avif_using_ffmpeg）
-                    let mut tmp = std::env::temp_dir();
-                    let filename = format!("neoview_archive_avif_{}_{}.avif", chrono::Utc::now().timestamp_nanos(), std::process::id());
-                    tmp.push(filename);
-                    std::fs::write(&tmp, &data).map_err(|e| format!("写入临时 AVIF 文件失败: {}", e))?;
-                    let res = self.convert_avif_using_ffmpeg(&tmp);
-                    let _ = std::fs::remove_file(&tmp);
-                    res?
-                } else {
-                    image::load_from_memory(&data).map_err(|e| format!("加载压缩包内图片失败: {}", e))?
+            // 将提取的数据写为临时文件（保留扩展名），然后通过现有的文件加载/转换流程处理
+            let ext = Path::new(first).extension().and_then(|e| e.to_str()).unwrap_or("bin");
+            let mut tmp = std::env::temp_dir();
+            let filename = format!("neoview_archive_extracted_{}_{}.{}", chrono::Utc::now().timestamp_nanos(), std::process::id(), ext);
+            tmp.push(filename);
+            println!("📦 write temp extracted file: {} (bytes={})", tmp.display(), data.len());
+            std::fs::write(&tmp, &data).map_err(|e| format!("写入临时文件失败: {}", e))?;
+            println!("🔧 load_image_with_format_support from temp: {}", tmp.display());
+            let img = match self.load_image_with_format_support(&tmp) {
+                Ok(i) => {
+                    let (w, h) = i.dimensions();
+                    println!("✅ loaded image from temp: {} ({}x{})", tmp.display(), w, h);
+                    i
                 }
-            } else {
-                image::load_from_memory(&data).map_err(|e| format!("加载压缩包内图片失败: {}", e))?
+                Err(e) => {
+                    // 清理临时文件后返回错误
+                    let _ = std::fs::remove_file(&tmp);
+                    println!("❌ load_image_with_format_support failed for temp {}: {}", tmp.display(), e);
+                    return Err(format!("从压缩包加载图片失败: {}", e));
+                }
+            };
+            // 清理临时文件
+            if std::fs::remove_file(&tmp).is_ok() {
+                println!("🧹 removed temp file: {}", tmp.display());
             }
+            img
         } else if self.is_video_file(image_path) {
             println!("🎬 generate_and_save_thumbnail: detected video file: {}", image_path.display());
             self.extract_frame_from_video(image_path)?
@@ -329,6 +336,7 @@ impl ThumbnailManager {
         // upsert 使用 clone 以便后续仍能访问 record 的字段
         self.db.upsert_thumbnail(record.clone())
             .map_err(|e| format!("保存数据库记录失败: {}", e))?;
+        println!("💾 upserted thumbnail record: bookpath='{}' -> {}", record.bookpath, relative_thumb_path);
 
             // 如果缩略图来源于压缩包内部图片，也为压缩包本身创建一条记录（便于直接请求压缩包的缩略图）
             if image_path.to_string_lossy().contains("__archive__") {
@@ -363,7 +371,10 @@ impl ThumbnailManager {
                             };
 
                             // 忽略错误，尽量确保主记录已写入
-                            let _ = self.db.upsert_thumbnail(archive_record);
+                            match self.db.upsert_thumbnail(archive_record.clone()) {
+                                Ok(_) => println!("💾 upserted archive thumbnail record: bookpath='{}' -> {}", archive_record.bookpath, archive_record.relative_thumb_path),
+                                Err(e) => println!("⚠️ archive upsert failed for '{}': {}", archive_record.bookpath, e),
+                            }
                         }
                     }
                 }
@@ -862,6 +873,7 @@ impl ThumbnailManager {
 
     /// 从压缩包中提取图片
     fn extract_image_from_archive(&self, combined_path: &Path) -> Result<DynamicImage, String> {
+        println!("📦 extract_image_from_archive start: {}", combined_path.display());
         use crate::core::archive::ArchiveManager;
         
         // 解析组合路径：archive_path/__archive__/image_path
@@ -878,47 +890,26 @@ impl ThumbnailManager {
         let archive_manager = ArchiveManager::new();
         let image_data = archive_manager.extract_file(archive_path, image_path_in_archive)
             .map_err(|e| format!("从压缩包提取图片失败: {}", e))?;
-        
-        // 加载提取的图片数据
-        // 首先尝试通用加载（更安全，避免 AVIF 崩溃）
-        match image::load_from_memory(&image_data) {
-            Ok(img) => Ok(img),
+
+        // 将提取的字节写为临时文件并通过已有的文件加载/转换流程处理（统一 AVIF/JXL/FFmpeg 路径）
+        let ext = Path::new(image_path_in_archive).extension().and_then(|e| e.to_str()).unwrap_or("bin");
+        let mut tmp = std::env::temp_dir();
+    let filename = format!("neoview_archive_extracted_{}_{}.{}", chrono::Utc::now().timestamp_nanos(), std::process::id(), ext);
+        tmp.push(filename);
+        std::fs::write(&tmp, &image_data).map_err(|e| format!("写入临时文件失败: {}", e))?;
+
+        let img = match self.load_image_with_format_support(&tmp) {
+            Ok(i) => i,
             Err(e) => {
-                println!("⚠️ 压缩包内图片通用加载失败: {}, 尝试检测格式", e);
-                // 如果通用加载失败，尝试检测文件格式并指定格式加载
-                if let Some(ext) = Path::new(image_path_in_archive).extension() {
-                    let ext_lower = ext.to_string_lossy().to_lowercase();
-                    if ext_lower == "avif" {
-                        // 尝试用 image 指定格式加载
-                        match image::load_from_memory_with_format(&image_data, ImageFormat::Avif) {
-                            Ok(img) => {
-                                println!("✅ 压缩包内 AVIF 指定格式加载成功");
-                                return Ok(img);
-                            },
-                            Err(e2) => {
-                                println!("❌ 压缩包内 AVIF 指定格式加载失败: {}，尝试通过 FFmpeg 处理", e2);
-                                // 写临时文件并使用 ffmpeg 解码（复用文件路径解码逻辑）
-                                let mut tmp = std::env::temp_dir();
-                                let filename = format!("neoview_archive_avif_{}_{}.avif", chrono::Utc::now().timestamp_nanos(), std::process::id());
-                                tmp.push(filename);
-                                if let Err(write_err) = std::fs::write(&tmp, &image_data) {
-                                    return Err(format!("写入临时 AVIF 文件失败: {} ; 原始错误: {}", write_err, e));
-                                }
-                                let conv = self.convert_avif_using_ffmpeg(&tmp);
-                                // 清理临时文件（忽略错误）
-                                let _ = std::fs::remove_file(&tmp);
-                                return conv.map_err(|ce| format!("压缩包内 AVIF 解码失败: {} ; 原始错误: {}", ce, e));
-                            }
-                        }
-                    } else if ext_lower == "jxl" {
-                        // 使用 JXL 解码器直接解码内存数据
-                        println!("🔧 压缩包内 JXL 文件，使用专用解码器: {}", image_path_in_archive);
-                        return self.decode_jxl_image(&image_data);
-                    }
-                }
-                Err(format!("加载压缩包内图片失败: {}", e))
+                let _ = std::fs::remove_file(&tmp);
+                return Err(format!("压缩包内图片加载失败: {}", e));
             }
-        }
+        };
+
+        // 清理临时文件
+        let _ = std::fs::remove_file(&tmp);
+
+        Ok(img)
     }
 
     

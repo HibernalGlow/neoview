@@ -4,7 +4,11 @@ import { toAssetUrl } from '$lib/utils/assetProxy';
 type Job = { path: string; isFolder: boolean; isArchive?: boolean };
 
 let _queue: Job[] = [];
-let _generating: Set<string> = new Set();
+// 将_generating 从 Set 改为 Map，记录每个正在生成的 path 对应的 epoch
+// 这样在切换目录（epoch 变化）时，旧 epoch 的进行中任务不会阻塞新 epoch 的任务启动
+let _generating: Map<string, number> = new Map();
+// epoch 用于在清空队列时使已有任务的回调失效（避免切换目录后旧任务填充新目录）
+let _epoch = 0;
 let _maxConcurrent = 4;
 let _addThumbnailCb: ((path: string, url: string) => void) | null = null;
 
@@ -26,8 +30,8 @@ export function itemIsImage(item: any) {
 
 export function enqueueThumbnail(path: string, isFolder: boolean) {
   if (!path) return;
-  // 已在生成中或已有队列则跳过
-  if (_generating.has(path)) return;
+  // 已在生成中或已有队列则跳过（仅考虑当前 epoch 的生成状态）
+  if (_generating.get(path) === _epoch) return;
   if (_queue.findIndex(x => x.path === path) !== -1) return;
 
   _queue.push({ path, isFolder });
@@ -65,7 +69,7 @@ export function toRelativeKey(absPath: string): string {
 
 export function enqueueArchiveThumbnail(path: string) {
   if (!path) return;
-  if (_generating.has(path)) return;
+  if (_generating.get(path) === _epoch) return;
   if (_queue.findIndex(x => x.path === path) !== -1) return;
 
   _queue.push({ path, isFolder: false, isArchive: true });
@@ -73,13 +77,20 @@ export function enqueueArchiveThumbnail(path: string) {
 }
 
 async function processQueue() {
-  while (_generating.size < _maxConcurrent && _queue.length > 0) {
+  // 计算当前 epoch 下正在进行的任务数量
+  const generatingCountForEpoch = Array.from(_generating.values()).filter(v => v === _epoch).length;
+  while (generatingCountForEpoch < _maxConcurrent && _queue.length > 0) {
+    // Recompute generating count at loop top in case it changed
+    const currentGenerating = Array.from(_generating.values()).filter(v => v === _epoch).length;
+    if (currentGenerating >= _maxConcurrent) break;
+
     const job = _queue.shift();
     if (!job) break;
     const { path, isFolder } = job;
-    if (_generating.has(path)) continue;
+    if (_generating.get(path) === _epoch) continue;
 
-    _generating.add(path);
+    const jobEpoch = _epoch; // 捕获当前 epoch，任务完成时用于判断是否仍然有效
+    _generating.set(path, jobEpoch);
 
     (async () => {
       try {
@@ -102,25 +113,32 @@ async function processQueue() {
           thumbnail = await FileSystemAPI.generateFileThumbnail(path);
         }
 
-        if (thumbnail && _addThumbnailCb) {
+        // 在调用回调之前检查任务 epoch 是否仍然有效（切换目录会递增 epoch，使旧任务失效）
+        if (thumbnail && _addThumbnailCb && jobEpoch === _epoch) {
           const converted = toAssetUrl(thumbnail) || String(thumbnail || '');
           const key = toRelativeKey(path);
           // 可见日志，确保前端能观察到回调被触发与最终 URL
           console.log('thumbnailManager: addThumbnail callback ->', { key, raw: thumbnail, converted });
           _addThumbnailCb(key, converted);
+        } else if (thumbnail && jobEpoch !== _epoch) {
+          // 任务已过期（例如切换目录），忽略结果并记录日志以便调试
+          console.log('thumbnailManager: job result ignored due to epoch mismatch', { path, jobEpoch, current: _epoch });
         }
-      } catch (e) {
-        console.debug('thumbnailManager: failed to generate thumbnail for', path, e);
-      } finally {
-        _generating.delete(path);
-        setTimeout(() => processQueue(), 0);
-      }
+        } catch (e) {
+          console.debug('thumbnailManager: failed to generate thumbnail for', path, e);
+        } finally {
+          // 仅删除 map 条目（不论 epoch）以释放占位
+          _generating.delete(path);
+          setTimeout(() => processQueue(), 0);
+        }
     })();
   }
 }
 
 export function clearQueue() {
+  // 清空未开始的队列并递增 epoch，使当前进行中的任务在完成后失效
   _queue = [];
+  _epoch += 1;
 }
 
 export function setMaxConcurrent(n: number) {
@@ -128,5 +146,5 @@ export function setMaxConcurrent(n: number) {
 }
 
 export function isGenerating(path: string) {
-  return _generating.has(path);
+  return _generating.get(path) === _epoch;
 }

@@ -70,29 +70,28 @@ impl ThumbnailManager {
         let mut loaded_count = 0;
         
         for record in records {
-            // 构建完整的缩略图文件路径
-            let date_folder = record.created_at.format("%Y/%m/%d").to_string();
-            let thumbnail_path = self.db.thumbnail_root
-                .join(date_folder)
-                .join(&record.thumbnail_name);
-            
+            // 构建完整的缩略图文件路径（record.relative_thumb_path 已经是相对于 thumbnail_root 的路径）
+            let thumbnail_path = self.db.thumbnail_root.join(&record.relative_thumb_path);
+
             // 检查文件是否存在
             if thumbnail_path.exists() {
                 let thumbnail_url = format!("file://{}", thumbnail_path.to_string_lossy());
-                
-                // 计算原始文件的完整路径（如果数据库中存的是相对路径，则基于 root_dir 组合）
+
+                // 计算原始文件的完整路径（bookpath 字段可能是相对于 root 的路径或绝对路径）
                 let original_path = {
-                    let rel = record.relative_path.as_str();
-                    let rel_path = Path::new(rel);
-                    if rel_path.is_absolute() {
-                        rel_path.to_path_buf()
+                    let book = record.bookpath.as_str();
+                    let book_path = Path::new(book);
+                    if book_path.is_absolute() {
+                        book_path.to_path_buf()
                     } else {
-                        self.root_dir.join(rel_path)
+                        self.root_dir.join(book_path)
                     }
                 };
 
                 // 添加到内存缓存：使用完整路径字符串作为 key，以便与前端请求的 path.to_string_lossy() 保持一致
-                cache.set(original_path.to_string_lossy().to_string(), thumbnail_url);
+                cache.set(original_path.to_string_lossy().to_string(), thumbnail_url.clone());
+                // 另外也把相对 bookpath（数据库中的 bookpath 字符串）也注册一次，方便前端使用相对 key 查找
+                cache.set(record.bookpath.clone(), thumbnail_url);
                 loaded_count += 1;
             }
         }
@@ -106,16 +105,13 @@ impl ThumbnailManager {
         println!("🔍 ThumbnailManager::get_thumbnail_info - 完整路径: {}", full_path.display());
         let relative_path = self.get_relative_path(full_path)?;
         // 统一使用正斜杠作为路径分隔符，确保数据库查询一致
-        let relative_str = relative_path.to_string_lossy().replace('\\', "/");
+    let relative_str = relative_path.to_string_lossy().replace('\\', "/");
         println!("🔍 标准化相对路径: {}", relative_str);
         
-        if let Ok(Some(record)) = self.db.find_by_relative_path(&relative_str) {
+        if let Ok(Some(record)) = self.db.find_by_bookpath(&relative_str) {
             println!("✅ 数据库中找到记录: {}", record.thumbnail_name);
-            // 使用创建日期构建正确路径
-            let date_folder = record.created_at.format("%Y/%m/%d").to_string();
-            let thumbnail_path = self.db.thumbnail_root
-                .join(date_folder)
-                .join(&record.thumbnail_name);
+            // 直接使用记录中的 relative_thumb_path 构建完整路径
+            let thumbnail_path = self.db.thumbnail_root.join(&record.relative_thumb_path);
             if thumbnail_path.exists() {
                 println!("✅ 缩略图文件存在: {}", thumbnail_path.display());
                 Ok(Some(ThumbnailInfo {
@@ -139,8 +135,8 @@ impl ThumbnailManager {
     /// 生成缩略图（返回文件URL）
     pub fn generate_thumbnail(&self, image_path: &Path) -> Result<String, String> {
         // 获取相对路径
-        let relative_path = self.get_relative_path(image_path)?;
-        let relative_str = relative_path.to_string_lossy();
+    let relative_path = self.get_relative_path(image_path)?;
+    let relative_str = relative_path.to_string_lossy();
         
         // 获取源文件修改时间
         let source_meta = fs::metadata(image_path)
@@ -152,13 +148,10 @@ impl ThumbnailManager {
             .as_secs() as i64;
 
         // 检查数据库中是否已有有效缩略图
-        if let Ok(Some(record)) = self.db.find_by_relative_path(&relative_str) {
+        if let Ok(Some(record)) = self.db.find_by_bookpath(&relative_str) {
             if record.source_modified == source_modified {
                 // 缩略图有效，使用创建日期构建正确路径
-                let date_folder = record.created_at.format("%Y/%m/%d").to_string();
-                let thumbnail_path = self.db.thumbnail_root
-                    .join(date_folder)
-                    .join(&record.thumbnail_name);
+                let thumbnail_path = self.db.thumbnail_root.join(&record.relative_thumb_path);
                 if thumbnail_path.exists() {
                     return Ok(format!("file://{}", thumbnail_path.to_string_lossy()));
                 }
@@ -207,9 +200,9 @@ impl ThumbnailManager {
         // 编码为 WebP
         let webp_data = self.encode_webp(&thumbnail)?;
 
-        // 获取保存路径
-        let now = Utc::now();
-        let thumbnail_path = self.db.get_thumbnail_path(relative_path, &now);
+    // 获取保存路径
+    let now = Utc::now();
+    let thumbnail_path = self.db.get_thumbnail_path(relative_path, &now);
         
         // 确保目录存在
         if let Some(parent) = thumbnail_path.parent() {
@@ -229,12 +222,23 @@ impl ThumbnailManager {
             .unwrap_or(&ThumbnailDatabase::hash_path(relative_path))
             .to_string();
 
-        // 创建数据库记录
+        // 创建数据库记录：bookpath 存储原始文件的相对/绝对表示，relative_thumb_path 存储缩略图在 thumbnail_root 下的相对路径
         // 统一使用正斜杠作为路径分隔符，确保数据库查询一致
-        let relative_path_str = relative_path.to_string_lossy().replace('\\', "/");
+        let bookpath_str = relative_path.to_string_lossy().replace('\\', "/");
+        let relative_thumb_path = thumbnail_path
+            .strip_prefix(&self.db.thumbnail_root)
+            .map(|p| p.to_string_lossy().replace('\\', "/"))
+            .unwrap_or_else(|_| thumbnail_path.to_string_lossy().replace('\\', "/"));
+        let hash = thumbnail_path.file_stem()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| ThumbnailDatabase::hash_path(relative_path));
+
         let record = ThumbnailRecord {
-            relative_path: relative_path_str,
+            bookpath: bookpath_str,
+            relative_thumb_path: relative_thumb_path.to_string(),
             thumbnail_name,
+            hash,
             created_at: now,
             source_modified,
             is_folder,
@@ -500,12 +504,22 @@ impl ThumbnailManager {
                 .unwrap_or(&ThumbnailDatabase::hash_path(relative_path))
                 .to_string();
 
-            // 创建数据库记录
-            // 统一使用正斜杠作为路径分隔符，确保数据库查询一致
-            let relative_path_str = relative_path.to_string_lossy().replace('\\', "/");
+            // 创建数据库记录（folder）
+            let bookpath_str = relative_path.to_string_lossy().replace('\\', "/");
+            let relative_thumb_path = thumbnail_path
+                .strip_prefix(&self.db.thumbnail_root)
+                .map(|p| p.to_string_lossy().replace('\\', "/"))
+                .unwrap_or_else(|_| thumbnail_path.to_string_lossy().replace('\\', "/"));
+            let hash = thumbnail_path.file_stem()
+                .and_then(|s| s.to_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| ThumbnailDatabase::hash_path(relative_path));
+
             let record = ThumbnailRecord {
-                relative_path: relative_path_str,
+                bookpath: bookpath_str,
+                relative_thumb_path: relative_thumb_path.to_string(),
                 thumbnail_name,
+                hash,
                 created_at: now,
                 source_modified,
                 is_folder: true,

@@ -12,10 +12,14 @@ use serde::{Deserialize, Serialize};
 /// 缩略图数据库记录
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThumbnailRecord {
-    /// 原始文件/文件夹的相对路径
-    pub relative_path: String,
+    /// 原始文件/文件夹的匹配路径（相对于 root_dir 的相对路径，或在非 root 下的完整路径）
+    pub bookpath: String,
+    /// 缩略图在 thumbnail_root 下的相对路径（例如 "2025/11/11/<hash>.webp"）
+    pub relative_thumb_path: String,
     /// 缩略图文件名（哈希值.webp）
     pub thumbnail_name: String,
+    /// 缩略图哈希（不带扩展名），用于快速查找或作为备用标识
+    pub hash: String,
     /// 缩略图生成时间
     pub created_at: DateTime<Utc>,
     /// 原文件最后修改时间
@@ -63,8 +67,10 @@ impl ThumbnailDatabase {
     fn init_tables(&self) -> SqliteResult<()> {
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS thumbnails (
-                relative_path TEXT PRIMARY KEY,
+                bookpath TEXT PRIMARY KEY,
+                relative_thumb_path TEXT NOT NULL,
                 thumbnail_name TEXT NOT NULL,
+                hash TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 source_modified INTEGER NOT NULL,
                 is_folder BOOLEAN NOT NULL DEFAULT 0,
@@ -119,11 +125,13 @@ impl ThumbnailDatabase {
     pub fn upsert_thumbnail(&self, record: ThumbnailRecord) -> SqliteResult<()> {
         self.conn.execute(
             "INSERT OR REPLACE INTO thumbnails 
-                (relative_path, thumbnail_name, created_at, source_modified, is_folder, width, height, file_size)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                (bookpath, relative_thumb_path, thumbnail_name, hash, created_at, source_modified, is_folder, width, height, file_size)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
-                record.relative_path,
+                record.bookpath,
+                record.relative_thumb_path,
                 record.thumbnail_name,
+                record.hash,
                 record.created_at.to_rfc3339(),
                 record.source_modified,
                 record.is_folder,
@@ -139,22 +147,24 @@ impl ThumbnailDatabase {
     /// 获取所有缩略图记录
     pub fn get_all_thumbnails(&self) -> SqliteResult<Vec<ThumbnailRecord>> {
         let mut stmt = self.conn.prepare(
-            "SELECT relative_path, thumbnail_name, created_at, source_modified, is_folder, width, height, file_size
+            "SELECT bookpath, relative_thumb_path, thumbnail_name, hash, created_at, source_modified, is_folder, width, height, file_size
              FROM thumbnails ORDER BY created_at DESC"
         )?;
         
         let records = stmt.query_map([], |row| {
             Ok(ThumbnailRecord {
-                relative_path: row.get(0)?,
-                thumbnail_name: row.get(1)?,
-                created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(2)?)
+                bookpath: row.get(0)?,
+                relative_thumb_path: row.get(1)?,
+                thumbnail_name: row.get(2)?,
+                hash: row.get(3)?,
+                created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?)
                     .unwrap()
                     .with_timezone(&Utc),
-                source_modified: row.get(3)?,
-                is_folder: row.get(4)?,
-                width: row.get(5)?,
-                height: row.get(6)?,
-                file_size: row.get(7)?,
+                source_modified: row.get(5)?,
+                is_folder: row.get(6)?,
+                width: row.get(7)?,
+                height: row.get(8)?,
+                file_size: row.get(9)?,
             })
         })?;
         
@@ -167,24 +177,27 @@ impl ThumbnailDatabase {
     }
 
     /// 根据相对路径查找缩略图记录
-    pub fn find_by_relative_path(&self, relative_path: &str) -> SqliteResult<Option<ThumbnailRecord>> {
+    /// 根据 bookpath 查找缩略图记录
+    pub fn find_by_bookpath(&self, bookpath: &str) -> SqliteResult<Option<ThumbnailRecord>> {
         let mut stmt = self.conn.prepare(
-            "SELECT relative_path, thumbnail_name, created_at, source_modified, is_folder, width, height, file_size
-             FROM thumbnails WHERE relative_path = ?1"
+            "SELECT bookpath, relative_thumb_path, thumbnail_name, hash, created_at, source_modified, is_folder, width, height, file_size
+             FROM thumbnails WHERE bookpath = ?1"
         )?;
         
-        let record = stmt.query_row([relative_path], |row| {
+        let record = stmt.query_row([bookpath], |row| {
             Ok(ThumbnailRecord {
-                relative_path: row.get(0)?,
-                thumbnail_name: row.get(1)?,
-                created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(2)?)
+                bookpath: row.get(0)?,
+                relative_thumb_path: row.get(1)?,
+                thumbnail_name: row.get(2)?,
+                hash: row.get(3)?,
+                created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?)
                     .unwrap()
                     .with_timezone(&Utc),
-                source_modified: row.get(3)?,
-                is_folder: row.get(4)?,
-                width: row.get(5)?,
-                height: row.get(6)?,
-                file_size: row.get(7)?,
+                source_modified: row.get(5)?,
+                is_folder: row.get(6)?,
+                width: row.get(7)?,
+                height: row.get(8)?,
+                file_size: row.get(9)?,
             })
         });
         
@@ -198,22 +211,24 @@ impl ThumbnailDatabase {
     /// 根据缩略图名称查找记录
     pub fn find_by_thumbnail_name(&self, thumbnail_name: &str) -> SqliteResult<Option<ThumbnailRecord>> {
         let mut stmt = self.conn.prepare(
-            "SELECT relative_path, thumbnail_name, created_at, source_modified, is_folder, width, height, file_size
+            "SELECT bookpath, relative_thumb_path, thumbnail_name, hash, created_at, source_modified, is_folder, width, height, file_size
              FROM thumbnails WHERE thumbnail_name = ?1"
         )?;
         
         let record = stmt.query_row([thumbnail_name], |row| {
             Ok(ThumbnailRecord {
-                relative_path: row.get(0)?,
-                thumbnail_name: row.get(1)?,
-                created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(2)?)
+                bookpath: row.get(0)?,
+                relative_thumb_path: row.get(1)?,
+                thumbnail_name: row.get(2)?,
+                hash: row.get(3)?,
+                created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?)
                     .unwrap()
                     .with_timezone(&Utc),
-                source_modified: row.get(3)?,
-                is_folder: row.get(4)?,
-                width: row.get(5)?,
-                height: row.get(6)?,
-                file_size: row.get(7)?,
+                source_modified: row.get(5)?,
+                is_folder: row.get(6)?,
+                width: row.get(7)?,
+                height: row.get(8)?,
+                file_size: row.get(9)?,
             })
         });
         
@@ -225,26 +240,26 @@ impl ThumbnailDatabase {
     }
     
     /// 检查缩略图是否需要更新
-    pub fn needs_update(&self, relative_path: &str, source_modified: i64) -> SqliteResult<bool> {
-        match self.find_by_relative_path(relative_path)? {
+    pub fn needs_update(&self, bookpath: &str, source_modified: i64) -> SqliteResult<bool> {
+        match self.find_by_bookpath(bookpath)? {
             Some(record) => Ok(record.source_modified != source_modified),
             None => Ok(true),
         }
     }
     
     /// 删除缩略图记录和文件
-    pub fn delete_thumbnail(&self, relative_path: &str) -> SqliteResult<bool> {
-        if let Some(record) = self.find_by_relative_path(relative_path)? {
+    pub fn delete_thumbnail(&self, bookpath: &str) -> SqliteResult<bool> {
+        if let Some(record) = self.find_by_bookpath(bookpath)? {
             // 删除文件
-            let thumbnail_path = self.thumbnail_root.join(&record.thumbnail_name);
+            let thumbnail_path = self.thumbnail_root.join(&record.relative_thumb_path);
             if thumbnail_path.exists() {
                 fs::remove_file(&thumbnail_path).ok();
             }
             
             // 删除数据库记录
             let affected = self.conn.execute(
-                "DELETE FROM thumbnails WHERE relative_path = ?1",
-                [relative_path],
+                "DELETE FROM thumbnails WHERE bookpath = ?1",
+                [bookpath],
             )?;
             
             Ok(affected > 0)
@@ -259,7 +274,7 @@ impl ThumbnailDatabase {
         
         // 查找过期记录
         let mut stmt = self.conn.prepare(
-            "SELECT thumbnail_name FROM thumbnails WHERE created_at < ?1"
+            "SELECT relative_thumb_path FROM thumbnails WHERE created_at < ?1"
         )?;
         
         let expired_names: Vec<String> = stmt.query_map([cutoff_date.to_rfc3339()], |row| {
@@ -267,8 +282,8 @@ impl ThumbnailDatabase {
         })?.collect::<SqliteResult<Vec<_>>>()?;
         
         // 删除文件
-        for name in &expired_names {
-            let thumbnail_path = self.thumbnail_root.join(name);
+        for rel in &expired_names {
+            let thumbnail_path = self.thumbnail_root.join(rel);
             if thumbnail_path.exists() {
                 fs::remove_file(&thumbnail_path).ok();
             }

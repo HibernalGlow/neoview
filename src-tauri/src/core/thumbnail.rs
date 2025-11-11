@@ -54,6 +54,11 @@ impl ThumbnailManager {
         }
     }
 
+    /// 返回 thumbnail root 的路径（供其他模块使用，例如 archive 的缓存根）
+    pub fn thumbnail_root_path(&self) -> PathBuf {
+        self.db.thumbnail_root.clone()
+    }
+
     /// 规范化路径字符串，统一使用正斜杠
     fn normalize_path_string(path: &Path) -> String {
         path.to_string_lossy().replace('\\', "/")
@@ -615,7 +620,7 @@ impl ThumbnailManager {
     fn get_first_image_from_archive(&self, archive_path: &Path) -> Result<PathBuf, String> {
         use crate::core::archive::ArchiveManager;
         
-        let archive_manager = ArchiveManager::new();
+    let archive_manager = ArchiveManager::new_with_cache_root(self.db.thumbnail_root.clone());
         let entries = match archive_manager.list_zip_contents(archive_path) {
             Ok(e) => e,
             Err(err) => {
@@ -720,7 +725,7 @@ impl ThumbnailManager {
         let archive_path = Path::new(parts[0]);
         let image_path_in_archive = parts[1].trim_start_matches(['/', '\\']);
         
-        let archive_manager = ArchiveManager::new();
+    let archive_manager = ArchiveManager::new_with_cache_root(self.db.thumbnail_root.clone());
         let image_data = archive_manager.extract_file(archive_path, image_path_in_archive)
             .map_err(|e| format!("从压缩包提取图片失败: {}", e))?;
         

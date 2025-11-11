@@ -6,6 +6,10 @@ use zip::ZipArchive;
 use serde::{Deserialize, Serialize};
 use base64::{Engine as _, engine::general_purpose};
 use image::GenericImageView;
+use std::path::PathBuf;
+use std::fs;
+use std::process::Command;
+use md5;
 
 /// 压缩包内的文件项
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,6 +27,8 @@ pub struct ArchiveManager {
     image_extensions: Vec<String>,
     /// 图片缓存
     cache: Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
+    /// 临时缓存根目录（用于将 archive 内部提取到磁盘）
+    cache_root: std::path::PathBuf,
 }
 
 impl ArchiveManager {
@@ -42,7 +48,174 @@ impl ArchiveManager {
                 "tif".to_string(),
             ],
             cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+            cache_root: std::env::temp_dir(),
         }
+    }
+
+    /// 创建带指定缓存根目录的 ArchiveManager（用于把提取文件放到 thumbnail_root 的子目录）
+    pub fn new_with_cache_root(cache_root: std::path::PathBuf) -> Self {
+        Self {
+            image_extensions: vec![
+                "jpg".to_string(),
+                "jpeg".to_string(),
+                "png".to_string(),
+                "gif".to_string(),
+                "bmp".to_string(),
+                "webp".to_string(),
+                "avif".to_string(),
+                "jxl".to_string(),
+                "tiff".to_string(),
+                "tif".to_string(),
+            ],
+            cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+            cache_root,
+        }
+    }
+
+    /// 获取临时缓存目录（用于提取 archive 内文件）
+    fn get_temp_cache_dir(&self) -> Result<PathBuf, String> {
+        let mut dir = self.cache_root.clone();
+        dir.push("neoview_archive_cache");
+        fs::create_dir_all(&dir).map_err(|e| format!("创建临时缓存目录失败: {}", e))?;
+        Ok(dir)
+    }
+
+    /// 计算 md5 key（基于 archive 绝对路径 + 内部路径）
+    fn md5_key(archive_path: &Path, inner: &str) -> String {
+        let s = format!("{}::{}", archive_path.display(), inner);
+        format!("{:x}", md5::compute(s.as_bytes()))
+    }
+
+    /// 从 archive 中提取一段图片到临时目录，按 md5 命名并返回本地路径（不带 file://）
+    /// start/count 为索引，若 count 超过剩余则尽量提取全部
+    pub fn extract_images_to_temp(&self, archive_path: &Path, start: usize, count: usize) -> Result<Vec<String>, String> {
+        // 列表所有图片
+        let entries = self.list_zip_contents(archive_path)?;
+        let images: Vec<String> = entries.into_iter().filter(|e| e.is_image).map(|e| e.path).collect();
+
+        if images.is_empty() {
+            return Err("压缩包中没有图片".to_string());
+        }
+
+        let total = images.len();
+        let mut end = start + count;
+        if count == 0 || end > total { end = total; }
+        if start >= total { return Ok(Vec::new()); }
+
+        let cache_dir = self.get_temp_cache_dir()?;
+        let mut results = Vec::new();
+
+        for idx in start..end {
+            let inner = &images[idx];
+            let key = Self::md5_key(archive_path, inner);
+            // 保存原始或转换后的文件到 temp
+            let ext = Path::new(inner).extension().and_then(|e| e.to_str()).map(|s| s.to_lowercase()).unwrap_or_else(|| "bin".to_string());
+            let mut out_path = cache_dir.join(format!("{}.{}", key, ext));
+
+            // 如果文件已存在，直接跳过写入
+            if !out_path.exists() {
+                let data = match self.extract_file_from_zip(archive_path, inner) {
+                    Ok(d) => d,
+                    Err(e) => { println!("⚠️ 提取 {} 失败: {}", inner, e); continue; }
+                };
+
+                if ext == "jxl" {
+                    // 解码并保存为 png
+                    match self.load_jxl_from_zip(&data) {
+                        Ok(data_url) => {
+                            // data_url is data:image/png;base64,...
+                            if let Some(pos) = data_url.find(",") {
+                                let b64 = &data_url[pos+1..];
+                                if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64) {
+                                    out_path = cache_dir.join(format!("{}.png", key));
+                                    if let Err(e) = fs::write(&out_path, &bytes) {
+                                        println!("⚠️ 写入 JXL 转 PNG 失败: {}", e);
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => { println!("⚠️ JXL 解码失败 {}: {}", inner, e); continue; }
+                    }
+                } else {
+                    // 普通情况：直接写入原始字节（保持原格式）
+                    if let Err(e) = fs::write(&out_path, &data) {
+                        println!("⚠️ 写入提取文件失败: {} -> {}", out_path.display(), e);
+                        continue;
+                    }
+                }
+            }
+
+            results.push(out_path.to_string_lossy().to_string());
+        }
+
+        Ok(results)
+    }
+
+    /// 为已提取的本地图片生成缩略图（WebP），命名为 <md5>_thumb.webp，返回缩略图本地路径
+    pub fn generate_thumb_for_extracted(&self, local_path: &Path, max_size: u32) -> Result<String, String> {
+        // 读取文件并尝试加载
+        let data = fs::read(local_path).map_err(|e| format!("读取本地文件失败: {}", e))?;
+
+        // 先尝试内存加载
+        let img = match image::load_from_memory(&data) {
+            Ok(i) => i,
+            Err(_) => {
+                // 如果是 avif 或其他 image crate 不支持的格式，尝试使用 ffmpeg 转换为 png 再加载
+                if let Some(ext) = local_path.extension().and_then(|e| e.to_str()) {
+                    if ext.to_lowercase() == "avif" {
+                        // 使用 ffmpeg 将文件解码为 png via stdout
+                        let output = Command::new("ffmpeg")
+                            .arg("-hide_banner")
+                            .arg("-loglevel")
+                            .arg("error")
+                            .arg("-i")
+                            .arg(local_path.as_os_str())
+                            .arg("-f")
+                            .arg("image2pipe")
+                            .arg("-vcodec")
+                            .arg("png")
+                            .arg("pipe:1")
+                            .output()
+                            .map_err(|e| format!("启动 FFmpeg 失败: {}", e))?;
+
+                        if !output.status.success() {
+                            let stderr = String::from_utf8_lossy(&output.stderr);
+                            return Err(format!("FFmpeg 转换失败: {}", stderr));
+                        }
+
+                        image::load_from_memory(&output.stdout).map_err(|e| format!("从 FFmpeg 输出加载图片失败: {}", e))?
+                    } else {
+                        return Err("图片解码失败且无法使用 FFmpeg 回退".to_string());
+                    }
+                } else {
+                    return Err("图片无扩展名且无法解码".to_string());
+                }
+            }
+        };
+
+        // 生成缩略图
+        let thumbnail = {
+            let (w, h) = img.dimensions();
+            if w <= max_size && h <= max_size { img.clone() } else { img.resize(max_size, max_size, image::imageops::FilterType::Lanczos3) }
+        };
+
+        // 输出 webp
+        let mut buf = Vec::new();
+        let mut cursor = Cursor::new(&mut buf);
+        thumbnail.write_to(&mut cursor, image::ImageFormat::WebP).map_err(|e| format!("编码 WebP 失败: {}", e))?;
+
+        // 缩略图文件名
+        let key = {
+            // derive key from file contents md5
+            format!("{:x}", md5::compute(&data))
+        };
+
+        let mut out_thumb = self.get_temp_cache_dir()?;
+        out_thumb.push(format!("{}_thumb.webp", key));
+        fs::write(&out_thumb, &buf).map_err(|e| format!("写入缩略图失败: {}", e))?;
+
+        Ok(out_thumb.to_string_lossy().to_string())
     }
 
     /// 检查是否为图片文件

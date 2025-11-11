@@ -5,7 +5,8 @@
 	 */
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { loadImage } from '$lib/api/fs';
-	import { loadImageFromArchive } from '$lib/api/filesystem';
+	import { loadImageFromArchive, extractArchiveImages, generateThumbForExtracted } from '$lib/api/filesystem';
+	import { toAssetUrl } from '$lib/utils/assetProxy';
 	import { bottomThumbnailBarPinned, bottomThumbnailBarHeight } from '$lib/stores';
 	import { Button } from '$lib/components/ui/button';
 	import * as Progress from '$lib/components/ui/progress';
@@ -181,13 +182,22 @@
 			let fullImageData: string;
 
 			if (currentBook.type === 'archive') {
-				fullImageData = await loadImageFromArchive(currentBook.path, page.path);
+				// 提取单张图片到临时目录
+				const paths = await extractArchiveImages(currentBook.path, pageIndex, 1);
+				if (paths && paths.length > 0) {
+					const local = paths[0];
+					// 为已提取文件生成缩略图（返回本地路径）
+					const thumbPath = await generateThumbForExtracted(local, $bottomThumbnailBarHeight - 40);
+					const url = toAssetUrl(thumbPath) || thumbPath;
+					thumbnails = { ...thumbnails, [pageIndex]: { url, width: 0, height: 0 } };
+				} else {
+					console.error('无法从压缩包提取图片用于缩略图', pageIndex);
+				}
 			} else {
-				fullImageData = await loadImage(page.path);
+				const fullImageData = await loadImage(page.path);
+				const thumbnail = await generateThumbnailFromBase64(fullImageData);
+				thumbnails = { ...thumbnails, [pageIndex]: thumbnail };
 			}
-
-			const thumbnail = await generateThumbnailFromBase64(fullImageData);
-			thumbnails = { ...thumbnails, [pageIndex]: thumbnail };
 		} catch (err) {
 			console.error(`Failed to load thumbnail for page ${pageIndex}:`, err);
 		}

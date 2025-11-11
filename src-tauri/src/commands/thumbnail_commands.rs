@@ -603,3 +603,78 @@ pub async fn debug_avif(
 
     Ok(report.join("\n"))
 }
+
+/// 从压缩包中提取图片到临时目录（返回本地绝对路径，不带 file:// 前缀）
+#[command]
+pub async fn extract_archive_images(
+    archive_path: String,
+    start: Option<usize>,
+    count: Option<usize>,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<Vec<String>, String> {
+    use std::path::PathBuf;
+    use crate::core::archive::ArchiveManager;
+
+    println!("📦 extract_archive_images: {} start={:?} count={:?}", archive_path, start, count);
+
+    // 等待管理器初始化（最多 5 秒）
+    if let Err(e) = ensure_manager_ready(&state, 5000).await {
+        println!("❌ {}", e);
+        return Err(e);
+    }
+
+    // 获取 thumbnail_root 用于作为 ArchiveManager 的 cache 根
+    let thumbnail_root = {
+        let manager_guard = state.manager.lock().map_err(|_| "无法获取缩略图管理器锁".to_string())?;
+        if let Some(ref manager) = *manager_guard {
+            manager.thumbnail_root_path()
+        } else {
+            return Err("缩略图管理器未初始化".to_string());
+        }
+    };
+
+    let archive_manager = ArchiveManager::new_with_cache_root(thumbnail_root);
+    let start = start.unwrap_or(0);
+    let count = count.unwrap_or(0);
+
+    let paths = archive_manager.extract_images_to_temp(&PathBuf::from(archive_path), start, count)
+        .map_err(|e| format!("提取失败: {}", e))?;
+
+    Ok(paths)
+}
+
+/// 为已提取的本地图片生成缩略图（返回缩略图本地路径，不带 file:// 前缀）
+#[command]
+pub async fn generate_thumb_for_extracted(
+    local_path: String,
+    max_size: Option<u32>,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<String, String> {
+    use std::path::PathBuf;
+    use crate::core::archive::ArchiveManager;
+
+    println!("🔧 generate_thumb_for_extracted: {} size={:?}", local_path, max_size);
+
+    // 等待管理器初始化（最多 5 秒）
+    if let Err(e) = ensure_manager_ready(&state, 5000).await {
+        println!("❌ {}", e);
+        return Err(e);
+    }
+
+    let thumbnail_root = {
+        let manager_guard = state.manager.lock().map_err(|_| "无法获取缩略图管理器锁".to_string())?;
+        if let Some(ref manager) = *manager_guard {
+            manager.thumbnail_root_path()
+        } else {
+            return Err("缩略图管理器未初始化".to_string());
+        }
+    };
+
+    let archive_manager = ArchiveManager::new_with_cache_root(thumbnail_root);
+    let max_size = max_size.unwrap_or(256);
+
+    let thumb = archive_manager.generate_thumb_for_extracted(&PathBuf::from(local_path), max_size)
+        .map_err(|e| format!("生成缩略图失败: {}", e))?;
+
+    Ok(thumb)
+}

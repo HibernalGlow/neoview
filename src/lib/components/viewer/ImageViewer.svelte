@@ -11,7 +11,8 @@
 		findCommandByKeys
 	} from '$lib/stores/keyboard.svelte';
 	import { loadImage } from '$lib/api/fs';
-	import { loadImageFromArchive } from '$lib/api/filesystem';
+	import { loadImageFromArchive, extractArchiveImages } from '$lib/api/filesystem';
+	import { toAssetUrl } from '$lib/utils/assetProxy';
 	import { FileSystemAPI } from '$lib/api';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
@@ -133,15 +134,25 @@
 
 		try {
 			// 加载当前页
-			let data: string;
+			let dataUrl: string | null = null;
 			if (currentBook.type === 'archive') {
-				console.log('Loading image from archive:', currentPage.path);
-				data = await loadImageFromArchive(currentBook.path, currentPage.path);
+				console.log('Extracting image from archive (file-based):', currentPage.path);
+				// 使用当前页索引作为 archive 内的 start 索引，提取 single 图像
+				const idx = bookStore.currentPageIndex || 0;
+				const paths = await extractArchiveImages(currentBook.path, idx, 1);
+				if (paths && paths.length > 0) {
+					// paths 返回不带 file:// 的本地绝对路径
+					const local = paths[0];
+					dataUrl = toAssetUrl(local);
+				} else {
+					throw new Error('无法从压缩包提取图片');
+				}
 			} else {
 				console.log('Loading image from file system:', currentPage.path);
-				data = await loadImage(currentPage.path);
+				const local = await loadImage(currentPage.path);
+				dataUrl = toAssetUrl(local) || local;
 			}
-			imageData = data;
+			imageData = dataUrl;
 
 			// 双页模式：加载下一页
 			if ($viewMode === 'double' && bookStore.canNextPage) {
@@ -149,13 +160,18 @@
 				const nextPageInfo = currentBook.pages[nextPage];
 				
 				if (nextPageInfo) {
-					let data2: string;
+					let data2Url: string | null = null;
 					if (currentBook.type === 'archive') {
-						data2 = await loadImageFromArchive(currentBook.path, nextPageInfo.path);
+						const nidx = bookStore.currentPageIndex + 1;
+						const paths2 = await extractArchiveImages(currentBook.path, nidx, 1);
+						if (paths2 && paths2.length > 0) {
+							data2Url = toAssetUrl(paths2[0]);
+						}
 					} else {
-						data2 = await loadImage(nextPageInfo.path);
+						const local2 = await loadImage(nextPageInfo.path);
+						data2Url = toAssetUrl(local2) || local2;
 					}
-					imageData2 = data2;
+					imageData2 = data2Url;
 				}
 			}
 		} catch (err) {

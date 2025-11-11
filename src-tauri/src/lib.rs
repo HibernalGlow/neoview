@@ -128,6 +128,9 @@ pub fn run() {
             commands::get_thumbnail_stats,
             commands::clear_all_thumbnails,
             commands::preload_thumbnails,
+            // Archive/temp helpers
+            commands::extract_archive_images,
+            commands::generate_thumb_for_extracted,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

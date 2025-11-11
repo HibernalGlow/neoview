@@ -200,6 +200,20 @@ export async function getImagesFromArchive(archivePath: string): Promise<string[
 }
 
 /**
+ * 从压缩包中提取图片到临时目录（返回本地绝对路径数组，不带 file://）
+ */
+export async function extractArchiveImages(archivePath: string, start: number = 0, count: number = 1): Promise<string[]> {
+  return await invoke<string[]>('extract_archive_images', { archivePath: archivePath, start, count });
+}
+
+/**
+ * 为已提取的本地图片生成缩略图（返回缩略图本地路径，不带 file://）
+ */
+export async function generateThumbForExtracted(localPath: string, maxSize: number = 256): Promise<string> {
+  return await invoke<string>('generate_thumb_for_extracted', { localPath: localPath, maxSize });
+}
+
+/**
  * 生成压缩包内图片的缩略图
  */
 export async function generateArchiveThumbnail(

@@ -96,13 +96,16 @@ async function processQueue() {
       try {
         let thumbnail: string | null = null;
         if (job.isArchive) {
-          // 对于压缩包：尝试读取压缩包内第一张图片并生成缩略图
+          // 对于压缩包：提取 archive 内对应序号的图片并生成本地缩略图文件，然后使用 toAssetUrl 转换为前端可用 URL
           try {
-            const entries = await FileSystemAPI.listArchiveContents(path);
-            const firstImage = (entries || []).find((e: any) => e && (e.is_image === true || e.isImage === true));
-            if (firstImage) {
-              const imageData = await FileSystemAPI.loadImageFromArchive(path, firstImage.path);
-              thumbnail = await FileSystemAPI.generateThumbnailFromData(imageData);
+            // 这里假设 path 是 archive 的绝对路径（与 enqueueArchiveThumbnail 时保持一致），
+            // 使用 toRelativeKey 或其它机制来传递页索引并触发提取。简化实现：
+            const idx = 0; // 默认提取首图；更高级的策略可传递索引到队列
+            const paths = await FileSystemAPI.extractArchiveImages(path, idx, 1);
+            if (paths && paths.length > 0) {
+              const local = paths[0];
+              const thumbPath = await FileSystemAPI.generateThumbForExtracted(local);
+              thumbnail = toAssetUrl(thumbPath) || thumbPath;
             }
           } catch (e) {
             console.debug('thumbnailManager: archive thumbnail generation failed for', path, e);

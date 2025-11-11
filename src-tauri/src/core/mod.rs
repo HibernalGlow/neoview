@@ -9,6 +9,8 @@ pub mod thumbnail;
 pub mod thumbnail_queue;
 pub mod thumbnail_db;
 pub mod archive;
+pub mod archive_cache;
+pub mod archive_viewer;
 pub mod file_indexer;
 
 pub use book_manager::BookManager;

@@ -8,13 +8,14 @@ mod commands;
 mod core;
 mod models;
 
-use commands::{default, book_commands, fs_commands, image_commands, thumbnail_commands};
+use commands::{default, fs_commands};
 use tauri::Manager;
 use std::sync::Mutex;
 use std::path::PathBuf;
 use core::{BookManager, ImageLoader, FsManager, ThumbnailManager, ArchiveManager};
 use commands::fs_commands::FsState;
 use commands::thumbnail_commands::ThumbnailManagerState;
+use core::archive_viewer::ArchiveViewerState;
 
 #[allow(clippy::missing_panics_doc)]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -64,6 +65,7 @@ pub fn run() {
         .manage(Mutex::new(BookManager::new()))
         .manage(Mutex::new(ImageLoader::default()))
         .manage(ThumbnailManagerState::default())
+        .manage(ArchiveViewerState::default())
         .invoke_handler(tauri::generate_handler![
             // Book commands
             commands::open_book,
@@ -128,6 +130,19 @@ pub fn run() {
             commands::get_thumbnail_stats,
             commands::clear_all_thumbnails,
             commands::preload_thumbnails,
+            // Archive viewer commands
+            commands::init_archive_viewer,
+            commands::get_archive_cache_stats,
+            commands::clear_archive_cache,
+            commands::set_archive_cache_max_entries,
+            core::archive_viewer::archive_viewer_open,
+            core::archive_viewer::archive_viewer_goto,
+            core::archive_viewer::archive_viewer_get_current,
+            core::archive_viewer::archive_viewer_get_image,
+            core::archive_viewer::archive_viewer_get_thumbnail,
+            core::archive_viewer::archive_viewer_get_all_thumbnails,
+            core::archive_viewer::archive_viewer_super_resolve,
+            core::archive_viewer::archive_viewer_get_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

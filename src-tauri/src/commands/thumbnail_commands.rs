@@ -468,3 +468,55 @@ pub async fn preload_thumbnails(
         Err(format!("部分缩略图生成失败: {}", failed_paths.join("; ")))
     }
 }
+
+/// 调试 AVIF 支持：尝试使用 image crate 的 AVIF 加载、通用加载，并返回详细诊断信息
+#[command]
+pub async fn debug_avif(
+    file_path: String,
+) -> Result<String, String> {
+    use std::fs;
+    use image::ImageFormat;
+
+    let mut report = Vec::new();
+
+    report.push(format!("Debug AVIF for path: {}", file_path));
+
+    // 读取文件
+    let data = match fs::read(&file_path) {
+        Ok(d) => d,
+        Err(e) => return Err(format!("无法读取文件: {}", e)),
+    };
+
+    // 1) 尝试使用明确的 AVIF 格式加载
+    match image::load_from_memory_with_format(&data, ImageFormat::Avif) {
+        Ok(_) => report.push("image::load_from_memory_with_format(ImageFormat::Avif) => OK".to_string()),
+        Err(e) => report.push(format!("image::load_from_memory_with_format(ImageFormat::Avif) => ERR: {}", e)),
+    }
+
+    // 2) 尝试通用加载
+    match image::load_from_memory(&data) {
+        Ok(_) => report.push("image::load_from_memory => OK".to_string()),
+        Err(e) => report.push(format!("image::load_from_memory => ERR: {}", e)),
+    }
+
+    // 3) 检查当前工作目录下的 Cargo.toml（用于确认 image crate features）
+    match std::env::current_dir() {
+        Ok(dir) => {
+            let cargo_toml = dir.join("Cargo.toml");
+            if cargo_toml.exists() {
+                if let Ok(t) = fs::read_to_string(cargo_toml) {
+                    // 只取前 2000 字符避免超大输出
+                    let snippet: String = t.chars().take(2000).collect();
+                    report.push(format!("Cargo.toml (snippet):\n{}", snippet));
+                } else {
+                    report.push("无法读取 Cargo.toml 内容".to_string());
+                }
+            } else {
+                report.push("当前目录下未找到 Cargo.toml (可能运行在已打包环境)".to_string());
+            }
+        }
+        Err(e) => report.push(format!("无法获取当前工作目录: {}", e)),
+    }
+
+    Ok(report.join("\n"))
+}

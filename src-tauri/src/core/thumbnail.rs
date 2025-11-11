@@ -286,8 +286,8 @@ impl ThumbnailManager {
                             },
                             Err(e2) => {
                                 println!("❌ 通用加载也失败: {}", e2);
-                                // 最后尝试使用系统命令转换
-                                return self.convert_avif_using_system(&image_path, image_data);
+                                // 不再使用系统转换作为回退，改为返回错误，让调用方决定策略
+                                return Err(format!("AVIF 解码失败: {} ; {}", e, e2));
                             }
                         }
                     }
@@ -379,63 +379,7 @@ impl ThumbnailManager {
         img.resize(new_width, new_height, image::imageops::FilterType::Lanczos3)
     }
 
-    /// 使用系统工具转换 AVIF
-    fn convert_avif_using_system(&self, avif_path: &Path, _image_data: Vec<u8>) -> Result<DynamicImage, String> {
-        use std::process::Command;
-        
-        println!("🔄 尝试使用系统工具转换 AVIF: {}", avif_path.display());
-        
-        // 创建临时 PNG 文件
-        let temp_png_path = avif_path.with_extension("png");
-        
-        // 尝试使用 magick (ImageMagick) 转换
-        if let Ok(output) = Command::new("magick")
-            .arg(avif_path)
-            .arg(&temp_png_path)
-            .output()
-        {
-            if output.status.success() {
-                println!("✅ Magick 转换成功");
-                // 加载转换后的 PNG
-                let result = image::open(&temp_png_path)
-                    .map_err(|e| format!("加载转换后的 PNG 失败: {}", e));
-                
-                // 清理临时文件
-                let _ = fs::remove_file(&temp_png_path);
-                
-                return result;
-            } else {
-                println!("⚠️ Magick 转换失败: {}", String::from_utf8_lossy(&output.stderr));
-            }
-        }
-        
-        // 尝试使用 ffmpeg 转换
-        if let Ok(output) = Command::new("ffmpeg")
-            .arg("-i")
-            .arg(avif_path)
-            .arg(&temp_png_path)
-            .output()
-        {
-            if output.status.success() {
-                println!("✅ FFmpeg 转换成功");
-                // 加载转换后的 PNG
-                let result = image::open(&temp_png_path)
-                    .map_err(|e| format!("加载转换后的 PNG 失败: {}", e));
-                
-                // 清理临时文件
-                let _ = fs::remove_file(&temp_png_path);
-                
-                return result;
-            } else {
-                println!("⚠️ FFmpeg 转换失败: {}", String::from_utf8_lossy(&output.stderr));
-            }
-        }
-        
-        // 清理可能存在的临时文件
-        let _ = fs::remove_file(&temp_png_path);
-        
-        Err(format!("无法转换 AVIF 文件，请安装 ImageMagick 或 FFmpeg"))
-    }
+    // 已移除对系统工具（ImageMagick/FFmpeg）的 AVIF 回退转换。若 native 解码失败，则返回错误。
 
     /// 编码为 WebP 格式
     fn encode_webp(&self, img: &DynamicImage) -> Result<Vec<u8>, String> {

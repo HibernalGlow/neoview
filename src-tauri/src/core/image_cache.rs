@@ -40,23 +40,25 @@ impl ImageCache {
 
     /// 获取缓存的图片
     pub fn get(&self, path: &str) -> Option<String> {
+        let key = path.replace('\\', "/");
         let mut cache = self.cache.lock().unwrap();
-        
-        if let Some(entry) = cache.get_mut(path) {
+
+        if let Some(entry) = cache.get_mut(&key) {
             // 更新访问时间
             entry.last_access = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_secs();
-            
+
             return Some(entry.data.clone());
         }
-        
+
         None
     }
 
     /// 添加图片到缓存
     pub fn set(&self, path: String, data: String) {
+        let key = path.replace('\\', "/");
         let size = data.len();
         let is_file_url = data.starts_with("file://");
         let entry = CacheEntry {
@@ -90,8 +92,8 @@ impl ImageCache {
             }
         }
 
-        // 添加新条目
-        cache.insert(path, entry);
+        // 添加新条目（使用规范化 key）
+        cache.insert(key, entry);
         *current_size += size;
     }
 
@@ -114,18 +116,22 @@ impl ImageCache {
 
     /// 移除特定路径的缓存
     pub fn remove(&self, path: &str) {
+        let key = path.replace('\\', "/");
         let mut cache = self.cache.lock().unwrap();
         let mut current_size = self.current_size.lock().unwrap();
-        
-        if let Some(removed) = cache.remove(path) {
+
+        if let Some(removed) = cache.remove(&key) {
+            println!("🧹 ImageCache::remove - removed key='{}' size={} bytes", key, removed.size);
             *current_size -= removed.size;
         }
     }
 
     /// 检查文件URL是否仍然有效
     pub fn validate_file_url(&self, path: &str) -> bool {
+        let key = path.replace('\\', "/");
+
         if let Ok(cache) = self.cache.lock() {
-            if let Some(entry) = cache.get(path) {
+            if let Some(entry) = cache.get(&key) {
                 if entry.is_file_url {
                     // 检查文件是否存在
                     if let Ok(url) = url::Url::parse(&entry.data) {
@@ -135,18 +141,21 @@ impl ImageCache {
                     }
                     // 文件不存在，移除缓存
                     drop(cache);
-                    self.remove(path);
+                    println!("🧹 ImageCache::validate_file_url - file missing for key='{}', removing entry", key);
+                    self.remove(&key);
                     return false;
                 }
             }
         }
+
         true
     }
 
     /// 获取缓存项的详细信息
     pub fn get_entry_info(&self, path: &str) -> Option<CacheEntryInfo> {
+        let key = path.replace('\\', "/");
         if let Ok(cache) = self.cache.lock() {
-            cache.get(path).map(|entry| CacheEntryInfo {
+            cache.get(&key).map(|entry| CacheEntryInfo {
                 size: entry.size,
                 last_access: entry.last_access,
                 is_file_url: entry.is_file_url,

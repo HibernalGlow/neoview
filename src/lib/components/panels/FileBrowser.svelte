@@ -14,6 +14,7 @@
   import * as Input from '$lib/components/ui/input';
   import * as ContextMenu from '$lib/components/ui/context-menu';
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
+  import { convertFileSrc } from '@tauri-apps/api/core';
 
   // 使用全局状态
   let currentPath = $state('');
@@ -401,7 +402,12 @@
   async function loadThumbnail(path: string) {
     try {
       const thumbnail = await FileSystemAPI.generateFileThumbnail(path);
-      fileBrowserStore.addThumbnail(path, thumbnail);
+      console.log('📸 缩略图生成成功:', thumbnail);
+      
+      // 使用 convertFileSrc 转换本地文件路径
+      const thumbnailUrl = convertFileSrc(thumbnail);
+      console.log('🔄 转换后的缩略图URL:', thumbnailUrl);
+      fileBrowserStore.addThumbnail(path, thumbnailUrl);
     } catch (err) {
       // 不支持的图片格式或其他错误，静默失败
       console.debug('Failed to load thumbnail:', err);
@@ -414,7 +420,12 @@
   async function loadFolderThumbnail(path: string) {
     try {
       const thumbnail = await FileSystemAPI.generateFolderThumbnail(path);
-      fileBrowserStore.addThumbnail(path, thumbnail);
+      console.log('📸 文件夹缩略图生成成功:', thumbnail);
+      
+      // 使用 convertFileSrc 转换本地文件路径
+      const thumbnailUrl = convertFileSrc(thumbnail);
+      console.log('🔄 转换后的缩略图URL:', thumbnailUrl);
+      fileBrowserStore.addThumbnail(path, thumbnailUrl);
     } catch (err) {
       // 文件夹缩略图生成失败，静默失败
       console.debug('Failed to load folder thumbnail:', err);

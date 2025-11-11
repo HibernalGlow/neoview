@@ -49,7 +49,7 @@ export async function getImagesInDirectory(
 export async function generateFileThumbnail(path: string): Promise<string> {
   console.log('🖼️ FileSystemAPI: 生成文件缩略图:', path);
   try {
-    const result = await invoke<string>('generate_file_thumbnail_new', { path });
+    const result = await invoke<string>('generate_file_thumbnail_new', { filePath: path });
     console.log('✅ FileSystemAPI: 文件缩略图生成成功:', result);
     return result;
   } catch (error) {
@@ -64,11 +64,26 @@ export async function generateFileThumbnail(path: string): Promise<string> {
 export async function generateFolderThumbnail(path: string): Promise<string> {
   console.log('📁 FileSystemAPI: 生成文件夹缩略图:', path);
   try {
-    const result = await invoke<string>('generate_folder_thumbnail', { path });
+    const result = await invoke<string>('generate_folder_thumbnail', { folderPath: path });
     console.log('✅ FileSystemAPI: 文件夹缩略图生成成功:', result);
     return result;
   } catch (error) {
     console.error('❌ FileSystemAPI: 文件夹缩略图生成失败:', path, error);
+    throw error;
+  }
+}
+
+/**
+ * 获取缩略图数据（返回 base64 data URL）
+ */
+export async function getThumbnailData(path: string): Promise<string> {
+  console.log('🖼️ FileSystemAPI: 获取缩略图数据:', path);
+  try {
+    const result = await invoke<string>('get_thumbnail_data', { filePath: path });
+    console.log('✅ FileSystemAPI: 缩略图数据获取成功');
+    return result;
+  } catch (error) {
+    console.error('❌ FileSystemAPI: 缩略图数据获取失败:', path, error);
     throw error;
   }
 }

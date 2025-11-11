@@ -1,13 +1,17 @@
 //! NeoView - Main Library
 //! Tauri 应用程序主入口
 
-mod commands;
-mod models;
-mod core;
+// Prevents additional console window on Windows in release, DO NOT REMOVE!!
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod commands;
+mod core;
+mod models;
+
+use commands::{default, book_commands, fs_commands, image_commands, thumbnail_commands};
+use tauri::Manager;
 use std::sync::Mutex;
 use std::path::PathBuf;
-use tauri::Manager;
 use core::{BookManager, ImageLoader, FsManager, ThumbnailManager, ArchiveManager};
 use commands::fs_commands::FsState;
 use commands::thumbnail_commands::ThumbnailManagerState;
@@ -16,15 +20,9 @@ use commands::thumbnail_commands::ThumbnailManagerState;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
             
             // 初始化文件系统管理器和压缩包管理器
             let fs_manager = FsManager::new();

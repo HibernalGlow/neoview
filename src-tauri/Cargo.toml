@@ -21,12 +21,12 @@ tauri-build = { version = "2.2.0", features = [] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-tauri = { version = "2.6.2", features = [] }
+tauri = { version = "2.6.2", features = ["protocol-asset"] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2.4"
 thiserror = "2.0.12"
 base64 = "0.22"
-image = { version = "0.25", features = ["png", "jpeg", "webp", "avif"] }
+image = { version = "0.25", features = ["png", "jpeg", "webp", "avif", "gif", "bmp", "ico", "tiff", "tga"] }
 jxl-oxide = { version = "0.12.2", features = ["image"] }
 zip = "2.2"
 walkdir = "2.5"

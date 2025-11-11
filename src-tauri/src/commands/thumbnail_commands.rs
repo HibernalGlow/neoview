@@ -257,6 +257,55 @@ pub async fn get_thumbnail_url(
     }
 }
 
+/// 获取缩略图文件内容（返回 base64）
+#[command]
+pub async fn get_thumbnail_data(
+    file_path: String,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<String, String> {
+    use base64::Engine;
+    println!("🔍 获取缩略图数据: {}", file_path);
+    let path = PathBuf::from(file_path);
+    
+    if let Ok(manager_guard) = state.manager.lock() {
+        if let Some(ref manager) = *manager_guard {
+            // 使用 ThumbnailManager 的公共方法获取缩略图信息
+            match manager.get_thumbnail_info(&path) {
+                Ok(Some(info)) => {
+                    println!("✅ 找到缩略图信息: {}x{}", info.width, info.height);
+                    
+                    // 读取缩略图文件
+                    let thumbnail_path = info.url.strip_prefix("file://")
+                        .unwrap_or(&info.url);
+                    
+                    let thumbnail_data = std::fs::read(thumbnail_path)
+                        .map_err(|e| format!("读取缩略图文件失败: {}", e))?;
+                    
+                    // 转换为 base64
+                    let base64_data = base64::engine::general_purpose::STANDARD.encode(&thumbnail_data);
+                    let data_url = format!("data:image/webp;base64,{}", base64_data);
+                    
+                    Ok(data_url)
+                },
+                Ok(None) => {
+                    println!("⚠️ 未找到缩略图信息");
+                    Err("未找到缩略图".to_string())
+                },
+                Err(e) => {
+                    println!("❌ 获取缩略图信息失败: {}", e);
+                    Err(e)
+                }
+            }
+        } else {
+            println!("❌ 缩略图管理器未初始化");
+            Err("缩略图管理器未初始化".to_string())
+        }
+    } else {
+        println!("❌ 无法获取缩略图管理器锁");
+        Err("无法获取缩略图管理器".to_string())
+    }
+}
+
 /// 获取缩略图信息（包括尺寸）
 #[command]
 pub async fn get_thumbnail_info(

@@ -4,6 +4,7 @@
 	 * 缩略图系统测试组件
 	 */
 	import { invoke } from '@tauri-apps/api/core';
+	import { convertFileSrc } from '@tauri-apps/api/core';
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
@@ -26,7 +27,8 @@
 		{ name: '生成文件夹缩略图', command: 'generate_folder_thumbnail' },
 		{ name: '获取缩略图信息', command: 'get_thumbnail_info' },
 		{ name: '获取缩略图统计', command: 'get_thumbnail_stats' },
-		{ name: '清理缩略图', command: 'cleanup_thumbnails' }
+		{ name: '清理缩略图', command: 'cleanup_thumbnails' },
+		{ name: 'convertFileSrc 函数测试', command: 'convertFileSrc_test' }
 	];
 
 	async function runAllTests() {
@@ -70,6 +72,10 @@
 			// 测试清理功能
 			currentTest = '清理缩略图';
 			await testCleanupThumbnails();
+
+			// 测试 convertFileSrc 函数
+			currentTest = 'convertFileSrc 函数测试';
+			await testConvertFileSrc();
 
 		} catch (error) {
 			results.push({
@@ -250,6 +256,98 @@
 		}
 	}
 
+	async function testConvertFileSrc() {
+		const startTime = Date.now();
+
+		try {
+			// 测试用例
+			const testCases = [
+				{
+					name: 'Windows绝对路径',
+					input: 'C:\\Users\\test\\image.jpg',
+					expectedPattern: /^asset:\/\/localhost\/.*$/
+				},
+				{
+					name: '相对路径',
+					input: 'images\\thumbnail.jpg',
+					expectedPattern: /^asset:\/\/localhost\/.*$/
+				},
+				{
+					name: '应用数据目录路径',
+					input: 'C:\\Users\\username\\AppData\\Roaming\\neoview\\thumbnails\\test.webp',
+					expectedPattern: /^asset:\/\/localhost\/.*$/
+				}
+			];
+
+			let passedTests = 0;
+			let failedTests = 0;
+
+			for (const testCase of testCases) {
+				try {
+					console.log(`🧪 测试 convertFileSrc: ${testCase.name}`);
+					console.log(`📥 输入: ${testCase.input}`);
+
+					const result = convertFileSrc(testCase.input);
+					console.log(`📤 输出: ${result}`);
+
+					// 验证结果
+					let success = true;
+					let error = '';
+
+					// 检查是否符合预期模式
+					if (testCase.expectedPattern && !testCase.expectedPattern.test(result)) {
+						success = false;
+						error = `输出不符合预期模式`;
+					}
+
+					// 检查是否为有效URL
+					try {
+						new URL(result);
+					} catch (urlError) {
+						success = false;
+						error = `输出不是有效URL: ${urlError}`;
+					}
+
+					// 检查是否以asset://开头
+					if (!result.startsWith('asset://')) {
+						success = false;
+						error = `输出不是asset协议URL`;
+					}
+
+					if (success) {
+						passedTests++;
+						console.log(`✅ ${testCase.name}: 通过`);
+					} else {
+						failedTests++;
+						console.log(`❌ ${testCase.name}: 失败 - ${error}`);
+					}
+
+				} catch (err) {
+					failedTests++;
+					console.log(`❌ ${testCase.name}: 异常 - ${err}`);
+				}
+			}
+
+			const totalTests = testCases.length;
+			const successRate = Math.round((passedTests / totalTests) * 100);
+
+			results.push({
+				name: 'convertFileSrc 函数测试',
+				success: failedTests === 0,
+				message: `convertFileSrc测试完成: ${passedTests}/${totalTests} 通过 (${successRate}%)`,
+				duration: Date.now() - startTime
+			});
+
+		} catch (error) {
+			results.push({
+				name: 'convertFileSrc 函数测试',
+				success: false,
+				message: `convertFileSrc测试失败: ${error}`,
+				duration: Date.now() - startTime
+			});
+		}
+	}
+
 	function clearResults() {
 		results = [];
 	}
@@ -349,6 +447,7 @@
 					<li>• <strong>获取缩略图信息</strong>: 测试获取缩略图的详细信息</li>
 					<li>• <strong>获取缩略图统计</strong>: 测试获取系统统计信息</li>
 					<li>• <strong>清理缩略图</strong>: 测试清理过期缩略图的功能</li>
+					<li>• <strong>convertFileSrc 函数测试</strong>: 测试本地文件路径转换为前端URL的功能</li>
 				</ul>
 			</div>
 		</CardContent>

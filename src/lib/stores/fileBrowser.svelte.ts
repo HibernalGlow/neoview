@@ -4,6 +4,7 @@
  */
 
 import { writable } from 'svelte/store';
+import { toAssetUrl } from '$lib/utils/assetProxy';
 import type { FsItem } from '$lib/types';
 
 interface FileBrowserState {
@@ -49,7 +50,15 @@ function createFileBrowserStore() {
     addThumbnail: (path: string, thumbnail: string) => 
       update(state => {
         const newThumbnails = new Map(state.thumbnails);
-        newThumbnails.set(path, thumbnail);
+        // 统一通过 asset 转换中转，避免存入 raw file:// URL 导致前端无法显示
+        try {
+          const url = toAssetUrl(thumbnail) || thumbnail;
+          console.log('fileBrowserStore.addThumbnail:', { key: path, raw: thumbnail, converted: url });
+          newThumbnails.set(path, url as string);
+        } catch (e) {
+          console.debug('addThumbnail: toAssetUrl failed, storing raw thumbnail', e);
+          newThumbnails.set(path, thumbnail);
+        }
         return { ...state, thumbnails: newThumbnails };
       }),
     clearThumbnails: () => update(state => ({ ...state, thumbnails: new Map() })),

@@ -1,5 +1,5 @@
 import { FileSystemAPI } from '$lib/api';
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { toAssetUrl } from '$lib/utils/assetProxy';
 
 type Job = { path: string; isFolder: boolean; isArchive?: boolean };
 
@@ -22,21 +22,7 @@ export function itemIsImage(item: any) {
   return Boolean(item && (item.is_image === true || item.isImage === true || item.is_image === 'true' || item.isImage === 'true'));
 }
 
-function toAssetUrl(maybePath: string) {
-  if (!maybePath) return maybePath;
-  const s = String(maybePath);
-  if (s.startsWith('asset://') || s.startsWith('data:') || s.startsWith('http://') || s.startsWith('https://')) return s;
-
-  let cleaned = s.replace(/^file:\/+/i, '');
-  if (/^\/[A-Za-z]:/.test(cleaned)) cleaned = cleaned.slice(1);
-
-  try {
-    return convertFileSrc(cleaned);
-  } catch (e) {
-    console.error('thumbnailManager: convertFileSrc failed', e, cleaned);
-    return cleaned;
-  }
-}
+// 使用统一的 asset 转换逻辑（定义在 assetProxy）
 
 export function enqueueThumbnail(path: string, isFolder: boolean) {
   if (!path) return;
@@ -46,6 +32,35 @@ export function enqueueThumbnail(path: string, isFolder: boolean) {
 
   _queue.push({ path, isFolder });
   processQueue();
+}
+
+/**
+ * 将绝对路径规范化为相对 key（基于本地存储中配置的 thumbnail root），
+ * 若未配置 root，则返回以正斜杠为分隔符的原始路径字符串。
+ */
+export function toRelativeKey(absPath: string): string {
+  try {
+    const root = typeof localStorage !== 'undefined' ? localStorage.getItem('neoview-thumbnail-root') : null;
+    let p = String(absPath || '');
+    // 统一反斜杠为正斜杠
+    p = p.replace(/\\/g, '/');
+    if (root) {
+      let r = String(root).replace(/\\/g, '/');
+      // 如果 root 没有以斜杠结尾，添加
+      if (!r.endsWith('/')) r = r + '/';
+      if (p.startsWith(r)) {
+        let rel = p.slice(r.length);
+        // 去掉开头的斜杠
+        if (rel.startsWith('/')) rel = rel.slice(1);
+        return rel;
+      }
+    }
+    // 否则返回完整路径的规范化形式（用于不在 root 下的文件）
+    if (p.startsWith('/')) p = p.slice(1);
+    return p;
+  } catch (e) {
+    return absPath.replace(/\\/g, '/');
+  }
 }
 
 export function enqueueArchiveThumbnail(path: string) {
@@ -88,8 +103,11 @@ async function processQueue() {
         }
 
         if (thumbnail && _addThumbnailCb) {
-          const url = toAssetUrl(thumbnail);
-          _addThumbnailCb(path, url);
+          const converted = toAssetUrl(thumbnail) || String(thumbnail || '');
+          const key = toRelativeKey(path);
+          // 可见日志，确保前端能观察到回调被触发与最终 URL
+          console.log('thumbnailManager: addThumbnail callback ->', { key, raw: thumbnail, converted });
+          _addThumbnailCb(key, converted);
         }
       } catch (e) {
         console.debug('thumbnailManager: failed to generate thumbnail for', path, e);

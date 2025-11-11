@@ -15,7 +15,7 @@
   import * as ContextMenu from '$lib/components/ui/context-menu';
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
   import { homeDir } from '@tauri-apps/api/path';
-  import { enqueueThumbnail, enqueueArchiveThumbnail, configureThumbnailManager, itemIsDirectory, itemIsImage, clearQueue } from '$lib/utils/thumbnailManager';
+  import { enqueueThumbnail, enqueueArchiveThumbnail, configureThumbnailManager, itemIsDirectory, itemIsImage, clearQueue, toRelativeKey } from '$lib/utils/thumbnailManager';
 
 
   // 使用全局状态
@@ -375,16 +375,24 @@
       console.log('📊 图片数量:', imageCount, '文件夹数量:', folderCount);
 
       for (const item of loadedItems) {
+        try {
+          const key = toRelativeKey(item.path);
+          // 如果 store 中已经存在对应的相对路径缩略图，则跳过入队
+          if (thumbnails && thumbnails.has(key)) {
+            console.log('ℹ️ 已存在缩略图，跳过入队:', key);
+            continue;
+          }
+        } catch (e) {
+          // 忽略 key 计算错误
+        }
+
         if (itemIsDirectory(item)) {
-          // 为文件夹生成缩略图（入队，由 worker 负责）
           console.log('📁 Enqueue folder thumbnail:', item.path);
           enqueueThumbnail(item.path, true);
         } else if (itemIsImage(item)) {
-          // 为图片文件生成缩略图（入队，由 worker 负责）
           console.log('🖼️ Enqueue image thumbnail:', item.path);
           enqueueThumbnail(item.path, false);
         } else {
-          // 非图片也非目录：异步检查是否为压缩包，若是则为该压缩包生成基于第一张图片的缩略图
           (async () => {
             try {
               if (await FileSystemAPI.isSupportedArchive(item.path)) {
@@ -1544,10 +1552,10 @@
 
             <!-- 图标或缩略图 -->
             <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded">
-              {#if thumbnails.has(item.path)}
+              {#if thumbnails.has(toRelativeKey(item.path))}
                 <!-- 显示缩略图 -->
                 <img 
-                  src={thumbnails.get(item.path)} 
+                  src={thumbnails.get(toRelativeKey(item.path))} 
                   alt={item.name}
                   class="h-full w-full object-cover transition-transform group-hover:scale-105"
                 />
@@ -1726,10 +1734,10 @@
 
             <!-- 图标或缩略图 -->
             <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded">
-              {#if thumbnails.has(item.path)}
+              {#if thumbnails.has(toRelativeKey(item.path))}
                 <!-- 显示缩略图 -->
                 <img 
-                  src={thumbnails.get(item.path)} 
+                  src={thumbnails.get(toRelativeKey(item.path))} 
                   alt={item.name}
                   class="h-full w-full object-cover transition-transform group-hover:scale-105"
                 />

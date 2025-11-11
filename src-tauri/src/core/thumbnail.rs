@@ -80,8 +80,19 @@ impl ThumbnailManager {
             if thumbnail_path.exists() {
                 let thumbnail_url = format!("file://{}", thumbnail_path.to_string_lossy());
                 
-                // 添加到内存缓存
-                cache.set(record.relative_path.clone(), thumbnail_url);
+                // 计算原始文件的完整路径（如果数据库中存的是相对路径，则基于 root_dir 组合）
+                let original_path = {
+                    let rel = record.relative_path.as_str();
+                    let rel_path = Path::new(rel);
+                    if rel_path.is_absolute() {
+                        rel_path.to_path_buf()
+                    } else {
+                        self.root_dir.join(rel_path)
+                    }
+                };
+
+                // 添加到内存缓存：使用完整路径字符串作为 key，以便与前端请求的 path.to_string_lossy() 保持一致
+                cache.set(original_path.to_string_lossy().to_string(), thumbnail_url);
                 loaded_count += 1;
             }
         }

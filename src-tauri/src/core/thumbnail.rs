@@ -226,10 +226,48 @@ impl ThumbnailManager {
         source_modified: i64,
         is_folder: bool,
     ) -> Result<String, String> {
-        // 加载图片 - 支持 JXL、AVIF 等格式
+        // 加载图片 - 支持 JXL、AVIF、压缩包、视频等格式
         let img = if is_folder {
             // 文件夹缩略图需要特殊处理
             return self.generate_folder_thumbnail(image_path, relative_path, source_modified);
+        } else if self.is_archive_file(image_path) {
+            println!("📦 generate_and_save_thumbnail: detected archive file: {}", image_path.display());
+            // 从压缩包中获取第一张图片并加载到内存
+            use crate::core::archive::ArchiveManager;
+            let archive_manager = ArchiveManager::new();
+            let images = archive_manager.get_images_from_zip(image_path)
+                .map_err(|e| format!("从压缩包列出图片失败: {}", e))?;
+            if images.is_empty() {
+                return Err("压缩包内未找到图片文件".to_string());
+            }
+            let first = &images[0];
+            println!("📦 generate_and_save_thumbnail: archive selected inner file: {} -> {}", image_path.display(), first);
+            let data = archive_manager.extract_file(image_path, first)
+                .map_err(|e| format!("从压缩包提取文件失败: {}", e))?;
+
+            // 若为 JXL/AVIF 等需要特殊处理的格式，尝试相应解码路径
+            if let Some(ext) = Path::new(first).extension().and_then(|e| e.to_str()) {
+                let ext_l = ext.to_lowercase();
+                if ext_l == "jxl" {
+                    self.decode_jxl_image(&data)?
+                } else if ext_l == "avif" {
+                    // 写临时文件并使用 ffmpeg 解码（复用 convert_avif_using_ffmpeg）
+                    let mut tmp = std::env::temp_dir();
+                    let filename = format!("neoview_archive_avif_{}_{}.avif", chrono::Utc::now().timestamp_nanos(), std::process::id());
+                    tmp.push(filename);
+                    std::fs::write(&tmp, &data).map_err(|e| format!("写入临时 AVIF 文件失败: {}", e))?;
+                    let res = self.convert_avif_using_ffmpeg(&tmp);
+                    let _ = std::fs::remove_file(&tmp);
+                    res?
+                } else {
+                    image::load_from_memory(&data).map_err(|e| format!("加载压缩包内图片失败: {}", e))?
+                }
+            } else {
+                image::load_from_memory(&data).map_err(|e| format!("加载压缩包内图片失败: {}", e))?
+            }
+        } else if self.is_video_file(image_path) {
+            println!("🎬 generate_and_save_thumbnail: detected video file: {}", image_path.display());
+            self.extract_frame_from_video(image_path)?
         } else {
             self.load_image_with_format_support(image_path)?
         };
@@ -288,8 +326,48 @@ impl ThumbnailManager {
         };
 
         // 保存到数据库
-        self.db.upsert_thumbnail(record)
+        // upsert 使用 clone 以便后续仍能访问 record 的字段
+        self.db.upsert_thumbnail(record.clone())
             .map_err(|e| format!("保存数据库记录失败: {}", e))?;
+
+            // 如果缩略图来源于压缩包内部图片，也为压缩包本身创建一条记录（便于直接请求压缩包的缩略图）
+            if image_path.to_string_lossy().contains("__archive__") {
+                // 解析 archive 路径
+                let path_str = image_path.to_string_lossy().into_owned();
+                let parts: Vec<&str> = path_str.split("__archive__").collect();
+                if parts.len() == 2 {
+                    let archive_path = Path::new(parts[0]);
+                    if archive_path.exists() {
+                        // 获取 archive 的相对路径与修改时间
+                        if let Ok(arch_rel) = self.get_relative_path(archive_path) {
+                            let arch_bookpath = Self::normalize_path_string(&arch_rel);
+                            let arch_meta = std::fs::metadata(archive_path).ok();
+                            let arch_source_modified = arch_meta
+                                .and_then(|m| m.modified().ok())
+                                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                                .map(|d| d.as_secs() as i64)
+                                .unwrap_or(source_modified);
+
+                            // 克隆 record 以便在 upsert 后仍可使用原 record
+                            let archive_record = ThumbnailRecord {
+                                bookpath: arch_bookpath,
+                                relative_thumb_path: relative_thumb_path.to_string(),
+                                thumbnail_name: record.thumbnail_name.clone(),
+                                hash: record.hash.clone(),
+                                created_at: now,
+                                source_modified: arch_source_modified,
+                                is_folder: false,
+                                width,
+                                height,
+                                file_size,
+                            };
+
+                            // 忽略错误，尽量确保主记录已写入
+                            let _ = self.db.upsert_thumbnail(archive_record);
+                        }
+                    }
+                }
+            }
 
         // 返回文件URL
         Ok(format!("file://{}", thumbnail_path.to_string_lossy()))
@@ -521,8 +599,46 @@ impl ThumbnailManager {
             };
 
             // 保存到数据库
-            self.db.upsert_thumbnail(record)
+            self.db.upsert_thumbnail(record.clone())
                 .map_err(|e| format!("保存数据库记录失败: {}", e))?;
+
+            // 如果文件夹缩略图来源于压缩包内部图片，也为压缩包本身创建一条记录（便于直接请求压缩包的缩略图）
+            if image_path.to_string_lossy().contains("__archive__") {
+                // 解析 archive 路径
+                let path_str = image_path.to_string_lossy().into_owned();
+                let parts: Vec<&str> = path_str.split("__archive__").collect();
+                if parts.len() == 2 {
+                    let archive_path = Path::new(parts[0]);
+                    if archive_path.exists() {
+                        // 获取 archive 的相对路径与修改时间
+                        if let Ok(arch_rel) = self.get_relative_path(archive_path) {
+                            let arch_bookpath = Self::normalize_path_string(&arch_rel);
+                            let arch_meta = std::fs::metadata(archive_path).ok();
+                            let arch_source_modified = arch_meta
+                                .and_then(|m| m.modified().ok())
+                                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                                .map(|d| d.as_secs() as i64)
+                                .unwrap_or(source_modified);
+
+                            let archive_record = ThumbnailRecord {
+                                bookpath: arch_bookpath,
+                                relative_thumb_path: relative_thumb_path.to_string(),
+                                thumbnail_name: record.thumbnail_name.clone(),
+                                hash: record.hash.clone(),
+                                created_at: now,
+                                source_modified: arch_source_modified,
+                                is_folder: false,
+                                width,
+                                height,
+                                file_size,
+                            };
+
+                            // 忽略错误，尽量确保主记录已写入
+                            let _ = self.db.upsert_thumbnail(archive_record);
+                        }
+                    }
+                }
+            }
 
             // 返回文件URL
             Ok(format!("file://{}", thumbnail_path.to_string_lossy()))
@@ -667,6 +783,45 @@ impl ThumbnailManager {
         } else {
             false
         }
+    }
+
+    /// 检查是否为视频文件
+    fn is_video_file(&self, path: &Path) -> bool {
+        if let Some(ext) = path.extension() {
+            let ext = ext.to_string_lossy().to_lowercase();
+            matches!(ext.as_str(), "mp4" | "mkv" | "avi" | "mov" | "webm" | "flv" | "wmv" | "m4v")
+        } else {
+            false
+        }
+    }
+
+    /// 使用 FFmpeg 提取视频的一帧为 DynamicImage（返回图片或错误）
+    fn extract_frame_from_video(&self, video_path: &Path) -> Result<DynamicImage, String> {
+        println!("🎬 extract_frame_from_video: {}", video_path.display());
+        let output = Command::new("ffmpeg")
+            .arg("-hide_banner")
+            .arg("-loglevel")
+            .arg("error")
+            .arg("-i")
+            .arg(video_path.as_os_str())
+            .arg("-ss")
+            .arg("00:00:01")
+            .arg("-frames:v")
+            .arg("1")
+            .arg("-f")
+            .arg("image2pipe")
+            .arg("-vcodec")
+            .arg("png")
+            .arg("pipe:1")
+            .output()
+            .map_err(|e| format!("启动 FFmpeg 失败: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("FFmpeg 提取视频帧失败: {}", stderr));
+        }
+
+        image::load_from_memory(&output.stdout).map_err(|e| format!("从 FFmpeg 输出加载图片失败: {}", e))
     }
 
     /// 获取缓存统计信息

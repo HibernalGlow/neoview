@@ -48,8 +48,7 @@ impl ThumbnailManager {
         match full_path.strip_prefix(&self.root_dir) {
             Ok(relative) => Ok(relative.to_path_buf()),
             Err(_) => {
-                // 如果不在根目录下，使用完整路径作为相对路径
-                println!("⚠️ 路径 {} 不在根目录 {} 下，使用完整路径", full_path.display(), self.root_dir.display());
+                // 如果不在根目录下，使用完整路径作为相对路径（不重复打印警告以避免噪声）
                 Ok(full_path.to_path_buf())
             }
         }
@@ -89,10 +88,10 @@ impl ThumbnailManager {
                     }
                 };
 
-                // 添加到内存缓存：使用完整路径字符串作为 key，以便与前端请求的 path.to_string_lossy() 保持一致
-                cache.set(original_path.to_string_lossy().to_string(), thumbnail_url.clone());
+                // 添加到内存缓存：使用规范化的完整路径字符串作为 key，以便与前端请求的 path 保持一致
+                cache.set(Self::normalize_path_string(&original_path), thumbnail_url.clone());
                 // 另外也把相对 bookpath（数据库中的 bookpath 字符串）也注册一次，方便前端使用相对 key 查找
-                cache.set(record.bookpath.clone(), thumbnail_url);
+                cache.set(Self::normalize_path_string(Path::new(&record.bookpath)), thumbnail_url);
                 loaded_count += 1;
             }
         }
@@ -105,8 +104,8 @@ impl ThumbnailManager {
     pub fn get_thumbnail_info(&self, full_path: &Path) -> Result<Option<ThumbnailInfo>, String> {
         println!("🔍 ThumbnailManager::get_thumbnail_info - 完整路径: {}", full_path.display());
         let relative_path = self.get_relative_path(full_path)?;
-        // 统一使用正斜杠作为路径分隔符，确保数据库查询一致
-    let relative_str = relative_path.to_string_lossy().replace('\\', "/");
+        // 统一使用 normalize helper 规范化路径字符串，确保数据库查询一致
+        let relative_str = Self::normalize_path_string(&relative_path);
         println!("🔍 标准化相对路径: {}", relative_str);
         
         if let Ok(Some(record)) = self.db.find_by_bookpath(&relative_str) {
@@ -137,8 +136,8 @@ impl ThumbnailManager {
     pub fn generate_thumbnail(&self, image_path: &Path) -> Result<String, String> {
         // 获取相对路径
     let relative_path = self.get_relative_path(image_path)?;
-    // 统一使用正斜杠作为路径分隔符，确保与数据库中存储的 bookpath 字段一致
-    let relative_str = relative_path.to_string_lossy().replace('\\', "/");
+    // 统一使用 normalize helper 规范化路径字符串，确保与数据库中存储的 bookpath 字段一致
+    let relative_str = Self::normalize_path_string(&relative_path);
         
         // 获取源文件修改时间
         let source_meta = fs::metadata(image_path)
@@ -227,11 +226,11 @@ impl ThumbnailManager {
 
         // 创建数据库记录：bookpath 存储原始文件的相对/绝对表示，relative_thumb_path 存储缩略图在 thumbnail_root 下的相对路径
         // 统一使用正斜杠作为路径分隔符，确保数据库查询一致
-        let bookpath_str = relative_path.to_string_lossy().replace('\\', "/");
+        let bookpath_str = Self::normalize_path_string(relative_path);
         let relative_thumb_path = thumbnail_path
             .strip_prefix(&self.db.thumbnail_root)
-            .map(|p| p.to_string_lossy().replace('\\', "/"))
-            .unwrap_or_else(|_| thumbnail_path.to_string_lossy().replace('\\', "/"));
+            .map(|p| Self::normalize_path_string(p))
+            .unwrap_or_else(|_| Self::normalize_path_string(&thumbnail_path));
         let hash = thumbnail_path.file_stem()
             .and_then(|s| s.to_str())
             .map(|s| s.to_string())
@@ -459,11 +458,11 @@ impl ThumbnailManager {
                 .to_string();
 
             // 创建数据库记录（folder）
-            let bookpath_str = relative_path.to_string_lossy().replace('\\', "/");
+            let bookpath_str = Self::normalize_path_string(relative_path);
             let relative_thumb_path = thumbnail_path
                 .strip_prefix(&self.db.thumbnail_root)
-                .map(|p| p.to_string_lossy().replace('\\', "/"))
-                .unwrap_or_else(|_| thumbnail_path.to_string_lossy().replace('\\', "/"));
+                .map(|p| Self::normalize_path_string(p))
+                .unwrap_or_else(|_| Self::normalize_path_string(&thumbnail_path));
             let hash = thumbnail_path.file_stem()
                 .and_then(|s| s.to_str())
                 .map(|s| s.to_string())

@@ -131,6 +131,7 @@ pub fn run() {
             // Archive/temp helpers
             commands::extract_archive_images,
             commands::extract_archive_inner,
+            commands::extract_archive_inner_schedule_thumb,
             commands::generate_thumb_for_extracted,
         ])
         .run(tauri::generate_context!())

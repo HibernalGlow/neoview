@@ -753,3 +753,171 @@ pub async fn extract_archive_inner(
 
     Ok(out_path.to_string_lossy().to_string())
 }
+
+/// 从压缩包中提取单个文件并立即调度缩略图生成（不阻塞调用者）
+#[command]
+pub async fn extract_archive_inner_schedule_thumb(
+    args: JsonValue,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<String, String> {
+    use std::path::PathBuf;
+    use crate::core::archive::ArchiveManager;
+
+    // 支持多种命名：archivePath / archive_path ; innerPath / inner_path
+    let archive_path = args.get("archivePath")
+        .or_else(|| args.get("archive_path"))
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "missing archive path".to_string())?;
+
+    let inner_path = args.get("innerPath")
+        .or_else(|| args.get("inner_path"))
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "missing inner path".to_string())?;
+
+    println!("📦 extract_archive_inner_schedule_thumb: archive={} inner={}", archive_path, inner_path);
+
+    // 等待管理器初始化（最多 5 秒）
+    if let Err(e) = ensure_manager_ready(&state, 5000).await {
+        println!("❌ {}", e);
+        return Err(e);
+    }
+
+    // 获取 thumbnail_root 用于作为 ArchiveManager 的 cache 根
+    let thumbnail_root = {
+        let manager_guard = state.manager.lock().map_err(|_| "无法获取缩略图管理器锁".to_string())?;
+        if let Some(ref manager) = *manager_guard {
+            manager.thumbnail_root_path()
+        } else {
+            return Err("缩略图管理器未初始化".to_string());
+        }
+    };
+
+    let archive_manager = ArchiveManager::new_with_cache_root(thumbnail_root);
+
+    // 计算输出路径
+    let mut cache_dir = archive_manager.get_temp_cache_dir()?;
+    let key = ArchiveManager::md5_key(&PathBuf::from(archive_path), inner_path);
+    let ext = std::path::Path::new(inner_path).extension().and_then(|e| e.to_str()).map(|s| s.to_lowercase()).unwrap_or_else(|| "bin".to_string());
+    let out_path = cache_dir.join(format!("{}.{}", key, ext));
+
+    // 如果已存在则直接返回，同时尝试异步调度缩略图（如果队列存在）
+    if out_path.exists() {
+        let local_str = out_path.to_string_lossy().to_string();
+        // 立即将主图映射保存到内存缓存（file:// 前缀）
+        if let Ok(cache) = state.cache.lock() {
+            let logical_key = format!("{}::{}", archive_path.replace('\\', "/"), inner_path.replace('\\', "/"));
+            cache.set(logical_key.clone(), format!("file://{}", local_str));
+        }
+
+        // 尝试异步入队生成缩略图
+        let queue_opt = {
+            let qg = state.queue.lock().map_err(|_| "无法获取队列锁".to_string())?;
+            qg.clone()
+        };
+
+        if let Some(qarc) = queue_opt {
+            let cache_clone = state.cache.clone();
+            let logical_key = format!("{}::{}", archive_path.replace('\\', "/"), inner_path.replace('\\', "/"));
+            let local_clone = local_str.clone();
+            std::thread::spawn(move || {
+                match qarc.enqueue(PathBuf::from(&local_clone), false, true) {
+                    Ok(thumb_url) => {
+                        if let Ok(cache) = cache_clone.lock() {
+                            cache.set(logical_key.clone(), thumb_url.clone());
+                        }
+                        println!("✅ Scheduled thumbnail ready for {} -> {}", local_clone, thumb_url);
+                    }
+                    Err(e) => println!("⚠️ Failed to schedule thumbnail for {}: {}", local_clone, e),
+                }
+            });
+        }
+
+        return Ok(local_str);
+    }
+
+    // 需要提取并写入
+    if ext == "jxl" {
+        let data = archive_manager.extract_file(&PathBuf::from(archive_path), inner_path)
+            .map_err(|e| format!("直接提取失败: {}", e))?;
+        match archive_manager.load_jxl_from_zip(&data) {
+            Ok(data_url) => {
+                if let Some(pos) = data_url.find(',') {
+                    let b64 = &data_url[pos+1..];
+                    if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64) {
+                        let out_png = cache_dir.join(format!("{}.png", key));
+                        std::fs::write(&out_png, &bytes).map_err(|e| format!("写入 JXL 转 PNG 失败: {}", e))?;
+
+                        let local_str = out_png.to_string_lossy().to_string();
+                        // 保存主图映射到内存缓存
+                        if let Ok(cache) = state.cache.lock() {
+                            let logical_key = format!("{}::{}", archive_path.replace('\\', "/"), inner_path.replace('\\', "/"));
+                            cache.set(logical_key.clone(), format!("file://{}", local_str));
+                        }
+
+                        // 异步调度缩略图生成
+                        let queue_opt = {
+                            let qg = state.queue.lock().map_err(|_| "无法获取队列锁".to_string())?;
+                            qg.clone()
+                        };
+                        if let Some(qarc) = queue_opt {
+                            let cache_clone = state.cache.clone();
+                            let logical_key = format!("{}::{}", archive_path.replace('\\', "/"), inner_path.replace('\\', "/"));
+                            let local_clone = local_str.clone();
+                            std::thread::spawn(move || {
+                                match qarc.enqueue(PathBuf::from(&local_clone), false, true) {
+                                    Ok(thumb_url) => {
+                                        if let Ok(cache) = cache_clone.lock() {
+                                            cache.set(logical_key.clone(), thumb_url.clone());
+                                        }
+                                        println!("✅ Scheduled thumbnail ready for {} -> {}", local_clone, thumb_url);
+                                    }
+                                    Err(e) => println!("⚠️ Failed to schedule thumbnail for {}: {}", local_clone, e),
+                                }
+                            });
+                        }
+
+                        return Ok(local_str);
+                    }
+                }
+                return Err("JXL 转换失败".to_string());
+            }
+            Err(e) => return Err(format!("JXL 解码失败: {}", e)),
+        }
+    } else {
+        let data = archive_manager.extract_file(&PathBuf::from(archive_path), inner_path)
+            .map_err(|e| format!("直接提取失败: {}", e))?;
+        std::fs::write(&out_path, &data).map_err(|e| format!("写入提取文件失败: {}", e))?;
+
+        let local_str = out_path.to_string_lossy().to_string();
+        // 保存主图映射到内存缓存
+        if let Ok(cache) = state.cache.lock() {
+            let logical_key = format!("{}::{}", archive_path.replace('\\', "/"), inner_path.replace('\\', "/"));
+            cache.set(logical_key.clone(), format!("file://{}", local_str));
+        }
+
+        // 异步调度缩略图生成
+        let queue_opt = {
+            let qg = state.queue.lock().map_err(|_| "无法获取队列锁".to_string())?;
+            qg.clone()
+        };
+
+        if let Some(qarc) = queue_opt {
+            let cache_clone = state.cache.clone();
+            let logical_key = format!("{}::{}", archive_path.replace('\\', "/"), inner_path.replace('\\', "/"));
+            let local_clone = local_str.clone();
+            std::thread::spawn(move || {
+                match qarc.enqueue(PathBuf::from(&local_clone), false, true) {
+                    Ok(thumb_url) => {
+                        if let Ok(cache) = cache_clone.lock() {
+                            cache.set(logical_key.clone(), thumb_url.clone());
+                        }
+                        println!("✅ Scheduled thumbnail ready for {} -> {}", local_clone, thumb_url);
+                    }
+                    Err(e) => println!("⚠️ Failed to schedule thumbnail for {}: {}", local_clone, e),
+                }
+            });
+        }
+
+        return Ok(local_str);
+    }
+}

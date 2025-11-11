@@ -222,6 +222,13 @@ export async function extractArchiveInner(archivePath: string, innerPath: string
 }
 
 /**
+ * 提取压缩包内部单个文件并异步调度高优先级缩略图生成（返回本地文件路径，不带 file://）
+ */
+export async function extractArchiveInnerAndScheduleThumb(archivePath: string, innerPath: string): Promise<string> {
+  return await invoke<string>('extract_archive_inner_schedule_thumb', { args: { archivePath, innerPath } });
+}
+
+/**
  * 生成压缩包内图片的缩略图
  */
 export async function generateArchiveThumbnail(

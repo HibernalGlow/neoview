@@ -11,7 +11,7 @@
 		findCommandByKeys
 	} from '$lib/stores/keyboard.svelte';
 	import { loadImage } from '$lib/api/fs';
-	import { loadImageFromArchive, extractArchiveInner } from '$lib/api/filesystem';
+	import { loadImageFromArchive, extractArchiveInnerAndScheduleThumb } from '$lib/api/filesystem';
 	import { toAssetUrl } from '$lib/utils/assetProxy';
 	import { FileSystemAPI } from '$lib/api';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
@@ -138,7 +138,7 @@
 			if (currentBook.type === 'archive') {
 				console.log('Extracting image from archive (by innerPath):', currentPage.path);
 				// 直接按 inner path 提取
-				const local = await extractArchiveInner(currentBook.path, currentPage.path);
+				const local = await extractArchiveInnerAndScheduleThumb(currentBook.path, currentPage.path);
 				if (local) {
 					dataUrl = toAssetUrl(local);
 				} else {
@@ -159,7 +159,7 @@
 				if (nextPageInfo) {
 					let data2Url: string | null = null;
 					if (currentBook.type === 'archive') {
-						const local2 = await extractArchiveInner(currentBook.path, nextPageInfo.path);
+						const local2 = await extractArchiveInnerAndScheduleThumb(currentBook.path, nextPageInfo.path);
 						if (local2) data2Url = toAssetUrl(local2);
 					} else {
 						const local2 = await loadImage(nextPageInfo.path);

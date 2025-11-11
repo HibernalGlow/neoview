@@ -28,9 +28,9 @@ thiserror = "2.0.12"
 base64 = "0.22"
 image = { version = "0.25", features = ["png", "jpeg", "webp", "avif", "gif", "bmp", "ico", "tiff", "tga"] }
 jxl-oxide = { version = "0.12.2", features = ["image"] }
-zip = "2.2"
+zip = "6.0.0"
 walkdir = "2.5"
 threadpool = "1.8"
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.32.0", features = ["bundled"] }
 chrono = { version = "0.4", features = ["serde"] }
 url = "2.5"

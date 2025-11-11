@@ -14,37 +14,9 @@
   import * as Input from '$lib/components/ui/input';
   import * as ContextMenu from '$lib/components/ui/context-menu';
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
-  import { convertFileSrc } from '@tauri-apps/api/core';
+  import { homeDir } from '@tauri-apps/api/path';
+  import { enqueueThumbnail, enqueueArchiveThumbnail, configureThumbnailManager, itemIsDirectory, itemIsImage, clearQueue } from '$lib/utils/thumbnailManager';
 
-  /**
-   * 将后端返回的本地路径规范化并转换为前端可用的 asset URL。
-   * - 如果是 asset:, data:, http(s): 原样返回
-   * - 如果是 file:// 前缀，去掉前缀再转换
-   * - 返回 convertFileSrc(...) 的结果
-   */
-  function toAssetUrl(maybePath: string) {
-    if (!maybePath) return maybePath;
-    const s = String(maybePath);
-    // 已经是可直接使用的 URL
-    if (s.startsWith('asset://') || s.startsWith('data:') || s.startsWith('http://') || s.startsWith('https://')) {
-      return s;
-    }
-
-    // 去掉 file:// 或 file:/// 前缀
-    let cleaned = s.replace(/^file:\/+/i, '');
-    // 如果是 /C:/... 这种形式（来自 file:///C:/...），去掉前导斜杠
-    if (/^\/[A-Za-z]:/.test(cleaned)) {
-      cleaned = cleaned.slice(1);
-    }
-
-    // 注意：不要对 cleaned 做 encodeURIComponent，否则会导致 asset 后端路径匹配失败
-    try {
-      return convertFileSrc(cleaned);
-    } catch (e) {
-      console.error('toAssetUrl: convertFileSrc failed', e, cleaned);
-      return cleaned;
-    }
-  }
 
   // 使用全局状态
   let currentPath = $state('');
@@ -52,6 +24,7 @@
   let loading = $state(false);
   let error = $state('');
   let thumbnails = $state<Map<string, string>>(new Map());
+  // 缩略图由外部 thumbnailManager 管理（队列、并发、archive 支持）
   let isArchiveView = $state(false);
   let currentArchivePath = $state('');
   let selectedIndex = $state(-1);
@@ -132,13 +105,31 @@
   /**
    * 加载主页路径
    */
-  function loadHomepage() {
+  async function loadHomepage() {
     try {
-      const homepage = localStorage.getItem(HOMEPAGE_STORAGE_KEY);
+      let homepage = localStorage.getItem(HOMEPAGE_STORAGE_KEY);
+      if (!homepage) {
+        // 如果本地没有保存主页，尝试使用系统 Home 目录作为默认主页
+        try {
+          const hd = await homeDir();
+          if (hd) {
+            homepage = hd;
+            console.log('📍 未设置主页，本次使用系统 Home 目录作为主页:', homepage);
+            // 将该值保存为主页以便下次启动使用
+            setHomepage(homepage);
+          }
+        } catch (e) {
+          console.warn('⚠️ 无法获取系统 Home 目录:', e);
+        }
+      }
+
       if (homepage) {
         console.log('📍 加载主页路径:', homepage);
         navigationHistory.setHomepage(homepage);
-        loadDirectory(homepage);
+        // 注意：不在此处 await 阻塞 UI，如果需要可以等待
+        await loadDirectory(homepage);
+      } else {
+        console.warn('⚠️ 没有可用的主页路径，跳过加载主页');
       }
     } catch (err) {
       console.error('❌ 加载主页路径失败:', err);
@@ -228,6 +219,8 @@
     return `${size.toFixed(2)} ${units[unitIndex]}`;
   }
 
+  
+
   /**
    * 后退
    */
@@ -304,9 +297,15 @@
     
     // 加载主页
     loadHomepage();
-    
+
     // 加载搜索历史
     loadSearchHistory();
+
+    // 配置外部的 Thumbnail Manager，使其把生成的缩略图写入 store
+    configureThumbnailManager({
+      addThumbnail: (path: string, url: string) => fileBrowserStore.addThumbnail(path, url),
+      maxConcurrent: 4
+    });
     
     return () => {
       document.removeEventListener('click', handleClick);
@@ -350,9 +349,11 @@
   async function loadDirectoryWithoutHistory(path: string) {
     console.log('📂 loadDirectory called with path:', path);
     
-    fileBrowserStore.setLoading(true);
-    fileBrowserStore.setError('');
-    fileBrowserStore.clearThumbnails();
+  fileBrowserStore.setLoading(true);
+  fileBrowserStore.setError('');
+  fileBrowserStore.clearThumbnails();
+  // 清空外部缩略图队列，避免上次目录的任务残留
+  clearQueue();
     fileBrowserStore.setArchiveView(false);
     fileBrowserStore.setSelectedIndex(-1);
     fileBrowserStore.setCurrentPath(path);
@@ -369,19 +370,33 @@
       
       // 异步加载缩略图
       console.log('🖼️ 开始加载缩略图，项目总数:', loadedItems.length);
-      const imageCount = loadedItems.filter(item => item.isImage).length;
-      const folderCount = loadedItems.filter(item => item.is_dir).length;
+      const imageCount = loadedItems.filter(item => itemIsImage(item)).length;
+      const folderCount = loadedItems.filter(item => itemIsDirectory(item)).length;
       console.log('📊 图片数量:', imageCount, '文件夹数量:', folderCount);
-      
+
       for (const item of loadedItems) {
-        if (item.is_dir) {
-          // 为文件夹生成缩略图
-          console.log('📁 准备为文件夹生成缩略图:', item.path);
-          loadFolderThumbnail(item.path);
-        } else if (item.isImage) {
-          // 为图片文件生成缩略图
-          console.log('🖼️ 准备为图片生成缩略图:', item.path);
-          loadThumbnail(item.path);
+        if (itemIsDirectory(item)) {
+          // 为文件夹生成缩略图（入队，由 worker 负责）
+          console.log('📁 Enqueue folder thumbnail:', item.path);
+          enqueueThumbnail(item.path, true);
+        } else if (itemIsImage(item)) {
+          // 为图片文件生成缩略图（入队，由 worker 负责）
+          console.log('🖼️ Enqueue image thumbnail:', item.path);
+          enqueueThumbnail(item.path, false);
+        } else {
+          // 非图片也非目录：异步检查是否为压缩包，若是则为该压缩包生成基于第一张图片的缩略图
+          (async () => {
+            try {
+              if (await FileSystemAPI.isSupportedArchive(item.path)) {
+                console.log('📦 Enqueue archive thumbnail:', item.path);
+                enqueueArchiveThumbnail(item.path);
+              } else {
+                console.log('⚪ 跳过非图片非目录项:', item.path);
+              }
+            } catch (e) {
+              console.debug('Archive check failed for', item.path, e);
+            }
+          })();
         }
       }
     } catch (err) {
@@ -413,7 +428,7 @@
       
       // 异步加载压缩包内图片的缩略图
       for (const item of loadedItems) {
-        if (item.isImage) {
+        if (itemIsImage(item)) {
           loadArchiveThumbnail(item.path);
         }
       }
@@ -429,38 +444,12 @@
   /**
    * 加载单个缩略图
    */
-  async function loadThumbnail(path: string) {
-    try {
-      const thumbnail = await FileSystemAPI.generateFileThumbnail(path);
-      console.log('📸 缩略图生成成功:', thumbnail);
-      
-  // 使用 toAssetUrl 进行规范化并转换为 asset URL
-  const thumbnailUrl = toAssetUrl(thumbnail);
-      console.log('🔄 转换后的缩略图URL:', thumbnailUrl);
-      fileBrowserStore.addThumbnail(path, thumbnailUrl);
-    } catch (err) {
-      // 不支持的图片格式或其他错误，静默失败
-      console.debug('Failed to load thumbnail:', err);
-    }
-  }
+  
 
   /**
    * 加载文件夹缩略图
    */
-  async function loadFolderThumbnail(path: string) {
-    try {
-      const thumbnail = await FileSystemAPI.generateFolderThumbnail(path);
-      console.log('📸 文件夹缩略图生成成功:', thumbnail);
-      
-  // 使用 toAssetUrl 进行规范化并转换为 asset URL
-  const thumbnailUrl = toAssetUrl(thumbnail);
-      console.log('🔄 转换后的缩略图URL:', thumbnailUrl);
-      fileBrowserStore.addThumbnail(path, thumbnailUrl);
-    } catch (err) {
-      // 文件夹缩略图生成失败，静默失败
-      console.debug('Failed to load folder thumbnail:', err);
-    }
-  }
+  
 
   /**
    * 加载压缩包内图片的缩略图 - 完全使用单张图片逻辑

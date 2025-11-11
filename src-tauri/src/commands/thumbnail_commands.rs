@@ -9,6 +9,11 @@ use crate::core::thumbnail::ThumbnailManager;
 use crate::core::fs_manager::FsItem;
 use crate::core::image_cache::ImageCache;
 
+// 简单的路径规范化，保持与 ThumbnailManager 中的 normalize_path_string 行为一致
+fn normalize_path_string<S: AsRef<str>>(s: S) -> String {
+    s.as_ref().replace('\\', "/")
+}
+
 /// 全局缩略图管理器
 pub struct ThumbnailManagerState {
     pub manager: Arc<Mutex<Option<ThumbnailManager>>>,
@@ -100,8 +105,8 @@ pub async fn generate_file_thumbnail_new(
         return Err(e);
     }
     
-    // 首先检查缓存
-    let cache_key = path.to_string_lossy().to_string();
+    // 首先检查缓存（使用规范化路径以匹配 preload 注册的 key）
+    let cache_key = normalize_path_string(path.to_string_lossy());
     if let Ok(cache) = state.cache.lock() {
         if let Some(cached_url) = cache.get(&cache_key) {
             // 验证文件URL是否仍然有效
@@ -138,7 +143,7 @@ pub async fn generate_file_thumbnail_new(
             
             // 添加到缓存
             if let Ok(cache) = state.cache.lock() {
-                cache.set(cache_key, thumbnail_url.clone());
+                cache.set(cache_key.clone(), thumbnail_url.clone());
                 println!("💾 缩略图已添加到缓存");
             }
             
@@ -166,8 +171,8 @@ pub async fn generate_folder_thumbnail(
         return Err(e);
     }
     
-    // 首先检查缓存
-    let cache_key = format!("folder:{}", path.to_string_lossy());
+    // 首先检查缓存（使用规范化路径，以匹配 preload 注册的 key）
+    let cache_key = format!("folder:{}", normalize_path_string(path.to_string_lossy()));
     if let Ok(cache) = state.cache.lock() {
         if let Some(cached_url) = cache.get(&cache_key) {
             // 验证文件URL是否仍然有效
@@ -224,7 +229,7 @@ pub async fn generate_folder_thumbnail(
             
             // 添加到缓存
             if let Ok(cache) = state.cache.lock() {
-                cache.set(cache_key, thumbnail_url.clone());
+                cache.set(cache_key.clone(), thumbnail_url.clone());
                 println!("💾 文件夹缩略图已添加到缓存");
             }
             
@@ -448,8 +453,8 @@ pub async fn preload_thumbnails(
     for path_str in &paths {
         let path = PathBuf::from(path_str);
         
-        // 检查缓存
-        let cache_key = path.to_string_lossy().to_string();
+    // 检查缓存（使用规范化路径以匹配 preload 注册的 key）
+    let cache_key = normalize_path_string(path.to_string_lossy());
         let mut should_generate = true;
         
         if let Ok(cache) = state.cache.lock() {
@@ -473,7 +478,7 @@ pub async fn preload_thumbnails(
                     match manager.generate_thumbnail(&path) {
                         Ok(thumbnail_url) => {
                             if let Ok(cache) = state.cache.lock() {
-                                cache.set(cache_key, thumbnail_url.clone());
+                                cache.set(cache_key.clone(), thumbnail_url.clone());
                             }
                             success_paths.push(thumbnail_url);
                         }

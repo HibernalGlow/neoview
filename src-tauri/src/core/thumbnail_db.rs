@@ -238,6 +238,38 @@ impl ThumbnailDatabase {
             Err(e) => Err(e),
         }
     }
+
+    /// 按 pattern 查找 bookpath（用于诊断，返回最多 limit 条结果）
+    pub fn find_by_bookpath_like(&self, pattern: &str, limit: usize) -> SqliteResult<Vec<ThumbnailRecord>> {
+        let sql = format!(
+            "SELECT bookpath, relative_thumb_path, thumbnail_name, hash, created_at, source_modified, is_folder, width, height, file_size FROM thumbnails WHERE bookpath LIKE ?1 LIMIT {}",
+            limit
+        );
+
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt.query_map([pattern], |row| {
+            Ok(ThumbnailRecord {
+                bookpath: row.get(0)?,
+                relative_thumb_path: row.get(1)?,
+                thumbnail_name: row.get(2)?,
+                hash: row.get(3)?,
+                created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?)
+                    .unwrap()
+                    .with_timezone(&Utc),
+                source_modified: row.get(5)?,
+                is_folder: row.get(6)?,
+                width: row.get(7)?,
+                height: row.get(8)?,
+                file_size: row.get(9)?,
+            })
+        })?;
+
+        let mut result = Vec::new();
+        for r in rows {
+            result.push(r?);
+        }
+        Ok(result)
+    }
     
     /// 检查缩略图是否需要更新
     pub fn needs_update(&self, bookpath: &str, source_modified: i64) -> SqliteResult<bool> {

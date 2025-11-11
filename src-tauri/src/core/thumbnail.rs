@@ -91,7 +91,14 @@ impl ThumbnailManager {
                 // 添加到内存缓存：使用规范化的完整路径字符串作为 key，以便与前端请求的 path 保持一致
                 cache.set(Self::normalize_path_string(&original_path), thumbnail_url.clone());
                 // 另外也把相对 bookpath（数据库中的 bookpath 字符串）也注册一次，方便前端使用相对 key 查找
-                cache.set(Self::normalize_path_string(Path::new(&record.bookpath)), thumbnail_url);
+                cache.set(Self::normalize_path_string(Path::new(&record.bookpath)), thumbnail_url.clone());
+                // 若为文件夹缩略图，也注册带前缀的 folder: key，供 generate_folder_thumbnail 查询使用
+                if record.is_folder {
+                    let folder_key_abs = format!("folder:{}", Self::normalize_path_string(&original_path));
+                    let folder_key_rel = format!("folder:{}", Self::normalize_path_string(Path::new(&record.bookpath)));
+                    cache.set(folder_key_abs, thumbnail_url.clone());
+                    cache.set(folder_key_rel, thumbnail_url);
+                }
                 loaded_count += 1;
             }
         }
@@ -127,7 +134,38 @@ impl ThumbnailManager {
                 Ok(None)
             }
         } else {
-            println!("❌ 数据库中未找到记录");
+            println!("❌ 数据库中未找到记录 - 尝试诊断候选条目...");
+
+            // 诊断：尝试按文件名或上层目录做模糊匹配，帮助定位为何未命中
+            if let Some(basename) = full_path.file_name().and_then(|n| n.to_str()) {
+                let pattern = format!("%{}%", basename.replace('%', "\\%"));
+                match self.db.find_by_bookpath_like(&pattern, 20) {
+                    Ok(candidates) => {
+                        if candidates.is_empty() {
+                            println!("🔎 未找到与 basename 匹配的候选记录（pattern={}）", pattern);
+                        } else {
+                            println!("🔎 找到 {} 个候选记录（基于 basename 模糊匹配 {}）：", candidates.len(), pattern);
+                            for c in candidates.iter() {
+                                println!(" - bookpath='{}' | relative='{}' | thumb='{}'", c.bookpath, c.relative_thumb_path, c.thumbnail_name);
+                            }
+                        }
+                    }
+                    Err(e) => println!("⚠️ 模糊查询失败: {}", e),
+                }
+            }
+
+            // 另外打印最近几条数据库记录的前缀，帮助诊断编码/规范化差异
+            match self.db.get_all_thumbnails() {
+                Ok(all) => {
+                    let limit = 10usize.min(all.len());
+                    println!("🔎 打印最近 {} 条数据库记录的 bookpath（用于对比）:", limit);
+                    for r in all.iter().take(limit) {
+                        println!(" - '{}'", r.bookpath);
+                    }
+                }
+                Err(e) => println!("⚠️ 获取所有记录失败: {}", e),
+            }
+
             Ok(None)
         }
     }

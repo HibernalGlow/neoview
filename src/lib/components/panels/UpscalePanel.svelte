@@ -8,7 +8,7 @@
 	import { Progress } from '$lib/components/ui/progress';
 	import { Slider } from '$lib/components/ui/slider';
 	import { Switch } from '$lib/components/ui/switch';
-	import { Select } from '$lib/components/ui/select';
+	import { NativeSelect } from '$lib/components/ui/native-select';
 	import { Sparkles, Play, Settings, Loader2, CheckCircle, AlertCircle, Image as ImageIcon, Download, TestTube, List, FolderOpen } from '@lucide/svelte';
 	import { invoke } from '@tauri-apps/api/core';
 	import { save } from '@tauri-apps/plugin-dialog';
@@ -31,7 +31,7 @@
 	
 	// 手动设置状态
 	let selectedAlgorithm = $state('realcugan'); // 默认使用 realcugan
-	let selectedModel = $state('se');
+	let selectedModel = $state(''); // 用户自行选择模型
 	let selectedScale = $state('2');
 	let customGpuId = $state('0');
 	let customTileSize = $state('0');
@@ -48,7 +48,15 @@
 	
 	// 扫描到的模型列表
 	let scannedModels = $state<string[]>([]);
-	let modelOptions = $state<Array<{value: string, label: string}>>([]);
+	let modelOptions = $state<Array<{value: string, label: string}>>([
+		{ value: 'se', label: 'se' },
+		{ value: 'general', label: 'general' },
+		{ value: 'anime-denoise', label: 'anime-denoise' },
+		{ value: 'realesrgan-x4plus', label: 'realesrgan-x4plus' },
+		{ value: 'realesrgan-x4plus-anime', label: 'realesrgan-x4plus-anime' },
+		{ value: 'WAIFU2X_CUNET_UP2X', label: 'WAIFU2X_CUNET_UP2X' },
+		{ value: 'WAIFU2X_ANIME_UP2X', label: 'WAIFU2X_ANIME_UP2X' }
+	]);
 	
 	let scaleOptions = $state(['2', '3', '4']);
 
@@ -116,7 +124,7 @@
 			
 			// 应用设置
 			selectedAlgorithm = settings.algorithm || 'realcugan';
-			selectedModel = settings.model || 'se';
+			selectedModel = settings.model || ''; // 不设置默认模型
 			selectedScale = settings.scale_factor || '2';
 			customGpuId = settings.gpu_id || '0';
 			customTileSize = settings.tile_size || '0';
@@ -137,20 +145,21 @@
 			const models = await invoke('scan_models_directory');
 			console.log('扫描到的模型:', models);
 			
-			// 更新模型选项
-			modelOptions = models.map(model => ({
-				value: model,
-				label: model
-			}));
-			
-			// 如果当前选择的模型不在扫描列表中，使用第一个模型
-			if (!models.includes(selectedModel)) {
-				selectedModel = models[0] || '';
+			// 更新模型选项 - 只显示扫描到的模型
+			if (models && models.length > 0) {
+				modelOptions = models.map(model => ({
+					value: model,
+					label: model
+				}));
+				console.log('模型选项已更新，共', modelOptions.length, '个模型');
+			} else {
+				// 没有扫描到模型时，保持现有选项不变
+				console.log('未扫描到模型，保持现有选项');
 			}
-			
-			console.log('模型选项已更新');
 		} catch (error) {
 			console.error('扫描模型失败:', error);
+			// 扫描失败时，保持现有选项不变
+			console.log('扫描失败，保持现有选项');
 		}
 	}
 
@@ -175,14 +184,20 @@
 		}
 	}
 
+	// 根据当前算法更新模型选项
+	async function updateModelsForAlgorithm() {
+		// 仅重新扫描模型，不提供默认选项
+		await scanModels();
+	}
+
 	// 重置设置
 	async function resetSettings() {
 		try {
 			const defaultSettings = await invoke('reset_upscale_settings');
 			
-			// 应用默认设置
+			// 应用默认设置，但不重置模型选择
 			selectedAlgorithm = defaultSettings.algorithm;
-			selectedModel = defaultSettings.model;
+			// 保持用户选择的模型，不重置
 			selectedScale = defaultSettings.scale_factor;
 			customGpuId = defaultSettings.gpu_id;
 			customTileSize = defaultSettings.tile_size;
@@ -190,7 +205,7 @@
 			customNoiseLevel = defaultSettings.noise_level;
 			customNumThreads = defaultSettings.num_threads;
 			
-			console.log('设置已重置为默认值');
+			console.log('设置已重置为默认值（模型选择保持不变）');
 		} catch (error) {
 			console.error('重置设置失败:', error);
 		}
@@ -454,33 +469,31 @@
 	<!-- 算法选择 -->
 	<div class="space-y-2">
 		<Label class="text-sm font-medium">超分算法</Label>
-		<Select.Root bind:value={selectedAlgorithm} onchange={saveSettings}>
-			<Select.Trigger class="w-full">
-				{algorithmOptions.find(opt => opt.value === selectedAlgorithm)?.label || '选择算法'}
-			</Select.Trigger>
-			<Select.Content>
-				{#each algorithmOptions as option}
-					<Select.Item value={option.value} label={option.label}>
-					</Select.Item>
-				{/each}
-			</Select.Content>
-		</Select.Root>
+		<NativeSelect 
+			bind:value={selectedAlgorithm} 
+			onchange={saveSettings}
+			class="w-full z-[60]"
+		>
+			<option value="" disabled>选择算法</option>
+			{#each algorithmOptions as option}
+				<option value={option.value}>{option.label}</option>
+			{/each}
+		</NativeSelect>
 	</div>
 
 	<!-- 模型选择 -->
 	<div class="space-y-2">
 		<Label class="text-sm font-medium">超分模型</Label>
-		<Select.Root bind:value={selectedModel} onchange={saveSettings}>
-			<Select.Trigger class="w-full">
-				{modelOptions.find(opt => opt.value === selectedModel)?.label || '选择模型'}
-			</Select.Trigger>
-			<Select.Content>
-				{#each modelOptions as option}
-					<Select.Item value={option.value} label={option.label}>
-					</Select.Item>
-				{/each}
-			</Select.Content>
-		</Select.Root>
+		<NativeSelect 
+			bind:value={selectedModel} 
+			onchange={saveSettings}
+			class="w-full z-[60]"
+		>
+			<option value="" disabled>选择模型</option>
+			{#each modelOptions as option}
+				<option value={option.value}>{option.label}</option>
+			{/each}
+		</NativeSelect>
 		<div class="flex gap-2 pt-1">
 			<Button
 				variant="outline"
@@ -499,18 +512,16 @@
 	<!-- 放大倍数 -->
 	<div class="space-y-2">
 		<Label class="text-sm font-medium">放大倍数</Label>
-		<Select.Root bind:value={selectedScale} onchange={saveSettings}>
-			<Select.Trigger class="w-full">
-				{selectedScale}x
-			</Select.Trigger>
-			<Select.Content>
-				{#each scaleOptions as scale}
-					<Select.Item value={scale}>
-						{scale}x
-					</Select.Item>
-				{/each}
-			</Select.Content>
-		</Select.Root>
+		<NativeSelect 
+			bind:value={selectedScale} 
+			onchange={saveSettings}
+			class="w-full z-[60]"
+		>
+			<option value="" disabled>选择倍数</option>
+			{#each scaleOptions as scale}
+				<option value={scale}>{scale}x</option>
+			{/each}
+		</NativeSelect>
 	</div>
 
 	<!-- 高级设置 -->
@@ -679,11 +690,12 @@
 			<div class="space-y-2">
 				<Select.Root bind:value={selectedTestAlgorithm}>
 					<Select.Trigger class="w-full h-8">
-						{algorithmOptions.find(opt => opt.value === selectedTestAlgorithm)?.label || '选择算法'}
+						<Select.Value placeholder="选择算法" />
 					</Select.Trigger>
 					<Select.Content>
 						{#each algorithmOptions as option}
-							<Select.Item value={option.value} label={option.label}>
+							<Select.Item value={option.value}>
+								{option.label}
 							</Select.Item>
 						{/each}
 					</Select.Content>

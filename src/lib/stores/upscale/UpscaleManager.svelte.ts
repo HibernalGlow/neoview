@@ -159,12 +159,53 @@ export async function resetUpscaleSettings() {
 /**
  * 检查图片是否满足超分条件
  */
-export async function checkUpscaleConditions(width, height) {
+export async function checkUpscaleConditions(width: number, height: number) {
     try {
-        return await invoke('check_upscale_conditions', { width, height });
+        // 本地评估条件超分设置，-1 表示无上限/无下限（即不作此项筛选）
+        let settings: any;
+        upscaleSettings.subscribe(s => settings = s)();
+        const cfg = settings?.conditional_upscale;
+        if (!cfg || !cfg.enabled) return true;
+
+        const minW = Number(cfg.min_width ?? -1);
+        const minH = Number(cfg.min_height ?? -1);
+        const maxW = Number(cfg.max_width ?? -1);
+        const maxH = Number(cfg.max_height ?? -1);
+
+        if (minW !== -1 && width < minW) return false;
+        if (minH !== -1 && height < minH) return false;
+        if (maxW !== -1 && maxW > 0 && width > maxW) return false;
+        if (maxH !== -1 && maxH > 0 && height > maxH) return false;
+
+        // 处理宽高比条件：支持对象 {min, max} 或字符串 "w:h" 或数字
+        const ar = cfg?.aspect_ratio_condition;
+        if (ar) {
+            const ratio = width / height;
+            if (typeof ar === 'object') {
+                const minAr = Number(ar.min ?? -1);
+                const maxAr = Number(ar.max ?? -1);
+                if (minAr !== -1 && ratio < minAr) return false;
+                if (maxAr !== -1 && ratio > maxAr) return false;
+            } else if (typeof ar === 'string') {
+                // 支持 x:y 格式
+                const m = ar.match(/^(\d+(?:\.\d+)?)[ :xX](\d+(?:\.\d+)?)/);
+                if (m) {
+                    const target = Number(m[1]) / Number(m[2]);
+                    // 允许小幅偏差
+                    const tol = 0.02;
+                    if (Math.abs(ratio - target) > tol) return false;
+                }
+            } else if (typeof ar === 'number') {
+                const target = Number(ar);
+                const tol = 0.02;
+                if (Math.abs((width / height) - target) > tol) return false;
+            }
+        }
+
+        return true;
     } catch (error) {
         console.error('检查超分条件失败:', error);
-        return true; // 出错时默认允许超分
+        return true;
     }
 }
 

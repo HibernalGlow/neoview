@@ -18,6 +18,7 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import ComparisonViewer from './ComparisonViewer.svelte';
 	import { upscaleState, performUpscale, getGlobalUpscaleEnabled, upscaleSettings, initUpscaleSettingsManager } from '$lib/stores/upscale/UpscaleManager.svelte';
+	import { idbGet, idbSet, idbDelete } from '$lib/utils/idb';
     import { get } from 'svelte/store';
 
 	// 进度条状态
@@ -41,6 +42,9 @@
 	// 预加载队列管理
 	let preloadQueue = $state<ImageDataWithHash[]>([]);
 	let isPreloading = $state(false);
+
+	// 预加载内存缓存：hash -> { url, blob }
+	let preloadMemoryCache = $state<Map<string, { url: string; blob: Blob }>>(new Map());
 
 	// 预超分进度管理
 	let preUpscaleProgress = $state(0); // 预超分进度 (0-100)
@@ -150,15 +154,35 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 	// 监听书籍切换：清理上一本书的内存缓存（但不立即删除磁盘缓存，磁盘缓存由 TTL 管理）
 	$effect(() => {
 		const currentBook = bookStore.currentBook;
-		// 当 currentBook 发生变化时（切书或关闭），清理内存缓存与预加载队列
-		// 如果 currentBook 非空，表示打开/切换到新书；我们仍然清理旧的内存缓存以释放资源
+		// 清理一些临时内存缓存与队列
 		md5Cache = new Map();
-		hashPathIndex = new Map();
 		preloadQueue = [];
 		isPreloading = false;
+		preloadMemoryCache = new Map();
 		bookStore.setUpscaledImage(null);
 		bookStore.setUpscaledImageBlob(null);
 		resetPreUpscaleProgress();
+
+		// 尝试从 IndexedDB 恢复该书的 hashPathIndex（若存在）
+		(async () => {
+			try {
+				if (currentBook && currentBook.path) {
+					const key = `hashPathIndex:${currentBook.path}`;
+					const stored = await idbGet(key);
+					if (stored && Array.isArray(stored)) {
+						hashPathIndex = new Map(stored);
+						console.log('已从IndexedDB恢复hashPathIndex，条目数:', hashPathIndex.size);
+					} else {
+						hashPathIndex = new Map();
+					}
+				} else {
+					hashPathIndex = new Map();
+				}
+			} catch (err) {
+				console.warn('恢复hashPathIndex失败:', err);
+				hashPathIndex = new Map();
+			}
+		})();
 	});
 
 	// 监听超分完成事件
@@ -197,13 +221,23 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 			}
 		};
 
-		const handleUpscaleSaved = (e: CustomEvent) => {
+		const handleUpscaleSaved = async (e: CustomEvent) => {
 			try {
 				const { finalHash, savePath } = e.detail || {};
 				if (finalHash && savePath) {
 					// 更新内存索引，供后续快速命中
 					hashPathIndex.set(finalHash, savePath);
 					console.log('后台超分已保存，已更新 hashPathIndex:', finalHash, savePath);
+					// 持久化到 IndexedDB（按书）
+					try {
+						const cb = bookStore.currentBook;
+						if (cb && cb.path) {
+							const key = `hashPathIndex:${cb.path}`;
+							await idbSet(key, Array.from(hashPathIndex.entries()));
+						}
+					} catch (err2) {
+						console.warn('持久化 hashPathIndex 到 IndexedDB 失败:', err2);
+					}
 				}
 			} catch (err) {
 				console.error('处理 upscale-saved 事件失败:', err);
@@ -414,8 +448,23 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 
 	// 检查超分缓存（使用传入的hash）
 	async function checkUpscaleCache(imageDataWithHash: ImageDataWithHash): Promise<boolean> {
-	    try {
-		    const { data: imageData, hash: imageHash } = imageDataWithHash;
+		try {
+			const { data: imageData, hash: imageHash } = imageDataWithHash;
+
+			// 优先检查内存预加载缓存（preloadMemoryCache），减少导航时磁盘读取等待
+			try {
+				if (preloadMemoryCache.has(imageHash)) {
+					const cached = preloadMemoryCache.get(imageHash);
+					if (cached) {
+						bookStore.setUpscaledImage(cached.url);
+						bookStore.setUpscaledImageBlob(cached.blob);
+						console.log('从内存预加载缓存命中 upscaled，MD5:', imageHash);
+						return true;
+					}
+				}
+			} catch (e) {
+				console.warn('检查内存预加载缓存失败:', e);
+			}
 			
 			// 获取当前活动的算法设置
 			let currentAlgorithm = 'realcugan'; // 默认值
@@ -462,6 +511,16 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 								bookStore.setUpscaledImageBlob(blob);
 								// 更新内存索引，便于后续快速命中
 								hashPathIndex.set(imageHash, meta.path);
+								// 持久化索引到 IndexedDB
+								try {
+									const cb = bookStore.currentBook;
+									if (cb && cb.path) {
+										const key = `hashPathIndex:${cb.path}`;
+										await idbSet(key, Array.from(hashPathIndex.entries()));
+									}
+								} catch (err) {
+									console.warn('持久化 hashPathIndex 失败:', err);
+								}
 								console.log(`找到 ${meta.algorithm || algorithm} 算法的超分缓存，path: ${meta.path}`);
 								return true;
 							} catch (e) {
@@ -752,6 +811,15 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 					if (!(res && res.requeue)) {
 						preUpscaledPages = new Set([...preUpscaledPages, targetIndex]);
 						updatePreUpscaleProgress();
+						// 如果后台返回了 upscaledBlob / dataURL，则写入内存预加载缓存，便于立即命中
+						try {
+							if (res && res.upscaledImageBlob && res.upscaledImageData) {
+								preloadMemoryCache.set(imageDataWithHash.hash, { url: res.upscaledImageData, blob: res.upscaledImageBlob });
+								console.log('已将预加载超分结果写入内存缓存，MD5:', imageDataWithHash.hash);
+							}
+						} catch (e) {
+							console.warn('写入内存预加载缓存失败:', e);
+						}
 					} else {
 						console.log('预超分被要求重试（并发受限），稍后重试:', imageDataWithHash.hash);
 					}

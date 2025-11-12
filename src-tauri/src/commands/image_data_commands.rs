@@ -8,18 +8,18 @@ use std::fs;
 use std::path::PathBuf;
 use base64::{Engine as _, engine::general_purpose};
 
-/// 计算数据的哈希值
+/// 计算数据的哈希值（使用MD5）
 #[command]
 pub async fn calculate_data_hash(data_url: String) -> Result<String, String> {
+    use md5;
+    
     // 从 data URL 提取二进制数据
     let binary_data = extract_binary_from_data_url(&data_url)?;
     
-    // 计算哈希
-    let mut hasher = DefaultHasher::new();
-    hasher.write(&binary_data);
-    let hash = hasher.finish();
+    // 计算MD5
+    let digest = md5::compute(&binary_data);
     
-    Ok(format!("{:x}", hash))
+    Ok(format!("{:x}", digest))
 }
 
 /// 将 data URL 转换为 WebP 格式

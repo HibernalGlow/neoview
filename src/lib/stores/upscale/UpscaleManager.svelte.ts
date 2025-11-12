@@ -467,7 +467,11 @@ export async function performUpscale(imageData) {
 
         // 通知主查看器替换图片
         window.dispatchEvent(new CustomEvent('upscale-complete', {
-            detail: { imageData: upscaledImageData, imageBlob: upscaledImageBlob }
+            detail: { 
+                imageData: upscaledImageData, 
+                imageBlob: upscaledImageBlob,
+                originalImageHash: imageHash
+            }
         }));
 
         console.log(`超分完成，耗时: ${elapsedSeconds}秒`);

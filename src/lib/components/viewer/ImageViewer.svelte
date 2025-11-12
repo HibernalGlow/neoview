@@ -17,7 +17,7 @@
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { invoke } from '@tauri-apps/api/core';
 	import ComparisonViewer from './ComparisonViewer.svelte';
-	import { upscaleState, performUpscale, getGlobalUpscaleEnabled } from '$lib/stores/upscale/UpscaleManager.svelte';
+	import { upscaleState, performUpscale, getGlobalUpscaleEnabled, upscaleSettings } from '$lib/stores/upscale/UpscaleManager.svelte';
 
 	// 进度条状态
 	let showProgressBar = $state(true);
@@ -38,13 +38,19 @@
 	let progressBlinking = $state(false);
 
 	// 预加载队列管理
-	let preloadQueue = $state<string[]>([]);
+	let preloadQueue = $state<{hash: string, imageData: string}[]>([]);
 	let isPreloading = $state(false);
 
-	// 预加载进度管理
-	let preloadProgress = $state(0); // 预加载进度 (0-100)
-	let preloadedPages = $state(new Set<number>()); // 已预加载的页面索引
-	let totalPreloadPages = $state(0); // 总预加载页数
+	// 预超分进度管理
+	let preUpscaleProgress = $state(0); // 预超分进度 (0-100)
+	let preUpscaledPages = $state(new Set<number>()); // 已预超分的页面索引
+	let totalPreUpscalePages = $state(0); // 总预超分页数
+
+	// 当前页面hash管理
+	let currentImageHash = $state<string>(''); // 当前页面的原始图片hash
+	
+	// MD5缓存管理
+	let md5Cache = $state<Map<string, string>>(new Map()); // 缓存图片URL到MD5的映射
 
 	// 订阅设置变化
 	settingsManager.addListener((s) => {
@@ -128,24 +134,39 @@
 		const currentPage = bookStore.currentPage;
 		if (currentPage) {
 			bookStore.setCurrentImage(currentPage);
-			// 重置预加载进度
-			preloadProgress = 0;
-			preloadedPages = new Set();
-			totalPreloadPages = 0;
+			// 重置预超分进度
+			preUpscaleProgress = 0;
+			preUpscaledPages = new Set();
+			totalPreUpscalePages = 0;
+			// 重置当前页面hash
+			currentImageHash = '';
 			loadCurrentImage();
 		}
 	});
 
 	// 监听超分完成事件
 	$effect(() => {
-		const handleUpscaleComplete = (e: CustomEvent) => {
-			const { imageData, imageBlob } = e.detail;
-			bookStore.setUpscaledImage(imageData);
-			if (imageBlob) {
-				bookStore.setUpscaledImageBlob(imageBlob);
+		const handleUpscaleComplete = async (e: CustomEvent) => {
+			const { imageData, imageBlob, originalImageHash } = e.detail;
+			
+			if (!imageData || !originalImageHash) return;
+			
+			try {
+				// 只有当超分的是当前页面时才替换图片
+				if (originalImageHash === currentImageHash) {
+					bookStore.setUpscaledImage(imageData);
+					if (imageBlob) {
+						bookStore.setUpscaledImageBlob(imageBlob);
+					}
+					// 更新对比数据
+					upscaledImageDataForComparison = imageData;
+					console.log('超分图已匹配当前页面，已替换');
+				} else {
+					console.log('超分图不属于当前页面，跳过替换');
+				}
+			} catch (error) {
+				console.error('处理超分完成事件失败:', error);
 			}
-			// 更新对比数据
-			upscaledImageDataForComparison = imageData;
 		};
 
 		// 监听超分面板请求当前图片数据
@@ -262,6 +283,15 @@
 			// 更新对比数据
 			originalImageDataForComparison = data;
 
+			// 计算并保存当前页面的hash
+			try {
+				currentImageHash = await invoke<string>('calculate_data_hash', {
+					dataUrl: data
+				});
+			} catch (error) {
+				console.error('计算当前页面hash失败:', error);
+			}
+
 			// 检查是否有对应的超分缓存
 			const hasCache = await checkUpscaleCache(data);
 
@@ -312,10 +342,12 @@
 			bookStore.setUpscaledImage(null);
 			bookStore.setUpscaledImageBlob(null);
 			
-			// 计算图片数据的hash
-			const imageHash = await invoke<string>('calculate_data_hash', {
-				dataUrl: imageData
-			});
+			// 获取图片的MD5
+			const imageHash = await getImageMd5(imageData);
+			if (!imageHash) {
+				console.error('缓存检查：无法获取图片MD5');
+				return false;
+			}
 			
 			// 获取当前活动的算法设置
 			let currentAlgorithm = 'realcugan'; // 默认值
@@ -370,6 +402,12 @@
 	// 触发自动超分 - 复用 UpscalePanel 的 startUpscale 逻辑
 	async function triggerAutoUpscale(imageData: string, isPreload = false) {
 		try {
+			// 验证图片数据
+			if (!imageData) {
+				console.error('自动超分：图片数据为空');
+				return;
+			}
+
 			// 检查全局开关
 			const globalEnabled = await getGlobalUpscaleEnabled();
 			if (!globalEnabled) {
@@ -381,15 +419,24 @@
 			if (isPreload) {
 				const currentState = upscaleState;
 				if (currentState.isUpscaling || isPreloading) {
-					// 计算图片hash作为唯一标识
-					const imageHash = await invoke<string>('calculate_data_hash', {
-						dataUrl: imageData
-					});
+					// 验证图片数据格式
+					if (!imageData.startsWith('blob:') && !imageData.startsWith('data:image/')) {
+						console.warn('预加载：图片数据格式异常，不加入队列');
+						return;
+					}
+					
+					// 计算图片hash
+					const imageHash = await getImageMd5(imageData);
+					if (!imageHash) {
+						console.error('预加载：无法获取图片MD5');
+						return;
+					}
 					
 					// 检查是否已在队列中
-					if (!preloadQueue.includes(imageHash)) {
-						preloadQueue = [...preloadQueue, imageHash];
-						console.log(`加入预加载队列，队列长度: ${preloadQueue.length}`);
+					const exists = preloadQueue.some(item => item.hash === imageHash);
+					if (!exists) {
+						preloadQueue = [...preloadQueue, { hash: imageHash, imageData }];
+						console.log(`加入预加载队列，队列长度: ${preloadQueue.length}, 数据长度: ${imageData.length}`);
 					}
 					return;
 				}
@@ -403,6 +450,10 @@
 			}
 
 			console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', '图片数据长度:', imageData.length);
+			// blob URL 本身很短，这是正常的
+			if (!imageData.startsWith('blob:') && !imageData.startsWith('data:image/')) {
+				console.warn('图片数据格式异常:', imageData.substring(0, 50));
+			}
 			
 			// 检查是否是blob URL，如果是则转换为data URL
 			if (imageData.startsWith('blob:')) {
@@ -462,12 +513,20 @@
 		}
 
 		// 取出队列第一个任务
-		const nextHash = preloadQueue[0];
+		const nextTask = preloadQueue[0];
 		preloadQueue = preloadQueue.slice(1);
 
-		// 这里需要重新加载图片数据，因为只有hash
-		// 暂时跳过，因为需要从页面信息重新加载
-		console.log(`处理队列中的下一个任务: ${nextHash}`);
+		console.log(`处理队列中的下一个任务: ${nextTask.hash}, 数据长度: ${nextTask.imageData.length}`);
+		
+		// 使用保存的图片数据执行超分
+		try {
+			await performUpscale(nextTask.imageData);
+		} catch (error) {
+			console.error('队列任务执行失败:', error);
+		}
+		
+		// 继续处理下一个
+		processNextInQueue();
 	}
 
 	// 预加载后续页面的超分
@@ -484,7 +543,7 @@
 			}
 
 			if (preloadPages <= 0) {
-				console.log('预加载页数为0，跳过预加载');
+				console.log('预加载页数为0，跳过预超分');
 				return;
 			}
 
@@ -494,16 +553,16 @@
 			const currentIndex = bookStore.currentPageIndex;
 			const totalPages = bookStore.totalPages;
 
-			// 初始化预加载进度
-			totalPreloadPages = Math.min(preloadPages, totalPages - currentIndex - 1);
-			preloadedPages = new Set();
-			preloadProgress = 0;
+			// 初始化预超分进度
+			totalPreUpscalePages = Math.min(preloadPages, totalPages - currentIndex - 1);
+			preUpscaledPages = new Set();
+			preUpscaleProgress = 0;
 
-			if (totalPreloadPages <= 0) {
+			if (totalPreUpscalePages <= 0) {
 				return;
 			}
 
-			console.log(`开始预加载，共 ${totalPreloadPages} 页`);
+			console.log(`开始预超分，共 ${totalPreUpscalePages} 页`);
 
 			// 预加载后续页面
 			for (let i = 1; i <= preloadPages; i++) {
@@ -513,7 +572,7 @@
 				const pageInfo = currentBook.pages[targetIndex];
 				if (!pageInfo) continue;
 
-				console.log(`预加载第 ${targetIndex + 1} 页的超分...`);
+				console.log(`预超分第 ${targetIndex + 1} 页...`);
 
 				try {
 					// 加载页面图片
@@ -524,34 +583,42 @@
 						pageImageData = await loadImage(pageInfo.path);
 					}
 
+					// 验证图片数据
+					if (!pageImageData) {
+						console.warn(`第 ${targetIndex + 1} 页图片数据为空，跳过`);
+						continue;
+					}
+
+					console.log(`第 ${targetIndex + 1} 页图片数据长度: ${pageImageData.length}, 类型: ${pageImageData.substring(0, 30)}...`);
+
 					// 检查是否已有缓存
 					const hasCache = await checkUpscaleCache(pageImageData);
 					if (hasCache) {
 						console.log(`第 ${targetIndex + 1} 页已有超分缓存`);
-						// 标记为已预加载
-						preloadedPages = new Set([...preloadedPages, targetIndex]);
-						updatePreloadProgress();
+						// 标记为已预超分
+						preUpscaledPages = new Set([...preUpscaledPages, targetIndex]);
+						updatePreUpscaleProgress();
 						continue;
 					}
 
-					// 没有缓存，触发预加载超分
+					// 没有缓存，触发预超分
 					await triggerAutoUpscale(pageImageData, true);
-					// 标记为已预加载
-					preloadedPages = new Set([...preloadedPages, targetIndex]);
-					updatePreloadProgress();
+					// 标记为已预超分
+					preUpscaledPages = new Set([...preUpscaledPages, targetIndex]);
+					updatePreUpscaleProgress();
 				} catch (error) {
-					console.error(`预加载第 ${targetIndex + 1} 页失败:`, error);
+					console.error(`预超分第 ${targetIndex + 1} 页失败:`, error);
 				}
 			}
 		} catch (error) {
-			console.error('预加载失败:', error);
+			console.error('预超分失败:', error);
 		}
 	}
 
-	// 更新预加载进度
-	function updatePreloadProgress() {
-		if (totalPreloadPages > 0) {
-			preloadProgress = (preloadedPages.size / totalPreloadPages) * 100;
+	// 更新预超分进度
+	function updatePreUpscaleProgress() {
+		if (totalPreUpscalePages > 0) {
+			preUpscaleProgress = (preUpscaledPages.size / totalPreUpscalePages) * 100;
 		}
 	}
 
@@ -637,6 +704,52 @@
 	function closeComparison() {
 		comparisonVisible = false;
 	}
+
+	// 获取图片的MD5（带缓存）
+	async function getImageMd5(imageUrl: string): Promise<string | null> {
+		if (!imageUrl) return null;
+		
+		// 检查缓存
+		if (md5Cache.has(imageUrl)) {
+			return md5Cache.get(imageUrl) || null;
+		}
+		
+		try {
+			// 对于blob URL，需要先转换为data URL
+			let dataUrl = imageUrl;
+			if (imageUrl.startsWith('blob:')) {
+				console.log('getImageMd5: 转换blob URL为data URL...');
+				const response = await fetch(imageUrl);
+				const blob = await response.blob();
+				dataUrl = await new Promise<string>((resolve, reject) => {
+					const reader = new FileReader();
+					reader.onload = () => {
+						const result = reader.result as string;
+						resolve(result);
+					};
+					reader.onerror = reject;
+					reader.readAsDataURL(blob);
+				});
+				console.log('getImageMd5: 转换完成，data URL长度:', dataUrl.length);
+			} else if (!imageUrl.startsWith('data:image/')) {
+				console.error('getImageMd5: 无效的图片URL格式:', imageUrl);
+				return null;
+			}
+			
+			// 计算MD5
+			const md5 = await invoke<string>('calculate_data_hash', {
+				dataUrl: dataUrl
+			});
+			
+			// 缓存结果
+			md5Cache.set(imageUrl, md5);
+			
+			return md5;
+		} catch (error) {
+			console.error('计算MD5失败:', error);
+			return null;
+		}
+	}
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -703,22 +816,24 @@
 	/>
 	
 	<!-- Viewer底部进度条 -->
-	{#if showProgressBar && bookStore.currentBook}
+	{#if showProgressBar && bookStore.currentBook && (preUpscaleProgress > 0 || progressColor !== '#FDFBF7')}
 		<div class="absolute bottom-0 left-0 right-0 h-1 pointer-events-none">
-			<!-- 预加载进度条（黄色，底层） -->
-			{#if preloadProgress > 0}
+			<!-- 预超分进度条（黄色，底层） -->
+			{#if preUpscaleProgress > 0}
 				<div 
 					class="absolute bottom-0 left-0 h-full transition-all duration-500" 
-					style="width: {((bookStore.currentPageIndex + 1 + preloadProgress / 100 * totalPreloadPages) / bookStore.currentBook.pages.length) * 100}%; background-color: #FCD34D; opacity: 0.6;"
+					style="width: {((bookStore.currentPageIndex + 1 + preUpscaleProgress / 100 * totalPreUpscalePages) / bookStore.currentBook.pages.length) * 100}%; background-color: #FCD34D; opacity: 0.6;"
 				>
 				</div>
 			{/if}
 			<!-- 当前页面进度条（绿色，顶层） -->
-			<div 
-				class="absolute bottom-0 left-0 h-full transition-all duration-300 {progressBlinking ? 'animate-pulse' : ''}" 
-				style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%; background-color: {progressColor}; opacity: 0.8;"
-			>
-			</div>
+			{#if progressColor !== '#FDFBF7'}
+				<div 
+					class="absolute bottom-0 left-0 h-full transition-all duration-300 {progressBlinking ? 'animate-pulse' : ''}" 
+					style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%; background-color: {progressColor}; opacity: 0.8;"
+				>
+				</div>
+			{/if}
 		</div>
 	{/if}
 </div>

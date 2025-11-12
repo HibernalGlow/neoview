@@ -582,6 +582,80 @@ export async function performUpscale(imageData: string, imageHash?: string, opti
 }
 
 /**
+ * 刷新给定图片数据的缓存状态并更新 `upscaleState`，用于面板实时显示。
+ * 如果找到缓存会把 upscaledImageData/upscaledImageBlob 更新到状态中。
+ */
+export async function refreshCacheStatusForData(imageData: string) {
+    try {
+        if (!imageData) {
+            upscaleState.update(s => ({ ...s, status: '没有图片数据', progress: 0 }));
+            return false;
+        }
+
+        // 计算数据hash
+        const imageHash = await invoke('calculate_data_hash', { dataUrl: imageData }) as string;
+
+        // 更新状态为检查中
+        upscaleState.update(s => ({ ...s, status: '检查缓存...', progress: 0, showProgress: false }));
+
+        // 获取当前算法优先项
+        let settings: any; upscaleSettings.subscribe(s => settings = s)();
+        const currentAlgorithm = settings?.active_algorithm || 'realcugan';
+        const algorithms = [currentAlgorithm, 'realcugan', 'realesrgan', 'waifu2x'];
+
+    let ttlHours = 8;
+    try { let s: any; upscaleSettings.subscribe(x => s = x)(); ttlHours = (s && s.cache_ttl_hours) ?? ttlHours; } catch(e) {}
+        const ttlSeconds = ttlHours * 3600;
+
+        for (const algorithm of algorithms) {
+            try {
+                const meta: any = await invoke('check_upscale_cache_for_algorithm', {
+                    imageHash,
+                    algorithm,
+                    thumbnailPath: 'D:\\temp\\neoview_thumbnails_test',
+                    max_age_seconds: ttlSeconds
+                });
+                if (meta && meta.path) {
+                    // 读取二进制并构建 blob/url
+                    const bytes = await invoke<number[]>('read_binary_file', { filePath: meta.path });
+                    const arr = new Uint8Array(bytes);
+                    const blob = new Blob([arr], { type: 'image/webp' });
+                    const url = URL.createObjectURL(blob);
+
+                    // 更新状态，标记为已存在缓存
+                    upscaleState.update(s => ({
+                        ...s,
+                        status: `已找到缓存 (${meta.algorithm || algorithm})`,
+                        progress: 100,
+                        upscaledImageData: url,
+                        upscaledImageBlob: blob as any,
+                        isUpscaling: false,
+                        showProgress: false
+                    }));
+
+                    // 也把 upscaled image 写入 bookStore，方便查看器同步
+                    try { bookStore.setUpscaledImage(url); bookStore.setUpscaledImageBlob(blob); } catch(e) {}
+
+                    return true;
+                }
+            } catch (e) {
+                continue; // 继续下一种算法
+            }
+        }
+
+        // 未找到缓存
+        upscaleState.update(s => ({ ...s, status: '未找到缓存', progress: 0, upscaledImageData: '', upscaledImageBlob: null }));
+        // 清除 bookStore 上的 upscaled 图像
+        try { bookStore.setUpscaledImage(null); bookStore.setUpscaledImageBlob(null); } catch(e) {}
+        return false;
+    } catch (error) {
+        console.error('刷新缓存状态失败:', error);
+        upscaleState.update(s => ({ ...s, status: `检查缓存失败: ${error}`, progress: 0 }));
+        return false;
+    }
+}
+
+/**
  * 获取图片尺寸
  */
 async function getImageDimensions(imageData: string) {

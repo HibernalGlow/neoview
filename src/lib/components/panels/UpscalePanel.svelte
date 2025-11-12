@@ -15,7 +15,7 @@
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
-	import { upscaleSettings, upscaleState, currentAlgorithmSettings, preloadPages, conditionalUpscaleSettings, initUpscaleSettingsManager, loadUpscaleSettings, saveUpscaleSettings, resetUpscaleSettings, switchAlgorithm, updateCurrentAlgorithmSettings, performUpscale, setPreloadPages, updateConditionalUpscaleSettings, getGlobalUpscaleEnabled, setGlobalUpscaleEnabled } from '$lib/stores/upscale/UpscaleManager.svelte';
+	import { upscaleSettings, upscaleState, currentAlgorithmSettings, preloadPages, conditionalUpscaleSettings, initUpscaleSettingsManager, loadUpscaleSettings, saveUpscaleSettings, resetUpscaleSettings, switchAlgorithm, updateCurrentAlgorithmSettings, performUpscale, setPreloadPages, updateConditionalUpscaleSettings, getGlobalUpscaleEnabled, setGlobalUpscaleEnabled, refreshCacheStatusForData } from '$lib/stores/upscale/UpscaleManager.svelte';
 
 	// 使用store订阅
 	let isUpscaling = $state(false);
@@ -35,6 +35,9 @@
 	// 延迟订阅store，确保所有变量已初始化
 	let upscaleStateUnsubscribe: () => void;
 	let upscaleSettingsUnsubscribe: () => void;
+
+	// 监听书籍当前图片变化用于实时刷新当前图片缓存状态
+	let bookStoreUnsubscribe: () => void;
 	
 	onMount(async () => {
 		// 检查是否有可用的超分工具
@@ -111,6 +114,38 @@
 			// 同步全局超分开关
 			globalUpscaleEnabled = settings.global_upscale_enabled;
 		});
+
+		// 订阅 bookStore 的变化，当当前图片变化时刷新缓存状态
+		bookStoreUnsubscribe = bookStore.subscribe(bs => {
+			try {
+				if (bs && bs.currentImage) {
+					// 请求当前 ImageViewer 返回图片 data
+					const imageDataPromise = new Promise<string>((resolve, reject) => {
+						const timeout = setTimeout(() => reject(new Error('获取图片数据超时')), 2000);
+						window.dispatchEvent(new CustomEvent('request-current-image-data', {
+							detail: {
+								callback: (data: string) => {
+									clearTimeout(timeout);
+									resolve(data);
+								}
+							}
+						}));
+					});
+					imageDataPromise.then(data => {
+						if (data) {
+							refreshCacheStatusForData(data).catch(e => console.warn('刷新缓存状态失败:', e));
+						}
+					}).catch(err => {
+						console.warn('获取当前图片数据失败:', err);
+					});
+				} else {
+					// 没有当前图片，清理状态
+					upscaleState.update(s => ({ ...s, status: '没有当前图片', progress: 0, upscaledImageData: '', upscaledImageBlob: null }));
+				}
+			} catch (e) {
+				console.warn('bookStore 订阅处理失败:', e);
+			}
+		});
 	});
 	
 	// 清理订阅
@@ -118,6 +153,7 @@
 		if (upscaleStateUnsubscribe) upscaleStateUnsubscribe();
 		if (upscaleSettingsUnsubscribe) upscaleSettingsUnsubscribe();
 		if (currentAlgorithmSettingsUnsubscribe) currentAlgorithmSettingsUnsubscribe();
+		if (bookStoreUnsubscribe) bookStoreUnsubscribe();
 	});
 	
 	// Real-CUGAN 设置

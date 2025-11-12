@@ -108,8 +108,11 @@
 				const dataUrl = await dataOrBlobUrlToDataUrl(val.data);
 				entries.push([idx, dataUrl]);
 			}
-			await idbSet(`preloadedPageImages:${bookPath}`, entries);
-			console.log('已持久化 preloadedPageImages 到 IndexedDB，count=', entries.length);
+			// 只持久化最近的 N 条，避免占用过多 IndexedDB 空间
+			const start = Math.max(0, entries.length - PRELOADED_PAGES_CACHE_LIMIT);
+			const limited = entries.slice(start);
+			await idbSet(`preloadedPageImages:${bookPath}`, limited);
+			console.log('已持久化 preloadedPageImages 到 IndexedDB，count=', limited.length);
 		} catch (e) {
 			console.warn('持久化 pre加载页面到 IndexedDB 失败:', e);
 		}
@@ -119,8 +122,14 @@
 		try {
 			const stored = await idbGet(`preloadedPageImages:${bookPath}`);
 			if (stored && Array.isArray(stored)) {
+				// 如果存储条目超过限制，取最后的 PRELOADED_PAGES_CACHE_LIMIT 条
+				let limited = stored;
+				if (stored.length > PRELOADED_PAGES_CACHE_LIMIT) {
+					limited = stored.slice(stored.length - PRELOADED_PAGES_CACHE_LIMIT);
+					console.log('从 IndexedDB 恢复 preloadedPageImages 时进行截断，原始条目=', stored.length, '保留=', limited.length);
+				}
 				preloadedPageImages = new Map();
-				for (const [idx, dataUrl] of stored) {
+				for (const [idx, dataUrl] of limited) {
 					preloadedPageImages.set(Number(idx), { data: dataUrl as string, decoded: true });
 				}
 				console.log('已从 IndexedDB 恢复 preloadedPageImages，条目:', preloadedPageImages.size);

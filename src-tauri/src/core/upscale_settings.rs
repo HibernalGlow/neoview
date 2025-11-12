@@ -67,6 +67,7 @@ pub struct Waifu2xSettings {
 
 /// 超分设置
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct UpscaleSettings {
     /// 当前选中的算法
     pub active_algorithm: String,

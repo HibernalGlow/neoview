@@ -49,6 +49,87 @@
 	// 预加载已解码的页面图片缓存：pageIndex -> { data, decoded }
 	let preloadedPageImages = $state<Map<number, { data: string; decoded: boolean }>>(new Map());
 
+	// 预加载缓存容量与 LRU 管理
+	const PRELOADED_PAGES_CACHE_LIMIT = 10; // 可调整
+
+	function touchPreloadedPage(index: number) {
+		// 更新 LRU：删除并重新插入到 Map 末尾
+		try {
+			if (!preloadedPageImages.has(index)) return;
+			const val = preloadedPageImages.get(index)!;
+			preloadedPageImages.delete(index);
+			preloadedPageImages.set(index, val);
+		} catch (e) {
+			console.warn('touchPreloadedPage failed', e);
+		}
+	}
+
+	function ensurePreloadedCacheLimit() {
+		try {
+			while (preloadedPageImages.size > PRELOADED_PAGES_CACHE_LIMIT) {
+				// Map keys are ordered; 删除最旧的一项
+				const firstKey = preloadedPageImages.keys().next().value as number;
+				preloadedPageImages.delete(firstKey);
+				console.log('预加载页面缓存超限，已移除最旧页：', firstKey + 1);
+			}
+		} catch (e) {
+			console.warn('ensurePreloadedCacheLimit failed', e);
+		}
+	}
+
+	async function dataOrBlobUrlToDataUrl(raw: string): Promise<string> {
+		// 如果已经是 data URL，直接返回
+		if (!raw) return raw;
+		if (raw.startsWith('data:')) return raw;
+		if (raw.startsWith('blob:')) {
+			try {
+				const resp = await fetch(raw);
+				const blob = await resp.blob();
+				return await new Promise<string>((resolve, reject) => {
+					const reader = new FileReader();
+					reader.onload = () => resolve(reader.result as string);
+					reader.onerror = reject;
+					reader.readAsDataURL(blob);
+				});
+			} catch (e) {
+				console.warn('转换 blob URL 到 data URL 失败:', e);
+				return raw;
+			}
+		}
+		// 其他情况直接返回原始字符串
+		return raw;
+	}
+
+	async function persistPreloadedPagesForBook(bookPath: string) {
+		try {
+			const entries: Array<[number, string]> = [];
+			for (const [idx, val] of preloadedPageImages.entries()) {
+				// 尽量保存为 data URL
+				const dataUrl = await dataOrBlobUrlToDataUrl(val.data);
+				entries.push([idx, dataUrl]);
+			}
+			await idbSet(`preloadedPageImages:${bookPath}`, entries);
+			console.log('已持久化 preloadedPageImages 到 IndexedDB，count=', entries.length);
+		} catch (e) {
+			console.warn('持久化 pre加载页面到 IndexedDB 失败:', e);
+		}
+	}
+
+	async function restorePreloadedPagesForBook(bookPath: string) {
+		try {
+			const stored = await idbGet(`preloadedPageImages:${bookPath}`);
+			if (stored && Array.isArray(stored)) {
+				preloadedPageImages = new Map();
+				for (const [idx, dataUrl] of stored) {
+					preloadedPageImages.set(Number(idx), { data: dataUrl as string, decoded: true });
+				}
+				console.log('已从 IndexedDB 恢复 preloadedPageImages，条目:', preloadedPageImages.size);
+			}
+		} catch (e) {
+			console.warn('恢复 preloadedPageImages 失败:', e);
+		}
+	}
+
 	// 预超分进度管理
 	let preUpscaleProgress = $state(0); // 预超分进度 (0-100)
 	let preUpscaledPages = $state(new Set<number>()); // 已预超分的页面索引
@@ -368,6 +449,8 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 				if (cached && cached.data) {
 					console.log('使用预加载缓存的当前页面图片，index:', currentIndex + 1);
 					imageData = cached.data;
+						// 标记为最近使用
+						touchPreloadedPage(currentIndex);
 				} else {
 					imageData = null;
 				}
@@ -831,6 +914,16 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 						img.src = imageDataWithHash.data;
 						await decodePromise;
 						preloadedPageImages.set(targetIndex, { data: imageDataWithHash.data, decoded: true });
+						// LRU 管理与持久化
+						touchPreloadedPage(targetIndex);
+						ensurePreloadedCacheLimit();
+						// 持久化当前书的 preloaded 页面数据
+						try {
+							const cb = bookStore.currentBook;
+							if (cb && cb.path) await persistPreloadedPagesForBook(cb.path);
+						} catch (e) {
+							console.warn('持久化 preloadedPageImages 失败:', e);
+						}
 						console.log('预加载已解码页面图片，index:', targetIndex + 1);
 					} catch (e) {
 						console.warn('预加载页面解码失败，继续超分预处理:', e);

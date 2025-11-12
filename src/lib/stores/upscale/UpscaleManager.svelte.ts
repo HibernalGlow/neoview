@@ -123,11 +123,27 @@ export async function initUpscaleSettingsManager() {
  */
 export async function loadUpscaleSettings() {
     try {
-        const settings = await invoke('get_upscale_settings');
+        const raw = await invoke('get_upscale_settings');
+        // 验证并合并默认设置，容错处理后端返回不完整或解析错误
+        let settings: any = {};
+        if (raw && typeof raw === 'object') {
+            settings = { ...DEFAULT_UPSCALE_SETTINGS, ...(raw as any) };
+            // ensure conditional_upscale exists
+            settings.conditional_upscale = { ...DEFAULT_UPSCALE_SETTINGS.conditional_upscale, ...(raw?.conditional_upscale || {}) };
+        } else {
+            console.warn('loadUpscaleSettings: 后端返回无效，使用默认设置');
+            settings = DEFAULT_UPSCALE_SETTINGS;
+        }
+        // 基本字段校验
+        if (!settings.active_algorithm) {
+            console.warn('超分设置缺少 active_algorithm 字段，使用默认设置');
+            settings = DEFAULT_UPSCALE_SETTINGS;
+        }
         upscaleSettings.set(settings);
-        console.log('超分设置已加载:', settings);
+        console.log('超分设置已加载（合并/验证）:', settings);
     } catch (error) {
-        console.error('加载超分设置失败:', error);
+        console.error('加载超分设置失败，使用默认设置:', error);
+        upscaleSettings.set(DEFAULT_UPSCALE_SETTINGS);
     }
 }
 

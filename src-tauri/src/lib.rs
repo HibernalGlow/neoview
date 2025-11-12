@@ -183,11 +183,13 @@ pub fn run() {
             commands::set_comparison_mode,
             // Image Data commands
             commands::calculate_data_hash,
+            commands::calculate_path_hash,
             commands::convert_data_url_to_webp,
             commands::get_upscale_save_path_from_data,
             commands::upscale_image_from_data,
             commands::check_upscale_cache_for_algorithm,
             commands::save_binary_file,
+            commands::read_binary_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -52,6 +52,9 @@
 	// MD5缓存管理
 	let md5Cache = $state<Map<string, string>>(new Map()); // 缓存图片URL到MD5的映射
 
+	// 本地 hash -> disk path 索引（内存）
+	let hashPathIndex = $state<Map<string, string>>(new Map());
+
 	// 订阅设置变化
 	settingsManager.addListener((s) => {
 		settings = s;
@@ -138,6 +141,20 @@
 			currentImageHash = '';
 			loadCurrentImage();
 		}
+	});
+
+	// 监听书籍切换：清理上一本书的内存缓存（但不立即删除磁盘缓存，磁盘缓存由 TTL 管理）
+	$effect(() => {
+		const currentBook = bookStore.currentBook;
+		// 当 currentBook 发生变化时（切书或关闭），清理内存缓存与预加载队列
+		// 如果 currentBook 非空，表示打开/切换到新书；我们仍然清理旧的内存缓存以释放资源
+		md5Cache = new Map();
+		hashPathIndex = new Map();
+		preloadQueue = [];
+		isPreloading = false;
+		bookStore.setUpscaledImage(null);
+		bookStore.setUpscaledImageBlob(null);
+		resetPreUpscaleProgress();
 	});
 
 	// 监听超分完成事件
@@ -295,18 +312,39 @@
 			// 更新对比数据
 			originalImageDataForComparison = data;
 
-			// 获取带hash的图片数据
-			const imageDataWithHash = await getImageDataWithHash(data);
-			if (!imageDataWithHash) {
-				console.error('无法获取图片数据及hash');
-				return;
+			// 获取带hash的图片数据：优先使用基于路径的稳定hash（archive::innerpath），回退到数据hash
+			let imageDataWithHash = null;
+			try {
+				const book = currentBook;
+				if (book) {
+					const pageIndex = bookStore.currentPageIndex;
+					const pageInfo = book.pages?.[pageIndex];
+					if (pageInfo) {
+						const pathKey = book.type === 'archive' ? `${book.path}::${pageInfo.path}` : pageInfo.path;
+						try {
+							const pathHash = await invoke<string>('calculate_path_hash', { path: pathKey });
+							imageDataWithHash = { data, hash: pathHash };
+						} catch (e) {
+							console.warn('调用 calculate_path_hash 失败，回退到数据哈希:', e);
+						}
+					}
+				}
+			} catch (e) {
+				console.warn('生成路径hash异常，回退到数据哈希:', e);
 			}
-			
+			if (!imageDataWithHash) {
+				imageDataWithHash = await getImageDataWithHash(data);
+				if (!imageDataWithHash) {
+					console.error('无法获取图片数据及hash');
+					return;
+				}
+			}
+		
 			// 保存当前页面的hash
 			currentImageHash = imageDataWithHash.hash;
-			console.log('当前页面MD5:', currentImageHash);
+			console.log('当前页面hash:', currentImageHash);
 
-			// 检查是否有对应的超分缓存
+			// 检查是否有对应的超分缓存（传入带hash的对象）
 			const hasCache = await checkUpscaleCache(imageDataWithHash);
 
 			// 如果没有缓存且全局超分开关开启，则自动开始超分
@@ -369,33 +407,51 @@
 				console.warn('获取当前算法失败，使用默认值:', e);
 			}
 			
-			// 优先检查当前算法的缓存
-			const algorithms = [currentAlgorithm, 'realcugan', 'realesrgan', 'waifu2x'];
-			
-			for (const algorithm of algorithms) {
+				// 优先检查当前算法的缓存
+				const algorithms = [currentAlgorithm, 'realcugan', 'realesrgan', 'waifu2x'];
+
+				// 读取 TTL（小时）设置，默认8小时
+				let ttlHours = 8;
 				try {
-					const cacheData = await invoke<string>('check_upscale_cache_for_algorithm', {
-						imageHash,
-						algorithm,
-						thumbnailPath: 'D:\\temp\\neoview_thumbnails_test'
-					});
-					
-					if (cacheData) {
-						// 找到缓存，设置超分结果
-						const blob = new Blob([new Uint8Array(JSON.parse(cacheData))], { type: 'image/webp' });
-						const url = URL.createObjectURL(blob);
-						
-						bookStore.setUpscaledImage(url);
-						bookStore.setUpscaledImageBlob(blob);
-						
-						console.log(`找到 ${algorithm} 算法的超分缓存，MD5: ${imageHash}`);
-						return true;
-					}
+					let s; upscaleSettings.subscribe(x => s = x)();
+					ttlHours = s?.cache_ttl_hours ?? ttlHours;
 				} catch (e) {
-					// 继续检查下一个算法
-					continue;
+					console.warn('读取缓存TTL失败，使用默认值', e);
 				}
-			}
+				const ttlSeconds = ttlHours * 3600;
+
+				for (const algorithm of algorithms) {
+					try {
+						// 后端返回的是匹配缓存文件的绝对路径（若找到），否则会抛出错误
+						const cachePath = await invoke<string>('check_upscale_cache_for_algorithm', {
+							imageHash,
+							algorithm,
+							thumbnailPath: 'D:\\temp\\neoview_thumbnails_test',
+							max_age_seconds: ttlSeconds
+						});
+						if (cachePath) {
+							try {
+								// 通过后端命令读取文件二进制
+								const bytes = await invoke<number[]>('read_binary_file', { filePath: cachePath });
+								const arr = new Uint8Array(bytes);
+								const blob = new Blob([arr], { type: 'image/webp' });
+								const url = URL.createObjectURL(blob);
+								bookStore.setUpscaledImage(url);
+								bookStore.setUpscaledImageBlob(blob);
+								// 更新内存索引，便于后续快速命中
+								hashPathIndex.set(imageHash, cachePath);
+								console.log(`找到 ${algorithm} 算法的超分缓存，path: ${cachePath}`);
+								return true;
+							} catch (e) {
+								console.error('读取缓存文件失败:', e);
+								continue;
+							}
+						}
+					} catch (e) {
+						// 继续检查下一个算法
+						continue;
+					}
+				}
 			
 			// 没有找到缓存
 			console.log('未找到任何超分缓存，MD5:', imageHash);
@@ -590,14 +646,29 @@
 						continue;
 					}
 
-					// 获取带hash的图片数据
-					const imageDataWithHash = await getImageDataWithHash(pageImageData);
+					// 获取带hash的图片数据：优先使用基于路径的稳定hash（archive::innerpath），回退到数据哈希
+					let imageDataWithHash = null;
+					try {
+						const pathKey = currentBook.type === 'archive' ? `${currentBook.path}::${pageInfo.path}` : pageInfo.path;
+						try {
+							const pathHash = await invoke<string>('calculate_path_hash', { path: pathKey });
+							imageDataWithHash = { data: pageImageData, hash: pathHash };
+						} catch (e) {
+							console.warn('为预加载页面获取路径hash失败，回退到数据hash:', e);
+						}
+					} catch (e) {
+						console.warn('生成预加载页面路径hash异常，回退到数据hash:', e);
+					}
 					if (!imageDataWithHash) {
-						console.warn(`第 ${targetIndex + 1} 页无法获取图片hash，跳过`);
-						continue;
+						const tmp = await getImageDataWithHash(pageImageData);
+						if (!tmp) {
+							console.warn(`第 ${targetIndex + 1} 页无法获取图片hash，跳过`);
+							continue;
+						}
+						imageDataWithHash = tmp;
 					}
 
-					console.log(`第 ${targetIndex + 1} 页图片数据长度: ${imageDataWithHash.data.length}, MD5: ${imageDataWithHash.hash}`);
+					console.log(`第 ${targetIndex + 1} 页图片数据长度: ${imageDataWithHash.data.length}, hash: ${imageDataWithHash.hash}`);
 
 					// 检查是否已有缓存
 					const hasCache = await checkUpscaleCache(imageDataWithHash);

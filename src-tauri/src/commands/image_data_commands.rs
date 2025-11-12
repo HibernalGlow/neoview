@@ -7,6 +7,7 @@ use std::hash::{Hash, Hasher};
 use std::fs;
 use std::path::PathBuf;
 use base64::{Engine as _, engine::general_purpose};
+use std::collections::HashMap;
 
 /// 计算数据的哈希值（使用MD5）
 #[command]
@@ -185,41 +186,124 @@ pub async fn upscale_image_from_data(
     Ok(result)
 }
 
-/// 检查指定算法的超分缓存
+/// 计算基于路径的哈希（MD5）
+#[command]
+pub async fn calculate_path_hash(path: String) -> Result<String, String> {
+    use md5;
+
+    let digest = md5::compute(path.as_bytes());
+    Ok(format!("{:x}", digest))
+}
+
+/// 检查指定算法的超分缓存（支持可选的最大年龄过滤，单位秒）。
+/// 返回匹配的缓存文件的完整路径（字符串），如果未找到则返回 Err。
 #[command]
 pub async fn check_upscale_cache_for_algorithm(
     image_hash: String,
     algorithm: String,
     thumbnail_path: String,
+    max_age_seconds: Option<u64>,
 ) -> Result<String, String> {
     let thumbnail_root = PathBuf::from(thumbnail_path);
     let upscale_dir = thumbnail_root.join("generic-upscale");
-    
-    // 搜索缓存目录中匹配的文件
+
+    // 索引文件（简单的文本格式：每行 hash|path|mtime）
+    let index_file = upscale_dir.join("index.txt");
+
+    // 尝试从索引中快速查找
+    if index_file.exists() {
+        if let Ok(content) = fs::read_to_string(&index_file) {
+            for line in content.lines() {
+                let parts: Vec<&str> = line.splitn(3, '|').collect();
+                if parts.len() < 3 { continue; }
+                let h = parts[0];
+                let p = parts[1];
+                let mtime = parts[2].parse::<u64>().unwrap_or(0);
+                if h == image_hash {
+                    let path_buf = PathBuf::from(p);
+                    if path_buf.exists() {
+                        // 检查TTL
+                        if let Some(max_age) = max_age_seconds {
+                            if let Ok(metadata) = fs::metadata(&path_buf) {
+                                if let Ok(modified) = metadata.modified() {
+                                    if let Ok(elapsed) = std::time::SystemTime::now().duration_since(modified) {
+                                        if elapsed.as_secs() > max_age {
+                                            // 过期，继续查找其他文件
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        return Ok(path_buf.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    // 索引未命中或索引不可用时扫描目录并更新索引
     if upscale_dir.exists() {
+        let mut new_index: HashMap<String, (String, u64)> = HashMap::new();
         if let Ok(entries) = fs::read_dir(&upscale_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.is_file() {
                     if let Some(filename) = path.file_name() {
                         let filename_str = filename.to_string_lossy();
-                        
-                        // 检查文件名是否匹配: {hash}_sr[{model}].webp
                         if filename_str.starts_with(&format!("{}_", image_hash)) {
-                            // 找到匹配的缓存文件
-                            let data = fs::read(&path)
-                                .map_err(|e| format!("读取缓存文件失败: {}", e))?;
-                            
-                            // 返回base64编码的数据
-                            let base64_data = general_purpose::STANDARD.encode(&data);
-                            return Ok(base64_data);
+                            // 检查TTL
+                            if let Some(max_age) = max_age_seconds {
+                                if let Ok(metadata) = fs::metadata(&path) {
+                                    if let Ok(modified) = metadata.modified() {
+                                        if let Ok(elapsed) = std::time::SystemTime::now().duration_since(modified) {
+                                            if elapsed.as_secs() > max_age {
+                                                // 已过期，跳过此文件
+                                                continue;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 找到匹配的缓存文件，记录到索引并返回路径
+                            if let Ok(metadata) = fs::metadata(&path) {
+                                let mtime = metadata.modified()
+                                    .ok()
+                                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                                    .map(|d| d.as_secs()).unwrap_or(0);
+                                new_index.insert(image_hash.clone(), (path.to_string_lossy().to_string(), mtime));
+                            }
+                            return Ok(path.to_string_lossy().to_string());
+                        } else {
+                            // 也把其他文件加入索引候选（简单策略）
+                            if let Some(pos) = filename_str.find("_") {
+                                let key = &filename_str[..pos];
+                                if let Ok(metadata) = fs::metadata(&path) {
+                                    let mtime = metadata.modified()
+                                        .ok()
+                                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                                        .map(|d| d.as_secs()).unwrap_or(0);
+                                    new_index.insert(key.to_string(), (path.to_string_lossy().to_string(), mtime));
+                                }
+                            }
                         }
                     }
                 }
             }
         }
+
+        // 写回索引文件（覆盖）
+        if !new_index.is_empty() {
+            let mut lines = Vec::new();
+            for (k, (p, m)) in new_index.iter() {
+                lines.push(format!("{}|{}|{}", k, p, m));
+            }
+            let content = lines.join("\n");
+            let _ = fs::write(&index_file, content);
+        }
     }
-    
+
     Err("未找到缓存".to_string())
 }
 
@@ -232,6 +316,13 @@ pub async fn save_binary_file(file_path: String, data: Vec<u8>) -> Result<(), St
         .map_err(|e| format!("保存文件失败: {}", e))?;
     
     Ok(())
+}
+
+/// 读取二进制文件并返回字节数组
+#[command]
+pub async fn read_binary_file(file_path: String) -> Result<Vec<u8>, String> {
+    use std::fs;
+    fs::read(&file_path).map_err(|e| format!("读取文件失败: {}", e))
 }
 
 /// 从 data URL 提取二进制数据

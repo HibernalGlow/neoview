@@ -38,6 +38,8 @@ export const upscaleSettings = writable({
         gpu_id: '0',
         threads: '1:2:2'
     },
+    // 缓存生命周期（小时）: 生成超分文件后多少小时视为有效，默认 8 小时
+    cache_ttl_hours: 8,
     preload_pages: 3,
     conditional_upscale: {
         enabled: false,

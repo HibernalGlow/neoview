@@ -836,10 +836,10 @@
 				>
 				</div>
 			{/if}
-			<!-- 当前页面进度条（绿色，叠加在黄色上面） -->
+			<!-- 当前页面进度条（奶白色/绿色，叠加在黄色上面） -->
 			<div 
 				class="absolute bottom-0 left-0 h-full transition-all duration-300 {progressBlinking ? 'animate-pulse' : ''}" 
-				style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%; background-color: {progressColor}; opacity: {progressColor === '#FDFBF7' ? 0 : 0.8};"
+				style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%; background-color: {progressColor}; opacity: 0.8;"
 			>
 			</div>
 		</div>

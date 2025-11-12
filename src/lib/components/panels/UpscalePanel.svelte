@@ -414,11 +414,12 @@
 				tileSize: activeTab === 'realcugan' ? realcuganTileSize : 
 						  activeTab === 'realesrgan' ? realesrganTileSize : waifu2xTileSize,
 				tta: activeTab === 'realcugan' ? realcuganTta : 
-					 activeTab === 'realesrgan' ? realesrganTta : false,
+						 activeTab === 'realesrgan' ? realesrganTta : false,
 				noiseLevel: activeTab === 'realcugan' ? realcuganNoiseLevel : 
 							activeTab === 'realesrgan' ? '0' : waifu2xNoiseLevel,
 				numThreads: activeTab === 'realcugan' ? realcuganThreads : 
-							activeTab === 'realesrgan' ? realesrganThreads : waifu2xThreads
+							activeTab === 'realesrgan' ? realesrganThreads : waifu2xThreads,
+				thumbnailPath: 'D:\\temp\\neoview_thumbnails_test'
 			});
 
 			console.log('超分保存路径:', savePath);
@@ -440,7 +441,8 @@
 				noiseLevel: activeTab === 'realcugan' ? realcuganNoiseLevel : 
 							activeTab === 'realesrgan' ? '0' : waifu2xNoiseLevel,
 				numThreads: activeTab === 'realcugan' ? realcuganThreads : 
-							activeTab === 'realesrgan' ? realesrganThreads : waifu2xThreads
+							activeTab === 'realesrgan' ? realesrganThreads : waifu2xThreads,
+				thumbnailPath: 'D:\\temp\\neoview_thumbnails_test'
 			});
 
 			console.log('超分完成，数据长度:', result.length);

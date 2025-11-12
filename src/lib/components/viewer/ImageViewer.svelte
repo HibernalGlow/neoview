@@ -239,7 +239,8 @@
 				try {
 					const cacheData = await invoke<string>('check_upscale_cache_for_algorithm', {
 						imageHash,
-						algorithm
+						algorithm,
+						thumbnailPath: 'D:\\temp\\neoview_thumbnails_test'
 					});
 					
 					if (cacheData) {

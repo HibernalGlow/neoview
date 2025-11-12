@@ -66,22 +66,15 @@ impl UpscaleManager {
 
     /// 获取超分命令路径
     fn get_upscale_command(&self) -> String {
-        match std::env::consts::OS {
-            "windows" => r".\resources\bin\windows\realesrgan-ncnn-vulkan.exe".to_string(),
-            "linux" => "./resources/bin/linux/realesrgan-ncnn-vulkan".to_string(),
-            "macos" => "./resources/bin/macos/realesrgan-ncnn-vulkan".to_string(),
-            _ => panic!("不支持的操作系统"),
-        }
+        // 直接使用系统PATH中的realesrgan-ncnn-vulkan命令
+        "realesrgan-ncnn-vulkan".to_string()
     }
 
     /// 获取模型路径
     fn get_models_path(&self) -> String {
-        match std::env::consts::OS {
-            "windows" => r".\resources\models".to_string(),
-            "linux" => "./resources/models".to_string(),
-            "macos" => "./resources/models".to_string(),
-            _ => panic!("不支持的操作系统"),
-        }
+        // 使用realesrgan-ncnn-vulkan默认的模型路径
+        // 通常程序会自动在安装目录下查找models文件夹
+        "".to_string() // 空字符串让程序使用默认路径
     }
 
     /// 获取模型名称
@@ -172,11 +165,16 @@ impl UpscaleManager {
         let mut args = vec![
             "-i", image_path.to_str().unwrap(),
             "-o", save_path.to_str().unwrap(),
-            "-m", &models_path,
             "-n", model_name,
             "-s", factor,
             "-f", "webp",  // 指定输出格式为 WebP
         ];
+
+        // 只有当模型路径不为空时才添加-m参数
+        if !models_path.is_empty() {
+            args.insert(2, "-m");
+            args.insert(3, &models_path);
+        }
 
         // 添加GPU参数
         if !options.gpu_id.is_empty() && options.gpu_id != "0" {

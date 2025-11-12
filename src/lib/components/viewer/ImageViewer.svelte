@@ -38,7 +38,7 @@
 	let progressBlinking = $state(false);
 
 	// 预加载队列管理
-	let preloadQueue = $state<{hash: string, imageData: string}[]>([]);
+	let preloadQueue = $state<ImageDataWithHash[]>([]);
 	let isPreloading = $state(false);
 
 	// 预超分进度管理
@@ -148,6 +148,15 @@
 			if (!imageData || !originalImageHash) return;
 			
 			try {
+				// 获取当前页面的hash（如果还没有的话）
+				if (!currentImageHash && imageData) {
+					// 尝试从当前图片数据计算hash
+					const currentHash = await getImageMd5(imageData);
+					if (currentHash) {
+						currentImageHash = currentHash;
+					}
+				}
+				
 				// 只有当超分的是当前页面时才替换图片
 				if (originalImageHash === currentImageHash) {
 					bookStore.setUpscaledImage(imageData);
@@ -156,9 +165,9 @@
 					}
 					// 更新对比数据
 					upscaledImageDataForComparison = imageData;
-					console.log('超分图已匹配当前页面，已替换');
+					console.log('超分图已匹配当前页面，MD5:', originalImageHash, '已替换');
 				} else {
-					console.log('超分图不属于当前页面，跳过替换');
+					console.log('超分图不属于当前页面，超分MD5:', originalImageHash, '当前MD5:', currentImageHash);
 				}
 			} catch (error) {
 				console.error('处理超分完成事件失败:', error);
@@ -286,21 +295,23 @@
 			// 更新对比数据
 			originalImageDataForComparison = data;
 
-			// 计算并保存当前页面的hash
-			try {
-				currentImageHash = await invoke<string>('calculate_data_hash', {
-					dataUrl: data
-				});
-			} catch (error) {
-				console.error('计算当前页面hash失败:', error);
+			// 获取带hash的图片数据
+			const imageDataWithHash = await getImageDataWithHash(data);
+			if (!imageDataWithHash) {
+				console.error('无法获取图片数据及hash');
+				return;
 			}
+			
+			// 保存当前页面的hash
+			currentImageHash = imageDataWithHash.hash;
+			console.log('当前页面MD5:', currentImageHash);
 
 			// 检查是否有对应的超分缓存
-			const hasCache = await checkUpscaleCache(data);
+			const hasCache = await checkUpscaleCache(imageDataWithHash);
 
 			// 如果没有缓存且全局超分开关开启，则自动开始超分
 			if (!hasCache) {
-				await triggerAutoUpscale(data);
+				await triggerAutoUpscale(imageDataWithHash);
 			}
 
 			// 触发预加载后续页面
@@ -338,19 +349,14 @@
 		}
 	}
 
-	// 检查超分缓存
-	async function checkUpscaleCache(imageData: string): Promise<boolean> {
+	// 检查超分缓存（使用传入的hash）
+	async function checkUpscaleCache(imageDataWithHash: ImageDataWithHash): Promise<boolean> {
 		try {
 			// 先清除当前的超分结果，避免显示错误的图片
 			bookStore.setUpscaledImage(null);
 			bookStore.setUpscaledImageBlob(null);
 			
-			// 获取图片的MD5
-			const imageHash = await getImageMd5(imageData);
-			if (!imageHash) {
-				console.error('缓存检查：无法获取图片MD5');
-				return false;
-			}
+			const { data: imageData, hash: imageHash } = imageDataWithHash;
 			
 			// 获取当前活动的算法设置
 			let currentAlgorithm = 'realcugan'; // 默认值
@@ -382,7 +388,7 @@
 						bookStore.setUpscaledImage(url);
 						bookStore.setUpscaledImageBlob(blob);
 						
-						console.log(`找到 ${algorithm} 算法的超分缓存`);
+						console.log(`找到 ${algorithm} 算法的超分缓存，MD5: ${imageHash}`);
 						return true;
 					}
 				} catch (e) {
@@ -392,7 +398,7 @@
 			}
 			
 			// 没有找到缓存
-			console.log('未找到任何超分缓存');
+			console.log('未找到任何超分缓存，MD5:', imageHash);
 			return false;
 		} catch (error) {
 			console.error('检查超分缓存失败:', error);
@@ -403,10 +409,10 @@
 	}
 
 	// 触发自动超分 - 复用 UpscalePanel 的 startUpscale 逻辑
-	async function triggerAutoUpscale(imageData: string, isPreload = false) {
+	async function triggerAutoUpscale(imageDataWithHash: ImageDataWithHash, isPreload = false) {
 		try {
 			// 验证图片数据
-			if (!imageData) {
+			if (!imageDataWithHash || !imageDataWithHash.data) {
 				console.error('自动超分：图片数据为空');
 				return;
 			}
@@ -423,23 +429,17 @@
 				const currentState = upscaleState;
 				if (currentState.isUpscaling || isPreloading) {
 					// 验证图片数据格式
-					if (!imageData.startsWith('blob:') && !imageData.startsWith('data:image/')) {
+					if (!imageDataWithHash.data.startsWith('blob:') && !imageDataWithHash.data.startsWith('data:image/')) {
 						console.warn('预加载：图片数据格式异常，不加入队列');
 						return;
 					}
 					
-					// 计算图片hash
-					const imageHash = await getImageMd5(imageData);
-					if (!imageHash) {
-						console.error('预加载：无法获取图片MD5');
-						return;
-					}
-					
 					// 检查是否已在队列中
-					const exists = preloadQueue.some(item => item.hash === imageHash);
+					const exists = preloadQueue.some(item => item.hash === imageDataWithHash.hash);
 					if (!exists) {
-						preloadQueue = [...preloadQueue, { hash: imageHash, imageData }];
-						console.log(`加入预加载队列，队列长度: ${preloadQueue.length}, 数据长度: ${imageData.length}`);
+						// 保存带hash的图片数据到队列
+						preloadQueue = [...preloadQueue, imageDataWithHash];
+						console.log(`加入预加载队列，MD5: ${imageDataWithHash.hash}, 数据长度: ${imageDataWithHash.data.length}`);
 					}
 					return;
 				}
@@ -452,13 +452,11 @@
 				}
 			}
 
-			console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', '图片数据长度:', imageData.length);
-			// blob URL 本身很短，这是正常的
-			if (!imageData.startsWith('blob:') && !imageData.startsWith('data:image/')) {
-				console.warn('图片数据格式异常:', imageData.substring(0, 50));
-			}
+			const { data: imageData, hash: imageHash } = imageDataWithHash;
+			console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', 'MD5:', imageHash, '图片数据长度:', imageData.length);
 			
-			// 检查是否是blob URL，如果是则转换为data URL
+			// 检查是否是blob URL，如果是则转换为data URL（保持一致性）
+			let processedImageData = imageData;
 			if (imageData.startsWith('blob:')) {
 				console.log('检测到blob URL，正在转换为data URL...');
 				const response = await fetch(imageData);
@@ -466,7 +464,7 @@
 				
 				// 转换为base64
 				const reader = new FileReader();
-				imageData = await new Promise<string>((resolve, reject) => {
+				processedImageData = await new Promise<string>((resolve, reject) => {
 					reader.onload = () => {
 						const result = reader.result as string;
 						resolve(result);
@@ -474,20 +472,20 @@
 					reader.onerror = reject;
 					reader.readAsDataURL(blob);
 				});
-				console.log('转换后的data URL长度:', imageData.length);
+				console.log('转换后的data URL长度:', processedImageData.length);
 			}
 			
 			// 检查图片格式
-			const isAvif = imageData.startsWith('data:image/avif');
-			const isJxl = imageData.startsWith('data:image/jxl');
+			const isAvif = processedImageData.startsWith('data:image/avif');
+			const isJxl = processedImageData.startsWith('data:image/jxl');
 			
 			// 对于AVIF和JXL，先转换为WebP
 			if (isAvif || isJxl) {
 				console.log(`转换${isAvif ? 'AVIF' : 'JXL'}为WebP...`);
-				imageData = await invoke<string>('convert_data_url_to_webp', {
-					dataUrl: imageData
+				processedImageData = await invoke<string>('convert_data_url_to_webp', {
+					dataUrl: processedImageData
 				});
-				console.log('转换后的WebP数据长度:', imageData.length);
+				console.log('转换后的WebP数据长度:', processedImageData.length);
 			}
 			
 			// 标记预加载状态
@@ -495,8 +493,8 @@
 				isPreloading = true;
 			}
 			
-			// 使用新的超分管理器执行超分
-			await performUpscale(imageData);
+			// 使用处理后的图片数据和原始hash执行超分
+			await performUpscale(processedImageData, imageHash);
 		} catch (error) {
 			console.error('自动超分失败:', error);
 		} finally {
@@ -519,11 +517,11 @@
 		const nextTask = preloadQueue[0];
 		preloadQueue = preloadQueue.slice(1);
 
-		console.log(`处理队列中的下一个任务: ${nextTask.hash}, 数据长度: ${nextTask.imageData.length}`);
+		console.log(`处理队列中的下一个任务: ${nextTask.hash}, 数据长度: ${nextTask.data.length}`);
 		
-		// 使用保存的图片数据执行超分
+		// 使用保存的图片数据和hash执行超分
 		try {
-			await performUpscale(nextTask.imageData);
+			await triggerAutoUpscale(nextTask, true);
 		} catch (error) {
 			console.error('队列任务执行失败:', error);
 		}
@@ -592,10 +590,17 @@
 						continue;
 					}
 
-					console.log(`第 ${targetIndex + 1} 页图片数据长度: ${pageImageData.length}, 类型: ${pageImageData.substring(0, 30)}...`);
+					// 获取带hash的图片数据
+					const imageDataWithHash = await getImageDataWithHash(pageImageData);
+					if (!imageDataWithHash) {
+						console.warn(`第 ${targetIndex + 1} 页无法获取图片hash，跳过`);
+						continue;
+					}
+
+					console.log(`第 ${targetIndex + 1} 页图片数据长度: ${imageDataWithHash.data.length}, MD5: ${imageDataWithHash.hash}`);
 
 					// 检查是否已有缓存
-					const hasCache = await checkUpscaleCache(pageImageData);
+					const hasCache = await checkUpscaleCache(imageDataWithHash);
 					if (hasCache) {
 						console.log(`第 ${targetIndex + 1} 页已有超分缓存`);
 						// 标记为已预超分
@@ -605,7 +610,7 @@
 					}
 
 					// 没有缓存，触发预超分
-					await triggerAutoUpscale(pageImageData, true);
+					await triggerAutoUpscale(imageDataWithHash, true);
 					// 标记为已预超分
 					preUpscaledPages = new Set([...preUpscaledPages, targetIndex]);
 					updatePreUpscaleProgress();
@@ -715,7 +720,7 @@
 		comparisonVisible = false;
 	}
 
-	// 获取图片的MD5（带缓存）
+	// 获取图片的MD5（只计算一次，后续使用缓存）
 	async function getImageMd5(imageUrl: string): Promise<string | null> {
 		if (!imageUrl) return null;
 		
@@ -759,6 +764,26 @@
 			console.error('计算MD5失败:', error);
 			return null;
 		}
+	}
+
+	// 创建带有MD5信息的图片数据结构
+	interface ImageDataWithHash {
+		data: string;
+		hash: string;
+	}
+
+	// 获取带hash的图片数据
+	async function getImageDataWithHash(imageUrl: string): Promise<ImageDataWithHash | null> {
+		if (!imageUrl) return null;
+		
+		// 获取或计算MD5
+		const hash = await getImageMd5(imageUrl);
+		if (!hash) return null;
+		
+		return {
+			data: imageUrl,
+			hash: hash
+		};
 	}
 </script>
 

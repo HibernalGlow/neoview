@@ -346,7 +346,7 @@ export function switchAlgorithm(algorithm) {
 /**
  * 执行超分处理
  */
-export async function performUpscale(imageData) {
+export async function performUpscale(imageData: string, imageHash?: string) {
     let currentState;
     let currentSettings;
     
@@ -428,10 +428,10 @@ export async function performUpscale(imageData) {
             params.numThreads = algorithmSettings.threads;
         }
 
-        // 生成保存路径
-        const imageHash = await invoke('calculate_data_hash', { dataUrl: imageData });
+        // 使用传入的hash或计算新的hash
+        const finalHash = imageHash || await invoke('calculate_data_hash', { dataUrl: imageData });
         const savePath = await invoke('get_upscale_save_path_from_data', {
-            imageHash,
+            imageHash: finalHash,
             ...params,
             thumbnailPath: params.thumbnailPath
         });
@@ -470,7 +470,7 @@ export async function performUpscale(imageData) {
             detail: { 
                 imageData: upscaledImageData, 
                 imageBlob: upscaledImageBlob,
-                originalImageHash: imageHash
+                originalImageHash: finalHash
             }
         }));
 

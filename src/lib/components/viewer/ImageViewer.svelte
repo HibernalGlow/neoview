@@ -33,7 +33,9 @@
 	let imageData = $state<string | null>(null);
 	let imageData2 = $state<string | null>(null); // 双页模式的第二张图
 	let loading = $state(false);
+	let loadingVisible = $state(false); // 控制loading动画的可见性
 	let error = $state<string | null>(null);
+	let loadingTimeout: number | null = null; // 延迟显示loading的定时器
 
 	// 鼠标光标隐藏功能
 	function showCursor() {
@@ -144,9 +146,16 @@
 		if (!currentPage || !currentBook) return;
 
 		loading = true;
+		loadingVisible = false; // 初始不显示loading
 		error = null;
-		imageData = null;
-		imageData2 = null;
+		// 不清空imageData，保持显示上一张图片直到新图加载完成
+
+		// 设置1秒后显示loading动画
+		loadingTimeout = setTimeout(() => {
+			if (loading) {
+				loadingVisible = true;
+			}
+		}, 1000);
 
 		try {
 			// 加载当前页
@@ -180,6 +189,12 @@
 			console.error('Failed to load image:', err);
 		} finally {
 			loading = false;
+			loadingVisible = false;
+			// 清除延迟显示loading的定时器
+			if (loadingTimeout) {
+				clearTimeout(loadingTimeout);
+				loadingTimeout = null;
+			}
 		}
 	}
 
@@ -268,7 +283,7 @@
 	>
 	<!-- 图像显示区域 -->
 	<div class="image-container flex-1 flex items-center justify-center overflow-auto" data-viewer="true">
-		{#if loading}
+		{#if loadingVisible}
 			<div class="text-white">Loading...</div>
 		{:else if error}
 			<div class="text-red-500">Error: {error}</div>
@@ -308,8 +323,6 @@
 					style="transform: scale({$zoomLevel}) rotate({$rotationAngle}deg); transition: transform 0.2s;"
 				/>
 			{/if}
-		{:else}
-			<div class="text-white/50">No image to display</div>
 		{/if}
 	</div>
 	

@@ -17,7 +17,7 @@
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { invoke } from '@tauri-apps/api/core';
 	import ComparisonViewer from './ComparisonViewer.svelte';
-	import { upscaleState } from '$lib/stores/upscale/UpscaleManager.svelte';
+	import { upscaleState, performUpscale, getGlobalUpscaleEnabled } from '$lib/stores/upscale/UpscaleManager.svelte';
 
 	// 进度条状态
 	let showProgressBar = $state(true);
@@ -43,22 +43,31 @@
 		settings = s;
 	});
 
-	// 监听超分状态变化
+	// 订阅超分状态变化
+	let upscaleStateUnsubscribe: () => void;
+	
 	$effect(() => {
-		const currentState = upscaleState;
-		if (currentState.isUpscaling) {
-			// 超分进行中，开始闪烁
-			progressBlinking = true;
-			progressColor = '#FDFBF7'; // 奶白色
-		} else if (currentState.upscaledImageData && !currentState.isUpscaling) {
-			// 超分完成，停止闪烁，变成绿色
-			progressBlinking = false;
-			progressColor = '#22c55e'; // 绿色
-		} else {
-			// 没有超分，恢复默认
-			progressBlinking = false;
-			progressColor = '#FDFBF7'; // 奶白色
-		}
+		upscaleStateUnsubscribe = upscaleState.subscribe(state => {
+			if (state.isUpscaling) {
+				// 超分进行中，开始闪烁
+				progressBlinking = true;
+				progressColor = '#FDFBF7'; // 奶白色
+			} else if (state.upscaledImageData && !state.isUpscaling) {
+				// 超分完成，停止闪烁，变成绿色
+				progressBlinking = false;
+				progressColor = '#22c55e'; // 绿色
+			} else {
+				// 没有超分，恢复默认
+				progressBlinking = false;
+				progressColor = '#FDFBF7'; // 奶白色
+			}
+		});
+		
+		return () => {
+			if (upscaleStateUnsubscribe) {
+				upscaleStateUnsubscribe();
+			}
+		};
 	});
 
 	let imageData = $state<string | null>(null);
@@ -242,7 +251,12 @@
 			originalImageDataForComparison = data;
 
 			// 检查是否有对应的超分缓存
-			await checkUpscaleCache(data);
+			const hasCache = await checkUpscaleCache(data);
+
+			// 如果没有缓存且全局超分开关开启，则自动开始超分
+			if (!hasCache) {
+				await triggerAutoUpscale(data);
+			}
 
 			// 双页模式：加载下一页
 			if ($viewMode === 'double' && bookStore.canNextPage) {
@@ -274,7 +288,7 @@
 	}
 
 	// 检查超分缓存
-	async function checkUpscaleCache(imageData: string) {
+	async function checkUpscaleCache(imageData: string): Promise<boolean> {
 		try {
 			// 计算图片数据的hash
 			const imageHash = await invoke<string>('calculate_data_hash', {
@@ -301,7 +315,7 @@
 						bookStore.setUpscaledImageBlob(blob);
 						
 						console.log(`找到 ${algorithm} 算法的超分缓存`);
-						return;
+						return true;
 					}
 				} catch (e) {
 					// 继续检查下一个算法
@@ -312,8 +326,68 @@
 			// 没有找到缓存，清除超分结果
 			bookStore.setUpscaledImage(null);
 			bookStore.setUpscaledImageBlob(null);
+			return false;
 		} catch (error) {
 			console.error('检查超分缓存失败:', error);
+			return false;
+		}
+	}
+
+	// 触发自动超分 - 复用 UpscalePanel 的 startUpscale 逻辑
+	async function triggerAutoUpscale(imageData: string) {
+		try {
+			// 检查全局开关
+			const globalEnabled = await getGlobalUpscaleEnabled();
+			if (!globalEnabled) {
+				console.log('全局超分开关已关闭，跳过自动超分');
+				return;
+			}
+
+			// 检查是否正在超分
+			const currentState = upscaleState;
+			if (currentState.isUpscaling) {
+				console.log('超分正在进行中，跳过自动超分');
+				return;
+			}
+
+			console.log('触发自动超分，图片数据长度:', imageData.length);
+			
+			// 检查是否是blob URL，如果是则转换为data URL
+			if (imageData.startsWith('blob:')) {
+				console.log('检测到blob URL，正在转换为data URL...');
+				const response = await fetch(imageData);
+				const blob = await response.blob();
+				
+				// 转换为base64
+				const reader = new FileReader();
+				imageData = await new Promise<string>((resolve, reject) => {
+					reader.onload = () => {
+						const result = reader.result as string;
+						resolve(result);
+					};
+					reader.onerror = reject;
+					reader.readAsDataURL(blob);
+				});
+				console.log('转换后的data URL长度:', imageData.length);
+			}
+			
+			// 检查图片格式
+			const isAvif = imageData.startsWith('data:image/avif');
+			const isJxl = imageData.startsWith('data:image/jxl');
+			
+			// 对于AVIF和JXL，先转换为WebP
+			if (isAvif || isJxl) {
+				console.log(`转换${isAvif ? 'AVIF' : 'JXL'}为WebP...`);
+				imageData = await invoke<string>('convert_data_url_to_webp', {
+					dataUrl: imageData
+				});
+				console.log('转换后的WebP数据长度:', imageData.length);
+			}
+			
+			// 使用新的超分管理器执行超分
+			await performUpscale(imageData);
+		} catch (error) {
+			console.error('自动超分失败:', error);
 		}
 	}
 

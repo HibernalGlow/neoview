@@ -220,10 +220,14 @@ export async function updateConditionalUpscaleSettings(conditionalSettings) {
  */
 export async function getGlobalUpscaleEnabled() {
     try {
+        // 先尝试从后端获取
         return await invoke('get_global_upscale_enabled');
     } catch (error) {
-        console.error('获取全局超分开关失败:', error);
-        return true; // 默认开启
+        // 如果后端未初始化，从本地 store 获取
+        console.warn('后端设置管理器未初始化，使用本地设置:', error);
+        let settings;
+        upscaleSettings.subscribe(s => settings = s)();
+        return settings?.global_upscale_enabled ?? true; // 默认开启
     }
 }
 

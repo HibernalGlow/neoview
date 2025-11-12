@@ -490,7 +490,11 @@
 			// 生成默认文件名
 			const originalName = bookStore.currentImage.name;
 			const nameWithoutExt = originalName.substring(0, originalName.lastIndexOf('.')) || originalName;
-			const defaultFileName = `${nameWithoutExt}_upscaled_${upscaleFactor}x.webp`;
+			
+			// 获取当前算法的放大倍数
+			const currentScale = activeTab === 'realcugan' ? realcuganScale : 
+								 activeTab === 'realesrgan' ? realesrganScale : waifu2xScale;
+			const defaultFileName = `${nameWithoutExt}_upscaled_${currentScale}x.webp`;
 
 			// 使用文件保存对话框
 			const filePath = await save({
@@ -514,10 +518,10 @@
 					arrayBuffer = await blob.arrayBuffer();
 				}
 				
-				// 使用 Tauri 的文件系统 API 保存文件
-				await invoke('save_upscaled_image', {
+				// 使用后端命令保存文件
+				await invoke('save_binary_file', {
 					filePath,
-					imageData: Array.from(new Uint8Array(arrayBuffer))
+					data: Array.from(new Uint8Array(arrayBuffer))
 				});
 
 				upscaleStatus = '图片已保存';

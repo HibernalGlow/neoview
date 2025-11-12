@@ -153,6 +153,17 @@ pub async fn check_upscale_cache_for_algorithm(
     Err("未找到缓存".to_string())
 }
 
+/// 保存二进制文件
+#[command]
+pub async fn save_binary_file(file_path: String, data: Vec<u8>) -> Result<(), String> {
+    use std::fs;
+    
+    fs::write(&file_path, data)
+        .map_err(|e| format!("保存文件失败: {}", e))?;
+    
+    Ok(())
+}
+
 /// 从 data URL 提取二进制数据
 fn extract_binary_from_data_url(data_url: &str) -> Result<Vec<u8>, String> {
     // 解析 data URL

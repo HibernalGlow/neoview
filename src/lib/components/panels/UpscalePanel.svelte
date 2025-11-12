@@ -14,6 +14,7 @@
 	import { save } from '@tauri-apps/plugin-dialog';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { onMount } from 'svelte';
+	import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
 
 	// 超分状态
 	let isUpscaling = $state(false);
@@ -22,6 +23,7 @@
 	let showProgress = $state(false);
 	let upscaledImageData = $state(''); // 保持兼容性，用于预览
 	let upscaledImageBlob = $state<Blob | null>(null); // 新增：存储二进制数据
+	let upscaleStartTime = $state<number>(0); // 记录开始时间
 
 	// Tab切换状态
 	let activeTab = $state('realcugan'); // 'realcugan' | 'realesrgan' | 'waifu2x'
@@ -449,12 +451,27 @@
 
 			console.log('超分完成，数据长度:', result.length);
 			
+			// 计算耗时
+			const elapsedTime = Date.now() - upscaleStartTime;
+			const elapsedSeconds = (elapsedTime / 1000).toFixed(2);
+			
 			// 将二进制数据转换为 Blob
 			upscaledImageBlob = new Blob([new Uint8Array(result)], { type: 'image/webp' });
 			
 			// 为预览生成 data URL
 			upscaledImageData = URL.createObjectURL(upscaledImageBlob);
 			upscaleStatus = '超分完成';
+			
+			// 获取当前算法和模型信息
+			const algorithmName = activeTab === 'realcugan' ? 'Real-CUGAN' : 
+								  activeTab === 'realesrgan' ? 'Real-ESRGAN' : 'Waifu2x';
+			const modelName = activeTab === 'realcugan' ? realcuganModel : 
+								activeTab === 'realesrgan' ? realesrganModel : waifu2xModel;
+			const scaleValue = activeTab === 'realcugan' ? realcuganScale : 
+								activeTab === 'realesrgan' ? realesrganScale : waifu2xScale;
+			
+			// 显示成功提示
+			showSuccessToast(`${algorithmName} 超分完成`, `模型: ${modelName} | 倍数: ${scaleValue}x | 耗时: ${elapsedSeconds}秒`);
 			
 			// 通知主查看器替换图片
 			window.dispatchEvent(new CustomEvent('upscale-complete', {
@@ -464,6 +481,9 @@
 		} catch (error) {
 			console.error('超分失败:', error);
 			upscaleStatus = `超分失败: ${error}`;
+			
+			// 显示错误提示
+			showErrorToast('超分失败', String(error));
 		} finally {
 			isUpscaling = false;
 			// 3秒后隐藏进度条

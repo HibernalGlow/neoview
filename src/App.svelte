@@ -12,6 +12,7 @@
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { FolderOpen } from '@lucide/svelte';
 	import { init_thumbnail_manager } from '$lib/api';
+	import Toast from '$lib/components/ui/toast.svelte';
 	import { onMount } from 'svelte';
 
 	let loading = $state(false);
@@ -284,6 +285,7 @@ function handleGlobalMouseDown(e: MouseEvent) {
 />
 
 <Tooltip.Provider>
+	<Toast />
 	<MainLayout>
 	<div class="h-full w-full flex items-center justify-center">
 		<ImageViewer />

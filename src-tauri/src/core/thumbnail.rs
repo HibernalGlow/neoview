@@ -323,9 +323,15 @@ impl ThumbnailManager {
 
         // 保存到数据库
         // upsert 使用 clone 以便后续仍能访问 record 的字段
-        self.db.upsert_thumbnail(record.clone())
-            .map_err(|e| format!("保存数据库记录失败: {}", e))?;
-        println!("💾 upserted thumbnail record: bookpath='{}' -> {}", record.bookpath, relative_thumb_path);
+        match self.db.upsert_thumbnail(record.clone()) {
+            Ok(_) => {
+                println!("💾 upserted thumbnail record: bookpath='{}' -> {}", record.bookpath, relative_thumb_path);
+            }
+            Err(e) => {
+                println!("❌ 保存数据库记录失败: {} - bookpath='{}'", e, record.bookpath);
+                return Err(format!("保存数据库记录失败: {}", e));
+            }
+        }
 
             // 如果缩略图来源于压缩包内部图片，也为压缩包本身创建一条记录（便于直接请求压缩包的缩略图）
             if image_path.to_string_lossy().contains("__archive__") {

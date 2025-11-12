@@ -134,10 +134,6 @@
 		const currentPage = bookStore.currentPage;
 		if (currentPage) {
 			bookStore.setCurrentImage(currentPage);
-			// 重置预超分进度
-			preUpscaleProgress = 0;
-			preUpscaledPages = new Set();
-			totalPreUpscalePages = 0;
 			// 重置当前页面hash
 			currentImageHash = '';
 			loadCurrentImage();
@@ -169,6 +165,11 @@
 			}
 		};
 
+		// 监听重置预超分进度事件
+		const handleResetPreUpscaleProgress = () => {
+			resetPreUpscaleProgress();
+		};
+
 		// 监听超分面板请求当前图片数据
 		const handleRequestCurrentImageData = (e: CustomEvent) => {
 			console.log('ImageViewer: 收到图片数据请求');
@@ -190,6 +191,7 @@
 
 		window.addEventListener('upscale-complete', handleUpscaleComplete as EventListener);
 		window.addEventListener('request-current-image-data', handleRequestCurrentImageData as EventListener);
+		window.addEventListener('reset-pre-upscale-progress', handleResetPreUpscaleProgress as EventListener);
 
 		// 监听对比模式变化
 		const handleComparisonModeChanged = (e: CustomEvent) => {
@@ -208,6 +210,7 @@
 		return () => {
 			window.removeEventListener('upscale-complete', handleUpscaleComplete as EventListener);
 			window.removeEventListener('request-current-image-data', handleRequestCurrentImageData as EventListener);
+			window.removeEventListener('reset-pre-upscale-progress', handleResetPreUpscaleProgress as EventListener);
 			window.removeEventListener('comparison-mode-changed', handleComparisonModeChanged as EventListener);
 		};
 	});
@@ -622,6 +625,13 @@
 		}
 	}
 
+	// 重置预超分进度（仅在书籍关闭时调用）
+	function resetPreUpscaleProgress() {
+		preUpscaleProgress = 0;
+		preUpscaledPages = new Set();
+		totalPreUpscalePages = 0;
+	}
+
 	async function handleNextPage() {
 		if (!bookStore.canNextPage) return;
 		try {
@@ -827,13 +837,11 @@
 				</div>
 			{/if}
 			<!-- 当前页面进度条（绿色，叠加在黄色上面） -->
-			{#if progressColor !== '#FDFBF7'}
-				<div 
-					class="absolute bottom-0 left-0 h-full transition-all duration-300 {progressBlinking ? 'animate-pulse' : ''}" 
-					style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%; background-color: {progressColor}; opacity: 0.8;"
-				>
-				</div>
-			{/if}
+			<div 
+				class="absolute bottom-0 left-0 h-full transition-all duration-300 {progressBlinking ? 'animate-pulse' : ''}" 
+				style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%; background-color: {progressColor}; opacity: {progressColor === '#FDFBF7' ? 0 : 0.8};"
+			>
+			</div>
 		</div>
 	{/if}
 </div>

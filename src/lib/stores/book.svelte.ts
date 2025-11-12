@@ -166,6 +166,9 @@ class BookStore {
     this.state.currentImage = null;
     this.state.upscaledImageData = null;
     this.state.upscaledImageBlob = null;
+    
+    // 触发重置预超分进度事件
+    window.dispatchEvent(new CustomEvent('reset-pre-upscale-progress'));
   }
 
   /**
@@ -285,6 +288,15 @@ class BookStore {
    */
   async goToPage(index: number) {
     await this.navigateToPage(index);
+  }
+
+  /**
+   * 关闭书籍
+   */
+  async closeBook() {
+    // 触发重置预超分进度事件
+    window.dispatchEvent(new CustomEvent('reset-pre-upscale-progress'));
+    await this.closeViewer();
   }
 
   /**

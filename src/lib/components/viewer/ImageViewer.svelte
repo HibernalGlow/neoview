@@ -453,19 +453,21 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 		try {
 			// 优先使用预加载解码的页面图片（若存在）以实现即时显示
 			const currentIndex = bookStore.currentPageIndex;
+			let data: string | null = null;
 			if (preloadedPageImages.has(currentIndex)) {
 				const cached = preloadedPageImages.get(currentIndex);
 				if (cached && cached.data) {
 					console.log('使用预加载缓存的当前页面图片，index:', currentIndex + 1);
 					imageData = cached.data;
-						// 标记为最近使用
-						touchPreloadedPage(currentIndex);
+					data = cached.data;
+					// 标记为最近使用
+					touchPreloadedPage(currentIndex);
 				} else {
 					imageData = null;
+					data = null;
 				}
 			} else {
 				// 加载当前页（从磁盘/存档）
-				let data: string;
 				if (currentBook.type === 'archive') {
 					console.log('Loading image from archive:', currentPage.path);
 					data = await loadImageFromArchive(currentBook.path, currentPage.path);
@@ -475,8 +477,12 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 				}
 				imageData = data;
 			}
-			// 更新对比数据
-			originalImageDataForComparison = data;
+			// 更新对比数据（若存在）
+			if (data) {
+				originalImageDataForComparison = data;
+			} else {
+				originalImageDataForComparison = '';
+			}
 
 			// 获取带hash的图片数据：优先使用基于路径的稳定hash（archive::innerpath），回退到数据hash
 			let imageDataWithHash = null;

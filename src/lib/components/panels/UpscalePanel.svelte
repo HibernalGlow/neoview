@@ -781,7 +781,7 @@ let cacheMeta: any = $state(null);
 				{/if}
 			</div>
 			<div class="flex gap-2">
-				<button class="btn btn-sm" on:click={async () => {
+				<button class="btn btn-sm" onclick={async () => {
 					// 手动刷新：请求当前 ImageViewer 的图片数据并检查元数据
 					try {
 						const data = await new Promise<string>((resolve, reject) => {
@@ -798,7 +798,7 @@ let cacheMeta: any = $state(null);
 						console.warn('手动刷新缓存失败:', e);
 					}
 				}}>手动刷新</button>
-				<button class="btn btn-primary btn-sm" disabled={isUpscaling || !bookStore.currentImage || !globalUpscaleEnabled} on:click={() => startUpscale()}>立即超分</button>
+				<button class="btn btn-primary btn-sm" disabled={isUpscaling || !bookStore.currentImage || !globalUpscaleEnabled} onclick={() => startUpscale()}>立即超分</button>
 			</div>
 		</div>
 		{#if cachePath}

@@ -306,7 +306,10 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 					}
 					// 更新对比数据
 					upscaledImageDataForComparison = upscaledImageData;
-					console.log('超分图已匹配当前页面，MD5:', originalImageHash, '已替换');
+					// 立即更新进度条外观：停止闪烁并变绿——比仅依赖 upscaleState 更可靠，能避免竞态导致不变色的问题
+					progressBlinking = false;
+					progressColor = '#22c55e'; // 绿色
+					console.log('超分图已匹配当前页面，MD5:', originalImageHash, '已替换，进度条设为绿色');
 				} else {
 					console.log('超分图不属于当前页面，超分MD5:', originalImageHash, '当前MD5:', currentImageHash);
 				}

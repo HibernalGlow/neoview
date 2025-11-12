@@ -51,13 +51,4 @@ pub async fn get_image_dimensions(
     loader.get_image_dimensions(&path)
 }
 
-#[tauri::command]
-pub async fn generate_thumbnail(
-    path: String,
-    max_width: u32,
-    max_height: u32,
-    state: State<'_, Mutex<ImageLoader>>,
-) -> Result<String, String> {
-    let loader = state.lock().map_err(|e| e.to_string())?;
-    loader.generate_thumbnail(&path, max_width, max_height)
-}
+

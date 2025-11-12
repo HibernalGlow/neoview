@@ -292,7 +292,8 @@ pub async fn load_image_from_archive(
         .map_err(|e| format!("获取锁失败: {}", e))?;
 
     let path = PathBuf::from(archive_path);
-    archive_manager.load_image_from_zip(&path, &file_path)
+    let image_data = archive_manager.load_image_from_zip_binary(&path, &file_path)?;
+    Ok(format!("data:image/jpeg;base64,{}", base64::engine::general_purpose::STANDARD.encode(&image_data)))
 }
 
 /// 获取压缩包中的所有图片

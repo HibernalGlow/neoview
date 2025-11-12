@@ -1,7 +1,6 @@
 //! NeoView - Image Loader
 //! 图像加载和处理模块
 
-use base64::{engine::general_purpose, Engine as _};
 use std::fs;
 use std::path::Path;
 use std::io::Cursor;
@@ -9,6 +8,8 @@ use std::sync::Arc;
 use image::{GenericImageView, ImageFormat};
 use super::image_cache::ImageCache;
 use threadpool::ThreadPool;
+use base64::engine::general_purpose;
+use base64::Engine;
 
 #[derive(Clone)]
 pub struct ImageLoader {
@@ -68,31 +69,7 @@ impl ImageLoader {
         Ok(image_data)
     }
 
-    /// 加载图像文件为 base64 (带缓存) - 保持向后兼容
-    pub fn load_image_as_base64(&self, path: &str) -> Result<String, String> {
-        // 检查缓存
-        if let Some(cached_data) = self.cache.get(path) {
-            return Ok(cached_data);
-        }
-
-        // 先获取二进制数据
-        let image_data = self.load_image_as_binary(path)?;
-
-        // 获取 MIME 类型
-        let path_obj = Path::new(path);
-        let mime_type = self.detect_mime_type(path_obj)?;
-
-        // 转换为 base64
-        let base64_data = general_purpose::STANDARD.encode(&image_data);
-
-        // 返回 data URL
-        let result = format!("data:{};base64,{}", mime_type, base64_data);
-        
-        // 添加到缓存
-        self.cache.set(path.to_string(), result.clone());
-        
-        Ok(result)
-    }
+    
 
     /// 清除缓存
     pub fn clear_cache(&self) {
@@ -176,7 +153,8 @@ impl ImageLoader {
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
             if ext.to_lowercase() == "jxl" {
                 let img = self.decode_jxl_image(&image_data)?;
-                return self.create_thumbnail_from_image(img, max_width, max_height);
+                let thumbnail_data = self.create_thumbnail_from_image(img, max_width, max_height)?;
+                return Ok(format!("data:image/jpeg;base64,{}", base64::engine::general_purpose::STANDARD.encode(&thumbnail_data)));
             }
         }
 
@@ -211,7 +189,8 @@ impl ImageLoader {
             }
         };
 
-        self.create_thumbnail_from_image(img, max_width, max_height)
+        let thumbnail_data = self.create_thumbnail_from_image(img, max_width, max_height)?;
+        Ok(format!("data:image/jpeg;base64,{}", base64::engine::general_purpose::STANDARD.encode(&thumbnail_data)))
     }
 
     /// 解码 JXL 图像
@@ -288,7 +267,7 @@ impl ImageLoader {
         img: image::DynamicImage,
         max_width: u32,
         max_height: u32,
-    ) -> Result<String, String> {
+    ) -> Result<Vec<u8>, String> {
         // 计算缩略图尺寸（保持宽高比）
         let (original_width, original_height) = img.dimensions();
         let ratio = (max_width as f32 / original_width as f32)
@@ -318,11 +297,8 @@ impl ImageLoader {
         dynamic_img.write_to(&mut cursor, ImageFormat::Jpeg)
             .map_err(|e| format!("Failed to encode thumbnail: {}", e))?;
 
-        // 转换为 base64
-        let base64_data = general_purpose::STANDARD.encode(&thumbnail_data);
-
-        // 返回 data URL
-        Ok(format!("data:image/jpeg;base64,{}", base64_data))
+        // 返回二进制数据
+        Ok(thumbnail_data)
     }
 
     /// 检测 MIME 类型

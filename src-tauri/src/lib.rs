@@ -84,7 +84,6 @@ pub fn run() {
             // Image commands
             commands::load_image,
             commands::get_image_dimensions,
-            commands::generate_thumbnail,
             // File system commands (old)
             commands::read_directory,
             commands::get_file_info,

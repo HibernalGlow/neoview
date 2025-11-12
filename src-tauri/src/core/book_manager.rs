@@ -6,6 +6,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use base64::engine::general_purpose;
+use base64::Engine;
 
 pub struct BookManager {
     current_book: Option<BookInfo>,
@@ -77,9 +79,10 @@ impl BookManager {
                     
                     // 异步加载，避免阻塞
                     thread_pool.execute(move || {
-                        if let Ok(image_data) = image_loader_ref.load_image_as_base64(&path) {
+                        if let Ok(image_data) = image_loader_ref.load_image_as_binary(&path) {
                             if let Ok(mut cache) = cache_clone.lock() {
-                                cache.insert(page_idx, image_data);
+                                let base64_data = format!("data:image/jpeg;base64,{}", general_purpose::STANDARD.encode(&image_data));
+                                cache.insert(page_idx, base64_data);
                             }
                         }
                     });

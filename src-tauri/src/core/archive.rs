@@ -5,8 +5,9 @@ use std::sync::Arc;
 use std::time::Instant;
 use zip::ZipArchive;
 use serde::{Deserialize, Serialize};
-use base64::{Engine as _, engine::general_purpose};
 use image::GenericImageView;
+use base64::engine::general_purpose;
+use base64::Engine;
 
 /// 压缩包内的文件项
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -187,53 +188,7 @@ impl ArchiveManager {
         Ok(data)
     }
 
-    /// 从 ZIP 压缩包中加载图片（返回 base64，带缓存）
-    pub fn load_image_from_zip(
-        &self,
-        archive_path: &Path,
-        file_path: &str,
-    ) -> Result<String, String> {
-        // 创建缓存键：压缩包路径 + 文件路径
-        // 规范化 archive_path 和 file_path（统一使用正斜杠），避免 Windows 上的分隔符差异
-        let archive_key = archive_path.to_string_lossy().replace('\\', "/");
-        let inner_key = file_path.replace('\\', "/");
-        let cache_key = format!("{}::{}", archive_key, inner_key);
-        
-        // 检查缓存
-        if let Ok(cache) = self.cache.lock() {
-            if let Some(cached_data) = cache.get(&cache_key) {
-                return Ok(cached_data.clone());
-            }
-        }
-
-        let data = self.extract_file_from_zip(archive_path, file_path)?;
-
-        // 对于 JXL 格式，需要先解码再重新编码为通用格式
-        let result = if let Some(ext) = Path::new(file_path).extension() {
-            if ext.to_string_lossy().to_lowercase() == "jxl" {
-                self.load_jxl_from_zip(&data)?
-            } else {
-                // 检测图片类型
-                let mime_type = self.detect_image_mime_type(file_path);
-                // 编码为 base64
-                let base64_data = general_purpose::STANDARD.encode(&data);
-                format!("data:{};base64,{}", mime_type, base64_data)
-            }
-        } else {
-            // 检测图片类型
-            let mime_type = self.detect_image_mime_type(file_path);
-            // 编码为 base64
-            let base64_data = general_purpose::STANDARD.encode(&data);
-            format!("data:{};base64,{}", mime_type, base64_data)
-        };
-
-        // 添加到缓存
-        if let Ok(mut cache) = self.cache.lock() {
-            cache.insert(cache_key, result.clone());
-        }
-
-        Ok(result)
-    }
+    
 
     /// 从压缩包中加载 JXL 图片并转换为 PNG（返回二进制数据）
     fn load_jxl_binary_from_zip(&self, image_data: &[u8]) -> Result<Vec<u8>, String> {
@@ -652,7 +607,7 @@ impl ArchiveManager {
         
         let mut loaded_count = 0;
         for entry in image_entries {
-            if self.load_image_from_zip(archive_path, &entry.path).is_ok() {
+            if self.load_image_from_zip_binary(archive_path, &entry.path).is_ok() {
                 loaded_count += 1;
             }
         }

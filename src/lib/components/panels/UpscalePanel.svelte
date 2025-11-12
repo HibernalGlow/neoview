@@ -278,12 +278,14 @@
 	// 构建命令行参数
 	function buildCommand(algorithm: string) {
 		let command = '';
+		let inputPath = 'temp_input.png';
+		let outputPath = 'temp_output.webp';
 		
 		switch (algorithm) {
 			case 'realcugan':
 				command = 'realcugan-ncnn-vulkan.exe';
-				command += ` -i input.jpg`;
-				command += ` -o output.png`;
+				command += ` -i ${inputPath}`;
+				command += ` -o ${outputPath}`;
 				command += ` -n ${realcuganNoiseLevel}`;
 				command += ` -s ${realcuganScale}`;
 				command += ` -t ${realcuganTileSize}`;
@@ -297,8 +299,8 @@
 				
 			case 'realesrgan':
 				command = 'realesrgan-ncnn-vulkan.exe';
-				command += ` -i input.jpg`;
-				command += ` -o output.png`;
+				command += ` -i ${inputPath}`;
+				command += ` -o ${outputPath}`;
 				command += ` -s ${realesrganScale}`;
 				command += ` -t ${realesrganTileSize}`;
 				command += ` -m ${realesrganModel === 'custom' ? customModelPath : 'models'}`;
@@ -311,8 +313,8 @@
 				
 			case 'waifu2x':
 				command = 'waifu2x-ncnn-vulkan.exe';
-				command += ` -i input.jpg`;
-				command += ` -o output.png`;
+				command += ` -i ${inputPath}`;
+				command += ` -o ${outputPath}`;
 				command += ` -n ${waifu2xNoiseLevel}`;
 				command += ` -s ${waifu2xScale}`;
 				command += ` -t ${waifu2xTileSize}`;
@@ -482,13 +484,14 @@
 	}
 
 	async function saveUpscaledImage() {
-		if (!upscaledImageBlob && !bookStore.currentImage) {
+		if (!upscaledImageBlob) {
+			upscaleStatus = '没有超分结果可保存';
 			return;
 		}
 
 		try {
 			// 生成默认文件名
-			const originalName = bookStore.currentImage.name;
+			const originalName = bookStore.currentImage?.name || 'image';
 			const nameWithoutExt = originalName.substring(0, originalName.lastIndexOf('.')) || originalName;
 			
 			// 获取当前算法的放大倍数
@@ -506,17 +509,8 @@
 			});
 
 			if (filePath) {
-				let arrayBuffer: ArrayBuffer;
-				
-				if (upscaledImageBlob) {
-					// 直接使用二进制数据
-					arrayBuffer = await upscaledImageBlob.arrayBuffer();
-				} else {
-					// 兼容旧方式：从 data URL 获取数据
-					const response = await fetch(upscaledImageData);
-					const blob = await response.blob();
-					arrayBuffer = await blob.arrayBuffer();
-				}
+				// 直接使用超分后的二进制数据
+				const arrayBuffer = await upscaledImageBlob.arrayBuffer();
 				
 				// 使用后端命令保存文件
 				await invoke('save_binary_file', {

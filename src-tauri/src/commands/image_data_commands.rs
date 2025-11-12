@@ -89,6 +89,8 @@ pub async fn upscale_image_from_data(
     num_threads: String,
     thumbnail_path: String,
 ) -> Result<Vec<u8>, String> {
+    use std::process::Command;
+    
     // 从 data URL 提取二进制数据
     let binary_data = extract_binary_from_data_url(&image_data)?;
     
@@ -99,18 +101,86 @@ pub async fn upscale_image_from_data(
         .unwrap()
         .as_secs();
     let temp_input = temp_dir.join(format!("temp_input_{}.png", timestamp));
+    let temp_output = temp_dir.join(format!("temp_output_{}.webp", timestamp));
     
-    // 保存临时文件
+    // 保存临时输入文件
     fs::write(&temp_input, &binary_data)
         .map_err(|e| format!("写入临时文件失败: {}", e))?;
     
-    // 直接读取保存的文件并返回
-    // 这里应该调用超分算法，但暂时返回原始数据
-    let result = fs::read(&temp_input)
-        .map_err(|e| format!("读取临时文件失败: {}", e))?;
+    // 确保输出目录存在
+    let save_path_buf = std::path::PathBuf::from(&save_path);
+    if let Some(parent) = save_path_buf.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("创建输出目录失败: {}", e))?;
+    }
+    
+    // 构建命令
+    let command = match algorithm.as_str() {
+        "realcugan" => "realcugan-ncnn-vulkan",
+        "realesrgan" => "realesrgan-ncnn-vulkan",
+        "waifu2x" => "waifu2x-ncnn-vulkan",
+        _ => return Err("不支持的算法".to_string()),
+    };
+    
+    let mut cmd = Command::new(command);
+    cmd.arg("-i").arg(&temp_input);
+    cmd.arg("-o").arg(&temp_output);
+    
+    // 添加算法特定参数
+    match algorithm.as_str() {
+        "realcugan" => {
+            cmd.arg("-n").arg(&noise_level);
+            cmd.arg("-s").arg("2"); // Real-CUGAN 默认2x
+            cmd.arg("-t").arg(&tile_size);
+            cmd.arg("-m").arg(&model);
+            cmd.arg("-g").arg(&gpu_id);
+            cmd.arg("-j").arg(&num_threads);
+            if tta { cmd.arg("-x"); }
+        }
+        "realesrgan" => {
+            cmd.arg("-s").arg("4"); // Real-ESRGAN 默认4x
+            cmd.arg("-t").arg(&tile_size);
+            cmd.arg("-m").arg("models");
+            cmd.arg("-n").arg(&model);
+            cmd.arg("-g").arg(&gpu_id);
+            cmd.arg("-j").arg(&num_threads);
+            if tta { cmd.arg("-x"); }
+        }
+        "waifu2x" => {
+            cmd.arg("-n").arg(&noise_level);
+            cmd.arg("-s").arg("2"); // Waifu2x 默认2x
+            cmd.arg("-t").arg(&tile_size);
+            cmd.arg("-m").arg(&model);
+            cmd.arg("-g").arg(&gpu_id);
+            cmd.arg("-j").arg(&num_threads);
+        }
+        _ => {}
+    }
+    
+    println!("执行超分命令: {:?}", cmd);
+    
+    // 执行命令
+    let output = cmd.output()
+        .map_err(|e| format!("执行超分命令失败: {}", e))?;
+    
+    if !output.status.success() {
+        let error = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("超分命令执行失败: {}", error));
+    }
+    
+    // 读取结果文件
+    let result = fs::read(&temp_output)
+        .map_err(|e| format!("读取超分结果失败: {}", e))?;
+    
+    // 保存到最终路径
+    fs::write(&save_path, &result)
+        .map_err(|e| format!("保存超分结果失败: {}", e))?;
     
     // 清理临时文件
     let _ = fs::remove_file(&temp_input);
+    let _ = fs::remove_file(&temp_output);
+    
+    println!("超分完成，结果保存到: {}", save_path);
     
     Ok(result)
 }

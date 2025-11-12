@@ -17,7 +17,7 @@
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { invoke } from '@tauri-apps/api/core';
 	import ComparisonViewer from './ComparisonViewer.svelte';
-	import { upscaleState, performUpscale, getGlobalUpscaleEnabled, upscaleSettings } from '$lib/stores/upscale/UpscaleManager.svelte';
+	import { upscaleState, performUpscale, getGlobalUpscaleEnabled, upscaleSettings, initUpscaleSettingsManager } from '$lib/stores/upscale/UpscaleManager.svelte';
     import { get } from 'svelte/store';
 
 	// 进度条状态
@@ -87,6 +87,9 @@
 			}
 		};
 	});
+
+// 初始化后端超分设置管理器，避免 getGlobalUpscaleEnabled 在未初始化时回退到本地默认
+initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管理器失败:', err));
 
 	let imageData = $state<string | null>(null);
 	let imageData2 = $state<string | null>(null); // 双页模式的第二张图
@@ -194,6 +197,19 @@
 			}
 		};
 
+		const handleUpscaleSaved = (e: CustomEvent) => {
+			try {
+				const { finalHash, savePath } = e.detail || {};
+				if (finalHash && savePath) {
+					// 更新内存索引，供后续快速命中
+					hashPathIndex.set(finalHash, savePath);
+					console.log('后台超分已保存，已更新 hashPathIndex:', finalHash, savePath);
+				}
+			} catch (err) {
+				console.error('处理 upscale-saved 事件失败:', err);
+			}
+		};
+
 		// 监听重置预超分进度事件
 		const handleResetPreUpscaleProgress = () => {
 			resetPreUpscaleProgress();
@@ -218,7 +234,8 @@
 			}, 100);
 		};
 
-		window.addEventListener('upscale-complete', handleUpscaleComplete as EventListener);
+	window.addEventListener('upscale-complete', handleUpscaleComplete as EventListener);
+	window.addEventListener('upscale-saved', handleUpscaleSaved as EventListener);
 		window.addEventListener('request-current-image-data', handleRequestCurrentImageData as EventListener);
 		window.addEventListener('reset-pre-upscale-progress', handleResetPreUpscaleProgress as EventListener);
 
@@ -238,6 +255,7 @@
 		
 		return () => {
 			window.removeEventListener('upscale-complete', handleUpscaleComplete as EventListener);
+			window.removeEventListener('upscale-saved', handleUpscaleSaved as EventListener);
 			window.removeEventListener('request-current-image-data', handleRequestCurrentImageData as EventListener);
 			window.removeEventListener('reset-pre-upscale-progress', handleResetPreUpscaleProgress as EventListener);
 			window.removeEventListener('comparison-mode-changed', handleComparisonModeChanged as EventListener);
@@ -292,6 +310,9 @@
 		loading = true;
 		loadingVisible = false; // 初始不显示loading
 		error = null;
+		// 清理上一个页面的 upscaled 显示，避免在切页时短暂显示上一个页面的超分图
+		bookStore.setUpscaledImage(null);
+		bookStore.setUpscaledImageBlob(null);
 		// 不清空imageData，保持显示上一张图片直到新图加载完成
 
 		// 设置1秒后显示loading动画
@@ -393,12 +414,8 @@
 
 	// 检查超分缓存（使用传入的hash）
 	async function checkUpscaleCache(imageDataWithHash: ImageDataWithHash): Promise<boolean> {
-		try {
-			// 先清除当前的超分结果，避免显示错误的图片
-			bookStore.setUpscaledImage(null);
-			bookStore.setUpscaledImageBlob(null);
-			
-			const { data: imageData, hash: imageHash } = imageDataWithHash;
+	    try {
+		    const { data: imageData, hash: imageHash } = imageDataWithHash;
 			
 			// 获取当前活动的算法设置
 			let currentAlgorithm = 'realcugan'; // 默认值
@@ -566,9 +583,11 @@
 			if (isPreload) {
 				isPreloading = true;
 				// 后台任务：告诉 performUpscale 这是后台预加载
-				await performUpscale(processedImageData, imageHash, { background: true });
+				const res = await performUpscale(processedImageData, imageHash, { background: true });
+				return res;
 			} else {
-				await performUpscale(processedImageData, imageHash, { background: false });
+				const res = await performUpscale(processedImageData, imageHash, { background: false });
+				return res;
 			}
 		} catch (error) {
 			console.error('自动超分失败:', error);
@@ -602,7 +621,14 @@
 
 		// 使用保存的图片数据和hash执行超分
 		try {
-			await triggerAutoUpscale(nextTask, true);
+			const res = await triggerAutoUpscale(nextTask, true);
+			if (res && res.requeue) {
+				// 后台并发已满或前台冲突，重试：将任务放回队列尾部并在短时间后重试
+				console.log('任务需要重试，已放回队列:', nextTask.hash);
+				preloadQueue = [...preloadQueue, nextTask];
+				setTimeout(() => processNextInQueue(), 200);
+				return;
+			}
 		} catch (error) {
 			console.error('队列任务执行失败:', error);
 		}
@@ -721,10 +747,14 @@
 					}
 
 					// 没有缓存，触发预超分
-					await triggerAutoUpscale(imageDataWithHash, true);
-					// 标记为已预超分
-					preUpscaledPages = new Set([...preUpscaledPages, targetIndex]);
-					updatePreUpscaleProgress();
+					const res = await triggerAutoUpscale(imageDataWithHash, true);
+					// 仅在实际执行（未被要求重试）时标记为已预超分
+					if (!(res && res.requeue)) {
+						preUpscaledPages = new Set([...preUpscaledPages, targetIndex]);
+						updatePreUpscaleProgress();
+					} else {
+						console.log('预超分被要求重试（并发受限），稍后重试:', imageDataWithHash.hash);
+					}
 				} catch (error) {
 					console.error(`预超分第 ${targetIndex + 1} 页失败:`, error);
 				}

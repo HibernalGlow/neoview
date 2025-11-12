@@ -23,42 +23,67 @@
 	let upscaledImageData = $state(''); // 保持兼容性，用于预览
 	let upscaledImageBlob = $state<Blob | null>(null); // 新增：存储二进制数据
 
-	// 通用超分状态
-	let activeTab = $state('standard'); // 'standard' | 'test'
-	let testResults = $state<string[]>([]);
-	let isTesting = $state(false);
-	let selectedTestAlgorithm = $state('realesrgan');
+	// Tab切换状态
+	let activeTab = $state('realcugan'); // 'realcugan' | 'realesrgan' | 'waifu2x'
 	
-	// 手动设置状态
-	let selectedAlgorithm = $state('realcugan'); // 默认使用 realcugan
-	let selectedModel = $state(''); // 用户自行选择模型
-	let selectedScale = $state('2');
-	let customGpuId = $state('0');
-	let customTileSize = $state('0');
-	let customTta = $state(false);
-	let customNoiseLevel = $state('1');
-	let customNumThreads = $state('1');
+	// Real-CUGAN 参数
+	let realcuganModel = $state('models-se');
+	let realcuganScale = $state('2');
+	let realcuganNoiseLevel = $state('-1');
+	let realcuganTileSize = $state('0');
+	let realcuganSyncgapMode = $state('3');
+	let realcuganGpuId = $state('auto');
+	let realcuganThreads = $state('1:2:2');
+	let realcuganTta = $state(false);
+	let realcuganFormat = $state('png');
 	
-	// 固定的算法列表
-	let algorithmOptions = $state([
-		{ value: 'realcugan', label: 'Real-CUGAN' },
-		{ value: 'realesrgan', label: 'Real-ESRGAN' },
-		{ value: 'waifu2x', label: 'Waifu2x' }
+	// Real-ESRGAN 参数
+	let realesrganModel = $state('realesr-animevideov3');
+	let realesrganScale = $state('4');
+	let realesrganTileSize = $state('0');
+	let realesrganGpuId = $state('auto');
+	let realesrganThreads = $state('1:2:2');
+	let realesrganTta = $state(false);
+	let realesrganFormat = $state('png');
+	
+	// Waifu2x 参数
+	let waifu2xModel = $state('models-cunet');
+	let waifu2xNoiseLevel = $state('0');
+	let waifu2xScale = $state('2');
+	let waifu2xTileSize = $state('400');
+	let waifu2xGpuId = $state('0');
+	let waifu2xThreads = $state('1:2:2');
+	
+	// 模型选项
+	let realcuganModelOptions = $state([
+		{ value: 'models-se', label: 'models-se (默认)' },
+		{ value: 'models-up2x', label: 'models-up2x' },
+		{ value: 'models-up3x', label: 'models-up3x' },
+		{ value: 'custom', label: '自定义模型路径' }
 	]);
+	
+	let realesrganModelOptions = $state([
+		{ value: 'realesr-animevideov3', label: 'realesr-animevideov3 (默认)' },
+		{ value: 'realesrgan-x4plus', label: 'realesrgan-x4plus' },
+		{ value: 'realesrgan-x4plus-anime', label: 'realesrgan-x4plus-anime' },
+		{ value: 'realesrnet-x4plus', label: 'realesrnet-x4plus' },
+		{ value: 'custom', label: '自定义模型路径' }
+	]);
+	
+	let waifu2xModelOptions = $state([
+		{ value: 'models-cunet', label: 'models-cunet (默认)' },
+		{ value: 'models-upconv_7_anime_style_art_rgb', label: 'upconv_7_anime_style_art_rgb' },
+		{ value: 'models-upconv_7_photo', label: 'upconv_7_photo' },
+		{ value: 'custom', label: '自定义模型路径' }
+	]);
+	
+	// 自定义模型路径
+	let customModelPath = $state('');
 	
 	// 扫描到的模型列表
 	let scannedModels = $state<string[]>([]);
-	let modelOptions = $state<Array<{value: string, label: string}>>([
-		{ value: 'se', label: 'se' },
-		{ value: 'general', label: 'general' },
-		{ value: 'anime-denoise', label: 'anime-denoise' },
-		{ value: 'realesrgan-x4plus', label: 'realesrgan-x4plus' },
-		{ value: 'realesrgan-x4plus-anime', label: 'realesrgan-x4plus-anime' },
-		{ value: 'WAIFU2X_CUNET_UP2X', label: 'WAIFU2X_CUNET_UP2X' },
-		{ value: 'WAIFU2X_ANIME_UP2X', label: 'WAIFU2X_ANIME_UP2X' }
-	]);
+
 	
-	let scaleOptions = $state(['2', '3', '4']);
 
 	// 超分参数（已废弃，使用新的变量）
 	// let upscaleModel = $state('general'); // general | digital
@@ -122,15 +147,19 @@
 			const settings = await invoke('get_upscale_settings');
 			console.log('加载设置:', settings);
 			
-			// 应用设置
-			selectedAlgorithm = settings.algorithm || 'realcugan';
-			selectedModel = settings.model || ''; // 不设置默认模型
-			selectedScale = settings.scale_factor || '2';
-			customGpuId = settings.gpu_id || '0';
-			customTileSize = settings.tile_size || '0';
-			customTta = settings.tta || false;
-			customNoiseLevel = settings.noise_level || '1';
-			customNumThreads = settings.num_threads || '1';
+			// 应用设置到各个算法
+			if (settings.realcugan) {
+				Object.assign({ realcuganModel, realcuganScale, realcuganNoiseLevel, realcuganTileSize, 
+					realcuganSyncgapMode, realcuganGpuId, realcuganThreads, realcuganTta, realcuganFormat }, settings.realcugan);
+			}
+			if (settings.realesrgan) {
+				Object.assign({ realesrganModel, realesrganScale, realesrganTileSize, realesrganGpuId, 
+					realesrganThreads, realesrganTta, realesrganFormat }, settings.realesrgan);
+			}
+			if (settings.waifu2x) {
+				Object.assign({ waifu2xModel, waifu2xNoiseLevel, waifu2xScale, waifu2xTileSize, 
+					waifu2xGpuId, waifu2xThreads }, settings.waifu2x);
+			}
 			
 			// 扫描模型文件
 			await scanModels();
@@ -167,14 +196,34 @@
 	async function saveSettings() {
 		try {
 			const settings = {
-				algorithm: selectedAlgorithm,
-				model: selectedModel,
-				scale_factor: selectedScale,
-				gpu_id: customGpuId,
-				tile_size: customTileSize,
-				tta: customTta,
-				noise_level: customNoiseLevel,
-				num_threads: customNumThreads
+				realcugan: {
+					model: realcuganModel,
+					scale: realcuganScale,
+					noiseLevel: realcuganNoiseLevel,
+					tileSize: realcuganTileSize,
+					syncgapMode: realcuganSyncgapMode,
+					gpuId: realcuganGpuId,
+					threads: realcuganThreads,
+					tta: realcuganTta,
+					format: realcuganFormat
+				},
+				realesrgan: {
+					model: realesrganModel,
+					scale: realesrganScale,
+					tileSize: realesrganTileSize,
+					gpuId: realesrganGpuId,
+					threads: realesrganThreads,
+					tta: realesrganTta,
+					format: realesrganFormat
+				},
+				waifu2x: {
+					model: waifu2xModel,
+					noiseLevel: waifu2xNoiseLevel,
+					scale: waifu2xScale,
+					tileSize: waifu2xTileSize,
+					gpuId: waifu2xGpuId,
+					threads: waifu2xThreads
+				}
 			};
 			
 			await invoke('save_upscale_settings', { settings });
@@ -193,84 +242,90 @@
 	// 重置设置
 	async function resetSettings() {
 		try {
-			const defaultSettings = await invoke('reset_upscale_settings');
+			// 重置所有算法为默认值
+			realcuganModel = 'models-se';
+			realcuganScale = '2';
+			realcuganNoiseLevel = '-1';
+			realcuganTileSize = '0';
+			realcuganSyncgapMode = '3';
+			realcuganGpuId = 'auto';
+			realcuganThreads = '1:2:2';
+			realcuganTta = false;
+			realcuganFormat = 'png';
 			
-			// 应用默认设置，但不重置模型选择
-			selectedAlgorithm = defaultSettings.algorithm;
-			// 保持用户选择的模型，不重置
-			selectedScale = defaultSettings.scale_factor;
-			customGpuId = defaultSettings.gpu_id;
-			customTileSize = defaultSettings.tile_size;
-			customTta = defaultSettings.tta;
-			customNoiseLevel = defaultSettings.noise_level;
-			customNumThreads = defaultSettings.num_threads;
+			realesrganModel = 'realesr-animevideov3';
+			realesrganScale = '4';
+			realesrganTileSize = '0';
+			realesrganGpuId = 'auto';
+			realesrganThreads = '1:2:2';
+			realesrganTta = false;
+			realesrganFormat = 'png';
 			
-			console.log('设置已重置为默认值（模型选择保持不变）');
+			waifu2xModel = 'models-cunet';
+			waifu2xNoiseLevel = '0';
+			waifu2xScale = '2';
+			waifu2xTileSize = '400';
+			waifu2xGpuId = '0';
+			waifu2xThreads = '1:2:2';
+			
+			await saveSettings();
+			console.log('设置已重置为默认值');
 		} catch (error) {
 			console.error('重置设置失败:', error);
 		}
 	}
 
-	async function testAllAlgorithms() {
-		isTesting = true;
-		testResults = [];
+	// 构建命令行参数
+	function buildCommand(algorithm: string) {
+		let command = '';
 		
-		try {
-			console.log('开始测试所有算法...');
-			const results = await invoke('test_all_algorithms');
-			testResults = results;
-			console.log('测试结果:', results);
-		} catch (error) {
-			console.error('测试失败:', error);
-			testResults = [`测试失败: ${error}`];
-		} finally {
-			isTesting = false;
+		switch (algorithm) {
+			case 'realcugan':
+				command = 'realcugan-ncnn-vulkan.exe';
+				command += ` -i input.jpg`;
+				command += ` -o output.png`;
+				command += ` -n ${realcuganNoiseLevel}`;
+				command += ` -s ${realcuganScale}`;
+				command += ` -t ${realcuganTileSize}`;
+				command += ` -c ${realcuganSyncgapMode}`;
+				command += ` -m ${realcuganModel === 'custom' ? customModelPath : realcuganModel}`;
+				command += ` -g ${realcuganGpuId}`;
+				command += ` -j ${realcuganThreads}`;
+				if (realcuganTta) command += ` -x`;
+				command += ` -f ${realcuganFormat}`;
+				break;
+				
+			case 'realesrgan':
+				command = 'realesrgan-ncnn-vulkan.exe';
+				command += ` -i input.jpg`;
+				command += ` -o output.png`;
+				command += ` -s ${realesrganScale}`;
+				command += ` -t ${realesrganTileSize}`;
+				command += ` -m ${realesrganModel === 'custom' ? customModelPath : 'models'}`;
+				command += ` -n ${realesrganModel}`;
+				command += ` -g ${realesrganGpuId}`;
+				command += ` -j ${realesrganThreads}`;
+				if (realesrganTta) command += ` -x`;
+				command += ` -f ${realesrganFormat}`;
+				break;
+				
+			case 'waifu2x':
+				command = 'waifu2x-ncnn-vulkan.exe';
+				command += ` -i input.jpg`;
+				command += ` -o output.png`;
+				command += ` -n ${waifu2xNoiseLevel}`;
+				command += ` -s ${waifu2xScale}`;
+				command += ` -t ${waifu2xTileSize}`;
+				command += ` -m ${waifu2xModel === 'custom' ? customModelPath : waifu2xModel}`;
+				command += ` -g ${waifu2xGpuId}`;
+				command += ` -j ${waifu2xThreads}`;
+				break;
 		}
-	}
-
-	async function testAlgorithmModels() {
-		isTesting = true;
-		testResults = [];
 		
-		try {
-			console.log(`开始测试 ${selectedTestAlgorithm} 算法的模型...`);
-			const results = await invoke('test_algorithm_models', {
-				algorithm: selectedTestAlgorithm
-			});
-			testResults = results;
-			console.log('测试结果:', results);
-		} catch (error) {
-			console.error('测试失败:', error);
-			testResults = [`测试失败: ${error}`];
-		} finally {
-			isTesting = false;
-		}
+		return command;
 	}
 
-	async function openModelsFolder() {
-		try {
-			// 打开模型文件夹
-			const modelsPath = 'D:\\temp\\neoview_thumbnails_test\\models';
-			await invoke('show_in_file_manager', { path: modelsPath });
-		} catch (error) {
-			console.error('打开模型文件夹失败:', error);
-		}
-	}
-
-	async function debugModelsInfo() {
-		try {
-			const info = await invoke('debug_models_info');
-			console.log('=== 模型调试信息 ===');
-			console.log(info);
-			console.log('==================');
-			
-			// 也显示在测试结果中
-			testResults = info.split('\n').filter(line => line.trim());
-		} catch (error) {
-			console.error('获取调试信息失败:', error);
-			testResults = [`调试失败: ${error}`];
-		}
-	}
+	
 
 	async function startUpscale() {
 		if (!bookStore.currentImage) {
@@ -312,16 +367,22 @@
 				console.log('转换后的 WebP 文件路径:', actualImagePath);
 			}
 
-			// 生成保存路径
+			// 生成保存路径 - 使用新的命名规则
 			const savePath = await invoke<string>('get_generic_upscale_save_path', {
 				imagePath: actualImagePath,
-				algorithm: selectedAlgorithm,
-				model: selectedModel,
-				gpuId: customGpuId,
-				tileSize: customTileSize,
-				tta: customTta,
-				noiseLevel: customNoiseLevel,
-				numThreads: customNumThreads
+				algorithm: activeTab,
+				model: activeTab === 'realcugan' ? realcuganModel : 
+					   activeTab === 'realesrgan' ? realesrganModel : waifu2xModel,
+				gpuId: activeTab === 'realcugan' ? realcuganGpuId : 
+					   activeTab === 'realesrgan' ? realesrganGpuId : waifu2xGpuId,
+				tileSize: activeTab === 'realcugan' ? realcuganTileSize : 
+						  activeTab === 'realesrgan' ? realesrganTileSize : waifu2xTileSize,
+				tta: activeTab === 'realcugan' ? realcuganTta : 
+					 activeTab === 'realesrgan' ? realesrganTta : false,
+				noiseLevel: activeTab === 'realcugan' ? realcuganNoiseLevel : 
+							activeTab === 'realesrgan' ? '0' : waifu2xNoiseLevel,
+				numThreads: activeTab === 'realcugan' ? realcuganThreads : 
+							activeTab === 'realesrgan' ? realesrganThreads : waifu2xThreads
 			});
 
 			console.log('超分保存路径:', savePath);
@@ -331,13 +392,19 @@
 			const result = await invoke<number[]>('generic_upscale_image', {
 				imagePath: actualImagePath,
 				savePath,
-				algorithm: selectedAlgorithm,
-				model: selectedModel,
-				gpuId: customGpuId,
-				tileSize: customTileSize,
-				tta: customTta,
-				noiseLevel: customNoiseLevel,
-				numThreads: customNumThreads
+				algorithm: activeTab,
+				model: activeTab === 'realcugan' ? realcuganModel : 
+					   activeTab === 'realesrgan' ? realesrganModel : waifu2xModel,
+				gpuId: activeTab === 'realcugan' ? realcuganGpuId : 
+					   activeTab === 'realesrgan' ? realesrganGpuId : waifu2xGpuId,
+				tileSize: activeTab === 'realcugan' ? realcuganTileSize : 
+						  activeTab === 'realesrgan' ? realesrganTileSize : waifu2xTileSize,
+				tta: activeTab === 'realcugan' ? realcuganTta : 
+					 activeTab === 'realesrgan' ? realesrganTta : false,
+				noiseLevel: activeTab === 'realcugan' ? realcuganNoiseLevel : 
+							activeTab === 'realesrgan' ? '0' : waifu2xNoiseLevel,
+				numThreads: activeTab === 'realcugan' ? realcuganThreads : 
+							activeTab === 'realesrgan' ? realesrganThreads : waifu2xThreads
 			});
 
 			console.log('超分完成，数据长度:', result.length);
@@ -434,162 +501,397 @@
 	<!-- Tab 切换 -->
 	<div class="flex gap-1 p-1 bg-muted rounded-lg">
 		<button
-			class="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors {activeTab === 'standard' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}"
-			onclick={() => activeTab = 'standard'}
+			class="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors {activeTab === 'realcugan' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}"
+			onclick={() => activeTab = 'realcugan'}
 		>
-			<Play class="h-4 w-4" />
-			标准超分
+			Real-CUGAN
 		</button>
 		<button
-			class="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors {activeTab === 'test' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}"
-			onclick={() => activeTab = 'test'}
+			class="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors {activeTab === 'realesrgan' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}"
+			onclick={() => activeTab = 'realesrgan'}
 		>
-			<TestTube class="h-4 w-4" />
-			算法测试
+			Real-ESRGAN
 		</button>
+		<button
+			class="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors {activeTab === 'waifu2x' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}"
+			onclick={() => activeTab = 'waifu2x'}
+		>
+			Waifu2x
+		</button>
+	</div>
+
+	<!-- 当前图片信息 -->
+	<div class="flex items-center gap-2 p-2 bg-muted rounded-md">
+		<ImageIcon class="h-4 w-4 text-muted-foreground" />
+		<span class="text-sm text-muted-foreground truncate">
+			{#if bookStore.currentImage}
+				{bookStore.currentImage.name}
+			{:else}
+				没有当前图片
+			{/if}
+		</span>
 	</div>
 
 	<!-- Tab 内容 -->
-	{#if activeTab === 'standard'}
-		<!-- 标准 Tab 内容 -->
-		<!-- 当前图片信息 -->
-		{#if bookStore.currentImage}
-			<div class="flex items-center gap-2 p-2 bg-muted rounded-md">
-				<ImageIcon class="h-4 w-4 text-muted-foreground" />
-				<span class="text-sm text-muted-foreground truncate">
-					{bookStore.currentImage.name}
-				</span>
+	{#if activeTab === 'realcugan'}
+		<!-- Real-CUGAN Tab 内容 -->
+		<div class="space-y-3">
+			<!-- 模型选择 -->
+			<div class="space-y-2">
+				<Label class="text-sm font-medium">模型路径</Label>
+				<NativeSelect 
+					bind:value={realcuganModel} 
+					onchange={saveSettings}
+					class="w-full z-[60]"
+				>
+					{#each realcuganModelOptions as option}
+						<option value={option.value}>{option.label}</option>
+					{/each}
+				</NativeSelect>
+				{#if realcuganModel === 'custom'}
+					<input
+						type="text"
+						bind:value={customModelPath}
+						onchange={saveSettings}
+						class="w-full h-8 px-2 text-sm border rounded-md"
+						placeholder="输入自定义模型路径"
+					/>
+				{/if}
 			</div>
-		{:else}
-			<div class="text-sm text-muted-foreground text-center p-4">
-				没有当前图片
+
+			<!-- 放大倍数 -->
+			<div class="space-y-2">
+				<Label class="text-sm font-medium">放大倍数</Label>
+				<NativeSelect 
+					bind:value={realcuganScale} 
+					onchange={saveSettings}
+					class="w-full z-[60]"
+				>
+					<option value="1">1x</option>
+					<option value="2">2x</option>
+					<option value="3">3x</option>
+					<option value="4">4x</option>
+				</NativeSelect>
 			</div>
-		{/if}
 
-	<!-- 算法选择 -->
-	<div class="space-y-2">
-		<Label class="text-sm font-medium">超分算法</Label>
-		<NativeSelect 
-			bind:value={selectedAlgorithm} 
-			onchange={saveSettings}
-			class="w-full z-[60]"
-		>
-			<option value="" disabled>选择算法</option>
-			{#each algorithmOptions as option}
-				<option value={option.value}>{option.label}</option>
-			{/each}
-		</NativeSelect>
-	</div>
+			<!-- 噪声等级 -->
+			<div class="space-y-2">
+				<Label class="text-sm font-medium">噪声等级</Label>
+				<NativeSelect 
+					bind:value={realcuganNoiseLevel} 
+					onchange={saveSettings}
+					class="w-full z-[60]"
+				>
+					<option value="-1">无效果 (-1)</option>
+					<option value="0">0</option>
+					<option value="1">1</option>
+					<option value="2">2</option>
+					<option value="3">3</option>
+				</NativeSelect>
+			</div>
 
-	<!-- 模型选择 -->
-	<div class="space-y-2">
-		<Label class="text-sm font-medium">超分模型</Label>
-		<NativeSelect 
-			bind:value={selectedModel} 
-			onchange={saveSettings}
-			class="w-full z-[60]"
-		>
-			<option value="" disabled>选择模型</option>
-			{#each modelOptions as option}
-				<option value={option.value}>{option.label}</option>
-			{/each}
-		</NativeSelect>
-		<div class="flex gap-2 pt-1">
-			<Button
-				variant="outline"
-				size="sm"
-				class="flex-1 text-xs"
-				onclick={scanModels}
-			>
-				🔍 重新扫描
-			</Button>
-			<span class="text-xs text-muted-foreground">
-				{modelOptions.length} 个模型
-			</span>
+			<!-- 高级设置 -->
+			<div class="space-y-2">
+				<Label class="text-sm font-medium">高级设置</Label>
+				
+				<!-- Tile Size -->
+				<div class="space-y-1">
+					<Label class="text-xs text-muted-foreground">Tile Size (0=自动)</Label>
+					<input
+						type="number"
+						bind:value={realcuganTileSize}
+						onchange={saveSettings}
+						class="w-full h-8 px-2 text-sm border rounded-md"
+						placeholder="0"
+						min="0"
+					/>
+				</div>
+
+				<!-- Sync Gap Mode -->
+				<div class="space-y-1">
+					<Label class="text-xs text-muted-foreground">Sync Gap Mode</Label>
+					<NativeSelect 
+						bind:value={realcuganSyncgapMode} 
+						onchange={saveSettings}
+						class="w-full z-[60]"
+					>
+						<option value="0">0 - 无同步</option>
+						<option value="1">1 - 精确同步</option>
+						<option value="2">2 - 粗略同步</option>
+						<option value="3">3 - 非常粗略同步</option>
+					</NativeSelect>
+				</div>
+
+				<!-- GPU ID -->
+				<div class="space-y-1">
+					<Label class="text-xs text-muted-foreground">GPU ID</Label>
+					<input
+						type="text"
+						bind:value={realcuganGpuId}
+						onchange={saveSettings}
+						class="w-full h-8 px-2 text-sm border rounded-md"
+						placeholder="auto"
+					/>
+				</div>
+
+				<!-- 线程数 -->
+				<div class="space-y-1">
+					<Label class="text-xs text-muted-foreground">线程数 (load:proc:save)</Label>
+					<input
+						type="text"
+						bind:value={realcuganThreads}
+						onchange={saveSettings}
+						class="w-full h-8 px-2 text-sm border rounded-md"
+						placeholder="1:2:2"
+					/>
+				</div>
+
+				<!-- TTA -->
+				<div class="flex items-center justify-between">
+					<Label class="text-xs text-muted-foreground">TTA 模式</Label>
+					<Switch bind:checked={realcuganTta} onchange={saveSettings} />
+				</div>
+
+				<!-- 输出格式 -->
+				<div class="space-y-1">
+					<Label class="text-xs text-muted-foreground">输出格式</Label>
+					<NativeSelect 
+						bind:value={realcuganFormat} 
+						onchange={saveSettings}
+						class="w-full z-[60]"
+					>
+						<option value="jpg">JPG</option>
+						<option value="png">PNG</option>
+						<option value="webp">WebP</option>
+					</NativeSelect>
+				</div>
+			</div>
+
+			<!-- 命令行预览 -->
+			<div class="space-y-2">
+				<Label class="text-sm font-medium">命令行预览</Label>
+				<div class="p-2 bg-muted rounded-md">
+					<code class="text-xs break-all">{buildCommand('realcugan')}</code>
+				</div>
+			</div>
 		</div>
-	</div>
+	{:else if activeTab === 'realesrgan'}
+		<!-- Real-ESRGAN Tab 内容 -->
+		<div class="space-y-3">
+			<!-- 模型选择 -->
+			<div class="space-y-2">
+				<Label class="text-sm font-medium">模型名称</Label>
+				<NativeSelect 
+					bind:value={realesrganModel} 
+					onchange={saveSettings}
+					class="w-full z-[60]"
+				>
+					{#each realesrganModelOptions as option}
+						<option value={option.value}>{option.label}</option>
+					{/each}
+				</NativeSelect>
+				{#if realesrganModel === 'custom'}
+					<input
+						type="text"
+						bind:value={customModelPath}
+						onchange={saveSettings}
+						class="w-full h-8 px-2 text-sm border rounded-md"
+						placeholder="输入自定义模型路径"
+					/>
+				{/if}
+			</div>
 
-	<!-- 放大倍数 -->
-	<div class="space-y-2">
-		<Label class="text-sm font-medium">放大倍数</Label>
-		<NativeSelect 
-			bind:value={selectedScale} 
-			onchange={saveSettings}
-			class="w-full z-[60]"
-		>
-			<option value="" disabled>选择倍数</option>
-			{#each scaleOptions as scale}
-				<option value={scale}>{scale}x</option>
-			{/each}
-		</NativeSelect>
-	</div>
+			<!-- 放大倍数 -->
+			<div class="space-y-2">
+				<Label class="text-sm font-medium">放大倍数</Label>
+				<NativeSelect 
+					bind:value={realesrganScale} 
+					onchange={saveSettings}
+					class="w-full z-[60]"
+				>
+					<option value="2">2x</option>
+					<option value="3">3x</option>
+					<option value="4">4x</option>
+				</NativeSelect>
+			</div>
 
-	<!-- 高级设置 -->
-	<div class="space-y-3">
-		<div class="flex items-center gap-2">
-			<Settings class="h-4 w-4" />
-			<Label class="text-sm font-medium">高级设置</Label>
+			<!-- 高级设置 -->
+			<div class="space-y-2">
+				<Label class="text-sm font-medium">高级设置</Label>
+				
+				<!-- Tile Size -->
+				<div class="space-y-1">
+					<Label class="text-xs text-muted-foreground">Tile Size (0=自动)</Label>
+					<input
+						type="number"
+						bind:value={realesrganTileSize}
+						onchange={saveSettings}
+						class="w-full h-8 px-2 text-sm border rounded-md"
+						placeholder="0"
+						min="0"
+					/>
+				</div>
+
+				<!-- GPU ID -->
+				<div class="space-y-1">
+					<Label class="text-xs text-muted-foreground">GPU ID</Label>
+					<input
+						type="text"
+						bind:value={realesrganGpuId}
+						onchange={saveSettings}
+						class="w-full h-8 px-2 text-sm border rounded-md"
+						placeholder="auto"
+					/>
+				</div>
+
+				<!-- 线程数 -->
+				<div class="space-y-1">
+					<Label class="text-xs text-muted-foreground">线程数 (load:proc:save)</Label>
+					<input
+						type="text"
+						bind:value={realesrganThreads}
+						onchange={saveSettings}
+						class="w-full h-8 px-2 text-sm border rounded-md"
+						placeholder="1:2:2"
+					/>
+				</div>
+
+				<!-- TTA -->
+				<div class="flex items-center justify-between">
+					<Label class="text-xs text-muted-foreground">TTA 模式</Label>
+					<Switch bind:checked={realesrganTta} onchange={saveSettings} />
+				</div>
+
+				<!-- 输出格式 -->
+				<div class="space-y-1">
+					<Label class="text-xs text-muted-foreground">输出格式</Label>
+					<NativeSelect 
+						bind:value={realesrganFormat} 
+						onchange={saveSettings}
+						class="w-full z-[60]"
+					>
+						<option value="jpg">JPG</option>
+						<option value="png">PNG</option>
+						<option value="webp">WebP</option>
+					</NativeSelect>
+				</div>
+			</div>
+
+			<!-- 命令行预览 -->
+			<div class="space-y-2">
+				<Label class="text-sm font-medium">命令行预览</Label>
+				<div class="p-2 bg-muted rounded-md">
+					<code class="text-xs break-all">{buildCommand('realesrgan')}</code>
+				</div>
+			</div>
 		</div>
+	{:else if activeTab === 'waifu2x'}
+		<!-- Waifu2x Tab 内容 -->
+		<div class="space-y-3">
+			<!-- 模型选择 -->
+			<div class="space-y-2">
+				<Label class="text-sm font-medium">模型路径</Label>
+				<NativeSelect 
+					bind:value={waifu2xModel} 
+					onchange={saveSettings}
+					class="w-full z-[60]"
+				>
+					{#each waifu2xModelOptions as option}
+						<option value={option.value}>{option.label}</option>
+					{/each}
+				</NativeSelect>
+				{#if waifu2xModel === 'custom'}
+					<input
+						type="text"
+						bind:value={customModelPath}
+						onchange={saveSettings}
+						class="w-full h-8 px-2 text-sm border rounded-md"
+						placeholder="输入自定义模型路径"
+					/>
+				{/if}
+			</div>
 
-		<!-- GPU ID -->
-		<div class="space-y-1">
-			<Label class="text-xs text-muted-foreground">GPU ID</Label>
-			<input
-				type="number"
-				bind:value={customGpuId}
-				onchange={saveSettings}
-				class="w-full h-8 px-2 text-sm border rounded-md"
-				placeholder="0"
-				min="0"
-			/>
-		</div>
+			<!-- 噪声等级 -->
+			<div class="space-y-2">
+				<Label class="text-sm font-medium">噪声等级</Label>
+				<NativeSelect 
+					bind:value={waifu2xNoiseLevel} 
+					onchange={saveSettings}
+					class="w-full z-[60]"
+				>
+					<option value="-1">无效果 (-1)</option>
+					<option value="0">0</option>
+					<option value="1">1</option>
+					<option value="2">2</option>
+					<option value="3">3</option>
+				</NativeSelect>
+			</div>
 
-		<!-- Tile Size -->
-		<div class="space-y-1">
-			<Label class="text-xs text-muted-foreground">Tile Size (0=自动)</Label>
-			<input
-				type="number"
-				bind:value={customTileSize}
-				onchange={saveSettings}
-				class="w-full h-8 px-2 text-sm border rounded-md"
-				placeholder="0"
-				min="0"
-			/>
-		</div>
+			<!-- 放大倍数 -->
+			<div class="space-y-2">
+				<Label class="text-sm font-medium">放大倍数</Label>
+				<NativeSelect 
+					bind:value={waifu2xScale} 
+					onchange={saveSettings}
+					class="w-full z-[60]"
+				>
+					<option value="1">1x (无缩放)</option>
+					<option value="2">2x</option>
+				</NativeSelect>
+			</div>
 
-		<!-- TTA -->
-		<div class="flex items-center justify-between">
-			<Label class="text-xs text-muted-foreground">TTA (测试时增强)</Label>
-			<Switch bind:checked={customTta} onchange={saveSettings} />
-		</div>
+			<!-- 高级设置 -->
+			<div class="space-y-2">
+				<Label class="text-sm font-medium">高级设置</Label>
+				
+				<!-- Tile Size -->
+				<div class="space-y-1">
+					<Label class="text-xs text-muted-foreground">Tile Size</Label>
+					<input
+						type="number"
+						bind:value={waifu2xTileSize}
+						onchange={saveSettings}
+						class="w-full h-8 px-2 text-sm border rounded-md"
+						placeholder="400"
+						min="32"
+					/>
+				</div>
 
-		<!-- 噪声等级 -->
-		<div class="space-y-1">
-			<Label class="text-xs text-muted-foreground">噪声等级</Label>
-			<input
-				type="number"
-				bind:value={customNoiseLevel}
-				onchange={saveSettings}
-				class="w-full h-8 px-2 text-sm border rounded-md"
-				placeholder="1"
-				min="0"
-				max="3"
-			/>
-		</div>
+				<!-- GPU ID -->
+				<div class="space-y-1">
+					<Label class="text-xs text-muted-foreground">GPU ID</Label>
+					<input
+						type="number"
+						bind:value={waifu2xGpuId}
+						onchange={saveSettings}
+						class="w-full h-8 px-2 text-sm border rounded-md"
+						placeholder="0"
+						min="0"
+					/>
+				</div>
 
-		<!-- 线程数 -->
-		<div class="space-y-1">
-			<Label class="text-xs text-muted-foreground">线程数</Label>
-			<input
-				type="number"
-				bind:value={customNumThreads}
-				onchange={saveSettings}
-				class="w-full h-8 px-2 text-sm border rounded-md"
-				placeholder="1"
-				min="1"
-			/>
+				<!-- 线程数 -->
+				<div class="space-y-1">
+					<Label class="text-xs text-muted-foreground">线程数 (load:proc:save)</Label>
+					<input
+						type="text"
+						bind:value={waifu2xThreads}
+						onchange={saveSettings}
+						class="w-full h-8 px-2 text-sm border rounded-md"
+						placeholder="1:2:2"
+					/>
+				</div>
+			</div>
+
+			<!-- 命令行预览 -->
+			<div class="space-y-2">
+				<Label class="text-sm font-medium">命令行预览</Label>
+				<div class="p-2 bg-muted rounded-md">
+					<code class="text-xs break-all">{buildCommand('waifu2x')}</code>
+				</div>
+			</div>
 		</div>
-	</div>
+	{/if}
 
 	<!-- 操作按钮 -->
 	<div class="flex gap-2 pt-2">
@@ -663,102 +965,5 @@
 			<AlertCircle class="h-4 w-4" />
 			<span>{upscaleStatus}</span>
 		</div>
-	{/if}
-	{:else if activeTab === 'test'}
-		<!-- 测试 Tab 内容 -->
-		<!-- 算法状态 -->
-		<div class="space-y-2">
-			<div class="flex items-center gap-2">
-				<List class="h-4 w-4" />
-				<Label class="text-sm font-medium">支持的超分算法</Label>
-			</div>
-			<div class="flex flex-wrap gap-2">
-				<span class="px-2 py-1 text-xs bg-primary/10 text-primary rounded-md">Real-CUGAN</span>
-				<span class="px-2 py-1 text-xs bg-primary/10 text-primary rounded-md">ESRGAN</span>
-				<span class="px-2 py-1 text-xs bg-primary/10 text-primary rounded-md">Waifu2x</span>
-			</div>
-		</div>
-
-		<!-- 测试操作 -->
-		<div class="space-y-3">
-			<div class="flex items-center gap-2">
-				<TestTube class="h-4 w-4" />
-				<Label class="text-sm font-medium">算法测试</Label>
-			</div>
-
-			<!-- 测试指定算法的模型 -->
-			<div class="space-y-2">
-				<Select.Root bind:value={selectedTestAlgorithm}>
-					<Select.Trigger class="w-full h-8">
-						<Select.Value placeholder="选择算法" />
-					</Select.Trigger>
-					<Select.Content>
-						{#each algorithmOptions as option}
-							<Select.Item value={option.value}>
-								{option.label}
-							</Select.Item>
-						{/each}
-					</Select.Content>
-				</Select.Root>
-				
-				<Button
-					variant="outline"
-					size="sm"
-					class="w-full"
-					onclick={testAlgorithmModels}
-					disabled={isTesting}
-				>
-					{#if isTesting}
-						<Loader2 class="h-4 w-4 mr-1 animate-spin" />
-						测试中...
-					{:else}
-						<TestTube class="h-4 w-4 mr-1" />
-						测试 {selectedTestAlgorithm} 工具
-					{/if}
-				</Button>
-			</div>
-		</div>
-
-		<!-- 打开模型文件夹 -->
-		<div class="space-y-2">
-			<Button
-				variant="ghost"
-				size="sm"
-				class="w-full"
-				onclick={openModelsFolder}
-			>
-				<FolderOpen class="h-4 w-4 mr-1" />
-				打开模型文件夹
-			</Button>
-			<Button
-				variant="ghost"
-				size="sm"
-				class="w-full"
-				onclick={debugModelsInfo}
-			>
-				<Settings class="h-4 w-4 mr-1" />
-				调试模型信息
-			</Button>
-			<div class="text-xs text-muted-foreground">
-				将测试图片放在 models/testimg 目录下
-			</div>
-		</div>
-
-		<!-- 测试结果 -->
-		{#if testResults.length > 0}
-			<div class="space-y-2">
-				<div class="flex items-center gap-2">
-					<CheckCircle class="h-4 w-4" />
-					<Label class="text-sm font-medium">测试结果</Label>
-				</div>
-				<div class="max-h-48 overflow-y-auto space-y-1">
-					{#each testResults as result}
-						<div class="text-xs p-2 bg-muted rounded-md font-mono">
-							{result}
-						</div>
-					{/each}
-				</div>
-			</div>
-		{/if}
 	{/if}
 </div>

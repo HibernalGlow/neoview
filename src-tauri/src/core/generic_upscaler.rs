@@ -167,6 +167,12 @@ impl GenericUpscaler {
         // 计算原文件MD5
         let md5 = self.calculate_file_md5(original_path)?;
         
+        // 获取原文件格式
+        let original_format = original_path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("webp");
+        
         // 获取算法名称
         let algorithm_name = match options.algorithm {
             UpscaleAlgorithm::RealESRGAN => "esrgan",
@@ -174,18 +180,23 @@ impl GenericUpscaler {
             UpscaleAlgorithm::RealCUGAN => "realcugan",
         };
         
-        // 生成参数字符串
-        let params = format!(
-            "{}_{}_{}_{}_{}_{}", 
-            options.model, 
-            options.gpu_id, 
-            options.tile_size,
-            options.noise_level,
-            options.num_threads,
-            if options.tta { "tta" } else { "no_tta" }
-        );
+        // 使用新的命名规则: md5.format -> md5_sr[model].webp
+        // 提取模型名称（去掉路径前缀）
+        let model_name = if options.model.contains('/') || options.model.contains('\\') {
+            // 如果是路径，提取最后部分
+            options.model
+                .split('/')
+                .last()
+                .unwrap_or(&options.model)
+                .split('\\')
+                .last()
+                .unwrap_or(&options.model)
+                .to_string()
+        } else {
+            options.model.clone()
+        };
         
-        Ok(format!("{}_{}_{}.webp", md5, algorithm_name, params))
+        Ok(format!("{}_sr[{}].webp", md5, model_name))
     }
 
     /// 获取超分保存路径

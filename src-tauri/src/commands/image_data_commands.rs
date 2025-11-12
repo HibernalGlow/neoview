@@ -8,6 +8,16 @@ use std::fs;
 use std::path::PathBuf;
 use base64::{Engine as _, engine::general_purpose};
 use std::collections::HashMap;
+use serde::Serialize;
+
+/// 缓存元数据结构
+#[derive(Debug, Serialize)]
+pub struct CacheMeta {
+    pub path: String,
+    pub mtime: u64,
+    pub size: u64,
+    pub algorithm: String,
+}
 
 /// 计算数据的哈希值（使用MD5）
 #[command]
@@ -203,22 +213,23 @@ pub async fn check_upscale_cache_for_algorithm(
     algorithm: String,
     thumbnail_path: String,
     max_age_seconds: Option<u64>,
-) -> Result<String, String> {
+) -> Result<CacheMeta, String> {
     let thumbnail_root = PathBuf::from(thumbnail_path);
     let upscale_dir = thumbnail_root.join("generic-upscale");
 
-    // 索引文件（简单的文本格式：每行 hash|path|mtime）
+    // 索引文件（简单的文本格式：每行 hash|path|mtime|algorithm）
     let index_file = upscale_dir.join("index.txt");
 
     // 尝试从索引中快速查找
     if index_file.exists() {
         if let Ok(content) = fs::read_to_string(&index_file) {
             for line in content.lines() {
-                let parts: Vec<&str> = line.splitn(3, '|').collect();
-                if parts.len() < 3 { continue; }
+                let parts: Vec<&str> = line.splitn(4, '|').collect();
+                if parts.len() < 4 { continue; }
                 let h = parts[0];
                 let p = parts[1];
                 let mtime = parts[2].parse::<u64>().unwrap_or(0);
+                let alg = parts[3];
                 if h == image_hash {
                     let path_buf = PathBuf::from(p);
                     if path_buf.exists() {
@@ -228,14 +239,15 @@ pub async fn check_upscale_cache_for_algorithm(
                                 if let Ok(modified) = metadata.modified() {
                                     if let Ok(elapsed) = std::time::SystemTime::now().duration_since(modified) {
                                         if elapsed.as_secs() > max_age {
-                                            // 过期，继续查找其他文件
-                                            break;
+                                            // 过期，跳过此索引项并继续查找（不要中断整个索引遍历）
+                                            continue;
                                         }
                                     }
                                 }
                             }
                         }
-                        return Ok(path_buf.to_string_lossy().to_string());
+                        let size = fs::metadata(&path_buf).map(|m| m.len()).unwrap_or(0);
+                        return Ok(CacheMeta { path: path_buf.to_string_lossy().to_string(), mtime, size, algorithm: alg.to_string() });
                     }
                 }
             }
@@ -244,7 +256,8 @@ pub async fn check_upscale_cache_for_algorithm(
 
     // 索引未命中或索引不可用时扫描目录并更新索引
     if upscale_dir.exists() {
-        let mut new_index: HashMap<String, (String, u64)> = HashMap::new();
+        // map: hash -> (path, mtime, algorithm)
+        let mut new_index: HashMap<String, (String, u64, String)> = HashMap::new();
         if let Ok(entries) = fs::read_dir(&upscale_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -265,16 +278,16 @@ pub async fn check_upscale_cache_for_algorithm(
                                     }
                                 }
                             }
-
-                            // 找到匹配的缓存文件，记录到索引并返回路径
+                            // 找到匹配的缓存文件，记录到索引并返回 metadata
                             if let Ok(metadata) = fs::metadata(&path) {
                                 let mtime = metadata.modified()
                                     .ok()
                                     .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                                     .map(|d| d.as_secs()).unwrap_or(0);
-                                new_index.insert(image_hash.clone(), (path.to_string_lossy().to_string(), mtime));
+                                let size = metadata.len();
+                                new_index.insert(image_hash.clone(), (path.to_string_lossy().to_string(), mtime, algorithm.clone()));
+                                return Ok(CacheMeta { path: path.to_string_lossy().to_string(), mtime, size, algorithm: algorithm.clone() });
                             }
-                            return Ok(path.to_string_lossy().to_string());
                         } else {
                             // 也把其他文件加入索引候选（简单策略）
                             if let Some(pos) = filename_str.find("_") {
@@ -284,7 +297,7 @@ pub async fn check_upscale_cache_for_algorithm(
                                         .ok()
                                         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                                         .map(|d| d.as_secs()).unwrap_or(0);
-                                    new_index.insert(key.to_string(), (path.to_string_lossy().to_string(), mtime));
+                                    new_index.insert(key.to_string(), (path.to_string_lossy().to_string(), mtime, algorithm.clone()));
                                 }
                             }
                         }
@@ -296,14 +309,14 @@ pub async fn check_upscale_cache_for_algorithm(
         // 写回索引文件（覆盖）
         if !new_index.is_empty() {
             let mut lines = Vec::new();
-            for (k, (p, m)) in new_index.iter() {
-                lines.push(format!("{}|{}|{}", k, p, m));
+            for (k, (p, m, alg)) in new_index.iter() {
+                lines.push(format!("{}|{}|{}|{}", k, p, m, alg));
             }
             let content = lines.join("\n");
             let _ = fs::write(&index_file, content);
         }
     }
-
+    
     Err("未找到缓存".to_string())
 }
 

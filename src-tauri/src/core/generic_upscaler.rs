@@ -168,13 +168,13 @@ impl GenericUpscaler {
         let md5 = self.calculate_file_md5(original_path)?;
         
         // 获取原文件格式
-        let original_format = original_path
+        let _original_format = original_path
             .extension()
             .and_then(|ext| ext.to_str())
             .unwrap_or("webp");
         
         // 获取算法名称
-        let algorithm_name = match options.algorithm {
+        let _algorithm_name = match options.algorithm {
             UpscaleAlgorithm::RealESRGAN => "esrgan",
             UpscaleAlgorithm::Waifu2x => "waifu2x",
             UpscaleAlgorithm::RealCUGAN => "realcugan",

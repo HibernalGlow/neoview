@@ -355,6 +355,7 @@
 			// 触发预加载后续页面
 			// 使用 setTimeout 避免阻塞当前页面加载
 			setTimeout(() => {
+				console.log('准备触发预超分...');
 				preloadNextPages();
 			}, 1000);
 
@@ -422,25 +423,26 @@
 
 				for (const algorithm of algorithms) {
 					try {
-						// 后端返回的是匹配缓存文件的绝对路径（若找到），否则会抛出错误
-						const cachePath = await invoke<string>('check_upscale_cache_for_algorithm', {
+						// 后端现在返回结构化的 metadata（path/mtime/size/algorithm），若未命中会抛出错误
+						const meta: any = await invoke('check_upscale_cache_for_algorithm', {
 							imageHash,
 							algorithm,
 							thumbnailPath: 'D:\\temp\\neoview_thumbnails_test',
 							max_age_seconds: ttlSeconds
 						});
-						if (cachePath) {
+
+						if (meta && meta.path) {
 							try {
-								// 通过后端命令读取文件二进制
-								const bytes = await invoke<number[]>('read_binary_file', { filePath: cachePath });
+								// 懒加载二进制：仅在确认存在缓存时才读取文件字节
+								const bytes = await invoke<number[]>('read_binary_file', { filePath: meta.path });
 								const arr = new Uint8Array(bytes);
 								const blob = new Blob([arr], { type: 'image/webp' });
 								const url = URL.createObjectURL(blob);
 								bookStore.setUpscaledImage(url);
 								bookStore.setUpscaledImageBlob(blob);
 								// 更新内存索引，便于后续快速命中
-								hashPathIndex.set(imageHash, cachePath);
-								console.log(`找到 ${algorithm} 算法的超分缓存，path: ${cachePath}`);
+								hashPathIndex.set(imageHash, meta.path);
+								console.log(`找到 ${meta.algorithm || algorithm} 算法的超分缓存，path: ${meta.path}`);
 								return true;
 							} catch (e) {
 								console.error('读取缓存文件失败:', e);
@@ -595,8 +597,16 @@
 				let settings;
 				upscaleSettings.subscribe(s => settings = s)();
 				preloadPages = settings?.preload_pages || 3;
+				console.log('预加载设置:', { preloadPages, globalEnabled: settings?.global_upscale_enabled });
 			} catch (e) {
 				console.warn('获取预加载设置失败，使用默认值:', e);
+			}
+
+			// 检查全局开关
+			const globalEnabled = await getGlobalUpscaleEnabled();
+			if (!globalEnabled) {
+				console.log('全局超分开关已关闭，跳过预超分');
+				return;
 			}
 
 			if (preloadPages <= 0) {
@@ -605,7 +615,10 @@
 			}
 
 			const currentBook = bookStore.currentBook;
-			if (!currentBook) return;
+			if (!currentBook) {
+				console.log('没有当前书籍，跳过预超分');
+				return;
+			}
 
 			const currentIndex = bookStore.currentPageIndex;
 			const totalPages = bookStore.totalPages;
@@ -616,10 +629,11 @@
 			preUpscaleProgress = 0;
 
 			if (totalPreUpscalePages <= 0) {
+				console.log('没有需要预超分的页面');
 				return;
 			}
 
-			console.log(`开始预超分，共 ${totalPreUpscalePages} 页`);
+			console.log(`开始预超分，共 ${totalPreUpscalePages} 页，当前页: ${currentIndex + 1}/${totalPages}`);
 
 			// 预加载后续页面
 			for (let i = 1; i <= preloadPages; i++) {

@@ -8,6 +8,9 @@
 		"email": "contato@alysonhower.dev"
 	},
 	"type": "module",
+	"resolutions": {
+		"yaml": "^2.4.2"
+	},
 	"scripts": {
 		"dev": "vite",
 		"build": "vite build",

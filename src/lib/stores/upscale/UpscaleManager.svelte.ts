@@ -369,7 +369,7 @@ export async function performUpscale(imageData) {
         return;
     }
 
-    const settings = upscaleSettings.get();
+    const settings = currentSettings;
     const algorithm = settings.active_algorithm;
     const algorithmSettings = settings[algorithm];
 
@@ -449,7 +449,7 @@ export async function performUpscale(imageData) {
         const upscaledImageData = URL.createObjectURL(upscaledImageBlob);
 
         // 计算耗时
-        const elapsedTime = Date.now() - state.startTime;
+        const elapsedTime = Date.now() - currentState.startTime;
         const elapsedSeconds = (elapsedTime / 1000).toFixed(2);
 
         // 更新状态

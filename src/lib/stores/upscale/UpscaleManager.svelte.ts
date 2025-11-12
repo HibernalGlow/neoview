@@ -357,7 +357,7 @@ export function switchAlgorithm(algorithm) {
 /**
  * 执行超分处理
  */
-export async function performUpscale(imageData: string, imageHash?: string) {
+export async function performUpscale(imageData: string, imageHash?: string, options?: { background?: boolean }) {
     // 先读取当前设置快照
     let currentSettings: any;
     upscaleSettings.subscribe(s => currentSettings = s)();
@@ -366,7 +366,9 @@ export async function performUpscale(imageData: string, imageHash?: string) {
     const algorithm = settings.active_algorithm;
     const algorithmSettings = settings[algorithm];
 
-    // 计算最终hash（如果未给出）以便做去重
+    const isBackground = !!options?.background;
+
+    // 使用传入的hash或计算新的hash以便去重
     const finalHash: string = (imageHash as string) || (await invoke('calculate_data_hash', { dataUrl: imageData }) as string);
 
     // 如果已有相同 hash 的任务在进行中，复用该 Promise
@@ -381,15 +383,34 @@ export async function performUpscale(imageData: string, imageHash?: string) {
         return Promise.resolve(null);
     }
 
-    // 创建任务 Promise 并登记到注册表
+    // 并发限制检查：前台 1 个，后台由 settings.background_concurrency 决定
+    const bgLimit = Number(settings.background_concurrency) || 1;
+    if (isBackground) {
+        if (backgroundRunning >= bgLimit) {
+            console.log('后台并发已满，要求前端队列重试，hash:', finalHash);
+            return { requeue: true, reason: 'background_limit', finalHash };
+        }
+    } else {
+        // 前台最多 1 个任务运行
+        if (foregroundRunning >= 1) {
+            console.log('前台并发已满，要求前端队列重试，hash:', finalHash);
+            return { requeue: true, reason: 'foreground_limit', finalHash };
+        }
+    }
+
+    // 在通过并发检查后，登记并创建任务 Promise
+    // 在登记前立即增加计数器，保证并发计数的准确性
+    if (isBackground) backgroundRunning++;
+    else foregroundRunning++;
+
     const taskPromise = (async () => {
-        // 在任务开始前更新状态
+        // 在任务开始前更新状态（仅前台显示进度）
         upscaleState.update(state => ({
             ...state,
             isUpscaling: true,
             progress: 0,
             status: '准备超分...',
-            showProgress: true,
+            showProgress: isBackground ? false : true,
             upscaledImageData: '',
             upscaledImageBlob: null,
             startTime: Date.now()
@@ -450,18 +471,27 @@ export async function performUpscale(imageData: string, imageHash?: string) {
                 ...state,
                 status: '超分完成',
                 upscaledImageData,
-                upscaledImageBlob,
+                upscaledImageBlob: upscaledImageBlob as any,
                 isUpscaling: false
             }));
 
-            // 通知主查看器替换图片
-            window.dispatchEvent(new CustomEvent('upscale-complete', {
-                detail: {
-                    imageData: upscaledImageData,
-                    imageBlob: upscaledImageBlob,
-                    originalImageHash: finalHash
-                }
-            }));
+            // 前台任务通知主查看器替换图片；后台任务仅写缓存并触发保存事件（由查看器选择监听）
+            if (!isBackground) {
+                window.dispatchEvent(new CustomEvent('upscale-complete', {
+                    detail: {
+                        imageData: upscaledImageData,
+                        imageBlob: upscaledImageBlob,
+                        originalImageHash: finalHash
+                    }
+                }));
+            } else {
+                window.dispatchEvent(new CustomEvent('upscale-saved', {
+                    detail: {
+                        finalHash,
+                        savePath
+                    }
+                }));
+            }
 
             console.log(`超分完成，hash: ${finalHash}, 耗时: ${elapsedSeconds}秒`);
             return { upscaledImageData, upscaledImageBlob, finalHash };
@@ -481,136 +511,21 @@ export async function performUpscale(imageData: string, imageHash?: string) {
                     showProgress: false
                 }));
             }, 3000);
-
-            // 从注册表移除
+            // 从注册表移除并更新并发计数器
             ongoingUpscaleTasks.delete(finalHash);
+            if (isBackground) backgroundRunning = Math.max(0, backgroundRunning - 1);
+            else foregroundRunning = Math.max(0, foregroundRunning - 1);
         }
     })();
-
+    // 登记正在进行的任务，供重复请求复用
     ongoingUpscaleTasks.set(finalHash, taskPromise);
     return taskPromise;
-
-    // 检查图片是否满足超分条件
-    if (settings.conditional_upscale.enabled) {
-        // 获取图片尺寸
-        const dimensions = await getImageDimensions(imageData);
-        if (dimensions) {
-            const shouldUpscale = await checkUpscaleConditions(
-                dimensions.width, 
-                dimensions.height
-            );
-            if (!shouldUpscale) {
-                console.log('图片不满足超分条件，跳过超分处理');
-                return;
-            }
-        }
-    }
-
-    // 更新状态
-    upscaleState.update(state => ({
-        ...state,
-        isUpscaling: true,
-        progress: 0,
-        status: '准备超分...',
-        showProgress: true,
-        upscaledImageData: '',
-        upscaledImageBlob: null,
-        startTime: Date.now()
-    }));
-
-    try {
-        // 构建参数
-        const params = {
-            imageData,
-            algorithm,
-            model: algorithmSettings.model,
-            gpuId: algorithmSettings.gpu_id,
-            tileSize: algorithmSettings.tile_size,
-            tta: algorithmSettings.tta || false,
-            thumbnailPath: 'D:\\temp\\neoview_thumbnails_test'
-        };
-
-        // 添加算法特定参数
-        if (algorithm === 'realcugan') {
-            params.noiseLevel = algorithmSettings.noise_level;
-            params.numThreads = algorithmSettings.threads;
-        } else if (algorithm === 'realesrgan') {
-            params.numThreads = algorithmSettings.threads;
-        } else if (algorithm === 'waifu2x') {
-            params.noiseLevel = algorithmSettings.noise_level;
-            params.numThreads = algorithmSettings.threads;
-        }
-
-        // 使用传入的hash或计算新的hash
-        const finalHash = imageHash || await invoke('calculate_data_hash', { dataUrl: imageData });
-        const savePath = await invoke('get_upscale_save_path_from_data', {
-            imageHash: finalHash,
-            ...params,
-            thumbnailPath: params.thumbnailPath
-        });
-
-        // 更新状态
-        upscaleState.update(state => ({
-            ...state,
-            status: '执行超分处理...'
-        }));
-
-        // 执行超分
-        const result = await invoke('upscale_image_from_data', {
-            ...params,
-            savePath
-        });
-
-        // 处理结果
-        const upscaledImageBlob = new Blob([new Uint8Array(result)], { type: 'image/webp' });
-        const upscaledImageData = URL.createObjectURL(upscaledImageBlob);
-
-        // 计算耗时
-        const elapsedTime = Date.now() - currentState.startTime;
-        const elapsedSeconds = (elapsedTime / 1000).toFixed(2);
-
-        // 更新状态
-        upscaleState.update(state => ({
-            ...state,
-            status: '超分完成',
-            upscaledImageData,
-            upscaledImageBlob,
-            isUpscaling: false
-        }));
-
-        // 通知主查看器替换图片
-        window.dispatchEvent(new CustomEvent('upscale-complete', {
-            detail: { 
-                imageData: upscaledImageData, 
-                imageBlob: upscaledImageBlob,
-                originalImageHash: finalHash
-            }
-        }));
-
-        console.log(`超分完成，耗时: ${elapsedSeconds}秒`);
-
-    } catch (error) {
-        console.error('超分失败:', error);
-        upscaleState.update(state => ({
-            ...state,
-            status: `超分失败: ${error}`,
-            isUpscaling: false
-        }));
-    } finally {
-        // 3秒后隐藏进度条
-        setTimeout(() => {
-            upscaleState.update(state => ({
-                ...state,
-                showProgress: false
-            }));
-        }, 3000);
-    }
 }
 
 /**
  * 获取图片尺寸
  */
-async function getImageDimensions(imageData) {
+async function getImageDimensions(imageData: string) {
     return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {

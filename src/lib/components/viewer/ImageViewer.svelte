@@ -519,21 +519,34 @@
 			// 检查是否是blob URL，如果是则转换为data URL（保持一致性）
 			let processedImageData = imageData;
 			if (imageData.startsWith('blob:')) {
-				console.log('检测到blob URL，正在转换为data URL...');
+				console.log('检测到blob URL，使用 worker 异步转换为 data URL...');
 				const response = await fetch(imageData);
 				const blob = await response.blob();
-				
-				// 转换为base64
-				const reader = new FileReader();
-				processedImageData = await new Promise<string>((resolve, reject) => {
-					reader.onload = () => {
-						const result = reader.result as string;
-						resolve(result);
-					};
-					reader.onerror = reject;
-					reader.readAsDataURL(blob);
+
+				// 使用 worker 转换，避免阻塞主线程
+				if (!window.__blobWorker) {
+					// @ts-ignore
+					window.__blobWorker = new Worker(new URL('$lib/workers/blobToDataUrl.worker.ts', import.meta.url), { type: 'module' });
+					window.__blobWorkerCallbacks = new Map();
+					window.__blobWorker.addEventListener('message', (ev) => {
+						const { id, success, data, error } = ev.data || {};
+						const cb = window.__blobWorkerCallbacks.get(id);
+						if (cb) {
+							window.__blobWorkerCallbacks.delete(id);
+							if (success) cb.resolve(data);
+							else cb.reject(error);
+						}
+					});
+				}
+
+				const id = Math.random().toString(36).slice(2);
+				const promise = new Promise<string>((resolve, reject) => {
+					window.__blobWorkerCallbacks.set(id, { resolve, reject });
+					window.__blobWorker.postMessage({ id, action: 'blobToDataUrl', blob });
 				});
-				console.log('转换后的data URL长度:', processedImageData.length);
+
+				processedImageData = await promise;
+				console.log('worker 转换后的 data URL 长度:', processedImageData.length);
 			}
 			
 			// 检查图片格式
@@ -552,10 +565,11 @@
 			// 标记预加载状态
 			if (isPreload) {
 				isPreloading = true;
+				// 后台任务：告诉 performUpscale 这是后台预加载
+				await performUpscale(processedImageData, imageHash, { background: true });
+			} else {
+				await performUpscale(processedImageData, imageHash, { background: false });
 			}
-			
-			// 使用处理后的图片数据和原始hash执行超分
-			await performUpscale(processedImageData, imageHash);
 		} catch (error) {
 			console.error('自动超分失败:', error);
 		} finally {

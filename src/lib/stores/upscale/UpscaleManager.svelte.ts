@@ -41,6 +41,8 @@ export const upscaleSettings = writable({
     // 缓存生命周期（小时）: 生成超分文件后多少小时视为有效，默认 8 小时
     cache_ttl_hours: 8,
     preload_pages: 3,
+    // 后台预加载并发数
+    background_concurrency: 1,
     conditional_upscale: {
         enabled: false,
         min_width: 0,
@@ -55,6 +57,10 @@ export const upscaleSettings = writable({
         mode: 'slider'
     }
 });
+
+// 并发计数器
+let foregroundRunning = 0;
+let backgroundRunning = 0;
 
 // 超分状态
 export const upscaleState = writable({

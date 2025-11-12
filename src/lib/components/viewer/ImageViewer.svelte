@@ -46,6 +46,9 @@
 	// 预加载内存缓存：hash -> { url, blob }
 	let preloadMemoryCache = $state<Map<string, { url: string; blob: Blob }>>(new Map());
 
+	// 预加载已解码的页面图片缓存：pageIndex -> { data, decoded }
+	let preloadedPageImages = $state<Map<number, { data: string; decoded: boolean }>>(new Map());
+
 	// 预超分进度管理
 	let preUpscaleProgress = $state(0); // 预超分进度 (0-100)
 	let preUpscaledPages = $state(new Set<number>()); // 已预超分的页面索引
@@ -159,6 +162,7 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 		preloadQueue = [];
 		isPreloading = false;
 		preloadMemoryCache = new Map();
+		preloadedPageImages = new Map();
 		bookStore.setUpscaledImage(null);
 		bookStore.setUpscaledImageBlob(null);
 		resetPreUpscaleProgress();
@@ -357,16 +361,28 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 		}, 1000);
 
 		try {
-			// 加载当前页
-			let data: string;
-			if (currentBook.type === 'archive') {
-				console.log('Loading image from archive:', currentPage.path);
-				data = await loadImageFromArchive(currentBook.path, currentPage.path);
+			// 优先使用预加载解码的页面图片（若存在）以实现即时显示
+			const currentIndex = bookStore.currentPageIndex;
+			if (preloadedPageImages.has(currentIndex)) {
+				const cached = preloadedPageImages.get(currentIndex);
+				if (cached && cached.data) {
+					console.log('使用预加载缓存的当前页面图片，index:', currentIndex + 1);
+					imageData = cached.data;
+				} else {
+					imageData = null;
+				}
 			} else {
-				console.log('Loading image from file system:', currentPage.path);
-				data = await loadImage(currentPage.path);
+				// 加载当前页（从磁盘/存档）
+				let data: string;
+				if (currentBook.type === 'archive') {
+					console.log('Loading image from archive:', currentPage.path);
+					data = await loadImageFromArchive(currentBook.path, currentPage.path);
+				} else {
+					console.log('Loading image from file system:', currentPage.path);
+					data = await loadImage(currentPage.path);
+				}
+				imageData = data;
 			}
-			imageData = data;
 			// 更新对比数据
 			originalImageDataForComparison = data;
 
@@ -803,6 +819,21 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 						preUpscaledPages = new Set([...preUpscaledPages, targetIndex]);
 						updatePreUpscaleProgress();
 						continue;
+					}
+
+					// 先把页面原图解码并缓存，保证翻页时可以直接显示（避免 DOM 再次解码延迟）
+					try {
+						const img = new Image();
+						const decodePromise = new Promise<void>((resolve, reject) => {
+							img.onload = () => resolve();
+							img.onerror = () => reject(new Error('预加载图片解码失败'));
+						});
+						img.src = imageDataWithHash.data;
+						await decodePromise;
+						preloadedPageImages.set(targetIndex, { data: imageDataWithHash.data, decoded: true });
+						console.log('预加载已解码页面图片，index:', targetIndex + 1);
+					} catch (e) {
+						console.warn('预加载页面解码失败，继续超分预处理:', e);
 					}
 
 					// 没有缓存，触发预超分

@@ -8,7 +8,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { bookStore } from '$lib/stores/book.svelte';
 
 // 超分设置状态
-export const upscaleSettings = writable({
+const DEFAULT_UPSCALE_SETTINGS = {
     active_algorithm: 'waifu2x',
     realcugan: {
         model: 'models-se',
@@ -45,10 +45,10 @@ export const upscaleSettings = writable({
     background_concurrency: 1,
     conditional_upscale: {
         enabled: false,
-        min_width: 0,
-        min_height: 0,
-        max_width: 0,
-        max_height: 0,
+        min_width: -1,
+        min_height: -1,
+        max_width: -1,
+        max_height: -1,
         aspect_ratio_condition: null
     },
     global_upscale_enabled: true,
@@ -56,7 +56,9 @@ export const upscaleSettings = writable({
         enabled: false,
         mode: 'slider'
     }
-});
+};
+
+export const upscaleSettings = writable(DEFAULT_UPSCALE_SETTINGS);
 
 // 并发计数器
 let foregroundRunning = 0;

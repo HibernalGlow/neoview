@@ -517,7 +517,7 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 			console.log('当前页面hash:', currentImageHash);
 
 			// 检查是否有对应的超分缓存（传入带hash的对象）
-			const hasCache = await checkUpscaleCache(imageDataWithHash);
+			const hasCache = await checkUpscaleCache(imageDataWithHash, true);
 
 			// 如果没有缓存且全局超分开关开启，则自动开始超分
 			if (!hasCache) {

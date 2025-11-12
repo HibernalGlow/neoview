@@ -591,11 +591,37 @@ export async function refreshCacheStatusForData(imageData: string) {
             upscaleState.update(s => ({ ...s, status: '没有图片数据', progress: 0 }));
             return false;
         }
-
         // 使用轻量元数据检查以尽量避免立即读取文件字节
         const meta = await checkCacheMetaForData(imageData);
         if (meta && meta.path) {
             try {
+                // 先计算传入图片的数据哈希，并与当前查看器页面的路径哈希比对，
+                // 只有当两者匹配（即该缓存属于当前页面）时才会替换 bookStore 的显示，避免竞态导致非当前页替换当前显示。
+                const imageHash = await invoke<string>('calculate_data_hash', { dataUrl: imageData });
+
+                // 计算当前查看器页面的路径哈希（若有当前页）
+                let currentPageHash: string | null = null;
+                try {
+                    const cb = bookStore.currentBook;
+                    if (cb) {
+                        const pageIndex = bookStore.currentPageIndex;
+                        const pageInfo = cb.pages?.[pageIndex];
+                        if (pageInfo) {
+                            const pathKey = cb.type === 'archive' ? `${cb.path}::${pageInfo.path}` : pageInfo.path;
+                            try {
+                                currentPageHash = await invoke<string>('calculate_path_hash', { path: pathKey });
+                            } catch (err) {
+                                console.warn('refreshCacheStatusForData: 计算当前页面 path hash 失败，无法比对:', err);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.warn('refreshCacheStatusForData: 读取 bookStore 当前页信息失败:', err);
+                }
+
+                // 仅当 hash 匹配或无法计算当前页面 hash（保守策略）时，才读取并替换显示
+                const shouldReplace = !currentPageHash || (currentPageHash === imageHash);
+
                 // 仅当需要预览二进制时才读取文件（Viewer 可能需要）
                 const bytes = await invoke<number[]>('read_binary_file', { filePath: meta.path });
                 const arr = new Uint8Array(bytes);
@@ -612,7 +638,14 @@ export async function refreshCacheStatusForData(imageData: string) {
                     showProgress: false
                 }));
 
-                try { bookStore.setUpscaledImage(url); bookStore.setUpscaledImageBlob(blob); } catch (e) {}
+                try {
+                    if (shouldReplace) {
+                        bookStore.setUpscaledImage(url);
+                        bookStore.setUpscaledImageBlob(blob);
+                    } else {
+                        console.log('缓存属于非当前页面，跳过替换显示');
+                    }
+                } catch (e) {}
                 return true;
             } catch (e) {
                 console.error('读取缓存文件失败:', e);

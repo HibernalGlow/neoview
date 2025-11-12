@@ -816,7 +816,7 @@
 	/>
 	
 	<!-- Viewer底部进度条 -->
-	{#if showProgressBar && bookStore.currentBook && (preUpscaleProgress > 0 || progressColor !== '#FDFBF7')}
+	{#if showProgressBar && bookStore.currentBook}
 		<div class="absolute bottom-0 left-0 right-0 h-1 pointer-events-none">
 			<!-- 预超分进度条（黄色，底层） -->
 			{#if preUpscaleProgress > 0}
@@ -826,7 +826,7 @@
 				>
 				</div>
 			{/if}
-			<!-- 当前页面进度条（绿色，顶层） -->
+			<!-- 当前页面进度条（绿色，叠加在黄色上面） -->
 			{#if progressColor !== '#FDFBF7'}
 				<div 
 					class="absolute bottom-0 left-0 h-full transition-all duration-300 {progressBlinking ? 'animate-pulse' : ''}" 

@@ -5,12 +5,13 @@
 	 */
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
-	import * as Progress from '$lib/components/ui/progress';
-	import * as Slider from '$lib/components/ui/slider';
-	import * as Switch from '$lib/components/ui/switch';
-	import * as Select from '$lib/components/ui/select';
-	import { Sparkles, Play, Settings, Loader2, CheckCircle, AlertCircle, Image as ImageIcon } from '@lucide/svelte';
+	import { Progress } from '$lib/components/ui/progress';
+	import { Slider } from '$lib/components/ui/slider';
+	import { Switch } from '$lib/components/ui/switch';
+	import { Select } from '$lib/components/ui/select';
+	import { Sparkles, Play, Settings, Loader2, CheckCircle, AlertCircle, Image as ImageIcon, Download } from '@lucide/svelte';
 	import { invoke } from '@tauri-apps/api/core';
+	import { save } from '@tauri-apps/plugin-dialog';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { onMount } from 'svelte';
 
@@ -67,12 +68,37 @@
 		upscaledImageData = '';
 
 		try {
-			const imagePath = bookStore.currentImage.path;
+			let imagePath = bookStore.currentImage.path;
 			console.log('开始超分图片:', imagePath);
 
-			// 计算保存路径
-			const savePath = await invoke<string>('get_upscale_save_path', {
-				imagePath,
+			// 检查是否是压缩包内的图片
+			let actualImagePath = imagePath;
+			let isFromArchive = false;
+			
+			if (bookStore.currentBook && bookStore.currentBook.type === 'archive') {
+				// 对于压缩包，需要先提取图片到临时文件
+				upscaleStatus = '提取压缩包图片...';
+				actualImagePath = await invoke<string>('extract_image_from_archive', {
+					archivePath: bookStore.currentBook.path,
+					imagePath: imagePath
+				});
+				isFromArchive = true;
+				console.log('提取的临时文件路径:', actualImagePath);
+			}
+
+			// 检查是否需要转换 AVIF 为 WebP
+			if (actualImagePath.toLowerCase().endsWith('.avif')) {
+				upscaleStatus = '转换 AVIF 为 WebP...';
+				actualImagePath = await invoke<string>('convert_avif_to_webp', {
+					imagePath: actualImagePath
+				});
+				console.log('转换后的 WebP 文件路径:', actualImagePath);
+			}
+
+			// 计算保存路径（使用原始路径和实际处理路径）
+			const savePath = await invoke<string>('get_upscale_save_path_with_info', {
+				originalPath: imagePath,
+				actualPath: actualImagePath,
 				model: upscaleModel,
 				factor: upscaleFactor
 			});
@@ -80,8 +106,9 @@
 			console.log('超分保存路径:', savePath);
 
 			// 开始超分
+			upscaleStatus = '执行超分处理...';
 			const result = await invoke<string>('upscale_image', {
-				imagePath,
+				imagePath: actualImagePath,
 				savePath,
 				model: upscaleModel,
 				factor: upscaleFactor,
@@ -136,6 +163,46 @@
 		tileSize = '0';
 		tta = false;
 	}
+
+	async function saveUpscaledImage() {
+		if (!upscaledImageData || !bookStore.currentImage) {
+			return;
+		}
+
+		try {
+			// 生成默认文件名
+			const originalName = bookStore.currentImage.name;
+			const nameWithoutExt = originalName.substring(0, originalName.lastIndexOf('.')) || originalName;
+			const defaultFileName = `${nameWithoutExt}_upscaled_${upscaleFactor}x.webp`;
+
+			// 使用文件保存对话框
+			const filePath = await save({
+				filters: [{
+					name: 'WebP Image',
+					extensions: ['webp']
+				}],
+				defaultPath: defaultFileName
+			});
+
+			if (filePath) {
+				// 将 base64 数据转换为 blob 并保存
+				const response = await fetch(upscaledImageData);
+				const blob = await response.blob();
+				const arrayBuffer = await blob.arrayBuffer();
+				
+				// 使用 Tauri 的文件系统 API 保存文件
+				await invoke('save_upscaled_image', {
+					filePath,
+					imageData: Array.from(new Uint8Array(arrayBuffer))
+				});
+
+				upscaleStatus = '图片已保存';
+			}
+		} catch (error) {
+			console.error('保存失败:', error);
+			upscaleStatus = `保存失败: ${error}`;
+		}
+	}
 </script>
 
 <div class="h-full flex flex-col bg-background p-4 space-y-4">
@@ -164,12 +231,11 @@
 		<Label class="text-sm font-medium">超分模型</Label>
 		<Select.Root bind:value={upscaleModel}>
 			<Select.Trigger class="w-full">
-				<Select.Value placeholder="选择模型" />
+				{modelOptions.find(opt => opt.value === upscaleModel)?.label || '选择模型'}
 			</Select.Trigger>
 			<Select.Content>
 				{#each modelOptions as option}
-					<Select.Item value={option.value}>
-						<Select.ItemText>{option.label}</Select.ItemText>
+					<Select.Item value={option.value} label={option.label}>
 					</Select.Item>
 				{/each}
 			</Select.Content>
@@ -181,12 +247,11 @@
 		<Label class="text-sm font-medium">放大倍数</Label>
 		<Select.Root bind:value={upscaleFactor}>
 			<Select.Trigger class="w-full">
-				<Select.Value placeholder="选择倍数" />
+				{factorOptions.find(opt => opt.value === upscaleFactor)?.label || '选择倍数'}
 			</Select.Trigger>
 			<Select.Content>
 				{#each factorOptions as option}
-					<Select.Item value={option.value}>
-						<Select.ItemText>{option.label}</Select.ItemText>
+					<Select.Item value={option.value} label={option.label}>
 					</Select.Item>
 				{/each}
 			</Select.Content>
@@ -227,9 +292,7 @@
 		<!-- TTA -->
 		<div class="flex items-center justify-between">
 			<Label class="text-xs text-muted-foreground">TTA (测试时增强)</Label>
-			<Switch.Root bind:checked={tta}>
-				<Switch.Thumb />
-			</Switch.Root>
+			<Switch bind:checked={tta} />
 		</div>
 	</div>
 
@@ -268,9 +331,7 @@
 				<span>{upscaleStatus}</span>
 				<span>{upscaleProgress}%</span>
 			</div>
-			<Progress.Root value={upscaleProgress} class="h-2">
-				<Progress.Indicator class="h-full bg-primary transition-all duration-300" />
-			</Progress.Root>
+			<Progress value={upscaleProgress} class="h-2" />
 		</div>
 	{/if}
 
@@ -288,6 +349,16 @@
 					class="w-full h-auto max-h-48 object-contain bg-muted"
 				/>
 			</div>
+			<!-- 保存按钮 -->
+			<Button
+				variant="outline"
+				size="sm"
+				class="w-full"
+				onclick={saveUpscaledImage}
+			>
+				<Download class="h-4 w-4 mr-1" />
+				保存图片
+			</Button>
 		</div>
 	{/if}
 

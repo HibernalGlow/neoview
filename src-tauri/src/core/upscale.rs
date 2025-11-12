@@ -93,7 +93,7 @@ impl UpscaleManager {
     }
 
     /// 计算文件MD5
-    fn calculate_file_md5(&self, file_path: &Path) -> Result<String, String> {
+    pub fn calculate_file_md5(&self, file_path: &Path) -> Result<String, String> {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::Hasher;
         
@@ -175,6 +175,7 @@ impl UpscaleManager {
             "-m", &models_path,
             "-n", model_name,
             "-s", factor,
+            "-f", "webp",  // 指定输出格式为 WebP
         ];
 
         // 添加GPU参数

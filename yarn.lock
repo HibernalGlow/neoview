@@ -1727,6 +1727,14 @@ minimatch@^9.0.4:
   dependencies:
     brace-expansion "^2.0.1"
 
+mode-watcher@^1.1.0:
+  version "1.1.0"
+  resolved "https://registry.npmmirror.com/mode-watcher/-/mode-watcher-1.1.0.tgz#a83e43b3ebac0e23f01016123e309a464cb26643"
+  integrity sha512-mUT9RRGPDYenk59qJauN1rhsIMKBmWA3xMF+uRwE8MW/tjhaDSCCARqkSuDTq8vr4/2KcAxIGVjACxTjdk5C3g==
+  dependencies:
+    runed "^0.25.0"
+    svelte-toolbelt "^0.7.1"
+
 mri@^1.1.0:
   version "1.2.0"
   resolved "https://registry.npmmirror.com/mri/-/mri-1.2.0.tgz#6721480fec2a11a4889861115a48b6cbe7cc8f0b"
@@ -1946,10 +1954,24 @@ run-parallel@^1.1.9:
   dependencies:
     queue-microtask "^1.2.2"
 
-runed@^0.23.4:
+runed@^0.23.2, runed@^0.23.4:
   version "0.23.4"
   resolved "https://registry.npmmirror.com/runed/-/runed-0.23.4.tgz#0b68fd24434e65dd8cbd9f7072521d6f5f409eba"
   integrity sha512-9q8oUiBYeXIDLWNK5DfCWlkL0EW3oGbk845VdKlPeia28l751VpfesaB/+7pI6rnbx1I6rqoZ2fZxptOJLxILA==
+  dependencies:
+    esm-env "^1.0.0"
+
+runed@^0.25.0:
+  version "0.25.0"
+  resolved "https://registry.npmmirror.com/runed/-/runed-0.25.0.tgz#dad779435734eb4d2bbab85798e2da36e1bd7af4"
+  integrity sha512-7+ma4AG9FT2sWQEA0Egf6mb7PBT2vHyuHail1ie8ropfSjvZGtEAx8YTmUjv/APCsdRRxEVvArNjALk9zFSOrg==
+  dependencies:
+    esm-env "^1.0.0"
+
+runed@^0.28.0:
+  version "0.28.0"
+  resolved "https://registry.npmmirror.com/runed/-/runed-0.28.0.tgz#68e2ec076ae921f5e7ca0ebaa37e9f6598775c3c"
+  integrity sha512-k2xx7RuO9hWcdd9f+8JoBeqWtYrm5CALfgpkg2YDB80ds/QE4w0qqu34A7fqiAwiBBSBQOid7TLxwxVC27ymWQ==
   dependencies:
     esm-env "^1.0.0"
 
@@ -1992,6 +2014,11 @@ shebang-regex@^3.0.0:
   version "3.0.0"
   resolved "https://registry.npmmirror.com/shebang-regex/-/shebang-regex-3.0.0.tgz#ae16f1644d873ecad843b0307b143362d4c42172"
   integrity sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==
+
+sonner@^2.0.7:
+  version "2.0.7"
+  resolved "https://registry.npmmirror.com/sonner/-/sonner-2.0.7.tgz#810c1487a67ec3370126e0f400dfb9edddc3e4f6"
+  integrity sha512-W6ZN4p58k8aDKA4XPcx2hpIQXBRAgyiWVkYhT7CvK6D3iAu7xjvVyhQHg2/iaKJZ1XVJ4r7XuwGL+WGEK37i9w==
 
 source-map-js@^1.2.1:
   version "1.2.1"
@@ -2058,6 +2085,13 @@ svelte-eslint-parser@^1.4.0:
     postcss-scss "^4.0.9"
     postcss-selector-parser "^7.0.0"
 
+svelte-sonner@^1.0.5:
+  version "1.0.6"
+  resolved "https://registry.npmmirror.com/svelte-sonner/-/svelte-sonner-1.0.6.tgz#d9b0db76029304b35ac422f1b616df243c17a3e0"
+  integrity sha512-cOB6fKVPnJ/wuqHV4dqoTJ/l/g7n3V8goUHqnhIV2wyv55DdoCI1D3VQSBIs7Iy8pkH5ZaNPB8T53jFfXE/6og==
+  dependencies:
+    runed "^0.28.0"
+
 svelte-toolbelt@^0.10.6:
   version "0.10.6"
   resolved "https://registry.npmmirror.com/svelte-toolbelt/-/svelte-toolbelt-0.10.6.tgz#573e25a69cdef3c3eb2bb6762e6c63b4db2d3355"
@@ -2073,6 +2107,15 @@ svelte-toolbelt@^0.5.0:
   integrity sha512-t3tenZcnfQoIeRuQf/jBU7bvTeT3TGkcEE+1EUr5orp0lR7NEpprflpuie3x9Dn0W9nOKqs3HwKGJeeN5Ok1sQ==
   dependencies:
     clsx "^2.1.1"
+    style-to-object "^1.0.8"
+
+svelte-toolbelt@^0.7.1:
+  version "0.7.1"
+  resolved "https://registry.npmmirror.com/svelte-toolbelt/-/svelte-toolbelt-0.7.1.tgz#63e9c6629456a1a0dd57812f85426e4631fd754e"
+  integrity sha512-HcBOcR17Vx9bjaOceUvxkY3nGmbBmCBBbuWLLEWO6jtmWH8f/QoWmbyUfQZrpDINH39en1b8mptfPQT9VKQ1xQ==
+  dependencies:
+    clsx "^2.1.1"
+    runed "^0.23.2"
     style-to-object "^1.0.8"
 
 svelte-toolbelt@^0.9.2:

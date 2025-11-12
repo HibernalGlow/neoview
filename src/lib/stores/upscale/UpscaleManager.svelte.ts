@@ -9,7 +9,7 @@ import { bookStore } from '$lib/stores/book.svelte';
 
 // 超分设置状态
 export const upscaleSettings = writable({
-    active_algorithm: 'realcugan',
+    active_algorithm: 'waifu2x',
     realcugan: {
         model: 'models-se',
         scale: '2',
@@ -47,7 +47,11 @@ export const upscaleSettings = writable({
         max_height: 0,
         aspect_ratio_condition: null
     },
-    global_upscale_enabled: true
+    global_upscale_enabled: true,
+    comparison: {
+        enabled: false,
+        mode: 'slider'
+    }
 });
 
 // 超分状态
@@ -82,6 +86,12 @@ export const conditionalUpscaleSettings = derived(
     $settings => $settings.conditional_upscale
 );
 
+// 对比模式设置
+export const comparisonSettings = derived(
+    upscaleSettings,
+    $settings => $settings.comparison
+);
+
 /**
  * 初始化超分设置管理器
  */
@@ -113,7 +123,8 @@ export async function loadUpscaleSettings() {
  */
 export async function saveUpscaleSettings() {
     try {
-        const settings = upscaleSettings.get();
+        let settings;
+        upscaleSettings.subscribe(s => settings = s)();
         await invoke('save_upscale_settings', { settings });
         console.log('超分设置已保存');
     } catch (error) {
@@ -229,6 +240,76 @@ export async function setGlobalUpscaleEnabled(enabled) {
         }));
     } catch (error) {
         console.error('设置全局超分开关失败:', error);
+    }
+}
+
+/**
+ * 获取对比模式设置
+ */
+export async function getComparisonSettings() {
+    try {
+        return await invoke('get_comparison_settings');
+    } catch (error) {
+        console.error('获取对比模式设置失败:', error);
+        return { enabled: false, mode: 'slider' };
+    }
+}
+
+/**
+ * 更新对比模式设置
+ */
+export async function updateComparisonSettings(comparisonSettings) {
+    try {
+        await invoke('update_comparison_settings', { 
+            comparisonSettings 
+        });
+        // 更新本地状态
+        upscaleSettings.update(settings => ({
+            ...settings,
+            comparison: comparisonSettings
+        }));
+    } catch (error) {
+        console.error('更新对比模式设置失败:', error);
+    }
+}
+
+/**
+ * 切换对比模式开关
+ */
+export async function toggleComparisonMode() {
+    try {
+        const enabled = await invoke('toggle_comparison_mode');
+        // 更新本地状态
+        upscaleSettings.update(settings => ({
+            ...settings,
+            comparison: {
+                ...settings.comparison,
+                enabled
+            }
+        }));
+        return enabled;
+    } catch (error) {
+        console.error('切换对比模式失败:', error);
+        return false;
+    }
+}
+
+/**
+ * 设置对比模式类型
+ */
+export async function setComparisonMode(mode) {
+    try {
+        await invoke('set_comparison_mode', { mode });
+        // 更新本地状态
+        upscaleSettings.update(settings => ({
+            ...settings,
+            comparison: {
+                ...settings.comparison,
+                mode
+            }
+        }));
+    } catch (error) {
+        console.error('设置对比模式类型失败:', error);
     }
 }
 

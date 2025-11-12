@@ -216,3 +216,78 @@ pub async fn get_upscale_settings_path(
         Err("设置管理器未初始化".to_string())
     }
 }
+
+/// 获取对比模式设置
+#[command]
+pub async fn get_comparison_settings(
+    state: State<'_, UpscaleSettingsState>,
+) -> Result<crate::core::upscale_settings::ComparisonSettings, String> {
+    let manager_guard = state.manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+    
+    if let Some(manager) = manager_guard.as_ref() {
+        let settings = manager.load_settings();
+        Ok(settings.comparison)
+    } else {
+        Err("设置管理器未初始化".to_string())
+    }
+}
+
+/// 更新对比模式设置
+#[command]
+pub async fn update_comparison_settings(
+    comparison_settings: crate::core::upscale_settings::ComparisonSettings,
+    state: State<'_, UpscaleSettingsState>,
+) -> Result<(), String> {
+    let manager_guard = state.manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+    
+    if let Some(manager) = manager_guard.as_ref() {
+        let mut settings = manager.load_settings();
+        settings.comparison = comparison_settings;
+        manager.save_settings(&settings)
+    } else {
+        Err("设置管理器未初始化".to_string())
+    }
+}
+
+/// 切换对比模式开关
+#[command]
+pub async fn toggle_comparison_mode(
+    state: State<'_, UpscaleSettingsState>,
+) -> Result<bool, String> {
+    let manager_guard = state.manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+    
+    if let Some(manager) = manager_guard.as_ref() {
+        let mut settings = manager.load_settings();
+        settings.comparison.enabled = !settings.comparison.enabled;
+        let enabled = settings.comparison.enabled;
+        manager.save_settings(&settings)?;
+        Ok(enabled)
+    } else {
+        Err("设置管理器未初始化".to_string())
+    }
+}
+
+/// 设置对比模式类型
+#[command]
+pub async fn set_comparison_mode(
+    mode: String,
+    state: State<'_, UpscaleSettingsState>,
+) -> Result<(), String> {
+    let manager_guard = state.manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+    
+    if let Some(manager) = manager_guard.as_ref() {
+        let mut settings = manager.load_settings();
+        settings.comparison.mode = match mode.as_str() {
+            "slider" => crate::core::upscale_settings::ComparisonMode::Slider,
+            "split_screen" => crate::core::upscale_settings::ComparisonMode::SplitScreen,
+            _ => return Err("无效的对比模式类型".to_string()),
+        };
+        manager.save_settings(&settings)
+    } else {
+        Err("设置管理器未初始化".to_string())
+    }
+}

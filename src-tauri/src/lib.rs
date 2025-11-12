@@ -177,6 +177,10 @@ pub fn run() {
             commands::update_conditional_upscale_settings,
             commands::get_global_upscale_enabled,
             commands::set_global_upscale_enabled,
+            commands::get_comparison_settings,
+            commands::update_comparison_settings,
+            commands::toggle_comparison_mode,
+            commands::set_comparison_mode,
             // Image Data commands
             commands::calculate_data_hash,
             commands::convert_data_url_to_webp,

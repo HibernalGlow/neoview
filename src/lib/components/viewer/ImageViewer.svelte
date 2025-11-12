@@ -16,6 +16,8 @@
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { invoke } from '@tauri-apps/api/core';
+	import ComparisonViewer from './ComparisonViewer.svelte';
+	import { upscaleState } from '$lib/stores/upscale/UpscaleManager.svelte';
 
 	// 进度条状态
 	let showProgressBar = $state(true);
@@ -26,9 +28,37 @@
 	let lastMousePosition = $state({ x: 0, y: 0 });
 	let settings = $state(settingsManager.getSettings());
 
+	// 对比模式状态
+	let comparisonMode = $state<'slider' | 'split_screen'>('slider');
+	let comparisonVisible = $state(false);
+	let originalImageDataForComparison = $state<string>('');
+	let upscaledImageDataForComparison = $state<string>('');
+
+	// 进度条状态
+	let progressColor = $state('#FDFBF7'); // 默认奶白色
+	let progressBlinking = $state(false);
+
 	// 订阅设置变化
 	settingsManager.addListener((s) => {
 		settings = s;
+	});
+
+	// 监听超分状态变化
+	$effect(() => {
+		const currentState = upscaleState;
+		if (currentState.isUpscaling) {
+			// 超分进行中，开始闪烁
+			progressBlinking = true;
+			progressColor = '#FDFBF7'; // 奶白色
+		} else if (currentState.upscaledImageData && !currentState.isUpscaling) {
+			// 超分完成，停止闪烁，变成绿色
+			progressBlinking = false;
+			progressColor = '#22c55e'; // 绿色
+		} else {
+			// 没有超分，恢复默认
+			progressBlinking = false;
+			progressColor = '#FDFBF7'; // 奶白色
+		}
 	});
 
 	let imageData = $state<string | null>(null);
@@ -93,6 +123,8 @@
 			if (imageBlob) {
 				bookStore.setUpscaledImageBlob(imageBlob);
 			}
+			// 更新对比数据
+			upscaledImageDataForComparison = imageData;
 		};
 
 		// 监听超分面板请求当前图片数据
@@ -116,10 +148,25 @@
 
 		window.addEventListener('upscale-complete', handleUpscaleComplete as EventListener);
 		window.addEventListener('request-current-image-data', handleRequestCurrentImageData as EventListener);
+
+		// 监听对比模式变化
+		const handleComparisonModeChanged = (e: CustomEvent) => {
+			const { enabled, mode } = e.detail;
+			if (enabled && imageData && upscaledImageDataForComparison) {
+				comparisonMode = mode;
+				comparisonVisible = true;
+				originalImageDataForComparison = imageData;
+			} else {
+				comparisonVisible = false;
+			}
+		};
+
+		window.addEventListener('comparison-mode-changed', handleComparisonModeChanged as EventListener);
 		
 		return () => {
 			window.removeEventListener('upscale-complete', handleUpscaleComplete as EventListener);
 			window.removeEventListener('request-current-image-data', handleRequestCurrentImageData as EventListener);
+			window.removeEventListener('comparison-mode-changed', handleComparisonModeChanged as EventListener);
 		};
 	});
 
@@ -191,6 +238,8 @@
 				data = await loadImage(currentPage.path);
 			}
 			imageData = data;
+			// 更新对比数据
+			originalImageDataForComparison = data;
 
 			// 检查是否有对应的超分缓存
 			await checkUpscaleCache(data);
@@ -328,6 +377,12 @@
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
+		// 处理对比模式下的 ESC 键
+		if (comparisonVisible && e.key === 'Escape') {
+			comparisonVisible = false;
+			return;
+		}
+
 		// 生成按键组合
 		const keyCombo = generateKeyCombo(e);
 
@@ -338,6 +393,11 @@
 			e.preventDefault();
 			executeCommand(command);
 		}
+	}
+
+	// 关闭对比模式
+	function closeComparison() {
+		comparisonVisible = false;
 	}
 </script>
 
@@ -395,12 +455,23 @@
 			{/if}
 		{/if}
 	</div>
+
+	<!-- 对比模式查看器 -->
+	<ComparisonViewer
+		originalImageData={originalImageDataForComparison}
+		upscaledImageData={upscaledImageDataForComparison}
+		mode={comparisonMode}
+		isVisible={comparisonVisible}
+		onClose={closeComparison}
+	/>
 	
 	<!-- Viewer底部进度条 -->
 	{#if showProgressBar && bookStore.currentBook}
 		<div class="absolute bottom-0 left-0 right-0 h-1 pointer-events-none">
-			<div class="h-full transition-all duration-300 opacity-70" 
-					 style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%; background-color: #FDFBF7;">
+			<div 
+				class="h-full transition-all duration-300 {progressBlinking ? 'animate-pulse' : ''}" 
+				style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%; background-color: {progressColor}; opacity: 0.7;"
+			>
 			</div>
 		</div>
 	{/if}

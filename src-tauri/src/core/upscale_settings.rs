@@ -82,6 +82,8 @@ pub struct UpscaleSettings {
     pub conditional_upscale: ConditionalUpscaleSettings,
     /// 全局超分开关
     pub global_upscale_enabled: bool,
+    /// 对比模式设置
+    pub comparison: ComparisonSettings,
 }
 
 /// 条件超分设置
@@ -110,16 +112,35 @@ pub struct AspectRatioCondition {
     pub max_ratio: f32,
 }
 
+/// 对比模式设置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComparisonSettings {
+    /// 是否启用对比模式
+    pub enabled: bool,
+    /// 对比模式类型
+    pub mode: ComparisonMode,
+}
+
+/// 对比模式类型
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ComparisonMode {
+    /// 滑动对比
+    Slider,
+    /// 分屏对比
+    SplitScreen,
+}
+
 impl Default for UpscaleSettings {
     fn default() -> Self {
         Self {
-            active_algorithm: "realcugan".to_string(),
+            active_algorithm: "waifu2x".to_string(),
             realcugan: RealCuganSettings::default(),
             realesrgan: RealesrganSettings::default(),
             waifu2x: Waifu2xSettings::default(),
             preload_pages: 3,
             conditional_upscale: ConditionalUpscaleSettings::default(),
             global_upscale_enabled: true,
+            comparison: ComparisonSettings::default(),
         }
     }
 }
@@ -176,6 +197,15 @@ impl Default for ConditionalUpscaleSettings {
             max_width: 0,
             max_height: 0,
             aspect_ratio_condition: None,
+        }
+    }
+}
+
+impl Default for ComparisonSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            mode: ComparisonMode::Slider,
         }
     }
 }

@@ -781,14 +781,106 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 	}
 
 	// 处理预加载队列
-	async function processNextInQueue() {
+let preloadingWorkerRunning = false;
+
+// 串行但并发的预加载池（按队列顺序启动，但允许并发执行）
+let preloadSeqCounter = 0; // 为每个入队任务分配序号
+let nextApplySeq = 0; // 下一个应当应用（记录为已完成并可更新UI）的序号
+let activePreloadTasks = new Map<number, Promise<any>>();
+let completedPreloadResults = new Map<number, any>();
+
+async function startPreloadWorkers(bgLimit: number) {
+	// 启动尽可能多的 worker（直到达到 bgLimit 或队列为空）
+	while (activePreloadTasks.size < bgLimit && preloadQueue.length > 0) {
+		const task = preloadQueue.shift();
+		if (!task) break;
+		const seq = ++preloadSeqCounter;
+
+		// 启动任务（不 await），记录为活动任务
+		const p = (async () => {
+			try {
+				const res = await triggerAutoUpscale(task, true);
+				return { success: true, res, task };
+			} catch (err) {
+				return { success: false, err, task };
+			}
+		})();
+
+		activePreloadTasks.set(seq, p);
+
+		// 任务完成后，把结果放到 completedPreloadResults 并尝试按序应用
+		p.then(result => {
+			activePreloadTasks.delete(seq);
+			completedPreloadResults.set(seq, result);
+			tryApplyCompletedResults();
+			// 尝试继续启动更多 worker
+			setTimeout(() => startPreloadWorkers(bgLimit), 0);
+		}).catch(err => {
+			activePreloadTasks.delete(seq);
+			completedPreloadResults.set(seq, { success: false, err, task });
+			tryApplyCompletedResults();
+			setTimeout(() => startPreloadWorkers(bgLimit), 0);
+		});
+	}
+}
+
+function tryApplyCompletedResults() {
+	// 按序应用已完成的结果（只有当序号连续可用时才应用）
+	while (completedPreloadResults.has(nextApplySeq + 1)) {
+		const seq = nextApplySeq + 1;
+		const entry = completedPreloadResults.get(seq);
+		completedPreloadResults.delete(seq);
+		nextApplySeq = seq;
+
+		// 如果成功，写入内存缓存并标记已预超分
+		try {
+			if (entry && entry.success && entry.res) {
+				const { res, task } = entry.res ? entry.res : entry;
+				// 当 triggerAutoUpscale 返回 upscaled data，写入 preloadMemoryCache
+				if (res && res.upscaledImageBlob && res.upscaledImageData) {
+					try {
+						preloadMemoryCache.set(task.hash, { url: res.upscaledImageData, blob: res.upscaledImageBlob });
+						console.log('按序写入内存预加载超分结果，hash:', task.hash);
+					} catch (e) {
+						console.warn('写入内存预加载缓存失败（按序）:', e);
+					}
+				}
+
+				// 标记为已预超分（按页序）并更新进度
+				try {
+					const idx = (task && task.pageIndex) || null;
+					if (typeof idx === 'number') {
+						preUpscaledPages = new Set([...preUpscaledPages, idx]);
+						updatePreUpscaleProgress();
+					}
+				} catch (e) {
+					console.warn('更新预超分进度失败（按序）:', e);
+				}
+			} else {
+				// 失败的任务也推进序号（避免阻塞后续结果应用）
+				console.warn('预加载任务失败（按序处理）:', entry && entry.err ? entry.err : entry);
+			}
+		} catch (e) {
+			console.error('处理已完成预加载结果失败:', e);
+		}
+	}
+}
+
+// 串行处理预加载队列，保证按队列顺序逐个执行（FIFO）
+async function processNextInQueue() {
 		// 如果队列为空，直接返回
 		if (preloadQueue.length === 0) return;
 
-		// 如果当前有超分任务在执行，稍后再试（由正在进行的任务在完成时触发 processNextInQueue）
+		// 如果已经有一个预加载 worker 在运行，稍后再试，保持串行
+		if (preloadingWorkerRunning) {
+			console.log('preload worker already running, will try later');
+			return;
+		}
+
+		// 如果当前有前台超分任务在执行，稍后再试
 		const currentState = get(upscaleState);
-		if (currentState?.isUpscaling || isPreloading) {
-			console.log('preload queue: upscale in progress, will try later');
+		if (currentState?.isUpscaling) {
+			console.log('preload queue: foreground upscale in progress, will try later');
 			return;
 		}
 
@@ -798,22 +890,28 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 
 		console.log(`处理队列中的下一个任务: ${nextTask.hash}, 数据长度: ${nextTask.data.length}`);
 
-		// 使用保存的图片数据和hash执行超分
+		// 标记 worker 正在运行，保持串行执行
+		preloadingWorkerRunning = true;
+
 		try {
 			const res = await triggerAutoUpscale(nextTask, true);
 			if (res && res.requeue) {
 				// 后台并发已满或前台冲突，重试：将任务放回队列尾部并在短时间后重试
 				console.log('任务需要重试，已放回队列:', nextTask.hash);
 				preloadQueue = [...preloadQueue, nextTask];
-				setTimeout(() => processNextInQueue(), 200);
+				// 给出短暂延时再继续处理
+				setTimeout(() => { preloadingWorkerRunning = false; processNextInQueue(); }, 200);
 				return;
 			}
 		} catch (error) {
 			console.error('队列任务执行失败:', error);
+		} finally {
+			preloadingWorkerRunning = false;
 		}
 
 		// 如果队列还有剩余，则尝试继续（triggerAutoUpscale 的 finally 会再次调用 processNextInQueue
 		// 当当前任务完成后；这里做一次主动调用以覆盖没有触发完成路径的情况）
+		// 继续处理队列中的下一个任务（若存在）
 		if (preloadQueue.length > 0) {
 			setTimeout(() => processNextInQueue(), 50);
 		}
@@ -963,23 +1061,18 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 						console.warn('预加载页面解码失败，继续超分预处理:', e);
 					}
 
-					// 没有缓存，触发预超分
-					const res = await triggerAutoUpscale(imageDataWithHash, true);
-					// 仅在实际执行（未被要求重试）时标记为已预超分
-					if (!(res && res.requeue)) {
-						preUpscaledPages = new Set([...preUpscaledPages, targetIndex]);
-						updatePreUpscaleProgress();
-						// 如果后台返回了 upscaledBlob / dataURL，则写入内存预加载缓存，便于立即命中
-						try {
-							if (res && res.upscaledImageBlob && res.upscaledImageData) {
-								preloadMemoryCache.set(imageDataWithHash.hash, { url: res.upscaledImageData, blob: res.upscaledImageBlob });
-								console.log('已将预加载超分结果写入内存缓存，MD5:', imageDataWithHash.hash);
-							}
-						} catch (e) {
-							console.warn('写入内存预加载缓存失败:', e);
-						}
+					// 没有缓存：如果全局已开启，则把任务入队由池并发执行（按队列顺序启动并按序应用结果）；
+					// 如果全局已关闭，则跳过触发超分
+					if (globalEnabled) {
+						// 放入队列（带 pageIndex 以便按序应用）
+						const task = { data: imageDataWithHash.data, hash: imageDataWithHash.hash, pageIndex: targetIndex };
+						preloadQueue = [...preloadQueue, task];
+						// 启动池（使用设置中的后台并发限制）
+						let settings; upscaleSettings.subscribe(s => settings = s)();
+						const bgLimit = Number(settings?.background_concurrency) || 1;
+						startPreloadWorkers(bgLimit);
 					} else {
-						console.log('预超分被要求重试（并发受限），稍后重试:', imageDataWithHash.hash);
+						console.log('全局超分关闭，跳过触发预超分（已完成预解码）');
 					}
 				} catch (error) {
 					console.error(`预超分第 ${targetIndex + 1} 页失败:`, error);

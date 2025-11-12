@@ -1,0 +1,2 @@
+cd /d "D:\temp\neoview_thumbnails_test\models\testimg"
+waifu2x-ncnn-vulkan -i test.jpg -o output_x4plus.jpg -s 2 -n realesrgan-x4plus

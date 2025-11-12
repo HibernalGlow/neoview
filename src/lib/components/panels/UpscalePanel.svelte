@@ -13,22 +13,111 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { save } from '@tauri-apps/plugin-dialog';
 	import { bookStore } from '$lib/stores/book.svelte';
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
+	import { upscaleSettings, upscaleState, currentAlgorithmSettings, preloadPages, conditionalUpscaleSettings, initUpscaleSettingsManager, loadUpscaleSettings, saveUpscaleSettings, resetUpscaleSettings, switchAlgorithm, updateCurrentAlgorithmSettings, performUpscale, setPreloadPages, updateConditionalUpscaleSettings } from '$lib/stores/upscale/UpscaleManager.svelte';
 
-	// 超分状态
+	// 使用store订阅
 	let isUpscaling = $state(false);
 	let upscaleProgress = $state(0);
 	let upscaleStatus = $state('');
 	let showProgress = $state(false);
-	let upscaledImageData = $state(''); // 保持兼容性，用于预览
-	let upscaledImageBlob = $state<Blob | null>(null); // 新增：存储二进制数据
-	let upscaleStartTime = $state<number>(0); // 记录开始时间
-
-	// Tab切换状态
-	let activeTab = $state('realcugan'); // 'realcugan' | 'realesrgan' | 'waifu2x'
+	let upscaledImageData = $state('');
+	let upscaledImageBlob = $state(null);
 	
-	// Real-CUGAN 参数
+	// 当前算法和设置
+	let activeTab = $state('realcugan');
+	let currentSettings = $state({});
+	
+	// 订阅currentAlgorithmSettings
+	let currentAlgorithmSettingsUnsubscribe: () => void;
+	
+	// 延迟订阅store，确保所有变量已初始化
+	let upscaleStateUnsubscribe: () => void;
+	let upscaleSettingsUnsubscribe: () => void;
+	
+	onMount(async () => {
+		// 检查是否有可用的超分工具
+		await checkUpscaleAvailability();
+		// 初始化通用超分管理器
+		await initGenericUpscaleManager();
+		// 初始化设置管理器（已在UpscaleManager中处理）
+		// 扫描模型文件
+		await scanModels();
+		
+		// 同步临时变量
+		tempPreloadPages = currentPreloadPages;
+		tempConditionalEnabled = conditionalEnabled;
+		tempMinWidth = conditionalMinWidth;
+		tempMinHeight = conditionalMinHeight;
+		tempMaxWidth = conditionalMaxWidth;
+		tempMaxHeight = conditionalMaxHeight;
+		
+		// 现在可以安全地订阅store
+		upscaleStateUnsubscribe = upscaleState.subscribe(state => {
+			isUpscaling = state.isUpscaling;
+			upscaleProgress = state.progress;
+			upscaleStatus = state.status;
+			showProgress = state.showProgress;
+			upscaledImageData = state.upscaledImageData;
+			upscaledImageBlob = state.upscaledImageBlob;
+		});
+		
+		currentAlgorithmSettingsUnsubscribe = currentAlgorithmSettings.subscribe(settings => {
+			currentSettings = settings;
+		});
+		
+		upscaleSettingsUnsubscribe = upscaleSettings.subscribe(settings => {
+			activeTab = settings.active_algorithm;
+			
+			// 同步Real-CUGAN设置
+			realcuganModel = settings.realcugan.model;
+			realcuganScale = settings.realcugan.scale;
+			realcuganNoiseLevel = settings.realcugan.noise_level;
+			realcuganTileSize = settings.realcugan.tile_size;
+			realcuganSyncgapMode = settings.realcugan.syncgap_mode;
+			realcuganGpuId = settings.realcugan.gpu_id;
+			realcuganThreads = settings.realcugan.threads;
+			realcuganTta = settings.realcugan.tta;
+			realcuganFormat = settings.realcugan.format;
+			
+			// 同步Real-ESRGAN设置
+			realesrganModel = settings.realesrgan.model;
+			realesrganScale = settings.realesrgan.scale;
+			realesrganTileSize = settings.realesrgan.tile_size;
+			realesrganGpuId = settings.realesrgan.gpu_id;
+			realesrganThreads = settings.realesrgan.threads;
+			realesrganTta = settings.realesrgan.tta;
+			realesrganFormat = settings.realesrgan.format;
+			
+			// 同步Waifu2x设置
+			waifu2xModel = settings.waifu2x.model;
+			waifu2xNoiseLevel = settings.waifu2x.noise_level;
+			waifu2xScale = settings.waifu2x.scale;
+			waifu2xTileSize = settings.waifu2x.tile_size;
+			waifu2xGpuId = settings.waifu2x.gpu_id;
+			waifu2xThreads = settings.waifu2x.threads;
+			
+			// 同步条件超分设置
+			conditionalEnabled = settings.conditional_upscale.enabled;
+			conditionalMinWidth = settings.conditional_upscale.min_width;
+			conditionalMinHeight = settings.conditional_upscale.min_height;
+			conditionalMaxWidth = settings.conditional_upscale.max_width;
+			conditionalMaxHeight = settings.conditional_upscale.max_height;
+			
+			// 同步预加载页数
+			currentPreloadPages = settings.preload_pages;
+		});
+	});
+	
+	// 清理订阅
+	onDestroy(() => {
+		if (upscaleStateUnsubscribe) upscaleStateUnsubscribe();
+		if (upscaleSettingsUnsubscribe) upscaleSettingsUnsubscribe();
+		if (currentAlgorithmSettingsUnsubscribe) currentAlgorithmSettingsUnsubscribe();
+	});
+	
+	// Real-CUGAN 设置
 	let realcuganModel = $state('models-se');
 	let realcuganScale = $state('2');
 	let realcuganNoiseLevel = $state('-1');
@@ -39,7 +128,7 @@
 	let realcuganTta = $state(false);
 	let realcuganFormat = $state('png');
 	
-	// Real-ESRGAN 参数
+	// Real-ESRGAN 设置
 	let realesrganModel = $state('realesr-animevideov3');
 	let realesrganScale = $state('4');
 	let realesrganTileSize = $state('0');
@@ -48,7 +137,7 @@
 	let realesrganTta = $state(false);
 	let realesrganFormat = $state('png');
 	
-	// Waifu2x 参数
+	// Waifu2x 设置
 	let waifu2xModel = $state('models-cunet');
 	let waifu2xNoiseLevel = $state('0');
 	let waifu2xScale = $state('2');
@@ -84,6 +173,24 @@
 	
 	// 扫描到的模型列表
 	let scannedModels = $state<string[]>([]);
+	
+	// 条件超分设置
+	let conditionalEnabled = $state(false);
+	let conditionalMinWidth = $state(0);
+	let conditionalMinHeight = $state(0);
+	let conditionalMaxWidth = $state(0);
+	let conditionalMaxHeight = $state(0);
+	
+	// 预加载页数设置
+	let currentPreloadPages = $state(3);
+	let tempPreloadPages = $state(0);
+	
+	// 条件超分临时变量
+	let tempConditionalEnabled = $state(false);
+	let tempMinWidth = $state(0);
+	let tempMinHeight = $state(0);
+	let tempMaxWidth = $state(0);
+	let tempMaxHeight = $state(0);
 
 	
 
@@ -109,11 +216,20 @@
 
 	onMount(async () => {
 		// 检查是否有可用的超分工具
-		checkUpscaleAvailability();
+		await checkUpscaleAvailability();
 		// 初始化通用超分管理器
 		await initGenericUpscaleManager();
-		// 初始化设置管理器
-		await initSettingsManager();
+		// 初始化设置管理器（已在UpscaleManager中处理）
+		// 扫描模型文件
+		await scanModels();
+		
+		// 同步临时变量
+		tempPreloadPages = currentPreloadPages;
+		tempConditionalEnabled = conditionalEnabled;
+		tempMinWidth = conditionalMinWidth;
+		tempMinHeight = conditionalMinHeight;
+		tempMaxWidth = conditionalMaxWidth;
+		tempMaxHeight = conditionalMaxHeight;
 	});
 
 	async function checkUpscaleAvailability() {
@@ -197,38 +313,7 @@
 	// 保存设置
 	async function saveSettings() {
 		try {
-			const settings = {
-				realcugan: {
-					model: realcuganModel,
-					scale: realcuganScale,
-					noiseLevel: realcuganNoiseLevel,
-					tileSize: realcuganTileSize,
-					syncgapMode: realcuganSyncgapMode,
-					gpuId: realcuganGpuId,
-					threads: realcuganThreads,
-					tta: realcuganTta,
-					format: realcuganFormat
-				},
-				realesrgan: {
-					model: realesrganModel,
-					scale: realesrganScale,
-					tileSize: realesrganTileSize,
-					gpuId: realesrganGpuId,
-					threads: realesrganThreads,
-					tta: realesrganTta,
-					format: realesrganFormat
-				},
-				waifu2x: {
-					model: waifu2xModel,
-					noiseLevel: waifu2xNoiseLevel,
-					scale: waifu2xScale,
-					tileSize: waifu2xTileSize,
-					gpuId: waifu2xGpuId,
-					threads: waifu2xThreads
-				}
-			};
-			
-			await invoke('save_upscale_settings', { settings });
+			await saveUpscaleSettings();
 			console.log('设置已保存');
 		} catch (error) {
 			console.error('保存设置失败:', error);
@@ -244,33 +329,7 @@
 	// 重置设置
 	async function resetSettings() {
 		try {
-			// 重置所有算法为默认值
-			realcuganModel = 'models-se';
-			realcuganScale = '2';
-			realcuganNoiseLevel = '-1';
-			realcuganTileSize = '0';
-			realcuganSyncgapMode = '3';
-			realcuganGpuId = 'auto';
-			realcuganThreads = '1:2:2';
-			realcuganTta = false;
-			realcuganFormat = 'png';
-			
-			realesrganModel = 'realesr-animevideov3';
-			realesrganScale = '4';
-			realesrganTileSize = '0';
-			realesrganGpuId = 'auto';
-			realesrganThreads = '1:2:2';
-			realesrganTta = false;
-			realesrganFormat = 'png';
-			
-			waifu2xModel = 'models-cunet';
-			waifu2xNoiseLevel = '0';
-			waifu2xScale = '2';
-			waifu2xTileSize = '400';
-			waifu2xGpuId = '0';
-			waifu2xThreads = '1:2:2';
-			
-			await saveSettings();
+			await resetUpscaleSettings();
 			console.log('设置已重置为默认值');
 		} catch (error) {
 			console.error('重置设置失败:', error);
@@ -337,12 +396,6 @@
 			return;
 		}
 
-		isUpscaling = true;
-		showProgress = true;
-		upscaleProgress = 0;
-		upscaleStatus = '准备超分...';
-		upscaledImageData = '';
-
 		try {
 			// 从全局事件获取当前图片数据
 			let imageData: string | null = null;
@@ -402,94 +455,16 @@
 				console.log('转换后的WebP数据长度:', imageData.length);
 			}
 			
-			// 生成文件标识符（使用图片数据的hash）
-			const imageHash = await invoke<string>('calculate_data_hash', {
-				dataUrl: imageData
-			});
-			
-			// 生成保存路径
-			const savePath = await invoke<string>('get_upscale_save_path_from_data', {
-				imageHash,
-				algorithm: activeTab,
-				model: activeTab === 'realcugan' ? realcuganModel : 
-					   activeTab === 'realesrgan' ? realesrganModel : waifu2xModel,
-				gpuId: activeTab === 'realcugan' ? realcuganGpuId : 
-					   activeTab === 'realesrgan' ? realesrganGpuId : waifu2xGpuId,
-				tileSize: activeTab === 'realcugan' ? realcuganTileSize : 
-						  activeTab === 'realesrgan' ? realesrganTileSize : waifu2xTileSize,
-				tta: activeTab === 'realcugan' ? realcuganTta : 
-						 activeTab === 'realesrgan' ? realesrganTta : false,
-				noiseLevel: activeTab === 'realcugan' ? realcuganNoiseLevel : 
-							activeTab === 'realesrgan' ? '0' : waifu2xNoiseLevel,
-				numThreads: activeTab === 'realcugan' ? realcuganThreads : 
-							activeTab === 'realesrgan' ? realesrganThreads : waifu2xThreads,
-				thumbnailPath: 'D:\\temp\\neoview_thumbnails_test'
-			});
-
-			console.log('超分保存路径:', savePath);
-
-			// 开始超分
-			upscaleStatus = '执行超分处理...';
-			const result = await invoke<number[]>('upscale_image_from_data', {
-				imageData,
-				savePath,
-				algorithm: activeTab,
-				model: activeTab === 'realcugan' ? realcuganModel : 
-					   activeTab === 'realesrgan' ? realesrganModel : waifu2xModel,
-				gpuId: activeTab === 'realcugan' ? realcuganGpuId : 
-					   activeTab === 'realesrgan' ? realesrganGpuId : waifu2xGpuId,
-				tileSize: activeTab === 'realcugan' ? realcuganTileSize : 
-						  activeTab === 'realesrgan' ? realesrganTileSize : waifu2xTileSize,
-				tta: activeTab === 'realcugan' ? realcuganTta : 
-					 activeTab === 'realesrgan' ? realesrganTta : false,
-				noiseLevel: activeTab === 'realcugan' ? realcuganNoiseLevel : 
-							activeTab === 'realesrgan' ? '0' : waifu2xNoiseLevel,
-				numThreads: activeTab === 'realcugan' ? realcuganThreads : 
-							activeTab === 'realesrgan' ? realesrganThreads : waifu2xThreads,
-				thumbnailPath: 'D:\\temp\\neoview_thumbnails_test'
-			});
-
-			console.log('超分完成，数据长度:', result.length);
-			
-			// 计算耗时
-			const elapsedTime = Date.now() - upscaleStartTime;
-			const elapsedSeconds = (elapsedTime / 1000).toFixed(2);
-			
-			// 将二进制数据转换为 Blob
-			upscaledImageBlob = new Blob([new Uint8Array(result)], { type: 'image/webp' });
-			
-			// 为预览生成 data URL
-			upscaledImageData = URL.createObjectURL(upscaledImageBlob);
-			upscaleStatus = '超分完成';
-			
-			// 获取当前算法和模型信息
-			const algorithmName = activeTab === 'realcugan' ? 'Real-CUGAN' : 
-								  activeTab === 'realesrgan' ? 'Real-ESRGAN' : 'Waifu2x';
-			const modelName = activeTab === 'realcugan' ? realcuganModel : 
-								activeTab === 'realesrgan' ? realesrganModel : waifu2xModel;
-			const scaleValue = activeTab === 'realcugan' ? realcuganScale : 
-								activeTab === 'realesrgan' ? realesrganScale : waifu2xScale;
-			
-			// 显示成功提示
-			showSuccessToast(`${algorithmName} 超分完成`, `模型: ${modelName} | 倍数: ${scaleValue}x | 耗时: ${elapsedSeconds}秒`);
-			
-			// 通知主查看器替换图片
-			window.dispatchEvent(new CustomEvent('upscale-complete', {
-				detail: { imageData: upscaledImageData, imageBlob: upscaledImageBlob }
-			}));
+			// 使用新的超分管理器执行超分
+			await performUpscale(imageData);
 
 		} catch (error) {
 			console.error('超分失败:', error);
 			upscaleStatus = `超分失败: ${error}`;
+			isUpscaling = false;
 			
 			// 显示错误提示
 			showErrorToast('超分失败', String(error));
-		} finally {
-			isUpscaling = false;
-			// 3秒后隐藏进度条
-			setTimeout(() => {
-				showProgress = false;
-			}, 3000);
 		}
 	}
 
@@ -558,22 +533,126 @@
 	<div class="flex gap-1 p-1 bg-muted rounded-lg">
 		<button
 			class="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors {activeTab === 'realcugan' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}"
-			onclick={() => activeTab = 'realcugan'}
+			onclick={() => switchAlgorithm('realcugan')}
 		>
 			Real-CUGAN
 		</button>
 		<button
 			class="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors {activeTab === 'realesrgan' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}"
-			onclick={() => activeTab = 'realesrgan'}
+			onclick={() => switchAlgorithm('realesrgan')}
 		>
 			Real-ESRGAN
 		</button>
 		<button
 			class="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors {activeTab === 'waifu2x' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}"
-			onclick={() => activeTab = 'waifu2x'}
+			onclick={() => switchAlgorithm('waifu2x')}
 		>
 			Waifu2x
 		</button>
+	</div>
+	
+	<!-- 全局设置 -->
+	<div class="space-y-3">
+		<div class="flex items-center justify-between">
+			<Label class="text-sm font-medium">预加载页数</Label>
+			<input
+				type="number"
+				bind:value={tempPreloadPages}
+				class="w-16 h-8 px-2 text-sm border rounded-md text-center"
+				min="0"
+				max="10"
+			/>
+		</div>
+		<Button
+			variant="outline"
+			size="sm"
+			class="w-full"
+			onclick={async () => {
+				await setPreloadPages(tempPreloadPages);
+				showSuccessToast('设置已保存', `预加载页数已更新为 ${tempPreloadPages}`);
+			}}
+		>
+			保存预加载设置
+		</Button>
+		
+		<div class="border-t pt-3">
+			<div class="flex items-center justify-between mb-2">
+				<Label class="text-sm font-medium">条件超分</Label>
+				<Switch bind:checked={tempConditionalEnabled} />
+			</div>
+			
+			{#if tempConditionalEnabled}
+				<div class="space-y-2 p-2 bg-muted rounded-md">
+					<!-- 最小尺寸 -->
+					<div class="grid grid-cols-2 gap-2">
+						<div>
+							<Label class="text-xs text-muted-foreground">最小宽度</Label>
+							<input
+								type="number"
+								bind:value={tempMinWidth}
+								class="w-full h-8 px-2 text-sm border rounded-md"
+								placeholder="0"
+								min="0"
+							/>
+						</div>
+						<div>
+							<Label class="text-xs text-muted-foreground">最小高度</Label>
+							<input
+								type="number"
+								bind:value={tempMinHeight}
+								class="w-full h-8 px-2 text-sm border rounded-md"
+								placeholder="0"
+								min="0"
+							/>
+						</div>
+					</div>
+					
+					<!-- 最大尺寸 -->
+					<div class="grid grid-cols-2 gap-2">
+						<div>
+							<Label class="text-xs text-muted-foreground">最大宽度 (0=无限制)</Label>
+							<input
+								type="number"
+								bind:value={tempMaxWidth}
+								class="w-full h-8 px-2 text-sm border rounded-md"
+								placeholder="0"
+								min="0"
+							/>
+						</div>
+						<div>
+							<Label class="text-xs text-muted-foreground">最大高度 (0=无限制)</Label>
+							<input
+								type="number"
+								bind:value={tempMaxHeight}
+								class="w-full h-8 px-2 text-sm border rounded-md"
+								placeholder="0"
+								min="0"
+							/>
+						</div>
+					</div>
+					
+					<Button
+						variant="outline"
+						size="sm"
+						class="w-full"
+						onclick={async () => {
+							const conditionalSettings = {
+								enabled: tempConditionalEnabled,
+								min_width: tempMinWidth,
+								min_height: tempMinHeight,
+								max_width: tempMaxWidth,
+								max_height: tempMaxHeight,
+								aspect_ratio_condition: null
+							};
+							await updateConditionalUpscaleSettings(conditionalSettings);
+							showSuccessToast('设置已保存', '条件超分设置已更新');
+						}}
+					>
+						保存条件设置
+					</Button>
+				</div>
+			{/if}
+		</div>
 	</div>
 
 	<!-- 当前图片信息 -->
@@ -596,8 +675,11 @@
 			<div class="space-y-2">
 				<Label class="text-sm font-medium">模型路径</Label>
 				<NativeSelect 
-					bind:value={realcuganModel} 
-					onchange={saveSettings}
+					value={realcuganModel}
+					onchange={(e) => {
+						updateCurrentAlgorithmSettings({ model: e.target.value });
+						saveSettings();
+					}}
 					class="w-full z-[60]"
 				>
 					{#each realcuganModelOptions as option}
@@ -619,8 +701,11 @@
 			<div class="space-y-2">
 				<Label class="text-sm font-medium">放大倍数</Label>
 				<NativeSelect 
-					bind:value={realcuganScale} 
-					onchange={saveSettings}
+					value={realcuganScale}
+					onchange={(e) => {
+						updateCurrentAlgorithmSettings({ scale: e.target.value });
+						saveSettings();
+					}}
 					class="w-full z-[60]"
 				>
 					<option value="1">1x</option>
@@ -634,8 +719,11 @@
 			<div class="space-y-2">
 				<Label class="text-sm font-medium">噪声等级</Label>
 				<NativeSelect 
-					bind:value={realcuganNoiseLevel} 
-					onchange={saveSettings}
+					value={realcuganNoiseLevel}
+					onchange={(e) => {
+						updateCurrentAlgorithmSettings({ noise_level: e.target.value });
+						saveSettings();
+					}}
 					class="w-full z-[60]"
 				>
 					<option value="-1">无效果 (-1)</option>
@@ -655,8 +743,11 @@
 					<Label class="text-xs text-muted-foreground">Tile Size (0=自动)</Label>
 					<input
 						type="number"
-						bind:value={realcuganTileSize}
-						onchange={saveSettings}
+						value={realcuganTileSize}
+						onchange={(e) => {
+							updateCurrentAlgorithmSettings({ tile_size: e.target.value });
+							saveSettings();
+						}}
 						class="w-full h-8 px-2 text-sm border rounded-md"
 						placeholder="0"
 						min="0"
@@ -667,8 +758,11 @@
 				<div class="space-y-1">
 					<Label class="text-xs text-muted-foreground">Sync Gap Mode</Label>
 					<NativeSelect 
-						bind:value={realcuganSyncgapMode} 
-						onchange={saveSettings}
+						value={realcuganSyncgapMode}
+						onchange={(e) => {
+							updateCurrentAlgorithmSettings({ syncgap_mode: e.target.value });
+							saveSettings();
+						}}
 						class="w-full z-[60]"
 					>
 						<option value="0">0 - 无同步</option>
@@ -683,8 +777,11 @@
 					<Label class="text-xs text-muted-foreground">GPU ID</Label>
 					<input
 						type="text"
-						bind:value={realcuganGpuId}
-						onchange={saveSettings}
+						value={realcuganGpuId}
+						onchange={(e) => {
+							updateCurrentAlgorithmSettings({ gpu_id: e.target.value });
+							saveSettings();
+						}}
 						class="w-full h-8 px-2 text-sm border rounded-md"
 						placeholder="auto"
 					/>
@@ -695,8 +792,11 @@
 					<Label class="text-xs text-muted-foreground">线程数 (load:proc:save)</Label>
 					<input
 						type="text"
-						bind:value={realcuganThreads}
-						onchange={saveSettings}
+						value={realcuganThreads}
+						onchange={(e) => {
+							updateCurrentAlgorithmSettings({ threads: e.target.value });
+							saveSettings();
+						}}
 						class="w-full h-8 px-2 text-sm border rounded-md"
 						placeholder="1:2:2"
 					/>
@@ -705,15 +805,24 @@
 				<!-- TTA -->
 				<div class="flex items-center justify-between">
 					<Label class="text-xs text-muted-foreground">TTA 模式</Label>
-					<Switch bind:checked={realcuganTta} onchange={saveSettings} />
+					<Switch 
+						checked={realcuganTta}
+						onchange={(e) => {
+							updateCurrentAlgorithmSettings({ tta: e.target.checked });
+							saveSettings();
+						}} 
+					/>
 				</div>
 
 				<!-- 输出格式 -->
 				<div class="space-y-1">
 					<Label class="text-xs text-muted-foreground">输出格式</Label>
 					<NativeSelect 
-						bind:value={realcuganFormat} 
-						onchange={saveSettings}
+						value={realcuganFormat}
+						onchange={(e) => {
+							updateCurrentAlgorithmSettings({ format: e.target.value });
+							saveSettings();
+						}}
 						class="w-full z-[60]"
 					>
 						<option value="jpg">JPG</option>
@@ -738,8 +847,11 @@
 			<div class="space-y-2">
 				<Label class="text-sm font-medium">模型名称</Label>
 				<NativeSelect 
-					bind:value={realesrganModel} 
-					onchange={saveSettings}
+					value={realesrganModel}
+					onchange={(e) => {
+						updateCurrentAlgorithmSettings({ model: e.target.value });
+						saveSettings();
+					}}
 					class="w-full z-[60]"
 				>
 					{#each realesrganModelOptions as option}
@@ -761,8 +873,11 @@
 			<div class="space-y-2">
 				<Label class="text-sm font-medium">放大倍数</Label>
 				<NativeSelect 
-					bind:value={realesrganScale} 
-					onchange={saveSettings}
+					value={realesrganScale}
+					onchange={(e) => {
+						updateCurrentAlgorithmSettings({ scale: e.target.value });
+						saveSettings();
+					}}
 					class="w-full z-[60]"
 				>
 					<option value="2">2x</option>
@@ -780,8 +895,11 @@
 					<Label class="text-xs text-muted-foreground">Tile Size (0=自动)</Label>
 					<input
 						type="number"
-						bind:value={realesrganTileSize}
-						onchange={saveSettings}
+						value={realesrganTileSize}
+						onchange={(e) => {
+							updateCurrentAlgorithmSettings({ tile_size: e.target.value });
+							saveSettings();
+						}}
 						class="w-full h-8 px-2 text-sm border rounded-md"
 						placeholder="0"
 						min="0"
@@ -793,8 +911,11 @@
 					<Label class="text-xs text-muted-foreground">GPU ID</Label>
 					<input
 						type="text"
-						bind:value={realesrganGpuId}
-						onchange={saveSettings}
+						value={realesrganGpuId}
+						onchange={(e) => {
+							updateCurrentAlgorithmSettings({ gpu_id: e.target.value });
+							saveSettings();
+						}}
 						class="w-full h-8 px-2 text-sm border rounded-md"
 						placeholder="auto"
 					/>
@@ -805,8 +926,11 @@
 					<Label class="text-xs text-muted-foreground">线程数 (load:proc:save)</Label>
 					<input
 						type="text"
-						bind:value={realesrganThreads}
-						onchange={saveSettings}
+						value={realesrganThreads}
+						onchange={(e) => {
+							updateCurrentAlgorithmSettings({ threads: e.target.value });
+							saveSettings();
+						}}
 						class="w-full h-8 px-2 text-sm border rounded-md"
 						placeholder="1:2:2"
 					/>
@@ -815,15 +939,24 @@
 				<!-- TTA -->
 				<div class="flex items-center justify-between">
 					<Label class="text-xs text-muted-foreground">TTA 模式</Label>
-					<Switch bind:checked={realesrganTta} onchange={saveSettings} />
+					<Switch 
+						checked={realesrganTta}
+						onchange={(e) => {
+							updateCurrentAlgorithmSettings({ tta: e.target.checked });
+							saveSettings();
+						}} 
+					/>
 				</div>
 
 				<!-- 输出格式 -->
 				<div class="space-y-1">
 					<Label class="text-xs text-muted-foreground">输出格式</Label>
 					<NativeSelect 
-						bind:value={realesrganFormat} 
-						onchange={saveSettings}
+						value={realesrganFormat}
+						onchange={(e) => {
+							updateCurrentAlgorithmSettings({ format: e.target.value });
+							saveSettings();
+						}}
 						class="w-full z-[60]"
 					>
 						<option value="jpg">JPG</option>
@@ -848,8 +981,11 @@
 			<div class="space-y-2">
 				<Label class="text-sm font-medium">模型路径</Label>
 				<NativeSelect 
-					bind:value={waifu2xModel} 
-					onchange={saveSettings}
+					value={waifu2xModel}
+					onchange={(e) => {
+						updateCurrentAlgorithmSettings({ model: e.target.value });
+						saveSettings();
+					}}
 					class="w-full z-[60]"
 				>
 					{#each waifu2xModelOptions as option}
@@ -871,8 +1007,11 @@
 			<div class="space-y-2">
 				<Label class="text-sm font-medium">噪声等级</Label>
 				<NativeSelect 
-					bind:value={waifu2xNoiseLevel} 
-					onchange={saveSettings}
+					value={waifu2xNoiseLevel}
+					onchange={(e) => {
+						updateCurrentAlgorithmSettings({ noise_level: e.target.value });
+						saveSettings();
+					}}
 					class="w-full z-[60]"
 				>
 					<option value="-1">无效果 (-1)</option>
@@ -887,8 +1026,11 @@
 			<div class="space-y-2">
 				<Label class="text-sm font-medium">放大倍数</Label>
 				<NativeSelect 
-					bind:value={waifu2xScale} 
-					onchange={saveSettings}
+					value={waifu2xScale}
+					onchange={(e) => {
+						updateCurrentAlgorithmSettings({ scale: e.target.value });
+						saveSettings();
+					}}
 					class="w-full z-[60]"
 				>
 					<option value="1">1x (无缩放)</option>
@@ -905,8 +1047,11 @@
 					<Label class="text-xs text-muted-foreground">Tile Size</Label>
 					<input
 						type="number"
-						bind:value={waifu2xTileSize}
-						onchange={saveSettings}
+						value={waifu2xTileSize}
+						onchange={(e) => {
+							updateCurrentAlgorithmSettings({ tile_size: e.target.value });
+							saveSettings();
+						}}
 						class="w-full h-8 px-2 text-sm border rounded-md"
 						placeholder="400"
 						min="32"
@@ -918,8 +1063,11 @@
 					<Label class="text-xs text-muted-foreground">GPU ID</Label>
 					<input
 						type="number"
-						bind:value={waifu2xGpuId}
-						onchange={saveSettings}
+						value={waifu2xGpuId}
+						onchange={(e) => {
+							updateCurrentAlgorithmSettings({ gpu_id: e.target.value });
+							saveSettings();
+						}}
 						class="w-full h-8 px-2 text-sm border rounded-md"
 						placeholder="0"
 						min="0"
@@ -931,8 +1079,11 @@
 					<Label class="text-xs text-muted-foreground">线程数 (load:proc:save)</Label>
 					<input
 						type="text"
-						bind:value={waifu2xThreads}
-						onchange={saveSettings}
+						value={waifu2xThreads}
+						onchange={(e) => {
+							updateCurrentAlgorithmSettings({ threads: e.target.value });
+							saveSettings();
+						}}
 						class="w-full h-8 px-2 text-sm border rounded-md"
 						placeholder="1:2:2"
 					/>

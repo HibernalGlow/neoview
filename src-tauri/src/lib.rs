@@ -170,6 +170,11 @@ pub fn run() {
             commands::save_upscale_settings,
             commands::reset_upscale_settings,
             commands::get_upscale_settings_path,
+            commands::check_upscale_conditions,
+            commands::get_preload_pages,
+            commands::set_preload_pages,
+            commands::get_conditional_upscale_settings,
+            commands::update_conditional_upscale_settings,
             // Image Data commands
             commands::calculate_data_hash,
             commands::convert_data_url_to_webp,

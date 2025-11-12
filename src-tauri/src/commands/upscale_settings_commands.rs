@@ -83,6 +83,91 @@ pub async fn reset_upscale_settings(
     }
 }
 
+/// 检查图片是否满足超分条件
+#[command]
+pub async fn check_upscale_conditions(
+    width: u32,
+    height: u32,
+    state: State<'_, UpscaleSettingsState>,
+) -> Result<bool, String> {
+    let manager_guard = state.manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+    
+    if let Some(manager) = manager_guard.as_ref() {
+        Ok(manager.should_upscale_image(width, height))
+    } else {
+        Err("设置管理器未初始化".to_string())
+    }
+}
+
+/// 获取预加载页数设置
+#[command]
+pub async fn get_preload_pages(
+    state: State<'_, UpscaleSettingsState>,
+) -> Result<u32, String> {
+    let manager_guard = state.manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+    
+    if let Some(manager) = manager_guard.as_ref() {
+        let settings = manager.load_settings();
+        Ok(settings.preload_pages)
+    } else {
+        Err("设置管理器未初始化".to_string())
+    }
+}
+
+/// 设置预加载页数
+#[command]
+pub async fn set_preload_pages(
+    pages: u32,
+    state: State<'_, UpscaleSettingsState>,
+) -> Result<(), String> {
+    let manager_guard = state.manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+    
+    if let Some(manager) = manager_guard.as_ref() {
+        let mut settings = manager.load_settings();
+        settings.preload_pages = pages;
+        manager.save_settings(&settings)
+    } else {
+        Err("设置管理器未初始化".to_string())
+    }
+}
+
+/// 获取条件超分设置
+#[command]
+pub async fn get_conditional_upscale_settings(
+    state: State<'_, UpscaleSettingsState>,
+) -> Result<crate::core::upscale_settings::ConditionalUpscaleSettings, String> {
+    let manager_guard = state.manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+    
+    if let Some(manager) = manager_guard.as_ref() {
+        let settings = manager.load_settings();
+        Ok(settings.conditional_upscale)
+    } else {
+        Err("设置管理器未初始化".to_string())
+    }
+}
+
+/// 更新条件超分设置
+#[command]
+pub async fn update_conditional_upscale_settings(
+    conditional_settings: crate::core::upscale_settings::ConditionalUpscaleSettings,
+    state: State<'_, UpscaleSettingsState>,
+) -> Result<(), String> {
+    let manager_guard = state.manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+    
+    if let Some(manager) = manager_guard.as_ref() {
+        let mut settings = manager.load_settings();
+        settings.conditional_upscale = conditional_settings;
+        manager.save_settings(&settings)
+    } else {
+        Err("设置管理器未初始化".to_string())
+    }
+}
+
 /// 获取设置文件路径
 #[command]
 pub async fn get_upscale_settings_path(

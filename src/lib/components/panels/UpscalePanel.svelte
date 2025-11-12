@@ -736,7 +736,6 @@ let cacheMeta: any = $state(null);
 						variant="outline"
 						size="sm"
 						class="w-full"
-						disabled={!globalUpscaleEnabled}
 						onclick={async () => {
 							const conditionalSettings = {
 								enabled: tempConditionalEnabled,

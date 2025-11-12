@@ -704,21 +704,21 @@
 	
 	<!-- Viewer底部进度条 -->
 	{#if showProgressBar && bookStore.currentBook}
-		<div class="absolute bottom-0 left-0 right-0 h-2 pointer-events-none">
-			<!-- 当前页面进度条（绿色） -->
-			<div 
-				class="absolute bottom-0 left-0 h-1 transition-all duration-300 {progressBlinking ? 'animate-pulse' : ''}" 
-				style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%; background-color: {progressColor}; opacity: 0.7;"
-			>
-			</div>
-			<!-- 预加载进度条（黄色） -->
+		<div class="absolute bottom-0 left-0 right-0 h-1 pointer-events-none">
+			<!-- 预加载进度条（黄色，底层） -->
 			{#if preloadProgress > 0}
 				<div 
-					class="absolute bottom-1 left-0 h-1 transition-all duration-500" 
-					style="width: {((bookStore.currentPageIndex + 1 + preloadProgress / 100 * totalPreloadPages) / bookStore.currentBook.pages.length) * 100}%; background-color: #FCD34D; opacity: 0.8;"
+					class="absolute bottom-0 left-0 h-full transition-all duration-500" 
+					style="width: {((bookStore.currentPageIndex + 1 + preloadProgress / 100 * totalPreloadPages) / bookStore.currentBook.pages.length) * 100}%; background-color: #FCD34D; opacity: 0.6;"
 				>
 				</div>
 			{/if}
+			<!-- 当前页面进度条（绿色，顶层） -->
+			<div 
+				class="absolute bottom-0 left-0 h-full transition-all duration-300 {progressBlinking ? 'animate-pulse' : ''}" 
+				style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%; background-color: {progressColor}; opacity: 0.8;"
+			>
+			</div>
 		</div>
 	{/if}
 </div>

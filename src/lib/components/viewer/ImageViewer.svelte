@@ -18,6 +18,7 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import ComparisonViewer from './ComparisonViewer.svelte';
 	import { upscaleState, performUpscale, getGlobalUpscaleEnabled, upscaleSettings } from '$lib/stores/upscale/UpscaleManager.svelte';
+    import { get } from 'svelte/store';
 
 	// 进度条状态
 	let showProgressBar = $state(true);
@@ -160,28 +161,30 @@
 	// 监听超分完成事件
 	$effect(() => {
 		const handleUpscaleComplete = async (e: CustomEvent) => {
-			const { imageData, imageBlob, originalImageHash } = e.detail;
-			
-			if (!imageData || !originalImageHash) return;
-			
+			// 为避免与组件中 imageData 变量冲突，这里用 upscaledImageData 表示事件中的数据
+			const { imageData: upscaledImageData, imageBlob, originalImageHash } = e.detail;
+
+			if (!upscaledImageData || !originalImageHash) return;
+
 			try {
-				// 获取当前页面的hash（如果还没有的话）
-				if (!currentImageHash && imageData) {
-					// 尝试从当前图片数据计算hash
-					const currentHash = await getImageMd5(imageData);
-					if (currentHash) {
-						currentImageHash = currentHash;
+				// 如果 currentImageHash 还没有（异常情况），使用原始页面数据进行计算
+				if (!currentImageHash) {
+					if (originalImageDataForComparison) {
+						const currentHash = await getImageMd5(originalImageDataForComparison);
+						if (currentHash) {
+							currentImageHash = currentHash;
+						}
 					}
 				}
-				
+
 				// 只有当超分的是当前页面时才替换图片
 				if (originalImageHash === currentImageHash) {
-					bookStore.setUpscaledImage(imageData);
+					bookStore.setUpscaledImage(upscaledImageData);
 					if (imageBlob) {
 						bookStore.setUpscaledImageBlob(imageBlob);
 					}
 					// 更新对比数据
-					upscaledImageDataForComparison = imageData;
+					upscaledImageDataForComparison = upscaledImageData;
 					console.log('超分图已匹配当前页面，MD5:', originalImageHash, '已替换');
 				} else {
 					console.log('超分图不属于当前页面，超分MD5:', originalImageHash, '当前MD5:', currentImageHash);
@@ -484,8 +487,8 @@
 
 			// 如果是预加载且有其他任务在进行，加入队列
 			if (isPreload) {
-				const currentState = upscaleState;
-				if (currentState.isUpscaling || isPreloading) {
+				const currentState = get(upscaleState);
+				if (currentState?.isUpscaling || isPreloading) {
 					// 验证图片数据格式
 					if (!imageDataWithHash.data.startsWith('blob:') && !imageDataWithHash.data.startsWith('data:image/')) {
 						console.warn('预加载：图片数据格式异常，不加入队列');
@@ -503,8 +506,8 @@
 				}
 			} else {
 				// 当前页面的超分，检查是否正在超分
-				const currentState = upscaleState;
-				if (currentState.isUpscaling) {
+				const currentState = get(upscaleState);
+				if (currentState?.isUpscaling) {
 					console.log('超分正在进行中，跳过自动超分');
 					return;
 				}
@@ -567,25 +570,34 @@
 
 	// 处理预加载队列
 	async function processNextInQueue() {
-		if (preloadQueue.length === 0) {
+		// 如果队列为空，直接返回
+		if (preloadQueue.length === 0) return;
+
+		// 如果当前有超分任务在执行，稍后再试（由正在进行的任务在完成时触发 processNextInQueue）
+		const currentState = get(upscaleState);
+		if (currentState?.isUpscaling || isPreloading) {
+			console.log('preload queue: upscale in progress, will try later');
 			return;
 		}
 
-		// 取出队列第一个任务
+		// 取出队列第一个任务（按 FIFO）
 		const nextTask = preloadQueue[0];
 		preloadQueue = preloadQueue.slice(1);
 
 		console.log(`处理队列中的下一个任务: ${nextTask.hash}, 数据长度: ${nextTask.data.length}`);
-		
+
 		// 使用保存的图片数据和hash执行超分
 		try {
 			await triggerAutoUpscale(nextTask, true);
 		} catch (error) {
 			console.error('队列任务执行失败:', error);
 		}
-		
-		// 继续处理下一个
-		processNextInQueue();
+
+		// 如果队列还有剩余，则尝试继续（triggerAutoUpscale 的 finally 会再次调用 processNextInQueue
+		// 当当前任务完成后；这里做一次主动调用以覆盖没有触发完成路径的情况）
+		if (preloadQueue.length > 0) {
+			setTimeout(() => processNextInQueue(), 50);
+		}
 	}
 
 	// 预加载后续页面的超分

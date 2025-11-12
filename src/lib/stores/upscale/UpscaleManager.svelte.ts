@@ -592,54 +592,31 @@ export async function refreshCacheStatusForData(imageData: string) {
             return false;
         }
 
-        // 计算数据hash
-        const imageHash = await invoke('calculate_data_hash', { dataUrl: imageData }) as string;
-
-        // 更新状态为检查中
-        upscaleState.update(s => ({ ...s, status: '检查缓存...', progress: 0, showProgress: false }));
-
-        // 获取当前算法优先项
-        let settings: any; upscaleSettings.subscribe(s => settings = s)();
-        const currentAlgorithm = settings?.active_algorithm || 'realcugan';
-        const algorithms = [currentAlgorithm, 'realcugan', 'realesrgan', 'waifu2x'];
-
-    let ttlHours = 8;
-    try { let s: any; upscaleSettings.subscribe(x => s = x)(); ttlHours = (s && s.cache_ttl_hours) ?? ttlHours; } catch(e) {}
-        const ttlSeconds = ttlHours * 3600;
-
-        for (const algorithm of algorithms) {
+        // 使用轻量元数据检查以尽量避免立即读取文件字节
+        const meta = await checkCacheMetaForData(imageData);
+        if (meta && meta.path) {
             try {
-                const meta: any = await invoke('check_upscale_cache_for_algorithm', {
-                    imageHash,
-                    algorithm,
-                    thumbnailPath: 'D:\\temp\\neoview_thumbnails_test',
-                    max_age_seconds: ttlSeconds
-                });
-                if (meta && meta.path) {
-                    // 读取二进制并构建 blob/url
-                    const bytes = await invoke<number[]>('read_binary_file', { filePath: meta.path });
-                    const arr = new Uint8Array(bytes);
-                    const blob = new Blob([arr], { type: 'image/webp' });
-                    const url = URL.createObjectURL(blob);
+                // 仅当需要预览二进制时才读取文件（Viewer 可能需要）
+                const bytes = await invoke<number[]>('read_binary_file', { filePath: meta.path });
+                const arr = new Uint8Array(bytes);
+                const blob = new Blob([arr], { type: 'image/webp' });
+                const url = URL.createObjectURL(blob);
 
-                    // 更新状态，标记为已存在缓存
-                    upscaleState.update(s => ({
-                        ...s,
-                        status: `已找到缓存 (${meta.algorithm || algorithm})`,
-                        progress: 100,
-                        upscaledImageData: url,
-                        upscaledImageBlob: blob as any,
-                        isUpscaling: false,
-                        showProgress: false
-                    }));
+                upscaleState.update(s => ({
+                    ...s,
+                    status: `已找到缓存 (${meta.algorithm || meta.detected_algorithm || 'unknown'})`,
+                    progress: 100,
+                    upscaledImageData: url,
+                    upscaledImageBlob: blob as any,
+                    isUpscaling: false,
+                    showProgress: false
+                }));
 
-                    // 也把 upscaled image 写入 bookStore，方便查看器同步
-                    try { bookStore.setUpscaledImage(url); bookStore.setUpscaledImageBlob(blob); } catch(e) {}
-
-                    return true;
-                }
+                try { bookStore.setUpscaledImage(url); bookStore.setUpscaledImageBlob(blob); } catch (e) {}
+                return true;
             } catch (e) {
-                continue; // 继续下一种算法
+                console.error('读取缓存文件失败:', e);
+                // fallthrough 清理状态后返回 false
             }
         }
 
@@ -652,6 +629,46 @@ export async function refreshCacheStatusForData(imageData: string) {
         console.error('刷新缓存状态失败:', error);
         upscaleState.update(s => ({ ...s, status: `检查缓存失败: ${error}`, progress: 0 }));
         return false;
+    }
+}
+
+/**
+ * 轻量：仅检查缓存元数据（不读取文件字节）
+ * 返回 meta（后端原样返回）或 null
+ */
+export async function checkCacheMetaForData(imageData: string) {
+    try {
+        if (!imageData) return null;
+        const imageHash = await invoke('calculate_data_hash', { dataUrl: imageData }) as string;
+
+        let settings: any; upscaleSettings.subscribe(s => settings = s)();
+        const currentAlgorithm = settings?.active_algorithm || 'realcugan';
+        const algorithms = [currentAlgorithm, 'realcugan', 'realesrgan', 'waifu2x'];
+
+        let ttlHours = 8;
+        try { let s: any; upscaleSettings.subscribe(x => s = x)(); ttlHours = (s && s.cache_ttl_hours) ?? ttlHours; } catch(e) {}
+        const ttlSeconds = ttlHours * 3600;
+
+        for (const algorithm of algorithms) {
+            try {
+                const meta: any = await invoke('check_upscale_cache_for_algorithm', {
+                    imageHash,
+                    algorithm,
+                    thumbnailPath: 'D:\\temp\\neoview_thumbnails_test',
+                    max_age_seconds: ttlSeconds
+                });
+                if (meta && meta.path) {
+                    // 返回元数据，供面板显示
+                    return { ...meta, detected_algorithm: algorithm };
+                }
+            } catch (e) {
+                continue;
+            }
+        }
+        return null;
+    } catch (error) {
+        console.error('检查缓存元数据失败:', error);
+        return null;
     }
 }
 

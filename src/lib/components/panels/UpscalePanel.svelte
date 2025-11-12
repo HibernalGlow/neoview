@@ -15,7 +15,7 @@
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
-	import { upscaleSettings, upscaleState, currentAlgorithmSettings, preloadPages, conditionalUpscaleSettings, initUpscaleSettingsManager, loadUpscaleSettings, saveUpscaleSettings, resetUpscaleSettings, switchAlgorithm, updateCurrentAlgorithmSettings, performUpscale, setPreloadPages, updateConditionalUpscaleSettings, getGlobalUpscaleEnabled, setGlobalUpscaleEnabled, refreshCacheStatusForData } from '$lib/stores/upscale/UpscaleManager.svelte';
+	import { upscaleSettings, upscaleState, currentAlgorithmSettings, preloadPages, conditionalUpscaleSettings, initUpscaleSettingsManager, loadUpscaleSettings, saveUpscaleSettings, resetUpscaleSettings, switchAlgorithm, updateCurrentAlgorithmSettings, performUpscale, setPreloadPages, updateConditionalUpscaleSettings, getGlobalUpscaleEnabled, setGlobalUpscaleEnabled, refreshCacheStatusForData, checkCacheMetaForData } from '$lib/stores/upscale/UpscaleManager.svelte';
 
 	// 使用store订阅
 	let isUpscaling = $state(false);
@@ -24,6 +24,12 @@
 	let showProgress = $state(false);
 	let upscaledImageData = $state('');
 	let upscaledImageBlob = $state(null);
+
+// 缓存元数据（面板用来显示更详细的信息）
+let cacheFound = $state(false);
+let cacheAlgorithm = $state('');
+let cachePath = $state('');
+let cacheMeta: any = $state(null);
 	
 	// 当前算法和设置
 	let activeTab = $state('realcugan');
@@ -115,37 +121,52 @@
 			globalUpscaleEnabled = settings.global_upscale_enabled;
 		});
 
-		// 订阅 bookStore 的变化，当当前图片变化时刷新缓存状态
-		bookStoreUnsubscribe = bookStore.subscribe(bs => {
-			try {
-				if (bs && bs.currentImage) {
-					// 请求当前 ImageViewer 返回图片 data
-					const imageDataPromise = new Promise<string>((resolve, reject) => {
-						const timeout = setTimeout(() => reject(new Error('获取图片数据超时')), 2000);
-						window.dispatchEvent(new CustomEvent('request-current-image-data', {
-							detail: {
-								callback: (data: string) => {
-									clearTimeout(timeout);
-									resolve(data);
-								}
-							}
-						}));
-					});
-					imageDataPromise.then(data => {
-						if (data) {
-							refreshCacheStatusForData(data).catch(e => console.warn('刷新缓存状态失败:', e));
-						}
-					}).catch(err => {
-						console.warn('获取当前图片数据失败:', err);
-					});
-				} else {
-					// 没有当前图片，清理状态
-					upscaleState.update(s => ({ ...s, status: '没有当前图片', progress: 0, upscaledImageData: '', upscaledImageBlob: null }));
-				}
-			} catch (e) {
-				console.warn('bookStore 订阅处理失败:', e);
-			}
-		});
+	    // 订阅 bookStore 的变化，当当前图片索引或路径变化时刷新缓存状态（更精确，避免重复检查）
+	    		let lastPageIndex: number | null = null;
+	    		let lastImagePath: string | null = null;
+	    		bookStoreUnsubscribe = bookStore.subscribe(bs => {
+	    			try {
+	    				const currentIndex = bs?.currentPageIndex ?? null;
+	    				const currentPath = bs?.currentImage?.path ?? null;
+	    				if (currentIndex !== lastPageIndex || currentPath !== lastImagePath) {
+	    					lastPageIndex = currentIndex;
+	    					lastImagePath = currentPath;
+	    					if (bs && bs.currentImage) {
+	    						// 请求 ImageViewer 返回图片 data（短时限）
+	    						const imageDataPromise = new Promise<string>((resolve, reject) => {
+	    							const timeout = setTimeout(() => reject(new Error('获取图片数据超时')), 1500);
+	    							window.dispatchEvent(new CustomEvent('request-current-image-data', {
+	    								detail: { callback: (data: string) => { clearTimeout(timeout); resolve(data); } }
+	    							}));
+	    						});
+	    						imageDataPromise.then(data => {
+	    							if (data) {
+	    								// 使用轻量元数据检查来快速更新面板上的缓存信息
+	    								checkCacheMetaForData(data).then(meta => {
+	    									if (meta) {
+	    										// 将信息写入局部展示变量（由 panel 中的绑定使用）
+	    										cacheFound = true;
+	    										cacheAlgorithm = meta.detected_algorithm || meta.algorithm || 'unknown';
+	    										cachePath = meta.path || '';
+	    										cacheMeta = meta;
+	    									} else {
+	    										cacheFound = false;
+	    										cacheAlgorithm = '';
+	    										cachePath = '';
+	    										cacheMeta = null;
+	    									}
+	    								}).catch(err => console.warn('checkCacheMetaForData 失败:', err));
+	    							}
+	    						}).catch(err => { console.warn('获取当前图片数据失败:', err); });
+	    					} else {
+	    						// 没有当前图片
+	    						cacheFound = false; cacheAlgorithm = ''; cachePath = ''; cacheMeta = null;
+	    					}
+	    				}
+	    			} catch (e) {
+	    				console.warn('bookStore 订阅处理失败:', e);
+	    			}
+	    		});
 	});
 	
 	// 清理订阅
@@ -746,6 +767,43 @@
 				没有当前图片
 			{/if}
 		</span>
+	</div>
+
+	<!-- 缓存元信息（快速显示 / 手动刷新 / 立即超分） -->
+	<div class="flex flex-col gap-2 p-2 bg-muted rounded-md">
+		<div class="flex items-center justify-between">
+			<div class="text-sm">
+				{#if cacheFound}
+					<span class="text-success">缓存已找到</span>
+					<span class="text-muted-foreground ml-2 text-xs">({cacheAlgorithm})</span>
+				{:else}
+					<span class="text-muted-foreground">未找到缓存</span>
+				{/if}
+			</div>
+			<div class="flex gap-2">
+				<button class="btn btn-sm" on:click={async () => {
+					// 手动刷新：请求当前 ImageViewer 的图片数据并检查元数据
+					try {
+						const data = await new Promise<string>((resolve, reject) => {
+							const timeout = setTimeout(() => reject(new Error('获取图片数据超时')), 2000);
+							window.dispatchEvent(new CustomEvent('request-current-image-data', { detail: { callback: (d: string) => { clearTimeout(timeout); resolve(d); } } }));
+						});
+						const meta = await checkCacheMetaForData(data);
+						if (meta) {
+							cacheFound = true; cacheAlgorithm = meta.detected_algorithm || meta.algorithm || 'unknown'; cachePath = meta.path || ''; cacheMeta = meta;
+						} else {
+							cacheFound = false; cacheAlgorithm = ''; cachePath = ''; cacheMeta = null;
+						}
+					} catch (e) {
+						console.warn('手动刷新缓存失败:', e);
+					}
+				}}>手动刷新</button>
+				<button class="btn btn-primary btn-sm" disabled={isUpscaling || !bookStore.currentImage || !globalUpscaleEnabled} on:click={() => startUpscale()}>立即超分</button>
+			</div>
+		</div>
+		{#if cachePath}
+			<div class="text-xs text-muted-foreground truncate" title={cachePath}>缓存路径: {cachePath}</div>
+		{/if}
 	</div>
 
 	<!-- Tab 内容 -->

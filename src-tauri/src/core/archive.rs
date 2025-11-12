@@ -168,6 +168,25 @@ impl ArchiveManager {
         self.extract_file_from_zip(archive_path, file_path)
     }
 
+    /// 从 ZIP 压缩包中加载图片（返回二进制数据）
+    pub fn load_image_from_zip_binary(
+        &self,
+        archive_path: &Path,
+        file_path: &str,
+    ) -> Result<Vec<u8>, String> {
+        let data = self.extract_file_from_zip(archive_path, file_path)?;
+
+        // 对于 JXL 格式，需要先解码再重新编码为通用格式
+        if let Some(ext) = Path::new(file_path).extension() {
+            if ext.to_string_lossy().to_lowercase() == "jxl" {
+                return self.load_jxl_binary_from_zip(&data);
+            }
+        }
+
+        // 直接返回原始二进制数据
+        Ok(data)
+    }
+
     /// 从 ZIP 压缩包中加载图片（返回 base64，带缓存）
     pub fn load_image_from_zip(
         &self,
@@ -214,6 +233,73 @@ impl ArchiveManager {
         }
 
         Ok(result)
+    }
+
+    /// 从压缩包中加载 JXL 图片并转换为 PNG（返回二进制数据）
+    fn load_jxl_binary_from_zip(&self, image_data: &[u8]) -> Result<Vec<u8>, String> {
+        use jxl_oxide::JxlImage;
+        use std::io::Cursor;
+        
+        let mut reader = Cursor::new(image_data);
+        let jxl_image = JxlImage::builder()
+            .read(&mut reader)
+            .map_err(|e| format!("Failed to decode JXL: {}", e))?;
+        
+        let render = jxl_image.render_frame(0)
+            .map_err(|e| format!("Failed to render JXL frame: {}", e))?;
+        
+        let fb = render.image_all_channels();
+        let width = fb.width() as u32;
+        let height = fb.height() as u32;
+        let channels = fb.channels();
+        let float_buf = fb.buf();
+        
+        // 转换为 DynamicImage
+        let img = if channels == 1 {
+            let gray_data: Vec<u8> = float_buf
+                .iter()
+                .map(|&v| (v.clamp(0.0, 1.0) * 255.0) as u8)
+                .collect();
+            
+            let gray_img = image::GrayImage::from_raw(width, height, gray_data)
+                .ok_or_else(|| "Failed to create gray image from JXL data".to_string())?;
+            image::DynamicImage::ImageLuma8(gray_img)
+        } else if channels == 3 {
+            let rgb_data: Vec<u8> = float_buf
+                .iter()
+                .map(|&v| (v.clamp(0.0, 1.0) * 255.0) as u8)
+                .collect();
+            
+            let rgb_img = image::RgbImage::from_raw(width, height, rgb_data)
+                .ok_or_else(|| "Failed to create RGB image from JXL data".to_string())?;
+            image::DynamicImage::ImageRgb8(rgb_img)
+        } else {
+            let rgba_data: Vec<u8> = float_buf
+                .chunks(channels)
+                .flat_map(|chunk| {
+                    vec![
+                        (chunk[0].clamp(0.0, 1.0) * 255.0) as u8,
+                        (chunk[1].clamp(0.0, 1.0) * 255.0) as u8,
+                        (chunk[2].clamp(0.0, 1.0) * 255.0) as u8,
+                        (chunk.get(3).copied().unwrap_or(1.0).clamp(0.0, 1.0) * 255.0) as u8,
+                    ]
+                })
+                .collect();
+            
+            let rgba_img = image::RgbaImage::from_raw(width, height, rgba_data)
+                .ok_or_else(|| "Failed to create RGBA image from JXL data".to_string())?;
+            image::DynamicImage::ImageRgba8(rgba_img)
+        };
+
+        // 编码为 PNG
+        let mut buffer = Vec::new();
+        let mut cursor = Cursor::new(&mut buffer);
+        
+        img.write_to(&mut cursor, image::ImageFormat::Png)
+            .map_err(|e| format!("编码 JXL 为 PNG 失败: {}", e))?;
+
+        // 返回 PNG 格式的二进制数据
+        Ok(buffer)
     }
 
     /// 从压缩包中加载 JXL 图片并转换为 PNG

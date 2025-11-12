@@ -12,7 +12,8 @@ interface BookState {
   error: string;
   viewerOpen: boolean;
   currentImage: Page | null;
-  upscaledImageData: string | null;
+  upscaledImageData: string | null; // 保持兼容性，用于显示
+  upscaledImageBlob: Blob | null; // 新增：存储二进制数据
 }
 
 class BookStore {
@@ -23,6 +24,7 @@ class BookStore {
     viewerOpen: false,
     currentImage: null,
     upscaledImageData: null,
+    upscaledImageBlob: null,
   });
 
   // === Getters ===
@@ -48,6 +50,10 @@ class BookStore {
 
   get upscaledImageData() {
     return this.state.upscaledImageData;
+  }
+
+  get upscaledImageBlob() {
+    return this.state.upscaledImageBlob;
   }
 
   get currentPage(): Page | null {
@@ -159,6 +165,7 @@ class BookStore {
     this.state.currentBook = null;
     this.state.currentImage = null;
     this.state.upscaledImageData = null;
+    this.state.upscaledImageBlob = null;
   }
 
   /**
@@ -168,6 +175,7 @@ class BookStore {
     this.state.currentImage = page;
     // 切换图片时清除超分结果
     this.state.upscaledImageData = null;
+    this.state.upscaledImageBlob = null;
   }
 
   /**
@@ -175,6 +183,13 @@ class BookStore {
    */
   setUpscaledImage(data: string | null) {
     this.state.upscaledImageData = data;
+  }
+
+  /**
+   * 设置超分图片二进制数据
+   */
+  setUpscaledImageBlob(blob: Blob | null) {
+    this.state.upscaledImageBlob = blob;
   }
 
   /**

@@ -6,7 +6,9 @@
 import { invoke } from '@tauri-apps/api/core';
 
 export async function loadImage(path: string): Promise<string> {
-	return await invoke<string>('load_image', { path });
+	const binaryData = await invoke<number[]>('load_image', { path });
+	const blob = new Blob([new Uint8Array(binaryData)]);
+	return URL.createObjectURL(blob);
 }
 
 export async function getImageDimensions(path: string): Promise<[number, number]> {

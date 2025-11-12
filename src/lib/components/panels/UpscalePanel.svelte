@@ -20,7 +20,8 @@
 	let upscaleProgress = $state(0);
 	let upscaleStatus = $state('');
 	let showProgress = $state(false);
-	let upscaledImageData = $state('');
+	let upscaledImageData = $state(''); // 保持兼容性，用于预览
+	let upscaledImageBlob = $state<Blob | null>(null); // 新增：存储二进制数据
 
 	// 超分参数
 	let upscaleModel = $state('general'); // general | digital
@@ -107,7 +108,7 @@
 
 			// 开始超分
 			upscaleStatus = '执行超分处理...';
-			const result = await invoke<string>('upscale_image', {
+			const result = await invoke<number[]>('upscale_image', {
 				imagePath: actualImagePath,
 				savePath,
 				model: upscaleModel,
@@ -117,15 +118,18 @@
 				tta
 			});
 
-			console.log('超分完成:', result);
+			console.log('超分完成，数据长度:', result.length);
 			
-			// 保存超分后的 base64 数据
-			upscaledImageData = result;
+			// 将二进制数据转换为 Blob
+			upscaledImageBlob = new Blob([new Uint8Array(result)], { type: 'image/webp' });
+			
+			// 为预览生成 data URL
+			upscaledImageData = URL.createObjectURL(upscaledImageBlob);
 			upscaleStatus = '超分完成';
 			
 			// 通知主查看器替换图片
 			window.dispatchEvent(new CustomEvent('upscale-complete', {
-				detail: { imageData: upscaledImageData }
+				detail: { imageData: upscaledImageData, imageBlob: upscaledImageBlob }
 			}));
 
 		} catch (error) {
@@ -165,7 +169,7 @@
 	}
 
 	async function saveUpscaledImage() {
-		if (!upscaledImageData || !bookStore.currentImage) {
+		if (!upscaledImageBlob && !bookStore.currentImage) {
 			return;
 		}
 
@@ -185,10 +189,17 @@
 			});
 
 			if (filePath) {
-				// 将 base64 数据转换为 blob 并保存
-				const response = await fetch(upscaledImageData);
-				const blob = await response.blob();
-				const arrayBuffer = await blob.arrayBuffer();
+				let arrayBuffer: ArrayBuffer;
+				
+				if (upscaledImageBlob) {
+					// 直接使用二进制数据
+					arrayBuffer = await upscaledImageBlob.arrayBuffer();
+				} else {
+					// 兼容旧方式：从 data URL 获取数据
+					const response = await fetch(upscaledImageData);
+					const blob = await response.blob();
+					arrayBuffer = await blob.arrayBuffer();
+				}
 				
 				// 使用 Tauri 的文件系统 API 保存文件
 				await invoke('save_upscaled_image', {

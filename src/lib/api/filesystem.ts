@@ -189,7 +189,9 @@ export async function loadImageFromArchive(
   archivePath: string,
   filePath: string
 ): Promise<string> {
-  return await invoke<string>('load_image_from_archive', { archivePath, filePath });
+  const binaryData = await invoke<number[]>('load_image', { path: filePath });
+  const blob = new Blob([new Uint8Array(binaryData)]);
+  return URL.createObjectURL(blob);
 }
 
 /**

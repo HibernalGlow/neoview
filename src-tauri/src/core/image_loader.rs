@@ -36,13 +36,8 @@ impl ImageLoader {
         self.thread_pool = Arc::new(ThreadPool::new(num_threads));
     }
 
-    /// 加载图像文件为 base64 (带缓存)
-    pub fn load_image_as_base64(&self, path: &str) -> Result<String, String> {
-        // 检查缓存
-        if let Some(cached_data) = self.cache.get(path) {
-            return Ok(cached_data);
-        }
-
+    /// 加载图像文件为二进制数据 (带缓存)
+    pub fn load_image_as_binary(&self, path: &str) -> Result<Vec<u8>, String> {
         let path_obj = Path::new(path);
         
         if !path_obj.exists() {
@@ -65,18 +60,26 @@ impl ImageLoader {
                 img.write_to(&mut Cursor::new(&mut png_data), ImageFormat::Png)
                     .map_err(|e| format!("Failed to encode PNG: {}", e))?;
                 
-                // 转换为 base64
-                let base64_data = general_purpose::STANDARD.encode(&png_data);
-                let result = format!("data:image/png;base64,{}", base64_data);
-                
-                // 添加到缓存
-                self.cache.set(path.to_string(), result.clone());
-                
-                return Ok(result);
+                return Ok(png_data);
             }
         }
 
+        // 直接返回原始二进制数据
+        Ok(image_data)
+    }
+
+    /// 加载图像文件为 base64 (带缓存) - 保持向后兼容
+    pub fn load_image_as_base64(&self, path: &str) -> Result<String, String> {
+        // 检查缓存
+        if let Some(cached_data) = self.cache.get(path) {
+            return Ok(cached_data);
+        }
+
+        // 先获取二进制数据
+        let image_data = self.load_image_as_binary(path)?;
+
         // 获取 MIME 类型
+        let path_obj = Path::new(path);
         let mime_type = self.detect_mime_type(path_obj)?;
 
         // 转换为 base64

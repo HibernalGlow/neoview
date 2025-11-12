@@ -85,8 +85,11 @@
 	// 监听超分完成事件
 	$effect(() => {
 		const handleUpscaleComplete = (e: CustomEvent) => {
-			const { imageData } = e.detail;
+			const { imageData, imageBlob } = e.detail;
 			bookStore.setUpscaledImage(imageData);
+			if (imageBlob) {
+				bookStore.setUpscaledImageBlob(imageBlob);
+			}
 		};
 
 		window.addEventListener('upscale-complete', handleUpscaleComplete as EventListener);

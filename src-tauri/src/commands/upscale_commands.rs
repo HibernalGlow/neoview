@@ -4,7 +4,6 @@
 use std::sync::{Arc, Mutex};
 use tauri::{command, Window};
 use crate::core::upscale::{UpscaleManager, UpscaleOptions};
-use base64::Engine;
 
 /// 全局超分管理器状态
 pub struct UpscaleManagerState {
@@ -277,7 +276,7 @@ pub async fn get_upscale_save_path_with_info(
 
     if let Some(manager) = manager_result {
         use std::path::PathBuf;
-        let original_path = PathBuf::from(original_path);
+        let _original_path = PathBuf::from(original_path);
         let actual_path = PathBuf::from(actual_path);
         
         // 使用实际路径计算MD5，但使用原始路径生成文件名

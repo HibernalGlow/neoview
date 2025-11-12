@@ -12,7 +12,7 @@ pub async fn load_image(
     path: String,
     image_loader: State<'_, Mutex<ImageLoader>>,
     book_manager: State<'_, Mutex<BookManager>>,
-) -> Result<String, String> {
+) -> Result<Vec<u8>, String> {
     // 检查当前书籍类型
     let book_manager_lock = book_manager.lock().map_err(|e| e.to_string())?;
     
@@ -23,7 +23,7 @@ pub async fn load_image(
                 let book_path = book.path.clone(); // 克隆路径
                 drop(book_manager_lock); // 释放锁
                 let archive_manager = ArchiveManager::new();
-                return archive_manager.load_image_from_zip(
+                return archive_manager.load_image_from_zip_binary(
                     Path::new(&book_path),
                     &path
                 );
@@ -32,14 +32,14 @@ pub async fn load_image(
                 // 其他类型使用常规加载
                 drop(book_manager_lock); // 释放锁
                 let loader = image_loader.lock().map_err(|e| e.to_string())?;
-                return loader.load_image_as_base64(&path);
+                return loader.load_image_as_binary(&path);
             }
         }
     }
     
     // 如果没有打开的书籍,尝试常规加载
     let loader = image_loader.lock().map_err(|e| e.to_string())?;
-    loader.load_image_as_base64(&path)
+    loader.load_image_as_binary(&path)
 }
 
 #[tauri::command]

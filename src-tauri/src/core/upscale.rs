@@ -72,16 +72,24 @@ impl UpscaleManager {
 
     /// 获取模型路径
     fn get_models_path(&self) -> String {
+        // 优先使用项目内的模型目录
+        let project_models_dir = self.thumbnail_root.join("models");
+        if project_models_dir.exists() {
+            return project_models_dir.to_string_lossy().to_string();
+        }
+        
         // 使用realesrgan-ncnn-vulkan默认的模型路径
         // 通常程序会自动在安装目录下查找models文件夹
         "".to_string() // 空字符串让程序使用默认路径
     }
 
     /// 获取模型名称
-    fn get_model_name(&self, model: &str) -> &str {
+    fn get_model_name<'a>(&self, model: &'a str) -> &'a str {
         match model {
             "digital" => "realesrgan-x4plus-anime",
-            _ => "realesrgan-x4plus",
+            "general" => "realesrgan-x4plus",
+            // 支持自定义模型，直接返回模型名称
+            _ => model,
         }
     }
 

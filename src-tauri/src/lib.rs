@@ -16,6 +16,8 @@ use core::{BookManager, ImageLoader, FsManager, ThumbnailManager, ArchiveManager
 use commands::fs_commands::FsState;
 use commands::thumbnail_commands::ThumbnailManagerState;
 use commands::upscale_commands::UpscaleManagerState;
+use commands::generic_upscale_commands::GenericUpscalerState;
+use commands::upscale_settings_commands::UpscaleSettingsState;
 use std::sync::Arc;
 
 #[allow(clippy::missing_panics_doc)]
@@ -66,6 +68,12 @@ pub fn run() {
             app.manage(UpscaleManagerState {
                 manager: Arc::new(Mutex::new(Some(upscale_manager))),
             });
+            
+            // 初始化通用超分管理器
+            app.manage(GenericUpscalerState::default());
+            
+            // 初始化设置管理器
+            app.manage(UpscaleSettingsState::default());
             
             Ok(())
         })
@@ -143,6 +151,25 @@ pub fn run() {
             commands::upscale_image,
             commands::get_upscale_cache_stats,
             commands::cleanup_upscale_cache,
+            // Generic Upscale commands
+            commands::init_generic_upscale_manager,
+            commands::check_generic_upscale_availability,
+            commands::get_available_algorithms,
+            commands::get_algorithm_default_models,
+            commands::scan_models_directory,
+            commands::generic_upscale_image,
+            commands::get_generic_upscale_save_path,
+            commands::get_generic_upscale_cache_stats,
+            commands::cleanup_generic_upscale_cache,
+            commands::test_all_algorithms,
+            commands::test_algorithm_models,
+            commands::debug_models_info,
+            // Upscale Settings commands
+            commands::init_upscale_settings_manager,
+            commands::get_upscale_settings,
+            commands::save_upscale_settings,
+            commands::reset_upscale_settings,
+            commands::get_upscale_settings_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -37,6 +37,10 @@
 	let progressColor = $state('#FDFBF7'); // 默认奶白色
 	let progressBlinking = $state(false);
 
+	// 预加载队列管理
+	let preloadQueue = $state<string[]>([]);
+	let isPreloading = $state(false);
+
 	// 订阅设置变化
 	settingsManager.addListener((s) => {
 		settings = s;
@@ -257,6 +261,12 @@
 				await triggerAutoUpscale(data);
 			}
 
+			// 触发预加载后续页面
+			// 使用 setTimeout 避免阻塞当前页面加载
+			setTimeout(() => {
+				preloadNextPages();
+			}, 1000);
+
 			// 双页模式：加载下一页
 			if ($viewMode === 'double' && bookStore.canNextPage) {
 				const nextPage = bookStore.currentPageIndex + 1;
@@ -289,13 +299,28 @@
 	// 检查超分缓存
 	async function checkUpscaleCache(imageData: string): Promise<boolean> {
 		try {
+			// 先清除当前的超分结果，避免显示错误的图片
+			bookStore.setUpscaledImage(null);
+			bookStore.setUpscaledImageBlob(null);
+			
 			// 计算图片数据的hash
 			const imageHash = await invoke<string>('calculate_data_hash', {
 				dataUrl: imageData
 			});
 			
-			// 检查所有算法的缓存
-			const algorithms = ['realcugan', 'realesrgan', 'waifu2x'];
+			// 获取当前活动的算法设置
+			let currentAlgorithm = 'realcugan'; // 默认值
+			try {
+				// 从本地设置获取当前算法
+				let settings;
+				upscaleSettings.subscribe(s => settings = s)();
+				currentAlgorithm = settings?.active_algorithm || 'realcugan';
+			} catch (e) {
+				console.warn('获取当前算法失败，使用默认值:', e);
+			}
+			
+			// 优先检查当前算法的缓存
+			const algorithms = [currentAlgorithm, 'realcugan', 'realesrgan', 'waifu2x'];
 			
 			for (const algorithm of algorithms) {
 				try {
@@ -322,18 +347,19 @@
 				}
 			}
 			
-			// 没有找到缓存，清除超分结果
-			bookStore.setUpscaledImage(null);
-			bookStore.setUpscaledImageBlob(null);
+			// 没有找到缓存
+			console.log('未找到任何超分缓存');
 			return false;
 		} catch (error) {
 			console.error('检查超分缓存失败:', error);
+			bookStore.setUpscaledImage(null);
+			bookStore.setUpscaledImageBlob(null);
 			return false;
 		}
 	}
 
 	// 触发自动超分 - 复用 UpscalePanel 的 startUpscale 逻辑
-	async function triggerAutoUpscale(imageData: string) {
+	async function triggerAutoUpscale(imageData: string, isPreload = false) {
 		try {
 			// 检查全局开关
 			const globalEnabled = await getGlobalUpscaleEnabled();
@@ -342,14 +368,32 @@
 				return;
 			}
 
-			// 检查是否正在超分
-			const currentState = upscaleState;
-			if (currentState.isUpscaling) {
-				console.log('超分正在进行中，跳过自动超分');
-				return;
+			// 如果是预加载且有其他任务在进行，加入队列
+			if (isPreload) {
+				const currentState = upscaleState;
+				if (currentState.isUpscaling || isPreloading) {
+					// 计算图片hash作为唯一标识
+					const imageHash = await invoke<string>('calculate_data_hash', {
+						dataUrl: imageData
+					});
+					
+					// 检查是否已在队列中
+					if (!preloadQueue.includes(imageHash)) {
+						preloadQueue = [...preloadQueue, imageHash];
+						console.log(`加入预加载队列，队列长度: ${preloadQueue.length}`);
+					}
+					return;
+				}
+			} else {
+				// 当前页面的超分，检查是否正在超分
+				const currentState = upscaleState;
+				if (currentState.isUpscaling) {
+					console.log('超分正在进行中，跳过自动超分');
+					return;
+				}
 			}
 
-			console.log('触发自动超分，图片数据长度:', imageData.length);
+			console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', '图片数据长度:', imageData.length);
 			
 			// 检查是否是blob URL，如果是则转换为data URL
 			if (imageData.startsWith('blob:')) {
@@ -383,10 +427,98 @@
 				console.log('转换后的WebP数据长度:', imageData.length);
 			}
 			
+			// 标记预加载状态
+			if (isPreload) {
+				isPreloading = true;
+			}
+			
 			// 使用新的超分管理器执行超分
 			await performUpscale(imageData);
 		} catch (error) {
 			console.error('自动超分失败:', error);
+		} finally {
+			// 清理预加载状态
+			if (isPreload) {
+				isPreloading = false;
+				// 处理队列中的下一个任务
+				processNextInQueue();
+			}
+		}
+	}
+
+	// 处理预加载队列
+	async function processNextInQueue() {
+		if (preloadQueue.length === 0) {
+			return;
+		}
+
+		// 取出队列第一个任务
+		const nextHash = preloadQueue[0];
+		preloadQueue = preloadQueue.slice(1);
+
+		// 这里需要重新加载图片数据，因为只有hash
+		// 暂时跳过，因为需要从页面信息重新加载
+		console.log(`处理队列中的下一个任务: ${nextHash}`);
+	}
+
+	// 预加载后续页面的超分
+	async function preloadNextPages() {
+		try {
+			// 获取预加载页数设置
+			let preloadPages = 3; // 默认值
+			try {
+				let settings;
+				upscaleSettings.subscribe(s => settings = s)();
+				preloadPages = settings?.preload_pages || 3;
+			} catch (e) {
+				console.warn('获取预加载设置失败，使用默认值:', e);
+			}
+
+			if (preloadPages <= 0) {
+				console.log('预加载页数为0，跳过预加载');
+				return;
+			}
+
+			const currentBook = bookStore.currentBook;
+			if (!currentBook) return;
+
+			const currentIndex = bookStore.currentPageIndex;
+			const totalPages = bookStore.totalPages;
+
+			// 预加载后续页面
+			for (let i = 1; i <= preloadPages; i++) {
+				const targetIndex = currentIndex + i;
+				if (targetIndex >= totalPages) break;
+
+				const pageInfo = currentBook.pages[targetIndex];
+				if (!pageInfo) continue;
+
+				console.log(`预加载第 ${targetIndex + 1} 页的超分...`);
+
+				// 加载页面图片
+				let pageImageData: string;
+				try {
+					if (currentBook.type === 'archive') {
+						pageImageData = await loadImageFromArchive(currentBook.path, pageInfo.path);
+					} else {
+						pageImageData = await loadImage(pageInfo.path);
+					}
+
+					// 检查是否已有缓存
+					const hasCache = await checkUpscaleCache(pageImageData);
+					if (hasCache) {
+						console.log(`第 ${targetIndex + 1} 页已有超分缓存`);
+						continue;
+					}
+
+					// 没有缓存，触发预加载超分
+					await triggerAutoUpscale(pageImageData, true);
+				} catch (error) {
+					console.error(`预加载第 ${targetIndex + 1} 页失败:`, error);
+				}
+			}
+		} catch (error) {
+			console.error('预加载失败:', error);
 		}
 	}
 

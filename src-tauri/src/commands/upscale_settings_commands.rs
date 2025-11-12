@@ -168,6 +168,40 @@ pub async fn update_conditional_upscale_settings(
     }
 }
 
+/// 获取全局超分开关状态
+#[command]
+pub async fn get_global_upscale_enabled(
+    state: State<'_, UpscaleSettingsState>,
+) -> Result<bool, String> {
+    let manager_guard = state.manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+    
+    if let Some(manager) = manager_guard.as_ref() {
+        let settings = manager.load_settings();
+        Ok(settings.global_upscale_enabled)
+    } else {
+        Err("设置管理器未初始化".to_string())
+    }
+}
+
+/// 设置全局超分开关
+#[command]
+pub async fn set_global_upscale_enabled(
+    enabled: bool,
+    state: State<'_, UpscaleSettingsState>,
+) -> Result<(), String> {
+    let manager_guard = state.manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+    
+    if let Some(manager) = manager_guard.as_ref() {
+        let mut settings = manager.load_settings();
+        settings.global_upscale_enabled = enabled;
+        manager.save_settings(&settings)
+    } else {
+        Err("设置管理器未初始化".to_string())
+    }
+}
+
 /// 获取设置文件路径
 #[command]
 pub async fn get_upscale_settings_path(

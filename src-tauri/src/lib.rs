@@ -175,6 +175,8 @@ pub fn run() {
             commands::set_preload_pages,
             commands::get_conditional_upscale_settings,
             commands::update_conditional_upscale_settings,
+            commands::get_global_upscale_enabled,
+            commands::set_global_upscale_enabled,
             // Image Data commands
             commands::calculate_data_hash,
             commands::convert_data_url_to_webp,

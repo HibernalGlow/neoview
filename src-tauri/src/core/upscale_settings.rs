@@ -80,6 +80,8 @@ pub struct UpscaleSettings {
     pub preload_pages: u32,
     /// 条件超分设置
     pub conditional_upscale: ConditionalUpscaleSettings,
+    /// 全局超分开关
+    pub global_upscale_enabled: bool,
 }
 
 /// 条件超分设置
@@ -117,6 +119,7 @@ impl Default for UpscaleSettings {
             waifu2x: Waifu2xSettings::default(),
             preload_pages: 3,
             conditional_upscale: ConditionalUpscaleSettings::default(),
+            global_upscale_enabled: true,
         }
     }
 }
@@ -248,9 +251,15 @@ impl UpscaleSettingsManager {
         &self.settings_file
     }
     
-    /// 检查图片是否满足条件超分要求
+    /// 检查图片是否满足超分要求
     pub fn should_upscale_image(&self, width: u32, height: u32) -> bool {
         let settings = self.load_settings();
+        
+        // 首先检查全局开关
+        if !settings.global_upscale_enabled {
+            return false;
+        }
+        
         let condition = &settings.conditional_upscale;
         
         // 如果未启用条件超分，直接返回 true

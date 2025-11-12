@@ -46,7 +46,8 @@ export const upscaleSettings = writable({
         max_width: 0,
         max_height: 0,
         aspect_ratio_condition: null
-    }
+    },
+    global_upscale_enabled: true
 });
 
 // 超分状态
@@ -204,6 +205,34 @@ export async function updateConditionalUpscaleSettings(conditionalSettings) {
 }
 
 /**
+ * 获取全局超分开关状态
+ */
+export async function getGlobalUpscaleEnabled() {
+    try {
+        return await invoke('get_global_upscale_enabled');
+    } catch (error) {
+        console.error('获取全局超分开关失败:', error);
+        return true; // 默认开启
+    }
+}
+
+/**
+ * 设置全局超分开关
+ */
+export async function setGlobalUpscaleEnabled(enabled) {
+    try {
+        await invoke('set_global_upscale_enabled', { enabled });
+        // 更新本地状态
+        upscaleSettings.update(settings => ({
+            ...settings,
+            global_upscale_enabled: enabled
+        }));
+    } catch (error) {
+        console.error('设置全局超分开关失败:', error);
+    }
+}
+
+/**
  * 更新当前算法设置
  */
 export function updateCurrentAlgorithmSettings(updates) {
@@ -234,10 +263,25 @@ export function switchAlgorithm(algorithm) {
  */
 export async function performUpscale(imageData) {
     let currentState;
-    const unsubscribe = upscaleState.subscribe(state => {
+    let currentSettings;
+    
+    // 获取超分状态
+    const unsubscribeState = upscaleState.subscribe(state => {
         currentState = state;
     });
-    unsubscribe();
+    unsubscribeState();
+    
+    // 获取设置
+    const unsubscribeSettings = upscaleSettings.subscribe(settings => {
+        currentSettings = settings;
+    });
+    unsubscribeSettings();
+    
+    // 检查全局开关
+    if (!currentSettings.global_upscale_enabled) {
+        console.log('全局超分开关已关闭，跳过超分处理');
+        return;
+    }
     
     if (currentState.isUpscaling) {
         console.log('超分正在进行中，忽略重复请求');

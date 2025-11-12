@@ -15,7 +15,7 @@
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
-	import { upscaleSettings, upscaleState, currentAlgorithmSettings, preloadPages, conditionalUpscaleSettings, initUpscaleSettingsManager, loadUpscaleSettings, saveUpscaleSettings, resetUpscaleSettings, switchAlgorithm, updateCurrentAlgorithmSettings, performUpscale, setPreloadPages, updateConditionalUpscaleSettings } from '$lib/stores/upscale/UpscaleManager.svelte';
+	import { upscaleSettings, upscaleState, currentAlgorithmSettings, preloadPages, conditionalUpscaleSettings, initUpscaleSettingsManager, loadUpscaleSettings, saveUpscaleSettings, resetUpscaleSettings, switchAlgorithm, updateCurrentAlgorithmSettings, performUpscale, setPreloadPages, updateConditionalUpscaleSettings, getGlobalUpscaleEnabled, setGlobalUpscaleEnabled } from '$lib/stores/upscale/UpscaleManager.svelte';
 
 	// 使用store订阅
 	let isUpscaling = $state(false);
@@ -107,6 +107,9 @@
 			
 			// 同步预加载页数
 			currentPreloadPages = settings.preload_pages;
+			
+			// 同步全局超分开关
+			globalUpscaleEnabled = settings.global_upscale_enabled;
 		});
 	});
 	
@@ -185,12 +188,20 @@
 	let currentPreloadPages = $state(3);
 	let tempPreloadPages = $state(0);
 	
+	// 全局超分开关
+	let globalUpscaleEnabled = $state(true);
+	
 	// 条件超分临时变量
 	let tempConditionalEnabled = $state(false);
 	let tempMinWidth = $state(0);
 	let tempMinHeight = $state(0);
 	let tempMaxWidth = $state(0);
 	let tempMaxHeight = $state(0);
+	
+	// 计算全局样式
+	const globalStyle = $derived(() => ({
+		opacity: globalUpscaleEnabled ? 1 : 0.5
+	}));
 
 	
 
@@ -395,6 +406,13 @@
 			upscaleStatus = '没有当前图片';
 			return;
 		}
+		
+		// 检查全局开关
+		if (!globalUpscaleEnabled) {
+			upscaleStatus = '全局超分开关已关闭';
+			showErrorToast('超分已禁用', '请先开启全局超分开关');
+			return;
+		}
 
 		try {
 			// 从全局事件获取当前图片数据
@@ -528,6 +546,26 @@
 		<Sparkles class="h-5 w-5 text-primary" />
 		<h3 class="text-lg font-semibold">图片超分</h3>
 	</div>
+	
+	<!-- 全局超分开关 -->
+	<div class="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+		<div class="flex items-center gap-2">
+			<Switch 
+				bind:checked={globalUpscaleEnabled}
+				onchange={async () => {
+					await setGlobalUpscaleEnabled(globalUpscaleEnabled);
+					showSuccessToast(
+						globalUpscaleEnabled ? '超分已启用' : '超分已禁用',
+						globalUpscaleEnabled ? '自动超分功能已开启' : '自动超分功能已关闭'
+					);
+				}}
+			/>
+			<Label class="text-sm font-medium">全局超分开关</Label>
+		</div>
+		<span class="text-xs text-muted-foreground">
+			{globalUpscaleEnabled ? '已启用自动超分' : '已禁用自动超分'}
+		</span>
+	</div>
 
 	<!-- Tab 切换 -->
 	<div class="flex gap-1 p-1 bg-muted rounded-lg">
@@ -552,7 +590,7 @@
 	</div>
 	
 	<!-- 全局设置 -->
-	<div class="space-y-3">
+	<div class="space-y-3" style={globalStyle}>
 		<div class="flex items-center justify-between">
 			<Label class="text-sm font-medium">预加载页数</Label>
 			<input
@@ -561,12 +599,14 @@
 				class="w-16 h-8 px-2 text-sm border rounded-md text-center"
 				min="0"
 				max="10"
+				disabled={!globalUpscaleEnabled}
 			/>
 		</div>
 		<Button
 			variant="outline"
 			size="sm"
 			class="w-full"
+			disabled={!globalUpscaleEnabled}
 			onclick={async () => {
 				await setPreloadPages(tempPreloadPages);
 				showSuccessToast('设置已保存', `预加载页数已更新为 ${tempPreloadPages}`);
@@ -575,14 +615,14 @@
 			保存预加载设置
 		</Button>
 		
-		<div class="border-t pt-3">
+		<div class="border-t pt-3" style={globalStyle}>
 			<div class="flex items-center justify-between mb-2">
 				<Label class="text-sm font-medium">条件超分</Label>
-				<Switch bind:checked={tempConditionalEnabled} />
+				<Switch bind:checked={tempConditionalEnabled} disabled={!globalUpscaleEnabled} />
 			</div>
 			
 			{#if tempConditionalEnabled}
-				<div class="space-y-2 p-2 bg-muted rounded-md">
+				<div class="space-y-2 p-2 bg-muted rounded-md" style={globalStyle}>
 					<!-- 最小尺寸 -->
 					<div class="grid grid-cols-2 gap-2">
 						<div>
@@ -593,6 +633,7 @@
 								class="w-full h-8 px-2 text-sm border rounded-md"
 								placeholder="0"
 								min="0"
+								disabled={!globalUpscaleEnabled}
 							/>
 						</div>
 						<div>
@@ -603,6 +644,7 @@
 								class="w-full h-8 px-2 text-sm border rounded-md"
 								placeholder="0"
 								min="0"
+								disabled={!globalUpscaleEnabled}
 							/>
 						</div>
 					</div>
@@ -617,6 +659,7 @@
 								class="w-full h-8 px-2 text-sm border rounded-md"
 								placeholder="0"
 								min="0"
+								disabled={!globalUpscaleEnabled}
 							/>
 						</div>
 						<div>
@@ -627,6 +670,7 @@
 								class="w-full h-8 px-2 text-sm border rounded-md"
 								placeholder="0"
 								min="0"
+								disabled={!globalUpscaleEnabled}
 							/>
 						</div>
 					</div>
@@ -635,6 +679,7 @@
 						variant="outline"
 						size="sm"
 						class="w-full"
+						disabled={!globalUpscaleEnabled}
 						onclick={async () => {
 							const conditionalSettings = {
 								enabled: tempConditionalEnabled,
@@ -670,7 +715,7 @@
 	<!-- Tab 内容 -->
 	{#if activeTab === 'realcugan'}
 		<!-- Real-CUGAN Tab 内容 -->
-		<div class="space-y-3">
+		<div class="space-y-3" style={globalStyle}>
 			<!-- 模型选择 -->
 			<div class="space-y-2">
 				<Label class="text-sm font-medium">模型路径</Label>
@@ -842,7 +887,7 @@
 		</div>
 	{:else if activeTab === 'realesrgan'}
 		<!-- Real-ESRGAN Tab 内容 -->
-		<div class="space-y-3">
+		<div class="space-y-3" style={globalStyle}>
 			<!-- 模型选择 -->
 			<div class="space-y-2">
 				<Label class="text-sm font-medium">模型名称</Label>
@@ -976,7 +1021,7 @@
 		</div>
 	{:else if activeTab === 'waifu2x'}
 		<!-- Waifu2x Tab 内容 -->
-		<div class="space-y-3">
+		<div class="space-y-3" style={globalStyle}>
 			<!-- 模型选择 -->
 			<div class="space-y-2">
 				<Label class="text-sm font-medium">模型路径</Label>
@@ -1107,7 +1152,7 @@
 			size="sm"
 			class="flex-1"
 			onclick={resetSettings}
-			disabled={isUpscaling}
+			disabled={isUpscaling || !globalUpscaleEnabled}
 		>
 			重置设置
 		</Button>
@@ -1116,7 +1161,7 @@
 			size="sm"
 			class="flex-1"
 			onclick={startUpscale}
-			disabled={isUpscaling || !bookStore.currentImage}
+			disabled={isUpscaling || !bookStore.currentImage || !globalUpscaleEnabled}
 		>
 			{#if isUpscaling}
 				<Loader2 class="h-4 w-4 mr-1 animate-spin" />

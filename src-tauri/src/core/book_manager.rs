@@ -6,13 +6,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use base64::engine::general_purpose;
-use base64::Engine;
 
 pub struct BookManager {
     current_book: Option<BookInfo>,
     /// 预加载的页面缓存
-    preload_cache: Arc<Mutex<HashMap<usize, String>>>,
+    preload_cache: Arc<Mutex<HashMap<usize, Vec<u8>>>>,
     /// 预加载数量
     preload_size: usize,
 }
@@ -81,8 +79,7 @@ impl BookManager {
                     thread_pool.execute(move || {
                         if let Ok(image_data) = image_loader_ref.load_image_as_binary(&path) {
                             if let Ok(mut cache) = cache_clone.lock() {
-                                let base64_data = format!("data:image/jpeg;base64,{}", general_purpose::STANDARD.encode(&image_data));
-                                cache.insert(page_idx, base64_data);
+                                cache.insert(page_idx, image_data);
                             }
                         }
                     });
@@ -92,7 +89,7 @@ impl BookManager {
     }
 
     /// 获取预加载的页面
-    pub fn get_preloaded_page(&self, page_index: usize) -> Option<String> {
+    pub fn get_preloaded_page(&self, page_index: usize) -> Option<Vec<u8>> {
         if let Ok(cache) = self.preload_cache.lock() {
             cache.get(&page_index).cloned()
         } else {

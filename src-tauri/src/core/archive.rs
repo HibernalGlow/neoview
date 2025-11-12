@@ -6,8 +6,6 @@ use std::time::Instant;
 use zip::ZipArchive;
 use serde::{Deserialize, Serialize};
 use image::GenericImageView;
-use base64::engine::general_purpose;
-use base64::Engine;
 
 /// 压缩包内的文件项
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,7 +22,7 @@ pub struct ArchiveManager {
     /// 支持的图片格式
     image_extensions: Vec<String>,
     /// 图片缓存
-    cache: Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
+    cache: Arc<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>>,
     /// 压缩包文件缓存（避免重复打开）
     archive_cache: Arc<std::sync::Mutex<std::collections::HashMap<String, Arc<std::sync::Mutex<ZipArchive<std::fs::File>>>>>>,
 }
@@ -258,7 +256,7 @@ impl ArchiveManager {
     }
 
     /// 从压缩包中加载 JXL 图片并转换为 PNG
-    fn load_jxl_from_zip(&self, image_data: &[u8]) -> Result<String, String> {
+    fn load_jxl_from_zip(&self, image_data: &[u8]) -> Result<Vec<u8>, String> {
         use jxl_oxide::JxlImage;
         use std::io::Cursor;
         
@@ -320,8 +318,8 @@ impl ArchiveManager {
         img.write_to(&mut cursor, image::ImageFormat::Png)
             .map_err(|e| format!("编码 JXL 为 PNG 失败: {}", e))?;
 
-        // 返回 PNG 格式的 base64
-        Ok(format!("data:image/png;base64,{}", general_purpose::STANDARD.encode(&buffer)))
+        // 返回 PNG 格式的二进制数据
+        Ok(buffer)
     }
 
     /// 检测图片 MIME 类型
@@ -372,7 +370,7 @@ impl ArchiveManager {
         archive_path: &Path,
         file_path: &str,
         max_size: u32,
-    ) -> Result<String, String> {
+    ) -> Result<Vec<u8>, String> {
         // 创建缓存键：压缩包路径 + 文件路径 + 缩略图大小
         // 规范化路径部分以保证一致性
         let archive_key = archive_path.to_string_lossy().replace('\\', "/");
@@ -423,15 +421,12 @@ impl ArchiveManager {
         // 编码为 WebP（比JPEG更高效）
         let webp_data = self.encode_webp(&thumbnail)?;
 
-        // 返回 base64
-        let result = format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&webp_data));
-
         // 添加到缓存
         if let Ok(mut cache) = self.cache.lock() {
-            cache.insert(cache_key, result.clone());
+            cache.insert(cache_key, webp_data.clone());
         }
 
-        Ok(result)
+        Ok(webp_data)
     }
 
     /// 等比例缩放图片

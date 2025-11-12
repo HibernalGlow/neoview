@@ -8,8 +8,6 @@ use std::sync::Arc;
 use image::{GenericImageView, ImageFormat};
 use super::image_cache::ImageCache;
 use threadpool::ThreadPool;
-use base64::engine::general_purpose;
-use base64::Engine;
 
 #[derive(Clone)]
 pub struct ImageLoader {
@@ -138,7 +136,7 @@ impl ImageLoader {
         path: &str,
         max_width: u32,
         max_height: u32,
-    ) -> Result<String, String> {
+    ) -> Result<Vec<u8>, String> {
         let path = Path::new(path);
         
         if !path.exists() {
@@ -153,8 +151,7 @@ impl ImageLoader {
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
             if ext.to_lowercase() == "jxl" {
                 let img = self.decode_jxl_image(&image_data)?;
-                let thumbnail_data = self.create_thumbnail_from_image(img, max_width, max_height)?;
-                return Ok(format!("data:image/jpeg;base64,{}", base64::engine::general_purpose::STANDARD.encode(&thumbnail_data)));
+                return self.create_thumbnail_from_image(img, max_width, max_height);
             }
         }
 
@@ -189,8 +186,7 @@ impl ImageLoader {
             }
         };
 
-        let thumbnail_data = self.create_thumbnail_from_image(img, max_width, max_height)?;
-        Ok(format!("data:image/jpeg;base64,{}", base64::engine::general_purpose::STANDARD.encode(&thumbnail_data)))
+        self.create_thumbnail_from_image(img, max_width, max_height)
     }
 
     /// 解码 JXL 图像

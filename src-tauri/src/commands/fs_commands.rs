@@ -287,13 +287,12 @@ pub async fn load_image_from_archive(
     archive_path: String,
     file_path: String,
     state: State<'_, FsState>,
-) -> Result<String, String> {
+) -> Result<Vec<u8>, String> {
     let archive_manager = state.archive_manager.lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
 
     let path = PathBuf::from(archive_path);
-    let image_data = archive_manager.load_image_from_zip_binary(&path, &file_path)?;
-    Ok(format!("data:image/jpeg;base64,{}", base64::engine::general_purpose::STANDARD.encode(&image_data)))
+    archive_manager.load_image_from_zip_binary(&path, &file_path)
 }
 
 /// 获取压缩包中的所有图片
@@ -316,7 +315,7 @@ pub async fn generate_archive_thumbnail(
     file_path: String,
     max_size: u32,
     state: State<'_, FsState>,
-) -> Result<String, String> {
+) -> Result<Vec<u8>, String> {
     let archive_manager = state.archive_manager.lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
 

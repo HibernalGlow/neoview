@@ -561,7 +561,10 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 	}
 
 	// 检查超分缓存（使用传入的hash）
-	async function checkUpscaleCache(imageDataWithHash: ImageDataWithHash): Promise<boolean> {
+	// checkUpscaleCache: 检查是否存在超分缓存
+	// 参数 preview: boolean - 如果为 true（默认），在命中缓存时会把 upscaledImage 写入 bookStore 以便立即显示；
+	// 当用于预加载（preload）时应传入 preview=false，以避免替换当前查看器的显示。
+	async function checkUpscaleCache(imageDataWithHash: ImageDataWithHash, preview: boolean = true): Promise<boolean> {
 		try {
 			const { data: imageData, hash: imageHash } = imageDataWithHash;
 
@@ -621,8 +624,11 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 								const arr = new Uint8Array(bytes);
 								const blob = new Blob([arr], { type: 'image/webp' });
 								const url = URL.createObjectURL(blob);
-								bookStore.setUpscaledImage(url);
-								bookStore.setUpscaledImageBlob(blob);
+								// 仅当调用方希望预览（通常为当前页）时，才更新 bookStore 来替换显示
+								if (preview) {
+									bookStore.setUpscaledImage(url);
+									bookStore.setUpscaledImageBlob(blob);
+								}
 								// 更新内存索引，便于后续快速命中
 								hashPathIndex.set(imageHash, meta.path);
 								// 持久化索引到 IndexedDB
@@ -827,11 +833,10 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 				console.warn('获取预加载设置失败，使用默认值:', e);
 			}
 
-			// 检查全局开关
+			// 检查全局开关（如果关闭，仍执行普通的页面预加载/解码逻辑，但不触发预超分）
 			const globalEnabled = await getGlobalUpscaleEnabled();
 			if (!globalEnabled) {
-				console.log('全局超分开关已关闭，跳过预超分');
-				return;
+				console.log('全局超分开关已关闭，预超分将被跳过，但会继续执行页面预加载解码');
 			}
 
 			if (preloadPages <= 0) {
@@ -909,8 +914,22 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 
 					console.log(`第 ${targetIndex + 1} 页图片数据长度: ${imageDataWithHash.data.length}, hash: ${imageDataWithHash.hash}`);
 
-					// 检查是否已有缓存
-					const hasCache = await checkUpscaleCache(imageDataWithHash);
+					// 检查是否已有缓存（仅在开启全局超分或需要预览时进行）
+					let hasCache = false;
+					if (globalEnabled) {
+						hasCache = await checkUpscaleCache(imageDataWithHash, false);
+					} else {
+						// 当全局关闭时，只做本地索引检查（不读取磁盘或替换显示）
+						try {
+							const idxPath = hashPathIndex.get(imageDataWithHash.hash);
+							if (idxPath) {
+								console.log('本地索引命中（全局超分关闭），hash:', imageDataWithHash.hash);
+								hasCache = true;
+							}
+						} catch (e) {
+							console.warn('本地索引检查失败:', e);
+						}
+					}
 					if (hasCache) {
 						console.log(`第 ${targetIndex + 1} 页已有超分缓存`);
 						// 标记为已预超分

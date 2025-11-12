@@ -220,29 +220,19 @@
 
 	// 对比模式功能
 	let comparisonEnabled = $state(false);
-	let comparisonMode = $state<'slider' | 'split_screen'>('slider');
 
 	// 监听对比模式设置变化
 	$effect(() => {
 		// 这里可以从store获取对比模式设置
 	});
 
+	// 点击对比按钮切换对比模式
 	function toggleComparisonMode() {
 		comparisonEnabled = !comparisonEnabled;
-		// 触发全局事件通知其他组件
+		// 触发全局事件通知其他组件（始终使用滑动对比）
 		window.dispatchEvent(new CustomEvent('comparison-mode-changed', {
-			detail: { enabled: comparisonEnabled, mode: comparisonMode }
+			detail: { enabled: comparisonEnabled, mode: 'slider' }
 		}));
-	}
-
-	function setComparisonMode(mode: 'slider' | 'split_screen') {
-		comparisonMode = mode;
-		if (comparisonEnabled) {
-			// 触发全局事件通知其他组件
-			window.dispatchEvent(new CustomEvent('comparison-mode-changed', {
-				detail: { enabled: comparisonEnabled, mode: comparisonMode }
-			}));
-		}
 	}
 </script>
 
@@ -456,49 +446,22 @@
 				<Separator.Root orientation="vertical" class="h-6 mx-1" />
 
 				<!-- 对比模式按钮 -->
-				<DropdownMenu.Root>
-					<DropdownMenu.Trigger asChild>
+				<Tooltip.Root>
+					<Tooltip.Trigger asChild>
 						<Button 
 							variant={comparisonEnabled ? 'default' : 'ghost'} 
 							size="icon" 
 							class="h-8 w-8"
-							title="对比模式"
+							title={comparisonEnabled ? '关闭滑动对比' : '开启滑动对比'}
+							onclick={toggleComparisonMode}
 						>
 							<Split class="h-4 w-4" />
 						</Button>
-					</DropdownMenu.Trigger>
-					<DropdownMenu.Content class="w-48">
-						<DropdownMenu.Item 
-							onclick={toggleComparisonMode}
-							class={comparisonEnabled ? 'bg-accent' : ''}
-						>
-							<Split class="h-4 w-4 mr-2" />
-							<span>{comparisonEnabled ? '关闭对比' : '开启对比'}</span>
-						</DropdownMenu.Item>
-						<DropdownMenu.Separator />
-						<DropdownMenu.Sub>
-							<DropdownMenu.SubTrigger>
-								对比模式
-							</DropdownMenu.SubTrigger>
-							<DropdownMenu.SubContent>
-								<DropdownMenu.Item 
-									onclick={() => setComparisonMode('slider')}
-									class={comparisonMode === 'slider' ? 'bg-accent' : ''}
-									disabled={!comparisonEnabled}
-								>
-									滑动对比
-								</DropdownMenu.Item>
-								<DropdownMenu.Item 
-									onclick={() => setComparisonMode('split_screen')}
-									class={comparisonMode === 'split_screen' ? 'bg-accent' : ''}
-									disabled={!comparisonEnabled}
-								>
-									分屏对比
-								</DropdownMenu.Item>
-							</DropdownMenu.SubContent>
-						</DropdownMenu.Sub>
-					</DropdownMenu.Content>
-				</DropdownMenu.Root>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>{comparisonEnabled ? '关闭滑动对比' : '开启滑动对比'}</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
 
 				<!-- 分隔线 -->
 				<Separator.Root orientation="vertical" class="h-6 mx-1" />

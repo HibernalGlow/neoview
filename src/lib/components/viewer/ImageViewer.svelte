@@ -29,7 +29,6 @@
 	let settings = $state(settingsManager.getSettings());
 
 	// 对比模式状态
-	let comparisonMode = $state<'slider' | 'split_screen'>('slider');
 	let comparisonVisible = $state(false);
 	let originalImageDataForComparison = $state<string>('');
 	let upscaledImageDataForComparison = $state<string>('');
@@ -160,11 +159,11 @@
 
 		// 监听对比模式变化
 		const handleComparisonModeChanged = (e: CustomEvent) => {
-			const { enabled, mode } = e.detail;
-			if (enabled && imageData && upscaledImageDataForComparison) {
-				comparisonMode = mode;
+			const { enabled } = e.detail;
+			if (enabled && imageData && bookStore.upscaledImageData) {
 				comparisonVisible = true;
 				originalImageDataForComparison = imageData;
+				upscaledImageDataForComparison = bookStore.upscaledImageData;
 			} else {
 				comparisonVisible = false;
 			}
@@ -534,7 +533,6 @@
 	<ComparisonViewer
 		originalImageData={originalImageDataForComparison}
 		upscaledImageData={upscaledImageDataForComparison}
-		mode={comparisonMode}
 		isVisible={comparisonVisible}
 		onClose={closeComparison}
 	/>

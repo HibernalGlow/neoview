@@ -25,6 +25,9 @@
 	let showProgressBar = $state(true);
 
 	// 鼠标光标隐藏相关
+	// 全局超分开关（由设置驱动）
+	let globalUpscaleEnabled = $state(true);
+
 	let cursorVisible = $state(true);
 	let hideCursorTimeout: number | null = null;
 	let lastMousePosition = $state({ x: 0, y: 0 });
@@ -160,11 +163,25 @@
 
 	// 订阅超分状态变化
 	let upscaleStateUnsubscribe: () => void;
+// 订阅 bookStore（用于检测 bookStore.upscaledImageData 的变化，及时更新进度条颜色）
+let bookStoreUnsubscribeForProgress: () => void;
 	
 	$effect(() => {
+		// 订阅设置中的全局开关以驱动进度条显示
+		let settingsSub = upscaleSettings.subscribe(s => {
+			globalUpscaleEnabled = !!(s && s.global_upscale_enabled);
+		});
+
 		upscaleStateUnsubscribe = upscaleState.subscribe(state => {
+			// 如果全局开关被关闭，保证不显示进度动画并使用默认颜色
+			if (!globalUpscaleEnabled) {
+				progressBlinking = false;
+				progressColor = '#FDFBF7'; // 默认奶白
+				return;
+			}
+
 			if (state.isUpscaling) {
-				// 超分进行中，开始闪烁
+				// 超分进行中，开始闪烁（白色闪烁）
 				progressBlinking = true;
 				progressColor = '#FDFBF7'; // 奶白色
 			} else if (state.upscaledImageData && !state.isUpscaling) {
@@ -177,11 +194,24 @@
 				progressColor = '#FDFBF7'; // 奶白色
 			}
 		});
-		
-		return () => {
-			if (upscaleStateUnsubscribe) {
-				upscaleStateUnsubscribe();
+
+		// 额外订阅 bookStore.upscaledImageData，确保当 bookStore 被直接更新（例如通过事件）时也能停止闪烁并变绿
+		bookStoreUnsubscribeForProgress = bookStore.subscribe(bs => {
+			try {
+				const up = bs && (bs as any).upscaledImageData;
+				if (up) {
+					progressBlinking = false;
+					progressColor = '#22c55e';
+				}
+			} catch (e) {
+				// 忽略订阅内错误
 			}
+		});
+
+		return () => {
+			if (upscaleStateUnsubscribe) upscaleStateUnsubscribe();
+			if (settingsSub) settingsSub();
+			if (bookStoreUnsubscribeForProgress) bookStoreUnsubscribeForProgress();
 		};
 	});
 
@@ -1218,10 +1248,10 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 	/>
 	
 	<!-- Viewer底部进度条 -->
-	{#if showProgressBar && bookStore.currentBook}
+	{#if showProgressBar && bookStore.currentBook && globalUpscaleEnabled}
 		<div class="absolute bottom-0 left-0 right-0 h-1 pointer-events-none">
 			<!-- 预超分进度条（黄色，底层） -->
-			{#if preUpscaleProgress > 0}
+				{#if preUpscaleProgress > 0 && globalUpscaleEnabled}
 				<div 
 					class="absolute bottom-0 left-0 h-full transition-all duration-500" 
 					style="width: {((bookStore.currentPageIndex + 1 + preUpscaleProgress / 100 * totalPreUpscalePages) / bookStore.currentBook.pages.length) * 100}%; background-color: #FCD34D; opacity: 0.6;"

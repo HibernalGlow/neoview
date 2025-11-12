@@ -41,6 +41,11 @@
 	let preloadQueue = $state<string[]>([]);
 	let isPreloading = $state(false);
 
+	// 预加载进度管理
+	let preloadProgress = $state(0); // 预加载进度 (0-100)
+	let preloadedPages = $state(new Set<number>()); // 已预加载的页面索引
+	let totalPreloadPages = $state(0); // 总预加载页数
+
 	// 订阅设置变化
 	settingsManager.addListener((s) => {
 		settings = s;
@@ -123,6 +128,10 @@
 		const currentPage = bookStore.currentPage;
 		if (currentPage) {
 			bookStore.setCurrentImage(currentPage);
+			// 重置预加载进度
+			preloadProgress = 0;
+			preloadedPages = new Set();
+			totalPreloadPages = 0;
 			loadCurrentImage();
 		}
 	});
@@ -485,6 +494,17 @@
 			const currentIndex = bookStore.currentPageIndex;
 			const totalPages = bookStore.totalPages;
 
+			// 初始化预加载进度
+			totalPreloadPages = Math.min(preloadPages, totalPages - currentIndex - 1);
+			preloadedPages = new Set();
+			preloadProgress = 0;
+
+			if (totalPreloadPages <= 0) {
+				return;
+			}
+
+			console.log(`开始预加载，共 ${totalPreloadPages} 页`);
+
 			// 预加载后续页面
 			for (let i = 1; i <= preloadPages; i++) {
 				const targetIndex = currentIndex + i;
@@ -495,9 +515,9 @@
 
 				console.log(`预加载第 ${targetIndex + 1} 页的超分...`);
 
-				// 加载页面图片
-				let pageImageData: string;
 				try {
+					// 加载页面图片
+					let pageImageData: string;
 					if (currentBook.type === 'archive') {
 						pageImageData = await loadImageFromArchive(currentBook.path, pageInfo.path);
 					} else {
@@ -508,17 +528,30 @@
 					const hasCache = await checkUpscaleCache(pageImageData);
 					if (hasCache) {
 						console.log(`第 ${targetIndex + 1} 页已有超分缓存`);
+						// 标记为已预加载
+						preloadedPages = new Set([...preloadedPages, targetIndex]);
+						updatePreloadProgress();
 						continue;
 					}
 
 					// 没有缓存，触发预加载超分
 					await triggerAutoUpscale(pageImageData, true);
+					// 标记为已预加载
+					preloadedPages = new Set([...preloadedPages, targetIndex]);
+					updatePreloadProgress();
 				} catch (error) {
 					console.error(`预加载第 ${targetIndex + 1} 页失败:`, error);
 				}
 			}
 		} catch (error) {
 			console.error('预加载失败:', error);
+		}
+	}
+
+	// 更新预加载进度
+	function updatePreloadProgress() {
+		if (totalPreloadPages > 0) {
+			preloadProgress = (preloadedPages.size / totalPreloadPages) * 100;
 		}
 	}
 
@@ -671,12 +704,21 @@
 	
 	<!-- Viewer底部进度条 -->
 	{#if showProgressBar && bookStore.currentBook}
-		<div class="absolute bottom-0 left-0 right-0 h-1 pointer-events-none">
+		<div class="absolute bottom-0 left-0 right-0 h-2 pointer-events-none">
+			<!-- 当前页面进度条（绿色） -->
 			<div 
-				class="h-full transition-all duration-300 {progressBlinking ? 'animate-pulse' : ''}" 
+				class="absolute bottom-0 left-0 h-1 transition-all duration-300 {progressBlinking ? 'animate-pulse' : ''}" 
 				style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%; background-color: {progressColor}; opacity: 0.7;"
 			>
 			</div>
+			<!-- 预加载进度条（黄色） -->
+			{#if preloadProgress > 0}
+				<div 
+					class="absolute bottom-1 left-0 h-1 transition-all duration-500" 
+					style="width: {((bookStore.currentPageIndex + 1 + preloadProgress / 100 * totalPreloadPages) / bookStore.currentBook.pages.length) * 100}%; background-color: #FCD34D; opacity: 0.8;"
+				>
+				</div>
+			{/if}
 		</div>
 	{/if}
 </div>

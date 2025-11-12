@@ -343,23 +343,47 @@
 			// 从全局事件获取当前图片数据
 			let imageData: string | null = null;
 			
-			// 触发事件获取当前图片数据
-			window.dispatchEvent(new CustomEvent('request-current-image-data', {
-				detail: { callback: (data: string) => imageData = data }
-			}));
+			// 使用Promise包装回调
+			const imageDataPromise = new Promise<string>((resolve, reject) => {
+				const timeout = setTimeout(() => {
+					reject(new Error('获取图片数据超时'));
+				}, 2000);
+				
+				console.log('UpscalePanel: 发送图片数据请求');
+				// 触发事件获取当前图片数据
+				window.dispatchEvent(new CustomEvent('request-current-image-data', {
+					detail: { 
+						callback: (data: string) => {
+							console.log('UpscalePanel: 收到图片数据回调');
+							clearTimeout(timeout);
+							resolve(data);
+						}
+					}
+				}));
+			});
 			
-			// 等待图片数据
-			let attempts = 0;
-			while (!imageData && attempts < 10) {
-				await new Promise(resolve => setTimeout(resolve, 100));
-				attempts++;
-			}
-			
-			if (!imageData) {
-				throw new Error('无法获取当前图片数据');
-			}
+			imageData = await imageDataPromise;
 			
 			console.log('获取到图片数据，长度:', imageData.length);
+			
+			// 检查是否是blob URL，如果是则转换为data URL
+			if (imageData.startsWith('blob:')) {
+				console.log('检测到blob URL，正在转换为data URL...');
+				const response = await fetch(imageData);
+				const blob = await response.blob();
+				
+				// 转换为base64
+				const reader = new FileReader();
+				imageData = await new Promise<string>((resolve, reject) => {
+					reader.onload = () => {
+						const result = reader.result as string;
+						resolve(result);
+					};
+					reader.onerror = reject;
+					reader.readAsDataURL(blob);
+				});
+				console.log('转换后的data URL长度:', imageData.length);
+			}
 			
 			// 检查图片格式
 			const isAvif = imageData.startsWith('data:image/avif');

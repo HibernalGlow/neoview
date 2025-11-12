@@ -15,6 +15,7 @@
 	import { FileSystemAPI } from '$lib/api';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
+	import { invoke } from '@tauri-apps/api/core';
 
 	// 进度条状态
 	let showProgressBar = $state(true);
@@ -96,10 +97,21 @@
 
 		// 监听超分面板请求当前图片数据
 		const handleRequestCurrentImageData = (e: CustomEvent) => {
+			console.log('ImageViewer: 收到图片数据请求');
 			const { callback } = e.detail;
-			if (imageData && callback) {
-				callback(imageData);
-			}
+			
+			// 延迟检查，确保图片数据已加载
+			setTimeout(() => {
+				if (imageData && typeof callback === 'function') {
+					console.log('ImageViewer: 返回图片数据，长度:', imageData.length);
+					console.log('ImageViewer: 图片数据前缀:', imageData.substring(0, 50));
+					callback(imageData);
+				} else {
+					console.log('ImageViewer: 没有图片数据或回调无效');
+					console.log('ImageViewer: imageData存在:', !!imageData);
+					console.log('ImageViewer: callback是函数:', typeof callback === 'function');
+				}
+			}, 100);
 		};
 
 		window.addEventListener('upscale-complete', handleUpscaleComplete as EventListener);

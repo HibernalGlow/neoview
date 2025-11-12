@@ -94,6 +94,9 @@ export const comparisonSettings = derived(
     $settings => $settings.comparison
 );
 
+// 进行中超分任务注册表：hash -> Promise
+const ongoingUpscaleTasks: Map<string, Promise<any>> = new Map();
+
 /**
  * 初始化超分设置管理器
  */
@@ -349,35 +352,137 @@ export function switchAlgorithm(algorithm) {
  * 执行超分处理
  */
 export async function performUpscale(imageData: string, imageHash?: string) {
-    let currentState;
-    let currentSettings;
-    
-    // 获取超分状态
-    const unsubscribeState = upscaleState.subscribe(state => {
-        currentState = state;
-    });
-    unsubscribeState();
-    
-    // 获取设置
-    const unsubscribeSettings = upscaleSettings.subscribe(settings => {
-        currentSettings = settings;
-    });
-    unsubscribeSettings();
-    
-    // 检查全局开关
-    if (!currentSettings.global_upscale_enabled) {
-        console.log('全局超分开关已关闭，跳过超分处理');
-        return;
-    }
-    
-    if (currentState.isUpscaling) {
-        console.log('超分正在进行中，忽略重复请求');
-        return;
-    }
+    // 先读取当前设置快照
+    let currentSettings: any;
+    upscaleSettings.subscribe(s => currentSettings = s)();
 
-    const settings = currentSettings;
+    const settings: any = currentSettings;
     const algorithm = settings.active_algorithm;
     const algorithmSettings = settings[algorithm];
+
+    // 计算最终hash（如果未给出）以便做去重
+    const finalHash: string = (imageHash as string) || (await invoke('calculate_data_hash', { dataUrl: imageData }) as string);
+
+    // 如果已有相同 hash 的任务在进行中，复用该 Promise
+    if (ongoingUpscaleTasks.has(finalHash)) {
+        console.log('复用进行中的超分任务，hash:', finalHash);
+        return ongoingUpscaleTasks.get(finalHash) as Promise<any>;
+    }
+
+    // 如果全局开关关闭，直接返回 resolved promise
+    if (!settings.global_upscale_enabled) {
+        console.log('全局超分开关已关闭，跳过超分处理');
+        return Promise.resolve(null);
+    }
+
+    // 创建任务 Promise 并登记到注册表
+    const taskPromise = (async () => {
+        // 在任务开始前更新状态
+        upscaleState.update(state => ({
+            ...state,
+            isUpscaling: true,
+            progress: 0,
+            status: '准备超分...',
+            showProgress: true,
+            upscaledImageData: '',
+            upscaledImageBlob: null,
+            startTime: Date.now()
+        }));
+
+        try {
+            // 构建参数
+            const params: any = {
+                imageData,
+                algorithm,
+                model: algorithmSettings.model,
+                gpuId: algorithmSettings.gpu_id,
+                tileSize: algorithmSettings.tile_size,
+                tta: algorithmSettings.tta || false,
+                thumbnailPath: 'D:\\temp\\neoview_thumbnails_test'
+            };
+
+            // 添加算法特定参数
+            if (algorithm === 'realcugan') {
+                params.noiseLevel = algorithmSettings.noise_level;
+                params.numThreads = algorithmSettings.threads;
+            } else if (algorithm === 'realesrgan') {
+                params.numThreads = algorithmSettings.threads;
+            } else if (algorithm === 'waifu2x') {
+                params.noiseLevel = algorithmSettings.noise_level;
+                params.numThreads = algorithmSettings.threads;
+            }
+
+            const savePath = await invoke('get_upscale_save_path_from_data', {
+                imageHash: finalHash,
+                ...params,
+                thumbnailPath: params.thumbnailPath
+            });
+
+            // 更新状态
+            upscaleState.update(state => ({
+                ...state,
+                status: '执行超分处理...'
+            }));
+
+            // 执行超分
+            const result: any = await invoke('upscale_image_from_data', {
+                ...params,
+                savePath
+            });
+
+            // 处理结果
+            const bytes = result as number[];
+            const upscaledImageBlob = new Blob([new Uint8Array(bytes)], { type: 'image/webp' });
+            const upscaledImageData = URL.createObjectURL(upscaledImageBlob);
+
+            // 计算耗时
+            const elapsedTime = Date.now() - (upscaleState && (upscaleState as any).startTime || Date.now());
+            const elapsedSeconds = (elapsedTime / 1000).toFixed(2);
+
+            // 更新状态
+            upscaleState.update(state => ({
+                ...state,
+                status: '超分完成',
+                upscaledImageData,
+                upscaledImageBlob,
+                isUpscaling: false
+            }));
+
+            // 通知主查看器替换图片
+            window.dispatchEvent(new CustomEvent('upscale-complete', {
+                detail: {
+                    imageData: upscaledImageData,
+                    imageBlob: upscaledImageBlob,
+                    originalImageHash: finalHash
+                }
+            }));
+
+            console.log(`超分完成，hash: ${finalHash}, 耗时: ${elapsedSeconds}秒`);
+            return { upscaledImageData, upscaledImageBlob, finalHash };
+        } catch (error) {
+            console.error('超分失败:', error);
+            upscaleState.update(state => ({
+                ...state,
+                status: `超分失败: ${error}`,
+                isUpscaling: false
+            }));
+            throw error;
+        } finally {
+            // 3秒后隐藏进度条
+            setTimeout(() => {
+                upscaleState.update(state => ({
+                    ...state,
+                    showProgress: false
+                }));
+            }, 3000);
+
+            // 从注册表移除
+            ongoingUpscaleTasks.delete(finalHash);
+        }
+    })();
+
+    ongoingUpscaleTasks.set(finalHash, taskPromise);
+    return taskPromise;
 
     // 检查图片是否满足超分条件
     if (settings.conditional_upscale.enabled) {

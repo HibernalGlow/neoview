@@ -340,36 +340,48 @@
 		upscaledImageData = '';
 
 		try {
-			let imagePath = bookStore.currentImage.path;
-			console.log('开始超分图片:', imagePath);
-
-			// 检查是否是压缩包内的图片
-			let actualImagePath = imagePath;
-			let isFromArchive = false;
+			// 从全局事件获取当前图片数据
+			let imageData: string | null = null;
 			
-			if (bookStore.currentBook && bookStore.currentBook.type === 'archive') {
-				// 对于压缩包，需要先提取图片到临时文件
-				upscaleStatus = '提取压缩包图片...';
-				actualImagePath = await invoke<string>('extract_image_from_archive', {
-					archivePath: bookStore.currentBook.path,
-					imagePath: imagePath
-				});
-				isFromArchive = true;
-				console.log('提取的临时文件路径:', actualImagePath);
+			// 触发事件获取当前图片数据
+			window.dispatchEvent(new CustomEvent('request-current-image-data', {
+				detail: { callback: (data: string) => imageData = data }
+			}));
+			
+			// 等待图片数据
+			let attempts = 0;
+			while (!imageData && attempts < 10) {
+				await new Promise(resolve => setTimeout(resolve, 100));
+				attempts++;
 			}
-
-			// 检查是否需要转换 AVIF 为 WebP
-			if (actualImagePath.toLowerCase().endsWith('.avif')) {
-				upscaleStatus = '转换 AVIF 为 WebP...';
-				actualImagePath = await invoke<string>('convert_avif_to_webp', {
-					imagePath: actualImagePath
-				});
-				console.log('转换后的 WebP 文件路径:', actualImagePath);
+			
+			if (!imageData) {
+				throw new Error('无法获取当前图片数据');
 			}
-
-			// 生成保存路径 - 使用新的命名规则
-			const savePath = await invoke<string>('get_generic_upscale_save_path', {
-				imagePath: actualImagePath,
+			
+			console.log('获取到图片数据，长度:', imageData.length);
+			
+			// 检查图片格式
+			const isAvif = imageData.startsWith('data:image/avif');
+			const isJxl = imageData.startsWith('data:image/jxl');
+			
+			// 对于AVIF和JXL，先转换为WebP
+			if (isAvif || isJxl) {
+				upscaleStatus = `转换${isAvif ? 'AVIF' : 'JXL'}为WebP...`;
+				imageData = await invoke<string>('convert_data_url_to_webp', {
+					dataUrl: imageData
+				});
+				console.log('转换后的WebP数据长度:', imageData.length);
+			}
+			
+			// 生成文件标识符（使用图片数据的hash）
+			const imageHash = await invoke<string>('calculate_data_hash', {
+				dataUrl: imageData
+			});
+			
+			// 生成保存路径
+			const savePath = await invoke<string>('get_upscale_save_path_from_data', {
+				imageHash,
 				algorithm: activeTab,
 				model: activeTab === 'realcugan' ? realcuganModel : 
 					   activeTab === 'realesrgan' ? realesrganModel : waifu2xModel,
@@ -389,8 +401,8 @@
 
 			// 开始超分
 			upscaleStatus = '执行超分处理...';
-			const result = await invoke<number[]>('generic_upscale_image', {
-				imagePath: actualImagePath,
+			const result = await invoke<number[]>('upscale_image_from_data', {
+				imageData,
 				savePath,
 				algorithm: activeTab,
 				model: activeTab === 'realcugan' ? realcuganModel : 

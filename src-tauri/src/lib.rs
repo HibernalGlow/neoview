@@ -170,6 +170,12 @@ pub fn run() {
             commands::save_upscale_settings,
             commands::reset_upscale_settings,
             commands::get_upscale_settings_path,
+            // Image Data commands
+            commands::calculate_data_hash,
+            commands::convert_data_url_to_webp,
+            commands::get_upscale_save_path_from_data,
+            commands::upscale_image_from_data,
+            commands::check_upscale_cache_for_algorithm,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

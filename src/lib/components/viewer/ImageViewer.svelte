@@ -94,9 +94,20 @@
 			}
 		};
 
+		// 监听超分面板请求当前图片数据
+		const handleRequestCurrentImageData = (e: CustomEvent) => {
+			const { callback } = e.detail;
+			if (imageData && callback) {
+				callback(imageData);
+			}
+		};
+
 		window.addEventListener('upscale-complete', handleUpscaleComplete as EventListener);
+		window.addEventListener('request-current-image-data', handleRequestCurrentImageData as EventListener);
+		
 		return () => {
 			window.removeEventListener('upscale-complete', handleUpscaleComplete as EventListener);
+			window.removeEventListener('request-current-image-data', handleRequestCurrentImageData as EventListener);
 		};
 	});
 
@@ -169,6 +180,9 @@
 			}
 			imageData = data;
 
+			// 检查是否有对应的超分缓存
+			await checkUpscaleCache(data);
+
 			// 双页模式：加载下一页
 			if ($viewMode === 'double' && bookStore.canNextPage) {
 				const nextPage = bookStore.currentPageIndex + 1;
@@ -195,6 +209,49 @@
 				clearTimeout(loadingTimeout);
 				loadingTimeout = null;
 			}
+		}
+	}
+
+	// 检查超分缓存
+	async function checkUpscaleCache(imageData: string) {
+		try {
+			// 计算图片数据的hash
+			const imageHash = await invoke<string>('calculate_data_hash', {
+				dataUrl: imageData
+			});
+			
+			// 检查所有算法的缓存
+			const algorithms = ['realcugan', 'realesrgan', 'waifu2x'];
+			
+			for (const algorithm of algorithms) {
+				try {
+					const cacheData = await invoke<string>('check_upscale_cache_for_algorithm', {
+						imageHash,
+						algorithm
+					});
+					
+					if (cacheData) {
+						// 找到缓存，设置超分结果
+						const blob = new Blob([new Uint8Array(JSON.parse(cacheData))], { type: 'image/webp' });
+						const url = URL.createObjectURL(blob);
+						
+						bookStore.setUpscaledImage(url);
+						bookStore.setUpscaledImageBlob(blob);
+						
+						console.log(`找到 ${algorithm} 算法的超分缓存`);
+						return;
+					}
+				} catch (e) {
+					// 继续检查下一个算法
+					continue;
+				}
+			}
+			
+			// 没有找到缓存，清除超分结果
+			bookStore.setUpscaledImage(null);
+			bookStore.setUpscaledImageBlob(null);
+		} catch (error) {
+			console.error('检查超分缓存失败:', error);
 		}
 	}
 

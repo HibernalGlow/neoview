@@ -173,9 +173,7 @@ class BookStore {
    */
   setCurrentImage(page: Page | null) {
     this.state.currentImage = page;
-    // 切换图片时清除超分结果
-    this.state.upscaledImageData = null;
-    this.state.upscaledImageBlob = null;
+    // 切换图片时不立即清除超分结果，让系统检查缓存
   }
 
   /**

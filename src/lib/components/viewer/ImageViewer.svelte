@@ -146,6 +146,11 @@ interface PerformUpscaleResult {
 				preUpscaleProgress = progress;
 				totalPreUpscalePages = total;
 			},
+			onUpscaleStart: () => {
+				// 超分开始，进度条变黄并闪烁
+				progressColor = '#FCD34D'; // 黄色
+				progressBlinking = true;
+			},
 			onUpscaleComplete: (detail) => {
 				const { imageData: upscaledImageData, imageBlob, originalImageHash } = detail;
 				if (upscaledImageData) {
@@ -158,10 +163,81 @@ interface PerformUpscaleResult {
 				// 更新进度条外观：停止闪烁并变绿
 				progressBlinking = false;
 				progressColor = '#22c55e'; // 绿色
+				console.log('超分图已匹配当前页面，MD5:', originalImageHash, '已替换，进度条设为绿色');
+			},
+			onUpscaleSaved: async (detail) => {
+				try {
+					const { finalHash, savePath } = detail || {};
+					if (finalHash && savePath) {
+						console.log('后台超分已保存:', finalHash, savePath);
+						// 持久化到 IndexedDB（按书）
+						try {
+							const cb = bookStore.currentBook;
+							if (cb && cb.path) {
+								const key = `hashPathIndex:${cb.path}`;
+								// 从 preloadManager 获取 hashPathIndex 并持久化
+								const cacheIndex = preloadManager.getPreloadMemoryCache();
+								if (cacheIndex.has(finalHash)) {
+									await idbSet(key, Array.from(cacheIndex.entries()));
+								}
+							}
+						} catch (err2) {
+							console.warn('持久化 hashPathIndex 到 IndexedDB 失败:', err2);
+						}
+					}
+				} catch (err) {
+					console.error('处理 upscale-saved 事件失败:', err);
+				}
+			},
+			onRequestCurrentImageData: (detail) => {
+				console.log('ImageViewer: 收到图片数据请求');
+				const { callback } = detail;
+				
+				// 延迟检查，确保图片数据已加载
+				setTimeout(() => {
+					if (imageData && typeof callback === 'function') {
+						console.log('ImageViewer: 返回图片数据，长度:', imageData.length);
+						callback(imageData);
+					} else {
+						console.log('ImageViewer: 没有图片数据或回调无效');
+					}
+				}, 100);
+			},
+			onResetPreUpscaleProgress: () => {
+				preUpscaleProgress = 0;
+				totalPreUpscalePages = 0;
 			},
 			onComparisonModeChanged: (detail) => {
 				const { enabled } = detail;
-				comparisonVisible = enabled;
+				if (enabled && imageData && bookStore.upscaledImageData) {
+					comparisonVisible = true;
+					originalImageDataForComparison = imageData;
+					upscaledImageDataForComparison = bookStore.upscaledImageData;
+				} else {
+					comparisonVisible = false;
+				}
+			},
+			onCacheHit: (detail) => {
+				const { imageHash, url, blob } = detail;
+				console.log('缓存命中，hash:', imageHash);
+				// 更新 bookStore
+				bookStore.setUpscaledImage(url);
+				bookStore.setUpscaledImageBlob(blob);
+			},
+			onCheckPreloadCache: (detail) => {
+				const { imageHash, preview } = detail;
+				if (preview) {
+					// 从内存缓存检查并更新
+					const cache = preloadManager.getPreloadMemoryCache();
+					if (cache.has(imageHash)) {
+						const cached = cache.get(imageHash);
+						if (cached) {
+							bookStore.setUpscaledImage(cached.url);
+							bookStore.setUpscaledImageBlob(cached.blob);
+							console.log('从内存预加载缓存命中 upscaled，MD5:', imageHash);
+						}
+					}
+				}
 			}
 		});
 
@@ -238,119 +314,7 @@ interface PerformUpscaleResult {
 
 	
 
-	// 监听超分完成事件
-	$effect(() => {
-		const handleUpscaleComplete = async (e: CustomEvent) => {
-			// 为避免与组件中 imageData 变量冲突，这里用 upscaledImageData 表示事件中的数据
-			const { imageData: upscaledImageData, imageBlob, originalImageHash } = e.detail;
-
-			if (!upscaledImageData || !originalImageHash) return;
-
-			try {
-				// 如果 currentImageHash 还没有（异常情况），使用原始页面数据进行计算
-				if (!currentImageHash) {
-					if (originalImageDataForComparison) {
-						const currentHash = await getImageMd5(originalImageDataForComparison);
-						if (currentHash) {
-							currentImageHash = currentHash;
-						}
-					}
-				}
-
-				// 只有当超分的是当前页面时才替换图片
-				if (originalImageHash === currentImageHash) {
-					bookStore.setUpscaledImage(upscaledImageData);
-					if (imageBlob) {
-						bookStore.setUpscaledImageBlob(imageBlob);
-					}
-					// 更新对比数据
-					upscaledImageDataForComparison = upscaledImageData;
-					// 立即更新进度条外观：停止闪烁并变绿——比仅依赖 upscaleState 更可靠，能避免竞态导致不变色的问题
-					progressBlinking = false;
-					progressColor = '#22c55e'; // 绿色
-					console.log('超分图已匹配当前页面，MD5:', originalImageHash, '已替换，进度条设为绿色');
-				} else {
-					console.log('超分图不属于当前页面，超分MD5:', originalImageHash, '当前MD5:', currentImageHash);
-				}
-			} catch (error) {
-				console.error('处理超分完成事件失败:', error);
-			}
-		};
-
-		const handleUpscaleSaved = async (e: CustomEvent) => {
-			try {
-				const { finalHash, savePath } = e.detail || {};
-				if (finalHash && savePath) {
-					// 更新内存索引，供后续快速命中
-					hashPathIndex.set(finalHash, savePath);
-					console.log('后台超分已保存，已更新 hashPathIndex:', finalHash, savePath);
-					// 持久化到 IndexedDB（按书）
-					try {
-						const cb = bookStore.currentBook;
-						if (cb && cb.path) {
-							const key = `hashPathIndex:${cb.path}`;
-							await idbSet(key, Array.from(hashPathIndex.entries()));
-						}
-					} catch (err2) {
-						console.warn('持久化 hashPathIndex 到 IndexedDB 失败:', err2);
-					}
-				}
-			} catch (err) {
-				console.error('处理 upscale-saved 事件失败:', err);
-			}
-		};
-
-		// 监听重置预超分进度事件
-		const handleResetPreUpscaleProgress = () => {
-			resetPreUpscaleProgress();
-		};
-
-		// 监听超分面板请求当前图片数据
-		const handleRequestCurrentImageData = (e: CustomEvent) => {
-			console.log('ImageViewer: 收到图片数据请求');
-			const { callback } = e.detail;
-			
-			// 延迟检查，确保图片数据已加载
-			setTimeout(() => {
-				if (imageData && typeof callback === 'function') {
-					console.log('ImageViewer: 返回图片数据，长度:', imageData.length);
-					console.log('ImageViewer: 图片数据前缀:', imageData.substring(0, 50));
-					callback(imageData);
-				} else {
-					console.log('ImageViewer: 没有图片数据或回调无效');
-					console.log('ImageViewer: imageData存在:', !!imageData);
-					console.log('ImageViewer: callback是函数:', typeof callback === 'function');
-				}
-			}, 100);
-		};
-
-	window.addEventListener('upscale-complete', handleUpscaleComplete as EventListener);
-	window.addEventListener('upscale-saved', handleUpscaleSaved as EventListener);
-		window.addEventListener('request-current-image-data', handleRequestCurrentImageData as EventListener);
-		window.addEventListener('reset-pre-upscale-progress', handleResetPreUpscaleProgress as EventListener);
-
-		// 监听对比模式变化
-		const handleComparisonModeChanged = (e: CustomEvent) => {
-			const { enabled } = e.detail;
-			if (enabled && imageData && bookStore.upscaledImageData) {
-				comparisonVisible = true;
-				originalImageDataForComparison = imageData;
-				upscaledImageDataForComparison = bookStore.upscaledImageData;
-			} else {
-				comparisonVisible = false;
-			}
-		};
-
-		window.addEventListener('comparison-mode-changed', handleComparisonModeChanged as EventListener);
-		
-		return () => {
-			window.removeEventListener('upscale-complete', handleUpscaleComplete as EventListener);
-			window.removeEventListener('upscale-saved', handleUpscaleSaved as EventListener);
-			window.removeEventListener('request-current-image-data', handleRequestCurrentImageData as EventListener);
-			window.removeEventListener('reset-pre-upscale-progress', handleResetPreUpscaleProgress as EventListener);
-			window.removeEventListener('comparison-mode-changed', handleComparisonModeChanged as EventListener);
-		};
-	});
+	
 
 	// 处理鼠标滚轮事件
 	function handleWheel(e: WheelEvent) {
@@ -436,10 +400,13 @@ interface PerformUpscaleResult {
 		bookStore.closeBook();
 	}
 
-	// 监听视图模式变化，重新加载页面
+	// 监听视图模式变化，更新 PreloadManager 配置
 	$effect(() => {
 		const mode = $viewMode;
 		if (mode && preloadManager) {
+			// 更新 ImageLoader 的视图模式配置
+			preloadManager.updateImageLoaderConfigWithViewMode(mode);
+			// 重新加载当前页面
 			preloadManager.loadCurrentImage();
 		}
 	});

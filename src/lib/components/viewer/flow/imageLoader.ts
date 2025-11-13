@@ -20,6 +20,7 @@ import { createPreloadWorker, type PreloadTask, type PreloadTaskResult } from '.
 export interface ImageLoaderOptions {
 	performancePreloadPages: number;
 	performanceMaxThreads: number;
+	viewMode?: 'single' | 'double' | 'panorama';
 	onImageLoaded?: (imageData: string, imageData2?: string) => void;
 	onPreloadProgress?: (progress: number, total: number) => void;
 	onError?: (error: string) => void;
@@ -74,6 +75,37 @@ export class ImageLoader {
 				console.error('预加载任务失败，hash:', task.hash, error);
 			}
 		});
+	}
+
+	/**
+	 * 更新配置
+	 */
+	updateConfig(config: { preloadPages?: number; maxThreads?: number; viewMode?: 'single' | 'double' | 'panorama' }): void {
+		if (config.preloadPages !== undefined) {
+			this.options.performancePreloadPages = config.preloadPages;
+		}
+		if (config.maxThreads !== undefined) {
+			this.options.performanceMaxThreads = config.maxThreads;
+			// 更新 worker 的并发数
+			this.preloadWorker.updateConcurrency(config.maxThreads);
+		}
+		if (config.viewMode !== undefined) {
+			this.options.viewMode = config.viewMode;
+		}
+		
+		console.log('ImageLoader 配置已更新:', {
+			preloadPages: this.options.performancePreloadPages,
+			maxThreads: this.options.performanceMaxThreads,
+			viewMode: this.options.viewMode
+		});
+	}
+
+	/**
+	 * 初始化（用于重新加载 IndexedDB 缓存等）
+	 */
+	initialize(): void {
+		// 这里可以添加从 IndexedDB 加载持久化缓存的逻辑
+		console.log('ImageLoader 初始化');
 	}
 
 	/**

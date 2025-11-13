@@ -157,6 +157,10 @@ export function createPreloadWorker<Result extends PreloadTaskResult = PreloadTa
 		},
 		pending() {
 			return state.queue.length;
+		},
+		updateConcurrency(newConcurrency: () => number) {
+			state.opts.concurrency = newConcurrency;
+			schedule(); // 重新调度以应用新的并发数
 		}
 	};
 }

@@ -19,6 +19,10 @@ export interface PreloadManagerOptions {
 	onResetPreUpscaleProgress?: () => void;
 	onComparisonModeChanged?: (detail: any) => void;
 	onProgressBarStateChange?: (detail: any) => void;
+	// 新增回调
+	onUpscaleStart?: () => void;
+	onCacheHit?: (detail: any) => void;
+	onCheckPreloadCache?: (detail: any) => void;
 }
 
 export class PreloadManager {
@@ -28,6 +32,7 @@ export class PreloadManager {
 	private performanceSettingsListener: (preLoadSize: number, maxThreads: number) => void;
 	private eventListeners: ReturnType<typeof createEventListeners>;
 	private cleanupEventListeners: () => void;
+	private bookUnsubscribe: () => void;
 
 	constructor(options: PreloadManagerOptions = {}) {
 		// 初始化性能配置
@@ -53,6 +58,7 @@ export class PreloadManager {
 			onResetPreUpscaleProgress: options.onResetPreUpscaleProgress,
 			onComparisonModeChanged: options.onComparisonModeChanged,
 			onProgressBarStateChange: options.onProgressBarStateChange,
+			onUpscaleStart: options.onUpscaleStart,
 			onCheckPreloadCache: this.handleCheckPreloadCache.bind(this),
 			onCacheHit: this.handleCacheHit.bind(this)
 		});
@@ -92,6 +98,11 @@ export class PreloadManager {
 
 		// 清理性能配置监听器
 		performanceSettings.removeListener(this.performanceSettingsListener);
+
+		// 取消书籍切换监听
+		if (this.bookUnsubscribe) {
+			this.bookUnsubscribe();
+		}
 
 		// 清理图片加载器
 		this.imageLoader.cleanup();
@@ -136,11 +147,21 @@ export class PreloadManager {
 	 * 更新图片加载器配置
 	 */
 	private updateImageLoaderConfig(): void {
-		// 这里可以添加更新配置的逻辑
-		// 由于ImageLoader的构造函数参数，可能需要重新创建实例或添加更新方法
-		console.log('更新图片加载器配置:', {
+		// 调用 ImageLoader 的 updateConfig 方法
+		this.imageLoader.updateConfig({
 			preloadPages: this.performancePreloadPages,
 			maxThreads: this.performanceMaxThreads
+		});
+	}
+
+	/**
+	 * 公开的配置更新方法（支持视图模式）
+	 */
+	updateImageLoaderConfigWithViewMode(viewMode: 'single' | 'double' | 'panorama'): void {
+		this.imageLoader.updateConfig({
+			preloadPages: this.performancePreloadPages,
+			maxThreads: this.performanceMaxThreads,
+			viewMode
 		});
 	}
 
@@ -148,9 +169,32 @@ export class PreloadManager {
 	 * 设置书籍切换监听器
 	 */
 	private setupBookChangeListener(): void {
-		// 这里可以添加书籍切换的监听逻辑
-		// 当书籍切换时清理缓存
-		console.log('设置书籍切换监听器');
+		let currentBookPath: string | undefined;
+		
+		// 监听书籍切换
+		const unsubscribe = bookStore.subscribe((state) => {
+			const newBookPath = state.currentBook?.path;
+			
+			// 如果书籍路径发生变化
+			if (newBookPath !== currentBookPath) {
+				// 清理上一本书的缓存
+				this.imageLoader.cleanup();
+				
+				// 重置预超分进度
+				this.resetPreUpscaleProgress();
+				
+				// 重新初始化以加载新书的缓存
+				if (newBookPath) {
+					this.imageLoader.initialize();
+				}
+				
+				currentBookPath = newBookPath;
+				console.log('书籍已切换:', newBookPath);
+			}
+		});
+		
+		// 保存取消订阅函数
+		this.bookUnsubscribe = unsubscribe;
 	}
 
 	/**

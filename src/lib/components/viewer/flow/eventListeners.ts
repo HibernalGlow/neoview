@@ -103,7 +103,7 @@ export function createEventListeners(options: EventListenersOptions) {
 		window.addEventListener('request-current-image-data', handleRequestCurrentImageData as EventListener);
 		window.addEventListener('reset-pre-upscale-progress', handleResetPreUpscaleProgress as EventListener);
 		window.addEventListener('comparison-mode-changed', handleComparisonModeChanged as EventListener);
-		window.addEventListener('progressBarStateChange', handleProgressBarStateChange as EventListener);
+		window.addEventListener('progressBarStateChange', handleProgressBarState as EventListener);
 		window.addEventListener('check-preload-cache', handleCheckPreloadCache as EventListener);
 		window.addEventListener('cache-hit', handleCacheHit as EventListener);
 		

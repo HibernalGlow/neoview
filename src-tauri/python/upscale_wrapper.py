@@ -6,7 +6,7 @@ NeoView Upscale Wrapper
 
 import sys
 import os
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, Union
 import threading
 import queue
 import time
@@ -15,8 +15,10 @@ import time
 try:
     from sr_vulkan import sr_vulkan as sr
     SR_AVAILABLE = True
+    print("✅ sr_vulkan 模块导入成功")
 except ImportError:
     SR_AVAILABLE = False
+    sr = None
     print("警告: sr_vulkan 模块未找到，超分功能将不可用")
 
 
@@ -62,6 +64,7 @@ class UpscaleManager:
         self.running = False
         self.lock = threading.Lock()
         self.sr_initialized = False
+        self.model_id_map: Dict[str, int] = {}
         
         if SR_AVAILABLE:
             self._init_sr_vulkan()
@@ -73,42 +76,158 @@ class UpscaleManager:
         try:
             print("🔍 初始化 sr_vulkan...")
             
-            # 初始化 sr_vulkan
+            # 步骤1: 基础初始化
             sts = sr.init()
             print(f"📊 sr.init() 返回: {sts}")
             
-            is_cpu_model = False
             if sts < 0:
-                print("⚠️ GPU 模式失败，使用 CPU 模式")
-                is_cpu_model = True
+                print("⚠️ GPU 初始化返回负值 (可能使用 CPU 模式): {sts}")
+            
+            # 启用调试模式
+            try:
+                sr.setDebug(True)
+                print("✅ 已启用 sr_vulkan 调试模式")
+            except:
+                print("⚠️ setDebug 方法不可用")
             
             # 获取 GPU 信息
-            gpu_list = sr.getGpuInfo()
-            print(f"📊 GPU 列表: {gpu_list}")
+            try:
+                gpu_info = sr.getGpuInfo()
+                print(f"📊 GPU 信息: {gpu_info}")
+            except Exception as e:
+                print(f"⚠️ 无法获取 GPU 信息: {e}")
+                gpu_info = None
             
-            # 设置 GPU (使用第一个 GPU)
+            # 步骤2: 设置 GPU 和线程数 (关键!会加载模型)
+            # 参考 picacg-qt: sr.initSet(config.Encode, config.UseCpuNum)
+            # 使用第一个 GPU (ID=0) 或 CPU 模式 (ID=-1)
             gpu_id = 0
-            if not is_cpu_model and gpu_list and len(gpu_list) > 0:
-                gpu_id = 0
+            if gpu_info and str(gpu_info).strip():
                 print(f"🎯 使用 GPU {gpu_id}")
             else:
                 gpu_id = -1  # CPU 模式
                 print("🎯 使用 CPU 模式")
             
-            # 初始化设置
-            sts = sr.initSet(gpuId=gpu_id)
-            print(f"📊 sr.initSet(gpuId={gpu_id}) 返回: {sts}")
+            print(f"🔍 调用 sr.initSet({gpu_id}, 0)...")
+            init_set_result = sr.initSet(gpu_id, 0)  # 0 = 自动线程数
+            print(f"📊 sr.initSet() 返回: {init_set_result}")
             
-            if sts >= 0:
+            if init_set_result >= 0:
                 self.sr_initialized = True
                 print("✅ sr_vulkan 初始化成功")
+                
+                # 获取版本信息
+                try:
+                    version = sr.getVersion()
+                    print(f"📋 sr_vulkan 版本: {version}")
+                except:
+                    print("⚠️ 无法获取版本信息")
+
+                # 动态读取所有模型常量
+                try:
+                    self._discover_models()
+                except Exception as discover_error:
+                    print(f"⚠️ 读取模型常量失败: {discover_error}")
             else:
-                print(f"❌ sr_vulkan 初始化失败: {sts}")
+                print(f"❌ sr_vulkan 初始化失败: {init_set_result}")
                 self.sr_initialized = False
                 
         except Exception as e:
             print(f"❌ sr_vulkan 初始化异常: {e}")
             self.sr_initialized = False
+
+    def _discover_models(self):
+        """扫描 sr_vulkan 模块，提取所有 MODEL_* 常量"""
+        if not SR_AVAILABLE:
+            return
+
+        print("🔍 开始扫描 sr_vulkan 模型常量...")
+        self.model_id_map.clear()
+
+        try:
+            attr_names = dir(sr)
+            model_names = [name for name in attr_names if name.startswith("MODEL_")]
+            print(f"📋 检测到模型常量数量: {len(model_names)}")
+
+            for name in sorted(model_names):
+                try:
+                    value = getattr(sr, name)
+                    model_id = int(value)
+                    self.model_id_map[name] = model_id
+                except Exception as attr_err:
+                    print(f"⚠️ 读取模型常量 {name} 失败: {attr_err}")
+
+            if self.model_id_map:
+                preview = list(self.model_id_map.items())[:10]
+                print("✅ 模型常量加载成功，示例:")
+                for entry in preview:
+                    print(f"   - {entry[0]} = {entry[1]}")
+            else:
+                print("⚠️ 未从 sr_vulkan 读取到任何模型常量")
+        except Exception as e:
+            print(f"❌ 扫描模型常量时出错: {e}")
+            raise
+
+    def _resolve_model(self, model: Union[int, str]) -> Tuple[int, str]:
+        """将传入的模型参数解析为 (model_id, model_name)"""
+        default_name = "MODEL_WAIFU2X_CUNET_UP2X"
+
+        if SR_AVAILABLE and not self.model_id_map:
+            try:
+                self._discover_models()
+            except Exception as e:
+                print(f"⚠️ 无法刷新模型列表，使用默认模型: {e}")
+
+        model_map = self.model_id_map
+
+        def fallback() -> Tuple[int, str]:
+            default_id = model_map.get(default_name, 0) if model_map else 0
+            print(f"⚠️ 使用默认模型 {default_name} (ID={default_id})")
+            return default_id, default_name
+
+        if isinstance(model, str):
+            normalized = model.strip()
+            if not normalized:
+                return fallback()
+
+            if normalized in model_map:
+                return model_map[normalized], normalized
+
+            for name, model_id in model_map.items():
+                if name.lower() == normalized.lower():
+                    return model_id, name
+
+            try:
+                numeric = int(normalized)
+                # 如果恰好匹配某个模型ID，则返回对应名称
+                for name, model_id in model_map.items():
+                    if model_id == numeric:
+                        return model_id, name
+                print(f"⚠️ 字符串模型 '{model}' 被解析为数字 {numeric}")
+                return numeric, default_name
+            except ValueError:
+                print(f"⚠️ 未识别的模型字符串: {model}")
+                return fallback()
+
+        if isinstance(model, int):
+            if model_map:
+                # 优先按模型ID匹配
+                for name, model_id in model_map.items():
+                    if model_id == model:
+                        return model_id, name
+
+                # 再按索引匹配
+                keys = sorted(model_map.keys())
+                if 0 <= model < len(keys):
+                    name = keys[model]
+                    return model_map[name], name
+
+            # 直接返回数值，名称使用默认
+            print(f"⚠️ 直接使用数值模型 ID: {model}")
+            return model, default_name
+
+        print(f"⚠️ 未知类型的模型参数: {type(model)}")
+        return fallback()
     
     def _start_processing_thread(self):
         """启动处理线程"""
@@ -133,22 +252,46 @@ class UpscaleManager:
                     time.sleep(0.01)
                     continue
                 
-                data, format_str, task_id, tick = result
+                # result 是元组: (data, format, taskId, tick)
+                data, format_str, returned_task_id, tick = result
+                
+                print(f"🔍 收到超分结果:")
+                print(f"  returned_task_id: {returned_task_id}")
+                print(f"  format_str: {format_str}")
+                print(f"  tick: {tick}")
+                print(f"  data len: {len(data) if data else 0}")
+                
+                # 检查结果图像尺寸
+                if data and len(data) > 0:
+                    try:
+                        from PIL import Image
+                        import io
+                        img = Image.open(io.BytesIO(data))
+                        print(f"  📐 结果图像尺寸: {img.size[0]}x{img.size[1]}")
+                        print(f"  🎨 结果图像模式: {img.mode}")
+                    except Exception as e:
+                        print(f"  ⚠️ 无法读取结果图像信息: {e}")
                 
                 with self.lock:
-                    if task_id in self.tasks:
-                        task = self.tasks[task_id]
+                    # 🔥 关键修复：验证 taskId 匹配
+                    if returned_task_id in self.tasks:
+                        task = self.tasks[returned_task_id]
                         task.result_data = data
                         task.tick = tick
                         
                         if data and len(data) > 0:
                             task.status = "completed"
+                            print(f"✅ 任务 {returned_task_id} 完成")
                         else:
                             task.status = "failed"
                             task.error = "超分返回空数据"
+                            print(f"❌ 任务 {returned_task_id} 失败: 返回空数据")
                         
                         # 将结果放入队列供外部获取
-                        self.result_queue.put(task_id)
+                        self.result_queue.put(returned_task_id)
+                    else:
+                        # 🔧 优化：记录不匹配的任务ID，可能是之前被取消的任务
+                        print(f"⚠️ 收到未知任务ID {returned_task_id} 的结果，可能是已取消任务，丢弃")
                         
             except Exception as e:
                 print(f"处理结果时出错: {e}")
@@ -157,7 +300,7 @@ class UpscaleManager:
     def add_task(
         self,
         image_data: bytes,
-        model: int = 0,
+        model: Union[int, str] = 0,
         scale: int = 2,
         width: int = 0,
         height: int = 0,
@@ -203,15 +346,8 @@ class UpscaleManager:
             task.status = "processing"
             
             self.tasks[task_id] = task
-        
+
         try:
-            # 调用 sr_vulkan 添加任务
-            # 确保 tile_size 是有效值
-            valid_tile_sizes = [0, 64, 128, 256, 512]
-            if tile_size not in valid_tile_sizes:
-                print(f"⚠️ 无效的 tile_size: {tile_size}，使用默认值 0")
-                tile_size = 64
-            
             print(f"🔍 Python add_task 调用 sr.add:")
             print(f"  image_data len: {len(image_data)}")
             print(f"  model: {model}")
@@ -223,12 +359,17 @@ class UpscaleManager:
             print(f"  tile_size: {tile_size}")
             print(f"  noise_level: {noise_level}")
             
+            # 获取模型常量值
+            model_id, model_name = self._resolve_model(model)
+            
+            # 根据 sr_vulkan API 规范调用 sr.add()
+            # 参数顺序: data, model, taskId, scale/width, height(可选), format, tileSize
             if width > 0 and height > 0:
-                # 使用指定尺寸
+                # 使用指定尺寸模式
                 print("📏 使用指定尺寸模式")
                 status = sr.add(
                     image_data,
-                    model,
+                    model_id,
                     task_id,
                     width,
                     height,
@@ -236,76 +377,74 @@ class UpscaleManager:
                     tileSize=tile_size
                 )
             else:
-                # 使用缩放倍数
+                # 使用缩放倍数模式
                 print("📏 使用缩放倍数模式")
+                status = sr.add(
+                    image_data,
+                    model_id,
+                    task_id,
+                    scale,
+                    format=format_str,
+                    tileSize=tile_size
+                )
+            
+            print(f"📊 sr.add 返回 status: {status}")
+            print(f"🔍 sr.add 状态说明: status > 0 表示成功添加到队列")
+            
+            # 检查任务队列状态
+            try:
+                if hasattr(sr, 'getCount'):
+                    count = sr.getCount()
+                    print(f"📊 当前任务队列数量: {count}")
+            except:
+                pass
+            
+            # 🔥 关键修复：检查 procId 是否为错误码（负数表示错误）
+            if status <= 0:
+                error = sr.getLastError() if hasattr(sr, 'getLastError') else f"未知错误 (status={status})"
+                print(f"❌ sr.add 失败: {error}")
+                
+                # 尝试使用默认 tileSize=0 重试
+                print("🔄 尝试使用默认 tileSize=0 重试...")
                 try:
-                    # 对于缩放模式，不使用 width 和 height 参数
-                    status = sr.add(
-                        image_data,
-                        model,
-                        task_id,
-                        scale,
-                        format=format_str,
-                        tileSize=tile_size
-                    )
-                    print(f"📊 sr.add 返回 status: {status}")
+                    if width > 0 and height > 0:
+                        status = sr.add(
+                            image_data,
+                            model_id,
+                            task_id,
+                            width,
+                            height,
+                            format=format_str,
+                            tileSize=0
+                        )
+                    else:
+                        status = sr.add(
+                            image_data,
+                            model_id,
+                            task_id,
+                            scale,
+                            format=format_str,
+                            tileSize=0
+                        )
+                    print(f"📊 sr.add 默认参数返回 status: {status}")
                     
                     if status <= 0:
-                        error = sr.getLastError() if hasattr(sr, 'getLastError') else f"未知错误 (status={status})"
-                        print(f"❌ sr.add 失败: {error}")
-                        # 尝试使用默认参数重试
-                        print("🔄 尝试使用默认 tileSize=0 重试...")
-                        status = sr.add(
-                            image_data,
-                            model,
-                            task_id,
-                            scale,
-                            format=format_str,
-                            tileSize=0
-                        )
-                        print(f"📊 sr.add 默认参数返回 status: {status}")
-                        if status <= 0:
-                            error2 = sr.getLastError() if hasattr(sr, 'getLastError') else f"未知错误 (status={status})"
-                            print(f"❌ sr.add 默认参数也失败: {error2}")
-                            raise RuntimeError(f"添加任务失败: {error2}")
-                        else:
-                            print("✅ sr.add 默认参数成功")
+                        error2 = sr.getLastError() if hasattr(sr, 'getLastError') else f"未知错误 (status={status})"
+                        print(f"❌ sr.add 默认参数也失败: {error2}")
+                        with self.lock:
+                            task.status = "failed"
+                            task.error = f"添加任务失败: {error2}"
+                        raise RuntimeError(task.error)
                     else:
-                        print("✅ sr.add 调用成功")
-                except Exception as e:
-                    print(f"❌ sr.add 调用失败: {e}")
-                    print(f"❌ 错误类型: {type(e).__name__}")
-                    print(f"❌ 错误详情: {repr(e)}")
-                    
-                    # 尝试获取更详细的错误信息
-                    import traceback
-                    print(f"❌ 错误堆栈: {traceback.format_exc()}")
-                    
-                    # 尝试使用默认参数重试
-                    print("🔄 尝试使用默认 tileSize=0 重试...")
-                    try:
-                        status = sr.add(
-                            image_data,
-                            model,
-                            task_id,
-                            scale,
-                            format=format_str,
-                            tileSize=0
-                        )
-                        print(f"✅ sr.add 默认参数调用成功，status: {status}")
-                    except Exception as e2:
-                        print(f"❌ sr.add 默认参数也失败: {e2}")
-                        print(f"❌ 默认参数错误类型: {type(e2).__name__}")
-                        print(f"❌ 默认参数错误详情: {repr(e2)}")
-                        print(f"❌ 默认参数错误堆栈: {traceback.format_exc()}")
-                        raise e
-            
-            if status <= 0:
-                error = sr.getLastError() if hasattr(sr, 'getLastError') else "未知错误"
-                with self.lock:
-                    task.status = "failed"
-                    task.error = f"添加任务失败: {error}"
-                raise RuntimeError(task.error)
+                        print("✅ sr.add 默认参数成功")
+                except Exception as retry_e:
+                    print(f"❌ 重试失败: {retry_e}")
+                    with self.lock:
+                        task.status = "failed"
+                        task.error = str(retry_e)
+                    raise
+            else:
+                print("✅ sr.add 调用成功")
             
             return task_id
             
@@ -430,7 +569,7 @@ def get_sr_available() -> bool:
 
 def upscale_image(
     image_data: bytes,
-    model: int = 0,
+    model: Union[int, str] = 0,
     scale: int = 2,
     tile_size: int = 0,
     noise_level: int = 0,
@@ -521,109 +660,76 @@ def upscale_image_async(
     )
 
 
-# 模型名称映射 - 使用 sr_vulkan 实际的模型常量
-MODEL_NAMES = {
-    0: "MODEL_WAIFU2X_CUNET_UP2X",
-    1: "MODEL_WAIFU2X_PHOTO_UP2X",
-    2: "MODEL_WAIFU2X_ANIME_UP2X",
-    3: "MODEL_WAIFU2X_CUNET_UP1X_DENOISE3X",
-    4: "MODEL_WAIFU2X_CUNET_UP2X_DENOISE3X",
-    5: "MODEL_WAIFU2X_PHOTO_UP2X_DENOISE3X",
-    6: "MODEL_WAIFU2X_ANIME_UP2X_DENOISE3X",
-    7: "MODEL_REALCUGAN_PRO_UP2X",
-    8: "MODEL_REALCUGAN_SE_UP2X",
-    9: "MODEL_REALCUGAN_PRO_UP3X",
-    10: "MODEL_REALESRGAN_ANIMAVIDEOV3_UP2X",
-    11: "MODEL_REALESRGAN_X4PLUS_ANIME_UP4X",
-    12: "MODEL_REALSR_DF2K_UP4X",
-    13: "MODEL_WAIFU2X_CUNET_UP1X",
-    14: "MODEL_WAIFU2X_CUNET_UP1X_DENOISE1X",
-    15: "MODEL_WAIFU2X_CUNET_UP1X_DENOISE2X",
-    16: "MODEL_WAIFU2X_PHOTO_UP2X_DENOISE1X",
-    17: "MODEL_WAIFU2X_PHOTO_UP2X_DENOISE2X",
-    18: "MODEL_WAIFU2X_ANIME_UP2X_DENOISE1X",
-    19: "MODEL_WAIFU2X_ANIME_UP2X_DENOISE2X",
-    20: "MODEL_REALCUGAN_PRO_UP2X_CONSERVATIVE",
-    21: "MODEL_REALCUGAN_SE_UP2X_CONSERVATIVE",
-    22: "MODEL_REALCUGAN_PRO_UP3X_CONSERVATIVE",
-    23: "MODEL_REALESRGAN_ANIMAVIDEOV3_UP3X",
-    24: "MODEL_REALESRGAN_X4PLUS_UP4X",
-    25: "MODEL_REALCUGAN_PRO_UP2X_DENOISE3X",
-    26: "MODEL_REALCUGAN_SE_UP2X_DENOISE1X",
-    27: "MODEL_REALCUGAN_SE_UP2X_DENOISE2X",
-    28: "MODEL_REALCUGAN_PRO_UP3X_DENOISE3X",
-    29: "MODEL_REALCUGAN_SE_UP2X_DENOISE3X",
-    30: "MODEL_REALCUGAN_PRO_UP4X",
-    31: "MODEL_REALCUGAN_SE_UP4X",
-    32: "MODEL_REALESRGAN_ANIMAVIDEOV3_UP4X",
-    33: "MODEL_REALESRGAN_X4PLUSANIME_UP4X_TTA",
-    34: "MODEL_REALSR_DF2K_UP4X_TTA",
-    35: "MODEL_WAIFU2X_ANIME_UP2X_TTA",
-    36: "MODEL_WAIFU2X_CUNET_UP2X_TTA",
-    37: "MODEL_WAIFU2X_PHOTO_UP2X_TTA",
-    38: "MODEL_REALCUGAN_PRO_UP2X_TTA",
-    39: "MODEL_REALCUGAN_SE_UP2X_TTA",
-    40: "MODEL_REALCUGAN_PRO_UP3X_TTA",
-    41: "MODEL_REALCUGAN_PRO_UP4X_TTA",
-    42: "MODEL_REALCUGAN_SE_UP4X_TTA",
-    43: "MODEL_REALESRGAN_ANIMAVIDEOV3_UP2X_TTA",
-    44: "MODEL_REALESRGAN_X4PLUS_ANIME_UP4X",
-    45: "MODEL_REALESRGAN_X4PLUS_UP4X_TTA",
-    46: "MODEL_REALCUGAN_PRO_UP2X_CONSERVATIVE_TTA",
-    47: "MODEL_REALCUGAN_SE_UP2X_CONSERVATIVE_TTA",
-    48: "MODEL_REALCUGAN_PRO_UP3X_CONSERVATIVE_TTA",
-    49: "MODEL_REALCUGAN_SE_UP2X_DENOISE1X_TTA",
-    50: "MODEL_REALCUGAN_SE_UP2X_DENOISE2X_TTA",
-    51: "MODEL_REALCUGAN_SE_UP2X_DENOISE3X_TTA",
-    52: "MODEL_REALCUGAN_PRO_UP3X_DENOISE3X_TTA",
-    53: "MODEL_REALCUGAN_PRO_UP4X_DENOISE3X_TTA",
-    54: "MODEL_WAIFU2X_ANIME_UP2X_DENOISE0X",
-    55: "MODEL_WAIFU2X_ANIME_UP2X_DENOISE0X_TTA",
-    56: "MODEL_WAIFU2X_ANIME_UP2X_DENOISE1X_TTA",
-    57: "MODEL_WAIFU2X_ANIME_UP2X_DENOISE2X_TTA",
-    58: "MODEL_WAIFU2X_CUNET_UP1X_DENOISE0X",
-    59: "MODEL_WAIFU2X_CUNET_UP1X_DENOISE0X_TTA",
-    60: "MODEL_WAIFU2X_CUNET_UP1X_DENOISE1X_TTA",
-    61: "MODEL_WAIFU2X_CUNET_UP1X_DENOISE2X_TTA",
-    62: "MODEL_WAIFU2X_CUNET_UP1X_DENOISE3X_TTA",
-    63: "MODEL_WAIFU2X_CUNET_UP2X_DENOISE0X_TTA",
-    64: "MODEL_WAIFU2X_CUNET_UP2X_DENOISE1X_TTA",
-    65: "MODEL_WAIFU2X_CUNET_UP2X_DENOISE2X_TTA",
-    66: "MODEL_WAIFU2X_PHOTO_UP2X_DENOISE0X_TTA",
-    67: "MODEL_WAIFU2X_PHOTO_UP2X_DENOISE1X_TTA",
-    68: "MODEL_WAIFU2X_PHOTO_UP2X_DENOISE2X_TTA",
-    69: "MODEL_WAIFU2X_PHOTO_UP2X_DENOISE3X_TTA",
-    70: "MODEL_REALCUGAN_PRO_UP3X_CONSERVATIVE_TTA",
-    71: "MODEL_REALCUGAN_SE_UP3X_CONSERVATIVE_TTA",
-    72: "MODEL_REALCUGAN_PRO_UP4X_CONSERVATIVE_TTA",
-    73: "MODEL_REALCUGAN_SE_UP4X_CONSERVATIVE_TTA",
-    74: "MODEL_REALESRGAN_ANIMAVIDEOV3_UP3X_TTA",
-    75: "MODEL_REALESRGAN_X4PLUS_ANIME_UP4X_TTA",
-    76: "MODEL_REALSR_DF2K_UP4X_TTA",
-    77: "MODEL_WAIFU2X_ANIME_UP2X_DENOISE3X_TTA",
-    78: "MODEL_WAIFU2X_CUNET_UP2X_DENOISE3X_TTA",
-    79: "MODEL_WAIFU2X_PHOTO_UP2X_DENOISE3X_TTA",
-    80: "MODEL_REALCUGAN_PRO_UP2X_DENOISE3X_TTA",
-    81: "MODEL_REALCUGAN_SE_UP2X_DENOISE3X_TTA",
-    82: "MODEL_REALCUGAN_PRO_UP3X_DENOISE3X_TTA",
-    83: "MODEL_REALCUGAN_SE_UP3X_DENOISE3X_TTA"
-}
+def _get_manager_model_map() -> Dict[str, int]:
+    manager = get_manager()
+    if manager.model_id_map:
+        return manager.model_id_map
+
+    if SR_AVAILABLE and not manager.model_id_map:
+        try:
+            manager._discover_models()
+        except Exception as e:
+            print(f"❌ 无法刷新模型列表: {e}")
+
+    return manager.model_id_map
 
 
+def get_model_id(model: Union[str, int]) -> int:
+    """根据模型名称或索引获取模型 ID"""
+    model_map = _get_manager_model_map()
 
-def get_model_id(model_name: str) -> int:
-    """根据模型名称获取模型 ID"""
-    model_name_lower = model_name.lower()
-    
-    for model_id, name in MODEL_NAMES.items():
-        if name.lower() == model_name_lower:
-            return model_id
-    
-    # 尝试直接解析为数字
-    try:
-        return int(model_name)
-    except:
-        return 0  # 默认返回 0
+    if isinstance(model, int):
+        # 如果传入的是索引，尝试按排序获取
+        if model_map:
+            try:
+                key = sorted(model_map.keys())[model]
+                return model_map[key]
+            except Exception:
+                pass
+        return model  # 直接返回
+
+    if isinstance(model, str):
+        normalized = model.strip()
+        if not normalized:
+            return 0
+
+        # 直接匹配模型常量名称
+        if normalized in model_map:
+            return model_map[normalized]
+
+        # 忽略大小写匹配
+        for name, model_id in model_map.items():
+            if name.lower() == normalized.lower():
+                return model_id
+
+        # 尝试解析为整数文字
+        try:
+            return int(normalized)
+        except ValueError:
+            pass
+
+    return 0
+
+
+def get_model_name(model: Union[str, int]) -> str:
+    """根据输入参数返回规范化的模型常量名"""
+    model_map = _get_manager_model_map()
+
+    if isinstance(model, str):
+        normalized = model.strip()
+        if normalized in model_map:
+            return normalized
+
+        for name in model_map:
+            if name.lower() == normalized.lower():
+                return name
+
+    if isinstance(model, int) and model_map:
+        keys = sorted(model_map.keys())
+        if 0 <= model < len(keys):
+            return keys[model]
+
+    return "MODEL_WAIFU2X_CUNET_UP2X"
 
 
 if __name__ == "__main__":

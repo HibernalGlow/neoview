@@ -144,6 +144,8 @@ impl PyO3Upscaler {
         image_data: &[u8],
         model: &UpscaleModel,
         timeout: f64,
+        width: i32,
+        height: i32,
     ) -> Result<Vec<u8>, String> {
         // 确保已初始化
         self.initialize()?;
@@ -153,6 +155,7 @@ impl PyO3Upscaler {
         println!("  📏 缩放: {}x", model.scale);
         println!("  🧩 Tile Size: {}", model.tile_size);
         println!("  🔊 降噪等级: {}", model.noise_level);
+        println!("  📐 图像尺寸: {}x{}", width, height);
         println!("  📊 输入数据大小: {} bytes ({:.2} MB)", 
             image_data.len(), 
             image_data.len() as f64 / 1024.0 / 1024.0
@@ -171,6 +174,8 @@ impl PyO3Upscaler {
                 model.tile_size,
                 model.noise_level,
                 timeout,
+                width,
+                height,
             ).map_err(|e| format!("调用 Python 超分函数失败: {}", e))?;
             
             if let Some(data) = result {

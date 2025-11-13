@@ -32,6 +32,9 @@ export class PyO3UpscaleManager {
 		noiseLevel: 0
 	});
 
+	private _imageWidth = $state(0);
+	private _imageHeight = $state(0);
+
 	private constructor() {}
 
 	static getInstance(): PyO3UpscaleManager {
@@ -120,6 +123,44 @@ export class PyO3UpscaleManager {
 				tileSize: this._currentModel.tileSize,
 				noiseLevel: this._currentModel.noiseLevel
 			};
+			console.log('✅ 模型设置成功:', this._currentModel);
+		} catch (error) {
+			console.error('❌ 设置模型失败:', error);
+			throw error;
+		}
+	}
+
+	/**
+	 * 设置图像尺寸
+	 */
+	setImageDimensions(width: number, height: number): void {
+		this._imageWidth = width;
+		this._imageHeight = height;
+		console.log(`📐 设置图像尺寸: ${width}x${height}`);
+	}
+
+	/**
+	 * 获取图像宽度
+	 */
+	get imageWidth(): number {
+		return this._imageWidth;
+	}
+
+	/**
+	 * 获取图像高度
+	 */
+	get imageHeight(): number {
+		return this._imageHeight;
+	}
+		try {
+			const modelId = await invoke<number>('get_pyo3_model_id', { modelName });
+			this._currentModel = {
+				modelId,
+				modelName,
+				scale,
+				tileSize: this._currentModel.tileSize,
+				noiseLevel: this._currentModel.noiseLevel
+			};
 			console.log('✅ 已切换模型:', this._currentModel);
 		} catch (error) {
 			console.error('❌ 设置模型失败:', error);
@@ -178,7 +219,9 @@ export class PyO3UpscaleManager {
 				scale: this._currentModel.scale,
 				tileSize: this._currentModel.tileSize,
 				noiseLevel: this._currentModel.noiseLevel,
-				timeout
+				timeout,
+				width: this._imageWidth || 0,
+				height: this._imageHeight || 0
 			});
 
 			console.log('✅ PyO3 超分完成 (内存流), 数据大小:', result.length);

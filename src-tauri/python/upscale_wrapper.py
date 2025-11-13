@@ -10,6 +10,8 @@ from typing import Optional, Tuple, Dict, Any
 import threading
 import queue
 import time
+import io
+from PIL import Image
 
 # 尝试导入 sr_vulkan 模块
 try:
@@ -205,6 +207,15 @@ class UpscaleManager:
             self.tasks[task_id] = task
         
         try:
+            # 获取实际的图像尺寸
+            if width == 0 or height == 0:
+                actual_width, actual_height = get_image_dimensions(image_data)
+                print(f"📐 获取到实际图像尺寸: {actual_width}x{actual_height}")
+                if width == 0:
+                    width = actual_width
+                if height == 0:
+                    height = actual_height
+            
             # 调用 sr_vulkan 添加任务
             # 确保 tile_size 是有效值
             valid_tile_sizes = [0, 64, 128, 256, 512]
@@ -240,13 +251,13 @@ class UpscaleManager:
                 # 使用缩放倍数
                 print("📏 使用缩放倍数模式")
                 try:
-                    # 对于缩放模式，width 和 height 都设为 0
+                    # 使用实际的图像尺寸
                     status = sr.add(
                         image_data,
                         model,
                         task_id,
-                        0,  # width
-                        0,  # height
+                        width,  # 实际宽度
+                        height,  # 实际高度
                         scale,
                         format=format_str,
                         tileSize=tile_size,
@@ -263,8 +274,8 @@ class UpscaleManager:
                             image_data,
                             model,
                             task_id,
-                            0,  # width
-                            0,  # height
+                            width,  # 实际宽度
+                            height,  # 实际高度
                             scale,
                             format=format_str,
                             tileSize=0,
@@ -295,8 +306,8 @@ class UpscaleManager:
                             image_data,
                             model,
                             task_id,
-                            0,  # width
-                            0,  # height
+                            width,  # 实际宽度
+                            height,  # 实际高度
                             scale,
                             format=format_str,
                             tileSize=0,
@@ -414,6 +425,24 @@ class UpscaleManager:
             self.tasks.clear()
 
 
+def get_image_dimensions(image_data: bytes) -> Tuple[int, int]:
+    """
+    获取图像的宽高
+    
+    Args:
+        image_data: 图像二进制数据
+    
+    Returns:
+        (width, height)
+    """
+    try:
+        with Image.open(io.BytesIO(image_data)) as img:
+            return img.size
+    except Exception as e:
+        print(f"⚠️ 获取图像尺寸失败: {e}")
+        return (0, 0)
+
+
 # 全局管理器实例
 _manager = None
 
@@ -444,7 +473,9 @@ def upscale_image(
     scale: int = 2,
     tile_size: int = 0,
     noise_level: int = 0,
-    timeout: float = 60.0
+    timeout: float = 60.0,
+    width: int = 0,
+    height: int = 0
 ) -> Tuple[Optional[bytes], Optional[str]]:
     """
     超分图像（同步接口）
@@ -471,8 +502,8 @@ def upscale_image(
             image_data=image_data,
             model=model,
             scale=scale,
-            width=0,
-            height=0,
+            width=width,
+            height=height,
             format_str="",
             tile_size=tile_size,
             noise_level=noise_level

@@ -194,6 +194,8 @@ pub async fn pyo3_upscale_image_memory(
     tile_size: i32,
     noise_level: i32,
     timeout: f64,
+    width: i32,
+    height: i32,
     state: tauri::State<'_, PyO3UpscalerState>,
 ) -> Result<Vec<u8>, String> {
     println!("🔍 Rust 收到参数:");

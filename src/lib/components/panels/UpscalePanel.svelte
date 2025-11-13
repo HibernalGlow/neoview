@@ -98,6 +98,32 @@
 
 	// ==================== 生命周期 ====================
 
+	// 监听当前图片变化 - 同步 Viewer 的当前图片
+	$effect(() => {
+		const currentPage = bookStore.currentPage;
+		if (currentPage) {
+			// 获取图片路径
+			const imagePath = (currentPage as any).path || (currentPage as any).url;
+			if (imagePath) {
+				updateCurrentImageInfo(imagePath);
+				console.log('📷 同步当前图片:', imagePath);
+				
+				// 如果启用自动超分，自动执行
+				if (autoUpscaleEnabled && !isProcessing) {
+					console.log('🚀 自动超分已启用，执行超分...');
+					performUpscale();
+				}
+			}
+		}
+	});
+
+	// 监听自动超分开关变化
+	$effect(() => {
+		if (autoUpscaleEnabled) {
+			console.log('✅ 自动超分已启用');
+		}
+	});
+
 	onMount(async () => {
 		// 加载设置
 		loadSettings();
@@ -130,32 +156,6 @@
 			console.error('❌ 初始化 PyO3 超分管理器失败:', error);
 			showErrorToast('初始化超分功能失败: ' + (error instanceof Error ? error.message : String(error)));
 		}
-
-		// 监听当前图片变化 - 同步 Viewer 的当前图片
-		$effect(() => {
-			const currentPage = bookStore.currentPage;
-			if (currentPage) {
-				// 获取图片路径
-				const imagePath = (currentPage as any).path || (currentPage as any).url;
-				if (imagePath) {
-					updateCurrentImageInfo(imagePath);
-					console.log('📷 同步当前图片:', imagePath);
-					
-					// 如果启用自动超分，自动执行
-					if (autoUpscaleEnabled && !isProcessing) {
-						console.log('🚀 自动超分已启用，执行超分...');
-						performUpscale();
-					}
-				}
-			}
-		});
-
-		// 监听自动超分开关变化
-		$effect(() => {
-			if (autoUpscaleEnabled) {
-				console.log('✅ 自动超分已启用');
-			}
-		});
 	});
 
 	// ==================== 功能函数 ====================

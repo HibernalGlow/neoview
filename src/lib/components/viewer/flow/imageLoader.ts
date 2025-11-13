@@ -69,7 +69,7 @@ export class ImageLoader {
 	private md5Cache = new Map<string, string>();
 	private hashPathIndex = new Map<string, string>();
 	private preloadMemoryCache = new Map<string, { url: string; blob: Blob }>();
-	private preloadedPageImages = new Map<number, { data: string; decoded: boolean }>();
+	private preloadedPageImages = new Map<number, { data: string; decoded: boolean; lastAccessed: number }>();
 	
 	// 加载状态
 	private loading = false;
@@ -614,35 +614,26 @@ export class ImageLoader {
 						continue;
 					}
 
-					// 先把页面原图解码并缓存，保证翻页时可以直接显示（避免 DOM 再次解码延迟）
+					// 确保核心缓存已准备（Blob + ImageBitmap），保证翻页时可以直接显示
 					try {
-						const img = new Image();
-						const decodePromise = new Promise<void>((resolve, reject) => {
-							img.onload = () => resolve();
-							img.onerror = () => reject(new Error('预加载图片解码失败'));
-						});
-						img.src = imageDataWithHash.data;
-						await decodePromise;
-						this.preloadedPageImages.set(targetIndex, { data: imageDataWithHash.data, decoded: true });
-						
-						// LRU 管理与持久化
-						this.touchPreloadedPage(targetIndex);
-						this.ensurePreloadedCacheLimit();
-						
-						console.log('预加载已解码页面图片，index:', targetIndex + 1);
+						// 调用 ensureResources 确保页面资源已加载到核心缓存
+						await this.ensureResources(targetIndex);
+						console.log('预加载已写入核心缓存，index:', targetIndex + 1);
 					} catch (e) {
-						console.warn('预加载页面解码失败，继续超分预处理:', e);
+						console.warn('预加载写入核心缓存失败:', e);
 					}
 
 					// 没有缓存：如果自动超分已开启，则使用新的preloadWorker API；
 					// 如果自动超分已关闭，则跳过触发超分
 					if (autoUpscaleEnabled) {
+						// 获取 Blob 用于超分
+						const blob = await this.getBlob(targetIndex);
 						// 使用新的preloadWorker API
-						const task = { data: imageDataWithHash.data, hash: imageDataWithHash.hash, pageIndex: targetIndex };
+						const task = { blob, hash: imageDataWithHash.hash, pageIndex: targetIndex };
 						this.preloadWorker.enqueue(task);
 						console.log('已加入preloadWorker队列，hash:', imageDataWithHash.hash, 'pageIndex:', targetIndex);
 					} else {
-						console.log('自动超分关闭，跳过触发预超分（已完成预解码）');
+						console.log('自动超分关闭，跳过触发预超分（已完成预加载）');
 					}
 				} catch (error) {
 					console.error(`预超分第 ${targetIndex + 1} 页失败:`, error);
@@ -731,13 +722,13 @@ export class ImageLoader {
 	 * 更新预加载页面的访问时间（LRU）
 	 */
 	private touchPreloadedPage(pageIndex: number): void {
-		// 这个方法用于 LRU 管理，目前 preloadedPageImages 使用较少
-		// 暂时只做简单的访问更新
 		if (this.preloadedPageImages.has(pageIndex)) {
 			const data = this.preloadedPageImages.get(pageIndex)!;
-			// 可以在这里添加访问时间戳，但目前 Map 没有存储时间戳
-			// 所以暂时只是确保页面存在于缓存中
-			this.preloadedPageImages.set(pageIndex, data);
+			// 更新访问时间戳
+			this.preloadedPageImages.set(pageIndex, {
+				...data,
+				lastAccessed: Date.now()
+			});
 		}
 	}
 
@@ -752,9 +743,11 @@ export class ImageLoader {
 			return;
 		}
 		
-		// 简单的 LRU：删除最旧的条目
-		// 由于我们的 Map 没有时间戳，这里简单地删除前面的条目
+		// 真正的 LRU：按访问时间排序，删除最旧的条目
 		const entries = Array.from(this.preloadedPageImages.entries());
+		// 按访问时间升序排序（最旧的在前）
+		entries.sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
+		
 		const toDelete = entries.slice(0, this.preloadedPageImages.size - MAX_PRELOADED_PAGES);
 		
 		for (const [pageIndex] of toDelete) {

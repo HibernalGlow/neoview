@@ -16,6 +16,8 @@
 ```bash
 # 备份原始 UpscalePanel
 cp src/lib/components/panels/UpscalePanel.svelte src/lib/components/panels/UpscalePanel.svelte.backup
+cp src/lib/components/panels/UpscalePanelNew.svelte src/lib/components/panels/UpscalePanel.svelte
+
 ```
 
 ### 2. 替换新文件

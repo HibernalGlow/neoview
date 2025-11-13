@@ -41,7 +41,9 @@
 	let tileSize = $state(400);
 	let tta = $state(false);
 	let preupscaleEnabled = $state(true);
+	let preupscalePageCount = $state(3); // 预超分页数
 	let maxMemoryMB = $state(500);
+	let globalUpscaleEnabled = $state(true); // 全局超分开关
 
 	// UI 状态
 	let isUpscaling = $state(false);
@@ -90,7 +92,53 @@
 		cacheStats = $upscaleCacheStats;
 	});
 
+	/**
+	 * 保存设置到 localStorage
+	 */
+	function saveSettings() {
+		const settings = {
+			selectedModel,
+			selectedScale,
+			gpuId,
+			tileSize,
+			tta,
+			preupscaleEnabled,
+			preupscalePageCount,
+			maxMemoryMB,
+			globalUpscaleEnabled
+		};
+		localStorage.setItem('upscaleSettings', JSON.stringify(settings));
+		console.log('[UpscalePanel] 设置已保存');
+	}
+
+	/**
+	 * 从 localStorage 加载设置
+	 */
+	function loadSettings() {
+		try {
+			const saved = localStorage.getItem('upscaleSettings');
+			if (saved) {
+				const settings = JSON.parse(saved);
+				selectedModel = settings.selectedModel || selectedModel;
+				selectedScale = settings.selectedScale || selectedScale;
+				gpuId = settings.gpuId ?? gpuId;
+				tileSize = settings.tileSize ?? tileSize;
+				tta = settings.tta ?? tta;
+				preupscaleEnabled = settings.preupscaleEnabled ?? preupscaleEnabled;
+				preupscalePageCount = settings.preupscalePageCount ?? preupscalePageCount;
+				maxMemoryMB = settings.maxMemoryMB ?? maxMemoryMB;
+				globalUpscaleEnabled = settings.globalUpscaleEnabled ?? globalUpscaleEnabled;
+				console.log('[UpscalePanel] 设置已加载');
+			}
+		} catch (error) {
+			console.warn('[UpscalePanel] 加载设置失败:', error);
+		}
+	}
+
 	onMount(() => {
+		// 加载保存的设置
+		loadSettings();
+		
 		// 初始化设置
 		setPreupscaleEnabled(preupscaleEnabled);
 		setMaxMemory(maxMemoryMB);
@@ -371,11 +419,24 @@
 		</div>
 	{/if}
 
+	<!-- 全局超分开关 -->
+	<div class="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+		<div class="flex items-center gap-2">
+			<Sparkles class="h-4 w-4 text-primary" />
+			<Label class="text-sm font-medium">全局超分</Label>
+		</div>
+		<Switch 
+			bind:checked={globalUpscaleEnabled}
+			onchange={() => saveSettings()}
+		/>
+	</div>
+
 	<!-- 模型选择 -->
 	<div class="space-y-2">
 		<Label class="text-sm font-medium">超分模型</Label>
 		<NativeSelect 
 			bind:value={selectedModel}
+			onchange={() => saveSettings()}
 			class="w-full"
 		>
 			{#each modelOptions as option}
@@ -391,13 +452,29 @@
 			{#each scaleOptions as scale}
 				<button
 					class="px-3 py-2 text-sm font-medium rounded-md transition-colors {selectedScale === scale ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'}"
-					onclick={() => selectedScale = scale}
+					onclick={() => {
+						selectedScale = scale;
+						saveSettings();
+					}}
 				>
 					{scale}x
 				</button>
 			{/each}
 		</div>
 	</div>
+
+	<!-- 保存设置按钮 -->
+	<Button
+		variant="outline"
+		size="sm"
+		class="w-full"
+		onclick={() => {
+			saveSettings();
+			showSuccessToast('成功', '设置已保存');
+		}}
+	>
+		💾 保存设置
+	</Button>
 
 	<!-- 高级设置 -->
 	<details class="group">
@@ -452,15 +529,39 @@
 	</details>
 
 	<!-- 预超分设置 -->
-	<div class="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-		<div class="flex items-center gap-2">
-			<Flame class="h-4 w-4 text-yellow-500" />
-			<Label class="text-sm font-medium">预超分</Label>
+	<div class="space-y-3 p-3 bg-muted/50 rounded-lg">
+		<div class="flex items-center justify-between">
+			<div class="flex items-center gap-2">
+				<Flame class="h-4 w-4 text-yellow-500" />
+				<Label class="text-sm font-medium">预超分</Label>
+			</div>
+			<Switch 
+				bind:checked={preupscaleEnabled}
+				onchange={() => {
+					setPreupscaleEnabled(preupscaleEnabled);
+					saveSettings();
+				}}
+			/>
 		</div>
-		<Switch 
-			bind:checked={preupscaleEnabled}
-			onchange={() => setPreupscaleEnabled(preupscaleEnabled)}
-		/>
+
+		<!-- 预超分页数设置 -->
+		{#if preupscaleEnabled}
+			<div class="space-y-2">
+				<Label class="text-xs font-medium">预超分页数: {preupscalePageCount}</Label>
+				<input
+					type="range"
+					bind:value={preupscalePageCount}
+					onchange={() => saveSettings()}
+					class="w-full"
+					min="1"
+					max="10"
+					step="1"
+				/>
+				<div class="text-xs text-muted-foreground">
+					翻页时自动预超分后续 {preupscalePageCount} 页
+				</div>
+			</div>
+		{/if}
 	</div>
 
 	<!-- 操作按钮 -->

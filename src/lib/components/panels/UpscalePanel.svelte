@@ -4,20 +4,7 @@
 	 * 超分面板 - 使用 PyO3 直接调用 Python sr_vulkan
 	 * 参考 picacg-qt 的 Waifu2x 面板功能
 	 */
-	import { Button } from '$lib/components/ui/button';
-	import { Label } from '$lib/components/ui/label';
-	import { Switch } from '$lib/components/ui/switch';
-	import { 
-		Sparkles, 
-		Settings, 
-		Zap, 
-		CheckCircle, 
-		AlertCircle, 
-		Loader2, 
-		Clock,
-		HardDrive,
-		Trash2
-	} from '@lucide/svelte';
+	import { Sparkles, AlertCircle } from '@lucide/svelte';
 	import { onMount, createEventDispatcher } from 'svelte';
 	import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
 	import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
@@ -36,6 +23,9 @@
 	} from './UpscalePanel';
 	import UpscalePanelGlobalControls from './UpscalePanelGlobalControls.svelte';
 	import UpscalePanelModelSettings from './UpscalePanelModelSettings.svelte';
+	import UpscalePanelCurrentInfo from './UpscalePanelCurrentInfo.svelte';
+	import UpscalePanelCacheSection from './UpscalePanelCacheSection.svelte';
+	import UpscalePanelPreview from './UpscalePanelPreview.svelte';
 
 	// ==================== 状态管理 ====================
 	
@@ -643,110 +633,40 @@
 	<UpscalePanelModelSettings
 		bind:scale
 		bind:selectedModel
-		bind:availableModels
-		bind:modelLabels
+		availableModels={availableModels}
+		modelLabels={modelLabels}
 		bind:gpuId
-		bind:gpuOptions
+		gpuOptions={gpuOptions}
 		bind:tileSize
-		bind:tileSizeOptions
+		tileSizeOptions={tileSizeOptions}
 		bind:noiseLevel
-		bind:noiseLevelOptions
-		onApply={applyModelSettings}
+		noiseLevelOptions={noiseLevelOptions}
+		on:apply={applyModelSettings}
 	/>
 
 	<!-- 当前图片信息 -->
-	<div class="section">
-		<div class="section-title">
-			<Zap class="w-4 h-4" />
-			<span>当前图片</span>
-		</div>
-
-		<div class="info-grid">
-			<div class="info-item">
-				<span class="info-label">分辨率：</span>
-				<span class="info-value">{currentImageResolution || '-'}</span>
-			</div>
-			<div class="info-item">
-				<span class="info-label">大小：</span>
-				<span class="info-value">{currentImageSize || '-'}</span>
-			</div>
-			<div class="info-item">
-				<span class="info-label">耗时：</span>
-				<span class="info-value">{processingTime.toFixed(1)}s</span>
-			</div>
-			<div class="info-item">
-				<span class="info-label">状态：</span>
-				<span class="info-value" class:text-green-500={status === '转换完成'} class:text-red-500={status === '转换失败'}>
-					{status}
-				</span>
-			</div>
-		</div>
-
-		<!-- 执行超分按钮 -->
-		<Button 
-			onclick={performUpscale} 
-			class="w-full mt-3" 
-			disabled={isProcessing || !currentImagePath}
-		>
-			{#if isProcessing}
-				<Loader2 class="w-4 h-4 mr-2 animate-spin" />
-				处理中...
-			{:else}
-				<Sparkles class="w-4 h-4 mr-2" />
-				执行超分
-			{/if}
-		</Button>
-
-		<!-- 进度条 -->
-		{#if isProcessing}
-			<div class="progress-container">
-				<div class="progress-bar">
-					<div 
-						class="progress-fill {getProgressColor(progress)}" 
-						style="width: {progress}%"
-					></div>
-				</div>
-				<span class="progress-text">{progress.toFixed(0)}%</span>
-			</div>
-		{/if}
-	</div>
+	<UpscalePanelCurrentInfo
+		currentImageResolution={currentImageResolution}
+		currentImageSize={currentImageSize}
+		processingTime={processingTime}
+		status={status}
+		statusClass={status === '转换完成' ? 'text-green-500' : status === '超分失败' ? 'text-red-500' : ''}
+		isProcessing={isProcessing}
+		currentImagePath={currentImagePath}
+		progress={progress}
+		progressColorClass={getProgressColor(progress)}
+		on:perform={performUpscale}
+	/>
 
 	<!-- 缓存管理 -->
-	<div class="section">
-		<div class="section-title">
-			<HardDrive class="w-4 h-4" />
-			<span>缓存管理</span>
-		</div>
-
-		<div class="info-grid">
-			<div class="info-item">
-				<span class="info-label">文件数：</span>
-				<span class="info-value">{cacheStats.totalFiles}</span>
-			</div>
-			<div class="info-item">
-				<span class="info-label">总大小：</span>
-				<span class="info-value">{formatFileSize(cacheStats.totalSize)}</span>
-			</div>
-		</div>
-
-		<Button onclick={cleanupCache} class="w-full mt-2" variant="outline">
-			<Trash2 class="w-4 h-4 mr-2" />
-			清理缓存 (30天前)
-		</Button>
-	</div>
+	<UpscalePanelCacheSection
+		cacheStats={cacheStats}
+		formattedSize={formatFileSize(cacheStats.totalSize)}
+		on:clear={cleanupCache}
+	/>
 
 	<!-- 预览区域 -->
-	{#if upscaledImageUrl}
-		<div class="section">
-			<div class="section-title">
-				<CheckCircle class="w-4 h-4 text-green-500" />
-				<span>超分结果</span>
-			</div>
-			<div class="preview-container">
-				<img src={upscaledImageUrl} alt="超分结果" class="preview-image" />
-			</div>
-		</div>
-	{/if}
+	<UpscalePanelPreview upscaledImageUrl={upscaledImageUrl} />
 </div>
 
 <style>
@@ -765,121 +685,5 @@
 		align-items: center;
 		padding-bottom: 0.75rem;
 		border-bottom: 1px solid hsl(var(--border));
-	}
-
-	.section {
-		background: hsl(var(--card));
-		border: 1px solid hsl(var(--border));
-		border-radius: 0.5rem;
-		padding: 1rem;
-	}
-
-	.section-title {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-weight: 600;
-		margin-bottom: 0.75rem;
-		color: hsl(var(--foreground));
-	}
-
-	.setting-row {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 0.5rem 0;
-	}
-
-	.setting-row:not(:last-child) {
-		border-bottom: 1px solid hsl(var(--border) / 0.3);
-	}
-
-	.input-number {
-		width: 80px;
-		padding: 0.25rem 0.5rem;
-		border: 1px solid hsl(var(--border));
-		border-radius: 0.25rem;
-		background: hsl(var(--background));
-		color: hsl(var(--foreground));
-		text-align: center;
-	}
-
-	.select-input {
-		padding: 0.25rem 0.5rem;
-		border: 1px solid hsl(var(--border));
-		border-radius: 0.25rem;
-		background: hsl(var(--background));
-		color: hsl(var(--foreground));
-		min-width: 150px;
-	}
-
-	.info-grid {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 0.75rem;
-	}
-
-	.info-item {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-	}
-
-	.info-label {
-		font-size: 0.75rem;
-		color: hsl(var(--muted-foreground));
-	}
-
-	.info-value {
-		font-size: 0.875rem;
-		font-weight: 500;
-		color: hsl(var(--foreground));
-	}
-
-	.progress-container {
-		margin-top: 0.75rem;
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.progress-bar {
-		flex: 1;
-		height: 8px;
-		background: hsl(var(--muted));
-		border-radius: 4px;
-		overflow: hidden;
-	}
-
-	.progress-fill {
-		height: 100%;
-		transition: width 0.3s ease, background-color 0.3s ease;
-	}
-
-	.progress-text {
-		font-size: 0.75rem;
-		font-weight: 600;
-		min-width: 40px;
-		text-align: right;
-	}
-
-	.preview-container {
-		margin-top: 0.5rem;
-		border-radius: 0.5rem;
-		overflow: hidden;
-		border: 1px solid hsl(var(--border));
-	}
-
-	.preview-image {
-		width: 100%;
-		height: auto;
-		display: block;
-	}
-
-	/* 响应式调整 */
-	@media (max-width: 640px) {
-		.info-grid {
-			grid-template-columns: 1fr;
-		}
 	}
 </style>

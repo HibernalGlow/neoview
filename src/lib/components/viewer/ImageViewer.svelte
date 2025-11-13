@@ -311,6 +311,14 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 					progressBlinking = false;
 					progressColor = '#22c55e'; // 绿色
 					console.log('超分图已匹配当前页面，MD5:', originalImageHash, '已替换，进度条设为绿色');
+					try {
+						const idx = bookStore.currentPageIndex;
+						preUpscaledPages = new Set([...preUpscaledPages, idx]);
+						updatePreUpscaleProgress();
+						window.dispatchEvent(new CustomEvent('upscaled-pages-changed', { detail: { indices: Array.from(preUpscaledPages) } }));
+					} catch (e) {
+						console.warn('标记当前页为已超分失败:', e);
+					}
 				} else {
 					console.log('超分图不属于当前页面，超分MD5:', originalImageHash, '当前MD5:', currentImageHash);
 				}
@@ -366,9 +374,33 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 			}, 100);
 		};
 
+		// 监听底栏请求指定页图片数据（优先返回预加载缓存）
+		const handleRequestPageImageData = (e: CustomEvent) => {
+			try {
+				const { index, callback } = e.detail || {};
+				if (typeof index !== 'number' || typeof callback !== 'function') return;
+				let data: string | null = null;
+				if (preloadedPageImages.has(index)) {
+					const cached = preloadedPageImages.get(index);
+					if (cached && cached.data) data = cached.data;
+				}
+				// 回退：如果请求的是当前页，返回当前 imageData
+				try {
+					const idx = bookStore.currentPageIndex;
+					if (data == null && typeof idx === 'number' && idx === index && imageData) {
+						data = imageData;
+					}
+				} catch {}
+				callback(data);
+			} catch (err) {
+				console.warn('handleRequestPageImageData 处理失败:', err);
+			}
+		};
+
 	window.addEventListener('upscale-complete', handleUpscaleComplete as EventListener);
 	window.addEventListener('upscale-saved', handleUpscaleSaved as EventListener);
 		window.addEventListener('request-current-image-data', handleRequestCurrentImageData as EventListener);
+		window.addEventListener('request-page-image-data', handleRequestPageImageData as EventListener);
 		window.addEventListener('reset-pre-upscale-progress', handleResetPreUpscaleProgress as EventListener);
 
 		// 监听对比模式变化
@@ -389,6 +421,7 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 			window.removeEventListener('upscale-complete', handleUpscaleComplete as EventListener);
 			window.removeEventListener('upscale-saved', handleUpscaleSaved as EventListener);
 			window.removeEventListener('request-current-image-data', handleRequestCurrentImageData as EventListener);
+			window.removeEventListener('request-page-image-data', handleRequestPageImageData as EventListener);
 			window.removeEventListener('reset-pre-upscale-progress', handleResetPreUpscaleProgress as EventListener);
 			window.removeEventListener('comparison-mode-changed', handleComparisonModeChanged as EventListener);
 		};
@@ -852,16 +885,17 @@ function tryApplyCompletedResults() {
 					}
 				}
 
-				// 标记为已预超分（按页序）并更新进度
-				try {
-					const idx = (task && task.pageIndex) || null;
-					if (typeof idx === 'number') {
-						preUpscaledPages = new Set([...preUpscaledPages, idx]);
-						updatePreUpscaleProgress();
+					// 标记为已预超分（按页序）并更新进度
+					try {
+						const idx = (task && task.pageIndex) || null;
+						if (typeof idx === 'number') {
+							preUpscaledPages = new Set([...preUpscaledPages, idx]);
+							updatePreUpscaleProgress();
+							window.dispatchEvent(new CustomEvent('upscaled-pages-changed', { detail: { indices: Array.from(preUpscaledPages) } }));
+						}
+					} catch (e) {
+						console.warn('更新预超分进度失败（按序）:', e);
 					}
-				} catch (e) {
-					console.warn('更新预超分进度失败（按序）:', e);
-				}
 			} else {
 				// 失败的任务也推进序号（避免阻塞后续结果应用）
 				console.warn('预加载任务失败（按序处理）:', entry && entry.err ? entry.err : entry);

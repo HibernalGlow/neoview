@@ -12,6 +12,38 @@ export interface ViewerImageSource {
   decoderId?: string | null;
 }
 
+export function createSuperResSourceFromPath(options: {
+  path: string;
+  hash: string;
+  fallbackUrl?: string | null;
+  decoderId?: string | null;
+}): ViewerImageSource {
+  return createSuperResSource({
+    path: options.path,
+    hash: options.hash,
+    fallbackUrl: options.fallbackUrl ?? null,
+    decoderId: options.decoderId ?? null,
+  });
+}
+
+export function createSuperResSourceFromBlob(options: {
+  blob: Blob;
+  hash: string;
+  path?: string | null;
+  objectUrlFactory?: (blob: Blob) => string;
+  decoderId?: string | null;
+}): ViewerImageSource {
+  const factory = options.objectUrlFactory ?? URL.createObjectURL;
+  const url = factory(options.blob);
+  return createSuperResSource({
+    path: options.path ?? null,
+    hash: options.hash,
+    blob: options.blob,
+    fallbackUrl: url,
+    decoderId: options.decoderId ?? null,
+  });
+}
+
 export interface DecoderInput {
   data: Blob | ArrayBuffer;
   mimeType?: string;
@@ -64,6 +96,16 @@ export function createStreamSource(url: string, hash: string, blob?: Blob | null
   };
 }
 
+export function createStreamSourceFromBlob(options: {
+  blob: Blob;
+  hash: string;
+  objectUrlFactory?: (blob: Blob) => string;
+}): ViewerImageSource {
+  const factory = options.objectUrlFactory ?? URL.createObjectURL;
+  const url = factory(options.blob);
+  return createStreamSource(url, options.hash, options.blob);
+}
+
 export function createSuperResSource(options: {
   path?: string | null;
   hash: string;
@@ -113,6 +155,26 @@ export function cloneSource(source: ViewerImageSource): ViewerImageSource {
   };
 }
 
+export function revokeSourceObjectUrls(
+  source: ViewerImageSource | null | undefined,
+  options: { revoke?: (url: string) => void } = {}
+): void {
+  if (!source) return;
+  const revoke = options.revoke ?? URL.revokeObjectURL?.bind(URL);
+  if (!revoke) return;
+
+  const urls = [source.primaryUrl, source.fallbackUrl].filter((url): url is string => typeof url === 'string');
+  for (const url of urls) {
+    if (url.startsWith('blob:')) {
+      try {
+        revoke(url);
+      } catch (error) {
+        console.warn('Failed to revoke blob URL', error);
+      }
+    }
+  }
+}
+
 export function mergeSource(base: ViewerImageSource, updates: Partial<ViewerImageSource>): ViewerImageSource {
   return {
     ...base,
@@ -126,6 +188,18 @@ export function getSourcePath(source: ViewerImageSource | null | undefined): str
 
 export function getSourceBlob(source: ViewerImageSource | null | undefined): Blob | null {
   return source?.blob ?? null;
+}
+
+export function isStreamSource(
+  source: ViewerImageSource | null | undefined
+): source is ViewerImageSource & { mode: 'archive_stream' } {
+  return Boolean(source && source.mode === 'archive_stream');
+}
+
+export function isSuperResSource(
+  source: ViewerImageSource | null | undefined
+): source is ViewerImageSource & { mode: 'superres_url' } {
+  return Boolean(source && source.mode === 'superres_url');
 }
 
 export async function preloadImage(url: string): Promise<void> {

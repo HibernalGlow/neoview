@@ -59,16 +59,10 @@ impl PythonUpscaleModule {
     pub fn get_available_models(&self) -> Result<Vec<String>, PyErr> {
         Python::with_gil(|py| {
             let module = self.module.bind(py);
-            let models = module.getattr("MODEL_NAMES")?;
-            let model_dict: &Bound<'_, PyDict> = models.downcast()?;
-            
-            let mut result = Vec::new();
-            for (_, value) in model_dict.iter() {
-                let model_name: String = value.extract()?;
-                result.push(model_name);
-            }
-            
-            Ok(result)
+            let result = module
+                .getattr("get_available_models")?
+                .call0()?;
+            result.extract()
         })
     }
     

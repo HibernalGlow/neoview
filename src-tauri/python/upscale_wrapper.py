@@ -6,7 +6,8 @@ NeoView Upscale Wrapper
 
 import sys
 import os
-from typing import Optional, Tuple, Dict, Any, Union
+from typing import Optional, Tuple, Dict, Any, Union, List
+
 import threading
 import queue
 import time
@@ -730,6 +731,30 @@ def get_model_name(model: Union[str, int]) -> str:
             return keys[model]
 
     return "MODEL_WAIFU2X_CUNET_UP2X"
+
+
+def get_available_models(refresh: bool = False) -> List[str]:
+    """获取可用的模型常量名称列表"""
+    if not SR_AVAILABLE:
+        return []
+
+    manager = get_manager()
+
+    if not manager.sr_initialized:
+        try:
+            manager._init_sr_vulkan()
+        except Exception as exc:
+            print(f"❌ 初始化 sr_vulkan 失败，无法获取模型列表: {exc}")
+            return []
+
+    if refresh or not manager.model_id_map:
+        try:
+            manager._discover_models()
+        except Exception as exc:
+            print(f"❌ 刷新模型列表失败: {exc}")
+            return []
+
+    return sorted(manager.model_id_map.keys())
 
 
 if __name__ == "__main__":

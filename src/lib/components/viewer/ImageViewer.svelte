@@ -4,7 +4,8 @@
 	 * 图像查看器主组件 (Svelte 5 Runes)
 	 */
 	import { bookStore } from '$lib/stores/book.svelte';
-	import { zoomLevel, zoomIn, zoomOut, resetZoom } from '$lib/stores';
+	import { zoomLevel, zoomIn, zoomOut, resetZoom, rotationAngle, viewMode } from '$lib/stores';
+	import { viewerDisplayState } from '$lib/stores/viewerDisplayStore';
 	import {
 		keyBindings,
 		generateKeyCombo,
@@ -15,6 +16,8 @@
 	import { FileSystemAPI } from '$lib/api';
 	import { Button } from '$lib/components/ui/button';
 	import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, X, Grid, Maximize2, PanelLeft } from '@lucide/svelte';
+	import { derived } from 'svelte/store';
+	import { ensurePrimaryUrl } from '$lib/viewer/imageSourceManager';
 
 	let imageData = $state<string | null>(null);
 	let imageData2 = $state<string | null>(null); // 双页模式的第二张图
@@ -23,6 +26,15 @@
 	let viewMode = $state<'single' | 'double' | 'panorama'>('single'); // 视图模式
 	let showThumbnails = $state(false); // 是否显示缩略图栏
 	let thumbnails = $state<Record<number, string>>({}); // 缓存缩略图
+	const displayUrlStore = derived(viewerDisplayState, ($state) => {
+		if ($state.mode === 'superres_url' && $state.superResSource) {
+			return ensurePrimaryUrl($state.superResSource);
+		}
+		if ($state.streamSource) {
+			return ensurePrimaryUrl($state.streamSource);
+		}
+		return null;
+	});
 
 	// 监听书籍变化，清空缩略图缓存
 	$effect(() => {
@@ -35,6 +47,7 @@
 	$effect(() => {
 		const currentPage = bookStore.currentPage;
 		if (currentPage) {
+			viewerDisplayState.resetForNewPage();
 			loadCurrentImage();
 			// 如果缩略图栏打开，加载可见的缩略图
 			if (showThumbnails) {
@@ -42,18 +55,27 @@
 			}
 		} else {
 			imageData = null;
+			viewerDisplayState.clear();
 		}
 	});
 
 	async function loadCurrentImage() {
 		const currentPage = bookStore.currentPage;
 		const currentBook = bookStore.currentBook;
-		if (!currentPage || !currentBook) return;
+		if (!currentPage || !currentBook) {
+			viewerDisplayState.clear();
+			return;
+		}
+
+		const streamHash = currentBook.type === 'archive'
+			? `${currentBook.path}::${currentPage.path}`
+			: currentPage.path;
 
 		loading = true;
 		error = null;
 		imageData = null;
 		imageData2 = null;
+		viewerDisplayState.setCurrentHash(streamHash);
 
 		try {
 			// 加载当前页
@@ -66,6 +88,7 @@
 				data = await loadImage(currentPage.path);
 			}
 			imageData = data;
+			viewerDisplayState.setStreamFromUrl(data, streamHash);
 
 			// 双页模式：加载下一页
 			if (viewMode === 'double' && bookStore.canNextPage) {
@@ -123,6 +146,7 @@
 	}
 
 	function handleClose() {
+		viewerDisplayState.clear();
 		bookStore.closeBook();
 	}
 
@@ -342,19 +366,17 @@
 		{:else if error}
 			<div class="text-red-500">Error: {error}</div>
 		{:else if imageData}
-			<!-- 单页模式 -->
 			{#if viewMode === 'single'}
 				<img
-					src={imageData}
+					src={$displayUrlStore || imageData}
 					alt="Current page"
 					class="max-w-full max-h-full object-contain"
 					style="transform: scale({$zoomLevel}); transition: transform 0.2s;"
 				/>
-			<!-- 双页模式 -->
 			{:else if viewMode === 'double'}
 				<div class="flex gap-4 items-center justify-center">
 					<img
-						src={imageData}
+						src={$displayUrlStore || imageData}
 						alt="Current page"
 						class="max-w-[45%] max-h-full object-contain"
 						style="transform: scale({$zoomLevel}); transition: transform 0.2s;"
@@ -368,10 +390,9 @@
 						/>
 					{/if}
 				</div>
-			<!-- 全景模式 -->
 			{:else if viewMode === 'panorama'}
 				<img
-					src={imageData}
+					src={$displayUrlStore || imageData}
 					alt="Current page"
 					class="w-full h-full object-contain"
 					style="transform: scale({$zoomLevel}); transition: transform 0.2s;"

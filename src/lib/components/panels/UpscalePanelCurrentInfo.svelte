@@ -3,15 +3,17 @@
 	import { Loader2, Sparkles, Zap } from '@lucide/svelte';
 	import { createEventDispatcher } from 'svelte';
 
-	export let currentImageResolution = '';
-	export let currentImageSize = '';
-	export let processingTime = 0;
-	export let status = '';
-	export let isProcessing = false;
-	export let currentImagePath = '';
-	export let progress = 0;
-	export let progressColorClass = '';
-export let statusClass = '';
+	let {
+		currentImageResolution = '',
+		currentImageSize = '',
+		processingTime = 0,
+		status = '',
+		isProcessing = false,
+		currentImagePath = '',
+		progress = 0,
+		progressColorClass = '',
+		statusClass = ''
+	} = $props();
 
 	const dispatch = createEventDispatcher();
 

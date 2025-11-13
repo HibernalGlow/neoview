@@ -1,7 +1,11 @@
 <script lang="ts">
 	import { CheckCircle } from '@lucide/svelte';
 
-	export let upscaledImageUrl: string | null = null;
+	let {
+		upscaledImageUrl = null
+	}: {
+		upscaledImageUrl?: string | null;
+	} = $props();
 </script>
 
 {#if upscaledImageUrl}

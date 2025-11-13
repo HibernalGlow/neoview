@@ -6,16 +6,29 @@
 
 	const dispatch = createEventDispatcher();
 
-	export let scale = 2;
-	export let selectedModel = '';
-	export let availableModels: string[] = [];
-	export let modelLabels: Record<string, string> = {};
-	export let gpuId = 0;
-	export let gpuOptions: { value: number; label: string }[] = [];
-	export let tileSize = 0;
-	export let tileSizeOptions: { value: number; label: string }[] = [];
-	export let noiseLevel = 0;
-	export let noiseLevelOptions: { value: number; label: string }[] = [];
+	let {
+		scale = 2,
+		selectedModel = '',
+		availableModels = [],
+		modelLabels = {},
+		gpuId = 0,
+		gpuOptions = [],
+		tileSize = 0,
+		tileSizeOptions = [],
+		noiseLevel = 0,
+		noiseLevelOptions = []
+	}: {
+		scale?: number;
+		selectedModel?: string;
+		availableModels?: string[];
+		modelLabels?: Record<string, string>;
+		gpuId?: number;
+		gpuOptions?: { value: number; label: string }[];
+		tileSize?: number;
+		tileSizeOptions?: { value: number; label: string }[];
+		noiseLevel?: number;
+		noiseLevelOptions?: { value: number; label: string }[];
+	} = $props();
 
 	function handleApply() {
 		dispatch('apply');

@@ -2,13 +2,15 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import { Label } from '$lib/components/ui/label';
 
-	export let autoUpscaleEnabled = false;
-	export let preUpscaleEnabled = true;
-	export let conditionalUpscaleEnabled = false;
-	export let conditionalMinWidth = 0;
-	export let conditionalMinHeight = 0;
-	export let currentImageUpscaleEnabled = false;
-	export let useCachedFirst = true;
+	let {
+		autoUpscaleEnabled = false,
+		preUpscaleEnabled = true,
+		conditionalUpscaleEnabled = false,
+		conditionalMinWidth = 0,
+		conditionalMinHeight = 0,
+		currentImageUpscaleEnabled = false,
+		useCachedFirst = true
+	} = $props();
 </script>
 
 <div class="section">

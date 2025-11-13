@@ -232,22 +232,21 @@ class UpscaleManager:
                     task_id,
                     width,
                     height,
-                    format_str,
-                    tile_size
+                    format=format_str,
+                    tileSize=tile_size
                 )
             else:
                 # 使用缩放倍数
                 print("📏 使用缩放倍数模式")
                 try:
-                    # 对于缩放模式，width 和 height 都设为 0
+                    # 对于缩放模式，不使用 width 和 height 参数
                     status = sr.add(
                         image_data,
                         model,
                         task_id,
                         scale,
-                        format_str,
-                        0,
-                        0  # 添加第7个参数
+                        format=format_str,
+                        tileSize=tile_size
                     )
                     print(f"📊 sr.add 返回 status: {status}")
                     
@@ -260,11 +259,9 @@ class UpscaleManager:
                             image_data,
                             model,
                             task_id,
-                            0,  # width
-                            0,  # height
                             scale,
-                            format_str,
-                            0  # tileSize
+                            format=format_str,
+                            tileSize=0
                         )
                         print(f"📊 sr.add 默认参数返回 status: {status}")
                         if status <= 0:
@@ -291,11 +288,9 @@ class UpscaleManager:
                             image_data,
                             model,
                             task_id,
-                            0,  # width
-                            0,  # height
                             scale,
-                            format_str,
-                            0  # tileSize
+                            format=format_str,
+                            tileSize=0
                         )
                         print(f"✅ sr.add 默认参数调用成功，status: {status}")
                     except Exception as e2:

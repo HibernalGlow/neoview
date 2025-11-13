@@ -17,7 +17,7 @@
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { invoke } from '@tauri-apps/api/core';
 	import ComparisonViewer from './ComparisonViewer.svelte';
-	import { upscaleState, performUpscale, getGlobalUpscaleEnabled, upscaleSettings, initUpscaleSettingsManager } from '$lib/stores/upscale/UpscaleManager.svelte';
+	import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
 	import { idbGet, idbSet, idbDelete } from '$lib/utils/idb';
     import { get } from 'svelte/store';
 
@@ -158,35 +158,8 @@
 		settings = s;
 	});
 
-	// 订阅超分状态变化
-	let upscaleStateUnsubscribe: () => void;
-	
-	$effect(() => {
-		upscaleStateUnsubscribe = upscaleState.subscribe(state => {
-			if (state.isUpscaling) {
-				// 超分进行中，开始闪烁
-				progressBlinking = true;
-				progressColor = '#FDFBF7'; // 奶白色
-			} else if (state.upscaledImageData && !state.isUpscaling) {
-				// 超分完成，停止闪烁，变成绿色
-				progressBlinking = false;
-				progressColor = '#22c55e'; // 绿色
-			} else {
-				// 没有超分，恢复默认
-				progressBlinking = false;
-				progressColor = '#FDFBF7'; // 奶白色
-			}
-		});
-		
-		return () => {
-			if (upscaleStateUnsubscribe) {
-				upscaleStateUnsubscribe();
-			}
-		};
-	});
-
-// 初始化后端超分设置管理器，避免 getGlobalUpscaleEnabled 在未初始化时回退到本地默认
-initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管理器失败:', err));
+	// PyO3 超分系统已在 UpscalePanel 中初始化
+	// 进度条状态由事件监听器管理（见下方 handleUpscaleComplete）
 
 	let imageData = $state<string | null>(null);
 	let imageData2 = $state<string | null>(null); // 双页模式的第二张图

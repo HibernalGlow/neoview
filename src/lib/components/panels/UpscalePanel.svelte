@@ -104,10 +104,16 @@
 		
 		// 初始化 PyO3 管理器
 		try {
-			await pyo3UpscaleManager.initialize(
-				'./src-tauri/python/upscale_wrapper.py',
-				'./cache/pyo3-upscale'
-			);
+			// 使用相对于应用根目录的路径
+			// Tauri 会自动处理资源路径
+			const pythonModulePath = 'src-tauri/python/upscale_wrapper.py';
+			const cacheDir = './cache/pyo3-upscale';
+			
+			console.log('🔧 初始化 PyO3 超分管理器...');
+			console.log('  Python 模块路径:', pythonModulePath);
+			console.log('  缓存目录:', cacheDir);
+			
+			await pyo3UpscaleManager.initialize(pythonModulePath, cacheDir);
 			
 			if (pyo3UpscaleManager.isAvailable()) {
 				availableModels = pyo3UpscaleManager.getAvailableModels();
@@ -117,23 +123,39 @@
 				// 更新缓存统计
 				await updateCacheStats();
 			} else {
-				showErrorToast('PyO3 超分功能不可用，请检查 sr_vulkan 模块');
+				console.warn('⚠️ PyO3 超分功能不可用，请检查 sr_vulkan 模块');
+				showErrorToast('sr_vulkan 模块不可用，请确保已安装: pip install sr_vulkan');
 			}
 		} catch (error) {
-			console.error('初始化 PyO3 超分管理器失败:', error);
-			showErrorToast('初始化超分功能失败');
+			console.error('❌ 初始化 PyO3 超分管理器失败:', error);
+			showErrorToast('初始化超分功能失败: ' + (error instanceof Error ? error.message : String(error)));
 		}
 
-		// 监听当前图片变化
+		// 监听当前图片变化 - 同步 Viewer 的当前图片
 		$effect(() => {
-			const book = bookStore.currentBook;
-			if (book && book.currentPage) {
-				const imagePath = typeof book.currentPage === 'string' 
-					? book.currentPage 
-					: (book.currentPage as any).path;
-				updateCurrentImageInfo(imagePath);
+			const currentPage = bookStore.currentPage;
+			if (currentPage) {
+				// 获取图片路径
+				const imagePath = (currentPage as any).path || (currentPage as any).url;
+				if (imagePath) {
+					updateCurrentImageInfo(imagePath);
+					console.log('📷 同步当前图片:', imagePath);
+					
+					// 如果启用自动超分，自动执行
+					if (autoUpscaleEnabled && !isProcessing) {
+						console.log('🚀 自动超分已启用，执行超分...');
+						performUpscale();
+					}
+				}
 			}
 		});
+	});
+
+	// 监听自动超分开关变化
+	$effect(() => {
+		if (autoUpscaleEnabled) {
+			console.log('✅ 自动超分已启用');
+		}
 	});
 
 	// ==================== 功能函数 ====================
@@ -245,6 +267,23 @@
 			status = '转换完成';
 			
 			showSuccessToast(`超分完成！耗时 ${processingTime.toFixed(1)}s`);
+			
+			// 同步超分结果到 bookStore
+			if ((bookStore as any).setUpscaledImage) {
+				(bookStore as any).setUpscaledImage(blob, upscaledImageUrl);
+				console.log('✨ 超分结果已同步到 bookStore');
+			}
+			
+			// 触发事件通知 ImageViewer 更新
+			window.dispatchEvent(new CustomEvent('upscale-complete', {
+				detail: { 
+					imageUrl: upscaledImageUrl,
+					blob: blob,
+					originalPath: currentImagePath,
+					processingTime: processingTime.toFixed(1)
+				}
+			}));
+			console.log('📢 触发 upscale-complete 事件');
 			
 			// 更新缓存统计
 			await updateCacheStats();

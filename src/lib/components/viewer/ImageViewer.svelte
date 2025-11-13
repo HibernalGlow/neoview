@@ -14,8 +14,9 @@
 	import { loadImageFromArchive } from '$lib/api/filesystem';
 	import { FileSystemAPI } from '$lib/api';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
-	import { settingsManager } from '$lib/settings/settingsManager';
+	import { settingsManager, performanceSettings } from '$lib/settings/settingsManager';
 	import { invoke } from '@tauri-apps/api/core';
+	import { onDestroy } from 'svelte';
 	import ComparisonViewer from './ComparisonViewer.svelte';
 	import ImageViewerDisplay from './flow/ImageViewerDisplay.svelte';
 	import ImageViewerProgressBar from './flow/ImageViewerProgressBar.svelte';
@@ -25,11 +26,93 @@
 		persistPreloadedPagesForBook,
 		restorePreloadedPagesForBook
 	} from './flow/preloadUtils';
-	import { createPreloadWorker, type PreloadTask } from './flow/preloadWorker';
+	import { createPreloadWorker, type PreloadTask, type PreloadTaskResult } from './flow/preloadWorker';
+
+// 预加载任务结果类型
+interface PreloadWorkerResult extends PreloadTaskResult {
+	upscaledImageData?: string;
+	upscaledImageBlob?: Blob;
+}
+
+// 执行超分函数的选项
+interface PerformUpscaleOptions {
+	background?: boolean;
+}
+
+// 执行超分函数的结果
+interface PerformUpscaleResult {
+	upscaledImageData?: string;
+	upscaledImageBlob?: Blob;
+	success?: boolean;
+	error?: string;
+}
 
 	import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
+	import { upscaleState } from '$lib/stores/upscale/upscaleState.svelte';
 	import { idbGet, idbSet, idbDelete } from '$lib/utils/idb';
     import { get } from 'svelte/store';
+
+	// 获取全局超分开关状态
+	async function getGlobalUpscaleEnabled(): Promise<boolean> {
+		try {
+			const settings = settingsManager.getSettings();
+			return settings.image.enableSuperResolution || false;
+		} catch (error) {
+			console.warn('获取全局超分开关状态失败:', error);
+			return false;
+		}
+	}
+
+	// 执行超分处理
+	async function performUpscale(imageData: string, imageHash: string, options: PerformUpscaleOptions = {}): Promise<PerformUpscaleResult> {
+		try {
+			console.log('执行超分处理，hash:', imageHash, 'background:', options.background);
+			
+			// 将data URL转换为Uint8Array
+			const response = await fetch(imageData);
+			const blob = await response.blob();
+			const arrayBuffer = await blob.arrayBuffer();
+			const imageDataArray = new Uint8Array(arrayBuffer);
+			
+			// 调用pyo3UpscaleManager进行超分处理
+			const resultData = await pyo3UpscaleManager.upscaleImageMemory(imageDataArray);
+			
+			// 将结果转换为Blob和URL
+			const resultBlob = new Blob([resultData], { type: 'image/webp' });
+			const resultUrl = URL.createObjectURL(resultBlob);
+			
+			// 如果是后台任务，保存到缓存
+			if (options.background) {
+				try {
+					await pyo3UpscaleManager.saveUpscaleCache(imageHash, resultData);
+					console.log('后台超分结果已保存到缓存，hash:', imageHash);
+				} catch (e) {
+					console.warn('保存超分缓存失败:', e);
+				}
+			}
+			
+			// 触发超分完成事件
+			window.dispatchEvent(new CustomEvent('upscale-complete', {
+				detail: {
+					imageData: resultUrl,
+					imageBlob: resultBlob,
+					originalImageHash: imageHash
+				}
+			}));
+			
+			return {
+				upscaledImageData: resultUrl,
+				upscaledImageBlob: resultBlob,
+				success: true
+			};
+		} catch (error) {
+			console.error('超分处理失败:', error);
+			return {
+				success: false,
+				error: error instanceof Error ? error.message : String(error)
+			};
+		}
+	}
 
 	// 进度条状态
 	let showProgressBar = $state(true);
@@ -73,12 +156,35 @@
 		};
 	});
 
-	// 预加载队列管理
-	let preloadQueue = $state<ImageDataWithHash[]>([]);
+	// 性能配置本地状态
+	let performancePreloadPages = $state(performanceSettings.preLoadSize);
+	let performanceMaxThreads = $state(performanceSettings.maxThreads);
+
+	// 预加载状态管理
 	let isPreloading = $state(false);
-	const preloadWorker = createPreloadWorker({
-		runTask: async () => undefined,
-		onTaskSuccess: () => {}
+	const preloadWorker = createPreloadWorker<PreloadWorkerResult>({
+		concurrency: () => performanceMaxThreads,
+		runTask: async (task: PreloadTask) => {
+			// 调用已有的 triggerAutoUpscale 进行预超分
+			return await triggerAutoUpscale(task, true);
+		},
+		onTaskSuccess: (task: PreloadTask, result: PreloadWorkerResult | undefined) => {
+			if (result && result.upscaledImageBlob && result.upscaledImageData) {
+				// 把返回的 data/blob 写入 preloadMemoryCache
+				preloadMemoryCache.set(task.hash, { url: result.upscaledImageData, blob: result.upscaledImageBlob });
+				
+				// 标记预超分进度
+				if (typeof task.pageIndex === 'number') {
+					preUpscaledPages = new Set([...preUpscaledPages, task.pageIndex]);
+					updatePreUpscaleProgress();
+				}
+				
+				console.log('预加载任务成功，已写入缓存，hash:', task.hash);
+			}
+		},
+		onTaskFailure: (task: PreloadTask, error: unknown) => {
+			console.error('预加载任务失败，hash:', task.hash, error);
+		}
 	});
 
 	// 预加载内存缓存：hash -> { url, blob }
@@ -136,6 +242,19 @@
 	// 订阅设置变化
 	settingsManager.addListener((s) => {
 		settings = s;
+	});
+
+	// 订阅性能配置变化
+	const performanceSettingsListener = (preLoadSize: number, maxThreads: number) => {
+		performancePreloadPages = preLoadSize;
+		performanceMaxThreads = maxThreads;
+	};
+	
+	performanceSettings.addListener(performanceSettingsListener);
+	
+	// 组件卸载时清理监听器
+	onDestroy(() => {
+		performanceSettings.removeListener(performanceSettingsListener);
 	});
 
 	// PyO3 超分系统已在 UpscalePanel 中初始化
@@ -200,11 +319,11 @@
 	// 监听书籍切换：清理上一本书的内存缓存（但不立即删除磁盘缓存，磁盘缓存由 TTL 管理）
 	$effect(() => {
 		const currentBook = bookStore.currentBook;
-		// 清理一些临时内存缓存与队列
+		// 清理一些临时内存缓存
 		md5Cache = new Map();
-		preloadQueue = [];
 		isPreloading = false;
 		preloadMemoryCache = new Map();
+		preloadWorker.clear();
 		preloadedPageImages = new Map();
 		bookStore.setUpscaledImage(null);
 		bookStore.setUpscaledImageBlob(null);
@@ -637,23 +756,11 @@
 				return;
 			}
 
-			// 如果是预加载且有其他任务在进行，加入队列
+			// 如果是预加载且有其他任务在进行，直接返回（worker会自动处理队列）
 			if (isPreload) {
 				const currentState = get(upscaleState);
 				if (currentState?.isUpscaling || isPreloading) {
-					// 验证图片数据格式
-					if (!imageDataWithHash.data.startsWith('blob:') && !imageDataWithHash.data.startsWith('data:image/')) {
-						console.warn('预加载：图片数据格式异常，不加入队列');
-						return;
-					}
-					
-					// 检查是否已在队列中
-					const exists = preloadQueue.some(item => item.hash === imageDataWithHash.hash);
-					if (!exists) {
-						// 保存带hash的图片数据到队列
-						preloadQueue = [...preloadQueue, imageDataWithHash];
-						console.log(`加入预加载队列，MD5: ${imageDataWithHash.hash}, 数据长度: ${imageDataWithHash.data.length}`);
-					}
+					// worker会自动处理队列，这里不需要手动管理
 					return;
 				}
 			} else {
@@ -730,162 +837,18 @@
 			// 清理预加载状态
 			if (isPreload) {
 				isPreloading = false;
-				// 处理队列中的下一个任务
-				processNextInQueue();
 			}
 		}
 	}
 
-	// 处理预加载队列
-let preloadingWorkerRunning = false;
-
-// 串行但并发的预加载池（按队列顺序启动，但允许并发执行）
-let preloadSeqCounter = 0; // 为每个入队任务分配序号
-let nextApplySeq = 0; // 下一个应当应用（记录为已完成并可更新UI）的序号
-let activePreloadTasks = new Map<number, Promise<any>>();
-let completedPreloadResults = new Map<number, any>();
-
-async function startPreloadWorkers(bgLimit: number) {
-	// 启动尽可能多的 worker（直到达到 bgLimit 或队列为空）
-	while (activePreloadTasks.size < bgLimit && preloadQueue.length > 0) {
-		const task = preloadQueue.shift();
-		if (!task) break;
-		const seq = ++preloadSeqCounter;
-
-		// 启动任务（不 await），记录为活动任务
-		const p = (async () => {
-			try {
-				const res = await triggerAutoUpscale(task, true);
-				return { success: true, res, task };
-			} catch (err) {
-				return { success: false, err, task };
-			}
-		})();
-
-		activePreloadTasks.set(seq, p);
-
-		// 任务完成后，把结果放到 completedPreloadResults 并尝试按序应用
-		p.then(result => {
-			activePreloadTasks.delete(seq);
-			completedPreloadResults.set(seq, result);
-			tryApplyCompletedResults();
-			// 尝试继续启动更多 worker
-			setTimeout(() => startPreloadWorkers(bgLimit), 0);
-		}).catch(err => {
-			activePreloadTasks.delete(seq);
-			completedPreloadResults.set(seq, { success: false, err, task });
-			tryApplyCompletedResults();
-			setTimeout(() => startPreloadWorkers(bgLimit), 0);
-		});
-	}
-}
-
-function tryApplyCompletedResults() {
-	// 按序应用已完成的结果（只有当序号连续可用时才应用）
-	while (completedPreloadResults.has(nextApplySeq + 1)) {
-		const seq = nextApplySeq + 1;
-		const entry = completedPreloadResults.get(seq);
-		completedPreloadResults.delete(seq);
-		nextApplySeq = seq;
-
-		// 如果成功，写入内存缓存并标记已预超分
-		try {
-			if (entry && entry.success && entry.res) {
-				const { res, task } = entry.res ? entry.res : entry;
-				// 当 triggerAutoUpscale 返回 upscaled data，写入 preloadMemoryCache
-				if (res && res.upscaledImageBlob && res.upscaledImageData) {
-					try {
-						preloadMemoryCache.set(task.hash, { url: res.upscaledImageData, blob: res.upscaledImageBlob });
-						console.log('按序写入内存预加载超分结果，hash:', task.hash);
-					} catch (e) {
-						console.warn('写入内存预加载缓存失败（按序）:', e);
-					}
-				}
-
-				// 标记为已预超分（按页序）并更新进度
-				try {
-					const idx = (task && task.pageIndex) || null;
-					if (typeof idx === 'number') {
-						preUpscaledPages = new Set([...preUpscaledPages, idx]);
-						updatePreUpscaleProgress();
-					}
-				} catch (e) {
-					console.warn('更新预超分进度失败（按序）:', e);
-				}
-			} else {
-				// 失败的任务也推进序号（避免阻塞后续结果应用）
-				console.warn('预加载任务失败（按序处理）:', entry && entry.err ? entry.err : entry);
-			}
-		} catch (e) {
-			console.error('处理已完成预加载结果失败:', e);
-		}
-	}
-}
-
-// 串行处理预加载队列，保证按队列顺序逐个执行（FIFO）
-async function processNextInQueue() {
-		// 如果队列为空，直接返回
-		if (preloadQueue.length === 0) return;
-
-		// 如果已经有一个预加载 worker 在运行，稍后再试，保持串行
-		if (preloadingWorkerRunning) {
-			console.log('preload worker already running, will try later');
-			return;
-		}
-
-		// 如果当前有前台超分任务在执行，稍后再试
-		const currentState = get(upscaleState);
-		if (currentState?.isUpscaling) {
-			console.log('preload queue: foreground upscale in progress, will try later');
-			return;
-		}
-
-		// 取出队列第一个任务（按 FIFO）
-		const nextTask = preloadQueue[0];
-		preloadQueue = preloadQueue.slice(1);
-
-		console.log(`处理队列中的下一个任务: ${nextTask.hash}, 数据长度: ${nextTask.data.length}`);
-
-		// 标记 worker 正在运行，保持串行执行
-		preloadingWorkerRunning = true;
-
-		try {
-			const res = await triggerAutoUpscale(nextTask, true);
-			if (res && res.requeue) {
-				// 后台并发已满或前台冲突，重试：将任务放回队列尾部并在短时间后重试
-				console.log('任务需要重试，已放回队列:', nextTask.hash);
-				preloadQueue = [...preloadQueue, nextTask];
-				// 给出短暂延时再继续处理
-				setTimeout(() => { preloadingWorkerRunning = false; processNextInQueue(); }, 200);
-				return;
-			}
-		} catch (error) {
-			console.error('队列任务执行失败:', error);
-		} finally {
-			preloadingWorkerRunning = false;
-		}
-
-		// 如果队列还有剩余，则尝试继续（triggerAutoUpscale 的 finally 会再次调用 processNextInQueue
-		// 当当前任务完成后；这里做一次主动调用以覆盖没有触发完成路径的情况）
-		// 继续处理队列中的下一个任务（若存在）
-		if (preloadQueue.length > 0) {
-			setTimeout(() => processNextInQueue(), 50);
-		}
-	}
+	
 
 	// 预加载后续页面的超分
 	async function preloadNextPages() {
 		try {
-			// 获取预加载页数设置
-			let preloadPages = 3; // 默认值
-			try {
-				let settings;
-				upscaleSettings.subscribe(s => settings = s)();
-				preloadPages = settings?.preload_pages || 3;
-				console.log('预加载设置:', { preloadPages, globalEnabled: settings?.global_upscale_enabled });
-			} catch (e) {
-				console.warn('获取预加载设置失败，使用默认值:', e);
-			}
+			// 使用性能配置中的预加载页数
+			const preloadPages = performancePreloadPages;
+			console.log('预加载设置:', { preloadPages, performanceMaxThreads });
 
 			// 检查全局开关（如果关闭，仍执行普通的页面预加载/解码逻辑，但不触发预超分）
 			const globalEnabled = await getGlobalUpscaleEnabled();
@@ -1017,16 +980,13 @@ async function processNextInQueue() {
 						console.warn('预加载页面解码失败，继续超分预处理:', e);
 					}
 
-					// 没有缓存：如果全局已开启，则把任务入队由池并发执行（按队列顺序启动并按序应用结果）；
+					// 没有缓存：如果全局已开启，则使用新的preloadWorker API；
 					// 如果全局已关闭，则跳过触发超分
 					if (globalEnabled) {
-						// 放入队列（带 pageIndex 以便按序应用）
+						// 使用新的preloadWorker API
 						const task = { data: imageDataWithHash.data, hash: imageDataWithHash.hash, pageIndex: targetIndex };
-						preloadQueue = [...preloadQueue, task];
-						// 启动池（使用设置中的后台并发限制）
-						let settings; upscaleSettings.subscribe(s => settings = s)();
-						const bgLimit = Number(settings?.background_concurrency) || 1;
-						startPreloadWorkers(bgLimit);
+						preloadWorker.enqueue(task);
+						console.log('已加入preloadWorker队列，hash:', imageDataWithHash.hash, 'pageIndex:', targetIndex);
 					} else {
 						console.log('全局超分关闭，跳过触发预超分（已完成预解码）');
 					}

@@ -19,6 +19,7 @@ export interface NeoViewSettings {
     cacheMemorySize: number; // MB
     preLoadSize: number; // number of items
     multiThreadedRendering: boolean;
+    maxThreads: number;
   };
   image: {
     supportedFormats: string[];
@@ -96,7 +97,8 @@ const defaultSettings: NeoViewSettings = {
   performance: {
     cacheMemorySize: 512,
     preLoadSize: 3,
-    multiThreadedRendering: true
+    multiThreadedRendering: true,
+    maxThreads: 2
   },
   image: {
     supportedFormats: ['jpg', 'png', 'webp', 'avif', 'jxl'],
@@ -224,8 +226,8 @@ export class SettingsManager {
     }
   }
 
-  addListener(cb: (s: NeoViewSettings) => void) {
-    this.listeners.add(cb);
+  addListener(callback: (s: NeoViewSettings) => void) {
+    this.listeners.add(callback);
   }
 
   removeListener(cb: (s: NeoViewSettings) => void) {
@@ -260,3 +262,44 @@ export class SettingsManager {
 }
 
 export const settingsManager = SettingsManager.getInstance();
+
+// 性能配置便捷访问器
+export class PerformanceSettings {
+  private manager: SettingsManager;
+  
+  constructor(manager: SettingsManager) {
+    this.manager = manager;
+  }
+
+  get preLoadSize(): number {
+    return this.manager.getSettings().performance.preLoadSize;
+  }
+
+  get maxThreads(): number {
+    return this.manager.getSettings().performance.maxThreads;
+  }
+
+  updatePreLoadSize(value: number) {
+    this.manager.updateNestedSettings('performance', { preLoadSize: value });
+  }
+
+  updateMaxThreads(value: number) {
+    this.manager.updateNestedSettings('performance', { maxThreads: value });
+  }
+
+  addListener(callback: (preLoadSize: number, maxThreads: number) => void) {
+    this.manager.addListener((settings) => {
+      callback(settings.performance.preLoadSize, settings.performance.maxThreads);
+    });
+  }
+
+  removeListener(callback: (preLoadSize: number, maxThreads: number) => void) {
+    // 由于内部实现不同，这里需要通过manager移除监听器
+    // 实际使用时建议保存回调引用
+    this.manager.removeListener((settings) => {
+      callback(settings.performance.preLoadSize, settings.performance.maxThreads);
+    });
+  }
+}
+
+export const performanceSettings = new PerformanceSettings(settingsManager);

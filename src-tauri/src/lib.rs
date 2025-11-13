@@ -18,6 +18,7 @@ use commands::thumbnail_commands::ThumbnailManagerState;
 use commands::upscale_commands::UpscaleManagerState;
 use commands::generic_upscale_commands::GenericUpscalerState;
 use commands::upscale_settings_commands::UpscaleSettingsState;
+use commands::sr_vulkan_commands::SrVulkanManagerState;
 use std::sync::Arc;
 
 #[allow(clippy::missing_panics_doc)]
@@ -74,6 +75,9 @@ pub fn run() {
             
             // 初始化设置管理器
             app.manage(UpscaleSettingsState::default());
+            
+            // 初始化 Sr_vulkan 超分管理器
+            app.manage(SrVulkanManagerState::default());
             
             Ok(())
         })
@@ -190,6 +194,13 @@ pub fn run() {
             commands::check_upscale_cache_for_algorithm,
             commands::save_binary_file,
             commands::read_binary_file,
+            // Sr_vulkan commands
+            commands::init_sr_vulkan_manager,
+            commands::check_sr_vulkan_availability,
+            commands::get_sr_vulkan_gpu_info,
+            commands::upscale_image_sr_vulkan,
+            commands::get_sr_vulkan_cache_stats,
+            commands::cleanup_sr_vulkan_cache,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

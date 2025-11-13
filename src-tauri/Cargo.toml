@@ -35,3 +35,5 @@ rusqlite = { version = "0.32.0", features = ["bundled"] }
 chrono = { version = "0.4", features = ["serde"] }
 url = "2.5"
 md5 = "0.7.0"
+pyo3 = { version = "0.21", features = ["auto-initialize"] }
+numpy = "0.21"

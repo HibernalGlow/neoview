@@ -36,7 +36,9 @@ def test_upscale():
             scale=2,        # 2x
             tile_size=256,  # 256
             noise_level=0,  # 无降噪
-            timeout=60.0    # 60秒
+            timeout=60.0,   # 60秒
+            width=0,        # 0 表示使用 scale
+            height=0        # 0 表示使用 scale
         )
         
         if result is not None:

@@ -29,3 +29,5 @@ ref/upscale*
 /cache/pyo3-upscale
 /cache/pyo3-upscale/*
 
+test_image.png
+test_image_upscaled.png

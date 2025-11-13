@@ -28,7 +28,7 @@ export class PyO3UpscaleManager {
 		modelId: 0,
 		modelName: 'cunet',
 		scale: 2,
-		tileSize: 0,
+		tileSize: 64,
 		noiseLevel: 0
 	});
 
@@ -322,7 +322,7 @@ export class PyO3UpscaleManager {
 			modelId: 0,
 			modelName: 'cunet',
 			scale: 2,
-			tileSize: 0,
+			tileSize: 64,
 			noiseLevel: 0
 		};
 	}

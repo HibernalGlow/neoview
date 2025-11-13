@@ -33,7 +33,7 @@
 	// 模型参数
 	let selectedModel = $state('cunet');
 	let scale = $state(2);
-	let tileSize = $state(0); // 0 = 自动
+	let tileSize = $state(64); // 默认 tile size
 	let noiseLevel = $state(0);
 	let gpuId = $state(0);
 
@@ -267,8 +267,10 @@
 
 		try {
 			// 应用当前设置
+			console.log('🔧 应用设置 - tileSize:', tileSize, 'selectedModel:', selectedModel, 'scale:', scale);
 			await pyo3UpscaleManager.setModel(selectedModel, scale);
 			pyo3UpscaleManager.setTileSize(tileSize);
+			console.log('✅ 设置已应用到 PyO3UpscaleManager');
 
 			// 从当前页面获取图像数据
 			const currentPage = bookStore.currentPage;

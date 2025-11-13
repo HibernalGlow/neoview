@@ -608,25 +608,42 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 				return;
 			}
 
-			const { data: imageData } = imageDataWithHash;
+			let { data: imageData } = imageDataWithHash;
 			console.log('[ImageViewer] 开始自动超分，数据长度:', imageData.length);
+
+			// 如果是 blob URL，转换为 data URL
+			if (imageData.startsWith('blob:')) {
+				console.log('[ImageViewer] 检测到 blob URL，转换为 data URL...');
+				try {
+					const response = await fetch(imageData);
+					const blob = await response.blob();
+					imageData = await new Promise<string>((resolve, reject) => {
+						const reader = new FileReader();
+						reader.onload = () => resolve(reader.result as string);
+						reader.onerror = reject;
+						reader.readAsDataURL(blob);
+					});
+					console.log('[ImageViewer] 转换完成，data URL 长度:', imageData.length);
+				} catch (e) {
+					console.error('[ImageViewer] blob URL 转换失败:', e);
+					return;
+				}
+			}
 
 			// 使用新的简化超分系统
 			await performUpscale(imageData);
 
-			// 更新显示
-			const state = await new Promise<any>((resolve) => {
-				let unsub: any;
-				unsub = upscaleState.subscribe(s => {
-					resolve(s);
-					unsub();
+			// 等待超分完成（从 store 获取结果）
+			await new Promise<void>((resolve) => {
+				const unsub = upscaleState.subscribe(s => {
+					if (!s.isUpscaling && s.upscaledImageData) {
+						bookStore.setUpscaledImage(s.upscaledImageData);
+						console.log('[ImageViewer] 超分结果已更新到 bookStore');
+						unsub();
+						resolve();
+					}
 				});
 			});
-
-			if (state.upscaledImageData) {
-				bookStore.setUpscaledImage(state.upscaledImageData);
-				console.log('[ImageViewer] 超分结果已更新到 bookStore');
-			}
 
 			console.log('[ImageViewer] 自动超分完成');
 

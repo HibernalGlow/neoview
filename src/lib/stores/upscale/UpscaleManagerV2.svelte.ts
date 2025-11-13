@@ -61,14 +61,26 @@ export async function performUpscale(imageData: string): Promise<void> {
 
 		console.log('[UpscaleManager] 开始超分，数据长度:', imageData.length);
 
-		// 调用后端超分命令
-		const result = await invoke<string>('upscale_image_from_data', {
+		// 调用后端超分命令（Tauri 自动转换蛇形命名为驼峰式）
+		const result = await invoke<number[]>('upscale_image_from_data', {
 			imageData: imageData,
-			model: 'waifu2x_cunet',
-			scale: 2
+			savePath: '',
+			algorithm: 'waifu2x',
+			model: 'models-cunet',
+			gpuId: '0',
+			tileSize: '400',
+			tta: false,
+			noiseLevel: '0',
+			numThreads: '1:2:2',
+			thumbnailPath: 'D:\\temp\\neoview_thumbnails_test'
 		});
 
 		console.log('[UpscaleManager] 超分完成，结果长度:', result.length);
+
+		// 转换结果为 data URL
+		const uint8Array = new Uint8Array(result);
+		const blob = new Blob([uint8Array], { type: 'image/webp' });
+		const blobUrl = URL.createObjectURL(blob);
 
 		// 更新状态为完成
 		upscaleState.update(state => ({
@@ -76,7 +88,7 @@ export async function performUpscale(imageData: string): Promise<void> {
 			isUpscaling: false,
 			progress: 100,
 			status: '超分完成',
-			upscaledImageData: result,
+			upscaledImageData: blobUrl,
 			showProgress: true
 		}));
 

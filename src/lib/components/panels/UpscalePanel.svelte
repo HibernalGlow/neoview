@@ -27,8 +27,13 @@
 	
 	// 全局开关
 	let autoUpscaleEnabled = $state(false);
+	let preUpscaleEnabled = $state(true);
+	let conditionalUpscaleEnabled = $state(false);
+	let conditionalMinWidth = $state(0);
+	let conditionalMinHeight = $state(0);
 	let currentImageUpscaleEnabled = $state(false);
 	let useCachedFirst = $state(true);
+	let settingsInitialized = $state(false);
 
 	// 模型参数
 	let selectedModel = $state('MODEL_WAIFU2X_CUNET_UP2X');
@@ -191,6 +196,16 @@
 	// 创建事件分发器
 	const dispatch = createEventDispatcher();
 
+	function emitUpscaleSettings() {
+		dispatch('upscale-settings-updated', {
+			autoUpscaleEnabled,
+			preUpscaleEnabled,
+			conditionalUpscaleEnabled,
+			conditionalMinWidth,
+			conditionalMinHeight
+		});
+	}
+
 	onMount(async () => {
 		// 加载设置
 		loadSettings();
@@ -248,6 +263,21 @@
 			console.error('获取图片信息失败:', error);
 		}
 	}
+
+	$effect(() => {
+		if (!settingsInitialized) {
+			return;
+		}
+		autoUpscaleEnabled;
+		preUpscaleEnabled;
+		conditionalUpscaleEnabled;
+		conditionalMinWidth;
+		conditionalMinHeight;
+		currentImageUpscaleEnabled;
+		useCachedFirst;
+		saveSettings();
+		emitUpscaleSettings();
+	});
 
 	/**
 	 * 更新缓存统计
@@ -580,6 +610,10 @@
 	function saveSettings() {
 		const settings = {
 			autoUpscaleEnabled,
+			preUpscaleEnabled,
+			conditionalUpscaleEnabled,
+			conditionalMinWidth,
+			conditionalMinHeight,
 			currentImageUpscaleEnabled,
 			useCachedFirst,
 			selectedModel,
@@ -600,6 +634,10 @@
 			try {
 				const settings = JSON.parse(saved);
 				autoUpscaleEnabled = settings.autoUpscaleEnabled ?? false;
+				preUpscaleEnabled = settings.preUpscaleEnabled ?? true;
+				conditionalUpscaleEnabled = settings.conditionalUpscaleEnabled ?? false;
+				conditionalMinWidth = settings.conditionalMinWidth ?? 0;
+				conditionalMinHeight = settings.conditionalMinHeight ?? 0;
 				currentImageUpscaleEnabled = settings.currentImageUpscaleEnabled ?? false;
 				useCachedFirst = settings.useCachedFirst ?? true;
 				selectedModel = settings.selectedModel ?? 'cunet';
@@ -664,8 +702,48 @@
 	<div class="section">
 		<div class="setting-row">
 			<div class="flex items-center gap-2">
-				<Switch bind:checked={autoUpscaleEnabled} onchange={saveSettings} />
+				<Switch bind:checked={autoUpscaleEnabled} />
 				<Label>自动 Waifu2x</Label>
+			</div>
+		</div>
+
+		<div class="setting-row">
+			<div class="flex items-center gap-2">
+				<Switch bind:checked={preUpscaleEnabled} />
+				<Label>开启预超分</Label>
+			</div>
+		</div>
+
+		<div class="setting-row items-start">
+			<div class="flex flex-col gap-2">
+				<div class="flex items-center gap-2">
+					<Switch bind:checked={conditionalUpscaleEnabled} />
+					<Label>满足条件才自动超分</Label>
+				</div>
+				<div class="flex gap-4 pl-6 text-sm text-gray-500">
+					<label class="flex items-center gap-2">
+						<span>最小宽度</span>
+						<input
+							type="number"
+							class="input-number w-24"
+							min="0"
+							bind:value={conditionalMinWidth}
+							disabled={!conditionalUpscaleEnabled}
+						/>
+						x
+					</label>
+					<label class="flex items-center gap-2">
+						<span>最小高度</span>
+						<input
+							type="number"
+							class="input-number w-24"
+							min="0"
+							bind:value={conditionalMinHeight}
+							disabled={!conditionalUpscaleEnabled}
+						/>
+						x
+					</label>
+				</div>
 			</div>
 		</div>
 

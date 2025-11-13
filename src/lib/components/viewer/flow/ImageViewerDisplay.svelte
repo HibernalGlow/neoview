@@ -22,8 +22,8 @@
 	} = $props();
 
 	// Canvas 引用
-	let canvas1: HTMLCanvasElement;
-	let canvas2: HTMLCanvasElement;
+	let canvas1 = $state<HTMLCanvasElement>();
+	let canvas2 = $state<HTMLCanvasElement>();
 
 	// 当 ImageBitmap 更新时，绘制到 Canvas
 	$effect(() => {

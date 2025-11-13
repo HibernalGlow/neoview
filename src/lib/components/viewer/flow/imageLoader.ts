@@ -726,4 +726,40 @@ export class ImageLoader {
 			pages: this.preUpscaledPages
 		};
 	}
+
+	/**
+	 * 更新预加载页面的访问时间（LRU）
+	 */
+	private touchPreloadedPage(pageIndex: number): void {
+		// 这个方法用于 LRU 管理，目前 preloadedPageImages 使用较少
+		// 暂时只做简单的访问更新
+		if (this.preloadedPageImages.has(pageIndex)) {
+			const data = this.preloadedPageImages.get(pageIndex)!;
+			// 可以在这里添加访问时间戳，但目前 Map 没有存储时间戳
+			// 所以暂时只是确保页面存在于缓存中
+			this.preloadedPageImages.set(pageIndex, data);
+		}
+	}
+
+	/**
+	 * 确保预加载缓存不超过限制
+	 */
+	private ensurePreloadedCacheLimit(): void {
+		// 设置合理的缓存限制，避免内存占用过高
+		const MAX_PRELOADED_PAGES = 20;
+		
+		if (this.preloadedPageImages.size <= MAX_PRELOADED_PAGES) {
+			return;
+		}
+		
+		// 简单的 LRU：删除最旧的条目
+		// 由于我们的 Map 没有时间戳，这里简单地删除前面的条目
+		const entries = Array.from(this.preloadedPageImages.entries());
+		const toDelete = entries.slice(0, this.preloadedPageImages.size - MAX_PRELOADED_PAGES);
+		
+		for (const [pageIndex] of toDelete) {
+			this.preloadedPageImages.delete(pageIndex);
+			console.log(`清理预加载页面缓存，删除页面: ${pageIndex + 1}`);
+		}
+	}
 }

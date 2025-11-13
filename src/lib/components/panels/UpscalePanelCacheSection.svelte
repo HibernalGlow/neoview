@@ -9,8 +9,10 @@
 		cacheDir?: string;
 	};
 
-	export let cacheStats: CacheStats = { totalFiles: 0, totalSize: 0 };
-	export let formattedSize = '0 B';
+	let {
+		cacheStats = { totalFiles: 0, totalSize: 0 },
+		formattedSize = '0 B'
+	} = $props();
 
 	const dispatch = createEventDispatcher();
 

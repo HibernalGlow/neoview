@@ -4,18 +4,11 @@
 	 * 图像查看器主组件 (Svelte 5 Runes)
 	 */
 	import { bookStore } from '$lib/stores/book.svelte';
-	import { 
-		zoomLevel, 
-		zoomIn, 
-		zoomOut, 
-		resetZoom, 
-		rotationAngle, 
-		viewMode 
-	} from '$lib/stores';
-	import { 
-		keyBindings, 
-		generateKeyCombo, 
-		findCommandByKeys 
+	import { zoomLevel, zoomIn, zoomOut, resetZoom, rotationAngle, viewMode } from '$lib/stores';
+	import {
+		keyBindings,
+		generateKeyCombo,
+		findCommandByKeys
 	} from '$lib/stores/keyboard.svelte';
 	import { loadImage } from '$lib/api/fs';
 	import { loadImageFromArchive } from '$lib/api/filesystem';
@@ -24,8 +17,7 @@
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { invoke } from '@tauri-apps/api/core';
 	import ComparisonViewer from './ComparisonViewer.svelte';
-	import ImageViewerImageDisplay from './flow/ImageViewerImageDisplay.svelte';
-	import ImageViewerProgressBar from './flow/ImageViewerProgressBar.svelte';
+	import ImageViewerDisplay from './flow/ImageViewerDisplay.svelte';
 	import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
 	import { idbGet, idbSet, idbDelete } from '$lib/utils/idb';
     import { get } from 'svelte/store';
@@ -176,9 +168,6 @@
 	let preUpscaleProgress = $state(0); // 预超分进度 (0-100)
 	let preUpscaledPages = $state(new Set<number>()); // 已预超分的页面索引
 	let totalPreUpscalePages = $state(0); // 总预超分页数
-
-	let currentProgressPercent = $state(0);
-	let preUpscaleBarPercent = $state(0);
 
 	// 当前页面hash管理
 	let currentImageHash = $state<string>(''); // 当前页面的原始图片hash
@@ -514,7 +503,7 @@
 					}
 				}
 			} catch (e) {
-				console.warn('生成路径hash异常，回退到数据hash:', e);
+				console.warn('生成路径hash异常，回退到数据哈希:', e);
 			}
 			if (!imageDataWithHash) {
 				imageDataWithHash = await getImageDataWithHash(data);
@@ -643,7 +632,7 @@
 								}
 								// 更新内存索引，便于后续快速命中
 								hashPathIndex.set(imageHash, meta.path);
-								// 持久化到 IndexedDB
+								// 持久化索引到 IndexedDB
 								try {
 									const cb = bookStore.currentBook;
 									if (cb && cb.path) {
@@ -651,7 +640,7 @@
 										await idbSet(key, Array.from(hashPathIndex.entries()));
 									}
 								} catch (err) {
-									console.warn('持久化 hashPathIndex 到 IndexedDB 失败:', err);
+									console.warn('持久化 hashPathIndex 失败:', err);
 								}
 								console.log(`找到 ${meta.algorithm || algorithm} 算法的超分缓存，path: ${meta.path}`);
 								return true;
@@ -1109,23 +1098,6 @@ async function processNextInQueue() {
 		totalPreUpscalePages = 0;
 	}
 
-	$effect(() => {
-		const currentBook = bookStore.currentBook;
-		const pagesTotal = currentBook?.pages?.length ?? 0;
-		if (!currentBook || pagesTotal <= 0) {
-			currentProgressPercent = 0;
-			preUpscaleBarPercent = 0;
-			return;
-		}
-
-		const currentPageIndex = Math.max(0, Math.min(bookStore.currentPageIndex, pagesTotal - 1));
-		currentProgressPercent = ((currentPageIndex + 1) / pagesTotal) * 100;
-
-		const preUpscaleExtra = Math.max(0, (preUpscaleProgress / 100) * totalPreUpscalePages);
-		preUpscaleBarPercent = ((currentPageIndex + 1 + preUpscaleExtra) / pagesTotal) * 100;
-		preUpscaleBarPercent = Math.max(currentProgressPercent, preUpscaleBarPercent);
-	});
-
 	async function handleNextPage() {
 		if (!bookStore.canNextPage) return;
 		try {
@@ -1287,16 +1259,22 @@ async function processNextInQueue() {
 		style:cursor={cursorVisible ? 'default' : 'none'}
 	>
 	<!-- 图像显示区域 -->
-	<ImageViewerImageDisplay
-		loadingVisible={loadingVisible}
-		error={error}
-		imageData={imageData}
-		imageData2={imageData2}
-		viewMode={$viewMode}
-		zoomLevel={$zoomLevel}
-		rotationAngle={$rotationAngle}
-		upscaledImageData={bookStore.upscaledImageData}
-	/>
+	<div class="image-container flex-1 flex items-center justify-center overflow-auto" data-viewer="true">
+		{#if loadingVisible}
+			<div class="text-white">Loading...</div>
+		{:else if error}
+			<div class="text-red-500">Error: {error}</div>
+		{:else}
+			<ImageViewerDisplay
+				imageData={imageData}
+				imageData2={imageData2}
+				upscaledImageData={bookStore.upscaledImageData}
+				viewMode={$viewMode as 'single' | 'double' | 'panorama'}
+				zoomLevel={$zoomLevel}
+				rotationAngle={$rotationAngle}
+			/>
+		{/if}
+	</div>
 
 	<!-- 对比模式查看器 -->
 	<ComparisonViewer
@@ -1307,11 +1285,22 @@ async function processNextInQueue() {
 	/>
 	
 	<!-- Viewer底部进度条 -->
-	<ImageViewerProgressBar
-		show={showProgressBar && !!bookStore.currentBook}
-		currentPercent={currentProgressPercent}
-		preUpscalePercent={preUpscaleBarPercent}
-		progressBlinking={progressBlinking}
-		progressColor={progressColor}
-	/>
+	{#if showProgressBar && bookStore.currentBook}
+		<div class="absolute bottom-0 left-0 right-0 h-1 pointer-events-none">
+			<!-- 预超分进度条（黄色，底层） -->
+			{#if preUpscaleProgress > 0}
+				<div 
+					class="absolute bottom-0 left-0 h-full transition-all duration-500" 
+					style="width: {((bookStore.currentPageIndex + 1 + preUpscaleProgress / 100 * totalPreUpscalePages) / bookStore.currentBook.pages.length) * 100}%; background-color: #FCD34D; opacity: 0.6;"
+				>
+				</div>
+			{/if}
+			<!-- 当前页面进度条（奶白色/绿色，叠加在黄色上面） -->
+			<div 
+				class="absolute bottom-0 left-0 h-full transition-all duration-300 {progressBlinking ? 'animate-pulse' : ''}" 
+				style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%; background-color: {progressColor}; opacity: 0.8;"
+			>
+			</div>
+		</div>
+	{/if}
 </div>

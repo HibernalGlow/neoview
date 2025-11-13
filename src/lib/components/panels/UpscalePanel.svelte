@@ -399,30 +399,34 @@
 					reject(new Error('等待 ImageViewer 响应超时'));
 				}, 5000);
 				
-				// 触发事件请求 ImageViewer 提供当前图像数据
-				dispatch('request-current-image-data', {
-					callback: (imageData: string) => {
-						clearTimeout(timeout);
-						console.log('✅ 收到 ImageViewer 返回的数据，长度:', imageData.length);
-						
-						// 转换 data URL 为 Uint8Array
-						if (imageData.startsWith('data:')) {
-							fetch(imageData)
-								.then(response => response.blob())
-								.then(blob => blob.arrayBuffer())
-								.then(arrayBuffer => {
-									console.log('✅ 成功转换为 Uint8Array，大小:', arrayBuffer.byteLength);
-									resolve(new Uint8Array(arrayBuffer));
-								})
-								.catch(error => {
-									console.error('❌ 转换图像数据失败:', error);
-									reject(error);
-								});
-						} else {
-							reject(new Error('无效的图像数据格式'));
-						}
+				// 定义回调函数
+				const callback = (imageData: string) => {
+					clearTimeout(timeout);
+					console.log('✅ 收到 ImageViewer 返回的数据，长度:', imageData.length);
+					
+					// 转换 data URL 或 blob URL 为 Uint8Array
+					if (imageData.startsWith('data:') || imageData.startsWith('blob:')) {
+						fetch(imageData)
+							.then(response => response.blob())
+							.then(blob => blob.arrayBuffer())
+							.then(arrayBuffer => {
+								console.log('✅ 成功转换为 Uint8Array，大小:', arrayBuffer.byteLength);
+								resolve(new Uint8Array(arrayBuffer));
+							})
+							.catch(error => {
+								console.error('❌ 转换图像数据失败:', error);
+								reject(error);
+							});
+					} else {
+						reject(new Error('无效的图像数据格式: ' + imageData.substring(0, 50)));
 					}
+				};
+				
+				// 使用 window.dispatchEvent 发送 CustomEvent
+				const event = new CustomEvent('request-current-image-data', {
+					detail: { callback }
 				});
+				window.dispatchEvent(event);
 			});
 			
 		} catch (error) {

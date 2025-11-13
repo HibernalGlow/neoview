@@ -49,6 +49,8 @@
 	// 图片数据状态
 	let imageData = $state<string | null>(null);
 	let imageData2 = $state<string | null>(null); // 双页模式的第二张图
+	let imageBitmap = $state<ImageBitmap | null>(null);
+	let imageBitmap2 = $state<ImageBitmap | null>(null); // 双页模式的第二张图
 	let loading = $state(false);
 	let loadingVisible = $state(false); // 控制loading动画的可见性
 	let error = $state<string | null>(null);
@@ -66,10 +68,14 @@
 	// 初始化预加载管理器
 	onMount(() => {
 		preloadManager = createPreloadManager({
-			onImageLoaded: (data, data2) => {
-				imageData = data;
-				imageData2 = data2;
-				originalImageDataForComparison = data;
+			onImageLoaded: (objectUrl, objectUrl2) => {
+				imageData = objectUrl;
+				imageData2 = objectUrl2;
+			},
+			onImageBitmapReady: async (bitmap, bitmap2) => {
+				imageBitmap = bitmap;
+				imageBitmap2 = bitmap2;
+				originalImageDataForComparison = bitmap ? await bitmapToDataURL(bitmap) : '';
 			},
 			onLoadingStateChange: (loadingState, visible) => {
 				loading = loadingState;
@@ -143,11 +149,11 @@
 				preUpscaleProgress = 0;
 				totalPreUpscalePages = 0;
 			},
-			onComparisonModeChanged: (detail) => {
+			onComparisonModeChanged: async (detail) => {
 				const { enabled } = detail;
-				if (enabled && imageData && bookStore.upscaledImageData) {
+				if (enabled && imageBitmap && bookStore.upscaledImageData) {
 					comparisonVisible = true;
-					originalImageDataForComparison = imageData;
+					originalImageDataForComparison = await bitmapToDataURL(imageBitmap);
 					upscaledImageDataForComparison = bookStore.upscaledImageData;
 				} else {
 					comparisonVisible = false;
@@ -388,6 +394,18 @@
 		comparisonVisible = false;
 	}
 
+	/**
+	 * 将 ImageBitmap 转换为 DataURL
+	 */
+	async function bitmapToDataURL(bitmap: ImageBitmap): Promise<string> {
+		const canvas = document.createElement('canvas');
+		const ctx = canvas.getContext('2d')!;
+		canvas.width = bitmap.width;
+		canvas.height = bitmap.height;
+		ctx.drawImage(bitmap, 0, 0);
+		return canvas.toDataURL('image/png');
+	}
+
 	
 </script>
 
@@ -411,6 +429,8 @@
 			<ImageViewerDisplay
 				imageData={imageData}
 				imageData2={imageData2}
+				imageBitmap={imageBitmap}
+				imageBitmap2={imageBitmap2}
 				upscaledImageData={bookStore.upscaledImageData}
 				viewMode={$viewMode as 'single' | 'double' | 'panorama'}
 				zoomLevel={$zoomLevel}

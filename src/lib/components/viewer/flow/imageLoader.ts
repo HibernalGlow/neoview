@@ -1,6 +1,6 @@
 /**
  * Image Loader
- * 页面加载和预加载逻辑模块
+ * 页面加载和预加载逻辑模块 - 三层缓存架构
  */
 
 import { invoke } from '@tauri-apps/api/core';
@@ -17,11 +17,32 @@ import {
 } from './preloadRuntime';
 import { createPreloadWorker, type PreloadTask, type PreloadTaskResult } from './preloadWorker';
 
+// 缩略图高度配置
+const THUMB_HEIGHT = 120;
+
+// 缓存项接口
+interface BlobCacheItem {
+	blob: Blob;
+	url: string;
+	lastAccessed: number;
+}
+
+interface BitmapCacheItem {
+	bitmap: ImageBitmap;
+	lastAccessed: number;
+}
+
+interface ThumbnailCacheItem {
+	dataURL: string;
+	lastAccessed: number;
+}
+
 export interface ImageLoaderOptions {
 	performancePreloadPages: number;
 	performanceMaxThreads: number;
 	viewMode?: 'single' | 'double' | 'panorama';
-	onImageLoaded?: (imageData: string, imageData2?: string) => void;
+	onImageLoaded?: (objectUrl: string, objectUrl2?: string) => void;
+	onImageBitmapReady?: (bitmap: ImageBitmap, bitmap2?: ImageBitmap) => void;
 	onPreloadProgress?: (progress: number, total: number) => void;
 	onError?: (error: string) => void;
 	onLoadingStateChange?: (loading: boolean, visible: boolean) => void;
@@ -35,13 +56,20 @@ export interface PreloadWorkerResult extends PreloadTaskResult {
 export class ImageLoader {
 	private options: ImageLoaderOptions;
 	private preloadWorker: ReturnType<typeof createPreloadWorker<PreloadWorkerResult>>;
-	private preloadMemoryCache = new Map<string, { url: string; blob: Blob }>();
-	private preloadedPageImages = new Map<number, { data: string; decoded: boolean }>();
+	
+	// 三层缓存架构
+	private blobCache = new Map<number, BlobCacheItem>();
+	private bitmapCache = new Map<number, BitmapCacheItem>();
+	private thumbnailCache = new Map<number, ThumbnailCacheItem>();
+	
+	// 预超分相关
 	private preUpscaledPages = new Set<number>();
 	private totalPreUpscalePages = 0;
 	private preUpscaleProgress = 0;
 	private md5Cache = new Map<string, string>();
 	private hashPathIndex = new Map<string, string>();
+	
+	// 加载状态
 	private loading = false;
 	private loadingVisible = false;
 	private loadingTimeout: number | null = null;
@@ -101,20 +129,271 @@ export class ImageLoader {
 	}
 
 	/**
+	 * 确保页面资源已加载
+	 */
+	private async ensureResources(pageIndex: number): Promise<void> {
+		// 1. 确保 Blob 缓存
+		if (!this.blobCache.has(pageIndex)) {
+			const blob = await this.readPageBlob(pageIndex);
+			const url = URL.createObjectURL(blob);
+			this.blobCache.set(pageIndex, {
+				blob,
+				url,
+				lastAccessed: Date.now()
+			});
+		}
+		
+		// 2. 确保 ImageBitmap 缓存
+		if (!this.bitmapCache.has(pageIndex)) {
+			const { blob } = this.blobCache.get(pageIndex)!;
+			const bitmap = await createImageBitmap(blob);
+			this.bitmapCache.set(pageIndex, {
+				bitmap,
+				lastAccessed: Date.now()
+			});
+		}
+		
+		// 更新访问时间
+		this.updateAccessTime(pageIndex);
+	}
+	
+	/**
+	 * 读取页面 Blob
+	 */
+	private async readPageBlob(pageIndex: number): Promise<Blob> {
+		const currentBook = bookStore.currentBook;
+		if (!currentBook) {
+			throw new Error('没有当前书籍');
+		}
+		
+		const pageInfo = currentBook.pages[pageIndex];
+		if (!pageInfo) {
+			throw new Error(`页面 ${pageIndex} 不存在`);
+		}
+		
+		let base64Data: string;
+		if (currentBook.type === 'archive') {
+			base64Data = await loadImageFromArchive(currentBook.path, pageInfo.path);
+		} else {
+			base64Data = await loadImage(pageInfo.path);
+		}
+		
+		// 将 base64 转换为 Blob
+		const response = await fetch(base64Data);
+		return response.blob();
+	}
+	
+	/**
+	 * 更新缓存访问时间
+	 */
+	private updateAccessTime(pageIndex: number): void {
+		const now = Date.now();
+		if (this.blobCache.has(pageIndex)) {
+			const item = this.blobCache.get(pageIndex)!;
+			item.lastAccessed = now;
+		}
+		if (this.bitmapCache.has(pageIndex)) {
+			const item = this.bitmapCache.get(pageIndex)!;
+			item.lastAccessed = now;
+		}
+		if (this.thumbnailCache.has(pageIndex)) {
+			const item = this.thumbnailCache.get(pageIndex)!;
+			item.lastAccessed = now;
+		}
+	}
+	
+	/**
+	 * 获取 ImageBitmap
+	 */
+	async getBitmap(pageIndex: number): Promise<ImageBitmap> {
+		await this.ensureResources(pageIndex);
+		return this.bitmapCache.get(pageIndex)!.bitmap;
+	}
+	
+	/**
+	 * 获取缩略图 DataURL
+	 */
+	async getThumbnail(pageIndex: number): Promise<string> {
+		await this.ensureResources(pageIndex);
+		
+		if (!this.thumbnailCache.has(pageIndex)) {
+			const { bitmap } = this.bitmapCache.get(pageIndex)!;
+			const dataURL = await this.drawBitmapToDataURL(bitmap, THUMB_HEIGHT);
+			this.thumbnailCache.set(pageIndex, {
+				dataURL,
+				lastAccessed: Date.now()
+			});
+		}
+		
+		return this.thumbnailCache.get(pageIndex)!.dataURL;
+	}
+	
+	/**
+	 * 获取 Blob
+	 */
+	async getBlob(pageIndex: number): Promise<Blob> {
+		await this.ensureResources(pageIndex);
+		return this.blobCache.get(pageIndex)!.blob;
+	}
+	
+	/**
+	 * 获取 Object URL
+	 */
+	async getObjectUrl(pageIndex: number): Promise<string> {
+		await this.ensureResources(pageIndex);
+		return this.blobCache.get(pageIndex)!.url;
+	}
+	
+	/**
+	 * 将 ImageBitmap 绘制为 DataURL 缩略图
+	 */
+	private async drawBitmapToDataURL(bitmap: ImageBitmap, height: number): Promise<string> {
+		const canvas = document.createElement('canvas');
+		const ctx = canvas.getContext('2d')!;
+		
+		// 计算缩放比例
+		const scale = height / bitmap.height;
+		canvas.width = bitmap.width * scale;
+		canvas.height = height;
+		
+		// 绘制缩略图
+		ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+		
+		return canvas.toDataURL('image/jpeg', 0.85);
+	}
+
+	/**
+	 * 预加载指定范围
+	 */
+	async preloadRange(centerIndex: number, radius: number): Promise<void> {
+		const targets = this.computeRange(centerIndex, radius);
+		const promises = targets.map(index => this.ensureResources(index));
+		await Promise.all(promises);
+		this.enforceCacheLimits();
+	}
+	
+	/**
+	 * 计算预加载范围
+	 */
+	private computeRange(centerIndex: number, radius: number): number[] {
+		const currentBook = bookStore.currentBook;
+		if (!currentBook) return [];
+		
+		const totalPages = currentBook.pages.length;
+		const start = Math.max(0, centerIndex - radius);
+		const end = Math.min(totalPages - 1, centerIndex + radius);
+		
+		const indices: number[] = [];
+		for (let i = start; i <= end; i++) {
+			if (i !== centerIndex) { // 跳过当前页
+				indices.push(i);
+			}
+		}
+		
+		return indices;
+	}
+	
+	/**
+	 * 执行缓存限制
+	 */
+	private enforceCacheLimits(): void {
+		this.enforceBlobCacheLimit();
+		this.enforceBitmapCacheLimit();
+		this.enforceThumbnailCacheLimit();
+	}
+	
+	/**
+	 * 限制 Blob 缓存
+	 */
+	private enforceBlobCacheLimit(): void {
+		const limit = performanceSettings.cache_memory_size * 1024 * 1024; // MB to bytes
+		let totalSize = 0;
+		const entries = Array.from(this.blobCache.entries());
+		
+		// 计算总大小
+		for (const [, item] of entries) {
+			totalSize += item.blob.size;
+		}
+		
+		// 按访问时间排序
+		entries.sort(([, a], [, b]) => a.lastAccessed - b.lastAccessed);
+		
+		// 移除最旧的项直到满足限制
+		for (const [index, item] of entries) {
+			if (totalSize <= limit) break;
+			
+			// 检查是否有其他缓存依赖
+			if (this.bitmapCache.has(index) || this.thumbnailCache.has(index)) {
+				continue; // 跳过仍在使用的项
+			}
+			
+			URL.revokeObjectURL(item.url);
+			this.blobCache.delete(index);
+			totalSize -= item.blob.size;
+		}
+	}
+	
+	/**
+	 * 限制 ImageBitmap 缓存
+	 */
+	private enforceBitmapCacheLimit(): void {
+		const limit = 20; // 最多缓存 20 个 ImageBitmap
+		const entries = Array.from(this.bitmapCache.entries());
+		
+		if (entries.length <= limit) return;
+		
+		// 按访问时间排序
+		entries.sort(([, a], [, b]) => a.lastAccessed - b.lastAccessed);
+		
+		// 移除最旧的项
+		const toRemove = entries.length - limit;
+		for (let i = 0; i < toRemove; i++) {
+			const [index, item] = entries[i];
+			
+			// 检查是否有缩略图依赖
+			if (this.thumbnailCache.has(index)) {
+				continue; // 跳过仍在使用的项
+			}
+			
+			item.bitmap.close();
+			this.bitmapCache.delete(index);
+		}
+	}
+	
+	/**
+	 * 限制缩略图缓存
+	 */
+	private enforceThumbnailCacheLimit(): void {
+		const limit = 50; // 最多缓存 50 个缩略图
+		const entries = Array.from(this.thumbnailCache.entries());
+		
+		if (entries.length <= limit) return;
+		
+		// 按访问时间排序
+		entries.sort(([, a], [, b]) => a.lastAccessed - b.lastAccessed);
+		
+		// 移除最旧的项
+		const toRemove = entries.length - limit;
+		for (let i = 0; i < toRemove; i++) {
+			const [index] = entries[i];
+			this.thumbnailCache.delete(index);
+		}
+	}
+	
+	/**
 	 * 初始化（用于重新加载 IndexedDB 缓存等）
 	 */
 	initialize(): void {
 		// 这里可以添加从 IndexedDB 加载持久化缓存的逻辑
 		console.log('ImageLoader 初始化');
 	}
-
 	/**
 	 * 加载当前页面图片
 	 */
 	async loadCurrentImage(): Promise<void> {
-		const currentPage = bookStore.currentPage;
+		const currentPageIndex = bookStore.currentPageIndex;
 		const currentBook = bookStore.currentBook;
-		if (!currentPage || !currentBook) return;
+		if (!currentBook) return;
 
 		this.loading = true;
 		this.loadingVisible = false;
@@ -129,51 +408,35 @@ export class ImageLoader {
 		}, 1000);
 
 		try {
-			// 优先使用预加载解码的页面图片（若存在）以实现即时显示
-			const currentIndex = bookStore.currentPageIndex;
-			let data: string | null = null;
-			let imageData2: string | null = null;
-
-			if (this.preloadedPageImages.has(currentIndex)) {
-				const cached = this.preloadedPageImages.get(currentIndex);
-				if (cached && cached.data) {
-					console.log('使用预加载缓存的当前页面图片，index:', currentIndex + 1);
-					data = cached.data;
-					// 标记为最近使用
-					this.touchPreloadedPage(currentIndex);
-				}
-			} else {
-				// 加载当前页（从磁盘/存档）
-				if (currentBook.type === 'archive') {
-					console.log('Loading image from archive:', currentPage.path);
-					data = await loadImageFromArchive(currentBook.path, currentPage.path);
-				} else {
-					console.log('Loading image from file system:', currentPage.path);
-					data = await loadImage(currentPage.path);
-				}
-			}
-
+			// 确保当前页资源已加载
+			await this.ensureResources(currentPageIndex);
+			
+			// 获取 ImageBitmap 和 Object URL
+			const bitmap = await this.getBitmap(currentPageIndex);
+			const objectUrl = await this.getObjectUrl(currentPageIndex);
+			
 			// 双页模式：加载下一页
+			let bitmap2: ImageBitmap | null = null;
+			let objectUrl2: string | null = null;
+			
 			if (this.options.viewMode === 'double' && bookStore.canNextPage) {
-				const nextPage = bookStore.currentPageIndex + 1;
-				const nextPageInfo = currentBook.pages[nextPage];
-				
-				if (nextPageInfo) {
-					if (currentBook.type === 'archive') {
-						imageData2 = await loadImageFromArchive(currentBook.path, nextPageInfo.path);
-					} else {
-						imageData2 = await loadImage(nextPageInfo.path);
-					}
+				const nextPageIndex = currentPageIndex + 1;
+				if (nextPageIndex < currentBook.pages.length) {
+					await this.ensureResources(nextPageIndex);
+					bitmap2 = await this.getBitmap(nextPageIndex);
+					objectUrl2 = await this.getObjectUrl(nextPageIndex);
 				}
 			}
 
-			// 获取带hash的图片数据：优先使用基于路径的稳定hash（archive::innerpath），回退到数据hash
+			// 获取带hash的图片数据：用于超分缓存检查
+			const pageInfo = currentBook.pages[currentPageIndex];
 			let imageDataWithHash = null;
 			try {
-				const pathKey = currentBook.type === 'archive' ? `${currentBook.path}::${currentPage.path}` : currentPage.path;
+				const pathKey = currentBook.type === 'archive' ? `${currentBook.path}::${pageInfo.path}` : pageInfo.path;
 				try {
 					const pathHash = await invoke<string>('calculate_path_hash', { path: pathKey });
-					imageDataWithHash = { data, hash: pathHash };
+					const { blob } = this.blobCache.get(currentPageIndex)!;
+					imageDataWithHash = { blob, hash: pathHash };
 				} catch (e) {
 					console.warn('调用 calculate_path_hash 失败，回退到数据hash:', e);
 				}
@@ -181,6 +444,8 @@ export class ImageLoader {
 				console.warn('生成路径hash异常，回退到数据hash:', e);
 			}
 			if (!imageDataWithHash) {
+				const { blob } = this.blobCache.get(currentPageIndex)!;
+				const data = await this.blobToDataURL(blob);
 				imageDataWithHash = await getImageDataWithHash(data);
 				if (!imageDataWithHash) {
 					console.error('无法获取图片数据及hash');
@@ -188,7 +453,7 @@ export class ImageLoader {
 				}
 			}
 
-			// 检查是否有对应的超分缓存（传入带hash的对象）
+			// 检查是否有对应的超分缓存
 			const hasCache = await checkUpscaleCache(imageDataWithHash, true);
 
 			// 如果没有缓存且全局超分开关开启，则自动开始超分
@@ -201,8 +466,9 @@ export class ImageLoader {
 				this.preloadNextPages();
 			}, 1000);
 
-			// 调用外部回调
-			this.options.onImageLoaded?.(data, imageData2);
+			// 调用外部回调 - 传递新的数据格式
+			this.options.onImageLoaded?.(objectUrl, objectUrl2);
+			this.options.onImageBitmapReady?.(bitmap, bitmap2);
 		} catch (err) {
 			const errorMessage = err instanceof Error ? err.message : 'Failed to load image';
 			console.error('Failed to load image:', err);
@@ -218,6 +484,18 @@ export class ImageLoader {
 				this.loadingTimeout = null;
 			}
 		}
+	}
+	
+	/**
+	 * 将 Blob 转换为 DataURL
+	 */
+	private async blobToDataURL(blob: Blob): Promise<string> {
+		return new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = () => resolve(reader.result as string);
+			reader.onerror = reject;
+			reader.readAsDataURL(blob);
+		});
 	}
 
 	/**
@@ -396,43 +674,49 @@ export class ImageLoader {
 	 * 清理预加载缓存（书籍切换时调用）
 	 */
 	cleanup(): void {
+		// 清理所有缓存
+		for (const [, item] of this.blobCache) {
+			URL.revokeObjectURL(item.url);
+		}
+		this.blobCache.clear();
+		
+		for (const [, item] of this.bitmapCache) {
+			item.bitmap.close();
+		}
+		this.bitmapCache.clear();
+		
+		this.thumbnailCache.clear();
+		
+		// 清理其他状态
 		this.md5Cache = new Map();
 		this.isPreloading = false;
-		this.preloadMemoryCache = new Map();
-		this.preloadedPageImages = new Map();
 		bookStore.setUpscaledImage(null);
 		bookStore.setUpscaledImageBlob(null);
 		this.preloadWorker.clear();
 		this.resetPreUpscaleProgress();
 	}
 
-	/**
-	 * 标记预加载页面为最近使用
-	 */
-	private touchPreloadedPage(index: number): void {
-		if (this.preloadedPageImages.has(index)) {
-			const data = this.preloadedPageImages.get(index);
-			this.preloadedPageImages.delete(index);
-			this.preloadedPageImages.set(index, data);
-		}
-	}
+	
 
 	/**
-	 * 确保预加载缓存不超过限制
-	 */
-	private ensurePreloadedCacheLimit(): void {
-		const PRELOADED_PAGES_CACHE_LIMIT = 10;
-		while (this.preloadedPageImages.size > PRELOADED_PAGES_CACHE_LIMIT) {
-			const firstKey = this.preloadedPageImages.keys().next().value;
-			this.preloadedPageImages.delete(firstKey);
-		}
-	}
-
-	/**
-	 * 获取内存预加载缓存
+	 * 获取内存预加载缓存（兼容旧接口）
 	 */
 	getPreloadMemoryCache(): Map<string, { url: string; blob: Blob }> {
-		return this.preloadMemoryCache;
+		const cache = new Map<string, { url: string; blob: Blob }>();
+		for (const [pageIndex, item] of this.blobCache) {
+			const pageInfo = bookStore.currentBook?.pages[pageIndex];
+			if (pageInfo) {
+				const pathKey = bookStore.currentBook?.type === 'archive' 
+					? `${bookStore.currentBook.path}::${pageInfo.path}` 
+					: pageInfo.path;
+				if (pathKey) {
+					// 使用路径生成 hash 作为键
+					const hash = `${pageIndex}_${pathKey.split('/').pop()}`;
+					cache.set(hash, { url: item.url, blob: item.blob });
+				}
+			}
+		}
+		return cache;
 	}
 
 	/**

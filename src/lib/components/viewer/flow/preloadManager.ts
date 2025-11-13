@@ -5,11 +5,15 @@
 
 import { performanceSettings } from '$lib/settings/settingsManager';
 import { bookStore } from '$lib/stores/book.svelte';
+import { invoke } from '@tauri-apps/api/core';
 import { ImageLoader, type ImageLoaderOptions } from './imageLoader';
 import { createEventListeners, type EventListenersOptions } from './eventListeners';
+import { createPreloadWorker } from './preloadWorker';
+import { triggerAutoUpscale } from './preloadRuntime';
 
 export interface PreloadManagerOptions {
-	onImageLoaded?: (imageData: string, imageData2?: string) => void;
+	onImageLoaded?: (objectUrl: string, objectUrl2?: string) => void;
+	onImageBitmapReady?: (bitmap: ImageBitmap, bitmap2?: ImageBitmap) => void;
 	onPreloadProgress?: (progress: number, total: number) => void;
 	onError?: (error: string) => void;
 	onLoadingStateChange?: (loading: boolean, visible: boolean) => void;
@@ -23,6 +27,7 @@ export interface PreloadManagerOptions {
 	onUpscaleStart?: () => void;
 	onCacheHit?: (detail: any) => void;
 	onCheckPreloadCache?: (detail: any) => void;
+	onThumbnailReady?: (pageIndex: number, dataURL: string) => void;
 }
 
 export class PreloadManager {
@@ -33,8 +38,14 @@ export class PreloadManager {
 	private eventListeners: ReturnType<typeof createEventListeners>;
 	private cleanupEventListeners: () => void;
 	private bookUnsubscribe: () => void;
+	private preloadWorker: ReturnType<typeof createPreloadWorker<any>>;
+	private options: PreloadManagerOptions;
+	private preUpscaledPages = new Set<number>();
 
 	constructor(options: PreloadManagerOptions = {}) {
+		// 保存选项
+		this.options = options;
+		
 		// 初始化性能配置
 		this.performancePreloadPages = performanceSettings.preLoadSize;
 		this.performanceMaxThreads = performanceSettings.maxThreads;
@@ -44,9 +55,41 @@ export class PreloadManager {
 			performancePreloadPages: this.performancePreloadPages,
 			performanceMaxThreads: this.performanceMaxThreads,
 			onImageLoaded: options.onImageLoaded,
+			onImageBitmapReady: options.onImageBitmapReady,
 			onPreloadProgress: options.onPreloadProgress,
 			onError: options.onError,
 			onLoadingStateChange: options.onLoadingStateChange
+		});
+		
+		// 创建预加载 worker
+		this.preloadWorker = createPreloadWorker({
+			concurrency: () => this.performanceMaxThreads,
+			runTask: async (task) => {
+				// 调用 triggerAutoUpscale 进行预超分，传递 Blob
+				return await triggerAutoUpscale({
+					blob: task.blob,
+					hash: task.hash
+				}, true);
+			},
+			onTaskSuccess: (task, result) => {
+				if (result && result.upscaledImageBlob && result.upscaledImageData) {
+					// 更新内存缓存
+					const cache = this.imageLoader.getPreloadMemoryCache();
+					cache.set(task.hash, { 
+						url: result.upscaledImageData, 
+						blob: result.upscaledImageBlob 
+					});
+					
+					// 标记预超分进度
+					if (typeof task.pageIndex === 'number') {
+						this.preUpscaledPages = new Set([...this.preUpscaledPages, task.pageIndex]);
+						this.updatePreUpscaleProgress();
+					}
+				}
+			},
+			onTaskFailure: (task, error) => {
+				console.error('预加载任务失败，hash:', task.hash, error);
+			}
 		});
 
 		// 创建事件监听器
@@ -103,6 +146,9 @@ export class PreloadManager {
 		if (this.bookUnsubscribe) {
 			this.bookUnsubscribe();
 		}
+
+		// 清理预加载 worker
+		this.preloadWorker.clear();
 
 		// 清理图片加载器
 		this.imageLoader.cleanup();
@@ -179,6 +225,7 @@ export class PreloadManager {
 			if (newBookPath !== currentBookPath) {
 				// 清理上一本书的缓存
 				this.imageLoader.cleanup();
+				this.preloadWorker.clear();
 				
 				// 重置预超分进度
 				this.resetPreUpscaleProgress();
@@ -186,6 +233,12 @@ export class PreloadManager {
 				// 重新初始化以加载新书的缓存
 				if (newBookPath) {
 					this.imageLoader.initialize();
+					// 预加载当前页周围的内容
+					const currentPageIndex = bookStore.currentPageIndex;
+					if (currentPageIndex >= 0) {
+						const radius = Math.floor(this.performancePreloadPages / 2);
+						this.imageLoader.preloadRange(currentPageIndex, radius);
+					}
 				}
 				
 				currentBookPath = newBookPath;
@@ -241,10 +294,111 @@ export class PreloadManager {
 	}
 
 	/**
-	 * 触发预加载（外部调用接口）
+	 * 请求缩略图
 	 */
-	async triggerPreload(): Promise<void> {
-		return this.imageLoader.preloadNextPages();
+	async requestThumbnail(pageIndex: number): Promise<string> {
+		const thumb = await this.imageLoader.getThumbnail(pageIndex);
+		this.options.onThumbnailReady?.(pageIndex, thumb);
+		return thumb;
+	}
+	
+	/**
+	 * 获取 ImageBitmap
+	 */
+	async getBitmap(pageIndex: number): Promise<ImageBitmap> {
+		return this.imageLoader.getBitmap(pageIndex);
+	}
+	
+	/**
+	 * 获取 Blob
+	 */
+	async getBlob(pageIndex: number): Promise<Blob> {
+		return this.imageLoader.getBlob(pageIndex);
+	}
+	
+	/**
+	 * 获取 Object URL
+	 */
+	async getObjectUrl(pageIndex: number): Promise<string> {
+		return this.imageLoader.getObjectUrl(pageIndex);
+	}
+	
+	/**
+	 * 触发预超分
+	 */
+	triggerPreUpscale(range: number[]): void {
+		const globalEnabled = true; // 这里应该从某个地方获取全局设置
+		if (!globalEnabled) {
+			console.log('全局超分开关已关闭，跳过预超分');
+			return;
+		}
+		
+		for (const index of range) {
+			this.enqueueUpscaleTask(index);
+		}
+	}
+	
+	/**
+	 * 将超分任务加入队列
+	 */
+	private async enqueueUpscaleTask(pageIndex: number): Promise<void> {
+		try {
+			const blob = await this.imageLoader.getBlob(pageIndex);
+			const pageInfo = bookStore.currentBook?.pages[pageIndex];
+			if (!pageInfo) return;
+			
+			// 生成 hash
+			let hash: string;
+			const currentBook = bookStore.currentBook;
+			if (currentBook?.type === 'archive') {
+				const pathKey = `${currentBook.path}::${pageInfo.path}`;
+				hash = await invoke<string>('calculate_path_hash', { path: pathKey });
+			} else {
+				hash = await invoke<string>('calculate_path_hash', { path: pageInfo.path });
+			}
+			
+			// 创建任务 - 直接传递 Blob
+			const task = {
+				blob,
+				hash,
+				pageIndex
+			};
+			
+			// 加入队列
+			this.preloadWorker.enqueue(task);
+		} catch (error) {
+			console.error(`加入超分任务失败，页面 ${pageIndex}:`, error);
+		}
+	}
+	
+	/**
+	 * 将 Blob 转换为 DataURL
+	 */
+	private async blobToDataURL(blob: Blob): Promise<string> {
+		return new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = () => resolve(reader.result as string);
+			reader.onerror = reject;
+			reader.readAsDataURL(blob);
+		});
+	}
+	
+	/**
+	 * 更新预超分进度
+	 */
+	private updatePreUpscaleProgress(): void {
+		const total = this.totalPreUpscalePages;
+		if (total > 0) {
+			const progress = (this.preUpscaledPages.size / total) * 100;
+			this.options.onPreloadProgress?.(progress, total);
+		}
+	}
+	
+	/**
+	 * 获取总预超分页数
+	 */
+	private get totalPreUpscalePages(): number {
+		return this.performancePreloadPages;
 	}
 
 	/**

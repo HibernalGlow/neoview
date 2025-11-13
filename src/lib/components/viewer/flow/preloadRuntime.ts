@@ -10,7 +10,8 @@ import { settingsManager } from '$lib/settings/settingsManager';
 import { get } from 'svelte/store';
 
 export interface ImageDataWithHash {
-	data: string;
+	data?: string;
+	blob?: Blob;
 	hash: string;
 }
 
@@ -42,18 +43,26 @@ export async function getGlobalUpscaleEnabled(): Promise<boolean> {
  * 执行超分处理
  */
 export async function performUpscale(
-	imageData: string, 
+	imageDataOrBlob: string | Blob, 
 	imageHash: string, 
 	options: PerformUpscaleOptions = {}
 ): Promise<PerformUpscaleResult> {
 	try {
 		console.log('执行超分处理，hash:', imageHash, 'background:', options.background);
+
+		let imageDataArray: Uint8Array;
 		
-		// 将data URL转换为Uint8Array
-		const response = await fetch(imageData);
-		const blob = await response.blob();
-		const arrayBuffer = await blob.arrayBuffer();
-		const imageDataArray = new Uint8Array(arrayBuffer);
+		// 如果是 Blob，直接使用
+		if (imageDataOrBlob instanceof Blob) {
+			const arrayBuffer = await imageDataOrBlob.arrayBuffer();
+			imageDataArray = new Uint8Array(arrayBuffer);
+		} else {
+			// 如果是 data URL，转换为 Uint8Array
+			const response = await fetch(imageDataOrBlob);
+			const blob = await response.blob();
+			const arrayBuffer = await blob.arrayBuffer();
+			imageDataArray = new Uint8Array(arrayBuffer);
+		}
 		
 		// 调用pyo3UpscaleManager进行超分处理
 		const resultData = await pyo3UpscaleManager.upscaleImageMemory(imageDataArray);
@@ -104,7 +113,7 @@ export async function triggerAutoUpscale(
 ): Promise<PerformUpscaleResult | undefined> {
 	try {
 		// 验证图片数据
-		if (!imageDataWithHash || !imageDataWithHash.data) {
+		if (!imageDataWithHash || (!imageDataWithHash.data && !imageDataWithHash.blob)) {
 			console.error('自动超分：图片数据为空');
 			return;
 		}
@@ -132,58 +141,17 @@ export async function triggerAutoUpscale(
 			}
 		}
 
-		const { data: imageData, hash: imageHash } = imageDataWithHash;
-		console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', 'MD5:', imageHash, '图片数据长度:', imageData.length);
+		const { data: imageData, blob: imageBlob, hash: imageHash } = imageDataWithHash;
+		const input = imageBlob || imageData;
 		
-		// 检查是否是blob URL，如果是则转换为data URL（保持一致性）
-		let processedImageData = imageData;
-		if (imageData.startsWith('blob:')) {
-			console.log('检测到blob URL，使用 worker 异步转换为 data URL...');
-			const response = await fetch(imageData);
-			const blob = await response.blob();
-
-			// 使用 worker 转换，避免阻塞主线程
-			if (!window.__blobWorker) {
-				// @ts-ignore
-				window.__blobWorker = new Worker(new URL('$lib/workers/blobToDataUrl.worker.ts', import.meta.url), { type: 'module' });
-				window.__blobWorkerCallbacks = new Map();
-				window.__blobWorker.addEventListener('message', (ev) => {
-					const { id, success, data, error } = ev.data || {};
-					const cb = window.__blobWorkerCallbacks.get(id);
-					if (cb) {
-						window.__blobWorkerCallbacks.delete(id);
-						if (success) cb.resolve(data);
-						else cb.reject(error);
-					}
-				});
-			}
-
-			const id = Math.random().toString(36).slice(2);
-			const promise = new Promise<string>((resolve, reject) => {
-				window.__blobWorkerCallbacks.set(id, { resolve, reject });
-				window.__blobWorker.postMessage({ id, action: 'blobToDataUrl', blob });
-			});
-
-			processedImageData = await promise;
-			console.log('worker 转换后的 data URL 长度:', processedImageData.length);
-		}
+		console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', 'MD5:', imageHash, 
+			imageBlob ? `Blob size: ${imageBlob.size}` : `图片数据长度: ${imageData?.length}`);
 		
-		// 检查图片格式
-		const isAvif = processedImageData.startsWith('data:image/avif');
-		const isJxl = processedImageData.startsWith('data:image/jxl');
+		// 触发超分开始事件
+		window.dispatchEvent(new CustomEvent('upscale-start'));
 		
-		// 对于AVIF和JXL，先转换为WebP
-		if (isAvif || isJxl) {
-			console.log(`转换${isAvif ? 'AVIF' : 'JXL'}为WebP...`);
-			processedImageData = await invoke<string>('convert_data_url_to_webp', {
-				dataUrl: processedImageData
-			});
-			console.log('转换后的WebP数据长度:', processedImageData.length);
-		}
-		
-		// 执行超分处理
-		const res = await performUpscale(processedImageData, imageHash, { background: isPreload });
-		return res;
+		// 执行超分
+		return await performUpscale(input!, imageHash, { background: isPreload });
 	} catch (error) {
 		console.error('自动超分失败:', error);
 		return {

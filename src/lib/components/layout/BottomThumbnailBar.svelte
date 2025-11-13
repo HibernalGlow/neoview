@@ -10,6 +10,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Progress from '$lib/components/ui/progress';
 	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, ExternalLink, Minus, Target } from '@lucide/svelte';
+	import { createPreloadManager } from '$lib/components/viewer/flow/preloadManager';
 
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
@@ -20,6 +21,9 @@
 	let showProgressBar = $state(true);
 	let hoverCount = $state(0); // 追踪悬停区域的计数
 	let showAreaOverlay = $state(false); // 显示区域覆盖层
+	
+	// 创建预加载管理器实例用于缩略图
+	let preloadManager: ReturnType<typeof createPreloadManager>;
 
 	// 响应钉住状态
 	$effect(() => {
@@ -119,7 +123,7 @@
 
 	async function loadVisibleThumbnails() {
 		const currentBook = bookStore.currentBook;
-		if (!currentBook) return;
+		if (!currentBook || !preloadManager) return;
 
 		// 动态计算预加载范围，确保至少显示6页
 		const preloadRange = Math.max(5, Math.floor(($bottomThumbnailBarHeight - 40) / 60)); // 基于高度计算
@@ -128,11 +132,14 @@
 
 		console.log(`Loading thumbnails from ${start} to ${end} (total: ${end - start + 1})`);
 
+		// 并行请求所有缩略图
+		const promises: Promise<void>[] = [];
 		for (let i = start; i <= end; i++) {
 			if (!(i in thumbnails)) {
-				loadThumbnail(i);
+				promises.push(loadThumbnail(i));
 			}
 		}
+		await Promise.all(promises);
 	}
 
 	// 在前端从 base64 生成缩略图
@@ -173,23 +180,32 @@
 	}
 
 	async function loadThumbnail(pageIndex: number) {
-		const currentBook = bookStore.currentBook;
-		if (!currentBook || !currentBook.pages[pageIndex]) return;
-
+		if (!preloadManager) return;
+		
 		try {
-			const page = currentBook.pages[pageIndex];
-			let fullImageData: string;
-
-			if (currentBook.type === 'archive') {
-				fullImageData = await loadImageFromArchive(currentBook.path, page.path);
-			} else {
-				fullImageData = await loadImage(page.path);
-			}
-
-			const thumbnail = await generateThumbnailFromBase64(fullImageData);
-			thumbnails = { ...thumbnails, [pageIndex]: thumbnail };
+			// 使用预加载管理器获取缩略图
+			await preloadManager.requestThumbnail(pageIndex);
 		} catch (err) {
 			console.error(`Failed to load thumbnail for page ${pageIndex}:`, err);
+			// 回退到原始方法
+			const currentBook = bookStore.currentBook;
+			if (!currentBook || !currentBook.pages[pageIndex]) return;
+
+			try {
+				const page = currentBook.pages[pageIndex];
+				let fullImageData: string;
+
+				if (currentBook.type === 'archive') {
+					fullImageData = await loadImageFromArchive(currentBook.path, page.path);
+				} else {
+					fullImageData = await loadImage(page.path);
+				}
+
+				const thumbnail = await generateThumbnailFromBase64(fullImageData);
+				thumbnails = { ...thumbnails, [pageIndex]: thumbnail };
+			} catch (fallbackErr) {
+				console.error(`Fallback also failed for page ${pageIndex}:`, fallbackErr);
+			}
 		}
 	}
 
@@ -215,10 +231,45 @@
 		});
 	}
 
+	// 初始化预加载管理器
+	$effect(() => {
+		const currentBook = bookStore.currentBook;
+		if (currentBook) {
+			// 创建预加载管理器
+			preloadManager = createPreloadManager({
+				onThumbnailReady: (pageIndex: number, dataURL: string) => {
+					// 解析 dataURL 获取图片尺寸
+					const img = new Image();
+					img.onload = () => {
+						const maxHeight = $bottomThumbnailBarHeight - 40;
+						let width = img.width;
+						let height = img.height;
+						if (height > maxHeight) {
+							width = (width * maxHeight) / height;
+							height = maxHeight;
+						}
+						thumbnails = { ...thumbnails, [pageIndex]: { url: dataURL, width, height } };
+					};
+					img.src = dataURL;
+				}
+			});
+			preloadManager.initialize();
+		}
+		
+		// 清理函数
+		return () => {
+			if (preloadManager) {
+				preloadManager.cleanup();
+			}
+		};
+	});
+
 	// 清空缩略图缓存当书籍变化时
 	$effect(() => {
 		const currentBook = bookStore.currentBook;
-		thumbnails = {};
+		if (currentBook) {
+			thumbnails = {};
+		}
 	});
 
 	// 当高度变化时重新生成缩略图

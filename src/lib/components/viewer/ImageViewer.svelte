@@ -17,7 +17,9 @@
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { invoke } from '@tauri-apps/api/core';
 	import ComparisonViewer from './ComparisonViewer.svelte';
-	import { upscaleState, performUpscale, getGlobalUpscaleEnabled, upscaleSettings, initUpscaleSettingsManager } from '$lib/stores/upscale/UpscaleManager.svelte';
+	// ✅ 使用新的 UpscaleManagerV2
+	import { upscaleState, performUpscale, getGlobalUpscaleEnabled, initUpscaleSettingsManager, resetUpscaleState } from '$lib/stores/upscale/UpscaleManagerV2.svelte';
+	import ProgressBar from './ProgressBar.svelte';
 	import { idbGet, idbSet, idbDelete } from '$lib/utils/idb';
     import { get } from 'svelte/store';
 
@@ -668,118 +670,45 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 		}
 	}
 
-	// 触发自动超分 - 复用 UpscalePanel 的 startUpscale 逻辑
+	// ✅ 触发自动超分（简化版本 - 使用新的 UpscaleManagerV2）
 	async function triggerAutoUpscale(imageDataWithHash: ImageDataWithHash, isPreload = false) {
 		try {
 			// 验证图片数据
 			if (!imageDataWithHash || !imageDataWithHash.data) {
-				console.error('自动超分：图片数据为空');
+				console.log('[ImageViewer] 没有图片数据，跳过超分');
 				return;
 			}
 
 			// 检查全局开关
 			const globalEnabled = await getGlobalUpscaleEnabled();
 			if (!globalEnabled) {
-				console.log('全局超分开关已关闭，跳过自动超分');
+				console.log('[ImageViewer] 全局超分开关已关闭');
 				return;
 			}
 
-			// 如果是预加载且有其他任务在进行，加入队列
-			if (isPreload) {
-				const currentState = get(upscaleState);
-				if (currentState?.isUpscaling || isPreloading) {
-					// 验证图片数据格式
-					if (!imageDataWithHash.data.startsWith('blob:') && !imageDataWithHash.data.startsWith('data:image/')) {
-						console.warn('预加载：图片数据格式异常，不加入队列');
-						return;
-					}
-					
-					// 检查是否已在队列中
-					const exists = preloadQueue.some(item => item.hash === imageDataWithHash.hash);
-					if (!exists) {
-						// 保存带hash的图片数据到队列
-						preloadQueue = [...preloadQueue, imageDataWithHash];
-						console.log(`加入预加载队列，MD5: ${imageDataWithHash.hash}, 数据长度: ${imageDataWithHash.data.length}`);
-					}
-					return;
-				}
-			} else {
-				// 当前页面的超分，检查是否正在超分
-				const currentState = get(upscaleState);
-				if (currentState?.isUpscaling) {
-					console.log('超分正在进行中，跳过自动超分');
-					return;
-				}
-			}
+			const { data: imageData } = imageDataWithHash;
+			console.log('[ImageViewer] 开始自动超分，数据长度:', imageData.length);
 
-			const { data: imageData, hash: imageHash } = imageDataWithHash;
-			console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', 'MD5:', imageHash, '图片数据长度:', imageData.length);
-			
-			// 检查是否是blob URL，如果是则转换为data URL（保持一致性）
-			let processedImageData = imageData;
-			if (imageData.startsWith('blob:')) {
-				console.log('检测到blob URL，使用 worker 异步转换为 data URL...');
-				const response = await fetch(imageData);
-				const blob = await response.blob();
+			// 使用新的简化超分系统
+			await performUpscale(imageData);
 
-				// 使用 worker 转换，避免阻塞主线程
-				if (!window.__blobWorker) {
-					// @ts-ignore
-					window.__blobWorker = new Worker(new URL('$lib/workers/blobToDataUrl.worker.ts', import.meta.url), { type: 'module' });
-					window.__blobWorkerCallbacks = new Map();
-					window.__blobWorker.addEventListener('message', (ev) => {
-						const { id, success, data, error } = ev.data || {};
-						const cb = window.__blobWorkerCallbacks.get(id);
-						if (cb) {
-							window.__blobWorkerCallbacks.delete(id);
-							if (success) cb.resolve(data);
-							else cb.reject(error);
-						}
-					});
-				}
-
-				const id = Math.random().toString(36).slice(2);
-				const promise = new Promise<string>((resolve, reject) => {
-					window.__blobWorkerCallbacks.set(id, { resolve, reject });
-					window.__blobWorker.postMessage({ id, action: 'blobToDataUrl', blob });
+			// 更新显示
+			const state = await new Promise<any>((resolve) => {
+				const unsub = upscaleState.subscribe(s => {
+					resolve(s);
+					unsub();
 				});
+			});
 
-				processedImageData = await promise;
-				console.log('worker 转换后的 data URL 长度:', processedImageData.length);
+			if (state.upscaledImageData) {
+				bookStore.setUpscaledImage(state.upscaledImageData);
+				console.log('[ImageViewer] 超分结果已更新到 bookStore');
 			}
-			
-			// 检查图片格式
-			const isAvif = processedImageData.startsWith('data:image/avif');
-			const isJxl = processedImageData.startsWith('data:image/jxl');
-			
-			// 对于AVIF和JXL，先转换为WebP
-			if (isAvif || isJxl) {
-				console.log(`转换${isAvif ? 'AVIF' : 'JXL'}为WebP...`);
-				processedImageData = await invoke<string>('convert_data_url_to_webp', {
-					dataUrl: processedImageData
-				});
-				console.log('转换后的WebP数据长度:', processedImageData.length);
-			}
-			
-			// 标记预加载状态
-			if (isPreload) {
-				isPreloading = true;
-				// 后台任务：告诉 performUpscale 这是后台预加载
-				const res = await performUpscale(processedImageData, imageHash, { background: true });
-				return res;
-			} else {
-				const res = await performUpscale(processedImageData, imageHash, { background: false });
-				return res;
-			}
+
+			console.log('[ImageViewer] 自动超分完成');
+
 		} catch (error) {
-			console.error('自动超分失败:', error);
-		} finally {
-			// 清理预加载状态
-			if (isPreload) {
-				isPreloading = false;
-				// 处理队列中的下一个任务
-				processNextInQueue();
-			}
+			console.error('[ImageViewer] 自动超分失败:', error);
 		}
 	}
 
@@ -1313,23 +1242,10 @@ async function processNextInQueue() {
 		onClose={closeComparison}
 	/>
 	
-	<!-- Viewer底部进度条 -->
-	{#if showProgressBar && bookStore.currentBook}
-		<div class="absolute bottom-0 left-0 right-0 h-1 pointer-events-none">
-			<!-- 预超分进度条（黄色，底层） -->
-			{#if preUpscaleProgress > 0}
-				<div 
-					class="absolute bottom-0 left-0 h-full transition-all duration-500" 
-					style="width: {((bookStore.currentPageIndex + 1 + preUpscaleProgress / 100 * totalPreUpscalePages) / bookStore.currentBook.pages.length) * 100}%; background-color: #FCD34D; opacity: 0.6;"
-				>
-				</div>
-			{/if}
-			<!-- 当前页面进度条（奶白色/绿色，叠加在黄色上面） -->
-			<div 
-				class="absolute bottom-0 left-0 h-full transition-all duration-300 {progressBlinking ? 'animate-pulse' : ''}" 
-				style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%; background-color: {progressColor}; opacity: 0.8;"
-			>
-			</div>
-		</div>
-	{/if}
+	<!-- ✅ 新的进度条组件 -->
+	<ProgressBar 
+		showProgressBar={showProgressBar}
+		preUpscaleProgress={preUpscaleProgress}
+		totalPreUpscalePages={totalPreUpscalePages}
+	/>
 </div>

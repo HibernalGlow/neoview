@@ -152,21 +152,6 @@ export class PyO3UpscaleManager {
 	get imageHeight(): number {
 		return this._imageHeight;
 	}
-		try {
-			const modelId = await invoke<number>('get_pyo3_model_id', { modelName });
-			this._currentModel = {
-				modelId,
-				modelName,
-				scale,
-				tileSize: this._currentModel.tileSize,
-				noiseLevel: this._currentModel.noiseLevel
-			};
-			console.log('✅ 已切换模型:', this._currentModel);
-		} catch (error) {
-			console.error('❌ 设置模型失败:', error);
-			throw error;
-		}
-	}
 
 	/**
 	 * 设置 Tile Size

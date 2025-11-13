@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 use std::fs;
 use std::sync::{Arc, Mutex, Once};
 use serde::{Deserialize, Serialize};
-use pyo3::prelude::*;
 use super::python_upscale_wrapper::PythonUpscaleModule;
 
 static INIT: Once = Once::new();
@@ -244,7 +243,9 @@ impl PyO3Upscaler {
         );
         
         // 调用内存流版本
-        let result = self.upscale_image_memory(&image_data, model, _timeout)?;
+        // 对于文件路径版本，我们需要先获取图像尺寸
+        // 这里暂时使用 0，让 Python 端来获取实际尺寸
+        let result = self.upscale_image_memory(&image_data, model, _timeout, 0, 0)?;
         
         Ok(result)
     }

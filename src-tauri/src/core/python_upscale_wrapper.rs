@@ -92,8 +92,8 @@ impl PythonUpscaleModule {
         tile_size: i32,
         noise_level: i32,
         timeout: f64,
-        width: i32,
-        height: i32,
+        _width: i32,
+        _height: i32,
     ) -> Result<Option<Vec<u8>>, PyErr> {
         Python::with_gil(|py| {
             let module = self.module.bind(py);

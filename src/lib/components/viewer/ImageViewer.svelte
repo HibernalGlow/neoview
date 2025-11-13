@@ -39,6 +39,30 @@
 	let progressColor = $state('#FDFBF7'); // 默认奶白色
 	let progressBlinking = $state(false);
 
+	// 响应超分状态变化
+	$effect(() => {
+		if (bookStore.currentPageUpscaled) {
+			progressColor = '#10B981'; // 绿色
+			progressBlinking = false;
+		} else {
+			progressColor = '#FDFBF7'; // 奶白色
+		}
+	});
+
+	// 监听超分开始事件
+	$effect(() => {
+		const handleUpscaleStart = () => {
+			progressColor = '#FCD34D'; // 黄色
+			progressBlinking = true;
+		};
+
+		window.addEventListener('upscale-start', handleUpscaleStart);
+		
+		return () => {
+			window.removeEventListener('upscale-start', handleUpscaleStart);
+		};
+	});
+
 	// 预加载队列管理
 	let preloadQueue = $state<ImageDataWithHash[]>([]);
 	let isPreloading = $state(false);

@@ -14,6 +14,7 @@ interface BookState {
   currentImage: Page | null;
   upscaledImageData: string | null; // 保持兼容性，用于显示
   upscaledImageBlob: Blob | null; // 新增：存储二进制数据
+  currentPageUpscaled: boolean; // 当前页面是否已超分成功
 }
 
 class BookStore {
@@ -25,6 +26,7 @@ class BookStore {
     currentImage: null,
     upscaledImageData: null,
     upscaledImageBlob: null,
+    currentPageUpscaled: false,
   });
 
   // 超分缓存映射: hash -> { model, cachePath, originalPath, innerPath }
@@ -64,6 +66,10 @@ class BookStore {
 
   get upscaledImageBlob() {
     return this.state.upscaledImageBlob;
+  }
+
+  get currentPageUpscaled() {
+    return this.state.currentPageUpscaled;
   }
 
   get currentPage(): Page | null {
@@ -176,6 +182,7 @@ class BookStore {
     this.state.currentImage = null;
     this.state.upscaledImageData = null;
     this.state.upscaledImageBlob = null;
+    this.state.currentPageUpscaled = false;
     
     // 触发重置预超分进度事件
     window.dispatchEvent(new CustomEvent('reset-pre-upscale-progress'));
@@ -189,6 +196,14 @@ class BookStore {
     // 切换图片时立即清除超分结果，让系统重新检查缓存
     this.state.upscaledImageData = null;
     this.state.upscaledImageBlob = null;
+    this.state.currentPageUpscaled = false;
+  }
+
+  /**
+   * 设置当前页面超分状态
+   */
+  setCurrentPageUpscaled(upscaled: boolean) {
+    this.state.currentPageUpscaled = upscaled;
   }
 
   /**

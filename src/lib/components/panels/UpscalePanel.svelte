@@ -318,6 +318,9 @@
 			status = '超分处理中...';
 			progress = 30;
 			
+			// 通知 ImageViewer 开始超分（设置进度条闪烁）
+			window.dispatchEvent(new CustomEvent('upscale-start'));
+			
 			result = await pyo3UpscaleManager.upscaleImageMemory(imageData, 120.0);
 			
 			progress = 90;
@@ -332,6 +335,9 @@
 			
 			const processingTime = (Date.now() - startTime) / 1000;
 			showSuccessToast(`超分完成！耗时 ${processingTime.toFixed(1)}s`);
+			
+			// 设置当前页面超分状态
+			bookStore.setCurrentPageUpscaled(true);
 			
 			// 异步保存超分结果到缓存
 			try {

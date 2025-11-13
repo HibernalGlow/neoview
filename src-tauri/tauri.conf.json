@@ -29,6 +29,11 @@
     },
     "withGlobalTauri": true
   },
+  "plugins": {
+    "fs": {
+      "scope": ["$APPDATA/**", "D:\\temp\\**", "C:\\Users\\**\\AppData\\**"]
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

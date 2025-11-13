@@ -761,6 +761,13 @@
   dependencies:
     "@tauri-apps/api" "^2.8.0"
 
+"@tauri-apps/plugin-fs@^2.4.4":
+  version "2.4.4"
+  resolved "https://registry.npmmirror.com/@tauri-apps/plugin-fs/-/plugin-fs-2.4.4.tgz#b5111e02ca8b632588ff192bb0be6dd4eb2c9a63"
+  integrity sha512-MTorXxIRmOnOPT1jZ3w96vjSuScER38ryXY88vl5F0uiKdnvTKKTtaEjTEo8uPbl4e3gnUtfsDVwC7h77GQLvQ==
+  dependencies:
+    "@tauri-apps/api" "^2.8.0"
+
 "@tsconfig/svelte@^5.0.4":
   version "5.0.5"
   resolved "https://registry.npmmirror.com/@tsconfig/svelte/-/svelte-5.0.5.tgz#781df887c6a41b574e6972f9e002cea7edf4f450"

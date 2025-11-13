@@ -409,3 +409,31 @@ pub async fn test_pyo3_upscaler(
         Err("PyO3 超分管理器未初始化".to_string())
     }
 }
+
+/// 读取超分缓存文件
+#[tauri::command]
+pub async fn read_upscale_cache_file(
+    cache_path: String,
+) -> Result<Vec<u8>, String> {
+    use std::fs;
+    
+    match fs::read(&cache_path) {
+        Ok(data) => Ok(data),
+        Err(e) => Err(format!("读取缓存文件失败: {}", e)),
+    }
+}
+
+/// 获取图像数据用于超分 (普通文件)
+#[tauri::command]
+pub async fn get_image_data_for_upscale(
+    image_path: String,
+    _inner_path: Option<String>,
+) -> Result<Vec<u8>, String> {
+    use std::fs;
+    
+    // 暂时只支持普通文件，直接读取
+    match fs::read(&image_path) {
+        Ok(data) => Ok(data),
+        Err(e) => Err(format!("读取文件失败: {}", e)),
+    }
+}

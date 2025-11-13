@@ -225,9 +225,11 @@
 
 			if (cache) {
 				console.log('🎯 找到超分缓存:', cache.cachePath);
-				// 尝试读取缓存文件
-				const { readBinaryFile } = await import(/* @vite-ignore */ '@tauri-apps' + '/api/fs');
-				const data = await readBinaryFile(cache.cachePath);
+				// 使用 invoke 命令读取缓存文件
+				const { invoke } = await import('@tauri-apps/api/core');
+				const data = await invoke<number[]>('read_upscale_cache_file', {
+					cachePath: cache.cachePath
+				});
 				return new Uint8Array(data);
 			}
 
@@ -379,7 +381,7 @@
 	}
 
 	/**
-	 * 获取当前图像的 Blob 数据 (通过事件请求 ImageViewer 数据)
+	 * 获取当前图像的 Blob 数据 (从 ImageViewer 内存缓存获取)
 	 */
 	async function getCurrentImageBlob(): Promise<Uint8Array> {
 		try {
@@ -388,34 +390,40 @@
 				throw new Error('没有当前图片');
 			}
 
-			// 触发事件请求当前图像数据
-			dispatch('request-current-image-data');
+			console.log('🎯 从 ImageViewer 内存获取图像数据:', currentPage.path);
 			
-			// 等待 ImageViewer 响应 (这里需要实现事件监听)
-			// 暂时回退到文件读取
-			console.warn('等待 ImageViewer 响应，暂时回退到文件读取');
-			
-			// 检查是否是压缩包文件
-			const isArchive = currentPage.path.endsWith('.zip') || currentPage.path.endsWith('.rar') || currentPage.path.endsWith('.7z');
-			
-			if (isArchive) {
-				// 对于压缩包，使用 invoke 调用后端提取
-				const innerPath = (currentPage as any).innerPath || currentPage.name;
-				console.log('从压缩包提取图像:', currentPage.path, 'inner:', innerPath);
+			// 使用 Promise 等待 ImageViewer 响应
+			return new Promise<Uint8Array>((resolve, reject) => {
+				// 设置超时
+				const timeout = setTimeout(() => {
+					reject(new Error('等待 ImageViewer 响应超时'));
+				}, 5000);
 				
-				const { invoke } = await import('@tauri-apps/api/core');
-				const imageData = await invoke<number[]>('extract_file_from_zip', {
-					archivePath: currentPage.path,
-					innerPath: innerPath
+				// 触发事件请求 ImageViewer 提供当前图像数据
+				dispatch('request-current-image-data', {
+					callback: (imageData: string) => {
+						clearTimeout(timeout);
+						console.log('✅ 收到 ImageViewer 返回的数据，长度:', imageData.length);
+						
+						// 转换 data URL 为 Uint8Array
+						if (imageData.startsWith('data:')) {
+							fetch(imageData)
+								.then(response => response.blob())
+								.then(blob => blob.arrayBuffer())
+								.then(arrayBuffer => {
+									console.log('✅ 成功转换为 Uint8Array，大小:', arrayBuffer.byteLength);
+									resolve(new Uint8Array(arrayBuffer));
+								})
+								.catch(error => {
+									console.error('❌ 转换图像数据失败:', error);
+									reject(error);
+								});
+						} else {
+							reject(new Error('无效的图像数据格式'));
+						}
+					}
 				});
-				
-				return new Uint8Array(imageData);
-			} else {
-				// 对于普通文件，直接读取
-				const { readBinaryFile } = await import(/* @vite-ignore */ '@tauri-apps' + '/api/fs');
-				const data = await readBinaryFile(currentPage.path);
-				return new Uint8Array(data);
-			}
+			});
 			
 		} catch (error) {
 			console.error('获取图像数据失败:', error);

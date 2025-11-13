@@ -25,6 +25,8 @@
 		persistPreloadedPagesForBook,
 		restorePreloadedPagesForBook
 	} from './flow/preloadUtils';
+	import { createPreloadWorker, type PreloadTask } from './flow/preloadWorker';
+
 	import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
 	import { idbGet, idbSet, idbDelete } from '$lib/utils/idb';
     import { get } from 'svelte/store';
@@ -74,6 +76,10 @@
 	// 预加载队列管理
 	let preloadQueue = $state<ImageDataWithHash[]>([]);
 	let isPreloading = $state(false);
+	const preloadWorker = createPreloadWorker({
+		runTask: async () => undefined,
+		onTaskSuccess: () => {}
+	});
 
 	// 预加载内存缓存：hash -> { url, blob }
 	let preloadMemoryCache = $state<Map<string, { url: string; blob: Blob }>>(new Map());

@@ -180,6 +180,39 @@ export class PyO3UpscaleManager {
 	}
 
 	/**
+	 * 保存超分结果到缓存
+	 */
+	async saveUpscaleCache(
+		imageHash: string,
+		resultData: Uint8Array
+	): Promise<string> {
+		if (!this.initialized) {
+			throw new Error('PyO3 超分管理器未初始化');
+		}
+
+		try {
+			console.log('💾 保存超分结果到缓存:', imageHash);
+			console.log('  模型:', this.currentModel.modelName);
+			console.log('  数据大小:', resultData.length, 'bytes');
+
+			const cachePath = await invoke<string>('pyo3_save_upscale_cache', {
+				imageHash,
+				modelName: this.currentModel.modelName,
+				scale: this.currentModel.scale,
+				tileSize: this.currentModel.tileSize,
+				noiseLevel: this.currentModel.noiseLevel,
+				resultData: Array.from(resultData)
+			});
+
+			console.log('✅ 超分结果已缓存:', cachePath);
+			return cachePath;
+		} catch (error) {
+			console.error('❌ 保存超分缓存失败:', error);
+			throw error;
+		}
+	}
+
+	/**
 	 * 执行超分处理 (文件路径版本，保持兼容性)
 	 */
 	async upscaleImage(

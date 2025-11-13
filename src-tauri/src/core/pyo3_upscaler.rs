@@ -248,6 +248,30 @@ impl PyO3Upscaler {
         Ok(result)
     }
 
+    /// 异步保存超分结果到缓存
+    pub fn save_upscale_cache(
+        &self,
+        image_hash: &str,
+        model: &UpscaleModel,
+        result_data: &[u8],
+    ) -> Result<PathBuf, String> {
+        // 确保缓存目录存在
+        if let Err(e) = fs::create_dir_all(&self.cache_dir) {
+            eprintln!("创建缓存目录失败: {}", e);
+        }
+        
+        // 生成缓存文件名: hash_sr[model].webp
+        let cache_filename = format!("{}_sr[{}].webp", image_hash, model.model_name);
+        let cache_path = self.cache_dir.join(cache_filename);
+        
+        // 异步保存到文件
+        fs::write(&cache_path, result_data)
+            .map_err(|e| format!("保存缓存文件失败: {}", e))?;
+        
+        println!("💾 超分结果已缓存: {}", cache_path.display());
+        Ok(cache_path)
+    }
+
     /// 执行超分处理 (文件路径版本，保持兼容性)
     pub fn upscale_image(
         &self,

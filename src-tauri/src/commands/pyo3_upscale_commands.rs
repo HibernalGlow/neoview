@@ -138,6 +138,48 @@ pub async fn get_pyo3_model_id(
     Err("PyO3 超分管理器未初始化".to_string())
 }
 
+/// 保存超分结果到缓存
+#[command]
+pub async fn pyo3_save_upscale_cache(
+    image_hash: String,
+    model_name: String,
+    scale: i32,
+    tile_size: i32,
+    noise_level: i32,
+    result_data: Vec<u8>,
+    state: tauri::State<'_, PyO3UpscalerState>,
+) -> Result<String, String> {
+    // 等待管理器初始化
+    if let Err(e) = ensure_manager_ready(&state, 5000).await {
+        return Err(e);
+    }
+    
+    let manager_result = {
+        let manager_guard = state.manager.lock()
+            .map_err(|e| format!("获取锁失败: {}", e))?;
+        manager_guard.clone()
+    };
+    
+    if let Some(manager) = manager_result {
+        // 获取模型 ID
+        let model_id = manager.get_model_id(&model_name)?;
+        
+        let model = UpscaleModel {
+            model_id,
+            model_name,
+            scale,
+            tile_size,
+            noise_level,
+        };
+        
+        // 保存到缓存
+        let cache_path = manager.save_upscale_cache(&image_hash, &model, &result_data)?;
+        Ok(cache_path.to_string_lossy().to_string())
+    } else {
+        Err("PyO3 超分管理器未初始化".to_string())
+    }
+}
+
 /// 执行 PyO3 超分 (内存流版本)
 #[command]
 pub async fn pyo3_upscale_image_memory(

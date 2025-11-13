@@ -18,7 +18,7 @@
 		HardDrive,
 		Trash2
 	} from '@lucide/svelte';
-	import { onMount } from 'svelte';
+	import { onMount, createEventDispatcher } from 'svelte';
 	import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
 	import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
@@ -123,6 +123,9 @@
 			console.log('✅ 自动超分已启用');
 		}
 	});
+
+	// 创建事件分发器
+	const { dispatch } = createEventDispatcher();
 
 	onMount(async () => {
 		// 加载设置
@@ -257,7 +260,7 @@
 			progress = 90;
 			status = '生成预览...';
 			
-			// 转换为 URL
+			// 直接创建 blob，用于传递给 ImageViewer 和显示
 			const blob = new Blob([result as BlobPart], { type: 'image/webp' });
 			upscaledImageUrl = URL.createObjectURL(blob);
 			
@@ -267,10 +270,28 @@
 			const processingTime = (Date.now() - startTime) / 1000;
 			showSuccessToast(`超分完成！耗时 ${processingTime.toFixed(1)}s`);
 			
-			// 触发事件通知 ImageViewer
+			// 异步保存超分结果到缓存
+			try {
+				const imageHash = await getCurrentImageHash();
+				if (imageHash) {
+					// 异步保存，不等待完成
+					pyo3UpscaleManager.saveUpscaleCache(imageHash, result)
+						.then(cachePath => {
+							console.log('💾 超分结果已异步缓存:', cachePath);
+						})
+						.catch(error => {
+							console.warn('异步保存缓存失败:', error);
+						});
+				}
+			} catch (error) {
+				console.warn('获取图像 hash 失败，跳过缓存保存:', error);
+			}
+
+			// 触发事件通知 ImageViewer，传递 blob 数据
 			dispatch('upscale-complete', {
 				originalPath: currentImagePath,
-				upscaledBlob: blob
+				upscaledBlob: blob,
+				upscaledData: result
 			});
 			
 		} catch (err) {
@@ -285,18 +306,74 @@
 	}
 
 	/**
-	 * 加载图像数据 (临时解决方案，后续优化为纯内存)
+	 * 获取当前图像的 Blob 数据 (从 ImageViewer 缓存中获取)
 	 */
-	async function loadImageData(imagePath: string): Promise<Uint8Array> {
+	async function getCurrentImageBlob(): Promise<Uint8Array> {
 		try {
-			// 使用 Tauri API 读取文件
-			const { readBinaryFile } = await import('@tauri-apps/plugin-fs');
-			const data = await readBinaryFile(imagePath);
+			const currentPage = bookStore.currentPage;
+			if (!currentPage) {
+				throw new Error('没有当前图片');
+			}
+
+			// 首先尝试从 bookStore 获取已加载的图像数据
+			const currentImageData = bookStore.currentImage;
+			if (currentImageData) {
+				// 如果是 blob URL，转换为 Uint8Array
+				if (currentImageData.startsWith('blob:')) {
+					const response = await fetch(currentImageData);
+					const blob = await response.blob();
+					return new Uint8Array(await blob.arrayBuffer());
+				}
+				// 如果是 data URL，转换为 Uint8Array
+				else if (currentImageData.startsWith('data:image/')) {
+					const base64Data = currentImageData.split(',')[1];
+					const binaryString = atob(base64Data);
+					const bytes = new Uint8Array(binaryString.length);
+					for (let i = 0; i < binaryString.length; i++) {
+						bytes[i] = binaryString.charCodeAt(i);
+					}
+					return bytes;
+				}
+			}
+
+			// 如果缓存中没有，回退到文件读取
+			console.warn('缓存中没有图像数据，回退到文件读取');
+			const { readBinaryFile } = await import('@tauri-apps/api/fs');
+			const data = await readBinaryFile(currentPage.path);
 			return new Uint8Array(data);
 		} catch (error) {
-			console.error('读取图像数据失败:', error);
+			console.error('获取图像数据失败:', error);
 			throw error;
 		}
+	}
+
+	/**
+	 * 获取当前图像的 Hash (从 ImageViewer 获取)
+	 */
+	async function getCurrentImageHash(): Promise<string | null> {
+		try {
+			const currentImageData = bookStore.currentImage;
+			if (!currentImageData) {
+				return null;
+			}
+
+			// 计算 MD5 hash
+			const hash = await calculateImageHash(currentImageData);
+			return hash;
+		} catch (error) {
+			console.error('获取图像 hash 失败:', error);
+			return null;
+		}
+	}
+
+	/**
+	 * 计算图像 MD5 hash
+	 */
+	async function calculateImageHash(imageData: string): Promise<string> {
+		// 这里需要实现 MD5 计算，可以使用 crypto-js 或其他库
+		// 暂时返回一个简单的 hash
+		const msg = await import('crypto-js');
+		return msg.default.MD5(imageData).toString();
 	}
 
 	/**

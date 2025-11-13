@@ -1,640 +1,686 @@
 <script lang="ts">
 	/**
-	 * Upscale Panel (New)
-	 * 超分面板 - 内存中超分工作流集成
-	 * 支持实时进度、预超分、内存缓存
+	 * PyO3 Upscale Panel
+	 * 超分面板 - 使用 PyO3 直接调用 Python sr_vulkan
+	 * 参考 picacg-qt 的 Waifu2x 面板功能
 	 */
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
-	import { Progress } from '$lib/components/ui/progress';
 	import { Switch } from '$lib/components/ui/switch';
-	import { NativeSelect } from '$lib/components/ui/native-select';
-	import { Sparkles, Play, Zap, CheckCircle, AlertCircle, Image as ImageIcon, Download, Loader2, Clock, Flame } from '@lucide/svelte';
-	import { invoke } from '@tauri-apps/api/core';
-	import { save } from '@tauri-apps/plugin-dialog';
-	import { bookStore } from '$lib/stores/book.svelte';
-	import { onMount, onDestroy } from 'svelte';
-	import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
-	
-	// 导入新的内存中超分 Store
 	import { 
-		currentUpscaleTask, 
-		upscaleTaskQueue, 
-		upscaleCacheStats 
-	} from '$lib/stores/upscale/UpscaleMemoryCache.svelte';
-	import {
-		performUpscaleInMemory,
-		preupscaleInMemory,
-		createBlobUrl,
-		releaseBlobUrl,
-		getTaskProgress,
-		getTaskStatus,
-		getTaskProgressColor,
-		setPreupscaleEnabled,
-		setMaxMemory
-	} from '$lib/stores/upscale/UpscaleWorkflow.svelte';
+		Sparkles, 
+		Settings, 
+		Zap, 
+		CheckCircle, 
+		AlertCircle, 
+		Loader2, 
+		Clock,
+		HardDrive,
+		Trash2
+	} from '@lucide/svelte';
+	import { onMount } from 'svelte';
+	import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
+	import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
+	import { bookStore } from '$lib/stores/book.svelte';
 
-	// 超分参数
-	let selectedModel = $state('REALESRGAN_X4PLUS_UP4X');
-	let selectedScale = $state(2.0);
+	// ==================== 状态管理 ====================
+	
+	// 全局开关
+	let autoUpscaleEnabled = $state(false);
+	let currentImageUpscaleEnabled = $state(false);
+	let useCachedFirst = $state(true);
+
+	// 模型参数
+	let selectedModel = $state('cunet');
+	let scale = $state(2);
+	let tileSize = $state(0); // 0 = 自动
+	let noiseLevel = $state(0);
 	let gpuId = $state(0);
-	let tileSize = $state(400);
-	let tta = $state(false);
-	let preupscaleEnabled = $state(true);
-	let preupscalePageCount = $state(3); // 预超分页数
-	let maxMemoryMB = $state(500);
-	let globalUpscaleEnabled = $state(true); // 全局超分开关
 
-	// UI 状态
-	let isUpscaling = $state(false);
-	let currentProgress = $state(0);
-	let currentStatus = $state('');
-	let currentProgressColor = $state('green');
+	// 可用模型列表
+	let availableModels = $state<string[]>([]);
+	
+	// 模型选项映射
+	const modelLabels: Record<string, string> = {
+		'cunet': 'CUNet (推荐)',
+		'photo': 'Photo (照片)',
+		'anime_style_art_rgb': 'Anime Style Art',
+		'upconv_7_anime_style_art_rgb': 'UpConv 7 Anime',
+		'upconv_7_photo': 'UpConv 7 Photo',
+		'upresnet10': 'UpResNet10',
+		'swin_unet_art_scan': 'Swin UNet Art'
+	};
+
+	// 处理状态
+	let isProcessing = $state(false);
+	let progress = $state(0);
+	let status = $state('就绪');
+	let processingTime = $state(0);
+	let startTime = 0;
+
+	// 当前图片信息
+	let currentImagePath = $state('');
+	let currentImageResolution = $state('');
+	let currentImageSize = $state('');
 	let upscaledImageUrl = $state('');
-	let lastUpscaleTaskId = $state('');
 
 	// 缓存统计
-	let cacheStats = $state({ totalTasks: 0, totalCached: 0, totalCachedSize: 0, queueLength: 0 });
+	let cacheStats = $state({
+		totalFiles: 0,
+		totalSize: 0,
+		cacheDir: ''
+	});
 
-	// 模型选项
-	const modelOptions = [
-		{ value: 'REALESRGAN_X4PLUS_UP4X', label: 'Real-ESRGAN 4x (通用)' },
-		{ value: 'REALESRGAN_X4PLUSANIME_UP4X', label: 'Real-ESRGAN 4x (动漫)' },
-		{ value: 'WAIFU2X_CUNET_UP2X', label: 'Waifu2x 2x (动漫)' },
-		{ value: 'WAIFU2X_CUNET_UP4X', label: 'Waifu2x 4x (动漫)' },
-		{ value: 'REALCUGAN_PRO_UP2X', label: 'RealCUGAN 2x (专业)' },
-		{ value: 'REALCUGAN_PRO_UP3X', label: 'RealCUGAN 3x (专业)' },
-		{ value: 'REALCUGAN_PRO_UP4X', label: 'RealCUGAN 4x (专业)' }
+	// GPU 选项
+	const gpuOptions = [
+		{ value: 0, label: 'GPU 0 (默认)' },
+		{ value: 1, label: 'GPU 1' },
+		{ value: 2, label: 'GPU 2' },
+		{ value: 3, label: 'GPU 3' }
 	];
 
-	const scaleOptions = [1, 2, 3, 4];
+	// Tile Size 选项
+	const tileSizeOptions = [
+		{ value: 0, label: '自动' },
+		{ value: 256, label: '256' },
+		{ value: 512, label: '512' },
+		{ value: 1024, label: '1024' }
+	];
 
-	// 订阅 Store
-	let currentTask = $state($currentUpscaleTask);
-	let taskQueue = $state($upscaleTaskQueue);
+	// 降噪等级选项
+	const noiseLevelOptions = [
+		{ value: -1, label: '无降噪' },
+		{ value: 0, label: '等级 0' },
+		{ value: 1, label: '等级 1' },
+		{ value: 2, label: '等级 2' },
+		{ value: 3, label: '等级 3' }
+	];
 
-	$effect(() => {
-		currentTask = $currentUpscaleTask;
-		if (currentTask) {
-			currentProgress = getTaskProgress(currentTask.id);
-			currentStatus = getTaskStatus(currentTask.id);
-			currentProgressColor = getTaskProgressColor(currentTask.id);
-			isUpscaling = currentTask.status === 'upscaling' || currentTask.status === 'preupscaling';
-			lastUpscaleTaskId = currentTask.id;
-		}
-	});
+	// ==================== 生命周期 ====================
 
-	$effect(() => {
-		taskQueue = $upscaleTaskQueue;
-	});
-
-	$effect(() => {
-		cacheStats = $upscaleCacheStats;
-	});
-
-	/**
-	 * 保存设置到 localStorage
-	 */
-	function saveSettings() {
-		const settings = {
-			selectedModel,
-			selectedScale,
-			gpuId,
-			tileSize,
-			tta,
-			preupscaleEnabled,
-			preupscalePageCount,
-			maxMemoryMB,
-			globalUpscaleEnabled
-		};
-		localStorage.setItem('upscaleSettings', JSON.stringify(settings));
-		console.log('[UpscalePanel] 设置已保存');
-	}
-
-	/**
-	 * 从 localStorage 加载设置
-	 */
-	function loadSettings() {
-		try {
-			const saved = localStorage.getItem('upscaleSettings');
-			if (saved) {
-				const settings = JSON.parse(saved);
-				selectedModel = settings.selectedModel || selectedModel;
-				selectedScale = settings.selectedScale || selectedScale;
-				gpuId = settings.gpuId ?? gpuId;
-				tileSize = settings.tileSize ?? tileSize;
-				tta = settings.tta ?? tta;
-				preupscaleEnabled = settings.preupscaleEnabled ?? preupscaleEnabled;
-				preupscalePageCount = settings.preupscalePageCount ?? preupscalePageCount;
-				maxMemoryMB = settings.maxMemoryMB ?? maxMemoryMB;
-				globalUpscaleEnabled = settings.globalUpscaleEnabled ?? globalUpscaleEnabled;
-				console.log('[UpscalePanel] 设置已加载');
-			}
-		} catch (error) {
-			console.warn('[UpscalePanel] 加载设置失败:', error);
-		}
-	}
-
-	onMount(() => {
-		// 加载保存的设置
+	onMount(async () => {
+		// 加载设置
 		loadSettings();
 		
-		// 初始化设置
-		setPreupscaleEnabled(preupscaleEnabled);
-		setMaxMemory(maxMemoryMB);
+		// 初始化 PyO3 管理器
+		try {
+			await pyo3UpscaleManager.initialize(
+				'./src-tauri/python/upscale_wrapper.py',
+				'./cache/pyo3-upscale'
+			);
+			
+			if (pyo3UpscaleManager.isAvailable()) {
+				availableModels = pyo3UpscaleManager.getAvailableModels();
+				console.log('✅ PyO3 超分功能可用');
+				console.log('可用模型:', availableModels);
+				
+				// 更新缓存统计
+				await updateCacheStats();
+			} else {
+				showErrorToast('PyO3 超分功能不可用，请检查 sr_vulkan 模块');
+			}
+		} catch (error) {
+			console.error('初始化 PyO3 超分管理器失败:', error);
+			showErrorToast('初始化超分功能失败');
+		}
+
+		// 监听当前图片变化
+		$effect(() => {
+			const book = bookStore.currentBook;
+			if (book && book.currentPage) {
+				const imagePath = typeof book.currentPage === 'string' 
+					? book.currentPage 
+					: (book.currentPage as any).path;
+				updateCurrentImageInfo(imagePath);
+			}
+		});
 	});
+
+	// ==================== 功能函数 ====================
+
+	/**
+	 * 更新当前图片信息
+	 */
+	async function updateCurrentImageInfo(imagePath: string) {
+		currentImagePath = imagePath;
+		
+		// 获取图片尺寸和大小
+		try {
+			// 这里可以调用 Tauri 命令获取图片信息
+			// 暂时使用占位符
+			currentImageResolution = '2560x3716';
+			currentImageSize = '6.44mb';
+		} catch (error) {
+			console.error('获取图片信息失败:', error);
+		}
+	}
+
+	/**
+	 * 更新缓存统计
+	 */
+	async function updateCacheStats() {
+		try {
+			cacheStats = await pyo3UpscaleManager.getCacheStats();
+		} catch (error) {
+			console.error('更新缓存统计失败:', error);
+		}
+	}
+
+	/**
+	 * 应用模型设置
+	 */
+	async function applyModelSettings() {
+		try {
+			await pyo3UpscaleManager.setModel(selectedModel, scale);
+			pyo3UpscaleManager.setTileSize(tileSize);
+			pyo3UpscaleManager.setNoiseLevel(noiseLevel);
+			
+			saveSettings();
+			showSuccessToast('模型设置已应用');
+		} catch (error) {
+			console.error('应用模型设置失败:', error);
+			showErrorToast('应用设置失败');
+		}
+	}
 
 	/**
 	 * 执行超分
 	 */
-	async function handleUpscale() {
-		if (!bookStore.currentImage) {
-			showErrorToast('错误', '没有当前图片');
+	async function performUpscale() {
+		if (!currentImagePath) {
+			showErrorToast('没有选中的图片');
 			return;
 		}
 
+		if (isProcessing) {
+			showErrorToast('正在处理中，请稍候');
+			return;
+		}
+
+		isProcessing = true;
+		progress = 0;
+		status = '准备中...';
+		startTime = Date.now();
+		processingTime = 0;
+
+		// 启动计时器
+		const timer = setInterval(() => {
+			processingTime = (Date.now() - startTime) / 1000;
+		}, 100);
+
 		try {
-			// 获取当前图片数据
-			const imageData = await getImageData();
-			if (!imageData) {
-				showErrorToast('错误', '无法获取图片数据');
-				return;
+			// 应用当前设置
+			await pyo3UpscaleManager.setModel(selectedModel, scale);
+			pyo3UpscaleManager.setTileSize(tileSize);
+			pyo3UpscaleManager.setNoiseLevel(noiseLevel);
+
+			// 检查缓存
+			if (useCachedFirst) {
+				status = '检查缓存...';
+				progress = 10;
+				const cached = await pyo3UpscaleManager.checkCache(currentImagePath);
+				if (cached) {
+					status = '使用缓存';
+					progress = 100;
+					upscaledImageUrl = `file://${cached}`;
+					showSuccessToast('使用缓存的超分结果');
+					return;
+				}
 			}
 
-			// 计算图片哈希
-			const imageHash = await calculateHash(imageData);
-
-			// 执行超分（内存中）
-			const { blob, taskId } = await performUpscaleInMemory(
-				imageHash,
-				bookStore.currentImage.path,
-				imageData,
-				selectedModel,
-				selectedScale,
-				gpuId,
-				tileSize,
-				tta,
-				(progress) => {
-					currentProgress = progress;
-				}
-			);
-
-			// 创建 Blob URL
-			upscaledImageUrl = createBlobUrl(blob);
-			lastUpscaleTaskId = taskId;
-
-			// 触发事件通知 Viewer 更新图片
-			window.dispatchEvent(new CustomEvent('upscale-complete', {
-				detail: { imageUrl: upscaledImageUrl, taskId }
-			}));
-
-			showSuccessToast('成功', '超分完成！');
-
+			// 执行超分
+			status = '超分处理中...';
+			progress = 30;
+			
+			const result = await pyo3UpscaleManager.upscaleImage(currentImagePath, 120.0);
+			
+			progress = 90;
+			status = '生成预览...';
+			
+			// 转换为 URL
+			const blob = new Blob([result as BlobPart], { type: 'image/webp' });
+			upscaledImageUrl = URL.createObjectURL(blob);
+			
+			progress = 100;
+			status = '转换完成';
+			
+			showSuccessToast(`超分完成！耗时 ${processingTime.toFixed(1)}s`);
+			
+			// 更新缓存统计
+			await updateCacheStats();
+			
 		} catch (error) {
 			console.error('超分失败:', error);
-			showErrorToast('失败', `超分失败: ${error}`);
+			status = '转换失败';
+			showErrorToast(error instanceof Error ? error.message : '超分失败');
+		} finally {
+			clearInterval(timer);
+			isProcessing = false;
 		}
 	}
 
 	/**
-	 * 启动预超分
+	 * 清理缓存
 	 */
-	async function handlePreupscale() {
-		if (!bookStore.currentImage) {
-			showErrorToast('错误', '没有当前图片');
-			return;
-		}
-
+	async function cleanupCache() {
 		try {
-			// 获取下一页图片
-			const nextPages = getNextPages(3);
-			
-			for (const page of nextPages) {
-				try {
-					const imageData = await loadPageImage(page);
-					const imageHash = await calculateHash(imageData);
-
-					await preupscaleInMemory(
-						imageHash,
-						page.path,
-						imageData,
-						selectedModel,
-						selectedScale
-					);
-				} catch (e) {
-					console.warn(`预超分第 ${page.index + 1} 页失败:`, e);
-				}
-			}
-
-			showSuccessToast('成功', '预超分已启动');
-
+			const removed = await pyo3UpscaleManager.cleanupCache(30);
+			await updateCacheStats();
+			showSuccessToast(`已清理 ${removed} 个缓存文件`);
 		} catch (error) {
-			console.error('预超分失败:', error);
-			showErrorToast('失败', `预超分失败: ${error}`);
+			console.error('清理缓存失败:', error);
+			showErrorToast('清理缓存失败');
 		}
 	}
 
 	/**
-	 * 获取图片数据
+	 * 保存设置
 	 */
-	async function getImageData(): Promise<Uint8Array | null> {
-		return new Promise((resolve) => {
-			const timeout = setTimeout(() => resolve(null), 2000);
-			
-			window.dispatchEvent(new CustomEvent('request-current-image-data', {
-				detail: {
-					callback: (data: string) => {
-						clearTimeout(timeout);
-						// 转换 data URL 或 blob URL 到 Uint8Array
-						dataUrlToUint8Array(data).then(resolve).catch(() => resolve(null));
-					}
-				}
-			}));
-		});
+	function saveSettings() {
+		const settings = {
+			autoUpscaleEnabled,
+			currentImageUpscaleEnabled,
+			useCachedFirst,
+			selectedModel,
+			scale,
+			tileSize,
+			noiseLevel,
+			gpuId
+		};
+		localStorage.setItem('pyo3_upscale_settings', JSON.stringify(settings));
 	}
 
 	/**
-	 * 将 data URL 或 blob URL 转换为 Uint8Array
+	 * 加载设置
 	 */
-	async function dataUrlToUint8Array(url: string): Promise<Uint8Array> {
-		if (url.startsWith('data:')) {
-			// data URL
-			const base64 = url.split(',')[1];
-			const binary = atob(base64);
-			const bytes = new Uint8Array(binary.length);
-			for (let i = 0; i < binary.length; i++) {
-				bytes[i] = binary.charCodeAt(i);
+	function loadSettings() {
+		const saved = localStorage.getItem('pyo3_upscale_settings');
+		if (saved) {
+			try {
+				const settings = JSON.parse(saved);
+				autoUpscaleEnabled = settings.autoUpscaleEnabled ?? false;
+				currentImageUpscaleEnabled = settings.currentImageUpscaleEnabled ?? false;
+				useCachedFirst = settings.useCachedFirst ?? true;
+				selectedModel = settings.selectedModel ?? 'cunet';
+				scale = settings.scale ?? 2;
+				tileSize = settings.tileSize ?? 0;
+				noiseLevel = settings.noiseLevel ?? 0;
+				gpuId = settings.gpuId ?? 0;
+			} catch (error) {
+				console.error('加载设置失败:', error);
 			}
-			return bytes;
-		} else if (url.startsWith('blob:')) {
-			// blob URL
-			const response = await fetch(url);
-			const blob = await response.blob();
-			return new Uint8Array(await blob.arrayBuffer());
-		}
-		throw new Error('不支持的 URL 格式');
-	}
-
-	/**
-	 * 计算数据哈希
-	 */
-	async function calculateHash(data: Uint8Array): Promise<string> {
-		const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-		const hashArray = Array.from(new Uint8Array(hashBuffer));
-		return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16);
-	}
-
-	/**
-	 * 获取下一页图片
-	 */
-	function getNextPages(count: number): any[] {
-		// TODO: 从 bookStore 获取下一页图片
-		return [];
-	}
-
-	/**
-	 * 加载页面图片
-	 */
-	async function loadPageImage(page: any): Promise<Uint8Array> {
-		// TODO: 从文件系统加载图片
-		return new Uint8Array();
-	}
-
-	/**
-	 * 保存超分图片
-	 */
-	async function handleSaveUpscaled() {
-		if (!upscaledImageUrl) {
-			showErrorToast('错误', '没有超分结果可保存');
-			return;
-		}
-
-		try {
-			const originalName = bookStore.currentImage?.name || 'image';
-			const nameWithoutExt = originalName.substring(0, originalName.lastIndexOf('.')) || originalName;
-			const defaultFileName = `${nameWithoutExt}_upscaled_${selectedScale}x.webp`;
-
-			const filePath = await save({
-				filters: [{ name: 'WebP Image', extensions: ['webp'] }],
-				defaultPath: defaultFileName
-			});
-
-			if (filePath) {
-				const response = await fetch(upscaledImageUrl);
-				const blob = await response.blob();
-				const arrayBuffer = await blob.arrayBuffer();
-
-				await invoke('save_binary_file', {
-					filePath,
-					data: Array.from(new Uint8Array(arrayBuffer))
-				});
-
-				showSuccessToast('成功', '图片已保存');
-			}
-		} catch (error) {
-			console.error('保存失败:', error);
-			showErrorToast('失败', `保存失败: ${error}`);
 		}
 	}
 
 	/**
-	 * 清理资源
+	 * 获取进度条颜色
 	 */
-	onDestroy(() => {
-		if (upscaledImageUrl) {
-			releaseBlobUrl(upscaledImageUrl);
+	function getProgressColor(progress: number): string {
+		if (progress < 30) return 'bg-blue-500';
+		if (progress < 70) return 'bg-yellow-500';
+		return 'bg-green-500';
+	}
+
+	/**
+	 * 格式化文件大小
+	 */
+	function formatFileSize(bytes: number): string {
+		if (bytes === 0) return '0 B';
+		const k = 1024;
+		const sizes = ['B', 'KB', 'MB', 'GB'];
+		const i = Math.floor(Math.log(bytes) / Math.log(k));
+		return (bytes / Math.pow(k, i)).toFixed(2) + ' ' + sizes[i];
+	}
+
+	// 快捷键处理
+	function handleKeyPress(event: KeyboardEvent) {
+		if (event.key === 'F2') {
+			event.preventDefault();
+			currentImageUpscaleEnabled = !currentImageUpscaleEnabled;
+			saveSettings();
 		}
-	});
+	}
 </script>
 
-<div class="h-full flex flex-col bg-background p-4 space-y-4 overflow-y-auto">
-	<!-- 头部 -->
-	<div class="flex items-center gap-2 pb-2 border-b sticky top-0 bg-background">
-		<Sparkles class="h-5 w-5 text-primary" />
-		<h3 class="text-lg font-semibold">图片超分 (内存中)</h3>
-	</div>
+<svelte:window onkeydown={handleKeyPress} />
 
-	<!-- 当前任务进度 -->
-	{#if currentTask}
-		<div class="space-y-2 p-3 bg-muted/50 rounded-lg border">
-			<div class="flex items-center justify-between">
-				<div class="flex items-center gap-2">
-					{#if currentProgressColor === 'yellow'}
-						<Flame class="h-4 w-4 text-yellow-500 animate-pulse" />
-						<span class="text-sm font-medium">预超分中...</span>
-					{:else if currentProgressColor === 'green'}
-						<Loader2 class="h-4 w-4 text-green-500 animate-spin" />
-						<span class="text-sm font-medium">超分中...</span>
-					{:else}
-						<AlertCircle class="h-4 w-4 text-red-500" />
-						<span class="text-sm font-medium text-red-500">错误</span>
-					{/if}
-				</div>
-				<span class="text-sm font-semibold">{currentProgress}%</span>
-			</div>
-			
-			<!-- 进度条 -->
-			<div class="w-full bg-muted rounded-full h-2 overflow-hidden">
-				<div 
-					class="h-full transition-all duration-300"
-					style:background-color={currentProgressColor === 'yellow' ? '#eab308' : currentProgressColor === 'green' ? '#22c55e' : '#ef4444'}
-					style:width="{currentProgress}%"
-				></div>
-			</div>
-
-			<div class="text-xs text-muted-foreground">
-				状态: {currentStatus} | 模型: {selectedModel} | 倍数: {selectedScale}x
-			</div>
-		</div>
-	{/if}
-
-	<!-- 缓存统计 -->
-	<div class="grid grid-cols-2 gap-2 p-3 bg-muted/30 rounded-lg">
-		<div class="text-center">
-			<div class="text-2xl font-bold text-primary">{cacheStats.totalCached}</div>
-			<div class="text-xs text-muted-foreground">已缓存</div>
-		</div>
-		<div class="text-center">
-			<div class="text-2xl font-bold text-primary">{(cacheStats.totalCachedSize / 1024 / 1024).toFixed(1)}</div>
-			<div class="text-xs text-muted-foreground">MB</div>
-		</div>
-	</div>
-
-	<!-- 任务队列 -->
-	{#if taskQueue.length > 0}
-		<div class="space-y-2">
-			<Label class="text-sm font-medium">任务队列 ({taskQueue.length})</Label>
-			<div class="space-y-1 max-h-32 overflow-y-auto">
-				{#each taskQueue as task}
-					<div class="flex items-center gap-2 p-2 bg-muted/50 rounded text-xs">
-						<div 
-							class="w-2 h-2 rounded-full"
-							style:background-color={task.progressColor === 'yellow' ? '#eab308' : task.progressColor === 'green' ? '#22c55e' : '#ef4444'}
-						></div>
-						<span class="flex-1 truncate">{task.isPreupscale ? '预' : ''}{task.model}</span>
-						<span class="font-semibold">{task.progress}%</span>
-					</div>
-				{/each}
-			</div>
-		</div>
-	{/if}
-
-	<!-- 全局超分开关 -->
-	<div class="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+<div class="upscale-panel">
+	<!-- 标题栏 -->
+	<div class="panel-header">
 		<div class="flex items-center gap-2">
-			<Sparkles class="h-4 w-4 text-primary" />
-			<Label class="text-sm font-medium">全局超分</Label>
+			<Sparkles class="w-5 h-5 text-purple-500" />
+			<h3 class="text-lg font-semibold">PyO3 超分面板</h3>
 		</div>
-		<Switch 
-			bind:checked={globalUpscaleEnabled}
-			onchange={() => saveSettings()}
-		/>
-	</div>
-
-	<!-- 模型选择 -->
-	<div class="space-y-2">
-		<Label class="text-sm font-medium">超分模型</Label>
-		<NativeSelect 
-			bind:value={selectedModel}
-			onchange={() => saveSettings()}
-			class="w-full"
-		>
-			{#each modelOptions as option}
-				<option value={option.value}>{option.label}</option>
-			{/each}
-		</NativeSelect>
-	</div>
-
-	<!-- 放大倍数 -->
-	<div class="space-y-2">
-		<Label class="text-sm font-medium">放大倍数</Label>
-		<div class="grid grid-cols-4 gap-2">
-			{#each scaleOptions as scale}
-				<button
-					class="px-3 py-2 text-sm font-medium rounded-md transition-colors {selectedScale === scale ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'}"
-					onclick={() => {
-						selectedScale = scale;
-						saveSettings();
-					}}
-				>
-					{scale}x
-				</button>
-			{/each}
-		</div>
-	</div>
-
-	<!-- 保存设置按钮 -->
-	<Button
-		variant="outline"
-		size="sm"
-		class="w-full"
-		onclick={() => {
-			saveSettings();
-			showSuccessToast('成功', '设置已保存');
-		}}
-	>
-		💾 保存设置
-	</Button>
-
-	<!-- 高级设置 -->
-	<details class="group">
-		<summary class="cursor-pointer flex items-center gap-2 p-2 hover:bg-muted/50 rounded">
-			<span class="text-sm font-medium">高级设置</span>
-		</summary>
-		
-		<div class="space-y-3 p-3 bg-muted/30 rounded-lg mt-2">
-			<!-- GPU ID -->
-			<div class="space-y-1">
-				<Label class="text-xs font-medium">GPU ID</Label>
-				<input
-					type="number"
-					bind:value={gpuId}
-					class="w-full h-8 px-2 text-sm border rounded-md"
-					min="0"
-				/>
-			</div>
-
-			<!-- Tile Size -->
-			<div class="space-y-1">
-				<Label class="text-xs font-medium">Tile Size (内存)</Label>
-				<input
-					type="number"
-					bind:value={tileSize}
-					class="w-full h-8 px-2 text-sm border rounded-md"
-					min="100"
-					step="100"
-				/>
-			</div>
-
-			<!-- TTA -->
-			<div class="flex items-center justify-between">
-				<Label class="text-xs font-medium">TTA (更好质量)</Label>
-				<Switch bind:checked={tta} />
-			</div>
-
-			<!-- 最大内存 -->
-			<div class="space-y-1">
-				<Label class="text-xs font-medium">最大内存: {maxMemoryMB} MB</Label>
-				<input
-					type="range"
-					bind:value={maxMemoryMB}
-					onchange={() => setMaxMemory(maxMemoryMB)}
-					class="w-full"
-					min="100"
-					max="1000"
-					step="50"
-				/>
-			</div>
-		</div>
-	</details>
-
-	<!-- 预超分设置 -->
-	<div class="space-y-3 p-3 bg-muted/50 rounded-lg">
-		<div class="flex items-center justify-between">
-			<div class="flex items-center gap-2">
-				<Flame class="h-4 w-4 text-yellow-500" />
-				<Label class="text-sm font-medium">预超分</Label>
-			</div>
-			<Switch 
-				bind:checked={preupscaleEnabled}
-				onchange={() => {
-					setPreupscaleEnabled(preupscaleEnabled);
-					saveSettings();
-				}}
-			/>
-		</div>
-
-		<!-- 预超分页数设置 -->
-		{#if preupscaleEnabled}
-			<div class="space-y-2">
-				<Label class="text-xs font-medium">预超分页数: {preupscalePageCount}</Label>
-				<input
-					type="range"
-					bind:value={preupscalePageCount}
-					onchange={() => saveSettings()}
-					class="w-full"
-					min="1"
-					max="10"
-					step="1"
-				/>
-				<div class="text-xs text-muted-foreground">
-					翻页时自动预超分后续 {preupscalePageCount} 页
-				</div>
+		{#if !pyo3UpscaleManager.isAvailable()}
+			<div class="flex items-center gap-1 text-red-500 text-sm">
+				<AlertCircle class="w-4 h-4" />
+				<span>sr_vulkan 不可用</span>
 			</div>
 		{/if}
 	</div>
 
-	<!-- 操作按钮 -->
-	<div class="space-y-2">
-		<!-- 超分按钮 -->
-		<Button
-			class="w-full"
-			disabled={isUpscaling || !bookStore.currentImage}
-			onclick={handleUpscale}
-		>
-			{#if isUpscaling}
-				<Loader2 class="h-4 w-4 mr-2 animate-spin" />
-				超分中...
-			{:else}
-				<Play class="h-4 w-4 mr-2" />
-				立即超分
-			{/if}
-		</Button>
+	<!-- 全局开关 -->
+	<div class="section">
+		<div class="setting-row">
+			<div class="flex items-center gap-2">
+				<Switch bind:checked={autoUpscaleEnabled} onchange={saveSettings} />
+				<Label>自动 Waifu2x</Label>
+			</div>
+		</div>
 
-		<!-- 预超分按钮 -->
-		<Button
-			variant="outline"
-			class="w-full"
-			disabled={isUpscaling || !bookStore.currentImage || !preupscaleEnabled}
-			onclick={handlePreupscale}
-		>
-			<Flame class="h-4 w-4 mr-2 text-yellow-500" />
-			预超分下一页
-		</Button>
+		<div class="setting-row">
+			<div class="flex items-center gap-2">
+				<Switch bind:checked={currentImageUpscaleEnabled} onchange={saveSettings} />
+				<Label>本张图开启 Waifu2x (F2)</Label>
+			</div>
+		</div>
 
-		<!-- 保存按钮 -->
-		<Button
-			variant="outline"
-			class="w-full"
-			disabled={!upscaledImageUrl}
-			onclick={handleSaveUpscaled}
-		>
-			<Download class="h-4 w-4 mr-2" />
-			保存超分图
+		<div class="setting-row">
+			<div class="flex items-center gap-2">
+				<Switch bind:checked={useCachedFirst} onchange={saveSettings} />
+				<Label>优先使用下载转换好的</Label>
+			</div>
+		</div>
+	</div>
+
+	<!-- 修改参数 -->
+	<div class="section">
+		<div class="section-title">
+			<Settings class="w-4 h-4" />
+			<span>修改参数</span>
+		</div>
+
+		<!-- 放大倍数 -->
+		<div class="setting-row">
+			<Label>放大倍数：</Label>
+			<div class="flex items-center gap-2">
+				<input
+					type="number"
+					bind:value={scale}
+					min="1"
+					max="4"
+					step="0.5"
+					class="input-number"
+				/>
+				<span class="text-sm text-gray-500">x</span>
+			</div>
+		</div>
+
+		<!-- 模型选择 -->
+		<div class="setting-row">
+			<Label>模型：</Label>
+			<select bind:value={selectedModel} class="select-input">
+				{#each availableModels as model}
+					<option value={model}>
+						{modelLabels[model] || model}
+					</option>
+				{/each}
+			</select>
+		</div>
+
+		<!-- GPU 选择 -->
+		<div class="setting-row">
+			<Label>GPU：</Label>
+			<select bind:value={gpuId} class="select-input">
+				{#each gpuOptions as option}
+					<option value={option.value}>{option.label}</option>
+				{/each}
+			</select>
+		</div>
+
+		<!-- Tile Size -->
+		<div class="setting-row">
+			<Label>Tile Size：</Label>
+			<select bind:value={tileSize} class="select-input">
+				{#each tileSizeOptions as option}
+					<option value={option.value}>{option.label}</option>
+				{/each}
+			</select>
+		</div>
+
+		<!-- 降噪等级 -->
+		<div class="setting-row">
+			<Label>降噪等级：</Label>
+			<select bind:value={noiseLevel} class="select-input">
+				{#each noiseLevelOptions as option}
+					<option value={option.value}>{option.label}</option>
+				{/each}
+			</select>
+		</div>
+
+		<!-- 应用按钮 -->
+		<Button onclick={applyModelSettings} class="w-full mt-2" variant="outline">
+			<Settings class="w-4 h-4 mr-2" />
+			应用设置
 		</Button>
 	</div>
 
 	<!-- 当前图片信息 -->
-	<div class="flex items-center gap-2 p-2 bg-muted/50 rounded-md text-xs">
-		<ImageIcon class="h-4 w-4 text-muted-foreground shrink-0" />
-		<span class="truncate text-muted-foreground">
-			{#if bookStore.currentImage}
-				{bookStore.currentImage.name}
+	<div class="section">
+		<div class="section-title">
+			<Zap class="w-4 h-4" />
+			<span>当前图片</span>
+		</div>
+
+		<div class="info-grid">
+			<div class="info-item">
+				<span class="info-label">分辨率：</span>
+				<span class="info-value">{currentImageResolution || '-'}</span>
+			</div>
+			<div class="info-item">
+				<span class="info-label">大小：</span>
+				<span class="info-value">{currentImageSize || '-'}</span>
+			</div>
+			<div class="info-item">
+				<span class="info-label">耗时：</span>
+				<span class="info-value">{processingTime.toFixed(1)}s</span>
+			</div>
+			<div class="info-item">
+				<span class="info-label">状态：</span>
+				<span class="info-value" class:text-green-500={status === '转换完成'} class:text-red-500={status === '转换失败'}>
+					{status}
+				</span>
+			</div>
+		</div>
+
+		<!-- 执行超分按钮 -->
+		<Button 
+			onclick={performUpscale} 
+			class="w-full mt-3" 
+			disabled={isProcessing || !currentImagePath}
+		>
+			{#if isProcessing}
+				<Loader2 class="w-4 h-4 mr-2 animate-spin" />
+				处理中...
 			{:else}
-				没有当前图片
+				<Sparkles class="w-4 h-4 mr-2" />
+				执行超分
 			{/if}
-		</span>
+		</Button>
+
+		<!-- 进度条 -->
+		{#if isProcessing}
+			<div class="progress-container">
+				<div class="progress-bar">
+					<div 
+						class="progress-fill {getProgressColor(progress)}" 
+						style="width: {progress}%"
+					></div>
+				</div>
+				<span class="progress-text">{progress.toFixed(0)}%</span>
+			</div>
+		{/if}
 	</div>
 
-	<!-- 提示信息 -->
-	<div class="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md">
-		<p>💡 <strong>内存中处理:</strong> 超分结果存储在内存中，无需保存到本地</p>
-		<p>💡 <strong>实时进度:</strong> 进度条实时更新，支持多任务队列</p>
-		<p>💡 <strong>预超分:</strong> 后台预处理下一页，翻页时无需等待</p>
+	<!-- 缓存管理 -->
+	<div class="section">
+		<div class="section-title">
+			<HardDrive class="w-4 h-4" />
+			<span>缓存管理</span>
+		</div>
+
+		<div class="info-grid">
+			<div class="info-item">
+				<span class="info-label">文件数：</span>
+				<span class="info-value">{cacheStats.totalFiles}</span>
+			</div>
+			<div class="info-item">
+				<span class="info-label">总大小：</span>
+				<span class="info-value">{formatFileSize(cacheStats.totalSize)}</span>
+			</div>
+		</div>
+
+		<Button onclick={cleanupCache} class="w-full mt-2" variant="outline">
+			<Trash2 class="w-4 h-4 mr-2" />
+			清理缓存 (30天前)
+		</Button>
 	</div>
+
+	<!-- 预览区域 -->
+	{#if upscaledImageUrl}
+		<div class="section">
+			<div class="section-title">
+				<CheckCircle class="w-4 h-4 text-green-500" />
+				<span>超分结果</span>
+			</div>
+			<div class="preview-container">
+				<img src={upscaledImageUrl} alt="超分结果" class="preview-image" />
+			</div>
+		</div>
+	{/if}
 </div>
 
 <style>
-	:global(.animate-pulse) {
-		animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+	.upscale-panel {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		padding: 1rem;
+		height: 100%;
+		overflow-y: auto;
 	}
 
-	@keyframes pulse {
-		0%, 100% {
-			opacity: 1;
-		}
-		50% {
-			opacity: 0.5;
+	.panel-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding-bottom: 0.75rem;
+		border-bottom: 1px solid hsl(var(--border));
+	}
+
+	.section {
+		background: hsl(var(--card));
+		border: 1px solid hsl(var(--border));
+		border-radius: 0.5rem;
+		padding: 1rem;
+	}
+
+	.section-title {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-weight: 600;
+		margin-bottom: 0.75rem;
+		color: hsl(var(--foreground));
+	}
+
+	.setting-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 0.5rem 0;
+	}
+
+	.setting-row:not(:last-child) {
+		border-bottom: 1px solid hsl(var(--border) / 0.3);
+	}
+
+	.input-number {
+		width: 80px;
+		padding: 0.25rem 0.5rem;
+		border: 1px solid hsl(var(--border));
+		border-radius: 0.25rem;
+		background: hsl(var(--background));
+		color: hsl(var(--foreground));
+		text-align: center;
+	}
+
+	.select-input {
+		padding: 0.25rem 0.5rem;
+		border: 1px solid hsl(var(--border));
+		border-radius: 0.25rem;
+		background: hsl(var(--background));
+		color: hsl(var(--foreground));
+		min-width: 150px;
+	}
+
+	.info-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.75rem;
+	}
+
+	.info-item {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+
+	.info-label {
+		font-size: 0.75rem;
+		color: hsl(var(--muted-foreground));
+	}
+
+	.info-value {
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: hsl(var(--foreground));
+	}
+
+	.progress-container {
+		margin-top: 0.75rem;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.progress-bar {
+		flex: 1;
+		height: 8px;
+		background: hsl(var(--muted));
+		border-radius: 4px;
+		overflow: hidden;
+	}
+
+	.progress-fill {
+		height: 100%;
+		transition: width 0.3s ease, background-color 0.3s ease;
+	}
+
+	.progress-text {
+		font-size: 0.75rem;
+		font-weight: 600;
+		min-width: 40px;
+		text-align: right;
+	}
+
+	.preview-container {
+		margin-top: 0.5rem;
+		border-radius: 0.5rem;
+		overflow: hidden;
+		border: 1px solid hsl(var(--border));
+	}
+
+	.preview-image {
+		width: 100%;
+		height: auto;
+		display: block;
+	}
+
+	/* 响应式调整 */
+	@media (max-width: 640px) {
+		.info-grid {
+			grid-template-columns: 1fr;
 		}
 	}
 </style>

@@ -31,3 +31,5 @@ ref/upscale*
 
 test_image.png
 test_image_upscaled.png
+/output_dir
+*.jpg

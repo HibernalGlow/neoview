@@ -49,11 +49,11 @@ def test_upscale():
         print("🚀 开始超分测试...")
         result, error = upscale_image(
             image_data=image_data,
-            model="MODEL_REALESRGAN_X4PLUS_UP4X",  # 使用 4x RealESRGAN 模型
-            scale=4,        # 4x
+            model="MODEL_WAIFU2X_ANIME_UP2X_DENOISE3X",  # 使用 2x Waifu2x CUNet 模型
+            scale=2,        # 2x
             tile_size=0,    # 0 表示由 sr_vulkan 自动选择 tile size
             noise_level=0,  # 无降噪
-            timeout=600.0,  # 600秒
+            timeout=180.0,  # 180秒
             width=0,        # 0 表示使用 scale
             height=0        # 0 表示使用 scale
         )

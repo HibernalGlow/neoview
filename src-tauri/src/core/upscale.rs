@@ -48,30 +48,19 @@ impl UpscaleManager {
         Self { thumbnail_root }
     }
 
-    /// 检查超分工具是否可用（检查 Python 和 sr_vulkan）
+    /// 检查超分工具是否可用
     pub fn check_availability(&self) -> Result<(), String> {
-        // 检查 Python 是否可用
-        let python_check = Command::new("python")
-            .arg("--version")
+        let command = self.get_upscale_command();
+        
+        let output = Command::new(&command)
+            .arg("-v")
             .output()
-            .map_err(|e| format!("Python 不可用: {}", e))?;
+            .map_err(|e| format!("执行超分命令失败: {}", e))?;
 
-        if !python_check.status.success() {
-            return Err("Python 未安装或不可用".to_string());
+        if !output.status.success() {
+            return Err("超分工具未安装或不可用".to_string());
         }
 
-        // 检查 sr_vulkan 是否可用
-        let sr_check = Command::new("python")
-            .arg("-c")
-            .arg("from sr_vulkan import sr_vulkan; print('sr_vulkan available')")
-            .output()
-            .map_err(|e| format!("检查 sr_vulkan 失败: {}", e))?;
-
-        if !sr_check.status.success() {
-            return Err("sr_vulkan 未安装。请运行: pip install sr-vulkan".to_string());
-        }
-
-        println!("✅ 超分工具可用 (Python + sr_vulkan)");
         Ok(())
     }
 
@@ -153,7 +142,7 @@ impl UpscaleManager {
         Ok(neosr_dir.join(filename))
     }
 
-    /// 执行超分处理（使用 sr_vulkan Python 库）
+    /// 执行超分处理
     pub async fn upscale_image(
         &self,
         image_path: &Path,
@@ -161,7 +150,7 @@ impl UpscaleManager {
         model: &str,
         factor: &str,
         options: UpscaleOptions,
-        _window: Option<Window>,
+        window: Option<Window>,
     ) -> Result<String, String> {
         println!("🚀 开始超分处理: {} -> {}", image_path.display(), save_path.display());
 
@@ -176,56 +165,61 @@ impl UpscaleManager {
                 .map_err(|e| format!("创建输出目录失败: {}", e))?;
         }
 
-        // 转换模型名称为 sr_vulkan 格式
-        let model_name = self.get_sr_vulkan_model_name(model);
-        
-        // 解析缩放因子
-        let scale: f64 = factor.parse()
-            .map_err(|_| format!("无效的缩放因子: {}", factor))?;
+        // 构建命令参数
+        let command = self.get_upscale_command();
+        let models_path = self.get_models_path();
+        let model_name = self.get_model_name(model);
 
-        // 解析 tile size
-        let tile_size: i32 = options.tile_size.parse()
-            .unwrap_or(400);
-
-        // 构建 Python 命令
-        let python_script = self.get_upscale_script_path();
-        
         let mut args = vec![
-            python_script.to_string_lossy().to_string(),
-            image_path.to_string_lossy().to_string(),
-            save_path.to_string_lossy().to_string(),
-            "--model".to_string(),
-            model_name.to_string(),
-            "--scale".to_string(),
-            scale.to_string(),
-            "--tile-size".to_string(),
-            tile_size.to_string(),
-            "--format".to_string(),
-            "webp".to_string(),
-            "--gpu-id".to_string(),
-            options.gpu_id.clone(),
+            "-i", image_path.to_str().unwrap(),
+            "-o", save_path.to_str().unwrap(),
+            "-n", model_name,
+            "-s", factor,
+            "-f", "webp",  // 指定输出格式为 WebP
         ];
+
+        // 只有当模型路径不为空时才添加-m参数
+        if !models_path.is_empty() {
+            args.insert(2, "-m");
+            args.insert(3, &models_path);
+        }
+
+        // 添加GPU参数
+        if !options.gpu_id.is_empty() && options.gpu_id != "0" {
+            args.extend_from_slice(&["-g", &options.gpu_id]);
+        }
+
+        // 添加Tile Size参数
+        if !options.tile_size.is_empty() && options.tile_size != "0" {
+            args.extend_from_slice(&["-t", &options.tile_size]);
+        }
 
         // 添加TTA参数
         if options.tta {
-            args.push("--tta".to_string());
+            args.push("-x");
         }
 
-        println!("执行命令: python {}", args.join(" "));
+        println!("执行命令: {} {}", command, args.join(" "));
 
-        // 执行 Python 脚本
-        let output = Command::new("python")
+        // 执行命令
+        let mut child = Command::new(&command)
             .args(&args)
-            .output()
+            .spawn()
             .map_err(|e| format!("启动超分进程失败: {}", e))?;
 
-        // 检查执行结果
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            println!("STDOUT: {}", stdout);
-            println!("STDERR: {}", stderr);
-            return Err(format!("超分进程失败: {}", stderr));
+        // 读取输出并发送进度
+        if let Some(_window) = window {
+            // 简化处理：直接执行命令并等待完成
+            // TODO: 在 Tauri 2.x 中需要使用新的方式来获取进程输出
+            println!("执行超分命令并等待完成...");
+        } else {
+            // 等待进程完成
+            let status = child.wait()
+                .map_err(|e| format!("等待超分进程失败: {}", e))?;
+
+            if !status.success() {
+                return Err("超分进程失败".to_string());
+            }
         }
 
         // 检查输出文件是否存在
@@ -235,38 +229,6 @@ impl UpscaleManager {
 
         println!("✅ 超分完成: {}", save_path.display());
         Ok(save_path.to_string_lossy().to_string())
-    }
-
-    /// 获取超分脚本路径
-    fn get_upscale_script_path(&self) -> PathBuf {
-        // 优先使用项目内的脚本目录
-        let project_script_dir = self.thumbnail_root.join("scripts");
-        if project_script_dir.exists() {
-            return project_script_dir.join("upscale_service.py");
-        }
-        
-        // 使用默认的脚本路径
-        // 通常程序会自动在安装目录下查找脚本文件
-        PathBuf::from("upscale_service.py")
-    }
-
-    /// 转换模型名称为 sr_vulkan 格式
-    fn get_sr_vulkan_model_name(&self, model: &str) -> String {
-        match model {
-            // 数字艺术/动漫
-            "digital" | "anime" => "REALESRGAN_X4PLUSANIME_UP4X".to_string(),
-            // 通用
-            "general" => "REALESRGAN_X4PLUS_UP4X".to_string(),
-            // Waifu2x 模型
-            "waifu2x_cunet" => "WAIFU2X_CUNET_UP2X".to_string(),
-            "waifu2x_anime" => "WAIFU2X_ANIME_UP2X".to_string(),
-            "waifu2x_photo" => "WAIFU2X_PHOTO_UP2X".to_string(),
-            // RealCUGAN 模型
-            "realcugan_pro" => "REALCUGAN_PRO_UP2X".to_string(),
-            "realcugan_se" => "REALCUGAN_SE_UP2X".to_string(),
-            // 直接使用提供的模型名称
-            _ => model.to_uppercase(),
-        }
     }
 
     /// 检查是否已有超分缓存

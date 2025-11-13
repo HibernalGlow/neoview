@@ -97,31 +97,38 @@ impl GenericUpscaler {
         Self { thumbnail_root }
     }
 
-    /// 检查指定算法是否可用（检查 Python 和 sr_vulkan）
-    pub fn check_algorithm_availability(&self, _algorithm: &UpscaleAlgorithm) -> Result<(), String> {
-        // 检查 Python 是否可用
-        let python_check = Command::new("python")
-            .arg("--version")
-            .output()
-            .map_err(|e| format!("Python 不可用: {}", e))?;
-
-        if !python_check.status.success() {
-            return Err("Python 未安装或不可用".to_string());
+    /// 检查指定算法是否可用
+    pub fn check_algorithm_availability(&self, algorithm: &UpscaleAlgorithm) -> Result<(), String> {
+        let command = algorithm.get_command();
+        
+        // 使用 -h 参数检查命令是否存在（更通用）
+        let output = Command::new(&command)
+            .arg("-h")
+            .output();
+            
+        match output {
+            Ok(result) => {
+                if result.status.success() {
+                    println!("✅ {:?} 工具可用", algorithm);
+                    Ok(())
+                } else {
+                    Err(format!("{} 工具未正确安装", command))
+                }
+            }
+            Err(_e) => {
+                match algorithm {
+                    UpscaleAlgorithm::RealESRGAN => {
+                        Err(format!("{} 工具未安装", command))
+                    }
+                    UpscaleAlgorithm::Waifu2x => {
+                        Err(format!("{} 工具未安装", command))
+                    }
+                    UpscaleAlgorithm::RealCUGAN => {
+                        Err(format!("{} 工具未安装", command))
+                    }
+                }
+            }
         }
-
-        // 检查 sr_vulkan 是否可用
-        let sr_check = Command::new("python")
-            .arg("-c")
-            .arg("from sr_vulkan import sr_vulkan; print('sr_vulkan available')")
-            .output()
-            .map_err(|e| format!("检查 sr_vulkan 失败: {}", e))?;
-
-        if !sr_check.status.success() {
-            return Err("sr_vulkan 未安装。请运行: pip install sr-vulkan".to_string());
-        }
-
-        println!("✅ 超分工具可用 (Python + sr_vulkan)");
-        Ok(())
     }
 
     /// 获取模型路径
@@ -203,13 +210,13 @@ impl GenericUpscaler {
         Ok(upscale_dir.join(filename))
     }
 
-    /// 执行超分处理（使用 sr_vulkan Python 库）
+    /// 执行超分处理
     pub async fn upscale_image(
         &self,
         image_path: &Path,
         save_path: &Path,
         options: GenericUpscaleOptions,
-        _window: Option<Window>,
+        window: Option<Window>,
     ) -> Result<String, String> {
         println!("🚀 开始通用超分处理");
         println!("  📁 输入路径: {}", image_path.display());
@@ -250,56 +257,41 @@ impl GenericUpscaler {
         }
         println!("  ✅ 输出目录已准备");
 
-        // 构建 Python 命令
-        let python_script = self.get_upscale_script_path();
-
-        // 解析 tile size
-        let tile_size: i32 = options.tile_size.parse()
-            .unwrap_or(400);
-
-        let mut args = vec![
-            python_script.to_string_lossy().to_string(),
-            image_path.to_string_lossy().to_string(),
-            save_path.to_string_lossy().to_string(),
-            "--model".to_string(),
-            options.model.clone(),
-            "--scale".to_string(),
-            "2.0".to_string(),  // 默认 2x 缩放
-            "--tile-size".to_string(),
-            tile_size.to_string(),
-            "--format".to_string(),
-            "webp".to_string(),
-            "--gpu-id".to_string(),
-            options.gpu_id.clone(),
-        ];
-
-        // 添加TTA参数
-        if options.tta {
-            args.push("--tta".to_string());
-        }
-
+        // 构建命令参数
+        let command = options.algorithm.get_command();
+        let models_path = self.get_models_path();
+        
         println!("  🔧 构建命令参数...");
-        println!("  📝 执行命令: python {}", args.join(" "));
+        let args = self.build_command_args(image_path, save_path, &options, &models_path)?;
+        println!("  📝 执行命令: {} {}", command, args.join(" "));
 
-        // 执行 Python 脚本
+        // 执行命令
         println!("  🚀 启动超分进程...");
         let start_time = std::time::Instant::now();
         
-        let output = Command::new("python")
+        let mut child = Command::new(&command)
             .args(&args)
-            .output()
+            .spawn()
             .map_err(|e| format!("启动超分进程失败: {}", e))?;
+        
+        println!("  ⏱️  进程已启动，PID: {:?}", child.id());
+
+        // 等待进程完成
+        if let Some(_window) = window {
+            // 简化处理：直接执行命令并等待完成
+            println!("  ⏳ 执行超分命令并等待完成...");
+        }
+
+        let status = child.wait()
+            .map_err(|e| format!("等待超分进程失败: {}", e))?;
 
         let elapsed = start_time.elapsed();
         println!("  ⏱️  处理耗时: {:.2} 秒", elapsed.as_secs_f64());
 
-        // 检查执行结果
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            println!("  STDOUT: {}", stdout);
-            println!("  STDERR: {}", stderr);
-            return Err(format!("超分进程失败: {}", stderr));
+        if !status.success() {
+            let exit_code = status.code().unwrap_or(-1);
+            println!("  ❌ 超分进程失败，退出码: {}", exit_code);
+            return Err(format!("超分进程失败，退出码: {}", exit_code));
         }
 
         // 检查输出文件是否存在
@@ -326,16 +318,95 @@ impl GenericUpscaler {
         Ok(save_path.to_string_lossy().to_string())
     }
 
-    /// 获取超分脚本路径
-    fn get_upscale_script_path(&self) -> PathBuf {
-        // 优先使用项目内的脚本目录
-        let project_script_dir = self.thumbnail_root.join("scripts");
-        if project_script_dir.exists() {
-            return project_script_dir.join("upscale_service.py");
+    /// 构建命令参数
+    fn build_command_args(
+        &self,
+        image_path: &Path,
+        save_path: &Path,
+        options: &GenericUpscaleOptions,
+        models_path: &str,
+    ) -> Result<Vec<String>, String> {
+        let mut args = match options.algorithm {
+            UpscaleAlgorithm::RealESRGAN => {
+                vec![
+                    "-i".to_string(),
+                    image_path.to_str().unwrap().to_string(),
+                    "-o".to_string(),
+                    save_path.to_str().unwrap().to_string(),
+                    "-n".to_string(),
+                    options.model.clone(),
+                    "-s".to_string(),
+                    "4".to_string(), // Real-ESRGAN 通常使用 4x
+                    "-f".to_string(),
+                    "webp".to_string(),
+                ]
+            }
+            UpscaleAlgorithm::Waifu2x => {
+                vec![
+                    "-i".to_string(),
+                    image_path.to_str().unwrap().to_string(),
+                    "-o".to_string(),
+                    save_path.to_str().unwrap().to_string(),
+                    "-n".to_string(),
+                    options.model.clone(),
+                    "-s".to_string(),
+                    "2".to_string(), // Waifu2x 通常使用 2x
+                    "--noise".to_string(),
+                    options.noise_level.clone(),
+                    "-f".to_string(),
+                    "webp".to_string(),
+                ]
+            }
+            UpscaleAlgorithm::RealCUGAN => {
+                vec![
+                    "-i".to_string(),
+                    image_path.to_str().unwrap().to_string(),
+                    "-o".to_string(),
+                    save_path.to_str().unwrap().to_string(),
+                    "-n".to_string(),
+                    options.model.clone(),
+                    "-s".to_string(),
+                    "2".to_string(), // Real-CUGAN 通常使用 2x
+                    "--noise".to_string(),
+                    options.noise_level.clone(),
+                    "-f".to_string(),
+                    "webp".to_string(),
+                ]
+            }
+        };
+
+        // 只有当模型路径不为空时才添加-m参数
+        if !models_path.is_empty() {
+            args.push("-m".to_string());
+            args.push(models_path.to_string());
         }
-        
-        // 使用默认的脚本路径
-        PathBuf::from("upscale_service.py")
+
+        // 添加GPU参数
+        if !options.gpu_id.is_empty() && options.gpu_id != "0" {
+            args.extend_from_slice(&["-g".to_string(), options.gpu_id.clone()]);
+        }
+
+        // 添加Tile Size参数
+        if !options.tile_size.is_empty() && options.tile_size != "0" {
+            args.extend_from_slice(&["-t".to_string(), options.tile_size.clone()]);
+        }
+
+        // 添加TTA参数
+        if options.tta {
+            args.push("-x".to_string());
+        }
+
+        // 添加线程数参数（如果支持）
+        if !options.num_threads.is_empty() && options.num_threads != "1" {
+            match options.algorithm {
+                UpscaleAlgorithm::Waifu2x | UpscaleAlgorithm::RealCUGAN => {
+                    args.extend_from_slice(&["-j".to_string(), options.num_threads.clone()]);
+                }
+                _ => {}
+            }
+        }
+
+        Ok(args)
     }
 
     /// 检查是否已有超分缓存

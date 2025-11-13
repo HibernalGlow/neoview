@@ -207,14 +207,13 @@ class UpscaleManager:
             self.tasks[task_id] = task
         
         try:
-            # 获取实际的图像尺寸
-            if width == 0 or height == 0:
+            # 判断是否使用指定尺寸
+            use_explicit_dimensions = width > 0 and height > 0
+
+            actual_width = actual_height = 0
+            if not use_explicit_dimensions:
                 actual_width, actual_height = get_image_dimensions(image_data)
-                print(f"📐 获取到实际图像尺寸: {actual_width}x{actual_height}")
-                if width == 0:
-                    width = actual_width
-                if height == 0:
-                    height = actual_height
+                print(f"📐 原始图像尺寸: {actual_width}x{actual_height}")
             
             # 调用 sr_vulkan 添加任务
             # 确保 tile_size 是有效值
@@ -234,7 +233,9 @@ class UpscaleManager:
             print(f"  tile_size: {tile_size}")
             print(f"  noise_level: {noise_level}")
             
-            if width > 0 and height > 0:
+            status = -1
+
+            if use_explicit_dimensions:
                 # 使用指定尺寸
                 print("📏 使用指定尺寸模式")
                 status = sr.add(
@@ -266,14 +267,25 @@ class UpscaleManager:
                         print(f"❌ sr.add 失败: {error}")
                         # 尝试使用默认参数重试
                         print("🔄 尝试使用默认 tileSize=0 重试...")
-                        status = sr.add(
-                            image_data,
-                            model,
-                            task_id,
-                            scale,
-                            format=format_str,
-                            tileSize=0
-                        )
+                        if use_explicit_dimensions:
+                            status = sr.add(
+                                image_data,
+                                model,
+                                task_id,
+                                width,
+                                height,
+                                format=format_str,
+                                tileSize=0
+                            )
+                        else:
+                            status = sr.add(
+                                image_data,
+                                model,
+                                task_id,
+                                scale,
+                                format=format_str,
+                                tileSize=0
+                            )
                         print(f"📊 sr.add 默认参数返回 status: {status}")
                         if status <= 0:
                             error2 = sr.getLastError() if hasattr(sr, 'getLastError') else f"未知错误 (status={status})"
@@ -295,17 +307,25 @@ class UpscaleManager:
                     # 尝试使用默认参数重试
                     print("🔄 尝试使用默认 tileSize=0 重试...")
                     try:
-                        status = sr.add(
-                            image_data,
-                            model,
-                            task_id,
-                            width,  # 实际宽度
-                            height,  # 实际高度
-                            scale,
-                            format=format_str,
-                            tileSize=0,
-                            noiseLevel=noise_level
-                        )
+                        if use_explicit_dimensions:
+                            status = sr.add(
+                                image_data,
+                                model,
+                                task_id,
+                                width,
+                                height,
+                                format=format_str,
+                                tileSize=0
+                            )
+                        else:
+                            status = sr.add(
+                                image_data,
+                                model,
+                                task_id,
+                                scale,
+                                format=format_str,
+                                tileSize=0
+                            )
                         print(f"✅ sr.add 默认参数调用成功，status: {status}")
                     except Exception as e2:
                         print(f"❌ sr.add 默认参数也失败: {e2}")

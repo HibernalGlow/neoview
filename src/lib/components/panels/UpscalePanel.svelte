@@ -57,6 +57,7 @@
 	let status = $state('就绪');
 	let processingTime = $state(0);
 	let startTime = 0;
+	let error = $state('');
 
 	// 当前图片信息
 	let currentImagePath = $state('');
@@ -125,7 +126,7 @@
 	});
 
 	// 创建事件分发器
-	const { dispatch } = createEventDispatcher();
+	const dispatch = createEventDispatcher();
 
 	onMount(async () => {
 		// 加载设置
@@ -317,7 +318,7 @@
 
 			// 首先尝试从 bookStore 获取已加载的图像数据
 			const currentImageData = bookStore.currentImage;
-			if (currentImageData) {
+			if (currentImageData && typeof currentImageData === 'string') {
 				// 如果是 blob URL，转换为 Uint8Array
 				if (currentImageData.startsWith('blob:')) {
 					const response = await fetch(currentImageData);
@@ -348,17 +349,22 @@
 	}
 
 	/**
-	 * 获取当前图像的 Hash (从 ImageViewer 获取)
+	 * 获取当前图像的 Hash (使用路径 + innerpath)
 	 */
 	async function getCurrentImageHash(): Promise<string | null> {
 		try {
-			const currentImageData = bookStore.currentImage;
-			if (!currentImageData) {
+			const currentPage = bookStore.currentPage;
+			if (!currentPage) {
 				return null;
 			}
 
-			// 计算 MD5 hash
-			const hash = await calculateImageHash(currentImageData);
+			// 使用路径 + innerpath 作为 hash 基础
+			const path = currentPage.path || '';
+			const innerPath = (currentPage as any).innerPath || '';
+			const hashInput = path + '|' + innerPath;
+			
+			// 计算 hash
+			const hash = await calculatePathHash(hashInput);
 			return hash;
 		} catch (error) {
 			console.error('获取图像 hash 失败:', error);
@@ -367,13 +373,25 @@
 	}
 
 	/**
-	 * 计算图像 MD5 hash
+	 * 计算路径 hash (使用 Web Crypto API)
 	 */
-	async function calculateImageHash(imageData: string): Promise<string> {
-		// 这里需要实现 MD5 计算，可以使用 crypto-js 或其他库
-		// 暂时返回一个简单的 hash
-		const msg = await import('crypto-js');
-		return msg.default.MD5(imageData).toString();
+	async function calculatePathHash(pathInput: string): Promise<string> {
+		try {
+			// 将路径字符串转换为 ArrayBuffer
+			const encoder = new TextEncoder();
+			const bytes = encoder.encode(pathInput);
+			
+			// 使用 Web Crypto API 计算 SHA-256 hash
+			const hashBuffer = await crypto.subtle.digest('SHA-256', bytes);
+			const hashArray = Array.from(new Uint8Array(hashBuffer));
+			const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+			
+			return hashHex;
+		} catch (error) {
+			console.error('计算路径 hash 失败:', error);
+			// 回退到简单的字符串 hash
+			return pathInput.length.toString(36);
+		}
 	}
 
 	/**

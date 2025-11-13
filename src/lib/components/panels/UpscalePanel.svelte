@@ -26,6 +26,7 @@
 	import UpscalePanelCurrentInfo from './UpscalePanelCurrentInfo.svelte';
 	import UpscalePanelCacheSection from './UpscalePanelCacheSection.svelte';
 	import UpscalePanelPreview from './UpscalePanelPreview.svelte';
+	import './UpscalePanel.styles.css';
 
 	// ==================== 状态管理 ====================
 	

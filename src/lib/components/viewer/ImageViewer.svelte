@@ -15,7 +15,8 @@
 	import { FileSystemAPI } from '$lib/api';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
-	import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core';
+import toAssetUrl from '$lib/utils/assetProxy';
 	import ComparisonViewer from './ComparisonViewer.svelte';
 	import { upscaleState, performUpscale, getGlobalUpscaleEnabled, upscaleSettings, initUpscaleSettingsManager } from '$lib/stores/upscale/UpscaleManager.svelte';
 	import { idbGet, idbSet, idbDelete } from '$lib/utils/idb';
@@ -622,18 +623,20 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 
 						if (meta && meta.path) {
 							try {
-								// 懒加载二进制：仅在确认存在缓存时才读取文件字节
-								const bytes = await invoke<number[]>('read_binary_file', { filePath: meta.path });
-								const arr = new Uint8Array(bytes);
-								const blob = new Blob([arr], { type: 'image/webp' });
-								const url = URL.createObjectURL(blob);
+                                const url = toAssetUrl(meta.path);
 								// 仅当调用方希望预览（通常为当前页）时，才更新 bookStore 来替换显示
-								if (preview) {
-									bookStore.setUpscaledImage(url);
-									bookStore.setUpscaledImageBlob(blob);
-								}
+                                if (preview) {
+                                    bookStore.setUpscaledImage(url);
+                                    bookStore.setUpscaledImageBlob(null);
+                                } else {
+                                    try {
+                                        preloadMemoryCache.set(imageHash, { url, blob: new Blob([], { type: 'image/webp' }) });
+                                    } catch (e) {
+                                        console.warn('写入预加载内存缓存失败:', e);
+                                    }
+                                }
 								// 更新内存索引，便于后续快速命中
-								hashPathIndex.set(imageHash, meta.path);
+                                hashPathIndex.set(imageHash, meta.path);
 								// 持久化索引到 IndexedDB
 								try {
 									const cb = bookStore.currentBook;
@@ -644,12 +647,12 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 								} catch (err) {
 									console.warn('持久化 hashPathIndex 失败:', err);
 								}
-								console.log(`找到 ${meta.algorithm || algorithm} 算法的超分缓存，path: ${meta.path}`);
-								return true;
-							} catch (e) {
-								console.error('读取缓存文件失败:', e);
-								continue;
-							}
+                                console.log(`找到 ${meta.algorithm || algorithm} 算法的超分缓存，asset: ${url}`);
+                                return true;
+                            } catch (e) {
+                                console.error('生成资产URL失败:', e);
+                                continue;
+                            }
 						}
 					} catch (e) {
 						// 继续检查下一个算法

@@ -307,7 +307,7 @@
 	}
 
 	/**
-	 * 获取当前图像的 Blob 数据 (从 ImageViewer 缓存中获取)
+	 * 获取当前图像的 Blob 数据 (通过事件请求 ImageViewer 数据)
 	 */
 	async function getCurrentImageBlob(): Promise<Uint8Array> {
 		try {
@@ -316,32 +316,35 @@
 				throw new Error('没有当前图片');
 			}
 
-			// 首先尝试从 bookStore 获取已加载的图像数据
-			const currentImageData = bookStore.currentImage;
-			if (currentImageData && typeof currentImageData === 'string') {
-				// 如果是 blob URL，转换为 Uint8Array
-				if (currentImageData.startsWith('blob:')) {
-					const response = await fetch(currentImageData);
-					const blob = await response.blob();
-					return new Uint8Array(await blob.arrayBuffer());
-				}
-				// 如果是 data URL，转换为 Uint8Array
-				else if (currentImageData.startsWith('data:image/')) {
-					const base64Data = currentImageData.split(',')[1];
-					const binaryString = atob(base64Data);
-					const bytes = new Uint8Array(binaryString.length);
-					for (let i = 0; i < binaryString.length; i++) {
-						bytes[i] = binaryString.charCodeAt(i);
-					}
-					return bytes;
-				}
+			// 触发事件请求当前图像数据
+			dispatch('request-current-image-data');
+			
+			// 等待 ImageViewer 响应 (这里需要实现事件监听)
+			// 暂时回退到文件读取
+			console.warn('等待 ImageViewer 响应，暂时回退到文件读取');
+			
+			// 检查是否是压缩包文件
+			const isArchive = currentPage.path.endsWith('.zip') || currentPage.path.endsWith('.rar') || currentPage.path.endsWith('.7z');
+			
+			if (isArchive) {
+				// 对于压缩包，使用 invoke 调用后端提取
+				const innerPath = (currentPage as any).innerPath || currentPage.name;
+				console.log('从压缩包提取图像:', currentPage.path, 'inner:', innerPath);
+				
+				const { invoke } = await import('@tauri-apps/api/core');
+				const imageData = await invoke<number[]>('extract_file_from_zip', {
+					archivePath: currentPage.path,
+					innerPath: innerPath
+				});
+				
+				return new Uint8Array(imageData);
+			} else {
+				// 对于普通文件，直接读取
+				const { readBinaryFile } = await import('@tauri-apps/api/fs');
+				const data = await readBinaryFile(currentPage.path);
+				return new Uint8Array(data);
 			}
-
-			// 如果缓存中没有，回退到文件读取
-			console.warn('缓存中没有图像数据，回退到文件读取');
-			const { readBinaryFile } = await import('@tauri-apps/api/fs');
-			const data = await readBinaryFile(currentPage.path);
-			return new Uint8Array(data);
+			
 		} catch (error) {
 			console.error('获取图像数据失败:', error);
 			throw error;

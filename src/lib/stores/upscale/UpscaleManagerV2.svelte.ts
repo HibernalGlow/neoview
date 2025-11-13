@@ -63,7 +63,7 @@ export async function performUpscale(imageData: string): Promise<void> {
 
 		// 调用后端超分命令
 		const result = await invoke<string>('upscale_image_from_data', {
-			dataUrl: imageData,
+			imageData: imageData,
 			model: 'waifu2x_cunet',
 			scale: 2
 		});

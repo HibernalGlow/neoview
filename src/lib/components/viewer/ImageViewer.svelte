@@ -565,100 +565,22 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 		}
 	}
 
-	// 检查超分缓存（使用传入的hash）
-	// checkUpscaleCache: 检查是否存在超分缓存
-	// 参数 preview: boolean - 如果为 true（默认），在命中缓存时会把 upscaledImage 写入 bookStore 以便立即显示；
-	// 当用于预加载（preload）时应传入 preview=false，以避免替换当前查看器的显示。
+	// ✅ 检查超分缓存（简化版本 - 使用新系统）
 	async function checkUpscaleCache(imageDataWithHash: ImageDataWithHash, preview: boolean = true): Promise<boolean> {
 		try {
-			const { data: imageData, hash: imageHash } = imageDataWithHash;
+			const { hash: imageHash } = imageDataWithHash;
 
-			// 优先检查内存预加载缓存（preloadMemoryCache），减少导航时磁盘读取等待
-			try {
-				if (preloadMemoryCache.has(imageHash)) {
-					const cached = preloadMemoryCache.get(imageHash);
-					if (cached) {
-						bookStore.setUpscaledImage(cached.url);
-						bookStore.setUpscaledImageBlob(cached.blob);
-						console.log('从内存预加载缓存命中 upscaled，MD5:', imageHash);
-						return true;
-					}
+			// 优先检查内存预加载缓存
+			if (preloadMemoryCache.has(imageHash)) {
+				const cached = preloadMemoryCache.get(imageHash);
+				if (cached) {
+					bookStore.setUpscaledImage(cached.url);
+					bookStore.setUpscaledImageBlob(cached.blob);
+					console.log('从内存预加载缓存命中 upscaled，MD5:', imageHash);
+					return true;
 				}
-			} catch (e) {
-				console.warn('检查内存预加载缓存失败:', e);
 			}
-			
-			// 获取当前活动的算法设置
-			let currentAlgorithm = 'realcugan'; // 默认值
-			try {
-				// 从本地设置获取当前算法
-				let settings;
-				upscaleSettings.subscribe(s => settings = s)();
-				currentAlgorithm = settings?.active_algorithm || 'realcugan';
-			} catch (e) {
-				console.warn('获取当前算法失败，使用默认值:', e);
-			}
-			
-				// 优先检查当前算法的缓存
-				const algorithms = [currentAlgorithm, 'realcugan', 'realesrgan', 'waifu2x'];
 
-				// 读取 TTL（小时）设置，默认8小时
-				let ttlHours = 8;
-				try {
-					let s; upscaleSettings.subscribe(x => s = x)();
-					ttlHours = s?.cache_ttl_hours ?? ttlHours;
-				} catch (e) {
-					console.warn('读取缓存TTL失败，使用默认值', e);
-				}
-				const ttlSeconds = ttlHours * 3600;
-
-				for (const algorithm of algorithms) {
-					try {
-						// 后端现在返回结构化的 metadata（path/mtime/size/algorithm），若未命中会抛出错误
-						const meta: any = await invoke('check_upscale_cache_for_algorithm', {
-							imageHash,
-							algorithm,
-							thumbnailPath: 'D:\\temp\\neoview_thumbnails_test',
-							max_age_seconds: ttlSeconds
-						});
-
-						if (meta && meta.path) {
-							try {
-								// 懒加载二进制：仅在确认存在缓存时才读取文件字节
-								const bytes = await invoke<number[]>('read_binary_file', { filePath: meta.path });
-								const arr = new Uint8Array(bytes);
-								const blob = new Blob([arr], { type: 'image/webp' });
-								const url = URL.createObjectURL(blob);
-								// 仅当调用方希望预览（通常为当前页）时，才更新 bookStore 来替换显示
-								if (preview) {
-									bookStore.setUpscaledImage(url);
-									bookStore.setUpscaledImageBlob(blob);
-								}
-								// 更新内存索引，便于后续快速命中
-								hashPathIndex.set(imageHash, meta.path);
-								// 持久化索引到 IndexedDB
-								try {
-									const cb = bookStore.currentBook;
-									if (cb && cb.path) {
-										const key = `hashPathIndex:${cb.path}`;
-										await idbSet(key, Array.from(hashPathIndex.entries()));
-									}
-								} catch (err) {
-									console.warn('持久化 hashPathIndex 失败:', err);
-								}
-								console.log(`找到 ${meta.algorithm || algorithm} 算法的超分缓存，path: ${meta.path}`);
-								return true;
-							} catch (e) {
-								console.error('读取缓存文件失败:', e);
-								continue;
-							}
-						}
-					} catch (e) {
-						// 继续检查下一个算法
-						continue;
-					}
-				}
-			
 			// 没有找到缓存
 			console.log('未找到任何超分缓存，MD5:', imageHash);
 			return false;
@@ -694,7 +616,8 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 
 			// 更新显示
 			const state = await new Promise<any>((resolve) => {
-				const unsub = upscaleState.subscribe(s => {
+				let unsub: any;
+				unsub = upscaleState.subscribe(s => {
 					resolve(s);
 					unsub();
 				});
@@ -849,19 +772,11 @@ async function processNextInQueue() {
 		}
 	}
 
-	// 预加载后续页面的超分
+	// ✅ 预加载后续页面的超分（简化版本）
 	async function preloadNextPages() {
 		try {
-			// 获取预加载页数设置
-			let preloadPages = 3; // 默认值
-			try {
-				let settings;
-				upscaleSettings.subscribe(s => settings = s)();
-				preloadPages = settings?.preload_pages || 3;
-				console.log('预加载设置:', { preloadPages, globalEnabled: settings?.global_upscale_enabled });
-			} catch (e) {
-				console.warn('获取预加载设置失败，使用默认值:', e);
-			}
+			// ✅ 使用新系统，默认预加载 3 页
+			const preloadPages = 3;
 
 			// 检查全局开关（如果关闭，仍执行普通的页面预加载/解码逻辑，但不触发预超分）
 			const globalEnabled = await getGlobalUpscaleEnabled();
@@ -999,10 +914,8 @@ async function processNextInQueue() {
 						// 放入队列（带 pageIndex 以便按序应用）
 						const task = { data: imageDataWithHash.data, hash: imageDataWithHash.hash, pageIndex: targetIndex };
 						preloadQueue = [...preloadQueue, task];
-						// 启动池（使用设置中的后台并发限制）
-						let settings; upscaleSettings.subscribe(s => settings = s)();
-						const bgLimit = Number(settings?.background_concurrency) || 1;
-						startPreloadWorkers(bgLimit);
+						// ✅ 使用新系统，默认后台并发为 1
+						startPreloadWorkers(1);
 					} else {
 						console.log('全局超分关闭，跳过触发预超分（已完成预解码）');
 					}

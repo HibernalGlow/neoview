@@ -22,6 +22,13 @@
 	import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
 	import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
+	import {
+		defaultPanelSettings,
+		loadUpscalePanelSettings,
+		persistUpscalePanelSettings,
+		toUpscalePanelEventDetail,
+		type UpscalePanelSettings
+	} from './UpscalePanel';
 
 	// ==================== 状态管理 ====================
 	
@@ -61,7 +68,7 @@
 		'MODEL_REALESRGAN_X4PLUS_ANIME_UP4X': 'Real-ESRGAN 4x+ Anime',
 		'MODEL_REALSR_DF2K_UP4X': 'Real-ESRGAN 4x DF2K',
 		'MODEL_WAIFU2X_CUNET_UP1X': 'CUNet 1x',
-	'MODEL_WAIFU2X_CUNET_UP1X_DENOISE1X': 'CUNet 1x + Denoise 1x',
+		'MODEL_WAIFU2X_CUNET_UP1X_DENOISE1X': 'CUNet 1x + Denoise 1x',
 		'MODEL_WAIFU2X_CUNET_UP1X_DENOISE2X': 'CUNet 1x + Denoise 2x',
 		'MODEL_WAIFU2X_ANIME_UP2X_DENOISE0X': 'Anime 2x + Denoise 0x',
 		'MODEL_WAIFU2X_ANIME_UP2X_DENOISE1X': 'Anime 2x + Denoise 1x',
@@ -71,52 +78,29 @@
 		'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE2X': 'Photo 2x + Denoise 2x',
 		'MODEL_REALCUGAN_PRO_UP2X_DENOISE3X': 'Real-CUGAN Pro 2x + Denoise 3x',
 		'MODEL_REALCUGAN_SE_UP2X_DENOISE1X': 'Real-CUGAN SE 2x + Denoise 1x',
-	'MODEL_REALCUGAN_SE_UP2X_DENOISE2X': 'Real-CUGAN SE 2x + Denoise 2x',
+		'MODEL_REALCUGAN_SE_UP2X_DENOISE2X': 'Real-CUGAN SE 2x + Denoise 2x',
 		'MODEL_REALCUGAN_PRO_UP3X_DENOISE3X': 'Real-CUGAN Pro 3x + Denoise 3x',
-		'MODEL_REALESRGAN_ANIMAVIDEOV3_UP3X': 'Real-ESRGAN Anime 3x',
-		'MODEL_REALESRGAN_X4PLUS_ANIME_UP4X': 'Real-ESRGAN 4x+ Anime',
-		'MODEL_REALSR_DF2K_UP4X_TTA': 'Real-ESRGAN 4x DF2K',
-		'MODEL_WAIFU2X_ANIME_UP2X_TTA': 'Waifu2x Anime 2x',
-	'MODEL_WAIFU2X_CUNET_UP2X_TTA': 'Waifu2x CUNet 2x',
-		'MODEL_WAIFU2X_PHOTO_UP2X_TTA': 'Waifu2x Photo 2x',
-	'MODEL_REALCUGAN_PRO_UP2X_TTA': 'Real-CUGAN Pro 2x',
-		'MODEL_REALCUGAN_SE_UP2X_TTA': 'Real-CUGAN SE 2x',
-		'MODEL_REALCUGAN_PRO_UP3X_TTA': 'Real-CUGAN Pro 3x',
-	'MODEL_REALCUGAN_SE_UP3X_TTA': 'Real-CUGAN SE 3x',
-		'MODEL_REALCUGAN_PRO_UP4X_TTA': 'Real-CUGAN Pro 4x',
-	'MODEL_REALCUGAN_SE_UP4X_TTA': 'Real-CUGAN SE 4x',
-		'MODEL_REALESRGAN_ANIMAVIDEOV3_UP2X_TTA': 'Real-ESRGAN Anime 2x',
-	'MODEL_REALESRGAN_X4PLUS_ANIME_UP4X_TTA': 'Real-ESRGAN 4x+ Anime',
-	'MODEL_REALSR_DF2K_UP4X_TTA': 'Real-ESRGAN 4x DF2K',
-	'MODEL_WAIFU2X_ANIME_UP2X_DENOISE3X_TTA': 'Waifu2x Anime 2x + Denoise 3x',
-	'MODEL_WAIFU2X_CUNET_UP2X_DENOISE3X_TTA': 'Waifu2x CUNet 2x + Denoise 3x',
-		'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE3X_TTA': 'Waifu2x Photo 2x + Denoise 3x',
-		'MODEL_REALCUGAN_PRO_UP2X_DENOISE3X_TTA': 'Real-CUGAN Pro 2x + Denoise 3x',
-		'MODEL_REALCUGAN_SE_UP2X_DENOISE3X_TTA': 'Real-CUGAN SE 2x + Denoise 3x',
-		'MODEL_REALCUGAN_PRO_UP3X_DENOISE3X_TTA': 'Real-CUGAN Pro 3x + Denoise 3x',
-		'MODEL_REALCUGAN_PRO_UP4X': 'Real-CUGAN Pro 4x',
-		'MODEL_REALCUGAN_SE_UP4X': 'Real-CUGAN SE 4x',
 		'MODEL_REALESRGAN_ANIMAVIDEOV3_UP3X': 'Real-ESRGAN Anime 3x',
 		'MODEL_REALESRGAN_ANIMAVIDEOV3_UP4X': 'Real-ESRGAN Anime 4x',
 		'MODEL_REALESRGAN_X4PLUS_ANIME_UP4X': 'Real-ESRGAN 4x+ Anime',
 		'MODEL_REALSR_DF2K_UP4X': 'Real-ESRGAN 4x DF2K',
-	'MODEL_WAIFU2X_ANIME_UP2X': 'Waifu2x Anime 2x',
+		'MODEL_WAIFU2X_ANIME_UP2X': 'Waifu2x Anime 2x',
 		'MODEL_WAIFU2X_CUNET_UP1X': 'Waifu2x CUNet 1x',
-	'MODEL_WAIFU2X_CUNET_UP2X': 'Waifu2x CUNet 2x',
+		'MODEL_WAIFU2X_CUNET_UP2X': 'Waifu2x CUNet 2x',
 		'MODEL_WAIFU2X_PHOTO_UP2X': 'Waifu2x Photo 2x',
-	'MODEL_WAIFU2X_ANIME_UP2X_DENOISE0X': 'Waifu2x Anime 2x + Denoise 0x',
-	'MODEL_WAIFU2X_ANIME_UP2X_DENOISE1X': 'Waifu2x Anime 2x + Denoise 1x',
+		'MODEL_WAIFU2X_ANIME_UP2X_DENOISE0X': 'Waifu2x Anime 2x + Denoise 0x',
+		'MODEL_WAIFU2X_ANIME_UP2X_DENOISE1X': 'Waifu2x Anime 2x + Denoise 1x',
 		'MODEL_WAIFU2X_ANIME_UP2X_DENOISE2X': 'Waifu2x Anime 2x + Denoise 2x',
-	'MODEL_WAIFU2X_CUNET_UP1X_DENOISE0X': 'Waifu2x CUNet 1x + Denoise 0x',
-	'MODEL_WAIFU2X_CUNET_UP1X_DENOISE1X': 'Waifu2x CUNet 1x + Denoise 1x',
-	'MODEL_WAIFU2X_CUNET_UP1X_DENOISE2X': 'Waifu2x CUNet 1x + Denoise 2x',
-	'MODEL_WAIFU2X_CUNET_UP1X_DENOISE3X': 'Waifu2x CUNet 1x + Denoise 3x',
-	'MODEL_WAIFU2X_CUNET_UP2X_DENOISE0X': 'Waifu2x CUNet 2x + Denoise 0x',
+		'MODEL_WAIFU2X_CUNET_UP1X_DENOISE0X': 'Waifu2x CUNet 1x + Denoise 0x',
+		'MODEL_WAIFU2X_CUNET_UP1X_DENOISE1X': 'Waifu2x CUNet 1x + Denoise 1x',
+		'MODEL_WAIFU2X_CUNET_UP1X_DENOISE2X': 'Waifu2x CUNet 1x + Denoise 2x',
+		'MODEL_WAIFU2X_CUNET_UP1X_DENOISE3X': 'Waifu2x CUNet 1x + Denoise 3x',
+		'MODEL_WAIFU2X_CUNET_UP2X_DENOISE0X': 'Waifu2x CUNet 2x + Denoise 0x',
 		'MODEL_WAIFU2X_CUNET_UP2X_DENOISE1X': 'Waifu2x CUNet 2x + Denoise 1x',
-	'MODEL_WAIFU2X_CUNET_UP2X_DENOISE2X': 'Waifu2x CUNet 2x + Denoise 2x',
+		'MODEL_WAIFU2X_CUNET_UP2X_DENOISE2X': 'Waifu2x CUNet 2x + Denoise 2x',
 		'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE0X': 'Waifu2x Photo 2x + Denoise 0x',
-	'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE1X': 'Waifu2x Photo 2x + Denoise 1x',
-	'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE2X': 'Waifu2x Photo 2x + Denoise 2x'
+		'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE1X': 'Waifu2x Photo 2x + Denoise 1x',
+		'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE2X': 'Waifu2x Photo 2x + Denoise 2x'
 	};
 
 	// 处理状态
@@ -196,20 +180,55 @@
 	// 创建事件分发器
 	const dispatch = createEventDispatcher();
 
-	function emitUpscaleSettings() {
-		dispatch('upscale-settings-updated', {
+	function applyPanelSettings(settings: UpscalePanelSettings) {
+		autoUpscaleEnabled = settings.autoUpscaleEnabled;
+		preUpscaleEnabled = settings.preUpscaleEnabled;
+		conditionalUpscaleEnabled = settings.conditions.enabled ?? settings.conditionalUpscaleEnabled;
+		conditionalMinWidth = settings.conditionalMinWidth ?? settings.conditions.minWidth;
+		conditionalMinHeight = settings.conditionalMinHeight ?? settings.conditions.minHeight;
+		currentImageUpscaleEnabled = settings.currentImageUpscaleEnabled;
+		useCachedFirst = settings.useCachedFirst;
+		selectedModel = settings.selectedModel;
+		scale = settings.scale;
+		tileSize = settings.tileSize;
+		noiseLevel = settings.noiseLevel;
+		gpuId = settings.gpuId;
+	}
+
+	function gatherPanelSettings(): UpscalePanelSettings {
+		return {
+			...defaultPanelSettings,
 			autoUpscaleEnabled,
 			preUpscaleEnabled,
 			conditionalUpscaleEnabled,
 			conditionalMinWidth,
-			conditionalMinHeight
-		});
+			conditionalMinHeight,
+			currentImageUpscaleEnabled,
+			useCachedFirst,
+			selectedModel,
+			scale,
+			tileSize,
+			noiseLevel,
+			gpuId,
+			conditions: {
+				enabled: conditionalUpscaleEnabled,
+				minWidth: conditionalMinWidth,
+				minHeight: conditionalMinHeight
+			}
+		};
+	}
+
+	function emitUpscaleSettings(settings: UpscalePanelSettings) {
+		dispatch('upscale-settings-updated', toUpscalePanelEventDetail(settings));
 	}
 
 	onMount(async () => {
 		// 加载设置
-		loadSettings();
-		
+		const loaded = loadUpscalePanelSettings();
+		applyPanelSettings(loaded);
+		settingsInitialized = true;
+		emitUpscaleSettings(gatherPanelSettings());
+
 		// 初始化 PyO3 管理器
 		try {
 			// 使用绝对路径
@@ -240,6 +259,15 @@
 		}
 	});
 
+	$effect(() => {
+		if (!settingsInitialized) {
+			return;
+		}
+		const settings = gatherPanelSettings();
+		persistUpscalePanelSettings(settings);
+		emitUpscaleSettings(settings);
+	});
+
 	// ==================== 功能函数 ====================
 
 	/**
@@ -263,21 +291,6 @@
 			console.error('获取图片信息失败:', error);
 		}
 	}
-
-	$effect(() => {
-		if (!settingsInitialized) {
-			return;
-		}
-		autoUpscaleEnabled;
-		preUpscaleEnabled;
-		conditionalUpscaleEnabled;
-		conditionalMinWidth;
-		conditionalMinHeight;
-		currentImageUpscaleEnabled;
-		useCachedFirst;
-		saveSettings();
-		emitUpscaleSettings();
-	});
 
 	/**
 	 * 更新缓存统计

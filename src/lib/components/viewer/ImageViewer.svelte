@@ -17,9 +17,7 @@
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { invoke } from '@tauri-apps/api/core';
 	import ComparisonViewer from './ComparisonViewer.svelte';
-	// ✅ 使用新的 UpscaleManagerV2
-	import { upscaleState, performUpscale, getGlobalUpscaleEnabled, initUpscaleSettingsManager, resetUpscaleState } from '$lib/stores/upscale/UpscaleManagerV2.svelte';
-	import ProgressBar from './ProgressBar.svelte';
+	import { upscaleState, performUpscale, getGlobalUpscaleEnabled, upscaleSettings, initUpscaleSettingsManager } from '$lib/stores/upscale/UpscaleManager.svelte';
 	import { idbGet, idbSet, idbDelete } from '$lib/utils/idb';
     import { get } from 'svelte/store';
 
@@ -565,22 +563,100 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 		}
 	}
 
-	// ✅ 检查超分缓存（简化版本 - 使用新系统）
+	// 检查超分缓存（使用传入的hash）
+	// checkUpscaleCache: 检查是否存在超分缓存
+	// 参数 preview: boolean - 如果为 true（默认），在命中缓存时会把 upscaledImage 写入 bookStore 以便立即显示；
+	// 当用于预加载（preload）时应传入 preview=false，以避免替换当前查看器的显示。
 	async function checkUpscaleCache(imageDataWithHash: ImageDataWithHash, preview: boolean = true): Promise<boolean> {
 		try {
-			const { hash: imageHash } = imageDataWithHash;
+			const { data: imageData, hash: imageHash } = imageDataWithHash;
 
-			// 优先检查内存预加载缓存
-			if (preloadMemoryCache.has(imageHash)) {
-				const cached = preloadMemoryCache.get(imageHash);
-				if (cached) {
-					bookStore.setUpscaledImage(cached.url);
-					bookStore.setUpscaledImageBlob(cached.blob);
-					console.log('从内存预加载缓存命中 upscaled，MD5:', imageHash);
-					return true;
+			// 优先检查内存预加载缓存（preloadMemoryCache），减少导航时磁盘读取等待
+			try {
+				if (preloadMemoryCache.has(imageHash)) {
+					const cached = preloadMemoryCache.get(imageHash);
+					if (cached) {
+						bookStore.setUpscaledImage(cached.url);
+						bookStore.setUpscaledImageBlob(cached.blob);
+						console.log('从内存预加载缓存命中 upscaled，MD5:', imageHash);
+						return true;
+					}
 				}
+			} catch (e) {
+				console.warn('检查内存预加载缓存失败:', e);
 			}
+			
+			// 获取当前活动的算法设置
+			let currentAlgorithm = 'realcugan'; // 默认值
+			try {
+				// 从本地设置获取当前算法
+				let settings;
+				upscaleSettings.subscribe(s => settings = s)();
+				currentAlgorithm = settings?.active_algorithm || 'realcugan';
+			} catch (e) {
+				console.warn('获取当前算法失败，使用默认值:', e);
+			}
+			
+				// 优先检查当前算法的缓存
+				const algorithms = [currentAlgorithm, 'realcugan', 'realesrgan', 'waifu2x'];
 
+				// 读取 TTL（小时）设置，默认8小时
+				let ttlHours = 8;
+				try {
+					let s; upscaleSettings.subscribe(x => s = x)();
+					ttlHours = s?.cache_ttl_hours ?? ttlHours;
+				} catch (e) {
+					console.warn('读取缓存TTL失败，使用默认值', e);
+				}
+				const ttlSeconds = ttlHours * 3600;
+
+				for (const algorithm of algorithms) {
+					try {
+						// 后端现在返回结构化的 metadata（path/mtime/size/algorithm），若未命中会抛出错误
+						const meta: any = await invoke('check_upscale_cache_for_algorithm', {
+							imageHash,
+							algorithm,
+							thumbnailPath: 'D:\\temp\\neoview_thumbnails_test',
+							max_age_seconds: ttlSeconds
+						});
+
+						if (meta && meta.path) {
+							try {
+								// 懒加载二进制：仅在确认存在缓存时才读取文件字节
+								const bytes = await invoke<number[]>('read_binary_file', { filePath: meta.path });
+								const arr = new Uint8Array(bytes);
+								const blob = new Blob([arr], { type: 'image/webp' });
+								const url = URL.createObjectURL(blob);
+								// 仅当调用方希望预览（通常为当前页）时，才更新 bookStore 来替换显示
+								if (preview) {
+									bookStore.setUpscaledImage(url);
+									bookStore.setUpscaledImageBlob(blob);
+								}
+								// 更新内存索引，便于后续快速命中
+								hashPathIndex.set(imageHash, meta.path);
+								// 持久化索引到 IndexedDB
+								try {
+									const cb = bookStore.currentBook;
+									if (cb && cb.path) {
+										const key = `hashPathIndex:${cb.path}`;
+										await idbSet(key, Array.from(hashPathIndex.entries()));
+									}
+								} catch (err) {
+									console.warn('持久化 hashPathIndex 失败:', err);
+								}
+								console.log(`找到 ${meta.algorithm || algorithm} 算法的超分缓存，path: ${meta.path}`);
+								return true;
+							} catch (e) {
+								console.error('读取缓存文件失败:', e);
+								continue;
+							}
+						}
+					} catch (e) {
+						// 继续检查下一个算法
+						continue;
+					}
+				}
+			
 			// 没有找到缓存
 			console.log('未找到任何超分缓存，MD5:', imageHash);
 			return false;
@@ -592,63 +668,118 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 		}
 	}
 
-	// ✅ 触发自动超分（简化版本 - 使用新的 UpscaleManagerV2）
+	// 触发自动超分 - 复用 UpscalePanel 的 startUpscale 逻辑
 	async function triggerAutoUpscale(imageDataWithHash: ImageDataWithHash, isPreload = false) {
 		try {
 			// 验证图片数据
 			if (!imageDataWithHash || !imageDataWithHash.data) {
-				console.log('[ImageViewer] 没有图片数据，跳过超分');
+				console.error('自动超分：图片数据为空');
 				return;
 			}
 
 			// 检查全局开关
 			const globalEnabled = await getGlobalUpscaleEnabled();
 			if (!globalEnabled) {
-				console.log('[ImageViewer] 全局超分开关已关闭');
+				console.log('全局超分开关已关闭，跳过自动超分');
 				return;
 			}
 
-			let { data: imageData } = imageDataWithHash;
-			console.log('[ImageViewer] 开始自动超分，数据长度:', imageData.length);
-
-			// 如果是 blob URL，转换为 data URL
-			if (imageData.startsWith('blob:')) {
-				console.log('[ImageViewer] 检测到 blob URL，转换为 data URL...');
-				try {
-					const response = await fetch(imageData);
-					const blob = await response.blob();
-					imageData = await new Promise<string>((resolve, reject) => {
-						const reader = new FileReader();
-						reader.onload = () => resolve(reader.result as string);
-						reader.onerror = reject;
-						reader.readAsDataURL(blob);
-					});
-					console.log('[ImageViewer] 转换完成，data URL 长度:', imageData.length);
-				} catch (e) {
-					console.error('[ImageViewer] blob URL 转换失败:', e);
+			// 如果是预加载且有其他任务在进行，加入队列
+			if (isPreload) {
+				const currentState = get(upscaleState);
+				if (currentState?.isUpscaling || isPreloading) {
+					// 验证图片数据格式
+					if (!imageDataWithHash.data.startsWith('blob:') && !imageDataWithHash.data.startsWith('data:image/')) {
+						console.warn('预加载：图片数据格式异常，不加入队列');
+						return;
+					}
+					
+					// 检查是否已在队列中
+					const exists = preloadQueue.some(item => item.hash === imageDataWithHash.hash);
+					if (!exists) {
+						// 保存带hash的图片数据到队列
+						preloadQueue = [...preloadQueue, imageDataWithHash];
+						console.log(`加入预加载队列，MD5: ${imageDataWithHash.hash}, 数据长度: ${imageDataWithHash.data.length}`);
+					}
+					return;
+				}
+			} else {
+				// 当前页面的超分，检查是否正在超分
+				const currentState = get(upscaleState);
+				if (currentState?.isUpscaling) {
+					console.log('超分正在进行中，跳过自动超分');
 					return;
 				}
 			}
 
-			// 使用新的简化超分系统
-			await performUpscale(imageData);
+			const { data: imageData, hash: imageHash } = imageDataWithHash;
+			console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', 'MD5:', imageHash, '图片数据长度:', imageData.length);
+			
+			// 检查是否是blob URL，如果是则转换为data URL（保持一致性）
+			let processedImageData = imageData;
+			if (imageData.startsWith('blob:')) {
+				console.log('检测到blob URL，使用 worker 异步转换为 data URL...');
+				const response = await fetch(imageData);
+				const blob = await response.blob();
 
-			// 等待超分完成（从 store 获取结果）
-			await new Promise<void>((resolve) => {
-				const unsub = upscaleState.subscribe(s => {
-					if (!s.isUpscaling && s.upscaledImageData) {
-						bookStore.setUpscaledImage(s.upscaledImageData);
-						console.log('[ImageViewer] 超分结果已更新到 bookStore');
-						unsub();
-						resolve();
-					}
+				// 使用 worker 转换，避免阻塞主线程
+				if (!window.__blobWorker) {
+					// @ts-ignore
+					window.__blobWorker = new Worker(new URL('$lib/workers/blobToDataUrl.worker.ts', import.meta.url), { type: 'module' });
+					window.__blobWorkerCallbacks = new Map();
+					window.__blobWorker.addEventListener('message', (ev) => {
+						const { id, success, data, error } = ev.data || {};
+						const cb = window.__blobWorkerCallbacks.get(id);
+						if (cb) {
+							window.__blobWorkerCallbacks.delete(id);
+							if (success) cb.resolve(data);
+							else cb.reject(error);
+						}
+					});
+				}
+
+				const id = Math.random().toString(36).slice(2);
+				const promise = new Promise<string>((resolve, reject) => {
+					window.__blobWorkerCallbacks.set(id, { resolve, reject });
+					window.__blobWorker.postMessage({ id, action: 'blobToDataUrl', blob });
 				});
-			});
 
-			console.log('[ImageViewer] 自动超分完成');
-
+				processedImageData = await promise;
+				console.log('worker 转换后的 data URL 长度:', processedImageData.length);
+			}
+			
+			// 检查图片格式
+			const isAvif = processedImageData.startsWith('data:image/avif');
+			const isJxl = processedImageData.startsWith('data:image/jxl');
+			
+			// 对于AVIF和JXL，先转换为WebP
+			if (isAvif || isJxl) {
+				console.log(`转换${isAvif ? 'AVIF' : 'JXL'}为WebP...`);
+				processedImageData = await invoke<string>('convert_data_url_to_webp', {
+					dataUrl: processedImageData
+				});
+				console.log('转换后的WebP数据长度:', processedImageData.length);
+			}
+			
+			// 标记预加载状态
+			if (isPreload) {
+				isPreloading = true;
+				// 后台任务：告诉 performUpscale 这是后台预加载
+				const res = await performUpscale(processedImageData, imageHash, { background: true });
+				return res;
+			} else {
+				const res = await performUpscale(processedImageData, imageHash, { background: false });
+				return res;
+			}
 		} catch (error) {
-			console.error('[ImageViewer] 自动超分失败:', error);
+			console.error('自动超分失败:', error);
+		} finally {
+			// 清理预加载状态
+			if (isPreload) {
+				isPreloading = false;
+				// 处理队列中的下一个任务
+				processNextInQueue();
+			}
 		}
 	}
 
@@ -789,11 +920,19 @@ async function processNextInQueue() {
 		}
 	}
 
-	// ✅ 预加载后续页面的超分（简化版本）
+	// 预加载后续页面的超分
 	async function preloadNextPages() {
 		try {
-			// ✅ 使用新系统，默认预加载 3 页
-			const preloadPages = 3;
+			// 获取预加载页数设置
+			let preloadPages = 3; // 默认值
+			try {
+				let settings;
+				upscaleSettings.subscribe(s => settings = s)();
+				preloadPages = settings?.preload_pages || 3;
+				console.log('预加载设置:', { preloadPages, globalEnabled: settings?.global_upscale_enabled });
+			} catch (e) {
+				console.warn('获取预加载设置失败，使用默认值:', e);
+			}
 
 			// 检查全局开关（如果关闭，仍执行普通的页面预加载/解码逻辑，但不触发预超分）
 			const globalEnabled = await getGlobalUpscaleEnabled();
@@ -931,8 +1070,10 @@ async function processNextInQueue() {
 						// 放入队列（带 pageIndex 以便按序应用）
 						const task = { data: imageDataWithHash.data, hash: imageDataWithHash.hash, pageIndex: targetIndex };
 						preloadQueue = [...preloadQueue, task];
-						// ✅ 使用新系统，默认后台并发为 1
-						startPreloadWorkers(1);
+						// 启动池（使用设置中的后台并发限制）
+						let settings; upscaleSettings.subscribe(s => settings = s)();
+						const bgLimit = Number(settings?.background_concurrency) || 1;
+						startPreloadWorkers(bgLimit);
 					} else {
 						console.log('全局超分关闭，跳过触发预超分（已完成预解码）');
 					}
@@ -1172,10 +1313,23 @@ async function processNextInQueue() {
 		onClose={closeComparison}
 	/>
 	
-	<!-- ✅ 新的进度条组件 -->
-	<ProgressBar 
-		showProgressBar={showProgressBar}
-		preUpscaleProgress={preUpscaleProgress}
-		totalPreUpscalePages={totalPreUpscalePages}
-	/>
+	<!-- Viewer底部进度条 -->
+	{#if showProgressBar && bookStore.currentBook}
+		<div class="absolute bottom-0 left-0 right-0 h-1 pointer-events-none">
+			<!-- 预超分进度条（黄色，底层） -->
+			{#if preUpscaleProgress > 0}
+				<div 
+					class="absolute bottom-0 left-0 h-full transition-all duration-500" 
+					style="width: {((bookStore.currentPageIndex + 1 + preUpscaleProgress / 100 * totalPreUpscalePages) / bookStore.currentBook.pages.length) * 100}%; background-color: #FCD34D; opacity: 0.6;"
+				>
+				</div>
+			{/if}
+			<!-- 当前页面进度条（奶白色/绿色，叠加在黄色上面） -->
+			<div 
+				class="absolute bottom-0 left-0 h-full transition-all duration-300 {progressBlinking ? 'animate-pulse' : ''}" 
+				style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%; background-color: {progressColor}; opacity: 0.8;"
+			>
+			</div>
+		</div>
+	{/if}
 </div>

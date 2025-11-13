@@ -18,6 +18,7 @@ use commands::thumbnail_commands::ThumbnailManagerState;
 use commands::upscale_commands::UpscaleManagerState;
 use commands::generic_upscale_commands::GenericUpscalerState;
 use commands::upscale_settings_commands::UpscaleSettingsState;
+use commands::pyo3_upscale_commands::PyO3UpscalerState;
 use std::sync::Arc;
 
 #[allow(clippy::missing_panics_doc)]
@@ -71,6 +72,9 @@ pub fn run() {
             
             // 初始化通用超分管理器
             app.manage(GenericUpscalerState::default());
+            
+            // 初始化 PyO3 超分管理器
+            app.manage(PyO3UpscalerState::default());
             
             // 初始化设置管理器
             app.manage(UpscaleSettingsState::default());
@@ -164,6 +168,16 @@ pub fn run() {
             commands::test_all_algorithms,
             commands::test_algorithm_models,
             commands::debug_models_info,
+            // PyO3 Upscale commands
+            commands::init_pyo3_upscaler,
+            commands::check_pyo3_upscaler_availability,
+            commands::get_pyo3_available_models,
+            commands::get_pyo3_model_id,
+            commands::pyo3_upscale_image,
+            commands::check_pyo3_upscale_cache,
+            commands::get_pyo3_cache_stats,
+            commands::cleanup_pyo3_cache,
+            commands::test_pyo3_upscaler,
             // Upscale Settings commands
             commands::init_upscale_settings_manager,
             commands::get_upscale_settings,

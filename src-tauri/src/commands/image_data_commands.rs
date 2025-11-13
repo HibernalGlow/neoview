@@ -2,8 +2,6 @@
 //! 图片数据处理相关的 Tauri 命令
 
 use tauri::command;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use std::fs;
 use std::path::PathBuf;
 use base64::{Engine as _, engine::general_purpose};
@@ -183,18 +181,15 @@ pub async fn upscale_image_from_data(
     let result = fs::read(&temp_output)
         .map_err(|e| format!("读取超分结果失败: {}", e))?;
     
-    // 只保存到最终路径如果 save_path 不为空
-    if !save_path.is_empty() {
-        fs::write(&save_path, &result)
-            .map_err(|e| format!("保存超分结果失败: {}", e))?;
-        println!("超分完成，结果保存到: {}", save_path);
-    } else {
-        println!("超分完成，结果直接返回内存（未保存）");
-    }
+    // 保存到最终路径
+    fs::write(&save_path, &result)
+        .map_err(|e| format!("保存超分结果失败: {}", e))?;
     
     // 清理临时文件
     let _ = fs::remove_file(&temp_input);
     let _ = fs::remove_file(&temp_output);
+    
+    println!("超分完成，结果保存到: {}", save_path);
     
     Ok(result)
 }

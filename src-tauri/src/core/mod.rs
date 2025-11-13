@@ -13,6 +13,7 @@ pub mod file_indexer;
 pub mod upscale;
 pub mod generic_upscaler;
 pub mod upscale_settings;
+pub mod pyo3_upscaler;
 
 pub use book_manager::BookManager;
 pub use image_loader::ImageLoader;

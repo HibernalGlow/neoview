@@ -8,6 +8,7 @@ pub mod thumbnail_commands;
 pub mod upscale_commands;
 pub mod generic_upscale_commands;
 pub mod upscale_settings_commands;
+pub mod pyo3_upscale_commands;
 pub mod image_data_commands;
 pub mod default;
 
@@ -18,5 +19,6 @@ pub use thumbnail_commands::*;
 pub use upscale_commands::*;
 pub use generic_upscale_commands::*;
 pub use upscale_settings_commands::*;
+pub use pyo3_upscale_commands::*;
 pub use image_data_commands::*;
 pub use default::*;

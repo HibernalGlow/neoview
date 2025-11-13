@@ -18,6 +18,13 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import ComparisonViewer from './ComparisonViewer.svelte';
 	import ImageViewerDisplay from './flow/ImageViewerDisplay.svelte';
+	import ImageViewerProgressBar from './flow/ImageViewerProgressBar.svelte';
+	import {
+		touchPreloadedPage,
+		ensurePreloadedCacheLimit,
+		persistPreloadedPagesForBook,
+		restorePreloadedPagesForBook
+	} from './flow/preloadUtils';
 	import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
 	import { idbGet, idbSet, idbDelete } from '$lib/utils/idb';
     import { get } from 'svelte/store';
@@ -77,90 +84,32 @@
 	// 预加载缓存容量与 LRU 管理
 	const PRELOADED_PAGES_CACHE_LIMIT = 10; // 可调整
 
-	function touchPreloadedPage(index: number) {
-		// 更新 LRU：删除并重新插入到 Map 末尾
+	const touchPreloadedPageSafe = (index: number) => {
 		try {
-			if (!preloadedPageImages.has(index)) return;
-			const val = preloadedPageImages.get(index)!;
-			preloadedPageImages.delete(index);
-			preloadedPageImages.set(index, val);
+			touchPreloadedPage(preloadedPageImages, index);
 		} catch (e) {
 			console.warn('touchPreloadedPage failed', e);
 		}
-	}
+	};
 
-	function ensurePreloadedCacheLimit() {
+	const ensurePreloadedCacheLimitSafe = () => {
 		try {
-			while (preloadedPageImages.size > PRELOADED_PAGES_CACHE_LIMIT) {
-				// Map keys are ordered; 删除最旧的一项
-				const firstKey = preloadedPageImages.keys().next().value as number;
-				preloadedPageImages.delete(firstKey);
-				console.log('预加载页面缓存超限，已移除最旧页：', firstKey + 1);
-			}
+			ensurePreloadedCacheLimit(preloadedPageImages, PRELOADED_PAGES_CACHE_LIMIT);
 		} catch (e) {
 			console.warn('ensurePreloadedCacheLimit failed', e);
 		}
-	}
+	};
 
-	async function dataOrBlobUrlToDataUrl(raw: string): Promise<string> {
-		// 如果已经是 data URL，直接返回
-		if (!raw) return raw;
-		if (raw.startsWith('data:')) return raw;
-		if (raw.startsWith('blob:')) {
-			try {
-				const resp = await fetch(raw);
-				const blob = await resp.blob();
-				return await new Promise<string>((resolve, reject) => {
-					const reader = new FileReader();
-					reader.onload = () => resolve(reader.result as string);
-					reader.onerror = reject;
-					reader.readAsDataURL(blob);
-				});
-			} catch (e) {
-				console.warn('转换 blob URL 到 data URL 失败:', e);
-				return raw;
-			}
-		}
-		// 其他情况直接返回原始字符串
-		return raw;
-	}
-
-	async function persistPreloadedPagesForBook(bookPath: string) {
+	async function persistPreloadedPagesForCurrentBook(bookPath: string) {
 		try {
-			const entries: Array<[number, string]> = [];
-			for (const [idx, val] of preloadedPageImages.entries()) {
-				// 尽量保存为 data URL
-				const dataUrl = await dataOrBlobUrlToDataUrl(val.data);
-				entries.push([idx, dataUrl]);
-			}
-			// 只持久化最近的 N 条，避免占用过多 IndexedDB 空间
-			const start = Math.max(0, entries.length - PRELOADED_PAGES_CACHE_LIMIT);
-			const limited = entries.slice(start);
-			await idbSet(`preloadedPageImages:${bookPath}`, limited);
-			console.log('已持久化 preloadedPageImages 到 IndexedDB，count=', limited.length);
+			await persistPreloadedPagesForBook(
+				preloadedPageImages,
+				bookPath,
+				PRELOADED_PAGES_CACHE_LIMIT
+			);
+			console.log('已持久化 preloadedPageImages 到 IndexedDB，count=', preloadedPageImages.size);
 		} catch (e) {
 			console.warn('持久化 pre加载页面到 IndexedDB 失败:', e);
-		}
-	}
-
-	async function restorePreloadedPagesForBook(bookPath: string) {
-		try {
-			const stored = await idbGet(`preloadedPageImages:${bookPath}`);
-			if (stored && Array.isArray(stored)) {
-				// 如果存储条目超过限制，取最后的 PRELOADED_PAGES_CACHE_LIMIT 条
-				let limited = stored;
-				if (stored.length > PRELOADED_PAGES_CACHE_LIMIT) {
-					limited = stored.slice(stored.length - PRELOADED_PAGES_CACHE_LIMIT);
-					console.log('从 IndexedDB 恢复 preloadedPageImages 时进行截断，原始条目=', stored.length, '保留=', limited.length);
-				}
-				preloadedPageImages = new Map();
-				for (const [idx, dataUrl] of limited) {
-					preloadedPageImages.set(Number(idx), { data: dataUrl as string, decoded: true });
-				}
-				console.log('已从 IndexedDB 恢复 preloadedPageImages，条目:', preloadedPageImages.size);
-			}
-		} catch (e) {
-			console.warn('恢复 preloadedPageImages 失败:', e);
 		}
 	}
 
@@ -462,7 +411,7 @@
 					imageData = cached.data;
 					data = cached.data;
 					// 标记为最近使用
-					touchPreloadedPage(currentIndex);
+					touchPreloadedPageSafe(currentIndex);
 				} else {
 					imageData = null;
 					data = null;
@@ -1047,16 +996,16 @@ async function processNextInQueue() {
 						img.src = imageDataWithHash.data;
 						await decodePromise;
 						preloadedPageImages.set(targetIndex, { data: imageDataWithHash.data, decoded: true });
-						// LRU 管理与持久化
-						touchPreloadedPage(targetIndex);
-						ensurePreloadedCacheLimit();
-						// 持久化当前书的 preloaded 页面数据
-						try {
-							const cb = bookStore.currentBook;
-							if (cb && cb.path) await persistPreloadedPagesForBook(cb.path);
-						} catch (e) {
-							console.warn('持久化 preloadedPageImages 失败:', e);
-						}
+					// LRU 管理与持久化
+					touchPreloadedPageSafe(targetIndex);
+					ensurePreloadedCacheLimitSafe();
+					// 持久化当前书的 preloaded 页面数据
+					try {
+						const cb = bookStore.currentBook;
+						if (cb && cb.path) await persistPreloadedPagesForCurrentBook(cb.path);
+					} catch (e) {
+						console.warn('持久化 preloadedPageImages 失败:', e);
+					}
 						console.log('预加载已解码页面图片，index:', targetIndex + 1);
 					} catch (e) {
 						console.warn('预加载页面解码失败，继续超分预处理:', e);
@@ -1284,23 +1233,13 @@ async function processNextInQueue() {
 		onClose={closeComparison}
 	/>
 	
-	<!-- Viewer底部进度条 -->
-	{#if showProgressBar && bookStore.currentBook}
-		<div class="absolute bottom-0 left-0 right-0 h-1 pointer-events-none">
-			<!-- 预超分进度条（黄色，底层） -->
-			{#if preUpscaleProgress > 0}
-				<div 
-					class="absolute bottom-0 left-0 h-full transition-all duration-500" 
-					style="width: {((bookStore.currentPageIndex + 1 + preUpscaleProgress / 100 * totalPreUpscalePages) / bookStore.currentBook.pages.length) * 100}%; background-color: #FCD34D; opacity: 0.6;"
-				>
-				</div>
-			{/if}
-			<!-- 当前页面进度条（奶白色/绿色，叠加在黄色上面） -->
-			<div 
-				class="absolute bottom-0 left-0 h-full transition-all duration-300 {progressBlinking ? 'animate-pulse' : ''}" 
-				style="width: {((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}%; background-color: {progressColor}; opacity: 0.8;"
-			>
-			</div>
-		</div>
-	{/if}
+	<ImageViewerProgressBar
+		showProgressBar={showProgressBar && Boolean(bookStore.currentBook)}
+		totalPages={bookStore.currentBook?.pages.length ?? 0}
+		currentPageIndex={bookStore.currentPageIndex}
+		preUpscaleProgress={preUpscaleProgress}
+		totalPreUpscalePages={totalPreUpscalePages}
+		progressBlinking={progressBlinking}
+		progressColor={progressColor}
+	/>
 </div>

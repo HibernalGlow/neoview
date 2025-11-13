@@ -47,13 +47,13 @@ pub async fn convert_data_url_to_webp(data_url: String) -> Result<String, String
 #[command]
 pub async fn get_upscale_save_path_from_data(
     image_hash: String,
-    algorithm: String,
+    _algorithm: String,
     model: String,
-    gpu_id: String,
-    tile_size: String,
-    tta: bool,
-    noise_level: String,
-    num_threads: String,
+    _gpu_id: String,
+    _tile_size: String,
+    _tta: bool,
+    _noise_level: String,
+    _num_threads: String,
     thumbnail_path: String,
 ) -> Result<String, String> {
     let thumbnail_root = PathBuf::from(thumbnail_path);
@@ -96,7 +96,7 @@ pub async fn upscale_image_from_data(
     tta: bool,
     noise_level: String,
     num_threads: String,
-    thumbnail_path: String,
+    _thumbnail_path: String,
 ) -> Result<Vec<u8>, String> {
     use std::process::Command;
     

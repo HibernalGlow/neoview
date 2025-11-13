@@ -49,6 +49,7 @@ impl Default for UpscaleModel {
 }
 
 /// PyO3 超分管理器
+#[derive(Clone)]
 pub struct PyO3Upscaler {
     /// Python 模块路径
     python_module_path: PathBuf,
@@ -80,13 +81,14 @@ impl PyO3Upscaler {
         Python::with_gil(|py| {
             // 添加模块路径到 sys.path
             let sys = py.import_bound("sys")?;
-            let sys_path: &Bound<'_, pyo3::types::PyList> = sys.getattr("path")?.downcast()?;
+            let path_attr = sys.getattr("path")?;
+            let sys_path: &Bound<'_, pyo3::types::PyList> = path_attr.downcast()?;
             
             let module_dir = self.python_module_path
                 .parent()
-                .ok_or("无法获取模块目录")?
+                .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("无法获取模块目录"))?
                 .to_str()
-                .ok_or("路径转换失败")?;
+                .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("路径转换失败"))?;
             
             if !sys_path.contains(module_dir)? {
                 sys_path.insert(0, module_dir)?;
@@ -117,13 +119,14 @@ impl PyO3Upscaler {
         Python::with_gil(|py| {
             // 添加模块路径到 sys.path
             let sys = py.import_bound("sys")?;
-            let sys_path: &Bound<'_, pyo3::types::PyList> = sys.getattr("path")?.downcast()?;
+            let path_attr = sys.getattr("path")?;
+            let sys_path: &Bound<'_, pyo3::types::PyList> = path_attr.downcast()?;
             
             let module_dir = self.python_module_path
                 .parent()
-                .ok_or("无法获取模块目录")?
+                .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("无法获取模块目录"))?
                 .to_str()
-                .ok_or("路径转换失败")?;
+                .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("路径转换失败"))?;
             
             if !sys_path.contains(module_dir)? {
                 sys_path.insert(0, module_dir)?;

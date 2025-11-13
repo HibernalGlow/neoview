@@ -105,7 +105,7 @@
 		if (currentPage) {
 			// 获取图片路径
 			const imagePath = (currentPage as any).path || (currentPage as any).url;
-			if (imagePath) {
+			if (imagePath && imagePath !== currentImagePath) {
 				updateCurrentImageInfo(imagePath);
 				console.log('📷 同步当前图片:', imagePath);
 				
@@ -169,6 +169,11 @@
 	 */
 	async function updateCurrentImageInfo(imagePath: string) {
 		currentImagePath = imagePath;
+		// 重置超分状态
+		upscaledImageUrl = '';
+		progress = 0;
+		status = '';
+		isProcessing = false;
 		
 		// 获取图片尺寸和大小
 		try {
@@ -289,6 +294,9 @@
 				result = cachedResult;
 				progress = 100;
 				status = '缓存命中';
+				
+				// 设置当前页面超分状态
+				bookStore.setCurrentPageUpscaled(true);
 				
 				const processingTime = (Date.now() - startTime) / 1000;
 				showSuccessToast(`使用缓存！耗时 ${processingTime.toFixed(1)}s`);

@@ -60,6 +60,11 @@ pub async fn init_pyo3_upscaler(
     
     let manager = PyO3Upscaler::new(python_module_path, cache_dir)?;
     
+    // 初始化 Python 模块
+    println!("🔍 开始初始化 Python 模块...");
+    manager.initialize()?;
+    println!("✅ Python 模块初始化完成");
+    
     let mut manager_guard = state.manager.lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
     

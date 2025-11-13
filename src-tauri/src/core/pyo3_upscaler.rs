@@ -6,7 +6,7 @@ use std::fs;
 use std::sync::{Arc, Mutex, Once};
 use serde::{Deserialize, Serialize};
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDict, PyModule};
+use super::python_upscale_wrapper::PythonUpscaleModule;
 
 static INIT: Once = Once::new();
 static mut PYTHON_INITIALIZED: bool = false;
@@ -65,6 +65,8 @@ pub struct PyO3Upscaler {
     cache_dir: PathBuf,
     /// 是否已初始化
     initialized: Arc<Mutex<bool>>,
+    /// Python 模块包装器
+    python_module: Arc<Mutex<Option<PythonUpscaleModule>>>,
 }
 
 impl PyO3Upscaler {
@@ -77,65 +79,32 @@ impl PyO3Upscaler {
             eprintln!("创建缓存目录失败: {}", e);
         }
         
+        // 初始化 Python 模块包装器
+        let python_module = match PythonUpscaleModule::new(&python_module_path.parent()
+            .ok_or_else(|| "无法获取模块目录".to_string())?.to_path_buf()) {
+            Ok(module) => module,
+            Err(e) => return Err(format!("初始化 Python 模块失败: {}", e)),
+        };
+        
         Ok(Self {
             python_module_path,
             cache_dir,
             initialized: Arc::new(Mutex::new(false)),
+            python_module: Arc::new(Mutex::new(Some(python_module))),
         })
     }
     
     /// 检查 Python 模块是否可用
     pub fn check_availability(&self) -> Result<bool, String> {
-        Python::with_gil(|py| {
-            // 添加模块路径到 sys.path
-            let sys = py.import_bound("sys")?;
-            let path_attr = sys.getattr("path")?;
-            let sys_path: &Bound<'_, pyo3::types::PyList> = path_attr.downcast()?;
-            
-            // 获取模块目录的绝对路径
-            let module_dir = self.python_module_path
-                .parent()
-                .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("无法获取模块目录"))?;
-            
-            let module_dir_str = module_dir
-                .canonicalize()
-                .unwrap_or_else(|_| module_dir.to_path_buf())
-                .to_str()
-                .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("路径转换失败"))?
-                .to_string();
-            
-            eprintln!("📂 Python 模块目录: {}", module_dir_str);
-            
-            // 检查是否已在 sys.path 中
-            let mut found = false;
-            for item in sys_path.iter() {
-                if let Ok(path_str) = item.extract::<String>() {
-                    if path_str == module_dir_str {
-                        found = true;
-                        break;
-                    }
-                }
-            }
-            
-            if !found {
-                sys_path.insert(0, module_dir_str.clone())?;
-                eprintln!("✅ 已添加 Python 路径: {}", module_dir_str);
-            }
-            
-            // 尝试导入模块
-            eprintln!("🔍 尝试导入 upscale_wrapper 模块...");
-            let module = PyModule::import_bound(py, "upscale_wrapper")?;
-            eprintln!("✅ upscale_wrapper 模块导入成功");
-            
-            // 检查是否可用
-            let is_available: bool = module
-                .getattr("is_available")?
-                .call0()?
-                .extract()?;
-            
-            eprintln!("✅ sr_vulkan 可用性检查: {}", is_available);
-            Ok(is_available)
-        }).map_err(|e: PyErr| format!("检查 Python 模块失败: {}", e))
+        let module_guard = self.python_module.lock()
+            .map_err(|e| format!("获取锁失败: {}", e))?;
+        
+        if let Some(module) = module_guard.as_ref() {
+            module.check_sr_available()
+                .map_err(|e| format!("检查可用性失败: {}", e))
+        } else {
+            Err("Python 模块未初始化".to_string())
+        }
     }
     
     /// 初始化 Python 模块
@@ -147,52 +116,26 @@ impl PyO3Upscaler {
             return Ok(());
         }
         
-        Python::with_gil(|py| {
-            // 添加模块路径到 sys.path
-            let sys = py.import_bound("sys")?;
-            let path_attr = sys.getattr("path")?;
-            let sys_path: &Bound<'_, pyo3::types::PyList> = path_attr.downcast()?;
-            
-            // 获取模块目录的绝对路径
-            let module_dir = self.python_module_path
-                .parent()
-                .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("无法获取模块目录"))?;
-            
-            let module_dir_str = module_dir
-                .canonicalize()
-                .unwrap_or_else(|_| module_dir.to_path_buf())
-                .to_str()
-                .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("路径转换失败"))?
-                .to_string();
-            
-            eprintln!("📂 初始化 - Python 模块目录: {}", module_dir_str);
-            
-            // 检查是否已在 sys.path 中
-            let mut found = false;
-            for item in sys_path.iter() {
-                if let Ok(path_str) = item.extract::<String>() {
-                    if path_str == module_dir_str {
-                        found = true;
-                        break;
-                    }
-                }
-            }
-            
-            if !found {
-                sys_path.insert(0, module_dir_str.clone())?;
-                eprintln!("✅ 已添加 Python 路径: {}", module_dir_str);
-            }
-            
-            // 导入模块
-            eprintln!("🔍 初始化 - 尝试导入 upscale_wrapper 模块...");
-            let _module = PyModule::import_bound(py, "upscale_wrapper")?;
-            
-            eprintln!("✅ Python 超分模块初始化成功");
-            Ok::<(), PyErr>(())
-        }).map_err(|e: PyErr| format!("初始化 Python 模块失败: {}", e))?;
+        let module_guard = self.python_module.lock()
+            .map_err(|e| format!("获取锁失败: {}", e))?;
         
-        *initialized = true;
-        Ok(())
+        if let Some(module) = module_guard.as_ref() {
+            // 检查是否可用
+            let available = module.check_sr_available()
+                .map_err(|e| format!("检查可用性失败: {}", e))?;
+            
+            println!("📊 sr_vulkan 可用性: {}", available);
+            
+            if available {
+                *initialized = true;
+                println!("✅ PyO3 超分管理器初始化成功");
+                Ok(())
+            } else {
+                Err("sr_vulkan 不可用或未初始化".to_string())
+            }
+        } else {
+            Err("Python 模块未初始化".to_string())
+        }
     }
     
     /// 执行超分处理 (内存流版本)
@@ -200,7 +143,7 @@ impl PyO3Upscaler {
         &self,
         image_data: &[u8],
         model: &UpscaleModel,
-        _timeout: f64,
+        timeout: f64,
     ) -> Result<Vec<u8>, String> {
         // 确保已初始化
         self.initialize()?;
@@ -215,38 +158,34 @@ impl PyO3Upscaler {
             image_data.len() as f64 / 1024.0 / 1024.0
         );
         
-        // 调用 Python 函数
-        let result = Python::with_gil(|py| {
-            let module = PyModule::import_bound(py, "upscale_wrapper")?;
-            
-            // 调用 upscale_image 函数
-            let upscale_fn = module.getattr("upscale_image")?;
-            
-            // 准备参数
-            let args = (
-                image_data.to_vec(),
+        // 使用 Python 模块包装器
+        let module_guard = self.python_module.lock()
+            .map_err(|e| format!("获取锁失败: {}", e))?;
+        
+        if let Some(module) = module_guard.as_ref() {
+            // 调用 Python 函数
+            let result = module.upscale_image(
+                image_data,
                 model.model_id,
                 model.scale,
                 model.tile_size,
                 model.noise_level,
-                _timeout,
-            );
+                timeout,
+            ).map_err(|e| format!("调用 Python 超分函数失败: {}", e))?;
             
-            // 调用函数
-            let result_bytes: Vec<u8> = upscale_fn
-                .call1(args)?
-                .extract()?;
-            
-            Ok::<Vec<u8>, PyErr>(result_bytes)
-        }).map_err(|e: PyErr| format!("调用 Python 超分函数失败: {}", e))?;
-        
-        println!("✅ 超分处理完成 (内存流)");
-        println!("  📊 输出数据大小: {} bytes ({:.2} MB)", 
-            result.len(), 
-            result.len() as f64 / 1024.0 / 1024.0
-        );
-        
-        Ok(result)
+            if let Some(data) = result {
+                println!("✅ 超分处理完成 (内存流)");
+                println!("  📊 输出数据大小: {} bytes ({:.2} MB)", 
+                    data.len(), 
+                    data.len() as f64 / 1024.0 / 1024.0
+                );
+                Ok(data)
+            } else {
+                Err("超分返回空结果".to_string())
+            }
+        } else {
+            Err("Python 模块未初始化".to_string())
+        }
     }
 
     /// 异步保存超分结果到缓存
@@ -365,8 +304,16 @@ impl PyO3Upscaler {
     }
     
     /// 获取模型 ID
-    pub fn get_model_id(&self, _model_name: &str) -> Result<i32, String> {
-        Ok(0)
+    pub fn get_model_id(&self, model_name: &str) -> Result<i32, String> {
+        let module_guard = self.python_module.lock()
+            .map_err(|e| format!("获取锁失败: {}", e))?;
+        
+        if let Some(module) = module_guard.as_ref() {
+            module.get_model_id(model_name)
+                .map_err(|e| format!("获取模型 ID 失败: {}", e))
+        } else {
+            Err("Python 模块未初始化".to_string())
+        }
     }
     
     /// 检查缓存
@@ -376,10 +323,14 @@ impl PyO3Upscaler {
     
     /// 获取可用模型
     pub fn get_available_models(&self) -> Result<Vec<String>, String> {
-        Ok(vec![
-            "cunet".to_string(),
-            "upconv_7_anime_style_art_rgb".to_string(),
-            "upconv_7_photo".to_string(),
-        ])
+        let module_guard = self.python_module.lock()
+            .map_err(|e| format!("获取锁失败: {}", e))?;
+        
+        if let Some(module) = module_guard.as_ref() {
+            module.get_available_models()
+                .map_err(|e| format!("获取可用模型失败: {}", e))
+        } else {
+            Err("Python 模块未初始化".to_string())
+        }
     }
 }

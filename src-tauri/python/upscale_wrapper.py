@@ -233,19 +233,24 @@ class UpscaleManager:
                     width,
                     height,
                     format=format_str,
-                    tileSize=tile_size
+                    tileSize=tile_size,
+                    noiseLevel=noise_level
                 )
             else:
                 # 使用缩放倍数
                 print("📏 使用缩放倍数模式")
                 try:
+                    # 对于缩放模式，width 和 height 都设为 0
                     status = sr.add(
                         image_data,
                         model,
                         task_id,
+                        0,  # width
+                        0,  # height
                         scale,
                         format=format_str,
-                        tileSize=tile_size
+                        tileSize=tile_size,
+                        noiseLevel=noise_level
                     )
                     print(f"📊 sr.add 返回 status: {status}")
                     
@@ -258,9 +263,12 @@ class UpscaleManager:
                             image_data,
                             model,
                             task_id,
+                            0,  # width
+                            0,  # height
                             scale,
                             format=format_str,
-                            tileSize=0
+                            tileSize=0,
+                            noiseLevel=noise_level
                         )
                         print(f"📊 sr.add 默认参数返回 status: {status}")
                         if status <= 0:
@@ -274,6 +282,12 @@ class UpscaleManager:
                 except Exception as e:
                     print(f"❌ sr.add 调用失败: {e}")
                     print(f"❌ 错误类型: {type(e).__name__}")
+                    print(f"❌ 错误详情: {repr(e)}")
+                    
+                    # 尝试获取更详细的错误信息
+                    import traceback
+                    print(f"❌ 错误堆栈: {traceback.format_exc()}")
+                    
                     # 尝试使用默认参数重试
                     print("🔄 尝试使用默认 tileSize=0 重试...")
                     try:
@@ -281,13 +295,19 @@ class UpscaleManager:
                             image_data,
                             model,
                             task_id,
+                            0,  # width
+                            0,  # height
                             scale,
                             format=format_str,
-                            tileSize=0
+                            tileSize=0,
+                            noiseLevel=noise_level
                         )
                         print(f"✅ sr.add 默认参数调用成功，status: {status}")
                     except Exception as e2:
                         print(f"❌ sr.add 默认参数也失败: {e2}")
+                        print(f"❌ 默认参数错误类型: {type(e2).__name__}")
+                        print(f"❌ 默认参数错误详情: {repr(e2)}")
+                        print(f"❌ 默认参数错误堆栈: {traceback.format_exc()}")
                         raise e
             
             if status <= 0:
@@ -408,7 +428,14 @@ def get_manager() -> UpscaleManager:
 
 def get_sr_available() -> bool:
     """检查 sr_vulkan 是否可用"""
-    return SR_AVAILABLE and get_manager().sr_initialized
+    manager = get_manager()
+    # 如果还未初始化，尝试初始化
+    if not manager.sr_initialized and SR_AVAILABLE:
+        try:
+            manager._init_sr_vulkan()
+        except Exception as e:
+            print(f"❌ 自动初始化 sr_vulkan 失败: {e}")
+    return SR_AVAILABLE and manager.sr_initialized
 
 
 def upscale_image(

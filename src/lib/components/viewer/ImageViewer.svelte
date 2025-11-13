@@ -18,50 +18,8 @@
 	import ImageViewerProgressBar from './flow/ImageViewerProgressBar.svelte';
 	
 	// 新模块导入
-	import { 
-		performUpscale, 
-		checkUpscaleCache, 
-		triggerAutoUpscale, 
-		getImageDataWithHash,
-		type ImageDataWithHash 
-	} from './flow/preloadRuntime';
-	import { createEventListeners } from './flow/eventListeners';
 	import { createPreloadManager } from './flow/preloadManager';
-
-// 预加载任务结果类型
-interface PreloadWorkerResult extends PreloadTaskResult {
-	upscaledImageData?: string;
-	upscaledImageBlob?: Blob;
-}
-
-// 执行超分函数的选项
-interface PerformUpscaleOptions {
-	background?: boolean;
-}
-
-// 执行超分函数的结果
-interface PerformUpscaleResult {
-	upscaledImageData?: string;
-	upscaledImageBlob?: Blob;
-	success?: boolean;
-	error?: string;
-}
-
-	import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
-	import { upscaleState } from '$lib/stores/upscale/upscaleState.svelte';
-	import { idbGet, idbSet, idbDelete } from '$lib/utils/idb';
-    import { get } from 'svelte/store';
-
-	// 获取全局超分开关状态
-	async function getGlobalUpscaleEnabled(): Promise<boolean> {
-		try {
-			const settings = settingsManager.getSettings();
-			return settings.image.enableSuperResolution || false;
-		} catch (error) {
-			console.warn('获取全局超分开关状态失败:', error);
-			return false;
-		}
-	}
+	import { idbSet } from '$lib/utils/idb';
 
 	
 
@@ -83,29 +41,7 @@ interface PerformUpscaleResult {
 	let progressColor = $state('#FDFBF7'); // 默认奶白色
 	let progressBlinking = $state(false);
 
-	// 响应超分状态变化
-	$effect(() => {
-		if (bookStore.currentPageUpscaled) {
-			progressColor = '#10B981'; // 绿色
-			progressBlinking = false;
-		} else {
-			progressColor = '#FDFBF7'; // 奶白色
-		}
-	});
-
-	// 监听超分开始事件
-	$effect(() => {
-		const handleUpscaleStart = () => {
-			progressColor = '#FCD34D'; // 黄色
-			progressBlinking = true;
-		};
-
-		window.addEventListener('upscale-start', handleUpscaleStart);
-		
-		return () => {
-			window.removeEventListener('upscale-start', handleUpscaleStart);
-		};
-	});
+	
 
 	// 预加载管理器
 	let preloadManager: ReturnType<typeof createPreloadManager>;

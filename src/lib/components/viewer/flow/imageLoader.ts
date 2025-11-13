@@ -86,8 +86,8 @@ export class ImageLoader {
 		}
 		if (config.maxThreads !== undefined) {
 			this.options.performanceMaxThreads = config.maxThreads;
-			// 更新 worker 的并发数
-			this.preloadWorker.updateConcurrency(config.maxThreads);
+			// 更新 worker 的并发数 - 传入函数而不是值
+			this.preloadWorker.updateConcurrency(() => config.maxThreads!);
 		}
 		if (config.viewMode !== undefined) {
 			this.options.viewMode = config.viewMode;

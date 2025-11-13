@@ -171,9 +171,9 @@ export class PreloadManager {
 	private setupBookChangeListener(): void {
 		let currentBookPath: string | undefined;
 		
-		// 监听书籍切换
-		const unsubscribe = bookStore.subscribe((state) => {
-			const newBookPath = state.currentBook?.path;
+		// 使用 $effect 监听书籍切换
+		const checkBookChange = () => {
+			const newBookPath = bookStore.currentBook?.path;
 			
 			// 如果书籍路径发生变化
 			if (newBookPath !== currentBookPath) {
@@ -191,10 +191,18 @@ export class PreloadManager {
 				currentBookPath = newBookPath;
 				console.log('书籍已切换:', newBookPath);
 			}
-		});
+		};
 		
-		// 保存取消订阅函数
-		this.bookUnsubscribe = unsubscribe;
+		// 立即检查一次
+		checkBookChange();
+		
+		// 设置定时检查（作为替代方案）
+		const intervalId = setInterval(checkBookChange, 100);
+		
+		// 保存清理函数
+		this.bookUnsubscribe = () => {
+			clearInterval(intervalId);
+		};
 	}
 
 	/**

@@ -75,7 +75,16 @@
 			onImageBitmapReady: async (bitmap, bitmap2) => {
 				imageBitmap = bitmap;
 				imageBitmap2 = bitmap2;
-				originalImageDataForComparison = bitmap ? await bitmapToDataURL(bitmap) : '';
+				if (bitmap) {
+					try {
+						originalImageDataForComparison = await bitmapToDataURL(bitmap);
+					} catch (error) {
+						console.error('转换 ImageBitmap 为 DataURL 失败:', error);
+						originalImageDataForComparison = '';
+					}
+				} else {
+					originalImageDataForComparison = '';
+				}
 			},
 			onLoadingStateChange: (loadingState, visible) => {
 				loading = loadingState;
@@ -153,7 +162,12 @@
 				const { enabled } = detail;
 				if (enabled && imageBitmap && bookStore.upscaledImageData) {
 					comparisonVisible = true;
-					originalImageDataForComparison = await bitmapToDataURL(imageBitmap);
+					try {
+						originalImageDataForComparison = await bitmapToDataURL(imageBitmap);
+					} catch (error) {
+						console.error('对比模式：转换 ImageBitmap 为 DataURL 失败:', error);
+						originalImageDataForComparison = '';
+					}
 					upscaledImageDataForComparison = bookStore.upscaledImageData;
 				} else {
 					comparisonVisible = false;
@@ -398,12 +412,28 @@
 	 * 将 ImageBitmap 转换为 DataURL
 	 */
 	async function bitmapToDataURL(bitmap: ImageBitmap): Promise<string> {
-		const canvas = document.createElement('canvas');
-		const ctx = canvas.getContext('2d')!;
-		canvas.width = bitmap.width;
-		canvas.height = bitmap.height;
-		ctx.drawImage(bitmap, 0, 0);
-		return canvas.toDataURL('image/png');
+		try {
+			// 检查 ImageBitmap 是否已 detached
+			const width = bitmap.width;
+			const height = bitmap.height;
+			
+			if (width === 0 || height === 0) {
+				throw new Error('ImageBitmap 尺寸无效，可能已 detached');
+			}
+			
+			const canvas = document.createElement('canvas');
+			const ctx = canvas.getContext('2d')!;
+			canvas.width = width;
+			canvas.height = height;
+			
+			// 尝试绘制，如果失败则抛出错误
+			ctx.drawImage(bitmap, 0, 0);
+			
+			return canvas.toDataURL('image/png');
+		} catch (error) {
+			console.error('bitmapToDataURL 失败，ImageBitmap 可能已 detached:', error);
+			throw error;
+		}
 	}
 
 	

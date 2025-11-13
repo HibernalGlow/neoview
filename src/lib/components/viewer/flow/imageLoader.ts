@@ -509,10 +509,10 @@ export class ImageLoader {
 			const preloadPages = this.options.performancePreloadPages;
 			console.log('预加载设置:', { preloadPages, performanceMaxThreads: this.options.performanceMaxThreads });
 
-			// 检查全局开关（如果关闭，仍执行普通的页面预加载/解码逻辑，但不触发预超分）
-			const globalEnabled = await getGlobalUpscaleEnabled();
-			if (!globalEnabled) {
-				console.log('全局超分开关已关闭，预超分将被跳过，但会继续执行页面预加载解码');
+			// 检查自动超分开关（如果关闭，仍执行普通的页面预加载/解码逻辑，但不触发预超分）
+			const autoUpscaleEnabled = await getAutoUpscaleEnabled();
+			if (!autoUpscaleEnabled) {
+				console.log('自动超分开关已关闭，预超分将被跳过，但会继续执行页面预加载解码');
 			}
 
 			if (preloadPages <= 0) {
@@ -590,9 +590,9 @@ export class ImageLoader {
 
 					console.log(`第 ${targetIndex + 1} 页图片数据长度: ${imageDataWithHash.data.length}, hash: ${imageDataWithHash.hash}`);
 
-					// 检查是否已有缓存（仅在开启全局超分或需要预览时进行）
+					// 检查是否已有缓存（仅在开启自动超分或需要预览时进行）
 					let hasCache = false;
-					if (globalEnabled) {
+					if (autoUpscaleEnabled) {
 						hasCache = await checkUpscaleCache(imageDataWithHash, false);
 					} else {
 						// 当全局关闭时，只做本地索引检查（不读取磁盘或替换显示）
@@ -634,15 +634,15 @@ export class ImageLoader {
 						console.warn('预加载页面解码失败，继续超分预处理:', e);
 					}
 
-					// 没有缓存：如果全局已开启，则使用新的preloadWorker API；
-					// 如果全局已关闭，则跳过触发超分
-					if (globalEnabled) {
+					// 没有缓存：如果自动超分已开启，则使用新的preloadWorker API；
+					// 如果自动超分已关闭，则跳过触发超分
+					if (autoUpscaleEnabled) {
 						// 使用新的preloadWorker API
 						const task = { data: imageDataWithHash.data, hash: imageDataWithHash.hash, pageIndex: targetIndex };
 						this.preloadWorker.enqueue(task);
 						console.log('已加入preloadWorker队列，hash:', imageDataWithHash.hash, 'pageIndex:', targetIndex);
 					} else {
-						console.log('全局超分关闭，跳过触发预超分（已完成预解码）');
+						console.log('自动超分关闭，跳过触发预超分（已完成预解码）');
 					}
 				} catch (error) {
 					console.error(`预超分第 ${targetIndex + 1} 页失败:`, error);

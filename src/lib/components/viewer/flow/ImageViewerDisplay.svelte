@@ -28,53 +28,81 @@
 	// 当 ImageBitmap 更新时，绘制到 Canvas
 	$effect(() => {
 		if (imageBitmap && canvas1) {
-			const ctx = canvas1.getContext('2d')!;
-			
-			// 先保存当前状态
-			ctx.save();
-			
-			// 完全清理画布 - 重置变换矩阵
-			ctx.setTransform(1, 0, 0, 1, 0, 0);
-			ctx.clearRect(0, 0, canvas1.width, canvas1.height);
-			
-			// 设置新尺寸
-			canvas1.width = imageBitmap.width;
-			canvas1.height = imageBitmap.height;
-			
-			// 再次清理确保完全清除
-			ctx.clearRect(0, 0, canvas1.width, canvas1.height);
-			
-			// 绘制新图像
-			ctx.drawImage(imageBitmap, 0, 0);
-			
-			// 恢复状态
-			ctx.restore();
+			// 检查 ImageBitmap 是否已 detached
+			try {
+				// 尝试访问 width 属性来检查是否 detached
+				const width = imageBitmap.width;
+				const height = imageBitmap.height;
+				
+				if (width === 0 || height === 0) {
+					console.warn('ImageBitmap 尺寸无效，可能已 detached');
+					return;
+				}
+				
+				const ctx = canvas1.getContext('2d')!;
+				
+				// 先保存当前状态
+				ctx.save();
+				
+				// 完全清理画布 - 重置变换矩阵
+				ctx.setTransform(1, 0, 0, 1, 0, 0);
+				ctx.clearRect(0, 0, canvas1.width, canvas1.height);
+				
+				// 设置新尺寸
+				canvas1.width = width;
+				canvas1.height = height;
+				
+				// 再次清理确保完全清除
+				ctx.clearRect(0, 0, canvas1.width, canvas1.height);
+				
+				// 绘制新图像，使用 try-catch 捕获可能的 detached 错误
+				ctx.drawImage(imageBitmap, 0, 0);
+				
+				// 恢复状态
+				ctx.restore();
+			} catch (error) {
+				console.warn('绘制 ImageBitmap 失败，可能已 detached:', error);
+			}
 		}
 	});
 
 	$effect(() => {
 		if (imageBitmap2 && canvas2) {
-			const ctx = canvas2.getContext('2d')!;
-			
-			// 先保存当前状态
-			ctx.save();
-			
-			// 完全清理画布 - 重置变换矩阵
-			ctx.setTransform(1, 0, 0, 1, 0, 0);
-			ctx.clearRect(0, 0, canvas2.width, canvas2.height);
-			
-			// 设置新尺寸
-			canvas2.width = imageBitmap2.width;
-			canvas2.height = imageBitmap2.height;
-			
-			// 再次清理确保完全清除
-			ctx.clearRect(0, 0, canvas2.width, canvas2.height);
-			
-			// 绘制新图像
-			ctx.drawImage(imageBitmap2, 0, 0);
-			
-			// 恢复状态
-			ctx.restore();
+			// 检查 ImageBitmap 是否已 detached
+			try {
+				// 尝试访问 width 属性来检查是否 detached
+				const width = imageBitmap2.width;
+				const height = imageBitmap2.height;
+				
+				if (width === 0 || height === 0) {
+					console.warn('ImageBitmap2 尺寸无效，可能已 detached');
+					return;
+				}
+				
+				const ctx = canvas2.getContext('2d')!;
+				
+				// 先保存当前状态
+				ctx.save();
+				
+				// 完全清理画布 - 重置变换矩阵
+				ctx.setTransform(1, 0, 0, 1, 0, 0);
+				ctx.clearRect(0, 0, canvas2.width, canvas2.height);
+				
+				// 设置新尺寸
+				canvas2.width = width;
+				canvas2.height = height;
+				
+				// 再次清理确保完全清除
+				ctx.clearRect(0, 0, canvas2.width, canvas2.height);
+				
+				// 绘制新图像，使用 try-catch 捕获可能的 detached 错误
+				ctx.drawImage(imageBitmap2, 0, 0);
+				
+				// 恢复状态
+				ctx.restore();
+			} catch (error) {
+				console.warn('绘制 ImageBitmap2 失败，可能已 detached:', error);
+			}
 		}
 	});
 </script>

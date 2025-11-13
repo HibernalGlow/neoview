@@ -15,8 +15,7 @@
 	import { FileSystemAPI } from '$lib/api';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
-import { invoke } from '@tauri-apps/api/core';
-import toAssetUrl from '$lib/utils/assetProxy';
+	import { invoke } from '@tauri-apps/api/core';
 	import ComparisonViewer from './ComparisonViewer.svelte';
 	import { upscaleState, performUpscale, getGlobalUpscaleEnabled, upscaleSettings, initUpscaleSettingsManager } from '$lib/stores/upscale/UpscaleManager.svelte';
 	import { idbGet, idbSet, idbDelete } from '$lib/utils/idb';
@@ -311,14 +310,6 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 					progressBlinking = false;
 					progressColor = '#22c55e'; // 绿色
 					console.log('超分图已匹配当前页面，MD5:', originalImageHash, '已替换，进度条设为绿色');
-					try {
-						const idx = bookStore.currentPageIndex;
-						preUpscaledPages = new Set([...preUpscaledPages, idx]);
-						updatePreUpscaleProgress();
-						window.dispatchEvent(new CustomEvent('upscaled-pages-changed', { detail: { indices: Array.from(preUpscaledPages) } }));
-					} catch (e) {
-						console.warn('标记当前页为已超分失败:', e);
-					}
 				} else {
 					console.log('超分图不属于当前页面，超分MD5:', originalImageHash, '当前MD5:', currentImageHash);
 				}
@@ -374,33 +365,9 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 			}, 100);
 		};
 
-		// 监听底栏请求指定页图片数据（优先返回预加载缓存）
-		const handleRequestPageImageData = (e: CustomEvent) => {
-			try {
-				const { index, callback } = e.detail || {};
-				if (typeof index !== 'number' || typeof callback !== 'function') return;
-				let data: string | null = null;
-				if (preloadedPageImages.has(index)) {
-					const cached = preloadedPageImages.get(index);
-					if (cached && cached.data) data = cached.data;
-				}
-				// 回退：如果请求的是当前页，返回当前 imageData
-				try {
-					const idx = bookStore.currentPageIndex;
-					if (data == null && typeof idx === 'number' && idx === index && imageData) {
-						data = imageData;
-					}
-				} catch {}
-				callback(data);
-			} catch (err) {
-				console.warn('handleRequestPageImageData 处理失败:', err);
-			}
-		};
-
 	window.addEventListener('upscale-complete', handleUpscaleComplete as EventListener);
 	window.addEventListener('upscale-saved', handleUpscaleSaved as EventListener);
 		window.addEventListener('request-current-image-data', handleRequestCurrentImageData as EventListener);
-		window.addEventListener('request-page-image-data', handleRequestPageImageData as EventListener);
 		window.addEventListener('reset-pre-upscale-progress', handleResetPreUpscaleProgress as EventListener);
 
 		// 监听对比模式变化
@@ -421,7 +388,6 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 			window.removeEventListener('upscale-complete', handleUpscaleComplete as EventListener);
 			window.removeEventListener('upscale-saved', handleUpscaleSaved as EventListener);
 			window.removeEventListener('request-current-image-data', handleRequestCurrentImageData as EventListener);
-			window.removeEventListener('request-page-image-data', handleRequestPageImageData as EventListener);
 			window.removeEventListener('reset-pre-upscale-progress', handleResetPreUpscaleProgress as EventListener);
 			window.removeEventListener('comparison-mode-changed', handleComparisonModeChanged as EventListener);
 		};
@@ -656,20 +622,18 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 
 						if (meta && meta.path) {
 							try {
-                                const url = toAssetUrl(meta.path);
+								// 懒加载二进制：仅在确认存在缓存时才读取文件字节
+								const bytes = await invoke<number[]>('read_binary_file', { filePath: meta.path });
+								const arr = new Uint8Array(bytes);
+								const blob = new Blob([arr], { type: 'image/webp' });
+								const url = URL.createObjectURL(blob);
 								// 仅当调用方希望预览（通常为当前页）时，才更新 bookStore 来替换显示
-                                if (preview) {
-                                    bookStore.setUpscaledImage(url);
-                                    bookStore.setUpscaledImageBlob(null);
-                                } else {
-                                    try {
-                                        preloadMemoryCache.set(imageHash, { url, blob: new Blob([], { type: 'image/webp' }) });
-                                    } catch (e) {
-                                        console.warn('写入预加载内存缓存失败:', e);
-                                    }
-                                }
+								if (preview) {
+									bookStore.setUpscaledImage(url);
+									bookStore.setUpscaledImageBlob(blob);
+								}
 								// 更新内存索引，便于后续快速命中
-                                hashPathIndex.set(imageHash, meta.path);
+								hashPathIndex.set(imageHash, meta.path);
 								// 持久化索引到 IndexedDB
 								try {
 									const cb = bookStore.currentBook;
@@ -680,12 +644,12 @@ initUpscaleSettingsManager().catch(err => console.warn('初始化超分设置管
 								} catch (err) {
 									console.warn('持久化 hashPathIndex 失败:', err);
 								}
-                                console.log(`找到 ${meta.algorithm || algorithm} 算法的超分缓存，asset: ${url}`);
-                                return true;
-                            } catch (e) {
-                                console.error('生成资产URL失败:', e);
-                                continue;
-                            }
+								console.log(`找到 ${meta.algorithm || algorithm} 算法的超分缓存，path: ${meta.path}`);
+								return true;
+							} catch (e) {
+								console.error('读取缓存文件失败:', e);
+								continue;
+							}
 						}
 					} catch (e) {
 						// 继续检查下一个算法
@@ -885,17 +849,16 @@ function tryApplyCompletedResults() {
 					}
 				}
 
-					// 标记为已预超分（按页序）并更新进度
-					try {
-						const idx = (task && task.pageIndex) || null;
-						if (typeof idx === 'number') {
-							preUpscaledPages = new Set([...preUpscaledPages, idx]);
-							updatePreUpscaleProgress();
-							window.dispatchEvent(new CustomEvent('upscaled-pages-changed', { detail: { indices: Array.from(preUpscaledPages) } }));
-						}
-					} catch (e) {
-						console.warn('更新预超分进度失败（按序）:', e);
+				// 标记为已预超分（按页序）并更新进度
+				try {
+					const idx = (task && task.pageIndex) || null;
+					if (typeof idx === 'number') {
+						preUpscaledPages = new Set([...preUpscaledPages, idx]);
+						updatePreUpscaleProgress();
 					}
+				} catch (e) {
+					console.warn('更新预超分进度失败（按序）:', e);
+				}
 			} else {
 				// 失败的任务也推进序号（避免阻塞后续结果应用）
 				console.warn('预加载任务失败（按序处理）:', entry && entry.err ? entry.err : entry);

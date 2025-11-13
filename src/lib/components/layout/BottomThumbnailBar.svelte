@@ -4,9 +4,8 @@
 	 * 底部缩略图栏 - 自动隐藏，鼠标悬停显示
 	 */
 	import { bookStore } from '$lib/stores/book.svelte';
-import { loadImage } from '$lib/api/fs';
-import { loadImageFromArchive } from '$lib/api/filesystem';
-import toAssetUrl from '$lib/utils/assetProxy';
+	import { loadImage } from '$lib/api/fs';
+	import { loadImageFromArchive } from '$lib/api/filesystem';
 	import { bottomThumbnailBarPinned, bottomThumbnailBarHeight } from '$lib/stores';
 	import { Button } from '$lib/components/ui/button';
 	import * as Progress from '$lib/components/ui/progress';
@@ -14,8 +13,7 @@ import toAssetUrl from '$lib/utils/assetProxy';
 
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
-let thumbnails = $state<Record<number, {url: string, width: number, height: number}>>({});
-let upscaledPages = $state<Set<number>>(new Set());
+	let thumbnails = $state<Record<number, {url: string, width: number, height: number}>>({});
 	let isResizing = $state(false);
 	let resizeStartY = 0;
 	let resizeStartHeight = 0;
@@ -119,7 +117,7 @@ let upscaledPages = $state<Set<number>>(new Set());
 		}
 	});
 
-async function loadVisibleThumbnails() {
+	async function loadVisibleThumbnails() {
 		const currentBook = bookStore.currentBook;
 		if (!currentBook) return;
 
@@ -137,47 +135,62 @@ async function loadVisibleThumbnails() {
 		}
 	}
 
-// 直接使用已加载的完整图片URL并由CSS缩放展示（避免额外生成缩略图）
-function toThumb(url: string | null, maxHeight: number = $bottomThumbnailBarHeight - 40): { url: string, width: number, height: number } {
-    if (!url) return { url: '', width: 0, height: 0 };
-    return { url, width: 0, height: maxHeight };
-}
+	// 在前端从 base64 生成缩略图
+	function generateThumbnailFromBase64(base64Data: string, maxHeight: number = $bottomThumbnailBarHeight - 40): Promise<{url: string, width: number, height: number}> {
+		return new Promise((resolve, reject) => {
+			const img = new Image();
+			img.onload = () => {
+				const canvas = document.createElement('canvas');
+				const ctx = canvas.getContext('2d');
+				if (!ctx) {
+					reject(new Error('Cannot get canvas context'));
+					return;
+				}
+
+				// 根据容器高度自适应调整缩略图大小
+				let width = img.width;
+				let height = img.height;
+				if (height > maxHeight) {
+					width = (width * maxHeight) / height;
+					height = maxHeight;
+				}
+
+				canvas.width = width;
+				canvas.height = height;
+				ctx.drawImage(img, 0, 0, width, height);
+
+				// 直接使用 JPEG 格式
+				const thumbnailData = canvas.toDataURL('image/jpeg', 0.85);
+				resolve({
+					url: thumbnailData,
+					width: width,
+					height: height
+				});
+			};
+			img.onerror = () => reject(new Error('Failed to load image'));
+			img.src = base64Data;
+		});
+	}
 
 	async function loadThumbnail(pageIndex: number) {
 		const currentBook = bookStore.currentBook;
 		if (!currentBook || !currentBook.pages[pageIndex]) return;
 
-    try {
-        const page = currentBook.pages[pageIndex];
-        let url: string | null = null;
+		try {
+			const page = currentBook.pages[pageIndex];
+			let fullImageData: string;
 
-        // 优先向 ImageViewer 请求该页已加载的图片数据
-        url = await new Promise<string | null>((resolve) => {
-            const cb = (data: string | null) => resolve(data || null);
-            window.dispatchEvent(new CustomEvent('request-page-image-data', { detail: { index: pageIndex, callback: cb } }));
-            // 如果 120ms 内未返回，后续会走回退加载
-            setTimeout(() => resolve(null), 120);
-        });
+			if (currentBook.type === 'archive') {
+				fullImageData = await loadImageFromArchive(currentBook.path, page.path);
+			} else {
+				fullImageData = await loadImage(page.path);
+			}
 
-        // 回退：未命中则自行加载该页原图
-        if (!url) {
-            if (currentBook.type === 'archive') {
-                url = await loadImageFromArchive(currentBook.path, page.path);
-            } else {
-                url = await loadImage(page.path);
-            }
-        }
-
-        // 文件路径可转换为资产URL以利于多处复用
-        if (url && !url.startsWith('blob:') && !url.startsWith('data:')) {
-            url = toAssetUrl(url) || url;
-        }
-
-        const thumb = toThumb(url);
-        thumbnails = { ...thumbnails, [pageIndex]: thumb };
-    } catch (err) {
-        console.error(`Failed to load thumbnail for page ${pageIndex}:`, err);
-    }
+			const thumbnail = await generateThumbnailFromBase64(fullImageData);
+			thumbnails = { ...thumbnails, [pageIndex]: thumbnail };
+		} catch (err) {
+			console.error(`Failed to load thumbnail for page ${pageIndex}:`, err);
+		}
 	}
 
 	function handleScroll(e: Event) {
@@ -204,31 +217,18 @@ function toThumb(url: string | null, maxHeight: number = $bottomThumbnailBarHeig
 
 	// 清空缩略图缓存当书籍变化时
 	$effect(() => {
-    const currentBook = bookStore.currentBook;
-    thumbnails = {};
-    upscaledPages = new Set();
+		const currentBook = bookStore.currentBook;
+		thumbnails = {};
 	});
 
 	// 当高度变化时重新生成缩略图
 	$effect(() => {
 		const currentBook = bookStore.currentBook;
-        if (currentBook && Object.keys(thumbnails).length > 0) {
-            // 重新加载当前可见的缩略图以适应新高度
-            loadVisibleThumbnails();
-        }
-    });
-
-    // 监听已超分页索引集合变化，更新绿边显示
-    $effect(() => {
-        const handler = (e: CustomEvent) => {
-            try {
-                const arr = (e.detail && e.detail.indices) || [];
-                upscaledPages = new Set(arr.map((x: any) => Number(x)).filter((x: number) => Number.isFinite(x)));
-            } catch {}
-        };
-        window.addEventListener('upscaled-pages-changed', handler as EventListener);
-        return () => window.removeEventListener('upscaled-pages-changed', handler as EventListener);
-    });
+		if (currentBook && Object.keys(thumbnails).length > 0) {
+			// 重新加载当前可见的缩略图以适应新高度
+			loadVisibleThumbnails();
+		}
+	});
 </script>
 
 {#if bookStore.currentBook && bookStore.currentBook.pages.length > 0}
@@ -313,7 +313,10 @@ function toThumb(url: string | null, maxHeight: number = $bottomThumbnailBarHeig
 				<div class="flex gap-2 overflow-x-auto h-full pb-1 items-center" onscroll={handleScroll}>
 					{#each bookStore.currentBook.pages as page, index (page.path)}
 						<button
-							class="flex-shrink-0 rounded overflow-hidden border-2 {upscaledPages.has(index) ? 'border-green-500' : (index === bookStore.currentPageIndex ? 'border-primary' : 'border-transparent')} hover:border-primary/50 transition-colors relative group"
+							class="flex-shrink-0 rounded overflow-hidden border-2 {index ===
+							bookStore.currentPageIndex
+								? 'border-primary'
+								: 'border-transparent'} hover:border-primary/50 transition-colors relative group"
 							style="width: auto; height: {$bottomThumbnailBarHeight - 40}px; min-width: 60px; max-width: 120px;"
 							onclick={() => bookStore.navigateToPage(index)}
 							title="Page {index + 1}"

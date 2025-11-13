@@ -5,7 +5,6 @@
 
 import { writable, derived } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
-import toAssetUrl from '$lib/utils/assetProxy';
 import { bookStore } from '$lib/stores/book.svelte';
 
 // 超分设置状态
@@ -520,7 +519,7 @@ export async function performUpscale(imageData: string, imageHash?: string, opti
             // 处理结果
             const bytes = result as number[];
             const upscaledImageBlob = new Blob([new Uint8Array(bytes)], { type: 'image/webp' });
-            const upscaledAssetUrl = toAssetUrl(String(savePath));
+            const upscaledImageData = URL.createObjectURL(upscaledImageBlob);
 
             // 计算耗时
             const elapsedTime = Date.now() - (upscaleState && (upscaleState as any).startTime || Date.now());
@@ -530,7 +529,7 @@ export async function performUpscale(imageData: string, imageHash?: string, opti
             upscaleState.update(state => ({
                 ...state,
                 status: '超分完成',
-                upscaledImageData: upscaledAssetUrl || '',
+                upscaledImageData,
                 upscaledImageBlob: upscaledImageBlob as any,
                 isUpscaling: false
             }));
@@ -539,7 +538,7 @@ export async function performUpscale(imageData: string, imageHash?: string, opti
             if (!isBackground) {
                 window.dispatchEvent(new CustomEvent('upscale-complete', {
                     detail: {
-                        imageData: upscaledAssetUrl || '',
+                        imageData: upscaledImageData,
                         imageBlob: upscaledImageBlob,
                         originalImageHash: finalHash
                     }
@@ -554,7 +553,7 @@ export async function performUpscale(imageData: string, imageHash?: string, opti
             }
 
             console.log(`超分完成，hash: ${finalHash}, 耗时: ${elapsedSeconds}秒`);
-            return { upscaledImageData: upscaledAssetUrl || '', upscaledImageBlob, finalHash };
+            return { upscaledImageData, upscaledImageBlob, finalHash };
         } catch (error) {
             console.error('超分失败:', error);
             upscaleState.update(state => ({
@@ -596,7 +595,11 @@ export async function refreshCacheStatusForData(imageData: string) {
         const meta = await checkCacheMetaForData(imageData);
         if (meta && meta.path) {
             try {
+                // 先计算传入图片的数据哈希，并与当前查看器页面的路径哈希比对，
+                // 只有当两者匹配（即该缓存属于当前页面）时才会替换 bookStore 的显示，避免竞态导致非当前页替换当前显示。
                 const imageHash = await invoke<string>('calculate_data_hash', { dataUrl: imageData });
+
+                // 计算当前查看器页面的路径哈希（若有当前页）
                 let currentPageHash: string | null = null;
                 try {
                     const cb = bookStore.currentBook;
@@ -616,31 +619,37 @@ export async function refreshCacheStatusForData(imageData: string) {
                     console.warn('refreshCacheStatusForData: 读取 bookStore 当前页信息失败:', err);
                 }
 
+                // 仅当 hash 匹配或无法计算当前页面 hash（保守策略）时，才读取并替换显示
                 const shouldReplace = !currentPageHash || (currentPageHash === imageHash);
 
-                const assetUrl = toAssetUrl(meta.path);
+                // 仅当需要预览二进制时才读取文件（Viewer 可能需要）
+                const bytes = await invoke<number[]>('read_binary_file', { filePath: meta.path });
+                const arr = new Uint8Array(bytes);
+                const blob = new Blob([arr], { type: 'image/webp' });
+                const url = URL.createObjectURL(blob);
 
                 upscaleState.update(s => ({
                     ...s,
                     status: `已找到缓存 (${meta.algorithm || meta.detected_algorithm || 'unknown'})`,
                     progress: 100,
-                    upscaledImageData: assetUrl || '',
-                    upscaledImageBlob: null,
+                    upscaledImageData: url,
+                    upscaledImageBlob: blob as any,
                     isUpscaling: false,
                     showProgress: false
                 }));
 
                 try {
                     if (shouldReplace) {
-                        bookStore.setUpscaledImage(assetUrl);
-                        bookStore.setUpscaledImageBlob(null);
+                        bookStore.setUpscaledImage(url);
+                        bookStore.setUpscaledImageBlob(blob);
                     } else {
                         console.log('缓存属于非当前页面，跳过替换显示');
                     }
                 } catch (e) {}
                 return true;
             } catch (e) {
-                console.error('生成资产URL失败:', e);
+                console.error('读取缓存文件失败:', e);
+                // fallthrough 清理状态后返回 false
             }
         }
 

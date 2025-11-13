@@ -117,6 +117,10 @@ interface PerformUpscaleResult {
 	let loadingVisible = $state(false); // 控制loading动画的可见性
 	let error = $state<string | null>(null);
 	let loadingTimeout: number | null = null; // 延迟显示loading的定时器
+	
+	// 预超分进度管理
+	let preUpscaleProgress = $state(0); // 预超分进度 (0-100)
+	let totalPreUpscalePages = $state(0); // 总预超分页数
 
 	// 订阅设置变化
 	settingsManager.addListener((s) => {
@@ -177,7 +181,9 @@ interface PerformUpscaleResult {
 		if (currentPage) {
 			bookStore.setCurrentImage(currentPage);
 			// 使用预加载管理器加载图片
-			loadCurrentImage();
+			if (preloadManager) {
+				preloadManager.loadCurrentImage();
+			}
 		}
 	});
 
@@ -433,7 +439,9 @@ interface PerformUpscaleResult {
 	// 监听视图模式变化，重新加载页面
 	$effect(() => {
 		const mode = $viewMode;
-		if (mode) loadCurrentImage();
+		if (mode && preloadManager) {
+			preloadManager.loadCurrentImage();
+		}
 	});
 
 	// 执行命令

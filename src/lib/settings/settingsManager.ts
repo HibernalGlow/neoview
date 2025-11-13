@@ -266,6 +266,7 @@ export const settingsManager = SettingsManager.getInstance();
 // 性能配置便捷访问器
 export class PerformanceSettings {
   private manager: SettingsManager;
+  private wrappedCallbacks = new Map<(preLoadSize: number, maxThreads: number) => void, (s: NeoViewSettings) => void>();
   
   constructor(manager: SettingsManager) {
     this.manager = manager;
@@ -288,17 +289,21 @@ export class PerformanceSettings {
   }
 
   addListener(callback: (preLoadSize: number, maxThreads: number) => void) {
-    this.manager.addListener((settings) => {
+    const wrappedCallback = (settings: NeoViewSettings) => {
       callback(settings.performance.preLoadSize, settings.performance.maxThreads);
-    });
+    };
+    
+    // 保存包装后的回调引用
+    this.wrappedCallbacks.set(callback, wrappedCallback);
+    this.manager.addListener(wrappedCallback);
   }
 
   removeListener(callback: (preLoadSize: number, maxThreads: number) => void) {
-    // 由于内部实现不同，这里需要通过manager移除监听器
-    // 实际使用时建议保存回调引用
-    this.manager.removeListener((settings) => {
-      callback(settings.performance.preLoadSize, settings.performance.maxThreads);
-    });
+    const wrappedCallback = this.wrappedCallbacks.get(callback);
+    if (wrappedCallback) {
+      this.manager.removeListener(wrappedCallback);
+      this.wrappedCallbacks.delete(callback);
+    }
   }
 }
 

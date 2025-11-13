@@ -104,10 +104,10 @@
 		
 		// 初始化 PyO3 管理器
 		try {
-			// 使用相对于应用根目录的路径
-			// Tauri 会自动处理资源路径
-			const pythonModulePath = 'src-tauri/python/upscale_wrapper.py';
-			const cacheDir = './cache/pyo3-upscale';
+			// 使用绝对路径
+			// 在开发环境中，使用项目根目录的绝对路径
+			const pythonModulePath = 'D:/1VSCODE/Projects/ImageAll/NeeWaifu/neoview/neoview-tauri/src-tauri/python/upscale_wrapper.py';
+			const cacheDir = 'D:/1VSCODE/Projects/ImageAll/NeeWaifu/neoview/neoview-tauri/cache/pyo3-upscale';
 			
 			console.log('🔧 初始化 PyO3 超分管理器...');
 			console.log('  Python 模块路径:', pythonModulePath);
@@ -149,13 +149,13 @@
 				}
 			}
 		});
-	});
 
-	// 监听自动超分开关变化
-	$effect(() => {
-		if (autoUpscaleEnabled) {
-			console.log('✅ 自动超分已启用');
-		}
+		// 监听自动超分开关变化
+		$effect(() => {
+			if (autoUpscaleEnabled) {
+				console.log('✅ 自动超分已启用');
+			}
+		});
 	});
 
 	// ==================== 功能函数 ====================

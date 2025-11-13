@@ -154,8 +154,7 @@ export class ImageLoader {
 			}
 
 			// 双页模式：加载下一页
-			const viewMode = 'single'; // 应该从外部传入
-			if (viewMode === 'double' && bookStore.canNextPage) {
+			if (this.options.viewMode === 'double' && bookStore.canNextPage) {
 				const nextPage = bookStore.currentPageIndex + 1;
 				const nextPageInfo = currentBook.pages[nextPage];
 				

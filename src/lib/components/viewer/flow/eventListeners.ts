@@ -15,6 +15,7 @@ export interface EventListenersOptions {
 	onProgressBarStateChange?: (detail: any) => void;
 	onCheckPreloadCache?: (detail: any) => void;
 	onCacheHit?: (detail: any) => void;
+	onUpscaleStart?: () => void;
 }
 
 export function createEventListeners(options: EventListenersOptions) {
@@ -27,7 +28,8 @@ export function createEventListeners(options: EventListenersOptions) {
 		onComparisonModeChanged,
 		onProgressBarStateChange,
 		onCheckPreloadCache,
-		onCacheHit
+		onCacheHit,
+		onUpscaleStart
 	} = options;
 
 	const handleUpscaleComplete = async (e: CustomEvent) => {
@@ -91,6 +93,9 @@ export function createEventListeners(options: EventListenersOptions) {
 		onCacheHit?.(e.detail);
 	};
 
+	// 用于保存超分开始事件的处理器，以便后续清理
+	let handleUpscaleStart: (() => void) | null = null;
+
 	// 注册所有事件监听器
 	const registerEventListeners = () => {
 		window.addEventListener('upscale-complete', handleUpscaleComplete as EventListener);
@@ -98,9 +103,17 @@ export function createEventListeners(options: EventListenersOptions) {
 		window.addEventListener('request-current-image-data', handleRequestCurrentImageData as EventListener);
 		window.addEventListener('reset-pre-upscale-progress', handleResetPreUpscaleProgress as EventListener);
 		window.addEventListener('comparison-mode-changed', handleComparisonModeChanged as EventListener);
-		window.addEventListener('progressBarStateChange', handleProgressBarState as EventListener);
+		window.addEventListener('progressBarStateChange', handleProgressBarStateChange as EventListener);
 		window.addEventListener('check-preload-cache', handleCheckPreloadCache as EventListener);
 		window.addEventListener('cache-hit', handleCacheHit as EventListener);
+		
+		// 监听超分开始事件
+		if (onUpscaleStart) {
+			handleUpscaleStart = () => {
+				onUpscaleStart();
+			};
+			window.addEventListener('upscale-start', handleUpscaleStart as EventListener);
+		}
 	};
 
 	// 清理所有事件监听器
@@ -113,6 +126,12 @@ export function createEventListeners(options: EventListenersOptions) {
 		window.removeEventListener('progressBarStateChange', handleProgressBarState as EventListener);
 		window.removeEventListener('check-preload-cache', handleCheckPreloadCache as EventListener);
 		window.removeEventListener('cache-hit', handleCacheHit as EventListener);
+		
+		// 清理超分开始事件监听器
+		if (handleUpscaleStart) {
+			window.removeEventListener('upscale-start', handleUpscaleStart as EventListener);
+			handleUpscaleStart = null;
+		}
 	};
 
 	return {

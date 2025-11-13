@@ -234,27 +234,25 @@
 			// 应用当前设置
 			await pyo3UpscaleManager.setModel(selectedModel, scale);
 			pyo3UpscaleManager.setTileSize(tileSize);
-			pyo3UpscaleManager.setNoiseLevel(noiseLevel);
 
-			// 检查缓存
-			if (useCachedFirst) {
-				status = '检查缓存...';
-				progress = 10;
-				const cached = await pyo3UpscaleManager.checkCache(currentImagePath);
-				if (cached) {
-					status = '使用缓存';
-					progress = 100;
-					upscaledImageUrl = `file://${cached}`;
-					showSuccessToast('使用缓存的超分结果');
-					return;
-				}
+			// 从当前页面获取图像数据
+			const currentPage = bookStore.currentPage;
+			if (!currentPage) {
+				throw new Error('没有当前图片');
 			}
 
-			// 执行超分
+			// 获取图像数据 - 从 ImageViewer 的缓存中获取已加载的 blob
+			const imageData = await getCurrentImageBlob();
+			
+			progress = 20;
+			status = '初始化模型...';
+			await new Promise(resolve => setTimeout(resolve, 500));
+
+			// 执行超分 (内存流)
 			status = '超分处理中...';
 			progress = 30;
 			
-			const result = await pyo3UpscaleManager.upscaleImage(currentImagePath, 120.0);
+			const result = await pyo3UpscaleManager.upscaleImageMemory(imageData, 120.0);
 			
 			progress = 90;
 			status = '生成预览...';
@@ -266,35 +264,38 @@
 			progress = 100;
 			status = '转换完成';
 			
+			const processingTime = (Date.now() - startTime) / 1000;
 			showSuccessToast(`超分完成！耗时 ${processingTime.toFixed(1)}s`);
 			
-			// 同步超分结果到 bookStore
-			if ((bookStore as any).setUpscaledImage) {
-				(bookStore as any).setUpscaledImage(blob, upscaledImageUrl);
-				console.log('✨ 超分结果已同步到 bookStore');
-			}
+			// 触发事件通知 ImageViewer
+			dispatch('upscale-complete', {
+				originalPath: currentImagePath,
+				upscaledBlob: blob
+			});
 			
-			// 触发事件通知 ImageViewer 更新
-			window.dispatchEvent(new CustomEvent('upscale-complete', {
-				detail: { 
-					imageUrl: upscaledImageUrl,
-					blob: blob,
-					originalPath: currentImagePath,
-					processingTime: processingTime.toFixed(1)
-				}
-			}));
-			console.log('📢 触发 upscale-complete 事件');
-			
-			// 更新缓存统计
-			await updateCacheStats();
-			
-		} catch (error) {
-			console.error('超分失败:', error);
-			status = '转换失败';
-			showErrorToast(error instanceof Error ? error.message : '超分失败');
+		} catch (err) {
+			console.error('超分失败:', err);
+			error = err instanceof Error ? err.message : String(err);
+			status = '超分失败';
+			showErrorToast('超分失败: ' + error);
 		} finally {
 			clearInterval(timer);
 			isProcessing = false;
+		}
+	}
+
+	/**
+	 * 加载图像数据 (临时解决方案，后续优化为纯内存)
+	 */
+	async function loadImageData(imagePath: string): Promise<Uint8Array> {
+		try {
+			// 使用 Tauri API 读取文件
+			const { readBinaryFile } = await import('@tauri-apps/plugin-fs');
+			const data = await readBinaryFile(imagePath);
+			return new Uint8Array(data);
+		} catch (error) {
+			console.error('读取图像数据失败:', error);
+			throw error;
 		}
 	}
 

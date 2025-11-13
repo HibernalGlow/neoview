@@ -142,11 +142,11 @@ export class PyO3UpscaleManager {
 	}
 
 	/**
-	 * 超分图像
+	 * 执行超分处理 (内存流版本)
 	 */
-	async upscaleImage(
-		imagePath: string,
-		timeout: number = 60.0
+	async upscaleImageMemory(
+		imageData: Uint8Array,
+		timeout: number = 120.0
 	): Promise<Uint8Array> {
 		if (!this.initialized) {
 			throw new Error('PyO3 超分管理器未初始化');
@@ -157,7 +157,45 @@ export class PyO3UpscaleManager {
 		}
 
 		try {
-			console.log('🚀 开始 PyO3 超分:', imagePath);
+			console.log('🚀 开始 PyO3 超分 (内存流)');
+			console.log('  模型:', this.currentModel.modelName);
+			console.log('  缩放:', this.currentModel.scale + 'x');
+			console.log('  输入数据大小:', imageData.length, 'bytes');
+
+			const result = await invoke<number[]>('pyo3_upscale_image_memory', {
+				imageData: Array.from(imageData),
+				modelName: this.currentModel.modelName,
+				scale: this.currentModel.scale,
+				tileSize: this.currentModel.tileSize,
+				noiseLevel: this.currentModel.noiseLevel,
+				timeout
+			});
+
+			console.log('✅ PyO3 超分完成 (内存流), 数据大小:', result.length);
+			return new Uint8Array(result);
+		} catch (error) {
+			console.error('❌ PyO3 超分失败 (内存流):', error);
+			throw error;
+		}
+	}
+
+	/**
+	 * 执行超分处理 (文件路径版本，保持兼容性)
+	 */
+	async upscaleImage(
+		imagePath: string,
+		timeout: number = 120.0
+	): Promise<Uint8Array> {
+		if (!this.initialized) {
+			throw new Error('PyO3 超分管理器未初始化');
+		}
+
+		if (!this.available) {
+			throw new Error('PyO3 超分功能不可用');
+		}
+
+		try {
+			console.log('🚀 开始 PyO3 超分 (文件路径):', imagePath);
 			console.log('  模型:', this.currentModel.modelName);
 			console.log('  缩放:', this.currentModel.scale + 'x');
 
@@ -170,10 +208,10 @@ export class PyO3UpscaleManager {
 				timeout
 			});
 
-			console.log('✅ PyO3 超分完成, 数据大小:', result.length);
+			console.log('✅ PyO3 超分完成 (文件路径), 数据大小:', result.length);
 			return new Uint8Array(result);
 		} catch (error) {
-			console.error('❌ PyO3 超分失败:', error);
+			console.error('❌ PyO3 超分失败 (文件路径):', error);
 			throw error;
 		}
 	}

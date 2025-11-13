@@ -195,7 +195,60 @@ impl PyO3Upscaler {
         Ok(())
     }
     
-    /// 执行超分处理
+    /// 执行超分处理 (内存流版本)
+    pub fn upscale_image_memory(
+        &self,
+        image_data: &[u8],
+        model: &UpscaleModel,
+        _timeout: f64,
+    ) -> Result<Vec<u8>, String> {
+        // 确保已初始化
+        self.initialize()?;
+        
+        println!("🚀 开始 PyO3 超分处理 (内存流)");
+        println!("  🎯 模型: {} (ID: {})", model.model_name, model.model_id);
+        println!("  📏 缩放: {}x", model.scale);
+        println!("  🧩 Tile Size: {}", model.tile_size);
+        println!("  🔊 降噪等级: {}", model.noise_level);
+        println!("  📊 输入数据大小: {} bytes ({:.2} MB)", 
+            image_data.len(), 
+            image_data.len() as f64 / 1024.0 / 1024.0
+        );
+        
+        // 调用 Python 函数
+        let result = Python::with_gil(|py| {
+            let module = PyModule::import_bound(py, "upscale_wrapper")?;
+            
+            // 调用 upscale_image 函数
+            let upscale_fn = module.getattr("upscale_image")?;
+            
+            // 准备参数
+            let args = (
+                image_data.to_vec(),
+                model.model_id,
+                model.scale,
+                model.tile_size,
+                model.noise_level,
+            );
+            
+            // 调用函数
+            let result_bytes: Vec<u8> = upscale_fn
+                .call1(args)?
+                .extract()?;
+            
+            Ok::<Vec<u8>, PyErr>(result_bytes)
+        }).map_err(|e: PyErr| format!("调用 Python 超分函数失败: {}", e))?;
+        
+        println!("✅ 超分处理完成 (内存流)");
+        println!("  📊 输出数据大小: {} bytes ({:.2} MB)", 
+            result.len(), 
+            result.len() as f64 / 1024.0 / 1024.0
+        );
+        
+        Ok(result)
+    }
+
+    /// 执行超分处理 (文件路径版本，保持兼容性)
     pub fn upscale_image(
         &self,
         image_path: &Path,
@@ -205,7 +258,7 @@ impl PyO3Upscaler {
         // 确保已初始化
         self.initialize()?;
         
-        println!("🚀 开始 PyO3 超分处理");
+        println!("🚀 开始 PyO3 超分处理 (文件路径)");
         println!("  📁 输入路径: {}", image_path.display());
         println!("  🎯 模型: {} (ID: {})", model.model_name, model.model_id);
         println!("  📏 缩放: {}x", model.scale);
@@ -221,35 +274,8 @@ impl PyO3Upscaler {
             image_data.len() as f64 / 1024.0 / 1024.0
         );
         
-        // 调用 Python 函数
-        let result = Python::with_gil(|py| {
-            let module = PyModule::import_bound(py, "upscale_wrapper")?;
-            
-            // 调用 upscale_image 函数
-            let upscale_fn = module.getattr("upscale_image")?;
-            
-            // 准备参数
-            let args = (
-                image_data.clone(),
-                model.model_id,
-                model.scale,
-                model.tile_size,
-                model.noise_level,
-            );
-            
-            // 调用函数
-            let result_bytes: Vec<u8> = upscale_fn
-                .call1(args)?
-                .extract()?;
-            
-            Ok::<Vec<u8>, PyErr>(result_bytes)
-        }).map_err(|e: PyErr| format!("调用 Python 超分函数失败: {}", e))?;
-        
-        println!("✅ 超分处理完成");
-        println!("  📊 输出文件大小: {} bytes ({:.2} MB)", 
-            result.len(), 
-            result.len() as f64 / 1024.0 / 1024.0
-        );
+        // 调用内存流版本
+        let result = self.upscale_image_memory(&image_data, model, _timeout)?;
         
         Ok(result)
     }

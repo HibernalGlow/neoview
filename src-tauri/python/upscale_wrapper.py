@@ -434,7 +434,9 @@ def upscale_image(
     scale: int = 2,
     tile_size: int = 0,
     noise_level: int = 0,
-    timeout: float = 60.0
+    timeout: float = 60.0,
+    width: int = 0,
+    height: int = 0
 ) -> Tuple[Optional[bytes], Optional[str]]:
     """
     超分图像（同步接口）
@@ -446,6 +448,8 @@ def upscale_image(
         tile_size: tile 大小
         noise_level: 降噪等级
         timeout: 超时时间
+        width: 目标宽度 (0 表示使用 scale)
+        height: 目标高度 (0 表示使用 scale)
     
     Returns:
         (结果数据, 错误信息)
@@ -461,8 +465,8 @@ def upscale_image(
             image_data=image_data,
             model=model,
             scale=scale,
-            width=0,
-            height=0,
+            width=width,
+            height=height,
             format_str="",
             tile_size=tile_size,
             noise_level=noise_level

@@ -34,6 +34,7 @@
 		"eslint-config-prettier": "^10.1.5",
 		"eslint-plugin-svelte": "^3.8.1",
 		"formsnap": "^2.0.1",
+		"jsdom": "^27.2.0",
 		"mode-watcher": "^1.1.0",
 		"paneforge": "^1.0.2",
 		"prettier": "^3.5.3",

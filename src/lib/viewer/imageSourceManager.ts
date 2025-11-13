@@ -96,6 +96,10 @@ export function createStreamSource(url: string, hash: string, blob?: Blob | null
   };
 }
 
+export function createStreamSourceFromUrl(options: { url: string; hash: string; blob?: Blob | null }): ViewerImageSource {
+  return createStreamSource(options.url, options.hash, options.blob ?? null);
+}
+
 export function createStreamSourceFromBlob(options: {
   blob: Blob;
   hash: string;

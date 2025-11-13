@@ -18,6 +18,16 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import ComparisonViewer from './ComparisonViewer.svelte';
 	import { upscaleState, performUpscale, getGlobalUpscaleEnabled, upscaleSettings, initUpscaleSettingsManager } from '$lib/stores/upscale/UpscaleManager.svelte';
+	import {
+		createStreamSource,
+		createSuperResSource,
+		ensurePrimaryUrl,
+		ViewerImageSource,
+		ViewerDisplayMode,
+		isValidSource,
+		cloneSource,
+		mergeSource
+	} from '$lib/viewer/imageSourceManager';
 	import { idbGet, idbSet, idbDelete } from '$lib/utils/idb';
     import { get } from 'svelte/store';
 
@@ -43,8 +53,76 @@
 	let preloadQueue = $state<ImageDataWithHash[]>([]);
 	let isPreloading = $state(false);
 
-	// 预加载内存缓存：hash -> { url, blob }
-	let preloadMemoryCache = $state<Map<string, { url: string; blob: Blob }>>(new Map());
+	// 预加载内存缓存：hash -> ViewerImageSource
+	let preloadMemoryCache = $state<Map<string, ViewerImageSource>>(new Map());
+
+	// 当前页面显示源管理
+	let streamSource = $state<ViewerImageSource | null>(null);
+	let superResSource = $state<ViewerImageSource | null>(null);
+	let activeDisplayMode = $state<ViewerDisplayMode>('archive_stream');
+
+	function applyDisplayMode() {
+		const usingSuperRes = activeDisplayMode === 'superres_url' && superResSource;
+		if (usingSuperRes && superResSource) {
+			const url = ensurePrimaryUrl(superResSource);
+			bookStore.setUpscaledImage(url);
+			bookStore.setUpscaledImageBlob(superResSource.blob ?? null);
+		} else {
+			bookStore.setUpscaledImage(null);
+			bookStore.setUpscaledImageBlob(null);
+		}
+	}
+
+	function setActiveDisplayMode(mode: ViewerDisplayMode) {
+		if (mode === 'superres_url' && !superResSource) {
+			console.warn('Requested superres display mode but no superres source available');
+			return;
+		}
+		if (activeDisplayMode === mode) return;
+		activeDisplayMode = mode;
+		applyDisplayMode();
+	}
+
+	function toggleDisplayMode() {
+		if (activeDisplayMode === 'archive_stream' && superResSource) {
+			setActiveDisplayMode('superres_url');
+		} else {
+			setActiveDisplayMode('archive_stream');
+		}
+	}
+
+	function resetDisplaySources() {
+		streamSource = null;
+		superResSource = null;
+		activeDisplayMode = 'archive_stream';
+		applyDisplayMode();
+	}
+
+	function setStreamSource(source: ViewerImageSource | null) {
+		streamSource = source ? cloneSource(source) : null;
+		if (streamSource) {
+			imageData = ensurePrimaryUrl(streamSource) || null;
+		} else {
+			imageData = null;
+		}
+		if (activeDisplayMode === 'archive_stream') {
+			applyDisplayMode();
+		}
+	}
+
+	function setSuperResSource(source: ViewerImageSource | null, options: { autoSwitch?: boolean } = {}) {
+		const autoSwitch = options.autoSwitch ?? true;
+		superResSource = source ? cloneSource(source) : null;
+		if (superResSource) {
+			preloadMemoryCache.set(superResSource.hash, cloneSource(superResSource));
+			if (autoSwitch) {
+				activeDisplayMode = 'superres_url';
+			}
+		} else if (activeDisplayMode === 'superres_url') {
+			activeDisplayMode = 'archive_stream';
+		}
+		applyDisplayMode();
+	}
 
 	// 预加载已解码的页面图片缓存：pageIndex -> { data, decoded }
 	let preloadedPageImages = $state<Map<number, { data: string; decoded: boolean }>>(new Map());

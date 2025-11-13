@@ -540,7 +540,8 @@ export async function performUpscale(imageData: string, imageHash?: string, opti
                     detail: {
                         imageData: upscaledImageData,
                         imageBlob: upscaledImageBlob,
-                        originalImageHash: finalHash
+                        originalImageHash: finalHash,
+                        savePath
                     }
                 }));
             } else {
@@ -553,7 +554,7 @@ export async function performUpscale(imageData: string, imageHash?: string, opti
             }
 
             console.log(`超分完成，hash: ${finalHash}, 耗时: ${elapsedSeconds}秒`);
-            return { upscaledImageData, upscaledImageBlob, finalHash };
+            return { upscaledImageData, upscaledImageBlob, finalHash, savePath };
         } catch (error) {
             console.error('超分失败:', error);
             upscaleState.update(state => ({

@@ -31,7 +31,7 @@
 	let useCachedFirst = $state(true);
 
 	// 模型参数
-	let selectedModel = $state('cunet');
+	let selectedModel = $state('MODEL_WAIFU2X_CUNET_UP2X');
 	let scale = $state(2);
 	let tileSize = $state(64); // 默认 tile size
 	let noiseLevel = $state(0);
@@ -40,15 +40,78 @@
 	// 可用模型列表
 	let availableModels = $state<string[]>([]);
 	
-	// 模型选项映射
+	// 模型选项映射 - 使用 sr_vulkan 实际的模型名称
 	const modelLabels: Record<string, string> = {
-		'cunet': 'CUNet (推荐)',
-		'photo': 'Photo (照片)',
-		'anime_style_art_rgb': 'Anime Style Art',
-		'upconv_7_anime_style_art_rgb': 'UpConv 7 Anime',
-		'upconv_7_photo': 'UpConv 7 Photo',
-		'upresnet10': 'UpResNet10',
-		'swin_unet_art_scan': 'Swin UNet Art'
+		'MODEL_WAIFU2X_CUNET_UP2X': 'CUNet 2x (推荐)',
+		'MODEL_WAIFU2X_PHOTO_UP2X': 'Photo 2x (照片)',
+		'MODEL_WAIFU2X_ANIME_UP2X': 'Anime 2x',
+		'MODEL_WAIFU2X_CUNET_UP1X_DENOISE3X': 'CUNet 1x + Denoise 3x',
+		'MODEL_WAIFU2X_CUNET_UP2X_DENOISE3X': 'CUNet 2x + Denoise 3x',
+		'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE3X': 'Photo 2x + Denoise 3x',
+		'MODEL_WAIFU2X_ANIME_UP2X_DENOISE3X': 'Anime 2x + Denoise 3x',
+		'MODEL_REALCUGAN_PRO_UP2X': 'Real-CUGAN Pro 2x',
+		'MODEL_REALCUGAN_SE_UP2X': 'Real-CUGAN SE 2x',
+		'MODEL_REALCUGAN_PRO_UP3X': 'Real-CUGAN Pro 3x',
+		'MODEL_REALESRGAN_ANIMAVIDEOV3_UP2X': 'Real-ESRGAN Anime 2x',
+		'MODEL_REALESRGAN_X4PLUS_ANIME_UP4X': 'Real-ESRGAN 4x+ Anime',
+		'MODEL_REALSR_DF2K_UP4X': 'Real-ESRGAN 4x DF2K',
+		'MODEL_WAIFU2X_CUNET_UP1X': 'CUNet 1x',
+	'MODEL_WAIFU2X_CUNET_UP1X_DENOISE1X': 'CUNet 1x + Denoise 1x',
+		'MODEL_WAIFU2X_CUNET_UP1X_DENOISE2X': 'CUNet 1x + Denoise 2x',
+		'MODEL_WAIFU2X_ANIME_UP2X_DENOISE0X': 'Anime 2x + Denoise 0x',
+		'MODEL_WAIFU2X_ANIME_UP2X_DENOISE1X': 'Anime 2x + Denoise 1x',
+		'MODEL_WAIFU2X_ANIME_UP2X_DENOISE2X': 'Anime 2x + Denoise 2x',
+		'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE0X': 'Photo 2x + Denoise 0x',
+		'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE1X': 'Photo 2x + Denoise 1x',
+		'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE2X': 'Photo 2x + Denoise 2x',
+		'MODEL_REALCUGAN_PRO_UP2X_DENOISE3X': 'Real-CUGAN Pro 2x + Denoise 3x',
+		'MODEL_REALCUGAN_SE_UP2X_DENOISE1X': 'Real-CUGAN SE 2x + Denoise 1x',
+	'MODEL_REALCUGAN_SE_UP2X_DENOISE2X': 'Real-CUGAN SE 2x + Denoise 2x',
+		'MODEL_REALCUGAN_PRO_UP3X_DENOISE3X': 'Real-CUGAN Pro 3x + Denoise 3x',
+		'MODEL_REALESRGAN_ANIMAVIDEOV3_UP3X': 'Real-ESRGAN Anime 3x',
+		'MODEL_REALESRGAN_X4PLUS_ANIME_UP4X': 'Real-ESRGAN 4x+ Anime',
+		'MODEL_REALSR_DF2K_UP4X_TTA': 'Real-ESRGAN 4x DF2K',
+		'MODEL_WAIFU2X_ANIME_UP2X_TTA': 'Waifu2x Anime 2x',
+	'MODEL_WAIFU2X_CUNET_UP2X_TTA': 'Waifu2x CUNet 2x',
+		'MODEL_WAIFU2X_PHOTO_UP2X_TTA': 'Waifu2x Photo 2x',
+	'MODEL_REALCUGAN_PRO_UP2X_TTA': 'Real-CUGAN Pro 2x',
+		'MODEL_REALCUGAN_SE_UP2X_TTA': 'Real-CUGAN SE 2x',
+		'MODEL_REALCUGAN_PRO_UP3X_TTA': 'Real-CUGAN Pro 3x',
+	'MODEL_REALCUGAN_SE_UP3X_TTA': 'Real-CUGAN SE 3x',
+		'MODEL_REALCUGAN_PRO_UP4X_TTA': 'Real-CUGAN Pro 4x',
+	'MODEL_REALCUGAN_SE_UP4X_TTA': 'Real-CUGAN SE 4x',
+		'MODEL_REALESRGAN_ANIMAVIDEOV3_UP2X_TTA': 'Real-ESRGAN Anime 2x',
+	'MODEL_REALESRGAN_X4PLUS_ANIME_UP4X_TTA': 'Real-ESRGAN 4x+ Anime',
+	'MODEL_REALSR_DF2K_UP4X_TTA': 'Real-ESRGAN 4x DF2K',
+	'MODEL_WAIFU2X_ANIME_UP2X_DENOISE3X_TTA': 'Waifu2x Anime 2x + Denoise 3x',
+	'MODEL_WAIFU2X_CUNET_UP2X_DENOISE3X_TTA': 'Waifu2x CUNet 2x + Denoise 3x',
+		'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE3X_TTA': 'Waifu2x Photo 2x + Denoise 3x',
+		'MODEL_REALCUGAN_PRO_UP2X_DENOISE3X_TTA': 'Real-CUGAN Pro 2x + Denoise 3x',
+		'MODEL_REALCUGAN_SE_UP2X_DENOISE3X_TTA': 'Real-CUGAN SE 2x + Denoise 3x',
+		'MODEL_REALCUGAN_PRO_UP3X_DENOISE3X_TTA': 'Real-CUGAN Pro 3x + Denoise 3x',
+		'MODEL_REALCUGAN_PRO_UP4X': 'Real-CUGAN Pro 4x',
+		'MODEL_REALCUGAN_SE_UP4X': 'Real-CUGAN SE 4x',
+		'MODEL_REALESRGAN_ANIMAVIDEOV3_UP3X': 'Real-ESRGAN Anime 3x',
+		'MODEL_REALESRGAN_ANIMAVIDEOV3_UP4X': 'Real-ESRGAN Anime 4x',
+		'MODEL_REALESRGAN_X4PLUS_ANIME_UP4X': 'Real-ESRGAN 4x+ Anime',
+		'MODEL_REALSR_DF2K_UP4X': 'Real-ESRGAN 4x DF2K',
+	'MODEL_WAIFU2X_ANIME_UP2X': 'Waifu2x Anime 2x',
+		'MODEL_WAIFU2X_CUNET_UP1X': 'Waifu2x CUNet 1x',
+	'MODEL_WAIFU2X_CUNET_UP2X': 'Waifu2x CUNet 2x',
+		'MODEL_WAIFU2X_PHOTO_UP2X': 'Waifu2x Photo 2x',
+	'MODEL_WAIFU2X_ANIME_UP2X_DENOISE0X': 'Waifu2x Anime 2x + Denoise 0x',
+	'MODEL_WAIFU2X_ANIME_UP2X_DENOISE1X': 'Waifu2x Anime 2x + Denoise 1x',
+		'MODEL_WAIFU2X_ANIME_UP2X_DENOISE2X': 'Waifu2x Anime 2x + Denoise 2x',
+	'MODEL_WAIFU2X_CUNET_UP1X_DENOISE0X': 'Waifu2x CUNet 1x + Denoise 0x',
+	'MODEL_WAIFU2X_CUNET_UP1X_DENOISE1X': 'Waifu2x CUNet 1x + Denoise 1x',
+	'MODEL_WAIFU2X_CUNET_UP1X_DENOISE2X': 'Waifu2x CUNet 1x + Denoise 2x',
+	'MODEL_WAIFU2X_CUNET_UP1X_DENOISE3X': 'Waifu2x CUNet 1x + Denoise 3x',
+	'MODEL_WAIFU2X_CUNET_UP2X_DENOISE0X': 'Waifu2x CUNet 2x + Denoise 0x',
+		'MODEL_WAIFU2X_CUNET_UP2X_DENOISE1X': 'Waifu2x CUNet 2x + Denoise 1x',
+	'MODEL_WAIFU2X_CUNET_UP2X_DENOISE2X': 'Waifu2x CUNet 2x + Denoise 2x',
+		'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE0X': 'Waifu2x Photo 2x + Denoise 0x',
+	'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE1X': 'Waifu2x Photo 2x + Denoise 1x',
+	'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE2X': 'Waifu2x Photo 2x + Denoise 2x'
 	};
 
 	// 处理状态

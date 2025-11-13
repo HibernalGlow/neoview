@@ -10,8 +10,6 @@ from typing import Optional, Tuple, Dict, Any
 import threading
 import queue
 import time
-import io
-from PIL import Image
 
 # 尝试导入 sr_vulkan 模块
 try:
@@ -207,14 +205,6 @@ class UpscaleManager:
             self.tasks[task_id] = task
         
         try:
-            # 判断是否使用指定尺寸
-            use_explicit_dimensions = width > 0 and height > 0
-
-            actual_width = actual_height = 0
-            if not use_explicit_dimensions:
-                actual_width, actual_height = get_image_dimensions(image_data)
-                print(f"📐 原始图像尺寸: {actual_width}x{actual_height}")
-            
             # 调用 sr_vulkan 添加任务
             # 确保 tile_size 是有效值
             valid_tile_sizes = [0, 64, 128, 256, 512]
@@ -233,9 +223,7 @@ class UpscaleManager:
             print(f"  tile_size: {tile_size}")
             print(f"  noise_level: {noise_level}")
             
-            status = -1
-
-            if use_explicit_dimensions:
+            if width > 0 and height > 0:
                 # 使用指定尺寸
                 print("📏 使用指定尺寸模式")
                 status = sr.add(
@@ -245,20 +233,24 @@ class UpscaleManager:
                     width,
                     height,
                     format=format_str,
-                    tileSize=tile_size
+                    tileSize=tile_size,
+                    noiseLevel=noise_level
                 )
             else:
                 # 使用缩放倍数
                 print("📏 使用缩放倍数模式")
                 try:
-                    # 使用实际的图像尺寸
+                    # 对于缩放模式，width 和 height 都设为 0
                     status = sr.add(
                         image_data,
                         model,
                         task_id,
+                        0,  # width
+                        0,  # height
                         scale,
                         format=format_str,
-                        tileSize=tile_size
+                        tileSize=tile_size,
+                        noiseLevel=noise_level
                     )
                     print(f"📊 sr.add 返回 status: {status}")
                     
@@ -267,25 +259,17 @@ class UpscaleManager:
                         print(f"❌ sr.add 失败: {error}")
                         # 尝试使用默认参数重试
                         print("🔄 尝试使用默认 tileSize=0 重试...")
-                        if use_explicit_dimensions:
-                            status = sr.add(
-                                image_data,
-                                model,
-                                task_id,
-                                width,
-                                height,
-                                format=format_str,
-                                tileSize=0
-                            )
-                        else:
-                            status = sr.add(
-                                image_data,
-                                model,
-                                task_id,
-                                scale,
-                                format=format_str,
-                                tileSize=0
-                            )
+                        status = sr.add(
+                            image_data,
+                            model,
+                            task_id,
+                            0,  # width
+                            0,  # height
+                            scale,
+                            format=format_str,
+                            tileSize=0,
+                            noiseLevel=noise_level
+                        )
                         print(f"📊 sr.add 默认参数返回 status: {status}")
                         if status <= 0:
                             error2 = sr.getLastError() if hasattr(sr, 'getLastError') else f"未知错误 (status={status})"
@@ -307,25 +291,17 @@ class UpscaleManager:
                     # 尝试使用默认参数重试
                     print("🔄 尝试使用默认 tileSize=0 重试...")
                     try:
-                        if use_explicit_dimensions:
-                            status = sr.add(
-                                image_data,
-                                model,
-                                task_id,
-                                width,
-                                height,
-                                format=format_str,
-                                tileSize=0
-                            )
-                        else:
-                            status = sr.add(
-                                image_data,
-                                model,
-                                task_id,
-                                scale,
-                                format=format_str,
-                                tileSize=0
-                            )
+                        status = sr.add(
+                            image_data,
+                            model,
+                            task_id,
+                            0,  # width
+                            0,  # height
+                            scale,
+                            format=format_str,
+                            tileSize=0,
+                            noiseLevel=noise_level
+                        )
                         print(f"✅ sr.add 默认参数调用成功，status: {status}")
                     except Exception as e2:
                         print(f"❌ sr.add 默认参数也失败: {e2}")
@@ -438,24 +414,6 @@ class UpscaleManager:
             self.tasks.clear()
 
 
-def get_image_dimensions(image_data: bytes) -> Tuple[int, int]:
-    """
-    获取图像的宽高
-    
-    Args:
-        image_data: 图像二进制数据
-    
-    Returns:
-        (width, height)
-    """
-    try:
-        with Image.open(io.BytesIO(image_data)) as img:
-            return img.size
-    except Exception as e:
-        print(f"⚠️ 获取图像尺寸失败: {e}")
-        return (0, 0)
-
-
 # 全局管理器实例
 _manager = None
 
@@ -486,9 +444,7 @@ def upscale_image(
     scale: int = 2,
     tile_size: int = 0,
     noise_level: int = 0,
-    timeout: float = 60.0,
-    width: int = 0,
-    height: int = 0
+    timeout: float = 60.0
 ) -> Tuple[Optional[bytes], Optional[str]]:
     """
     超分图像（同步接口）
@@ -515,9 +471,9 @@ def upscale_image(
             image_data=image_data,
             model=model,
             scale=scale,
-            width=width,
-            height=height,
-            format_str="webp",
+            width=0,
+            height=0,
+            format_str="",
             tile_size=tile_size,
             noise_level=noise_level
         )
@@ -571,16 +527,94 @@ def upscale_image_async(
     )
 
 
-# 模型名称映射
+# 模型名称映射 - 使用 sr_vulkan 实际的模型常量
 MODEL_NAMES = {
-    0: "cunet",
-    1: "photo",
-    2: "anime_style_art_rgb",
-    3: "upconv_7_anime_style_art_rgb",
-    4: "upconv_7_photo",
-    5: "upresnet10",
-    6: "swin_unet_art_scan"
+    0: "MODEL_WAIFU2X_CUNET_UP2X",
+    1: "MODEL_WAIFU2X_PHOTO_UP2X",
+    2: "MODEL_WAIFU2X_ANIME_UP2X",
+    3: "MODEL_WAIFU2X_CUNET_UP1X_DENOISE3X",
+    4: "MODEL_WAIFU2X_CUNET_UP2X_DENOISE3X",
+    5: "MODEL_WAIFU2X_PHOTO_UP2X_DENOISE3X",
+    6: "MODEL_WAIFU2X_ANIME_UP2X_DENOISE3X",
+    7: "MODEL_REALCUGAN_PRO_UP2X",
+    8: "MODEL_REALCUGAN_SE_UP2X",
+    9: "MODEL_REALCUGAN_PRO_UP3X",
+    10: "MODEL_REALESRGAN_ANIMAVIDEOV3_UP2X",
+    11: "MODEL_REALESRGAN_X4PLUS_ANIME_UP4X",
+    12: "MODEL_REALSR_DF2K_UP4X",
+    13: "MODEL_WAIFU2X_CUNET_UP1X",
+    14: "MODEL_WAIFU2X_CUNET_UP1X_DENOISE1X",
+    15: "MODEL_WAIFU2X_CUNET_UP1X_DENOISE2X",
+    16: "MODEL_WAIFU2X_PHOTO_UP2X_DENOISE1X",
+    17: "MODEL_WAIFU2X_PHOTO_UP2X_DENOISE2X",
+    18: "MODEL_WAIFU2X_ANIME_UP2X_DENOISE1X",
+    19: "MODEL_WAIFU2X_ANIME_UP2X_DENOISE2X",
+    20: "MODEL_REALCUGAN_PRO_UP2X_CONSERVATIVE",
+    21: "MODEL_REALCUGAN_SE_UP2X_CONSERVATIVE",
+    22: "MODEL_REALCUGAN_PRO_UP3X_CONSERVATIVE",
+    23: "MODEL_REALESRGAN_ANIMAVIDEOV3_UP3X",
+    24: "MODEL_REALESRGAN_X4PLUS_UP4X",
+    25: "MODEL_REALCUGAN_PRO_UP2X_DENOISE3X",
+    26: "MODEL_REALCUGAN_SE_UP2X_DENOISE1X",
+    27: "MODEL_REALCUGAN_SE_UP2X_DENOISE2X",
+    28: "MODEL_REALCUGAN_PRO_UP3X_DENOISE3X",
+    29: "MODEL_REALCUGAN_SE_UP2X_DENOISE3X",
+    30: "MODEL_REALCUGAN_PRO_UP4X",
+    31: "MODEL_REALCUGAN_SE_UP4X",
+    32: "MODEL_REALESRGAN_ANIMAVIDEOV3_UP4X",
+    33: "MODEL_REALESRGAN_X4PLUSANIME_UP4X_TTA",
+    34: "MODEL_REALSR_DF2K_UP4X_TTA",
+    35: "MODEL_WAIFU2X_ANIME_UP2X_TTA",
+    36: "MODEL_WAIFU2X_CUNET_UP2X_TTA",
+    37: "MODEL_WAIFU2X_PHOTO_UP2X_TTA",
+    38: "MODEL_REALCUGAN_PRO_UP2X_TTA",
+    39: "MODEL_REALCUGAN_SE_UP2X_TTA",
+    40: "MODEL_REALCUGAN_PRO_UP3X_TTA",
+    41: "MODEL_REALCUGAN_PRO_UP4X_TTA",
+    42: "MODEL_REALCUGAN_SE_UP4X_TTA",
+    43: "MODEL_REALESRGAN_ANIMAVIDEOV3_UP2X_TTA",
+    44: "MODEL_REALESRGAN_X4PLUS_ANIME_UP4X",
+    45: "MODEL_REALESRGAN_X4PLUS_UP4X_TTA",
+    46: "MODEL_REALCUGAN_PRO_UP2X_CONSERVATIVE_TTA",
+    47: "MODEL_REALCUGAN_SE_UP2X_CONSERVATIVE_TTA",
+    48: "MODEL_REALCUGAN_PRO_UP3X_CONSERVATIVE_TTA",
+    49: "MODEL_REALCUGAN_SE_UP2X_DENOISE1X_TTA",
+    50: "MODEL_REALCUGAN_SE_UP2X_DENOISE2X_TTA",
+    51: "MODEL_REALCUGAN_SE_UP2X_DENOISE3X_TTA",
+    52: "MODEL_REALCUGAN_PRO_UP3X_DENOISE3X_TTA",
+    53: "MODEL_REALCUGAN_PRO_UP4X_DENOISE3X_TTA",
+    54: "MODEL_WAIFU2X_ANIME_UP2X_DENOISE0X",
+    55: "MODEL_WAIFU2X_ANIME_UP2X_DENOISE0X_TTA",
+    56: "MODEL_WAIFU2X_ANIME_UP2X_DENOISE1X_TTA",
+    57: "MODEL_WAIFU2X_ANIME_UP2X_DENOISE2X_TTA",
+    58: "MODEL_WAIFU2X_CUNET_UP1X_DENOISE0X",
+    59: "MODEL_WAIFU2X_CUNET_UP1X_DENOISE0X_TTA",
+    60: "MODEL_WAIFU2X_CUNET_UP1X_DENOISE1X_TTA",
+    61: "MODEL_WAIFU2X_CUNET_UP1X_DENOISE2X_TTA",
+    62: "MODEL_WAIFU2X_CUNET_UP1X_DENOISE3X_TTA",
+    63: "MODEL_WAIFU2X_CUNET_UP2X_DENOISE0X_TTA",
+    64: "MODEL_WAIFU2X_CUNET_UP2X_DENOISE1X_TTA",
+    65: "MODEL_WAIFU2X_CUNET_UP2X_DENOISE2X_TTA",
+    66: "MODEL_WAIFU2X_PHOTO_UP2X_DENOISE0X_TTA",
+    67: "MODEL_WAIFU2X_PHOTO_UP2X_DENOISE1X_TTA",
+    68: "MODEL_WAIFU2X_PHOTO_UP2X_DENOISE2X_TTA",
+    69: "MODEL_WAIFU2X_PHOTO_UP2X_DENOISE3X_TTA",
+    70: "MODEL_REALCUGAN_PRO_UP3X_CONSERVATIVE_TTA",
+    71: "MODEL_REALCUGAN_SE_UP3X_CONSERVATIVE_TTA",
+    72: "MODEL_REALCUGAN_PRO_UP4X_CONSERVATIVE_TTA",
+    73: "MODEL_REALCUGAN_SE_UP4X_CONSERVATIVE_TTA",
+    74: "MODEL_REALESRGAN_ANIMAVIDEOV3_UP3X_TTA",
+    75: "MODEL_REALESRGAN_X4PLUS_ANIME_UP4X_TTA",
+    76: "MODEL_REALSR_DF2K_UP4X_TTA",
+    77: "MODEL_WAIFU2X_ANIME_UP2X_DENOISE3X_TTA",
+    78: "MODEL_WAIFU2X_CUNET_UP2X_DENOISE3X_TTA",
+    79: "MODEL_WAIFU2X_PHOTO_UP2X_DENOISE3X_TTA",
+    80: "MODEL_REALCUGAN_PRO_UP2X_DENOISE3X_TTA",
+    81: "MODEL_REALCUGAN_SE_UP2X_DENOISE3X_TTA",
+    82: "MODEL_REALCUGAN_PRO_UP3X_DENOISE3X_TTA",
+    83: "MODEL_REALCUGAN_SE_UP3X_DENOISE3X_TTA"
 }
+
 
 
 def get_model_id(model_name: str) -> int:

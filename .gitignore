@@ -26,4 +26,6 @@ temp/*
 temp/test_images/test_image.png
 ref/*
 
-cache/pyo3-upscale/
+/cache/pyo3-upscale
+/cache/pyo3-upscale/*
+

@@ -26,7 +26,7 @@ export class PyO3UpscaleManager {
 	private availableModels = $state<string[]>([]);
 	private _currentModel = $state<PyO3UpscaleModel>({
 		modelId: 0,
-		modelName: 'cunet',
+		modelName: 'MODEL_WAIFU2X_CUNET_UP2X',
 		scale: 2,
 		tileSize: 64,
 		noiseLevel: 0

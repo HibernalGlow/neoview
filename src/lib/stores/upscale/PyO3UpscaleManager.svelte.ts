@@ -24,7 +24,7 @@ export class PyO3UpscaleManager {
 	private initialized = $state(false);
 	private available = $state(false);
 	private availableModels = $state<string[]>([]);
-	private currentModel = $state<PyO3UpscaleModel>({
+	private _currentModel = $state<PyO3UpscaleModel>({
 		modelId: 0,
 		modelName: 'cunet',
 		scale: 2,
@@ -101,10 +101,10 @@ export class PyO3UpscaleManager {
 	}
 
 	/**
-	 * 获取当前模型配置
+	 * 获取当前模型信息
 	 */
-	getCurrentModel(): PyO3UpscaleModel {
-		return this.currentModel;
+	get currentModel() {
+		return this._currentModel;
 	}
 
 	/**
@@ -113,14 +113,14 @@ export class PyO3UpscaleManager {
 	async setModel(modelName: string, scale: number = 2): Promise<void> {
 		try {
 			const modelId = await invoke<number>('get_pyo3_model_id', { modelName });
-			this.currentModel = {
+			this._currentModel = {
 				modelId,
 				modelName,
 				scale,
-				tileSize: this.currentModel.tileSize,
-				noiseLevel: this.currentModel.noiseLevel
+				tileSize: this._currentModel.tileSize,
+				noiseLevel: this._currentModel.noiseLevel
 			};
-			console.log('✅ 已切换模型:', this.currentModel);
+			console.log('✅ 已切换模型:', this._currentModel);
 		} catch (error) {
 			console.error('❌ 设置模型失败:', error);
 			throw error;
@@ -131,14 +131,14 @@ export class PyO3UpscaleManager {
 	 * 设置 Tile Size
 	 */
 	setTileSize(tileSize: number): void {
-		this.currentModel.tileSize = tileSize;
+		this._currentModel.tileSize = tileSize;
 	}
 
 	/**
 	 * 设置降噪等级
 	 */
 	setNoiseLevel(noiseLevel: number): void {
-		this.currentModel.noiseLevel = noiseLevel;
+		this._currentModel.noiseLevel = noiseLevel;
 	}
 
 	/**
@@ -158,16 +158,16 @@ export class PyO3UpscaleManager {
 
 		try {
 			console.log('🚀 开始 PyO3 超分 (内存流)');
-			console.log('  模型:', this.currentModel.modelName);
-			console.log('  缩放:', this.currentModel.scale + 'x');
+			console.log('  模型:', this._currentModel.modelName);
+			console.log('  缩放:', this._currentModel.scale + 'x');
 			console.log('  输入数据大小:', imageData.length, 'bytes');
 
 			const result = await invoke<number[]>('pyo3_upscale_image_memory', {
 				imageData: Array.from(imageData),
-				modelName: this.currentModel.modelName,
-				scale: this.currentModel.scale,
-				tileSize: this.currentModel.tileSize,
-				noiseLevel: this.currentModel.noiseLevel,
+				modelName: this._currentModel.modelName,
+				scale: this._currentModel.scale,
+				tileSize: this._currentModel.tileSize,
+				noiseLevel: this._currentModel.noiseLevel,
 				timeout
 			});
 
@@ -192,15 +192,15 @@ export class PyO3UpscaleManager {
 
 		try {
 			console.log('💾 保存超分结果到缓存:', imageHash);
-			console.log('  模型:', this.currentModel.modelName);
+			console.log('  模型:', this._currentModel.modelName);
 			console.log('  数据大小:', resultData.length, 'bytes');
 
 			const cachePath = await invoke<string>('pyo3_save_upscale_cache', {
 				imageHash,
-				modelName: this.currentModel.modelName,
-				scale: this.currentModel.scale,
-				tileSize: this.currentModel.tileSize,
-				noiseLevel: this.currentModel.noiseLevel,
+				modelName: this._currentModel.modelName,
+				scale: this._currentModel.scale,
+				tileSize: this._currentModel.tileSize,
+				noiseLevel: this._currentModel.noiseLevel,
 				resultData: Array.from(resultData)
 			});
 
@@ -229,15 +229,15 @@ export class PyO3UpscaleManager {
 
 		try {
 			console.log('🚀 开始 PyO3 超分 (文件路径):', imagePath);
-			console.log('  模型:', this.currentModel.modelName);
-			console.log('  缩放:', this.currentModel.scale + 'x');
+			console.log('  模型:', this._currentModel.modelName);
+			console.log('  缩放:', this._currentModel.scale + 'x');
 
 			const result = await invoke<number[]>('pyo3_upscale_image', {
 				imagePath,
-				modelName: this.currentModel.modelName,
-				scale: this.currentModel.scale,
-				tileSize: this.currentModel.tileSize,
-				noiseLevel: this.currentModel.noiseLevel,
+				modelName: this._currentModel.modelName,
+				scale: this._currentModel.scale,
+				tileSize: this._currentModel.tileSize,
+				noiseLevel: this._currentModel.noiseLevel,
 				timeout
 			});
 
@@ -256,10 +256,10 @@ export class PyO3UpscaleManager {
 		try {
 			const result = await invoke<string | null>('check_pyo3_upscale_cache', {
 				imagePath,
-				modelName: this.currentModel.modelName,
-				scale: this.currentModel.scale,
-				tileSize: this.currentModel.tileSize,
-				noiseLevel: this.currentModel.noiseLevel
+				modelName: this._currentModel.modelName,
+				scale: this._currentModel.scale,
+				tileSize: this._currentModel.tileSize,
+				noiseLevel: this._currentModel.noiseLevel
 			});
 			return result;
 		} catch (error) {
@@ -318,7 +318,7 @@ export class PyO3UpscaleManager {
 		this.initialized = false;
 		this.available = false;
 		this.availableModels = [];
-		this.currentModel = {
+		this._currentModel = {
 			modelId: 0,
 			modelName: 'cunet',
 			scale: 2,

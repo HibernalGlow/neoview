@@ -27,6 +27,16 @@ class BookStore {
     upscaledImageBlob: null,
   });
 
+  // 超分缓存映射: hash -> { model, cachePath, originalPath, innerPath }
+  private upscaleCacheMap = $state<Map<string, {
+    model: string;
+    scale: number;
+    cachePath: string;
+    originalPath: string;
+    innerPath?: string;
+    timestamp: number;
+  }>>(new Map());
+
   // === Getters ===
   get currentBook() {
     return this.state.currentBook;
@@ -331,6 +341,67 @@ class BookStore {
    */
   clearError() {
     this.state.error = '';
+  }
+
+  // === 超分缓存管理 ===
+
+  /**
+   * 记录超分缓存关系
+   */
+  recordUpscaleCache(
+    hash: string,
+    model: string,
+    scale: number,
+    cachePath: string,
+    originalPath: string,
+    innerPath?: string
+  ) {
+    this.upscaleCacheMap.set(hash, {
+      model,
+      scale,
+      cachePath,
+      originalPath,
+      innerPath,
+      timestamp: Date.now()
+    });
+    console.log('💾 记录超分缓存:', hash, '->', cachePath);
+  }
+
+  /**
+   * 检查是否有超分缓存
+   */
+  getUpscaleCache(hash: string, model: string, scale: number) {
+    const cache = this.upscaleCacheMap.get(hash);
+    if (cache && cache.model === model && cache.scale === scale) {
+      // 检查缓存文件是否仍然存在
+      return cache;
+    }
+    return null;
+  }
+
+  /**
+   * 获取所有超分缓存
+   */
+  getAllUpscaleCaches() {
+    return Array.from(this.upscaleCacheMap.entries());
+  }
+
+  /**
+   * 清理过期缓存
+   */
+  cleanupExpiredCaches(maxAge: number = 30 * 24 * 60 * 60 * 1000) { // 默认30天
+    const now = Date.now();
+    let cleaned = 0;
+    
+    for (const [hash, cache] of this.upscaleCacheMap.entries()) {
+      if (now - cache.timestamp > maxAge) {
+        this.upscaleCacheMap.delete(hash);
+        cleaned++;
+      }
+    }
+    
+    console.log('🧹 清理过期缓存:', cleaned, '个');
+    return cleaned;
   }
 }
 

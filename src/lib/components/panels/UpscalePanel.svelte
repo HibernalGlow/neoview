@@ -210,7 +210,36 @@
 	}
 
 	/**
-	 * 执行超分
+	 * 检查是否有缓存
+	 */
+	async function checkUpscaleCache(): Promise<Uint8Array | null> {
+		try {
+			const imageHash = await getCurrentImageHash();
+			if (!imageHash) return null;
+
+			const cache = bookStore.getUpscaleCache(
+				imageHash,
+				pyo3UpscaleManager.currentModel.modelName,
+				pyo3UpscaleManager.currentModel.scale
+			);
+
+			if (cache) {
+				console.log('🎯 找到超分缓存:', cache.cachePath);
+				// 尝试读取缓存文件
+				const { readBinaryFile } = await import(/* @vite-ignore */ '@tauri-apps' + '/api/fs');
+				const data = await readBinaryFile(cache.cachePath);
+				return new Uint8Array(data);
+			}
+
+			return null;
+		} catch (error) {
+			console.warn('检查缓存失败:', error);
+			return null;
+		}
+	}
+
+	/**
+	 * 执行超分处理
 	 */
 	async function performUpscale() {
 		if (!currentImagePath) {
@@ -245,6 +274,35 @@
 				throw new Error('没有当前图片');
 			}
 
+			// 首先检查缓存
+			console.log('🔍 检查超分缓存...');
+			const cachedResult = await checkUpscaleCache();
+			
+			let result: Uint8Array;
+			
+			if (cachedResult) {
+				console.log('✅ 使用缓存数据，无需重新生成');
+				result = cachedResult;
+				progress = 100;
+				status = '缓存命中';
+				
+				const processingTime = (Date.now() - startTime) / 1000;
+				showSuccessToast(`使用缓存！耗时 ${processingTime.toFixed(1)}s`);
+				
+				// 直接创建 blob，用于传递给 ImageViewer 和显示
+				const blob = new Blob([result as BlobPart], { type: 'image/webp' });
+				upscaledImageUrl = URL.createObjectURL(blob);
+				
+				// 触发事件通知 ImageViewer，传递 blob 数据
+				dispatch('upscale-complete', {
+					originalPath: currentImagePath,
+					upscaledBlob: blob,
+					upscaledData: result
+				});
+				
+				return; // 缓存命中，直接返回
+			}
+
 			// 获取图像数据 - 从 ImageViewer 的缓存中获取已加载的 blob
 			const imageData = await getCurrentImageBlob();
 			
@@ -256,7 +314,7 @@
 			status = '超分处理中...';
 			progress = 30;
 			
-			const result = await pyo3UpscaleManager.upscaleImageMemory(imageData, 120.0);
+			result = await pyo3UpscaleManager.upscaleImageMemory(imageData, 120.0);
 			
 			progress = 90;
 			status = '生成预览...';
@@ -275,14 +333,28 @@
 			try {
 				const imageHash = await getCurrentImageHash();
 				if (imageHash) {
-					// 异步保存，不等待完成
-					pyo3UpscaleManager.saveUpscaleCache(imageHash, result)
-						.then(cachePath => {
-							console.log('💾 超分结果已异步缓存:', cachePath);
-						})
-						.catch(error => {
-							console.warn('异步保存缓存失败:', error);
-						});
+					const currentPage = bookStore.currentPage;
+					if (currentPage) {
+						// 异步保存，不等待完成
+						pyo3UpscaleManager.saveUpscaleCache(imageHash, result)
+							.then(cachePath => {
+								console.log('💾 超分结果已异步缓存:', cachePath);
+								
+								// 记录缓存关系到 BookStore
+								const innerPath = (currentPage as any).innerPath || undefined;
+								bookStore.recordUpscaleCache(
+									imageHash,
+									pyo3UpscaleManager.currentModel.modelName,
+									pyo3UpscaleManager.currentModel.scale,
+									cachePath,
+									currentPage.path,
+									innerPath
+								);
+							})
+							.catch(error => {
+								console.warn('异步保存缓存失败:', error);
+							});
+					}
 				}
 			} catch (error) {
 				console.warn('获取图像 hash 失败，跳过缓存保存:', error);
@@ -340,7 +412,7 @@
 				return new Uint8Array(imageData);
 			} else {
 				// 对于普通文件，直接读取
-				const { readBinaryFile } = await import('@tauri-apps/api/fs');
+				const { readBinaryFile } = await import(/* @vite-ignore */ '@tauri-apps' + '/api/fs');
 				const data = await readBinaryFile(currentPage.path);
 				return new Uint8Array(data);
 			}

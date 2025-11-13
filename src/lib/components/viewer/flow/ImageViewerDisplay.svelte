@@ -1,12 +1,21 @@
 <script lang="ts">
 	type ViewMode = 'single' | 'double' | 'panorama';
 
-	export let imageData: string | null = null;
-	export let imageData2: string | null = null;
-	export let upscaledImageData: string | null = null;
-	export let viewMode: ViewMode = 'single';
-	export let zoomLevel = 1;
-	export let rotationAngle = 0;
+	let {
+		imageData = null,
+		imageData2 = null,
+		upscaledImageData = null,
+		viewMode = 'single',
+		zoomLevel = 1,
+		rotationAngle = 0
+	}: {
+		imageData?: string | null;
+		imageData2?: string | null;
+		upscaledImageData?: string | null;
+		viewMode?: ViewMode;
+		zoomLevel?: number;
+		rotationAngle?: number;
+	} = $props();
 </script>
 
 {#if imageData}

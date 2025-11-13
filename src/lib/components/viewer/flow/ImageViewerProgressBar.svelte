@@ -1,11 +1,13 @@
 <script lang="ts">
-	export let showProgressBar = true;
-	export let totalPages = 0;
-	export let currentPageIndex = 0;
-	export let preUpscaleProgress = 0;
-	export let totalPreUpscalePages = 0;
-	export let progressBlinking = false;
-	export let progressColor = '#FDFBF7';
+	let {
+		showProgressBar = true,
+		totalPages = 0,
+		currentPageIndex = 0,
+		preUpscaleProgress = 0,
+		totalPreUpscalePages = 0,
+		progressBlinking = false,
+		progressColor = '#FDFBF7'
+	} = $props();
 </script>
 
 {#if showProgressBar && totalPages > 0}

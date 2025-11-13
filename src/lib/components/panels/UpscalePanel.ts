@@ -95,3 +95,40 @@ export function toUpscalePanelEventDetail(settings: UpscalePanelSettings): Upsca
 		useCachedFirst: settings.useCachedFirst
 	};
 }
+
+export function buildHashInput(path: string, innerPath?: string): string {
+	return `${path || ''}|${innerPath || ''}`;
+}
+
+export async function calculatePathHash(pathInput: string): Promise<string> {
+	try {
+		const encoder = new TextEncoder();
+		const bytes = encoder.encode(pathInput);
+		const hashBuffer = await crypto.subtle.digest('SHA-256', bytes);
+		const hashArray = Array.from(new Uint8Array(hashBuffer));
+		return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+	} catch (error) {
+		console.error('计算路径 hash 失败:', error);
+		return pathInput.length.toString(36);
+	}
+}
+
+export async function readUpscaleCacheFile(cachePath: string): Promise<Uint8Array> {
+	const { invoke } = await import('@tauri-apps/api/core');
+	const data = await invoke<number[]>('read_upscale_cache_file', { cachePath });
+	return new Uint8Array(data);
+}
+
+export function getProgressColor(progress: number): string {
+	if (progress < 30) return 'bg-blue-500';
+	if (progress < 70) return 'bg-yellow-500';
+	return 'bg-green-500';
+}
+
+export function formatFileSize(bytes: number): string {
+	if (bytes === 0) return '0 B';
+	const k = 1024;
+	const sizes = ['B', 'KB', 'MB', 'GB'];
+	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	return (bytes / Math.pow(k, i)).toFixed(2) + ' ' + sizes[i];
+}

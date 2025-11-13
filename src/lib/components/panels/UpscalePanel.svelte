@@ -27,8 +27,14 @@
 		loadUpscalePanelSettings,
 		persistUpscalePanelSettings,
 		toUpscalePanelEventDetail,
+		formatFileSize,
+		getProgressColor,
+		buildHashInput,
+		calculatePathHash,
+		readUpscaleCacheFile,
 		type UpscalePanelSettings
 	} from './UpscalePanel';
+	import UpscalePanelGlobalControls from './UpscalePanelGlobalControls.svelte';
 
 	// ==================== 状态管理 ====================
 	
@@ -311,8 +317,9 @@
 			await pyo3UpscaleManager.setModel(selectedModel, scale);
 			pyo3UpscaleManager.setTileSize(tileSize);
 			pyo3UpscaleManager.setNoiseLevel(noiseLevel);
-			
-			saveSettings();
+			const settings = gatherPanelSettings();
+			persistUpscalePanelSettings(settings);
+			emitUpscaleSettings(settings);
 			showSuccessToast('模型设置已应用');
 		} catch (error) {
 			console.error('应用模型设置失败:', error);
@@ -567,39 +574,12 @@
 				return null;
 			}
 
-			// 使用路径 + innerpath 作为 hash 基础
-			const path = currentPage.path || '';
-			const innerPath = (currentPage as any).innerPath || '';
-			const hashInput = path + '|' + innerPath;
-			
-			// 计算 hash
+			const hashInput = buildHashInput(currentPage.path, (currentPage as any).innerPath);
 			const hash = await calculatePathHash(hashInput);
 			return hash;
 		} catch (error) {
 			console.error('获取图像 hash 失败:', error);
 			return null;
-		}
-	}
-
-	/**
-	 * 计算路径 hash (使用 Web Crypto API)
-	 */
-	async function calculatePathHash(pathInput: string): Promise<string> {
-		try {
-			// 将路径字符串转换为 ArrayBuffer
-			const encoder = new TextEncoder();
-			const bytes = encoder.encode(pathInput);
-			
-			// 使用 Web Crypto API 计算 SHA-256 hash
-			const hashBuffer = await crypto.subtle.digest('SHA-256', bytes);
-			const hashArray = Array.from(new Uint8Array(hashBuffer));
-			const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-			
-			return hashHex;
-		} catch (error) {
-			console.error('计算路径 hash 失败:', error);
-			// 回退到简单的字符串 hash
-			return pathInput.length.toString(36);
 		}
 	}
 
@@ -620,76 +600,12 @@
 	/**
 	 * 保存设置
 	 */
-	function saveSettings() {
-		const settings = {
-			autoUpscaleEnabled,
-			preUpscaleEnabled,
-			conditionalUpscaleEnabled,
-			conditionalMinWidth,
-			conditionalMinHeight,
-			currentImageUpscaleEnabled,
-			useCachedFirst,
-			selectedModel,
-			scale,
-			tileSize,
-			noiseLevel,
-			gpuId
-		};
-		localStorage.setItem('pyo3_upscale_settings', JSON.stringify(settings));
-	}
-
-	/**
-	 * 加载设置
-	 */
-	function loadSettings() {
-		const saved = localStorage.getItem('pyo3_upscale_settings');
-		if (saved) {
-			try {
-				const settings = JSON.parse(saved);
-				autoUpscaleEnabled = settings.autoUpscaleEnabled ?? false;
-				preUpscaleEnabled = settings.preUpscaleEnabled ?? true;
-				conditionalUpscaleEnabled = settings.conditionalUpscaleEnabled ?? false;
-				conditionalMinWidth = settings.conditionalMinWidth ?? 0;
-				conditionalMinHeight = settings.conditionalMinHeight ?? 0;
-				currentImageUpscaleEnabled = settings.currentImageUpscaleEnabled ?? false;
-				useCachedFirst = settings.useCachedFirst ?? true;
-				selectedModel = settings.selectedModel ?? 'cunet';
-				scale = settings.scale ?? 2;
-				tileSize = settings.tileSize ?? 0;
-				noiseLevel = settings.noiseLevel ?? 0;
-				gpuId = settings.gpuId ?? 0;
-			} catch (error) {
-				console.error('加载设置失败:', error);
-			}
-		}
-	}
-
-	/**
-	 * 获取进度条颜色
-	 */
-	function getProgressColor(progress: number): string {
-		if (progress < 30) return 'bg-blue-500';
-		if (progress < 70) return 'bg-yellow-500';
-		return 'bg-green-500';
-	}
-
-	/**
-	 * 格式化文件大小
-	 */
-	function formatFileSize(bytes: number): string {
-		if (bytes === 0) return '0 B';
-		const k = 1024;
-		const sizes = ['B', 'KB', 'MB', 'GB'];
-		const i = Math.floor(Math.log(bytes) / Math.log(k));
-		return (bytes / Math.pow(k, i)).toFixed(2) + ' ' + sizes[i];
-	}
 
 	// 快捷键处理
 	function handleKeyPress(event: KeyboardEvent) {
 		if (event.key === 'F2') {
 			event.preventDefault();
 			currentImageUpscaleEnabled = !currentImageUpscaleEnabled;
-			saveSettings();
 		}
 	}
 </script>
@@ -712,68 +628,15 @@
 	</div>
 
 	<!-- 全局开关 -->
-	<div class="section">
-		<div class="setting-row">
-			<div class="flex items-center gap-2">
-				<Switch bind:checked={autoUpscaleEnabled} />
-				<Label>自动 Waifu2x</Label>
-			</div>
-		</div>
-
-		<div class="setting-row">
-			<div class="flex items-center gap-2">
-				<Switch bind:checked={preUpscaleEnabled} />
-				<Label>开启预超分</Label>
-			</div>
-		</div>
-
-		<div class="setting-row items-start">
-			<div class="flex flex-col gap-2">
-				<div class="flex items-center gap-2">
-					<Switch bind:checked={conditionalUpscaleEnabled} />
-					<Label>满足条件才自动超分</Label>
-				</div>
-				<div class="flex gap-4 pl-6 text-sm text-gray-500">
-					<label class="flex items-center gap-2">
-						<span>最小宽度</span>
-						<input
-							type="number"
-							class="input-number w-24"
-							min="0"
-							bind:value={conditionalMinWidth}
-							disabled={!conditionalUpscaleEnabled}
-						/>
-						x
-					</label>
-					<label class="flex items-center gap-2">
-						<span>最小高度</span>
-						<input
-							type="number"
-							class="input-number w-24"
-							min="0"
-							bind:value={conditionalMinHeight}
-							disabled={!conditionalUpscaleEnabled}
-						/>
-						x
-					</label>
-				</div>
-			</div>
-		</div>
-
-		<div class="setting-row">
-			<div class="flex items-center gap-2">
-				<Switch bind:checked={currentImageUpscaleEnabled} onchange={saveSettings} />
-				<Label>本张图开启 Waifu2x (F2)</Label>
-			</div>
-		</div>
-
-		<div class="setting-row">
-			<div class="flex items-center gap-2">
-				<Switch bind:checked={useCachedFirst} onchange={saveSettings} />
-				<Label>优先使用下载转换好的</Label>
-			</div>
-		</div>
-	</div>
+	<UpscalePanelGlobalControls
+		bind:autoUpscaleEnabled
+		bind:preUpscaleEnabled
+		bind:conditionalUpscaleEnabled
+		bind:conditionalMinWidth
+		bind:conditionalMinHeight
+		bind:currentImageUpscaleEnabled
+		bind:useCachedFirst
+	/>
 
 	<!-- 修改参数 -->
 	<div class="section">

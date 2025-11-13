@@ -335,6 +335,9 @@ def upscale_image(
             image_data=image_data,
             model=model,
             scale=scale,
+            width=0,
+            height=0,
+            format_str="",
             tile_size=tile_size,
             noise_level=noise_level
         )
@@ -380,6 +383,9 @@ def upscale_image_async(
         image_data=image_data,
         model=model,
         scale=scale,
+        width=0,
+        height=0,
+        format_str="",
         tile_size=tile_size,
         noise_level=noise_level
     )

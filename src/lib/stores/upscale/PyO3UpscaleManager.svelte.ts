@@ -131,7 +131,9 @@ export class PyO3UpscaleManager {
 	 * 设置 Tile Size
 	 */
 	setTileSize(tileSize: number): void {
+		console.log('🔧 PyO3UpscaleManager.setTileSize:', tileSize);
 		this._currentModel.tileSize = tileSize;
+		console.log('✅ PyO3UpscaleManager.tileSize 已更新为:', this._currentModel.tileSize);
 	}
 
 	/**
@@ -162,6 +164,15 @@ export class PyO3UpscaleManager {
 			console.log('  缩放:', this._currentModel.scale + 'x');
 			console.log('  输入数据大小:', imageData.length, 'bytes');
 
+			console.log('📤 发送参数到 Rust:', {
+				imageDataLength: imageData.length,
+				modelName: this._currentModel.modelName,
+				scale: this._currentModel.scale,
+				tileSize: this._currentModel.tileSize,
+				noiseLevel: this._currentModel.noiseLevel,
+				timeout
+			});
+			
 			const result = await invoke<number[]>('pyo3_upscale_image_memory', {
 				imageData: Array.from(imageData),
 				modelName: this._currentModel.modelName,

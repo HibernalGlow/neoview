@@ -9,7 +9,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { ImageLoader, type ImageLoaderOptions } from './imageLoader';
 import { createEventListeners, type EventListenersOptions } from './eventListeners';
 import { createPreloadWorker } from './preloadWorker';
-import { triggerAutoUpscale } from './preloadRuntime';
+import { triggerAutoUpscale, getAutoUpscaleEnabled } from './preloadRuntime';
 
 export interface PreloadManagerOptions {
 	onImageLoaded?: (objectUrl: string, objectUrl2?: string) => void;
@@ -326,10 +326,10 @@ export class PreloadManager {
 	/**
 	 * 触发预超分
 	 */
-	triggerPreUpscale(range: number[]): void {
-		const globalEnabled = true; // 这里应该从某个地方获取全局设置
-		if (!globalEnabled) {
-			console.log('全局超分开关已关闭，跳过预超分');
+	async triggerPreUpscale(range: number[]): Promise<void> {
+		const autoUpscaleEnabled = await getAutoUpscaleEnabled();
+		if (!autoUpscaleEnabled) {
+			console.log('自动超分开关已关闭，跳过预超分');
 			return;
 		}
 		

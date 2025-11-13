@@ -27,14 +27,14 @@ export interface PerformUpscaleResult {
 }
 
 /**
- * 获取全局超分开关状态
+ * 获取自动超分开关状态
  */
-export async function getGlobalUpscaleEnabled(): Promise<boolean> {
+export async function getAutoUpscaleEnabled(): Promise<boolean> {
 	try {
 		const settings = settingsManager.getSettings();
 		return settings.image.enableSuperResolution || false;
 	} catch (error) {
-		console.warn('获取全局超分开关状态失败:', error);
+		console.warn('获取自动超分开关状态失败:', error);
 		return false;
 	}
 }
@@ -118,10 +118,10 @@ export async function triggerAutoUpscale(
 			return;
 		}
 
-		// 检查全局开关
-		const globalEnabled = await getGlobalUpscaleEnabled();
-		if (!globalEnabled) {
-			console.log('全局超分开关已关闭，跳过自动超分');
+		// 检查自动超分开关
+		const autoUpscaleEnabled = await getAutoUpscaleEnabled();
+		if (!autoUpscaleEnabled) {
+			console.log('自动超分开关已关闭，跳过自动超分');
 			return;
 		}
 
@@ -142,10 +142,29 @@ export async function triggerAutoUpscale(
 		}
 
 		const { data: imageData, blob: imageBlob, hash: imageHash } = imageDataWithHash;
-		const input = imageBlob || imageData;
 		
-		console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', 'MD5:', imageHash, 
-			imageBlob ? `Blob size: ${imageBlob.size}` : `图片数据长度: ${imageData?.length}`);
+		// 优先使用 Blob，如果没有则转换为 DataURL
+		let input: string | Blob;
+		if (imageBlob) {
+			input = imageBlob;
+			console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', 'MD5:', imageHash, 
+				`Blob size: ${imageBlob.size}`);
+		} else if (imageData) {
+			// 如果是 DataURL，先转换为 Blob 以获得更好的性能
+			try {
+				const response = await fetch(imageData);
+				input = await response.blob();
+				console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', 'MD5:', imageHash, 
+					`DataURL 转换为 Blob，size: ${input.size}`);
+			} catch (error) {
+				console.warn('DataURL 转 Blob 失败，使用原始 DataURL:', error);
+				input = imageData;
+				console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', 'MD5:', imageHash, 
+					`图片数据长度: ${imageData.length}`);
+			}
+		} else {
+			throw new Error('没有有效的图片数据');
+		}
 		
 		// 触发超分开始事件
 		window.dispatchEvent(new CustomEvent('upscale-start'));

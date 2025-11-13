@@ -12,7 +12,7 @@ import {
 	triggerAutoUpscale, 
 	checkUpscaleCache, 
 	getImageDataWithHash,
-	getGlobalUpscaleEnabled,
+	getAutoUpscaleEnabled,
 	type ImageDataWithHash 
 } from './preloadRuntime';
 import { createPreloadWorker, type PreloadTask, type PreloadTaskResult } from './preloadWorker';

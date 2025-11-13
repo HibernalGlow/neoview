@@ -517,7 +517,7 @@ def upscale_image(
             scale=scale,
             width=width,
             height=height,
-            format_str="",
+            format_str="webp",
             tile_size=tile_size,
             noise_level=noise_level
         )

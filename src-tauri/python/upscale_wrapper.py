@@ -232,9 +232,8 @@ class UpscaleManager:
                     task_id,
                     width,
                     height,
-                    format=format_str,
-                    tileSize=tile_size,
-                    noiseLevel=noise_level
+                    format_str,
+                    tile_size
                 )
             else:
                 # 使用缩放倍数
@@ -245,12 +244,9 @@ class UpscaleManager:
                         image_data,
                         model,
                         task_id,
-                        0,  # width
-                        0,  # height
                         scale,
-                        format=format_str,
-                        tileSize=tile_size,
-                        noiseLevel=noise_level
+                        format_str,
+                        0
                     )
                     print(f"📊 sr.add 返回 status: {status}")
                     
@@ -266,9 +262,8 @@ class UpscaleManager:
                             0,  # width
                             0,  # height
                             scale,
-                            format=format_str,
-                            tileSize=0,
-                            noiseLevel=noise_level
+                            format_str,
+                            0  # tileSize
                         )
                         print(f"📊 sr.add 默认参数返回 status: {status}")
                         if status <= 0:
@@ -298,9 +293,8 @@ class UpscaleManager:
                             0,  # width
                             0,  # height
                             scale,
-                            format=format_str,
-                            tileSize=0,
-                            noiseLevel=noise_level
+                            format_str,
+                            0  # tileSize
                         )
                         print(f"✅ sr.add 默认参数调用成功，status: {status}")
                     except Exception as e2:

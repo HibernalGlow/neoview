@@ -229,6 +229,7 @@ impl PyO3Upscaler {
                 model.scale,
                 model.tile_size,
                 model.noise_level,
+                _timeout,
             );
             
             // 调用函数

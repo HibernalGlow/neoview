@@ -191,6 +191,13 @@ pub async fn pyo3_upscale_image_memory(
     timeout: f64,
     state: tauri::State<'_, PyO3UpscalerState>,
 ) -> Result<Vec<u8>, String> {
+    println!("🔍 Rust 收到参数:");
+    println!("  image_data.len(): {}", image_data.len());
+    println!("  model_name: {}", model_name);
+    println!("  scale: {}", scale);
+    println!("  tile_size: {}", tile_size);
+    println!("  noise_level: {}", noise_level);
+    println!("  timeout: {}", timeout);
     // 等待管理器初始化
     if let Err(e) = ensure_manager_ready(&state, 5000).await {
         return Err(e);

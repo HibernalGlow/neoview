@@ -55,16 +55,60 @@ class UpscaleManager:
         if self._initialized:
             return
             
-        self._initialized = True
-        self.tasks: Dict[int, UpscaleTask] = {}
+        self.tasks = {}
         self.task_id_counter = 0
         self.result_queue = queue.Queue()
         self.processing_thread = None
         self.running = False
         self.lock = threading.Lock()
+        self.sr_initialized = False
         
         if SR_AVAILABLE:
-            self._start_processing_thread()
+            self._init_sr_vulkan()
+            if self.sr_initialized:
+                self._start_processing_thread()
+    
+    def _init_sr_vulkan(self):
+        """初始化 sr_vulkan"""
+        try:
+            print("🔍 初始化 sr_vulkan...")
+            
+            # 初始化 sr_vulkan
+            sts = sr.init()
+            print(f"📊 sr.init() 返回: {sts}")
+            
+            is_cpu_model = False
+            if sts < 0:
+                print("⚠️ GPU 模式失败，使用 CPU 模式")
+                is_cpu_model = True
+            
+            # 获取 GPU 信息
+            gpu_list = sr.getGpuInfo()
+            print(f"📊 GPU 列表: {gpu_list}")
+            
+            # 设置 GPU (使用第一个 GPU)
+            gpu_id = 0
+            if not is_cpu_model and gpu_list and len(gpu_list) > 0:
+                gpu_id = 0
+                print(f"🎯 使用 GPU {gpu_id}")
+            else:
+                gpu_id = -1  # CPU 模式
+                print("🎯 使用 CPU 模式")
+            
+            # 初始化设置
+            sts = sr.initSet(gpuId=gpu_id)
+            print(f"📊 sr.initSet(gpuId={gpu_id}) 返回: {sts}")
+            
+            if sts >= 0:
+                self.sr_initialized = True
+                print("✅ sr_vulkan 初始化成功")
+            else:
+                print(f"❌ sr_vulkan 初始化失败: {sts}")
+                self.sr_initialized = False
+                
+        except Exception as e:
+            print(f"❌ sr_vulkan 初始化异常: {e}")
+            self.sr_initialized = False
     
     def _start_processing_thread(self):
         """启动处理线程"""
@@ -140,6 +184,9 @@ class UpscaleManager:
         if not SR_AVAILABLE:
             raise RuntimeError("sr_vulkan 模块不可用")
         
+        if not self.sr_initialized:
+            raise RuntimeError("sr_vulkan 未初始化")
+        
         with self.lock:
             self.task_id_counter += 1
             task_id = self.task_id_counter
@@ -159,8 +206,26 @@ class UpscaleManager:
         
         try:
             # 调用 sr_vulkan 添加任务
+            # 确保 tile_size 是有效值
+            valid_tile_sizes = [0, 64, 128, 256, 512]
+            if tile_size not in valid_tile_sizes:
+                print(f"⚠️ 无效的 tile_size: {tile_size}，使用默认值 0")
+                tile_size = 64
+            
+            print(f"🔍 Python add_task 调用 sr.add:")
+            print(f"  image_data len: {len(image_data)}")
+            print(f"  model: {model}")
+            print(f"  task_id: {task_id}")
+            print(f"  width: {width}")
+            print(f"  height: {height}")
+            print(f"  scale: {scale}")
+            print(f"  format_str: {format_str}")
+            print(f"  tile_size: {tile_size}")
+            print(f"  noise_level: {noise_level}")
+            
             if width > 0 and height > 0:
                 # 使用指定尺寸
+                print("📏 使用指定尺寸模式")
                 status = sr.add(
                     image_data,
                     model,
@@ -172,14 +237,58 @@ class UpscaleManager:
                 )
             else:
                 # 使用缩放倍数
-                status = sr.add(
-                    image_data,
-                    model,
-                    task_id,
-                    scale,
-                    format=format_str,
-                    tileSize=tile_size
-                )
+                print("📏 使用缩放倍数模式")
+                try:
+                    status = sr.add(
+                        image_data,
+                        model,
+                        task_id,
+                        scale,
+                        format=format_str,
+                        tileSize=tile_size
+                    )
+                    print(f"📊 sr.add 返回 status: {status}")
+                    
+                    if status <= 0:
+                        error = sr.getLastError() if hasattr(sr, 'getLastError') else f"未知错误 (status={status})"
+                        print(f"❌ sr.add 失败: {error}")
+                        # 尝试使用默认参数重试
+                        print("🔄 尝试使用默认 tileSize=0 重试...")
+                        status = sr.add(
+                            image_data,
+                            model,
+                            task_id,
+                            scale,
+                            format=format_str,
+                            tileSize=0
+                        )
+                        print(f"📊 sr.add 默认参数返回 status: {status}")
+                        if status <= 0:
+                            error2 = sr.getLastError() if hasattr(sr, 'getLastError') else f"未知错误 (status={status})"
+                            print(f"❌ sr.add 默认参数也失败: {error2}")
+                            raise RuntimeError(f"添加任务失败: {error2}")
+                        else:
+                            print("✅ sr.add 默认参数成功")
+                    else:
+                        print("✅ sr.add 调用成功")
+                except Exception as e:
+                    print(f"❌ sr.add 调用失败: {e}")
+                    print(f"❌ 错误类型: {type(e).__name__}")
+                    # 尝试使用默认参数重试
+                    print("🔄 尝试使用默认 tileSize=0 重试...")
+                    try:
+                        status = sr.add(
+                            image_data,
+                            model,
+                            task_id,
+                            scale,
+                            format=format_str,
+                            tileSize=0
+                        )
+                        print(f"✅ sr.add 默认参数调用成功，status: {status}")
+                    except Exception as e2:
+                        print(f"❌ sr.add 默认参数也失败: {e2}")
+                        raise e
             
             if status <= 0:
                 error = sr.getLastError() if hasattr(sr, 'getLastError') else "未知错误"
@@ -297,9 +406,9 @@ def get_manager() -> UpscaleManager:
     return _manager
 
 
-def is_available() -> bool:
-    """检查超分功能是否可用"""
-    return SR_AVAILABLE
+def get_sr_available() -> bool:
+    """检查 sr_vulkan 是否可用"""
+    return SR_AVAILABLE and get_manager().sr_initialized
 
 
 def upscale_image(

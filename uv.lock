@@ -1,0 +1,37 @@
+version = 1
+revision = 3
+requires-python = ">=3.12"
+
+[[package]]
+name = "neoview-tauri"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "sr-vulkan" },
+    { name = "sr-vulkan-model-waifu2x" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "sr-vulkan", specifier = ">=2.0.1.1" },
+    { name = "sr-vulkan-model-waifu2x", specifier = ">=1.0.1" },
+]
+
+[[package]]
+name = "sr-vulkan"
+version = "2.0.1.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/17/a9/90297011b5e8805a8594c4e55c2ce28032773ae524ab1d36d5196652d887/sr-vulkan-2.0.1.1.tar.gz", hash = "sha256:4697919171c84feec5adb1fbbb7a835b32f18f5645f910ac0735fb2c94b32135", size = 38742388, upload-time = "2025-10-21T01:36:29.475Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bd/9a/b9645ff7dce152c4c7cf8f7a7c894ae2e73b99e3c5ac6526dd150f7fd5e1/sr_vulkan-2.0.1.1-cp37-abi3-macosx_10_4_universal2.whl", hash = "sha256:eae274ed9831d9a466edffa1622cc6c9ff11c7b54d365a62bfacfd92f5c08bae", size = 9807501, upload-time = "2025-10-21T01:36:14.78Z" },
+    { url = "https://files.pythonhosted.org/packages/2f/bf/8da6f4f37cc9ad76a46a9722c5dc5ca8d3061e8471ece5a9488088037cee/sr_vulkan-2.0.1.1-cp37-abi3-manylinux_2_17_x86_64.whl", hash = "sha256:a00fa688fd74211a187b00fa83f05ac6ad65ec9e884263618f06eaf93597d383", size = 3647541, upload-time = "2025-10-21T01:36:17.383Z" },
+    { url = "https://files.pythonhosted.org/packages/5e/9a/9a5eb50fa27e0377be3c56fa803802053957d4900c8ff3d5eafb8b8d6fdd/sr_vulkan-2.0.1.1-cp37-abi3-win_amd64.whl", hash = "sha256:a93ef8d3ff6f3ce766a8df408bc06bac3122affc9e3d260d31a832dcc2c87c6b", size = 2595388, upload-time = "2025-10-21T01:36:19.603Z" },
+]
+
+[[package]]
+name = "sr-vulkan-model-waifu2x"
+version = "1.0.1"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/75/cb/aefb05235c68b8a72444779d56505a5047692f2c13c497e8131c8f710f29/sr_vulkan_model_waifu2x-1.0.1-py3-none-any.whl", hash = "sha256:64b535fc96ff392825535915ef3f03e4820b8c18aace861aa0d9b49b0628634b", size = 33479155, upload-time = "2025-10-15T08:35:16.515Z" },
+]

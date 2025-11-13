@@ -1,0 +1,10 @@
+[project]
+name = "neoview-tauri"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "sr-vulkan>=2.0.1.1",
+    "sr-vulkan-model-waifu2x>=1.0.1",
+]

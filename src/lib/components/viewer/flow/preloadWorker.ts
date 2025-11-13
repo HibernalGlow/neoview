@@ -25,6 +25,7 @@ export interface PreloadWorker {
 	notifyIdle(): void;
 	isRunning(): boolean;
 	pending(): number;
+	updateConcurrency(newConcurrency: () => number): void;
 }
 
 interface InternalState<Result extends PreloadTaskResult> {

@@ -108,7 +108,7 @@ export async function performUpscale(
  * 触发自动超分
  */
 export async function triggerAutoUpscale(
-	imageDataWithHash: ImageDataWithHash, 
+	imageDataWithHash: { data?: string; blob?: Blob; hash: string }, 
 	isPreload = false
 ): Promise<PerformUpscaleResult | undefined> {
 	try {

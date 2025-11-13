@@ -68,6 +68,8 @@ export class ImageLoader {
 	private preUpscaleProgress = 0;
 	private md5Cache = new Map<string, string>();
 	private hashPathIndex = new Map<string, string>();
+	private preloadMemoryCache = new Map<string, { url: string; blob: Blob }>();
+	private preloadedPageImages = new Map<number, { data: string; decoded: boolean }>();
 	
 	// 加载状态
 	private loading = false;
@@ -689,6 +691,8 @@ export class ImageLoader {
 		
 		// 清理其他状态
 		this.md5Cache = new Map();
+		this.preloadMemoryCache.clear();
+		this.preloadedPageImages.clear();
 		this.isPreloading = false;
 		bookStore.setUpscaledImage(null);
 		bookStore.setUpscaledImageBlob(null);
@@ -702,21 +706,7 @@ export class ImageLoader {
 	 * 获取内存预加载缓存（兼容旧接口）
 	 */
 	getPreloadMemoryCache(): Map<string, { url: string; blob: Blob }> {
-		const cache = new Map<string, { url: string; blob: Blob }>();
-		for (const [pageIndex, item] of this.blobCache) {
-			const pageInfo = bookStore.currentBook?.pages[pageIndex];
-			if (pageInfo) {
-				const pathKey = bookStore.currentBook?.type === 'archive' 
-					? `${bookStore.currentBook.path}::${pageInfo.path}` 
-					: pageInfo.path;
-				if (pathKey) {
-					// 使用路径生成 hash 作为键
-					const hash = `${pageIndex}_${pathKey.split('/').pop()}`;
-					cache.set(hash, { url: item.url, blob: item.blob });
-				}
-			}
-		}
-		return cache;
+		return this.preloadMemoryCache;
 	}
 
 	/**

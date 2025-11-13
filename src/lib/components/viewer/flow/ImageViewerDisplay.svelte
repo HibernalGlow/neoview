@@ -29,6 +29,9 @@
 	$effect(() => {
 		if (imageBitmap && canvas1) {
 			const ctx = canvas1.getContext('2d')!;
+			// 清理画布
+			ctx.clearRect(0, 0, canvas1.width, canvas1.height);
+			// 设置新尺寸并绘制
 			canvas1.width = imageBitmap.width;
 			canvas1.height = imageBitmap.height;
 			ctx.drawImage(imageBitmap, 0, 0);
@@ -38,6 +41,9 @@
 	$effect(() => {
 		if (imageBitmap2 && canvas2) {
 			const ctx = canvas2.getContext('2d')!;
+			// 清理画布
+			ctx.clearRect(0, 0, canvas2.width, canvas2.height);
+			// 设置新尺寸并绘制
 			canvas2.width = imageBitmap2.width;
 			canvas2.height = imageBitmap2.height;
 			ctx.drawImage(imageBitmap2, 0, 0);

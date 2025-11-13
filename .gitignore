@@ -24,7 +24,7 @@ dist-ssr
 __pycache__/thumbnail_preprocessor.cpython-311.pyc
 temp/*
 temp/test_images/test_image.png
-ref/*
+ref/upscale*
 
 /cache/pyo3-upscale
 /cache/pyo3-upscale/*

@@ -246,7 +246,8 @@ class UpscaleManager:
                         task_id,
                         scale,
                         format_str,
-                        0
+                        0,
+                        0  # 添加第7个参数
                     )
                     print(f"📊 sr.add 返回 status: {status}")
                     

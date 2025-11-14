@@ -573,6 +573,22 @@
     hideContextMenu();
   }
 
+  const contextMenuHandlers = {
+    addBookmark: addToBookmark,
+    openInExplorer,
+    openWithExternalApp,
+    cutItem,
+    copyItem,
+    deleteItem: deleteItemFromMenu,
+    moveToFolder,
+    renameItem,
+    openArchiveAsBook,
+    browseArchive,
+    copyPath: (item: FsItem) => {
+      navigator.clipboard.writeText(item.path);
+    }
+  };
+
   /**
    * 作为书籍打开压缩包
    */

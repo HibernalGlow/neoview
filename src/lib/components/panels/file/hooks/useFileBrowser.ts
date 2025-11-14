@@ -8,8 +8,8 @@ export function useFileBrowser() {
   const navigation = new NavigationHistory();
   const store = fileBrowserStore;
   
-  // 响应式状态
-  const state = $derived(store.state);
+  // 直接使用 store，不创建响应式状态
+  // 状态访问将在 FileBrowserPanel.svelte 中处理
   
   // 加载目录
   async function loadDirectory(path: string, options = { pushHistory: true }) {
@@ -178,32 +178,8 @@ export function useFileBrowser() {
     // Store
     store,
     
-    // 状态访问器
-    get currentPath() { return state.currentPath; },
-    get visibleItems() { return state.searchMode ? state.searchResults : state.items; },
-    get latestItems() { return state.items; },
-    get thumbnails() { return state.thumbnails; },
-    get loading() { return state.loading; },
-    get searching() { return state.searching; },
-    get viewMode() { return state.viewMode; },
-    get selectedItems() { return state.selectedItems; },
-    get isCheckMode() { return state.isCheckMode; },
-    get isDeleteMode() { return state.isDeleteMode; },
-    get bookmarks() { return state.bookmarks; },
-    get history() { return navigation.getHistory(); },
-    get searchState() { 
-      return { 
-        query: state.searchQuery, 
-        active: state.searchMode 
-      }; 
-    },
-    get contextMenuState() {
-      return {
-        visible: state.contextMenuVisible,
-        position: state.contextMenuPosition,
-        item: state.contextMenuItem
-      };
-    },
+    // 直接返回 store，让调用者处理响应式状态
+  store,
     
     // 方法
     selectFolder,

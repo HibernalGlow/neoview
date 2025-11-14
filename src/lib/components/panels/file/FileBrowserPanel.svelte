@@ -14,12 +14,15 @@
   const fileBrowser = useFileBrowser();
   const thumbnailQueue = useThumbnailQueue({ store: fileBrowser.store });
 
+  // 响应式状态
+  const state = $derived(fileBrowser.store.getState());
+
   // 监听文件列表变化，自动入队缩略图
   $effect(() => {
-    if (fileBrowser.latestItems.length > 0) {
-      thumbnailQueue.enqueueBatch(fileBrowser.latestItems, { 
+    if (state.items.length > 0) {
+      thumbnailQueue.enqueueBatch(state.items, { 
         priority: 'high', 
-        source: fileBrowser.currentPath 
+        source: state.currentPath 
       });
     }
   });

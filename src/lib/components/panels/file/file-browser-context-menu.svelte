@@ -1,7 +1,7 @@
 <!-- file-browser-context-menu.svelte - 右键菜单 -->
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { flyAndScale } from 'svelte/transition';
+  import { fly, scale } from 'svelte/transition';
   import { File, ExternalLink, Copy, Scissors, FolderPlus, Edit3, Trash2, Archive, Star, Info } from '@lucide/svelte';
   
   interface Props {
@@ -44,7 +44,7 @@
     <div 
       class="context-menu"
       style="left: {position.x}px; top: {position.y}px;"
-      transition:flyAndScale
+      
     >
       <!-- 打开操作 -->
       <div class="menu-section">

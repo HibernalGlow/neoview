@@ -247,8 +247,8 @@ impl PyO3Upscaler {
         // 调用内存流版本
         // 对于文件路径版本，我们需要先获取图像尺寸
         // 这里暂时使用 0，让 Python 端来获取实际尺寸
-        let result = self.upscale_image_memory(&image_data, model, _timeout, 0, 0)?;
-        
+        let result = self.upscale_image_memory(&image_data, model, _timeout, 0, 0, None)?;
+
         Ok(result)
     }
     

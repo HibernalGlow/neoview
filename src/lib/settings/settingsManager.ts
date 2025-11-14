@@ -26,6 +26,8 @@ export interface NeoViewSettings {
     preloadCount: number;
     enableSuperResolution: boolean;
     superResolutionModel: string | null;
+    currentImageUpscaleEnabled: boolean;
+    useCachedFirst: boolean;
   };
   view: {
     defaultZoomMode: ZoomMode;
@@ -220,7 +222,7 @@ export class SettingsManager {
   importSettings(json: string): boolean {
     try {
       const data = JSON.parse(json);
-      let cfg: any = null;
+      let cfg: Partial<NeoViewSettings> | null = null;
       if (data.format && data.config) {
         cfg = data.config;
       } else {

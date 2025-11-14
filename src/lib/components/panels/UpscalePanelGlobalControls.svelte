@@ -12,7 +12,9 @@
 		conditionalMinWidth = $bindable(0),
 		conditionalMinHeight = $bindable(0),
 		currentImageUpscaleEnabled = $bindable(false),
-		useCachedFirst = $bindable(true)
+		useCachedFirst = $bindable(true),
+		preloadPages = $bindable(3),
+		backgroundConcurrency = $bindable(2)
 	} = $props();
 
 	// 处理开关变化
@@ -33,13 +35,41 @@
 		</div>
 	</div>
 
-	<div class="setting-row">
-		<div class="flex items-center gap-2">
-			<Switch 
-				bind:checked={preUpscaleEnabled} 
-				onchange={handleSettingChange} 
-			/>
-			<Label>开启预超分</Label>
+	<div class="setting-row items-start">
+		<div class="flex flex-col gap-2">
+			<div class="flex items-center gap-2">
+				<Switch 
+					bind:checked={preUpscaleEnabled} 
+					onchange={handleSettingChange} 
+				/>
+				<Label>开启预超分</Label>
+			</div>
+			<div class="flex gap-4 pl-6 text-sm text-gray-500">
+				<label class="flex items-center gap-2">
+					<span>预超分页数</span>
+					<input
+						type="number"
+						class="input-number w-20"
+						min="0"
+						max="10"
+						bind:value={preloadPages}
+						onchange={handleSettingChange}
+						disabled={!preUpscaleEnabled}
+					/>
+				</label>
+				<label class="flex items-center gap-2">
+					<span>并发数</span>
+					<input
+						type="number"
+						class="input-number w-20"
+						min="1"
+						max="4"
+						bind:value={backgroundConcurrency}
+						onchange={handleSettingChange}
+						disabled={!preUpscaleEnabled}
+					/>
+				</label>
+			</div>
 		</div>
 	</div>
 

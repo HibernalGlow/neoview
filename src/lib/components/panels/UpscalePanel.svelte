@@ -6,7 +6,7 @@
 	 */
 	import { Sparkles, AlertCircle } from '@lucide/svelte';
 	import { onMount, createEventDispatcher } from 'svelte';
-	import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
+	// Toast 已改为控制台输出，避免右上角弹窗干扰
 	import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
@@ -315,11 +315,11 @@
 				await updateCacheStats();
 			} else {
 				console.warn('⚠️ PyO3 超分功能不可用，请检查 sr_vulkan 模块');
-				showErrorToast('sr_vulkan 模块不可用，请确保已安装: pip install sr_vulkan');
+				console.error('[UpscalePanel] sr_vulkan 模块不可用，请确保已安装: pip install sr_vulkan');
 			}
 		} catch (error) {
 			console.error('❌ 初始化 PyO3 超分管理器失败:', error);
-			showErrorToast('初始化超分功能失败: ' + (error instanceof Error ? error.message : String(error)));
+			console.error('[UpscalePanel] 初始化超分功能失败:', error instanceof Error ? error.message : String(error));
 		}
 	});
 
@@ -379,18 +379,31 @@
 			const settings = gatherPanelSettings();
 			persistUpscalePanelSettings(settings);
 			emitUpscaleSettings(settings);
-			showSuccessToast('模型设置已应用');
+			console.log('[UpscalePanel] 模型设置已应用', {
+				model: selectedModel,
+				scale,
+				tileSize,
+				noiseLevel
+			});
 		} catch (error) {
-			console.error('应用模型设置失败:', error);
-			showErrorToast('应用设置失败');
+			console.error('[UpscalePanel] 应用模型设置失败:', error);
 		}
 	}
 
 	function handleGlobalControlsChange() {
 		console.log('🔄 处理开关设置变化');
 		const settings = gatherPanelSettings();
-		persistUpscaleSettings(settings);
+		persistUpscalePanelSettings(settings);
 		emitUpscaleSettings(settings);
+		
+		// 即时更新预加载配置
+		const preloadManager = (window as any).preloadManager;
+		if (preloadManager) {
+			preloadManager.updateImageLoaderConfig({
+				preloadPages: settings.preloadPages,
+				maxThreads: settings.backgroundConcurrency
+			});
+		}
 	}
 
 	/**
@@ -456,12 +469,12 @@
 	 */
 	async function performUpscale() {
 		if (!currentImagePath) {
-			showErrorToast('没有选中的图片');
+			console.error('[UpscalePanel] 没有选中的图片');
 			return;
 		}
 
 		if (isProcessing) {
-			showErrorToast('正在处理中，请稍候');
+			console.error('[UpscalePanel] 正在处理中，请稍候');
 			return;
 		}
 
@@ -508,7 +521,10 @@
 					bookStore.setCurrentPageUpscaled(true);
 					
 					const processingTime = (Date.now() - startTime) / 1000;
-					showSuccessToast(`使用缓存！第 ${bookStore.currentPageIndex + 1} 页，耗时 ${processingTime.toFixed(1)}s`);
+					console.log('[UpscalePanel] 使用缓存！', {
+					page: bookStore.currentPageIndex + 1,
+					time: processingTime.toFixed(1)
+				});
 					
 					// 直接使用内存缓存
 					upscaledImageUrl = cached.url;
@@ -545,14 +561,17 @@
 			bookStore.setCurrentPageUpscaled(true);
 			
 			const processingTime = (Date.now() - startTime) / 1000;
-			showSuccessToast(`超分完成！第 ${bookStore.currentPageIndex + 1} 页，耗时 ${processingTime.toFixed(1)}s`);
+			console.log('[UpscalePanel] 超分完成', {
+					page: bookStore.currentPageIndex + 1,
+					time: processingTime.toFixed(1)
+				});
 			
 			// 检查 imageHash 是否存在（已在上面声明）
 			if (!imageHash) {
-				console.warn('无法获取当前页 hash，跳过缓存保存');
+				console.warn('[UpscalePanel] 无法获取当前页 hash，跳过缓存保存');
 				error = '无法获取页面哈希';
 				status = '超分失败';
-				showErrorToast('超分失败: 无法获取页面哈希');
+				console.error('[UpscalePanel] 超分失败: 无法获取页面哈希');
 				return;
 			}
 
@@ -560,10 +579,10 @@
 			await handleUpscaleResult(imageHash, blob, upscaledImageUrl, result);
 			
 		} catch (err) {
-			console.error('超分失败:', err);
+			console.error('[UpscalePanel] 超分失败:', err);
 			error = err instanceof Error ? err.message : String(err);
 			status = '超分失败';
-			showErrorToast('超分失败: ' + error);
+			console.error('[UpscalePanel] 超分失败:', error);
 		} finally {
 			clearInterval(timer);
 			isProcessing = false;
@@ -712,10 +731,9 @@
 		try {
 			const removed = await pyo3UpscaleManager.cleanupCache(30);
 			await updateCacheStats();
-			showSuccessToast(`已清理 ${removed} 个缓存文件`);
+			console.log('[UpscalePanel] 已清理缓存文件', { removed });
 		} catch (error) {
-			console.error('清理缓存失败:', error);
-			showErrorToast('清理缓存失败');
+			console.error('[UpscalePanel] 清理缓存失败:', error);
 		}
 	}
 
@@ -725,7 +743,7 @@
 	async function saveUpscaledImage() {
 		try {
 			if (!lastUpscaledBlob) {
-				showErrorToast('没有可保存的超分结果');
+				console.error('[UpscalePanel] 没有可保存的超分结果');
 				return;
 			}
 
@@ -749,10 +767,9 @@
 			// 3. 写入文件
 			await invoke('write_binary_file', { path: savePath, contents: bytes });
 
-			showSuccessToast(`已保存到: ${savePath}`);
+			console.log('[UpscalePanel] 超分结果已保存', { path: savePath });
 		} catch (err) {
-			console.error('保存超分图失败:', err);
-			showErrorToast('保存超分图失败');
+			console.error('[UpscalePanel] 保存超分图失败:', err);
 		}
 	}
 
@@ -795,6 +812,8 @@
 		bind:conditionalMinHeight
 		bind:currentImageUpscaleEnabled
 		bind:useCachedFirst
+		bind:preloadPages
+		bind:backgroundConcurrency
 		on:change={handleGlobalControlsChange}
 	/>
 

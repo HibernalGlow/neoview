@@ -1,4 +1,5 @@
 import { setUpscaleSettings, DEFAULT_UPSCALE_SETTINGS } from '$lib/utils/upscale/settings';
+import { settingsManager } from '$lib/settings/settingsManager';
 import { invoke } from '@tauri-apps/api/core';
 import type { UpscaleSettings } from '$lib/utils/upscale/settings';
 
@@ -20,10 +21,27 @@ export interface UpscalePanelEventDetail {
 
 const STORAGE_KEY = 'pyo3_upscale_settings';
 
+const initialImageSettings = (() => {
+	try {
+		const imageSettings = settingsManager.getSettings().image ?? {};
+		return {
+			enableSuperResolution:
+				imageSettings.enableSuperResolution ?? DEFAULT_UPSCALE_SETTINGS.currentImageUpscaleEnabled,
+			useCachedFirst: imageSettings.useCachedFirst ?? DEFAULT_UPSCALE_SETTINGS.useCachedFirst
+		};
+	} catch (error) {
+		console.warn('无法读取全局图像设置，使用默认值', error);
+		return {
+			enableSuperResolution: DEFAULT_UPSCALE_SETTINGS.currentImageUpscaleEnabled,
+			useCachedFirst: DEFAULT_UPSCALE_SETTINGS.useCachedFirst
+		};
+	}
+})();
+
 export const defaultPanelSettings: UpscalePanelSettings = {
 	...DEFAULT_UPSCALE_SETTINGS,
-	currentImageUpscaleEnabled: settings.image.enableSuperResolution || false,
-	useCachedFirst: settings.image.useCachedFirst || false,
+	currentImageUpscaleEnabled: initialImageSettings.enableSuperResolution,
+	useCachedFirst: initialImageSettings.useCachedFirst,
 	preloadPages: 3,
 	backgroundConcurrency: 2,
 	showPanelPreview: false

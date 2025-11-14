@@ -365,11 +365,11 @@
 					{#each bookStore.currentBook.pages as page, index (page.path)}
 						<button
 							class="flex-shrink-0 rounded overflow-hidden border-2 transition-colors relative group
-								{index === bookStore.currentPageIndex && bookStore.getPageUpscaleStatus(index) === 'done' ? 'border-green-500' : 
-								 index === bookStore.currentPageIndex ? 'border-primary' : 
-								 bookStore.getPageUpscaleStatus(index) === 'preupscaled' || bookStore.getPageUpscaleStatus(index) === 'done' ? 'border-yellow-400' : 
-									'border-transparent'}
-								hover:border-primary/50"
+								{index === bookStore.currentPageIndex ? 'outline outline-2 outline-yellow-400' : ''}
+								{bookStore.getPageUpscaleStatus(index) === 'preupscaled' ? 'ring-2 ring-blue-500' : ''}
+								{bookStore.getPageUpscaleStatus(index) === 'done' ? 'ring-2 ring-green-500' : ''}
+								{bookStore.getPageUpscaleStatus(index) === 'error' ? 'ring-2 ring-red-500' : ''}
+								border-gray-300 hover:border-primary/50"
 							style="width: auto; height: {$bottomThumbnailBarHeight - 40}px; min-width: 60px; max-width: 120px;"
 							onclick={() => bookStore.navigateToPage(index)}
 							title="Page {index + 1}"
@@ -397,6 +397,15 @@
 							>
 								{index + 1}
 							</div>
+							
+							<!-- 状态角标 -->
+							{#if bookStore.getPageUpscaleStatus(index) === 'done'}
+								<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-green-500" title="已超分" />
+							{:else if bookStore.getPageUpscaleStatus(index) === 'preupscaled'}
+								<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-blue-500" title="已预超分" />
+							{:else if bookStore.getPageUpscaleStatus(index) === 'error'}
+								<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-red-500" title="超分失败" />
+							{/if}
 						</button>
 					{/each}
 				</div>

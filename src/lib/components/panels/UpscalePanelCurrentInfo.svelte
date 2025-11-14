@@ -42,9 +42,9 @@
 			status = '处理失败';
 			statusClass = 'text-red-600';
 			progressColorClass = 'bg-red-500';
-		} else if (progress === 100) {
+		} else if (progress === 100 || status === '缓存命中') {
 			isProcessing = false;
-			status = '转换完成';
+			status = status === '缓存命中' ? '缓存命中' : '转换完成';
 			statusClass = 'text-green-600';
 			progressColorClass = 'bg-green-500';
 		} else {

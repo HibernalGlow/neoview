@@ -58,7 +58,7 @@ def _needs_transcode(image_data: bytes) -> bool:
     return False
 
 def _transcode_to_png(image_data: bytes) -> bytes:
-    """将图像转换为 PNG 格式"""
+    """将图像转换为无损 WebP 格式以减小体积"""
     if not PIL_AVAILABLE:
         raise RuntimeError("Pillow 模块不可用，无法转换图像格式")
     
@@ -71,7 +71,7 @@ def _transcode_to_png(image_data: bytes) -> bytes:
                 img = img.convert('RGB')
             
             with io.BytesIO() as buf:
-                img.save(buf, format='PNG')
+                img.save(buf, format='WEBP', lossless=True, quality=100)
                 return buf.getvalue()
     except Exception as e:
         raise RuntimeError(f"图像格式转换失败: {str(e)}")

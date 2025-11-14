@@ -115,11 +115,20 @@
 				console.log('超分开始事件触发');
 			},
 			onUpscaleComplete: (detail) => {
-				const { imageData: upscaledImageData, imageBlob, originalImageHash, background, pageIndex } = detail;
+				const { imageData: upscaledImageData, imageBlob, originalImageHash, background, pageIndex, writeToMemoryCache } = detail;
 				
 				// 确定目标页面索引，优先使用事件中的 pageIndex
 				const targetIndex = typeof pageIndex === 'number' ? pageIndex : bookStore.currentPageIndex;
 				const isCurrentPage = targetIndex === bookStore.currentPageIndex;
+				
+				// 写入内存缓存（如果请求）
+				if (writeToMemoryCache && upscaledImageData && imageBlob && originalImageHash) {
+					if (preloadManager) {
+						const memCache = preloadManager.getPreloadMemoryCache();
+						memCache.set(originalImageHash, { url: upscaledImageData, blob: imageBlob });
+						console.log('超分结果已写入内存缓存，MD5:', originalImageHash);
+					}
+				}
 				
 				// 非后台任务且是当前页时，才更新显示和状态
 				if (!background && isCurrentPage) {

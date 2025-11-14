@@ -109,14 +109,19 @@ export async function performUpscale(
 		// 这里不再重复设置，避免冗余
 		
 		// 触发超分完成事件
-		window.dispatchEvent(new CustomEvent('upscale-complete', {
-			detail: {
-				imageData: resultUrl,
-				imageBlob: resultBlob,
-				originalImageHash: imageHash,
-				background: isBackground
-			}
-		}));
+		const eventDetail = {
+			imageData: resultUrl,
+			imageBlob: resultBlob,
+			originalImageHash: imageHash,
+			background: isBackground
+		};
+		
+		// 非后台任务时，额外写入内存缓存（通过事件传递给 ImageLoader）
+		if (!isBackground) {
+			eventDetail['writeToMemoryCache'] = true;
+		}
+		
+		window.dispatchEvent(new CustomEvent('upscale-complete', { detail: eventDetail }));
 		
 		// 完成超分（非后台任务都需要更新状态）
 		if (!isBackground) {

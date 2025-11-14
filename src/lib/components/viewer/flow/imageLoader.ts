@@ -493,12 +493,60 @@ export class ImageLoader {
 				}
 			}
 
-			// 检查是否有对应的超分缓存
-			const hasCache = await checkUpscaleCache(imageDataWithHash, true);
+			// 新的缓存检查顺序：内存 -> 磁盘 -> 现场超分
+			const { hash: imageHash } = imageDataWithHash;
+			
+			// 1. 先检查内存缓存
+			const memCache = this.preloadMemoryCache.get(imageHash);
+			if (memCache) {
+				console.log('使用内存超分缓存，页码:', currentPageIndex + 1);
+				// 直接使用内存中的超分结果
+				bookStore.setUpscaledImage(memCache.url);
+				bookStore.setUpscaledImageBlob(memCache.blob);
+				bookStore.setPageUpscaleStatus(currentPageIndex, 'done');
+				// 触发事件通知 Viewer 替换显示
+				window.dispatchEvent(new CustomEvent('upscale-complete', {
+					detail: {
+						imageData: memCache.url,
+						imageBlob: memCache.blob,
+						originalImageHash: imageHash,
+						background: false,
+						pageIndex: currentPageIndex
+					}
+				}));
+				return; // 使用缓存，直接返回
+			}
 
-			// 如果没有缓存且全局超分开关开启，则自动开始超分
-			if (!hasCache) {
+			// 2. 内存没有，尝试从磁盘加载到内存
+			const diskLoaded = await this.loadDiskUpscaleToMemory(imageHash);
+			if (diskLoaded) {
+				console.log('从磁盘加载超分结果到内存，页码:', currentPageIndex + 1);
+				const diskCache = this.preloadMemoryCache.get(imageHash);
+				if (diskCache) {
+					bookStore.setUpscaledImage(diskCache.url);
+					bookStore.setUpscaledImageBlob(diskCache.blob);
+					bookStore.setPageUpscaleStatus(currentPageIndex, 'done');
+					// 触发事件通知 Viewer 替换显示
+					window.dispatchEvent(new CustomEvent('upscale-complete', {
+						detail: {
+							imageData: diskCache.url,
+							imageBlob: diskCache.blob,
+							originalImageHash: imageHash,
+							background: false,
+							pageIndex: currentPageIndex
+						}
+					}));
+					return; // 磁盘加载成功，直接返回
+				}
+			}
+
+			// 3. 内存和磁盘都没有，检查自动超分开关并现场超分
+			const autoUpscaleEnabled = await getAutoUpscaleEnabled();
+			if (autoUpscaleEnabled) {
+				console.log('内存和磁盘都没有缓存，开始现场超分，页码:', currentPageIndex + 1);
 				await triggerAutoUpscale(imageDataWithHash);
+			} else {
+				console.log('自动超分开关已关闭，不进行现场超分');
 			}
 
 			// 触发预加载后续页面
@@ -719,6 +767,39 @@ export class ImageLoader {
 			total: this.totalPreUpscalePages,
 			pages: preUpscaledPages
 		};
+	}
+
+	/**
+	 * 从磁盘加载超分结果到内存缓存
+	 */
+	async loadDiskUpscaleToMemory(imageHash: string): Promise<boolean> {
+		try {
+			// 检查磁盘缓存
+			const meta: any = await invoke('check_upscale_cache', {
+				imageHash,
+				thumbnailPath: 'D:\\temp\\neoview_thumbnails_test',
+				max_age_seconds: 8 * 3600 // 8小时
+			});
+
+			if (meta && meta.path) {
+				// 读取文件
+				const bytes = await invoke<number[]>('read_binary_file', { filePath: meta.path });
+				const arr = new Uint8Array(bytes);
+				const blob = new Blob([arr], { type: 'image/webp' });
+				const url = URL.createObjectURL(blob);
+				
+				// 写入内存缓存
+				this.preloadMemoryCache.set(imageHash, { url, blob });
+				
+				console.log('从磁盘加载超分结果到内存:', imageHash);
+				return true;
+			}
+			
+			return false;
+		} catch (error) {
+			console.warn('从磁盘加载超分结果失败:', error);
+			return false;
+		}
 	}
 
 	

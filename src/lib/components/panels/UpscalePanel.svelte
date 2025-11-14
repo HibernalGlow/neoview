@@ -472,53 +472,49 @@
 				throw new Error('没有当前图片');
 			}
 
-			// 首先检查缓存
-			console.log('🔍 检查超分缓存...');
-			const cachedResult = await checkUpscaleCache();
+			// 检查当前页是否已有内存缓存
+			console.log('🔍 检查内存超分缓存...');
+			const imageHash = await getCurrentImageHash();
 			
-			let result: Uint8Array;
-			
-			if (cachedResult) {
-				console.log('✅ 使用缓存数据，无需重新生成');
-				result = cachedResult;
-				progress = 100;
-				status = '缓存命中';
+			// 通过全局 window 对象获取 preloadManager
+			const preloadManager = (window as any).preloadManager;
+			if (preloadManager) {
+				const memCache = preloadManager.getPreloadMemoryCache();
+				const cached = memCache.get(imageHash);
 				
-				// 设置当前页面超分状态
-				bookStore.setCurrentPageUpscaled(true);
-				
-				const processingTime = (Date.now() - startTime) / 1000;
-				showSuccessToast(`使用缓存！第 ${bookStore.currentPageIndex + 1} 页，耗时 ${processingTime.toFixed(1)}s`);
-				
-				// 直接创建 blob，用于传递给 ImageViewer 和显示
-				const blob = new Blob([result as BlobPart], { type: 'image/webp' });
-				upscaledImageUrl = URL.createObjectURL(blob);
-				
-				// 获取当前页面的 hash 和索引
-				const imageHash = await getCurrentImageHash();
-				const currentPageIndex = bookStore.currentPageIndex;
-				
-				// 触发事件通知 ImageViewer，传递 blob 数据
-				dispatch('upscale-complete', {
-					originalPath: currentImagePath,
-					upscaledBlob: blob,
-					upscaledData: result
-				});
-				
-				// 同时触发全局 upscale-complete 事件（与 preloadRuntime.performUpscale 格式一致）
-				console.log('🔥 UpscalePanel (缓存命中) 触发全局 upscale-complete 事件，页码:', currentPageIndex + 1);
-				window.dispatchEvent(new CustomEvent('upscale-complete', {
-					detail: {
-						imageData: upscaledImageUrl,
-						imageBlob: blob,
-						originalImageHash: imageHash,
-						background: false,
-						pageIndex: currentPageIndex
-					}
-				}));
-				
-				return; // 缓存命中，直接返回
+				if (cached) {
+					console.log('✅ 使用内存缓存数据，无需重新生成');
+					progress = 100;
+					status = '缓存命中';
+					
+					// 设置当前页面超分状态
+					bookStore.setCurrentPageUpscaled(true);
+					
+					const processingTime = (Date.now() - startTime) / 1000;
+					showSuccessToast(`使用缓存！第 ${bookStore.currentPageIndex + 1} 页，耗时 ${processingTime.toFixed(1)}s`);
+					
+					// 直接使用内存缓存
+					upscaledImageUrl = cached.url;
+					
+					// 触发全局事件通知 ImageViewer 替换显示
+					const currentPageIndex = bookStore.currentPageIndex;
+					console.log('🔥 UpscalePanel (内存缓存命中) 触发全局 upscale-complete 事件，页码:', currentPageIndex + 1);
+					window.dispatchEvent(new CustomEvent('upscale-complete', {
+						detail: {
+							imageData: cached.url,
+							imageBlob: cached.blob,
+							originalImageHash: imageHash,
+							background: false,
+							pageIndex: currentPageIndex,
+							writeToMemoryCache: false // 已经在内存中，不需要再写
+						}
+					}));
+					
+					return; // 内存缓存命中，直接返回
+				}
 			}
+			
+			console.log('内存中没有缓存，开始执行超分...');
 
 			// 获取图像数据 - 从 ImageViewer 的缓存中获取已加载的 blob
 			const imageData = await getCurrentImageBlob();
@@ -594,6 +590,14 @@
 				upscaledData: result
 			});
 			
+			// 写入内存缓存
+			const preloadManager = (window as any).preloadManager;
+			if (preloadManager) {
+				const memCache = preloadManager.getPreloadMemoryCache();
+				memCache.set(imageHash, { url: upscaledImageUrl, blob });
+				console.log('UpscalePanel 超分结果已写入内存缓存');
+			}
+			
 			// 同时触发全局 upscale-complete 事件（与 preloadRuntime.performUpscale 格式一致）
 			console.log('🔥 UpscalePanel 触发全局 upscale-complete 事件，页码:', currentPageIndex + 1);
 			window.dispatchEvent(new CustomEvent('upscale-complete', {
@@ -602,7 +606,8 @@
 					imageBlob: blob,
 					originalImageHash: imageHash,
 					background: false,
-					pageIndex: currentPageIndex
+					pageIndex: currentPageIndex,
+					writeToMemoryCache: false // 已经写入内存缓存
 				}
 			}));
 			

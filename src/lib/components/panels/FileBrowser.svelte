@@ -15,6 +15,9 @@
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
   import { homeDir } from '@tauri-apps/api/path';
   import { itemIsDirectory, itemIsImage, toRelativeKey } from '$lib/utils/thumbnailManager';
+  import FileBrowserToolbar from './file/components/FileBrowserToolbar.svelte';
+  import FileBrowserSearch from './file/components/FileBrowserSearch.svelte';
+  import FileBrowserList from './file/components/FileBrowserList.svelte';
 
 
   // 使用全局状态
@@ -41,6 +44,8 @@
   let isDeleteMode = $state(false);
   let viewMode = $state<'list' | 'thumbnails'>('list'); // 列表 or 缩略图视图
   let selectedItems = $state<Set<string>>(new Set());
+  let hasHomepage = $state(false);
+  let canNavigateBack = $state(false);
 
   
 
@@ -80,6 +85,7 @@
       currentArchivePath = state.currentArchivePath;
       selectedIndex = state.selectedIndex;
       thumbnails = state.thumbnails;
+      canNavigateBack = state.isArchiveView || Boolean(state.currentPath);
     });
     
     return unsubscribe;
@@ -116,6 +122,7 @@
             console.log('📍 未设置主页，本次使用系统 Home 目录作为主页:', homepage);
             // 将该值保存为主页以便下次启动使用
             setHomepage(homepage);
+            hasHomepage = true;
           }
         } catch (e) {
           console.warn('⚠️ 无法获取系统 Home 目录:', e);
@@ -125,6 +132,7 @@
       if (homepage) {
         console.log('📍 加载主页路径:', homepage);
         navigationHistory.setHomepage(homepage);
+        hasHomepage = true;
         // 注意：不在此处 await 阻塞 UI，如果需要可以等待
         await loadDirectory(homepage);
       } else {

@@ -1,9 +1,10 @@
 <script lang="ts">
   import { Search } from '@lucide/svelte';
 
-  export type SearchHistoryItem = { query: string; timestamp: number };
+  type SearchHistoryItem = { query: string; timestamp: number };
 
   export let searchHistory: SearchHistoryItem[] = [];
+  export let className = '';
   export let onSelect: (item: SearchHistoryItem) => void = () => {};
   export let onRemoveItem: (item: SearchHistoryItem) => void = () => {};
   export let onClearAll: () => void = () => {};
@@ -19,7 +20,7 @@
   };
 </script>
 
-<div class="search-history absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+<div class={`search-history absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto ${className}`}>
   {#if searchHistory.length > 0}
     {#each searchHistory as item (item.query)}
       <div

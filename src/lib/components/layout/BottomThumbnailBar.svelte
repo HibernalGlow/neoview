@@ -363,11 +363,15 @@
 			<div class="px-2 pb-2 h-[calc(100%-theme(spacing.8))] overflow-hidden">
 				<div class="flex gap-2 overflow-x-auto h-full pb-1 items-center" onscroll={handleScroll}>
 					{#each bookStore.currentBook.pages as page, index (page.path)}
+						{@const status = bookStore.getPageUpscaleStatus(index);}
+						{@const isCurrentPage = index === bookStore.currentPageIndex;}
 						<button
-							class="flex-shrink-0 rounded overflow-hidden border-2 {index ===
-							bookStore.currentPageIndex
-								? 'border-primary'
-								: 'border-transparent'} hover:border-primary/50 transition-colors relative group"
+							class="flex-shrink-0 rounded overflow-hidden border-2 transition-colors relative group
+								{isCurrentPage && status === 'done' ? 'border-green-500' : 
+								 isCurrentPage ? 'border-primary' : 
+									status === 'preupscaled' || status === 'done' ? 'border-yellow-400' : 
+									'border-transparent'}
+								hover:border-primary/50"
 							style="width: auto; height: {$bottomThumbnailBarHeight - 40}px; min-width: 60px; max-width: 120px;"
 							onclick={() => bookStore.navigateToPage(index)}
 							title="Page {index + 1}"

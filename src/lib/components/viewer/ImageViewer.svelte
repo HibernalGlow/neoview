@@ -118,10 +118,11 @@
 				if (!background) {
 					// 清掉当前页的 imageBitmap，强制使用 <img> 渲染
 					imageBitmap = null;
-					imageBitmap2 = null;
 					// 将 imageData 替换为超分 URL
 					imageData = upscaledImageData;
-					imageData2 = null; // 双页模式的第二张图也清掉
+					
+					// 注意：不要清空 imageBitmap2 和 imageData2
+					// 双页模式下，第二页应该保持不变
 				}
 				
 				// 更新当前页面状态为已完成

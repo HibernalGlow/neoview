@@ -488,7 +488,7 @@
 				bookStore.setCurrentPageUpscaled(true);
 				
 				const processingTime = (Date.now() - startTime) / 1000;
-				showSuccessToast(`使用缓存！耗时 ${processingTime.toFixed(1)}s`);
+				showSuccessToast(`使用缓存！第 ${bookStore.currentPageIndex + 1} 页，耗时 ${processingTime.toFixed(1)}s`);
 				
 				// 直接创建 blob，用于传递给 ImageViewer 和显示
 				const blob = new Blob([result as BlobPart], { type: 'image/webp' });
@@ -506,6 +506,7 @@
 				});
 				
 				// 同时触发全局 upscale-complete 事件（与 preloadRuntime.performUpscale 格式一致）
+				console.log('🔥 UpscalePanel (缓存命中) 触发全局 upscale-complete 事件，页码:', currentPageIndex + 1);
 				window.dispatchEvent(new CustomEvent('upscale-complete', {
 					detail: {
 						imageData: upscaledImageUrl,
@@ -546,7 +547,7 @@
 			status = '转换完成';
 			
 			const processingTime = (Date.now() - startTime) / 1000;
-			showSuccessToast(`超分完成！耗时 ${processingTime.toFixed(1)}s`);
+			showSuccessToast(`第 ${bookStore.currentPageIndex + 1} 页超分完成！耗时 ${processingTime.toFixed(1)}s`);
 			
 			// 设置当前页面超分状态
 			bookStore.setCurrentPageUpscaled(true);
@@ -594,6 +595,7 @@
 			});
 			
 			// 同时触发全局 upscale-complete 事件（与 preloadRuntime.performUpscale 格式一致）
+			console.log('🔥 UpscalePanel 触发全局 upscale-complete 事件，页码:', currentPageIndex + 1);
 			window.dispatchEvent(new CustomEvent('upscale-complete', {
 				detail: {
 					imageData: upscaledImageUrl,

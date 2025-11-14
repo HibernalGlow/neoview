@@ -1,6 +1,5 @@
 <script lang="ts">
   import { Folder, File, Image, Trash2, RefreshCw, FileArchive, FolderOpen, Home, ChevronLeft, ChevronRight, ChevronUp, CheckSquare, Grid3x3, List, MoreVertical, Search, ChevronDown, Settings, AlertCircle, Bookmark, Star } from '@lucide/svelte';
-  import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
   import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
   import { onMount } from 'svelte';
   import { fileBrowserService, navigationHistory } from './file/services/fileBrowserService';
@@ -24,6 +23,12 @@
     setClipboardItem,
     pasteClipboardItem,
   } from './file/services/contextMenuService';
+  import {
+    sortFsItems,
+    getSortConfig,
+    setSortConfig,
+    type SortConfig,
+  } from './file/services/sortService';
 
 
   // 使用全局状态
@@ -50,6 +55,7 @@
   let selectedItems = $state<Set<string>>(new Set());
   let hasHomepage = $state(false);
   let canNavigateBack = $state(false);
+  let sortConfig = $state<SortConfig>(getSortConfig());
 
   
 
@@ -177,12 +183,12 @@
         maxResults: 100,
       };
       
-      searchResults = await fileBrowserService.searchFiles(currentPath, query, options);
-      console.log(`✅ 搜索完成，找到 ${searchResults.length} 个结果`);
-      console.log('搜索结果详情:', searchResults);
+      const results = await fileBrowserService.searchFiles(currentPath, query, options);
+      console.log(`✅ 搜索完成，找到 ${results.length} 个结果`);
+      console.log('搜索结果详情:', results);
       
       // 显示每个结果的详细信息
-      searchResults.forEach((item, index) => {
+      results.forEach((item, index) => {
         console.log(`[${index + 1}] ${item.isDir ? '📁' : '📄'} ${item.name}`);
         console.log(`    路径: ${item.path}`);
         console.log(`    大小: ${formatFileSize(item.size, item.isDir)}`);
@@ -191,16 +197,10 @@
       });
 
       // 搜索完成后自动应用默认排序（路径升序）
-      if (searchResults.length > 0) {
-        const sorted = [...searchResults].sort((a, b) => {
-          // 文件夹始终在前面
-          if (a.isDir !== b.isDir) {
-            return a.isDir ? -1 : 1;
-          }
-          // 按路径升序排序
-          return a.path.localeCompare(b.path, undefined, { numeric: true });
-        });
-        searchResults = sorted;
+      if (results.length > 0) {
+        searchResults = sortFsItems(results, sortConfig);
+      } else {
+        searchResults = [];
       }
     } catch (err) {
       console.error('❌ 搜索失败:', err);
@@ -373,7 +373,8 @@
       const loadedItems = await fileBrowserService.browseDirectory(path);
       console.log('✅ Loaded', loadedItems.length, 'items:', loadedItems.map(i => i.name));
       
-      fileBrowserStore.setItems(loadedItems);
+      const sortedItems = sortFsItems(loadedItems, sortConfig);
+      fileBrowserStore.setItems(sortedItems);
       
       // 异步加载缩略图
       console.log('🖼️ 开始加载缩略图，项目总数:', loadedItems.length);
@@ -748,17 +749,21 @@
     }
   }
 
-  /**
-   * 处理排序
-   */
-  function handleSort(sortedItems: FsItem[]) {
+  function applySortingToCurrentData() {
     if (searchQuery && searchResults.length > 0) {
-      // 如果正在显示搜索结果，则排序搜索结果
-      searchResults = sortedItems;
+      searchResults = sortFsItems(searchResults, sortConfig);
     } else {
-      // 否则排序普通文件列表
-      fileBrowserStore.setItems(sortedItems);
+      fileBrowserStore.setItems(sortFsItems(items, sortConfig));
     }
+  }
+
+  /**
+   * 处理排序配置变更
+   */
+  function handleSortConfig(config: SortConfig) {
+    sortConfig = config;
+    setSortConfig(config);
+    applySortingToCurrentData();
   }
 
   
@@ -1144,7 +1149,6 @@
     isCheckMode={isCheckMode}
     isDeleteMode={isDeleteMode}
     viewMode={viewMode}
-    sortItems={items}
     onGoHome={goHome}
     onGoBackInHistory={goBackInHistory}
     onGoForwardInHistory={goForwardInHistory}
@@ -1155,7 +1159,7 @@
     onToggleDeleteMode={toggleDeleteMode}
     onToggleViewMode={toggleViewMode}
     onClearThumbnailCache={clearThumbnailCache}
-    onSort={handleSort}
+    onSort={handleSortConfig}
   />
 
   <!-- 搜索栏 -->

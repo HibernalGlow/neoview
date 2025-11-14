@@ -157,7 +157,7 @@
       {/if}
     </Button>
 
-    <SortPanel items={sortItems} onSort={onSort} />
+    <SortPanel onSortChange={onSort} />
 
     <Button
       variant="ghost"

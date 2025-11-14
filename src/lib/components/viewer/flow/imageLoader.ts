@@ -18,6 +18,7 @@ import {
 import { createPreloadWorker, type PreloadTask, type PreloadTaskResult } from './preloadWorker';
 import { upscaleState, startUpscale, updateUpscaleProgress, completeUpscale, setUpscaleError } from '$lib/stores/upscale/upscaleState.svelte';
 import { showSuccessToast } from '$lib/utils/toast';
+import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
 
 // 缩略图高度配置
 const THUMB_HEIGHT = 120;
@@ -765,30 +766,35 @@ export class ImageLoader {
 	 */
 	async loadDiskUpscaleToMemory(imageHash: string): Promise<boolean> {
 		try {
-			// 检查磁盘缓存
-			const meta: any = await invoke('check_upscale_cache', {
+			// 通过 PyO3 命令检查当前模型下是否有该 hash 的缓存
+			const model = pyo3UpscaleManager.currentModel;
+
+			const cachePath = await invoke<string | null>('check_pyo3_upscale_cache', {
 				imageHash,
-				thumbnailPath: 'D:\\temp\\neoview_thumbnails_test',
-				max_age_seconds: 8 * 3600 // 8小时
+				modelName: model.modelName,
+				scale: model.scale,
+				tileSize: model.tileSize,
+				noiseLevel: model.noiseLevel
 			});
 
-			if (meta && meta.path) {
-				// 读取文件
-				const bytes = await invoke<number[]>('read_binary_file', { filePath: meta.path });
-				const arr = new Uint8Array(bytes);
-				const blob = new Blob([arr], { type: 'image/webp' });
-				const url = URL.createObjectURL(blob);
-				
-				// 写入内存缓存
-				this.preloadMemoryCache.set(imageHash, { url, blob });
-				
-				console.log('从磁盘加载超分结果到内存:', imageHash);
-				return true;
+			if (!cachePath) {
+				console.log('PyO3 磁盘缓存未命中，hash:', imageHash);
+				return false;
 			}
-			
-			return false;
+
+			// 读磁盘文件 → Blob
+			const bytes = await invoke<number[]>('read_binary_file', { filePath: cachePath });
+			const arr = new Uint8Array(bytes);
+			const blob = new Blob([arr], { type: 'image/webp' });
+			const url = URL.createObjectURL(blob);
+
+			// 写入内存缓存
+			this.preloadMemoryCache.set(imageHash, { url, blob });
+			console.log('从 PyO3 磁盘缓存加载超分结果到内存:', imageHash, 'path:', cachePath);
+
+			return true;
 		} catch (error) {
-			console.warn('从磁盘加载超分结果失败:', error);
+			console.warn('从 PyO3 磁盘缓存加载超分结果失败:', error);
 			return false;
 		}
 	}

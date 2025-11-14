@@ -253,41 +253,41 @@ export async function checkUpscaleCache(
 		}
 		const ttlSeconds = ttlHours * 3600;
 
+		// 2. 磁盘缓存（改用 PyO3 的命令）
 		try {
-			// 直接检查 hash 是否有缓存，不依赖算法匹配
-			const meta: any = await invoke('check_upscale_cache', {
+			const model = pyo3UpscaleManager.currentModel;
+
+			const cachePath = await invoke<string | null>('check_pyo3_upscale_cache', {
 				imageHash,
-				thumbnailPath: 'D:\\temp\\neoview_thumbnails_test',
-				max_age_seconds: ttlSeconds
+				modelName: model.modelName,
+				scale: model.scale,
+				tileSize: model.tileSize,
+				noiseLevel: model.noiseLevel
 			});
 
-			if (meta && meta.path) {
-				try {
-					// 懒加载二进制：仅在确认存在缓存时才读取文件字节
-					const bytes = await invoke<number[]>('read_binary_file', { filePath: meta.path });
-					const arr = new Uint8Array(bytes);
-					const blob = new Blob([arr], { type: 'image/webp' });
-					const url = URL.createObjectURL(blob);
-					
-					// 触发缓存命中事件
-					window.dispatchEvent(new CustomEvent('cache-hit', {
-						detail: {
-							imageHash,
-							url,
-							blob,
-							preview,
-							algorithm: meta.algorithm || 'unknown'
-						}
-					}));
-					
-					console.log(`找到超分缓存，path: ${meta.path}, algorithm: ${meta.algorithm || 'unknown'}`);
-					return true;
-				} catch (e) {
-					console.error('读取缓存文件失败:', e);
-				}
+			if (cachePath) {
+				// 读文件 → Blob
+				const bytes = await invoke<number[]>('read_binary_file', { filePath: cachePath });
+				const arr = new Uint8Array(bytes);
+				const blob = new Blob([arr], { type: 'image/webp' });
+				const url = URL.createObjectURL(blob);
+
+				// 通知预加载管理器 & Viewer
+				window.dispatchEvent(new CustomEvent('cache-hit', {
+					detail: {
+						imageHash,
+						url,
+						blob,
+						preview,
+						algorithm: model.modelName   // 可选
+					}
+				}));
+
+				console.log(`找到 PyO3 超分缓存，path: ${cachePath}`);
+				return true;
 			}
 		} catch (e) {
-			// 缓存未找到
+			console.warn('检查 PyO3 磁盘缓存失败:', e);
 		}
 		
 		// 没有找到缓存

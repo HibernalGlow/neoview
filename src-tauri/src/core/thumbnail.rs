@@ -7,6 +7,32 @@ use std::process::Command;
 use base64::{Engine as _, engine::general_purpose};
 use chrono::{DateTime, Utc};
 use crate::core::thumbnail_db::{ThumbnailDatabase, ThumbnailRecord};
+use crate::models::BookType;
+
+/// 构建路径键
+/// 用于统一不同类型书籍的路径标识
+pub fn build_path_key(
+    book_path: &str,
+    page_rel_path: &str,
+    book_type: &BookType,
+    inner_path_opt: Option<&str>,
+) -> String {
+    match book_type {
+        BookType::Archive => {
+            // 对于压缩包，使用 书籍路径::内部路径 作为唯一标识
+            let inner = inner_path_opt.unwrap_or(page_rel_path);
+            format!("{}::{}", book_path, inner)
+        }
+        // 对于文件夹和单文件，直接使用页面路径
+        BookType::Folder | BookType::Pdf | BookType::Media => page_rel_path.to_string(),
+    }
+}
+
+/// 计算路径哈希
+/// 复用缩略图的哈希算法，确保一致性
+pub fn calculate_path_hash(path_key: &str) -> String {
+    ThumbnailDatabase::hash_path(Path::new(path_key))
+}
 
 /// 缩略图信息
 #[derive(Debug, Clone)]

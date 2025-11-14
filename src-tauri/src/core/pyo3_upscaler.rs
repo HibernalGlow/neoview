@@ -294,9 +294,11 @@ impl PyO3Upscaler {
         Ok(removed)
     }
     
-    /// 获取缓存路径
-    pub fn get_cache_path(&self, _image_path: &Path, _model: &UpscaleModel) -> Result<PathBuf, String> {
-        Ok(self.cache_dir.clone())
+    /// 获取缓存路径（基于 image_hash）
+    pub fn get_cache_path(&self, image_hash: &str, model: &UpscaleModel) -> Result<PathBuf, String> {
+        // 生成缓存文件名: hash_sr[model].webp
+        let cache_filename = format!("{}_sr[{}].webp", image_hash, model.model_name);
+        Ok(self.cache_dir.join(cache_filename))
     }
     
     /// 执行超分并缓存
@@ -322,9 +324,18 @@ impl PyO3Upscaler {
         }
     }
     
-    /// 检查缓存
-    pub fn check_cache(&self, _image_path: &Path, _model: &UpscaleModel) -> Option<PathBuf> {
-        None
+    /// 检查缓存（基于 image_hash）
+    pub fn check_cache(&self, image_hash: &str, model: &UpscaleModel) -> Option<PathBuf> {
+        // 生成缓存文件名: hash_sr[model].webp
+        let cache_filename = format!("{}_sr[{}].webp", image_hash, model.model_name);
+        let cache_path = self.cache_dir.join(cache_filename);
+        
+        if cache_path.exists() {
+            println!("💾 找到缓存: {}", cache_path.display());
+            Some(cache_path)
+        } else {
+            None
+        }
     }
     
     /// 获取可用模型

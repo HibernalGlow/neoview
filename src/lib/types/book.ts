@@ -16,6 +16,8 @@ export interface Page {
   index: number;
   /** 页面路径 */
   path: string;
+  /** 内部路径（用于压缩包内的文件） */
+  innerPath?: string;
   /** 文件名 */
   name: string;
   /** 文件大小 (字节) */
@@ -30,6 +32,8 @@ export interface Page {
   isCover?: boolean;
   /** 缩略图数据 */
   thumbnail?: string;
+  /** 稳定哈希值（用于缓存键） */
+  stableHash: string;
 }
 
 export interface BookInfo {

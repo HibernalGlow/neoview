@@ -10,7 +10,6 @@ import { ImageLoader, type ImageLoaderOptions } from './imageLoader';
 import { createEventListeners, type EventListenersOptions } from './eventListeners';
 import { createPreloadWorker } from './preloadWorker';
 import { triggerAutoUpscale, getAutoUpscaleEnabled } from './preloadRuntime';
-import { buildImagePathKey, getStableImageHash } from '$lib/utils/pathHash';
 
 export interface PreloadManagerOptions {
 	onImageLoaded?: (objectUrl: string, objectUrl2?: string) => void;
@@ -351,19 +350,14 @@ export class PreloadManager {
 	private async enqueueUpscaleTask(pageIndex: number): Promise<void> {
 		try {
 			const blob = await this.imageLoader.getBlob(pageIndex);
-			const pageInfo = bookStore.currentBook?.pages[pageIndex];
-			if (!pageInfo) return;
 			
-			// 使用统一的路径哈希工具
-			const pathKey = buildImagePathKey({
-				bookPath: bookStore.currentBook?.path || '',
-				bookType: bookStore.currentBook?.type || 'file',
-				pagePath: pageInfo.path,
-				innerPath: (pageInfo as any).innerPath
-			});
-			
-			const hash = await getStableImageHash(pathKey);
-			console.log(`PreloadManager 生成路径哈希，页码: ${pageIndex + 1}/${bookStore.totalPages}, 路径key: ${pathKey}`);
+			// 使用 bookStore 的统一 hash API
+			const hash = bookStore.getPageHash(pageIndex);
+			if (!hash) {
+				console.warn(`页面 ${pageIndex + 1} 没有 stableHash，跳过预超分任务`);
+				return;
+			}
+			console.log(`PreloadManager 使用稳定哈希，页码: ${pageIndex + 1}/${bookStore.totalPages}, hash: ${hash}`);
 			
 			// 创建任务 - 直接传递 Blob
 			const task = {

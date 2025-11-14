@@ -279,10 +279,10 @@ pub async fn pyo3_upscale_image(
     Err("PyO3 超分管理器未初始化".to_string())
 }
 
-/// 检查缓存是否存在
+/// 检查缓存是否存在（基于 image_hash）
 #[command]
 pub async fn check_pyo3_upscale_cache(
-    image_path: String,
+    image_hash: String,
     model_name: String,
     scale: i32,
     tile_size: i32,
@@ -301,8 +301,6 @@ pub async fn check_pyo3_upscale_cache(
     };
     
     if let Some(manager) = manager_result {
-        let image_path = PathBuf::from(image_path);
-        
         // 获取模型 ID
         let model_id = manager.get_model_id(&model_name)?;
         
@@ -315,7 +313,7 @@ pub async fn check_pyo3_upscale_cache(
         };
         
         // 检查缓存
-        if let Some(cache_path) = manager.check_cache(&image_path, &model) {
+        if let Some(cache_path) = manager.check_cache(&image_hash, &model) {
             return Ok(Some(cache_path.to_string_lossy().to_string()));
         }
         

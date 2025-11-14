@@ -18,7 +18,6 @@ import {
 import { createPreloadWorker, type PreloadTask, type PreloadTaskResult } from './preloadWorker';
 import { upscaleState, startUpscale, updateUpscaleProgress, completeUpscale, setUpscaleError } from '$lib/stores/upscale/upscaleState.svelte';
 import { showSuccessToast } from '$lib/utils/toast';
-import { buildImagePathKey, getStableImageHash, buildImageContext } from '$lib/utils/pathHash';
 
 // 缩略图高度配置
 const THUMB_HEIGHT = 120;
@@ -475,27 +474,14 @@ export class ImageLoader {
 			const pageInfo = currentBook.pages[currentPageIndex];
 			let imageDataWithHash = null;
 			
-			try {
-				// 使用统一的路径哈希工具
-				const pathKey = buildImagePathKey({
-					bookPath: currentBook.path,
-					bookType: currentBook.type,
-					pagePath: pageInfo.path,
-					innerPath: (pageInfo as any).innerPath
-				});
-				
+			// 使用 bookStore 的统一 hash API
+			const imageHash = bookStore.getPageHash(currentPageIndex);
+			if (imageHash) {
 				const { blob } = this.blobCache.get(currentPageIndex)!;
-				const imageHash = await getStableImageHash(pathKey);
 				imageDataWithHash = { blob, hash: imageHash };
-				
-				console.log(`生成路径哈希，页码: ${currentPageIndex + 1}/${bookStore.totalPages}, 路径key: ${pathKey}`);
-			} catch (e) {
-				console.error('生成路径哈希失败:', e);
-				// 回退到旧的实现（如果需要的话）
-				if (!imageDataWithHash) {
-					const { blob } = this.blobCache.get(currentPageIndex)!;
-					imageDataWithHash = await getImageDataWithHash(blob);
-				}
+				console.log(`使用稳定哈希，页码: ${currentPageIndex + 1}/${bookStore.totalPages}, hash: ${imageHash}`);
+			} else {
+				console.warn('当前页没有 stableHash，跳过自动超分');
 			}
 
 			// 新的缓存检查顺序：内存 -> 磁盘 -> 现场超分
@@ -634,29 +620,21 @@ export class ImageLoader {
 
 				console.log(`预加载第 ${targetIndex + 1} 页...`);
 
-				try {
-					// 使用统一的路径哈希工具
-					const pathKey = buildImagePathKey({
-						bookPath: currentBook.path,
-						bookType: currentBook.type,
-						pagePath: pageInfo.path,
-						innerPath: (pageInfo as any).innerPath
-					});
-					
-					const hash = await getStableImageHash(pathKey);
-					console.log(`预加载生成路径哈希，页码: ${targetIndex + 1}/${totalPages}, 路径key: ${pathKey}`);
-				} catch (e) {
-					console.warn('获取路径hash失败，跳过页面:', e);
+				// 使用 bookStore 的统一 hash API
+				const hash = bookStore.getPageHash(targetIndex);
+				if (!hash) {
+					console.warn(`第 ${targetIndex + 1} 页没有 stableHash，跳过预超分`);
 					continue;
 				}
+				console.log(`预加载使用稳定哈希，页码: ${targetIndex + 1}/${totalPages}, hash: ${hash}`);
 
-					// 检查是否已有缓存
-					let hasCache = false;
-					if (autoUpscaleEnabled) {
-						// 使用 hash 检查缓存（需要传入一个空的 blob，因为缓存检查只需要 hash）
-						const emptyBlob = new Blob();
-						hasCache = await checkUpscaleCache({ blob: emptyBlob, hash }, false);
-					}
+				// 检查是否已有缓存
+				let hasCache = false;
+				if (autoUpscaleEnabled) {
+					// 使用 hash 检查缓存（需要传入一个空的 blob，因为缓存检查只需要 hash）
+					const emptyBlob = new Blob();
+					hasCache = await checkUpscaleCache({ blob: emptyBlob, hash }, false);
+				}
 
 					if (hasCache) {
 						console.log(`第 ${targetIndex + 1} 页已有超分缓存`);

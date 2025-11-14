@@ -45,6 +45,8 @@ pub struct Page {
     pub index: usize,
     /// 页面路径
     pub path: String,
+    /// 内部路径（用于压缩包内的文件）
+    pub inner_path: Option<String>,
     /// 文件名
     pub name: String,
     /// 文件大小 (字节)
@@ -59,6 +61,8 @@ pub struct Page {
     pub is_cover: Option<bool>,
     /// 缩略图数据 (base64)
     pub thumbnail: Option<String>,
+    /// 稳定哈希值（用于缓存键）
+    pub stable_hash: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -130,6 +134,7 @@ impl Page {
         Self {
             index,
             path,
+            inner_path: None,
             name,
             size,
             width: None,
@@ -137,7 +142,18 @@ impl Page {
             loaded: false,
             is_cover: None,
             thumbnail: None,
+            stable_hash: String::new(), // 将在 BookManager 中计算
         }
+    }
+
+    pub fn with_stable_hash(mut self, stable_hash: String) -> Self {
+        self.stable_hash = stable_hash;
+        self
+    }
+
+    pub fn with_inner_path(mut self, inner_path: Option<String>) -> Self {
+        self.inner_path = inner_path;
+        self
     }
 }
 

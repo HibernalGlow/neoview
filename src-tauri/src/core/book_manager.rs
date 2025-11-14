@@ -2,6 +2,7 @@
 //! 书籍管理核心模块
 
 use crate::models::{BookInfo, BookType, Page};
+use crate::core::thumbnail::{build_path_key, calculate_path_hash};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
@@ -184,7 +185,17 @@ impl BookManager {
             
             let path_str = path.to_string_lossy().to_string();
             
-            let page = Page::new(index, path_str, name, *size);
+            // 为文件夹类型计算 stable_hash
+            let path_key = build_path_key(
+                &book.path,
+                &path_str,
+                &book.book_type,
+                None
+            );
+            let stable_hash = calculate_path_hash(&path_key);
+            
+            let page = Page::new(index, path_str, name, *size)
+                .with_stable_hash(stable_hash);
             book.pages.push(page);
         }
 
@@ -208,8 +219,19 @@ impl BookManager {
         
         // 创建页面列表
         for (index, item) in image_items.iter().enumerate() {
+            // 对于压缩包，计算 stable_hash
+            let path_key = build_path_key(
+                &book.path,
+                &item.path,
+                &book.book_type,
+                Some(&item.name)
+            );
+            let stable_hash = calculate_path_hash(&path_key);
+            
             // 对于压缩包,path 使用压缩包内的文件路径
-            let page = Page::new(index, item.path.clone(), item.name.clone(), item.size);
+            let page = Page::new(index, item.path.clone(), item.name.clone(), item.size)
+                .with_stable_hash(stable_hash)
+                .with_inner_path(Some(item.name.clone()));
             book.pages.push(page);
         }
         

@@ -482,6 +482,25 @@ class BookStore {
     }
     return pages;
   }
+
+  // === 统一的 hash 获取 API ===
+
+  /**
+   * 获取指定页面的稳定哈希值
+   */
+  getPageHash(pageIndex: number): string | null {
+    const book = this.state.currentBook;
+    if (!book) return null;
+    const page = book.pages[pageIndex];
+    return page?.stableHash ?? null;
+  }
+
+  /**
+   * 获取当前页面的稳定哈希值
+   */
+  getCurrentPageHash(): string | null {
+    return this.getPageHash(this.currentPageIndex);
+  }
 }
 
 // 导出单例

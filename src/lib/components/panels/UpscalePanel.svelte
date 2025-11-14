@@ -17,8 +17,6 @@
 		toUpscalePanelEventDetail,
 		formatFileSize,
 		getProgressColor,
-		buildHashInput,
-		calculatePathHash,
 		readUpscaleCacheFile,
 		type UpscalePanelSettings
 	} from './UpscalePanel';
@@ -704,26 +702,16 @@
 	}
 
 	/**
-	 * 获取当前图像的 Hash (使用路径 + innerpath)
+	 * 获取当前图像的 Hash
 	 */
 	async function getCurrentImageHash(): Promise<string | null> {
-	const currentBook = bookStore.currentBook;
-	const currentPage = bookStore.currentPage;
-	if (!currentPage) return null;
-
-	const pathKey = buildImagePathKey({
-		bookPath: currentBook.path,
-		bookType: currentBook.type,
-		pagePath: currentPage.path,
-		innerPath: (currentPage as any).innerPath
-	});
-	
-	const hash = await getStableImageHash(pathKey);
-	// 添加调试日志
-		console.log(`UpscalePanel 获取路径哈希，页码: ${currentPageIndex + 1}/${bookStore.totalPages}, 路径key: ${pathKey}`);
-		
+		// 使用 bookStore 的统一 hash API
+		const hash = bookStore.getCurrentPageHash();
+		if (hash) {
+			console.log(`UpscalePanel 使用稳定哈希，页码: ${bookStore.currentPageIndex + 1}/${bookStore.totalPages}, hash: ${hash}`);
+		}
 		return hash;
-}
+	}
 
 	/**
 	 * 清理缓存

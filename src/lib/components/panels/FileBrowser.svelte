@@ -527,6 +527,7 @@
     // 获取视口尺寸
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
+    const viewportHeight = window.innerHeight;
     
     let menuX = e.clientX;
     let menuY = e.clientY;
@@ -1589,11 +1590,6 @@
               <div class="text-xs text-gray-500">
                 {item.path}
               </div>
-              <div class="text-xs text-gray-500">
-                {formatSize(item.size, item.isDir)} · {formatDate(item.modified)}
-              </div>
-            </div>
-              </div>
             </ContextMenu.Trigger>
             <ContextMenu.Content>
                 <ContextMenu.Item onclick={() => addToBookmark(item)}>
@@ -1694,6 +1690,8 @@
     <div 
       bind:this={fileListContainer}
       class="flex-1 overflow-y-auto p-2 focus:outline-none" 
+      role="region"
+      aria-label="搜索结果列表"
       tabindex="0" 
       onkeydown={handleKeydown}
       onclick={() => fileListContainer?.focus()}

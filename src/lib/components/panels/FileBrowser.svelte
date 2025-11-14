@@ -1527,66 +1527,67 @@
                   }
                 }}
               >
-            <!-- 勾选框（勾选模式） -->
-            {#if isCheckMode}
-              <button
-                class="shrink-0"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  toggleItemSelection(item.path);
-                }}
-              >
-                <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {selectedItems.has(item.path) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 hover:border-blue-400'}">
-                  {#if selectedItems.has(item.path)}
-                    <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                    </svg>
+                <!-- 勾选框（勾选模式） -->
+                {#if isCheckMode}
+                  <button
+                    class="shrink-0"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      toggleItemSelection(item.path);
+                    }}
+                  >
+                    <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {selectedItems.has(item.path) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 hover:border-blue-400'}">
+                      {#if selectedItems.has(item.path)}
+                        <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                        </svg>
+                      {/if}
+                    </div>
+                  </button>
+                {/if}
+
+                <!-- 删除按钮（删除模式） -->
+                {#if isDeleteMode && !isArchiveView}
+                  <button
+                    class="shrink-0"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      deleteItem(item.path);
+                    }}
+                    title="删除"
+                  >
+                    <div class="h-5 w-5 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors">
+                      <Trash2 class="h-3 w-3 text-white" />
+                    </div>
+                  </button>
+                {/if}
+
+                <!-- 图标或缩略图 -->
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded">
+                  {#if thumbnails.has(toRelativeKey(item.path))}
+                    <img 
+                      src={thumbnails.get(toRelativeKey(item.path))} 
+                      alt={item.name}
+                      class="h-full w-full object-cover transition-transform group-hover:scale-105"
+                    />
+                  {:else if item.isDir}
+                    <Folder class="h-8 w-8 text-blue-500 transition-colors group-hover:text-blue-600" />
+                  {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
+                    <FileArchive class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600" />
+                  {:else if item.isImage}
+                    <Image class="h-8 w-8 text-green-500 transition-colors group-hover:text-green-600" />
+                  {:else}
+                    <File class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500" />
                   {/if}
                 </div>
-              </button>
-            {/if}
 
-            <!-- 删除按钮（删除模式） -->
-            {#if isDeleteMode && !isArchiveView}
-              <button
-                class="shrink-0"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  deleteItem(item.path);
-                }}
-                title="删除"
-              >
-                <div class="h-5 w-5 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors">
-                  <Trash2 class="h-3 w-3 text-white" />
+                <!-- 信息 -->
+                <div class="min-w-0 flex-1">
+                  <div class="truncate font-medium">{item.name}</div>
+                  <div class="text-xs text-gray-500">
+                    {item.path}
+                  </div>
                 </div>
-              </button>
-            {/if}
-
-            <!-- 图标或缩略图 -->
-            <div class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded">
-              {#if thumbnails.has(toRelativeKey(item.path))}
-                <!-- 显示缩略图 -->
-                <img 
-                  src={thumbnails.get(toRelativeKey(item.path))} 
-                  alt={item.name}
-                  class="h-full w-full object-cover transition-transform group-hover:scale-105"
-                />
-              {:else if item.isDir}
-                <Folder class="h-8 w-8 text-blue-500 transition-colors group-hover:text-blue-600" />
-              {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
-                <FileArchive class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600" />
-              {:else if item.isImage}
-                <Image class="h-8 w-8 text-green-500 transition-colors group-hover:text-green-600" />
-              {:else}
-                <File class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500" />
-              {/if}
-            </div>
-
-            <!-- 信息 -->
-            <div class="min-w-0 flex-1">
-              <div class="truncate font-medium">{item.name}</div>
-              <div class="text-xs text-gray-500">
-                {item.path}
               </div>
             </ContextMenu.Trigger>
             <ContextMenu.Content>
@@ -1699,7 +1700,8 @@
             <ContextMenu.Trigger asChild>
               <div
                 class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors {selectedIndex === index ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}"
-                role="button"
+                role="option"
+                aria-selected={selectedIndex === index}
                 tabindex="0"
                 onclick={() => {
                   if (!isCheckMode && !isDeleteMode) {
@@ -1715,71 +1717,68 @@
                   }
                 }}
               >
-            <!-- 勾选框（勾选模式） -->
-            {#if isCheckMode}
-              <button
-                class="shrink-0"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  toggleItemSelection(item.path);
-                }}
-              >
-                <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {selectedItems.has(item.path) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 hover:border-blue-400'}">
-                  {#if selectedItems.has(item.path)}
-                    <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                    </svg>
+                <!-- 勾选框（勾选模式） -->
+                {#if isCheckMode}
+                  <button
+                    class="shrink-0"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      toggleItemSelection(item.path);
+                    }}
+                  >
+                    <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {selectedItems.has(item.path) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 hover:border-blue-400'}">
+                      {#if selectedItems.has(item.path)}
+                        <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                        </svg>
+                      {/if}
+                    </div>
+                  </button>
+                {/if}
+
+                <!-- 删除按钮（删除模式） -->
+                {#if isDeleteMode && !isArchiveView}
+                  <button
+                    class="shrink-0"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      deleteItem(item.path);
+                    }}
+                    title="删除"
+                  >
+                    <div class="h-5 w-5 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors">
+                      <Trash2 class="h-3 w-3 text-white" />
+                    </div>
+                  </button>
+                {/if}
+
+                <!-- 图标或缩略图 -->
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded">
+                  {#if thumbnails.has(toRelativeKey(item.path))}
+                    <!-- 显示缩略图 -->
+                    <img 
+                      src={thumbnails.get(toRelativeKey(item.path))} 
+                      alt={item.name}
+                      class="h-full w-full object-cover transition-transform group-hover:scale-105"
+                    />
+                  {:else if item.isDir}
+                    <Folder class="h-8 w-8 text-blue-500 transition-colors group-hover:text-blue-600" />
+                  {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
+                    <FileArchive class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600" />
+                  {:else if item.isImage}
+                    <Image class="h-8 w-8 text-green-500 transition-colors group-hover:text-green-600" />
+                  {:else}
+                    <File class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500" />
                   {/if}
                 </div>
-              </button>
-            {/if}
 
-            <!-- 删除按钮（删除模式） -->
-            {#if isDeleteMode && !isArchiveView}
-              <button
-                class="shrink-0"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  deleteItem(item.path);
-                }}
-                title="删除"
-              >
-                <div class="h-5 w-5 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors">
-                  <Trash2 class="h-3 w-3 text-white" />
+                <!-- 信息 -->
+                <div class="min-w-0 flex-1">
+                  <div class="truncate font-medium">{item.name}</div>
+                  <div class="text-xs text-gray-500">
+                    {formatSize(item.size, item.isDir)} · {formatDate(item.modified)}
+                  </div>
                 </div>
-              </button>
-            {/if}
-
-            <!-- 图标或缩略图 -->
-            <div class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded">
-              {#if thumbnails.has(toRelativeKey(item.path))}
-                <!-- 显示缩略图 -->
-                <img 
-                  src={thumbnails.get(toRelativeKey(item.path))} 
-                  alt={item.name}
-                  class="h-full w-full object-cover transition-transform group-hover:scale-105"
-                />
-              {:else if item.isDir}
-                <Folder class="h-8 w-8 text-blue-500 transition-colors group-hover:text-blue-600" />
-              {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
-                <FileArchive class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600" />
-              {:else if item.isImage}
-                <Image class="h-8 w-8 text-green-500 transition-colors group-hover:text-green-600" />
-              {:else}
-                <File class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500" />
-              {/if}
-            </div>
-
-            <!-- 信息 -->
-            <div class="min-w-0 flex-1">
-              <div class="truncate font-medium">{item.name}</div>
-              <div class="text-xs text-gray-500">
-                {item.path}
-              </div>
-              <div class="text-xs text-gray-500">
-                {formatSize(item.size, item.isDir)} · {formatDate(item.modified)}
-              </div>
-            </div>
               </div>
             </ContextMenu.Trigger>
             <ContextMenu.Content>

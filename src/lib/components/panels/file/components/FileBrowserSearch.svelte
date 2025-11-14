@@ -40,8 +40,8 @@
         class="w-full rounded border border-input bg-background px-10 pr-24 py-2 text-sm placeholder:text-muted-foreground focus:outline-none"
         placeholder="搜索当前目录下的文件..."
         value={searchQuery}
-        on:input={(event) => onSearchInput((event.target as HTMLInputElement).value)}
-        on:focus={onSearchFocus}
+        oninput={(event) => onSearchInput((event.target as HTMLInputElement).value)}
+        onfocus={onSearchFocus}
         disabled={!currentPath || isArchiveView}
       />
 

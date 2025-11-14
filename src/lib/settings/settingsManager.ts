@@ -231,8 +231,23 @@ export class SettingsManager {
       }
       // Basic validation: must have system and view
       if (!cfg || !cfg.system || !cfg.view) throw new Error('配置格式不完整');
-      // merge with defaults to ensure fields exist
-      this.settings = { ...defaultSettings, ...cfg } as NeoViewSettings;
+      
+      // 深合并 image 子对象，确保新字段不会被覆盖
+      const mergedImage = {
+        ...defaultSettings.image,
+        ...cfg.image,
+        // 显式补齐新字段，确保导入旧配置时不会丢失
+        currentImageUpscaleEnabled: cfg.image?.currentImageUpscaleEnabled ?? defaultSettings.image.currentImageUpscaleEnabled,
+        useCachedFirst: cfg.image?.useCachedFirst ?? defaultSettings.image.useCachedFirst
+      };
+      
+      // 合并其他设置
+      this.settings = {
+        ...defaultSettings,
+        ...cfg,
+        image: mergedImage
+      } as NeoViewSettings;
+      
       this.saveSettings();
       this.notifyListeners();
       return true;

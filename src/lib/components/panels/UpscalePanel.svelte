@@ -212,10 +212,8 @@
 				preloadPages: panelSettings.preloadPages,
 				backgroundConcurrency: panelSettings.backgroundConcurrency
 			});
-			persistUpscalePanelSettings(panelSettings);
-			
-			// 发送事件通知其他组件
-			emitUpscaleSettings(panelSettings);
+			persistAndBroadcast(panelSettings);
+			syncPreloadConfig(panelSettings);
 			
 			if (autoUpscaleEnabled) {
 				console.log('✅ 自动超分已启用');
@@ -246,12 +244,7 @@
 		showPanelPreview = settings.showPanelPreview ?? false;
 		
 		// 同步预加载配置到 PreloadManager
-		if (window.preloadManager) {
-			window.preloadManager.updateImageLoaderConfig({
-				preloadPages: settings.preloadPages,
-				maxThreads: settings.backgroundConcurrency
-			});
-		}
+		syncPreloadConfig(settings);
 	}
 
 	function gatherPanelSettings(): UpscalePanelSettings {
@@ -329,8 +322,8 @@
 		}
 		// $effect 会自动追踪其内部使用的响应式状态
 		const settings = gatherPanelSettings();
-		persistUpscalePanelSettings(settings);
-		emitUpscaleSettings(settings);
+		persistAndBroadcast(settings);
+		syncPreloadConfig(settings);
 	});
 
 	// ==================== 功能函数 ====================
@@ -390,13 +383,12 @@
 		}
 	}
 
-	function handleGlobalControlsChange() {
-		console.log('🔄 处理开关设置变化');
-		const settings = gatherPanelSettings();
+	function persistAndBroadcast(settings: UpscalePanelSettings) {
 		persistUpscalePanelSettings(settings);
 		emitUpscaleSettings(settings);
-		
-		// 即时更新预加载配置
+	}
+
+	function syncPreloadConfig(settings: UpscalePanelSettings) {
 		const preloadManager = (window as any).preloadManager;
 		if (preloadManager) {
 			preloadManager.updateImageLoaderConfig({
@@ -406,23 +398,20 @@
 		}
 	}
 
+	function handleGlobalControlsChange() {
+		console.log('🔄 处理开关设置变化');
+		const settings = gatherPanelSettings();
+		persistAndBroadcast(settings);
+		syncPreloadConfig(settings);
+	}
+
 	/**
 	 * 处理预加载配置变化
 	 */
 	function handlePreloadConfigChange() {
 		const settings = gatherPanelSettings();
-		// 1. 持久化到 localStorage + 更新全局 UpscaleSettings
-		persistUpscaleSettings(settings);
-		// 2. 通知其他组件（如果有监听）
-		emitUpscaleSettings(settings);
-		// 3. 即时更新 PreloadManager / ImageLoader 的配置
-		const preloadManager = (window as any).preloadManager;
-		if (preloadManager) {
-			preloadManager.updateImageLoaderConfig({
-				preloadPages: settings.preloadPages,
-				maxThreads: settings.backgroundConcurrency
-			});
-		}
+		persistAndBroadcast(settings);
+		syncPreloadConfig(settings);
 	}
 
 	/**

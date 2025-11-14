@@ -482,6 +482,55 @@ class BookStore {
     }
     return pages;
   }
+
+  /**
+   * 设置指定页面的超分状态
+   */
+  setPageUpscaleStatus(pageIndex: number, status: 'none' | 'preupscaled' | 'done' | 'failed') {
+    this.upscaleStatusByPage.set(pageIndex, status);
+    console.log(`📄 页面 ${pageIndex + 1} 超分状态更新为:`, status);
+  }
+
+  /**
+   * 获取所有页面的超分状态
+   */
+  getAllPageUpscaleStatus(): Map<number, 'none' | 'preupscaled' | 'done' | 'failed'> {
+    return new Map(this.upscaleStatusByPage);
+  }
+
+  /**
+   * 重置所有页面的超分状态（书籍切换时调用）
+   */
+  resetAllPageUpscaleStatus() {
+    this.upscaleStatusByPage.clear();
+    console.log('🔄 已重置所有页面超分状态');
+  }
+
+  /**
+   * 获取预超分覆盖范围（最远已预超分的页面索引）
+   */
+  getFurthestPreUpscaledIndex(): number {
+    let furthestIndex = -1;
+    for (const [pageIndex, status] of this.upscaleStatusByPage.entries()) {
+      if (status === 'preupscaled' || status === 'done') {
+        furthestIndex = Math.max(furthestIndex, pageIndex);
+      }
+    }
+    return furthestIndex;
+  }
+
+  /**
+   * 获取已预超分的页面集合
+   */
+  getPreUpscaledPages(): Set<number> {
+    const pages = new Set<number>();
+    for (const [pageIndex, status] of this.upscaleStatusByPage.entries()) {
+      if (status === 'preupscaled' || status === 'done') {
+        pages.add(pageIndex);
+      }
+    }
+    return pages;
+  }
 }
 
 // 导出单例

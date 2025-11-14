@@ -18,6 +18,7 @@ export interface ImageDataWithHash {
 
 export interface PerformUpscaleOptions {
 	background?: boolean;
+	skipStateUpdate?: boolean; // 跳过状态更新（由调用方管理）
 }
 
 export interface PerformUpscaleResult {
@@ -74,8 +75,9 @@ export async function performUpscale(
 		// 确定是否为后台任务
 		const isBackground = options.background || false;
 		
-		// 触发超分开始事件
-		if (!isBackground) {
+		// 只有在直接手动调用且非后台任务时才触发状态更新
+		// 自动超分由 triggerAutoUpscale 负责状态管理
+		if (!isBackground && !options.skipStateUpdate) {
 			startUpscale(imageHash, 'manual', '正在处理图片');
 		}
 		
@@ -119,8 +121,8 @@ export async function performUpscale(
 			}
 		}));
 		
-		// 完成超分
-		if (!isBackground) {
+		// 完成超分（只有手动调用且非后台任务时才更新状态）
+		if (!isBackground && !options.skipStateUpdate) {
 			completeUpscale();
 		}
 		
@@ -132,8 +134,8 @@ export async function performUpscale(
 	} catch (error) {
 		console.error('超分处理失败:', error);
 		
-		// 设置错误状态（仅对非后台任务）
-		if (!options.background) {
+		// 设置错误状态（仅对非后台任务且未跳过状态更新）
+		if (!options.background && !options.skipStateUpdate) {
 			setUpscaleError(error instanceof Error ? error.message : String(error));
 		}
 		
@@ -189,8 +191,11 @@ export async function triggerAutoUpscale(
 			startUpscale(imageHash, 'auto', '自动超分中');
 		}
 		
-		// 执行超分
-		return await performUpscale(imageBlob, imageHash, { background: isPreload });
+		// 执行超分，跳过状态更新（因为 triggerAutoUpscale 已经处理了）
+		return await performUpscale(imageBlob, imageHash, { 
+			background: isPreload,
+			skipStateUpdate: !isPreload // 非预加载任务跳过状态更新
+		});
 	} catch (error) {
 		console.error('自动超分失败:', error);
 		

@@ -38,9 +38,7 @@
 	let originalImageDataForComparison = $state<string>('');
 	let upscaledImageDataForComparison = $state<string>('');
 
-	// 进度条状态（现在由 ImageViewerProgressBar 内部计算）
-	let progressColor = $state('#FDFBF7'); // 默认奶白色
-	let progressBlinking = $state(false);
+	// 注意：progressColor 和 progressBlinking 现在由 ImageViewerProgressBar 内部管理
 
 	
 
@@ -513,7 +511,5 @@
 		currentPageIndex={bookStore.currentPageIndex}
 		preUpscaleProgress={preUpscaleProgress}
 		totalPreUpscalePages={totalPreUpscalePages}
-		progressBlinking={progressBlinking}
-		progressColor={progressColor}
 	/>
 </div>

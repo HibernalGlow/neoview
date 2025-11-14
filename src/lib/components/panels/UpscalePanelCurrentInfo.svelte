@@ -2,6 +2,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Loader2, Sparkles, Zap } from '@lucide/svelte';
 	import { createEventDispatcher } from 'svelte';
+	import { upscaleState } from '$lib/stores/upscale/upscaleState.svelte';
 
 	let {
 		currentImageResolution = '',
@@ -19,6 +20,39 @@
 
 	function handlePerformClick() {
 		dispatch('perform');
+	}
+
+	// 订阅全局 upscaleState，同步状态
+	$: {
+		if (upscaleState.isUpscaling) {
+			isProcessing = true;
+			status = upscaleState.currentTask || '处理中';
+			progress = upscaleState.progress;
+			
+			// 根据模式设置不同的颜色
+			if (upscaleState.mode === 'auto') {
+				progressColorClass = 'bg-yellow-500';
+				statusClass = 'text-yellow-600';
+			} else {
+				progressColorClass = 'bg-blue-500';
+				statusClass = 'text-blue-600';
+			}
+		} else if (upscaleState.error) {
+			isProcessing = false;
+			status = '处理失败';
+			statusClass = 'text-red-600';
+			progressColorClass = 'bg-red-500';
+		} else if (progress === 100) {
+			isProcessing = false;
+			status = '转换完成';
+			statusClass = 'text-green-600';
+			progressColorClass = 'bg-green-500';
+		} else {
+			isProcessing = false;
+			status = '就绪';
+			statusClass = '';
+			progressColorClass = '';
+		}
 	}
 </script>
 

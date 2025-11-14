@@ -7,10 +7,12 @@
 		totalPages = 0,
 		currentPageIndex = 0,
 		preUpscaleProgress = 0,
-		totalPreUpscalePages = 0,
-		progressBlinking = false,
-		progressColor = '#FDFBF7'
+		totalPreUpscalePages = 0
 	} = $props();
+
+	// 内部状态，不再从外部传入
+	let progressColor = $state('#FDFBF7');
+	let progressBlinking = $state(false);
 
 	// 计算预超分覆盖范围
 	const furthestPreUpscaledIndex = $derived(bookStore.getFurthestPreUpscaledIndex());

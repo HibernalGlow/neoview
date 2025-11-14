@@ -52,6 +52,15 @@ export class PreloadManager {
 		// 初始化性能配置，优先使用面板配置
 		this.performancePreloadPages = options.initialPreloadPages ?? performanceSettings.preLoadSize;
 		this.performanceMaxThreads = options.initialMaxThreads ?? performanceSettings.maxThreads;
+		
+		console.log('PreloadManager 初始化:', {
+			preloadPages: this.performancePreloadPages,
+			maxThreads: this.performanceMaxThreads,
+			source: {
+				preloadPages: options.initialPreloadPages ? '面板配置' : '默认设置',
+				maxThreads: options.initialMaxThreads ? '面板配置' : '默认设置'
+			}
+		});
 
 		// 创建图片加载器
 		this.imageLoader = new ImageLoader({

@@ -41,6 +41,10 @@
 	let useCachedFirst = $state(true);
 	let settingsInitialized = $state(false);
 
+	// 预加载配置
+	let preloadPages = $state(3);
+	let backgroundConcurrency = $state(2);
+
 	// 模型参数
 	let selectedModel = $state('MODEL_WAIFU2X_CUNET_UP2X');
 	let scale = $state(2);
@@ -177,6 +181,8 @@
 				enableSuperResolution: autoUpscaleEnabled
 			});
 			
+			console.log('自动超分全局设置 =>', autoUpscaleEnabled ? '已开启' : '已关闭');
+			
 			// 同时更新面板设置
 			const panelSettings = gatherPanelSettings();
 			persistUpscalePanelSettings(panelSettings);
@@ -211,6 +217,8 @@
 		tileSize = settings.tileSize;
 		noiseLevel = settings.noiseLevel;
 		gpuId = settings.gpuId;
+		preloadPages = settings.preloadPages;
+		backgroundConcurrency = settings.backgroundConcurrency;
 		
 		// 同步预加载配置到 PreloadManager
 		if (window.preloadManager) {
@@ -236,8 +244,8 @@
 			tileSize,
 			noiseLevel,
 			gpuId,
-			preloadPages: 3, // 默认值，可以从 UI 控件获取
-			backgroundConcurrency: 2, // 默认值，可以从 UI 控件获取
+			preloadPages,
+			backgroundConcurrency,
 			conditions: {
 				enabled: conditionalUpscaleEnabled,
 				minWidth: conditionalMinWidth,

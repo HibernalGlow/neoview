@@ -6,6 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::collections::HashMap;
 use serde::Serialize;
+use base64::{Engine as _, engine::general_purpose};
 
 /// 缓存元数据结构
 #[derive(Debug, Serialize)]
@@ -18,6 +19,20 @@ pub struct CacheMeta {
 
 
 
+/// 计算数据的哈希值（使用MD5）
+#[command]
+pub async fn calculate_data_hash(data_url: String) -> Result<String, String> {
+    use md5;
+    
+    // 从 data URL 提取二进制数据
+    let binary_data = extract_binary_from_data_url(&data_url)?;
+    
+    // 计算MD5
+    let digest = md5::compute(&binary_data);
+    
+    Ok(format!("{:x}", digest))
+}
+
 /// 计算字节数组的MD5哈希值
 #[command]
 pub async fn calculate_blob_md5(bytes: Vec<u8>) -> Result<String, String> {
@@ -27,6 +42,27 @@ pub async fn calculate_blob_md5(bytes: Vec<u8>) -> Result<String, String> {
     let digest = md5::compute(&bytes);
     
     Ok(format!("{:x}", digest))
+}
+
+/// 从 data URL 提取二进制数据
+fn extract_binary_from_data_url(data_url: &str) -> Result<Vec<u8>, String> {
+    // 解析 data URL
+    if !data_url.starts_with("data:") {
+        return Err("无效的 data URL".to_string());
+    }
+    
+    // 找到逗号位置
+    let comma_pos = data_url.find(',')
+        .ok_or("data URL 格式错误")?;
+    
+    // 提取 base64 部分
+    let base64_part = &data_url[comma_pos + 1..];
+    
+    // 解码 base64
+    use base64::{Engine as _, engine::general_purpose};
+    general_purpose::STANDARD
+        .decode(base64_part)
+        .map_err(|e| format!("base64 解码失败: {}", e))
 }
 
 

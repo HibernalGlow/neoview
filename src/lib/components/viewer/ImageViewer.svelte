@@ -428,7 +428,8 @@
 			const height = bitmap.height;
 			
 			if (width === 0 || height === 0) {
-				throw new Error('ImageBitmap 尺寸无效，可能已 detached');
+				console.warn('bitmapToDataURL: ImageBitmap 尺寸无效，可能已 detached');
+				return '';
 			}
 			
 			const canvas = document.createElement('canvas');
@@ -441,12 +442,12 @@
 			
 			return canvas.toDataURL('image/png');
 		} catch (error) {
-			console.error('bitmapToDataURL 失败，ImageBitmap 可能已 detached:', error);
-			throw error;
+			console.warn('bitmapToDataURL 失败，ImageBitmap 可能已 detached:', error);
+			return '';
 		}
 	}
 
-	
+	// ...
 </script>
 
 <svelte:window onkeydown={handleKeydown} />

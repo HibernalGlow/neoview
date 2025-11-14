@@ -32,7 +32,7 @@ pub fn build_path_key(
 /// 用于文件夹Tab直接查找压缩包缩略图
 pub fn build_archive_key(archive_path: &Path) -> Result<String, String> {
     // 规范化路径并计算哈希
-    let normalized = normalize_path_string(archive_path);
+    let normalized = archive_path.to_string_lossy().replace('\\', "/");
     Ok(ThumbnailDatabase::hash_path(Path::new(&normalized)))
 }
 
@@ -904,35 +904,41 @@ impl ThumbnailManager {
             .map_err(|e| format!("清理过期缩略图失败: {}", e))
     }
 
-    /// 确保压缩包缩略图存在（多线程优化版）
+    /// 确保压缩包缩略图存在（优化版）
     pub fn ensure_archive_thumbnail(&self, archive_path: &Path) -> Result<String, String> {
-        
-        
-        
-        println!("📦 ensure_archive_thumbnail: {}", archive_path.display());
+        println!("📦 [Rust] ensure_archive_thumbnail: {}", archive_path.display());
         
         // 1. 构建压缩包专用key
         let archive_key = self.build_archive_key(archive_path)?;
+        println!("🔑 [Rust] 压缩包Key: {}", archive_key);
         
         // 2. 检查缓存
         if let Ok(Some(record)) = self.db.find_by_bookpath(&archive_key) {
             let thumbnail_path = self.db.thumbnail_root.join(&record.relative_thumb_path);
             if thumbnail_path.exists() {
-                println!("✅ 压缩包缩略图缓存命中: {}", archive_path.display());
+                println!("✅ [Rust] 压缩包缩略图缓存命中: {} -> {}", archive_path.display(), thumbnail_path.display());
                 return Ok(format!("file://{}", thumbnail_path.to_string_lossy()));
+            } else {
+                println!("⚠️ [Rust] 缩略图文件不存在: {}", thumbnail_path.display());
             }
+        } else {
+            println!("🔍 [Rust] 数据库中未找到记录: {}", archive_key);
         }
         
         // 3. 扫描压缩包内的图片
+        println!("🔍 [Rust] 扫描压缩包内的图片...");
         let images = self.scan_archive_images(archive_path, 3)?;
         if images.is_empty() {
             return Err("压缩包内未找到图片".to_string());
         }
+        println!("📷 [Rust] 找到 {} 张图片: {:?}", images.len(), images);
         
         // 4. 串行处理前几张图片（避免数据库并发问题）
         for inner_path in images.iter() {
+            println!("🔄 [Rust] 处理图片: {}", inner_path);
             match self.extract_image_from_archive_stream(archive_path, inner_path) {
                 Ok((img, inner_path)) => {
+                    println!("✅ [Rust] 成功提取图片: {}", inner_path);
                     let relative_path = self.get_relative_path(archive_path)?;
                     let thumbnail_url = self.save_thumbnail_for_archive(
                         &img,
@@ -941,15 +947,13 @@ impl ThumbnailManager {
                         &inner_path,
                     )?;
                     
-                    println!("✅ 压缩包缩略图生成完成: {} -> {}", archive_path.display(), thumbnail_url);
+                    println!("✅ [Rust] 压缩包缩略图生成完成: {} -> {}", archive_path.display(), thumbnail_url);
                     return Ok(thumbnail_url);
                 }
                 Err(e) => {
-                    println!("⚠️ 处理图片失败: {} -> {}", inner_path, e);
+                    println!("⚠️ [Rust] 处理图片失败: {} -> {}", inner_path, e);
                     continue;
                 }
-            }
-        }
             }
         }
         
@@ -982,15 +986,13 @@ impl ThumbnailManager {
         use crate::core::archive::ArchiveManager;
         
         let archive_manager = ArchiveManager::new();
-        let mut reader = archive_manager.extract_file_stream(archive_path, inner_path)
-            .map_err(|e| format!("创建流式读取器失败: {}", e))?;
+        // 由于流式读取器不支持 Seek，先读取到内存
+        let image_data = archive_manager.extract_file(archive_path, inner_path)
+            .map_err(|e| format!("从压缩包提取文件失败: {}", e))?;
         
-        // 使用流式解码
-        let img = image::ImageReader::new(&mut reader)
-            .with_guessed_format()
-            .map_err(|e| format!("猜测图片格式失败: {}", e))?
-            .decode()
-            .map_err(|e| format!("解码图片失败: {}", e))?;
+        // 从内存加载图片
+        let img = self.load_image_from_memory(&image_data, Path::new(inner_path))
+            .map_err(|e| format!("加载图片失败: {}", e))?;
         
         Ok((img, inner_path.to_string()))
     }
@@ -1003,6 +1005,8 @@ impl ThumbnailManager {
         relative_path: &Path,
         inner_path: &str,
     ) -> Result<String, String> {
+        println!("💾 [Rust] save_thumbnail_for_archive: {} :: {}", archive_path.display(), inner_path);
+        
         let thumbnail = self.resize_keep_aspect_ratio(img, self.size);
         let webp_data = self.encode_webp(&thumbnail)?;
         
@@ -1024,7 +1028,7 @@ impl ThumbnailManager {
         let file_size = webp_data.len() as u64;
         let source_modified = std::fs::metadata(archive_path)
             .and_then(|m| m.modified())
-            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH))
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e)))
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0);
         
@@ -1036,8 +1040,10 @@ impl ThumbnailManager {
         
         // 1. 为压缩包本体创建记录
         let archive_key = self.build_archive_key(archive_path)?;
+        println!("🔑 [Rust] 压缩包Key: {}", archive_key);
+        
         let archive_record = ThumbnailRecord {
-            bookpath: archive_key,
+            bookpath: archive_key.clone(),
             relative_thumb_path: relative_thumb_path.clone(),
             thumbnail_name: thumbnail_path.file_name()
                 .and_then(|n| n.to_str())
@@ -1052,13 +1058,17 @@ impl ThumbnailManager {
             file_size,
         };
         
-        self.db.upsert_thumbnail(archive_record)
+        let archive_key_clone = archive_key.clone();
+        self.db.upsert_thumbnail(archive_record.clone())
             .map_err(|e| format!("保存压缩包记录失败: {}", e))?;
+        println!("💾 [Rust] 压缩包记录已保存: {}", archive_key);
         
         // 2. 为内部图片创建记录
         let inner_key = format!("{}::{}", archive_key, inner_path);
+        println!("🔑 [Rust] 内部图片Key: {}", inner_key);
+        
         let inner_record = ThumbnailRecord {
-            bookpath: inner_key,
+            bookpath: inner_key.clone(),
             relative_thumb_path: relative_thumb_path,
             thumbnail_name: archive_record.thumbnail_name.clone(),
             hash: archive_record.hash.clone(),
@@ -1072,8 +1082,9 @@ impl ThumbnailManager {
         
         self.db.upsert_thumbnail(inner_record)
             .map_err(|e| format!("保存内部图片记录失败: {}", e))?;
+        println!("💾 [Rust] 内部图片记录已保存: {}", inner_key);
         
-        println!("💾 双记录已保存: 压缩包='{}' 内部='{}'", archive_key, inner_key);
+        println!("✅ [Rust] 双记录已保存");
         
         Ok(format!("file://{}", thumbnail_path.to_string_lossy()))
     }

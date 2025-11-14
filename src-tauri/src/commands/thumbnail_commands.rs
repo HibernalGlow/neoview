@@ -558,14 +558,26 @@ pub async fn generate_archive_thumbnail_root(
     archive_path: String,
     state: tauri::State<'_, ThumbnailManagerState>,
 ) -> Result<String, String> {
-    println!("🔄 开始生成压缩包缩略图: {}", archive_path);
-    let path = PathBuf::from(archive_path);
+    println!("🔄 [Rust] 开始生成压缩包缩略图: {}", archive_path);
+    let path = PathBuf::from(&archive_path);
     
     // 等待管理器初始化（最多 5 秒）
     if let Err(e) = ensure_manager_ready(&state, 5000).await {
-        println!("❌ {}", e);
+        println!("❌ [Rust] {}", e);
         return Err(e);
     }
+    
+    // 构建压缩包专用key并记录日志
+    let _archive_key = match crate::core::thumbnail::build_archive_key(&path) {
+        Ok(key) => {
+            println!("🔑 [Rust] 压缩包Key: {} -> {}", archive_path, key);
+            key
+        }
+        Err(e) => {
+            println!("❌ [Rust] 构建压缩包Key失败: {}", e);
+            return Err(e);
+        }
+    };
     
     // 首先检查缓存（使用压缩包专用key）
     let cache_key = normalize_path_string(path.to_string_lossy());
@@ -573,34 +585,36 @@ pub async fn generate_archive_thumbnail_root(
         if let Some(cached_url) = cache.get(&cache_key) {
             if cached_url.starts_with("file://") {
                 if cache.validate_file_url(&cache_key) {
-                    println!("✅ 使用缓存的压缩包缩略图: {}", cached_url);
+                    println!("✅ [Rust] 压缩包缩略图缓存命中: {} -> {}", archive_path, cached_url);
                     return Ok(cached_url);
                 }
             } else {
-                println!("✅ 使用缓存的压缩包缩略图: {}", cached_url);
+                println!("✅ [Rust] 压缩包缩略图缓存命中: {} -> {}", archive_path, cached_url);
                 return Ok(cached_url);
             }
         }
     }
     
+    println!("🔍 [Rust] 缓存未命中，开始生成压缩包缩略图");
+    
     // 使用新的多线程压缩包缩略图生成方法
     if let Ok(manager_guard) = state.manager.lock() {
         if let Some(ref manager) = *manager_guard {
-            println!("📦 正在生成压缩包缩略图（多线程）...");
+            println!("📦 [Rust] 正在生成压缩包缩略图（多线程）...");
             match manager.ensure_archive_thumbnail(&path) {
                 Ok(thumbnail_url) => {
-                    println!("✅ 压缩包缩略图生成成功: {}", thumbnail_url);
+                    println!("✅ [Rust] 压缩包缩略图生成成功: {} -> {}", archive_path, thumbnail_url);
                     
                     // 添加到缓存
                     if let Ok(cache) = state.cache.lock() {
                         cache.set(cache_key.clone(), thumbnail_url.clone());
-                        println!("💾 压缩包缩略图已添加到缓存");
+                        println!("💾 [Rust] 压缩包缩略图已添加到缓存: {}", cache_key);
                     }
                     
                     return Ok(thumbnail_url);
                 }
                 Err(e) => {
-                    println!("❌ 压缩包缩略图生成失败: {}", e);
+                    println!("❌ [Rust] 压缩包缩略图生成失败: {}", e);
                     return Err(format!("生成压缩包缩略图失败: {}", e));
                 }
             }
@@ -617,8 +631,8 @@ pub async fn generate_archive_thumbnail_inner(
     inner_path: String,
     state: tauri::State<'_, ThumbnailManagerState>,
 ) -> Result<String, String> {
-    println!("🔄 开始生成压缩包内页缩略图: {} :: {}", archive_path, inner_path);
-    let archive_path = PathBuf::from(archive_path);
+    println!("🔄 [Rust] 开始生成压缩包内页缩略图: {} :: {}", archive_path, inner_path);
+    let archive_path = PathBuf::from(&archive_path);
     
     // 等待管理器初始化
     if let Err(e) = ensure_manager_ready(&state, 5000).await {
@@ -626,25 +640,36 @@ pub async fn generate_archive_thumbnail_inner(
     }
     
     // 构建内部页面的专用key
+    let _archive_key = match crate::core::thumbnail::build_archive_key(&archive_path) {
+        Ok(key) => key,
+        Err(e) => {
+            println!("❌ [Rust] 构建压缩包Key失败: {}", e);
+            return Err(e);
+        }
+    };
     let inner_key = format!("{}::{}", 
         normalize_path_string(archive_path.to_string_lossy()),
         normalize_path_string(&inner_path)
     );
+    
+    println!("🔑 [Rust] 内部页Key: {}", inner_key);
     
     // 检查缓存
     if let Ok(cache) = state.cache.lock() {
         if let Some(cached_url) = cache.get(&inner_key) {
             if cached_url.starts_with("file://") {
                 if cache.validate_file_url(&inner_key) {
-                    println!("✅ 使用缓存的内部页缩略图: {}", cached_url);
+                    println!("✅ [Rust] 内部页缩略图缓存命中: {} -> {}", inner_key, cached_url);
                     return Ok(cached_url);
                 }
             } else {
-                println!("✅ 使用缓存的内部页缩略图: {}", cached_url);
+                println!("✅ [Rust] 内部页缩略图缓存命中: {} -> {}", inner_key, cached_url);
                 return Ok(cached_url);
             }
         }
     }
+    
+    println!("🔍 [Rust] 缓存未命中，开始生成内部页缩略图");
     
     // 生成内部页缩略图
     if let Ok(manager_guard) = state.manager.lock() {
@@ -655,29 +680,38 @@ pub async fn generate_archive_thumbnail_inner(
             // 流式提取并解码
             match manager.extract_image_from_archive_stream(&archive_path, &inner_path) {
                 Ok((img, _)) => {
+                    println!("✅ [Rust] 成功提取图片: {}", inner_path);
+                    
                     // 获取相对路径
-                    let relative_path = manager.get_relative_path(&archive_path)?;
+                    let relative_path = match manager.get_relative_path(&archive_path) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            println!("❌ [Rust] 获取相对路径失败: {}", e);
+                            return Err(format!("获取相对路径失败: {}", e));
+                        }
+                    };
                     
                     // 保存缩略图
                     match manager.save_thumbnail_for_archive(&img, &archive_path, &relative_path, &inner_path) {
                         Ok(thumbnail_url) => {
-                            println!("✅ 内部页缩略图生成成功: {}", thumbnail_url);
+                            println!("✅ [Rust] 内部页缩略图生成成功: {} -> {}", inner_key, thumbnail_url);
                             
                             // 添加到缓存
                             if let Ok(cache) = state.cache.lock() {
                                 cache.set(inner_key.clone(), thumbnail_url.clone());
+                                println!("💾 [Rust] 内部页缩略图已添加到缓存: {}", inner_key);
                             }
                             
                             return Ok(thumbnail_url);
                         }
                         Err(e) => {
-                            println!("❌ 保存内部页缩略图失败: {}", e);
+                            println!("❌ [Rust] 保存内部页缩略图失败: {}", e);
                             return Err(format!("保存内部页缩略图失败: {}", e));
                         }
                     }
                 }
                 Err(e) => {
-                    println!("❌ 提取内部页失败: {}", e);
+                    println!("❌ [Rust] 提取内部页失败: {}", e);
                     return Err(format!("提取内部页失败: {}", e));
                 }
             }

@@ -134,6 +134,22 @@
 			}
 		});
 	}
+
+	function renameMetadataKey(conditionIndex: number, oldKey: string, newKey: string) {
+		const trimmed = newKey.trim();
+		if (!trimmed || trimmed === oldKey) return;
+
+		const condition = conditionsList[conditionIndex];
+		const metadata = condition.match.metadata || {};
+		
+		if (!metadata[oldKey]) return;
+
+		const newMetadata = { ...metadata };
+		newMetadata[trimmed] = newMetadata[oldKey];
+		delete newMetadata[oldKey];
+		
+		updateConditionMatch(conditionIndex, { metadata: newMetadata });
+	}
 </script>
 
 <Card class="w-full">
@@ -286,22 +302,13 @@
 										</Button>
 									</div>
 									
-									{#each Object.entries(condition.match.metadata || {}) as [key, rule]}
+									{#each Object.entries(condition.match.metadata || {}) as [key, rule] (key)}
 										<div class="flex items-center gap-2 p-2 border rounded">
 											<Input
-												bind:value={key}
+												value={key}
 												placeholder="键名"
 												class="w-24"
-												onchange={() => {
-													const newKey = key;
-													const oldKey = Object.entries(condition.match.metadata || {}).find(([, r]) => r === rule)?.[0];
-													if (oldKey && oldKey !== newKey) {
-														const metadata = { ...condition.match.metadata };
-														delete metadata[oldKey];
-														metadata[newKey] = rule;
-														updateConditionMatch(index, { metadata });
-													}
-												}}
+												onchange={(event) => renameMetadataKey(index, key, event.currentTarget.value)}
 											/>
 											<Select
 												bind:value={rule.operator}

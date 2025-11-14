@@ -113,18 +113,23 @@ export function persistUpscalePanelSettings(settings: UpscalePanelSettings): voi
 
 	setUpscaleSettings(upscaleSettings);
 	
-	// 同步 conditionsList 到全局 settingsManager
-	// 注意：这确保了通过 settingsManager.getSettings().image.conditionsList 
-	// 可以获取到最新的条件列表，供其他组件使用
+	// 异步同步 conditionsList 到全局 settingsManager
+	void syncConditionsToGlobal(settings);
+}
+
+/**
+ * 异步同步条件列表到全局设置
+ */
+async function syncConditionsToGlobal(settings: UpscalePanelSettings): Promise<void> {
 	try {
-		const settingsManager = await import('$lib/settings/settingsManager').then(m => m.settingsManager);
+		const { settingsManager } = await import('$lib/settings/settingsManager');
 		const globalSettings = settingsManager.getSettings();
 		if (globalSettings.image) {
 			globalSettings.image.conditionsList = settings.conditionsList;
 			settingsManager.saveSettings();
 		}
 	} catch (error) {
-		console.warn('同步 conditionsList 到全局设置失败:', error);
+		console.warn('同步条件失败', error);
 	}
 }
 

@@ -553,7 +553,6 @@
 			console.log('✅ 设置已应用到 PyO3UpscaleManager');
 
 			// 从当前页面获取图像数据
-			const currentPage = bookStore.currentPage;
 			if (!currentPage) {
 				throw new Error('没有当前图片');
 			}

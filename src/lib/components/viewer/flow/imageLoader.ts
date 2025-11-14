@@ -20,6 +20,8 @@ import type { PreloadTaskWithCondition } from './preloadManager';
 import { upscaleState, startUpscale, updateUpscaleProgress, completeUpscale, setUpscaleError } from '$lib/stores/upscale/upscaleState.svelte';
 import { showSuccessToast } from '$lib/utils/toast';
 import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
+import { collectPageMetadata, evaluateConditions } from '$lib/utils/upscale/conditions';
+import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
 
 // 缩略图高度配置
 const THUMB_HEIGHT = 120;

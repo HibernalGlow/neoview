@@ -204,7 +204,7 @@ export async function triggerAutoUpscale(
 		const { blob: imageBlob, hash: imageHash } = imageDataWithHash;
 		
 		console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', 'MD5:', imageHash, 
-			`Blob size: ${imageBlob.size}`, 'sessionId:', currentSession, 'conditionId:', imageDataWithHash.conditionId);
+			`Blob size: ${imageBlob.size}`, 'conditionId:', imageDataWithHash.conditionId);
 		
 		// 触发超分开始事件（仅对非预加载任务）
 		if (!isPreload) {

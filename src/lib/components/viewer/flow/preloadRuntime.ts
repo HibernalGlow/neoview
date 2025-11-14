@@ -10,8 +10,7 @@ import { settingsManager } from '$lib/settings/settingsManager';
 import { get } from 'svelte/store';
 
 export interface ImageDataWithHash {
-	data?: string;  // 保留兼容性，但新代码应使用 blob
-	blob?: Blob;
+	blob: Blob;
 	hash: string;
 }
 
@@ -43,26 +42,20 @@ export async function getAutoUpscaleEnabled(): Promise<boolean> {
  * 执行超分处理
  */
 export async function performUpscale(
-	imageDataOrBlob: string | Blob, 
+	imageBlob: Blob, 
 	imageHash: string, 
 	options: PerformUpscaleOptions = {}
 ): Promise<PerformUpscaleResult> {
 	try {
 		console.log('执行超分处理，hash:', imageHash, 'background:', options.background);
 
-		let imageDataArray: Uint8Array;
-		
-		// 如果是 Blob，直接使用
-		if (imageDataOrBlob instanceof Blob) {
-			const arrayBuffer = await imageDataOrBlob.arrayBuffer();
-			imageDataArray = new Uint8Array(arrayBuffer);
-		} else {
-			// 如果是 data URL，转换为 Uint8Array
-			const response = await fetch(imageDataOrBlob);
-			const blob = await response.blob();
-			const arrayBuffer = await blob.arrayBuffer();
-			imageDataArray = new Uint8Array(arrayBuffer);
+		// 只接受 Blob 格式
+		if (!(imageBlob instanceof Blob)) {
+			throw new Error('performUpscale 只接受 Blob 格式');
 		}
+
+		const arrayBuffer = await imageBlob.arrayBuffer();
+		const imageDataArray = new Uint8Array(arrayBuffer);
 		
 		// 调用pyo3UpscaleManager进行超分处理
 		const resultData = await pyo3UpscaleManager.upscaleImageMemory(imageDataArray);
@@ -168,7 +161,13 @@ export async function checkUpscaleCache(
 	preview: boolean = true
 ): Promise<boolean> {
 	try {
-		const { data: imageData, hash: imageHash } = imageDataWithHash;
+		const { blob: imageBlob, hash: imageHash } = imageDataWithHash;
+		
+		// 如果没有 blob，则无法检查缓存
+		if (!imageBlob) {
+			console.warn('checkUpscaleCache: 缺少 blob 数据');
+			return false;
+		}
 
 		// 优先检查内存预加载缓存（preloadMemoryCache），减少导航时磁盘读取等待
 		// 注意：这里不直接访问preloadMemoryCache，而是通过事件系统
@@ -260,89 +259,51 @@ export async function checkUpscaleCache(
 
 /**
  * 获取图片的MD5（只计算一次，后续使用缓存）
+ * @deprecated 使用 calculateBlobHash 替代
  */
 export async function getImageMd5(imageUrl: string, md5Cache = new Map<string, string>()): Promise<string | null> {
-	if (!imageUrl) return null;
-	
-	// 检查缓存
-	if (md5Cache.has(imageUrl)) {
-		return md5Cache.get(imageUrl) || null;
-	}
-	
-	try {
-		// 对于blob URL，需要先转换为data URL
-		let dataUrl = imageUrl;
-		if (imageUrl.startsWith('blob:')) {
-			console.log('getImageMd5: 转换blob URL为data URL...');
-			const response = await fetch(imageUrl);
-			const blob = await response.blob();
-			dataUrl = await new Promise<string>((resolve, reject) => {
-				const reader = new FileReader();
-				reader.onload = () => {
-					const result = reader.result as string;
-					resolve(result);
-				};
-				reader.onerror = reject;
-				reader.readAsDataURL(blob);
-			});
-			console.log('getImageMd5: 转换完成，data URL长度:', dataUrl.length);
-		} else if (!imageUrl.startsWith('data:image/')) {
-			console.error('getImageMd5: 无效的图片URL格式:', imageUrl);
-			return null;
-		}
-		
-		// 计算MD5
-		const md5 = await invoke<string>('calculate_data_hash', {
-			dataUrl: dataUrl
-		});
-		
-		// 缓存结果
-		md5Cache.set(imageUrl, md5);
-		
-		return md5;
-	} catch (error) {
-		console.error('计算MD5失败:', error);
-		return null;
-	}
+	console.warn('getImageMd5 is deprecated, use calculateBlobHash instead');
+	return null;
 }
 
 /**
  * 创建带有MD5信息的图片数据结构
  */
 export async function getImageDataWithHash(
-	imageData: string | Blob, 
+	imageData: Blob, 
 	md5Cache = new Map<string, string>()
 ): Promise<ImageDataWithHash | null> {
 	if (!imageData) return null;
 	
+	// 只接受 Blob 格式
+	if (!(imageData instanceof Blob)) {
+		console.warn('getImageDataWithHash: 只接受 Blob 格式，不支持 data URL');
+		return null;
+	}
+	
+	// 计算MD5
+	const { invoke } = await import('@tauri-apps/api/core');
+	const arrayBuffer = await imageData.arrayBuffer();
+	const bytes = new Uint8Array(arrayBuffer);
 	let hash: string;
 	
-	if (typeof imageData === 'string') {
-		// 兼容旧的数据URL格式
-		hash = await getImageMd5(imageData, md5Cache);
-	} else {
-		// 新的Blob格式，直接计算MD5
-		const { invoke } = await import('@tauri-apps/api/core');
-		const arrayBuffer = await imageData.arrayBuffer();
-		const bytes = new Uint8Array(arrayBuffer);
-		try {
-			hash = await invoke<string>('calculate_blob_md5', { 
-				bytes: Array.from(bytes) 
-			});
-		} catch (error) {
-			console.warn('后端 calculate_blob_md5 命令不可用，使用前端计算（SHA-256）:', error);
-			// 临时回退到前端计算 SHA-256
-			const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
-			const hashArray = Array.from(new Uint8Array(hashBuffer));
-			hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-		}
+	try {
+		hash = await invoke<string>('calculate_blob_md5', { 
+			bytes: Array.from(bytes) 
+		});
+	} catch (error) {
+		console.warn('后端 calculate_blob_md5 命令不可用，使用前端计算（SHA-256）:', error);
+		// 临时回退到前端计算 SHA-256
+		const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+		const hashArray = Array.from(new Uint8Array(hashBuffer));
+		hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 	}
 	
 	if (!hash) return null;
 	
 	return {
-		data: typeof imageData === 'string' ? imageData : undefined,
-		blob: typeof imageData === 'string' ? undefined : imageData,
+		data: undefined, // 不再使用 data URL
+		blob: imageData,
 		hash: hash
 	};
 }

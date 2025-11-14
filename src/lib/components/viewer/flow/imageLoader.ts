@@ -480,8 +480,7 @@ export class ImageLoader {
 			}
 			if (!imageDataWithHash) {
 				const { blob } = this.blobCache.get(currentPageIndex)!;
-				const data = await this.blobToDataURL(blob);
-				imageDataWithHash = await getImageDataWithHash(data);
+				imageDataWithHash = await getImageDataWithHash(blob);
 				if (!imageDataWithHash) {
 					console.error('无法获取图片数据及hash');
 					return;
@@ -521,17 +520,7 @@ export class ImageLoader {
 		}
 	}
 	
-	/**
-	 * 将 Blob 转换为 DataURL
-	 */
-	private async blobToDataURL(blob: Blob): Promise<string> {
-		return new Promise((resolve, reject) => {
-			const reader = new FileReader();
-			reader.onload = () => resolve(reader.result as string);
-			reader.onerror = reject;
-			reader.readAsDataURL(blob);
-		});
-	}
+	
 
 	/**
 	 * 预加载后续页面的超分
@@ -598,8 +587,9 @@ export class ImageLoader {
 					// 检查是否已有缓存
 					let hasCache = false;
 					if (autoUpscaleEnabled) {
-						// 使用 hash 检查缓存
-						hasCache = await checkUpscaleCache({ hash }, false);
+						// 使用 hash 检查缓存（需要传入一个空的 blob，因为缓存检查只需要 hash）
+						const emptyBlob = new Blob();
+						hasCache = await checkUpscaleCache({ blob: emptyBlob, hash }, false);
 					}
 
 					if (hasCache) {

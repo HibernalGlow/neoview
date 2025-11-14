@@ -652,37 +652,33 @@ export class ImageLoader {
 				}
 
 				// 确保核心缓存已准备（Blob + ImageBitmap），保证翻页时可以直接显示
+				// 没有缓存：如果自动超分已开启，则使用新的preloadWorker API
 				try {
 					await this.ensureResources(targetIndex);
 					console.log('预加载已写入核心缓存，index:', targetIndex + 1);
-				} catch (e) {
-					console.warn('预加载写入核心缓存失败:', e);
-					continue;
-				}
-
-				// 没有缓存：如果自动超分已开启，则使用新的preloadWorker API
-				if (autoUpscaleEnabled) {
-					// 检查是否已经在处理中（去重）
-					if (this.pendingPreloadTasks.has(hash)) {
-						console.log(`第 ${targetIndex + 1} 页已在预加载队列中，跳过重复任务`);
-						continue;
+					
+					if (autoUpscaleEnabled) {
+						// 检查是否已经在处理中（去重）
+						if (this.pendingPreloadTasks.has(hash)) {
+							console.log(`第 ${targetIndex + 1} 页已在预加载队列中，跳过重复任务`);
+							continue;
+						}
+						
+						// 标记为待处理
+						this.pendingPreloadTasks.add(hash);
+						
+						// 获取 Blob 用于超分
+						const blob = await this.getBlob(targetIndex);
+						// 使用新的preloadWorker API
+						const task = { blob, hash, pageIndex: targetIndex };
+						this.preloadWorker.enqueue(task);
+						console.log('已加入preloadWorker队列，hash:', hash, 'pageIndex:', targetIndex);
+					} else {
+						console.log('自动超分关闭，跳过触发预超分（已完成预加载）');
 					}
-					
-					// 标记为待处理
-					this.pendingPreloadTasks.add(hash);
-					
-					// 获取 Blob 用于超分
-					const blob = await this.getBlob(targetIndex);
-					// 使用新的preloadWorker API
-					const task = { blob, hash, pageIndex: targetIndex };
-					this.preloadWorker.enqueue(task);
-					console.log('已加入preloadWorker队列，hash:', hash, 'pageIndex:', targetIndex);
-				} else {
-					console.log('自动超分关闭，跳过触发预超分（已完成预加载）');
+				} catch (error) {
+					console.error(`预加载第 ${targetIndex + 1} 页失败:`, error);
 				}
-			} catch (error) {
-				console.error(`预加载第 ${targetIndex + 1} 页失败:`, error);
-			}
 			}
 		} catch (error) {
 			console.error('预超分失败:', error);

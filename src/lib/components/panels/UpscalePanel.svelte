@@ -433,6 +433,14 @@
 	}
 
 	/**
+	 * 更新进度
+	 */
+	function updateProgress(progressValue: number, statusValue: string) {
+		progress = progressValue;
+		status = statusValue;
+	}
+
+	/**
 	 * 执行超分处理
 	 */
 	async function performUpscale() {

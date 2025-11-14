@@ -2,7 +2,8 @@ import { setUpscaleSettings, DEFAULT_UPSCALE_SETTINGS } from '$lib/utils/upscale
 import { settingsManager } from '$lib/settings/settingsManager';
 import { invoke } from '@tauri-apps/api/core';
 import type { UpscaleSettings } from '$lib/utils/upscale/settings';
-import type { UpscaleCondition, createDefaultCondition } from '$lib/types/upscaleConditions';
+import type { UpscaleCondition } from '$lib/types/upscaleConditions';
+import { createDefaultCondition } from '$lib/types/upscaleConditions';
 
 export interface UpscalePanelSettings extends UpscaleSettings {
 	// ...已有字段

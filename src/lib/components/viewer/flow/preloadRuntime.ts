@@ -88,6 +88,16 @@ export async function performUpscale(
 		
 		// 调用pyo3UpscaleManager进行超分处理
 		updateUpscaleProgress(30, '执行超分处理');
+		
+		// 检查 PyO3 管理器是否已初始化
+		if (!pyo3UpscaleManager.isInitialized()) {
+			throw new Error('PyO3 超分管理器未初始化，请等待初始化完成');
+		}
+		
+		if (!pyo3UpscaleManager.isAvailable()) {
+			throw new Error('PyO3 超分功能不可用，请检查 sr_vulkan 模块');
+		}
+		
 		const resultData = await pyo3UpscaleManager.upscaleImageMemory(imageDataArray);
 		
 		// 更新进度 - 完成阶段
@@ -154,22 +164,21 @@ export async function performUpscale(
  * 触发自动超分
  */
 export async function triggerAutoUpscale(
-	imageDataWithHash: { blob: Blob; hash: string }, 
-	isPreload = false,
-	pageMeta?: { width: number; height: number; bookPath: string; imagePath: string }
-): Promise<PerformUpscaleResult | undefined> {
+	imageDataWithHash: ImageDataWithHash,
+	isPreload: boolean = false
+): Promise<UpscaleResult | null> {
 	try {
-		// 验证图片数据
-		if (!imageDataWithHash || !imageDataWithHash.blob) {
-			console.error('自动超分：图片数据为空');
-			return;
+		// 检查 PyO3 管理器是否已初始化
+		if (!pyo3UpscaleManager.isInitialized()) {
+			console.log('PyO3 超分管理器未初始化，跳过自动超分');
+			return null;
 		}
-
-		// 检查自动超分开关
-		const autoUpscaleEnabled = await getAutoUpscaleEnabled();
-		if (!autoUpscaleEnabled) {
-			console.log('自动超分开关已关闭，跳过自动超分');
-			return;
+		
+		// 检查是否启用自动超分
+		const upscaleSettings = getUpscaleSettings();
+		if (!upscaleSettings.autoUpscaleEnabled) {
+			console.log('自动超分未启用，跳过');
+			return null;
 		}
 
 		// 获取条件列表

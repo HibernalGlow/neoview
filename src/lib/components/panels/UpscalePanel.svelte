@@ -296,23 +296,6 @@
 		console.log('✅ settingsInitialized 设置为 true');
 		emitUpscaleSettings(gatherPanelSettings());
 		
-		// 监听会话变更
-		const handleSessionChange = (event: CustomEvent) => {
-			console.log('[UpscalePanel] 检测到会话变更:', event.detail);
-			// 如果有正在进行的任务，取消它
-			if (isProcessing && currentTaskId) {
-				console.log('[UpscalePanel] 会话变更，取消当前任务');
-				cancelCurrentUpscale();
-			}
-		};
-		
-		window.addEventListener('book-session-changed', handleSessionChange as EventListener);
-		
-		// 清理函数
-		return () => {
-			window.removeEventListener('book-session-changed', handleSessionChange as EventListener);
-		};
-
 		// 初始化 PyO3 管理器
 		try {
 			// 使用绝对路径
@@ -341,6 +324,23 @@
 			console.error('❌ 初始化 PyO3 超分管理器失败:', error);
 			console.error('[UpscalePanel] 初始化超分功能失败:', error instanceof Error ? error.message : String(error));
 		}
+		
+		// 监听会话变更
+		const handleSessionChange = (event: CustomEvent) => {
+			console.log('[UpscalePanel] 检测到会话变更:', event.detail);
+			// 如果有正在进行的任务，取消它
+			if (isProcessing && currentTaskId) {
+				console.log('[UpscalePanel] 会话变更，取消当前任务');
+				cancelCurrentUpscale();
+			}
+		};
+		
+		window.addEventListener('book-session-changed', handleSessionChange as EventListener);
+		
+		// 清理函数
+		return () => {
+			window.removeEventListener('book-session-changed', handleSessionChange as EventListener);
+		};
 	});
 
 	$effect(() => {

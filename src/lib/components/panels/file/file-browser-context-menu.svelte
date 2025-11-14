@@ -2,16 +2,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { flyAndScale } from 'svelte/transition';
-  import FileOpen from 'lucide-svelte/icons/file-open';
-  import ExternalLink from 'lucide-svelte/icons/external-link';
-  import Copy from 'lucide-svelte/icons/copy';
-  import Scissors from 'lucide-svelte/icons/scissors';
-  import FolderPlus from 'lucide-svelte/icons/folder-plus';
-  import Edit3 from 'lucide-svelte/icons/edit-3';
-  import Trash2 from 'lucide-svelte/icons/trash-2';
-  import Archive from 'lucide-svelte/icons/archive';
-  import Star from 'lucide-svelte/icons/star';
-  import Info from 'lucide-svelte/icons/info';
+  import { File, ExternalLink, Copy, Scissors, FolderPlus, Edit3, Trash2, Archive, Star, Info } from '@lucide/svelte';
   
   interface Props {
     visible?: boolean;
@@ -61,7 +52,7 @@
           class="menu-item"
           on:click={() => handleAction('open')}
         >
-          <FileOpen />
+          <File />
           <span>打开</span>
           <kbd>Enter</kbd>
         </button>
@@ -79,8 +70,8 @@
             class="menu-item"
             on:click={() => handleAction('openNewTab')}
           >
-            <FileOpen />
-            <span>新标签页打开</span>
+            <File />
+          <span>新标签页打开</span>
             <kbd>Ctrl+Enter</kbd>
           </button>
         {/if}

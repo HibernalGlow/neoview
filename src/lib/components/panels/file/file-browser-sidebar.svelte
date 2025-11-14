@@ -1,10 +1,7 @@
 <!-- file-browser-sidebar.svelte - 侧边栏 -->
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import Bookmark from 'lucide-svelte/icons/bookmark';
-  import Clock from 'lucide-svelte/icons/clock';
-  import Star from 'lucide-svelte/icons/star';
-  import FolderOpen from 'lucide-svelte/icons/folder-open';
+  import { Bookmark, Clock, Star, FolderOpen } from '@lucide/svelte';
   
   interface Props {
     bookmarks?: Array<{ path: string; name: string }>;

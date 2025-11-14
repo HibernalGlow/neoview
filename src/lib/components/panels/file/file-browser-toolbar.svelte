@@ -1,14 +1,7 @@
 <!-- file-browser-toolbar.svelte - 顶部工具栏 -->
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import Home from 'lucide-svelte/icons/home';
-  import ArrowLeft from 'lucide-svelte/icons/arrow-left';
-  import ArrowRight from 'lucide-svelte/icons/arrow-right';
-  import RefreshCw from 'lucide-svelte/icons/refresh-cw';
-  import Grid3x3 from 'lucide-svelte/icons/grid-3x3';
-  import List from 'lucide-svelte/icons/list';
-  import Search from 'lucide-svelte/icons/search';
-  import FolderOpen from 'lucide-svelte/icons/folder-open';
+  import { Home, ArrowLeft, ArrowRight, RefreshCw, Grid3x3, List, Search, FolderOpen } from '@lucide/svelte';
   
   interface Props {
     currentPath?: string;

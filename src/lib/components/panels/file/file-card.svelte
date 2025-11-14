@@ -1,12 +1,7 @@
 <!-- file-card.svelte - 单个文件卡片 -->
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import File from 'lucide-svelte/icons/file';
-  import Folder from 'lucide-svelte/icons/folder';
-  import Archive from 'lucide-svelte/icons/archive';
-  import Check from 'lucide-svelte/icons/check';
-  import X from 'lucide-svelte/icons/x';
-  import Trash2 from 'lucide-svelte/icons/trash-2';
+  import { File, Folder, Archive, Check, X, Trash2 } from '@lucide/svelte';
   import type { FsItem } from '$lib/types';
   
   interface Props {
@@ -61,8 +56,8 @@
     return new Date(timestamp).toLocaleDateString();
   }
   
-  $: fileIcon = getFileIcon();
-  $: hasThumbnail = thumbnail && item.is_image;
+  const fileIcon = $derived(getFileIcon());
+  const hasThumbnail = $derived(thumbnail && item.is_image);
 </script>
 
 <div 

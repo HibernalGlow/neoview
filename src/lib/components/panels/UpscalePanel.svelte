@@ -394,6 +394,16 @@
 	}
 
 	/**
+	 * 处理开关设置变化
+	 */
+	function handleGlobalControlsChange() {
+		console.log('🔄 处理开关设置变化');
+		const settings = gatherPanelSettings();
+		persistUpscalePanelSettings(settings);
+		emitUpscaleSettings(settings);
+	}
+
+	/**
 	 * 检查是否有缓存
 	 */
 	async function checkUpscaleCache(): Promise<Uint8Array | null> {
@@ -702,6 +712,7 @@
 		bind:conditionalMinHeight
 		bind:currentImageUpscaleEnabled
 		bind:useCachedFirst
+		on:change={handleGlobalControlsChange}
 	/>
 
 	<!-- 修改参数 -->

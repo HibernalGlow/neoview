@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { Switch } from '$lib/components/ui/switch';
 	import { Label } from '$lib/components/ui/label';
+	import { createEventDispatcher } from 'svelte';
+
+	const dispatch = createEventDispatcher();
 
 	let {
 		autoUpscaleEnabled = false,
@@ -12,56 +15,30 @@
 		useCachedFirst = true
 	} = $props();
 
-	// 创建响应式状态
-	let autoUpscaleEnabledState = $state(autoUpscaleEnabled);
-	let preUpscaleEnabledState = $state(preUpscaleEnabled);
-	let conditionalUpscaleEnabledState = $state(conditionalUpscaleEnabled);
-	let conditionalMinWidthState = $state(conditionalMinWidth);
-	let conditionalMinHeightState = $state(conditionalMinHeight);
-	let currentImageUpscaleEnabledState = $state(currentImageUpscaleEnabled);
-	let useCachedFirstState = $state(useCachedFirst);
-
-	// 监听变化并通知父组件
-	$effect(() => {
-		autoUpscaleEnabled = autoUpscaleEnabledState;
-	});
-	
-	$effect(() => {
-		preUpscaleEnabled = preUpscaleEnabledState;
-	});
-	
-	$effect(() => {
-		conditionalUpscaleEnabled = conditionalUpscaleEnabledState;
-	});
-	
-	$effect(() => {
-		conditionalMinWidth = conditionalMinWidthState;
-	});
-	
-	$effect(() => {
-		conditionalMinHeight = conditionalMinHeightState;
-	});
-	
-	$effect(() => {
-		currentImageUpscaleEnabled = currentImageUpscaleEnabledState;
-	});
-	
-	$effect(() => {
-		useCachedFirst = useCachedFirstState;
-	});
+	// 处理开关变化
+	function handleSettingChange() {
+		console.log('🔄 开关状态变化，触发保存事件');
+		dispatch('change');
+	}
 </script>
 
 <div class="section">
 	<div class="setting-row">
 		<div class="flex items-center gap-2">
-			<Switch bind:checked={autoUpscaleEnabledState} />
+			<Switch 
+				bind:checked={autoUpscaleEnabled} 
+				onchange={handleSettingChange} 
+			/>
 			<Label>自动超分</Label>
 		</div>
 	</div>
 
 	<div class="setting-row">
 		<div class="flex items-center gap-2">
-			<Switch bind:checked={preUpscaleEnabledState} />
+			<Switch 
+				bind:checked={preUpscaleEnabled} 
+				onchange={handleSettingChange} 
+			/>
 			<Label>开启预超分</Label>
 		</div>
 	</div>
@@ -69,7 +46,10 @@
 	<div class="setting-row items-start">
 		<div class="flex flex-col gap-2">
 			<div class="flex items-center gap-2">
-				<Switch bind:checked={conditionalUpscaleEnabledState} />
+				<Switch 
+					bind:checked={conditionalUpscaleEnabled} 
+					onchange={handleSettingChange} 
+				/>
 				<Label>满足条件才自动超分</Label>
 			</div>
 			<div class="flex gap-4 pl-6 text-sm text-gray-500">
@@ -79,8 +59,9 @@
 						type="number"
 						class="input-number w-24"
 						min="0"
-						bind:value={conditionalMinWidthState}
-						disabled={!conditionalUpscaleEnabledState}
+						bind:value={conditionalMinWidth}
+						onchange={handleSettingChange}
+						disabled={!conditionalUpscaleEnabled}
 					/>
 					x
 				</label>
@@ -90,8 +71,9 @@
 						type="number"
 						class="input-number w-24"
 						min="0"
-						bind:value={conditionalMinHeightState}
-						disabled={!conditionalUpscaleEnabledState}
+						bind:value={conditionalMinHeight}
+						onchange={handleSettingChange}
+						disabled={!conditionalUpscaleEnabled}
 					/>
 					x
 				</label>
@@ -101,14 +83,20 @@
 
 	<div class="setting-row">
 		<div class="flex items-center gap-2">
-			<Switch bind:checked={currentImageUpscaleEnabledState} />
+			<Switch 
+				bind:checked={currentImageUpscaleEnabled} 
+				onchange={handleSettingChange} 
+			/>
 			<Label>本张图开启 Waifu2x (F2)</Label>
 		</div>
 	</div>
 
 	<div class="setting-row">
 		<div class="flex items-center gap-2">
-			<Switch bind:checked={useCachedFirstState} />
+			<Switch 
+				bind:checked={useCachedFirst} 
+				onchange={handleSettingChange} 
+			/>
 			<Label>优先使用下载转换好的</Label>
 		</div>
 	</div>

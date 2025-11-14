@@ -311,7 +311,7 @@
   async function selectFolder() {
     console.log('📂 selectFolder called');
     try {
-      console.log('🔄 Calling FileSystemAPI.selectFolder...');
+      console.log('🔄 Selecting folder...');
       const path = await fileBrowserService.selectFolder();
       console.log('✅ Selected path:', path);
       
@@ -355,7 +355,7 @@
     selectedItems.clear();
 
     try {
-      console.log('🔄 Calling FileSystemAPI.browseDirectory...');
+      console.log('🔄 Loading directory via service...');
       const loadedItems = await fileBrowserService.browseDirectory(path);
       console.log('✅ Loaded', loadedItems.length, 'items:', loadedItems.map(i => i.name));
       
@@ -379,12 +379,9 @@
           // 忽略 key 计算错误
         }
 
-        if (itemIsDirectory(item)) {
-          console.log('📁 Enqueue folder thumbnail:', item.path);
+        if (itemIsDirectory(item) || itemIsImage(item)) {
+          console.log('🖼️/📁 Enqueue thumbnail:', item.path);
           thumbnailQueue.enqueueItems([item], { priority: 'high', source: path });
-        } else if (itemIsImage(item)) {
-          console.log('🖼️ Enqueue image thumbnail:', item.path);
-          enqueueThumbnail(item.path, false);
         } else {
           (async () => {
             try {
@@ -644,7 +641,7 @@
       // 打开整个压缩包作为 book
       await bookStore.openArchiveAsBook(currentArchivePath);
       // 跳转到指定图片
-      await BookAPI.navigateToImage(filePath);
+      await fileBrowserService.navigateToImage(filePath);
       console.log('✅ Image opened from archive');
     } catch (err) {
       console.error('❌ Error opening image from archive:', err);
@@ -710,7 +707,7 @@
       // 打开整个文件夹作为 book
       await bookStore.openDirectoryAsBook(parentDir);
       // 跳转到指定图片
-      await BookAPI.navigateToImage(path);
+      await fileBrowserService.navigateToImage(path);
       console.log('✅ Image opened');
     } catch (err) {
       console.error('❌ Error opening image:', err);

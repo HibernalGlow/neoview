@@ -33,7 +33,7 @@
   let copyToSubmenu = $state<{ show: boolean; x: number; y: number }>({ show: false, x: 0, y: 0 });
   let clipboardItem = $state<{ path: string; operation: 'copy' | 'cut' } | null>(null);
 
-  // 导航历史管理器
+  // 缩略图队列
   const thumbnailQueue = getThumbnailQueue((path, url) => fileBrowserStore.addThumbnail(path, url));
 
   // UI 模式状态
@@ -163,25 +163,25 @@
         maxResults: 100,
       };
       
-      searchResults = await FileSystemAPI.searchFiles(currentPath, query, options);
+      searchResults = await fileBrowserService.searchFiles(currentPath, query, options);
       console.log(`✅ 搜索完成，找到 ${searchResults.length} 个结果`);
       console.log('搜索结果详情:', searchResults);
       
       // 显示每个结果的详细信息
       searchResults.forEach((item, index) => {
-        console.log(`[${index + 1}] ${item.is_dir ? '📁' : '📄'} ${item.name}`);
+        console.log(`[${index + 1}] ${item.isDir ? '📁' : '📄'} ${item.name}`);
         console.log(`    路径: ${item.path}`);
-        console.log(`    大小: ${formatFileSize(item.size, item.is_dir)}`);
+        console.log(`    大小: ${formatFileSize(item.size, item.isDir)}`);
         console.log(`    修改时间: ${item.modified ? new Date(item.modified * 1000).toLocaleString() : '未知'}`);
-        console.log(`    是否图片: ${item.is_image ? '是' : '否'}`);
+        console.log(`    是否图片: ${item.isImage ? '是' : '否'}`);
       });
 
       // 搜索完成后自动应用默认排序（路径升序）
       if (searchResults.length > 0) {
         const sorted = [...searchResults].sort((a, b) => {
           // 文件夹始终在前面
-          if (a.is_dir !== b.is_dir) {
-            return a.is_dir ? -1 : 1;
+          if (a.isDir !== b.isDir) {
+            return a.isDir ? -1 : 1;
           }
           // 按路径升序排序
           return a.path.localeCompare(b.path, undefined, { numeric: true });
@@ -300,12 +300,6 @@
     // 加载搜索历史
     loadSearchHistory();
 
-    // 配置外部的 Thumbnail Manager，使其把生成的缩略图写入 store
-    configureThumbnailManager({
-      addThumbnail: (path: string, url: string) => fileBrowserStore.addThumbnail(path, url),
-      maxConcurrent: 4
-    });
-    
     return () => {
       document.removeEventListener('click', handleClick);
     };
@@ -352,7 +346,7 @@
   fileBrowserStore.setError('');
   fileBrowserStore.clearThumbnails();
   // 清空外部缩略图队列，避免上次目录的任务残留
-  clearQueue();
+  thumbnailQueue.clear();
     fileBrowserStore.setArchiveView(false);
     fileBrowserStore.setSelectedIndex(-1);
     fileBrowserStore.setCurrentPath(path);
@@ -428,7 +422,7 @@
     fileBrowserStore.setSelectedIndex(-1);
 
     try {
-      const loadedItems = await FileSystemAPI.listArchiveContents(path);
+      const loadedItems = await fileBrowserService.listArchiveContents(path);
       console.log('✅ Loaded', loadedItems.length, 'archive items');
       
       fileBrowserStore.setItems(loadedItems);
@@ -464,9 +458,9 @@
   async function loadArchiveThumbnail(filePath: string) {
     try {
       // 从压缩包中提取图片数据
-      const imageData = await FileSystemAPI.loadImageFromArchive(currentArchivePath, filePath);
+      const imageData = await fileBrowserService.loadImageFromArchive(currentArchivePath, filePath);
       // 使用新的API从图片数据生成缩略图
-      const thumbnail = await FileSystemAPI.generateThumbnailFromData(imageData);
+      const thumbnail = await fileBrowserService.generateThumbnailFromData(imageData);
       fileBrowserStore.addThumbnail(filePath, thumbnail);
     } catch (err) {
       // 不支持的图片格式或其他错误，静默失败
@@ -610,7 +604,7 @@
         console.log('✅ Directory navigation completed');
       } else {
         // 检查是否为压缩包
-        const isArchive = await FileSystemAPI.isSupportedArchive(item.path);
+        const isArchive = await fileBrowserService.isSupportedArchive(item.path);
         console.log('Is archive:', isArchive);
         
         if (isArchive) {
@@ -731,7 +725,7 @@
     if (!confirm('确定要删除此项吗？')) return;
 
     try {
-      await FileSystemAPI.moveToTrash(path);
+      await fileBrowserService.moveToTrash(path);
       await loadDirectory(currentPath);
     } catch (err) {
       fileBrowserStore.setError(String(err));
@@ -754,7 +748,7 @@
     if (!confirm('确定要清理所有缩略图缓存吗？这将重新生成所有缩略图。')) return;
 
     try {
-      const count = await FileSystemAPI.clearThumbnailCache();
+      const count = await fileBrowserService.clearThumbnailCache();
       console.log(`✅ 已清理 ${count} 个缓存文件`);
       // 刷新当前目录以重新生成缩略图
       if (currentPath) {
@@ -890,7 +884,7 @@
    */
   async function openInExplorer(item: FsItem) {
     try {
-      await FileSystemAPI.showInFileManager(item.path);
+      await fileBrowserService.showInFileManager(item.path);
     } catch (err) {
       fileBrowserStore.setError(String(err));
     }
@@ -902,7 +896,7 @@
    */
   async function openWithExternalApp(item: FsItem) {
     try {
-      await FileSystemAPI.openWithSystem(item.path);
+      await fileBrowserService.openWithSystem(item.path);
     } catch (err) {
       fileBrowserStore.setError(String(err));
     }
@@ -935,9 +929,9 @@
       const targetPath = `${currentPath}/${clipboardItem.path.split(/[\\/]/).pop()}`;
       
       if (clipboardItem.operation === 'cut') {
-        await FileSystemAPI.movePath(clipboardItem.path, targetPath);
+        await fileBrowserService.movePath(clipboardItem.path, targetPath);
       } else {
-        await FileSystemAPI.copyPath(clipboardItem.path, targetPath);
+        await fileBrowserService.copyPath(clipboardItem.path, targetPath);
       }
       
       clipboardItem = null;
@@ -1000,7 +994,7 @@
     try {
       const fileName = contextMenu.item.path.split(/[\\/]/).pop();
       const targetFilePath = `${targetPath}/${fileName}`;
-      await FileSystemAPI.copyPath(contextMenu.item.path, targetFilePath);
+      await fileBrowserService.copyPath(contextMenu.item.path, targetFilePath);
       await refresh();
     } catch (err) {
       fileBrowserStore.setError(String(err));
@@ -1016,7 +1010,7 @@
     if (!confirm(`确定要删除 "${item.name}" 吗？`)) return;
 
     try {
-      await FileSystemAPI.moveToTrash(item.path);
+      await fileBrowserService.moveToTrash(item.path);
       await refresh();
     } catch (err) {
       fileBrowserStore.setError(String(err));
@@ -1031,11 +1025,11 @@
     if (!contextMenu.item) return;
 
     try {
-      const targetPath = await FileSystemAPI.selectFolder();
+      const targetPath = await fileBrowserService.selectFolder();
       if (targetPath) {
         const fileName = contextMenu.item.path.split(/[\\/]/).pop();
         const targetFilePath = `${targetPath}/${fileName}`;
-        await FileSystemAPI.movePath(contextMenu.item.path, targetFilePath);
+        await fileBrowserService.movePath(contextMenu.item.path, targetFilePath);
         await refresh();
       }
     } catch (err) {
@@ -1053,7 +1047,7 @@
 
     try {
       const newPath = item.path.replace(item.name, newName);
-      await FileSystemAPI.renamePath(item.path, newPath);
+      await fileBrowserService.renamePath(item.path, newPath);
       await refresh();
     } catch (err) {
       fileBrowserStore.setError(String(err));

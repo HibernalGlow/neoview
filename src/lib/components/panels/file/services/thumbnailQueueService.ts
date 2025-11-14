@@ -42,17 +42,15 @@ class ThumbnailQueueService {
   }
 
   enqueueItems(items: FsItem[], options: EnqueueOptions = {}) {
-    const jobs: ThumbnailJob[] = [];
-
-    for (const item of items) {
-      if (item.is_dir) {
-        jobs.push({ path: item.path, kind: 'folder', priority: options.priority ?? 'normal', source: options.source });
-      } else if (item.is_image) {
-        jobs.push({ path: item.path, kind: 'image', priority: options.priority ?? 'normal', source: options.source });
-      } else {
-        jobs.push({ path: item.path, kind: 'archive', priority: options.priority ?? 'normal', source: options.source });
-      }
-    }
+    const jobs: ThumbnailJob[] = items.map(item => {
+      const kind: ThumbnailJobKind = item.isDir ? 'folder' : item.isImage ? 'image' : 'archive';
+      return {
+        path: item.path,
+        kind,
+        priority: options.priority ?? 'normal',
+        source: options.source,
+      };
+    });
 
     this.enqueueMany(jobs);
   }

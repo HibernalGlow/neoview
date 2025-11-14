@@ -552,6 +552,141 @@ pub async fn preload_thumbnails(
     }
 }
 
+/// 生成压缩包缩略图（优化版本）
+#[command]
+pub async fn generate_archive_thumbnail_root(
+    archive_path: String,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<String, String> {
+    println!("🔄 开始生成压缩包缩略图: {}", archive_path);
+    let path = PathBuf::from(archive_path);
+    
+    // 等待管理器初始化（最多 5 秒）
+    if let Err(e) = ensure_manager_ready(&state, 5000).await {
+        println!("❌ {}", e);
+        return Err(e);
+    }
+    
+    // 首先检查缓存（使用压缩包专用key）
+    let cache_key = normalize_path_string(path.to_string_lossy());
+    if let Ok(cache) = state.cache.lock() {
+        if let Some(cached_url) = cache.get(&cache_key) {
+            if cached_url.starts_with("file://") {
+                if cache.validate_file_url(&cache_key) {
+                    println!("✅ 使用缓存的压缩包缩略图: {}", cached_url);
+                    return Ok(cached_url);
+                }
+            } else {
+                println!("✅ 使用缓存的压缩包缩略图: {}", cached_url);
+                return Ok(cached_url);
+            }
+        }
+    }
+    
+    // 使用新的多线程压缩包缩略图生成方法
+    if let Ok(manager_guard) = state.manager.lock() {
+        if let Some(ref manager) = *manager_guard {
+            println!("📦 正在生成压缩包缩略图（多线程）...");
+            match manager.ensure_archive_thumbnail(&path) {
+                Ok(thumbnail_url) => {
+                    println!("✅ 压缩包缩略图生成成功: {}", thumbnail_url);
+                    
+                    // 添加到缓存
+                    if let Ok(cache) = state.cache.lock() {
+                        cache.set(cache_key.clone(), thumbnail_url.clone());
+                        println!("💾 压缩包缩略图已添加到缓存");
+                    }
+                    
+                    return Ok(thumbnail_url);
+                }
+                Err(e) => {
+                    println!("❌ 压缩包缩略图生成失败: {}", e);
+                    return Err(format!("生成压缩包缩略图失败: {}", e));
+                }
+            }
+        }
+    }
+    
+    Err("缩略图管理器未初始化".to_string())
+}
+
+/// 生成压缩包内特定页面的缩略图
+#[command]
+pub async fn generate_archive_thumbnail_inner(
+    archive_path: String,
+    inner_path: String,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<String, String> {
+    println!("🔄 开始生成压缩包内页缩略图: {} :: {}", archive_path, inner_path);
+    let archive_path = PathBuf::from(archive_path);
+    
+    // 等待管理器初始化
+    if let Err(e) = ensure_manager_ready(&state, 5000).await {
+        return Err(e);
+    }
+    
+    // 构建内部页面的专用key
+    let inner_key = format!("{}::{}", 
+        normalize_path_string(archive_path.to_string_lossy()),
+        normalize_path_string(&inner_path)
+    );
+    
+    // 检查缓存
+    if let Ok(cache) = state.cache.lock() {
+        if let Some(cached_url) = cache.get(&inner_key) {
+            if cached_url.starts_with("file://") {
+                if cache.validate_file_url(&inner_key) {
+                    println!("✅ 使用缓存的内部页缩略图: {}", cached_url);
+                    return Ok(cached_url);
+                }
+            } else {
+                println!("✅ 使用缓存的内部页缩略图: {}", cached_url);
+                return Ok(cached_url);
+            }
+        }
+    }
+    
+    // 生成内部页缩略图
+    if let Ok(manager_guard) = state.manager.lock() {
+        if let Some(ref manager) = *manager_guard {
+            use crate::core::archive::ArchiveManager;
+            let _archive_manager = ArchiveManager::new();
+            
+            // 流式提取并解码
+            match manager.extract_image_from_archive_stream(&archive_path, &inner_path) {
+                Ok((img, _)) => {
+                    // 获取相对路径
+                    let relative_path = manager.get_relative_path(&archive_path)?;
+                    
+                    // 保存缩略图
+                    match manager.save_thumbnail_for_archive(&img, &archive_path, &relative_path, &inner_path) {
+                        Ok(thumbnail_url) => {
+                            println!("✅ 内部页缩略图生成成功: {}", thumbnail_url);
+                            
+                            // 添加到缓存
+                            if let Ok(cache) = state.cache.lock() {
+                                cache.set(inner_key.clone(), thumbnail_url.clone());
+                            }
+                            
+                            return Ok(thumbnail_url);
+                        }
+                        Err(e) => {
+                            println!("❌ 保存内部页缩略图失败: {}", e);
+                            return Err(format!("保存内部页缩略图失败: {}", e));
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("❌ 提取内部页失败: {}", e);
+                    return Err(format!("提取内部页失败: {}", e));
+                }
+            }
+        }
+    }
+    
+    Err("缩略图管理器未初始化".to_string())
+}
+
 /// 调试 AVIF 支持：尝试使用 image crate 的 AVIF 加载、通用加载，并返回详细诊断信息
 #[command]
 pub async fn debug_avif(

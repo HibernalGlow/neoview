@@ -1,7 +1,7 @@
 import { FileSystemAPI } from '$lib/api';
 import { toAssetUrl } from '$lib/utils/assetProxy';
 
-type Job = { path: string; isFolder: boolean; isArchive?: boolean };
+type Job = { path: string; isFolder: boolean; isArchive?: boolean; isArchiveRoot?: boolean };
 
 let _queue: Job[] = [];
 // 将_generating 从 Set 改为 Map，记录每个正在生成的 path 对应的 epoch
@@ -9,12 +9,19 @@ let _queue: Job[] = [];
 let _generating: Map<string, number> = new Map();
 // epoch 用于在清空队列时使已有任务的回调失效（避免切换目录后旧任务填充新目录）
 let _epoch = 0;
-let _maxConcurrent = 4;
+// 区分本地文件和压缩包的并发数
+let _maxConcurrentLocal = 4;
+let _maxConcurrentArchive = 2;
 let _addThumbnailCb: ((path: string, url: string) => void) | null = null;
 
-export function configureThumbnailManager(options: { addThumbnail?: (path: string, url: string) => void; maxConcurrent?: number }) {
+export function configureThumbnailManager(options: { addThumbnail?: (path: string, url: string) => void; maxConcurrent?: number; maxConcurrentLocal?: number; maxConcurrentArchive?: number }) {
   if (options.addThumbnail) _addThumbnailCb = options.addThumbnail;
-  if (typeof options.maxConcurrent === 'number') _maxConcurrent = options.maxConcurrent;
+  if (typeof options.maxConcurrent === 'number') {
+    _maxConcurrentLocal = options.maxConcurrent;
+    _maxConcurrentArchive = Math.floor(options.maxConcurrent / 2);
+  }
+  if (typeof options.maxConcurrentLocal === 'number') _maxConcurrentLocal = options.maxConcurrentLocal;
+  if (typeof options.maxConcurrentArchive === 'number') _maxConcurrentArchive = options.maxConcurrentArchive;
 }
 
 /** 简单兼容 helper */
@@ -67,45 +74,61 @@ export function toRelativeKey(absPath: string): string {
   }
 }
 
-export function enqueueArchiveThumbnail(path: string) {
+export function enqueueArchiveThumbnail(path: string, isRoot: boolean = true) {
   if (!path) return;
   if (_generating.get(path) === _epoch) return;
   if (_queue.findIndex(x => x.path === path) !== -1) return;
 
-  _queue.push({ path, isFolder: false, isArchive: true });
+  _queue.push({ path, isFolder: false, isArchive: true, isArchiveRoot: isRoot });
   processQueue();
 }
 
 async function processQueue() {
-  // 计算当前 epoch 下正在进行的任务数量
-  const generatingCountForEpoch = Array.from(_generating.values()).filter(v => v === _epoch).length;
-  while (generatingCountForEpoch < _maxConcurrent && _queue.length > 0) {
-    // Recompute generating count at loop top in case it changed
-    const currentGenerating = Array.from(_generating.values()).filter(v => v === _epoch).length;
-    if (currentGenerating >= _maxConcurrent) break;
-
+  // 分别计算本地文件和压缩包的进行中任务数量
+  const generatingLocalForEpoch = Array.from(_generating.entries())
+    .filter(([path, epoch]) => epoch === _epoch && !_queue.find(x => x.path === path && x.isArchive))
+    .length;
+  const generatingArchiveForEpoch = Array.from(_generating.entries())
+    .filter(([path, epoch]) => epoch === _epoch && _queue.find(x => x.path === path && x.isArchive))
+    .length;
+  
+  while (_queue.length > 0) {
     const job = _queue.shift();
     if (!job) break;
-    const { path, isFolder } = job;
+    
+    // 根据任务类型检查并发限制
+    const currentGenerating = job.isArchive ? generatingArchiveForEpoch : generatingLocalForEpoch;
+    const maxConcurrent = job.isArchive ? _maxConcurrentArchive : _maxConcurrentLocal;
+    
+    if (currentGenerating >= maxConcurrent) {
+      // 重新放回队列开头
+      _queue.unshift(job);
+      break;
+    }
+    
+    const { path, isFolder, isArchive, isArchiveRoot } = job;
     if (_generating.get(path) === _epoch) continue;
 
-    const jobEpoch = _epoch; // 捕获当前 epoch，任务完成时用于判断是否仍然有效
+    const jobEpoch = _epoch;
     _generating.set(path, jobEpoch);
 
     (async () => {
       try {
         let thumbnail: string | null = null;
-        if (job.isArchive) {
-          // 对于压缩包：尝试读取压缩包内第一张图片并生成缩略图
-          try {
+        
+        if (isArchive) {
+          // 优化后的压缩包缩略图生成
+          if (isArchiveRoot) {
+            // 生成压缩包根缩略图（文件夹Tab使用）
+            thumbnail = await FileSystemAPI.generateArchiveThumbnailRoot(path);
+          } else {
+            // 生成压缩包内特定页缩略图（阅读器使用）
+            // 先获取压缩包内容列表
             const entries = await FileSystemAPI.listArchiveContents(path);
             const firstImage = (entries || []).find((e: any) => e && (e.is_image === true || e.isImage === true));
             if (firstImage) {
-              const imageData = await FileSystemAPI.loadImageFromArchive(path, firstImage.path);
-              thumbnail = await FileSystemAPI.generateThumbnailFromData(imageData);
+              thumbnail = await FileSystemAPI.generateArchiveThumbnailInner(path, firstImage.path);
             }
-          } catch (e) {
-            console.debug('thumbnailManager: archive thumbnail generation failed for', path, e);
           }
         } else if (isFolder) {
           thumbnail = await FileSystemAPI.generateFolderThumbnail(path);
@@ -113,24 +136,21 @@ async function processQueue() {
           thumbnail = await FileSystemAPI.generateFileThumbnail(path);
         }
 
-        // 在调用回调之前检查任务 epoch 是否仍然有效（切换目录会递增 epoch，使旧任务失效）
+        // 在调用回调之前检查任务 epoch 是否仍然有效
         if (thumbnail && _addThumbnailCb && jobEpoch === _epoch) {
           const converted = toAssetUrl(thumbnail) || String(thumbnail || '');
           const key = toRelativeKey(path);
-          // 可见日志，确保前端能观察到回调被触发与最终 URL
           console.log('thumbnailManager: addThumbnail callback ->', { key, raw: thumbnail, converted });
           _addThumbnailCb(key, converted);
         } else if (thumbnail && jobEpoch !== _epoch) {
-          // 任务已过期（例如切换目录），忽略结果并记录日志以便调试
           console.log('thumbnailManager: job result ignored due to epoch mismatch', { path, jobEpoch, current: _epoch });
         }
-        } catch (e) {
-          console.debug('thumbnailManager: failed to generate thumbnail for', path, e);
-        } finally {
-          // 仅删除 map 条目（不论 epoch）以释放占位
-          _generating.delete(path);
-          setTimeout(() => processQueue(), 0);
-        }
+      } catch (e) {
+        console.debug('thumbnailManager: failed to generate thumbnail for', path, e);
+      } finally {
+        _generating.delete(path);
+        setTimeout(() => processQueue(), 0);
+      }
     })();
   }
 }
@@ -141,8 +161,9 @@ export function clearQueue() {
   _epoch += 1;
 }
 
-export function setMaxConcurrent(n: number) {
-  _maxConcurrent = n;
+export function setMaxConcurrent(local?: number, archive?: number) {
+  if (typeof local === 'number') _maxConcurrentLocal = local;
+  if (typeof archive === 'number') _maxConcurrentArchive = archive;
 }
 
 export function isGenerating(path: string) {

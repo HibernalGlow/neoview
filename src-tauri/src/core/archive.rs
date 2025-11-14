@@ -609,4 +609,103 @@ impl ArchiveManager {
         
         Ok(loaded_count)
     }
+
+    /// 从 ZIP 压缩包中流式提取文件
+    pub fn extract_file_stream(&self, archive_path: &Path, file_path: &str) -> Result<impl Read + Send, String> {
+        
+        use std::thread;
+        
+        // 获取缓存的压缩包实例
+        let cached_archive = self.get_cached_archive(archive_path)?;
+        let _archive_path = archive_path.to_path_buf();
+        let file_path = file_path.to_string();
+        
+        // 创建通道用于流式传输
+        let (tx, rx) = std::sync::mpsc::channel::<Result<Vec<u8>, String>>();
+        
+        // 在新线程中处理读取
+        thread::spawn(move || {
+            let archive_result = {
+                let mut archive = cached_archive.lock().unwrap();
+                archive.by_name(&file_path).map(|zip_file| {
+                    // 将 ZipFile 的数据复制到 Vec<u8> 中
+                    let mut data = Vec::new();
+                    let mut zip_file = zip_file;
+                    std::io::copy(&mut zip_file, &mut data).map(|_| data)
+                })
+            };
+            
+            match archive_result {
+                Ok(Ok(data)) => {
+                    // 分块发送数据
+                    let mut pos = 0;
+                    while pos < data.len() {
+                        let chunk_size = std::cmp::min(64 * 1024, data.len() - pos);
+                        let chunk = data[pos..pos + chunk_size].to_vec();
+                        if tx.send(Ok(chunk)).is_err() {
+                            break; // 接收端已关闭
+                        }
+                        pos += chunk_size;
+                    }
+                }
+                Ok(Err(e)) => {
+                    let _ = tx.send(Err(format!("读取失败: {}", e)));
+                }
+                Err(e) => {
+                    let _ = tx.send(Err(format!("找不到文件: {}", e)));
+                }
+            }
+        });
+        
+        // 返回一个实现 Read 的迭代器
+        Ok(StreamReader::new(rx))
+    }
+}
+
+/// 流式读取器
+struct StreamReader {
+    receiver: std::sync::mpsc::Receiver<Result<Vec<u8>, String>>,
+    buffer: Vec<u8>,
+    position: usize,
+}
+
+impl StreamReader {
+    fn new(receiver: std::sync::mpsc::Receiver<Result<Vec<u8>, String>>) -> Self {
+        Self {
+            receiver,
+            buffer: Vec::new(),
+            position: 0,
+        }
+    }
+}
+
+impl Read for StreamReader {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        // 如果当前缓冲区还有数据，先返回
+        if self.position < self.buffer.len() {
+            let remaining = self.buffer.len() - self.position;
+            let to_copy = std::cmp::min(remaining, buf.len());
+            buf[..to_copy].copy_from_slice(&self.buffer[self.position..self.position + to_copy]);
+            self.position += to_copy;
+            return Ok(to_copy);
+        }
+        
+        // 获取下一块数据
+        match self.receiver.recv() {
+            Ok(Ok(chunk)) => {
+                self.buffer = chunk;
+                self.position = 0;
+                
+                // 递归调用以返回新数据
+                self.read(buf)
+            }
+            Ok(Err(e)) => {
+                Err(std::io::Error::new(std::io::ErrorKind::Other, e))
+            }
+            Err(_) => {
+                // 通道关闭，表示 EOF
+                Ok(0)
+            }
+        }
+    }
 }

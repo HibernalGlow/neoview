@@ -202,7 +202,43 @@ export async function getImagesFromArchive(archivePath: string): Promise<string[
 }
 
 /**
- * 生成压缩包内图片的缩略图
+ * 生成压缩包根缩略图（优化版本）
+ */
+export async function generateArchiveThumbnailRoot(archivePath: string): Promise<string> {
+  console.log('📦 FileSystemAPI: 生成压缩包根缩略图:', archivePath);
+  try {
+    const result = await invoke<string>('generate_archive_thumbnail_root', { archivePath });
+    console.log('✅ FileSystemAPI: 压缩包根缩略图生成成功:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ FileSystemAPI: 压缩包根缩略图生成失败:', archivePath, error);
+    throw error;
+  }
+}
+
+/**
+ * 生成压缩包内特定页缩略图
+ */
+export async function generateArchiveThumbnailInner(
+  archivePath: string,
+  innerPath: string
+): Promise<string> {
+  console.log('📦 FileSystemAPI: 生成压缩包内页缩略图:', archivePath, '::', innerPath);
+  try {
+    const result = await invoke<string>('generate_archive_thumbnail_inner', { 
+      archivePath, 
+      innerPath 
+    });
+    console.log('✅ FileSystemAPI: 压缩包内页缩略图生成成功:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ FileSystemAPI: 压缩包内页缩略图生成失败:', archivePath, innerPath, error);
+    throw error;
+  }
+}
+
+/**
+ * 生成压缩包内图片的缩略图（旧版本，保留兼容性）
  */
 export async function generateArchiveThumbnail(
   archivePath: string,

@@ -133,6 +133,7 @@ dependencies = [
  "log",
  "md5",
  "pyo3",
+ "rayon",
  "rusqlite",
  "serde",
  "serde_json",

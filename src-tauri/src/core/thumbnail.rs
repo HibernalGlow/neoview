@@ -28,6 +28,14 @@ pub fn build_path_key(
     }
 }
 
+/// 构建压缩包专用Key（仅使用归档路径）
+/// 用于文件夹Tab直接查找压缩包缩略图
+pub fn build_archive_key(archive_path: &Path) -> Result<String, String> {
+    // 规范化路径并计算哈希
+    let normalized = normalize_path_string(archive_path);
+    Ok(ThumbnailDatabase::hash_path(Path::new(&normalized)))
+}
+
 /// 计算路径哈希
 /// 复用缩略图的哈希算法，确保一致性
 pub fn calculate_path_hash(path_key: &str) -> String {
@@ -559,7 +567,27 @@ impl ThumbnailManager {
             // 检查是否为压缩包内的图片
             let img = if image_path.to_string_lossy().contains("__archive__") {
                 // 从压缩包中提取图片
-                self.extract_image_from_archive(&image_path)?
+                use crate::core::archive::ArchiveManager;
+                
+                // 解析组合路径：archive_path/__archive__/image_path
+                let path_str = image_path.to_string_lossy();
+                let parts: Vec<&str> = path_str.split("__archive__").collect();
+                
+                if parts.len() == 2 {
+                    let archive_path = Path::new(parts[0]);
+                    let image_path_in_archive = parts[1].trim_start_matches(['/', '\\']);
+                    
+                    let archive_manager = ArchiveManager::new();
+                    let image_data = archive_manager.extract_file(archive_path, image_path_in_archive)
+                        .map_err(|e| format!("从压缩包提取图片失败: {}", e))?;
+
+                    // 直接在内存中处理图片数据
+                    println!("🔧 loading image from memory: {} (bytes={})", image_path_in_archive, image_data.len());
+                    self.load_image_from_memory(&image_data, Path::new(image_path_in_archive))
+                        .map_err(|e| format!("压缩包内图片加载失败: {}", e))?
+                } else {
+                    return Err("无效的压缩包路径格式".to_string());
+                }
             } else {
                 // 直接加载图片文件
                 self.load_image_with_format_support(&image_path)?
@@ -876,32 +904,187 @@ impl ThumbnailManager {
             .map_err(|e| format!("清理过期缩略图失败: {}", e))
     }
 
-    /// 从压缩包中提取图片（直接在内存中处理）
-    fn extract_image_from_archive(&self, combined_path: &Path) -> Result<DynamicImage, String> {
-        println!("📦 extract_image_from_archive start: {}", combined_path.display());
-        use crate::core::archive::ArchiveManager;
+    /// 确保压缩包缩略图存在（多线程优化版）
+    pub fn ensure_archive_thumbnail(&self, archive_path: &Path) -> Result<String, String> {
         
-        // 解析组合路径：archive_path/__archive__/image_path
-        let path_str = combined_path.to_string_lossy();
-        let parts: Vec<&str> = path_str.split("__archive__").collect();
         
-        if parts.len() != 2 {
-            return Err("无效的压缩包路径格式".to_string());
+        
+        println!("📦 ensure_archive_thumbnail: {}", archive_path.display());
+        
+        // 1. 构建压缩包专用key
+        let archive_key = self.build_archive_key(archive_path)?;
+        
+        // 2. 检查缓存
+        if let Ok(Some(record)) = self.db.find_by_bookpath(&archive_key) {
+            let thumbnail_path = self.db.thumbnail_root.join(&record.relative_thumb_path);
+            if thumbnail_path.exists() {
+                println!("✅ 压缩包缩略图缓存命中: {}", archive_path.display());
+                return Ok(format!("file://{}", thumbnail_path.to_string_lossy()));
+            }
         }
         
-        let archive_path = Path::new(parts[0]);
-        let image_path_in_archive = parts[1].trim_start_matches(['/', '\\']);
+        // 3. 扫描压缩包内的图片
+        let images = self.scan_archive_images(archive_path, 3)?;
+        if images.is_empty() {
+            return Err("压缩包内未找到图片".to_string());
+        }
+        
+        // 4. 串行处理前几张图片（避免数据库并发问题）
+        for inner_path in images.iter() {
+            match self.extract_image_from_archive_stream(archive_path, inner_path) {
+                Ok((img, inner_path)) => {
+                    let relative_path = self.get_relative_path(archive_path)?;
+                    let thumbnail_url = self.save_thumbnail_for_archive(
+                        &img,
+                        archive_path,
+                        &relative_path,
+                        &inner_path,
+                    )?;
+                    
+                    println!("✅ 压缩包缩略图生成完成: {} -> {}", archive_path.display(), thumbnail_url);
+                    return Ok(thumbnail_url);
+                }
+                Err(e) => {
+                    println!("⚠️ 处理图片失败: {} -> {}", inner_path, e);
+                    continue;
+                }
+            }
+        }
+            }
+        }
+        
+        Err("所有图片处理失败".to_string())
+    }
+    
+    /// 扫描压缩包内的前N张图片
+    fn scan_archive_images(&self, archive_path: &Path, limit: usize) -> Result<Vec<String>, String> {
+        use crate::core::archive::ArchiveManager;
         
         let archive_manager = ArchiveManager::new();
-        let image_data = archive_manager.extract_file(archive_path, image_path_in_archive)
-            .map_err(|e| format!("从压缩包提取图片失败: {}", e))?;
-
-        // 直接在内存中处理图片数据
-        println!("🔧 loading image from memory: {} (bytes={})", image_path_in_archive, image_data.len());
-        let img = self.load_image_from_memory(&image_data, Path::new(image_path_in_archive))
-            .map_err(|e| format!("压缩包内图片加载失败: {}", e))?;
-
-        Ok(img)
+        let entries = archive_manager.list_zip_contents(archive_path)
+            .map_err(|e| format!("列出压缩包内容失败: {}", e))?;
+        
+        let mut images = Vec::new();
+        for entry in entries.into_iter() {
+            if !entry.is_dir && self.is_image_file(&Path::new(&entry.name)) {
+                images.push(entry.name);
+                if images.len() >= limit {
+                    break;
+                }
+            }
+        }
+        
+        Ok(images)
+    }
+    
+    /// 从压缩包流式提取图片
+    pub fn extract_image_from_archive_stream(&self, archive_path: &Path, inner_path: &str) -> Result<(DynamicImage, String), String> {
+        use crate::core::archive::ArchiveManager;
+        
+        let archive_manager = ArchiveManager::new();
+        let mut reader = archive_manager.extract_file_stream(archive_path, inner_path)
+            .map_err(|e| format!("创建流式读取器失败: {}", e))?;
+        
+        // 使用流式解码
+        let img = image::ImageReader::new(&mut reader)
+            .with_guessed_format()
+            .map_err(|e| format!("猜测图片格式失败: {}", e))?
+            .decode()
+            .map_err(|e| format!("解码图片失败: {}", e))?;
+        
+        Ok((img, inner_path.to_string()))
+    }
+    
+    /// 为压缩包保存缩略图（双记录模式）
+    pub fn save_thumbnail_for_archive(
+        &self,
+        img: &DynamicImage,
+        archive_path: &Path,
+        relative_path: &Path,
+        inner_path: &str,
+    ) -> Result<String, String> {
+        let thumbnail = self.resize_keep_aspect_ratio(img, self.size);
+        let webp_data = self.encode_webp(&thumbnail)?;
+        
+        let now = Utc::now();
+        let thumbnail_path = self.db.get_thumbnail_path(relative_path, &now);
+        
+        // 确保目录存在
+        if let Some(parent) = thumbnail_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("创建缩略图目录失败: {}", e))?;
+        }
+        
+        // 保存文件
+        fs::write(&thumbnail_path, &webp_data)
+            .map_err(|e| format!("保存缩略图失败: {}", e))?;
+        
+        // 获取文件信息
+        let (width, height) = thumbnail.dimensions();
+        let file_size = webp_data.len() as u64;
+        let source_modified = std::fs::metadata(archive_path)
+            .and_then(|m| m.modified())
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH))
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        
+        // 构建相对缩略图路径
+        let relative_thumb_path = thumbnail_path
+            .strip_prefix(&self.db.thumbnail_root)
+            .map(|p| Self::normalize_path_string(p))
+            .unwrap_or_else(|_| Self::normalize_path_string(&thumbnail_path));
+        
+        // 1. 为压缩包本体创建记录
+        let archive_key = self.build_archive_key(archive_path)?;
+        let archive_record = ThumbnailRecord {
+            bookpath: archive_key,
+            relative_thumb_path: relative_thumb_path.clone(),
+            thumbnail_name: thumbnail_path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(&ThumbnailDatabase::hash_path(relative_path))
+                .to_string(),
+            hash: ThumbnailDatabase::hash_path(relative_path),
+            created_at: now,
+            source_modified,
+            is_folder: false,
+            width,
+            height,
+            file_size,
+        };
+        
+        self.db.upsert_thumbnail(archive_record)
+            .map_err(|e| format!("保存压缩包记录失败: {}", e))?;
+        
+        // 2. 为内部图片创建记录
+        let inner_key = format!("{}::{}", archive_key, inner_path);
+        let inner_record = ThumbnailRecord {
+            bookpath: inner_key,
+            relative_thumb_path: relative_thumb_path,
+            thumbnail_name: archive_record.thumbnail_name.clone(),
+            hash: archive_record.hash.clone(),
+            created_at: now,
+            source_modified,
+            is_folder: false,
+            width,
+            height,
+            file_size,
+        };
+        
+        self.db.upsert_thumbnail(inner_record)
+            .map_err(|e| format!("保存内部图片记录失败: {}", e))?;
+        
+        println!("💾 双记录已保存: 压缩包='{}' 内部='{}'", archive_key, inner_key);
+        
+        Ok(format!("file://{}", thumbnail_path.to_string_lossy()))
+    }
+    
+    /// 构建压缩包专用Key（仅使用归档路径）
+    /// 用于文件夹Tab直接查找压缩包缩略图
+    fn build_archive_key(&self, archive_path: &Path) -> Result<String, String> {
+        // 获取相对路径
+        let relative_path = self.get_relative_path(archive_path)?;
+        // 规范化路径并使用相对路径作为key
+        Ok(Self::normalize_path_string(&relative_path))
     }
 
     /// 从内存中的字节数据加载图片（支持 JXL、AVIF 等特殊格式）

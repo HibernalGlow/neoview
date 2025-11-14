@@ -1,6 +1,5 @@
 export interface PreloadTask {
-	data?: string;
-	blob?: Blob;
+	blob: Blob;
 	hash: string;
 	pageIndex: number;
 }

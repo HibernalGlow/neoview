@@ -10,7 +10,7 @@ import { settingsManager } from '$lib/settings/settingsManager';
 import { get } from 'svelte/store';
 
 export interface ImageDataWithHash {
-	data?: string;
+	data?: string;  // 保留兼容性，但新代码应使用 blob
 	blob?: Blob;
 	hash: string;
 }
@@ -310,17 +310,31 @@ export async function getImageMd5(imageUrl: string, md5Cache = new Map<string, s
  * 创建带有MD5信息的图片数据结构
  */
 export async function getImageDataWithHash(
-	imageUrl: string, 
+	imageData: string | Blob, 
 	md5Cache = new Map<string, string>()
 ): Promise<ImageDataWithHash | null> {
-	if (!imageUrl) return null;
+	if (!imageData) return null;
 	
-	// 获取或计算MD5
-	const hash = await getImageMd5(imageUrl, md5Cache);
+	let hash: string;
+	
+	if (typeof imageData === 'string') {
+		// 兼容旧的数据URL格式
+		hash = await getImageMd5(imageData, md5Cache);
+	} else {
+		// 新的Blob格式，直接计算MD5
+		const { invoke } = await import('@tauri-apps/api/core');
+		const arrayBuffer = await imageData.arrayBuffer();
+		const bytes = new Uint8Array(arrayBuffer);
+		hash = await invoke<string>('calculate_blob_md5', { 
+			bytes: Array.from(bytes) 
+		});
+	}
+	
 	if (!hash) return null;
 	
 	return {
-		data: imageUrl,
+		data: typeof imageData === 'string' ? imageData : undefined,
+		blob: typeof imageData === 'string' ? undefined : imageData,
 		hash: hash
 	};
 }

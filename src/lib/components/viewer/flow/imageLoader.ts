@@ -110,33 +110,14 @@ export class ImageLoader {
 	 * 从 Blob 计算 MD5 哈希
 	 */
 	async calculateBlobHash(blob: Blob): Promise<string> {
-		// 将 Blob 转换为 ArrayBuffer
+		// 直接使用后端计算 MD5，确保与缓存系统一致
 		const arrayBuffer = await blob.arrayBuffer();
-		
-		// 使用 Web Crypto API 计算 MD5（如果可用）
-		if (crypto.subtle) {
-			try {
-				// 注意：Web Crypto API 默认不支持 MD5，这里使用 SHA-256 作为替代
-				// 在生产环境中，应该在后端计算 MD5
-				const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
-				const hashArray = Array.from(new Uint8Array(hashBuffer));
-				const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-				return hashHex;
-			} catch (e) {
-				console.warn('Web Crypto API 计算哈希失败，回退到后端:', e);
-			}
-		}
-		
-		// 回退到后端计算
-		// 将 ArrayBuffer 转换为 base64（仅用于哈希计算）
 		const bytes = new Uint8Array(arrayBuffer);
-		let binary = '';
-		for (let i = 0; i < bytes.byteLength; i++) {
-			binary += String.fromCharCode(bytes[i]);
-		}
-		const base64 = btoa(binary);
 		
-		return await invoke<string>('calculate_data_hash', { dataUrl: `data:image/png;base64,${base64}` });
+		// 调用后端命令计算 MD5
+		return await invoke<string>('calculate_blob_md5', { 
+			bytes: Array.from(bytes) 
+		});
 	}
 
 	/**

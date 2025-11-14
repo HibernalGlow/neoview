@@ -38,7 +38,7 @@
 	let originalImageDataForComparison = $state<string>('');
 	let upscaledImageDataForComparison = $state<string>('');
 
-	// 进度条状态
+	// 进度条状态（现在由 ImageViewerProgressBar 内部计算）
 	let progressColor = $state('#FDFBF7'); // 默认奶白色
 	let progressBlinking = $state(false);
 
@@ -103,9 +103,8 @@
 				totalPreUpscalePages = total;
 			},
 			onUpscaleStart: () => {
-				// 超分开始，进度条变黄并闪烁
-				progressColor = '#FCD34D'; // 黄色
-				progressBlinking = true;
+				// 超分开始状态现在由 upscaleState 管理，进度条组件会自动响应
+				console.log('超分开始事件触发');
 			},
 			onUpscaleComplete: (detail) => {
 				const { imageData: upscaledImageData, imageBlob, originalImageHash } = detail;
@@ -116,10 +115,10 @@
 				if (imageBlob) {
 					bookStore.setUpscaledImageBlob(imageBlob);
 				}
-				// 更新进度条外观：停止闪烁并变绿
-				progressBlinking = false;
-				progressColor = '#22c55e'; // 绿色
-				console.log('超分图已匹配当前页面，MD5:', originalImageHash, '已替换，进度条设为绿色');
+				// 更新当前页面状态为已完成
+				const currentPageIndex = bookStore.currentPageIndex;
+				bookStore.setPageUpscaleStatus(currentPageIndex, 'done');
+				console.log('超分图已匹配当前页面，MD5:', originalImageHash, '已替换，页面状态更新为完成');
 			},
 			onUpscaleSaved: async (detail) => {
 				try {

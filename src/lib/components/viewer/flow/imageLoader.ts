@@ -16,6 +16,7 @@ import {
 	type ImageDataWithHash 
 } from './preloadRuntime';
 import { createPreloadWorker, type PreloadTask, type PreloadTaskResult } from './preloadWorker';
+import { upscaleState, startUpscale, updateUpscaleProgress, completeUpscale, setUpscaleError } from '$lib/stores/upscale/upscaleState.svelte';
 
 // 缩略图高度配置
 const THUMB_HEIGHT = 120;
@@ -63,7 +64,6 @@ export class ImageLoader {
 	private thumbnailCache = new Map<number, ThumbnailCacheItem>();
 	
 	// 预超分相关
-	private preUpscaledPages = new Set<number>();
 	private totalPreUpscalePages = 0;
 	private preUpscaleProgress = 0;
 	private md5Cache = new Map<string, string>();
@@ -93,7 +93,7 @@ export class ImageLoader {
 					
 					// 标记预超分进度
 					if (typeof task.pageIndex === 'number') {
-						this.preUpscaledPages = new Set([...this.preUpscaledPages, task.pageIndex]);
+						bookStore.setPageUpscaleStatus(task.pageIndex, 'preupscaled');
 						this.updatePreUpscaleProgress();
 					}
 					
@@ -556,7 +556,6 @@ export class ImageLoader {
 
 			// 初始化预超分进度
 			this.totalPreUpscalePages = Math.min(preloadPages, totalPages - currentIndex - 1);
-			this.preUpscaledPages = new Set();
 			this.preUpscaleProgress = 0;
 
 			if (this.totalPreUpscalePages <= 0) {
@@ -598,7 +597,7 @@ export class ImageLoader {
 					if (hasCache) {
 						console.log(`第 ${targetIndex + 1} 页已有超分缓存`);
 						// 标记为已预超分
-						this.preUpscaledPages = new Set([...this.preUpscaledPages, targetIndex]);
+						bookStore.setPageUpscaleStatus(targetIndex, 'preupscaled');
 						this.updatePreUpscaleProgress();
 						continue;
 					}
@@ -637,7 +636,8 @@ export class ImageLoader {
 	 */
 	private updatePreUpscaleProgress(): void {
 		if (this.totalPreUpscalePages > 0) {
-			this.preUpscaleProgress = (this.preUpscaledPages.size / this.totalPreUpscalePages) * 100;
+			const preUpscaledPages = bookStore.getPreUpscaledPages();
+			this.preUpscaleProgress = (preUpscaledPages.size / this.totalPreUpscalePages) * 100;
 			this.options.onPreloadProgress?.(this.preUpscaleProgress, this.totalPreUpscalePages);
 		}
 	}
@@ -647,7 +647,6 @@ export class ImageLoader {
 	 */
 	resetPreUpscaleProgress(): void {
 		this.preUpscaleProgress = 0;
-		this.preUpscaledPages = new Set();
 		this.totalPreUpscalePages = 0;
 	}
 
@@ -698,10 +697,11 @@ export class ImageLoader {
 	 * 获取预超分进度
 	 */
 	getPreUpscaleProgress(): { progress: number; total: number; pages: Set<number> } {
+		const preUpscaledPages = bookStore.getPreUpscaledPages();
 		return {
 			progress: this.preUpscaleProgress,
 			total: this.totalPreUpscalePages,
-			pages: this.preUpscaledPages
+			pages: preUpscaledPages
 		};
 	}
 

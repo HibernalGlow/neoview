@@ -5,9 +5,10 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
-import { upscaleState } from '$lib/stores/upscale/upscaleState.svelte';
+import { upscaleState, startUpscale, updateUpscaleProgress, completeUpscale, setUpscaleError } from '$lib/stores/upscale/upscaleState.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
 import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
+import { bookStore } from '$lib/stores/book.svelte';
 
 export interface ImageDataWithHash {
 	data?: string;  // 兼容旧的 data URL 格式
@@ -70,15 +71,30 @@ export async function performUpscale(
 		const arrayBuffer = await imageBlob.arrayBuffer();
 		const imageDataArray = new Uint8Array(arrayBuffer);
 		
+		// 确定是否为后台任务
+		const isBackground = options.background || false;
+		
+		// 触发超分开始事件
+		if (!isBackground) {
+			startUpscale(imageHash, 'manual', '正在处理图片');
+		}
+		
+		// 更新进度 - 开始阶段
+		updateUpscaleProgress(10, '准备超分模型');
+		
 		// 调用pyo3UpscaleManager进行超分处理
+		updateUpscaleProgress(30, '执行超分处理');
 		const resultData = await pyo3UpscaleManager.upscaleImageMemory(imageDataArray);
+		
+		// 更新进度 - 完成阶段
+		updateUpscaleProgress(80, '生成结果图片');
 		
 		// 将结果转换为Blob和URL
 		const resultBlob = new Blob([resultData], { type: 'image/webp' });
 		const resultUrl = URL.createObjectURL(resultBlob);
 		
 		// 如果是后台任务，保存到缓存
-		if (options.background) {
+		if (isBackground) {
 			try {
 				await pyo3UpscaleManager.saveUpscaleCache(imageHash, resultData);
 				console.log('后台超分结果已保存到缓存，hash:', imageHash);
@@ -87,14 +103,26 @@ export async function performUpscale(
 			}
 		}
 		
+		// 更新当前页面状态（如果不是后台任务）
+		if (!isBackground) {
+			const currentPageIndex = bookStore.currentPageIndex;
+			bookStore.setPageUpscaleStatus(currentPageIndex, 'done');
+		}
+		
 		// 触发超分完成事件
 		window.dispatchEvent(new CustomEvent('upscale-complete', {
 			detail: {
 				imageData: resultUrl,
 				imageBlob: resultBlob,
-				originalImageHash: imageHash
+				originalImageHash: imageHash,
+				background: isBackground
 			}
 		}));
+		
+		// 完成超分
+		if (!isBackground) {
+			completeUpscale();
+		}
 		
 		return {
 			upscaledImageData: resultUrl,
@@ -103,6 +131,12 @@ export async function performUpscale(
 		};
 	} catch (error) {
 		console.error('超分处理失败:', error);
+		
+		// 设置错误状态（仅对非后台任务）
+		if (!options.background) {
+			setUpscaleError(error instanceof Error ? error.message : String(error));
+		}
+		
 		return {
 			success: false,
 			error: error instanceof Error ? error.message : String(error)
@@ -150,13 +184,21 @@ export async function triggerAutoUpscale(
 		console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', 'MD5:', imageHash, 
 			`Blob size: ${imageBlob.size}`);
 		
-		// 触发超分开始事件
-		window.dispatchEvent(new CustomEvent('upscale-start'));
+		// 触发超分开始事件（仅对非预加载任务）
+		if (!isPreload) {
+			startUpscale(imageHash, 'auto', '自动超分中');
+		}
 		
 		// 执行超分
 		return await performUpscale(imageBlob, imageHash, { background: isPreload });
 	} catch (error) {
 		console.error('自动超分失败:', error);
+		
+		// 设置错误状态（仅对非预加载任务）
+		if (!isPreload) {
+			setUpscaleError(error instanceof Error ? error.message : String(error));
+		}
+		
 		return {
 			success: false,
 			error: error instanceof Error ? error.message : String(error)

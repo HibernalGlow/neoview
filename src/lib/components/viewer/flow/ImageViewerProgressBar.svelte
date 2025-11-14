@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { bookStore } from '$lib/stores/book.svelte';
+	import { upscaleState } from '$lib/stores/upscale/upscaleState.svelte';
+
 	let {
 		showProgressBar = true,
 		totalPages = 0,
@@ -8,16 +11,45 @@
 		progressBlinking = false,
 		progressColor = '#FDFBF7'
 	} = $props();
+
+	// 计算预超分覆盖范围
+	$: furthestPreUpscaledIndex = bookStore.getFurthestPreUpscaledIndex();
+	$: preUpscaleExtent = furthestPreUpscaledIndex >= 0 ? ((furthestPreUpscaledIndex + 1) / totalPages) * 100 : 0;
+
+	// 根据当前页面状态和全局状态计算进度条颜色和动画
+	$: currentPageStatus = totalPages > 0 ? bookStore.getPageUpscaleStatus(currentPageIndex) : 'none';
+	$: isCurrentPageUpscaling = upscaleState.isUpscaling && upscaleState.currentImageHash !== null;
+	
+	// 更新进度条状态
+	$: {
+		if (isCurrentPageUpscaling) {
+			progressColor = '#FFFFFF'; // 白色
+			progressBlinking = true;
+		} else if (currentPageStatus === 'done') {
+			progressColor = '#22c55e'; // 绿色
+			progressBlinking = false;
+		} else if (currentPageStatus === 'failed') {
+			progressColor = '#ef4444'; // 红色
+			progressBlinking = false;
+		} else {
+			progressColor = '#FDFBF7'; // 奶白色
+			progressBlinking = false;
+		}
+	}
 </script>
 
 {#if showProgressBar && totalPages > 0}
+	<!-- 底部双层进度条 -->
 	<div class="absolute bottom-0 left-0 right-0 h-1 pointer-events-none">
-		{#if preUpscaleProgress > 0}
+		<!-- 下层：预超分覆盖进度条（黄色） -->
+		{#if preUpscaleExtent > 0}
 			<div
 				class="absolute bottom-0 left-0 h-full transition-all duration-500"
-				style={`width: ${((currentPageIndex + 1 + (preUpscaleProgress / 100) * totalPreUpscalePages) / totalPages) * 100}%; background-color: #FCD34D; opacity: 0.6;`}
+				style={`width: ${preUpscaleExtent}%; background-color: #FCD34D; opacity: 0.6;`}
 			></div>
 		{/if}
+		
+		<!-- 上层：阅读进度 + 当前页超分状态条 -->
 		<div
 			class={`absolute bottom-0 left-0 h-full transition-all duration-300 ${progressBlinking ? 'animate-pulse' : ''}`}
 			style={`width: ${((currentPageIndex + 1) / totalPages) * 100}%; background-color: ${progressColor}; opacity: 0.8;`}

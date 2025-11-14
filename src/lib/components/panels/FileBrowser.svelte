@@ -3,19 +3,18 @@
   import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
   import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
   import { onMount } from 'svelte';
-  import { FileSystemAPI } from '$lib/api';
+  import { fileBrowserService, navigationHistory } from './file/services/fileBrowserService';
+  import { getThumbnailQueue } from './file/services/thumbnailQueueService';
   import type { FsItem } from '$lib/types';
   import { bookStore } from '$lib/stores/book.svelte';
-  import * as BookAPI from '$lib/api/book';
   import PathBar from '../ui/PathBar.svelte';
   import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
-  import { NavigationHistory } from '$lib/utils/navigationHistory';
   import { Button } from '$lib/components/ui/button';
   import * as Input from '$lib/components/ui/input';
   import * as ContextMenu from '$lib/components/ui/context-menu';
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
   import { homeDir } from '@tauri-apps/api/path';
-  import { enqueueThumbnail, enqueueArchiveThumbnail, configureThumbnailManager, itemIsDirectory, itemIsImage, clearQueue, toRelativeKey } from '$lib/utils/thumbnailManager';
+  import { itemIsDirectory, itemIsImage, toRelativeKey } from '$lib/utils/thumbnailManager';
 
 
   // 使用全局状态
@@ -35,8 +34,8 @@
   let clipboardItem = $state<{ path: string; operation: 'copy' | 'cut' } | null>(null);
 
   // 导航历史管理器
-  let navigationHistory = new NavigationHistory();
-  
+  const thumbnailQueue = getThumbnailQueue((path, url) => fileBrowserStore.addThumbnail(path, url));
+
   // UI 模式状态
   let isCheckMode = $state(false);
   let isDeleteMode = $state(false);
@@ -319,7 +318,7 @@
     console.log('📂 selectFolder called');
     try {
       console.log('🔄 Calling FileSystemAPI.selectFolder...');
-      const path = await FileSystemAPI.selectFolder();
+      const path = await fileBrowserService.selectFolder();
       console.log('✅ Selected path:', path);
       
       if (path) {
@@ -363,7 +362,7 @@
 
     try {
       console.log('🔄 Calling FileSystemAPI.browseDirectory...');
-      const loadedItems = await FileSystemAPI.browseDirectory(path);
+      const loadedItems = await fileBrowserService.browseDirectory(path);
       console.log('✅ Loaded', loadedItems.length, 'items:', loadedItems.map(i => i.name));
       
       fileBrowserStore.setItems(loadedItems);
@@ -388,16 +387,16 @@
 
         if (itemIsDirectory(item)) {
           console.log('📁 Enqueue folder thumbnail:', item.path);
-          enqueueThumbnail(item.path, true);
+          thumbnailQueue.enqueueItems([item], { priority: 'high', source: path });
         } else if (itemIsImage(item)) {
           console.log('🖼️ Enqueue image thumbnail:', item.path);
           enqueueThumbnail(item.path, false);
         } else {
           (async () => {
             try {
-              if (await FileSystemAPI.isSupportedArchive(item.path)) {
+              if (await fileBrowserService.isSupportedArchive(item.path)) {
                 console.log('📦 Enqueue archive thumbnail:', item.path);
-                enqueueArchiveThumbnail(item.path);
+                thumbnailQueue.enqueueItems([item], { priority: 'high', source: path });
               } else {
                 console.log('⚪ 跳过非图片非目录项:', item.path);
               }

@@ -1149,6 +1149,7 @@
     isCheckMode={isCheckMode}
     isDeleteMode={isDeleteMode}
     viewMode={viewMode}
+    sortConfig={sortConfig}
     onGoHome={goHome}
     onGoBackInHistory={goBackInHistory}
     onGoForwardInHistory={goForwardInHistory}

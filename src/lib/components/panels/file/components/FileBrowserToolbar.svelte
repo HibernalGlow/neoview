@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Button } from '$lib/components/ui/button';
   import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
-  import type { SortConfig } from '$lib/components/panels/file/services/sortService';
+  import { sortFieldLabels, type SortConfig } from '$lib/components/panels/file/services/sortService';
   import {
     Home,
     ChevronLeft,
@@ -24,6 +24,7 @@
   export let isCheckMode = false;
   export let isDeleteMode = false;
   export let viewMode: 'list' | 'thumbnails' = 'list';
+  export let sortConfig: SortConfig = { field: 'path', order: 'asc' };
 
   export let onGoHome: () => void = () => {};
   export let onGoBackInHistory: () => void = () => {};
@@ -156,6 +157,12 @@
         <Grid3x3 class="h-4 w-4" />
       {/if}
     </Button>
+
+    <div class="flex items-center gap-2 text-xs text-muted-foreground px-2">
+      <span>当前排序:</span>
+      <span class="font-medium">{sortFieldLabels[sortConfig.field]}</span>
+      <span>· {sortConfig.order === 'asc' ? '升序' : '降序'}</span>
+    </div>
 
     <SortPanel onSortChange={onSort} />
 

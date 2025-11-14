@@ -7,7 +7,42 @@ export type SortConfig = {
   order: SortOrder;
 };
 
-let sortConfig: SortConfig = { field: 'path', order: 'asc' };
+const SORT_STORAGE_KEY = 'neoview-sort-config';
+
+function readStoredSortConfig(): SortConfig | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(SORT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.field && parsed.order) {
+      return parsed as SortConfig;
+    }
+  } catch (err) {
+    console.warn('读取排序配置失败:', err);
+  }
+  return null;
+}
+
+function persistSortConfig(config: SortConfig) {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(SORT_STORAGE_KEY, JSON.stringify(config));
+  } catch (err) {
+    console.warn('保存排序配置失败:', err);
+  }
+}
+
+let sortConfig: SortConfig = readStoredSortConfig() ?? { field: 'path', order: 'asc' };
+persistSortConfig(sortConfig);
+
+export const sortFieldLabels: Record<SortField, string> = {
+  path: '路径',
+  name: '名称',
+  modified: '修改时间',
+  size: '大小',
+  type: '类型',
+};
 
 function getItemType(item: FsItem): string {
   if (item.isDir) return '0_folder';
@@ -24,6 +59,7 @@ export function getSortConfig(): SortConfig {
 
 export function setSortConfig(config: SortConfig) {
   sortConfig = config;
+  persistSortConfig(config);
 }
 
 export function sortFsItems(items: FsItem[], config: SortConfig = sortConfig): FsItem[] {

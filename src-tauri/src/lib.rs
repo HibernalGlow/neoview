@@ -200,7 +200,6 @@ pub fn run() {
             commands::toggle_comparison_mode,
             commands::set_comparison_mode,
             // Image Data commands
-            commands::calculate_data_hash,
             commands::calculate_path_hash,
             commands::check_upscale_cache_for_algorithm,
             commands::save_binary_file,

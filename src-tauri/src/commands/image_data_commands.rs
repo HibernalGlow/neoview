@@ -31,6 +31,17 @@ pub async fn calculate_data_hash(data_url: String) -> Result<String, String> {
     Ok(format!("{:x}", digest))
 }
 
+/// 计算字节数组的MD5哈希值
+#[command]
+pub async fn calculate_blob_md5(bytes: Vec<u8>) -> Result<String, String> {
+    use md5;
+    
+    // 计算MD5
+    let digest = md5::compute(&bytes);
+    
+    Ok(format!("{:x}", digest))
+}
+
 /// 将 data URL 转换为 WebP 格式
 #[command]
 pub async fn convert_data_url_to_webp(data_url: String) -> Result<String, String> {

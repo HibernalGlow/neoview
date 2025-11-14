@@ -114,10 +114,18 @@ export class ImageLoader {
 		const arrayBuffer = await blob.arrayBuffer();
 		const bytes = new Uint8Array(arrayBuffer);
 		
-		// 调用后端命令计算 MD5
-		return await invoke<string>('calculate_blob_md5', { 
-			bytes: Array.from(bytes) 
-		});
+		try {
+			// 调用后端命令计算 MD5
+			return await invoke<string>('calculate_blob_md5', { 
+				bytes: Array.from(bytes) 
+			});
+		} catch (error) {
+			console.warn('后端 calculate_blob_md5 命令不可用，使用前端计算（SHA-256）:', error);
+			// 临时回退到前端计算 SHA-256（虽然与缓存系统不匹配，但至少不会崩溃）
+			const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+			const hashArray = Array.from(new Uint8Array(hashBuffer));
+			return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+		}
 	}
 
 	/**

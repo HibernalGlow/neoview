@@ -325,9 +325,17 @@ export async function getImageDataWithHash(
 		const { invoke } = await import('@tauri-apps/api/core');
 		const arrayBuffer = await imageData.arrayBuffer();
 		const bytes = new Uint8Array(arrayBuffer);
-		hash = await invoke<string>('calculate_blob_md5', { 
-			bytes: Array.from(bytes) 
-		});
+		try {
+			hash = await invoke<string>('calculate_blob_md5', { 
+				bytes: Array.from(bytes) 
+			});
+		} catch (error) {
+			console.warn('后端 calculate_blob_md5 命令不可用，使用前端计算（SHA-256）:', error);
+			// 临时回退到前端计算 SHA-256
+			const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+			const hashArray = Array.from(new Uint8Array(hashBuffer));
+			hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+		}
 	}
 	
 	if (!hash) return null;

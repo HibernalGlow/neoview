@@ -105,7 +105,7 @@
 				console.log('超分开始事件触发');
 			},
 			onUpscaleComplete: (detail) => {
-				const { imageData: upscaledImageData, imageBlob, originalImageHash } = detail;
+				const { imageData: upscaledImageData, imageBlob, originalImageHash, background } = detail;
 				if (upscaledImageData) {
 					bookStore.setUpscaledImage(upscaledImageData);
 					upscaledImageDataForComparison = upscaledImageData;
@@ -116,6 +116,7 @@
 				// 更新当前页面状态为已完成
 				const currentPageIndex = bookStore.currentPageIndex;
 				bookStore.setPageUpscaleStatus(currentPageIndex, 'done');
+				
 				console.log('超分图已匹配当前页面，MD5:', originalImageHash, '已替换，页面状态更新为完成');
 			},
 			onUpscaleSaved: async (detail) => {

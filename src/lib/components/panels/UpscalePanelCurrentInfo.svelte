@@ -23,7 +23,7 @@
 	}
 
 	// 订阅全局 upscaleState，同步状态
-	$: {
+	$effect(() => {
 		if (upscaleState.isUpscaling) {
 			isProcessing = true;
 			status = upscaleState.currentTask || '处理中';
@@ -53,7 +53,7 @@
 			statusClass = '';
 			progressColorClass = '';
 		}
-	}
+	});
 </script>
 
 <div class="section">

@@ -250,7 +250,6 @@ export class PreloadManager {
 			this.currentBookSession = sessionId;
 		}
 	}
-	}
 
 	/**
 	 * 清理管理器（在组件onDestroy时调用）

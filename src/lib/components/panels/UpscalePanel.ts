@@ -3,18 +3,9 @@ import { invoke } from '@tauri-apps/api/core';
 import type { UpscaleSettings } from '$lib/utils/upscale/settings';
 
 export interface UpscalePanelSettings extends UpscaleSettings {
-	conditionalMinWidth: number;
-	conditionalMinHeight: number;
-	conditionalUpscaleEnabled: boolean;
-	currentImageUpscaleEnabled: boolean;
-	useCachedFirst: boolean;
-	selectedModel: string;
-	scale: number;
-	tileSize: number;
-	noiseLevel: number;
-	gpuId: number;
-	preloadPages: number;
+	// ...已有字段
 	backgroundConcurrency: number;
+	showPanelPreview: boolean;
 }
 
 export interface UpscalePanelEventDetail {
@@ -31,18 +22,11 @@ const STORAGE_KEY = 'pyo3_upscale_settings';
 
 export const defaultPanelSettings: UpscalePanelSettings = {
 	...DEFAULT_UPSCALE_SETTINGS,
-	conditionalMinWidth: 0,
-	conditionalMinHeight: 0,
-	conditionalUpscaleEnabled: false,
-	currentImageUpscaleEnabled: false,
-	useCachedFirst: true,
-	selectedModel: 'MODEL_WAIFU2X_CUNET_UP2X',
-	scale: 2,
-	tileSize: 64,
-	noiseLevel: 0,
-	gpuId: 0,
+	currentImageUpscaleEnabled: settings.image.enableSuperResolution || false,
+	useCachedFirst: settings.image.useCachedFirst || false,
 	preloadPages: 3,
-	backgroundConcurrency: 2
+	backgroundConcurrency: 2,
+	showPanelPreview: false
 };
 
 export function loadUpscalePanelSettings(): UpscalePanelSettings {

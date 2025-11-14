@@ -37,7 +37,12 @@
 	let conditionalMinHeight = $state(0);
 	let currentImageUpscaleEnabled = $state(false);
 	let useCachedFirst = $state(true);
+	let showPanelPreview = $state(false); // 新增：侧边预览开关
 	let settingsInitialized = $state(false);
+	
+	// 保存超分图相关状态
+	let lastUpscaledBlob = $state<Blob | null>(null);
+	let lastUpscaledFileName = $state('');
 
 	// 预加载配置
 	let preloadPages = $state(3);
@@ -224,23 +229,11 @@
 	const dispatch = createEventDispatcher();
 
 	function applyPanelSettings(settings: UpscalePanelSettings) {
-		// 优先从 settingsManager 读取自动超分开关状态
-		const globalSettings = settingsManager.getSettings();
-		const globalEnabled = globalSettings.image.enableSuperResolution;
-		const localEnabled = settings.autoUpscaleEnabled;
-		
-		console.log('🔧 applyPanelSettings:', {
-			globalEnabled,
-			localEnabled,
-			final: globalEnabled ?? localEnabled
-		});
-		
-		autoUpscaleEnabled = globalEnabled ?? localEnabled;
-		
+		autoUpscaleEnabled = settings.autoUpscaleEnabled;
 		preUpscaleEnabled = settings.preUpscaleEnabled;
-		conditionalUpscaleEnabled = settings.conditions.enabled ?? settings.conditionalUpscaleEnabled;
-		conditionalMinWidth = settings.conditionalMinWidth ?? settings.conditions.minWidth;
-		conditionalMinHeight = settings.conditionalMinHeight ?? settings.conditions.minHeight;
+		conditionalUpscaleEnabled = settings.conditionalUpscaleEnabled;
+		conditionalMinWidth = settings.conditionalMinWidth;
+		conditionalMinHeight = settings.conditionalMinHeight;
 		currentImageUpscaleEnabled = settings.currentImageUpscaleEnabled;
 		useCachedFirst = settings.useCachedFirst;
 		selectedModel = settings.selectedModel;
@@ -250,6 +243,7 @@
 		gpuId = settings.gpuId;
 		preloadPages = settings.preloadPages;
 		backgroundConcurrency = settings.backgroundConcurrency;
+		showPanelPreview = settings.showPanelPreview ?? false;
 		
 		// 同步预加载配置到 PreloadManager
 		if (window.preloadManager) {
@@ -277,6 +271,7 @@
 			gpuId,
 			preloadPages,
 			backgroundConcurrency,
+			showPanelPreview,
 			conditions: {
 				enabled: conditionalUpscaleEnabled,
 				minWidth: conditionalMinWidth,
@@ -391,14 +386,30 @@
 		}
 	}
 
-	/**
-	 * 处理开关设置变化
-	 */
 	function handleGlobalControlsChange() {
 		console.log('🔄 处理开关设置变化');
 		const settings = gatherPanelSettings();
-		persistUpscalePanelSettings(settings);
+		persistUpscaleSettings(settings);
 		emitUpscaleSettings(settings);
+	}
+
+	/**
+	 * 处理预加载配置变化
+	 */
+	function handlePreloadConfigChange() {
+		const settings = gatherPanelSettings();
+		// 1. 持久化到 localStorage + 更新全局 UpscaleSettings
+		persistUpscaleSettings(settings);
+		// 2. 通知其他组件（如果有监听）
+		emitUpscaleSettings(settings);
+		// 3. 即时更新 PreloadManager / ImageLoader 的配置
+		const preloadManager = (window as any).preloadManager;
+		if (preloadManager) {
+			preloadManager.updateImageLoaderConfig({
+				preloadPages: settings.preloadPages,
+				maxThreads: settings.backgroundConcurrency
+			});
+		}
 	}
 
 	/**
@@ -637,6 +648,13 @@
 	) {
 		const currentPageIndex = bookStore.currentPageIndex;
 		const currentPage = bookStore.currentPage;
+		
+		// 记住最新超分结果（用于保存功能）
+		lastUpscaledBlob = blob;
+		// 简单从路径提文件名（可自行优化）
+		lastUpscaledFileName = currentPage
+			? (currentPage as any).path?.split(/[\/]/).pop() ?? 'upscaled.webp'
+			: 'upscaled.webp';
 
 		// 1. 异步保存到磁盘缓存 + BookStore 记录
 		if (currentPage) {
@@ -698,6 +716,43 @@
 		} catch (error) {
 			console.error('清理缓存失败:', error);
 			showErrorToast('清理缓存失败');
+		}
+	}
+
+	/**
+	 * 保存超分图到本地文件
+	 */
+	async function saveUpscaledImage() {
+		try {
+			if (!lastUpscaledBlob) {
+				showErrorToast('没有可保存的超分结果');
+				return;
+			}
+
+			// 1. 选择保存路径
+			const defaultName = lastUpscaledFileName.replace(/\.[^.]+$/, '') + '_sr.webp';
+			const savePath = await invoke<string | null>('dialog_save', {
+				title: '保存超分结果',
+				defaultPath: defaultName,
+				filters: [{ name: 'WebP Image', extensions: ['webp'] }]
+			});
+
+			if (!savePath) {
+				// 用户取消
+				return;
+			}
+
+			// 2. Blob -> Uint8Array
+			const arrayBuffer = await lastUpscaledBlob.arrayBuffer();
+			const bytes = new Uint8Array(arrayBuffer);
+
+			// 3. 写入文件
+			await invoke('write_binary_file', { path: savePath, contents: bytes });
+
+			showSuccessToast(`已保存到: ${savePath}`);
+		} catch (err) {
+			console.error('保存超分图失败:', err);
+			showErrorToast('保存超分图失败');
 		}
 	}
 

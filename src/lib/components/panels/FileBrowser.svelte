@@ -19,6 +19,13 @@
   import FileBrowserSearch from './file/components/FileBrowserSearch.svelte';
   import FileBrowserList from './file/components/FileBrowserList.svelte';
   import FileBrowserEmptyState from './file/components/FileBrowserEmptyState.svelte';
+  import {
+    calculateContextMenuPosition,
+    calculateSubmenuPosition,
+    setClipboardItem,
+    pasteClipboardItem,
+    copyItemToFolder as copyItemToFolderService,
+  } from './file/services/contextMenuService';
 
 
   // 使用全局状态
@@ -35,7 +42,6 @@
   let contextMenu = $state<{ x: number; y: number; item: FsItem | null; direction: 'up' | 'down' }>({ x: 0, y: 0, item: null, direction: 'down' });
   let bookmarkContextMenu = $state<{ x: number; y: number; bookmark: any | null }>({ x: 0, y: 0, bookmark: null });
   let copyToSubmenu = $state<{ show: boolean; x: number; y: number }>({ show: false, x: 0, y: 0 });
-  let clipboardItem = $state<{ path: string; operation: 'copy' | 'cut' } | null>(null);
 
   // 缩略图队列
   const thumbnailQueue = getThumbnailQueue((path, url) => fileBrowserStore.addThumbnail(path, url));
@@ -481,51 +487,8 @@
    */
   function showContextMenu(e: MouseEvent, item: FsItem) {
     e.preventDefault();
-    
-    // 获取视口尺寸
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const viewportMiddle = viewportHeight / 2;
-    
-    let menuX = e.clientX;
-    let menuY = e.clientY;
-    let menuDirection: 'up' | 'down' = 'down'; // 默认向下展开
-    
-    // 确保菜单不超出视口右侧
-    const menuWidth = 180; // 预估菜单宽度
-    if (e.clientX + menuWidth > viewportWidth) {
-      menuX = viewportWidth - menuWidth - 10; // 留10px边距
-    }
-    
-    // 确保菜单不超出视口左侧
-    if (menuX < 10) {
-      menuX = 10;
-    }
-    
-    // 如果点击位置在视口中线以下，则向上翻转菜单
-    if (e.clientY > viewportMiddle) {
-      menuDirection = 'up';
-      // 向上翻转时，需要调整Y坐标，让菜单底部对齐点击位置
-      // 使用70vh的最大高度来计算位置
-      const maxMenuHeight = viewportHeight * 0.7;
-      menuY = e.clientY - Math.min(250, maxMenuHeight); // 预估菜单高度或最大高度
-    }
-    
-    // 确保菜单不超出视口顶部或底部
-    const maxMenuHeight = viewportHeight * 0.7;
-    if (menuDirection === 'down' && menuY + maxMenuHeight > viewportHeight) {
-      menuY = viewportHeight - maxMenuHeight - 10;
-    }
-    if (menuDirection === 'up' && menuY < 10) {
-      menuY = 10;
-    }
-    
-    contextMenu = { 
-      x: menuX, 
-      y: menuY, 
-      item,
-      direction: menuDirection
-    };
+    const position = calculateContextMenuPosition(e);
+    contextMenu = { ...position, item };
   }
 
   /**
@@ -936,7 +899,7 @@
    * 剪切文件
    */
   function cutItem(item: FsItem) {
-    clipboardItem = { path: item.path, operation: 'cut' };
+    setClipboardItem(item, 'cut');
     hideContextMenu();
   }
 
@@ -944,7 +907,7 @@
    * 复制文件
    */
   function copyItem(item: FsItem) {
-    clipboardItem = { path: item.path, operation: 'copy' };
+    setClipboardItem(item, 'copy');
     hideContextMenu();
   }
 
@@ -952,19 +915,11 @@
    * 粘贴文件
    */
   async function pasteItem() {
-    if (!clipboardItem || !currentPath) return;
-
+    if (!currentPath) return;
     try {
-      const targetPath = `${currentPath}/${clipboardItem.path.split(/[\\/]/).pop()}`;
-      
-      if (clipboardItem.operation === 'cut') {
-        await fileBrowserService.movePath(clipboardItem.path, targetPath);
-      } else {
-        await fileBrowserService.copyPath(clipboardItem.path, targetPath);
-      }
-      
-      clipboardItem = null;
-      await refresh();
+      await pasteClipboardItem(currentPath, async () => {
+        await refresh();
+      });
     } catch (err) {
       fileBrowserStore.setError(String(err));
     }
@@ -976,42 +931,12 @@
   function showCopyToSubmenu(e: MouseEvent) {
     e.stopPropagation();
     
-    // 获取视口尺寸
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    
-    let submenuX = contextMenu.x + 150; // 子菜单在主菜单右侧
-    let submenuY = contextMenu.y;
-    
-    // 确保子菜单不超出视口右侧
-    const submenuWidth = 150;
-    if (submenuX + submenuWidth > viewportWidth) {
-      // 如果右侧放不下，放在左侧
-      submenuX = contextMenu.x - submenuWidth - 10;
-    }
-    
-    // 确保子菜单不超出视口左侧
-    if (submenuX < 10) {
-      submenuX = 10;
-    }
-    
-    // 如果主菜单是向上展开的，子菜单也需要相应调整位置
-    if (contextMenu.direction === 'up') {
-      submenuY = contextMenu.y + 200; // 调整子菜单位置，使其与主菜单项对齐
-    }
-    
-    // 确保子菜单不超出视口底部
-    const maxSubmenuHeight = viewportHeight * 0.5;
-    if (submenuY + maxSubmenuHeight > viewportHeight) {
-      submenuY = viewportHeight - maxSubmenuHeight - 10;
-    }
-    
-    // 确保子菜单不超出视口顶部
-    if (submenuY < 10) {
-      submenuY = 10;
-    }
-    
-    copyToSubmenu = { show: true, x: submenuX, y: submenuY };
+    const { x, y } = calculateSubmenuPosition(
+      { x: contextMenu.x, y: contextMenu.y, direction: contextMenu.direction },
+      window.innerWidth,
+      window.innerHeight
+    );
+    copyToSubmenu = { show: true, x, y };
   }
 
   /**
@@ -1021,10 +946,9 @@
     if (!contextMenu.item) return;
 
     try {
-      const fileName = contextMenu.item.path.split(/[\\/]/).pop();
-      const targetFilePath = `${targetPath}/${fileName}`;
-      await fileBrowserService.copyPath(contextMenu.item.path, targetFilePath);
-      await refresh();
+      await copyItemToFolderService(contextMenu.item, targetPath, async () => {
+        await refresh();
+      });
     } catch (err) {
       fileBrowserStore.setError(String(err));
     }
@@ -1289,151 +1213,74 @@
     onSearchSettingChange={updateSearchSetting}
   />
 
-        }
-      }
-
-      function toggleSearchSettingsDropdown(event: MouseEvent) {
-        event.stopPropagation();
-        showSearchSettings = !showSearchSettings;
-        if (showSearchSettings) {
-          showSearchHistory = false;
-        }
-      }
-
-      function clearSearchField() {
-        handleSearchInput('');
-        searchResults = [];
-      }
-
-      function updateSearchSetting(
-        key: 'includeSubfolders' | 'showHistoryOnFocus',
-        value: boolean
-      ) {
-        searchSettings = { ...searchSettings, [key]: value };
-      }
-    </script>
-
-    <div class="flex h-full flex-col">
-      <!-- 路径面包屑导航 -->
-      <PathBar 
-        bind:currentPath={currentPath} 
-        isArchive={isArchiveView}
-        onNavigate={handlePathNavigate}
-        onSetHomepage={setHomepage}
+  <!-- 错误提示 -->
+  {#if error}
+    <div class="m-2 rounded bg-red-50 p-3 text-sm text-red-600">
+      {error}
+    </div>
+  {:else}
+    {#if loading || isSearching || (searchQuery && searchResults.length === 0) || items.length === 0}
+      <FileBrowserEmptyState
+        {loading}
+        {isSearching}
+        {searchQuery}
+        hasSearchResults={searchResults.length > 0}
+        itemsCount={items.length}
+        currentPath={currentPath}
+        onSelectFolder={selectFolder}
       />
-
-      <!-- 工具栏 -->
-      <FileBrowserToolbar
-        isArchiveView={isArchiveView}
-        hasHomepage={hasHomepage}
-        canGoBackInHistory={navigationHistory.canGoBack()}
-        canGoForwardInHistory={navigationHistory.canGoForward()}
-        canNavigateBack={canNavigateBack}
+    {:else if searchQuery && searchResults.length > 0}
+      <FileBrowserList
+        listLabel="搜索结果列表"
+        items={searchResults}
+        isSearchResults={true}
         isCheckMode={isCheckMode}
         isDeleteMode={isDeleteMode}
-        viewMode={viewMode}
-        sortItems={items}
-        onGoHome={goHome}
-        onGoBackInHistory={goBackInHistory}
-        onGoForwardInHistory={goForwardInHistory}
-        onGoBack={goBack}
-        onSelectFolder={selectFolder}
-        onRefresh={refresh}
-        onToggleCheckMode={toggleCheckMode}
-        onToggleDeleteMode={toggleDeleteMode}
-        onToggleViewMode={toggleViewMode}
-        onClearThumbnailCache={clearThumbnailCache}
-        onSort={handleSort}
-      />
-
-      <!-- 搜索栏 -->
-      <FileBrowserSearch
-        searchQuery={searchQuery}
-        searchHistory={searchHistory}
-        searchSettings={searchSettings}
-        showSearchHistory={showSearchHistory}
-        showSearchSettings={showSearchSettings}
         isArchiveView={isArchiveView}
-        currentPath={currentPath}
-        onSearchInput={handleSearchInput}
-        onSearchFocus={handleSearchFocus}
-        onSearchHistoryToggle={toggleSearchHistoryDropdown}
-        onSearchSettingsToggle={toggleSearchSettingsDropdown}
-        onClearSearch={clearSearchField}
-        onSelectSearchHistory={selectSearchHistory}
-        onRemoveSearchHistoryItem={removeSearchHistoryItem}
-        onClearSearchHistory={clearSearchHistory}
-        onSearchSettingChange={updateSearchSetting}
-      />
-
-      <!-- 错误提示 -->
-      {#if error}
-        <div class="m-2 rounded bg-red-50 p-3 text-sm text-red-600">
-          {error}
+        selectedIndex={selectedIndex}
+        {selectedItems}
+        {thumbnails}
+        containerRef={fileListContainer}
+        onKeydown={handleKeydown}
+        onRowClick={(item) => openSearchResult(item)}
+        onRowKeyboardActivate={(item) => openSearchResult(item)}
+        onToggleSelection={toggleItemSelection}
+        onInlineDelete={(item) => deleteItem(item.path)}
+        contextMenuHandlers={contextMenuHandlers}
+      >
+        <div slot="header" class="mb-3 text-sm text-gray-600 px-2">
+          找到 {searchResults.length} 个结果 (搜索: "{searchQuery}")
         </div>
-      {:else}
-        {#if loading || isSearching || (searchQuery && searchResults.length === 0) || items.length === 0}
-          <FileBrowserEmptyState
-            {loading}
-            {isSearching}
-            {searchQuery}
-            hasSearchResults={searchResults.length > 0}
-            itemsCount={items.length}
-            currentPath={currentPath}
-            onSelectFolder={selectFolder}
-          />
-        {:else if searchQuery && searchResults.length > 0}
-          <FileBrowserList
-            listLabel="搜索结果列表"
-            items={searchResults}
-            isSearchResults={true}
-            isCheckMode={isCheckMode}
-            isDeleteMode={isDeleteMode}
-            isArchiveView={isArchiveView}
-            selectedIndex={selectedIndex}
-            {selectedItems}
-            {thumbnails}
-            containerRef={fileListContainer}
-            onKeydown={handleKeydown}
-            onRowClick={(item) => openSearchResult(item)}
-            onRowKeyboardActivate={(item) => openSearchResult(item)}
-            onToggleSelection={toggleItemSelection}
-            onInlineDelete={(item) => deleteItem(item.path)}
-            contextMenuHandlers={contextMenuHandlers}
-          >
-            <div slot="header" class="mb-3 text-sm text-gray-600 px-2">
-              找到 {searchResults.length} 个结果 (搜索: "{searchQuery}")
-            </div>
-          </FileBrowserList>
-        {:else}
-          <FileBrowserList
-            listLabel="文件列表"
-            items={items}
-            isSearchResults={false}
-            isCheckMode={isCheckMode}
-            isDeleteMode={isDeleteMode}
-            isArchiveView={isArchiveView}
-            {selectedIndex}
-            {selectedItems}
-            {thumbnails}
-            containerRef={fileListContainer}
-            onKeydown={handleKeydown}
-            onRowClick={(item, index) => {
-              if (!isCheckMode && !isDeleteMode) {
-                fileBrowserStore.setSelectedIndex(index);
-                openFile(item);
-              }
-            }}
-            onRowKeyboardActivate={(item, index) => {
-              if (!isCheckMode && !isDeleteMode) {
-                fileBrowserStore.setSelectedIndex(index);
-                openFile(item);
-              }
-            }}
-            onToggleSelection={toggleItemSelection}
-            onInlineDelete={(item) => deleteItem(item.path)}
-            contextMenuHandlers={contextMenuHandlers}
-          />
-        {/if}
-      {/if}
-    </div>
+      </FileBrowserList>
+    {:else}
+      <FileBrowserList
+        listLabel="文件列表"
+        items={items}
+        isSearchResults={false}
+        isCheckMode={isCheckMode}
+        isDeleteMode={isDeleteMode}
+        isArchiveView={isArchiveView}
+        {selectedIndex}
+        {selectedItems}
+        {thumbnails}
+        containerRef={fileListContainer}
+        onKeydown={handleKeydown}
+        onRowClick={(item, index) => {
+          if (!isCheckMode && !isDeleteMode) {
+            fileBrowserStore.setSelectedIndex(index);
+            openFile(item);
+          }
+        }}
+        onRowKeyboardActivate={(item, index) => {
+          if (!isCheckMode && !isDeleteMode) {
+            fileBrowserStore.setSelectedIndex(index);
+            openFile(item);
+          }
+        }}
+        onToggleSelection={toggleItemSelection}
+        onInlineDelete={(item) => deleteItem(item.path)}
+        contextMenuHandlers={contextMenuHandlers}
+      />
+    {/if}
+  {/if}
+</div>

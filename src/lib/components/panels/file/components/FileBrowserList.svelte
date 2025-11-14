@@ -55,6 +55,9 @@
     const size = item.size ? `${item.size}` : '';
     return item.isDir ? '文件夹' : size;
   };
+
+  export let onContextMenuOpen: (event: MouseEvent, item: FsItem) => void = () => {};
+  export let onContextMenuClose: () => void = () => {};
 </script>
 
 <div
@@ -68,7 +71,7 @@
   <slot name="header" />
   <div class="grid grid-cols-1 gap-2">
     {#each items as item, index (item.path)}
-      <ContextMenu.Root>
+      <ContextMenu.Root onOpen={(event) => onContextMenuOpen(event, item)} onClose={onContextMenuClose}>
         <ContextMenu.Trigger asChild>
           <div
             class={`group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors ${!isSearchResults && selectedIndex === index ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}`}

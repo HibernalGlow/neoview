@@ -130,7 +130,6 @@ export async function performUpscale(
 			imageBlob: resultBlob,
 			originalImageHash: imageHash,
 			background: isBackground,
-			sessionId: currentSession,
 			conditionId: options.conditionId
 		};
 		

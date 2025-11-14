@@ -145,6 +145,7 @@ impl PyO3Upscaler {
         timeout: f64,
         width: i32,
         height: i32,
+        task_id: Option<String>,
     ) -> Result<Vec<u8>, String> {
         // 确保已初始化
         self.initialize()?;
@@ -175,6 +176,7 @@ impl PyO3Upscaler {
                 timeout,
                 width,
                 height,
+                task_id,
             ).map_err(|e| format!("调用 Python 超分函数失败: {}", e))?;
             
             if let Some(data) = result {
@@ -338,6 +340,19 @@ impl PyO3Upscaler {
         }
     }
     
+    /// 取消任务
+    pub fn cancel_task(&self, task_id: &str) -> Result<bool, String> {
+        let module_guard = self.python_module.lock()
+            .map_err(|e| format!("获取锁失败: {}", e))?;
+        
+        if let Some(module) = module_guard.as_ref() {
+            module.cancel_task(task_id)
+                .map_err(|e| format!("取消任务失败: {}", e))
+        } else {
+            Err("Python 模块未初始化".to_string())
+        }
+    }
+
     /// 获取可用模型
     pub fn get_available_models(&self) -> Result<Vec<String>, String> {
         let module_guard = self.python_module.lock()

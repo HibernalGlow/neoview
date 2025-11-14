@@ -44,6 +44,8 @@ export class PreloadManager {
 	private preloadWorker: ReturnType<typeof createPreloadWorker<any>>;
 	private options: PreloadManagerOptions;
 	private preUpscaledPages = new Set<number>();
+	private currentBookSession = ''; // 当前书籍会话ID
+	private activeTasks = new Map<string, { taskId: string; pageIndex: number }>(); // 活跃任务映射
 
 	constructor(options: PreloadManagerOptions = {}) {
 		// 保存选项
@@ -77,13 +79,38 @@ export class PreloadManager {
 		this.preloadWorker = createPreloadWorker({
 			concurrency: () => this.performanceMaxThreads,
 			runTask: async (task) => {
-				// 调用 triggerAutoUpscale 进行预超分，传递 Blob
-				return await triggerAutoUpscale({
-					blob: task.blob,
-					hash: task.hash
-				}, true);
+				// 生成任务ID
+				const taskId = `preload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+				
+				// 记录活跃任务
+				this.activeTasks.set(task.hash, { taskId, pageIndex: task.pageIndex });
+				
+				try {
+					// 收集页面元数据
+					const pageMeta = {
+						width: task.pageWidth || 0,
+						height: task.pageHeight || 0,
+						bookPath: task.bookPath || '',
+						imagePath: task.imagePath || ''
+					};
+					
+					// 调用 triggerAutoUpscale 进行预超分，传递 Blob 和元数据
+					return await triggerAutoUpscale({
+						blob: task.blob,
+						hash: task.hash
+					}, true, pageMeta);
+				} finally {
+					// 清理活跃任务
+					this.activeTasks.delete(task.hash);
+				}
 			},
 			onTaskSuccess: (task, result) => {
+				// 校验会话是否仍然有效
+				if (!this.currentBookSession) {
+					console.warn('[PreloadManager] 会话无效，丢弃预超分结果');
+					return;
+				}
+				
 				if (result && result.upscaledImageBlob && result.upscaledImageData) {
 					// 更新内存缓存
 					const cache = this.imageLoader.getPreloadMemoryCache();
@@ -145,6 +172,20 @@ export class PreloadManager {
 
 		// 监听书籍切换：清理上一本书的内存缓存
 		this.setupBookChangeListener();
+		
+		// 监听会话变更事件
+		const handleSessionChange = (event: CustomEvent) => {
+			this.updateBookSession(event.detail.sessionId);
+		};
+		
+		window.addEventListener('book-session-changed', handleSessionChange as EventListener);
+		
+		// 保存清理函数
+		const originalCleanup = this.cleanupEventListeners;
+		this.cleanupEventListeners = () => {
+			originalCleanup();
+			window.removeEventListener('book-session-changed', handleSessionChange as EventListener);
+		};
 	}
 
 	/**
@@ -171,6 +212,44 @@ export class PreloadManager {
 				
 				// 重置图片加载器的缓存
 				this.imageLoader.clearCache();
+				
+				// 取消所有活跃的预加载任务
+				this.cancelAllActiveTasks();
+			}
+			
+			lastBookPath = currentBookPath;
+		});
+	}
+
+	/**
+	 * 取消所有活跃的预加载任务
+	 */
+	private cancelAllActiveTasks(): void {
+		if (this.activeTasks.size === 0) return;
+		
+		console.log('[PreloadManager] 取消所有活跃任务:', this.activeTasks.size);
+		
+		// 清空任务映射，实际的取消由会话校验处理
+		this.activeTasks.clear();
+		
+		// 清空预加载队列
+		this.preloadWorker.clear();
+	}
+
+	/**
+	 * 更新当前书籍会话
+	 */
+	updateBookSession(sessionId: string): void {
+		if (this.currentBookSession !== sessionId) {
+			console.log('[PreloadManager] 更新书籍会话:', this.currentBookSession, '->', sessionId);
+			
+			// 取消旧会话的任务
+			this.cancelAllActiveTasks();
+			
+			// 更新会话ID
+			this.currentBookSession = sessionId;
+		}
+	}
 			}
 			
 			lastBookPath = currentBookPath;

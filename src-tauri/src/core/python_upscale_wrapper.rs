@@ -88,6 +88,7 @@ impl PythonUpscaleModule {
         timeout: f64,
         _width: i32,
         _height: i32,
+        task_id: Option<String>,
     ) -> Result<Option<Vec<u8>>, PyErr> {
         Python::with_gil(|py| {
             let module = self.module.bind(py);
@@ -103,6 +104,7 @@ impl PythonUpscaleModule {
                     tile_size,
                     noise_level,
                     timeout,
+                    task_id.unwrap_or_default(),
                 ))?;
             
             // 结果是一个元组 (result_data, error)
@@ -223,6 +225,15 @@ impl PythonUpscaleModule {
             let module = self.module.bind(py);
             module.getattr("remove_task")?.call1((task_id,))?;
             Ok(())
+        })
+    }
+    
+    /// 取消任务
+    pub fn cancel_task(&self, task_id: &str) -> Result<bool, PyErr> {
+        Python::with_gil(|py| {
+            let module = self.module.bind(py);
+            let result = module.getattr("cancel_task")?.call1((task_id,))?;
+            result.extract()
         })
     }
 }

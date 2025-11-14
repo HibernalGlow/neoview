@@ -63,6 +63,10 @@
 	// 条件列表
 	let conditionsList = $state(defaultPanelSettings.conditionsList);
 	
+	// 会话和任务管理
+	let currentTaskId = $state('');
+	let currentBookSession = $state('');
+	
 	// 模型选项映射 - 使用 sr_vulkan 实际的模型名称
 	const modelLabels: Record<string, string> = {
 		'MODEL_WAIFU2X_CUNET_UP2X': 'CUNet 2x (推荐)',
@@ -291,6 +295,23 @@
 		settingsInitialized = true;
 		console.log('✅ settingsInitialized 设置为 true');
 		emitUpscaleSettings(gatherPanelSettings());
+		
+		// 监听会话变更
+		const handleSessionChange = (event: CustomEvent) => {
+			console.log('[UpscalePanel] 检测到会话变更:', event.detail);
+			// 如果有正在进行的任务，取消它
+			if (isProcessing && currentTaskId) {
+				console.log('[UpscalePanel] 会话变更，取消当前任务');
+				cancelCurrentUpscale();
+			}
+		};
+		
+		window.addEventListener('book-session-changed', handleSessionChange as EventListener);
+		
+		// 清理函数
+		return () => {
+			window.removeEventListener('book-session-changed', handleSessionChange as EventListener);
+		};
 
 		// 初始化 PyO3 管理器
 		try {
@@ -473,6 +494,11 @@
 			return;
 		}
 
+		// 记录当前会话和任务ID
+		currentBookSession = bookStore.currentBookSession;
+		currentTaskId = `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+		console.log('🆔 Starting upscale task:', currentTaskId, 'session:', currentBookSession);
+
 		isProcessing = true;
 		progress = 0;
 		status = '准备中...';
@@ -569,8 +595,22 @@
 			updateProgress?.(progress, status);
 			
 			// 调用 PyO3 超分管理器
-			const result = await pyo3UpscaleManager.upscaleImageMemory(imageData);
+			const result = await pyo3UpscaleManager.upscaleImageMemory(imageData, { taskId: currentTaskId });
 			console.log('✅ 超分完成，输出大小:', result.length);
+			
+			// 校验会话是否仍然有效
+			if (currentBookSession !== bookStore.currentBookSession) {
+				console.warn('[UpscalePanel] 会话已变更，丢弃超分结果', {
+					taskSession: currentBookSession,
+					currentSession: bookStore.currentBookSession,
+					taskId: currentTaskId
+				});
+				// 清理资源但不更新UI
+				const blob = new Blob([result], { type: 'image/webp' });
+				const url = URL.createObjectURL(blob);
+				URL.revokeObjectURL(url);
+				return;
+			}
 			
 			// 转换为 Blob 和 URL
 			const blob = new Blob([result], { type: 'image/webp' });
@@ -609,6 +649,41 @@
 		} finally {
 			clearInterval(timer);
 			isProcessing = false;
+			currentTaskId = '';
+			currentBookSession = '';
+		}
+	}
+
+	/**
+	 * 取消当前超分任务
+	 */
+	function cancelCurrentUpscale() {
+		if (!isProcessing || !currentTaskId) {
+			console.log('[UpscalePanel] 没有正在进行的任务');
+			return;
+		}
+
+		console.log('[UpscalePanel] 取消超分任务:', currentTaskId);
+		
+		// 更新状态
+		isProcessing = false;
+		status = '已取消';
+		progress = 0;
+		
+		// 调用 PyO3 管理器取消任务
+		pyo3UpscaleManager.cancelTask(currentTaskId).catch(err => {
+			console.warn('[UpscalePanel] 取消任务失败:', err);
+		});
+		
+		// 清理任务ID
+		const taskId = currentTaskId;
+		currentTaskId = '';
+		currentBookSession = '';
+		
+		// 清理可能的URL
+		if (upscaledImageUrl) {
+			URL.revokeObjectURL(upscaledImageUrl);
+			upscaledImageUrl = '';
 		}
 	}
 

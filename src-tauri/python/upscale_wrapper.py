@@ -4,10 +4,13 @@ NeoView Upscale Wrapper
 此模块将被 Rust 通过 PyO3 调用
 """
 
-import sys
 import os
-from typing import Optional, Tuple, Dict, Any, Union, List
+import sys
+import time
 import io
+import threading
+from typing import Union, Optional, Dict, List
+from pathlib import Path
 
 import threading
 import queue
@@ -81,9 +84,11 @@ class UpscaleTask:
     """超分任务"""
     def __init__(self, task_id: int):
         self.task_id = task_id
+        self.task_uuid = ""  # 前端传递的任务UUID
+        self.session_id = ""  # 书籍会话ID
         self.image_data = None
         self.result_data = None
-        self.status = "pending"  # pending, processing, completed, failed
+        self.status = "pending"  # pending, processing, completed, failed, cancelled
         self.error = None
         self.tick = 0.0
         self.model = 0
@@ -93,6 +98,7 @@ class UpscaleTask:
         self.format = ""
         self.tile_size = 0
         self.noise_level = 0
+        self.cancel_event = threading.Event()  # 取消事件
 
 
 class UpscaleManager:
@@ -113,6 +119,7 @@ class UpscaleManager:
             return
             
         self.tasks = {}
+        self.task_uuid_map = {}  # UUID -> task_id 映射
         self.task_id_counter = 0
         self.result_queue = queue.Queue()
         self.processing_thread = None
@@ -331,12 +338,18 @@ class UpscaleManager:
                     # 🔥 关键修复：验证 taskId 匹配
                     if returned_task_id in self.tasks:
                         task = self.tasks[returned_task_id]
+                        
+                        # 检查任务是否已被取消
+                        if task.status == "cancelled":
+                            print(f"🛑 任务 {returned_task_id} 已被取消，丢弃结果")
+                            continue
+                        
                         task.result_data = data
                         task.tick = tick
                         
                         if data and len(data) > 0:
                             task.status = "completed"
-                            print(f"✅ 任务 {returned_task_id} 完成")
+                            print(f"✅ 任务 {returned_task_id} 完成 (session: {task.session_id})")
                         else:
                             task.status = "failed"
                             task.error = "超分返回空数据"
@@ -361,7 +374,9 @@ class UpscaleManager:
         height: int = 0,
         format_str: str = "",
         tile_size: int = 0,
-        noise_level: int = 0
+        noise_level: int = 0,
+        task_uuid: str = "",
+        session_id: str = ""
     ) -> int:
         """
         添加超分任务
@@ -390,6 +405,8 @@ class UpscaleManager:
             task_id = self.task_id_counter
             
             task = UpscaleTask(task_id)
+            task.task_uuid = task_uuid
+            task.session_id = session_id
             task.image_data = image_data
             task.model = model
             task.scale = scale
@@ -398,9 +415,11 @@ class UpscaleManager:
             task.format = format_str
             task.tile_size = tile_size
             task.noise_level = noise_level
-            task.status = "processing"
             
             self.tasks[task_id] = task
+            if task_uuid:
+                self.task_uuid_map[task_uuid] = task_id
+            self.result_queue.put(task_id)
 
         try:
             print(f"🔍 Python add_task 调用 sr.add:")
@@ -577,17 +596,44 @@ class UpscaleManager:
         
         return False
     
-    def remove_task(self, task_id: int):
-        """移除任务"""
+    def cancel_task(self, task_id: int = None, task_uuid: str = None):
+        """取消任务"""
+        # 如果提供了 UUID，先查找对应的 task_id
+        if task_uuid and not task_id:
+            with self.lock:
+                task_id = self.task_uuid_map.get(task_uuid)
+                if not task_id:
+                    print(f"⚠️ 未找到任务 UUID: {task_uuid}")
+                    return False
+        
+        if not task_id:
+            print(f"⚠️ 未提供有效的任务ID")
+            return False
+        
         with self.lock:
-            if task_id in self.tasks:
-                del self.tasks[task_id]
+            task = self.tasks.get(task_id)
+            if not task:
+                print(f"⚠️ 未找到任务 ID: {task_id}")
+                return False
+            
+            # 标记任务为已取消
+            task.status = "cancelled"
+            task.cancel_event.set()
+            
+            # 清理映射
+            if task.task_uuid:
+                self.task_uuid_map.pop(task.task_uuid, None)
         
         if SR_AVAILABLE:
             try:
                 sr.remove([task_id])
-            except:
-                pass
+                print(f"✅ 已取消任务: {task_id}")
+                return True
+            except Exception as e:
+                print(f"❌ 取消任务失败: {e}")
+                return False
+        
+        return True
     
     def cancel_tasks(self, task_ids: list):
         """取消多个任务"""
@@ -644,7 +690,8 @@ def upscale_image(
     noise_level: int = 0,
     timeout: float = 60.0,
     width: int = 0,
-    height: int = 0
+    height: int = 0,
+    task_uuid: str = ""
 ) -> Tuple[Optional[bytes], Optional[str]]:
     """
     超分图像（同步接口）
@@ -677,7 +724,8 @@ def upscale_image(
             height=height,
             format_str="",
             tile_size=tile_size,
-            noise_level=noise_level
+            noise_level=noise_level,
+            task_uuid=task_uuid
         )
         
         # 等待完成
@@ -799,6 +847,15 @@ def get_model_name(model: Union[str, int]) -> str:
             return keys[model]
 
     return "MODEL_WAIFU2X_CUNET_UP2X"
+
+
+def cancel_task(task_uuid: str) -> bool:
+    """取消指定的任务"""
+    if not SR_AVAILABLE:
+        return False
+    
+    manager = get_manager()
+    return manager.cancel_task(task_uuid=task_uuid)
 
 
 def get_available_models(refresh: bool = False) -> List[str]:

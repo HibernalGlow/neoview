@@ -174,7 +174,7 @@ export class PyO3UpscaleManager {
 	 */
 	async upscaleImageMemory(
 		imageData: Uint8Array,
-		timeout: number = 120.0
+		options: { timeout?: number; taskId?: string } = {}
 	): Promise<Uint8Array> {
 		if (!this.initialized) {
 			throw new Error('PyO3 超分管理器未初始化');
@@ -184,11 +184,14 @@ export class PyO3UpscaleManager {
 			throw new Error('PyO3 超分功能不可用');
 		}
 
+		const { timeout = 120.0, taskId } = options;
+
 		try {
 			console.log('🚀 开始 PyO3 超分 (内存流)');
 			console.log('  模型:', this._currentModel.modelName);
 			console.log('  缩放:', this._currentModel.scale + 'x');
 			console.log('  输入数据大小:', imageData.length, 'bytes');
+			if (taskId) console.log('  任务ID:', taskId);
 
 			console.log('📤 发送参数到 Rust:');
 			console.log('  imageDataLength:', imageData.length);
@@ -206,7 +209,8 @@ export class PyO3UpscaleManager {
 				noiseLevel: this._currentModel.noiseLevel,
 				timeout,
 				width: this._imageWidth || 0,
-				height: this._imageHeight || 0
+				height: this._imageHeight || 0,
+				taskId: taskId || null
 			});
 
 			console.log('✅ PyO3 超分完成 (内存流), 数据大小:', result.length);
@@ -214,6 +218,26 @@ export class PyO3UpscaleManager {
 		} catch (error) {
 			console.error('❌ PyO3 超分失败 (内存流):', error);
 			throw error;
+		}
+	}
+
+	/**
+	 * 取消正在进行的超分任务
+	 */
+	async cancelTask(taskId: string): Promise<boolean> {
+		if (!this.initialized) {
+			console.warn('PyO3 超分管理器未初始化，无法取消任务');
+			return false;
+		}
+
+		try {
+			console.log('🛑 取消 PyO3 超分任务:', taskId);
+			const result = await invoke<boolean>('cancel_pyo3_upscale_task', { taskId });
+			console.log('✅ 任务取消结果:', result);
+			return result;
+		} catch (error) {
+			console.error('❌ 取消任务失败:', error);
+			return false;
 		}
 	}
 

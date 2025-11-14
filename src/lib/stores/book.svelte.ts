@@ -15,6 +15,7 @@ interface BookState {
   upscaledImageData: string | null; // 保持兼容性，用于显示
   upscaledImageBlob: Blob | null; // 新增：存储二进制数据
   currentPageUpscaled: boolean; // 当前页面是否已超分成功
+  currentBookSession: string; // 当前书籍的会话ID，用于防止超分结果写入错误的页面
 }
 
 class BookStore {
@@ -27,7 +28,15 @@ class BookStore {
     upscaledImageData: null,
     upscaledImageBlob: null,
     currentPageUpscaled: false,
+    currentBookSession: '',
   });
+
+  /**
+   * 生成新的会话ID
+   */
+  private generateSessionId(): string {
+    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
 
   // 每页超分状态映射: pageIndex -> 'none' | 'preupscaled' | 'done' | 'failed'
   private upscaleStatusByPage = $state<Map<number, 'none' | 'preupscaled' | 'done' | 'failed'>>(new Map());
@@ -92,6 +101,10 @@ class BookStore {
     return this.state.currentBook !== null;
   }
 
+  get currentBookSession(): string {
+    return this.state.currentBookSession;
+  }
+
   get canNextPage(): boolean {
     const book = this.state.currentBook;
     return book !== null && book.currentPage < book.totalPages - 1;
@@ -119,10 +132,19 @@ class BookStore {
 
       this.state.currentBook = book;
       this.state.viewerOpen = true;
+      // 生成新的会话ID
+      this.state.currentBookSession = this.generateSessionId();
+      console.log('🆔 New book session:', this.state.currentBookSession);
+      
+      // 广播会话变更事件
+      window.dispatchEvent(new CustomEvent('book-session-changed', {
+        detail: { sessionId: this.state.currentBookSession, bookPath: path }
+      }));
     } catch (err) {
       console.error('❌ Error opening book:', err);
       this.state.error = String(err);
       this.state.currentBook = null;
+      this.state.currentBookSession = '';
     } finally {
       this.state.loading = false;
     }
@@ -143,10 +165,19 @@ class BookStore {
 
       this.state.currentBook = book;
       this.state.viewerOpen = true;
+      // 生成新的会话ID
+      this.state.currentBookSession = this.generateSessionId();
+      console.log('🆔 New book session:', this.state.currentBookSession);
+      
+      // 广播会话变更事件
+      window.dispatchEvent(new CustomEvent('book-session-changed', {
+        detail: { sessionId: this.state.currentBookSession, bookPath: path }
+      }));
     } catch (err) {
       console.error('❌ Error opening directory as book:', err);
       this.state.error = String(err);
       this.state.currentBook = null;
+      this.state.currentBookSession = '';
     } finally {
       this.state.loading = false;
     }

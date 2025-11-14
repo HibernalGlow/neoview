@@ -1183,289 +1183,62 @@
   />
 
   <!-- 工具栏 -->
-  <div class="flex items-center gap-1 border-b px-2 py-1.5 bg-background/50">
-    <!-- 左侧：导航按钮 -->
-    <div class="flex items-center gap-1">
-      <Button
-        variant="ghost"
-        size="icon"
-        class="h-8 w-8"
-        onclick={goHome}
-        disabled={!navigationHistory.getHomepage()}
-        title="主页"
-      >
-        <Home class="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="icon"
-        class="h-8 w-8"
-        onclick={goBackInHistory}
-        disabled={!navigationHistory.canGoBack()}
-        title="后退"
-      >
-        <ChevronLeft class="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="icon"
-        class="h-8 w-8"
-        onclick={goForwardInHistory}
-        disabled={!navigationHistory.canGoForward()}
-        title="前进"
-      >
-        <ChevronRight class="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="icon"
-        class="h-8 w-8"
-        onclick={goBack}
-        disabled={!currentPath && !isArchiveView}
-        title="上一级 (Backspace)"
-      >
-        <ChevronUp class="h-4 w-4" />
-      </Button>
-
-      <div class="w-px h-6 bg-border mx-1"></div>
-
-      <Button
-        variant="ghost"
-        size="icon"
-        class="h-8 w-8"
-        onclick={selectFolder}
-        title="选择文件夹"
-      >
-        <FolderOpen class="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="icon"
-        class="h-8 w-8"
-        onclick={refresh}
-        disabled={!currentPath && !isArchiveView}
-        title="刷新 (F5)"
-      >
-        <RefreshCw class="h-4 w-4" />
-      </Button>
-    </div>
-
-    <div class="flex-1"></div>
-
-    <!-- 右侧：操作按钮 -->
-    <div class="flex items-center gap-1">
-      {#if isArchiveView}
-        <div class="flex items-center gap-1.5 px-2 text-xs text-muted-foreground">
-          <FileArchive class="h-3.5 w-3.5 text-purple-500" />
-          <span>压缩包</span>
-        </div>
-        <div class="w-px h-6 bg-border mx-1"></div>
-      {/if}
-
-      <div class="w-px h-6 bg-border mx-1"></div>
-
-      <Button
-        variant={isCheckMode ? 'default' : 'ghost'}
-        size="icon"
-        class="h-8 w-8"
-        onclick={toggleCheckMode}
-        title={isCheckMode ? '退出勾选模式' : '勾选模式'}
-      >
-        <CheckSquare class="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant={isDeleteMode ? 'destructive' : 'ghost'}
-        size="icon"
-        class="h-8 w-8"
-        onclick={toggleDeleteMode}
-        title={isDeleteMode ? '退出删除模式' : '删除模式'}
-      >
-        <Trash2 class="h-4 w-4" />
-      </Button>
-
-      <div class="w-px h-6 bg-border mx-1"></div>
-
-      <Button
-        variant={viewMode === 'list' ? 'default' : 'ghost'}
-        size="icon"
-        class="h-8 w-8"
-        onclick={toggleViewMode}
-        title={viewMode === 'list' ? '切换到缩略图视图' : '切换到列表视图'}
-      >
-        {#if viewMode === 'list'}
-          <List class="h-4 w-4" />
-        {:else}
-          <Grid3x3 class="h-4 w-4" />
-        {/if}
-      </Button>
-
-      <!-- 排序面板 -->
-      <SortPanel 
-        items={searchQuery && searchResults.length > 0 ? searchResults : items} 
-        onSort={handleSort}
-      />
-
-      <Button
-        variant="ghost"
-        size="icon"
-        class="h-8 w-8"
-        onclick={clearThumbnailCache}
-        title="清理缩略图缓存"
-      >
-        <Trash2 class="h-4 w-4" />
-      </Button>
-    </div>
-  </div>
+  <FileBrowserToolbar
+    isArchiveView={isArchiveView}
+    hasHomepage={hasHomepage}
+    canGoBackInHistory={navigationHistory.canGoBack()}
+    canGoForwardInHistory={navigationHistory.canGoForward()}
+    canNavigateBack={canNavigateBack}
+    isCheckMode={isCheckMode}
+    isDeleteMode={isDeleteMode}
+    viewMode={viewMode}
+    sortItems={items}
+    onGoHome={goHome}
+    onGoBackInHistory={goBackInHistory}
+    onGoForwardInHistory={goForwardInHistory}
+    onGoBack={goBack}
+    onSelectFolder={selectFolder}
+    onRefresh={refresh}
+    onToggleCheckMode={toggleCheckMode}
+    onToggleDeleteMode={toggleDeleteMode}
+    onToggleViewMode={toggleViewMode}
+    onClearThumbnailCache={clearThumbnailCache}
+    onSort={handleSort}
+  />
 
   <!-- 搜索栏 -->
-  <div class="flex items-center gap-2 border-b px-2 py-2 bg-background/30">
-    <div class="relative flex-1">
-      <!-- 搜索输入框 -->
-      <div class="relative">
-        <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <Input.Root
-          placeholder="搜索当前目录下的文件..."
-          bind:value={searchQuery}
-          oninput={handleSearchInput}
-          onfocus={handleSearchFocus}
-          class="pl-10 pr-24"
-          disabled={!currentPath || isArchiveView}
-        />
-        
-        <!-- 清空按钮 -->
-        {#if searchQuery}
-          <button
-            class="absolute right-16 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
-            onclick={() => {
-              searchQuery = '';
-              searchResults = [];
-            }}
-            title="清空搜索"
-          >
-            <svg class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        {/if}
-        
-        <!-- 搜索历史按钮 -->
-        <button
-          class="absolute right-8 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
-          onclick={() => {
-            showSearchHistory = !showSearchHistory;
-            showSearchSettings = false;
-          }}
-          disabled={searchHistory.length === 0}
-          title="搜索历史"
-        >
-          <ChevronDown class="h-4 w-4 text-gray-500" />
-        </button>
-        
-        <!-- 搜索设置按钮 -->
-        <button
-          class="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
-          onclick={(e) => {
-            e.stopPropagation();
-            console.log('搜索设置按钮被点击');
-            showSearchSettings = !showSearchSettings;
-            showSearchHistory = false;
-          }}
-          title="搜索设置"
-        >
-          <MoreVertical class="h-4 w-4 text-gray-500" />
-        </button>
-      </div>
-      
-      <!-- 搜索历史下拉 -->
-      {#if showSearchHistory}
-        <div class="search-history absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
-          {#each searchHistory as item (item.query)}
-            <div
-              class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center justify-between group cursor-pointer"
-              role="button"
-              tabindex="0"
-              onclick={() => selectSearchHistory(item)}
-              onkeydown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  selectSearchHistory(item);
-                }
-              }}
-            >
-              <div class="flex items-center gap-2 flex-1 min-w-0">
-                <Search class="h-4 w-4 text-gray-400 shrink-0" />
-                <span class="truncate">{item.query}</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-gray-400">{formatSearchHistoryTime(item.timestamp)}</span>
-                <button
-                  class="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded shrink-0"
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    searchHistory = searchHistory.filter(historyItem => historyItem.query !== item.query);
-                    saveSearchHistory();
-                  }}
-                  title="删除"
-                >
-                  <svg class="h-3 w-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          {/each}
-          {#if searchHistory.length > 0}
-            <div class="border-t border-gray-200 p-2">
-              <button
-                class="w-full px-3 py-1 text-xs text-gray-500 hover:bg-gray-100 rounded"
-                onclick={clearSearchHistory}
-              >
-                清除搜索历史
-              </button>
-            </div>
-          {:else}
-            <div class="p-3 text-center text-sm text-gray-500">
-              暂无搜索历史
-            </div>
-          {/if}
-        </div>
-      {/if}
-      
-      <!-- 搜索设置下拉 -->
-      {#if showSearchSettings}
-        <div class="search-settings absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[200px] p-2">
-          <div class="space-y-3">
-            <div class="pb-2">
-              <h4 class="text-xs font-semibold text-gray-700 mb-2">搜索选项</h4>
-              
-              <label class="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  bind:checked={searchSettings.includeSubfolders}
-                  class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span>搜索子文件夹</span>
-              </label>
-              
-              <label class="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  bind:checked={searchSettings.showHistoryOnFocus}
-                  class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span>聚焦时显示历史</span>
-              </label>
-            </div>
-          </div>
-        </div>
-      {/if}
-    </div>
-  </div>
+  <FileBrowserSearch
+    searchQuery={searchQuery}
+    searchHistory={searchHistory}
+    searchSettings={searchSettings}
+    showSearchHistory={showSearchHistory}
+    showSearchSettings={showSearchSettings}
+    isArchiveView={isArchiveView}
+    currentPath={currentPath}
+    onSearchInput={(value) => {
+      searchQuery = value;
+      handleSearchInput(new InputEvent('input'));
+    }}
+    onSearchFocus={() => handleSearchFocus(new FocusEvent('focus'))}
+    onSearchHistoryToggle={() => {
+      showSearchHistory = !showSearchHistory;
+      showSearchSettings = false;
+    }}
+    onSearchSettingsToggle={(event) => {
+      event.stopPropagation();
+      showSearchSettings = !showSearchSettings;
+      showSearchHistory = false;
+    }}
+    onClearSearch={() => {
+      searchQuery = '';
+      searchResults = [];
+    }}
+    onSelectSearchHistory={(item) => selectSearchHistory(item)}
+    onClearSearchHistory={clearSearchHistory}
+    onSearchSettingChange={(key, value) => {
+      searchSettings = { ...searchSettings, [key]: value };
+    }}
+  />
 
   <!-- 错误提示 -->
   {#if error}

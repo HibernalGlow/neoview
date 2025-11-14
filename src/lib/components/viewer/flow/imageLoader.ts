@@ -93,6 +93,7 @@ export class ImageLoader {
 				if (result && result.upscaledImageBlob && result.upscaledImageData) {
 					// 把返回的 data/blob 写入 preloadMemoryCache
 					this.preloadMemoryCache.set(task.hash, { url: result.upscaledImageData, blob: result.upscaledImageBlob });
+					this.enforcePreloadMemoryLimit();
 					
 					// 标记预超分进度
 					if (typeof task.pageIndex === 'number') {
@@ -424,12 +425,39 @@ export class ImageLoader {
 	}
 	
 	/**
+	 * 限制预超分内存缓存（preloadMemoryCache）总大小
+	 * 使用简单的近似 LRU：按照 Map 插入顺序移除最早写入的条目
+	 */
+	private enforcePreloadMemoryLimit(): void {
+		// 默认 1000 MB 上限，仅作用于超分内存缓存
+		const limitBytes = 1000 * 1024 * 1024;
+		let totalSize = 0;
+		const entries = Array.from(this.preloadMemoryCache.entries());
+		
+		for (const [, item] of entries) {
+			// Blob.size 为字节数
+			totalSize += item.blob.size;
+		}
+		
+		if (totalSize <= limitBytes) return;
+		
+		// 按插入顺序移除最旧的项（Map 迭代顺序即插入顺序）
+		for (const [hash, item] of this.preloadMemoryCache) {
+			if (totalSize <= limitBytes) break;
+			URL.revokeObjectURL(item.url);
+			this.preloadMemoryCache.delete(hash);
+			totalSize -= item.blob.size;
+		}
+	}
+	
+	/**
 	 * 初始化（用于重新加载 IndexedDB 缓存等）
 	 */
 	initialize(): void {
 		// 这里可以添加从 IndexedDB 加载持久化缓存的逻辑
 		console.log('ImageLoader 初始化');
 	}
+	
 	/**
 	 * 加载当前页面图片
 	 */
@@ -573,8 +601,6 @@ export class ImageLoader {
 		}
 	}
 	
-	
-
 	/**
 	 * 预加载后续页面的超分
 	 */
@@ -725,15 +751,12 @@ export class ImageLoader {
 		
 		// 清理其他状态
 		this.md5Cache = new Map();
-		this.preloadMemoryCache.clear();
 		this.isPreloading = false;
 		bookStore.setUpscaledImage(null);
 		bookStore.setUpscaledImageBlob(null);
 		this.preloadWorker.clear();
 		this.resetPreUpscaleProgress();
 	}
-
-	
 
 	/**
 	 * 获取内存预加载缓存（兼容旧接口）
@@ -790,6 +813,7 @@ export class ImageLoader {
 
 			// 写入内存缓存
 			this.preloadMemoryCache.set(imageHash, { url, blob });
+			this.enforcePreloadMemoryLimit();
 			console.log('从 PyO3 磁盘缓存加载超分结果到内存:', imageHash, 'path:', cachePath);
 
 			return true;

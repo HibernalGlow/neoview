@@ -148,6 +148,36 @@ export class PreloadManager {
 	}
 
 	/**
+	 * 设置书籍变化监听器
+	 */
+	private setupBookChangeListener(): void {
+		let lastBookPath: string | null = null;
+		
+		// 订阅 bookStore.currentBook 的变化
+		this.bookUnsubscribe = bookStore.subscribe(($state) => {
+			const currentBook = $state.currentBook;
+			const currentBookPath = currentBook?.path || null;
+			
+			// 只有当书籍路径真正改变时才清理缓存
+			if (lastBookPath !== null && currentBookPath !== lastBookPath) {
+				console.log('书籍路径发生变化，清理预加载缓存:', lastBookPath, '->', currentBookPath);
+				
+				// 清理内存缓存
+				this.imageLoader.getPreloadMemoryCache().clear();
+				
+				// 重置预超分进度
+				this.resetPreUpscaleProgress();
+				this.preUpscaledPages.clear();
+				
+				// 重置图片加载器的缓存
+				this.imageLoader.clearCache();
+			}
+			
+			lastBookPath = currentBookPath;
+		});
+	}
+
+	/**
 	 * 清理管理器（在组件onDestroy时调用）
 	 */
 	cleanup(): void {

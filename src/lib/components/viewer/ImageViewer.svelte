@@ -295,14 +295,8 @@
 		}
 	});
 
-	// 监听书籍切换：清理预加载管理器的缓存
-	$effect(() => {
-		const currentBook = bookStore.currentBook;
-		if (preloadManager) {
-			preloadManager.cleanup();
-			preloadManager.initialize();
-		}
-	});
+	// 书籍切换现在由 PreloadManager 内部的 setupBookChangeListener 处理
+	// 删除了会导致缓存被清空的 $effect
 
 	
 

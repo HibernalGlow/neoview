@@ -12,6 +12,11 @@ import threading
 from typing import Union, Optional, Dict, List
 from pathlib import Path
 
+
+class CancelledError(Exception):
+    """任务被取消时抛出的异常"""
+    pass
+
 import threading
 import queue
 import time
@@ -342,6 +347,26 @@ class UpscaleManager:
                         # 检查任务是否已被取消
                         if task.status == "cancelled":
                             print(f"🛑 任务 {returned_task_id} 已被取消，丢弃结果")
+                            # 强制清理 GPU 资源
+                            if SR_AVAILABLE:
+                                try:
+                                    if hasattr(sr, 'abort'):
+                                        sr.abort()
+                                except:
+                                    pass
+                            continue
+                        
+                        # 再次检查取消事件，确保及时响应
+                        if task.cancel_event.is_set():
+                            print(f"🛑 任务 {returned_task_id} 检测到取消信号，标记为已取消")
+                            task.status = "cancelled"
+                            # 强制清理 GPU 资源
+                            if SR_AVAILABLE:
+                                try:
+                                    if hasattr(sr, 'abort'):
+                                        sr.abort()
+                                except:
+                                    pass
                             continue
                         
                         task.result_data = data
@@ -433,11 +458,20 @@ class UpscaleManager:
             print(f"  tile_size: {tile_size}")
             print(f"  noise_level: {noise_level}")
             
+            # 检查任务是否已被取消
+            if task.cancel_event.is_set():
+                print(f"🛑 任务 {task_id} 在执行前被取消")
+                task.status = "cancelled"
+                raise CancelledError("任务被取消")
+            
             # 检测并转换不支持的格式
             processed_data = image_data
             if _needs_transcode(image_data):
                 print(f"🔄 检测到不支持的格式，正在转换为 PNG...")
                 try:
+                    # 在转换过程中也要检查取消状态
+                    if task.cancel_event.wait(timeout=0.1):
+                        raise CancelledError("任务在格式转换时被取消")
                     processed_data = _transcode_to_png(image_data)
                     print(f"✅ 格式转换完成，新数据大小: {len(processed_data)} bytes")
                 except RuntimeError as e:
@@ -534,6 +568,7 @@ class UpscaleManager:
             else:
                 print("✅ sr.add 调用成功")
             
+            # 任务已提交到队列，在等待结果时检查取消状态
             return task_id
             
         except Exception as e:
@@ -624,10 +659,29 @@ class UpscaleManager:
             if task.task_uuid:
                 self.task_uuid_map.pop(task.task_uuid, None)
         
+        # 尝试从 sr_vulkan 队列中移除任务
         if SR_AVAILABLE:
             try:
+                # 先尝试从队列中移除
                 sr.remove([task_id])
-                print(f"✅ 已取消任务: {task_id}")
+                print(f"✅ 已从队列移除任务: {task_id}")
+                
+                # 强制中断 GPU 处理
+                try:
+                    # 尝试调用 sr_vulkan 的中断功能
+                    if hasattr(sr, 'abort'):
+                        sr.abort()
+                        print(f"✅ 已强制中断 sr_vulkan 处理")
+                    elif hasattr(sr, 'abort_current_task'):
+                        sr.abort_current_task(task_id)
+                        print(f"✅ 已中断正在执行的任务: {task_id}")
+                    else:
+                        # 如果没有直接的 abort 方法，尝试重新初始化来强制停止
+                        print(f"⚠️ sr_vulkan 缺少中断方法，尝试重新初始化")
+                        sr.init()  # 重新初始化可能会停止当前任务
+                except Exception as e:
+                    print(f"⚠️ 中断 GPU 任务失败: {e}")
+                
                 return True
             except Exception as e:
                 print(f"❌ 取消任务失败: {e}")

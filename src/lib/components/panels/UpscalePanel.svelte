@@ -510,6 +510,13 @@
 			processingTime = (Date.now() - startTime) / 1000;
 		}, 100);
 
+		// 保存面板原始参数以便恢复
+		const originalPanelModel = selectedModel;
+		const originalPanelScale = scale;
+		const originalPanelTileSize = tileSize;
+		const originalPanelNoiseLevel = noiseLevel;
+		let appliedCondition = false;
+
 		try {
 			// 收集页面元数据用于条件评估
 			const currentPage = bookStore.currentPage;
@@ -519,7 +526,6 @@
 			}
 
 			// 评估条件并应用匹配的参数
-			let useConditionParams = false;
 			if (pageMeta && conditionsList.length > 0) {
 				const conditionResult = evaluateConditions(pageMeta, conditionsList);
 				
@@ -533,15 +539,16 @@
 					await pyo3UpscaleManager.setModel(conditionResult.action.model, conditionResult.action.scale);
 					pyo3UpscaleManager.setTileSize(conditionResult.action.tileSize);
 					pyo3UpscaleManager.setNoiseLevel(conditionResult.action.noiseLevel);
-					useConditionParams = true;
+					appliedCondition = true;
 				}
 			}
 
 			// 如果没有匹配条件，使用面板当前设置
-			if (!useConditionParams) {
+			if (!appliedCondition) {
 				console.log('🔧 应用面板设置 - tileSize:', tileSize, 'selectedModel:', selectedModel, 'scale:', scale);
 				await pyo3UpscaleManager.setModel(selectedModel, scale);
 				pyo3UpscaleManager.setTileSize(tileSize);
+				pyo3UpscaleManager.setNoiseLevel(noiseLevel);
 			}
 			console.log('✅ 设置已应用到 PyO3UpscaleManager');
 
@@ -561,7 +568,8 @@
 				const memCache = preloadManager.getPreloadMemoryCache();
 				const cached = memCache.get(imageHash);
 				
-				if (cached) {
+				// 验证缓存的会话是否匹配
+				if (cached && cached.sessionId === currentBookSession) {
 					console.log('✅ 使用内存缓存数据，无需重新生成');
 					progress = 100;
 					status = '缓存命中';
@@ -572,7 +580,8 @@
 					const processingTime = (Date.now() - startTime) / 1000;
 					console.log('[UpscalePanel] 使用缓存！', {
 					page: bookStore.currentPageIndex + 1,
-					time: processingTime.toFixed(1)
+					time: processingTime.toFixed(1),
+					session: cached.sessionId
 				});
 					
 					// 直接使用内存缓存
@@ -582,6 +591,11 @@
 					await handleUpscaleResult(imageHash, cached.blob, cached.url, new Uint8Array());
 					
 					return; // 使用缓存，直接返回
+				} else if (cached) {
+					console.log('⚠️ 内存缓存会话不匹配，忽略缓存', {
+						cacheSession: cached.sessionId,
+						currentSession: currentBookSession
+					});
 				}
 			}
 			
@@ -651,6 +665,18 @@
 			isProcessing = false;
 			currentTaskId = '';
 			currentBookSession = '';
+			
+			// 如果应用了条件参数，恢复面板原始设置
+			if (appliedCondition) {
+				console.log('[UpscalePanel] 恢复面板原始参数');
+				try {
+					await pyo3UpscaleManager.setModel(originalPanelModel, originalPanelScale);
+					pyo3UpscaleManager.setTileSize(originalPanelTileSize);
+					pyo3UpscaleManager.setNoiseLevel(originalPanelNoiseLevel);
+				} catch (err) {
+					console.warn('[UpscalePanel] 恢复面板参数失败:', err);
+				}
+			}
 		}
 	}
 
@@ -804,8 +830,14 @@
 		const preloadManager = (window as any).preloadManager;
 		if (preloadManager) {
 			const memCache = preloadManager.getPreloadMemoryCache();
-			memCache.set(imageHash, { url, blob });
-			console.log('UpscalePanel 超分结果已写入内存缓存');
+			// 包含会话信息
+			memCache.set(imageHash, { 
+				url, 
+				blob, 
+				timestamp: Date.now(),
+				sessionId: currentBookSession 
+			});
+			console.log('UpscalePanel 超分结果已写入内存缓存，会话:', currentBookSession);
 		}
 
 		// 4. 触发全局事件给 ImageViewer

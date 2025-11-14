@@ -32,11 +32,27 @@ class BookStore {
   });
 
   /**
-   * 生成新的会话ID
-   */
-  private generateSessionId(): string {
-    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
+	 * 生成新的会话ID
+	 */
+	private generateSessionId(): string {
+		return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+	}
+
+	/**
+	 * 设置当前书籍会话并广播事件
+	 */
+	private setBookSession(bookPath: string): void {
+		this.state.currentBookSession = this.generateSessionId();
+		console.log('🆔 New book session:', this.state.currentBookSession, 'for:', bookPath);
+		
+		// 广播会话变更事件
+		window.dispatchEvent(new CustomEvent('book-session-changed', {
+			detail: { 
+				sessionId: this.state.currentBookSession, 
+				bookPath 
+			}
+		}));
+	}
 
   // 每页超分状态映射: pageIndex -> 'none' | 'preupscaled' | 'done' | 'failed'
   private upscaleStatusByPage = $state<Map<number, 'none' | 'preupscaled' | 'done' | 'failed'>>(new Map());
@@ -132,19 +148,12 @@ class BookStore {
 
       this.state.currentBook = book;
       this.state.viewerOpen = true;
-      // 生成新的会话ID
-      this.state.currentBookSession = this.generateSessionId();
-      console.log('🆔 New book session:', this.state.currentBookSession);
-      
-      // 广播会话变更事件
-      window.dispatchEvent(new CustomEvent('book-session-changed', {
-        detail: { sessionId: this.state.currentBookSession, bookPath: path }
-      }));
+      // 设置新的会话ID
+      this.setBookSession(path);
     } catch (err) {
       console.error('❌ Error opening book:', err);
       this.state.error = String(err);
       this.state.currentBook = null;
-      this.state.currentBookSession = '';
     } finally {
       this.state.loading = false;
     }
@@ -165,19 +174,12 @@ class BookStore {
 
       this.state.currentBook = book;
       this.state.viewerOpen = true;
-      // 生成新的会话ID
-      this.state.currentBookSession = this.generateSessionId();
-      console.log('🆔 New book session:', this.state.currentBookSession);
-      
-      // 广播会话变更事件
-      window.dispatchEvent(new CustomEvent('book-session-changed', {
-        detail: { sessionId: this.state.currentBookSession, bookPath: path }
-      }));
+      // 设置新的会话ID
+      this.setBookSession(path);
     } catch (err) {
       console.error('❌ Error opening directory as book:', err);
       this.state.error = String(err);
       this.state.currentBook = null;
-      this.state.currentBookSession = '';
     } finally {
       this.state.loading = false;
     }
@@ -198,6 +200,8 @@ class BookStore {
 
       this.state.currentBook = book;
       this.state.viewerOpen = true;
+      // 设置新的会话ID
+      this.setBookSession(path);
     } catch (err) {
       console.error('❌ Error opening archive as book:', err);
       this.state.error = String(err);

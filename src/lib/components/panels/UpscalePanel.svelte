@@ -9,6 +9,7 @@
 	import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
 	import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
+	import { settingsManager } from '$lib/settings/settingsManager';
 	import {
 		defaultPanelSettings,
 		loadUpscalePanelSettings,
@@ -170,8 +171,24 @@
 
 	// 监听自动超分开关变化
 	$effect(() => {
-		if (autoUpscaleEnabled) {
-			console.log('✅ 自动超分已启用');
+		if (settingsInitialized) {
+			// 更新 settingsManager 中的设置
+			const settings = settingsManager.getSettings();
+			settings.image.enableSuperResolution = autoUpscaleEnabled;
+			settingsManager.updateSettings(settings);
+			
+			// 同时更新面板设置
+			const panelSettings = gatherPanelSettings();
+			persistUpscalePanelSettings(panelSettings);
+			
+			// 发送事件通知其他组件
+			emitUpscaleSettings(panelSettings);
+			
+			if (autoUpscaleEnabled) {
+				console.log('✅ 自动超分已启用');
+			} else {
+				console.log('❌ 自动超分已关闭');
+			}
 		}
 	});
 

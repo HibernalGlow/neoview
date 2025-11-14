@@ -17,7 +17,7 @@
 	<div class="setting-row">
 		<div class="flex items-center gap-2">
 			<Switch bind:checked={autoUpscaleEnabled} />
-			<Label>自动 Waifu2x</Label>
+			<Label>自动超分</Label>
 		</div>
 	</div>
 

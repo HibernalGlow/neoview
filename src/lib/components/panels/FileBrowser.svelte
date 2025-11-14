@@ -1382,16 +1382,24 @@
           {#each searchHistory as item (item.query)}
             <div
               class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center justify-between group cursor-pointer"
+              role="button"
+              tabindex="0"
               onclick={() => selectSearchHistory(item)}
+              onkeydown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  selectSearchHistory(item);
+                }
+              }}
             >
               <div class="flex items-center gap-2 flex-1 min-w-0">
-                <Search class="h-4 w-4 text-gray-400 flex-shrink-0" />
+                <Search class="h-4 w-4 text-gray-400 shrink-0" />
                 <span class="truncate">{item.query}</span>
               </div>
               <div class="flex items-center gap-2">
                 <span class="text-xs text-gray-400">{formatSearchHistoryTime(item.timestamp)}</span>
                 <button
-                  class="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded flex-shrink-0"
+                  class="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded shrink-0"
                   onclick={(e) => {
                     e.stopPropagation();
                     searchHistory = searchHistory.filter(historyItem => historyItem.query !== item.query);
@@ -1503,12 +1511,20 @@
             <ContextMenu.Trigger asChild>
               <div
                 class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors hover:bg-gray-50 border-gray-200"
+                role="button"
+                tabindex="0"
                 onclick={() => openSearchResult(item)}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openSearchResult(item);
+                  }
+                }}
               >
             <!-- 勾选框（勾选模式） -->
             {#if isCheckMode}
               <button
-                class="flex-shrink-0"
+                class="shrink-0"
                 onclick={(e) => {
                   e.stopPropagation();
                   toggleItemSelection(item.path);
@@ -1527,7 +1543,7 @@
             <!-- 删除按钮（删除模式） -->
             {#if isDeleteMode && !isArchiveView}
               <button
-                class="flex-shrink-0"
+                class="shrink-0"
                 onclick={(e) => {
                   e.stopPropagation();
                   deleteItem(item.path);
@@ -1541,7 +1557,7 @@
             {/if}
 
             <!-- 图标或缩略图 -->
-            <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded">
+            <div class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded">
               {#if thumbnails.has(toRelativeKey(item.path))}
                 <!-- 显示缩略图 -->
                 <img 
@@ -1680,8 +1696,17 @@
             <ContextMenu.Trigger asChild>
               <div
                 class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors {selectedIndex === index ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}"
+                role="button"
+                tabindex="0"
                 onclick={() => {
                   if (!isCheckMode && !isDeleteMode) {
+                    fileBrowserStore.setSelectedIndex(index);
+                    openFile(item);
+                  }
+                }}
+                onkeydown={(e) => {
+                  if ((e.key === 'Enter' || e.key === ' ') && !isCheckMode && !isDeleteMode) {
+                    e.preventDefault();
                     fileBrowserStore.setSelectedIndex(index);
                     openFile(item);
                   }

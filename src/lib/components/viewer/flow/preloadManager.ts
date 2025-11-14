@@ -10,6 +10,7 @@ import { ImageLoader, type ImageLoaderOptions } from './imageLoader';
 import { createEventListeners, type EventListenersOptions } from './eventListeners';
 import { createPreloadWorker } from './preloadWorker';
 import { triggerAutoUpscale, getAutoUpscaleEnabled } from './preloadRuntime';
+import { buildImagePathKey, getStableImageHash } from '$lib/utils/pathHash';
 
 export interface PreloadManagerOptions {
 	onImageLoaded?: (objectUrl: string, objectUrl2?: string) => void;
@@ -353,15 +354,16 @@ export class PreloadManager {
 			const pageInfo = bookStore.currentBook?.pages[pageIndex];
 			if (!pageInfo) return;
 			
-			// 生成 hash
-			let hash: string;
-			const currentBook = bookStore.currentBook;
-			if (currentBook?.type === 'archive') {
-				const pathKey = `${currentBook.path}::${pageInfo.path}`;
-				hash = await invoke<string>('calculate_path_hash', { path: pathKey });
-			} else {
-				hash = await invoke<string>('calculate_path_hash', { path: pageInfo.path });
-			}
+			// 使用统一的路径哈希工具
+			const pathKey = buildImagePathKey({
+				bookPath: bookStore.currentBook?.path || '',
+				bookType: bookStore.currentBook?.type || 'file',
+				pagePath: pageInfo.path,
+				innerPath: (pageInfo as any).innerPath
+			});
+			
+			const hash = await getStableImageHash(pathKey);
+			console.log(`PreloadManager 生成路径哈希，页码: ${pageIndex + 1}/${bookStore.totalPages}, 路径key: ${pathKey}`);
 			
 			// 创建任务 - 直接传递 Blob
 			const task = {

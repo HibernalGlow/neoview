@@ -17,6 +17,8 @@ import {
 } from './preloadRuntime';
 import { createPreloadWorker, type PreloadTask, type PreloadTaskResult } from './preloadWorker';
 import { upscaleState, startUpscale, updateUpscaleProgress, completeUpscale, setUpscaleError } from '$lib/stores/upscale/upscaleState.svelte';
+import { showSuccessToast } from '$lib/utils/toast';
+import { buildImagePathKey, getStableImageHash, buildImageContext } from '$lib/utils/pathHash';
 
 // 缩略图高度配置
 const THUMB_HEIGHT = 120;
@@ -472,24 +474,27 @@ export class ImageLoader {
 			// 获取带hash的图片数据：用于超分缓存检查
 			const pageInfo = currentBook.pages[currentPageIndex];
 			let imageDataWithHash = null;
+			
 			try {
-				const pathKey = currentBook.type === 'archive' ? `${currentBook.path}::${pageInfo.path}` : pageInfo.path;
-				try {
-					const pathHash = await invoke<string>('calculate_path_hash', { path: pathKey });
-					const { blob } = this.blobCache.get(currentPageIndex)!;
-					imageDataWithHash = { blob, hash: pathHash };
-				} catch (e) {
-					console.warn('调用 calculate_path_hash 失败，回退到数据hash:', e);
-				}
-			} catch (e) {
-				console.warn('生成路径hash异常，回退到数据hash:', e);
-			}
-			if (!imageDataWithHash) {
+				// 使用统一的路径哈希工具
+				const pathKey = buildImagePathKey({
+					bookPath: currentBook.path,
+					bookType: currentBook.type,
+					pagePath: pageInfo.path,
+					innerPath: (pageInfo as any).innerPath
+				});
+				
 				const { blob } = this.blobCache.get(currentPageIndex)!;
-				imageDataWithHash = await getImageDataWithHash(blob);
+				const imageHash = await getStableImageHash(pathKey);
+				imageDataWithHash = { blob, hash: imageHash };
+				
+				console.log(`生成路径哈希，页码: ${currentPageIndex + 1}/${bookStore.totalPages}, 路径key: ${pathKey}`);
+			} catch (e) {
+				console.error('生成路径哈希失败:', e);
+				// 回退到旧的实现（如果需要的话）
 				if (!imageDataWithHash) {
-					console.error('无法获取图片数据及hash');
-					return;
+					const { blob } = this.blobCache.get(currentPageIndex)!;
+					imageDataWithHash = await getImageDataWithHash(blob);
 				}
 			}
 
@@ -630,15 +635,20 @@ export class ImageLoader {
 				console.log(`预加载第 ${targetIndex + 1} 页...`);
 
 				try {
-					// 获取路径哈希
-					let hash: string;
-					const pathKey = currentBook.type === 'archive' ? `${currentBook.path}::${pageInfo.path}` : pageInfo.path;
-					try {
-						hash = await invoke<string>('calculate_path_hash', { path: pathKey });
-					} catch (e) {
-						console.warn('获取路径hash失败，跳过页面:', e);
-						continue;
-					}
+					// 使用统一的路径哈希工具
+					const pathKey = buildImagePathKey({
+						bookPath: currentBook.path,
+						bookType: currentBook.type,
+						pagePath: pageInfo.path,
+						innerPath: (pageInfo as any).innerPath
+					});
+					
+					const hash = await getStableImageHash(pathKey);
+					console.log(`预加载生成路径哈希，页码: ${targetIndex + 1}/${totalPages}, 路径key: ${pathKey}`);
+				} catch (e) {
+					console.warn('获取路径hash失败，跳过页面:', e);
+					continue;
+				}
 
 					// 检查是否已有缓存
 					let hasCache = false;

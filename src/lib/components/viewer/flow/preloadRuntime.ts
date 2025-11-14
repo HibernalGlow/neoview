@@ -300,19 +300,12 @@ export async function checkUpscaleCache(
 }
 
 /**
- * 获取图片的MD5（只计算一次，后续使用缓存）
- * @deprecated 使用 calculateBlobHash 替代
- */
-export async function getImageMd5(imageUrl: string, md5Cache = new Map<string, string>()): Promise<string | null> {
-	console.warn('getImageMd5 is deprecated, use calculateBlobHash instead');
-	return null;
-}
-
-/**
- * 创建带有MD5信息的图片数据结构
+ * 创建带有路径哈希信息的图片数据结构
+ * @deprecated 使用 getStableImageHash 替代
  */
 export async function getImageDataWithHash(
 	imageBlob: Blob, 
+	// 保留 md5Cache 参数以兼容现有调用，但不再使用
 	md5Cache = new Map<string, string>()
 ): Promise<ImageDataWithHash | null> {
 	if (!imageBlob) return null;
@@ -323,28 +316,14 @@ export async function getImageDataWithHash(
 		return null;
 	}
 	
-	// 计算MD5
-	const { invoke } = await import('@tauri-apps/api/core');
+	console.warn('getImageDataWithHash 已弃用，请使用 getStableImageHash');
+	
+	// 回退到旧的实现（如果需要的话）
 	const arrayBuffer = await imageBlob.arrayBuffer();
 	const bytes = new Uint8Array(arrayBuffer);
-	let hash: string;
+	const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+	const hashArray = Array.from(new Uint8Array(hashBuffer));
+	const hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 	
-	try {
-		hash = await invoke<string>('calculate_blob_md5', { 
-			bytes: Array.from(bytes) 
-		});
-	} catch (error) {
-		console.warn('后端 calculate_blob_md5 命令不可用，使用前端计算（SHA-256）:', error);
-		// 临时回退到前端计算 SHA-256
-		const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
-		const hashArray = Array.from(new Uint8Array(hashBuffer));
-		hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-	}
-	
-	if (!hash) return null;
-	
-	return {
-		blob: imageBlob,
-		hash
-	};
+	return { blob, hash };
 }

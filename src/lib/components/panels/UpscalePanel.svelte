@@ -211,6 +211,14 @@
 		tileSize = settings.tileSize;
 		noiseLevel = settings.noiseLevel;
 		gpuId = settings.gpuId;
+		
+		// 同步预加载配置到 PreloadManager
+		if (window.preloadManager) {
+			window.preloadManager.updateImageLoaderConfig({
+				preloadPages: settings.preloadPages,
+				maxThreads: settings.backgroundConcurrency
+			});
+		}
 	}
 
 	function gatherPanelSettings(): UpscalePanelSettings {
@@ -228,6 +236,8 @@
 			tileSize,
 			noiseLevel,
 			gpuId,
+			preloadPages: 3, // 默认值，可以从 UI 控件获取
+			backgroundConcurrency: 2, // 默认值，可以从 UI 控件获取
 			conditions: {
 				enabled: conditionalUpscaleEnabled,
 				minWidth: conditionalMinWidth,

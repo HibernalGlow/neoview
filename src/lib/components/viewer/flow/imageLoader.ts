@@ -7,7 +7,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { loadImage } from '$lib/api/fs';
 import { loadImageFromArchive } from '$lib/api/filesystem';
 import { bookStore } from '$lib/stores/book.svelte';
-import { settingsManager, performanceSettings } from '$lib/settings/settingsManager';
+import { performanceSettings } from '$lib/settings/settingsManager';
 import { 
 	triggerAutoUpscale, 
 	checkUpscaleCache, 
@@ -527,12 +527,10 @@ export class ImageLoader {
 	 */
 	async preloadNextPages(): Promise<void> {
 		try {
-			// 从 settingsManager 动态读取最新的预加载页数设置
-			const settings = settingsManager.getSettings();
-			const preloadPages = settings.performance.preLoadSize || this.options.performancePreloadPages;
+			// 使用自身配置中的预加载页数
+			const preloadPages = this.options.performancePreloadPages;
 			console.log('预加载设置:', { 
 				preloadPages, 
-				optionsPreloadPages: this.options.performancePreloadPages,
 				performanceMaxThreads: this.options.performanceMaxThreads 
 			});
 

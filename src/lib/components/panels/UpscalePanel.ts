@@ -12,6 +12,8 @@ export interface UpscalePanelSettings extends UpscaleSettings {
 	tileSize: number;
 	noiseLevel: number;
 	gpuId: number;
+	preloadPages: number;
+	backgroundConcurrency: number;
 }
 
 export interface UpscalePanelEventDetail {
@@ -37,7 +39,9 @@ export const defaultPanelSettings: UpscalePanelSettings = {
 	scale: 2,
 	tileSize: 64,
 	noiseLevel: 0,
-	gpuId: 0
+	gpuId: 0,
+	preloadPages: 3,
+	backgroundConcurrency: 2
 };
 
 export function loadUpscalePanelSettings(): UpscalePanelSettings {

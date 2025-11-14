@@ -28,6 +28,9 @@ export interface PreloadManagerOptions {
 	onCacheHit?: (detail: any) => void;
 	onCheckPreloadCache?: (detail: any) => void;
 	onThumbnailReady?: (pageIndex: number, dataURL: string) => void;
+	// 初始配置
+	initialPreloadPages?: number;
+	initialMaxThreads?: number;
 }
 
 export class PreloadManager {
@@ -46,9 +49,9 @@ export class PreloadManager {
 		// 保存选项
 		this.options = options;
 		
-		// 初始化性能配置
-		this.performancePreloadPages = performanceSettings.preLoadSize;
-		this.performanceMaxThreads = performanceSettings.maxThreads;
+		// 初始化性能配置，优先使用面板配置
+		this.performancePreloadPages = options.initialPreloadPages ?? performanceSettings.preLoadSize;
+		this.performanceMaxThreads = options.initialMaxThreads ?? performanceSettings.maxThreads;
 
 		// 创建图片加载器
 		this.imageLoader = new ImageLoader({
@@ -399,6 +402,32 @@ export class PreloadManager {
 			preloadPages: this.performancePreloadPages,
 			maxThreads: this.performanceMaxThreads
 		};
+	}
+
+	/**
+	 * 更新 ImageLoader 配置
+	 */
+	updateImageLoaderConfig(config: { preloadPages?: number; maxThreads?: number }): void {
+		if (config.preloadPages !== undefined) {
+			this.performancePreloadPages = config.preloadPages;
+		}
+		if (config.maxThreads !== undefined) {
+			this.performanceMaxThreads = config.maxThreads;
+		}
+		
+		// 更新 ImageLoader 配置
+		this.imageLoader.updateConfig({
+			preloadPages: this.performancePreloadPages,
+			maxThreads: this.performanceMaxThreads
+		});
+		
+		// 更新 worker 并发数
+		this.preloadWorker.updateConcurrency(() => this.performanceMaxThreads);
+		
+		console.log('PreloadManager 配置已更新:', {
+			preloadPages: this.performancePreloadPages,
+			maxThreads: this.performanceMaxThreads
+		});
 	}
 }
 

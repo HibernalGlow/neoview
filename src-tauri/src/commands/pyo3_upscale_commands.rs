@@ -409,7 +409,18 @@ pub async fn test_pyo3_upscaler(
         // 执行超分
         let result = manager.upscale_and_cache(&test_image_path, &model, 60.0)?;
         
-        let cache_path = manager.get_cache_path(&test_image_path, &model)?;
+        // 计算测试图片的 hash
+        use crate::core::thumbnail::{build_path_key, calculate_path_hash};
+        use crate::models::BookType;
+        let path_key = build_path_key(
+            test_image_path.to_str().unwrap_or(""),
+            test_image_path.to_str().unwrap_or(""),
+            &BookType::Folder, // 假设是文件夹类型
+            None
+        );
+        let image_hash = calculate_path_hash(&path_key);
+        
+        let cache_path = manager.get_cache_path(&image_hash, &model)?;
         
         Ok(format!(
             "✅ 测试成功！\n输入: {}\n输出大小: {} bytes\n缓存路径: {}",

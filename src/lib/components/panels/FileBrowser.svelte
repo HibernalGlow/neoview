@@ -24,6 +24,16 @@
     pasteClipboardItem,
   } from './file/services/contextMenuService';
   import {
+    addBookmarkAction,
+    openInExplorerAction,
+    openWithExternalAppAction,
+    deleteItemAction,
+    moveItemToFolderAction,
+    renameItemAction,
+    openArchiveAsBookAction,
+    copyPathAction,
+  } from './file/services/fileActionService';
+  import {
     sortFsItems,
     getSortConfig,
     setSortConfig,
@@ -867,8 +877,8 @@
    * 添加到书签
    */
   function addToBookmark(item: FsItem) {
-    bookmarkStore.add(item);
-    loadBookmarks(); // 立即刷新书签列表
+    addBookmarkAction(item);
+    loadBookmarks();
     hideContextMenu();
   }
 
@@ -876,11 +886,7 @@
    * 在资源管理器中打开
    */
   async function openInExplorer(item: FsItem) {
-    try {
-      await fileBrowserService.showInFileManager(item.path);
-    } catch (err) {
-      fileBrowserStore.setError(String(err));
-    }
+    await openInExplorerAction(item);
     hideContextMenu();
   }
 
@@ -888,11 +894,7 @@
    * 在外部应用中打开
    */
   async function openWithExternalApp(item: FsItem) {
-    try {
-      await fileBrowserService.openWithSystem(item.path);
-    } catch (err) {
-      fileBrowserStore.setError(String(err));
-    }
+    await openWithExternalAppAction(item);
     hideContextMenu();
   }
 
@@ -930,13 +932,9 @@
    * 删除文件
    */
   async function deleteItemFromMenu(item: FsItem) {
-    if (!confirm(`确定要删除 "${item.name}" 吗？`)) return;
-
-    try {
-      await fileBrowserService.moveToTrash(item.path);
+    const success = await deleteItemAction(item);
+    if (success) {
       await refresh();
-    } catch (err) {
-      fileBrowserStore.setError(String(err));
     }
     hideContextMenu();
   }
@@ -944,19 +942,10 @@
   /**
    * 移动到文件夹
    */
-  async function moveToFolder() {
-    if (!contextMenu.item) return;
-
-    try {
-      const targetPath = await fileBrowserService.selectFolder();
-      if (targetPath) {
-        const fileName = contextMenu.item.path.split(/[\\/]/).pop();
-        const targetFilePath = `${targetPath}/${fileName}`;
-        await fileBrowserService.movePath(contextMenu.item.path, targetFilePath);
-        await refresh();
-      }
-    } catch (err) {
-      fileBrowserStore.setError(String(err));
+  async function moveToFolder(item: FsItem) {
+    const success = await moveItemToFolderAction(item);
+    if (success) {
+      await refresh();
     }
     hideContextMenu();
   }
@@ -965,15 +954,9 @@
    * 重命名
    */
   async function renameItem(item: FsItem) {
-    const newName = prompt('请输入新名称:', item.name);
-    if (!newName || newName === item.name) return;
-
-    try {
-      const newPath = item.path.replace(item.name, newName);
-      await fileBrowserService.renamePath(item.path, newPath);
+    const success = await renameItemAction(item);
+    if (success) {
       await refresh();
-    } catch (err) {
-      fileBrowserStore.setError(String(err));
     }
     hideContextMenu();
   }

@@ -527,9 +527,14 @@ export class ImageLoader {
 	 */
 	async preloadNextPages(): Promise<void> {
 		try {
-			// 使用性能配置中的预加载页数
-			const preloadPages = this.options.performancePreloadPages;
-			console.log('预加载设置:', { preloadPages, performanceMaxThreads: this.options.performanceMaxThreads });
+			// 从 settingsManager 动态读取最新的预加载页数设置
+			const settings = settingsManager.getSettings();
+			const preloadPages = settings.performance.preLoadSize || this.options.performancePreloadPages;
+			console.log('预加载设置:', { 
+				preloadPages, 
+				optionsPreloadPages: this.options.performancePreloadPages,
+				performanceMaxThreads: this.options.performanceMaxThreads 
+			});
 
 			// 检查自动超分开关（如果关闭，仍执行普通的页面预加载/解码逻辑，但不触发预超分）
 			const autoUpscaleEnabled = await getAutoUpscaleEnabled();

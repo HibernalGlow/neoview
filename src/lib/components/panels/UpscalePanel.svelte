@@ -172,10 +172,10 @@
 	// 监听自动超分开关变化
 	$effect(() => {
 		if (settingsInitialized) {
-			// 更新 settingsManager 中的设置
-			const settings = settingsManager.getSettings();
-			settings.image.enableSuperResolution = autoUpscaleEnabled;
-			settingsManager.updateSettings(settings);
+			// 使用 updateNestedSettings 更新全局设置
+			settingsManager.updateNestedSettings('image', {
+				enableSuperResolution: autoUpscaleEnabled
+			});
 			
 			// 同时更新面板设置
 			const panelSettings = gatherPanelSettings();
@@ -196,7 +196,10 @@
 	const dispatch = createEventDispatcher();
 
 	function applyPanelSettings(settings: UpscalePanelSettings) {
-		autoUpscaleEnabled = settings.autoUpscaleEnabled;
+		// 优先从 settingsManager 读取自动超分开关状态
+		const globalSettings = settingsManager.getSettings();
+		autoUpscaleEnabled = globalSettings.image.enableSuperResolution ?? settings.autoUpscaleEnabled;
+		
 		preUpscaleEnabled = settings.preUpscaleEnabled;
 		conditionalUpscaleEnabled = settings.conditions.enabled ?? settings.conditionalUpscaleEnabled;
 		conditionalMinWidth = settings.conditionalMinWidth ?? settings.conditions.minWidth;

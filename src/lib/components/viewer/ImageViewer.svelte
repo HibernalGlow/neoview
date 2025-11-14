@@ -113,6 +113,17 @@
 				if (imageBlob) {
 					bookStore.setUpscaledImageBlob(imageBlob);
 				}
+				
+				// 非后台任务时，更新显示为超分图
+				if (!background) {
+					// 清掉当前页的 imageBitmap，强制使用 <img> 渲染
+					imageBitmap = null;
+					imageBitmap2 = null;
+					// 将 imageData 替换为超分 URL
+					imageData = upscaledImageData;
+					imageData2 = null; // 双页模式的第二张图也清掉
+				}
+				
 				// 更新当前页面状态为已完成
 				const currentPageIndex = bookStore.currentPageIndex;
 				bookStore.setPageUpscaleStatus(currentPageIndex, 'done');

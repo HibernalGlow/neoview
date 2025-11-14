@@ -494,12 +494,27 @@
 				const blob = new Blob([result as BlobPart], { type: 'image/webp' });
 				upscaledImageUrl = URL.createObjectURL(blob);
 				
+				// 获取当前页面的 hash 和索引
+				const imageHash = await getCurrentImageHash();
+				const currentPageIndex = bookStore.currentPageIndex;
+				
 				// 触发事件通知 ImageViewer，传递 blob 数据
 				dispatch('upscale-complete', {
 					originalPath: currentImagePath,
 					upscaledBlob: blob,
 					upscaledData: result
 				});
+				
+				// 同时触发全局 upscale-complete 事件（与 preloadRuntime.performUpscale 格式一致）
+				window.dispatchEvent(new CustomEvent('upscale-complete', {
+					detail: {
+						imageData: upscaledImageUrl,
+						imageBlob: blob,
+						originalImageHash: imageHash,
+						background: false,
+						pageIndex: currentPageIndex
+					}
+				}));
 				
 				return; // 缓存命中，直接返回
 			}
@@ -567,12 +582,27 @@
 				console.warn('获取图像 hash 失败，跳过缓存保存:', error);
 			}
 
+			// 获取当前页面的 hash 和索引
+			const imageHash = await getCurrentImageHash();
+			const currentPageIndex = bookStore.currentPageIndex;
+			
 			// 触发事件通知 ImageViewer，传递 blob 数据
 			dispatch('upscale-complete', {
 				originalPath: currentImagePath,
 				upscaledBlob: blob,
 				upscaledData: result
 			});
+			
+			// 同时触发全局 upscale-complete 事件（与 preloadRuntime.performUpscale 格式一致）
+			window.dispatchEvent(new CustomEvent('upscale-complete', {
+				detail: {
+					imageData: upscaledImageUrl,
+					imageBlob: blob,
+					originalImageHash: imageHash,
+					background: false,
+					pageIndex: currentPageIndex
+				}
+			}));
 			
 		} catch (err) {
 			console.error('超分失败:', err);

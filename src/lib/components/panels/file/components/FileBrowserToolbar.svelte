@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Button } from '$lib/components/ui/button';
   import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
+  import type { SortConfig } from '$lib/components/panels/file/services/sortService';
   import {
     Home,
     ChevronLeft,
@@ -14,7 +15,6 @@
     List,
     Grid3x3,
   } from '@lucide/svelte';
-  import type { FsItem } from '$lib/types';
 
   export let isArchiveView = false;
   export let hasHomepage = false;
@@ -24,7 +24,6 @@
   export let isCheckMode = false;
   export let isDeleteMode = false;
   export let viewMode: 'list' | 'thumbnails' = 'list';
-  export let sortItems: FsItem[] = [];
 
   export let onGoHome: () => void = () => {};
   export let onGoBackInHistory: () => void = () => {};
@@ -36,7 +35,7 @@
   export let onToggleDeleteMode: () => void = () => {};
   export let onToggleViewMode: () => void = () => {};
   export let onClearThumbnailCache: () => void = () => {};
-  export let onSort: (sorted: FsItem[]) => void = () => {};
+  export let onSort: (config: SortConfig) => void = () => {};
 </script>
 
 <div class="flex items-center gap-1 border-b px-2 py-1.5 bg-background/50">

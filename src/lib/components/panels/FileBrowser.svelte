@@ -21,10 +21,8 @@
   import FileBrowserEmptyState from './file/components/FileBrowserEmptyState.svelte';
   import {
     calculateContextMenuPosition,
-    calculateSubmenuPosition,
     setClipboardItem,
     pasteClipboardItem,
-    copyItemToFolder as copyItemToFolderService,
   } from './file/services/contextMenuService';
 
 
@@ -41,7 +39,6 @@
   let fileListContainer = $state<HTMLDivElement | undefined>(undefined);
   let contextMenu = $state<{ x: number; y: number; item: FsItem | null; direction: 'up' | 'down' }>({ x: 0, y: 0, item: null, direction: 'down' });
   let bookmarkContextMenu = $state<{ x: number; y: number; bookmark: any | null }>({ x: 0, y: 0, bookmark: null });
-  let copyToSubmenu = $state<{ show: boolean; x: number; y: number }>({ show: false, x: 0, y: 0 });
 
   // 缩略图队列
   const thumbnailQueue = getThumbnailQueue((path, url) => fileBrowserStore.addThumbnail(path, url));
@@ -531,7 +528,6 @@
   function hideContextMenu() {
     contextMenu = { x: 0, y: 0, item: null, direction: 'down' };
     bookmarkContextMenu = { x: 0, y: 0, bookmark: null };
-    copyToSubmenu.show = false;
   }
 
   async function openSearchResult(item: FsItem) {
@@ -923,37 +919,6 @@
     } catch (err) {
       fileBrowserStore.setError(String(err));
     }
-  }
-
-  /**
-   * 显示复制到子菜单
-   */
-  function showCopyToSubmenu(e: MouseEvent) {
-    e.stopPropagation();
-    
-    const { x, y } = calculateSubmenuPosition(
-      { x: contextMenu.x, y: contextMenu.y, direction: contextMenu.direction },
-      window.innerWidth,
-      window.innerHeight
-    );
-    copyToSubmenu = { show: true, x, y };
-  }
-
-  /**
-   * 复制到指定文件夹
-   */
-  async function copyToFolder(targetPath: string) {
-    if (!contextMenu.item) return;
-
-    try {
-      await copyItemToFolderService(contextMenu.item, targetPath, async () => {
-        await refresh();
-      });
-    } catch (err) {
-      fileBrowserStore.setError(String(err));
-    }
-    hideContextMenu();
-    copyToSubmenu.show = false;
   }
 
   /**

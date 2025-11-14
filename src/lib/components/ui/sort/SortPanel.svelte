@@ -1,21 +1,18 @@
 <script lang="ts">
   import { ArrowUpDown, ArrowUp, ArrowDown, Type, Calendar, HardDrive, FileImage, FileArchive, Folder } from '@lucide/svelte';
-  import type { FsItem } from '$lib/types';
+  import { getSortConfig, setSortConfig, type SortConfig, type SortField, type SortOrder } from '$lib/components/panels/file/services/sortService';
 
   let { 
-    items = [], 
-    onSort = () => {} 
+    onSortChange = () => {} 
   }: {
-    items: FsItem[];
-    onSort: (sortedItems: FsItem[]) => void;
+    onSortChange: (config: SortConfig) => void;
   } = $props();
 
   // 排序选项
-  type SortField = 'name' | 'modified' | 'size' | 'type' | 'path';
-  type SortOrder = 'asc' | 'desc';
+  const initialConfig = getSortConfig();
+  let sortField = $state<SortField>(initialConfig.field);
+  let sortOrder = $state<SortOrder>(initialConfig.order);
 
-  let sortField: SortField = 'path';
-  let sortOrder: SortOrder = 'asc';
   let showSortMenu = $state(false);
 
   // 排序配置
@@ -27,54 +24,11 @@
     { field: 'type' as SortField, label: '类型', icon: FileImage }
   ];
 
-  /**
-   * 获取文件类型用于排序
-   */
-  function getItemType(item: FsItem): string {
-    if (item.isDir) return '0_folder';
-    if (item.name.endsWith('.zip') || item.name.endsWith('.cbz') || 
-        item.name.endsWith('.rar') || item.name.endsWith('.cbr')) return '1_archive';
-    if (item.isImage) return '2_image';
-    return '3_file';
-  }
+  function emitSortChange() {
+    const config: SortConfig = { field: sortField, order: sortOrder };
+    setSortConfig(config);
+    onSortChange(config);
 
-  /**
-   * 执行排序
-   */
-  function performSort() {
-    const sorted = [...items].sort((a, b) => {
-      // 文件夹始终在前面
-      if (a.isDir !== b.isDir) {
-        return a.isDir ? -1 : 1;
-      }
-
-      let comparison = 0;
-
-      switch (sortField) {
-        case 'path':
-          comparison = a.path.localeCompare(b.path, undefined, { numeric: true });
-          break;
-        case 'name':
-          comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
-          break;
-        case 'modified':
-          comparison = (a.modified || 0) - (b.modified || 0);
-          break;
-        case 'size':
-          comparison = a.size - b.size;
-          break;
-        case 'type':
-          comparison = getItemType(a).localeCompare(getItemType(b));
-          if (comparison === 0) {
-            comparison = a.name.localeCompare(b.name);
-          }
-          break;
-      }
-
-      return sortOrder === 'asc' ? comparison : -comparison;
-    });
-
-    onSort(sorted);
     showSortMenu = false;
   }
 
@@ -89,7 +43,7 @@
       sortField = field;
       sortOrder = 'asc';
     }
-    performSort();
+    emitSortChange();
   }
 
   /**
@@ -155,7 +109,7 @@
             class="flex-1 px-2 py-1 text-xs {sortOrder === 'asc' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700'} rounded transition-colors"
             onclick={() => {
               sortOrder = 'asc';
-              performSort();
+              emitSortChange();
             }}
           >
             升序
@@ -164,7 +118,7 @@
             class="flex-1 px-2 py-1 text-xs {sortOrder === 'desc' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700'} rounded transition-colors"
             onclick={() => {
               sortOrder = 'desc';
-              performSort();
+              emitSortChange();
             }}
           >
             降序

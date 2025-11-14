@@ -241,42 +241,6 @@ export async function checkUpscaleCache(
 			console.warn('检查内存预加载缓存失败:', e);
 		}
 		
-		// 获取当前活动的算法设置
-		let currentAlgorithm = 'realcugan'; // 默认值
-		try {
-			// 从本地设置获取当前算法
-			const settings = settingsManager.getSettings();
-			currentAlgorithm = settings.image.superResolutionModel || 'realcugan';
-		} catch (e) {
-			console.warn('获取当前算法失败，使用默认值:', e);
-		}
-		
-		// 优先检查当前算法的缓存
-		// 注意：算法名称需要与实际保存时使用的名称一致
-		const algorithms = [
-			currentAlgorithm,
-			'MODEL_WAIFU2X_ANIME_UP2X',
-			'MODEL_WAIFU2X_CUNET_UP1X_DENOISE0X',
-			'MODEL_WAIFU2X_CUNET_UP2X_DENOISE0X',
-			'MODEL_WAIFU2X_CUNET_UP2X_DENOISE1X',
-			'MODEL_WAIFU2X_CUNET_UP2X_DENOISE2X',
-			'MODEL_WAIFU2X_ANIME_UP2X_DENOISE0X',
-			'MODEL_WAIFU2X_ANIME_UP2X_DENOISE1X',
-			'MODEL_WAIFU2X_ANIME_UP2X_DENOISE2X',
-			'MODEL_WAIFU2X_ANIME_UP2X_DENOISE3X',
-			'MODEL_REALESRGAN_X4PLUS',
-			'MODEL_REALESRGAN_X4PLUSANIME',
-			'MODEL_REALESRGAN_ANIMAVIDEOV3',
-			'MODEL_REALSR_DF2K',
-			'MODEL_REALCUGAN_PRO_UP2X',
-			'MODEL_REALCUGAN_PRO_UP3X',
-			'MODEL_REALCUGAN_PRO_UP4X',
-			'MODEL_REALCUGAN_SE_UP2X',
-			'realcugan',
-			'realesrgan',
-			'waifu2x'
-		];
-
 		// 读取 TTL（小时）设置，默认8小时
 		let ttlHours = 8;
 		try {
@@ -287,46 +251,41 @@ export async function checkUpscaleCache(
 		}
 		const ttlSeconds = ttlHours * 3600;
 
-		for (const algorithm of algorithms) {
-			try {
-				// 后端现在返回结构化的 metadata（path/mtime/size/algorithm），若未命中会抛出错误
-				const meta: any = await invoke('check_upscale_cache_for_algorithm', {
-					imageHash,
-					algorithm,
-					thumbnailPath: 'D:\\temp\\neoview_thumbnails_test',
-					max_age_seconds: ttlSeconds
-				});
+		try {
+			// 直接检查 hash 是否有缓存，不依赖算法匹配
+			const meta: any = await invoke('check_upscale_cache', {
+				imageHash,
+				thumbnailPath: 'D:\\temp\\neoview_thumbnails_test',
+				max_age_seconds: ttlSeconds
+			});
 
-				if (meta && meta.path) {
-					try {
-						// 懒加载二进制：仅在确认存在缓存时才读取文件字节
-						const bytes = await invoke<number[]>('read_binary_file', { filePath: meta.path });
-						const arr = new Uint8Array(bytes);
-						const blob = new Blob([arr], { type: 'image/webp' });
-						const url = URL.createObjectURL(blob);
-						
-						// 触发缓存命中事件
-						window.dispatchEvent(new CustomEvent('cache-hit', {
-							detail: {
-								imageHash,
-								url,
-								blob,
-								preview,
-								algorithm: meta.algorithm || algorithm
-							}
-						}));
-						
-						console.log(`找到 ${meta.algorithm || algorithm} 算法的超分缓存，path: ${meta.path}`);
-						return true;
-					} catch (e) {
-						console.error('读取缓存文件失败:', e);
-						continue;
-					}
+			if (meta && meta.path) {
+				try {
+					// 懒加载二进制：仅在确认存在缓存时才读取文件字节
+					const bytes = await invoke<number[]>('read_binary_file', { filePath: meta.path });
+					const arr = new Uint8Array(bytes);
+					const blob = new Blob([arr], { type: 'image/webp' });
+					const url = URL.createObjectURL(blob);
+					
+					// 触发缓存命中事件
+					window.dispatchEvent(new CustomEvent('cache-hit', {
+						detail: {
+							imageHash,
+							url,
+							blob,
+							preview,
+							algorithm: meta.algorithm || 'unknown'
+						}
+					}));
+					
+					console.log(`找到超分缓存，path: ${meta.path}, algorithm: ${meta.algorithm || 'unknown'}`);
+					return true;
+				} catch (e) {
+					console.error('读取缓存文件失败:', e);
 				}
-			} catch (e) {
-				// 继续检查下一个算法
-				continue;
 			}
+		} catch (e) {
+			// 缓存未找到
 		}
 		
 		// 没有找到缓存

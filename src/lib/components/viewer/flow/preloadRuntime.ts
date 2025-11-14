@@ -105,11 +105,8 @@ export async function performUpscale(
 			}
 		}
 		
-		// 更新当前页面状态（如果不是后台任务）
-		if (!isBackground) {
-			const currentPageIndex = bookStore.currentPageIndex;
-			bookStore.setPageUpscaleStatus(currentPageIndex, 'done');
-		}
+		// 注意：页面状态更新由 ImageViewer 的 onUpscaleComplete 事件处理
+		// 这里不再重复设置，避免冗余
 		
 		// 触发超分完成事件
 		window.dispatchEvent(new CustomEvent('upscale-complete', {
@@ -121,8 +118,8 @@ export async function performUpscale(
 			}
 		}));
 		
-		// 完成超分（只有手动调用且非后台任务时才更新状态）
-		if (!isBackground && !options.skipStateUpdate) {
+		// 完成超分（非后台任务都需要更新状态）
+		if (!isBackground) {
 			completeUpscale();
 		}
 		
@@ -134,8 +131,8 @@ export async function performUpscale(
 	} catch (error) {
 		console.error('超分处理失败:', error);
 		
-		// 设置错误状态（仅对非后台任务且未跳过状态更新）
-		if (!options.background && !options.skipStateUpdate) {
+		// 设置错误状态（非后台任务都需要更新状态）
+		if (!options.background) {
 			setUpscaleError(error instanceof Error ? error.message : String(error));
 		}
 		
@@ -191,18 +188,13 @@ export async function triggerAutoUpscale(
 			startUpscale(imageHash, 'auto', '自动超分中');
 		}
 		
-		// 执行超分，跳过状态更新（因为 triggerAutoUpscale 已经处理了）
+		// 执行超分，skipStateUpdate 防止重复调用 startUpscale
 		return await performUpscale(imageBlob, imageHash, { 
 			background: isPreload,
-			skipStateUpdate: !isPreload // 非预加载任务跳过状态更新
+			skipStateUpdate: !isPreload // 非预加载任务跳过 startUpscale，但保留 completeUpscale
 		});
 	} catch (error) {
 		console.error('自动超分失败:', error);
-		
-		// 设置错误状态（仅对非预加载任务）
-		if (!isPreload) {
-			setUpscaleError(error instanceof Error ? error.message : String(error));
-		}
 		
 		return {
 			success: false,

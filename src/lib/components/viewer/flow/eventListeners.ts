@@ -64,13 +64,8 @@ export function createEventListeners(options: EventListenersOptions) {
 
 	const handleRequestCurrentImageData = (e: CustomEvent) => {
 		console.log('ImageViewer: 收到图片数据请求');
-		const { callback } = e.detail;
-		
-		// 延迟检查，确保图片数据已加载
-		setTimeout(() => {
-			// 调用外部回调处理实际的数据返回
-			onRequestCurrentImageData?.(e.detail);
-		}, 100);
+		// 直接调用外部回调，不再添加额外的延迟
+		onRequestCurrentImageData?.(e.detail);
 	};
 
 	const handleResetPreUpscaleProgress = () => {

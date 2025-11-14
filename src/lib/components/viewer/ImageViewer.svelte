@@ -146,8 +146,8 @@
 				console.log('ImageViewer: 收到图片数据请求');
 				const { callback } = detail;
 				
-				// 延迟检查，确保图片数据已加载
-				setTimeout(async () => {
+				// 立即执行，不再添加额外延迟（eventListeners 已经移除了延迟）
+				(async () => {
 					if (typeof callback === 'function') {
 						// 优先尝试从 ImageLoader 获取当前页面的 Blob
 						if (preloadManager) {
@@ -174,7 +174,7 @@
 					} else {
 						console.log('ImageViewer: 回调函数无效');
 					}
-				}, 100);
+				})();
 			},
 			onResetPreUpscaleProgress: () => {
 				preUpscaleProgress = 0;

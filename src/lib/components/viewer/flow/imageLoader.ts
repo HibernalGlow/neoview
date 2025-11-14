@@ -7,7 +7,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { loadImage } from '$lib/api/fs';
 import { loadImageFromArchive } from '$lib/api/filesystem';
 import { bookStore } from '$lib/stores/book.svelte';
-import { performanceSettings } from '$lib/settings/settingsManager';
+import { settingsManager, performanceSettings } from '$lib/settings/settingsManager';
 import { 
 	triggerAutoUpscale, 
 	checkUpscaleCache, 

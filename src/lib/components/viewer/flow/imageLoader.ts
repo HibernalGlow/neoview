@@ -484,70 +484,77 @@ export class ImageLoader {
 				console.warn('当前页没有 stableHash，跳过自动超分');
 			}
 
-			// 新的缓存检查顺序：内存 -> 磁盘 -> 现场超分
+			// ---- 缓存优先逻辑 ----
+			let usedCache = false;
 			const { hash: imageHash } = imageDataWithHash;
 			
-			// 1. 先检查内存缓存
-			const memCache = this.preloadMemoryCache.get(imageHash);
-			if (memCache) {
-				console.log('使用内存超分缓存，页码:', currentPageIndex + 1);
-				// 直接使用内存中的超分结果
-				bookStore.setUpscaledImage(memCache.url);
-				bookStore.setUpscaledImageBlob(memCache.blob);
-				bookStore.setPageUpscaleStatus(currentPageIndex, 'done');
-				// 触发事件通知 Viewer 替换显示
-				window.dispatchEvent(new CustomEvent('upscale-complete', {
-					detail: {
-						imageData: memCache.url,
-						imageBlob: memCache.blob,
-						originalImageHash: imageHash,
-						background: false,
-						pageIndex: currentPageIndex
-					}
-				}));
-				return; // 使用缓存，直接返回
-			}
-
-			// 2. 内存没有，尝试从磁盘加载到内存
-			const diskLoaded = await this.loadDiskUpscaleToMemory(imageHash);
-			if (diskLoaded) {
-				console.log('从磁盘加载超分结果到内存，页码:', currentPageIndex + 1);
-				const diskCache = this.preloadMemoryCache.get(imageHash);
-				if (diskCache) {
-					bookStore.setUpscaledImage(diskCache.url);
-					bookStore.setUpscaledImageBlob(diskCache.blob);
+			if (imageHash) {
+				// 1. 先检查内存缓存
+				const memCache = this.preloadMemoryCache.get(imageHash);
+				if (memCache) {
+					usedCache = true;
+					console.log('使用内存超分缓存，页码:', currentPageIndex + 1);
+					// 直接使用内存中的超分结果
+					bookStore.setUpscaledImage(memCache.url);
+					bookStore.setUpscaledImageBlob(memCache.blob);
 					bookStore.setPageUpscaleStatus(currentPageIndex, 'done');
 					// 触发事件通知 Viewer 替换显示
 					window.dispatchEvent(new CustomEvent('upscale-complete', {
 						detail: {
-							imageData: diskCache.url,
-							imageBlob: diskCache.blob,
+							imageData: memCache.url,
+							imageBlob: memCache.blob,
 							originalImageHash: imageHash,
 							background: false,
 							pageIndex: currentPageIndex
 						}
 					}));
-					return; // 磁盘加载成功，直接返回
+				}
+
+				// 2. 内存没有，尝试从磁盘加载到内存
+				if (!usedCache) {
+					const diskLoaded = await this.loadDiskUpscaleToMemory(imageHash);
+					if (diskLoaded) {
+						usedCache = true;
+						const diskCache = this.preloadMemoryCache.get(imageHash);
+						if (diskCache) {
+							console.log('从磁盘加载超分结果到内存，页码:', currentPageIndex + 1);
+							bookStore.setUpscaledImage(diskCache.url);
+							bookStore.setUpscaledImageBlob(diskCache.blob);
+							bookStore.setPageUpscaleStatus(currentPageIndex, 'done');
+							// 触发事件通知 Viewer 替换显示
+							window.dispatchEvent(new CustomEvent('upscale-complete', {
+								detail: {
+									imageData: diskCache.url,
+									imageBlob: diskCache.blob,
+									originalImageHash: imageHash,
+									background: false,
+									pageIndex: currentPageIndex
+								}
+							}));
+						}
+					}
+				}
+
+				// 3. 现场超分（仅在没有任何缓存时）
+				if (!usedCache && imageDataWithHash) {
+					const autoUpscaleEnabled = await getAutoUpscaleEnabled();
+					if (autoUpscaleEnabled) {
+						console.log('内存和磁盘都没有缓存，开始现场超分，页码:', currentPageIndex + 1);
+						await triggerAutoUpscale(imageDataWithHash);
+					} else {
+						console.log('自动超分开关已关闭，不进行现场超分');
+					}
 				}
 			}
-
-			// 3. 内存和磁盘都没有，检查自动超分开关并现场超分
-			const autoUpscaleEnabled = await getAutoUpscaleEnabled();
-			if (autoUpscaleEnabled) {
-				console.log('内存和磁盘都没有缓存，开始现场超分，页码:', currentPageIndex + 1);
-				await triggerAutoUpscale(imageDataWithHash);
-			} else {
-				console.log('自动超分开关已关闭，不进行现场超分');
-			}
-
-			// 触发预加载后续页面
-			setTimeout(() => {
-				this.preloadNextPages();
-			}, 1000);
 
 			// 调用外部回调 - 传递新的数据格式
 			this.options.onImageLoaded?.(objectUrl, objectUrl2);
 			this.options.onImageBitmapReady?.(bitmap, bitmap2);
+
+			// ---- 无论是否 usedCache，都进行预超分队列调度 ----
+			setTimeout(() => {
+				this.preloadNextPages();   // 利用 pendingPreloadTasks + preloadWorker 队列管理预超分
+			}, 1000);
 		} catch (err) {
 			const errorMessage = err instanceof Error ? err.message : 'Failed to load image';
 			console.error('Failed to load image:', err);

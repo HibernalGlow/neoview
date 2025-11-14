@@ -494,146 +494,52 @@
 					// 直接使用内存缓存
 					upscaledImageUrl = cached.url;
 					
-					// 触发全局事件通知 ImageViewer 替换显示
-					const currentPageIndex = bookStore.currentPageIndex;
-					console.log('🔥 UpscalePanel (内存缓存命中) 触发全局 upscale-complete 事件，页码:', currentPageIndex + 1);
-					window.dispatchEvent(new CustomEvent('upscale-complete', {
-						detail: {
-							imageData: cached.url,
-							imageBlob: cached.blob,
-							originalImageHash: imageHash,
-							background: false,
-							pageIndex: currentPageIndex,
-							writeToMemoryCache: false // 已经在内存中，不需要再写
-						}
-					}));
+					// 使用统一处理函数
+					await handleUpscaleResult(imageHash, cached.blob, cached.url, new Uint8Array());
 					
-					return; // 内存缓存命中，直接返回
+					return; // 使用缓存，直接返回
 				}
 			}
 			
-			console.log('内存中没有缓存，开始执行超分...');
-
-			// 获取图像数据 - 从 ImageViewer 的缓存中获取已加载的 blob
+			console.log('📥 从 ImageViewer 获取图像数据...');
 			const imageData = await getCurrentImageBlob();
+			console.log('✅ 成功获取图像数据，大小:', imageData.length);
 			
+			// 执行超分
 			progress = 20;
-			status = '初始化模型...';
-			await new Promise(resolve => setTimeout(resolve, 500));
-
-			// 执行超分 (内存流)
-			status = '超分处理中...';
-			progress = 30;
+			status = '执行超分...';
+			updateProgress?.(progress, status);
 			
-			// 通知 ImageViewer 开始超分（设置进度条闪烁）
-			window.dispatchEvent(new CustomEvent('upscale-start'));
+			// 调用 PyO3 超分管理器
+			const result = await pyo3UpscaleManager.upscaleImageMemory(imageData);
+			console.log('✅ 超分完成，输出大小:', result.length);
 			
-			result = await pyo3UpscaleManager.upscaleImageMemory(imageData, 120.0);
-			
-			progress = 90;
-			status = '生成预览...';
-			
-			// 直接创建 blob，用于传递给 ImageViewer 和显示
-			const blob = new Blob([result as BlobPart], { type: 'image/webp' });
+			// 转换为 Blob 和 URL
+			const blob = new Blob([result], { type: 'image/webp' });
 			upscaledImageUrl = URL.createObjectURL(blob);
 			
 			progress = 100;
 			status = '转换完成';
-			
-			const processingTime = (Date.now() - startTime) / 1000;
-			showSuccessToast(`第 ${bookStore.currentPageIndex + 1} 页超分完成！耗时 ${processingTime.toFixed(1)}s`);
+			updateProgress?.(progress, status);
 			
 			// 设置当前页面超分状态
 			bookStore.setCurrentPageUpscaled(true);
 			
-			// 异步保存超分结果到缓存
-			try {
-				const imageHash = await getCurrentImageHash();
-				const currentPageIndex = bookStore.currentPageIndex;
-				
-				if (imageHash) {
-					const currentPage = bookStore.currentPage;
-					if (currentPage) {
-						// 异步保存，不等待完成
-						pyo3UpscaleManager.saveUpscaleCache(imageHash, result)
-							.then(cachePath => {
-								console.log('💾 超分结果已异步缓存:', cachePath);
-								
-								// 记录缓存关系到 BookStore
-								const innerPath = (currentPage as any).innerPath || undefined;
-								bookStore.recordUpscaleCache(
-									imageHash,
-									pyo3UpscaleManager.currentModel.modelName,
-									pyo3UpscaleManager.currentModel.scale,
-									cachePath,
-									currentPage.path,
-									innerPath
-								);
-							})
-							.catch(error => {
-								console.warn('异步保存缓存失败:', error);
-							});
-					}
-				}
-				
-				// 触发事件通知 ImageViewer，传递 blob 数据
-				dispatch('upscale-complete', {
-					originalPath: currentImagePath,
-					upscaledBlob: blob,
-					upscaledData: result
-				});
-				
-				// 写入内存缓存
-				const preloadManager = (window as any).preloadManager;
-				if (preloadManager) {
-					const memCache = preloadManager.getPreloadMemoryCache();
-					memCache.set(imageHash, { url: upscaledImageUrl, blob });
-					console.log('UpscalePanel 超分结果已写入内存缓存');
-				}
-				
-				// 同时触发全局 upscale-complete 事件（与 preloadRuntime.performUpscale 格式一致）
-				console.log('🔥 UpscalePanel 触发全局 upscale-complete 事件，页码:', currentPageIndex + 1);
-				window.dispatchEvent(new CustomEvent('upscale-complete', {
-					detail: {
-						imageData: upscaledImageUrl,
-						imageBlob: blob,
-						originalImageHash: imageHash,
-						background: false,
-						pageIndex: currentPageIndex,
-						writeToMemoryCache: false // 已经写入内存缓存
-					}
-				}));
-			} catch (error) {
-				console.warn('获取图像 hash 失败，跳过缓存保存:', error);
+			const processingTime = (Date.now() - startTime) / 1000;
+			showSuccessToast(`超分完成！第 ${bookStore.currentPageIndex + 1} 页，耗时 ${processingTime.toFixed(1)}s`);
+			
+			// 获取当前页面的 hash
+			const imageHash = await getCurrentImageHash();
+			if (!imageHash) {
+				console.warn('无法获取当前页 hash，跳过缓存保存');
+				error = '无法获取页面哈希';
+				status = '超分失败';
+				showErrorToast('超分失败: 无法获取页面哈希');
+				return;
 			}
-			
-			// 触发事件通知 ImageViewer，传递 blob 数据
-			dispatch('upscale-complete', {
-				originalPath: currentImagePath,
-				upscaledBlob: blob,
-				upscaledData: result
-			});
-			
-			// 写入内存缓存
-			const preloadManager = (window as any).preloadManager;
-			if (preloadManager) {
-				const memCache = preloadManager.getPreloadMemoryCache();
-				memCache.set(imageHash, { url: upscaledImageUrl, blob });
-				console.log('UpscalePanel 超分结果已写入内存缓存');
-			}
-			
-			// 同时触发全局 upscale-complete 事件（与 preloadRuntime.performUpscale 格式一致）
-			console.log('🔥 UpscalePanel 触发全局 upscale-complete 事件，页码:', currentPageIndex + 1);
-			window.dispatchEvent(new CustomEvent('upscale-complete', {
-				detail: {
-					imageData: upscaledImageUrl,
-					imageBlob: blob,
-					originalImageHash: imageHash,
-					background: false,
-					pageIndex: currentPageIndex,
-					writeToMemoryCache: false // 已经写入内存缓存
-				}
-			}));
+
+			// 使用统一处理函数
+			await handleUpscaleResult(imageHash, blob, upscaledImageUrl, result);
 			
 		} catch (err) {
 			console.error('超分失败:', err);
@@ -711,6 +617,67 @@
 			console.log(`UpscalePanel 使用稳定哈希，页码: ${bookStore.currentPageIndex + 1}/${bookStore.totalPages}, hash: ${hash}`);
 		}
 		return hash;
+	}
+
+	/**
+	 * 处理超分完成后的统一逻辑
+	 */
+	async function handleUpscaleResult(
+		imageHash: string,
+		blob: Blob,
+		url: string,
+		resultData: Uint8Array
+	) {
+		const currentPageIndex = bookStore.currentPageIndex;
+		const currentPage = bookStore.currentPage;
+
+		// 1. 异步保存到磁盘缓存 + BookStore 记录
+		if (currentPage) {
+			pyo3UpscaleManager.saveUpscaleCache(imageHash, resultData)
+				.then(cachePath => {
+					console.log('💾 超分结果已异步缓存:', cachePath);
+					const innerPath = (currentPage as any).innerPath || undefined;
+					bookStore.recordUpscaleCache(
+						imageHash,
+						pyo3UpscaleManager.currentModel.modelName,
+						pyo3UpscaleManager.currentModel.scale,
+						cachePath,
+						currentPage.path,
+						innerPath
+					);
+				})
+				.catch(error => {
+					console.warn('异步保存缓存失败:', error);
+				});
+		}
+
+		// 2. 通知面板父组件（内部事件）
+		dispatch('upscale-complete', {
+			originalPath: currentImagePath,
+			upscaledBlob: blob,
+			upscaledData: resultData
+		});
+
+		// 3. 写入内存预超分缓存
+		const preloadManager = (window as any).preloadManager;
+		if (preloadManager) {
+			const memCache = preloadManager.getPreloadMemoryCache();
+			memCache.set(imageHash, { url, blob });
+			console.log('UpscalePanel 超分结果已写入内存缓存');
+		}
+
+		// 4. 触发全局事件给 ImageViewer
+		console.log('🔥 UpscalePanel 触发全局 upscale-complete 事件，页码:', currentPageIndex + 1);
+		window.dispatchEvent(new CustomEvent('upscale-complete', {
+			detail: {
+				imageData: url,
+				imageBlob: blob,
+				originalImageHash: imageHash,
+				background: false,
+				pageIndex: currentPageIndex,
+				writeToMemoryCache: false   // 已经写入内存缓存
+			}
+		}));
 	}
 
 	/**

@@ -130,7 +130,7 @@ describe('Hash Cache', () => {
     const ctx1 = testCases[0].context;
     const ctx2 = testCases[1].context;
     
-    const hash1 = await getStileImageHash(buildImagePathKey(ctx1));
+    const hash1 = await getStableImageHash(buildImagePathKey(ctx1));
     const hash2 = await getStableImageHash(buildImagePathKey(ctx2));
     
     // 不同的路径应该产生不同的哈希

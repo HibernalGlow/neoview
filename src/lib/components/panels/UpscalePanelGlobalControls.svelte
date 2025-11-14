@@ -6,13 +6,13 @@
 	const dispatch = createEventDispatcher();
 
 	let {
-		autoUpscaleEnabled = false,
-		preUpscaleEnabled = true,
-		conditionalUpscaleEnabled = false,
-		conditionalMinWidth = 0,
-		conditionalMinHeight = 0,
-		currentImageUpscaleEnabled = false,
-		useCachedFirst = true
+		autoUpscaleEnabled = $bindable(false),
+		preUpscaleEnabled = $bindable(true),
+		conditionalUpscaleEnabled = $bindable(false),
+		conditionalMinWidth = $bindable(0),
+		conditionalMinHeight = $bindable(0),
+		currentImageUpscaleEnabled = $bindable(false),
+		useCachedFirst = $bindable(true)
 	} = $props();
 
 	// 处理开关变化

@@ -9,8 +9,6 @@ import { upscaleState } from '$lib/stores/upscale/upscaleState.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
 import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
 
-import { get } from 'svelte/store';
-
 export interface ImageDataWithHash {
 	data?: string;  // 兼容旧的 data URL 格式
 	blob?: Blob;   // 新的 Blob 格式
@@ -135,15 +133,13 @@ export async function triggerAutoUpscale(
 
 		// 如果是预加载且有其他任务在进行，直接返回（worker会自动处理队列）
 		if (isPreload) {
-			const currentState = get(upscaleState);
-			if (currentState?.isUpscaling) {
+			if (upscaleState.isUpscaling) {
 				// worker会自动处理队列，这里不需要手动管理
 				return;
 			}
 		} else {
 			// 当前页面的超分，检查是否正在超分
-			const currentState = get(upscaleState);
-			if (currentState?.isUpscaling) {
+			if (upscaleState.isUpscaling) {
 				console.log('超分正在进行中，跳过自动超分');
 				return;
 			}

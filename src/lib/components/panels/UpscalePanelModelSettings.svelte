@@ -7,27 +7,16 @@
 	const dispatch = createEventDispatcher();
 
 	let {
-		scale = 2,
-		selectedModel = '',
-		availableModels = [],
-		modelLabels = {},
-		gpuId = 0,
-		gpuOptions = [],
-		tileSize = 0,
-		tileSizeOptions = [],
-		noiseLevel = 0,
-		noiseLevelOptions = []
-	}: {
-		scale?: number;
-		selectedModel?: string;
-		availableModels?: string[];
-		modelLabels?: Record<string, string>;
-		gpuId?: number;
-		gpuOptions?: { value: number; label: string }[];
-		tileSize?: number;
-		tileSizeOptions?: { value: number; label: string }[];
-		noiseLevel?: number;
-		noiseLevelOptions?: { value: number; label: string }[];
+		scale = $bindable(2),
+		selectedModel = $bindable(''),
+		availableModels = $bindable([] as string[]),
+		modelLabels = $bindable({} as Record<string, string>),
+		gpuId = $bindable(0),
+		gpuOptions = $bindable([] as { value: number; label: string }[]),
+		tileSize = $bindable(0),
+		tileSizeOptions = $bindable([] as { value: number; label: string }[]),
+		noiseLevel = $bindable(0),
+		noiseLevelOptions = $bindable([] as { value: number; label: string }[])
 	} = $props();
 
 	function handleApply() {

@@ -237,9 +237,17 @@
 				}
 			},
 			onCacheHit: (detail) => {
-				const { imageHash, url, blob } = detail;
-				console.log('缓存命中，hash:', imageHash);
-				// 更新 bookStore
+				const { imageHash, url, blob, preview } = detail;
+				const currentHash = bookStore.getCurrentPageHash();
+				console.log('缓存命中，hash:', imageHash, 'preview:', preview, 'currentHash:', currentHash);
+				// 仅在需要预览当前页，且 hash 与当前页匹配时才更新显示
+				if (!preview) {
+					return;
+				}
+				if (!currentHash || currentHash !== imageHash) {
+					console.log('缓存命中但非当前页，忽略更新显示');
+					return;
+				}
 				bookStore.setUpscaledImage(url);
 				bookStore.setUpscaledImageBlob(blob);
 			},

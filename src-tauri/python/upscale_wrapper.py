@@ -7,6 +7,7 @@ NeoView Upscale Wrapper
 import sys
 import os
 from typing import Optional, Tuple, Dict, Any, Union, List
+import io
 
 import threading
 import queue
@@ -21,6 +22,59 @@ except ImportError:
     SR_AVAILABLE = False
     sr = None
     print("警告: sr_vulkan 模块未找到，超分功能将不可用")
+
+# 尝试导入 Pillow 用于格式转换
+try:
+    from PIL import Image
+    import pillow_avif
+    import pillow_jxl
+    PIL_AVAILABLE = True
+    print("✅ Pillow 模块导入成功")
+except ImportError:
+    PIL_AVAILABLE = False
+    print("警告: Pillow 模块未找到，格式转换功能将不可用")
+
+# 不支持的格式需要转换
+UNSUPPORTED_FORMATS = {
+    b'\x00\x00\x00\x0cjxl ': 'JXL',  # JPEG XL
+    # AVIF 格式标识符（ftypavif 或 ftypavis）
+    b'ftypavif': 'AVIF',
+    b'ftypavis': 'AVIF',
+}
+
+def _needs_transcode(image_data: bytes) -> bool:
+    """检测图像是否需要转换为 PNG"""
+    if len(image_data) < 12:
+        return False
+    
+    # 检测 JXL 格式
+    if image_data[:12] == b'\x00\x00\x00\x0cjxl ':
+        return True
+    
+    # 检测 AVIF 格式（ftyp box）
+    if image_data[4:12] in (b'ftypavif', b'ftypavis'):
+        return True
+    
+    return False
+
+def _transcode_to_png(image_data: bytes) -> bytes:
+    """将图像转换为 PNG 格式"""
+    if not PIL_AVAILABLE:
+        raise RuntimeError("Pillow 模块不可用，无法转换图像格式")
+    
+    try:
+        with Image.open(io.BytesIO(image_data)) as img:
+            # 转换为 RGB 模式以确保兼容性
+            if img.mode in ('RGBA', 'LA', 'P'):
+                img = img.convert('RGB')
+            elif img.mode not in ('RGB', 'L'):
+                img = img.convert('RGB')
+            
+            with io.BytesIO() as buf:
+                img.save(buf, format='PNG')
+                return buf.getvalue()
+    except Exception as e:
+        raise RuntimeError(f"图像格式转换失败: {str(e)}")
 
 
 class UpscaleTask:
@@ -360,6 +414,20 @@ class UpscaleManager:
             print(f"  tile_size: {tile_size}")
             print(f"  noise_level: {noise_level}")
             
+            # 检测并转换不支持的格式
+            processed_data = image_data
+            if _needs_transcode(image_data):
+                print(f"🔄 检测到不支持的格式，正在转换为 PNG...")
+                try:
+                    processed_data = _transcode_to_png(image_data)
+                    print(f"✅ 格式转换完成，新数据大小: {len(processed_data)} bytes")
+                except RuntimeError as e:
+                    print(f"❌ 格式转换失败: {e}")
+                    with self.lock:
+                        task.status = "failed"
+                        task.error = str(e)
+                    raise
+            
             # 获取模型常量值
             model_id, model_name = self._resolve_model(model)
             
@@ -369,7 +437,7 @@ class UpscaleManager:
                 # 使用指定尺寸模式
                 print("📏 使用指定尺寸模式")
                 status = sr.add(
-                    image_data,
+                    processed_data,
                     model_id,
                     task_id,
                     width,
@@ -381,7 +449,7 @@ class UpscaleManager:
                 # 使用缩放倍数模式
                 print("📏 使用缩放倍数模式")
                 status = sr.add(
-                    image_data,
+                    processed_data,
                     model_id,
                     task_id,
                     scale,

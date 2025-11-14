@@ -7,6 +7,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
 import { upscaleState } from '$lib/stores/upscale/upscaleState.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
+import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
+
 import { get } from 'svelte/store';
 
 export interface ImageDataWithHash {
@@ -31,8 +33,20 @@ export interface PerformUpscaleResult {
  */
 export async function getAutoUpscaleEnabled(): Promise<boolean> {
 	try {
+		const panelSettings = loadUpscalePanelSettings();
+		if (typeof panelSettings.autoUpscaleEnabled === 'boolean') {
+			console.log('从 UpscalePanel 持久化读取自动超分开关:', panelSettings.autoUpscaleEnabled);
+			return panelSettings.autoUpscaleEnabled;
+		}
+	} catch (error) {
+		console.warn('从 UpscalePanel 持久化读取自动超分开关失败，回退到 settingsManager:', error);
+	}
+
+	try {
 		const settings = settingsManager.getSettings();
-		return settings.image.enableSuperResolution || false;
+		const value = settings.image.enableSuperResolution || false;
+		console.log('从 settingsManager 读取自动超分开关:', value);
+		return value;
 	} catch (error) {
 		console.warn('获取自动超分开关状态失败:', error);
 		return false;

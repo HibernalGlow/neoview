@@ -188,7 +188,19 @@ export class SettingsManager {
   }
 
   updateNestedSettings<K extends keyof NeoViewSettings>(category: K, updates: Partial<NeoViewSettings[K]>) {
+    console.log('📝 updateNestedSettings 调用:', {
+      category,
+      updates,
+     	before: this.settings[category]
+    });
+    
     this.settings[category] = { ...this.settings[category], ...updates } as NeoViewSettings[K];
+    
+    console.log('✅ updateNestedSettings 完成:', {
+      category,
+     	after: this.settings[category]
+    });
+    
     this.saveSettings();
     this.notifyListeners();
   }

@@ -19,6 +19,7 @@
 	
 	// 新模块导入
 	import { createPreloadManager } from './flow/preloadManager';
+	import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
 	import { idbSet } from '$lib/utils/idb';
 
 	
@@ -67,7 +68,11 @@
 
 	// 初始化预加载管理器
 	onMount(() => {
+		const panelSettings = loadUpscalePanelSettings();
+
 		preloadManager = createPreloadManager({
+			initialPreloadPages: panelSettings.preloadPages,
+			initialMaxThreads: panelSettings.backgroundConcurrency,
 			onImageLoaded: (objectUrl, objectUrl2) => {
 				imageData = objectUrl;
 				imageData2 = objectUrl2;
@@ -197,6 +202,8 @@
 			}
 		});
 
+		(window as unknown as { preloadManager?: typeof preloadManager }).preloadManager = preloadManager;
+
 		preloadManager.initialize();
 	});
 
@@ -204,6 +211,9 @@
 	onDestroy(() => {
 		if (preloadManager) {
 			preloadManager.cleanup();
+		}
+		if ((window as { preloadManager?: typeof preloadManager }).preloadManager === preloadManager) {
+			delete (window as { preloadManager?: typeof preloadManager }).preloadManager;
 		}
 	});
 

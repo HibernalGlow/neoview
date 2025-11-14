@@ -176,15 +176,34 @@
 	// 监听自动超分开关变化
 	$effect(() => {
 		if (settingsInitialized) {
+			// 读取当前全局设置以便对比
+			const currentGlobalSettings = settingsManager.getSettings();
+			console.log('🔍 更新前全局设置:', {
+				enableSuperResolution: currentGlobalSettings.image.enableSuperResolution,
+				autoUpscaleEnabled: autoUpscaleEnabled
+			});
+			
 			// 使用 updateNestedSettings 更新全局设置
 			settingsManager.updateNestedSettings('image', {
 				enableSuperResolution: autoUpscaleEnabled
 			});
 			
-			console.log('自动超分全局设置 =>', autoUpscaleEnabled ? '已开启' : '已关闭');
+			// 验证更新是否成功
+			const updatedGlobalSettings = settingsManager.getSettings();
+			console.log('🔍 更新后全局设置:', {
+				enableSuperResolution: updatedGlobalSettings.image.enableSuperResolution,
+				updateSuccess: updatedGlobalSettings.image.enableSuperResolution === autoUpscaleEnabled
+			});
+			
+			console.log('⚙️ 自动超分全局设置 =>', autoUpscaleEnabled ? '已开启' : '已关闭');
 			
 			// 同时更新面板设置
 			const panelSettings = gatherPanelSettings();
+			console.log('💾 保存面板设置:', {
+				autoUpscaleEnabled: panelSettings.autoUpscaleEnabled,
+				preloadPages: panelSettings.preloadPages,
+				backgroundConcurrency: panelSettings.backgroundConcurrency
+			});
 			persistUpscalePanelSettings(panelSettings);
 			
 			// 发送事件通知其他组件

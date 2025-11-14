@@ -127,7 +127,10 @@ export class PreloadManager {
 			this.performanceMaxThreads = maxThreads;
 			
 			// 更新图片加载器的配置
-			this.updateImageLoaderConfig();
+			this.updateImageLoaderConfig({
+				preloadPages: this.performancePreloadPages,
+				maxThreads: this.performanceMaxThreads
+			});
 		};
 		
 		performanceSettings.addListener(this.performanceSettingsListener);
@@ -201,16 +204,7 @@ export class PreloadManager {
 		return this.imageLoader.getPreloadMemoryCache();
 	}
 
-	/**
-	 * 更新图片加载器配置
-	 */
-	private updateImageLoaderConfig(): void {
-		// 调用 ImageLoader 的 updateConfig 方法
-		this.imageLoader.updateConfig({
-			preloadPages: this.performancePreloadPages,
-			maxThreads: this.performanceMaxThreads
-		});
-	}
+	
 
 	/**
 	 * 公开的配置更新方法（支持视图模式）

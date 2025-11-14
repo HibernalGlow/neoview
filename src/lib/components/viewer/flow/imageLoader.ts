@@ -69,7 +69,6 @@ export class ImageLoader {
 	private md5Cache = new Map<string, string>();
 	private hashPathIndex = new Map<string, string>();
 	private preloadMemoryCache = new Map<string, { url: string; blob: Blob }>();
-	private preloadedPageImages = new Map<number, { data: string; decoded: boolean; lastAccessed: number }>();
 	
 	// 加载状态
 	private loading = false;
@@ -105,6 +104,39 @@ export class ImageLoader {
 				console.error('预加载任务失败，hash:', task.hash, error);
 			}
 		});
+	}
+
+	/**
+	 * 从 Blob 计算 MD5 哈希
+	 */
+	async calculateBlobHash(blob: Blob): Promise<string> {
+		// 将 Blob 转换为 ArrayBuffer
+		const arrayBuffer = await blob.arrayBuffer();
+		
+		// 使用 Web Crypto API 计算 MD5（如果可用）
+		if (crypto.subtle) {
+			try {
+				// 注意：Web Crypto API 默认不支持 MD5，这里使用 SHA-256 作为替代
+				// 在生产环境中，应该在后端计算 MD5
+				const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+				const hashArray = Array.from(new Uint8Array(hashBuffer));
+				const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+				return hashHex;
+			} catch (e) {
+				console.warn('Web Crypto API 计算哈希失败，回退到后端:', e);
+			}
+		}
+		
+		// 回退到后端计算
+		// 将 ArrayBuffer 转换为 base64（仅用于哈希计算）
+		const bytes = new Uint8Array(arrayBuffer);
+		let binary = '';
+		for (let i = 0; i < bytes.byteLength; i++) {
+			binary += String.fromCharCode(bytes[i]);
+		}
+		const base64 = btoa(binary);
+		
+		return await invoke<string>('calculate_data_hash', { dataUrl: `data:image/png;base64,${base64}` });
 	}
 
 	/**
@@ -162,27 +194,39 @@ export class ImageLoader {
 	/**
 	 * 读取页面 Blob
 	 */
-	private async readPageBlob(pageIndex: number): Promise<Blob> {
-		const currentBook = bookStore.currentBook;
-		if (!currentBook) {
-			throw new Error('没有当前书籍');
+	async readPageBlob(pageIndex: number): Promise<Blob> {
+		// 首先检查缓存
+		if (this.blobCache.has(pageIndex)) {
+			const item = this.blobCache.get(pageIndex)!;
+			item.lastAccessed = Date.now();
+			return item.blob;
 		}
 		
-		const pageInfo = currentBook.pages[pageIndex];
+		const pageInfo = bookStore.currentBook?.pages[pageIndex];
 		if (!pageInfo) {
 			throw new Error(`页面 ${pageIndex} 不存在`);
 		}
 		
 		let base64Data: string;
-		if (currentBook.type === 'archive') {
-			base64Data = await loadImageFromArchive(currentBook.path, pageInfo.path);
+		if (bookStore.currentBook?.type === 'archive') {
+			base64Data = await loadImageFromArchive(bookStore.currentBook.path, pageInfo.path);
 		} else {
 			base64Data = await loadImage(pageInfo.path);
 		}
 		
 		// 将 base64 转换为 Blob
 		const response = await fetch(base64Data);
-		return response.blob();
+		const blob = await response.blob();
+		
+		// 缓存 Blob
+		const url = URL.createObjectURL(blob);
+		this.blobCache.set(pageIndex, {
+			blob,
+			url,
+			lastAccessed: Date.now()
+		});
+		
+		return blob;
 	}
 	
 	/**
@@ -549,63 +593,26 @@ export class ImageLoader {
 				const pageInfo = currentBook.pages[targetIndex];
 				if (!pageInfo) continue;
 
-				console.log(`预超分第 ${targetIndex + 1} 页...`);
+				console.log(`预加载第 ${targetIndex + 1} 页...`);
 
 				try {
-					// 加载页面图片
-					let pageImageData: string;
-					if (currentBook.type === 'archive') {
-						pageImageData = await loadImageFromArchive(currentBook.path, pageInfo.path);
-					} else {
-						pageImageData = await loadImage(pageInfo.path);
-					}
-
-					// 验证图片数据
-					if (!pageImageData) {
-						console.warn(`第 ${targetIndex + 1} 页图片数据为空，跳过`);
+					// 获取路径哈希
+					let hash: string;
+					const pathKey = currentBook.type === 'archive' ? `${currentBook.path}::${pageInfo.path}` : pageInfo.path;
+					try {
+						hash = await invoke<string>('calculate_path_hash', { path: pathKey });
+					} catch (e) {
+						console.warn('获取路径hash失败，跳过页面:', e);
 						continue;
 					}
 
-					// 获取带hash的图片数据：优先使用基于路径的稳定hash（archive::innerpath），回退到数据哈希
-					let imageDataWithHash = null;
-					try {
-						const pathKey = currentBook.type === 'archive' ? `${currentBook.path}::${pageInfo.path}` : pageInfo.path;
-						try {
-							const pathHash = await invoke<string>('calculate_path_hash', { path: pathKey });
-							imageDataWithHash = { data: pageImageData, hash: pathHash };
-						} catch (e) {
-							console.warn('为预加载页面获取路径hash失败，回退到数据hash:', e);
-						}
-					} catch (e) {
-						console.warn('生成预加载页面路径hash异常，回退到数据hash:', e);
-					}
-					if (!imageDataWithHash) {
-						const tmp = await getImageDataWithHash(pageImageData);
-						if (!tmp) {
-							console.warn(`第 ${targetIndex + 1} 页无法获取图片hash，跳过`);
-							continue;
-						}
-						imageDataWithHash = tmp;
-					}
-
-					console.log(`第 ${targetIndex + 1} 页图片数据长度: ${imageDataWithHash.data.length}, hash: ${imageDataWithHash.hash}`);
-
-					// 检查是否已有缓存（仅在开启自动超分或需要预览时进行）
+					// 检查是否已有缓存
 					let hasCache = false;
 					if (autoUpscaleEnabled) {
-						hasCache = await checkUpscaleCache(imageDataWithHash, false);
-					} else {
-						// 当全局关闭时，只做本地索引检查（不读取磁盘或替换显示）
-						try {
-							const idxPath = this.hashPathIndex.get(imageDataWithHash.hash);
-							if (idxPath) {
-								console.log('本地索引命中（全局超分关闭），hash:', imageDataWithHash.hash);
-								hasCache = true;
-							}
-						} catch (e) {
-							console.warn('本地索引检查失败:', e);
-						}
+						// 使用 hash 检查缓存
+						hasCache = await checkUpscaleCache({ hash }, false);
 					}
+
 					if (hasCache) {
 						console.log(`第 ${targetIndex + 1} 页已有超分缓存`);
 						// 标记为已预超分
@@ -616,27 +623,26 @@ export class ImageLoader {
 
 					// 确保核心缓存已准备（Blob + ImageBitmap），保证翻页时可以直接显示
 					try {
-						// 调用 ensureResources 确保页面资源已加载到核心缓存
 						await this.ensureResources(targetIndex);
 						console.log('预加载已写入核心缓存，index:', targetIndex + 1);
 					} catch (e) {
 						console.warn('预加载写入核心缓存失败:', e);
+						continue;
 					}
 
-					// 没有缓存：如果自动超分已开启，则使用新的preloadWorker API；
-					// 如果自动超分已关闭，则跳过触发超分
+					// 没有缓存：如果自动超分已开启，则使用新的preloadWorker API
 					if (autoUpscaleEnabled) {
 						// 获取 Blob 用于超分
 						const blob = await this.getBlob(targetIndex);
 						// 使用新的preloadWorker API
-						const task = { blob, hash: imageDataWithHash.hash, pageIndex: targetIndex };
+						const task = { blob, hash, pageIndex: targetIndex };
 						this.preloadWorker.enqueue(task);
-						console.log('已加入preloadWorker队列，hash:', imageDataWithHash.hash, 'pageIndex:', targetIndex);
+						console.log('已加入preloadWorker队列，hash:', hash, 'pageIndex:', targetIndex);
 					} else {
 						console.log('自动超分关闭，跳过触发预超分（已完成预加载）');
 					}
 				} catch (error) {
-					console.error(`预超分第 ${targetIndex + 1} 页失败:`, error);
+					console.error(`预加载第 ${targetIndex + 1} 页失败:`, error);
 				}
 			}
 		} catch (error) {
@@ -683,7 +689,6 @@ export class ImageLoader {
 		// 清理其他状态
 		this.md5Cache = new Map();
 		this.preloadMemoryCache.clear();
-		this.preloadedPageImages.clear();
 		this.isPreloading = false;
 		bookStore.setUpscaledImage(null);
 		bookStore.setUpscaledImageBlob(null);
@@ -718,41 +723,5 @@ export class ImageLoader {
 		};
 	}
 
-	/**
-	 * 更新预加载页面的访问时间（LRU）
-	 */
-	private touchPreloadedPage(pageIndex: number): void {
-		if (this.preloadedPageImages.has(pageIndex)) {
-			const data = this.preloadedPageImages.get(pageIndex)!;
-			// 更新访问时间戳
-			this.preloadedPageImages.set(pageIndex, {
-				...data,
-				lastAccessed: Date.now()
-			});
-		}
-	}
-
-	/**
-	 * 确保预加载缓存不超过限制
-	 */
-	private ensurePreloadedCacheLimit(): void {
-		// 设置合理的缓存限制，避免内存占用过高
-		const MAX_PRELOADED_PAGES = 20;
-		
-		if (this.preloadedPageImages.size <= MAX_PRELOADED_PAGES) {
-			return;
-		}
-		
-		// 真正的 LRU：按访问时间排序，删除最旧的条目
-		const entries = Array.from(this.preloadedPageImages.entries());
-		// 按访问时间升序排序（最旧的在前）
-		entries.sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
-		
-		const toDelete = entries.slice(0, this.preloadedPageImages.size - MAX_PRELOADED_PAGES);
-		
-		for (const [pageIndex] of toDelete) {
-			this.preloadedPageImages.delete(pageIndex);
-			console.log(`清理预加载页面缓存，删除页面: ${pageIndex + 1}`);
-		}
-	}
+	
 }

@@ -371,17 +371,7 @@ export class PreloadManager {
 		}
 	}
 	
-	/**
-	 * 将 Blob 转换为 DataURL
-	 */
-	private async blobToDataURL(blob: Blob): Promise<string> {
-		return new Promise((resolve, reject) => {
-			const reader = new FileReader();
-			reader.onload = () => resolve(reader.result as string);
-			reader.onerror = reject;
-			reader.readAsDataURL(blob);
-		});
-	}
+	
 	
 	/**
 	 * 更新预超分进度

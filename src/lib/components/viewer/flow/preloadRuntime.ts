@@ -108,12 +108,12 @@ export async function performUpscale(
  * 触发自动超分
  */
 export async function triggerAutoUpscale(
-	imageDataWithHash: { data?: string; blob?: Blob; hash: string }, 
+	imageDataWithHash: { blob: Blob; hash: string }, 
 	isPreload = false
 ): Promise<PerformUpscaleResult | undefined> {
 	try {
 		// 验证图片数据
-		if (!imageDataWithHash || (!imageDataWithHash.data && !imageDataWithHash.blob)) {
+		if (!imageDataWithHash || !imageDataWithHash.blob) {
 			console.error('自动超分：图片数据为空');
 			return;
 		}
@@ -141,36 +141,16 @@ export async function triggerAutoUpscale(
 			}
 		}
 
-		const { data: imageData, blob: imageBlob, hash: imageHash } = imageDataWithHash;
+		const { blob: imageBlob, hash: imageHash } = imageDataWithHash;
 		
-		// 优先使用 Blob，如果没有则转换为 DataURL
-		let input: string | Blob;
-		if (imageBlob) {
-			input = imageBlob;
-			console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', 'MD5:', imageHash, 
-				`Blob size: ${imageBlob.size}`);
-		} else if (imageData) {
-			// 如果是 DataURL，先转换为 Blob 以获得更好的性能
-			try {
-				const response = await fetch(imageData);
-				input = await response.blob();
-				console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', 'MD5:', imageHash, 
-					`DataURL 转换为 Blob，size: ${input.size}`);
-			} catch (error) {
-				console.warn('DataURL 转 Blob 失败，使用原始 DataURL:', error);
-				input = imageData;
-				console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', 'MD5:', imageHash, 
-					`图片数据长度: ${imageData.length}`);
-			}
-		} else {
-			throw new Error('没有有效的图片数据');
-		}
+		console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', 'MD5:', imageHash, 
+			`Blob size: ${imageBlob.size}`);
 		
 		// 触发超分开始事件
 		window.dispatchEvent(new CustomEvent('upscale-start'));
 		
 		// 执行超分
-		return await performUpscale(input!, imageHash, { background: isPreload });
+		return await performUpscale(imageBlob, imageHash, { background: isPreload });
 	} catch (error) {
 		console.error('自动超分失败:', error);
 		return {

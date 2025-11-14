@@ -51,7 +51,9 @@
 
   // 搜索功能状态
   let searchQuery = $state('');
-  let searchHistory = $state<{ query: string; timestamp: number }[]>([]);
+  type SearchHistoryEntry = { query: string; timestamp: number };
+
+  let searchHistory = $state<SearchHistoryEntry[]>([]);
   let showSearchHistory = $state(false);
   let showSearchSettings = $state(false);
   let searchSettings = $state({
@@ -1141,6 +1143,16 @@
     showSearchHistory = false;
   }
 
+  function removeSearchHistoryItem(item: SearchHistoryEntry) {
+    searchHistory = searchHistory.filter(
+      (entry) => !(entry.query === item.query && entry.timestamp === item.timestamp)
+    );
+    saveSearchHistory();
+    if (searchHistory.length === 0) {
+      showSearchHistory = false;
+    }
+  }
+
   /**
    * 搜索文件
    */
@@ -1194,6 +1206,33 @@
     }, 10);
     showSearchSettings = false;
   }
+
+  function toggleSearchHistoryDropdown() {
+    showSearchHistory = !showSearchHistory;
+    if (showSearchHistory) {
+      showSearchSettings = false;
+    }
+  }
+
+  function toggleSearchSettingsDropdown(event: MouseEvent) {
+    event.stopPropagation();
+    showSearchSettings = !showSearchSettings;
+    if (showSearchSettings) {
+      showSearchHistory = false;
+    }
+  }
+
+  function clearSearchField() {
+    handleSearchInput('');
+    searchResults = [];
+  }
+
+  function updateSearchSetting(
+    key: 'includeSubfolders' | 'showHistoryOnFocus',
+    value: boolean
+  ) {
+    searchSettings = { ...searchSettings, [key]: value };
+  }
 </script>
 
 <div class="flex h-full flex-col">
@@ -1240,24 +1279,13 @@
     currentPath={currentPath}
     onSearchInput={handleSearchInput}
     onSearchFocus={handleSearchFocus}
-    onSearchHistoryToggle={() => {
-      showSearchHistory = !showSearchHistory;
-      showSearchSettings = false;
-    }}
-    onSearchSettingsToggle={(event) => {
-      event.stopPropagation();
-      showSearchSettings = !showSearchSettings;
-      showSearchHistory = false;
-    }}
-    onClearSearch={() => {
-      handleSearchInput('');
-      searchResults = [];
-    }}
-    onSelectSearchHistory={(item) => selectSearchHistory(item)}
+    onSearchHistoryToggle={toggleSearchHistoryDropdown}
+    onSearchSettingsToggle={toggleSearchSettingsDropdown}
+    onClearSearch={clearSearchField}
+    onSelectSearchHistory={selectSearchHistory}
+    onRemoveSearchHistoryItem={removeSearchHistoryItem}
     onClearSearchHistory={clearSearchHistory}
-    onSearchSettingChange={(key, value) => {
-      searchSettings = { ...searchSettings, [key]: value };
-    }}
+    onSearchSettingChange={updateSearchSetting}
   />
 
   <!-- 错误提示 -->

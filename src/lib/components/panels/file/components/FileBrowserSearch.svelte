@@ -3,26 +3,49 @@
   import FileBrowserSearchHistory from './FileBrowserSearchHistory.svelte';
   import FileBrowserSearchSettings from './FileBrowserSearchSettings.svelte';
 
-  export let searchQuery = '';
-  export let searchHistory: { query: string; timestamp: number }[] = [];
-  export let searchSettings = {
-    includeSubfolders: true,
-    showHistoryOnFocus: true,
-  };
-  export let showSearchHistory = false;
-  export let showSearchSettings = false;
-  export let isArchiveView = false;
-  export let currentPath = '';
+  interface Props {
+    searchQuery?: string;
+    searchHistory?: { query: string; timestamp: number }[];
+    searchSettings?: {
+      includeSubfolders: boolean;
+      showHistoryOnFocus: boolean;
+    };
+    showSearchHistory?: boolean;
+    showSearchSettings?: boolean;
+    isArchiveView?: boolean;
+    currentPath?: string;
+    onSearchInput?: (value: string) => void;
+    onSearchFocus?: () => void;
+    onSearchHistoryToggle?: () => void;
+    onSearchSettingsToggle?: (event: MouseEvent) => void;
+    onClearSearch?: () => void;
+    onSelectSearchHistory?: (item: { query: string; timestamp: number }) => void;
+    onRemoveSearchHistoryItem?: (item: { query: string; timestamp: number }) => void;
+    onClearSearchHistory?: () => void;
+    onSearchSettingChange?: (key: 'includeSubfolders' | 'showHistoryOnFocus', value: boolean) => void;
+  }
 
-  export let onSearchInput: (value: string) => void = () => {};
-  export let onSearchFocus: () => void = () => {};
-  export let onSearchHistoryToggle: () => void = () => {};
-  export let onSearchSettingsToggle: (event: MouseEvent) => void = () => {};
-  export let onClearSearch: () => void = () => {};
-  export let onSelectSearchHistory: (item: { query: string; timestamp: number }) => void = () => {};
-  export let onRemoveSearchHistoryItem: (item: { query: string; timestamp: number }) => void = () => {};
-  export let onClearSearchHistory: () => void = () => {};
-  export let onSearchSettingChange: (key: 'includeSubfolders' | 'showHistoryOnFocus', value: boolean) => void = () => {};
+  let {
+    searchQuery = '',
+    searchHistory = [],
+    searchSettings = {
+      includeSubfolders: true,
+      showHistoryOnFocus: true,
+    },
+    showSearchHistory = false,
+    showSearchSettings = false,
+    isArchiveView = false,
+    currentPath = '',
+    onSearchInput = () => {},
+    onSearchFocus = () => {},
+    onSearchHistoryToggle = () => {},
+    onSearchSettingsToggle = () => {},
+    onClearSearch = () => {},
+    onSelectSearchHistory = () => {},
+    onRemoveSearchHistoryItem = () => {},
+    onClearSearchHistory = () => {},
+    onSearchSettingChange = () => {}
+  }: Props = $props();
 </script>
 
 <div class="flex items-center gap-2 border-b px-2 py-2 bg-background/30">

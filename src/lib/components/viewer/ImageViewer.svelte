@@ -76,6 +76,16 @@
 				imageData2 = objectUrl2;
 			},
 			onImageBitmapReady: async (bitmap, bitmap2) => {
+				// 检查当前页是否已经是超分完成状态
+				const currentPageIndex = bookStore.currentPageIndex;
+				const currentStatus = bookStore.getPageUpscaleStatus(currentPageIndex);
+				
+				// 如果当前页已超分完成，不要用原图覆盖
+				if (currentStatus === 'done') {
+					console.log('当前页已超分完成，跳过原图 bitmap 更新');
+					return;
+				}
+				
 				imageBitmap = bitmap;
 				imageBitmap2 = bitmap2;
 				if (bitmap) {
@@ -105,31 +115,40 @@
 				console.log('超分开始事件触发');
 			},
 			onUpscaleComplete: (detail) => {
-				const { imageData: upscaledImageData, imageBlob, originalImageHash, background } = detail;
-				if (upscaledImageData) {
-					bookStore.setUpscaledImage(upscaledImageData);
-					upscaledImageDataForComparison = upscaledImageData;
-				}
-				if (imageBlob) {
-					bookStore.setUpscaledImageBlob(imageBlob);
-				}
+				const { imageData: upscaledImageData, imageBlob, originalImageHash, background, pageIndex } = detail;
 				
-				// 非后台任务时，更新显示为超分图
-				if (!background) {
+				// 确定目标页面索引，优先使用事件中的 pageIndex
+				const targetIndex = typeof pageIndex === 'number' ? pageIndex : bookStore.currentPageIndex;
+				const isCurrentPage = targetIndex === bookStore.currentPageIndex;
+				
+				// 非后台任务且是当前页时，才更新显示和状态
+				if (!background && isCurrentPage) {
+					if (upscaledImageData) {
+						bookStore.setUpscaledImage(upscaledImageData);
+						upscaledImageDataForComparison = upscaledImageData;
+					}
+					if (imageBlob) {
+						bookStore.setUpscaledImageBlob(imageBlob);
+					}
+					
 					// 清掉当前页的 imageBitmap，强制使用 <img> 渲染
 					imageBitmap = null;
 					// 将 imageData 替换为超分 URL
 					imageData = upscaledImageData;
 					
-					// 注意：不要清空 imageBitmap2 和 imageData2
-					// 双页模式下，第二页应该保持不变
+					// 更新当前页面状态为已完成
+					bookStore.setPageUpscaleStatus(targetIndex, 'done');
+					
+					console.log('超分图已匹配当前页面，MD5:', originalImageHash, '已替换，页面状态更新为完成');
+				} else if (background) {
+					// 后台任务：只更新页面状态，不更新显示
+					bookStore.setPageUpscaleStatus(targetIndex, 'preupscaled');
+					console.log('后台预超分完成，页码:', targetIndex + 1, 'MD5:', originalImageHash);
+				} else {
+					// 非当前页的超分完成：只更新状态，不更新显示
+					bookStore.setPageUpscaleStatus(targetIndex, 'done');
+					console.log('其他页超分完成，页码:', targetIndex + 1, 'MD5:', originalImageHash, '（不影响当前显示）');
 				}
-				
-				// 更新当前页面状态为已完成
-				const currentPageIndex = bookStore.currentPageIndex;
-				bookStore.setPageUpscaleStatus(currentPageIndex, 'done');
-				
-				console.log('超分图已匹配当前页面，MD5:', originalImageHash, '已替换，页面状态更新为完成');
 			},
 			onUpscaleSaved: async (detail) => {
 				try {

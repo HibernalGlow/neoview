@@ -527,7 +527,6 @@
     // 获取视口尺寸
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    const viewportHeight = window.innerHeight;
     
     let menuX = e.clientX;
     let menuY = e.clientY;
@@ -1504,11 +1503,10 @@
     <div 
       bind:this={fileListContainer}
       class="flex-1 overflow-y-auto p-2 focus:outline-none" 
-      role="region"
+      role="listbox"
       aria-label="搜索结果列表"
       tabindex="0" 
       onkeydown={handleKeydown}
-      onclick={() => fileListContainer?.focus()}
     >
       <div class="mb-3 text-sm text-gray-600 px-2">
         找到 {searchResults.length} 个结果 (搜索: "{searchQuery}")
@@ -1516,7 +1514,7 @@
       <div class="grid grid-cols-1 gap-2">
         {#each searchResults as item, index (item.path)}
           <ContextMenu.Root>
-            <ContextMenu.Trigger>
+            <ContextMenu.Trigger asChild>
               <div
                 class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors hover:bg-gray-50 border-gray-200"
                 role="button"
@@ -1690,16 +1688,15 @@
     <div 
       bind:this={fileListContainer}
       class="flex-1 overflow-y-auto p-2 focus:outline-none" 
-      role="region"
-      aria-label="搜索结果列表"
+      role="listbox"
+      aria-label="文件列表"
       tabindex="0" 
       onkeydown={handleKeydown}
-      onclick={() => fileListContainer?.focus()}
     >
       <div class="grid grid-cols-1 gap-2">
         {#each items as item, index (item.path)}
           <ContextMenu.Root>
-            <ContextMenu.Trigger>
+            <ContextMenu.Trigger asChild>
               <div
                 class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors {selectedIndex === index ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}"
                 role="button"
@@ -1721,7 +1718,7 @@
             <!-- 勾选框（勾选模式） -->
             {#if isCheckMode}
               <button
-                class="flex-shrink-0"
+                class="shrink-0"
                 onclick={(e) => {
                   e.stopPropagation();
                   toggleItemSelection(item.path);
@@ -1740,7 +1737,7 @@
             <!-- 删除按钮（删除模式） -->
             {#if isDeleteMode && !isArchiveView}
               <button
-                class="flex-shrink-0"
+                class="shrink-0"
                 onclick={(e) => {
                   e.stopPropagation();
                   deleteItem(item.path);
@@ -1754,7 +1751,7 @@
             {/if}
 
             <!-- 图标或缩略图 -->
-            <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded">
+            <div class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded">
               {#if thumbnails.has(toRelativeKey(item.path))}
                 <!-- 显示缩略图 -->
                 <img 
@@ -1776,6 +1773,9 @@
             <!-- 信息 -->
             <div class="min-w-0 flex-1">
               <div class="truncate font-medium">{item.name}</div>
+              <div class="text-xs text-gray-500">
+                {item.path}
+              </div>
               <div class="text-xs text-gray-500">
                 {formatSize(item.size, item.isDir)} · {formatDate(item.modified)}
               </div>

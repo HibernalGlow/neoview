@@ -408,6 +408,19 @@ export class PreloadManager {
 	}
 
 	/**
+	 * 获取当前页面的 Blob 数据
+	 */
+	async getCurrentPageBlob(): Promise<Blob | null> {
+		try {
+			const currentPageIndex = bookStore.currentPageIndex;
+			return await this.imageLoader.getBlob(currentPageIndex);
+		} catch (error) {
+			console.error('获取当前页面 Blob 失败:', error);
+			return null;
+		}
+	}
+
+	/**
 	 * 更新 ImageLoader 配置
 	 */
 	updateImageLoaderConfig(config: { preloadPages?: number; maxThreads?: number }): void {

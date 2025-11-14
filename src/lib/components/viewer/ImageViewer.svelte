@@ -149,12 +149,32 @@
 				const { callback } = detail;
 				
 				// 延迟检查，确保图片数据已加载
-				setTimeout(() => {
-					if (imageData && typeof callback === 'function') {
-						console.log('ImageViewer: 返回图片数据，长度:', imageData.length);
-						callback(imageData);
+				setTimeout(async () => {
+					if (typeof callback === 'function') {
+						// 优先尝试从 ImageLoader 获取当前页面的 Blob
+						if (preloadManager) {
+							try {
+								const blob = await preloadManager.getCurrentPageBlob();
+								if (blob && blob.size > 0) {
+									const url = URL.createObjectURL(blob);
+									console.log('ImageViewer: 返回新的 Blob URL，大小:', blob.size);
+									callback(url);
+									return; // 成功返回，不执行后续逻辑
+								}
+							} catch (e) {
+								console.warn('从 ImageLoader 获取 Blob 失败:', e);
+							}
+						}
+						
+						// 回退到 Object URL（如果可用）
+						if (imageData) {
+							console.log('ImageViewer: 返回缓存的 Object URL，长度:', imageData.length);
+							callback(imageData);
+						} else {
+							console.log('ImageViewer: 没有可用的图片数据');
+						}
 					} else {
-						console.log('ImageViewer: 没有图片数据或回调无效');
+						console.log('ImageViewer: 回调函数无效');
 					}
 				}, 100);
 			},

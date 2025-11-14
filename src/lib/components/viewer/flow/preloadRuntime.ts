@@ -252,7 +252,30 @@ export async function checkUpscaleCache(
 		}
 		
 		// 优先检查当前算法的缓存
-		const algorithms = [currentAlgorithm, 'realcugan', 'realesrgan', 'waifu2x'];
+		// 注意：算法名称需要与实际保存时使用的名称一致
+		const algorithms = [
+			currentAlgorithm,
+			'MODEL_WAIFU2X_ANIME_UP2X',
+			'MODEL_WAIFU2X_CUNET_UP1X_DENOISE0X',
+			'MODEL_WAIFU2X_CUNET_UP2X_DENOISE0X',
+			'MODEL_WAIFU2X_CUNET_UP2X_DENOISE1X',
+			'MODEL_WAIFU2X_CUNET_UP2X_DENOISE2X',
+			'MODEL_WAIFU2X_ANIME_UP2X_DENOISE0X',
+			'MODEL_WAIFU2X_ANIME_UP2X_DENOISE1X',
+			'MODEL_WAIFU2X_ANIME_UP2X_DENOISE2X',
+			'MODEL_WAIFU2X_ANIME_UP2X_DENOISE3X',
+			'MODEL_REALESRGAN_X4PLUS',
+			'MODEL_REALESRGAN_X4PLUSANIME',
+			'MODEL_REALESRGAN_ANIMAVIDEOV3',
+			'MODEL_REALSR_DF2K',
+			'MODEL_REALCUGAN_PRO_UP2X',
+			'MODEL_REALCUGAN_PRO_UP3X',
+			'MODEL_REALCUGAN_PRO_UP4X',
+			'MODEL_REALCUGAN_SE_UP2X',
+			'realcugan',
+			'realesrgan',
+			'waifu2x'
+		];
 
 		// 读取 TTL（小时）设置，默认8小时
 		let ttlHours = 8;

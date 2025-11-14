@@ -13,15 +13,15 @@
 	} = $props();
 
 	// 计算预超分覆盖范围
-	$: furthestPreUpscaledIndex = bookStore.getFurthestPreUpscaledIndex();
-	$: preUpscaleExtent = furthestPreUpscaledIndex >= 0 ? ((furthestPreUpscaledIndex + 1) / totalPages) * 100 : 0;
+	const furthestPreUpscaledIndex = $derived(bookStore.getFurthestPreUpscaledIndex());
+	const preUpscaleExtent = $derived(furthestPreUpscaledIndex >= 0 ? ((furthestPreUpscaledIndex + 1) / totalPages) * 100 : 0);
 
-	// 根据当前页面状态和全局状态计算进度条颜色和动画
-	$: currentPageStatus = totalPages > 0 ? bookStore.getPageUpscaleStatus(currentPageIndex) : 'none';
-	$: isCurrentPageUpscaling = upscaleState.isUpscaling && upscaleState.currentImageHash !== null;
+	// 根据当前页面状态和全局状态计算进度条状态
+	const currentPageStatus = $derived(totalPages > 0 ? bookStore.getPageUpscaleStatus(currentPageIndex) : 'none');
+	const isCurrentPageUpscaling = $derived(upscaleState.isUpscaling && upscaleState.currentImageHash !== null);
 	
 	// 更新进度条状态
-	$: {
+	$effect(() => {
 		if (isCurrentPageUpscaling) {
 			progressColor = '#FFFFFF'; // 白色
 			progressBlinking = true;
@@ -35,7 +35,7 @@
 			progressColor = '#FDFBF7'; // 奶白色
 			progressBlinking = false;
 		}
-	}
+	});
 </script>
 
 {#if showProgressBar && totalPages > 0}

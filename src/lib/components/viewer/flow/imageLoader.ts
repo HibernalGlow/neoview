@@ -69,6 +69,7 @@ export class ImageLoader {
 	private md5Cache = new Map<string, string>();
 	private hashPathIndex = new Map<string, string>();
 	private preloadMemoryCache = new Map<string, { url: string; blob: Blob }>();
+	private pendingPreloadTasks = new Set<string>(); // 用于去重的待处理任务集合
 	
 	// 加载状态
 	private loading = false;
@@ -97,11 +98,16 @@ export class ImageLoader {
 						this.updatePreUpscaleProgress();
 					}
 					
+					// 从待处理集合中移除
+					this.pendingPreloadTasks.delete(task.hash);
+					
 					console.log('预加载任务成功，已写入缓存，hash:', task.hash);
 				}
 			},
 			onTaskFailure: (task: PreloadTask, error: unknown) => {
 				console.error('预加载任务失败，hash:', task.hash, error);
+				// 从待处理集合中移除
+				this.pendingPreloadTasks.delete(task.hash);
 			}
 		});
 	}
@@ -613,6 +619,15 @@ export class ImageLoader {
 
 					// 没有缓存：如果自动超分已开启，则使用新的preloadWorker API
 					if (autoUpscaleEnabled) {
+						// 检查是否已经在处理中（去重）
+						if (this.pendingPreloadTasks.has(hash)) {
+							console.log(`第 ${targetIndex + 1} 页已在预加载队列中，跳过重复任务`);
+							continue;
+						}
+						
+						// 标记为待处理
+						this.pendingPreloadTasks.add(hash);
+						
 						// 获取 Blob 用于超分
 						const blob = await this.getBlob(targetIndex);
 						// 使用新的preloadWorker API
@@ -648,6 +663,7 @@ export class ImageLoader {
 	resetPreUpscaleProgress(): void {
 		this.preUpscaleProgress = 0;
 		this.totalPreUpscalePages = 0;
+		this.pendingPreloadTasks.clear();
 	}
 
 	/**

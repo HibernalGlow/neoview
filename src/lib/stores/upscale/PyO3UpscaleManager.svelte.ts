@@ -290,10 +290,10 @@ export class PyO3UpscaleManager {
 	/**
 	 * 检查缓存是否存在
 	 */
-	async checkCache(imagePath: string): Promise<string | null> {
+	async checkCache(imageHash: string): Promise<string | null> {
 		try {
 			const result = await invoke<string | null>('check_pyo3_upscale_cache', {
-				imagePath,
+				imageHash,
 				modelName: this._currentModel.modelName,
 				scale: this._currentModel.scale,
 				tileSize: this._currentModel.tileSize,

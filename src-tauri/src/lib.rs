@@ -201,6 +201,7 @@ pub fn run() {
             commands::set_comparison_mode,
             // Image Data commands
             commands::calculate_path_hash,
+            commands::check_upscale_cache,
             commands::check_upscale_cache_for_algorithm,
             commands::save_binary_file,
             commands::read_binary_file,

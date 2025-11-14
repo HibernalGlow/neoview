@@ -35,13 +35,32 @@ pub async fn calculate_blob_md5(bytes: Vec<u8>) -> Result<String, String> {
 
 
 
-/// 计算基于路径的哈希（MD5）
+/// 计算基于路径的哈希（使用缩略图统一算法）
+/// @deprecated 建议直接使用 Page.stableHash
 #[command]
 pub async fn calculate_path_hash(path: String) -> Result<String, String> {
-    use md5;
+    use crate::core::thumbnail_db::ThumbnailDatabase;
+    use std::path::Path;
+    
+    // 使用与缩略图相同的算法，确保一致性
+    let hash = ThumbnailDatabase::hash_path(Path::new(&path));
+    Ok(hash)
+}
 
-    let digest = md5::compute(path.as_bytes());
-    Ok(format!("{:x}", digest))
+/// 检查超分缓存（包装函数，为前端提供简化接口）
+#[command]
+pub async fn check_upscale_cache(
+    image_hash: String,
+    thumbnail_path: String,
+    max_age_seconds: i64,
+) -> Result<CacheMeta, String> {
+    // 调用现有的实现，使用固定的算法名称
+    check_upscale_cache_for_algorithm(
+        image_hash,
+        "generic".to_string(), // 固定算法名
+        thumbnail_path,
+        Some(max_age_seconds as u64),
+    ).await
 }
 
 /// 检查指定算法的超分缓存（支持可选的最大年龄过滤，单位秒）。

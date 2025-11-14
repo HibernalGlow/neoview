@@ -3,10 +3,51 @@ import { settingsManager } from '$lib/settings/settingsManager';
 import { invoke } from '@tauri-apps/api/core';
 import type { UpscaleSettings } from '$lib/utils/upscale/settings';
 
+// 条件表达式类型
+export interface ConditionExpression {
+	operator: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'regex' | 'contains';
+	value: string | number;
+}
+
+// 超分条件定义
+export interface UpscaleCondition {
+	id: string;                  // 稳定标识
+	name: string;                // Tab 标题
+	enabled: boolean;
+	priority: number;            // 决定"向后进位"顺序
+	match: {
+		minWidth?: number;
+		minHeight?: number;
+		createdBetween?: [number, number]; // epoch
+		modifiedBetween?: [number, number];
+		regexBookPath?: string;    // 正则表达式字符串
+		regexImagePath?: string;
+		excludeFromPreload?: boolean; // 筛出预超分队列
+		metadata?: Record<string, ConditionExpression>; // 自定义键
+	};
+	action: {
+		model: string;
+		scale: number;
+		tileSize: number;
+		noiseLevel: number;
+		gpuId: number;
+		useCache: boolean;
+	};
+}
+
+// 条件评估结果
+export interface ConditionResult {
+	conditionId: string | null;
+	action: UpscaleCondition['action'] | null;
+	excludeFromPreload: boolean;
+}
+
 export interface UpscalePanelSettings extends UpscaleSettings {
 	// ...已有字段
 	backgroundConcurrency: number;
 	showPanelPreview: boolean;
+	conditionalUpscaleEnabled: boolean;
+	conditionsList: UpscaleCondition[];
 }
 
 export interface UpscalePanelEventDetail {
@@ -17,6 +58,7 @@ export interface UpscalePanelEventDetail {
 	conditionalMinHeight: number;
 	currentImageUpscaleEnabled: boolean;
 	useCachedFirst: boolean;
+	conditionsList: UpscaleCondition[];
 }
 
 const STORAGE_KEY = 'pyo3_upscale_settings';
@@ -44,7 +86,30 @@ export const defaultPanelSettings: UpscalePanelSettings = {
 	useCachedFirst: initialImageSettings.useCachedFirst,
 	preloadPages: 3,
 	backgroundConcurrency: 2,
-	showPanelPreview: false
+	showPanelPreview: false,
+	conditionalUpscaleEnabled: false,
+	conditionsList: [
+		// 默认条件：保持现有逻辑
+		{
+			id: 'default-condition',
+			name: '默认条件',
+			enabled: true,
+			priority: 0,
+			match: {
+				minWidth: 1000,
+				minHeight: 1000,
+				excludeFromPreload: false
+			},
+			action: {
+				model: 'real-cugan',
+				scale: 2,
+				tileSize: 400,
+				noiseLevel: -1,
+				gpuId: 0,
+				useCache: true
+			}
+		}
+	]
 };
 
 export function loadUpscalePanelSettings(): UpscalePanelSettings {
@@ -55,14 +120,42 @@ export function loadUpscalePanelSettings(): UpscalePanelSettings {
 		}
 
 		const parsed = JSON.parse(stored) as Partial<UpscalePanelSettings>;
+		
+		// 处理条件列表，确保向后兼容
+		let conditionsList = defaultPanelSettings.conditionsList;
+		if (parsed.conditionsList) {
+			conditionsList = parsed.conditionsList;
+		} else if (parsed.conditions) {
+			// 向后兼容：将旧的单条件转换为条件列表
+			const oldCondition = parsed.conditions;
+			conditionsList = [
+				{
+					id: 'migrated-condition',
+					name: '迁移的条件',
+					enabled: oldCondition.enabled ?? true,
+					priority: 0,
+					match: {
+						minWidth: oldCondition.minWidth,
+						minHeight: oldCondition.minHeight,
+						excludeFromPreload: false
+					},
+					action: {
+						model: oldCondition.model || 'real-cugan',
+						scale: oldCondition.scale || 2,
+						tileSize: oldCondition.tileSize || 400,
+						noiseLevel: oldCondition.noiseLevel || -1,
+						gpuId: oldCondition.gpuId || 0,
+						useCache: oldCondition.useCache ?? true
+					}
+				}
+			];
+		}
+
 		return {
 			...defaultPanelSettings,
 			...parsed,
-			conditionalUpscaleEnabled: parsed.conditionalUpscaleEnabled ?? parsed.conditions?.enabled ?? defaultPanelSettings.conditionalUpscaleEnabled,
-			conditions: {
-				...defaultPanelSettings.conditions,
-				...(parsed.conditions ?? defaultPanelSettings.conditions)
-			}
+			conditionalUpscaleEnabled: parsed.conditionalUpscaleEnabled ?? defaultPanelSettings.conditionalUpscaleEnabled,
+			conditionsList
 		};
 	} catch (error) {
 		console.warn('加载面板设置失败，使用默认配置', error);
@@ -101,7 +194,8 @@ export function toUpscalePanelEventDetail(settings: UpscalePanelSettings): Upsca
 		conditionalMinWidth: settings.conditionalMinWidth,
 		conditionalMinHeight: settings.conditionalMinHeight,
 		currentImageUpscaleEnabled: settings.currentImageUpscaleEnabled,
-		useCachedFirst: settings.useCachedFirst
+		useCachedFirst: settings.useCachedFirst,
+		conditionsList: settings.conditionsList
 	};
 }
 

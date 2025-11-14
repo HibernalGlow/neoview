@@ -16,6 +16,7 @@ import {
 	type ImageDataWithHash 
 } from './preloadRuntime';
 import { createPreloadWorker, type PreloadTask, type PreloadTaskResult } from './preloadWorker';
+import type { PreloadTaskWithCondition } from './preloadManager';
 import { upscaleState, startUpscale, updateUpscaleProgress, completeUpscale, setUpscaleError } from '$lib/stores/upscale/upscaleState.svelte';
 import { showSuccessToast } from '$lib/utils/toast';
 import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
@@ -685,21 +686,39 @@ export class ImageLoader {
 					console.log('预加载已写入核心缓存，index:', targetIndex + 1);
 					
 					if (autoUpscaleEnabled) {
-						// 检查是否已经在处理中（去重）
-						if (this.pendingPreloadTasks.has(hash)) {
-							console.log(`第 ${targetIndex + 1} 页已在预加载队列中，跳过重复任务`);
-							continue;
+						// 评估条件并检查是否应该排除预超分
+						const currentBook = bookStore.currentBook;
+						if (currentBook) {
+							const pageMetadata = collectPageMetadata(pageInfo, currentBook.path);
+							const panelSettings = loadUpscalePanelSettings();
+							const conditionResult = evaluateConditions(pageMetadata, panelSettings.conditionsList);
+							
+							if (conditionResult.excludeFromPreload) {
+								console.log(`第 ${targetIndex + 1} 页被条件排除，跳过预超分。条件ID: ${conditionResult.conditionId}`);
+								continue;
+							}
+							
+							// 检查是否已经在处理中（去重）
+							if (this.pendingPreloadTasks.has(hash)) {
+								console.log(`第 ${targetIndex + 1} 页已在预加载队列中，跳过重复任务`);
+								continue;
+							}
+							
+							// 标记为待处理
+							this.pendingPreloadTasks.add(hash);
+							
+							// 获取 Blob 用于超分
+							const blob = await this.getBlob(targetIndex);
+							// 使用新的preloadWorker API，携带条件ID
+							const task: PreloadTaskWithCondition = { 
+								blob, 
+								hash, 
+								pageIndex: targetIndex,
+								conditionId: conditionResult.conditionId || undefined
+							};
+							this.preloadWorker.enqueue(task);
+							console.log('已加入preloadWorker队列，hash:', hash, 'pageIndex:', targetIndex, 'conditionId:', conditionResult.conditionId);
 						}
-						
-						// 标记为待处理
-						this.pendingPreloadTasks.add(hash);
-						
-						// 获取 Blob 用于超分
-						const blob = await this.getBlob(targetIndex);
-						// 使用新的preloadWorker API
-						const task = { blob, hash, pageIndex: targetIndex };
-						this.preloadWorker.enqueue(task);
-						console.log('已加入preloadWorker队列，hash:', hash, 'pageIndex:', targetIndex);
 					} else {
 						console.log('自动超分关闭，跳过触发预超分（已完成预加载）');
 					}

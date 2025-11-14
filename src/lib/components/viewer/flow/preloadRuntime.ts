@@ -14,11 +14,13 @@ export interface ImageDataWithHash {
 	data?: string;  // 兼容旧的 data URL 格式
 	blob?: Blob;   // 新的 Blob 格式
 	hash: string;
+	conditionId?: string;  // 关联的条件ID
 }
 
 export interface PerformUpscaleOptions {
 	background?: boolean;
 	skipStateUpdate?: boolean; // 跳过状态更新（由调用方管理）
+	conditionId?: string; // 关联的条件ID
 }
 
 export interface PerformUpscaleResult {
@@ -84,6 +86,20 @@ export async function performUpscale(
 		// 更新进度 - 开始阶段
 		updateUpscaleProgress(10, '准备超分模型');
 		
+		// 根据条件ID设置模型参数
+		if (options.conditionId) {
+			const panelSettings = await import('$lib/components/panels/UpscalePanel').then(m => m.loadUpscalePanelSettings());
+			const condition = panelSettings.conditionsList.find(c => c.id === options.conditionId);
+			if (condition) {
+				console.log('应用条件参数:', condition.name, condition.action);
+				// 设置模型参数
+				await pyo3UpscaleManager.setModel(condition.action.model, condition.action.scale);
+				await pyo3UpscaleManager.setTileSize(condition.action.tileSize);
+				await pyo3UpscaleManager.setNoiseLevel(condition.action.noiseLevel);
+				await pyo3UpscaleManager.setGpuId(condition.action.gpuId);
+			}
+		}
+		
 		// 调用pyo3UpscaleManager进行超分处理
 		updateUpscaleProgress(30, '执行超分处理');
 		const resultData = await pyo3UpscaleManager.upscaleImageMemory(imageDataArray);
@@ -108,12 +124,14 @@ export async function performUpscale(
 		// 注意：页面状态更新由 ImageViewer 的 onUpscaleComplete 事件处理
 		// 这里不再重复设置，避免冗余
 		
-		// 触发超分完成事件
+		// 触发超分完成事件，携带会话ID和条件ID
 		const eventDetail = {
 			imageData: resultUrl,
 			imageBlob: resultBlob,
 			originalImageHash: imageHash,
-			background: isBackground
+			background: isBackground,
+			sessionId: currentSession,
+			conditionId: options.conditionId
 		};
 		
 		// 非后台任务时，额外写入内存缓存（通过事件传递给 ImageLoader）
@@ -152,7 +170,7 @@ export async function performUpscale(
  * 触发自动超分
  */
 export async function triggerAutoUpscale(
-	imageDataWithHash: { blob: Blob; hash: string }, 
+	imageDataWithHash: { blob: Blob; hash: string; conditionId?: string }, 
 	isPreload = false
 ): Promise<PerformUpscaleResult | undefined> {
 	try {
@@ -186,7 +204,7 @@ export async function triggerAutoUpscale(
 		const { blob: imageBlob, hash: imageHash } = imageDataWithHash;
 		
 		console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', 'MD5:', imageHash, 
-			`Blob size: ${imageBlob.size}`);
+			`Blob size: ${imageBlob.size}`, 'sessionId:', currentSession, 'conditionId:', imageDataWithHash.conditionId);
 		
 		// 触发超分开始事件（仅对非预加载任务）
 		if (!isPreload) {
@@ -196,7 +214,8 @@ export async function triggerAutoUpscale(
 		// 执行超分，skipStateUpdate 防止重复调用 startUpscale
 		return await performUpscale(imageBlob, imageHash, { 
 			background: isPreload,
-			skipStateUpdate: !isPreload // 非预加载任务跳过 startUpscale，但保留 completeUpscale
+			skipStateUpdate: !isPreload, // 非预加载任务跳过 startUpscale，但保留 completeUpscale
+			conditionId: imageDataWithHash.conditionId
 		});
 	} catch (error) {
 		console.error('自动超分失败:', error);

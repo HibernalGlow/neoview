@@ -25,6 +25,7 @@
 	import UpscalePanelCurrentInfo from './UpscalePanelCurrentInfo.svelte';
 	import UpscalePanelCacheSection from './UpscalePanelCacheSection.svelte';
 	import UpscalePanelPreview from './UpscalePanelPreview.svelte';
+	import UpscalePanelConditionTabs from './UpscalePanelConditionTabs.svelte';
 	import './UpscalePanel.styles.css';
 
 	// ==================== 状态管理 ====================
@@ -47,6 +48,9 @@
 	// 预加载配置
 	let preloadPages = $state(3);
 	let backgroundConcurrency = $state(2);
+
+	// 条件列表
+	let conditionsList = $state(loadUpscalePanelSettings().conditionsList);
 
 	// 模型参数
 	let selectedModel = $state('MODEL_WAIFU2X_CUNET_UP2X');
@@ -242,6 +246,7 @@
 		preloadPages = settings.preloadPages;
 		backgroundConcurrency = settings.backgroundConcurrency;
 		showPanelPreview = settings.showPanelPreview ?? false;
+		conditionsList = settings.conditionsList;
 		
 		// 同步预加载配置到 PreloadManager
 		syncPreloadConfig(settings);
@@ -265,6 +270,7 @@
 			preloadPages,
 			backgroundConcurrency,
 			showPanelPreview,
+			conditionsList,
 			conditions: {
 				enabled: conditionalUpscaleEnabled,
 				minWidth: conditionalMinWidth,
@@ -833,6 +839,17 @@
 		progress={progress}
 		progressColorClass={getProgressColor(progress)}
 		on:perform={performUpscale}
+	/>
+
+	<!-- 条件管理 -->
+	<UpscalePanelConditionTabs
+		bind:conditions={conditionsList}
+		bind:conditionalUpscaleEnabled
+		on:conditionsChanged={(e) => {
+			conditionsList = e.detail.conditions;
+			const settings = gatherPanelSettings();
+			persistAndBroadcast(settings);
+		}}
 	/>
 
 	<!-- 缓存管理 -->

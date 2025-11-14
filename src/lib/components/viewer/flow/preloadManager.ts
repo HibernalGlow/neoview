@@ -10,6 +10,23 @@ import { ImageLoader, type ImageLoaderOptions } from './imageLoader';
 import { createEventListeners, type EventListenersOptions } from './eventListeners';
 import { createPreloadWorker } from './preloadWorker';
 import { triggerAutoUpscale, getAutoUpscaleEnabled } from './preloadRuntime';
+import { evaluateConditions, collectPageMetadata } from '$lib/utils/upscale/conditions';
+import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
+
+// 扩展缓存类型以包含 sessionId
+interface CacheEntry {
+	url: string;
+	blob: Blob;
+	sessionId?: string;
+}
+
+// 扩展预加载任务以包含条件ID
+export interface PreloadTaskWithCondition {
+	blob: Blob;
+	hash: string;
+	pageIndex?: number;
+	conditionId?: string;
+}
 
 export interface PreloadManagerOptions {
 	onImageLoaded?: (objectUrl: string, objectUrl2?: string) => void;
@@ -76,11 +93,12 @@ export class PreloadManager {
 		// 创建预加载 worker
 		this.preloadWorker = createPreloadWorker({
 			concurrency: () => this.performanceMaxThreads,
-			runTask: async (task) => {
-				// 调用 triggerAutoUpscale 进行预超分，传递 Blob
+			runTask: async (task: PreloadTaskWithCondition) => {
+				// 调用 triggerAutoUpscale 进行预超分，传递 Blob 和条件ID
 				return await triggerAutoUpscale({
 					blob: task.blob,
-					hash: task.hash
+					hash: task.hash,
+					conditionId: task.conditionId
 				}, true);
 			},
 			onTaskSuccess: (task, result) => {

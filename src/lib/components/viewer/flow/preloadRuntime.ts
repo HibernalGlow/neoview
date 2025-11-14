@@ -31,6 +31,28 @@ export interface PerformUpscaleResult {
 }
 
 /**
+ * 检测 Blob 是否为 GIF（类型或文件头）
+ */
+async function isGifBlob(blob?: Blob | null): Promise<boolean> {
+	if (!blob) return false;
+	const mime = blob.type?.toLowerCase() || '';
+	if (mime.includes('image/gif')) return true;
+	console.log('检测到 GIF Blob:');
+
+	if (blob.size < 6) return false;
+
+	try {
+		const headerBuffer = await blob.slice(0, 6).arrayBuffer();
+		const headerBytes = new Uint8Array(headerBuffer);
+		const signature = String.fromCharCode(...headerBytes);
+		return signature === 'GIF87a' || signature === 'GIF89a';
+	} catch (error) {
+		console.warn('检测 GIF Blob 失败，默认视为非 GIF:', error);
+		return false;
+	}
+}
+
+/**
  * 获取自动超分开关状态
  */
 export async function getAutoUpscaleEnabled(): Promise<boolean> {
@@ -77,6 +99,15 @@ export async function performUpscale(
 		// 确定是否为后台任务
 		const isBackground = options.background || false;
 		
+		// GIF 直接跳过
+		if (await isGifBlob(imageBlob)) {
+			console.log('检测到 GIF，跳过超分处理:', imageHash);
+			return {
+				success: false,
+				error: 'GIF images are skipped for super-resolution'
+			};
+		}
+
 		// 只有在直接手动调用且非后台任务时才触发状态更新
 		// 自动超分由 triggerAutoUpscale 负责状态管理
 		if (!isBackground && !options.skipStateUpdate) {
@@ -202,6 +233,11 @@ export async function triggerAutoUpscale(
 
 		const { blob: imageBlob, hash: imageHash } = imageDataWithHash;
 		
+		if (await isGifBlob(imageBlob)) {
+			console.log('检测到 GIF，跳过自动超分:', imageHash);
+			return;
+		}
+
 		console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', 'MD5:', imageHash, 
 			`Blob size: ${imageBlob.size}`, 'conditionId:', imageDataWithHash.conditionId);
 		
@@ -343,5 +379,5 @@ export async function getImageDataWithHash(
 	const hashArray = Array.from(new Uint8Array(hashBuffer));
 	const hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 	
-	return { blob, hash };
+	return { blob: imageBlob, hash };
 }

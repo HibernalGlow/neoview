@@ -2,11 +2,20 @@
 <script lang="ts">
   import FileBrowserPanel from './file/FileBrowserPanel.svelte';
   
-  // 导出所有 props 以保持兼容性
-  export let initialPath = '';
-  export let showBookmarks = true;
-  export let showHistory = true;
-  export let allowMultiSelect = true;
+  // 使用 Svelte 5 的 $props() 语法
+  interface Props {
+    initialPath?: string;
+    showBookmarks?: boolean;
+    showHistory?: boolean;
+    allowMultiSelect?: boolean;
+  }
+  
+  let {
+    initialPath = '',
+    showBookmarks = true,
+    showHistory = true,
+    allowMultiSelect = true
+  }: Props = $props();
 </script>
 
 <FileBrowserPanel {initialPath} {showBookmarks} {showHistory} {allowMultiSelect} />

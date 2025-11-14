@@ -1,7 +1,14 @@
 <!-- loading-spinner.svelte - 加载动画 -->
 <script lang="ts">
-  export let size = 'medium';
-  export let text = '';
+  interface Props {
+    size?: 'small' | 'medium' | 'large';
+    text?: string;
+  }
+  
+  let {
+    size = 'medium',
+    text = ''
+  }: Props = $props();
   
   const sizes = {
     small: '16px',

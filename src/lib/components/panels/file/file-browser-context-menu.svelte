@@ -13,9 +13,17 @@
   import Star from 'lucide-svelte/icons/star';
   import Info from 'lucide-svelte/icons/info';
   
-  export let visible = false;
-  export let position = { x: 0, y: 0 };
-  export let targetItem: any = null;
+  interface Props {
+    visible?: boolean;
+    position?: { x: number; y: number };
+    targetItem?: any;
+  }
+  
+  let {
+    visible = false,
+    position = { x: 0, y: 0 },
+    targetItem = null
+  }: Props = $props();
   
   const dispatch = createEventDispatcher();
   

@@ -6,9 +6,17 @@
   import Star from 'lucide-svelte/icons/star';
   import FolderOpen from 'lucide-svelte/icons/folder-open';
   
-  export let bookmarks: Array<{ path: string; name: string }> = [];
-  export let history: Array<{ path: string; timestamp: number }> = [];
-  export let currentPath = '';
+  interface Props {
+    bookmarks?: Array<{ path: string; name: string }>;
+    history?: Array<{ path: string; timestamp: number }>;
+    currentPath?: string;
+  }
+  
+  let {
+    bookmarks = [],
+    history = [],
+    currentPath = ''
+  }: Props = $props();
   
   const dispatch = createEventDispatcher();
   

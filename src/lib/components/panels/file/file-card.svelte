@@ -9,12 +9,23 @@
   import Trash2 from 'lucide-svelte/icons/trash-2';
   import type { FsItem } from '$lib/types';
   
-  export let item: FsItem;
-  export let thumbnail: string | undefined;
-  export let viewMode: 'list' | 'thumbnails' = 'list';
-  export let selected = false;
-  export let isCheckMode = false;
-  export let isDeleteMode = false;
+  interface Props {
+    item: FsItem;
+    thumbnail?: string;
+    viewMode?: 'list' | 'thumbnails';
+    selected?: boolean;
+    isCheckMode?: boolean;
+    isDeleteMode?: boolean;
+  }
+  
+  let {
+    item,
+    thumbnail,
+    viewMode = 'list',
+    selected = false,
+    isCheckMode = false,
+    isDeleteMode = false
+  }: Props = $props();
   
   const dispatch = createEventDispatcher();
   

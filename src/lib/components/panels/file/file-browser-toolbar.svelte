@@ -10,12 +10,23 @@
   import Search from 'lucide-svelte/icons/search';
   import FolderOpen from 'lucide-svelte/icons/folder-open';
   
-  export let currentPath = '';
-  export let viewMode: 'list' | 'thumbnails' = 'list';
-  export let searchState = { query: '', active: false };
-  export let loading = false;
-  export let canGoBack = false;
-  export let canGoForward = false;
+  interface Props {
+    currentPath?: string;
+    viewMode?: 'list' | 'thumbnails';
+    searchState?: { query: string; active: boolean };
+    loading?: boolean;
+    canGoBack?: boolean;
+    canGoForward?: boolean;
+  }
+  
+  let {
+    currentPath = '',
+    viewMode = 'list',
+    searchState = { query: '', active: false },
+    loading = false,
+    canGoBack = false,
+    canGoForward = false
+  }: Props = $props();
   
   const dispatch = createEventDispatcher();
   

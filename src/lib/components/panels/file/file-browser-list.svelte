@@ -5,13 +5,25 @@
   import LoadingSpinner from '$lib/components/ui/loading-spinner.svelte';
   import type { FsItem } from '$lib/types';
   
-  export let items: FsItem[] = [];
-  export let thumbnails: Map<string, string> = new Map();
-  export let viewMode: 'list' | 'thumbnails' = 'list';
-  export let loading = false;
-  export let selectedItems: Set<string> = new Set();
-  export let isCheckMode = false;
-  export let isDeleteMode = false;
+  interface Props {
+    items?: FsItem[];
+    thumbnails?: Map<string, string>;
+    viewMode?: 'list' | 'thumbnails';
+    loading?: boolean;
+    selectedItems?: Set<string>;
+    isCheckMode?: boolean;
+    isDeleteMode?: boolean;
+  }
+  
+  let {
+    items = [],
+    thumbnails = new Map(),
+    viewMode = 'list',
+    loading = false,
+    selectedItems = new Set(),
+    isCheckMode = false,
+    isDeleteMode = false
+  }: Props = $props();
   
   const dispatch = createEventDispatcher();
   

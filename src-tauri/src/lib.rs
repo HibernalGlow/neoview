@@ -117,6 +117,8 @@ pub fn run() {
             commands::load_image_from_archive,
             commands::get_images_from_archive,
             commands::generate_archive_thumbnail,
+            commands::generate_archive_thumbnail_root,
+            commands::generate_archive_thumbnail_inner,
             commands::is_supported_archive,
             // File operation commands
             commands::fs_commands::copy_path,

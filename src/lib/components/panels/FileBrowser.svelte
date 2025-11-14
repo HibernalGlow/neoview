@@ -1297,28 +1297,16 @@
 
   
     <!-- 加载状态 -->
-  {#if loading}
-    <div class="flex flex-1 items-center justify-center">
-      <div class="flex flex-col items-center gap-3">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-        <div class="text-sm text-gray-500">加载中...</div>
-      </div>
-    </div>
-  {:else if isSearching}
-    <div class="flex flex-1 items-center justify-center">
-      <div class="flex flex-col items-center gap-3">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-        <div class="text-sm text-gray-500">搜索中...</div>
-      </div>
-    </div>
-  {:else if searchQuery && searchResults.length === 0}
-    <div class="flex flex-1 items-center justify-center">
-      <div class="text-center text-gray-400">
-        <Search class="mx-auto mb-2 h-16 w-16 opacity-50" />
-        <p class="text-sm">未找到匹配的文件</p>
-        <p class="text-xs text-gray-500 mt-1">搜索词: "{searchQuery}"</p>
-      </div>
-    </div>
+  {:else if loading || isSearching || (searchQuery && searchResults.length === 0) || items.length === 0}
+    <FileBrowserEmptyState
+      {loading}
+      {isSearching}
+      {searchQuery}
+      hasSearchResults={searchResults.length > 0}
+      itemsCount={items.length}
+      currentPath={currentPath}
+      onSelectFolder={selectFolder}
+    />
   {:else if searchQuery && searchResults.length > 0}
     <FileBrowserList
       listLabel="搜索结果列表"
@@ -1342,27 +1330,6 @@
         找到 {searchResults.length} 个结果 (搜索: "{searchQuery}")
       </div>
     </FileBrowserList>
-  {:else if items.length === 0 && currentPath}
-    <div class="flex flex-1 items-center justify-center">
-      <div class="text-center text-gray-400">
-        <Folder class="mx-auto mb-2 h-16 w-16 opacity-50" />
-        <p class="text-sm">此目录为空</p>
-      </div>
-    </div>
-  {:else if items.length === 0}
-    <div class="flex flex-1 items-center justify-center">
-      <div class="text-center">
-        <FolderOpen class="mx-auto mb-4 h-20 w-20 text-gray-300" />
-        <p class="text-lg font-medium text-gray-600 mb-2">选择文件夹开始浏览</p>
-        <p class="text-sm text-gray-400 mb-6">点击上方的"选择文件夹"按钮</p>
-        <button
-          onclick={selectFolder}
-          class="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
-        >
-          选择文件夹
-        </button>
-      </div>
-    </div>
   {:else}
     <FileBrowserList
       listLabel="文件列表"

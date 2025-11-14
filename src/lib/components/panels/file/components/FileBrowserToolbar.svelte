@@ -16,27 +16,49 @@
     Grid3x3,
   } from '@lucide/svelte';
 
-  export let isArchiveView = false;
-  export let hasHomepage = false;
-  export let canGoBackInHistory = false;
-  export let canGoForwardInHistory = false;
-  export let canNavigateBack = false;
-  export let isCheckMode = false;
-  export let isDeleteMode = false;
-  export let viewMode: 'list' | 'thumbnails' = 'list';
-  export let sortConfig: SortConfig = { field: 'path', order: 'asc' };
-
-  export let onGoHome: () => void = () => {};
-  export let onGoBackInHistory: () => void = () => {};
-  export let onGoForwardInHistory: () => void = () => {};
-  export let onGoBack: () => void = () => {};
-  export let onSelectFolder: () => void = () => {};
-  export let onRefresh: () => void = () => {};
-  export let onToggleCheckMode: () => void = () => {};
-  export let onToggleDeleteMode: () => void = () => {};
-  export let onToggleViewMode: () => void = () => {};
-  export let onClearThumbnailCache: () => void = () => {};
-  export let onSort: (config: SortConfig) => void = () => {};
+  let {
+    isArchiveView = false,
+    hasHomepage = false,
+    canGoBackInHistory = false,
+    canGoForwardInHistory = false,
+    canNavigateBack = false,
+    isCheckMode = false,
+    isDeleteMode = false,
+    viewMode = 'list',
+    sortConfig = { field: 'path', order: 'asc' },
+    onGoHome = () => {},
+    onGoBackInHistory = () => {},
+    onGoForwardInHistory = () => {},
+    onGoBack = () => {},
+    onSelectFolder = () => {},
+    onRefresh = () => {},
+    onToggleCheckMode = () => {},
+    onToggleDeleteMode = () => {},
+    onToggleViewMode = () => {},
+    onClearThumbnailCache = () => {},
+    onSort = () => {},
+  }: {
+    isArchiveView?: boolean;
+    hasHomepage?: boolean;
+    canGoBackInHistory?: boolean;
+    canGoForwardInHistory?: boolean;
+    canNavigateBack?: boolean;
+    isCheckMode?: boolean;
+    isDeleteMode?: boolean;
+    viewMode?: 'list' | 'thumbnails';
+    sortConfig?: SortConfig;
+    onGoHome?: () => void;
+    onGoBackInHistory?: () => void;
+    onGoForwardInHistory?: () => void;
+    onGoBack?: () => void;
+    onSelectFolder?: () => void;
+    onRefresh?: () => void;
+    onToggleCheckMode?: () => void;
+    onToggleDeleteMode?: () => void;
+    onToggleViewMode?: () => void;
+    onClearThumbnailCache?: () => void;
+    onSort?: (config: SortConfig) => void;
+  } = $props();
 </script>
 
 <div class="flex items-center gap-1 border-b px-2 py-1.5 bg-background/50">

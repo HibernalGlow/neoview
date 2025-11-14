@@ -1,6 +1,6 @@
 <script lang="ts">
   import { File, FileArchive, Folder, Image, Trash2 } from '@lucide/svelte';
-  import * as ContextMenu from '$lib/components/ui/context-menu';
+  import * as ContextMenu from '$lib/components/ui/context-menu/index.js';
   import FileContextMenu from './FileContextMenu.svelte';
   import type { FsItem } from '$lib/types';
   import { toRelativeKey } from '$lib/utils/thumbnailManager';
@@ -14,24 +14,50 @@
     renameItemAction,
     openArchiveAsBookAction,
     copyPathAction,
-  } from '../../services/fileActionService';
-  import { setClipboardItem } from '../../services/contextMenuService';
+  } from '../services/fileActionService';
+  import { setClipboardItem } from '../services/contextMenuService';
 
-  export let items: FsItem[] = [];
-  export let listLabel = '文件列表';
-  export let isSearchResults = false;
-  export let isCheckMode = false;
-  export let isDeleteMode = false;
-  export let isArchiveView = false;
-  export let selectedIndex = -1;
-  export let selectedItems: Set<string> = new Set();
-  export let thumbnails: Map<string, string> = new Map();
-  export let containerRef: HTMLDivElement | undefined;
-  export let onKeydown: (event: KeyboardEvent) => void = () => {};
-  export let onRowClick: (item: FsItem, index: number) => void = () => {};
-  export let onRowKeyboardActivate: (item: FsItem, index: number) => void = () => {};
-  export let onToggleSelection: (path: string) => void = () => {};
-  export let onInlineDelete: (item: FsItem) => void = () => {};
+  type Props = {
+    items?: FsItem[];
+    listLabel?: string;
+    isSearchResults?: boolean;
+    isCheckMode?: boolean;
+    isDeleteMode?: boolean;
+    isArchiveView?: boolean;
+    selectedIndex?: number;
+    selectedItems?: Set<string>;
+    thumbnails?: Map<string, string>;
+    containerRef?: HTMLDivElement;
+    onKeydown?: (event: KeyboardEvent) => void;
+    onRowClick?: (item: FsItem, index: number) => void;
+    onRowKeyboardActivate?: (item: FsItem, index: number) => void;
+    onToggleSelection?: (path: string) => void;
+    onInlineDelete?: (item: FsItem) => void;
+    onContextMenuOpen?: (event: MouseEvent, item: FsItem) => void;
+    onContextMenuClose?: () => void;
+    header?: Snippet;
+  };
+
+  let {
+    items = [],
+    listLabel = '文件列表',
+    isSearchResults = false,
+    isCheckMode = false,
+    isDeleteMode = false,
+    isArchiveView = false,
+    selectedIndex = -1,
+    selectedItems = new Set<string>(),
+    thumbnails = new Map<string, string>(),
+    containerRef,
+    onKeydown = () => {},
+    onRowClick = () => {},
+    onRowKeyboardActivate = () => {},
+    onToggleSelection = () => {},
+    onInlineDelete = () => {},
+    onContextMenuOpen = () => {},
+    onContextMenuClose = () => {},
+    header,
+  }: Props = $props();
 
   const formatPathInfo = (item: FsItem) => {
     if (isSearchResults) {
@@ -41,8 +67,9 @@
     return item.isDir ? '文件夹' : size;
   };
 
-  export let onContextMenuOpen: (event: MouseEvent, item: FsItem) => void = () => {};
-  export let onContextMenuClose: () => void = () => {};
+  function handleContextMenu(event: MouseEvent, item: FsItem) {
+    onContextMenuOpen(event, item);
+  }
 
   async function handleDelete(item: FsItem) {
     const success = await deleteItemAction(item);
@@ -68,10 +95,10 @@
   tabindex="0"
   onkeydown={onKeydown}
 >
-  <slot name="header" />
+  {@render header?.()}
   <div class="grid grid-cols-1 gap-2">
     {#each items as item, index (item.path)}
-      <ContextMenu.Root onOpen={(event) => onContextMenuOpen(event, item)} onClose={onContextMenuClose}>
+      <ContextMenu.Root onOpenChange={(open) => open && onContextMenuOpen(lastContextMenuEvent, item)} onClose={onContextMenuClose}>
         <ContextMenu.Trigger asChild>
           <div
             class={`group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors ${!isSearchResults && selectedIndex === index ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}`}
@@ -85,6 +112,7 @@
                 onRowKeyboardActivate(item, index);
               }
             }}
+            oncontextmenu={(event) => handleContextMenu(event, item)}
           >
             {#if isCheckMode}
               <button

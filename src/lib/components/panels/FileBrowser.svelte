@@ -39,6 +39,15 @@
     setSortConfig,
     type SortConfig,
   } from './file/services/sortService';
+  import {
+    loadSearchHistoryEntries,
+    addSearchHistoryEntry,
+    removeSearchHistoryEntry,
+    clearSearchHistoryEntries,
+    searchFilesInPath,
+    type SearchHistoryEntry,
+    type SearchSettings,
+  } from './file/services/searchService';
 
 
   // 使用全局状态
@@ -76,12 +85,13 @@
   let searchHistory = $state<SearchHistoryEntry[]>([]);
   let showSearchHistory = $state(false);
   let showSearchSettings = $state(false);
-  let searchSettings = $state({
+  let searchSettings = $state<SearchSettings>({
     includeSubfolders: true,
-    showHistoryOnFocus: true
+    showHistoryOnFocus: true,
   });
   let searchResults = $state<FsItem[]>([]);
   let isSearching = $state(false);
+  let searchInputTimeout: ReturnType<typeof setTimeout> | null = null;
 
   // 书签相关 - 使用 bookmarkStore
   function loadBookmarks() {
@@ -188,12 +198,9 @@
 
     isSearching = true;
     try {
-      const options = {
-        includeSubfolders: searchSettings.includeSubfolders,
+      const results = await searchFilesInPath(currentPath, query, searchSettings, {
         maxResults: 100,
-      };
-      
-      const results = await fileBrowserService.searchFiles(currentPath, query, options);
+      });
       console.log(`✅ 搜索完成，找到 ${results.length} 个结果`);
       console.log('搜索结果详情:', results);
       
@@ -321,8 +328,7 @@
     // 加载主页
     loadHomepage();
 
-    // 加载搜索历史
-    loadSearchHistory();
+    searchHistory = loadSearchHistoryEntries();
 
     return () => {
       document.removeEventListener('click', handleClick);
@@ -966,66 +972,17 @@
   /**
    * 加载搜索历史
    */
-  function loadSearchHistory() {
-    try {
-      const saved = localStorage.getItem('neoview-search-history');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // 兼容旧版本数据结构
-        if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string') {
-          // 旧版本：字符串数组，转换为新格式
-          searchHistory = (parsed as string[]).map(query => ({ query, timestamp: Date.now() - 86400000 })); // 默认昨天
-        } else {
-          // 新版本：对象数组
-          searchHistory = parsed;
-        }
-      }
-    } catch (err) {
-      console.error('加载搜索历史失败:', err);
-    }
-  }
-
-  /**
-   * 保存搜索历史
-   */
-  function saveSearchHistory() {
-    try {
-      localStorage.setItem('neoview-search-history', JSON.stringify(searchHistory));
-    } catch (err) {
-      console.error('保存搜索历史失败:', err);
-    }
-  }
-
-  /**
-   * 添加搜索历史
-   */
   function addSearchHistory(query: string) {
-    if (!query.trim()) return;
-    
-    // 移除已存在的相同查询
-    searchHistory = searchHistory.filter(item => item.query !== query);
-    // 添加到开头
-    searchHistory.unshift({ query, timestamp: Date.now() });
-    // 限制历史记录数量
-    searchHistory = searchHistory.slice(0, 20);
-    
-    saveSearchHistory();
+    searchHistory = addSearchHistoryEntry(searchHistory, query);
   }
 
-  /**
-   * 清除搜索历史
-   */
   function clearSearchHistory() {
-    searchHistory = [];
-    saveSearchHistory();
+    searchHistory = clearSearchHistoryEntries();
     showSearchHistory = false;
   }
 
   function removeSearchHistoryItem(item: SearchHistoryEntry) {
-    searchHistory = searchHistory.filter(
-      (entry) => !(entry.query === item.query && entry.timestamp === item.timestamp)
-    );
-    saveSearchHistory();
+    searchHistory = removeSearchHistoryEntry(searchHistory, item);
     if (searchHistory.length === 0) {
       showSearchHistory = false;
     }
@@ -1035,13 +992,14 @@
    * 搜索文件
    */
   async function searchFiles(query: string) {
-    if (!query.trim()) {
+    const trimmed = query.trim();
+    if (!trimmed) {
       searchResults = [];
       return;
     }
 
-    addSearchHistory(query);
-    await performSearch(query);
+    addSearchHistory(trimmed);
+    await performSearch(trimmed);
   }
 
   /**
@@ -1049,15 +1007,15 @@
    */
   function handleSearchInput(value: string) {
     searchQuery = value;
-    
-    // 实时搜索
+
+    if (searchInputTimeout) {
+      clearTimeout(searchInputTimeout);
+    }
+
     if (searchQuery.trim()) {
-      const timeout = setTimeout(() => {
+      searchInputTimeout = setTimeout(() => {
         searchFiles(searchQuery);
       }, 300);
-      
-      // 清除之前的超时
-      return () => clearTimeout(timeout);
     } else {
       searchResults = [];
     }
@@ -1101,6 +1059,10 @@
   }
 
   function clearSearchField() {
+    if (searchInputTimeout) {
+      clearTimeout(searchInputTimeout);
+      searchInputTimeout = null;
+    }
     handleSearchInput('');
     searchResults = [];
   }
@@ -1199,7 +1161,6 @@
         onRowKeyboardActivate={(item) => openSearchResult(item)}
         onToggleSelection={toggleItemSelection}
         onInlineDelete={(item) => deleteItem(item.path)}
-        contextMenuHandlers={contextMenuHandlers}
       >
         <div slot="header" class="mb-3 text-sm text-gray-600 px-2">
           找到 {searchResults.length} 个结果 (搜索: "{searchQuery}")
@@ -1232,7 +1193,6 @@
         }}
         onToggleSelection={toggleItemSelection}
         onInlineDelete={(item) => deleteItem(item.path)}
-        contextMenuHandlers={contextMenuHandlers}
       />
     {/if}
   {/if}

@@ -528,8 +528,7 @@
 			const processingTime = (Date.now() - startTime) / 1000;
 			showSuccessToast(`超分完成！第 ${bookStore.currentPageIndex + 1} 页，耗时 ${processingTime.toFixed(1)}s`);
 			
-			// 获取当前页面的 hash
-			const imageHash = await getCurrentImageHash();
+			// 检查 imageHash 是否存在（已在上面声明）
 			if (!imageHash) {
 				console.warn('无法获取当前页 hash，跳过缓存保存');
 				error = '无法获取页面哈希';

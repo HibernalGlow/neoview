@@ -2,11 +2,17 @@ import { setUpscaleSettings, DEFAULT_UPSCALE_SETTINGS } from '$lib/utils/upscale
 import { settingsManager } from '$lib/settings/settingsManager';
 import { invoke } from '@tauri-apps/api/core';
 import type { UpscaleSettings } from '$lib/utils/upscale/settings';
+import type { UpscaleCondition, createDefaultCondition } from '$lib/types/upscaleConditions';
 
 export interface UpscalePanelSettings extends UpscaleSettings {
 	// ...已有字段
 	backgroundConcurrency: number;
 	showPanelPreview: boolean;
+	// 新增条件列表
+	conditionsList: UpscaleCondition[];
+	// 保持向后兼容的旧字段
+	conditionalMinWidth?: number;
+	conditionalMinHeight?: number;
 }
 
 export interface UpscalePanelEventDetail {
@@ -17,6 +23,8 @@ export interface UpscalePanelEventDetail {
 	conditionalMinHeight: number;
 	currentImageUpscaleEnabled: boolean;
 	useCachedFirst: boolean;
+	// 新增条件列表
+	conditionsList: UpscaleCondition[];
 }
 
 const STORAGE_KEY = 'pyo3_upscale_settings';
@@ -44,7 +52,12 @@ export const defaultPanelSettings: UpscalePanelSettings = {
 	useCachedFirst: initialImageSettings.useCachedFirst,
 	preloadPages: 3,
 	backgroundConcurrency: 2,
-	showPanelPreview: false
+	showPanelPreview: false,
+	// 新增条件列表，默认包含一个默认条件
+	conditionsList: [createDefaultCondition()],
+	// 保持向后兼容
+	conditionalMinWidth: 0,
+	conditionalMinHeight: 0
 };
 
 export function loadUpscalePanelSettings(): UpscalePanelSettings {
@@ -58,11 +71,19 @@ export function loadUpscalePanelSettings(): UpscalePanelSettings {
 		return {
 			...defaultPanelSettings,
 			...parsed,
-			conditionalUpscaleEnabled: parsed.conditionalUpscaleEnabled ?? parsed.conditions?.enabled ?? defaultPanelSettings.conditionalUpscaleEnabled,
-			conditions: {
-				...defaultPanelSettings.conditions,
-				...(parsed.conditions ?? defaultPanelSettings.conditions)
-			}
+			// 向后兼容：如果旧数据中有 conditions，转换为新的 conditionsList
+			conditionsList: parsed.conditionsList ?? (
+				parsed.conditionalUpscaleEnabled ? [{
+					...createDefaultCondition(),
+					match: {
+						minWidth: parsed.conditionalMinWidth ?? 0,
+						minHeight: parsed.conditionalMinHeight ?? 0
+					}
+				}] : defaultPanelSettings.conditionsList
+			),
+			conditionalUpscaleEnabled: parsed.conditionalUpscaleEnabled ?? defaultPanelSettings.conditionalUpscaleEnabled,
+			conditionalMinWidth: parsed.conditionalMinWidth ?? defaultPanelSettings.conditionalMinWidth,
+			conditionalMinHeight: parsed.conditionalMinHeight ?? defaultPanelSettings.conditionalMinHeight
 		};
 	} catch (error) {
 		console.warn('加载面板设置失败，使用默认配置', error);
@@ -98,10 +119,11 @@ export function toUpscalePanelEventDetail(settings: UpscalePanelSettings): Upsca
 		autoUpscaleEnabled: settings.autoUpscaleEnabled,
 		preUpscaleEnabled: settings.preUpscaleEnabled,
 		conditionalUpscaleEnabled: settings.conditionalUpscaleEnabled,
-		conditionalMinWidth: settings.conditionalMinWidth,
-		conditionalMinHeight: settings.conditionalMinHeight,
+		conditionalMinWidth: settings.conditionalMinWidth ?? 0,
+		conditionalMinHeight: settings.conditionalMinHeight ?? 0,
 		currentImageUpscaleEnabled: settings.currentImageUpscaleEnabled,
-		useCachedFirst: settings.useCachedFirst
+		useCachedFirst: settings.useCachedFirst,
+		conditionsList: settings.conditionsList
 	};
 }
 

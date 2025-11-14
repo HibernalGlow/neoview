@@ -28,6 +28,7 @@ export interface NeoViewSettings {
     superResolutionModel: string | null;
     currentImageUpscaleEnabled: boolean;
     useCachedFirst: boolean;
+    conditionsList?: any[]; // 使用 any[] 以支持未知字段
   };
   view: {
     defaultZoomMode: ZoomMode;
@@ -108,7 +109,8 @@ const defaultSettings: NeoViewSettings = {
     enableSuperResolution: false,
     superResolutionModel: null,
     currentImageUpscaleEnabled: false,
-    useCachedFirst: true
+    useCachedFirst: true,
+    conditionsList: []
   },
   view: {
     defaultZoomMode: 'fit',
@@ -233,20 +235,30 @@ export class SettingsManager {
       if (!cfg || !cfg.system || !cfg.view) throw new Error('配置格式不完整');
       
       // 深合并 image 子对象，确保新字段不会被覆盖
-      const mergedImage = {
-        ...defaultSettings.image,
-        ...cfg.image,
-        // 显式补齐新字段，确保导入旧配置时不会丢失
-        currentImageUpscaleEnabled: cfg.image?.currentImageUpscaleEnabled ?? defaultSettings.image.currentImageUpscaleEnabled,
-        useCachedFirst: cfg.image?.useCachedFirst ?? defaultSettings.image.useCachedFirst
-      };
-      
-      // 合并其他设置
-      this.settings = {
-        ...defaultSettings,
-        ...cfg,
-        image: mergedImage
-      } as NeoViewSettings;
+		const mergedImage = {
+			...defaultSettings.image,
+			...cfg.image,
+			// 显式补齐新字段，确保导入旧配置时不会丢失
+			currentImageUpscaleEnabled: cfg.image?.currentImageUpscaleEnabled ?? defaultSettings.image.currentImageUpscaleEnabled,
+			useCachedFirst: cfg.image?.useCachedFirst ?? defaultSettings.image.useCachedFirst
+		};
+		
+		// 深拷贝条件列表，确保未知字段被保留
+		let conditionsList = defaultSettings.image.conditionsList || [];
+		if (cfg.image?.conditionsList && Array.isArray(cfg.image.conditionsList)) {
+			// 深拷贝以保留未知字段
+			conditionsList = JSON.parse(JSON.stringify(cfg.image.conditionsList));
+		}
+		
+		// 合并其他设置
+		this.settings = {
+			...defaultSettings,
+			...cfg,
+			image: {
+				...mergedImage,
+				conditionsList
+			}
+		} as NeoViewSettings;
       
       this.saveSettings();
       this.notifyListeners();

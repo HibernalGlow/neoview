@@ -25,6 +25,8 @@
 	import UpscalePanelCurrentInfo from './UpscalePanelCurrentInfo.svelte';
 	import UpscalePanelCacheSection from './UpscalePanelCacheSection.svelte';
 	import UpscalePanelPreview from './UpscalePanelPreview.svelte';
+	import UpscalePanelConditionTabs from './UpscalePanelConditionTabs.svelte';
+	import { evaluateConditions, collectPageMeta } from '$lib/utils/upscale/conditions';
 	import './UpscalePanel.styles.css';
 
 	// ==================== 状态管理 ====================
@@ -57,6 +59,9 @@
 
 	// 可用模型列表
 	let availableModels = $state<string[]>([]);
+	
+	// 条件列表
+	let conditionsList = $state(defaultPanelSettings.conditionsList);
 	
 	// 模型选项映射 - 使用 sr_vulkan 实际的模型名称
 	const modelLabels: Record<string, string> = {
@@ -240,11 +245,11 @@
 		noiseLevel = settings.noiseLevel;
 		gpuId = settings.gpuId;
 		preloadPages = settings.preloadPages;
-		backgroundConcurrency = settings.backgroundConcurrency;
 		showPanelPreview = settings.showPanelPreview ?? false;
 		
 		// 同步预加载配置到 PreloadManager
 		syncPreloadConfig(settings);
+		conditionsList = settings.conditionsList;
 	}
 
 	function gatherPanelSettings(): UpscalePanelSettings {
@@ -265,6 +270,7 @@
 			preloadPages,
 			backgroundConcurrency,
 			showPanelPreview,
+			conditionsList,
 			conditions: {
 				enabled: conditionalUpscaleEnabled,
 				minWidth: conditionalMinWidth,
@@ -479,10 +485,38 @@
 		}, 100);
 
 		try {
-			// 应用当前设置
-			console.log('🔧 应用设置 - tileSize:', tileSize, 'selectedModel:', selectedModel, 'scale:', scale);
-			await pyo3UpscaleManager.setModel(selectedModel, scale);
-			pyo3UpscaleManager.setTileSize(tileSize);
+			// 收集页面元数据用于条件评估
+			const currentPage = bookStore.currentPage;
+			let pageMeta = undefined;
+			if (currentPage && bookStore.currentBook) {
+				pageMeta = collectPageMeta(currentPage, bookStore.currentBook.path);
+			}
+
+			// 评估条件并应用匹配的参数
+			let useConditionParams = false;
+			if (pageMeta && conditionsList.length > 0) {
+				const conditionResult = evaluateConditions(pageMeta, conditionsList);
+				
+				if (conditionResult.conditionId && conditionResult.action) {
+					console.log('[条件超分] 应用条件参数', { 
+						conditionId: conditionResult.conditionId,
+						action: conditionResult.action
+					});
+					
+					// 应用条件指定的参数
+					await pyo3UpscaleManager.setModel(conditionResult.action.model, conditionResult.action.scale);
+					pyo3UpscaleManager.setTileSize(conditionResult.action.tileSize);
+					pyo3UpscaleManager.setNoiseLevel(conditionResult.action.noiseLevel);
+					useConditionParams = true;
+				}
+			}
+
+			// 如果没有匹配条件，使用面板当前设置
+			if (!useConditionParams) {
+				console.log('🔧 应用面板设置 - tileSize:', tileSize, 'selectedModel:', selectedModel, 'scale:', scale);
+				await pyo3UpscaleManager.setModel(selectedModel, scale);
+				pyo3UpscaleManager.setTileSize(tileSize);
+			}
 			console.log('✅ 设置已应用到 PyO3UpscaleManager');
 
 			// 从当前页面获取图像数据
@@ -834,6 +868,23 @@
 		progressColorClass={getProgressColor(progress)}
 		on:perform={performUpscale}
 	/>
+
+	<!-- 条件超分配置 -->
+	{#if conditionalUpscaleEnabled}
+		<UpscalePanelConditionTabs
+			bind:conditionsList
+			availableModels={availableModels}
+			modelLabels={modelLabels}
+			gpuOptions={gpuOptions}
+			tileSizeOptions={tileSizeOptions}
+			noiseLevelOptions={noiseLevelOptions}
+			on:change={() => {
+				const settings = gatherPanelSettings();
+				persistAndBroadcast(settings);
+				syncPreloadConfig(settings);
+			}}
+		/>
+	{/if}
 
 	<!-- 缓存管理 -->
 	<UpscalePanelCacheSection

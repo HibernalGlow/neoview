@@ -9,6 +9,8 @@ import { upscaleState, startUpscale, updateUpscaleProgress, completeUpscale, set
 import { settingsManager } from '$lib/settings/settingsManager';
 import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
 import { bookStore } from '$lib/stores/book.svelte';
+import { evaluateConditions, collectPageMeta } from '$lib/utils/upscale/conditions';
+import type { UpscaleCondition } from '$lib/types/upscaleConditions';
 
 export interface ImageDataWithHash {
 	data?: string;  // 兼容旧的 data URL 格式
@@ -153,7 +155,8 @@ export async function performUpscale(
  */
 export async function triggerAutoUpscale(
 	imageDataWithHash: { blob: Blob; hash: string }, 
-	isPreload = false
+	isPreload = false,
+	pageMeta?: { width: number; height: number; bookPath: string; imagePath: string }
 ): Promise<PerformUpscaleResult | undefined> {
 	try {
 		// 验证图片数据
@@ -167,6 +170,38 @@ export async function triggerAutoUpscale(
 		if (!autoUpscaleEnabled) {
 			console.log('自动超分开关已关闭，跳过自动超分');
 			return;
+		}
+
+		// 获取条件列表
+		const panelSettings = loadUpscalePanelSettings();
+		const conditionsList = panelSettings.conditionsList || [];
+
+		// 如果提供了页面元数据，评估条件
+		if (pageMeta && conditionsList.length > 0) {
+			const conditionResult = evaluateConditions(pageMeta, conditionsList);
+			
+			// 如果条件要求从预超分队列排除
+			if (isPreload && conditionResult.excludeFromPreload) {
+				console.log('[条件超分] 页面被排除从预超分队列', { 
+					conditionId: conditionResult.conditionId,
+					bookPath: pageMeta.bookPath,
+					imagePath: pageMeta.imagePath
+				});
+				return;
+			}
+
+			// 如果匹配了条件，使用条件指定的参数
+			if (conditionResult.conditionId && conditionResult.action) {
+				console.log('[条件超分] 匹配到条件', { 
+					conditionId: conditionResult.conditionId,
+					action: conditionResult.action
+				});
+				
+				// 设置模型参数
+				await pyo3UpscaleManager.setModel(conditionResult.action.model, conditionResult.action.scale);
+				pyo3UpscaleManager.setTileSize(conditionResult.action.tileSize);
+				pyo3UpscaleManager.setNoiseLevel(conditionResult.action.noiseLevel);
+			}
 		}
 
 		// 如果是预加载且有其他任务在进行，直接返回（worker会自动处理队列）

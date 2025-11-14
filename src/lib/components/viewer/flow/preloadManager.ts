@@ -250,10 +250,6 @@ export class PreloadManager {
 			this.currentBookSession = sessionId;
 		}
 	}
-			}
-			
-			lastBookPath = currentBookPath;
-		});
 	}
 
 	/**

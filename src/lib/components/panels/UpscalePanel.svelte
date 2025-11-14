@@ -223,7 +223,16 @@
 	function applyPanelSettings(settings: UpscalePanelSettings) {
 		// 优先从 settingsManager 读取自动超分开关状态
 		const globalSettings = settingsManager.getSettings();
-		autoUpscaleEnabled = globalSettings.image.enableSuperResolution ?? settings.autoUpscaleEnabled;
+		const globalEnabled = globalSettings.image.enableSuperResolution;
+		const localEnabled = settings.autoUpscaleEnabled;
+		
+		console.log('🔧 applyPanelSettings:', {
+			globalEnabled,
+			localEnabled,
+			final: globalEnabled ?? localEnabled
+		});
+		
+		autoUpscaleEnabled = globalEnabled ?? localEnabled;
 		
 		preUpscaleEnabled = settings.preUpscaleEnabled;
 		conditionalUpscaleEnabled = settings.conditions.enabled ?? settings.conditionalUpscaleEnabled;

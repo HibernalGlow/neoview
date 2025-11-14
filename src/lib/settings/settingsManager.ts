@@ -257,18 +257,29 @@ export class SettingsManager {
       if (raw) {
         const parsed = JSON.parse(raw);
         this.settings = { ...defaultSettings, ...parsed };
+        console.log('📂 从 localStorage 加载设置:', {
+          enableSuperResolution: this.settings.image.enableSuperResolution
+        });
+      } else {
+        console.log('📂 localStorage 中没有设置，使用默认值');
       }
     } catch (err) {
-      console.warn('loadSettings failed', err);
+      console.error('❌ loadSettings failed:', err);
       this.settings = { ...defaultSettings };
     }
   }
 
   private saveSettings() {
     try {
-      localStorage.setItem('neoview-settings', JSON.stringify(this.settings));
+      const settingsStr = JSON.stringify(this.settings);
+      console.log('💾 保存设置到 localStorage:', {
+        size: settingsStr.length,
+        enableSuperResolution: this.settings.image.enableSuperResolution
+      });
+      localStorage.setItem('neoview-settings', settingsStr);
+      console.log('✅ 设置保存成功');
     } catch (err) {
-      console.warn('saveSettings failed', err);
+      console.error('❌ saveSettings failed:', err);
     }
   }
 }

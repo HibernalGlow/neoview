@@ -9,6 +9,8 @@ export interface UpscaleSettings {
 	preUpscaleEnabled: boolean;
 	globalUpscaleEnabled: boolean;
 	conditions: UpscaleConditionSettings;
+	currentImageUpscaleEnabled: boolean;
+	useCachedFirst: boolean;
 }
 
 const defaultSettings: UpscaleSettings = {
@@ -19,7 +21,9 @@ const defaultSettings: UpscaleSettings = {
 		enabled: false,
 		minWidth: 0,
 		minHeight: 0
-	}
+	},
+	currentImageUpscaleEnabled: false,
+	useCachedFirst: true
 };
 
 let currentSettings: UpscaleSettings = { ...defaultSettings };

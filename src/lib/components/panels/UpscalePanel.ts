@@ -82,7 +82,9 @@ export function persistUpscalePanelSettings(settings: UpscalePanelSettings): voi
 			enabled: settings.conditionalUpscaleEnabled,
 			minWidth: settings.conditionalMinWidth,
 			minHeight: settings.conditionalMinHeight
-		}
+		},
+		currentImageUpscaleEnabled: settings.currentImageUpscaleEnabled,
+		useCachedFirst: settings.useCachedFirst
 	};
 
 	setUpscaleSettings(upscaleSettings);

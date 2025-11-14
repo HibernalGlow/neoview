@@ -175,6 +175,11 @@
 
 	// 监听自动超分开关变化
 	$effect(() => {
+		console.log('🔄 $effect 触发:', {
+			settingsInitialized,
+			autoUpscaleEnabled
+		});
+		
 		if (settingsInitialized) {
 			// 读取当前全局设置以便对比
 			const currentGlobalSettings = settingsManager.getSettings();
@@ -287,10 +292,12 @@
 	}
 
 	onMount(async () => {
+		console.log('🚀 UpscalePanel onMount 开始');
 		// 加载设置
 		const loaded = loadUpscalePanelSettings();
 		applyPanelSettings(loaded);
 		settingsInitialized = true;
+		console.log('✅ settingsInitialized 设置为 true');
 		emitUpscaleSettings(gatherPanelSettings());
 
 		// 初始化 PyO3 管理器
@@ -327,6 +334,7 @@
 		if (!settingsInitialized) {
 			return;
 		}
+		// $effect 会自动追踪其内部使用的响应式状态
 		const settings = gatherPanelSettings();
 		persistUpscalePanelSettings(settings);
 		emitUpscaleSettings(settings);

@@ -104,7 +104,9 @@ const defaultSettings: NeoViewSettings = {
     supportedFormats: ['jpg', 'png', 'webp', 'avif', 'jxl'],
     preloadCount: 2,
     enableSuperResolution: false,
-    superResolutionModel: null
+    superResolutionModel: null,
+    currentImageUpscaleEnabled: false,
+    useCachedFirst: true
   },
   view: {
     defaultZoomMode: 'fit',

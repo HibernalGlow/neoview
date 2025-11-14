@@ -478,7 +478,7 @@
     
     let menuX = e.clientX;
     let menuY = e.clientY;
-    let menuDirection = 'down'; // 默认向下展开
+    let menuDirection: 'up' | 'down' = 'down'; // 默认向下展开
     
     // 确保菜单不超出视口右侧
     const menuWidth = 180; // 预估菜单宽度
@@ -526,6 +526,7 @@
     
     // 获取视口尺寸
     const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
     
     let menuX = e.clientX;
     let menuY = e.clientY;
@@ -557,6 +558,10 @@
     contextMenu = { x: 0, y: 0, item: null, direction: 'down' };
     bookmarkContextMenu = { x: 0, y: 0, bookmark: null };
     copyToSubmenu.show = false;
+  }
+
+  async function openSearchResult(item: FsItem) {
+    await openFile(item);
   }
 
   /**
@@ -1498,6 +1503,8 @@
     <div 
       bind:this={fileListContainer}
       class="flex-1 overflow-y-auto p-2 focus:outline-none" 
+      role="region"
+      aria-label="搜索结果列表"
       tabindex="0" 
       onkeydown={handleKeydown}
       onclick={() => fileListContainer?.focus()}
@@ -1508,7 +1515,7 @@
       <div class="grid grid-cols-1 gap-2">
         {#each searchResults as item, index (item.path)}
           <ContextMenu.Root>
-            <ContextMenu.Trigger asChild>
+            <ContextMenu.Trigger>
               <div
                 class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors hover:bg-gray-50 border-gray-200"
                 role="button"
@@ -1586,8 +1593,9 @@
                 {formatSize(item.size, item.isDir)} · {formatDate(item.modified)}
               </div>
             </div>
-              </ContextMenu.Trigger>
-              <ContextMenu.Content>
+              </div>
+            </ContextMenu.Trigger>
+            <ContextMenu.Content>
                 <ContextMenu.Item onclick={() => addToBookmark(item)}>
                   <Bookmark class="h-4 w-4 mr-2" />
                   添加到书签
@@ -1693,7 +1701,7 @@
       <div class="grid grid-cols-1 gap-2">
         {#each items as item, index (item.path)}
           <ContextMenu.Root>
-            <ContextMenu.Trigger asChild>
+            <ContextMenu.Trigger>
               <div
                 class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors {selectedIndex === index ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}"
                 role="button"

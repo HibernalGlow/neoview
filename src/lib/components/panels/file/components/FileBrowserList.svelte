@@ -5,19 +5,17 @@
   import type { FsItem } from '$lib/types';
   import { toRelativeKey } from '$lib/utils/thumbnailManager';
 
-  export type ContextMenuHandlers = {
-    addBookmark: (item: FsItem) => void;
-    openInExplorer: (item: FsItem) => void;
-    openWithExternalApp: (item: FsItem) => void;
-    cutItem: (item: FsItem) => void;
-    copyItem: (item: FsItem) => void;
-    deleteItem: (item: FsItem) => void;
-    moveToFolder: (item: FsItem) => void;
-    renameItem: (item: FsItem) => void;
-    openArchiveAsBook: (item: FsItem) => void;
-    browseArchive: (item: FsItem) => void;
-    copyPath: (item: FsItem) => void;
-  };
+  import {
+    addBookmarkAction,
+    openInExplorerAction,
+    openWithExternalAppAction,
+    deleteItemAction,
+    moveItemToFolderAction,
+    renameItemAction,
+    openArchiveAsBookAction,
+    copyPathAction,
+  } from '../../services/fileActionService';
+  import { setClipboardItem } from '../../services/contextMenuService';
 
   export let items: FsItem[] = [];
   export let listLabel = '文件列表';
@@ -34,19 +32,6 @@
   export let onRowKeyboardActivate: (item: FsItem, index: number) => void = () => {};
   export let onToggleSelection: (path: string) => void = () => {};
   export let onInlineDelete: (item: FsItem) => void = () => {};
-  export let contextMenuHandlers: ContextMenuHandlers = {
-    addBookmark: () => {},
-    openInExplorer: () => {},
-    openWithExternalApp: () => {},
-    cutItem: () => {},
-    copyItem: () => {},
-    deleteItem: () => {},
-    moveToFolder: () => {},
-    renameItem: () => {},
-    openArchiveAsBook: () => {},
-    browseArchive: () => {},
-    copyPath: () => {},
-  };
 
   const formatPathInfo = (item: FsItem) => {
     if (isSearchResults) {
@@ -58,6 +43,21 @@
 
   export let onContextMenuOpen: (event: MouseEvent, item: FsItem) => void = () => {};
   export let onContextMenuClose: () => void = () => {};
+
+  async function handleDelete(item: FsItem) {
+    const success = await deleteItemAction(item);
+    if (success) {
+      onInlineDelete(item);
+    }
+  }
+
+  async function handleMove(item: FsItem) {
+    await moveItemToFolderAction(item);
+  }
+
+  async function handleRename(item: FsItem) {
+    await renameItemAction(item);
+  }
 </script>
 
 <div
@@ -148,17 +148,17 @@
         <FileContextMenu
           {item}
           {isArchiveView}
-          onAddBookmark={contextMenuHandlers.addBookmark}
-          onOpenInExplorer={contextMenuHandlers.openInExplorer}
-          onOpenWithExternalApp={contextMenuHandlers.openWithExternalApp}
-          onCutItem={contextMenuHandlers.cutItem}
-          onCopyItem={contextMenuHandlers.copyItem}
-          onDeleteItem={contextMenuHandlers.deleteItem}
-          onMoveToFolder={contextMenuHandlers.moveToFolder}
-          onRenameItem={contextMenuHandlers.renameItem}
-          onOpenArchiveAsBook={contextMenuHandlers.openArchiveAsBook}
-          onBrowseArchive={contextMenuHandlers.browseArchive}
-          onCopyPath={contextMenuHandlers.copyPath}
+          onAddBookmark={(i) => addBookmarkAction(i)}
+          onOpenInExplorer={(i) => openInExplorerAction(i)}
+          onOpenWithExternalApp={(i) => openWithExternalAppAction(i)}
+          onCutItem={(i) => setClipboardItem(i, 'cut')}
+          onCopyItem={(i) => setClipboardItem(i, 'copy')}
+          onDeleteItem={handleDelete}
+          onMoveToFolder={handleMove}
+          onRenameItem={handleRename}
+          onOpenArchiveAsBook={(i) => openArchiveAsBookAction(i)}
+          onBrowseArchive={(i) => openArchiveAsBookAction(i)}
+          onCopyPath={(i) => copyPathAction(i)}
         />
       </ContextMenu.Root>
     {/each}

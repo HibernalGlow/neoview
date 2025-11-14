@@ -103,34 +103,10 @@ export function toUpscalePanelEventDetail(settings: UpscalePanelSettings): Upsca
 	};
 }
 
-export function buildHashInput(path: string, innerPath?: string): string {
-	if (innerPath && innerPath.length > 0) {
-		// 压缩包使用 "archivePath::innerPath" 作为稳定键
-		return `${path}::${innerPath}`;
-	}
-	// 普通图片直接使用路径本身
-	return path;
-}
-
-export async function calculatePathHash(pathInput: string): Promise<string> {
-	try {
-		// 优先使用后端提供的 calculate_path_hash，确保与 Rust 缓存逻辑一致
-		const hash = await invoke<string>('calculate_path_hash', { path: pathInput });
-		return hash;
-	} catch (error) {
-		console.warn('调用 calculate_path_hash 失败，回退到前端计算:', error);
-		try {
-			const encoder = new TextEncoder();
-			const bytes = encoder.encode(pathInput);
-			const hashBuffer = await crypto.subtle.digest('SHA-256', bytes);
-			const hashArray = Array.from(new Uint8Array(hashBuffer));
-			return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-		} catch (fallbackError) {
-			console.error('计算路径 hash 失败:', fallbackError);
-			return pathInput.length.toString(36);
-		}
-	}
-}
+// 移除本地哈希实现，这些功能已迁移到 pathHash.ts
+// export function buildHashInput(path: string, innerPath?: string): string {
+// export async function calculatePathHash(pathInput: string): Promise<string> {
+// }
 
 export async function readUpscaleCacheFile(cachePath: string): Promise<Uint8Array> {
 	const { invoke } = await import('@tauri-apps/api/core');

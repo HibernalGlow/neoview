@@ -707,20 +707,23 @@
 	 * 获取当前图像的 Hash (使用路径 + innerpath)
 	 */
 	async function getCurrentImageHash(): Promise<string | null> {
-		try {
-			const currentPage = bookStore.currentPage;
-			if (!currentPage) {
-				return null;
-			}
+	const currentBook = bookStore.currentBook;
+	const currentPage = bookStore.currentPage;
+	if (!currentPage) return null;
 
-			const hashInput = buildHashInput(currentPage.path, (currentPage as any).innerPath);
-			const hash = await calculatePathHash(hashInput);
-			return hash;
-		} catch (error) {
-			console.error('获取图像 hash 失败:', error);
-			return null;
-		}
-	}
+	const pathKey = buildImagePathKey({
+		bookPath: currentBook.path,
+		bookType: currentBook.type,
+		pagePath: currentPage.path,
+		innerPath: (currentPage as any).innerPath
+	});
+	
+	const hash = await getStableImageHash(pathKey);
+	// 添加调试日志
+		console.log(`UpscalePanel 获取路径哈希，页码: ${currentPageIndex + 1}/${bookStore.totalPages}, 路径key: ${pathKey}`);
+		
+		return hash;
+}
 
 	/**
 	 * 清理缓存

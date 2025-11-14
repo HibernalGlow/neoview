@@ -2,13 +2,16 @@
 	import { cn } from "$lib/utils.js";
 	import type { HTMLAttributes } from "svelte/elements";
 
-	type $$Props = HTMLAttributes<HTMLDivElement> & {
+	interface Props extends HTMLAttributes<HTMLDivElement> {
 		variant?: "default" | "secondary" | "destructive" | "outline";
-	};
+	}
 
-	export let variant: $$Props["variant"] = "default";
-	let className: $$Props["class"] = undefined;
-	export { className as class };
+	let {
+		variant = "default",
+		class: className = undefined,
+		children,
+		...restProps
+	}: Props = $props();
 </script>
 
 <div
@@ -25,7 +28,7 @@
 		},
 		className
 	)}
-	{...$$restProps}
+	{...restProps}
 >
-	<slot />
+	{@render children?.()}
 </div>

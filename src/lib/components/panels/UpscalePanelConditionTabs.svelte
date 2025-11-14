@@ -13,12 +13,19 @@
 	import { Tabs, TabsContent, TabsList, TabsTrigger } from '$lib/components/ui/tabs';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
-	import { Trash2, Plus, ArrowUp, ArrowDown, Copy } from 'lucide-svelte';
+	import { Trash2, Plus, ArrowUp, ArrowDown, Copy } from '@lucide/svelte';
 	import type { UpscaleCondition, ConditionExpression } from './UpscalePanel';
 	import { createBlankCondition } from '$lib/utils/upscale/conditions';
 
-	export let conditions: UpscaleCondition[] = [];
-	export let conditionalUpscaleEnabled = false;
+	interface Props {
+		conditions: UpscaleCondition[];
+		conditionalUpscaleEnabled: boolean;
+	}
+
+	let {
+		conditions = [],
+		conditionalUpscaleEnabled = false
+	}: Props = $props();
 
 	const dispatch = createEventDispatcher();
 

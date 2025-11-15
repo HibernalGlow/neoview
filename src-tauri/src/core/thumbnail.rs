@@ -925,39 +925,36 @@ impl ThumbnailManager {
             println!("🔍 [Rust] 数据库中未找到记录: {}", archive_key);
         }
         
-        // 3. 扫描压缩包内的图片
-        println!("🔍 [Rust] 扫描压缩包内的图片...");
-        let images = self.scan_archive_images(archive_path, 3)?;
+        // 3. 扫描压缩包内的图片 - 优化：只扫描第一张图片
+        println!("🔍 [Rust] 扫描压缩包内的第一张图片...");
+        let images = self.scan_archive_images(archive_path, 1)?;
         if images.is_empty() {
             return Err("压缩包内未找到图片".to_string());
         }
-        println!("📷 [Rust] 找到 {} 张图片: {:?}", images.len(), images);
+        println!("📷 [Rust] 找到图片: {:?}", images);
         
-        // 4. 串行处理前几张图片（避免数据库并发问题）
-        for inner_path in images.iter() {
-            println!("🔄 [Rust] 处理图片: {}", inner_path);
-            match self.extract_image_from_archive_stream(archive_path, inner_path) {
-                Ok((img, inner_path)) => {
-                    println!("✅ [Rust] 成功提取图片: {}", inner_path);
-                    let relative_path = self.get_relative_path(archive_path)?;
-                    let thumbnail_url = self.save_thumbnail_for_archive(
-                        &img,
-                        archive_path,
-                        &relative_path,
-                        &inner_path,
-                    )?;
-                    
-                    println!("✅ [Rust] 压缩包缩略图生成完成: {} -> {}", archive_path.display(), thumbnail_url);
-                    return Ok(thumbnail_url);
-                }
-                Err(e) => {
-                    println!("⚠️ [Rust] 处理图片失败: {} -> {}", inner_path, e);
-                    continue;
-                }
+        // 4. 处理第一张图片
+        let inner_path = &images[0];
+        println!("🔄 [Rust] 处理图片: {}", inner_path);
+        match self.extract_image_from_archive_stream(archive_path, inner_path) {
+            Ok((img, inner_path)) => {
+                println!("✅ [Rust] 成功提取图片: {}", inner_path);
+                let relative_path = self.get_relative_path(archive_path)?;
+                let thumbnail_url = self.save_thumbnail_for_archive(
+                    &img,
+                    archive_path,
+                    &relative_path,
+                    &inner_path,
+                )?;
+                
+                println!("✅ [Rust] 压缩包缩略图生成完成: {} -> {}", archive_path.display(), thumbnail_url);
+                return Ok(thumbnail_url);
+            }
+            Err(e) => {
+                println!("❌ [Rust] 处理图片失败: {} -> {}", inner_path, e);
+                return Err(format!("处理图片失败: {}", e));
             }
         }
-        
-        Err("所有图片处理失败".to_string())
     }
     
     /// 扫描压缩包内的前N张图片
@@ -1058,7 +1055,6 @@ impl ThumbnailManager {
             file_size,
         };
         
-        let archive_key_clone = archive_key.clone();
         self.db.upsert_thumbnail(archive_record.clone())
             .map_err(|e| format!("保存压缩包记录失败: {}", e))?;
         println!("💾 [Rust] 压缩包记录已保存: {}", archive_key);

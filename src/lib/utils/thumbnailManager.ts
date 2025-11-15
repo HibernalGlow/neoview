@@ -93,8 +93,8 @@ class ThumbnailExecutor {
   private running = false;
   private currentEpoch = 0;
   private generating = new Map<string, { epoch: number; isArchive: boolean }>();
-  private maxConcurrentLocal = 4;
-  private maxConcurrentArchive = 2;
+  private maxConcurrentLocal = 16;
+  private maxConcurrentArchive = 8;
   private addThumbnailCb: ((path: string, url: string) => void) | null = null;
 
   constructor(private queue: ThumbnailPriorityQueue) {}

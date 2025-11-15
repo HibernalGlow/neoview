@@ -90,10 +90,10 @@ pub async fn init_thumbnail_manager(
 
     // 启动后台优先队列（去重 + worker pool）
     if let Ok(mut queue_guard) = state.queue.lock() {
-        // 超激进优化：使用所有可用核心的 2 倍，最多 64 个 worker，最少 12 个
+        // 超激进优化：使用所有可用核心的 4 倍，最多 64 个 worker，最少 16 个
         let num_workers = std::thread::available_parallelism()
-            .map(|n| ((n.get() as f64 * 2.0) as usize).min(64).max(12))
-            .unwrap_or(24);
+            .map(|n| ((n.get() as f64 * 4.0) as usize).min(64).max(16))
+            .unwrap_or(32);
         println!("🔧 启动缩略图队列，worker 数量: {} (超激进模式 - 动态调整)", num_workers);
         let q = ThumbnailQueue::start(state.manager.clone(), state.cache.clone(), num_workers);
         println!("✅ 缩略图队列已启动，所有 {} 个 worker 已就绪", num_workers);

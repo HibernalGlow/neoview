@@ -2,8 +2,10 @@
 //! 缩略图相关的 Tauri 命令
 
 use std::path::PathBuf;
+use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
-use tauri::command;
+use tauri::{command, AppHandle};
+
 use std::time::Duration;
 use crate::core::thumbnail::ThumbnailManager;
 use crate::core::thumbnail_queue::ThumbnailQueue;
@@ -54,11 +56,83 @@ async fn ensure_manager_ready(
             break;
         }
 
-    std::thread::sleep(Duration::from_millis(step));
+        std::thread::sleep(Duration::from_millis(step));
         waited += step;
     }
 
     Err("缩略图管理器未初始化".to_string())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ThumbnailJobRequest {
+    pub path: String,
+    pub is_folder: bool,
+    #[serde(default)]
+    pub priority: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ThumbnailJobResultPayload {
+    pub path: String,
+    pub success: bool,
+    pub url: Option<String>,
+    pub error: Option<String>,
+}
+
+#[command]
+pub async fn enqueue_thumbnail_jobs(
+    jobs: Vec<ThumbnailJobRequest>,
+    state: tauri::State<'_, ThumbnailManagerState>,
+    app_handle: AppHandle,
+) -> Result<(), String> {
+    if jobs.is_empty() {
+        return Ok(());
+    }
+
+    ensure_manager_ready(&state, 5000).await?;
+
+    let queue_arc = {
+        let guard = state.queue.lock().map_err(|_| "无法获取缩略图队列锁".to_string())?;
+        guard.clone().ok_or_else(|| "缩略图队列未初始化".to_string())?
+    };
+
+    for job in jobs {
+        let queue = queue_arc.clone();
+        let app = app_handle.clone();
+        tauri::async_runtime::spawn(async move {
+            let path_string = job.path.clone();
+            let enqueue_res = tauri::async_runtime::spawn_blocking(move || {
+                let path_buf = PathBuf::from(&path_string);
+                queue.enqueue(path_buf, job.is_folder, job.priority)
+            })
+            .await;
+
+            let payload = match enqueue_res {
+                Ok(Ok(url)) => ThumbnailJobResultPayload {
+                    path: job.path,
+                    success: true,
+                    url: Some(url),
+                    error: None,
+                },
+                Ok(Err(e)) => ThumbnailJobResultPayload {
+                    path: job.path,
+                    success: false,
+                    url: None,
+                    error: Some(e),
+                },
+                Err(e) => ThumbnailJobResultPayload {
+                    path: job.path,
+                    success: false,
+                    url: None,
+                    error: Some(e.to_string()),
+                },
+            };
+
+            let _ = app.emit_all("thumbnail-generated", payload);
+        });
+    }
+
+    Ok(())
 }
 
 /// 初始化缩略图管理器

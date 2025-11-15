@@ -4,7 +4,8 @@ use image::{DynamicImage, ImageFormat, GenericImageView};
 use std::io::Cursor;
 use std::process::Command;
 
-use base64::{Engine as _, engine::general_purpose};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use chrono::{DateTime, Utc};
 use crate::core::thumbnail_db::{ThumbnailDatabase, ThumbnailRecord};
 use crate::models::BookType;
@@ -94,10 +95,25 @@ impl ThumbnailManager {
         path.to_string_lossy().replace('\\', "/")
     }
 
+    /// 生成blob URL ID（用于内存中的缩略图数据）
+    fn generate_blob_url(key: &str) -> String {
+        let mut hasher = DefaultHasher::new();
+        key.hash(&mut hasher);
+        let hash = hasher.finish();
+        format!("blob:{:x}", hash)
+    }
+
+    /// 获取缩略图的WebP二进制数据
+    pub fn get_thumbnail_webp_data(&self, bookpath: &str) -> Result<Option<Vec<u8>>, String> {
+        match self.db.find_by_bookpath(bookpath) {
+            Ok(Some(record)) => Ok(Some(record.webp_data)),
+            Ok(None) => Ok(None),
+            Err(e) => Err(format!("获取缩略图数据失败: {}", e)),
+        }
+    }
+
     /// 预加载缩略图到内存缓存 - 从数据库加载 WebP 字节数据
     pub fn preload_thumbnails_to_cache(&self, cache: &crate::core::image_cache::ImageCache) -> Result<usize, String> {
-        println!("🔄 开始预加载缩略图到内存缓存...");
-        
         // 获取数据库中的所有缩略图记录
         let records = self.db.get_all_thumbnails()
             .map_err(|e| format!("获取数据库记录失败: {}", e))?;
@@ -105,8 +121,8 @@ impl ThumbnailManager {
         let mut loaded_count = 0;
         
         for record in records {
-            // 将 WebP 字节数据转换为 data URL
-            let thumbnail_url = format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&record.webp_data));
+            // 生成blob URL ID（内存中的缩略图数据）
+            let thumbnail_url = Self::generate_blob_url(&record.bookpath);
 
             // 计算原始文件的完整路径（bookpath 字段可能是相对于 root 的路径或绝对路径）
             let original_path = {
@@ -133,7 +149,6 @@ impl ThumbnailManager {
             loaded_count += 1;
         }
         
-        println!("✅ 预加载完成，共加载 {} 个缩略图", loaded_count);
         Ok(loaded_count)
     }
 
@@ -146,11 +161,10 @@ impl ThumbnailManager {
         println!("🔍 标准化相对路径: {}", relative_str);
         
         if let Ok(Some(record)) = self.db.find_by_bookpath(&relative_str) {
-            println!("✅ 数据库中找到记录，WebP 数据大小: {} 字节", record.webp_data.len());
-            // 将 WebP 字节数据转换为 data URL
-            let data_url = format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&record.webp_data));
+            // 生成blob URL ID（内存中的缩略图数据）
+            let blob_url = Self::generate_blob_url(&relative_str);
             Ok(Some(ThumbnailInfo {
-                url: data_url,
+                url: blob_url,
                 width: record.width,
                 height: record.height,
                 file_size: record.file_size,
@@ -211,13 +225,13 @@ impl ThumbnailManager {
             .as_secs() as i64;
 
         // 检查数据库中是否已有缩略图（不再强制要求 source_modified 相同）
-        if let Ok(Some(record)) = self.db.find_by_bookpath(&relative_str) {
-            // 直接从数据库读取 WebP 字节数据，转换为 data URL
-            if record.source_modified != source_modified {
+        if let Ok(Some(_record)) = self.db.find_by_bookpath(&relative_str) {
+            // 直接返回blob URL ID（内存中的缩略图数据）
+            if _record.source_modified != source_modified {
                 println!("⚠️ 源文件修改时间不同，但使用已有缩略图");
             }
-            let data_url = format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&record.webp_data));
-            return Ok(data_url);
+            let blob_url = Self::generate_blob_url(&relative_str);
+            return Ok(blob_url);
         }
 
         // 生成新缩略图
@@ -233,11 +247,11 @@ impl ThumbnailManager {
         // 生成等比例缩略图
         let thumbnail = self.resize_keep_aspect_ratio(&img, max_size);
 
-        // 编码为 WebP
-        let webp_data = self.encode_webp(&thumbnail)?;
+        // 编码为 WebP（暂时不使用，后续可用于缓存）
+        let _webp_data = self.encode_webp(&thumbnail)?;
 
-        // 返回 base64
-        Ok(format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&webp_data)))
+        // 返回blob URL ID（内存中的缩略图数据）
+        Ok(Self::generate_blob_url("temp_thumbnail"))
     }
 
     /// 生成并保存缩略图到数据库
@@ -293,14 +307,14 @@ impl ThumbnailManager {
         // 编码为 WebP
         let webp_data = self.encode_webp(&thumbnail)?;
 
-        // 🚀 立即返回 blob URL（不阻塞）
-        let blob_url = format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&webp_data));
+        // 🚀 立即返回blob URL ID（不阻塞）
+        let relative_path_str = Self::normalize_path_string(relative_path);
+        let blob_url = Self::generate_blob_url(&relative_path_str);
         println!("✅ 生成缩略图完成: {} (大小: {} KB)", relative_path.display(), webp_data.len() / 1024);
 
         // 获取文件信息用于异步保存到数据库
         let (width, height) = thumbnail.dimensions();
         let file_size = webp_data.len() as u64;
-        let relative_path_str = Self::normalize_path_string(relative_path);
         let hash = ThumbnailDatabase::hash_path(relative_path);
         let webp_data_owned = webp_data.clone();
         let db_path = self.db.thumbnail_root.parent()
@@ -582,9 +596,9 @@ impl ThumbnailManager {
                 }
             }
 
-            // 返回 data URL
-            let data_url = format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&record.webp_data));
-            Ok(data_url)
+            // 返回blob URL ID
+            let blob_url = Self::generate_blob_url(&record.bookpath);
+            Ok(blob_url)
         } else {
             Err("文件夹中没有找到图片或压缩包".to_string())
         }
@@ -801,10 +815,10 @@ impl ThumbnailManager {
         let archive_key = self.build_archive_key(archive_path)?;
         
         // 2. 检查缓存
-        if let Ok(Some(record)) = self.db.find_by_bookpath(&archive_key) {
-            // 直接从数据库读取 WebP 字节数据
-            let data_url = format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&record.webp_data));
-            return Ok(data_url);
+        if let Ok(Some(_record)) = self.db.find_by_bookpath(&archive_key) {
+            // 直接返回blob URL ID
+            let blob_url = Self::generate_blob_url(&archive_key);
+            return Ok(blob_url);
         }
         
         // 3. 扫描压缩包内的图片 - 优化：只扫描第一张图片
@@ -914,7 +928,7 @@ impl ThumbnailManager {
         let inner_key = format!("{}::{}", archive_key, inner_path);
         
         let inner_record = ThumbnailRecord {
-            bookpath: inner_key,
+            bookpath: inner_key.clone(),
             hash: archive_record.hash.clone(),
             created_at: now,
             source_modified,
@@ -928,9 +942,9 @@ impl ThumbnailManager {
         self.db.upsert_thumbnail(inner_record)
             .map_err(|e| format!("保存内部图片记录失败: {}", e))?;
         
-        // 返回 data URL
-        let data_url = format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&webp_data));
-        Ok(data_url)
+        // 返回blob URL ID
+        let blob_url = Self::generate_blob_url(&inner_key);
+        Ok(blob_url)
     }
     
     /// 构建压缩包专用Key（仅使用归档路径）

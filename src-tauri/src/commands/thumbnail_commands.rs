@@ -829,3 +829,27 @@ pub async fn load_thumbnails_batch_async(
         Err("缩略图管理器未初始化".to_string())
     }
 }
+
+/// 获取缩略图的二进制WebP数据（用于blob URL）
+#[command]
+pub async fn get_thumbnail_blob(
+    file_path: String,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<Vec<u8>, String> {
+    let path = PathBuf::from(file_path);
+    
+    if let Ok(manager_guard) = state.manager.lock() {
+        if let Some(ref manager) = *manager_guard {
+            // 获取相对路径
+            let relative_path = manager.get_relative_path(&path)?;
+            let relative_str = normalize_path_string(relative_path.to_string_lossy().as_ref());
+            
+            // 从数据库获取WebP数据
+            if let Ok(Some(webp_data)) = manager.get_thumbnail_webp_data(&relative_str) {
+                return Ok(webp_data);
+            }
+        }
+    }
+    
+    Err("无法获取缩略图数据".to_string())
+}

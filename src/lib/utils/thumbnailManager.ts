@@ -1,30 +1,308 @@
 import { FileSystemAPI } from '$lib/api';
 import { toAssetUrl } from '$lib/utils/assetProxy';
 
-type Job = { path: string; isFolder: boolean; isArchive?: boolean; isArchiveRoot?: boolean };
+type Priority = 'immediate' | 'high' | 'normal';
 
-let _queue: Job[] = [];
-// 将_generating 从 Set 改为 Map，记录每个正在生成的 path 对应的 epoch
-// 这样在切换目录（epoch 变化）时，旧 epoch 的进行中任务不会阻塞新 epoch 的任务启动
-let _generating: Map<string, {epoch: number, isArchive: boolean}> = new Map();
-// epoch 用于在清空队列时使已有任务的回调失效（避免切换目录后旧任务填充新目录）
-let _epoch = 0;
-// 区分本地文件和压缩包的并发数
-let _maxConcurrentLocal = 4;
-let _maxConcurrentArchive = 2;
-let _addThumbnailCb: ((path: string, url: string) => void) | null = null;
+type QueueTask = {
+  item: any; // FsItem
+  source: string;
+  priority: Priority;
+  epoch: number;
+};
 
-export function configureThumbnailManager(options: { addThumbnail?: (path: string, url: string) => void; maxConcurrent?: number; maxConcurrentLocal?: number; maxConcurrentArchive?: number }) {
-  if (options.addThumbnail) _addThumbnailCb = options.addThumbnail;
-  if (typeof options.maxConcurrent === 'number') {
-    _maxConcurrentLocal = options.maxConcurrent;
-    _maxConcurrentArchive = Math.floor(options.maxConcurrent / 2);
+class ThumbnailPriorityQueue {
+  private queues = {
+    immediate: new Map<string, QueueTask[]>(),
+    high: new Map<string, QueueTask[]>(),
+    normal: new Map<string, QueueTask[]>(),
+  };
+
+  enqueue(source: string, items: any[], priority: Priority = 'normal', epoch: number = 0) {
+    const list = this.queues[priority].get(source) ?? [];
+    const tasks = items.map(item => ({ item, source, priority, epoch }));
+    this.queues[priority].set(source, list.concat(tasks));
   }
-  if (typeof options.maxConcurrentLocal === 'number') _maxConcurrentLocal = options.maxConcurrentLocal;
-  if (typeof options.maxConcurrentArchive === 'number') _maxConcurrentArchive = options.maxConcurrentArchive;
+
+  // 提升指定任务的优先级
+  bump(source: string, predicate: (task: QueueTask) => boolean) {
+    for (const prio of ['normal', 'high'] as Priority[]) {
+      const list = this.queues[prio].get(source);
+      if (!list) continue;
+      
+      const toPromote = list.filter(predicate);
+      if (toPromote.length) {
+        this.queues[prio].set(source, list.filter(it => !predicate(it)));
+        this.enqueue(source, toPromote.map(t => t.item), 'immediate', toPromote[0].epoch);
+      }
+    }
+  }
+
+  // 取消指定源的所有任务
+  cancelBySource(source: string) {
+    this.queues.immediate.delete(source);
+    this.queues.high.delete(source);
+    this.queues.normal.delete(source);
+  }
+
+  // 清空所有任务
+  clearAll() {
+    this.queues.immediate.clear();
+    this.queues.high.clear();
+    this.queues.normal.clear();
+  }
+
+  // 取出一批任务进行处理
+  takeBatch(max: number = 10): QueueTask[] {
+    const batch: QueueTask[] = [];
+    
+    for (const prio of ['immediate', 'high', 'normal'] as Priority[]) {
+      for (const [source, tasks] of this.queues[prio]) {
+        while (tasks.length && batch.length < max) {
+          const task = tasks.shift()!;
+          batch.push(task);
+        }
+        
+        if (!tasks.length) {
+          this.queues[prio].delete(source);
+        }
+        
+        if (batch.length >= max) {
+          return batch;
+        }
+      }
+      
+      if (batch.length > 0) {
+        return batch;
+      }
+    }
+    
+    return batch;
+  }
+
+  // 获取队列统计信息
+  getStats() {
+    return {
+      immediate: Array.from(this.queues.immediate.values()).reduce((sum, tasks) => sum + tasks.length, 0),
+      high: Array.from(this.queues.high.values()).reduce((sum, tasks) => sum + tasks.length, 0),
+      normal: Array.from(this.queues.normal.values()).reduce((sum, tasks) => sum + tasks.length, 0),
+    };
+  }
 }
 
-/** 简单兼容 helper */
+class ThumbnailExecutor {
+  private running = false;
+  private currentEpoch = 0;
+  private generating = new Map<string, { epoch: number; isArchive: boolean }>();
+  private maxConcurrentLocal = 4;
+  private maxConcurrentArchive = 2;
+  private addThumbnailCb: ((path: string, url: string) => void) | null = null;
+
+  constructor(private queue: ThumbnailPriorityQueue) {}
+
+  configure(options: { 
+    addThumbnail?: (path: string, url: string) => void; 
+    maxConcurrentLocal?: number; 
+    maxConcurrentArchive?: number; 
+  }) {
+    if (options.addThumbnail) this.addThumbnailCb = options.addThumbnail;
+    if (typeof options.maxConcurrentLocal === 'number') this.maxConcurrentLocal = options.maxConcurrentLocal;
+    if (typeof options.maxConcurrentArchive === 'number') this.maxConcurrentArchive = options.maxConcurrentArchive;
+  }
+
+  async start() {
+    if (this.running) return;
+    this.running = true;
+
+    while (this.running) {
+      const batch = this.queue.takeBatch();
+      
+      if (!batch.length) {
+        await this.waitIdle(32);
+        continue;
+      }
+
+      // 按类型分组处理
+      const archiveTasks = batch.filter(task => this.isArchiveTask(task));
+      const localTasks = batch.filter(task => !this.isArchiveTask(task));
+
+      // 检查并发限制
+      const currentGenerating = Array.from(this.generating.entries());
+      const generatingLocal = currentGenerating.filter(([, info]) => 
+        info.epoch === this.currentEpoch && !info.isArchive
+      ).length;
+      const generatingArchive = currentGenerating.filter(([, info]) => 
+        info.epoch === this.currentEpoch && info.isArchive
+      ).length;
+
+      // 处理本地任务
+      const localToProcess = localTasks.slice(0, Math.max(0, this.maxConcurrentLocal - generatingLocal));
+      // 处理压缩包任务
+      const archiveToProcess = archiveTasks.slice(0, Math.max(0, this.maxConcurrentArchive - generatingArchive));
+
+      // 将无法处理的任务重新放回队列
+      const deferredTasks = [
+        ...localTasks.slice(localToProcess.length),
+        ...archiveTasks.slice(archiveToProcess.length)
+      ];
+      
+      if (deferredTasks.length > 0) {
+        for (const task of deferredTasks) {
+          this.queue.enqueue(task.source, [task.item], task.priority, task.epoch);
+        }
+      }
+
+      // 处理选中的任务
+      const tasksToProcess = [...localToProcess, ...archiveToProcess];
+      
+      if (tasksToProcess.length > 0) {
+        await Promise.allSettled(
+          tasksToProcess.map(task => this.generateThumbnail(task))
+        );
+      }
+
+      // immediate 批次不必等待过久
+      const hasImmediate = batch.some(task => task.priority === 'immediate');
+      await this.waitIdle(hasImmediate ? 8 : 16);
+    }
+  }
+
+  stop() {
+    this.running = false;
+  }
+
+  // 增加epoch，使旧任务失效
+  bumpEpoch() {
+    this.currentEpoch++;
+  }
+
+  // 清空队列并增加epoch
+  clearQueue() {
+    this.queue.clearAll();
+    this.bumpEpoch();
+  }
+
+  // 取消指定源的任务
+  cancelBySource(source: string) {
+    this.queue.cancelBySource(source);
+  }
+
+  private async waitIdle(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private isArchiveTask(task: QueueTask): boolean {
+    const item = task.item;
+    return item.name.endsWith('.zip') || 
+           item.name.endsWith('.cbz') || 
+           item.name.endsWith('.rar') || 
+           item.name.endsWith('.cbr');
+  }
+
+  private async generateThumbnail(task: QueueTask) {
+    const { item, source, epoch } = task;
+    const path = item.path;
+
+    // 检查是否已在生成中
+    const generating = this.generating.get(path);
+    if (generating && generating.epoch === epoch) return;
+
+    // 标记为生成中
+    this.generating.set(path, { 
+      epoch, 
+      isArchive: this.isArchiveTask(task) 
+    });
+
+    try {
+      let thumbnail: string | null = null;
+      const isArchive = this.isArchiveTask(task);
+      const isDir = item.is_dir || item.isDir;
+
+      if (isArchive) {
+        console.log('📦 生成压缩包缩略图:', path);
+        thumbnail = await FileSystemAPI.generateArchiveThumbnailRoot(path);
+      } else if (isDir) {
+        console.log('📁 生成文件夹缩略图:', path);
+        thumbnail = await FileSystemAPI.generateFolderThumbnail(path);
+      } else {
+        console.log('🖼️ 生成文件缩略图:', path);
+        thumbnail = await FileSystemAPI.generateFileThumbnail(path);
+      }
+
+      // 在调用回调之前检查任务 epoch 是否仍然有效
+      if (thumbnail && this.addThumbnailCb && epoch === this.currentEpoch) {
+        const converted = toAssetUrl(thumbnail) || String(thumbnail || '');
+        const key = this.toRelativeKey(path);
+        console.log('✅ 缩略图生成成功:', { key, raw: thumbnail, converted });
+        this.addThumbnailCb(key, converted);
+      } else if (thumbnail && epoch !== this.currentEpoch) {
+        console.log('⏰ 任务结果已过期:', { path, epoch, current: this.currentEpoch });
+      }
+    } catch (e) {
+      console.error('❌ 缩略图生成失败:', path, e);
+    } finally {
+      this.generating.delete(path);
+    }
+  }
+
+  private toRelativeKey(absPath: string): string {
+    try {
+      const root = typeof localStorage !== 'undefined' ? localStorage.getItem('neoview-thumbnail-root') : null;
+      let p = String(absPath || '');
+      // 统一反斜杠为正斜杠
+      p = p.replace(/\/g, '/');
+      if (root) {
+        let r = String(root).replace(/\/g, '/');
+        // 如果 root 没有以斜杠结尾，添加
+        if (!r.endsWith('/')) r = r + '/';
+        if (p.startsWith(r)) {
+          let rel = p.slice(r.length);
+          // 去掉开头的斜杠
+          if (rel.startsWith('/')) rel = rel.slice(1);
+          return rel;
+        }
+      }
+      // 否则返回完整路径的规范化形式（用于不在 root 下的文件）
+      if (p.startsWith('/')) p = p.slice(1);
+      return p;
+    } catch (e) {
+      return absPath.replace(/\/g, '/');
+    }
+  }
+
+  // 获取统计信息
+  getStats() {
+    const currentGenerating = Array.from(this.generating.entries());
+    const generatingLocal = currentGenerating.filter(([, info]) => 
+      info.epoch === this.currentEpoch && !info.isArchive
+    ).length;
+    const generatingArchive = currentGenerating.filter(([, info]) => 
+      info.epoch === this.currentEpoch && info.isArchive
+    ).length;
+    
+    return {
+      queue: this.queue.getStats(),
+      generatingLocal,
+      generatingArchive,
+      maxLocal: this.maxConcurrentLocal,
+      maxArchive: this.maxConcurrentArchive,
+      epoch: this.currentEpoch
+    };
+  }
+}
+
+// 全局实例
+const priorityQueue = new ThumbnailPriorityQueue();
+const executor = new ThumbnailExecutor(priorityQueue);
+
+// 导出的API
+export function configureThumbnailManager(options: { 
+  addThumbnail?: (path: string, url: string) => void; 
+  maxConcurrentLocal?: number; 
+  maxConcurrentArchive?: number; 
+}) {
+  executor.configure(options);
+}
+
 export function itemIsDirectory(item: any) {
   return Boolean(item && (item.is_dir === true || item.isDir === true));
 }
@@ -33,179 +311,112 @@ export function itemIsImage(item: any) {
   return Boolean(item && (item.is_image === true || item.isImage === true || item.is_image === 'true' || item.isImage === 'true'));
 }
 
-// 使用统一的 asset 转换逻辑（定义在 assetProxy）
-
-export function enqueueThumbnail(path: string, isFolder: boolean) {
-  if (!path) return;
-  // 已在生成中或已有队列则跳过（仅考虑当前 epoch 的生成状态）
-  const generating = _generating.get(path);
-  if (generating && generating.epoch === _epoch) return;
-  if (_queue.findIndex(x => x.path === path) !== -1) return;
-
-  _queue.push({ path, isFolder });
-  processQueue();
-}
-
-/**
- * 将绝对路径规范化为相对 key（基于本地存储中配置的 thumbnail root），
- * 若未配置 root，则返回以正斜杠为分隔符的原始路径字符串。
- */
 export function toRelativeKey(absPath: string): string {
   try {
     const root = typeof localStorage !== 'undefined' ? localStorage.getItem('neoview-thumbnail-root') : null;
     let p = String(absPath || '');
-    // 统一反斜杠为正斜杠
-    p = p.replace(/\\/g, '/');
+    p = p.replace(/\/g, '/');
     if (root) {
-      let r = String(root).replace(/\\/g, '/');
-      // 如果 root 没有以斜杠结尾，添加
+      let r = String(root).replace(/\/g, '/');
       if (!r.endsWith('/')) r = r + '/';
       if (p.startsWith(r)) {
         let rel = p.slice(r.length);
-        // 去掉开头的斜杠
         if (rel.startsWith('/')) rel = rel.slice(1);
         return rel;
       }
     }
-    // 否则返回完整路径的规范化形式（用于不在 root 下的文件）
     if (p.startsWith('/')) p = p.slice(1);
     return p;
   } catch (e) {
-    return absPath.replace(/\\/g, '/');
+    return absPath.replace(/\/g, '/');
   }
+}
+
+// 新的队列API
+export function enqueueVisible(sourcePath: string, items: any[], options: { priority?: Priority; delay?: number } = {}) {
+  const { priority = 'immediate', delay = 0 } = options;
+  
+  if (delay > 0) {
+    setTimeout(() => {
+      priorityQueue.enqueue(sourcePath, items, priority, executor['currentEpoch']);
+    }, delay);
+  } else {
+    priorityQueue.enqueue(sourcePath, items, priority, executor['currentEpoch']);
+  }
+  
+  // 确保执行器在运行
+  if (!executor['running']) {
+    executor.start();
+  }
+}
+
+export function enqueueBackground(sourcePath: string, items: any[], options: { priority?: Priority; delay?: number } = {}) {
+  const { priority = 'normal', delay = 200 } = options;
+  
+  setTimeout(() => {
+    priorityQueue.enqueue(sourcePath, items, priority, executor['currentEpoch']);
+    
+    // 确保执行器在运行
+    if (!executor['running']) {
+      executor.start();
+    }
+  }, delay);
+}
+
+export function bumpPriority(sourcePath: string, itemPath: string, newPriority: Priority) {
+  priorityQueue.bump(sourcePath, task => task.item.path === itemPath);
+}
+
+export function cancelBySource(sourcePath: string) {
+  executor.cancelBySource(sourcePath);
+}
+
+export function clearAll() {
+  executor.clearQueue();
+}
+
+// 分批入队辅助函数
+export function splitForEnqueue(items: any[]) {
+  const FIRST_SCREEN = 30;
+  const SECOND_SCREEN = 70;
+  
+  return {
+    immediate: items.slice(0, FIRST_SCREEN),
+    high: items.slice(FIRST_SCREEN, FIRST_SCREEN + SECOND_SCREEN),
+    normal: items.slice(FIRST_SCREEN + SECOND_SCREEN),
+  };
+}
+
+export function enqueueDirectoryThumbnails(path: string, items: any[]) {
+  const { immediate, high, normal } = splitForEnqueue(items);
+
+  enqueueVisible(path, immediate, { priority: 'immediate' });
+  enqueueVisible(path, high, { priority: 'high' });
+  enqueueBackground(path, normal, { priority: 'normal', delay: 500 });
+}
+
+// 兼容旧API
+export function enqueueThumbnail(path: string, isFolder: boolean) {
+  // 这个函数现在主要用于向后兼容，建议使用新的队列API
+  console.warn('enqueueThumbnail is deprecated, use new queue API instead');
 }
 
 export function enqueueArchiveThumbnail(path: string, isRoot: boolean = true) {
-  if (!path) return;
-  const generating = _generating.get(path);
-  if (generating && generating.epoch === _epoch) return;
-  if (_queue.findIndex(x => x.path === path) !== -1) return;
-
-  _queue.push({ path, isFolder: false, isArchive: true, isArchiveRoot: isRoot });
-  processQueue();
-}
-
-async function processQueue() {
-  // 分别计算本地文件和压缩包的进行中任务数量（每次循环都重新计算）
- const currentGenerating = Array.from(_generating.entries());
-  const generatingLocalForEpoch = currentGenerating.filter(([, info]) => 
-    info.epoch === _epoch && !info.isArchive
-  ).length;
-  const generatingArchiveForEpoch = currentGenerating.filter(([, info]) => 
-    info.epoch === _epoch && info.isArchive
-  ).length;
-  
-  console.log('📊 processQueue stats:', {
-    totalInQueue: _queue.length,
-    generatingLocal: generatingLocalForEpoch,
-    generatingArchive: generatingArchiveForEpoch,
-    maxLocal: _maxConcurrentLocal,
-    maxArchive: _maxConcurrentArchive
-  });
-  
-  while (_queue.length > 0) {
-    const job = _queue.shift();
-    if (!job) break;
-    
-    // 根据任务类型检查并发限制
-    const currentGenerating = job.isArchive ? generatingArchiveForEpoch : generatingLocalForEpoch;
-    const maxConcurrent = job.isArchive ? _maxConcurrentArchive : _maxConcurrentLocal;
-    
-    if (currentGenerating >= maxConcurrent) {
-      // 重新放回队列开头
-      _queue.unshift(job);
-      console.log(`⏸️ 并发限制达到: ${job.isArchive ? 'Archive' : 'Local'} ${currentGenerating}/${maxConcurrent}`);
-      break;
-    }
-    
-    const { path, isFolder, isArchive, isArchiveRoot } = job;
-    const generating = _generating.get(path);
-    if (generating && generating.epoch === _epoch) continue;
-
-    const jobEpoch = _epoch;
-    _generating.set(path, { epoch: jobEpoch, isArchive: !!isArchive });
-    console.log(`🚀 开始任务: ${path} (${isArchive ? 'Archive' : 'Local'})`);
-
-    (async () => {
-      try {
-        let thumbnail: string | null = null;
-        
-        if (isArchive) {
-          // 优化后的压缩包缩略图生成
-          if (isArchiveRoot) {
-            // 生成压缩包根缩略图（文件夹Tab使用）
-            console.log('📦 生成压缩包根缩略图:', path);
-            thumbnail = await FileSystemAPI.generateArchiveThumbnailRoot(path);
-          } else {
-            // 生成压缩包内特定页缩略图（阅读器使用）
-            // 先获取压缩包内容列表
-            const entries = await FileSystemAPI.listArchiveContents(path);
-            const firstImage = (entries || []).find((e: any) => e && (e.is_image === true || e.isImage === true));
-            if (firstImage) {
-              console.log('📦 生成压缩包内页缩略图:', path, '::', firstImage.path);
-              thumbnail = await FileSystemAPI.generateArchiveThumbnailInner(path, firstImage.path);
-            }
-          }
-        } else if (isFolder) {
-          console.log('📁 生成文件夹缩略图:', path);
-          thumbnail = await FileSystemAPI.generateFolderThumbnail(path);
-        } else {
-          console.log('🖼️ 生成文件缩略图:', path);
-          thumbnail = await FileSystemAPI.generateFileThumbnail(path);
-        }
-
-        // 在调用回调之前检查任务 epoch 是否仍然有效
-        if (thumbnail && _addThumbnailCb && jobEpoch === _epoch) {
-          const converted = toAssetUrl(thumbnail) || String(thumbnail || '');
-          const key = toRelativeKey(path);
-          console.log('✅ 缩略图生成成功:', { key, raw: thumbnail, converted });
-          _addThumbnailCb(key, converted);
-        } else if (thumbnail && jobEpoch !== _epoch) {
-          console.log('⏰ 任务结果已过期:', { path, jobEpoch, current: _epoch });
-        }
-      } catch (e) {
-        console.error('❌ 缩略图生成失败:', path, e);
-      } finally {
-        _generating.delete(path);
-        console.log('✅ 任务完成:', path);
-        setTimeout(() => processQueue(), 0);
-      }
-    })();
-  }
+  // 这个函数现在主要用于向后兼容，建议使用新的队列API
+  console.warn('enqueueArchiveThumbnail is deprecated, use new queue API instead');
 }
 
 export function clearQueue() {
-  // 清空未开始的队列并递增 epoch，使当前进行中的任务在完成后失效
-  _queue = [];
-  _epoch += 1;
-}
-
-export function setMaxConcurrent(local?: number, archive?: number) {
-  if (typeof local === 'number') _maxConcurrentLocal = local;
-  if (typeof archive === 'number') _maxConcurrentArchive = archive;
+  clearAll();
 }
 
 export function isGenerating(path: string) {
-  const generating = _generating.get(path);
-  return generating && generating.epoch === _epoch;
+  return executor['generating'].has(path);
 }
 
-// 获取当前任务统计信息（用于调试）
 export function getQueueStats() {
-  const currentGenerating = Array.from(_generating.entries());
-  const generatingLocal = currentGenerating.filter(([, info]) => 
-    info.epoch === _epoch && !info.isArchive
-  ).length;
-  const generatingArchive = currentGenerating.filter(([, info]) => 
-    info.epoch === _epoch && info.isArchive
-  ).length;
-  
-  return {
-    queueLength: _queue.length,
-    generatingLocal,
-    generatingArchive,
-    maxLocal: _maxConcurrentLocal,
-    maxArchive: _maxConcurrentArchive,
-    epoch: _epoch
-  };
+  return executor.getStats();
 }
+
+// 启动执行器
+executor.start();

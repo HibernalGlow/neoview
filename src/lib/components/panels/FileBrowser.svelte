@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Folder, File, Image, Trash2, RefreshCw, FileArchive, FolderOpen, Home, ChevronLeft, ChevronRight, ChevronUp, CheckSquare, Grid3x3, List, MoreVertical, Search, ChevronDown, Settings, AlertCircle, Bookmark, Star } from '@lucide/svelte';
+  import FileBrowserList from './file/components/FileBrowserList.svelte';
   import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
   import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
   import { onMount } from 'svelte';
@@ -15,7 +16,7 @@
   import * as ContextMenu from '$lib/components/ui/context-menu';
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
   import { homeDir } from '@tauri-apps/api/path';
-  import { enqueueThumbnail, enqueueArchiveThumbnail, configureThumbnailManager, itemIsDirectory, itemIsImage, clearQueue, toRelativeKey } from '$lib/utils/thumbnailManager';
+  import { enqueueThumbnail, enqueueArchiveThumbnail, configureThumbnailManager, itemIsDirectory, itemIsImage, clearQueue, toRelativeKey, enqueueDirectoryThumbnails, cancelBySource } from '$lib/utils/thumbnailManager';
 
 
   // 使用全局状态
@@ -349,11 +350,14 @@
   async function loadDirectoryWithoutHistory(path: string) {
     console.log('📂 loadDirectory called with path:', path);
     
-  fileBrowserStore.setLoading(true);
-  fileBrowserStore.setError('');
-  fileBrowserStore.clearThumbnails();
-  // 清空外部缩略图队列，避免上次目录的任务残留
-  clearQueue();
+    // 取消之前的任务
+    cancelBySource(currentPath);
+    
+    fileBrowserStore.setLoading(true);
+    fileBrowserStore.setError('');
+    fileBrowserStore.clearThumbnails();
+    // 清空外部缩略图队列，避免上次目录的任务残留
+    clearQueue();
     fileBrowserStore.setArchiveView(false);
     fileBrowserStore.setSelectedIndex(-1);
     fileBrowserStore.setCurrentPath(path);
@@ -368,12 +372,15 @@
       
       fileBrowserStore.setItems(loadedItems);
       
-      // 异步加载缩略图
-      console.log('🖼️ 开始加载缩略图，项目总数:', loadedItems.length);
+      // 使用新的分批入队系统
+      console.log('🖼️ 开始分批加载缩略图，项目总数:', loadedItems.length);
       const imageCount = loadedItems.filter(item => itemIsImage(item)).length;
       const folderCount = loadedItems.filter(item => itemIsDirectory(item)).length;
       console.log('📊 图片数量:', imageCount, '文件夹数量:', folderCount);
 
+      // 过滤需要生成缩略图的项目
+      const thumbnailItems = [];
+      
       for (const item of loadedItems) {
         try {
           const key = toRelativeKey(item.path);
@@ -386,18 +393,17 @@
           // 忽略 key 计算错误
         }
 
-        if (itemIsDirectory(item)) {
-          console.log('📁 Enqueue folder thumbnail:', item.path);
-          enqueueThumbnail(item.path, true);
-        } else if (itemIsImage(item)) {
-          console.log('🖼️ Enqueue image thumbnail:', item.path);
-          enqueueThumbnail(item.path, false);
+        // 添加到缩略图队列
+        if (itemIsDirectory(item) || itemIsImage(item)) {
+          thumbnailItems.push(item);
         } else {
+          // 异步检查是否为压缩包
           (async () => {
             try {
               if (await FileSystemAPI.isSupportedArchive(item.path)) {
-                console.log('📦 Enqueue archive thumbnail:', item.path);
-                enqueueArchiveThumbnail(item.path);
+                console.log('📦 添加压缩包到缩略图队列:', item.path);
+                // 动态添加到队列
+                enqueueVisible(path, [item], { priority: 'normal' });
               } else {
                 console.log('⚪ 跳过非图片非目录项:', item.path);
               }
@@ -406,6 +412,11 @@
             }
           })();
         }
+      }
+
+      // 使用新的分批入队系统
+      if (thumbnailItems.length > 0) {
+        enqueueDirectoryThumbnails(path, thumbnailItems);
       }
     } catch (err) {
       console.error('❌ Error loading directory:', err);
@@ -1163,6 +1174,13 @@
     showSearchHistory = false;
     searchFiles(item.query);
   }
+
+  /**
+   * 打开搜索结果
+   */
+  async function openSearchResult(item: FsItem) {
+    await openFile(item);
+  }
   
   /**
    * 处理搜索框聚焦
@@ -1677,161 +1695,32 @@
     </div>
   {:else}
     <!-- 文件列表 -->
-    <div 
-      bind:this={fileListContainer}
-      class="flex-1 overflow-y-auto p-2 focus:outline-none" 
-      tabindex="0" 
-      onkeydown={handleKeydown}
-      onclick={() => fileListContainer?.focus()}
-    >
-      <div class="grid grid-cols-1 gap-2">
-        {#each items as item, index (item.path)}
-          <ContextMenu.Root>
-            <ContextMenu.Trigger asChild>
-              <div
-                class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors {selectedIndex === index ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}"
-                onclick={() => {
-                  if (!isCheckMode && !isDeleteMode) {
-                    fileBrowserStore.setSelectedIndex(index);
-                    openFile(item);
-                  }
-                }}
-              >
-            <!-- 勾选框（勾选模式） -->
-            {#if isCheckMode}
-              <button
-                class="flex-shrink-0"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  toggleItemSelection(item.path);
-                }}
-              >
-                <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {selectedItems.has(item.path) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 hover:border-blue-400'}">
-                  {#if selectedItems.has(item.path)}
-                    <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                    </svg>
-                  {/if}
-                </div>
-              </button>
-            {/if}
-
-            <!-- 删除按钮（删除模式） -->
-            {#if isDeleteMode && !isArchiveView}
-              <button
-                class="flex-shrink-0"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  deleteItem(item.path);
-                }}
-                title="删除"
-              >
-                <div class="h-5 w-5 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors">
-                  <Trash2 class="h-3 w-3 text-white" />
-                </div>
-              </button>
-            {/if}
-
-            <!-- 图标或缩略图 -->
-            <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded">
-              {#if thumbnails.has(toRelativeKey(item.path))}
-                <!-- 显示缩略图 -->
-                <img 
-                  src={thumbnails.get(toRelativeKey(item.path))} 
-                  alt={item.name}
-                  class="h-full w-full object-cover transition-transform group-hover:scale-105"
-                />
-              {:else if item.isDir}
-                <Folder class="h-8 w-8 text-blue-500 transition-colors group-hover:text-blue-600" />
-              {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
-                <FileArchive class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600" />
-              {:else if item.isImage}
-                <Image class="h-8 w-8 text-green-500 transition-colors group-hover:text-green-600" />
-              {:else}
-                <File class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500" />
-              {/if}
-            </div>
-
-            <!-- 信息 -->
-            <div class="min-w-0 flex-1">
-              <div class="truncate font-medium">{item.name}</div>
-              <div class="text-xs text-gray-500">
-                {formatSize(item.size, item.isDir)} · {formatDate(item.modified)}
-              </div>
-            </div>
-              </div>
-            </ContextMenu.Trigger>
-            <ContextMenu.Content>
-                <ContextMenu.Item onclick={() => addToBookmark(item)}>
-                  <Bookmark class="h-4 w-4 mr-2" />
-                  添加到书签
-                </ContextMenu.Item>
-                <ContextMenu.Separator />
-                <ContextMenu.Item onclick={() => openInExplorer(item)}>
-                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                  </svg>
-                  在资源管理器中打开
-                </ContextMenu.Item>
-                <ContextMenu.Item onclick={() => openWithExternalApp(item)}>
-                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                  在外部应用中打开
-                </ContextMenu.Item>
-                <ContextMenu.Separator />
-                <ContextMenu.Item onclick={() => cutItem(item)}>
-                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
-                  </svg>
-                  剪切
-                </ContextMenu.Item>
-                <ContextMenu.Item onclick={() => copyItem(item)}>
-                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                  复制
-                </ContextMenu.Item>
-                <ContextMenu.Separator />
-                <ContextMenu.Item onclick={() => deleteItemFromMenu(item)} class="text-red-600 focus:text-red-600">
-                  <Trash2 class="h-4 w-4 mr-2" />
-                  删除
-                </ContextMenu.Item>
-                <ContextMenu.Item onclick={moveToFolder}>
-                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                  </svg>
-                  移动到文件夹(E)
-                </ContextMenu.Item>
-                <ContextMenu.Item onclick={() => renameItem(item)}>
-                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                  重命名(M)
-                </ContextMenu.Item>
-                {#if item.name.endsWith('.zip') || item.name.endsWith('.cbz') || item.name.endsWith('.rar') || item.name.endsWith('.cbr')}
-                  <ContextMenu.Separator />
-                  <ContextMenu.Item onclick={() => openArchiveAsBook(item)}>
-                    <FolderOpen class="h-4 w-4 mr-2" />
-                    作为书籍打开
-                  </ContextMenu.Item>
-                  <ContextMenu.Item onclick={() => browseArchive(item)}>
-                    <Folder class="h-4 w-4 mr-2" />
-                    浏览内容
-                  </ContextMenu.Item>
-                {/if}
-                <ContextMenu.Separator />
-                <ContextMenu.Item onclick={() => {
-                  navigator.clipboard.writeText(item.path);
-                }}>
-                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                  </svg>
-                  复制路径
-                </ContextMenu.Item>
-              </ContextMenu.Content>
-            </ContextMenu.Root>
-          {/each}
+    <FileBrowserList 
+      {items}
+      {currentPath}
+      {thumbnails}
+      {selectedIndex}
+      {isCheckMode}
+      {isDeleteMode}
+      {selectedItems}
+      {viewMode}
+      on:itemClick={(e) => {
+        const { item, index } = e.detail;
+        if (!isCheckMode && !isDeleteMode) {
+          fileBrowserStore.setSelectedIndex(index);
+          openFile(item);
+        }
+      }}
+      on:itemContextMenu={(e) => {
+        const { event, item } = e.detail;
+        showContextMenu(event, item);
+      }}
+      on:deleteItem={(e) => {
+        deleteItem(e.detail.item.path);
+      }}
+    />
+        }}
+  {/if}
       </div>
     </div>
   {/if}

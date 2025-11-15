@@ -4,12 +4,18 @@
     showHistoryOnFocus: boolean;
   };
 
-  export let searchSettings: SearchSettings = {
-    includeSubfolders: true,
-    showHistoryOnFocus: true,
-  };
+  interface Props {
+    searchSettings?: SearchSettings;
+    onChange: (key: keyof SearchSettings, value: boolean) => void;
+  }
 
-  export let onChange: (key: keyof SearchSettings, value: boolean) => void = () => {};
+  let {
+    searchSettings = {
+      includeSubfolders: true,
+      showHistoryOnFocus: true,
+    },
+    onChange = () => {}
+  }: Props = $props();
 </script>
 
 <div class="search-settings absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[200px] p-2">

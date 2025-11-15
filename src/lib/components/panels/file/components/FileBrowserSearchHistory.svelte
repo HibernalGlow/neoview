@@ -3,11 +3,21 @@
 
   type SearchHistoryItem = { query: string; timestamp: number };
 
-  export let searchHistory: SearchHistoryItem[] = [];
-  export let className = '';
-  export let onSelect: (item: SearchHistoryItem) => void = () => {};
-  export let onRemoveItem: (item: SearchHistoryItem) => void = () => {};
-  export let onClearAll: () => void = () => {};
+  interface Props {
+    searchHistory?: SearchHistoryItem[];
+    className?: string;
+    onSelect: (item: SearchHistoryItem) => void;
+    onRemoveItem: (item: SearchHistoryItem) => void;
+    onClearAll: () => void;
+  }
+
+  let {
+    searchHistory = [],
+    className = '',
+    onSelect = () => {},
+    onRemoveItem = () => {},
+    onClearAll = () => {}
+  }: Props = $props();
 
   const formatSearchHistoryTime = (timestamp: number): string => {
     const date = new Date(timestamp);

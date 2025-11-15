@@ -1,13 +1,25 @@
 <script lang="ts">
   import { Search, Folder, FolderOpen } from '@lucide/svelte';
 
-  export let loading = false;
-  export let isSearching = false;
-  export let searchQuery = '';
-  export let hasSearchResults = false;
-  export let itemsCount = 0;
-  export let currentPath = '';
-  export let onSelectFolder: () => void = () => {};
+  interface Props {
+    loading?: boolean;
+    isSearching?: boolean;
+    searchQuery?: string;
+    hasSearchResults?: boolean;
+    itemsCount?: number;
+    currentPath?: string;
+    onSelectFolder: () => void;
+  }
+
+  let {
+    loading = false,
+    isSearching = false,
+    searchQuery = '',
+    hasSearchResults = false,
+    itemsCount = 0,
+    currentPath = '',
+    onSelectFolder = () => {}
+  }: Props = $props();
 </script>
 
 {#if loading}

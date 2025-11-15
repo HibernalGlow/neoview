@@ -1058,7 +1058,7 @@ impl ThumbnailManager {
             file_size,
         };
         
-        let archive_key_clone = archive_key.clone();
+        let _archive_key_clone = archive_key.clone();
         self.db.upsert_thumbnail(archive_record.clone())
             .map_err(|e| format!("保存压缩包记录失败: {}", e))?;
         println!("💾 [Rust] 压缩包记录已保存: {}", archive_key);

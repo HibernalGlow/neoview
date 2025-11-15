@@ -400,11 +400,11 @@
 							
 							<!-- 状态角标 -->
 							{#if bookStore.getPageUpscaleStatus(index) === 'done'}
-								<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-green-500" title="已超分" />
+								<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-green-500" title="已超分"></span>
 							{:else if bookStore.getPageUpscaleStatus(index) === 'preupscaled'}
-								<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-blue-500" title="已预超分" />
+								<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-blue-500" title="已预超分"></span>
 							{:else if bookStore.getPageUpscaleStatus(index) === 'error'}
-								<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-red-500" title="超分失败" />
+								<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-red-500" title="超分失败"></span>
 							{/if}
 						</button>
 					{/each}

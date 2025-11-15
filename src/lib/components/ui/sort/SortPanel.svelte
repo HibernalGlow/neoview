@@ -14,8 +14,8 @@
   type SortField = 'name' | 'modified' | 'size' | 'type' | 'path';
   type SortOrder = 'asc' | 'desc';
 
-  let sortField: SortField = 'path';
-  let sortOrder: SortOrder = 'asc';
+  let sortField = $state<SortField>('path');
+  let sortOrder = $state<SortOrder>('asc');
   let showSortMenu = $state(false);
 
   // 排序配置

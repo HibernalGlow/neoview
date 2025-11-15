@@ -1,6 +1,8 @@
 <script lang="ts">
   import { Folder, File, Image, Trash2, RefreshCw, FileArchive, FolderOpen, Home, ChevronLeft, ChevronRight, ChevronUp, CheckSquare, Grid3x3, List, MoreVertical, Search, ChevronDown, Settings, AlertCircle, Bookmark, Star } from '@lucide/svelte';
   import VirtualizedFileList from './file/components/VirtualizedFileList.svelte';
+  import { invoke } from '@tauri-apps/api/core';
+  import { listen } from '@tauri-apps/api/event';
   import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
   import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
   import { onMount } from 'svelte';
@@ -16,9 +18,11 @@
   import * as ContextMenu from '$lib/components/ui/context-menu';
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
   import { homeDir } from '@tauri-apps/api/path';
-  import { configureThumbnailManager, itemIsDirectory, itemIsImage, toRelativeKey, enqueueDirectoryThumbnails, cancelBySource } from '$lib/utils/thumbnailManager';
+  import { itemIsDirectory, itemIsImage, toRelativeKey, splitForEnqueue, cancelBySource } from '$lib/utils/thumbnailManager';
 import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
 
+
+  const pendingThumbnailKeys = new Set<string>();
 
   // 使用全局状态
   let currentPath = $state('');
@@ -296,17 +300,22 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
     };
     
     document.addEventListener('click', handleClick);
+    const unlistenPromise = listen('thumbnail-generated', (event) => {
+      const detail = event.payload as { path: string; success: boolean; url?: string; error?: string };
+      const key = detail.path.replace(/\\/g, '/');
+      pendingThumbnailKeys.delete(key);
+      if (detail.success && detail.url) {
+        fileBrowserStore.addThumbnail(key, detail.url);
+      } else if (detail.error) {
+        console.error('thumbnail job failed:', detail.error);
+      }
+    });
     
     // 加载主页
     loadHomepage();
 
     // 加载搜索历史
     loadSearchHistory();
-
-    // 注册缩略图生成回调
-    configureThumbnailManager({
-      addThumbnail: (path: string, url: string) => fileBrowserStore.addThumbnail(path, url)
-    });
 
     // 开发模式下运行性能测试
     if (import.meta.env.DEV) {
@@ -317,8 +326,12 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
       }, 2000);
     }
     
-    return () => {
+    return async () => {
       document.removeEventListener('click', handleClick);
+      if (unlistenPromise) {
+        const unlisten = await unlistenPromise;
+        unlisten();
+      }
     };
   });
 
@@ -488,7 +501,18 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
 
     if (thumbnailItems.length > 0) {
       console.log('📦 缓存未命中，准备入队的项目数:', thumbnailItems.length);
-      enqueueDirectoryThumbnails(path, thumbnailItems);
+      const { immediate, high, normal } = splitForEnqueue(thumbnailItems);
+      const jobs = [
+        ...immediate.map(item => ({ path: item.path, is_folder: !!item.isDir, priority: true })),
+        ...high.map(item => ({ path: item.path, is_folder: !!item.isDir, priority: false })),
+        ...normal.map(item => ({ path: item.path, is_folder: !!item.isDir, priority: false })),
+      ];
+
+      try {
+        await invoke('enqueue_thumbnail_jobs', { jobs });
+      } catch (err) {
+        console.error('enqueue_thumbnail_jobs failed', err);
+      }
     }
   }
 
@@ -1488,7 +1512,15 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
           {#each searchHistory as item (item.query)}
             <div
               class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center justify-between group cursor-pointer"
+              role="button"
+              tabindex="0"
               onclick={() => selectSearchHistory(item)}
+              onkeydown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  selectSearchHistory(item);
+                }
+              }}
             >
               <div class="flex items-center gap-2 flex-1 min-w-0">
                 <Search class="h-4 w-4 text-gray-400 flex-shrink-0" />
@@ -1596,9 +1628,9 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
     <div 
       bind:this={fileListContainer}
       class="flex-1 overflow-y-auto p-2 focus:outline-none" 
-      tabindex="0" 
-      onkeydown={handleKeydown}
-      onclick={() => fileListContainer?.focus()}
+      role="region"
+      aria-label="搜索结果列表"
+      tabindex="-1"
     >
       <div class="mb-3 text-sm text-gray-600 px-2">
         找到 {searchResults.length} 个结果 (搜索: "{searchQuery}")
@@ -1610,6 +1642,14 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
               <div
                 class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors hover:bg-gray-50 border-gray-200"
                 onclick={() => openSearchResult(item)}
+                role="button"
+                tabindex="0"
+                onkeydown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openSearchResult(item);
+                  }
+                }}
               >
             <!-- 勾选框（勾选模式） -->
             {#if isCheckMode}

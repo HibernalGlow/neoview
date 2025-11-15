@@ -100,13 +100,7 @@
 {/if}
 
 <style>
-	.animate-in {
-		animation: slideIn 0.3s ease-out;
-	}
 	
-	.slide-in-from-right {
-		animation: slideInFromRight 0.3s ease-out;
-	}
 	
 	@keyframes slideInFromRight {
 		from {

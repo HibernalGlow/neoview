@@ -265,52 +265,7 @@ export class PreloadManager {
 		});
 	}
 
-	/**
-	 * 设置书籍切换监听器
-	 */
-	private setupBookChangeListener(): void {
-		let currentBookPath: string | undefined;
-		
-		// 使用 $effect 监听书籍切换
-		const checkBookChange = () => {
-			const newBookPath = bookStore.currentBook?.path;
-			
-			// 如果书籍路径发生变化
-			if (newBookPath !== currentBookPath) {
-				// 清理上一本书的缓存
-				this.imageLoader.cleanup();
-				this.preloadWorker.clear();
-				
-				// 重置预超分进度
-				this.resetPreUpscaleProgress();
-				
-				// 重新初始化以加载新书的缓存
-				if (newBookPath) {
-					this.imageLoader.initialize();
-					// 预加载当前页周围的内容
-					const currentPageIndex = bookStore.currentPageIndex;
-					if (currentPageIndex >= 0) {
-						const radius = Math.floor(this.performancePreloadPages / 2);
-						this.imageLoader.preloadRange(currentPageIndex, radius);
-					}
-				}
-				
-				currentBookPath = newBookPath;
-				console.log('书籍已切换:', newBookPath);
-			}
-		};
-		
-		// 立即检查一次
-		checkBookChange();
-		
-		// 设置定时检查（作为替代方案）
-		const intervalId = setInterval(checkBookChange, 100);
-		
-		// 保存清理函数
-		this.bookUnsubscribe = () => {
-			clearInterval(intervalId);
-		};
-	}
+	
 
 	/**
 	 * 处理检查预加载缓存事件

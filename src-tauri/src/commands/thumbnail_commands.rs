@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
-use tauri::{command, AppHandle};
+use tauri::{command, AppHandle, Emitter};
 
 use std::time::Duration;
 use crate::core::thumbnail::ThumbnailManager;
@@ -71,7 +71,7 @@ pub struct ThumbnailJobRequest {
     pub priority: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct ThumbnailJobResultPayload {
     pub path: String,
     pub success: bool,
@@ -128,7 +128,7 @@ pub async fn enqueue_thumbnail_jobs(
                 },
             };
 
-            let _ = app.emit_all("thumbnail-generated", payload);
+            let _ = app.emit("thumbnail-generated", payload);
         });
     }
 

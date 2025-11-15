@@ -193,10 +193,10 @@
 		</div>
 
 		{#if conditions.length > 0}
-			<Tabs bind:value={activeTab} className="w-full">
-				<TabsList className="grid w-full grid-cols-{conditions.length}">
+			<Tabs bind:value={activeTab} class="w-full">
+				<TabsList class="grid w-full grid-cols-{conditions.length}">
 					{#each conditions as condition (condition.id)}
-						<TabsTrigger value={condition.id} className="flex items-center gap-2">
+						<TabsTrigger value={condition.id} class="flex items-center gap-2">
 							<span>{condition.name}</span>
 							{#if !condition.enabled}
 								<Badge variant="secondary" class="text-xs">已禁用</Badge>
@@ -210,7 +210,7 @@
 						<Card>
 							<CardHeader>
 								<div class="flex items-center justify-between">
-									<CardTitle className="text-base">{condition.name}</CardTitle>
+									<CardTitle class="text-base">{condition.name}</CardTitle>
 									<div class="flex items-center gap-2">
 										<Badge variant="outline">优先级: {condition.priority}</Badge>
 										<Button
@@ -247,7 +247,7 @@
 								</div>
 								<CardDescription>配置超分条件和执行参数</CardDescription>
 							</CardHeader>
-							<CardContent className="space-y-6">
+							<CardContent class="space-y-6">
 								<!-- 基础设置 -->
 								<div class="grid grid-cols-2 gap-4">
 									<div class="space-y-2">
@@ -335,9 +335,9 @@
 										{#if condition.match.metadata && Object.keys(condition.match.metadata).length > 0}
 											<div class="space-y-2">
 												{#each Object.entries(condition.match.metadata) as [key, expression]}
-													<div className="grid grid-cols-4 gap-2 items-end">
-														<div className="space-y-1">
-															<Label className="text-xs">键名</Label>
+													<div class="grid grid-cols-4 gap-2 items-end">
+														<div class="space-y-1">
+															<Label class="text-xs">键名</Label>
 															<Input
 																value={key}
 																onchange={(e) => {
@@ -348,8 +348,8 @@
 																size="sm"
 															/>
 														</div>
-														<div className="space-y-1">
-															<Label className="text-xs">操作符</Label>
+														<div class="space-y-1">
+															<Label class="text-xs">操作符</Label>
 															<Select
 																value={expression.operator}
 																onchange={(value) => updateMetadataExpression(condition.id, key, { ...expression, operator: value })}
@@ -364,8 +364,8 @@
 																</SelectContent>
 															</Select>
 														</div>
-														<div className="space-y-1">
-															<Label className="text-xs">值</Label>
+														<div class="space-y-1">
+															<Label class="text-xs">值</Label>
 															<Input
 																value={String(expression.value)}
 																onchange={(e) => updateMetadataExpression(condition.id, key, { ...expression, value: e.target.value })}
@@ -383,14 +383,14 @@
 												{/each}
 											</div>
 										{:else}
-											<p className="text-sm text-muted-foreground">暂无自定义元数据条件</p>
+											<p class="text-sm text-muted-foreground">暂无自定义元数据条件</p>
 										{/if}
 									</div>
 								</div>
 
 								<!-- 执行参数 -->
 								<div class="space-y-4">
-									<h4 className="text-sm font-semibold">执行参数</h4>
+									<h4 class="text-sm font-semibold">执行参数</h4>
 									<div class="grid grid-cols-2 gap-4">
 										<div class="space-y-2">
 											<Label htmlFor={`model-${condition.id}`}>模型</Label>
@@ -408,7 +408,7 @@
 												</SelectContent>
 											</Select>
 										</div>
-										<div className="space-y-2">
+										<div class="space-y-2">
 											<Label htmlFor={`scale-${condition.id}`}>缩放倍数: {condition.action.scale}x</Label>
 											<Slider
 												value={[condition.action.scale]}
@@ -418,7 +418,7 @@
 												step={0.5}
 											/>
 										</div>
-										<div className="space-y-2">
+										<div class="space-y-2">
 											<Label htmlFor={`tileSize-${condition.id}`}>分块大小: {condition.action.tileSize}</Label>
 											<Slider
 												value={[condition.action.tileSize]}
@@ -428,7 +428,7 @@
 												step={50}
 											/>
 										</div>
-										<div className="space-y-2">
+										<div class="space-y-2">
 											<Label htmlFor={`noiseLevel-${condition.id}`}>降噪级别: {condition.action.noiseLevel}</Label>
 											<Slider
 												value={[condition.action.noiseLevel]}
@@ -438,7 +438,7 @@
 												step={1}
 											/>
 										</div>
-										<div className="space-y-2">
+										<div class="space-y-2">
 											<Label htmlFor={`gpuId-${condition.id}`}>GPU ID</Label>
 											<Input
 												id={`gpuId-${condition.id}`}
@@ -447,7 +447,7 @@
 												onchange={(e) => updateAction(condition.id, { gpuId: Number(e.target.value) })}
 											/>
 										</div>
-										<div className="flex items-center space-x-2 pt-6">
+										<div class="flex items-center space-x-2 pt-6">
 											<Switch
 												id={`useCache-${condition.id}`}
 												checked={condition.action.useCache}
@@ -464,9 +464,9 @@
 			</Tabs>
 		{:else}
 			<Card>
-				<CardContent className="pt-6">
-					<div className="text-center">
-						<p className="text-muted-foreground mb-4">暂无超分条件</p>
+				<CardContent class="pt-6">
+					<div class="text-center">
+						<p class="text-muted-foreground mb-4">暂无超分条件</p>
 						<Button onclick={addCondition}>
 							<Plus class="w-4 h-4 mr-1" />
 							添加第一个条件
@@ -477,7 +477,7 @@
 		{/if}
 	{:else}
 		<Card>
-			<CardContent className="pt-6">
+			<CardContent class="pt-6">
 				<p class="text-sm text-muted-foreground">启用条件超分后可以配置多个条件规则</p>
 			</CardContent>
 		</Card>

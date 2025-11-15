@@ -1,63 +1,52 @@
 <script lang="ts">
   import { File, FileArchive, Folder, Image, Trash2 } from '@lucide/svelte';
-  import * as ContextMenu from '$lib/components/ui/context-menu/index.js';
+  import * as ContextMenu from '$lib/components/ui/context-menu';
   import FileContextMenu from './FileContextMenu.svelte';
   import type { FsItem } from '$lib/types';
   import { toRelativeKey } from '$lib/utils/thumbnailManager';
 
-  import {
-    addBookmarkAction,
-    openInExplorerAction,
-    openWithExternalAppAction,
-    deleteItemAction,
-    moveItemToFolderAction,
-    renameItemAction,
-    openArchiveAsBookAction,
-    copyPathAction,
-  } from '../services/fileActionService';
-  import { setClipboardItem } from '../services/contextMenuService';
-
-  type Props = {
-    items?: FsItem[];
-    listLabel?: string;
-    isSearchResults?: boolean;
-    isCheckMode?: boolean;
-    isDeleteMode?: boolean;
-    isArchiveView?: boolean;
-    selectedIndex?: number;
-    selectedItems?: Set<string>;
-    thumbnails?: Map<string, string>;
-    containerRef?: HTMLDivElement;
-    onKeydown?: (event: KeyboardEvent) => void;
-    onRowClick?: (item: FsItem, index: number) => void;
-    onRowKeyboardActivate?: (item: FsItem, index: number) => void;
-    onToggleSelection?: (path: string) => void;
-    onInlineDelete?: (item: FsItem) => void;
-    onContextMenuOpen?: (event: MouseEvent, item: FsItem) => void;
-    onContextMenuClose?: () => void;
-    header?: Snippet;
+  export type ContextMenuHandlers = {
+    addBookmark: (item: FsItem) => void;
+    openInExplorer: (item: FsItem) => void;
+    openWithExternalApp: (item: FsItem) => void;
+    cutItem: (item: FsItem) => void;
+    copyItem: (item: FsItem) => void;
+    deleteItem: (item: FsItem) => void;
+    moveToFolder: (item: FsItem) => void;
+    renameItem: (item: FsItem) => void;
+    openArchiveAsBook: (item: FsItem) => void;
+    browseArchive: (item: FsItem) => void;
+    copyPath: (item: FsItem) => void;
   };
 
-  let {
-    items = [],
-    listLabel = '文件列表',
-    isSearchResults = false,
-    isCheckMode = false,
-    isDeleteMode = false,
-    isArchiveView = false,
-    selectedIndex = -1,
-    selectedItems = new Set<string>(),
-    thumbnails = new Map<string, string>(),
-    containerRef,
-    onKeydown = () => {},
-    onRowClick = () => {},
-    onRowKeyboardActivate = () => {},
-    onToggleSelection = () => {},
-    onInlineDelete = () => {},
-    onContextMenuOpen = () => {},
-    onContextMenuClose = () => {},
-    header,
-  }: Props = $props();
+  export let items: FsItem[] = [];
+  export let listLabel = '文件列表';
+  export let isSearchResults = false;
+  export let isCheckMode = false;
+  export let isDeleteMode = false;
+  export let isArchiveView = false;
+  export let selectedIndex = -1;
+  export let selectedItems: Set<string> = new Set();
+  export let thumbnails: Map<string, string> = new Map();
+  export let containerRef: HTMLDivElement | undefined;
+  export let onKeydown: (event: KeyboardEvent) => void = () => {};
+  export let onRowClick: (item: FsItem, index: number) => void = () => {};
+  export let onRowKeyboardActivate: (item: FsItem, index: number) => void = () => {};
+  export let onToggleSelection: (path: string) => void = () => {};
+  export let onInlineDelete: (item: FsItem) => void = () => {};
+  export let contextMenuHandlers: ContextMenuHandlers = {
+    addBookmark: () => {},
+    openInExplorer: () => {},
+    openWithExternalApp: () => {},
+    cutItem: () => {},
+    copyItem: () => {},
+    deleteItem: () => {},
+    moveToFolder: () => {},
+    renameItem: () => {},
+    openArchiveAsBook: () => {},
+    browseArchive: () => {},
+    copyPath: () => {},
+  };
 
   const formatPathInfo = (item: FsItem) => {
     if (isSearchResults) {
@@ -66,25 +55,6 @@
     const size = item.size ? `${item.size}` : '';
     return item.isDir ? '文件夹' : size;
   };
-
-  function handleContextMenu(event: MouseEvent, item: FsItem) {
-    onContextMenuOpen(event, item);
-  }
-
-  async function handleDelete(item: FsItem) {
-    const success = await deleteItemAction(item);
-    if (success) {
-      onInlineDelete(item);
-    }
-  }
-
-  async function handleMove(item: FsItem) {
-    await moveItemToFolderAction(item);
-  }
-
-  async function handleRename(item: FsItem) {
-    await renameItemAction(item);
-  }
 </script>
 
 <div
@@ -95,10 +65,10 @@
   tabindex="0"
   onkeydown={onKeydown}
 >
-  {@render header?.()}
+  <slot name="header" />
   <div class="grid grid-cols-1 gap-2">
     {#each items as item, index (item.path)}
-      <ContextMenu.Root onOpenChange={(open) => open && onContextMenuOpen(lastContextMenuEvent, item)} onClose={onContextMenuClose}>
+      <ContextMenu.Root>
         <ContextMenu.Trigger asChild>
           <div
             class={`group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors ${!isSearchResults && selectedIndex === index ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}`}
@@ -112,7 +82,6 @@
                 onRowKeyboardActivate(item, index);
               }
             }}
-            oncontextmenu={(event) => handleContextMenu(event, item)}
           >
             {#if isCheckMode}
               <button
@@ -176,17 +145,17 @@
         <FileContextMenu
           {item}
           {isArchiveView}
-          onAddBookmark={(i) => addBookmarkAction(i)}
-          onOpenInExplorer={(i) => openInExplorerAction(i)}
-          onOpenWithExternalApp={(i) => openWithExternalAppAction(i)}
-          onCutItem={(i) => setClipboardItem(i, 'cut')}
-          onCopyItem={(i) => setClipboardItem(i, 'copy')}
-          onDeleteItem={handleDelete}
-          onMoveToFolder={handleMove}
-          onRenameItem={handleRename}
-          onOpenArchiveAsBook={(i) => openArchiveAsBookAction(i)}
-          onBrowseArchive={(i) => openArchiveAsBookAction(i)}
-          onCopyPath={(i) => copyPathAction(i)}
+          onAddBookmark={contextMenuHandlers.addBookmark}
+          onOpenInExplorer={contextMenuHandlers.openInExplorer}
+          onOpenWithExternalApp={contextMenuHandlers.openWithExternalApp}
+          onCutItem={contextMenuHandlers.cutItem}
+          onCopyItem={contextMenuHandlers.copyItem}
+          onDeleteItem={contextMenuHandlers.deleteItem}
+          onMoveToFolder={contextMenuHandlers.moveToFolder}
+          onRenameItem={contextMenuHandlers.renameItem}
+          onOpenArchiveAsBook={contextMenuHandlers.openArchiveAsBook}
+          onBrowseArchive={contextMenuHandlers.browseArchive}
+          onCopyPath={contextMenuHandlers.copyPath}
         />
       </ContextMenu.Root>
     {/each}

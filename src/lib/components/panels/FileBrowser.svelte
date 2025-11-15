@@ -1,66 +1,22 @@
 <script lang="ts">
+  import { Folder, File, Image, Trash2, RefreshCw, FileArchive, FolderOpen, Home, ChevronLeft, ChevronRight, ChevronUp, CheckSquare, Grid3x3, List, MoreVertical, Search, ChevronDown, Settings, AlertCircle, Bookmark, Star } from '@lucide/svelte';
+  import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
+  import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
   import { onMount } from 'svelte';
   import { fileBrowserService, navigationHistory } from './file/services/fileBrowserService';
-  import type { FsItem } from '$lib/types/FsItem';
+  import { getThumbnailQueue } from './file/services/thumbnailQueueService';
+  import type { FsItem } from '$lib/types';
   import { bookStore } from '$lib/stores/book.svelte';
+  import PathBar from '../ui/PathBar.svelte';
   import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
+  import { Button } from '$lib/components/ui/button';
+  import * as Input from '$lib/components/ui/input';
+  import * as ContextMenu from '$lib/components/ui/context-menu';
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
-  import { explorerSettingsStore, type ExplorerSettings } from '$lib/stores/explorerSettings.svelte';
-  import { selectionStore } from '$lib/stores/selection.svelte';
-  import { fileTreeStore } from '$lib/stores/fileTree.svelte';
   import { homeDir } from '@tauri-apps/api/path';
-  import FileBrowserLayout from './file/components/FileBrowserLayout.svelte';
-  import FileTreePanel from './file/components/FileTreePanel.svelte';
-  import {
-    calculateContextMenuPosition,
-    setClipboardItem,
-    pasteClipboardItem,
-  } from './file/services/contextMenuService';
-  import {
-    addBookmarkAction,
-    openInExplorerAction,
-    openWithExternalAppAction,
-    deleteItemAction,
-    moveItemToFolderAction,
-    renameItemAction,
-    openArchiveAsBookAction,
-    copyPathAction,
-  } from './file/services/fileActionService';
-  import {
-    sortFsItems,
-    getSortConfig,
-    setSortConfig,
-    type SortConfig,
-  } from './file/services/sortService';
-  import {
-    loadSearchHistoryEntries,
-    addSearchHistoryEntry,
-    removeSearchHistoryEntry,
-    clearSearchHistoryEntries,
-    searchFilesInPath,
-    type SearchHistoryEntry,
-    type SearchSettings,
-  } from './file/services/searchService';
-  import {
-    loadDirectory as loadDirectoryService,
-    loadDirectoryWithoutHistory as loadDirectoryWithoutHistoryService,
-    navigateToDirectory as navigateToDirectoryService,
-    loadArchive as loadArchiveService,
-    goBack as goBackService,
-    goBackInHistory as goBackInHistoryService,
-    goForwardInHistory as goForwardInHistoryService,
-    refreshDirectory as refreshDirectoryService,
-    type NavigationOptions,
-    type NavigationContext,
-  } from './file/services/navigationService';
-  import { useShortcuts, explorerShortcuts } from '$lib/hooks/useShortcuts.svelte';
+  import { itemIsDirectory, itemIsImage, toRelativeKey } from '$lib/utils/thumbnailManager';
 
 
-  // Explorer 设置和选择状态
-  let explorerSettings = $state<ExplorerSettings>();
-  let selectedItems = $derived(selectionStore.getSelectedItems());
-  let selectedCount = $derived(selectionStore.getSelectedCount());
-  
   // 使用全局状态
   let currentPath = $state('');
   let items = $state<FsItem[]>([]);
@@ -74,114 +30,31 @@
   let fileListContainer = $state<HTMLDivElement | undefined>(undefined);
   let contextMenu = $state<{ x: number; y: number; item: FsItem | null; direction: 'up' | 'down' }>({ x: 0, y: 0, item: null, direction: 'down' });
   let bookmarkContextMenu = $state<{ x: number; y: number; bookmark: any | null }>({ x: 0, y: 0, bookmark: null });
+  let copyToSubmenu = $state<{ show: boolean; x: number; y: number }>({ show: false, x: 0, y: 0 });
+  let clipboardItem = $state<{ path: string; operation: 'copy' | 'cut' } | null>(null);
 
-  // UI 模式状态（从 explorerSettings 获取）
-  let viewMode = $derived(explorerSettings?.layout || 'list');
-  let sortConfig = $derived(explorerSettings?.sortConfig || getSortConfig());
-  let hasHomepage = $state(false);
-  let canNavigateBack = $state(false);
-  
-  // 移除旧的选择状态，使用 selectionStore
+  // 缩略图队列
+  const thumbnailQueue = getThumbnailQueue((path, url) => fileBrowserStore.addThumbnail(path, url));
 
-  function createNavigationOptions(): NavigationOptions {
-    return {
-      sortConfig,
-      thumbnails,
-      clearSelection: () => selectionStore.clear(),
-    };
-  }
-
-  function createNavigationContext(): NavigationContext {
-    return {
-      ...createNavigationOptions(),
-      currentPath,
-      currentArchivePath,
-      isArchiveView,
-    };
-  }
-
-  // 为 FileBrowserLayout 创建数据对象
-  const layoutData = $derived({
-    currentPath,
-    items,
-    searchResults,
-    loading,
-    isSearching,
-    error,
-    searchQuery,
-    searchHistory,
-    searchSettings,
-    showSearchHistory,
-    showSearchSettings,
-    isArchiveView,
-    hasHomepage,
-    canNavigateBack,
-    canGoBackInHistory: navigationHistory.canGoBack(),
-    canGoForwardInHistory: navigationHistory.canGoForward(),
-    viewMode,
-    sortConfig,
-    thumbnails,
-    selectedItems: new Set(selectedItems.map(item => item.path)),
-    selectedCount,
-    selectedIndex,
-    fileListContainer,
-    explorerSettings
-  });
-
-  // 为 FileBrowserLayout 创建处理器对象
-  const layoutHandlers = {
-    handlePathNavigate,
-    goHome,
-    goBackInHistory,
-    goForwardInHistory,
-    goBack,
-    selectFolder,
-    refresh,
-    toggleCheckMode,
-    toggleDeleteMode,
-    toggleViewMode,
-    clearThumbnailCache,
-    handleSortConfig,
-    handleLayoutChange,
-    handleIconSizeChange,
-    handleSelectionChange,
-    handleSearchInput,
-    handleSearchFocus,
-    toggleSearchHistoryDropdown,
-    toggleSearchSettingsDropdown,
-    clearSearchField,
-    selectSearchHistory,
-    removeSearchHistoryItem,
-    clearSearchHistory,
-    updateSearchSetting,
-    handleKeydown,
-    openSearchResult,
-    deleteItem,
-    toggleItemSelection: (item: FsItem, index: number) => selectionStore.toggleSelection(item, index),
-    openFile: (item: FsItem, index?: number) => {
-      if (index !== undefined) {
-        fileBrowserStore.setSelectedIndex(index);
-      }
-      return openFile(item);
-    }
-  };
+  // UI 模式状态
+  let isCheckMode = $state(false);
+  let isDeleteMode = $state(false);
+  let viewMode = $state<'list' | 'thumbnails'>('list'); // 列表 or 缩略图视图
+  let selectedItems = $state<Set<string>>(new Set());
 
   
 
   // 搜索功能状态
   let searchQuery = $state('');
-  type SearchHistoryEntry = { query: string; timestamp: number };
-
-  let searchHistory = $state<SearchHistoryEntry[]>([]);
+  let searchHistory = $state<{ query: string; timestamp: number }[]>([]);
   let showSearchHistory = $state(false);
   let showSearchSettings = $state(false);
-  let searchSettings = $state<SearchSettings>({
+  let searchSettings = $state({
     includeSubfolders: true,
-    showHistoryOnFocus: true,
+    showHistoryOnFocus: true
   });
   let searchResults = $state<FsItem[]>([]);
   let isSearching = $state(false);
-  let searchInputTimeout: ReturnType<typeof setTimeout> | null = null;
 
   // 书签相关 - 使用 bookmarkStore
   function loadBookmarks() {
@@ -190,7 +63,7 @@
 
   // 订阅全局状态 - 使用 Svelte 5 的响应式
   $effect(() => {
-    const fileBrowserUnsubscribe = fileBrowserStore.subscribe(state => {
+    const unsubscribe = fileBrowserStore.subscribe(state => {
       console.log('📊 Store state updated:', {
         currentPath: state.currentPath,
         itemsCount: state.items.length,
@@ -207,17 +80,9 @@
       currentArchivePath = state.currentArchivePath;
       selectedIndex = state.selectedIndex;
       thumbnails = state.thumbnails;
-      canNavigateBack = state.isArchiveView || Boolean(state.currentPath);
     });
     
-    const settingsUnsubscribe = explorerSettingsStore.subscribe(settings => {
-      explorerSettings = settings;
-    });
-    
-    return () => {
-      fileBrowserUnsubscribe();
-      settingsUnsubscribe();
-    };
+    return unsubscribe;
   });
 
   // 主页路径的本地存储键
@@ -251,7 +116,6 @@
             console.log('📍 未设置主页，本次使用系统 Home 目录作为主页:', homepage);
             // 将该值保存为主页以便下次启动使用
             setHomepage(homepage);
-            hasHomepage = true;
           }
         } catch (e) {
           console.warn('⚠️ 无法获取系统 Home 目录:', e);
@@ -261,9 +125,8 @@
       if (homepage) {
         console.log('📍 加载主页路径:', homepage);
         navigationHistory.setHomepage(homepage);
-        hasHomepage = true;
         // 注意：不在此处 await 阻塞 UI，如果需要可以等待
-        await loadDirectoryService(homepage, createNavigationOptions());
+        await loadDirectory(homepage);
       } else {
         console.warn('⚠️ 没有可用的主页路径，跳过加载主页');
       }
@@ -285,7 +148,7 @@
   
   
   /**
-   * 执行搜索（使用fd）
+   * 执行搜索（使用 ripgrep）
    */
   async function performSearch(query: string) {
     if (!query.trim()) {
@@ -295,14 +158,17 @@
 
     isSearching = true;
     try {
-      const results = await searchFilesInPath(currentPath, query, searchSettings, {
+      const options = {
+        includeSubfolders: searchSettings.includeSubfolders,
         maxResults: 100,
-      });
-      console.log(`✅ 搜索完成，找到 ${results.length} 个结果`);
-      console.log('搜索结果详情:', results);
+      };
+      
+      searchResults = await fileBrowserService.searchFiles(currentPath, query, options);
+      console.log(`✅ 搜索完成，找到 ${searchResults.length} 个结果`);
+      console.log('搜索结果详情:', searchResults);
       
       // 显示每个结果的详细信息
-      results.forEach((item, index) => {
+      searchResults.forEach((item, index) => {
         console.log(`[${index + 1}] ${item.isDir ? '📁' : '📄'} ${item.name}`);
         console.log(`    路径: ${item.path}`);
         console.log(`    大小: ${formatFileSize(item.size, item.isDir)}`);
@@ -311,10 +177,16 @@
       });
 
       // 搜索完成后自动应用默认排序（路径升序）
-      if (results.length > 0) {
-        searchResults = sortFsItems(results, sortConfig);
-      } else {
-        searchResults = [];
+      if (searchResults.length > 0) {
+        const sorted = [...searchResults].sort((a, b) => {
+          // 文件夹始终在前面
+          if (a.isDir !== b.isDir) {
+            return a.isDir ? -1 : 1;
+          }
+          // 按路径升序排序
+          return a.path.localeCompare(b.path, undefined, { numeric: true });
+        });
+        searchResults = sorted;
       }
     } catch (err) {
       console.error('❌ 搜索失败:', err);
@@ -352,51 +224,56 @@
    * 后退
    */
   function goBackInHistory() {
-    goBackInHistoryService(createNavigationOptions());
+    const path = navigationHistory.back();
+    if (path) {
+      loadDirectoryWithoutHistory(path);
+    }
   }
 
   /**
    * 前进
    */
   function goForwardInHistory() {
-    goForwardInHistoryService(createNavigationOptions());
+    const path = navigationHistory.forward();
+    if (path) {
+      loadDirectoryWithoutHistory(path);
+    }
   }
 
   /**
    * 切换勾选模式
    */
   function toggleCheckMode() {
-    // TODO: 实现勾选模式逻辑
-    console.log('Toggle check mode');
+    isCheckMode = !isCheckMode;
+    if (!isCheckMode) {
+      selectedItems.clear();
+    }
   }
 
   /**
    * 切换删除模式
    */
   function toggleDeleteMode() {
-    // TODO: 实现删除模式逻辑
-    console.log('Toggle delete mode');
+    isDeleteMode = !isDeleteMode;
   }
 
   /**
    * 切换视图模式
    */
   function toggleViewMode() {
-    explorerSettingsStore.updateSetting(
-      'layout', 
-      explorerSettings?.layout === 'list' ? 'thumbnails' : 'list'
-    );
+    viewMode = viewMode === 'list' ? 'thumbnails' : 'list';
   }
 
   /**
    * 切换项目选中状态
    */
   function toggleItemSelection(path: string) {
-    const item = items.find(item => item.path === path);
-    if (item) {
-      const index = items.indexOf(item);
-      selectionStore.toggleSelection(item, index);
+    if (selectedItems.has(path)) {
+      selectedItems.delete(path);
+    } else {
+      selectedItems.add(path);
     }
+    selectedItems = selectedItems; // 触发响应式更新
   }
 
   // 组件挂载时添加全局点击事件和加载主页
@@ -420,94 +297,8 @@
     // 加载主页
     loadHomepage();
 
-    searchHistory = loadSearchHistoryEntries();
-
-    // 设置快捷键
-    useShortcuts([
-      {
-        ...explorerShortcuts.goBack,
-        action: () => {
-          if (navigationHistory.canGoBack()) {
-            goBackInHistory();
-          }
-        }
-      },
-      {
-        ...explorerShortcuts.goForward,
-        action: () => {
-          if (navigationHistory.canGoForward()) {
-            goForwardInHistory();
-          }
-        }
-      },
-      {
-        ...explorerShortcuts.goHome,
-        action: goHome
-      },
-      {
-        ...explorerShortcuts.expandTree,
-        action: () => {
-          const selectedPath = fileTreeStore.getState().selectedPath;
-          if (selectedPath) {
-            const node = fileTreeStore.getState().nodes.get(selectedPath);
-            if (node?.isDir) {
-              if (node.isExpanded) {
-                fileTreeStore.collapseNode(selectedPath);
-              } else {
-                fileTreeStore.expandNode(selectedPath);
-              }
-            }
-          }
-        }
-      },
-      {
-        ...explorerShortcuts.focusSearch,
-        action: () => {
-          const searchInput = document.querySelector('input[placeholder*="搜索"]') as HTMLInputElement;
-          if (searchInput) {
-            searchInput.focus();
-          }
-        }
-      },
-      {
-        ...explorerShortcuts.clearSearch,
-        action: () => {
-          if (searchQuery) {
-            clearSearchField();
-          }
-        }
-      },
-      {
-        ...explorerShortcuts.toggleSidebar,
-        action: () => {
-          explorerSettingsStore.updateSetting('showSidebar', !explorerSettings?.showSidebar);
-        }
-      },
-      {
-        ...explorerShortcuts.selectAll,
-        action: () => {
-          selectionStore.selectAll(items);
-        }
-      },
-      {
-        ...explorerShortcuts.rename,
-        action: () => {
-          const selectedItems = selectionStore.getSelectedItems();
-          if (selectedItems.length === 1) {
-            renameItem(selectedItems[0]);
-          }
-        }
-      },
-      {
-        ...explorerShortcuts.delete,
-        action: () => {
-          const selectedItems = selectionStore.getSelectedItems();
-          if (selectedItems.length > 0) {
-            selectedItems.forEach(item => deleteItem(item.path));
-          }
-        }
-      }
-    ]);
+    // 加载搜索历史
+    loadSearchHistory();
 
     return () => {
       document.removeEventListener('click', handleClick);
@@ -526,7 +317,7 @@
       
       if (path) {
         console.log('📂 Loading selected directory...');
-        await loadDirectoryService(path, createNavigationOptions());
+        await loadDirectory(path);
         console.log('✅ Directory loaded successfully');
       } else {
         console.log('⚠️ No folder selected');
@@ -537,36 +328,193 @@
     }
   }
 
-  function loadDirectory(path: string) {
-    return loadDirectoryService(path, createNavigationOptions());
+  /**
+   * 加载目录内容（添加到历史记录）
+   */
+  async function loadDirectory(path: string) {
+    await loadDirectoryWithoutHistory(path);
+    navigationHistory.push(path);
   }
 
-  function loadDirectoryWithoutHistory(path: string) {
-    return loadDirectoryWithoutHistoryService(path, createNavigationOptions());
-  }
+  /**
+   * 加载目录内容（不添加历史记录，用于前进/后退）
+   */
+  async function loadDirectoryWithoutHistory(path: string) {
+    console.log('📂 loadDirectory called with path:', path);
+    
+  fileBrowserStore.setLoading(true);
+  fileBrowserStore.setError('');
+  fileBrowserStore.clearThumbnails();
+  // 清空外部缩略图队列，避免上次目录的任务残留
+  thumbnailQueue.clear();
+    fileBrowserStore.setArchiveView(false);
+    fileBrowserStore.setSelectedIndex(-1);
+    fileBrowserStore.setCurrentPath(path);
+    
+    // 清空选择
+    selectedItems.clear();
 
-  function navigateToDirectory(path: string) {
-    if (!path) {
-      console.warn('⚠️ Empty path provided to navigateToDirectory');
-      return Promise.resolve();
+    try {
+      console.log('🔄 Loading directory via service...');
+      const loadedItems = await fileBrowserService.browseDirectory(path);
+      console.log('✅ Loaded', loadedItems.length, 'items:', loadedItems.map(i => i.name));
+      
+      fileBrowserStore.setItems(loadedItems);
+      
+      // 异步加载缩略图
+      console.log('🖼️ 开始加载缩略图，项目总数:', loadedItems.length);
+      const imageCount = loadedItems.filter(item => itemIsImage(item)).length;
+      const folderCount = loadedItems.filter(item => itemIsDirectory(item)).length;
+      console.log('📊 图片数量:', imageCount, '文件夹数量:', folderCount);
+
+      for (const item of loadedItems) {
+        try {
+          const key = toRelativeKey(item.path);
+          // 如果 store 中已经存在对应的相对路径缩略图，则跳过入队
+          if (thumbnails && thumbnails.has(key)) {
+            console.log('ℹ️ 已存在缩略图，跳过入队:', key);
+            continue;
+          }
+        } catch (e) {
+          // 忽略 key 计算错误
+        }
+
+        if (itemIsDirectory(item) || itemIsImage(item)) {
+          console.log('🖼️/📁 Enqueue thumbnail:', item.path);
+          thumbnailQueue.enqueueItems([item], { priority: 'high', source: path });
+        } else {
+          (async () => {
+            try {
+              if (await fileBrowserService.isSupportedArchive(item.path)) {
+                console.log('📦 Enqueue archive thumbnail:', item.path);
+                thumbnailQueue.enqueueItems([item], { priority: 'high', source: path });
+              } else {
+                console.log('⚪ 跳过非图片非目录项:', item.path);
+              }
+            } catch (e) {
+              console.debug('Archive check failed for', item.path, e);
+            }
+          })();
+        }
+      }
+    } catch (err) {
+      console.error('❌ Error loading directory:', err);
+      fileBrowserStore.setError(String(err));
+      fileBrowserStore.setItems([]);
+    } finally {
+      fileBrowserStore.setLoading(false);
     }
-    return navigateToDirectoryService(path, createNavigationOptions());
   }
 
-  function loadArchive(path: string) {
-    return loadArchiveService(path, createNavigationOptions());
+  /**
+   * 加载压缩包内容
+   */
+  async function loadArchive(path: string) {
+    console.log('📦 loadArchive called with path:', path);
+    
+    fileBrowserStore.setLoading(true);
+    fileBrowserStore.setError('');
+    fileBrowserStore.clearThumbnails();
+    fileBrowserStore.setArchiveView(true, path);
+    fileBrowserStore.setSelectedIndex(-1);
+
+    try {
+      const loadedItems = await fileBrowserService.listArchiveContents(path);
+      console.log('✅ Loaded', loadedItems.length, 'archive items');
+      
+      fileBrowserStore.setItems(loadedItems);
+      
+      // 异步加载压缩包内图片的缩略图
+      for (const item of loadedItems) {
+        if (itemIsImage(item)) {
+          loadArchiveThumbnail(item.path);
+        }
+      }
+    } catch (err) {
+      console.error('❌ Error loading archive:', err);
+      fileBrowserStore.setError(String(err));
+      fileBrowserStore.setItems([]);
+    } finally {
+      fileBrowserStore.setLoading(false);
+    }
   }
 
+  /**
+   * 加载单个缩略图
+   */
   
+
+  /**
+   * 加载文件夹缩略图
+   */
   
+
+  /**
+   * 加载压缩包内图片的缩略图 - 完全使用单张图片逻辑
+   */
+  async function loadArchiveThumbnail(filePath: string) {
+    try {
+      // 从压缩包中提取图片数据
+      const imageData = await fileBrowserService.loadImageFromArchive(currentArchivePath, filePath);
+      // 使用新的API从图片数据生成缩略图
+      const thumbnail = await fileBrowserService.generateThumbnailFromData(imageData);
+      fileBrowserStore.addThumbnail(filePath, thumbnail);
+    } catch (err) {
+      // 不支持的图片格式或其他错误，静默失败
+      console.debug('Failed to load archive thumbnail:', err);
+    }
+  }
 
   /**
    * 显示右键菜单
    */
   function showContextMenu(e: MouseEvent, item: FsItem) {
     e.preventDefault();
-    const position = calculateContextMenuPosition(e);
-    contextMenu = { ...position, item };
+    
+    // 获取视口尺寸
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const viewportMiddle = viewportHeight / 2;
+    
+    let menuX = e.clientX;
+    let menuY = e.clientY;
+    let menuDirection: 'up' | 'down' = 'down'; // 默认向下展开
+    
+    // 确保菜单不超出视口右侧
+    const menuWidth = 180; // 预估菜单宽度
+    if (e.clientX + menuWidth > viewportWidth) {
+      menuX = viewportWidth - menuWidth - 10; // 留10px边距
+    }
+    
+    // 确保菜单不超出视口左侧
+    if (menuX < 10) {
+      menuX = 10;
+    }
+    
+    // 如果点击位置在视口中线以下，则向上翻转菜单
+    if (e.clientY > viewportMiddle) {
+      menuDirection = 'up';
+      // 向上翻转时，需要调整Y坐标，让菜单底部对齐点击位置
+      // 使用70vh的最大高度来计算位置
+      const maxMenuHeight = viewportHeight * 0.7;
+      menuY = e.clientY - Math.min(250, maxMenuHeight); // 预估菜单高度或最大高度
+    }
+    
+    // 确保菜单不超出视口顶部或底部
+    const maxMenuHeight = viewportHeight * 0.7;
+    if (menuDirection === 'down' && menuY + maxMenuHeight > viewportHeight) {
+      menuY = viewportHeight - maxMenuHeight - 10;
+    }
+    if (menuDirection === 'up' && menuY < 10) {
+      menuY = 10;
+    }
+    
+    contextMenu = { 
+      x: menuX, 
+      y: menuY, 
+      item,
+      direction: menuDirection
+    };
   }
 
   /**
@@ -609,6 +557,7 @@
   function hideContextMenu() {
     contextMenu = { x: 0, y: 0, item: null, direction: 'down' };
     bookmarkContextMenu = { x: 0, y: 0, bookmark: null };
+    copyToSubmenu.show = false;
   }
 
   async function openSearchResult(item: FsItem) {
@@ -725,22 +674,60 @@
    * 返回上一级
    */
   async function goBack() {
-    await goBackService(createNavigationContext());
+    if (isArchiveView) {
+      // 从压缩包视图返回到文件系统
+      isArchiveView = false;
+      const lastBackslash = currentArchivePath.lastIndexOf('\\');
+      const lastSlash = currentArchivePath.lastIndexOf('/');
+      const lastSeparator = Math.max(lastBackslash, lastSlash);
+      const parentDir = lastSeparator > 0 ? currentArchivePath.substring(0, lastSeparator) : currentPath;
+      await loadDirectory(parentDir);
+    } else if (currentPath) {
+      // 文件系统中返回上一级
+      const lastBackslash = currentPath.lastIndexOf('\\');
+      const lastSlash = currentPath.lastIndexOf('/');
+      const lastSeparator = Math.max(lastBackslash, lastSlash);
+      
+      if (lastSeparator > 0) {
+        const parentDir = currentPath.substring(0, lastSeparator);
+        // 确保不是驱动器根目录后面的路径
+        if (parentDir && !parentDir.endsWith(':')) {
+          await loadDirectory(parentDir);
+        }
+      }
+    }
   }
 
   
 
-  
+  /**
+   * 导航到目录
+   */
+  async function navigateToDirectory(path: string) {
+    console.log('🚀 navigateToDirectory called with path:', path);
+    if (!path) {
+      console.warn('⚠️ Empty path provided to navigateToDirectory');
+      return;
+    }
+    await loadDirectory(path);
+  }
+
+  /**
+   * 打开图片文件
+   */
   async function openImage(path: string) {
     try {
       console.log('🖼️ Opening image:', path);
+      // 获取图片所在的目录
       const lastBackslash = path.lastIndexOf('\\');
       const lastSlash = path.lastIndexOf('/');
       const lastSeparator = Math.max(lastBackslash, lastSlash);
       const parentDir = lastSeparator > 0 ? path.substring(0, lastSeparator) : path;
       
       console.log('📁 Parent directory:', parentDir);
+      // 打开整个文件夹作为 book
       await bookStore.openDirectoryAsBook(parentDir);
+      // 跳转到指定图片
       await fileBrowserService.navigateToImage(path);
       console.log('✅ Image opened');
     } catch (err) {
@@ -791,50 +778,16 @@
     }
   }
 
-  function applySortingToCurrentData() {
+  /**
+   * 处理排序
+   */
+  function handleSort(sortedItems: FsItem[]) {
     if (searchQuery && searchResults.length > 0) {
-      searchResults = sortFsItems(searchResults, sortConfig);
+      // 如果正在显示搜索结果，则排序搜索结果
+      searchResults = sortedItems;
     } else {
-      fileBrowserStore.setItems(sortFsItems(items, sortConfig));
-    }
-  }
-
-  /**
-   * 处理排序配置变更
-   */
-  function handleSortConfig(config: SortConfig) {
-    explorerSettingsStore.updateSetting('sortConfig', config);
-    setSortConfig(config);
-    applySortingToCurrentData();
-  }
-
-  /**
-   * 处理布局模式变更
-   */
-  function handleLayoutChange(layout: ExplorerSettings['layout']) {
-    explorerSettingsStore.updateSetting('layout', layout);
-  }
-
-  /**
-   * 处理图标大小变更
-   */
-  function handleIconSizeChange(size: ExplorerSettings['iconSize']) {
-    explorerSettingsStore.updateSetting('iconSize', size);
-  }
-
-  /**
-   * 处理选择变更
-   */
-  function handleSelectionChange(item: FsItem, index: number, event: MouseEvent) {
-    if (event.ctrlKey || event.metaKey) {
-      selectionStore.toggleSelection(item, index);
-    } else if (event.shiftKey && selectionStore.getState().lastSelectedId) {
-      const lastItem = selectionStore.getState().itemsMap.get(selectionStore.getState().lastSelectedId!);
-      if (lastItem) {
-        selectionStore.selectRange(items, lastItem.index, index);
-      }
-    } else {
-      selectionStore.select(item, index);
+      // 否则排序普通文件列表
+      fileBrowserStore.setItems(sortedItems);
     }
   }
 
@@ -939,8 +892,8 @@
    * 添加到书签
    */
   function addToBookmark(item: FsItem) {
-    addBookmarkAction(item);
-    loadBookmarks();
+    bookmarkStore.add(item);
+    loadBookmarks(); // 立即刷新书签列表
     hideContextMenu();
   }
 
@@ -948,7 +901,11 @@
    * 在资源管理器中打开
    */
   async function openInExplorer(item: FsItem) {
-    await openInExplorerAction(item);
+    try {
+      await fileBrowserService.showInFileManager(item.path);
+    } catch (err) {
+      fileBrowserStore.setError(String(err));
+    }
     hideContextMenu();
   }
 
@@ -956,7 +913,11 @@
    * 在外部应用中打开
    */
   async function openWithExternalApp(item: FsItem) {
-    await openWithExternalAppAction(item);
+    try {
+      await fileBrowserService.openWithSystem(item.path);
+    } catch (err) {
+      fileBrowserStore.setError(String(err));
+    }
     hideContextMenu();
   }
 
@@ -964,7 +925,7 @@
    * 剪切文件
    */
   function cutItem(item: FsItem) {
-    setClipboardItem(item, 'cut');
+    clipboardItem = { path: item.path, operation: 'cut' };
     hideContextMenu();
   }
 
@@ -972,7 +933,7 @@
    * 复制文件
    */
   function copyItem(item: FsItem) {
-    setClipboardItem(item, 'copy');
+    clipboardItem = { path: item.path, operation: 'copy' };
     hideContextMenu();
   }
 
@@ -980,23 +941,97 @@
    * 粘贴文件
    */
   async function pasteItem() {
-    if (!currentPath) return;
+    if (!clipboardItem || !currentPath) return;
+
     try {
-      await pasteClipboardItem(currentPath, async () => {
-        await refresh();
-      });
+      const targetPath = `${currentPath}/${clipboardItem.path.split(/[\\/]/).pop()}`;
+      
+      if (clipboardItem.operation === 'cut') {
+        await fileBrowserService.movePath(clipboardItem.path, targetPath);
+      } else {
+        await fileBrowserService.copyPath(clipboardItem.path, targetPath);
+      }
+      
+      clipboardItem = null;
+      await refresh();
     } catch (err) {
       fileBrowserStore.setError(String(err));
     }
   }
 
   /**
+   * 显示复制到子菜单
+   */
+  function showCopyToSubmenu(e: MouseEvent) {
+    e.stopPropagation();
+    
+    // 获取视口尺寸
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    let submenuX = contextMenu.x + 150; // 子菜单在主菜单右侧
+    let submenuY = contextMenu.y;
+    
+    // 确保子菜单不超出视口右侧
+    const submenuWidth = 150;
+    if (submenuX + submenuWidth > viewportWidth) {
+      // 如果右侧放不下，放在左侧
+      submenuX = contextMenu.x - submenuWidth - 10;
+    }
+    
+    // 确保子菜单不超出视口左侧
+    if (submenuX < 10) {
+      submenuX = 10;
+    }
+    
+    // 如果主菜单是向上展开的，子菜单也需要相应调整位置
+    if (contextMenu.direction === 'up') {
+      submenuY = contextMenu.y + 200; // 调整子菜单位置，使其与主菜单项对齐
+    }
+    
+    // 确保子菜单不超出视口底部
+    const maxSubmenuHeight = viewportHeight * 0.5;
+    if (submenuY + maxSubmenuHeight > viewportHeight) {
+      submenuY = viewportHeight - maxSubmenuHeight - 10;
+    }
+    
+    // 确保子菜单不超出视口顶部
+    if (submenuY < 10) {
+      submenuY = 10;
+    }
+    
+    copyToSubmenu = { show: true, x: submenuX, y: submenuY };
+  }
+
+  /**
+   * 复制到指定文件夹
+   */
+  async function copyToFolder(targetPath: string) {
+    if (!contextMenu.item) return;
+
+    try {
+      const fileName = contextMenu.item.path.split(/[\\/]/).pop();
+      const targetFilePath = `${targetPath}/${fileName}`;
+      await fileBrowserService.copyPath(contextMenu.item.path, targetFilePath);
+      await refresh();
+    } catch (err) {
+      fileBrowserStore.setError(String(err));
+    }
+    hideContextMenu();
+    copyToSubmenu.show = false;
+  }
+
+  /**
    * 删除文件
    */
   async function deleteItemFromMenu(item: FsItem) {
-    const success = await deleteItemAction(item);
-    if (success) {
+    if (!confirm(`确定要删除 "${item.name}" 吗？`)) return;
+
+    try {
+      await fileBrowserService.moveToTrash(item.path);
       await refresh();
+    } catch (err) {
+      fileBrowserStore.setError(String(err));
     }
     hideContextMenu();
   }
@@ -1004,10 +1039,19 @@
   /**
    * 移动到文件夹
    */
-  async function moveToFolder(item: FsItem) {
-    const success = await moveItemToFolderAction(item);
-    if (success) {
-      await refresh();
+  async function moveToFolder() {
+    if (!contextMenu.item) return;
+
+    try {
+      const targetPath = await fileBrowserService.selectFolder();
+      if (targetPath) {
+        const fileName = contextMenu.item.path.split(/[\\/]/).pop();
+        const targetFilePath = `${targetPath}/${fileName}`;
+        await fileBrowserService.movePath(contextMenu.item.path, targetFilePath);
+        await refresh();
+      }
+    } catch (err) {
+      fileBrowserStore.setError(String(err));
     }
     hideContextMenu();
   }
@@ -1016,9 +1060,15 @@
    * 重命名
    */
   async function renameItem(item: FsItem) {
-    const success = await renameItemAction(item);
-    if (success) {
+    const newName = prompt('请输入新名称:', item.name);
+    if (!newName || newName === item.name) return;
+
+    try {
+      const newPath = item.path.replace(item.name, newName);
+      await fileBrowserService.renamePath(item.path, newPath);
       await refresh();
+    } catch (err) {
+      fileBrowserStore.setError(String(err));
     }
     hideContextMenu();
   }
@@ -1028,34 +1078,72 @@
   /**
    * 加载搜索历史
    */
-  function addSearchHistory(query: string) {
-    searchHistory = addSearchHistoryEntry(searchHistory, query);
-  }
-
-  function clearSearchHistory() {
-    searchHistory = clearSearchHistoryEntries();
-    showSearchHistory = false;
-  }
-
-  function removeSearchHistoryItem(item: SearchHistoryEntry) {
-    searchHistory = removeSearchHistoryEntry(searchHistory, item);
-    if (searchHistory.length === 0) {
-      showSearchHistory = false;
+  function loadSearchHistory() {
+    try {
+      const saved = localStorage.getItem('neoview-search-history');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // 兼容旧版本数据结构
+        if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string') {
+          // 旧版本：字符串数组，转换为新格式
+          searchHistory = (parsed as string[]).map(query => ({ query, timestamp: Date.now() - 86400000 })); // 默认昨天
+        } else {
+          // 新版本：对象数组
+          searchHistory = parsed;
+        }
+      }
+    } catch (err) {
+      console.error('加载搜索历史失败:', err);
     }
+  }
+
+  /**
+   * 保存搜索历史
+   */
+  function saveSearchHistory() {
+    try {
+      localStorage.setItem('neoview-search-history', JSON.stringify(searchHistory));
+    } catch (err) {
+      console.error('保存搜索历史失败:', err);
+    }
+  }
+
+  /**
+   * 添加搜索历史
+   */
+  function addSearchHistory(query: string) {
+    if (!query.trim()) return;
+    
+    // 移除已存在的相同查询
+    searchHistory = searchHistory.filter(item => item.query !== query);
+    // 添加到开头
+    searchHistory.unshift({ query, timestamp: Date.now() });
+    // 限制历史记录数量
+    searchHistory = searchHistory.slice(0, 20);
+    
+    saveSearchHistory();
+  }
+
+  /**
+   * 清除搜索历史
+   */
+  function clearSearchHistory() {
+    searchHistory = [];
+    saveSearchHistory();
+    showSearchHistory = false;
   }
 
   /**
    * 搜索文件
    */
   async function searchFiles(query: string) {
-    const trimmed = query.trim();
-    if (!trimmed) {
+    if (!query.trim()) {
       searchResults = [];
       return;
     }
 
-    addSearchHistory(trimmed);
-    await performSearch(trimmed);
+    addSearchHistory(query);
+    await performSearch(query);
   }
 
   /**
@@ -1063,15 +1151,15 @@
    */
   function handleSearchInput(value: string) {
     searchQuery = value;
-
-    if (searchInputTimeout) {
-      clearTimeout(searchInputTimeout);
-    }
-
+    
+    // 实时搜索
     if (searchQuery.trim()) {
-      searchInputTimeout = setTimeout(() => {
+      const timeout = setTimeout(() => {
         searchFiles(searchQuery);
       }, 300);
+      
+      // 清除之前的超时
+      return () => clearTimeout(timeout);
     } else {
       searchResults = [];
     }
@@ -1098,55 +1186,175 @@
     }, 10);
     showSearchSettings = false;
   }
-
-  function toggleSearchHistoryDropdown() {
-    showSearchHistory = !showSearchHistory;
-    if (showSearchHistory) {
-      showSearchSettings = false;
-    }
-  }
-
-  function toggleSearchSettingsDropdown(event: MouseEvent) {
-    event.stopPropagation();
-    showSearchSettings = !showSearchSettings;
-    if (showSearchSettings) {
-      showSearchHistory = false;
-    }
-  }
-
-  function clearSearchField() {
-    if (searchInputTimeout) {
-      clearTimeout(searchInputTimeout);
-      searchInputTimeout = null;
-    }
-    handleSearchInput('');
-    searchResults = [];
-  }
-
-  function updateSearchSetting(
-    key: 'includeSubfolders' | 'showHistoryOnFocus',
-    value: boolean
-  ) {
-    searchSettings = { ...searchSettings, [key]: value };
-  }
 </script>
 
-<div class="flex h-full">
-  <!-- 文件树面板 -->
-  {#if explorerSettings?.showSidebar}
-    <div class="file-tree-sidebar" style="width: {explorerSettings.sidebarWidth}px;">
-      <FileTreePanel />
+<div class="flex h-full flex-col">
+  <!-- 路径面包屑导航 -->
+  <PathBar 
+    bind:currentPath={currentPath} 
+    isArchive={isArchiveView}
+    onNavigate={handlePathNavigate}
+    onSetHomepage={setHomepage}
+  />
+
+  <!-- 工具栏 -->
+  <FileBrowserToolbar
+    isArchiveView={isArchiveView}
+    hasHomepage={hasHomepage}
+    canGoBackInHistory={navigationHistory.canGoBack()}
+    canGoForwardInHistory={navigationHistory.canGoForward()}
+    canNavigateBack={canNavigateBack}
+    isCheckMode={isCheckMode}
+    isDeleteMode={isDeleteMode}
+    viewMode={viewMode}
+    sortItems={items}
+    onGoHome={goHome}
+    onGoBackInHistory={goBackInHistory}
+    onGoForwardInHistory={goForwardInHistory}
+    onGoBack={goBack}
+    onSelectFolder={selectFolder}
+    onRefresh={refresh}
+    onToggleCheckMode={toggleCheckMode}
+    onToggleDeleteMode={toggleDeleteMode}
+    onToggleViewMode={toggleViewMode}
+    onClearThumbnailCache={clearThumbnailCache}
+    onSort={handleSort}
+  />
+
+  <!-- 搜索栏 -->
+  <FileBrowserSearch
+    searchQuery={searchQuery}
+    searchHistory={searchHistory}
+    searchSettings={searchSettings}
+    showSearchHistory={showSearchHistory}
+    showSearchSettings={showSearchSettings}
+    isArchiveView={isArchiveView}
+    currentPath={currentPath}
+    onSearchInput={handleSearchInput}
+    onSearchFocus={handleSearchFocus}
+    onSearchHistoryToggle={() => {
+      showSearchHistory = !showSearchHistory;
+      showSearchSettings = false;
+    }}
+    onSearchSettingsToggle={(event) => {
+      event.stopPropagation();
+      showSearchSettings = !showSearchSettings;
+      showSearchHistory = false;
+    }}
+    onClearSearch={() => {
+      handleSearchInput('');
+      searchResults = [];
+    }}
+    onSelectSearchHistory={(item) => selectSearchHistory(item)}
+    onClearSearchHistory={clearSearchHistory}
+    onSearchSettingChange={(key, value) => {
+      searchSettings = { ...searchSettings, [key]: value };
+    }}
+  />
+
+  <!-- 错误提示 -->
+  {#if error}
+    <div class="m-2 rounded bg-red-50 p-3 text-sm text-red-600">
+      {error}
     </div>
   {/if}
+
   
-  <!-- 主内容区域 -->
-  <div class="flex-1">
-    <FileBrowserLayout 
-      data={layoutData} 
-      handlers={layoutHandlers} 
-      setHomepage={setHomepage}
+    <!-- 加载状态 -->
+  {#if loading}
+    <div class="flex flex-1 items-center justify-center">
+      <div class="flex flex-col items-center gap-3">
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        <div class="text-sm text-gray-500">加载中...</div>
+      </div>
+    </div>
+  {:else if isSearching}
+    <div class="flex flex-1 items-center justify-center">
+      <div class="flex flex-col items-center gap-3">
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        <div class="text-sm text-gray-500">搜索中...</div>
+      </div>
+    </div>
+  {:else if searchQuery && searchResults.length === 0}
+    <div class="flex flex-1 items-center justify-center">
+      <div class="text-center text-gray-400">
+        <Search class="mx-auto mb-2 h-16 w-16 opacity-50" />
+        <p class="text-sm">未找到匹配的文件</p>
+        <p class="text-xs text-gray-500 mt-1">搜索词: "{searchQuery}"</p>
+      </div>
+    </div>
+  {:else if searchQuery && searchResults.length > 0}
+    <FileBrowserList
+      listLabel="搜索结果列表"
+      items={searchResults}
+      isSearchResults={true}
+      isCheckMode={isCheckMode}
+      isDeleteMode={isDeleteMode}
+      isArchiveView={isArchiveView}
+      selectedIndex={selectedIndex}
+      {selectedItems}
+      {thumbnails}
+      containerRef={fileListContainer}
+      onKeydown={handleKeydown}
+      onRowClick={(item) => openSearchResult(item)}
+      onRowKeyboardActivate={(item) => openSearchResult(item)}
+      onToggleSelection={toggleItemSelection}
+      onInlineDelete={(item) => deleteItem(item.path)}
+      contextMenuHandlers={contextMenuHandlers}
+    >
+      <div slot="header" class="mb-3 text-sm text-gray-600 px-2">
+        找到 {searchResults.length} 个结果 (搜索: "{searchQuery}")
+      </div>
+    </FileBrowserList>
+  {:else if items.length === 0 && currentPath}
+    <div class="flex flex-1 items-center justify-center">
+      <div class="text-center text-gray-400">
+        <Folder class="mx-auto mb-2 h-16 w-16 opacity-50" />
+        <p class="text-sm">此目录为空</p>
+      </div>
+    </div>
+  {:else if items.length === 0}
+    <div class="flex flex-1 items-center justify-center">
+      <div class="text-center">
+        <FolderOpen class="mx-auto mb-4 h-20 w-20 text-gray-300" />
+        <p class="text-lg font-medium text-gray-600 mb-2">选择文件夹开始浏览</p>
+        <p class="text-sm text-gray-400 mb-6">点击上方的"选择文件夹"按钮</p>
+        <button
+          onclick={selectFolder}
+          class="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
+        >
+          选择文件夹
+        </button>
+      </div>
+    </div>
+  {:else}
+    <FileBrowserList
+      listLabel="文件列表"
+      items={items}
+      isSearchResults={false}
+      isCheckMode={isCheckMode}
+      isDeleteMode={isDeleteMode}
+      isArchiveView={isArchiveView}
+      {selectedIndex}
+      {selectedItems}
+      {thumbnails}
+      containerRef={fileListContainer}
+      onKeydown={handleKeydown}
+      onRowClick={(item, index) => {
+        if (!isCheckMode && !isDeleteMode) {
+          fileBrowserStore.setSelectedIndex(index);
+          openFile(item);
+        }
+      }}
+      onRowKeyboardActivate={(item, index) => {
+        if (!isCheckMode && !isDeleteMode) {
+          fileBrowserStore.setSelectedIndex(index);
+          openFile(item);
+        }
+      }}
+      onToggleSelection={toggleItemSelection}
+      onInlineDelete={(item) => deleteItem(item.path)}
+      contextMenuHandlers={contextMenuHandlers}
     />
-  </div>
+  {/if}
 </div>
-
-

@@ -1,23 +1,12 @@
 <script lang="ts">
   import { Search } from '@lucide/svelte';
 
-  type SearchHistoryItem = { query: string; timestamp: number };
+  export type SearchHistoryItem = { query: string; timestamp: number };
 
-  interface Props {
-    searchHistory?: SearchHistoryItem[];
-    className?: string;
-    onSelect: (item: SearchHistoryItem) => void;
-    onRemoveItem: (item: SearchHistoryItem) => void;
-    onClearAll: () => void;
-  }
-
-  let {
-    searchHistory = [],
-    className = '',
-    onSelect = () => {},
-    onRemoveItem = () => {},
-    onClearAll = () => {}
-  }: Props = $props();
+  export let searchHistory: SearchHistoryItem[] = [];
+  export let onSelect: (item: SearchHistoryItem) => void = () => {};
+  export let onRemoveItem: (item: SearchHistoryItem) => void = () => {};
+  export let onClearAll: () => void = () => {};
 
   const formatSearchHistoryTime = (timestamp: number): string => {
     const date = new Date(timestamp);
@@ -30,7 +19,7 @@
   };
 </script>
 
-<div class={`search-history absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto ${className}`}>
+<div class="search-history absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
   {#if searchHistory.length > 0}
     {#each searchHistory as item (item.query)}
       <div

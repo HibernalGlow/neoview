@@ -96,12 +96,12 @@ impl ThumbnailManager {
     }
 
     /// 生成blob URL ID（用于内存中的缩略图数据）
-    /// 返回格式：tauri://blob/{hash}，前端可通过此URL获取二进制数据
+    /// 返回格式：blob:{hash}，前端通过get_thumbnail_blob命令获取二进制数据后创建真正的blob URL
     fn generate_blob_url(key: &str) -> String {
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
         let hash = hasher.finish();
-        format!("tauri://blob/{:x}", hash)
+        format!("blob:{:x}", hash)
     }
 
     /// 获取缩略图的WebP二进制数据

@@ -9,7 +9,8 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 export function toAssetUrl(maybePath: string | null | undefined): string | null {
   if (!maybePath) return null;
   const s = String(maybePath);
-  if (s.startsWith('data:') || s.startsWith('asset:') || s.startsWith('http:') || s.startsWith('https:')) return s;
+  // 保留 data:, asset:, http(s):, 和 blob: 前缀
+  if (s.startsWith('data:') || s.startsWith('asset:') || s.startsWith('http:') || s.startsWith('https:') || s.startsWith('blob:')) return s;
 
   try {
   console.log('assetProxy.toAssetUrl input:', maybePath);

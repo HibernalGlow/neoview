@@ -186,6 +186,10 @@ class ThumbnailExecutor {
     this.queue.cancelBySource(source);
   }
 
+  getStats() {
+    return this.queue.getStats();
+  }
+
   private async waitIdle(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
@@ -238,7 +242,21 @@ class ThumbnailExecutor {
 
       // 在调用回调之前检查任务 epoch 是否仍然有效
       if (thumbnail && this.addThumbnailCb && epoch === this.currentEpoch) {
-        const converted = toAssetUrl(thumbnail) || String(thumbnail || '');
+        let converted = toAssetUrl(thumbnail) || String(thumbnail || '');
+        
+        // 如果是blob URL ID，需要通过Tauri命令获取二进制数据
+        if (converted.startsWith('blob:')) {
+          try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            const binaryData = await invoke<number[]>('load_thumbnail_async', { filePath: path });
+            const blob = new Blob([new Uint8Array(binaryData)]);
+            converted = URL.createObjectURL(blob);
+            console.log(' blob URL已转换:', { key: path, blobUrl: converted });
+          } catch (e) {
+            console.warn(' 无法转换blob URL，使用原始值:', e);
+          }
+        }
+        
         const key = this.toRelativeKey(path);
         console.log(' 缩略图生成成功:', { key, raw: thumbnail, converted });
         this.addThumbnailCb(key, converted);

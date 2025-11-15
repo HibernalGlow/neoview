@@ -98,26 +98,17 @@ pub async fn init_thumbnail_manager(
     Ok(())
 }
 
-/// 生成文件缩略图 - 异步显示版本
-/// 返回立即显示的 blob URL，后台异步保存到本地
+/// 生成文件缩略图 - 返回blob URL ID
 #[command]
 pub async fn generate_file_thumbnail_new(
     file_path: String,
     state: tauri::State<'_, ThumbnailManagerState>,
 ) -> Result<String, String> {
-    let path = PathBuf::from(file_path);
+    let path = PathBuf::from(&file_path);
     
     // 等待管理器初始化（最多 5 秒）
     if let Err(e) = ensure_manager_ready(&state, 5000).await {
         return Err(e);
-    }
-    
-    // 首先检查缓存（使用规范化路径以匹配 preload 注册的 key）
-    let cache_key = normalize_path_string(path.to_string_lossy());
-    if let Ok(cache) = state.cache.lock() {
-        if let Some(cached_url) = cache.get(&cache_key) {
-            return Ok(cached_url);
-        }
     }
 
     // 生成新缩略图 - 使用后台优先队列
@@ -125,8 +116,10 @@ pub async fn generate_file_thumbnail_new(
         if let Some(ref q) = *qguard {
             match q.enqueue(path.clone(), false, false) {
                 Ok(url) => {
+                    // 队列成功，返回blob URL
                     if let Ok(cache) = state.cache.lock() {
-                        cache.set(cache_key.clone(), url.clone());
+                        let cache_key = normalize_path_string(path.to_string_lossy());
+                        cache.set(cache_key, url.clone());
                     }
                     return Ok(url);
                 }
@@ -143,8 +136,10 @@ pub async fn generate_file_thumbnail_new(
             let thumbnail_url = manager.generate_thumbnail(&path)
                 .map_err(|e| format!("生成缩略图失败: {}", e))?;
             
+            // 添加到缓存
             if let Ok(cache) = state.cache.lock() {
-                cache.set(cache_key.clone(), thumbnail_url.clone());
+                let cache_key = normalize_path_string(path.to_string_lossy());
+                cache.set(cache_key, thumbnail_url.clone());
             }
             
             return Ok(thumbnail_url);
@@ -754,32 +749,27 @@ pub async fn enqueue_dir_files_highest_priority(
     }
 }
 
-/// 异步加载单个缩略图 - 直接从数据库读取 WebP 字节数据
+/// 异步加载单个缩略图 - 返回二进制WebP数据
 #[command]
 pub async fn load_thumbnail_async(
     file_path: String,
     state: tauri::State<'_, ThumbnailManagerState>,
-) -> Result<Option<serde_json::Value>, String> {
+) -> Result<Option<Vec<u8>>, String> {
     ensure_manager_ready(&state, 5000).await?;
     
     let path = PathBuf::from(&file_path);
     
     if let Ok(manager_guard) = state.manager.lock() {
         if let Some(ref manager) = *manager_guard {
-            match manager.get_thumbnail_info(&path) {
-                Ok(Some(info)) => {
-                    Ok(Some(serde_json::json!({
-                        "url": info.url,
-                        "width": info.width,
-                        "height": info.height,
-                        "file_size": info.file_size,
-                        "created_at": info.created_at.to_rfc3339(),
-                        "is_folder": info.is_folder,
-                    })))
-                }
-                Ok(None) => Ok(None),
-                Err(e) => Err(format!("加载缩略图失败: {}", e)),
+            // 获取相对路径
+            let relative_path = manager.get_relative_path(&path)?;
+            let relative_str = normalize_path_string(relative_path.to_string_lossy().as_ref());
+            
+            // 从数据库获取WebP二进制数据
+            if let Ok(Some(webp_data)) = manager.get_thumbnail_webp_data(&relative_str) {
+                return Ok(Some(webp_data));
             }
+            Ok(None)
         } else {
             Err("缩略图管理器未初始化".to_string())
         }

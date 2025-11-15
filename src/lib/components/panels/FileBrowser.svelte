@@ -303,9 +303,11 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
     // 加载搜索历史
     loadSearchHistory();
 
-    // 注册缩略图生成回调
+    // 注册缩略图生成回调 - 增加并发数以提高性能
     configureThumbnailManager({
-      addThumbnail: (path: string, url: string) => fileBrowserStore.addThumbnail(path, url)
+      addThumbnail: (path: string, url: string) => fileBrowserStore.addThumbnail(path, url),
+      maxConcurrentLocal: 6,      // 增加本地文件并发从 4 到 6
+      maxConcurrentArchive: 3     // 增加压缩包并发从 2 到 3
     });
 
     // 开发模式下运行性能测试

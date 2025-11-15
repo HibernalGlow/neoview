@@ -357,10 +357,11 @@ export function clearAll() {
   executor.clearQueue();
 }
 
-// 分批入队辅助函数
+// 分批入队辅助函数 - 优化版本
 export function splitForEnqueue(items: any[]) {
-  const FIRST_SCREEN = 30;
-  const SECOND_SCREEN = 70;
+  // 优化策略：增加首屏数量，减少延迟
+  const FIRST_SCREEN = 50;      // 增加到 50 个立即加载
+  const SECOND_SCREEN = 100;    // 增加到 100 个高优先级
   
   return {
     immediate: items.slice(0, FIRST_SCREEN),
@@ -372,12 +373,15 @@ export function splitForEnqueue(items: any[]) {
 export function enqueueDirectoryThumbnails(path: string, items: any[]) {
   const { immediate, high, normal } = splitForEnqueue(items);
 
+  // 立即入队第一屏
   enqueueVisible(path, immediate, { priority: 'immediate' });
+  
+  // 高优先级无延迟入队（而不是等待）
   enqueueVisible(path, high, { priority: 'high' });
-  enqueueBackground(path, normal, { priority: 'normal', delay: 500 });
+  
+  // 普通优先级降低延迟从 500ms 到 100ms，加快整体加载速度
+  enqueueBackground(path, normal, { priority: 'normal', delay: 100 });
 }
-
-
 
 export function clearQueue() {
   clearAll();

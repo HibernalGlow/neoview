@@ -18,7 +18,7 @@
 	import ImageViewerProgressBar from './flow/ImageViewerProgressBar.svelte';
 	
 	// 新模块导入
-	import { createPreloadManager } from './flow/preloadManager';
+	import { createPreloadManager } from './flow/preloadManager.svelte';
 	import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
 	import { idbSet } from '$lib/utils/idb';
 

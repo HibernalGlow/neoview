@@ -10,7 +10,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Progress from '$lib/components/ui/progress';
 	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, ExternalLink, Minus, Target } from '@lucide/svelte';
-	import { createPreloadManager } from '$lib/components/viewer/flow/preloadManager';
+	import { createPreloadManager } from '$lib/components/viewer/flow/preloadManager.svelte';
 
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;

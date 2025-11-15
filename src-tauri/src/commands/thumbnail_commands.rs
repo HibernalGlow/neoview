@@ -90,8 +90,8 @@ pub async fn init_thumbnail_manager(
 
     // 启动后台优先队列（去重 + worker pool）
     if let Ok(mut queue_guard) = state.queue.lock() {
-        // create queue with 4 workers
-        let q = ThumbnailQueue::start(state.manager.clone(), state.cache.clone(), 4);
+        // 增加 worker 数量从 4 到 6 以提高压缩包缩略图生成速度
+        let q = ThumbnailQueue::start(state.manager.clone(), state.cache.clone(), 6);
         *queue_guard = Some(q);
     }
 

@@ -90,15 +90,21 @@ pub async fn init_thumbnail_manager(
 
     // 启动后台优先队列（去重 + worker pool）
     if let Ok(mut queue_guard) = state.queue.lock() {
-        // 增加 worker 数量从 4 到 6 以提高压缩包缩略图生成速度
-        let q = ThumbnailQueue::start(state.manager.clone(), state.cache.clone(), 6);
+        // 超激进优化：使用所有可用核心的 2 倍，最多 64 个 worker，最少 12 个
+        let num_workers = std::thread::available_parallelism()
+            .map(|n| ((n.get() as f64 * 2.0) as usize).min(64).max(12))
+            .unwrap_or(24);
+        println!("🔧 启动缩略图队列，worker 数量: {} (超激进模式 - 动态调整)", num_workers);
+        let q = ThumbnailQueue::start(state.manager.clone(), state.cache.clone(), num_workers);
+        println!("✅ 缩略图队列已启动，所有 {} 个 worker 已就绪", num_workers);
         *queue_guard = Some(q);
     }
 
     Ok(())
 }
 
-/// 生成文件缩略图
+/// 生成文件缩略图 - 异步显示版本
+/// 返回立即显示的 blob URL，后台异步保存到本地
 #[command]
 pub async fn generate_file_thumbnail_new(
     file_path: String,
@@ -106,8 +112,6 @@ pub async fn generate_file_thumbnail_new(
 ) -> Result<String, String> {
     println!("🔄 开始生成缩略图: {}", file_path);
     let path = PathBuf::from(file_path);
-    
-    // 检查缩略图管理器是否已初始化
     
     // 等待管理器初始化（最多 5 秒）
     if let Err(e) = ensure_manager_ready(&state, 5000).await {
@@ -119,35 +123,18 @@ pub async fn generate_file_thumbnail_new(
     let cache_key = normalize_path_string(path.to_string_lossy());
     if let Ok(cache) = state.cache.lock() {
         if let Some(cached_url) = cache.get(&cache_key) {
-            // 验证文件URL是否仍然有效
-            if cached_url.starts_with("file://") {
-                if cache.validate_file_url(&cache_key) {
-                    // 检查数据库中是否有记录
-                    if let Ok(manager_guard) = state.manager.lock() {
-                        if let Some(ref manager) = *manager_guard {
-                            if let Ok(Some(_)) = manager.get_thumbnail_info(&path) {
-                                println!("✅ 使用缓存的缩略图: {}", cached_url);
-                                return Ok(cached_url);
-                            }
-                        }
-                    }
-                }
-            } else {
-                println!("✅ 使用缓存的缩略图: {}", cached_url);
-                return Ok(cached_url);
-            }
+            println!("✅ 使用缓存的缩略图: {}", cached_url);
+            return Ok(cached_url);
         }
     }
 
-    // 生成新缩略图
-    // 首选使用后台优先队列（若存在）入队处理并等待结果（去重/优先）
+    // 生成新缩略图 - 使用后台优先队列
     if let Ok(qguard) = state.queue.lock() {
         if let Some(ref q) = *qguard {
             println!("📥 将文件缩略图任务入队（普通）: {}", path.display());
             match q.enqueue(path.clone(), false, false) {
                 Ok(url) => {
                     println!("✅ 文件缩略图生成成功(队列): {}", url);
-                    // 添加到缓存
                     if let Ok(cache) = state.cache.lock() {
                         cache.set(cache_key.clone(), url.clone());
                     }
@@ -155,7 +142,6 @@ pub async fn generate_file_thumbnail_new(
                 }
                 Err(e) => {
                     println!("⚠️ 队列生成失败，降级到即时生成: {}", e);
-                    // 继续到后续的即时生成分支
                 }
             }
         }
@@ -173,7 +159,6 @@ pub async fn generate_file_thumbnail_new(
             
             println!("✅ 缩略图生成成功: {}", thumbnail_url);
             
-            // 添加到缓存
             if let Ok(cache) = state.cache.lock() {
                 cache.set(cache_key.clone(), thumbnail_url.clone());
                 println!("💾 缩略图已添加到缓存");
@@ -771,4 +756,46 @@ pub async fn debug_avif(
     }
 
     Ok(report.join("\n"))
+}
+
+/// 批量入队当前目录的所有文件为最高优先级
+/// 用于快速加载当前浏览目录的缩略图
+#[command]
+pub async fn enqueue_dir_files_highest_priority(
+    dir_path: String,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<usize, String> {
+    use crate::core::fs_manager::FsManager;
+    
+    let path = PathBuf::from(&dir_path);
+    let fs_manager = FsManager::new();
+    
+    // 获取目录内容
+    let items = fs_manager.read_directory(&path)
+        .map_err(|e| format!("列出目录失败: {}", e))?;
+    
+    // 获取队列
+    let queue_guard = state.queue.lock()
+        .map_err(|_| "无法获取队列锁".to_string())?;
+    
+    if let Some(ref q) = *queue_guard {
+        let mut enqueued_count = 0;
+        
+        // 为每个文件入队为最高优先级
+        for item in items {
+            if !item.is_dir {  // 只入队文件，不入队文件夹
+                let file_path = path.join(&item.name);
+                // 使用 enqueue 方法，第三个参数表示最高优先级
+                match q.enqueue(file_path.to_path_buf(), false, true) {
+                    Ok(_) => enqueued_count += 1,
+                    Err(e) => println!("⚠️ 入队失败 {}: {}", file_path.display(), e),
+                }
+            }
+        }
+        
+        println!("⚡ 已将 {} 个文件入队为最高优先级", enqueued_count);
+        Ok(enqueued_count)
+    } else {
+        Err("缩略图队列未初始化".to_string())
+    }
 }

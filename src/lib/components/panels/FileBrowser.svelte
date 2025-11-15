@@ -19,6 +19,7 @@
   import { configureThumbnailManager, itemIsDirectory, itemIsImage, toRelativeKey, enqueueDirectoryThumbnails, cancelBySource, enqueueVisible } from '$lib/utils/thumbnailManager';
 import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
 import ThumbnailsPanel from './ThumbnailsPanel.svelte';
+import { getPerformanceSettings } from '$lib/api/performance';
 
 
   // 使用全局状态
@@ -45,6 +46,10 @@ import ThumbnailsPanel from './ThumbnailsPanel.svelte';
   let isDeleteMode = $state(false);
   let viewMode = $state<'list' | 'thumbnails'>('list'); // 列表 or 缩略图视图
   let selectedItems = $state<Set<string>>(new Set());
+
+  // 缩略图入队管理
+  let lastEnqueueTimeout: ReturnType<typeof setTimeout> | null = null;  // 用于取消上一个入队任务
+  let currentEpoch = 0;  // 用于设置检查
 
   
 
@@ -304,12 +309,38 @@ import ThumbnailsPanel from './ThumbnailsPanel.svelte';
     // 加载搜索历史
     loadSearchHistory();
 
-    // 注册缩略图生成回调 - 使用默认值，设置会动态应用
-    configureThumbnailManager({
-      addThumbnail: (path: string, url: string) => fileBrowserStore.addThumbnail(path, url),
-      maxConcurrentLocal: 6,      // 默认值，可在设置中调整
-      maxConcurrentArchive: 3     // 默认值，可在设置中调整
-    });
+    // 注册缩略图生成回调 - 从设置读取配置
+    const applyThumbnailSettings = async () => {
+      try {
+        const settings = await getPerformanceSettings();
+        const maxLocal = settings.thumbnail_concurrent_local || 6;
+        const maxArchive = settings.thumbnail_concurrent_archive || 3;
+        console.log(`📊 应用缩略图设置: 本地=${maxLocal}, 压缩包=${maxArchive}`);
+        configureThumbnailManager({
+          addThumbnail: (path: string, url: string) => fileBrowserStore.addThumbnail(path, url),
+          maxConcurrentLocal: maxLocal,
+          maxConcurrentArchive: maxArchive
+        });
+      } catch (e) {
+        console.debug('读取缩略图设置失败，使用默认值:', e);
+        configureThumbnailManager({
+          addThumbnail: (path: string, url: string) => fileBrowserStore.addThumbnail(path, url),
+          maxConcurrentLocal: 6,
+          maxConcurrentArchive: 3
+        });
+      }
+    };
+    
+    // 初始化
+    applyThumbnailSettings();
+    
+    // 每 5 秒检查一次设置是否变化
+    let settingsCheckInterval: ReturnType<typeof setInterval> | null = null;
+    
+    settingsCheckInterval = setInterval(() => {
+      currentEpoch++;
+      applyThumbnailSettings();
+    }, 5000);
 
     // 开发模式下运行性能测试
     if (import.meta.env.DEV) {
@@ -322,6 +353,7 @@ import ThumbnailsPanel from './ThumbnailsPanel.svelte';
     
     return () => {
       document.removeEventListener('click', handleClick);
+      clearInterval(settingsCheckInterval);
     };
   });
 
@@ -441,6 +473,21 @@ import ThumbnailsPanel from './ThumbnailsPanel.svelte';
     
     // 缓存目录数据
     navigationHistory.cacheDirectory(path, loadedItems, thumbnails, mtime);
+    
+    // 🚀 异步入队首屏文件为最高优先级（不阻塞主线程）
+    // 取消之前的入队任务
+    if (lastEnqueueTimeout) {
+      clearTimeout(lastEnqueueTimeout);
+    }
+    
+    lastEnqueueTimeout = setTimeout(async () => {
+      try {
+        const enqueuedCount = await FileSystemAPI.enqueueDirFilesHighestPriority(path);
+        console.log(`⚡ 已将 ${enqueuedCount} 个文件入队为最高优先级`);
+      } catch (e) {
+        console.debug('入队最高优先级失败:', e);
+      }
+    }, 100);  // 延迟 100ms，避免阻塞目录加载
     
     // 预加载相邻目录
     navigationHistory.prefetchAdjacentPaths(path);

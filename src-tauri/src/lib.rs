@@ -151,6 +151,7 @@ pub fn run() {
             commands::generate_archive_thumbnail_root,
             commands::generate_archive_thumbnail_inner,
             commands::is_supported_archive,
+            commands::enqueue_dir_files_highest_priority,
             // File operation commands
             commands::fs_commands::copy_path,
             commands::fs_commands::move_path,

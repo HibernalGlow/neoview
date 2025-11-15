@@ -12,6 +12,11 @@ export interface PerformanceSettings {
   gpu_acceleration: boolean;         // GPU rendering
   multi_threaded_rendering: boolean; // multi-threaded decoding
   decoding_threads: number;          // number of threads for decoding
+  // 缩略图设置
+  thumbnail_concurrent_local?: number;    // 本地文件并发数
+  thumbnail_concurrent_archive?: number;  // 压缩包并发数
+  thumbnail_concurrent_video?: number;    // 视频处理并发数
+  enable_video_thumbnail?: boolean;       // 启用视频缩略图
 }
 
 /**

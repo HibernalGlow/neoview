@@ -445,3 +445,11 @@ export async function isVideoFile(filePath: string): Promise<boolean> {
 export async function checkFFmpegAvailable(): Promise<boolean> {
   return await invoke<boolean>('check_ffmpeg_available');
 }
+
+/**
+ * 批量入队当前目录的所有文件为最高优先级
+ * 用于快速加载当前浏览目录的缩略图
+ */
+export async function enqueueDirFilesHighestPriority(dirPath: string): Promise<number> {
+  return await invoke<number>('enqueue_dir_files_highest_priority', { dirPath });
+}

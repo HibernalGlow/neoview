@@ -167,7 +167,6 @@
 			role="separator"
 			aria-label="调整左侧边栏宽度"
 			aria-orientation="vertical"
-			tabindex="0"
 		></div>
 	{/if}
 
@@ -188,7 +187,6 @@
 			role="separator"
 			aria-label="调整右侧边栏宽度"
 			aria-orientation="vertical"
-			tabindex="0"
 		></div>
 	{/if}
 

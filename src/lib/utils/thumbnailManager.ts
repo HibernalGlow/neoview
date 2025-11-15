@@ -249,9 +249,9 @@ class ThumbnailExecutor {
       const root = typeof localStorage !== 'undefined' ? localStorage.getItem('neoview-thumbnail-root') : null;
       let p = String(absPath || '');
       // 统一反斜杠为正斜杠
-      p = p.replace(/\/g, '/');
+      p = p.replace(/\\/g, '/');
       if (root) {
-        let r = String(root).replace(/\/g, '/');
+        let r = String(root).replace(/\\/g, '/');
         // 如果 root 没有以斜杠结尾，添加
         if (!r.endsWith('/')) r = r + '/';
         if (p.startsWith(r)) {

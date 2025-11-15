@@ -518,10 +518,11 @@
 		onwheel={handleWheel}
 		onmousemove={handleMouseMove}
 		onclick={handleMouseClick}
+		onkeydown={handleKeydown}
 		style:cursor={cursorVisible ? 'default' : 'none'}
 		role="application"
 		aria-label="图像查看器"
-		tabindex="0"
+		tabindex="-1"
 	>
 	<!-- 图像显示区域 -->
 	<div class="image-container flex-1 flex items-center justify-center overflow-auto" data-viewer="true" role="region" aria-label="图像显示区域">

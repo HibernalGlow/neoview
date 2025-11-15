@@ -254,7 +254,6 @@
 		role="separator"
 		aria-label="调整右侧边栏宽度"
 		aria-orientation="vertical"
-		tabindex="0"
 	>
 		<!-- 拖拽区域（加大点击区域） -->
 		<div class="absolute top-0 bottom-0 -left-2 -right-2"></div>

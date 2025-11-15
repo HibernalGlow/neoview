@@ -1822,8 +1822,3 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
     />
   {/if}
 </div>
-
-  
-
-  
-</div>

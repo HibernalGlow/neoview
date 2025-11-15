@@ -426,18 +426,19 @@
 						<div class="space-y-2">
 							<h4 class="text-sm font-semibold">缓存</h4>
 							<div class="space-y-2">
-								<label class="flex items-center justify-between">
-									<span class="text-sm">图像缓存大小</span>
-									<span class="text-xs text-muted-foreground">{performanceSettings.cache_memory_size} MB</span>
-								</label>
-								<input 
-									type="range" 
-									min="128" 
-									max="2048" 
-									step="128" 
-									bind:value={performanceSettings.cache_memory_size}
-									class="w-full" 
-								/>
+								<div class="flex items-center justify-between">
+								<span class="text-sm">图像缓存大小</span>
+								<span class="text-xs text-muted-foreground">{performanceSettings.cache_memory_size} MB</span>
+							</div>
+							<input 
+								type="range" 
+								min="128" 
+								max="2048" 
+								step="128" 
+								bind:value={performanceSettings.cache_memory_size}
+								class="w-full" 
+								aria-label="图像缓存大小"
+							/>
 							</div>
 						</div>
 
@@ -454,16 +455,17 @@
 							</label>
 							{#if performanceSettings.preload_enabled}
 								<div class="space-y-2">
-									<label class="flex items-center justify-between">
+									<div class="flex items-center justify-between">
 										<span class="text-sm">预加载页面数</span>
 										<span class="text-xs text-muted-foreground">{performanceSettings.preload_size}</span>
-									</label>
+									</div>
 									<input 
 										type="range" 
 										min="1" 
 										max="20" 
 										bind:value={performanceSettings.preload_size}
 										class="w-full"
+										aria-label="预加载页面数"
 									/>
 								</div>
 							{/if}

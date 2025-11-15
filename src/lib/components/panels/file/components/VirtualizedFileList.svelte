@@ -6,14 +6,25 @@
   import { writable, type Writable } from 'svelte/store';
   import { throttle, debounce, scheduleIdleTask, getAdaptivePerformanceConfig } from '$lib/utils/performance';
 
-  export let items: FsItem[] = [];
-  export let currentPath = '';
-  export let thumbnails: Map<string, string> = new Map();
-  export let selectedIndex = -1;
-  export let isCheckMode = false;
-  export let isDeleteMode = false;
-  export let selectedItems: Set<string> = new Set();
-  export let viewMode: 'list' | 'thumbnails' = 'list';
+  const {
+    items = [],
+    currentPath = '',
+    thumbnails = new Map(),
+    selectedIndex = -1,
+    isCheckMode = false,
+    isDeleteMode = false,
+    selectedItems = new Set(),
+    viewMode = 'list'
+  }: {
+    items?: FsItem[];
+    currentPath?: string;
+    thumbnails?: Map<string, string>;
+    selectedIndex?: number;
+    isCheckMode?: boolean;
+    isDeleteMode?: boolean;
+    selectedItems?: Set<string>;
+    viewMode?: 'list' | 'thumbnails';
+  } = $props();
 
   const dispatch = createEventDispatcher();
   

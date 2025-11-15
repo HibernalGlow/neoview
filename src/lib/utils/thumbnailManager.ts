@@ -215,16 +215,16 @@ class ThumbnailExecutor {
     try {
       let thumbnail: string | null = null;
       const isArchive = this.isArchiveTask(task);
-      const isDir = item.is_dir || item.isDir;
+      const isDir = itemIsDirectory(item);
 
       if (isArchive) {
-        console.log('📦 生成压缩包缩略图:', path);
+        console.log(' 生成压缩包缩略图:', path);
         thumbnail = await FileSystemAPI.generateArchiveThumbnailRoot(path);
       } else if (isDir) {
-        console.log('📁 生成文件夹缩略图:', path);
+        console.log(' 生成文件夹缩略图:', path);
         thumbnail = await FileSystemAPI.generateFolderThumbnail(path);
       } else {
-        console.log('🖼️ 生成文件缩略图:', path);
+        console.log(' 生成文件缩略图:', path);
         thumbnail = await FileSystemAPI.generateFileThumbnail(path);
       }
 
@@ -232,13 +232,13 @@ class ThumbnailExecutor {
       if (thumbnail && this.addThumbnailCb && epoch === this.currentEpoch) {
         const converted = toAssetUrl(thumbnail) || String(thumbnail || '');
         const key = this.toRelativeKey(path);
-        console.log('✅ 缩略图生成成功:', { key, raw: thumbnail, converted });
+        console.log(' 缩略图生成成功:', { key, raw: thumbnail, converted });
         this.addThumbnailCb(key, converted);
       } else if (thumbnail && epoch !== this.currentEpoch) {
-        console.log('⏰ 任务结果已过期:', { path, epoch, current: this.currentEpoch });
+        console.log(' 任务结果已过期:', { path, epoch, current: this.currentEpoch });
       }
     } catch (e) {
-      console.error('❌ 缩略图生成失败:', path, e);
+      console.error(' 缩略图生成失败:', path, e);
     } finally {
       this.generating.delete(path);
     }
@@ -271,11 +271,33 @@ class ThumbnailExecutor {
   }
 }
 
+const priorityQueue = new ThumbnailPriorityQueue();
+const executor = new ThumbnailExecutor(priorityQueue);
+
+export function configureThumbnailManager(options: {
+  addThumbnail?: (path: string, url: string) => void;
+  maxConcurrentLocal?: number;
+  maxConcurrentArchive?: number;
+}) {
+  executor.configure(options);
+}
+
+type FsLike = { isDir?: boolean; is_dir?: boolean; isImage?: boolean; is_image?: boolean } | null | undefined;
+
+export function itemIsDirectory(item: FsLike): boolean {
+  return Boolean(item && (item.isDir || item.is_dir));
+}
+
+export function itemIsImage(item: FsLike): boolean {
+  return Boolean(item && (item.isImage || item.is_image));
+}
+
 export function toRelativeKey(absPath: string): string {
   try {
     const root = typeof localStorage !== 'undefined' ? localStorage.getItem('neoview-thumbnail-root') : null;
     let p = String(absPath || '');
     p = p.replace(/\\/g, '/');
+
     if (root) {
       let r = String(root).replace(/\\/g, '/');
       if (!r.endsWith('/')) r = r + '/';

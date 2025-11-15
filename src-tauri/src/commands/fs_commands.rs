@@ -810,3 +810,302 @@ fn scan_directory(
     
     Ok(())
 }
+
+// ===== 分页和流式浏览相关 =====
+
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+// 全局流ID计数器
+static STREAM_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+// 流状态管理
+static STREAMS: Mutex<HashMap<String, DirectoryStream>> = Mutex::new(HashMap::new());
+
+#[derive(Debug, Clone)]
+struct DirectoryStream {
+    id: String,
+    path: PathBuf,
+    entries: Vec<std::fs::DirEntry>,
+    current_index: usize,
+    batch_size: usize,
+    total: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectoryPageResult {
+    pub items: Vec<FileInfo>,
+    pub total: usize,
+    pub has_more: bool,
+    pub next_offset: Option<usize>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectoryStreamStartResult {
+    pub stream_id: String,
+    pub initial_batch: Vec<FileInfo>,
+    pub total: usize,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamBatchResult {
+    pub items: Vec<FileInfo>,
+    pub has_more: bool,
+}
+
+/// 分页浏览目录
+#[tauri::command]
+pub async fn browse_directory_page(
+    path: String,
+    options: Option<DirectoryPageOptions>,
+) -> Result<DirectoryPageResult, String> {
+    let options = options.unwrap_or_default();
+    let path = Path::new(&path);
+    
+    if !path.exists() {
+        return Err(format!("Path does not exist: {}", path.display()));
+    }
+
+    if !path.is_dir() {
+        return Err(format!("Path is not a directory: {}", path.display()));
+    }
+
+    // 读取所有目录条目
+    let mut entries: Vec<std::fs::DirEntry> = std::fs::read_dir(path)
+        .map_err(|e| format!("Failed to read directory: {}", e))?
+        .filter_map(Result::ok)
+        .collect();
+
+    // 应用排序
+    sort_entries(&mut entries, &options.sort_by, options.sort_order);
+
+    let total = entries.len();
+    let offset = options.offset.unwrap_or(0);
+    let limit = options.limit.unwrap_or(100);
+    
+    // 获取分页数据
+    let page_entries: Vec<std::fs::DirEntry> = entries
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .collect();
+
+    // 转换为FileInfo
+    let items = convert_entries_to_file_info(page_entries)?;
+
+    let has_more = offset + items.len() < total;
+    let next_offset = if has_more { Some(offset + items.len()) } else { None };
+
+    Ok(DirectoryPageResult {
+        items,
+        total,
+        has_more,
+        next_offset,
+    })
+}
+
+/// 启动目录流
+#[tauri::command]
+pub async fn start_directory_stream(
+    path: String,
+    options: Option<DirectoryStreamOptions>,
+) -> Result<DirectoryStreamStartResult, String> {
+    let options = options.unwrap_or_default();
+    let path = Path::new(&path);
+    
+    if !path.exists() {
+        return Err(format!("Path does not exist: {}", path.display()));
+    }
+
+    if !path.is_dir() {
+        return Err(format!("Path is not a directory: {}", path.display()));
+    }
+
+    // 读取所有目录条目
+    let mut entries: Vec<std::fs::DirEntry> = std::fs::read_dir(path)
+        .map_err(|e| format!("Failed to read directory: {}", e))?
+        .filter_map(Result::ok)
+        .collect();
+
+    // 应用排序
+    sort_entries(&mut entries, &options.sort_by, options.sort_order);
+
+    let total = entries.len();
+    let batch_size = options.batch_size.unwrap_or(50);
+    let stream_id = format!("stream_{}", STREAM_COUNTER.fetch_add(1, Ordering::SeqCst));
+
+    // 获取初始批次
+    let initial_batch: Vec<std::fs::DirEntry> = entries
+        .iter()
+        .take(batch_size)
+        .cloned()
+        .collect();
+
+    let initial_items = convert_entries_to_file_info(initial_batch)?;
+    let has_more = batch_size < total;
+
+    // 创建流状态
+    let stream = DirectoryStream {
+        id: stream_id.clone(),
+        path: path.to_path_buf(),
+        entries,
+        current_index: batch_size,
+        batch_size,
+        total,
+    };
+
+    // 存储流状态
+    let mut streams = STREAMS.lock().unwrap();
+    streams.insert(stream_id.clone(), stream);
+
+    Ok(DirectoryStreamStartResult {
+        stream_id,
+        initial_batch: initial_items,
+        total,
+        has_more,
+    })
+}
+
+/// 获取流的下一批数据
+#[tauri::command]
+pub async fn get_next_stream_batch(
+    stream_id: String,
+) -> Result<StreamBatchResult, String> {
+    let mut streams = STREAMS.lock().unwrap();
+    
+    if let Some(stream) = streams.get_mut(&stream_id) {
+        if stream.current_index >= stream.entries.len() {
+            // 没有更多数据
+            return Ok(StreamBatchResult {
+                items: vec![],
+                has_more: false,
+            });
+        }
+
+        // 获取下一批
+        let next_index = (stream.current_index + stream.batch_size).min(stream.entries.len());
+        let batch: Vec<std::fs::DirEntry> = stream.entries
+            [stream.current_index..next_index]
+            .iter()
+            .cloned()
+            .collect();
+
+        stream.current_index = next_index;
+        let has_more = stream.current_index < stream.entries.len();
+
+        let items = convert_entries_to_file_info(batch)?;
+
+        Ok(StreamBatchResult {
+            items,
+            has_more,
+        })
+    } else {
+        Err(format!("Stream not found: {}", stream_id))
+    }
+}
+
+/// 取消目录流
+#[tauri::command]
+pub async fn cancel_directory_stream(stream_id: String) -> Result<(), String> {
+    let mut streams = STREAMS.lock().unwrap();
+    if streams.remove(&stream_id).is_some() {
+        Ok(())
+    } else {
+        Err(format!("Stream not found: {}", stream_id))
+    }
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectoryPageOptions {
+    pub offset: Option<usize>,
+    pub limit: Option<usize>,
+    pub sort_by: Option<String>,
+    pub sort_order: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectoryStreamOptions {
+    pub batch_size: Option<usize>,
+    pub sort_by: Option<String>,
+    pub sort_order: Option<String>,
+}
+
+fn sort_entries(
+    entries: &mut Vec<std::fs::DirEntry>,
+    sort_by: &Option<String>,
+    sort_order: &Option<String>,
+) {
+    let sort_by = sort_by.as_ref().map(|s| s.as_str()).unwrap_or("name");
+    let sort_ascending = sort_order.as_ref().map(|s| s.as_str()).unwrap_or("asc") == "asc";
+
+    entries.sort_by(|a, b| {
+        let a_name = a.file_name().to_string_lossy();
+        let b_name = b.file_name().to_string_lossy();
+        
+        let comparison = match sort_by {
+            "name" => a_name.cmp(&b_name),
+            "size" => {
+                let a_size = a.metadata().ok().map(|m| m.len()).unwrap_or(0);
+                let b_size = b.metadata().ok().map(|m| m.len()).unwrap_or(0);
+                a_size.cmp(&b_size)
+            },
+            "modified" => {
+                let a_modified = a.metadata().ok().and_then(|m| m.modified()).ok();
+                let b_modified = b.metadata().ok().and_then(|m| m.modified()).ok();
+                a_modified.cmp(&b_modified)
+            },
+            _ => a_name.cmp(&b_name),
+        };
+
+        if sort_ascending {
+            comparison
+        } else {
+            comparison.reverse()
+        }
+    });
+}
+
+fn convert_entries_to_file_info(entries: Vec<std::fs::DirEntry>) -> Result<Vec<FileInfo>, String> {
+    let mut items = Vec::new();
+    
+    for entry in entries {
+        let path = entry.path();
+        let metadata = entry.metadata()
+            .map_err(|e| format!("Failed to read metadata for {}: {}", path.display(), e))?;
+
+        let name = path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+
+        let size = if metadata.is_file() {
+            Some(metadata.len())
+        } else {
+            None
+        };
+
+        let modified = metadata.modified()
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .map(|duration| {
+                let secs = duration.as_secs();
+                format!("{} seconds ago", secs)
+            });
+
+        items.push(FileInfo {
+            name,
+            path: path.to_string_lossy().to_string(),
+            is_directory: metadata.is_dir(),
+            size,
+            modified,
+        });
+    }
+
+    Ok(items)
+}

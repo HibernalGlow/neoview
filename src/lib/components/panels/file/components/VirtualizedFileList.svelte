@@ -1,0 +1,460 @@
+<script lang="ts">
+  import { createEventDispatcher, onMount, onDestroy } from 'svelte';
+  import type { FsItem } from '$lib/types';
+  import { enqueueVisible, bumpPriority } from '$lib/utils/thumbnailManager';
+  import { Folder, File, Image, FileArchive } from '@lucide/svelte';
+  import { writable, type Writable } from 'svelte/store';
+  import { throttle, debounce, scheduleIdleTask, getAdaptivePerformanceConfig } from '$lib/utils/performance';
+
+  export let items: FsItem[] = [];
+  export let currentPath = '';
+  export let thumbnails: Map<string, string> = new Map();
+  export let selectedIndex = -1;
+  export let isCheckMode = false;
+  export let isDeleteMode = false;
+  export let selectedItems: Set<string> = new Set();
+  export let viewMode: 'list' | 'thumbnails' = 'list';
+
+  const dispatch = createEventDispatcher();
+  
+  // 虚拟滚动状态
+  let container = $state<HTMLDivElement | undefined>(undefined);
+  let viewportHeight = $state(600);
+  let scrollTop = $state(0);
+  let itemHeight = $state(60);
+  let overscan = $state(5); // 预渲染的项目数量
+  
+  // 计算可见范围
+  let startIndex = $state(0);
+  let endIndex = $state(0);
+  let totalHeight = $state(0);
+  let offsetY = $state(0);
+  
+  // 滚动节流
+  let scrollTimer: number | null = null;
+  let resizeObserver: ResizeObserver | null = null;
+  
+  // 性能配置
+  const perfConfig = getAdaptivePerformanceConfig();
+  overscan = perfConfig.virtualScroll.overscan;
+  let scrollThrottleDelay = perfConfig.virtualScroll.throttleDelay;
+  
+  // 性能监控
+  let lastScrollTime = 0;
+
+  // 计算可见项目范围
+  function calculateVisibleRange() {
+    if (!container) return;
+    
+    const visibleCount = Math.ceil(viewportHeight / itemHeight);
+    startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - overscan);
+    endIndex = Math.min(items.length - 1, startIndex + visibleCount + overscan * 2);
+    
+    // 确保startIndex不会导致endIndex超出范围
+    if (endIndex >= items.length) {
+      startIndex = Math.max(0, items.length - visibleCount - overscan * 2);
+      endIndex = items.length - 1;
+    }
+    
+    offsetY = startIndex * itemHeight;
+    totalHeight = items.length * itemHeight;
+    
+    // 触发可见范围变化事件
+    handleVisibleRangeChange();
+  }
+
+  // 处理可见范围变化（防抖）
+  const handleVisibleRangeChange = debounce(() => {
+    if (!currentPath || items.length === 0) return;
+    
+    const now = performance.now();
+    if (now - lastScrollTime < scrollThrottleDelay) return;
+    lastScrollTime = now;
+    
+    const visibleItems = items.slice(startIndex, endIndex + 1);
+    
+    // 过滤需要缩略图的项目
+    const thumbnailItems = visibleItems.filter(item => 
+      item.is_dir || item.isImage || 
+      item.name.endsWith('.zip') || 
+      item.name.endsWith('.cbz') || 
+      item.name.endsWith('.rar') || 
+      item.name.endsWith('.cbr')
+    );
+    
+    // 过滤已有缩略图的项目
+    const needThumbnails = thumbnailItems.filter(item => {
+      const key = getThumbnailKey(item);
+      return !thumbnails.has(key);
+    });
+    
+    if (needThumbnails.length > 0) {
+      console.log(`👁️ 虚拟滚动范围更新: ${startIndex}-${endIndex}, 需要缩略图: ${needThumbnails.length}`);
+      
+      // 使用 scheduleIdleCallback 确保不阻塞UI
+      scheduleIdleTask(() => {
+        enqueueVisible(currentPath, needThumbnails, { priority: 'immediate' });
+      });
+    }
+  }, 50); // 50ms 防抖延迟
+
+  // 处理滚动事件（节流）
+  const handleScroll = throttle(() => {
+    if (!container) return;
+    
+    scrollTop = container.scrollTop;
+    
+    // 节流处理
+    if (scrollTimer) {
+      cancelAnimationFrame(scrollTimer);
+    }
+    
+    scrollTimer = requestAnimationFrame(() => {
+      calculateVisibleRange();
+      scrollTimer = null;
+    });
+  }, scrollThrottleDelay);
+
+  // 处理容器大小变化
+  function handleResize() {
+    if (!container) return;
+    
+    const newHeight = container.clientHeight;
+    if (newHeight !== viewportHeight) {
+      viewportHeight = newHeight;
+      calculateVisibleRange();
+    }
+  }
+
+  // 处理项目点击
+  function handleItemClick(item: FsItem, index: number) {
+    dispatch('itemClick', { item, index });
+  }
+
+  // 处理项目右键
+  function handleItemContextMenu(event: MouseEvent, item: FsItem) {
+    dispatch('itemContextMenu', { event, item });
+  }
+
+  // 格式化文件大小
+  function formatSize(bytes: number, isDir: boolean): string {
+    if (isDir) {
+      return bytes === 0 ? '空文件夹' : `${bytes} 项`;
+    }
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+  }
+
+  // 格式化日期
+  function formatDate(timestamp?: number): string {
+    if (!timestamp) return '-';
+    const date = new Date(timestamp * 1000);
+    return date.toLocaleString();
+  }
+
+  // 切换项目选中状态
+  function toggleItemSelection(path: string) {
+    if (selectedItems.has(path)) {
+      selectedItems.delete(path);
+    } else {
+      selectedItems.add(path);
+    }
+    selectedItems = selectedItems; // 触发响应式更新
+  }
+
+  // 获取缩略图键
+  function getThumbnailKey(item: FsItem): string {
+    return item.path.replace(/\\/g, '/').split('/').pop() || item.path;
+  }
+
+  // 获取项目在列表中的实际索引
+  function getItemIndex(item: FsItem): number {
+    return items.findIndex(i => i.path === item.path);
+  }
+
+  // 组件挂载时初始化
+  onMount(() => {
+    if (container) {
+      viewportHeight = container.clientHeight;
+      calculateVisibleRange();
+      
+      // 设置ResizeObserver监听容器大小变化
+      resizeObserver = new ResizeObserver(handleResize);
+      resizeObserver.observe(container);
+    }
+  });
+
+  // 组件销毁时清理
+  onDestroy(() => {
+    if (scrollTimer) {
+      cancelAnimationFrame(scrollTimer);
+    }
+    if (resizeObserver) {
+      resizeObserver.disconnect();
+    }
+  });
+
+  // 监听项目变化
+  $effect(() => {
+    if (items.length > 0) {
+      calculateVisibleRange();
+    } else {
+      totalHeight = 0;
+    }
+  });
+
+  // 监听视图模式变化，调整项目高度
+  $effect(() => {
+    itemHeight = viewMode === 'list' ? 60 : 150;
+    calculateVisibleRange();
+  });
+
+  // 键盘导航支持
+  function handleKeydown(e: KeyboardEvent) {
+    if (items.length === 0) return;
+    
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        const nextIndex = Math.min(selectedIndex + 1, items.length - 1);
+        if (nextIndex !== selectedIndex) {
+          selectedIndex = nextIndex;
+          // 确保选中项在视口中可见
+          scrollToItem(nextIndex);
+        }
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        const prevIndex = Math.max(selectedIndex - 1, 0);
+        if (prevIndex !== selectedIndex) {
+          selectedIndex = prevIndex;
+          scrollToItem(prevIndex);
+        }
+        break;
+      case 'Home':
+        e.preventDefault();
+        if (selectedIndex !== 0) {
+          selectedIndex = 0;
+          scrollToItem(0);
+        }
+        break;
+      case 'End':
+        e.preventDefault();
+        if (selectedIndex !== items.length - 1) {
+          selectedIndex = items.length - 1;
+          scrollToItem(items.length - 1);
+        }
+        break;
+    }
+  }
+
+  // 滚动到指定项目
+  function scrollToItem(index: number) {
+    if (!container || index < 0 || index >= items.length) return;
+    
+    const targetScrollTop = index * itemHeight - viewportHeight / 2 + itemHeight / 2;
+    container.scrollTo({
+      top: Math.max(0, targetScrollTop),
+      behavior: 'smooth'
+    });
+  }
+</script>
+
+<div 
+  bind:this={container}
+  class="virtual-list-container flex-1 overflow-y-auto focus:outline-none" 
+  tabindex="0" 
+  onscroll={handleScroll}
+  onkeydown={handleKeydown}
+>
+  {#if viewMode === 'list'}
+    <!-- 列表视图 - 虚拟滚动 -->
+    <div class="virtual-list" style="height: {totalHeight}px; position: relative;">
+      <div 
+        class="virtual-list-viewport" 
+        style="transform: translateY({offsetY}px); position: absolute; top: 0; left: 0; right: 0;"
+      >
+        {#each items.slice(startIndex, endIndex + 1) as item, i (item.path)}
+          {@const actualIndex = startIndex + i}
+          <div
+            class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors {selectedIndex === actualIndex ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}"
+            style="height: {itemHeight}px;"
+            onclick={() => handleItemClick(item, actualIndex)}
+            oncontextmenu={(e) => handleItemContextMenu(e, item)}
+          >
+            <!-- 勾选框（勾选模式） -->
+            {#if isCheckMode}
+              <button
+                class="flex-shrink-0"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  toggleItemSelection(item.path);
+                }}
+              >
+                <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {selectedItems.has(item.path) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 hover:border-blue-400'}">
+                  {#if selectedItems.has(item.path)}
+                    <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                    </svg>
+                  {/if}
+                </div>
+              </button>
+            {/if}
+
+            <!-- 删除按钮（删除模式） -->
+            {#if isDeleteMode}
+              <button
+                class="flex-shrink-0"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  dispatch('deleteItem', { item });
+                }}
+                title="删除"
+              >
+                <div class="h-5 w-5 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors">
+                  <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+              </button>
+            {/if}
+
+            <!-- 图标或缩略图 -->
+            <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded">
+              {#if thumbnails.has(getThumbnailKey(item))}
+                <!-- 显示缩略图 -->
+                <img 
+                  src={thumbnails.get(getThumbnailKey(item))} 
+                  alt={item.name}
+                  class="h-full w-full object-cover transition-transform group-hover:scale-105"
+                />
+              {:else if item.is_dir}
+                <Folder class="h-8 w-8 text-blue-500 transition-colors group-hover:text-blue-600" />
+              {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
+                <FileArchive class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600" />
+              {:else if item.isImage}
+                <Image class="h-8 w-8 text-green-500 transition-colors group-hover:text-green-600" />
+              {:else}
+                <File class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500" />
+              {/if}
+            </div>
+
+            <!-- 信息 -->
+            <div class="min-w-0 flex-1">
+              <div class="truncate font-medium">{item.name}</div>
+              <div class="text-xs text-gray-500">
+                {formatSize(item.size, item.is_dir)} · {formatDate(item.modified)}
+              </div>
+            </div>
+          </div>
+        {/each}
+      </div>
+    </div>
+  {:else}
+    <!-- 缩略图网格视图 - 虚拟滚动 -->
+    <div class="virtual-grid" style="height: {totalHeight}px; position: relative;">
+      <div 
+        class="virtual-grid-viewport" 
+        style="transform: translateY({offsetY}px); position: absolute; top: 0; left: 0; right: 0;"
+      >
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4 p-2">
+          {#each items.slice(startIndex, endIndex + 1) as item, i (item.path)}
+            {@const actualIndex = startIndex + i}
+            <div
+              class="group flex flex-col items-center gap-2 p-2 rounded border cursor-pointer transition-colors {selectedIndex === actualIndex ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}"
+              style="height: {itemHeight}px;"
+              onclick={() => handleItemClick(item, actualIndex)}
+              oncontextmenu={(e) => handleItemContextMenu(e, item)}
+            >
+              <!-- 勾选框（勾选模式） -->
+              {#if isCheckMode}
+                <button
+                  class="self-start"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    toggleItemSelection(item.path);
+                  }}
+                >
+                  <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {selectedItems.has(item.path) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 hover:border-blue-400'}">
+                    {#if selectedItems.has(item.path)}
+                      <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                      </svg>
+                    {/if}
+                  </div>
+                </button>
+              {/if}
+
+              <!-- 缩略图容器 -->
+              <div class="w-full aspect-square flex items-center justify-center overflow-hidden rounded bg-gray-100">
+                {#if thumbnails.has(getThumbnailKey(item))}
+                  <!-- 显示缩略图 -->
+                  <img 
+                    src={thumbnails.get(getThumbnailKey(item))} 
+                    alt={item.name}
+                    class="w-full h-full object-cover transition-transform group-hover:scale-105"
+                  />
+                {:else if item.is_dir}
+                  <Folder class="h-12 w-12 text-blue-500" />
+                {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
+                  <FileArchive class="h-12 w-12 text-purple-500" />
+                {:else if item.isImage}
+                  <Image class="h-12 w-12 text-green-500" />
+                {:else}
+                  <File class="h-12 w-12 text-gray-400" />
+                {/if}
+              </div>
+
+              <!-- 文件名 -->
+              <div class="w-full text-center">
+                <div class="truncate text-sm font-medium">{item.name}</div>
+                <div class="text-xs text-gray-500">
+                  {formatSize(item.size, item.is_dir)}
+                </div>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
+    </div>
+  {/if}
+</div>
+
+<style>
+  .virtual-list-container {
+    height: 100%;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+  }
+  
+  /* 自定义滚动条样式 */
+  .virtual-list-container::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  .virtual-list-container::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .virtual-list-container::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  
+  .virtual-list-container::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(0, 0, 0, 0.3);
+  }
+  
+  /* 确保项目高度一致 */
+  .virtual-list-viewport > * {
+    box-sizing: border-box;
+  }
+  
+  .virtual-grid-viewport > div > * {
+    box-sizing: border-box;
+  }
+</style>

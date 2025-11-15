@@ -27,6 +27,77 @@ export async function browseDirectory(path: string): Promise<FsItem[]> {
 }
 
 /**
+ * 分页浏览目录内容
+ */
+export async function browseDirectoryPage(
+  path: string,
+  options: {
+    offset?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  } = {}
+): Promise<{
+  items: FsItem[];
+  total: number;
+  hasMore: boolean;
+  nextOffset?: number;
+}> {
+  return await invoke<{
+    items: FsItem[];
+    total: number;
+    hasMore: boolean;
+    nextOffset?: number;
+  }>('browse_directory_page', { path, options });
+}
+
+/**
+ * 流式浏览目录内容（返回游标）
+ */
+export async function startDirectoryStream(
+  path: string,
+  options: {
+    batchSize?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  } = {}
+): Promise<{
+  streamId: string;
+  initialBatch: FsItem[];
+  total: number;
+  hasMore: boolean;
+}> {
+  return await invoke<{
+    streamId: string;
+    initialBatch: FsItem[];
+    total: number;
+    hasMore: boolean;
+  }>('start_directory_stream', { path, options });
+}
+
+/**
+ * 获取流的下一批数据
+ */
+export async function getNextStreamBatch(
+  streamId: string
+): Promise<{
+  items: FsItem[];
+  hasMore: boolean;
+}> {
+  return await invoke<{
+    items: FsItem[];
+    hasMore: boolean;
+  }>('get_next_stream_batch', { streamId });
+}
+
+/**
+ * 取消目录流
+ */
+export async function cancelDirectoryStream(streamId: string): Promise<void> {
+  return await invoke<void>('cancel_directory_stream', { streamId });
+}
+
+/**
  * 获取文件元数据
  */
 export async function getFileMetadata(path: string): Promise<FsItem> {

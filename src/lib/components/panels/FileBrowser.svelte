@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Folder, File, Image, Trash2, RefreshCw, FileArchive, FolderOpen, Home, ChevronLeft, ChevronRight, ChevronUp, CheckSquare, Grid3x3, List, MoreVertical, Search, ChevronDown, Settings, AlertCircle, Bookmark, Star } from '@lucide/svelte';
-  import FileBrowserList from './file/components/FileBrowserList.svelte';
+  import VirtualizedFileList from './file/components/VirtualizedFileList.svelte';
   import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
   import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
   import { onMount } from 'svelte';
@@ -366,57 +366,36 @@
     selectedItems.clear();
 
     try {
-      console.log('🔄 Calling FileSystemAPI.browseDirectory...');
-      const loadedItems = await FileSystemAPI.browseDirectory(path);
-      console.log('✅ Loaded', loadedItems.length, 'items:', loadedItems.map(i => i.name));
+      // 首先检查缓存
+      const cachedData = navigationHistory.getCachedDirectory(path);
       
-      fileBrowserStore.setItems(loadedItems);
+      let loadedItems: FsItem[] = [];
+      let cachedThumbnails = new Map<string, string>();
       
-      // 使用新的分批入队系统
-      console.log('🖼️ 开始分批加载缩略图，项目总数:', loadedItems.length);
-      const imageCount = loadedItems.filter(item => itemIsImage(item)).length;
-      const folderCount = loadedItems.filter(item => itemIsDirectory(item)).length;
-      console.log('📊 图片数量:', imageCount, '文件夹数量:', folderCount);
-
-      // 过滤需要生成缩略图的项目
-      const thumbnailItems = [];
-      
-      for (const item of loadedItems) {
-        try {
-          const key = toRelativeKey(item.path);
-          // 如果 store 中已经存在对应的相对路径缩略图，则跳过入队
-          if (thumbnails && thumbnails.has(key)) {
-            console.log('ℹ️ 已存在缩略图，跳过入队:', key);
-            continue;
+      if (cachedData) {
+        // 使用缓存数据
+        console.log('📋 使用缓存数据:', path);
+        loadedItems = cachedData.items;
+        cachedThumbnails = cachedData.thumbnails;
+        
+        // 设置缓存数据
+        fileBrowserStore.setItems(loadedItems);
+        fileBrowserStore.setThumbnails(cachedThumbnails);
+        
+        // 后台验证缓存是否仍然有效
+        navigationHistory.validateCache(path).then(async (isValid) => {
+          if (!isValid) {
+            console.log('🔄 缓存失效，重新加载:', path);
+            await reloadDirectoryFromBackend(path);
+          } else {
+            // 缓存有效，预加载缩略图
+            await loadThumbnailsForItems(loadedItems, path, cachedThumbnails);
           }
-        } catch (e) {
-          // 忽略 key 计算错误
-        }
-
-        // 添加到缩略图队列
-        if (itemIsDirectory(item) || itemIsImage(item)) {
-          thumbnailItems.push(item);
-        } else {
-          // 异步检查是否为压缩包
-          (async () => {
-            try {
-              if (await FileSystemAPI.isSupportedArchive(item.path)) {
-                console.log('📦 添加压缩包到缩略图队列:', item.path);
-                // 动态添加到队列
-                enqueueVisible(path, [item], { priority: 'normal' });
-              } else {
-                console.log('⚪ 跳过非图片非目录项:', item.path);
-              }
-            } catch (e) {
-              console.debug('Archive check failed for', item.path, e);
-            }
-          })();
-        }
-      }
-
-      // 使用新的分批入队系统
-      if (thumbnailItems.length > 0) {
-        enqueueDirectoryThumbnails(path, thumbnailItems);
+        });
+      } else {
+        // 没有缓存，从后端加载
+        console.log('🔄 从后端加载:', path);
+        await reloadDirectoryFromBackend(path);
       }
     } catch (err) {
       console.error('❌ Error loading directory:', err);
@@ -424,6 +403,91 @@
       fileBrowserStore.setItems([]);
     } finally {
       fileBrowserStore.setLoading(false);
+    }
+  }
+
+  /**
+   * 从后端重新加载目录数据
+   */
+  async function reloadDirectoryFromBackend(path: string) {
+    console.log('🔄 Calling FileSystemAPI.browseDirectory...');
+    const loadedItems = await FileSystemAPI.browseDirectory(path);
+    console.log('✅ Loaded', loadedItems.length, 'items:', loadedItems.map(i => i.name));
+    
+    // 获取目录修改时间用于缓存验证
+    let mtime: number | undefined;
+    try {
+      const fileInfo = await FileSystemAPI.getFileMetadata(path);
+      mtime = fileInfo.modified ? new Date(fileInfo.modified).getTime() : undefined;
+    } catch (e) {
+      console.debug('Failed to get directory mtime:', e);
+    }
+    
+    // 设置数据
+    fileBrowserStore.setItems(loadedItems);
+    
+    // 加载缩略图
+    await loadThumbnailsForItems(loadedItems, path);
+    
+    // 缓存目录数据
+    navigationHistory.cacheDirectory(path, loadedItems, thumbnails, mtime);
+    
+    // 预加载相邻目录
+    navigationHistory.prefetchAdjacentPaths(path);
+  }
+
+  /**
+   * 为项目加载缩略图
+   */
+  async function loadThumbnailsForItems(
+    items: FsItem[], 
+    path: string, 
+    existingThumbnails: Map<string, string> = new Map()
+  ) {
+    console.log('🖼️ 开始分批加载缩略图，项目总数:', items.length);
+    const imageCount = items.filter(item => itemIsImage(item)).length;
+    const folderCount = items.filter(item => itemIsDirectory(item)).length;
+    console.log('📊 图片数量:', imageCount, '文件夹数量:', folderCount);
+
+    // 过滤需要生成缩略图的项目
+    const thumbnailItems = [];
+    
+    for (const item of items) {
+      try {
+        const key = toRelativeKey(item.path);
+        // 如果 store 中已经存在对应的相对路径缩略图，则跳过入队
+        if (existingThumbnails.has(key) || (thumbnails && thumbnails.has(key))) {
+          console.log('ℹ️ 已存在缩略图，跳过入队:', key);
+          continue;
+        }
+      } catch (e) {
+        // 忽略 key 计算错误
+      }
+
+      // 添加到缩略图队列
+      if (itemIsDirectory(item) || itemIsImage(item)) {
+        thumbnailItems.push(item);
+      } else {
+        // 异步检查是否为压缩包
+        (async () => {
+          try {
+            if (await FileSystemAPI.isSupportedArchive(item.path)) {
+              console.log('📦 添加压缩包到缩略图队列:', item.path);
+              // 动态添加到队列
+              enqueueVisible(path, [item], { priority: 'normal' });
+            } else {
+              console.log('⚪ 跳过非图片非目录项:', item.path);
+            }
+          } catch (e) {
+            console.debug('Archive check failed for', item.path, e);
+          }
+        })();
+      }
+    }
+
+    // 使用新的分批入队系统
+    if (thumbnailItems.length > 0) {
+      enqueueDirectoryThumbnails(path, thumbnailItems);
     }
   }
 
@@ -671,31 +735,44 @@
   }
 
   /**
-   * 返回上一级
+   * 返回上一级（优化响应性）
    */
   async function goBack() {
-    if (isArchiveView) {
-      // 从压缩包视图返回到文件系统
-      isArchiveView = false;
-      const lastBackslash = currentArchivePath.lastIndexOf('\\');
-      const lastSlash = currentArchivePath.lastIndexOf('/');
-      const lastSeparator = Math.max(lastBackslash, lastSlash);
-      const parentDir = lastSeparator > 0 ? currentArchivePath.substring(0, lastSeparator) : currentPath;
-      await loadDirectory(parentDir);
-    } else if (currentPath) {
-      // 文件系统中返回上一级
-      const lastBackslash = currentPath.lastIndexOf('\\');
-      const lastSlash = currentPath.lastIndexOf('/');
-      const lastSeparator = Math.max(lastBackslash, lastSlash);
-      
-      if (lastSeparator > 0) {
-        const parentDir = currentPath.substring(0, lastSeparator);
-        // 确保不是驱动器根目录后面的路径
-        if (parentDir && !parentDir.endsWith(':')) {
+    // 立即设置加载状态，提供即时反馈
+    fileBrowserStore.setLoading(true);
+    
+    // 使用 requestIdleCallback 确保UI更新优先
+    requestIdleCallback(async () => {
+      try {
+        if (isArchiveView) {
+          // 从压缩包视图返回到文件系统
+          isArchiveView = false;
+          const lastBackslash = currentArchivePath.lastIndexOf('\\');
+          const lastSlash = currentArchivePath.lastIndexOf('/');
+          const lastSeparator = Math.max(lastBackslash, lastSlash);
+          const parentDir = lastSeparator > 0 ? currentArchivePath.substring(0, lastSeparator) : currentPath;
           await loadDirectory(parentDir);
+        } else if (currentPath) {
+          // 文件系统中返回上一级
+          const lastBackslash = currentPath.lastIndexOf('\\');
+          const lastSlash = currentPath.lastIndexOf('/');
+          const lastSeparator = Math.max(lastBackslash, lastSlash);
+          
+          if (lastSeparator > 0) {
+            const parentDir = currentPath.substring(0, lastSeparator);
+            // 确保不是驱动器根目录后面的路径
+            if (parentDir && !parentDir.endsWith(':')) {
+              await loadDirectory(parentDir);
+            }
+          }
         }
+      } catch (error) {
+        console.error('❌ 返回上一级失败:', error);
+        fileBrowserStore.setError(String(error));
+      } finally {
+        fileBrowserStore.setLoading(false);
       }
-    }
+    });
   }
 
   
@@ -1695,7 +1772,7 @@
     </div>
   {:else}
     <!-- 文件列表 -->
-    <FileBrowserList 
+    <VirtualizedFileList 
       {items}
       {currentPath}
       {thumbnails}

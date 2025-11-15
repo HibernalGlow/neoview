@@ -119,6 +119,11 @@ pub fn run() {
             // File system commands (new)
             commands::browse_directory,
             commands::get_images_in_directory,
+            // File system commands (paginated/streaming)
+            commands::fs_commands::browse_directory_page,
+            commands::fs_commands::start_directory_stream,
+            commands::fs_commands::get_next_stream_batch,
+            commands::fs_commands::cancel_directory_stream,
             commands::generate_file_thumbnail,
             commands::generate_thumbnail_from_data,
             commands::create_directory,

@@ -451,39 +451,33 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
     path: string, 
     existingThumbnails: Map<string, string> = new Map()
   ) {
-    console.log('🖼️ 开始分批加载缩略图，项目总数:', items.length);
-    const imageCount = items.filter(item => itemIsImage(item)).length;
-    const folderCount = items.filter(item => itemIsDirectory(item)).length;
-    console.log('📊 图片数量:', imageCount, '文件夹数量:', folderCount);
+    console.log('🖼️ 缩略图扫描：项目总数', items.length);
 
-    // 过滤需要生成缩略图的项目
-    const thumbnailItems = [];
-    
+    const cachedKeys = new Set<string>();
+    for (const key of existingThumbnails.keys()) cachedKeys.add(key);
+    for (const key of thumbnails?.keys?.() ?? []) cachedKeys.add(key);
+
+    const thumbnailItems: FsItem[] = [];
+
     for (const item of items) {
+      let key: string | null = null;
       try {
-        const key = toRelativeKey(item.path);
-        // 如果 store 中已经存在对应的相对路径缩略图，则跳过入队
-        if (existingThumbnails.has(key) || (thumbnails && thumbnails.has(key))) {
-          console.log('ℹ️ 已存在缩略图，跳过入队:', key);
-          continue;
-        }
+        key = toRelativeKey(item.path);
       } catch (e) {
-        // 忽略 key 计算错误
+        key = null;
       }
 
-      // 添加到缩略图队列
+      const alreadyCached = key ? cachedKeys.has(key) : false;
+      if (alreadyCached) continue;
+
       if (itemIsDirectory(item) || itemIsImage(item)) {
         thumbnailItems.push(item);
+        if (key) cachedKeys.add(key);
       } else {
-        // 异步检查是否为压缩包
         (async () => {
           try {
             if (await FileSystemAPI.isSupportedArchive(item.path)) {
-              console.log('📦 添加压缩包到缩略图队列:', item.path);
-              // 动态添加到队列
               enqueueVisible(path, [item], { priority: 'normal' });
-            } else {
-              console.log('⚪ 跳过非图片非目录项:', item.path);
             }
           } catch (e) {
             console.debug('Archive check failed for', item.path, e);
@@ -492,8 +486,8 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
       }
     }
 
-    // 使用新的分批入队系统
     if (thumbnailItems.length > 0) {
+      console.log('📦 缓存未命中，准备入队的项目数:', thumbnailItems.length);
       enqueueDirectoryThumbnails(path, thumbnailItems);
     }
   }

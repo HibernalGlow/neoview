@@ -102,6 +102,13 @@
 
   // 是否选中
   const isSelected = $derived(treeState.selectedPath === node.path);
+
+  const childNodes = $derived(() => {
+    if (!node.children || node.children.length === 0) return [];
+    return node.children
+      .map((path) => treeState.nodes[path])
+      .filter((child): child is typeof node => Boolean(child));
+  });
 </script>
 
 <li class="tree-node" {indentStyle}>
@@ -164,19 +171,16 @@
   </div>
 
   <!-- 子节点 -->
-  {#if node.isExpanded && treeState.children.has(node.path)}
+  {#if node.isExpanded && childNodes.length > 0}
     <ul class="tree-children" role="group">
-      {#each treeState.children.get(node.path) as childPath (childPath)}
-        {@const childNode = treeState.nodes.get(childPath)}
-        {#if childNode}
-          <TreeNode 
-            node={childNode}
-            level={level + 1}
-            onToggle={onToggle}
-            onSelect={onSelect}
-            onContextMenu={onContextMenu}
-          />
-        {/if}
+      {#each childNodes as childNode (childNode.path)}
+        <TreeNode 
+          node={childNode}
+          level={level + 1}
+          onToggle={onToggle}
+          onSelect={onSelect}
+          onContextMenu={onContextMenu}
+        />
       {/each}
     </ul>
   {/if}

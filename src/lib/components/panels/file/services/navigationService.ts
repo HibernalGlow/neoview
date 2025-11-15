@@ -92,7 +92,7 @@ function syncTreeState(path: string, items: FsItem[]) {
   
   // 如果有父目录，确保父目录也包含当前节点
   if (parentPath && parentPath !== path) {
-    const parentState = fileTreeStore.getState().nodes.get(parentPath);
+    const parentState = fileTreeStore.getState().nodes[parentPath];
     if (parentState && !parentState.isExpanded) {
       fileTreeStore.expandNode(parentPath);
     }

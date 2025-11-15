@@ -163,7 +163,7 @@
   <div class="p-2">
     <ul class="tree-root" role="tree">
       {#each rootNodes as root (root.path)}
-        {@const node = treeState.nodes[root.path]}
+        {@const node = treeState.nodes[root.path] || null}
         {#if node}
           <TreeNode 
             node={node}

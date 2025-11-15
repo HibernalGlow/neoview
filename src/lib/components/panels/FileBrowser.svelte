@@ -361,42 +361,52 @@
       
       fileBrowserStore.setItems(loadedItems);
       
-      // 异步加载缩略图
-      console.log('🖼️ 开始加载缩略图，项目总数:', loadedItems.length);
+      // 使用新的分批缩略图加载策略
+      console.log('🖼️ 开始分批加载缩略图，项目总数:', loadedItems.length);
       const imageCount = loadedItems.filter(item => itemIsImage(item)).length;
       const folderCount = loadedItems.filter(item => itemIsDirectory(item)).length;
       console.log('📊 图片数量:', imageCount, '文件夹数量:', folderCount);
 
-      for (const item of loadedItems) {
+      // 过滤掉已有缩略图的项目
+      const itemsWithoutThumbnails = loadedItems.filter(item => {
         try {
           const key = toRelativeKey(item.path);
-          // 如果 store 中已经存在对应的相对路径缩略图，则跳过入队
-          if (thumbnails && thumbnails.has(key)) {
-            console.log('ℹ️ 已存在缩略图，跳过入队:', key);
-            continue;
-          }
+          return !(thumbnails && thumbnails.has(key));
         } catch (e) {
-          // 忽略 key 计算错误
+          return true; // 如果 key 计算出错，仍然尝试生成缩略图
         }
+      });
 
-        if (itemIsDirectory(item) || itemIsImage(item)) {
-          console.log('🖼️/📁 Enqueue thumbnail:', item.path);
-          thumbnailQueue.enqueueItems([item], { priority: 'high', source: path });
-        } else {
-          (async () => {
-            try {
-              if (await fileBrowserService.isSupportedArchive(item.path)) {
-                console.log('📦 Enqueue archive thumbnail:', item.path);
-                thumbnailQueue.enqueueItems([item], { priority: 'high', source: path });
-              } else {
-                console.log('⚪ 跳过非图片非目录项:', item.path);
+      // 异步检测压缩包并分类
+      const [regularItems, archiveItems] = await Promise.all([
+        new Promise<FsItem[]>(resolve => {
+          const regular = itemsWithoutThumbnails.filter(item => 
+            itemIsDirectory(item) || itemIsImage(item)
+          );
+          resolve(regular);
+        }),
+        new Promise<FsItem[]>(async resolve => {
+          const archives: FsItem[] = [];
+          for (const item of itemsWithoutThumbnails) {
+            if (!itemIsDirectory(item) && !itemIsImage(item)) {
+              try {
+                if (await fileBrowserService.isSupportedArchive(item.path)) {
+                  archives.push(item);
+                }
+              } catch (e) {
+                console.debug('Archive check failed for', item.path, e);
               }
-            } catch (e) {
-              console.debug('Archive check failed for', item.path, e);
             }
-          })();
-        }
-      }
+          }
+          resolve(archives);
+        })
+      ]);
+
+      // 合并所有需要生成缩略图的项目
+      const allItems = [...regularItems, ...archiveItems];
+      
+      // 使用新的分批入队方法
+      thumbnailQueue.enqueueDirectoryThumbnails(path, allItems);
     } catch (err) {
       console.error('❌ Error loading directory:', err);
       fileBrowserStore.setError(String(err));

@@ -4,6 +4,9 @@
   import FileContextMenu from './FileContextMenu.svelte';
   import type { FsItem } from '$lib/types';
   import { toRelativeKey } from '$lib/utils/thumbnailManager';
+  import { onMount } from 'svelte';
+  import { getThumbnailQueue } from '../services/thumbnailQueueService';
+  import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 
   export type ContextMenuHandlers = {
     addBookmark: (item: FsItem) => void;
@@ -55,6 +58,76 @@
     const size = item.size ? `${item.size}` : '';
     return item.isDir ? '文件夹' : size;
   };
+
+  // 缩略图队列
+  const thumbnailQueue = getThumbnailQueue((path, url) => fileBrowserStore.addThumbnail(path, url));
+  
+  // 可见范围检测
+  let visibleRange = $state({ start: 0, end: 30 });
+  let intersectionObserver: IntersectionObserver;
+  let itemElements = new Map<string, HTMLElement>();
+
+  // 初始化可见范围检测
+  onMount(() => {
+    if (typeof IntersectionObserver !== 'undefined') {
+      intersectionObserver = new IntersectionObserver(
+        (entries) => {
+          const visibleIndices = entries
+            .filter(entry => entry.isIntersecting)
+            .map(entry => {
+              const element = entry.target as HTMLElement;
+              return parseInt(element.dataset.index || '0');
+            })
+            .sort((a, b) => a - b);
+
+          if (visibleIndices.length > 0) {
+            const newStart = visibleIndices[0];
+            const newEnd = visibleIndices[visibleIndices.length - 1];
+            
+            // 只有当可见范围发生显著变化时才更新
+            if (Math.abs(newStart - visibleRange.start) > 5 || Math.abs(newEnd - visibleRange.end) > 5) {
+              visibleRange = { start: newStart, end: newEnd };
+              onVisibleRangeChange(visibleRange);
+            }
+          }
+        },
+        {
+          root: containerRef,
+          rootMargin: '50px', // 提前加载即将进入视口的项
+          threshold: 0.1
+        }
+      );
+    }
+  });
+
+  // 处理可见范围变化
+  function onVisibleRangeChange(range: { start: number; end: number }) {
+    if (isSearchResults || isArchiveView) return; // 搜索结果和压缩包视图不需要优先级提升
+    
+    const visibleItems = items.slice(range.start, range.end + 1);
+    const currentPath = fileBrowserStore.getCurrentPath();
+    
+    if (currentPath && visibleItems.length > 0) {
+      console.log('👁️ 可见范围更新:', range.start, '-', range.end, '提升优先级');
+      thumbnailQueue.enqueueVisible(currentPath, visibleItems);
+    }
+  }
+
+  // 注册元素到观察器
+  function registerItemElement(path: string, element: HTMLElement) {
+    if (intersectionObserver && !isSearchResults && !isArchiveView) {
+      itemElements.set(path, element);
+      intersectionObserver.observe(element);
+    }
+  }
+
+  // 清理观察器
+  function cleanupObserver() {
+    if (intersectionObserver) {
+      intersectionObserver.disconnect();
+      itemElements.clear();
+    }
+  }
 </script>
 
 <div

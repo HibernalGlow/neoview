@@ -1,14 +1,4 @@
-/**
- * 文件系统项
- */
-export interface FsItem {
-  name: string;
-  path: string;
-  isDir: boolean;
-  size: number;
-  modified?: number;
-  isImage: boolean;
-}
+export type { FsItem } from './FsItem';
 
 /**
  * 文件浏览器配置

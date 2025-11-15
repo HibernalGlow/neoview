@@ -49,8 +49,6 @@
   // 订阅 fileTreeStore 状态
   let treeState = $state(fileTreeStore.getState());
 
-  });
-
   // 订阅状态更新
   $effect(() => {
     const unsubscribe = fileTreeStore.subscribe(state => {
@@ -159,6 +157,7 @@
       });
     });
   });
+</script>
 
 <div class="file-tree-panel h-full bg-gray-50 border-r border-gray-200 overflow-y-auto">
   <div class="p-2">

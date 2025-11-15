@@ -7,3 +7,12 @@ export * from './book';
 export * from './settings';
 export * from './keyboard';
 export * from './fs';
+export type {
+	FsItem,
+	FileTreeNode,
+	NavigationOptions,
+	NavigationContext,
+	SearchHistoryEntry,
+	SearchSettings,
+	SortConfig
+} from './FsItem';

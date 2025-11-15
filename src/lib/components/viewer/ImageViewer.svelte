@@ -473,11 +473,6 @@
 		}
 	}
 
-	// 关闭对比模式
-	function closeComparison() {
-		comparisonVisible = false;
-	}
-
 	/**
 	 * 将 ImageBitmap 转换为 DataURL
 	 */
@@ -508,6 +503,19 @@
 	}
 
 	// ...
+
+	function handleContainerKeydown(event: KeyboardEvent) {
+		switch (event.key) {
+			case 'Enter':
+			case ' ':
+				event.preventDefault();
+				handleMouseClick();
+				break;
+			default:
+				break;
+		}
+	}
+
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -518,6 +526,10 @@
 		onwheel={handleWheel}
 		onmousemove={handleMouseMove}
 		onclick={handleMouseClick}
+		onkeydown={handleContainerKeydown}
+		role="application"
+		tabindex="0"
+		aria-label="Image viewer"
 		style:cursor={cursorVisible ? 'default' : 'none'}
 	>
 	<!-- 图像显示区域 -->
@@ -545,7 +557,7 @@
 		originalImageData={originalImageDataForComparison}
 		upscaledImageData={upscaledImageDataForComparison}
 		isVisible={comparisonVisible}
-		onClose={closeComparison}
+		onClose={() => comparisonVisible = false}
 	/>
 	
 	<ImageViewerProgressBar

@@ -271,6 +271,9 @@
 	<!-- 拖拽调整大小的分隔条 -->
 	<div
 		class="absolute top-0 bottom-0 right-0 w-4 cursor-col-resize transition-colors z-50"
+		role="separator"
+		aria-orientation="vertical"
+		tabindex="-1"
 		onmousedown={handleMouseDown}
 	>
 		<!-- 拖拽区域（加大点击区域） -->

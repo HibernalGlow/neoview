@@ -181,6 +181,28 @@ function createFileTreeStore() {
 		});
 	}
 
+	function updateNode(path: string, partial: Partial<FileTreeNode>) {
+		update((state) => {
+			const node = state.nodes[path];
+			if (!node) return state;
+			return {
+				...state,
+				nodes: {
+					...state.nodes,
+					[path]: { ...node, ...partial }
+				}
+			};
+		});
+	}
+
+	function expandNode(path: string) {
+		setExpanded(path, true);
+	}
+
+	function collapseNode(path: string) {
+		setExpanded(path, false);
+	}
+
 	function setSelectedPath(path: string | null) {
 		update((state) => ({ ...state, selectedPath: path ?? null }));
 	}
@@ -198,6 +220,9 @@ function createFileTreeStore() {
 		setChildren,
 		setNodeLoading,
 		setExpanded,
+		updateNode,
+		expandNode,
+		collapseNode,
 		setSelectedPath,
 		selectPath,
 		reset: () => set(initialState)

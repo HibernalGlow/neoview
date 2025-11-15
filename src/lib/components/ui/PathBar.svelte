@@ -38,11 +38,14 @@
     navigationState
   }: Props = $props();
 
-  // 订阅 fileTreeStore 以获取当前路径
   import { fileTreeStore } from '$lib/stores/fileTree.svelte';
   let treeState = fileTreeStore.getState();
-  const unsubscribe = fileTreeStore.subscribe(state => {
-    treeState = state;
+
+  $effect(() => {
+    const unsubscribe = fileTreeStore.subscribe(state => {
+      treeState = state;
+    });
+    return () => unsubscribe();
   });
 
   /**
@@ -90,10 +93,10 @@
   }
 
   // 从根到当前 - 优先使用树状态
-  $: breadcrumbs = getBreadcrumbs(treeState.selectedPath || currentPath);
+  const breadcrumbs = $derived(getBreadcrumbs(treeState.selectedPath || currentPath));
 
   // 是否是根路径
-  $: isRoot = (treeState.selectedPath || currentPath) === '';
+  const isRoot = $derived((treeState.selectedPath || currentPath) === '');
 
   /**
    * 处理导航
@@ -140,10 +143,6 @@
     }
   }
 
-  // 清理订阅
-  $: {
-    return unsubscribe;
-  }
 </script>
 
 <div class="flex items-center gap-1 px-2 py-1 bg-gray-50 border-b overflow-x-auto whitespace-nowrap justify-end">

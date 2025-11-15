@@ -16,7 +16,7 @@
   import * as ContextMenu from '$lib/components/ui/context-menu';
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
   import { homeDir } from '@tauri-apps/api/path';
-  import { itemIsDirectory, itemIsImage, toRelativeKey, enqueueDirectoryThumbnails, cancelBySource } from '$lib/utils/thumbnailManager';
+  import { configureThumbnailManager, itemIsDirectory, itemIsImage, toRelativeKey, enqueueDirectoryThumbnails, cancelBySource } from '$lib/utils/thumbnailManager';
 import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
 
 
@@ -302,6 +302,11 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
 
     // 加载搜索历史
     loadSearchHistory();
+
+    // 注册缩略图生成回调
+    configureThumbnailManager({
+      addThumbnail: (path: string, url: string) => fileBrowserStore.addThumbnail(path, url)
+    });
 
     // 开发模式下运行性能测试
     if (import.meta.env.DEV) {

@@ -167,14 +167,21 @@ async function processQueue() {
           thumbnail = await FileSystemAPI.generateFileThumbnail(path);
         }
 
-        // 在调用回调之前检查任务 epoch 是否仍然有效
-        if (thumbnail && _addThumbnailCb && jobEpoch === _epoch) {
+        // 在调用回调之前检查任务 epoch 和 sourcePath 是否仍然有效
+        const isActivePath = !sourcePath || sourcePath === _activePath;
+        if (thumbnail && _addThumbnailCb && jobEpoch === _epoch && isActivePath) {
           const converted = toAssetUrl(thumbnail) || String(thumbnail || '');
           const key = toRelativeKey(path);
-          console.log('✅ 缩略图生成成功:', { key, raw: thumbnail, converted });
+          console.log('✅ 缩略图生成成功:', { key, raw: thumbnail, converted, sourcePath });
           _addThumbnailCb(key, converted);
-        } else if (thumbnail && jobEpoch !== _epoch) {
-          console.log('⏰ 任务结果已过期:', { path, jobEpoch, current: _epoch });
+        } else if (thumbnail && (jobEpoch !== _epoch || !isActivePath)) {
+          console.log('⏰ 任务结果已过期:', { 
+            path, 
+            jobEpoch, 
+            current: _epoch, 
+            sourcePath, 
+            activePath: _activePath 
+          });
         }
       } catch (e) {
         console.error('❌ 缩略图生成失败:', path, e);
@@ -191,6 +198,8 @@ export function clearQueue() {
   // 清空未开始的队列并递增 epoch，使当前进行中的任务在完成后失效
   _queue = [];
   _epoch += 1;
+  // 重置活跃路径
+  _activePath = null;
 }
 
 export function setMaxConcurrent(local?: number, archive?: number) {

@@ -47,7 +47,7 @@ function createFileBrowserStore() {
     setArchiveView: (isArchive: boolean, archivePath: string = '') => 
       update(state => ({ ...state, isArchiveView: isArchive, currentArchivePath: archivePath })),
     setSelectedIndex: (index: number) => update(state => ({ ...state, selectedIndex: index })),
-    addThumbnail: (path: string, thumbnail: string) => 
+    addThumbnail: (path: string, thumbnail: string) =>
       update(state => {
         const newThumbnails = new Map(state.thumbnails);
         // 统一通过 asset 转换中转，避免存入 raw file:// URL 导致前端无法显示
@@ -61,7 +61,14 @@ function createFileBrowserStore() {
         }
         return { ...state, thumbnails: newThumbnails };
       }),
+    removeThumbnail: (path: string) =>
+      update(state => {
+        const newThumbnails = new Map(state.thumbnails);
+        newThumbnails.delete(path);
+        return { ...state, thumbnails: newThumbnails };
+      }),
     clearThumbnails: () => update(state => ({ ...state, thumbnails: new Map() })),
+    getThumbnails: () => currentState.thumbnails,
     reset: () => set(initialState)
   };
 }

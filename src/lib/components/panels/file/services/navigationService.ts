@@ -81,9 +81,6 @@ export async function loadDirectoryWithoutHistory(path: string, options: Navigat
   fileBrowserStore.setLoading(true);
   fileBrowserStore.setError('');
   
-  // 保留旧缩略图直到新目录加载完成，减少闪烁
-  const previousThumbnails = new Map(fileBrowserStore.getThumbnails());
-  
   // Cancel previous tasks for this path before loading new directory
   thumbnailQueue.cancelBySource(path);
   // Set active path to filter old tasks
@@ -99,14 +96,15 @@ export async function loadDirectoryWithoutHistory(path: string, options: Navigat
     const sortedItems = sortFsItems(loadedItems, options.sortConfig);
     fileBrowserStore.setItems(sortedItems);
     
-    // 清理缩略图（在设置新项目后）
-    fileBrowserStore.clearThumbnails();
+    // 不要立即清空缩略图，让缓存自然过渡
+    // 只清理不匹配当前目录的缓存条目
+    const currentThumbnails = fileBrowserStore.getThumbnails();
+    const currentPaths = new Set(sortedItems.map(item => item.path));
     
-    // 如果新目录中有与旧目录相同的文件，立即恢复其缩略图
-    for (const item of sortedItems) {
-      const oldThumbnail = previousThumbnails.get(item.path);
-      if (oldThumbnail) {
-        fileBrowserStore.addThumbnail(item.path, oldThumbnail);
+    // 移除不属于当前目录的缩略图
+    for (const [thumbPath] of currentThumbnails.entries()) {
+      if (!currentPaths.has(thumbPath)) {
+        fileBrowserStore.removeThumbnail(thumbPath);
       }
     }
     

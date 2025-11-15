@@ -37,10 +37,7 @@
   ];
 
   // 订阅 fileTreeStore 状态
-  let treeState = fileTreeStore.getState();
-  const unsubscribe = fileTreeStore.subscribe(state => {
-    treeState = state;
-  });
+  let treeState = $state(fileTreeStore.getState());
 
   // 切换节点展开状态
   async function handleToggle(node: any) {
@@ -137,6 +134,14 @@
     console.log('Context menu for:', node);
   }
 
+  // 订阅状态更新
+  $effect(() => {
+    const unsubscribe = fileTreeStore.subscribe(state => {
+      treeState = state;
+    });
+    return unsubscribe;
+  });
+
   // 初始化
   onMount(async () => {
     // 初始化根节点
@@ -151,8 +156,6 @@
       });
     });
   });
-
-  // 清理订阅会在组件销毁时自动处理
 </script>
 
 <div class="file-tree-panel h-full bg-gray-50 border-r border-gray-200 overflow-y-auto">

@@ -5,29 +5,42 @@
   import { selectionStore } from '$lib/stores/selection.svelte';
   import type { FsItem } from '$lib/types';
 
-  export let node: {
-    path: string;
-    name: string;
-    isDir: boolean;
-    depth: number;
-    isExpanded: boolean;
-    isLoading: boolean;
-    hasChildren: boolean;
-    isSpecial?: boolean;
-    icon?: any;
-  };
+  interface Props {
+    node: {
+      path: string;
+      name: string;
+      isDir: boolean;
+      depth: number;
+      isExpanded: boolean;
+      isLoading: boolean;
+      hasChildren: boolean;
+      isSpecial?: boolean;
+      icon?: any;
+    };
+    level?: number;
+    onToggle?: () => void;
+    onSelect?: () => void;
+    onContextMenu?: (node: any, event: MouseEvent) => void;
+  }
 
-  export let level = 0;
-  export let onToggle = () => {};
-  export let onSelect = () => {};
-  export let onContextMenu = () => {};
+  let {
+    node,
+    level = 0,
+    onToggle = () => {},
+    onSelect = () => {},
+    onContextMenu = () => {}
+  }: Props = $props();
 
   const dispatch = createEventDispatcher();
 
   // 订阅 fileTreeStore 状态
-  let treeState = fileTreeStore.getState();
-  const unsubscribe = fileTreeStore.subscribe(state => {
-    treeState = state;
+  let treeState = $state(fileTreeStore.getState());
+
+  $effect(() => {
+    const unsubscribe = fileTreeStore.subscribe(state => {
+      treeState = state;
+    });
+    return unsubscribe;
   });
 
   // 获取文件类型图标
@@ -85,15 +98,10 @@
   }
 
   // 获取缩进样式
-  $: indentStyle = `padding-left: ${node.depth * 14}px`;
+  const indentStyle = $derived(`padding-left: ${node.depth * 14}px`);
 
   // 是否选中
-  $: isSelected = treeState.selectedPath === node.path;
-
-  // 清理订阅
-  $: {
-    return unsubscribe;
-  }
+  const isSelected = $derived(treeState.selectedPath === node.path);
 </script>
 
 <li class="tree-node" {indentStyle}>
@@ -161,12 +169,12 @@
       {#each treeState.children.get(node.path) as childPath (childPath)}
         {@const childNode = treeState.nodes.get(childPath)}
         {#if childNode}
-          <svelte:self 
+          <TreeNode 
             node={childNode}
             level={level + 1}
-            {onToggle}
-            {onSelect}
-            {onContextMenu}
+            onToggle={onToggle}
+            onSelect={onSelect}
+            onContextMenu={onContextMenu}
           />
         {/if}
       {/each}

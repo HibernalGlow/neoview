@@ -10,6 +10,7 @@
   import { fileTreeStore } from '$lib/stores/fileTree.svelte';
   import { homeDir } from '@tauri-apps/api/path';
   import FileBrowserLayout from './file/components/FileBrowserLayout.svelte';
+  import FileTreePanel from './file/components/FileTreePanel.svelte';
   import {
     calculateContextMenuPosition,
     setClipboardItem,
@@ -1145,7 +1146,4 @@
   </div>
 </div>
 
-<!-- 导入文件树面板 -->
-<script context="module">
-  import FileTreePanel from './file/components/FileTreePanel.svelte';
-</script>
+

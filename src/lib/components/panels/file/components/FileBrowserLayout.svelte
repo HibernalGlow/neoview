@@ -79,15 +79,15 @@
     treeState = state;
   });
 
-  $: shouldShowEmptyState = data.loading || 
+  const shouldShowEmptyState = $derived(data.loading || 
     data.isSearching || 
     (data.searchQuery && data.searchResults.length === 0) || 
-    data.items.length === 0;
+    data.items.length === 0);
 
-  $: shouldShowSearchResults = data.searchQuery && data.searchResults.length > 0;
+  const shouldShowSearchResults = $derived(data.searchQuery && data.searchResults.length > 0);
 
   // 使用树状态作为当前路径
-  $: currentPath = treeState.selectedPath || data.currentPath;
+  const currentPath = $derived(treeState.selectedPath || data.currentPath);
 
   // 清理订阅会在组件销毁时自动处理
 </script>
@@ -152,7 +152,6 @@
     onRemoveSearchHistoryItem={handlers.removeSearchHistoryItem}
     onClearSearchHistory={handlers.clearSearchHistory}
     onSearchSettingChange={handlers.updateSearchSetting}
-    currentPath={currentPath}
   />
 
   <!-- 错误提示 -->

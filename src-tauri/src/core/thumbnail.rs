@@ -318,9 +318,7 @@ impl ThumbnailManager {
         let file_size = webp_data.len() as u64;
         let hash = ThumbnailDatabase::hash_path(relative_path);
         let webp_data_owned = webp_data.clone();
-        let db_path = self.db.thumbnail_root.parent()
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| PathBuf::from("."));
+        let db_path = self.db.thumbnail_root.clone();
 
         // 🔄 异步保存到数据库（后台线程）
         std::thread::spawn(move || {

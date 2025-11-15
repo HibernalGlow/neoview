@@ -78,7 +78,10 @@ pub async fn init_thumbnail_manager(
 
     // 预加载缩略图到内存缓存
     if let Ok(cache) = state.cache.lock() {
-        let _ = manager.preload_thumbnails_to_cache(&cache);
+        match manager.preload_thumbnails_to_cache(&cache) {
+            Ok(count) => println!("✅ 预加载了 {} 个缩略图到内存缓存", count),
+            Err(e) => println!("⚠️ 预加载缩略图失败: {}", e),
+        }
     }
 
     if let Ok(mut manager_guard) = state.manager.lock() {
@@ -91,40 +94,54 @@ pub async fn init_thumbnail_manager(
         let num_workers = std::thread::available_parallelism()
             .map(|n| ((n.get() as f64 * 2.0) as usize).min(64).max(12))
             .unwrap_or(24);
+        println!("🔧 启动缩略图队列，worker 数量: {} (超激进模式 - 动态调整)", num_workers);
         let q = ThumbnailQueue::start(state.manager.clone(), state.cache.clone(), num_workers);
+        println!("✅ 缩略图队列已启动，所有 {} 个 worker 已就绪", num_workers);
         *queue_guard = Some(q);
     }
 
     Ok(())
 }
 
-/// 生成文件缩略图 - 返回blob URL ID
+/// 生成文件缩略图 - 异步显示版本
+/// 返回立即显示的 blob URL，后台异步保存到本地
 #[command]
 pub async fn generate_file_thumbnail_new(
     file_path: String,
     state: tauri::State<'_, ThumbnailManagerState>,
 ) -> Result<String, String> {
-    let path = PathBuf::from(&file_path);
+    println!("🔄 开始生成缩略图: {}", file_path);
+    let path = PathBuf::from(file_path);
     
     // 等待管理器初始化（最多 5 秒）
     if let Err(e) = ensure_manager_ready(&state, 5000).await {
+        println!("❌ {}", e);
         return Err(e);
+    }
+    
+    // 首先检查缓存（使用规范化路径以匹配 preload 注册的 key）
+    let cache_key = normalize_path_string(path.to_string_lossy());
+    if let Ok(cache) = state.cache.lock() {
+        if let Some(cached_url) = cache.get(&cache_key) {
+            println!("✅ 使用缓存的缩略图: {}", cached_url);
+            return Ok(cached_url);
+        }
     }
 
     // 生成新缩略图 - 使用后台优先队列
     if let Ok(qguard) = state.queue.lock() {
         if let Some(ref q) = *qguard {
+            println!("📥 将文件缩略图任务入队（普通）: {}", path.display());
             match q.enqueue(path.clone(), false, false) {
                 Ok(url) => {
-                    // 队列成功，返回blob URL
+                    println!("✅ 文件缩略图生成成功(队列): {}", url);
                     if let Ok(cache) = state.cache.lock() {
-                        let cache_key = normalize_path_string(path.to_string_lossy());
-                        cache.set(cache_key, url.clone());
+                        cache.set(cache_key.clone(), url.clone());
                     }
                     return Ok(url);
                 }
-                Err(_) => {
-                    // 队列失败，降级到即时生成
+                Err(e) => {
+                    println!("⚠️ 队列生成失败，降级到即时生成: {}", e);
                 }
             }
         }
@@ -133,13 +150,18 @@ pub async fn generate_file_thumbnail_new(
     // 回退：即时生成（无队列或队列失败）
     if let Ok(manager_guard) = state.manager.lock() {
         if let Some(ref manager) = *manager_guard {
+            println!("📸 正在生成新的缩略图...");
             let thumbnail_url = manager.generate_thumbnail(&path)
-                .map_err(|e| format!("生成缩略图失败: {}", e))?;
+                .map_err(|e| {
+                    println!("❌ 生成缩略图失败: {}", e);
+                    format!("生成缩略图失败: {}", e)
+                })?;
             
-            // 添加到缓存
+            println!("✅ 缩略图生成成功: {}", thumbnail_url);
+            
             if let Ok(cache) = state.cache.lock() {
-                let cache_key = normalize_path_string(path.to_string_lossy());
-                cache.set(cache_key, thumbnail_url.clone());
+                cache.set(cache_key.clone(), thumbnail_url.clone());
+                println!("💾 缩略图已添加到缓存");
             }
             
             return Ok(thumbnail_url);
@@ -155,10 +177,14 @@ pub async fn generate_folder_thumbnail(
     folder_path: String,
     state: tauri::State<'_, ThumbnailManagerState>,
 ) -> Result<String, String> {
+    println!("🔄 开始生成文件夹缩略图: {}", folder_path);
     let path = PathBuf::from(folder_path);
+    
+    // 检查缩略图管理器是否已初始化
     
     // 等待管理器初始化（最多 5 秒）
     if let Err(e) = ensure_manager_ready(&state, 5000).await {
+        println!("❌ {}", e);
         return Err(e);
     }
     
@@ -169,9 +195,11 @@ pub async fn generate_folder_thumbnail(
             // 验证文件URL是否仍然有效
             if cached_url.starts_with("file://") {
                 if cache.validate_file_url(&cache_key) {
+                    println!("✅ 使用缓存的文件夹缩略图: {}", cached_url);
                     return Ok(cached_url);
                 }
             } else {
+                println!("✅ 使用缓存的文件夹缩略图: {}", cached_url);
                 return Ok(cached_url);
             }
         }
@@ -181,16 +209,19 @@ pub async fn generate_folder_thumbnail(
     // 首选使用后台优先队列（若存在）入队处理并等待结果（去重/优先）
     if let Ok(qguard) = state.queue.lock() {
         if let Some(ref q) = *qguard {
+            println!("📥 将文件夹缩略图任务入队（优先）: {}", path.display());
             match q.enqueue(path.clone(), true, true) {
                 Ok(url) => {
+                    println!("✅ 文件夹缩略图生成成功(队列): {}", url);
                     // 添加到缓存
                     if let Ok(cache) = state.cache.lock() {
                         cache.set(cache_key.clone(), url.clone());
                     }
                     return Ok(url);
                 }
-                Err(_) => {
-                    // 队列失败，降级到即时生成
+                Err(e) => {
+                    println!("⚠️ 队列生成失败，降级到即时生成: {}", e);
+                    // 继续到后续的即时生成分支
                 }
             }
         }
@@ -199,26 +230,46 @@ pub async fn generate_folder_thumbnail(
     // 回退：即时生成（无队列或队列失败）
     if let Ok(manager_guard) = state.manager.lock() {
         if let Some(ref manager) = *manager_guard {
+            println!("📁 正在生成新的文件夹缩略图...");
+            
             // 获取相对路径
             let relative_path = manager.get_relative_path(&path)
-                .map_err(|e| format!("获取相对路径失败: {}", e))?;
+                .map_err(|e| {
+                    println!("❌ 获取相对路径失败: {}", e);
+                    format!("获取相对路径失败: {}", e)
+                })?;
             
             // 获取源文件修改时间
             let source_meta = std::fs::metadata(&path)
-                .map_err(|e| format!("获取文件夹元数据失败: {}", e))?;
+                .map_err(|e| {
+                    println!("❌ 获取文件夹元数据失败: {}", e);
+                    format!("获取文件夹元数据失败: {}", e)
+                })?;
             let source_modified = source_meta.modified()
-                .map_err(|e| format!("获取修改时间失败: {}", e))?
+                .map_err(|e| {
+                    println!("❌ 获取修改时间失败: {}", e);
+                    format!("获取修改时间失败: {}", e)
+                })?
                 .duration_since(std::time::UNIX_EPOCH)
-                .map_err(|e| format!("时间转换失败: {}", e))?
+                .map_err(|e| {
+                    println!("❌ 时间转换失败: {}", e);
+                    format!("时间转换失败: {}", e)
+                })?
                 .as_secs() as i64;
             
             // 生成文件夹缩略图
             let thumbnail_url = manager.generate_and_save_thumbnail(&path, &relative_path, source_modified, true)
-                .map_err(|e| format!("生成文件夹缩略图失败: {}", e))?;
+                .map_err(|e| {
+                    println!("❌ 生成文件夹缩略图失败: {}", e);
+                    format!("生成文件夹缩略图失败: {}", e)
+                })?;
+            
+            println!("✅ 文件夹缩略图生成成功: {}", thumbnail_url);
             
             // 添加到缓存
             if let Ok(cache) = state.cache.lock() {
                 cache.set(cache_key.clone(), thumbnail_url.clone());
+                println!("💾 文件夹缩略图已添加到缓存");
             }
             
             return Ok(thumbnail_url);

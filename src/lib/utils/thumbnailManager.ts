@@ -93,8 +93,8 @@ class ThumbnailExecutor {
   private running = false;
   private currentEpoch = 0;
   private generating = new Map<string, { epoch: number; isArchive: boolean }>();
-  private maxConcurrentLocal = 4;
-  private maxConcurrentArchive = 2;
+  private maxConcurrentLocal = 32;   // 增加到32个并发（充分利用Worker）
+  private maxConcurrentArchive = 16; // 增加到16个并发
   private addThumbnailCb: ((path: string, url: string) => void) | null = null;
 
   constructor(private queue: ThumbnailPriorityQueue) {}
@@ -385,9 +385,9 @@ export function clearAll() {
 
 // 分批入队辅助函数 - 优化版本
 export function splitForEnqueue(items: any[]) {
-  // 优化策略：增加首屏数量，减少延迟
-  const FIRST_SCREEN = 50;      // 增加到 50 个立即加载
-  const SECOND_SCREEN = 100;    // 增加到 100 个高优先级
+  // 优化策略：最大化immediate优先级，快速加载当前屏幕
+  const FIRST_SCREEN = 200;     // 增加到 200 个立即加载（用最多线程）
+  const SECOND_SCREEN = 100;    // 高优先级 100 个
   
   return {
     immediate: items.slice(0, FIRST_SCREEN),
@@ -396,17 +396,28 @@ export function splitForEnqueue(items: any[]) {
   };
 }
 
+// 记录当前正在加载的目录
+let currentLoadingPath: string | null = null;
+
 export function enqueueDirectoryThumbnails(path: string, items: any[]) {
+  // 如果切换了目录，取消上一个目录的所有任务
+  if (currentLoadingPath && currentLoadingPath !== path) {
+    console.log('🔄 切换目录，取消上一个目录的任务:', currentLoadingPath);
+    cancelBySource(currentLoadingPath);
+  }
+  
+  currentLoadingPath = path;
+  
   const { immediate, high, normal } = splitForEnqueue(items);
 
-  // 立即入队第一屏
+  // 立即入队第一屏 - 用最高优先级和最多线程
   enqueueVisible(path, immediate, { priority: 'immediate' });
   
-  // 高优先级无延迟入队（而不是等待）
+  // 高优先级无延迟入队
   enqueueVisible(path, high, { priority: 'high' });
   
-  // 普通优先级降低延迟从 500ms 到 100ms，加快整体加载速度
-  enqueueBackground(path, normal, { priority: 'normal', delay: 100 });
+  // 普通优先级降低延迟，加快整体加载速度
+  enqueueBackground(path, normal, { priority: 'normal', delay: 50 });
 }
 
 export function clearQueue() {

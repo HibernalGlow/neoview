@@ -269,15 +269,9 @@ impl ThumbnailManager {
                 .map_err(|e| format!("从压缩包提取文件失败: {}", e))?;
 
             // 直接在内存中处理图片数据，不写入临时文件
-            println!("🔧 loading image from memory: {} (bytes={})", first, data.len());
             let img = match self.load_image_from_memory(&data, Path::new(first)) {
-                Ok(i) => {
-                    let (w, h) = i.dimensions();
-                    println!("✅ loaded image from memory: {} ({}x{})", first, w, h);
-                    i
-                }
+                Ok(i) => i,
                 Err(e) => {
-                    println!("❌ load_image_from_memory failed for {}: {}", first, e);
                     return Err(format!("从压缩包加载图片失败: {}", e));
                 }
             };
@@ -297,7 +291,6 @@ impl ThumbnailManager {
 
         // 🚀 立即返回 blob URL（不阻塞）
         let blob_url = format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&webp_data));
-        println!("⚡ 立即返回 blob URL: {} bytes", webp_data.len());
 
         // 获取文件信息用于异步保存到数据库
         let (width, height) = thumbnail.dimensions();
@@ -508,7 +501,6 @@ impl ThumbnailManager {
                         .map_err(|e| format!("从压缩包提取图片失败: {}", e))?;
 
                     // 直接在内存中处理图片数据
-                    println!("🔧 loading image from memory: {} (bytes={})", image_path_in_archive, image_data.len());
                     self.load_image_from_memory(&image_data, Path::new(image_path_in_archive))
                         .map_err(|e| format!("压缩包内图片加载失败: {}", e))?
                 } else {

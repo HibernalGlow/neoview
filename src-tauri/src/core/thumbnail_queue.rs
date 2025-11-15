@@ -78,7 +78,7 @@ impl ThumbnailQueue {
                     }
 
                     if let Some(t) = task_opt {
-                        println!("⬇️ Worker {} picked task: key={} path={}", i, t.key, t.path.display());
+                        
                         // 处理任务：调用 manager 生成缩略图
                         let key = t.key.clone();
                         let result = (|| {
@@ -149,7 +149,7 @@ impl ThumbnailQueue {
             } else {
                 map.insert(key.clone(), vec![tx]);
                 let pending_after = map.len();
-                println!("➕ enqueue new: {} (will send task). pending now={}", key, pending_after);
+                
             }
         }
 

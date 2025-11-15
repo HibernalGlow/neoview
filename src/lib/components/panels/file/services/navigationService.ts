@@ -1,5 +1,6 @@
 import type { FsItem } from '$lib/types';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
+import { fileTreeStore } from '$lib/stores/fileTree.svelte';
 import { fileBrowserService, navigationHistory } from './fileBrowserService';
 import { getThumbnailQueue } from './thumbnailQueueService';
 import { itemIsDirectory, itemIsImage, toRelativeKey, setActivePath } from '$lib/utils/thumbnailManager';
@@ -77,6 +78,37 @@ export function getParentDirectory(path: string) {
   return path.substring(0, lastSeparator);
 }
 
+// 同步树状态
+function syncTreeState(path: string, items: FsItem[]) {
+  // 获取父目录
+  const parentPath = getParentDirectory(path);
+  
+  // 确保当前节点存在
+  fileTreeStore.ensureNode({
+    path,
+    name: path.split(/[\/]/).pop() || path,
+    isDir: true,
+    hasChildren: items.some(item => item.isDir),
+    isExpanded: false,
+    children: []
+  });
+  
+  // 设置子节点（只包含目录）
+  const dirItems = items.filter(item => item.isDir);
+  fileTreeStore.setChildren(path, dirItems);
+  
+  // 设置选中路径
+  fileTreeStore.setSelectedPath(path);
+  
+  // 如果有父目录，确保父目录也包含当前节点
+  if (parentPath && parentPath !== path) {
+    const parentState = fileTreeStore.getState().nodes.get(parentPath);
+    if (parentState && !parentState.isExpanded) {
+      fileTreeStore.expandNode(parentPath);
+    }
+  }
+}
+
 export async function loadDirectoryWithoutHistory(path: string, options: NavigationOptions) {
   fileBrowserStore.setLoading(true);
   fileBrowserStore.setError('');
@@ -95,6 +127,9 @@ export async function loadDirectoryWithoutHistory(path: string, options: Navigat
     const loadedItems = await fileBrowserService.browseDirectory(path);
     const sortedItems = sortFsItems(loadedItems, options.sortConfig);
     fileBrowserStore.setItems(sortedItems);
+    
+    // 同步树状态
+    syncTreeState(path, loadedItems);
     
     // 不要立即清空缩略图，让缓存自然过渡
     // 只清理不匹配当前目录的缓存条目

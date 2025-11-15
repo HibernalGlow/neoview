@@ -5,6 +5,9 @@
   import { bookStore } from '$lib/stores/book.svelte';
   import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
+  import { explorerSettingsStore, type ExplorerSettings } from '$lib/stores/explorerSettings.svelte';
+  import { selectionStore } from '$lib/stores/selection.svelte';
+  import { fileTreeStore } from '$lib/stores/fileTree.svelte';
   import { homeDir } from '@tauri-apps/api/path';
   import FileBrowserLayout from './file/components/FileBrowserLayout.svelte';
   import {
@@ -49,8 +52,14 @@
     type NavigationOptions,
     type NavigationContext,
   } from './file/services/navigationService';
+  import { useShortcuts, explorerShortcuts } from '$lib/hooks/useShortcuts.svelte';
 
 
+  // Explorer 设置和选择状态
+  let explorerSettings = $state<ExplorerSettings>();
+  let selectedItems = $derived(selectionStore.getSelectedItems());
+  let selectedCount = $derived(selectionStore.getSelectedCount());
+  
   // 使用全局状态
   let currentPath = $state('');
   let items = $state<FsItem[]>([]);
@@ -65,24 +74,17 @@
   let contextMenu = $state<{ x: number; y: number; item: FsItem | null; direction: 'up' | 'down' }>({ x: 0, y: 0, item: null, direction: 'down' });
   let bookmarkContextMenu = $state<{ x: number; y: number; bookmark: any | null }>({ x: 0, y: 0, bookmark: null });
 
-  // UI 模式状态
-  let isCheckMode = $state(false);
-  let isDeleteMode = $state(false);
-  let viewMode = $state<'list' | 'thumbnails'>('list'); // 列表 or 缩略图视图
-  let selectedItems = $state<Set<string>>(new Set());
+  // UI 模式状态（从 explorerSettings 获取）
+  let viewMode = $derived(explorerSettings?.layout || 'list');
+  let sortConfig = $derived(explorerSettings?.sortConfig || getSortConfig());
   let hasHomepage = $state(false);
   let canNavigateBack = $state(false);
-  let sortConfig = $state<SortConfig>(getSortConfig());
-
-  function clearSelectedItems() {
-    selectedItems = new Set();
-  }
 
   function createNavigationOptions(): NavigationOptions {
     return {
       sortConfig,
       thumbnails,
-      clearSelection: clearSelectedItems,
+      clearSelection: () => selectionStore.clear(),
     };
   }
 
@@ -113,14 +115,14 @@
     canNavigateBack,
     canGoBackInHistory: navigationHistory.canGoBack(),
     canGoForwardInHistory: navigationHistory.canGoForward(),
-    isCheckMode,
-    isDeleteMode,
     viewMode,
     sortConfig,
     thumbnails,
-    selectedItems,
+    selectedItems: new Set(selectedItems.map(item => item.path)),
+    selectedCount,
     selectedIndex,
-    fileListContainer
+    fileListContainer,
+    explorerSettings
   });
 
   // 为 FileBrowserLayout 创建处理器对象
@@ -137,6 +139,9 @@
     toggleViewMode,
     clearThumbnailCache,
     handleSortConfig,
+    handleLayoutChange,
+    handleIconSizeChange,
+    handleSelectionChange,
     handleSearchInput,
     handleSearchFocus,
     toggleSearchHistoryDropdown,
@@ -149,7 +154,7 @@
     handleKeydown,
     openSearchResult,
     deleteItem,
-    toggleItemSelection,
+    toggleItemSelection: (item: FsItem, index: number) => selectionStore.toggleSelection(item, index),
     openFile: (item: FsItem, index?: number) => {
       if (index !== undefined) {
         fileBrowserStore.setSelectedIndex(index);
@@ -182,7 +187,7 @@
 
   // 订阅全局状态 - 使用 Svelte 5 的响应式
   $effect(() => {
-    const unsubscribe = fileBrowserStore.subscribe(state => {
+    const fileBrowserUnsubscribe = fileBrowserStore.subscribe(state => {
       console.log('📊 Store state updated:', {
         currentPath: state.currentPath,
         itemsCount: state.items.length,
@@ -202,7 +207,14 @@
       canNavigateBack = state.isArchiveView || Boolean(state.currentPath);
     });
     
-    return unsubscribe;
+    const settingsUnsubscribe = explorerSettingsStore.subscribe(settings => {
+      explorerSettings = settings;
+    });
+    
+    return () => {
+      fileBrowserUnsubscribe();
+      settingsUnsubscribe();
+    };
   });
 
   // 主页路径的本地存储键
@@ -405,6 +417,93 @@
     loadHomepage();
 
     searchHistory = loadSearchHistoryEntries();
+
+    // 设置快捷键
+    useShortcuts([
+      {
+        ...explorerShortcuts.goBack,
+        action: () => {
+          if (navigationHistory.canGoBack()) {
+            goBackInHistory();
+          }
+        }
+      },
+      {
+        ...explorerShortcuts.goForward,
+        action: () => {
+          if (navigationHistory.canGoForward()) {
+            goForwardInHistory();
+          }
+        }
+      },
+      {
+        ...explorerShortcuts.goHome,
+        action: goHome
+      },
+      {
+        ...explorerShortcuts.expandTree,
+        action: () => {
+          const selectedPath = fileTreeStore.getState().selectedPath;
+          if (selectedPath) {
+            const node = fileTreeStore.getState().nodes.get(selectedPath);
+            if (node?.isDir) {
+              if (node.isExpanded) {
+                fileTreeStore.collapseNode(selectedPath);
+              } else {
+                fileTreeStore.expandNode(selectedPath);
+              }
+            }
+          }
+        }
+      },
+      {
+        ...explorerShortcuts.focusSearch,
+        action: () => {
+          const searchInput = document.querySelector('input[placeholder*="搜索"]') as HTMLInputElement;
+          if (searchInput) {
+            searchInput.focus();
+          }
+        }
+      },
+      {
+        ...explorerShortcuts.clearSearch,
+        action: () => {
+          if (searchQuery) {
+            clearSearchField();
+          }
+        }
+      },
+      {
+        ...explorerShortcuts.toggleSidebar,
+        action: () => {
+          explorerSettingsStore.updateSetting('showSidebar', !explorerSettings?.showSidebar);
+        }
+      },
+      {
+        ...explorerShortcuts.selectAll,
+        action: () => {
+          selectionStore.selectAll(items);
+        }
+      },
+      {
+        ...explorerShortcuts.rename,
+        action: () => {
+          const selectedItems = selectionStore.getSelectedItems();
+          if (selectedItems.length === 1) {
+            renameItem(selectedItems[0]);
+          }
+        }
+      },
+      {
+        ...explorerShortcuts.delete,
+        action: () => {
+          const selectedItems = selectionStore.getSelectedItems();
+          if (selectedItems.length > 0) {
+            selectedItems.forEach(item => deleteItem(item.path));
+          }
+        }
+      }
+    ]);
 
     return () => {
       document.removeEventListener('click', handleClick);
@@ -700,9 +799,39 @@
    * 处理排序配置变更
    */
   function handleSortConfig(config: SortConfig) {
-    sortConfig = config;
+    explorerSettingsStore.updateSetting('sortConfig', config);
     setSortConfig(config);
     applySortingToCurrentData();
+  }
+
+  /**
+   * 处理布局模式变更
+   */
+  function handleLayoutChange(layout: ExplorerSettings['layout']) {
+    explorerSettingsStore.updateSetting('layout', layout);
+  }
+
+  /**
+   * 处理图标大小变更
+   */
+  function handleIconSizeChange(size: ExplorerSettings['iconSize']) {
+    explorerSettingsStore.updateSetting('iconSize', size);
+  }
+
+  /**
+   * 处理选择变更
+   */
+  function handleSelectionChange(item: FsItem, index: number, event: MouseEvent) {
+    if (event.ctrlKey || event.metaKey) {
+      selectionStore.toggleSelection(item, index);
+    } else if (event.shiftKey && selectionStore.getState().lastSelectedId) {
+      const lastItem = selectionStore.getState().itemsMap.get(selectionStore.getState().lastSelectedId!);
+      if (lastItem) {
+        selectionStore.selectRange(items, lastItem.index, index);
+      }
+    } else {
+      selectionStore.select(item, index);
+    }
   }
 
   
@@ -998,8 +1127,25 @@
   }
 </script>
 
-<FileBrowserLayout 
-  data={layoutData} 
-  handlers={layoutHandlers} 
-  setHomepage={setHomepage}
-/>
+<div class="flex h-full">
+  <!-- 文件树面板 -->
+  {#if explorerSettings?.showSidebar}
+    <div class="file-tree-sidebar" style="width: {explorerSettings.sidebarWidth}px;">
+      <FileTreePanel />
+    </div>
+  {/if}
+  
+  <!-- 主内容区域 -->
+  <div class="flex-1">
+    <FileBrowserLayout 
+      data={layoutData} 
+      handlers={layoutHandlers} 
+      setHomepage={setHomepage}
+    />
+  </div>
+</div>
+
+<!-- 导入文件树面板 -->
+<script context="module">
+  import FileTreePanel from './file/components/FileTreePanel.svelte';
+</script>

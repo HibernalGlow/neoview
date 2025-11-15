@@ -21,13 +21,21 @@
     isArchive?: boolean;
     onNavigate?: (path: string) => void;
     onSetHomepage?: (path: string) => void;
+    navigationState?: {
+      canGoBack: boolean;
+      canGoForward: boolean;
+      canGoHome: boolean;
+      hasHomepage: boolean;
+      homepage?: string;
+    };
   }
 
   let {
     currentPath = $bindable(''),
     isArchive = false,
     onNavigate,
-    onSetHomepage
+    onSetHomepage,
+    navigationState
   }: Props = $props();
 
   /**
@@ -76,12 +84,47 @@
 
   const breadcrumbs = $derived(getBreadcrumbs(currentPath));
 
+  /**
+   * 处理导航
+   */
   function handleNavigate(path: string) {
-    onNavigate?.(path);
+    if (onNavigate) {
+      onNavigate(path);
+    }
   }
 
+  /**
+   * 处理设置主页
+   */
   function handleSetHomepage(path: string) {
-    onSetHomepage?.(path);
+    if (onSetHomepage) {
+      onSetHomepage(path);
+    }
+  }
+
+  /**
+   * 复制路径
+   */
+  async function handleCopyPath(path: string) {
+    try {
+      await navigator.clipboard.writeText(path);
+      // TODO: 显示 toast 提示
+      console.log('Path copied to clipboard:', path);
+    } catch (error) {
+      console.error('Failed to copy path:', error);
+    }
+  }
+
+  /**
+   * 在资源管理器中打开
+   */
+  async function handleOpenInExplorer(path: string) {
+    try {
+      const { showInFileManager } = await import('$lib/api/filesystem');
+      await showInFileManager(path);
+    } catch (error) {
+      console.error('Failed to open in file manager:', error);
+    }
   }
 </script>
 
@@ -124,6 +167,18 @@
                 <ContextMenuItem onclick={() => handleSetHomepage(breadcrumb.path)}>
                   <HomeIcon class="h-4 w-4 mr-2" />
                   设置为主页
+                </ContextMenuItem>
+                <ContextMenuItem onclick={() => handleCopyPath(breadcrumb.path)}>
+                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  复制路径
+                </ContextMenuItem>
+                <ContextMenuItem onclick={() => handleOpenInExplorer(breadcrumb.path)}>
+                  <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                  </svg>
+                  在资源管理器中打开
                 </ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>

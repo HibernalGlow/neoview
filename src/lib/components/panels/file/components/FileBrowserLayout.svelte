@@ -4,6 +4,7 @@
   import FileBrowserSearch from './FileBrowserSearch.svelte';
   import FileBrowserList from './FileBrowserList.svelte';
   import FileBrowserEmptyState from './FileBrowserEmptyState.svelte';
+  import { fileTreeStore } from '$lib/stores/fileTree.svelte';
   import type { FsItem } from '$lib/types';
   import type { SortConfig } from '../services/sortService';
   import type { SearchHistoryEntry, SearchSettings } from '../services/searchService';
@@ -72,21 +73,41 @@
 
   let { data, handlers, setHomepage }: Props = $props();
 
-  const shouldShowEmptyState = $derived(data.loading || 
+  // 订阅 fileTreeStore 以获取当前路径
+  let treeState = fileTreeStore.getState();
+  const unsubscribe = fileTreeStore.subscribe(state => {
+    treeState = state;
+  });
+
+  $: shouldShowEmptyState = data.loading || 
     data.isSearching || 
     (data.searchQuery && data.searchResults.length === 0) || 
-    data.items.length === 0);
+    data.items.length === 0;
 
-  const shouldShowSearchResults = $derived(data.searchQuery && data.searchResults.length > 0);
+  $: shouldShowSearchResults = data.searchQuery && data.searchResults.length > 0;
+
+  // 使用树状态作为当前路径
+  $: currentPath = treeState.selectedPath || data.currentPath;
+
+  // 清理订阅会在组件销毁时自动处理
 </script>
 
 <div class="flex h-full flex-col">
   <!-- 路径面包屑导航 -->
   <PathBar 
-    bind:currentPath={data.currentPath} 
+    currentPath={currentPath} 
     isArchive={data.isArchiveView}
-    onNavigate={handlers.handlePathNavigate}
+    onNavigate={(path) => {
+      fileTreeStore.selectPath(path);
+      handlers.handlePathNavigate(path);
+    }}
     onSetHomepage={setHomepage}
+    navigationState={{
+      canGoBack: data.canNavigateBack,
+      canGoForward: data.canGoForwardInHistory,
+      canGoHome: data.hasHomepage,
+      hasHomepage: data.hasHomepage
+    }}
   />
 
   <!-- 工具栏 -->
@@ -131,6 +152,7 @@
     onRemoveSearchHistoryItem={handlers.removeSearchHistoryItem}
     onClearSearchHistory={handlers.clearSearchHistory}
     onSearchSettingChange={handlers.updateSearchSetting}
+    currentPath={currentPath}
   />
 
   <!-- 错误提示 -->

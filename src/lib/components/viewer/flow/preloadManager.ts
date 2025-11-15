@@ -57,7 +57,7 @@ export class PreloadManager {
 	private performanceSettingsListener: (preLoadSize: number, maxThreads: number) => void;
 	private eventListeners: ReturnType<typeof createEventListeners>;
 	private cleanupEventListeners: () => void;
-	private bookUnsubscribe: () => void;
+	
 	private preloadWorker: ReturnType<typeof createPreloadWorker<any>>;
 	private options: PreloadManagerOptions;
 	private preUpscaledPages = new Set<number>();
@@ -171,9 +171,9 @@ export class PreloadManager {
 	private setupBookChangeListener(): void {
 		let lastBookPath: string | null = null;
 		
-		// 订阅 bookStore.currentBook 的变化
-		this.bookUnsubscribe = bookStore.subscribe(($state) => {
-			const currentBook = $state.currentBook;
+		// 使用 $effect 监听书籍切换
+		$effect(() => {
+			const currentBook = bookStore.currentBook;
 			const currentBookPath = currentBook?.path || null;
 			
 			// 只有当书籍路径真正改变时才清理缓存
@@ -205,10 +205,7 @@ export class PreloadManager {
 		// 清理性能配置监听器
 		performanceSettings.removeListener(this.performanceSettingsListener);
 
-		// 取消书籍切换监听
-		if (this.bookUnsubscribe) {
-			this.bookUnsubscribe();
-		}
+		
 
 		// 清理预加载 worker
 		this.preloadWorker.clear();

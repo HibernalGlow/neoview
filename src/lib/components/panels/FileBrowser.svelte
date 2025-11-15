@@ -16,7 +16,7 @@
   import * as ContextMenu from '$lib/components/ui/context-menu';
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
   import { homeDir } from '@tauri-apps/api/path';
-  import { enqueueThumbnail, enqueueArchiveThumbnail, configureThumbnailManager, itemIsDirectory, itemIsImage, clearQueue, toRelativeKey, enqueueDirectoryThumbnails, cancelBySource } from '$lib/utils/thumbnailManager';
+  import { itemIsDirectory, itemIsImage, toRelativeKey, enqueueDirectoryThumbnails, cancelBySource } from '$lib/utils/thumbnailManager';
 import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
 
 

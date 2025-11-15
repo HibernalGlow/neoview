@@ -16,8 +16,9 @@
   import * as ContextMenu from '$lib/components/ui/context-menu';
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
   import { homeDir } from '@tauri-apps/api/path';
-  import { configureThumbnailManager, itemIsDirectory, itemIsImage, toRelativeKey, enqueueDirectoryThumbnails, cancelBySource } from '$lib/utils/thumbnailManager';
+  import { configureThumbnailManager, itemIsDirectory, itemIsImage, toRelativeKey, enqueueDirectoryThumbnails, cancelBySource, enqueueVisible } from '$lib/utils/thumbnailManager';
 import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
+import ThumbnailsPanel from './ThumbnailsPanel.svelte';
 
 
   // 使用全局状态
@@ -303,11 +304,11 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
     // 加载搜索历史
     loadSearchHistory();
 
-    // 注册缩略图生成回调 - 增加并发数以提高性能
+    // 注册缩略图生成回调 - 使用默认值，设置会动态应用
     configureThumbnailManager({
       addThumbnail: (path: string, url: string) => fileBrowserStore.addThumbnail(path, url),
-      maxConcurrentLocal: 6,      // 增加本地文件并发从 4 到 6
-      maxConcurrentArchive: 3     // 增加压缩包并发从 2 到 3
+      maxConcurrentLocal: 6,      // 默认值，可在设置中调整
+      maxConcurrentArchive: 3     // 默认值，可在设置中调整
     });
 
     // 开发模式下运行性能测试
@@ -446,7 +447,7 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
   }
 
   /**
-   * 为项目加载缩略图
+   * 为项目加载缩略图 - 优化版本，当前文件夹优先加载
    */
   async function loadThumbnailsForItems(
     items: FsItem[], 
@@ -460,6 +461,7 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
     for (const key of thumbnails?.keys?.() ?? []) cachedKeys.add(key);
 
     const thumbnailItems: FsItem[] = [];
+    const archiveItems: FsItem[] = [];
 
     for (const item of items) {
       let key: string | null = null;
@@ -476,10 +478,11 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
         thumbnailItems.push(item);
         if (key) cachedKeys.add(key);
       } else {
+        // 异步检查压缩包，但先收集起来
         (async () => {
           try {
             if (await FileSystemAPI.isSupportedArchive(item.path)) {
-              enqueueVisible(path, [item], { priority: 'normal' });
+              archiveItems.push(item);
             }
           } catch (e) {
             console.debug('Archive check failed for', item.path, e);
@@ -488,9 +491,17 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
       }
     }
 
+    // 🔥 关键优化：当前文件夹的所有项目使用 immediate 优先级
     if (thumbnailItems.length > 0) {
-      console.log('📦 缓存未命中，准备入队的项目数:', thumbnailItems.length);
-      enqueueDirectoryThumbnails(path, thumbnailItems);
+      console.log('🚀 [优先级提升] 当前文件夹项目立即加载:', thumbnailItems.length);
+      // 所有项目都用 immediate 优先级，确保当前文件夹快速显示
+      const { immediate, high, normal } = {
+        immediate: thumbnailItems,
+        high: [],
+        normal: []
+      };
+      
+      enqueueVisible(path, immediate, { priority: 'immediate' });
     }
   }
 

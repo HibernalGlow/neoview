@@ -49,10 +49,20 @@ pub fn run() {
             let fs_manager = FsManager::new();
             let archive_manager = ArchiveManager::new();
             
+            // 确定缩略图目录
+            let thumbnail_root = if let Ok(test_dir) = std::env::var("NEOVIEW_THUMBNAIL_DIR") {
+                PathBuf::from(test_dir)
+            } else {
+                PathBuf::from(".cache/thumbnails")
+            };
+            
+            // 确保目录存在
+            std::fs::create_dir_all(&thumbnail_root).ok();
+            
             app.manage(FsState {
                 fs_manager: Mutex::new(fs_manager),
                 thumbnail_manager: Mutex::new(ThumbnailManager::new(
-                    PathBuf::from(".cache/thumbnails"),
+                    thumbnail_root,
                     PathBuf::from("."),
                     256
                 ).expect("Failed to create thumbnail manager")),
@@ -228,6 +238,11 @@ pub fn run() {
             commands::check_upscale_cache_for_algorithm,
             commands::save_binary_file,
             commands::read_binary_file,
+            // Video commands
+            commands::check_ffmpeg_available,
+            commands::generate_video_thumbnail,
+            commands::get_video_duration,
+            commands::is_video_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

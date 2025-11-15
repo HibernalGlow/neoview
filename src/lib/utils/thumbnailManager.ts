@@ -216,6 +216,7 @@ class ThumbnailExecutor {
       let thumbnail: string | null = null;
       const isArchive = this.isArchiveTask(task);
       const isDir = itemIsDirectory(item);
+      const isVideo = path.match(/\.(mp4|mkv|avi|mov|flv|webm|wmv)$/i);
 
       if (isArchive) {
         console.log(' 生成压缩包缩略图:', path);
@@ -223,6 +224,13 @@ class ThumbnailExecutor {
       } else if (isDir) {
         console.log(' 生成文件夹缩略图:', path);
         thumbnail = await FileSystemAPI.generateFolderThumbnail(path);
+      } else if (isVideo) {
+        console.log(' 生成视频缩略图:', path);
+        try {
+          thumbnail = await FileSystemAPI.generateVideoThumbnail(path);
+        } catch (e) {
+          console.debug('视频缩略图生成失败，跳过:', e);
+        }
       } else {
         console.log(' 生成文件缩略图:', path);
         thumbnail = await FileSystemAPI.generateFileThumbnail(path);

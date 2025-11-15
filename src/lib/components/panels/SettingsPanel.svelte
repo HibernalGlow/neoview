@@ -375,6 +375,56 @@
 						class="w-full"
 					/>
 				</div>
+
+				<!-- 缩略图设置 -->
+				<div class="border-t pt-6">
+					<h3 class="font-semibold mb-4">🖼️ 缩略图设置</h3>
+					
+					<div class="space-y-2">
+						<div class="flex items-center justify-between">
+							<Label>本地文件并发数</Label>
+							<span class="text-sm text-muted-foreground">{settings.performance.thumbnail?.maxConcurrentLocal || 6}</span>
+						</div>
+						<input
+							type="range"
+							bind:value={settings.performance.thumbnail.maxConcurrentLocal}
+							min={1}
+							max={16}
+							step={1}
+							class="w-full"
+						/>
+					</div>
+					
+					<div class="space-y-2">
+						<div class="flex items-center justify-between">
+							<Label>压缩包并发数</Label>
+							<span class="text-sm text-muted-foreground">{settings.performance.thumbnail?.maxConcurrentArchive || 3}</span>
+						</div>
+						<input
+							type="range"
+							bind:value={settings.performance.thumbnail.maxConcurrentArchive}
+							min={1}
+							max={8}
+							step={1}
+							class="w-full"
+						/>
+					</div>
+					
+					<div class="space-y-2">
+						<div class="flex items-center justify-between">
+							<Label>视频处理并发数</Label>
+							<span class="text-sm text-muted-foreground">{settings.performance.thumbnail?.maxConcurrentVideo || 2}</span>
+						</div>
+						<input
+							type="range"
+							bind:value={settings.performance.thumbnail.maxConcurrentVideo}
+							min={1}
+							max={4}
+							step={1}
+							class="w-full"
+						/>
+					</div>
+				</div>
 			</TabsContent>
 
 			<!-- 文件设置 -->

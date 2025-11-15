@@ -41,6 +41,25 @@ export interface UISettings {
   sidebarPosition: 'left' | 'right';
 }
 
+export interface ThumbnailSettings {
+  /** 本地文件并发数 */
+  maxConcurrentLocal: number;
+  /** 压缩包并发数 */
+  maxConcurrentArchive: number;
+  /** 视频处理并发数 */
+  maxConcurrentVideo: number;
+  /** 缩略图缓存大小 (MB) */
+  cacheSizeMB: number;
+  /** 缩略图尺寸 (px) */
+  thumbnailSize: number;
+  /** 启用视频缩略图 */
+  enableVideoThumbnail: boolean;
+  /** 视频截图时间 (秒) */
+  videoFrameTime: number;
+  /** 启动时自动索引 */
+  autoIndexOnStartup: boolean;
+}
+
 export interface PerformanceSettings {
   /** 缓存大小 (MB) */
   cacheSize: number;
@@ -50,6 +69,8 @@ export interface PerformanceSettings {
   hardwareAcceleration: boolean;
   /** 最大并发加载数 */
   maxConcurrentLoads: number;
+  /** 缩略图设置 */
+  thumbnail: ThumbnailSettings;
 }
 
 export interface KeyboardShortcut {

@@ -512,6 +512,63 @@
 								</p>
 							</div>
 						</div>
+
+						<!-- 缩略图设置 -->
+						<div class="space-y-2">
+							<h4 class="text-sm font-semibold">🖼️ 缩略图</h4>
+							<div class="space-y-3">
+								<div class="space-y-2">
+									<label class="flex items-center justify-between">
+										<span class="text-sm">本地文件并发数</span>
+										<span class="text-xs text-muted-foreground">{performanceSettings.thumbnail_concurrent_local || 6}</span>
+									</label>
+									<input 
+										type="range" 
+										min="1" 
+										max="16" 
+										bind:value={performanceSettings.thumbnail_concurrent_local}
+										class="w-full"
+										aria-label="本地文件并发数"
+									/>
+								</div>
+								<div class="space-y-2">
+									<label class="flex items-center justify-between">
+										<span class="text-sm">压缩包并发数</span>
+										<span class="text-xs text-muted-foreground">{performanceSettings.thumbnail_concurrent_archive || 3}</span>
+									</label>
+									<input 
+										type="range" 
+										min="1" 
+										max="8" 
+										bind:value={performanceSettings.thumbnail_concurrent_archive}
+										class="w-full"
+										aria-label="压缩包并发数"
+									/>
+								</div>
+								<div class="space-y-2">
+									<label class="flex items-center justify-between">
+										<span class="text-sm">视频处理并发数</span>
+										<span class="text-xs text-muted-foreground">{performanceSettings.thumbnail_concurrent_video || 2}</span>
+									</label>
+									<input 
+										type="range" 
+										min="1" 
+										max="4" 
+										bind:value={performanceSettings.thumbnail_concurrent_video}
+										class="w-full"
+										aria-label="视频处理并发数"
+									/>
+								</div>
+								<label class="flex items-center gap-2">
+									<input 
+										type="checkbox" 
+										class="rounded" 
+										bind:checked={performanceSettings.enable_video_thumbnail}
+									/>
+									<span class="text-sm">启用视频缩略图</span>
+								</label>
+							</div>
+						</div>
 					</div>
 				</div>
 			{/if}

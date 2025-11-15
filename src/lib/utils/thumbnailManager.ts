@@ -265,7 +265,7 @@ class ThumbnailExecutor {
       if (p.startsWith('/')) p = p.slice(1);
       return p;
     } catch (e) {
-      return absPath.replace(/\/g, '/');
+      return absPath.replace(/\\/g, '/');
     }
   }
 
@@ -328,7 +328,7 @@ export function toRelativeKey(absPath: string): string {
     if (p.startsWith('/')) p = p.slice(1);
     return p;
   } catch (e) {
-    return absPath.replace(/\/g, '/');
+    return absPath.replace(/\\/g, '/');
   }
 }
 

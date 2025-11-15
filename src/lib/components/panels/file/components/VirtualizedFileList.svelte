@@ -14,7 +14,9 @@
     isCheckMode = false,
     isDeleteMode = false,
     selectedItems = new Set(),
-    viewMode = 'list'
+    viewMode = 'list',
+    onSelectionChange = (_: { selectedItems: Set<string> }) => {},
+    onSelectedIndexChange = (_: { index: number }) => {}
   }: {
     items?: FsItem[];
     currentPath?: string;
@@ -24,6 +26,8 @@
     isDeleteMode?: boolean;
     selectedItems?: Set<string>;
     viewMode?: 'list' | 'thumbnails';
+    onSelectionChange?: (payload: { selectedItems: Set<string> }) => void;
+    onSelectedIndexChange?: (payload: { index: number }) => void;
   } = $props();
 
   const dispatch = createEventDispatcher();
@@ -199,12 +203,14 @@
 
   // 切换项目选中状态
   function toggleItemSelection(path: string) {
-    if (selectedItems.has(path)) {
-      selectedItems.delete(path);
+    const next = new Set(selectedItems);
+    if (next.has(path)) {
+      next.delete(path);
     } else {
-      selectedItems.add(path);
+      next.add(path);
     }
-    selectedItems = selectedItems; // 触发响应式更新
+    onSelectionChange({ selectedItems: next });
+    dispatch('selectionChange', { selectedItems: next });
   }
 
   // 获取缩略图键 - 统一使用toRelativeKey
@@ -263,7 +269,8 @@
         e.preventDefault();
         const nextIndex = Math.min(selectedIndex + 1, items.length - 1);
         if (nextIndex !== selectedIndex) {
-          selectedIndex = nextIndex;
+          onSelectedIndexChange({ index: nextIndex });
+          dispatch('selectedIndexChange', { index: nextIndex });
           // 确保选中项在视口中可见
           scrollToItem(nextIndex);
         }
@@ -272,22 +279,26 @@
         e.preventDefault();
         const prevIndex = Math.max(selectedIndex - 1, 0);
         if (prevIndex !== selectedIndex) {
-          selectedIndex = prevIndex;
+          onSelectedIndexChange({ index: prevIndex });
+          dispatch('selectedIndexChange', { index: prevIndex });
           scrollToItem(prevIndex);
         }
         break;
       case 'Home':
         e.preventDefault();
         if (selectedIndex !== 0) {
-          selectedIndex = 0;
+          onSelectedIndexChange({ index: 0 });
+          dispatch('selectedIndexChange', { index: 0 });
           scrollToItem(0);
         }
         break;
       case 'End':
         e.preventDefault();
         if (selectedIndex !== items.length - 1) {
-          selectedIndex = items.length - 1;
-          scrollToItem(items.length - 1);
+          const last = items.length - 1;
+          onSelectedIndexChange({ index: last });
+          dispatch('selectedIndexChange', { index: last });
+          scrollToItem(last);
         }
         break;
     }

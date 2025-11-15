@@ -2,8 +2,12 @@ import type { FsItem } from '$lib/types';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 import { fileBrowserService, navigationHistory } from './fileBrowserService';
 import { getThumbnailQueue } from './thumbnailQueueService';
-import { itemIsDirectory, itemIsImage, toRelativeKey } from '$lib/utils/thumbnailManager';
+import { itemIsDirectory, itemIsImage, toRelativeKey, setActivePath } from '$lib/utils/thumbnailManager';
 import { sortFsItems, type SortConfig } from './sortService';
+
+// 归档检测缓存
+const archiveCheckCache = new Map<string, { result: boolean; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5分钟缓存
 
 const thumbnailQueue = getThumbnailQueue((path, url) => fileBrowserStore.addThumbnail(path, url));
 
@@ -76,9 +80,14 @@ export function getParentDirectory(path: string) {
 export async function loadDirectoryWithoutHistory(path: string, options: NavigationOptions) {
   fileBrowserStore.setLoading(true);
   fileBrowserStore.setError('');
-  fileBrowserStore.clearThumbnails();
+  
+  // 保留旧缩略图直到新目录加载完成，减少闪烁
+  const previousThumbnails = new Map(fileBrowserStore.getThumbnails());
+  
   // Cancel previous tasks for this path before loading new directory
   thumbnailQueue.cancelBySource(path);
+  // Set active path to filter old tasks
+  setActivePath(path);
   fileBrowserStore.setArchiveView(false);
   fileBrowserStore.setSelectedIndex(-1);
   fileBrowserStore.setCurrentPath(path);
@@ -89,6 +98,18 @@ export async function loadDirectoryWithoutHistory(path: string, options: Navigat
     const loadedItems = await fileBrowserService.browseDirectory(path);
     const sortedItems = sortFsItems(loadedItems, options.sortConfig);
     fileBrowserStore.setItems(sortedItems);
+    
+    // 清理缩略图（在设置新项目后）
+    fileBrowserStore.clearThumbnails();
+    
+    // 如果新目录中有与旧目录相同的文件，立即恢复其缩略图
+    for (const item of sortedItems) {
+      const oldThumbnail = previousThumbnails.get(item.path);
+      if (oldThumbnail) {
+        fileBrowserStore.addThumbnail(item.path, oldThumbnail);
+      }
+    }
+    
     enqueueThumbnails(loadedItems, path, options.thumbnails);
   } catch (err) {
     console.error('❌ Error loading directory:', err);
@@ -158,7 +179,22 @@ function enqueueThumbnails(items: FsItem[], currentPath: string, thumbnails?: Ma
 
 async function checkArchiveAsync(item: FsItem, currentPath: string) {
   try {
-    if (await fileBrowserService.isSupportedArchive(item.path)) {
+    // 检查缓存
+    const cached = archiveCheckCache.get(item.path);
+    const now = Date.now();
+    
+    if (cached && (now - cached.timestamp) < CACHE_TTL) {
+      if (cached.result) {
+        thumbnailQueue.enqueueAdditional(currentPath, [item], { priority: 'low' });
+      }
+      return;
+    }
+    
+    // 执行检测并缓存结果
+    const isArchive = await fileBrowserService.isSupportedArchive(item.path);
+    archiveCheckCache.set(item.path, { result: isArchive, timestamp: now });
+    
+    if (isArchive) {
       thumbnailQueue.enqueueAdditional(currentPath, [item], { priority: 'low' });
     }
   } catch (error) {

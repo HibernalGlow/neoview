@@ -46,13 +46,26 @@ class ThumbnailQueueService {
 
   enqueueForPath(source: string, items: FsItem[], options: EnqueueOptions = {}) {
     const list = this.tasks.get(source) ?? [];
-    const newTasks = items.map(item => ({
+    // 限制批量入队数量，避免一次性处理太多任务
+    const maxBatchSize = options.priority === 'high' ? 20 : 10;
+    const itemsToEnqueue = items.slice(0, maxBatchSize);
+    
+    const newTasks = itemsToEnqueue.map(item => ({
       item,
       source,
       priority: options.priority ?? 'normal'
     }));
     
     this.tasks.set(source, list.concat(newTasks));
+    
+    // 如果有剩余项目，延迟入队
+    if (items.length > maxBatchSize) {
+      setTimeout(() => {
+        const remainingItems = items.slice(maxBatchSize);
+        this.enqueueForPath(source, remainingItems, { ...options, priority: 'normal' });
+      }, 100);
+    }
+    
     this.scheduleFlush();
   }
 

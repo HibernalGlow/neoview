@@ -6,9 +6,11 @@ type Job = { path: string; isFolder: boolean; isArchive?: boolean; isArchiveRoot
 let _queue: Job[] = [];
 // 将_generating 从 Set 改为 Map，记录每个正在生成的 path 对应的 epoch
 // 这样在切换目录（epoch 变化）时，旧 epoch 的进行中任务不会阻塞新 epoch 的任务启动
-let _generating: Map<string, {epoch: number, isArchive: boolean}> = new Map();
+let _generating: Map<string, {epoch: number, isArchive: boolean, sourcePath?: string}> = new Map();
 // epoch 用于在清空队列时使已有任务的回调失效（避免切换目录后旧任务填充新目录）
 let _epoch = 0;
+// 当前活跃的路径，用于过滤旧任务
+let _activePath: string | null = null;
 // 区分本地文件和压缩包的并发数
 let _maxConcurrentLocal = 4;
 let _maxConcurrentArchive = 2;
@@ -22,6 +24,16 @@ export function configureThumbnailManager(options: { addThumbnail?: (path: strin
   }
   if (typeof options.maxConcurrentLocal === 'number') _maxConcurrentLocal = options.maxConcurrentLocal;
   if (typeof options.maxConcurrentArchive === 'number') _maxConcurrentArchive = options.maxConcurrentArchive;
+}
+
+export function setActivePath(path: string | null) {
+  _activePath = path;
+  // 清理不匹配活跃路径的进行中任务
+  for (const [taskPath, info] of _generating.entries()) {
+    if (info.sourcePath && info.sourcePath !== path) {
+      _generating.delete(taskPath);
+    }
+  }
 }
 
 /** 简单兼容 helper */
@@ -123,8 +135,9 @@ async function processQueue() {
     if (generating && generating.epoch === _epoch) continue;
 
     const jobEpoch = _epoch;
-    _generating.set(path, { epoch: jobEpoch, isArchive: !!isArchive });
-    console.log(`🚀 开始任务: ${path} (${isArchive ? 'Archive' : 'Local'})`);
+    const sourcePath = _activePath;
+    _generating.set(path, { epoch: jobEpoch, isArchive: !!isArchive, sourcePath });
+    console.log(`🚀 开始任务: ${path} (${isArchive ? 'Archive' : 'Local'}) [source: ${sourcePath}]`);
 
     (async () => {
       try {

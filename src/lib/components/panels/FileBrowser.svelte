@@ -3,7 +3,6 @@
   import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
   import { onMount } from 'svelte';
   import { fileBrowserService, navigationHistory } from './file/services/fileBrowserService';
-  import { getThumbnailQueue } from './file/services/thumbnailQueueService';
   import type { FsItem } from '$lib/types';
   import { bookStore } from '$lib/stores/book.svelte';
   import PathBar from '../ui/PathBar.svelte';
@@ -13,7 +12,6 @@
   import * as ContextMenu from '$lib/components/ui/context-menu';
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
   import { homeDir } from '@tauri-apps/api/path';
-  import { itemIsDirectory, itemIsImage, toRelativeKey } from '$lib/utils/thumbnailManager';
   import FileBrowserToolbar from './file/components/FileBrowserToolbar.svelte';
   import FileBrowserSearch from './file/components/FileBrowserSearch.svelte';
   import FileBrowserList from './file/components/FileBrowserList.svelte';
@@ -48,6 +46,18 @@
     type SearchHistoryEntry,
     type SearchSettings,
   } from './file/services/searchService';
+  import {
+    loadDirectory as loadDirectoryService,
+    loadDirectoryWithoutHistory as loadDirectoryWithoutHistoryService,
+    navigateToDirectory as navigateToDirectoryService,
+    loadArchive as loadArchiveService,
+    goBack as goBackService,
+    goBackInHistory as goBackInHistoryService,
+    goForwardInHistory as goForwardInHistoryService,
+    refreshDirectory as refreshDirectoryService,
+    type NavigationOptions,
+    type NavigationContext,
+  } from './file/services/navigationService';
 
 
   // 使用全局状态
@@ -64,9 +74,6 @@
   let contextMenu = $state<{ x: number; y: number; item: FsItem | null; direction: 'up' | 'down' }>({ x: 0, y: 0, item: null, direction: 'down' });
   let bookmarkContextMenu = $state<{ x: number; y: number; bookmark: any | null }>({ x: 0, y: 0, bookmark: null });
 
-  // 缩略图队列
-  const thumbnailQueue = getThumbnailQueue((path, url) => fileBrowserStore.addThumbnail(path, url));
-
   // UI 模式状态
   let isCheckMode = $state(false);
   let isDeleteMode = $state(false);
@@ -75,6 +82,27 @@
   let hasHomepage = $state(false);
   let canNavigateBack = $state(false);
   let sortConfig = $state<SortConfig>(getSortConfig());
+
+  function clearSelectedItems() {
+    selectedItems = new Set();
+  }
+
+  function createNavigationOptions(): NavigationOptions {
+    return {
+      sortConfig,
+      thumbnails,
+      clearSelection: clearSelectedItems,
+    };
+  }
+
+  function createNavigationContext(): NavigationContext {
+    return {
+      ...createNavigationOptions(),
+      currentPath,
+      currentArchivePath,
+      isArchiveView,
+    };
+  }
 
   
 
@@ -166,7 +194,7 @@
         navigationHistory.setHomepage(homepage);
         hasHomepage = true;
         // 注意：不在此处 await 阻塞 UI，如果需要可以等待
-        await loadDirectory(homepage);
+        await loadDirectoryService(homepage, createNavigationOptions());
       } else {
         console.warn('⚠️ 没有可用的主页路径，跳过加载主页');
       }
@@ -188,7 +216,7 @@
   
   
   /**
-   * 执行搜索（使用 ripgrep）
+   * 执行搜索（使用fd）
    */
   async function performSearch(query: string) {
     if (!query.trim()) {
@@ -255,20 +283,14 @@
    * 后退
    */
   function goBackInHistory() {
-    const path = navigationHistory.back();
-    if (path) {
-      loadDirectoryWithoutHistory(path);
-    }
+    goBackInHistoryService(createNavigationOptions());
   }
 
   /**
    * 前进
    */
   function goForwardInHistory() {
-    const path = navigationHistory.forward();
-    if (path) {
-      loadDirectoryWithoutHistory(path);
-    }
+    goForwardInHistoryService(createNavigationOptions());
   }
 
   /**
@@ -347,7 +369,7 @@
       
       if (path) {
         console.log('📂 Loading selected directory...');
-        await loadDirectory(path);
+        await loadDirectoryService(path, createNavigationOptions());
         console.log('✅ Directory loaded successfully');
       } else {
         console.log('⚠️ No folder selected');
@@ -358,143 +380,28 @@
     }
   }
 
-  /**
-   * 加载目录内容（添加到历史记录）
-   */
-  async function loadDirectory(path: string) {
-    await loadDirectoryWithoutHistory(path);
-    navigationHistory.push(path);
+  function loadDirectory(path: string) {
+    return loadDirectoryService(path, createNavigationOptions());
   }
 
-  /**
-   * 加载目录内容（不添加历史记录，用于前进/后退）
-   */
-  async function loadDirectoryWithoutHistory(path: string) {
-    console.log('📂 loadDirectory called with path:', path);
-    
-  fileBrowserStore.setLoading(true);
-  fileBrowserStore.setError('');
-  fileBrowserStore.clearThumbnails();
-  // 清空外部缩略图队列，避免上次目录的任务残留
-  thumbnailQueue.clear();
-    fileBrowserStore.setArchiveView(false);
-    fileBrowserStore.setSelectedIndex(-1);
-    fileBrowserStore.setCurrentPath(path);
-    
-    // 清空选择
-    selectedItems.clear();
+  function loadDirectoryWithoutHistory(path: string) {
+    return loadDirectoryWithoutHistoryService(path, createNavigationOptions());
+  }
 
-    try {
-      console.log('🔄 Loading directory via service...');
-      const loadedItems = await fileBrowserService.browseDirectory(path);
-      console.log('✅ Loaded', loadedItems.length, 'items:', loadedItems.map(i => i.name));
-      
-      const sortedItems = sortFsItems(loadedItems, sortConfig);
-      fileBrowserStore.setItems(sortedItems);
-      
-      // 异步加载缩略图
-      console.log('🖼️ 开始加载缩略图，项目总数:', loadedItems.length);
-      const imageCount = loadedItems.filter(item => itemIsImage(item)).length;
-      const folderCount = loadedItems.filter(item => itemIsDirectory(item)).length;
-      console.log('📊 图片数量:', imageCount, '文件夹数量:', folderCount);
-
-      for (const item of loadedItems) {
-        try {
-          const key = toRelativeKey(item.path);
-          // 如果 store 中已经存在对应的相对路径缩略图，则跳过入队
-          if (thumbnails && thumbnails.has(key)) {
-            console.log('ℹ️ 已存在缩略图，跳过入队:', key);
-            continue;
-          }
-        } catch (e) {
-          // 忽略 key 计算错误
-        }
-
-        if (itemIsDirectory(item) || itemIsImage(item)) {
-          console.log('🖼️/📁 Enqueue thumbnail:', item.path);
-          thumbnailQueue.enqueueItems([item], { priority: 'high', source: path });
-        } else {
-          (async () => {
-            try {
-              if (await fileBrowserService.isSupportedArchive(item.path)) {
-                console.log('📦 Enqueue archive thumbnail:', item.path);
-                thumbnailQueue.enqueueItems([item], { priority: 'high', source: path });
-              } else {
-                console.log('⚪ 跳过非图片非目录项:', item.path);
-              }
-            } catch (e) {
-              console.debug('Archive check failed for', item.path, e);
-            }
-          })();
-        }
-      }
-    } catch (err) {
-      console.error('❌ Error loading directory:', err);
-      fileBrowserStore.setError(String(err));
-      fileBrowserStore.setItems([]);
-    } finally {
-      fileBrowserStore.setLoading(false);
+  function navigateToDirectory(path: string) {
+    if (!path) {
+      console.warn('⚠️ Empty path provided to navigateToDirectory');
+      return Promise.resolve();
     }
+    return navigateToDirectoryService(path, createNavigationOptions());
   }
 
-  /**
-   * 加载压缩包内容
-   */
-  async function loadArchive(path: string) {
-    console.log('📦 loadArchive called with path:', path);
-    
-    fileBrowserStore.setLoading(true);
-    fileBrowserStore.setError('');
-    fileBrowserStore.clearThumbnails();
-    fileBrowserStore.setArchiveView(true, path);
-    fileBrowserStore.setSelectedIndex(-1);
-
-    try {
-      const loadedItems = await fileBrowserService.listArchiveContents(path);
-      console.log('✅ Loaded', loadedItems.length, 'archive items');
-      
-      fileBrowserStore.setItems(loadedItems);
-      
-      // 异步加载压缩包内图片的缩略图
-      for (const item of loadedItems) {
-        if (itemIsImage(item)) {
-          loadArchiveThumbnail(item.path);
-        }
-      }
-    } catch (err) {
-      console.error('❌ Error loading archive:', err);
-      fileBrowserStore.setError(String(err));
-      fileBrowserStore.setItems([]);
-    } finally {
-      fileBrowserStore.setLoading(false);
-    }
+  function loadArchive(path: string) {
+    return loadArchiveService(path, createNavigationOptions());
   }
 
-  /**
-   * 加载单个缩略图
-   */
   
-
-  /**
-   * 加载文件夹缩略图
-   */
   
-
-  /**
-   * 加载压缩包内图片的缩略图 - 完全使用单张图片逻辑
-   */
-  async function loadArchiveThumbnail(filePath: string) {
-    try {
-      // 从压缩包中提取图片数据
-      const imageData = await fileBrowserService.loadImageFromArchive(currentArchivePath, filePath);
-      // 使用新的API从图片数据生成缩略图
-      const thumbnail = await fileBrowserService.generateThumbnailFromData(imageData);
-      fileBrowserStore.addThumbnail(filePath, thumbnail);
-    } catch (err) {
-      // 不支持的图片格式或其他错误，静默失败
-      console.debug('Failed to load archive thumbnail:', err);
-    }
-  }
 
   /**
    * 显示右键菜单
@@ -661,60 +568,22 @@
    * 返回上一级
    */
   async function goBack() {
-    if (isArchiveView) {
-      // 从压缩包视图返回到文件系统
-      isArchiveView = false;
-      const lastBackslash = currentArchivePath.lastIndexOf('\\');
-      const lastSlash = currentArchivePath.lastIndexOf('/');
-      const lastSeparator = Math.max(lastBackslash, lastSlash);
-      const parentDir = lastSeparator > 0 ? currentArchivePath.substring(0, lastSeparator) : currentPath;
-      await loadDirectory(parentDir);
-    } else if (currentPath) {
-      // 文件系统中返回上一级
-      const lastBackslash = currentPath.lastIndexOf('\\');
-      const lastSlash = currentPath.lastIndexOf('/');
-      const lastSeparator = Math.max(lastBackslash, lastSlash);
-      
-      if (lastSeparator > 0) {
-        const parentDir = currentPath.substring(0, lastSeparator);
-        // 确保不是驱动器根目录后面的路径
-        if (parentDir && !parentDir.endsWith(':')) {
-          await loadDirectory(parentDir);
-        }
-      }
-    }
+    await goBackService(createNavigationContext());
   }
 
   
 
-  /**
-   * 导航到目录
-   */
-  async function navigateToDirectory(path: string) {
-    console.log('🚀 navigateToDirectory called with path:', path);
-    if (!path) {
-      console.warn('⚠️ Empty path provided to navigateToDirectory');
-      return;
-    }
-    await loadDirectory(path);
-  }
-
-  /**
-   * 打开图片文件
-   */
+  
   async function openImage(path: string) {
     try {
       console.log('🖼️ Opening image:', path);
-      // 获取图片所在的目录
       const lastBackslash = path.lastIndexOf('\\');
       const lastSlash = path.lastIndexOf('/');
       const lastSeparator = Math.max(lastBackslash, lastSlash);
       const parentDir = lastSeparator > 0 ? path.substring(0, lastSeparator) : path;
       
       console.log('📁 Parent directory:', parentDir);
-      // 打开整个文件夹作为 book
       await bookStore.openDirectoryAsBook(parentDir);
-      // 跳转到指定图片
       await fileBrowserService.navigateToImage(path);
       console.log('✅ Image opened');
     } catch (err) {

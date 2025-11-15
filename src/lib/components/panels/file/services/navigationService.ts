@@ -129,6 +129,11 @@ export async function loadArchive(path: string, options?: NavigationOptions) {
 }
 
 function enqueueThumbnails(items: FsItem[], currentPath: string, thumbnails?: Map<string, string>) {
+  // Cancel previous tasks for this path
+  thumbnailQueue.cancelBySource(currentPath);
+  
+  const toEnqueue: FsItem[] = [];
+  
   for (const item of items) {
     try {
       const key = toRelativeKey(item.path);
@@ -140,18 +145,24 @@ function enqueueThumbnails(items: FsItem[], currentPath: string, thumbnails?: Ma
     }
 
     if (itemIsDirectory(item) || itemIsImage(item)) {
-      thumbnailQueue.enqueueItems([item], { priority: 'high', source: currentPath });
+      toEnqueue.push(item);
     } else {
+      // For potential archives, check asynchronously but don't block
       (async () => {
         try {
           if (await fileBrowserService.isSupportedArchive(item.path)) {
-            thumbnailQueue.enqueueItems([item], { priority: 'high', source: currentPath });
+            thumbnailQueue.enqueueForPath(currentPath, [item], { priority: 'high' });
           }
         } catch (error) {
           console.debug('Archive check failed for', item.path, error);
         }
       })();
     }
+  }
+  
+  // Fire-and-forget: enqueue items without awaiting
+  if (toEnqueue.length > 0) {
+    thumbnailQueue.enqueueForPath(currentPath, toEnqueue, { priority: 'high' });
   }
 }
 

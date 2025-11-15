@@ -1,21 +1,12 @@
 <script lang="ts">
-  import { Folder, File, Image, Trash2, RefreshCw, FileArchive, FolderOpen, Home, ChevronLeft, ChevronRight, ChevronUp, CheckSquare, Grid3x3, List, MoreVertical, Search, ChevronDown, Settings, AlertCircle, Bookmark, Star } from '@lucide/svelte';
-  import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
   import { onMount } from 'svelte';
   import { fileBrowserService, navigationHistory } from './file/services/fileBrowserService';
   import type { FsItem } from '$lib/types';
   import { bookStore } from '$lib/stores/book.svelte';
-  import PathBar from '../ui/PathBar.svelte';
   import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
-  import { Button } from '$lib/components/ui/button';
-  import * as Input from '$lib/components/ui/input';
-  import * as ContextMenu from '$lib/components/ui/context-menu';
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
   import { homeDir } from '@tauri-apps/api/path';
-  import FileBrowserToolbar from './file/components/FileBrowserToolbar.svelte';
-  import FileBrowserSearch from './file/components/FileBrowserSearch.svelte';
-  import FileBrowserList from './file/components/FileBrowserList.svelte';
-  import FileBrowserEmptyState from './file/components/FileBrowserEmptyState.svelte';
+  import FileBrowserLayout from './file/components/FileBrowserLayout.svelte';
   import {
     calculateContextMenuPosition,
     setClipboardItem,
@@ -103,6 +94,69 @@
       isArchiveView,
     };
   }
+
+  // 为 FileBrowserLayout 创建数据对象
+  $: layoutData = {
+    currentPath,
+    items,
+    searchResults,
+    loading,
+    isSearching,
+    error,
+    searchQuery,
+    searchHistory,
+    searchSettings,
+    showSearchHistory,
+    showSearchSettings,
+    isArchiveView,
+    hasHomepage,
+    canNavigateBack,
+    canGoBackInHistory: navigationHistory.canGoBack(),
+    canGoForwardInHistory: navigationHistory.canGoForward(),
+    isCheckMode,
+    isDeleteMode,
+    viewMode,
+    sortConfig,
+    thumbnails,
+    selectedItems,
+    selectedIndex,
+    fileListContainer
+  };
+
+  // 为 FileBrowserLayout 创建处理器对象
+  const layoutHandlers = {
+    handlePathNavigate,
+    goHome,
+    goBackInHistory,
+    goForwardInHistory,
+    goBack,
+    selectFolder,
+    refresh,
+    toggleCheckMode,
+    toggleDeleteMode,
+    toggleViewMode,
+    clearThumbnailCache,
+    handleSortConfig,
+    handleSearchInput,
+    handleSearchFocus,
+    toggleSearchHistoryDropdown,
+    toggleSearchSettingsDropdown,
+    clearSearchField,
+    selectSearchHistory,
+    removeSearchHistoryItem,
+    clearSearchHistory,
+    updateSearchSetting,
+    handleKeydown,
+    openSearchResult,
+    deleteItem,
+    toggleItemSelection,
+    openFile: (item: FsItem, index?: number) => {
+      if (index !== undefined) {
+        fileBrowserStore.setSelectedIndex(index);
+      }
+      return openFile(item);
+    }
+  };
 
   
 
@@ -944,125 +998,8 @@
   }
 </script>
 
-<div class="flex h-full flex-col">
-  <!-- 路径面包屑导航 -->
-  <PathBar 
-    bind:currentPath={currentPath} 
-    isArchive={isArchiveView}
-    onNavigate={handlePathNavigate}
-    onSetHomepage={setHomepage}
-  />
-
-  <!-- 工具栏 -->
-  <FileBrowserToolbar
-    isArchiveView={isArchiveView}
-    hasHomepage={hasHomepage}
-    canGoBackInHistory={navigationHistory.canGoBack()}
-    canGoForwardInHistory={navigationHistory.canGoForward()}
-    canNavigateBack={canNavigateBack}
-    isCheckMode={isCheckMode}
-    isDeleteMode={isDeleteMode}
-    viewMode={viewMode}
-    sortConfig={sortConfig}
-    onGoHome={goHome}
-    onGoBackInHistory={goBackInHistory}
-    onGoForwardInHistory={goForwardInHistory}
-    onGoBack={goBack}
-    onSelectFolder={selectFolder}
-    onRefresh={refresh}
-    onToggleCheckMode={toggleCheckMode}
-    onToggleDeleteMode={toggleDeleteMode}
-    onToggleViewMode={toggleViewMode}
-    onClearThumbnailCache={clearThumbnailCache}
-    onSort={handleSortConfig}
-  />
-
-  <!-- 搜索栏 -->
-  <FileBrowserSearch
-    searchQuery={searchQuery}
-    searchHistory={searchHistory}
-    searchSettings={searchSettings}
-    showSearchHistory={showSearchHistory}
-    showSearchSettings={showSearchSettings}
-    isArchiveView={isArchiveView}
-    currentPath={currentPath}
-    onSearchInput={handleSearchInput}
-    onSearchFocus={handleSearchFocus}
-    onSearchHistoryToggle={toggleSearchHistoryDropdown}
-    onSearchSettingsToggle={toggleSearchSettingsDropdown}
-    onClearSearch={clearSearchField}
-    onSelectSearchHistory={selectSearchHistory}
-    onRemoveSearchHistoryItem={removeSearchHistoryItem}
-    onClearSearchHistory={clearSearchHistory}
-    onSearchSettingChange={updateSearchSetting}
-  />
-
-  <!-- 错误提示 -->
-  {#if error}
-    <div class="m-2 rounded bg-red-50 p-3 text-sm text-red-600">
-      {error}
-    </div>
-  {:else}
-    {#if loading || isSearching || (searchQuery && searchResults.length === 0) || items.length === 0}
-      <FileBrowserEmptyState
-        {loading}
-        {isSearching}
-        {searchQuery}
-        hasSearchResults={searchResults.length > 0}
-        itemsCount={items.length}
-        currentPath={currentPath}
-        onSelectFolder={selectFolder}
-      />
-    {:else if searchQuery && searchResults.length > 0}
-      <FileBrowserList
-        listLabel="搜索结果列表"
-        items={searchResults}
-        isSearchResults={true}
-        isCheckMode={isCheckMode}
-        isDeleteMode={isDeleteMode}
-        isArchiveView={isArchiveView}
-        selectedIndex={selectedIndex}
-        {selectedItems}
-        {thumbnails}
-        containerRef={fileListContainer}
-        onKeydown={handleKeydown}
-        onRowClick={(item) => openSearchResult(item)}
-        onRowKeyboardActivate={(item) => openSearchResult(item)}
-        onToggleSelection={toggleItemSelection}
-        onInlineDelete={(item) => deleteItem(item.path)}
-      >
-        <div slot="header" class="mb-3 text-sm text-gray-600 px-2">
-          找到 {searchResults.length} 个结果 (搜索: "{searchQuery}")
-        </div>
-      </FileBrowserList>
-    {:else}
-      <FileBrowserList
-        listLabel="文件列表"
-        items={items}
-        isSearchResults={false}
-        isCheckMode={isCheckMode}
-        isDeleteMode={isDeleteMode}
-        isArchiveView={isArchiveView}
-        {selectedIndex}
-        {selectedItems}
-        {thumbnails}
-        containerRef={fileListContainer}
-        onKeydown={handleKeydown}
-        onRowClick={(item, index) => {
-          if (!isCheckMode && !isDeleteMode) {
-            fileBrowserStore.setSelectedIndex(index);
-            openFile(item);
-          }
-        }}
-        onRowKeyboardActivate={(item, index) => {
-          if (!isCheckMode && !isDeleteMode) {
-            fileBrowserStore.setSelectedIndex(index);
-            openFile(item);
-          }
-        }}
-        onToggleSelection={toggleItemSelection}
-        onInlineDelete={(item) => deleteItem(item.path)}
-      />
-    {/if}
-  {/if}
-</div>
+<FileBrowserLayout 
+  data={layoutData} 
+  handlers={layoutHandlers} 
+  setHomepage={setHomepage}
+/>

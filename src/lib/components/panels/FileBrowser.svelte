@@ -96,7 +96,7 @@
   }
 
   // 为 FileBrowserLayout 创建数据对象
-  $: layoutData = {
+  const layoutData = $derived({
     currentPath,
     items,
     searchResults,
@@ -121,7 +121,7 @@
     selectedItems,
     selectedIndex,
     fileListContainer
-  };
+  });
 
   // 为 FileBrowserLayout 创建处理器对象
   const layoutHandlers = {

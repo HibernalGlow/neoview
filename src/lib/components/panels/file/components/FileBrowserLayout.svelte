@@ -72,12 +72,12 @@
 
   let { data, handlers, setHomepage }: Props = $props();
 
-  $: shouldShowEmptyState = data.loading || 
+  const shouldShowEmptyState = $derived(data.loading || 
     data.isSearching || 
     (data.searchQuery && data.searchResults.length === 0) || 
-    data.items.length === 0;
+    data.items.length === 0);
 
-  $: shouldShowSearchResults = data.searchQuery && data.searchResults.length > 0;
+  const shouldShowSearchResults = $derived(data.searchQuery && data.searchResults.length > 0);
 </script>
 
 <div class="flex h-full flex-col">

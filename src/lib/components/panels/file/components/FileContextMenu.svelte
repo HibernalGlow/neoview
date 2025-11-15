@@ -3,19 +3,37 @@
   import { Bookmark, FolderOpen, Folder, Trash2 } from '@lucide/svelte';
   import type { FsItem } from '$lib/types';
 
-  export let item: FsItem;
-  export let isArchiveView = false;
-  export let onAddBookmark: (item: FsItem) => void = () => {};
-  export let onOpenInExplorer: (item: FsItem) => void = () => {};
-  export let onOpenWithExternalApp: (item: FsItem) => void = () => {};
-  export let onCutItem: (item: FsItem) => void = () => {};
-  export let onCopyItem: (item: FsItem) => void = () => {};
-  export let onDeleteItem: (item: FsItem) => void = () => {};
-  export let onMoveToFolder: (item: FsItem) => void = () => {};
-  export let onRenameItem: (item: FsItem) => void = () => {};
-  export let onOpenArchiveAsBook: (item: FsItem) => void = () => {};
-  export let onBrowseArchive: (item: FsItem) => void = () => {};
-  export let onCopyPath: (item: FsItem) => void = () => {};
+  interface Props {
+    item: FsItem;
+    isArchiveView?: boolean;
+    onAddBookmark: (item: FsItem) => void;
+    onOpenInExplorer: (item: FsItem) => void;
+    onOpenWithExternalApp: (item: FsItem) => void;
+    onCutItem: (item: FsItem) => void;
+    onCopyItem: (item: FsItem) => void;
+    onDeleteItem: (item: FsItem) => void;
+    onMoveToFolder: (item: FsItem) => void;
+    onRenameItem: (item: FsItem) => void;
+    onOpenArchiveAsBook: (item: FsItem) => void;
+    onBrowseArchive: (item: FsItem) => void;
+    onCopyPath: (item: FsItem) => void;
+  }
+
+  let {
+    item,
+    isArchiveView = false,
+    onAddBookmark = () => {},
+    onOpenInExplorer = () => {},
+    onOpenWithExternalApp = () => {},
+    onCutItem = () => {},
+    onCopyItem = () => {},
+    onDeleteItem = () => {},
+    onMoveToFolder = () => {},
+    onRenameItem = () => {},
+    onOpenArchiveAsBook = () => {},
+    onBrowseArchive = () => {},
+    onCopyPath = () => {}
+  }: Props = $props();
 </script>
 
 <ContextMenu.Content>

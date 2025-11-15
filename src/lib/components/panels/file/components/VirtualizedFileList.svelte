@@ -136,6 +136,38 @@
     dispatch('itemContextMenu', { event, item });
   }
 
+  // 处理项目双击（快速打开）
+  function handleItemDoubleClick(item: FsItem, index: number) {
+    dispatch('itemDoubleClick', { item, index });
+  }
+
+  // 处理项目选择（多选模式）
+  function handleItemSelect(item: FsItem, index: number, multiSelect: boolean = false) {
+    dispatch('itemSelect', { item, index, multiSelect });
+  }
+
+  // 处理项目键盘事件
+  function handleItemKeydown(event: KeyboardEvent, item: FsItem, index: number) {
+    switch (event.key) {
+      case 'Enter':
+      case ' ':
+        event.preventDefault();
+        handleItemClick(item, index);
+        break;
+      case 'ContextMenu':
+        event.preventDefault();
+        // 模拟右键点击
+        const mouseEvent = new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 0,
+          clientY: 0
+        });
+        handleItemContextMenu(mouseEvent, item);
+        break;
+    }
+  }
+
   // 格式化文件大小
   function formatSize(bytes: number, isDir: boolean): string {
     if (isDir) {
@@ -164,9 +196,9 @@
     selectedItems = selectedItems; // 触发响应式更新
   }
 
-  // 获取缩略图键
+  // 获取缩略图键 - 统一使用toRelativeKey
   function getThumbnailKey(item: FsItem): string {
-    return item.path.replace(/\\/g, '/').split('/').pop() || item.path;
+    return toRelativeKey(item.path);
   }
 
   // 获取项目在列表中的实际索引
@@ -266,23 +298,32 @@
   bind:this={container}
   class="virtual-list-container flex-1 overflow-y-auto focus:outline-none" 
   tabindex="0" 
+  role="listbox"
+  aria-label="文件列表"
   onscroll={handleScroll}
   onkeydown={handleKeydown}
 >
   {#if viewMode === 'list'}
     <!-- 列表视图 - 虚拟滚动 -->
-    <div class="virtual-list" style="height: {totalHeight}px; position: relative;">
+    <div class="virtual-list" style="height: {totalHeight}px; position: relative;" role="presentation">
       <div 
         class="virtual-list-viewport" 
         style="transform: translateY({offsetY}px); position: absolute; top: 0; left: 0; right: 0;"
+        role="presentation"
       >
         {#each items.slice(startIndex, endIndex + 1) as item, i (item.path)}
           {@const actualIndex = startIndex + i}
+          {@const isSelected = selectedIndex === actualIndex}
           <div
-            class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors {selectedIndex === actualIndex ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}"
+            class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors {isSelected ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}"
             style="height: {itemHeight}px;"
+            role="option"
+            aria-selected={isSelected}
+            aria-label={item.name}
+            tabindex={isSelected ? 0 : -1}
             onclick={() => handleItemClick(item, actualIndex)}
             oncontextmenu={(e) => handleItemContextMenu(e, item)}
+            onkeydown={(e) => handleItemKeydown(e, item, actualIndex)}
           >
             <!-- 勾选框（勾选模式） -->
             {#if isCheckMode}
@@ -354,19 +395,26 @@
     </div>
   {:else}
     <!-- 缩略图网格视图 - 虚拟滚动 -->
-    <div class="virtual-grid" style="height: {totalHeight}px; position: relative;">
+    <div class="virtual-grid" style="height: {totalHeight}px; position: relative;" role="grid" aria-label="缩略图网格">
       <div 
         class="virtual-grid-viewport" 
         style="transform: translateY({offsetY}px); position: absolute; top: 0; left: 0; right: 0;"
+        role="presentation"
       >
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4 p-2">
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4 p-2" role="presentation">
           {#each items.slice(startIndex, endIndex + 1) as item, i (item.path)}
             {@const actualIndex = startIndex + i}
+            {@const isSelected = selectedIndex === actualIndex}
             <div
-              class="group flex flex-col items-center gap-2 p-2 rounded border cursor-pointer transition-colors {selectedIndex === actualIndex ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}"
+              class="group flex flex-col items-center gap-2 p-2 rounded border cursor-pointer transition-colors {isSelected ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}"
               style="height: {itemHeight}px;"
+              role="option"
+              aria-selected={isSelected}
+              aria-label={item.name}
+              tabindex={isSelected ? 0 : -1}
               onclick={() => handleItemClick(item, actualIndex)}
               oncontextmenu={(e) => handleItemContextMenu(e, item)}
+              onkeydown={(e) => handleItemKeydown(e, item, actualIndex)}
             >
               <!-- 勾选框（勾选模式） -->
               {#if isCheckMode}

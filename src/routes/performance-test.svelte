@@ -3,6 +3,11 @@
   import { PerformanceMonitor, getMemoryUsage, getAdaptivePerformanceConfig } from '$lib/utils/performance';
   import { Button } from '$lib/components/ui/button';
 
+  // 仅在开发模式下启用
+  if (!import.meta.env.DEV) {
+    throw new Error('Performance test route is only available in development mode');
+  }
+
   let monitor = PerformanceMonitor.getInstance();
   let metrics = $state<any>({});
   let memoryUsage = $state<any>(null);

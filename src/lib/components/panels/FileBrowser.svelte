@@ -1798,6 +1798,20 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
           openFile(item);
         }
       }}
+      on:itemDoubleClick={(e) => {
+        const { item, index } = e.detail;
+        // 双击直接打开，无需检查模式
+        fileBrowserStore.setSelectedIndex(index);
+        openFile(item);
+      }}
+      on:itemSelect={(e) => {
+        const { item, index, multiSelect } = e.detail;
+        if (isCheckMode) {
+          toggleItemSelection(item.path);
+        } else {
+          fileBrowserStore.setSelectedIndex(index);
+        }
+      }}
       on:itemContextMenu={(e) => {
         const { event, item } = e.detail;
         showContextMenu(event, item);
@@ -1806,11 +1820,8 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
         deleteItem(e.detail.item.path);
       }}
     />
-        }}
   {/if}
-      </div>
-    </div>
-  {/if}
+</div>
 
   
 

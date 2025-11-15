@@ -89,12 +89,15 @@
 		<div class="absolute inset-4 grid grid-cols-3 grid-rows-2 gap-2 {sidebarOpen || rightSidebarOpen ? 'pointer-events-none' : 'pointer-events-auto'}">
 			{#each areas as area}
 				<div
-					class="border-2 border-white/60 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center cursor-pointer transition-all duration-200 hover:scale-105 hover:border-white/80 {area.gridClass}"
-					data-area={area.value}
-					onclick={(e) => handleAreaClick(area.value, e)}
-					oncontextmenu={handleContextMenu}
-					title="点击测试区域绑定"
-				>
+				class="border-2 border-white/60 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center cursor-pointer transition-all duration-200 hover:scale-105 hover:border-white/80 {area.gridClass}"
+				data-area={area.value}
+				onclick={(e) => handleAreaClick(area.value, e)}
+				oncontextmenu={handleContextMenu}
+				title="点击测试区域绑定"
+				role="button"
+				tabindex="0"
+				aria-label="{area.label}区域"
+			>
 					<div class="text-center">
 						<div class="text-white font-bold text-lg drop-shadow-lg">{area.label}</div>
 						<div class="text-white/80 text-xs drop-shadow">{area.value}</div>
@@ -108,9 +111,10 @@
 			<div class="flex items-center gap-2">
 				<span>按 ESC 关闭</span>
 				<button
-					class="ml-2 text-white/80 hover:text-white transition-colors"
-					onclick={() => (show = false)}
-				>
+				class="ml-2 text-white/80 hover:text-white transition-colors"
+				onclick={() => (show = false)}
+				aria-label="关闭区域覆盖层"
+			>
 					✕
 				</button>
 			</div>

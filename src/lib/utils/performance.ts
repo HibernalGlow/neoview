@@ -184,12 +184,19 @@ export function debounce<T extends (...args: any[]) => any>(
 }
 
 /**
- * 使用 requestIdleCallback 调度任务
+ * 使用 requestIdleCallback 调度任务（SSR安全）
  */
 export function scheduleIdleTask(
   fn: () => void,
   timeout: number = 5000
 ): void {
+  // SSR容错：检查是否在浏览器环境
+  if (typeof window === 'undefined') {
+    // 服务器端直接执行
+    setTimeout(fn, 0);
+    return;
+  }
+
   if ('requestIdleCallback' in window) {
     requestIdleCallback(
       () => fn(),
@@ -252,9 +259,14 @@ export function createBatchProcessor<T>(
 }
 
 /**
- * 内存使用监控
+ * 内存使用监控（SSR安全）
  */
 export function getMemoryUsage() {
+  // SSR容错：检查是否在浏览器环境
+  if (typeof window === 'undefined' || typeof performance === 'undefined') {
+    return null;
+  }
+
   if ('memory' in performance) {
     const memory = (performance as any).memory;
     return {
@@ -267,9 +279,14 @@ export function getMemoryUsage() {
 }
 
 /**
- * 检查是否为低性能设备
+ * 检查是否为低性能设备（SSR安全）
  */
 export function isLowPerformanceDevice(): boolean {
+  // SSR容错：检查是否在浏览器环境
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return true; // 保守假设为低性能设备
+  }
+  
   // 基于硬件并发数和内存判断
   const hardwareConcurrency = navigator.hardwareConcurrency || 4;
   const memory = getMemoryUsage();

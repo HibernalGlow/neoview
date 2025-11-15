@@ -519,9 +519,12 @@
 		onmousemove={handleMouseMove}
 		onclick={handleMouseClick}
 		style:cursor={cursorVisible ? 'default' : 'none'}
+		role="application"
+		aria-label="图像查看器"
+		tabindex="0"
 	>
 	<!-- 图像显示区域 -->
-	<div class="image-container flex-1 flex items-center justify-center overflow-auto" data-viewer="true">
+	<div class="image-container flex-1 flex items-center justify-center overflow-auto" data-viewer="true" role="region" aria-label="图像显示区域">
 		{#if loadingVisible}
 			<div class="text-white">Loading...</div>
 		{:else if error}

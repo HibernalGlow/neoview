@@ -132,7 +132,7 @@
 	
 </script>
 
-<div class="h-screen w-screen relative bg-background">
+<div class="h-screen w-screen relative bg-background" role="application" aria-label="NeoView 主界面">
 	<!-- 自动隐藏顶部工具栏（包含标题栏） -->
 	<TopToolbar />
 
@@ -164,6 +164,10 @@
 			class="absolute top-0 bottom-0 z-[45] cursor-col-resize"
 			style="left: {$sidebarWidth}px; width: 8px;"
 			onmousedown={handleLeftResizeStart}
+			role="separator"
+			aria-label="调整左侧边栏宽度"
+			aria-orientation="vertical"
+			tabindex="0"
 		></div>
 	{/if}
 
@@ -181,6 +185,10 @@
 			class="absolute top-0 bottom-0 z-[45] cursor-col-resize"
 			style="right: {$rightSidebarWidth}px; width: 8px;"
 			onmousedown={handleRightResizeStart}
+			role="separator"
+			aria-label="调整右侧边栏宽度"
+			aria-orientation="vertical"
+			tabindex="0"
 		></div>
 	{/if}
 

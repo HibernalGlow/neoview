@@ -395,15 +395,19 @@ export function enqueueDirectoryThumbnails(path: string, items: any[]) {
   enqueueBackground(path, normal, { priority: 'normal', delay: 500 });
 }
 
-// 兼容旧API
+// 兼容旧API - 已弃用，建议使用新的队列API
+/**
+ * @deprecated 请使用 enqueueVisible 或 enqueueBackground 替代
+ */
 export function enqueueThumbnail(path: string, isFolder: boolean) {
-  // 这个函数现在主要用于向后兼容，建议使用新的队列API
-  console.warn('enqueueThumbnail is deprecated, use new queue API instead');
+  // 空实现，保持向后兼容
 }
 
+/**
+ * @deprecated 请使用 enqueueVisible 或 enqueueBackground 替代
+ */
 export function enqueueArchiveThumbnail(path: string, isRoot: boolean = true) {
-  // 这个函数现在主要用于向后兼容，建议使用新的队列API
-  console.warn('enqueueArchiveThumbnail is deprecated, use new queue API instead');
+  // 空实现，保持向后兼容
 }
 
 export function clearQueue() {

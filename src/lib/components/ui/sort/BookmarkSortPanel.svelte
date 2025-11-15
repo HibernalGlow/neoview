@@ -22,8 +22,8 @@
   type SortField = 'name' | 'timestamp' | 'path' | 'starred';
   type SortOrder = 'asc' | 'desc';
 
-  let sortField: SortField = 'timestamp';
-  let sortOrder: SortOrder = 'desc';
+  let sortField: SortField = $state('timestamp');
+  let sortOrder: SortOrder = $state('desc');
   let showSortMenu = $state(false);
 
   // 排序配置

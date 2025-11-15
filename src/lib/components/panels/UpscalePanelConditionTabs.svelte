@@ -249,8 +249,8 @@
 							</CardHeader>
 							<CardContent className="space-y-6">
 								<!-- 基础设置 -->
-								<div className="grid grid-cols-2 gap-4">
-									<div className="space-y-2">
+								<div class="grid grid-cols-2 gap-4">
+									<div class="space-y-2">
 										<Label htmlFor={`name-${condition.id}`}>条件名称</Label>
 										<Input
 											id={`name-${condition.id}`}
@@ -258,7 +258,7 @@
 											onchange={(e) => updateCondition(condition.id, { name: e.target.value })}
 										/>
 									</div>
-									<div className="flex items-center space-x-2 pt-6">
+									<div class="flex items-center space-x-2 pt-6">
 										<Switch
 											id={`enabled-${condition.id}`}
 											checked={condition.enabled}
@@ -269,10 +269,10 @@
 								</div>
 
 								<!-- 匹配规则 -->
-								<div className="space-y-4">
-									<h4 className="text-sm font-semibold">匹配规则</h4>
-									<div className="grid grid-cols-2 gap-4">
-										<div className="space-y-2">
+								<div class="space-y-4">
+									<h4 class="text-sm font-semibold">匹配规则</h4>
+									<div class="grid grid-cols-2 gap-4">
+										<div class="space-y-2">
 											<Label htmlFor={`minWidth-${condition.id}`}>最小宽度</Label>
 											<Input
 												id={`minWidth-${condition.id}`}
@@ -282,7 +282,7 @@
 												placeholder="不限制"
 											/>
 										</div>
-										<div className="space-y-2">
+										<div class="space-y-2">
 											<Label htmlFor={`minHeight-${condition.id}`}>最小高度</Label>
 											<Input
 												id={`minHeight-${condition.id}`}
@@ -294,7 +294,7 @@
 										</div>
 									</div>
 
-									<div className="space-y-2">
+									<div class="space-y-2">
 										<Label htmlFor={`regexBookPath-${condition.id}`}>书籍路径正则</Label>
 										<Input
 											id={`regexBookPath-${condition.id}`}
@@ -304,7 +304,7 @@
 										/>
 									</div>
 
-									<div className="space-y-2">
+									<div class="space-y-2">
 										<Label htmlFor={`regexImagePath-${condition.id}`}>图片路径正则</Label>
 										<Input
 											id={`regexImagePath-${condition.id}`}
@@ -314,7 +314,7 @@
 										/>
 									</div>
 
-									<div className="flex items-center space-x-2">
+									<div class="flex items-center space-x-2">
 										<Switch
 											id={`excludeFromPreload-${condition.id}`}
 											checked={condition.match.excludeFromPreload || false}
@@ -324,8 +324,8 @@
 									</div>
 
 									<!-- 自定义元数据 -->
-									<div className="space-y-2">
-										<div className="flex items-center justify-between">
+									<div class="space-y-2">
+										<div class="flex items-center justify-between">
 											<Label>自定义元数据</Label>
 											<Button size="sm" variant="outline" onclick={() => addMetadataCondition(condition.id)}>
 												<Plus class="w-4 h-4 mr-1" />
@@ -333,7 +333,7 @@
 											</Button>
 										</div>
 										{#if condition.match.metadata && Object.keys(condition.match.metadata).length > 0}
-											<div className="space-y-2">
+											<div class="space-y-2">
 												{#each Object.entries(condition.match.metadata) as [key, expression]}
 													<div className="grid grid-cols-4 gap-2 items-end">
 														<div className="space-y-1">
@@ -389,10 +389,10 @@
 								</div>
 
 								<!-- 执行参数 -->
-								<div className="space-y-4">
+								<div class="space-y-4">
 									<h4 className="text-sm font-semibold">执行参数</h4>
-									<div className="grid grid-cols-2 gap-4">
-										<div className="space-y-2">
+									<div class="grid grid-cols-2 gap-4">
+										<div class="space-y-2">
 											<Label htmlFor={`model-${condition.id}`}>模型</Label>
 											<Select
 												value={condition.action.model}

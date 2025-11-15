@@ -1,7 +1,8 @@
 <script lang="ts">
   import { createEventDispatcher, onMount, onDestroy } from 'svelte';
   import type { FsItem } from '$lib/types';
-  import { enqueueVisible, bumpPriority } from '$lib/utils/thumbnailManager';
+  import { enqueueVisible, bumpPriority, toRelativeKey } from '$lib/utils/thumbnailManager';
+
   import { Folder, File, Image, FileArchive } from '@lucide/svelte';
   import { writable, type Writable } from 'svelte/store';
   import { throttle, debounce, scheduleIdleTask, getAdaptivePerformanceConfig } from '$lib/utils/performance';
@@ -16,7 +17,9 @@
     selectedItems = new Set(),
     viewMode = 'list',
     onSelectionChange = (_: { selectedItems: Set<string> }) => {},
-    onSelectedIndexChange = (_: { index: number }) => {}
+    onSelectedIndexChange = (_: { index: number }) => {},
+    onItemSelect = (_: { item: FsItem, index: number, multiSelect: boolean }) => {},
+    onItemDoubleClick = (_: { item: FsItem, index: number }) => {}
   }: {
     items?: FsItem[];
     currentPath?: string;
@@ -28,6 +31,8 @@
     viewMode?: 'list' | 'thumbnails';
     onSelectionChange?: (payload: { selectedItems: Set<string> }) => void;
     onSelectedIndexChange?: (payload: { index: number }) => void;
+    onItemSelect?: (payload: { item: FsItem, index: number, multiSelect: boolean }) => void;
+    onItemDoubleClick?: (payload: { item: FsItem, index: number }) => void;
   } = $props();
 
   const dispatch = createEventDispatcher();
@@ -90,7 +95,7 @@
     
     // 过滤需要缩略图的项目
     const thumbnailItems = visibleItems.filter(item => 
-      item.is_dir || item.isImage || 
+      item.isDir || item.isImage || 
       item.name.endsWith('.zip') || 
       item.name.endsWith('.cbz') || 
       item.name.endsWith('.rar') || 
@@ -144,6 +149,7 @@
   // 处理项目点击
   function handleItemClick(item: FsItem, index: number) {
     dispatch('itemClick', { item, index });
+    onItemSelect({ item, index, multiSelect: false });
   }
 
   // 处理项目右键
@@ -154,11 +160,13 @@
   // 处理项目双击（快速打开）
   function handleItemDoubleClick(item: FsItem, index: number) {
     dispatch('itemDoubleClick', { item, index });
+    onItemDoubleClick({ item, index });
   }
 
   // 处理项目选择（多选模式）
   function handleItemSelect(item: FsItem, index: number, multiSelect: boolean = false) {
     dispatch('itemSelect', { item, index, multiSelect });
+    onItemSelect({ item, index, multiSelect });
   }
 
   // 处理项目键盘事件
@@ -393,7 +401,7 @@
                   alt={item.name}
                   class="h-full w-full object-cover transition-transform group-hover:scale-105"
                 />
-              {:else if item.is_dir}
+              {:else if item.isDir}
                 <Folder class="h-8 w-8 text-blue-500 transition-colors group-hover:text-blue-600" />
               {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
                 <FileArchive class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600" />
@@ -408,7 +416,7 @@
             <div class="min-w-0 flex-1">
               <div class="truncate font-medium">{item.name}</div>
               <div class="text-xs text-gray-500">
-                {formatSize(item.size, item.is_dir)} · {formatDate(item.modified)}
+                {formatSize(item.size, item.isDir)} · {formatDate(item.modified)}
               </div>
             </div>
           </div>
@@ -466,7 +474,7 @@
                     alt={item.name}
                     class="w-full h-full object-cover transition-transform group-hover:scale-105"
                   />
-                {:else if item.is_dir}
+                {:else if item.isDir}
                   <Folder class="h-12 w-12 text-blue-500" />
                 {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
                   <FileArchive class="h-12 w-12 text-purple-500" />

@@ -269,8 +269,7 @@ class ThumbnailExecutor {
       return absPath.replace(/\\/g, '/');
     }
   }
-
-  // ...
+}
 
 export function toRelativeKey(absPath: string): string {
   try {

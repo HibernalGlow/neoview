@@ -94,7 +94,7 @@ impl ThumbnailManager {
         path.to_string_lossy().replace('\\', "/")
     }
 
-    /// 预加载缩略图到内存缓存
+    /// 预加载缩略图到内存缓存 - 从数据库加载 WebP 字节数据
     pub fn preload_thumbnails_to_cache(&self, cache: &crate::core::image_cache::ImageCache) -> Result<usize, String> {
         println!("🔄 开始预加载缩略图到内存缓存...");
         
@@ -105,44 +105,39 @@ impl ThumbnailManager {
         let mut loaded_count = 0;
         
         for record in records {
-            // 构建完整的缩略图文件路径（record.relative_thumb_path 已经是相对于 thumbnail_root 的路径）
-            let thumbnail_path = self.db.thumbnail_root.join(&record.relative_thumb_path);
+            // 将 WebP 字节数据转换为 data URL
+            let thumbnail_url = format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&record.webp_data));
 
-            // 检查文件是否存在
-            if thumbnail_path.exists() {
-                let thumbnail_url = format!("file://{}", thumbnail_path.to_string_lossy());
-
-                // 计算原始文件的完整路径（bookpath 字段可能是相对于 root 的路径或绝对路径）
-                let original_path = {
-                    let book = record.bookpath.as_str();
-                    let book_path = Path::new(book);
-                    if book_path.is_absolute() {
-                        book_path.to_path_buf()
-                    } else {
-                        self.root_dir.join(book_path)
-                    }
-                };
-
-                // 添加到内存缓存：使用规范化的完整路径字符串作为 key，以便与前端请求的 path 保持一致
-                cache.set(Self::normalize_path_string(&original_path), thumbnail_url.clone());
-                // 另外也把相对 bookpath（数据库中的 bookpath 字符串）也注册一次，方便前端使用相对 key 查找
-                cache.set(Self::normalize_path_string(Path::new(&record.bookpath)), thumbnail_url.clone());
-                // 若为文件夹缩略图，也注册带前缀的 folder: key，供 generate_folder_thumbnail 查询使用
-                if record.is_folder {
-                    let folder_key_abs = format!("folder:{}", Self::normalize_path_string(&original_path));
-                    let folder_key_rel = format!("folder:{}", Self::normalize_path_string(Path::new(&record.bookpath)));
-                    cache.set(folder_key_abs, thumbnail_url.clone());
-                    cache.set(folder_key_rel, thumbnail_url);
+            // 计算原始文件的完整路径（bookpath 字段可能是相对于 root 的路径或绝对路径）
+            let original_path = {
+                let book = record.bookpath.as_str();
+                let book_path = Path::new(book);
+                if book_path.is_absolute() {
+                    book_path.to_path_buf()
+                } else {
+                    self.root_dir.join(book_path)
                 }
-                loaded_count += 1;
+            };
+
+            // 添加到内存缓存：使用规范化的完整路径字符串作为 key，以便与前端请求的 path 保持一致
+            cache.set(Self::normalize_path_string(&original_path), thumbnail_url.clone());
+            // 另外也把相对 bookpath（数据库中的 bookpath 字符串）也注册一次，方便前端使用相对 key 查找
+            cache.set(Self::normalize_path_string(Path::new(&record.bookpath)), thumbnail_url.clone());
+            // 若为文件夹缩略图，也注册带前缀的 folder: key，供 generate_folder_thumbnail 查询使用
+            if record.is_folder {
+                let folder_key_abs = format!("folder:{}", Self::normalize_path_string(&original_path));
+                let folder_key_rel = format!("folder:{}", Self::normalize_path_string(Path::new(&record.bookpath)));
+                cache.set(folder_key_abs, thumbnail_url.clone());
+                cache.set(folder_key_rel, thumbnail_url);
             }
+            loaded_count += 1;
         }
         
         println!("✅ 预加载完成，共加载 {} 个缩略图", loaded_count);
         Ok(loaded_count)
     }
 
-    /// 获取缩略图信息（包括尺寸等）
+    /// 获取缩略图信息（包括尺寸等）- 从数据库加载
     pub fn get_thumbnail_info(&self, full_path: &Path) -> Result<Option<ThumbnailInfo>, String> {
         println!("🔍 ThumbnailManager::get_thumbnail_info - 完整路径: {}", full_path.display());
         let relative_path = self.get_relative_path(full_path)?;
@@ -151,23 +146,17 @@ impl ThumbnailManager {
         println!("🔍 标准化相对路径: {}", relative_str);
         
         if let Ok(Some(record)) = self.db.find_by_bookpath(&relative_str) {
-            println!("✅ 数据库中找到记录: {}", record.thumbnail_name);
-            // 直接使用记录中的 relative_thumb_path 构建完整路径
-            let thumbnail_path = self.db.thumbnail_root.join(&record.relative_thumb_path);
-            if thumbnail_path.exists() {
-                println!("✅ 缩略图文件存在: {}", thumbnail_path.display());
-                Ok(Some(ThumbnailInfo {
-                    url: format!("file://{}", thumbnail_path.to_string_lossy()),
-                    width: record.width,
-                    height: record.height,
-                    file_size: record.file_size,
-                    created_at: record.created_at,
-                    is_folder: record.is_folder,
-                }))
-            } else {
-                println!("❌ 缩略图文件不存在: {}", thumbnail_path.display());
-                Ok(None)
-            }
+            println!("✅ 数据库中找到记录，WebP 数据大小: {} 字节", record.webp_data.len());
+            // 将 WebP 字节数据转换为 data URL
+            let data_url = format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&record.webp_data));
+            Ok(Some(ThumbnailInfo {
+                url: data_url,
+                width: record.width,
+                height: record.height,
+                file_size: record.file_size,
+                created_at: record.created_at,
+                is_folder: record.is_folder,
+            }))
         } else {
             println!("❌ 数据库中未找到记录 - 尝试诊断候选条目...");
 
@@ -181,7 +170,7 @@ impl ThumbnailManager {
                         } else {
                             println!("🔎 找到 {} 个候选记录（基于 basename 模糊匹配 {}）：", candidates.len(), pattern);
                             for c in candidates.iter() {
-                                println!(" - bookpath='{}' | relative='{}' | thumb='{}'", c.bookpath, c.relative_thumb_path, c.thumbnail_name);
+                                println!(" - bookpath='{}' | hash='{}' | size={}", c.bookpath, c.hash, c.file_size);
                             }
                         }
                     }
@@ -253,7 +242,7 @@ impl ThumbnailManager {
         Ok(format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&webp_data)))
     }
 
-    /// 生成并保存缩略图到文件系统
+    /// 生成并保存缩略图到数据库
     pub fn generate_and_save_thumbnail(
         &self,
         image_path: &Path,
@@ -308,109 +297,48 @@ impl ThumbnailManager {
         // 编码为 WebP
         let webp_data = self.encode_webp(&thumbnail)?;
 
-    // 获取保存路径
-    let now = Utc::now();
-    let thumbnail_path = self.db.get_thumbnail_path(relative_path, &now);
-        
-        // 确保目录存在
-        if let Some(parent) = thumbnail_path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("创建缩略图目录失败: {}", e))?;
-        }
+        // 🚀 立即返回 blob URL（不阻塞）
+        let blob_url = format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&webp_data));
+        println!("⚡ 立即返回 blob URL: {} bytes", webp_data.len());
 
-        // 保存文件
-        fs::write(&thumbnail_path, &webp_data)
-            .map_err(|e| format!("保存缩略图失败: {}", e))?;
-
-        // 获取文件信息
+        // 获取文件信息用于异步保存到数据库
         let (width, height) = thumbnail.dimensions();
         let file_size = webp_data.len() as u64;
-        let thumbnail_name = thumbnail_path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or(&ThumbnailDatabase::hash_path(relative_path))
-            .to_string();
+        let relative_path_str = Self::normalize_path_string(relative_path);
+        let hash = ThumbnailDatabase::hash_path(relative_path);
+        let webp_data_owned = webp_data.clone();
+        let db_path = self.db.thumbnail_root.parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("."));
 
-        // 创建数据库记录：bookpath 存储原始文件的相对/绝对表示，relative_thumb_path 存储缩略图在 thumbnail_root 下的相对路径
-        // 统一使用正斜杠作为路径分隔符，确保数据库查询一致
-        let bookpath_str = Self::normalize_path_string(relative_path);
-        let relative_thumb_path = thumbnail_path
-            .strip_prefix(&self.db.thumbnail_root)
-            .map(|p| Self::normalize_path_string(p))
-            .unwrap_or_else(|_| Self::normalize_path_string(&thumbnail_path));
-        let hash = thumbnail_path.file_stem()
-            .and_then(|s| s.to_str())
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| ThumbnailDatabase::hash_path(relative_path));
+        // 🔄 异步保存到数据库（后台线程）
+        std::thread::spawn(move || {
+            // 打开数据库连接
+            if let Ok(db) = ThumbnailDatabase::new(db_path) {
+                let now = Utc::now();
+                let record = ThumbnailRecord {
+                    bookpath: relative_path_str.clone(),
+                    hash: hash.clone(),
+                    created_at: now,
+                    source_modified,
+                    is_folder,
+                    width,
+                    height,
+                    file_size,
+                    webp_data: webp_data_owned,
+                };
 
-        let record = ThumbnailRecord {
-            bookpath: bookpath_str,
-            relative_thumb_path: relative_thumb_path.to_string(),
-            thumbnail_name,
-            hash,
-            created_at: now,
-            source_modified,
-            is_folder,
-            width,
-            height,
-            file_size,
-        };
-
-        // 保存到数据库
-        // upsert 使用 clone 以便后续仍能访问 record 的字段
-        match self.db.upsert_thumbnail(record.clone()) {
-            Ok(_) => {
-                println!("💾 upserted thumbnail record: bookpath='{}' -> {}", record.bookpath, relative_thumb_path);
-            }
-            Err(e) => {
-                println!("❌ 保存数据库记录失败: {} - bookpath='{}'", e, record.bookpath);
-                return Err(format!("保存数据库记录失败: {}", e));
-            }
-        }
-
-            // 如果缩略图来源于压缩包内部图片，也为压缩包本身创建一条记录（便于直接请求压缩包的缩略图）
-            if image_path.to_string_lossy().contains("__archive__") {
-                // 解析 archive 路径
-                let path_str = image_path.to_string_lossy().into_owned();
-                let parts: Vec<&str> = path_str.split("__archive__").collect();
-                if parts.len() == 2 {
-                    let archive_path = Path::new(parts[0]);
-                    if archive_path.exists() {
-                        // 获取 archive 的相对路径与修改时间
-                        if let Ok(arch_rel) = self.get_relative_path(archive_path) {
-                            let arch_bookpath = Self::normalize_path_string(&arch_rel);
-                            let arch_meta = std::fs::metadata(archive_path).ok();
-                            let arch_source_modified = arch_meta
-                                .and_then(|m| m.modified().ok())
-                                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                                .map(|d| d.as_secs() as i64)
-                                .unwrap_or(source_modified);
-
-                            // 克隆 record 以便在 upsert 后仍可使用原 record
-                            let archive_record = ThumbnailRecord {
-                                bookpath: arch_bookpath,
-                                relative_thumb_path: relative_thumb_path.to_string(),
-                                thumbnail_name: record.thumbnail_name.clone(),
-                                hash: record.hash.clone(),
-                                created_at: now,
-                                source_modified: arch_source_modified,
-                                is_folder: false,
-                                width,
-                                height,
-                                file_size,
-                            };
-
-                            // 忽略错误，尽量确保主记录已写入
-                            match self.db.upsert_thumbnail(archive_record.clone()) {
-                                Ok(_) => println!("💾 upserted archive thumbnail record: bookpath='{}' -> {}", archive_record.bookpath, archive_record.relative_thumb_path),
-                                Err(e) => println!("⚠️ archive upsert failed for '{}': {}", archive_record.bookpath, e),
-                            }
-                        }
-                    }
+                match db.upsert_thumbnail(record) {
+                    Ok(_) => println!("💾 [异步] 缩略图已保存到数据库: {}", relative_path_str),
+                    Err(e) => println!("❌ 异步保存缩略图到数据库失败: {}", e),
                 }
+            } else {
+                println!("❌ 无法打开数据库连接");
             }
+        });
 
-        // 返回文件URL
-        Ok(format!("file://{}", thumbnail_path.to_string_lossy()))
+        // 立即返回 blob URL
+        Ok(blob_url)
     }
 
     /// 加载图片（支持 JXL 等特殊格式）

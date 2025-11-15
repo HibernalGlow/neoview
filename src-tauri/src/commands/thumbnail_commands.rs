@@ -799,3 +799,79 @@ pub async fn enqueue_dir_files_highest_priority(
         Err("缩略图队列未初始化".to_string())
     }
 }
+
+/// 异步加载单个缩略图 - 直接从数据库读取 WebP 字节数据
+#[command]
+pub async fn load_thumbnail_async(
+    file_path: String,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<Option<serde_json::Value>, String> {
+    ensure_manager_ready(&state, 5000).await?;
+    
+    let path = PathBuf::from(&file_path);
+    
+    if let Ok(manager_guard) = state.manager.lock() {
+        if let Some(ref manager) = *manager_guard {
+            match manager.get_thumbnail_info(&path) {
+                Ok(Some(info)) => {
+                    Ok(Some(serde_json::json!({
+                        "url": info.url,
+                        "width": info.width,
+                        "height": info.height,
+                        "file_size": info.file_size,
+                        "created_at": info.created_at.to_rfc3339(),
+                        "is_folder": info.is_folder,
+                    })))
+                }
+                Ok(None) => Ok(None),
+                Err(e) => Err(format!("加载缩略图失败: {}", e)),
+            }
+        } else {
+            Err("缩略图管理器未初始化".to_string())
+        }
+    } else {
+        Err("无法获取缩略图管理器锁".to_string())
+    }
+}
+
+/// 批量异步加载缩略图 - 并发从数据库读取
+#[command]
+pub async fn load_thumbnails_batch_async(
+    file_paths: Vec<String>,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<serde_json::Value, String> {
+    ensure_manager_ready(&state, 5000).await?;
+    
+    let manager_guard = state.manager.lock()
+        .map_err(|_| "无法获取缩略图管理器锁".to_string())?;
+    
+    if let Some(ref manager) = *manager_guard {
+        let mut results = serde_json::json!({});
+        
+        for file_path in file_paths {
+            let path = PathBuf::from(&file_path);
+            match manager.get_thumbnail_info(&path) {
+                Ok(Some(info)) => {
+                    results[&file_path] = serde_json::json!({
+                        "url": info.url,
+                        "width": info.width,
+                        "height": info.height,
+                        "file_size": info.file_size,
+                        "created_at": info.created_at.to_rfc3339(),
+                        "is_folder": info.is_folder,
+                    });
+                }
+                Ok(None) => {
+                    results[&file_path] = serde_json::Value::Null;
+                }
+                Err(e) => {
+                    println!("⚠️ 加载缩略图失败 {}: {}", file_path, e);
+                }
+            }
+        }
+        
+        Ok(results)
+    } else {
+        Err("缩略图管理器未初始化".to_string())
+    }
+}

@@ -453,3 +453,47 @@ export async function checkFFmpegAvailable(): Promise<boolean> {
 export async function enqueueDirFilesHighestPriority(dirPath: string): Promise<number> {
   return await invoke<number>('enqueue_dir_files_highest_priority', { dirPath });
 }
+
+/**
+ * 异步加载单个缩略图 - 直接从数据库读取 WebP 字节数据
+ * 返回包含 data URL 和元数据的对象，或 null 如果未找到
+ */
+export async function loadThumbnailAsync(filePath: string): Promise<{
+  url: string;
+  width: number;
+  height: number;
+  file_size: number;
+  created_at: string;
+  is_folder: boolean;
+} | null> {
+  return await invoke<{
+    url: string;
+    width: number;
+    height: number;
+    file_size: number;
+    created_at: string;
+    is_folder: boolean;
+  } | null>('load_thumbnail_async', { filePath });
+}
+
+/**
+ * 批量异步加载缩略图 - 并发从数据库读取
+ * 返回文件路径到缩略图信息的映射
+ */
+export async function loadThumbnailsBatchAsync(filePaths: string[]): Promise<Record<string, {
+  url: string;
+  width: number;
+  height: number;
+  file_size: number;
+  created_at: string;
+  is_folder: boolean;
+} | null>> {
+  return await invoke<Record<string, {
+    url: string;
+    width: number;
+    height: number;
+    file_size: number;
+    created_at: string;
+    is_folder: boolean;
+  } | null>>('load_thumbnails_batch_async', { filePaths });
+}

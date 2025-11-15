@@ -45,17 +45,20 @@ class ThumbnailQueueService {
   }
 
   enqueueForPath(source: string, items: FsItem[], options: EnqueueOptions = {}) {
-    // Cancel previous tasks for this source
-    this.cancelBySource(source);
-    
-    const list = items.map(item => ({
+    const list = this.tasks.get(source) ?? [];
+    const newTasks = items.map(item => ({
       item,
       source,
       priority: options.priority ?? 'normal'
     }));
     
-    this.tasks.set(source, list);
+    this.tasks.set(source, list.concat(newTasks));
     this.scheduleFlush();
+  }
+
+  enqueueAdditional(source: string, items: FsItem[], options: EnqueueOptions = {}) {
+    // Alias for enqueueForPath - used for archive detection results
+    return this.enqueueForPath(source, items, options);
   }
 
   cancelBySource(source: string) {

@@ -77,7 +77,8 @@ export async function loadDirectoryWithoutHistory(path: string, options: Navigat
   fileBrowserStore.setLoading(true);
   fileBrowserStore.setError('');
   fileBrowserStore.clearThumbnails();
-  thumbnailQueue.clear();
+  // Cancel previous tasks for this path before loading new directory
+  thumbnailQueue.cancelBySource(path);
   fileBrowserStore.setArchiveView(false);
   fileBrowserStore.setSelectedIndex(-1);
   fileBrowserStore.setCurrentPath(path);
@@ -129,10 +130,7 @@ export async function loadArchive(path: string, options?: NavigationOptions) {
 }
 
 function enqueueThumbnails(items: FsItem[], currentPath: string, thumbnails?: Map<string, string>) {
-  // Cancel previous tasks for this path
-  thumbnailQueue.cancelBySource(currentPath);
-  
-  const toEnqueue: FsItem[] = [];
+  const regular: FsItem[] = [];
   
   for (const item of items) {
     try {
@@ -145,24 +143,26 @@ function enqueueThumbnails(items: FsItem[], currentPath: string, thumbnails?: Ma
     }
 
     if (itemIsDirectory(item) || itemIsImage(item)) {
-      toEnqueue.push(item);
+      regular.push(item);
     } else {
       // For potential archives, check asynchronously but don't block
-      (async () => {
-        try {
-          if (await fileBrowserService.isSupportedArchive(item.path)) {
-            thumbnailQueue.enqueueForPath(currentPath, [item], { priority: 'high' });
-          }
-        } catch (error) {
-          console.debug('Archive check failed for', item.path, error);
-        }
-      })();
+      checkArchiveAsync(item, currentPath);
     }
   }
   
-  // Fire-and-forget: enqueue items without awaiting
-  if (toEnqueue.length > 0) {
-    thumbnailQueue.enqueueForPath(currentPath, toEnqueue, { priority: 'high' });
+  // Fire-and-forget: enqueue regular items without awaiting
+  if (regular.length > 0) {
+    thumbnailQueue.enqueueForPath(currentPath, regular, { priority: 'high' });
+  }
+}
+
+async function checkArchiveAsync(item: FsItem, currentPath: string) {
+  try {
+    if (await fileBrowserService.isSupportedArchive(item.path)) {
+      thumbnailQueue.enqueueAdditional(currentPath, [item], { priority: 'low' });
+    }
+  } catch (error) {
+    console.debug('Archive check failed for', item.path, error);
   }
 }
 

@@ -249,7 +249,7 @@ pub async fn clear_thumbnail_cache(
     let thumbnail_manager = state.thumbnail_manager.lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
 
-    thumbnail_manager.clear_all_cache()
+    thumbnail_manager.clear_all_thumbnails()
 }
 
 

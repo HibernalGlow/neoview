@@ -212,14 +212,12 @@ impl ThumbnailManager {
 
         // 检查数据库中是否已有缩略图（不再强制要求 source_modified 相同）
         if let Ok(Some(record)) = self.db.find_by_bookpath(&relative_str) {
-            // 直接使用记录中的 relative_thumb_path 构建完整路径
-            let thumbnail_path = self.db.thumbnail_root.join(&record.relative_thumb_path);
-            if thumbnail_path.exists() {
-                if record.source_modified != source_modified {
-                    println!("⚠️ 源文件修改时间不同（数据库: {} vs 当前: {}），但使用已有缩略图: {}", record.source_modified, source_modified, thumbnail_path.display());
-                }
-                return Ok(format!("file://{}", thumbnail_path.to_string_lossy()));
+            // 直接从数据库读取 WebP 字节数据，转换为 data URL
+            if record.source_modified != source_modified {
+                println!("⚠️ 源文件修改时间不同，但使用已有缩略图");
             }
+            let data_url = format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&record.webp_data));
+            return Ok(data_url);
         }
 
         // 生成新缩略图
@@ -524,43 +522,17 @@ impl ThumbnailManager {
             let thumbnail = self.resize_keep_aspect_ratio(&img, self.size);
             let webp_data = self.encode_webp(&thumbnail)?;
 
-            // 获取保存路径
-            let now = Utc::now();
-            let thumbnail_path = self.db.get_thumbnail_path(relative_path, &now);
-            
-            // 确保目录存在
-            if let Some(parent) = thumbnail_path.parent() {
-                fs::create_dir_all(parent)
-                    .map_err(|e| format!("创建缩略图目录失败: {}", e))?;
-            }
-
-            // 保存文件
-            fs::write(&thumbnail_path, &webp_data)
-                .map_err(|e| format!("保存缩略图失败: {}", e))?;
-
             // 获取文件信息
             let (width, height) = thumbnail.dimensions();
             let file_size = webp_data.len() as u64;
-            let thumbnail_name = thumbnail_path.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(&ThumbnailDatabase::hash_path(relative_path))
-                .to_string();
+            let now = Utc::now();
 
-            // 创建数据库记录（folder）
+            // 创建数据库记录（folder）- 直接存储 WebP 字节数据
             let bookpath_str = Self::normalize_path_string(relative_path);
-            let relative_thumb_path = thumbnail_path
-                .strip_prefix(&self.db.thumbnail_root)
-                .map(|p| Self::normalize_path_string(p))
-                .unwrap_or_else(|_| Self::normalize_path_string(&thumbnail_path));
-            let hash = thumbnail_path.file_stem()
-                .and_then(|s| s.to_str())
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| ThumbnailDatabase::hash_path(relative_path));
+            let hash = ThumbnailDatabase::hash_path(relative_path);
 
             let record = ThumbnailRecord {
                 bookpath: bookpath_str,
-                relative_thumb_path: relative_thumb_path.to_string(),
-                thumbnail_name,
                 hash,
                 created_at: now,
                 source_modified,
@@ -568,6 +540,7 @@ impl ThumbnailManager {
                 width,
                 height,
                 file_size,
+                webp_data,
             };
 
             // 保存到数据库
@@ -594,8 +567,6 @@ impl ThumbnailManager {
 
                             let archive_record = ThumbnailRecord {
                                 bookpath: arch_bookpath,
-                                relative_thumb_path: relative_thumb_path.to_string(),
-                                thumbnail_name: record.thumbnail_name.clone(),
                                 hash: record.hash.clone(),
                                 created_at: now,
                                 source_modified: arch_source_modified,
@@ -603,6 +574,7 @@ impl ThumbnailManager {
                                 width,
                                 height,
                                 file_size,
+                                webp_data: record.webp_data.clone(),
                             };
 
                             // 忽略错误，尽量确保主记录已写入
@@ -612,8 +584,9 @@ impl ThumbnailManager {
                 }
             }
 
-            // 返回文件URL
-            Ok(format!("file://{}", thumbnail_path.to_string_lossy()))
+            // 返回 data URL
+            let data_url = format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&record.webp_data));
+            Ok(data_url)
         } else {
             Err("文件夹中没有找到图片或压缩包".to_string())
         }
@@ -802,27 +775,19 @@ impl ThumbnailManager {
             .map_err(|e| format!("获取缓存统计失败: {}", e))
     }
 
-    /// 清空所有缓存
-    pub fn clear_all_cache(&self) -> Result<usize, String> {
+    /// 清空所有缩略图
+    pub fn clear_all_thumbnails(&self) -> Result<usize, String> {
+        // 获取记录数
         let records = self.db.get_all_thumbnails()
             .map_err(|e| format!("获取缩略图列表失败: {}", e))?;
         
-        let mut removed_count = 0;
+        let removed_count = records.len();
         
-        for record in records {
-            let thumbnail_path = self.db.thumbnail_root.join(&record.thumbnail_name);
-            if thumbnail_path.exists() {
-                if fs::remove_file(&thumbnail_path).is_ok() {
-                    removed_count += 1;
-                }
-            }
-        }
-        
-        // 清空数据库
-        
+        // 清空数据库（不再需要删除文件，因为数据存储在数据库中）
         self.db.conn.execute("DELETE FROM thumbnails", [])
             .map_err(|e| format!("清空数据库失败: {}", e))?;
         
+        println!("✅ 已清空 {} 个缩略图记录", removed_count);
         Ok(removed_count)
     }
 
@@ -834,39 +799,26 @@ impl ThumbnailManager {
 
     /// 确保压缩包缩略图存在（优化版）
     pub fn ensure_archive_thumbnail(&self, archive_path: &Path) -> Result<String, String> {
-        println!("📦 [Rust] ensure_archive_thumbnail: {}", archive_path.display());
-        
         // 1. 构建压缩包专用key
         let archive_key = self.build_archive_key(archive_path)?;
-        println!("🔑 [Rust] 压缩包Key: {}", archive_key);
         
         // 2. 检查缓存
         if let Ok(Some(record)) = self.db.find_by_bookpath(&archive_key) {
-            let thumbnail_path = self.db.thumbnail_root.join(&record.relative_thumb_path);
-            if thumbnail_path.exists() {
-                println!("✅ [Rust] 压缩包缩略图缓存命中: {} -> {}", archive_path.display(), thumbnail_path.display());
-                return Ok(format!("file://{}", thumbnail_path.to_string_lossy()));
-            } else {
-                println!("⚠️ [Rust] 缩略图文件不存在: {}", thumbnail_path.display());
-            }
-        } else {
-            println!("🔍 [Rust] 数据库中未找到记录: {}", archive_key);
+            // 直接从数据库读取 WebP 字节数据
+            let data_url = format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&record.webp_data));
+            return Ok(data_url);
         }
         
         // 3. 扫描压缩包内的图片 - 优化：只扫描第一张图片
-        println!("🔍 [Rust] 扫描压缩包内的第一张图片...");
         let images = self.scan_archive_images(archive_path, 1)?;
         if images.is_empty() {
             return Err("压缩包内未找到图片".to_string());
         }
-        println!("📷 [Rust] 找到图片: {:?}", images);
         
         // 4. 处理第一张图片
         let inner_path = &images[0];
-        println!("🔄 [Rust] 处理图片: {}", inner_path);
         match self.extract_image_from_archive_stream(archive_path, inner_path) {
             Ok((img, inner_path)) => {
-                println!("✅ [Rust] 成功提取图片: {}", inner_path);
                 let relative_path = self.get_relative_path(archive_path)?;
                 let thumbnail_url = self.save_thumbnail_for_archive(
                     &img,
@@ -875,11 +827,9 @@ impl ThumbnailManager {
                     &inner_path,
                 )?;
                 
-                println!("✅ [Rust] 压缩包缩略图生成完成: {} -> {}", archive_path.display(), thumbnail_url);
                 return Ok(thumbnail_url);
             }
             Err(e) => {
-                println!("❌ [Rust] 处理图片失败: {} -> {}", inner_path, e);
                 return Err(format!("处理图片失败: {}", e));
             }
         }
@@ -930,23 +880,10 @@ impl ThumbnailManager {
         relative_path: &Path,
         inner_path: &str,
     ) -> Result<String, String> {
-        println!("💾 [Rust] save_thumbnail_for_archive: {} :: {}", archive_path.display(), inner_path);
-        
         let thumbnail = self.resize_keep_aspect_ratio(img, self.size);
         let webp_data = self.encode_webp(&thumbnail)?;
         
         let now = Utc::now();
-        let thumbnail_path = self.db.get_thumbnail_path(relative_path, &now);
-        
-        // 确保目录存在
-        if let Some(parent) = thumbnail_path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("创建缩略图目录失败: {}", e))?;
-        }
-        
-        // 保存文件
-        fs::write(&thumbnail_path, &webp_data)
-            .map_err(|e| format!("保存缩略图失败: {}", e))?;
         
         // 获取文件信息
         let (width, height) = thumbnail.dimensions();
@@ -957,23 +894,11 @@ impl ThumbnailManager {
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0);
         
-        // 构建相对缩略图路径
-        let relative_thumb_path = thumbnail_path
-            .strip_prefix(&self.db.thumbnail_root)
-            .map(|p| Self::normalize_path_string(p))
-            .unwrap_or_else(|_| Self::normalize_path_string(&thumbnail_path));
-        
         // 1. 为压缩包本体创建记录
         let archive_key = self.build_archive_key(archive_path)?;
-        println!("🔑 [Rust] 压缩包Key: {}", archive_key);
         
         let archive_record = ThumbnailRecord {
             bookpath: archive_key.clone(),
-            relative_thumb_path: relative_thumb_path.clone(),
-            thumbnail_name: thumbnail_path.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(&ThumbnailDatabase::hash_path(relative_path))
-                .to_string(),
             hash: ThumbnailDatabase::hash_path(relative_path),
             created_at: now,
             source_modified,
@@ -981,20 +906,17 @@ impl ThumbnailManager {
             width,
             height,
             file_size,
+            webp_data: webp_data.clone(),
         };
         
         self.db.upsert_thumbnail(archive_record.clone())
             .map_err(|e| format!("保存压缩包记录失败: {}", e))?;
-        println!("💾 [Rust] 压缩包记录已保存: {}", archive_key);
         
         // 2. 为内部图片创建记录
         let inner_key = format!("{}::{}", archive_key, inner_path);
-        println!("🔑 [Rust] 内部图片Key: {}", inner_key);
         
         let inner_record = ThumbnailRecord {
-            bookpath: inner_key.clone(),
-            relative_thumb_path: relative_thumb_path,
-            thumbnail_name: archive_record.thumbnail_name.clone(),
+            bookpath: inner_key,
             hash: archive_record.hash.clone(),
             created_at: now,
             source_modified,
@@ -1002,15 +924,15 @@ impl ThumbnailManager {
             width,
             height,
             file_size,
+            webp_data: webp_data.clone(),
         };
         
         self.db.upsert_thumbnail(inner_record)
             .map_err(|e| format!("保存内部图片记录失败: {}", e))?;
-        println!("💾 [Rust] 内部图片记录已保存: {}", inner_key);
         
-        println!("✅ [Rust] 双记录已保存");
-        
-        Ok(format!("file://{}", thumbnail_path.to_string_lossy()))
+        // 返回 data URL
+        let data_url = format!("data:image/webp;base64,{}", general_purpose::STANDARD.encode(&webp_data));
+        Ok(data_url)
     }
     
     /// 构建压缩包专用Key（仅使用归档路径）

@@ -8,6 +8,9 @@ mod commands;
 mod core;
 mod models;
 
+// 确保异步处理器模块被包含
+pub use core::async_thumbnail_processor;
+
 
 use tauri::Manager;
 use std::sync::Mutex;
@@ -176,6 +179,7 @@ pub fn run() {
             commands::save_performance_settings,
             // Thumbnail commands (new)
             commands::init_thumbnail_manager,
+            commands::generate_file_thumbnail_async,
             commands::generate_file_thumbnail_new,
             commands::generate_folder_thumbnail,
             commands::get_thumbnail_info,

@@ -115,17 +115,19 @@ export async function getImagesInDirectory(
 }
 
 /**
- * 生成文件缩略图
+ * 生成文件缩略图 - tokio异步极致优化版本
  */
 export async function generateFileThumbnail(path: string): Promise<string> {
-  console.log('🖼️ FileSystemAPI: 生成文件缩略图:', path);
+  console.log('⚡ FileSystemAPI: 异步生成文件缩略图:', path);
   try {
-    const result = await invoke<string>('generate_file_thumbnail_new', { filePath: path });
+    const result = await invoke<string>('generate_file_thumbnail_async', { filePath: path });
     console.log('✅ FileSystemAPI: 文件缩略图生成成功:', result);
     return result;
   } catch (error) {
     console.error('❌ FileSystemAPI: 文件缩略图生成失败:', path, error);
-    throw error;
+    // 如果异步失败，降级到同步版本
+    console.log('🔄 降级到同步版本');
+    return await invoke<string>('generate_file_thumbnail_new', { filePath: path });
   }
 }
 

@@ -51,8 +51,8 @@ class ThumbnailPriorityQueue {
     this.queues.normal.clear();
   }
 
-  // 取出一批任务进行处理
-  takeBatch(max: number = 10): QueueTask[] {
+  // 取出一批任务进行处理 - 增大批次以提高吞吐量
+  takeBatch(max: number = 64): QueueTask[] {
     const batch: QueueTask[] = [];
     
     for (const prio of ['immediate', 'high', 'normal'] as Priority[]) {
@@ -114,55 +114,38 @@ class ThumbnailExecutor {
     this.running = true;
 
     while (this.running) {
-      const batch = this.queue.takeBatch();
+      // 每次只取一个任务
+      const singleBatch = this.queue.takeBatch(1);
       
-      if (!batch.length) {
-        await this.waitIdle(32);
+      if (!singleBatch.length) {
+        await this.waitIdle(1);
         continue;
       }
 
-      // 按类型分组处理
-      const archiveTasks = batch.filter(task => this.isArchiveTask(task));
-      const localTasks = batch.filter(task => !this.isArchiveTask(task));
-
-      // 检查并发限制
+      const task = singleBatch[0];
+      const isArchive = this.isArchiveTask(task);
+      
+      // 检查对应类型的并发限制
       const currentGenerating = Array.from(this.generating.entries());
-      const generatingLocal = currentGenerating.filter(([, info]) => 
-        info.epoch === this.currentEpoch && !info.isArchive
+      const generatingCount = currentGenerating.filter(([, info]) => 
+        info.epoch === this.currentEpoch && info.isArchive === isArchive
       ).length;
-      const generatingArchive = currentGenerating.filter(([, info]) => 
-        info.epoch === this.currentEpoch && info.isArchive
-      ).length;
-
-      // 处理本地任务
-      const localToProcess = localTasks.slice(0, Math.max(0, this.maxConcurrentLocal - generatingLocal));
-      // 处理压缩包任务
-      const archiveToProcess = archiveTasks.slice(0, Math.max(0, this.maxConcurrentArchive - generatingArchive));
-
-      // 将无法处理的任务重新放回队列
-      const deferredTasks = [
-        ...localTasks.slice(localToProcess.length),
-        ...archiveTasks.slice(archiveToProcess.length)
-      ];
       
-      if (deferredTasks.length > 0) {
-        for (const task of deferredTasks) {
-          this.queue.enqueue(task.source, [task.item], task.priority, task.epoch);
-        }
+      const maxConcurrent = isArchive ? this.maxConcurrentArchive : this.maxConcurrentLocal;
+      
+      // 如果已达到并发限制，将任务放回队列稍后处理
+      if (generatingCount >= maxConcurrent) {
+        this.queue.enqueue(task.source, [task.item], task.priority, task.epoch);
+        await this.waitIdle(1); // 短暂等待后重试
+        continue;
       }
 
-      // 处理选中的任务
-      const tasksToProcess = [...localToProcess, ...archiveToProcess];
+      // 立即处理单个任务
+      this.generateThumbnail(task).catch(e => {
+        console.error('缩略图生成失败:', task.item.path, e);
+      });
       
-      if (tasksToProcess.length > 0) {
-        await Promise.allSettled(
-          tasksToProcess.map(task => this.generateThumbnail(task))
-        );
-      }
-
-      // immediate 批次不必等待过久
-      const hasImmediate = batch.some(task => task.priority === 'immediate');
-      await this.waitIdle(hasImmediate ? 8 : 16);
+      // 不等待，立即处理下一个任务
     }
   }
 
@@ -258,14 +241,13 @@ class ThumbnailExecutor {
         thumbnail = await FileSystemAPI.generateFileThumbnail(path);
       }
 
-      // 在调用回调之前检查任务 epoch 是否仍然有效
-      if (thumbnail && this.addThumbnailCb && epoch === this.currentEpoch) {
+      // 一旦生成成功，立即显示缩略图
+      if (thumbnail && this.addThumbnailCb) {
         const converted = toAssetUrl(thumbnail) || String(thumbnail || '');
         const key = this.toRelativeKey(path);
-        console.log(' 缩略图生成成功:', { key, raw: thumbnail, converted });
+        // 即使 epoch 过期也显示，因为用户可能仍然在查看
+        console.log(' 缩略图生成成功，立即显示:', { key, raw: thumbnail, converted });
         this.addThumbnailCb(key, converted);
-      } else if (thumbnail && epoch !== this.currentEpoch) {
-        console.log(' 任务结果已过期:', { path, epoch, current: this.currentEpoch });
       }
     } catch (e) {
       console.error(' 缩略图生成失败:', path, e);
@@ -348,12 +330,17 @@ export function toRelativeKey(absPath: string): string {
 export function enqueueVisible(sourcePath: string, items: any[], options: { priority?: Priority; delay?: number } = {}) {
   const { priority = 'immediate', delay = 0 } = options;
   
+  // 每个文件或文件夹独立入队，而不是批量入队
+  const enqueueItems = () => {
+    for (const item of items) {
+      priorityQueue.enqueue(sourcePath, [item], priority, executor['currentEpoch']);
+    }
+  };
+  
   if (delay > 0) {
-    setTimeout(() => {
-      priorityQueue.enqueue(sourcePath, items, priority, executor['currentEpoch']);
-    }, delay);
+    setTimeout(enqueueItems, delay);
   } else {
-    priorityQueue.enqueue(sourcePath, items, priority, executor['currentEpoch']);
+    enqueueItems();
   }
   
   // 确保执行器在运行
@@ -366,7 +353,10 @@ export function enqueueBackground(sourcePath: string, items: any[], options: { p
   const { priority = 'normal', delay = 200 } = options;
   
   setTimeout(() => {
-    priorityQueue.enqueue(sourcePath, items, priority, executor['currentEpoch']);
+    // 每个文件或文件夹独立入队
+    for (const item of items) {
+      priorityQueue.enqueue(sourcePath, [item], priority, executor['currentEpoch']);
+    }
     
     // 确保执行器在运行
     if (!executor['running']) {
@@ -401,16 +391,34 @@ export function splitForEnqueue(items: any[]) {
 }
 
 export function enqueueDirectoryThumbnails(path: string, items: any[]) {
-  const { immediate, high, normal } = splitForEnqueue(items);
-
-  // 立即入队第一屏
-  enqueueVisible(path, immediate, { priority: 'immediate' });
+  // 不再分组，所有文件都独立入队
+  // 前50个为最高优先级，接下来的100个为高优先级，其余为普通优先级
+  const FIRST_SCREEN = 50;
+  const SECOND_SCREEN = 100;
   
-  // 高优先级无延迟入队（而不是等待）
-  enqueueVisible(path, high, { priority: 'high' });
+  // 立即入队前50个文件（最高优先级）
+  for (let i = 0; i < Math.min(FIRST_SCREEN, items.length); i++) {
+    priorityQueue.enqueue(path, [items[i]], 'immediate', executor['currentEpoch']);
+  }
   
-  // 普通优先级降低延迟从 500ms 到 100ms，加快整体加载速度
-  enqueueBackground(path, normal, { priority: 'normal', delay: 100 });
+  // 立即入队接下来的100个文件（高优先级）
+  for (let i = FIRST_SCREEN; i < Math.min(FIRST_SCREEN + SECOND_SCREEN, items.length); i++) {
+    priorityQueue.enqueue(path, [items[i]], 'high', executor['currentEpoch']);
+  }
+  
+  // 延迟入队剩余文件（普通优先级）
+  if (items.length > FIRST_SCREEN + SECOND_SCREEN) {
+    setTimeout(() => {
+      for (let i = FIRST_SCREEN + SECOND_SCREEN; i < items.length; i++) {
+        priorityQueue.enqueue(path, [items[i]], 'normal', executor['currentEpoch']);
+      }
+    }, 50); // 减少延迟时间
+  }
+  
+  // 确保执行器在运行
+  if (!executor['running']) {
+    executor.start();
+  }
 }
 
 export function clearQueue() {

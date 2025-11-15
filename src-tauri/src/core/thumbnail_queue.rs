@@ -67,9 +67,9 @@ impl ThumbnailQueue {
                             match nr.try_recv() {
                                 Ok(t) => task_opt = Some(t),
                                 Err(mpsc::TryRecvError::Empty) => {
-                                    // 释放锁后短暂休眠，然后重新开始循环（优先检查高优先级队列）
+                                    // 释放锁后极短暂休眠，然后重新开始循环（优先检查高优先级队列）
                                     drop(nr);
-                                    std::thread::sleep(std::time::Duration::from_millis(40));
+                                    std::thread::sleep(std::time::Duration::from_millis(5));
                                     continue; // 重新开始循环，优先检查高优先级队列
                                 }
                                 Err(mpsc::TryRecvError::Disconnected) => break,
@@ -81,23 +81,27 @@ impl ThumbnailQueue {
                         println!("⬇️ Worker {} picked task: key={} path={}", i, t.key, t.path.display());
                         // 处理任务：调用 manager 生成缩略图
                         let key = t.key.clone();
-                        let result = (|| {
-                            // obtain manager
+                        let result = || -> Result<String, String> {
+                            // 获取管理器引用，但尽快释放锁
+                            let path = t.path.clone();
+                            let is_folder = t.is_folder;
+                            
+                            // 先获取文件元数据（不需要管理器锁）
+                            let meta = std::fs::metadata(&path).map_err(|e| format!("读取文件元数据失败: {}", e))?;
+                            let source_modified = meta.modified().map_err(|e| format!("获取修改时间失败: {}", e))?
+                                .duration_since(std::time::UNIX_EPOCH).map_err(|e| format!("时间转换失败: {}", e))?.as_secs() as i64;
+                            
+                            // 然后获取管理器锁执行操作
                             let guard = mgr.lock().map_err(|e| format!("manager lock poisoned: {}", e))?;
                             if let Some(ref manager) = *guard {
-                                // try to perform generation
-                                let path = t.path.clone();
-                                // compute relative and source_modified
+                                // compute relative path
                                 let rel = manager.get_relative_path(&path).map_err(|e| e)?;
-                                let meta = std::fs::metadata(&path).map_err(|e| format!("读取文件元数据失败: {}", e))?;
-                                let source_modified = meta.modified().map_err(|e| format!("获取修改时间失败: {}", e))?
-                                    .duration_since(std::time::UNIX_EPOCH).map_err(|e| format!("时间转换失败: {}", e))?.as_secs() as i64;
-
-                                manager.generate_and_save_thumbnail(&path, &rel, source_modified, t.is_folder)
+                                // 释放锁前执行生成操作
+                                manager.generate_and_save_thumbnail(&path, &rel, source_modified, is_folder)
                             } else {
                                 Err("缩略图管理器未初始化".to_string())
                             }
-                        })();
+                        }();
 
                         // collect responders and respond
                         let mut responders = Vec::new();
@@ -110,9 +114,12 @@ impl ThumbnailQueue {
                             println!("⚠️ Worker {} could not lock pending map to pop responders for key={}", i, key);
                         }
 
+                        // 立即发送结果给所有等待的响应者
                         for r in responders {
                             // ignore send errors
-                            let _ = r.send(result.clone());
+                            if let Err(_) = r.send(result.clone()) {
+                                println!("⚠️ Failed to send result to responder for key={}", key);
+                            }
                         }
                         match result {
                             Ok(ref url) => println!("✅ Worker {} generated thumbnail for {} -> {}", i, key, url),

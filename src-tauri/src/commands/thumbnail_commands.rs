@@ -20,6 +20,8 @@ pub struct ThumbnailManagerState {
     pub manager: Arc<Mutex<Option<ThumbnailManager>>>,
     pub cache: Arc<Mutex<ImageCache>>,
     pub queue: Arc<Mutex<Option<Arc<ThumbnailQueue>>>>,
+    pub async_processor: Arc<Mutex<Option<crate::core::async_thumbnail_processor::AsyncThumbnailProcessor>>>,
+    pub async_task_tx: Arc<Mutex<Option<tokio::sync::mpsc::UnboundedSender<crate::core::async_thumbnail_processor::AsyncThumbnailTask>>>>,
 }
 
 impl Default for ThumbnailManagerState {
@@ -28,6 +30,8 @@ impl Default for ThumbnailManagerState {
             manager: Arc::new(Mutex::new(None)),
             cache: Arc::new(Mutex::new(ImageCache::new(1024))), // 1024MB 缓存
             queue: Arc::new(Mutex::new(None)),
+            async_processor: Arc::new(Mutex::new(None)),
+            async_task_tx: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -99,11 +103,123 @@ pub async fn init_thumbnail_manager(
         println!("✅ 缩略图队列已启动，所有 {} 个 worker 已就绪", num_workers);
         *queue_guard = Some(q);
     }
+    
+    // 启动异步处理器（tokio多线程极致优化）
+    {
+        use crate::core::async_thumbnail_processor::AsyncThumbnailProcessor;
+        
+        // 极致的并发数：本地文件32个，压缩文件16个
+        let max_concurrent_local = 32;
+        let max_concurrent_archive = 16;
+        
+        let (processor, task_tx) = AsyncThumbnailProcessor::new(
+            state.manager.clone(),
+            state.cache.clone(),
+            max_concurrent_local,
+            max_concurrent_archive,
+        );
+        
+        // 启动异步处理器
+        if let Err(e) = processor.start().await {
+            println!("❌ 启动异步处理器失败: {}", e);
+        } else {
+            println!("🚀 异步处理器已启动 (本地: {}, 压缩: {})", max_concurrent_local, max_concurrent_archive);
+            
+            // 保存处理器和发送器
+            if let Ok(mut proc_guard) = state.async_processor.lock() {
+                *proc_guard = Some(processor);
+            }
+            if let Ok(mut tx_guard) = state.async_task_tx.lock() {
+                *tx_guard = Some(task_tx);
+            }
+        }
+    }
 
     Ok(())
 }
 
-/// 生成文件缩略图 - 异步显示版本
+/// 生成文件缩略图 - tokio异步极致优化版本
+/// 使用tokio异步运行时，实现最高并发性能
+#[command]
+pub async fn generate_file_thumbnail_async(
+    file_path: String,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<String, String> {
+    use crate::core::async_thumbnail_processor::{AsyncThumbnailTask, TaskPriority};
+    use tokio::sync::oneshot;
+    
+    println!("⚡ 异步生成缩略图: {}", file_path);
+    let path = PathBuf::from(file_path);
+    
+    // 等待管理器初始化（最多 5 秒）
+    if let Err(e) = ensure_manager_ready(&state, 5000).await {
+        println!("❌ {}", e);
+        return Err(e);
+    }
+    
+    // 首先检查缓存
+    let cache_key = normalize_path_string(path.to_string_lossy());
+    if let Ok(cache) = state.cache.lock() {
+        if let Some(cached_url) = cache.get(&cache_key) {
+            println!("✅ 使用缓存的缩略图: {}", cached_url);
+            return Ok(cached_url);
+        }
+    }
+    
+    // 检查是否为压缩文件
+    let _is_archive = path.extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_lowercase())
+        .map(|s| matches!(s.as_str(), "zip" | "rar" | "7z" | "cbz" | "cbr" | "cb7"))
+        .unwrap_or(false);
+    
+    // 确定优先级
+    let priority = TaskPriority::High; // 默认高优先级
+    
+    // 创建响应通道
+    let (response_tx, response_rx) = oneshot::channel();
+    
+    // 创建异步任务
+    let task = AsyncThumbnailTask {
+        path: path.clone(),
+        is_folder: false,
+        priority,
+        response_tx,
+    };
+    
+    // 发送任务到异步处理器
+    if let Ok(tx_guard) = state.async_task_tx.lock() {
+        if let Some(ref tx) = *tx_guard {
+            if let Err(_) = tx.send(task) {
+                println!("❌ 发送任务到异步处理器失败");
+                return Err("发送任务失败".to_string());
+            }
+        } else {
+            println!("❌ 异步处理器未初始化");
+            return Err("异步处理器未初始化".to_string());
+        }
+    } else {
+        return Err("获取任务发送器失败".to_string());
+    }
+    
+    // 等待结果
+    match response_rx.await {
+        Ok(Ok(url)) => {
+            println!("✅ 异步缩略图生成成功: {} -> {}", path.display(), url);
+            Ok(url)
+        }
+        Ok(Err(e)) => {
+            println!("❌ 异步缩略图生成失败: {}", e);
+            Err(e)
+        }
+        Err(e) => {
+            println!("❌ 等待结果失败: {}", e);
+            return Err("等待结果失败".to_string());
+        }
+    }
+}
+
+/// 生成文件缩略图 - 异步显示版本（保留兼容性）
 /// 返回立即显示的 blob URL，后台异步保存到本地
 #[command]
 pub async fn generate_file_thumbnail_new(
@@ -913,7 +1029,7 @@ pub async fn generate_archive_thumbnail_async(
     // 入队到后台处理，不等待结果
     if let Ok(queue_guard) = state.queue.lock() {
         if let Some(ref queue) = *queue_guard {
-            let queue_clone = queue.clone();
+            let _queue_clone = queue.clone();
             let path_clone = path.clone();
             let cache_clone = state.cache.clone();
             let manager_clone = state.manager.clone();

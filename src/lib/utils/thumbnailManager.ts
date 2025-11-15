@@ -250,6 +250,7 @@ class ThumbnailExecutor {
       let p = String(absPath || '');
       // 统一反斜杠为正斜杠
       p = p.replace(/\\/g, '/');
+
       if (root) {
         let r = String(root).replace(/\\/g, '/');
         // 如果 root 没有以斜杠结尾，添加
@@ -269,55 +270,15 @@ class ThumbnailExecutor {
     }
   }
 
-  // 获取统计信息
-  getStats() {
-    const currentGenerating = Array.from(this.generating.entries());
-    const generatingLocal = currentGenerating.filter(([, info]) => 
-      info.epoch === this.currentEpoch && !info.isArchive
-    ).length;
-    const generatingArchive = currentGenerating.filter(([, info]) => 
-      info.epoch === this.currentEpoch && info.isArchive
-    ).length;
-    
-    return {
-      queue: this.queue.getStats(),
-      generatingLocal,
-      generatingArchive,
-      maxLocal: this.maxConcurrentLocal,
-      maxArchive: this.maxConcurrentArchive,
-      epoch: this.currentEpoch
-    };
-  }
-}
-
-// 全局实例
-const priorityQueue = new ThumbnailPriorityQueue();
-const executor = new ThumbnailExecutor(priorityQueue);
-
-// 导出的API
-export function configureThumbnailManager(options: { 
-  addThumbnail?: (path: string, url: string) => void; 
-  maxConcurrentLocal?: number; 
-  maxConcurrentArchive?: number; 
-}) {
-  executor.configure(options);
-}
-
-export function itemIsDirectory(item: any) {
-  return Boolean(item && (item.is_dir === true || item.isDir === true));
-}
-
-export function itemIsImage(item: any) {
-  return Boolean(item && (item.is_image === true || item.isImage === true || item.is_image === 'true' || item.isImage === 'true'));
-}
+  // ...
 
 export function toRelativeKey(absPath: string): string {
   try {
     const root = typeof localStorage !== 'undefined' ? localStorage.getItem('neoview-thumbnail-root') : null;
     let p = String(absPath || '');
-    p = p.replace(/\/g, '/');
+    p = p.replace(/\\/g, '/');
     if (root) {
-      let r = String(root).replace(/\/g, '/');
+      let r = String(root).replace(/\\/g, '/');
       if (!r.endsWith('/')) r = r + '/';
       if (p.startsWith(r)) {
         let rel = p.slice(r.length);

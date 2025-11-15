@@ -800,6 +800,56 @@ pub async fn enqueue_dir_files_highest_priority(
     }
 }
 
+/// 优先加载当前文件夹（使用 tokio 优化）
+/// 立即返回，后台异步处理当前文件夹的所有文件
+#[command]
+pub async fn prioritize_current_folder(
+    dir_path: String,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<String, String> {
+    use crate::core::fs_manager::FsManager;
+    
+    let path = PathBuf::from(&dir_path);
+    let fs_manager = FsManager::new();
+    
+    // 获取目录内容
+    let items = fs_manager.read_directory(&path)
+        .map_err(|e| format!("列出目录失败: {}", e))?;
+    
+    // 获取队列
+    let queue_guard = state.queue.lock()
+        .map_err(|_| "无法获取队列锁".to_string())?;
+    
+    if let Some(ref q) = *queue_guard {
+        let queue_clone = q.clone();
+        let dir_path_clone = path.clone();
+        
+        // 在后台异步处理当前文件夹的所有文件
+        tokio::spawn(async move {
+            let mut enqueued_count = 0;
+            
+            // 为每个文件入队为最高优先级
+            for item in items {
+                if !item.is_dir {  // 只入队文件，不入队文件夹
+                    let file_path = dir_path_clone.join(&item.name);
+                    // 使用 enqueue 方法，第三个参数表示最高优先级
+                    match queue_clone.enqueue(file_path.to_path_buf(), false, true) {
+                        Ok(_) => enqueued_count += 1,
+                        Err(e) => println!("⚠️ 入队失败 {}: {}", file_path.display(), e),
+                    }
+                }
+            }
+            
+            println!("⚡ 已将 {} 个文件入队为最高优先级（后台异步）", enqueued_count);
+        });
+        
+        println!("📥 当前文件夹优先加载已启动（后台处理）");
+        Ok("prioritizing".to_string())
+    } else {
+        Err("缩略图队列未初始化".to_string())
+    }
+}
+
 /// 快速获取原图（用于首次加载时立即显示）
 /// 返回原图的二进制数据
 #[command]

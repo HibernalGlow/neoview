@@ -223,12 +223,10 @@ class ThumbnailExecutor {
         
         // 1. 快速获取原图，立即显示
         try {
-          const imageBlob = await FileSystemAPI.getArchiveFirstImageQuick(path);
-          if (imageBlob && this.addThumbnailCb && epoch === this.currentEpoch) {
-            // 将 Blob 转换为 blob URL
-            const blobUrl = URL.createObjectURL(imageBlob);
+          const blobUrl = await FileSystemAPI.getArchiveFirstImageQuick(path);
+          if (blobUrl && this.addThumbnailCb && epoch === this.currentEpoch) {
             const key = this.toRelativeKey(path);
-            console.log('原图已显示:', { key, blobUrl, size: imageBlob.size });
+            console.log('原图已显示:', { key, blobUrl });
             this.addThumbnailCb(key, blobUrl);
           }
         } catch (e) {

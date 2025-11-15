@@ -979,6 +979,29 @@ impl ThumbnailManager {
         Ok(images)
     }
     
+    /// 快速提取压缩包内的第一张图片原始字节（不进行任何处理）
+    /// 用于首次加载时立即显示原图
+    pub fn extract_first_image_from_archive(&self, archive_path: &Path) -> Result<Vec<u8>, String> {
+        use crate::core::archive::ArchiveManager;
+        
+        let archive_manager = ArchiveManager::new();
+        
+        // 列出压缩包内的所有文件
+        let entries = archive_manager.list_zip_contents(archive_path)
+            .map_err(|e| format!("列出压缩包内容失败: {}", e))?;
+        
+        // 找到第一张图片
+        for entry in entries {
+            if !entry.is_dir && self.is_image_file(&Path::new(&entry.name)) {
+                // 快速提取第一张图片的原始字节
+                return archive_manager.extract_file(archive_path, &entry.name)
+                    .map_err(|e| format!("提取图片失败: {}", e));
+            }
+        }
+        
+        Err("压缩包内未找到图片".to_string())
+    }
+    
     /// 从压缩包流式提取图片
     pub fn extract_image_from_archive_stream(&self, archive_path: &Path, inner_path: &str) -> Result<(DynamicImage, String), String> {
         use crate::core::archive::ArchiveManager;

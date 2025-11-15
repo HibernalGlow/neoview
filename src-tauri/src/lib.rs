@@ -150,6 +150,8 @@ pub fn run() {
             commands::generate_archive_thumbnail,
             commands::generate_archive_thumbnail_root,
             commands::generate_archive_thumbnail_inner,
+            commands::get_archive_first_image_quick,
+            commands::generate_archive_thumbnail_async,
             commands::is_supported_archive,
             commands::enqueue_dir_files_highest_priority,
             // File operation commands

@@ -799,3 +799,101 @@ pub async fn enqueue_dir_files_highest_priority(
         Err("缩略图队列未初始化".to_string())
     }
 }
+
+/// 快速获取原图（用于首次加载时立即显示）
+/// 返回原图的二进制数据
+#[command]
+pub async fn get_archive_first_image_quick(
+    archive_path: String,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<Vec<u8>, String> {
+    println!("⚡ [Rust] 快速获取压缩包首张图片: {}", archive_path);
+    let path = PathBuf::from(&archive_path);
+    
+    // 等待管理器初始化
+    if let Err(e) = ensure_manager_ready(&state, 5000).await {
+        return Err(e);
+    }
+    
+    if let Ok(manager_guard) = state.manager.lock() {
+        if let Some(ref manager) = *manager_guard {
+            // 快速提取压缩包内的第一张图片，不进行任何处理
+            match manager.extract_first_image_from_archive(&path) {
+                Ok(image_data) => {
+                    println!("✅ [Rust] 快速获取成功: {} bytes", image_data.len());
+                    Ok(image_data)
+                }
+                Err(e) => {
+                    println!("❌ [Rust] 快速获取失败: {}", e);
+                    Err(e)
+                }
+            }
+        } else {
+            Err("缩略图管理器未初始化".to_string())
+        }
+    } else {
+        Err("无法获取缩略图管理器".to_string())
+    }
+}
+
+/// 后台异步生成压缩包缩略图（不等待完成）
+/// 立即返回，缩略图生成在后台进行
+#[command]
+pub async fn generate_archive_thumbnail_async(
+    archive_path: String,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<String, String> {
+    println!("🔄 [Rust] 后台异步生成压缩包缩略图: {}", archive_path);
+    let path = PathBuf::from(&archive_path);
+    
+    // 等待管理器初始化
+    if let Err(e) = ensure_manager_ready(&state, 5000).await {
+        return Err(e);
+    }
+    
+    // 检查缓存
+    let cache_key = normalize_path_string(path.to_string_lossy());
+    if let Ok(cache) = state.cache.lock() {
+        if let Some(cached_url) = cache.get(&cache_key) {
+            println!("✅ [Rust] 异步生成: 缓存命中 {}", cache_key);
+            return Ok(cached_url);
+        }
+    }
+    
+    // 入队到后台处理，不等待结果
+    if let Ok(queue_guard) = state.queue.lock() {
+        if let Some(ref queue) = *queue_guard {
+            let queue_clone = queue.clone();
+            let path_clone = path.clone();
+            let cache_clone = state.cache.clone();
+            let manager_clone = state.manager.clone();
+            
+            // 在后台线程中处理
+            tokio::spawn(async move {
+                // 获取管理器生成缩略图
+                if let Ok(manager_guard) = manager_clone.lock() {
+                    if let Some(ref manager) = *manager_guard {
+                        match manager.ensure_archive_thumbnail(&path_clone) {
+                            Ok(thumbnail_url) => {
+                                // 添加到缓存
+                                if let Ok(cache) = cache_clone.lock() {
+                                    let cache_key = normalize_path_string(path_clone.to_string_lossy());
+                                    cache.set(cache_key.clone(), thumbnail_url.clone());
+                                    println!("💾 [Rust] 异步生成完成并缓存: {}", cache_key);
+                                }
+                            }
+                            Err(e) => {
+                                println!("❌ [Rust] 异步生成失败: {}", e);
+                            }
+                        }
+                    }
+                }
+            });
+            
+            println!("⚡ [Rust] 异步生成已入队，立即返回");
+            return Ok("generating".to_string()); // 返回特殊值表示正在生成
+        }
+    }
+    
+    Err("缩略图队列未初始化".to_string())
+}

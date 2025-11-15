@@ -219,13 +219,37 @@ class ThumbnailExecutor {
       const isVideo = path.match(/\.(mp4|mkv|avi|mov|flv|webm|wmv)$/i);
 
       if (isArchive) {
-        console.log(' 生成压缩包缩略图:', path);
-        thumbnail = await FileSystemAPI.generateArchiveThumbnailRoot(path);
+        console.log('首次加载压缩包，快速显示原图:', path);
+        
+        // 1. 快速获取原图，立即显示
+        try {
+          const imageBlob = await FileSystemAPI.getArchiveFirstImageQuick(path);
+          if (imageBlob && this.addThumbnailCb && epoch === this.currentEpoch) {
+            // 将 Blob 转换为 blob URL
+            const blobUrl = URL.createObjectURL(imageBlob);
+            const key = this.toRelativeKey(path);
+            console.log('原图已显示:', { key, blobUrl, size: imageBlob.size });
+            this.addThumbnailCb(key, blobUrl);
+          }
+        } catch (e) {
+          console.debug('快速获取原图失败，继续生成缩略图:', e);
+        }
+        
+        // 2. 后台异步生成缩略图
+        console.log('后台异步生成压缩包缩略图:', path);
+        try {
+          await FileSystemAPI.generateArchiveThumbnailAsync(path);
+          console.log('缩略图已入队后台处理');
+        } catch (e) {
+          console.error('后台生成失败:', e);
+        }
+        
+        return; // 不等待后台完成
       } else if (isDir) {
-        console.log(' 生成文件夹缩略图:', path);
+        console.log('生成文件夹缩略图:', path);
         thumbnail = await FileSystemAPI.generateFolderThumbnail(path);
       } else if (isVideo) {
-        console.log(' 生成视频缩略图:', path);
+        console.log('生成视频缩略图:', path);
         try {
           thumbnail = await FileSystemAPI.generateVideoThumbnail(path);
         } catch (e) {

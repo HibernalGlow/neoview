@@ -453,3 +453,38 @@ export async function checkFFmpegAvailable(): Promise<boolean> {
 export async function enqueueDirFilesHighestPriority(dirPath: string): Promise<number> {
   return await invoke<number>('enqueue_dir_files_highest_priority', { dirPath });
 }
+
+/**
+ * 快速获取压缩包内的第一张图片原始字节
+ * 用于首次加载时立即显示原图，不进行任何处理
+ * 返回二进制数据，前端用 URL.createObjectURL 转换为 blob URL
+ */
+export async function getArchiveFirstImageQuick(archivePath: string): Promise<Blob> {
+  console.log('FileSystemAPI: 快速获取压缩包首张图片:', archivePath);
+  try {
+    const imageBytes = await invoke<number[]>('get_archive_first_image_quick', { archivePath });
+    // 转换为 Blob
+    const blob = new Blob([new Uint8Array(imageBytes)]);
+    console.log('FileSystemAPI: 快速获取成功:', blob.size, 'bytes');
+    return blob;
+  } catch (error) {
+    console.error('FileSystemAPI: 快速获取失败:', archivePath, error);
+    throw error;
+  }
+}
+
+/**
+ * 后台异步生成压缩包缩略图（不等待完成）
+ * 立即返回，缩略图生成在后台进行
+ */
+export async function generateArchiveThumbnailAsync(archivePath: string): Promise<string> {
+  console.log('🔄 FileSystemAPI: 后台异步生成压缩包缩略图:', archivePath);
+  try {
+    const result = await invoke<string>('generate_archive_thumbnail_async', { archivePath });
+    console.log('✅ FileSystemAPI: 异步生成已入队:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ FileSystemAPI: 异步生成失败:', archivePath, error);
+    throw error;
+  }
+}

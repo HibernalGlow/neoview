@@ -2,10 +2,7 @@ import type { FsItem } from '$lib/types';
 
 export type SortField = 'path' | 'name' | 'modified' | 'size' | 'type';
 export type SortOrder = 'asc' | 'desc';
-export type SortConfig = {
-  field: SortField;
-  order: SortOrder;
-};
+export type { SortConfig } from '$lib/types/FsItem';
 
 const SORT_STORAGE_KEY = 'neoview-sort-config';
 

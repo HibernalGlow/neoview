@@ -185,6 +185,11 @@ function createFileTreeStore() {
 		update((state) => ({ ...state, selectedPath: path ?? null }));
 	}
 
+	// 选择路径（导航）
+	function selectPath(path: string) {
+		update((state) => ({ ...state, selectedPath: path }));
+	}
+
 	return {
 		subscribe,
 		getState: () => currentState,
@@ -194,6 +199,7 @@ function createFileTreeStore() {
 		setNodeLoading,
 		setExpanded,
 		setSelectedPath,
+		selectPath,
 		reset: () => set(initialState)
 	};
 }

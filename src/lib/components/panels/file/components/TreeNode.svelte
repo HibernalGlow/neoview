@@ -3,7 +3,7 @@
   import { ChevronRight, ChevronDown, Folder, FolderOpen, File, Image, Archive, Music, Video } from '@lucide/svelte';
   import { fileTreeStore } from '$lib/stores/fileTree.svelte';
   import { selectionStore } from '$lib/stores/selection.svelte';
-  import type { FsItem } from '$lib/types';
+  import type { FsItem, FileTreeNode } from '$lib/types/FsItem';
 
   interface Props {
     node: {

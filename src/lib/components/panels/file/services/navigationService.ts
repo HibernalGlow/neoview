@@ -1,4 +1,4 @@
-import type { FsItem } from '$lib/types';
+import type { FsItem } from '$lib/types/FsItem';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 import { fileTreeStore } from '$lib/stores/fileTree.svelte';
 import { fileBrowserService, navigationHistory } from './fileBrowserService';
@@ -12,17 +12,7 @@ const CACHE_TTL = 5 * 60 * 1000; // 5分钟缓存
 
 const thumbnailQueue = getThumbnailQueue((path, url) => fileBrowserStore.addThumbnail(path, url));
 
-export type NavigationOptions = {
-  sortConfig: SortConfig;
-  clearSelection?: () => void;
-  thumbnails?: Map<string, string>;
-};
-
-export type NavigationContext = NavigationOptions & {
-  currentPath: string;
-  currentArchivePath: string;
-  isArchiveView: boolean;
-};
+export type { NavigationOptions, NavigationContext } from '$lib/types/FsItem';
 
 export async function loadDirectory(path: string, options: NavigationOptions) {
   await loadDirectoryWithoutHistory(path, options);

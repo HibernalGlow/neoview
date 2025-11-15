@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { fileBrowserService, navigationHistory } from './file/services/fileBrowserService';
-  import type { FsItem } from '$lib/types';
+  import type { FsItem } from '$lib/types/FsItem';
   import { bookStore } from '$lib/stores/book.svelte';
   import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
@@ -80,6 +80,8 @@
   let sortConfig = $derived(explorerSettings?.sortConfig || getSortConfig());
   let hasHomepage = $state(false);
   let canNavigateBack = $state(false);
+  
+  // 移除旧的选择状态，使用 selectionStore
 
   function createNavigationOptions(): NavigationOptions {
     return {
@@ -364,36 +366,37 @@
    * 切换勾选模式
    */
   function toggleCheckMode() {
-    isCheckMode = !isCheckMode;
-    if (!isCheckMode) {
-      selectedItems.clear();
-    }
+    // TODO: 实现勾选模式逻辑
+    console.log('Toggle check mode');
   }
 
   /**
    * 切换删除模式
    */
   function toggleDeleteMode() {
-    isDeleteMode = !isDeleteMode;
+    // TODO: 实现删除模式逻辑
+    console.log('Toggle delete mode');
   }
 
   /**
    * 切换视图模式
    */
   function toggleViewMode() {
-    viewMode = viewMode === 'list' ? 'thumbnails' : 'list';
+    explorerSettingsStore.updateSetting(
+      'layout', 
+      explorerSettings?.layout === 'list' ? 'thumbnails' : 'list'
+    );
   }
 
   /**
    * 切换项目选中状态
    */
   function toggleItemSelection(path: string) {
-    if (selectedItems.has(path)) {
-      selectedItems.delete(path);
-    } else {
-      selectedItems.add(path);
+    const item = items.find(item => item.path === path);
+    if (item) {
+      const index = items.indexOf(item);
+      selectionStore.toggleSelection(item, index);
     }
-    selectedItems = selectedItems; // 触发响应式更新
   }
 
   // 组件挂载时添加全局点击事件和加载主页

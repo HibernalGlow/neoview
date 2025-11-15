@@ -4,9 +4,10 @@
   import { fileTreeStore } from '$lib/stores/fileTree.svelte';
   import { selectionStore } from '$lib/stores/selection.svelte';
   import { fileBrowserService } from '../services/fileBrowserService';
+  import { navigateToDirectory } from '../services/navigationService';
   import { homeDir } from '@tauri-apps/api/path';
   import TreeNode from './TreeNode.svelte';
-  import type { FsItem } from '$lib/types';
+  import type { FsItem } from '$lib/types/FsItem';
 
   // 根节点配置
   const rootNodes = [
@@ -36,8 +37,27 @@
     }
   ];
 
+  // 创建导航选项
+  function createNavigationOptions() {
+    return {
+      sortConfig: { field: 'name', direction: 'asc' },
+      thumbnails: new Map(),
+      clearSelection: () => selectionStore.clear()
+    };
+  }
+
   // 订阅 fileTreeStore 状态
   let treeState = $state(fileTreeStore.getState());
+
+  });
+
+  // 订阅状态更新
+  $effect(() => {
+    const unsubscribe = fileTreeStore.subscribe(state => {
+      treeState = state;
+    });
+    return unsubscribe;
+  });
 
   // 切换节点展开状态
   async function handleToggle(node: any) {
@@ -93,10 +113,7 @@
       
       // 更新节点的 hasChildren 状态
       const hasSubDirs = children.some(item => item.isDir);
-      const nodeState = treeState.nodes.get(node.path);
-      if (nodeState) {
-        fileTreeStore.updateNode(node.path, { ...nodeState, hasChildren: hasSubDirs });
-      }
+      fileTreeStore.updateNode(node.path, { hasChildren: hasSubDirs });
     } catch (error) {
       console.error('Failed to load children for node:', node.path, error);
     } finally {
@@ -105,18 +122,12 @@
   }
 
   // 选择路径
-  function selectPath(path: string) {
+  async function selectPath(path: string) {
     fileTreeStore.selectPath(path);
     selectionStore.clear();
     
     // 触发导航
-    import('../services/navigationService').then(({ navigateToDirectory }) => {
-      navigateToDirectory(path, {
-        sortConfig: { field: 'name', direction: 'asc' },
-        thumbnails: new Map(),
-        clearSelection: () => selectionStore.clear()
-      });
-    });
+    await navigateToDirectory(path, createNavigationOptions());
   }
 
   // 处理节点选择
@@ -134,14 +145,6 @@
     console.log('Context menu for:', node);
   }
 
-  // 订阅状态更新
-  $effect(() => {
-    const unsubscribe = fileTreeStore.subscribe(state => {
-      treeState = state;
-    });
-    return unsubscribe;
-  });
-
   // 初始化
   onMount(async () => {
     // 初始化根节点
@@ -156,13 +159,12 @@
       });
     });
   });
-</script>
 
 <div class="file-tree-panel h-full bg-gray-50 border-r border-gray-200 overflow-y-auto">
   <div class="p-2">
     <ul class="tree-root" role="tree">
       {#each rootNodes as root (root.path)}
-        {@const node = treeState.nodes.get(root.path)}
+        {@const node = treeState.nodes[root.path]}
         {#if node}
           <TreeNode 
             node={node}

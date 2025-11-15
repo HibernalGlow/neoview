@@ -38,6 +38,13 @@
     navigationState
   }: Props = $props();
 
+  // 订阅 fileTreeStore 以获取当前路径
+  import { fileTreeStore } from '$lib/stores/fileTree.svelte';
+  let treeState = fileTreeStore.getState();
+  const unsubscribe = fileTreeStore.subscribe(state => {
+    treeState = state;
+  });
+
   /**
    * 获取路径的面包屑导航 - 保持原有顺序（从根到当前）
    */
@@ -82,7 +89,11 @@
     return breadcrumbs;
   }
 
-  const breadcrumbs = $derived(getBreadcrumbs(currentPath));
+  // 从根到当前 - 优先使用树状态
+  $: breadcrumbs = getBreadcrumbs(treeState.selectedPath || currentPath);
+
+  // 是否是根路径
+  $: isRoot = (treeState.selectedPath || currentPath) === '';
 
   /**
    * 处理导航
@@ -91,6 +102,8 @@
     if (onNavigate) {
       onNavigate(path);
     }
+    // 同时更新 fileTreeStore
+    fileTreeStore.setSelectedPath(path);
   }
 
   /**
@@ -125,6 +138,11 @@
     } catch (error) {
       console.error('Failed to open in file manager:', error);
     }
+  }
+
+  // 清理订阅
+  $: {
+    return unsubscribe;
   }
 </script>
 

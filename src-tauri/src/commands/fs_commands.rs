@@ -815,18 +815,19 @@ fn scan_directory(
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::LazyLock;
 
 // 全局流ID计数器
 static STREAM_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 // 流状态管理
-static STREAMS: Mutex<HashMap<String, DirectoryStream>> = Mutex::new(HashMap::new());
+static STREAMS: LazyLock<Mutex<HashMap<String, DirectoryStream>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct DirectoryStream {
     id: String,
     path: PathBuf,
-    entries: Vec<std::fs::DirEntry>,
+    entries: Vec<PathBuf>, // 改为存储PathBuf而不是DirEntry
     current_index: usize,
     batch_size: usize,
     total: usize,
@@ -875,27 +876,28 @@ pub async fn browse_directory_page(
     }
 
     // 读取所有目录条目
-    let mut entries: Vec<std::fs::DirEntry> = std::fs::read_dir(path)
+    let mut entries: Vec<PathBuf> = std::fs::read_dir(path)
         .map_err(|e| format!("Failed to read directory: {}", e))?
         .filter_map(Result::ok)
+        .map(|entry| entry.path())
         .collect();
 
     // 应用排序
-    sort_entries(&mut entries, &options.sort_by, options.sort_order);
+    sort_entries(&mut entries, &options.sort_by, &options.sort_order);
 
     let total = entries.len();
     let offset = options.offset.unwrap_or(0);
     let limit = options.limit.unwrap_or(100);
     
     // 获取分页数据
-    let page_entries: Vec<std::fs::DirEntry> = entries
+    let page_entries: Vec<PathBuf> = entries
         .into_iter()
         .skip(offset)
         .take(limit)
         .collect();
 
     // 转换为FileInfo
-    let items = convert_entries_to_file_info(page_entries)?;
+    let items = convert_paths_to_file_info(page_entries)?;
 
     let has_more = offset + items.len() < total;
     let next_offset = if has_more { Some(offset + items.len()) } else { None };
@@ -926,26 +928,27 @@ pub async fn start_directory_stream(
     }
 
     // 读取所有目录条目
-    let mut entries: Vec<std::fs::DirEntry> = std::fs::read_dir(path)
+    let mut entries: Vec<PathBuf> = std::fs::read_dir(path)
         .map_err(|e| format!("Failed to read directory: {}", e))?
         .filter_map(Result::ok)
+        .map(|entry| entry.path())
         .collect();
 
     // 应用排序
-    sort_entries(&mut entries, &options.sort_by, options.sort_order);
+    sort_entries(&mut entries, &options.sort_by, &options.sort_order);
 
     let total = entries.len();
     let batch_size = options.batch_size.unwrap_or(50);
     let stream_id = format!("stream_{}", STREAM_COUNTER.fetch_add(1, Ordering::SeqCst));
 
     // 获取初始批次
-    let initial_batch: Vec<std::fs::DirEntry> = entries
+    let initial_batch: Vec<PathBuf> = entries
         .iter()
         .take(batch_size)
         .cloned()
         .collect();
 
-    let initial_items = convert_entries_to_file_info(initial_batch)?;
+    let initial_items = convert_paths_to_file_info(initial_batch)?;
     let has_more = batch_size < total;
 
     // 创建流状态
@@ -988,7 +991,7 @@ pub async fn get_next_stream_batch(
 
         // 获取下一批
         let next_index = (stream.current_index + stream.batch_size).min(stream.entries.len());
-        let batch: Vec<std::fs::DirEntry> = stream.entries
+        let batch: Vec<PathBuf> = stream.entries
             [stream.current_index..next_index]
             .iter()
             .cloned()
@@ -997,7 +1000,7 @@ pub async fn get_next_stream_batch(
         stream.current_index = next_index;
         let has_more = stream.current_index < stream.entries.len();
 
-        let items = convert_entries_to_file_info(batch)?;
+        let items = convert_paths_to_file_info(batch)?;
 
         Ok(StreamBatchResult {
             items,
@@ -1037,7 +1040,7 @@ pub struct DirectoryStreamOptions {
 }
 
 fn sort_entries(
-    entries: &mut Vec<std::fs::DirEntry>,
+    entries: &mut Vec<PathBuf>,
     sort_by: &Option<String>,
     sort_order: &Option<String>,
 ) {
@@ -1045,8 +1048,8 @@ fn sort_entries(
     let sort_ascending = sort_order.as_ref().map(|s| s.as_str()).unwrap_or("asc") == "asc";
 
     entries.sort_by(|a, b| {
-        let a_name = a.file_name().to_string_lossy();
-        let b_name = b.file_name().to_string_lossy();
+        let a_name = a.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        let b_name = b.file_name().and_then(|n| n.to_str()).unwrap_or("");
         
         let comparison = match sort_by {
             "name" => a_name.cmp(&b_name),
@@ -1056,8 +1059,8 @@ fn sort_entries(
                 a_size.cmp(&b_size)
             },
             "modified" => {
-                let a_modified = a.metadata().ok().and_then(|m| m.modified()).ok();
-                let b_modified = b.metadata().ok().and_then(|m| m.modified()).ok();
+                let a_modified = a.metadata().ok().and_then(|m| m.modified().ok());
+                let b_modified = b.metadata().ok().and_then(|m| m.modified().ok());
                 a_modified.cmp(&b_modified)
             },
             _ => a_name.cmp(&b_name),
@@ -1071,12 +1074,11 @@ fn sort_entries(
     });
 }
 
-fn convert_entries_to_file_info(entries: Vec<std::fs::DirEntry>) -> Result<Vec<FileInfo>, String> {
+fn convert_paths_to_file_info(paths: Vec<PathBuf>) -> Result<Vec<FileInfo>, String> {
     let mut items = Vec::new();
     
-    for entry in entries {
-        let path = entry.path();
-        let metadata = entry.metadata()
+    for path in paths {
+        let metadata = std::fs::metadata(&path)
             .map_err(|e| format!("Failed to read metadata for {}: {}", path.display(), e))?;
 
         let name = path.file_name()

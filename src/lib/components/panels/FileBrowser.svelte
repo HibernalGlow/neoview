@@ -17,6 +17,7 @@
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
   import { homeDir } from '@tauri-apps/api/path';
   import { enqueueThumbnail, enqueueArchiveThumbnail, configureThumbnailManager, itemIsDirectory, itemIsImage, clearQueue, toRelativeKey, enqueueDirectoryThumbnails, cancelBySource } from '$lib/utils/thumbnailManager';
+import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
 
 
   // 使用全局状态
@@ -307,6 +308,15 @@
       addThumbnail: (path: string, url: string) => fileBrowserStore.addThumbnail(path, url),
       maxConcurrent: 4
     });
+
+    // 开发模式下运行性能测试
+    if (import.meta.env.DEV) {
+      console.log('🚀 性能优化已启用，可在控制台运行 runPerformanceTests() 进行测试');
+      // 延迟运行测试，避免影响初始加载
+      setTimeout(() => {
+        // runPerformanceOptimizationTests();
+      }, 2000);
+    }
     
     return () => {
       document.removeEventListener('click', handleClick);

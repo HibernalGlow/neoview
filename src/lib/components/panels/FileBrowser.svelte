@@ -303,12 +303,6 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
     // 加载搜索历史
     loadSearchHistory();
 
-    // 配置外部的 Thumbnail Manager，使其把生成的缩略图写入 store
-    configureThumbnailManager({
-      addThumbnail: (path: string, url: string) => fileBrowserStore.addThumbnail(path, url),
-      maxConcurrent: 4
-    });
-
     // 开发模式下运行性能测试
     if (import.meta.env.DEV) {
       console.log('🚀 性能优化已启用，可在控制台运行 runPerformanceTests() 进行测试');
@@ -366,8 +360,6 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
     fileBrowserStore.setLoading(true);
     fileBrowserStore.setError('');
     fileBrowserStore.clearThumbnails();
-    // 清空外部缩略图队列，避免上次目录的任务残留
-    clearQueue();
     fileBrowserStore.setArchiveView(false);
     fileBrowserStore.setSelectedIndex(-1);
     fileBrowserStore.setCurrentPath(path);
@@ -1818,6 +1810,12 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
       }}
       on:deleteItem={(e) => {
         deleteItem(e.detail.item.path);
+      }}
+      on:selectionChange={(e) => {
+        selectedItems = new Set(e.detail.selectedItems);
+      }}
+      on:selectedIndexChange={(e) => {
+        fileBrowserStore.setSelectedIndex(e.detail.index);
       }}
     />
   {/if}

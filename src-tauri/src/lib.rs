@@ -24,12 +24,8 @@ use std::sync::Arc;
 #[allow(clippy::missing_panics_doc)]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // 初始化日志过滤器，屏蔽 avif-native/mp4parse 的 TRACE 日志
-    std::env::set_var("RUST_LOG", "info");
-    env_logger::Builder::new()
-        .filter_module("mp4parse", log::LevelFilter::Info)
-        .filter_module("avif_native", log::LevelFilter::Info)
-        .init();
+    // 设置日志级别，屏蔽 avif-native/mp4parse 的 TRACE 日志
+    std::env::set_var("RUST_LOG", "info,mp4parse=info,avif_native=info");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::new().build())

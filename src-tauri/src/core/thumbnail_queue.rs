@@ -78,6 +78,7 @@ impl ThumbnailQueue {
                     }
 
                     if let Some(t) = task_opt {
+                        println!("⬇️ Worker {} 开始处理: {}", i, t.key);
                         
                         // 处理任务：调用 manager 生成缩略图
                         let key = t.key.clone();
@@ -149,6 +150,7 @@ impl ThumbnailQueue {
             } else {
                 map.insert(key.clone(), vec![tx]);
                 let pending_after = map.len();
+                println!("➕ 新增缩略图任务: {} (待处理: {})", key, pending_after);
                 
             }
         }

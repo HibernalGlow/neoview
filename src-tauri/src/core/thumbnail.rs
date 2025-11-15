@@ -31,9 +31,10 @@ pub fn build_path_key(
 /// 构建压缩包专用Key（仅使用归档路径）
 /// 用于文件夹Tab直接查找压缩包缩略图
 pub fn build_archive_key(archive_path: &Path) -> Result<String, String> {
-    // 规范化路径并计算哈希
+    // 规范化路径：将反斜杠转换为正斜杠
+    // 这与 ThumbnailManager::normalize_path_string 的逻辑一致
     let normalized = archive_path.to_string_lossy().replace('\\', "/");
-    Ok(ThumbnailDatabase::hash_path(Path::new(&normalized)))
+    Ok(normalized)
 }
 
 /// 计算路径哈希
@@ -1088,10 +1089,8 @@ impl ThumbnailManager {
     /// 构建压缩包专用Key（仅使用归档路径）
     /// 用于文件夹Tab直接查找压缩包缩略图
     fn build_archive_key(&self, archive_path: &Path) -> Result<String, String> {
-        // 获取相对路径
-        let relative_path = self.get_relative_path(archive_path)?;
-        // 规范化路径并使用相对路径作为key
-        Ok(Self::normalize_path_string(&relative_path))
+        // 调用公开的 build_archive_key 函数保持一致性
+        build_archive_key(archive_path)
     }
 
     /// 从内存中的字节数据加载图片（支持 JXL、AVIF 等特殊格式）

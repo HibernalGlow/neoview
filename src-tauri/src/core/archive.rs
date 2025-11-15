@@ -3,6 +3,7 @@ use std::io::{Read, Cursor};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
+use std::process::Command;
 use zip::ZipArchive;
 use serde::{Deserialize, Serialize};
 use image::GenericImageView;
@@ -132,7 +133,35 @@ impl ArchiveManager {
         Ok(entries)
     }
 
-    /// 从 ZIP 压缩包中提取文件内容（优化版本，使用缓存的压缩包实例）
+    /// 使用7z命令行工具提取文件到内存（性能优化版本）
+    fn extract_file_with_7z(
+        &self,
+        archive_path: &Path,
+        file_path: &str,
+    ) -> Result<Vec<u8>, String> {
+        println!("⚡ 使用7z提取文件: archive={} inner={}", archive_path.display(), file_path);
+        let start = Instant::now();
+        
+        // 尝试使用7z命令行工具
+        let output = Command::new("7z")
+            .args(&["x", "-so", "-ba"])  // x=提取, -so=输出到stdout, -ba=禁用所有输出
+            .arg(archive_path.to_string_lossy().as_ref())
+            .arg(file_path)
+            .output()
+            .map_err(|e| format!("7z命令执行失败: {}", e))?;
+        
+        if !output.status.success() {
+            return Err(format!("7z提取失败: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+        
+        let elapsed = start.elapsed();
+        let size = output.stdout.len() as u64;
+        println!("⚡ 7z提取完成: size={} elapsed_ms={}", size, elapsed.as_millis());
+        
+        Ok(output.stdout)
+    }
+
+    /// 从 ZIP 压缩包中提取文件内容（优化版本，优先使用7z，回退到Rust库）
     pub fn extract_file_from_zip(
         &self,
         archive_path: &Path,
@@ -140,7 +169,15 @@ impl ArchiveManager {
     ) -> Result<Vec<u8>, String> {
         println!("📦 extract_file_from_zip start: archive={} inner={}", archive_path.display(), file_path);
         
-        // 使用缓存的压缩包实例
+        // 首先尝试使用7z（更快）
+        match self.extract_file_with_7z(archive_path, file_path) {
+            Ok(data) => return Ok(data),
+            Err(e) => {
+                println!("⚠️ 7z提取失败，回退到Rust库: {}", e);
+            }
+        }
+        
+        // 回退：使用缓存的压缩包实例
         let cached_archive = self.get_cached_archive(archive_path)?;
         let mut archive = cached_archive.lock().unwrap();
         

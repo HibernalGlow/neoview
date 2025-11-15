@@ -382,7 +382,7 @@ import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
         
         // 设置缓存数据
         fileBrowserStore.setItems(loadedItems);
-        fileBrowserStore.setThumbnails(cachedThumbnails);
+        thumbnails = new Map(cachedThumbnails);
         
         // 后台验证缓存是否仍然有效
         navigationHistory.validateCache(path).then(async (isValid) => {

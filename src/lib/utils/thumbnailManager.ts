@@ -184,6 +184,7 @@ class ThumbnailScheduler {
     }
 
     if (isDir) {
+      // 对于文件夹，直接使用后端API（因为前端调度器已经过滤了文件类型）
       thumbnail = await FileSystemAPI.generateFolderThumbnail(path);
     } else if (isVideo) {
       try {
@@ -192,6 +193,7 @@ class ThumbnailScheduler {
         console.debug('视频缩略图生成失败，跳过:', e);
       }
     } else {
+      // 对于普通文件，使用新的异步API
       thumbnail = await FileSystemAPI.generateFileThumbnail(path);
     }
 

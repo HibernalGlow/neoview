@@ -474,20 +474,36 @@ import { getPerformanceSettings } from '$lib/api/performance';
     // 缓存目录数据
     navigationHistory.cacheDirectory(path, loadedItems, thumbnails, mtime);
     
-    // 🚀 异步入队首屏文件为最高优先级（不阻塞主线程）
+    // 🚀 使用前端调度器入队首屏文件为最高优先级
     // 取消之前的入队任务
     if (lastEnqueueTimeout) {
       clearTimeout(lastEnqueueTimeout);
     }
     
-    lastEnqueueTimeout = setTimeout(async () => {
-      try {
-        const enqueuedCount = await FileSystemAPI.enqueueDirFilesHighestPriority(path);
-        console.log(`⚡ 已将 ${enqueuedCount} 个文件入队为最高优先级`);
-      } catch (e) {
-        console.debug('入队最高优先级失败:', e);
-      }
-    }, 100);  // 延迟 100ms，避免阻塞目录加载
+    lastEnqueueTimeout = () => {
+      // 过滤出需要缩略图的项目
+      const itemsNeedingThumbnails = items.filter(item => {
+        const name = item.name.toLowerCase();
+        const isDir = item.is_dir;
+        
+        // 支持的图片扩展名
+        const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.avif', '.jxl', '.tiff', '.tif'];
+        // 支持的压缩包扩展名
+        const archiveExts = ['.zip', '.rar', '.7z', '.cbz', '.cbr', '.cb7'];
+        
+        const ext = name.substring(name.lastIndexOf('.'));
+        
+        // 文件夹或支持的文件类型
+        return isDir || imageExts.includes(ext) || archiveExts.includes(ext);
+      });
+      
+      // 使用前端调度器入队
+      enqueueDirectoryThumbnails(path, itemsNeedingThumbnails);
+      console.log(`⚡ 已将 ${itemsNeedingThumbnails.length} 个项目入队（前端调度）`);
+    };
+    
+    // 延迟执行，避免阻塞目录加载
+    setTimeout(lastEnqueueTimeout, 100);
     
     // 预加载相邻目录
     navigationHistory.prefetchAdjacentPaths(path);

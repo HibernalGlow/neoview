@@ -31,9 +31,9 @@ export interface ThumbnailCache {
 class ThumbnailManager {
   private config: ThumbnailConfig = {
     // 根据 CPU 核心数动态调整（前端使用 navigator.hardwareConcurrency）
-    // 拉满CPU性能，提高并发数
-    maxConcurrentLocal: Math.max(16, (navigator.hardwareConcurrency || 4) * 4), // 4倍核心数，最少16
-    maxConcurrentArchive: Math.max(8, (navigator.hardwareConcurrency || 4) * 2), // 2倍核心数，最少8
+    // 拉满CPU性能，参考 NeeView 的处理方式
+    maxConcurrentLocal: Math.max(32, (navigator.hardwareConcurrency || 4) * 8), // 8倍核心数，最少32，拉满速度
+    maxConcurrentArchive: Math.max(16, (navigator.hardwareConcurrency || 4) * 4), // 4倍核心数，最少16
     thumbnailSize: 256,
   };
 
@@ -49,9 +49,9 @@ class ThumbnailManager {
   // 回调函数
   private onThumbnailReady?: (path: string, dataUrl: string) => void;
 
-  // 任务上限管理
-  private readonly MAX_QUEUE_SIZE = 5000; // 最大队列大小（增加到5000）
-  private readonly MAX_PROCESSING = 100; // 最大并发处理数（增加到100）
+  // 任务上限管理（参考 NeeView，拉满速度）
+  private readonly MAX_QUEUE_SIZE = 10000; // 最大队列大小（增加到10000）
+  private readonly MAX_PROCESSING = 200; // 最大并发处理数（增加到200，拉满CPU）
 
   constructor() {
     // 初始化缩略图管理器
@@ -360,9 +360,9 @@ class ThumbnailManager {
       timestamp: Date.now(),
     });
 
-    // 5. 立即处理高优先级任务（不等待，异步执行）
-    if (priority === 'immediate') {
-      // 立即触发队列处理，确保 immediate 任务优先
+    // 5. 立即处理高优先级任务和当前目录任务（不等待，异步执行）
+    if (priority === 'immediate' || path.startsWith(this.currentDirectory)) {
+      // 立即触发队列处理，确保 immediate 和当前目录任务优先
       setTimeout(() => this.processQueue(), 0);
       // 异步处理，不阻塞
       this.processTask(pathKey).catch(err => {

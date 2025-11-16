@@ -11,6 +11,7 @@ use std::sync::mpsc;
 use std::collections::HashMap;
 
 /// 缩略图生成器配置
+#[derive(Clone)]
 pub struct ThumbnailGeneratorConfig {
     /// 缩略图最大宽度
     pub max_width: u32,
@@ -167,7 +168,7 @@ impl ThumbnailGenerator {
         Ok(output)
     }
 
-    /// 生成单个文件的缩略图
+    /// 生成单个文件的缩略图（第一次返回原图 blob，后台生成 webp 并保存）
     pub fn generate_file_thumbnail(
         &self,
         file_path: &str,
@@ -181,7 +182,7 @@ impl ThumbnailGenerator {
         let path_key = self.build_path_key(file_path, None);
         let ghash = Self::generate_hash(&path_key, file_size);
         
-        // 检查数据库缓存
+        // 检查数据库缓存（如果有 webp 缓存，直接返回）
         if let Ok(Some(cached)) = self.db.load_thumbnail(&path_key, file_size, ghash) {
             // 更新访问时间
             let _ = self.db.update_access_time(&path_key);
@@ -223,19 +224,42 @@ impl ThumbnailGenerator {
             .map_err(|e| format!("从内存加载图像失败: {}", e))?
         };
         
-        // 生成 webp 缩略图
-        let thumbnail_data = self.generate_webp_thumbnail(img)?;
+        // 第一次：快速生成简单缩放的 JPEG 缩略图（立即返回显示）
+        let (width, height) = img.dimensions();
+        let scale = (self.config.max_width as f32 / width as f32)
+            .min(self.config.max_height as f32 / height as f32)
+            .min(1.0);
+        let new_width = (width as f32 * scale) as u32;
+        let new_height = (height as f32 * scale) as u32;
+        let thumbnail_img = img.thumbnail(new_width, new_height);
         
-        // 先返回缩略图数据（立即显示），后台异步保存到数据库
+        // 编码为 JPEG（快速，用于立即显示）
+        let mut jpeg_output = Vec::new();
+        thumbnail_img.write_to(
+            &mut Cursor::new(&mut jpeg_output),
+            ImageFormat::Jpeg,
+        ).map_err(|e| format!("编码 JPEG 失败: {}", e))?;
+        
+        // 后台异步生成 webp 并保存到数据库
         let db_clone = Arc::clone(&self.db);
         let path_key_clone = path_key.clone();
-        let thumbnail_data_clone = thumbnail_data.clone();
         let file_size_clone = file_size;
         let ghash_clone = ghash;
+        let img_clone = thumbnail_img.clone();
+        let config_clone = self.config.clone();
         
         std::thread::spawn(move || {
-            println!("💾 后台开始保存文件缩略图到数据库: {} ({} bytes)", path_key_clone, thumbnail_data_clone.len());
-            match db_clone.save_thumbnail(&path_key_clone, file_size_clone, ghash_clone, &thumbnail_data_clone) {
+            // 生成 webp 缩略图
+            let webp_data = match Self::generate_webp_thumbnail_static(&img_clone, &config_clone) {
+                Ok(data) => data,
+                Err(e) => {
+                    eprintln!("❌ 后台生成 webp 缩略图失败: {} - {}", path_key_clone, e);
+                    return;
+                }
+            };
+            
+            println!("💾 后台开始保存文件缩略图到数据库: {} ({} bytes)", path_key_clone, webp_data.len());
+            match db_clone.save_thumbnail(&path_key_clone, file_size_clone, ghash_clone, &webp_data) {
                 Ok(_) => {
                     println!("✅ 文件缩略图已成功保存到数据库: {}", path_key_clone);
                 }
@@ -245,7 +269,36 @@ impl ThumbnailGenerator {
             }
         });
         
-        Ok(thumbnail_data)
+        // 立即返回 JPEG 缩略图（用于显示）
+        Ok(jpeg_output)
+    }
+    
+    /// 静态方法：生成 webp 缩略图（用于后台线程）
+    fn generate_webp_thumbnail_static(
+        img: &DynamicImage,
+        config: &ThumbnailGeneratorConfig,
+    ) -> Result<Vec<u8>, String> {
+        let (width, height) = img.dimensions();
+        
+        // 计算缩放比例，保持宽高比
+        let scale = (config.max_width as f32 / width as f32)
+            .min(config.max_height as f32 / height as f32)
+            .min(1.0);
+        
+        let new_width = (width as f32 * scale) as u32;
+        let new_height = (height as f32 * scale) as u32;
+        
+        // 缩放图像（使用 thumbnail 方法保持宽高比）
+        let thumbnail = img.thumbnail(new_width, new_height);
+        
+        // 编码为 webp
+        let mut output = Vec::new();
+        thumbnail.write_to(
+            &mut Cursor::new(&mut output),
+            ImageFormat::WebP,
+        ).map_err(|e| format!("编码 WebP 失败: {}", e))?;
+        
+        Ok(output)
     }
 
     /// 从压缩包生成缩略图（流式处理，找到第一张图就停止）
@@ -332,21 +385,44 @@ impl ThumbnailGenerator {
                     
                     println!("✅ 图像解码成功: {}x{}", img.width(), img.height());
                     
-                    // 生成 webp 缩略图
-                    let thumbnail_data = self.generate_webp_thumbnail(img)?;
+                    // 第一次：快速生成简单缩放的 JPEG 缩略图（立即返回显示）
+                    let (width, height) = img.dimensions();
+                    let scale = (self.config.max_width as f32 / width as f32)
+                        .min(self.config.max_height as f32 / height as f32)
+                        .min(1.0);
+                    let new_width = (width as f32 * scale) as u32;
+                    let new_height = (height as f32 * scale) as u32;
+                    let thumbnail_img = img.thumbnail(new_width, new_height);
                     
-                    println!("✅ 缩略图生成成功: {} bytes", thumbnail_data.len());
+                    // 编码为 JPEG（快速，用于立即显示）
+                    let mut jpeg_output = Vec::new();
+                    thumbnail_img.write_to(
+                        &mut Cursor::new(&mut jpeg_output),
+                        ImageFormat::Jpeg,
+                    ).map_err(|e| format!("编码 JPEG 失败: {}", e))?;
                     
-                    // 先返回缩略图数据（立即显示），后台异步保存到数据库
+                    println!("✅ JPEG 缩略图生成成功: {} bytes", jpeg_output.len());
+                    
+                    // 后台异步生成 webp 并保存到数据库
                     let db_clone = Arc::clone(&self.db);
                     let path_key_clone = path_key.clone();
-                    let thumbnail_data_clone = thumbnail_data.clone();
                     let archive_size_clone = archive_size;
                     let ghash_clone = ghash;
+                    let img_clone = thumbnail_img.clone();
+                    let config_clone = self.config.clone();
                     
                     std::thread::spawn(move || {
-                        println!("💾 后台开始保存压缩包缩略图到数据库: {} ({} bytes)", path_key_clone, thumbnail_data_clone.len());
-                        match db_clone.save_thumbnail(&path_key_clone, archive_size_clone, ghash_clone, &thumbnail_data_clone) {
+                        // 生成 webp 缩略图
+                        let webp_data = match Self::generate_webp_thumbnail_static(&img_clone, &config_clone) {
+                            Ok(data) => data,
+                            Err(e) => {
+                                eprintln!("❌ 后台生成 webp 缩略图失败: {} - {}", path_key_clone, e);
+                                return;
+                            }
+                        };
+                        
+                        println!("💾 后台开始保存压缩包缩略图到数据库: {} ({} bytes)", path_key_clone, webp_data.len());
+                        match db_clone.save_thumbnail(&path_key_clone, archive_size_clone, ghash_clone, &webp_data) {
                             Ok(_) => {
                                 println!("✅ 压缩包缩略图已成功保存到数据库: {}", path_key_clone);
                             }
@@ -356,7 +432,8 @@ impl ThumbnailGenerator {
                         }
                     });
                     
-                    return Ok(thumbnail_data);
+                    // 立即返回 JPEG 缩略图（用于显示）
+                    return Ok(jpeg_output);
                 }
             }
         }

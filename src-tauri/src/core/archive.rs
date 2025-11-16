@@ -1,6 +1,6 @@
 use std::fs::{self, File};
 use std::io::{Read, Cursor};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use zip::ZipArchive;
@@ -293,7 +293,7 @@ impl ArchiveManager {
         let float_buf = fb.buf();
 
         // 根据通道数创建对应的图像
-        if channels == 1 {
+        let img = if channels == 1 {
             let gray_data: Vec<u8> = float_buf
                 .iter()
                 .map(|&v| (v.clamp(0.0, 1.0) * 255.0) as u8)
@@ -783,6 +783,45 @@ impl ArchiveManager {
                 blob_url,
             });
         }
+    }
+
+    /// 获取首图 blob URL（带缓存）
+    pub fn get_first_image_blob(&self, archive_path: &Path) -> Result<String, String> {
+        let archive_key = Self::normalize_archive_key(archive_path);
+        let metadata = self.get_archive_metadata(archive_path)?;
+
+        // 检查缓存
+        if let Ok(cache) = self.first_image_cache.lock() {
+            if let Some(entry) = cache.get(&archive_key) {
+                if entry.modified == metadata.modified && entry.file_size == metadata.file_size {
+                    if let Some(ref blob_url) = entry.blob_url {
+                        println!("🎯 首图 blob 缓存命中: {} -> {}", archive_path.display(), blob_url);
+                        return Ok(blob_url.clone());
+                    }
+                }
+            }
+        }
+
+        // 缓存未命中，需要提取
+        let inner_path = match self.find_first_image_entry(archive_path)? {
+            Some(path) => path,
+            None => return Err("压缩包中没有图片".to_string()),
+        };
+
+        // 提取图片数据
+        let image_data = self.extract_file(archive_path, &inner_path)?;
+        let mime_type = self.detect_image_mime_type(&inner_path);
+        
+        // 生成 blob URL（这里使用 base64 data URL 作为模拟）
+        use base64::Engine;
+        let base64_data = base64::engine::general_purpose::STANDARD.encode(&image_data);
+        let blob_url = format!("data:{};base64,{}", mime_type, base64_data);
+
+        // 更新缓存
+        self.store_cached_first_image(archive_key, metadata, Some(inner_path), Some(blob_url.clone()));
+
+        println!("🎯 首图 blob 生成完成: {} -> {} bytes", archive_path.display(), image_data.len());
+        Ok(blob_url)
     }
 }
 

@@ -929,6 +929,36 @@ pub async fn debug_avif(
 
 
 
+/// 快速获取首图 blob URL（带缓存）
+/// 返回可立即显示的 data URL
+#[command]
+pub async fn get_archive_first_image_blob(
+    archive_path: String,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<String, String> {
+    println!("⚡ [Rust] 获取压缩包首图 blob: {}", archive_path);
+    let path = PathBuf::from(&archive_path);
+    
+    // 等待管理器初始化
+    if let Err(e) = ensure_manager_ready(&state, 5000).await {
+        return Err(e);
+    }
+    
+    // 使用 ArchiveManager 获取首图 blob
+    use crate::core::archive::ArchiveManager;
+    let archive_manager = ArchiveManager::new();
+    match archive_manager.get_first_image_blob(&path) {
+        Ok(blob_url) => {
+            println!("✅ [Rust] 首图 blob 获取成功: {}", archive_path);
+            Ok(blob_url)
+        }
+        Err(e) => {
+            println!("❌ [Rust] 首图 blob 获取失败: {}", e);
+            Err(e)
+        }
+    }
+}
+
 /// 快速获取原图（使用首图索引表）
 /// 返回原图的二进制数据
 #[command]
@@ -1200,6 +1230,42 @@ pub async fn generate_archive_thumbnail_async(
     
     println!("⚡ [Rust] 异步生成已启动，立即返回");
     Ok("generating".to_string()) // 返回特殊值表示正在生成
+}
+
+/// 提交压缩包预取任务
+/// 在后台预扫描压缩包，为后续缩略图生成做准备
+#[command]
+pub async fn enqueue_archive_preload(
+    archive_path: String,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<&'static str, String> {
+    println!("📤 [Rust] 提交压缩包预取任务: {}", archive_path);
+    let path = PathBuf::from(&archive_path);
+    
+    // 等待管理器初始化
+    if let Err(e) = ensure_manager_ready(&state, 5000).await {
+        return Err(e);
+    }
+    
+    // 获取异步处理器
+    let processor = {
+        let guard = state.async_processor.lock()
+            .map_err(|_| "无法获取处理器锁".to_string())?;
+        match (*guard).clone() {
+            Some(p) => p,
+            None => return Err("异步处理器未初始化".to_string()),
+        }
+    };
+    
+    // 提交预取任务
+    use crate::core::async_thumbnail_processor::TaskPriority;
+    if let Err(e) = processor.submit_preload_task(path, TaskPriority::Normal).await {
+        println!("❌ [Rust] 提交预取任务失败: {}", e);
+        return Err(format!("提交预取任务失败: {}", e));
+    }
+    
+    println!("✅ [Rust] 预取任务已提交");
+    Ok("preload_submitted")
 }
 
 /// 设置前台源目录

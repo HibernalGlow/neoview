@@ -70,6 +70,12 @@ pub struct ScanTask {
     pub response_tx: Option<tokio::sync::oneshot::Sender<ScanResult>>,
 }
 
+/// 预取任务
+pub struct PreloadTask {
+    pub archive_path: PathBuf,
+    pub priority: TaskPriority,
+}
+
 /// 提取任务（第二阶段）
 pub struct ExtractTask {
     pub archive_path: PathBuf,
@@ -141,6 +147,9 @@ pub struct AsyncThumbnailProcessor {
     /// 提取任务发送器和接收器
     extract_tx: mpsc::UnboundedSender<ExtractTask>,
     extract_rx: Arc<RwLock<mpsc::UnboundedReceiver<ExtractTask>>>,
+    /// 预取任务发送器和接收器
+    preload_tx: mpsc::UnboundedSender<PreloadTask>,
+    preload_rx: Arc<RwLock<mpsc::UnboundedReceiver<PreloadTask>>>,
     /// 首图缓存（archive_path -> inner_path）
     first_image_cache: Arc<RwLock<HashMap<PathBuf, String>>>,
     /// 正在处理的任务
@@ -195,6 +204,7 @@ impl AsyncThumbnailProcessor {
         let (task_tx, task_rx) = mpsc::unbounded_channel();
         let (scan_tx, scan_rx) = mpsc::unbounded_channel();
         let (extract_tx, extract_rx) = mpsc::unbounded_channel();
+        let (preload_tx, preload_rx) = mpsc::unbounded_channel();
         
         // 分阶段并发控制：扫描阶段低并发，解码阶段高并发
         let scan_max = 16;  // 扫描上限 16
@@ -232,6 +242,8 @@ impl AsyncThumbnailProcessor {
             scan_rx: Arc::new(RwLock::new(scan_rx)),
             extract_tx,
             extract_rx: Arc::new(RwLock::new(extract_rx)),
+            preload_tx,
+            preload_rx: Arc::new(RwLock::new(preload_rx)),
             first_image_cache: Arc::new(RwLock::new(HashMap::new())),
             processing_tasks: Arc::new(RwLock::new(HashMap::new())),
             scan_queue_paths: Arc::new(RwLock::new(Vec::new())),
@@ -290,6 +302,18 @@ impl AsyncThumbnailProcessor {
                 println!("📁 普通处理器 {} 已启动", i);
                 processor.process_tasks_loop(Arc::clone(&processor.task_rx)).await;
                 println!("📁 普通处理器 {} 已停止", i);
+            });
+        }
+        
+        // 启动预取循环
+        let preload_workers = 2;
+        for i in 0..preload_workers {
+            let processor = Arc::new(self.clone());
+            
+            tokio::spawn(async move {
+                println!("🔄 预取处理器 {} 已启动", i);
+                processor.run_preload_loop().await;
+                println!("🔄 预取处理器 {} 已停止", i);
             });
         }
         
@@ -1165,6 +1189,63 @@ impl AsyncThumbnailProcessor {
         Ok(())
     }
     
+    /// 运行预取循环
+    async fn run_preload_loop(&self) {
+        loop {
+            // 获取下一个预取任务
+            let task = {
+                let mut rx = self.preload_rx.write().await;
+                match rx.recv().await {
+                    Some(task) => task,
+                    None => {
+                        println!("📭 预取任务通道已关闭，处理器退出");
+                        break;
+                    }
+                }
+            };
+            
+            println!("🔄 开始预取: {}", task.archive_path.display());
+            
+            // 检查缓存是否已存在
+            let should_process = {
+                use crate::core::archive::ArchiveManager;
+                let archive_manager = ArchiveManager::new();
+                
+                // 检查首图缓存
+                match archive_manager.find_first_image_entry(&task.archive_path) {
+                    Ok(Some(_)) => {
+                        println!("✅ 预取跳过（已缓存）: {}", task.archive_path.display());
+                        false
+                    }
+                    Ok(None) => true,
+                    Err(_) => true,
+                }
+            };
+            
+            if !should_process {
+                continue;
+            }
+            
+            // 提交扫描任务
+            if let Err(e) = self.submit_scan_task(task.archive_path.clone(), None).await {
+                println!("❌ 预取提交扫描任务失败: {}", e);
+            }
+        }
+    }
+
+    /// 提交预取任务
+    pub async fn submit_preload_task(&self, archive_path: PathBuf, priority: TaskPriority) -> Result<(), String> {
+        let task = PreloadTask {
+            archive_path,
+            priority,
+        };
+        
+        self.preload_tx.send(task)
+            .map_err(|e| format!("提交预取任务失败: {}", e))?;
+        
+        Ok(())
+    }
+
     /// 设置应用句柄（用于发送事件）
     pub fn set_app_handle(&self, app_handle: tauri::AppHandle) {
         if let Ok(mut handle) = self.app_handle.lock() {

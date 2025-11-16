@@ -565,7 +565,7 @@ impl ThumbnailGenerator {
                             println!("📁 父文件夹没有缩略图记录，复制当前缩略图: {} (level {})", parent_path_str, level);
                         }
                         
-                        match db.save_thumbnail(&parent_path_key, parent_size, parent_ghash, thumbnail_data) {
+                        match db.save_thumbnail_with_category(&parent_path_key, parent_size, parent_ghash, thumbnail_data, Some("folder")) {
                             Ok(_) => {
                                 if cfg!(debug_assertions) {
                                     println!("✅ 已为父文件夹保存缩略图: {} (level {})", parent_path_str, level);

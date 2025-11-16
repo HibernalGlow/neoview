@@ -210,6 +210,7 @@ pub async fn load_thumbnail_from_db(
     path: String,
     size: i64,
     ghash: i32,
+    category: Option<String>,
 ) -> Result<Option<String>, String> {
     let state = app.state::<ThumbnailState>();
     
@@ -220,7 +221,7 @@ pub async fn load_thumbnail_from_db(
         path
     };
     
-    match state.db.load_thumbnail(&path_key, size, ghash) {
+    match state.db.load_thumbnail_with_category(&path_key, size, ghash, category.as_deref()) {
         Ok(Some(data)) => {
             // 注册到 BlobRegistry，返回 blob key
             use std::time::Duration;

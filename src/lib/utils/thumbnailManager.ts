@@ -220,21 +220,30 @@ class ThumbnailManager {
   /**
    * 从数据库加载缩略图（返回 blob URL）
    */
-  private async loadFromDb(path: string, innerPath?: string): Promise<string | null> {
+  private async loadFromDb(path: string, innerPath?: string, isFolder?: boolean): Promise<string | null> {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const pathKey = this.buildPathKey(path, innerPath);
       
-      // 获取文件大小
-      const metadata = await invoke<{ size: number }>('get_file_info', { path });
-      const size = metadata.size || 0;
+      // 获取文件/文件夹大小（文件夹可能返回 0 或目录项数量）
+      let size = 0;
+      try {
+        const metadata = await invoke<{ size: number }>('get_file_info', { path });
+        size = metadata.size || 0;
+      } catch (error) {
+        // 如果获取文件信息失败（可能是文件夹），使用 0
+        console.debug('获取文件信息失败，使用默认大小 0:', path, error);
+        size = 0;
+      }
       const ghash = await this.generateHash(pathKey, size);
 
       // 从数据库加载（返回 blob key）
+      // 如果是文件夹，指定 category='folder' 进行查询
       const blobKey = await invoke<string | null>('load_thumbnail_from_db', {
         path: pathKey,
         size,
         ghash,
+        category: isFolder ? 'folder' : undefined,
       });
 
       if (blobKey) {
@@ -345,8 +354,11 @@ class ThumbnailManager {
 
     // 2. 尝试从数据库加载（不依赖索引缓存，直接尝试）
     // 这样可以立即显示已缓存的缩略图，不需要等待索引预加载
+    // 判断是否为文件夹：没有 innerPath 且不是压缩包，且路径没有扩展名
+    const isFolder = !innerPath && !isArchive && !path.match(/\.(jpg|jpeg|png|gif|bmp|webp|avif|jxl|tiff|tif|zip|cbz|rar|cbr|mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/i);
+    
     try {
-      const dbBlobUrl = await this.loadFromDb(path, innerPath);
+      const dbBlobUrl = await this.loadFromDb(path, innerPath, isFolder);
       if (dbBlobUrl) {
         // loadFromDb 已经返回 blobUrl，不需要再转换
         // 更新缓存和索引缓存
@@ -358,7 +370,11 @@ class ThumbnailManager {
         this.dbIndexCache.set(pathKey, true);
         // 只在调试模式下打印日志
         if (import.meta.env.DEV) {
-          console.log(`✅ 从数据库加载缩略图: ${pathKey}`);
+          console.log(`✅ 从数据库加载缩略图: ${pathKey}${isFolder ? ' (文件夹)' : ''}`);
+        }
+        // 通知回调（重要：确保文件夹缩略图能正确显示）
+        if (this.onThumbnailReady) {
+          this.onThumbnailReady(path, dbBlobUrl);
         }
         return dbBlobUrl;
       }
@@ -372,8 +388,10 @@ class ThumbnailManager {
 
     // 3. 文件夹处理：只从数据库加载，不主动生成（避免性能问题）
     // 文件夹缩略图由反向查找策略自动更新（当子文件/压缩包生成缩略图时）
-    // 注意：这里无法直接判断是否为文件夹，但 VirtualizedFileList 会传递 isDir 信息
-    // 文件夹的缩略图只从数据库加载，如果数据库中没有，返回 null（不主动查找）
+    if (isFolder) {
+      // 文件夹的缩略图只从数据库加载，如果数据库中没有，返回 null（不主动查找）
+      return null;
+    }
 
     // 4. 如果任务已在处理中，等待
     if (this.processingTasks.has(pathKey)) {

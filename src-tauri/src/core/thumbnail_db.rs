@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const DB_FORMAT_VERSION: &str = "2.0";
+const DB_FORMAT_VERSION: &str = "2.1"; // 添加 category 字段
 
 /// 缩略图数据库管理器
 pub struct ThumbnailDb {
@@ -90,32 +90,104 @@ impl ThumbnailDb {
 
         // 检查格式版本
         let format = Self::load_property(conn, "format")?;
-        if format.is_some() && format.as_deref() != Some(DB_FORMAT_VERSION) {
-            // 格式不匹配，需要重建数据库
-            return Err(rusqlite::Error::SqliteFailure(
-                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_MISUSE),
-                Some("Database format mismatch".to_string()),
-            ));
+        let current_format = format.as_deref().unwrap_or("1.0");
+        
+        if current_format != DB_FORMAT_VERSION {
+            // 版本不匹配，执行迁移
+            println!("🔄 数据库版本迁移: {} -> {}", current_format, DB_FORMAT_VERSION);
+            
+            // 从 2.0 迁移到 2.1：添加 category 字段
+            if current_format == "2.0" && DB_FORMAT_VERSION == "2.1" {
+                // 检查是否已有 category 字段
+                let has_category = {
+                    let mut stmt = conn.prepare("PRAGMA table_info(thumbs)")?;
+                    let rows = stmt.query_map([], |row| {
+                        let name: String = row.get(1)?;
+                        Ok(name)
+                    })?;
+                    let mut found = false;
+                    for row in rows {
+                        if let Ok(name) = row {
+                            if name == "category" {
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                    found
+                };
+
+                if !has_category {
+                    println!("🔄 添加 category 字段...");
+                    conn.execute("ALTER TABLE thumbs ADD COLUMN category TEXT DEFAULT 'file'", [])?;
+                    // 更新现有记录：根据 key 判断是否为文件夹（简单判断：没有扩展名）
+                    conn.execute(
+                        "UPDATE thumbs SET category = 'folder' WHERE key NOT LIKE '%.%' AND key NOT LIKE '%::%'",
+                        [],
+                    )?;
+                    println!("✅ category 字段已添加并更新现有记录");
+                }
+            } else {
+                // 其他版本迁移可以在这里添加
+                println!("⚠️ 未知的版本迁移路径: {} -> {}", current_format, DB_FORMAT_VERSION);
+            }
+            
+            // 更新格式版本
+            Self::save_property(conn, "format", DB_FORMAT_VERSION)?;
+            println!("✅ 数据库版本已更新到 {}", DB_FORMAT_VERSION);
+        } else {
+            // 版本匹配，但需要检查是否有 category 字段（兼容性检查）
+            let has_category = {
+                let mut stmt = conn.prepare("PRAGMA table_info(thumbs)")?;
+                let rows = stmt.query_map([], |row| {
+                    let name: String = row.get(1)?;
+                    Ok(name)
+                })?;
+                let mut found = false;
+                for row in rows {
+                    if let Ok(name) = row {
+                        if name == "category" {
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                found
+            };
+
+            if !has_category {
+                println!("🔄 检测到缺少 category 字段，添加中...");
+                conn.execute("ALTER TABLE thumbs ADD COLUMN category TEXT DEFAULT 'file'", [])?;
+                conn.execute(
+                    "UPDATE thumbs SET category = 'folder' WHERE key NOT LIKE '%.%' AND key NOT LIKE '%::%'",
+                    [],
+                )?;
+                println!("✅ category 字段已添加");
+            }
         }
 
-        // 设置格式版本
-        Self::save_property(conn, "format", DB_FORMAT_VERSION)?;
-
-        // 创建缩略图表
+        // 创建缩略图表（添加 category 字段用于区分文件和文件夹）
         conn.execute(
             "CREATE TABLE IF NOT EXISTS thumbs (
                 key TEXT NOT NULL PRIMARY KEY,
                 size INTEGER,
                 date INTEGER,
                 ghash INTEGER,
+                category TEXT DEFAULT 'file',
                 value BLOB
             )",
             [],
         )?;
 
+        // category 字段的添加已在版本检查中处理，这里不需要重复
+
         // 创建索引以提高查询性能
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_thumbs_key ON thumbs(key)",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_thumbs_category ON thumbs(category)",
             [],
         )?;
 
@@ -161,26 +233,47 @@ impl ThumbnailDb {
         ghash: i32,
         thumbnail_data: &[u8],
     ) -> SqliteResult<()> {
+        self.save_thumbnail_with_category(key, size, ghash, thumbnail_data, None)
+    }
+
+    /// 保存缩略图（带类别）
+    pub fn save_thumbnail_with_category(
+        &self,
+        key: &str,
+        size: i64,
+        ghash: i32,
+        thumbnail_data: &[u8],
+        category: Option<&str>,
+    ) -> SqliteResult<()> {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
         
         let date = Self::current_timestamp();
+        
+        // 自动判断类别：如果没有扩展名且不是压缩包内部路径，则为文件夹
+        let cat = category.unwrap_or_else(|| {
+            if !key.contains("::") && !key.contains(".") {
+                "folder"
+            } else {
+                "file"
+            }
+        });
 
         // 使用 prepare + execute 避免 "Execute returned results" 错误
         let mut stmt = conn.prepare(
-            "INSERT OR REPLACE INTO thumbs (key, size, date, ghash, value) VALUES (?1, ?2, ?3, ?4, ?5)"
+            "INSERT OR REPLACE INTO thumbs (key, size, date, ghash, category, value) VALUES (?1, ?2, ?3, ?4, ?5, ?6)"
         )?;
         
         // execute 返回受影响的行数
-        let _rows_affected = stmt.execute(params![key, size, date, ghash, thumbnail_data])?;
+        let _rows_affected = stmt.execute(params![key, size, date, ghash, cat, thumbnail_data])?;
         
         // 释放语句，确保数据已写入
         drop(stmt);
         
         // 只在调试模式下打印日志
         if cfg!(debug_assertions) {
-            println!("✅ 缩略图已保存到数据库: key={}, size={} bytes", key, thumbnail_data.len());
+            println!("✅ 缩略图已保存到数据库: key={}, category={}, size={} bytes", key, cat, thumbnail_data.len());
         }
         
         Ok(())
@@ -193,31 +286,56 @@ impl ThumbnailDb {
         size: i64,
         ghash: i32,
     ) -> SqliteResult<Option<Vec<u8>>> {
+        self.load_thumbnail_with_category(key, size, ghash, None)
+    }
+
+    /// 加载缩略图（带类别过滤）
+    pub fn load_thumbnail_with_category(
+        &self,
+        key: &str,
+        size: i64,
+        ghash: i32,
+        category: Option<&str>,
+    ) -> SqliteResult<Option<Vec<u8>>> {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
-
-        let mut stmt = conn.prepare(
-            "SELECT value FROM thumbs WHERE key = ?1 AND size = ?2 AND ghash = ?3"
-        )?;
-
-        let mut rows = stmt.query_map(params![key, size, ghash], |row| {
-            Ok(row.get::<_, Vec<u8>>(0)?)
-        })?;
-
-        if let Some(row) = rows.next() {
-            let data = row?;
-            // 只在调试模式下打印日志
-            if cfg!(debug_assertions) {
-                println!("✅ 从数据库加载缩略图: key={}, size={} bytes", key, data.len());
-            }
-            Ok(Some(data))
+        
+        // 如果指定了类别，只在对应类别中搜索
+        let result = if let Some(cat) = category {
+            let mut stmt = conn.prepare(
+                "SELECT value FROM thumbs WHERE key = ?1 AND size = ?2 AND ghash = ?3 AND category = ?4"
+            )?;
+            let mut rows = stmt.query_map(params![key, size, ghash, cat], |row| {
+                Ok(row.get::<_, Vec<u8>>(0)?)
+            })?;
+            rows.next().transpose()
         } else {
-            // 只在调试模式下打印日志
-            if cfg!(debug_assertions) {
-                println!("📭 数据库中没有找到缩略图: key={}", key);
+            let mut stmt = conn.prepare(
+                "SELECT value FROM thumbs WHERE key = ?1 AND size = ?2 AND ghash = ?3"
+            )?;
+            let mut rows = stmt.query_map(params![key, size, ghash], |row| {
+                Ok(row.get::<_, Vec<u8>>(0)?)
+            })?;
+            rows.next().transpose()
+        };
+
+        match result {
+            Ok(Some(data)) => {
+                // 只在调试模式下打印日志
+                if cfg!(debug_assertions) {
+                    println!("✅ 从数据库加载缩略图: key={}, category={:?}, size={} bytes", key, category, data.len());
+                }
+                Ok(Some(data))
             }
-            Ok(None)
+            Ok(None) => {
+                // 只在调试模式下打印日志
+                if cfg!(debug_assertions) {
+                    println!("📭 数据库中没有找到缩略图: key={}, category={:?}", key, category);
+                }
+                Ok(None)
+            }
+            Err(e) => Err(e),
         }
     }
 
@@ -252,15 +370,33 @@ impl ThumbnailDb {
 
     /// 检查缩略图是否存在
     pub fn has_thumbnail(&self, key: &str, size: i64, ghash: i32) -> SqliteResult<bool> {
+        self.has_thumbnail_with_category(key, size, ghash, None)
+    }
+
+    /// 检查缩略图是否存在（带类别过滤）
+    pub fn has_thumbnail_with_category(
+        &self,
+        key: &str,
+        size: i64,
+        ghash: i32,
+        category: Option<&str>,
+    ) -> SqliteResult<bool> {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
 
-        let mut stmt = conn.prepare(
-            "SELECT 1 FROM thumbs WHERE key = ?1 AND size = ?2 AND ghash = ?3 LIMIT 1"
-        )?;
-
-        let exists = stmt.exists(params![key, size, ghash])?;
+        let exists = if let Some(cat) = category {
+            let mut stmt = conn.prepare(
+                "SELECT 1 FROM thumbs WHERE key = ?1 AND size = ?2 AND ghash = ?3 AND category = ?4 LIMIT 1"
+            )?;
+            stmt.exists(params![key, size, ghash, cat])?
+        } else {
+            let mut stmt = conn.prepare(
+                "SELECT 1 FROM thumbs WHERE key = ?1 AND size = ?2 AND ghash = ?3 LIMIT 1"
+            )?;
+            stmt.exists(params![key, size, ghash])?
+        };
+        
         Ok(exists)
     }
 

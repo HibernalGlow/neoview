@@ -11,7 +11,8 @@
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { onMount } from 'svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
-	import { runThumbnailTests } from '$lib/utils/thumbnail-test';
+	// TODO: 缩略图测试功能已移除，待重新实现
+	// import { runThumbnailTests } from '$lib/utils/thumbnail-test';
 
 	interface Thumbnail {
 		index: number;
@@ -127,8 +128,10 @@
 		testResults = []; // 重置结果
 
 		try {
-			const results = await runThumbnailTests();
-			testResults = results || [];
+			// TODO: 缩略图测试功能已移除，待重新实现
+			// const results = await runThumbnailTests();
+			testResults = [];
+			console.warn('缩略图测试功能已移除，待重新实现');
 		} catch (error) {
 			console.error('测试运行失败:', error);
 			testResults = [{

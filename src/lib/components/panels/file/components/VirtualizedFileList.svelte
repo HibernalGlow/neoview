@@ -1,7 +1,21 @@
 <script lang="ts">
   import { createEventDispatcher, onMount, onDestroy } from 'svelte';
   import type { FsItem } from '$lib/types';
-  import { enqueueVisible, bumpPriority, toRelativeKey } from '$lib/utils/thumbnailManager';
+  // TODO: 缩略图功能已移除，待重新实现
+  // import { enqueueVisible, bumpPriority, toRelativeKey } from '$lib/utils/thumbnailManager';
+  
+  // 临时占位函数
+  function toRelativeKey(path: string): string {
+    return path.replace(/\\/g, '/');
+  }
+  
+  function enqueueVisible(path: string, items: any[], options?: any): void {
+    // TODO: 实现缩略图队列
+  }
+  
+  function bumpPriority(path: string): void {
+    // TODO: 实现优先级提升
+  }
 
   import { Folder, File, Image, FileArchive } from '@lucide/svelte';
   import { writable, type Writable } from 'svelte/store';
@@ -489,7 +503,7 @@
               <div class="w-full text-center">
                 <div class="truncate text-sm font-medium">{item.name}</div>
                 <div class="text-xs text-gray-500">
-                  {formatSize(item.size, item.is_dir)}
+                  {formatSize(item.size, item.isDir)}
                 </div>
               </div>
             </div>

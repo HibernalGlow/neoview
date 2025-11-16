@@ -16,9 +16,44 @@
   import * as ContextMenu from '$lib/components/ui/context-menu';
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
   import { homeDir } from '@tauri-apps/api/path';
-  import { configureThumbnailManager, itemIsDirectory, itemIsImage, toRelativeKey, enqueueDirectoryThumbnails, cancelBySource, enqueueVisible } from '$lib/utils/thumbnailManager';
-  import { cancelFolderTasks } from '$lib/api';
-  import { thumbnailStore, setupThumbnailEventListener } from '$lib/thumbnailManager';
+  // TODO: 缩略图功能已移除，待重新实现
+  // import { configureThumbnailManager, itemIsDirectory, itemIsImage, toRelativeKey, enqueueDirectoryThumbnails, cancelBySource, enqueueVisible } from '$lib/utils/thumbnailManager';
+  // import { cancelFolderTasks } from '$lib/api';
+  // import { thumbnailStore, setupThumbnailEventListener } from '$lib/thumbnailManager';
+  
+  // 临时占位函数
+  function itemIsDirectory(item: any): boolean {
+    return item.isDir || item.is_directory;
+  }
+  
+  function itemIsImage(item: any): boolean {
+    return item.is_image || false;
+  }
+  
+  function toRelativeKey(path: string): string {
+    return path.replace(/\\/g, '/');
+  }
+  
+  function cancelBySource(source: string): void {
+    // TODO: 实现取消任务
+  }
+  
+  function enqueueVisible(path: string, items: any[], options?: any): void {
+    // TODO: 实现缩略图队列
+  }
+  
+  function configureThumbnailManager(config: any): void {
+    // TODO: 实现缩略图管理器配置
+  }
+  
+  function enqueueDirectoryThumbnails(path: string, items: any[]): void {
+    // TODO: 实现目录缩略图入队
+  }
+  
+  async function cancelFolderTasks(path: string): Promise<number> {
+    // TODO: 实现取消文件夹任务
+    return 0;
+  }
 import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
 import ThumbnailsPanel from './ThumbnailsPanel.svelte';
 import { getPerformanceSettings } from '$lib/api/performance';
@@ -48,15 +83,16 @@ import { getPerformanceSettings } from '$lib/api/performance';
   let unsubscribeStore: (() => void) | null = null;
   
   $effect(() => {
+    // TODO: 缩略图功能已移除，待重新实现
     // 设置缩略图事件监听
-    unsubscribeThumbnailStore = setupThumbnailEventListener();
+    // unsubscribeThumbnailStore = setupThumbnailEventListener();
     
     // 订阅 thumbnailStore 更新
-    unsubscribeStore = thumbnailStore.subscribe((store) => {
-      // 更新本地 thumbnails Map
-      thumbnails = new Map(store);
-      console.log('🖼️ [Frontend] thumbnails Map 更新，数量:', store.size);
-    });
+    // unsubscribeStore = thumbnailStore.subscribe((store) => {
+    //   // 更新本地 thumbnails Map
+    //   thumbnails = new Map(store);
+    //   console.log('🖼️ [Frontend] thumbnails Map 更新，数量:', store.size);
+    // });
     
     return () => {
       if (unsubscribeStore) unsubscribeStore();
@@ -201,19 +237,19 @@ import { getPerformanceSettings } from '$lib/api/performance';
       
       // 显示每个结果的详细信息
       searchResults.forEach((item, index) => {
-        console.log(`[${index + 1}] ${item.is_dir ? '📁' : '📄'} ${item.name}`);
+        console.log(`[${index + 1}] ${item.isDir ? '📁' : '📄'} ${item.name}`);
         console.log(`    路径: ${item.path}`);
-        console.log(`    大小: ${formatFileSize(item.size, item.is_dir)}`);
+        console.log(`    大小: ${formatFileSize(item.size, item.isDir)}`);
         console.log(`    修改时间: ${item.modified ? new Date(item.modified * 1000).toLocaleString() : '未知'}`);
-        console.log(`    是否图片: ${item.is_image ? '是' : '否'}`);
+        console.log(`    是否图片: ${item.isImage ? '是' : '否'}`);
       });
 
       // 搜索完成后自动应用默认排序（路径升序）
       if (searchResults.length > 0) {
         const sorted = [...searchResults].sort((a, b) => {
           // 文件夹始终在前面
-          if (a.is_dir !== b.is_dir) {
-            return a.is_dir ? -1 : 1;
+          if (a.isDir !== b.isDir) {
+            return a.isDir ? -1 : 1;
           }
           // 按路径升序排序
           return a.path.localeCompare(b.path, undefined, { numeric: true });
@@ -507,7 +543,7 @@ import { getPerformanceSettings } from '$lib/api/performance';
       // 过滤出需要缩略图的项目
       const itemsNeedingThumbnails = items.filter(item => {
         const name = item.name.toLowerCase();
-        const isDir = item.is_dir;
+        const isDir = item.isDir;
         
         // 支持的图片扩展名
         const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.avif', '.jxl', '.tiff', '.tif'];
@@ -641,9 +677,10 @@ import { getPerformanceSettings } from '$lib/api/performance';
     try {
       // 从压缩包中提取图片数据
       const imageData = await FileSystemAPI.loadImageFromArchive(currentArchivePath, filePath);
+      // TODO: 缩略图功能已移除，待重新实现
       // 使用新的API从图片数据生成缩略图
-      const thumbnail = await FileSystemAPI.generateThumbnailFromData(imageData);
-      fileBrowserStore.addThumbnail(filePath, thumbnail);
+      // const thumbnail = await FileSystemAPI.generateThumbnailFromData(imageData);
+      // fileBrowserStore.addThumbnail(filePath, thumbnail);
     } catch (err) {
       // 不支持的图片格式或其他错误，静默失败
       console.debug('Failed to load archive thumbnail:', err);
@@ -959,8 +996,10 @@ import { getPerformanceSettings } from '$lib/api/performance';
     if (!confirm('确定要清理所有缩略图缓存吗？这将重新生成所有缩略图。')) return;
 
     try {
-      const count = await FileSystemAPI.clearThumbnailCache();
-      console.log(`✅ 已清理 ${count} 个缓存文件`);
+      // TODO: 缩略图功能已移除，待重新实现
+      // const count = await FileSystemAPI.clearThumbnailCache();
+      // console.log(`✅ 已清理 ${count} 个缓存文件`);
+      console.warn('缩略图缓存清理功能已移除，待重新实现');
       // 刷新当前目录以重新生成缩略图
       if (currentPath) {
         await loadDirectory(currentPath);
@@ -1763,8 +1802,8 @@ import { getPerformanceSettings } from '$lib/api/performance';
 
             <!-- 图标或缩略图 -->
             <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded">
-              {#if thumbnails.has(toRelativeKey(item.path))}
-                <!-- 显示缩略图 -->
+              {#if false && thumbnails.has(toRelativeKey(item.path))}
+                <!-- TODO: 显示缩略图 - 功能已移除，待重新实现 -->
                 <img 
                   src={thumbnails.get(toRelativeKey(item.path))} 
                   alt={item.name}

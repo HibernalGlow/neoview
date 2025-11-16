@@ -15,6 +15,8 @@ interface MonitorMetrics {
   current_extract_limit: number;
   scan_queue_length: number;
   extract_queue_length: number;
+  decode_errors: number;
+  oom_errors: number;
 }
 
 interface ThumbnailMonitor {
@@ -53,7 +55,9 @@ function createThumbnailMonitor(): ThumbnailMonitor {
     current_scan_limit: 4,
     current_extract_limit: 16,
     scan_queue_length: 0,
-    extract_queue_length: 0
+    extract_queue_length: 0,
+    decode_errors: 0,
+    oom_errors: 0
   };
 
   const subscribe = (callback: (metrics: MonitorMetrics) => void) => {
@@ -64,7 +68,9 @@ function createThumbnailMonitor(): ThumbnailMonitor {
   const isHealthy = currentMetrics.total_errors < 10 && 
                    currentMetrics.running_scan + currentMetrics.running_extract < 50 &&
                    currentMetrics.current_scan_limit <= 16 &&
-                   currentMetrics.current_extract_limit <= 64;
+                   currentMetrics.current_extract_limit <= 64 &&
+                   currentMetrics.decode_errors < 5 &&
+                   currentMetrics.oom_errors < 2;
 
   // 计算P95响应时间
   const p95 = Math.max(currentMetrics.p95_scan_time, currentMetrics.p95_extract_time);

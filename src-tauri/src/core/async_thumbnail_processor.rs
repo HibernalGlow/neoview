@@ -28,6 +28,32 @@ struct ConcurrencyLimits {
     extract_max: usize,
 }
 
+/// 解码限制配置
+#[derive(Debug, Clone)]
+pub struct DecodeLimits {
+    /// 最大图片数据大小（字节）
+    max_image_bytes: usize,
+    /// 最大像素数
+    max_pixels: u64,
+    /// 最大图片尺寸（边长）
+    max_dimension: u32,
+    /// AVIF/JXL特殊限制
+    max_avif_bytes: usize,
+    max_jxl_bytes: usize,
+}
+
+impl Default for DecodeLimits {
+    fn default() -> Self {
+        Self {
+            max_image_bytes: 200 * 1024 * 1024, // 200MB
+            max_pixels: 20000 * 20000, // 4亿像素
+            max_dimension: 20000, // 20000x20000
+            max_avif_bytes: 100 * 1024 * 1024, // AVIF限制100MB
+            max_jxl_bytes: 100 * 1024 * 1024, // JXL限制100MB
+        }
+    }
+}
+
 /// 异步缩略图任务
 pub struct AsyncThumbnailTask {
     pub path: PathBuf,
@@ -105,6 +131,8 @@ pub struct AsyncThumbnailProcessor {
     last_adjustment_time: Arc<Mutex<Option<Instant>>>,
     /// 前台源目录
     foreground_source: Arc<Mutex<Option<String>>>,
+    /// 解码限制配置
+    decode_limits: Arc<DecodeLimits>,
     /// 任务接收器
     task_rx: Arc<RwLock<mpsc::UnboundedReceiver<AsyncThumbnailTask>>>,
     /// 扫描任务发送器和接收器
@@ -150,6 +178,10 @@ pub struct ProcessorMetrics {
     pub current_scan_limit: usize,
     /// 当前提取并发限制
     pub current_extract_limit: usize,
+    /// 解码错误计数
+    pub decode_errors: usize,
+    /// 内存溢出错误计数
+    pub oom_errors: usize,
 }
 
 impl AsyncThumbnailProcessor {
@@ -194,6 +226,7 @@ impl AsyncThumbnailProcessor {
             concurrency_limits,
             last_adjustment_time: Arc::new(Mutex::new(None)),
             foreground_source: Arc::new(Mutex::new(None)),
+            decode_limits: Arc::new(DecodeLimits::default()),
             task_rx: Arc::new(RwLock::new(task_rx)),
             scan_tx,
             scan_rx: Arc::new(RwLock::new(scan_rx)),
@@ -283,7 +316,7 @@ impl AsyncThumbnailProcessor {
     async fn adjust_concurrency(&self) {
         // 检查冷却时间
         {
-            let mut last_time = self.last_adjustment_time.lock().unwrap();
+            let last_time = self.last_adjustment_time.lock().unwrap();
             if let Some(last) = *last_time {
                 if last.elapsed() < Duration::from_secs(5) {
                     return; // 还在冷却期内
@@ -784,7 +817,7 @@ impl AsyncThumbnailProcessor {
             let extract_queue_paths: Arc<RwLock<Vec<PathBuf>>> = Arc::clone(&self.extract_queue_paths);
             let manager_clone: Arc<Mutex<Option<ThumbnailManager>>> = Arc::clone(&self.manager);
             let metrics_clone: Arc<Mutex<ProcessorMetrics>> = Arc::clone(&self.metrics);
-            let processor_clone = self.clone();
+            let _processor_clone = self.clone();
             
             // 启动扫描任务
             tokio::spawn(async move {
@@ -936,14 +969,14 @@ impl AsyncThumbnailProcessor {
             
             let archive_path = task.archive_path.clone();
             let inner_path = task.inner_path.clone();
-            let source_id = task.source_id.clone();
+            let _source_id = task.source_id.clone();
             let response_tx = task.response_tx;
             let manager_clone = Arc::clone(&self.manager);
             let cache_clone = Arc::clone(&self.cache);
             let metrics_clone: Arc<Mutex<ProcessorMetrics>> = Arc::clone(&self.metrics);
             let error_counts_clone: Arc<Mutex<HashMap<String, usize>>> = Arc::clone(&self.error_counts);
             let app_handle: Arc<Mutex<Option<tauri::AppHandle>>> = Arc::clone(&self.app_handle);
-            let processor_clone = self.clone();
+            let _processor_clone = self.clone();
             
             // 启动提取任务
             tokio::spawn(async move {
@@ -1017,12 +1050,16 @@ impl AsyncThumbnailProcessor {
                 error_counts: metrics.error_counts.clone(),
                 current_scan_limit,
                 current_extract_limit,
+                decode_errors: metrics.decode_errors,
+                oom_errors: metrics.oom_errors,
             }
         } else {
             let default = ProcessorMetrics::default();
             ProcessorMetrics {
                 current_scan_limit: self.current_scan_limit.load(Ordering::Relaxed),
                 current_extract_limit: self.current_extract_limit.load(Ordering::Relaxed),
+                decode_errors: 0,
+                oom_errors: 0,
                 ..default
             }
         }
@@ -1085,6 +1122,11 @@ impl AsyncThumbnailProcessor {
             }
         }
         false
+    }
+    
+    /// 获取解码限制配置
+    pub fn get_decode_limits(&self) -> DecodeLimits {
+        (*self.decode_limits).clone()
     }
 }
 

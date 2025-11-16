@@ -353,7 +353,9 @@ pub async fn get_thumbnail_metrics(
         "scan_queue_length": metrics.scan_queue_length,
         "extract_queue_length": metrics.extract_queue_length,
         "recent_durations": metrics.recent_durations.iter().cloned().collect::<Vec<_>>(),
-        "error_counts": metrics.error_counts
+        "error_counts": metrics.error_counts,
+        "decode_errors": metrics.decode_errors,
+        "oom_errors": metrics.oom_errors
     });
     
     Ok(json_metrics)

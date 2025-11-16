@@ -1218,103 +1218,37 @@ fn is_supported_image_name(name: &str) -> bool {
     /// 解码并限制图片尺寸（对超高分辨率图像先降采样）
     /// 在解码前检查图片尺寸，如果超过限制则进行降采样
     pub fn decode_and_downscale(&self, image_data: &[u8], file_path: &Path, max_side: u32) -> Result<DynamicImage, String> {
+        // 首先检查数据大小，防止内存爆炸
+        const MAX_IMAGE_BYTES: usize = 200 * 1024 * 1024; // 200MB
+        const MAX_PIXELS: u64 = 20000 * 20000; // 4亿像素
+        
+        if image_data.len() > MAX_IMAGE_BYTES {
+            return Err(format!("图片数据过大: {} bytes (限制: {} bytes)", image_data.len(), MAX_IMAGE_BYTES));
+        }
+        
+        // 直接解码，不使用catch_unwind（因为ThumbnailManager包含UnsafeCell）
         // 首先尝试获取图片尺寸而不完全解码
-        let (width, height) = self.get_image_dimensions(image_data, file_path)?;
+        let (width, height) = self.get_image_dimensions_safe(image_data, file_path)?;
+        
+        // 检查像素总数
+        let total_pixels = width as u64 * height as u64;
+        if total_pixels > MAX_PIXELS {
+            return Err(format!("图片像素过多: {}x{} = {} 像素 (限制: {} 像素)", 
+                width, height, total_pixels, MAX_PIXELS));
+        }
         
         // 如果图片尺寸在限制范围内，直接解码
         if width <= max_side && height <= max_side {
-            return self.load_image_from_memory(image_data, file_path);
+            return self.load_image_from_memory_safe(image_data, file_path);
         }
         
-        println!("🔧 [Rust] 图片尺寸过大 ({}x{})，进行降采样到最大边长 {}", width, height, max_side);
-        
-        // 计算降采样策略
-        let (new_width, new_height, filter_type) = self.calculate_downscale_strategy(width, height, max_side);
-        
-        // 对于超大图片，使用渐进式降采样
-        let mut img = self.progressive_downscale(image_data, file_path, width, height, new_width, new_height, filter_type)?;
-        
-        // 如果仍然过大，进行二次降采样
-        let (final_width, final_height) = img.dimensions();
-        if final_width > max_side || final_height > max_side {
-            let scale = if final_width > final_height {
-                max_side as f32 / final_width as f32
-            } else {
-                max_side as f32 / final_height as f32
-            };
-            
-            let final_w = (final_width as f32 * scale).round() as u32;
-            let final_h = (final_height as f32 * scale).round() as u32;
-            
-            img = img.resize(final_w, final_h, image::imageops::FilterType::Lanczos3);
-            println!("🔧 [Rust] 二次降采样: {}x{} -> {}x{}", final_width, final_height, final_w, final_h);
-        }
-        
-        println!("✅ [Rust] 降采样完成: {}x{} -> {}x{}", width, height, img.dimensions().0, img.dimensions().1);
-        
-        Ok(img)
+        // 否则进行降采样
+        self.downscale_image_safe(image_data, file_path, width, height, max_side)
     }
     
-    /// 计算降采样策略
-    fn calculate_downscale_strategy(&self, width: u32, height: u32, max_side: u32) -> (u32, u32, image::imageops::FilterType) {
-        let scale = if width > height {
-            max_side as f32 / width as f32
-        } else {
-            max_side as f32 / height as f32
-        };
-        
-        let new_width = (width as f32 * scale).round() as u32;
-        let new_height = (height as f32 * scale).round() as u32;
-        
-        // 根据降采样比例选择滤波器
-        let filter_type = if scale < 0.5 {
-            // 大幅降采样使用 CatmullRom
-            image::imageops::FilterType::CatmullRom
-        } else if scale < 0.8 {
-            // 中等降采样使用 Triangle
-            image::imageops::FilterType::Triangle
-        } else {
-            // 轻微降采样使用 Lanczos3
-            image::imageops::FilterType::Lanczos3
-        };
-        
-        (new_width, new_height, filter_type)
-    }
     
-    /// 渐进式降采样（对超大图片分步降采样）
-    fn progressive_downscale(&self, image_data: &[u8], file_path: &Path, width: u32, height: u32, target_width: u32, target_height: u32, filter_type: image::imageops::FilterType) -> Result<DynamicImage, String> {
-        // 如果图片不是特别大，直接降采样
-        if width <= 8192 && height <= 8192 {
-            let img = self.load_image_from_memory(image_data, file_path)?;
-            return Ok(img.resize(target_width, target_height, filter_type));
-        }
-        
-        println!("🔧 [Rust] 使用渐进式降采样: {}x{} -> {}x{}", width, height, target_width, target_height);
-        
-        // 对于超大图片，分步降采样
-        let mut img = self.load_image_from_memory(image_data, file_path)?;
-        let mut current_width = width;
-        let mut current_height = height;
-        
-        // 每次降采样不超过50%，直到接近目标尺寸
-        while current_width > target_width * 2 || current_height > target_height * 2 {
-            let next_width = (current_width / 2).max(target_width);
-            let next_height = (current_height / 2).max(target_height);
-            
-            img = img.resize(next_width, next_height, image::imageops::FilterType::Triangle);
-            current_width = next_width;
-            current_height = next_height;
-            
-            println!("🔧 [Rust] 渐进式降采样步骤: {}x{}", current_width, current_height);
-        }
-        
-        // 最后一步使用目标滤波器
-        if current_width != target_width || current_height != target_height {
-            img = img.resize(target_width, target_height, filter_type);
-        }
-        
-        Ok(img)
-    }
+    
+    
     
     /// 获取图片尺寸而不完全解码（对于支持格式的快速检测）
     fn get_image_dimensions(&self, image_data: &[u8], file_path: &Path) -> Result<(u32, u32), String> {
@@ -1367,6 +1301,120 @@ fn is_supported_image_name(name: &str) -> bool {
             Err(e) => Err(format!("获取图片尺寸失败: {}", e))
         }
     }
+    
+    /// 安全地获取图片尺寸（带内存检查）
+    fn get_image_dimensions_safe(&self, image_data: &[u8], file_path: &Path) -> Result<(u32, u32), String> {
+        // 检查数据大小
+        if image_data.len() > 50 * 1024 * 1024 { // 50MB
+            return Err("图片数据过大，无法安全检测尺寸".to_string());
+        }
+        
+        self.get_image_dimensions(image_data, file_path)
+    }
+    
+    /// 计算降采样策略
+    fn calculate_downscale_strategy(&self, width: u32, height: u32, max_side: u32) -> (u32, u32, image::imageops::FilterType) {
+        let scale = if width > height {
+            max_side as f32 / width as f32
+        } else {
+            max_side as f32 / height as f32
+        };
+        
+        let new_width = (width as f32 * scale).round() as u32;
+        let new_height = (height as f32 * scale).round() as u32;
+        
+        // 根据降采样比例选择滤波器
+        let filter_type = if scale < 0.5 {
+            // 大幅降采样使用 CatmullRom
+            image::imageops::FilterType::CatmullRom
+        } else if scale < 0.8 {
+            // 中等降采样使用 Triangle
+            image::imageops::FilterType::Triangle
+        } else {
+            // 轻微降采样使用 Lanczos3
+            image::imageops::FilterType::Lanczos3
+        };
+        
+        (new_width, new_height, filter_type)
+    }
+    
+    /// 安全地加载图片（带内存检查）
+    fn load_image_from_memory_safe(&self, image_data: &[u8], file_path: &Path) -> Result<DynamicImage, String> {
+        // 检查数据大小
+        if image_data.len() > 100 * 1024 * 1024 { // 100MB
+            return Err("图片数据过大，无法安全加载".to_string());
+        }
+        
+        self.load_image_from_memory(image_data, file_path)
+    }
+    
+    /// 安全地降采样图片
+    fn downscale_image_safe(&self, image_data: &[u8], file_path: &Path, width: u32, height: u32, max_side: u32) -> Result<DynamicImage, String> {
+        println!("🔧 [Rust] 图片尺寸过大 ({}x{})，进行降采样到最大边长 {}", width, height, max_side);
+        
+        // 计算降采样策略
+        let (new_width, new_height, filter_type) = self.calculate_downscale_strategy(width, height, max_side);
+        
+        // 对于超大图片，使用渐进式降采样
+        let mut img = self.progressive_downscale_safe(image_data, file_path, width, height, new_width, new_height, filter_type)?;
+        
+        // 如果仍然过大，进行二次降采样
+        let (final_width, final_height) = img.dimensions();
+        if final_width > max_side || final_height > max_side {
+            let scale = if final_width > final_height {
+                max_side as f32 / final_width as f32
+            } else {
+                max_side as f32 / final_height as f32
+            };
+            
+            let final_w = (final_width as f32 * scale).round() as u32;
+            let final_h = (final_height as f32 * scale).round() as u32;
+            
+            img = img.resize(final_w, final_h, image::imageops::FilterType::Lanczos3);
+            println!("🔧 [Rust] 二次降采样: {}x{} -> {}x{}", final_width, final_height, final_w, final_h);
+        }
+        
+        println!("✅ [Rust] 降采样完成: {}x{} -> {}x{}", width, height, img.dimensions().0, img.dimensions().1);
+        
+        Ok(img)
+    }
+    
+    /// 安全的渐进式降采样
+    fn progressive_downscale_safe(&self, image_data: &[u8], file_path: &Path, width: u32, height: u32, target_width: u32, target_height: u32, filter_type: image::imageops::FilterType) -> Result<DynamicImage, String> {
+        // 如果图片不是特别大，直接降采样
+        if width <= 8192 && height <= 8192 {
+            let img = self.load_image_from_memory_safe(image_data, file_path)?;
+            return Ok(img.resize(target_width, target_height, filter_type));
+        }
+        
+        println!("🔧 [Rust] 使用渐进式降采样: {}x{} -> {}x{}", width, height, target_width, target_height);
+        
+        // 对于超大图片，分步降采样
+        let mut img = self.load_image_from_memory_safe(image_data, file_path)?;
+        let mut current_width = width;
+        let mut current_height = height;
+        
+        // 每次降采样不超过50%，直到接近目标尺寸
+        while current_width > target_width * 2 || current_height > target_height * 2 {
+            let next_width = (current_width / 2).max(target_width);
+            let next_height = (current_height / 2).max(target_height);
+            
+            img = img.resize(next_width, next_height, image::imageops::FilterType::Triangle);
+            current_width = next_width;
+            current_height = next_height;
+            
+            println!("🔧 [Rust] 渐进式降采样步骤: {}x{}", current_width, current_height);
+        }
+        
+        // 最后一步使用目标滤波器
+        if current_width != target_width || current_height != target_height {
+            img = img.resize(target_width, target_height, filter_type);
+        }
+        
+        Ok(img)
+    }
+    
+    
     
     /// 获取 JPEG 图片尺寸（不完全解码）
     fn get_jpeg_dimensions(&self, image_data: &[u8]) -> Result<(u32, u32), String> {
@@ -1500,6 +1548,4 @@ fn is_supported_image_name(name: &str) -> bool {
         
         Ok((width, height))
     }
-
-    
 }

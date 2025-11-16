@@ -21,6 +21,7 @@ pub struct ThumbnailManagerState {
     pub cache: Arc<Mutex<ImageCache>>,
     pub async_processor: Arc<Mutex<Option<crate::core::async_thumbnail_processor::AsyncThumbnailProcessor>>>,
     pub async_task_tx: Arc<Mutex<Option<tokio::sync::mpsc::UnboundedSender<crate::core::async_thumbnail_processor::AsyncThumbnailTask>>>>,
+    pub blob_registry: Arc<crate::core::blob_registry::BlobRegistry>,
 }
 
 impl Default for ThumbnailManagerState {
@@ -30,6 +31,7 @@ impl Default for ThumbnailManagerState {
             cache: Arc::new(Mutex::new(ImageCache::new(1024))), // 1024MB 缓存
             async_processor: Arc::new(Mutex::new(None)),
             async_task_tx: Arc::new(Mutex::new(None)),
+            blob_registry: Arc::new(crate::core::blob_registry::BlobRegistry::new(1024)),
         }
     }
 }
@@ -930,7 +932,7 @@ pub async fn debug_avif(
 
 
 /// 快速获取首图 blob URL（带缓存）
-/// 返回可立即显示的 data URL
+/// 返回可立即显示的 blob URL，同时触发后台缩略图生成
 #[command]
 pub async fn get_archive_first_image_blob(
     archive_path: String,
@@ -947,16 +949,43 @@ pub async fn get_archive_first_image_blob(
     // 使用 ArchiveManager 获取首图 blob
     use crate::core::archive::ArchiveManager;
     let archive_manager = ArchiveManager::new();
-    match archive_manager.get_first_image_blob(&path) {
-        Ok(blob_url) => {
-            println!("✅ [Rust] 首图 blob 获取成功: {}", archive_path);
-            Ok(blob_url)
-        }
+    let (blob_url, inner_path_opt) = match archive_manager.get_first_image_blob_or_scan(&path) {
+        Ok(result) => result,
         Err(e) => {
             println!("❌ [Rust] 首图 blob 获取失败: {}", e);
-            Err(e)
+            return Err(e);
+        }
+    };
+    
+    // 如果有内部路径且有异步处理器，提交提取任务
+    if let (Some(inner_path), Some(processor)) = (inner_path_opt, {
+        let guard = state.async_processor.lock().unwrap();
+        (*guard).clone()
+    }) {
+        use crate::core::async_thumbnail_processor::ExtractTask;
+        
+        // 创建提取任务
+        let (extract_tx, _extract_rx) = tokio::sync::oneshot::channel();
+        let extract_task = ExtractTask {
+            archive_path: path.clone(),
+            inner_path: inner_path.clone(),
+            source_id: path.parent()
+                .and_then(|p| p.to_str())
+                .unwrap_or("")
+                .to_string(),
+            response_tx: extract_tx,
+        };
+        
+        // 提交到提取队列（前台优先级）
+        if let Err(e) = processor.submit_extract_task(extract_task).await {
+            println!("⚠️ [Rust] 提交提取任务失败: {}", e);
+        } else {
+            println!("⚡ [Rust] 提交提取任务成功: {} :: {}", archive_path, inner_path);
         }
     }
+    
+    println!("✅ [Rust] 首图 blob 获取成功: {}", archive_path);
+    Ok(blob_url)
 }
 
 /// 返回原图的二进制数据
@@ -1372,6 +1401,56 @@ pub async fn enqueue_archive_preload(
     
     println!("✅ [Rust] 预取任务已提交");
     Ok("preload_submitted")
+}
+
+/// 获取 blob 内容
+#[command]
+pub async fn get_blob_content(
+    blob_key: String,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<Vec<u8>, String> {
+    println!("🔍 [Rust] 获取 blob 内容: {}", blob_key);
+    
+    // 从 BlobRegistry 获取内容
+    let data = state.blob_registry.fetch_bytes(&blob_key)
+        .ok_or_else(|| format!("Blob 不存在: {}", blob_key))?;
+    
+    println!("✅ [Rust] blob 内容获取成功: {} bytes", data.len());
+    Ok(data)
+}
+
+/// 释放 blob 引用
+#[command]
+pub async fn release_blob(
+    blob_key: String,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<bool, String> {
+    println!("🗑️ [Rust] 释放 blob: {}", blob_key);
+    
+    let released = state.blob_registry.release(&blob_key);
+    println!("✅ [Rust] blob 释放完成: {}", blob_key);
+    Ok(released)
+}
+
+/// 清理过期 blob
+#[command]
+pub async fn cleanup_expired_blobs(
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<usize, String> {
+    println!("🧹 [Rust] 清理过期 blob");
+    
+    let removed = state.blob_registry.sweep_expired();
+    println!("✅ [Rust] 清理完成: {} 个 blob", removed);
+    Ok(removed)
+}
+
+/// 获取 blob 统计信息
+#[command]
+pub async fn get_blob_stats(
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<crate::core::blob_registry::BlobStats, String> {
+    let stats = state.blob_registry.get_stats();
+    Ok(stats)
 }
 
 /// 设置前台源目录

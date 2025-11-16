@@ -158,12 +158,11 @@ pub struct AsyncThumbnailProcessor {
     scan_queue_paths: Arc<RwLock<Vec<PathBuf>>>,
     /// 提取队列中的任务路径（用于取消）
     extract_queue_paths: Arc<RwLock<Vec<PathBuf>>>,
-    /// 错误统计
     error_counts: Arc<Mutex<HashMap<String, usize>>>,
-    /// 性能监控
-    metrics: Arc<Mutex<ProcessorMetrics>>,
-    /// 应用句柄（用于发送事件）
-    app_handle: Arc<Mutex<Option<tauri::AppHandle>>>,
+            metrics: Arc<Mutex<ProcessorMetrics>>,
+            app_handle: Arc<Mutex<Option<tauri::AppHandle>>>,
+    /// Blob 注册表
+    blob_registry: Arc<crate::core::blob_registry::BlobRegistry>,
 }
 
 /// 处理器性能指标
@@ -251,6 +250,7 @@ impl AsyncThumbnailProcessor {
             error_counts: Arc::new(Mutex::new(HashMap::new())),
             metrics: Arc::new(Mutex::new(ProcessorMetrics::default())),
             app_handle: Arc::new(Mutex::new(None)),
+            blob_registry: Arc::new(crate::core::blob_registry::BlobRegistry::new(1024)),
         };
         
         println!("🚀 异步处理器配置: 本地文件={}, 压缩包扫描={}, 压缩包解码={}", 
@@ -597,36 +597,15 @@ impl AsyncThumbnailProcessor {
         cache: Arc<Mutex<ImageCache>>,
         path: &PathBuf,
         inner_path: &str,
+        image_data: &[u8],
     ) -> Result<String, String> {
         println!("🔧 [Rust] 第二阶段：解码图片 {} :: {}", path.display(), inner_path);
-        
-        // 提取首图数据
-        let image_data: Vec<u8> = {
-            let manager_clone = Arc::clone(&manager);
-            let path_clone = path.clone();
-            let inner_path_clone = inner_path.to_string();
-            
-            tokio::task::spawn_blocking(move || {
-                let manager_guard = manager_clone.lock()
-                    .map_err(|e| format!("获取管理器锁失败: {}", e))?;
-                
-                let _manager = manager_guard.as_ref()
-                    .ok_or("缩略图管理器未初始化")?;
-                
-                // 提取图片数据
-                use crate::core::archive::ArchiveManager;
-                let archive_manager = ArchiveManager::new();
-                let image_data = archive_manager.extract_file(&path_clone, &inner_path_clone)
-                    .map_err(|e| format!("提取图片失败: {}", e))?;
-                
-                Ok::<Vec<u8>, String>(image_data)
-            }).await.map_err(|e| format!("提取图片失败: {}", e))??
-        };
         
         let manager_clone = Arc::clone(&manager);
         let path_clone = path.clone();
         let cache_clone = Arc::clone(&cache);
         let inner_path_clone = inner_path.to_string();
+        let image_data_owned = image_data.to_vec();
         
         tokio::task::spawn_blocking(move || {
             // 获取管理器
@@ -642,7 +621,7 @@ impl AsyncThumbnailProcessor {
             
             // 使用解码前限缩尺寸功能
             let max_side = 2048u32;
-            let img = manager.decode_and_downscale(&image_data, Path::new(&inner_path_clone), max_side)
+            let img = manager.decode_and_downscale(&image_data_owned, Path::new(&inner_path_clone), max_side)
                 .map_err(|e| format!("解码图片失败: {}", e))?;
             
             // 保存缩略图
@@ -1029,16 +1008,70 @@ impl AsyncThumbnailProcessor {
             let error_counts_clone: Arc<Mutex<HashMap<String, usize>>> = Arc::clone(&self.error_counts);
             let app_handle: Arc<Mutex<Option<tauri::AppHandle>>> = Arc::clone(&self.app_handle);
             let processor_clone = self.clone();
+            let blob_registry: Arc<crate::core::blob_registry::BlobRegistry> = Arc::clone(&self.blob_registry);
             
             // 启动提取任务
             let cache_clone_for_update = Arc::clone(&cache_clone);
             tokio::spawn(async move {
                 let start_time = std::time::Instant::now();
+                
+                // 首先提取原始图片数据
+                let image_data = {
+                    use crate::core::archive::ArchiveManager;
+                    let archive_manager = ArchiveManager::new();
+                    match archive_manager.extract_file(&archive_path, &inner_path) {
+                        Ok(data) => data,
+                        Err(e) => {
+                            let _ = response_tx.send(Err(format!("提取图片失败: {}", e)));
+                            return;
+                        }
+                    }
+                };
+                
+                // 检测 MIME 类型
+                let mime_type = {
+                    let path = std::path::Path::new(&inner_path);
+                    if let Some(ext) = path.extension() {
+                        match ext.to_string_lossy().to_lowercase().as_str() {
+                            "jpg" | "jpeg" => "image/jpeg",
+                            "png" => "image/png",
+                            "gif" => "image/gif",
+                            "bmp" => "image/bmp",
+                            "webp" => "image/webp",
+                            "avif" => "image/avif",
+                            "jxl" => "image/jxl",
+                            "tiff" | "tif" => "image/tiff",
+                            _ => "image/*",
+                        }
+                    } else {
+                        "image/*"
+                    }
+                };
+                
+                // 注册到 BlobRegistry
+                let blob_url = blob_registry.get_or_register(
+                    &image_data,
+                    &mime_type,
+                    std::time::Duration::from_secs(600)
+                );
+                
+                // 发送首图就绪事件
+                if let Ok(handle_guard) = app_handle.lock() {
+                    if let Some(app) = handle_guard.as_ref() {
+                        let _ = app.emit("thumbnail:firstImageReady", serde_json::json!({
+                            "archivePath": archive_path.to_string_lossy(),
+                            "blob": blob_url.clone()
+                        }));
+                    }
+                }
+                
+                // 生成 WebP 缩略图
                 let result = Self::generate_archive_thumbnail_staged(
                     manager_clone,
                     cache_clone,
                     &archive_path,
                     &inner_path,
+                    &image_data,
                 ).await;
                 
                 let duration = start_time.elapsed().as_millis() as u64;
@@ -1078,12 +1111,13 @@ impl AsyncThumbnailProcessor {
                             println!("💾 [Rust] 缩略图已添加到内存缓存: {}", cache_key);
                         }
                         
-                        // 发送事件通知前端
+                        // 发送最终缩略图就绪事件
                         if let Ok(handle_guard) = app_handle.lock() {
                             if let Some(app) = handle_guard.as_ref() {
-                                let _ = app.emit("thumbnail-ready", serde_json::json!({
-                                    "path": archive_path.to_string_lossy(),
-                                    "url": url
+                                let _ = app.emit("thumbnail:updated", serde_json::json!({
+                                    "archivePath": archive_path.to_string_lossy(),
+                                    "webpUrl": url,
+                                    "blobUrl": blob_url
                                 }));
                             }
                         }

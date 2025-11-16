@@ -2,10 +2,11 @@ use std::fs::{self, File};
 use std::io::{Read, Cursor};
 use std::path::Path;
 use std::sync::Arc;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH, Duration};
 use zip::ZipArchive;
 use serde::{Deserialize, Serialize};
 use image::GenericImageView;
+use super::blob_registry::BlobRegistry;
 
 const FIRST_IMAGE_CACHE_LIMIT: usize = 512;
 
@@ -44,6 +45,8 @@ pub struct ArchiveManager {
     archive_cache: Arc<std::sync::Mutex<std::collections::HashMap<String, Arc<std::sync::Mutex<ZipArchive<std::fs::File>>>>>>,
     /// 压缩包首图缓存
     first_image_cache: Arc<std::sync::Mutex<std::collections::HashMap<String, CachedFirstImageEntry>>>,
+    /// Blob 注册表
+    blob_registry: Arc<BlobRegistry>,
 }
 
 impl ArchiveManager {
@@ -65,6 +68,29 @@ impl ArchiveManager {
             cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
             archive_cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
             first_image_cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+            blob_registry: Arc::new(BlobRegistry::new(512)),
+        }
+    }
+    
+    /// 创建带自定义 blob 缓存大小的压缩包管理器
+    pub fn with_blob_cache_size(blob_cache_size: usize) -> Self {
+        Self {
+            image_extensions: vec![
+                "jpg".to_string(),
+                "jpeg".to_string(),
+                "png".to_string(),
+                "gif".to_string(),
+                "bmp".to_string(),
+                "webp".to_string(),
+                "avif".to_string(),
+                "jxl".to_string(),
+                "tiff".to_string(),
+                "tif".to_string(),
+            ],
+            cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+            archive_cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+            first_image_cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+            blob_registry: Arc::new(BlobRegistry::new(blob_cache_size)),
         }
     }
 
@@ -373,7 +399,7 @@ impl ArchiveManager {
     }
 
     /// 快速查找压缩包中的第一张图片（早停扫描）
-    /// 找到第一张图片即返回，避免遍历全部条目
+    /// 找到第一张图片即返回，避免扫描整个压缩包
     pub fn find_first_image_entry(&self, archive_path: &Path) -> Result<Option<String>, String> {
         println!("⚡ ArchiveManager::find_first_image_entry start: {}", archive_path.display());
 
@@ -785,8 +811,8 @@ impl ArchiveManager {
         }
     }
 
-    /// 获取首图 blob URL（带缓存）
-    pub fn get_first_image_blob(&self, archive_path: &Path) -> Result<String, String> {
+    /// 获取首图 blob 或扫描（返回 blob URL 和内部路径）
+    pub fn get_first_image_blob_or_scan(&self, archive_path: &Path) -> Result<(String, Option<String>), String> {
         let archive_key = Self::normalize_archive_key(archive_path);
         let metadata = self.get_archive_metadata(archive_path)?;
 
@@ -796,7 +822,7 @@ impl ArchiveManager {
                 if entry.modified == metadata.modified && entry.file_size == metadata.file_size {
                     if let Some(ref blob_url) = entry.blob_url {
                         println!("🎯 首图 blob 缓存命中: {} -> {}", archive_path.display(), blob_url);
-                        return Ok(blob_url.clone());
+                        return Ok((blob_url.clone(), entry.inner_path.clone()));
                     }
                 }
             }
@@ -812,16 +838,76 @@ impl ArchiveManager {
         let image_data = self.extract_file(archive_path, &inner_path)?;
         let mime_type = self.detect_image_mime_type(&inner_path);
         
-        // 生成 blob URL（这里使用 base64 data URL 作为模拟）
-        use base64::Engine;
-        let base64_data = base64::engine::general_purpose::STANDARD.encode(&image_data);
-        let blob_url = format!("data:{};base64,{}", mime_type, base64_data);
+        // 注册到 BlobRegistry
+        let blob_url = self.blob_registry.get_or_register(
+            &image_data, 
+            &mime_type, 
+            Duration::from_secs(600) // 10分钟 TTL
+        );
 
         // 更新缓存
-        self.store_cached_first_image(archive_key, metadata, Some(inner_path), Some(blob_url.clone()));
+        self.store_cached_first_image(archive_key, metadata, Some(inner_path.clone()), Some(blob_url.clone()));
 
-        println!("🎯 首图 blob 生成完成: {} -> {} bytes", archive_path.display(), image_data.len());
+        println!("🎯 首图 blob 注册完成: {} -> {} bytes (inner: {})", 
+            archive_path.display(), image_data.len(), inner_path);
+        
+        Ok((blob_url, Some(inner_path)))
+    }
+
+    /// 获取首图 blob URL（带缓存）
+    pub fn get_first_image_blob(&self, archive_path: &Path) -> Result<String, String> {
+        let (blob_url, _) = self.get_first_image_blob_or_scan(archive_path)?;
         Ok(blob_url)
+    }
+
+    /// 获取首图原始字节数据
+    pub fn get_first_image_bytes(&self, archive_path: &Path) -> Result<(Vec<u8>, Option<String>, ArchiveMetadata), String> {
+        let metadata = self.get_archive_metadata(archive_path)?;
+        
+        // 查找首图路径
+        let inner_path = match self.find_first_image_entry(archive_path)? {
+            Some(path) => path,
+            None => return Err("压缩包中没有图片".to_string()),
+        };
+
+        // 提取图片数据
+        let image_data = self.extract_file(archive_path, &inner_path)?;
+        
+        Ok((image_data, Some(inner_path), metadata))
+    }
+
+    /// 存储首图 blob 缓存
+    fn store_first_image_blob(
+        &self,
+        archive_key: String,
+        metadata: ArchiveMetadata,
+        inner_path: Option<String>,
+        blob_url: Option<String>,
+    ) {
+        if let Ok(mut cache) = self.first_image_cache.lock() {
+            if cache.len() >= FIRST_IMAGE_CACHE_LIMIT {
+                if let Some(oldest_key) = cache
+                    .iter()
+                    .min_by_key(|(_, entry)| entry.last_used)
+                    .map(|(k, _)| k.clone())
+                {
+                    cache.remove(&oldest_key);
+                }
+            }
+
+            cache.insert(archive_key, CachedFirstImageEntry {
+                inner_path,
+                modified: metadata.modified,
+                file_size: metadata.file_size,
+                last_used: Instant::now(),
+                blob_url,
+            });
+        }
+    }
+
+    /// 获取 BlobRegistry 引用
+    pub fn blob_registry(&self) -> &Arc<BlobRegistry> {
+        &self.blob_registry
     }
 }
 

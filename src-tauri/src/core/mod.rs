@@ -8,6 +8,7 @@ pub mod fs_manager;
 pub mod thumbnail;
 pub mod thumbnail_db;
 pub mod archive;
+pub mod blob_registry;
 pub mod file_indexer;
 pub mod upscale;
 pub mod generic_upscaler;

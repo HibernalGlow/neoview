@@ -1,5 +1,6 @@
 import { FileSystemAPI } from '$lib/api';
 import { toAssetUrl } from '$lib/utils/assetProxy';
+import { thumbnailState } from '$lib/stores/thumbnailState';
 
 type Priority = 'immediate' | 'high' | 'normal';
 
@@ -59,6 +60,12 @@ class ThumbnailScheduler {
   }
 
   cancelBySource(source: string) {
+    // 取消后端任务
+    thumbnailState.cancelDirectoryTasks(source).catch(error => {
+      console.error('❌ 取消目录任务失败:', error);
+    });
+    
+    // 取消前端队列中的任务
     for (const priority of PRIORITY_ORDER) {
       const tasks = this.queues[priority];
       if (!tasks.length) continue;
@@ -156,74 +163,94 @@ class ThumbnailScheduler {
   private async generateThumbnail(task: QueueTask) {
     const { item } = task;
     const path = item.path;
+    const normalizedPath = this.normalizePath(path);
+
+    // 标记为处理中
+    thumbnailState.markProcessing(normalizedPath);
 
     let thumbnail: string | null = null;
     const isArchive = this.isArchive(task);
     const isDir = itemIsDirectory(item);
-    const isVideo = path.match(/\.(mp4|mkv|avi|mov|flv|webm|wmv)$/i);
+    const isVideo = path.match(/\.(mp4|mkv|avi|mov|flv|webm|wmv|m4v)$/i);
 
-    if (isArchive) {
-      console.log('⚡ 首次加载压缩包，快速显示原图:', path);
-      try {
-        // 获取原图二进制数据
-        const imageData = await FileSystemAPI.getArchiveFirstImageQuick(path);
-        if (imageData && imageData.length > 0) {
-          // 创建 Blob URL
-          const blob = new Blob([imageData], { type: 'image/jpeg' });
-          const blobUrl = URL.createObjectURL(blob);
+    try {
+      if (isArchive) {
+        console.log('⚡ 首次加载压缩包，快速显示原图:', path);
+        try {
+          // 获取原图二进制数据
+          const imageData = await FileSystemAPI.getArchiveFirstImageQuick(path);
+          if (imageData && imageData.length > 0) {
+            // 创建 Blob URL
+            const blob = new Blob([imageData], { type: 'image/jpeg' });
+            const blobUrl = URL.createObjectURL(blob);
+            
+            // 缓存临时缩略图
+            thumbnailState.cacheThumbnail(normalizedPath, blobUrl);
+            
+            if (this.addThumbnailCb) {
+              const key = this.toRelativeKey(path);
+              this.addThumbnailCb(key, blobUrl);
+            }
+            
+            console.log('⚡ 快速显示原图成功:', path, 'size:', imageData.length);
+          }
+        } catch (e) {
+          console.debug('⚡ 快速获取原图失败，继续生成缩略图:', e);
+        }
+
+        // 后台异步生成压缩包缩略图（不等待）
+        console.log('🔄 后台异步生成压缩包缩略图:', path);
+        try {
+          const result = await FileSystemAPI.generateArchiveThumbnailAsync(path);
+          console.log('✅ 后台缩略图生成完成:', path, result);
           
+          // 缩略图生成完成后，重新获取并更新显示
           if (this.addThumbnailCb) {
-            const key = this.toRelativeKey(path);
-            this.addThumbnailCb(key, blobUrl);
+            try {
+              const thumbnailUrl = await FileSystemAPI.generateArchiveThumbnailRoot(path);
+              thumbnailState.cacheThumbnail(normalizedPath, thumbnailUrl);
+              const key = this.toRelativeKey(path);
+              this.addThumbnailCb(key, thumbnailUrl);
+              console.log('✅ 更新为正式缩略图:', path);
+            } catch (e) {
+              console.debug('更新缩略图失败:', e);
+              thumbnailState.markError(normalizedPath, e as string);
+            }
           }
-          
-          console.log('⚡ 快速显示原图成功:', path, 'size:', imageData.length);
+        } catch (e) {
+          console.error('❌ 后台生成失败:', e);
+          thumbnailState.markError(normalizedPath, e as string);
         }
-      } catch (e) {
-        console.debug('⚡ 快速获取原图失败，继续生成缩略图:', e);
+        return;
       }
 
-      // 后台异步生成压缩包缩略图（不等待）
-      console.log('🔄 后台异步生成压缩包缩略图:', path);
-      try {
-        const result = await FileSystemAPI.generateArchiveThumbnailAsync(path);
-        console.log('✅ 后台缩略图生成完成:', path, result);
+      if (isDir) {
+        // 对于文件夹，直接使用后端API（因为前端调度器已经过滤了文件类型）
+        thumbnail = await FileSystemAPI.generateFolderThumbnail(path);
+      } else if (isVideo) {
+        try {
+          thumbnail = await FileSystemAPI.generateVideoThumbnail(path);
+        } catch (e) {
+          console.debug('视频缩略图生成失败，跳过:', e);
+          thumbnailState.markError(normalizedPath, e as string);
+        }
+      } else {
+        // 对于普通文件，使用新的异步API
+        thumbnail = await FileSystemAPI.generateFileThumbnail(path);
+      }
+
+      if (thumbnail) {
+        const converted = toAssetUrl(thumbnail) || String(thumbnail || '');
+        thumbnailState.cacheThumbnail(normalizedPath, converted);
         
-        // 缩略图生成完成后，重新获取并更新显示
         if (this.addThumbnailCb) {
-          try {
-            const thumbnailUrl = await FileSystemAPI.generateArchiveThumbnailRoot(path);
-            const key = this.toRelativeKey(path);
-            this.addThumbnailCb(key, thumbnailUrl);
-            console.log('✅ 更新为正式缩略图:', path);
-          } catch (e) {
-            console.debug('更新缩略图失败:', e);
-          }
+          const key = this.toRelativeKey(path);
+          this.addThumbnailCb(key, converted);
         }
-      } catch (e) {
-        console.error('❌ 后台生成失败:', e);
       }
-      return;
-    }
-
-    if (isDir) {
-      // 对于文件夹，直接使用后端API（因为前端调度器已经过滤了文件类型）
-      thumbnail = await FileSystemAPI.generateFolderThumbnail(path);
-    } else if (isVideo) {
-      try {
-        thumbnail = await FileSystemAPI.generateVideoThumbnail(path);
-      } catch (e) {
-        console.debug('视频缩略图生成失败，跳过:', e);
-      }
-    } else {
-      // 对于普通文件，使用新的异步API
-      thumbnail = await FileSystemAPI.generateFileThumbnail(path);
-    }
-
-    if (thumbnail && this.addThumbnailCb) {
-      const converted = toAssetUrl(thumbnail) || String(thumbnail || '');
-      const key = this.toRelativeKey(path);
-      this.addThumbnailCb(key, converted);
+    } catch (error) {
+      console.error('❌ 生成缩略图失败:', path, error);
+      thumbnailState.markError(normalizedPath, error as string);
     }
   }
 

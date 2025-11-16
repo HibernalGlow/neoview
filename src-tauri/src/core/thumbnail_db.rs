@@ -81,6 +81,17 @@ impl ThumbnailDatabase {
             [],
         )?;
         
+        // 创建首图索引表（用于压缩包快速定位）
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS archive_first_image (
+                archive_path TEXT PRIMARY KEY,
+                inner_path TEXT NOT NULL,
+                mtime INTEGER NOT NULL,
+                created_at TEXT NOT NULL
+            )",
+            [],
+        )?;
+        
         // 创建索引以提高查询性能
         self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_thumbnail_name ON thumbnails(thumbnail_name)",
@@ -89,6 +100,11 @@ impl ThumbnailDatabase {
         
         self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_source_modified ON thumbnails(source_modified)",
+            [],
+        )?;
+        
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_archive_mtime ON archive_first_image(mtime)",
             [],
         )?;
         
@@ -367,5 +383,99 @@ pub struct ThumbnailStats {
     pub file_count: i64,
     /// 总文件大小（字节）
     pub total_size: i64,
+}
+
+impl ThumbnailDatabase {
+    /// 保存或更新压缩包首图索引
+    pub fn upsert_archive_first_image(&self, archive_path: &str, inner_path: &str, mtime: i64) -> SqliteResult<()> {
+        let now = Utc::now().to_rfc3339();
+        self.conn.execute(
+            "INSERT OR REPLACE INTO archive_first_image (archive_path, inner_path, mtime, created_at) VALUES (?1, ?2, ?3, ?4)",
+            [archive_path, inner_path, mtime, &now],
+        )?;
+        Ok(())
+    }
+    
+    /// 查找压缩包首图索引
+    pub fn find_archive_first_image(&self, archive_path: &str) -> SqliteResult<Option<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT inner_path FROM archive_first_image WHERE archive_path = ?1"
+        )?;
+        
+        let result = stmt.query_row([archive_path], |row| {
+            row.get(0)
+        });
+        
+        match result {
+            Ok(inner_path) => Ok(Some(inner_path)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+    
+    /// 批量查询压缩包首图索引
+    pub fn find_archive_first_images(&self, archive_paths: &[&str]) -> SqliteResult<std::collections::HashMap<String, String>> {
+        if archive_paths.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+        
+        let placeholders: String = archive_paths.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let query = format!(
+            "SELECT archive_path, inner_path FROM archive_first_image WHERE archive_path IN ({})",
+            placeholders
+        );
+        
+        let mut stmt = self.conn.prepare(&query)?;
+        let params: Vec<&dyn rusqlite::ToSql> = archive_paths.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+        
+        let rows = stmt.query_map(params.as_slice(), |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?
+            ))
+        })?;
+        
+        let mut result = std::collections::HashMap::new();
+        for row in rows {
+            let (archive_path, inner_path) = row?;
+            result.insert(archive_path, inner_path);
+        }
+        
+        Ok(result)
+    }
+    
+    /// 删除压缩包首图索引
+    pub fn delete_archive_first_image(&self, archive_path: &str) -> SqliteResult<bool> {
+        let affected = self.conn.execute(
+            "DELETE FROM archive_first_image WHERE archive_path = ?1",
+            [archive_path],
+        )?;
+        Ok(affected > 0)
+    }
+    
+    /// 清理过期的首图索引（超过指定天数）
+    pub fn cleanup_expired_archive_first_images(&self, days: u32) -> SqliteResult<usize> {
+        let cutoff_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64 - (days as i64 * 86400);
+        
+        let affected = self.conn.execute(
+            "DELETE FROM archive_first_image WHERE mtime < ?1",
+            [cutoff_time],
+        )?;
+        
+        Ok(affected as usize)
+    }
+    
+    /// 获取首图索引统计信息
+    pub fn get_archive_first_image_stats(&self) -> SqliteResult<i64> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM archive_first_image",
+            [],
+            |row| row.get(0)
+        )?;
+        Ok(count)
+    }
 }
 

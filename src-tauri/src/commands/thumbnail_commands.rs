@@ -320,6 +320,37 @@ pub async fn get_thumbnail_error_stats(
     Ok(stats)
 }
 
+/// 获取处理器性能指标
+#[command]
+pub async fn get_thumbnail_metrics(
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<serde_json::Value, String> {
+    // 获取处理器的克隆，避免跨await持有锁
+    let processor = {
+        let guard = state.async_processor.lock()
+            .map_err(|_| "无法获取处理器锁".to_string())?;
+        match (*guard).clone() {
+            Some(p) => p,
+            None => return Err("异步处理器未初始化".to_string()),
+        }
+    };
+    
+    let metrics = processor.get_metrics().await;
+    
+    // 转换为JSON
+    let json_metrics = serde_json::json!({
+        "running_scan": metrics.running_scan,
+        "running_extract": metrics.running_extract,
+        "running_local": metrics.running_local,
+        "scan_queue_length": metrics.scan_queue_length,
+        "extract_queue_length": metrics.extract_queue_length,
+        "recent_durations": metrics.recent_durations.iter().cloned().collect::<Vec<_>>(),
+        "error_counts": metrics.error_counts
+    });
+    
+    Ok(json_metrics)
+}
+
 /// 生成文件夹缩略图
 #[command]
 pub async fn generate_folder_thumbnail(
@@ -889,7 +920,7 @@ pub async fn debug_avif(
 
 
 
-/// 快速获取原图（用于首次加载时立即显示）
+/// 快速获取原图（使用首图索引表）
 /// 返回原图的二进制数据
 #[command]
 pub async fn get_archive_first_image_quick(
@@ -906,15 +937,35 @@ pub async fn get_archive_first_image_quick(
     
     if let Ok(manager_guard) = state.manager.lock() {
         if let Some(ref manager) = *manager_guard {
-            // 快速提取压缩包内的第一张图片，不进行任何处理
-            match manager.extract_first_image_from_archive(&path) {
-                Ok(image_data) => {
-                    println!("✅ [Rust] 快速获取成功: {} bytes", image_data.len());
-                    Ok(image_data)
+            // 首先查询首图索引表
+            let archive_key = archive_path.replace('\\', "/");
+            match manager.db.find_archive_first_image(&archive_key) {
+                Ok(Some(inner_path)) => {
+                    println!("🎯 [Rust] 首图索引命中: {} -> {}", archive_path, inner_path);
+                    
+                    // 直接提取已知的图片
+                    use crate::core::archive::ArchiveManager;
+                    let archive_manager = ArchiveManager::new();
+                    match archive_manager.extract_file(&path, &inner_path) {
+                        Ok(image_data) => {
+                            println!("✅ [Rust] 快速获取成功: {} bytes", image_data.len());
+                            Ok(image_data)
+                        }
+                        Err(e) => {
+                            println!("❌ [Rust] 提取失败: {}", e);
+                            
+                            // 索引可能已过期，回退到扫描
+                            get_archive_first_image_fallback(&path, manager).await
+                        }
+                    }
+                }
+                Ok(None) => {
+                    println!("🔍 [Rust] 首图索引未命中，启动扫描");
+                    get_archive_first_image_fallback(&path, manager).await
                 }
                 Err(e) => {
-                    println!("❌ [Rust] 快速获取失败: {}", e);
-                    Err(e)
+                    println!("❌ [Rust] 查询索引失败: {}", e);
+                    get_archive_first_image_fallback(&path, manager).await
                 }
             }
         } else {
@@ -922,6 +973,23 @@ pub async fn get_archive_first_image_quick(
         }
     } else {
         Err("无法获取缩略图管理器".to_string())
+    }
+}
+
+/// 首图获取回退方案（扫描压缩包）
+async fn get_archive_first_image_fallback(path: &PathBuf, manager: &crate::core::thumbnail::ThumbnailManager) -> Result<Vec<u8>, String> {
+    println!("🔄 [Rust] 使用回退方案扫描压缩包");
+    
+    // 快速提取压缩包内的第一张图片
+    match manager.extract_first_image_from_archive(path) {
+        Ok(image_data) => {
+            println!("✅ [Rust] 回退扫描成功: {} bytes", image_data.len());
+            Ok(image_data)
+        }
+        Err(e) => {
+            println!("❌ [Rust] 回退扫描失败: {}", e);
+            Err(e)
+        }
     }
 }
 

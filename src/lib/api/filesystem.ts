@@ -529,3 +529,17 @@ export async function prioritizeCurrentFolder(dirPath: string): Promise<string> 
     throw error;
   }
 }
+
+/**
+ * 获取缩略图处理器性能指标
+ * 用于监控缩略图生成系统的运行状态
+ */
+export async function getThumbnailMetrics(): Promise<any> {
+  try {
+    const metrics = await invoke<any>('get_thumbnail_metrics');
+    return metrics;
+  } catch (error) {
+    console.error('❌ FileSystemAPI: 获取处理器指标失败:', error);
+    throw error;
+  }
+}

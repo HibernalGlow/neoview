@@ -19,7 +19,7 @@ use commands::upscale_commands::UpscaleManagerState;
 use commands::generic_upscale_commands::GenericUpscalerState;
 use commands::upscale_settings_commands::UpscaleSettingsState;
 use commands::pyo3_upscale_commands::PyO3UpscalerState;
-use commands::python_thumbnail_commands::PyThumbState;
+use core::py_thumb_client::PyThumbState;
 use std::sync::Arc;
 
 #[allow(clippy::missing_panics_doc)]
@@ -217,9 +217,9 @@ pub fn run() {
             commands::python_thumbnail_commands::get_thumbnail_blob,
             commands::python_thumbnail_commands::get_thumbnail_blobs,
             commands::python_thumbnail_commands::prefetch_thumbnails,
-            commands::python_thumbnail_commands::generate_file_thumbnail,
-            commands::python_thumbnail_commands::generate_folder_thumbnail,
-            commands::python_thumbnail_commands::generate_archive_thumbnail,
+            commands::python_thumbnail_commands::generate_file_thumbnail_python,
+            commands::python_thumbnail_commands::generate_folder_thumbnail_python,
+            commands::python_thumbnail_commands::generate_archive_thumbnail_python,
             commands::python_thumbnail_commands::python_service_health,
         ])
         .run(tauri::generate_context!())

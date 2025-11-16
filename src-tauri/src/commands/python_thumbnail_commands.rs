@@ -1,12 +1,12 @@
 //! NeoView - Python Thumbnail Commands
 //! 使用 Python FastAPI 服务的缩略图命令
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::command;
 use serde_json::Value;
-use base64;
-use crate::core::py_thumb_client::{PyThumbClient, PyThumbState, EnsureReq, PrefetchReq, get_client, normalize_path, get_file_mtime};
+use base64::{Engine as _, engine::general_purpose};
+use crate::core::py_thumb_client::{PyThumbState, EnsureReq, PrefetchReq, get_client, normalize_path, get_file_mtime};
 
 /// 启动 Python 缩略图服务
 #[command]
@@ -23,7 +23,7 @@ pub async fn start_python_thumbnail_service(
 pub fn stop_python_thumbnail_service(
     state: tauri::State<'_, PyThumbState>,
 ) -> Result<(), String> {
-    if let Ok(client_guard) = state.client.lock() {
+    if let Ok(mut client_guard) = state.client.lock() {
         if let Some(ref client) = *client_guard {
             client.stop_service()?;
             *client_guard = None;
@@ -130,7 +130,7 @@ pub async fn prefetch_thumbnails(
 
 /// 生成文件缩略图（兼容旧接口，内部使用 Python 服务）
 #[command]
-pub async fn generate_file_thumbnail(
+pub async fn generate_file_thumbnail_python(
     file_path: String,
     state: tauri::State<'_, PyThumbState>,
 ) -> Result<String, String> {
@@ -151,13 +151,13 @@ pub async fn generate_file_thumbnail(
     let blob = client.ensure_thumbnail(req).await?;
     
     // 转换为 base64 data URL（保持兼容性）
-    let base64 = base64::encode(&blob);
+    let base64 = general_purpose::STANDARD.encode(&blob);
     Ok(format!("data:image/webp;base64,{}", base64))
 }
 
 /// 生成文件夹缩略图（兼容旧接口，内部使用 Python 服务）
 #[command]
-pub async fn generate_folder_thumbnail(
+pub async fn generate_folder_thumbnail_python(
     folder_path: String,
     state: tauri::State<'_, PyThumbState>,
 ) -> Result<String, String> {
@@ -177,13 +177,13 @@ pub async fn generate_folder_thumbnail(
     let blob = client.ensure_thumbnail(req).await?;
     
     // 转换为 base64 data URL（保持兼容性）
-    let base64 = base64::encode(&blob);
+    let base64 = general_purpose::STANDARD.encode(&blob);
     Ok(format!("data:image/webp;base64,{}", base64))
 }
 
 /// 生成压缩包缩略图（兼容旧接口，内部使用 Python 服务）
 #[command]
-pub async fn generate_archive_thumbnail(
+pub async fn generate_archive_thumbnail_python(
     archive_path: String,
     state: tauri::State<'_, PyThumbState>,
 ) -> Result<String, String> {
@@ -203,7 +203,7 @@ pub async fn generate_archive_thumbnail(
     let blob = client.ensure_thumbnail(req).await?;
     
     // 转换为 base64 data URL（保持兼容性）
-    let base64 = base64::encode(&blob);
+    let base64 = general_purpose::STANDARD.encode(&blob);
     Ok(format!("data:image/webp;base64,{}", base64))
 }
 
@@ -212,21 +212,29 @@ pub async fn generate_archive_thumbnail(
 pub async fn python_service_health(
     state: tauri::State<'_, PyThumbState>,
 ) -> Result<Value, String> {
-    if let Ok(client_guard) = state.client.lock() {
+    let client = {
+        let client_guard = state.client.lock().unwrap();
         if let Some(ref client) = *client_guard {
-            let health = client.health_check().await?;
+            client.clone()
+        } else {
             return Ok(serde_json::json!({
-                "status": health.status,
-                "workers": health.workers,
-                "running": true
+                "status": "stopped",
+                "running": false
             }));
         }
-    }
+    };
     
-    Ok(serde_json::json!({
-        "status": "stopped",
-        "running": false
-    }))
+    match client.health_check().await {
+        Ok(health) => Ok(serde_json::json!({
+            "status": health.status,
+            "workers": health.workers,
+            "running": true
+        })),
+        Err(_) => Ok(serde_json::json!({
+            "status": "error",
+            "running": false
+        }))
+    }
 }
 
 /// 检查文件是否为压缩包

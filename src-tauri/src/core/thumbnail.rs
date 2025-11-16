@@ -353,6 +353,7 @@ impl ThumbnailManager {
             width,
             height,
             file_size,
+            content: None, // 将在后续更新
         };
 
         // 保存到数据库
@@ -397,6 +398,7 @@ impl ThumbnailManager {
                                 width,
                                 height,
                                 file_size,
+                                content: None,
                             };
 
                             // 忽略错误，尽量确保主记录已写入
@@ -640,6 +642,7 @@ impl ThumbnailManager {
                 width,
                 height,
                 file_size,
+                content: None,
             };
 
             // 保存到数据库
@@ -665,17 +668,18 @@ impl ThumbnailManager {
                                 .unwrap_or(source_modified);
 
                             let archive_record = ThumbnailRecord {
-                                bookpath: arch_bookpath,
-                                relative_thumb_path: relative_thumb_path.to_string(),
-                                thumbnail_name: record.thumbnail_name.clone(),
-                                hash: record.hash.clone(),
-                                created_at: now,
-                                source_modified: arch_source_modified,
-                                is_folder: false,
-                                width,
-                                height,
-                                file_size,
-                            };
+                bookpath: arch_bookpath,
+                relative_thumb_path: relative_thumb_path.to_string(),
+                thumbnail_name: record.thumbnail_name.clone(),
+                hash: record.hash.clone(),
+                created_at: now,
+                source_modified: arch_source_modified,
+                is_folder: false,
+                width,
+                height,
+                file_size,
+                content: None,
+            };
 
                             // 忽略错误，尽量确保主记录已写入
                             let _ = self.db.upsert_thumbnail(archive_record);
@@ -1056,9 +1060,10 @@ impl ThumbnailManager {
             width,
             height,
             file_size,
+            content: None,
         };
         
-        let archive_key_clone = archive_key.clone();
+        let _archive_key_clone = archive_key.clone();
         self.db.upsert_thumbnail(archive_record.clone())
             .map_err(|e| format!("保存压缩包记录失败: {}", e))?;
         println!("💾 [Rust] 压缩包记录已保存: {}", archive_key);
@@ -1078,6 +1083,7 @@ impl ThumbnailManager {
             width,
             height,
             file_size,
+            content: None,
         };
         
         self.db.upsert_thumbnail(inner_record)

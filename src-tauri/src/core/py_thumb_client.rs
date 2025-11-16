@@ -8,9 +8,9 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
 use reqwest::Client;
-use tauri::AppHandle;
 
 /// Python 缩略图服务客户端
+#[derive(Clone)]
 pub struct PyThumbClient {
     /// HTTP 客户端
     http: Client,
@@ -177,8 +177,9 @@ impl PyThumbClient {
                 .map(|b| b.to_vec())
                 .map_err(|e| format!("读取缩略图数据失败: {}", e))
         } else {
+            let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
-            Err(format!("生成缩略图失败: {} - {}", resp.status(), text))
+            Err(format!("生成缩略图失败: {} - {}", status, text))
         }
     }
     
@@ -198,8 +199,9 @@ impl PyThumbClient {
             
             Ok(json["processed"].as_i64().unwrap_or(0) as i32)
         } else {
+            let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
-            Err(format!("预加载失败: {} - {}", resp.status(), text))
+            Err(format!("预加载失败: {} - {}", status, text))
         }
     }
     
@@ -225,8 +227,9 @@ impl PyThumbClient {
                 .map_err(|e| format!("解析批量响应失败: {}", e))?;
             Ok(batch.results)
         } else {
+            let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
-            Err(format!("批量获取失败: {} - {}", resp.status(), text))
+            Err(format!("批量获取失败: {} - {}", status, text))
         }
     }
     
@@ -264,43 +267,49 @@ impl Default for PyThumbState {
 }
 
 /// 获取或创建客户端
-async fn get_client(state: &tauri::State<'_, PyThumbState>) -> Result<PyThumbClient, String> {
+pub async fn get_client(state: &tauri::State<'_, PyThumbState>) -> Result<PyThumbClient, String> {
     // 检查是否已有客户端
-    {
+    let client = {
         let client_guard = state.client.lock().unwrap();
         if let Some(ref client) = *client_guard {
-            // 检查服务是否健康
-            if let Ok(_) = client.health_check().await {
-                return Ok(client.clone());
-            }
+            Some(client.clone())
+        } else {
+            None
+        }
+    };
+    
+    // 如果有客户端，检查健康状态
+    if let Some(client) = client {
+        if let Ok(_) = client.health_check().await {
+            return Ok(client);
         }
     }
     
     // 创建新客户端
-    let client = PyThumbClient::new()?;
+    let new_client = PyThumbClient::new()?;
     
     // 启动服务
-    client.start_service().await?;
+    new_client.start_service().await?;
     
     // 保存到状态
     {
         let mut client_guard = state.client.lock().unwrap();
-        *client_guard = Some(client.clone());
+        *client_guard = Some(new_client.clone());
     }
     
-    Ok(client)
+    Ok(new_client)
 }
 
 /// 获取文件修改时间
-fn get_file_mtime(path: &Path) -> i64 {
+pub fn get_file_mtime(path: &Path) -> i64 {
     std::fs::metadata(path)
         .and_then(|m| m.modified())
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH))
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Time conversion failed")))
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
 }
 
 /// 规范化路径（使用正斜杠）
-fn normalize_path(path: &Path) -> String {
+pub fn normalize_path(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }

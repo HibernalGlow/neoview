@@ -936,6 +936,7 @@ pub async fn get_archive_first_image_quick(
     archive_path: String,
     state: tauri::State<'_, ThumbnailManagerState>,
 ) -> Result<Vec<u8>, String> {
+    let start_time = std::time::Instant::now();
     println!("⚡ [Rust] 快速获取压缩包首张图片: {}", archive_path);
     let path = PathBuf::from(&archive_path);
     
@@ -991,7 +992,7 @@ pub async fn get_archive_first_image_quick(
             let archive_manager = ArchiveManager::new();
             match archive_manager.extract_file(&path, &inner_path) {
                 Ok(image_data) => {
-                    println!("✅ [Rust] 快速获取成功: {} bytes", image_data.len());
+                    println!("✅ [Rust] 快速获取成功: {} bytes (耗时: {:?})", image_data.len(), start_time.elapsed());
                     
                     // 如果有异步处理器，直接提交Stage②任务（跳过扫描）
                     let processor_opt = {
@@ -1081,16 +1082,17 @@ pub async fn get_archive_first_image_quick(
 
 /// 首图获取回退方案（扫描压缩包）
 async fn get_archive_first_image_fallback(path: &PathBuf, manager: crate::core::thumbnail::ThumbnailManager) -> Result<Vec<u8>, String> {
+    let start_time = std::time::Instant::now();
     println!("🔄 [Rust] 使用回退方案扫描压缩包");
     
     // 快速提取压缩包内的第一张图片
     match manager.extract_first_image_from_archive(path) {
         Ok(image_data) => {
-            println!("✅ [Rust] 回退扫描成功: {} bytes", image_data.len());
+            println!("✅ [Rust] 回退扫描成功: {} bytes (耗时: {:?})", image_data.len(), start_time.elapsed());
             Ok(image_data)
         }
         Err(e) => {
-            println!("❌ [Rust] 回退扫描失败: {}", e);
+            println!("❌ [Rust] 回退扫描失败: {} (耗时: {:?})", e, start_time.elapsed());
             Err(e)
         }
     }

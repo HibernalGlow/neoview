@@ -575,6 +575,7 @@ impl ThumbnailManager {
         relative_path: &Path,
         source_modified: i64,
     ) -> Result<String, String> {
+        let start_time = std::time::Instant::now();
         println!("📁 ThumbnailManager::generate_folder_thumbnail start: {}", folder_path.display());
         // 查找文件夹中的第一个图片或压缩包
         let first_image = self.find_first_image_in_folder(folder_path)?;
@@ -623,8 +624,10 @@ impl ThumbnailManager {
             }
 
             // 保存文件
+            let save_start = std::time::Instant::now();
             fs::write(&thumbnail_path, &webp_data)
                 .map_err(|e| format!("保存缩略图失败: {}", e))?;
+            println!("💾 缩略图文件保存完成 (耗时: {:?})", save_start.elapsed());
 
             // 获取文件信息
             let (width, height) = thumbnail.dimensions();
@@ -659,8 +662,10 @@ impl ThumbnailManager {
             };
 
             // 保存到数据库
+            let db_start = std::time::Instant::now();
             self.db.upsert_thumbnail(record.clone())
                 .map_err(|e| format!("保存数据库记录失败: {}", e))?;
+            println!("💾 数据库记录保存完成 (耗时: {:?})", db_start.elapsed());
 
             // 如果文件夹缩略图来源于压缩包内部图片，也为压缩包本身创建一条记录（便于直接请求压缩包的缩略图）
             if image_path.to_string_lossy().contains("__archive__") {
@@ -701,14 +706,17 @@ impl ThumbnailManager {
             }
 
             // 返回文件URL
+            println!("📁 ThumbnailManager::generate_folder_thumbnail 完成 (总耗时: {:?})", start_time.elapsed());
             Ok(format!("file://{}", thumbnail_path.to_string_lossy()))
         } else {
+            println!("📁 ThumbnailManager::generate_folder_thumbnail 失败 (耗时: {:?})", start_time.elapsed());
             Err("文件夹中没有找到图片或压缩包".to_string())
         }
     }
 
     /// 查找文件夹中的第一个图片或压缩包（递归查找子目录）
     fn find_first_image_in_folder(&self, folder_path: &Path) -> Result<Option<PathBuf>, String> {
+        let scan_start = std::time::Instant::now();
         if !folder_path.is_dir() {
             return Err("路径不是文件夹".to_string());
         }
@@ -744,7 +752,7 @@ impl ThumbnailManager {
                 }
 
                 if path.is_file() && self.is_image_file(&path) {
-                    println!("🎯 found image file for folder thumb: {}", path.display());
+                    println!("🎯 found image file for folder thumb: {} (扫描耗时: {:?})", path.display(), scan_start.elapsed());
                     return Ok(Some(path));
                 }
             }
@@ -784,11 +792,13 @@ impl ThumbnailManager {
             }
         }
 
+        println!("🔍 find_first_image_in_folder 完成，未找到图片 (扫描耗时: {:?})", scan_start.elapsed());
         Ok(None)
     }
 
     /// 从压缩包中获取第一张图片（使用早停扫描）
     fn get_first_image_from_archive(&self, archive_path: &Path) -> Result<PathBuf, String> {
+        let start_time = std::time::Instant::now();
         use crate::core::archive::ArchiveManager;
         
         let archive_manager = ArchiveManager::new();
@@ -798,18 +808,18 @@ impl ThumbnailManager {
         // 使用早停扫描找到第一张图片
         match archive_manager.find_first_image_entry(archive_path) {
             Ok(Some(first_image_name)) => {
-                println!("📷 selected archive inner file for thumb: {} -> {}", archive_path.display(), first_image_name);
+                println!("📷 selected archive inner file for thumb: {} -> {} (扫描耗时: {:?})", archive_path.display(), first_image_name, start_time.elapsed());
                 // 返回压缩包路径和内部图片路径的组合
                 // 这将在生成文件夹缩略图时被特殊处理
                 let combined_path = archive_path.join("__archive__").join(&first_image_name);
                 Ok(combined_path)
             }
             Ok(None) => {
-                println!("⚠️ 压缩包中没有找到图片: {}", archive_path.display());
+                println!("⚠️ 压缩包中没有找到图片: {} (扫描耗时: {:?})", archive_path.display(), start_time.elapsed());
                 Err("压缩包中没有找到图片".to_string())
             }
             Err(e) => {
-                println!("⚠️ 扫描压缩包失败: {} -> {}", archive_path.display(), e);
+                println!("⚠️ 扫描压缩包失败: {} -> {} (扫描耗时: {:?})", archive_path.display(), e, start_time.elapsed());
                 Err(format!("扫描压缩包失败: {}", e))
             }
         }
@@ -1011,6 +1021,7 @@ fn is_supported_image_name(name: &str) -> bool {
         relative_path: &Path,
         inner_path: &str,
     ) -> Result<String, String> {
+        let start_time = std::time::Instant::now();
         println!("💾 [Rust] save_thumbnail_for_archive: {} :: {}", archive_path.display(), inner_path);
         
         let thumbnail = self.resize_keep_aspect_ratio(img, self.size);
@@ -1089,7 +1100,7 @@ fn is_supported_image_name(name: &str) -> bool {
             .map_err(|e| format!("保存内部图片记录失败: {}", e))?;
         println!("💾 [Rust] 内部图片记录已保存: {}", inner_key);
         
-        println!("✅ [Rust] 双记录已保存");
+        println!("✅ [Rust] 双记录已保存 (总耗时: {:?})", start_time.elapsed());
         
         Ok(format!("file://{}", thumbnail_path.to_string_lossy()))
     }

@@ -74,12 +74,13 @@ pub async fn generate_file_thumbnail_new(
     // 生成缩略图（内部已异步保存到数据库）
     let thumbnail_data = generator.generate_file_thumbnail(&file_path)?;
     
-    // 注册到 BlobRegistry，返回 blob key
+    // 注册到 BlobRegistry，返回 blob key（带路径信息）
     use std::time::Duration;
     let blob_key = state.blob_registry.get_or_register(
         &thumbnail_data,
         "image/webp",
         Duration::from_secs(3600), // 1 小时 TTL
+        Some(file_path.clone()), // 传递路径用于日志
     );
     
     Ok(blob_key)
@@ -97,12 +98,13 @@ pub async fn generate_archive_thumbnail_new(
     // 生成缩略图
     let thumbnail_data = generator.generate_archive_thumbnail(&archive_path)?;
     
-    // 注册到 BlobRegistry，返回 blob key
+    // 注册到 BlobRegistry，返回 blob key（带路径信息）
     use std::time::Duration;
     let blob_key = state.blob_registry.get_or_register(
         &thumbnail_data,
         "image/webp",
         Duration::from_secs(3600), // 1 小时 TTL
+        Some(archive_path.clone()), // 传递路径用于日志
     );
     
     Ok(blob_key)
@@ -131,6 +133,7 @@ pub async fn batch_preload_thumbnails(
                     &data,
                     "image/webp",
                     Duration::from_secs(3600), // 1 小时 TTL
+                    Some(path.clone()), // 传递路径用于日志
                 );
                 blob_keys.push((path, blob_key));
             }
@@ -189,6 +192,7 @@ pub async fn load_thumbnail_from_db(
                 &data,
                 "image/webp",
                 Duration::from_secs(3600), // 1 小时 TTL
+                Some(path_key.clone()), // 传递路径用于日志
             );
             Ok(Some(blob_key))
         }

@@ -531,70 +531,69 @@ import { getPerformanceSettings } from '$lib/api/performance';
     // 缓存目录数据（不包含缩略图）
     navigationHistory.cacheDirectory(path, loadedItems, new Map(), mtime);
     
-    // 完全异步加载缩略图，不阻塞文件浏览
-    // 使用 requestIdleCallback 或 setTimeout 延迟加载
-    if ('requestIdleCallback' in window) {
-      requestIdleCallback(() => {
-        loadThumbnailsForItemsAsync(loadedItems, path);
-      }, { timeout: 500 });
-    } else {
-      setTimeout(() => {
-        loadThumbnailsForItemsAsync(loadedItems, path);
-      }, 0);
-    }
+    // 立即加载缩略图（不阻塞文件浏览，但立即开始处理）
+    // 1. 先预加载数据库索引，立即显示已缓存的
+    loadThumbnailsForItemsAsync(loadedItems, path);
     
     // 预加载相邻目录
     navigationHistory.prefetchAdjacentPaths(path);
   }
 
   /**
-   * 异步加载缩略图（不阻塞文件浏览）
+   * 异步加载缩略图（立即开始，不阻塞文件浏览）
    */
-  function loadThumbnailsForItemsAsync(
-    items: FsItem[], 
+  async function loadThumbnailsForItemsAsync(
+    items: FsItem[],
     path: string
   ) {
     console.log('🖼️ 异步缩略图扫描：项目总数', items.length);
+
+    // 设置当前目录（用于优先级判断）
+    thumbnailManager.setCurrentDirectory(path);
 
     // 检测是否为合集文件夹（子文件夹数量>45）
     const subfolders = items.filter(item => item.isDir);
     const isCollectionFolder = subfolders.length > 45;
 
+    // 过滤出需要缩略图的项目
+    const itemsNeedingThumbnails = items.filter(item => {
+      const name = item.name.toLowerCase();
+      const isDir = item.isDir;
+      
+      // 支持的图片扩展名
+      const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.avif', '.jxl', '.tiff', '.tif'];
+      // 支持的压缩包扩展名
+      const archiveExts = ['.zip', '.rar', '.7z', '.cbz', '.cbr', '.cb7'];
+      
+      const ext = name.substring(name.lastIndexOf('.'));
+      
+      // 文件夹或支持的文件类型
+      return isDir || imageExts.includes(ext) || archiveExts.includes(ext);
+    });
+
+    // 1. 立即预加载数据库索引（异步，不阻塞）
+    const paths = itemsNeedingThumbnails.map(item => item.path);
+    thumbnailManager.preloadDbIndex(paths).catch(err => {
+      console.debug('预加载数据库索引失败:', err);
+    });
+
+    // 2. 立即加载所有缩略图（getThumbnail 会自动检查数据库并立即显示已缓存的）
+    // 对于已缓存的，会立即从数据库加载并显示
+    // 对于未缓存的，会入队生成（immediate 优先级）
+    itemsNeedingThumbnails.forEach(item => {
+      const isArchive = item.name.endsWith('.zip') || item.name.endsWith('.cbz') ||
+                       item.name.endsWith('.rar') || item.name.endsWith('.cbr');
+      // getThumbnail 会自动检查数据库，如果存在会立即加载并返回
+      // 如果不存在，会入队生成（immediate 优先级）
+      thumbnailManager.getThumbnail(item.path, undefined, isArchive, 'immediate');
+    });
+
+    // 3. 处理合集文件夹（特殊优化）
     if (isCollectionFolder) {
       console.log('📚 检测到合集文件夹，优先加载最新和未记录的');
-      // 合集文件夹：优先加载最新和未记录的
       loadCollectionFolderThumbnails(items, path, subfolders);
     } else {
-      // 普通文件夹：正常加载
-      // 设置当前目录（用于优先级判断）
-      thumbnailManager.setCurrentDirectory(path);
-      
-      // 取消之前的入队任务
-      if (lastEnqueueTimeout) {
-        clearTimeout(lastEnqueueTimeout);
-      }
-      
-      lastEnqueueTimeout = setTimeout(() => {
-        // 过滤出需要缩略图的项目
-        const itemsNeedingThumbnails = items.filter(item => {
-          const name = item.name.toLowerCase();
-          const isDir = item.isDir;
-          
-          // 支持的图片扩展名
-          const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.avif', '.jxl', '.tiff', '.tif'];
-          // 支持的压缩包扩展名
-          const archiveExts = ['.zip', '.rar', '.7z', '.cbz', '.cbr', '.cb7'];
-          
-          const ext = name.substring(name.lastIndexOf('.'));
-          
-          // 文件夹或支持的文件类型
-          return isDir || imageExts.includes(ext) || archiveExts.includes(ext);
-        });
-        
-        // 使用前端调度器入队
-        enqueueDirectoryThumbnails(path, itemsNeedingThumbnails);
-        console.log(`⚡ 已将 ${itemsNeedingThumbnails.length} 个项目入队（前端调度）`);
-      }, 100);
+      console.log(`⚡ 已将 ${itemsNeedingThumbnails.length} 个项目入队（立即处理）`);
     }
   }
 

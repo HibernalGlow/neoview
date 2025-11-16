@@ -21,10 +21,12 @@ struct BlobEntry {
     ref_count: usize,
     /// TTL 生存时间
     ttl: Duration,
+    /// 关联的路径（用于日志）
+    path: Option<String>,
 }
 
 impl BlobEntry {
-    fn new(data: Vec<u8>, mime: String, ttl: Duration) -> Self {
+    fn new(data: Vec<u8>, mime: String, ttl: Duration, path: Option<String>) -> Self {
         let now = Instant::now();
         Self {
             data,
@@ -33,6 +35,7 @@ impl BlobEntry {
             last_used: now,
             ref_count: 1,
             ttl,
+            path,
         }
     }
 
@@ -74,7 +77,7 @@ impl BlobRegistry {
     }
 
     /// 获取或注册 blob
-    pub fn get_or_register(&self, data: &[u8], mime: &str, ttl: Duration) -> String {
+    pub fn get_or_register(&self, data: &[u8], mime: &str, ttl: Duration, path: Option<String>) -> String {
         let hash = md5::compute(data);
         let key = format!("blob:{:x}", hash);
 
@@ -106,10 +109,16 @@ impl BlobRegistry {
 
         // 创建新条目
         let blob_url = key.clone();
-        map.insert(key, BlobEntry::new(data.to_vec(), mime.to_string(), ttl));
+        map.insert(key, BlobEntry::new(data.to_vec(), mime.to_string(), ttl, path.clone()));
         
-        println!("📝 BlobRegistry: 注册新 blob {} ({} bytes, {})", 
-            blob_url, data.len(), mime);
+        // 显示路径信息（如果有）
+        if let Some(ref p) = path {
+            println!("📝 BlobRegistry: 注册新 blob {} ({} bytes, {}) - {}", 
+                blob_url, data.len(), mime, p);
+        } else {
+            println!("📝 BlobRegistry: 注册新 blob {} ({} bytes, {})", 
+                blob_url, data.len(), mime);
+        }
         
         blob_url
     }

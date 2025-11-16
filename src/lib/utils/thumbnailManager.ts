@@ -100,9 +100,15 @@ class ThumbnailManager {
    * 设置当前目录（用于优先级判断）
    */
   setCurrentDirectory(path: string) {
+    const oldPath = this.currentDirectory;
     this.currentDirectory = path;
-    // 提升当前目录任务的优先级
-    this.bumpCurrentDirectoryPriority();
+    
+    // 如果切换了目录，立即重新排序队列，优先处理新目录的任务
+    if (oldPath !== path) {
+      this.bumpCurrentDirectoryPriority();
+      // 立即处理队列，不要等待
+      setTimeout(() => this.processQueue(), 0);
+    }
   }
 
   /**
@@ -312,23 +318,29 @@ class ThumbnailManager {
       return cached.dataUrl;
     }
 
-    // 2. 检查数据库索引缓存
-    const hasDbCache = this.dbIndexCache.get(pathKey);
-    if (hasDbCache === true) {
-      // 从数据库加载（返回 blob key，需要转换为 blob URL）
+    // 2. 尝试从数据库加载（不依赖索引缓存，直接尝试）
+    // 这样可以立即显示已缓存的缩略图，不需要等待索引预加载
+    try {
       const dbBlobKey = await this.loadFromDb(path, innerPath);
       if (dbBlobKey) {
         const blobUrl = await this.blobKeyToUrl(dbBlobKey);
         if (blobUrl) {
-          // 更新缓存
+          // 更新缓存和索引缓存
           this.cache.set(pathKey, {
             pathKey,
             dataUrl: blobUrl,
             timestamp: Date.now(),
           });
+          this.dbIndexCache.set(pathKey, true);
           return blobUrl;
         }
       }
+      // 如果数据库中没有，更新索引缓存
+      this.dbIndexCache.set(pathKey, false);
+    } catch (error) {
+      // 加载失败，继续尝试生成
+      console.debug('从数据库加载缩略图失败:', pathKey, error);
+      this.dbIndexCache.set(pathKey, false);
     }
 
     // 3. 如果任务已在处理中，等待
@@ -346,9 +358,14 @@ class ThumbnailManager {
       timestamp: Date.now(),
     });
 
-    // 5. 立即处理高优先级任务
+    // 5. 立即处理高优先级任务（不等待，异步执行）
     if (priority === 'immediate') {
-      return this.processTask(pathKey);
+      // 立即触发队列处理，确保 immediate 任务优先
+      setTimeout(() => this.processQueue(), 0);
+      // 异步处理，不阻塞
+      this.processTask(pathKey).catch(err => {
+        console.error('处理 immediate 任务失败:', pathKey, err);
+      });
     }
 
     return null;
@@ -522,7 +539,7 @@ class ThumbnailManager {
   }
 
   /**
-   * 处理队列（优化并发性能，带上限管理）
+   * 处理队列（优化并发性能，带上限管理，优先处理当前目录）
    */
   private async processQueue() {
     const maxConcurrent = Math.min(this.config.maxConcurrentLocal, this.MAX_PROCESSING);
@@ -534,7 +551,21 @@ class ThumbnailManager {
       return;
     }
 
-    // 获取待处理的任务（按优先级排序）
+    // 重新排序队列，确保当前目录和 immediate 优先级任务在前
+    this.taskQueue.sort((a, b) => {
+      const priorityOrder = { immediate: 0, high: 1, normal: 2 };
+      const aIsCurrent = a.path.startsWith(this.currentDirectory);
+      const bIsCurrent = b.path.startsWith(this.currentDirectory);
+      
+      // 当前目录优先
+      if (aIsCurrent && !bIsCurrent) return -1;
+      if (!aIsCurrent && bIsCurrent) return 1;
+      
+      // 然后按优先级
+      return priorityOrder[a.priority] - priorityOrder[b.priority];
+    });
+
+    // 获取待处理的任务（优先当前目录和 immediate）
     const tasksToProcess = this.taskQueue
       .filter(
         (task) =>

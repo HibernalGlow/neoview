@@ -797,10 +797,11 @@ impl ArchiveManager {
         let mime_type = self.detect_image_mime_type(&inner_path);
         
         // 注册到 BlobRegistry
-        let blob_url = self.blob_registry.get_or_register(
+          let blob_url = self.blob_registry.get_or_register(
             &image_data, 
             &mime_type, 
-            Duration::from_secs(600) // 10分钟 TTL
+            Duration::from_secs(600), // 10分钟 TTL
+            Some(format!("{}::{}", archive_path.display(), inner_path)) // 传递路径用于日志
         );
 
         // 更新缓存

@@ -1,13 +1,11 @@
 //! Thumbnail Generator Module
 //! 缩略图生成器模块 - 支持多线程、压缩包流式处理、webp 格式
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
-use std::io::Cursor;
+use std::io::{self, Cursor, Read};
 use image::{DynamicImage, GenericImageView, ImageFormat};
 use crate::core::thumbnail_db::ThumbnailDb;
-use crate::core::image_loader::ImageLoader;
-use crate::core::archive::ArchiveManager;
 use threadpool::ThreadPool;
 use std::sync::mpsc;
 use std::collections::HashMap;
@@ -38,8 +36,6 @@ impl Default for ThumbnailGeneratorConfig {
 /// 缩略图生成器
 pub struct ThumbnailGenerator {
     db: Arc<ThumbnailDb>,
-    image_loader: Arc<ImageLoader>,
-    archive_manager: Arc<ArchiveManager>,
     config: ThumbnailGeneratorConfig,
     thread_pool: Arc<ThreadPool>,
 }
@@ -48,16 +44,12 @@ impl ThumbnailGenerator {
     /// 创建新的缩略图生成器
     pub fn new(
         db: Arc<ThumbnailDb>,
-        image_loader: Arc<ImageLoader>,
-        archive_manager: Arc<ArchiveManager>,
         config: ThumbnailGeneratorConfig,
     ) -> Self {
         let thread_pool = Arc::new(ThreadPool::new(config.thread_pool_size));
         
         Self {
             db,
-            image_loader,
-            archive_manager,
             config,
             thread_pool,
         }
@@ -71,11 +63,11 @@ impl ThumbnailGenerator {
         let mut hasher = DefaultHasher::new();
         path.hash(&mut hasher);
         size.hash(&mut hasher);
-        (hasher.finish() as i32)
+        hasher.finish() as i32
     }
 
     /// 生成文件路径的键（用于数据库）
-    fn build_path_key(path: &str, inner_path: Option<&str>) -> String {
+    fn build_path_key(&self, path: &str, inner_path: Option<&str>) -> String {
         if let Some(inner) = inner_path {
             format!("{}::{}", path, inner)
         } else {
@@ -238,31 +230,53 @@ impl ThumbnailGenerator {
             return Ok(cached);
         }
         
-        // 使用 find_first_image_entry 快速找到第一张图片
-        let first_image = self.archive_manager.find_first_image_entry(Path::new(archive_path))
-            .map_err(|e| format!("查找压缩包首图失败: {}", e))?;
+        // 使用 zip crate 直接读取压缩包，找到第一张图片
+        use zip::ZipArchive;
+        use std::fs::File;
         
-        if let Some(inner_path) = first_image {
-            // 从压缩包中提取图片
-            let image_data = self.archive_manager.extract_file(Path::new(archive_path), &inner_path)
-                .map_err(|e| format!("提取压缩包条目失败: {}", e))?;
+        let file = File::open(archive_path)
+            .map_err(|e| format!("打开压缩包失败: {}", e))?;
+        let mut archive = ZipArchive::new(file)
+            .map_err(|e| format!("读取压缩包失败: {}", e))?;
+        
+        // 支持的图片扩展名
+        let image_exts = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "avif", "jxl", "tiff", "tif"];
+        
+        // 遍历压缩包条目，找到第一个图片文件
+        for i in 0..archive.len() {
+            let mut file = archive.by_index(i)
+                .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
             
-            // 从内存加载图像
-            let img = image::load_from_memory(&image_data)
-                .map_err(|e| format!("从内存加载图像失败: {}", e))?;
-            
-            // 生成 webp 缩略图
-            let thumbnail_data = self.generate_webp_thumbnail(img)?;
-            
-            // 保存到数据库
-            if let Err(e) = self.db.save_thumbnail(&path_key, archive_size, ghash, &thumbnail_data) {
-                eprintln!("保存缩略图到数据库失败: {}", e);
+            let name = file.name().to_string();
+            if let Some(ext) = Path::new(&name)
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.to_lowercase())
+            {
+                if image_exts.contains(&ext.as_str()) {
+                    // 读取文件内容
+                    let mut image_data = Vec::new();
+                    file.read_to_end(&mut image_data)
+                        .map_err(|e| format!("读取压缩包文件失败: {}", e))?;
+                    
+                    // 从内存加载图像
+                    let img = image::load_from_memory(&image_data)
+                        .map_err(|e| format!("从内存加载图像失败: {}", e))?;
+                    
+                    // 生成 webp 缩略图
+                    let thumbnail_data = self.generate_webp_thumbnail(img)?;
+                    
+                    // 保存到数据库
+                    if let Err(e) = self.db.save_thumbnail(&path_key, archive_size, ghash, &thumbnail_data) {
+                        eprintln!("保存缩略图到数据库失败: {}", e);
+                    }
+                    
+                    return Ok(thumbnail_data);
+                }
             }
-            
-            Ok(thumbnail_data)
-        } else {
-            Err("压缩包中没有找到图片文件".to_string())
         }
+        
+        Err("压缩包中没有找到图片文件".to_string())
     }
 
     /// 批量生成缩略图（多线程）
@@ -304,8 +318,6 @@ impl Clone for ThumbnailGenerator {
     fn clone(&self) -> Self {
         Self {
             db: Arc::clone(&self.db),
-            image_loader: Arc::clone(&self.image_loader),
-            archive_manager: Arc::clone(&self.archive_manager),
             config: ThumbnailGeneratorConfig {
                 max_width: self.config.max_width,
                 max_height: self.config.max_height,

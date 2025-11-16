@@ -3,11 +3,9 @@
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use tauri::{State, Manager};
-use serde::{Deserialize, Serialize};
+use tauri::Manager;
 use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::thumbnail_generator::{ThumbnailGenerator, ThumbnailGeneratorConfig};
-use crate::core::{ImageLoader, ArchiveManager};
 
 /// 缩略图管理器状态
 pub struct ThumbnailState {
@@ -20,7 +18,7 @@ pub struct ThumbnailState {
 pub async fn init_thumbnail_manager(
     app: tauri::AppHandle,
     thumbnail_path: String,
-    root_path: String,
+    _root_path: String,
     size: u32,
 ) -> Result<(), String> {
     // 创建数据库路径
@@ -28,10 +26,6 @@ pub async fn init_thumbnail_manager(
     
     // 创建数据库
     let db = Arc::new(ThumbnailDb::new(db_path));
-    
-    // 创建图像加载器和压缩包管理器
-    let image_loader = Arc::new(ImageLoader::new(512, 6));
-    let archive_manager = Arc::new(ArchiveManager::new());
     
     // 创建生成器配置
     let config = ThumbnailGeneratorConfig {
@@ -41,11 +35,9 @@ pub async fn init_thumbnail_manager(
         archive_concurrency: 3,
     };
     
-    // 创建生成器
+    // 创建生成器（已解耦，不依赖 ImageLoader 和 ArchiveManager）
     let generator = Arc::new(Mutex::new(ThumbnailGenerator::new(
         Arc::clone(&db),
-        image_loader,
-        archive_manager,
         config,
     )));
     
@@ -68,7 +60,8 @@ pub async fn generate_file_thumbnail_new(
     let thumbnail_data = generator.generate_file_thumbnail(&file_path)?;
     
     // 转换为 base64 data URL
-    let base64 = base64::encode(&thumbnail_data);
+    use base64::{Engine as _, engine::general_purpose};
+    let base64 = general_purpose::STANDARD.encode(&thumbnail_data);
     Ok(format!("data:image/webp;base64,{}", base64))
 }
 
@@ -85,7 +78,8 @@ pub async fn generate_archive_thumbnail_new(
     let thumbnail_data = generator.generate_archive_thumbnail(&archive_path)?;
     
     // 转换为 base64 data URL
-    let base64 = base64::encode(&thumbnail_data);
+    use base64::{Engine as _, engine::general_purpose};
+    let base64 = general_purpose::STANDARD.encode(&thumbnail_data);
     Ok(format!("data:image/webp;base64,{}", base64))
 }
 
@@ -103,11 +97,12 @@ pub async fn batch_preload_thumbnails(
     let results = generator.batch_generate_thumbnails(paths, is_archive);
     
     // 转换为 base64 data URLs
+    use base64::{Engine as _, engine::general_purpose};
     let mut data_urls = Vec::new();
     for (path, result) in results {
         match result {
             Ok(data) => {
-                let base64 = base64::encode(&data);
+                let base64 = general_purpose::STANDARD.encode(&data);
                 data_urls.push((path, format!("data:image/webp;base64,{}", base64)));
             }
             Err(e) => {
@@ -157,9 +152,10 @@ pub async fn load_thumbnail_from_db(
         path
     };
     
+    use base64::{Engine as _, engine::general_purpose};
     match state.db.load_thumbnail(&path_key, size, ghash) {
         Ok(Some(data)) => {
-            let base64 = base64::encode(&data);
+            let base64 = general_purpose::STANDARD.encode(&data);
             Ok(Some(format!("data:image/webp;base64,{}", base64)))
         }
         Ok(None) => Ok(None),

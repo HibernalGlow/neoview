@@ -3,7 +3,7 @@
 //! 使用 SQLite 存储 webp 格式的缩略图 blob
 
 use rusqlite::{Connection, params, Result as SqliteResult};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -106,7 +106,7 @@ impl ThumbnailDb {
         })?;
 
         if let Some(row) = rows.next() {
-            Some(row)
+            row.map(Some)
         } else {
             Ok(None)
         }
@@ -261,7 +261,12 @@ impl ThumbnailDb {
     /// 获取数据库大小
     pub fn get_database_size(&self) -> SqliteResult<u64> {
         if self.db_path.exists() {
-            Ok(std::fs::metadata(&self.db_path)?.len())
+            std::fs::metadata(&self.db_path)
+                .map(|m| m.len())
+                .map_err(|e| rusqlite::Error::SqliteFailure(
+                    rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_IOERR),
+                    Some(format!("Failed to get file metadata: {}", e))
+                ))
         } else {
             Ok(0)
         }

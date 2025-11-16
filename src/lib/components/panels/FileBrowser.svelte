@@ -16,12 +16,9 @@
   import * as ContextMenu from '$lib/components/ui/context-menu';
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
   import { homeDir } from '@tauri-apps/api/path';
-  // TODO: 缩略图功能已移除，待重新实现
-  // import { configureThumbnailManager, itemIsDirectory, itemIsImage, toRelativeKey, enqueueDirectoryThumbnails, cancelBySource, enqueueVisible } from '$lib/utils/thumbnailManager';
-  // import { cancelFolderTasks } from '$lib/api';
-  // import { thumbnailStore, setupThumbnailEventListener } from '$lib/thumbnailManager';
+  import { thumbnailManager, type ThumbnailConfig } from '$lib/utils/thumbnailManager';
+  import { buildImagePathKey } from '$lib/utils/pathHash';
   
-  // 临时占位函数
   function itemIsDirectory(item: any): boolean {
     return item.isDir || item.is_directory;
   }
@@ -35,23 +32,38 @@
   }
   
   function cancelBySource(source: string): void {
-    // TODO: 实现取消任务
+    thumbnailManager.cancelByPath(source);
   }
   
   function enqueueVisible(path: string, items: any[], options?: any): void {
-    // TODO: 实现缩略图队列
+    const priority = options?.priority || 'normal';
+    items.forEach((item) => {
+      if (itemIsDirectory(item) || itemIsImage(item)) {
+        const isArchive = item.name.endsWith('.zip') || 
+                         item.name.endsWith('.cbz') || 
+                         item.name.endsWith('.rar') || 
+                         item.name.endsWith('.cbr');
+        thumbnailManager.getThumbnail(item.path, undefined, isArchive, priority);
+      }
+    });
   }
   
-  function configureThumbnailManager(config: any): void {
-    // TODO: 实现缩略图管理器配置
+  function configureThumbnailManager(config: Partial<ThumbnailConfig>): void {
+    thumbnailManager.setConfig(config);
+    thumbnailManager.setOnThumbnailReady((path, dataUrl) => {
+      const key = toRelativeKey(path);
+      fileBrowserStore.addThumbnail(key, dataUrl);
+    });
   }
   
   function enqueueDirectoryThumbnails(path: string, items: any[]): void {
-    // TODO: 实现目录缩略图入队
+    // 当前目录优先
+    thumbnailManager.setCurrentDirectory(path);
+    thumbnailManager.preloadThumbnails(items, path, 'immediate');
   }
   
   async function cancelFolderTasks(path: string): Promise<number> {
-    // TODO: 实现取消文件夹任务
+    thumbnailManager.cancelByPath(path);
     return 0;
   }
 import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
@@ -78,25 +90,14 @@ import { getPerformanceSettings } from '$lib/api/performance';
   // 导航历史管理器
   let navigationHistory = new NavigationHistory();
 
-  // 订阅 thumbnailStore 以获取实时缩略图更新
-  let unsubscribeThumbnailStore: (() => void) | null = null;
-  let unsubscribeStore: (() => void) | null = null;
+  // 缩略图功能已由 thumbnailManager 管理
   
   $effect(() => {
-    // TODO: 缩略图功能已移除，待重新实现
-    // 设置缩略图事件监听
-    // unsubscribeThumbnailStore = setupThumbnailEventListener();
-    
-    // 订阅 thumbnailStore 更新
-    // unsubscribeStore = thumbnailStore.subscribe((store) => {
-    //   // 更新本地 thumbnails Map
-    //   thumbnails = new Map(store);
-    //   console.log('🖼️ [Frontend] thumbnails Map 更新，数量:', store.size);
-    // });
+    // 缩略图功能已由 thumbnailManager 管理
+    // 不需要额外的订阅
     
     return () => {
-      if (unsubscribeStore) unsubscribeStore();
-      if (unsubscribeThumbnailStore) unsubscribeThumbnailStore();
+      // 清理工作由 thumbnailManager 处理
     };
   });
   
@@ -376,16 +377,16 @@ import { getPerformanceSettings } from '$lib/api/performance';
         const maxArchive = settings.thumbnail_concurrent_archive || 3;
         console.log(`📊 应用缩略图设置: 本地=${maxLocal}, 压缩包=${maxArchive}`);
         configureThumbnailManager({
-          addThumbnail: (path: string, url: string) => fileBrowserStore.addThumbnail(path, url),
           maxConcurrentLocal: maxLocal,
-          maxConcurrentArchive: maxArchive
+          maxConcurrentArchive: maxArchive,
+          thumbnailSize: 256,
         });
       } catch (e) {
         console.debug('读取缩略图设置失败，使用默认值:', e);
         configureThumbnailManager({
-          addThumbnail: (path: string, url: string) => fileBrowserStore.addThumbnail(path, url),
           maxConcurrentLocal: 6,
-          maxConcurrentArchive: 3
+          maxConcurrentArchive: 3,
+          thumbnailSize: 256,
         });
       }
     };
@@ -539,7 +540,7 @@ import { getPerformanceSettings } from '$lib/api/performance';
       clearTimeout(lastEnqueueTimeout);
     }
     
-    lastEnqueueTimeout = () => {
+    lastEnqueueTimeout = setTimeout(() => {
       // 过滤出需要缩略图的项目
       const itemsNeedingThumbnails = items.filter(item => {
         const name = item.name.toLowerCase();
@@ -559,10 +560,7 @@ import { getPerformanceSettings } from '$lib/api/performance';
       // 使用前端调度器入队
       enqueueDirectoryThumbnails(path, itemsNeedingThumbnails);
       console.log(`⚡ 已将 ${itemsNeedingThumbnails.length} 个项目入队（前端调度）`);
-    };
-    
-    // 延迟执行，避免阻塞目录加载
-    setTimeout(lastEnqueueTimeout, 100);
+    }, 100);
     
     // 预加载相邻目录
     navigationHistory.prefetchAdjacentPaths(path);
@@ -578,53 +576,11 @@ import { getPerformanceSettings } from '$lib/api/performance';
   ) {
     console.log('🖼️ 缩略图扫描：项目总数', items.length);
 
-    const cachedKeys = new Set<string>();
-    for (const key of existingThumbnails.keys()) cachedKeys.add(key);
-    for (const key of thumbnails?.keys?.() ?? []) cachedKeys.add(key);
+    // 设置当前目录（用于优先级判断）
+    thumbnailManager.setCurrentDirectory(path);
 
-    const thumbnailItems: FsItem[] = [];
-    const archiveItems: FsItem[] = [];
-
-    for (const item of items) {
-      let key: string | null = null;
-      try {
-        key = toRelativeKey(item.path);
-      } catch (e) {
-        key = null;
-      }
-
-      const alreadyCached = key ? cachedKeys.has(key) : false;
-      if (alreadyCached) continue;
-
-      if (itemIsDirectory(item) || itemIsImage(item)) {
-        thumbnailItems.push(item);
-        if (key) cachedKeys.add(key);
-      } else {
-        // 异步检查压缩包，但先收集起来
-        (async () => {
-          try {
-            if (await FileSystemAPI.isSupportedArchive(item.path)) {
-              archiveItems.push(item);
-            }
-          } catch (e) {
-            console.debug('Archive check failed for', item.path, e);
-          }
-        })();
-      }
-    }
-
-    // 🔥 关键优化：当前文件夹的所有项目使用 immediate 优先级
-    if (thumbnailItems.length > 0) {
-      console.log('🚀 [优先级提升] 当前文件夹项目立即加载:', thumbnailItems.length);
-      // 所有项目都用 immediate 优先级，确保当前文件夹快速显示
-      const { immediate, high, normal } = {
-        immediate: thumbnailItems,
-        high: [],
-        normal: []
-      };
-      
-      enqueueVisible(path, immediate, { priority: 'immediate' });
-    }
+    // 使用缩略图管理器预加载
+    await thumbnailManager.preloadThumbnails(items, path, 'immediate');
   }
 
   /**
@@ -735,7 +691,7 @@ import { getPerformanceSettings } from '$lib/api/performance';
       x: menuX, 
       y: menuY, 
       item,
-      direction: menuDirection
+      direction: menuDirection as 'up' | 'down'
     };
   }
 
@@ -764,6 +720,7 @@ import { getPerformanceSettings } from '$lib/api/performance';
     }
     
     // 确保菜单不超出视口底部
+    const viewportHeight = window.innerHeight;
     const maxMenuHeight = viewportHeight * 0.7;
     if (menuY + maxMenuHeight > viewportHeight) {
       menuY = viewportHeight - maxMenuHeight - 10;
@@ -1760,7 +1717,7 @@ import { getPerformanceSettings } from '$lib/api/performance';
       <div class="grid grid-cols-1 gap-2">
         {#each searchResults as item, index (item.path)}
           <ContextMenu.Root>
-            <ContextMenu.Trigger asChild>
+            <ContextMenu.Trigger>
               <div
                 class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors hover:bg-gray-50 border-gray-200"
                 onclick={() => openSearchResult(item)}

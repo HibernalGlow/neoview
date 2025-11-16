@@ -1,20 +1,37 @@
 <script lang="ts">
   import { createEventDispatcher, onMount, onDestroy } from 'svelte';
   import type { FsItem } from '$lib/types';
-  // TODO: 缩略图功能已移除，待重新实现
-  // import { enqueueVisible, bumpPriority, toRelativeKey } from '$lib/utils/thumbnailManager';
+  import { thumbnailManager } from '$lib/utils/thumbnailManager';
+  import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
   
-  // 临时占位函数
   function toRelativeKey(path: string): string {
     return path.replace(/\\/g, '/');
   }
   
   function enqueueVisible(path: string, items: any[], options?: any): void {
-    // TODO: 实现缩略图队列
+    const priority = options?.priority || 'normal';
+    items.forEach((item) => {
+      const isArchive = item.name.endsWith('.zip') || 
+                       item.name.endsWith('.cbz') || 
+                       item.name.endsWith('.rar') || 
+                       item.name.endsWith('.cbr');
+      
+      if (item.isDir) {
+        // 文件夹：使用子路径下第一个条目的缩略图
+        thumbnailManager.getFolderThumbnail(item.path).then((dataUrl) => {
+          if (dataUrl) {
+            const key = toRelativeKey(item.path);
+            fileBrowserStore.addThumbnail(key, dataUrl);
+          }
+        });
+      } else if (item.isImage || isArchive) {
+        thumbnailManager.getThumbnail(item.path, undefined, isArchive, priority);
+      }
+    });
   }
   
   function bumpPriority(path: string): void {
-    // TODO: 实现优先级提升
+    thumbnailManager.setCurrentDirectory(path);
   }
 
   import { Folder, File, Image, FileArchive } from '@lucide/svelte';

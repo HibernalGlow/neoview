@@ -129,6 +129,10 @@ class BookStore {
       this.state.currentBook = book;
       this.state.viewerOpen = true;
       
+      // 记录历史
+      const { historyStore } = await import('$lib/stores/history.svelte');
+      historyStore.add(path, book.name, book.currentPage, book.totalPages);
+      
       // 重置所有页面的超分状态
       this.resetAllPageUpscaleStatus();
       
@@ -168,6 +172,10 @@ class BookStore {
       this.state.currentBook = book;
       this.state.viewerOpen = true;
       
+      // 记录历史
+      const { historyStore } = await import('$lib/stores/history.svelte');
+      historyStore.add(path, book.name, book.currentPage, book.totalPages);
+      
       // 重置所有页面的超分状态
       this.resetAllPageUpscaleStatus();
       
@@ -206,6 +214,10 @@ class BookStore {
       
       this.state.currentBook = book;
       this.state.viewerOpen = true;
+      
+      // 记录历史
+      const { historyStore } = await import('$lib/stores/history.svelte');
+      historyStore.add(path, book.name, book.currentPage, book.totalPages);
       
       // 重置所有页面的超分状态
       this.resetAllPageUpscaleStatus();

@@ -246,11 +246,11 @@
 					<Sidebar.Group class="px-0">
 						<Sidebar.GroupContent>
 							{#if activeItem.value === 'folder'}
-								<FileBrowser />
+								<FileBrowser key="folder" />
 							{:else if activeItem.value === 'history'}
-								<HistoryPanel />
+								<HistoryPanel key="history" />
 							{:else if activeItem.value === 'bookmark'}
-								<BookmarkPanel />
+								<BookmarkPanel key="bookmark" />
 							{:else if activeItem.value === 'thumbnail'}
 								<ThumbnailsPanel />
 							{:else if activeItem.value === 'playlist'}

@@ -1,18 +1,24 @@
 <script lang="ts">
 	/**
 	 * NeoView - Bookmark Panel Component
-	 * 书签面板 - 使用 bookmarkStore
+	 * 书签面板 - 使用 bookmarkStore 和 FileItemCard
+	 * 支持列表和网格视图
 	 */
-	import { Bookmark, X, Star, Folder as FolderIcon, FileArchive, File } from '@lucide/svelte';
+	import { Bookmark, X, Star, Grid3x3, List } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
+	import FileItemCard from './file/components/FileItemCard.svelte';
 	import type { FsItem } from '$lib/types';
 	import { FileSystemAPI } from '$lib/api';
+	import { bookStore } from '$lib/stores/book.svelte';
+	import { thumbnailManager } from '$lib/utils/thumbnailManager';
 
 	let bookmarks: any[] = $state([]);
 	let searchQuery = $state('');
+	let viewMode = $state<'list' | 'grid'>('list');
+	let thumbnails = $state<Map<string, string>>(new Map());
 
 	let filteredBookmarks = $derived(bookmarks.filter(
 		(b) =>
@@ -20,11 +26,39 @@
 			b.path.toLowerCase().includes(searchQuery.toLowerCase())
 	));
 
+	// 加载书签
+	function loadBookmarks() {
+		bookmarks = bookmarkStore.getAll();
+		// 加载缩略图
+		loadThumbnails();
+	}
+
+	// 加载缩略图
+	async function loadThumbnails() {
+		const newThumbnails = new Map<string, string>();
+		for (const bookmark of bookmarks) {
+			try {
+				const isDir = bookmark.type === 'folder';
+				const isArchive = bookmark.name.endsWith('.zip') || bookmark.name.endsWith('.cbz') ||
+				                 bookmark.name.endsWith('.rar') || bookmark.name.endsWith('.cbr');
+				const thumbnail = await thumbnailManager.getThumbnail(bookmark.path, undefined, isArchive, 'normal');
+				if (thumbnail) {
+					newThumbnails.set(bookmark.path, thumbnail);
+				}
+			} catch (err) {
+				console.debug('加载缩略图失败:', bookmark.path, err);
+			}
+		}
+		thumbnails = newThumbnails;
+	}
+
+	// 移除书签
 	function removeBookmark(id: string) {
 		bookmarkStore.remove(id);
 		loadBookmarks();
 	}
 
+	// 打开书签
 	async function openBookmark(bookmark: any) {
 		try {
 			if (bookmark.type === 'folder') {
@@ -36,10 +70,9 @@
 				// 检查是否为压缩包
 				const isArchive = await FileSystemAPI.isSupportedArchive(bookmark.path);
 				if (isArchive) {
-					console.log('打开压缩包:', bookmark.path);
-					// TODO: 集成到书籍查看器
+					// 使用 bookStore 打开
+					await bookStore.openBook(bookmark.path);
 				} else {
-					console.log('打开文件:', bookmark.path);
 					// 使用系统默认应用打开
 					await FileSystemAPI.openWithSystem(bookmark.path);
 				}
@@ -49,8 +82,21 @@
 		}
 	}
 
-	function getFileName(path: string): string {
-		return path.split(/[\/\\]/).pop() || path;
+	// 将书签转换为 FsItem
+	function bookmarkToFsItem(bookmark: any): FsItem {
+		return {
+			path: bookmark.path,
+			name: bookmark.name,
+			isDir: bookmark.type === 'folder',
+			isImage: false,
+			size: 0,
+			modified: bookmark.createdAt ? new Date(bookmark.createdAt).getTime() : 0
+		};
+	}
+
+	// 切换视图模式
+	function toggleViewMode() {
+		viewMode = viewMode === 'list' ? 'grid' : 'list';
 	}
 
 	/**
@@ -61,32 +107,32 @@
 		const allBookmarks = bookmarkStore.getAll();
 		const newOrder = sortedBookmarks.map(sorted => 
 			allBookmarks.find(b => b.id === sorted.id)
-		).filter(Boolean);
+		).filter((b): b is NonNullable<typeof b> => b !== undefined);
 		
 		// 清空并重新添加以保持新顺序
 		bookmarkStore.clear();
 		newOrder.forEach(bookmark => {
-			bookmarkStore.add({
-				name: bookmark.name,
-				path: bookmark.path,
-				isDir: bookmark.type === 'folder',
-				isImage: false,
-				size: 0,
-				modified: 0
-			} as FsItem);
+			if (bookmark) {
+				bookmarkStore.add({
+					name: bookmark.name,
+					path: bookmark.path,
+					isDir: bookmark.type === 'folder',
+					isImage: false,
+					size: 0,
+					modified: 0
+				} as FsItem);
+			}
 		});
 		
 		loadBookmarks();
 	}
 
-	function loadBookmarks() {
-		bookmarks = bookmarkStore.getAll();
-	}
-
-	// 加载书签并订阅更新
+	// 订阅书签变化
 	$effect(() => {
 		loadBookmarks();
-		const unsubscribe = bookmarkStore.subscribe(loadBookmarks);
+		const unsubscribe = bookmarkStore.subscribe(() => {
+			loadBookmarks();
+		});
 		return unsubscribe;
 	});
 </script>
@@ -98,13 +144,20 @@
 			<div class="flex items-center gap-2">
 				<Bookmark class="h-5 w-5" />
 				<h3 class="font-semibold">书签</h3>
+				<span class="text-sm text-muted-foreground">({filteredBookmarks.length})</span>
 			</div>
 			<div class="flex items-center gap-2">
+				<Button variant="ghost" size="sm" onclick={toggleViewMode} title="切换视图">
+					{#if viewMode === 'list'}
+						<Grid3x3 class="h-4 w-4" />
+					{:else}
+						<List class="h-4 w-4" />
+					{/if}
+				</Button>
 				<BookmarkSortPanel 
 					bookmarks={bookmarks} 
 					onSort={handleBookmarkSort}
 				/>
-				<!-- 添加按钮已移除，通过文件浏览器右键菜单添加 -->
 			</div>
 		</div>
 		<Input
@@ -117,72 +170,46 @@
 
 	<!-- 书签列表 -->
 	<div class="flex-1 overflow-auto">
-		<div class="p-2 space-y-2">
-			{#if filteredBookmarks.length === 0}
-				<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
-					<div class="relative mb-4">
-						<Bookmark class="h-16 w-16 opacity-30" />
-						{#if !searchQuery}
-							<div class="absolute -top-1 -right-1">
-								<Star class="h-4 w-4 text-yellow-400 fill-yellow-400 animate-pulse" />
-							</div>
-						{/if}
-					</div>
-					<div class="text-center space-y-2">
-						<p class="text-lg font-medium">
-							{searchQuery ? '未找到匹配的书签' : '暂无书签'}
-						</p>
-						<p class="text-sm opacity-70">
-							{searchQuery 
-								? `尝试其他关键词：${searchQuery}` 
-								: '标记重要页面，方便快速访问'}
-						</p>
-						{#if !searchQuery}
-							<div class="mt-4 p-3 bg-muted/50 rounded-lg text-xs space-y-1">
-								<p class="font-medium text-foreground">提示：</p>
-								<p>• 右键点击文件或文件夹添加到书签</p>
-								<p>• 使用搜索功能快速定位书签</p>
-								<p>• 点击书签快速访问收藏内容</p>
-							</div>
-						{/if}
-					</div>
+			{#if filteredBookmarks.length === 0 || !filteredBookmarks}
+			<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
+				<div class="relative mb-4">
+					<Bookmark class="h-16 w-16 opacity-30" />
+					{#if !searchQuery}
+						<div class="absolute -top-1 -right-1">
+							<Star class="h-4 w-4 text-yellow-400 fill-yellow-400 animate-pulse" />
+						</div>
+					{/if}
 				</div>
-			{:else}
-				{#each filteredBookmarks as bookmark (bookmark.id)}
-					<button
-						class="group relative w-full text-left p-3 rounded-lg border hover:bg-accent transition-colors cursor-pointer"
-						onclick={() => openBookmark(bookmark)}
-					>
-						<div class="flex items-start gap-3">
-							<!-- 图标 -->
-							<div class="flex-shrink-0 w-12 h-12 bg-secondary rounded flex items-center justify-center">
-								{#if bookmark.type === 'folder'}
-									<FolderIcon class="h-6 w-6 text-blue-500" />
-								{:else if bookmark.name.endsWith('.zip') || bookmark.name.endsWith('.cbz')}
-									<FileArchive class="h-6 w-6 text-purple-500" />
-								{:else}
-									<File class="h-6 w-6 text-gray-400" />
-								{/if}
-							</div>
-
-							<!-- 信息 -->
-							<div class="flex-1 min-w-0">
-								<div class="font-medium truncate" title={bookmark.name}>
-									{bookmark.name}
-								</div>
-								<div class="text-xs text-muted-foreground truncate mt-1" title={bookmark.path}>
-									{getFileName(bookmark.path)}
-								</div>
-								<div class="text-xs text-muted-foreground mt-1">
-									{bookmark.createdAt ? new Date(bookmark.createdAt).toLocaleDateString() : ''}
-								</div>
-							</div>
-
-							<!-- 删除按钮 -->
+				<div class="text-center space-y-2">
+					<p class="text-lg font-medium">
+						{searchQuery ? '未找到匹配的书签' : '暂无书签'}
+					</p>
+					<p class="text-sm opacity-70">
+						{searchQuery 
+							? `尝试其他关键词：${searchQuery}` 
+							: '标记重要页面，方便快速访问'}
+					</p>
+				</div>
+			</div>
+			{:else if viewMode === 'list'}
+			<!-- 列表视图 -->
+			<div class="p-2 space-y-2">
+				{#each filteredBookmarks as bookmark (bookmark?.id || bookmark.path)}
+					{#if bookmark}
+						<div class="relative group">
+							<FileItemCard
+								item={bookmarkToFsItem(bookmark)}
+								thumbnail={thumbnails.get(bookmark.path)}
+								viewMode="list"
+								showReadMark={false}
+								showBookmarkMark={true}
+								onClick={() => openBookmark(bookmark)}
+								onDoubleClick={() => openBookmark(bookmark)}
+							/>
 							<Button
 								variant="ghost"
 								size="icon"
-								class="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+								class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
 								onclick={(e) => {
 									e.stopPropagation();
 									removeBookmark(bookmark.id);
@@ -191,9 +218,41 @@
 								<X class="h-4 w-4" />
 							</Button>
 						</div>
-					</button>
+					{/if}
 				{/each}
-			{/if}
-		</div>
+			</div>
+			{:else}
+			<!-- 网格视图 -->
+			<div class="p-2">
+				<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+					{#each filteredBookmarks as bookmark (bookmark?.id || bookmark.path)}
+						{#if bookmark}
+							<div class="relative group">
+								<FileItemCard
+									item={bookmarkToFsItem(bookmark)}
+									thumbnail={thumbnails.get(bookmark.path)}
+									viewMode="grid"
+									showReadMark={false}
+									showBookmarkMark={true}
+									onClick={() => openBookmark(bookmark)}
+									onDoubleClick={() => openBookmark(bookmark)}
+								/>
+								<Button
+									variant="ghost"
+									size="icon"
+									class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80"
+									onclick={(e) => {
+										e.stopPropagation();
+										removeBookmark(bookmark.id);
+									}}
+								>
+									<X class="h-4 w-4" />
+								</Button>
+							</div>
+						{/if}
+				{/each}
+				</div>
+			</div>
+		{/if}
 	</div>
 </div>

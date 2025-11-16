@@ -39,6 +39,9 @@
   import { Folder, File, Image, FileArchive } from '@lucide/svelte';
   import { writable, type Writable } from 'svelte/store';
   import { throttle, debounce, scheduleIdleTask, getAdaptivePerformanceConfig } from '$lib/utils/performance';
+  import FileItemCard from './FileItemCard.svelte';
+  import { historyStore } from '$lib/stores/history.svelte';
+  import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 
   const {
     items = [],
@@ -314,7 +317,8 @@
 
   // 监听视图模式变化，调整项目高度
   $effect(() => {
-    itemHeight = viewMode === 'list' ? 60 : 150;
+    // 列表视图：60px，网格视图：200px（包含缩略图和信息）
+    itemHeight = viewMode === 'list' ? 60 : 200;
     calculateVisibleRange();
   });
 
@@ -394,82 +398,26 @@
         {#each items.slice(startIndex, endIndex + 1) as item, i (item.path)}
           {@const actualIndex = startIndex + i}
           {@const isSelected = selectedIndex === actualIndex}
-          <div
-            class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors {isSelected ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}"
-            style="height: {itemHeight}px;"
-            role="option"
-            aria-selected={isSelected}
-            aria-label={item.name}
-            tabindex={isSelected ? 0 : -1}
-            onclick={() => handleItemClick(item, actualIndex)}
-            oncontextmenu={(e) => handleItemContextMenu(e, item)}
-            onkeydown={(e) => handleItemKeydown(e, item, actualIndex)}
-          >
-            <!-- 勾选框（勾选模式） -->
-            {#if isCheckMode}
-              <button
-                class="flex-shrink-0"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  toggleItemSelection(item.path);
-                }}
-              >
-                <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {selectedItems.has(item.path) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 hover:border-blue-400'}">
-                  {#if selectedItems.has(item.path)}
-                    <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                    </svg>
-                  {/if}
-                </div>
-              </button>
-            {/if}
-
-            <!-- 删除按钮（删除模式） -->
-            {#if isDeleteMode}
-              <button
-                class="flex-shrink-0"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  dispatch('deleteItem', { item });
-                }}
-                title="删除"
-              >
-                <div class="h-5 w-5 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors">
-                  <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </div>
-              </button>
-            {/if}
-
-            <!-- 图标或缩略图 -->
-            <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded">
-              {#if thumbnails.has(getThumbnailKey(item))}
-                <!-- 显示缩略图 -->
-                <img 
-                  src={thumbnails.get(getThumbnailKey(item))} 
-                  alt={item.name}
-                  class="h-full w-full object-cover transition-transform group-hover:scale-105"
-                />
-              {:else if item.isDir}
-                <Folder class="h-8 w-8 text-blue-500 transition-colors group-hover:text-blue-600" />
-              {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
-                <FileArchive class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600" />
-              {:else if item.isImage}
-                <Image class="h-8 w-8 text-green-500 transition-colors group-hover:text-green-600" />
-              {:else}
-                <File class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500" />
-              {/if}
-            </div>
-
-            <!-- 信息 -->
-            <div class="min-w-0 flex-1">
-              <div class="truncate font-medium">{item.name}</div>
-              <div class="text-xs text-gray-500">
-                {formatSize(item.size, item.isDir)} · {formatDate(item.modified)}
-              </div>
-            </div>
-          </div>
+          {@const historyEntry = historyStore.findByPath(item.path)}
+          {@const isBookmarked = bookmarkStore.getAll().some(b => b.path === item.path)}
+          <FileItemCard
+            item={item}
+            thumbnail={thumbnails.get(getThumbnailKey(item))}
+            viewMode="list"
+            isSelected={isSelected}
+            isCheckMode={isCheckMode}
+            isDeleteMode={isDeleteMode}
+            showReadMark={!!historyEntry}
+            showBookmarkMark={true}
+            currentPage={historyEntry?.currentPage}
+            totalPages={historyEntry?.totalPages}
+            timestamp={historyEntry?.timestamp}
+            onClick={() => handleItemClick(item, actualIndex)}
+            onDoubleClick={() => handleItemDoubleClick(item, actualIndex)}
+            onContextMenu={(e) => handleItemContextMenu(e, item)}
+            onToggleSelection={() => toggleItemSelection(item.path)}
+            onDelete={() => dispatch('deleteItem', { item })}
+          />
         {/each}
       </div>
     </div>
@@ -481,68 +429,30 @@
         style="transform: translateY({offsetY}px); position: absolute; top: 0; left: 0; right: 0;"
         role="presentation"
       >
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4 p-2" role="presentation">
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 p-2" role="presentation">
           {#each items.slice(startIndex, endIndex + 1) as item, i (item.path)}
             {@const actualIndex = startIndex + i}
             {@const isSelected = selectedIndex === actualIndex}
-            <div
-              class="group flex flex-col items-center gap-2 p-2 rounded border cursor-pointer transition-colors {isSelected ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}"
-              style="height: {itemHeight}px;"
-              role="option"
-              aria-selected={isSelected}
-              aria-label={item.name}
-              tabindex={isSelected ? 0 : -1}
-              onclick={() => handleItemClick(item, actualIndex)}
-              oncontextmenu={(e) => handleItemContextMenu(e, item)}
-              onkeydown={(e) => handleItemKeydown(e, item, actualIndex)}
-            >
-              <!-- 勾选框（勾选模式） -->
-              {#if isCheckMode}
-                <button
-                  class="self-start"
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    toggleItemSelection(item.path);
-                  }}
-                >
-                  <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {selectedItems.has(item.path) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 hover:border-blue-400'}">
-                    {#if selectedItems.has(item.path)}
-                      <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                      </svg>
-                    {/if}
-                  </div>
-                </button>
-              {/if}
-
-              <!-- 缩略图容器 -->
-              <div class="w-full aspect-square flex items-center justify-center overflow-hidden rounded bg-gray-100">
-                {#if thumbnails.has(getThumbnailKey(item))}
-                  <!-- 显示缩略图 -->
-                  <img 
-                    src={thumbnails.get(getThumbnailKey(item))} 
-                    alt={item.name}
-                    class="w-full h-full object-cover transition-transform group-hover:scale-105"
-                  />
-                {:else if item.isDir}
-                  <Folder class="h-12 w-12 text-blue-500" />
-                {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
-                  <FileArchive class="h-12 w-12 text-purple-500" />
-                {:else if item.isImage}
-                  <Image class="h-12 w-12 text-green-500" />
-                {:else}
-                  <File class="h-12 w-12 text-gray-400" />
-                {/if}
-              </div>
-
-              <!-- 文件名 -->
-              <div class="w-full text-center">
-                <div class="truncate text-sm font-medium">{item.name}</div>
-                <div class="text-xs text-gray-500">
-                  {formatSize(item.size, item.isDir)}
-                </div>
-              </div>
-            </div>
+            {@const historyEntry = historyStore.findByPath(item.path)}
+            {@const isBookmarked = bookmarkStore.getAll().some(b => b.path === item.path)}
+            <FileItemCard
+              item={item}
+              thumbnail={thumbnails.get(getThumbnailKey(item))}
+              viewMode="grid"
+              isSelected={isSelected}
+              isCheckMode={isCheckMode}
+              isDeleteMode={isDeleteMode}
+              showReadMark={!!historyEntry}
+              showBookmarkMark={true}
+              currentPage={historyEntry?.currentPage}
+              totalPages={historyEntry?.totalPages}
+              timestamp={historyEntry?.timestamp}
+              onClick={() => handleItemClick(item, actualIndex)}
+              onDoubleClick={() => handleItemDoubleClick(item, actualIndex)}
+              onContextMenu={(e) => handleItemContextMenu(e, item)}
+              onToggleSelection={() => toggleItemSelection(item.path)}
+              onDelete={() => dispatch('deleteItem', { item })}
+            />
           {/each}
         </div>
       </div>

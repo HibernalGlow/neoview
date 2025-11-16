@@ -104,7 +104,7 @@ import { getPerformanceSettings } from '$lib/api/performance';
   // UI 模式状态
   let isCheckMode = $state(false);
   let isDeleteMode = $state(false);
-  let viewMode = $state<'list' | 'thumbnails'>('list'); // 列表 or 缩略图视图
+  let viewMode = $state<'list' | 'thumbnails' | 'grid'>('list'); // 列表 or 缩略图视图 or 网格视图
   let selectedItems = $state<Set<string>>(new Set());
 
   // 缩略图入队管理
@@ -330,7 +330,12 @@ import { getPerformanceSettings } from '$lib/api/performance';
    * 切换视图模式
    */
   function toggleViewMode() {
-    viewMode = viewMode === 'list' ? 'thumbnails' : 'list';
+    // 循环切换：list -> grid -> list
+    if (viewMode === 'list') {
+      viewMode = 'thumbnails'; // 使用 'thumbnails' 作为网格视图的标识（兼容现有代码）
+    } else {
+      viewMode = 'list';
+    }
   }
 
   /**

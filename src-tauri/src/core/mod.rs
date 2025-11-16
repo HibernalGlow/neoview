@@ -15,6 +15,8 @@ pub mod pyo3_upscaler;
 pub mod python_upscale_wrapper;
 pub mod video_thumbnail;
 pub mod path_utils;
+pub mod thumbnail_db;
+pub mod thumbnail_generator;
 
 pub use book_manager::BookManager;
 pub use image_loader::ImageLoader;

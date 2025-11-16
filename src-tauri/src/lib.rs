@@ -190,6 +190,13 @@ pub fn run() {
             // Video commands
             commands::check_ffmpeg_available,
             commands::generate_video_thumbnail,
+            // Thumbnail commands
+            commands::init_thumbnail_manager,
+            commands::generate_file_thumbnail_new,
+            commands::generate_archive_thumbnail_new,
+            commands::batch_preload_thumbnails,
+            commands::has_thumbnail,
+            commands::load_thumbnail_from_db,
             commands::get_video_duration,
             commands::is_video_file,
         ])

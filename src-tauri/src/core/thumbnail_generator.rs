@@ -176,7 +176,28 @@ impl ThumbnailGenerator {
         Ok(output)
     }
 
-    /// 生成单个文件的缩略图（第一次返回原图 blob，后台生成 webp 并保存）
+    /// 检查是否为视频文件
+    fn is_video_file(path: &Path) -> bool {
+        let extensions = [
+            "mp4", "mkv", "avi", "mov", "flv", "webm", "wmv", "m4v", "mpg", "mpeg",
+        ];
+        path.extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| extensions.contains(&ext.to_lowercase().as_str()))
+            .unwrap_or(false)
+    }
+    
+    /// 生成视频缩略图（使用 ffmpeg 提取帧）
+    fn generate_video_thumbnail(
+        video_path: &Path,
+        config: &ThumbnailGeneratorConfig,
+        path_key: &str,
+    ) -> Option<Vec<u8>> {
+        // 视频缩略图使用相同的 ffmpeg 方法
+        Self::generate_webp_with_ffmpeg(video_path, config, path_key)
+    }
+    
+    /// 生成单个文件的缩略图（第一次返回原图/blob，后台生成 webp 并保存）
     pub fn generate_file_thumbnail(
         &self,
         file_path: &str,
@@ -195,6 +216,47 @@ impl ThumbnailGenerator {
             // 更新访问时间
             let _ = self.db.update_access_time(&path_key);
             return Ok(cached);
+        }
+        
+        let file_path_buf = PathBuf::from(file_path);
+        
+        // 检查是否为视频文件
+        if Self::is_video_file(&file_path_buf) {
+            // 视频文件：直接生成缩略图（不返回原视频数据）
+            let db_clone = Arc::clone(&self.db);
+            let path_key_clone = path_key.clone();
+            let file_size_clone = file_size;
+            let ghash_clone = ghash;
+            let config_clone = self.config.clone();
+            
+            std::thread::spawn(move || {
+                let webp_data = Self::generate_video_thumbnail(&file_path_buf, &config_clone, &path_key_clone);
+                
+                if let Some(webp_data) = webp_data {
+                    // 保存到数据库
+                    match db_clone.save_thumbnail(&path_key_clone, file_size_clone, ghash_clone, &webp_data) {
+                        Ok(_) => {
+                            if cfg!(debug_assertions) {
+                                println!("✅ 视频缩略图已保存到数据库: {} ({} bytes)", path_key_clone, webp_data.len());
+                            }
+                            
+                            // 反向查找：检查父文件夹是否需要缩略图
+                            Self::update_parent_folders_thumbnail(
+                                &db_clone,
+                                &path_key_clone,
+                                &webp_data,
+                                MAX_PARENT_LEVELS,
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!("❌ 保存视频缩略图到数据库失败: {} - {}", path_key_clone, e);
+                        }
+                    }
+                }
+            });
+            
+            // 视频文件返回空数据（前端会显示占位符）
+            return Ok(Vec::new());
         }
         
         // 从文件加载图像（改进错误处理，记录权限错误但静默处理）
@@ -220,17 +282,57 @@ impl ThumbnailGenerator {
         let image_data_clone = image_data.clone();
         let config_clone = self.config.clone();
         
-        // 检测是否为 AVIF 格式（需要特殊处理）
-        let is_avif = Path::new(&path_key_clone)
-            .extension()
+        // 检测文件类型
+        let file_path_buf = PathBuf::from(&path_key_clone);
+        let is_avif = file_path_buf.extension()
             .and_then(|e| e.to_str())
             .map(|e| e.to_lowercase() == "avif")
             .unwrap_or(false);
         
         std::thread::spawn(move || {
             let webp_data = if is_avif {
-                // AVIF 格式：使用 vips 命令行工具（避免 rust 库 panic）
-                Self::generate_webp_with_vips(&image_data_clone, &config_clone, &path_key_clone)
+                // AVIF 格式：优先使用 avif-native（image crate），回退到 ffmpeg
+                // 先尝试使用 image crate 的 avif-native feature 解码
+                match Self::decode_image_safe(&image_data_clone) {
+                    Ok(img) => {
+                        // avif-native 解码成功，使用 image 库生成 webp
+                        match Self::generate_webp_thumbnail_fallback(&img, &config_clone) {
+                            Ok(data) => Some(data),
+                            Err(e) => {
+                                eprintln!("⚠️ avif-native 解码成功但生成 webp 失败: {} - {}, 尝试 ffmpeg", path_key_clone, e);
+                                // 回退到 ffmpeg
+                                let temp_dir = std::env::temp_dir();
+                                let temp_input = temp_dir.join(format!("thumb_avif_input_{}_{}.avif", std::process::id(), 
+                                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+                                
+                                if let Err(e) = std::fs::write(&temp_input, &image_data_clone) {
+                                    eprintln!("❌ 写入临时文件失败: {} - {}", path_key_clone, e);
+                                    None
+                                } else {
+                                    let result = Self::generate_webp_with_ffmpeg(&temp_input, &config_clone, &path_key_clone);
+                                    let _ = std::fs::remove_file(&temp_input);
+                                    result
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        // avif-native 解码失败，回退到 ffmpeg
+                        eprintln!("⚠️ avif-native 解码失败: {} - {}, 尝试 ffmpeg", path_key_clone, e);
+                        let temp_dir = std::env::temp_dir();
+                        let temp_input = temp_dir.join(format!("thumb_avif_input_{}_{}.avif", std::process::id(), 
+                            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+                        
+                        if let Err(e) = std::fs::write(&temp_input, &image_data_clone) {
+                            eprintln!("❌ 写入临时文件失败: {} - {}", path_key_clone, e);
+                            None
+                        } else {
+                            let result = Self::generate_webp_with_ffmpeg(&temp_input, &config_clone, &path_key_clone);
+                            let _ = std::fs::remove_file(&temp_input);
+                            result
+                        }
+                    }
+                }
             } else {
                 // 其他格式：使用 image 库（性能更好）
                 match Self::decode_image_safe(&image_data_clone) {
@@ -277,7 +379,82 @@ impl ThumbnailGenerator {
         Ok(image_data)
     }
     
-    /// 使用 vips 命令行工具生成 webp 缩略图（仅用于 AVIF）
+    /// 使用 ffmpeg-sidecar 生成 webp 缩略图（优先方案，用于 AVIF 和视频）
+    fn generate_webp_with_ffmpeg(
+        input_path: &Path,
+        config: &ThumbnailGeneratorConfig,
+        path_key: &str,
+    ) -> Option<Vec<u8>> {
+        use std::fs;
+        use ffmpeg_sidecar::command::FfmpegCommand;
+        
+        let temp_dir = std::env::temp_dir();
+        let output_path = temp_dir.join(format!("thumb_ffmpeg_output_{}_{}.webp", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        
+        // 使用 ffmpeg-sidecar 构建命令
+        let is_video = Self::is_video_file(input_path);
+        let mut cmd = FfmpegCommand::new();
+        
+        cmd.input(input_path.to_string_lossy().as_ref());
+        
+        if is_video {
+            // 视频：从第 1 秒提取一帧
+            cmd.args(&["-ss", "1.0", "-vframes", "1"]);
+        }
+        
+        // 添加视频滤镜和输出格式
+        cmd.args(&[
+            "-vf", &format!("scale={}:-1", config.max_width),
+            "-f", "webp",
+            "-quality", "85",
+            "-y", // 覆盖输出文件
+        ]);
+        
+        cmd.output(output_path.to_string_lossy().as_ref());
+        
+        // 执行命令
+        match cmd.spawn() {
+            Ok(mut child) => {
+                // 等待命令完成
+                let status = child.wait();
+                match status {
+                    Ok(exit_status) if exit_status.success() => {
+                        match fs::read(&output_path) {
+                            Ok(data) => {
+                                let _ = fs::remove_file(&output_path);
+                                if cfg!(debug_assertions) {
+                                    println!("✅ 使用 FFmpeg 成功处理: {}", path_key);
+                                }
+                                Some(data)
+                            }
+                            Err(e) => {
+                                let _ = fs::remove_file(&output_path);
+                                eprintln!("❌ 读取 FFmpeg 输出失败: {} - {}", path_key, e);
+                                None
+                            }
+                        }
+                    }
+                    Ok(_) => {
+                        let _ = fs::remove_file(&output_path);
+                        eprintln!("⚠️ FFmpeg 转换失败: {}", path_key);
+                        None
+                    }
+                    Err(e) => {
+                        let _ = fs::remove_file(&output_path);
+                        eprintln!("⚠️ FFmpeg 等待失败: {} - {}", path_key, e);
+                        None
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("⚠️ FFmpeg 启动失败: {} - {}", path_key, e);
+                None
+            }
+        }
+    }
+    
+    /// 使用 vips 命令行工具生成 webp 缩略图（回退方案，仅用于 AVIF）
     fn generate_webp_with_vips(
         image_data: &[u8],
         config: &ThumbnailGeneratorConfig,
@@ -298,9 +475,9 @@ impl ThumbnailGenerator {
             return None;
         }
         
-        // 使用 vips 命令行工具转换（正确的参数格式）
+        // 使用 vips 命令行工具转换（修复参数：移除 --Q，使用正确的参数格式）
         // vips thumbnail 命令格式：vips thumbnail input output width [options]
-        // 输出格式由文件扩展名决定，不需要 --format 参数
+        // 输出格式由文件扩展名决定，质量通过输出文件扩展名控制
         let vips_result = Command::new("vips")
             .arg("thumbnail")
             .arg(&input_path)
@@ -308,8 +485,6 @@ impl ThumbnailGenerator {
             .arg(config.max_width.to_string())
             .arg("--size")
             .arg("down")
-            .arg("--Q")
-            .arg("85")
             .output();
         
         // 清理临时输入文件
@@ -618,8 +793,48 @@ impl ThumbnailGenerator {
                     
                     std::thread::spawn(move || {
                         let webp_data = if is_avif {
-                            // AVIF 格式：使用 vips 命令行工具
-                            Self::generate_webp_with_vips(&image_data_clone, &config_clone, &path_key_clone)
+                            // AVIF 格式：优先使用 avif-native（image crate），回退到 ffmpeg
+                            // 先尝试使用 image crate 的 avif-native feature 解码
+                            match Self::decode_image_safe(&image_data_clone) {
+                                Ok(img) => {
+                                    // avif-native 解码成功，使用 image 库生成 webp
+                                    match Self::generate_webp_thumbnail_fallback(&img, &config_clone) {
+                                        Ok(data) => Some(data),
+                                        Err(e) => {
+                                            eprintln!("⚠️ avif-native 解码成功但生成 webp 失败: {} - {}, 尝试 ffmpeg", path_key_clone, e);
+                                            // 回退到 ffmpeg
+                                            let temp_dir = std::env::temp_dir();
+                                            let temp_input = temp_dir.join(format!("thumb_archive_avif_input_{}_{}.avif", std::process::id(), 
+                                                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+                                            
+                                            if let Err(e) = std::fs::write(&temp_input, &image_data_clone) {
+                                                eprintln!("❌ 写入临时文件失败: {} - {}", path_key_clone, e);
+                                                None
+                                            } else {
+                                                let result = Self::generate_webp_with_ffmpeg(&temp_input, &config_clone, &path_key_clone);
+                                                let _ = std::fs::remove_file(&temp_input);
+                                                result
+                                            }
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    // avif-native 解码失败，回退到 ffmpeg
+                                    eprintln!("⚠️ avif-native 解码失败: {} - {}, 尝试 ffmpeg", path_key_clone, e);
+                                    let temp_dir = std::env::temp_dir();
+                                    let temp_input = temp_dir.join(format!("thumb_archive_avif_input_{}_{}.avif", std::process::id(), 
+                                        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+                                    
+                                    if let Err(e) = std::fs::write(&temp_input, &image_data_clone) {
+                                        eprintln!("❌ 写入临时文件失败: {} - {}", path_key_clone, e);
+                                        None
+                                    } else {
+                                        let result = Self::generate_webp_with_ffmpeg(&temp_input, &config_clone, &path_key_clone);
+                                        let _ = std::fs::remove_file(&temp_input);
+                                        result
+                                    }
+                                }
+                            }
                         } else {
                             // 其他格式：使用 image 库
                             match Self::decode_image_safe(&image_data_clone) {

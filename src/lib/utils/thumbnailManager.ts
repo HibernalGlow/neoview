@@ -697,6 +697,10 @@ class ThumbnailManager {
         return dbThumbnail;
       }
 
+      // 数据库中没有记录，开始查找文件夹内容
+      console.log(`📭 数据库中没有找到缩略图: key=${folderPath}`);
+      console.log(`🔍 开始查找文件夹内容: ${folderPath}`);
+
       // 立即获取文件夹内容（不延迟，跟随虚拟列表）
       const { invoke } = await import('@tauri-apps/api/core');
       
@@ -707,6 +711,7 @@ class ThumbnailManager {
         const firstImage = items.find((item) => item.isImage && !item.isDir);
 
         if (firstImage) {
+          console.log(`🖼️ 找到图片文件，使用图片缩略图: ${firstImage.path}`);
           // 使用第一个图片的缩略图（immediate 优先级，立即加载）
           const thumbnail = await this.getThumbnail(firstImage.path, undefined, false, 'immediate');
           if (thumbnail) {
@@ -731,6 +736,7 @@ class ThumbnailManager {
         );
 
         if (firstArchive) {
+          console.log(`📦 找到压缩包，使用压缩包缩略图: ${firstArchive.path}`);
           const thumbnail = await this.getThumbnail(firstArchive.path, undefined, true, 'immediate');
           if (thumbnail) {
             this.cache.set(pathKey, {
@@ -745,6 +751,7 @@ class ThumbnailManager {
         // 如果没有图片和压缩包，尝试查找子文件夹（递归，但限制深度）
         const firstSubfolder = items.find((item) => item.isDir);
         if (firstSubfolder) {
+          console.log(`📁 找到子文件夹，递归查找: ${firstSubfolder.path}`);
           // 递归查找，增加深度计数
           const subThumbnail = await this.getFolderThumbnail(
             firstSubfolder.path,
@@ -760,6 +767,8 @@ class ThumbnailManager {
             return subThumbnail;
           }
         }
+        
+        console.log(`⚠️ 文件夹中没有找到可用的缩略图源: ${folderPath}`);
         
         return null;
       } catch (error) {

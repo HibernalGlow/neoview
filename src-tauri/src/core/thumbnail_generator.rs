@@ -212,97 +212,121 @@ impl ThumbnailGenerator {
         let image_data_clone = image_data.clone();
         let config_clone = self.config.clone();
         
+        // 检测是否为 AVIF 格式（需要特殊处理）
+        let is_avif = Path::new(&path_key_clone)
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_lowercase() == "avif")
+            .unwrap_or(false);
+        
         std::thread::spawn(move || {
-            // 在后台线程中使用 vips 命令行工具生成 webp 缩略图（完全避免 rust 图像解码库 panic）
-            // 直接将原始图像数据写入临时文件，使用 vips 处理
-            use std::fs;
-            use std::process::Command;
-            use std::path::Path;
-            
-            // 检测文件格式，确定临时文件扩展名
-            let file_ext = Path::new(&path_key_clone)
-                .extension()
-                .and_then(|e| e.to_str())
-                .map(|e| e.to_lowercase())
-                .unwrap_or_else(|| "tmp".to_string());
-            
-            let temp_dir = std::env::temp_dir();
-            let input_path = temp_dir.join(format!("thumb_input_{}_{}.{}", std::process::id(), 
-                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
-                file_ext));
-            let output_path = temp_dir.join(format!("thumb_output_{}_{}.webp", std::process::id(),
-                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
-            
-            // 写入原始图像数据到临时文件（不进行任何解码，直接写入）
-            if let Err(e) = fs::write(&input_path, &image_data_clone) {
-                eprintln!("❌ 写入临时文件失败: {} - {}", path_key_clone, e);
-                return;
-            }
-            
-            // 使用 vips 命令行工具转换（完全避免 rust 图像解码库，包括 AVIF）
-            // vips 支持 AVIF、JXL 等格式，不需要 rust 库解码
-            let vips_result = Command::new("vips")
-                .arg("thumbnail")
-                .arg(&input_path)
-                .arg(&output_path)
-                .arg(config_clone.max_width.to_string())
-                .arg("--size")
-                .arg("down")
-                .arg("--format")
-                .arg("webp")
-                .arg("--Q")
-                .arg("85")
-                .output();
-            
-            // 清理临时输入文件
-            let _ = fs::remove_file(&input_path);
-            
-            let webp_data = match vips_result {
-                Ok(output) if output.status.success() => {
-                    // 读取生成的 webp 文件
-                    match fs::read(&output_path) {
-                        Ok(data) => {
-                            let _ = fs::remove_file(&output_path);
-                            data
-                        }
-                        Err(e) => {
-                            let _ = fs::remove_file(&output_path);
-                            eprintln!("❌ 读取 vips 输出失败: {} - {}", path_key_clone, e);
-                            return;
+            let webp_data = if is_avif {
+                // AVIF 格式：使用 vips 命令行工具（避免 rust 库 panic）
+                Self::generate_webp_with_vips(&image_data_clone, &config_clone, &path_key_clone)
+            } else {
+                // 其他格式：使用 image 库（性能更好）
+                match Self::decode_image_safe(&image_data_clone) {
+                    Ok(img) => {
+                        match Self::generate_webp_thumbnail_fallback(&img, &config_clone) {
+                            Ok(data) => Some(data),
+                            Err(e) => {
+                                eprintln!("❌ 生成 webp 缩略图失败: {} - {}", path_key_clone, e);
+                                None
+                            }
                         }
                     }
-                }
-                Ok(output) => {
-                    let _ = fs::remove_file(&output_path);
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    eprintln!("⚠️ vips 转换失败: {} - {}, 跳过此文件", path_key_clone, stderr);
-                    // 不再使用降级方案（避免 image crate 解码 AVIF 导致 panic）
-                    // 直接返回，不生成缩略图
-                    return;
-                }
-                Err(_) => {
-                    // vips 命令不存在，直接返回（不尝试降级，避免 panic）
-                    eprintln!("⚠️ vips 命令不存在，跳过此文件: {}", path_key_clone);
-                    return;
+                    Err(e) => {
+                        eprintln!("❌ 解码图像失败: {} - {}", path_key_clone, e);
+                        None
+                    }
                 }
             };
             
-            // 保存到数据库（减少日志输出）
-            match db_clone.save_thumbnail(&path_key_clone, file_size_clone, ghash_clone, &webp_data) {
-                Ok(_) => {
-                    // 只在调试模式下打印日志
-                    if cfg!(debug_assertions) {
-                        println!("✅ 文件缩略图已保存到数据库: {} ({} bytes)", path_key_clone, webp_data.len());
+            if let Some(webp_data) = webp_data {
+                // 保存到数据库
+                match db_clone.save_thumbnail(&path_key_clone, file_size_clone, ghash_clone, &webp_data) {
+                    Ok(_) => {
+                        if cfg!(debug_assertions) {
+                            println!("✅ 文件缩略图已保存到数据库: {} ({} bytes)", path_key_clone, webp_data.len());
+                        }
                     }
-                }
-                Err(e) => {
-                    eprintln!("❌ 保存文件缩略图到数据库失败: {} - {}", path_key_clone, e);
+                    Err(e) => {
+                        eprintln!("❌ 保存文件缩略图到数据库失败: {} - {}", path_key_clone, e);
+                    }
                 }
             }
         });
         
         // 立即返回原图 blob（用于显示）
         Ok(image_data)
+    }
+    
+    /// 使用 vips 命令行工具生成 webp 缩略图（仅用于 AVIF）
+    fn generate_webp_with_vips(
+        image_data: &[u8],
+        config: &ThumbnailGeneratorConfig,
+        path_key: &str,
+    ) -> Option<Vec<u8>> {
+        use std::fs;
+        use std::process::Command;
+        
+        let temp_dir = std::env::temp_dir();
+        let input_path = temp_dir.join(format!("thumb_avif_input_{}_{}.avif", std::process::id(), 
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let output_path = temp_dir.join(format!("thumb_avif_output_{}_{}.webp", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        
+        // 写入原始 AVIF 数据到临时文件
+        if let Err(e) = fs::write(&input_path, image_data) {
+            eprintln!("❌ 写入临时文件失败: {} - {}", path_key, e);
+            return None;
+        }
+        
+        // 使用 vips 命令行工具转换（正确的参数格式）
+        // vips thumbnail 命令格式：vips thumbnail input output width [options]
+        // 输出格式由文件扩展名决定，不需要 --format 参数
+        let vips_result = Command::new("vips")
+            .arg("thumbnail")
+            .arg(&input_path)
+            .arg(&output_path)
+            .arg(config.max_width.to_string())
+            .arg("--size")
+            .arg("down")
+            .arg("--Q")
+            .arg("85")
+            .output();
+        
+        // 清理临时输入文件
+        let _ = fs::remove_file(&input_path);
+        
+        match vips_result {
+            Ok(output) if output.status.success() => {
+                match fs::read(&output_path) {
+                    Ok(data) => {
+                        let _ = fs::remove_file(&output_path);
+                        if cfg!(debug_assertions) {
+                            println!("✅ 使用 vips 成功处理 AVIF: {}", path_key);
+                        }
+                        Some(data)
+                    }
+                    Err(e) => {
+                        let _ = fs::remove_file(&output_path);
+                        eprintln!("❌ 读取 vips 输出失败: {} - {}", path_key, e);
+                        None
+                    }
+                }
+            }
+            Ok(output) => {
+                let _ = fs::remove_file(&output_path);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                eprintln!("⚠️ vips 转换 AVIF 失败: {} - {}", path_key, stderr);
+                None
+            }
+            Err(_) => {
+                eprintln!("⚠️ vips 命令不存在，无法处理 AVIF: {}", path_key);
+                None
+            }
+        }
     }
     
     /// 安全解码图像（捕获 panic，用于后台线程）
@@ -501,87 +525,43 @@ impl ThumbnailGenerator {
                     let config_clone = self.config.clone();
                     let image_name_clone = name.clone(); // 克隆文件名用于后台线程
                     
+                    // 检测是否为 AVIF 格式
+                    let is_avif = image_name_clone.to_lowercase().ends_with(".avif");
+                    
                     std::thread::spawn(move || {
-                        // 在后台线程中使用 vips 命令行工具生成 webp 缩略图（完全避免 rust 库 panic）
-                        use std::fs;
-                        use std::process::Command;
-                        use std::path::Path;
-                        
-                        // 从文件名检测格式
-                        let file_ext = Path::new(&image_name_clone)
-                            .extension()
-                            .and_then(|e| e.to_str())
-                            .map(|e| e.to_lowercase())
-                            .unwrap_or_else(|| "tmp".to_string());
-                        
-                        let temp_dir = std::env::temp_dir();
-                        let input_path = temp_dir.join(format!("thumb_archive_input_{}_{}.{}", std::process::id(),
-                            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
-                            file_ext));
-                        let output_path = temp_dir.join(format!("thumb_archive_output_{}_{}.webp", std::process::id(),
-                            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
-                        
-                        // 写入原始图像数据到临时文件（不进行任何解码）
-                        if let Err(e) = fs::write(&input_path, &image_data_clone) {
-                            eprintln!("❌ 写入临时文件失败: {} - {}", path_key_clone, e);
-                            return;
-                        }
-                        
-                        // 使用 vips 命令行工具转换（完全避免 rust 图像解码库）
-                        let vips_result = Command::new("vips")
-                            .arg("thumbnail")
-                            .arg(&input_path)
-                            .arg(&output_path)
-                            .arg(config_clone.max_width.to_string())
-                            .arg("--size")
-                            .arg("down")
-                            .arg("--format")
-                            .arg("webp")
-                            .arg("--Q")
-                            .arg("85")
-                            .output();
-                        
-                        // 清理临时输入文件
-                        let _ = fs::remove_file(&input_path);
-                        
-                        let webp_data = match vips_result {
-                            Ok(output) if output.status.success() => {
-                                match fs::read(&output_path) {
-                                    Ok(data) => {
-                                        let _ = fs::remove_file(&output_path);
-                                        data
-                                    }
-                                    Err(e) => {
-                                        let _ = fs::remove_file(&output_path);
-                                        eprintln!("❌ 读取 vips 输出失败: {} - {}", path_key_clone, e);
-                                        return;
+                        let webp_data = if is_avif {
+                            // AVIF 格式：使用 vips 命令行工具
+                            Self::generate_webp_with_vips(&image_data_clone, &config_clone, &path_key_clone)
+                        } else {
+                            // 其他格式：使用 image 库
+                            match Self::decode_image_safe(&image_data_clone) {
+                                Ok(img) => {
+                                    match Self::generate_webp_thumbnail_fallback(&img, &config_clone) {
+                                        Ok(data) => Some(data),
+                                        Err(e) => {
+                                            eprintln!("❌ 生成 webp 缩略图失败: {} - {}", path_key_clone, e);
+                                            None
+                                        }
                                     }
                                 }
-                            }
-                            Ok(output) => {
-                                let _ = fs::remove_file(&output_path);
-                                let stderr = String::from_utf8_lossy(&output.stderr);
-                                eprintln!("⚠️ vips 转换失败: {} - {}, 跳过此文件", path_key_clone, stderr);
-                                // 不再使用降级方案（避免 image crate 解码 AVIF 导致 panic）
-                                return;
-                            }
-                            Err(_) => {
-                                eprintln!("⚠️ vips 命令不存在，跳过此文件: {}", path_key_clone);
-                                // 不再使用降级方案（避免 image crate 解码 AVIF 导致 panic）
-                                return;
+                                Err(e) => {
+                                    eprintln!("❌ 解码图像失败: {} - {}", path_key_clone, e);
+                                    None
+                                }
                             }
                         };
                         
-                        // 保存到数据库（减少日志输出）
-                        match db_clone.save_thumbnail(&path_key_clone, archive_size_clone, ghash_clone, &webp_data) {
-                            Ok(_) => {
-                                // 只在调试模式下打印日志
-                                if cfg!(debug_assertions) {
-                                    println!("✅ 压缩包缩略图已保存到数据库: {} ({} bytes)", path_key_clone, webp_data.len());
+                        if let Some(webp_data) = webp_data {
+                            // 保存到数据库
+                            match db_clone.save_thumbnail(&path_key_clone, archive_size_clone, ghash_clone, &webp_data) {
+                                Ok(_) => {
+                                    if cfg!(debug_assertions) {
+                                        println!("✅ 压缩包缩略图已保存到数据库: {} ({} bytes)", path_key_clone, webp_data.len());
+                                    }
                                 }
-                            }
-                            Err(e) => {
-                                eprintln!("❌ 保存压缩包缩略图到数据库失败: {} - {}", path_key_clone, e);
+                                Err(e) => {
+                                    eprintln!("❌ 保存压缩包缩略图到数据库失败: {} - {}", path_key_clone, e);
+                                }
                             }
                         }
                     });

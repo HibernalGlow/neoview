@@ -1360,14 +1360,29 @@ pub async fn generate_archive_thumbnail_async(
                                         println!("💾 [Rust] 异步生成完成并缓存: {}", cache_key);
                                     }
                                     
+                                    // 获取旧的 blob URL（如果有）
+                                    let old_blob_url = {
+                                        if let Ok(cache) = cache_clone.lock() {
+                                            let cache_key = normalize_path_string(path_clone.to_string_lossy());
+                                            cache.get(&cache_key)
+                                                .filter(|url| url.starts_with("blob:"))
+                                                .cloned()
+                                        } else {
+                                            None
+                                        }
+                                    };
+                                    
                                     // 发射缩略图更新事件
-                                    if let Err(e) = app_handle.emit_all("thumbnail:updated", 
-                                        serde_json::json!({
-                                            "archivePath": archive_path,
-                                            "webpUrl": thumbnail_url,
-                                            "blobUrl": null // 这里没有之前的 blob，因为是通过异步命令触发的
-                                        })
-                                    ) {
+                                    let mut payload = serde_json::json!({
+                                        "archivePath": archive_path,
+                                        "webpUrl": thumbnail_url
+                                    });
+                                    
+                                    if let Some(old_blob) = old_blob_url {
+                                        payload["blobUrl"] = serde_json::Value::String(old_blob);
+                                    }
+                                    
+                                    if let Err(e) = app_handle.emit_all("thumbnail:updated", payload) {
                                         println!("⚠️ [Rust] 发射 thumbnail:updated 事件失败: {}", e);
                                     } else {
                                         println!("🎯 [Rust] 已发射 thumbnail:updated 事件: {} -> {}", archive_path, thumbnail_url);

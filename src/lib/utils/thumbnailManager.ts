@@ -54,18 +54,18 @@ class ThumbnailScheduler {
       startThumbnailEventListener((event) => {
         const normalizedPath = this.normalizePath(event.path);
         
-        // 更新旧的状态缓存（兼容性）
+        // 更新旧的状态缓存（仅保兼容，不驱动UI）
         thumbnailState.cacheThumbnail(normalizedPath, event.url);
         
-        // 更新新的状态系统
+        // 更新新的状态系统（主要状态源）
         const isBlob = event.url.startsWith('blob:');
         thumbnailStore.update(normalizedPath, event.url, isBlob, isBlob ? event.url : undefined);
         
-        // 调用回调更新UI
-        if (this.addThumbnailCb) {
-          const key = this.toRelativeKey(event.path);
-          this.addThumbnailCb(key, event.url);
-        }
+        // 不再直接调用 addThumbnailCb，让UI订阅 thumbnailStore
+        // if (this.addThumbnailCb) {
+        //   const key = this.toRelativeKey(event.path);
+        //   this.addThumbnailCb(key, event.url);
+        // }
         
         // 从处理中状态移除
         this.generating.delete(normalizedPath);
@@ -250,17 +250,18 @@ class ThumbnailScheduler {
           // 使用新的 blob API 获取 blob URL
           const blobUrl = await FileSystemAPI.getArchiveFirstImageBlob(path);
           if (blobUrl) {
-            // 更新旧的状态系统（兼容性）
+            // 更新旧的状态系统（仅保兼容，不驱动UI）
             thumbnailState.cacheThumbnail(normalizedPath, blobUrl);
             
-            // 更新新的状态系统
+            // 更新新的状态系统（主要状态源）
             const blobKey = blobUrl.startsWith('blob:') ? blobUrl : undefined;
             thumbnailStore.update(normalizedPath, blobUrl, true, blobKey);
             
-            if (this.addThumbnailCb) {
-              const key = this.toRelativeKey(path);
-              this.addThumbnailCb(key, blobUrl);
-            }
+            // 不再直接调用 addThumbnailCb，让UI订阅 thumbnailStore
+            // if (this.addThumbnailCb) {
+            //   const key = this.toRelativeKey(path);
+            //   this.addThumbnailCb(key, blobUrl);
+            // }
             
             console.log('⚡ 快速显示原图成功:', path, 'blob URL:', blobUrl);
           }

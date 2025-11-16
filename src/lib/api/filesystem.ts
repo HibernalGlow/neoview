@@ -485,8 +485,8 @@ export async function getArchiveFirstImageQuick(archivePath: string): Promise<st
   console.log('⚡ FileSystemAPI: 快速获取压缩包首张图片 (旧版):', archivePath);
   try {
     // 使用新的 blob API
-    const { getArchiveFirstImageBlob } = await import('./archive');
-    const blobUrl = await getArchiveFirstImageBlob(archivePath);
+    const { getArchiveFirstImageBlob: invokeArchiveFirstImageBlob } = await import('./archive');
+    const blobUrl = await invokeArchiveFirstImageBlob(archivePath);
     console.log('✅ FileSystemAPI: 快速获取成功, blob URL:', blobUrl);
     return blobUrl;
   } catch (error) {
@@ -502,8 +502,8 @@ export async function getArchiveFirstImageQuick(archivePath: string): Promise<st
 export async function getArchiveFirstImageBlob(archivePath: string): Promise<string> {
   console.log('⚡ FileSystemAPI: 获取压缩包首图 blob:', archivePath);
   try {
-    const { getArchiveFirstImageBlob } = await import('./archive');
-    const blobUrl = await getArchiveFirstImageBlob(archivePath);
+    const { getArchiveFirstImageBlob: invokeArchiveFirstImageBlob } = await import('./archive');
+    const blobUrl = await invokeArchiveFirstImageBlob(archivePath);
     console.log('✅ FileSystemAPI: 获取成功, blob URL:', blobUrl);
     return blobUrl;
   } catch (error) {

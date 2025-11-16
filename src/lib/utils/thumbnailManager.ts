@@ -225,7 +225,8 @@ class ThumbnailManager {
       const { invoke } = await import('@tauri-apps/api/core');
       const pathKey = this.buildPathKey(path, innerPath);
       
-      // 获取文件/文件夹大小（文件夹可能返回 0 或目录项数量）
+      // 对于文件夹，尝试多个可能的 size 值（因为文件夹的 size 可能不一致）
+      // 先尝试获取实际大小
       let size = 0;
       try {
         const metadata = await invoke<{ size: number }>('get_file_info', { path });
@@ -235,15 +236,56 @@ class ThumbnailManager {
         console.debug('获取文件信息失败，使用默认大小 0:', path, error);
         size = 0;
       }
+      
+      // 如果是文件夹，直接使用 category='folder' 查询
+      // 后端会先尝试仅根据 key+category 查询（忽略 size），如果失败再尝试完整查询
+      if (isFolder) {
+        const ghash = await this.generateHash(pathKey, size);
+        
+        const blobKey = await invoke<string | null>('load_thumbnail_from_db', {
+          path: pathKey,
+          size,
+          ghash,
+          category: 'folder',
+        });
+        
+        if (blobKey) {
+          console.log(`📦 从数据库找到文件夹缩略图: ${pathKey} (blob key: ${blobKey})`);
+          // 获取 blob 数据并创建 Blob URL
+          const blobData = await invoke<number[] | null>('get_thumbnail_blob_data', {
+            blobKey,
+          });
+
+          if (blobData && blobData.length > 0) {
+            // 转换为 Uint8Array
+            const uint8Array = new Uint8Array(blobData);
+            const blob = new Blob([uint8Array], { type: 'image/webp' });
+            const blobUrl = URL.createObjectURL(blob);
+
+            // 更新缓存
+            this.cache.set(pathKey, {
+              pathKey,
+              dataUrl: blobUrl,
+              timestamp: Date.now(),
+            });
+            console.log(`✅ 成功从数据库加载文件夹缩略图: ${pathKey} (${blobData.length} bytes)`);
+            return blobUrl;
+          }
+        }
+        
+        // 如果找不到，返回 null
+        return null;
+      }
+      
+      // 文件：使用单个 size 值
       const ghash = await this.generateHash(pathKey, size);
 
       // 从数据库加载（返回 blob key）
-      // 如果是文件夹，指定 category='folder' 进行查询
       const blobKey = await invoke<string | null>('load_thumbnail_from_db', {
         path: pathKey,
         size,
         ghash,
-        category: isFolder ? 'folder' : undefined,
+        category: undefined,
       });
 
       if (blobKey) {

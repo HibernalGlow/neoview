@@ -221,6 +221,32 @@ pub async fn load_thumbnail_from_db(
         path
     };
     
+    // 如果是文件夹，先尝试仅根据 key 和 category 查询（忽略 size 和 ghash）
+    if let Some(cat) = &category {
+        if cat == "folder" {
+            match state.db.load_thumbnail_by_key_and_category(&path_key, cat) {
+                Ok(Some(data)) => {
+                    // 注册到 BlobRegistry，返回 blob key
+                    use std::time::Duration;
+                    let blob_key = state.blob_registry.get_or_register(
+                        &data,
+                        "image/webp",
+                        Duration::from_secs(3600), // 1 小时 TTL
+                        Some(path_key.clone()), // 传递路径用于日志
+                    );
+                    return Ok(Some(blob_key));
+                }
+                Ok(None) => {
+                    // 如果仅 key+category 查询失败，继续尝试完整查询
+                }
+                Err(e) => {
+                    eprintln!("⚠️ 仅 key+category 查询失败: {} - {}", path_key, e);
+                }
+            }
+        }
+    }
+    
+    // 使用完整的 size+ghash+category 查询
     match state.db.load_thumbnail_with_category(&path_key, size, ghash, category.as_deref()) {
         Ok(Some(data)) => {
             // 注册到 BlobRegistry，返回 blob key

@@ -289,6 +289,38 @@ impl ThumbnailDb {
         self.load_thumbnail_with_category(key, size, ghash, None)
     }
 
+    /// 加载缩略图（仅根据 key 和 category，忽略 size 和 ghash，用于文件夹）
+    pub fn load_thumbnail_by_key_and_category(
+        &self,
+        key: &str,
+        category: &str,
+    ) -> SqliteResult<Option<Vec<u8>>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+        
+        let mut stmt = conn.prepare(
+            "SELECT value FROM thumbs WHERE key = ?1 AND category = ?2 LIMIT 1"
+        )?;
+        
+        let mut rows = stmt.query_map(params![key, category], |row| {
+            Ok(row.get::<_, Vec<u8>>(0)?)
+        })?;
+
+        if let Some(row) = rows.next() {
+            let data = row?;
+            if cfg!(debug_assertions) {
+                println!("✅ 从数据库加载缩略图（仅 key+category）: key={}, category={}, size={} bytes", key, category, data.len());
+            }
+            Ok(Some(data))
+        } else {
+            if cfg!(debug_assertions) {
+                println!("📭 数据库中没有找到缩略图（仅 key+category）: key={}, category={}", key, category);
+            }
+            Ok(None)
+        }
+    }
+
     /// 加载缩略图（带类别过滤）
     pub fn load_thumbnail_with_category(
         &self,

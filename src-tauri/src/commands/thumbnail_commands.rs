@@ -935,49 +935,58 @@ pub async fn get_archive_first_image_quick(
         return Err(e);
     }
     
-    if let Ok(manager_guard) = state.manager.lock() {
-        if let Some(ref manager) = *manager_guard {
-            // 首先查询首图索引表
-            let archive_key = archive_path.replace('\\', "/");
-            match manager.db.find_archive_first_image(&archive_key) {
-                Ok(Some(inner_path)) => {
-                    println!("🎯 [Rust] 首图索引命中: {} -> {}", archive_path, inner_path);
-                    
-                    // 直接提取已知的图片
-                    use crate::core::archive::ArchiveManager;
-                    let archive_manager = ArchiveManager::new();
-                    match archive_manager.extract_file(&path, &inner_path) {
-                        Ok(image_data) => {
-                            println!("✅ [Rust] 快速获取成功: {} bytes", image_data.len());
-                            Ok(image_data)
-                        }
-                        Err(e) => {
-                            println!("❌ [Rust] 提取失败: {}", e);
-                            
-                            // 索引可能已过期，回退到扫描
-                            get_archive_first_image_fallback(&path, manager).await
-                        }
-                    }
-                }
-                Ok(None) => {
-                    println!("🔍 [Rust] 首图索引未命中，启动扫描");
-                    get_archive_first_image_fallback(&path, manager).await
+    // 首先查询首图索引表
+    let archive_key = archive_path.replace('\\', "/");
+    // 创建一个新的 ThumbnailManager 实例来避免借用问题
+    let manager = {
+        let manager_guard = state.manager.lock()
+            .map_err(|_| "无法获取缩略图管理器".to_string())?;
+        match manager_guard.as_ref() {
+            Some(m) => {
+                // 获取必要的参数来创建新实例
+                let thumbnail_root = m.thumbnail_root().clone();
+                let root_dir = m.root_dir().clone();
+                let size = m.size();
+                ThumbnailManager::new(thumbnail_root, root_dir, size)
+                    .map_err(|e| format!("创建管理器失败: {}", e))?
+            }
+            None => return Err("缩略图管理器未初始化".to_string()),
+        }
+    };
+    
+    match manager.db.find_archive_first_image(&archive_key) {
+        Ok(Some(inner_path)) => {
+            println!("🎯 [Rust] 首图索引命中: {} -> {}", archive_path, inner_path);
+            
+            // 直接提取已知的图片
+            use crate::core::archive::ArchiveManager;
+            let archive_manager = ArchiveManager::new();
+            match archive_manager.extract_file(&path, &inner_path) {
+                Ok(image_data) => {
+                    println!("✅ [Rust] 快速获取成功: {} bytes", image_data.len());
+                    Ok(image_data)
                 }
                 Err(e) => {
-                    println!("❌ [Rust] 查询索引失败: {}", e);
+                    println!("❌ [Rust] 提取失败: {}", e);
+                    
+                    // 索引可能已过期，回退到扫描
                     get_archive_first_image_fallback(&path, manager).await
                 }
             }
-        } else {
-            Err("缩略图管理器未初始化".to_string())
         }
-    } else {
-        Err("无法获取缩略图管理器".to_string())
+        Ok(None) => {
+            println!("🔍 [Rust] 首图索引未命中，启动扫描");
+            get_archive_first_image_fallback(&path, manager).await
+        }
+        Err(e) => {
+            println!("❌ [Rust] 查询索引失败: {}", e);
+            get_archive_first_image_fallback(&path, manager).await
+        }
     }
 }
 
 /// 首图获取回退方案（扫描压缩包）
-async fn get_archive_first_image_fallback(path: &PathBuf, manager: &crate::core::thumbnail::ThumbnailManager) -> Result<Vec<u8>, String> {
+async fn get_archive_first_image_fallback(path: &PathBuf, manager: crate::core::thumbnail::ThumbnailManager) -> Result<Vec<u8>, String> {
     println!("🔄 [Rust] 使用回退方案扫描压缩包");
     
     // 快速提取压缩包内的第一张图片

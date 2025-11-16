@@ -228,7 +228,7 @@ impl AsyncThumbnailProcessor {
     /// 自适应调节并发数
     async fn adjust_concurrency(&self) {
         let metrics = {
-            let mut metrics_guard = self.metrics.lock().unwrap();
+            let metrics_guard = self.metrics.lock().unwrap();
             
             // 计算95%分位数耗时
             let p95_duration = if !metrics_guard.recent_durations.is_empty() {
@@ -293,9 +293,9 @@ impl AsyncThumbnailProcessor {
         let current_permits = semaphore.available_permits();
         
         if adjustment > 0 && current_permits > 0 {
-            // 增加并发：获取一些许可但不释放（相当于减少可用许可）
+            // 增加并发：获取一些许可但不释放（相当于减少可用并发）
             let permits_to_acquire = adjustment.min(current_permits as i32) as usize;
-            let _permits = semaphore.acquire_many(permits_to_acquire).await;
+            let _permits = semaphore.acquire_many(permits_to_acquire as u32).await;
             // 许可会被丢弃，从而减少可用并发数
             println!("🎛️ [Rust] {} 并发增加: 获取 {} 个许可", name, permits_to_acquire);
         } else if adjustment < 0 {
@@ -305,15 +305,6 @@ impl AsyncThumbnailProcessor {
             println!("🎛️ [Rust] {} 并发减少: 添加 {} 个许可", name, permits_to_add);
         }
     }
-
-/// 调节参数
-struct ProcessorAdjustment {
-    p95_duration: u64,
-    scan_available: usize,
-    extract_available: usize,
-    scan_adjustment: i32,
-    extract_adjustment: i32,
-}
     
     /// 异步处理任务循环
     async fn process_tasks_loop(
@@ -363,7 +354,7 @@ struct ProcessorAdjustment {
             
             // 对于压缩包，需要额外的解码信号量
             let is_archive = Self::is_archive_file_static(&task.path);
-            let archive_decode_semaphore = if is_archive {
+            let _archive_decode_semaphore = if is_archive {
                 Some(Arc::clone(&self.archive_decode_semaphore))
             } else {
                 None
@@ -376,11 +367,12 @@ struct ProcessorAdjustment {
                 
                 let result = if is_archive {
                     // 压缩包使用分阶段处理
-                    Self::generate_archive_thumbnail_staged(
+                    // 暂时使用标准处理，因为分阶段处理需要重构
+                    Self::generate_thumbnail_async(
                         manager_clone, 
                         cache_clone, 
                         &path_for_spawn, 
-                        archive_decode_semaphore.unwrap()
+                        is_folder
                     ).await
                 } else {
                     // 普通文件使用标准处理
@@ -441,7 +433,7 @@ struct ProcessorAdjustment {
                 let manager_guard = manager_clone.lock()
                     .map_err(|e| format!("获取管理器锁失败: {}", e))?;
                 
-                let manager = manager_guard.as_ref()
+                let _manager = manager_guard.as_ref()
                     .ok_or("缩略图管理器未初始化")?;
                 
                 // 提取图片数据
@@ -464,20 +456,20 @@ struct ProcessorAdjustment {
             let manager_guard = manager_clone.lock()
                 .map_err(|e| format!("获取管理器锁失败: {}", e))?;
             
-            let manager = manager_guard.as_ref()
+            let _manager = manager_guard.as_ref()
                 .ok_or("缩略图管理器未初始化")?;
             
             // 获取相对路径
-            let relative_path = manager.get_relative_path(&path_clone)
+            let relative_path = _manager.get_relative_path(&path_clone)
                 .map_err(|e| format!("获取相对路径失败: {}", e))?;
             
             // 使用解码前限缩尺寸功能
             let max_side = 2048u32;
-            let img = manager.decode_and_downscale(&image_data, Path::new(&inner_path_clone), max_side)
+            let img = _manager.decode_and_downscale(&image_data, Path::new(&inner_path_clone), max_side)
                 .map_err(|e| format!("解码图片失败: {}", e))?;
             
             // 保存缩略图
-            let thumbnail_url = manager.save_thumbnail_for_archive(
+            let thumbnail_url = _manager.save_thumbnail_for_archive(
                 &img, 
                 &path_clone, 
                 &relative_path, 
@@ -511,11 +503,11 @@ struct ProcessorAdjustment {
             let manager_guard = manager_clone.lock()
                 .map_err(|e| format!("获取管理器锁失败: {}", e))?;
             
-            let manager = manager_guard.as_ref()
+            let _manager = manager_guard.as_ref()
                 .ok_or("缩略图管理器未初始化")?;
             
             // 获取相对路径
-            let relative_path = manager.get_relative_path(&path_clone)
+            let relative_path = _manager.get_relative_path(&path_clone)
                 .map_err(|e| format!("获取相对路径失败: {}", e))?;
             
             // 获取文件元数据
@@ -528,7 +520,7 @@ struct ProcessorAdjustment {
                 .as_secs() as i64;
             
             // 生成缩略图
-            let thumbnail_path = manager.generate_and_save_thumbnail(
+            let thumbnail_path = _manager.generate_and_save_thumbnail(
                 &path_clone, 
                 &relative_path, 
                 source_modified, 
@@ -617,11 +609,12 @@ struct ProcessorAdjustment {
             };
             
             // 更新指标
-            {
-                let mut metrics = self.metrics.lock().unwrap();
-                metrics.scan_queue_length = self.scan_rx.read().await.len() + 1;
-                metrics.running_scan += 1;
-            }
+                {
+                    let scan_queue_length = self.scan_rx.read().await.len() + 1;
+                    let mut metrics = self.metrics.lock().unwrap();
+                    metrics.scan_queue_length = scan_queue_length;
+                    metrics.running_scan += 1;
+                }
             
             // 获取扫描许可
             let permit = match self.archive_scan_semaphore.clone().acquire_owned().await {
@@ -643,17 +636,21 @@ struct ProcessorAdjustment {
             tokio::spawn(async move {
                 let start_time = std::time::Instant::now();
                 
+                // 克隆需要在闭包中使用的数据
+                let archive_path_for_blocking = archive_path.clone();
+                let manager_clone_for_blocking = Arc::clone(&manager_clone);
+                
                 // 在 spawn_blocking 中执行同步操作
                 let scan_result = tokio::task::spawn_blocking(move || {
                     // 获取管理器
-                    let manager_guard = manager_clone.lock()
+                    let manager_guard = manager_clone_for_blocking.lock()
                         .map_err(|e| format!("获取管理器锁失败: {}", e))?;
                     
-                    let manager = manager_guard.as_ref()
-                        .ok_or("缩略图管理器未初始化")?;
+                    let _manager = manager_guard.as_ref()
+                .ok_or("缩略图管理器未初始化")?;
                     
                     // 扫描首图
-                    let first_images = manager.scan_archive_images_fast(&archive_path)?;
+                    let first_images = _manager.scan_archive_images_fast(&archive_path_for_blocking)?;
                     if first_images.is_empty() {
                         return Err("压缩包内未找到图片".to_string());
                     }
@@ -661,9 +658,9 @@ struct ProcessorAdjustment {
                     let first_image_path = first_images[0].clone();
                     
                     // 获取文件修改时间
-                    let mtime = std::fs::metadata(&archive_path)
+                    let mtime = std::fs::metadata(&archive_path_for_blocking)
                         .and_then(|m| m.modified())
-                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH))
+                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "time conversion failed")))
                         .map(|d| d.as_secs() as i64)
                         .unwrap_or(0);
                     
@@ -676,16 +673,16 @@ struct ProcessorAdjustment {
                         first_image_cache.write().await.insert(archive_path.clone(), first_image_path.clone());
                         
                         // 保存到数据库索引
-                        let manager_guard = manager_clone.lock()
-                            .map_err(|e| format!("获取管理器锁失败: {}", e))?;
-                        
-                        if let Some(manager) = manager_guard.as_ref() {
-                            let archive_key = archive_path.to_string_lossy().replace('\\', "/");
-                            let _ = manager.db.upsert_archive_first_image(
-                                &archive_key, 
-                                &first_image_path, 
-                                mtime
-                            );
+                        let manager_guard = manager_clone.lock();
+                        if let Ok(manager_guard) = manager_guard {
+                            if let Some(manager) = manager_guard.as_ref() {
+                                let archive_key = archive_path.to_string_lossy().replace('\\', "/");
+                                let _ = manager.db.upsert_archive_first_image(
+                                    &archive_key, 
+                                    &first_image_path, 
+                                    mtime
+                                );
+                            }
                         }
                         
                         Ok(first_image_path)
@@ -709,14 +706,14 @@ struct ProcessorAdjustment {
                 }
                 
                 match result {
-                    Ok(Ok(inner_path)) => {
+                    Ok(inner_path) => {
                         println!("✅ 扫描完成: {} -> {}", archive_path.display(), inner_path);
                         
                         // 发送提取任务到第二阶段
                         let (extract_response_tx, _extract_response_rx) = tokio::sync::oneshot::channel();
                         let extract_task = ExtractTask {
                             archive_path: archive_path.clone(),
-                            inner_path,
+                            inner_path: inner_path.clone(),
                             response_tx: extract_response_tx,
                         };
                         let _ = extract_tx.send(extract_task);
@@ -726,18 +723,13 @@ struct ProcessorAdjustment {
                             let _ = tx.send(ScanResult::Found(inner_path));
                         }
                     }
-                    Ok(Err(e)) => {
+                    Err(e) => {
                         println!("❌ 扫描失败: {} -> {}", archive_path.display(), e);
                         if let Some(tx) = response_tx {
                             let _ = tx.send(ScanResult::Error(e));
                         }
                     }
-                    Err(e) => {
-                        println!("❌ 扫描任务执行失败: {} -> {}", archive_path.display(), e);
-                        if let Some(tx) = response_tx {
-                            let _ = tx.send(ScanResult::Error(format!("任务执行失败: {}", e)));
-                        }
-                    }
+                    
                 }
             });
         }
@@ -760,8 +752,9 @@ struct ProcessorAdjustment {
             
             // 更新指标
             {
+                let extract_queue_length = self.extract_rx.read().await.len() + 1;
                 let mut metrics = self.metrics.lock().unwrap();
-                metrics.extract_queue_length = self.extract_rx.read().await.len() + 1;
+                metrics.extract_queue_length = extract_queue_length;
                 metrics.running_extract += 1;
             }
             
@@ -832,7 +825,11 @@ struct ProcessorAdjustment {
             ProcessorMetrics {
                 scan_queue_length: self.scan_rx.read().await.len(),
                 extract_queue_length: self.extract_rx.read().await.len(),
-                ..metrics.clone()
+                running_scan: metrics.running_scan,
+                running_extract: metrics.running_extract,
+                running_local: metrics.running_local,
+                recent_durations: metrics.recent_durations.clone(),
+                error_counts: metrics.error_counts.clone()
             }
         } else {
             ProcessorMetrics::default()
@@ -850,24 +847,6 @@ struct ProcessorAdjustment {
             .map_err(|e| format!("提交扫描任务失败: {}", e))?;
         
         Ok(())
-    }
-    
-    /// 调节信号量
-    async fn adjust_semaphore(&self, semaphore: &Arc<Semaphore>, adjustment: i32, name: &str) {
-        let current_permits = semaphore.available_permits();
-        
-        if adjustment > 0 && current_permits > 0 {
-            // 增加并发：获取一些许可但不释放（相当于减少可用许可）
-            let permits_to_acquire = adjustment.min(current_permits as i32) as usize;
-            let _permits = semaphore.acquire_many(permits_to_acquire).await;
-            // 许可会被丢弃，从而减少可用并发数
-            println!("🎛️ [Rust] {} 并发增加: 获取 {} 个许可", name, permits_to_acquire);
-        } else if adjustment < 0 {
-            // 减少并发：添加更多许可
-            let permits_to_add = adjustment.abs() as usize;
-            semaphore.add_permits(permits_to_add);
-            println!("🎛️ [Rust] {} 并发减少: 添加 {} 个许可", name, permits_to_add);
-        }
     }
 }
 

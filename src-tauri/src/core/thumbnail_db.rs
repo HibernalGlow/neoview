@@ -391,7 +391,7 @@ impl ThumbnailDatabase {
         let now = Utc::now().to_rfc3339();
         self.conn.execute(
             "INSERT OR REPLACE INTO archive_first_image (archive_path, inner_path, mtime, created_at) VALUES (?1, ?2, ?3, ?4)",
-            [archive_path, inner_path, mtime, &now],
+            [archive_path, inner_path, &mtime.to_string(), &now],
         )?;
         Ok(())
     }

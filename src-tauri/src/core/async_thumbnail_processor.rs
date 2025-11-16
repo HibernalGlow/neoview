@@ -2,10 +2,11 @@
 //! 使用 tokio 异步运行时极致优化缩略图生成速度
 
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, atomic::{AtomicUsize, Ordering}};
 use tokio::sync::{Semaphore, RwLock, mpsc, OwnedSemaphorePermit};
 use tokio::task::JoinHandle;
 use std::collections::{HashMap, VecDeque};
+use std::time::{Instant, Duration};
 use crate::core::thumbnail::ThumbnailManager;
 use crate::core::image_cache::ImageCache;
 use tauri::{AppHandle, Emitter};
@@ -13,10 +14,18 @@ use tauri::{AppHandle, Emitter};
 /// 调节参数
 struct ProcessorAdjustment {
     p95_duration: u64,
-    scan_available: usize,
-    extract_available: usize,
+    scan_current: usize,
+    extract_current: usize,
     scan_adjustment: i32,
     extract_adjustment: i32,
+}
+
+/// 并发限制配置
+struct ConcurrencyLimits {
+    scan_min: usize,
+    scan_max: usize,
+    extract_min: usize,
+    extract_max: usize,
 }
 
 /// 异步缩略图任务
@@ -84,6 +93,13 @@ pub struct AsyncThumbnailProcessor {
     archive_scan_semaphore: Arc<Semaphore>,
     /// 压缩包解码信号量（第二阶段：高并发）
     archive_decode_semaphore: Arc<Semaphore>,
+    /// 当前并发限制
+    current_scan_limit: Arc<AtomicUsize>,
+    current_extract_limit: Arc<AtomicUsize>,
+    /// 并发限制配置
+    concurrency_limits: Arc<ConcurrencyLimits>,
+    /// 上次调节时间
+    last_adjustment_time: Arc<Mutex<Option<Instant>>>,
     /// 任务接收器
     task_rx: Arc<RwLock<mpsc::UnboundedReceiver<AsyncThumbnailTask>>>,
     /// 扫描任务发送器和接收器
@@ -125,6 +141,10 @@ pub struct ProcessorMetrics {
     pub recent_durations: VecDeque<u64>,
     /// 错误计数
     pub error_counts: HashMap<String, usize>,
+    /// 当前扫描并发限制
+    pub current_scan_limit: usize,
+    /// 当前提取并发限制
+    pub current_extract_limit: usize,
 }
 
 impl AsyncThumbnailProcessor {
@@ -140,16 +160,32 @@ impl AsyncThumbnailProcessor {
         let (extract_tx, extract_rx) = mpsc::unbounded_channel();
         
         // 分阶段并发控制：扫描阶段低并发，解码阶段高并发
-        let max_concurrent_scan = max_concurrent_archive / 4; // 扫描阶段使用1/4的并发数
-        let max_concurrent_decode = max_concurrent_archive;   // 解码阶段使用全部并发数
+        let scan_max = 16;  // 扫描上限 16
+        let extract_max = 64;  // 解码上限 64
+        let scan_min = scan_max / 4;  // 扫描下限 4
+        let extract_min = extract_max / 4;  // 解码下限 16
+        
+        let concurrency_limits = Arc::new(ConcurrencyLimits {
+            scan_min,
+            scan_max,
+            extract_min,
+            extract_max,
+        });
+        
+        let current_scan_limit = Arc::new(AtomicUsize::new(scan_min));
+        let current_extract_limit = Arc::new(AtomicUsize::new(extract_min));
         
         let processor = Self {
             manager,
             cache,
             local_semaphore: Arc::new(Semaphore::new(max_concurrent_local)),
             archive_semaphore: Arc::new(Semaphore::new(max_concurrent_archive)),
-            archive_scan_semaphore: Arc::new(Semaphore::new(max_concurrent_scan)),
-            archive_decode_semaphore: Arc::new(Semaphore::new(max_concurrent_decode)),
+            archive_scan_semaphore: Arc::new(Semaphore::new(scan_min)),
+            archive_decode_semaphore: Arc::new(Semaphore::new(extract_min)),
+            current_scan_limit: Arc::clone(&current_scan_limit),
+            current_extract_limit: Arc::clone(&current_extract_limit),
+            concurrency_limits,
+            last_adjustment_time: Arc::new(Mutex::new(None)),
             task_rx: Arc::new(RwLock::new(task_rx)),
             scan_tx,
             scan_rx: Arc::new(RwLock::new(scan_rx)),
@@ -237,8 +273,18 @@ impl AsyncThumbnailProcessor {
     
     /// 自适应调节并发数
     async fn adjust_concurrency(&self) {
-        // 计算95%分位数耗时 - 不持有锁跨await
-        let (p95_duration, scan_available, extract_available) = {
+        // 检查冷却时间
+        {
+            let mut last_time = self.last_adjustment_time.lock().unwrap();
+            if let Some(last) = *last_time {
+                if last.elapsed() < Duration::from_secs(5) {
+                    return; // 还在冷却期内
+                }
+            }
+        }
+        
+        // 计算95%分位数耗时和当前并发数
+        let (p95_duration, scan_current, extract_current, running_scan, running_extract, durations_len) = {
             let metrics_guard = self.metrics.lock().unwrap();
             
             // 计算95%分位数耗时
@@ -251,84 +297,124 @@ impl AsyncThumbnailProcessor {
                 0
             };
             
-            // 获取当前信号量可用许可数
-            let scan_available = self.archive_scan_semaphore.available_permits();
-            let extract_available = self.archive_decode_semaphore.available_permits();
+            // 获取当前并发限制
+            let scan_current = self.current_scan_limit.load(Ordering::Relaxed);
+            let extract_current = self.current_extract_limit.load(Ordering::Relaxed);
             
-            (p95_duration, scan_available, extract_available)
+            (p95_duration, scan_current, extract_current, 
+             metrics_guard.running_scan, metrics_guard.running_extract,
+             metrics_guard.recent_durations.len())
         };
         
-        // 调节策略 - 更积极的并发控制
-        let scan_adjustment = if p95_duration > 500 && scan_available == 0 {
-            // 耗时过长且没有可用许可，减少并发
-            -1
-        } else if p95_duration < 300 && scan_available > 0 {
-            // 耗时较短且有可用许可，增加并发
-            2
-        } else if p95_duration < 150 && scan_available > 2 {
-            // 非常快，大幅增加并发
-            4
+        // 需要足够的历史数据才能调节
+        if durations_len < 20 {
+            return;
+        }
+        
+        // 优化的调节策略 - 对称区间和更保守的调节
+        let scan_adjustment = if p95_duration > 600 {
+            -2  // 耗时过长，减少2个
+        } else if p95_duration > 350 {
+            -1  // 耗时偏长，减少1个
+        } else if p95_duration < 180 && (running_scan == scan_current) {
+            0   // 很快但已达上限，不再增加
+        } else if p95_duration < 180 {
+            1   // 很快且未达上限，增加1个
         } else {
-            0
+            0   // 保持不变
         };
         
-        let extract_adjustment = if p95_duration > 600 && extract_available == 0 {
-            // 耗时过长且没有可用许可，减少并发
-            -2
-        } else if p95_duration < 400 && extract_available > 0 {
-            // 耗时较短且有可用许可，增加并发
-            3
-        } else if p95_duration < 200 && extract_available > 3 {
-            // 非常快，大幅增加并发
-            6
+        let extract_adjustment = if p95_duration > 600 {
+            -2  // 耗时过长，减少2个
+        } else if p95_duration > 350 {
+            -1  // 耗时偏长，减少1个
+        } else if p95_duration < 180 && (running_extract == extract_current) {
+            0   // 很快但已达上限，不再增加
+        } else if p95_duration < 180 {
+            1   // 很快且未达上限，增加1个
         } else {
-            0
-        };
-        
-        let metrics = ProcessorAdjustment {
-            p95_duration,
-            scan_available,
-            extract_available,
-            scan_adjustment,
-            extract_adjustment,
+            0   // 保持不变
         };
         
         // 应用调节
-        if metrics.scan_adjustment != 0 {
-            self.adjust_semaphore(&self.archive_scan_semaphore, metrics.scan_adjustment, "scan").await;
-        }
+        let scan_changed = if scan_adjustment != 0 {
+            self.adjust_concurrency_with_limits("scan", scan_adjustment).await
+        } else {
+            false
+        };
         
-        if metrics.extract_adjustment != 0 {
-            self.adjust_semaphore(&self.archive_decode_semaphore, metrics.extract_adjustment, "extract").await;
-        }
+        let extract_changed = if extract_adjustment != 0 {
+            self.adjust_concurrency_with_limits("extract", extract_adjustment).await
+        } else {
+            false
+        };
         
         // 记录调节日志
-        if metrics.scan_adjustment != 0 || metrics.extract_adjustment != 0 {
-            println!("🎛️ [Rust] 自适应调节: p95={}ms scan={:+} extract={:+}", 
-                metrics.p95_duration, metrics.scan_adjustment, metrics.extract_adjustment);
+        if scan_changed || extract_changed {
+            let new_scan = self.current_scan_limit.load(Ordering::Relaxed);
+            let new_extract = self.current_extract_limit.load(Ordering::Relaxed);
+            println!("🎛️ [Rust] 自适应调节: p95={}ms scan={}->{} extract={}->{}", 
+                p95_duration, scan_current, new_scan, extract_current, new_extract);
+            
+            // 更新冷却时间
+            *self.last_adjustment_time.lock().unwrap() = Some(Instant::now());
         }
     }
     
-    /// 调节信号量
-    async fn adjust_semaphore(&self, semaphore: &Arc<Semaphore>, adjustment: i32, name: &str) {
-        let current_permits = semaphore.available_permits();
-        
-        if adjustment > 0 {
-            // 增加并发：添加更多许可
-            let permits_to_add = adjustment as usize;
-            semaphore.add_permits(permits_to_add);
-            println!("🎛️ [Rust] {} 并发增加: 添加 {} 个许可 (当前可用: {})", 
-                name, permits_to_add, current_permits + permits_to_add);
-        } else if adjustment < 0 {
-            // 减少并发：获取一些许可但不释放
-            let permits_to_acquire = adjustment.abs().min(current_permits as i32) as usize;
-            if permits_to_acquire > 0 {
-                let _permits = semaphore.acquire_many(permits_to_acquire as u32).await;
-                // 许可会被丢弃，从而减少可用并发数
-                println!("🎛️ [Rust] {} 并发减少: 获取 {} 个许可 (当前可用: {})", 
-                    name, permits_to_acquire, current_permits - permits_to_acquire);
+    /// 带限制的并发调节
+    async fn adjust_concurrency_with_limits(&self, name: &str, adjustment: i32) -> bool {
+        let (current, min, max, semaphore) = match name {
+            "scan" => {
+                let current = self.current_scan_limit.load(Ordering::Relaxed);
+                let min = self.concurrency_limits.scan_min;
+                let max = self.concurrency_limits.scan_max;
+                (current, min, max, &self.archive_scan_semaphore)
             }
+            "extract" => {
+                let current = self.current_extract_limit.load(Ordering::Relaxed);
+                let min = self.concurrency_limits.extract_min;
+                let max = self.concurrency_limits.extract_max;
+                (current, min, max, &self.archive_decode_semaphore)
+            }
+            _ => return false,
+        };
+        
+        let new_limit = if adjustment > 0 {
+            // 增加并发，但不能超过最大值
+            (current + adjustment as usize).min(max)
+        } else {
+            // 减少并发，但不能低于最小值
+            (current.saturating_sub(adjustment.abs() as usize)).max(min)
+        };
+        
+        // 如果没有变化，直接返回
+        if new_limit == current {
+            return false;
         }
+        
+        // 计算需要调整的数量
+        let diff = if new_limit > current {
+            new_limit - current
+        } else {
+            current - new_limit
+        };
+        
+        if new_limit > current {
+            // 增加并发：添加许可
+            semaphore.add_permits(diff);
+        } else {
+            // 减少并发：获取许可但不释放
+            let _permits = semaphore.acquire_many(diff as u32).await;
+        }
+        
+        // 更新当前限制
+        match name {
+            "scan" => self.current_scan_limit.store(new_limit, Ordering::Relaxed),
+            "extract" => self.current_extract_limit.store(new_limit, Ordering::Relaxed),
+            _ => {}
+        }
+        
+        true
     }
     
     /// 异步处理任务循环
@@ -898,6 +984,9 @@ impl AsyncThumbnailProcessor {
     /// 获取处理器指标
     pub async fn get_metrics(&self) -> ProcessorMetrics {
         if let Ok(metrics) = self.metrics.lock() {
+            let current_scan_limit = self.current_scan_limit.load(Ordering::Relaxed);
+            let current_extract_limit = self.current_extract_limit.load(Ordering::Relaxed);
+            
             ProcessorMetrics {
                 scan_queue_length: self.scan_rx.read().await.len(),
                 extract_queue_length: self.extract_rx.read().await.len(),
@@ -905,10 +994,17 @@ impl AsyncThumbnailProcessor {
                 running_extract: metrics.running_extract,
                 running_local: metrics.running_local,
                 recent_durations: metrics.recent_durations.clone(),
-                error_counts: metrics.error_counts.clone()
+                error_counts: metrics.error_counts.clone(),
+                current_scan_limit,
+                current_extract_limit,
             }
         } else {
-            ProcessorMetrics::default()
+            let default = ProcessorMetrics::default();
+            ProcessorMetrics {
+                current_scan_limit: self.current_scan_limit.load(Ordering::Relaxed),
+                current_extract_limit: self.current_extract_limit.load(Ordering::Relaxed),
+                ..default
+            }
         }
     }
     

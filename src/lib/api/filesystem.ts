@@ -499,11 +499,14 @@ export async function getArchiveFirstImageQuick(archivePath: string): Promise<st
 /**
  * 后台异步生成压缩包缩略图（不等待完成）
  * 立即返回，缩略图生成在后台进行
+ * 使用新的 archive API
  */
 export async function generateArchiveThumbnailAsync(archivePath: string): Promise<string> {
   console.log('🔄 FileSystemAPI: 后台异步生成压缩包缩略图:', archivePath);
   try {
-    const result = await invoke<string>('generate_archive_thumbnail_async', { archivePath });
+    // 使用新的 archive API
+    const { generateArchiveThumbnailAsync } = await import('./archive');
+    const result = await generateArchiveThumbnailAsync(archivePath);
     console.log('✅ FileSystemAPI: 异步生成已入队:', result);
     return result;
   } catch (error) {

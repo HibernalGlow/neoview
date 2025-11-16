@@ -239,13 +239,9 @@ class ThumbnailScheduler {
       if (isArchive) {
         console.log('⚡ 首次加载压缩包，快速显示原图:', path);
         try {
-          // 获取原图二进制数据
-          const imageData = await FileSystemAPI.getArchiveFirstImageQuick(path);
-          if (imageData && imageData.length > 0) {
-            // 创建 Blob URL
-            const blob = new Blob([imageData], { type: 'image/jpeg' });
-            const blobUrl = URL.createObjectURL(blob);
-            
+          // 使用新的 blob API 获取 blob URL
+          const blobUrl = await FileSystemAPI.getArchiveFirstImageQuick(path);
+          if (blobUrl) {
             // 缓存临时缩略图
             thumbnailState.cacheThumbnail(normalizedPath, blobUrl);
             
@@ -254,7 +250,7 @@ class ThumbnailScheduler {
               this.addThumbnailCb(key, blobUrl);
             }
             
-            console.log('⚡ 快速显示原图成功:', path, 'size:', imageData.length);
+            console.log('⚡ 快速显示原图成功:', path, 'blob URL:', blobUrl);
           }
         } catch (e) {
           console.debug('⚡ 快速获取原图失败，继续生成缩略图:', e);

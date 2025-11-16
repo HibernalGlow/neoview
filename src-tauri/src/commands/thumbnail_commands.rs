@@ -936,6 +936,7 @@ pub async fn debug_avif(
 #[command]
 pub async fn get_archive_first_image_blob(
     archive_path: String,
+    app_handle: tauri::AppHandle,
     state: tauri::State<'_, ThumbnailManagerState>,
 ) -> Result<String, String> {
     println!("⚡ [Rust] 获取压缩包首图 blob: {}", archive_path);
@@ -982,6 +983,18 @@ pub async fn get_archive_first_image_blob(
         } else {
             println!("⚡ [Rust] 提交提取任务成功: {} :: {}", archive_path, inner_path);
         }
+    }
+    
+    // 发射首图就绪事件
+    if let Err(e) = app_handle.emit_all("thumbnail:firstImageReady", 
+        serde_json::json!({
+            "archivePath": archive_path,
+            "blob": blob_url.clone()
+        })
+    ) {
+        println!("⚠️ [Rust] 发射 thumbnail:firstImageReady 事件失败: {}", e);
+    } else {
+        println!("🎯 [Rust] 已发射 thumbnail:firstImageReady 事件: {} -> {}", archive_path, blob_url);
     }
     
     println!("✅ [Rust] 首图 blob 获取成功: {}", archive_path);

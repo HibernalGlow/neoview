@@ -947,9 +947,9 @@ pub async fn get_archive_first_image_blob(
         return Err(e);
     }
     
-    // 使用 ArchiveManager 获取首图 blob
+    // 使用 ArchiveManager 获取首图 blob（使用共享的 BlobRegistry）
     use crate::core::archive::ArchiveManager;
-    let archive_manager = ArchiveManager::new();
+    let archive_manager = ArchiveManager::with_shared_blob_registry(state.blob_registry.clone());
     let (blob_url, inner_path_opt) = match archive_manager.get_first_image_blob_or_scan(&path) {
         Ok(result) => result,
         Err(e) => {

@@ -1,4 +1,4 @@
-import { get, writable } from 'svelte/store';
+import { writable } from 'svelte/store';
 import { listen } from '@tauri-apps/api/event';
 import { 
   getArchiveFirstImageBlob, 
@@ -7,7 +7,8 @@ import {
   cleanupExpiredBlobs,
   enqueueArchivePreload, 
   generateArchiveThumbnailAsync, 
-  setForegroundSource 
+  setForegroundSource,
+  getBlobStats 
 } from './api/archive';
 
 interface ThumbnailEntry {
@@ -68,7 +69,7 @@ class BlobLifecycle {
 
 // 创建缩略图存储
 function createThumbnailStore() {
-  const { subscribe, set, update } = writable<Map<string, ThumbnailEntry>>(new Map());
+  const { subscribe, update } = writable<Map<string, ThumbnailEntry>>(new Map());
 
   return {
     subscribe,
@@ -135,7 +136,6 @@ export async function loadArchiveThumbnail(entryPath: string): Promise<void> {
     
     if (blobKey) {
       blobLifecycle.touch(blobKey);
-      blobLifecycle.registerObjectUrl(blobKey, displayUrl);
     }
     
     thumbnailStore.update(entryPath, displayUrl, Boolean(blobKey), blobKey);
@@ -173,7 +173,10 @@ export async function preloadArchiveThumbnails(archivePaths: string[]): Promise<
 }
 
 // 设置前台源目录
-export async function setForegroundDirectory(dirPath: string, items?: any[]): Promise<void> {
+type ArchiveCandidate = { name?: string; path: string };
+
+export async function setForegroundDirectory(dirPath: string, items?: ArchiveCandidate[]): Promise<void> {
+  
   await setForegroundSource(dirPath);
   
   // 如果提供了项目列表，优先处理压缩包
@@ -203,7 +206,6 @@ export function setupThumbnailEventListener(): () => void {
     
     if (blobKey) {
       blobLifecycle.touch(blobKey);
-      blobLifecycle.registerObjectUrl(blobKey, displayUrl);
     }
     
     thumbnailStore.update(archivePath, displayUrl, Boolean(blobKey), blobKey);
@@ -245,4 +247,22 @@ export async function getBlobStatistics() {
 // 清理所有 blob 引用
 export function cleanupAllBlobs() {
   blobLifecycle.cleanup();
+}
+
+async function toDisplayUrl(source: string): Promise<{ displayUrl: string; blobKey?: string }> {
+  if (source.startsWith('blob:')) {
+    const blobKey = source;
+    const cached = blobLifecycle.getObjectUrl(blobKey);
+    if (cached) {
+      return { displayUrl: cached, blobKey };
+    }
+
+    const bytes = await getBlobContent(blobKey);
+    const blob = new Blob([new Uint8Array(bytes)], { type: 'image/*' });
+    const url = URL.createObjectURL(blob);
+    blobLifecycle.registerObjectUrl(blobKey, url);
+    return { displayUrl: url, blobKey };
+  }
+
+  return { displayUrl: source };
 }

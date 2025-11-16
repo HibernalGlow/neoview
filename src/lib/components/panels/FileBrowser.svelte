@@ -45,19 +45,21 @@ import { getPerformanceSettings } from '$lib/api/performance';
 
   // 订阅 thumbnailStore 以获取实时缩略图更新
   let unsubscribeThumbnailStore: (() => void) | null = null;
+  let unsubscribeStore: (() => void) | null = null;
   
   $effect(() => {
     // 设置缩略图事件监听
     unsubscribeThumbnailStore = setupThumbnailEventListener();
     
     // 订阅 thumbnailStore 更新
-    const unsubscribe = thumbnailStore.subscribe((store) => {
+    unsubscribeStore = thumbnailStore.subscribe((store) => {
       // 更新本地 thumbnails Map
       thumbnails = new Map(store);
+      console.log('🖼️ [Frontend] thumbnails Map 更新，数量:', store.size);
     });
     
     return () => {
-      if (unsubscribe) unsubscribe();
+      if (unsubscribeStore) unsubscribeStore();
       if (unsubscribeThumbnailStore) unsubscribeThumbnailStore();
     };
   });

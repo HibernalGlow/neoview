@@ -26,6 +26,9 @@ pub async fn init_thumbnail_manager(
     // 创建数据库路径
     let db_path = PathBuf::from(&thumbnail_path).join("thumbnails.db");
     
+    // 输出数据库路径（用于调试）
+    println!("📁 缩略图数据库路径: {}", db_path.display());
+    
     // 创建数据库
     let db = Arc::new(ThumbnailDb::new(db_path));
     

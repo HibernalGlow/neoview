@@ -581,8 +581,17 @@ import { getPerformanceSettings } from '$lib/api/performance';
     // 对于已缓存的，会立即从数据库加载并显示
     // 对于未缓存的，会入队生成（immediate 优先级）
     itemsNeedingThumbnails.forEach(item => {
-      const isArchive = item.name.endsWith('.zip') || item.name.endsWith('.cbz') ||
-                       item.name.endsWith('.rar') || item.name.endsWith('.cbr');
+      // 检查是否为压缩包（目前后端只支持 ZIP/CBZ，但前端可以识别更多格式）
+      const nameLower = item.name.toLowerCase();
+      const isArchive = nameLower.endsWith('.zip') || nameLower.endsWith('.cbz') ||
+                       nameLower.endsWith('.rar') || nameLower.endsWith('.cbr') ||
+                       nameLower.endsWith('.7z') || nameLower.endsWith('.cb7');
+      
+      // 如果是压缩包，记录日志
+      if (isArchive) {
+        console.log(`📦 请求压缩包缩略图: ${item.path}`);
+      }
+      
       // getThumbnail 会自动检查数据库，如果存在会立即加载并返回
       // 如果不存在，会入队生成（immediate 优先级）
       thumbnailManager.getThumbnail(item.path, undefined, isArchive, 'immediate');

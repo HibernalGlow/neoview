@@ -64,8 +64,11 @@ class ThumbnailManager {
   private async init() {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
+      const thumbnailPath = await this.getThumbnailPath();
+      const dbPath = `${thumbnailPath}/thumbnails.db`;
+      console.log(`📁 缩略图数据库路径: ${dbPath}`);
       await invoke('init_thumbnail_manager', {
-        thumbnailPath: await this.getThumbnailPath(),
+        thumbnailPath,
         rootPath: '',
         size: this.config.thumbnailSize,
       });
@@ -219,12 +222,13 @@ class ThumbnailManager {
       });
 
       if (blobKey) {
+        console.log(`📦 从数据库找到缩略图: ${pathKey} (blob key: ${blobKey})`);
         // 获取 blob 数据并创建 Blob URL
         const blobData = await invoke<number[] | null>('get_thumbnail_blob_data', {
           blobKey,
         });
 
-        if (blobData) {
+        if (blobData && blobData.length > 0) {
           // 转换为 Uint8Array
           const uint8Array = new Uint8Array(blobData);
           const blob = new Blob([uint8Array], { type: 'image/webp' });
@@ -236,8 +240,13 @@ class ThumbnailManager {
             dataUrl: blobUrl,
             timestamp: Date.now(),
           });
+          console.log(`✅ 成功从数据库加载缩略图: ${pathKey} (${blobData.length} bytes)`);
           return blobUrl;
+        } else {
+          console.warn(`⚠️ 从数据库获取的 blob 数据为空: ${pathKey}`);
         }
+      } else {
+        console.debug(`📭 数据库中没有缩略图: ${pathKey}`);
       }
     } catch (error) {
       console.debug('从数据库加载缩略图失败:', path, error);
@@ -321,19 +330,18 @@ class ThumbnailManager {
     // 2. 尝试从数据库加载（不依赖索引缓存，直接尝试）
     // 这样可以立即显示已缓存的缩略图，不需要等待索引预加载
     try {
-      const dbBlobKey = await this.loadFromDb(path, innerPath);
-      if (dbBlobKey) {
-        const blobUrl = await this.blobKeyToUrl(dbBlobKey);
-        if (blobUrl) {
-          // 更新缓存和索引缓存
-          this.cache.set(pathKey, {
-            pathKey,
-            dataUrl: blobUrl,
-            timestamp: Date.now(),
-          });
-          this.dbIndexCache.set(pathKey, true);
-          return blobUrl;
-        }
+      const dbBlobUrl = await this.loadFromDb(path, innerPath);
+      if (dbBlobUrl) {
+        // loadFromDb 已经返回 blobUrl，不需要再转换
+        // 更新缓存和索引缓存
+        this.cache.set(pathKey, {
+          pathKey,
+          dataUrl: dbBlobUrl,
+          timestamp: Date.now(),
+        });
+        this.dbIndexCache.set(pathKey, true);
+        console.log(`✅ 从数据库加载缩略图: ${pathKey}`);
+        return dbBlobUrl;
       }
       // 如果数据库中没有，更新索引缓存
       this.dbIndexCache.set(pathKey, false);
@@ -471,21 +479,18 @@ class ThumbnailManager {
       // 先尝试从数据库加载
       const dbThumbnail = await this.loadFromDb(task.path, task.innerPath);
       if (dbThumbnail) {
-        // 转换为 blob URL
-        const blobUrl = await this.blobKeyToUrl(dbThumbnail);
-        if (blobUrl) {
-          // 更新缓存
-          this.cache.set(pathKey, {
-            pathKey,
-            dataUrl: blobUrl,
-            timestamp: Date.now(),
-          });
-          // 通知回调
-          if (this.onThumbnailReady) {
-            this.onThumbnailReady(task.path, blobUrl);
-          }
-          return blobUrl;
+        // loadFromDb 已经返回 blobUrl，不需要再转换
+        // 更新缓存
+        this.cache.set(pathKey, {
+          pathKey,
+          dataUrl: dbThumbnail,
+          timestamp: Date.now(),
+        });
+        // 通知回调
+        if (this.onThumbnailReady) {
+          this.onThumbnailReady(task.path, dbThumbnail);
         }
+        return dbThumbnail;
       }
 
       // 生成新缩略图

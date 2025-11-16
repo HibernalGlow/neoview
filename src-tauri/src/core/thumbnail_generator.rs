@@ -247,6 +247,8 @@ impl ThumbnailGenerator {
         &self,
         archive_path: &str,
     ) -> Result<Vec<u8>, String> {
+        println!("📦 开始生成压缩包缩略图: {}", archive_path);
+        
         // 获取压缩包大小
         let metadata = std::fs::metadata(archive_path)
             .map_err(|e| format!("获取压缩包元数据失败: {}", e))?;
@@ -258,8 +260,17 @@ impl ThumbnailGenerator {
         
         // 检查数据库缓存
         if let Ok(Some(cached)) = self.db.load_thumbnail(&path_key, archive_size, ghash) {
+            println!("✅ 从数据库加载压缩包缩略图: {}", archive_path);
             let _ = self.db.update_access_time(&path_key);
             return Ok(cached);
+        }
+        
+        println!("🔄 生成新的压缩包缩略图: {}", archive_path);
+        
+        // 检查文件扩展名，目前只支持 ZIP 格式
+        let path_lower = archive_path.to_lowercase();
+        if !path_lower.ends_with(".zip") && !path_lower.ends_with(".cbz") {
+            return Err(format!("暂不支持此压缩包格式: {} (目前仅支持 ZIP/CBZ)", archive_path));
         }
         
         // 使用 zip crate 直接读取压缩包，找到第一张图片
@@ -281,6 +292,8 @@ impl ThumbnailGenerator {
         let mut archive = ZipArchive::new(file)
             .map_err(|e| format!("读取压缩包失败: {}", e))?;
         
+        println!("📂 压缩包包含 {} 个文件", archive.len());
+        
         // 支持的图片扩展名
         let image_exts = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "avif", "jxl", "tiff", "tif"];
         
@@ -296,10 +309,13 @@ impl ThumbnailGenerator {
                 .map(|e| e.to_lowercase())
             {
                 if image_exts.contains(&ext.as_str()) {
+                    println!("🖼️ 找到图片文件: {} (索引: {})", name, i);
                     // 读取文件内容
                     let mut image_data = Vec::new();
                     file.read_to_end(&mut image_data)
                         .map_err(|e| format!("读取压缩包文件失败: {}", e))?;
+                    
+                    println!("📊 图片文件大小: {} bytes", image_data.len());
                     
                     // 从内存加载图像（使用 catch_unwind 避免 panic）
                     let img = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -308,8 +324,12 @@ impl ThumbnailGenerator {
                     .map_err(|_| "图像解码时发生 panic（可能是格式问题）".to_string())?
                     .map_err(|e| format!("从内存加载图像失败: {}", e))?;
                     
+                    println!("✅ 图像解码成功: {}x{}", img.width(), img.height());
+                    
                     // 生成 webp 缩略图
                     let thumbnail_data = self.generate_webp_thumbnail(img)?;
+                    
+                    println!("✅ 缩略图生成成功: {} bytes", thumbnail_data.len());
                     
                     // 异步保存到数据库（使用线程池，不阻塞返回）
                     let db_clone = Arc::clone(&self.db);
@@ -321,6 +341,8 @@ impl ThumbnailGenerator {
                             if !e.to_string().contains("Execute returned results") {
                                 eprintln!("保存缩略图到数据库失败: {}", e);
                             }
+                        } else {
+                            println!("💾 缩略图已保存到数据库: {}", path_key_clone);
                         }
                     });
                     
@@ -329,6 +351,7 @@ impl ThumbnailGenerator {
             }
         }
         
+        println!("⚠️ 压缩包中没有找到图片文件: {}", archive_path);
         Err("压缩包中没有找到图片文件".to_string())
     }
 

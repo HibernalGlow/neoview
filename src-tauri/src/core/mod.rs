@@ -6,7 +6,6 @@ pub mod image_loader;
 pub mod image_cache;
 pub mod fs_manager;
 pub mod thumbnail;
-pub mod thumbnail_queue;
 pub mod thumbnail_db;
 pub mod archive;
 pub mod file_indexer;

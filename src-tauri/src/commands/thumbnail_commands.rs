@@ -6,7 +6,6 @@ use std::sync::{Arc, Mutex};
 use tauri::command;
 use std::time::Duration;
 use crate::core::thumbnail::ThumbnailManager;
-use crate::core::thumbnail_queue::ThumbnailQueue;
 use crate::core::fs_manager::FsItem;
 use crate::core::image_cache::ImageCache;
 
@@ -19,7 +18,6 @@ fn normalize_path_string<S: AsRef<str>>(s: S) -> String {
 pub struct ThumbnailManagerState {
     pub manager: Arc<Mutex<Option<ThumbnailManager>>>,
     pub cache: Arc<Mutex<ImageCache>>,
-    pub queue: Arc<Mutex<Option<Arc<ThumbnailQueue>>>>,
     pub async_processor: Arc<Mutex<Option<crate::core::async_thumbnail_processor::AsyncThumbnailProcessor>>>,
     pub async_task_tx: Arc<Mutex<Option<tokio::sync::mpsc::UnboundedSender<crate::core::async_thumbnail_processor::AsyncThumbnailTask>>>>,
 }
@@ -29,7 +27,6 @@ impl Default for ThumbnailManagerState {
         Self {
             manager: Arc::new(Mutex::new(None)),
             cache: Arc::new(Mutex::new(ImageCache::new(1024))), // 1024MB 缓存
-            queue: Arc::new(Mutex::new(None)),
             async_processor: Arc::new(Mutex::new(None)),
             async_task_tx: Arc::new(Mutex::new(None)),
         }
@@ -92,17 +89,7 @@ pub async fn init_thumbnail_manager(
         *manager_guard = Some(manager);
     }
 
-    // 启动后台优先队列（去重 + worker pool）
-    if let Ok(mut queue_guard) = state.queue.lock() {
-        // 超激进优化：使用所有可用核心的 4 倍，最多 64 个 worker，最少 16 个
-        let num_workers = std::thread::available_parallelism()
-            .map(|n| ((n.get() as f64 * 4.0) as usize).min(64).max(16))
-            .unwrap_or(32);
-        println!("🔧 启动缩略图队列，worker 数量: {} (超激进模式 - 动态调整)", num_workers);
-        let q = ThumbnailQueue::start(state.manager.clone(), state.cache.clone(), num_workers);
-        println!("✅ 缩略图队列已启动，所有 {} 个 worker 已就绪", num_workers);
-        *queue_guard = Some(q);
-    }
+    // 旧队列已移除，现在完全使用异步处理器
     
     // 启动异步处理器（tokio多线程极致优化）
     {
@@ -285,6 +272,63 @@ pub async fn generate_file_thumbnail_new(
     }
 
     Err("缩略图管理器未初始化".to_string())
+}
+
+/// 取消指定路径的缩略图生成任务
+#[command]
+pub async fn cancel_thumbnail_task(
+    path: String,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<bool, String> {
+    let path = PathBuf::from(path);
+    
+    if let Ok(processor_guard) = state.async_processor.lock() {
+        if let Some(ref processor) = *processor_guard {
+            let cancelled = processor.cancel(&path).await;
+            Ok(cancelled)
+        } else {
+            Err("异步处理器未初始化".to_string())
+        }
+    } else {
+        Err("无法获取处理器锁".to_string())
+    }
+}
+
+/// 取消指定目录下的所有缩略图生成任务
+#[command]
+pub async fn cancel_folder_tasks(
+    dir_path: String,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<usize, String> {
+    let dir_path = PathBuf::from(dir_path);
+    
+    if let Ok(processor_guard) = state.async_processor.lock() {
+        if let Some(ref processor) = *processor_guard {
+            let cancelled = processor.cancel_by_prefix(&dir_path).await;
+            Ok(cancelled)
+        } else {
+            Err("异步处理器未初始化".to_string())
+        }
+    } else {
+        Err("无法获取处理器锁".to_string())
+    }
+}
+
+/// 获取错误统计信息
+#[command]
+pub async fn get_thumbnail_error_stats(
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<std::collections::HashMap<String, usize>, String> {
+    if let Ok(processor_guard) = state.async_processor.lock() {
+        if let Some(ref processor) = *processor_guard {
+            let stats = processor.get_error_stats().await;
+            Ok(stats)
+        } else {
+            Err("异步处理器未初始化".to_string())
+        }
+    } else {
+        Err("无法获取处理器锁".to_string())
+    }
 }
 
 /// 生成文件夹缩略图
@@ -874,97 +918,7 @@ pub async fn debug_avif(
     Ok(report.join("\n"))
 }
 
-/// 批量入队当前目录的所有文件为最高优先级
-/// 用于快速加载当前浏览目录的缩略图
-#[command]
-pub async fn enqueue_dir_files_highest_priority(
-    dir_path: String,
-    state: tauri::State<'_, ThumbnailManagerState>,
-) -> Result<usize, String> {
-    use crate::core::fs_manager::FsManager;
-    
-    let path = PathBuf::from(&dir_path);
-    let fs_manager = FsManager::new();
-    
-    // 获取目录内容
-    let items = fs_manager.read_directory(&path)
-        .map_err(|e| format!("列出目录失败: {}", e))?;
-    
-    // 获取队列
-    let queue_guard = state.queue.lock()
-        .map_err(|_| "无法获取队列锁".to_string())?;
-    
-    if let Some(ref q) = *queue_guard {
-        let mut enqueued_count = 0;
-        
-        // 为每个文件入队为最高优先级
-        for item in items {
-            if !item.is_dir {  // 只入队文件，不入队文件夹
-                let file_path = path.join(&item.name);
-                // 使用 enqueue 方法，第三个参数表示最高优先级
-                match q.enqueue(file_path.to_path_buf(), false, true) {
-                    Ok(_) => enqueued_count += 1,
-                    Err(e) => println!("⚠️ 入队失败 {}: {}", file_path.display(), e),
-                }
-            }
-        }
-        
-        println!("⚡ 已将 {} 个文件入队为最高优先级", enqueued_count);
-        Ok(enqueued_count)
-    } else {
-        Err("缩略图队列未初始化".to_string())
-    }
-}
 
-/// 优先加载当前文件夹（使用 tokio 优化）
-/// 立即返回，后台异步处理当前文件夹的所有文件
-#[command]
-pub async fn prioritize_current_folder(
-    dir_path: String,
-    state: tauri::State<'_, ThumbnailManagerState>,
-) -> Result<String, String> {
-    use crate::core::fs_manager::FsManager;
-    
-    let path = PathBuf::from(&dir_path);
-    let fs_manager = FsManager::new();
-    
-    // 获取目录内容
-    let items = fs_manager.read_directory(&path)
-        .map_err(|e| format!("列出目录失败: {}", e))?;
-    
-    // 获取队列
-    let queue_guard = state.queue.lock()
-        .map_err(|_| "无法获取队列锁".to_string())?;
-    
-    if let Some(ref q) = *queue_guard {
-        let queue_clone = q.clone();
-        let dir_path_clone = path.clone();
-        
-        // 在后台异步处理当前文件夹的所有文件
-        tokio::spawn(async move {
-            let mut enqueued_count = 0;
-            
-            // 为每个文件入队为最高优先级
-            for item in items {
-                if !item.is_dir {  // 只入队文件，不入队文件夹
-                    let file_path = dir_path_clone.join(&item.name);
-                    // 使用 enqueue 方法，第三个参数表示最高优先级
-                    match queue_clone.enqueue(file_path.to_path_buf(), false, true) {
-                        Ok(_) => enqueued_count += 1,
-                        Err(e) => println!("⚠️ 入队失败 {}: {}", file_path.display(), e),
-                    }
-                }
-            }
-            
-            println!("⚡ 已将 {} 个文件入队为最高优先级（后台异步）", enqueued_count);
-        });
-        
-        println!("📥 当前文件夹优先加载已启动（后台处理）");
-        Ok("prioritizing".to_string())
-    } else {
-        Err("缩略图队列未初始化".to_string())
-    }
-}
 
 /// 快速获取原图（用于首次加载时立即显示）
 /// 返回原图的二进制数据

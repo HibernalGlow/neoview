@@ -407,6 +407,27 @@ export async function getThumbnailStats(): Promise<any> {
 }
 
 /**
+ * 取消指定路径的缩略图生成任务
+ */
+export async function cancelThumbnailTask(path: string): Promise<boolean> {
+  return await invoke<boolean>('cancel_thumbnail_task', { path });
+}
+
+/**
+ * 取消指定目录下的所有缩略图生成任务
+ */
+export async function cancelFolderTasks(dirPath: string): Promise<number> {
+  return await invoke<number>('cancel_folder_tasks', { dirPath });
+}
+
+/**
+ * 获取错误统计信息
+ */
+export async function getThumbnailErrorStats(): Promise<Record<string, number>> {
+  return await invoke<Record<string, number>>('get_thumbnail_error_stats');
+}
+
+/**
  * 清空所有缩略图
  */
 export async function clearAllThumbnails(): Promise<number> {

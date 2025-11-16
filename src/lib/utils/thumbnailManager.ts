@@ -278,32 +278,30 @@ export function toRelativeKey(absPath: string): string {
   }
 }
 
+// 定义FsItem类型
+interface FsItem {
+  name: string;
+  path: string;
+  isDir: boolean;
+  is_dir?: boolean;
+  isImage?: boolean;
+  is_image?: boolean;
+  size?: number;
+  modified?: string | number;
+  created?: string | number;
+  [key: string]: any;
+}
+
 // 新的队列API
-export function enqueueVisible(sourcePath: string, items: any[], options: { priority?: Priority; delay?: number } = {}) {
+export function enqueueVisible(sourcePath: string, items: FsItem[], options: { priority?: Priority; delay?: number } = {}) {
   const { priority = 'immediate', delay = 0 } = options;
 
-  // 过滤出支持的文件类型（图片和压缩包）
-  const supportedItems = items.filter(item => {
-    const name = item?.name || '';
-    const isDir = itemIsDirectory(item);
-    
-    // 支持的图片扩展名
-    const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.avif', '.jxl', '.tiff', '.tif'];
-    // 支持的压缩包扩展名
-    const archiveExts = ['.zip', '.rar', '.7z', '.cbz', '.cbr', '.cb7'];
-    
-    const ext = name.toLowerCase().substring(name.lastIndexOf('.'));
-    
-    // 文件夹或支持的文件类型
-    return isDir || imageExts.includes(ext) || archiveExts.includes(ext);
-  });
-
-  const run = () => scheduler.enqueue(sourcePath, supportedItems, priority);
+  const run = () => scheduler.enqueue(sourcePath, items, priority);
   if (delay > 0) setTimeout(run, delay);
   else run();
 }
 
-export function enqueueBackground(sourcePath: string, items: any[], options: { priority?: Priority; delay?: number } = {}) {
+export function enqueueBackground(sourcePath: string, items: FsItem[], options: { priority?: Priority; delay?: number } = {}) {
   const { priority = 'normal', delay = 200 } = options;
   
   // 过滤出支持的文件类型（图片和压缩包）
@@ -337,7 +335,7 @@ export function clearAll() {
   scheduler.clearAll();
 }
 
-export function enqueueDirectoryThumbnails(path: string, items: any[]) {
+export function enqueueDirectoryThumbnails(path: string, items: FsItem[]) {
   if (!items?.length) return;
 
   // 过滤出支持的文件类型（图片和压缩包）

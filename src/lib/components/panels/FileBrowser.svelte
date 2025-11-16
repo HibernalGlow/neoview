@@ -17,6 +17,7 @@
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
   import { homeDir } from '@tauri-apps/api/path';
   import { configureThumbnailManager, itemIsDirectory, itemIsImage, toRelativeKey, enqueueDirectoryThumbnails, cancelBySource, enqueueVisible } from '$lib/utils/thumbnailManager';
+  import { cancelFolderTasks } from '$lib/api';
 import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
 import ThumbnailsPanel from './ThumbnailsPanel.svelte';
 import { getPerformanceSettings } from '$lib/api/performance';
@@ -863,6 +864,22 @@ import { getPerformanceSettings } from '$lib/api/performance';
       console.warn('⚠️ Empty path provided to navigateToDirectory');
       return;
     }
+    
+    // 取消当前目录的所有缩略图任务
+    if (currentPath && currentPath !== path) {
+      try {
+        const cancelled = await cancelFolderTasks(currentPath);
+        if (cancelled > 0) {
+          console.log(`🚫 已取消旧目录 ${currentPath} 的 ${cancelled} 个缩略图任务`);
+        }
+        
+        // 清空前端队列
+        cancelBySource(currentPath);
+      } catch (e) {
+        console.debug('取消任务失败:', e);
+      }
+    }
+    
     await loadDirectory(path);
   }
 

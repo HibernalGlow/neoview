@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use tokio::sync::{Semaphore, RwLock, mpsc};
+use tokio::sync::{Semaphore, RwLock, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use std::collections::HashMap;
 use crate::core::thumbnail::ThumbnailManager;
@@ -15,6 +15,19 @@ pub struct AsyncThumbnailTask {
     pub is_folder: bool,
     pub priority: TaskPriority,
     pub response_tx: tokio::sync::oneshot::Sender<Result<String, String>>,
+}
+
+/// 任务取消令牌
+pub struct CancellationToken {
+    pub abort_handle: Option<JoinHandle<()>>,
+}
+
+impl CancellationToken {
+    pub fn abort(&self) {
+        if let Some(handle) = &self.abort_handle {
+            handle.abort();
+        }
+    }
 }
 
 /// 任务优先级
@@ -38,7 +51,9 @@ pub struct AsyncThumbnailProcessor {
     /// 任务接收器
     task_rx: Arc<RwLock<mpsc::UnboundedReceiver<AsyncThumbnailTask>>>,
     /// 正在处理的任务
-    processing_tasks: Arc<RwLock<HashMap<PathBuf, JoinHandle<()>>>>,
+    processing_tasks: Arc<RwLock<HashMap<PathBuf, CancellationToken>>>,
+    /// 错误统计
+    error_counts: Arc<Mutex<HashMap<String, usize>>>,
 }
 
 impl AsyncThumbnailProcessor {
@@ -136,26 +151,19 @@ impl AsyncThumbnailProcessor {
             let manager_clone = Arc::clone(&manager);
             let cache_clone = Arc::clone(&cache);
             let processing_tasks_clone = Arc::clone(&processing_tasks);
+            let error_counts_clone = Arc::clone(&self.error_counts);
             
-            // 根据文件类型选择信号量
-            let semaphore = if Self::is_archive_file_static(&task.path) {
-                Arc::clone(&archive_semaphore)
+            // 根据文件类型选择信号量并获取许可
+            let permit = if Self::is_archive_file_static(&task.path) {
+                Arc::clone(&archive_semaphore).acquire().await
             } else {
-                Arc::clone(&local_semaphore)
-            };
-            
-            let semaphore_clone = Arc::clone(&semaphore);
+                Arc::clone(&local_semaphore).acquire().await
+            }.map_err(|e| format!("获取信号量失败: {}", e))
+            .unwrap();
             
             // 启动异步任务
             let handle = tokio::spawn(async move {
-                // 获取信号量许可（owned permit 可以跨 await 传递）
-                let permit = match semaphore_clone.acquire_owned().await {
-                    Ok(p) => p,
-                    Err(e) => {
-                        let _ = response_tx.send(Err(format!("获取信号量失败: {}", e)));
-                        return;
-                    }
-                };
+                // 确保在任务完成时释放许可
                 let _permit = permit;
                 
                 let result = Self::generate_thumbnail_async(
@@ -164,6 +172,13 @@ impl AsyncThumbnailProcessor {
                     &path_for_spawn, 
                     is_folder
                 ).await;
+                
+                // 记录错误统计
+                if let Err(ref e) = result {
+                    if let Ok(mut counts) = error_counts_clone.lock() {
+                        *counts.entry(e.to_string()).or_insert(0) += 1;
+                    }
+                }
                 
                 // 发送结果
                 if let Err(_) = response_tx.send(result.clone()) {
@@ -180,7 +195,10 @@ impl AsyncThumbnailProcessor {
             });
             
             // 添加到处理中列表
-            processing_tasks.write().await.insert(path, handle);
+            let cancellation_token = CancellationToken {
+                abort_handle: Some(handle),
+            };
+            processing_tasks.write().await.insert(path, cancellation_token);
         }
     }
     
@@ -244,6 +262,52 @@ impl AsyncThumbnailProcessor {
             false
         }
     }
+    
+    /// 取消指定路径的任务
+    pub async fn cancel(&self, path: &PathBuf) -> bool {
+        if let Some(token) = self.processing_tasks.write().await.remove(path) {
+            token.abort();
+            println!("🚫 已取消任务: {}", path.display());
+            true
+        } else {
+            false
+        }
+    }
+    
+    /// 取消指定目录下的所有任务
+    pub async fn cancel_by_prefix(&self, dir_path: &PathBuf) -> usize {
+        let mut cancelled = 0;
+        let mut tasks_to_cancel = Vec::new();
+        
+        // 收集需要取消的任务
+        for (path, _token) in self.processing_tasks.read().await.iter() {
+            if path.starts_with(dir_path) {
+                tasks_to_cancel.push(path.clone());
+            }
+        }
+        
+        // 取消任务
+        for path in tasks_to_cancel {
+            if self.cancel(&path).await {
+                cancelled += 1;
+            }
+        }
+        
+        if cancelled > 0 {
+            println!("🚫 已取消目录 {} 下的 {} 个任务", dir_path.display(), cancelled);
+        }
+        
+        cancelled
+    }
+    
+    /// 获取错误统计
+    pub async fn get_error_stats(&self) -> HashMap<String, usize> {
+        if let Ok(counts) = self.error_counts.lock() {
+            counts.clone()
+        } else {
+            HashMap::new()
+        }
+    }
 }
 
 // 实现Clone以支持在多个任务间共享
@@ -256,6 +320,7 @@ impl Clone for AsyncThumbnailProcessor {
             archive_semaphore: self.archive_semaphore.clone(),
             task_rx: self.task_rx.clone(),
             processing_tasks: self.processing_tasks.clone(),
+            error_counts: self.error_counts.clone(),
         }
     }
 }

@@ -478,18 +478,17 @@ export async function enqueueDirFilesHighestPriority(dirPath: string): Promise<n
 }
 
 /**
- * 快速获取压缩包内的第一张图片原始字节
- * 用于首次加载时立即显示原图，不进行任何处理
- * 返回 blob URL（通过 URL.createObjectURL）
+ * 快速获取压缩包内的第一张图片
+ * 使用后端的 BlobRegistry 返回 blob:{hash} URL
+ * 无需前端创建 Blob 对象
  */
 export async function getArchiveFirstImageQuick(archivePath: string): Promise<string> {
   console.log('⚡ FileSystemAPI: 快速获取压缩包首张图片:', archivePath);
   try {
-    const imageBytes = await invoke<number[]>('get_archive_first_image_quick', { archivePath });
-    // 转换为 Blob 然后创建 blob URL
-    const blob = new Blob([new Uint8Array(imageBytes)]);
-    const blobUrl = URL.createObjectURL(blob);
-    console.log('✅ FileSystemAPI: 快速获取成功:', blob.size, 'bytes, URL:', blobUrl);
+    // 使用新的 blob API
+    const { getArchiveFirstImageBlob } = await import('./archive');
+    const blobUrl = await getArchiveFirstImageBlob(archivePath);
+    console.log('✅ FileSystemAPI: 快速获取成功, blob URL:', blobUrl);
     return blobUrl;
   } catch (error) {
     console.error('❌ FileSystemAPI: 快速获取失败:', archivePath, error);

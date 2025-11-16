@@ -95,8 +95,8 @@ impl ArchiveManager {
     }
 
     /// 获取或创建压缩包缓存
-    fn get_cached_archive(&self, archive_path: &Path) -> Result<Arc<std::sync::Mutex<ZipArchive<std::fs::File>>>, String> {
-        // 规范化缓存键，统一使用正斜杠，避免 Windows 上的 "\\"/"/" 差异导致命中失败
+    pub fn get_cached_archive(&self, archive_path: &Path) -> Result<Arc<std::sync::Mutex<ZipArchive<std::fs::File>>>, String> {
+        // 规范化缓存键，统一使用正斜杠，避免 Windows 上的 "\\""/" 差异导致命中失败
         let path_str = Self::normalize_archive_key(archive_path);
 
         // 检查缓存
@@ -399,7 +399,7 @@ impl ArchiveManager {
     }
 
     /// 快速查找压缩包中的第一张图片（早停扫描）
-    /// 找到第一张图片即返回，避免扫描整个压缩包
+    /// 找到第一张图片即返回，避免遍历全部条目
     pub fn find_first_image_entry(&self, archive_path: &Path) -> Result<Option<String>, String> {
         println!("⚡ ArchiveManager::find_first_image_entry start: {}", archive_path.display());
 

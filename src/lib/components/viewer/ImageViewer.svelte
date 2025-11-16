@@ -119,6 +119,14 @@
 				
 				// 确定目标页面索引，优先使用事件中的 pageIndex
 				const targetIndex = typeof pageIndex === 'number' ? pageIndex : bookStore.currentPageIndex;
+				
+				// 🔥 关键修复：验证 hash 是否匹配目标页面的 hash
+				const targetPageHash = bookStore.getPageHash(targetIndex);
+				if (targetPageHash && originalImageHash !== targetPageHash) {
+					console.warn(`⚠️ 超分结果 hash 不匹配！目标页 ${targetIndex + 1} 的 hash: ${targetPageHash}, 超分结果的 hash: ${originalImageHash}，忽略此结果`);
+					return; // 不匹配，直接返回，不更新显示
+				}
+				
 				const isCurrentPage = targetIndex === bookStore.currentPageIndex;
 				
 				// 写入内存缓存（如果请求）
@@ -126,12 +134,19 @@
 					if (preloadManager) {
 						const memCache = preloadManager.getPreloadMemoryCache();
 						memCache.set(originalImageHash, { url: upscaledImageData, blob: imageBlob });
-						console.log('超分结果已写入内存缓存，MD5:', originalImageHash);
+						console.log('超分结果已写入内存缓存，hash:', originalImageHash);
 					}
 				}
 				
 				// 非后台任务且是当前页时，才更新显示和状态
 				if (!background && isCurrentPage) {
+					// 🔥 再次验证：确保当前页的 hash 匹配
+					const currentHash = bookStore.getCurrentPageHash();
+					if (currentHash && originalImageHash !== currentHash) {
+						console.warn(`⚠️ 超分结果 hash 与当前页不匹配！当前页 hash: ${currentHash}, 超分结果的 hash: ${originalImageHash}，忽略此结果`);
+						return;
+					}
+					
 					if (upscaledImageData) {
 						bookStore.setUpscaledImage(upscaledImageData);
 						upscaledImageDataForComparison = upscaledImageData;
@@ -148,15 +163,15 @@
 					// 更新当前页面状态为已完成
 					bookStore.setPageUpscaleStatus(targetIndex, 'done');
 					
-					console.log('超分图已匹配当前页面，MD5:', originalImageHash, '已替换，页面状态更新为完成');
+					console.log('✅ 超分图已匹配当前页面，hash:', originalImageHash, '已替换，页面状态更新为完成');
 				} else if (background) {
 					// 后台任务：只更新页面状态，不更新显示
 					bookStore.setPageUpscaleStatus(targetIndex, 'preupscaled');
-					console.log('后台预超分完成，页码:', targetIndex + 1, 'MD5:', originalImageHash);
+					console.log('后台预超分完成，页码:', targetIndex + 1, 'hash:', originalImageHash);
 				} else {
 					// 非当前页的超分完成：只更新状态，不更新显示
 					bookStore.setPageUpscaleStatus(targetIndex, 'done');
-					console.log('其他页超分完成，页码:', targetIndex + 1, 'MD5:', originalImageHash, '（不影响当前显示）');
+					console.log('其他页超分完成，页码:', targetIndex + 1, 'hash:', originalImageHash, '（不影响当前显示）');
 				}
 			},
 			onUpscaleSaved: async (detail) => {

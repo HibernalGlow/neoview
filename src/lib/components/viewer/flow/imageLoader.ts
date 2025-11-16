@@ -524,45 +524,59 @@ export class ImageLoader {
 				// 1. 先检查内存缓存
 				const memCache = this.preloadMemoryCache.get(imageHash);
 				if (memCache) {
-					usedCache = true;
-					console.log('使用内存超分缓存，页码:', currentPageIndex + 1);
-					// 直接使用内存中的超分结果
-					bookStore.setUpscaledImage(memCache.url);
-					bookStore.setUpscaledImageBlob(memCache.blob);
-					bookStore.setPageUpscaleStatus(currentPageIndex, 'done');
-					// 触发事件通知 Viewer 替换显示
-					window.dispatchEvent(new CustomEvent('upscale-complete', {
-						detail: {
-							imageData: memCache.url,
-							imageBlob: memCache.blob,
-							originalImageHash: imageHash,
-							background: false,
-							pageIndex: currentPageIndex
-						}
-					}));
+					// 🔥 关键修复：验证缓存的 hash 是否真的匹配当前页
+					const currentPageHash = bookStore.getPageHash(currentPageIndex);
+					if (currentPageHash && currentPageHash !== imageHash) {
+						console.warn(`⚠️ 内存缓存 hash 不匹配！当前页 ${currentPageIndex + 1} 的 hash: ${currentPageHash}, 缓存的 hash: ${imageHash}，清除此缓存`);
+						this.preloadMemoryCache.delete(imageHash);
+					} else {
+						usedCache = true;
+						console.log('✅ 使用内存超分缓存，页码:', currentPageIndex + 1, 'hash:', imageHash);
+						// 直接使用内存中的超分结果
+						bookStore.setUpscaledImage(memCache.url);
+						bookStore.setUpscaledImageBlob(memCache.blob);
+						bookStore.setPageUpscaleStatus(currentPageIndex, 'done');
+						// 触发事件通知 Viewer 替换显示
+						window.dispatchEvent(new CustomEvent('upscale-complete', {
+							detail: {
+								imageData: memCache.url,
+								imageBlob: memCache.blob,
+								originalImageHash: imageHash,
+								background: false,
+								pageIndex: currentPageIndex
+							}
+						}));
+					}
 				}
 
 				// 2. 内存没有，尝试从磁盘加载到内存
 				if (!usedCache) {
 					const diskLoaded = await this.loadDiskUpscaleToMemory(imageHash);
 					if (diskLoaded) {
-						usedCache = true;
 						const diskCache = this.preloadMemoryCache.get(imageHash);
 						if (diskCache) {
-							console.log('从磁盘加载超分结果到内存，页码:', currentPageIndex + 1);
-							bookStore.setUpscaledImage(diskCache.url);
-							bookStore.setUpscaledImageBlob(diskCache.blob);
-							bookStore.setPageUpscaleStatus(currentPageIndex, 'done');
-							// 触发事件通知 Viewer 替换显示
-							window.dispatchEvent(new CustomEvent('upscale-complete', {
-								detail: {
-									imageData: diskCache.url,
-									imageBlob: diskCache.blob,
-									originalImageHash: imageHash,
-									background: false,
-									pageIndex: currentPageIndex
-								}
-							}));
+							// 🔥 关键修复：验证从磁盘加载的 hash 是否真的匹配当前页
+							const currentPageHash = bookStore.getPageHash(currentPageIndex);
+							if (currentPageHash && currentPageHash !== imageHash) {
+								console.warn(`⚠️ 磁盘缓存 hash 不匹配！当前页 ${currentPageIndex + 1} 的 hash: ${currentPageHash}, 缓存的 hash: ${imageHash}，清除此缓存`);
+								this.preloadMemoryCache.delete(imageHash);
+							} else {
+								usedCache = true;
+								console.log('✅ 从磁盘加载超分结果到内存，页码:', currentPageIndex + 1, 'hash:', imageHash);
+								bookStore.setUpscaledImage(diskCache.url);
+								bookStore.setUpscaledImageBlob(diskCache.blob);
+								bookStore.setPageUpscaleStatus(currentPageIndex, 'done');
+								// 触发事件通知 Viewer 替换显示
+								window.dispatchEvent(new CustomEvent('upscale-complete', {
+									detail: {
+										imageData: diskCache.url,
+										imageBlob: diskCache.blob,
+										originalImageHash: imageHash,
+										background: false,
+										pageIndex: currentPageIndex
+									}
+								}));
+							}
 						}
 					}
 				}
@@ -769,6 +783,9 @@ export class ImageLoader {
 		this.bitmapCache.clear();
 		
 		this.thumbnailCache.clear();
+		
+		// 清理超分内存缓存（重要：防止旧书的超分结果匹配到新书）
+		this.preloadMemoryCache.clear();
 		
 		// 清理其他状态
 		this.md5Cache = new Map();

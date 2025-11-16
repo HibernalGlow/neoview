@@ -959,7 +959,6 @@ pub async fn get_archive_first_image_blob(
     }
 }
 
-/// 快速获取原图（使用首图索引表）
 /// 返回原图的二进制数据
 #[command]
 pub async fn get_archive_first_image_quick(
@@ -967,17 +966,33 @@ pub async fn get_archive_first_image_quick(
     state: tauri::State<'_, ThumbnailManagerState>,
 ) -> Result<Vec<u8>, String> {
     let start_time = std::time::Instant::now();
-    println!("⚡ [Rust] 快速获取压缩包首张图片: {}", archive_path);
+    let thread_id = format!("{:?}", std::thread::current().id());
+    println!(
+        "⚡ [Rust] 快速获取压缩包首张图片: {} (thread={})",
+        archive_path, thread_id
+    );
     let path = PathBuf::from(&archive_path);
-    
+
     // 等待管理器初始化
+    let ensure_start = std::time::Instant::now();
+    println!("🕒 [Rust] ensure_manager_ready 开始: {}", archive_path);
     if let Err(e) = ensure_manager_ready(&state, 5000).await {
+        println!(
+            "🕒 [Rust] ensure_manager_ready 失败 (耗时 {:?}): {}",
+            ensure_start.elapsed(), e
+        );
         return Err(e);
     }
-    
+    println!(
+        "🕒 [Rust] ensure_manager_ready 完成 (耗时 {:?})",
+        ensure_start.elapsed()
+    );
+
     // 首先查询首图索引表
     let archive_key = archive_path.replace('\\', "/");
     // 创建一个新的 ThumbnailManager 实例来避免借用问题
+    let manager_build_start = std::time::Instant::now();
+    println!("🧩 [Rust] 构建临时 ThumbnailManager 实例");
     let manager = {
         let manager_guard = state.manager.lock()
             .map_err(|_| "无法获取缩略图管理器".to_string())?;
@@ -993,7 +1008,11 @@ pub async fn get_archive_first_image_quick(
             None => return Err("缩略图管理器未初始化".to_string()),
         }
     };
-    
+    println!(
+        "🧩 [Rust] 临时 ThumbnailManager 构建完成，耗时 {:?}",
+        manager_build_start.elapsed()
+    );
+
     // 检查文件是否过期
     fn is_stale(file_path: &PathBuf, cached_mtime: i64) -> bool {
         if let Ok(metadata) = std::fs::metadata(file_path) {
@@ -1006,35 +1025,56 @@ pub async fn get_archive_first_image_quick(
         }
         true // 无法获取文件时间，认为已过期
     }
-    
-    match manager.db.get_archive_first_image(&archive_key) {
+
+    let db_lookup_start = std::time::Instant::now();
+    println!("🔎 [Rust] 查询首图索引: {}", archive_key);
+    let db_lookup = manager.db.get_archive_first_image(&archive_key);
+    println!(
+        "🔎 [Rust] 首图索引查询完成，耗时 {:?}",
+        db_lookup_start.elapsed()
+    );
+
+    match db_lookup {
         Ok(Some((inner_path, cached_mtime))) => {
             // 检查缓存是否过期
             if is_stale(&path, cached_mtime) {
-                println!("🕐 [Rust] 缓存已过期，重新扫描: {}", archive_path);
+                println!(
+                    "🕐 [Rust] 首图索引过期: {} (cached_mtime={}, file_mtime>cached)",
+                    archive_path, cached_mtime
+                );
                 return get_archive_first_image_fallback(&path, manager).await;
             }
-            
+
             println!("🎯 [Rust] 首图索引命中: {} -> {}", archive_path, inner_path);
-            
+
             // 直接提取已知的图片
             use crate::core::archive::ArchiveManager;
             let archive_manager = ArchiveManager::new();
+            let extract_start = std::time::Instant::now();
+            println!(
+                "🗜️ [Rust] 从索引路径提取图片: {} :: {}",
+                archive_path, inner_path
+            );
             match archive_manager.extract_file(&path, &inner_path) {
                 Ok(image_data) => {
-                    println!("✅ [Rust] 快速获取成功: {} bytes (耗时: {:?})", image_data.len(), start_time.elapsed());
-                    
+                    println!(
+                        "✅ [Rust] 快速获取成功: {} bytes (提取耗时 {:?}, 总耗时 {:?})",
+                        image_data.len(),
+                        extract_start.elapsed(),
+                        start_time.elapsed()
+                    );
+
                     // 如果有异步处理器，直接提交Stage②任务（跳过扫描）
                     let processor_opt = {
                         let guard = state.async_processor.lock()
                             .map_err(|_| "无法获取异步处理器".to_string())?;
                         (*guard).clone()
                     };
-                    
+
                     if let Some(processor) = processor_opt {
                         use crate::core::async_thumbnail_processor::ExtractTask;
                         use tokio::sync::oneshot;
-                        
+
                         // 直接创建提取任务（跳过Stage①扫描）
                         let (extract_tx, _extract_rx) = oneshot::channel();
                         let archive_path_buf = PathBuf::from(&archive_path);
@@ -1047,7 +1087,7 @@ pub async fn get_archive_first_image_quick(
                                 .to_string(),
                             response_tx: extract_tx,
                         };
-                        
+
                         // 提交到提取队列（Stage②）
                         if let Err(e) = processor.submit_extract_task(extract_task).await {
                             println!("⚠️ [Rust] 提交提取任务失败: {}", e);
@@ -1055,56 +1095,110 @@ pub async fn get_archive_first_image_quick(
                             println!("⚡ [Rust] 跳过扫描，直接进入Stage②: {} :: {}", archive_path, inner_path);
                         }
                     }
-                    
+
                     Ok(image_data)
                 }
                 Err(e) => {
-                    println!("❌ [Rust] 提取失败: {}", e);
-                    
+                    println!(
+                        "❌ [Rust] 根据索引提取失败 (耗时 {:?}): {}",
+                        extract_start.elapsed(),
+                        e
+                    );
+
                     // 索引可能已过期，回退到扫描
                     get_archive_first_image_fallback(&path, manager).await
                 }
             }
         }
         Ok(None) => {
-            println!("🔍 [Rust] 首图索引未命中，启动扫描");
-            
+            println!("🔍 [Rust] 首图索引未命中，准备扫描: {}", archive_path);
+
             // 如果有异步处理器，使用扫描任务
             let processor_opt = {
                 let guard = state.async_processor.lock()
                     .map_err(|_| "无法获取异步处理器".to_string())?;
                 (*guard).clone()
             };
-            
+
             if let Some(processor) = processor_opt {
                 use crate::core::async_thumbnail_processor::{ScanResult};
                 use tokio::sync::oneshot;
-                
+
                 let (tx, rx) = oneshot::channel();
+                let scan_submit_start = std::time::Instant::now();
                 if let Err(_) = processor.submit_scan_task(path.clone(), Some(tx)).await {
-                    println!("❌ [Rust] 提交扫描任务失败");
+                    println!("❌ [Rust] 提交扫描任务失败 (耗时 {:?})", scan_submit_start.elapsed());
                     return get_archive_first_image_fallback(&path, manager).await;
                 }
-                
+                println!(
+                    "🛰️ [Rust] 扫描任务提交成功，耗时 {:?}" ,
+                    scan_submit_start.elapsed()
+                );
+
+                let wait_start = std::time::Instant::now();
                 match rx.await {
                     Ok(ScanResult::Found(inner_path)) => {
-                        println!("✅ [Rust] 扫描成功: {} -> {}", archive_path, inner_path);
+                        println!(
+                            "✅ [Rust] 扫描成功: {} -> {} (等待 {:?})",
+                            archive_path,
+                            inner_path,
+                            wait_start.elapsed()
+                        );
                         let archive_manager = ArchiveManager::new();
+                        let extract_start = std::time::Instant::now();
                         match archive_manager.extract_file(&path, &inner_path) {
-                            Ok(image_data) => Ok(image_data),
-                            Err(e) => Err(format!("提取图片失败: {}", e)),
+                            Ok(image_data) => {
+                                println!(
+                                    "✅ [Rust] 扫描结果提取成功: {} bytes (耗时 {:?})",
+                                    image_data.len(),
+                                    extract_start.elapsed()
+                                );
+                                Ok(image_data)
+                            }
+                            Err(e) => {
+                                println!(
+                                    "❌ [Rust] 扫描结果提取失败 (耗时 {:?}): {}",
+                                    extract_start.elapsed(),
+                                    e
+                                );
+                                Err(format!("提取图片失败: {}", e))
+                            }
                         }
                     }
-                    Ok(ScanResult::NotFound) => Err("压缩包中没有图片".to_string()),
-                    Ok(ScanResult::Error(e)) => Err(e),
-                    Err(_) => Err("等待扫描结果失败".to_string()),
+                    Ok(ScanResult::NotFound) => {
+                        println!(
+                            "❌ [Rust] 扫描结果: 未找到图片 (等待 {:?})",
+                            wait_start.elapsed()
+                        );
+                        Err("压缩包中没有图片".to_string())
+                    }
+                    Ok(ScanResult::Error(e)) => {
+                        println!(
+                            "❌ [Rust] 扫描任务返回错误 (等待 {:?}): {}",
+                            wait_start.elapsed(),
+                            e
+                        );
+                        Err(e)
+                    }
+                    Err(_) => {
+                        println!(
+                            "❌ [Rust] 等待扫描结果失败 (耗时 {:?})",
+                            wait_start.elapsed()
+                        );
+                        Err("等待扫描结果失败".to_string())
+                    }
                 }
             } else {
+                println!("🪫 [Rust] 异步处理器未就绪，回退到同步扫描");
                 get_archive_first_image_fallback(&path, manager).await
             }
         }
         Err(e) => {
-            println!("❌ [Rust] 查询索引失败: {}", e);
+            println!(
+                "❌ [Rust] 查询首图索引失败 (耗时 {:?}): {}",
+                db_lookup_start.elapsed(),
+                e
+            );
             get_archive_first_image_fallback(&path, manager).await
         }
     }
@@ -1113,23 +1207,35 @@ pub async fn get_archive_first_image_quick(
 /// 首图获取回退方案（扫描压缩包）
 async fn get_archive_first_image_fallback(path: &PathBuf, manager: crate::core::thumbnail::ThumbnailManager) -> Result<Vec<u8>, String> {
     let start_time = std::time::Instant::now();
-    println!("🔄 [Rust] 使用回退方案扫描压缩包");
-    
+    println!(
+        "🔄 [Rust] 使用回退方案扫描压缩包: {}",
+        path.display()
+    );
+
     // 快速提取压缩包内的第一张图片
+    let extract_start = std::time::Instant::now();
     match manager.extract_first_image_from_archive(path) {
         Ok(image_data) => {
-            println!("✅ [Rust] 回退扫描成功: {} bytes (耗时: {:?})", image_data.len(), start_time.elapsed());
+            println!(
+                "✅ [Rust] 回退扫描成功: {} bytes (扫描耗时 {:?}, 总耗时 {:?})",
+                image_data.len(),
+                extract_start.elapsed(),
+                start_time.elapsed()
+            );
             Ok(image_data)
         }
         Err(e) => {
-            println!("❌ [Rust] 回退扫描失败: {} (耗时: {:?})", e, start_time.elapsed());
+            println!(
+                "❌ [Rust] 回退扫描失败 (扫描耗时 {:?}, 总耗时 {:?}): {}",
+                extract_start.elapsed(),
+                start_time.elapsed(),
+                e
+            );
             Err(e)
         }
     }
 }
 
-/// 后台异步生成压缩包缩略图（不等待完成）
-/// 立即返回，缩略图生成在后台进行
 #[command]
 pub async fn generate_archive_thumbnail_async(
     archive_path: String,

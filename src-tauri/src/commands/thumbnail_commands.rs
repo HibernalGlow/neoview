@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use tauri::command;
+use tauri::{command, Emitter};
 use std::time::Duration;
 use crate::core::thumbnail::ThumbnailManager;
 use crate::core::fs_manager::FsItem;
@@ -986,7 +986,7 @@ pub async fn get_archive_first_image_blob(
     }
     
     // 发射首图就绪事件
-    if let Err(e) = app_handle.emit_all("thumbnail:firstImageReady", 
+    if let Err(e) = app_handle.emit("thumbnail:firstImageReady", 
         serde_json::json!({
             "archivePath": archive_path,
             "blob": blob_url.clone()
@@ -1366,7 +1366,7 @@ pub async fn generate_archive_thumbnail_async(
                                             let cache_key = normalize_path_string(path_clone.to_string_lossy());
                                             cache.get(&cache_key)
                                                 .filter(|url| url.starts_with("blob:"))
-                                                .cloned()
+                                                .map(|url| url.clone())
                                         } else {
                                             None
                                         }
@@ -1382,7 +1382,7 @@ pub async fn generate_archive_thumbnail_async(
                                         payload["blobUrl"] = serde_json::Value::String(old_blob);
                                     }
                                     
-                                    if let Err(e) = app_handle.emit_all("thumbnail:updated", payload) {
+                                    if let Err(e) = app_handle.emit("thumbnail:updated", payload) {
                                         println!("⚠️ [Rust] 发射 thumbnail:updated 事件失败: {}", e);
                                     } else {
                                         println!("🎯 [Rust] 已发射 thumbnail:updated 事件: {} -> {}", archive_path, thumbnail_url);

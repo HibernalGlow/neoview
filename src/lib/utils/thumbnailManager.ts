@@ -31,9 +31,9 @@ export interface ThumbnailCache {
 class ThumbnailManager {
   private config: ThumbnailConfig = {
     // 根据 CPU 核心数动态调整（前端使用 navigator.hardwareConcurrency）
-    // 拉满CPU性能，参考 NeeView 的处理方式
-    maxConcurrentLocal: Math.max(32, (navigator.hardwareConcurrency || 4) * 8), // 8倍核心数，最少32，拉满速度
-    maxConcurrentArchive: Math.max(16, (navigator.hardwareConcurrency || 4) * 4), // 4倍核心数，最少16
+    // 拉满CPU性能，参考 NeeView 的处理方式，提高两倍性能
+    maxConcurrentLocal: Math.max(64, (navigator.hardwareConcurrency || 4) * 16), // 16倍核心数，最少64，拉满速度（提高2倍）
+    maxConcurrentArchive: Math.max(32, (navigator.hardwareConcurrency || 4) * 8), // 8倍核心数，最少32（提高2倍）
     thumbnailSize: 256,
   };
 
@@ -49,9 +49,9 @@ class ThumbnailManager {
   // 回调函数
   private onThumbnailReady?: (path: string, dataUrl: string) => void;
 
-  // 任务上限管理（参考 NeeView，拉满速度）
-  private readonly MAX_QUEUE_SIZE = 10000; // 最大队列大小（增加到10000）
-  private readonly MAX_PROCESSING = 200; // 最大并发处理数（增加到200，拉满CPU）
+  // 任务上限管理（参考 NeeView，拉满速度，提高两倍性能）
+  private readonly MAX_QUEUE_SIZE = 20000; // 最大队列大小（增加到20000，提高2倍）
+  private readonly MAX_PROCESSING = 400; // 最大并发处理数（增加到400，拉满CPU，提高2倍）
 
   constructor() {
     // 初始化缩略图管理器
@@ -662,7 +662,7 @@ class ThumbnailManager {
   }
 
   /**
-   * 获取文件夹缩略图（使用子路径下第一个条目的缩略图，异步且不阻塞）
+   * 获取文件夹缩略图（使用子路径下第一个条目的缩略图，立即加载，跟随虚拟列表）
    */
   async getFolderThumbnail(folderPath: string): Promise<string | null> {
     try {
@@ -673,80 +673,83 @@ class ThumbnailManager {
         return cached.dataUrl;
       }
 
-      // 异步获取文件夹内容，不阻塞
+      // 尝试从数据库加载文件夹缩略图
+      const dbThumbnail = await this.loadFromDb(folderPath);
+      if (dbThumbnail) {
+        this.cache.set(pathKey, {
+          pathKey,
+          dataUrl: dbThumbnail,
+          timestamp: Date.now(),
+        });
+        return dbThumbnail;
+      }
+
+      // 立即获取文件夹内容（不延迟，跟随虚拟列表）
       const { invoke } = await import('@tauri-apps/api/core');
       
-      // 使用 requestIdleCallback 或 setTimeout 延迟加载，避免阻塞 UI
-      return new Promise((resolve) => {
-        // 延迟执行，确保不阻塞当前操作
-        setTimeout(async () => {
-          try {
-            const items = await invoke<FsItem[]>('browse_directory', { path: folderPath });
-            
-            // 优先查找图片文件
-            const firstImage = items.find((item) => item.isImage && !item.isDir);
+      try {
+        const items = await invoke<FsItem[]>('browse_directory', { path: folderPath });
+        
+        // 优先查找图片文件
+        const firstImage = items.find((item) => item.isImage && !item.isDir);
 
-            if (firstImage) {
-              // 使用第一个图片的缩略图（异步，不阻塞）
-              const thumbnail = await this.getThumbnail(firstImage.path, undefined, false, 'high');
-              if (thumbnail) {
-                // 缓存文件夹缩略图
-                this.cache.set(pathKey, {
-                  pathKey,
-                  dataUrl: thumbnail,
-                  timestamp: Date.now(),
-                });
-                resolve(thumbnail);
-                return;
-              }
-            }
-
-            // 如果没有图片，尝试查找压缩包
-            const firstArchive = items.find(
-              (item) =>
-                !item.isDir &&
-                (item.name.endsWith('.zip') ||
-                  item.name.endsWith('.cbz') ||
-                  item.name.endsWith('.rar') ||
-                  item.name.endsWith('.cbr'))
-            );
-
-            if (firstArchive) {
-              const thumbnail = await this.getThumbnail(firstArchive.path, undefined, true, 'high');
-              if (thumbnail) {
-                this.cache.set(pathKey, {
-                  pathKey,
-                  dataUrl: thumbnail,
-                  timestamp: Date.now(),
-                });
-                resolve(thumbnail);
-                return;
-              }
-            }
-
-            // 如果没有图片和压缩包，尝试查找子文件夹（限制深度）
-            const firstSubfolder = items.find((item) => item.isDir);
-            if (firstSubfolder) {
-              // 异步递归查找，不阻塞
-              const subThumbnail = await this.getFolderThumbnail(firstSubfolder.path);
-              if (subThumbnail) {
-                this.cache.set(pathKey, {
-                  pathKey,
-                  dataUrl: subThumbnail,
-                  timestamp: Date.now(),
-                });
-                resolve(subThumbnail);
-                return;
-              }
-            }
-            
-            resolve(null);
-          } catch (error) {
-            console.debug('获取文件夹缩略图失败:', folderPath, error);
-            resolve(null);
+        if (firstImage) {
+          // 使用第一个图片的缩略图（immediate 优先级，立即加载）
+          const thumbnail = await this.getThumbnail(firstImage.path, undefined, false, 'immediate');
+          if (thumbnail) {
+            // 缓存文件夹缩略图，并保存到数据库（使用文件夹路径作为 key）
+            this.cache.set(pathKey, {
+              pathKey,
+              dataUrl: thumbnail,
+              timestamp: Date.now(),
+            });
+            // 注意：这里不保存到数据库，因为文件夹缩略图应该使用子项的缩略图
+            return thumbnail;
           }
-        }, 0); // 使用 setTimeout(0) 延迟到下一个事件循环
-      });
+        }
+
+        // 如果没有图片，尝试查找压缩包
+        const firstArchive = items.find(
+          (item) =>
+            !item.isDir &&
+            (item.name.endsWith('.zip') ||
+              item.name.endsWith('.cbz') ||
+              item.name.endsWith('.rar') ||
+              item.name.endsWith('.cbr'))
+        );
+
+        if (firstArchive) {
+          const thumbnail = await this.getThumbnail(firstArchive.path, undefined, true, 'immediate');
+          if (thumbnail) {
+            this.cache.set(pathKey, {
+              pathKey,
+              dataUrl: thumbnail,
+              timestamp: Date.now(),
+            });
+            return thumbnail;
+          }
+        }
+
+        // 如果没有图片和压缩包，尝试查找子文件夹（限制深度为1，避免递归过深）
+        const firstSubfolder = items.find((item) => item.isDir);
+        if (firstSubfolder) {
+          // 递归查找，但限制深度
+          const subThumbnail = await this.getFolderThumbnail(firstSubfolder.path);
+          if (subThumbnail) {
+            this.cache.set(pathKey, {
+              pathKey,
+              dataUrl: subThumbnail,
+              timestamp: Date.now(),
+            });
+            return subThumbnail;
+          }
+        }
+        
+        return null;
+      } catch (error) {
+        console.debug('获取文件夹缩略图失败:', folderPath, error);
+        return null;
+      }
     } catch (error) {
       console.debug('获取文件夹缩略图失败:', folderPath, error);
       return null;

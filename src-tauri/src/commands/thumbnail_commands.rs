@@ -41,12 +41,12 @@ pub async fn init_thumbnail_manager(
     // 创建数据库
     let db = Arc::new(ThumbnailDb::new(db_path));
     
-    // 创建生成器配置（根据 CPU 核心数动态调整）
+    // 创建生成器配置（根据 CPU 核心数动态调整，提高两倍性能）
     let num_cores = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
-    let thread_pool_size = (num_cores * 2).max(8).min(16);
-    let archive_concurrency = (num_cores / 2).max(2).min(6);
+    let thread_pool_size = (num_cores * 4).max(16).min(32); // 提高2倍：4倍核心数，最少16，最多32
+    let archive_concurrency = (num_cores * 2).max(4).min(12); // 提高2倍：2倍核心数，最少4，最多12
     
     let config = ThumbnailGeneratorConfig {
         max_width: size,

@@ -17,28 +17,22 @@
                        item.name.endsWith('.cbr');
       
       if (item.isDir) {
-        // 文件夹：使用子路径下第一个条目的缩略图（异步，不阻塞）
-        // 使用 requestIdleCallback 延迟加载，避免阻塞 UI
-        if ('requestIdleCallback' in window) {
-          requestIdleCallback(() => {
-            thumbnailManager.getFolderThumbnail(item.path).then((dataUrl) => {
-              if (dataUrl) {
+        // 文件夹：立即加载（跟随虚拟列表），使用 immediate 优先级
+        // 不再延迟，确保在虚拟滚动时立即加载
+        thumbnailManager.getThumbnail(item.path, undefined, false, 'immediate').then((dataUrl) => {
+          if (dataUrl) {
+            const key = toRelativeKey(item.path);
+            fileBrowserStore.addThumbnail(key, dataUrl);
+          } else {
+            // 如果 getThumbnail 返回 null，尝试使用 getFolderThumbnail
+            thumbnailManager.getFolderThumbnail(item.path).then((folderDataUrl) => {
+              if (folderDataUrl) {
                 const key = toRelativeKey(item.path);
-                fileBrowserStore.addThumbnail(key, dataUrl);
+                fileBrowserStore.addThumbnail(key, folderDataUrl);
               }
             });
-          }, { timeout: 1000 });
-        } else {
-          // 降级到 setTimeout
-          setTimeout(() => {
-            thumbnailManager.getFolderThumbnail(item.path).then((dataUrl) => {
-              if (dataUrl) {
-                const key = toRelativeKey(item.path);
-                fileBrowserStore.addThumbnail(key, dataUrl);
-              }
-            });
-          }, 0);
-        }
+          }
+        });
       } else if (item.isImage || isArchive) {
         thumbnailManager.getThumbnail(item.path, undefined, isArchive, priority);
       }
@@ -157,9 +151,26 @@
     if (needThumbnails.length > 0) {
       console.log(`👁️ 虚拟滚动范围更新: ${startIndex}-${endIndex}, 需要缩略图: ${needThumbnails.length}`);
       
-      // 使用 scheduleIdleCallback 确保不阻塞UI
+      // 按虚拟列表顺序处理：视野上方的先加载，下方的后加载
+      // 计算每个项目在视野中的位置（距离顶部的距离）
+      const itemsWithPriority = needThumbnails.map((item, index) => {
+        const itemIndex = items.findIndex(i => i.path === item.path);
+        const distanceFromTop = itemIndex - startIndex; // 距离视野顶部的距离
+        return { item, distanceFromTop, itemIndex };
+      });
+      
+      // 按距离顶部距离排序（距离越近，优先级越高）
+      itemsWithPriority.sort((a, b) => a.distanceFromTop - b.distanceFromTop);
+      
+      // 使用 scheduleIdleCallback 确保不阻塞UI，按顺序处理
       scheduleIdleTask(() => {
-        enqueueVisible(currentPath, needThumbnails, { priority: 'immediate' });
+        // 按顺序入队，确保视野上方的先处理
+        itemsWithPriority.forEach(({ item }, index) => {
+          // 稍微延迟后面的项目，确保前面的先处理
+          setTimeout(() => {
+            enqueueVisible(currentPath, [item], { priority: 'immediate' });
+          }, index * 10); // 每个项目延迟 10ms，确保顺序
+        });
       });
     }
   }, 50); // 50ms 防抖延迟

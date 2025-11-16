@@ -70,6 +70,25 @@ pub struct PerformanceSettings {
     pub hardware_acceleration: bool,
     /// 最大并发加载数
     pub max_concurrent_loads: u32,
+    /// 缩略图并发设置
+    pub thumbnail: ThumbnailSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThumbnailSettings {
+    /// 本地文件最大并发数
+    pub max_concurrent_local: u32,
+    /// 压缩包扫描最大并发数（Stage①）
+    pub max_concurrent_archive_scan: u32,
+    /// 压缩包解码最大并发数（Stage②）
+    pub max_concurrent_archive_decode: u32,
+    /// 是否启用自适应并发控制
+    pub enable_adaptive_concurrency: bool,
+    /// P95耗时阈值（毫秒），超过此值减少并发
+    pub p95_threshold_high: u32,
+    /// P95耗时阈值（毫秒），低于此值增加并发
+    pub p95_threshold_low: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -138,10 +157,24 @@ impl Default for UISettings {
 impl Default for PerformanceSettings {
     fn default() -> Self {
         Self {
-            cache_size: 512,
+            cache_size: 1024,
             preload_pages: 3,
             hardware_acceleration: true,
             max_concurrent_loads: 4,
+            thumbnail: ThumbnailSettings::default(),
+        }
+    }
+}
+
+impl Default for ThumbnailSettings {
+    fn default() -> Self {
+        Self {
+            max_concurrent_local: 32,
+            max_concurrent_archive_scan: 8,
+            max_concurrent_archive_decode: 16,
+            enable_adaptive_concurrency: true,
+            p95_threshold_high: 500,
+            p95_threshold_low: 200,
         }
     }
 }

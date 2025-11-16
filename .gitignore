@@ -33,3 +33,4 @@ test_image.png
 test_image_upscaled.png
 /output_dir
 *.jpg
+src-tauri/.cache/thumbnails/thumbnails.db

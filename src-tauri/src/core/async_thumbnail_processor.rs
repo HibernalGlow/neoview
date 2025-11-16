@@ -258,21 +258,29 @@ impl AsyncThumbnailProcessor {
             (p95_duration, scan_available, extract_available)
         };
         
-        // 调节策略 - 在锁外计算
-        let scan_adjustment = if p95_duration > 400 && scan_available == 0 {
+        // 调节策略 - 更积极的并发控制
+        let scan_adjustment = if p95_duration > 500 && scan_available == 0 {
             // 耗时过长且没有可用许可，减少并发
             -1
-        } else if p95_duration < 200 && scan_available > 0 {
+        } else if p95_duration < 300 && scan_available > 0 {
             // 耗时较短且有可用许可，增加并发
-            1
+            2
+        } else if p95_duration < 150 && scan_available > 2 {
+            // 非常快，大幅增加并发
+            4
         } else {
             0
         };
         
-        let extract_adjustment = if p95_duration > 400 && extract_available == 0 {
-            -1
-        } else if p95_duration < 200 && extract_available > 0 {
-            1
+        let extract_adjustment = if p95_duration > 600 && extract_available == 0 {
+            // 耗时过长且没有可用许可，减少并发
+            -2
+        } else if p95_duration < 400 && extract_available > 0 {
+            // 耗时较短且有可用许可，增加并发
+            3
+        } else if p95_duration < 200 && extract_available > 3 {
+            // 非常快，大幅增加并发
+            6
         } else {
             0
         };
@@ -305,17 +313,21 @@ impl AsyncThumbnailProcessor {
     async fn adjust_semaphore(&self, semaphore: &Arc<Semaphore>, adjustment: i32, name: &str) {
         let current_permits = semaphore.available_permits();
         
-        if adjustment > 0 && current_permits > 0 {
-            // 增加并发：获取一些许可但不释放（相当于减少可用并发）
-            let permits_to_acquire = adjustment.min(current_permits as i32) as usize;
-            let _permits = semaphore.acquire_many(permits_to_acquire as u32).await;
-            // 许可会被丢弃，从而减少可用并发数
-            println!("🎛️ [Rust] {} 并发增加: 获取 {} 个许可", name, permits_to_acquire);
-        } else if adjustment < 0 {
-            // 减少并发：添加更多许可
-            let permits_to_add = adjustment.abs() as usize;
+        if adjustment > 0 {
+            // 增加并发：添加更多许可
+            let permits_to_add = adjustment as usize;
             semaphore.add_permits(permits_to_add);
-            println!("🎛️ [Rust] {} 并发减少: 添加 {} 个许可", name, permits_to_add);
+            println!("🎛️ [Rust] {} 并发增加: 添加 {} 个许可 (当前可用: {})", 
+                name, permits_to_add, current_permits + permits_to_add);
+        } else if adjustment < 0 {
+            // 减少并发：获取一些许可但不释放
+            let permits_to_acquire = adjustment.abs().min(current_permits as i32) as usize;
+            if permits_to_acquire > 0 {
+                let _permits = semaphore.acquire_many(permits_to_acquire as u32).await;
+                // 许可会被丢弃，从而减少可用并发数
+                println!("🎛️ [Rust] {} 并发减少: 获取 {} 个许可 (当前可用: {})", 
+                    name, permits_to_acquire, current_permits - permits_to_acquire);
+            }
         }
     }
     
@@ -912,6 +924,17 @@ impl AsyncThumbnailProcessor {
         
         self.scan_tx.send(task)
             .map_err(|e| format!("提交扫描任务失败: {}", e))?;
+        
+        Ok(())
+    }
+    
+    /// 提交提取任务（Stage②）
+    pub async fn submit_extract_task(&self, task: ExtractTask) -> Result<(), String> {
+        // 添加到队列跟踪
+        self.extract_queue_paths.write().await.push(task.archive_path.clone());
+        
+        self.extract_tx.send(task)
+            .map_err(|e| format!("提交提取任务失败: {}", e))?;
         
         Ok(())
     }

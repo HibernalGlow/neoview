@@ -987,6 +987,34 @@ pub async fn get_archive_first_image_quick(
             match archive_manager.extract_file(&path, &inner_path) {
                 Ok(image_data) => {
                     println!("✅ [Rust] 快速获取成功: {} bytes", image_data.len());
+                    
+                    // 如果有异步处理器，直接提交Stage②任务（跳过扫描）
+                    let processor_opt = {
+                        let guard = state.async_processor.lock()
+                            .map_err(|_| "无法获取异步处理器".to_string())?;
+                        (*guard).clone()
+                    };
+                    
+                    if let Some(processor) = processor_opt {
+                        use crate::core::async_thumbnail_processor::ExtractTask;
+                        use tokio::sync::oneshot;
+                        
+                        // 直接创建提取任务（跳过Stage①扫描）
+                        let (extract_tx, _extract_rx) = oneshot::channel();
+                        let extract_task = ExtractTask {
+                            archive_path: path.clone(),
+                            inner_path: inner_path.clone(),
+                            response_tx: extract_tx,
+                        };
+                        
+                        // 提交到提取队列（Stage②）
+                        if let Err(e) = processor.submit_extract_task(extract_task).await {
+                            println!("⚠️ [Rust] 提交提取任务失败: {}", e);
+                        } else {
+                            println!("⚡ [Rust] 跳过扫描，直接进入Stage②: {} :: {}", archive_path, inner_path);
+                        }
+                    }
+                    
                     Ok(image_data)
                 }
                 Err(e) => {

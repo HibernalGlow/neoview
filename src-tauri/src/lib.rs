@@ -18,6 +18,7 @@ use std::path::PathBuf;
 use core::{BookManager, ImageLoader, FsManager, ThumbnailManager, ArchiveManager};
 use commands::fs_commands::FsState;
 use commands::thumbnail_commands::ThumbnailManagerState;
+use commands::thumbnail_settings_commands::SettingsState;
 use commands::upscale_commands::UpscaleManagerState;
 use commands::generic_upscale_commands::GenericUpscalerState;
 use commands::upscale_settings_commands::UpscaleSettingsState;
@@ -108,6 +109,9 @@ pub fn run() {
             // 初始化设置管理器
             app.manage(UpscaleSettingsState::default());
             
+            // 初始化缩略图设置
+            app.manage(SettingsState::default());
+            
             Ok(())
         })
         .manage(Mutex::new(BookManager::new()))
@@ -190,6 +194,10 @@ pub fn run() {
             commands::get_thumbnail_stats,
             commands::clear_all_thumbnails,
             commands::preload_thumbnails,
+            // Thumbnail settings commands
+            commands::thumbnail_settings_commands::get_thumbnail_settings,
+            commands::thumbnail_settings_commands::update_thumbnail_settings,
+            commands::thumbnail_settings_commands::reset_thumbnail_settings,
             // Upscale commands
             commands::init_upscale_manager,
             commands::check_upscale_availability,

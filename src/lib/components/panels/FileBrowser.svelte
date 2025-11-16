@@ -509,7 +509,7 @@ import { getPerformanceSettings } from '$lib/api/performance';
   }
 
   /**
-   * 从后端重新加载目录数据
+   * 从后端重新加载目录数据（完全分离文件浏览和缩略图加载）
    */
   async function reloadDirectoryFromBackend(path: string) {
     console.log('🔄 Calling FileSystemAPI.browseDirectory...');
@@ -525,62 +525,139 @@ import { getPerformanceSettings } from '$lib/api/performance';
       console.debug('Failed to get directory mtime:', e);
     }
     
-    // 设置数据
+    // 立即设置数据，不等待缩略图
     fileBrowserStore.setItems(loadedItems);
     
-    // 加载缩略图
-    await loadThumbnailsForItems(loadedItems, path);
+    // 缓存目录数据（不包含缩略图）
+    navigationHistory.cacheDirectory(path, loadedItems, new Map(), mtime);
     
-    // 缓存目录数据
-    navigationHistory.cacheDirectory(path, loadedItems, thumbnails, mtime);
-    
-    // 🚀 使用前端调度器入队首屏文件为最高优先级
-    // 取消之前的入队任务
-    if (lastEnqueueTimeout) {
-      clearTimeout(lastEnqueueTimeout);
+    // 完全异步加载缩略图，不阻塞文件浏览
+    // 使用 requestIdleCallback 或 setTimeout 延迟加载
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(() => {
+        loadThumbnailsForItemsAsync(loadedItems, path);
+      }, { timeout: 500 });
+    } else {
+      setTimeout(() => {
+        loadThumbnailsForItemsAsync(loadedItems, path);
+      }, 0);
     }
-    
-    lastEnqueueTimeout = setTimeout(() => {
-      // 过滤出需要缩略图的项目
-      const itemsNeedingThumbnails = items.filter(item => {
-        const name = item.name.toLowerCase();
-        const isDir = item.isDir;
-        
-        // 支持的图片扩展名
-        const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.avif', '.jxl', '.tiff', '.tif'];
-        // 支持的压缩包扩展名
-        const archiveExts = ['.zip', '.rar', '.7z', '.cbz', '.cbr', '.cb7'];
-        
-        const ext = name.substring(name.lastIndexOf('.'));
-        
-        // 文件夹或支持的文件类型
-        return isDir || imageExts.includes(ext) || archiveExts.includes(ext);
-      });
-      
-      // 使用前端调度器入队
-      enqueueDirectoryThumbnails(path, itemsNeedingThumbnails);
-      console.log(`⚡ 已将 ${itemsNeedingThumbnails.length} 个项目入队（前端调度）`);
-    }, 100);
     
     // 预加载相邻目录
     navigationHistory.prefetchAdjacentPaths(path);
   }
 
   /**
-   * 为项目加载缩略图 - 优化版本，当前文件夹优先加载
+   * 异步加载缩略图（不阻塞文件浏览）
+   */
+  function loadThumbnailsForItemsAsync(
+    items: FsItem[], 
+    path: string
+  ) {
+    console.log('🖼️ 异步缩略图扫描：项目总数', items.length);
+
+    // 检测是否为合集文件夹（子文件夹数量>45）
+    const subfolders = items.filter(item => item.isDir);
+    const isCollectionFolder = subfolders.length > 45;
+
+    if (isCollectionFolder) {
+      console.log('📚 检测到合集文件夹，优先加载最新和未记录的');
+      // 合集文件夹：优先加载最新和未记录的
+      loadCollectionFolderThumbnails(items, path, subfolders);
+    } else {
+      // 普通文件夹：正常加载
+      // 设置当前目录（用于优先级判断）
+      thumbnailManager.setCurrentDirectory(path);
+      
+      // 取消之前的入队任务
+      if (lastEnqueueTimeout) {
+        clearTimeout(lastEnqueueTimeout);
+      }
+      
+      lastEnqueueTimeout = setTimeout(() => {
+        // 过滤出需要缩略图的项目
+        const itemsNeedingThumbnails = items.filter(item => {
+          const name = item.name.toLowerCase();
+          const isDir = item.isDir;
+          
+          // 支持的图片扩展名
+          const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.avif', '.jxl', '.tiff', '.tif'];
+          // 支持的压缩包扩展名
+          const archiveExts = ['.zip', '.rar', '.7z', '.cbz', '.cbr', '.cb7'];
+          
+          const ext = name.substring(name.lastIndexOf('.'));
+          
+          // 文件夹或支持的文件类型
+          return isDir || imageExts.includes(ext) || archiveExts.includes(ext);
+        });
+        
+        // 使用前端调度器入队
+        enqueueDirectoryThumbnails(path, itemsNeedingThumbnails);
+        console.log(`⚡ 已将 ${itemsNeedingThumbnails.length} 个项目入队（前端调度）`);
+      }, 100);
+    }
+  }
+
+  /**
+   * 加载合集文件夹缩略图（优先最新和未记录的）
+   */
+  function loadCollectionFolderThumbnails(
+    items: FsItem[],
+    path: string,
+    subfolders: FsItem[]
+  ) {
+    // 设置当前目录
+    thumbnailManager.setCurrentDirectory(path);
+    
+    // 按修改时间排序（最新的在前）
+    const sortedFolders = [...subfolders].sort((a, b) => {
+      const aTime = a.modified ? new Date(a.modified).getTime() : 0;
+      const bTime = b.modified ? new Date(b.modified).getTime() : 0;
+      return bTime - aTime; // 降序
+    });
+
+    // 优先加载前 50 个最新的文件夹
+    const priorityFolders = sortedFolders.slice(0, 50);
+    
+    // 先加载图片和压缩包（优先级最高）
+    const imagesAndArchives = items.filter(item => 
+      !item.isDir && (item.isImage || 
+        item.name.endsWith('.zip') || item.name.endsWith('.cbz') ||
+        item.name.endsWith('.rar') || item.name.endsWith('.cbr'))
+    );
+    
+    // 入队图片和压缩包（immediate 优先级）
+    imagesAndArchives.forEach(item => {
+      const isArchive = item.name.endsWith('.zip') || item.name.endsWith('.cbz') ||
+                       item.name.endsWith('.rar') || item.name.endsWith('.cbr');
+      thumbnailManager.getThumbnail(item.path, undefined, isArchive, 'immediate');
+    });
+    
+    // 入队优先文件夹（high 优先级）
+    priorityFolders.forEach(folder => {
+      thumbnailManager.getThumbnail(folder.path, undefined, false, 'high');
+    });
+    
+    // 其余文件夹延迟加载（normal 优先级）
+    const remainingFolders = sortedFolders.slice(50);
+    remainingFolders.forEach(folder => {
+      thumbnailManager.getThumbnail(folder.path, undefined, false, 'normal');
+    });
+    
+    console.log(`📚 合集文件夹：优先加载 ${priorityFolders.length} 个最新文件夹，${imagesAndArchives.length} 个图片/压缩包`);
+  }
+
+  /**
+   * 为项目加载缩略图 - 优化版本，当前文件夹优先加载（已弃用，改用异步版本）
+   * @deprecated 使用 loadThumbnailsForItemsAsync 代替
    */
   async function loadThumbnailsForItems(
     items: FsItem[], 
     path: string, 
     existingThumbnails: Map<string, string> = new Map()
   ) {
-    console.log('🖼️ 缩略图扫描：项目总数', items.length);
-
-    // 设置当前目录（用于优先级判断）
-    thumbnailManager.setCurrentDirectory(path);
-
-    // 使用缩略图管理器预加载
-    await thumbnailManager.preloadThumbnails(items, path, 'immediate');
+    // 直接调用异步版本，不阻塞
+    loadThumbnailsForItemsAsync(items, path);
   }
 
   /**

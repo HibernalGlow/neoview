@@ -5,7 +5,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { buildImagePathKey, type ImagePathContext, getStableImageHash } from './pathHash';
+import { buildImagePathKey, type ImagePathContext } from './pathHash';
 import type { FsItem } from '$lib/types';
 
 export interface ThumbnailConfig {
@@ -31,8 +31,9 @@ export interface ThumbnailCache {
 class ThumbnailManager {
   private config: ThumbnailConfig = {
     // 根据 CPU 核心数动态调整（前端使用 navigator.hardwareConcurrency）
-    maxConcurrentLocal: Math.max(8, (navigator.hardwareConcurrency || 4) * 2),
-    maxConcurrentArchive: Math.max(3, Math.floor((navigator.hardwareConcurrency || 4) / 2)),
+    // 限制最大并发，避免卡死
+    maxConcurrentLocal: Math.min(Math.max(8, (navigator.hardwareConcurrency || 4) * 2), 20),
+    maxConcurrentArchive: Math.min(Math.max(3, Math.floor((navigator.hardwareConcurrency || 4) / 2)), 10),
     thumbnailSize: 256,
   };
 
@@ -47,6 +48,10 @@ class ThumbnailManager {
 
   // 回调函数
   private onThumbnailReady?: (path: string, dataUrl: string) => void;
+
+  // 任务上限管理
+  private readonly MAX_QUEUE_SIZE = 1000; // 最大队列大小
+  private readonly MAX_PROCESSING = 50; // 最大并发处理数
 
   constructor() {
     // 初始化缩略图管理器
@@ -134,10 +139,16 @@ class ThumbnailManager {
 
   /**
    * 生成哈希值（用于数据库查询）
+   * 使用本地 SHA-256 计算，避免弃用警告
    */
   private async generateHash(pathKey: string, size: number): Promise<number> {
-    // 使用 pathHash.ts 的逻辑生成哈希
-    const hash = await getStableImageHash(pathKey);
+    // 使用 Web Crypto API 计算 SHA-256 哈希
+    const encoder = new TextEncoder();
+    const bytes = encoder.encode(pathKey);
+    const buf = await crypto.subtle.digest('SHA-256', bytes);
+    const arr = Array.from(new Uint8Array(buf));
+    const hash = arr.map(b => b.toString(16).padStart(2, '0')).join('');
+    
     // 转换为 i32（取前8位字符的哈希值，然后取模避免溢出）
     const hashNum = parseInt(hash.substring(0, 8), 16) % 2147483647; // i32 max
     return hashNum;
@@ -344,9 +355,18 @@ class ThumbnailManager {
   }
 
   /**
-   * 入队任务
+   * 入队任务（带上限管理）
    */
   private enqueueTask(task: ThumbnailTask) {
+    // 检查队列上限
+    if (this.taskQueue.length >= this.MAX_QUEUE_SIZE) {
+      // 移除最低优先级的任务
+      const priorityOrder = { immediate: 0, high: 1, normal: 2 };
+      this.taskQueue.sort((a, b) => priorityOrder[b.priority] - priorityOrder[a.priority]);
+      this.taskQueue = this.taskQueue.slice(0, this.MAX_QUEUE_SIZE - 1);
+      console.warn('缩略图队列已满，移除低优先级任务');
+    }
+
     // 检查是否已存在
     const existingIndex = this.taskQueue.findIndex(
       (t) => t.path === task.path && t.innerPath === task.innerPath
@@ -373,8 +393,8 @@ class ThumbnailManager {
       );
     }
 
-    // 开始处理队列
-    this.processQueue();
+    // 开始处理队列（异步，不阻塞）
+    setTimeout(() => this.processQueue(), 0);
   }
 
   /**
@@ -461,10 +481,10 @@ class ThumbnailManager {
   }
 
   /**
-   * 处理队列（优化并发性能）
+   * 处理队列（优化并发性能，带上限管理）
    */
   private async processQueue() {
-    const maxConcurrent = this.config.maxConcurrentLocal;
+    const maxConcurrent = Math.min(this.config.maxConcurrentLocal, this.MAX_PROCESSING);
     const currentProcessing = this.processingTasks.size;
 
     if (currentProcessing >= maxConcurrent) {
@@ -503,8 +523,8 @@ class ThumbnailManager {
         if (index >= 0) {
           this.taskQueue.splice(index, 1);
         }
-        // 继续处理队列
-        if (this.taskQueue.length > 0) {
+        // 继续处理队列（异步，不阻塞）
+        if (this.taskQueue.length > 0 && this.processingTasks.size < maxConcurrent) {
           setTimeout(() => this.processQueue(), 10);
         }
       });
@@ -512,31 +532,40 @@ class ThumbnailManager {
   }
 
   /**
-   * 批量预加载缩略图（用于当前目录）
+   * 批量预加载缩略图（用于当前目录，带上限管理）
    */
   async preloadThumbnails(
     items: FsItem[],
     currentPath: string,
     priority: 'immediate' | 'high' | 'normal' = 'immediate'
   ) {
-    // 预加载数据库索引
-    const paths = items
+    // 限制预加载数量，避免一次性加载太多
+    const maxPreload = 200;
+    const itemsToPreload = items.slice(0, maxPreload);
+    
+    // 预加载数据库索引（异步，不阻塞）
+    const paths = itemsToPreload
       .filter((item) => item.isImage || item.isDir)
       .map((item) => item.path);
 
-    await this.preloadDbIndex(paths);
+    // 异步预加载索引，不等待
+    this.preloadDbIndex(paths).catch(err => {
+      console.debug('预加载数据库索引失败:', err);
+    });
 
-    // 为每个项目获取缩略图
-    items.forEach((item) => {
+    // 为每个项目获取缩略图（异步，不阻塞）
+    itemsToPreload.forEach((item) => {
       if (item.isImage) {
         this.getThumbnail(item.path, undefined, false, priority);
       } else if (item.isDir) {
         // 文件夹：使用子路径下第一个条目的缩略图
-        // 这里需要先获取子目录的第一个条目
-        // 暂时入队，后续会处理
         this.getThumbnail(item.path, undefined, false, priority);
       }
     });
+    
+    if (items.length > maxPreload) {
+      console.log(`⚠️ 项目数量过多 (${items.length})，仅预加载前 ${maxPreload} 个`);
+    }
   }
 
   /**

@@ -226,15 +226,21 @@ impl ThumbnailGenerator {
         // 生成 webp 缩略图
         let thumbnail_data = self.generate_webp_thumbnail(img)?;
         
-        // 异步保存到数据库（使用线程池，不阻塞返回）
+        // 先返回缩略图数据（立即显示），后台异步保存到数据库
         let db_clone = Arc::clone(&self.db);
         let path_key_clone = path_key.clone();
         let thumbnail_data_clone = thumbnail_data.clone();
+        let file_size_clone = file_size;
+        let ghash_clone = ghash;
+        
         std::thread::spawn(move || {
-            if let Err(e) = db_clone.save_thumbnail(&path_key_clone, file_size, ghash, &thumbnail_data_clone) {
-                // 只记录警告，不打印错误（避免日志污染）
-                if !e.to_string().contains("Execute returned results") {
-                    eprintln!("保存缩略图到数据库失败: {}", e);
+            println!("💾 后台开始保存文件缩略图到数据库: {} ({} bytes)", path_key_clone, thumbnail_data_clone.len());
+            match db_clone.save_thumbnail(&path_key_clone, file_size_clone, ghash_clone, &thumbnail_data_clone) {
+                Ok(_) => {
+                    println!("✅ 文件缩略图已成功保存到数据库: {}", path_key_clone);
+                }
+                Err(e) => {
+                    eprintln!("❌ 保存文件缩略图到数据库失败: {} - {}", path_key_clone, e);
                 }
             }
         });
@@ -331,18 +337,22 @@ impl ThumbnailGenerator {
                     
                     println!("✅ 缩略图生成成功: {} bytes", thumbnail_data.len());
                     
-                    // 异步保存到数据库（使用线程池，不阻塞返回）
+                    // 先返回缩略图数据（立即显示），后台异步保存到数据库
                     let db_clone = Arc::clone(&self.db);
                     let path_key_clone = path_key.clone();
                     let thumbnail_data_clone = thumbnail_data.clone();
+                    let archive_size_clone = archive_size;
+                    let ghash_clone = ghash;
+                    
                     std::thread::spawn(move || {
-                        if let Err(e) = db_clone.save_thumbnail(&path_key_clone, archive_size, ghash, &thumbnail_data_clone) {
-                            // 只记录警告，不打印错误（避免日志污染）
-                            if !e.to_string().contains("Execute returned results") {
-                                eprintln!("保存缩略图到数据库失败: {}", e);
+                        println!("💾 后台开始保存压缩包缩略图到数据库: {} ({} bytes)", path_key_clone, thumbnail_data_clone.len());
+                        match db_clone.save_thumbnail(&path_key_clone, archive_size_clone, ghash_clone, &thumbnail_data_clone) {
+                            Ok(_) => {
+                                println!("✅ 压缩包缩略图已成功保存到数据库: {}", path_key_clone);
                             }
-                        } else {
-                            println!("💾 缩略图已保存到数据库: {}", path_key_clone);
+                            Err(e) => {
+                                eprintln!("❌ 保存压缩包缩略图到数据库失败: {} - {}", path_key_clone, e);
+                            }
                         }
                     });
                     

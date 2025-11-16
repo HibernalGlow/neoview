@@ -82,14 +82,8 @@ class ThumbnailManager {
    * 获取缩略图存储路径
    */
   private async getThumbnailPath(): Promise<string> {
-    // 使用应用数据目录
-    try {
-      const { appDataDir } = await import('@tauri-apps/api/path');
-      const dataDir = await appDataDir();
-      return dataDir;
-    } catch {
-      return './thumbnails';
-    }
+    // 强制使用 D:\temp\neoview
+    return 'D:\\temp\\neoview';
   }
 
   /**

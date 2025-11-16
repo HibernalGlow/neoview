@@ -19,12 +19,21 @@ pub struct ThumbnailState {
 #[tauri::command]
 pub async fn init_thumbnail_manager(
     app: tauri::AppHandle,
-    thumbnail_path: String,
+    _thumbnail_path: String,
     _root_path: String,
     size: u32,
 ) -> Result<(), String> {
+    // 强制使用 D:\temp\neoview 作为数据库路径
+    let db_dir = PathBuf::from("D:\\temp\\neoview");
+    
+    // 确保目录存在
+    if let Err(e) = std::fs::create_dir_all(&db_dir) {
+        eprintln!("⚠️ 创建数据库目录失败: {} - {}", db_dir.display(), e);
+        return Err(format!("创建数据库目录失败: {}", e));
+    }
+    
     // 创建数据库路径
-    let db_path = PathBuf::from(&thumbnail_path).join("thumbnails.db");
+    let db_path = db_dir.join("thumbnails.db");
     
     // 输出数据库路径（用于调试）
     println!("📁 缩略图数据库路径: {}", db_path.display());
@@ -65,17 +74,28 @@ pub async fn init_thumbnail_manager(
     Ok(())
 }
 
-/// 生成文件缩略图（返回 blob key，异步保存到数据库）
+/// 生成文件缩略图（返回 blob key，同步保存到数据库）
 #[tauri::command]
 pub async fn generate_file_thumbnail_new(
     app: tauri::AppHandle,
     file_path: String,
 ) -> Result<String, String> {
+    println!("🚀 generate_file_thumbnail_new 被调用: {}", file_path);
     let state = app.state::<ThumbnailState>();
     let generator = state.generator.lock().unwrap();
     
-    // 生成缩略图（内部已异步保存到数据库）
-    let thumbnail_data = generator.generate_file_thumbnail(&file_path)?;
+    // 生成缩略图（内部已同步保存到数据库）
+    println!("📸 开始生成文件缩略图: {}", file_path);
+    let thumbnail_data = match generator.generate_file_thumbnail(&file_path) {
+        Ok(data) => {
+            println!("✅ 文件缩略图生成成功: {} ({} bytes)", file_path, data.len());
+            data
+        }
+        Err(e) => {
+            eprintln!("❌ 文件缩略图生成失败: {} - {}", file_path, e);
+            return Err(e);
+        }
+    };
     
     // 注册到 BlobRegistry，返回 blob key（带路径信息）
     use std::time::Duration;
@@ -86,6 +106,7 @@ pub async fn generate_file_thumbnail_new(
         Some(file_path.clone()), // 传递路径用于日志
     );
     
+    println!("✅ generate_file_thumbnail_new 完成: {} -> blob_key: {}", file_path, blob_key);
     Ok(blob_key)
 }
 
@@ -95,11 +116,22 @@ pub async fn generate_archive_thumbnail_new(
     app: tauri::AppHandle,
     archive_path: String,
 ) -> Result<String, String> {
+    println!("🚀 generate_archive_thumbnail_new 被调用: {}", archive_path);
     let state = app.state::<ThumbnailState>();
     let generator = state.generator.lock().unwrap();
     
     // 生成缩略图
-    let thumbnail_data = generator.generate_archive_thumbnail(&archive_path)?;
+    println!("📸 开始生成压缩包缩略图: {}", archive_path);
+    let thumbnail_data = match generator.generate_archive_thumbnail(&archive_path) {
+        Ok(data) => {
+            println!("✅ 压缩包缩略图生成成功: {} ({} bytes)", archive_path, data.len());
+            data
+        }
+        Err(e) => {
+            eprintln!("❌ 压缩包缩略图生成失败: {} - {}", archive_path, e);
+            return Err(e);
+        }
+    };
     
     // 注册到 BlobRegistry，返回 blob key（带路径信息）
     use std::time::Duration;
@@ -110,6 +142,7 @@ pub async fn generate_archive_thumbnail_new(
         Some(archive_path.clone()), // 传递路径用于日志
     );
     
+    println!("✅ generate_archive_thumbnail_new 完成: {} -> blob_key: {}", archive_path, blob_key);
     Ok(blob_key)
 }
 

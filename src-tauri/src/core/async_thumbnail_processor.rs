@@ -9,7 +9,7 @@ use std::collections::{HashMap, VecDeque};
 use std::time::{Instant, Duration};
 use crate::core::thumbnail::ThumbnailManager;
 use crate::core::image_cache::ImageCache;
-use tauri::{AppHandle, Emitter};
+use tauri::Emitter;
 
 /// 调节参数
 struct ProcessorAdjustment {
@@ -104,7 +104,7 @@ pub struct AsyncThumbnailProcessor {
     /// 上次调节时间
     last_adjustment_time: Arc<Mutex<Option<Instant>>>,
     /// 前台源目录
-    foreground_source: Arc<Mutex<Option<String>>,
+    foreground_source: Arc<Mutex<Option<String>>>,
     /// 任务接收器
     task_rx: Arc<RwLock<mpsc::UnboundedReceiver<AsyncThumbnailTask>>>,
     /// 扫描任务发送器和接收器
@@ -169,6 +169,8 @@ impl AsyncThumbnailProcessor {
         let extract_max = 64;  // 解码上限 64
         let scan_min = scan_max / 4;  // 扫描下限 4
         let extract_min = extract_max / 4;  // 解码下限 16
+        let max_concurrent_scan = scan_min;  // 初始扫描并发数
+        let max_concurrent_decode = extract_min;  // 初始解码并发数
         
         let concurrency_limits = Arc::new(ConcurrencyLimits {
             scan_min,
@@ -185,8 +187,8 @@ impl AsyncThumbnailProcessor {
             cache,
             local_semaphore: Arc::new(Semaphore::new(max_concurrent_local)),
             archive_semaphore: Arc::new(Semaphore::new(max_concurrent_archive)),
-            archive_scan_semaphore: Arc::new(Semaphore::new(scan_min)),
-            archive_decode_semaphore: Arc::new(Semaphore::new(extract_min)),
+            archive_scan_semaphore: Arc::new(Semaphore::new(max_concurrent_scan)),
+            archive_decode_semaphore: Arc::new(Semaphore::new(max_concurrent_decode)),
             current_scan_limit: Arc::clone(&current_scan_limit),
             current_extract_limit: Arc::clone(&current_extract_limit),
             concurrency_limits,
@@ -457,8 +459,8 @@ impl AsyncThumbnailProcessor {
             let response_tx = task.response_tx;
             let manager_clone = Arc::clone(&self.manager);
             let cache_clone = Arc::clone(&self.cache);
-            let processing_tasks_clone = Arc::clone(&self.processing_tasks);
-            let error_counts_clone = Arc::clone(&self.error_counts);
+            let processing_tasks_clone: Arc<RwLock<HashMap<PathBuf, CancellationToken>>> = Arc::clone(&self.processing_tasks);
+            let error_counts_clone: Arc<Mutex<HashMap<String, usize>>> = Arc::clone(&self.error_counts);
             
             // 根据文件类型选择信号量并获取许可
             let permit: OwnedSemaphorePermit = if Self::is_archive_file_static(&task.path) {
@@ -778,10 +780,10 @@ impl AsyncThumbnailProcessor {
             let source_id = task.source_id.clone();
             let response_tx = task.response_tx;
             let extract_tx = self.extract_tx.clone();
-            let first_image_cache = Arc::clone(&self.first_image_cache);
-            let extract_queue_paths = Arc::clone(&self.extract_queue_paths);
-            let manager_clone = Arc::clone(&self.manager);
-            let metrics_clone = Arc::clone(&self.metrics);
+            let first_image_cache: Arc<RwLock<HashMap<PathBuf, String>>> = Arc::clone(&self.first_image_cache);
+            let extract_queue_paths: Arc<RwLock<Vec<PathBuf>>> = Arc::clone(&self.extract_queue_paths);
+            let manager_clone: Arc<Mutex<Option<ThumbnailManager>>> = Arc::clone(&self.manager);
+            let metrics_clone: Arc<Mutex<ProcessorMetrics>> = Arc::clone(&self.metrics);
             let processor_clone = self.clone();
             
             // 启动扫描任务
@@ -938,9 +940,9 @@ impl AsyncThumbnailProcessor {
             let response_tx = task.response_tx;
             let manager_clone = Arc::clone(&self.manager);
             let cache_clone = Arc::clone(&self.cache);
-            let metrics_clone = Arc::clone(&self.metrics);
-            let error_counts_clone = Arc::clone(&self.error_counts);
-            let app_handle = Arc::clone(&self.app_handle);
+            let metrics_clone: Arc<Mutex<ProcessorMetrics>> = Arc::clone(&self.metrics);
+            let error_counts_clone: Arc<Mutex<HashMap<String, usize>>> = Arc::clone(&self.error_counts);
+            let app_handle: Arc<Mutex<Option<tauri::AppHandle>>> = Arc::clone(&self.app_handle);
             let processor_clone = self.clone();
             
             // 启动提取任务
@@ -1028,11 +1030,18 @@ impl AsyncThumbnailProcessor {
     
     /// 提交扫描任务
     pub async fn submit_scan_task(&self, archive_path: PathBuf, response_tx: Option<tokio::sync::oneshot::Sender<ScanResult>>) -> Result<(), String> {
+        // 从路径提取source_id（父目录）
+        let source_id = archive_path.parent()
+            .and_then(|p| p.to_str())
+            .unwrap_or("")
+            .to_string();
+        
         // 添加到队列跟踪
         self.scan_queue_paths.write().await.push(archive_path.clone());
         
         let task = ScanTask {
             archive_path,
+            source_id,
             response_tx,
         };
         
@@ -1058,6 +1067,24 @@ impl AsyncThumbnailProcessor {
         if let Ok(mut handle) = self.app_handle.lock() {
             *handle = Some(app_handle);
         }
+    }
+    
+    /// 设置前台源目录
+    pub async fn set_foreground_source(&self, source_id: String) {
+        if let Ok(mut foreground) = self.foreground_source.lock() {
+            *foreground = Some(source_id.clone());
+            println!("🎯 [Rust] 前台源已设置为: {}", source_id);
+        }
+    }
+    
+    /// 检查任务是否为前台任务
+    async fn is_foreground_task(&self, source_id: &str) -> bool {
+        if let Ok(foreground) = self.foreground_source.lock() {
+            if let Some(ref fg) = *foreground {
+                return source_id == fg;
+            }
+        }
+        false
     }
 }
 

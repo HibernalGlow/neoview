@@ -175,6 +175,10 @@ pub async fn generate_file_thumbnail_async(
         path: path.clone(),
         is_folder: false,
         priority,
+        source_id: path.parent()
+            .and_then(|p| p.to_str())
+            .unwrap_or("")
+            .to_string(),
         response_tx,
     };
     
@@ -1001,9 +1005,14 @@ pub async fn get_archive_first_image_quick(
                         
                         // 直接创建提取任务（跳过Stage①扫描）
                         let (extract_tx, _extract_rx) = oneshot::channel();
+                        let archive_path_buf = PathBuf::from(&archive_path);
                         let extract_task = ExtractTask {
-                            archive_path: path.clone(),
+                            archive_path: archive_path_buf.clone(),
                             inner_path: inner_path.clone(),
+                            source_id: archive_path_buf.parent()
+                                .and_then(|p| p.to_str())
+                                .unwrap_or("")
+                                .to_string(),
                             response_tx: extract_tx,
                         };
                         

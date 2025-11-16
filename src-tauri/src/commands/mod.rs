@@ -18,7 +18,7 @@ pub use book_commands::*;
 pub use image_commands::*;
 pub use fs_commands::*;
 pub use thumbnail_commands::*;
-pub use thumbnail_settings_commands::*;
+// pub use thumbnail_settings_commands::*; // 暂时未使用，注释掉避免警告
 pub use upscale_commands::*;
 pub use generic_upscale_commands::*;
 pub use upscale_settings_commands::*;

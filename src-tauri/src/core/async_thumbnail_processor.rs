@@ -1309,5 +1309,269 @@ impl AsyncThumbnailProcessor {
     pub fn get_decode_limits(&self) -> DecodeLimits {
         (*self.decode_limits).clone()
     }
+    
+    /// 运行扫描循环
+    pub async fn run_scan_loop(&self) {
+        println!("🔍 [Rust] 扫描循环已启动");
+        
+        loop {
+            // 获取扫描任务
+            let task = {
+                let mut rx = self.scan_rx.write().await;
+                match rx.recv().await {
+                    Some(task) => task,
+                    None => {
+                        println!("🔍 [Rust] 扫描通道已关闭，退出扫描循环");
+                        break;
+                    }
+                }
+            };
+            
+            let permit = match self.archive_scan_semaphore.acquire().await {
+                Ok(permit) => permit,
+                Err(_) => {
+                    println!("🔍 [Rust] 扫描信号量已关闭");
+                    break;
+                }
+            };
+            
+            let archive_path = task.archive_path.clone();
+            let source_id = task.source_id.clone();
+            let response_tx = task.response_tx;
+            
+            // 执行扫描任务
+            let start_time = std::time::Instant::now();
+            let result = self.scan_archive_first_image(&archive_path).await;
+            let duration = start_time.elapsed();
+            
+            // 发送结果
+            if let Some(tx) = response_tx {
+                let _ = tx.send(result.clone());
+            }
+            
+            // 如果找到图片，发射首图就绪事件
+            if let Ok(ref inner_path) = result {
+                if let Some(ref inner_path) = inner_path {
+                    // 提取图片数据
+                    match self.extract_first_image_data(&archive_path, inner_path).await {
+                        Ok((image_data, mime_type)) => {
+                            // 注册到 BlobRegistry
+                            let blob_url = self.blob_registry.get_or_register(
+                                &image_data,
+                                &mime_type,
+                                std::time::Duration::from_secs(600)
+                            );
+                            
+                            // 发射首图就绪事件
+                            if let Ok(handle_guard) = self.app_handle.lock() {
+                                if let Some(app) = handle_guard.as_ref() {
+                                    let _ = app.emit("thumbnail:firstImageReady", serde_json::json!({
+                                        "archivePath": archive_path.to_string_lossy(),
+                                        "blob": blob_url.clone()
+                                    }));
+                                    
+                                    println!("🎯 [Rust] 扫描循环已发射 thumbnail:firstImageReady 事件: {} -> {}", 
+                                        archive_path.display(), blob_url);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            println!("❌ [Rust] 提取首图数据失败: {}", e);
+                        }
+                    }
+                }
+            }
+            
+            println!("🔍 [Rust] 扫描任务完成: {} (耗时: {:?})", archive_path.display(), duration);
+            drop(permit);
+        }
+    }
+    
+    /// 运行提取循环
+    pub async fn run_extract_loop(&self) {
+        println!("🔧 [Rust] 提取循环已启动");
+        
+        loop {
+            // 获取提取任务
+            let task = {
+                let mut rx = self.extract_rx.write().await;
+                match rx.recv().await {
+                    Some(task) => task,
+                    None => {
+                        println!("🔧 [Rust] 提取通道已关闭，退出提取循环");
+                        break;
+                    }
+                }
+            };
+            
+            let permit = match self.archive_decode_semaphore.acquire().await {
+                Ok(permit) => permit,
+                Err(_) => {
+                    println!("🔧 [Rust] 解码信号量已关闭");
+                    break;
+                }
+            };
+            
+            let archive_path = task.archive_path.clone();
+            let inner_path = task.inner_path.clone();
+            let source_id = task.source_id.clone();
+            let response_tx = task.response_tx;
+            
+            // 执行提取任务
+            let start_time = std::time::Instant::now();
+            let result = self.extract_and_generate_thumbnail(&archive_path, &inner_path).await;
+            let duration = start_time.elapsed();
+            
+            // 发送结果
+            if let Err(_) = response_tx.send(result.clone()) {
+                println!("⚠️ [Rust] 发送提取结果失败");
+            }
+            
+            // 如果成功，发射缩略图更新事件
+            if let Ok(ref thumbnail_url) = result {
+                // 获取旧的 blob URL
+                let old_blob_url = {
+                    if let Ok(cache) = self.cache.lock() {
+                        let cache_key = archive_path.to_string_lossy().replace('\\', "/");
+                        cache.get(&cache_key)
+                            .filter(|url| url.starts_with("blob:"))
+                            .cloned()
+                    } else {
+                        None
+                    }
+                };
+                
+                // 发射缩略图更新事件
+                if let Ok(handle_guard) = self.app_handle.lock() {
+                    if let Some(app) = handle_guard.as_ref() {
+                        let mut payload = serde_json::json!({
+                            "archivePath": archive_path.to_string_lossy(),
+                            "webpUrl": thumbnail_url
+                        });
+                        
+                        if let Some(old_blob) = old_blob_url {
+                            payload["blobUrl"] = serde_json::Value::String(old_blob);
+                        }
+                        
+                        let _ = app.emit("thumbnail:updated", payload);
+                        
+                        println!("🎯 [Rust] 提取循环已发射 thumbnail:updated 事件: {} -> {}", 
+                            archive_path.display(), thumbnail_url);
+                    }
+                }
+            }
+            
+            println!("🔧 [Rust] 提取任务完成: {} (耗时: {:?})", archive_path.display(), duration);
+            drop(permit);
+        }
+    }
+    
+    /// 提交扫描任务
+    pub async fn submit_scan_task(&self, archive_path: PathBuf, response_tx: Option<tokio::sync::oneshot::Sender<ScanResult>>) -> Result<(), String> {
+        let source_id = archive_path.parent()
+            .and_then(|p| p.to_str())
+            .unwrap_or("")
+            .to_string();
+            
+        let task = ScanTask {
+            archive_path,
+            source_id,
+            response_tx,
+        };
+        
+        self.scan_tx.send(task)
+            .map_err(|e| format!("提交扫描任务失败: {}", e))?;
+            
+        Ok(())
+    }
+    
+    /// 提交提取任务
+    pub async fn submit_extract_task(&self, task: ExtractTask) -> Result<(), String> {
+        self.extract_tx.send(task)
+            .map_err(|e| format!("提交提取任务失败: {}", e))?;
+            
+        Ok(())
+    }
+    
+    /// 扫描压缩包首图
+    async fn scan_archive_first_image(&self, archive_path: &PathBuf) -> Result<String, String> {
+        use crate::core::archive::ArchiveManager;
+        let archive_manager = ArchiveManager::new();
+        
+        match archive_manager.find_first_image_entry(archive_path) {
+            Ok(Some(inner_path)) => Ok(inner_path),
+            Ok(None) => Err("压缩包中没有图片".to_string()),
+            Err(e) => Err(format!("扫描失败: {}", e)),
+        }
+    }
+    
+    /// 提取首图数据
+    async fn extract_first_image_data(&self, archive_path: &PathBuf, inner_path: &str) -> Result<(Vec<u8>, String), String> {
+        use crate::core::archive::ArchiveManager;
+        let archive_manager = ArchiveManager::new();
+        
+        // 提取图片数据
+        let image_data = archive_manager.extract_file(archive_path, inner_path)
+            .map_err(|e| format!("提取失败: {}", e))?;
+            
+        // 检测 MIME 类型
+        let mime_type = {
+            let path = std::path::Path::new(inner_path);
+            if let Some(ext) = path.extension() {
+                match ext.to_string_lossy().to_lowercase().as_str() {
+                    "jpg" | "jpeg" => "image/jpeg",
+                    "png" => "image/png",
+                    "gif" => "image/gif",
+                    "bmp" => "image/bmp",
+                    "webp" => "image/webp",
+                    "avif" => "image/avif",
+                    "jxl" => "image/jxl",
+                    "tiff" | "tif" => "image/tiff",
+                    _ => "application/octet-stream",
+                }
+            } else {
+                "application/octet-stream"
+            }
+        };
+        
+        Ok((image_data, mime_type))
+    }
+    
+    /// 提取并生成缩略图
+    async fn extract_and_generate_thumbnail(&self, archive_path: &PathBuf, inner_path: &str) -> Result<String, String> {
+        // 获取管理器
+        let manager_guard = self.manager.lock()
+            .map_err(|e| format!("获取管理器锁失败: {}", e))?;
+        let manager = manager_guard.as_ref()
+            .ok_or("缩略图管理器未初始化")?;
+            
+        // 提取图片数据
+        let (image_data, _) = self.extract_first_image_data(archive_path, inner_path).await?;
+        
+        // 获取相对路径
+        let relative_path = manager.get_relative_path(archive_path)
+            .map_err(|e| format!("获取相对路径失败: {}", e))?;
+            
+        // 使用解码前限缩尺寸功能
+        let max_side = 2048u32;
+        let img = manager.decode_and_downscale(&image_data, Path::new(inner_path), max_side)
+            .map_err(|e| format!("解码图片失败: {}", e))?;
+            
+        // 保存缩略图
+        let thumbnail_url = manager.save_thumbnail_for_archive(
+            &img, 
+            archive_path, 
+            &relative_path, 
+            inner_path
+        )?;
+        
+        // 添加到缓存
+        if let Ok(cache) = self.cache.lock() {
+            let cache_key = archive_path.to_string_lossy().replace('\\', "/");
+            cache.set(cache_key.to_string(), thumbnail_url.clone());
+        }
+        
+        Ok(thumbnail_url)
+    }
 }
 

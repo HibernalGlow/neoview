@@ -521,8 +521,8 @@ export async function generateArchiveThumbnailAsync(archivePath: string): Promis
   console.log('🔄 FileSystemAPI: 后台异步生成压缩包缩略图:', archivePath);
   try {
     // 使用新的 archive API
-    const { generateArchiveThumbnailAsync } = await import('./archive');
-    const result = await generateArchiveThumbnailAsync(archivePath);
+    const { generateArchiveThumbnailAsync: invokeGenerateArchiveThumbnailAsync } = await import('./archive');
+    const result = await invokeGenerateArchiveThumbnailAsync(archivePath);
     console.log('✅ FileSystemAPI: 异步生成已入队:', result);
     return result;
   } catch (error) {

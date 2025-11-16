@@ -177,12 +177,13 @@ class ThumbnailManager {
 
   /**
    * 预加载数据库索引（批量检查哪些路径有缓存）
+   * 简化：只使用 key + category，减少计算
    */
   async preloadDbIndex(paths: string[]): Promise<Map<string, boolean>> {
     const results = new Map<string, boolean>();
     const { invoke } = await import('@tauri-apps/api/core');
     
-    // 批量检查（可以优化为一次查询）
+    // 批量检查（简化：只使用 key + category）
     await Promise.all(
       paths.map(async (path) => {
         const pathKey = this.buildPathKey(path);
@@ -193,16 +194,14 @@ class ThumbnailManager {
         }
 
         try {
-          // 获取文件大小
-          const metadata = await invoke<{ size: number }>('get_file_info', { path });
-          const size = metadata.size || 0;
-          const ghash = await this.generateHash(pathKey, size);
-
-          // 检查数据库
-          const exists = await invoke<boolean>('has_thumbnail', {
+          // 判断类别
+          const isFolder = !pathKey.includes("::") && !pathKey.match(/\.(jpg|jpeg|png|gif|bmp|webp|avif|jxl|tiff|tif|zip|cbz|rar|cbr|mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/i);
+          const category = isFolder ? 'folder' : 'file';
+          
+          // 检查数据库（只使用 key + category，不再需要 size 和 ghash）
+          const exists = await invoke<boolean>('has_thumbnail_by_key_category', {
             path: pathKey,
-            size,
-            ghash,
+            category,
           });
 
           this.dbIndexCache.set(pathKey, exists);
@@ -219,77 +218,28 @@ class ThumbnailManager {
 
   /**
    * 从数据库加载缩略图（返回 blob URL）
+   * 简化：只使用 key + category，减少计算
    */
   private async loadFromDb(path: string, innerPath?: string, isFolder?: boolean): Promise<string | null> {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const pathKey = this.buildPathKey(path, innerPath);
       
-      // 对于文件夹，尝试多个可能的 size 值（因为文件夹的 size 可能不一致）
-      // 先尝试获取实际大小
-      let size = 0;
-      try {
-        const metadata = await invoke<{ size: number }>('get_file_info', { path });
-        size = metadata.size || 0;
-      } catch (error) {
-        // 如果获取文件信息失败（可能是文件夹），使用 0
-        console.debug('获取文件信息失败，使用默认大小 0:', path, error);
-        size = 0;
-      }
+      // 确定类别
+      const category = isFolder ? 'folder' : 'file';
       
-      // 如果是文件夹，直接使用 category='folder' 查询
-      // 后端会先尝试仅根据 key+category 查询（忽略 size），如果失败再尝试完整查询
-      if (isFolder) {
-        const ghash = await this.generateHash(pathKey, size);
-        
-        const blobKey = await invoke<string | null>('load_thumbnail_from_db', {
-          path: pathKey,
-          size,
-          ghash,
-          category: 'folder',
-        });
-        
-        if (blobKey) {
-          console.log(`📦 从数据库找到文件夹缩略图: ${pathKey} (blob key: ${blobKey})`);
-          // 获取 blob 数据并创建 Blob URL
-          const blobData = await invoke<number[] | null>('get_thumbnail_blob_data', {
-            blobKey,
-          });
-
-          if (blobData && blobData.length > 0) {
-            // 转换为 Uint8Array
-            const uint8Array = new Uint8Array(blobData);
-            const blob = new Blob([uint8Array], { type: 'image/webp' });
-            const blobUrl = URL.createObjectURL(blob);
-
-            // 更新缓存
-            this.cache.set(pathKey, {
-              pathKey,
-              dataUrl: blobUrl,
-              timestamp: Date.now(),
-            });
-            console.log(`✅ 成功从数据库加载文件夹缩略图: ${pathKey} (${blobData.length} bytes)`);
-            return blobUrl;
-          }
-        }
-        
-        // 如果找不到，返回 null
-        return null;
-      }
-      
-      // 文件：使用单个 size 值
-      const ghash = await this.generateHash(pathKey, size);
-
-      // 从数据库加载（返回 blob key）
+      // 默认只使用 key + category 查询（减少计算，不需要 size 和 ghash）
+      // 传递 0 作为 size 和 ghash（后端不使用这些值）
+      // 如果是文件夹且没有记录，后端会自动查找路径下最早的文件记录并绑定
       const blobKey = await invoke<string | null>('load_thumbnail_from_db', {
         path: pathKey,
-        size,
-        ghash,
-        category: undefined,
+        size: 0, // 不再使用，减少计算
+        ghash: 0, // 不再使用，减少计算
+        category,
       });
 
       if (blobKey) {
-        console.log(`📦 从数据库找到缩略图: ${pathKey} (blob key: ${blobKey})`);
+        console.log(`📦 从数据库找到缩略图: ${pathKey} (category=${category}, blob key: ${blobKey})`);
         // 获取 blob 数据并创建 Blob URL
         const blobData = await invoke<number[] | null>('get_thumbnail_blob_data', {
           blobKey,
@@ -313,7 +263,7 @@ class ThumbnailManager {
           console.warn(`⚠️ 从数据库获取的 blob 数据为空: ${pathKey}`);
         }
       } else {
-        console.debug(`📭 数据库中没有缩略图: ${pathKey}`);
+        console.debug(`📭 数据库中没有缩略图: ${pathKey} (category=${category})`);
       }
     } catch (error) {
       console.debug('从数据库加载缩略图失败:', path, error);
@@ -745,12 +695,24 @@ class ThumbnailManager {
   }
 
   /**
-   * 检查数据库中是否有缩略图记录
+   * 检查数据库中是否有缩略图记录（简化：只使用 key + category）
    */
   async checkThumbnailInDb(path: string): Promise<boolean> {
     try {
-      const dbThumbnail = await this.loadFromDb(path);
-      return dbThumbnail !== null;
+      const { invoke } = await import('@tauri-apps/api/core');
+      const pathKey = this.buildPathKey(path);
+      
+      // 判断类别
+      const isFolder = !pathKey.includes("::") && !pathKey.match(/\.(jpg|jpeg|png|gif|bmp|webp|avif|jxl|tiff|tif|zip|cbz|rar|cbr|mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/i);
+      const category = isFolder ? 'folder' : 'file';
+      
+      // 检查数据库（只使用 key + category）
+      const exists = await invoke<boolean>('has_thumbnail_by_key_category', {
+        path: pathKey,
+        category,
+      });
+      
+      return exists;
     } catch {
       return false;
     }

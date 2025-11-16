@@ -182,13 +182,12 @@ pub async fn batch_preload_thumbnails(
     Ok(blob_keys)
 }
 
-/// 检查缩略图是否存在
+/// 检查缩略图是否存在（仅 key + category，减少计算）
 #[tauri::command]
-pub async fn has_thumbnail(
+pub async fn has_thumbnail_by_key_category(
     app: tauri::AppHandle,
     path: String,
-    size: i64,
-    ghash: i32,
+    category: String,
 ) -> Result<bool, String> {
     let state = app.state::<ThumbnailState>();
     
@@ -199,55 +198,68 @@ pub async fn has_thumbnail(
         path
     };
     
-    state.db.has_thumbnail(&path_key, size, ghash)
+    state.db.has_thumbnail_by_key_and_category(&path_key, &category)
+        .map_err(|e| format!("检查缩略图失败: {}", e))
+}
+
+/// 检查缩略图是否存在（保留以兼容旧代码）
+#[tauri::command]
+pub async fn has_thumbnail(
+    app: tauri::AppHandle,
+    path: String,
+    _size: i64, // 不再使用
+    _ghash: i32, // 不再使用
+) -> Result<bool, String> {
+    let state = app.state::<ThumbnailState>();
+    
+    // 构建路径键
+    let path_key = if path.contains("::") {
+        path.clone()
+    } else {
+        path.clone()
+    };
+    
+    // 自动判断类别
+    let category = if !path_key.contains("::") && !path_key.contains(".") {
+        "folder"
+    } else {
+        "file"
+    };
+    
+    state.db.has_thumbnail_by_key_and_category(&path_key, category)
         .map_err(|e| format!("检查缩略图失败: {}", e))
 }
 
 /// 加载缩略图（从数据库，返回 blob key）
+/// 默认只使用 key 和 category 查询，减少计算
 #[tauri::command]
 pub async fn load_thumbnail_from_db(
     app: tauri::AppHandle,
     path: String,
-    size: i64,
-    ghash: i32,
+    _size: i64, // 保留参数以兼容，但不使用
+    _ghash: i32, // 保留参数以兼容，但不使用
     category: Option<String>,
 ) -> Result<Option<String>, String> {
     let state = app.state::<ThumbnailState>();
     
     // 构建路径键
     let path_key = if path.contains("::") {
-        path
+        path.clone()
     } else {
-        path
+        path.clone()
     };
     
-    // 如果是文件夹，先尝试仅根据 key 和 category 查询（忽略 size 和 ghash）
-    if let Some(cat) = &category {
-        if cat == "folder" {
-            match state.db.load_thumbnail_by_key_and_category(&path_key, cat) {
-                Ok(Some(data)) => {
-                    // 注册到 BlobRegistry，返回 blob key
-                    use std::time::Duration;
-                    let blob_key = state.blob_registry.get_or_register(
-                        &data,
-                        "image/webp",
-                        Duration::from_secs(3600), // 1 小时 TTL
-                        Some(path_key.clone()), // 传递路径用于日志
-                    );
-                    return Ok(Some(blob_key));
-                }
-                Ok(None) => {
-                    // 如果仅 key+category 查询失败，继续尝试完整查询
-                }
-                Err(e) => {
-                    eprintln!("⚠️ 仅 key+category 查询失败: {} - {}", path_key, e);
-                }
-            }
+    // 确定类别（如果没有指定，根据路径判断）
+    let cat = category.unwrap_or_else(|| {
+        if !path_key.contains("::") && !path_key.contains(".") {
+            "folder".to_string()
+        } else {
+            "file".to_string()
         }
-    }
+    });
     
-    // 使用完整的 size+ghash+category 查询
-    match state.db.load_thumbnail_with_category(&path_key, size, ghash, category.as_deref()) {
+    // 默认只使用 key + category 查询（减少计算）
+    match state.db.load_thumbnail_by_key_and_category(&path_key, &cat) {
         Ok(Some(data)) => {
             // 注册到 BlobRegistry，返回 blob key
             use std::time::Duration;
@@ -259,7 +271,52 @@ pub async fn load_thumbnail_from_db(
             );
             Ok(Some(blob_key))
         }
-        Ok(None) => Ok(None),
+        Ok(None) => {
+            // 如果是文件夹且没有记录，尝试查找路径下最早的文件记录
+            if cat == "folder" {
+                match state.db.find_earliest_thumbnail_in_path(&path_key) {
+                    Ok(Some((child_key, child_data))) => {
+                        // 找到子文件的缩略图，复制给文件夹
+                        println!("🔍 文件夹无记录，找到子文件缩略图: {} -> {}", child_key, path_key);
+                        
+                        // 保存到文件夹
+                        let folder_size = 0; // 文件夹使用固定 size
+                        let folder_ghash = 0; // 文件夹使用固定 ghash（因为不再使用）
+                        match state.db.save_thumbnail_with_category(
+                            &path_key,
+                            folder_size,
+                            folder_ghash,
+                            &child_data,
+                            Some("folder"),
+                        ) {
+                            Ok(_) => {
+                                println!("✅ 已将子文件缩略图绑定到文件夹: {}", path_key);
+                                // 注册并返回
+                                use std::time::Duration;
+                                let blob_key = state.blob_registry.get_or_register(
+                                    &child_data,
+                                    "image/webp",
+                                    Duration::from_secs(3600),
+                                    Some(path_key.clone()),
+                                );
+                                Ok(Some(blob_key))
+                            }
+                            Err(e) => {
+                                eprintln!("❌ 保存文件夹缩略图失败: {} - {}", path_key, e);
+                                Ok(None)
+                            }
+                        }
+                    }
+                    Ok(None) => Ok(None),
+                    Err(e) => {
+                        eprintln!("⚠️ 查找路径下缩略图失败: {} - {}", path_key, e);
+                        Ok(None)
+                    }
+                }
+            } else {
+                Ok(None)
+            }
+        }
         Err(e) => Err(format!("加载缩略图失败: {}", e)),
     }
 }

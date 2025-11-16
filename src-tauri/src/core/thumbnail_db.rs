@@ -289,7 +289,8 @@ impl ThumbnailDb {
         self.load_thumbnail_with_category(key, size, ghash, None)
     }
 
-    /// 加载缩略图（仅根据 key 和 category，忽略 size 和 ghash，用于文件夹）
+    /// 加载缩略图（仅根据 key 和 category，忽略 size 和 ghash，减少计算）
+    /// 这是默认的查询方式，适用于所有文件和文件夹
     pub fn load_thumbnail_by_key_and_category(
         &self,
         key: &str,
@@ -310,12 +311,51 @@ impl ThumbnailDb {
         if let Some(row) = rows.next() {
             let data = row?;
             if cfg!(debug_assertions) {
-                println!("✅ 从数据库加载缩略图（仅 key+category）: key={}, category={}, size={} bytes", key, category, data.len());
+                println!("✅ 从数据库加载缩略图（key+category）: key={}, category={}, size={} bytes", key, category, data.len());
             }
             Ok(Some(data))
         } else {
             if cfg!(debug_assertions) {
-                println!("📭 数据库中没有找到缩略图（仅 key+category）: key={}, category={}", key, category);
+                println!("📭 数据库中没有找到缩略图（key+category）: key={}, category={}", key, category);
+            }
+            Ok(None)
+        }
+    }
+
+    /// 查找路径下最早的缩略图记录（用于文件夹绑定）
+    /// 查找所有以 folder_path/ 或 folder_path\ 开头的 key，返回最早的记录
+    pub fn find_earliest_thumbnail_in_path(
+        &self,
+        folder_path: &str,
+    ) -> SqliteResult<Option<(String, Vec<u8>)>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+        
+        // 查找所有以 folder_path/ 或 folder_path\ 开头的记录，按 date 排序，取最早的
+        // 只查找文件（category='file'），不查找文件夹
+        // 使用 OR 条件匹配两种路径分隔符
+        let search_pattern1 = format!("{}/%", folder_path);
+        let search_pattern2 = format!("{}\\{}", folder_path, "%");
+        let mut stmt = conn.prepare(
+            "SELECT key, value, date FROM thumbs WHERE (key LIKE ?1 OR key LIKE ?2) AND category = 'file' ORDER BY date ASC LIMIT 1"
+        )?;
+        
+        let mut rows = stmt.query_map(params![search_pattern1, search_pattern2], |row| {
+            let key: String = row.get(0)?;
+            let value: Vec<u8> = row.get(1)?;
+            Ok((key, value))
+        })?;
+
+        if let Some(row) = rows.next() {
+            let result = row?;
+            if cfg!(debug_assertions) {
+                println!("🔍 找到路径下最早的缩略图: {}", result.0);
+            }
+            Ok(Some(result))
+        } else {
+            if cfg!(debug_assertions) {
+                println!("📭 路径下没有找到缩略图: {}", folder_path);
             }
             Ok(None)
         }
@@ -400,36 +440,52 @@ impl ThumbnailDb {
         Ok(results)
     }
 
-    /// 检查缩略图是否存在
-    pub fn has_thumbnail(&self, key: &str, size: i64, ghash: i32) -> SqliteResult<bool> {
-        self.has_thumbnail_with_category(key, size, ghash, None)
-    }
-
-    /// 检查缩略图是否存在（带类别过滤）
-    pub fn has_thumbnail_with_category(
+    /// 检查缩略图是否存在（仅 key + category，减少计算）
+    /// 这是默认的检查方式，适用于所有文件和文件夹
+    pub fn has_thumbnail_by_key_and_category(
         &self,
         key: &str,
-        size: i64,
-        ghash: i32,
-        category: Option<&str>,
+        category: &str,
     ) -> SqliteResult<bool> {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
 
-        let exists = if let Some(cat) = category {
-            let mut stmt = conn.prepare(
-                "SELECT 1 FROM thumbs WHERE key = ?1 AND size = ?2 AND ghash = ?3 AND category = ?4 LIMIT 1"
-            )?;
-            stmt.exists(params![key, size, ghash, cat])?
-        } else {
-            let mut stmt = conn.prepare(
-                "SELECT 1 FROM thumbs WHERE key = ?1 AND size = ?2 AND ghash = ?3 LIMIT 1"
-            )?;
-            stmt.exists(params![key, size, ghash])?
-        };
+        let mut stmt = conn.prepare(
+            "SELECT 1 FROM thumbs WHERE key = ?1 AND category = ?2 LIMIT 1"
+        )?;
         
+        let exists = stmt.exists(params![key, category])?;
         Ok(exists)
+    }
+
+    /// 检查缩略图是否存在（保留以兼容旧代码）
+    pub fn has_thumbnail(&self, key: &str, _size: i64, _ghash: i32) -> SqliteResult<bool> {
+        // 自动判断类别
+        let category = if !key.contains("::") && !key.contains(".") {
+            "folder"
+        } else {
+            "file"
+        };
+        self.has_thumbnail_by_key_and_category(key, category)
+    }
+
+    /// 检查缩略图是否存在（带类别过滤，保留以兼容旧代码）
+    pub fn has_thumbnail_with_category(
+        &self,
+        key: &str,
+        _size: i64,
+        _ghash: i32,
+        category: Option<&str>,
+    ) -> SqliteResult<bool> {
+        let cat = category.unwrap_or_else(|| {
+            if !key.contains("::") && !key.contains(".") {
+                "folder"
+            } else {
+                "file"
+            }
+        });
+        self.has_thumbnail_by_key_and_category(key, cat)
     }
 
     /// 更新访问时间

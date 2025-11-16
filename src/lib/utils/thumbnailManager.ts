@@ -528,35 +528,68 @@ export function loadThumbnailsForItems(path: string, items: FsItem[]) {
 
   console.log(`📦 [Frontend] 加载缩略图: ${supported.length} 个支持的项目`);
 
-  // 分批处理策略
-  const batchSize = 200;
-  const batches: FsItem[][] = [];
+  // 分离压缩包和文件夹/其他文件
+  const archives: FsItem[] = [];
+  const others: FsItem[] = [];
   
-  for (let i = 0; i < supported.length; i += batchSize) {
-    batches.push(supported.slice(i, i + batchSize));
+  for (const item of supported) {
+    if (isArchiveFile(item)) {
+      archives.push(item);
+    } else {
+      others.push(item);
+    }
   }
 
-  // 立即处理第一批（前台）
-  if (batches[0]) {
-    scheduler.enqueue(path, batches[0], 'foreground');
-    console.log(`⚡ [Frontend] 立即处理第一批: ${batches[0].length} 个项目 (foreground)`);
+  console.log(`📦 [Frontend] 分类: ${archives.length} 个压缩包, ${others.length} 个其他项目`);
+
+  // 优先处理压缩包
+  if (archives.length > 0) {
+    // 分批处理压缩包
+    const batchSize = 200;
+    for (let i = 0; i < archives.length; i += batchSize) {
+      const batch = archives.slice(i, i + batchSize);
+      const priority = i === 0 ? 'foreground' : (i === batchSize ? 'high' : 'normal');
+      
+      if (priority === 'foreground') {
+        scheduler.enqueue(path, batch, priority);
+        console.log(`⚡ [Frontend] 立即处理压缩包批次 ${i + 1}: ${batch.length} 个项目 (${priority})`);
+      } else if (priority === 'high') {
+        setTimeout(() => {
+          scheduler.enqueue(path, batch, priority);
+          console.log(`🚀 [Frontend] 延迟处理压缩包批次 ${i + 1}: ${batch.length} 个项目`);
+        }, 10);
+      } else {
+        setTimeout(() => {
+          scheduler.enqueue(path, batch, priority);
+          console.log(`🔄 [Frontend] 后台处理压缩包批次 ${i + 1}: ${batch.length} 个项目`);
+        }, 50 * i);
+      }
+    }
   }
 
-  // 延迟处理第二批
-  if (batches[1]) {
-    setTimeout(() => {
-      scheduler.enqueue(path, batches[1], 'high');
-      console.log(`🚀 [Frontend] 延迟处理第二批: ${batches[1].length} 个项目`);
-    }, 10);
+  // 压缩包处理完毕后再处理其他项目
+  if (others.length > 0) {
+    const batchSize = 200;
+    for (let i = 0; i < others.length; i += batchSize) {
+      const batch = others.slice(i, i + batchSize);
+      // 延迟更长时间，确保压缩包优先处理
+      setTimeout(() => {
+        scheduler.enqueue(path, batch, 'normal');
+        console.log(`📁 [Frontend] 处理其他项目批次 ${i + 1}: ${batch.length} 个项目`);
+      }, 100 + (50 * i)); // 额外延迟确保压缩包优先
+    }
   }
+}
 
-  // 后台处理剩余批次
-  for (let i = 2; i < batches.length; i++) {
-    setTimeout(() => {
-      scheduler.enqueue(path, batches[i], 'normal');
-      console.log(`🔄 [Frontend] 后台处理第${i+1}批: ${batches[i].length} 个项目`);
-    }, 50 * i);
-  }
+// 判断是否为压缩包文件
+function isArchiveFile(item: FsItem): boolean {
+  if (!item || !item.name || itemIsDirectory(item)) return false;
+  
+  const archiveExts = ['.zip', '.rar', '.7z', '.cbz', '.cbr', '.cb7'];
+  const name = item.name.toLowerCase();
+  const ext = name.substring(name.lastIndexOf('.'));
+  
+  return archiveExts.includes(ext);
 }
 
 export function clearQueue() {

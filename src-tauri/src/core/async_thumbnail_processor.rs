@@ -1266,7 +1266,7 @@ impl AsyncThumbnailProcessor {
                 }
             };
             
-            println!("🔄 开始预取: {}", task.archive_path.display());
+            println!("🔄 开始预取 (优先级: {:?}): {}", task.priority, task.archive_path.display());
             
             // 检查缓存是否已存在
             let should_process = {
@@ -1288,9 +1288,20 @@ impl AsyncThumbnailProcessor {
                 continue;
             }
             
-            // 提交扫描任务
-            if let Err(e) = self.submit_scan_task(task.archive_path.clone(), None).await {
-                println!("❌ 预取提交扫描任务失败: {}", e);
+            // 根据优先级决定是否立即处理
+            match task.priority {
+                TaskPriority::Immediate => {
+                    // 立即处理
+                    if let Err(e) = self.submit_scan_task(task.archive_path.clone(), None).await {
+                        println!("❌ 立即预取提交扫描任务失败: {}", e);
+                    }
+                }
+                TaskPriority::High | TaskPriority::Normal => {
+                    // 对于非立即任务，也直接提交，让前台源检查来控制
+                    if let Err(e) = self.submit_scan_task(task.archive_path.clone(), None).await {
+                        println!("❌ 预取提交扫描任务失败: {}", e);
+                    }
+                }
             }
         }
     }

@@ -1360,6 +1360,13 @@ pub async fn generate_archive_thumbnail_async(
                                         println!("💾 [Rust] 异步生成完成并缓存: {}", cache_key);
                                     }
                                     
+                                    // 为父文件夹创建缩略图（如果还没有）
+                                    if let Some(parent_dir) = path_clone.parent() {
+                                        if let Err(e) = manager.ensure_folder_thumbnail(parent_dir, &thumbnail_url) {
+                                            println!("⚠️ [Rust] 为父文件夹创建缩略图失败: {}", e);
+                                        }
+                                    }
+                                    
                                     // 获取旧的 blob URL（如果有）
                                     let old_blob_url = {
                                         if let Ok(cache) = cache_clone.lock() {

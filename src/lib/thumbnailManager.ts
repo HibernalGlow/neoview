@@ -152,8 +152,25 @@ export async function preloadArchiveThumbnails(archivePaths: string[]): Promise<
 }
 
 // 设置前台源目录
-export async function setForegroundDirectory(dirPath: string): Promise<void> {
+export async function setForegroundDirectory(dirPath: string, items?: any[]): Promise<void> {
   await setForegroundSource(dirPath);
+  
+  // 如果提供了项目列表，优先处理压缩包
+  if (items && items.length > 0) {
+    const archiveItems = items.filter(item => {
+      if (!item || !item.name) return false;
+      const archiveExts = ['.zip', '.rar', '.7z', '.cbz', '.cbr', '.cb7'];
+      const name = item.name.toLowerCase();
+      const ext = name.substring(name.lastIndexOf('.'));
+      return archiveExts.includes(ext);
+    });
+    
+    if (archiveItems.length > 0) {
+      console.log(`🎯 [Frontend] 前台源切换，优先处理 ${archiveItems.length} 个压缩包`);
+      // 预加载压缩包
+      await preloadArchiveThumbnails(archiveItems.map(item => item.path));
+    }
+  }
 }
 
 // 监听缩略图事件

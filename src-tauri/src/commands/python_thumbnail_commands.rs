@@ -35,11 +35,11 @@ pub fn stop_python_thumbnail_service(
 /// 获取缩略图二进制数据（新版本，使用 Python 服务）
 #[command]
 pub async fn get_thumbnail_blob(
-    file_path: String,
+    filePath: String,
     is_folder: Option<bool>,
     state: tauri::State<'_, PyThumbState>,
 ) -> Result<Vec<u8>, String> {
-    let path = PathBuf::from(&file_path);
+    let path = PathBuf::from(&filePath);
     let is_folder = is_folder.unwrap_or(false);
     let is_archive = is_archive_file(&path);
     
@@ -47,7 +47,7 @@ pub async fn get_thumbnail_blob(
     
     let req = EnsureReq {
         bookpath: normalize_path(&path),
-        source_path: file_path.clone(),
+        source_path: filePath.clone(),
         is_folder,
         is_archive,
         source_mtime: get_file_mtime(&path),
@@ -60,10 +60,10 @@ pub async fn get_thumbnail_blob(
 /// 批量获取缩略图二进制数据
 #[command]
 pub async fn get_thumbnail_blobs(
-    file_paths: Vec<String>,
+    filePaths: Vec<String>,
     state: tauri::State<'_, PyThumbState>,
 ) -> Result<Vec<(String, Vec<u8>)>, String> {
-    if file_paths.is_empty() {
+    if filePaths.is_empty() {
         return Ok(Vec::new());
     }
     
@@ -74,7 +74,7 @@ pub async fn get_thumbnail_blobs(
     let semaphore = Arc::new(tokio::sync::Semaphore::new(8));
     let mut tasks = Vec::new();
     
-    for file_path in file_paths {
+    for file_path in filePaths {
         let path = PathBuf::from(&file_path);
         let is_archive = is_archive_file(&path);
         let client_clone = client.clone();
@@ -131,17 +131,17 @@ pub async fn prefetch_thumbnails(
 /// 生成文件缩略图（兼容旧接口，内部使用 Python 服务）
 #[command]
 pub async fn generate_file_thumbnail_python(
-    file_path: String,
+    filePath: String,
     state: tauri::State<'_, PyThumbState>,
 ) -> Result<String, String> {
-    let path = PathBuf::from(&file_path);
+    let path = PathBuf::from(&filePath);
     let is_archive = is_archive_file(&path);
     
     let client = get_client(&state).await?;
     
     let req = EnsureReq {
         bookpath: normalize_path(&path),
-        source_path: file_path.clone(),
+        source_path: filePath.clone(),
         is_folder: false,
         is_archive,
         source_mtime: get_file_mtime(&path),
@@ -158,16 +158,16 @@ pub async fn generate_file_thumbnail_python(
 /// 生成文件夹缩略图（兼容旧接口，内部使用 Python 服务）
 #[command]
 pub async fn generate_folder_thumbnail_python(
-    folder_path: String,
+    folderPath: String,
     state: tauri::State<'_, PyThumbState>,
 ) -> Result<String, String> {
-    let path = PathBuf::from(&folder_path);
+    let path = PathBuf::from(&folderPath);
     
     let client = get_client(&state).await?;
     
     let req = EnsureReq {
         bookpath: normalize_path(&path),
-        source_path: folder_path.clone(),
+        source_path: folderPath.clone(),
         is_folder: true,
         is_archive: false,
         source_mtime: get_file_mtime(&path),
@@ -184,16 +184,16 @@ pub async fn generate_folder_thumbnail_python(
 /// 生成压缩包缩略图（兼容旧接口，内部使用 Python 服务）
 #[command]
 pub async fn generate_archive_thumbnail_python(
-    archive_path: String,
+    archivePath: String,
     state: tauri::State<'_, PyThumbState>,
 ) -> Result<String, String> {
-    let path = PathBuf::from(&archive_path);
+    let path = PathBuf::from(&archivePath);
     
     let client = get_client(&state).await?;
     
     let req = EnsureReq {
         bookpath: normalize_path(&path),
-        source_path: archive_path.clone(),
+        source_path: archivePath.clone(),
         is_folder: false,
         is_archive: true,
         source_mtime: get_file_mtime(&path),

@@ -976,37 +976,53 @@ pub async fn generate_archive_thumbnail_async(
             }
         };
         
-        match manager.ensure_archive_thumbnail(&path_clone) {
-                Ok(thumbnail_url) => {
-                    // 如果返回的是特殊标记，说明是快速显示模式
-                    if thumbnail_url == "blob://quick_display" {
-                        println!("⚡ [Rust] 快速显示模式，等待后台缩略图生成");
-                        // 等待一段时间让后台任务完成
-                        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                        
-                        // 再次检查缓存
-                        if let Ok(cache) = cache_clone.lock() {
-                            let cache_key = normalize_path_string(path_clone.to_string_lossy());
-                            if let Some(cached_url) = cache.get(&cache_key) {
-                                if !cached_url.starts_with("blob://") {
-                                    println!("✅ [Rust] 后台缩略图生成完成: {}", cached_url);
+        // 使用快速扫描找到首图
+        match manager.scan_archive_images_fast(&path_clone) {
+            Ok(first_images) => {
+                if !first_images.is_empty() {
+                    let first_image_path = &first_images[0];
+                    
+                    // 流式提取并生成缩略图
+                    match manager.extract_image_from_archive_stream(&path_clone, first_image_path) {
+                        Ok((img, _)) => {
+                            println!("✅ [Rust] 成功提取图片: {}", first_image_path);
+                            
+                            // 获取相对路径
+                            let relative_path = match manager.get_relative_path(&path_clone) {
+                                Ok(p) => p,
+                                Err(e) => {
+                                    println!("❌ [Rust] 获取相对路径失败: {}", e);
                                     return;
+                                }
+                            };
+                            
+                            // 保存缩略图
+                            match manager.save_thumbnail_for_archive(&img, &path_clone, &relative_path, first_image_path) {
+                                Ok(thumbnail_url) => {
+                                    println!("✅ [Rust] 后台缩略图生成完成: {}", thumbnail_url);
+                                    
+                                    // 添加到缓存
+                                    if let Ok(cache) = cache_clone.lock() {
+                                        let cache_key = normalize_path_string(path_clone.to_string_lossy());
+                                        cache.set(cache_key.clone(), thumbnail_url.clone());
+                                        println!("💾 [Rust] 异步生成完成并缓存: {}", cache_key);
+                                    }
+                                }
+                                Err(e) => {
+                                    println!("❌ [Rust] 保存缩略图失败: {}", e);
                                 }
                             }
                         }
+                        Err(e) => {
+                            println!("❌ [Rust] 提取图片失败: {}", e);
+                        }
                     }
-                    
-                    // 添加到缓存
-                    if let Ok(cache) = cache_clone.lock() {
-                        let cache_key = normalize_path_string(path_clone.to_string_lossy());
-                        cache.set(cache_key.clone(), thumbnail_url.clone());
-                        println!("💾 [Rust] 异步生成完成并缓存: {}", cache_key);
-                    }
-                }
-                Err(e) => {
-                    println!("❌ [Rust] 异步生成失败: {}", e);
                 }
             }
+            Err(e) => {
+                println!("❌ [Rust] 扫描压缩包失败: {}", e);
+            }
+        }
     });
     
     println!("⚡ [Rust] 异步生成已启动，立即返回");

@@ -354,6 +354,149 @@ impl ArchiveManager {
         Ok(images)
     }
 
+    /// 快速查找压缩包中的第一张图片（早停扫描）
+    /// 找到第一张图片即返回，避免遍历全部条目
+    pub fn find_first_image_entry(&self, archive_path: &Path) -> Result<Option<String>, String> {
+        println!("⚡ ArchiveManager::find_first_image_entry start: {}", archive_path.display());
+        
+        let file = File::open(archive_path)
+            .map_err(|e| format!("打开压缩包失败: {}", e))?;
+
+        let mut archive = ZipArchive::new(file)
+            .map_err(|e| format!("读取压缩包失败: {}", e))?;
+
+        // 优先查找常见的图片命名模式
+        let priority_patterns = [
+            "cover", "front", "title", "page-001", "page_001", "001", 
+            "vol", "chapter", "ch", "p001", "p_001", "img"
+        ];
+
+        // 先按优先级查找
+        for i in 0..archive.len() {
+            let entry = archive.by_index(i)
+                .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
+            
+            let name = entry.name().to_string();
+            let name_lower = name.to_lowercase();
+            
+            // 跳过目录
+            if entry.is_dir() {
+                continue;
+            }
+            
+            // 检查是否为图片文件
+            if !self.is_image_file(&name) {
+                continue;
+            }
+            
+            // 检查优先级模式
+            for pattern in &priority_patterns {
+                if name_lower.contains(pattern) {
+                    println!("⚡ 快速扫描找到优先图片: {}", name);
+                    return Ok(Some(name));
+                }
+            }
+        }
+
+        // 如果没找到优先图片，再次扫描找到第一张图片
+        for i in 0..archive.len() {
+            let entry = archive.by_index(i)
+                .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
+            
+            let name = entry.name().to_string();
+            
+            // 跳过目录
+            if entry.is_dir() {
+                continue;
+            }
+            
+            // 检查是否为图片文件
+            if self.is_image_file(&name) {
+                println!("⚡ 快速扫描找到图片: {}", name);
+                return Ok(Some(name));
+            }
+        }
+
+        println!("⚡ 压缩包中未找到图片");
+        Ok(None)
+    }
+
+    /// 扫描压缩包内的前N张图片（限制扫描数量）
+    /// 用于快速获取首图，避免扫描整个压缩包
+    pub fn scan_archive_images_fast(&self, archive_path: &Path, limit: usize) -> Result<Vec<String>, String> {
+        println!("⚡ ArchiveManager::scan_archive_images_fast start: {} limit={}", archive_path.display(), limit);
+        
+        let file = File::open(archive_path)
+            .map_err(|e| format!("打开压缩包失败: {}", e))?;
+
+        let mut archive = ZipArchive::new(file)
+            .map_err(|e| format!("读取压缩包失败: {}", e))?;
+
+        let mut images = Vec::new();
+        let scan_limit = limit.min(archive.len()); // 限制扫描数量
+
+        // 优先查找常见的图片命名模式
+        let priority_patterns = [
+            "cover", "front", "title", "page-001", "page_001", "001", 
+            "vol", "chapter", "ch", "p001", "p_001", "img"
+        ];
+        
+        // 先按优先级查找
+        for i in 0..scan_limit {
+            let entry = archive.by_index(i)
+                .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
+            
+            let name = entry.name().to_string();
+            let name_lower = name.to_lowercase();
+            
+            // 跳过目录
+            if entry.is_dir() {
+                continue;
+            }
+            
+            // 检查是否为图片文件
+            if !self.is_image_file(&name) {
+                continue;
+            }
+            
+            // 检查优先级模式
+            for pattern in &priority_patterns {
+                if name_lower.contains(pattern) {
+                    images.push(name.clone());
+                    println!("⚡ 快速扫描找到优先图片: {}", name);
+                    return Ok(images);
+                }
+            }
+        }
+        
+        // 如果没找到优先图片，扫描前limit个文件
+        for i in 0..scan_limit {
+            let entry = archive.by_index(i)
+                .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
+            
+            let name = entry.name().to_string();
+            
+            // 跳过目录
+            if entry.is_dir() {
+                continue;
+            }
+            
+            // 检查是否为图片文件
+            if self.is_image_file(&name) {
+                images.push(name.clone());
+                println!("⚡ 快速扫描找到图片: {}", name);
+                return Ok(images);
+            }
+        }
+
+        if images.is_empty() {
+            println!("⚡ 压缩包内未找到图片");
+            Err("压缩包内未找到图片".to_string())
+        } else {
+            Ok(images)
+        }
+    }
+
     /// 检查文件是否为支持的压缩包
     pub fn is_supported_archive(path: &Path) -> bool {
         if let Some(ext) = path.extension() {

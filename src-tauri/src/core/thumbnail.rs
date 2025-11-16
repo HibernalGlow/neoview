@@ -787,36 +787,32 @@ impl ThumbnailManager {
         Ok(None)
     }
 
-    /// 从压缩包中获取第一张图片
+    /// 从压缩包中获取第一张图片（使用早停扫描）
     fn get_first_image_from_archive(&self, archive_path: &Path) -> Result<PathBuf, String> {
         use crate::core::archive::ArchiveManager;
         
         let archive_manager = ArchiveManager::new();
-        let entries = match archive_manager.list_zip_contents(archive_path) {
-            Ok(e) => e,
-            Err(err) => {
-                println!("⚠️ 读取压缩包内容失败: {} -> {}", archive_path.display(), err);
-                return Err(format!("读取压缩包内容失败: {}", err));
-            }
-        };
+        
+        println!("📦 get_first_image_from_archive: archive={}", archive_path.display());
 
-        println!("📦 get_first_image_from_archive: archive={} entries_total={}", archive_path.display(), entries.len());
-
-        // 对条目按名称排序
-        let mut sorted_entries = entries;
-        sorted_entries.sort_by(|a, b| a.name.cmp(&b.name));
-
-        for entry in sorted_entries {
-            if !entry.is_dir && self.is_image_file(&Path::new(&entry.name)) {
-                println!("📷 selected archive inner file for thumb: {} -> {}", archive_path.display(), entry.name);
+        // 使用早停扫描找到第一张图片
+        match archive_manager.find_first_image_entry(archive_path) {
+            Ok(Some(first_image_name)) => {
+                println!("📷 selected archive inner file for thumb: {} -> {}", archive_path.display(), first_image_name);
                 // 返回压缩包路径和内部图片路径的组合
                 // 这将在生成文件夹缩略图时被特殊处理
-                let combined_path = archive_path.join("__archive__").join(&entry.name);
-                return Ok(combined_path);
+                let combined_path = archive_path.join("__archive__").join(&first_image_name);
+                Ok(combined_path)
+            }
+            Ok(None) => {
+                println!("⚠️ 压缩包中没有找到图片: {}", archive_path.display());
+                Err("压缩包中没有找到图片".to_string())
+            }
+            Err(e) => {
+                println!("⚠️ 扫描压缩包失败: {} -> {}", archive_path.display(), e);
+                Err(format!("扫描压缩包失败: {}", e))
             }
         }
-
-        Err("压缩包中没有找到图片".to_string())
     }
 
     /// 检查文件是否为图片
@@ -972,26 +968,22 @@ fn is_supported_image_name(name: &str) -> bool {
     }
     
     /// 快速提取压缩包内的第一张图片原始字节（不进行任何处理）
-    /// 用于首次加载时立即显示原图
+    /// 使用早停扫描，用于首次加载时立即显示原图
     pub fn extract_first_image_from_archive(&self, archive_path: &Path) -> Result<Vec<u8>, String> {
         use crate::core::archive::ArchiveManager;
         
         let archive_manager = ArchiveManager::new();
         
-        // 列出压缩包内的所有文件
-        let entries = archive_manager.list_zip_contents(archive_path)
-            .map_err(|e| format!("列出压缩包内容失败: {}", e))?;
-        
-        // 找到第一张图片
-        for entry in entries {
-            if !entry.is_dir && self.is_image_file(&Path::new(&entry.name)) {
+        // 使用早停扫描找到第一张图片
+        match archive_manager.find_first_image_entry(archive_path) {
+            Ok(Some(first_image_name)) => {
                 // 快速提取第一张图片的原始字节
-                return archive_manager.extract_file(archive_path, &entry.name)
-                    .map_err(|e| format!("提取图片失败: {}", e));
+                archive_manager.extract_file(archive_path, &first_image_name)
+                    .map_err(|e| format!("提取图片失败: {}", e))
             }
+            Ok(None) => Err("压缩包内未找到图片".to_string()),
+            Err(e) => Err(format!("扫描压缩包失败: {}", e))
         }
-        
-        Err("压缩包内未找到图片".to_string())
     }
     
     /// 从压缩包流式提取图片
@@ -1003,8 +995,9 @@ fn is_supported_image_name(name: &str) -> bool {
         let image_data = archive_manager.extract_file(archive_path, inner_path)
             .map_err(|e| format!("从压缩包提取文件失败: {}", e))?;
         
-        // 从内存加载图片
-        let img = self.load_image_from_memory(&image_data, Path::new(inner_path))
+        // 使用解码前限缩尺寸功能，最大边长控制在 2048
+        let max_side = 2048u32;
+        let img = self.decode_and_downscale(&image_data, Path::new(inner_path), max_side)
             .map_err(|e| format!("加载图片失败: {}", e))?;
         
         Ok((img, inner_path.to_string()))
@@ -1108,60 +1101,14 @@ fn is_supported_image_name(name: &str) -> bool {
         build_archive_key(archive_path)
     }
 
-    /// 快速扫描压缩包内的图片（仅扫描前100个文件，找到即返回）
+    /// 快速扫描压缩包内的图片（使用ArchiveManager的优化方法）
     /// 用于快速获取首图，避免扫描整个压缩包
-    fn scan_archive_images_fast(&self, archive_path: &Path) -> Result<Vec<String>, String> {
+    pub fn scan_archive_images_fast(&self, archive_path: &Path) -> Result<Vec<String>, String> {
         use crate::core::archive::ArchiveManager;
         
         let archive_manager = ArchiveManager::new();
-        let entries = archive_manager.list_zip_contents(archive_path)
-            .map_err(|e| format!("列出压缩包内容失败: {}", e))?;
-        
-        let mut images = Vec::new();
-        let mut count = 0;
-        let scan_limit = 100; // 只扫描前100个文件
-        
-        // 优先查找常见的图片命名模式
-        let priority_patterns = [
-            "cover", "front", "title", "page-001", "page_001", "001", 
-            "vol", "chapter", "ch", "p001", "p_001"
-        ];
-        
-        // 先按优先级查找
-        for pattern in &priority_patterns {
-            for entry in &entries {
-                if entry.is_dir {
-                    continue;
-                }
-                
-                let name_lower = entry.name.to_lowercase();
-                if name_lower.contains(pattern) && self.is_image_file(&Path::new(&entry.name)) {
-                    images.push(entry.name.clone());
-                    println!("⚡ [Rust] 快速扫描找到优先图片: {}", entry.name);
-                    return Ok(images);
-                }
-            }
-        }
-        
-        // 如果没找到优先图片，扫描前100个文件
-        for entry in entries {
-            if entry.is_dir {
-                continue;
-            }
-            
-            count += 1;
-            if count > scan_limit {
-                break;
-            }
-            
-            if self.is_image_file(&Path::new(&entry.name)) {
-                images.push(entry.name.clone());
-                println!("⚡ [Rust] 快速扫描找到图片: {}", entry.name);
-                return Ok(images);
-            }
-        }
-        
-        Err("压缩包内未找到图片".to_string())
+        // 使用新的快速扫描方法，限制扫描50个文件
+        archive_manager.scan_archive_images_fast(archive_path, 50)
     }
     
     /// 确保压缩包缩略图存在（快速版本）
@@ -1266,6 +1213,171 @@ fn is_supported_image_name(name: &str) -> bool {
         // 其他格式使用标准加载
         image::load_from_memory(image_data)
             .map_err(|e| format!("加载图片失败: {}", e))
+    }
+
+    /// 解码并限制图片尺寸（对超高分辨率图像先降采样）
+    /// 在解码前检查图片尺寸，如果超过限制则进行降采样
+    pub fn decode_and_downscale(&self, image_data: &[u8], file_path: &Path, max_side: u32) -> Result<DynamicImage, String> {
+        // 首先尝试获取图片尺寸而不完全解码
+        let (width, height) = self.get_image_dimensions(image_data, file_path)?;
+        
+        // 如果图片尺寸在限制范围内，直接解码
+        if width <= max_side && height <= max_side {
+            return self.load_image_from_memory(image_data, file_path);
+        }
+        
+        println!("🔧 [Rust] 图片尺寸过大 ({}x{})，进行降采样到最大边长 {}", width, height, max_side);
+        
+        // 对于超大图片，使用更激进的降采样策略
+        let mut img = self.load_image_from_memory(image_data, file_path)?;
+        
+        // 计算缩放比例
+        let scale = if width > height {
+            max_side as f32 / width as f32
+        } else {
+            max_side as f32 / height as f32
+        };
+        
+        let new_width = (width as f32 * scale).round() as u32;
+        let new_height = (height as f32 * scale).round() as u32;
+        
+        // 使用 Triangle 滤波器进行快速降采样
+        img = img.resize(new_width, new_height, image::imageops::FilterType::Triangle);
+        
+        println!("✅ [Rust] 降采样完成: {}x{} -> {}x{}", width, height, new_width, new_height);
+        
+        Ok(img)
+    }
+    
+    /// 获取图片尺寸而不完全解码（对于支持格式的快速检测）
+    fn get_image_dimensions(&self, image_data: &[u8], file_path: &Path) -> Result<(u32, u32), String> {
+        // 检查文件扩展名
+        if let Some(ext) = file_path.extension().and_then(|e| e.to_str()) {
+            let ext_lower = ext.to_lowercase();
+            
+            match ext_lower.as_str() {
+                "jpg" | "jpeg" => {
+                    // 对于 JPEG，可以读取头部信息获取尺寸
+                    return self.get_jpeg_dimensions(image_data);
+                }
+                "png" => {
+                    // 对于 PNG，可以读取头部信息获取尺寸
+                    return self.get_png_dimensions(image_data);
+                }
+                "webp" => {
+                    // 对于 WebP，可以读取头部信息获取尺寸
+                    return self.get_webp_dimensions(image_data);
+                }
+                "avif" => {
+                    // AVIF 需要完全解码才能获取尺寸
+                    match self.decode_avif_image(image_data) {
+                        Ok(img) => return Ok(img.dimensions()),
+                        Err(_) => {}
+                    }
+                }
+                "jxl" => {
+                    // JXL 需要完全解码才能获取尺寸
+                    match self.decode_jxl_image(image_data) {
+                        Ok(img) => return Ok(img.dimensions()),
+                        Err(_) => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+        
+        // 对于其他格式，完全解码获取尺寸
+        match image::load_from_memory(image_data) {
+            Ok(img) => Ok(img.dimensions()),
+            Err(e) => Err(format!("获取图片尺寸失败: {}", e))
+        }
+    }
+    
+    /// 获取 JPEG 图片尺寸（不完全解码）
+    fn get_jpeg_dimensions(&self, image_data: &[u8]) -> Result<(u32, u32), String> {
+        // 简化的 JPEG 尺寸检测
+        if image_data.len() < 4 {
+            return Err("JPEG 数据太短".to_string());
+        }
+        
+        // 查找 SOF 标记
+        let mut i = 2;
+        while i + 9 < image_data.len() {
+            if image_data[i] == 0xFF {
+                match image_data[i + 1] {
+                    // SOF0, SOF1, SOF2, SOF3, SOF5, SOF6, SOF7, SOF9, SOF10, SOF11, SOF13, SOF14, SOF15
+                    0xC0 | 0xC1 | 0xC2 | 0xC3 | 0xC5 | 0xC6 | 0xC7 | 0xC9 | 0xCA | 0xCB | 0xCD | 0xCE | 0xCF => {
+                        let height = u32::from_be_bytes([image_data[i+5], image_data[i+6], 0, 0]);
+                        let width = u32::from_be_bytes([image_data[i+7], image_data[i+8], 0, 0]);
+                        return Ok((width, height));
+                    }
+                    _ => {}
+                }
+            }
+            i += 1;
+        }
+        
+        Err("无法获取 JPEG 尺寸".to_string())
+    }
+    
+    /// 获取 PNG 图片尺寸（不完全解码）
+    fn get_png_dimensions(&self, image_data: &[u8]) -> Result<(u32, u32), String> {
+        if image_data.len() < 24 {
+            return Err("PNG 数据太短".to_string());
+        }
+        
+        // PNG 尺寸存储在固定的位置
+        let width = u32::from_be_bytes([
+            image_data[16],
+            image_data[17],
+            image_data[18],
+            image_data[19]
+        ]);
+        let height = u32::from_be_bytes([
+            image_data[20],
+            image_data[21],
+            image_data[22],
+            image_data[23]
+        ]);
+        
+        Ok((width, height))
+    }
+    
+    /// 获取 WebP 图片尺寸（不完全解码）
+    fn get_webp_dimensions(&self, image_data: &[u8]) -> Result<(u32, u32), String> {
+        if image_data.len() < 30 {
+            return Err("WebP 数据太短".to_string());
+        }
+        
+        // 检查 RIFF 格式
+        if &image_data[0..4] != b"RIFF" || &image_data[8..12] != b"WEBP" {
+            return Err("无效的 WebP 格式".to_string());
+        }
+        
+        // 检查 VP8 格式
+        if &image_data[12..16] == b"VP8 " {
+            // VP8 格式的尺寸在特定位置
+            let width = u32::from_le_bytes([
+                image_data[26],
+                image_data[27] & 0x3F,
+                0,
+                0
+            ]) & 0x3FFF;
+            let height = u32::from_le_bytes([
+                image_data[24],
+                image_data[25] & 0x3F,
+                0,
+                0
+            ]) & 0x3FFF;
+            
+            return Ok((width, height));
+        }
+        
+        // 对于其他 WebP 格式，完全解码
+        match image::load_from_memory(image_data) {
+            Ok(img) => Ok(img.dimensions()),
+            Err(e) => Err(format!("获取 WebP 尺寸失败: {}", e))
+        }
     }
 
     

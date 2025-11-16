@@ -21,8 +21,8 @@ class ThumbnailScheduler {
   private generating = new Map<string, 'archive' | 'local'>();
   private runningLocal = 0;
   private runningArchive = 0;
-  private maxConcurrentLocal = 16;
-  private maxConcurrentArchive = 8;
+  private maxConcurrentLocal = 32;  // 提高本地文件并发数
+  private maxConcurrentArchive = 16; // 提高压缩包并发数
   private addThumbnailCb: ((path: string, url: string) => void) | null = null;
   private processing = false;
 
@@ -163,22 +163,45 @@ class ThumbnailScheduler {
     const isVideo = path.match(/\.(mp4|mkv|avi|mov|flv|webm|wmv)$/i);
 
     if (isArchive) {
-      console.log('首次加载压缩包，快速显示原图:', path);
+      console.log('⚡ 首次加载压缩包，快速显示原图:', path);
       try {
-        const blobUrl = await FileSystemAPI.getArchiveFirstImageQuick(path);
-        if (blobUrl && this.addThumbnailCb) {
-          const key = this.toRelativeKey(path);
-          this.addThumbnailCb(key, blobUrl);
+        // 获取原图二进制数据
+        const imageData = await FileSystemAPI.getArchiveFirstImageQuick(path);
+        if (imageData && imageData.length > 0) {
+          // 创建 Blob URL
+          const blob = new Blob([imageData], { type: 'image/jpeg' });
+          const blobUrl = URL.createObjectURL(blob);
+          
+          if (this.addThumbnailCb) {
+            const key = this.toRelativeKey(path);
+            this.addThumbnailCb(key, blobUrl);
+          }
+          
+          console.log('⚡ 快速显示原图成功:', path, 'size:', imageData.length);
         }
       } catch (e) {
-        console.debug('快速获取原图失败，继续生成缩略图:', e);
+        console.debug('⚡ 快速获取原图失败，继续生成缩略图:', e);
       }
 
-      console.log('后台异步生成压缩包缩略图:', path);
+      // 后台异步生成压缩包缩略图（不等待）
+      console.log('🔄 后台异步生成压缩包缩略图:', path);
       try {
-        await FileSystemAPI.generateArchiveThumbnailAsync(path);
+        const result = await FileSystemAPI.generateArchiveThumbnailAsync(path);
+        console.log('✅ 后台缩略图生成完成:', path, result);
+        
+        // 缩略图生成完成后，重新获取并更新显示
+        if (this.addThumbnailCb) {
+          try {
+            const thumbnailUrl = await FileSystemAPI.generateArchiveThumbnailRoot(path);
+            const key = this.toRelativeKey(path);
+            this.addThumbnailCb(key, thumbnailUrl);
+            console.log('✅ 更新为正式缩略图:', path);
+          } catch (e) {
+            console.debug('更新缩略图失败:', e);
+          }
+        }
       } catch (e) {
-        console.error('后台生成失败:', e);
+        console.error('❌ 后台生成失败:', e);
       }
       return;
     }
@@ -354,14 +377,89 @@ export function enqueueDirectoryThumbnails(path: string, items: FsItem[]) {
     return isDir || imageExts.includes(ext) || archiveExts.includes(ext);
   });
 
-  const FIRST_SCREEN = 50;
-  const SECOND_SCREEN = 100;
+  // 优化批量任务调度：分批次处理，保持高并发
+  const FIRST_BATCH = 200;    // 首屏立即处理
+  const SECOND_BATCH = 200;   // 第二批次高优先级
+  const THIRD_BATCH = 200;    // 第三批次普通优先级
 
-  scheduler.enqueue(path, supportedItems.slice(0, FIRST_SCREEN), 'immediate');
-  scheduler.enqueue(path, supportedItems.slice(FIRST_SCREEN, FIRST_SCREEN + SECOND_SCREEN), 'high');
-  const rest = supportedItems.slice(FIRST_SCREEN + SECOND_SCREEN);
-  if (rest.length) {
-    setTimeout(() => scheduler.enqueue(path, rest, 'normal'), 50);
+  console.log(`📦 [Frontend] 批量调度: 总计 ${supportedItems.length} 个项目，分 3 批次处理`);
+
+  // 第一批次：立即处理（首屏可见）
+  scheduler.enqueue(path, supportedItems.slice(0, FIRST_BATCH), 'immediate');
+  console.log(`⚡ [Frontend] 第一批次: ${Math.min(FIRST_BATCH, supportedItems.length)} 个项目 (immediate)`);
+
+  // 第二批次：高优先级（即将可见）
+  if (supportedItems.length > FIRST_BATCH) {
+    scheduler.enqueue(path, supportedItems.slice(FIRST_BATCH, FIRST_BATCH + SECOND_BATCH), 'high');
+    console.log(`🚀 [Frontend] 第二批次: ${Math.min(SECOND_BATCH, supportedItems.length - FIRST_BATCH)} 个项目 (high)`);
+  }
+
+  // 第三批次：普通优先级（后台处理）
+  if (supportedItems.length > FIRST_BATCH + SECOND_BATCH) {
+    const rest = supportedItems.slice(FIRST_BATCH + SECOND_BATCH);
+    setTimeout(() => {
+      scheduler.enqueue(path, rest, 'normal');
+      console.log(`🔄 [Frontend] 第三批次: ${rest.length} 个项目 (normal)`);
+    }, 50); // 短暂延迟确保前两批优先处理
+  }
+}
+
+// 新增：判断是否为支持的缩略图目标
+export function isSupportedThumbnailTarget(item: FsItem): boolean {
+  const name = item?.name || '';
+  const isDir = itemIsDirectory(item);
+  
+  // 支持的图片扩展名
+  const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.avif', '.jxl', '.tiff', '.tif'];
+  // 支持的压缩包扩展名
+  const archiveExts = ['.zip', '.rar', '.7z', '.cbz', '.cbr', '.cb7'];
+  // 支持的视频扩展名
+  const videoExts = ['.mp4', '.mkv', '.avi', '.mov', 'webm', '.flv', '.wmv', '.m4v'];
+  
+  const ext = name.toLowerCase().substring(name.lastIndexOf('.'));
+  
+  // 文件夹或支持的文件类型
+  return isDir || imageExts.includes(ext) || archiveExts.includes(ext) || videoExts.includes(ext);
+}
+
+// 新增：批量喂任务保持高并发
+export function loadThumbnailsForItems(path: string, items: FsItem[]) {
+  if (!items?.length) return;
+
+  // 过滤出支持的项目
+  const supported = items.filter(isSupportedThumbnailTarget);
+  if (!supported.length) return;
+
+  console.log(`📦 [Frontend] 加载缩略图: ${supported.length} 个支持的项目`);
+
+  // 分批处理策略
+  const batchSize = 200;
+  const batches: FsItem[][] = [];
+  
+  for (let i = 0; i < supported.length; i += batchSize) {
+    batches.push(supported.slice(i, i + batchSize));
+  }
+
+  // 立即处理第一批
+  if (batches[0]) {
+    scheduler.enqueue(path, batches[0], 'immediate');
+    console.log(`⚡ [Frontend] 立即处理第一批: ${batches[0].length} 个项目`);
+  }
+
+  // 延迟处理第二批
+  if (batches[1]) {
+    setTimeout(() => {
+      scheduler.enqueue(path, batches[1], 'high');
+      console.log(`🚀 [Frontend] 延迟处理第二批: ${batches[1].length} 个项目`);
+    }, 10);
+  }
+
+  // 后台处理剩余批次
+  for (let i = 2; i < batches.length; i++) {
+    setTimeout(() => {
+      scheduler.enqueue(path, batches[i], 'normal');
+      console.log(`🔄 [Frontend] 后台处理第${i+1}批: ${batches[i].length} 个项目`);
+    }, 50 * i);
   }
 }
 

@@ -31,9 +31,9 @@ export interface ThumbnailCache {
 class ThumbnailManager {
   private config: ThumbnailConfig = {
     // 根据 CPU 核心数动态调整（前端使用 navigator.hardwareConcurrency）
-    // 限制最大并发，避免卡死
-    maxConcurrentLocal: Math.min(Math.max(8, (navigator.hardwareConcurrency || 4) * 2), 20),
-    maxConcurrentArchive: Math.min(Math.max(3, Math.floor((navigator.hardwareConcurrency || 4) / 2)), 10),
+    // 拉满CPU性能，提高并发数
+    maxConcurrentLocal: Math.max(16, (navigator.hardwareConcurrency || 4) * 4), // 4倍核心数，最少16
+    maxConcurrentArchive: Math.max(8, (navigator.hardwareConcurrency || 4) * 2), // 2倍核心数，最少8
     thumbnailSize: 256,
   };
 
@@ -50,8 +50,8 @@ class ThumbnailManager {
   private onThumbnailReady?: (path: string, dataUrl: string) => void;
 
   // 任务上限管理
-  private readonly MAX_QUEUE_SIZE = 1000; // 最大队列大小
-  private readonly MAX_PROCESSING = 50; // 最大并发处理数
+  private readonly MAX_QUEUE_SIZE = 5000; // 最大队列大小（增加到5000）
+  private readonly MAX_PROCESSING = 100; // 最大并发处理数（增加到100）
 
   constructor() {
     // 初始化缩略图管理器

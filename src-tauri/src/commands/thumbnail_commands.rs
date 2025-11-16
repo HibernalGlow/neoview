@@ -62,7 +62,7 @@ pub async fn init_thumbnail_manager(
     Ok(())
 }
 
-/// 生成文件缩略图（返回 blob key）
+/// 生成文件缩略图（返回 blob key，异步保存到数据库）
 #[tauri::command]
 pub async fn generate_file_thumbnail_new(
     app: tauri::AppHandle,
@@ -71,7 +71,7 @@ pub async fn generate_file_thumbnail_new(
     let state = app.state::<ThumbnailState>();
     let generator = state.generator.lock().unwrap();
     
-    // 生成缩略图
+    // 生成缩略图（内部已异步保存到数据库）
     let thumbnail_data = generator.generate_file_thumbnail(&file_path)?;
     
     // 注册到 BlobRegistry，返回 blob key

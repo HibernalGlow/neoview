@@ -200,49 +200,85 @@
 			indexingCurrent = '开始生成缩略图...';
 			console.log('⚡ 开始批量生成缩略图...');
 
-			// 批量处理 - 并发处理提高速度
-			const batchSize = 5; // 每批处理5个
+			// 使用批量生成命令，提高效率
+			// 先尝试使用批量接口
+			const batchSize = 20; // 每批处理20个，充分利用CPU
 			let successCount = 0;
 			let errorCount = 0;
 
-			for (let i = 0; i < allItems.length; i += batchSize) {
-				const batch = allItems.slice(i, i + batchSize);
-				console.log(`📦 处理批次 ${Math.floor(i/batchSize) + 1}/${Math.ceil(allItems.length/batchSize)}, 包含 ${batch.length} 个项目`);
+			// 分离文件和文件夹
+			const imageFiles = files.filter(f => {
+				const ext = f.toLowerCase().split('.').pop() || '';
+				return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'avif', 'jxl', 'tiff', 'tif'].includes(ext);
+			});
+			const archiveFiles = files.filter(f => {
+				const ext = f.toLowerCase().split('.').pop() || '';
+				return ['zip', 'cbz', 'rar', 'cbr', '7z', 'cb7'].includes(ext);
+			});
+
+			// 处理图片文件
+			for (let i = 0; i < imageFiles.length; i += batchSize) {
+				const batch = imageFiles.slice(i, i + batchSize);
+				const fileName = batch[0]?.split('\\').pop() || `批次 ${Math.floor(i/batchSize) + 1}`;
+				indexingCurrent = `处理图片: ${fileName}... (${i + 1}/${imageFiles.length})`;
 				
-				// 并发处理当前批次
 				const promises = batch.map(async (item) => {
-					const fileName = item.split('\\').pop() || item;
-					indexingCurrent = fileName;
-					
 					try {
-						console.log(`🖼️ 生成缩略图: ${fileName}`);
-						// 调用后端生成缩略图
 						await invoke('generate_file_thumbnail_new', { filePath: item });
-						console.log(`✅ 缩略图生成成功: ${fileName}`);
 						return { success: true, item };
 					} catch (error) {
-						console.error(`❌ 索引失败 ${fileName}:`, error);
 						return { success: false, item, error };
 					}
 				});
 
-				// 等待当前批次完成
 				const results = await Promise.all(promises);
-				
-				// 统计结果
 				results.forEach(result => {
-					if (result.success) {
-						successCount++;
-					} else {
-						errorCount++;
+					if (result.success) successCount++;
+					else errorCount++;
+				});
+
+				indexingProgress = Math.min(i + batchSize, imageFiles.length);
+			}
+
+			// 处理压缩包文件
+			for (let i = 0; i < archiveFiles.length; i += batchSize) {
+				const batch = archiveFiles.slice(i, i + batchSize);
+				const fileName = batch[0]?.split('\\').pop() || `批次 ${Math.floor(i/batchSize) + 1}`;
+				indexingCurrent = `处理压缩包: ${fileName}... (${i + 1}/${archiveFiles.length})`;
+				
+				const promises = batch.map(async (item) => {
+					try {
+						await invoke('generate_archive_thumbnail_new', { archivePath: item });
+						return { success: true, item };
+					} catch (error) {
+						return { success: false, item, error };
 					}
 				});
 
-				// 更新进度
-				indexingProgress = Math.min(i + batchSize, allItems.length);
+				const results = await Promise.all(promises);
+				results.forEach(result => {
+					if (result.success) successCount++;
+					else errorCount++;
+				});
+
+				indexingProgress = imageFiles.length + Math.min(i + batchSize, archiveFiles.length);
+			}
+
+			// 处理文件夹（使用第一个子项的缩略图）
+			for (let i = 0; i < folders.length; i++) {
+				const folder = folders[i];
+				const fileName = folder.split('\\').pop() || folder;
+				indexingCurrent = `处理文件夹: ${fileName}... (${i + 1}/${folders.length})`;
 				
-				// 添加小延迟避免界面卡顿
-				await new Promise(resolve => setTimeout(resolve, 50));
+				try {
+					// 文件夹使用文件缩略图逻辑（会递归查找第一个图片）
+					await invoke('generate_file_thumbnail_new', { filePath: folder });
+					successCount++;
+				} catch (error) {
+					errorCount++;
+				}
+
+				indexingProgress = imageFiles.length + archiveFiles.length + i + 1;
 			}
 
 			console.log(`🎉 索引完成! 成功: ${successCount}, 失败: ${errorCount}`);

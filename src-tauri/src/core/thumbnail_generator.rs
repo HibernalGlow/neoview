@@ -188,12 +188,13 @@ impl ThumbnailGenerator {
             return Ok(cached);
         }
         
-        // 从文件加载图像（改进错误处理，静默处理权限错误）
+        // 从文件加载图像（改进错误处理，记录权限错误但静默处理）
         let image_data = match std::fs::read(file_path) {
             Ok(data) => data,
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::PermissionDenied {
-                    // 权限错误：静默返回错误，不打印日志（避免日志污染）
+                    // 权限错误：记录到日志但不打印到控制台（避免日志污染）
+                    eprintln!("⚠️ 权限错误 (静默处理): {}", file_path);
                     return Err("权限被拒绝".to_string());
                 } else {
                     return Err(format!("读取文件失败: {}", e));
@@ -225,13 +226,18 @@ impl ThumbnailGenerator {
         // 生成 webp 缩略图
         let thumbnail_data = self.generate_webp_thumbnail(img)?;
         
-        // 保存到数据库（忽略错误，不影响返回）
-        if let Err(e) = self.db.save_thumbnail(&path_key, file_size, ghash, &thumbnail_data) {
-            // 只记录警告，不打印错误（避免日志污染）
-            if !e.to_string().contains("Execute returned results") {
-                eprintln!("保存缩略图到数据库失败: {}", e);
+        // 异步保存到数据库（使用线程池，不阻塞返回）
+        let db_clone = Arc::clone(&self.db);
+        let path_key_clone = path_key.clone();
+        let thumbnail_data_clone = thumbnail_data.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = db_clone.save_thumbnail(&path_key_clone, file_size, ghash, &thumbnail_data_clone) {
+                // 只记录警告，不打印错误（避免日志污染）
+                if !e.to_string().contains("Execute returned results") {
+                    eprintln!("保存缩略图到数据库失败: {}", e);
+                }
             }
-        }
+        });
         
         Ok(thumbnail_data)
     }
@@ -264,7 +270,8 @@ impl ThumbnailGenerator {
             Ok(f) => f,
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::PermissionDenied {
-                    // 权限错误：静默返回错误
+                    // 权限错误：记录到日志但不打印到控制台
+                    eprintln!("⚠️ 权限错误 (静默处理): {}", archive_path);
                     return Err("权限被拒绝".to_string());
                 } else {
                     return Err(format!("打开压缩包失败: {}", e));
@@ -304,13 +311,18 @@ impl ThumbnailGenerator {
                     // 生成 webp 缩略图
                     let thumbnail_data = self.generate_webp_thumbnail(img)?;
                     
-                    // 保存到数据库（忽略错误，不影响返回）
-                    if let Err(e) = self.db.save_thumbnail(&path_key, archive_size, ghash, &thumbnail_data) {
-                        // 只记录警告，不打印错误（避免日志污染）
-                        if !e.to_string().contains("Execute returned results") {
-                            eprintln!("保存缩略图到数据库失败: {}", e);
+                    // 异步保存到数据库（使用线程池，不阻塞返回）
+                    let db_clone = Arc::clone(&self.db);
+                    let path_key_clone = path_key.clone();
+                    let thumbnail_data_clone = thumbnail_data.clone();
+                    std::thread::spawn(move || {
+                        if let Err(e) = db_clone.save_thumbnail(&path_key_clone, archive_size, ghash, &thumbnail_data_clone) {
+                            // 只记录警告，不打印错误（避免日志污染）
+                            if !e.to_string().contains("Execute returned results") {
+                                eprintln!("保存缩略图到数据库失败: {}", e);
+                            }
                         }
-                    }
+                    });
                     
                     return Ok(thumbnail_data);
                 }

@@ -23,20 +23,30 @@ use std::sync::Arc;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // 设置 panic hook，避免崩溃导致软件闪退
+    // 使用更彻底的 panic 处理，防止 dav1d 等库的 panic 导致进程退出
     std::panic::set_hook(Box::new(|panic_info| {
         // 检查是否是图像解码相关的 panic（dav1d/avif-native）
-        if let Some(location) = panic_info.location() {
+        let is_image_panic = if let Some(location) = panic_info.location() {
             let file = location.file();
-            if file.contains("dav1d") || file.contains("avif") || file.contains("avif-native") {
-                // 图像解码相关的 panic，静默处理，不终止进程
-                eprintln!("⚠️ 图像解码 panic (已捕获，不影响运行): {}:{}", 
-                    location.file(), location.line());
-                // 不调用 std::process::abort()，让程序继续运行
-                return;
+            file.contains("dav1d") || file.contains("avif") || file.contains("avif-native") || 
+            file.contains("image") || file.contains("decoder")
+        } else {
+            // 如果没有位置信息，检查 panic 消息
+            let msg = format!("{:?}", panic_info);
+            msg.contains("dav1d") || msg.contains("avif") || msg.contains("image") || msg.contains("decoder")
+        };
+        
+        if is_image_panic {
+            // 图像解码相关的 panic，静默处理，不终止进程
+            eprintln!("⚠️ 图像解码 panic (已捕获，不影响运行)");
+            if let Some(location) = panic_info.location() {
+                eprintln!("   位置: {}:{}", location.file(), location.line());
             }
+            // 不调用 std::process::abort()，让程序继续运行
+            return;
         }
         
-        // 其他 panic 记录详细信息
+        // 其他 panic 记录详细信息，但不终止进程
         eprintln!("⚠️ Panic caught: {:?}", panic_info);
         if let Some(location) = panic_info.location() {
             eprintln!("   Location: {}:{}:{}", location.file(), location.line(), location.column());

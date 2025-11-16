@@ -100,8 +100,30 @@ class ThumbnailManager {
     const oldPath = this.currentDirectory;
     this.currentDirectory = path;
     
-    // 如果切换了目录，立即重新排序队列，优先处理新目录的任务
-    if (oldPath !== path) {
+    // 如果切换了目录，取消旧目录的任务，优先处理新目录的任务
+    if (oldPath !== path && oldPath) {
+      // 取消旧目录的任务（不在当前目录的任务）
+      const beforeCount = this.taskQueue.length;
+      this.taskQueue = this.taskQueue.filter(task => task.path.startsWith(path));
+      const afterCount = this.taskQueue.length;
+      if (beforeCount !== afterCount) {
+        console.log(`🗑️ 取消 ${beforeCount - afterCount} 个旧目录任务`);
+      }
+      
+      // 取消旧目录的处理中任务（通过路径匹配）
+      const processingToRemove: string[] = [];
+      for (const taskKey of this.processingTasks) {
+        // 从 taskKey 中找到对应的任务，检查路径
+        const task = this.taskQueue.find(t => this.buildPathKey(t.path, t.innerPath) === taskKey);
+        if (!task || !task.path.startsWith(path)) {
+          processingToRemove.push(taskKey);
+        }
+      }
+      processingToRemove.forEach(key => this.processingTasks.delete(key));
+      if (processingToRemove.length > 0) {
+        console.log(`🗑️ 取消 ${processingToRemove.length} 个处理中的旧目录任务`);
+      }
+      
       this.bumpCurrentDirectoryPriority();
       // 立即处理队列，不要等待
       setTimeout(() => this.processQueue(), 0);

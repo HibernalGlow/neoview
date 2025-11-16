@@ -203,54 +203,27 @@ impl ThumbnailGenerator {
             }
         };
         
-        // 检查是否为 JXL 文件
-        let img = if let Some(ext) = Path::new(file_path).extension().and_then(|e| e.to_str()) {
-            if ext.to_lowercase() == "jxl" {
-                self.decode_jxl_image(&image_data)?
-            } else {
-                // 使用 catch_unwind 捕获可能的 panic（如 dav1d 崩溃）
-                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    image::load_from_memory(&image_data)
-                }))
-                .map_err(|_| "图像解码时发生 panic（可能是格式问题）".to_string())?
-                .map_err(|e| format!("从内存加载图像失败: {}", e))?
-            }
-        } else {
-            // 使用 catch_unwind 捕获可能的 panic
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                image::load_from_memory(&image_data)
-            }))
-            .map_err(|_| "图像解码时发生 panic（可能是格式问题）".to_string())?
-            .map_err(|e| format!("从内存加载图像失败: {}", e))?
-        };
-        
-        // 第一次：快速生成简单缩放的 JPEG 缩略图（立即返回显示）
-        let (width, height) = img.dimensions();
-        let scale = (self.config.max_width as f32 / width as f32)
-            .min(self.config.max_height as f32 / height as f32)
-            .min(1.0);
-        let new_width = (width as f32 * scale) as u32;
-        let new_height = (height as f32 * scale) as u32;
-        let thumbnail_img = img.thumbnail(new_width, new_height);
-        
-        // 编码为 JPEG（快速，用于立即显示）
-        let mut jpeg_output = Vec::new();
-        thumbnail_img.write_to(
-            &mut Cursor::new(&mut jpeg_output),
-            ImageFormat::Jpeg,
-        ).map_err(|e| format!("编码 JPEG 失败: {}", e))?;
-        
-        // 后台异步生成 webp 并保存到数据库
+        // 第一次：直接返回原图 blob（立即显示，不压缩）
+        // 后台异步生成 webp 缩略图并保存到数据库
         let db_clone = Arc::clone(&self.db);
         let path_key_clone = path_key.clone();
         let file_size_clone = file_size;
         let ghash_clone = ghash;
-        let img_clone = thumbnail_img.clone();
+        let image_data_clone = image_data.clone();
         let config_clone = self.config.clone();
         
         std::thread::spawn(move || {
+            // 在后台线程中解码图像并生成 webp 缩略图
+            let img = match Self::decode_image_safe(&image_data_clone) {
+                Ok(img) => img,
+                Err(e) => {
+                    eprintln!("❌ 后台解码图像失败: {} - {}", path_key_clone, e);
+                    return;
+                }
+            };
+            
             // 生成 webp 缩略图
-            let webp_data = match Self::generate_webp_thumbnail_static(&img_clone, &config_clone) {
+            let webp_data = match Self::generate_webp_thumbnail_static(&img, &config_clone) {
                 Ok(data) => data,
                 Err(e) => {
                     eprintln!("❌ 后台生成 webp 缩略图失败: {} - {}", path_key_clone, e);
@@ -269,8 +242,18 @@ impl ThumbnailGenerator {
             }
         });
         
-        // 立即返回 JPEG 缩略图（用于显示）
-        Ok(jpeg_output)
+        // 立即返回原图 blob（用于显示）
+        Ok(image_data)
+    }
+    
+    /// 安全解码图像（捕获 panic，用于后台线程）
+    fn decode_image_safe(image_data: &[u8]) -> Result<DynamicImage, String> {
+        // 使用 catch_unwind 捕获可能的 panic（如 dav1d 崩溃）
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            image::load_from_memory(image_data)
+        }))
+        .map_err(|_| "图像解码时发生 panic（可能是格式问题）".to_string())?
+        .map_err(|e| format!("从内存加载图像失败: {}", e))
     }
     
     /// 静态方法：生成 webp 缩略图（用于后台线程）
@@ -376,44 +359,30 @@ impl ThumbnailGenerator {
                     
                     println!("📊 图片文件大小: {} bytes", image_data.len());
                     
-                    // 从内存加载图像（使用 catch_unwind 避免 panic）
-                    let img = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        image::load_from_memory(&image_data)
-                    }))
-                    .map_err(|_| "图像解码时发生 panic（可能是格式问题）".to_string())?
-                    .map_err(|e| format!("从内存加载图像失败: {}", e))?;
-                    
-                    println!("✅ 图像解码成功: {}x{}", img.width(), img.height());
-                    
-                    // 第一次：快速生成简单缩放的 JPEG 缩略图（立即返回显示）
-                    let (width, height) = img.dimensions();
-                    let scale = (self.config.max_width as f32 / width as f32)
-                        .min(self.config.max_height as f32 / height as f32)
-                        .min(1.0);
-                    let new_width = (width as f32 * scale) as u32;
-                    let new_height = (height as f32 * scale) as u32;
-                    let thumbnail_img = img.thumbnail(new_width, new_height);
-                    
-                    // 编码为 JPEG（快速，用于立即显示）
-                    let mut jpeg_output = Vec::new();
-                    thumbnail_img.write_to(
-                        &mut Cursor::new(&mut jpeg_output),
-                        ImageFormat::Jpeg,
-                    ).map_err(|e| format!("编码 JPEG 失败: {}", e))?;
-                    
-                    println!("✅ JPEG 缩略图生成成功: {} bytes", jpeg_output.len());
-                    
-                    // 后台异步生成 webp 并保存到数据库
+                    // 第一次：直接返回原图 blob（立即显示，不压缩）
+                    // 后台异步生成 webp 缩略图并保存到数据库
                     let db_clone = Arc::clone(&self.db);
                     let path_key_clone = path_key.clone();
                     let archive_size_clone = archive_size;
                     let ghash_clone = ghash;
-                    let img_clone = thumbnail_img.clone();
+                    let image_data_clone = image_data.clone();
                     let config_clone = self.config.clone();
                     
                     std::thread::spawn(move || {
+                        // 在后台线程中解码图像并生成 webp 缩略图
+                        let img = match Self::decode_image_safe(&image_data_clone) {
+                            Ok(img) => {
+                                println!("✅ 后台图像解码成功: {}x{}", img.width(), img.height());
+                                img
+                            }
+                            Err(e) => {
+                                eprintln!("❌ 后台解码图像失败: {} - {}", path_key_clone, e);
+                                return;
+                            }
+                        };
+                        
                         // 生成 webp 缩略图
-                        let webp_data = match Self::generate_webp_thumbnail_static(&img_clone, &config_clone) {
+                        let webp_data = match Self::generate_webp_thumbnail_static(&img, &config_clone) {
                             Ok(data) => data,
                             Err(e) => {
                                 eprintln!("❌ 后台生成 webp 缩略图失败: {} - {}", path_key_clone, e);
@@ -432,8 +401,8 @@ impl ThumbnailGenerator {
                         }
                     });
                     
-                    // 立即返回 JPEG 缩略图（用于显示）
-                    return Ok(jpeg_output);
+                    // 立即返回原图 blob（用于显示）
+                    return Ok(image_data);
                 }
             }
         }

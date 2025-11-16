@@ -6,11 +6,13 @@ use std::sync::{Arc, Mutex};
 use tauri::Manager;
 use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::thumbnail_generator::{ThumbnailGenerator, ThumbnailGeneratorConfig};
+use crate::core::blob_registry::BlobRegistry;
 
 /// 缩略图管理器状态
 pub struct ThumbnailState {
     pub db: Arc<ThumbnailDb>,
     pub generator: Arc<Mutex<ThumbnailGenerator>>,
+    pub blob_registry: Arc<BlobRegistry>,
 }
 
 /// 初始化缩略图管理器
@@ -41,13 +43,20 @@ pub async fn init_thumbnail_manager(
         config,
     )));
     
+    // 创建 BlobRegistry（用于管理 blob URL）
+    let blob_registry = Arc::new(BlobRegistry::new(1000)); // 最多缓存 1000 个缩略图
+    
     // 保存到应用状态
-    app.manage(ThumbnailState { db, generator });
+    app.manage(ThumbnailState { 
+        db, 
+        generator,
+        blob_registry,
+    });
     
     Ok(())
 }
 
-/// 生成文件缩略图
+/// 生成文件缩略图（返回 blob key）
 #[tauri::command]
 pub async fn generate_file_thumbnail_new(
     app: tauri::AppHandle,
@@ -59,13 +68,18 @@ pub async fn generate_file_thumbnail_new(
     // 生成缩略图
     let thumbnail_data = generator.generate_file_thumbnail(&file_path)?;
     
-    // 转换为 base64 data URL
-    use base64::{Engine as _, engine::general_purpose};
-    let base64 = general_purpose::STANDARD.encode(&thumbnail_data);
-    Ok(format!("data:image/webp;base64,{}", base64))
+    // 注册到 BlobRegistry，返回 blob key
+    use std::time::Duration;
+    let blob_key = state.blob_registry.get_or_register(
+        &thumbnail_data,
+        "image/webp",
+        Duration::from_secs(3600), // 1 小时 TTL
+    );
+    
+    Ok(blob_key)
 }
 
-/// 生成压缩包缩略图
+/// 生成压缩包缩略图（返回 blob key）
 #[tauri::command]
 pub async fn generate_archive_thumbnail_new(
     app: tauri::AppHandle,
@@ -77,13 +91,18 @@ pub async fn generate_archive_thumbnail_new(
     // 生成缩略图
     let thumbnail_data = generator.generate_archive_thumbnail(&archive_path)?;
     
-    // 转换为 base64 data URL
-    use base64::{Engine as _, engine::general_purpose};
-    let base64 = general_purpose::STANDARD.encode(&thumbnail_data);
-    Ok(format!("data:image/webp;base64,{}", base64))
+    // 注册到 BlobRegistry，返回 blob key
+    use std::time::Duration;
+    let blob_key = state.blob_registry.get_or_register(
+        &thumbnail_data,
+        "image/webp",
+        Duration::from_secs(3600), // 1 小时 TTL
+    );
+    
+    Ok(blob_key)
 }
 
-/// 批量预加载缩略图
+/// 批量预加载缩略图（返回 blob keys）
 #[tauri::command]
 pub async fn batch_preload_thumbnails(
     app: tauri::AppHandle,
@@ -96,14 +115,18 @@ pub async fn batch_preload_thumbnails(
     // 批量生成缩略图
     let results = generator.batch_generate_thumbnails(paths, is_archive);
     
-    // 转换为 base64 data URLs
-    use base64::{Engine as _, engine::general_purpose};
-    let mut data_urls = Vec::new();
+    // 注册到 BlobRegistry，返回 blob keys
+    use std::time::Duration;
+    let mut blob_keys = Vec::new();
     for (path, result) in results {
         match result {
             Ok(data) => {
-                let base64 = general_purpose::STANDARD.encode(&data);
-                data_urls.push((path, format!("data:image/webp;base64,{}", base64)));
+                let blob_key = state.blob_registry.get_or_register(
+                    &data,
+                    "image/webp",
+                    Duration::from_secs(3600), // 1 小时 TTL
+                );
+                blob_keys.push((path, blob_key));
             }
             Err(e) => {
                 eprintln!("生成缩略图失败 {}: {}", path, e);
@@ -111,7 +134,7 @@ pub async fn batch_preload_thumbnails(
         }
     }
     
-    Ok(data_urls)
+    Ok(blob_keys)
 }
 
 /// 检查缩略图是否存在
@@ -135,7 +158,7 @@ pub async fn has_thumbnail(
         .map_err(|e| format!("检查缩略图失败: {}", e))
 }
 
-/// 加载缩略图（从数据库）
+/// 加载缩略图（从数据库，返回 blob key）
 #[tauri::command]
 pub async fn load_thumbnail_from_db(
     app: tauri::AppHandle,
@@ -152,14 +175,33 @@ pub async fn load_thumbnail_from_db(
         path
     };
     
-    use base64::{Engine as _, engine::general_purpose};
     match state.db.load_thumbnail(&path_key, size, ghash) {
         Ok(Some(data)) => {
-            let base64 = general_purpose::STANDARD.encode(&data);
-            Ok(Some(format!("data:image/webp;base64,{}", base64)))
+            // 注册到 BlobRegistry，返回 blob key
+            use std::time::Duration;
+            let blob_key = state.blob_registry.get_or_register(
+                &data,
+                "image/webp",
+                Duration::from_secs(3600), // 1 小时 TTL
+            );
+            Ok(Some(blob_key))
         }
         Ok(None) => Ok(None),
         Err(e) => Err(format!("加载缩略图失败: {}", e)),
+    }
+}
+
+/// 获取 blob 数据（用于创建前端 Blob URL）
+#[tauri::command]
+pub async fn get_thumbnail_blob_data(
+    app: tauri::AppHandle,
+    blob_key: String,
+) -> Result<Option<Vec<u8>>, String> {
+    let state = app.state::<ThumbnailState>();
+    
+    match state.blob_registry.fetch_bytes(&blob_key) {
+        Some(data) => Ok(Some(data)),
+        None => Ok(None),
     }
 }
 

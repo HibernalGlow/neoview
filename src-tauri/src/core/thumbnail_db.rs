@@ -114,10 +114,10 @@ impl ThumbnailDb {
 
     /// 保存属性
     fn save_property(conn: &Connection, key: &str, value: &str) -> SqliteResult<()> {
-        conn.execute(
-            "INSERT OR REPLACE INTO property (key, value) VALUES (?1, ?2)",
-            params![key, value],
+        let mut stmt = conn.prepare(
+            "INSERT OR REPLACE INTO property (key, value) VALUES (?1, ?2)"
         )?;
+        stmt.execute(params![key, value])?;
         Ok(())
     }
 
@@ -142,10 +142,12 @@ impl ThumbnailDb {
         let conn = conn_guard.as_ref().unwrap();
         let date = Self::current_timestamp();
 
-        conn.execute(
-            "INSERT OR REPLACE INTO thumbs (key, size, date, ghash, value) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![key, size, date, ghash, thumbnail_data],
+        // 使用 execute_batch 或者检查返回值
+        let mut stmt = conn.prepare(
+            "INSERT OR REPLACE INTO thumbs (key, size, date, ghash, value) VALUES (?1, ?2, ?3, ?4, ?5)"
         )?;
+        
+        stmt.execute(params![key, size, date, ghash, thumbnail_data])?;
 
         Ok(())
     }

@@ -197,6 +197,7 @@ pub fn run() {
             commands::batch_preload_thumbnails,
             commands::has_thumbnail,
             commands::load_thumbnail_from_db,
+            commands::get_thumbnail_blob_data,
             commands::get_video_duration,
             commands::is_video_file,
         ])

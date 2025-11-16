@@ -182,9 +182,15 @@ impl ThumbnailGenerator {
             return Ok(cached);
         }
         
-        // 从文件加载图像
+        // 从文件加载图像（改进错误处理）
         let image_data = std::fs::read(file_path)
-            .map_err(|e| format!("读取文件失败: {}", e))?;
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::PermissionDenied {
+                    format!("读取文件失败: 权限被拒绝 (os error 5)。请检查文件权限或尝试以管理员身份运行")
+                } else {
+                    format!("读取文件失败: {}", e)
+                }
+            })?;
         
         // 检查是否为 JXL 文件
         let img = if let Some(ext) = Path::new(file_path).extension().and_then(|e| e.to_str()) {
@@ -202,9 +208,12 @@ impl ThumbnailGenerator {
         // 生成 webp 缩略图
         let thumbnail_data = self.generate_webp_thumbnail(img)?;
         
-        // 保存到数据库
+        // 保存到数据库（忽略错误，不影响返回）
         if let Err(e) = self.db.save_thumbnail(&path_key, file_size, ghash, &thumbnail_data) {
-            eprintln!("保存缩略图到数据库失败: {}", e);
+            // 只记录警告，不打印错误（避免日志污染）
+            if !e.to_string().contains("Execute returned results") {
+                eprintln!("保存缩略图到数据库失败: {}", e);
+            }
         }
         
         Ok(thumbnail_data)
@@ -235,7 +244,13 @@ impl ThumbnailGenerator {
         use std::fs::File;
         
         let file = File::open(archive_path)
-            .map_err(|e| format!("打开压缩包失败: {}", e))?;
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::PermissionDenied {
+                    format!("打开压缩包失败: 权限被拒绝 (os error 5)。请检查文件权限或尝试以管理员身份运行")
+                } else {
+                    format!("打开压缩包失败: {}", e)
+                }
+            })?;
         let mut archive = ZipArchive::new(file)
             .map_err(|e| format!("读取压缩包失败: {}", e))?;
         
@@ -266,9 +281,12 @@ impl ThumbnailGenerator {
                     // 生成 webp 缩略图
                     let thumbnail_data = self.generate_webp_thumbnail(img)?;
                     
-                    // 保存到数据库
+                    // 保存到数据库（忽略错误，不影响返回）
                     if let Err(e) = self.db.save_thumbnail(&path_key, archive_size, ghash, &thumbnail_data) {
-                        eprintln!("保存缩略图到数据库失败: {}", e);
+                        // 只记录警告，不打印错误（避免日志污染）
+                        if !e.to_string().contains("Execute returned results") {
+                            eprintln!("保存缩略图到数据库失败: {}", e);
+                        }
                     }
                     
                     return Ok(thumbnail_data);

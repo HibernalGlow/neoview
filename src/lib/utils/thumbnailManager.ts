@@ -185,7 +185,7 @@ class ThumbnailManager {
   }
 
   /**
-   * 从数据库加载缩略图
+   * 从数据库加载缩略图（返回 blob URL）
    */
   private async loadFromDb(path: string, innerPath?: string): Promise<string | null> {
     try {
@@ -197,21 +197,33 @@ class ThumbnailManager {
       const size = metadata.size || 0;
       const ghash = await this.generateHash(pathKey, size);
 
-      // 从数据库加载
-      const dataUrl = await invoke<string | null>('load_thumbnail_from_db', {
+      // 从数据库加载（返回 blob key）
+      const blobKey = await invoke<string | null>('load_thumbnail_from_db', {
         path: pathKey,
         size,
         ghash,
       });
 
-      if (dataUrl) {
-        // 更新缓存
-        this.cache.set(pathKey, {
-          pathKey,
-          dataUrl,
-          timestamp: Date.now(),
+      if (blobKey) {
+        // 获取 blob 数据并创建 Blob URL
+        const blobData = await invoke<number[] | null>('get_thumbnail_blob_data', {
+          blobKey,
         });
-        return dataUrl;
+
+        if (blobData) {
+          // 转换为 Uint8Array
+          const uint8Array = new Uint8Array(blobData);
+          const blob = new Blob([uint8Array], { type: 'image/webp' });
+          const blobUrl = URL.createObjectURL(blob);
+
+          // 更新缓存
+          this.cache.set(pathKey, {
+            pathKey,
+            dataUrl: blobUrl,
+            timestamp: Date.now(),
+          });
+          return blobUrl;
+        }
       }
     } catch (error) {
       console.debug('从数据库加载缩略图失败:', path, error);
@@ -221,7 +233,7 @@ class ThumbnailManager {
   }
 
   /**
-   * 生成缩略图（第一次生成）
+   * 生成缩略图（第一次生成，返回 blob URL）
    */
   private async generateThumbnail(
     path: string,
@@ -232,25 +244,37 @@ class ThumbnailManager {
       const { invoke } = await import('@tauri-apps/api/core');
       const pathKey = this.buildPathKey(path, innerPath);
       
-      // 调用后端生成缩略图
-      const dataUrl = isArchive
+      // 调用后端生成缩略图（返回 blob key）
+      const blobKey = isArchive
         ? await invoke<string>('generate_archive_thumbnail_new', { archivePath: path })
         : await invoke<string>('generate_file_thumbnail_new', { filePath: path });
 
-      if (dataUrl) {
-        // 更新缓存
-        this.cache.set(pathKey, {
-          pathKey,
-          dataUrl,
-          timestamp: Date.now(),
+      if (blobKey) {
+        // 获取 blob 数据并创建 Blob URL
+        const blobData = await invoke<number[] | null>('get_thumbnail_blob_data', {
+          blobKey,
         });
 
-        // 通知回调
-        if (this.onThumbnailReady) {
-          this.onThumbnailReady(path, dataUrl);
-        }
+        if (blobData) {
+          // 转换为 Uint8Array 并创建 Blob URL
+          const uint8Array = new Uint8Array(blobData);
+          const blob = new Blob([uint8Array], { type: 'image/webp' });
+          const blobUrl = URL.createObjectURL(blob);
 
-        return dataUrl;
+          // 更新缓存
+          this.cache.set(pathKey, {
+            pathKey,
+            dataUrl: blobUrl,
+            timestamp: Date.now(),
+          });
+
+          // 通知回调
+          if (this.onThumbnailReady) {
+            this.onThumbnailReady(path, blobUrl);
+          }
+
+          return blobUrl;
+        }
       }
     } catch (error) {
       console.error('生成缩略图失败:', path, error);
@@ -459,7 +483,7 @@ class ThumbnailManager {
       const firstImage = items.find((item) => item.isImage && !item.isDir);
 
       if (firstImage) {
-        // 使用第一个图片的缩略图
+        // 使用第一个图片的缩略图（返回 blob URL）
         const thumbnail = await this.getThumbnail(firstImage.path, undefined, false, 'high');
         if (thumbnail) {
           // 缓存文件夹缩略图

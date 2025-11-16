@@ -31,15 +31,18 @@ pub async fn generate_video_thumbnail(
         .map_err(|e| format!("提取视频帧失败: {}", e))?;
     
     // 将图片编码为 base64
-    use image::ImageOutputFormat;
+    use image::ImageFormat;
+    use base64::engine::general_purpose;
+    use base64::Engine;
+    
     let mut buffer = Vec::new();
     {
         let mut cursor = std::io::Cursor::new(&mut buffer);
-        frame.write_to(&mut cursor, ImageOutputFormat::Png)
+        frame.write_to(&mut cursor, ImageFormat::Png)
             .map_err(|e| format!("编码图片失败: {}", e))?;
     }
     
-    let base64 = base64::engine::general_purpose::STANDARD.encode(&buffer);
+    let base64 = general_purpose::STANDARD.encode(&buffer);
     let data_url = format!("data:image/png;base64,{}", base64);
     
     println!("✅ [Rust] 视频缩略图生成成功");

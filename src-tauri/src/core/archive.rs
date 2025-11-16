@@ -1,11 +1,28 @@
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{Read, Cursor};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use zip::ZipArchive;
 use serde::{Deserialize, Serialize};
 use image::GenericImageView;
+
+const FIRST_IMAGE_CACHE_LIMIT: usize = 512;
+
+#[derive(Debug, Clone)]
+struct CachedFirstImageEntry {
+    inner_path: Option<String>,
+    modified: u64,
+    file_size: u64,
+    last_used: Instant,
+    blob_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ArchiveMetadata {
+    modified: u64,
+    file_size: u64,
+}
 
 /// 压缩包内的文件项
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,6 +42,8 @@ pub struct ArchiveManager {
     cache: Arc<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>>,
     /// 压缩包文件缓存（避免重复打开）
     archive_cache: Arc<std::sync::Mutex<std::collections::HashMap<String, Arc<std::sync::Mutex<ZipArchive<std::fs::File>>>>>>,
+    /// 压缩包首图缓存
+    first_image_cache: Arc<std::sync::Mutex<std::collections::HashMap<String, CachedFirstImageEntry>>>,
 }
 
 impl ArchiveManager {
@@ -45,14 +64,15 @@ impl ArchiveManager {
             ],
             cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
             archive_cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+            first_image_cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         }
     }
 
     /// 获取或创建压缩包缓存
     fn get_cached_archive(&self, archive_path: &Path) -> Result<Arc<std::sync::Mutex<ZipArchive<std::fs::File>>>, String> {
         // 规范化缓存键，统一使用正斜杠，避免 Windows 上的 "\\"/"/" 差异导致命中失败
-        let path_str = archive_path.to_string_lossy().replace('\\', "/");
-        
+        let path_str = Self::normalize_archive_key(archive_path);
+
         // 检查缓存
         {
             let cache = self.archive_cache.lock().unwrap();
@@ -60,22 +80,22 @@ impl ArchiveManager {
                 return Ok(Arc::clone(archive));
             }
         }
-        
+
         // 创建新的压缩包实例
         let file = File::open(archive_path)
             .map_err(|e| format!("打开压缩包失败: {}", e))?;
-        
+
         let archive = ZipArchive::new(file)
             .map_err(|e| format!("读取压缩包失败: {}", e))?;
-        
+
         let cached = Arc::new(std::sync::Mutex::new(archive));
-        
+
         // 添加到缓存
         {
             let mut cache = self.archive_cache.lock().unwrap();
             cache.insert(path_str, Arc::clone(&cached));
         }
-        
+
         Ok(cached)
     }
 
@@ -139,11 +159,11 @@ impl ArchiveManager {
         file_path: &str,
     ) -> Result<Vec<u8>, String> {
         println!("📦 extract_file_from_zip start: archive={} inner={}", archive_path.display(), file_path);
-        
+
         // 使用缓存的压缩包实例
         let cached_archive = self.get_cached_archive(archive_path)?;
         let mut archive = cached_archive.lock().unwrap();
-        
+
         let mut zip_file = archive.by_name(file_path)
             .map_err(|e| format!("在压缩包中找不到文件: {}", e))?;
 
@@ -186,34 +206,32 @@ impl ArchiveManager {
         Ok(data)
     }
 
-    
-
     /// 从压缩包中加载 JXL 图片并转换为 PNG（返回二进制数据）
     fn load_jxl_binary_from_zip(&self, image_data: &[u8]) -> Result<Vec<u8>, String> {
         use jxl_oxide::JxlImage;
         use std::io::Cursor;
-        
+
         let mut reader = Cursor::new(image_data);
         let jxl_image = JxlImage::builder()
             .read(&mut reader)
             .map_err(|e| format!("Failed to decode JXL: {}", e))?;
-        
+
         let render = jxl_image.render_frame(0)
             .map_err(|e| format!("Failed to render JXL frame: {}", e))?;
-        
+
         let fb = render.image_all_channels();
         let width = fb.width() as u32;
         let height = fb.height() as u32;
         let channels = fb.channels();
         let float_buf = fb.buf();
-        
+
         // 转换为 DynamicImage
         let img = if channels == 1 {
             let gray_data: Vec<u8> = float_buf
                 .iter()
                 .map(|&v| (v.clamp(0.0, 1.0) * 255.0) as u8)
                 .collect();
-            
+
             let gray_img = image::GrayImage::from_raw(width, height, gray_data)
                 .ok_or_else(|| "Failed to create gray image from JXL data".to_string())?;
             image::DynamicImage::ImageLuma8(gray_img)
@@ -222,7 +240,7 @@ impl ArchiveManager {
                 .iter()
                 .map(|&v| (v.clamp(0.0, 1.0) * 255.0) as u8)
                 .collect();
-            
+
             let rgb_img = image::RgbImage::from_raw(width, height, rgb_data)
                 .ok_or_else(|| "Failed to create RGB image from JXL data".to_string())?;
             image::DynamicImage::ImageRgb8(rgb_img)
@@ -238,7 +256,7 @@ impl ArchiveManager {
                     ]
                 })
                 .collect();
-            
+
             let rgba_img = image::RgbaImage::from_raw(width, height, rgba_data)
                 .ok_or_else(|| "Failed to create RGBA image from JXL data".to_string())?;
             image::DynamicImage::ImageRgba8(rgba_img)
@@ -247,7 +265,7 @@ impl ArchiveManager {
         // 编码为 PNG
         let mut buffer = Vec::new();
         let mut cursor = Cursor::new(&mut buffer);
-        
+
         img.write_to(&mut cursor, image::ImageFormat::Png)
             .map_err(|e| format!("编码 JXL 为 PNG 失败: {}", e))?;
 
@@ -259,28 +277,28 @@ impl ArchiveManager {
     fn load_jxl_from_zip(&self, image_data: &[u8]) -> Result<Vec<u8>, String> {
         use jxl_oxide::JxlImage;
         use std::io::Cursor;
-        
+
         let mut reader = Cursor::new(image_data);
         let jxl_image = JxlImage::builder()
             .read(&mut reader)
             .map_err(|e| format!("Failed to decode JXL: {}", e))?;
-        
+
         let render = jxl_image.render_frame(0)
             .map_err(|e| format!("Failed to render JXL frame: {}", e))?;
-        
+
         let fb = render.image_all_channels();
         let width = fb.width() as u32;
         let height = fb.height() as u32;
         let channels = fb.channels();
         let float_buf = fb.buf();
-        
-        // 转换为 DynamicImage
-        let img = if channels == 1 {
+
+        // 根据通道数创建对应的图像
+        if channels == 1 {
             let gray_data: Vec<u8> = float_buf
                 .iter()
                 .map(|&v| (v.clamp(0.0, 1.0) * 255.0) as u8)
                 .collect();
-            
+
             let gray_img = image::GrayImage::from_raw(width, height, gray_data)
                 .ok_or_else(|| "Failed to create gray image from JXL data".to_string())?;
             image::DynamicImage::ImageLuma8(gray_img)
@@ -289,7 +307,7 @@ impl ArchiveManager {
                 .iter()
                 .map(|&v| (v.clamp(0.0, 1.0) * 255.0) as u8)
                 .collect();
-            
+
             let rgb_img = image::RgbImage::from_raw(width, height, rgb_data)
                 .ok_or_else(|| "Failed to create RGB image from JXL data".to_string())?;
             image::DynamicImage::ImageRgb8(rgb_img)
@@ -305,7 +323,7 @@ impl ArchiveManager {
                     ]
                 })
                 .collect();
-            
+
             let rgba_img = image::RgbaImage::from_raw(width, height, rgba_data)
                 .ok_or_else(|| "Failed to create RGBA image from JXL data".to_string())?;
             image::DynamicImage::ImageRgba8(rgba_img)
@@ -314,7 +332,7 @@ impl ArchiveManager {
         // 编码为 PNG
         let mut buffer = Vec::new();
         let mut cursor = Cursor::new(&mut buffer);
-        
+
         img.write_to(&mut cursor, image::ImageFormat::Png)
             .map_err(|e| format!("编码 JXL 为 PNG 失败: {}", e))?;
 
@@ -344,7 +362,7 @@ impl ArchiveManager {
     /// 获取 ZIP 压缩包中的所有图片路径
     pub fn get_images_from_zip(&self, archive_path: &Path) -> Result<Vec<String>, String> {
         let entries = self.list_zip_contents(archive_path)?;
-        
+
         let images: Vec<String> = entries
             .into_iter()
             .filter(|e| e.is_image)
@@ -358,7 +376,26 @@ impl ArchiveManager {
     /// 找到第一张图片即返回，避免遍历全部条目
     pub fn find_first_image_entry(&self, archive_path: &Path) -> Result<Option<String>, String> {
         println!("⚡ ArchiveManager::find_first_image_entry start: {}", archive_path.display());
-        
+
+        let archive_key = Self::normalize_archive_key(archive_path);
+        let metadata = self.get_archive_metadata(archive_path)?;
+
+        if let Some(cached) = self.get_cached_first_image(&archive_key, metadata) {
+            if let Some(inner) = &cached {
+                println!("⚡ 首图缓存命中: {} :: {}", archive_path.display(), inner);
+            } else {
+                println!("⚡ 首图缓存命中 (无图片): {}", archive_path.display());
+            }
+            return Ok(cached);
+        }
+
+        let scan_result = self.scan_first_image_entry(archive_path)?;
+        self.store_cached_first_image(archive_key, metadata, scan_result.clone(), None);
+
+        Ok(scan_result)
+    }
+
+    fn scan_first_image_entry(&self, archive_path: &Path) -> Result<Option<String>, String> {
         let file = File::open(archive_path)
             .map_err(|e| format!("打开压缩包失败: {}", e))?;
 
@@ -367,7 +404,7 @@ impl ArchiveManager {
 
         // 优先查找常见的图片命名模式
         let priority_patterns = [
-            "cover", "front", "title", "page-001", "page_001", "001", 
+            "cover", "front", "title", "page-001", "page_001", "001",
             "vol", "chapter", "ch", "p001", "p_001", "img"
         ];
 
@@ -375,21 +412,18 @@ impl ArchiveManager {
         for i in 0..archive.len() {
             let entry = archive.by_index(i)
                 .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
-            
+
             let name = entry.name().to_string();
             let name_lower = name.to_lowercase();
-            
-            // 跳过目录
+
             if entry.is_dir() {
                 continue;
             }
-            
-            // 检查是否为图片文件
+
             if !self.is_image_file(&name) {
                 continue;
             }
-            
-            // 检查优先级模式
+
             for pattern in &priority_patterns {
                 if name_lower.contains(pattern) {
                     println!("⚡ 快速扫描找到优先图片: {}", name);
@@ -402,15 +436,13 @@ impl ArchiveManager {
         for i in 0..archive.len() {
             let entry = archive.by_index(i)
                 .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
-            
+
             let name = entry.name().to_string();
-            
-            // 跳过目录
+
             if entry.is_dir() {
                 continue;
             }
-            
-            // 检查是否为图片文件
+
             if self.is_image_file(&name) {
                 println!("⚡ 快速扫描找到图片: {}", name);
                 return Ok(Some(name));
@@ -425,7 +457,7 @@ impl ArchiveManager {
     /// 用于快速获取首图，避免扫描整个压缩包
     pub fn scan_archive_images_fast(&self, archive_path: &Path, limit: usize) -> Result<Vec<String>, String> {
         println!("⚡ ArchiveManager::scan_archive_images_fast start: {} limit={}", archive_path.display(), limit);
-        
+
         let file = File::open(archive_path)
             .map_err(|e| format!("打开压缩包失败: {}", e))?;
 
@@ -437,29 +469,26 @@ impl ArchiveManager {
 
         // 优先查找常见的图片命名模式
         let priority_patterns = [
-            "cover", "front", "title", "page-001", "page_001", "001", 
+            "cover", "front", "title", "page-001", "page_001", "001",
             "vol", "chapter", "ch", "p001", "p_001", "img"
         ];
-        
+
         // 先按优先级查找
         for i in 0..scan_limit {
             let entry = archive.by_index(i)
                 .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
-            
+
             let name = entry.name().to_string();
             let name_lower = name.to_lowercase();
-            
-            // 跳过目录
+
             if entry.is_dir() {
                 continue;
             }
-            
-            // 检查是否为图片文件
+
             if !self.is_image_file(&name) {
                 continue;
             }
-            
-            // 检查优先级模式
+
             for pattern in &priority_patterns {
                 if name_lower.contains(pattern) {
                     images.push(name.clone());
@@ -468,20 +497,18 @@ impl ArchiveManager {
                 }
             }
         }
-        
+
         // 如果没找到优先图片，扫描前limit个文件
         for i in 0..scan_limit {
             let entry = archive.by_index(i)
                 .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
-            
+
             let name = entry.name().to_string();
-            
-            // 跳过目录
+
             if entry.is_dir() {
                 continue;
             }
-            
-            // 检查是否为图片文件
+
             if self.is_image_file(&name) {
                 images.push(name.clone());
                 println!("⚡ 快速扫描找到图片: {}", name);
@@ -519,7 +546,7 @@ impl ArchiveManager {
         let archive_key = archive_path.to_string_lossy().replace('\\', "/");
         let inner_key = file_path.replace('\\', "/");
         let cache_key = format!("{}::{}::thumb_{}", archive_key, inner_key, max_size);
-        
+
         // 检查缓存
         if let Ok(cache) = self.cache.lock() {
             if let Some(cached_data) = cache.get(&cache_key) {
@@ -530,7 +557,7 @@ impl ArchiveManager {
         // 使用缓存的压缩包实例
         let cached_archive = self.get_cached_archive(archive_path)?;
         let mut archive = cached_archive.lock().unwrap();
-        
+
         let mut zip_file = archive.by_name(file_path)
             .map_err(|e| format!("在压缩包中找不到文件: {}", e))?;
 
@@ -575,22 +602,22 @@ impl ArchiveManager {
     /// 等比例缩放图片
     fn resize_keep_aspect_ratio(&self, img: &image::DynamicImage, max_size: u32) -> image::DynamicImage {
         let (width, height) = img.dimensions();
-        
+
         // 如果图片尺寸小于等于最大尺寸，直接返回
         if width <= max_size && height <= max_size {
             return img.clone();
         }
-        
+
         // 计算缩放比例
         let scale = if width > height {
             max_size as f32 / width as f32
         } else {
             max_size as f32 / height as f32
         };
-        
+
         let new_width = (width as f32 * scale).round() as u32;
         let new_height = (height as f32 * scale).round() as u32;
-        
+
         // 使用 Lanczos3 滤波器获得更好的缩放质量
         img.resize(new_width, new_height, image::imageops::FilterType::Lanczos3)
     }
@@ -643,28 +670,28 @@ impl ArchiveManager {
     fn decode_jxl_image(&self, image_data: &[u8]) -> Result<image::DynamicImage, String> {
         use jxl_oxide::JxlImage;
         use std::io::Cursor;
-        
+
         let mut reader = Cursor::new(image_data);
         let jxl_image = JxlImage::builder()
             .read(&mut reader)
             .map_err(|e| format!("Failed to decode JXL: {}", e))?;
-        
+
         let render = jxl_image.render_frame(0)
             .map_err(|e| format!("Failed to render JXL frame: {}", e))?;
-        
+
         let fb = render.image_all_channels();
         let width = fb.width() as u32;
         let height = fb.height() as u32;
         let channels = fb.channels();
         let float_buf = fb.buf();
-        
+
         // 根据通道数创建对应的图像
         if channels == 1 {
             let gray_data: Vec<u8> = float_buf
                 .iter()
                 .map(|&v| (v.clamp(0.0, 1.0) * 255.0) as u8)
                 .collect();
-            
+
             let gray_img = image::GrayImage::from_raw(width, height, gray_data)
                 .ok_or_else(|| "Failed to create gray image from JXL data".to_string())?;
             Ok(image::DynamicImage::ImageLuma8(gray_img))
@@ -673,7 +700,7 @@ impl ArchiveManager {
                 .iter()
                 .map(|&v| (v.clamp(0.0, 1.0) * 255.0) as u8)
                 .collect();
-            
+
             let rgb_img = image::RgbImage::from_raw(width, height, rgb_data)
                 .ok_or_else(|| "Failed to create RGB image from JXL data".to_string())?;
             Ok(image::DynamicImage::ImageRgb8(rgb_img))
@@ -689,10 +716,72 @@ impl ArchiveManager {
                     ]
                 })
                 .collect();
-            
+
             let rgba_img = image::RgbaImage::from_raw(width, height, rgba_data)
                 .ok_or_else(|| "Failed to create RGBA image from JXL data".to_string())?;
             Ok(image::DynamicImage::ImageRgba8(rgba_img))
+        }
+    }
+
+    fn normalize_archive_key(path: &Path) -> String {
+        path.to_string_lossy().replace('\\', "/")
+    }
+
+    fn get_archive_metadata(&self, archive_path: &Path) -> Result<ArchiveMetadata, String> {
+        let meta = fs::metadata(archive_path)
+            .map_err(|e| format!("获取压缩包元数据失败: {}", e))?;
+
+        let modified = meta.modified()
+            .unwrap_or(SystemTime::UNIX_EPOCH)
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        Ok(ArchiveMetadata {
+            modified,
+            file_size: meta.len(),
+        })
+    }
+
+    fn get_cached_first_image(&self, archive_key: &str, metadata: ArchiveMetadata) -> Option<Option<String>> {
+        if let Ok(mut cache) = self.first_image_cache.lock() {
+            if let std::collections::hash_map::Entry::Occupied(mut occ) = cache.entry(archive_key.to_string()) {
+                if occ.get().modified == metadata.modified && occ.get().file_size == metadata.file_size {
+                    occ.get_mut().last_used = Instant::now();
+                    return Some(occ.get().inner_path.clone());
+                } else {
+                    occ.remove();
+                }
+            }
+        }
+        None
+    }
+
+    fn store_cached_first_image(
+        &self,
+        archive_key: String,
+        metadata: ArchiveMetadata,
+        inner_path: Option<String>,
+        blob_url: Option<String>,
+    ) {
+        if let Ok(mut cache) = self.first_image_cache.lock() {
+            if cache.len() >= FIRST_IMAGE_CACHE_LIMIT {
+                if let Some(oldest_key) = cache
+                    .iter()
+                    .min_by_key(|(_, entry)| entry.last_used)
+                    .map(|(k, _)| k.clone())
+                {
+                    cache.remove(&oldest_key);
+                }
+            }
+
+            cache.insert(archive_key, CachedFirstImageEntry {
+                inner_path,
+                modified: metadata.modified,
+                file_size: metadata.file_size,
+                last_used: Instant::now(),
+                blob_url,
+            });
         }
     }
 }
@@ -712,6 +801,9 @@ impl ArchiveManager {
         if let Ok(mut archive_cache) = self.archive_cache.lock() {
             archive_cache.clear();
         }
+        if let Ok(mut first_image_cache) = self.first_image_cache.lock() {
+            first_image_cache.clear();
+        }
     }
 
     /// 限制缓存大小（保留最近使用的项）
@@ -726,7 +818,7 @@ impl ArchiveManager {
                 }
             }
         }
-        
+
         // 限制压缩包缓存
         if let Ok(mut archive_cache) = self.archive_cache.lock() {
             if archive_cache.len() > 5 { // 压缩包实例通常较大，限制更严格
@@ -736,28 +828,37 @@ impl ArchiveManager {
                 }
             }
         }
+
+        // 限制首图缓存
+        if let Ok(mut first_image_cache) = self.first_image_cache.lock() {
+            if first_image_cache.len() > FIRST_IMAGE_CACHE_LIMIT {
+                let keys_to_remove: Vec<_> = first_image_cache.keys().take(first_image_cache.len() / 2).cloned().collect();
+                for key in keys_to_remove {
+                    first_image_cache.remove(&key);
+                }
+            }
+        }
     }
 
     /// 预加载压缩包中的所有图片
     pub fn preload_all_images(&self, archive_path: &Path) -> Result<usize, String> {
         let entries = self.list_zip_contents(archive_path)?;
         let image_entries: Vec<_> = entries.iter().filter(|e| e.is_image).collect();
-        
+
         let mut loaded_count = 0;
         for entry in image_entries {
             if self.load_image_from_zip_binary(archive_path, &entry.path).is_ok() {
                 loaded_count += 1;
             }
         }
-        
+
         Ok(loaded_count)
     }
 
     /// 从 ZIP 压缩包中流式提取文件
     pub fn extract_file_stream(&self, archive_path: &Path, file_path: &str) -> Result<impl Read + Send, String> {
-        
         use std::thread;
-        
+
         // 获取缓存的压缩包实例
         let cached_archive = self.get_cached_archive(archive_path)?;
         let _archive_path = archive_path.to_path_buf();

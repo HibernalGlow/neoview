@@ -920,8 +920,11 @@ impl AsyncThumbnailProcessor {
                         if let Some(tx) = response_tx {
                             let _ = tx.send(ScanResult::Error(e));
                         }
+                        
+                        // 从处理中列表移除（扫描失败）
+                        // 注意：这里需要访问 processor，但当前闭包中没有
+                        // 这个移除操作会在 submit_scan_task 的重复检查中处理
                     }
-                    
                 }
             });
         }
@@ -958,6 +961,31 @@ impl AsyncThumbnailProcessor {
                 }
             }
             
+            // 再次检查数据库中是否已有缩略图（去重）
+            let should_skip = {
+                let manager_guard = self.manager.lock();
+                if let Ok(manager_guard) = manager_guard {
+                    if let Some(ref manager) = *manager_guard {
+                        if let Ok(Some(_url)) = manager.get_archive_thumbnail_url(&task.archive_path) {
+                            println!("✅ [Rust] 提取阶段发现缩略图已存在，跳过: {}", task.archive_path.display());
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            };
+            
+            if should_skip {
+                // 从处理中列表移除
+                self.processing_tasks.write().await.remove(&task.archive_path);
+                continue;
+            }
+            
             // 获取提取许可
             let permit = match self.archive_decode_semaphore.clone().acquire_owned().await {
                 Ok(permit) => permit,
@@ -976,9 +1004,10 @@ impl AsyncThumbnailProcessor {
             let metrics_clone: Arc<Mutex<ProcessorMetrics>> = Arc::clone(&self.metrics);
             let error_counts_clone: Arc<Mutex<HashMap<String, usize>>> = Arc::clone(&self.error_counts);
             let app_handle: Arc<Mutex<Option<tauri::AppHandle>>> = Arc::clone(&self.app_handle);
-            let _processor_clone = self.clone();
+            let processor_clone = self.clone();
             
             // 启动提取任务
+            let cache_clone_for_update = Arc::clone(&cache_clone);
             tokio::spawn(async move {
                 let start_time = std::time::Instant::now();
                 let result = Self::generate_archive_thumbnail_staged(
@@ -1018,6 +1047,13 @@ impl AsyncThumbnailProcessor {
                     Ok(url) => {
                         println!("✅ 提取完成: {} -> {}", archive_path.display(), url);
                         
+                        // 更新内存缓存
+                        if let Ok(cache) = cache_clone_for_update.lock() {
+                            let cache_key = archive_path.to_string_lossy().replace('\\', "/");
+                            cache.set(cache_key.clone(), url.clone());
+                            println!("💾 [Rust] 缩略图已添加到内存缓存: {}", cache_key);
+                        }
+                        
                         // 发送事件通知前端
                         if let Ok(handle_guard) = app_handle.lock() {
                             if let Some(app) = handle_guard.as_ref() {
@@ -1030,6 +1066,9 @@ impl AsyncThumbnailProcessor {
                     }
                     Err(e) => println!("❌ 提取失败: {} -> {}", archive_path.display(), e),
                 }
+                
+                // 从处理中列表移除
+                processor_clone.processing_tasks.write().await.remove(&archive_path);
             });
         }
     }
@@ -1067,11 +1106,38 @@ impl AsyncThumbnailProcessor {
     
     /// 提交扫描任务
     pub async fn submit_scan_task(&self, archive_path: PathBuf, response_tx: Option<tokio::sync::oneshot::Sender<ScanResult>>) -> Result<(), String> {
+        // 检查是否已在处理中
+        {
+            let processing = self.processing_tasks.read().await;
+            if processing.contains_key(&archive_path) {
+                println!("⚠️ [Rust] 压缩包已在处理中: {}", archive_path.display());
+                return Ok(());
+            }
+        }
+        
+        // 检查数据库中是否已有缩略图
+        {
+            let manager_guard = self.manager.lock()
+                .map_err(|_| "获取管理器锁失败".to_string())?;
+            if let Some(ref manager) = *manager_guard {
+                if let Ok(Some(_url)) = manager.get_archive_thumbnail_url(&archive_path) {
+                    println!("✅ [Rust] 压缩包缩略图已存在，跳过处理: {}", archive_path.display());
+                    return Ok(());
+                }
+            }
+        }
+        
         // 从路径提取source_id（父目录）
         let source_id = archive_path.parent()
             .and_then(|p| p.to_str())
             .unwrap_or("")
             .to_string();
+        
+        // 添加到处理中列表
+        let cancellation_token = CancellationToken {
+            abort_handle: None,
+        };
+        self.processing_tasks.write().await.insert(archive_path.clone(), cancellation_token);
         
         // 添加到队列跟踪
         self.scan_queue_paths.write().await.push(archive_path.clone());

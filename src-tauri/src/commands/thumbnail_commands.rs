@@ -707,7 +707,7 @@ pub async fn preload_thumbnails(
     }
 }
 
-/// 生成压缩包缩略图（优化版本）
+/// 生成压缩包缩略图（统一管线版本）
 #[command]
 pub async fn generate_archive_thumbnail_root(
     archive_path: String,
@@ -721,18 +721,6 @@ pub async fn generate_archive_thumbnail_root(
         println!("❌ [Rust] {}", e);
         return Err(e);
     }
-    
-    // 构建压缩包专用key并记录日志
-    let _archive_key = match crate::core::thumbnail::build_archive_key(&path) {
-        Ok(key) => {
-            println!("🔑 [Rust] 压缩包Key: {} -> {}", archive_path, key);
-            key
-        }
-        Err(e) => {
-            println!("❌ [Rust] 构建压缩包Key失败: {}", e);
-            return Err(e);
-        }
-    };
     
     // 首先检查缓存（使用压缩包专用key）
     let cache_key = normalize_path_string(path.to_string_lossy());
@@ -750,33 +738,44 @@ pub async fn generate_archive_thumbnail_root(
         }
     }
     
-    println!("🔍 [Rust] 缓存未命中，开始生成压缩包缩略图");
-    
-    // 使用新的多线程压缩包缩略图生成方法
+    // 检查数据库中是否已有缩略图
     if let Ok(manager_guard) = state.manager.lock() {
         if let Some(ref manager) = *manager_guard {
-            println!("📦 [Rust] 正在生成压缩包缩略图（多线程）...");
-            match manager.ensure_archive_thumbnail(&path) {
-                Ok(thumbnail_url) => {
-                    println!("✅ [Rust] 压缩包缩略图生成成功: {} -> {}", archive_path, thumbnail_url);
-                    
-                    // 添加到缓存
-                    if let Ok(cache) = state.cache.lock() {
-                        cache.set(cache_key.clone(), thumbnail_url.clone());
-                        println!("💾 [Rust] 压缩包缩略图已添加到缓存: {}", cache_key);
-                    }
-                    
-                    return Ok(thumbnail_url);
+            if let Ok(Some(url)) = manager.get_archive_thumbnail_url(&path) {
+                println!("✅ [Rust] 数据库中找到缩略图: {} -> {}", archive_path, url);
+                
+                // 添加到缓存
+                if let Ok(cache) = state.cache.lock() {
+                    cache.set(cache_key.clone(), url.clone());
+                    println!("💾 [Rust] 缩略图已添加到缓存: {}", cache_key);
                 }
-                Err(e) => {
-                    println!("❌ [Rust] 压缩包缩略图生成失败: {}", e);
-                    return Err(format!("生成压缩包缩略图失败: {}", e));
-                }
+                
+                return Ok(url);
             }
         }
     }
     
-    Err("缩略图管理器未初始化".to_string())
+    // 提交任务到异步处理器
+    println!("📤 [Rust] 提交压缩包缩略图任务到异步处理器: {}", archive_path);
+    
+    // 获取异步处理器
+    let processor = {
+        let guard = state.async_processor.lock()
+            .map_err(|_| "无法获取处理器锁".to_string())?;
+        match (*guard).clone() {
+            Some(p) => p,
+            None => return Err("异步处理器未初始化".to_string()),
+        }
+    };
+    
+    // 提交扫描任务
+    if let Err(e) = processor.submit_scan_task(path.clone(), None).await {
+        println!("❌ [Rust] 提交扫描任务失败: {}", e);
+        return Err(format!("提交扫描任务失败: {}", e));
+    }
+    
+    println!("✅ [Rust] 任务已提交，返回处理中标识");
+    Ok("thumbnail://pending".to_string())
 }
 
 /// 生成压缩包内特定页面的缩略图

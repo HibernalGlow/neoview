@@ -3,18 +3,19 @@ import { toAssetUrl } from '$lib/utils/assetProxy';
 import { thumbnailState } from '$lib/stores/thumbnailState';
 import { startThumbnailEventListener, stopThumbnailEventListener, isThumbnailEventListenerActive } from './thumbnailEvents';
 
-type Priority = 'immediate' | 'high' | 'normal';
+type Priority = 'foreground' | 'immediate' | 'high' | 'normal';
 
 type QueueTask = {
   item: any; // FsItem
-  source: string;
+  sourceId: string; // 目录路径
   priority: Priority;
 };
 
-const PRIORITY_ORDER: Priority[] = ['immediate', 'high', 'normal'];
+const PRIORITY_ORDER: Priority[] = ['foreground', 'immediate', 'high', 'normal'];
 
 class ThumbnailScheduler {
   private queues: Record<Priority, QueueTask[]> = {
+    foreground: [],
     immediate: [],
     high: [],
     normal: [],
@@ -27,6 +28,7 @@ class ThumbnailScheduler {
   private maxConcurrentArchive = 16; // 提高压缩包并发数
   private addThumbnailCb: ((path: string, url: string) => void) | null = null;
   private processing = false;
+  private currentSourceId: string | null = null;
 
   configure(options: {
     addThumbnail?: (path: string, url: string) => void;
@@ -65,7 +67,7 @@ class ThumbnailScheduler {
     }
   }
 
-  enqueue(source: string, items: any[], priority: Priority = 'normal') {
+  enqueue(sourceId: string, items: any[], priority: Priority = 'normal') {
     if (!items?.length) return;
 
     const queue = this.queues[priority];
@@ -76,7 +78,7 @@ class ThumbnailScheduler {
       const normalized = this.normalizePath(item.path);
       if (this.generating.has(normalized) || this.queuedPaths.has(normalized)) continue;
 
-      queue.push({ item, source, priority });
+      queue.push({ item, sourceId, priority });
       this.queuedPaths.add(normalized);
       added = true;
     }
@@ -86,9 +88,9 @@ class ThumbnailScheduler {
     }
   }
 
-  cancelBySource(source: string) {
+  cancelBySource(sourceId: string) {
     // 取消后端任务
-    thumbnailState.cancelDirectoryTasks(source).catch(error => {
+    thumbnailState.cancelDirectoryTasks(sourceId).catch(error => {
       console.error('❌ 取消目录任务失败:', error);
     });
     
@@ -97,12 +99,43 @@ class ThumbnailScheduler {
       const tasks = this.queues[priority];
       if (!tasks.length) continue;
       this.queues[priority] = tasks.filter(task => {
-        if (task.source === source) {
+        if (task.sourceId === sourceId) {
           this.queuedPaths.delete(this.normalizePath(task.item.path));
           return false;
         }
         return true;
       });
+    }
+  }
+
+  setCurrentSource(sourceId: string) {
+    if (this.currentSourceId !== sourceId) {
+      // 取消旧目录的前台任务
+      if (this.currentSourceId) {
+        this.clearForegroundQueue();
+      }
+      
+      this.currentSourceId = sourceId;
+      console.log(`🎯 [Frontend] 设置前台源: ${sourceId}`);
+      
+      // 通知后端更新前台源
+      this.setForegroundSource(sourceId);
+    }
+  }
+
+  private clearForegroundQueue() {
+    const foregroundTasks = this.queues.foreground;
+    for (const task of foregroundTasks) {
+      this.queuedPaths.delete(this.normalizePath(task.item.path));
+    }
+    this.queues.foreground = [];
+  }
+
+  private async setForegroundSource(sourceId: string) {
+    try {
+      await FileSystemAPI.setForegroundSource(sourceId);
+    } catch (error) {
+      console.error('❌ 设置前台源失败:', error);
     }
   }
 
@@ -119,11 +152,13 @@ class ThumbnailScheduler {
 
   getStats() {
     return {
+      foreground: this.queues.foreground.length,
       immediate: this.queues.immediate.length,
       high: this.queues.high.length,
       normal: this.queues.normal.length,
       runningLocal: this.runningLocal,
       runningArchive: this.runningArchive,
+      currentSourceId: this.currentSourceId,
     };
   }
 
@@ -360,7 +395,10 @@ interface FsItem {
 
 // 新的队列API
 export function enqueueVisible(sourcePath: string, items: FsItem[], options: { priority?: Priority; delay?: number } = {}) {
-  const { priority = 'immediate', delay = 0 } = options;
+  const { priority = 'foreground', delay = 0 } = options;
+
+  // 设置为当前前台源
+  scheduler.setCurrentSource(sourcePath);
 
   const run = () => scheduler.enqueue(sourcePath, items, priority);
   if (delay > 0) setTimeout(run, delay);
@@ -404,6 +442,9 @@ export function clearAll() {
 export function enqueueDirectoryThumbnails(path: string, items: FsItem[]) {
   if (!items?.length) return;
 
+  // 设置为当前前台源
+  scheduler.setCurrentSource(path);
+
   // 过滤出支持的文件类型（图片和压缩包）
   const supportedItems = items.filter(item => {
     const name = item?.name || '';
@@ -427,9 +468,9 @@ export function enqueueDirectoryThumbnails(path: string, items: FsItem[]) {
 
   console.log(`📦 [Frontend] 批量调度: 总计 ${supportedItems.length} 个项目，分 3 批次处理`);
 
-  // 第一批次：立即处理（首屏可见）
-  scheduler.enqueue(path, supportedItems.slice(0, FIRST_BATCH), 'immediate');
-  console.log(`⚡ [Frontend] 第一批次: ${Math.min(FIRST_BATCH, supportedItems.length)} 个项目 (immediate)`);
+  // 第一批次：前台处理（首屏可见）
+  scheduler.enqueue(path, supportedItems.slice(0, FIRST_BATCH), 'foreground');
+  console.log(`⚡ [Frontend] 第一批次: ${Math.min(FIRST_BATCH, supportedItems.length)} 个项目 (foreground)`);
 
   // 第二批次：高优先级（即将可见）
   if (supportedItems.length > FIRST_BATCH) {
@@ -469,6 +510,9 @@ export function isSupportedThumbnailTarget(item: FsItem): boolean {
 export function loadThumbnailsForItems(path: string, items: FsItem[]) {
   if (!items?.length) return;
 
+  // 设置为当前前台源
+  scheduler.setCurrentSource(path);
+
   // 过滤出支持的项目
   const supported = items.filter(isSupportedThumbnailTarget);
   if (!supported.length) return;
@@ -483,10 +527,10 @@ export function loadThumbnailsForItems(path: string, items: FsItem[]) {
     batches.push(supported.slice(i, i + batchSize));
   }
 
-  // 立即处理第一批
+  // 立即处理第一批（前台）
   if (batches[0]) {
-    scheduler.enqueue(path, batches[0], 'immediate');
-    console.log(`⚡ [Frontend] 立即处理第一批: ${batches[0].length} 个项目`);
+    scheduler.enqueue(path, batches[0], 'foreground');
+    console.log(`⚡ [Frontend] 立即处理第一批: ${batches[0].length} 个项目 (foreground)`);
   }
 
   // 延迟处理第二批

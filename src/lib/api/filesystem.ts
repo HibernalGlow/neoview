@@ -543,3 +543,18 @@ export async function getThumbnailMetrics(): Promise<any> {
     throw error;
   }
 }
+
+/**
+ * 设置前台源目录
+ * 用于优先处理当前可见目录的缩略图任务
+ */
+export async function setForegroundSource(sourceId: string): Promise<void> {
+  console.log('🎯 FileSystemAPI: 设置前台源:', sourceId);
+  try {
+    await invoke<void>('set_foreground_source', { sourceId });
+    console.log('✅ FileSystemAPI: 前台源设置成功');
+  } catch (error) {
+    console.error('❌ FileSystemAPI: 前台源设置失败:', error);
+    throw error;
+  }
+}

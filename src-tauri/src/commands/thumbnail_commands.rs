@@ -1189,3 +1189,26 @@ pub async fn generate_archive_thumbnail_async(
     println!("⚡ [Rust] 异步生成已启动，立即返回");
     Ok("generating".to_string()) // 返回特殊值表示正在生成
 }
+
+/// 设置前台源目录
+/// 用于优先处理当前可见目录的缩略图任务
+#[command]
+pub async fn set_foreground_source(
+    source_id: String,
+    state: tauri::State<'_, ThumbnailManagerState>,
+) -> Result<(), String> {
+    println!("🎯 [Rust] 设置前台源: {}", source_id);
+    
+    // 获取处理器的克隆，避免跨await持有锁
+    let processor = {
+        let guard = state.async_processor.lock()
+            .map_err(|_| "无法获取处理器锁".to_string())?;
+        match (*guard).clone() {
+            Some(p) => p,
+            None => return Err("异步处理器未初始化".to_string()),
+        }
+    };
+    
+    processor.set_foreground_source(source_id).await;
+    Ok(())
+}

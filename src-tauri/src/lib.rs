@@ -194,6 +194,7 @@ pub fn run() {
             commands::get_thumbnail_stats,
             commands::clear_all_thumbnails,
             commands::preload_thumbnails,
+            commands::set_foreground_source,
             // Thumbnail settings commands
             commands::thumbnail_settings_commands::get_thumbnail_settings,
             commands::thumbnail_settings_commands::update_thumbnail_settings,

@@ -33,12 +33,14 @@ pub struct AsyncThumbnailTask {
     pub path: PathBuf,
     pub is_folder: bool,
     pub priority: TaskPriority,
+    pub source_id: String,
     pub response_tx: tokio::sync::oneshot::Sender<Result<String, String>>,
 }
 
 /// 扫描任务（第一阶段）
 pub struct ScanTask {
     pub archive_path: PathBuf,
+    pub source_id: String,
     pub response_tx: Option<tokio::sync::oneshot::Sender<ScanResult>>,
 }
 
@@ -46,6 +48,7 @@ pub struct ScanTask {
 pub struct ExtractTask {
     pub archive_path: PathBuf,
     pub inner_path: String,
+    pub source_id: String,
     pub response_tx: tokio::sync::oneshot::Sender<Result<String, String>>,
 }
 
@@ -100,6 +103,8 @@ pub struct AsyncThumbnailProcessor {
     concurrency_limits: Arc<ConcurrencyLimits>,
     /// 上次调节时间
     last_adjustment_time: Arc<Mutex<Option<Instant>>>,
+    /// 前台源目录
+    foreground_source: Arc<Mutex<Option<String>>,
     /// 任务接收器
     task_rx: Arc<RwLock<mpsc::UnboundedReceiver<AsyncThumbnailTask>>>,
     /// 扫描任务发送器和接收器
@@ -186,6 +191,7 @@ impl AsyncThumbnailProcessor {
             current_extract_limit: Arc::clone(&current_extract_limit),
             concurrency_limits,
             last_adjustment_time: Arc::new(Mutex::new(None)),
+            foreground_source: Arc::new(Mutex::new(None)),
             task_rx: Arc::new(RwLock::new(task_rx)),
             scan_tx,
             scan_rx: Arc::new(RwLock::new(scan_rx)),
@@ -675,10 +681,17 @@ impl AsyncThumbnailProcessor {
         let mut cancelled = 0;
         let mut tasks_to_cancel = Vec::new();
         
-        // 收集需要取消的任务
+        // 将目录路径转换为字符串用于比较
+        let dir_path_str = dir_path.to_string_lossy();
+        
+        // 收集需要取消的任务（基于source_id）
         for (path, _token) in self.processing_tasks.read().await.iter() {
-            if path.starts_with(dir_path) {
-                tasks_to_cancel.push(path.clone());
+            // 从文件路径推断source_id（父目录）
+            if let Some(parent) = path.parent() {
+                let parent_str = parent.to_string_lossy();
+                if parent_str == dir_path_str {
+                    tasks_to_cancel.push(path.clone());
+                }
             }
         }
         
@@ -689,7 +702,7 @@ impl AsyncThumbnailProcessor {
             }
         }
         
-        // 清理扫描队列
+        // 清理扫描队列（基于路径前缀）
         {
             let mut scan_queue = self.scan_queue_paths.write().await;
             let initial_len = scan_queue.len();
@@ -697,7 +710,7 @@ impl AsyncThumbnailProcessor {
             cancelled += initial_len - scan_queue.len();
         }
         
-        // 清理提取队列
+        // 清理提取队列（基于路径前缀）
         {
             let mut extract_queue = self.extract_queue_paths.write().await;
             let initial_len = extract_queue.len();
@@ -762,12 +775,14 @@ impl AsyncThumbnailProcessor {
             };
             
             let archive_path = task.archive_path.clone();
+            let source_id = task.source_id.clone();
             let response_tx = task.response_tx;
             let extract_tx = self.extract_tx.clone();
             let first_image_cache = Arc::clone(&self.first_image_cache);
             let extract_queue_paths = Arc::clone(&self.extract_queue_paths);
             let manager_clone = Arc::clone(&self.manager);
             let metrics_clone = Arc::clone(&self.metrics);
+            let processor_clone = self.clone();
             
             // 启动扫描任务
             tokio::spawn(async move {
@@ -851,6 +866,7 @@ impl AsyncThumbnailProcessor {
                         let extract_task = ExtractTask {
                             archive_path: archive_path.clone(),
                             inner_path: inner_path.clone(),
+                            source_id: source_id.clone(),
                             response_tx: extract_response_tx,
                         };
                         
@@ -918,12 +934,14 @@ impl AsyncThumbnailProcessor {
             
             let archive_path = task.archive_path.clone();
             let inner_path = task.inner_path.clone();
+            let source_id = task.source_id.clone();
             let response_tx = task.response_tx;
             let manager_clone = Arc::clone(&self.manager);
             let cache_clone = Arc::clone(&self.cache);
             let metrics_clone = Arc::clone(&self.metrics);
             let error_counts_clone = Arc::clone(&self.error_counts);
             let app_handle = Arc::clone(&self.app_handle);
+            let processor_clone = self.clone();
             
             // 启动提取任务
             tokio::spawn(async move {

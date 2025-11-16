@@ -26,5 +26,6 @@ export {
   cancelFolderTasks,
   getThumbnailErrorStats,
   getArchiveFirstImageQuick,
-  generateArchiveThumbnailAsync
+  generateArchiveThumbnailAsync,
+  setForegroundSource
 } from './filesystem';

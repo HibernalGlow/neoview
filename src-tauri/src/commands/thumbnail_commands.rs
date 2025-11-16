@@ -8,6 +8,7 @@ use std::time::Duration;
 use crate::core::thumbnail::ThumbnailManager;
 use crate::core::fs_manager::FsItem;
 use crate::core::image_cache::ImageCache;
+use crate::core::archive::ArchiveManager;
 
 // 简单的路径规范化，保持与 ThumbnailManager 中的 normalize_path_string 行为一致
 fn normalize_path_string<S: AsRef<str>>(s: S) -> String {
@@ -1000,32 +1001,34 @@ pub async fn get_archive_first_image_quick(
             println!("🔍 [Rust] 首图索引未命中，启动扫描");
             
             // 如果有异步处理器，使用扫描任务
-            if let Ok(processor_guard) = state.async_processor.lock() {
-                if let Some(ref processor) = *processor_guard {
-                    use crate::core::async_thumbnail_processor::{ScanResult};
-                    use tokio::sync::oneshot;
-                    
-                    let (tx, rx) = oneshot::channel();
-                    if let Err(_) = processor.submit_scan_task(path.clone(), Some(tx)).await {
-                        println!("❌ [Rust] 提交扫描任务失败");
-                        return get_archive_first_image_fallback(&path, manager).await;
-                    }
-                    
-                    match rx.await {
-                        Ok(ScanResult::Found(inner_path)) => {
-                            println!("✅ [Rust] 扫描成功: {} -> {}", archive_path, inner_path);
-                            let archive_manager = ArchiveManager::new();
-                            match archive_manager.extract_file(&path, &inner_path) {
-                                Ok(image_data) => Ok(image_data),
-                                Err(e) => Err(format!("提取图片失败: {}", e)),
-                            }
+            let processor_opt = {
+                let guard = state.async_processor.lock()
+                    .map_err(|_| "无法获取异步处理器".to_string())?;
+                (*guard).clone()
+            };
+            
+            if let Some(processor) = processor_opt {
+                use crate::core::async_thumbnail_processor::{ScanResult};
+                use tokio::sync::oneshot;
+                
+                let (tx, rx) = oneshot::channel();
+                if let Err(_) = processor.submit_scan_task(path.clone(), Some(tx)).await {
+                    println!("❌ [Rust] 提交扫描任务失败");
+                    return get_archive_first_image_fallback(&path, manager).await;
+                }
+                
+                match rx.await {
+                    Ok(ScanResult::Found(inner_path)) => {
+                        println!("✅ [Rust] 扫描成功: {} -> {}", archive_path, inner_path);
+                        let archive_manager = ArchiveManager::new();
+                        match archive_manager.extract_file(&path, &inner_path) {
+                            Ok(image_data) => Ok(image_data),
+                            Err(e) => Err(format!("提取图片失败: {}", e)),
                         }
-                        Ok(ScanResult::NotFound) => Err("压缩包中没有图片".to_string()),
-                        Ok(ScanResult::Error(e)) => Err(e),
-                        Err(_) => Err("等待扫描结果失败".to_string()),
                     }
-                } else {
-                    get_archive_first_image_fallback(&path, manager).await
+                    Ok(ScanResult::NotFound) => Err("压缩包中没有图片".to_string()),
+                    Ok(ScanResult::Error(e)) => Err(e),
+                    Err(_) => Err("等待扫描结果失败".to_string()),
                 }
             } else {
                 get_archive_first_image_fallback(&path, manager).await

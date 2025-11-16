@@ -8,6 +8,7 @@ use tokio::task::JoinHandle;
 use std::collections::{HashMap, VecDeque};
 use crate::core::thumbnail::ThumbnailManager;
 use crate::core::image_cache::ImageCache;
+use tauri::{AppHandle, Emitter};
 
 /// 调节参数
 struct ProcessorAdjustment {
@@ -236,7 +237,8 @@ impl AsyncThumbnailProcessor {
     
     /// 自适应调节并发数
     async fn adjust_concurrency(&self) {
-        let metrics = {
+        // 计算95%分位数耗时 - 不持有锁跨await
+        let (p95_duration, scan_available, extract_available) = {
             let metrics_guard = self.metrics.lock().unwrap();
             
             // 计算95%分位数耗时
@@ -253,32 +255,34 @@ impl AsyncThumbnailProcessor {
             let scan_available = self.archive_scan_semaphore.available_permits();
             let extract_available = self.archive_decode_semaphore.available_permits();
             
-            // 调节策略
-            let scan_adjustment = if p95_duration > 400 && scan_available == 0 {
-                // 耗时过长且没有可用许可，减少并发
-                -1
-            } else if p95_duration < 200 && scan_available > 0 {
-                // 耗时较短且有可用许可，增加并发
-                1
-            } else {
-                0
-            };
-            
-            let extract_adjustment = if p95_duration > 400 && extract_available == 0 {
-                -1
-            } else if p95_duration < 200 && extract_available > 0 {
-                1
-            } else {
-                0
-            };
-            
-            ProcessorAdjustment {
-                p95_duration,
-                scan_available,
-                extract_available,
-                scan_adjustment,
-                extract_adjustment,
-            }
+            (p95_duration, scan_available, extract_available)
+        };
+        
+        // 调节策略 - 在锁外计算
+        let scan_adjustment = if p95_duration > 400 && scan_available == 0 {
+            // 耗时过长且没有可用许可，减少并发
+            -1
+        } else if p95_duration < 200 && scan_available > 0 {
+            // 耗时较短且有可用许可，增加并发
+            1
+        } else {
+            0
+        };
+        
+        let extract_adjustment = if p95_duration > 400 && extract_available == 0 {
+            -1
+        } else if p95_duration < 200 && extract_available > 0 {
+            1
+        } else {
+            0
+        };
+        
+        let metrics = ProcessorAdjustment {
+            p95_duration,
+            scan_available,
+            extract_available,
+            scan_adjustment,
+            extract_adjustment,
         };
         
         // 应用调节
@@ -370,6 +374,7 @@ impl AsyncThumbnailProcessor {
             };
             
             // 启动异步任务
+            let processor_clone = self.clone();
             let handle = tokio::spawn(async move {
                 // 确保在任务完成时释放许可
                 let _permit = permit;
@@ -377,7 +382,7 @@ impl AsyncThumbnailProcessor {
                 let result = if is_archive {
                     // 压缩包使用两阶段处理：只提交扫描任务
                     // 提交扫描任务
-                    if let Err(e) = self.submit_scan_task(path_for_spawn.clone(), None).await {
+                    if let Err(e) = processor_clone.submit_scan_task(path_for_spawn.clone(), None).await {
                         Err(format!("提交扫描任务失败: {}", e))
                     } else {
                         // 扫描任务已提交，返回成功
@@ -465,20 +470,20 @@ impl AsyncThumbnailProcessor {
             let manager_guard = manager_clone.lock()
                 .map_err(|e| format!("获取管理器锁失败: {}", e))?;
             
-            let _manager = manager_guard.as_ref()
+            let manager = manager_guard.as_ref()
                 .ok_or("缩略图管理器未初始化")?;
             
             // 获取相对路径
-            let relative_path = _manager.get_relative_path(&path_clone)
+            let relative_path = manager.get_relative_path(&path_clone)
                 .map_err(|e| format!("获取相对路径失败: {}", e))?;
             
             // 使用解码前限缩尺寸功能
             let max_side = 2048u32;
-            let img = _manager.decode_and_downscale(&image_data, Path::new(&inner_path_clone), max_side)
+            let img = manager.decode_and_downscale(&image_data, Path::new(&inner_path_clone), max_side)
                 .map_err(|e| format!("解码图片失败: {}", e))?;
             
             // 保存缩略图
-            let thumbnail_url = _manager.save_thumbnail_for_archive(
+            let thumbnail_url = manager.save_thumbnail_for_archive(
                 &img, 
                 &path_clone, 
                 &relative_path, 
@@ -512,11 +517,11 @@ impl AsyncThumbnailProcessor {
             let manager_guard = manager_clone.lock()
                 .map_err(|e| format!("获取管理器锁失败: {}", e))?;
             
-            let _manager = manager_guard.as_ref()
+            let manager = manager_guard.as_ref()
                 .ok_or("缩略图管理器未初始化")?;
             
             // 获取相对路径
-            let relative_path = _manager.get_relative_path(&path_clone)
+            let relative_path = manager.get_relative_path(&path_clone)
                 .map_err(|e| format!("获取相对路径失败: {}", e))?;
             
             // 获取文件元数据
@@ -529,7 +534,7 @@ impl AsyncThumbnailProcessor {
                 .as_secs() as i64;
             
             // 生成缩略图
-            let thumbnail_path = _manager.generate_and_save_thumbnail(
+            let thumbnail_path = manager.generate_and_save_thumbnail(
                 &path_clone, 
                 &relative_path, 
                 source_modified, 
@@ -644,7 +649,7 @@ impl AsyncThumbnailProcessor {
                 // 从队列跟踪中移除
                 {
                     let mut queue_paths = self.scan_queue_paths.write().await;
-                    if let Some(pos) = queue_paths.iter().position(|p| p == &archive_path) {
+                    if let Some(pos) = queue_paths.iter().position(|p| p == &task.archive_path) {
                         queue_paths.remove(pos);
                     }
                 }
@@ -680,11 +685,11 @@ impl AsyncThumbnailProcessor {
                     let manager_guard = manager_clone_for_blocking.lock()
                         .map_err(|e| format!("获取管理器锁失败: {}", e))?;
                     
-                    let _manager = manager_guard.as_ref()
+                    let manager = manager_guard.as_ref()
                 .ok_or("缩略图管理器未初始化")?;
                     
                     // 扫描首图
-                    let first_images = _manager.scan_archive_images_fast(&archive_path_for_blocking)?;
+                    let first_images = manager.scan_archive_images_fast(&archive_path_for_blocking)?;
                     if first_images.is_empty() {
                         return Err("压缩包内未找到图片".to_string());
                     }
@@ -799,7 +804,7 @@ impl AsyncThumbnailProcessor {
             // 从队列跟踪中移除
             {
                 let mut queue_paths = self.extract_queue_paths.write().await;
-                if let Some(pos) = queue_paths.iter().position(|p| p == &archive_path) {
+                if let Some(pos) = queue_paths.iter().position(|p| p == &task.archive_path) {
                     queue_paths.remove(pos);
                 }
             }
@@ -865,7 +870,7 @@ impl AsyncThumbnailProcessor {
                         // 发送事件通知前端
                         if let Ok(handle_guard) = app_handle.lock() {
                             if let Some(app) = handle_guard.as_ref() {
-                                let _ = app.emit_all("thumbnail-ready", serde_json::json!({
+                                let _ = app.emit("thumbnail-ready", serde_json::json!({
                                     "path": archive_path.to_string_lossy(),
                                     "url": url
                                 }));

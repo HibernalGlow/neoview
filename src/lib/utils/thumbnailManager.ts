@@ -544,25 +544,23 @@ export function loadThumbnailsForItems(path: string, items: FsItem[]) {
 
   // 优先处理压缩包
   if (archives.length > 0) {
-    // 分批处理压缩包
     const batchSize = 200;
-    for (let i = 0; i < archives.length; i += batchSize) {
-      const batch = archives.slice(i, i + batchSize);
-      const priority = i === 0 ? 'foreground' : (i === batchSize ? 'high' : 'normal');
-      
-      if (priority === 'foreground') {
+    const archiveBatches = Math.ceil(archives.length / batchSize);
+
+    for (let batchIndex = 0; batchIndex < archiveBatches; batchIndex++) {
+      const start = batchIndex * batchSize;
+      const batch = archives.slice(start, start + batchSize);
+      const priority: Priority = batchIndex === 0 ? 'foreground' : batchIndex === 1 ? 'high' : 'normal';
+
+      if (batchIndex === 0) {
         scheduler.enqueue(path, batch, priority);
-        console.log(`⚡ [Frontend] 立即处理压缩包批次 ${i + 1}: ${batch.length} 个项目 (${priority})`);
-      } else if (priority === 'high') {
-        setTimeout(() => {
-          scheduler.enqueue(path, batch, priority);
-          console.log(`🚀 [Frontend] 延迟处理压缩包批次 ${i + 1}: ${batch.length} 个项目`);
-        }, 10);
+        console.log(`⚡ [Frontend] 立即处理压缩包批次 ${batchIndex + 1}: ${batch.length} 个项目 (${priority})`);
       } else {
+        const delay = batchIndex === 1 ? 10 : 50 * batchIndex;
         setTimeout(() => {
           scheduler.enqueue(path, batch, priority);
-          console.log(`🔄 [Frontend] 后台处理压缩包批次 ${i + 1}: ${batch.length} 个项目`);
-        }, 50 * i);
+          console.log(`🔄 [Frontend] 处理压缩包批次 ${batchIndex + 1}: ${batch.length} 个项目 (${priority})`);
+        }, delay);
       }
     }
   }
@@ -570,13 +568,14 @@ export function loadThumbnailsForItems(path: string, items: FsItem[]) {
   // 压缩包处理完毕后再处理其他项目
   if (others.length > 0) {
     const batchSize = 200;
-    for (let i = 0; i < others.length; i += batchSize) {
-      const batch = others.slice(i, i + batchSize);
-      // 延迟更长时间，确保压缩包优先处理
+    const baseDelay = Math.ceil(archives.length / batchSize) * 60 + 100;
+    for (let batchIndex = 0; batchIndex < Math.ceil(others.length / batchSize); batchIndex++) {
+      const start = batchIndex * batchSize;
+      const batch = others.slice(start, start + batchSize);
       setTimeout(() => {
         scheduler.enqueue(path, batch, 'normal');
-        console.log(`📁 [Frontend] 处理其他项目批次 ${i + 1}: ${batch.length} 个项目`);
-      }, 100 + (50 * i)); // 额外延迟确保压缩包优先
+        console.log(`📁 [Frontend] 处理其他项目批次 ${batchIndex + 1}: ${batch.length} 个项目`);
+      }, baseDelay + 50 * batchIndex);
     }
   }
 }

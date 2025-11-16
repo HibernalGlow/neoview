@@ -4,8 +4,6 @@
 pub mod book_commands;
 pub mod fs_commands;
 pub mod image_commands;
-pub mod thumbnail_commands;
-pub mod thumbnail_settings_commands;
 pub mod upscale_commands;
 pub mod generic_upscale_commands;
 pub mod upscale_settings_commands;
@@ -17,8 +15,6 @@ pub mod default;
 pub use book_commands::*;
 pub use image_commands::*;
 pub use fs_commands::*;
-pub use thumbnail_commands::*;
-// pub use thumbnail_settings_commands::*; // 暂时未使用，注释掉避免警告
 pub use upscale_commands::*;
 pub use generic_upscale_commands::*;
 pub use upscale_settings_commands::*;

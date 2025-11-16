@@ -7,12 +7,11 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use base64::Engine;
-use crate::core::{FsManager, ThumbnailManager, ArchiveManager};
+use crate::core::{FsManager, ArchiveManager};
 
 /// 文件系统状态
 pub struct FsState {
     pub fs_manager: Mutex<FsManager>,
-    pub thumbnail_manager: Mutex<ThumbnailManager>,
     pub archive_manager: Mutex<ArchiveManager>,
 }
 
@@ -141,40 +140,6 @@ pub async fn get_images_in_directory(
     Ok(images.iter().map(|p| p.to_string_lossy().to_string()).collect())
 }
 
-/// 生成文件缩略图
-#[tauri::command]
-pub async fn generate_file_thumbnail(
-    path: String,
-    state: State<'_, FsState>,
-) -> Result<String, String> {
-    let thumbnail_manager = state.thumbnail_manager.lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
-
-    let path = PathBuf::from(path);
-    thumbnail_manager.generate_thumbnail(&path)
-}
-
-/// 从图片数据生成缩略图（用于压缩包内图片）
-#[tauri::command]
-pub async fn generate_thumbnail_from_data(
-    image_data: String,
-    max_size: u32,
-    state: State<'_, FsState>,
-) -> Result<String, String> {
-    let thumbnail_manager = state.thumbnail_manager.lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
-
-    // 解码 base64 数据
-    let base64_data = image_data.split(',').nth(1)
-        .ok_or_else(|| "Invalid image data format".to_string())?;
-    
-    let image_bytes = base64::engine::general_purpose::STANDARD
-        .decode(base64_data)
-        .map_err(|e| format!("Failed to decode base64: {}", e))?;
-
-    // 生成缩略图
-    thumbnail_manager.generate_thumbnail_from_bytes(&image_bytes, max_size)
-}
 
 /// 创建目录
 #[tauri::command]
@@ -230,41 +195,6 @@ pub async fn move_to_trash(
     fs_manager.move_to_trash(&path)
 }
 
-/// 获取缓存大小
-#[tauri::command]
-pub async fn get_thumbnail_cache_size(
-    state: State<'_, FsState>,
-) -> Result<u64, String> {
-    let thumbnail_manager = state.thumbnail_manager.lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
-
-    thumbnail_manager.get_cache_stats().map(|s| s.total_size as u64)
-}
-
-/// 清空缩略图缓存
-#[tauri::command]
-pub async fn clear_thumbnail_cache(
-    state: State<'_, FsState>,
-) -> Result<usize, String> {
-    let thumbnail_manager = state.thumbnail_manager.lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
-
-    thumbnail_manager.clear_all_cache()
-}
-
-
-
-/// 清理过期缓存
-#[tauri::command]
-pub async fn cleanup_thumbnail_cache(
-    max_age_days: u64,
-    state: State<'_, FsState>,
-) -> Result<usize, String> {
-    let thumbnail_manager = state.thumbnail_manager.lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
-
-    thumbnail_manager.cleanup_expired(max_age_days as u32)
-}
 
 // ===== 压缩包相关命令 =====
 

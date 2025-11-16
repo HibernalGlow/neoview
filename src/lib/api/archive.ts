@@ -25,15 +25,3 @@ export async function getBlobStats(): Promise<{
 }> {
   return await invoke('get_blob_stats');
 }
-
-export async function enqueueArchivePreload(path: string): Promise<string> {
-  return await invoke<string>('enqueue_archive_preload', { archivePath: path });
-}
-
-export async function generateArchiveThumbnailAsync(path: string): Promise<string> {
-  return await invoke<string>('generate_archive_thumbnail_async', { archivePath: path });
-}
-
-export async function setForegroundSource(sourceId: string): Promise<void> {
-  return await invoke<void>('set_foreground_source', { sourceId });
-}

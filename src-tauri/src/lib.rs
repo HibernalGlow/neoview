@@ -8,17 +8,11 @@ mod commands;
 mod core;
 mod models;
 
-// 确保异步处理器模块被包含
-pub use core::async_thumbnail_processor;
-
-
 use tauri::Manager;
 use std::sync::Mutex;
 use std::path::PathBuf;
-use core::{BookManager, ImageLoader, FsManager, ThumbnailManager, ArchiveManager};
+use core::{BookManager, ImageLoader, FsManager, ArchiveManager};
 use commands::fs_commands::FsState;
-use commands::thumbnail_commands::ThumbnailManagerState;
-use commands::thumbnail_settings_commands::SettingsState;
 use commands::upscale_commands::UpscaleManagerState;
 use commands::generic_upscale_commands::GenericUpscalerState;
 use commands::upscale_settings_commands::UpscaleSettingsState;
@@ -53,27 +47,12 @@ pub fn run() {
             let fs_manager = FsManager::new();
             let archive_manager = ArchiveManager::new();
             
-            // 确定缩略图目录
-            let thumbnail_root = if let Ok(test_dir) = std::env::var("NEOVIEW_THUMBNAIL_DIR") {
-                PathBuf::from(test_dir)
-            } else {
-                PathBuf::from(".cache/thumbnails")
-            };
-            
-            // 确保目录存在
-            std::fs::create_dir_all(&thumbnail_root).ok();
-            
             app.manage(FsState {
                 fs_manager: Mutex::new(fs_manager),
-                thumbnail_manager: Mutex::new(ThumbnailManager::new(
-                    thumbnail_root,
-                    PathBuf::from("."),
-                    256
-                ).expect("Failed to create thumbnail manager")),
                 archive_manager: Mutex::new(archive_manager),
             });
             
-            // 初始化新的缩略图管理器状态
+            // 初始化超分管理器
             let thumbnail_path = app.path().app_data_dir()
                 .unwrap_or_else(|_| {
                     // 如果无法获取应用数据目录，使用当前目录
@@ -81,20 +60,6 @@ pub fn run() {
                 })
                 .join("thumbnails");
             
-            // 确保缩略图目录存在
-            std::fs::create_dir_all(&thumbnail_path)
-                .expect("Failed to create thumbnail directory");
-            
-            // 获取当前目录作为根目录
-            let root_path = std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."));
-            
-            println!("📁 缩略图路径: {}", thumbnail_path.display());
-            println!("📂 根目录路径: {}", root_path.display());
-            
-            // 缩略图管理器将在前端初始化，这里只创建目录
-            
-            // 初始化超分管理器
             let upscale_manager = core::upscale::UpscaleManager::new(thumbnail_path.clone());
             app.manage(UpscaleManagerState {
                 manager: Arc::new(Mutex::new(Some(upscale_manager))),
@@ -109,14 +74,10 @@ pub fn run() {
             // 初始化设置管理器
             app.manage(UpscaleSettingsState::default());
             
-            // 初始化缩略图设置
-            app.manage(SettingsState::default());
-            
             Ok(())
         })
         .manage(Mutex::new(BookManager::new()))
         .manage(Mutex::new(ImageLoader::default()))
-        .manage(ThumbnailManagerState::default())
         .invoke_handler(tauri::generate_handler![
             // Book commands
             commands::open_book,
@@ -141,26 +102,16 @@ pub fn run() {
             commands::fs_commands::start_directory_stream,
             commands::fs_commands::get_next_stream_batch,
             commands::fs_commands::cancel_directory_stream,
-            commands::generate_file_thumbnail,
-            commands::generate_thumbnail_from_data,
             commands::create_directory,
             commands::delete_path,
             commands::rename_path,
             commands::move_to_trash,
-            commands::get_thumbnail_cache_size,
-            commands::clear_thumbnail_cache,
-            commands::cleanup_thumbnail_cache,
             // Archive commands
             commands::list_archive_contents,
             commands::load_image_from_archive,
             commands::get_images_from_archive,
-            commands::generate_archive_thumbnail,
-            commands::generate_archive_thumbnail_root,
-            commands::generate_archive_thumbnail_inner,
             commands::get_archive_first_image_quick,
             commands::get_archive_first_image_blob,
-            commands::generate_archive_thumbnail_async,
-            commands::enqueue_archive_preload,
             commands::is_supported_archive,
             // Blob registry commands
             commands::get_blob_content,
@@ -186,26 +137,6 @@ pub fn run() {
             // Performance commands
             commands::get_performance_settings,
             commands::save_performance_settings,
-            // Thumbnail commands (new)
-            commands::init_thumbnail_manager,
-            commands::generate_file_thumbnail_async,
-            commands::generate_file_thumbnail_new,
-            commands::generate_folder_thumbnail,
-            commands::cancel_thumbnail_task,
-            commands::cancel_folder_tasks,
-            commands::get_thumbnail_error_stats,
-            commands::get_thumbnail_info,
-            commands::get_thumbnails_for_path,
-            commands::get_thumbnail_url,
-            commands::cleanup_thumbnails,
-            commands::get_thumbnail_stats,
-            commands::clear_all_thumbnails,
-            commands::preload_thumbnails,
-            commands::set_foreground_source,
-            // Thumbnail settings commands
-            commands::thumbnail_settings_commands::get_thumbnail_settings,
-            commands::thumbnail_settings_commands::update_thumbnail_settings,
-            commands::thumbnail_settings_commands::reset_thumbnail_settings,
             // Upscale commands
             commands::init_upscale_manager,
             commands::check_upscale_availability,

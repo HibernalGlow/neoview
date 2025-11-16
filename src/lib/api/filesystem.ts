@@ -1,6 +1,6 @@
 /**
  * 文件系统 API
- * 提供文件浏览、操作、缩略图生成等功能
+ * 提供文件浏览、操作等功能
  */
 
 import { invoke } from '@tauri-apps/api/core';
@@ -114,74 +114,6 @@ export async function getImagesInDirectory(
   return await invoke<string[]>('get_images_in_directory', { path, recursive });
 }
 
-/**
- * 生成文件缩略图 - tokio异步极致优化版本
- */
-export async function generateFileThumbnail(path: string): Promise<string> {
-  console.log('⚡ FileSystemAPI: 异步生成文件缩略图:', path);
-  try {
-    const result = await invoke<string>('generate_file_thumbnail_async', { filePath: path });
-    console.log('✅ FileSystemAPI: 文件缩略图生成成功:', result);
-    return result;
-  } catch (error) {
-    console.error('❌ FileSystemAPI: 文件缩略图生成失败:', path, error);
-    // 如果异步失败，降级到同步版本
-    console.log('🔄 降级到同步版本');
-    return await invoke<string>('generate_file_thumbnail_new', { filePath: path });
-  }
-}
-
-/**
- * 生成文件夹缩略图
- */
-export async function generateFolderThumbnail(path: string): Promise<string> {
-  console.log('📁 FileSystemAPI: 生成文件夹缩略图:', path);
-  try {
-    const result = await invoke<string>('generate_folder_thumbnail', { folderPath: path });
-    console.log('✅ FileSystemAPI: 文件夹缩略图生成成功:', result);
-    return result;
-  } catch (error) {
-    console.error('❌ FileSystemAPI: 文件夹缩略图生成失败:', path, error);
-    throw error;
-  }
-}
-
-/**
- * 获取缩略图数据（返回 base64 data URL）
- */
-export async function getThumbnailData(path: string): Promise<string> {
-  console.log('🖼️ FileSystemAPI: 获取缩略图数据:', path);
-  try {
-    const result = await invoke<string>('get_thumbnail_data', { filePath: path });
-    console.log('✅ FileSystemAPI: 缩略图数据获取成功');
-    return result;
-  } catch (error) {
-    console.error('❌ FileSystemAPI: 缩略图数据获取失败:', path, error);
-    throw error;
-  }
-}
-
-/**
- * 初始化缩略图管理器
- */
-export async function init_thumbnail_manager(
-  thumbnailPath: string,
-  rootPath: string,
-  size?: number
-): Promise<void> {
-  return await invoke<void>('init_thumbnail_manager', { 
-    thumbnailPath, 
-    rootPath, 
-    size 
-  });
-}
-
-/**
- * 从图片数据生成缩略图（用于压缩包内图片）
- */
-export async function generateThumbnailFromData(imageData: string, maxSize: number = 256): Promise<string> {
-  return await invoke<string>('generate_thumbnail_from_data', { imageData, maxSize });
-}
 
 /**
  * 创建目录
@@ -211,26 +143,6 @@ export async function moveToTrash(path: string): Promise<void> {
   await invoke('move_to_trash', { path });
 }
 
-/**
- * 获取缩略图缓存大小
- */
-export async function getThumbnailCacheSize(): Promise<number> {
-  return await invoke<number>('get_thumbnail_cache_size');
-}
-
-/**
- * 清空缩略图缓存
- */
-export async function clearThumbnailCache(): Promise<number> {
-  return await invoke<number>('clear_thumbnail_cache');
-}
-
-/**
- * 清理过期缓存
- */
-export async function cleanupThumbnailCache(maxAgeDays: number): Promise<number> {
-  return await invoke<number>('cleanup_thumbnail_cache', { maxAgeDays });
-}
 
 /**
  * 检查路径是否存在
@@ -274,56 +186,6 @@ export async function getImagesFromArchive(archivePath: string): Promise<string[
   return await invoke<string[]>('get_images_from_archive', { archivePath });
 }
 
-/**
- * 生成压缩包根缩略图（优化版本）
- */
-export async function generateArchiveThumbnailRoot(archivePath: string): Promise<string> {
-  console.log('📦 FileSystemAPI: 生成压缩包根缩略图:', archivePath);
-  try {
-    const result = await invoke<string>('generate_archive_thumbnail_root', { archivePath });
-    console.log('✅ FileSystemAPI: 压缩包根缩略图生成成功:', result);
-    return result;
-  } catch (error) {
-    console.error('❌ FileSystemAPI: 压缩包根缩略图生成失败:', archivePath, error);
-    throw error;
-  }
-}
-
-/**
- * 生成压缩包内特定页缩略图
- */
-export async function generateArchiveThumbnailInner(
-  archivePath: string,
-  innerPath: string
-): Promise<string> {
-  console.log('📦 FileSystemAPI: 生成压缩包内页缩略图:', archivePath, '::', innerPath);
-  try {
-    const result = await invoke<string>('generate_archive_thumbnail_inner', { 
-      archivePath, 
-      innerPath 
-    });
-    console.log('✅ FileSystemAPI: 压缩包内页缩略图生成成功:', result);
-    return result;
-  } catch (error) {
-    console.error('❌ FileSystemAPI: 压缩包内页缩略图生成失败:', archivePath, innerPath, error);
-    throw error;
-  }
-}
-
-/**
- * 生成压缩包内图片的缩略图（旧版本，保留兼容性）
- */
-export async function generateArchiveThumbnail(
-  archivePath: string,
-  filePath: string,
-  maxSize: number = 256
-): Promise<string> {
-  return await invoke<string>('generate_archive_thumbnail', { 
-    archivePath, 
-    filePath, 
-    maxSize 
-  });
-}
 
 /**
  * 检查是否为支持的压缩包
@@ -376,70 +238,6 @@ export async function searchFiles(
   return await invoke<FsItem[]>('search_files', { path, query, options });
 }
 
-// ===== 缩略图相关 API =====
-
-/**
- * 获取缩略图URL（不生成新的）
- */
-export async function getThumbnailUrl(path: string): Promise<string | null> {
-  return await invoke<string | null>('get_thumbnail_url', { path });
-}
-
-/**
- * 获取缩略图信息（包括尺寸等）
- */
-export async function getThumbnailInfo(path: string): Promise<any | null> {
-  return await invoke<any | null>('get_thumbnail_info', { path });
-}
-
-/**
- * 清理过期缩略图
- */
-export async function cleanupThumbnails(days?: number): Promise<number> {
-  return await invoke<number>('cleanup_thumbnails', { days });
-}
-
-/**
- * 获取缩略图统计信息
- */
-export async function getThumbnailStats(): Promise<any> {
-  return await invoke<any>('get_thumbnail_stats');
-}
-
-/**
- * 取消指定路径的缩略图生成任务
- */
-export async function cancelThumbnailTask(path: string): Promise<boolean> {
-  return await invoke<boolean>('cancel_thumbnail_task', { path });
-}
-
-/**
- * 取消指定目录下的所有缩略图生成任务
- */
-export async function cancelFolderTasks(dirPath: string): Promise<number> {
-  return await invoke<number>('cancel_folder_tasks', { dirPath });
-}
-
-/**
- * 获取错误统计信息
- */
-export async function getThumbnailErrorStats(): Promise<Record<string, number>> {
-  return await invoke<Record<string, number>>('get_thumbnail_error_stats');
-}
-
-/**
- * 清空所有缩略图
- */
-export async function clearAllThumbnails(): Promise<number> {
-  return await invoke<number>('clear_all_thumbnails');
-}
-
-/**
- * 预加载缩略图
- */
-export async function preloadThumbnails(paths: string[]): Promise<string[]> {
-  return await invoke<string[]>('preload_thumbnails', { paths });
-}
 
 /**
  * 生成视频缩略图
@@ -512,24 +310,6 @@ export async function getArchiveFirstImageBlob(archivePath: string): Promise<str
   }
 }
 
-/**
- * 后台异步生成压缩包缩略图（不等待完成）
- * 立即返回，缩略图生成在后台进行
- * 使用新的 archive API
- */
-export async function generateArchiveThumbnailAsync(archivePath: string): Promise<string> {
-  console.log('🔄 FileSystemAPI: 后台异步生成压缩包缩略图:', archivePath);
-  try {
-    // 使用新的 archive API
-    const { generateArchiveThumbnailAsync: invokeGenerateArchiveThumbnailAsync } = await import('./archive');
-    const result = await invokeGenerateArchiveThumbnailAsync(archivePath);
-    console.log('✅ FileSystemAPI: 异步生成已入队:', result);
-    return result;
-  } catch (error) {
-    console.error('❌ FileSystemAPI: 异步生成失败:', archivePath, error);
-    throw error;
-  }
-}
 
 /**
  * 优先加载当前文件夹（使用 tokio 优化）
@@ -544,35 +324,6 @@ export async function prioritizeCurrentFolder(dirPath: string): Promise<string> 
     return result;
   } catch (error) {
     console.error('❌ FileSystemAPI: 优先加载失败:', dirPath, error);
-    throw error;
-  }
-}
-
-/**
- * 获取缩略图处理器性能指标
- * 用于监控缩略图生成系统的运行状态
- */
-export async function getThumbnailMetrics(): Promise<any> {
-  try {
-    const metrics = await invoke<any>('get_thumbnail_metrics');
-    return metrics;
-  } catch (error) {
-    console.error('❌ FileSystemAPI: 获取处理器指标失败:', error);
-    throw error;
-  }
-}
-
-/**
- * 设置前台源目录
- * 用于优先处理当前可见目录的缩略图任务
- */
-export async function setForegroundSource(sourceId: string): Promise<void> {
-  console.log('🎯 FileSystemAPI: 设置前台源:', sourceId);
-  try {
-    await invoke<void>('set_foreground_source', { sourceId });
-    console.log('✅ FileSystemAPI: 前台源设置成功');
-  } catch (error) {
-    console.error('❌ FileSystemAPI: 前台源设置失败:', error);
     throw error;
   }
 }

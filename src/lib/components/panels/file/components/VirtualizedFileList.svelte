@@ -17,21 +17,14 @@
                        item.name.endsWith('.cbr');
       
       if (item.isDir) {
-        // 文件夹：立即加载（跟随虚拟列表），使用 immediate 优先级
-        // 不再延迟，确保在虚拟滚动时立即加载
-        thumbnailManager.getThumbnail(item.path, undefined, false, 'immediate').then((dataUrl) => {
+        // 文件夹：只从数据库加载，不主动查找（避免超多子文件夹影响性能）
+        // 文件夹缩略图由反向查找策略自动更新（当子文件/压缩包生成缩略图时）
+        thumbnailManager.getThumbnail(item.path, undefined, false, priority).then((dataUrl) => {
           if (dataUrl) {
             const key = toRelativeKey(item.path);
             fileBrowserStore.addThumbnail(key, dataUrl);
-          } else {
-            // 如果 getThumbnail 返回 null，尝试使用 getFolderThumbnail
-            thumbnailManager.getFolderThumbnail(item.path).then((folderDataUrl) => {
-              if (folderDataUrl) {
-                const key = toRelativeKey(item.path);
-                fileBrowserStore.addThumbnail(key, folderDataUrl);
-              }
-            });
           }
+          // 如果没有找到，不主动查找，避免性能问题
         });
       } else if (item.isImage || isArchive) {
         thumbnailManager.getThumbnail(item.path, undefined, isArchive, priority);

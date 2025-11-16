@@ -356,7 +356,10 @@ class ThumbnailManager {
           timestamp: Date.now(),
         });
         this.dbIndexCache.set(pathKey, true);
-        console.log(`✅ 从数据库加载缩略图: ${pathKey}`);
+        // 只在调试模式下打印日志
+        if (import.meta.env.DEV) {
+          console.log(`✅ 从数据库加载缩略图: ${pathKey}`);
+        }
         return dbBlobUrl;
       }
       // 如果数据库中没有，更新索引缓存
@@ -367,13 +370,18 @@ class ThumbnailManager {
       this.dbIndexCache.set(pathKey, false);
     }
 
-    // 3. 如果任务已在处理中，等待
+    // 3. 文件夹处理：只从数据库加载，不主动生成（避免性能问题）
+    // 文件夹缩略图由反向查找策略自动更新（当子文件/压缩包生成缩略图时）
+    // 注意：这里无法直接判断是否为文件夹，但 VirtualizedFileList 会传递 isDir 信息
+    // 文件夹的缩略图只从数据库加载，如果数据库中没有，返回 null（不主动查找）
+
+    // 4. 如果任务已在处理中，等待
     if (this.processingTasks.has(pathKey)) {
       // 可以返回一个占位符或等待
       return null;
     }
 
-    // 4. 添加到任务队列
+    // 5. 添加到任务队列
     this.enqueueTask({
       path,
       innerPath,
@@ -382,7 +390,7 @@ class ThumbnailManager {
       timestamp: Date.now(),
     });
 
-    // 5. 立即处理高优先级任务和当前目录任务（不等待，异步执行）
+    // 6. 立即处理高优先级任务和当前目录任务（不等待，异步执行）
     if (priority === 'immediate' || path.startsWith(this.currentDirectory)) {
       // 立即触发队列处理，确保 immediate 和当前目录任务优先
       setTimeout(() => this.processQueue(), 0);
@@ -509,7 +517,16 @@ class ThumbnailManager {
         return dbThumbnail;
       }
 
-      // 生成新缩略图
+      // 如果是文件夹，不主动生成（避免性能问题）
+      // 文件夹缩略图由反向查找策略自动更新
+      // 这里通过检查路径是否可能是文件夹来判断（简单判断：没有扩展名且不是压缩包）
+      if (!task.isArchive && !task.innerPath) {
+        // 可能是文件夹，不主动生成
+        // 文件夹缩略图会在子文件生成时自动更新
+        return null;
+      }
+
+      // 生成新缩略图（只处理文件和压缩包）
       const blobKey = await this.generateThumbnail(task.path, task.innerPath, task.isArchive);
       if (blobKey) {
         // 转换为 blob URL
@@ -662,123 +679,36 @@ class ThumbnailManager {
   }
 
   /**
-   * 获取文件夹缩略图（使用子路径下第一个条目的缩略图，可以递归，但限制深度避免卡顿）
-   * @param folderPath 文件夹路径
-   * @param maxDepth 最大递归深度（默认3，避免超多文件夹造成卡顿）
-   * @param currentDepth 当前递归深度（内部使用）
+   * 获取文件夹缩略图（已弃用：不再主动查找，只从数据库加载）
+   * 文件夹缩略图由反向查找策略自动更新（当子文件/压缩包生成缩略图时）
+   * @deprecated 文件夹缩略图现在只从数据库加载，不主动查找
    */
   async getFolderThumbnail(
     folderPath: string,
-    maxDepth: number = 3,
-    currentDepth: number = 0
+    _maxDepth?: number,
+    _currentDepth?: number
   ): Promise<string | null> {
-    // 限制递归深度，避免超多文件夹造成卡顿
-    if (currentDepth >= maxDepth) {
-      console.debug(`⚠️ 文件夹缩略图递归深度已达上限 (${maxDepth}): ${folderPath}`);
-      return null;
+    // 只从数据库加载，不主动查找（避免超多子文件夹影响性能）
+    const pathKey = this.buildPathKey(folderPath);
+    const cached = this.cache.get(pathKey);
+    if (cached) {
+      return cached.dataUrl;
     }
 
-    try {
-      // 先检查是否有缓存的文件夹缩略图
-      const pathKey = this.buildPathKey(folderPath);
-      const cached = this.cache.get(pathKey);
-      if (cached) {
-        return cached.dataUrl;
-      }
-
-      // 尝试从数据库加载文件夹缩略图
-      const dbThumbnail = await this.loadFromDb(folderPath);
-      if (dbThumbnail) {
-        this.cache.set(pathKey, {
-          pathKey,
-          dataUrl: dbThumbnail,
-          timestamp: Date.now(),
-        });
-        return dbThumbnail;
-      }
-
-      // 数据库中没有记录，开始查找文件夹内容
-      console.log(`📭 数据库中没有找到缩略图: key=${folderPath}`);
-      console.log(`🔍 开始查找文件夹内容: ${folderPath}`);
-
-      // 立即获取文件夹内容（不延迟，跟随虚拟列表）
-      const { invoke } = await import('@tauri-apps/api/core');
-      
-      try {
-        const items = await invoke<FsItem[]>('browse_directory', { path: folderPath });
-        
-        // 优先查找图片文件
-        const firstImage = items.find((item) => item.isImage && !item.isDir);
-
-        if (firstImage) {
-          console.log(`🖼️ 找到图片文件，使用图片缩略图: ${firstImage.path}`);
-          // 使用第一个图片的缩略图（immediate 优先级，立即加载）
-          const thumbnail = await this.getThumbnail(firstImage.path, undefined, false, 'immediate');
-          if (thumbnail) {
-            // 缓存文件夹缩略图
-            this.cache.set(pathKey, {
-              pathKey,
-              dataUrl: thumbnail,
-              timestamp: Date.now(),
-            });
-            return thumbnail;
-          }
-        }
-
-        // 如果没有图片，尝试查找压缩包
-        const firstArchive = items.find(
-          (item) =>
-            !item.isDir &&
-            (item.name.endsWith('.zip') ||
-              item.name.endsWith('.cbz') ||
-              item.name.endsWith('.rar') ||
-              item.name.endsWith('.cbr'))
-        );
-
-        if (firstArchive) {
-          console.log(`📦 找到压缩包，使用压缩包缩略图: ${firstArchive.path}`);
-          const thumbnail = await this.getThumbnail(firstArchive.path, undefined, true, 'immediate');
-          if (thumbnail) {
-            this.cache.set(pathKey, {
-              pathKey,
-              dataUrl: thumbnail,
-              timestamp: Date.now(),
-            });
-            return thumbnail;
-          }
-        }
-
-        // 如果没有图片和压缩包，尝试查找子文件夹（递归，但限制深度）
-        const firstSubfolder = items.find((item) => item.isDir);
-        if (firstSubfolder) {
-          console.log(`📁 找到子文件夹，递归查找: ${firstSubfolder.path}`);
-          // 递归查找，增加深度计数
-          const subThumbnail = await this.getFolderThumbnail(
-            firstSubfolder.path,
-            maxDepth,
-            currentDepth + 1
-          );
-          if (subThumbnail) {
-            this.cache.set(pathKey, {
-              pathKey,
-              dataUrl: subThumbnail,
-              timestamp: Date.now(),
-            });
-            return subThumbnail;
-          }
-        }
-        
-        console.log(`⚠️ 文件夹中没有找到可用的缩略图源: ${folderPath}`);
-        
-        return null;
-      } catch (error) {
-        console.debug('获取文件夹缩略图失败:', folderPath, error);
-        return null;
-      }
-    } catch (error) {
-      console.debug('获取文件夹缩略图失败:', folderPath, error);
-      return null;
+    // 尝试从数据库加载文件夹缩略图
+    const dbThumbnail = await this.loadFromDb(folderPath);
+    if (dbThumbnail) {
+      this.cache.set(pathKey, {
+        pathKey,
+        dataUrl: dbThumbnail,
+        timestamp: Date.now(),
+      });
+      return dbThumbnail;
     }
+
+    // 数据库中没有记录，不主动查找（避免性能问题）
+    // 文件夹缩略图会在子文件/压缩包生成缩略图时自动更新
+    return null;
   }
 
   /**

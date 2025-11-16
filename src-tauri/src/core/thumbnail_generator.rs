@@ -1,7 +1,7 @@
 //! Thumbnail Generator Module
 //! 缩略图生成器模块 - 支持多线程、压缩包流式处理、webp 格式
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::io::{Cursor, Read};
 use image::{DynamicImage, GenericImageView, ImageFormat};
@@ -9,6 +9,9 @@ use crate::core::thumbnail_db::ThumbnailDb;
 use threadpool::ThreadPool;
 use std::sync::mpsc;
 use std::collections::HashMap;
+
+/// 反向查找父文件夹的最大层级（可配置）
+const MAX_PARENT_LEVELS: usize = 2;
 
 /// 缩略图生成器配置
 #[derive(Clone)]
@@ -75,6 +78,11 @@ impl ThumbnailGenerator {
 
     /// 生成文件路径的键（用于数据库）
     fn build_path_key(&self, path: &str, inner_path: Option<&str>) -> String {
+        Self::build_path_key_static(path, inner_path)
+    }
+    
+    /// 静态方法：构建路径键（用于父文件夹查找）
+    fn build_path_key_static(path: &str, inner_path: Option<&str>) -> String {
         if let Some(inner) = inner_path {
             format!("{}::{}", path, inner)
         } else {
@@ -249,6 +257,14 @@ impl ThumbnailGenerator {
                         if cfg!(debug_assertions) {
                             println!("✅ 文件缩略图已保存到数据库: {} ({} bytes)", path_key_clone, webp_data.len());
                         }
+                        
+                        // 反向查找：检查父文件夹是否需要缩略图
+                        Self::update_parent_folders_thumbnail(
+                            &db_clone,
+                            &path_key_clone,
+                            &webp_data,
+                            MAX_PARENT_LEVELS,
+                        );
                     }
                     Err(e) => {
                         eprintln!("❌ 保存文件缩略图到数据库失败: {} - {}", path_key_clone, e);
@@ -325,6 +341,78 @@ impl ThumbnailGenerator {
             Err(_) => {
                 eprintln!("⚠️ vips 命令不存在，无法处理 AVIF: {}", path_key);
                 None
+            }
+        }
+    }
+    
+    /// 更新父文件夹的缩略图（反向查找策略）
+    /// 检查父文件夹和祖父文件夹是否有缩略图记录，如果没有，将当前缩略图复制给它们
+    fn update_parent_folders_thumbnail(
+        db: &Arc<ThumbnailDb>,
+        file_path: &str,
+        thumbnail_data: &[u8],
+        max_levels: usize,
+    ) {
+        // 获取文件路径的父目录
+        let mut current_path = PathBuf::from(file_path);
+        
+        // 向上查找最多 max_levels 级父文件夹
+        for level in 1..=max_levels {
+            // 获取当前路径的父目录
+            if let Some(parent) = current_path.parent() {
+                let parent_path_str = parent.to_string_lossy().to_string();
+                
+                // 检查父文件夹是否有缩略图记录
+                let parent_size = match std::fs::metadata(&parent_path_str) {
+                    Ok(meta) => meta.len() as i64,
+                    Err(_) => {
+                        // 如果无法获取元数据，跳过此级别，继续查找上一级
+                        current_path = parent.to_path_buf();
+                        continue;
+                    }
+                };
+                
+                let parent_path_key = Self::build_path_key_static(&parent_path_str, None);
+                let parent_ghash = Self::generate_hash(&parent_path_key, parent_size);
+                
+                // 检查数据库中是否已有记录
+                match db.load_thumbnail(&parent_path_key, parent_size, parent_ghash) {
+                    Ok(Some(_)) => {
+                        // 已有记录，跳过（不继续向上查找，因为已经有缩略图了）
+                        if cfg!(debug_assertions) {
+                            println!("📁 父文件夹已有缩略图记录，跳过: {} (level {})", parent_path_str, level);
+                        }
+                        break; // 已有记录，停止向上查找
+                    }
+                    Ok(None) => {
+                        // 没有记录，复制当前缩略图给父文件夹
+                        if cfg!(debug_assertions) {
+                            println!("📁 父文件夹没有缩略图记录，复制当前缩略图: {} (level {})", parent_path_str, level);
+                        }
+                        
+                        match db.save_thumbnail(&parent_path_key, parent_size, parent_ghash, thumbnail_data) {
+                            Ok(_) => {
+                                if cfg!(debug_assertions) {
+                                    println!("✅ 已为父文件夹保存缩略图: {} (level {})", parent_path_str, level);
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("❌ 为父文件夹保存缩略图失败: {} (level {}) - {}", parent_path_str, level, e);
+                            }
+                        }
+                        
+                        // 继续向上查找下一级
+                        current_path = parent.to_path_buf();
+                    }
+                    Err(e) => {
+                        eprintln!("❌ 检查父文件夹缩略图失败: {} (level {}) - {}", parent_path_str, level, e);
+                        // 继续向上查找下一级
+                        current_path = parent.to_path_buf();
+                    }
+                }
+            } else {
+                // 没有更多父目录，停止查找
+                break;
             }
         }
     }
@@ -558,6 +646,14 @@ impl ThumbnailGenerator {
                                     if cfg!(debug_assertions) {
                                         println!("✅ 压缩包缩略图已保存到数据库: {} ({} bytes)", path_key_clone, webp_data.len());
                                     }
+                                    
+                                    // 反向查找：检查父文件夹是否需要缩略图
+                                    Self::update_parent_folders_thumbnail(
+                                        &db_clone,
+                                        &path_key_clone,
+                                        &webp_data,
+                                        MAX_PARENT_LEVELS,
+                                    );
                                 }
                                 Err(e) => {
                                     eprintln!("❌ 保存压缩包缩略图到数据库失败: {} - {}", path_key_clone, e);

@@ -1,6 +1,7 @@
 import { FileSystemAPI } from '$lib/api';
 import { toAssetUrl } from '$lib/utils/assetProxy';
 import { thumbnailState } from '$lib/stores/thumbnailState';
+import { thumbnailStore, setupThumbnailEventListener } from '$lib/thumbnailManager';
 import { startThumbnailEventListener, stopThumbnailEventListener, isThumbnailEventListenerActive } from './thumbnailEvents';
 
 type Priority = 'foreground' | 'immediate' | 'high' | 'normal';
@@ -42,6 +43,9 @@ class ThumbnailScheduler {
     // 启动事件监听器
     this.setupEventListener();
     
+    // 设置新的事件监听（blob 系统）
+    setupThumbnailEventListener();
+    
     this.processQueue();
   }
 
@@ -50,8 +54,12 @@ class ThumbnailScheduler {
       startThumbnailEventListener((event) => {
         const normalizedPath = this.normalizePath(event.path);
         
-        // 更新状态缓存
+        // 更新旧的状态缓存（兼容性）
         thumbnailState.cacheThumbnail(normalizedPath, event.url);
+        
+        // 更新新的状态系统
+        const isBlob = event.url.startsWith('blob:');
+        thumbnailStore.update(normalizedPath, event.url, isBlob, isBlob ? event.url : undefined);
         
         // 调用回调更新UI
         if (this.addThumbnailCb) {
@@ -240,10 +248,14 @@ class ThumbnailScheduler {
         console.log('⚡ 首次加载压缩包，快速显示原图:', path);
         try {
           // 使用新的 blob API 获取 blob URL
-          const blobUrl = await FileSystemAPI.getArchiveFirstImageQuick(path);
+          const blobUrl = await FileSystemAPI.getArchiveFirstImageBlob(path);
           if (blobUrl) {
-            // 缓存临时缩略图
+            // 更新旧的状态系统（兼容性）
             thumbnailState.cacheThumbnail(normalizedPath, blobUrl);
+            
+            // 更新新的状态系统
+            const blobKey = blobUrl.startsWith('blob:') ? blobUrl : undefined;
+            thumbnailStore.update(normalizedPath, blobUrl, true, blobKey);
             
             if (this.addThumbnailCb) {
               const key = this.toRelativeKey(path);

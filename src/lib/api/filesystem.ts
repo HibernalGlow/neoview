@@ -478,12 +478,11 @@ export async function enqueueDirFilesHighestPriority(dirPath: string): Promise<n
 }
 
 /**
- * 快速获取压缩包内的第一张图片
- * 使用后端的 BlobRegistry 返回 blob:{hash} URL
- * 无需前端创建 Blob 对象
+ * 快速获取压缩包内的第一张图片（旧版本，返回字节数组）
+ * @deprecated 请使用 getArchiveFirstImageBlob
  */
 export async function getArchiveFirstImageQuick(archivePath: string): Promise<string> {
-  console.log('⚡ FileSystemAPI: 快速获取压缩包首张图片:', archivePath);
+  console.log('⚡ FileSystemAPI: 快速获取压缩包首张图片 (旧版):', archivePath);
   try {
     // 使用新的 blob API
     const { getArchiveFirstImageBlob } = await import('./archive');
@@ -492,6 +491,23 @@ export async function getArchiveFirstImageQuick(archivePath: string): Promise<st
     return blobUrl;
   } catch (error) {
     console.error('❌ FileSystemAPI: 快速获取失败:', archivePath, error);
+    throw error;
+  }
+}
+
+/**
+ * 快速获取压缩包内的第一张图片（使用 BlobRegistry）
+ * 直接返回后端的 blob:{hash} URL
+ */
+export async function getArchiveFirstImageBlob(archivePath: string): Promise<string> {
+  console.log('⚡ FileSystemAPI: 获取压缩包首图 blob:', archivePath);
+  try {
+    const { getArchiveFirstImageBlob } = await import('./archive');
+    const blobUrl = await getArchiveFirstImageBlob(archivePath);
+    console.log('✅ FileSystemAPI: 获取成功, blob URL:', blobUrl);
+    return blobUrl;
+  } catch (error) {
+    console.error('❌ FileSystemAPI: 获取失败:', archivePath, error);
     throw error;
   }
 }

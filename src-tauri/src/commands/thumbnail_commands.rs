@@ -1281,6 +1281,7 @@ async fn get_archive_first_image_fallback(path: &PathBuf, manager: crate::core::
 #[command]
 pub async fn generate_archive_thumbnail_async(
     archive_path: String,
+    app_handle: tauri::AppHandle,
     state: tauri::State<'_, ThumbnailManagerState>,
 ) -> Result<String, String> {
     println!("🔄 [Rust] 后台异步生成压缩包缩略图: {}", archive_path);
@@ -1357,6 +1358,19 @@ pub async fn generate_archive_thumbnail_async(
                                         let cache_key = normalize_path_string(path_clone.to_string_lossy());
                                         cache.set(cache_key.clone(), thumbnail_url.clone());
                                         println!("💾 [Rust] 异步生成完成并缓存: {}", cache_key);
+                                    }
+                                    
+                                    // 发射缩略图更新事件
+                                    if let Err(e) = app_handle.emit_all("thumbnail:updated", 
+                                        serde_json::json!({
+                                            "archivePath": archive_path,
+                                            "webpUrl": thumbnail_url,
+                                            "blobUrl": null // 这里没有之前的 blob，因为是通过异步命令触发的
+                                        })
+                                    ) {
+                                        println!("⚠️ [Rust] 发射 thumbnail:updated 事件失败: {}", e);
+                                    } else {
+                                        println!("🎯 [Rust] 已发射 thumbnail:updated 事件: {} -> {}", archive_path, thumbnail_url);
                                     }
                                 }
                                 Err(e) => {

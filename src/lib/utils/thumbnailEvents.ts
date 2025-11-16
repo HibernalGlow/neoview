@@ -3,7 +3,6 @@
  * 监听后端发送的 thumbnail-ready 事件
  */
 
-import { appWindow } from '@tauri-apps/api/window';
 import { listen } from '@tauri-apps/api/event';
 
 export interface ThumbnailReadyEvent {

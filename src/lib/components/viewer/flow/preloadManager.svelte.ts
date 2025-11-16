@@ -188,7 +188,7 @@ export class PreloadManager {
 				this.preUpscaledPages.clear();
 				
 				// 重置图片加载器的缓存
-				this.imageLoader.clearCache();
+				this.imageLoader.cleanup();
 			}
 			
 			lastBookPath = currentBookPath;

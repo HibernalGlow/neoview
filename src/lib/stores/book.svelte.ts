@@ -113,12 +113,27 @@ class BookStore {
       this.state.loading = true;
       this.state.error = '';
 
+      // 清除旧书的状态
+      this.state.currentImage = null;
+      this.state.upscaledImageData = null;
+      this.state.upscaledImageBlob = null;
+      this.state.currentPageUpscaled = false;
+
       // 使用通用的 openBook API (它会自动检测类型)
       const book = await bookApi.openBook(path);
       console.log('✅ Book opened:', book.name, 'with', book.totalPages, 'pages');
 
+      // 重置页码到第一页
+      book.currentPage = 0;
+      
       this.state.currentBook = book;
       this.state.viewerOpen = true;
+      
+      // 重置所有页面的超分状态
+      this.resetAllPageUpscaleStatus();
+      
+      // 触发重置预超分进度事件
+      window.dispatchEvent(new CustomEvent('reset-pre-upscale-progress'));
     } catch (err) {
       console.error('❌ Error opening book:', err);
       this.state.error = String(err);
@@ -137,12 +152,27 @@ class BookStore {
       this.state.loading = true;
       this.state.error = '';
 
+      // 清除旧书的状态
+      this.state.currentImage = null;
+      this.state.upscaledImageData = null;
+      this.state.upscaledImageBlob = null;
+      this.state.currentPageUpscaled = false;
+
       // 使用通用的 openBook API (它会自动检测类型)
       const book = await bookApi.openBook(path);
       console.log('✅ Book opened:', book.name, 'with', book.totalPages, 'pages');
 
+      // 重置页码到第一页
+      book.currentPage = 0;
+      
       this.state.currentBook = book;
       this.state.viewerOpen = true;
+      
+      // 重置所有页面的超分状态
+      this.resetAllPageUpscaleStatus();
+      
+      // 触发重置预超分进度事件
+      window.dispatchEvent(new CustomEvent('reset-pre-upscale-progress'));
     } catch (err) {
       console.error('❌ Error opening directory as book:', err);
       this.state.error = String(err);
@@ -161,12 +191,27 @@ class BookStore {
       this.state.loading = true;
       this.state.error = '';
 
+      // 清除旧书的状态
+      this.state.currentImage = null;
+      this.state.upscaledImageData = null;
+      this.state.upscaledImageBlob = null;
+      this.state.currentPageUpscaled = false;
+
       // 使用通用的 openBook API (它会自动检测类型)
       const book = await bookApi.openBook(path);
       console.log('✅ Book opened:', book.name, 'with', book.totalPages, 'pages');
 
+      // 重置页码到第一页
+      book.currentPage = 0;
+      
       this.state.currentBook = book;
       this.state.viewerOpen = true;
+      
+      // 重置所有页面的超分状态
+      this.resetAllPageUpscaleStatus();
+      
+      // 触发重置预超分进度事件
+      window.dispatchEvent(new CustomEvent('reset-pre-upscale-progress'));
     } catch (err) {
       console.error('❌ Error opening archive as book:', err);
       this.state.error = String(err);

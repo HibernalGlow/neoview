@@ -46,15 +46,12 @@ export function buildImagePathKey(ctx: ImagePathContext): string {
 
 /**
  * 统一获取稳定哈希
- * 注意：此函数已弃用，请使用 bookStore.getPageHash() 或 bookStore.getCurrentPageHash()
- * 保留仅用于兼容性
- * @deprecated
+ * 注意：对于 bookStore 相关的场景，请使用 bookStore.getPageHash() 或 bookStore.getCurrentPageHash()
+ * 对于缩略图等独立场景，可以使用此函数
  */
 export async function getStableImageHash(
   ctxOrKey: ImagePathContext | string
 ): Promise<string> {
-  console.warn('getStableImageHash 已弃用，请使用 bookStore.getPageHash() 或 bookStore.getCurrentPageHash()');
-  
   const pathKey = typeof ctxOrKey === 'string' ? ctxOrKey : buildImagePathKey(ctxOrKey);
 
   // 检查缓存

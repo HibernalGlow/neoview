@@ -24,6 +24,16 @@ use std::sync::Arc;
 pub fn run() {
     // 设置 panic hook，避免崩溃导致软件闪退
     std::panic::set_hook(Box::new(|panic_info| {
+        // 检查是否是 dav1d 相关的 panic
+        if let Some(location) = panic_info.location() {
+            let file = location.file();
+            if file.contains("dav1d") || file.contains("avif") {
+                // dav1d/avif 相关的 panic，静默处理
+                eprintln!("⚠️ 图像解码 panic (已捕获，不影响运行): {:?}", location);
+                return;
+            }
+        }
+        
         eprintln!("⚠️ Panic caught: {:?}", panic_info);
         // 记录 panic 但不终止进程
         if let Some(location) = panic_info.location() {

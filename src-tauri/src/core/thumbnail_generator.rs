@@ -188,15 +188,18 @@ impl ThumbnailGenerator {
             return Ok(cached);
         }
         
-        // 从文件加载图像（改进错误处理）
-        let image_data = std::fs::read(file_path)
-            .map_err(|e| {
+        // 从文件加载图像（改进错误处理，静默处理权限错误）
+        let image_data = match std::fs::read(file_path) {
+            Ok(data) => data,
+            Err(e) => {
                 if e.kind() == std::io::ErrorKind::PermissionDenied {
-                    format!("读取文件失败: 权限被拒绝 (os error 5)。请检查文件权限或尝试以管理员身份运行")
+                    // 权限错误：静默返回错误，不打印日志（避免日志污染）
+                    return Err("权限被拒绝".to_string());
                 } else {
-                    format!("读取文件失败: {}", e)
+                    return Err(format!("读取文件失败: {}", e));
                 }
-            })?;
+            }
+        };
         
         // 检查是否为 JXL 文件
         let img = if let Some(ext) = Path::new(file_path).extension().and_then(|e| e.to_str()) {
@@ -257,14 +260,17 @@ impl ThumbnailGenerator {
         use zip::ZipArchive;
         use std::fs::File;
         
-        let file = File::open(archive_path)
-            .map_err(|e| {
+        let file = match File::open(archive_path) {
+            Ok(f) => f,
+            Err(e) => {
                 if e.kind() == std::io::ErrorKind::PermissionDenied {
-                    format!("打开压缩包失败: 权限被拒绝 (os error 5)。请检查文件权限或尝试以管理员身份运行")
+                    // 权限错误：静默返回错误
+                    return Err("权限被拒绝".to_string());
                 } else {
-                    format!("打开压缩包失败: {}", e)
+                    return Err(format!("打开压缩包失败: {}", e));
                 }
-            })?;
+            }
+        };
         let mut archive = ZipArchive::new(file)
             .map_err(|e| format!("读取压缩包失败: {}", e))?;
         

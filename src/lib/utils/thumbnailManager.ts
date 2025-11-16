@@ -5,7 +5,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { buildImagePathKey, type ImagePathContext } from './pathHash';
+import { buildImagePathKey, type ImagePathContext, getStableImageHash } from './pathHash';
 import type { FsItem } from '$lib/types';
 
 export interface ThumbnailConfig {
@@ -139,15 +139,11 @@ class ThumbnailManager {
 
   /**
    * 生成哈希值（用于数据库查询）
-   * 使用本地 SHA-256 计算，避免弃用警告
+   * 使用 getStableImageHash 保持一致性
    */
   private async generateHash(pathKey: string, size: number): Promise<number> {
-    // 使用 Web Crypto API 计算 SHA-256 哈希
-    const encoder = new TextEncoder();
-    const bytes = encoder.encode(pathKey);
-    const buf = await crypto.subtle.digest('SHA-256', bytes);
-    const arr = Array.from(new Uint8Array(buf));
-    const hash = arr.map(b => b.toString(16).padStart(2, '0')).join('');
+    // 使用统一的哈希函数
+    const hash = await getStableImageHash(pathKey);
     
     // 转换为 i32（取前8位字符的哈希值，然后取模避免溢出）
     const hashNum = parseInt(hash.substring(0, 8), 16) % 2147483647; // i32 max
@@ -289,7 +285,11 @@ class ThumbnailManager {
         }
       }
     } catch (error) {
-      console.error('生成缩略图失败:', path, error);
+      // 权限错误静默处理，其他错误才打印
+      const errorMsg = String(error);
+      if (!errorMsg.includes('权限被拒绝') && !errorMsg.includes('Permission denied')) {
+        console.error('生成缩略图失败:', path, error);
+      }
     }
 
     return null;
@@ -355,16 +355,30 @@ class ThumbnailManager {
   }
 
   /**
-   * 入队任务（带上限管理）
+   * 入队任务（带上限管理和当前目录优先）
    */
   private enqueueTask(task: ThumbnailTask) {
     // 检查队列上限
     if (this.taskQueue.length >= this.MAX_QUEUE_SIZE) {
-      // 移除最低优先级的任务
+      // 优先移除非当前目录的低优先级任务
       const priorityOrder = { immediate: 0, high: 1, normal: 2 };
-      this.taskQueue.sort((a, b) => priorityOrder[b.priority] - priorityOrder[a.priority]);
-      this.taskQueue = this.taskQueue.slice(0, this.MAX_QUEUE_SIZE - 1);
-      console.warn('缩略图队列已满，移除低优先级任务');
+      
+      // 先移除非当前目录的 normal 优先级任务
+      const toRemove = this.taskQueue.filter(t => 
+        t.priority === 'normal' && 
+        !t.path.startsWith(this.currentDirectory)
+      );
+      
+      if (toRemove.length > 0) {
+        // 移除这些任务
+        this.taskQueue = this.taskQueue.filter(t => !toRemove.includes(t));
+        console.warn(`缩略图队列已满，移除 ${toRemove.length} 个非当前目录的低优先级任务`);
+      } else {
+        // 如果没有可移除的，移除最低优先级的任务
+        this.taskQueue.sort((a, b) => priorityOrder[b.priority] - priorityOrder[a.priority]);
+        this.taskQueue = this.taskQueue.slice(0, this.MAX_QUEUE_SIZE - 1);
+        console.warn('缩略图队列已满，移除低优先级任务');
+      }
     }
 
     // 检查是否已存在
@@ -373,21 +387,48 @@ class ThumbnailManager {
     );
 
     if (existingIndex >= 0) {
-      // 更新优先级（如果更高）
+      // 更新优先级（如果更高，或者属于当前目录）
       const existing = this.taskQueue[existingIndex];
       const priorityOrder = { immediate: 0, high: 1, normal: 2 };
-      if (priorityOrder[task.priority] < priorityOrder[existing.priority]) {
+      const isCurrentDir = task.path.startsWith(this.currentDirectory);
+      const existingIsCurrentDir = existing.path.startsWith(this.currentDirectory);
+      
+      // 如果新任务属于当前目录而旧任务不是，提升优先级
+      if (isCurrentDir && !existingIsCurrentDir) {
         existing.priority = task.priority;
-        this.taskQueue.sort(
-          (a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]
-        );
+        existing.path = task.path; // 更新路径
+      } else if (priorityOrder[task.priority] < priorityOrder[existing.priority]) {
+        existing.priority = task.priority;
       }
+      
+      this.taskQueue.sort(
+        (a, b) => {
+          const priorityOrder = { immediate: 0, high: 1, normal: 2 };
+          const aIsCurrent = a.path.startsWith(this.currentDirectory);
+          const bIsCurrent = b.path.startsWith(this.currentDirectory);
+          
+          // 当前目录优先
+          if (aIsCurrent && !bIsCurrent) return -1;
+          if (!aIsCurrent && bIsCurrent) return 1;
+          
+          // 然后按优先级
+          return priorityOrder[a.priority] - priorityOrder[b.priority];
+        }
+      );
     } else {
       // 添加新任务
       this.taskQueue.push(task);
       this.taskQueue.sort(
         (a, b) => {
           const priorityOrder = { immediate: 0, high: 1, normal: 2 };
+          const aIsCurrent = a.path.startsWith(this.currentDirectory);
+          const bIsCurrent = b.path.startsWith(this.currentDirectory);
+          
+          // 当前目录优先
+          if (aIsCurrent && !bIsCurrent) return -1;
+          if (!aIsCurrent && bIsCurrent) return 1;
+          
+          // 然后按优先级
           return priorityOrder[a.priority] - priorityOrder[b.priority];
         }
       );

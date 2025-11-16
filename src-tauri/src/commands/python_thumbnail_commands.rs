@@ -114,15 +114,15 @@ pub async fn get_thumbnail_blobs(
 /// 预加载目录缩略图
 #[command]
 pub async fn prefetch_thumbnails(
-    dir_path: String,
-    entries: Vec<Value>,
+    dirPath: String,
+    entries: Vec<serde_json::Value>,
     state: tauri::State<'_, PyThumbState>,
 ) -> Result<i32, String> {
     let client = get_client(&state).await?;
     
     let req = PrefetchReq {
-        dir_path,
-        entries,
+        dir_path: dirPath,
+        entries: entries,
     };
     
     client.prefetch_directory(req).await

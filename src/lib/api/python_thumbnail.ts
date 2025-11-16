@@ -39,8 +39,8 @@ class PythonThumbnailAPI {
    */
   async getThumbnailBlob(filePath: string, isFolder?: boolean): Promise<Uint8Array> {
     return await invoke('get_thumbnail_blob', { 
-      file_path: filePath, 
-      is_folder: isFolder 
+      filePath: filePath, 
+      isFolder: isFolder 
     });
   }
   
@@ -51,7 +51,7 @@ class PythonThumbnailAPI {
    */
   async getThumbnailBlobs(filePaths: string[]): Promise<Array<[string, Uint8Array]>> {
     return await invoke('get_thumbnail_blobs', { 
-      file_paths: filePaths 
+      filePaths: filePaths 
     });
   }
   
@@ -63,7 +63,7 @@ class PythonThumbnailAPI {
    */
   async prefetchThumbnails(dirPath: string, entries: any[]): Promise<number> {
     return await invoke('prefetch_thumbnails', { 
-      dir_path: dirPath, 
+      dirPath: dirPath, 
       entries: entries 
     });
   }

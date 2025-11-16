@@ -95,16 +95,44 @@ impl PyThumbClient {
         }
         
         // 获取 Python 脚本路径
-        let script_path = std::env::current_exe()
-            .map_err(|e| format!("获取可执行文件路径失败: {}", e))?
+        // 首先尝试在可执行文件目录查找
+        let exe_path = std::env::current_exe()
+            .map_err(|e| format!("获取可执行文件路径失败: {}", e))?;
+        
+        let script_path = exe_path
             .parent()
             .ok_or("无法获取可执行文件目录")?
             .join("python")
             .join("thumbnail_service.py");
         
-        if !script_path.exists() {
-            return Err(format!("Python 脚本不存在: {}", script_path.display()));
-        }
+        // 如果不存在，尝试在源代码目录查找
+        let script_path = if script_path.exists() {
+            script_path
+        } else {
+            // 向上查找 src-tauri 目录
+            let mut current_dir = exe_path.parent().unwrap_or(&exe_path);
+            let mut found = false;
+            
+            for _ in 0..5 { // 最多向上查找5层
+                let test_path = current_dir.join("python").join("thumbnail_service.py");
+                if test_path.exists() {
+                    found = true;
+                    break;
+                }
+                current_dir = match current_dir.parent() {
+                    Some(p) => p,
+                    None => break,
+                };
+            }
+            
+            if found {
+                current_dir.join("python").join("thumbnail_service.py")
+            } else {
+                return Err(format!("Python 脚本不存在: {}", script_path.display()));
+            }
+        };
+        
+        println!("📁 Python 脚本路径: {}", script_path.display());
         
         // 启动 Python 子进程
         let mut child = Command::new("python")

@@ -3,7 +3,7 @@
 
 use std::path::Path;
 use std::sync::Arc;
-use std::io::{self, Cursor, Read};
+use std::io::{Cursor, Read};
 use image::{DynamicImage, GenericImageView, ImageFormat};
 use crate::core::thumbnail_db::ThumbnailDb;
 use threadpool::ThreadPool;
@@ -24,11 +24,17 @@ pub struct ThumbnailGeneratorConfig {
 
 impl Default for ThumbnailGeneratorConfig {
     fn default() -> Self {
+        // 根据 CPU 核心数动态调整线程池大小
+        let num_cores = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4);
+        let thread_pool_size = (num_cores * 2).max(8).min(16); // 2倍核心数，最少8，最多16
+        
         Self {
             max_width: 256,
             max_height: 256,
-            thread_pool_size: 6,
-            archive_concurrency: 3,
+            thread_pool_size,
+            archive_concurrency: (num_cores / 2).max(2).min(6), // 核心数的一半，最少2，最多6
         }
     }
 }
@@ -197,12 +203,20 @@ impl ThumbnailGenerator {
             if ext.to_lowercase() == "jxl" {
                 self.decode_jxl_image(&image_data)?
             } else {
-                image::load_from_memory(&image_data)
-                    .map_err(|e| format!("从内存加载图像失败: {}", e))?
+                // 使用 catch_unwind 捕获可能的 panic（如 dav1d 崩溃）
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    image::load_from_memory(&image_data)
+                }))
+                .map_err(|_| "图像解码时发生 panic（可能是格式问题）".to_string())?
+                .map_err(|e| format!("从内存加载图像失败: {}", e))?
             }
         } else {
-            image::load_from_memory(&image_data)
-                .map_err(|e| format!("从内存加载图像失败: {}", e))?
+            // 使用 catch_unwind 捕获可能的 panic
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                image::load_from_memory(&image_data)
+            }))
+            .map_err(|_| "图像解码时发生 panic（可能是格式问题）".to_string())?
+            .map_err(|e| format!("从内存加载图像失败: {}", e))?
         };
         
         // 生成 webp 缩略图
@@ -274,9 +288,12 @@ impl ThumbnailGenerator {
                     file.read_to_end(&mut image_data)
                         .map_err(|e| format!("读取压缩包文件失败: {}", e))?;
                     
-                    // 从内存加载图像
-                    let img = image::load_from_memory(&image_data)
-                        .map_err(|e| format!("从内存加载图像失败: {}", e))?;
+                    // 从内存加载图像（使用 catch_unwind 避免 panic）
+                    let img = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        image::load_from_memory(&image_data)
+                    }))
+                    .map_err(|_| "图像解码时发生 panic（可能是格式问题）".to_string())?
+                    .map_err(|e| format!("从内存加载图像失败: {}", e))?;
                     
                     // 生成 webp 缩略图
                     let thumbnail_data = self.generate_webp_thumbnail(img)?;

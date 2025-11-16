@@ -117,7 +117,7 @@ impl ThumbnailDb {
         let mut stmt = conn.prepare(
             "INSERT OR REPLACE INTO property (key, value) VALUES (?1, ?2)"
         )?;
-        stmt.execute(params![key, value])?;
+        let _ = stmt.execute(params![key, value])?;
         Ok(())
     }
 
@@ -142,12 +142,13 @@ impl ThumbnailDb {
         let conn = conn_guard.as_ref().unwrap();
         let date = Self::current_timestamp();
 
-        // 使用 execute_batch 或者检查返回值
+        // 使用 prepare + execute 避免 "Execute returned results" 错误
         let mut stmt = conn.prepare(
             "INSERT OR REPLACE INTO thumbs (key, size, date, ghash, value) VALUES (?1, ?2, ?3, ?4, ?5)"
         )?;
         
-        stmt.execute(params![key, size, date, ghash, thumbnail_data])?;
+        // execute 返回受影响的行数，忽略返回值
+        let _ = stmt.execute(params![key, size, date, ghash, thumbnail_data])?;
 
         Ok(())
     }

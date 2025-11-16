@@ -17,13 +17,28 @@
                        item.name.endsWith('.cbr');
       
       if (item.isDir) {
-        // 文件夹：使用子路径下第一个条目的缩略图
-        thumbnailManager.getFolderThumbnail(item.path).then((dataUrl) => {
-          if (dataUrl) {
-            const key = toRelativeKey(item.path);
-            fileBrowserStore.addThumbnail(key, dataUrl);
-          }
-        });
+        // 文件夹：使用子路径下第一个条目的缩略图（异步，不阻塞）
+        // 使用 requestIdleCallback 延迟加载，避免阻塞 UI
+        if ('requestIdleCallback' in window) {
+          requestIdleCallback(() => {
+            thumbnailManager.getFolderThumbnail(item.path).then((dataUrl) => {
+              if (dataUrl) {
+                const key = toRelativeKey(item.path);
+                fileBrowserStore.addThumbnail(key, dataUrl);
+              }
+            });
+          }, { timeout: 1000 });
+        } else {
+          // 降级到 setTimeout
+          setTimeout(() => {
+            thumbnailManager.getFolderThumbnail(item.path).then((dataUrl) => {
+              if (dataUrl) {
+                const key = toRelativeKey(item.path);
+                fileBrowserStore.addThumbnail(key, dataUrl);
+              }
+            });
+          }, 0);
+        }
       } else if (item.isImage || isArchive) {
         thumbnailManager.getThumbnail(item.path, undefined, isArchive, priority);
       }

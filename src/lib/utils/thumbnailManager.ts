@@ -30,8 +30,9 @@ export interface ThumbnailCache {
 
 class ThumbnailManager {
   private config: ThumbnailConfig = {
-    maxConcurrentLocal: 6,
-    maxConcurrentArchive: 3,
+    // 根据 CPU 核心数动态调整（前端使用 navigator.hardwareConcurrency）
+    maxConcurrentLocal: Math.max(8, (navigator.hardwareConcurrency || 4) * 2),
+    maxConcurrentArchive: Math.max(3, Math.floor((navigator.hardwareConcurrency || 4) / 2)),
     thumbnailSize: 256,
   };
 
@@ -303,10 +304,19 @@ class ThumbnailManager {
     // 2. 检查数据库索引缓存
     const hasDbCache = this.dbIndexCache.get(pathKey);
     if (hasDbCache === true) {
-      // 从数据库加载
-      const dbThumbnail = await this.loadFromDb(path, innerPath);
-      if (dbThumbnail) {
-        return dbThumbnail;
+      // 从数据库加载（返回 blob key，需要转换为 blob URL）
+      const dbBlobKey = await this.loadFromDb(path, innerPath);
+      if (dbBlobKey) {
+        const blobUrl = await this.blobKeyToUrl(dbBlobKey);
+        if (blobUrl) {
+          // 更新缓存
+          this.cache.set(pathKey, {
+            pathKey,
+            dataUrl: blobUrl,
+            timestamp: Date.now(),
+          });
+          return blobUrl;
+        }
       }
     }
 
@@ -368,7 +378,7 @@ class ThumbnailManager {
   }
 
   /**
-   * 处理任务
+   * 处理任务（优化版本，真正异步）
    */
   private async processTask(pathKey: string): Promise<string | null> {
     const task = this.taskQueue.find(
@@ -379,41 +389,91 @@ class ThumbnailManager {
       return null;
     }
 
-    this.processingTasks.add(pathKey);
-
     try {
       // 先尝试从数据库加载
       const dbThumbnail = await this.loadFromDb(task.path, task.innerPath);
       if (dbThumbnail) {
-        return dbThumbnail;
+        // 转换为 blob URL
+        const blobUrl = await this.blobKeyToUrl(dbThumbnail);
+        if (blobUrl) {
+          // 更新缓存
+          this.cache.set(pathKey, {
+            pathKey,
+            dataUrl: blobUrl,
+            timestamp: Date.now(),
+          });
+          // 通知回调
+          if (this.onThumbnailReady) {
+            this.onThumbnailReady(task.path, blobUrl);
+          }
+          return blobUrl;
+        }
       }
 
       // 生成新缩略图
-      return await this.generateThumbnail(task.path, task.innerPath, task.isArchive);
-    } finally {
-      this.processingTasks.delete(pathKey);
-      // 从队列中移除
-      const index = this.taskQueue.findIndex(
-        (t) => this.buildPathKey(t.path, t.innerPath) === pathKey
-      );
-      if (index >= 0) {
-        this.taskQueue.splice(index, 1);
+      const blobKey = await this.generateThumbnail(task.path, task.innerPath, task.isArchive);
+      if (blobKey) {
+        // 转换为 blob URL
+        const blobUrl = await this.blobKeyToUrl(blobKey);
+        if (blobUrl) {
+          // 更新缓存
+          this.cache.set(pathKey, {
+            pathKey,
+            dataUrl: blobUrl,
+            timestamp: Date.now(),
+          });
+          // 通知回调
+          if (this.onThumbnailReady) {
+            this.onThumbnailReady(task.path, blobUrl);
+          }
+          return blobUrl;
+        }
       }
+    } catch (error) {
+      console.error('处理缩略图任务失败:', pathKey, error);
     }
+
+    return null;
   }
 
   /**
-   * 处理队列
+   * 将 blob key 转换为 blob URL
+   */
+  private async blobKeyToUrl(blobKey: string): Promise<string | null> {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const blobData = await invoke<number[] | null>('get_thumbnail_blob_data', { blobKey });
+      
+      if (blobData && blobData.length > 0) {
+        // 转换为 Uint8Array
+        const uint8Array = new Uint8Array(blobData);
+        // 创建 Blob
+        const blob = new Blob([uint8Array], { type: 'image/webp' });
+        // 创建 Blob URL
+        const blobUrl = URL.createObjectURL(blob);
+        return blobUrl;
+      }
+    } catch (error) {
+      console.error('获取 blob 数据失败:', blobKey, error);
+    }
+    
+    return null;
+  }
+
+  /**
+   * 处理队列（优化并发性能）
    */
   private async processQueue() {
     const maxConcurrent = this.config.maxConcurrentLocal;
     const currentProcessing = this.processingTasks.size;
 
     if (currentProcessing >= maxConcurrent) {
+      // 如果已达到最大并发，延迟重试
+      setTimeout(() => this.processQueue(), 50);
       return;
     }
 
-    // 获取待处理的任务
+    // 获取待处理的任务（按优先级排序）
     const tasksToProcess = this.taskQueue
       .filter(
         (task) =>
@@ -421,18 +481,34 @@ class ThumbnailManager {
       )
       .slice(0, maxConcurrent - currentProcessing);
 
-    // 并行处理
-    await Promise.all(
-      tasksToProcess.map(async (task) => {
-        const pathKey = this.buildPathKey(task.path, task.innerPath);
-        await this.processTask(pathKey);
-      })
-    );
-
-    // 如果还有任务，继续处理
-    if (this.taskQueue.length > 0) {
-      setTimeout(() => this.processQueue(), 100);
+    if (tasksToProcess.length === 0) {
+      return;
     }
+
+    // 真正并行处理 - 不等待，让任务在后台执行
+    tasksToProcess.forEach((task) => {
+      const pathKey = this.buildPathKey(task.path, task.innerPath);
+      // 立即标记为处理中，避免重复
+      this.processingTasks.add(pathKey);
+      
+      // 异步执行，不阻塞
+      this.processTask(pathKey).catch((error) => {
+        console.error('处理缩略图任务失败:', pathKey, error);
+      }).finally(() => {
+        this.processingTasks.delete(pathKey);
+        // 从队列中移除
+        const index = this.taskQueue.findIndex(
+          (t) => this.buildPathKey(t.path, t.innerPath) === pathKey
+        );
+        if (index >= 0) {
+          this.taskQueue.splice(index, 1);
+        }
+        // 继续处理队列
+        if (this.taskQueue.length > 0) {
+          setTimeout(() => this.processQueue(), 10);
+        }
+      });
+    });
   }
 
   /**
@@ -464,7 +540,7 @@ class ThumbnailManager {
   }
 
   /**
-   * 获取文件夹缩略图（使用子路径下第一个条目的缩略图）
+   * 获取文件夹缩略图（使用子路径下第一个条目的缩略图，异步且不阻塞）
    */
   async getFolderThumbnail(folderPath: string): Promise<string | null> {
     try {
@@ -475,69 +551,84 @@ class ThumbnailManager {
         return cached.dataUrl;
       }
 
-      // 获取文件夹下的第一个图片文件
+      // 异步获取文件夹内容，不阻塞
       const { invoke } = await import('@tauri-apps/api/core');
-      const items = await invoke<FsItem[]>('browse_directory', { path: folderPath });
       
-      // 优先查找图片文件
-      const firstImage = items.find((item) => item.isImage && !item.isDir);
+      // 使用 requestIdleCallback 或 setTimeout 延迟加载，避免阻塞 UI
+      return new Promise((resolve) => {
+        // 延迟执行，确保不阻塞当前操作
+        setTimeout(async () => {
+          try {
+            const items = await invoke<FsItem[]>('browse_directory', { path: folderPath });
+            
+            // 优先查找图片文件
+            const firstImage = items.find((item) => item.isImage && !item.isDir);
 
-      if (firstImage) {
-        // 使用第一个图片的缩略图（返回 blob URL）
-        const thumbnail = await this.getThumbnail(firstImage.path, undefined, false, 'high');
-        if (thumbnail) {
-          // 缓存文件夹缩略图
-          this.cache.set(pathKey, {
-            pathKey,
-            dataUrl: thumbnail,
-            timestamp: Date.now(),
-          });
-          return thumbnail;
-        }
-      }
+            if (firstImage) {
+              // 使用第一个图片的缩略图（异步，不阻塞）
+              const thumbnail = await this.getThumbnail(firstImage.path, undefined, false, 'high');
+              if (thumbnail) {
+                // 缓存文件夹缩略图
+                this.cache.set(pathKey, {
+                  pathKey,
+                  dataUrl: thumbnail,
+                  timestamp: Date.now(),
+                });
+                resolve(thumbnail);
+                return;
+              }
+            }
 
-      // 如果没有图片，尝试查找压缩包
-      const firstArchive = items.find(
-        (item) =>
-          !item.isDir &&
-          (item.name.endsWith('.zip') ||
-            item.name.endsWith('.cbz') ||
-            item.name.endsWith('.rar') ||
-            item.name.endsWith('.cbr'))
-      );
+            // 如果没有图片，尝试查找压缩包
+            const firstArchive = items.find(
+              (item) =>
+                !item.isDir &&
+                (item.name.endsWith('.zip') ||
+                  item.name.endsWith('.cbz') ||
+                  item.name.endsWith('.rar') ||
+                  item.name.endsWith('.cbr'))
+            );
 
-      if (firstArchive) {
-        const thumbnail = await this.getThumbnail(firstArchive.path, undefined, true, 'high');
-        if (thumbnail) {
-          this.cache.set(pathKey, {
-            pathKey,
-            dataUrl: thumbnail,
-            timestamp: Date.now(),
-          });
-          return thumbnail;
-        }
-      }
+            if (firstArchive) {
+              const thumbnail = await this.getThumbnail(firstArchive.path, undefined, true, 'high');
+              if (thumbnail) {
+                this.cache.set(pathKey, {
+                  pathKey,
+                  dataUrl: thumbnail,
+                  timestamp: Date.now(),
+                });
+                resolve(thumbnail);
+                return;
+              }
+            }
 
-      // 如果没有图片和压缩包，尝试查找子文件夹
-      const firstSubfolder = items.find((item) => item.isDir);
-      if (firstSubfolder) {
-        // 递归查找（限制深度避免无限递归）
-        const subThumbnail = await this.getFolderThumbnail(firstSubfolder.path);
-        if (subThumbnail) {
-          // 缓存子文件夹的缩略图作为当前文件夹的缩略图
-          this.cache.set(pathKey, {
-            pathKey,
-            dataUrl: subThumbnail,
-            timestamp: Date.now(),
-          });
-          return subThumbnail;
-        }
-      }
+            // 如果没有图片和压缩包，尝试查找子文件夹（限制深度）
+            const firstSubfolder = items.find((item) => item.isDir);
+            if (firstSubfolder) {
+              // 异步递归查找，不阻塞
+              const subThumbnail = await this.getFolderThumbnail(firstSubfolder.path);
+              if (subThumbnail) {
+                this.cache.set(pathKey, {
+                  pathKey,
+                  dataUrl: subThumbnail,
+                  timestamp: Date.now(),
+                });
+                resolve(subThumbnail);
+                return;
+              }
+            }
+            
+            resolve(null);
+          } catch (error) {
+            console.debug('获取文件夹缩略图失败:', folderPath, error);
+            resolve(null);
+          }
+        }, 0); // 使用 setTimeout(0) 延迟到下一个事件循环
+      });
     } catch (error) {
       console.debug('获取文件夹缩略图失败:', folderPath, error);
+      return null;
     }
-
-    return null;
   }
 
   /**

@@ -22,6 +22,15 @@ use std::sync::Arc;
 #[allow(clippy::missing_panics_doc)]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 设置 panic hook，避免崩溃导致软件闪退
+    std::panic::set_hook(Box::new(|panic_info| {
+        eprintln!("⚠️ Panic caught: {:?}", panic_info);
+        // 记录 panic 但不终止进程
+        if let Some(location) = panic_info.location() {
+            eprintln!("   Location: {}:{}:{}", location.file(), location.line(), location.column());
+        }
+    }));
+    
     // 设置日志级别，屏蔽 avif-native/mp4parse 的 TRACE 日志
     std::env::set_var("RUST_LOG", "info,mp4parse=info,avif_native=info");
     

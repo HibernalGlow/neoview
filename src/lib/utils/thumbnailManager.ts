@@ -1,6 +1,7 @@
 import { FileSystemAPI } from '$lib/api';
 import { toAssetUrl } from '$lib/utils/assetProxy';
 import { thumbnailState } from '$lib/stores/thumbnailState';
+import { startThumbnailEventListener, stopThumbnailEventListener, isThumbnailEventListenerActive } from './thumbnailEvents';
 
 type Priority = 'immediate' | 'high' | 'normal';
 
@@ -35,7 +36,33 @@ class ThumbnailScheduler {
     if (options.addThumbnail) this.addThumbnailCb = options.addThumbnail;
     if (typeof options.maxConcurrentLocal === 'number') this.maxConcurrentLocal = options.maxConcurrentLocal;
     if (typeof options.maxConcurrentArchive === 'number') this.maxConcurrentArchive = options.maxConcurrentArchive;
+    
+    // 启动事件监听器
+    this.setupEventListener();
+    
     this.processQueue();
+  }
+
+  private setupEventListener() {
+    if (!isThumbnailEventListenerActive()) {
+      startThumbnailEventListener((event) => {
+        const normalizedPath = this.normalizePath(event.path);
+        
+        // 更新状态缓存
+        thumbnailState.cacheThumbnail(normalizedPath, event.url);
+        
+        // 调用回调更新UI
+        if (this.addThumbnailCb) {
+          const key = this.toRelativeKey(event.path);
+          this.addThumbnailCb(key, event.url);
+        }
+        
+        // 从处理中状态移除
+        this.generating.delete(normalizedPath);
+        
+        console.log(`📸 [Frontend] 事件更新缩略图: ${event.path}`);
+      });
+    }
   }
 
   enqueue(source: string, items: any[], priority: Priority = 'normal') {
@@ -202,21 +229,10 @@ class ThumbnailScheduler {
         console.log('🔄 后台异步生成压缩包缩略图:', path);
         try {
           const result = await FileSystemAPI.generateArchiveThumbnailAsync(path);
-          console.log('✅ 后台缩略图生成完成:', path, result);
+          console.log('✅ 后台缩略图生成已入队:', path, result);
           
-          // 缩略图生成完成后，重新获取并更新显示
-          if (this.addThumbnailCb) {
-            try {
-              const thumbnailUrl = await FileSystemAPI.generateArchiveThumbnailRoot(path);
-              thumbnailState.cacheThumbnail(normalizedPath, thumbnailUrl);
-              const key = this.toRelativeKey(path);
-              this.addThumbnailCb(key, thumbnailUrl);
-              console.log('✅ 更新为正式缩略图:', path);
-            } catch (e) {
-              console.debug('更新缩略图失败:', e);
-              thumbnailState.markError(normalizedPath, e as string);
-            }
-          }
+          // 缩略图生成完成后，将通过事件通知更新UI，不再主动获取
+          console.log('✅ 缩略图生成完成，等待事件通知:', path);
         } catch (e) {
           console.error('❌ 后台生成失败:', e);
           thumbnailState.markError(normalizedPath, e as string);

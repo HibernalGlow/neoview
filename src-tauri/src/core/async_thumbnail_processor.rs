@@ -95,10 +95,16 @@ pub struct AsyncThumbnailProcessor {
     first_image_cache: Arc<RwLock<HashMap<PathBuf, String>>>,
     /// 正在处理的任务
     processing_tasks: Arc<RwLock<HashMap<PathBuf, CancellationToken>>>,
+    /// 扫描队列中的任务路径（用于取消）
+    scan_queue_paths: Arc<RwLock<Vec<PathBuf>>>,
+    /// 提取队列中的任务路径（用于取消）
+    extract_queue_paths: Arc<RwLock<Vec<PathBuf>>>,
     /// 错误统计
     error_counts: Arc<Mutex<HashMap<String, usize>>>,
     /// 性能监控
     metrics: Arc<Mutex<ProcessorMetrics>>,
+    /// 应用句柄（用于发送事件）
+    app_handle: Arc<Mutex<Option<tauri::AppHandle>>>,
 }
 
 /// 处理器性能指标
@@ -150,8 +156,11 @@ impl AsyncThumbnailProcessor {
             extract_rx: Arc::new(RwLock::new(extract_rx)),
             first_image_cache: Arc::new(RwLock::new(HashMap::new())),
             processing_tasks: Arc::new(RwLock::new(HashMap::new())),
+            scan_queue_paths: Arc::new(RwLock::new(Vec::new())),
+            extract_queue_paths: Arc::new(RwLock::new(Vec::new())),
             error_counts: Arc::new(Mutex::new(HashMap::new())),
             metrics: Arc::new(Mutex::new(ProcessorMetrics::default())),
+            app_handle: Arc::new(Mutex::new(None)),
         };
         
         println!("🚀 异步处理器配置: 本地文件={}, 压缩包扫描={}, 压缩包解码={}", 
@@ -366,14 +375,14 @@ impl AsyncThumbnailProcessor {
                 let _permit = permit;
                 
                 let result = if is_archive {
-                    // 压缩包使用分阶段处理
-                    // 暂时使用标准处理，因为分阶段处理需要重构
-                    Self::generate_thumbnail_async(
-                        manager_clone, 
-                        cache_clone, 
-                        &path_for_spawn, 
-                        is_folder
-                    ).await
+                    // 压缩包使用两阶段处理：只提交扫描任务
+                    // 提交扫描任务
+                    if let Err(e) = self.submit_scan_task(path_for_spawn.clone(), None).await {
+                        Err(format!("提交扫描任务失败: {}", e))
+                    } else {
+                        // 扫描任务已提交，返回成功
+                        Ok("scan_submitted".to_string())
+                    }
                 } else {
                     // 普通文件使用标准处理
                     Self::generate_thumbnail_async(
@@ -577,8 +586,24 @@ impl AsyncThumbnailProcessor {
             }
         }
         
+        // 清理扫描队列
+        {
+            let mut scan_queue = self.scan_queue_paths.write().await;
+            let initial_len = scan_queue.len();
+            scan_queue.retain(|path| !path.starts_with(dir_path));
+            cancelled += initial_len - scan_queue.len();
+        }
+        
+        // 清理提取队列
+        {
+            let mut extract_queue = self.extract_queue_paths.write().await;
+            let initial_len = extract_queue.len();
+            extract_queue.retain(|path| !path.starts_with(dir_path));
+            cancelled += initial_len - extract_queue.len();
+        }
+        
         if cancelled > 0 {
-            println!("🚫 已取消目录 {} 下的 {} 个任务", dir_path.display(), cancelled);
+            println!("🚫 已取消目录 {} 下的 {} 个任务（含队列）", dir_path.display(), cancelled);
         }
         
         cancelled
@@ -615,6 +640,14 @@ impl AsyncThumbnailProcessor {
                     metrics.scan_queue_length = scan_queue_length;
                     metrics.running_scan += 1;
                 }
+                
+                // 从队列跟踪中移除
+                {
+                    let mut queue_paths = self.scan_queue_paths.write().await;
+                    if let Some(pos) = queue_paths.iter().position(|p| p == &archive_path) {
+                        queue_paths.remove(pos);
+                    }
+                }
             
             // 获取扫描许可
             let permit = match self.archive_scan_semaphore.clone().acquire_owned().await {
@@ -629,6 +662,7 @@ impl AsyncThumbnailProcessor {
             let response_tx = task.response_tx;
             let extract_tx = self.extract_tx.clone();
             let first_image_cache = Arc::clone(&self.first_image_cache);
+            let extract_queue_paths = Arc::clone(&self.extract_queue_paths);
             let manager_clone = Arc::clone(&self.manager);
             let metrics_clone = Arc::clone(&self.metrics);
             
@@ -716,6 +750,10 @@ impl AsyncThumbnailProcessor {
                             inner_path: inner_path.clone(),
                             response_tx: extract_response_tx,
                         };
+                        
+                        // 添加到提取队列跟踪
+                        extract_queue_paths.write().await.push(archive_path.clone());
+                        
                         let _ = extract_tx.send(extract_task);
                         
                         // 通知调用者
@@ -758,6 +796,14 @@ impl AsyncThumbnailProcessor {
                 metrics.running_extract += 1;
             }
             
+            // 从队列跟踪中移除
+            {
+                let mut queue_paths = self.extract_queue_paths.write().await;
+                if let Some(pos) = queue_paths.iter().position(|p| p == &archive_path) {
+                    queue_paths.remove(pos);
+                }
+            }
+            
             // 获取提取许可
             let permit = match self.archive_decode_semaphore.clone().acquire_owned().await {
                 Ok(permit) => permit,
@@ -774,6 +820,7 @@ impl AsyncThumbnailProcessor {
             let cache_clone = Arc::clone(&self.cache);
             let metrics_clone = Arc::clone(&self.metrics);
             let error_counts_clone = Arc::clone(&self.error_counts);
+            let app_handle = Arc::clone(&self.app_handle);
             
             // 启动提取任务
             tokio::spawn(async move {
@@ -812,7 +859,19 @@ impl AsyncThumbnailProcessor {
                 }
                 
                 match result {
-                    Ok(url) => println!("✅ 提取完成: {} -> {}", archive_path.display(), url),
+                    Ok(url) => {
+                        println!("✅ 提取完成: {} -> {}", archive_path.display(), url);
+                        
+                        // 发送事件通知前端
+                        if let Ok(handle_guard) = app_handle.lock() {
+                            if let Some(app) = handle_guard.as_ref() {
+                                let _ = app.emit_all("thumbnail-ready", serde_json::json!({
+                                    "path": archive_path.to_string_lossy(),
+                                    "url": url
+                                }));
+                            }
+                        }
+                    }
                     Err(e) => println!("❌ 提取失败: {} -> {}", archive_path.display(), e),
                 }
             });
@@ -838,6 +897,9 @@ impl AsyncThumbnailProcessor {
     
     /// 提交扫描任务
     pub async fn submit_scan_task(&self, archive_path: PathBuf, response_tx: Option<tokio::sync::oneshot::Sender<ScanResult>>) -> Result<(), String> {
+        // 添加到队列跟踪
+        self.scan_queue_paths.write().await.push(archive_path.clone());
+        
         let task = ScanTask {
             archive_path,
             response_tx,
@@ -847,6 +909,13 @@ impl AsyncThumbnailProcessor {
             .map_err(|e| format!("提交扫描任务失败: {}", e))?;
         
         Ok(())
+    }
+    
+    /// 设置应用句柄（用于发送事件）
+    pub fn set_app_handle(&self, app_handle: tauri::AppHandle) {
+        if let Ok(mut handle) = self.app_handle.lock() {
+            *handle = Some(app_handle);
+        }
     }
 }
 

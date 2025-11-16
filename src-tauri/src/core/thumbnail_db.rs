@@ -413,6 +413,23 @@ impl ThumbnailDatabase {
         }
     }
     
+    /// 查找压缩包首图索引（包含 mtime）
+    pub fn get_archive_first_image(&self, archive_path: &str) -> SqliteResult<Option<(String, i64)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT inner_path, mtime FROM archive_first_image WHERE archive_path = ?1"
+        )?;
+        
+        let result = stmt.query_row([archive_path], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        });
+        
+        match result {
+            Ok((inner_path, mtime)) => Ok(Some((inner_path, mtime))),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+    
     /// 批量查询压缩包首图索引
     pub fn find_archive_first_images(&self, archive_paths: &[&str]) -> SqliteResult<std::collections::HashMap<String, String>> {
         if archive_paths.is_empty() {

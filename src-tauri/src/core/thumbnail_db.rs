@@ -24,20 +24,20 @@ impl ThumbnailDb {
         }
     }
 
-    /// 打开数据库连接
+    /// 打开数据库连接（减少日志输出，避免频繁检查）
     fn open(&self) -> SqliteResult<()> {
-        println!("🔓 open() 被调用，数据库路径: {}", self.db_path.display());
         let mut conn_opt = self.connection.lock().unwrap();
         
         if conn_opt.is_some() {
-            // 连接已存在，直接返回
-            println!("✅ 数据库连接已存在，复用连接");
+            // 连接已存在，直接返回（不打印日志，减少输出）
             return Ok(());
         }
+        
+        // 只在首次打开时打印日志
+        println!("🔓 首次打开数据库连接: {}", self.db_path.display());
 
         // 创建数据库目录（如果不存在）
         if let Some(parent) = self.db_path.parent() {
-            println!("📁 创建数据库目录: {}", parent.display());
             if let Err(e) = std::fs::create_dir_all(parent) {
                 eprintln!("❌ 创建数据库目录失败: {} - {}", parent.display(), e);
                 return Err(rusqlite::Error::SqliteFailure(
@@ -45,15 +45,10 @@ impl ThumbnailDb {
                     Some(format!("创建数据库目录失败: {}", e))
                 ));
             }
-            println!("✅ 数据库目录创建成功或已存在");
         }
 
-        println!("🔌 打开数据库连接: {}", self.db_path.display());
         let conn = match Connection::open(&self.db_path) {
-            Ok(c) => {
-                println!("✅ 数据库连接打开成功");
-                c
-            }
+            Ok(c) => c,
             Err(e) => {
                 eprintln!("❌ 数据库连接打开失败: {} - {}", self.db_path.display(), e);
                 return Err(e);
@@ -61,11 +56,8 @@ impl ThumbnailDb {
         };
         
         // 初始化数据库
-        println!("🔧 初始化数据库表结构...");
         match Self::initialize_db(&conn) {
-            Ok(_) => {
-                println!("✅ 数据库表结构初始化成功");
-            }
+            Ok(_) => {}
             Err(e) => {
                 eprintln!("❌ 数据库表结构初始化失败: {}", e);
                 return Err(e);
@@ -73,7 +65,7 @@ impl ThumbnailDb {
         }
         
         *conn_opt = Some(conn);
-        println!("✅ 数据库连接已保存到状态");
+        println!("✅ 数据库连接已初始化");
         Ok(())
     }
 
@@ -161,7 +153,7 @@ impl ThumbnailDb {
             .as_secs() as i64
     }
 
-    /// 保存缩略图
+    /// 保存缩略图（减少日志输出）
     pub fn save_thumbnail(
         &self,
         key: &str,
@@ -169,120 +161,38 @@ impl ThumbnailDb {
         ghash: i32,
         thumbnail_data: &[u8],
     ) -> SqliteResult<()> {
-        println!("🔧 save_thumbnail 调用: key={}, size={}, ghash={}, data_len={}", 
-                 key, size, ghash, thumbnail_data.len());
-        println!("📂 数据库路径: {}", self.db_path.display());
-        
-        // 打开数据库连接
-        println!("🔓 调用 open()...");
-        match self.open() {
-            Ok(_) => println!("✅ open() 成功"),
-            Err(e) => {
-                eprintln!("❌ open() 失败: {}", e);
-                return Err(e);
-            }
-        }
-        
-        println!("🔒 获取数据库连接锁...");
+        self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
-        println!("✅ 数据库连接锁获取成功");
         
         let date = Self::current_timestamp();
-        println!("📅 当前时间戳: {}", date);
-
-        println!("📝 准备执行 SQL 插入: key={}, size={}, date={}, ghash={}, data_len={}", 
-                 key, size, date, ghash, thumbnail_data.len());
 
         // 使用 prepare + execute 避免 "Execute returned results" 错误
-        println!("🔧 准备 SQL 语句...");
-        let mut stmt = match conn.prepare(
+        let mut stmt = conn.prepare(
             "INSERT OR REPLACE INTO thumbs (key, size, date, ghash, value) VALUES (?1, ?2, ?3, ?4, ?5)"
-        ) {
-            Ok(s) => {
-                println!("✅ SQL 语句准备成功");
-                s
-            }
-            Err(e) => {
-                eprintln!("❌ SQL 语句准备失败: {}", e);
-                return Err(e);
-            }
-        };
+        )?;
         
         // execute 返回受影响的行数
-        println!("⚡ 执行 SQL 插入...");
-        let _rows_affected = match stmt.execute(params![key, size, date, ghash, thumbnail_data]) {
-            Ok(r) => {
-                println!("✅ SQL 执行成功，受影响行数: {}", r);
-                r
-            }
-            Err(e) => {
-                eprintln!("❌ SQL 执行失败: {}", e);
-                return Err(e);
-            }
-        };
+        let _rows_affected = stmt.execute(params![key, size, date, ghash, thumbnail_data])?;
         
-        // 立即提交事务（确保数据写入磁盘）
-        println!("💾 提交事务...");
-        drop(stmt); // 释放语句，确保数据已写入
+        // 释放语句，确保数据已写入
+        drop(stmt);
         
-        // 验证数据是否真的保存了
-        println!("🔍 验证数据是否保存...");
-        let mut verify_stmt = match conn.prepare("SELECT COUNT(*) FROM thumbs WHERE key = ?1") {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("❌ 验证查询准备失败: {}", e);
-                return Err(e);
-            }
-        };
-        
-        let count: i64 = match verify_stmt.query_row([key], |row| row.get(0)) {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!("❌ 验证查询执行失败: {}", e);
-                return Err(e);
-            }
-        };
-        println!("✅ 验证: 数据库中 key={} 的记录数: {}", key, count);
-        
-        if count > 0 {
-            // 验证 blob 数据大小
-            let mut size_stmt = match conn.prepare("SELECT LENGTH(value) FROM thumbs WHERE key = ?1") {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("⚠️ 获取 blob 大小查询准备失败: {}", e);
-                    return Ok(()); // 即使验证失败，也返回成功（因为插入已经成功）
-                }
-            };
-            
-            match size_stmt.query_row([key], |row| row.get::<_, i64>(0)) {
-                Ok(blob_size) => {
-                    println!("✅ 验证: 数据库中 blob 数据大小: {} bytes (原始: {} bytes)", blob_size, thumbnail_data.len());
-                    if blob_size != thumbnail_data.len() as i64 {
-                        eprintln!("⚠️ 警告: blob 数据大小不匹配! 数据库: {} bytes, 原始: {} bytes", blob_size, thumbnail_data.len());
-                    }
-                }
-                Err(e) => {
-                    eprintln!("⚠️ 获取 blob 大小失败: {}", e);
-                }
-            }
-        } else {
-            eprintln!("❌ 严重错误: 数据插入后验证失败，记录数为 0!");
+        // 只在调试模式下打印日志
+        if cfg!(debug_assertions) {
+            println!("✅ 缩略图已保存到数据库: key={}, size={} bytes", key, thumbnail_data.len());
         }
-
-        println!("✅ save_thumbnail 完成");
+        
         Ok(())
     }
 
-    /// 加载缩略图
+    /// 加载缩略图（减少日志输出）
     pub fn load_thumbnail(
         &self,
         key: &str,
         size: i64,
         ghash: i32,
     ) -> SqliteResult<Option<Vec<u8>>> {
-        println!("🔍 load_thumbnail 调用: key={}, size={}, ghash={}", key, size, ghash);
-        
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
@@ -297,10 +207,16 @@ impl ThumbnailDb {
 
         if let Some(row) = rows.next() {
             let data = row?;
-            println!("✅ 从数据库加载缩略图成功: key={}, data_len={}", key, data.len());
+            // 只在调试模式下打印日志
+            if cfg!(debug_assertions) {
+                println!("✅ 从数据库加载缩略图: key={}, size={} bytes", key, data.len());
+            }
             Ok(Some(data))
         } else {
-            println!("📭 数据库中没有找到缩略图: key={}, size={}, ghash={}", key, size, ghash);
+            // 只在调试模式下打印日志
+            if cfg!(debug_assertions) {
+                println!("📭 数据库中没有找到缩略图: key={}", key);
+            }
             Ok(None)
         }
     }

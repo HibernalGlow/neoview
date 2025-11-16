@@ -80,17 +80,17 @@ pub async fn generate_file_thumbnail_new(
     app: tauri::AppHandle,
     file_path: String,
 ) -> Result<String, String> {
-    println!("🚀 generate_file_thumbnail_new 被调用: {}", file_path);
+    // 检查是否为文件夹（文件夹不应该调用这个函数）
+    if std::path::Path::new(&file_path).is_dir() {
+        return Err("路径是文件夹，请使用文件夹缩略图逻辑".to_string());
+    }
+    
     let state = app.state::<ThumbnailState>();
     let generator = state.generator.lock().unwrap();
     
     // 生成缩略图（内部已同步保存到数据库）
-    println!("📸 开始生成文件缩略图: {}", file_path);
     let thumbnail_data = match generator.generate_file_thumbnail(&file_path) {
-        Ok(data) => {
-            println!("✅ 文件缩略图生成成功: {} ({} bytes)", file_path, data.len());
-            data
-        }
+        Ok(data) => data,
         Err(e) => {
             eprintln!("❌ 文件缩略图生成失败: {} - {}", file_path, e);
             return Err(e);

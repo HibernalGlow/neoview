@@ -662,9 +662,22 @@ class ThumbnailManager {
   }
 
   /**
-   * 获取文件夹缩略图（使用子路径下第一个条目的缩略图，立即加载，跟随虚拟列表）
+   * 获取文件夹缩略图（使用子路径下第一个条目的缩略图，可以递归，但限制深度避免卡顿）
+   * @param folderPath 文件夹路径
+   * @param maxDepth 最大递归深度（默认3，避免超多文件夹造成卡顿）
+   * @param currentDepth 当前递归深度（内部使用）
    */
-  async getFolderThumbnail(folderPath: string): Promise<string | null> {
+  async getFolderThumbnail(
+    folderPath: string,
+    maxDepth: number = 3,
+    currentDepth: number = 0
+  ): Promise<string | null> {
+    // 限制递归深度，避免超多文件夹造成卡顿
+    if (currentDepth >= maxDepth) {
+      console.debug(`⚠️ 文件夹缩略图递归深度已达上限 (${maxDepth}): ${folderPath}`);
+      return null;
+    }
+
     try {
       // 先检查是否有缓存的文件夹缩略图
       const pathKey = this.buildPathKey(folderPath);
@@ -697,13 +710,12 @@ class ThumbnailManager {
           // 使用第一个图片的缩略图（immediate 优先级，立即加载）
           const thumbnail = await this.getThumbnail(firstImage.path, undefined, false, 'immediate');
           if (thumbnail) {
-            // 缓存文件夹缩略图，并保存到数据库（使用文件夹路径作为 key）
+            // 缓存文件夹缩略图
             this.cache.set(pathKey, {
               pathKey,
               dataUrl: thumbnail,
               timestamp: Date.now(),
             });
-            // 注意：这里不保存到数据库，因为文件夹缩略图应该使用子项的缩略图
             return thumbnail;
           }
         }
@@ -730,11 +742,15 @@ class ThumbnailManager {
           }
         }
 
-        // 如果没有图片和压缩包，尝试查找子文件夹（限制深度为1，避免递归过深）
+        // 如果没有图片和压缩包，尝试查找子文件夹（递归，但限制深度）
         const firstSubfolder = items.find((item) => item.isDir);
         if (firstSubfolder) {
-          // 递归查找，但限制深度
-          const subThumbnail = await this.getFolderThumbnail(firstSubfolder.path);
+          // 递归查找，增加深度计数
+          const subThumbnail = await this.getFolderThumbnail(
+            firstSubfolder.path,
+            maxDepth,
+            currentDepth + 1
+          );
           if (subThumbnail) {
             this.cache.set(pathKey, {
               pathKey,

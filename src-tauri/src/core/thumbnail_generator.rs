@@ -287,10 +287,13 @@ impl ThumbnailGenerator {
                 }
             };
             
-            println!("💾 后台开始保存文件缩略图到数据库: {} ({} bytes)", path_key_clone, webp_data.len());
+            // 保存到数据库（减少日志输出）
             match db_clone.save_thumbnail(&path_key_clone, file_size_clone, ghash_clone, &webp_data) {
                 Ok(_) => {
-                    println!("✅ 文件缩略图已成功保存到数据库: {}", path_key_clone);
+                    // 只在调试模式下打印日志
+                    if cfg!(debug_assertions) {
+                        println!("✅ 文件缩略图已保存到数据库: {} ({} bytes)", path_key_clone, webp_data.len());
+                    }
                 }
                 Err(e) => {
                     eprintln!("❌ 保存文件缩略图到数据库失败: {} - {}", path_key_clone, e);
@@ -569,10 +572,13 @@ impl ThumbnailGenerator {
                             }
                         };
                         
-                        println!("💾 后台开始保存压缩包缩略图到数据库: {} ({} bytes)", path_key_clone, webp_data.len());
+                        // 保存到数据库（减少日志输出）
                         match db_clone.save_thumbnail(&path_key_clone, archive_size_clone, ghash_clone, &webp_data) {
                             Ok(_) => {
-                                println!("✅ 压缩包缩略图已成功保存到数据库: {}", path_key_clone);
+                                // 只在调试模式下打印日志
+                                if cfg!(debug_assertions) {
+                                    println!("✅ 压缩包缩略图已保存到数据库: {} ({} bytes)", path_key_clone, webp_data.len());
+                                }
                             }
                             Err(e) => {
                                 eprintln!("❌ 保存压缩包缩略图到数据库失败: {} - {}", path_key_clone, e);

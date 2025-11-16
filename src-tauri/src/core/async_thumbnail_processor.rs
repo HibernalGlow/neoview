@@ -787,6 +787,17 @@ impl AsyncThumbnailProcessor {
                 }
             };
             
+            // 检查是否为前台任务
+            if !self.is_foreground_task(&task.source_id).await {
+                println!("⏭️ [Rust] 扫描循环跳过非前台任务: {}", task.archive_path.display());
+                // 更新指标（跳过的任务）
+                {
+                    let mut metrics = self.metrics.lock().unwrap();
+                    metrics.scan_queue_length = metrics.scan_queue_length.saturating_sub(1);
+                }
+                continue;
+            }
+            
             // 更新指标
                 {
                     let scan_queue_length = self.scan_rx.read().await.len() + 1;
@@ -947,6 +958,17 @@ impl AsyncThumbnailProcessor {
                     }
                 }
             };
+            
+            // 检查是否为前台任务
+            if !self.is_foreground_task(&task.source_id).await {
+                println!("⏭️ [Rust] 提取循环跳过非前台任务: {}", task.archive_path.display());
+                // 更新指标（跳过的任务）
+                {
+                    let mut metrics = self.metrics.lock().unwrap();
+                    metrics.extract_queue_length = metrics.extract_queue_length.saturating_sub(1);
+                }
+                continue;
+            }
             
             // 更新指标
             {
@@ -1164,6 +1186,18 @@ impl AsyncThumbnailProcessor {
     
     /// 提交扫描任务
     pub async fn submit_scan_task(&self, archive_path: PathBuf, response_tx: Option<tokio::sync::oneshot::Sender<ScanResult>>) -> Result<(), String> {
+        // 从路径提取source_id（父目录）
+        let source_id = archive_path.parent()
+            .and_then(|p| p.to_str())
+            .unwrap_or("")
+            .to_string();
+            
+        // 检查是否为前台任务
+        if !self.is_foreground_task(&source_id).await {
+            println!("⏸️ [Rust] 忽略非前台扫描: {}", archive_path.display());
+            return Ok(());
+        }
+        
         // 检查是否已在处理中
         {
             let processing = self.processing_tasks.read().await;
@@ -1184,12 +1218,6 @@ impl AsyncThumbnailProcessor {
                 }
             }
         }
-        
-        // 从路径提取source_id（父目录）
-        let source_id = archive_path.parent()
-            .and_then(|p| p.to_str())
-            .unwrap_or("")
-            .to_string();
         
         // 添加到处理中列表
         let cancellation_token = CancellationToken {
@@ -1289,6 +1317,23 @@ impl AsyncThumbnailProcessor {
     
     /// 设置前台源目录
     pub async fn set_foreground_source(&self, source_id: String) {
+        // 获取旧的前台源
+        let old_source = {
+            if let Ok(foreground) = self.foreground_source.lock() {
+                foreground.clone()
+            } else {
+                None
+            }
+        };
+        
+        // 取消旧前台源的任务（如果有）
+        if let Some(ref prev) = old_source {
+            let prev_path = std::path::PathBuf::from(prev);
+            let cancelled = self.cancel_by_prefix(&prev_path).await;
+            println!("🚫 [Rust] 取消旧前台源任务 {} 个: {}", cancelled, prev);
+        }
+        
+        // 设置新的前台源
         if let Ok(mut foreground) = self.foreground_source.lock() {
             *foreground = Some(source_id.clone());
             println!("🎯 [Rust] 前台源已设置为: {}", source_id);

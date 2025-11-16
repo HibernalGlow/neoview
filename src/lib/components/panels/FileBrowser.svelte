@@ -18,6 +18,7 @@
   import { homeDir } from '@tauri-apps/api/path';
   import { configureThumbnailManager, itemIsDirectory, itemIsImage, toRelativeKey, enqueueDirectoryThumbnails, cancelBySource, enqueueVisible } from '$lib/utils/thumbnailManager';
   import { cancelFolderTasks } from '$lib/api';
+  import { thumbnailStore, setupThumbnailEventListener } from '$lib/thumbnailManager';
 import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
 import ThumbnailsPanel from './ThumbnailsPanel.svelte';
 import { getPerformanceSettings } from '$lib/api/performance';
@@ -41,6 +42,25 @@ import { getPerformanceSettings } from '$lib/api/performance';
 
   // 导航历史管理器
   let navigationHistory = new NavigationHistory();
+
+  // 订阅 thumbnailStore 以获取实时缩略图更新
+  let unsubscribeThumbnailStore: (() => void) | null = null;
+  
+  $effect(() => {
+    // 设置缩略图事件监听
+    unsubscribeThumbnailStore = setupThumbnailEventListener();
+    
+    // 订阅 thumbnailStore 更新
+    const unsubscribe = thumbnailStore.subscribe((store) => {
+      // 更新本地 thumbnails Map
+      thumbnails = new Map(store);
+    });
+    
+    return () => {
+      if (unsubscribe) unsubscribe();
+      if (unsubscribeThumbnailStore) unsubscribeThumbnailStore();
+    };
+  });
   
   // UI 模式状态
   let isCheckMode = $state(false);

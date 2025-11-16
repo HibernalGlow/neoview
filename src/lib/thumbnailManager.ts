@@ -21,16 +21,18 @@ interface ThumbnailEntry {
 // Blob 生命周期管理
 class BlobLifecycle {
   private refCounts = new Map<string, number>();
-  
+  private objectUrlMap = new Map<string, string>();
+
   touch(blobKey: string) {
     const current = this.refCounts.get(blobKey) || 0;
     this.refCounts.set(blobKey, current + 1);
   }
-  
+
   release(blobKey: string) {
     const current = this.refCounts.get(blobKey) || 0;
     if (current <= 1) {
       this.refCounts.delete(blobKey);
+      this.revokeObjectUrl(blobKey);
       // 通知后端释放
       releaseBlob(blobKey).catch(err => {
         console.warn('释放 blob 失败:', err);
@@ -39,10 +41,28 @@ class BlobLifecycle {
       this.refCounts.set(blobKey, current - 1);
     }
   }
-  
+
+  registerObjectUrl(blobKey: string, objectUrl: string) {
+    this.objectUrlMap.set(blobKey, objectUrl);
+  }
+
+  getObjectUrl(blobKey: string) {
+    return this.objectUrlMap.get(blobKey);
+  }
+
+  revokeObjectUrl(blobKey: string) {
+    const url = this.objectUrlMap.get(blobKey);
+    if (url) {
+      URL.revokeObjectURL(url);
+      this.objectUrlMap.delete(blobKey);
+    }
+  }
+
   cleanup() {
     // 清理所有引用
     this.refCounts.clear();
+    this.objectUrlMap.forEach(url => URL.revokeObjectURL(url));
+    this.objectUrlMap.clear();
   }
 }
 
@@ -72,6 +92,7 @@ function createThumbnailStore() {
     // 标记加载中
     setLoading(path: string) {
       update(store => {
+        const newStore = new Map(store);
         const entry = newStore.get(path);
         if (entry) {
           entry.isLoading = true;
@@ -110,14 +131,14 @@ export async function loadArchiveThumbnail(entryPath: string): Promise<void> {
   try {
     // 1. 快速获取首图 blob（立即显示）
     const blobUrl = await getArchiveFirstImageBlob(entryPath);
-    const blobKey = blobUrl.startsWith('blob:') ? blobUrl : undefined;
+    const { displayUrl, blobKey } = await toDisplayUrl(blobUrl);
     
-    // 增加 blob 引用
     if (blobKey) {
       blobLifecycle.touch(blobKey);
+      blobLifecycle.registerObjectUrl(blobKey, displayUrl);
     }
     
-    thumbnailStore.update(entryPath, blobUrl, true, blobKey);
+    thumbnailStore.update(entryPath, displayUrl, Boolean(blobKey), blobKey);
     
     // 2. 后台异步生成 WebP 缩略图
     enqueueArchivePreload(entryPath).catch(err => {
@@ -176,20 +197,20 @@ export async function setForegroundDirectory(dirPath: string, items?: any[]): Pr
 // 监听缩略图事件
 export function setupThumbnailEventListener(): () => void {
   // 首图就绪事件（立即显示）
-  const unlisten1 = listen<{ archivePath: string; blob: string }>('thumbnail:firstImageReady', (event) => {
+  const unlisten1Promise = listen<{ archivePath: string; blob: string }>('thumbnail:firstImageReady', async (event) => {
     const { archivePath, blob } = event.payload;
-    const blobKey = blob.startsWith('blob:') ? blob : undefined;
+    const { displayUrl, blobKey } = await toDisplayUrl(blob);
     
-    // 增加 blob 引用
     if (blobKey) {
       blobLifecycle.touch(blobKey);
+      blobLifecycle.registerObjectUrl(blobKey, displayUrl);
     }
     
-    thumbnailStore.update(archivePath, blob, true, blobKey);
+    thumbnailStore.update(archivePath, displayUrl, Boolean(blobKey), blobKey);
   });
   
   // 缩略图更新事件（WebP 完成）
-  const unlisten2 = listen<{ archivePath: string; webpUrl: string; blobUrl: string }>('thumbnail:updated', (event) => {
+  const unlisten2Promise = listen<{ archivePath: string; webpUrl: string; blobUrl: string }>('thumbnail:updated', (event) => {
     const { archivePath, webpUrl, blobUrl } = event.payload;
     
     // 释放旧 blob 引用
@@ -205,8 +226,8 @@ export function setupThumbnailEventListener(): () => void {
   
   // 返回清理函数
   return () => {
-    unlisten1();
-    unlisten2();
+    unlisten1Promise.then(unlisten => unlisten());
+    unlisten2Promise.then(unlisten => unlisten());
   };
 }
 

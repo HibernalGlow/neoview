@@ -449,52 +449,8 @@ export function clearAll() {
 }
 
 export function enqueueDirectoryThumbnails(path: string, items: FsItem[]) {
-  if (!items?.length) return;
-
-  // 设置为当前前台源
-  scheduler.setCurrentSource(path);
-
-  // 过滤出支持的文件类型（图片和压缩包）
-  const supportedItems = items.filter(item => {
-    const name = item?.name || '';
-    const isDir = itemIsDirectory(item);
-    
-    // 支持的图片扩展名
-    const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.avif', '.jxl', '.tiff', '.tif'];
-    // 支持的压缩包扩展名
-    const archiveExts = ['.zip', '.rar', '.7z', '.cbz', '.cbr', '.cb7'];
-    
-    const ext = name.toLowerCase().substring(name.lastIndexOf('.'));
-    
-    // 文件夹或支持的文件类型
-    return isDir || imageExts.includes(ext) || archiveExts.includes(ext);
-  });
-
-  // 优化批量任务调度：分批次处理，保持高并发
-  const FIRST_BATCH = 200;    // 首屏立即处理
-  const SECOND_BATCH = 200;   // 第二批次高优先级
-  const THIRD_BATCH = 200;    // 第三批次普通优先级
-
-  console.log(`📦 [Frontend] 批量调度: 总计 ${supportedItems.length} 个项目，分 3 批次处理`);
-
-  // 第一批次：前台处理（首屏可见）
-  scheduler.enqueue(path, supportedItems.slice(0, FIRST_BATCH), 'foreground');
-  console.log(`⚡ [Frontend] 第一批次: ${Math.min(FIRST_BATCH, supportedItems.length)} 个项目 (foreground)`);
-
-  // 第二批次：高优先级（即将可见）
-  if (supportedItems.length > FIRST_BATCH) {
-    scheduler.enqueue(path, supportedItems.slice(FIRST_BATCH, FIRST_BATCH + SECOND_BATCH), 'high');
-    console.log(`🚀 [Frontend] 第二批次: ${Math.min(SECOND_BATCH, supportedItems.length - FIRST_BATCH)} 个项目 (high)`);
-  }
-
-  // 第三批次：普通优先级（后台处理）
-  if (supportedItems.length > FIRST_BATCH + SECOND_BATCH) {
-    const rest = supportedItems.slice(FIRST_BATCH + SECOND_BATCH);
-    setTimeout(() => {
-      scheduler.enqueue(path, rest, 'normal');
-      console.log(`🔄 [Frontend] 第三批次: ${rest.length} 个项目 (normal)`);
-    }, 50); // 短暂延迟确保前两批优先处理
-  }
+  // 直接使用新的 loadThumbnailsForItems 函数，它已经实现了压缩包优先策略
+  loadThumbnailsForItems(path, items);
 }
 
 // 新增：判断是否为支持的缩略图目标

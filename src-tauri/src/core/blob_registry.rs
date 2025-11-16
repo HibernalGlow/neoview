@@ -189,7 +189,7 @@ impl BlobRegistry {
 }
 
 /// Blob 统计信息
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct BlobStats {
     /// 总条目数
     pub total_entries: usize,

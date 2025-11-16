@@ -158,8 +158,15 @@ pub fn run() {
             commands::generate_archive_thumbnail_root,
             commands::generate_archive_thumbnail_inner,
             commands::get_archive_first_image_quick,
+            commands::get_archive_first_image_blob,
             commands::generate_archive_thumbnail_async,
+            commands::enqueue_archive_preload,
             commands::is_supported_archive,
+            // Blob registry commands
+            commands::get_blob_content,
+            commands::release_blob,
+            commands::cleanup_expired_blobs,
+            commands::get_blob_stats,
             // File operation commands
             commands::fs_commands::copy_path,
             commands::fs_commands::move_path,

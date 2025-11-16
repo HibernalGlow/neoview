@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 
 export async function getArchiveFirstImageBlob(path: string): Promise<string> {
-  return await invoke<string>('get_archive_first_image_blob', { path });
+  return await invoke<string>('get_archive_first_image_blob', { archivePath: path });
 }
 
 export async function getBlobContent(blobKey: string): Promise<Uint8Array> {
@@ -27,11 +27,11 @@ export async function getBlobStats(): Promise<{
 }
 
 export async function enqueueArchivePreload(path: string): Promise<string> {
-  return await invoke<string>('enqueue_archive_preload', { path });
+  return await invoke<string>('enqueue_archive_preload', { archivePath: path });
 }
 
 export async function generateArchiveThumbnailAsync(path: string): Promise<string> {
-  return await invoke<string>('generate_archive_thumbnail_async', { path });
+  return await invoke<string>('generate_archive_thumbnail_async', { archivePath: path });
 }
 
 export async function setForegroundSource(sourceId: string): Promise<void> {

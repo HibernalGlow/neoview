@@ -32,6 +32,8 @@ pub struct ThumbnailRecord {
     pub height: u32,
     /// 缩略图文件大小（字节）
     pub file_size: u64,
+    /// WebP 二进制数据（BLOB）
+    pub content: Option<Vec<u8>>,
 }
 
 /// 缩略图数据库管理器
@@ -76,7 +78,8 @@ impl ThumbnailDatabase {
                 is_folder BOOLEAN NOT NULL DEFAULT 0,
                 width INTEGER NOT NULL,
                 height INTEGER NOT NULL,
-                file_size INTEGER NOT NULL
+                file_size INTEGER NOT NULL,
+                content BLOB
             )",
             [],
         )?;
@@ -91,6 +94,9 @@ impl ThumbnailDatabase {
             "CREATE INDEX IF NOT EXISTS idx_source_modified ON thumbnails(source_modified)",
             [],
         )?;
+        
+        // 检查是否需要迁移（添加 content 字段）
+        self.migrate_content_blob()?;
         
         Ok(())
     }
@@ -125,8 +131,8 @@ impl ThumbnailDatabase {
     pub fn upsert_thumbnail(&self, record: ThumbnailRecord) -> SqliteResult<()> {
         self.conn.execute(
             "INSERT OR REPLACE INTO thumbnails 
-                (bookpath, relative_thumb_path, thumbnail_name, hash, created_at, source_modified, is_folder, width, height, file_size)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                (bookpath, relative_thumb_path, thumbnail_name, hash, created_at, source_modified, is_folder, width, height, file_size, content)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 record.bookpath,
                 record.relative_thumb_path,
@@ -137,7 +143,8 @@ impl ThumbnailDatabase {
                 record.is_folder,
                 record.width,
                 record.height,
-                record.file_size
+                record.file_size,
+                record.content
             ],
         )?;
         
@@ -147,7 +154,7 @@ impl ThumbnailDatabase {
     /// 获取所有缩略图记录
     pub fn get_all_thumbnails(&self) -> SqliteResult<Vec<ThumbnailRecord>> {
         let mut stmt = self.conn.prepare(
-            "SELECT bookpath, relative_thumb_path, thumbnail_name, hash, created_at, source_modified, is_folder, width, height, file_size
+            "SELECT bookpath, relative_thumb_path, thumbnail_name, hash, created_at, source_modified, is_folder, width, height, file_size, content
              FROM thumbnails ORDER BY created_at DESC"
         )?;
         
@@ -165,6 +172,7 @@ impl ThumbnailDatabase {
                 width: row.get(7)?,
                 height: row.get(8)?,
                 file_size: row.get(9)?,
+                content: row.get(10)?,
             })
         })?;
         
@@ -180,7 +188,7 @@ impl ThumbnailDatabase {
     /// 根据 bookpath 查找缩略图记录
     pub fn find_by_bookpath(&self, bookpath: &str) -> SqliteResult<Option<ThumbnailRecord>> {
         let mut stmt = self.conn.prepare(
-            "SELECT bookpath, relative_thumb_path, thumbnail_name, hash, created_at, source_modified, is_folder, width, height, file_size
+            "SELECT bookpath, relative_thumb_path, thumbnail_name, hash, created_at, source_modified, is_folder, width, height, file_size, content
              FROM thumbnails WHERE bookpath = ?1"
         )?;
         
@@ -198,6 +206,7 @@ impl ThumbnailDatabase {
                 width: row.get(7)?,
                 height: row.get(8)?,
                 file_size: row.get(9)?,
+                content: row.get(10)?,
             })
         });
         
@@ -211,7 +220,7 @@ impl ThumbnailDatabase {
     /// 根据缩略图名称查找记录
     pub fn find_by_thumbnail_name(&self, thumbnail_name: &str) -> SqliteResult<Option<ThumbnailRecord>> {
         let mut stmt = self.conn.prepare(
-            "SELECT bookpath, relative_thumb_path, thumbnail_name, hash, created_at, source_modified, is_folder, width, height, file_size
+            "SELECT bookpath, relative_thumb_path, thumbnail_name, hash, created_at, source_modified, is_folder, width, height, file_size, content
              FROM thumbnails WHERE thumbnail_name = ?1"
         )?;
         
@@ -229,6 +238,7 @@ impl ThumbnailDatabase {
                 width: row.get(7)?,
                 height: row.get(8)?,
                 file_size: row.get(9)?,
+                content: row.get(10)?,
             })
         });
         
@@ -242,7 +252,7 @@ impl ThumbnailDatabase {
     /// 按 pattern 查找 bookpath（用于诊断，返回最多 limit 条结果）
     pub fn find_by_bookpath_like(&self, pattern: &str, limit: usize) -> SqliteResult<Vec<ThumbnailRecord>> {
         let sql = format!(
-            "SELECT bookpath, relative_thumb_path, thumbnail_name, hash, created_at, source_modified, is_folder, width, height, file_size FROM thumbnails WHERE bookpath LIKE ?1 LIMIT {}",
+            "SELECT bookpath, relative_thumb_path, thumbnail_name, hash, created_at, source_modified, is_folder, width, height, file_size, content FROM thumbnails WHERE bookpath LIKE ?1 LIMIT {}",
             limit
         );
 
@@ -261,6 +271,7 @@ impl ThumbnailDatabase {
                 width: row.get(7)?,
                 height: row.get(8)?,
                 file_size: row.get(9)?,
+                content: row.get(10)?,
             })
         })?;
 
@@ -332,6 +343,81 @@ impl ThumbnailDatabase {
     
     
     
+    /// 迁移：添加 content BLOB 字段
+    fn migrate_content_blob(&self) -> SqliteResult<()> {
+        // 检查 content 列是否存在
+        let mut stmt = self.conn.prepare("PRAGMA table_info(thumbnails)")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(row.get::<_, String>(1).unwrap_or_default())
+        })?;
+        
+        let mut has_content = false;
+        for row in rows {
+            if let Ok(column_name) = row {
+                if column_name == "content" {
+                    has_content = true;
+                    break;
+                }
+            }
+        }
+
+        if !has_content {
+            println!("🔄 开始数据库迁移：添加 content BLOB 字段");
+            self.conn.execute(
+                "ALTER TABLE thumbnails ADD COLUMN content BLOB",
+                [],
+            )?;
+            println!("✅ 数据库迁移完成：content 字段已添加");
+        }
+        
+        Ok(())
+    }
+
+    /// 获取 WebP 二进制数据
+    pub fn get_thumbnail_blob(&self, bookpath: &str) -> SqliteResult<Option<Vec<u8>>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT content FROM thumbnails WHERE bookpath = ?1"
+        )?;
+        
+        match stmt.query_row([bookpath], |row| {
+            row.get(0)
+        }) {
+            Ok(blob) => Ok(Some(blob)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// 批量获取 WebP 二进制数据
+    pub fn get_thumbnail_blobs(&self, bookpaths: &[String]) -> SqliteResult<Vec<(String, Option<Vec<u8>>)>> {
+        if bookpaths.is_empty() {
+            return Ok(Vec::new());
+        }
+        
+        let placeholders: String = bookpaths.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let sql = format!(
+            "SELECT bookpath, content FROM thumbnails WHERE bookpath IN ({})",
+            placeholders
+        );
+        
+        let mut stmt = self.conn.prepare(&sql)?;
+        let params: Vec<&dyn rusqlite::ToSql> = bookpaths.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+        
+        let rows = stmt.query_map(params.as_slice(), |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, Option<Vec<u8>>>(1)?
+            ))
+        })?;
+        
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(row?);
+        }
+        
+        Ok(results)
+    }
+
     /// 获取统计信息
     pub fn get_stats(&self) -> SqliteResult<ThumbnailStats> {
         let mut stmt = self.conn.prepare(

@@ -1,4 +1,5 @@
 import { FileSystemAPI } from '$lib/api';
+import { pythonThumbnailAPI } from '$lib/api/python_thumbnail';
 import { toAssetUrl } from '$lib/utils/assetProxy';
 
 type Job = { path: string; isFolder: boolean; isArchive?: boolean; isArchiveRoot?: boolean };
@@ -13,8 +14,16 @@ let _epoch = 0;
 let _maxConcurrentLocal = 4;
 let _maxConcurrentArchive = 2;
 let _addThumbnailCb: ((path: string, url: string) => void) | null = null;
+// 是否使用 Python 缩略图服务
+let _usePythonService = true;
 
-export function configureThumbnailManager(options: { addThumbnail?: (path: string, url: string) => void; maxConcurrent?: number; maxConcurrentLocal?: number; maxConcurrentArchive?: number }) {
+export function configureThumbnailManager(options: { 
+  addThumbnail?: (path: string, url: string) => void; 
+  maxConcurrent?: number; 
+  maxConcurrentLocal?: number; 
+  maxConcurrentArchive?: number;
+  usePythonService?: boolean;
+}) {
   if (options.addThumbnail) _addThumbnailCb = options.addThumbnail;
   if (typeof options.maxConcurrent === 'number') {
     _maxConcurrentLocal = options.maxConcurrent;
@@ -22,6 +31,7 @@ export function configureThumbnailManager(options: { addThumbnail?: (path: strin
   }
   if (typeof options.maxConcurrentLocal === 'number') _maxConcurrentLocal = options.maxConcurrentLocal;
   if (typeof options.maxConcurrentArchive === 'number') _maxConcurrentArchive = options.maxConcurrentArchive;
+  if (typeof options.usePythonService === 'boolean') _usePythonService = options.usePythonService;
 }
 
 /** 简单兼容 helper */
@@ -129,39 +139,86 @@ async function processQueue() {
     (async () => {
       try {
         let thumbnail: string | null = null;
+        let blobUrl: string | null = null;
         
-        if (isArchive) {
-          // 优化后的压缩包缩略图生成
-          if (isArchiveRoot) {
-            // 生成压缩包根缩略图（文件夹Tab使用）
-            console.log('📦 生成压缩包根缩略图:', path);
-            thumbnail = await FileSystemAPI.generateArchiveThumbnailRoot(path);
-          } else {
-            // 生成压缩包内特定页缩略图（阅读器使用）
-            // 先获取压缩包内容列表
-            const entries = await FileSystemAPI.listArchiveContents(path);
-            const firstImage = (entries || []).find((e: any) => e && (e.is_image === true || e.isImage === true));
-            if (firstImage) {
-              console.log('📦 生成压缩包内页缩略图:', path, '::', firstImage.path);
-              thumbnail = await FileSystemAPI.generateArchiveThumbnailInner(path, firstImage.path);
+        if (_usePythonService) {
+          // 使用 Python 服务
+          console.log('🐍 使用Python服务生成缩略图:', path);
+          
+          if (isArchive) {
+            if (isArchiveRoot) {
+              // 生成压缩包根缩略图
+              console.log('📦 生成压缩包根缩略图:', path);
+              const bytes = await pythonThumbnailAPI.getThumbnailBlob(path, false);
+              blobUrl = pythonThumbnailAPI.blobUrlFromBytes(bytes);
+            } else {
+              // 生成压缩包内特定页缩略图
+              const entries = await FileSystemAPI.listArchiveContents(path);
+              const firstImage = (entries || []).find((e: any) => e && (e.is_image === true || e.isImage === true));
+              if (firstImage) {
+                console.log('📦 生成压缩包内页缩略图:', path, '::', firstImage.path);
+                const bytes = await pythonThumbnailAPI.getThumbnailBlob(path, false);
+                blobUrl = pythonThumbnailAPI.blobUrlFromBytes(bytes);
+              }
             }
+          } else if (isFolder) {
+            console.log('📁 生成文件夹缩略图:', path);
+            const bytes = await pythonThumbnailAPI.getThumbnailBlob(path, true);
+            blobUrl = pythonThumbnailAPI.blobUrlFromBytes(bytes);
+          } else {
+            console.log('🖼️ 生成文件缩略图:', path);
+            const bytes = await pythonThumbnailAPI.getThumbnailBlob(path, false);
+            blobUrl = pythonThumbnailAPI.blobUrlFromBytes(bytes);
           }
-        } else if (isFolder) {
-          console.log('📁 生成文件夹缩略图:', path);
-          thumbnail = await FileSystemAPI.generateFolderThumbnail(path);
         } else {
-          console.log('🖼️ 生成文件缩略图:', path);
-          thumbnail = await FileSystemAPI.generateFileThumbnail(path);
+          // 使用原有实现
+          if (isArchive) {
+            // 优化后的压缩包缩略图生成
+            if (isArchiveRoot) {
+              // 生成压缩包根缩略图（文件夹Tab使用）
+              console.log('📦 生成压缩包根缩略图:', path);
+              thumbnail = await FileSystemAPI.generateArchiveThumbnailRoot(path);
+            } else {
+              // 生成压缩包内特定页缩略图（阅读器使用）
+              // 先获取压缩包内容列表
+              const entries = await FileSystemAPI.listArchiveContents(path);
+              const firstImage = (entries || []).find((e: any) => e && (e.is_image === true || e.isImage === true));
+              if (firstImage) {
+                console.log('📦 生成压缩包内页缩略图:', path, '::', firstImage.path);
+                thumbnail = await FileSystemAPI.generateArchiveThumbnailInner(path, firstImage.path);
+              }
+            }
+          } else if (isFolder) {
+            console.log('📁 生成文件夹缩略图:', path);
+            thumbnail = await FileSystemAPI.generateFolderThumbnail(path);
+          } else {
+            console.log('🖼️ 生成文件缩略图:', path);
+            thumbnail = await FileSystemAPI.generateFileThumbnail(path);
+          }
         }
 
         // 在调用回调之前检查任务 epoch 是否仍然有效
-        if (thumbnail && _addThumbnailCb && jobEpoch === _epoch) {
-          const converted = toAssetUrl(thumbnail) || String(thumbnail || '');
+        if ((thumbnail || blobUrl) && _addThumbnailCb && jobEpoch === _epoch) {
           const key = toRelativeKey(path);
-          console.log('✅ 缩略图生成成功:', { key, raw: thumbnail, converted });
-          _addThumbnailCb(key, converted);
-        } else if (thumbnail && jobEpoch !== _epoch) {
+          let finalUrl: string;
+          
+          if (blobUrl) {
+            // 直接使用 Blob URL
+            finalUrl = blobUrl;
+            console.log('✅ 缩略图生成成功 (Python):', { key, blobUrl });
+          } else {
+            // 使用 base64 data URL（原有方式）
+            finalUrl = toAssetUrl(thumbnail) || String(thumbnail || '');
+            console.log('✅ 缩略图生成成功 (原有):', { key, raw: thumbnail, converted: finalUrl });
+          }
+          
+          _addThumbnailCb(key, finalUrl);
+        } else if ((thumbnail || blobUrl) && jobEpoch !== _epoch) {
           console.log('⏰ 任务结果已过期:', { path, jobEpoch, current: _epoch });
+          // 如果是 Blob URL，需要释放
+          if (blobUrl) {
+            pythonThumbnailAPI.revokeBlobUrl(blobUrl);
+          }
         }
       } catch (e) {
         console.error('❌ 缩略图生成失败:', path, e);
@@ -190,6 +247,37 @@ export function isGenerating(path: string) {
   return generating && generating.epoch === _epoch;
 }
 
+// 初始化 Python 缩略图服务
+export async function initPythonService() {
+  if (!_usePythonService) {
+    console.log('Python 缩略图服务已禁用');
+    return;
+  }
+  
+  try {
+    const message = await pythonThumbnailAPI.startService();
+    console.log('✅ Python 缩略图服务启动成功:', message);
+    
+    // 定期检查服务健康状态
+    setInterval(async () => {
+      try {
+        const health = await pythonThumbnailAPI.getServiceHealth();
+        if (!health.running) {
+          console.warn('⚠️ Python 缩略图服务未运行，尝试重启...');
+          await pythonThumbnailAPI.startService();
+        }
+      } catch (e) {
+        console.error('❌ Python 缩略图服务健康检查失败:', e);
+      }
+    }, 30000); // 每 30 秒检查一次
+  } catch (e) {
+    console.error('❌ Python 缩略图服务启动失败:', e);
+    // 降级到原有实现
+    _usePythonService = false;
+    console.log('🔄 已降级到原有缩略图实现');
+  }
+}
+
 // 获取当前任务统计信息（用于调试）
 export function getQueueStats() {
   const currentGenerating = Array.from(_generating.entries());
@@ -206,6 +294,7 @@ export function getQueueStats() {
     generatingArchive,
     maxLocal: _maxConcurrentLocal,
     maxArchive: _maxConcurrentArchive,
-    epoch: _epoch
+    epoch: _epoch,
+    usePythonService: _usePythonService
   };
 }

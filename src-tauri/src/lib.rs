@@ -19,6 +19,7 @@ use commands::upscale_commands::UpscaleManagerState;
 use commands::generic_upscale_commands::GenericUpscalerState;
 use commands::upscale_settings_commands::UpscaleSettingsState;
 use commands::pyo3_upscale_commands::PyO3UpscalerState;
+use commands::python_thumbnail_commands::PyThumbState;
 use std::sync::Arc;
 
 #[allow(clippy::missing_panics_doc)]
@@ -78,6 +79,9 @@ pub fn run() {
             
             // 初始化设置管理器
             app.manage(UpscaleSettingsState::default());
+            
+            // 初始化 Python 缩略图客户端状态
+            app.manage(PyThumbState::default());
             
             Ok(())
         })
@@ -207,6 +211,16 @@ pub fn run() {
             commands::check_upscale_cache_for_algorithm,
             commands::save_binary_file,
             commands::read_binary_file,
+            // Python Thumbnail commands
+            commands::python_thumbnail_commands::start_python_thumbnail_service,
+            commands::python_thumbnail_commands::stop_python_thumbnail_service,
+            commands::python_thumbnail_commands::get_thumbnail_blob,
+            commands::python_thumbnail_commands::get_thumbnail_blobs,
+            commands::python_thumbnail_commands::prefetch_thumbnails,
+            commands::python_thumbnail_commands::generate_file_thumbnail,
+            commands::python_thumbnail_commands::generate_folder_thumbnail,
+            commands::python_thumbnail_commands::generate_archive_thumbnail,
+            commands::python_thumbnail_commands::python_service_health,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

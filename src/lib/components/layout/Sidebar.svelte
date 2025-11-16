@@ -115,10 +115,10 @@
 		sidebar.setOpen(true);
 	}
 
-	// 响应 activePanel 变化
+	// 响应 activePanel 变化（避免无限循环）
 	$effect(() => {
 		const currentActive = navMain.find(nav => nav.value === $activePanel);
-		if (currentActive) {
+		if (currentActive && currentActive.value !== activeItem.value) {
 			activeItem = currentActive;
 		}
 	});

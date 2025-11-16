@@ -26,36 +26,35 @@
 			b.path.toLowerCase().includes(searchQuery.toLowerCase())
 	));
 
-	// 加载书签
-	function loadBookmarks() {
-		bookmarks = bookmarkStore.getAll();
-		// 加载缩略图
-		loadThumbnails();
-	}
-
-	// 加载缩略图
-	async function loadThumbnails() {
+	// 加载缩略图（异步，不阻塞）
+	async function loadThumbnails(bookmarkList: any[]) {
 		const newThumbnails = new Map<string, string>();
-		for (const bookmark of bookmarks) {
-			try {
-				const isDir = bookmark.type === 'folder';
-				const isArchive = bookmark.name.endsWith('.zip') || bookmark.name.endsWith('.cbz') ||
-				                 bookmark.name.endsWith('.rar') || bookmark.name.endsWith('.cbr');
-				const thumbnail = await thumbnailManager.getThumbnail(bookmark.path, undefined, isArchive, 'normal');
-				if (thumbnail) {
-					newThumbnails.set(bookmark.path, thumbnail);
+		// 分批加载，避免一次性加载太多
+		const BATCH_SIZE = 10;
+		for (let i = 0; i < bookmarkList.length; i += BATCH_SIZE) {
+			const batch = bookmarkList.slice(i, i + BATCH_SIZE);
+			await Promise.all(batch.map(async (bookmark) => {
+				try {
+					const isDir = bookmark.type === 'folder';
+					const isArchive = bookmark.name.endsWith('.zip') || bookmark.name.endsWith('.cbz') ||
+					                 bookmark.name.endsWith('.rar') || bookmark.name.endsWith('.cbr');
+					const thumbnail = await thumbnailManager.getThumbnail(bookmark.path, undefined, isArchive, 'normal');
+					if (thumbnail) {
+						newThumbnails.set(bookmark.path, thumbnail);
+					}
+				} catch (err) {
+					console.debug('加载缩略图失败:', bookmark.path, err);
 				}
-			} catch (err) {
-				console.debug('加载缩略图失败:', bookmark.path, err);
-			}
+			}));
+			// 更新缩略图（增量更新）
+			thumbnails = new Map([...thumbnails, ...newThumbnails]);
 		}
-		thumbnails = newThumbnails;
 	}
 
 	// 移除书签
 	function removeBookmark(id: string) {
 		bookmarkStore.remove(id);
-		loadBookmarks();
+		// 状态会通过 store 订阅自动更新
 	}
 
 	// 打开书签
@@ -123,15 +122,22 @@
 				} as FsItem);
 			}
 		});
-		
-		loadBookmarks();
+		// 状态会通过 store 订阅自动更新
 	}
 
-	// 订阅书签变化
+	// 订阅书签变化（避免无限循环）
 	$effect(() => {
-		loadBookmarks();
-		const unsubscribe = bookmarkStore.subscribe(() => {
-			loadBookmarks();
+		// 只在 store 更新时更新状态，不在 effect 中直接调用 loadBookmarks
+		const unsubscribe = bookmarkStore.subscribe((newBookmarks) => {
+			bookmarks = newBookmarks;
+			// 异步加载缩略图，不阻塞
+			if (newBookmarks.length > 0) {
+				loadThumbnails(newBookmarks).catch(err => {
+					console.debug('加载缩略图失败:', err);
+				});
+			} else {
+				thumbnails = new Map();
+			}
 		});
 		return unsubscribe;
 	});

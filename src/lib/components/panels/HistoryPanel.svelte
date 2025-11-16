@@ -16,27 +16,26 @@
 	let viewMode = $state<'list' | 'grid'>('list');
 	let thumbnails = $state<Map<string, string>>(new Map());
 
-	// 加载历史记录
-	function loadHistory() {
-		history = historyStore.getAll();
-		// 加载缩略图
-		loadThumbnails();
-	}
-
-	// 加载缩略图
-	async function loadThumbnails() {
+	// 加载缩略图（异步，不阻塞）
+	async function loadThumbnails(entries: HistoryEntry[]) {
 		const newThumbnails = new Map<string, string>();
-		for (const entry of history) {
-			try {
-				const thumbnail = await thumbnailManager.getThumbnail(entry.path, undefined, false, 'normal');
-				if (thumbnail) {
-					newThumbnails.set(entry.path, thumbnail);
+		// 分批加载，避免一次性加载太多
+		const BATCH_SIZE = 10;
+		for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+			const batch = entries.slice(i, i + BATCH_SIZE);
+			await Promise.all(batch.map(async (entry) => {
+				try {
+					const thumbnail = await thumbnailManager.getThumbnail(entry.path, undefined, false, 'normal');
+					if (thumbnail) {
+						newThumbnails.set(entry.path, thumbnail);
+					}
+				} catch (err) {
+					console.debug('加载缩略图失败:', entry.path, err);
 				}
-			} catch (err) {
-				console.debug('加载缩略图失败:', entry.path, err);
-			}
+			}));
+			// 更新缩略图（增量更新）
+			thumbnails = new Map([...thumbnails, ...newThumbnails]);
 		}
-		thumbnails = newThumbnails;
 	}
 
 	// 打开历史记录
@@ -57,14 +56,14 @@
 	// 移除历史记录
 	function removeHistory(id: string) {
 		historyStore.remove(id);
-		loadHistory();
+		// 状态会通过 store 订阅自动更新
 	}
 
 	// 清空历史记录
 	function clearHistory() {
 		if (confirm('确定要清除所有历史记录吗？')) {
 			historyStore.clear();
-			loadHistory();
+			// 状态会通过 store 订阅自动更新
 		}
 	}
 
@@ -85,11 +84,19 @@
 		};
 	}
 
-	// 订阅历史记录变化
+	// 订阅历史记录变化（避免无限循环）
 	$effect(() => {
-		loadHistory();
-		const unsubscribe = historyStore.subscribe(() => {
-			loadHistory();
+		// 只在 store 更新时更新状态，不在 effect 中直接调用 loadHistory
+		const unsubscribe = historyStore.subscribe((newHistory) => {
+			history = newHistory;
+			// 异步加载缩略图，不阻塞
+			if (newHistory.length > 0) {
+				loadThumbnails(newHistory).catch(err => {
+					console.debug('加载缩略图失败:', err);
+				});
+			} else {
+				thumbnails = new Map();
+			}
 		});
 		return unsubscribe;
 	});

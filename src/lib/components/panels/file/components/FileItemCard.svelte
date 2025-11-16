@@ -44,11 +44,16 @@
     onDelete?: () => void;
   } = $props();
 
-  // 检查是否为收藏
+  // 检查是否为收藏（使用 $derived 避免在每次渲染时调用）
   const isBookmarked = $derived.by(() => {
     if (!showBookmarkMark) return false;
-    const bookmarks = bookmarkStore.getAll();
-    return bookmarks.some(b => b.path === item.path);
+    try {
+      const bookmarks = bookmarkStore.getAll();
+      return bookmarks.some(b => b.path === item.path);
+    } catch (err) {
+      console.debug('检查收藏状态失败:', err);
+      return false;
+    }
   });
 
   // 判断文件类型

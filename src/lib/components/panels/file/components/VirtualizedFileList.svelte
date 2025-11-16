@@ -398,8 +398,13 @@
         {#each items.slice(startIndex, endIndex + 1) as item, i (item.path)}
           {@const actualIndex = startIndex + i}
           {@const isSelected = selectedIndex === actualIndex}
-          {@const historyEntry = historyStore.findByPath(item.path)}
-          {@const isBookmarked = bookmarkStore.getAll().some(b => b.path === item.path)}
+          {@const historyEntry = (() => {
+            try {
+              return historyStore.findByPath(item.path);
+            } catch {
+              return undefined;
+            }
+          })()}
           <FileItemCard
             item={item}
             thumbnail={thumbnails.get(getThumbnailKey(item))}
@@ -433,8 +438,13 @@
           {#each items.slice(startIndex, endIndex + 1) as item, i (item.path)}
             {@const actualIndex = startIndex + i}
             {@const isSelected = selectedIndex === actualIndex}
-            {@const historyEntry = historyStore.findByPath(item.path)}
-            {@const isBookmarked = bookmarkStore.getAll().some(b => b.path === item.path)}
+            {@const historyEntry = (() => {
+              try {
+                return historyStore.findByPath(item.path);
+              } catch {
+                return undefined;
+              }
+            })()}
             <FileItemCard
               item={item}
               thumbnail={thumbnails.get(getThumbnailKey(item))}

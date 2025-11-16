@@ -517,16 +517,22 @@ class ThumbnailManager {
         return dbThumbnail;
       }
 
-      // 如果是文件夹，不主动生成（避免性能问题）
-      // 文件夹缩略图由反向查找策略自动更新
-      // 这里通过检查路径是否可能是文件夹来判断（简单判断：没有扩展名且不是压缩包）
+      // 检查是否为文件夹（通过检查路径是否有图片/压缩包扩展名来判断）
+      // 如果是文件夹（没有扩展名且不是压缩包），不主动生成
       if (!task.isArchive && !task.innerPath) {
-        // 可能是文件夹，不主动生成
-        // 文件夹缩略图会在子文件生成时自动更新
-        return null;
+        const pathLower = task.path.toLowerCase();
+        const hasImageExt = /\.(jpg|jpeg|png|gif|bmp|webp|avif|jxl|tiff|tif)$/.test(pathLower);
+        const hasArchiveExt = /\.(zip|cbz|rar|cbr)$/.test(pathLower);
+        const hasVideoExt = /\.(mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/.test(pathLower);
+        
+        // 如果没有图片、压缩包或视频扩展名，可能是文件夹，不主动生成
+        if (!hasImageExt && !hasArchiveExt && !hasVideoExt) {
+          // 文件夹缩略图会在子文件生成时自动更新
+          return null;
+        }
       }
 
-      // 生成新缩略图（只处理文件和压缩包）
+      // 生成新缩略图（处理图片、压缩包和视频文件）
       const blobKey = await this.generateThumbnail(task.path, task.innerPath, task.isArchive);
       if (blobKey) {
         // 转换为 blob URL
@@ -676,6 +682,108 @@ class ThumbnailManager {
     if (items.length > maxPreload) {
       console.log(`⚠️ 项目数量过多 (${items.length})，仅预加载前 ${maxPreload} 个`);
     }
+  }
+
+  /**
+   * 检查数据库中是否有缩略图记录
+   */
+  async checkThumbnailInDb(path: string): Promise<boolean> {
+    try {
+      const dbThumbnail = await this.loadFromDb(path);
+      return dbThumbnail !== null;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 批量扫描文件夹并自动绑定缩略图
+   * 对于无记录的文件夹，查找第一个图片/压缩包，生成缩略图并绑定到文件夹
+   */
+  async batchScanFoldersAndBindThumbnails(
+    folders: FsItem[],
+    currentPath: string
+  ): Promise<void> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    
+    // 限制并发扫描数量，避免性能问题
+    const maxConcurrent = 10;
+    const batchSize = Math.min(folders.length, maxConcurrent);
+    
+    // 分批处理
+    for (let i = 0; i < folders.length; i += batchSize) {
+      const batch = folders.slice(i, i + batchSize);
+      
+      // 并行扫描一批文件夹
+      await Promise.all(
+        batch.map(async (folder) => {
+          try {
+            // 获取文件夹内容
+            const items = await invoke<FsItem[]>('browse_directory', { path: folder.path });
+            
+            // 优先查找图片文件
+            const firstImage = items.find((item) => item.isImage && !item.isDir);
+            if (firstImage) {
+              console.log(`🖼️ 为文件夹找到图片: ${folder.path} -> ${firstImage.path}`);
+              // 生成图片缩略图（会自动反向更新父文件夹）
+              await this.getThumbnail(firstImage.path, undefined, false, 'high');
+              return;
+            }
+            
+            // 如果没有图片，查找压缩包
+            const firstArchive = items.find(
+              (item) =>
+                !item.isDir &&
+                (item.name.endsWith('.zip') ||
+                  item.name.endsWith('.cbz') ||
+                  item.name.endsWith('.rar') ||
+                  item.name.endsWith('.cbr'))
+            );
+            if (firstArchive) {
+              console.log(`📦 为文件夹找到压缩包: ${folder.path} -> ${firstArchive.path}`);
+              // 生成压缩包缩略图（会自动反向更新父文件夹）
+              await this.getThumbnail(firstArchive.path, undefined, true, 'high');
+              return;
+            }
+            
+            // 如果没有图片和压缩包，查找子文件夹（最多一层，避免递归太深）
+            const firstSubfolder = items.find((item) => item.isDir);
+            if (firstSubfolder) {
+              // 递归查找子文件夹的第一个图片/压缩包（限制深度为1）
+              const subItems = await invoke<FsItem[]>('browse_directory', { path: firstSubfolder.path });
+              const subImage = subItems.find((item) => item.isImage && !item.isDir);
+              if (subImage) {
+                console.log(`🖼️ 为文件夹找到子文件夹图片: ${folder.path} -> ${subImage.path}`);
+                await this.getThumbnail(subImage.path, undefined, false, 'high');
+                return;
+              }
+              const subArchive = subItems.find(
+                (item) =>
+                  !item.isDir &&
+                  (item.name.endsWith('.zip') ||
+                    item.name.endsWith('.cbz') ||
+                    item.name.endsWith('.rar') ||
+                    item.name.endsWith('.cbr'))
+              );
+              if (subArchive) {
+                console.log(`📦 为文件夹找到子文件夹压缩包: ${folder.path} -> ${subArchive.path}`);
+                await this.getThumbnail(subArchive.path, undefined, true, 'high');
+                return;
+              }
+            }
+          } catch (error) {
+            console.debug(`扫描文件夹失败: ${folder.path}`, error);
+          }
+        })
+      );
+      
+      // 批次之间稍微延迟，避免过载
+      if (i + batchSize < folders.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+    
+    console.log(`✅ 批量扫描完成: ${folders.length} 个文件夹`);
   }
 
   /**

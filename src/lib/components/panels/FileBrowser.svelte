@@ -577,27 +577,56 @@ import { getPerformanceSettings } from '$lib/api/performance';
       console.debug('预加载数据库索引失败:', err);
     });
 
-    // 2. 立即加载所有缩略图（getThumbnail 会自动检查数据库并立即显示已缓存的）
+    // 2. 立即加载所有文件的缩略图（getThumbnail 会自动检查数据库并立即显示已缓存的）
     // 对于已缓存的，会立即从数据库加载并显示
     // 对于未缓存的，会入队生成（immediate 优先级）
     itemsNeedingThumbnails.forEach(item => {
-      // 检查是否为压缩包（目前后端只支持 ZIP/CBZ，但前端可以识别更多格式）
-      const nameLower = item.name.toLowerCase();
-      const isArchive = nameLower.endsWith('.zip') || nameLower.endsWith('.cbz') ||
-                       nameLower.endsWith('.rar') || nameLower.endsWith('.cbr') ||
-                       nameLower.endsWith('.7z') || nameLower.endsWith('.cb7');
+      if (item.isDir) {
+        // 文件夹：先尝试从数据库加载，如果没有记录则批量扫描
+        thumbnailManager.getThumbnail(item.path, undefined, false, 'immediate');
+      } else {
+        // 文件：检查是否为压缩包
+        const nameLower = item.name.toLowerCase();
+        const isArchive = nameLower.endsWith('.zip') || nameLower.endsWith('.cbz') ||
+                         nameLower.endsWith('.rar') || nameLower.endsWith('.cbr') ||
+                         nameLower.endsWith('.7z') || nameLower.endsWith('.cb7');
+        
+        // 如果是压缩包，记录日志
+        if (isArchive) {
+          console.log(`📦 请求压缩包缩略图: ${item.path}`);
+        }
+        
+        // getThumbnail 会自动检查数据库，如果存在会立即加载并返回
+        // 如果不存在，会入队生成（immediate 优先级）
+        thumbnailManager.getThumbnail(item.path, undefined, isArchive, 'immediate');
+      }
+    });
+    
+    // 3. 批量扫描无记录的文件夹，查找第一个图片/压缩包并绑定（异步，不阻塞）
+    // 延迟执行，避免阻塞文件浏览
+    setTimeout(async () => {
+      const foldersWithoutThumbnails: FsItem[] = [];
       
-      // 如果是压缩包，记录日志
-      if (isArchive) {
-        console.log(`📦 请求压缩包缩略图: ${item.path}`);
+      // 检查哪些文件夹没有缩略图记录
+      for (const item of itemsNeedingThumbnails) {
+        if (item.isDir) {
+          const hasThumbnail = await thumbnailManager.checkThumbnailInDb(item.path);
+          if (!hasThumbnail) {
+            foldersWithoutThumbnails.push(item);
+          }
+        }
       }
       
-      // getThumbnail 会自动检查数据库，如果存在会立即加载并返回
-      // 如果不存在，会入队生成（immediate 优先级）
-      thumbnailManager.getThumbnail(item.path, undefined, isArchive, 'immediate');
-    });
+      if (foldersWithoutThumbnails.length > 0) {
+        console.log(`🔍 批量扫描 ${foldersWithoutThumbnails.length} 个无记录文件夹...`);
+        // 异步批量扫描，不阻塞
+        thumbnailManager.batchScanFoldersAndBindThumbnails(foldersWithoutThumbnails, path).catch(err => {
+          console.debug('批量扫描文件夹失败:', err);
+        });
+      }
+    }, 500); // 延迟 500ms，确保文件浏览不阻塞
 
-    // 3. 处理合集文件夹（特殊优化）
+    // 5. 处理合集文件夹（特殊优化）
     if (isCollectionFolder) {
       console.log('📚 检测到合集文件夹，优先加载最新和未记录的');
       loadCollectionFolderThumbnails(items, path, subfolders);

@@ -231,24 +231,7 @@ pub async fn generate_file_thumbnail_new(
         }
     }
 
-    // 生成新缩略图 - 使用后台优先队列
-    if let Ok(qguard) = state.queue.lock() {
-        if let Some(ref q) = *qguard {
-            println!("📥 将文件缩略图任务入队（普通）: {}", path.display());
-            match q.enqueue(path.clone(), false, false) {
-                Ok(url) => {
-                    println!("✅ 文件缩略图生成成功(队列): {}", url);
-                    if let Ok(cache) = state.cache.lock() {
-                        cache.set(cache_key.clone(), url.clone());
-                    }
-                    return Ok(url);
-                }
-                Err(e) => {
-                    println!("⚠️ 队列生成失败，降级到即时生成: {}", e);
-                }
-            }
-        }
-    }
+    // 队列已移除，直接使用即时生成
 
     // 回退：即时生成（无队列或队列失败）
     if let Ok(manager_guard) = state.manager.lock() {
@@ -282,16 +265,18 @@ pub async fn cancel_thumbnail_task(
 ) -> Result<bool, String> {
     let path = PathBuf::from(path);
     
-    if let Ok(processor_guard) = state.async_processor.lock() {
-        if let Some(ref processor) = *processor_guard {
-            let cancelled = processor.cancel(&path).await;
-            Ok(cancelled)
-        } else {
-            Err("异步处理器未初始化".to_string())
+    // 获取处理器的克隆，避免跨await持有锁
+    let processor = {
+        let guard = state.async_processor.lock()
+            .map_err(|_| "无法获取处理器锁".to_string())?;
+        match (*guard).clone() {
+            Some(p) => p,
+            None => return Err("异步处理器未初始化".to_string()),
         }
-    } else {
-        Err("无法获取处理器锁".to_string())
-    }
+    };
+    
+    let cancelled = processor.cancel(&path).await;
+    Ok(cancelled)
 }
 
 /// 取消指定目录下的所有缩略图生成任务
@@ -302,16 +287,18 @@ pub async fn cancel_folder_tasks(
 ) -> Result<usize, String> {
     let dir_path = PathBuf::from(dir_path);
     
-    if let Ok(processor_guard) = state.async_processor.lock() {
-        if let Some(ref processor) = *processor_guard {
-            let cancelled = processor.cancel_by_prefix(&dir_path).await;
-            Ok(cancelled)
-        } else {
-            Err("异步处理器未初始化".to_string())
+    // 获取处理器的克隆，避免跨await持有锁
+    let processor = {
+        let guard = state.async_processor.lock()
+            .map_err(|_| "无法获取处理器锁".to_string())?;
+        match (*guard).clone() {
+            Some(p) => p,
+            None => return Err("异步处理器未初始化".to_string()),
         }
-    } else {
-        Err("无法获取处理器锁".to_string())
-    }
+    };
+    
+    let cancelled = processor.cancel_by_prefix(&dir_path).await;
+    Ok(cancelled)
 }
 
 /// 获取错误统计信息
@@ -319,16 +306,18 @@ pub async fn cancel_folder_tasks(
 pub async fn get_thumbnail_error_stats(
     state: tauri::State<'_, ThumbnailManagerState>,
 ) -> Result<std::collections::HashMap<String, usize>, String> {
-    if let Ok(processor_guard) = state.async_processor.lock() {
-        if let Some(ref processor) = *processor_guard {
-            let stats = processor.get_error_stats().await;
-            Ok(stats)
-        } else {
-            Err("异步处理器未初始化".to_string())
+    // 获取处理器的克隆，避免跨await持有锁
+    let processor = {
+        let guard = state.async_processor.lock()
+            .map_err(|_| "无法获取处理器锁".to_string())?;
+        match (*guard).clone() {
+            Some(p) => p,
+            None => return Err("异步处理器未初始化".to_string()),
         }
-    } else {
-        Err("无法获取处理器锁".to_string())
-    }
+    };
+    
+    let stats = processor.get_error_stats().await;
+    Ok(stats)
 }
 
 /// 生成文件夹缩略图
@@ -365,27 +354,7 @@ pub async fn generate_folder_thumbnail(
         }
     }
 
-    // 生成新缩略图
-    // 首选使用后台优先队列（若存在）入队处理并等待结果（去重/优先）
-    if let Ok(qguard) = state.queue.lock() {
-        if let Some(ref q) = *qguard {
-            println!("📥 将文件夹缩略图任务入队（优先）: {}", path.display());
-            match q.enqueue(path.clone(), true, true) {
-                Ok(url) => {
-                    println!("✅ 文件夹缩略图生成成功(队列): {}", url);
-                    // 添加到缓存
-                    if let Ok(cache) = state.cache.lock() {
-                        cache.set(cache_key.clone(), url.clone());
-                    }
-                    return Ok(url);
-                }
-                Err(e) => {
-                    println!("⚠️ 队列生成失败，降级到即时生成: {}", e);
-                    // 继续到后续的即时生成分支
-                }
-            }
-        }
-    }
+    // 队列已移除，直接使用即时生成
 
     // 回退：即时生成（无队列或队列失败）
     if let Ok(manager_guard) = state.manager.lock() {
@@ -980,40 +949,66 @@ pub async fn generate_archive_thumbnail_async(
         }
     }
     
-    // 入队到后台处理，不等待结果
-    if let Ok(queue_guard) = state.queue.lock() {
-        if let Some(ref queue) = *queue_guard {
-            let _queue_clone = queue.clone();
-            let path_clone = path.clone();
-            let cache_clone = state.cache.clone();
-            let manager_clone = state.manager.clone();
-            
-            // 在后台线程中处理
-            tokio::spawn(async move {
-                // 获取管理器生成缩略图
-                if let Ok(manager_guard) = manager_clone.lock() {
-                    if let Some(ref manager) = *manager_guard {
-                        match manager.ensure_archive_thumbnail(&path_clone) {
-                            Ok(thumbnail_url) => {
-                                // 添加到缓存
-                                if let Ok(cache) = cache_clone.lock() {
-                                    let cache_key = normalize_path_string(path_clone.to_string_lossy());
-                                    cache.set(cache_key.clone(), thumbnail_url.clone());
-                                    println!("💾 [Rust] 异步生成完成并缓存: {}", cache_key);
+    // 直接在后台生成缩略图
+    let path_clone = path.clone();
+    let cache_clone = state.cache.clone();
+    let manager_clone = state.manager.clone();
+    
+    // 在后台线程中处理
+    tokio::spawn(async move {
+        // 获取管理器的路径信息
+        let (thumbnail_root, root_dir, size) = {
+            let guard = manager_clone.lock().unwrap();
+            if let Some(ref manager) = *guard {
+                (manager.thumbnail_root().clone(), manager.root_dir().clone(), manager.size())
+            } else {
+                println!("❌ [Rust] 管理器未初始化");
+                return;
+            }
+        };
+        
+        // 创建新的管理器实例
+        let manager = match ThumbnailManager::new(thumbnail_root, root_dir, size) {
+            Ok(m) => m,
+            Err(e) => {
+                println!("❌ [Rust] 创建管理器失败: {}", e);
+                return;
+            }
+        };
+        
+        match manager.ensure_archive_thumbnail(&path_clone) {
+                Ok(thumbnail_url) => {
+                    // 如果返回的是特殊标记，说明是快速显示模式
+                    if thumbnail_url == "blob://quick_display" {
+                        println!("⚡ [Rust] 快速显示模式，等待后台缩略图生成");
+                        // 等待一段时间让后台任务完成
+                        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                        
+                        // 再次检查缓存
+                        if let Ok(cache) = cache_clone.lock() {
+                            let cache_key = normalize_path_string(path_clone.to_string_lossy());
+                            if let Some(cached_url) = cache.get(&cache_key) {
+                                if !cached_url.starts_with("blob://") {
+                                    println!("✅ [Rust] 后台缩略图生成完成: {}", cached_url);
+                                    return;
                                 }
-                            }
-                            Err(e) => {
-                                println!("❌ [Rust] 异步生成失败: {}", e);
                             }
                         }
                     }
+                    
+                    // 添加到缓存
+                    if let Ok(cache) = cache_clone.lock() {
+                        let cache_key = normalize_path_string(path_clone.to_string_lossy());
+                        cache.set(cache_key.clone(), thumbnail_url.clone());
+                        println!("💾 [Rust] 异步生成完成并缓存: {}", cache_key);
+                    }
                 }
-            });
-            
-            println!("⚡ [Rust] 异步生成已入队，立即返回");
-            return Ok("generating".to_string()); // 返回特殊值表示正在生成
-        }
-    }
+                Err(e) => {
+                    println!("❌ [Rust] 异步生成失败: {}", e);
+                }
+            }
+    });
     
-    Err("缩略图队列未初始化".to_string())
+    println!("⚡ [Rust] 异步生成已启动，立即返回");
+    Ok("generating".to_string()) // 返回特殊值表示正在生成
 }

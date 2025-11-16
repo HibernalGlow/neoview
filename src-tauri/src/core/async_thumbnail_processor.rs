@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use tokio::sync::{Semaphore, RwLock, mpsc, oneshot};
+use tokio::sync::{Semaphore, RwLock, mpsc, OwnedSemaphorePermit};
 use tokio::task::JoinHandle;
 use std::collections::HashMap;
 use crate::core::thumbnail::ThumbnailManager;
@@ -39,6 +39,7 @@ pub enum TaskPriority {
 }
 
 /// 异步缩略图处理器
+#[derive(Clone)]
 pub struct AsyncThumbnailProcessor {
     /// 管理器实例
     manager: Arc<Mutex<Option<ThumbnailManager>>>,
@@ -73,6 +74,7 @@ impl AsyncThumbnailProcessor {
             archive_semaphore: Arc::new(Semaphore::new(max_concurrent_archive)),
             task_rx: Arc::new(RwLock::new(task_rx)),
             processing_tasks: Arc::new(RwLock::new(HashMap::new())),
+            error_counts: Arc::new(Mutex::new(HashMap::new())),
         };
         
         (processor, task_tx)
@@ -88,23 +90,11 @@ impl AsyncThumbnailProcessor {
             .unwrap_or(8);
             
         for i in 0..num_processors {
-            let task_rx = Arc::clone(&self.task_rx);
-            let manager = Arc::clone(&self.manager);
-            let cache = Arc::clone(&self.cache);
-            let local_semaphore = Arc::clone(&self.local_semaphore);
-            let archive_semaphore = Arc::clone(&self.archive_semaphore);
-            let processing_tasks = Arc::clone(&self.processing_tasks);
+            let processor = Arc::new(self.clone());
             
             tokio::spawn(async move {
                 println!("🔧 异步处理器 {} 已启动", i);
-                Self::process_tasks_loop(
-                    task_rx,
-                    manager,
-                    cache,
-                    local_semaphore,
-                    archive_semaphore,
-                    processing_tasks,
-                ).await;
+                processor.process_tasks_loop(Arc::clone(&processor.task_rx)).await;
                 println!("🔧 异步处理器 {} 已停止", i);
             });
         }
@@ -114,12 +104,8 @@ impl AsyncThumbnailProcessor {
     
     /// 异步处理任务循环
     async fn process_tasks_loop(
+        &self,
         task_rx: Arc<RwLock<mpsc::UnboundedReceiver<AsyncThumbnailTask>>>,
-        manager: Arc<Mutex<Option<ThumbnailManager>>>,
-        cache: Arc<Mutex<ImageCache>>,
-        local_semaphore: Arc<Semaphore>,
-        archive_semaphore: Arc<Semaphore>,
-        processing_tasks: Arc<RwLock<HashMap<PathBuf, JoinHandle<()>>>>,
     ) {
         loop {
             // 获取下一个任务
@@ -136,7 +122,7 @@ impl AsyncThumbnailProcessor {
             
             // 检查是否已经在处理中
             {
-                let processing = processing_tasks.read().await;
+                let processing = self.processing_tasks.read().await;
                 if processing.contains_key(&task.path) {
                     println!("⚠️ 任务已在处理中: {}", task.path.display());
                     continue;
@@ -148,16 +134,16 @@ impl AsyncThumbnailProcessor {
             let path_for_spawn = path.clone();
             let is_folder = task.is_folder;
             let response_tx = task.response_tx;
-            let manager_clone = Arc::clone(&manager);
-            let cache_clone = Arc::clone(&cache);
-            let processing_tasks_clone = Arc::clone(&processing_tasks);
+            let manager_clone = Arc::clone(&self.manager);
+            let cache_clone = Arc::clone(&self.cache);
+            let processing_tasks_clone = Arc::clone(&self.processing_tasks);
             let error_counts_clone = Arc::clone(&self.error_counts);
             
             // 根据文件类型选择信号量并获取许可
-            let permit = if Self::is_archive_file_static(&task.path) {
-                Arc::clone(&archive_semaphore).acquire().await
+            let permit: OwnedSemaphorePermit = if Self::is_archive_file_static(&task.path) {
+                self.archive_semaphore.clone().acquire_owned().await
             } else {
-                Arc::clone(&local_semaphore).acquire().await
+                self.local_semaphore.clone().acquire_owned().await
             }.map_err(|e| format!("获取信号量失败: {}", e))
             .unwrap();
             
@@ -198,7 +184,7 @@ impl AsyncThumbnailProcessor {
             let cancellation_token = CancellationToken {
                 abort_handle: Some(handle),
             };
-            processing_tasks.write().await.insert(path, cancellation_token);
+            self.processing_tasks.write().await.insert(path, cancellation_token);
         }
     }
     
@@ -310,17 +296,3 @@ impl AsyncThumbnailProcessor {
     }
 }
 
-// 实现Clone以支持在多个任务间共享
-impl Clone for AsyncThumbnailProcessor {
-    fn clone(&self) -> Self {
-        Self {
-            manager: self.manager.clone(),
-            cache: self.cache.clone(),
-            local_semaphore: self.local_semaphore.clone(),
-            archive_semaphore: self.archive_semaphore.clone(),
-            task_rx: self.task_rx.clone(),
-            processing_tasks: self.processing_tasks.clone(),
-            error_counts: self.error_counts.clone(),
-        }
-    }
-}

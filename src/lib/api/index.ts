@@ -21,5 +21,10 @@ export {
   cleanupThumbnails,
   getThumbnailStats,
   clearAllThumbnails,
-  preloadThumbnails
+  preloadThumbnails,
+  cancelThumbnailTask,
+  cancelFolderTasks,
+  getThumbnailErrorStats,
+  getArchiveFirstImageQuick,
+  generateArchiveThumbnailAsync
 } from './filesystem';

@@ -78,6 +78,21 @@ impl ThumbnailManager {
         })
     }
 
+    /// 获取缩略图根目录
+    pub fn thumbnail_root(&self) -> &PathBuf {
+        &self.db.thumbnail_root
+    }
+
+    /// 获取根目录
+    pub fn root_dir(&self) -> &PathBuf {
+        &self.root_dir
+    }
+
+    /// 获取缩略图尺寸
+    pub fn size(&self) -> u32 {
+        self.size
+    }
+
     /// 获取相对路径
     pub fn get_relative_path(&self, full_path: &Path) -> Result<PathBuf, String> {
         // 尝试获取相对于根目录的路径
@@ -905,58 +920,35 @@ impl ThumbnailManager {
             .map_err(|e| format!("清理过期缩略图失败: {}", e))
     }
 
-    /// 确保压缩包缩略图存在（优化版）
-    pub fn ensure_archive_thumbnail(&self, archive_path: &Path) -> Result<String, String> {
-        println!("📦 [Rust] ensure_archive_thumbnail: {}", archive_path.display());
-        
-        // 1. 构建压缩包专用key
-        let archive_key = self.build_archive_key(archive_path)?;
-        println!("🔑 [Rust] 压缩包Key: {}", archive_key);
-        
-        // 2. 检查缓存
-        if let Ok(Some(record)) = self.db.find_by_bookpath(&archive_key) {
-            let thumbnail_path = self.db.thumbnail_root.join(&record.relative_thumb_path);
-            if thumbnail_path.exists() {
-                println!("✅ [Rust] 压缩包缩略图缓存命中: {} -> {}", archive_path.display(), thumbnail_path.display());
-                return Ok(format!("file://{}", thumbnail_path.to_string_lossy()));
-            } else {
-                println!("⚠️ [Rust] 缩略图文件不存在: {}", thumbnail_path.display());
-            }
-        } else {
-            println!("🔍 [Rust] 数据库中未找到记录: {}", archive_key);
-        }
-        
-        // 3. 扫描压缩包内的图片 - 优化：只扫描第一张图片
-        println!("🔍 [Rust] 扫描压缩包内的第一张图片...");
-        let images = self.scan_archive_images(archive_path, 1)?;
-        if images.is_empty() {
-            return Err("压缩包内未找到图片".to_string());
-        }
-        println!("📷 [Rust] 找到图片: {:?}", images);
-        
-        // 4. 处理第一张图片
-        let inner_path = &images[0];
-        println!("🔄 [Rust] 处理图片: {}", inner_path);
-        match self.extract_image_from_archive_stream(archive_path, inner_path) {
-            Ok((img, inner_path)) => {
-                println!("✅ [Rust] 成功提取图片: {}", inner_path);
-                let relative_path = self.get_relative_path(archive_path)?;
-                let thumbnail_url = self.save_thumbnail_for_archive(
-                    &img,
-                    archive_path,
-                    &relative_path,
-                    &inner_path,
-                )?;
-                
-                println!("✅ [Rust] 压缩包缩略图生成完成: {} -> {}", archive_path.display(), thumbnail_url);
-                return Ok(thumbnail_url);
-            }
-            Err(e) => {
-                println!("❌ [Rust] 处理图片失败: {} -> {}", inner_path, e);
-                return Err(format!("处理图片失败: {}", e));
-            }
-        }
+
+
+/// 检查是否为支持的图片名称（快速判断）
+fn is_supported_image_name(name: &str) -> bool {
+    let name_lower = name.to_lowercase();
+    // 先检查常见图片扩展名
+    if name_lower.ends_with(".png") || 
+       name_lower.ends_with(".jpg") || 
+       name_lower.ends_with(".jpeg") || 
+       name_lower.ends_with(".webp") ||
+       name_lower.ends_with(".avif") ||
+       name_lower.ends_with(".jxl") ||
+       name_lower.ends_with(".gif") ||
+       name_lower.ends_with(".bmp") ||
+       name_lower.ends_with(".tiff") ||
+       name_lower.ends_with(".tif") {
+        return true;
     }
+    
+    // 检查是否包含img前缀（通常用于图片文件）
+    if name_lower.contains("img") || 
+       name_lower.contains("cover") ||
+       name_lower.contains("front") ||
+       name_lower.contains("page") {
+        return true;
+    }
+    
+    false
+}
     
     /// 扫描压缩包内的前N张图片
     fn scan_archive_images(&self, archive_path: &Path, limit: usize) -> Result<Vec<String>, String> {
@@ -1114,6 +1106,144 @@ impl ThumbnailManager {
     fn build_archive_key(&self, archive_path: &Path) -> Result<String, String> {
         // 调用公开的 build_archive_key 函数保持一致性
         build_archive_key(archive_path)
+    }
+
+    /// 快速扫描压缩包内的图片（仅扫描前100个文件，找到即返回）
+    /// 用于快速获取首图，避免扫描整个压缩包
+    fn scan_archive_images_fast(&self, archive_path: &Path) -> Result<Vec<String>, String> {
+        use crate::core::archive::ArchiveManager;
+        
+        let archive_manager = ArchiveManager::new();
+        let entries = archive_manager.list_zip_contents(archive_path)
+            .map_err(|e| format!("列出压缩包内容失败: {}", e))?;
+        
+        let mut images = Vec::new();
+        let mut count = 0;
+        let scan_limit = 100; // 只扫描前100个文件
+        
+        // 优先查找常见的图片命名模式
+        let priority_patterns = [
+            "cover", "front", "title", "page-001", "page_001", "001", 
+            "vol", "chapter", "ch", "p001", "p_001"
+        ];
+        
+        // 先按优先级查找
+        for pattern in &priority_patterns {
+            for entry in &entries {
+                if entry.is_dir {
+                    continue;
+                }
+                
+                let name_lower = entry.name.to_lowercase();
+                if name_lower.contains(pattern) && self.is_image_file(&Path::new(&entry.name)) {
+                    images.push(entry.name.clone());
+                    println!("⚡ [Rust] 快速扫描找到优先图片: {}", entry.name);
+                    return Ok(images);
+                }
+            }
+        }
+        
+        // 如果没找到优先图片，扫描前100个文件
+        for entry in entries {
+            if entry.is_dir {
+                continue;
+            }
+            
+            count += 1;
+            if count > scan_limit {
+                break;
+            }
+            
+            if self.is_image_file(&Path::new(&entry.name)) {
+                images.push(entry.name.clone());
+                println!("⚡ [Rust] 快速扫描找到图片: {}", entry.name);
+                return Ok(images);
+            }
+        }
+        
+        Err("压缩包内未找到图片".to_string())
+    }
+    
+    /// 确保压缩包缩略图存在（快速版本）
+    /// 首图直传 + 后台缩略图
+    pub fn ensure_archive_thumbnail(&self, archive_path: &Path) -> Result<String, String> {
+        println!("⚡ [Rust] ensure_archive_thumbnail: {}", archive_path.display());
+        
+        // 1. 快速扫描首图
+        let first_images = self.scan_archive_images_fast(archive_path)?;
+        if first_images.is_empty() {
+            return Err("压缩包内未找到图片".to_string());
+        }
+        
+        let first_image_path = &first_images[0];
+        
+        // 2. 提取首图数据
+        use crate::core::archive::ArchiveManager;
+        let archive_manager = ArchiveManager::new();
+        let image_data = archive_manager.extract_file(archive_path, first_image_path)
+            .map_err(|e| format!("提取首图失败: {}", e))?;
+        
+        // 3. 创建blob URL（前端使用）
+        // 注意：这里返回的是原始图片数据，前端需要创建blob URL
+        println!("⚡ [Rust] 首图提取成功: {} bytes", image_data.len());
+        
+        // 4. 后台异步生成缩略图
+        self.generate_archive_thumbnail_background(archive_path, first_image_path);
+        
+        // 5. 返回临时URL（前端将创建blob URL）
+        // 这里返回一个特殊标记，前端看到后会调用get_archive_first_image_quick获取原始数据
+        Ok("blob://quick_display".to_string())
+    }
+    
+    /// 后台异步生成压缩包缩略图
+    fn generate_archive_thumbnail_background(&self, archive_path: &Path, first_image_path: &str) {
+        println!("🔄 [Rust] 后台生成压缩包缩略图: {} :: {}", archive_path.display(), first_image_path);
+        
+        // 克隆需要的数据
+        let archive_path = archive_path.to_path_buf();
+        let first_image_path = first_image_path.to_string();
+        let thumbnail_root = self.db.thumbnail_root.clone();
+        let size = self.size;
+        let root_dir = self.root_dir.clone();
+        
+        // 在后台线程中处理
+        tokio::spawn(async move {
+            // 创建新的管理器实例用于后台任务
+            let manager = match ThumbnailManager::new(thumbnail_root.clone(), root_dir, size) {
+                Ok(m) => m,
+                Err(e) => {
+                    println!("❌ [Rust] 创建后台管理器失败: {}", e);
+                    return;
+                }
+            };
+            
+            // 提取并处理图片
+            match manager.extract_image_from_archive_stream(&archive_path, &first_image_path) {
+                Ok((img, _)) => {
+                    // 获取相对路径
+                    let relative_path = match manager.get_relative_path(&archive_path) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            println!("❌ [Rust] 获取相对路径失败: {}", e);
+                            return;
+                        }
+                    };
+                    
+                    // 保存缩略图
+                    match manager.save_thumbnail_for_archive(&img, &archive_path, &relative_path, &first_image_path) {
+                        Ok(thumbnail_url) => {
+                            println!("✅ [Rust] 后台缩略图生成完成: {}", thumbnail_url);
+                        }
+                        Err(e) => {
+                            println!("❌ [Rust] 后台缩略图生成失败: {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("❌ [Rust] 后台提取图片失败: {}", e);
+                }
+            }
+        });
     }
 
     /// 从内存中的字节数据加载图片（支持 JXL、AVIF 等特殊格式）

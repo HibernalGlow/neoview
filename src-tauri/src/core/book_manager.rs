@@ -2,7 +2,7 @@
 //! 书籍管理核心模块
 
 use crate::models::{BookInfo, BookType, Page};
-use crate::core::thumbnail::{build_path_key, calculate_path_hash};
+use crate::core::path_utils::{build_path_key, calculate_path_hash};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;

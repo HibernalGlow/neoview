@@ -39,11 +39,17 @@ pub async fn calculate_blob_md5(bytes: Vec<u8>) -> Result<String, String> {
 /// @deprecated 建议直接使用 Page.stableHash
 #[command]
 pub async fn calculate_path_hash(path: String) -> Result<String, String> {
-    use crate::core::thumbnail_db::ThumbnailDatabase;
+    use sha1::{Sha1, Digest};
     use std::path::Path;
     
-    // 使用与缩略图相同的算法，确保一致性
-    let hash = ThumbnailDatabase::hash_path(Path::new(&path));
+    // 规范化路径（统一使用正斜杠）
+    let normalized_path = Path::new(&path).to_string_lossy().replace('\\', "/");
+    
+    // 计算 SHA1 哈希
+    let mut hasher = Sha1::new();
+    hasher.update(normalized_path.as_bytes());
+    let hash = hex::encode(hasher.finalize());
+    
     Ok(hash)
 }
 

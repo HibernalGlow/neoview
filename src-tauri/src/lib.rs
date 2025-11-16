@@ -110,14 +110,7 @@ pub fn run() {
             commands::list_archive_contents,
             commands::load_image_from_archive,
             commands::get_images_from_archive,
-            commands::get_archive_first_image_quick,
-            commands::get_archive_first_image_blob,
             commands::is_supported_archive,
-            // Blob registry commands
-            commands::get_blob_content,
-            commands::release_blob,
-            commands::cleanup_expired_blobs,
-            commands::get_blob_stats,
             // File operation commands
             commands::fs_commands::copy_path,
             commands::fs_commands::move_path,

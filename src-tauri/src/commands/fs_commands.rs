@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::State;
-use base64::Engine;
 use crate::core::{FsManager, ArchiveManager};
 
 /// 文件系统状态
@@ -236,21 +235,6 @@ pub async fn get_images_from_archive(
 
     let path = PathBuf::from(archive_path);
     archive_manager.get_images_from_zip(&path)
-}
-
-/// 生成压缩包内图片的缩略图
-#[tauri::command]
-pub async fn generate_archive_thumbnail(
-    archive_path: String,
-    file_path: String,
-    max_size: u32,
-    state: State<'_, FsState>,
-) -> Result<Vec<u8>, String> {
-    let archive_manager = state.archive_manager.lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
-
-    let path = PathBuf::from(archive_path);
-    archive_manager.generate_thumbnail_from_zip(&path, &file_path, max_size)
 }
 
 /// 检查是否为支持的压缩包

@@ -1,0 +1,428 @@
+<script lang="ts">
+	/**
+	 * Bottom Thumbnail Bar
+	 * 底部缩略图栏 - 自动隐藏，鼠标悬停显示
+	 */
+	import { bookStore } from '$lib/stores/book.svelte';
+	import { loadImage } from '$lib/api/fs';
+	import { loadImageFromArchive } from '$lib/api/filesystem';
+	import { bottomThumbnailBarPinned, bottomThumbnailBarHeight } from '$lib/stores';
+	import { Button } from '$lib/components/ui/button';
+	import * as Progress from '$lib/components/ui/progress';
+	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, ExternalLink, Minus, Target } from '@lucide/svelte';
+	import { createPreloadManager } from '$lib/components/viewer/flow/preloadManager.svelte';
+
+	let isVisible = $state(false);
+	let hideTimeout: number | undefined;
+	let thumbnails = $state<Record<number, {url: string, width: number, height: number}>>({});
+	let isResizing = $state(false);
+	let resizeStartY = 0;
+	let resizeStartHeight = 0;
+	let showProgressBar = $state(true);
+	let hoverCount = $state(0); // 追踪悬停区域的计数
+	let showAreaOverlay = $state(false); // 显示区域覆盖层
+	
+	// 创建预加载管理器实例用于缩略图
+	let preloadManager: ReturnType<typeof createPreloadManager>;
+
+	// 响应钉住状态
+	$effect(() => {
+		if ($bottomThumbnailBarPinned) {
+			isVisible = true;
+			if (hideTimeout) clearTimeout(hideTimeout);
+		}
+	});
+
+	// 初始化时同步进度条状态
+	$effect(() => {
+		window.dispatchEvent(new CustomEvent('progressBarStateChange', {
+			detail: { show: showProgressBar }
+		}));
+	});
+
+	function showThumbnails() {
+		isVisible = true;
+		if (hideTimeout) clearTimeout(hideTimeout);
+		loadVisibleThumbnails();
+		// 不要在这里设置定时器，让 handleMouseLeave 来处理
+	}
+
+	function handleMouseEnter() {
+		hoverCount++;
+		showThumbnails();
+	}
+
+	function handleMouseLeave() {
+		hoverCount--;
+		if ($bottomThumbnailBarPinned || isResizing) return;
+		if (hideTimeout) clearTimeout(hideTimeout);
+		// 只有当计数为0时（即鼠标离开了所有相关区域）才开始延迟隐藏
+		if (hoverCount <= 0) {
+			hideTimeout = setTimeout(() => {
+				if (hoverCount <= 0) {
+					isVisible = false;
+				}
+			}, 300) as unknown as number;
+		}
+	}
+
+	function togglePin() {
+		bottomThumbnailBarPinned.update(p => !p);
+	}
+
+	function toggleProgressBar() {
+		showProgressBar = !showProgressBar;
+		// 通知ImageViewer进度条状态变化
+		window.dispatchEvent(new CustomEvent('progressBarStateChange', {
+			detail: { show: showProgressBar }
+		}));
+	}
+
+	function toggleAreaOverlay() {
+		showAreaOverlay = !showAreaOverlay;
+		// 通知主窗口显示/隐藏区域覆盖层
+		window.dispatchEvent(new CustomEvent('areaOverlayToggle', {
+			detail: { show: showAreaOverlay }
+		}));
+	}
+
+	function openInNewWindow() {
+		const url = `${window.location.origin}/standalone/bottom-thumbnails`;
+		const features = 'width=1200,height=300,resizable=yes,scrollbars=yes,status=yes,toolbar=no,menubar=no,location=no';
+		window.open(url, '缩略图栏', features);
+	}
+
+	function handleResizeStart(e: MouseEvent) {
+		isResizing = true;
+		resizeStartY = e.clientY;
+		resizeStartHeight = $bottomThumbnailBarHeight;
+		e.preventDefault();
+	}
+
+	function handleResizeMove(e: MouseEvent) {
+		if (!isResizing) return;
+		const deltaY = resizeStartY - e.clientY; // 反向，因为是从底部拖拽
+		const newHeight = Math.max(80, Math.min(400, resizeStartHeight + deltaY));
+		bottomThumbnailBarHeight.set(newHeight);
+	}
+
+	function handleResizeEnd() {
+		isResizing = false;
+	}
+
+	$effect(() => {
+		if (isResizing) {
+			window.addEventListener('mousemove', handleResizeMove);
+			window.addEventListener('mouseup', handleResizeEnd);
+			return () => {
+				window.removeEventListener('mousemove', handleResizeMove);
+				window.removeEventListener('mouseup', handleResizeEnd);
+			};
+		}
+	});
+
+	async function loadVisibleThumbnails() {
+		const currentBook = bookStore.currentBook;
+		if (!currentBook || !preloadManager) return;
+
+		// 动态计算预加载范围，确保至少显示6页
+		const preloadRange = Math.max(5, Math.floor(($bottomThumbnailBarHeight - 40) / 60)); // 基于高度计算
+		const start = Math.max(0, bookStore.currentPageIndex - preloadRange);
+		const end = Math.min(currentBook.pages.length - 1, bookStore.currentPageIndex + preloadRange);
+
+		console.log(`Loading thumbnails from ${start} to ${end} (total: ${end - start + 1})`);
+
+		// 并行请求所有缩略图
+		const promises: Promise<void>[] = [];
+		for (let i = start; i <= end; i++) {
+			if (!(i in thumbnails)) {
+				promises.push(loadThumbnail(i));
+			}
+		}
+		await Promise.all(promises);
+	}
+
+	// 在前端从 base64 生成缩略图
+	function generateThumbnailFromBase64(base64Data: string, maxHeight: number = $bottomThumbnailBarHeight - 40): Promise<{url: string, width: number, height: number}> {
+		return new Promise((resolve, reject) => {
+			const img = new Image();
+			img.onload = () => {
+				const canvas = document.createElement('canvas');
+				const ctx = canvas.getContext('2d');
+				if (!ctx) {
+					reject(new Error('Cannot get canvas context'));
+					return;
+				}
+
+				// 根据容器高度自适应调整缩略图大小
+				let width = img.width;
+				let height = img.height;
+				if (height > maxHeight) {
+					width = (width * maxHeight) / height;
+					height = maxHeight;
+				}
+
+				canvas.width = width;
+				canvas.height = height;
+				ctx.drawImage(img, 0, 0, width, height);
+
+				// 直接使用 JPEG 格式
+				const thumbnailData = canvas.toDataURL('image/jpeg', 0.85);
+				resolve({
+					url: thumbnailData,
+					width: width,
+					height: height
+				});
+			};
+			img.onerror = () => reject(new Error('Failed to load image'));
+			img.src = base64Data;
+		});
+	}
+
+	async function loadThumbnail(pageIndex: number) {
+		if (!preloadManager) return;
+		
+		try {
+			// 使用预加载管理器获取缩略图
+			await preloadManager.requestThumbnail(pageIndex);
+		} catch (err) {
+			console.error(`Failed to load thumbnail for page ${pageIndex}:`, err);
+			// 回退到原始方法
+			const currentBook = bookStore.currentBook;
+			if (!currentBook || !currentBook.pages[pageIndex]) return;
+
+			try {
+				const page = currentBook.pages[pageIndex];
+				let fullImageData: string;
+
+				if (currentBook.type === 'archive') {
+					fullImageData = await loadImageFromArchive(currentBook.path, page.path);
+				} else {
+					fullImageData = await loadImage(page.path);
+				}
+
+				const thumbnail = await generateThumbnailFromBase64(fullImageData);
+				thumbnails = { ...thumbnails, [pageIndex]: thumbnail };
+			} catch (fallbackErr) {
+				console.error(`Fallback also failed for page ${pageIndex}:`, fallbackErr);
+			}
+		}
+	}
+
+	function handleScroll(e: Event) {
+		const container = e.target as HTMLElement;
+		const thumbnailElements = container.querySelectorAll('button');
+
+		// 加载所有可见的缩略图，包括缓冲区
+		thumbnailElements.forEach((el, i) => {
+			const rect = el.getBoundingClientRect();
+			const containerRect = container.getBoundingClientRect();
+
+			// 扩大可见范围，提前加载即将进入视野的缩略图
+			const buffer = 200; // 200px 缓冲区
+			if (
+				rect.left >= containerRect.left - buffer &&
+				rect.right <= containerRect.right + buffer
+			) {
+				if (!(i in thumbnails)) {
+					loadThumbnail(i);
+				}
+			}
+		});
+	}
+
+	// 初始化预加载管理器
+	$effect(() => {
+		const currentBook = bookStore.currentBook;
+		if (currentBook) {
+			// 创建预加载管理器
+			preloadManager = createPreloadManager({
+				onThumbnailReady: (pageIndex: number, dataURL: string) => {
+					// 解析 dataURL 获取图片尺寸
+					const img = new Image();
+					img.onload = () => {
+						const maxHeight = $bottomThumbnailBarHeight - 40;
+						let width = img.width;
+						let height = img.height;
+						if (height > maxHeight) {
+							width = (width * maxHeight) / height;
+							height = maxHeight;
+						}
+						thumbnails = { ...thumbnails, [pageIndex]: { url: dataURL, width, height } };
+					};
+					img.src = dataURL;
+				}
+			});
+			preloadManager.initialize();
+		}
+		
+		// 清理函数
+		return () => {
+			if (preloadManager) {
+				preloadManager.cleanup();
+			}
+		};
+	});
+
+	// 清空缩略图缓存当书籍变化时
+	$effect(() => {
+		const currentBook = bookStore.currentBook;
+		if (currentBook) {
+			thumbnails = {};
+		}
+	});
+
+	// 当高度变化时重新生成缩略图
+	$effect(() => {
+		const currentBook = bookStore.currentBook;
+		if (currentBook && Object.keys(thumbnails).length > 0) {
+			// 重新加载当前可见的缩略图以适应新高度
+			loadVisibleThumbnails();
+		}
+	});
+</script>
+
+{#if bookStore.currentBook && bookStore.currentBook.pages.length > 0}
+	<!-- 缩略图栏触发区域（独立） -->
+	<div
+		class="fixed bottom-0 left-0 right-0 h-4 z-[57]"
+		onmouseenter={handleMouseEnter}
+		onmouseleave={handleMouseLeave}
+		role="presentation"
+		aria-label="底部缩略图栏触发区域"
+	></div>
+
+	<!-- 缩略图栏内容 -->
+	<div
+		data-bottom-bar="true"
+		class="absolute bottom-0 left-0 right-0 z-[58] transition-transform duration-300 {isVisible
+			? 'translate-y-0'
+			: 'translate-y-full'}"
+		onmouseenter={handleMouseEnter}
+		onmouseleave={handleMouseLeave}
+	>
+		<div class="bg-secondary/95 backdrop-blur-sm border-t shadow-lg overflow-hidden" style="height: {$bottomThumbnailBarHeight}px;">
+			<!-- 拖拽手柄 -->
+			<div
+				class="h-2 flex items-center justify-center cursor-ns-resize hover:bg-primary/20 transition-colors"
+				onmousedown={handleResizeStart}
+				role="separator"
+				aria-label="拖拽调整缩略图栏高度"
+				tabindex="0"
+			>
+				<GripHorizontal class="h-3 w-3 text-muted-foreground" />
+			</div>
+
+			<!-- 控制按钮 -->
+			<div class="px-2 pb-1 flex justify-center gap-2">
+				<Button
+					variant={$bottomThumbnailBarPinned ? 'default' : 'ghost'}
+					size="sm"
+					class="h-6"
+					onclick={togglePin}
+				>
+					{#if $bottomThumbnailBarPinned}
+						<Pin class="h-3 w-3 mr-1" />
+					{:else}
+						<PinOff class="h-3 w-3 mr-1" />
+					{/if}
+					<span class="text-xs">{$bottomThumbnailBarPinned ? '已钉住' : '钉住'}</span>
+				</Button>
+				<Button
+					variant="ghost"
+					size="sm"
+					class="h-6"
+					onclick={openInNewWindow}
+					title="在独立窗口中打开"
+				>
+					<ExternalLink class="h-3 w-3 mr-1" />
+					<span class="text-xs">独立窗口</span>
+				</Button>
+				<Button
+					variant={showProgressBar ? 'default' : 'ghost'}
+					size="sm"
+					class="h-6"
+					onclick={toggleProgressBar}
+					title="显示阅读进度条"
+				>
+					<Minus class="h-3 w-3 mr-1" />
+					<span class="text-xs">进度条</span>
+				</Button>
+				<Button
+					variant={showAreaOverlay ? 'default' : 'ghost'}
+					size="sm"
+					class="h-6"
+					onclick={toggleAreaOverlay}
+					title="显示/隐藏6区域点击测试"
+				>
+					<Target class="h-3 w-3 mr-1" />
+					<span class="text-xs">区域</span>
+				</Button>
+			</div>
+
+			<div class="px-2 pb-2 h-[calc(100%-theme(spacing.8))] overflow-hidden">
+				<div class="flex gap-2 overflow-x-auto h-full pb-1 items-center" onscroll={handleScroll}>
+					{#each bookStore.currentBook.pages as page, index (page.path)}
+						<button
+							class="flex-shrink-0 rounded overflow-hidden border-2 transition-colors relative group
+								{index === bookStore.currentPageIndex ? 'outline outline-2 outline-yellow-400' : ''}
+								{bookStore.getPageUpscaleStatus(index) === 'preupscaled' ? 'ring-2 ring-blue-500' : ''}
+								{bookStore.getPageUpscaleStatus(index) === 'done' ? 'ring-2 ring-green-500' : ''}
+								{bookStore.getPageUpscaleStatus(index) === 'error' ? 'ring-2 ring-red-500' : ''}
+								border-gray-300 hover:border-primary/50"
+							style="width: auto; height: {$bottomThumbnailBarHeight - 40}px; min-width: 60px; max-width: 120px;"
+							onclick={() => bookStore.navigateToPage(index)}
+							title="Page {index + 1}"
+						>
+							{#if index in thumbnails}
+								<img
+									src={thumbnails[index].url}
+									alt="Page {index + 1}"
+									class="w-full h-full object-contain"
+									style="object-position: center;"
+								/>
+							{:else}
+								<div
+									class="w-full h-full flex flex-col items-center justify-center bg-muted text-xs text-muted-foreground"
+									style="min-width: 60px; max-width: 120px;"
+								>
+									<ImageIcon class="h-6 w-6 mb-1" />
+									<span class="font-mono">{index + 1}</span>
+								</div>
+							{/if}
+
+							<!-- 页码标签 -->
+							<div
+								class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[10px] text-center py-0.5 font-mono"
+							>
+								{index + 1}
+							</div>
+							
+							<!-- 状态角标 -->
+							{#if bookStore.getPageUpscaleStatus(index) === 'done'}
+								<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-green-500" title="已超分"></span>
+							{:else if bookStore.getPageUpscaleStatus(index) === 'preupscaled'}
+								<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-blue-500" title="已预超分"></span>
+							{:else if bookStore.getPageUpscaleStatus(index) === 'error'}
+								<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-red-500" title="超分失败"></span>
+							{/if}
+						</button>
+					{/each}
+				</div>
+			</div>
+		</div>
+	
+	<!-- 阅读进度条 -->
+	{#if showProgressBar && bookStore.currentBook}
+		<!-- 底部进度条 -->
+		<div class="fixed bottom-0 left-0 right-0 h-1 z-[51] pointer-events-none">
+			<Progress.Root 
+				value={((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}
+				class="h-full"
+			>
+				<Progress.Indicator class="h-full bg-primary transition-all duration-300" />
+			</Progress.Root>
+		</div>
+	{/if}
+</div>
+{/if}

@@ -238,6 +238,7 @@ export async function searchFiles(
   return await invoke<FsItem[]>('search_files', { path, query, options });
 }
 
+// ===== 视频相关 API =====
 
 /**
  * 生成视频缩略图
@@ -267,13 +268,6 @@ export async function checkFFmpegAvailable(): Promise<boolean> {
   return await invoke<boolean>('check_ffmpeg_available');
 }
 
-/**
- * 批量入队当前目录的所有文件为最高优先级
- * 用于快速加载当前浏览目录的缩略图
- */
-export async function enqueueDirFilesHighestPriority(dirPath: string): Promise<number> {
-  return await invoke<number>('enqueue_dir_files_highest_priority', { dirPath });
-}
 
 /**
  * 快速获取压缩包内的第一张图片（旧版本，返回字节数组）
@@ -306,24 +300,6 @@ export async function getArchiveFirstImageBlob(archivePath: string): Promise<str
     return blobUrl;
   } catch (error) {
     console.error('❌ FileSystemAPI: 获取失败:', archivePath, error);
-    throw error;
-  }
-}
-
-
-/**
- * 优先加载当前文件夹（使用 tokio 优化）
- * 立即返回，后台异步处理当前文件夹的所有文件
- * 让当前文件夹的文件最优先生成缩略图
- */
-export async function prioritizeCurrentFolder(dirPath: string): Promise<string> {
-  console.log('📥 FileSystemAPI: 优先加载当前文件夹:', dirPath);
-  try {
-    const result = await invoke<string>('prioritize_current_folder', { dir_path: dirPath });
-    console.log('✅ FileSystemAPI: 当前文件夹优先加载已启动:', result);
-    return result;
-  } catch (error) {
-    console.error('❌ FileSystemAPI: 优先加载失败:', dirPath, error);
     throw error;
   }
 }

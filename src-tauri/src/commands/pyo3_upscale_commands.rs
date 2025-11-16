@@ -410,7 +410,7 @@ pub async fn test_pyo3_upscaler(
         let result = manager.upscale_and_cache(&test_image_path, &model, 60.0)?;
         
         // 计算测试图片的 hash
-        use crate::core::thumbnail::{build_path_key, calculate_path_hash};
+        use crate::core::path_utils::{build_path_key, calculate_path_hash};
         use crate::models::BookType;
         let path_key = build_path_key(
             test_image_path.to_str().unwrap_or(""),

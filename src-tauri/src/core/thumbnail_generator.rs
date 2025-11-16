@@ -213,24 +213,34 @@ impl ThumbnailGenerator {
         let config_clone = self.config.clone();
         
         std::thread::spawn(move || {
-            // 在后台线程中使用 vips 命令行工具生成 webp 缩略图（避免 rust 库 panic）
+            // 在后台线程中使用 vips 命令行工具生成 webp 缩略图（完全避免 rust 图像解码库 panic）
             // 直接将原始图像数据写入临时文件，使用 vips 处理
             use std::fs;
             use std::process::Command;
+            use std::path::Path;
+            
+            // 检测文件格式，确定临时文件扩展名
+            let file_ext = Path::new(&path_key_clone)
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.to_lowercase())
+                .unwrap_or_else(|| "tmp".to_string());
             
             let temp_dir = std::env::temp_dir();
-            let input_path = temp_dir.join(format!("thumb_input_{}_{}.tmp", std::process::id(), 
-                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+            let input_path = temp_dir.join(format!("thumb_input_{}_{}.{}", std::process::id(), 
+                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
+                file_ext));
             let output_path = temp_dir.join(format!("thumb_output_{}_{}.webp", std::process::id(),
                 std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
             
-            // 写入原始图像数据到临时文件
+            // 写入原始图像数据到临时文件（不进行任何解码，直接写入）
             if let Err(e) = fs::write(&input_path, &image_data_clone) {
                 eprintln!("❌ 写入临时文件失败: {} - {}", path_key_clone, e);
                 return;
             }
             
-            // 使用 vips 命令行工具转换（完全避免 rust 图像解码库）
+            // 使用 vips 命令行工具转换（完全避免 rust 图像解码库，包括 AVIF）
+            // vips 支持 AVIF、JXL 等格式，不需要 rust 库解码
             let vips_result = Command::new("vips")
                 .arg("thumbnail")
                 .arg(&input_path)
@@ -265,68 +275,15 @@ impl ThumbnailGenerator {
                 Ok(output) => {
                     let _ = fs::remove_file(&output_path);
                     let stderr = String::from_utf8_lossy(&output.stderr);
-                    eprintln!("⚠️ vips 转换失败: {} - {}, 尝试降级方案", path_key_clone, stderr);
-                    // 降级：使用 image crate（但捕获 panic）
-                    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        image::load_from_memory(&image_data_clone)
-                            .and_then(|img| {
-                                let (width, height) = img.dimensions();
-                                let scale = (config_clone.max_width as f32 / width as f32)
-                                    .min(config_clone.max_height as f32 / height as f32)
-                                    .min(1.0);
-                                let new_width = (width as f32 * scale) as u32;
-                                let new_height = (height as f32 * scale) as u32;
-                                let thumbnail = img.thumbnail(new_width, new_height);
-                                let mut output = Vec::new();
-                                thumbnail.write_to(
-                                    &mut Cursor::new(&mut output),
-                                    ImageFormat::WebP,
-                                )?;
-                                Ok(output)
-                            })
-                    })) {
-                        Ok(Ok(data)) => data,
-                        Ok(Err(e)) => {
-                            eprintln!("❌ 降级方案失败: {} - {}", path_key_clone, e);
-                            return;
-                        }
-                        Err(_) => {
-                            eprintln!("❌ 降级方案 panic: {}", path_key_clone);
-                            return;
-                        }
-                    }
+                    eprintln!("⚠️ vips 转换失败: {} - {}, 跳过此文件", path_key_clone, stderr);
+                    // 不再使用降级方案（避免 image crate 解码 AVIF 导致 panic）
+                    // 直接返回，不生成缩略图
+                    return;
                 }
                 Err(_) => {
-                    // vips 命令不存在，使用降级方案
-                    eprintln!("⚠️ vips 命令不存在，使用降级方案: {}", path_key_clone);
-                    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        image::load_from_memory(&image_data_clone)
-                            .and_then(|img| {
-                                let (width, height) = img.dimensions();
-                                let scale = (config_clone.max_width as f32 / width as f32)
-                                    .min(config_clone.max_height as f32 / height as f32)
-                                    .min(1.0);
-                                let new_width = (width as f32 * scale) as u32;
-                                let new_height = (height as f32 * scale) as u32;
-                                let thumbnail = img.thumbnail(new_width, new_height);
-                                let mut output = Vec::new();
-                                thumbnail.write_to(
-                                    &mut Cursor::new(&mut output),
-                                    ImageFormat::WebP,
-                                )?;
-                                Ok(output)
-                            })
-                    })) {
-                        Ok(Ok(data)) => data,
-                        Ok(Err(e)) => {
-                            eprintln!("❌ 降级方案失败: {} - {}", path_key_clone, e);
-                            return;
-                        }
-                        Err(_) => {
-                            eprintln!("❌ 降级方案 panic: {}", path_key_clone);
-                            return;
-                        }
-                    }
+                    // vips 命令不存在，直接返回（不尝试降级，避免 panic）
+                    eprintln!("⚠️ vips 命令不存在，跳过此文件: {}", path_key_clone);
+                    return;
                 }
             };
             
@@ -539,25 +496,35 @@ impl ThumbnailGenerator {
                     let ghash_clone = ghash;
                     let image_data_clone = image_data.clone();
                     let config_clone = self.config.clone();
+                    let image_name_clone = name.clone(); // 克隆文件名用于后台线程
                     
                     std::thread::spawn(move || {
-                        // 在后台线程中使用 vips 命令行工具生成 webp 缩略图（避免 rust 库 panic）
+                        // 在后台线程中使用 vips 命令行工具生成 webp 缩略图（完全避免 rust 库 panic）
                         use std::fs;
                         use std::process::Command;
+                        use std::path::Path;
+                        
+                        // 从文件名检测格式
+                        let file_ext = Path::new(&image_name_clone)
+                            .extension()
+                            .and_then(|e| e.to_str())
+                            .map(|e| e.to_lowercase())
+                            .unwrap_or_else(|| "tmp".to_string());
                         
                         let temp_dir = std::env::temp_dir();
-                        let input_path = temp_dir.join(format!("thumb_archive_input_{}_{}.tmp", std::process::id(),
-                            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+                        let input_path = temp_dir.join(format!("thumb_archive_input_{}_{}.{}", std::process::id(),
+                            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
+                            file_ext));
                         let output_path = temp_dir.join(format!("thumb_archive_output_{}_{}.webp", std::process::id(),
                             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
                         
-                        // 写入原始图像数据到临时文件
+                        // 写入原始图像数据到临时文件（不进行任何解码）
                         if let Err(e) = fs::write(&input_path, &image_data_clone) {
                             eprintln!("❌ 写入临时文件失败: {} - {}", path_key_clone, e);
                             return;
                         }
                         
-                        // 使用 vips 命令行工具转换
+                        // 使用 vips 命令行工具转换（完全避免 rust 图像解码库）
                         let vips_result = Command::new("vips")
                             .arg("thumbnail")
                             .arg(&input_path)
@@ -591,67 +558,14 @@ impl ThumbnailGenerator {
                             Ok(output) => {
                                 let _ = fs::remove_file(&output_path);
                                 let stderr = String::from_utf8_lossy(&output.stderr);
-                                eprintln!("⚠️ vips 转换失败: {} - {}, 尝试降级方案", path_key_clone, stderr);
-                                // 降级方案
-                                match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                                    image::load_from_memory(&image_data_clone)
-                                        .and_then(|img| {
-                                            let (width, height) = img.dimensions();
-                                            let scale = (config_clone.max_width as f32 / width as f32)
-                                                .min(config_clone.max_height as f32 / height as f32)
-                                                .min(1.0);
-                                            let new_width = (width as f32 * scale) as u32;
-                                            let new_height = (height as f32 * scale) as u32;
-                                            let thumbnail = img.thumbnail(new_width, new_height);
-                                            let mut output = Vec::new();
-                                            thumbnail.write_to(
-                                                &mut Cursor::new(&mut output),
-                                                ImageFormat::WebP,
-                                            )?;
-                                            Ok(output)
-                                        })
-                                })) {
-                                    Ok(Ok(data)) => data,
-                                    Ok(Err(e)) => {
-                                        eprintln!("❌ 降级方案失败: {} - {}", path_key_clone, e);
-                                        return;
-                                    }
-                                    Err(_) => {
-                                        eprintln!("❌ 降级方案 panic: {}", path_key_clone);
-                                        return;
-                                    }
-                                }
+                                eprintln!("⚠️ vips 转换失败: {} - {}, 跳过此文件", path_key_clone, stderr);
+                                // 不再使用降级方案（避免 image crate 解码 AVIF 导致 panic）
+                                return;
                             }
                             Err(_) => {
-                                eprintln!("⚠️ vips 命令不存在，使用降级方案: {}", path_key_clone);
-                                match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                                    image::load_from_memory(&image_data_clone)
-                                        .and_then(|img| {
-                                            let (width, height) = img.dimensions();
-                                            let scale = (config_clone.max_width as f32 / width as f32)
-                                                .min(config_clone.max_height as f32 / height as f32)
-                                                .min(1.0);
-                                            let new_width = (width as f32 * scale) as u32;
-                                            let new_height = (height as f32 * scale) as u32;
-                                            let thumbnail = img.thumbnail(new_width, new_height);
-                                            let mut output = Vec::new();
-                                            thumbnail.write_to(
-                                                &mut Cursor::new(&mut output),
-                                                ImageFormat::WebP,
-                                            )?;
-                                            Ok(output)
-                                        })
-                                })) {
-                                    Ok(Ok(data)) => data,
-                                    Ok(Err(e)) => {
-                                        eprintln!("❌ 降级方案失败: {} - {}", path_key_clone, e);
-                                        return;
-                                    }
-                                    Err(_) => {
-                                        eprintln!("❌ 降级方案 panic: {}", path_key_clone);
-                                        return;
-                                    }
-                                }
+                                eprintln!("⚠️ vips 命令不存在，跳过此文件: {}", path_key_clone);
+                                // 不再使用降级方案（避免 image crate 解码 AVIF 导致 panic）
+                                return;
                             }
                         };
                         

@@ -95,14 +95,11 @@ impl ThumbnailManager {
 
     /// 确保文件夹有缩略图（如果没有，使用提供的缩略图URL）
     pub fn ensure_folder_thumbnail(&self, folder_path: &Path, thumbnail_url: &str) -> Result<(), String> {
-        // 检查文件夹是否已有缩略图
-        let folder_key = format!("folder:{}", Self::normalize_path_string(folder_path));
-        
         // 查询数据库中是否已有文件夹缩略图记录
         let relative_path = self.get_relative_path(folder_path)?;
         let bookpath = relative_path.to_string_lossy();
         
-        match self.db.get_thumbnail(&bookpath, true) {
+        match self.db.find_by_bookpath(&bookpath) {
             Ok(Some(_)) => {
                 // 已有缩略图，不做处理
                 println!("📁 文件夹已有缩略图: {}", folder_path.display());
@@ -122,10 +119,7 @@ impl ThumbnailManager {
                 };
                 
                 // 创建文件夹缩略图记录
-                let now = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map_err(|e| format!("时间错误: {}", e))?
-                    .as_secs();
+                let now = chrono::Utc::now();
                 
                 let record = ThumbnailRecord {
                     bookpath: bookpath.to_string(),
@@ -133,9 +127,9 @@ impl ThumbnailManager {
                     thumbnail_name: format!("folder_{}.webp", folder_path.file_name()
                         .and_then(|n| n.to_str())
                         .unwrap_or("folder")),
-                    hash: format!("folder_shared_{}", now),
+                    hash: ThumbnailDatabase::hash_path(folder_path),
                     created_at: now,
-                    source_modified: now,
+                    source_modified: now.timestamp(),
                     is_folder: true,
                     width: self.size,
                     height: self.size,
@@ -1162,6 +1156,14 @@ fn is_supported_image_name(name: &str) -> bool {
             .map_err(|e| format!("保存内部图片记录失败: {}", e))?;
         println!("💾 [Rust] 内部图片记录已保存: {}", inner_key);
         
+        // 3. 为父文件夹创建缩略图（如果还没有）
+        if let Some(parent_dir) = archive_path.parent() {
+            let thumbnail_url = format!("file://{}", thumbnail_path.to_string_lossy());
+            if let Err(e) = self.ensure_folder_thumbnail(parent_dir, &thumbnail_url) {
+                println!("⚠️ [Rust] 为父文件夹创建缩略图失败: {}", e);
+            }
+        }
+        
         println!("✅ [Rust] 双记录已保存 (总耗时: {:?})", start_time.elapsed());
         
         Ok(format!("file://{}", thumbnail_path.to_string_lossy()))
@@ -1219,101 +1221,7 @@ fn is_supported_image_name(name: &str) -> bool {
         }
     }
 
-    /// 为压缩包保存缩略图
-    pub fn save_thumbnail_for_archive(
-        &self,
-        img: &DynamicImage,
-        archive_path: &Path,
-        relative_path: &Path,
-        inner_path: &str,
-    ) -> Result<String, String> {
-        let start_time = std::time::Instant::now();
-        println!("🎯 [Rust] 开始保存压缩包缩略图: {} -> {}", archive_path.display(), inner_path);
-        
-        // 生成缩略图文件路径
-        let archive_name = archive_path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("archive");
-        
-        let inner_name = Path::new(inner_path)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("image");
-        
-        // 使用 hash 作为文件名避免冲突
-        let hash = ThumbnailDatabase::hash_path(&relative_path.join(inner_path));
-        let thumbnail_name = format!("{}_{}_{}.webp", archive_name, inner_name, &hash[..8]);
-        
-        let thumbnail_path = self.db.thumbnail_root
-            .join("archives")
-            .join(&thumbnail_name);
-        
-        // 确保目录存在
-        if let Some(parent) = thumbnail_path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("创建缩略图目录失败: {}", e))?;
-        }
-        
-        // 编码为 WebP
-        let webp_data = img.to_webp()
-            .map_err(|e| format!("WebP 编码失败: {}", e))?;
-        
-        // 保存文件
-        fs::write(&thumbnail_path, &webp_data)
-            .map_err(|e| format!("保存缩略图失败: {}", e))?;
-        
-        // 获取文件信息
-        let (width, height) = img.dimensions();
-        let file_size = webp_data.len() as u64;
-        let source_modified = std::fs::metadata(archive_path)
-            .and_then(|m| m.modified())
-            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e)))
-            .map(|d| d.as_secs() as i64)
-            .unwrap_or(0);
-        
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|e| format!("时间错误: {}", e))?
-            .as_secs();
-        
-        // 构建相对缩略图路径
-        let relative_thumb_path = thumbnail_path
-            .strip_prefix(&self.db.thumbnail_root)
-            .map(|p| Self::normalize_path_string(p))
-            .unwrap_or_else(|_| Self::normalize_path_string(&thumbnail_path));
-        
-        // 1. 为压缩包本体创建记录
-        let archive_key = self.build_archive_key(archive_path)?;
-        
-        let archive_record = ThumbnailRecord {
-            bookpath: archive_key.clone(),
-            relative_thumb_path: relative_thumb_path.clone(),
-            thumbnail_name: thumbnail_name.clone(),
-            hash: ThumbnailDatabase::hash_path(&relative_path.join(inner_path)),
-            created_at: now,
-            source_modified,
-            is_folder: false,
-            width,
-            height,
-            file_size,
-        };
-        
-        self.db.upsert_thumbnail(archive_record)
-            .map_err(|e| format!("保存压缩包记录失败: {}", e))?;
-        
-        // 2. 为父文件夹创建缩略图（如果还没有）
-        if let Some(parent_dir) = archive_path.parent() {
-            let thumbnail_url = format!("file://{}", thumbnail_path.to_string_lossy());
-            if let Err(e) = self.ensure_folder_thumbnail(parent_dir, &thumbnail_url) {
-                println!("⚠️ [Rust] 为父文件夹创建缩略图失败: {}", e);
-            }
-        }
-        
-        println!("✅ [Rust] 压缩包缩略图保存完成 (耗时: {:?})", start_time.elapsed());
-        
-        Ok(format!("file://{}", thumbnail_path.to_string_lossy()))
-    }
+    
     
     /// 确保压缩包缩略图存在（统一管线版本）
     /// 只做缓存/数据库命中查询，未命中时仅提交任务给异步处理器

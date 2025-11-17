@@ -196,11 +196,59 @@ export async function performUpscale(
 	}
 }
 
+const MAX_BACKGROUND_CONCURRENCY =
+	typeof navigator !== 'undefined' ? Math.min(4, Math.max(1, navigator.hardwareConcurrency || 4)) : 2;
+
+interface BackgroundUpscaleJob {
+	blob: Blob;
+	hash: string;
+	conditionId?: string;
+	resolve: (result: PerformUpscaleResult | undefined) => void;
+	reject: (reason?: unknown) => void;
+}
+
+const backgroundUpscaleQueue: BackgroundUpscaleJob[] = [];
+let activeBackgroundUpscaleJobs = 0;
+
+function enqueueBackgroundUpscale(jobInput: { blob: Blob; hash: string; conditionId?: string }) {
+	return new Promise<PerformUpscaleResult | undefined>((resolve, reject) => {
+		backgroundUpscaleQueue.push({
+			blob: jobInput.blob,
+			hash: jobInput.hash,
+			conditionId: jobInput.conditionId,
+			resolve,
+			reject
+		});
+		processBackgroundUpscaleQueue();
+	});
+}
+
+function processBackgroundUpscaleQueue() {
+	while (activeBackgroundUpscaleJobs < MAX_BACKGROUND_CONCURRENCY && backgroundUpscaleQueue.length > 0) {
+		const job = backgroundUpscaleQueue.shift()!;
+		activeBackgroundUpscaleJobs++;
+		performUpscale(job.blob, job.hash, {
+			background: true,
+			skipStateUpdate: true,
+			conditionId: job.conditionId
+		})
+			.then(job.resolve)
+			.catch(job.reject)
+			.finally(() => {
+				activeBackgroundUpscaleJobs = Math.max(0, activeBackgroundUpscaleJobs - 1);
+				if (backgroundUpscaleQueue.length > 0) {
+					// 微延迟避免阻塞线程
+					setTimeout(processBackgroundUpscaleQueue, 0);
+				}
+			});
+	}
+}
+
 /**
  * 触发自动超分
  */
 export async function triggerAutoUpscale(
-	imageDataWithHash: { blob: Blob; hash: string; conditionId?: string }, 
+	imageDataWithHash: { blob: Blob; hash: string; conditionId?: string },
 	isPreload = false
 ): Promise<PerformUpscaleResult | undefined> {
 	try {
@@ -217,20 +265,6 @@ export async function triggerAutoUpscale(
 			return;
 		}
 
-		// 如果是预加载且有其他任务在进行，直接返回（worker会自动处理队列）
-		if (isPreload) {
-			if (upscaleState.isUpscaling) {
-				// worker会自动处理队列，这里不需要手动管理
-				return;
-			}
-		} else {
-			// 当前页面的超分，检查是否正在超分
-			if (upscaleState.isUpscaling) {
-				console.log('超分正在进行中，跳过自动超分');
-				return;
-			}
-		}
-
 		const { blob: imageBlob, hash: imageHash } = imageDataWithHash;
 		
 		if (await isGifBlob(imageBlob)) {
@@ -238,18 +272,34 @@ export async function triggerAutoUpscale(
 			return;
 		}
 
-		console.log(isPreload ? '触发预加载超分' : '触发当前页面超分', 'MD5:', imageHash, 
-			`Blob size: ${imageBlob.size}`, 'conditionId:', imageDataWithHash.conditionId);
-		
-		// 触发超分开始事件（仅对非预加载任务）
-		if (!isPreload) {
-			startUpscale(imageHash, 'auto', '自动超分中');
+		console.log(
+			isPreload ? '触发预加载超分' : '触发当前页面超分',
+			'MD5:',
+			imageHash,
+			`Blob size: ${imageBlob.size}`,
+			'conditionId:',
+			imageDataWithHash.conditionId
+		);
+
+		if (isPreload) {
+			return enqueueBackgroundUpscale({
+				blob: imageBlob,
+				hash: imageHash,
+				conditionId: imageDataWithHash.conditionId
+			});
 		}
-		
-		// 执行超分，skipStateUpdate 防止重复调用 startUpscale
-		return await performUpscale(imageBlob, imageHash, { 
-			background: isPreload,
-			skipStateUpdate: !isPreload, // 非预加载任务跳过 startUpscale，但保留 completeUpscale
+
+		// 当前页自动超分与手动路径共用，仍需串行执行
+		if (upscaleState.isUpscaling) {
+			console.log('超分正在进行中，跳过当前页面自动超分');
+			return;
+		}
+
+		startUpscale(imageHash, 'auto', '自动超分中');
+
+		return await performUpscale(imageBlob, imageHash, {
+			background: false,
+			skipStateUpdate: true,
 			conditionId: imageDataWithHash.conditionId
 		});
 	} catch (error) {

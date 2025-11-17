@@ -33,15 +33,15 @@ class BookStore {
   // 每页超分状态映射: pageIndex -> 'none' | 'preupscaled' | 'done' | 'failed'
   private upscaleStatusByPage = $state<Map<number, 'none' | 'preupscaled' | 'done' | 'failed'>>(new Map());
 
-  // 超分缓存映射: hash -> { model, cachePath, originalPath, innerPath }
-  private upscaleCacheMap = $state<Map<string, {
+  // 超分缓存映射: bookPath -> (hash -> cacheEntry)
+  private upscaleCacheMapByBook = $state<Map<string, Map<string, {
     model: string;
     scale: number;
     cachePath: string;
     originalPath: string;
     innerPath?: string;
     timestamp: number;
-  }>>(new Map());
+  }>>>(new Map());
 
   // === Getters ===
   get currentBook() {
@@ -438,6 +438,17 @@ class BookStore {
 
   // === 超分缓存管理 ===
 
+  private getCurrentBookCacheKey(): string {
+    return this.state.currentBook?.path ?? '__global__';
+  }
+
+  private getOrCreateBookCache(bookPath: string) {
+    if (!this.upscaleCacheMapByBook.has(bookPath)) {
+      this.upscaleCacheMapByBook.set(bookPath, new Map());
+    }
+    return this.upscaleCacheMapByBook.get(bookPath)!;
+  }
+
   /**
    * 记录超分缓存关系
    */
@@ -449,7 +460,9 @@ class BookStore {
     originalPath: string,
     innerPath?: string
   ) {
-    this.upscaleCacheMap.set(hash, {
+    const bookPath = this.state.currentBook?.path ?? originalPath ?? this.getCurrentBookCacheKey();
+    const bookCache = this.getOrCreateBookCache(bookPath);
+    bookCache.set(hash, {
       model,
       scale,
       cachePath,
@@ -457,14 +470,19 @@ class BookStore {
       innerPath,
       timestamp: Date.now()
     });
-    console.log('💾 记录超分缓存:', hash, '->', cachePath);
+    console.log('💾 记录超分缓存:', hash, '->', cachePath, `(book: ${bookPath})`);
   }
 
   /**
    * 检查是否有超分缓存
    */
   getUpscaleCache(hash: string, model: string, scale: number) {
-    const cache = this.upscaleCacheMap.get(hash);
+    const bookPath = this.state.currentBook?.path ?? this.getCurrentBookCacheKey();
+    const bookCache = this.upscaleCacheMapByBook.get(bookPath);
+    if (!bookCache) {
+      return null;
+    }
+    const cache = bookCache.get(hash);
     if (cache && cache.model === model && cache.scale === scale) {
       // 检查缓存文件是否仍然存在
       return cache;
@@ -476,7 +494,18 @@ class BookStore {
    * 获取所有超分缓存
    */
   getAllUpscaleCaches() {
-    return Array.from(this.upscaleCacheMap.entries());
+    const allEntries: Array<[string, Map<string, {
+      model: string;
+      scale: number;
+      cachePath: string;
+      originalPath: string;
+      innerPath?: string;
+      timestamp: number;
+    }>]> = [];
+    for (const [bookPath, cacheMap] of this.upscaleCacheMapByBook.entries()) {
+      allEntries.push([bookPath, new Map(cacheMap)]);
+    }
+    return allEntries;
   }
 
   /**
@@ -486,10 +515,15 @@ class BookStore {
     const now = Date.now();
     let cleaned = 0;
     
-    for (const [hash, cache] of this.upscaleCacheMap.entries()) {
-      if (now - cache.timestamp > maxAge) {
-        this.upscaleCacheMap.delete(hash);
-        cleaned++;
+    for (const [bookPath, cacheMap] of this.upscaleCacheMapByBook.entries()) {
+      for (const [hash, cache] of cacheMap.entries()) {
+        if (now - cache.timestamp > maxAge) {
+          cacheMap.delete(hash);
+          cleaned++;
+        }
+      }
+      if (cacheMap.size === 0) {
+        this.upscaleCacheMapByBook.delete(bookPath);
       }
     }
     

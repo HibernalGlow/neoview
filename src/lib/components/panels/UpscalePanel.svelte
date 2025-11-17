@@ -4,8 +4,9 @@
 	 * 超分面板 - 使用 PyO3 直接调用 Python sr_vulkan
 	 * 参考 picacg-qt 的 Waifu2x 面板功能
 	 */
-	import { Sparkles, AlertCircle } from '@lucide/svelte';
-	import { onMount, createEventDispatcher } from 'svelte';
+import { Sparkles, AlertCircle } from '@lucide/svelte';
+import { onMount, onDestroy, createEventDispatcher } from 'svelte';
+import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 	// Toast 已改为控制台输出，避免右上角弹窗干扰
 	import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
@@ -123,10 +124,13 @@ import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
 	let error = $state('');
 
 	// 当前图片信息
-	let currentImagePath = $state('');
-	let currentImageResolution = $state('');
-	let currentImageSize = $state('');
-	let upscaledImageUrl = $state('');
+let currentImagePath = $state('');
+let currentImageResolution = $state('');
+let currentImageSize = $state('');
+let upscaledImageUrl = $state('');
+let currentImageHash = $state<string | null>(null);
+let originalPreviewUrl = $state('');
+let originalPreviewObjectUrl: string | null = null;
 
 	// 缓存统计
 	let cacheStats = $state({
@@ -355,7 +359,9 @@ import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
 		progress = 0;
 		status = '';
 		isProcessing = false;
-
+		currentImageHash = bookStore.getCurrentPageHash();
+		originalPreviewUrl = '';
+		void updateOriginalPreview();
 
 		const currentPage = bookStore.currentPage as {
 			width?: number;
@@ -387,6 +393,66 @@ import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
 				typeof imageInfo.fileSize === 'number' ? formatFileSize(imageInfo.fileSize) : '';
 		});
 		return unsubscribe;
+	});
+
+	async function updateOriginalPreview() {
+		if (originalPreviewObjectUrl) {
+			URL.revokeObjectURL(originalPreviewObjectUrl);
+			originalPreviewObjectUrl = null;
+		}
+
+		const preloadManager = (window as { preloadManager?: { getCurrentPageBlob: () => Promise<Blob | null> } })
+			.preloadManager;
+		if (!preloadManager) {
+			originalPreviewUrl = '';
+			return;
+		}
+
+		try {
+			const blob = await preloadManager.getCurrentPageBlob();
+			if (blob && blob.size > 0) {
+				const objectUrl = URL.createObjectURL(blob);
+				originalPreviewUrl = objectUrl;
+				originalPreviewObjectUrl = objectUrl;
+				return;
+			}
+		} catch (error) {
+			console.warn('获取原图预览失败:', error);
+		}
+
+		originalPreviewUrl = '';
+	}
+
+	function applyUpscaledPreview(imageHash: string, url: string, options?: { revokeOnMismatch?: boolean }) {
+		const expected = currentImageHash;
+		if (expected && imageHash !== expected) {
+			console.warn(
+				`⚠️ 超分预览 hash 不匹配，expected=${expected}, received=${imageHash}，跳过更新`
+			);
+			if (options?.revokeOnMismatch) {
+				try {
+					URL.revokeObjectURL(url);
+				} catch (error) {
+					console.warn('释放对象 URL 失败:', error);
+				}
+			}
+			return false;
+		}
+		upscaledImageUrl = url;
+		return true;
+	}
+
+	$effect(() => {
+		if (!originalPreviewUrl && currentImagePath) {
+			void updateOriginalPreview();
+		}
+	});
+
+	onDestroy(() => {
+		if (originalPreviewObjectUrl) {
+			URL.revokeObjectURL(originalPreviewObjectUrl);
+			originalPreviewObjectUrl = null;
+		}
 	});
 
 	/**
@@ -470,8 +536,7 @@ import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
 			if (cache) {
 				console.log('🎯 找到超分缓存:', cache.cachePath);
 				// 使用 invoke 命令读取缓存文件
-				const { invoke } = await import('@tauri-apps/api/core');
-				const data = await invoke<number[]>('read_upscale_cache_file', {
+				const data = await tauriInvoke<number[]>('read_upscale_cache_file', {
 					cachePath: cache.cachePath
 				});
 				return new Uint8Array(data);
@@ -536,7 +601,7 @@ import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
 			
 			// 通过全局 window 对象获取 preloadManager
 			const preloadManager = (window as any).preloadManager;
-			if (preloadManager) {
+			if (preloadManager && imageHash) {
 				const memCache = preloadManager.getPreloadMemoryCache();
 				const cached = memCache.get(imageHash);
 				
@@ -555,7 +620,7 @@ import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
 				});
 					
 					// 直接使用内存缓存
-					upscaledImageUrl = cached.url;
+					applyUpscaledPreview(imageHash, cached.url);
 					
 					// 使用统一处理函数
 					await handleUpscaleResult(imageHash, cached.blob, cached.url, new Uint8Array());
@@ -577,10 +642,24 @@ import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
 			const result = await pyo3UpscaleManager.upscaleImageMemory(imageData);
 			console.log('✅ 超分完成，输出大小:', result.length);
 			
+			// 检查 imageHash 是否存在
+			if (!imageHash) {
+				console.warn('[UpscalePanel] 无法获取当前页 hash，跳过缓存保存');
+				error = '无法获取页面哈希';
+				status = '超分失败';
+				console.error('[UpscalePanel] 超分失败: 无法获取页面哈希');
+				return;
+			}
+
 			// 转换为 Blob 和 URL
-			const blob = new Blob([result], { type: 'image/webp' });
-			upscaledImageUrl = URL.createObjectURL(blob);
-			
+			const buffer = new ArrayBuffer(result.byteLength);
+			new Uint8Array(buffer).set(result);
+			const blob = new Blob([buffer], { type: 'image/webp' });
+			const objectUrl = URL.createObjectURL(blob);
+			applyUpscaledPreview(imageHash, objectUrl, {
+				revokeOnMismatch: true
+			});
+
 			progress = 100;
 			status = '转换完成';
 			updateProgress?.(progress, status);
@@ -593,18 +672,9 @@ import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
 					page: bookStore.currentPageIndex + 1,
 					time: processingTime.toFixed(1)
 				});
-			
-			// 检查 imageHash 是否存在（已在上面声明）
-			if (!imageHash) {
-				console.warn('[UpscalePanel] 无法获取当前页 hash，跳过缓存保存');
-				error = '无法获取页面哈希';
-				status = '超分失败';
-				console.error('[UpscalePanel] 超分失败: 无法获取页面哈希');
-				return;
-			}
 
 			// 使用统一处理函数
-			await handleUpscaleResult(imageHash, blob, upscaledImageUrl, result);
+			await handleUpscaleResult(imageHash, blob, objectUrl, result);
 			
 		} catch (err) {
 			console.error('[UpscalePanel] 超分失败:', err);
@@ -777,7 +847,7 @@ import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
 
 			// 1. 选择保存路径
 			const defaultName = lastUpscaledFileName.replace(/\.[^.]+$/, '') + '_sr.webp';
-			const savePath = await invoke<string | null>('dialog_save', {
+			const savePath = await tauriInvoke<string | null>('dialog_save', {
 				title: '保存超分结果',
 				defaultPath: defaultName,
 				filters: [{ name: 'WebP Image', extensions: ['webp'] }]
@@ -793,7 +863,7 @@ import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
 			const bytes = new Uint8Array(arrayBuffer);
 
 			// 3. 写入文件
-			await invoke('write_binary_file', { path: savePath, contents: bytes });
+			await tauriInvoke('write_binary_file', { path: savePath, contents: bytes });
 
 			console.log('[UpscalePanel] 超分结果已保存', { path: savePath });
 		} catch (err) {
@@ -893,7 +963,11 @@ import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
 	/>
 
 	<!-- 预览区域 -->
-	<UpscalePanelPreview upscaledImageUrl={upscaledImageUrl} />
+	<UpscalePanelPreview
+		upscaledImageUrl={upscaledImageUrl}
+		originalImageUrl={originalPreviewUrl}
+		isProcessing={isProcessing}
+	/>
 </div>
 
 <style>

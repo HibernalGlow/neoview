@@ -13,7 +13,7 @@ use std::{
         Arc,
     },
 };
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tokio::sync::{Mutex, Notify};
 use uuid::Uuid;
 
@@ -36,6 +36,12 @@ pub enum UpscaleJobOrigin {
     Current,
     Preload,
     Manual,
+}
+
+impl Default for UpscaleJobOrigin {
+    fn default() -> Self {
+        Self::Current
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -208,7 +214,7 @@ impl UpscaleSchedulerInner {
     async fn emit_event(&self, payload: UpscaleJobEventPayload) {
         if let Err(err) = self
             .app_handle
-            .emit_all("upscale-job-event", payload.clone())
+            .emit("upscale-job-event", payload.clone())
         {
             eprintln!("emit upscale-job-event failed: {}", err);
         }
@@ -282,13 +288,15 @@ impl UpscaleSchedulerInner {
         let image_data = request.image_data.clone();
 
         let cancellation_flag = handle.cancel_flag.clone();
+        let manager_for_task = manager.clone();
+        let model_for_task = upscale_model.clone();
         let result = tauri::async_runtime::spawn_blocking(move || {
             if cancellation_flag.load(Ordering::Relaxed) {
                 return Err("任务在开始前被取消".to_string());
             }
-            manager.upscale_image_memory(
+            manager_for_task.upscale_image_memory(
                 &image_data,
-                &upscale_model,
+                &model_for_task,
                 120.0,
                 0,
                 0,

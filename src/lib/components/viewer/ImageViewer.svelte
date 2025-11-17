@@ -16,11 +16,14 @@
 	import ComparisonViewer from './ComparisonViewer.svelte';
 	import ImageViewerDisplay from './flow/ImageViewerDisplay.svelte';
 	import ImageViewerProgressBar from './flow/ImageViewerProgressBar.svelte';
+	import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
 	
 	// 新模块导入
 	import { createPreloadManager } from './flow/preloadManager.svelte';
 	import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
 	import { idbSet } from '$lib/utils/idb';
+	import { getFileMetadata } from '$lib/api/fs';
+	import type { BookInfo, Page } from '$lib/types';
 
 	
 
@@ -55,9 +58,99 @@
 	let error = $state<string | null>(null);
 	let loadingTimeout: number | null = null; // 延迟显示loading的定时器
 	
-	// 预超分进度管理
-	let preUpscaleProgress = $state(0); // 预超分进度 (0-100)
-	let totalPreUpscalePages = $state(0); // 总预超分页数
+// 预超分进度管理
+let preUpscaleProgress = $state(0); // 预超分进度 (0-100)
+let totalPreUpscalePages = $state(0); // 总预超分页数
+
+type CachedFileMetadata = {
+	size?: number;
+	createdAt?: string;
+	modifiedAt?: string;
+};
+
+const fileMetadataCache = new Map<string, CachedFileMetadata>();
+let metadataRequestId = 0;
+
+function buildDisplayPath(book: BookInfo, page: Page): string {
+	if (book.type === 'archive' && page.innerPath) {
+		return `${book.path}::${page.innerPath}`;
+	}
+	return page.path;
+}
+
+function guessFormat(name?: string): string | undefined {
+	if (!name) return undefined;
+	const dotIndex = name.lastIndexOf('.');
+	if (dotIndex === -1) return undefined;
+	return name.slice(dotIndex + 1).toUpperCase();
+}
+
+async function fetchCachedFileMetadata(path: string): Promise<CachedFileMetadata | null> {
+	if (fileMetadataCache.has(path)) {
+		return fileMetadataCache.get(path)!;
+	}
+	try {
+		const metadata = await getFileMetadata(path);
+		const parsed: CachedFileMetadata = {
+			size: metadata.size,
+			createdAt: metadata.created ? new Date(metadata.created * 1000).toISOString() : undefined,
+			modifiedAt: metadata.modified ? new Date(metadata.modified * 1000).toISOString() : undefined
+		};
+		fileMetadataCache.set(path, parsed);
+		return parsed;
+	} catch (error) {
+		console.warn('获取文件元数据失败:', error);
+		return null;
+	}
+}
+
+async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
+	const book = bookStore.currentBook;
+	const page = bookStore.currentPage;
+	if (!book || !page) {
+		infoPanelStore.resetImageInfo();
+		return;
+	}
+
+	const requestId = ++metadataRequestId;
+	const widthsKnown = bitmap?.width ?? page.width;
+	const heightsKnown = bitmap?.height ?? page.height;
+
+	const baseInfo = {
+		path: buildDisplayPath(book, page),
+		name: page.name,
+		format: guessFormat(page.name),
+		width: widthsKnown,
+		height: heightsKnown,
+		fileSize: page.size,
+		colorDepth: undefined,
+		createdAt: undefined,
+		modifiedAt: undefined
+	};
+
+	infoPanelStore.setImageInfo(baseInfo);
+
+	if (book.type === 'folder' || book.type === 'media') {
+		const metadata = await fetchCachedFileMetadata(page.path);
+		if (metadata && requestId === metadataRequestId) {
+			infoPanelStore.setImageInfo({
+				...baseInfo,
+				fileSize: metadata.size ?? baseInfo.fileSize,
+				createdAt: metadata.createdAt ?? baseInfo.createdAt,
+				modifiedAt: metadata.modifiedAt ?? baseInfo.modifiedAt
+			});
+		}
+		return;
+	}
+
+	if (requestId === metadataRequestId) {
+		infoPanelStore.setImageInfo({
+			...baseInfo,
+			createdAt: book.createdAt ?? baseInfo.createdAt,
+			modifiedAt: book.modifiedAt ?? baseInfo.modifiedAt
+		});
+	}
+}
 
 	// 订阅设置变化
 	settingsManager.addListener((s) => {
@@ -88,6 +181,7 @@
 				
 				imageBitmap = bitmap;
 				imageBitmap2 = bitmap2;
+				void updateInfoPanelForCurrentPage(bitmap);
 				if (bitmap) {
 					try {
 						originalImageDataForComparison = await bitmapToDataURL(bitmap);
@@ -307,6 +401,9 @@
 			if (preloadManager) {
 				preloadManager.loadCurrentImage();
 			}
+			void updateInfoPanelForCurrentPage();
+		} else {
+			infoPanelStore.resetImageInfo();
 		}
 	});
 

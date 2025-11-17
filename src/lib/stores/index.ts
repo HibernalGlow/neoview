@@ -7,6 +7,7 @@ export * from './book.svelte';
 export * from './ui.svelte';
 export * from './keyboard.svelte';
 export * from './fileBrowser.svelte';
+export * from './infoPanel.svelte';
 // panels.svelte 导出的 PanelType 与 ui.svelte 冲突，需要单独导入
 export {
 	panels,

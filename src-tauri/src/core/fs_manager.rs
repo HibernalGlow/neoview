@@ -14,6 +14,7 @@ pub struct FsItem {
     pub is_dir: bool,
     pub size: u64,
     pub modified: Option<u64>,
+    pub created: Option<u64>,
     pub is_image: bool,
 }
 
@@ -116,6 +117,10 @@ impl FsManager {
                 .ok()
                 .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
                 .map(|d| d.as_secs());
+            let created = metadata.created()
+                .ok()
+                .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs());
 
             let is_image = !is_dir && Self::is_image_file(&path);
 
@@ -125,6 +130,7 @@ impl FsManager {
                 is_dir,
                 size,
                 modified,
+                created,
                 is_image,
             });
         }
@@ -196,6 +202,10 @@ impl FsManager {
             .ok()
             .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
             .map(|d| d.as_secs());
+        let created = metadata.created()
+            .ok()
+            .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+            .map(|d| d.as_secs());
 
         let is_image = !is_dir && Self::is_image_file(path);
 
@@ -205,6 +215,7 @@ impl FsManager {
             is_dir,
             size,
             modified,
+            created,
             is_image,
         })
     }
@@ -557,6 +568,10 @@ impl FsManager {
                     .ok()
                     .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
                     .map(|d| d.as_secs());
+                let created = metadata.created()
+                    .ok()
+                    .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs());
 
                 let is_image = !is_dir && Self::is_image_file(&entry_path);
 
@@ -566,6 +581,7 @@ impl FsManager {
                     is_dir,
                     size,
                     modified,
+                    created,
                     is_image,
                 });
             }

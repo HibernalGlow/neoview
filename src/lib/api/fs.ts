@@ -4,6 +4,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import type { FsItem } from '$lib/types';
 
 export async function loadImage(path: string): Promise<string> {
 	const binaryData = await invoke<number[]>('load_image', { path });
@@ -21,4 +22,8 @@ export async function generateThumbnail(
 	maxHeight: number
 ): Promise<string> {
 	return await invoke<string>('generate_thumbnail', { path, maxWidth, maxHeight });
+}
+
+export async function getFileMetadata(path: string): Promise<FsItem> {
+	return await invoke<FsItem>('get_file_metadata', { path });
 }

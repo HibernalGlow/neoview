@@ -139,6 +139,18 @@ pub async fn get_images_in_directory(
     Ok(images.iter().map(|p| p.to_string_lossy().to_string()).collect())
 }
 
+/// 获取单个文件/文件夹的元数据（包含创建/修改时间）
+#[tauri::command]
+pub async fn get_file_metadata(
+    path: String,
+    state: State<'_, FsState>,
+) -> Result<crate::core::fs_manager::FsItem, String> {
+    let fs_manager = state.fs_manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    let path = PathBuf::from(path);
+    fs_manager.get_file_metadata(&path)
+}
 
 /// 创建目录
 #[tauri::command]
@@ -426,6 +438,10 @@ pub async fn search_files(
                 .ok()
                 .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                 .map(|d| d.as_secs());
+            let created = metadata.created()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs());
             
             let is_image = !is_dir && is_image_file(&path_buf);
             
@@ -435,6 +451,7 @@ pub async fn search_files(
                 is_dir,
                 size,
                 modified,
+                created,
                 is_image,
             });
             

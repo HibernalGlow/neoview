@@ -7,8 +7,6 @@ use rusqlite::{Connection, params, Result as SqliteResult};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-const DB_FORMAT_VERSION: &str = "2.1"; // 添加 category 字段
-
 /// 缩略图数据库管理器
 pub struct ThumbnailDb {
     connection: Arc<Mutex<Option<Connection>>>,
@@ -79,111 +77,18 @@ impl ThumbnailDb {
              PRAGMA synchronous = NORMAL;"
         )?;
 
-        // 创建属性表
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS property (
-                key TEXT NOT NULL PRIMARY KEY,
-                value TEXT
-            )",
-            [],
-        )?;
-
-        // 检查格式版本
-        let format = Self::load_property(conn, "format")?;
-        let current_format = format.as_deref().unwrap_or("1.0");
-        
-        if current_format != DB_FORMAT_VERSION {
-            // 版本不匹配，执行迁移
-            println!("🔄 数据库版本迁移: {} -> {}", current_format, DB_FORMAT_VERSION);
-            
-            // 从 2.0 迁移到 2.1：添加 category 字段
-            if current_format == "2.0" && DB_FORMAT_VERSION == "2.1" {
-                // 检查是否已有 category 字段
-                let has_category = {
-                    let mut stmt = conn.prepare("PRAGMA table_info(thumbs)")?;
-                    let rows = stmt.query_map([], |row| {
-                        let name: String = row.get(1)?;
-                        Ok(name)
-                    })?;
-                    let mut found = false;
-                    for row in rows {
-                        if let Ok(name) = row {
-                            if name == "category" {
-                                found = true;
-                                break;
-                            }
-                        }
-                    }
-                    found
-                };
-
-                if !has_category {
-                    println!("🔄 添加 category 字段...");
-                    conn.execute("ALTER TABLE thumbs ADD COLUMN category TEXT DEFAULT 'file'", [])?;
-                    // 更新现有记录：根据 key 判断是否为文件夹（简单判断：没有扩展名）
-                    conn.execute(
-                        "UPDATE thumbs SET category = 'folder' WHERE key NOT LIKE '%.%' AND key NOT LIKE '%::%'",
-                        [],
-                    )?;
-                    println!("✅ category 字段已添加并更新现有记录");
-                }
-            } else {
-                // 其他版本迁移可以在这里添加
-                println!("⚠️ 未知的版本迁移路径: {} -> {}", current_format, DB_FORMAT_VERSION);
-            }
-            
-            // 更新格式版本
-            Self::save_property(conn, "format", DB_FORMAT_VERSION)?;
-            println!("✅ 数据库版本已更新到 {}", DB_FORMAT_VERSION);
-        } else {
-            // 版本匹配，但需要检查是否有 category 字段（兼容性检查）
-            let has_category = {
-                let mut stmt = conn.prepare("PRAGMA table_info(thumbs)")?;
-                let rows = stmt.query_map([], |row| {
-                    let name: String = row.get(1)?;
-                    Ok(name)
-                })?;
-                let mut found = false;
-                for row in rows {
-                    if let Ok(name) = row {
-                        if name == "category" {
-                            found = true;
-                            break;
-                        }
-                    }
-                }
-                found
-            };
-
-            if !has_category {
-                println!("🔄 检测到缺少 category 字段，添加中...");
-                conn.execute("ALTER TABLE thumbs ADD COLUMN category TEXT DEFAULT 'file'", [])?;
-                conn.execute(
-                    "UPDATE thumbs SET category = 'folder' WHERE key NOT LIKE '%.%' AND key NOT LIKE '%::%'",
-                    [],
-                )?;
-                println!("✅ category 字段已添加");
-            }
-        }
-
-        // 创建缩略图表（添加 category 字段用于区分文件和文件夹）
+        // 创建缩略图表
         conn.execute(
             "CREATE TABLE IF NOT EXISTS thumbs (
                 key TEXT NOT NULL PRIMARY KEY,
                 size INTEGER,
-                date INTEGER,
+                date TEXT,
                 ghash INTEGER,
                 category TEXT DEFAULT 'file',
                 value BLOB
             )",
             [],
         )?;
-
-        // 确保 date 字段为人类可读的字符串
-        Self::ensure_human_readable_dates(conn)?;
-
-        // category 字段的添加已在版本检查中处理，这里不需要重复
-
         // 创建索引以提高查询性能
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_thumbs_key ON thumbs(key)",
@@ -193,41 +98,11 @@ impl ThumbnailDb {
             "CREATE INDEX IF NOT EXISTS idx_thumbs_category ON thumbs(category)",
             [],
         )?;
-
-        Ok(())
-    }
-
-    /// 将 date 字段转换为人类可读的字符串格式（仅转换数值类型的数据）
-    fn ensure_human_readable_dates(conn: &Connection) -> SqliteResult<()> {
         conn.execute(
-            "UPDATE thumbs
-             SET date = datetime(date, 'unixepoch', 'localtime')
-             WHERE typeof(date) IN ('integer', 'real')",
+            "CREATE INDEX IF NOT EXISTS idx_thumbs_date ON thumbs(date)",
             [],
         )?;
-        Ok(())
-    }
 
-    /// 加载属性
-    fn load_property(conn: &Connection, key: &str) -> SqliteResult<Option<String>> {
-        let mut stmt = conn.prepare("SELECT value FROM property WHERE key = ?1")?;
-        let mut rows = stmt.query_map([key], |row| {
-            Ok(row.get::<_, String>(0)?)
-        })?;
-
-        if let Some(row) = rows.next() {
-            row.map(Some)
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// 保存属性
-    fn save_property(conn: &Connection, key: &str, value: &str) -> SqliteResult<()> {
-        let mut stmt = conn.prepare(
-            "INSERT OR REPLACE INTO property (key, value) VALUES (?1, ?2)"
-        )?;
-        let _ = stmt.execute(params![key, value])?;
         Ok(())
     }
 

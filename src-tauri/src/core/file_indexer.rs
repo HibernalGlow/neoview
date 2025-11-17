@@ -353,6 +353,7 @@ impl FileIndexer {
                                 is_dir: entry.is_dir,
                                 size: entry.size,
                                 modified: Some(entry.modified),
+                                created: None,
                                 is_image: entry.is_image,
                             });
                         }
@@ -377,6 +378,7 @@ impl FileIndexer {
                                             is_dir: entry.is_dir,
                                             size: entry.size,
                                             modified: Some(entry.modified),
+                                            created: None,
                                             is_image: entry.is_image,
                                         });
                                     }

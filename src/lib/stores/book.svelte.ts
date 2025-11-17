@@ -5,6 +5,7 @@
 
 import type { BookInfo, Page } from '../types';
 import * as bookApi from '../api/book';
+import { infoPanelStore } from './infoPanel.svelte';
 
 interface BookState {
   currentBook: BookInfo | null;
@@ -118,6 +119,7 @@ class BookStore {
       this.state.upscaledImageData = null;
       this.state.upscaledImageBlob = null;
       this.state.currentPageUpscaled = false;
+      infoPanelStore.resetAll();
 
       // 使用通用的 openBook API (它会自动检测类型)
       const book = await bookApi.openBook(path);
@@ -128,6 +130,7 @@ class BookStore {
       
       this.state.currentBook = book;
       this.state.viewerOpen = true;
+      this.syncInfoPanelBookInfo();
       
       // 记录历史
       const { historyStore } = await import('$lib/stores/history.svelte');
@@ -142,6 +145,7 @@ class BookStore {
       console.error('❌ Error opening book:', err);
       this.state.error = String(err);
       this.state.currentBook = null;
+      infoPanelStore.resetBookInfo();
     } finally {
       this.state.loading = false;
     }
@@ -161,6 +165,7 @@ class BookStore {
       this.state.upscaledImageData = null;
       this.state.upscaledImageBlob = null;
       this.state.currentPageUpscaled = false;
+      infoPanelStore.resetAll();
 
       // 使用通用的 openBook API (它会自动检测类型)
       const book = await bookApi.openBook(path);
@@ -171,6 +176,7 @@ class BookStore {
       
       this.state.currentBook = book;
       this.state.viewerOpen = true;
+      this.syncInfoPanelBookInfo();
       
       // 记录历史
       const { historyStore } = await import('$lib/stores/history.svelte');
@@ -185,6 +191,7 @@ class BookStore {
       console.error('❌ Error opening directory as book:', err);
       this.state.error = String(err);
       this.state.currentBook = null;
+      infoPanelStore.resetBookInfo();
     } finally {
       this.state.loading = false;
     }
@@ -204,6 +211,7 @@ class BookStore {
       this.state.upscaledImageData = null;
       this.state.upscaledImageBlob = null;
       this.state.currentPageUpscaled = false;
+      infoPanelStore.resetAll();
 
       // 使用通用的 openBook API (它会自动检测类型)
       const book = await bookApi.openBook(path);
@@ -214,6 +222,7 @@ class BookStore {
       
       this.state.currentBook = book;
       this.state.viewerOpen = true;
+      this.syncInfoPanelBookInfo();
       
       // 记录历史
       const { historyStore } = await import('$lib/stores/history.svelte');
@@ -228,6 +237,7 @@ class BookStore {
       console.error('❌ Error opening archive as book:', err);
       this.state.error = String(err);
       this.state.currentBook = null;
+      infoPanelStore.resetBookInfo();
     } finally {
       this.state.loading = false;
     }
@@ -243,6 +253,7 @@ class BookStore {
     this.state.upscaledImageData = null;
     this.state.upscaledImageBlob = null;
     this.state.currentPageUpscaled = false;
+    infoPanelStore.resetAll();
     
     // 重置页面超分状态
     this.resetAllPageUpscaleStatus();
@@ -301,6 +312,7 @@ class BookStore {
       
       // 更新本地状态
       this.state.currentBook.currentPage = index;
+      this.syncInfoPanelBookInfo();
     } catch (err) {
       console.error('❌ Error navigating to page:', err);
       this.state.error = String(err);
@@ -320,6 +332,7 @@ class BookStore {
       const newIndex = await bookApi.nextPage();
       if (this.state.currentBook) {
         this.state.currentBook.currentPage = newIndex;
+        this.syncInfoPanelBookInfo();
       }
       return newIndex;
     } catch (err) {
@@ -348,6 +361,7 @@ class BookStore {
       const newIndex = await bookApi.previousPage();
       if (this.state.currentBook) {
         this.state.currentBook.currentPage = newIndex;
+        this.syncInfoPanelBookInfo();
       }
       return newIndex;
     } catch (err) {
@@ -401,6 +415,7 @@ class BookStore {
     try {
       const book = await bookApi.getCurrentBook();
       this.state.currentBook = book;
+      this.syncInfoPanelBookInfo();
     } catch (err) {
       console.error('❌ Error refreshing book:', err);
       this.state.error = String(err);
@@ -557,6 +572,21 @@ class BookStore {
    */
   getCurrentPageHash(): string | null {
     return this.getPageHash(this.currentPageIndex);
+  }
+
+  private syncInfoPanelBookInfo() {
+    const book = this.state.currentBook;
+    if (!book) {
+      infoPanelStore.resetBookInfo();
+      return;
+    }
+    infoPanelStore.setBookInfo({
+      path: book.path,
+      name: book.name,
+      type: book.type,
+      totalPages: book.totalPages,
+      currentPage: book.totalPages === 0 ? 0 : book.currentPage + 1,
+    });
   }
 }
 

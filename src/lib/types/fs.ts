@@ -7,6 +7,7 @@ export interface FsItem {
   isDir: boolean;
   size: number;
   modified?: number;
+  created?: number;
   isImage: boolean;
 }
 

@@ -134,6 +134,7 @@ pub fn run() {
             commands::fs_commands::start_directory_stream,
             commands::fs_commands::get_next_stream_batch,
             commands::fs_commands::cancel_directory_stream,
+            commands::fs_commands::get_file_metadata,
             commands::create_directory,
             commands::delete_path,
             commands::rename_path,

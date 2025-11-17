@@ -5,59 +5,51 @@
 	 */
 	import { Info, Image as ImageIcon, FileText, Calendar, HardDrive } from '@lucide/svelte';
 	import * as Separator from '$lib/components/ui/separator';
+	import { infoPanelStore, type ViewerBookInfo, type ViewerImageInfo } from '$lib/stores/infoPanel.svelte';
 
-	interface ImageInfo {
-		filename: string;
-		format: string;
-		width: number;
-		height: number;
-		fileSize: number;
-		colorDepth: number;
-		created: Date;
-		modified: Date;
-	}
+	let imageInfo = $state<ViewerImageInfo | null>(null);
+	let bookInfo = $state<ViewerBookInfo | null>(null);
 
-	interface BookInfo {
-		path: string;
-		type: 'folder' | 'archive';
-		totalPages: number;
-		currentPage: number;
-	}
+	$effect(() => {
+		const unsubscribe = infoPanelStore.subscribe((state) => {
+			imageInfo = state.imageInfo;
+			bookInfo = state.bookInfo;
+		});
+		return unsubscribe;
+	});
 
-	let imageInfo = $state<ImageInfo | null>(null);
-	let bookInfo = $state<BookInfo | null>(null);
-
-	function formatFileSize(bytes: number): string {
+	function formatFileSize(bytes?: number): string {
+		if (bytes === undefined) return '—';
 		if (bytes < 1024) return `${bytes} B`;
 		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
 		if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 		return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 	}
 
-	function formatDate(date: Date): string {
-		return date.toLocaleString('zh-CN');
+	function formatDate(date?: string): string {
+		if (!date) return '—';
+		const parsed = new Date(date);
+		if (Number.isNaN(parsed.getTime())) {
+			return date;
+		}
+		return parsed.toLocaleString('zh-CN');
 	}
 
-	// 示例数据
-	$effect(() => {
-		imageInfo = {
-			filename: 'example.jpg',
-			format: 'JPEG',
-			width: 1920,
-			height: 1080,
-			fileSize: 2547890,
-			colorDepth: 24,
-			created: new Date(2024, 0, 15),
-			modified: new Date(2024, 10, 9)
-		};
-
-		bookInfo = {
-			path: 'C:\\Images\\Manga\\Volume 1',
-			type: 'folder',
-			totalPages: 200,
-			currentPage: 15
-		};
-	});
+	function formatBookType(type?: string): string {
+		if (!type) return '未知';
+		switch (type.toLowerCase()) {
+			case 'folder':
+				return '文件夹';
+			case 'archive':
+				return '压缩包';
+			case 'pdf':
+				return 'PDF';
+			case 'media':
+				return '媒体';
+			default:
+				return type;
+		}
+	}
 </script>
 
 <div class="h-full flex flex-col bg-background">
@@ -81,6 +73,12 @@
 
 					<div class="space-y-2 text-sm">
 						<div class="flex justify-between">
+							<span class="text-muted-foreground">名称:</span>
+							<span class="font-medium truncate max-w-[200px]" title={bookInfo.name}>
+								{bookInfo.name}
+							</span>
+						</div>
+						<div class="flex justify-between">
 							<span class="text-muted-foreground">路径:</span>
 							<span class="font-mono text-xs truncate max-w-[200px]" title={bookInfo.path}>
 								{bookInfo.path}
@@ -88,19 +86,26 @@
 						</div>
 						<div class="flex justify-between">
 							<span class="text-muted-foreground">类型:</span>
-							<span>{bookInfo.type === 'folder' ? '文件夹' : '压缩包'}</span>
+							<span>{formatBookType(bookInfo.type)}</span>
 						</div>
 						<div class="flex justify-between">
-							<span class="text-muted-foreground">总页数:</span>
-							<span>{bookInfo.totalPages}</span>
-						</div>
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">当前页:</span>
-							<span>{bookInfo.currentPage}</span>
+							<span class="text-muted-foreground">页码:</span>
+							<span>
+								{bookInfo.currentPage} / {bookInfo.totalPages}
+							</span>
 						</div>
 						<div class="flex justify-between">
 							<span class="text-muted-foreground">进度:</span>
-							<span>{((bookInfo.currentPage / bookInfo.totalPages) * 100).toFixed(1)}%</span>
+							<span>
+								{#if bookInfo.totalPages > 0}
+									{(
+										(Math.min(bookInfo.currentPage, bookInfo.totalPages) / bookInfo.totalPages) *
+										100
+									).toFixed(1)}%
+								{:else}
+									—
+								{/if}
+							</span>
 						</div>
 					</div>
 				</div>
@@ -119,25 +124,49 @@
 					<div class="space-y-2 text-sm">
 						<div class="flex justify-between">
 							<span class="text-muted-foreground">文件名:</span>
-							<span class="font-mono text-xs" title={imageInfo.filename}>
-								{imageInfo.filename}
+							<span class="font-mono text-xs" title={imageInfo.name}>
+								{imageInfo.name}
 							</span>
 						</div>
 						<div class="flex justify-between">
 							<span class="text-muted-foreground">格式:</span>
-							<span>{imageInfo.format}</span>
+							<span>{imageInfo.format ?? '—'}</span>
 						</div>
 						<div class="flex justify-between">
 							<span class="text-muted-foreground">尺寸:</span>
-							<span>{imageInfo.width} × {imageInfo.height}</span>
-						</div>
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">文件大小:</span>
-							<span>{formatFileSize(imageInfo.fileSize)}</span>
+							<span>
+								{#if imageInfo.width && imageInfo.height}
+									{imageInfo.width} × {imageInfo.height}
+								{:else}
+									—
+								{/if}
+							</span>
 						</div>
 						<div class="flex justify-between">
 							<span class="text-muted-foreground">色深:</span>
-							<span>{imageInfo.colorDepth} 位</span>
+							<span>{imageInfo.colorDepth ?? '—'}</span>
+						</div>
+					</div>
+				</div>
+
+				<Separator.Root />
+
+				<div class="space-y-3">
+					<div class="flex items-center gap-2 font-semibold text-sm">
+						<HardDrive class="h-4 w-4" />
+						<span>存储信息</span>
+					</div>
+
+					<div class="space-y-2 text-sm">
+						<div class="flex justify-between">
+							<span class="text-muted-foreground">路径:</span>
+							<span class="font-mono text-xs truncate max-w-[200px]" title={imageInfo.path}>
+								{imageInfo.path ?? '—'}
+							</span>
+						</div>
+						<div class="flex justify-between">
+							<span class="text-muted-foreground">大小:</span>
+							<span>{formatFileSize(imageInfo.fileSize)}</span>
 						</div>
 					</div>
 				</div>
@@ -154,11 +183,11 @@
 					<div class="space-y-2 text-sm">
 						<div class="flex justify-between">
 							<span class="text-muted-foreground">创建时间:</span>
-							<span class="text-xs">{formatDate(imageInfo.created)}</span>
+							<span class="text-xs">{formatDate(imageInfo.createdAt)}</span>
 						</div>
 						<div class="flex justify-between">
 							<span class="text-muted-foreground">修改时间:</span>
-							<span class="text-xs">{formatDate(imageInfo.modified)}</span>
+							<span class="text-xs">{formatDate(imageInfo.modifiedAt)}</span>
 						</div>
 					</div>
 				</div>

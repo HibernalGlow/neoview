@@ -211,6 +211,7 @@ pub fn run() {
             commands::cancel_upscale_jobs_for_page,
             commands::cancel_upscale_jobs_for_book,
             commands::get_upscale_scheduler_stats,
+            commands::enqueue_preload_batch,
             // Upscale Settings commands
             commands::init_upscale_settings_manager,
             commands::get_upscale_settings,

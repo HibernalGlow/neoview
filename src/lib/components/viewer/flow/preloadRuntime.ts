@@ -75,7 +75,7 @@ interface SchedulerJobInput {
 	background: boolean;
 }
 
-interface SchedulerModelSettings {
+export interface SchedulerModelSettings {
 	modelName: string;
 	scale: number;
 	tileSize: number;
@@ -99,7 +99,7 @@ interface UpscaleJobEventDetail {
 	background: boolean;
 }
 
-function resolveModelSettings(conditionId?: string): SchedulerModelSettings {
+export function resolveModelSettings(conditionId?: string): SchedulerModelSettings {
 	const panelSettings = loadUpscalePanelSettings();
 	if (conditionId) {
 		const condition = panelSettings.conditionsList.find((c) => c.id === conditionId);
@@ -167,6 +167,42 @@ function convertResultToBlob(resultData: number[] | Uint8Array): { blob: Blob; u
 	const blob = new Blob([uint8], { type: 'image/webp' });
 	const url = URL.createObjectURL(blob);
 	return { blob, url };
+}
+
+export interface PreloadBatchJobInput {
+	pageIndex: number;
+	imageHash: string;
+	conditionId?: string;
+	priority?: 'high' | 'normal';
+}
+
+export async function enqueuePreloadBatchJobs(
+	bookPath: string,
+	jobs: PreloadBatchJobInput[]
+): Promise<string[]> {
+	if (!jobs.length) {
+		return [];
+	}
+
+	const payload = jobs.map((job) => {
+		const model = resolveModelSettings(job.conditionId);
+		return {
+			pageIndex: job.pageIndex,
+			imageHash: job.imageHash,
+			conditionId: job.conditionId ?? null,
+			modelName: model.modelName,
+			scale: model.scale,
+			tileSize: model.tileSize,
+			noiseLevel: model.noiseLevel,
+			gpuId: model.gpuId ?? null,
+			priority: job.priority ?? 'normal'
+		};
+	});
+
+	return invoke<string[]>('enqueue_preload_batch', {
+		bookPath,
+		jobs: payload
+	});
 }
 
 function handleSchedulerEvent(detail: UpscaleJobEventDetail) {

@@ -8,14 +8,15 @@ import { loadImage } from '$lib/api/fs';
 import { loadImageFromArchive } from '$lib/api/filesystem';
 import { bookStore } from '$lib/stores/book.svelte';
 import { performanceSettings, settingsManager } from '$lib/settings/settingsManager';
-import { 
-	triggerAutoUpscale, 
-	checkUpscaleCache, 
+import {
+	triggerAutoUpscale,
+	checkUpscaleCache,
 	getImageDataWithHash,
 	getAutoUpscaleEnabled,
-	type ImageDataWithHash 
+	type ImageDataWithHash,
+	enqueuePreloadBatchJobs,
+	type PreloadBatchJobInput
 } from './preloadRuntime';
-import { createPreloadWorker, type PreloadTask, type PreloadTaskResult } from './preloadWorker';
 import { upscaleState, startUpscale, updateUpscaleProgress, completeUpscale, setUpscaleError } from '$lib/stores/upscale/upscaleState.svelte';
 import { showSuccessToast } from '$lib/utils/toast';
 import { collectPageMetadata, evaluateConditions } from '$lib/utils/upscale/conditions';
@@ -61,11 +62,8 @@ export interface ImageLoaderOptions {
 	onLoadingStateChange?: (loading: boolean, visible: boolean) => void;
 }
 
-export interface PreloadWorkerResult extends PreloadTaskResult {}
-
 export class ImageLoader {
 	private options: ImageLoaderOptions;
-	private preloadWorker: ReturnType<typeof createPreloadWorker<PreloadWorkerResult>>;
 	
 	// 三层缓存架构
 	private blobCache = new Map<number, BlobCacheItem>();
@@ -79,7 +77,6 @@ export class ImageLoader {
 	private hashPathIndex = new Map<string, string>();
 	private preloadMemoryCache = new Map<string, { url: string; blob: Blob }>();
 	private pendingPreloadTasks = new Set<string>(); // 用于去重的待处理任务集合
-	private pendingPreloadConditions = new Map<string, string | undefined>();
 	private lastAutoUpscalePageIndex: number | null = null;
 	
 	// 加载状态
@@ -92,33 +89,6 @@ export class ImageLoader {
 	constructor(options: ImageLoaderOptions) {
 		this.options = options;
 		
-		// 初始化预加载worker
-		this.preloadWorker = createPreloadWorker<PreloadWorkerResult>({
-			concurrency: () => options.performanceMaxThreads,
-			runTask: async (task: PreloadTask) => {
-				const conditionId = this.pendingPreloadConditions.get(task.hash);
-				await triggerAutoUpscale(
-					{
-						blob: task.blob,
-						hash: task.hash,
-						pageIndex: task.pageIndex,
-						conditionId
-					},
-					true
-				);
-				return undefined;
-			},
-			onTaskSuccess: (task: PreloadTask) => {
-				this.pendingPreloadTasks.delete(task.hash);
-				this.pendingPreloadConditions.delete(task.hash);
-			},
-			onTaskFailure: (task: PreloadTask, error: unknown) => {
-				console.error('预加载任务失败，hash:', task.hash, error);
-				this.pendingPreloadTasks.delete(task.hash);
-				this.pendingPreloadConditions.delete(task.hash);
-			}
-		});
-
 		if (typeof window !== 'undefined') {
 			this.upscaleCompleteListener = ((event: CustomEvent) => {
 				const detail = event.detail;
@@ -164,7 +134,6 @@ export class ImageLoader {
 		if (config.maxThreads !== undefined) {
 			this.options.performanceMaxThreads = config.maxThreads;
 			// 更新 worker 的并发数 - 传入函数而不是值
-			this.preloadWorker.updateConcurrency(() => config.maxThreads!);
 		}
 		if (config.viewMode !== undefined) {
 			this.options.viewMode = config.viewMode;
@@ -635,7 +604,7 @@ export class ImageLoader {
 
 			// ---- 无论是否 usedCache，都进行预超分队列调度 ----
 			setTimeout(() => {
-				this.preloadNextPages();   // 利用 pendingPreloadTasks + preloadWorker 队列管理预超分
+				this.preloadNextPages(); // 触发后台批量预超分调度
 			}, 1000);
 		} catch (err) {
 			const errorMessage = err instanceof Error ? err.message : 'Failed to load image';
@@ -698,6 +667,7 @@ export class ImageLoader {
 			console.log(`开始预超分，共 ${this.totalPreUpscalePages} 页，当前页: ${currentIndex + 1}/${totalPages}`);
 
 			// 预加载后续页面
+			const batchJobs: PreloadBatchJobInput[] = [];
 			for (let i = 1; i <= preloadPages; i++) {
 				const targetIndex = currentIndex + i;
 				if (targetIndex >= totalPages) break;
@@ -732,7 +702,7 @@ export class ImageLoader {
 				}
 
 				// 确保核心缓存已准备（Blob + ImageBitmap），保证翻页时可以直接显示
-				// 没有缓存：如果自动超分已开启，则使用新的preloadWorker API
+				// 没有缓存：如果自动超分已开启，则添加到后端批量调度队列
 				try {
 					await this.ensureResources(targetIndex);
 					console.log('预加载已写入核心缓存，index:', targetIndex + 1);
@@ -759,20 +729,40 @@ export class ImageLoader {
 							// 标记为待处理
 							this.pendingPreloadTasks.add(hash);
 							
-							// 获取 Blob 用于超分
-							const blob = await this.getBlob(targetIndex);
-							// 使用新的preloadWorker API，携带条件ID
+							// 使用批量调度接口，携带条件ID
 							const conditionId = conditionResult.conditionId || undefined;
-							this.pendingPreloadConditions.set(hash, conditionId);
-							const task = { blob, hash, pageIndex: targetIndex };
-							this.preloadWorker.enqueue(task);
-							console.log('已加入preloadWorker队列，hash:', hash, 'pageIndex:', targetIndex, 'conditionId:', conditionResult.conditionId);
+							const task: PreloadBatchJobInput = {
+								pageIndex: targetIndex,
+								imageHash: hash,
+								conditionId
+							};
+							batchJobs.push(task);
+							console.log(
+								'已加入批量预超分队列，hash:',
+								hash,
+								'pageIndex:',
+								targetIndex,
+								'conditionId:',
+								conditionResult.conditionId
+							);
 						}
 					} else {
 						console.log('自动超分关闭，跳过触发预超分（已完成预加载）');
 					}
 				} catch (error) {
 					console.error(`预加载第 ${targetIndex + 1} 页失败:`, error);
+				}
+			}
+
+			if (batchJobs.length > 0) {
+				const bookPath = currentBook.path;
+				try {
+					await enqueuePreloadBatchJobs(bookPath, batchJobs);
+				} catch (error) {
+					console.error('批量预超分调度失败:', error);
+					for (const job of batchJobs) {
+						this.pendingPreloadTasks.delete(job.imageHash);
+					}
 				}
 			}
 		} catch (error) {
@@ -824,10 +814,12 @@ export class ImageLoader {
 		this.md5Cache = new Map();
 		this.isPreloading = false;
 		this.lastAutoUpscalePageIndex = null;
-		this.pendingPreloadConditions.clear();
+		if (typeof window !== 'undefined' && this.upscaleCompleteListener) {
+			window.removeEventListener('upscale-complete', this.upscaleCompleteListener);
+			this.upscaleCompleteListener = undefined;
+		}
 		bookStore.setUpscaledImage(null);
 		bookStore.setUpscaledImageBlob(null);
-		this.preloadWorker.clear();
 		this.resetPreUpscaleProgress();
 	}
 

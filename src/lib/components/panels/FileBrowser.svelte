@@ -53,6 +53,7 @@
     thumbnailManager.setOnThumbnailReady((path, dataUrl) => {
       const key = toRelativeKey(path);
       fileBrowserStore.addThumbnail(key, dataUrl);
+      navigationHistory.updateCachedThumbnail(currentPath, key, dataUrl);
     });
   }
   
@@ -60,6 +61,16 @@
     // 当前目录优先
     thumbnailManager.setCurrentDirectory(path);
     thumbnailManager.preloadThumbnails(items, path, 'immediate');
+  }
+
+  async function prefillThumbnailsFromCache(items: FsItem[], path: string) {
+    const hits = thumbnailManager.matchCachedThumbnails(items);
+    if (hits.size === 0) return;
+    hits.forEach((dataUrl, originalPath) => {
+      const key = toRelativeKey(originalPath);
+      fileBrowserStore.addThumbnail(key, dataUrl);
+      navigationHistory.updateCachedThumbnail(path, key, dataUrl);
+    });
   }
   
   async function cancelFolderTasks(path: string): Promise<number> {
@@ -486,8 +497,9 @@ import { getPerformanceSettings } from '$lib/api/performance';
         cachedThumbnails = cachedData.thumbnails;
         
         // 设置缓存数据
-        fileBrowserStore.setItems(loadedItems);
-        thumbnails = new Map(cachedThumbnails);
+      fileBrowserStore.setItems(loadedItems);
+      fileBrowserStore.setThumbnails(cachedThumbnails);
+      thumbnails = new Map(cachedThumbnails);
         
         // 后台验证缓存是否仍然有效
         navigationHistory.validateCache(path).then(async (isValid) => {
@@ -532,6 +544,8 @@ import { getPerformanceSettings } from '$lib/api/performance';
     
     // 立即设置数据，不等待缩略图
     fileBrowserStore.setItems(loadedItems);
+    fileBrowserStore.setThumbnails(new Map());
+    await prefillThumbnailsFromCache(loadedItems, path);
     
     // 缓存目录数据（不包含缩略图）
     navigationHistory.cacheDirectory(path, loadedItems, new Map(), mtime);

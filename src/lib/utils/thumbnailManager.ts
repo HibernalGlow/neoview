@@ -163,6 +163,28 @@ class ThumbnailManager {
   }
 
   /**
+   * 获取已缓存的缩略图（存在内存缓存时立即返回）
+   */
+  getCachedThumbnail(path: string, innerPath?: string): string | null {
+    const pathKey = this.buildPathKey(path, innerPath);
+    return this.cache.get(pathKey)?.dataUrl ?? null;
+  }
+
+  /**
+   * 批量匹配内存缓存中的缩略图，返回映射
+   */
+  matchCachedThumbnails(items: FsItem[]): Map<string, string> {
+    const results = new Map<string, string>();
+    items.forEach((item) => {
+      const cached = this.getCachedThumbnail(item.path);
+      if (cached) {
+        results.set(item.path, cached);
+      }
+    });
+    return results;
+  }
+
+  /**
    * 生成哈希值（用于数据库查询）
    * 使用 getStableImageHash 保持一致性
    */

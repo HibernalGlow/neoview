@@ -155,6 +155,16 @@ export class NavigationHistory {
   }
 
   /**
+   * 更新目录缓存中的单个缩略图
+   */
+  updateCachedThumbnail(path: string, key: string, dataUrl: string) {
+    const cached = this.cache.get(path);
+    if (!cached) return;
+    cached.thumbnails.set(key, dataUrl);
+    cached.timestamp = Date.now();
+  }
+
+  /**
    * 获取缓存的目录数据
    */
   getCachedDirectory(path: string): DirectoryCache | null {

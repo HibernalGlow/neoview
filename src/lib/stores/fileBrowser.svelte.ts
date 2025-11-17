@@ -61,6 +61,8 @@ function createFileBrowserStore() {
         }
         return { ...state, thumbnails: newThumbnails };
       }),
+    setThumbnails: (thumbnails: Map<string, string>) => 
+      update(state => ({ ...state, thumbnails: new Map(thumbnails) })),
     clearThumbnails: () => update(state => ({ ...state, thumbnails: new Map() })),
     reset: () => set(initialState)
   };

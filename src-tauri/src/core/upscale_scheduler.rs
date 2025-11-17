@@ -228,6 +228,14 @@ impl UpscaleSchedulerInner {
             .ok_or_else(|| "PyO3 超分管理器未初始化".to_string())
     }
 
+    async fn request_python_cancel(&self, handle: &Arc<UpscaleJobHandle>) {
+        if let Ok(manager) = self.acquire_manager().await {
+            if let Err(err) = manager.cancel_job(&handle.record.id.to_string()) {
+                eprintln!("⚠️ 取消 Python 超分任务失败: {}", err);
+            }
+        }
+    }
+
     async fn process_job(&self, handle: Arc<UpscaleJobHandle>) {
         if handle.is_cancelled() {
             self.emit_event(handle.as_cancel_payload(UpscaleJobStatus::Cancelled, None))
@@ -283,6 +291,7 @@ impl UpscaleSchedulerInner {
         };
 
         let image_data = request.image_data.clone();
+        let job_key = handle.record.id.to_string();
 
         let cancellation_flag = handle.cancel_flag.clone();
         let manager_for_task = manager.clone();
@@ -297,6 +306,7 @@ impl UpscaleSchedulerInner {
                 120.0,
                 0,
                 0,
+                Some(job_key.as_str()),
             )
         })
         .await
@@ -428,12 +438,14 @@ impl UpscaleScheduler {
             }
         }
 
-        {
+        let running_handle = {
             let running = self.inner.running_map.lock().await;
-            if let Some(handle) = running.get(job_id) {
-                handle.cancel();
-                return true;
-            }
+            running.get(job_id).cloned()
+        };
+        if let Some(handle) = running_handle {
+            handle.cancel();
+            self.inner.request_python_cancel(&handle).await;
+            return true;
         }
 
         false
@@ -472,14 +484,18 @@ impl UpscaleScheduler {
             });
         }
 
-        {
+        let running_handles: Vec<Arc<UpscaleJobHandle>> = {
             let running = self.inner.running_map.lock().await;
-            for handle in running.values() {
-                if predicate(handle) {
-                    handle.cancel();
-                    cancelled += 1;
-                }
-            }
+            running
+                .values()
+                .filter(|handle| predicate(handle))
+                .cloned()
+                .collect()
+        };
+        for handle in running_handles {
+            handle.cancel();
+            cancelled += 1;
+            self.inner.request_python_cancel(&handle).await;
         }
 
         cancelled

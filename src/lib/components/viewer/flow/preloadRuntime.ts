@@ -222,6 +222,21 @@ export async function enqueuePreloadBatchJobs(
 }
 
 function handleSchedulerEvent(detail: UpscaleJobEventDetail) {
+	const activeBookPath = bookStore.currentBook?.path;
+	if (
+		detail.book_path &&
+		activeBookPath &&
+		detail.book_path !== activeBookPath
+	) {
+		console.log(
+			'忽略不同书籍的超分事件:',
+			detail.book_path,
+			'当前书籍:',
+			activeBookPath
+		);
+		return;
+	}
+
 	const pageIndex = detail.page_index;
 	const imageHash = detail.image_hash;
 	const status = detail.status;

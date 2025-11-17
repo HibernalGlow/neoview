@@ -145,6 +145,7 @@ impl PyO3Upscaler {
         timeout: f64,
         width: i32,
         height: i32,
+        job_key: Option<&str>,
     ) -> Result<Vec<u8>, String> {
         // 确保已初始化
         self.initialize()?;
@@ -175,6 +176,7 @@ impl PyO3Upscaler {
                 timeout,
                 width,
                 height,
+                job_key,
             ).map_err(|e| format!("调用 Python 超分函数失败: {}", e))?;
             
             if let Some(data) = result {
@@ -245,7 +247,7 @@ impl PyO3Upscaler {
         // 调用内存流版本
         // 对于文件路径版本，我们需要先获取图像尺寸
         // 这里暂时使用 0，让 Python 端来获取实际尺寸
-        let result = self.upscale_image_memory(&image_data, model, _timeout, 0, 0)?;
+        let result = self.upscale_image_memory(&image_data, model, _timeout, 0, 0, None)?;
         
         Ok(result)
     }
@@ -346,6 +348,19 @@ impl PyO3Upscaler {
         if let Some(module) = module_guard.as_ref() {
             module.get_available_models()
                 .map_err(|e| format!("获取可用模型失败: {}", e))
+        } else {
+            Err("Python 模块未初始化".to_string())
+        }
+    }
+
+    /// 请求取消正在执行的任务
+    pub fn cancel_job(&self, job_key: &str) -> Result<(), String> {
+        let module_guard = self.python_module.lock()
+            .map_err(|e| format!("获取锁失败: {}", e))?;
+
+        if let Some(module) = module_guard.as_ref() {
+            module.cancel_job(job_key)
+                .map_err(|e| format!("取消 Python 任务失败: {}", e))
         } else {
             Err("Python 模块未初始化".to_string())
         }

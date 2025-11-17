@@ -230,7 +230,7 @@ pub async fn pyo3_upscale_image_memory(
         };
         
         // 直接使用内存数据进行超分
-        let result = manager.upscale_image_memory(&image_data, &model, timeout, width, height)?;
+        let result = manager.upscale_image_memory(&image_data, &model, timeout, width, height, None)?;
         Ok(result)
     } else {
         Err("PyO3 超分管理器未初始化".to_string())

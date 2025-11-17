@@ -3,6 +3,7 @@
 
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyTuple, PyDict};
+use pyo3::IntoPy;
 use std::path::PathBuf;
 
 /// Python 超分模块的 PyO3 包装器
@@ -88,22 +89,34 @@ impl PythonUpscaleModule {
         timeout: f64,
         _width: i32,
         _height: i32,
+        job_key: Option<&str>,
     ) -> Result<Option<Vec<u8>>, PyErr> {
         Python::with_gil(|py| {
             let module = self.module.bind(py);
             let py_bytes = PyBytes::new_bound(py, image_data);
             
+            let args = PyTuple::new_bound(
+                py,
+                &[
+                    py_bytes.into_py(py),
+                    model.into_py(py),
+                    scale.into_py(py),
+                    tile_size.into_py(py),
+                    noise_level.into_py(py),
+                    timeout.into_py(py),
+                    0.into_py(py),
+                    0.into_py(py),
+                ],
+            );
+            let kwargs = PyDict::new_bound(py);
+            if let Some(key) = job_key {
+                kwargs.set_item("job_key", key)?;
+            }
+            
             // 调用 Python 函数
             let result = module
                 .getattr("upscale_image")?
-                .call1((
-                    py_bytes,
-                    model,
-                    scale,
-                    tile_size,
-                    noise_level,
-                    timeout,
-                ))?;
+                .call(args, Some(&kwargs))?;
             
             // 结果是一个元组 (result_data, error)
             let tuple: &Bound<'_, PyTuple> = result.downcast()?;
@@ -222,6 +235,15 @@ impl PythonUpscaleModule {
         Python::with_gil(|py| {
             let module = self.module.bind(py);
             module.getattr("remove_task")?.call1((task_id,))?;
+            Ok(())
+        })
+    }
+
+    /// 取消指定 job_key 的任务
+    pub fn cancel_job(&self, job_key: &str) -> Result<(), PyErr> {
+        Python::with_gil(|py| {
+            let module = self.module.bind(py);
+            module.getattr("cancel_upscale_job")?.call1((job_key,))?;
             Ok(())
         })
     }

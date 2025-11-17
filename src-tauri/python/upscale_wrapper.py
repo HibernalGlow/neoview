@@ -23,16 +23,25 @@ except ImportError:
     sr = None
     print("警告: sr_vulkan 模块未找到，超分功能将不可用")
 
-# 尝试导入 Pillow 用于格式转换
+# 优先尝试使用 PyVips 进行高性能解码
+try:
+    import pyvips
+    PYVIPS_AVAILABLE = True
+    print("✅ PyVips 模块导入成功")
+except ImportError:
+    PYVIPS_AVAILABLE = False
+    print("⚠️ PyVips 未找到，将回退到 Pillow 解码")
+
+# 回退方案：Pillow
 try:
     from PIL import Image
-    import pillow_avif
-    import pillow_jxl
+    import pillow_avif  # noqa: F401
+    import pillow_jxl   # noqa: F401
     PIL_AVAILABLE = True
     print("✅ Pillow 模块导入成功")
 except ImportError:
     PIL_AVAILABLE = False
-    print("警告: Pillow 模块未找到，格式转换功能将不可用")
+    print("警告: Pillow 模块未找到，格式转换功能将受限")
 
 # 不支持的格式需要转换
 UNSUPPORTED_FORMATS = {
@@ -57,14 +66,21 @@ def _needs_transcode(image_data: bytes) -> bool:
     
     return False
 
-def _transcode_to_png(image_data: bytes) -> bytes:
-    """将图像转换为无损 WebP 格式以减小体积"""
+def _transcode_to_webp(image_data: bytes) -> bytes:
+    """将不受支持的格式转换为无损 WebP，以兼容 sr_vulkan"""
+    # 首选 PyVips，性能更佳且原生支持 AVIF/JXL
+    if PYVIPS_AVAILABLE:
+        try:
+            image = pyvips.Image.new_from_buffer(image_data, "", access="sequential")
+            return image.write_to_buffer(".webp", Q=100, lossless=1)
+        except Exception as e:
+            print(f"⚠️ PyVips 转码失败，回退到 Pillow: {e}")
+    
     if not PIL_AVAILABLE:
-        raise RuntimeError("Pillow 模块不可用，无法转换图像格式")
+        raise RuntimeError("缺少 PyVips/Pillow 解码能力，无法处理该格式")
     
     try:
         with Image.open(io.BytesIO(image_data)) as img:
-            # 转换为 RGB 模式以确保兼容性
             if img.mode in ('RGBA', 'LA', 'P'):
                 img = img.convert('RGB')
             elif img.mode not in ('RGB', 'L'):
@@ -120,6 +136,9 @@ class UpscaleManager:
         self.lock = threading.Lock()
         self.sr_initialized = False
         self.model_id_map: Dict[str, int] = {}
+        self.job_key_map: Dict[str, int] = {}
+        self.task_key_map: Dict[int, str] = {}
+        self.cancel_flags: Dict[int, threading.Event] = {}
         
         if SR_AVAILABLE:
             self._init_sr_vulkan()
@@ -361,7 +380,8 @@ class UpscaleManager:
         height: int = 0,
         format_str: str = "",
         tile_size: int = 0,
-        noise_level: int = 0
+        noise_level: int = 0,
+        job_key: Optional[str] = None
     ) -> int:
         """
         添加超分任务
@@ -398,6 +418,12 @@ class UpscaleManager:
             task.format = format_str
             task.tile_size = tile_size
             task.noise_level = noise_level
+            
+            cancel_event = threading.Event()
+            self.cancel_flags[task_id] = cancel_event
+            if job_key:
+                self.job_key_map[job_key] = task_id
+                self.task_key_map[task_id] = job_key
             task.status = "processing"
             
             self.tasks[task_id] = task
@@ -419,7 +445,7 @@ class UpscaleManager:
             if _needs_transcode(image_data):
                 print(f"🔄 检测到不支持的格式，正在转换为 PNG...")
                 try:
-                    processed_data = _transcode_to_png(image_data)
+                    processed_data = _transcode_to_webp(image_data)
                     print(f"✅ 格式转换完成，新数据大小: {len(processed_data)} bytes")
                 except RuntimeError as e:
                     print(f"❌ 格式转换失败: {e}")
@@ -564,6 +590,11 @@ class UpscaleManager:
         start_time = time.time()
         
         while time.time() - start_time < timeout:
+            cancel_event = self.cancel_flags.get(task_id)
+            if cancel_event and cancel_event.is_set():
+                self.remove_task(task_id)
+                raise RuntimeError("任务被取消")
+            
             status = self.get_task_status(task_id)
             if status is None:
                 return False
@@ -582,6 +613,10 @@ class UpscaleManager:
         with self.lock:
             if task_id in self.tasks:
                 del self.tasks[task_id]
+            self.cancel_flags.pop(task_id, None)
+            job_key = self.task_key_map.pop(task_id, None)
+            if job_key and job_key in self.job_key_map:
+                del self.job_key_map[job_key]
         
         if SR_AVAILABLE:
             try:
@@ -595,12 +630,37 @@ class UpscaleManager:
             for task_id in task_ids:
                 if task_id in self.tasks:
                     del self.tasks[task_id]
+                self.cancel_flags.pop(task_id, None)
+                job_key = self.task_key_map.pop(task_id, None)
+                if job_key and job_key in self.job_key_map:
+                    del self.job_key_map[job_key]
         
         if SR_AVAILABLE:
             try:
                 sr.remove(task_ids)
             except:
                 pass
+
+    def request_cancel_task(self, task_id: int) -> bool:
+        """请求取消指定任务"""
+        with self.lock:
+            event = self.cancel_flags.get(task_id)
+            if event:
+                event.set()
+        if SR_AVAILABLE:
+            try:
+                sr.remove([task_id])
+            except Exception as e:
+                print(f"⚠️ sr.remove 调用失败: {e}")
+        return True
+
+    def request_cancel_by_key(self, job_key: str) -> bool:
+        """根据 job_key 取消任务"""
+        with self.lock:
+            task_id = self.job_key_map.get(job_key)
+        if task_id is None:
+            return False
+        return self.request_cancel_task(task_id)
     
     def cleanup(self):
         """清理资源"""
@@ -644,7 +704,8 @@ def upscale_image(
     noise_level: int = 0,
     timeout: float = 60.0,
     width: int = 0,
-    height: int = 0
+    height: int = 0,
+    job_key: Optional[str] = None
 ) -> Tuple[Optional[bytes], Optional[str]]:
     """
     超分图像（同步接口）
@@ -677,7 +738,8 @@ def upscale_image(
             height=height,
             format_str="",
             tile_size=tile_size,
-            noise_level=noise_level
+            noise_level=noise_level,
+            job_key=job_key
         )
         
         # 等待完成
@@ -727,6 +789,12 @@ def upscale_image_async(
         tile_size=tile_size,
         noise_level=noise_level
     )
+
+
+def cancel_upscale_job(job_key: str) -> bool:
+    """供 PyO3 调用的任务取消接口"""
+    manager = get_manager()
+    return manager.request_cancel_by_key(job_key)
 
 
 def _get_manager_model_map() -> Dict[str, int]:
@@ -827,8 +895,9 @@ def get_available_models(refresh: bool = False) -> List[str]:
 
 if __name__ == "__main__":
     # 测试代码
-    print(f"SR Vulkan 可用: {is_available()}")
+    available = get_sr_available()
+    print(f"SR Vulkan 可用: {available}")
     
-    if is_available():
+    if available:
         # 这里可以添加测试代码
         pass

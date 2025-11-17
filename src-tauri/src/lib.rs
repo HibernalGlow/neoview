@@ -12,6 +12,7 @@ use tauri::Manager;
 use std::sync::Mutex;
 use std::path::PathBuf;
 use core::{BookManager, ImageLoader, FsManager, ArchiveManager};
+use core::upscale_scheduler::{UpscaleScheduler, UpscaleSchedulerState};
 use commands::fs_commands::FsState;
 use commands::upscale_commands::UpscaleManagerState;
 use commands::generic_upscale_commands::GenericUpscalerState;
@@ -101,7 +102,14 @@ pub fn run() {
             app.manage(GenericUpscalerState::default());
             
             // 初始化 PyO3 超分管理器
-            app.manage(PyO3UpscalerState::default());
+            let pyo3_state = PyO3UpscalerState::default();
+            let pyo3_state_arc = Arc::new(pyo3_state.clone());
+            let worker_count = num_cpus::get().clamp(1, 4);
+            let scheduler = UpscaleScheduler::new(app.handle().clone(), pyo3_state_arc, worker_count);
+            app.manage(pyo3_state);
+            app.manage(UpscaleSchedulerState {
+                scheduler: Arc::new(scheduler),
+            });
             
             // 初始化设置管理器
             app.manage(UpscaleSettingsState::default());
@@ -197,6 +205,12 @@ pub fn run() {
             commands::get_pyo3_cache_stats,
             commands::cleanup_pyo3_cache,
             commands::test_pyo3_upscaler,
+            // Upscale scheduler commands
+            commands::enqueue_upscale_job,
+            commands::cancel_upscale_job,
+            commands::cancel_upscale_jobs_for_page,
+            commands::cancel_upscale_jobs_for_book,
+            commands::get_upscale_scheduler_stats,
             // Upscale Settings commands
             commands::init_upscale_settings_manager,
             commands::get_upscale_settings,

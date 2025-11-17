@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createPreloadManager } from '../flow/preloadManager';
 import { createEventListeners } from '../flow/eventListeners';
-import { performUpscale, checkUpscaleCache, triggerAutoUpscale } from '../flow/preloadRuntime';
+import { checkUpscaleCache, triggerAutoUpscale } from '../flow/preloadRuntime';
 import { bookStore } from '$lib/stores/book.svelte';
 
 // Mock 外部依赖
@@ -116,16 +116,12 @@ describe('模块化重构验证', () => {
 		const cacheResult = await checkUpscaleCache({ data: mockImageData, hash: mockImageHash });
 		expect(typeof cacheResult).toBe('boolean');
 
-		// 测试getImageDataWithHash
+		// 测试 getImageDataWithHash
 		const hashResult = await getImageDataWithHash(mockImageData);
 		expect(hashResult).toEqual({
 			data: mockImageData,
 			hash: expect.any(String)
 		});
-
-		// 测试getGlobalUpscaleEnabled
-		const enabledResult = await performUpscale({ data: mockImageData, hash: mockImageHash });
-		expect(enabledResult).toBeDefined();
 	});
 
 	it('应该能够正确初始化和清理管理器', () => {

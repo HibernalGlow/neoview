@@ -17,6 +17,7 @@ pub mod video_thumbnail;
 pub mod path_utils;
 pub mod thumbnail_db;
 pub mod thumbnail_generator;
+pub mod upscale_scheduler;
 
 pub use book_manager::BookManager;
 pub use image_loader::ImageLoader;

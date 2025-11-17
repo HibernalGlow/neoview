@@ -19,9 +19,17 @@ import { createPreloadWorker, type PreloadTask, type PreloadTaskResult } from '.
 import type { PreloadTaskWithCondition } from './preloadManager';
 import { upscaleState, startUpscale, updateUpscaleProgress, completeUpscale, setUpscaleError } from '$lib/stores/upscale/upscaleState.svelte';
 import { showSuccessToast } from '$lib/utils/toast';
-import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
 import { collectPageMetadata, evaluateConditions } from '$lib/utils/upscale/conditions';
 import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
+function getPanelModelSettings() {
+	const settings = loadUpscalePanelSettings();
+	return {
+		modelName: settings.selectedModel,
+		scale: settings.scale,
+		tileSize: settings.tileSize,
+		noiseLevel: settings.noiseLevel
+	};
+}
 
 // 缩略图高度配置
 const THUMB_HEIGHT = 120;
@@ -75,6 +83,7 @@ export class ImageLoader {
 	private hashPathIndex = new Map<string, string>();
 	private preloadMemoryCache = new Map<string, { url: string; blob: Blob }>();
 	private pendingPreloadTasks = new Set<string>(); // 用于去重的待处理任务集合
+	private lastAutoUpscalePageIndex: number | null = null;
 	
 	// 加载状态
 	private loading = false;
@@ -469,6 +478,26 @@ export class ImageLoader {
 		const currentBook = bookStore.currentBook;
 		if (!currentBook) return;
 
+		if (
+			this.lastAutoUpscalePageIndex !== null &&
+			this.lastAutoUpscalePageIndex !== currentPageIndex
+		) {
+			try {
+				await invoke('cancel_upscale_jobs_for_page', {
+					bookPath: currentBook.path ?? null,
+					pageIndex: this.lastAutoUpscalePageIndex
+				});
+				console.log(
+					'已请求取消上一页的超分任务:',
+					this.lastAutoUpscalePageIndex + 1
+				);
+			} catch (error) {
+				console.warn('取消上一页超分任务失败:', error);
+			} finally {
+				this.lastAutoUpscalePageIndex = null;
+			}
+		}
+
 		this.loading = true;
 		this.loadingVisible = false;
 		this.options.onError?.(null);
@@ -586,7 +615,8 @@ export class ImageLoader {
 					const autoUpscaleEnabled = await getAutoUpscaleEnabled();
 					if (autoUpscaleEnabled) {
 						console.log('内存和磁盘都没有缓存，开始现场超分，页码:', currentPageIndex + 1);
-						await triggerAutoUpscale(imageDataWithHash);
+							await triggerAutoUpscale(imageDataWithHash);
+							this.lastAutoUpscalePageIndex = currentPageIndex;
 					} else {
 						console.log('自动超分开关已关闭，不进行现场超分');
 					}
@@ -790,6 +820,7 @@ export class ImageLoader {
 		// 清理其他状态
 		this.md5Cache = new Map();
 		this.isPreloading = false;
+		this.lastAutoUpscalePageIndex = null;
 		bookStore.setUpscaledImage(null);
 		bookStore.setUpscaledImageBlob(null);
 		this.preloadWorker.clear();
@@ -828,7 +859,7 @@ export class ImageLoader {
 	async loadDiskUpscaleToMemory(imageHash: string): Promise<boolean> {
 		try {
 			// 通过 PyO3 命令检查当前模型下是否有该 hash 的缓存
-			const model = pyo3UpscaleManager.currentModel;
+			const model = getPanelModelSettings();
 
 			const cachePath = await invoke<string | null>('check_pyo3_upscale_cache', {
 				imageHash,

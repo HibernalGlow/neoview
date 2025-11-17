@@ -12,6 +12,7 @@ pub mod image_data_commands;
 pub mod video_commands;
 pub mod thumbnail_commands;
 pub mod default;
+pub mod upscale_scheduler_commands;
 
 pub use book_commands::*;
 pub use image_commands::*;
@@ -24,3 +25,4 @@ pub use image_data_commands::*;
 pub use video_commands::*;
 pub use thumbnail_commands::*;
 pub use default::*;
+pub use upscale_scheduler_commands::*;

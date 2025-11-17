@@ -95,38 +95,36 @@ export class PreloadManager {
 			concurrency: () => this.performanceMaxThreads,
 			runTask: async (task: PreloadTaskWithCondition) => {
 				// 调用 triggerAutoUpscale 进行预超分，传递 Blob 和条件ID
-				return await triggerAutoUpscale({
+				await triggerAutoUpscale({
 					blob: task.blob,
 					hash: task.hash,
 					conditionId: task.conditionId,
 					pageIndex: task.pageIndex
 				}, true);
+				return;
 			},
-			onTaskSuccess: (task, result) => {
-				if (result && result.upscaledImageBlob && result.upscaledImageData) {
-					// 更新内存缓存
-					const cache = this.imageLoader.getPreloadMemoryCache();
-					cache.set(task.hash, { 
-						url: result.upscaledImageData, 
-						blob: result.upscaledImageBlob 
-					});
-					
-					// 标记预超分进度
-					if (typeof task.pageIndex === 'number') {
-						this.preUpscaledPages = new Set([...this.preUpscaledPages, task.pageIndex]);
-						this.updatePreUpscaleProgress();
-					}
-				}
+			onTaskSuccess: () => {
+				// 具体缓存与进度更新在调度事件回调中处理
 			},
 			onTaskFailure: (task, error) => {
 				console.error('预加载任务失败，hash:', task.hash, error);
 			}
 		});
 
+		const handleUpscaleComplete = (detail: any) => {
+			options.onUpscaleComplete?.(detail);
+			const targetIndex =
+				typeof detail?.pageIndex === 'number' ? detail.pageIndex : bookStore.currentPageIndex;
+			if (typeof targetIndex === 'number' && targetIndex >= 0) {
+				this.preUpscaledPages = new Set([...this.preUpscaledPages, targetIndex]);
+				this.updatePreUpscaleProgress();
+			}
+		};
+
 		// 创建事件监听器
 		this.eventListeners = createEventListeners({
 			bookStore,
-			onUpscaleComplete: options.onUpscaleComplete,
+			onUpscaleComplete: handleUpscaleComplete,
 			onUpscaleSaved: options.onUpscaleSaved,
 			onRequestCurrentImageData: options.onRequestCurrentImageData,
 			onResetPreUpscaleProgress: options.onResetPreUpscaleProgress,
@@ -180,6 +178,11 @@ export class PreloadManager {
 			// 只有当书籍路径真正改变时才清理缓存
 			if (lastBookPath !== null && currentBookPath !== lastBookPath) {
 				console.log('书籍路径发生变化，清理预加载缓存:', lastBookPath, '->', currentBookPath);
+				if (lastBookPath) {
+					invoke('cancel_upscale_jobs_for_book', { bookPath: lastBookPath }).catch((error) => {
+						console.warn('取消上一书籍超分任务失败:', error);
+					});
+				}
 				
 				// 清理内存缓存
 				this.imageLoader.getPreloadMemoryCache().clear();

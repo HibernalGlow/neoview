@@ -4,8 +4,8 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
-import { upscaleState, startUpscale, updateUpscaleProgress, completeUpscale, setUpscaleError } from '$lib/stores/upscale/upscaleState.svelte';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { upscaleState, startUpscale, completeUpscale, setUpscaleError } from '$lib/stores/upscale/upscaleState.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
 import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
 import { bookStore } from '$lib/stores/book.svelte';
@@ -16,20 +16,6 @@ export interface ImageDataWithHash {
 	hash: string;
 	conditionId?: string; // 关联的条件ID
 	pageIndex?: number; // 关联页面索引（用于事件派发）
-}
-
-export interface PerformUpscaleOptions {
-	background?: boolean;
-	skipStateUpdate?: boolean; // 跳过状态更新（由调用方管理）
-	conditionId?: string; // 关联的条件ID
-	pageIndex?: number; // 事件派发所需的页面索引
-}
-
-export interface PerformUpscaleResult {
-	upscaledImageData?: string;
-	upscaledImageBlob?: Blob;
-	success?: boolean;
-	error?: string;
 }
 
 /**
@@ -79,177 +65,177 @@ export async function getAutoUpscaleEnabled(): Promise<boolean> {
 	}
 }
 
-/**
- * 执行超分处理
- */
-export async function performUpscale(
-	imageBlob: Blob, 
-	imageHash: string, 
-	options: PerformUpscaleOptions = {}
-): Promise<PerformUpscaleResult> {
-	try {
-		console.log('执行超分处理，hash:', imageHash, 'background:', options.background);
-
-		// 只接受 Blob 格式
-		if (!(imageBlob instanceof Blob)) {
-			throw new Error('performUpscale 只接受 Blob 格式');
-		}
-
-		const arrayBuffer = await imageBlob.arrayBuffer();
-		const imageDataArray = new Uint8Array(arrayBuffer);
-		
-		// 确定是否为后台任务
-		const isBackground = options.background || false;
-	const targetPageIndex = options.pageIndex;
-		
-		// GIF 直接跳过
-		if (await isGifBlob(imageBlob)) {
-			console.log('检测到 GIF，跳过超分处理:', imageHash);
-			return {
-				success: false,
-				error: 'GIF images are skipped for super-resolution'
-			};
-		}
-
-		// 只有在直接手动调用且非后台任务时才触发状态更新
-		// 自动超分由 triggerAutoUpscale 负责状态管理
-		if (!isBackground && !options.skipStateUpdate) {
-			startUpscale(imageHash, 'manual', '正在处理图片');
-		}
-		
-		// 更新进度 - 开始阶段
-		updateUpscaleProgress(10, '准备超分模型');
-		
-		// 根据条件ID设置模型参数
-		if (options.conditionId) {
-			const panelSettings = await import('$lib/components/panels/UpscalePanel').then(m => m.loadUpscalePanelSettings());
-			const condition = panelSettings.conditionsList.find(c => c.id === options.conditionId);
-			if (condition) {
-				console.log('应用条件参数:', condition.name, condition.action);
-				// 设置模型参数
-				await pyo3UpscaleManager.setModel(condition.action.model, condition.action.scale);
-				await pyo3UpscaleManager.setTileSize(condition.action.tileSize);
-				await pyo3UpscaleManager.setNoiseLevel(condition.action.noiseLevel);
-				await pyo3UpscaleManager.setGpuId(condition.action.gpuId);
-			}
-		}
-		
-		// 调用pyo3UpscaleManager进行超分处理
-		updateUpscaleProgress(30, '执行超分处理');
-		const resultData = await pyo3UpscaleManager.upscaleImageMemory(imageDataArray);
-		
-		// 更新进度 - 完成阶段
-		updateUpscaleProgress(80, '生成结果图片');
-		
-		// 将结果转换为Blob和URL
-		const resultBlob = new Blob([resultData], { type: 'image/webp' });
-		const resultUrl = URL.createObjectURL(resultBlob);
-		
-		// 如果是后台任务，保存到缓存
-		if (isBackground) {
-			try {
-				await pyo3UpscaleManager.saveUpscaleCache(imageHash, resultData);
-				console.log('后台超分结果已保存到缓存，hash:', imageHash);
-			} catch (e) {
-				console.warn('保存超分缓存失败:', e);
-			}
-		}
-		
-		// 注意：页面状态更新由 ImageViewer 的 onUpscaleComplete 事件处理
-		// 这里不再重复设置，避免冗余
-		
-		// 触发超分完成事件，携带会话ID和条件ID
-		const eventDetail = {
-			imageData: resultUrl,
-			imageBlob: resultBlob,
-			originalImageHash: imageHash,
-			background: isBackground,
-		conditionId: options.conditionId,
-		pageIndex: typeof targetPageIndex === 'number' ? targetPageIndex : undefined
-		};
-		
-		// 非后台任务时，额外写入内存缓存（通过事件传递给 ImageLoader）
-		if (!isBackground) {
-			eventDetail['writeToMemoryCache'] = true;
-		}
-		
-		window.dispatchEvent(new CustomEvent('upscale-complete', { detail: eventDetail }));
-		
-		// 完成超分（非后台任务都需要更新状态）
-		if (!isBackground) {
-			completeUpscale();
-		}
-		
-		return {
-			upscaledImageData: resultUrl,
-			upscaledImageBlob: resultBlob,
-			success: true
-		};
-	} catch (error) {
-		console.error('超分处理失败:', error);
-		
-		// 设置错误状态（非后台任务都需要更新状态）
-		if (!options.background) {
-			setUpscaleError(error instanceof Error ? error.message : String(error));
-		}
-		
-		return {
-			success: false,
-			error: error instanceof Error ? error.message : String(error)
-		};
-	}
-}
-
-const MAX_BACKGROUND_CONCURRENCY =
-	typeof navigator !== 'undefined' ? Math.min(4, Math.max(1, navigator.hardwareConcurrency || 4)) : 2;
-
-interface BackgroundUpscaleJob {
+interface SchedulerJobInput {
 	blob: Blob;
 	hash: string;
+	pageIndex: number;
 	conditionId?: string;
-	pageIndex?: number;
-	resolve: (result: PerformUpscaleResult | undefined) => void;
-	reject: (reason?: unknown) => void;
+	priority: 'high' | 'normal';
+	origin: 'current' | 'preload' | 'manual';
+	background: boolean;
 }
 
-const backgroundUpscaleQueue: BackgroundUpscaleJob[] = [];
-let activeBackgroundUpscaleJobs = 0;
+interface SchedulerModelSettings {
+	modelName: string;
+	scale: number;
+	tileSize: number;
+	noiseLevel: number;
+	gpuId?: number;
+}
 
-function enqueueBackgroundUpscale(jobInput: { blob: Blob; hash: string; conditionId?: string; pageIndex?: number }) {
-	return new Promise<PerformUpscaleResult | undefined>((resolve, reject) => {
-		backgroundUpscaleQueue.push({
-			blob: jobInput.blob,
-			hash: jobInput.hash,
-			conditionId: jobInput.conditionId,
-			pageIndex: jobInput.pageIndex,
-			resolve,
-			reject
+interface UpscaleJobEventDetail {
+	job_id: string;
+	status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+	book_id?: string | null;
+	book_path?: string | null;
+	page_index: number;
+	image_hash: string;
+	origin: 'current' | 'preload' | 'manual';
+	priority: 'high' | 'normal';
+	condition_id?: string | null;
+	error?: string | null;
+	cache_path?: string | null;
+	result_data?: number[] | null;
+	background: boolean;
+}
+
+function resolveModelSettings(conditionId?: string): SchedulerModelSettings {
+	const panelSettings = loadUpscalePanelSettings();
+	if (conditionId) {
+		const condition = panelSettings.conditionsList.find((c) => c.id === conditionId);
+		if (condition) {
+			return {
+				modelName: condition.action.model,
+				scale: condition.action.scale,
+				tileSize: condition.action.tileSize,
+				noiseLevel: condition.action.noiseLevel,
+				gpuId: condition.action.gpuId
+			};
+		}
+	}
+
+	return {
+		modelName: panelSettings.selectedModel,
+		scale: panelSettings.scale,
+		tileSize: panelSettings.tileSize,
+		noiseLevel: panelSettings.noiseLevel,
+		gpuId: panelSettings.gpuId
+	};
+}
+
+async function submitSchedulerJob(input: SchedulerJobInput): Promise<string | undefined> {
+	const { blob, hash, pageIndex, conditionId, priority, origin, background } = input;
+	const book = bookStore.currentBook;
+	if (!book) {
+		console.warn('submitSchedulerJob: 没有当前书籍，跳过任务');
+		return;
+	}
+
+	const buffer = await blob.arrayBuffer();
+	const imageDataArray = Array.from(new Uint8Array(buffer));
+	const modelSettings = resolveModelSettings(conditionId);
+
+	try {
+		const jobId = await invoke<string>('enqueue_upscale_job', {
+			job: {
+				bookId: book.path ?? null,
+				bookPath: book.path ?? null,
+				pageIndex,
+				imageHash: hash,
+				imageData: imageDataArray,
+				priority,
+				origin,
+				conditionId,
+				modelName: modelSettings.modelName,
+				scale: modelSettings.scale,
+				tileSize: modelSettings.tileSize,
+				noiseLevel: modelSettings.noiseLevel,
+				gpuId: modelSettings.gpuId ?? null,
+				allowCache: true,
+				background
+			}
 		});
-		processBackgroundUpscaleQueue();
-	});
-}
-
-function processBackgroundUpscaleQueue() {
-	while (activeBackgroundUpscaleJobs < MAX_BACKGROUND_CONCURRENCY && backgroundUpscaleQueue.length > 0) {
-		const job = backgroundUpscaleQueue.shift()!;
-		activeBackgroundUpscaleJobs++;
-		performUpscale(job.blob, job.hash, {
-			background: true,
-			skipStateUpdate: true,
-			conditionId: job.conditionId,
-			pageIndex: job.pageIndex
-		})
-			.then(job.resolve)
-			.catch(job.reject)
-			.finally(() => {
-				activeBackgroundUpscaleJobs = Math.max(0, activeBackgroundUpscaleJobs - 1);
-				if (backgroundUpscaleQueue.length > 0) {
-					// 微延迟避免阻塞线程
-					setTimeout(processBackgroundUpscaleQueue, 0);
-				}
-			});
+		return jobId;
+	} catch (error) {
+		console.error('提交调度任务失败:', error);
+		throw error;
 	}
 }
+
+function convertResultToBlob(resultData: number[] | Uint8Array): { blob: Blob; url: string } {
+	const uint8 = resultData instanceof Uint8Array ? resultData : Uint8Array.from(resultData);
+	const blob = new Blob([uint8], { type: 'image/webp' });
+	const url = URL.createObjectURL(blob);
+	return { blob, url };
+}
+
+function handleSchedulerEvent(detail: UpscaleJobEventDetail) {
+	const pageIndex = detail.page_index;
+	const imageHash = detail.image_hash;
+	const status = detail.status;
+
+	if (status === 'queued') {
+		return;
+	}
+
+	if (status === 'running') {
+		if (detail.origin === 'current' && !detail.background) {
+			startUpscale(imageHash, 'auto', '自动超分中');
+		}
+		bookStore.setPageUpscaleStatus(pageIndex, detail.background ? 'preupscaled' : 'none');
+		return;
+	}
+
+	if (status === 'failed') {
+		bookStore.setPageUpscaleStatus(pageIndex, 'failed');
+		if (!detail.background) {
+			setUpscaleError(detail.error ?? '超分失败');
+		}
+		return;
+	}
+
+	if (status === 'cancelled') {
+		bookStore.setPageUpscaleStatus(pageIndex, 'none');
+		return;
+	}
+
+	if (status === 'completed' && detail.result_data) {
+		const { blob, url } = convertResultToBlob(detail.result_data);
+		bookStore.setPageUpscaleStatus(pageIndex, detail.background ? 'preupscaled' : 'done');
+		window.dispatchEvent(
+			new CustomEvent('upscale-complete', {
+				detail: {
+					imageData: url,
+					imageBlob: blob,
+					originalImageHash: imageHash,
+					background: detail.background,
+					pageIndex,
+					conditionId: detail.condition_id ?? undefined,
+					writeToMemoryCache: true
+				}
+			})
+		);
+		if (!detail.background) {
+			completeUpscale();
+		}
+	}
+}
+
+let schedulerUnlisten: UnlistenFn | null = null;
+async function ensureSchedulerListener() {
+	if (schedulerUnlisten || typeof window === 'undefined') {
+		return;
+	}
+	try {
+		schedulerUnlisten = await listen<UpscaleJobEventDetail>('upscale-job-event', (event) => {
+			handleSchedulerEvent(event.payload);
+		});
+	} catch (error) {
+		console.error('监听调度事件失败:', error);
+	}
+}
+
+void ensureSchedulerListener();
 
 /**
  * 触发自动超分
@@ -257,7 +243,7 @@ function processBackgroundUpscaleQueue() {
 export async function triggerAutoUpscale(
 	imageDataWithHash: ImageDataWithHash,
 	isPreload = false
-): Promise<PerformUpscaleResult | undefined> {
+): Promise<void> {
 	try {
 		// 验证图片数据
 		if (!imageDataWithHash || !imageDataWithHash.blob) {
@@ -292,12 +278,16 @@ export async function triggerAutoUpscale(
 		);
 
 		if (isPreload) {
-			return enqueueBackgroundUpscale({
+			await submitSchedulerJob({
 				blob: imageBlob,
 				hash: imageHash,
+				pageIndex: targetPageIndex,
 				conditionId: imageDataWithHash.conditionId,
-				pageIndex: targetPageIndex
+				priority: 'normal',
+				origin: 'preload',
+				background: true
 			});
+			return;
 		}
 
 		// 当前页自动超分与手动路径共用，仍需串行执行
@@ -306,21 +296,19 @@ export async function triggerAutoUpscale(
 			return;
 		}
 
-		startUpscale(imageHash, 'auto', '自动超分中');
-
-		return await performUpscale(imageBlob, imageHash, {
-			background: false,
-			skipStateUpdate: true,
+		await submitSchedulerJob({
+			blob: imageBlob,
+			hash: imageHash,
+			pageIndex: targetPageIndex,
 			conditionId: imageDataWithHash.conditionId,
-			pageIndex: targetPageIndex
+			priority: 'high',
+			origin: 'current',
+			background: false
 		});
 	} catch (error) {
 		console.error('自动超分失败:', error);
 		
-		return {
-			success: false,
-			error: error instanceof Error ? error.message : String(error)
-		};
+		setUpscaleError(error instanceof Error ? error.message : String(error));
 	}
 }
 
@@ -371,7 +359,7 @@ export async function checkUpscaleCache(
 
 		// 2. 磁盘缓存（改用 PyO3 的命令）
 		try {
-			const model = pyo3UpscaleManager.currentModel;
+			const model = resolveModelSettings(imageDataWithHash.conditionId);
 
 			const cachePath = await invoke<string | null>('check_pyo3_upscale_cache', {
 				imageHash,

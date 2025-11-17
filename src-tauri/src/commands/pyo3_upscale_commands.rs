@@ -7,6 +7,7 @@ use tauri::command;
 use crate::core::pyo3_upscaler::{PyO3Upscaler, UpscaleModel, CacheStats};
 
 /// 全局 PyO3 超分管理器状态
+#[derive(Clone)]
 pub struct PyO3UpscalerState {
     pub manager: Arc<Mutex<Option<PyO3Upscaler>>>,
 }

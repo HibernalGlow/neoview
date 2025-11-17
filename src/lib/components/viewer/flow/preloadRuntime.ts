@@ -176,6 +176,18 @@ export interface PreloadBatchJobInput {
 	priority?: 'high' | 'normal';
 }
 
+interface PreloadBatchJobPayload {
+	page_index: number;
+	image_hash: string;
+	condition_id?: string | null;
+	model_name: string;
+	scale: number;
+	tile_size: number;
+	noise_level: number;
+	gpu_id?: number | null;
+	priority?: 'high' | 'normal';
+}
+
 export async function enqueuePreloadBatchJobs(
 	bookPath: string,
 	jobs: PreloadBatchJobInput[]
@@ -184,24 +196,26 @@ export async function enqueuePreloadBatchJobs(
 		return [];
 	}
 
-	const payload = jobs.map((job) => {
+	const payload: PreloadBatchJobPayload[] = jobs.map((job) => {
 		const model = resolveModelSettings(job.conditionId);
 		return {
-			pageIndex: job.pageIndex,
-			imageHash: job.imageHash,
-			conditionId: job.conditionId ?? null,
-			modelName: model.modelName,
+			page_index: job.pageIndex,
+			image_hash: job.imageHash,
+			condition_id: job.conditionId ?? null,
+			model_name: model.modelName,
 			scale: model.scale,
-			tileSize: model.tileSize,
-			noiseLevel: model.noiseLevel,
-			gpuId: model.gpuId ?? null,
+			tile_size: model.tileSize,
+			noise_level: model.noiseLevel,
+			gpu_id: model.gpuId ?? null,
 			priority: job.priority ?? 'normal'
 		};
 	});
 
 	return invoke<string[]>('enqueue_preload_batch', {
-		bookPath,
-		jobs: payload
+		payload: {
+			book_path: bookPath,
+			jobs: payload
+		}
 	});
 }
 

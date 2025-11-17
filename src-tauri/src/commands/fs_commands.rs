@@ -631,15 +631,17 @@ pub async fn get_unindexed_files(
     // 获取所有文件和文件夹
     let mut files = Vec::new();
     let mut folders = Vec::new();
+    let mut archives = Vec::new();
     
     // 递归扫描目录
-    scan_directory(&root_path, &mut files, &mut folders, &fs_manager)?;
+    scan_directory(&root_path, &mut files, &mut folders, &mut archives, &fs_manager)?;
     
     println!("📊 扫描完成: 找到 {} 个文件, {} 个文件夹", files.len(), folders.len());
     
     // 过滤掉已索引的项目（只获取未索引的）
     let mut unindexed_files = Vec::new();
     let mut unindexed_folders = Vec::new();
+    let mut unindexed_archives = Vec::new();
     
     for file in files {
         let path_str = file.to_string_lossy();
@@ -672,13 +674,33 @@ pub async fn get_unindexed_files(
             }
         }
     }
+
+    for archive in archives {
+        let path_str = archive.to_string_lossy();
+        match fs_manager.is_path_indexed(&path_str) {
+            Ok(is_indexed) => {
+                if !is_indexed {
+                    unindexed_archives.push(path_str.to_string());
+                }
+            }
+            Err(e) => {
+                println!("⚠️ 检查索引状态失败 {}: {}", path_str, e);
+                unindexed_archives.push(path_str.to_string());
+            }
+        }
+    }
     
-    println!("✅ 过滤完成: 未索引文件 {} 个, 未索引文件夹 {} 个", 
-             unindexed_files.len(), unindexed_folders.len());
+    println!(
+        "✅ 过滤完成: 未索引文件 {} 个, 未索引文件夹 {} 个, 未索引压缩包 {} 个",
+        unindexed_files.len(),
+        unindexed_folders.len(),
+        unindexed_archives.len()
+    );
     
     Ok(UnindexedFilesResult {
         files: unindexed_files,
         folders: unindexed_folders,
+        archives: unindexed_archives,
     })
 }
 
@@ -687,12 +709,14 @@ pub async fn get_unindexed_files(
 pub struct UnindexedFilesResult {
     pub files: Vec<String>,
     pub folders: Vec<String>,
+    pub archives: Vec<String>,
 }
 
 fn scan_directory(
     dir: &Path,
     files: &mut Vec<PathBuf>,
     folders: &mut Vec<PathBuf>,
+    archives: &mut Vec<PathBuf>,
     fs_manager: &FsManager,
 ) -> Result<(), String> {
     let dir_name = dir.file_name()
@@ -706,6 +730,7 @@ fn scan_directory(
     
     let mut file_count = 0;
     let mut folder_count = 0;
+    let mut archive_count = 0;
     
     for entry in entries {
         let entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
@@ -725,21 +750,39 @@ fn scan_directory(
             folder_count += 1;
             
             // 递归扫描子目录
-            scan_directory(&path, files, folders, fs_manager)?;
+            scan_directory(&path, files, folders, archives, fs_manager)?;
         } else if path.is_file() {
-            // 检查是否为图片文件
+            // 检查是否为图片文件或压缩包
             if is_image_file(&path) {
                 files.push(path);
                 file_count += 1;
+            } else if is_archive_file(&path) {
+                archives.push(path);
+                archive_count += 1;
             }
         }
     }
     
-    if file_count > 0 || folder_count > 0 {
-        println!("  📊 {} - 文件: {}, 文件夹: {}", dir_name, file_count, folder_count);
+    if file_count > 0 || folder_count > 0 || archive_count > 0 {
+        println!(
+            "  📊 {} - 文件: {}, 文件夹: {}, 压缩包: {}",
+            dir_name,
+            file_count,
+            folder_count,
+            archive_count
+        );
     }
     
     Ok(())
+}
+
+fn is_archive_file(path: &Path) -> bool {
+    if let Some(ext) = path.extension() {
+        let ext = ext.to_string_lossy().to_lowercase();
+        matches!(ext.as_str(), "zip" | "cbz" | "rar" | "cbr" | "7z" | "cb7")
+    } else {
+        false
+    }
 }
 
 // ===== 分页和流式浏览相关 =====

@@ -6,7 +6,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import * as Progress from '$lib/components/ui/progress';
-	import { Image as ImageIcon, Grid3x3, Grid2x2, LayoutGrid, Loader2, AlertCircle, TestTube, CheckCircle, XCircle, Database, Play, FolderOpen } from '@lucide/svelte';
+import { Image as ImageIcon, Grid3x3, Grid2x2, LayoutGrid, Loader2, AlertCircle, TestTube, CheckCircle, XCircle, Database, FolderOpen } from '@lucide/svelte';
 	import { invoke } from '@tauri-apps/api/core';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { onMount } from 'svelte';
@@ -42,6 +42,24 @@
 	let indexingCurrent = $state('');
 	let showIndexingProgress = $state(false);
 	let selectedFolder = $state(''); // 选择的文件夹路径
+
+	// 自动扫描状态
+	let isScanningFolder = $state(false);
+	let scanError = $state('');
+	let unindexedFiles = $state<string[]>([]);
+	let unindexedFolders = $state<string[]>([]);
+	let unindexedArchives = $state<string[]>([]);
+
+	const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'avif', 'jxl', 'tiff', 'tif'];
+
+	function getFileExtension(path: string): string {
+		const parts = path.toLowerCase().split('.');
+		return parts.length > 1 ? parts.pop() || '' : '';
+	}
+
+	function getTotalUnindexedItems() {
+		return unindexedFiles.length + unindexedFolders.length + unindexedArchives.length;
+	}
 
 	// 缩略图尺寸
 	const gridSizes = {
@@ -84,7 +102,7 @@
 		
 		try {
 			// 调用 Tauri 命令生成缩略图
-			const thumbnailUrl = await invoke('generate_file_thumbnail_new', { filePath });
+			const thumbnailUrl = await invoke<string>('generate_file_thumbnail_new', { filePath });
 			thumb.imageUrl = thumbnailUrl;
 		} catch (error) {
 			console.error(`生成缩略图失败 ${filePath}:`, error);
@@ -153,12 +171,49 @@
 				title: '选择要索引的文件夹'
 			});
 			
-			if (selected) {
-				selectedFolder = selected;
-				console.log('选择的文件夹:', selectedFolder);
-			}
+		if (selected) {
+			selectedFolder = selected;
+			console.log('选择的文件夹:', selectedFolder);
+			unindexedFiles = [];
+			unindexedFolders = [];
+			unindexedArchives = [];
+			await scanSelectedFolder(selected);
+		}
 		} catch (error) {
 			console.error('选择文件夹失败:', error);
+		}
+	}
+
+	async function scanSelectedFolder(path: string) {
+		isScanningFolder = true;
+		scanError = '';
+		try {
+			console.log('🔍 自动扫描未索引项目:', path);
+			const result = await invoke('get_unindexed_files', {
+				rootPath: path
+			});
+
+			const { files = [], folders = [], archives = [] } = result as {
+				files?: string[];
+				folders?: string[];
+				archives?: string[];
+			};
+
+			unindexedFiles = files;
+			unindexedFolders = folders;
+			unindexedArchives = archives;
+
+			console.log(
+				`📊 扫描完成: 文件 ${files.length}, 文件夹 ${folders.length}, 压缩包 ${archives.length}`
+			);
+		} catch (error) {
+			console.error('扫描未索引项目失败:', error);
+			scanError = error instanceof Error ? error.message : String(error);
+			unindexedFiles = [];
+			unindexedFolders = [];
+			unindexedArchives = [];
+		} finally {
+			isScanningFolder = false;
 		}
 	}
 
@@ -168,6 +223,20 @@
 			return;
 		}
 
+		if (isScanningFolder) {
+			console.warn('正在扫描未索引项目，请稍后重试');
+			return;
+		}
+
+		if (getTotalUnindexedItems() === 0) {
+			await scanSelectedFolder(selectedFolder);
+			if (getTotalUnindexedItems() === 0) {
+				indexingCurrent = '没有需要索引的项目';
+				console.log('✅ 所有项目均已索引');
+				return;
+			}
+		}
+
 		isIndexing = true;
 		showIndexingProgress = true;
 		indexingProgress = 0;
@@ -175,114 +244,104 @@
 		indexingCurrent = '准备中...';
 
 		try {
-			console.log('🚀 开始获取未索引文件列表...');
-			indexingCurrent = '扫描文件中...';
-			
-			// 获取需要索引的文件和文件夹列表
-			const result = await invoke('get_unindexed_files', {
-				rootPath: selectedFolder // 使用选择的文件夹路径
-			});
-			
-			console.log('📋 获取到索引结果:', result);
-			
-			const { files, folders } = result as { files: string[], folders: string[] };
-			const allItems = [...files, ...folders];
-			indexingTotal = allItems.length;
-			
-			console.log(`📁 找到 ${files.length} 个文件, ${folders.length} 个文件夹, 总计 ${indexingTotal} 个项目`);
-			
+			const imageFiles = [...unindexedFiles];
+			const archiveFiles = [...unindexedArchives];
+			const folders = [...unindexedFolders];
+
+			indexingTotal = imageFiles.length + archiveFiles.length + folders.length;
+
+			console.log(
+				`📁 待处理 => 图片: ${imageFiles.length}, 压缩包: ${archiveFiles.length}, 文件夹: ${folders.length}`
+			);
+
 			if (indexingTotal === 0) {
 				indexingCurrent = '没有需要索引的项目';
-				console.log('✅ 所有文件已索引完成');
+				console.log('✅ 所有项目已索引完成');
 				return;
 			}
 
 			indexingCurrent = '开始生成缩略图...';
 			console.log('⚡ 开始批量生成缩略图...');
 
-			// 使用批量生成命令，提高效率
-			// 先尝试使用批量接口
+			let processedCount = 0;
 			const batchSize = 20; // 每批处理20个，充分利用CPU
 			let successCount = 0;
 			let errorCount = 0;
 
-			// 分离文件和文件夹
-			const imageFiles = files.filter(f => {
-				const ext = f.toLowerCase().split('.').pop() || '';
-				return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'avif', 'jxl', 'tiff', 'tif'].includes(ext);
+			const processBatch = async (
+				items: string[],
+				label: string,
+				handler: (path: string) => Promise<boolean>
+			) => {
+				for (let i = 0; i < items.length; i += batchSize) {
+					const batch = items.slice(i, i + batchSize);
+					const displayName = batch[0]?.split('\\').pop() || `批次 ${Math.floor(i / batchSize) + 1}`;
+					indexingCurrent = `处理${label}: ${displayName}... (${Math.min(i + 1, items.length)}/${items.length})`;
+
+					const results = await Promise.all(
+						batch.map(async (item) => {
+							try {
+								return await handler(item);
+							} catch (error) {
+								console.error(`处理${label}失败 ${item}:`, error);
+								return false;
+							}
+						})
+					);
+
+					results.forEach((success) => {
+						if (success) successCount++;
+						else errorCount++;
+					});
+
+					processedCount += batch.length;
+					indexingProgress = processedCount;
+				}
+			};
+
+			await processBatch(archiveFiles, '压缩包', async (item) => {
+				await invoke('generate_archive_thumbnail_new', { archivePath: item });
+				return true;
 			});
-			const archiveFiles = files.filter(f => {
-				const ext = f.toLowerCase().split('.').pop() || '';
-				return ['zip', 'cbz', 'rar', 'cbr', '7z', 'cb7'].includes(ext);
+
+			await processBatch(imageFiles, '图片', async (item) => {
+				const ext = getFileExtension(item);
+				if (!imageExtensions.includes(ext)) {
+					console.warn('跳过非图片文件:', item);
+					return true;
+				}
+				await invoke('generate_file_thumbnail_new', { filePath: item });
+				return true;
 			});
 
-			// 处理图片文件
-			for (let i = 0; i < imageFiles.length; i += batchSize) {
-				const batch = imageFiles.slice(i, i + batchSize);
-				const fileName = batch[0]?.split('\\').pop() || `批次 ${Math.floor(i/batchSize) + 1}`;
-				indexingCurrent = `处理图片: ${fileName}... (${i + 1}/${imageFiles.length})`;
-				
-				const promises = batch.map(async (item) => {
-					try {
-						await invoke('generate_file_thumbnail_new', { filePath: item });
-						return { success: true, item };
-					} catch (error) {
-						return { success: false, item, error };
-					}
-				});
-
-				const results = await Promise.all(promises);
-				results.forEach(result => {
-					if (result.success) successCount++;
-					else errorCount++;
-				});
-
-				indexingProgress = Math.min(i + batchSize, imageFiles.length);
-			}
-
-			// 处理压缩包文件
-			for (let i = 0; i < archiveFiles.length; i += batchSize) {
-				const batch = archiveFiles.slice(i, i + batchSize);
-				const fileName = batch[0]?.split('\\').pop() || `批次 ${Math.floor(i/batchSize) + 1}`;
-				indexingCurrent = `处理压缩包: ${fileName}... (${i + 1}/${archiveFiles.length})`;
-				
-				const promises = batch.map(async (item) => {
-					try {
-						await invoke('generate_archive_thumbnail_new', { archivePath: item });
-						return { success: true, item };
-					} catch (error) {
-						return { success: false, item, error };
-					}
-				});
-
-				const results = await Promise.all(promises);
-				results.forEach(result => {
-					if (result.success) successCount++;
-					else errorCount++;
-				});
-
-				indexingProgress = imageFiles.length + Math.min(i + batchSize, archiveFiles.length);
-			}
-
-			// 处理文件夹（使用第一个子项的缩略图）
+			// 处理文件夹（复用内部文件缩略图逻辑）
 			for (let i = 0; i < folders.length; i++) {
 				const folder = folders[i];
 				const fileName = folder.split('\\').pop() || folder;
 				indexingCurrent = `处理文件夹: ${fileName}... (${i + 1}/${folders.length})`;
-				
+
 				try {
-					// 文件夹使用文件缩略图逻辑（会递归查找第一个图片）
-					await invoke('generate_file_thumbnail_new', { filePath: folder });
+					await invoke('load_thumbnail_from_db', {
+						path: folder,
+						size: 0,
+						ghash: 0,
+						category: 'folder'
+					});
 					successCount++;
 				} catch (error) {
+					console.error('处理文件夹失败:', error);
 					errorCount++;
 				}
 
-				indexingProgress = imageFiles.length + archiveFiles.length + i + 1;
+				processedCount += 1;
+				indexingProgress = processedCount;
 			}
 
 			console.log(`🎉 索引完成! 成功: ${successCount}, 失败: ${errorCount}`);
 			indexingCurrent = `索引完成 (成功: ${successCount}, 失败: ${errorCount})`;
+
+			// 索引完成后自动重新扫描
+			await scanSelectedFolder(selectedFolder);
 		} catch (error) {
 			console.error('💥 索引过程出错:', error);
 			indexingCurrent = `索引出错: ${error instanceof Error ? error.message : '未知错误'}`;
@@ -342,7 +401,7 @@
 					size="sm"
 					class="h-7 px-2 text-xs"
 					onclick={startIndexing}
-					disabled={isIndexing || !selectedFolder}
+					disabled={isIndexing || !selectedFolder || isScanningFolder}
 				>
 					{#if isIndexing}
 						<Loader2 class="h-3 w-3 mr-1 animate-spin" />
@@ -372,8 +431,34 @@
 
 		<!-- 选择的文件夹显示 -->
 		{#if selectedFolder}
-			<div class="text-[10px] text-muted-foreground truncate px-1">
-				📁 {selectedFolder}
+			<div class="text-[10px] text-muted-foreground px-1 space-y-1">
+				<div class="truncate">📁 {selectedFolder}</div>
+				{#if isScanningFolder}
+					<div class="flex items-center gap-1 text-primary">
+						<Loader2 class="h-3 w-3 animate-spin" />
+						<span>扫描未索引项目中...</span>
+					</div>
+				{:else if scanError}
+					<div class="text-destructive">扫描失败: {scanError}</div>
+				{:else}
+					<div class="flex items-center gap-2 flex-wrap">
+						<span>
+							未索引 - 图片 {unindexedFiles.length} | 压缩包 {unindexedArchives.length} | 文件夹 {unindexedFolders.length}
+						</span>
+						<Button
+							variant="ghost"
+							size="sm"
+							class="h-5 px-2 text-[10px]"
+							onclick={() => selectedFolder && scanSelectedFolder(selectedFolder)}
+							disabled={isIndexing || isScanningFolder}
+						>
+							重新扫描
+						</Button>
+					</div>
+					{#if getTotalUnindexedItems() === 0}
+						<div class="text-muted-foreground">所有项目已索引</div>
+					{/if}
+				{/if}
 			</div>
 		{/if}
 
@@ -384,9 +469,10 @@
 					<span>正在索引: {indexingCurrent}</span>
 					<span>{indexingProgress}/{indexingTotal}</span>
 				</div>
-				<Progress.Root value={(indexingProgress / indexingTotal) * 100} class="h-2">
-					<Progress.Indicator class="h-full bg-primary transition-all duration-300" />
-				</Progress.Root>
+				<Progress.Root
+					value={indexingTotal ? (indexingProgress / indexingTotal) * 100 : 0}
+					class="h-2"
+				/>
 			</div>
 		{/if}
 

@@ -98,7 +98,8 @@ export class PreloadManager {
 				return await triggerAutoUpscale({
 					blob: task.blob,
 					hash: task.hash,
-					conditionId: task.conditionId
+					conditionId: task.conditionId,
+					pageIndex: task.pageIndex
 				}, true);
 			},
 			onTaskSuccess: (task, result) => {

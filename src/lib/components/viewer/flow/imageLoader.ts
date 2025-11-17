@@ -504,13 +504,13 @@ export class ImageLoader {
 
 			// 获取带hash的图片数据：用于超分缓存检查
 			const pageInfo = currentBook.pages[currentPageIndex];
-			let imageDataWithHash = null;
+			let imageDataWithHash: ImageDataWithHash | null = null;
 			
 			// 使用 bookStore 的统一 hash API
 			const imageHash = bookStore.getPageHash(currentPageIndex);
 			if (imageHash) {
 				const { blob } = this.blobCache.get(currentPageIndex)!;
-				imageDataWithHash = { blob, hash: imageHash };
+				imageDataWithHash = { blob, hash: imageHash, pageIndex: currentPageIndex };
 				console.log(`使用稳定哈希，页码: ${currentPageIndex + 1}/${bookStore.totalPages}, hash: ${imageHash}`);
 			} else {
 				console.warn('当前页没有 stableHash，跳过自动超分');

@@ -11,16 +11,18 @@ import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
 import { bookStore } from '$lib/stores/book.svelte';
 
 export interface ImageDataWithHash {
-	data?: string;  // 兼容旧的 data URL 格式
-	blob?: Blob;   // 新的 Blob 格式
+	data?: string; // 兼容旧的 data URL 格式
+	blob?: Blob; // 新的 Blob 格式
 	hash: string;
-	conditionId?: string;  // 关联的条件ID
+	conditionId?: string; // 关联的条件ID
+	pageIndex?: number; // 关联页面索引（用于事件派发）
 }
 
 export interface PerformUpscaleOptions {
 	background?: boolean;
 	skipStateUpdate?: boolean; // 跳过状态更新（由调用方管理）
 	conditionId?: string; // 关联的条件ID
+	pageIndex?: number; // 事件派发所需的页面索引
 }
 
 export interface PerformUpscaleResult {
@@ -98,6 +100,7 @@ export async function performUpscale(
 		
 		// 确定是否为后台任务
 		const isBackground = options.background || false;
+	const targetPageIndex = options.pageIndex;
 		
 		// GIF 直接跳过
 		if (await isGifBlob(imageBlob)) {
@@ -161,7 +164,8 @@ export async function performUpscale(
 			imageBlob: resultBlob,
 			originalImageHash: imageHash,
 			background: isBackground,
-			conditionId: options.conditionId
+		conditionId: options.conditionId,
+		pageIndex: typeof targetPageIndex === 'number' ? targetPageIndex : undefined
 		};
 		
 		// 非后台任务时，额外写入内存缓存（通过事件传递给 ImageLoader）
@@ -203,6 +207,7 @@ interface BackgroundUpscaleJob {
 	blob: Blob;
 	hash: string;
 	conditionId?: string;
+	pageIndex?: number;
 	resolve: (result: PerformUpscaleResult | undefined) => void;
 	reject: (reason?: unknown) => void;
 }
@@ -210,12 +215,13 @@ interface BackgroundUpscaleJob {
 const backgroundUpscaleQueue: BackgroundUpscaleJob[] = [];
 let activeBackgroundUpscaleJobs = 0;
 
-function enqueueBackgroundUpscale(jobInput: { blob: Blob; hash: string; conditionId?: string }) {
+function enqueueBackgroundUpscale(jobInput: { blob: Blob; hash: string; conditionId?: string; pageIndex?: number }) {
 	return new Promise<PerformUpscaleResult | undefined>((resolve, reject) => {
 		backgroundUpscaleQueue.push({
 			blob: jobInput.blob,
 			hash: jobInput.hash,
 			conditionId: jobInput.conditionId,
+			pageIndex: jobInput.pageIndex,
 			resolve,
 			reject
 		});
@@ -230,7 +236,8 @@ function processBackgroundUpscaleQueue() {
 		performUpscale(job.blob, job.hash, {
 			background: true,
 			skipStateUpdate: true,
-			conditionId: job.conditionId
+			conditionId: job.conditionId,
+			pageIndex: job.pageIndex
 		})
 			.then(job.resolve)
 			.catch(job.reject)
@@ -248,7 +255,7 @@ function processBackgroundUpscaleQueue() {
  * 触发自动超分
  */
 export async function triggerAutoUpscale(
-	imageDataWithHash: { blob: Blob; hash: string; conditionId?: string },
+	imageDataWithHash: ImageDataWithHash,
 	isPreload = false
 ): Promise<PerformUpscaleResult | undefined> {
 	try {
@@ -266,6 +273,9 @@ export async function triggerAutoUpscale(
 		}
 
 		const { blob: imageBlob, hash: imageHash } = imageDataWithHash;
+		const targetPageIndex = typeof imageDataWithHash.pageIndex === 'number'
+			? imageDataWithHash.pageIndex
+			: bookStore.currentPageIndex;
 		
 		if (await isGifBlob(imageBlob)) {
 			console.log('检测到 GIF，跳过自动超分:', imageHash);
@@ -285,7 +295,8 @@ export async function triggerAutoUpscale(
 			return enqueueBackgroundUpscale({
 				blob: imageBlob,
 				hash: imageHash,
-				conditionId: imageDataWithHash.conditionId
+				conditionId: imageDataWithHash.conditionId,
+				pageIndex: targetPageIndex
 			});
 		}
 
@@ -300,7 +311,8 @@ export async function triggerAutoUpscale(
 		return await performUpscale(imageBlob, imageHash, {
 			background: false,
 			skipStateUpdate: true,
-			conditionId: imageDataWithHash.conditionId
+			conditionId: imageDataWithHash.conditionId,
+			pageIndex: targetPageIndex
 		});
 	} catch (error) {
 		console.error('自动超分失败:', error);

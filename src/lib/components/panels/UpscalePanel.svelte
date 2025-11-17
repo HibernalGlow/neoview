@@ -131,6 +131,7 @@ let upscaledImageUrl = $state('');
 let currentImageHash = $state<string | null>(null);
 let originalPreviewUrl = $state('');
 let originalPreviewObjectUrl: string | null = null;
+let upscaledPreviewObjectUrl: string | null = null;
 
 	// 缓存统计
 	let cacheStats = $state({
@@ -438,8 +439,34 @@ let originalPreviewObjectUrl: string | null = null;
 			}
 			return false;
 		}
+		if (upscaledPreviewObjectUrl && upscaledPreviewObjectUrl !== url) {
+			try {
+				URL.revokeObjectURL(upscaledPreviewObjectUrl);
+			} catch (error) {
+				console.warn('释放旧的超分预览 URL 失败:', error);
+			}
+			upscaledPreviewObjectUrl = null;
+		}
 		upscaledImageUrl = url;
+		if (url.startsWith('blob:')) {
+			upscaledPreviewObjectUrl = url;
+		}
 		return true;
+	}
+
+	function resetUpscaledDisplay() {
+		if (upscaledPreviewObjectUrl) {
+			try {
+				URL.revokeObjectURL(upscaledPreviewObjectUrl);
+			} catch (error) {
+				console.warn('释放超分预览 URL 失败:', error);
+			}
+			upscaledPreviewObjectUrl = null;
+		}
+		upscaledImageUrl = '';
+		bookStore.setUpscaledImage(null);
+		bookStore.setUpscaledImageBlob(null);
+		bookStore.setCurrentPageUpscaled(false);
 	}
 
 	$effect(() => {
@@ -453,6 +480,10 @@ let originalPreviewObjectUrl: string | null = null;
 			URL.revokeObjectURL(originalPreviewObjectUrl);
 			originalPreviewObjectUrl = null;
 		}
+	if (upscaledPreviewObjectUrl) {
+		URL.revokeObjectURL(upscaledPreviewObjectUrl);
+		upscaledPreviewObjectUrl = null;
+	}
 	});
 
 	/**
@@ -571,6 +602,7 @@ let originalPreviewObjectUrl: string | null = null;
 			return;
 		}
 
+	resetUpscaledDisplay();
 		isProcessing = true;
 		progress = 0;
 		status = '准备中...';

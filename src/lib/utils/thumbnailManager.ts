@@ -366,11 +366,20 @@ class ThumbnailManager {
       return cached.dataUrl;
     }
 
-    // 2. 尝试从数据库加载（不依赖索引缓存，直接尝试）
-    // 这样可以立即显示已缓存的缩略图，不需要等待索引预加载
     // 判断是否为文件夹：没有 innerPath 且不是压缩包，且路径没有扩展名
     const isFolder = !innerPath && !isArchive && !path.match(/\.(jpg|jpeg|png|gif|bmp|webp|avif|jxl|tiff|tif|zip|cbz|rar|cbr|mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/i);
     
+    // 2. 对于文件夹，如果索引缓存已确认数据库中没有，直接返回 null（避免重复查询）
+    if (isFolder) {
+      const cachedIndex = this.dbIndexCache.get(pathKey);
+      if (cachedIndex === false) {
+        // 已确认数据库中没有，直接返回，避免重复查询
+        return null;
+      }
+    }
+
+    // 3. 尝试从数据库加载（不依赖索引缓存，直接尝试）
+    // 这样可以立即显示已缓存的缩略图，不需要等待索引预加载
     try {
       const dbBlobUrl = await this.loadFromDb(path, innerPath, isFolder);
       if (dbBlobUrl) {
@@ -400,20 +409,20 @@ class ThumbnailManager {
       this.dbIndexCache.set(pathKey, false);
     }
 
-    // 3. 文件夹处理：只从数据库加载，不主动生成（避免性能问题）
+    // 4. 文件夹处理：只从数据库加载，不主动生成（避免性能问题）
     // 文件夹缩略图由反向查找策略自动更新（当子文件/压缩包生成缩略图时）
     if (isFolder) {
       // 文件夹的缩略图只从数据库加载，如果数据库中没有，返回 null（不主动查找）
       return null;
     }
 
-    // 4. 如果任务已在处理中，等待
+    // 5. 如果任务已在处理中，等待
     if (this.processingTasks.has(pathKey)) {
       // 可以返回一个占位符或等待
       return null;
     }
 
-    // 5. 添加到任务队列
+    // 6. 添加到任务队列
     this.enqueueTask({
       path,
       innerPath,
@@ -422,7 +431,7 @@ class ThumbnailManager {
       timestamp: Date.now(),
     });
 
-    // 6. 立即处理高优先级任务和当前目录任务（不等待，异步执行）
+    // 7. 立即处理高优先级任务和当前目录任务（不等待，异步执行）
     if (priority === 'immediate' || path.startsWith(this.currentDirectory)) {
       // 立即触发队列处理，确保 immediate 和当前目录任务优先
       setTimeout(() => this.processQueue(), 0);

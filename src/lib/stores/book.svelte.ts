@@ -544,6 +544,10 @@ class BookStore {
    * 设置指定页面的超分状态
    */
   setPageUpscaleStatus(pageIndex: number, status: 'none' | 'preupscaled' | 'done' | 'failed') {
+    const previous = this.upscaleStatusByPage.get(pageIndex);
+    if (previous === status) {
+      return;
+    }
     this.upscaleStatusByPage.set(pageIndex, status);
     console.log(`📄 页面 ${pageIndex + 1} 超分状态更新为:`, status);
   }

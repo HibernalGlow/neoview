@@ -24,7 +24,7 @@ function createConditionId(prefix = CONDITION_ID_PREFIX): string {
 }
 
 function ensureMatchDefaults(match?: UpscaleCondition['match']): UpscaleCondition['match'] {
-	const safeMatch = match ?? {};
+	const safeMatch: Partial<UpscaleCondition['match']> = match ?? {};
 	return {
 		minWidth: safeMatch.minWidth,
 		minHeight: safeMatch.minHeight,
@@ -41,7 +41,7 @@ function ensureMatchDefaults(match?: UpscaleCondition['match']): UpscaleConditio
 }
 
 function ensureActionDefaults(action?: UpscaleCondition['action']): UpscaleCondition['action'] {
-	const safeAction = action ?? {};
+	const safeAction: Partial<UpscaleCondition['action']> = action ?? {};
 	return {
 		model: safeAction.model ?? 'MODEL_WAIFU2X_CUNET_UP2X',
 		scale: safeAction.scale ?? 2,
@@ -181,6 +181,36 @@ export interface PageMetadata {
 	metadata?: Record<string, any>;
 }
 
+const invalidRegexCache = new Set<string>();
+
+function escapeRegexLiteral(pattern: string): string {
+	return pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function buildRegexFromPattern(pattern?: string): RegExp | null {
+	if (!pattern) {
+		return null;
+	}
+	try {
+		return new RegExp(pattern);
+	} catch (error) {
+		if (!invalidRegexCache.has(pattern)) {
+			console.warn('正则无效，将按文本匹配处理:', pattern, error);
+			invalidRegexCache.add(pattern);
+		}
+		// 将 * ? 作为通配处理，其余字符转义
+		const escaped = escapeRegexLiteral(pattern)
+			.replace(/\\\*/g, '.*')
+			.replace(/\\\?/g, '.');
+		try {
+			return new RegExp(escaped);
+		} catch (fallbackErr) {
+			console.warn('正则降级失败，彻底按字面匹配:', pattern, fallbackErr);
+			return new RegExp(escapeRegexLiteral(pattern));
+		}
+	}
+}
+
 /**
  * 评估页面元数据是否匹配条件
  */
@@ -224,26 +254,16 @@ function matchesCondition(matchRule: UpscaleCondition['match'], meta: PageMetada
 
 	// 检查书籍路径正则
 	if (match.regexBookPath) {
-		try {
-			const regex = new RegExp(match.regexBookPath);
-			if (!regex.test(meta.bookPath)) {
-				return false;
-			}
-		} catch (error) {
-			console.warn('书籍路径正则表达式无效:', match.regexBookPath, error);
+		const regex = buildRegexFromPattern(match.regexBookPath);
+		if (!regex || !regex.test(meta.bookPath)) {
 			return false;
 		}
 	}
 
 	// 检查图片路径正则
 	if (match.regexImagePath) {
-		try {
-			const regex = new RegExp(match.regexImagePath);
-			if (!regex.test(meta.imagePath)) {
-				return false;
-			}
-		} catch (error) {
-			console.warn('图片路径正则表达式无效:', match.regexImagePath, error);
+		const regex = buildRegexFromPattern(match.regexImagePath);
+		if (!regex || !regex.test(meta.imagePath)) {
 			return false;
 		}
 	}
@@ -370,12 +390,39 @@ export function createBlankCondition(name: string): UpscaleCondition {
 }
 
 /**
+ * 从 Blob 获取图片分辨率
+ */
+export async function getImageDimensions(blob: Blob): Promise<{ width: number; height: number } | null> {
+	return new Promise((resolve) => {
+		const img = new Image();
+		const url = URL.createObjectURL(blob);
+		img.onload = () => {
+			URL.revokeObjectURL(url);
+			resolve({ width: img.naturalWidth, height: img.naturalHeight });
+		};
+		img.onerror = () => {
+			URL.revokeObjectURL(url);
+			resolve(null);
+		};
+		img.src = url;
+	});
+}
+
+/**
  * 收集页面元数据
  */
-export function collectPageMetadata(page: any, bookPath: string): PageMetadata {
+export function collectPageMetadata(
+	page: any,
+	bookPath: string,
+	dimensions?: { width: number; height: number } | null
+): PageMetadata {
+	// 优先使用传入的 dimensions，其次使用 page 中的 width/height
+	const width = dimensions?.width ?? page.width ?? 0;
+	const height = dimensions?.height ?? page.height ?? 0;
+
 	const metadata: PageMetadata = {
-		width: page.width || 0,
-		height: page.height || 0,
+		width,
+		height,
 		bookPath,
 		imagePath: page.path || page.innerPath || ''
 	};

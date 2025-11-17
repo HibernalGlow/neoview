@@ -66,18 +66,17 @@ def _needs_transcode(image_data: bytes) -> bool:
     
     return False
 
-def _transcode_to_webp(image_data: bytes) -> bytes:
-    """将不受支持的格式转换为无损 WebP，以兼容 sr_vulkan"""
-    # 首选 PyVips，性能更佳且原生支持 AVIF/JXL
+def _encode_webp(image_data: bytes, *, quality: int, lossless: bool) -> bytes:
+    """使用指定质量编码为 WebP"""
     if PYVIPS_AVAILABLE:
         try:
             image = pyvips.Image.new_from_buffer(image_data, "", access="sequential")
-            return image.write_to_buffer(".webp", Q=100, lossless=1)
+            return image.write_to_buffer(".webp", Q=quality, lossless=int(lossless))
         except Exception as e:
-            print(f"⚠️ PyVips 转码失败，回退到 Pillow: {e}")
+            print(f"⚠️ PyVips WebP 编码失败，回退到 Pillow: {e}")
     
     if not PIL_AVAILABLE:
-        raise RuntimeError("缺少 PyVips/Pillow 解码能力，无法处理该格式")
+        raise RuntimeError("缺少 PyVips/Pillow 解码能力，无法编码 WebP")
     
     try:
         with Image.open(io.BytesIO(image_data)) as img:
@@ -87,8 +86,15 @@ def _transcode_to_webp(image_data: bytes) -> bytes:
                 img = img.convert('RGB')
             
             with io.BytesIO() as buf:
-                img.save(buf, format='WEBP', lossless=True, quality=100)
+                img.save(buf, format='WEBP', lossless=lossless, quality=quality, method=6)
                 return buf.getvalue()
+    except Exception as e:
+        raise RuntimeError(f"WebP 编码失败: {str(e)}")
+
+def _transcode_to_webp(image_data: bytes) -> bytes:
+    """将不受支持的格式转换为有损 WebP 以减小体积"""
+    try:
+        return _encode_webp(image_data, quality=80, lossless=False)
     except Exception as e:
         raise RuntimeError(f"图像格式转换失败: {str(e)}")
 
@@ -109,6 +115,7 @@ class UpscaleTask:
         self.format = ""
         self.tile_size = 0
         self.noise_level = 0
+        self.lossy_webp = False
 
 
 class UpscaleManager:
@@ -350,6 +357,12 @@ class UpscaleManager:
                     # 🔥 关键修复：验证 taskId 匹配
                     if returned_task_id in self.tasks:
                         task = self.tasks[returned_task_id]
+                    #     if task.lossy_webp and data and len(data) > 0:
+                    #         try:
+                    #             data = _encode_webp(data, quality=85, lossless=False)
+                    #             print(f"🎯 任务 {returned_task_id} 结果已重新编码为 85 质量 WebP")
+                    #         except Exception as encode_err:
+                    #             print(f"⚠️ 结果 WebP 重新编码失败，使用原始数据: {encode_err}")
                         task.result_data = data
                         task.tick = tick
                         
@@ -443,10 +456,13 @@ class UpscaleManager:
             # 检测并转换不支持的格式
             processed_data = image_data
             if _needs_transcode(image_data):
-                print(f"🔄 检测到不支持的格式，正在转换为 PNG...")
+                print(f"🔄 检测到不支持的格式，正在转换")
                 try:
                     processed_data = _transcode_to_webp(image_data)
                     print(f"✅ 格式转换完成，新数据大小: {len(processed_data)} bytes")
+                    with self.lock:
+                        if task_id in self.tasks:
+                            self.tasks[task_id].lossy_webp = True
                 except RuntimeError as e:
                     print(f"❌ 格式转换失败: {e}")
                     with self.lock:

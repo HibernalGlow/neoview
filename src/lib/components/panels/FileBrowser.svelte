@@ -561,6 +561,8 @@ import { getPerformanceSettings } from '$lib/api/performance';
   /**
    * 异步加载缩略图（立即开始，不阻塞文件浏览）
    */
+  const MANY_SUBFOLDERS_THRESHOLD = 20;
+
   async function loadThumbnailsForItemsAsync(
     items: FsItem[],
     path: string
@@ -573,6 +575,7 @@ import { getPerformanceSettings } from '$lib/api/performance';
     // 检测是否为合集文件夹（子文件夹数量>45）
     const subfolders = items.filter(item => item.isDir);
     const isCollectionFolder = subfolders.length > 45;
+    const deferFolderThumbnails = subfolders.length > MANY_SUBFOLDERS_THRESHOLD;
 
     // 过滤出需要缩略图的项目
     const itemsNeedingThumbnails = items.filter(item => {
@@ -599,9 +602,16 @@ import { getPerformanceSettings } from '$lib/api/performance';
     // 2. 立即加载所有文件的缩略图（getThumbnail 会自动检查数据库并立即显示已缓存的）
     // 对于已缓存的，会立即从数据库加载并显示
     // 对于未缓存的，会入队生成（immediate 优先级）
+    // 注意：不主动扫描未记录的文件夹，避免性能消耗
+    // 文件夹缩略图只在打开压缩包时顺带检查并生成
+    let deferredFolderCount = 0;
     itemsNeedingThumbnails.forEach(item => {
       if (item.isDir) {
-        // 文件夹：先尝试从数据库加载，如果没有记录则批量扫描
+        if (deferFolderThumbnails) {
+          deferredFolderCount++;
+          return;
+        }
+        // 只从数据库加载已缓存的文件夹缩略图，不主动扫描未记录的
         thumbnailManager.getThumbnail(item.path, undefined, false, 'immediate');
       } else {
         // 文件：检查是否为压缩包
@@ -621,36 +631,21 @@ import { getPerformanceSettings } from '$lib/api/performance';
       }
     });
     
-    // 3. 批量扫描无记录的文件夹，查找第一个图片/压缩包并绑定（异步，不阻塞）
-    // 延迟执行，避免阻塞文件浏览
-    setTimeout(async () => {
-      const foldersWithoutThumbnails: FsItem[] = [];
-      
-      // 检查哪些文件夹没有缩略图记录
-      for (const item of itemsNeedingThumbnails) {
-        if (item.isDir) {
-          const hasThumbnail = await thumbnailManager.checkThumbnailInDb(item.path);
-          if (!hasThumbnail) {
-            foldersWithoutThumbnails.push(item);
-          }
-        }
+    if (deferFolderThumbnails) {
+      if (deferredFolderCount > 0) {
+        console.log(`📁 跳过 ${deferredFolderCount} 个文件夹缩略图，等待虚拟列表视野触发`);
       }
-      
-      if (foldersWithoutThumbnails.length > 0) {
-        console.log(`🔍 批量扫描 ${foldersWithoutThumbnails.length} 个无记录文件夹...`);
-        // 异步批量扫描，不阻塞
-        thumbnailManager.batchScanFoldersAndBindThumbnails(foldersWithoutThumbnails, path).catch(err => {
-          console.debug('批量扫描文件夹失败:', err);
-        });
-      }
-    }, 500); // 延迟 500ms，确保文件浏览不阻塞
+    }
 
     // 5. 处理合集文件夹（特殊优化）
-    if (isCollectionFolder) {
+    if (isCollectionFolder && !deferFolderThumbnails) {
       console.log('📚 检测到合集文件夹，优先加载最新和未记录的');
       loadCollectionFolderThumbnails(items, path, subfolders);
     } else {
-      console.log(`⚡ 已将 ${itemsNeedingThumbnails.length} 个项目入队（立即处理）`);
+      console.log(`⚡ 已将 ${itemsNeedingThumbnails.length - deferredFolderCount} 个项目入队（立即处理）`);
+      if (deferFolderThumbnails) {
+        console.log('📁 其余文件夹将在虚拟列表可见时再行查询');
+      }
     }
   }
 
@@ -733,6 +728,29 @@ import { getPerformanceSettings } from '$lib/api/performance';
       console.log('✅ Loaded', loadedItems.length, 'archive items');
       
       fileBrowserStore.setItems(loadedItems);
+      
+      // 检查压缩包本身是否有缩略图记录，如果没有则生成
+      const archiveHasThumbnail = await thumbnailManager.checkThumbnailInDb(path);
+      if (!archiveHasThumbnail) {
+        console.log(`📦 压缩包 ${path} 没有缩略图记录，生成中...`);
+        thumbnailManager.getThumbnail(path, undefined, true, 'immediate');
+      }
+      
+      // 检查父文件夹是否需要补全缩略图
+      const lastBackslash = path.lastIndexOf('\\');
+      const lastSlash = path.lastIndexOf('/');
+      const lastSeparator = Math.max(lastBackslash, lastSlash);
+      const parentPath = lastSeparator > 0 ? path.substring(0, lastSeparator) : '';
+      if (parentPath && parentPath !== path) {
+        const parentHasThumbnail = await thumbnailManager.checkThumbnailInDb(parentPath);
+        if (!parentHasThumbnail) {
+          console.log(`📁 父文件夹 ${parentPath} 没有缩略图记录，使用当前压缩包补全...`);
+          // 延迟执行，等待压缩包缩略图生成完成
+          setTimeout(() => {
+            thumbnailManager.getThumbnail(parentPath, undefined, false, 'normal');
+          }, 1000);
+        }
+      }
       
       // 异步加载压缩包内图片的缩略图
       for (const item of loadedItems) {

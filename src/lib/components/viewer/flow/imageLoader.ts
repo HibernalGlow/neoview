@@ -19,7 +19,7 @@ import {
 } from './preloadRuntime';
 import { upscaleState, startUpscale, updateUpscaleProgress, completeUpscale, setUpscaleError } from '$lib/stores/upscale/upscaleState.svelte';
 import { showSuccessToast } from '$lib/utils/toast';
-import { collectPageMetadata, evaluateConditions } from '$lib/utils/upscale/conditions';
+import { collectPageMetadata, evaluateConditions, getImageDimensions } from '$lib/utils/upscale/conditions';
 import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
 function getPanelModelSettings() {
 	const settings = loadUpscalePanelSettings();
@@ -522,15 +522,15 @@ export class ImageLoader {
 			}
 
 			let currentConditionId: string | undefined;
-			if (pageInfo && currentBook) {
+			if (pageInfo && currentBook && imageDataWithHash && imageDataWithHash.blob) {
 				const panelSettings = loadUpscalePanelSettings();
-				const pageMetadata = collectPageMetadata(pageInfo, currentBook.path);
+				// 从 Blob 获取图片分辨率
+				const dimensions = await getImageDimensions(imageDataWithHash.blob);
+				const pageMetadata = collectPageMetadata(pageInfo, currentBook.path, dimensions);
 				const conditionResult = evaluateConditions(pageMetadata, panelSettings.conditionsList);
 				currentConditionId = conditionResult.conditionId ?? undefined;
 				shouldSkipUpscale = conditionResult.action?.skip === true;
-				if (imageDataWithHash) {
-					imageDataWithHash.conditionId = currentConditionId;
-				}
+				imageDataWithHash.conditionId = currentConditionId;
 			}
 
 			// ---- 缓存优先逻辑 ----
@@ -609,13 +609,20 @@ export class ImageLoader {
 
 				// 3. 现场超分（仅在没有任何缓存时）
 				if (!usedCache && imageDataWithHash) {
-					const autoUpscaleEnabled = await getAutoUpscaleEnabled();
-					if (autoUpscaleEnabled) {
-						console.log('内存和磁盘都没有缓存，开始现场超分，页码:', currentPageIndex + 1);
+					// 先检查是否为 GIF，避免重复尝试
+					const { isGifBlob } = await import('./preloadRuntime');
+					if (imageDataWithHash.blob && await isGifBlob(imageDataWithHash.blob)) {
+						console.log('检测到 GIF，跳过现场超分，页码:', currentPageIndex + 1);
+						bookStore.setPageUpscaleStatus(currentPageIndex, 'none');
+					} else {
+						const autoUpscaleEnabled = await getAutoUpscaleEnabled();
+						if (autoUpscaleEnabled) {
+							console.log('内存和磁盘都没有缓存，开始现场超分，页码:', currentPageIndex + 1);
 							await triggerAutoUpscale(imageDataWithHash);
 							this.lastAutoUpscalePageIndex = currentPageIndex;
-					} else {
-						console.log('自动超分开关已关闭，不进行现场超分');
+						} else {
+							console.log('自动超分开关已关闭，不进行现场超分');
+						}
 					}
 				}
 				}
@@ -731,10 +738,27 @@ export class ImageLoader {
 					console.log('预加载已写入核心缓存，index:', targetIndex + 1);
 					
 					if (autoUpscaleEnabled) {
+						// 先检查是否为 GIF，避免重复尝试
+						const blobCacheEntry = this.blobCache.get(targetIndex);
+						if (blobCacheEntry) {
+							const { isGifBlob } = await import('./preloadRuntime');
+							if (await isGifBlob(blobCacheEntry.blob)) {
+								console.log(`第 ${targetIndex + 1} 页是 GIF，跳过预超分`);
+								bookStore.setPageUpscaleStatus(targetIndex, 'none');
+								continue;
+							}
+						}
+						
 						// 评估条件并检查是否应该排除预超分
 						const currentBook = bookStore.currentBook;
 						if (currentBook) {
-							const pageMetadata = collectPageMetadata(pageInfo, currentBook.path);
+							// 从 Blob 获取图片分辨率
+							let dimensions: { width: number; height: number } | null = null;
+							if (blobCacheEntry) {
+								dimensions = await getImageDimensions(blobCacheEntry.blob);
+							}
+							
+							const pageMetadata = collectPageMetadata(pageInfo, currentBook.path, dimensions);
 							const panelSettings = loadUpscalePanelSettings();
 							const conditionResult = evaluateConditions(pageMetadata, panelSettings.conditionsList);
 							

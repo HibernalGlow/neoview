@@ -8,7 +8,8 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { upscaleState, startUpscale, completeUpscale, setUpscaleError } from '$lib/stores/upscale/upscaleState.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
 import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
-import { collectPageMetadata, evaluateConditions } from '$lib/utils/upscale/conditions';
+import { collectPageMetadata, evaluateConditions, getImageDimensions } from '$lib/utils/upscale/conditions';
+import type { UpscaleCondition } from '$lib/components/panels/UpscalePanel';
 import { bookStore } from '$lib/stores/book.svelte';
 
 export interface ImageDataWithHash {
@@ -22,11 +23,13 @@ export interface ImageDataWithHash {
 /**
  * 检测 Blob 是否为 GIF（类型或文件头）
  */
-async function isGifBlob(blob?: Blob | null): Promise<boolean> {
+export async function isGifBlob(blob?: Blob | null): Promise<boolean> {
 	if (!blob) return false;
 	const mime = blob.type?.toLowerCase() || '';
-	if (mime.includes('image/gif')) return true;
-	console.log('检测到 GIF Blob:');
+	if (mime.includes('image/gif')) {
+		console.log('检测到 GIF Blob (通过 MIME type)');
+		return true;
+	}
 
 	if (blob.size < 6) return false;
 
@@ -34,7 +37,11 @@ async function isGifBlob(blob?: Blob | null): Promise<boolean> {
 		const headerBuffer = await blob.slice(0, 6).arrayBuffer();
 		const headerBytes = new Uint8Array(headerBuffer);
 		const signature = String.fromCharCode(...headerBytes);
-		return signature === 'GIF87a' || signature === 'GIF89a';
+		const isGif = signature === 'GIF87a' || signature === 'GIF89a';
+		if (isGif) {
+			console.log('检测到 GIF Blob (通过文件头)');
+		}
+		return isGif;
 	} catch (error) {
 		console.warn('检测 GIF Blob 失败，默认视为非 GIF:', error);
 		return false;
@@ -127,7 +134,7 @@ export function resolveModelSettings(conditionId?: string): SchedulerModelSettin
 	};
 }
 
-function ensureConditionBinding(imageData: ImageDataWithHash): { conditionId?: string; skip: boolean } {
+async function ensureConditionBinding(imageData: ImageDataWithHash): Promise<{ conditionId?: string; skip: boolean }> {
 	const book = bookStore.currentBook;
 	const panelSettings = loadUpscalePanelSettings();
 	const pageIndex = imageData.pageIndex ?? bookStore.currentPageIndex;
@@ -136,24 +143,31 @@ function ensureConditionBinding(imageData: ImageDataWithHash): { conditionId?: s
 		return { conditionId: imageData.conditionId, skip: false };
 	}
 
-	let condition =
-		imageData.conditionId &&
-		panelSettings.conditionsList.find((c) => c.id === imageData.conditionId);
+	let condition: UpscaleCondition | undefined =
+		imageData.conditionId
+			? panelSettings.conditionsList.find((c) => c.id === imageData.conditionId)
+			: undefined;
 
 	if (!condition) {
 		const page = book.pages?.[pageIndex];
 		if (!page) {
 			return { conditionId: undefined, skip: false };
 		}
-		const metadata = collectPageMetadata(page, book.path);
+		// 从 Blob 获取图片分辨率（如果可用）
+		let dimensions: { width: number; height: number } | null = null;
+		if (imageData.blob) {
+			dimensions = await getImageDimensions(imageData.blob);
+		}
+		const metadata = collectPageMetadata(page, book.path, dimensions);
 		const result = evaluateConditions(metadata, panelSettings.conditionsList);
 		imageData.conditionId = result.conditionId ?? undefined;
 		if (result.action?.skip) {
 			return { conditionId: imageData.conditionId, skip: true };
 		}
 		condition =
-			result.conditionId &&
-			panelSettings.conditionsList.find((c) => c.id === result.conditionId);
+			result.conditionId
+				? panelSettings.conditionsList.find((c) => c.id === result.conditionId)
+				: undefined;
 	}
 
 	return {
@@ -225,13 +239,13 @@ export interface PreloadBatchJobInput {
 interface PreloadBatchJobPayload {
 	page_index: number;
 	image_hash: string;
-	condition_id?: string | null;
+	condition_id: string | null;
 	model_name: string;
 	scale: number;
 	tile_size: number;
 	noise_level: number;
-	gpu_id?: number | null;
-	priority?: 'high' | 'normal';
+	gpu_id: number | null;
+	priority: 'high' | 'normal';
 }
 
 export async function enqueuePreloadBatchJobs(
@@ -249,10 +263,11 @@ export async function enqueuePreloadBatchJobs(
 				console.log('批量预超分: 条件要求跳过任务, hash:', job.imageHash, 'conditionId:', job.conditionId);
 				return null;
 			}
+			const conditionId: string | null = job.conditionId ? job.conditionId : null;
 			return {
 				page_index: job.pageIndex,
 				image_hash: job.imageHash,
-				condition_id: job.conditionId ?? null,
+				condition_id: conditionId,
 				model_name: model.modelName,
 				scale: model.scale,
 				tile_size: model.tileSize,
@@ -389,7 +404,7 @@ export async function triggerAutoUpscale(
 			return;
 		}
 
-		const conditionBinding = ensureConditionBinding(imageDataWithHash);
+		const conditionBinding = await ensureConditionBinding(imageDataWithHash);
 		if (conditionBinding.skip) {
 			console.log('条件指定跳过超分，hash:', imageHash, 'conditionId:', conditionBinding.conditionId);
 			bookStore.setPageUpscaleStatus(targetPageIndex, 'none');

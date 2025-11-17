@@ -24,7 +24,7 @@ interface CacheEntry {
 export interface PreloadTaskWithCondition {
 	blob: Blob;
 	hash: string;
-	pageIndex?: number;
+	pageIndex: number;
 	conditionId?: string;
 }
 

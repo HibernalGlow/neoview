@@ -48,6 +48,11 @@ export interface UpscalePanelSettings extends UpscaleSettings {
 	showPanelPreview: boolean;
 	conditionalUpscaleEnabled: boolean;
 	conditionsList: UpscaleCondition[];
+	selectedModel: string;
+	scale: number;
+	tileSize: number;
+	noiseLevel: number;
+	gpuId: number;
 }
 
 export interface UpscalePanelEventDetail {

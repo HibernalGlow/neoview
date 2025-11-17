@@ -7,7 +7,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { loadImage } from '$lib/api/fs';
 import { loadImageFromArchive } from '$lib/api/filesystem';
 import { bookStore } from '$lib/stores/book.svelte';
-import { performanceSettings } from '$lib/settings/settingsManager';
+import { performanceSettings, settingsManager } from '$lib/settings/settingsManager';
 import { 
 	triggerAutoUpscale, 
 	checkUpscaleCache, 
@@ -16,7 +16,6 @@ import {
 	type ImageDataWithHash 
 } from './preloadRuntime';
 import { createPreloadWorker, type PreloadTask, type PreloadTaskResult } from './preloadWorker';
-import type { PreloadTaskWithCondition } from './preloadManager';
 import { upscaleState, startUpscale, updateUpscaleProgress, completeUpscale, setUpscaleError } from '$lib/stores/upscale/upscaleState.svelte';
 import { showSuccessToast } from '$lib/utils/toast';
 import { collectPageMetadata, evaluateConditions } from '$lib/utils/upscale/conditions';
@@ -62,10 +61,7 @@ export interface ImageLoaderOptions {
 	onLoadingStateChange?: (loading: boolean, visible: boolean) => void;
 }
 
-export interface PreloadWorkerResult extends PreloadTaskResult {
-	upscaledImageData?: string;
-	upscaledImageBlob?: Blob;
-}
+export interface PreloadWorkerResult extends PreloadTaskResult {}
 
 export class ImageLoader {
 	private options: ImageLoaderOptions;
@@ -83,6 +79,7 @@ export class ImageLoader {
 	private hashPathIndex = new Map<string, string>();
 	private preloadMemoryCache = new Map<string, { url: string; blob: Blob }>();
 	private pendingPreloadTasks = new Set<string>(); // 用于去重的待处理任务集合
+	private pendingPreloadConditions = new Map<string, string | undefined>();
 	private lastAutoUpscalePageIndex: number | null = null;
 	
 	// 加载状态
@@ -90,6 +87,7 @@ export class ImageLoader {
 	private loadingVisible = false;
 	private loadingTimeout: number | null = null;
 	private isPreloading = false;
+	private upscaleCompleteListener?: EventListener;
 
 	constructor(options: ImageLoaderOptions) {
 		this.options = options;
@@ -98,33 +96,40 @@ export class ImageLoader {
 		this.preloadWorker = createPreloadWorker<PreloadWorkerResult>({
 			concurrency: () => options.performanceMaxThreads,
 			runTask: async (task: PreloadTask) => {
-				// 调用已有的 triggerAutoUpscale 进行预超分
-				return await triggerAutoUpscale(task, true);
+				const conditionId = this.pendingPreloadConditions.get(task.hash);
+				await triggerAutoUpscale(
+					{
+						blob: task.blob,
+						hash: task.hash,
+						pageIndex: task.pageIndex,
+						conditionId
+					},
+					true
+				);
+				return undefined;
 			},
-			onTaskSuccess: (task: PreloadTask, result: PreloadWorkerResult | undefined) => {
-				if (result && result.upscaledImageBlob && result.upscaledImageData) {
-					// 把返回的 data/blob 写入 preloadMemoryCache
-					this.preloadMemoryCache.set(task.hash, { url: result.upscaledImageData, blob: result.upscaledImageBlob });
-					this.enforcePreloadMemoryLimit();
-					
-					// 标记预超分进度
-					if (typeof task.pageIndex === 'number') {
-						bookStore.setPageUpscaleStatus(task.pageIndex, 'preupscaled');
-						this.updatePreUpscaleProgress();
-					}
-					
-					// 从待处理集合中移除
-					this.pendingPreloadTasks.delete(task.hash);
-					
-					console.log('预加载任务成功，已写入缓存，hash:', task.hash);
-				}
+			onTaskSuccess: (task: PreloadTask) => {
+				this.pendingPreloadTasks.delete(task.hash);
+				this.pendingPreloadConditions.delete(task.hash);
 			},
 			onTaskFailure: (task: PreloadTask, error: unknown) => {
 				console.error('预加载任务失败，hash:', task.hash, error);
-				// 从待处理集合中移除
 				this.pendingPreloadTasks.delete(task.hash);
+				this.pendingPreloadConditions.delete(task.hash);
 			}
 		});
+
+		if (typeof window !== 'undefined') {
+			this.upscaleCompleteListener = ((event: CustomEvent) => {
+				const detail = event.detail;
+				const hash: string | undefined = detail?.originalImageHash;
+				if (hash) {
+					this.pendingPreloadTasks.delete(hash);
+				}
+				this.updatePreUpscaleProgress();
+			}) as EventListener;
+			window.addEventListener('upscale-complete', this.upscaleCompleteListener);
+		}
 	}
 
 	/**
@@ -362,7 +367,8 @@ export class ImageLoader {
 	 * 限制 Blob 缓存
 	 */
 	private enforceBlobCacheLimit(): void {
-		const limit = performanceSettings.cache_memory_size * 1024 * 1024; // MB to bytes
+		const limit =
+			settingsManager.getSettings().performance.cacheMemorySize * 1024 * 1024; // MB to bytes
 		let totalSize = 0;
 		const entries = Array.from(this.blobCache.entries());
 		
@@ -484,7 +490,7 @@ export class ImageLoader {
 		) {
 			try {
 				await invoke('cancel_upscale_jobs_for_page', {
-					bookPath: currentBook.path ?? null,
+					bookPath: currentBook.path ?? undefined,
 					pageIndex: this.lastAutoUpscalePageIndex
 				});
 				console.log(
@@ -500,10 +506,10 @@ export class ImageLoader {
 
 		this.loading = true;
 		this.loadingVisible = false;
-		this.options.onError?.(null);
+		this.options.onError?.('');
 
 		// 设置1秒后显示loading动画
-		this.loadingTimeout = setTimeout(() => {
+		this.loadingTimeout = window.setTimeout(() => {
 			if (this.loading) {
 				this.loadingVisible = true;
 				this.options.onLoadingStateChange?.(this.loading, this.loadingVisible);
@@ -519,8 +525,8 @@ export class ImageLoader {
 			const objectUrl = await this.getObjectUrl(currentPageIndex);
 			
 			// 双页模式：加载下一页
-			let bitmap2: ImageBitmap | null = null;
-			let objectUrl2: string | null = null;
+			let bitmap2: ImageBitmap | undefined;
+			let objectUrl2: string | undefined;
 			
 			if (this.options.viewMode === 'double' && bookStore.canNextPage) {
 				const nextPageIndex = currentPageIndex + 1;
@@ -624,8 +630,8 @@ export class ImageLoader {
 			}
 
 			// 调用外部回调 - 传递新的数据格式
-			this.options.onImageLoaded?.(objectUrl, objectUrl2);
-			this.options.onImageBitmapReady?.(bitmap, bitmap2);
+			this.options.onImageLoaded?.(objectUrl, objectUrl2 ?? undefined);
+			this.options.onImageBitmapReady?.(bitmap, bitmap2 ?? undefined);
 
 			// ---- 无论是否 usedCache，都进行预超分队列调度 ----
 			setTimeout(() => {
@@ -756,12 +762,9 @@ export class ImageLoader {
 							// 获取 Blob 用于超分
 							const blob = await this.getBlob(targetIndex);
 							// 使用新的preloadWorker API，携带条件ID
-							const task: PreloadTaskWithCondition = { 
-								blob, 
-								hash, 
-								pageIndex: targetIndex,
-								conditionId: conditionResult.conditionId || undefined
-							};
+							const conditionId = conditionResult.conditionId || undefined;
+							this.pendingPreloadConditions.set(hash, conditionId);
+							const task = { blob, hash, pageIndex: targetIndex };
 							this.preloadWorker.enqueue(task);
 							console.log('已加入preloadWorker队列，hash:', hash, 'pageIndex:', targetIndex, 'conditionId:', conditionResult.conditionId);
 						}
@@ -821,6 +824,7 @@ export class ImageLoader {
 		this.md5Cache = new Map();
 		this.isPreloading = false;
 		this.lastAutoUpscalePageIndex = null;
+		this.pendingPreloadConditions.clear();
 		bookStore.setUpscaledImage(null);
 		bookStore.setUpscaledImageBlob(null);
 		this.preloadWorker.clear();

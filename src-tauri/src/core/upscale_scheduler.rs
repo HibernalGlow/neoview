@@ -212,10 +212,7 @@ impl UpscaleSchedulerInner {
     }
 
     async fn emit_event(&self, payload: UpscaleJobEventPayload) {
-        if let Err(err) = self
-            .app_handle
-            .emit("upscale-job-event", payload.clone())
-        {
+        if let Err(err) = self.app_handle.emit("upscale-job-event", payload.clone()) {
             eprintln!("emit upscale-job-event failed: {}", err);
         }
     }

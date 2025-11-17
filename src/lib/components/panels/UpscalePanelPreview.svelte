@@ -4,52 +4,70 @@
 	let {
 		upscaledImageUrl = null,
 		originalImageUrl = null,
-		isProcessing = false
+	isProcessing = false,
+	showOriginal = false,
+	showUpscaled = false
 	}: {
 		upscaledImageUrl?: string | null;
 		originalImageUrl?: string | null;
-		isProcessing?: boolean;
+	isProcessing?: boolean;
+	showOriginal?: boolean;
+	showUpscaled?: boolean;
 	} = $props();
 </script>
 
-{#if originalImageUrl}
-	<div class="section">
-		<div class="section-title">
-			<ImageIcon class="w-4 h-4" />
-			<span>原图预览</span>
-			{#if isProcessing && !upscaledImageUrl}
-				<span class="badge processing">
-					<Loader2 class="w-3 h-3 animate-spin" />
-					等待超分...
-				</span>
-			{/if}
+{#if showOriginal}
+	{#if originalImageUrl}
+		<div class="section">
+			<div class="section-title">
+				<ImageIcon class="w-4 h-4" />
+				<span>原图预览</span>
+				{#if isProcessing && !upscaledImageUrl && showUpscaled}
+					<span class="badge processing">
+						<Loader2 class="w-3 h-3 animate-spin" />
+						等待超分...
+					</span>
+				{/if}
+			</div>
+			<div class="preview-container">
+				<img src={originalImageUrl} alt="原图" class="preview-image" />
+			</div>
 		</div>
-		<div class="preview-container">
-			<img src={originalImageUrl} alt="原图" class="preview-image" />
+	{:else}
+		<div class="section empty">
+			<div class="section-title">
+				<ImageIcon class="w-4 h-4" />
+				<span>原图预览</span>
+			</div>
+			<div class="empty-state">
+				<p>暂无原图数据，等待页面加载...</p>
+			</div>
 		</div>
-	</div>
-{:else}
-	<div class="section empty">
-		<div class="section-title">
-			<ImageIcon class="w-4 h-4" />
-			<span>原图预览</span>
-		</div>
-		<div class="empty-state">
-			<p>暂无原图数据，等待页面加载...</p>
-		</div>
-	</div>
+	{/if}
 {/if}
 
-{#if upscaledImageUrl}
-	<div class="section">
-		<div class="section-title">
-			<CheckCircle class="w-4 h-4 text-green-500" />
-			<span>超分结果</span>
+{#if showUpscaled}
+	{#if upscaledImageUrl}
+		<div class="section">
+			<div class="section-title">
+				<CheckCircle class="w-4 h-4 text-green-500" />
+				<span>超分结果</span>
+			</div>
+			<div class="preview-container">
+				<img src={upscaledImageUrl} alt="超分结果" class="preview-image" />
+			</div>
 		</div>
-		<div class="preview-container">
-			<img src={upscaledImageUrl} alt="超分结果" class="preview-image" />
+	{:else}
+		<div class="section empty">
+			<div class="section-title">
+				<CheckCircle class="w-4 h-4" />
+				<span>超分结果</span>
+			</div>
+			<div class="empty-state">
+				<p>尚未生成超分结果。</p>
+			</div>
 		</div>
-	</div>
+	{/if}
 {/if}
 
 <style>

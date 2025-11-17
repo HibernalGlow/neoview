@@ -6,6 +6,8 @@
 	 */
 import { Sparkles, AlertCircle } from '@lucide/svelte';
 import { onMount, onDestroy, createEventDispatcher } from 'svelte';
+import { Switch } from '$lib/components/ui/switch';
+import { Label } from '$lib/components/ui/label';
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 	// Toast 已改为控制台输出，避免右上角弹窗干扰
 	import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
@@ -132,6 +134,8 @@ let currentImageHash = $state<string | null>(null);
 let originalPreviewUrl = $state('');
 let originalPreviewObjectUrl: string | null = null;
 let upscaledPreviewObjectUrl: string | null = null;
+let showOriginalPreview = $state(false);
+let showUpscaledPreview = $state(false);
 
 	// 缓存统计
 	let cacheStats = $state({
@@ -470,8 +474,18 @@ let upscaledPreviewObjectUrl: string | null = null;
 	}
 
 	$effect(() => {
-		if (!originalPreviewUrl && currentImagePath) {
-			void updateOriginalPreview();
+		if (showOriginalPreview) {
+			if (!originalPreviewUrl && currentImagePath) {
+				void updateOriginalPreview();
+			}
+		} else if (originalPreviewObjectUrl) {
+			try {
+				URL.revokeObjectURL(originalPreviewObjectUrl);
+			} catch (error) {
+				console.warn('释放原图预览 URL 失败:', error);
+			}
+			originalPreviewObjectUrl = null;
+			originalPreviewUrl = '';
 		}
 	});
 
@@ -994,12 +1008,31 @@ let upscaledPreviewObjectUrl: string | null = null;
 		on:clear={cleanupCache}
 	/>
 
+	<!-- 预览控制 -->
+	<div class="rounded-md border border-border/70 p-4 space-y-3">
+		<div class="text-xs text-muted-foreground">预览显示（默认关闭以节约性能）</div>
+		<div class="flex flex-wrap gap-6">
+			<label class="flex items-center gap-2 text-sm">
+				<Switch bind:checked={showOriginalPreview} />
+				<span>显示原图预览</span>
+			</label>
+			<label class="flex items-center gap-2 text-sm">
+				<Switch bind:checked={showUpscaledPreview} />
+				<span>显示超分结果预览</span>
+			</label>
+		</div>
+	</div>
+
 	<!-- 预览区域 -->
-	<UpscalePanelPreview
-		upscaledImageUrl={upscaledImageUrl}
-		originalImageUrl={originalPreviewUrl}
-		isProcessing={isProcessing}
-	/>
+	{#if showOriginalPreview || showUpscaledPreview}
+		<UpscalePanelPreview
+			upscaledImageUrl={upscaledImageUrl}
+			originalImageUrl={originalPreviewUrl}
+			isProcessing={isProcessing}
+			showOriginal={showOriginalPreview}
+			showUpscaled={showUpscaledPreview}
+		/>
+	{/if}
 </div>
 
 <style>

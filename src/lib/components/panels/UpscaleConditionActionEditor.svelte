@@ -4,29 +4,29 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import { Switch } from '$lib/components/ui/switch';
-	import type { UpscaleCondition } from './UpscalePanel';
+import type { UpscaleCondition } from './UpscalePanel';
 
-	interface Props {
-		condition: UpscaleCondition;
-		availableModels: string[];
-		modelLabels: Record<string, string>;
-		gpuOptions: { value: number; label: string }[];
-		tileSizeOptions: { value: number; label: string }[];
-		noiseLevelOptions: { value: number; label: string }[];
-	}
+export interface UpscaleConditionActionEditorProps {
+	condition: UpscaleCondition;
+	availableModels?: string[];
+	modelLabels?: Record<string, string>;
+	gpuOptions?: { value: number; label: string }[];
+	tileSizeOptions?: { value: number; label: string }[];
+	noiseLevelOptions?: { value: number; label: string }[];
+}
 
-	const dispatch = createEventDispatcher<{
-		apply: { id: string; action: UpscaleCondition['action'] };
-	}>();
+const dispatch = createEventDispatcher<{
+	apply: { id: string; action: UpscaleCondition['action'] };
+}>();
 
-	let {
-		condition,
-		availableModels = [],
-		modelLabels = {},
-		gpuOptions = [],
-		tileSizeOptions = [],
-		noiseLevelOptions = []
-	}: Props = $props();
+let {
+	condition,
+	availableModels = [],
+	modelLabels = {},
+	gpuOptions = [],
+	tileSizeOptions = [],
+	noiseLevelOptions = []
+}: UpscaleConditionActionEditorProps = $props();
 
 	let selectedModel = $state(condition.action.model);
 	let scale = $state(condition.action.scale);

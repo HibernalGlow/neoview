@@ -8,7 +8,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Switch } from '$lib/components/ui/switch';
-	import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '$lib/components/ui/select';
+	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select';
 	import { Slider } from '$lib/components/ui/slider';
 	import { Tabs, TabsContent, TabsList, TabsTrigger } from '$lib/components/ui/tabs';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
@@ -66,7 +66,10 @@
 	let activeTab = $state(conditions[0]?.id || '');
 
 	const presetOptions = CONDITION_PRESET_OPTIONS;
-
+	const dimensionModeOptions = [
+		{ value: 'and', label: '同时满足' },
+		{ value: 'or', label: '任一满足' }
+	];
 	let importDialogOpen = $state(false);
 	let importJson = $state('');
 
@@ -247,6 +250,14 @@
 		}
 	});
 
+	function parseNumericInput(value: string): number | undefined {
+		if (value === '' || value === null || value === undefined) {
+			return undefined;
+		}
+		const parsed = Number(value);
+		return Number.isNaN(parsed) ? undefined : parsed;
+	}
+
 	function handleExportConditions() {
 		const payload = JSON.stringify(conditions, null, 2);
 		if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -307,7 +318,7 @@
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
+				<DropdownMenuTrigger>
 					<Button size="sm">
 						<Plus class="w-4 h-4 mr-1" />
 						添加条件
@@ -316,7 +327,7 @@
 				<DropdownMenuContent class="w-72">
 					<DropdownMenuLabel>快速预设</DropdownMenuLabel>
 					{#each presetOptions as preset}
-						<DropdownMenuItem on:click={() => addConditionFromPreset(preset.key as ConditionPresetKey)}>
+						<DropdownMenuItem onclick={() => addConditionFromPreset(preset.key as ConditionPresetKey)}>
 							<div class="space-y-1">
 								<p class="text-sm font-medium">{preset.name}</p>
 								<p class="text-xs text-muted-foreground">{preset.description}</p>
@@ -324,7 +335,7 @@
 						</DropdownMenuItem>
 					{/each}
 					<DropdownMenuSeparator />
-					<DropdownMenuItem on:click={addBlankCondition}>
+					<DropdownMenuItem onclick={addBlankCondition}>
 						<Plus class="w-3.5 h-3.5 mr-2" />
 						<span>空白条件</span>
 					</DropdownMenuItem>
@@ -410,20 +421,24 @@
 								<!-- 基础设置 -->
 								<div class="grid grid-cols-2 gap-4">
 									<div class="space-y-2">
-										<Label htmlFor={`name-${condition.id}`}>条件名称</Label>
+										<Label for={`name-${condition.id}`}>条件名称</Label>
 										<Input
 											id={`name-${condition.id}`}
 											value={condition.name}
-											onchange={(e) => updateCondition(condition.id, { name: e.target.value })}
+											onchange={(event: Event & { currentTarget: HTMLInputElement }) =>
+												updateCondition(condition.id, {
+													name: event.currentTarget.value
+												})}
 										/>
 									</div>
 									<div class="flex items-center space-x-2 pt-6">
 										<Switch
 											id={`enabled-${condition.id}`}
 											checked={condition.enabled}
-											onchange={(checked) => updateCondition(condition.id, { enabled: checked })}
+											onclick={() =>
+												updateCondition(condition.id, { enabled: !condition.enabled })}
 										/>
-										<Label htmlFor={`enabled-${condition.id}`}>启用此条件</Label>
+										<Label for={`enabled-${condition.id}`}>启用此条件</Label>
 									</div>
 								</div>
 
@@ -432,82 +447,100 @@
 									<h4 class="text-sm font-semibold">匹配规则</h4>
 									<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 										<div class="space-y-2">
-											<Label htmlFor={`minWidth-${condition.id}`}>最小宽度</Label>
+											<Label for={`minWidth-${condition.id}`}>最小宽度</Label>
 											<Input
 												id={`minWidth-${condition.id}`}
 												type="number"
 												value={condition.match.minWidth || ''}
-												onchange={(e) => updateMatch(condition.id, { minWidth: Number(e.target.value) || undefined })}
+												onchange={(event: Event & { currentTarget: HTMLInputElement }) =>
+													updateMatch(condition.id, {
+														minWidth: parseNumericInput(event.currentTarget.value)
+													})}
 												placeholder="不限制"
 											/>
 										</div>
 										<div class="space-y-2">
-											<Label htmlFor={`minHeight-${condition.id}`}>最小高度</Label>
+											<Label for={`minHeight-${condition.id}`}>最小高度</Label>
 											<Input
 												id={`minHeight-${condition.id}`}
 												type="number"
 												value={condition.match.minHeight || ''}
-												onchange={(e) => updateMatch(condition.id, { minHeight: Number(e.target.value) || undefined })}
+												onchange={(event: Event & { currentTarget: HTMLInputElement }) =>
+													updateMatch(condition.id, {
+														minHeight: parseNumericInput(event.currentTarget.value)
+													})}
 												placeholder="不限制"
 											/>
 										</div>
 										<div class="space-y-2">
-											<Label htmlFor={`maxWidth-${condition.id}`}>最大宽度</Label>
+											<Label for={`maxWidth-${condition.id}`}>最大宽度</Label>
 											<Input
 												id={`maxWidth-${condition.id}`}
 												type="number"
 												value={condition.match.maxWidth || ''}
-												onchange={(e) => updateMatch(condition.id, { maxWidth: Number(e.target.value) || undefined })}
+												onchange={(event: Event & { currentTarget: HTMLInputElement }) =>
+													updateMatch(condition.id, {
+														maxWidth: parseNumericInput(event.currentTarget.value)
+													})}
 												placeholder="不限制"
 											/>
 										</div>
 										<div class="space-y-2">
-											<Label htmlFor={`maxHeight-${condition.id}`}>最大高度</Label>
+											<Label for={`maxHeight-${condition.id}`}>最大高度</Label>
 											<Input
 												id={`maxHeight-${condition.id}`}
 												type="number"
 												value={condition.match.maxHeight || ''}
-												onchange={(e) => updateMatch(condition.id, { maxHeight: Number(e.target.value) || undefined })}
+												onchange={(event: Event & { currentTarget: HTMLInputElement }) =>
+													updateMatch(condition.id, {
+														maxHeight: parseNumericInput(event.currentTarget.value)
+													})}
 												placeholder="不限制"
 											/>
 										</div>
 									</div>
 
 									<div class="space-y-2">
-										<Label htmlFor={`dimensionMode-${condition.id}`}>宽高判定逻辑</Label>
-										<Select
-											value={condition.match.dimensionMode || 'and'}
-											onchange={(value) => updateMatch(condition.id, { dimensionMode: value as 'and' | 'or' })}
-										>
-											<SelectTrigger id={`dimensionMode-${condition.id}`}>
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												<SelectItem value="and">同时满足（AND）</SelectItem>
-												<SelectItem value="or">任一满足（OR）</SelectItem>
-											</SelectContent>
-										</Select>
+										<Label>宽高判定逻辑</Label>
+										<div class="flex gap-2">
+											{#each dimensionModeOptions as option}
+												<Button
+													type="button"
+													size="sm"
+													variant={condition.match.dimensionMode === option.value ? 'default' : 'outline'}
+													onclick={() => updateMatch(condition.id, { dimensionMode: option.value as 'and' | 'or' })}
+												>
+													{option.label}
+												</Button>
+											{/each}
+										</div>
 										<p class="text-xs text-muted-foreground">
 											例如基础 A 预设使用 OR，以宽度或高度任一超出即触发。
 										</p>
 									</div>
 
 									<div class="space-y-2">
-										<Label htmlFor={`regexBookPath-${condition.id}`}>书籍路径正则</Label>
+										<Label for={`regexBookPath-${condition.id}`}>书籍路径正则</Label>
 										<Input
 											id={`regexBookPath-${condition.id}`}
 											value={condition.match.regexBookPath || ''}
-											onchange={(e) => updateMatch(condition.id, { regexBookPath: e.target.value || undefined })}
+											onchange={(event: Event & { currentTarget: HTMLInputElement }) =>
+												updateMatch(condition.id, {
+													regexBookPath: event.currentTarget.value || undefined
+												})}
 											placeholder="例如: .*manga.*"
 										/>
 									</div>
 
 									<div class="space-y-2">
-										<Label htmlFor={`regexImagePath-${condition.id}`}>图片路径正则</Label>
+										<Label for={`regexImagePath-${condition.id}`}>图片路径正则</Label>
 										<Input
 											id={`regexImagePath-${condition.id}`}
 											value={condition.match.regexImagePath || ''}
-											onchange={(e) => updateMatch(condition.id, { regexImagePath: e.target.value || undefined })}
+											onchange={(event: Event & { currentTarget: HTMLInputElement }) =>
+												updateMatch(condition.id, {
+													regexImagePath: event.currentTarget.value || undefined
+												})}
 											placeholder="例如: .*\\.(jpg|png)$"
 										/>
 									</div>
@@ -516,9 +549,12 @@
 										<Switch
 											id={`excludeFromPreload-${condition.id}`}
 											checked={condition.match.excludeFromPreload || false}
-											onchange={(checked) => updateMatch(condition.id, { excludeFromPreload: checked })}
+											onclick={() =>
+												updateMatch(condition.id, {
+													excludeFromPreload: !condition.match.excludeFromPreload
+												})}
 										/>
-										<Label htmlFor={`excludeFromPreload-${condition.id}`}>排除预超分队列</Label>
+										<Label for={`excludeFromPreload-${condition.id}`}>排除预超分队列</Label>
 									</div>
 
 									<!-- 自定义元数据 -->
@@ -538,36 +574,40 @@
 															<Label class="text-xs">键名</Label>
 															<Input
 																value={key}
-																onchange={(e) => {
+																onchange={(event: Event & { currentTarget: HTMLInputElement }) => {
 																	const { [key]: removed, ...rest } = condition.match.metadata || {};
-																	const newMetadata = { ...rest, [e.target.value]: expression };
+																	const newMetadata = { ...rest, [event.currentTarget.value]: expression };
 																	updateMatch(condition.id, { metadata: newMetadata });
 																}}
-																size="sm"
 															/>
 														</div>
 														<div class="space-y-1">
 															<Label class="text-xs">操作符</Label>
-															<Select
+															<NativeSelect
 																value={expression.operator}
-																onchange={(value) => updateMetadataExpression(condition.id, key, { ...expression, operator: value })}
+																onchange={(event: Event & { currentTarget: HTMLSelectElement }) =>
+																	updateMetadataExpression(condition.id, key, {
+																		...expression,
+																		operator: event.currentTarget.value as ConditionExpression['operator']
+																	})}
+																class="w-full"
 															>
-																<SelectTrigger size="sm">
-																	<SelectValue />
-																</SelectTrigger>
-																<SelectContent>
-																	{#each operators as op}
-																		<SelectItem value={op.value}>{op.label}</SelectItem>
-																	{/each}
-																</SelectContent>
-															</Select>
+																{#each operators as op}
+																	<NativeSelectOption value={op.value}>
+																		{op.label}
+																	</NativeSelectOption>
+																{/each}
+															</NativeSelect>
 														</div>
 														<div class="space-y-1">
 															<Label class="text-xs">值</Label>
 															<Input
 																value={String(expression.value)}
-																onchange={(e) => updateMetadataExpression(condition.id, key, { ...expression, value: e.target.value })}
-																size="sm"
+																onchange={(event: Event & { currentTarget: HTMLInputElement }) =>
+																	updateMetadataExpression(condition.id, key, {
+																		...expression,
+																		value: event.currentTarget.value
+																	})}
 															/>
 														</div>
 														<Button
@@ -636,7 +676,7 @@
 			class="h-64 w-full resize-none rounded-md border border-border bg-background p-3 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-ring"
 			bind:value={importJson}
 			placeholder="[&#123; 'name': '条件A', ... &#125;]"
-		/>
+		></textarea>
 		<DialogFooter class="flex gap-2">
 			<Button variant="ghost" onclick={() => (importDialogOpen = false)}>取消</Button>
 			<Button onclick={handleImportConfirm}>导入</Button>

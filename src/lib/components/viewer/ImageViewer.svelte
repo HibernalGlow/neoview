@@ -32,14 +32,15 @@
 
 	// 鼠标光标隐藏相关
 	let cursorVisible = $state(true);
-	let hideCursorTimeout: number | null = null;
+let hideCursorTimeout: ReturnType<typeof window.setTimeout> | null = null;
 	let lastMousePosition = $state({ x: 0, y: 0 });
 	let settings = $state(settingsManager.getSettings());
 
 	// 对比模式状态
-	let comparisonVisible = $state(false);
-	let originalImageDataForComparison = $state<string>('');
-	let upscaledImageDataForComparison = $state<string>('');
+let comparisonVisible = $state(false);
+let originalImageDataForComparison = $state<string>('');
+let upscaledImageDataForComparison = $state<string>('');
+let derivedUpscaledUrl = $state<string | null>(null);
 
 	// 注意：progressColor 和 progressBlinking 现在由 ImageViewerProgressBar 内部管理
 
@@ -56,7 +57,7 @@
 	let loading = $state(false);
 	let loadingVisible = $state(false); // 控制loading动画的可见性
 	let error = $state<string | null>(null);
-	let loadingTimeout: number | null = null; // 延迟显示loading的定时器
+let loadingTimeout: ReturnType<typeof window.setTimeout> | null = null; // 延迟显示loading的定时器
 	
 // 预超分进度管理
 let preUpscaleProgress = $state(0); // 预超分进度 (0-100)
@@ -160,13 +161,19 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 	// 初始化预加载管理器
 	onMount(() => {
 		const panelSettings = loadUpscalePanelSettings();
+		const initialPreloadPages =
+			(panelSettings as { preloadPages?: number }).preloadPages ??
+			performanceSettings.preLoadSize;
+		const initialMaxThreads =
+			(panelSettings as { backgroundConcurrency?: number }).backgroundConcurrency ??
+			performanceSettings.maxThreads;
 
 		preloadManager = createPreloadManager({
-			initialPreloadPages: panelSettings.preloadPages,
-			initialMaxThreads: panelSettings.backgroundConcurrency,
+			initialPreloadPages,
+			initialMaxThreads,
 			onImageLoaded: (objectUrl, objectUrl2) => {
-				imageData = objectUrl;
-				imageData2 = objectUrl2;
+				imageData = objectUrl ?? null;
+				imageData2 = objectUrl2 ?? null;
 			},
 			onImageBitmapReady: async (bitmap, bitmap2) => {
 				// 检查当前页是否已经是超分完成状态
@@ -178,9 +185,8 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 					console.log('当前页已超分完成，跳过原图 bitmap 更新');
 					return;
 				}
-				
-				imageBitmap = bitmap;
-				imageBitmap2 = bitmap2;
+				imageBitmap = bitmap ?? null;
+				imageBitmap2 = bitmap2 ?? null;
 				void updateInfoPanelForCurrentPage(bitmap);
 				if (bitmap) {
 					try {
@@ -332,7 +338,8 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 			},
 			onComparisonModeChanged: async (detail) => {
 				const { enabled } = detail;
-				if (enabled && imageBitmap && bookStore.upscaledImageData) {
+				const upscaledSource = derivedUpscaledUrl || bookStore.upscaledImageData;
+				if (enabled && imageBitmap && upscaledSource) {
 					comparisonVisible = true;
 					try {
 						originalImageDataForComparison = await bitmapToDataURL(imageBitmap);
@@ -340,7 +347,7 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 						console.error('对比模式：转换 ImageBitmap 为 DataURL 失败:', error);
 						originalImageDataForComparison = '';
 					}
-					upscaledImageDataForComparison = bookStore.upscaledImageData;
+					upscaledImageDataForComparison = upscaledSource;
 				} else {
 					comparisonVisible = false;
 				}
@@ -390,6 +397,10 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 		if ((window as { preloadManager?: typeof preloadManager }).preloadManager === preloadManager) {
 			delete (window as { preloadManager?: typeof preloadManager }).preloadManager;
 		}
+		if (derivedUpscaledUrl) {
+			URL.revokeObjectURL(derivedUpscaledUrl);
+			derivedUpscaledUrl = null;
+		}
 	});
 
 	// 监听当前页面变化
@@ -410,7 +421,24 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 	// 书籍切换现在由 PreloadManager 内部的 setupBookChangeListener 处理
 	// 删除了会导致缓存被清空的 $effect
 
-	
+	// 根据 Blob 生成独立的 object URL，避免复用已被释放的 URL
+	$effect(() => {
+		const blob = bookStore.upscaledImageBlob;
+		if (blob) {
+			try {
+				const newUrl = URL.createObjectURL(blob);
+				if (derivedUpscaledUrl && derivedUpscaledUrl !== newUrl) {
+					URL.revokeObjectURL(derivedUpscaledUrl);
+				}
+				derivedUpscaledUrl = newUrl;
+			} catch (error) {
+				console.warn('创建超分 object URL 失败:', error);
+			}
+		} else if (derivedUpscaledUrl) {
+			URL.revokeObjectURL(derivedUpscaledUrl);
+			derivedUpscaledUrl = null;
+		}
+	});
 
 	// 鼠标光标隐藏功能
 	function showCursor() {
@@ -648,7 +676,7 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 				imageData2={imageData2}
 				imageBitmap={imageBitmap}
 				imageBitmap2={imageBitmap2}
-				upscaledImageData={bookStore.upscaledImageData}
+				upscaledImageData={derivedUpscaledUrl || bookStore.upscaledImageData}
 				viewMode={$viewMode as 'single' | 'double' | 'panorama'}
 				zoomLevel={$zoomLevel}
 				rotationAngle={$rotationAngle}
@@ -659,7 +687,7 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 	<!-- 对比模式查看器 -->
 	<ComparisonViewer
 		originalImageData={originalImageDataForComparison}
-		upscaledImageData={upscaledImageDataForComparison}
+		upscaledImageData={derivedUpscaledUrl || upscaledImageDataForComparison}
 		isVisible={comparisonVisible}
 		onClose={closeComparison}
 	/>

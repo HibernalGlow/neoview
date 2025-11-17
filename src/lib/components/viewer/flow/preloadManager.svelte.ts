@@ -184,15 +184,12 @@ export class PreloadManager {
 					});
 				}
 				
-				// 清理内存缓存
-				this.imageLoader.getPreloadMemoryCache().clear();
-				
 				// 重置预超分进度
 				this.resetPreUpscaleProgress();
 				this.preUpscaledPages.clear();
 				
-				// 重置图片加载器的缓存
-				this.imageLoader.cleanup();
+				// 重置图片加载器（保留可跨书复用的超分缓存）
+				this.imageLoader.resetForBookChange({ preservePreloadCache: true });
 			}
 			
 			lastBookPath = currentBookPath;

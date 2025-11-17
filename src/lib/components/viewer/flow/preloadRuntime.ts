@@ -138,20 +138,20 @@ async function submitSchedulerJob(input: SchedulerJobInput): Promise<string | un
 	try {
 		const jobId = await invoke<string>('enqueue_upscale_job', {
 			job: {
-				bookId: book.path ?? null,
-				bookPath: book.path ?? null,
-				pageIndex,
-				imageHash: hash,
-				imageData: imageDataArray,
+				book_id: book.path ?? null,
+				book_path: book.path ?? null,
+				page_index: pageIndex,
+				image_hash: hash,
+				image_data: imageDataArray,
 				priority,
 				origin,
-				conditionId,
-				modelName: modelSettings.modelName,
+				condition_id: conditionId ?? null,
+				model_name: modelSettings.modelName,
 				scale: modelSettings.scale,
-				tileSize: modelSettings.tileSize,
-				noiseLevel: modelSettings.noiseLevel,
-				gpuId: modelSettings.gpuId ?? null,
-				allowCache: true,
+				tile_size: modelSettings.tileSize,
+				noise_level: modelSettings.noiseLevel,
+				gpu_id: modelSettings.gpuId ?? null,
+				allow_cache: true,
 				background
 			}
 		});
@@ -164,7 +164,9 @@ async function submitSchedulerJob(input: SchedulerJobInput): Promise<string | un
 
 function convertResultToBlob(resultData: number[] | Uint8Array): { blob: Blob; url: string } {
 	const uint8 = resultData instanceof Uint8Array ? resultData : Uint8Array.from(resultData);
-	const blob = new Blob([uint8], { type: 'image/webp' });
+	const safeBuffer = new ArrayBuffer(uint8.byteLength);
+	new Uint8Array(safeBuffer).set(uint8);
+	const blob = new Blob([safeBuffer], { type: 'image/webp' });
 	const url = URL.createObjectURL(blob);
 	return { blob, url };
 }

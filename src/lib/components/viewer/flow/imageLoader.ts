@@ -791,9 +791,11 @@ export class ImageLoader {
 	}
 
 	/**
-	 * 清理预加载缓存（书籍切换时调用）
+	 * 重置状态（用于书籍切换）
 	 */
-	cleanup(): void {
+	resetForBookChange(options: { preservePreloadCache?: boolean } = {}): void {
+		const { preservePreloadCache = true } = options;
+		
 		// 清理所有缓存
 		for (const [, item] of this.blobCache) {
 			URL.revokeObjectURL(item.url);
@@ -807,20 +809,32 @@ export class ImageLoader {
 		
 		this.thumbnailCache.clear();
 		
-		// 清理超分内存缓存（重要：防止旧书的超分结果匹配到新书）
-		this.preloadMemoryCache.clear();
+		// 根据需求决定是否保留超分内存缓存（允许跨书复用）
+		if (!preservePreloadCache) {
+			for (const [, item] of this.preloadMemoryCache) {
+				URL.revokeObjectURL(item.url);
+			}
+			this.preloadMemoryCache.clear();
+		}
 		
 		// 清理其他状态
 		this.md5Cache = new Map();
 		this.isPreloading = false;
 		this.lastAutoUpscalePageIndex = null;
+		bookStore.setUpscaledImage(null);
+		bookStore.setUpscaledImageBlob(null);
+		this.resetPreUpscaleProgress();
+	}
+
+	/**
+	 * 清理所有资源（组件销毁时调用）
+	 */
+	cleanup(): void {
+		this.resetForBookChange({ preservePreloadCache: false });
 		if (typeof window !== 'undefined' && this.upscaleCompleteListener) {
 			window.removeEventListener('upscale-complete', this.upscaleCompleteListener);
 			this.upscaleCompleteListener = undefined;
 		}
-		bookStore.setUpscaledImage(null);
-		bookStore.setUpscaledImageBlob(null);
-		this.resetPreUpscaleProgress();
 	}
 
 	/**

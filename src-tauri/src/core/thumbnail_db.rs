@@ -2,10 +2,10 @@
 //! 缩略图数据库模块 - 参考 NeeView 的实现
 //! 使用 SQLite 存储 webp 格式的缩略图 blob
 
+use chrono::{Duration, Local};
 use rusqlite::{Connection, params, Result as SqliteResult};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 const DB_FORMAT_VERSION: &str = "2.1"; // 添加 category 字段
 
@@ -179,6 +179,9 @@ impl ThumbnailDb {
             [],
         )?;
 
+        // 确保 date 字段为人类可读的字符串
+        Self::ensure_human_readable_dates(conn)?;
+
         // category 字段的添加已在版本检查中处理，这里不需要重复
 
         // 创建索引以提高查询性能
@@ -191,6 +194,17 @@ impl ThumbnailDb {
             [],
         )?;
 
+        Ok(())
+    }
+
+    /// 将 date 字段转换为人类可读的字符串格式（仅转换数值类型的数据）
+    fn ensure_human_readable_dates(conn: &Connection) -> SqliteResult<()> {
+        conn.execute(
+            "UPDATE thumbs
+             SET date = datetime(date, 'unixepoch', 'localtime')
+             WHERE typeof(date) IN ('integer', 'real')",
+            [],
+        )?;
         Ok(())
     }
 
@@ -218,11 +232,8 @@ impl ThumbnailDb {
     }
 
     /// 获取当前时间戳（秒）
-    fn current_timestamp() -> i64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as i64
+    fn current_timestamp_string() -> String {
+        Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
     }
 
     /// 保存缩略图（减少日志输出）
@@ -249,7 +260,7 @@ impl ThumbnailDb {
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
         
-        let date = Self::current_timestamp();
+        let date = Self::current_timestamp_string();
         
         // 自动判断类别：如果没有扩展名且不是压缩包内部路径，则为文件夹
         let cat = category.unwrap_or_else(|| {
@@ -493,7 +504,7 @@ impl ThumbnailDb {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
-        let date = Self::current_timestamp();
+        let date = Self::current_timestamp_string();
 
         conn.execute(
             "UPDATE thumbs SET date = ?1 WHERE key = ?2",
@@ -508,7 +519,8 @@ impl ThumbnailDb {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
-        let cutoff = Self::current_timestamp() - (days * 86400);
+        let cutoff_time = Local::now() - Duration::days(days);
+        let cutoff = cutoff_time.format("%Y-%m-%d %H:%M:%S").to_string();
 
         let count = conn.execute(
             "DELETE FROM thumbs WHERE date < ?1",

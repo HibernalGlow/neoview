@@ -13,30 +13,62 @@
 	import { Tabs, TabsContent, TabsList, TabsTrigger } from '$lib/components/ui/tabs';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
-	import { Trash2, Plus, ArrowUp, ArrowDown, Copy } from '@lucide/svelte';
+	import {
+		DropdownMenu,
+		DropdownMenuContent,
+		DropdownMenuItem,
+		DropdownMenuLabel,
+		DropdownMenuSeparator,
+		DropdownMenuTrigger
+	} from '$lib/components/ui/dropdown-menu';
+	import {
+		Dialog,
+		DialogContent,
+		DialogDescription,
+		DialogFooter,
+		DialogHeader,
+		DialogTitle
+	} from '$lib/components/ui/dialog';
+	import { Trash2, Plus, ArrowUp, ArrowDown, Copy, Upload, Download, RotateCcw } from '@lucide/svelte';
 	import type { UpscaleCondition, ConditionExpression } from './UpscalePanel';
-	import { createBlankCondition } from '$lib/utils/upscale/conditions';
+	import type { ConditionPresetKey } from '$lib/utils/upscale/conditions';
+	import {
+		createBlankCondition,
+		CONDITION_PRESET_OPTIONS,
+		createPresetCondition,
+		getDefaultConditionPresets,
+		normalizeCondition
+	} from '$lib/utils/upscale/conditions';
+	import UpscaleConditionActionEditor from './UpscaleConditionActionEditor.svelte';
 
 	interface Props {
 		conditions: UpscaleCondition[];
 		conditionalUpscaleEnabled: boolean;
+		availableModels: string[];
+		modelLabels: Record<string, string>;
+		gpuOptions: { value: number; label: string }[];
+		tileSizeOptions: { value: number; label: string }[];
+		noiseLevelOptions: { value: number; label: string }[];
 	}
 
 	let {
 		conditions = [],
-		conditionalUpscaleEnabled = false
+		conditionalUpscaleEnabled = false,
+		availableModels = [],
+		modelLabels = {},
+		gpuOptions = [],
+		tileSizeOptions = [],
+		noiseLevelOptions = []
 	}: Props = $props();
 
 	const dispatch = createEventDispatcher();
 
 	let activeTab = $state(conditions[0]?.id || '');
 
-	// 可用的模型列表
-	const availableModels = [
-		{ value: 'real-cugan', label: 'Real-CUGAN' },
-		{ value: 'realesrgan', label: 'Real-ESRGAN' },
-		{ value: 'waifu2x', label: 'Waifu2x' }
-	];
+	const presetOptions = CONDITION_PRESET_OPTIONS;
+
+	let importDialogOpen = $state(false);
+	let importJson = $state('');
 
 	// 操作符列表
 	const operators = [
@@ -50,12 +82,38 @@
 		{ value: 'contains', label: '包含' }
 	];
 
+	function normalizeList(list: UpscaleCondition[]): UpscaleCondition[] {
+		return list.map((condition, index) =>
+			normalizeCondition(
+				{
+					...condition,
+					priority: index
+				},
+				index
+			)
+		);
+	}
+
+	function persistConditions(nextList?: UpscaleCondition[]) {
+		const normalized = normalizeList(nextList ?? conditions);
+		conditions = normalized;
+		dispatch('conditionsChanged', { conditions: normalized });
+	}
+
 	// 添加新条件
-	function addCondition() {
+	function addBlankCondition() {
 		const newCondition = createBlankCondition(`条件 ${conditions.length + 1}`);
-		conditions = [...conditions, newCondition];
+		newCondition.priority = conditions.length;
+		persistConditions([...conditions, newCondition]);
 		activeTab = newCondition.id;
-		persistConditions();
+	}
+
+	function addConditionFromPreset(key: ConditionPresetKey) {
+		const preset = createPresetCondition(key, conditions.length);
+		if (!preset) return;
+		preset.priority = conditions.length;
+		persistConditions([...conditions, preset]);
+		activeTab = preset.id;
 	}
 
 	// 删除条件
@@ -65,23 +123,26 @@
 			return;
 		}
 		
-		conditions = conditions.filter(c => c.id !== id);
+		const next = conditions.filter(c => c.id !== id);
+		persistConditions(next);
 		if (activeTab === id) {
-			activeTab = conditions[0]?.id || '';
+			activeTab = next[0]?.id || '';
 		}
-		persistConditions();
 	}
 
 	// 复制条件
 	function duplicateCondition(condition: UpscaleCondition) {
-		const newCondition = {
-			...condition,
-			id: `condition-${Date.now()}`,
-			name: `${condition.name} (副本)`
-		};
-		conditions = [...conditions, newCondition];
+		const newCondition = normalizeCondition(
+			{
+				...condition,
+				id: '',
+				name: `${condition.name} (副本)`
+			},
+			conditions.length
+		);
+		newCondition.priority = conditions.length;
+		persistConditions([...conditions, newCondition]);
 		activeTab = newCondition.id;
-		persistConditions();
 	}
 
 	// 移动条件优先级
@@ -94,38 +155,47 @@
 
 		const newConditions = [...conditions];
 		[newConditions[index], newConditions[newIndex]] = [newConditions[newIndex], newConditions[index]];
-		
-		// 更新优先级
-		newConditions.forEach((c, i) => {
-			c.priority = i;
-		});
-
-		conditions = newConditions;
-		persistConditions();
+		persistConditions(newConditions);
 	}
 
 	// 更新条件
 	function updateCondition(id: string, updates: Partial<UpscaleCondition>) {
-		conditions = conditions.map(c => 
-			c.id === id ? { ...c, ...updates } : c
+		const next = conditions.map(c =>
+			c.id === id ? normalizeCondition({ ...c, ...updates }, c.priority) : c
 		);
-		persistConditions();
+		persistConditions(next);
 	}
 
 	// 更新匹配规则
 	function updateMatch(id: string, matchUpdates: Partial<UpscaleCondition['match']>) {
-		conditions = conditions.map(c => 
-			c.id === id ? { ...c, match: { ...c.match, ...matchUpdates } } : c
+		const next = conditions.map(c =>
+			c.id === id
+				? {
+						...c,
+						match: {
+							...c.match,
+							...matchUpdates
+						}
+					}
+				: c
 		);
-		persistConditions();
+		persistConditions(next);
 	}
 
 	// 更新动作参数
 	function updateAction(id: string, actionUpdates: Partial<UpscaleCondition['action']>) {
-		conditions = conditions.map(c => 
-			c.id === id ? { ...c, action: { ...c.action, ...actionUpdates } } : c
+		const next = conditions.map(c =>
+			c.id === id
+				? {
+						...c,
+						action: {
+							...c.action,
+							...actionUpdates
+						}
+					}
+				: c
 		);
-		persistConditions();
+		persistConditions(next);
 	}
 
 	// 添加元数据条件
@@ -170,36 +240,125 @@
 	}
 
 	// 持久化条件
-	function persistConditions() {
-		dispatch('conditionsChanged', { conditions });
-	}
-
 	// 监听条件变化，同步 activeTab
 	$effect(() => {
 		if (conditions.length > 0 && !conditions.find(c => c.id === activeTab)) {
 			activeTab = conditions[0]?.id || '';
 		}
 	});
+
+	function handleExportConditions() {
+		const payload = JSON.stringify(conditions, null, 2);
+		if (typeof navigator !== 'undefined' && navigator.clipboard) {
+			navigator.clipboard
+				.writeText(payload)
+				.then(() => {
+					console.log('已复制条件 JSON');
+				})
+				.catch(() => triggerJsonDownload(payload));
+		} else {
+			triggerJsonDownload(payload);
+		}
+	}
+
+	function triggerJsonDownload(payload: string) {
+		const blob = new Blob([payload], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = 'conditional-upscale.json';
+		link.click();
+		URL.revokeObjectURL(url);
+	}
+
+	function openImportModal() {
+		importJson = JSON.stringify(conditions, null, 2);
+		importDialogOpen = true;
+	}
+
+	function handleImportConfirm() {
+		try {
+			const parsed = JSON.parse(importJson);
+			if (!Array.isArray(parsed)) {
+				throw new Error('JSON 须为数组');
+			}
+			const normalized = normalizeList(parsed as UpscaleCondition[]);
+			importDialogOpen = false;
+			activeTab = normalized[0]?.id ?? '';
+			persistConditions(normalized);
+		} catch (error) {
+			alert(`导入失败: ${error instanceof Error ? error.message : error}`);
+		}
+	}
+
+	function handleRestorePresets() {
+		const presets = getDefaultConditionPresets();
+		activeTab = presets[0]?.id ?? '';
+		persistConditions(presets);
+	}
 </script>
 
 <div class="w-full space-y-4">
-	{#if conditionalUpscaleEnabled}
-		<div class="flex items-center justify-between">
-			<h3 class="text-lg font-semibold">超分条件</h3>
-			<Button size="sm" onclick={addCondition}>
-				<Plus class="w-4 h-4 mr-1" />
-				添加条件
+{#if conditionalUpscaleEnabled}
+	<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+		<div>
+			<h3 class="text-lg font-semibold">条件策略</h3>
+			<p class="text-xs text-muted-foreground">根据尺寸 / 路径自动选择模型或跳过超分</p>
+		</div>
+		<div class="flex flex-wrap gap-2">
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<Button size="sm">
+						<Plus class="w-4 h-4 mr-1" />
+						添加条件
+					</Button>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent class="w-72">
+					<DropdownMenuLabel>快速预设</DropdownMenuLabel>
+					{#each presetOptions as preset}
+						<DropdownMenuItem on:click={() => addConditionFromPreset(preset.key as ConditionPresetKey)}>
+							<div class="space-y-1">
+								<p class="text-sm font-medium">{preset.name}</p>
+								<p class="text-xs text-muted-foreground">{preset.description}</p>
+							</div>
+						</DropdownMenuItem>
+					{/each}
+					<DropdownMenuSeparator />
+					<DropdownMenuItem on:click={addBlankCondition}>
+						<Plus class="w-3.5 h-3.5 mr-2" />
+						<span>空白条件</span>
+					</DropdownMenuItem>
+				</DropdownMenuContent>
+			</DropdownMenu>
+			<Button variant="outline" size="sm" onclick={handleExportConditions}>
+				<Download class="w-4 h-4 mr-1" />
+				导出 JSON
+			</Button>
+			<Button variant="outline" size="sm" onclick={openImportModal}>
+				<Upload class="w-4 h-4 mr-1" />
+				导入 JSON
+			</Button>
+			<Button variant="ghost" size="sm" onclick={handleRestorePresets}>
+				<RotateCcw class="w-4 h-4 mr-1" />
+				恢复预设
 			</Button>
 		</div>
+	</div>
 
 		{#if conditions.length > 0}
 			<Tabs bind:value={activeTab} class="w-full">
-				<TabsList class="grid w-full grid-cols-{conditions.length}">
+				<TabsList class="flex flex-wrap gap-2">
 					{#each conditions as condition (condition.id)}
-						<TabsTrigger value={condition.id} class="flex items-center gap-2">
+						<TabsTrigger
+							value={condition.id}
+							class="flex items-center gap-2 rounded-md border border-transparent px-3 py-2 text-sm data-[state=active]:border-border data-[state=active]:bg-muted"
+						>
 							<span>{condition.name}</span>
 							{#if !condition.enabled}
-								<Badge variant="secondary" class="text-xs">已禁用</Badge>
+								<Badge variant="secondary" class="text-[10px]">已禁用</Badge>
+							{/if}
+							{#if condition.action.skip}
+								<Badge variant="destructive" class="text-[10px]">不超分</Badge>
 							{/if}
 						</TabsTrigger>
 					{/each}
@@ -271,7 +430,7 @@
 								<!-- 匹配规则 -->
 								<div class="space-y-4">
 									<h4 class="text-sm font-semibold">匹配规则</h4>
-									<div class="grid grid-cols-2 gap-4">
+									<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 										<div class="space-y-2">
 											<Label htmlFor={`minWidth-${condition.id}`}>最小宽度</Label>
 											<Input
@@ -292,6 +451,45 @@
 												placeholder="不限制"
 											/>
 										</div>
+										<div class="space-y-2">
+											<Label htmlFor={`maxWidth-${condition.id}`}>最大宽度</Label>
+											<Input
+												id={`maxWidth-${condition.id}`}
+												type="number"
+												value={condition.match.maxWidth || ''}
+												onchange={(e) => updateMatch(condition.id, { maxWidth: Number(e.target.value) || undefined })}
+												placeholder="不限制"
+											/>
+										</div>
+										<div class="space-y-2">
+											<Label htmlFor={`maxHeight-${condition.id}`}>最大高度</Label>
+											<Input
+												id={`maxHeight-${condition.id}`}
+												type="number"
+												value={condition.match.maxHeight || ''}
+												onchange={(e) => updateMatch(condition.id, { maxHeight: Number(e.target.value) || undefined })}
+												placeholder="不限制"
+											/>
+										</div>
+									</div>
+
+									<div class="space-y-2">
+										<Label htmlFor={`dimensionMode-${condition.id}`}>宽高判定逻辑</Label>
+										<Select
+											value={condition.match.dimensionMode || 'and'}
+											onchange={(value) => updateMatch(condition.id, { dimensionMode: value as 'and' | 'or' })}
+										>
+											<SelectTrigger id={`dimensionMode-${condition.id}`}>
+												<SelectValue />
+											</SelectTrigger>
+											<SelectContent>
+												<SelectItem value="and">同时满足（AND）</SelectItem>
+												<SelectItem value="or">任一满足（OR）</SelectItem>
+											</SelectContent>
+										</Select>
+										<p class="text-xs text-muted-foreground">
+											例如基础 A 预设使用 OR，以宽度或高度任一超出即触发。
+										</p>
 									</div>
 
 									<div class="space-y-2">
@@ -391,71 +589,15 @@
 								<!-- 执行参数 -->
 								<div class="space-y-4">
 									<h4 class="text-sm font-semibold">执行参数</h4>
-									<div class="grid grid-cols-2 gap-4">
-										<div class="space-y-2">
-											<Label htmlFor={`model-${condition.id}`}>模型</Label>
-											<Select
-												value={condition.action.model}
-												onchange={(value) => updateAction(condition.id, { model: value })}
-											>
-												<SelectTrigger>
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent>
-													{#each availableModels as model}
-														<SelectItem value={model.value}>{model.label}</SelectItem>
-													{/each}
-												</SelectContent>
-											</Select>
-										</div>
-										<div class="space-y-2">
-											<Label htmlFor={`scale-${condition.id}`}>缩放倍数: {condition.action.scale}x</Label>
-											<Slider
-												value={[condition.action.scale]}
-												onchange={(value) => updateAction(condition.id, { scale: value[0] })}
-												min={1}
-												max={4}
-												step={0.5}
-											/>
-										</div>
-										<div class="space-y-2">
-											<Label htmlFor={`tileSize-${condition.id}`}>分块大小: {condition.action.tileSize}</Label>
-											<Slider
-												value={[condition.action.tileSize]}
-												onchange={(value) => updateAction(condition.id, { tileSize: value[0] })}
-												min={100}
-												max={800}
-												step={50}
-											/>
-										</div>
-										<div class="space-y-2">
-											<Label htmlFor={`noiseLevel-${condition.id}`}>降噪级别: {condition.action.noiseLevel}</Label>
-											<Slider
-												value={[condition.action.noiseLevel]}
-												onchange={(value) => updateAction(condition.id, { noiseLevel: value[0] })}
-												min={-1}
-												max={3}
-												step={1}
-											/>
-										</div>
-										<div class="space-y-2">
-											<Label htmlFor={`gpuId-${condition.id}`}>GPU ID</Label>
-											<Input
-												id={`gpuId-${condition.id}`}
-												type="number"
-												value={condition.action.gpuId}
-												onchange={(e) => updateAction(condition.id, { gpuId: Number(e.target.value) })}
-											/>
-										</div>
-										<div class="flex items-center space-x-2 pt-6">
-											<Switch
-												id={`useCache-${condition.id}`}
-												checked={condition.action.useCache}
-												onchange={(checked) => updateAction(condition.id, { useCache: checked })}
-											/>
-											<Label htmlFor={`useCache-${condition.id}`}>使用缓存</Label>
-										</div>
-									</div>
+									<UpscaleConditionActionEditor
+										condition={condition}
+										availableModels={availableModels}
+										modelLabels={modelLabels}
+										gpuOptions={gpuOptions}
+										tileSizeOptions={tileSizeOptions}
+										noiseLevelOptions={noiseLevelOptions}
+										on:apply={(event) => updateAction(condition.id, event.detail.action)}
+									/>
 								</div>
 							</CardContent>
 						</Card>
@@ -467,7 +609,7 @@
 				<CardContent class="pt-6">
 					<div class="text-center">
 						<p class="text-muted-foreground mb-4">暂无超分条件</p>
-						<Button onclick={addCondition}>
+						<Button onclick={addBlankCondition}>
 							<Plus class="w-4 h-4 mr-1" />
 							添加第一个条件
 						</Button>
@@ -483,3 +625,21 @@
 		</Card>
 	{/if}
 </div>
+
+<Dialog bind:open={importDialogOpen}>
+	<DialogContent class="sm:max-w-2xl">
+		<DialogHeader>
+			<DialogTitle>导入条件 JSON</DialogTitle>
+			<DialogDescription>粘贴或修改 JSON 文本，确认后将覆盖当前的条件列表。</DialogDescription>
+		</DialogHeader>
+		<textarea
+			class="h-64 w-full resize-none rounded-md border border-border bg-background p-3 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+			bind:value={importJson}
+			placeholder="[&#123; 'name': '条件A', ... &#125;]"
+		/>
+		<DialogFooter class="flex gap-2">
+			<Button variant="ghost" onclick={() => (importDialogOpen = false)}>取消</Button>
+			<Button onclick={handleImportConfirm}>导入</Button>
+		</DialogFooter>
+	</DialogContent>
+</Dialog>

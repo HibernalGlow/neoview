@@ -8,6 +8,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { upscaleState, startUpscale, completeUpscale, setUpscaleError } from '$lib/stores/upscale/upscaleState.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
 import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
+import { collectPageMetadata, evaluateConditions } from '$lib/utils/upscale/conditions';
 import { bookStore } from '$lib/stores/book.svelte';
 
 export interface ImageDataWithHash {
@@ -99,11 +100,14 @@ interface UpscaleJobEventDetail {
 	background: boolean;
 }
 
-export function resolveModelSettings(conditionId?: string): SchedulerModelSettings {
+export function resolveModelSettings(conditionId?: string): SchedulerModelSettings | null {
 	const panelSettings = loadUpscalePanelSettings();
 	if (conditionId) {
 		const condition = panelSettings.conditionsList.find((c) => c.id === conditionId);
 		if (condition) {
+			if (condition.action.skip) {
+				return null;
+			}
 			return {
 				modelName: condition.action.model,
 				scale: condition.action.scale,
@@ -114,12 +118,47 @@ export function resolveModelSettings(conditionId?: string): SchedulerModelSettin
 		}
 	}
 
-	return {
+			return {
 		modelName: panelSettings.selectedModel,
 		scale: panelSettings.scale,
 		tileSize: panelSettings.tileSize,
 		noiseLevel: panelSettings.noiseLevel,
 		gpuId: panelSettings.gpuId
+	};
+}
+
+function ensureConditionBinding(imageData: ImageDataWithHash): { conditionId?: string; skip: boolean } {
+	const book = bookStore.currentBook;
+	const panelSettings = loadUpscalePanelSettings();
+	const pageIndex = imageData.pageIndex ?? bookStore.currentPageIndex;
+
+	if (!book || typeof pageIndex !== 'number') {
+		return { conditionId: imageData.conditionId, skip: false };
+	}
+
+	let condition =
+		imageData.conditionId &&
+		panelSettings.conditionsList.find((c) => c.id === imageData.conditionId);
+
+	if (!condition) {
+		const page = book.pages?.[pageIndex];
+		if (!page) {
+			return { conditionId: undefined, skip: false };
+		}
+		const metadata = collectPageMetadata(page, book.path);
+		const result = evaluateConditions(metadata, panelSettings.conditionsList);
+		imageData.conditionId = result.conditionId ?? undefined;
+		if (result.action?.skip) {
+			return { conditionId: imageData.conditionId, skip: true };
+		}
+		condition =
+			result.conditionId &&
+			panelSettings.conditionsList.find((c) => c.id === result.conditionId);
+	}
+
+	return {
+		conditionId: condition?.id ?? imageData.conditionId,
+		skip: condition?.action.skip === true
 	};
 }
 
@@ -131,9 +170,14 @@ async function submitSchedulerJob(input: SchedulerJobInput): Promise<string | un
 		return;
 	}
 
+	const modelSettings = resolveModelSettings(conditionId);
+	if (!modelSettings) {
+		console.log('条件要求跳过超分任务，hash:', hash, 'conditionId:', conditionId);
+		bookStore.setPageUpscaleStatus(pageIndex, 'none');
+		return;
+	}
 	const buffer = await blob.arrayBuffer();
 	const imageDataArray = Array.from(new Uint8Array(buffer));
-	const modelSettings = resolveModelSettings(conditionId);
 
 	try {
 		const jobId = await invoke<string>('enqueue_upscale_job', {
@@ -198,20 +242,30 @@ export async function enqueuePreloadBatchJobs(
 		return [];
 	}
 
-	const payload: PreloadBatchJobPayload[] = jobs.map((job) => {
-		const model = resolveModelSettings(job.conditionId);
-		return {
-			page_index: job.pageIndex,
-			image_hash: job.imageHash,
-			condition_id: job.conditionId ?? null,
-			model_name: model.modelName,
-			scale: model.scale,
-			tile_size: model.tileSize,
-			noise_level: model.noiseLevel,
-			gpu_id: model.gpuId ?? null,
-			priority: job.priority ?? 'normal'
-		};
-	});
+	const payload: PreloadBatchJobPayload[] = jobs
+		.map((job) => {
+			const model = resolveModelSettings(job.conditionId);
+			if (!model) {
+				console.log('批量预超分: 条件要求跳过任务, hash:', job.imageHash, 'conditionId:', job.conditionId);
+				return null;
+			}
+			return {
+				page_index: job.pageIndex,
+				image_hash: job.imageHash,
+				condition_id: job.conditionId ?? null,
+				model_name: model.modelName,
+				scale: model.scale,
+				tile_size: model.tileSize,
+				noise_level: model.noiseLevel,
+				gpu_id: model.gpuId ?? null,
+				priority: job.priority ?? 'normal'
+			};
+		})
+		.filter((job): job is PreloadBatchJobPayload => job !== null);
+
+	if (!payload.length) {
+		return [];
+	}
 
 	return invoke<string[]>('enqueue_preload_batch', {
 		payload: {
@@ -335,6 +389,13 @@ export async function triggerAutoUpscale(
 			return;
 		}
 
+		const conditionBinding = ensureConditionBinding(imageDataWithHash);
+		if (conditionBinding.skip) {
+			console.log('条件指定跳过超分，hash:', imageHash, 'conditionId:', conditionBinding.conditionId);
+			bookStore.setPageUpscaleStatus(targetPageIndex, 'none');
+			return;
+		}
+
 		console.log(
 			isPreload ? '触发预加载超分' : '触发当前页面超分',
 			'MD5:',
@@ -427,6 +488,10 @@ export async function checkUpscaleCache(
 		// 2. 磁盘缓存（改用 PyO3 的命令）
 		try {
 			const model = resolveModelSettings(imageDataWithHash.conditionId);
+			if (!model) {
+				console.log('条件要求跳过超分，不检查缓存，hash:', imageHash);
+				return false;
+			}
 
 			const cachePath = await invoke<string | null>('check_pyo3_upscale_cache', {
 				imageHash,

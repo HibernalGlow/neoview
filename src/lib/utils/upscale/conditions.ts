@@ -5,6 +5,171 @@
 
 import type { UpscaleCondition, ConditionResult, ConditionExpression } from '$lib/components/panels/UpscalePanel';
 
+export type ConditionPresetKey = 'A' | 'B' | 'C' | 'D';
+
+interface ConditionPresetDefinition {
+	key: ConditionPresetKey;
+	name: string;
+	description: string;
+	build: () => {
+		match?: Partial<UpscaleCondition['match']>;
+		action?: Partial<UpscaleCondition['action']>;
+	};
+}
+
+const CONDITION_ID_PREFIX = 'condition';
+
+function createConditionId(prefix = CONDITION_ID_PREFIX): string {
+	return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
+}
+
+function ensureMatchDefaults(match?: UpscaleCondition['match']): UpscaleCondition['match'] {
+	const safeMatch = match ?? {};
+	return {
+		minWidth: safeMatch.minWidth,
+		minHeight: safeMatch.minHeight,
+		maxWidth: safeMatch.maxWidth,
+		maxHeight: safeMatch.maxHeight,
+		dimensionMode: safeMatch.dimensionMode ?? 'and',
+		createdBetween: safeMatch.createdBetween,
+		modifiedBetween: safeMatch.modifiedBetween,
+		regexBookPath: safeMatch.regexBookPath,
+		regexImagePath: safeMatch.regexImagePath,
+		excludeFromPreload: safeMatch.excludeFromPreload ?? false,
+		metadata: safeMatch.metadata ? { ...safeMatch.metadata } : undefined
+	};
+}
+
+function ensureActionDefaults(action?: UpscaleCondition['action']): UpscaleCondition['action'] {
+	const safeAction = action ?? {};
+	return {
+		model: safeAction.model ?? 'MODEL_WAIFU2X_CUNET_UP2X',
+		scale: safeAction.scale ?? 2,
+		tileSize: safeAction.tileSize ?? 400,
+		noiseLevel: safeAction.noiseLevel ?? -1,
+		gpuId: safeAction.gpuId ?? 0,
+		useCache: safeAction.useCache ?? true,
+		skip: safeAction.skip ?? false
+	};
+}
+
+export function normalizeCondition(condition: UpscaleCondition, priorityFallback = 0): UpscaleCondition {
+	return {
+		id: condition.id || createConditionId(),
+		name: condition.name || '自定义条件',
+		enabled: condition.enabled ?? true,
+		priority: typeof condition.priority === 'number' ? condition.priority : priorityFallback,
+		match: ensureMatchDefaults(condition.match),
+		action: ensureActionDefaults(condition.action)
+	};
+}
+
+const CONDITION_PRESET_DEFINITIONS: ConditionPresetDefinition[] = [
+	{
+		key: 'A',
+		name: '基础A · 超大图跳过',
+		description: '宽≥2048 或 高≥3142 时跳过超分',
+		build: () => ({
+			match: {
+				minWidth: 2048,
+				minHeight: 3142,
+				dimensionMode: 'or'
+			},
+			action: {
+				skip: true,
+				useCache: false
+			}
+		})
+	},
+	{
+		key: 'B',
+		name: '基础B · COS 专用 ESRGAN',
+		description: '路径包含 02cos 时改用 ESRGAN',
+		build: () => ({
+			match: {
+				regexBookPath: '.*02cos.*'
+			},
+			action: {
+				model: 'MODEL_REALESRGAN_X4PLUS_ANIME_UP4X',
+				scale: 4,
+				tileSize: 256,
+				noiseLevel: 0,
+				useCache: true
+			}
+		})
+	},
+	{
+		key: 'C',
+		name: '基础C · 中分辨率 CUGAN 2x',
+		description: '宽度低于 2048 使用 CUGAN 2x',
+		build: () => ({
+			match: {
+				maxWidth: 2048
+			},
+			action: {
+				model: 'MODEL_REALCUGAN_PRO_UP2X',
+				scale: 2,
+				tileSize: 400,
+				noiseLevel: -1
+			}
+		})
+	},
+	{
+		key: 'D',
+		name: '基础D · 低分辨率 CUGAN 4x',
+		description: '宽度低于 512 强制 4x 放大',
+		build: () => ({
+			match: {
+				maxWidth: 512
+			},
+			action: {
+				model: 'MODEL_REALCUGAN_PRO_UP3X',
+				scale: 4,
+				tileSize: 256,
+				noiseLevel: -1
+			}
+		})
+	}
+];
+
+export const CONDITION_PRESET_OPTIONS = CONDITION_PRESET_DEFINITIONS.map((preset) => ({
+	key: preset.key,
+	name: preset.name,
+	description: preset.description
+}));
+
+function composePresetCondition(def: ConditionPresetDefinition, priority: number): UpscaleCondition {
+	const base = createBlankCondition(def.name);
+	const overrides = def.build();
+	const merged: UpscaleCondition = {
+		...base,
+		id: createConditionId(`preset-${def.key}`),
+		name: def.name,
+		match: ensureMatchDefaults({
+			...base.match,
+			...overrides.match
+		}),
+		action: ensureActionDefaults({
+			...base.action,
+			...overrides.action
+		}),
+		priority
+	};
+	return normalizeCondition(merged, priority);
+}
+
+export function getDefaultConditionPresets(): UpscaleCondition[] {
+	return CONDITION_PRESET_DEFINITIONS.map((preset, index) => composePresetCondition(preset, index));
+}
+
+export function createPresetCondition(key: ConditionPresetKey, priority = 0): UpscaleCondition | null {
+	const preset = CONDITION_PRESET_DEFINITIONS.find((item) => item.key === key);
+	if (!preset) {
+		return null;
+	}
+	return composePresetCondition(preset, priority);
+}
+
 // 页面元数据接口
 export interface PageMetadata {
 	width: number;
@@ -20,61 +185,72 @@ export interface PageMetadata {
  * 评估页面元数据是否匹配条件
  */
 function matchesCondition(matchRule: UpscaleCondition['match'], meta: PageMetadata): boolean {
-	// 检查最小宽度
-	if (matchRule.minWidth !== undefined && meta.width < matchRule.minWidth) {
-		return false;
-	}
+	const match = ensureMatchDefaults(matchRule);
 
-	// 检查最小高度
-	if (matchRule.minHeight !== undefined && meta.height < matchRule.minHeight) {
-		return false;
+	const hasWidthRule = match.minWidth !== undefined || match.maxWidth !== undefined;
+	const hasHeightRule = match.minHeight !== undefined || match.maxHeight !== undefined;
+
+	const widthOk =
+		(match.minWidth === undefined || meta.width >= match.minWidth) &&
+		(match.maxWidth === undefined || meta.width <= match.maxWidth);
+	const heightOk =
+		(match.minHeight === undefined || meta.height >= match.minHeight) &&
+		(match.maxHeight === undefined || meta.height <= match.maxHeight);
+
+	if (match.dimensionMode === 'or' && hasWidthRule && hasHeightRule) {
+		if (!widthOk && !heightOk) {
+			return false;
+		}
+	} else {
+		if (hasWidthRule && !widthOk) return false;
+		if (hasHeightRule && !heightOk) return false;
 	}
 
 	// 检查创建时间范围
-	if (matchRule.createdBetween && meta.createdAt) {
-		const [start, end] = matchRule.createdBetween;
+	if (match.createdBetween && meta.createdAt) {
+		const [start, end] = match.createdBetween;
 		if (meta.createdAt < start || meta.createdAt > end) {
 			return false;
 		}
 	}
 
 	// 检查修改时间范围
-	if (matchRule.modifiedBetween && meta.modifiedAt) {
-		const [start, end] = matchRule.modifiedBetween;
+	if (match.modifiedBetween && meta.modifiedAt) {
+		const [start, end] = match.modifiedBetween;
 		if (meta.modifiedAt < start || meta.modifiedAt > end) {
 			return false;
 		}
 	}
 
 	// 检查书籍路径正则
-	if (matchRule.regexBookPath) {
+	if (match.regexBookPath) {
 		try {
-			const regex = new RegExp(matchRule.regexBookPath);
+			const regex = new RegExp(match.regexBookPath);
 			if (!regex.test(meta.bookPath)) {
 				return false;
 			}
 		} catch (error) {
-			console.warn('书籍路径正则表达式无效:', matchRule.regexBookPath, error);
+			console.warn('书籍路径正则表达式无效:', match.regexBookPath, error);
 			return false;
 		}
 	}
 
 	// 检查图片路径正则
-	if (matchRule.regexImagePath) {
+	if (match.regexImagePath) {
 		try {
-			const regex = new RegExp(matchRule.regexImagePath);
+			const regex = new RegExp(match.regexImagePath);
 			if (!regex.test(meta.imagePath)) {
 				return false;
 			}
 		} catch (error) {
-			console.warn('图片路径正则表达式无效:', matchRule.regexImagePath, error);
+			console.warn('图片路径正则表达式无效:', match.regexImagePath, error);
 			return false;
 		}
 	}
 
 	// 检查自定义元数据
-	if (matchRule.metadata && meta.metadata) {
-		for (const [key, expression] of Object.entries(matchRule.metadata)) {
+	if (match.metadata && meta.metadata) {
+		for (const [key, expression] of Object.entries(match.metadata)) {
 			const metaValue = meta.metadata[key];
 			if (!evaluateExpression(expression, metaValue)) {
 				return false;
@@ -140,7 +316,8 @@ export function evaluateConditions(
 			return {
 				conditionId: condition.id,
 				action: condition.action,
-				excludeFromPreload: condition.match.excludeFromPreload === true
+				excludeFromPreload: condition.match.excludeFromPreload === true,
+				skipUpscale: condition.action?.skip === true
 			};
 		}
 	}
@@ -149,7 +326,8 @@ export function evaluateConditions(
 	return {
 		conditionId: null,
 		action: null,
-		excludeFromPreload: false
+		excludeFromPreload: false,
+		skipUpscale: false
 	};
 }
 
@@ -168,26 +346,27 @@ export function getConditionById(
  * 创建新的空白条件
  */
 export function createBlankCondition(name: string): UpscaleCondition {
-	const timestamp = Date.now();
-	return {
-		id: `condition-${timestamp}`,
+	return normalizeCondition({
+		id: createConditionId(),
 		name,
 		enabled: true,
 		priority: 0,
 		match: {
 			minWidth: 1000,
 			minHeight: 1000,
+			dimensionMode: 'and',
 			excludeFromPreload: false
 		},
 		action: {
-			model: 'real-cugan',
+			model: 'MODEL_WAIFU2X_CUNET_UP2X',
 			scale: 2,
 			tileSize: 400,
 			noiseLevel: -1,
 			gpuId: 0,
-			useCache: true
+			useCache: true,
+			skip: false
 		}
-	};
+	});
 }
 
 /**

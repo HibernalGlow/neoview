@@ -2,6 +2,7 @@ import { setUpscaleSettings, DEFAULT_UPSCALE_SETTINGS } from '$lib/utils/upscale
 import { settingsManager } from '$lib/settings/settingsManager';
 import { invoke } from '@tauri-apps/api/core';
 import type { UpscaleSettings } from '$lib/utils/upscale/settings';
+import { getDefaultConditionPresets, normalizeCondition } from '$lib/utils/upscale/conditions';
 
 // 条件表达式类型
 export interface ConditionExpression {
@@ -18,6 +19,9 @@ export interface UpscaleCondition {
 	match: {
 		minWidth?: number;
 		minHeight?: number;
+		maxWidth?: number;
+		maxHeight?: number;
+		dimensionMode?: 'and' | 'or';
 		createdBetween?: [number, number]; // epoch
 		modifiedBetween?: [number, number];
 		regexBookPath?: string;    // 正则表达式字符串
@@ -32,6 +36,7 @@ export interface UpscaleCondition {
 		noiseLevel: number;
 		gpuId: number;
 		useCache: boolean;
+		skip?: boolean;
 	};
 }
 
@@ -40,6 +45,7 @@ export interface ConditionResult {
 	conditionId: string | null;
 	action: UpscaleCondition['action'] | null;
 	excludeFromPreload: boolean;
+	skipUpscale: boolean;
 }
 
 export interface UpscalePanelSettings extends UpscaleSettings {
@@ -85,6 +91,8 @@ const initialImageSettings = (() => {
 	}
 })();
 
+const DEFAULT_CONDITION_PRESETS = getDefaultConditionPresets();
+
 export const defaultPanelSettings: UpscalePanelSettings = {
 	...DEFAULT_UPSCALE_SETTINGS,
 	currentImageUpscaleEnabled: initialImageSettings.enableSuperResolution,
@@ -93,48 +101,32 @@ export const defaultPanelSettings: UpscalePanelSettings = {
 	backgroundConcurrency: 2,
 	showPanelPreview: false,
 	conditionalUpscaleEnabled: false,
-	conditionsList: [
-		// 默认条件：保持现有逻辑
-		{
-			id: 'default-condition',
-			name: '默认条件',
-			enabled: true,
-			priority: 0,
-			match: {
-				minWidth: 1000,
-				minHeight: 1000,
-				excludeFromPreload: false
-			},
-			action: {
-				model: 'real-cugan',
-				scale: 2,
-				tileSize: 400,
-				noiseLevel: -1,
-				gpuId: 0,
-				useCache: true
-			}
-		}
-	]
+	conditionsList: DEFAULT_CONDITION_PRESETS
 };
 
 export function loadUpscalePanelSettings(): UpscalePanelSettings {
 	try {
 		const stored = localStorage.getItem(STORAGE_KEY);
 		if (!stored) {
-			return { ...defaultPanelSettings };
+			return {
+				...defaultPanelSettings,
+				conditionsList: getDefaultConditionPresets()
+			};
 		}
 
 		const parsed = JSON.parse(stored) as Partial<UpscalePanelSettings>;
 		
 		// 处理条件列表，确保向后兼容
-		let conditionsList = defaultPanelSettings.conditionsList;
+		let conditionsList = getDefaultConditionPresets();
 		if (parsed.conditionsList) {
-			conditionsList = parsed.conditionsList;
+			conditionsList = parsed.conditionsList.map((condition, index) =>
+				normalizeCondition(condition, index)
+			);
 		} else if (parsed.conditions) {
 			// 向后兼容：将旧的单条件转换为条件列表
 			const oldCondition = parsed.conditions;
 			conditionsList = [
-				{
+				normalizeCondition({
 					id: 'migrated-condition',
 					name: '迁移的条件',
 					enabled: oldCondition.enabled ?? true,
@@ -152,7 +144,7 @@ export function loadUpscalePanelSettings(): UpscalePanelSettings {
 						gpuId: oldCondition.gpuId || 0,
 						useCache: oldCondition.useCache ?? true
 					}
-				}
+				})
 			];
 		}
 
@@ -164,7 +156,10 @@ export function loadUpscalePanelSettings(): UpscalePanelSettings {
 		};
 	} catch (error) {
 		console.warn('加载面板设置失败，使用默认配置', error);
-		return { ...defaultPanelSettings };
+		return {
+			...defaultPanelSettings,
+			conditionsList: getDefaultConditionPresets()
+		};
 	}
 }
 

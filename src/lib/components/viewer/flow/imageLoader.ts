@@ -509,6 +509,7 @@ export class ImageLoader {
 			// 获取带hash的图片数据：用于超分缓存检查
 			const pageInfo = currentBook.pages[currentPageIndex];
 			let imageDataWithHash: ImageDataWithHash | null = null;
+			let shouldSkipUpscale = false;
 			
 			// 使用 bookStore 的统一 hash API
 			const imageHash = bookStore.getPageHash(currentPageIndex);
@@ -520,11 +521,32 @@ export class ImageLoader {
 				console.warn('当前页没有 stableHash，跳过自动超分');
 			}
 
+			let currentConditionId: string | undefined;
+			if (pageInfo && currentBook) {
+				const panelSettings = loadUpscalePanelSettings();
+				const pageMetadata = collectPageMetadata(pageInfo, currentBook.path);
+				const conditionResult = evaluateConditions(pageMetadata, panelSettings.conditionsList);
+				currentConditionId = conditionResult.conditionId ?? undefined;
+				shouldSkipUpscale = conditionResult.action?.skip === true;
+				if (imageDataWithHash) {
+					imageDataWithHash.conditionId = currentConditionId;
+				}
+			}
+
 			// ---- 缓存优先逻辑 ----
 			let usedCache = false;
 			// imageHash 已经在上面声明过了
 			
 			if (imageHash) {
+				if (shouldSkipUpscale) {
+					console.log('条件要求跳过超分，直接显示原图，hash:', imageHash, 'conditionId:', currentConditionId);
+					bookStore.setPageUpscaleStatus(currentPageIndex, 'none');
+					this.preloadMemoryCache.delete(imageHash);
+					this.pendingPreloadTasks.delete(imageHash);
+					setTimeout(() => {
+						this.preloadNextPages();
+					}, 500);
+				} else {
 				// 1. 先检查内存缓存
 				const memCache = this.preloadMemoryCache.get(imageHash);
 				if (memCache) {
@@ -595,6 +617,7 @@ export class ImageLoader {
 					} else {
 						console.log('自动超分开关已关闭，不进行现场超分');
 					}
+				}
 				}
 			}
 
@@ -717,6 +740,11 @@ export class ImageLoader {
 							
 							if (conditionResult.excludeFromPreload) {
 								console.log(`第 ${targetIndex + 1} 页被条件排除，跳过预超分。条件ID: ${conditionResult.conditionId}`);
+								continue;
+							}
+
+							if (conditionResult.action?.skip) {
+								console.log(`第 ${targetIndex + 1} 页条件指定跳过超分，conditionId: ${conditionResult.conditionId}`);
 								continue;
 							}
 							

@@ -994,6 +994,11 @@ let showUpscaledPreview = $state(false);
 	<UpscalePanelConditionTabs
 		bind:conditions={conditionsList}
 		bind:conditionalUpscaleEnabled
+		availableModels={availableModels}
+		modelLabels={modelLabels}
+		gpuOptions={gpuOptions}
+		tileSizeOptions={tileSizeOptions}
+		noiseLevelOptions={noiseLevelOptions}
 		on:conditionsChanged={(e) => {
 			conditionsList = e.detail.conditions;
 			const settings = gatherPanelSettings();

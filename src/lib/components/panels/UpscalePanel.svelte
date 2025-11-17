@@ -26,7 +26,8 @@
 	import UpscalePanelCacheSection from './UpscalePanelCacheSection.svelte';
 	import UpscalePanelPreview from './UpscalePanelPreview.svelte';
 	import UpscalePanelConditionTabs from './UpscalePanelConditionTabs.svelte';
-	import './UpscalePanel.styles.css';
+import './UpscalePanel.styles.css';
+import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
 
 	// ==================== 状态管理 ====================
 	
@@ -133,6 +134,16 @@
 		totalSize: 0,
 		cacheDir: ''
 	});
+
+	function getResolutionString(width?: number, height?: number): string {
+		if (typeof width !== 'number' || typeof height !== 'number') {
+			return '';
+		}
+		if (width <= 0 || height <= 0) {
+			return '';
+		}
+		return `${Math.round(width)}×${Math.round(height)}`;
+	}
 
 	// GPU 选项
 	const gpuOptions = [
@@ -344,17 +355,39 @@
 		progress = 0;
 		status = '';
 		isProcessing = false;
-		
-		// 获取图片尺寸和大小
-		try {
-			// 这里可以调用 Tauri 命令获取图片信息
-			// 暂时使用占位符
-			currentImageResolution = '2560x3716';
-			currentImageSize = '6.44mb';
-		} catch (error) {
-			console.error('获取图片信息失败:', error);
+
+
+		const currentPage = bookStore.currentPage as {
+			width?: number;
+			height?: number;
+			size?: number;
+		} | null;
+
+		if (currentPage) {
+			currentImageResolution = getResolutionString(currentPage.width, currentPage.height);
+			currentImageSize =
+				typeof currentPage.size === 'number' ? formatFileSize(currentPage.size) : '';
+		} else {
+			currentImageResolution = '';
+			currentImageSize = '';
 		}
 	}
+
+	$effect(() => {
+		const unsubscribe = infoPanelStore.subscribe((state) => {
+			const imageInfo = state.imageInfo;
+			if (!imageInfo) {
+				currentImageResolution = '';
+				currentImageSize = '';
+				return;
+			}
+
+			currentImageResolution = getResolutionString(imageInfo.width, imageInfo.height);
+			currentImageSize =
+				typeof imageInfo.fileSize === 'number' ? formatFileSize(imageInfo.fileSize) : '';
+		});
+		return unsubscribe;
+	});
 
 	/**
 	 * 更新缓存统计

@@ -51,7 +51,8 @@ let lastUpscaledObjectUrl: string | null = null;
 let lastRequestedPageIndex = -1;
 let lastLoadedPageIndex = -1;
 let lastLoadedHash: string | null = null;
-let lastViewMode: 'single' | 'double' | 'panorama' | null = null;
+let lastViewMode: 'single' | 'double' | 'panorama' | 'vertical' | null = null;
+let verticalPagesData = $state<Array<{ index: number; data: string | null }>>([]);
 
 	// 注意：progressColor 和 progressBlinking 现在由 ImageViewerProgressBar 内部管理
 
@@ -711,9 +712,10 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 				imageData={imageData}
 				imageData2={imageData2}
 				upscaledImageData={derivedUpscaledUrl || bookStore.upscaledImageData}
-				viewMode={$viewerState.viewMode as 'single' | 'double' | 'panorama'}
+				viewMode={$viewerState.viewMode as 'single' | 'double' | 'panorama' | 'vertical'}
 				zoomLevel={$viewerState.zoom}
 				rotationAngle={$rotationAngle}
+				bind:verticalPages={verticalPagesData}
 			/>
 		{/if}
 	</div>

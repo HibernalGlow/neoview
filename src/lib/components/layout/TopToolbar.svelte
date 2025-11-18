@@ -34,6 +34,7 @@ import { appState, type StateSelector } from '$lib/core/state/appState';
 		RectangleVertical,
 		Columns2,
 		PanelsTopLeft,
+		ArrowDownUp,
 		X,
 		Folder,
 		FileArchive,
@@ -410,7 +411,7 @@ function toggleComparisonMode() {
 					<DropdownMenu.Trigger>
 						<Button variant="outline" size="sm" class="h-8 px-3">
 							<Eye class="h-4 w-4 mr-2" />
-							{#if $viewerState.viewMode === 'single'}单页{:else if $viewerState.viewMode === 'double'}双页{:else}全景{/if}
+							{#if $viewerState.viewMode === 'single'}单页{:else if $viewerState.viewMode === 'double'}双页{:else if $viewerState.viewMode === 'vertical'}纵向{:else}全景{/if}
 						</Button>
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content class="w-48">
@@ -425,6 +426,10 @@ function toggleComparisonMode() {
 						<DropdownMenu.Item onclick={() => setViewMode('panorama')} class={$viewerState.viewMode === 'panorama' ? 'bg-accent' : ''}>
 							<PanelsTopLeft class="h-4 w-4 mr-2" />
 							<span>全景模式</span>
+						</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={() => setViewMode('vertical')} class={$viewerState.viewMode === 'vertical' ? 'bg-accent' : ''}>
+							<ArrowDownUp class="h-4 w-4 mr-2" />
+							<span>纵向滚动</span>
 						</DropdownMenu.Item>
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>

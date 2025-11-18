@@ -55,7 +55,7 @@ interface ImageDimensions {
 export interface ImageLoaderOptions {
 	performancePreloadPages: number;
 	performanceMaxThreads: number;
-	viewMode?: 'single' | 'double' | 'panorama';
+	viewMode?: 'single' | 'double' | 'panorama' | 'vertical';
 	onImageLoaded?: (objectUrl: string, objectUrl2?: string) => void;
 	onImageMetadataReady?: (metadata: ImageDimensions | null, metadata2?: ImageDimensions | null) => void;
 	onPreloadProgress?: (progress: number, total: number) => void;
@@ -143,7 +143,7 @@ export class ImageLoader {
 	/**
 	 * 更新配置
 	 */
-	updateConfig(config: { preloadPages?: number; maxThreads?: number; viewMode?: 'single' | 'double' | 'panorama' }): void {
+	updateConfig(config: { preloadPages?: number; maxThreads?: number; viewMode?: 'single' | 'double' | 'panorama' | 'vertical' }): void {
 		const nextPreload = config.preloadPages ?? this.options.performancePreloadPages;
 		const nextThreads = config.maxThreads ?? this.options.performanceMaxThreads;
 		const nextViewMode = config.viewMode ?? this.options.viewMode;

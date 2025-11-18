@@ -255,7 +255,7 @@ export class PreloadManager {
 	/**
 	 * 公开的配置更新方法（支持视图模式）
 	 */
-	updateImageLoaderConfigWithViewMode(viewMode: 'single' | 'double' | 'panorama'): void {
+	updateImageLoaderConfigWithViewMode(viewMode: 'single' | 'double' | 'panorama' | 'vertical'): void {
 		this.imageLoader.updateConfig({
 			preloadPages: this.performancePreloadPages,
 			maxThreads: this.performanceMaxThreads,

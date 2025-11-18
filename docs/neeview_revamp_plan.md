@@ -170,30 +170,75 @@
 | `prepare_comparison_preview` (`comparison-prepare`) | `comparison-prepare` | `scheduleComparisonPreview()` | ✅ 比较模式 Blob → DataURL 转换，通过 Rust 调度器执行，沿用现有前端指标 |
 
 **3.3 IPC 规范**
-- 所有命令集中管理（`src-tauri/src/api/mod.rs`），生成 TS 类型（使用 `ts-rs` 或手写声明）。
-- 提供 Mock Server 以支持前端单测，不依赖真实 Tauri 环境。
+- 所有命令集中管理（`src-tauri/src/commands/mod.rs`），生成 TS 类型（手写声明在 `$lib/api/backgroundTasks.ts`）。
+- ✅ 提供统一的 SDK 封装（`$lib/api/backgroundTasks.ts`），前端可通过统一接口调用 Rust 调度器任务。
+- ⏳ Mock Server 以支持前端单测（待 Phase 4 实现）。
 
 交付物：
-1. Rust scheduler + IPC 接口 + TS SDK
-2. Cache 管理 CLI（清理、索引、统计）
+1. ✅ Rust scheduler + IPC 接口 + TS SDK
+   - `BackgroundTaskScheduler` 已实现并承载所有长耗时任务
+   - `$lib/api/backgroundTasks.ts` 提供统一 SDK
+   - 所有任务类型已映射到 Rust 调度器
+2. ✅ Cache 管理命令（清理、索引、统计）
+   - `cache_index_stats` - 获取缓存统计信息
+   - `cache_index_gc` - 同步执行缓存清理
+   - `enqueue_cache_maintenance` - 通过调度器执行缓存清理
+   - 前端可通过 `runCacheMaintenance()` 调用
+
+> **Phase 3 完成状态（2025-11-21）**：
+> - ✅ Rust 背景调度器已实现并承载所有长耗时任务（`thumbnail-generate`, `filebrowser-directory-load`, `filebrowser-folder-scan`, `cache-maintenance`, `comparison-prepare`, `archive-batch-scan`）
+> - ✅ 统一 SQLite Cache Index（`directory_cache` + `thumbnail_cache`）已实现
+> - ✅ 所有 IPC 命令已规范化，TS SDK 已统一封装
+> - ✅ 文档映射表已更新，所有任务类型已标记完成状态
+> - 🎯 Phase 3 核心目标已完成，可进入 Phase 4 功能复刻阶段
 
 ---
 
 ### 4. 功能复刻阶段（Week 13-24）
+> **Phase 3 已完成（2025-11-21）**：Rust 调度器、SQLite Cache Index、IPC 规范化已完成，基础设施已就绪。
+
 **4.1 浏览器/视图功能**
 - 多视图模式：单页/双页/纵向滚动/书脊翻页（参考 NeeView `BookPanel`）。
+  - ✅ 单页模式：已实现
+  - ⏳ 双页模式：基础实现完成，需要完善左右翻页和同步滚动
+  - ⏳ 纵向滚动模式：待实现（Phase 4 高优先级）
+  - ⏳ 全景模式：基础实现完成，需要完善"图片边框空隙用相邻图片显示"功能（Phase 4 高优先级）
 - 多窗口/多面板布局：实现 dock/undock、面板记忆、快捷键切换。
+  - ⏳ 多标签模式：待实现（Phase 4 高优先级）
+  - ⏳ 应用多开模式：待实现（Phase 4 高优先级）
 - 书签、收藏、阅读进度历史。
+- ⏳ 当前状态：基础视图功能已实现，正在扩展多视图模式和多窗口支持。
 
 **4.2 文件/书籍管理**
 - `BookSource` 抽象：Folder, Archive, Susie, Remote。
 - 扩展格式支持（7z, rar, zip, epub, pdf），借鉴 NeeView 的扩展管线或复用其解码 DLL（通过 Tauri plugin 调用）。
 - Library/书架视图：分类、搜索、标签。
+- ⏳ 视频格式支持：缩略图生成和显示（Phase 4 高优先级）
+  - ✅ Rust 端视频缩略图生成器已实现（`VideoThumbnailGenerator`）
+  - ⏳ 需要集成到缩略图管理系统和 FileBrowser
+  - ⏳ 需要支持视频文件的预览和播放
+- ⏳ 当前状态：基础文件浏览和压缩包支持已实现，正在扩展视频格式支持和 Library 视图。
 
 **4.3 超分 & 图像处理**
 - 多模型管理（RealCUGAN, Waifu2x, 模型热插拔），支持 GPU/CPU fallback。
 - SR Pipeline：任务依赖、缓存写入、模型/参数配置集。
 - 图像滤镜、对比、同步视图（参考 NeeView 的比较模式）。
+- ⏳ 当前状态：基础超分功能已实现（PyO3），需要扩展多模型管理和图像处理功能。
+
+**Phase 4 开发优先级（2025-11-21 更新）**：
+1. **高优先级**：
+   - ✅ 完善多视图模式（双页/纵向滚动/全景模式相邻图片填充）
+   - ✅ 视频格式缩略图显示和记录
+   - ✅ 支持 app 多开和多标签模式
+2. **中优先级**：扩展格式支持（7z, rar），Library/书架视图
+3. **低优先级**：多模型管理、图像滤镜、多窗口布局
+
+> **Phase 4 进度（2025-11-21）**：
+> - ✅ 纵向滚动视图模式基础实现完成：已添加 `vertical` 视图模式类型，更新了 `ImageViewerDisplay`、`appState`、`TopToolbar` 等组件
+> - ⏳ 纵向滚动模式数据加载逻辑：需要在 `ImageViewer` 中实现页面数据的预加载和滚动加载
+> - ⏳ 全景模式相邻图片填充：待实现
+> - ⏳ 视频缩略图集成：待实现
+> - ⏳ 多标签和多开模式：待实现
 
 交付物：
 1. 浏览器/面板功能的 MVP + UX 复刻文档

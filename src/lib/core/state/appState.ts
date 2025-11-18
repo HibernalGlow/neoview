@@ -35,7 +35,7 @@ export interface TaskCursorState {
 }
 
 export interface ViewerSlice {
-	viewMode: 'single' | 'double' | 'panorama';
+	viewMode: 'single' | 'double' | 'panorama' | 'vertical';
 	zoom: number;
 	loading: boolean;
 	comparisonVisible: boolean;

@@ -59,7 +59,7 @@ export const zoomLevel = writable<number>(loadFromStorage('zoomLevel', 1.0));
 export const rotationAngle = writable<number>(loadFromStorage('rotationAngle', 0));
 
 // 视图模式
-export type ViewMode = 'single' | 'double' | 'panorama';
+export type ViewMode = 'single' | 'double' | 'panorama' | 'vertical';
 export const viewMode = writable<ViewMode>(loadFromStorage('viewMode', 'single'));
 
 // 边栏钉住状态（钉住时不自动隐藏）

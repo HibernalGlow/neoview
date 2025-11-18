@@ -674,6 +674,8 @@ class ThumbnailManager {
       taskScheduler.enqueue({
         type: 'thumbnail-generate',
         priority: this.mapSchedulerPriority(task.priority),
+        bucket: 'background',
+        source: 'thumbnail-manager',
         executor: async () => {
           try {
             await this.processTask(pathKey);

@@ -411,6 +411,9 @@ export async function triggerAutoUpscale(
 		taskScheduler.enqueue({
 			type: isPreload ? 'auto-upscale-preload' : 'auto-upscale-current',
 			priority: isPreload ? 'normal' : 'high',
+			bucket: isPreload ? 'forward' : 'current',
+			source: isPreload ? 'preload-runtime' : 'image-viewer',
+			pageIndices: [targetPageIndex],
 			executor: async () => {
 				if (!isPreload && upscaleState.isUpscaling) {
 					console.log('超分正在进行中，跳过当前页面自动超分');

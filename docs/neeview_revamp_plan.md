@@ -5,9 +5,12 @@
 ---
 
 ### 0. 参考代码库研读（Week 1-2）
-- **模块索引**：通读 `ref/NeeView/NeeView.sln` 相关项目，建立对 `Book`, `Viewer`, `Cache`, `Task`, `Plugin`, `SR` 等核心命名空间的映射表。
-- **行为对照**：在 NeeView 运行环境中记录 UI/交互、配置项、性能指标，并与 NeoView 现功能做矩阵对比。
-- **抽象提炼**：输出一份《NeeView 架构概要》文档（类图 + 流程图），作为后续复刻的蓝图。
+- **模块索引**：通读 `ref/NeeView/NeeView.sln`，建立 `Book`, `Viewer`, `Cache`, `Task`, `RandomAccess`, `SR` 命名空间的索引表，记录关键类（`BookMemory`, `BookPageCache`, `TaskQueue`, `RandomJumpCommand` 等）的职责、依赖。
+- **行为对照**：在 NeeView 中重点演练“随机跳页 / 快速前后翻 / 双页同步”三种场景，抓取 Task 面板和 IO 轨迹，形成“操作 → 缓存命中层级 → 队列调度”时序图。初步结论：
+  - 当前页维持“前 8 / 后 8”窗口，命中优先级：内存 `PageSlot` → 磁盘缓存 → 即刻排入预取任务并返回低清版本。
+  - 随机跳页会把目标页插入 `CurrentBucket`，并将原先的前向/后向任务降级，确保 UI 秒级响应。
+  - 任务监控面板能实时显示 `ActiveSlot`, `AheadSlots`, `BehindSlots` 状态，为我们提供指标参考。
+- **抽象提炼**：输出《NeeView 架构概要》（类图 + 流程图 + 缓存窗口示意），并整理“NeoView 现状 vs NeeView 行为”对照矩阵，明确后续每个迭代需要复刻的能力（例如“随机跳 50 次平均响应 < 80ms”）。
 
 交付物：
 1. 调研日志 + 对照表（NeeView 模块 -> NeoView 现状 -> 差距）
@@ -21,7 +24,7 @@
 ┌──────────────┐
 │ UI Layer     │  ─ Svelte 组件、Routing、主题系统
 ├──────────────┤
-│ ViewModel    │  ─ TypeScript services：State / Task / Cache / Plugin
+│ ViewModel    │  ─ TypeScript services：State / Task / Cache
 ├──────────────┤
 │ IPC Layer    │  ─ Tauri commands & events（Rust）
 ├──────────────┤
@@ -29,16 +32,16 @@
 └──────────────┘
 ```
 
-**1.2 核心服务职责**
-- `StateService`: 统一管理 Settings / Book / Viewer state，支持快照、回滚、导入导出。
-- `TaskScheduler`: 负责预加载、超分、缩略图等后台任务，支持优先级、并发、取消、持久化队列。
-- `CacheService`: 抽象内存 / IndexedDB / SQLite / FS 多级缓存，维持 hash -> 模型 -> 路径索引。
-- `PluginService`: 预留 JS 插件入口，结合 NeeView 的脚本/插件机制。
-- `IPCService`: 规范化所有 invoke/event 接口，附带 TS 类型定义与调试工具。
+**1.2 核心服务职责（结合 NeeView 实践）**
+- `StateService`: 统一管理 Settings / Book / Viewer state，新增 `viewer.pageWindow`, `viewer.jumpHistory`, `viewer.preloadCursor` 等字段，提供快照/回滚/导入导出。
+- `TaskScheduler`: 负责预加载、超分、缩略图、随机跳页任务，具备桶化优先级（Current/Forward/Backward/Background）、并发控制、取消、持久化队列和监控接口。
+- `CacheService`: 抽象内存 LRU / IndexedDB / FS / PyO3 多级缓存，维持 `hash -> 层级 -> 路径` 索引，并提供窗口命中率与降级策略（低清回退）。
+- `IPCService`: 规范化 invoke/event，定义 `fetch_page_blob`, `prefetch_window`, `lookup_cache_index`, `schedule_jump_task` 等命令，并生成 TS 类型和调试工具。
 
 **1.3 数据契约**
-- 设计统一的数据结构（Book, Page, CacheEntry, Task, JobResult），保证前后端一致。
+- 设计统一的数据结构（Book, Page, CacheEntry, Task, JobResult, PageWindowSlot），保证前后端一致。
 - 引入 schema 版本管理，提供向后兼容的迁移脚本（参考 NeeView 的 config 升级逻辑）。
+- 任务描述中固定字段：`source`, `priorityBucket`, `dependsOn`, `cacheHint`, `pageIndices`，便于 Task Monitor 与 IPC 复用。
 
 交付物：
 1. 架构设计文档（模块职责、接口、序列图）
@@ -49,27 +52,29 @@
 ### 2. 基础设施改造（Week 5-8）
 > **进度（2025-11-18）**：核心服务目录已创建，`appState`、`taskScheduler`、`CacheService` 初版就绪，并在 `ImageLoader` / `preloadRuntime` / `ImageViewer` 中开始接入。
 
-> **进度（2025-11-18 更新）**：对比模式、缩略图任务开始通过 `appState` + `taskScheduler` 管理，缩略图生成已迁入统一任务队列。
+> **进度（2025-11-18 更新）**：对比模式、缩略图任务开始通过 `appState` + `taskScheduler` 管理，缩略图生成已迁入统一任务队列；已完成 NeeView 随机跳页缓存窗口调研，确认其 `ActiveSlot + AheadSlots + BehindSlots` 框架。
 
 **2.1 StateService**
-- 把 `bookStore`, `settingsManager`, 各种 $state 合并到统一的 `appState`.
-- 提供 `appState.subscribe(selector, listener)` API；Svelte 组件改为消费 selector。
-- 实现 state persistence（localStorage/IndexedDB）+ 版本迁移。
+- 合并 `bookStore`, `settingsManager`, 分散 $state 到 `appState`，组件统一走 selector。
+- 新增 `viewer.pageWindow`（包含 `center`, `forward`, `backward`, `stale`）与 `viewer.taskCursor`（记录 `oldestPendingIdx`, `furthestReadyIdx`），支持 UI 实时展示缓存覆盖范围。
+- 追踪最近 20 次跳页的 `jumpHistory`，提供给 TaskScheduler 预测下一次方向。
+- 实现本地持久化与 schema 迁移，保证状态升级不丢失。
 
-**2.2 TaskScheduler（前端版）** 直接一步到位后端实现 参考3.1
-- 初版先在 TS 侧实现队列：FIFO + 优先级 + 并发控制。
-    这个不用 直接迁移到 Rust：使用 async queue（Tokio + prioritised queue）。
-- 处理 `preloadNextPages`, `triggerAutoUpscale`, `thumbnail` 等任务，统一去重与状态机。
-- 提供开发者面板显示任务队列（类似 NeeView 的 “任务监视器”）。
+**3.1 Rust TaskScheduler**
+- 把 TS 版调度迁移到 Rust：使用 async queue（Tokio + prioritised queue）。
+- Job 类型：`Preload`, `Upscale`, `Thumbnail`, `Metadata`.
+- 对接 PyO3（Python 超分）与未来扩展（Rust/ncnn 实现）。
+
 
 **2.3 CacheService**
-- 实现内存 LRU（Map + 双向链表）＋ IndexedDB （持久化 Blob 索引）。
-- 统一封装 `getBlob`, `getThumbnail`, `getUpscaleCache`（已放弃 `ImageBitmap` 流程，直接使用 Blob/Object URL）。
-- 加入缓存监控接口（容量、命中率、清理）。
+- 内存层：实现“窗口化 LRU”，默认 ±8 页，可配置；记录命中来源（memory/indexedDB/fs/PyO3），暴露统计。
+- 持久层：IndexedDB 保存 `bookPath -> [{hash, blobKey, lastAccess}]`，磁盘/ PyO3 负责真实文件；提供 `warmUpWindow(windowSpec)` 一次性返回多页命中情况。
+- API：统一 `getBlob`, `getThumbnail`, `getUpscaleCache`, `prefetchWindow`, `evictWindow`，并和 TaskScheduler 紧密联动（未命中时自动调度补齐）。
+- UI 反馈：将 `pageWindow` 命中信息同步给 `BottomThumbnailBar`、`Sidebar` 等组件，营造 NeeView “画廊式随跳秒开”的体验。
 
 交付物：
 1. `core/services/*` 目录 + 单元测试
-2. 开发者工具面板（显示 state / task / cache）
+2. 开发者工具面板（state/task/cache）+ 随机跳页性能报表（平均响应、多级缓存命中率）
 
 ---
 
@@ -109,14 +114,9 @@
 - SR Pipeline：任务依赖、缓存写入、模型/参数配置集。
 - 图像滤镜、对比、同步视图（参考 NeeView 的比较模式）。
 
-**4.4 插件/脚本系统**
-- 前端 JS 插件机制（Manifest + 权限 + 事件 API）。
-- 后端命令注册（允许 Rust/Python 扩展）。
-- 兼容 NeeView 脚本思路：提供 CLI + REST API 触发动作。
-
 交付物：
 1. 浏览器/面板功能的 MVP + UX 复刻文档
-2. 插件 SDK & 示例
+2. SR Pipeline 与任务监控工具的联调报告
 
 ---
 
@@ -134,8 +134,8 @@
 
 ### 6. 上线与迭代（Week 31+）
 - Beta 发布 → 收集反馈 → 快速修复。
-- 文档化：用户手册、开发者文档、插件指南、API 参考（对标 NeeView 的 doc）。
-- 社区体系：Issue 模板、Roadmap、贡献指南、模型/插件仓库。
+- 文档化：用户手册、开发者文档、API 参考（对标 NeeView 的 doc）。
+- 社区体系：Issue 模板、Roadmap、贡献指南、模型仓库。
 - 长期规划：Web 端/移动端客户端、云同步、AI 功能扩展等。
 
 ---

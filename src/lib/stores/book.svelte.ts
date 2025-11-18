@@ -6,7 +6,10 @@
 import type { BookInfo, Page } from '../types';
 import * as bookApi from '../api/book';
 import { infoPanelStore } from './infoPanel.svelte';
-import { appState } from '$lib/core/state/appState';
+import { appState, type ViewerJumpSource, type PageWindowState } from '$lib/core/state/appState';
+
+const PAGE_WINDOW_PADDING = 8;
+const JUMP_HISTORY_LIMIT = 20;
 
 interface BookState {
   currentBook: BookInfo | null;
@@ -320,7 +323,7 @@ class BookStore {
       
       // 更新本地状态
       this.state.currentBook.currentPage = index;
-      this.syncAppStateBookSlice();
+      this.syncAppStateBookSlice('user');
       this.syncInfoPanelBookInfo();
     } catch (err) {
       console.error('❌ Error navigating to page:', err);
@@ -342,7 +345,7 @@ class BookStore {
       if (this.state.currentBook) {
         this.state.currentBook.currentPage = newIndex;
         this.syncInfoPanelBookInfo();
-        this.syncAppStateBookSlice();
+        this.syncAppStateBookSlice('user');
       }
       return newIndex;
     } catch (err) {
@@ -372,7 +375,7 @@ class BookStore {
       if (this.state.currentBook) {
         this.state.currentBook.currentPage = newIndex;
         this.syncInfoPanelBookInfo();
-        this.syncAppStateBookSlice();
+        this.syncAppStateBookSlice('user');
       }
       return newIndex;
     } catch (err) {
@@ -635,13 +638,82 @@ class BookStore {
     });
   }
 
-  private syncAppStateBookSlice() {
+  private computePageWindowState(currentIndex: number, totalPages: number, radius: number): PageWindowState {
+    const forward: number[] = [];
+    const backward: number[] = [];
+    for (let i = 1; i <= radius; i++) {
+      const nextIndex = currentIndex + i;
+      if (nextIndex < totalPages) {
+        forward.push(nextIndex);
+      }
+      const prevIndex = currentIndex - i;
+      if (prevIndex >= 0) {
+        backward.push(prevIndex);
+      }
+    }
+    return {
+      center: currentIndex,
+      forward,
+      backward,
+      stale: false
+    };
+  }
+
+  private syncAppStateBookSlice(source: ViewerJumpSource = 'system') {
     const currentBook = this.state.currentBook;
+    const snapshot = appState.getSnapshot();
+
+    const bookSlice = {
+      currentBookPath: currentBook?.path ?? null,
+      currentPageIndex: currentBook?.currentPage ?? 0,
+      totalPages: currentBook?.totalPages ?? 0
+    };
+
+    if (!currentBook) {
+      appState.update({
+        book: bookSlice,
+        viewer: {
+          ...snapshot.viewer,
+          pageWindow: {
+            center: 0,
+            forward: [],
+            backward: [],
+            stale: true
+          },
+          jumpHistory: [],
+          taskCursor: {
+            ...snapshot.viewer.taskCursor,
+            centerIndex: 0,
+            oldestPendingIdx: 0,
+            furthestReadyIdx: 0,
+            activeBuckets: snapshot.viewer.taskCursor.activeBuckets
+          }
+        }
+      });
+      return;
+    }
+
+    const preloadRadius =
+      snapshot.settings.performance?.preLoadSize ?? PAGE_WINDOW_PADDING;
+    const radius = Math.max(1, Math.max(PAGE_WINDOW_PADDING, preloadRadius));
+    const pageWindow = this.computePageWindowState(bookSlice.currentPageIndex, bookSlice.totalPages, radius);
+    const jumpEntry = {
+      index: bookSlice.currentPageIndex,
+      timestamp: Date.now(),
+      source
+    };
+    const jumpHistory = [jumpEntry, ...snapshot.viewer.jumpHistory].slice(0, JUMP_HISTORY_LIMIT);
+
     appState.update({
-      book: {
-        currentBookPath: currentBook?.path ?? null,
-        currentPageIndex: currentBook?.currentPage ?? 0,
-        totalPages: currentBook?.totalPages ?? 0
+      book: bookSlice,
+      viewer: {
+        ...snapshot.viewer,
+        pageWindow,
+        jumpHistory,
+        taskCursor: {
+          ...snapshot.viewer.taskCursor,
+          centerIndex: bookSlice.currentPageIndex
+        }
       }
     });
   }

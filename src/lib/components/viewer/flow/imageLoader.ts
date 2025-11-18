@@ -660,6 +660,8 @@ export class ImageLoader {
 		const snapshot = taskScheduler.enqueue({
 			type: 'preload-next-pages',
 			priority: 'normal',
+			bucket: 'forward',
+			source: 'imageLoader',
 			executor: () => this.processPreloadNextPages()
 		});
 		this.pendingPreloadJobId = snapshot.id;

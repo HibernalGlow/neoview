@@ -1,5 +1,6 @@
 import { appState } from './state/appState';
 import { settingsManager } from '$lib/settings/settingsManager';
+import './tasks/taskSchedulerBridge';
 
 let initialized = false;
 let removeSettingsListener: (() => void) | null = null;

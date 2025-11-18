@@ -1,9 +1,37 @@
 import type { NeoViewSettings } from '$lib/settings/settingsManager';
+import type { TaskBucket } from '../tasks/taskScheduler';
 
 export interface BookSlice {
 	currentBookPath: string | null;
 	currentPageIndex: number;
 	totalPages: number;
+}
+
+export type ViewerJumpSource = 'user' | 'system' | 'task';
+
+export interface JumpHistoryEntry {
+	index: number;
+	timestamp: number;
+	source: ViewerJumpSource;
+}
+
+export interface PageWindowState {
+	center: number;
+	forward: number[];
+	backward: number[];
+	stale: boolean;
+}
+
+export type TaskBucketDepth = Record<TaskBucket, number>;
+
+export interface TaskCursorState {
+	centerIndex: number;
+	oldestPendingIdx: number;
+	furthestReadyIdx: number;
+	activeBuckets: TaskBucketDepth;
+	running: number;
+	concurrency: number;
+	updatedAt: number;
 }
 
 export interface ViewerSlice {
@@ -12,6 +40,9 @@ export interface ViewerSlice {
 	loading: boolean;
 	comparisonVisible: boolean;
 	comparisonMode: 'slider' | 'side-by-side';
+	pageWindow: PageWindowState;
+	jumpHistory: JumpHistoryEntry[];
+	taskCursor: TaskCursorState;
 }
 
 export interface AppStateSnapshot {
@@ -32,6 +63,13 @@ function structuredCopy<T>(value: T): T {
 }
 
 export function createDefaultAppState(): AppStateSnapshot {
+	const defaultBucketDepth: TaskBucketDepth = {
+		current: 0,
+		forward: 0,
+		backward: 0,
+		background: 0
+	};
+
 	return {
 		settings: {
 			system: {
@@ -123,7 +161,23 @@ export function createDefaultAppState(): AppStateSnapshot {
 			zoom: 1,
 			loading: false,
 			comparisonVisible: false,
-			comparisonMode: 'slider'
+			comparisonMode: 'slider',
+			pageWindow: {
+				center: 0,
+				forward: [],
+				backward: [],
+				stale: true
+			},
+			jumpHistory: [],
+			taskCursor: {
+				centerIndex: 0,
+				oldestPendingIdx: 0,
+				furthestReadyIdx: 0,
+				activeBuckets: defaultBucketDepth,
+				running: 0,
+				concurrency: 2,
+				updatedAt: Date.now()
+			}
 		},
 		lastUpdated: Date.now()
 	};

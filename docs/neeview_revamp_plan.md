@@ -54,6 +54,7 @@
 
 **2.2 TaskScheduler（前端版）**
 - 初版先在 TS 侧实现队列：FIFO + 优先级 + 并发控制。
+    这个不用 直接迁移到 Rust：使用 async queue（Tokio + prioritised queue）。
 - 处理 `preloadNextPages`, `triggerAutoUpscale`, `thumbnail` 等任务，统一去重与状态机。
 - 提供开发者面板显示任务队列（类似 NeeView 的 “任务监视器”）。
 

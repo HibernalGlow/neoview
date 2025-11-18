@@ -4,7 +4,7 @@
 	 * 图像查看器主组件 (Svelte 5 Runes)
 	 */
 	import { bookStore } from '$lib/stores/book.svelte';
-	import { zoomLevel, zoomIn, zoomOut, resetZoom, rotationAngle, viewMode } from '$lib/stores';
+	import { zoomIn, zoomOut, resetZoom, rotationAngle } from '$lib/stores';
 	import {
 		keyBindings,
 		generateKeyCombo,
@@ -13,10 +13,12 @@
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { settingsManager, performanceSettings } from '$lib/settings/settingsManager';
 	import { onDestroy, onMount } from 'svelte';
+	import { readable } from 'svelte/store';
 	import ComparisonViewer from './ComparisonViewer.svelte';
 	import ImageViewerDisplay from './flow/ImageViewerDisplay.svelte';
 	import ImageViewerProgressBar from './flow/ImageViewerProgressBar.svelte';
 	import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
+	import { appState, type StateSelector } from '$lib/core/state/appState';
 	
 	// 新模块导入
 	import { createPreloadManager } from './flow/preloadManager.svelte';
@@ -73,6 +75,18 @@ type CachedFileMetadata = {
 
 const fileMetadataCache = new Map<string, CachedFileMetadata>();
 let metadataRequestId = 0;
+
+function createAppStateStore<T>(selector: StateSelector<T>) {
+	const initial = selector(appState.getSnapshot());
+	return readable(initial, (set) => {
+		const unsubscribe = appState.subscribe(selector, (value) => {
+			set(value);
+		});
+		return unsubscribe;
+	});
+}
+
+const viewerState = createAppStateStore((state) => state.viewer);
 
 function buildDisplayPath(book: BookInfo, page: Page): string {
 	if (book.type === 'archive' && page.innerPath) {
@@ -542,7 +556,7 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 		if (!bookStore.canNextPage) return;
 		try {
 			// 双页模式：跳过两页
-			if ($viewMode === 'double') {
+			if ($viewerState.viewMode === 'double') {
 				const currentIndex = bookStore.currentPageIndex;
 				const targetIndex = Math.min(currentIndex + 2, bookStore.totalPages - 1);
 				await bookStore.navigateToPage(targetIndex);
@@ -558,7 +572,7 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 		if (!bookStore.canPreviousPage) return;
 		try {
 			// 双页模式：后退两页
-			if ($viewMode === 'double') {
+			if ($viewerState.viewMode === 'double') {
 				const currentIndex = bookStore.currentPageIndex;
 				const targetIndex = Math.max(currentIndex - 2, 0);
 				await bookStore.navigateToPage(targetIndex);
@@ -576,7 +590,7 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 
 	// 监听视图模式变化，更新 PreloadManager 配置
 	$effect(() => {
-		const mode = $viewMode;
+		const mode = $viewerState.viewMode;
 		if (mode && preloadManager) {
 			// 更新 ImageLoader 的视图模式配置
 			preloadManager.updateImageLoaderConfigWithViewMode(mode);
@@ -660,6 +674,9 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 
 <svelte:window onkeydown={handleKeydown} />
 
+	<!-- 中文：该容器需要捕获滚轮、键盘以及鼠标事件以实现自定义阅读交互，因此禁用默认的可访问性 lint -->
+	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div 
 		class="image-viewer-container h-full w-full flex flex-col bg-black relative" 
 		data-viewer="true" 
@@ -685,8 +702,8 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 				imageBitmap={imageBitmap}
 				imageBitmap2={imageBitmap2}
 				upscaledImageData={derivedUpscaledUrl || bookStore.upscaledImageData}
-				viewMode={$viewMode as 'single' | 'double' | 'panorama'}
-				zoomLevel={$zoomLevel}
+				viewMode={$viewerState.viewMode as 'single' | 'double' | 'panorama'}
+				zoomLevel={$viewerState.zoom}
 				rotationAngle={$rotationAngle}
 			/>
 		{/if}

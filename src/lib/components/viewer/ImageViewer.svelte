@@ -58,7 +58,7 @@ let lastUpscaledObjectUrl: string | null = null;
 	let imageBitmap = $state<ImageBitmap | null>(null);
 	let imageBitmap2 = $state<ImageBitmap | null>(null); // 双页模式的第二张图
 	let loading = $state(false);
-	let loadingVisible = $state(false); // 控制loading动画的可见性
+let loadingVisible = $state(false); // 控制loading动画的可见性
 	let error = $state<string | null>(null);
 let loadingTimeout: ReturnType<typeof window.setTimeout> | null = null; // 延迟显示loading的定时器
 	

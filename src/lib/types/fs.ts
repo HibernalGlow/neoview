@@ -9,6 +9,11 @@ export interface FsItem {
   modified?: number;
   created?: number;
   isImage: boolean;
+  // EMM 元数据（可选）
+  emmMetadata?: {
+    translatedTitle?: string;
+    tags?: Record<string, string[]>;
+  };
 }
 
 /**

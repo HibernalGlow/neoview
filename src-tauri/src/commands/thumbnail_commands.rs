@@ -200,7 +200,6 @@ pub async fn generate_video_thumbnail_new(
     time_seconds: Option<f64>,
 ) -> Result<String, String> {
     use image::ImageFormat;
-    use std::io::Cursor;
     use std::path::Path;
 
     let state = app.state::<ThumbnailState>();

@@ -3,15 +3,53 @@
 	 * NeoView - Info Panel Component
 	 * 信息面板 - 显示当前图像/书籍详细信息
 	 */
-	import { Info, Image as ImageIcon, FileText, Calendar, HardDrive, ExternalLink, Copy } from '@lucide/svelte';
+	import { Info, Image as ImageIcon, FileText, Calendar, HardDrive, ExternalLink, Copy, Tag } from '@lucide/svelte';
 	import * as Separator from '$lib/components/ui/separator';
 	import { infoPanelStore, type ViewerBookInfo, type ViewerImageInfo } from '$lib/stores/infoPanel.svelte';
 	import { FileSystemAPI } from '$lib/api';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
+	import { emmMetadataStore, isCollectTagHelper } from '$lib/stores/emmMetadata.svelte';
+	import type { EMMCollectTag } from '$lib/api/emm';
 
 	let imageInfo = $state<ViewerImageInfo | null>(null);
 	let bookInfo = $state<ViewerBookInfo | null>(null);
 	let contextMenu = $state<{ x: number; y: number; open: boolean }>({ x: 0, y: 0, open: false });
+	let collectTags = $state<EMMCollectTag[]>([]);
+
+	// 加载收藏标签
+	$effect(() => {
+		collectTags = emmMetadataStore.getCollectTags();
+	});
+
+	// 检查标签是否为收藏标签
+	function isCollectTag(tag: string): EMMCollectTag | null {
+		return isCollectTagHelper(tag, collectTags);
+	}
+
+	// 获取所有标签（扁平化）
+	const allTags = $derived(() => {
+		if (!bookInfo?.emmMetadata?.tags) return [];
+		
+		const tags: Array<{ category: string; tag: string; isCollect: boolean; color?: string }> = [];
+		for (const [category, tagList] of Object.entries(bookInfo.emmMetadata.tags)) {
+			for (const tag of tagList) {
+				const collectTag = isCollectTag(tag);
+				tags.push({
+					category,
+					tag,
+					isCollect: !!collectTag,
+					color: collectTag?.color
+				});
+			}
+		}
+		
+		// 收藏标签优先
+		return tags.sort((a, b) => {
+			if (a.isCollect && !b.isCollect) return -1;
+			if (!a.isCollect && b.isCollect) return 1;
+			return 0;
+		});
+	});
 
 	$effect(() => {
 		const unsubscribe = infoPanelStore.subscribe((state) => {
@@ -137,10 +175,18 @@
 					<div class="space-y-2 text-sm">
 						<div class="flex justify-between">
 							<span class="text-muted-foreground">名称:</span>
-							<span class="font-medium truncate max-w-[200px]" title={bookInfo.name}>
-								{bookInfo.name}
+							<span class="font-medium truncate max-w-[200px]" title={bookInfo.emmMetadata?.translatedTitle || bookInfo.name}>
+								{bookInfo.emmMetadata?.translatedTitle || bookInfo.name}
 							</span>
 						</div>
+						{#if bookInfo.emmMetadata?.translatedTitle && bookInfo.emmMetadata.translatedTitle !== bookInfo.name}
+							<div class="flex justify-between">
+								<span class="text-muted-foreground">原名:</span>
+								<span class="font-mono text-xs truncate max-w-[200px]" title={bookInfo.name}>
+									{bookInfo.name}
+								</span>
+							</div>
+						{/if}
 						<div class="flex justify-between">
 							<span class="text-muted-foreground">路径:</span>
 							<span class="font-mono text-xs truncate max-w-[200px]" title={bookInfo.path}>
@@ -172,6 +218,28 @@
 						</div>
 					</div>
 				</div>
+
+				<!-- 标签信息 -->
+				{#if allTags().length > 0}
+					<Separator.Root />
+					<div class="space-y-3">
+						<div class="flex items-center gap-2 font-semibold text-sm">
+							<Tag class="h-4 w-4" />
+							<span>标签</span>
+						</div>
+						<div class="flex flex-wrap gap-1.5">
+							{#each allTags() as tagInfo}
+								<span
+									class="text-xs px-2 py-1 rounded {tagInfo.isCollect ? 'font-semibold' : ''}"
+									style="background-color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '20' : 'rgba(0,0,0,0.05)'}; color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') : 'inherit'}; border: 1px solid {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '40' : 'transparent'};"
+									title="{tagInfo.category}:{tagInfo.tag}"
+								>
+									{tagInfo.category}:{tagInfo.tag}
+								</span>
+							{/each}
+						</div>
+					</div>
+				{/if}
 
 				<Separator.Root />
 			{/if}

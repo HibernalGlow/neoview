@@ -7,6 +7,8 @@
   import { Folder, File, Image, FileArchive, Check, Star } from '@lucide/svelte';
   import type { FsItem } from '$lib/types';
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
+  import { emmMetadataStore, isCollectTagHelper } from '$lib/stores/emmMetadata.svelte';
+  import type { EMMCollectTag } from '$lib/api/emm';
 
   let {
     item,
@@ -65,6 +67,55 @@
     item.name.endsWith('.7z') ||
     item.name.endsWith('.cb7')
   );
+
+  // EMM 元数据
+  let emmMetadata = $state<{ translatedTitle?: string; tags?: Record<string, string[]> } | null>(null);
+  let collectTags = $state<EMMCollectTag[]>([]);
+
+  // 加载 EMM 元数据
+  $effect(() => {
+    if (item.path && !item.isDir) {
+      emmMetadataStore.loadMetadataByPath(item.path).then(metadata => {
+        if (metadata) {
+          emmMetadata = {
+            translatedTitle: metadata.translated_title,
+            tags: metadata.tags
+          };
+        }
+      });
+    }
+    
+    // 加载收藏标签
+    collectTags = emmMetadataStore.getCollectTags();
+  });
+
+  // 检查标签是否为收藏标签
+  function isCollectTag(tag: string): EMMCollectTag | null {
+    return isCollectTagHelper(tag, collectTags);
+  }
+
+  // 获取显示的标签（前3个，高亮收藏的）
+  const displayTags = $derived(() => {
+    if (!emmMetadata?.tags) return [];
+    
+    const allTags: Array<{ tag: string; isCollect: boolean; color?: string }> = [];
+    for (const [category, tags] of Object.entries(emmMetadata.tags)) {
+      for (const tag of tags) {
+        const collectTag = isCollectTag(tag);
+        allTags.push({
+          tag: `${category}:${tag}`,
+          isCollect: !!collectTag,
+          color: collectTag?.color
+        });
+      }
+    }
+    
+    // 收藏标签优先显示
+    const collectTagsList = allTags.filter(t => t.isCollect);
+    const normalTagsList = allTags.filter(t => !t.isCollect);
+    
+    return [...collectTagsList, ...normalTagsList].slice(0, 3);
+  });
 
   // 格式化时间
   function formatTime(ts?: number): string {
@@ -180,10 +231,15 @@
 
     <!-- 信息 -->
     <div class="min-w-0 flex-1">
-      <div class="font-medium truncate" title={item.name}>
-        {item.name}
+      <div class="font-medium truncate" title={emmMetadata?.translatedTitle || item.name}>
+        {emmMetadata?.translatedTitle || item.name}
       </div>
-      <div class="text-sm text-muted-foreground mt-1 flex items-center gap-2">
+      {#if emmMetadata?.translatedTitle && emmMetadata.translatedTitle !== item.name}
+        <div class="text-xs text-muted-foreground truncate" title={item.name}>
+          {item.name}
+        </div>
+      {/if}
+      <div class="text-sm text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
         {#if currentPage !== undefined && totalPages !== undefined}
           <span>页码: {currentPage}/{totalPages}</span>
         {/if}
@@ -194,6 +250,19 @@
           <span>{formatSize(item.size || 0, item.isDir || false)}</span>
         {/if}
       </div>
+      {#if displayTags().length > 0}
+        <div class="flex items-center gap-1 mt-1 flex-wrap">
+          {#each displayTags() as tagInfo}
+            <span
+              class="text-xs px-1.5 py-0.5 rounded {tagInfo.isCollect ? 'font-semibold' : ''}"
+              style="background-color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '20' : 'transparent'}; color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') : 'inherit'};"
+              title={tagInfo.tag}
+            >
+              {tagInfo.tag.split(':')[1]}
+            </span>
+          {/each}
+        </div>
+      {/if}
     </div>
   </div>
 {:else}
@@ -265,9 +334,14 @@
 
     <!-- 信息区域 -->
     <div class="p-2 bg-background">
-      <div class="font-medium text-sm truncate" title={item.name}>
-        {item.name}
+      <div class="font-medium text-sm truncate" title={emmMetadata?.translatedTitle || item.name}>
+        {emmMetadata?.translatedTitle || item.name}
       </div>
+      {#if emmMetadata?.translatedTitle && emmMetadata.translatedTitle !== item.name}
+        <div class="text-xs text-muted-foreground truncate" title={item.name}>
+          {item.name}
+        </div>
+      {/if}
       <div class="text-xs text-muted-foreground mt-1">
         {#if currentPage !== undefined && totalPages !== undefined}
           <span>{currentPage}/{totalPages}</span>
@@ -277,6 +351,19 @@
           <span>{formatSize(item.size || 0, item.isDir || false)}</span>
         {/if}
       </div>
+      {#if displayTags().length > 0}
+        <div class="flex items-center gap-1 mt-1 flex-wrap">
+          {#each displayTags() as tagInfo}
+            <span
+              class="text-xs px-1 py-0.5 rounded {tagInfo.isCollect ? 'font-semibold' : ''}"
+              style="background-color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '20' : 'transparent'}; color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') : 'inherit'};"
+              title={tagInfo.tag}
+            >
+              {tagInfo.tag.split(':')[1]}
+            </span>
+          {/each}
+        </div>
+      {/if}
     </div>
   </div>
 {/if}

@@ -4,6 +4,7 @@
 pub mod book_commands;
 pub mod comparison_commands;
 pub mod default;
+pub mod emm_metadata_commands;
 pub mod fs_commands;
 pub mod generic_upscale_commands;
 pub mod image_commands;

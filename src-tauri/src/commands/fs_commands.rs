@@ -557,8 +557,14 @@ pub async fn search_files(
 
     let path_buf = PathBuf::from(path);
     
+    // 转换 SearchOptions 类型
+    let fs_search_options = crate::core::fs_manager::SearchOptions {
+        include_subfolders: search_options.include_subfolders,
+        max_results: search_options.max_results,
+    };
+    
     // 使用 fs_manager 的 search_files 方法（支持索引和递归搜索）
-    fs_manager.search_files(&path_buf, &query, &search_options)
+    fs_manager.search_files(&path_buf, &query, &fs_search_options)
 }
 
 /// 检查文件是否为图片

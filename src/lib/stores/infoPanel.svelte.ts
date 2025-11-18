@@ -11,6 +11,11 @@ export interface ViewerBookInfo {
 	type: string;
 	totalPages: number;
 	currentPage: number;
+	// EMM 元数据
+	emmMetadata?: {
+		translatedTitle?: string;
+		tags?: Record<string, string[]>;
+	};
 }
 
 export interface ViewerImageInfo {

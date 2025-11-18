@@ -7,6 +7,7 @@ import type { BookInfo, Page } from '../types';
 import * as bookApi from '../api/book';
 import { infoPanelStore } from './infoPanel.svelte';
 import { appState, type ViewerJumpSource, type PageWindowState } from '$lib/core/state/appState';
+import { emmMetadataStore } from './emmMetadata.svelte';
 
 const PAGE_WINDOW_PADDING = 8;
 const JUMP_HISTORY_LIMIT = 20;
@@ -135,7 +136,7 @@ class BookStore {
       this.state.currentBook = book;
       this.syncAppStateBookSlice();
       this.state.viewerOpen = true;
-      this.syncInfoPanelBookInfo();
+      await this.syncInfoPanelBookInfo();
       
       // 记录历史
       const { historyStore } = await import('$lib/stores/history.svelte');
@@ -183,7 +184,7 @@ class BookStore {
       this.state.currentBook = book;
       this.syncAppStateBookSlice();
       this.state.viewerOpen = true;
-      this.syncInfoPanelBookInfo();
+      await this.syncInfoPanelBookInfo();
       
       // 记录历史
       const { historyStore } = await import('$lib/stores/history.svelte');
@@ -231,7 +232,7 @@ class BookStore {
       this.state.currentBook = book;
       this.syncAppStateBookSlice();
       this.state.viewerOpen = true;
-      this.syncInfoPanelBookInfo();
+      await this.syncInfoPanelBookInfo();
       
       // 记录历史
       const { historyStore } = await import('$lib/stores/history.svelte');
@@ -344,7 +345,7 @@ class BookStore {
       const newIndex = await bookApi.nextPage();
       if (this.state.currentBook) {
         this.state.currentBook.currentPage = newIndex;
-        this.syncInfoPanelBookInfo();
+        await this.syncInfoPanelBookInfo();
         this.syncAppStateBookSlice('user');
       }
       return newIndex;
@@ -374,7 +375,7 @@ class BookStore {
       const newIndex = await bookApi.previousPage();
       if (this.state.currentBook) {
         this.state.currentBook.currentPage = newIndex;
-        this.syncInfoPanelBookInfo();
+        await this.syncInfoPanelBookInfo();
         this.syncAppStateBookSlice('user');
       }
       return newIndex;
@@ -622,19 +623,25 @@ class BookStore {
     return this.getPageHash(this.currentPageIndex);
   }
 
-  private syncInfoPanelBookInfo() {
+  private async syncInfoPanelBookInfo() {
     const book = this.state.currentBook;
     if (!book) {
       infoPanelStore.resetBookInfo();
       return;
     }
 
+    // 加载 EMM 元数据
+    const emmMetadata = await emmMetadataStore.loadMetadataByPath(book.path);
     infoPanelStore.setBookInfo({
       path: book.path,
       name: book.name,
       type: book.type,
       totalPages: book.totalPages,
       currentPage: book.totalPages === 0 ? 0 : book.currentPage + 1,
+      emmMetadata: emmMetadata ? {
+        translatedTitle: emmMetadata.translated_title,
+        tags: emmMetadata.tags
+      } : undefined,
     });
   }
 

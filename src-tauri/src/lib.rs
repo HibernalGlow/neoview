@@ -200,6 +200,12 @@ pub fn run() {
             commands::fs_commands::open_with_system,
             commands::fs_commands::show_in_file_manager,
             commands::fs_commands::search_files,
+            // EMM Metadata commands
+            commands::emm_metadata_commands::load_emm_metadata,
+            commands::emm_metadata_commands::load_emm_metadata_by_path,
+            commands::emm_metadata_commands::load_emm_collect_tags,
+            commands::emm_metadata_commands::find_emm_databases,
+            commands::emm_metadata_commands::find_emm_setting_file,
             // Index commands
             commands::fs_commands::initialize_file_index,
             commands::fs_commands::build_file_index,

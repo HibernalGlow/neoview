@@ -3,18 +3,27 @@
 	 * NeoView - Info Panel Component
 	 * 信息面板 - 显示当前图像/书籍详细信息
 	 */
-	import { Info, Image as ImageIcon, FileText, Calendar, HardDrive, ExternalLink, Copy, Tag } from '@lucide/svelte';
+	import { Info, Image as ImageIcon, FileText, Calendar, HardDrive, ExternalLink, Copy, Tag, Settings, FolderOpen, Save } from '@lucide/svelte';
 	import * as Separator from '$lib/components/ui/separator';
 	import { infoPanelStore, type ViewerBookInfo, type ViewerImageInfo } from '$lib/stores/infoPanel.svelte';
 	import { FileSystemAPI } from '$lib/api';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import { emmMetadataStore, isCollectTagHelper } from '$lib/stores/emmMetadata.svelte';
 	import type { EMMCollectTag } from '$lib/api/emm';
+	import { open } from '@tauri-apps/plugin-dialog';
+	import * as Input from '$lib/components/ui/input';
+	import * as Button from '$lib/components/ui/button';
 
 	let imageInfo = $state<ViewerImageInfo | null>(null);
 	let bookInfo = $state<ViewerBookInfo | null>(null);
 	let contextMenu = $state<{ x: number; y: number; open: boolean }>({ x: 0, y: 0, open: false });
 	let collectTags = $state<EMMCollectTag[]>([]);
+	
+	// EMM 配置状态
+	let showEMMConfig = $state(false);
+	let emmDatabasePaths = $state<string[]>([]);
+	let emmSettingPath = $state<string>('');
+	let emmDatabasePathInput = $state<string>('');
 
 	// 加载收藏标签
 	$effect(() => {
@@ -146,6 +155,120 @@
 	function hideContextMenu() {
 		contextMenu = { x: 0, y: 0, open: false };
 	}
+	
+	// 加载 EMM 配置
+	function loadEMMConfig() {
+		emmDatabasePaths = emmMetadataStore.getDatabasePaths();
+		emmSettingPath = emmMetadataStore.getSettingPath() || '';
+	}
+	
+	// 选择数据库文件
+	async function selectDatabaseFile() {
+		try {
+			const selected = await open({
+				multiple: true,
+				filters: [{
+					name: 'SQLite Database',
+					extensions: ['sqlite', 'db']
+				}]
+			});
+			
+			if (selected) {
+				if (Array.isArray(selected)) {
+					const paths = selected.map(f => {
+						if (typeof f === 'string') return f;
+						if (f && typeof f === 'object' && 'path' in f) return (f as { path: string }).path;
+						return '';
+					}).filter(p => p);
+					emmDatabasePaths = [...emmDatabasePaths, ...paths];
+				} else {
+					const path = typeof selected === 'string' ? selected : 
+						(selected && typeof selected === 'object' && 'path' in selected ? (selected as { path: string }).path : '');
+					if (path) {
+						emmDatabasePaths = [...emmDatabasePaths, path];
+					}
+				}
+			}
+		} catch (err) {
+			console.error('选择数据库文件失败:', err);
+		}
+	}
+	
+	// 选择设置文件
+	async function selectSettingFile() {
+		try {
+			const selected = await open({
+				filters: [{
+					name: 'JSON File',
+					extensions: ['json']
+				}]
+			});
+			
+			if (selected) {
+				let path = '';
+				if (typeof selected === 'string') {
+					path = selected;
+				} else if (Array.isArray(selected)) {
+					const arr = selected as unknown[];
+					if (arr.length > 0) {
+						const first = arr[0];
+						path = typeof first === 'string' ? first : 
+							(first && typeof first === 'object' && 'path' in first ? (first as { path: string }).path : '');
+					}
+				} else if (selected && typeof selected === 'object' && 'path' in selected) {
+					path = (selected as { path: string }).path;
+				}
+				
+				if (path) {
+					emmSettingPath = path;
+				}
+			}
+		} catch (err) {
+			console.error('选择设置文件失败:', err);
+		}
+	}
+	
+	// 添加数据库路径（手动输入）
+	function addDatabasePath() {
+		if (emmDatabasePathInput.trim()) {
+			emmDatabasePaths = [...emmDatabasePaths, emmDatabasePathInput.trim()];
+			emmDatabasePathInput = '';
+		}
+	}
+	
+	// 删除数据库路径
+	function removeDatabasePath(index: number) {
+		emmDatabasePaths = emmDatabasePaths.filter((_, i) => i !== index);
+	}
+	
+	// 保存 EMM 配置
+	async function saveEMMConfig() {
+		emmMetadataStore.setManualDatabasePaths(emmDatabasePaths);
+		if (emmSettingPath) {
+			await emmMetadataStore.setManualSettingPath(emmSettingPath);
+		}
+		showEMMConfig = false;
+		// 重新加载当前书籍的元数据
+		if (bookInfo?.path) {
+			const metadata = await emmMetadataStore.loadMetadataByPath(bookInfo.path);
+			if (metadata) {
+				infoPanelStore.setBookInfo({
+					...bookInfo,
+					emmMetadata: {
+						translatedTitle: metadata.translated_title,
+						tags: metadata.tags
+					}
+				});
+			}
+		}
+	}
+	
+	// 初始化时加载配置
+	$effect(() => {
+		if (showEMMConfig) {
+			loadEMMConfig();
+		}
+	});
 </script>
 
 <div 
@@ -240,6 +363,117 @@
 						</div>
 					</div>
 				{/if}
+
+				<!-- EMM 元数据配置 -->
+				<Separator.Root />
+				<div class="space-y-3">
+					<div class="flex items-center justify-between">
+						<div class="flex items-center gap-2 font-semibold text-sm">
+							<Settings class="h-4 w-4" />
+							<span>EMM 元数据配置</span>
+						</div>
+						<button
+							class="text-xs text-muted-foreground hover:text-foreground"
+							onclick={() => showEMMConfig = !showEMMConfig}
+						>
+							{showEMMConfig ? '收起' : '展开'}
+						</button>
+					</div>
+					
+					{#if showEMMConfig}
+						<div class="space-y-3 text-sm border rounded-lg p-3 bg-muted/30">
+							<!-- 数据库路径配置 -->
+							<div class="space-y-2">
+								<div class="text-xs font-medium text-muted-foreground">元数据数据库路径</div>
+								<div class="space-y-2">
+									{#each emmDatabasePaths as path, index}
+										<div class="flex items-center gap-2">
+											<Input.Root
+												value={path}
+												readonly
+												class="flex-1 text-xs font-mono"
+											/>
+											<Button.Root
+												variant="ghost"
+												size="sm"
+												onclick={() => removeDatabasePath(index)}
+												class="h-8 w-8 p-0"
+											>
+												<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+												</svg>
+											</Button.Root>
+										</div>
+									{/each}
+									<div class="flex items-center gap-2">
+										<Input.Root
+											bind:value={emmDatabasePathInput}
+											placeholder="输入数据库路径或点击选择..."
+											class="flex-1 text-xs"
+											onkeydown={(e) => {
+												if (e.key === 'Enter') {
+													addDatabasePath();
+												}
+											}}
+										/>
+										<Button.Root
+											variant="outline"
+											size="sm"
+											onclick={selectDatabaseFile}
+											class="h-8"
+										>
+											<FolderOpen class="h-3 w-3 mr-1" />
+											选择
+										</Button.Root>
+										<Button.Root
+											variant="ghost"
+											size="sm"
+											onclick={addDatabasePath}
+											class="h-8"
+											disabled={!emmDatabasePathInput.trim()}
+										>
+											添加
+										</Button.Root>
+									</div>
+								</div>
+							</div>
+							
+							<!-- 设置文件路径配置 -->
+							<div class="space-y-2">
+								<div class="text-xs font-medium text-muted-foreground">设置文件路径 (setting.json)</div>
+								<div class="flex items-center gap-2">
+									<Input.Root
+										bind:value={emmSettingPath}
+										placeholder="输入设置文件路径或点击选择..."
+										class="flex-1 text-xs font-mono"
+									/>
+									<Button.Root
+										variant="outline"
+										size="sm"
+										onclick={selectSettingFile}
+										class="h-8"
+									>
+										<FolderOpen class="h-3 w-3 mr-1" />
+										选择
+									</Button.Root>
+								</div>
+							</div>
+							
+							<!-- 保存按钮 -->
+							<div class="flex items-center justify-end gap-2 pt-2 border-t">
+								<Button.Root
+									variant="default"
+									size="sm"
+									onclick={saveEMMConfig}
+									class="h-8"
+								>
+									<Save class="h-3 w-3 mr-1" />
+									保存并重新加载
+								</Button.Root>
+							</div>
+						</div>
+					{/if}
+				</div>
 
 				<Separator.Root />
 			{/if}

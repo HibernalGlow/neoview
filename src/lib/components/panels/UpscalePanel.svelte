@@ -678,11 +678,11 @@ let showUpscaledPreview = $state(false);
 			// 检查磁盘缓存
 			if (imageHash) {
 				try {
-					const cachePath = await invoke<string | null>('check_pyo3_upscale_cache', {
+					const cachePath = await tauriInvoke<string | null>('check_pyo3_upscale_cache', {
 						imageHash,
 						modelName: selectedModel,
 						scale,
-						tileSize: pyo3UpscaleManager.tileSize,
+						tileSize: tileSize,
 						noiseLevel: 0
 					});
 
@@ -702,7 +702,7 @@ let showUpscaledPreview = $state(false);
 						});
 						
 						// 读取磁盘缓存文件
-						const bytes = await invoke<number[]>('read_binary_file', { filePath: cachePath });
+						const bytes = await tauriInvoke<number[]>('read_binary_file', { filePath: cachePath });
 						const arr = new Uint8Array(bytes);
 						const blob = new Blob([arr], { type: 'image/webp' });
 						const url = URL.createObjectURL(blob);

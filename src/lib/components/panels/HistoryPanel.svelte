@@ -4,7 +4,7 @@
 	 * 历史记录面板 - 参考 NeeView HistoryPanel.cs
 	 * 使用 FileItemCard 组件，支持列表和网格视图
 	 */
-	import { Clock, X, Grid3x3, List, Activity } from '@lucide/svelte';
+	import { Clock, X, Grid3x3, List, Activity, Bookmark, Trash2, ExternalLink, FolderOpen } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { historyStore, type HistoryEntry } from '$lib/stores/history.svelte';
 	import FileItemCard from './file/components/FileItemCard.svelte';
@@ -14,11 +14,15 @@
 	import { readable } from 'svelte/store';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
 	import { taskScheduler } from '$lib/core/tasks/taskScheduler';
+	import * as ContextMenu from '$lib/components/ui/context-menu';
+	import { FileSystemAPI } from '$lib/api';
+	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 
 	let history = $state<HistoryEntry[]>([]);
 	let viewMode = $state<'list' | 'grid'>('list');
 	let thumbnails = $state<Map<string, string>>(new Map());
 	const thumbnailJobs = new Map<string, string>();
+	let contextMenu = $state<{ x: number; y: number; entry: HistoryEntry | null }>({ x: 0, y: 0, entry: null });
 
 	function createAppStateStore<T>(selector: StateSelector<T>) {
 		const initial = selector(appState.getSnapshot());
@@ -100,6 +104,71 @@
 			size: 0,
 			modified: entry.timestamp
 		};
+	}
+
+	// 显示右键菜单
+	function showContextMenu(e: MouseEvent, entry: HistoryEntry) {
+		e.preventDefault();
+		e.stopPropagation();
+		
+		const viewportWidth = window.innerWidth;
+		const viewportHeight = window.innerHeight;
+		
+		let menuX = e.clientX;
+		let menuY = e.clientY;
+		
+		const menuWidth = 180;
+		if (e.clientX + menuWidth > viewportWidth) {
+			menuX = viewportWidth - menuWidth - 10;
+		}
+		if (menuX < 10) {
+			menuX = 10;
+		}
+		
+		const maxMenuHeight = viewportHeight * 0.7;
+		if (menuY + maxMenuHeight > viewportHeight) {
+			menuY = viewportHeight - maxMenuHeight - 10;
+		}
+		
+		contextMenu = { x: menuX, y: menuY, entry };
+	}
+
+	// 隐藏右键菜单
+	function hideContextMenu() {
+		contextMenu = { x: 0, y: 0, entry: null };
+	}
+
+	// 添加到书签
+	function addToBookmark(entry: HistoryEntry) {
+		const fsItem = historyToFsItem(entry);
+		bookmarkStore.add(fsItem);
+		hideContextMenu();
+	}
+
+	// 在资源管理器中打开
+	async function openInExplorer(entry: HistoryEntry) {
+		try {
+			await FileSystemAPI.showInFileManager(entry.path);
+		} catch (err) {
+			console.error('在资源管理器中打开失败:', err);
+		}
+		hideContextMenu();
+	}
+
+	// 在外部应用中打开
+	async function openWithExternalApp(entry: HistoryEntry) {
+		try {
+			await FileSystemAPI.openWithSystem(entry.path);
+		} catch (err) {
+			console.error('在外部应用中打开失败:', err);
+		}
+		hideContextMenu();
+	}
+
+	// 复制路径
+	function copyPath(entry: HistoryEntry) {
+		navigator.clipboard.writeText(entry.path);
+		hideContextMenu();
 	}
 
 	// 订阅历史记录变化（避免无限循环）
@@ -190,6 +259,7 @@
 							timestamp={entry.timestamp}
 							onClick={() => openHistory(entry)}
 							onDoubleClick={() => openHistory(entry)}
+							onContextMenu={(e) => showContextMenu(e, entry)}
 						/>
 						<Button
 							variant="ghost"
@@ -222,6 +292,7 @@
 								timestamp={entry.timestamp}
 								onClick={() => openHistory(entry)}
 								onDoubleClick={() => openHistory(entry)}
+								onContextMenu={(e) => showContextMenu(e, entry)}
 							/>
 							<Button
 								variant="ghost"
@@ -240,4 +311,42 @@
 			</div>
 		{/if}
 	</div>
+
+	<!-- 右键菜单 -->
+	{#if contextMenu.entry}
+		<ContextMenu.Root open={true} onOpenChange={(open) => { if (!open) hideContextMenu(); }}>
+			<ContextMenu.Trigger />
+			<ContextMenu.Content
+				style="position: fixed; left: {contextMenu.x}px; top: {contextMenu.y}px; z-index: 10000;"
+			>
+				<ContextMenu.Item onclick={() => openHistory(contextMenu.entry!)}>
+					<FolderOpen class="h-4 w-4 mr-2" />
+					打开
+				</ContextMenu.Item>
+				<ContextMenu.Separator />
+				<ContextMenu.Item onclick={() => addToBookmark(contextMenu.entry!)}>
+					<Bookmark class="h-4 w-4 mr-2" />
+					添加到书签
+				</ContextMenu.Item>
+				<ContextMenu.Separator />
+				<ContextMenu.Item onclick={() => openInExplorer(contextMenu.entry!)}>
+					<ExternalLink class="h-4 w-4 mr-2" />
+					在资源管理器中打开
+				</ContextMenu.Item>
+				<ContextMenu.Item onclick={() => openWithExternalApp(contextMenu.entry!)}>
+					<ExternalLink class="h-4 w-4 mr-2" />
+					在外部应用中打开
+				</ContextMenu.Item>
+				<ContextMenu.Separator />
+				<ContextMenu.Item onclick={() => copyPath(contextMenu.entry!)}>
+					复制路径
+				</ContextMenu.Item>
+				<ContextMenu.Separator />
+				<ContextMenu.Item onclick={() => removeHistory(contextMenu.entry!.id)} class="text-red-600 focus:text-red-600">
+					<Trash2 class="h-4 w-4 mr-2" />
+					删除
+				</ContextMenu.Item>
+			</ContextMenu.Content>
+		</ContextMenu.Root>
+	{/if}
 </div>

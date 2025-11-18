@@ -18,20 +18,26 @@
 		items = [],
 		zIndex = 10000,
 		children,
-		customItems
+		customItems,
+		position = 'trigger' // 'trigger' | 'mouse'
 	}: {
 		items?: MenuItem[];
 		zIndex?: number;
 		children?: import('svelte').Snippet;
 		customItems?: import('svelte').Snippet;
+		position?: 'trigger' | 'mouse';
 	} = $props();
 
 	let open = $state(false);
 	let contextMenuElement: HTMLElement | null = $state(null);
+	let mousePosition = $state<{ x: number; y: number } | null>(null);
 
 	function handleContextMenu(e: MouseEvent) {
 		e.preventDefault();
 		e.stopPropagation();
+		if (position === 'mouse') {
+			mousePosition = { x: e.clientX, y: e.clientY };
+		}
 		open = true;
 	}
 
@@ -82,7 +88,7 @@
 	<ContextMenu.Content
 		bind:ref={contextMenuElement}
 		class="min-w-[180px]"
-		style="z-index: {zIndex};"
+		style="z-index: {zIndex}; {position === 'mouse' && mousePosition ? `position: fixed; left: ${mousePosition.x}px; top: ${mousePosition.y}px;` : ''}"
 		onpointerleave={() => {
 			// 悬停时不消失，只在点击外部时关闭
 		}}

@@ -4,7 +4,7 @@
 	 * 书签面板 - 使用 bookmarkStore 和 FileItemCard
 	 * 支持列表和网格视图
 	 */
-import { Bookmark, X, Star, Grid3x3, List, Activity } from '@lucide/svelte';
+import { Bookmark, X, Star, Grid3x3, List, Activity, Trash2, ExternalLink, FolderOpen } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import { Input } from '$lib/components/ui/input';
 import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
@@ -17,12 +17,14 @@ import { thumbnailManager } from '$lib/utils/thumbnailManager';
 import { readable } from 'svelte/store';
 import { appState, type StateSelector } from '$lib/core/state/appState';
 import { taskScheduler } from '$lib/core/tasks/taskScheduler';
+import * as ContextMenu from '$lib/components/ui/context-menu';
 
 let bookmarks: any[] = $state([]);
 let searchQuery = $state('');
 let viewMode = $state<'list' | 'grid'>('list');
 let thumbnails = $state<Map<string, string>>(new Map());
 const thumbnailJobs = new Map<string, string>();
+let contextMenu = $state<{ x: number; y: number; bookmark: any | null }>({ x: 0, y: 0, bookmark: null });
 
 function createAppStateStore<T>(selector: StateSelector<T>) {
 	const initial = selector(appState.getSnapshot());
@@ -116,6 +118,64 @@ function loadThumbnails(bookmarkList: any[]) {
 	// 切换视图模式
 	function toggleViewMode() {
 		viewMode = viewMode === 'list' ? 'grid' : 'list';
+	}
+
+	// 显示右键菜单
+	function showContextMenu(e: MouseEvent, bookmark: any) {
+		e.preventDefault();
+		e.stopPropagation();
+		
+		const viewportWidth = window.innerWidth;
+		const viewportHeight = window.innerHeight;
+		
+		let menuX = e.clientX;
+		let menuY = e.clientY;
+		
+		const menuWidth = 180;
+		if (e.clientX + menuWidth > viewportWidth) {
+			menuX = viewportWidth - menuWidth - 10;
+		}
+		if (menuX < 10) {
+			menuX = 10;
+		}
+		
+		const maxMenuHeight = viewportHeight * 0.7;
+		if (menuY + maxMenuHeight > viewportHeight) {
+			menuY = viewportHeight - maxMenuHeight - 10;
+		}
+		
+		contextMenu = { x: menuX, y: menuY, bookmark };
+	}
+
+	// 隐藏右键菜单
+	function hideContextMenu() {
+		contextMenu = { x: 0, y: 0, bookmark: null };
+	}
+
+	// 在资源管理器中打开
+	async function openInExplorer(bookmark: any) {
+		try {
+			await FileSystemAPI.showInFileManager(bookmark.path);
+		} catch (err) {
+			console.error('在资源管理器中打开失败:', err);
+		}
+		hideContextMenu();
+	}
+
+	// 在外部应用中打开
+	async function openWithExternalApp(bookmark: any) {
+		try {
+			await FileSystemAPI.openWithSystem(bookmark.path);
+		} catch (err) {
+			console.error('在外部应用中打开失败:', err);
+		}
+		hideContextMenu();
+	}
+
+	// 复制路径
+	function copyPath(bookmark: any) {
+		navigator.clipboard.writeText(bookmark.path);
+		hideContextMenu();
 	}
 
 	/**
@@ -248,6 +308,7 @@ function loadThumbnails(bookmarkList: any[]) {
 								showBookmarkMark={true}
 								onClick={() => openBookmark(bookmark)}
 								onDoubleClick={() => openBookmark(bookmark)}
+								onContextMenu={(e) => showContextMenu(e, bookmark)}
 							/>
 							<Button
 								variant="ghost"
@@ -279,6 +340,7 @@ function loadThumbnails(bookmarkList: any[]) {
 									showBookmarkMark={true}
 									onClick={() => openBookmark(bookmark)}
 									onDoubleClick={() => openBookmark(bookmark)}
+									onContextMenu={(e) => showContextMenu(e, bookmark)}
 								/>
 								<Button
 									variant="ghost"
@@ -298,4 +360,37 @@ function loadThumbnails(bookmarkList: any[]) {
 			</div>
 		{/if}
 	</div>
+
+	<!-- 右键菜单 -->
+	{#if contextMenu.bookmark}
+		<ContextMenu.Root open={true} onOpenChange={(open) => { if (!open) hideContextMenu(); }}>
+			<ContextMenu.Trigger />
+			<ContextMenu.Content
+				style="position: fixed; left: {contextMenu.x}px; top: {contextMenu.y}px; z-index: 10000;"
+			>
+				<ContextMenu.Item onclick={() => openBookmark(contextMenu.bookmark!)}>
+					<FolderOpen class="h-4 w-4 mr-2" />
+					打开
+				</ContextMenu.Item>
+				<ContextMenu.Separator />
+				<ContextMenu.Item onclick={() => openInExplorer(contextMenu.bookmark!)}>
+					<ExternalLink class="h-4 w-4 mr-2" />
+					在资源管理器中打开
+				</ContextMenu.Item>
+				<ContextMenu.Item onclick={() => openWithExternalApp(contextMenu.bookmark!)}>
+					<ExternalLink class="h-4 w-4 mr-2" />
+					在外部应用中打开
+				</ContextMenu.Item>
+				<ContextMenu.Separator />
+				<ContextMenu.Item onclick={() => copyPath(contextMenu.bookmark!)}>
+					复制路径
+				</ContextMenu.Item>
+				<ContextMenu.Separator />
+				<ContextMenu.Item onclick={() => removeBookmark(contextMenu.bookmark!.id)} class="text-red-600 focus:text-red-600">
+					<Trash2 class="h-4 w-4 mr-2" />
+					删除
+				</ContextMenu.Item>
+			</ContextMenu.Content>
+		</ContextMenu.Root>
+	{/if}
 </div>

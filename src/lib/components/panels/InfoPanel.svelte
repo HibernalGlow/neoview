@@ -3,12 +3,15 @@
 	 * NeoView - Info Panel Component
 	 * 信息面板 - 显示当前图像/书籍详细信息
 	 */
-	import { Info, Image as ImageIcon, FileText, Calendar, HardDrive } from '@lucide/svelte';
+	import { Info, Image as ImageIcon, FileText, Calendar, HardDrive, ExternalLink, Copy } from '@lucide/svelte';
 	import * as Separator from '$lib/components/ui/separator';
 	import { infoPanelStore, type ViewerBookInfo, type ViewerImageInfo } from '$lib/stores/infoPanel.svelte';
+	import { FileSystemAPI } from '$lib/api';
+	import * as ContextMenu from '$lib/components/ui/context-menu';
 
 	let imageInfo = $state<ViewerImageInfo | null>(null);
 	let bookInfo = $state<ViewerBookInfo | null>(null);
+	let contextMenu = $state<{ x: number; y: number; open: boolean }>({ x: 0, y: 0, open: false });
 
 	$effect(() => {
 		const unsubscribe = infoPanelStore.subscribe((state) => {
@@ -50,18 +53,78 @@
 				return type;
 		}
 	}
+
+	// 复制路径
+	function copyPath() {
+		if (bookInfo?.path) {
+			navigator.clipboard.writeText(bookInfo.path);
+		} else if (imageInfo?.path) {
+			navigator.clipboard.writeText(imageInfo.path);
+		}
+		hideContextMenu();
+	}
+
+	// 在资源管理器中打开
+	async function openInExplorer() {
+		const path = bookInfo?.path || imageInfo?.path;
+		if (path) {
+			try {
+				await FileSystemAPI.showInFileManager(path);
+			} catch (err) {
+				console.error('在资源管理器中打开失败:', err);
+			}
+		}
+		hideContextMenu();
+	}
+
+	// 显示右键菜单
+	function showContextMenu(e: MouseEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		
+		const viewportWidth = window.innerWidth;
+		const viewportHeight = window.innerHeight;
+		
+		let menuX = e.clientX;
+		let menuY = e.clientY;
+		
+		const menuWidth = 180;
+		if (e.clientX + menuWidth > viewportWidth) {
+			menuX = viewportWidth - menuWidth - 10;
+		}
+		if (menuX < 10) {
+			menuX = 10;
+		}
+		
+		const maxMenuHeight = viewportHeight * 0.7;
+		if (menuY + maxMenuHeight > viewportHeight) {
+			menuY = viewportHeight - maxMenuHeight - 10;
+		}
+		
+		contextMenu = { x: menuX, y: menuY, open: true };
+	}
+
+	// 隐藏右键菜单
+	function hideContextMenu() {
+		contextMenu = { x: 0, y: 0, open: false };
+	}
 </script>
 
-<div class="h-full flex flex-col bg-background">
-	<!-- 标题栏 -->
-	<div class="p-4 border-b">
-		<div class="flex items-center gap-2">
-			<Info class="h-5 w-5" />
-			<h3 class="font-semibold">详细信息</h3>
+<div 
+	class="h-full flex flex-col bg-background"
+	oncontextmenu={showContextMenu}
+	role="region"
+	aria-label="信息面板"
+>
+		<!-- 标题栏 -->
+		<div class="p-4 border-b">
+			<div class="flex items-center gap-2">
+				<Info class="h-5 w-5" />
+				<h3 class="font-semibold">详细信息</h3>
+			</div>
 		</div>
-	</div>
 
-	<div class="flex-1 overflow-auto">
+		<div class="flex-1 overflow-auto">
 		<div class="p-4 space-y-6">
 			<!-- 书籍信息 -->
 			{#if bookInfo}
@@ -213,4 +276,27 @@
 			{/if}
 		</div>
 	</div>
+
+	<!-- 右键菜单 -->
+	{#if contextMenu.open}
+		<ContextMenu.Root open={true} onOpenChange={(open) => { if (!open) hideContextMenu(); }}>
+			<ContextMenu.Trigger />
+			<ContextMenu.Content
+				style="position: fixed; left: {contextMenu.x}px; top: {contextMenu.y}px; z-index: 10000;"
+			>
+				<ContextMenu.Item onclick={copyPath}>
+					<Copy class="h-4 w-4 mr-2" />
+					复制路径
+				</ContextMenu.Item>
+				<ContextMenu.Separator />
+				<ContextMenu.Item 
+					onclick={openInExplorer}
+					disabled={!bookInfo?.path && !imageInfo?.path}
+				>
+					<ExternalLink class="h-4 w-4 mr-2" />
+					在资源管理器中打开
+				</ContextMenu.Item>
+			</ContextMenu.Content>
+		</ContextMenu.Root>
+	{/if}
 </div>

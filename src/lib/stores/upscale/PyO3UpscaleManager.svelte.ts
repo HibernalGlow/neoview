@@ -233,6 +233,10 @@ export class PyO3UpscaleManager {
 		imageHash: string,
 		resultData: Uint8Array
 	): Promise<string> {
+		if (resultData.length === 0) {
+			console.warn('saveUpscaleCache 跳过：数据为空', imageHash);
+			return '';
+		}
 		if (!this.initialized) {
 			throw new Error('PyO3 超分管理器未初始化');
 		}

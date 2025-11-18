@@ -567,6 +567,9 @@ export class ImageLoader {
 					if (currentPageHash && currentPageHash !== imageHash) {
 						console.warn(`⚠️ 内存缓存 hash 不匹配！当前页 ${currentPageIndex + 1} 的 hash: ${currentPageHash}, 缓存的 hash: ${imageHash}，清除此缓存`);
 						this.preloadMemoryCache.delete(imageHash);
+					} else if (!memCache.blob || memCache.blob.size === 0) {
+						console.warn(`⚠️ 内存缓存 blob 为空，移除缓存 hash: ${imageHash}`);
+						this.preloadMemoryCache.delete(imageHash);
 					} else {
 						usedCache = true;
 						console.log('✅ 使用内存超分缓存，页码:', currentPageIndex + 1, 'hash:', imageHash);
@@ -597,6 +600,9 @@ export class ImageLoader {
 							const currentPageHash = bookStore.getPageHash(currentPageIndex);
 							if (currentPageHash && currentPageHash !== imageHash) {
 								console.warn(`⚠️ 磁盘缓存 hash 不匹配！当前页 ${currentPageIndex + 1} 的 hash: ${currentPageHash}, 缓存的 hash: ${imageHash}，清除此缓存`);
+								this.preloadMemoryCache.delete(imageHash);
+							} else if (!diskCache.blob || diskCache.blob.size === 0) {
+								console.warn(`⚠️ 磁盘缓存 blob 为空，移除 hash: ${imageHash}`);
 								this.preloadMemoryCache.delete(imageHash);
 							} else {
 								usedCache = true;

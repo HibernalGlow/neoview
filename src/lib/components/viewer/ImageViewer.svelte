@@ -284,16 +284,15 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 						return;
 					}
 					
-					if (upscaledImageData) {
-						bookStore.setUpscaledImage(upscaledImageData);
-						upscaledImageDataForComparison = upscaledImageData;
-					}
 					if (imageBlob) {
 						bookStore.setUpscaledImageBlob(imageBlob);
+					} else if (upscaledImageData) {
+						bookStore.setUpscaledImage(upscaledImageData);
 					}
-					
-					// 将 imageData 替换为超分 URL
-					imageData = upscaledImageData;
+					if (upscaledImageData) {
+						imageData = upscaledImageData;
+						upscaledImageDataForComparison = upscaledImageData;
+					}
 					
 					// 更新当前页面状态为已完成
 					bookStore.setPageUpscaleStatus(targetIndex, 'done');
@@ -484,6 +483,9 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 				derivedUpscaledUrl = newUrl;
 				lastUpscaledObjectUrl = newUrl;
 				lastUpscaledBlob = blob;
+				bookStore.setUpscaledImage(newUrl);
+				imageData = newUrl;
+				upscaledImageDataForComparison = newUrl;
 			} catch (error) {
 				console.warn('创建超分 object URL 失败:', error);
 			}
@@ -492,6 +494,8 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 			lastUpscaledObjectUrl = null;
 			lastUpscaledBlob = null;
 			derivedUpscaledUrl = null;
+			bookStore.setUpscaledImage(null);
+			upscaledImageDataForComparison = '';
 		}
 	});
 

@@ -20,7 +20,9 @@
 	}
 
 	const viewerState = createAppStateStore((state) => state.viewer);
-	const MIN_VISIBLE_THUMBNAILS = 6;
+
+	const LOCAL_MIN_THUMBNAILS = 6;
+	const ARCHIVE_MIN_THUMBNAILS = 3;
 
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
@@ -131,16 +133,25 @@
 		}
 	});
 
-	function ensureMinimumSpan(start: number, end: number, totalPages: number): { start: number; end: number } {
+	function getMinVisibleThumbnails(): number {
+		const bookType = bookStore.currentBook?.type;
+		return bookType === 'archive' ? ARCHIVE_MIN_THUMBNAILS : LOCAL_MIN_THUMBNAILS;
+	}
+
+	function ensureMinimumSpan(
+		start: number,
+		end: number,
+		totalPages: number,
+		targetLength: number
+	): { start: number; end: number } {
 		let newStart = start;
 		let newEnd = end;
-		const desired = MIN_VISIBLE_THUMBNAILS;
 		const currentSpan = newEnd - newStart + 1;
-		if (currentSpan >= desired) {
+		if (currentSpan >= targetLength) {
 			return { start: newStart, end: newEnd };
 		}
 
-		let deficit = desired - currentSpan;
+		let deficit = targetLength - currentSpan;
 		while (deficit > 0 && (newStart > 0 || newEnd < totalPages - 1)) {
 			if (newStart > 0) {
 				newStart -= 1;
@@ -157,12 +168,13 @@
 
 	function getWindowRange(totalPages: number): { start: number; end: number } {
 		const windowState = $viewerState.pageWindow;
-		const fallbackRadius = Math.max(MIN_VISIBLE_THUMBNAILS, Math.floor(($bottomThumbnailBarHeight - 40) / 60));
+		const minVisible = getMinVisibleThumbnails();
+		const fallbackRadius = Math.max(minVisible, Math.floor(($bottomThumbnailBarHeight - 40) / 60));
 
 		if (!windowState || windowState.stale) {
 			const start = Math.max(0, bookStore.currentPageIndex - fallbackRadius);
 			const end = Math.min(totalPages - 1, bookStore.currentPageIndex + fallbackRadius);
-			return ensureMinimumSpan(start, end, totalPages);
+			return ensureMinimumSpan(start, end, totalPages, minVisible);
 		}
 
 		let minIndex = windowState.center;
@@ -176,7 +188,25 @@
 		minIndex = Math.max(0, minIndex);
 		maxIndex = Math.min(totalPages - 1, maxIndex);
 
-		return ensureMinimumSpan(minIndex, maxIndex, totalPages);
+		const currentSpan = maxIndex - minIndex + 1;
+		if (currentSpan <= minVisible) {
+			return ensureMinimumSpan(minIndex, maxIndex, totalPages, minVisible);
+		}
+
+		const center = windowState.center;
+		const half = Math.floor((minVisible - 1) / 2);
+		let start = Math.max(minIndex, center - half);
+		let end = start + minVisible - 1;
+		if (end > maxIndex) {
+			end = maxIndex;
+			start = Math.max(minIndex, end - minVisible + 1);
+		}
+		if (end >= totalPages) {
+			end = totalPages - 1;
+			start = Math.max(0, end - minVisible + 1);
+		}
+
+		return { start, end };
 	}
 
 	function windowBadgeLabel(index: number): string | null {
@@ -203,8 +233,9 @@
 
 		const totalPages = currentBook.pages.length;
 		const { start, end } = getWindowRange(totalPages);
+		const desired = getMinVisibleThumbnails();
 
-		console.log(`Loading thumbnails from ${start} to ${end} (total: ${end - start + 1})`);
+		console.log(`Loading thumbnails from ${start} to ${end} (total: ${end - start + 1}, desired: ${desired})`);
 
 		// 并行请求所有缩略图
 		const promises: Promise<void>[] = [];

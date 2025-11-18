@@ -52,8 +52,8 @@
 	}
 
 	let {
-		conditions = [],
-		conditionalUpscaleEnabled = false,
+		conditions = $bindable([] as UpscaleCondition[]),
+		conditionalUpscaleEnabled = $bindable(false),
 		availableModels = [],
 		modelLabels = {},
 		gpuOptions = [],

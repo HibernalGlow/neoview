@@ -50,9 +50,12 @@ export interface ConditionResult {
 
 export interface UpscalePanelSettings extends UpscaleSettings {
 	// ...已有字段
+	preloadPages: number;
 	backgroundConcurrency: number;
 	showPanelPreview: boolean;
 	conditionalUpscaleEnabled: boolean;
+	conditionalMinWidth: number;
+	conditionalMinHeight: number;
 	conditionsList: UpscaleCondition[];
 	selectedModel: string;
 	scale: number;
@@ -101,7 +104,14 @@ export const defaultPanelSettings: UpscalePanelSettings = {
 	backgroundConcurrency: 2,
 	showPanelPreview: false,
 	conditionalUpscaleEnabled: false,
-	conditionsList: DEFAULT_CONDITION_PRESETS
+	conditionalMinWidth: 0,
+	conditionalMinHeight: 0,
+	conditionsList: DEFAULT_CONDITION_PRESETS,
+	selectedModel: 'MODEL_WAIFU2X_CUNET_UP2X',
+	scale: 2,
+	tileSize: 64,
+	noiseLevel: 0,
+	gpuId: 0
 };
 
 export function loadUpscalePanelSettings(): UpscalePanelSettings {
@@ -124,7 +134,7 @@ export function loadUpscalePanelSettings(): UpscalePanelSettings {
 			);
 		} else if (parsed.conditions) {
 			// 向后兼容：将旧的单条件转换为条件列表
-			const oldCondition = parsed.conditions;
+			const oldCondition = parsed.conditions as any;
 			conditionsList = [
 				normalizeCondition({
 					id: 'migrated-condition',

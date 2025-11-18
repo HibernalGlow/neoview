@@ -67,55 +67,57 @@ import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
 	let availableModels = $state<string[]>([]);
 	
 	// 模型选项映射 - 使用 sr_vulkan 实际的模型名称
-	const modelLabels: Record<string, string> = {
-		'MODEL_WAIFU2X_CUNET_UP2X': 'CUNet 2x (推荐)',
-		'MODEL_WAIFU2X_PHOTO_UP2X': 'Photo 2x (照片)',
-		'MODEL_WAIFU2X_ANIME_UP2X': 'Anime 2x',
-		'MODEL_WAIFU2X_CUNET_UP1X_DENOISE3X': 'CUNet 1x + Denoise 3x',
-		'MODEL_WAIFU2X_CUNET_UP2X_DENOISE3X': 'CUNet 2x + Denoise 3x',
-		'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE3X': 'Photo 2x + Denoise 3x',
-		'MODEL_WAIFU2X_ANIME_UP2X_DENOISE3X': 'Anime 2x + Denoise 3x',
-		'MODEL_REALCUGAN_PRO_UP2X': 'Real-CUGAN Pro 2x',
-		'MODEL_REALCUGAN_SE_UP2X': 'Real-CUGAN SE 2x',
-		'MODEL_REALCUGAN_PRO_UP3X': 'Real-CUGAN Pro 3x',
-		'MODEL_REALESRGAN_ANIMAVIDEOV3_UP2X': 'Real-ESRGAN Anime 2x',
-		'MODEL_REALESRGAN_X4PLUS_ANIME_UP4X': 'Real-ESRGAN 4x+ Anime',
-		'MODEL_REALSR_DF2K_UP4X': 'Real-ESRGAN 4x DF2K',
-		'MODEL_WAIFU2X_CUNET_UP1X': 'CUNet 1x',
-		'MODEL_WAIFU2X_CUNET_UP1X_DENOISE1X': 'CUNet 1x + Denoise 1x',
-		'MODEL_WAIFU2X_CUNET_UP1X_DENOISE2X': 'CUNet 1x + Denoise 2x',
-		'MODEL_WAIFU2X_ANIME_UP2X_DENOISE0X': 'Anime 2x + Denoise 0x',
-		'MODEL_WAIFU2X_ANIME_UP2X_DENOISE1X': 'Anime 2x + Denoise 1x',
-		'MODEL_WAIFU2X_ANIME_UP2X_DENOISE2X': 'Anime 2x + Denoise 2x',
-		'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE0X': 'Photo 2x + Denoise 0x',
-		'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE1X': 'Photo 2x + Denoise 1x',
-		'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE2X': 'Photo 2x + Denoise 2x',
-		'MODEL_REALCUGAN_PRO_UP2X_DENOISE3X': 'Real-CUGAN Pro 2x + Denoise 3x',
-		'MODEL_REALCUGAN_SE_UP2X_DENOISE1X': 'Real-CUGAN SE 2x + Denoise 1x',
-		'MODEL_REALCUGAN_SE_UP2X_DENOISE2X': 'Real-CUGAN SE 2x + Denoise 2x',
-		'MODEL_REALCUGAN_PRO_UP3X_DENOISE3X': 'Real-CUGAN Pro 3x + Denoise 3x',
-		'MODEL_REALESRGAN_ANIMAVIDEOV3_UP3X': 'Real-ESRGAN Anime 3x',
-		'MODEL_REALESRGAN_ANIMAVIDEOV3_UP4X': 'Real-ESRGAN Anime 4x',
-		'MODEL_REALESRGAN_X4PLUS_ANIME_UP4X': 'Real-ESRGAN 4x+ Anime',
-		'MODEL_REALSR_DF2K_UP4X': 'Real-ESRGAN 4x DF2K',
-		'MODEL_WAIFU2X_ANIME_UP2X': 'Waifu2x Anime 2x',
-		'MODEL_WAIFU2X_CUNET_UP1X': 'Waifu2x CUNet 1x',
-		'MODEL_WAIFU2X_CUNET_UP2X': 'Waifu2x CUNet 2x',
-		'MODEL_WAIFU2X_PHOTO_UP2X': 'Waifu2x Photo 2x',
-		'MODEL_WAIFU2X_ANIME_UP2X_DENOISE0X': 'Waifu2x Anime 2x + Denoise 0x',
-		'MODEL_WAIFU2X_ANIME_UP2X_DENOISE1X': 'Waifu2x Anime 2x + Denoise 1x',
-		'MODEL_WAIFU2X_ANIME_UP2X_DENOISE2X': 'Waifu2x Anime 2x + Denoise 2x',
-		'MODEL_WAIFU2X_CUNET_UP1X_DENOISE0X': 'Waifu2x CUNet 1x + Denoise 0x',
-		'MODEL_WAIFU2X_CUNET_UP1X_DENOISE1X': 'Waifu2x CUNet 1x + Denoise 1x',
-		'MODEL_WAIFU2X_CUNET_UP1X_DENOISE2X': 'Waifu2x CUNet 1x + Denoise 2x',
-		'MODEL_WAIFU2X_CUNET_UP1X_DENOISE3X': 'Waifu2x CUNet 1x + Denoise 3x',
-		'MODEL_WAIFU2X_CUNET_UP2X_DENOISE0X': 'Waifu2x CUNet 2x + Denoise 0x',
-		'MODEL_WAIFU2X_CUNET_UP2X_DENOISE1X': 'Waifu2x CUNet 2x + Denoise 1x',
-		'MODEL_WAIFU2X_CUNET_UP2X_DENOISE2X': 'Waifu2x CUNet 2x + Denoise 2x',
-		'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE0X': 'Waifu2x Photo 2x + Denoise 0x',
-		'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE1X': 'Waifu2x Photo 2x + Denoise 1x',
-		'MODEL_WAIFU2X_PHOTO_UP2X_DENOISE2X': 'Waifu2x Photo 2x + Denoise 2x'
-	};
+	const modelLabels: Record<string, string> = (() => {
+		const map = new Map<string, string>();
+		map.set('MODEL_WAIFU2X_CUNET_UP2X', 'CUNet 2x (推荐)');
+		map.set('MODEL_WAIFU2X_PHOTO_UP2X', 'Photo 2x (照片)');
+		map.set('MODEL_WAIFU2X_ANIME_UP2X', 'Anime 2x');
+		map.set('MODEL_WAIFU2X_CUNET_UP1X_DENOISE3X', 'CUNet 1x + Denoise 3x');
+		map.set('MODEL_WAIFU2X_CUNET_UP2X_DENOISE3X', 'CUNet 2x + Denoise 3x');
+		map.set('MODEL_WAIFU2X_PHOTO_UP2X_DENOISE3X', 'Photo 2x + Denoise 3x');
+		map.set('MODEL_WAIFU2X_ANIME_UP2X_DENOISE3X', 'Anime 2x + Denoise 3x');
+		map.set('MODEL_REALCUGAN_PRO_UP2X', 'Real-CUGAN Pro 2x');
+		map.set('MODEL_REALCUGAN_SE_UP2X', 'Real-CUGAN SE 2x');
+		map.set('MODEL_REALCUGAN_PRO_UP3X', 'Real-CUGAN Pro 3x');
+		map.set('MODEL_REALESRGAN_ANIMAVIDEOV3_UP2X', 'Real-ESRGAN Anime 2x');
+		map.set('MODEL_REALESRGAN_X4PLUS_ANIME_UP4X', 'Real-ESRGAN 4x+ Anime');
+		map.set('MODEL_REALSR_DF2K_UP4X', 'Real-ESRGAN 4x DF2K');
+		map.set('MODEL_WAIFU2X_CUNET_UP1X', 'CUNet 1x');
+		map.set('MODEL_WAIFU2X_CUNET_UP1X_DENOISE1X', 'CUNet 1x + Denoise 1x');
+		map.set('MODEL_WAIFU2X_CUNET_UP1X_DENOISE2X', 'CUNet 1x + Denoise 2x');
+		map.set('MODEL_WAIFU2X_ANIME_UP2X_DENOISE0X', 'Anime 2x + Denoise 0x');
+		map.set('MODEL_WAIFU2X_ANIME_UP2X_DENOISE1X', 'Anime 2x + Denoise 1x');
+		map.set('MODEL_WAIFU2X_ANIME_UP2X_DENOISE2X', 'Anime 2x + Denoise 2x');
+		map.set('MODEL_WAIFU2X_PHOTO_UP2X_DENOISE0X', 'Photo 2x + Denoise 0x');
+		map.set('MODEL_WAIFU2X_PHOTO_UP2X_DENOISE1X', 'Photo 2x + Denoise 1x');
+		map.set('MODEL_WAIFU2X_PHOTO_UP2X_DENOISE2X', 'Photo 2x + Denoise 2x');
+		map.set('MODEL_REALCUGAN_PRO_UP2X_DENOISE3X', 'Real-CUGAN Pro 2x + Denoise 3x');
+		map.set('MODEL_REALCUGAN_SE_UP2X_DENOISE1X', 'Real-CUGAN SE 2x + Denoise 1x');
+		map.set('MODEL_REALCUGAN_SE_UP2X_DENOISE2X', 'Real-CUGAN SE 2x + Denoise 2x');
+		map.set('MODEL_REALCUGAN_PRO_UP3X_DENOISE3X', 'Real-CUGAN Pro 3x + Denoise 3x');
+		map.set('MODEL_REALESRGAN_ANIMAVIDEOV3_UP3X', 'Real-ESRGAN Anime 3x');
+		map.set('MODEL_REALESRGAN_ANIMAVIDEOV3_UP4X', 'Real-ESRGAN Anime 4x');
+		map.set('MODEL_REALESRGAN_X4PLUS_ANIME_UP4X', 'Real-ESRGAN 4x+ Anime');
+		map.set('MODEL_REALSR_DF2K_UP4X', 'Real-ESRGAN 4x DF2K');
+		map.set('MODEL_WAIFU2X_ANIME_UP2X', 'Waifu2x Anime 2x');
+		map.set('MODEL_WAIFU2X_CUNET_UP1X', 'Waifu2x CUNet 1x');
+		map.set('MODEL_WAIFU2X_CUNET_UP2X', 'Waifu2x CUNet 2x');
+		map.set('MODEL_WAIFU2X_PHOTO_UP2X', 'Waifu2x Photo 2x');
+		map.set('MODEL_WAIFU2X_ANIME_UP2X_DENOISE0X', 'Waifu2x Anime 2x + Denoise 0x');
+		map.set('MODEL_WAIFU2X_ANIME_UP2X_DENOISE1X', 'Waifu2x Anime 2x + Denoise 1x');
+		map.set('MODEL_WAIFU2X_ANIME_UP2X_DENOISE2X', 'Waifu2x Anime 2x + Denoise 2x');
+		map.set('MODEL_WAIFU2X_CUNET_UP1X_DENOISE0X', 'Waifu2x CUNet 1x + Denoise 0x');
+		map.set('MODEL_WAIFU2X_CUNET_UP1X_DENOISE1X', 'Waifu2x CUNet 1x + Denoise 1x');
+		map.set('MODEL_WAIFU2X_CUNET_UP1X_DENOISE2X', 'Waifu2x CUNet 1x + Denoise 2x');
+		map.set('MODEL_WAIFU2X_CUNET_UP1X_DENOISE3X', 'Waifu2x CUNet 1x + Denoise 3x');
+		map.set('MODEL_WAIFU2X_CUNET_UP2X_DENOISE0X', 'Waifu2x CUNet 2x + Denoise 0x');
+		map.set('MODEL_WAIFU2X_CUNET_UP2X_DENOISE1X', 'Waifu2x CUNet 2x + Denoise 1x');
+		map.set('MODEL_WAIFU2X_CUNET_UP2X_DENOISE2X', 'Waifu2x CUNet 2x + Denoise 2x');
+		map.set('MODEL_WAIFU2X_PHOTO_UP2X_DENOISE0X', 'Waifu2x Photo 2x + Denoise 0x');
+		map.set('MODEL_WAIFU2X_PHOTO_UP2X_DENOISE1X', 'Waifu2x Photo 2x + Denoise 1x');
+		map.set('MODEL_WAIFU2X_PHOTO_UP2X_DENOISE2X', 'Waifu2x Photo 2x + Denoise 2x');
+		return Object.fromEntries(map);
+	})();
 
 	// 处理状态
 	let isProcessing = $state(false);
@@ -468,9 +470,6 @@ let showUpscaledPreview = $state(false);
 			upscaledPreviewObjectUrl = null;
 		}
 		upscaledImageUrl = '';
-		bookStore.setUpscaledImage(null);
-		bookStore.setUpscaledImageBlob(null);
-		bookStore.setCurrentPageUpscaled(false);
 	}
 
 	$effect(() => {
@@ -652,26 +651,31 @@ let showUpscaledPreview = $state(false);
 				const cached = memCache.get(imageHash);
 				
 				if (cached) {
-					console.log('✅ 使用内存缓存数据，无需重新生成');
-					progress = 100;
-					status = '缓存命中';
-					
-					// 设置当前页面超分状态
-					bookStore.setCurrentPageUpscaled(true);
-					
-					const processingTime = (Date.now() - startTime) / 1000;
-					console.log('[UpscalePanel] 使用缓存！', {
-					page: bookStore.currentPageIndex + 1,
-					time: processingTime.toFixed(1)
-				});
-					
-					// 直接使用内存缓存
-					applyUpscaledPreview(imageHash, cached.url);
-					
-					// 使用统一处理函数
-					await handleUpscaleResult(imageHash, cached.blob, cached.url, new Uint8Array());
-					
-					return; // 使用缓存，直接返回
+					if (!cached.blob || cached.blob.size === 0) {
+						console.warn('[UpscalePanel] 内存缓存为空，移除后重新超分:', imageHash);
+						memCache.delete(imageHash);
+					} else {
+						console.log('✅ 使用内存缓存数据，无需重新生成');
+						progress = 100;
+						status = '缓存命中';
+						
+						// 设置当前页面超分状态
+						bookStore.setCurrentPageUpscaled(true);
+						
+						const processingTime = (Date.now() - startTime) / 1000;
+						console.log('[UpscalePanel] 使用缓存！', {
+							page: bookStore.currentPageIndex + 1,
+							time: processingTime.toFixed(1)
+						});
+						
+						// 直接使用内存缓存
+						applyUpscaledPreview(imageHash, cached.url);
+						
+						// 使用统一处理函数（resultData 为空表示无需重新保存）
+						await handleUpscaleResult(imageHash, cached.blob, cached.url, new Uint8Array());
+						
+						return; // 使用缓存，直接返回
+					}
 				}
 			}
 
@@ -687,30 +691,33 @@ let showUpscaledPreview = $state(false);
 					});
 
 					if (cachePath) {
-						console.log('✅ 发现磁盘缓存，直接使用:', cachePath);
-						progress = 100;
-						status = '磁盘缓存命中';
-						
-						// 设置当前页面超分状态
-						bookStore.setCurrentPageUpscaled(true);
-						
-						const processingTime = (Date.now() - startTime) / 1000;
-						console.log('[UpscalePanel] 使用磁盘缓存！', {
-							page: bookStore.currentPageIndex + 1,
-							time: processingTime.toFixed(1),
-							path: cachePath
-						});
-						
-						// 读取磁盘缓存文件
 						const bytes = await tauriInvoke<number[]>('read_binary_file', { filePath: cachePath });
-						const arr = new Uint8Array(bytes);
-						const blob = new Blob([arr], { type: 'image/webp' });
-						const url = URL.createObjectURL(blob);
-						
-						// 使用统一处理函数
-						await handleUpscaleResult(imageHash, blob, url, arr);
-						
-						return; // 使用磁盘缓存，直接返回
+						if (bytes.length === 0) {
+							console.warn('[UpscalePanel] 磁盘缓存文件为空，忽略并重新超分:', cachePath);
+						} else {
+							console.log('✅ 发现磁盘缓存，直接使用:', cachePath);
+							progress = 100;
+							status = '磁盘缓存命中';
+							
+							// 设置当前页面超分状态
+							bookStore.setCurrentPageUpscaled(true);
+							
+							const processingTime = (Date.now() - startTime) / 1000;
+							console.log('[UpscalePanel] 使用磁盘缓存！', {
+								page: bookStore.currentPageIndex + 1,
+								time: processingTime.toFixed(1),
+								path: cachePath
+							});
+							
+							const arr = new Uint8Array(bytes);
+							const blob = new Blob([arr], { type: 'image/webp' });
+							const url = URL.createObjectURL(blob);
+							
+							// 使用统一处理函数
+							await handleUpscaleResult(imageHash, blob, url, arr);
+							
+							return; // 使用磁盘缓存，直接返回
+						}
 					}
 				} catch (error) {
 					console.warn('检查磁盘缓存失败:', error);
@@ -861,10 +868,14 @@ let showUpscaledPreview = $state(false);
 			? (currentPage as any).path?.split(/[\/]/).pop() ?? 'upscaled.webp'
 			: 'upscaled.webp';
 
-		// 1. 异步保存到磁盘缓存 + BookStore 记录
-		if (currentPage) {
-			pyo3UpscaleManager.saveUpscaleCache(imageHash, resultData)
-				.then(cachePath => {
+		// 1. 异步保存到磁盘缓存 + BookStore 记录（仅在有新结果时）
+		if (currentPage && resultData.length > 0) {
+			pyo3UpscaleManager
+				.saveUpscaleCache(imageHash, resultData)
+				.then((cachePath) => {
+					if (!cachePath) {
+						return;
+					}
 					console.log('💾 超分结果已异步缓存:', cachePath);
 					const innerPath = (currentPage as any).innerPath || undefined;
 					bookStore.recordUpscaleCache(
@@ -876,9 +887,11 @@ let showUpscaledPreview = $state(false);
 						innerPath
 					);
 				})
-				.catch(error => {
+				.catch((error) => {
 					console.warn('异步保存缓存失败:', error);
 				});
+		} else if (resultData.length === 0) {
+			console.log('⚠️ 命中缓存，跳过重复保存:', imageHash);
 		}
 
 		// 2. 通知面板父组件（内部事件）

@@ -502,6 +502,10 @@ export async function checkUpscaleCache(
 				// 读文件 → Blob
 				const bytes = await invoke<number[]>('read_binary_file', { filePath: cachePath });
 				const arr = new Uint8Array(bytes);
+				if (arr.length === 0) {
+					console.warn('检查 PyO3 磁盘缓存失败：文件为空，忽略', cachePath);
+					return false;
+				}
 				const blob = new Blob([arr], { type: 'image/webp' });
 				const url = URL.createObjectURL(blob);
 

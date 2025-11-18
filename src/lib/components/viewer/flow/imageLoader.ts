@@ -21,6 +21,7 @@ import { upscaleState, startUpscale, updateUpscaleProgress, completeUpscale, set
 import { showSuccessToast } from '$lib/utils/toast';
 import { collectPageMetadata, evaluateConditions } from '$lib/utils/upscale/conditions';
 import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
+import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 function getPanelModelSettings() {
 	const settings = loadUpscalePanelSettings();
 	return {
@@ -85,6 +86,8 @@ export class ImageLoader {
 	private loadingTimeout: number | null = null;
 	private isPreloading = false;
 	private upscaleCompleteListener?: EventListener;
+	private pendingPreloadJobId: string | null = null;
+	private unsubscribeTaskWatcher: (() => void) | null = null;
 
 	constructor(options: ImageLoaderOptions) {
 		this.options = options;
@@ -100,6 +103,14 @@ export class ImageLoader {
 			}) as EventListener;
 			window.addEventListener('upscale-complete', this.upscaleCompleteListener);
 		}
+		// 使用任务调度器监听预加载任务状态（中文注释：确保跨模块可见任务生命周期）
+		this.unsubscribeTaskWatcher = taskScheduler.subscribe((snapshot) => {
+			if (snapshot.id === this.pendingPreloadJobId) {
+				if (snapshot.status === 'completed' || snapshot.status === 'failed' || snapshot.status === 'cancelled') {
+					this.pendingPreloadJobId = null;
+				}
+			}
+		});
 	}
 
 	/**
@@ -655,6 +666,21 @@ export class ImageLoader {
 	 * 预加载后续页面的超分
 	 */
 	async preloadNextPages(): Promise<void> {
+		// 中文注释：避免重复排队，若已有任务则直接返回
+		if (this.pendingPreloadJobId) {
+			console.log('已有预加载任务在排队，跳过本次调度');
+			return;
+		}
+		const snapshot = taskScheduler.enqueue({
+			type: 'preload-next-pages',
+			priority: 'normal',
+			executor: () => this.processPreloadNextPages()
+		});
+		this.pendingPreloadJobId = snapshot.id;
+	}
+
+	// 中文注释：核心预加载逻辑被拆分到独立方法，便于任务调度复用
+	private async processPreloadNextPages(): Promise<void> {
 		try {
 			// 使用自身配置中的预加载页数
 			const preloadPages = this.options.performancePreloadPages;
@@ -878,6 +904,10 @@ export class ImageLoader {
 		if (typeof window !== 'undefined' && this.upscaleCompleteListener) {
 			window.removeEventListener('upscale-complete', this.upscaleCompleteListener);
 			this.upscaleCompleteListener = undefined;
+		}
+		if (this.unsubscribeTaskWatcher) {
+			this.unsubscribeTaskWatcher();
+			this.unsubscribeTaskWatcher = null;
 		}
 	}
 

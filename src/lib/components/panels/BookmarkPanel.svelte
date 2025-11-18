@@ -4,21 +4,33 @@
 	 * 书签面板 - 使用 bookmarkStore 和 FileItemCard
 	 * 支持列表和网格视图
 	 */
-	import { Bookmark, X, Star, Grid3x3, List } from '@lucide/svelte';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
-	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
-	import FileItemCard from './file/components/FileItemCard.svelte';
-	import type { FsItem } from '$lib/types';
-	import { FileSystemAPI } from '$lib/api';
-	import { bookStore } from '$lib/stores/book.svelte';
-	import { thumbnailManager } from '$lib/utils/thumbnailManager';
+import { Bookmark, X, Star, Grid3x3, List, Activity } from '@lucide/svelte';
+import { Button } from '$lib/components/ui/button';
+import { Input } from '$lib/components/ui/input';
+import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
+import { bookmarkStore } from '$lib/stores/bookmark.svelte';
+import FileItemCard from './file/components/FileItemCard.svelte';
+import type { FsItem } from '$lib/types';
+import { FileSystemAPI } from '$lib/api';
+import { bookStore } from '$lib/stores/book.svelte';
+import { thumbnailManager } from '$lib/utils/thumbnailManager';
+import { readable } from 'svelte/store';
+import { appState, type StateSelector } from '$lib/core/state/appState';
+import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 
-	let bookmarks: any[] = $state([]);
-	let searchQuery = $state('');
-	let viewMode = $state<'list' | 'grid'>('list');
-	let thumbnails = $state<Map<string, string>>(new Map());
+let bookmarks: any[] = $state([]);
+let searchQuery = $state('');
+let viewMode = $state<'list' | 'grid'>('list');
+let thumbnails = $state<Map<string, string>>(new Map());
+const thumbnailJobs = new Map<string, string>();
+
+function createAppStateStore<T>(selector: StateSelector<T>) {
+	const initial = selector(appState.getSnapshot());
+	return readable(initial, (set) => appState.subscribe(selector, (value) => set(value)));
+}
+
+const bookState = createAppStateStore((state) => state.book);
+const viewerState = createAppStateStore((state) => state.viewer);
 
 	let filteredBookmarks = $derived(bookmarks.filter(
 		(b) =>
@@ -27,29 +39,37 @@
 	));
 
 	// 加载缩略图（异步，不阻塞）
-	async function loadThumbnails(bookmarkList: any[]) {
-		const newThumbnails = new Map<string, string>();
-		// 分批加载，避免一次性加载太多
-		const BATCH_SIZE = 10;
-		for (let i = 0; i < bookmarkList.length; i += BATCH_SIZE) {
-			const batch = bookmarkList.slice(i, i + BATCH_SIZE);
-			await Promise.all(batch.map(async (bookmark) => {
+function loadThumbnails(bookmarkList: any[]) {
+	for (const bookmark of bookmarkList) {
+		if (thumbnailJobs.has(bookmark.path)) {
+			continue;
+		}
+		const snapshot = taskScheduler.enqueue({
+			type: 'bookmark-thumbnail-load',
+			bucket: 'background',
+			priority: 'low',
+			source: 'bookmark-panel',
+			executor: async () => {
 				try {
-					const isDir = bookmark.type === 'folder';
-					const isArchive = bookmark.name.endsWith('.zip') || bookmark.name.endsWith('.cbz') ||
-					                 bookmark.name.endsWith('.rar') || bookmark.name.endsWith('.cbr');
+					const isArchive =
+						bookmark.name.endsWith('.zip') ||
+						bookmark.name.endsWith('.cbz') ||
+						bookmark.name.endsWith('.rar') ||
+						bookmark.name.endsWith('.cbr');
 					const thumbnail = await thumbnailManager.getThumbnail(bookmark.path, undefined, isArchive, 'normal');
 					if (thumbnail) {
-						newThumbnails.set(bookmark.path, thumbnail);
+						thumbnails = new Map(thumbnails).set(bookmark.path, thumbnail);
 					}
 				} catch (err) {
 					console.debug('加载缩略图失败:', bookmark.path, err);
+				} finally {
+					thumbnailJobs.delete(bookmark.path);
 				}
-			}));
-			// 更新缩略图（增量更新）
-			thumbnails = new Map([...thumbnails, ...newThumbnails]);
-		}
+			}
+		});
+		thumbnailJobs.set(bookmark.path, snapshot.id);
 	}
+}
 
 	// 移除书签
 	function removeBookmark(id: string) {
@@ -132,9 +152,11 @@
 			bookmarks = newBookmarks;
 			// 异步加载缩略图，不阻塞
 			if (newBookmarks.length > 0) {
-				loadThumbnails(newBookmarks).catch(err => {
-					console.debug('加载缩略图失败:', err);
-				});
+				try {
+					loadThumbnails(newBookmarks);
+				} catch (err) {
+					console.debug('调度书签缩略图失败:', err);
+				}
 			} else {
 				thumbnails = new Map();
 			}
@@ -172,6 +194,21 @@
 			bind:value={searchQuery}
 			class="w-full"
 		/>
+	</div>
+	<div class="px-4 py-2 border-b flex flex-wrap gap-3 text-[11px] text-muted-foreground bg-muted/30">
+		<span>当前书籍：{$bookState.currentBookPath ?? '—'}</span>
+		<span>
+			页码：
+			{#if $bookState.currentBookPath}
+				{$bookState.currentPageIndex + 1}/{Math.max($bookState.totalPages, 1)}
+			{:else}
+				—
+			{/if}
+		</span>
+		<span class="flex items-center gap-1">
+			<Activity class="w-3 h-3" />
+			任务 {$viewerState.taskCursor.running}/{$viewerState.taskCursor.concurrency}
+		</span>
 	</div>
 
 	<!-- 书签列表 -->

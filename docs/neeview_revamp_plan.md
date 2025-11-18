@@ -60,6 +60,8 @@
 
 > **进度（2025-11-19）**：`ThumbnailsPanel` 现已通过 `appState` 订阅 `book/viewer` 状态并读取 `viewer.taskCursor`，可视化调度器桶深度；面板内部的缩略图加载任务改为经由 `taskScheduler` 排队（`panel-thumbnail-load`），避免与主线程抢占；同时 `PyO3`/`ImageLoader`/`UpscalePanel` 的缓存回写流程加入空 Blob 防护，彻底清除了破损 `blob:` URL。
 
+> **进度（2025-11-19 夜间）**：History / Bookmark / FileBrowser 面板已接入 `appState`，在 UI 中同步当前书籍与任务窗口；相关后台流程（历史/书签缩略图、目录缓存校验、FileBrowser 目录重建、文件夹批量扫描）统一通过 `taskScheduler` (`history-thumbnail-load`, `bookmark-thumbnail-load`, `filebrowser-directory-load`, `filebrowser-cache-validate`, `filebrowser-thumbnail-preload`, `filebrowser-folder-scan`) 承载，确保随机访问与索引操作都有统一的调度指标。
+
 **2.1 StateService**
 - 合并 `bookStore`, `settingsManager`, 分散 $state 到 `appState`，组件统一走 selector。
 - 新增 `viewer.pageWindow`（包含 `center`, `forward`, `backward`, `stale`）与 `viewer.taskCursor`（记录 `oldestPendingIdx`, `furthestReadyIdx`），支持 UI 实时展示缓存覆盖范围。
@@ -68,6 +70,7 @@
 - ✅ BottomThumbnailBar 已消费 `pageWindow`/`taskCursor`，以窗口视图 + 队列指标反馈缓存命中情况，验证 ViewModel→UI 流向。
 - ✅ Sidebar 接入 `appState.book/viewer`，在 UI 中显示当前页进度与窗口覆盖状态，减少局部 store 分歧。
 - ✅ ThumbnailsPanel 已迁移到 `appState` + `taskScheduler`，缩略图生成任务以 `panel-thumbnail-load` 排队，UI 可实时显示桶深度和运行并发。
+- ✅ History / Bookmark / FileBrowser 面板已完成 ViewModel 化，统一显示当前页/任务状态；FileBrowser 的目录校验、缩略图预取、批量扫描等任务通过 `taskScheduler` 排程，形成面板级别的调度可视化。
 
 **3.1 Rust TaskScheduler**
 - 把 TS 版调度迁移到 Rust：使用 async queue（Tokio + prioritised queue）。

@@ -4,20 +4,23 @@
   import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
   import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
   import { onMount } from 'svelte';
-  import { FileSystemAPI } from '$lib/api';
-  import type { FsItem } from '$lib/types';
-  import { bookStore } from '$lib/stores/book.svelte';
-  import * as BookAPI from '$lib/api/book';
-  import PathBar from '../ui/PathBar.svelte';
-  import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
-  import { NavigationHistory } from '$lib/utils/navigationHistory';
-  import { Button } from '$lib/components/ui/button';
-  import * as Input from '$lib/components/ui/input';
-  import * as ContextMenu from '$lib/components/ui/context-menu';
-  import { bookmarkStore } from '$lib/stores/bookmark.svelte';
-  import { homeDir } from '@tauri-apps/api/path';
-  import { thumbnailManager, type ThumbnailConfig } from '$lib/utils/thumbnailManager';
-  import { buildImagePathKey } from '$lib/utils/pathHash';
+import { FileSystemAPI } from '$lib/api';
+import type { FsItem } from '$lib/types';
+import { bookStore } from '$lib/stores/book.svelte';
+import * as BookAPI from '$lib/api/book';
+import PathBar from '../ui/PathBar.svelte';
+import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
+import { NavigationHistory } from '$lib/utils/navigationHistory';
+import { Button } from '$lib/components/ui/button';
+import * as Input from '$lib/components/ui/input';
+import * as ContextMenu from '$lib/components/ui/context-menu';
+import { bookmarkStore } from '$lib/stores/bookmark.svelte';
+import { homeDir } from '@tauri-apps/api/path';
+import { thumbnailManager, type ThumbnailConfig } from '$lib/utils/thumbnailManager';
+import { buildImagePathKey } from '$lib/utils/pathHash';
+import { readable } from 'svelte/store';
+import { appState, type StateSelector } from '$lib/core/state/appState';
+import { taskScheduler } from '$lib/core/tasks/taskScheduler';
   
   function itemIsDirectory(item: any): boolean {
     return item.isDir || item.is_directory;
@@ -77,6 +80,41 @@
     thumbnailManager.cancelByPath(path);
     return 0;
   }
+  function createAppStateStore<T>(selector: StateSelector<T>) {
+    const initial = selector(appState.getSnapshot());
+    return readable(initial, (set) => appState.subscribe(selector, (value) => set(value)));
+  }
+
+  const bookState = createAppStateStore((state) => state.book);
+  const viewerState = createAppStateStore((state) => state.viewer);
+  const schedulerSource = 'file-browser';
+
+  function runWithScheduler<TResult>(options: {
+    type: string;
+    source?: string;
+    bucket?: 'current' | 'forward' | 'backward' | 'background';
+    priority?: 'low' | 'normal' | 'high';
+    executor: () => Promise<TResult>;
+  }): Promise<TResult> {
+    return new Promise<TResult>((resolve, reject) => {
+      taskScheduler.enqueue({
+        type: options.type,
+        source: options.source ?? schedulerSource,
+        bucket: options.bucket ?? 'background',
+        priority: options.priority ?? 'normal',
+        executor: async () => {
+          try {
+            const result = await options.executor();
+            resolve(result);
+            return result;
+          } catch (error) {
+            reject(error);
+            throw error;
+          }
+        }
+      });
+    });
+  }
 import { runPerformanceOptimizationTests } from '$lib/utils/performanceTests';
 import ThumbnailsPanel from './ThumbnailsPanel.svelte';
 import { getPerformanceSettings } from '$lib/api/performance';
@@ -115,7 +153,7 @@ import { getPerformanceSettings } from '$lib/api/performance';
   // UI 模式状态
   let isCheckMode = $state(false);
   let isDeleteMode = $state(false);
-  let viewMode = $state<'list' | 'thumbnails' | 'grid'>('list'); // 列表 or 缩略图视图 or 网格视图
+  let viewMode = $state<'list' | 'thumbnails'>('list'); // 列表 or 缩略图视图
   let selectedItems = $state<Set<string>>(new Set());
 
   // 缩略图入队管理
@@ -502,19 +540,33 @@ import { getPerformanceSettings } from '$lib/api/performance';
       thumbnails = new Map(cachedThumbnails);
         
         // 后台验证缓存是否仍然有效
-        navigationHistory.validateCache(path).then(async (isValid) => {
-          if (!isValid) {
-            console.log('🔄 缓存失效，重新加载:', path);
-            await reloadDirectoryFromBackend(path);
-          } else {
-            // 缓存有效，预加载缩略图
-            await loadThumbnailsForItems(loadedItems, path, cachedThumbnails);
+        runWithScheduler({
+          type: 'filebrowser-cache-validate',
+          source: `cache:${path}`,
+          bucket: 'background',
+          priority: 'low',
+          executor: async () => {
+            const isValid = await navigationHistory.validateCache(path);
+            if (!isValid) {
+              console.log('🔄 缓存失效，重新加载:', path);
+              await reloadDirectoryFromBackend(path);
+            } else {
+              await loadThumbnailsForItems(loadedItems, path, cachedThumbnails);
+            }
           }
+        }).catch((err) => {
+          console.debug('缓存验证任务失败:', err);
         });
       } else {
         // 没有缓存，从后端加载
         console.log('🔄 从后端加载:', path);
-        await reloadDirectoryFromBackend(path);
+        await runWithScheduler({
+          type: 'filebrowser-directory-load',
+          source: `load:${path}`,
+          bucket: 'background',
+          priority: 'normal',
+          executor: () => reloadDirectoryFromBackend(path)
+        });
       }
     } catch (err) {
       console.error('❌ Error loading directory:', err);
@@ -551,11 +603,24 @@ import { getPerformanceSettings } from '$lib/api/performance';
     navigationHistory.cacheDirectory(path, loadedItems, new Map(), mtime);
     
     // 立即加载缩略图（不阻塞文件浏览，但立即开始处理）
-    // 1. 先预加载数据库索引，立即显示已缓存的
-    loadThumbnailsForItemsAsync(loadedItems, path);
+    runWithScheduler({
+      type: 'filebrowser-thumbnail-preload',
+      source: `thumb:${path}`,
+      bucket: 'background',
+      priority: 'low',
+      executor: () => loadThumbnailsForItemsAsync(loadedItems, path)
+    }).catch((err) => console.debug('缩略图预加载任务失败:', err));
     
     // 预加载相邻目录
-    navigationHistory.prefetchAdjacentPaths(path);
+    runWithScheduler({
+      type: 'filebrowser-prefetch-adjacent',
+      source: `prefetch:${path}`,
+      bucket: 'background',
+      priority: 'low',
+      executor: async () => {
+        navigationHistory.prefetchAdjacentPaths(path);
+      }
+    }).catch((err) => console.debug('相邻目录预取失败:', err));
   }
 
   /**
@@ -622,28 +687,28 @@ import { getPerformanceSettings } from '$lib/api/performance';
     });
     
     // 3. 批量扫描无记录的文件夹，查找第一个图片/压缩包并绑定（异步，不阻塞）
-    // 延迟执行，避免阻塞文件浏览
-    setTimeout(async () => {
-      const foldersWithoutThumbnails: FsItem[] = [];
-      
-      // 检查哪些文件夹没有缩略图记录
-      for (const item of itemsNeedingThumbnails) {
-        if (item.isDir) {
-          const hasThumbnail = await thumbnailManager.checkThumbnailInDb(item.path);
-          if (!hasThumbnail) {
-            foldersWithoutThumbnails.push(item);
+    runWithScheduler({
+      type: 'filebrowser-folder-scan',
+      source: `scan:${path}`,
+      bucket: 'background',
+      priority: 'low',
+      executor: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const foldersWithoutThumbnails: FsItem[] = [];
+        for (const item of itemsNeedingThumbnails) {
+          if (item.isDir) {
+            const hasThumbnail = await thumbnailManager.checkThumbnailInDb(item.path);
+            if (!hasThumbnail) {
+              foldersWithoutThumbnails.push(item);
+            }
           }
         }
+        if (foldersWithoutThumbnails.length > 0) {
+          console.log(`🔍 批量扫描 ${foldersWithoutThumbnails.length} 个无记录文件夹...`);
+          await thumbnailManager.batchScanFoldersAndBindThumbnails(foldersWithoutThumbnails, path);
+        }
       }
-      
-      if (foldersWithoutThumbnails.length > 0) {
-        console.log(`🔍 批量扫描 ${foldersWithoutThumbnails.length} 个无记录文件夹...`);
-        // 异步批量扫描，不阻塞
-        thumbnailManager.batchScanFoldersAndBindThumbnails(foldersWithoutThumbnails, path).catch(err => {
-          console.debug('批量扫描文件夹失败:', err);
-        });
-      }
-    }, 500); // 延迟 500ms，确保文件浏览不阻塞
+    }).catch((err) => console.debug('批量扫描任务失败:', err));
 
     // 5. 处理合集文件夹（特殊优化）
     if (isCollectionFolder) {
@@ -1496,12 +1561,26 @@ import { getPerformanceSettings } from '$lib/api/performance';
     showSearchHistory = false;
     searchFiles(item.query);
   }
+  
+  function handleSearchHistoryKeydown(event: KeyboardEvent, item: { query: string; timestamp: number }) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      selectSearchHistory(item);
+    }
+  }
 
   /**
    * 打开搜索结果
    */
   async function openSearchResult(item: FsItem) {
     await openFile(item);
+  }
+  
+  function handleSearchResultKeydown(event: KeyboardEvent, item: FsItem) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      void openSearchResult(item);
+    }
   }
   
   /**
@@ -1666,6 +1745,21 @@ import { getPerformanceSettings } from '$lib/api/performance';
       </Button>
     </div>
   </div>
+  <div class="border-b px-3 py-1 text-[11px] text-muted-foreground flex flex-wrap gap-3 bg-muted/30">
+    <span>当前书籍：{$bookState.currentBookPath ?? '—'}</span>
+    <span>
+      页码：
+      {#if $bookState.currentBookPath}
+        {$bookState.currentPageIndex + 1}/{Math.max($bookState.totalPages, 1)}
+      {:else}
+        —
+      {/if}
+    </span>
+    <span>正在处理：{$viewerState.taskCursor.running}/{$viewerState.taskCursor.concurrency}</span>
+    <span>
+      桶深度 C {$viewerState.taskCursor.activeBuckets.current} · F {$viewerState.taskCursor.activeBuckets.forward} · B {$viewerState.taskCursor.activeBuckets.backward} · BG {$viewerState.taskCursor.activeBuckets.background}
+    </span>
+  </div>
 
   <!-- 搜索栏 -->
   <div class="flex items-center gap-2 border-b px-2 py-2 bg-background/30">
@@ -1732,7 +1826,10 @@ import { getPerformanceSettings } from '$lib/api/performance';
           {#each searchHistory as item (item.query)}
             <div
               class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center justify-between group cursor-pointer"
+              role="button"
+              tabindex="0"
               onclick={() => selectSearchHistory(item)}
+              onkeydown={(event) => handleSearchHistoryKeydown(event, item)}
             >
               <div class="flex items-center gap-2 flex-1 min-w-0">
                 <Search class="h-4 w-4 text-gray-400 flex-shrink-0" />
@@ -1841,8 +1938,9 @@ import { getPerformanceSettings } from '$lib/api/performance';
       bind:this={fileListContainer}
       class="flex-1 overflow-y-auto p-2 focus:outline-none" 
       tabindex="0" 
+      role="listbox"
+      aria-label="搜索结果列表"
       onkeydown={handleKeydown}
-      onclick={() => fileListContainer?.focus()}
     >
       <div class="mb-3 text-sm text-gray-600 px-2">
         找到 {searchResults.length} 个结果 (搜索: "{searchQuery}")
@@ -1853,7 +1951,10 @@ import { getPerformanceSettings } from '$lib/api/performance';
             <ContextMenu.Trigger>
               <div
                 class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors hover:bg-gray-50 border-gray-200"
+                role="button"
+                tabindex="0"
                 onclick={() => openSearchResult(item)}
+                onkeydown={(event) => handleSearchResultKeydown(event, item)}
               >
             <!-- 勾选框（勾选模式） -->
             {#if isCheckMode}
@@ -1920,6 +2021,7 @@ import { getPerformanceSettings } from '$lib/api/performance';
                 {formatSize(item.size, item.isDir)} · {formatDate(item.modified)}
               </div>
             </div>
+              </div>
               </ContextMenu.Trigger>
               <ContextMenu.Content>
                 <ContextMenu.Item onclick={() => addToBookmark(item)}>

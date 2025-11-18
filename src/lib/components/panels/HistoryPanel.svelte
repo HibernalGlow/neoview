@@ -4,37 +4,55 @@
 	 * 历史记录面板 - 参考 NeeView HistoryPanel.cs
 	 * 使用 FileItemCard 组件，支持列表和网格视图
 	 */
-	import { Clock, X, Grid3x3, List } from '@lucide/svelte';
+	import { Clock, X, Grid3x3, List, Activity } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { historyStore, type HistoryEntry } from '$lib/stores/history.svelte';
 	import FileItemCard from './file/components/FileItemCard.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { thumbnailManager } from '$lib/utils/thumbnailManager';
 	import type { FsItem } from '$lib/types';
+	import { readable } from 'svelte/store';
+	import { appState, type StateSelector } from '$lib/core/state/appState';
+	import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 
 	let history = $state<HistoryEntry[]>([]);
 	let viewMode = $state<'list' | 'grid'>('list');
 	let thumbnails = $state<Map<string, string>>(new Map());
+	const thumbnailJobs = new Map<string, string>();
+
+	function createAppStateStore<T>(selector: StateSelector<T>) {
+		const initial = selector(appState.getSnapshot());
+		return readable(initial, (set) => appState.subscribe(selector, (value) => set(value)));
+	}
+
+	const bookState = createAppStateStore((state) => state.book);
+	const viewerState = createAppStateStore((state) => state.viewer);
 
 	// 加载缩略图（异步，不阻塞）
-	async function loadThumbnails(entries: HistoryEntry[]) {
-		const newThumbnails = new Map<string, string>();
-		// 分批加载，避免一次性加载太多
-		const BATCH_SIZE = 10;
-		for (let i = 0; i < entries.length; i += BATCH_SIZE) {
-			const batch = entries.slice(i, i + BATCH_SIZE);
-			await Promise.all(batch.map(async (entry) => {
-				try {
-					const thumbnail = await thumbnailManager.getThumbnail(entry.path, undefined, false, 'normal');
-					if (thumbnail) {
-						newThumbnails.set(entry.path, thumbnail);
+	function loadThumbnails(entries: HistoryEntry[]) {
+		for (const entry of entries) {
+			if (thumbnailJobs.has(entry.path)) {
+				continue;
+			}
+			const snapshot = taskScheduler.enqueue({
+				type: 'history-thumbnail-load',
+				priority: 'low',
+				bucket: 'background',
+				source: 'history-panel',
+				executor: async () => {
+					try {
+						const thumbnail = await thumbnailManager.getThumbnail(entry.path, undefined, false, 'normal');
+						if (thumbnail) {
+							thumbnails = new Map(thumbnails).set(entry.path, thumbnail);
+						}
+					} catch (err) {
+						console.debug('加载缩略图失败:', entry.path, err);
+					} finally {
+						thumbnailJobs.delete(entry.path);
 					}
-				} catch (err) {
-					console.debug('加载缩略图失败:', entry.path, err);
 				}
-			}));
-			// 更新缩略图（增量更新）
-			thumbnails = new Map([...thumbnails, ...newThumbnails]);
+			});
+			thumbnailJobs.set(entry.path, snapshot.id);
 		}
 	}
 
@@ -91,9 +109,11 @@
 			history = newHistory;
 			// 异步加载缩略图，不阻塞
 			if (newHistory.length > 0) {
-				loadThumbnails(newHistory).catch(err => {
-					console.debug('加载缩略图失败:', err);
-				});
+				try {
+					loadThumbnails(newHistory);
+				} catch (err) {
+					console.debug('调度历史缩略图失败:', err);
+				}
 			} else {
 				thumbnails = new Map();
 			}
@@ -122,6 +142,21 @@
 				清除全部
 			</Button>
 		</div>
+	</div>
+	<div class="px-4 py-2 border-b text-[11px] text-muted-foreground flex flex-wrap gap-3 items-center bg-muted/30">
+		<span>当前书籍：{$bookState.currentBookPath ?? '—'}</span>
+		<span>
+			页码：
+			{#if $bookState.currentBookPath}
+				{$bookState.currentPageIndex + 1}/{Math.max($bookState.totalPages, 1)}
+			{:else}
+				—
+			{/if}
+		</span>
+		<span class="flex items-center gap-1">
+			<Activity class="w-3 h-3" />
+			任务 {$viewerState.taskCursor.running}/{$viewerState.taskCursor.concurrency}
+		</span>
 	</div>
 
 	<!-- 历史列表 -->

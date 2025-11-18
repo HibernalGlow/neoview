@@ -86,6 +86,7 @@ export class ImageLoader {
 	private isPreloading = false;
 	private upscaleCompleteListener?: EventListener;
 	private pendingPreloadJobId: string | null = null;
+	private pendingCacheTrimJobId: string | null = null;
 	private unsubscribeTaskWatcher: (() => void) | null = null;
 
 	constructor(options: ImageLoaderOptions) {
@@ -107,6 +108,11 @@ export class ImageLoader {
 			if (snapshot.id === this.pendingPreloadJobId) {
 				if (snapshot.status === 'completed' || snapshot.status === 'failed' || snapshot.status === 'cancelled') {
 					this.pendingPreloadJobId = null;
+				}
+			}
+			if (snapshot.id === this.pendingCacheTrimJobId) {
+				if (snapshot.status === 'completed' || snapshot.status === 'failed' || snapshot.status === 'cancelled') {
+					this.pendingCacheTrimJobId = null;
 				}
 			}
 		});
@@ -428,6 +434,22 @@ export class ImageLoader {
 			this.preloadMemoryCache.delete(hash);
 			totalSize -= item.blob.size;
 		}
+	}
+
+	private schedulePreloadCacheTrim(source: string): void {
+		if (this.pendingCacheTrimJobId) {
+			return;
+		}
+		const snapshot = taskScheduler.enqueue({
+			type: 'cache-trim-preload',
+			priority: 'low',
+			bucket: 'background',
+			source,
+			executor: async () => {
+				this.enforcePreloadMemoryLimit();
+			}
+		});
+		this.pendingCacheTrimJobId = snapshot.id;
 	}
 	
 	/**
@@ -949,7 +971,7 @@ export class ImageLoader {
 
 			// 写入内存缓存
 			this.preloadMemoryCache.set(imageHash, { url, blob });
-			this.enforcePreloadMemoryLimit();
+			this.schedulePreloadCacheTrim('disk-cache-load');
 			console.log('从 PyO3 磁盘缓存加载超分结果到内存:', imageHash, 'path:', cachePath);
 
 			return true;

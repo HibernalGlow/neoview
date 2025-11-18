@@ -18,7 +18,9 @@
 	import ImageViewerDisplay from './flow/ImageViewerDisplay.svelte';
 	import ImageViewerProgressBar from './flow/ImageViewerProgressBar.svelte';
 	import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
-	import { appState, type StateSelector, type AppStateSnapshot } from '$lib/core/state/appState';
+import { appState, type StateSelector, type AppStateSnapshot } from '$lib/core/state/appState';
+import { scheduleComparisonPreview, cancelComparisonPreviewTask } from '$lib/core/tasks/comparisonTaskService';
+import { scheduleUpscaleCacheCleanup } from '$lib/core/cache/cacheMaintenance';
 	
 	// 新模块导入
 	import { createPreloadManager } from './flow/preloadManager.svelte';
@@ -312,6 +314,7 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 					const { finalHash, savePath } = detail || {};
 					if (finalHash && savePath) {
 						console.log('后台超分已保存:', finalHash, savePath);
+						scheduleUpscaleCacheCleanup('upscale-saved');
 						// 持久化到 IndexedDB（按书）
 						try {
 							const cb = bookStore.currentBook;
@@ -373,20 +376,22 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 				const { enabled, mode = 'slider' } = detail;
 				const upscaledSource = derivedUpscaledUrl || bookStore.upscaledImageData;
 				if (enabled && upscaledSource) {
-					const blob = preloadManager ? await preloadManager.getCurrentPageBlob() : null;
-					if (!blob) {
-						updateViewerState({ comparisonVisible: false });
-						return;
-					}
-					updateViewerState({ comparisonVisible: true, comparisonMode: mode });
 					try {
-						originalImageDataForComparison = await blobToDataURL(blob);
+						const preview = await scheduleComparisonPreview(
+							async () => (preloadManager ? await preloadManager.getCurrentPageBlob() : null),
+							bookStore.currentPageIndex
+						);
+						updateViewerState({ comparisonVisible: true, comparisonMode: mode });
+						originalImageDataForComparison = preview;
+						upscaledImageDataForComparison = upscaledSource;
 					} catch (error) {
-						console.error('对比模式：转换 Blob 为 DataURL 失败:', error);
+						console.error('对比模式：生成原图预览失败:', error);
+						updateViewerState({ comparisonVisible: false });
 						originalImageDataForComparison = '';
+						upscaledImageDataForComparison = '';
 					}
-					upscaledImageDataForComparison = upscaledSource;
 				} else {
+					cancelComparisonPreviewTask('comparison disabled');
 					updateViewerState({ comparisonVisible: false });
 				}
 			},
@@ -432,6 +437,7 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 		if (preloadManager) {
 			preloadManager.cleanup();
 		}
+	cancelComparisonPreviewTask('viewer destroyed');
 		if ((window as { preloadManager?: typeof preloadManager }).preloadManager === preloadManager) {
 			delete (window as { preloadManager?: typeof preloadManager }).preloadManager;
 		}
@@ -669,18 +675,6 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 	function closeComparison() {
 		updateViewerState({ comparisonVisible: false });
 	}
-
-	/**
-	 * 将 Blob 转换为 DataURL
-	 */
-	async function blobToDataURL(blob: Blob): Promise<string> {
-	const reader = new FileReader();
-	return await new Promise((resolve, reject) => {
-		reader.onload = () => resolve(reader.result as string);
-		reader.onerror = (error) => reject(error);
-		reader.readAsDataURL(blob);
-	});
-}
 
 	// ...
 </script>

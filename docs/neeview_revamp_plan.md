@@ -56,12 +56,15 @@
 
 > **进度（2025-11-18 晚间）**：`viewer.pageWindow`、`jumpHistory`、`taskCursor` 已写入 `appState` 并由 BookStore 驱动；TaskScheduler 引入 Current/Forward/Backward/Background 桶化策略及指标订阅；BottomThumbnailBar 读取 pageWindow 与 taskCursor 实时展示覆盖范围与队列深度，形成 NeeView 风格的窗口化随机访问体验雏形。
 
+> **进度（2025-11-18 夜间）**：Comparison 预览生成和内存/磁盘缓存维护均已通过 `taskScheduler` 承载（`comparison-prepare`、`cache-trim-preload`、`cache-maintenance` 任务）；`ImageViewer` 在开启对比模式时会调度高优先级任务生成原图 DataURL，并在 `upscale-saved` 事件后异步触发缓存清理；Sidebar 现在直接消费 `appState.book/viewer`，即可展示当前页与窗口覆盖范围，完成面板层 ViewModel 迁移的下一步。
+
 **2.1 StateService**
 - 合并 `bookStore`, `settingsManager`, 分散 $state 到 `appState`，组件统一走 selector。
 - 新增 `viewer.pageWindow`（包含 `center`, `forward`, `backward`, `stale`）与 `viewer.taskCursor`（记录 `oldestPendingIdx`, `furthestReadyIdx`），支持 UI 实时展示缓存覆盖范围。
 - 追踪最近 20 次跳页的 `jumpHistory`，提供给 TaskScheduler 预测下一次方向。
 - 实现本地持久化与 schema 迁移，保证状态升级不丢失。
 - ✅ BottomThumbnailBar 已消费 `pageWindow`/`taskCursor`，以窗口视图 + 队列指标反馈缓存命中情况，验证 ViewModel→UI 流向。
+- ✅ Sidebar 接入 `appState.book/viewer`，在 UI 中显示当前页进度与窗口覆盖状态，减少局部 store 分歧。
 
 **3.1 Rust TaskScheduler**
 - 把 TS 版调度迁移到 Rust：使用 async queue（Tokio + prioritised queue）。
@@ -78,6 +81,11 @@
 交付物：
 1. `core/services/*` 目录 + 单元测试
 2. 开发者工具面板（state/task/cache）+ 随机跳页性能报表（平均响应、多级缓存命中率）
+
+#### 下一次 `pnpm tauri dev` 验证（Milestone #2）
+- ✅ Comparison 生成、缓存维护、Sidebar 等高频背景流程已迁入统一调度队列，日志与 `appState` 能完整反映窗口/任务状态。
+- ⏳ 需要在日常操作中观察新版调度（尤其是缓存裁剪与 comparison 预览）的稳定性，并补齐 `BottomThumbnailBar` / Sidebar 交互的回归用例。
+- 🎯 计划在上述 soak 测试完成后运行 `pnpm tauri dev`：重点验证随机跳页是否仍保持“原图→超分无闪屏”的体验，并复查 CSP/Blob 修复在 DevTools 下的表现。完成该节点即视为 Phase 2 可对外演示的检查点。
 
 ---
 

@@ -4,8 +4,9 @@
 	 * 左侧边栏组件 - 使用 shadcn-svelte Sidebar 二级菜单结构，恢复拖拽和悬停逻辑
 	 */
 	import { Folder, History, Bookmark, Info, Image as ImageIcon, List, Pin, PinOff } from '@lucide/svelte';
-	import { activePanel, setActivePanelTab, sidebarWidth, sidebarPinned, sidebarOpen } from '$lib/stores';
-	import type { PanelType } from '$lib/stores';
+	import { readable } from 'svelte/store';
+import { activePanel, setActivePanelTab, sidebarWidth, sidebarPinned, sidebarOpen } from '$lib/stores';
+import type { PanelTabType } from '$lib/stores';
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import FileBrowser from '$lib/components/panels/FileBrowser.svelte';
 	import HistoryPanel from '$lib/components/panels/HistoryPanel.svelte';
@@ -14,6 +15,7 @@
 	import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import HoverWrapper from './HoverWrapper.svelte';
+	import { appState, type StateSelector } from '$lib/core/state/appState';
 
 	interface Props {
 		onResize?: (width: number) => void;
@@ -25,7 +27,14 @@
 
 	const sidebar = Sidebar.useSidebar();
 
-	const navMain = [
+	type NavItem = {
+		title: string;
+		url: string;
+		icon: typeof Folder;
+		value: PanelTabType;
+	};
+
+	const navMain: NavItem[] = [
 		{
 			title: '文件夹',
 			url: '#',
@@ -66,6 +75,27 @@
 
 	let activeItem = $state(navMain[0]);
 
+	function createAppStateStore<T>(selector: StateSelector<T>) {
+		const initial = selector(appState.getSnapshot());
+		return readable(initial, (set) => appState.subscribe(selector, (value) => set(value)));
+	}
+
+	const viewerState = createAppStateStore((state) => state.viewer);
+	const bookState = createAppStateStore((state) => state.book);
+
+	const sidebarBookSummary = $derived(
+		$bookState.totalPages > 0
+			? `第 ${$bookState.currentPageIndex + 1}/${$bookState.totalPages} 页`
+			: '未打开书籍'
+	);
+	const sidebarWindowSummary = $derived(() => {
+		const windowState = $viewerState.pageWindow;
+		if (!windowState || windowState.stale) {
+			return '窗口初始化中';
+		}
+		return `窗口中心 ${windowState.center + 1} · 前 ${windowState.forward.length} / 后 ${windowState.backward.length}`;
+	});
+
 	// 拖拽调整大小
 	let isResizing = $state(false);
 	let startX = 0;
@@ -105,11 +135,11 @@
 		}
 	}
 
-	function handleTabChange(item: typeof navMain[0]) {
+	function handleTabChange(item: NavItem) {
 		activeItem = item;
 		
 		// 设置活动面板
-		setActivePanelTab(item.value as PanelType);
+		setActivePanelTab(item.value as PanelTabType);
 		
 		// 确保侧边栏打开
 		sidebar.setOpen(true);
@@ -224,8 +254,17 @@
 					<div class="flex w-full items-center justify-between">
 						<div class="text-foreground text-base font-medium">
 							{activeItem.title}
+							<div class="text-xs text-muted-foreground mt-1 space-x-2">
+								<span>{sidebarBookSummary}</span>
+								{#if $viewerState.pageWindow && !$viewerState.pageWindow.stale}
+									<span>{sidebarWindowSummary}</span>
+								{/if}
+							</div>
 						</div>
-						<div class="flex items-center gap-2">
+						<div class="flex items-center gap-3">
+							<span class={`text-xs ${$viewerState.loading ? 'text-amber-500' : 'text-emerald-500'}`}>
+								{$viewerState.loading ? '加载中' : '就绪'} · {$viewerState.viewMode}
+							</span>
 							<Button variant="ghost" size="sm" onclick={togglePin}>
 								{#if $sidebarPinned}
 									<PinOff class="h-4 w-4" />
@@ -233,11 +272,9 @@
 									<Pin class="h-4 w-4" />
 								{/if}
 							</Button>
-							<Sidebar.Trigger asChild>
-								<Button variant="ghost" size="sm">
-									×
-								</Button>
-							</Sidebar.Trigger>
+							<Button variant="ghost" size="sm" onclick={() => sidebar.setOpen(false)}>
+								×
+							</Button>
 						</div>
 					</div>
 				</Sidebar.Header>
@@ -246,11 +283,11 @@
 					<Sidebar.Group class="px-0">
 						<Sidebar.GroupContent>
 							{#if activeItem.value === 'folder'}
-								<FileBrowser key="folder" />
+								<FileBrowser />
 							{:else if activeItem.value === 'history'}
-								<HistoryPanel key="history" />
+								<HistoryPanel />
 							{:else if activeItem.value === 'bookmark'}
-								<BookmarkPanel key="bookmark" />
+								<BookmarkPanel />
 							{:else if activeItem.value === 'thumbnail'}
 								<ThumbnailsPanel />
 							{:else if activeItem.value === 'playlist'}
@@ -268,7 +305,8 @@
 		</Sidebar.Root>
 	</Sidebar.Provider>
 
-	<!-- 拖拽调整大小的分隔条 -->
+	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+	<!-- 拖拽调整大小的分隔条（div 仅承载鼠标事件，不处理键盘） -->
 	<div
 		class="absolute top-0 bottom-0 right-0 w-4 cursor-col-resize transition-colors z-50"
 		onmousedown={handleMouseDown}

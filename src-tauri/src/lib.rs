@@ -8,12 +8,14 @@ mod commands;
 mod core;
 mod models;
 
-use commands::fs_commands::{DirectoryCacheState, FsState};
+use commands::fs_commands::{CacheIndexState, DirectoryCacheState, FsState};
 use commands::generic_upscale_commands::GenericUpscalerState;
 use commands::pyo3_upscale_commands::PyO3UpscalerState;
+use commands::task_queue_commands::BackgroundSchedulerState;
 use commands::upscale_commands::UpscaleManagerState;
 use commands::upscale_settings_commands::UpscaleSettingsState;
-use core::directory_cache_db::DirectoryCacheDb;
+use core::background_scheduler::BackgroundTaskScheduler;
+use core::cache_index_db::CacheIndexDb;
 use core::upscale_scheduler::{UpscaleScheduler, UpscaleSchedulerState};
 use core::{ArchiveManager, BookManager, FsManager, ImageLoader};
 use std::path::PathBuf;
@@ -99,19 +101,27 @@ pub fn run() {
                 .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
             app.manage(FsState {
-                fs_manager: Mutex::new(fs_manager),
-                archive_manager: Mutex::new(archive_manager),
+                fs_manager: Arc::new(Mutex::new(fs_manager)),
+                archive_manager: Arc::new(Mutex::new(archive_manager)),
             });
 
             let directory_cache =
                 core::directory_cache::DirectoryCache::new(128, Duration::from_secs(30));
-            let directory_cache_db = DirectoryCacheDb::new(
+            let cache_index_db = CacheIndexDb::new(
                 app_data_root.join("directory_cache.db"),
                 Duration::from_secs(300),
+                Duration::from_secs(3600),
             );
             app.manage(DirectoryCacheState {
                 cache: Mutex::new(directory_cache),
-                db: Arc::new(directory_cache_db),
+            });
+            app.manage(CacheIndexState {
+                db: Arc::new(cache_index_db),
+            });
+
+            let background_scheduler = BackgroundTaskScheduler::new(4, 64);
+            app.manage(BackgroundSchedulerState {
+                scheduler: Arc::new(background_scheduler),
             });
 
             // 初始化超分管理器
@@ -169,6 +179,8 @@ pub fn run() {
             commands::fs_commands::get_next_stream_batch,
             commands::fs_commands::cancel_directory_stream,
             commands::fs_commands::get_file_metadata,
+            commands::cache_index_stats,
+            commands::cache_index_gc,
             commands::create_directory,
             commands::delete_path,
             commands::rename_path,
@@ -276,6 +288,7 @@ pub fn run() {
             commands::preload_thumbnail_index,
             commands::get_video_duration,
             commands::is_video_file,
+            commands::get_background_queue_metrics,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -2,10 +2,11 @@
 //! 导出所有核心功能模块
 
 pub mod archive;
+pub mod background_scheduler;
 pub mod blob_registry;
 pub mod book_manager;
+pub mod cache_index_db;
 pub mod directory_cache;
-pub mod directory_cache_db;
 pub mod file_indexer;
 pub mod fs_manager;
 pub mod generic_upscaler;

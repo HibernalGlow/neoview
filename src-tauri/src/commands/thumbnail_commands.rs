@@ -1,12 +1,17 @@
 //! Thumbnail Commands
 //! 缩略图相关的 Tauri 命令
 
+use super::fs_commands::CacheIndexState;
+use super::task_queue_commands::BackgroundSchedulerState;
 use crate::core::blob_registry::BlobRegistry;
+use crate::core::cache_index_db::ThumbnailCacheUpsert;
 use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::thumbnail_generator::{ThumbnailGenerator, ThumbnailGeneratorConfig};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tauri::Manager;
 
 /// 缩略图管理器状态
@@ -84,25 +89,40 @@ pub async fn generate_file_thumbnail_new(
     }
 
     let state = app.state::<ThumbnailState>();
-    let generator = state.generator.lock().unwrap();
+    let cache_index = app.state::<CacheIndexState>();
+    let scheduler = app.state::<BackgroundSchedulerState>();
+    let generator = Arc::clone(&state.generator);
+    let job_source = format!("file:{}", file_path);
+    let path_for_job = file_path.clone();
 
-    // 生成缩略图（内部已同步保存到数据库）
-    let thumbnail_data = match generator.generate_file_thumbnail(&file_path) {
-        Ok(data) => data,
-        Err(e) => {
-            eprintln!("❌ 文件缩略图生成失败: {} - {}", file_path, e);
-            return Err(e);
-        }
-    };
+    let thumbnail_data = scheduler
+        .scheduler
+        .enqueue_blocking("thumbnail-generate", job_source, move || {
+            let mut generator = generator
+                .lock()
+                .map_err(|e| format!("获取缩略图生成器锁失败: {}", e))?;
+            generator.generate_file_thumbnail(&path_for_job)
+        })
+        .await?;
 
     // 注册到 BlobRegistry，返回 blob key（带路径信息）
-    use std::time::Duration;
     let blob_key = state.blob_registry.get_or_register(
         &thumbnail_data,
         "image/webp",
         Duration::from_secs(3600), // 1 小时 TTL
         Some(file_path.clone()),   // 传递路径用于日志
     );
+
+    if let Err(err) = cache_index.db.upsert_thumbnail_entry(ThumbnailCacheUpsert {
+        path_key: &file_path,
+        category: &infer_category(&file_path, None),
+        hash: None,
+        size: Some(thumbnail_data.len() as i64),
+        source: Some("generate_file_thumbnail_new"),
+        blob_key: Some(&blob_key),
+    }) {
+        eprintln!("⚠️ 写入缩略图缓存索引失败: {}", err);
+    }
 
     println!(
         "✅ generate_file_thumbnail_new 完成: {} -> blob_key: {}",
@@ -119,33 +139,49 @@ pub async fn generate_archive_thumbnail_new(
 ) -> Result<String, String> {
     println!("🚀 generate_archive_thumbnail_new 被调用: {}", archive_path);
     let state = app.state::<ThumbnailState>();
-    let generator = state.generator.lock().unwrap();
-
-    // 生成缩略图
+    let cache_index = app.state::<CacheIndexState>();
+    let scheduler = app.state::<BackgroundSchedulerState>();
+    let generator = Arc::clone(&state.generator);
     println!("📸 开始生成压缩包缩略图: {}", archive_path);
-    let thumbnail_data = match generator.generate_archive_thumbnail(&archive_path) {
-        Ok(data) => {
-            println!(
-                "✅ 压缩包缩略图生成成功: {} ({} bytes)",
-                archive_path,
-                data.len()
-            );
-            data
-        }
-        Err(e) => {
-            eprintln!("❌ 压缩包缩略图生成失败: {} - {}", archive_path, e);
-            return Err(e);
-        }
-    };
+    let path_for_job = archive_path.clone();
 
-    // 注册到 BlobRegistry，返回 blob key（带路径信息）
-    use std::time::Duration;
+    let thumbnail_data = scheduler
+        .scheduler
+        .enqueue_blocking(
+            "thumbnail-generate",
+            format!("archive:{}", archive_path),
+            move || {
+                let mut generator = generator
+                    .lock()
+                    .map_err(|e| format!("获取缩略图生成器锁失败: {}", e))?;
+                generator.generate_archive_thumbnail(&path_for_job)
+            },
+        )
+        .await?;
+
+    println!(
+        "✅ 压缩包缩略图生成成功: {} ({} bytes)",
+        archive_path,
+        thumbnail_data.len()
+    );
+
     let blob_key = state.blob_registry.get_or_register(
         &thumbnail_data,
         "image/webp",
         Duration::from_secs(3600),  // 1 小时 TTL
         Some(archive_path.clone()), // 传递路径用于日志
     );
+
+    if let Err(err) = cache_index.db.upsert_thumbnail_entry(ThumbnailCacheUpsert {
+        path_key: &archive_path,
+        category: &infer_category(&archive_path, None),
+        hash: None,
+        size: Some(thumbnail_data.len() as i64),
+        source: Some("generate_archive_thumbnail_new"),
+        blob_key: Some(&blob_key),
+    }) {
+        eprintln!("⚠️ 写入缩略图缓存索引失败: {}", err);
+    }
 
     println!(
         "✅ generate_archive_thumbnail_new 完成: {} -> blob_key: {}",
@@ -162,13 +198,29 @@ pub async fn batch_preload_thumbnails(
     is_archive: bool,
 ) -> Result<Vec<(String, String)>, String> {
     let state = app.state::<ThumbnailState>();
-    let generator = state.generator.lock().unwrap();
+    let cache_index = app.state::<CacheIndexState>();
+    let scheduler = app.state::<BackgroundSchedulerState>();
+    let generator = Arc::clone(&state.generator);
+    let batch_paths = paths.clone();
 
-    // 批量生成缩略图
-    let results = generator.batch_generate_thumbnails(paths, is_archive);
+    let results = scheduler
+        .scheduler
+        .enqueue_blocking(
+            "thumbnail-generate",
+            format!(
+                "batch:{}:{}",
+                if is_archive { "archive" } else { "file" },
+                batch_paths.len()
+            ),
+            move || {
+                let generator = generator
+                    .lock()
+                    .map_err(|e| format!("获取缩略图生成器锁失败: {}", e))?;
+                Ok(generator.batch_generate_thumbnails(batch_paths, is_archive))
+            },
+        )
+        .await??;
 
-    // 注册到 BlobRegistry，返回 blob keys
-    use std::time::Duration;
     let mut blob_keys = Vec::new();
     for (path, result) in results {
         match result {
@@ -176,9 +228,19 @@ pub async fn batch_preload_thumbnails(
                 let blob_key = state.blob_registry.get_or_register(
                     &data,
                     "image/webp",
-                    Duration::from_secs(3600), // 1 小时 TTL
-                    Some(path.clone()),        // 传递路径用于日志
+                    Duration::from_secs(3600),
+                    Some(path.clone()),
                 );
+                if let Err(err) = cache_index.db.upsert_thumbnail_entry(ThumbnailCacheUpsert {
+                    path_key: &path,
+                    category: &infer_category(&path, None),
+                    hash: None,
+                    size: Some(data.len() as i64),
+                    source: Some("batch_preload_thumbnails"),
+                    blob_key: Some(&blob_key),
+                }) {
+                    eprintln!("⚠️ 写入缩略图缓存索引失败: {}", err);
+                }
                 blob_keys.push((path, blob_key));
             }
             Err(e) => {
@@ -249,6 +311,7 @@ pub async fn load_thumbnail_from_db(
     category: Option<String>,
 ) -> Result<Option<String>, String> {
     let state = app.state::<ThumbnailState>();
+    let cache_index = app.state::<CacheIndexState>();
 
     // 构建路径键
     let path_key = if path.contains("::") {
@@ -270,13 +333,22 @@ pub async fn load_thumbnail_from_db(
     match state.db.load_thumbnail_by_key_and_category(&path_key, &cat) {
         Ok(Some(data)) => {
             // 注册到 BlobRegistry，返回 blob key
-            use std::time::Duration;
             let blob_key = state.blob_registry.get_or_register(
                 &data,
                 "image/webp",
                 Duration::from_secs(3600), // 1 小时 TTL
                 Some(path_key.clone()),    // 传递路径用于日志
             );
+            if let Err(err) = cache_index.db.upsert_thumbnail_entry(ThumbnailCacheUpsert {
+                path_key: &path_key,
+                category: &cat,
+                hash: None,
+                size: Some(data.len() as i64),
+                source: Some("load_thumbnail_from_db"),
+                blob_key: Some(&blob_key),
+            }) {
+                eprintln!("⚠️ 写入缩略图缓存索引失败: {}", err);
+            }
             Ok(Some(blob_key))
         }
         Ok(None) => {
@@ -303,13 +375,24 @@ pub async fn load_thumbnail_from_db(
                             Ok(_) => {
                                 println!("✅ 已将子文件缩略图绑定到文件夹: {}", path_key);
                                 // 注册并返回
-                                use std::time::Duration;
                                 let blob_key = state.blob_registry.get_or_register(
                                     &child_data,
                                     "image/webp",
                                     Duration::from_secs(3600),
                                     Some(path_key.clone()),
                                 );
+                                if let Err(err) =
+                                    cache_index.db.upsert_thumbnail_entry(ThumbnailCacheUpsert {
+                                        path_key: &path_key,
+                                        category: "folder",
+                                        hash: None,
+                                        size: Some(child_data.len() as i64),
+                                        source: Some("load_thumbnail_from_db/folder_bind"),
+                                        blob_key: Some(&blob_key),
+                                    })
+                                {
+                                    eprintln!("⚠️ 写入缩略图缓存索引失败: {}", err);
+                                }
                                 Ok(Some(blob_key))
                             }
                             Err(e) => {
@@ -377,28 +460,75 @@ pub async fn preload_thumbnail_index(
     entries: Vec<ThumbnailIndexRequest>,
 ) -> Result<Vec<ThumbnailIndexResult>, String> {
     let state = app.state::<ThumbnailState>();
-    let db = Arc::clone(&state.db);
+    let cache_index = app.state::<CacheIndexState>();
+    let thumb_db = Arc::clone(&state.db);
+    let cache_db = Arc::clone(&cache_index.db);
 
-    let requests: Vec<(String, String)> = entries
+    #[derive(Clone)]
+    struct IndexPayload {
+        path: String,
+        path_key: String,
+        category: String,
+    }
+
+    let payloads: Vec<IndexPayload> = entries
         .into_iter()
         .map(|entry| {
             let category = infer_category(&entry.path, entry.category);
-            (entry.path, category)
+            let original_path = entry.path;
+            IndexPayload {
+                path: original_path.clone(),
+                path_key: original_path,
+                category,
+            }
         })
         .collect();
 
-    let handle = tauri::async_runtime::spawn_blocking(
-        move || -> Result<Vec<ThumbnailIndexResult>, String> {
-            let mut responses = Vec::with_capacity(requests.len());
-            for (path, category) in requests {
-                let exists = db
-                    .has_thumbnail_by_key_and_category(&path, &category)
-                    .map_err(|e| format!("检查缩略图失败: {}", e))?;
-                responses.push(ThumbnailIndexResult { path, exists });
+    let handle = tauri::async_runtime::spawn_blocking(move || {
+        let lookup_pairs: Vec<(String, String)> = payloads
+            .iter()
+            .map(|p| (p.path_key.clone(), p.category.clone()))
+            .collect();
+
+        let cached = cache_db.lookup_thumbnail_entries(&lookup_pairs)?;
+        let mut hit_set = HashSet::new();
+        for entry in cached {
+            hit_set.insert((entry.path_key, entry.category));
+        }
+
+        let mut responses = Vec::with_capacity(payloads.len());
+        for payload in payloads {
+            if hit_set.contains(&(payload.path_key.clone(), payload.category.clone())) {
+                responses.push(ThumbnailIndexResult {
+                    path: payload.path.clone(),
+                    exists: true,
+                });
+                continue;
             }
-            Ok(responses)
-        },
-    );
+
+            let exists = thumb_db
+                .has_thumbnail_by_key_and_category(&payload.path_key, &payload.category)
+                .map_err(|e| format!("检查缩略图失败: {}", e))?;
+
+            if exists {
+                let _ = cache_db.upsert_thumbnail_entry(ThumbnailCacheUpsert {
+                    path_key: &payload.path_key,
+                    category: &payload.category,
+                    hash: None,
+                    size: None,
+                    source: Some("preload_thumbnail_index/backfill"),
+                    blob_key: None,
+                });
+            }
+
+            responses.push(ThumbnailIndexResult {
+                path: payload.path,
+                exists,
+            });
+        }
+
+        Ok::<_, String>(responses)
+    });
 
     handle
         .await

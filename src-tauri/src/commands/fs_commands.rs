@@ -1,8 +1,9 @@
 //! NeoView - File System Commands
 //! 文件系统操作相关的 Tauri 命令
 
+use super::task_queue_commands::BackgroundSchedulerState;
+use crate::core::cache_index_db::{CacheGcResult, CacheIndexDb, CacheIndexStats};
 use crate::core::directory_cache::DirectoryCache;
-use crate::core::directory_cache_db::DirectoryCacheDb;
 use crate::core::fs_manager::FsItem;
 use crate::core::{ArchiveManager, FsManager};
 use serde::{Deserialize, Serialize};
@@ -15,14 +16,18 @@ use tauri::State;
 
 /// 文件系统状态
 pub struct FsState {
-    pub fs_manager: Mutex<FsManager>,
-    pub archive_manager: Mutex<ArchiveManager>,
+    pub fs_manager: Arc<Mutex<FsManager>>,
+    pub archive_manager: Arc<Mutex<ArchiveManager>>,
 }
 
-/// 目录缓存状态
+/// 目录缓存状态（内存 LRU）
 pub struct DirectoryCacheState {
     pub cache: Mutex<DirectoryCache>,
-    pub db: Arc<DirectoryCacheDb>,
+}
+
+/// 缓存索引状态（SQLite）
+pub struct CacheIndexState {
+    pub db: Arc<CacheIndexDb>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -154,6 +159,8 @@ pub async fn load_directory_snapshot(
     path: String,
     state: State<'_, FsState>,
     cache_state: State<'_, DirectoryCacheState>,
+    cache_index: State<'_, CacheIndexState>,
+    scheduler: State<'_, BackgroundSchedulerState>,
 ) -> Result<DirectorySnapshotResponse, String> {
     let path_buf = PathBuf::from(&path);
     let mtime = directory_mtime(&path_buf);
@@ -165,6 +172,11 @@ pub async fn load_directory_snapshot(
             .lock()
             .map_err(|e| format!("获取目录缓存锁失败: {}", e))?;
         if let Some(entry) = cache.get(&path, mtime) {
+            println!(
+                "📁 DirectorySnapshot 命中内存缓存: {} (entries={})",
+                path,
+                entry.items.len()
+            );
             return Ok(DirectorySnapshotResponse {
                 items: entry.items,
                 mtime: entry.mtime,
@@ -174,7 +186,12 @@ pub async fn load_directory_snapshot(
     }
 
     // SQLite 缓存
-    if let Some(persisted_items) = cache_state.db.load_snapshot(&path, mtime)? {
+    if let Some(persisted_items) = cache_index.db.load_directory_snapshot(&path, mtime)? {
+        println!(
+            "📁 DirectorySnapshot 命中 SQLite 缓存: {} (entries={})",
+            path,
+            persisted_items.len()
+        );
         {
             let mut cache = cache_state
                 .cache
@@ -190,13 +207,22 @@ pub async fn load_directory_snapshot(
     }
 
     // 文件系统读取
-    let items = {
-        let fs_manager = state
-            .fs_manager
-            .lock()
-            .map_err(|e| format!("获取锁失败: {}", e))?;
-        fs_manager.read_directory(&path_buf)?
-    };
+    println!(
+        "📁 DirectorySnapshot miss: {} -> 调度 filebrowser-directory-load",
+        path
+    );
+    let fs_manager = Arc::clone(&state.fs_manager);
+    let job_path = path.clone();
+    let path_for_job = path_buf.clone();
+    let items = scheduler
+        .scheduler
+        .enqueue_blocking("filebrowser-directory-load", job_path, move || {
+            let fs_manager = fs_manager
+                .lock()
+                .map_err(|e| format!("获取锁失败: {}", e))?;
+            fs_manager.read_directory(&path_for_job)
+        })
+        .await?;
 
     {
         let mut cache = cache_state
@@ -205,7 +231,9 @@ pub async fn load_directory_snapshot(
             .map_err(|e| format!("获取目录缓存锁失败: {}", e))?;
         cache.insert(path.clone(), items.clone(), mtime);
     }
-    cache_state.db.save_snapshot(&path, mtime, &items)?;
+    cache_index
+        .db
+        .save_directory_snapshot(&path, mtime, &items)?;
 
     Ok(DirectorySnapshotResponse {
         items,
@@ -1102,6 +1130,22 @@ pub async fn get_next_stream_batch(stream_id: String) -> Result<StreamBatchResul
     } else {
         Err(format!("Stream not found: {}", stream_id))
     }
+}
+
+/// 缓存索引统计
+#[tauri::command]
+pub async fn cache_index_stats(
+    cache_index: State<'_, CacheIndexState>,
+) -> Result<CacheIndexStats, String> {
+    cache_index.db.stats()
+}
+
+/// 触发缓存 GC
+#[tauri::command]
+pub async fn cache_index_gc(
+    cache_index: State<'_, CacheIndexState>,
+) -> Result<CacheGcResult, String> {
+    cache_index.db.run_gc()
 }
 
 /// 取消目录流

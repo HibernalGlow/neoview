@@ -64,6 +64,8 @@
 
 > **进度（2025-11-20）**：`load_directory_snapshot` 已挂接 Rust 双层缓存（内存 LRU + SQLite `directory_cache.db`），并根据 mtime/TTL 自动失效，前端仅需一次 IPC 即可命中持久快照；`thumbnailManager.preloadDbIndex` 改为调用 `preload_thumbnail_index`，由 Rust 批量查询 `thumbnail_cache`，彻底移除前端逐条 `has_thumbnail_by_key_category` 的阻塞。
 
+> **进度（2025-11-20 深夜）**：新增 Rust 背景调度器（`BackgroundTaskScheduler`）承载 `thumbnail-generate` / `filebrowser-directory-load`，沿用前端 `type/source`，支持 `get_background_queue_metrics` 实时查看队列深度；缩略图生成、批量预热、目录 miss 均转为后台 job，不阻塞 `invoke` 主线程。`cache_index_db` 扩展为统一 SQLite（`directory_cache` + `thumbnail_cache`），提供 `cache_index_stats` / `cache_index_gc` 命令给前端 soak 期间监控命中率，并把命中/回填日志统一落在 Rust 端。
+
 **2.1 StateService**
 - 合并 `bookStore`, `settingsManager`, 分散 $state 到 `appState`，组件统一走 selector。
 - 新增 `viewer.pageWindow`（包含 `center`, `forward`, `backward`, `stale`）与 `viewer.taskCursor`（记录 `oldestPendingIdx`, `furthestReadyIdx`），支持 UI 实时展示缓存覆盖范围。
@@ -74,6 +76,7 @@
 - ✅ ThumbnailsPanel 已迁移到 `appState` + `taskScheduler`，缩略图生成任务以 `panel-thumbnail-load` 排队，UI 可实时显示桶深度和运行并发。
 - ✅ History / Bookmark / FileBrowser 面板已完成 ViewModel 化，统一显示当前页/任务状态；FileBrowser 的目录校验、缩略图预取、批量扫描等任务通过 `taskScheduler` 排程，形成面板级别的调度可视化。
 - ✅ FileBrowser 目录快照命中优先走 Rust 端缓存（内存 + SQLite），前端删除了重复 `getFileMetadata`/`pathExists` 轮询，继续聚焦 ViewModel。
+- ✅ Rust 版 `BackgroundTaskScheduler` 正在承载 `thumbnail-generate` 与 `filebrowser-directory-load`，配套的 `get_background_queue_metrics` 让 soak 期间可以观察队列深度/运行数/最近 64 个任务。
 
 **3.1 Rust TaskScheduler**
 - 把 TS 版调度迁移到 Rust：使用 async queue（Tokio + prioritised queue）。
@@ -144,7 +147,8 @@
 **3.2 Cache Index 持久化**
 - 引入 SQLite (via `tauri-plugin-sql` 或自研) 存储 hash -> cache info。
 - Rust API: `cache_lookup`, `cache_insert`, `cache_gc`.
-- ✅ `directory_cache.db` 已上线：`load_directory_snapshot` 先查 SQLite，再落地 `cache_insert`；`preload_thumbnail_index` 批量调用 `has_thumbnail_by_key_category`，为 Phase 3 的统一 `cache_lookup` 打下基础。
+- ✅ `directory_cache.db`（现 `cache_index_db`）上线：`load_directory_snapshot` → `cache_lookup`(内存/SQLite) → miss 时后台任务补齐并 `cache_insert`；新增 `thumbnail_cache` 表承载缩略图索引，前端批量调用 `preload_thumbnail_index` 即可读取 SQLite 命中；
+- ✅ 暴露 `cache_index_stats` / `cache_index_gc` / `get_background_queue_metrics` 命令，配合 soak 日志，Phase 3 可直接迁移到 Rust Scheduler + SQLite Cache Index。
 
 **3.3 IPC 规范**
 - 所有命令集中管理（`src-tauri/src/api/mod.rs`），生成 TS 类型（使用 `ts-rs` 或手写声明）。

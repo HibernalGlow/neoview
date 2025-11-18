@@ -158,12 +158,14 @@
 
 | Rust Command / Job | TaskScheduler `type/source` | TS SDK 入口 | 说明 |
 | --- | --- | --- | --- |
-| `load_directory_snapshot` (`filebrowser-directory-load`) | `filebrowser-directory-load` | `FileSystemAPI.loadDirectorySnapshot` | 调度器负责 miss -> FsManager，命中落盘至 `cache_index_db` |
+| `load_directory_snapshot` (`filebrowser-directory-load`) | `filebrowser-directory-load` | `FileSystemAPI.loadDirectorySnapshot` | 调度器负责 miss -> FsManager，命中落盘至 `cache_index_db`，FileBrowser 预热/校验 job 统一复用该路径 |
 | `scan_folder_thumbnails` (`filebrowser-folder-scan`) | `filebrowser-folder-scan` | `scanFolderThumbnails()` | Rust 端查找候选图片/压缩包并生成缩略图，直接写入 `thumbnail_cache` |
 | `preload_thumbnail_index` (`thumbnail-generate` background) | `filebrowser-thumbnail-preload` | `thumbnailManager.preloadDbIndex` | 批量命中 SQLite，若缺失自动回写 |
 | `generate_*_thumbnail_new` (`thumbnail-generate`) | `panel-thumbnail-load` 等 | 组件直接触发 `getThumbnail` | 任务在 Rust 调度器中串行化，TS 仅发起命令 |
 | `enqueue_cache_maintenance` (`cache-maintenance`) | `cache-maintenance` | `runCacheMaintenance()` | SQLite 双表 GC、后续拓展到 Blob/thumbnail 真正删除 |
 | `get_background_queue_metrics` | N/A（监控） | `fetchBackgroundQueueMetrics()` | 提供 queue depth / running / 最近 64 条记录 |
+| （规划）`archive-batch-scan` | `archive-batch-scan` | **TODO** `scanArchiveBatch()` | Phase 3：Rust 侧串行解包并写入 cache，替换前端逐个 `listArchiveContents` |
+| （规划）`comparison-prepare` | `comparison-prepare` | **TODO** `scheduleComparisonPrepare()` | Phase 3：比较模式耗时流程（差值、缓存清理）直接交给 Rust Scheduler，沿用现有前端指标 |
 
 **3.3 IPC 规范**
 - 所有命令集中管理（`src-tauri/src/api/mod.rs`），生成 TS 类型（使用 `ts-rs` 或手写声明）。

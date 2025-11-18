@@ -9,6 +9,7 @@ import { buildImagePathKey, type ImagePathContext, getStableImageHash } from './
 import type { FsItem } from '$lib/types';
 import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 import { scanFolderThumbnails } from '$lib/api/backgroundTasks';
+import * as FileSystemAPI from '$lib/api/filesystem';
 
 export interface ThumbnailConfig {
   maxConcurrentLocal: number;
@@ -806,7 +807,6 @@ class ThumbnailManager {
   }
 
   private async legacyFolderScan(folders: FsItem[]) {
-    const { invoke } = await import('@tauri-apps/api/core');
     const maxConcurrent = 6;
     const batchSize = Math.min(folders.length, maxConcurrent);
 
@@ -815,7 +815,7 @@ class ThumbnailManager {
       await Promise.all(
         batch.map(async (folder) => {
           try {
-            const items = await invoke<FsItem[]>('browse_directory', { path: folder.path });
+            const items = await FileSystemAPI.browseDirectory(folder.path);
             const firstImage = items.find((item) => item.isImage && !item.isDir);
             if (firstImage) {
               await this.getThumbnail(firstImage.path, undefined, false, 'high');

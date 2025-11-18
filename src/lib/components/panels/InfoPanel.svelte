@@ -22,6 +22,7 @@
 	// EMM 配置状态
 	let showEMMConfig = $state(false);
 	let emmDatabasePaths = $state<string[]>([]);
+	let emmTranslationDbPath = $state<string>('');
 	let emmSettingPath = $state<string>('');
 	let emmDatabasePathInput = $state<string>('');
 
@@ -159,6 +160,7 @@
 	// 加载 EMM 配置
 	function loadEMMConfig() {
 		emmDatabasePaths = emmMetadataStore.getDatabasePaths();
+		emmTranslationDbPath = emmMetadataStore.getTranslationDbPath() || '';
 		emmSettingPath = emmMetadataStore.getSettingPath() || '';
 	}
 	
@@ -191,6 +193,40 @@
 			}
 		} catch (err) {
 			console.error('选择数据库文件失败:', err);
+		}
+	}
+	
+	// 选择翻译数据库文件
+	async function selectTranslationDbFile() {
+		try {
+			const selected = await open({
+				filters: [{
+					name: 'SQLite Database',
+					extensions: ['sqlite', 'db']
+				}]
+			});
+			
+			if (selected) {
+				let path = '';
+				if (typeof selected === 'string') {
+					path = selected;
+				} else if (Array.isArray(selected)) {
+					const arr = selected as unknown[];
+					if (arr.length > 0) {
+						const first = arr[0];
+						path = typeof first === 'string' ? first : 
+							(first && typeof first === 'object' && 'path' in first ? (first as { path: string }).path : '');
+					}
+				} else if (selected && typeof selected === 'object' && 'path' in selected) {
+					path = (selected as { path: string }).path;
+				}
+				
+				if (path) {
+					emmTranslationDbPath = path;
+				}
+			}
+		} catch (err) {
+			console.error('选择翻译数据库文件失败:', err);
 		}
 	}
 	
@@ -244,6 +280,9 @@
 	// 保存 EMM 配置
 	async function saveEMMConfig() {
 		emmMetadataStore.setManualDatabasePaths(emmDatabasePaths);
+		if (emmTranslationDbPath) {
+			emmMetadataStore.setManualTranslationDbPath(emmTranslationDbPath);
+		}
 		if (emmSettingPath) {
 			await emmMetadataStore.setManualSettingPath(emmSettingPath);
 		}
@@ -435,6 +474,27 @@
 											添加
 										</Button.Root>
 									</div>
+								</div>
+							</div>
+							
+							<!-- 翻译数据库路径配置 -->
+							<div class="space-y-2">
+								<div class="text-xs font-medium text-muted-foreground">翻译数据库路径 (translations.db)</div>
+								<div class="flex items-center gap-2">
+									<Input.Root
+										bind:value={emmTranslationDbPath}
+										placeholder="输入翻译数据库路径或点击选择..."
+										class="flex-1 text-xs font-mono"
+									/>
+									<Button.Root
+										variant="outline"
+										size="sm"
+										onclick={selectTranslationDbFile}
+										class="h-8"
+									>
+										<FolderOpen class="h-3 w-3 mr-1" />
+										选择
+									</Button.Root>
 								</div>
 							</div>
 							

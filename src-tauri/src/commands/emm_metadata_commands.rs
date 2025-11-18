@@ -29,6 +29,7 @@ pub struct EMMCollectTag {
 pub async fn load_emm_metadata(
     db_path: String,
     hash: String,
+    translation_db_path: Option<String>, // 可选的翻译数据库路径
 ) -> Result<Option<EMMMetadata>, String> {
     let path = PathBuf::from(&db_path);
     if !path.exists() {
@@ -50,7 +51,7 @@ pub async fn load_emm_metadata(
 
             Ok(EMMMetadata {
                 hash: row.get(0)?,
-                translated_title: None, // 需要从 translations 表读取
+                translated_title: None, // 需要从翻译数据库读取
                 tags,
                 title: row.get(1)?,
                 title_jpn: row.get(2)?,
@@ -89,14 +90,32 @@ pub async fn load_emm_metadata(
         }
     };
 
-    // 从 translations 表读取译名
-    let mut stmt = conn
-        .prepare("SELECT chinese_title FROM translations WHERE hash = ?1")
-        .map_err(|e| format!("准备查询失败: {}", e))?;
+    // 从翻译数据库读取译名（优先使用指定的翻译数据库，否则尝试从主数据库读取）
+    if let Some(translation_db) = translation_db_path {
+        let translation_path = PathBuf::from(&translation_db);
+        if translation_path.exists() {
+            if let Ok(translation_conn) = Connection::open(&translation_path) {
+                let mut stmt = translation_conn
+                    .prepare("SELECT chinese_title FROM translations WHERE hash = ?1")
+                    .map_err(|e| format!("准备查询失败: {}", e))?;
 
-    if let Ok(chinese_title) = stmt.query_row([&hash], |row| row.get::<_, Option<String>>(0)) {
-        if let Some(title) = chinese_title {
-            metadata.translated_title = Some(title);
+                if let Ok(chinese_title) = stmt.query_row([&hash], |row| row.get::<_, Option<String>>(0)) {
+                    if let Some(title) = chinese_title {
+                        metadata.translated_title = Some(title);
+                    }
+                }
+            }
+        }
+    } else {
+        // 尝试从主数据库的 translations 表读取（兼容旧版本）
+        let mut stmt = conn
+            .prepare("SELECT chinese_title FROM translations WHERE hash = ?1")
+            .map_err(|e| format!("准备查询失败: {}", e))?;
+
+        if let Ok(chinese_title) = stmt.query_row([&hash], |row| row.get::<_, Option<String>>(0)) {
+            if let Some(title) = chinese_title {
+                metadata.translated_title = Some(title);
+            }
         }
     }
 
@@ -108,6 +127,7 @@ pub async fn load_emm_metadata(
 pub async fn load_emm_metadata_by_path(
     db_path: String,
     file_path: String,
+    translation_db_path: Option<String>, // 可选的翻译数据库路径
 ) -> Result<Option<EMMMetadata>, String> {
     let path = PathBuf::from(&db_path);
     if !path.exists() {
@@ -144,14 +164,32 @@ pub async fn load_emm_metadata_by_path(
         return Ok(None);
     };
 
-    // 从 translations 表读取译名
-    let mut stmt = conn
-        .prepare("SELECT chinese_title FROM translations WHERE hash = ?1")
-        .map_err(|e| format!("准备查询失败: {}", e))?;
+    // 从翻译数据库读取译名（优先使用指定的翻译数据库，否则尝试从主数据库读取）
+    if let Some(translation_db) = translation_db_path {
+        let translation_path = PathBuf::from(&translation_db);
+        if translation_path.exists() {
+            if let Ok(translation_conn) = Connection::open(&translation_path) {
+                let mut stmt = translation_conn
+                    .prepare("SELECT chinese_title FROM translations WHERE hash = ?1")
+                    .map_err(|e| format!("准备查询失败: {}", e))?;
 
-    if let Ok(chinese_title) = stmt.query_row([&hash], |row| row.get::<_, Option<String>>(0)) {
-        if let Some(title) = chinese_title {
-            metadata.translated_title = Some(title);
+                if let Ok(chinese_title) = stmt.query_row([&hash], |row| row.get::<_, Option<String>>(0)) {
+                    if let Some(title) = chinese_title {
+                        metadata.translated_title = Some(title);
+                    }
+                }
+            }
+        }
+    } else {
+        // 尝试从主数据库的 translations 表读取（兼容旧版本）
+        let mut stmt = conn
+            .prepare("SELECT chinese_title FROM translations WHERE hash = ?1")
+            .map_err(|e| format!("准备查询失败: {}", e))?;
+
+        if let Ok(chinese_title) = stmt.query_row([&hash], |row| row.get::<_, Option<String>>(0)) {
+            if let Some(title) = chinese_title {
+                metadata.translated_title = Some(title);
+            }
         }
     }
 
@@ -203,12 +241,12 @@ pub async fn load_emm_collect_tags(
     Ok(tags)
 }
 
-/// 查找 EMM 数据库路径（自动检测）
+/// 查找 EMM 主数据库路径（自动检测，不包括 translations.db）
 #[tauri::command]
 pub async fn find_emm_databases() -> Result<Vec<String>, String> {
     let mut databases = Vec::new();
 
-    // 常见的 EMM 数据库位置
+    // 常见的 EMM 主数据库位置（不包括 translations.db）
     let appdata = std::env::var("APPDATA").unwrap_or_default();
     let localappdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
     
@@ -218,9 +256,6 @@ pub async fn find_emm_databases() -> Result<Vec<String>, String> {
         // 用户数据目录
         format!("{}/exhentai-manga-manager/db.sqlite", appdata),
         format!("{}/exhentai-manga-manager/db.sqlite", localappdata),
-        // 也尝试查找 translations.db（如果存在）
-        format!("{}/exhentai-manga-manager/translations.db", appdata),
-        format!("{}/exhentai-manga-manager/translations.db", localappdata),
     ];
 
     for path_str in common_paths {
@@ -231,6 +266,30 @@ pub async fn find_emm_databases() -> Result<Vec<String>, String> {
     }
 
     Ok(databases)
+}
+
+/// 查找 EMM 翻译数据库路径（自动检测）
+#[tauri::command]
+pub async fn find_emm_translation_database() -> Result<Option<String>, String> {
+    let appdata = std::env::var("APPDATA").unwrap_or_default();
+    let localappdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
+    
+    let common_paths: Vec<String> = vec![
+        // 便携版
+        "portable/translations.db".to_string(),
+        // 用户数据目录
+        format!("{}/exhentai-manga-manager/translations.db", appdata),
+        format!("{}/exhentai-manga-manager/translations.db", localappdata),
+    ];
+
+    for path_str in common_paths {
+        let path = PathBuf::from(&path_str);
+        if path.exists() {
+            return Ok(Some(path_str));
+        }
+    }
+
+    Ok(None)
 }
 
 /// 查找 EMM 设置文件路径

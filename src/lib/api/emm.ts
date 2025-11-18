@@ -26,9 +26,14 @@ export interface EMMCollectTag {
  */
 export async function loadEMMMetadata(
 	dbPath: string,
-	hash: string
+	hash: string,
+	translationDbPath?: string
 ): Promise<EMMMetadata | null> {
-	return await invoke<EMMMetadata | null>('load_emm_metadata', { dbPath, hash });
+	return await invoke<EMMMetadata | null>('load_emm_metadata', { 
+		dbPath, 
+		hash,
+		translationDbPath: translationDbPath || null
+	});
 }
 
 /**
@@ -36,9 +41,14 @@ export async function loadEMMMetadata(
  */
 export async function loadEMMMetadataByPath(
 	dbPath: string,
-	filePath: string
+	filePath: string,
+	translationDbPath?: string
 ): Promise<EMMMetadata | null> {
-	return await invoke<EMMMetadata | null>('load_emm_metadata_by_path', { dbPath, filePath });
+	return await invoke<EMMMetadata | null>('load_emm_metadata_by_path', { 
+		dbPath, 
+		filePath,
+		translationDbPath: translationDbPath || null
+	});
 }
 
 /**
@@ -49,10 +59,17 @@ export async function loadEMMCollectTags(settingPath: string): Promise<EMMCollec
 }
 
 /**
- * 查找 EMM 数据库路径
+ * 查找 EMM 主数据库路径（不包括 translations.db）
  */
 export async function findEMMDatabases(): Promise<string[]> {
 	return await invoke<string[]>('find_emm_databases');
+}
+
+/**
+ * 查找 EMM 翻译数据库路径
+ */
+export async function findEMMTranslationDatabase(): Promise<string | null> {
+	return await invoke<string | null>('find_emm_translation_database');
 }
 
 /**

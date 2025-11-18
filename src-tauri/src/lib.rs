@@ -205,6 +205,7 @@ pub fn run() {
             commands::emm_metadata_commands::load_emm_metadata_by_path,
             commands::emm_metadata_commands::load_emm_collect_tags,
             commands::emm_metadata_commands::find_emm_databases,
+            commands::emm_metadata_commands::find_emm_translation_database,
             commands::emm_metadata_commands::find_emm_setting_file,
             // Index commands
             commands::fs_commands::initialize_file_index,

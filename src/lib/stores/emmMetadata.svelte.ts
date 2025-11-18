@@ -12,27 +12,34 @@ interface EMMMetadataState {
 	metadataCache: Map<string, EMMMetadata>;
 	// 收藏标签列表
 	collectTags: EMMCollectTag[];
-	// 数据库路径列表（自动检测 + 手动配置）
+	// 主数据库路径列表（自动检测 + 手动配置）
 	databasePaths: string[];
+	// 翻译数据库路径（自动检测 + 手动配置）
+	translationDbPath?: string;
 	// 设置文件路径（自动检测 + 手动配置）
 	settingPath?: string;
-	// 手动配置的数据库路径
+	// 手动配置的主数据库路径
 	manualDatabasePaths: string[];
+	// 手动配置的翻译数据库路径
+	manualTranslationDbPath?: string;
 	// 手动配置的设置文件路径
 	manualSettingPath?: string;
 }
 
 const STORAGE_KEY_DB_PATHS = 'neoview-emm-database-paths';
+const STORAGE_KEY_TRANSLATION_DB_PATH = 'neoview-emm-translation-db-path';
 const STORAGE_KEY_SETTING_PATH = 'neoview-emm-setting-path';
 
 // 从 localStorage 加载手动配置的路径
-function loadManualPaths(): { databasePaths: string[]; settingPath?: string } {
+function loadManualPaths(): { databasePaths: string[]; translationDbPath?: string; settingPath?: string } {
 	try {
 		const dbPathsStr = localStorage.getItem(STORAGE_KEY_DB_PATHS);
+		const translationDbPathStr = localStorage.getItem(STORAGE_KEY_TRANSLATION_DB_PATH);
 		const settingPathStr = localStorage.getItem(STORAGE_KEY_SETTING_PATH);
 		
 		return {
 			databasePaths: dbPathsStr ? JSON.parse(dbPathsStr) : [],
+			translationDbPath: translationDbPathStr || undefined,
 			settingPath: settingPathStr || undefined
 		};
 	} catch (e) {
@@ -42,9 +49,14 @@ function loadManualPaths(): { databasePaths: string[]; settingPath?: string } {
 }
 
 // 保存手动配置的路径到 localStorage
-function saveManualPaths(databasePaths: string[], settingPath?: string) {
+function saveManualPaths(databasePaths: string[], translationDbPath?: string, settingPath?: string) {
 	try {
 		localStorage.setItem(STORAGE_KEY_DB_PATHS, JSON.stringify(databasePaths));
+		if (translationDbPath) {
+			localStorage.setItem(STORAGE_KEY_TRANSLATION_DB_PATH, translationDbPath);
+		} else {
+			localStorage.removeItem(STORAGE_KEY_TRANSLATION_DB_PATH);
+		}
 		if (settingPath) {
 			localStorage.setItem(STORAGE_KEY_SETTING_PATH, settingPath);
 		} else {
@@ -61,8 +73,10 @@ const { subscribe, set, update } = writable<EMMMetadataState>({
 	metadataCache: new Map(),
 	collectTags: [],
 	databasePaths: [],
+	translationDbPath: undefined,
 	settingPath: undefined,
 	manualDatabasePaths: manualPaths.databasePaths,
+	manualTranslationDbPath: manualPaths.translationDbPath,
 	manualSettingPath: manualPaths.settingPath
 });
 
@@ -84,7 +98,7 @@ export const emmMetadataStore = {
 	 */
 	async initialize() {
 		try {
-			// 合并自动检测和手动配置的数据库路径
+			// 合并自动检测和手动配置的主数据库路径
 			const autoDatabases = await EMMAPI.findEMMDatabases();
 			let currentState: EMMMetadataState;
 			subscribe(state => {
@@ -94,9 +108,17 @@ export const emmMetadataStore = {
 			const allDatabases = [...autoDatabases, ...(currentState!.manualDatabasePaths || [])];
 			// 去重
 			const uniqueDatabases = Array.from(new Set(allDatabases));
+			
+			// 确定翻译数据库路径（优先手动配置，否则自动检测）
+			let translationDbPath = currentState!.manualTranslationDbPath;
+			if (!translationDbPath) {
+				translationDbPath = await EMMAPI.findEMMTranslationDatabase() || undefined;
+			}
+			
 			update(s => ({
 				...s,
-				databasePaths: uniqueDatabases
+				databasePaths: uniqueDatabases,
+				translationDbPath
 			}));
 			
 			// 优先使用手动配置的设置文件，否则尝试自动查找
@@ -124,14 +146,32 @@ export const emmMetadataStore = {
 	},
 	
 	/**
-	 * 设置手动配置的数据库路径
+	 * 设置手动配置的主数据库路径
 	 */
 	setManualDatabasePaths(paths: string[]) {
+		subscribe(state => {
+			saveManualPaths(paths, state.manualTranslationDbPath, state.manualSettingPath);
+		})();
 		update(state => ({
 			...state,
 			manualDatabasePaths: paths
 		}));
-		saveManualPaths(paths, undefined);
+		// 重新初始化以应用新路径
+		this.initialize();
+	},
+	
+	/**
+	 * 设置手动配置的翻译数据库路径
+	 */
+	setManualTranslationDbPath(path: string) {
+		subscribe(state => {
+			saveManualPaths(state.manualDatabasePaths, path, state.manualSettingPath);
+		})();
+		update(state => ({
+			...state,
+			manualTranslationDbPath: path,
+			translationDbPath: path
+		}));
 		// 重新初始化以应用新路径
 		this.initialize();
 	},
@@ -141,7 +181,7 @@ export const emmMetadataStore = {
 	 */
 	async setManualSettingPath(path: string) {
 		subscribe(state => {
-			saveManualPaths(state.manualDatabasePaths, path);
+			saveManualPaths(state.manualDatabasePaths, state.manualTranslationDbPath, path);
 		})();
 		update(state => ({
 			...state,
@@ -172,6 +212,17 @@ export const emmMetadataStore = {
 	},
 	
 	/**
+	 * 获取当前配置的翻译数据库路径
+	 */
+	getTranslationDbPath(): string | undefined {
+		let path: string | undefined;
+		subscribe(state => {
+			path = state.translationDbPath;
+		})();
+		return path;
+	},
+	
+	/**
 	 * 获取当前配置的设置文件路径
 	 */
 	getSettingPath(): string | undefined {
@@ -196,10 +247,12 @@ export const emmMetadataStore = {
 			return currentState!.metadataCache.get(hash)!;
 		}
 		
-		// 从所有数据库尝试加载
+		const translationDbPath = currentState!.translationDbPath;
+		
+		// 从所有主数据库尝试加载
 		for (const dbPath of currentState!.databasePaths) {
 			try {
-				const metadata = await EMMAPI.loadEMMMetadata(dbPath, hash);
+				const metadata = await EMMAPI.loadEMMMetadata(dbPath, hash, translationDbPath);
 				if (metadata) {
 					update(s => {
 						const newCache = new Map(s.metadataCache);
@@ -220,18 +273,17 @@ export const emmMetadataStore = {
 	 * 加载元数据（通过文件路径）
 	 */
 	async loadMetadataByPath(filePath: string): Promise<EMMMetadata | null> {
-		// 先检查缓存（通过文件路径的 hash）
-		// 这里简化处理，直接查询数据库
-		
 		let currentState: EMMMetadataState;
 		subscribe(state => {
 			currentState = state;
 		})();
 		
-		// 从所有数据库尝试加载
+		const translationDbPath = currentState!.translationDbPath;
+		
+		// 从所有主数据库尝试加载
 		for (const dbPath of currentState!.databasePaths) {
 			try {
-				const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, filePath);
+				const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, filePath, translationDbPath);
 				if (metadata) {
 					update(s => {
 						const newCache = new Map(s.metadataCache);

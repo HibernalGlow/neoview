@@ -49,12 +49,14 @@
 ### 2. 基础设施改造（Week 5-8）
 > **进度（2025-11-18）**：核心服务目录已创建，`appState`、`taskScheduler`、`CacheService` 初版就绪，并在 `ImageLoader` / `preloadRuntime` / `ImageViewer` 中开始接入。
 
+> **进度（2025-11-18 更新）**：对比模式、缩略图任务开始通过 `appState` + `taskScheduler` 管理，缩略图生成已迁入统一任务队列。
+
 **2.1 StateService**
 - 把 `bookStore`, `settingsManager`, 各种 $state 合并到统一的 `appState`.
 - 提供 `appState.subscribe(selector, listener)` API；Svelte 组件改为消费 selector。
 - 实现 state persistence（localStorage/IndexedDB）+ 版本迁移。
 
-**2.2 TaskScheduler（前端版）**
+**2.2 TaskScheduler（前端版）** 直接医嘱到位后端实现 参考3.1
 - 初版先在 TS 侧实现队列：FIFO + 优先级 + 并发控制。
     这个不用 直接迁移到 Rust：使用 async queue（Tokio + prioritised queue）。
 - 处理 `preloadNextPages`, `triggerAutoUpscale`, `thumbnail` 等任务，统一去重与状态机。

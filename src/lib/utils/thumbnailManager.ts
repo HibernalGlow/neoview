@@ -7,6 +7,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { buildImagePathKey, type ImagePathContext, getStableImageHash } from './pathHash';
 import type { FsItem } from '$lib/types';
+import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 
 export interface ThumbnailConfig {
   maxConcurrentLocal: number;
@@ -519,6 +520,17 @@ class ThumbnailManager {
     setTimeout(() => this.processQueue(), 0);
   }
 
+  private mapSchedulerPriority(priority: ThumbnailTask['priority']): 'low' | 'normal' | 'high' {
+    switch (priority) {
+      case 'immediate':
+        return 'high';
+      case 'high':
+        return 'normal';
+      default:
+        return 'low';
+    }
+  }
+
   /**
    * 处理任务（优化版本，真正异步）
    */
@@ -653,27 +665,32 @@ class ThumbnailManager {
       return;
     }
 
-    // 真正并行处理 - 不等待，让任务在后台执行
+    // 使用全局任务调度器执行，统一控制并发
     tasksToProcess.forEach((task) => {
       const pathKey = this.buildPathKey(task.path, task.innerPath);
-      // 立即标记为处理中，避免重复
+      if (this.processingTasks.has(pathKey)) return;
       this.processingTasks.add(pathKey);
-      
-      // 异步执行，不阻塞
-      this.processTask(pathKey).catch((error) => {
-        console.error('处理缩略图任务失败:', pathKey, error);
-      }).finally(() => {
-        this.processingTasks.delete(pathKey);
-        // 从队列中移除
-        const index = this.taskQueue.findIndex(
-          (t) => this.buildPathKey(t.path, t.innerPath) === pathKey
-        );
-        if (index >= 0) {
-          this.taskQueue.splice(index, 1);
-        }
-        // 继续处理队列（异步，不阻塞）
-        if (this.taskQueue.length > 0 && this.processingTasks.size < maxConcurrent) {
-          setTimeout(() => this.processQueue(), 10);
+
+      taskScheduler.enqueue({
+        type: 'thumbnail-generate',
+        priority: this.mapSchedulerPriority(task.priority),
+        executor: async () => {
+          try {
+            await this.processTask(pathKey);
+          } catch (error) {
+            console.error('处理缩略图任务失败:', pathKey, error);
+          } finally {
+            this.processingTasks.delete(pathKey);
+            const index = this.taskQueue.findIndex(
+              (t) => this.buildPathKey(t.path, t.innerPath) === pathKey
+            );
+            if (index >= 0) {
+              this.taskQueue.splice(index, 1);
+            }
+            if (this.taskQueue.length > 0 && this.processingTasks.size < maxConcurrent) {
+              setTimeout(() => this.processQueue(), 10);
+            }
+          }
         }
       });
     });

@@ -222,18 +222,44 @@ pub async fn load_emm_collect_tags(
 
     let mut tags = Vec::new();
     for tag_obj in collect_tags {
-        if let (Some(id), Some(letter), Some(tag), Some(color)) = (
-            tag_obj.get("id").and_then(|v| v.as_str()),
-            tag_obj.get("letter").and_then(|v| v.as_str()),
-            tag_obj.get("tag").and_then(|v| v.as_str()),
-            tag_obj.get("color").and_then(|v| v.as_str()),
-        ) {
+        // 从 JSON 中提取字段：id, letter, cat, tag, color
+        // id 格式通常是 "cat:tag"，例如 "female:stirrup legwear"
+        // 如果没有 id，可以从 cat 和 tag 构造
+        let id = tag_obj.get("id").and_then(|v| v.as_str());
+        let letter = tag_obj.get("letter").and_then(|v| v.as_str());
+        let cat = tag_obj.get("cat").and_then(|v| v.as_str()); // 分类，如 "female", "male", "character"
+        let tag = tag_obj.get("tag").and_then(|v| v.as_str());
+        let color = tag_obj.get("color").and_then(|v| v.as_str());
+        
+        // 至少需要 tag 和 color，其他字段可以推断
+        if let (Some(tag_str), Some(color_str)) = (tag, color) {
+            // 如果有 id，使用它；否则从 cat 和 tag 构造
+            let id_str = id.map(|s| s.to_string())
+                .unwrap_or_else(|| {
+                    if let Some(cat_str) = cat {
+                        format!("{}:{}", cat_str, tag_str)
+                    } else if let Some(letter_str) = letter {
+                        format!("{}:{}", letter_str, tag_str)
+                    } else {
+                        tag_str.to_string()
+                    }
+                });
+            
+            // display 格式：使用 cat:tag（如果 cat 存在），否则使用 letter:tag
+            let display_str = if let Some(cat_str) = cat {
+                format!("{}:{}", cat_str, tag_str)
+            } else if let Some(letter_str) = letter {
+                format!("{}:{}", letter_str, tag_str)
+            } else {
+                tag_str.to_string()
+            };
+            
             tags.push(EMMCollectTag {
-                id: id.to_string(),
-                letter: letter.to_string(),
-                tag: tag.to_string(),
-                color: color.to_string(),
-                display: format!("{}:{}", letter, tag),
+                id: id_str,
+                letter: letter.map(|s| s.to_string()).unwrap_or_default(),
+                tag: tag_str.to_string(),
+                color: color_str.to_string(),
+                display: display_str,
             });
         }
     }

@@ -107,8 +107,15 @@
     }
   });
 
-  // 检查标签是否为收藏标签
-  function isCollectTag(tag: string): EMMCollectTag | null {
+  // 检查标签是否为收藏标签（支持完整格式 "category:tag" 或单独 tag）
+  function isCollectTag(tag: string, category?: string): EMMCollectTag | null {
+    // 先尝试完整格式 "category:tag"
+    if (category) {
+      const fullTag = `${category}:${tag}`;
+      const result = isCollectTagHelper(fullTag, collectTags);
+      if (result) return result;
+    }
+    // 再尝试单独 tag
     return isCollectTagHelper(tag, collectTags);
   }
 
@@ -119,7 +126,7 @@
     const allTags: Array<{ tag: string; isCollect: boolean; color?: string }> = [];
     for (const [category, tags] of Object.entries(emmMetadata.tags)) {
       for (const tag of tags) {
-        const collectTag = isCollectTag(tag);
+        const collectTag = isCollectTag(tag, category);
         allTags.push({
           tag: `${category}:${tag}`,
           isCollect: !!collectTag,
@@ -249,11 +256,11 @@
 
     <!-- 信息 -->
     <div class="min-w-0 flex-1">
-      <div class="font-medium truncate" title={emmMetadata?.translatedTitle || item.name}>
+      <div class="font-medium break-words" title={emmMetadata?.translatedTitle || item.name}>
         {emmMetadata?.translatedTitle || item.name}
       </div>
       {#if emmMetadata?.translatedTitle && emmMetadata.translatedTitle !== item.name}
-        <div class="text-xs text-muted-foreground truncate" title={item.name}>
+        <div class="text-xs text-muted-foreground break-words mt-0.5" title={item.name}>
           {item.name}
         </div>
       {/if}
@@ -273,7 +280,7 @@
           {#each displayTags() as tagInfo}
             <span
               class="text-xs px-1.5 py-0.5 rounded {tagInfo.isCollect ? 'font-semibold' : ''}"
-              style="background-color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '20' : 'transparent'}; color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') : 'inherit'};"
+              style="background-color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '20' : 'rgba(0,0,0,0.05)'}; color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') : 'inherit'}; border: 1px solid {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '40' : 'transparent'};"
               title={tagInfo.tag}
             >
               {tagInfo.tag.split(':')[1]}
@@ -352,11 +359,11 @@
 
     <!-- 信息区域 -->
     <div class="p-2 bg-background">
-      <div class="font-medium text-sm truncate" title={emmMetadata?.translatedTitle || item.name}>
+      <div class="font-medium text-sm break-words" title={emmMetadata?.translatedTitle || item.name}>
         {emmMetadata?.translatedTitle || item.name}
       </div>
       {#if emmMetadata?.translatedTitle && emmMetadata.translatedTitle !== item.name}
-        <div class="text-xs text-muted-foreground truncate" title={item.name}>
+        <div class="text-xs text-muted-foreground break-words mt-0.5" title={item.name}>
           {item.name}
         </div>
       {/if}
@@ -374,7 +381,7 @@
           {#each displayTags() as tagInfo}
             <span
               class="text-xs px-1 py-0.5 rounded {tagInfo.isCollect ? 'font-semibold' : ''}"
-              style="background-color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '20' : 'transparent'}; color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') : 'inherit'};"
+              style="background-color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '20' : 'rgba(0,0,0,0.05)'}; color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') : 'inherit'}; border: 1px solid {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '40' : 'transparent'};"
               title={tagInfo.tag}
             >
               {tagInfo.tag.split(':')[1]}

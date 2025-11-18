@@ -31,19 +31,26 @@
 		collectTags = emmMetadataStore.getCollectTags();
 	});
 
-	// 检查标签是否为收藏标签
-	function isCollectTag(tag: string): EMMCollectTag | null {
+	// 检查标签是否为收藏标签（支持完整格式 "category:tag" 或单独 tag）
+	function isCollectTag(tag: string, category?: string): EMMCollectTag | null {
+		// 先尝试完整格式 "category:tag"
+		if (category) {
+			const fullTag = `${category}:${tag}`;
+			const result = isCollectTagHelper(fullTag, collectTags);
+			if (result) return result;
+		}
+		// 再尝试单独 tag
 		return isCollectTagHelper(tag, collectTags);
 	}
 
-	// 获取所有标签（扁平化）
+	// 获取所有标签（扁平化，高亮收藏的）
 	const allTags = $derived(() => {
 		if (!bookInfo?.emmMetadata?.tags) return [];
 		
 		const tags: Array<{ category: string; tag: string; isCollect: boolean; color?: string }> = [];
 		for (const [category, tagList] of Object.entries(bookInfo.emmMetadata.tags)) {
 			for (const tag of tagList) {
-				const collectTag = isCollectTag(tag);
+				const collectTag = isCollectTag(tag, category);
 				tags.push({
 					category,
 					tag,
@@ -337,21 +344,21 @@
 					<div class="space-y-2 text-sm">
 						<div class="flex justify-between">
 							<span class="text-muted-foreground">名称:</span>
-							<span class="font-medium truncate max-w-[200px]" title={bookInfo.emmMetadata?.translatedTitle || bookInfo.name}>
+							<span class="font-medium break-words max-w-[200px]" title={bookInfo.emmMetadata?.translatedTitle || bookInfo.name}>
 								{bookInfo.emmMetadata?.translatedTitle || bookInfo.name}
 							</span>
 						</div>
 						{#if bookInfo.emmMetadata?.translatedTitle && bookInfo.emmMetadata.translatedTitle !== bookInfo.name}
 							<div class="flex justify-between">
 								<span class="text-muted-foreground">原名:</span>
-								<span class="font-mono text-xs truncate max-w-[200px]" title={bookInfo.name}>
+								<span class="font-mono text-xs break-words max-w-[200px]" title={bookInfo.name}>
 									{bookInfo.name}
 								</span>
 							</div>
 						{/if}
 						<div class="flex justify-between">
 							<span class="text-muted-foreground">路径:</span>
-							<span class="font-mono text-xs truncate max-w-[200px]" title={bookInfo.path}>
+							<span class="font-mono text-xs break-words max-w-[200px]" title={bookInfo.path}>
 								{bookInfo.path}
 							</span>
 						</div>
@@ -585,7 +592,7 @@
 					<div class="space-y-2 text-sm">
 						<div class="flex justify-between">
 							<span class="text-muted-foreground">路径:</span>
-							<span class="font-mono text-xs truncate max-w-[200px]" title={imageInfo.path}>
+							<span class="font-mono text-xs break-words max-w-[200px]" title={imageInfo.path}>
 								{imageInfo.path ?? '—'}
 							</span>
 						</div>

@@ -3,10 +3,12 @@
  * 封装ImageViewer相关的事件监听器
  */
 
-import type { BookStore } from '$lib/stores/book.svelte';
+import { bookStore as globalBookStore } from '$lib/stores/book.svelte';
+
+type BookStore = typeof globalBookStore;
 
 export interface EventListenersOptions {
-	bookStore: BookStore;
+	bookStore?: BookStore;
 	onUpscaleComplete?: (detail: any) => void;
 	onUpscaleSaved?: (detail: any) => void;
 	onRequestCurrentImageData?: (detail: any) => void;
@@ -20,7 +22,7 @@ export interface EventListenersOptions {
 
 export function createEventListeners(options: EventListenersOptions) {
 	const {
-		bookStore,
+		bookStore = globalBookStore,
 		onUpscaleComplete,
 		onUpscaleSaved,
 		onRequestCurrentImageData,
@@ -32,12 +34,17 @@ export function createEventListeners(options: EventListenersOptions) {
 		onUpscaleStart
 	} = options;
 
-	const handleUpscaleComplete = async (e: CustomEvent) => {
-		const { imageData: upscaledImageData, imageBlob, originalImageHash } = e.detail;
+	const handleUpscaleComplete = async (event: Event) => {
+		const e = event as CustomEvent;
+		const { imageData: upscaledImageData, imageBlob, originalImageHash, background, pageIndex } = e.detail;
 		if (!upscaledImageData || !originalImageHash) return;
 
 		try {
-			if (imageBlob) {
+			const targetIndex = typeof pageIndex === 'number' ? pageIndex : bookStore.currentPageIndex;
+			const isCurrentPage = targetIndex === bookStore.currentPageIndex;
+
+			// 仅在当前页且非后台任务时才更新全局 upscaled Blob，避免后台结果覆盖当前显示
+			if (imageBlob && !background && isCurrentPage) {
 				bookStore.setUpscaledImageBlob(imageBlob);
 			}
 			
@@ -48,7 +55,8 @@ export function createEventListeners(options: EventListenersOptions) {
 		}
 	};
 
-	const handleUpscaleSaved = async (e: CustomEvent) => {
+	const handleUpscaleSaved = async (event: Event) => {
+		const e = event as CustomEvent;
 		try {
 			const { finalHash, savePath } = e.detail || {};
 			if (finalHash && savePath) {
@@ -62,7 +70,8 @@ export function createEventListeners(options: EventListenersOptions) {
 		}
 	};
 
-	const handleRequestCurrentImageData = (e: CustomEvent) => {
+	const handleRequestCurrentImageData = (event: Event) => {
+		const e = event as CustomEvent;
 		console.log('ImageViewer: 收到图片数据请求');
 		// 直接调用外部回调，不再添加额外的延迟
 		onRequestCurrentImageData?.(e.detail);
@@ -72,19 +81,23 @@ export function createEventListeners(options: EventListenersOptions) {
 		onResetPreUpscaleProgress?.();
 	};
 
-	const handleComparisonModeChanged = (e: CustomEvent) => {
+	const handleComparisonModeChanged = (event: Event) => {
+		const e = event as CustomEvent;
 		onComparisonModeChanged?.(e.detail);
 	};
 
-	const handleProgressBarState = (e: CustomEvent) => {
+	const handleProgressBarState = (event: Event) => {
+		const e = event as CustomEvent;
 		onProgressBarStateChange?.(e.detail);
 	};
 
-	const handleCheckPreloadCache = (e: CustomEvent) => {
+	const handleCheckPreloadCache = (event: Event) => {
+		const e = event as CustomEvent;
 		onCheckPreloadCache?.(e.detail);
 	};
 
-	const handleCacheHit = (e: CustomEvent) => {
+	const handleCacheHit = (event: Event) => {
+		const e = event as CustomEvent;
 		onCacheHit?.(e.detail);
 	};
 

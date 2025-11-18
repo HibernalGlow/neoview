@@ -4,6 +4,7 @@
  */
 
 import { writable } from 'svelte/store';
+import { appState, type AppStateSnapshot } from '$lib/core/state/appState';
 
 // 从本地存储加载状态
 function loadFromStorage<T>(key: string, defaultValue: T): T {
@@ -80,15 +81,37 @@ activeRightPanel.subscribe((value) => saveToStorage('activeRightPanel', value));
 isFullscreen.subscribe((value) => saveToStorage('isFullscreen', value));
 activeUIPanel.subscribe((value) => saveToStorage('activeUIPanel', value));
 themeMode.subscribe((value) => saveToStorage('themeMode', value));
-zoomLevel.subscribe((value) => saveToStorage('zoomLevel', value));
 rotationAngle.subscribe((value) => saveToStorage('rotationAngle', value));
-viewMode.subscribe((value) => saveToStorage('viewMode', value));
 topToolbarPinned.subscribe((value) => saveToStorage('topToolbarPinned', value));
 bottomThumbnailBarPinned.subscribe((value) => saveToStorage('bottomThumbnailBarPinned', value));
 sidebarPinned.subscribe((value) => saveToStorage('sidebarPinned', value));
 rightSidebarPinned.subscribe((value) => saveToStorage('rightSidebarPinned', value));
 topToolbarHeight.subscribe((value) => saveToStorage('topToolbarHeight', value));
 bottomThumbnailBarHeight.subscribe((value) => saveToStorage('bottomThumbnailBarHeight', value));
+
+const updateViewerSlice = (partial: Partial<AppStateSnapshot['viewer']>) => {
+	const snapshot = appState.getSnapshot();
+	appState.update({
+		viewer: {
+			...snapshot.viewer,
+			...partial
+		}
+	});
+};
+
+zoomLevel.subscribe((value) => {
+	saveToStorage('zoomLevel', value);
+	updateViewerSlice({ zoom: value });
+});
+
+viewMode.subscribe((value) => {
+	saveToStorage('viewMode', value);
+	updateViewerSlice({ viewMode: value });
+});
+
+isLoading.subscribe((value) => {
+	updateViewerSlice({ loading: value });
+});
 
 /**
  * 切换侧边栏

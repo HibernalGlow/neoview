@@ -6,6 +6,7 @@
 import type { BookInfo, Page } from '../types';
 import * as bookApi from '../api/book';
 import { infoPanelStore } from './infoPanel.svelte';
+import { appState } from '$lib/core/state/appState';
 
 interface BookState {
   currentBook: BookInfo | null;
@@ -129,6 +130,7 @@ class BookStore {
       book.currentPage = 0;
       
       this.state.currentBook = book;
+      this.syncAppStateBookSlice();
       this.state.viewerOpen = true;
       this.syncInfoPanelBookInfo();
       
@@ -145,6 +147,7 @@ class BookStore {
       console.error('❌ Error opening book:', err);
       this.state.error = String(err);
       this.state.currentBook = null;
+      this.syncAppStateBookSlice();
       infoPanelStore.resetBookInfo();
     } finally {
       this.state.loading = false;
@@ -175,6 +178,7 @@ class BookStore {
       book.currentPage = 0;
       
       this.state.currentBook = book;
+      this.syncAppStateBookSlice();
       this.state.viewerOpen = true;
       this.syncInfoPanelBookInfo();
       
@@ -191,6 +195,7 @@ class BookStore {
       console.error('❌ Error opening directory as book:', err);
       this.state.error = String(err);
       this.state.currentBook = null;
+      this.syncAppStateBookSlice();
       infoPanelStore.resetBookInfo();
     } finally {
       this.state.loading = false;
@@ -221,6 +226,7 @@ class BookStore {
       book.currentPage = 0;
       
       this.state.currentBook = book;
+      this.syncAppStateBookSlice();
       this.state.viewerOpen = true;
       this.syncInfoPanelBookInfo();
       
@@ -237,6 +243,7 @@ class BookStore {
       console.error('❌ Error opening archive as book:', err);
       this.state.error = String(err);
       this.state.currentBook = null;
+      this.syncAppStateBookSlice();
       infoPanelStore.resetBookInfo();
     } finally {
       this.state.loading = false;
@@ -249,6 +256,7 @@ class BookStore {
   closeViewer() {
     this.state.viewerOpen = false;
     this.state.currentBook = null;
+    this.syncAppStateBookSlice();
     this.state.currentImage = null;
     this.state.upscaledImageData = null;
     this.state.upscaledImageBlob = null;
@@ -312,6 +320,7 @@ class BookStore {
       
       // 更新本地状态
       this.state.currentBook.currentPage = index;
+      this.syncAppStateBookSlice();
       this.syncInfoPanelBookInfo();
     } catch (err) {
       console.error('❌ Error navigating to page:', err);
@@ -333,6 +342,7 @@ class BookStore {
       if (this.state.currentBook) {
         this.state.currentBook.currentPage = newIndex;
         this.syncInfoPanelBookInfo();
+        this.syncAppStateBookSlice();
       }
       return newIndex;
     } catch (err) {
@@ -362,6 +372,7 @@ class BookStore {
       if (this.state.currentBook) {
         this.state.currentBook.currentPage = newIndex;
         this.syncInfoPanelBookInfo();
+        this.syncAppStateBookSlice();
       }
       return newIndex;
     } catch (err) {
@@ -614,6 +625,17 @@ class BookStore {
       infoPanelStore.resetBookInfo();
       return;
     }
+  private syncAppStateBookSlice() {
+    const currentBook = this.state.currentBook;
+    appState.update({
+      book: {
+        currentBookPath: currentBook?.path ?? null,
+        currentPageIndex: currentBook?.currentPage ?? 0,
+        totalPages: currentBook?.totalPages ?? 0
+      }
+    });
+  }
+
     infoPanelStore.setBookInfo({
       path: book.path,
       name: book.name,

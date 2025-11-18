@@ -3,6 +3,7 @@
 	 * Bottom Thumbnail Bar
 	 * 底部缩略图栏 - 自动隐藏，鼠标悬停显示
 	 */
+	import { readable } from 'svelte/store';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { loadImage } from '$lib/api/fs';
 	import { loadImageFromArchive } from '$lib/api/filesystem';
@@ -11,6 +12,15 @@
 	import * as Progress from '$lib/components/ui/progress';
 	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, ExternalLink, Minus, Target } from '@lucide/svelte';
 	import { createPreloadManager } from '$lib/components/viewer/flow/preloadManager.svelte';
+	import { appState, type StateSelector } from '$lib/core/state/appState';
+
+	function createAppStateStore<T>(selector: StateSelector<T>) {
+		const initial = selector(appState.getSnapshot());
+		return readable(initial, (set) => appState.subscribe(selector, (value) => set(value)));
+	}
+
+	const viewerState = createAppStateStore((state) => state.viewer);
+	const MIN_VISIBLE_THUMBNAILS = 6;
 
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
@@ -121,14 +131,78 @@
 		}
 	});
 
+	function ensureMinimumSpan(start: number, end: number, totalPages: number): { start: number; end: number } {
+		let newStart = start;
+		let newEnd = end;
+		const desired = MIN_VISIBLE_THUMBNAILS;
+		const currentSpan = newEnd - newStart + 1;
+		if (currentSpan >= desired) {
+			return { start: newStart, end: newEnd };
+		}
+
+		let deficit = desired - currentSpan;
+		while (deficit > 0 && (newStart > 0 || newEnd < totalPages - 1)) {
+			if (newStart > 0) {
+				newStart -= 1;
+				deficit -= 1;
+			}
+			if (deficit > 0 && newEnd < totalPages - 1) {
+				newEnd += 1;
+				deficit -= 1;
+			}
+		}
+
+		return { start: newStart, end: newEnd };
+	}
+
+	function getWindowRange(totalPages: number): { start: number; end: number } {
+		const windowState = $viewerState.pageWindow;
+		const fallbackRadius = Math.max(MIN_VISIBLE_THUMBNAILS, Math.floor(($bottomThumbnailBarHeight - 40) / 60));
+
+		if (!windowState || windowState.stale) {
+			const start = Math.max(0, bookStore.currentPageIndex - fallbackRadius);
+			const end = Math.min(totalPages - 1, bookStore.currentPageIndex + fallbackRadius);
+			return ensureMinimumSpan(start, end, totalPages);
+		}
+
+		let minIndex = windowState.center;
+		let maxIndex = windowState.center;
+		if (windowState.backward.length) {
+			minIndex = Math.min(minIndex, ...windowState.backward);
+		}
+		if (windowState.forward.length) {
+			maxIndex = Math.max(maxIndex, ...windowState.forward);
+		}
+		minIndex = Math.max(0, minIndex);
+		maxIndex = Math.min(totalPages - 1, maxIndex);
+
+		return ensureMinimumSpan(minIndex, maxIndex, totalPages);
+	}
+
+	function windowBadgeLabel(index: number): string | null {
+		const windowState = $viewerState.pageWindow;
+		if (!windowState || windowState.stale) return null;
+		if (index === windowState.center) return 'C';
+		if (windowState.forward.includes(index)) return '+';
+		if (windowState.backward.includes(index)) return '-';
+		return null;
+	}
+
+	function windowBadgeClass(index: number): string {
+		const windowState = $viewerState.pageWindow;
+		if (!windowState || windowState.stale) return '';
+		if (index === windowState.center) return 'bg-amber-500/80';
+		if (windowState.forward.includes(index)) return 'bg-blue-500/70';
+		if (windowState.backward.includes(index)) return 'bg-purple-500/70';
+		return '';
+	}
+
 	async function loadVisibleThumbnails() {
 		const currentBook = bookStore.currentBook;
 		if (!currentBook || !preloadManager) return;
 
-		// 动态计算预加载范围，确保至少显示6页
-		const preloadRange = Math.max(5, Math.floor(($bottomThumbnailBarHeight - 40) / 60)); // 基于高度计算
-		const start = Math.max(0, bookStore.currentPageIndex - preloadRange);
-		const end = Math.min(currentBook.pages.length - 1, bookStore.currentPageIndex + preloadRange);
+		const totalPages = currentBook.pages.length;
+		const { start, end } = getWindowRange(totalPages);
 
 		console.log(`Loading thumbnails from ${start} to ${end} (total: ${end - start + 1})`);
 
@@ -264,6 +338,12 @@
 		};
 	});
 
+	$effect(() => {
+		const windowState = $viewerState.pageWindow;
+		if (!bookStore.currentBook || !windowState) return;
+		void loadVisibleThumbnails();
+	});
+
 	// 清空缩略图缓存当书籍变化时
 	$effect(() => {
 		const currentBook = bookStore.currentBook;
@@ -300,18 +380,19 @@
 			: 'translate-y-full'}"
 		onmouseenter={handleMouseEnter}
 		onmouseleave={handleMouseLeave}
+		role="application"
+		aria-label="底部缩略图栏"
 	>
 		<div class="bg-secondary/95 backdrop-blur-sm border-t shadow-lg overflow-hidden" style="height: {$bottomThumbnailBarHeight}px;">
 			<!-- 拖拽手柄 -->
-			<div
-				class="h-2 flex items-center justify-center cursor-ns-resize hover:bg-primary/20 transition-colors"
+			<button
+				type="button"
+				class="h-2 w-full flex items-center justify-center cursor-ns-resize hover:bg-primary/20 transition-colors"
 				onmousedown={handleResizeStart}
-				role="separator"
 				aria-label="拖拽调整缩略图栏高度"
-				tabindex="0"
 			>
 				<GripHorizontal class="h-3 w-3 text-muted-foreground" />
-			</div>
+			</button>
 
 			<!-- 控制按钮 -->
 			<div class="px-2 pb-1 flex justify-center gap-2">
@@ -360,7 +441,25 @@
 				</Button>
 			</div>
 
-			<div class="px-2 pb-2 h-[calc(100%-theme(spacing.8))] overflow-hidden">
+			{#if $viewerState.pageWindow && !$viewerState.pageWindow.stale}
+				<div class="px-3 pb-1 text-[11px] text-muted-foreground flex flex-wrap gap-3">
+					<span>窗口中心：{$viewerState.pageWindow.center + 1}</span>
+					<span>前向覆盖：{$viewerState.pageWindow.forward.length} 页</span>
+					<span>后向覆盖：{$viewerState.pageWindow.backward.length} 页</span>
+				</div>
+			{/if}
+
+			{#if $viewerState.taskCursor}
+				<div class="px-3 text-[11px] text-muted-foreground flex flex-wrap gap-3 pb-1">
+					<span>任务：{$viewerState.taskCursor.running}/{$viewerState.taskCursor.concurrency}</span>
+					<span>Current {$viewerState.taskCursor.activeBuckets.current}</span>
+					<span>Forward {$viewerState.taskCursor.activeBuckets.forward}</span>
+					<span>Backward {$viewerState.taskCursor.activeBuckets.backward}</span>
+					<span>Background {$viewerState.taskCursor.activeBuckets.background}</span>
+				</div>
+			{/if}
+
+			<div class="px-2 pb-2 h-[calc(100%-theme(spacing.12))] overflow-hidden">
 				<div class="flex gap-2 overflow-x-auto h-full pb-1 items-center" onscroll={handleScroll}>
 					{#each bookStore.currentBook.pages as page, index (page.path)}
 						<button
@@ -368,7 +467,7 @@
 								{index === bookStore.currentPageIndex ? 'outline outline-2 outline-yellow-400' : ''}
 								{bookStore.getPageUpscaleStatus(index) === 'preupscaled' ? 'ring-2 ring-blue-500' : ''}
 								{bookStore.getPageUpscaleStatus(index) === 'done' ? 'ring-2 ring-green-500' : ''}
-								{bookStore.getPageUpscaleStatus(index) === 'error' ? 'ring-2 ring-red-500' : ''}
+								{bookStore.getPageUpscaleStatus(index) === 'failed' ? 'ring-2 ring-red-500' : ''}
 								border-gray-300 hover:border-primary/50"
 							style="width: auto; height: {$bottomThumbnailBarHeight - 40}px; min-width: 60px; max-width: 120px;"
 							onclick={() => bookStore.navigateToPage(index)}
@@ -391,6 +490,14 @@
 								</div>
 							{/if}
 
+							{#if windowBadgeLabel(index)}
+								<div
+									class={`absolute top-0 right-0 text-[10px] px-1 py-[1px] text-white font-mono ${windowBadgeClass(index)}`}
+								>
+									{windowBadgeLabel(index)}
+								</div>
+							{/if}
+
 							<!-- 页码标签 -->
 							<div
 								class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[10px] text-center py-0.5 font-mono"
@@ -403,7 +510,7 @@
 								<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-green-500" title="已超分"></span>
 							{:else if bookStore.getPageUpscaleStatus(index) === 'preupscaled'}
 								<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-blue-500" title="已预超分"></span>
-							{:else if bookStore.getPageUpscaleStatus(index) === 'error'}
+							{:else if bookStore.getPageUpscaleStatus(index) === 'failed'}
 								<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-red-500" title="超分失败"></span>
 							{/if}
 						</button>
@@ -416,12 +523,10 @@
 	{#if showProgressBar && bookStore.currentBook}
 		<!-- 底部进度条 -->
 		<div class="fixed bottom-0 left-0 right-0 h-1 z-[51] pointer-events-none">
-			<Progress.Root 
+			<Progress.Root
 				value={((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}
 				class="h-full"
-			>
-				<Progress.Indicator class="h-full bg-primary transition-all duration-300" />
-			</Progress.Root>
+			/>
 		</div>
 	{/if}
 </div>

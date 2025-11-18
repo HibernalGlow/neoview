@@ -54,11 +54,14 @@
 
 > **进度（2025-11-18 更新）**：对比模式、缩略图任务开始通过 `appState` + `taskScheduler` 管理，缩略图生成已迁入统一任务队列；已完成 NeeView 随机跳页缓存窗口调研，确认其 `ActiveSlot + AheadSlots + BehindSlots` 框架。
 
+> **进度（2025-11-18 晚间）**：`viewer.pageWindow`、`jumpHistory`、`taskCursor` 已写入 `appState` 并由 BookStore 驱动；TaskScheduler 引入 Current/Forward/Backward/Background 桶化策略及指标订阅；BottomThumbnailBar 读取 pageWindow 与 taskCursor 实时展示覆盖范围与队列深度，形成 NeeView 风格的窗口化随机访问体验雏形。
+
 **2.1 StateService**
 - 合并 `bookStore`, `settingsManager`, 分散 $state 到 `appState`，组件统一走 selector。
 - 新增 `viewer.pageWindow`（包含 `center`, `forward`, `backward`, `stale`）与 `viewer.taskCursor`（记录 `oldestPendingIdx`, `furthestReadyIdx`），支持 UI 实时展示缓存覆盖范围。
 - 追踪最近 20 次跳页的 `jumpHistory`，提供给 TaskScheduler 预测下一次方向。
 - 实现本地持久化与 schema 迁移，保证状态升级不丢失。
+- ✅ BottomThumbnailBar 已消费 `pageWindow`/`taskCursor`，以窗口视图 + 队列指标反馈缓存命中情况，验证 ViewModel→UI 流向。
 
 **3.1 Rust TaskScheduler**
 - 把 TS 版调度迁移到 Rust：使用 async queue（Tokio + prioritised queue）。

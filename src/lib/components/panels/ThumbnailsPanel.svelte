@@ -6,11 +6,14 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import * as Progress from '$lib/components/ui/progress';
-import { Image as ImageIcon, Grid3x3, Grid2x2, LayoutGrid, Loader2, AlertCircle, TestTube, CheckCircle, XCircle, Database, FolderOpen } from '@lucide/svelte';
-	import { invoke } from '@tauri-apps/api/core';
-	import { open } from '@tauri-apps/plugin-dialog';
-	import { onMount } from 'svelte';
-	import { bookStore } from '$lib/stores/book.svelte';
+import { Image as ImageIcon, Grid3x3, Grid2x2, LayoutGrid, Loader2, AlertCircle, TestTube, CheckCircle, XCircle, Database, FolderOpen, Zap, Activity } from '@lucide/svelte';
+import { invoke } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
+import { onMount } from 'svelte';
+import { readable } from 'svelte/store';
+import { bookStore } from '$lib/stores/book.svelte';
+import { appState, type StateSelector } from '$lib/core/state/appState';
+import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 	// TODO: 缩略图测试功能已移除，待重新实现
 	// import { runThumbnailTests } from '$lib/utils/thumbnail-test';
 
@@ -21,6 +24,7 @@ import { Image as ImageIcon, Grid3x3, Grid2x2, LayoutGrid, Loader2, AlertCircle,
 		loading: boolean;
 		error: boolean;
 		pagePath: string; // 页面路径
+		jobId?: string;
 	}
 
 	// 缩略图数据 - 从 store 获取并动态生成缩略图
@@ -51,6 +55,16 @@ import { Image as ImageIcon, Grid3x3, Grid2x2, LayoutGrid, Loader2, AlertCircle,
 	let unindexedArchives = $state<string[]>([]);
 
 	const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'avif', 'jxl', 'tiff', 'tif'];
+
+	function createAppStateStore<T>(selector: StateSelector<T>) {
+		const initial = selector(appState.getSnapshot());
+		return readable(initial, (set) => appState.subscribe(selector, (value) => set(value)));
+	}
+
+	const bookState = createAppStateStore((state) => state.book);
+	const viewerState = createAppStateStore((state) => state.viewer);
+	const thumbnailJobs = new Map<string, Thumbnail>();
+	let taskWatcher: (() => void) | null = null;
 
 	function getFileExtension(path: string): string {
 		const parts = path.toLowerCase().split('.');
@@ -112,21 +126,25 @@ import { Image as ImageIcon, Grid3x3, Grid2x2, LayoutGrid, Loader2, AlertCircle,
 		}
 	}
 
-	async function loadAllThumbnails() {
-		// 限制并发加载的缩略图数量
-		const concurrency = 6;
-		const chunks = [];
-		
-		for (let i = 0; i < thumbnails.length; i += concurrency) {
-			chunks.push(thumbnails.slice(i, i + concurrency));
+	async function enqueueThumbnailLoad(thumb: Thumbnail) {
+		if (thumb.jobId) {
+			return;
 		}
-		
-		for (const chunk of chunks) {
-			await Promise.all(
-				chunk.map((thumb) => {
-					return loadThumbnail(thumb, thumb.pagePath);
-				})
-			);
+		const snapshot = taskScheduler.enqueue({
+			type: 'panel-thumbnail-load',
+			priority: 'low',
+			bucket: 'background',
+			source: 'thumbnails-panel',
+			pageIndices: [thumb.index - 1],
+			executor: () => loadThumbnail(thumb, thumb.pagePath)
+		});
+		thumb.jobId = snapshot.id;
+		thumbnailJobs.set(snapshot.id, thumb);
+	}
+
+	async function loadAllThumbnails() {
+		for (const thumb of thumbnails) {
+			void enqueueThumbnailLoad(thumb);
 		}
 	}
 
@@ -354,24 +372,50 @@ import { Image as ImageIcon, Grid3x3, Grid2x2, LayoutGrid, Loader2, AlertCircle,
 		}
 	}
 
-	// 初始化缩略图管理器
-	onMount(async () => {
-		try {
-			// 初始化缩略图管理器
-			await invoke('init_thumbnail_manager', {
-				thumbnailPath: 'D:\\temp\\neoview_thumbnails',
-				rootPath: 'D:\\',
-				size: 256
-			});
-		} catch (error) {
-			console.error('初始化缩略图管理器失败:', error);
-		}
+	// 初始化缩略图管理器并监听任务队列
+	onMount(() => {
+		(async () => {
+			try {
+				await invoke('init_thumbnail_manager', {
+					thumbnailPath: 'D:\\temp\\neoview_thumbnails',
+					rootPath: 'D:\\',
+					size: 256
+				});
+			} catch (error) {
+				console.error('初始化缩略图管理器失败:', error);
+			}
+		})();
+
+		taskWatcher = taskScheduler.subscribe((snapshot) => {
+			if (snapshot.type !== 'panel-thumbnail-load') return;
+			if (
+				snapshot.status === 'completed' ||
+				snapshot.status === 'failed' ||
+				snapshot.status === 'cancelled'
+			) {
+				const thumb = thumbnailJobs.get(snapshot.id);
+				if (thumb) {
+					if (thumb.jobId === snapshot.id) {
+						thumb.jobId = undefined;
+					}
+					thumbnailJobs.delete(snapshot.id);
+				}
+			}
+		});
+
+		return () => {
+			taskWatcher?.();
+			taskWatcher = null;
+		};
 	});
 
 	// 监听当前书籍变化
 	$effect(() => {
-		if (bookStore.currentBook && bookStore.currentBook.path) {
-			loadThumbnails(bookStore.currentBook.path);
+		const path = $bookState.currentBookPath;
+		if (path) {
+			void loadThumbnails(path);
+		} else {
+			thumbnails = [];
 		}
 	});
 </script>
@@ -426,6 +470,18 @@ import { Image as ImageIcon, Grid3x3, Grid2x2, LayoutGrid, Loader2, AlertCircle,
 						测试
 					{/if}
 				</Button>
+			</div>
+		</div>
+		<div class="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+			<div class="flex items-center gap-1">
+				<Zap class="w-3 h-3" />
+				<span>任务 {$viewerState.taskCursor.running}/{$viewerState.taskCursor.concurrency}</span>
+			</div>
+			<div class="flex items-center gap-1">
+				<Activity class="w-3 h-3" />
+				<span>
+					C {$viewerState.taskCursor.activeBuckets.current} · F {$viewerState.taskCursor.activeBuckets.forward} · B {$viewerState.taskCursor.activeBuckets.backward} · BG {$viewerState.taskCursor.activeBuckets.background}
+				</span>
 			</div>
 		</div>
 

@@ -43,8 +43,8 @@ export function createEventListeners(options: EventListenersOptions) {
 			const targetIndex = typeof pageIndex === 'number' ? pageIndex : bookStore.currentPageIndex;
 			const isCurrentPage = targetIndex === bookStore.currentPageIndex;
 
-			// 仅在当前页且非后台任务时才更新全局 upscaled Blob，避免后台结果覆盖当前显示
-			if (imageBlob && !background && isCurrentPage) {
+			// 仅在当前页时才更新全局 upscaled Blob，避免其他页面覆盖当前显示
+			if (imageBlob && isCurrentPage) {
 				bookStore.setUpscaledImageBlob(imageBlob);
 			}
 			

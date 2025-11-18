@@ -138,16 +138,22 @@ export class ImageLoader {
 	 * 更新配置
 	 */
 	updateConfig(config: { preloadPages?: number; maxThreads?: number; viewMode?: 'single' | 'double' | 'panorama' }): void {
-		if (config.preloadPages !== undefined) {
-			this.options.performancePreloadPages = config.preloadPages;
+		const nextPreload = config.preloadPages ?? this.options.performancePreloadPages;
+		const nextThreads = config.maxThreads ?? this.options.performanceMaxThreads;
+		const nextViewMode = config.viewMode ?? this.options.viewMode;
+
+		if (
+			nextPreload === this.options.performancePreloadPages &&
+			nextThreads === this.options.performanceMaxThreads &&
+			nextViewMode === this.options.viewMode
+		) {
+			// 中文：配置未变化，避免重复日志和触发闪烁
+			return;
 		}
-		if (config.maxThreads !== undefined) {
-			this.options.performanceMaxThreads = config.maxThreads;
-			// 更新 worker 的并发数 - 传入函数而不是值
-		}
-		if (config.viewMode !== undefined) {
-			this.options.viewMode = config.viewMode;
-		}
+
+		this.options.performancePreloadPages = nextPreload;
+		this.options.performanceMaxThreads = nextThreads;
+		this.options.viewMode = nextViewMode;
 		
 		console.log('ImageLoader 配置已更新:', {
 			preloadPages: this.options.performancePreloadPages,

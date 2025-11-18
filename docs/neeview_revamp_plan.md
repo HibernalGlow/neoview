@@ -56,7 +56,7 @@
 - 提供 `appState.subscribe(selector, listener)` API；Svelte 组件改为消费 selector。
 - 实现 state persistence（localStorage/IndexedDB）+ 版本迁移。
 
-**2.2 TaskScheduler（前端版）** 直接医嘱到位后端实现 参考3.1
+**2.2 TaskScheduler（前端版）** 直接一步到位后端实现 参考3.1
 - 初版先在 TS 侧实现队列：FIFO + 优先级 + 并发控制。
     这个不用 直接迁移到 Rust：使用 async queue（Tokio + prioritised queue）。
 - 处理 `preloadNextPages`, `triggerAutoUpscale`, `thumbnail` 等任务，统一去重与状态机。

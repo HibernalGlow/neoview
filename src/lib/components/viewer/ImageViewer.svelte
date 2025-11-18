@@ -41,6 +41,8 @@ let comparisonVisible = $state(false);
 let originalImageDataForComparison = $state<string>('');
 let upscaledImageDataForComparison = $state<string>('');
 let derivedUpscaledUrl = $state<string | null>(null);
+let lastUpscaledBlob: Blob | null = null;
+let lastUpscaledObjectUrl: string | null = null;
 
 	// 注意：progressColor 和 progressBlinking 现在由 ImageViewerProgressBar 内部管理
 
@@ -397,10 +399,12 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 		if ((window as { preloadManager?: typeof preloadManager }).preloadManager === preloadManager) {
 			delete (window as { preloadManager?: typeof preloadManager }).preloadManager;
 		}
-		if (derivedUpscaledUrl) {
-			URL.revokeObjectURL(derivedUpscaledUrl);
-			derivedUpscaledUrl = null;
+		if (lastUpscaledObjectUrl) {
+			URL.revokeObjectURL(lastUpscaledObjectUrl);
 		}
+		derivedUpscaledUrl = null;
+		lastUpscaledObjectUrl = null;
+		lastUpscaledBlob = null;
 	});
 
 	// 监听当前页面变化
@@ -424,18 +428,22 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 	// 根据 Blob 生成独立的 object URL，避免复用已被释放的 URL
 	$effect(() => {
 		const blob = bookStore.upscaledImageBlob;
-		if (blob) {
+		if (blob && blob !== lastUpscaledBlob) {
 			try {
 				const newUrl = URL.createObjectURL(blob);
-				if (derivedUpscaledUrl && derivedUpscaledUrl !== newUrl) {
-					URL.revokeObjectURL(derivedUpscaledUrl);
+				if (lastUpscaledObjectUrl) {
+					URL.revokeObjectURL(lastUpscaledObjectUrl);
 				}
 				derivedUpscaledUrl = newUrl;
+				lastUpscaledObjectUrl = newUrl;
+				lastUpscaledBlob = blob;
 			} catch (error) {
 				console.warn('创建超分 object URL 失败:', error);
 			}
-		} else if (derivedUpscaledUrl) {
-			URL.revokeObjectURL(derivedUpscaledUrl);
+		} else if (!blob && lastUpscaledObjectUrl) {
+			URL.revokeObjectURL(lastUpscaledObjectUrl);
+			lastUpscaledObjectUrl = null;
+			lastUpscaledBlob = null;
 			derivedUpscaledUrl = null;
 		}
 	});

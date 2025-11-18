@@ -198,6 +198,12 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 			initialPreloadPages,
 			initialMaxThreads,
 			onImageLoaded: (objectUrl, objectUrl2) => {
+				const currentPageIndex = bookStore.currentPageIndex;
+				const currentStatus = bookStore.getPageUpscaleStatus(currentPageIndex);
+				if (currentStatus === 'done' && bookStore.upscaledImageData) {
+					console.log('当前页已超分完成，跳过原图加载以避免闪屏');
+					return;
+				}
 				imageData = objectUrl ?? null;
 				imageData2 = objectUrl2 ?? null;
 			},

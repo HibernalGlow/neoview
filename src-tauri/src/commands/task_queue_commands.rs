@@ -14,4 +14,3 @@ pub async fn get_background_queue_metrics(
 ) -> Result<BackgroundSchedulerSnapshot, String> {
     Ok(state.scheduler.snapshot())
 }
-

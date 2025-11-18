@@ -161,4 +161,3 @@ pub struct BackgroundSchedulerSnapshot {
     pub failed: u64,
     pub recent_tasks: Vec<BackgroundTaskRecord>,
 }
-

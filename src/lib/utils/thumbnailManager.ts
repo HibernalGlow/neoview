@@ -8,6 +8,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { buildImagePathKey, type ImagePathContext, getStableImageHash } from './pathHash';
 import type { FsItem } from '$lib/types';
 import { taskScheduler } from '$lib/core/tasks/taskScheduler';
+import { scanFolderThumbnails } from '$lib/api/backgroundTasks';
 
 export interface ThumbnailConfig {
   maxConcurrentLocal: number;
@@ -791,86 +792,63 @@ class ThumbnailManager {
     folders: FsItem[],
     currentPath: string
   ): Promise<void> {
+    if (!folders.length) {
+      return;
+    }
+
+    try {
+      const results = await scanFolderThumbnails(folders.map((folder) => folder.path));
+      console.debug('[thumbnailManager] folder scan results', results);
+    } catch (error) {
+      console.debug('Rust folder scan 调用失败，回退到前端扫描逻辑', error);
+      await this.legacyFolderScan(folders);
+    }
+  }
+
+  private async legacyFolderScan(folders: FsItem[]) {
     const { invoke } = await import('@tauri-apps/api/core');
-    
-    // 限制并发扫描数量，避免性能问题
-    const maxConcurrent = 10;
+    const maxConcurrent = 6;
     const batchSize = Math.min(folders.length, maxConcurrent);
-    
-    // 分批处理
+
     for (let i = 0; i < folders.length; i += batchSize) {
       const batch = folders.slice(i, i + batchSize);
-      
-      // 并行扫描一批文件夹
       await Promise.all(
         batch.map(async (folder) => {
           try {
-            // 获取文件夹内容
             const items = await invoke<FsItem[]>('browse_directory', { path: folder.path });
-            
-            // 优先查找图片文件
             const firstImage = items.find((item) => item.isImage && !item.isDir);
             if (firstImage) {
-              console.log(`🖼️ 为文件夹找到图片: ${folder.path} -> ${firstImage.path}`);
-              // 生成图片缩略图（会自动反向更新父文件夹）
               await this.getThumbnail(firstImage.path, undefined, false, 'high');
               return;
             }
-            
-            // 如果没有图片，查找压缩包
-            const firstArchive = items.find(
-              (item) =>
-                !item.isDir &&
-                (item.name.endsWith('.zip') ||
-                  item.name.endsWith('.cbz') ||
-                  item.name.endsWith('.rar') ||
-                  item.name.endsWith('.cbr'))
-            );
+
+            const firstArchive = items.find((item) => this.isArchive(item));
             if (firstArchive) {
-              console.log(`📦 为文件夹找到压缩包: ${folder.path} -> ${firstArchive.path}`);
-              // 生成压缩包缩略图（会自动反向更新父文件夹）
               await this.getThumbnail(firstArchive.path, undefined, true, 'high');
               return;
             }
-            
-            // 如果没有图片和压缩包，查找子文件夹（最多一层，避免递归太深）
-            const firstSubfolder = items.find((item) => item.isDir);
-            if (firstSubfolder) {
-              // 递归查找子文件夹的第一个图片/压缩包（限制深度为1）
-              const subItems = await invoke<FsItem[]>('browse_directory', { path: firstSubfolder.path });
-              const subImage = subItems.find((item) => item.isImage && !item.isDir);
-              if (subImage) {
-                console.log(`🖼️ 为文件夹找到子文件夹图片: ${folder.path} -> ${subImage.path}`);
-                await this.getThumbnail(subImage.path, undefined, false, 'high');
-                return;
-              }
-              const subArchive = subItems.find(
-                (item) =>
-                  !item.isDir &&
-                  (item.name.endsWith('.zip') ||
-                    item.name.endsWith('.cbz') ||
-                    item.name.endsWith('.rar') ||
-                    item.name.endsWith('.cbr'))
-              );
-              if (subArchive) {
-                console.log(`📦 为文件夹找到子文件夹压缩包: ${folder.path} -> ${subArchive.path}`);
-                await this.getThumbnail(subArchive.path, undefined, true, 'high');
-                return;
-              }
-            }
-          } catch (error) {
-            console.debug(`扫描文件夹失败: ${folder.path}`, error);
+          } catch (err) {
+            console.debug('legacy folder scan error', err);
           }
         })
       );
-      
-      // 批次之间稍微延迟，避免过载
+
       if (i + batchSize < folders.length) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
     }
-    
-    console.log(`✅ 批量扫描完成: ${folders.length} 个文件夹`);
+  }
+
+  private isArchive(item: FsItem) {
+    return (
+      !item.isDir &&
+      (item.name.endsWith('.zip') ||
+        item.name.endsWith('.cbz') ||
+        item.name.endsWith('.rar') ||
+        item.name.endsWith('.cbr') ||
+        item.name.endsWith('.7z') ||
+        item.name.endsWith('.cb7'))
+    );
   }
 
   /**

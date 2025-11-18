@@ -1,15 +1,16 @@
 //! Thumbnail Commands
 //! 缩略图相关的 Tauri 命令
 
-use super::fs_commands::CacheIndexState;
+use super::fs_commands::{CacheIndexState, FsState};
 use super::task_queue_commands::BackgroundSchedulerState;
 use crate::core::blob_registry::BlobRegistry;
 use crate::core::cache_index_db::ThumbnailCacheUpsert;
+use crate::core::fs_manager::{FsItem, FsManager};
 use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::thumbnail_generator::{ThumbnailGenerator, ThumbnailGeneratorConfig};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::Manager;
@@ -453,6 +454,22 @@ pub struct ThumbnailIndexResult {
     pub exists: bool,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderScanResult {
+    pub folder: String,
+    pub matched_path: Option<String>,
+    pub matched_type: Option<String>,
+    pub generated: bool,
+    pub message: Option<String>,
+}
+
+#[derive(Clone, Copy)]
+enum FolderMatchKind {
+    Image,
+    Archive,
+}
+
 /// 批量预加载缩略图索引（后台线程）
 #[tauri::command]
 pub async fn preload_thumbnail_index(
@@ -533,4 +550,168 @@ pub async fn preload_thumbnail_index(
     handle
         .await
         .map_err(|e| format!("缩略图索引预加载任务失败: {}", e))?
+}
+
+/// 在 Rust 调度器中扫描文件夹并绑定缩略图
+#[tauri::command]
+pub async fn scan_folder_thumbnails(
+    folders: Vec<String>,
+    fs_state: State<'_, FsState>,
+    thumb_state: State<'_, ThumbnailState>,
+    cache_index: State<'_, CacheIndexState>,
+    scheduler: State<'_, BackgroundSchedulerState>,
+) -> Result<Vec<FolderScanResult>, String> {
+    if folders.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let fs_manager = Arc::clone(&fs_state.fs_manager);
+    let generator = Arc::clone(&thumb_state.generator);
+    let thumb_db = Arc::clone(&thumb_state.db);
+    let cache_db = Arc::clone(&cache_index.db);
+
+    let mut results = Vec::with_capacity(folders.len());
+
+    for folder in folders {
+        let fs_manager = Arc::clone(&fs_manager);
+        let generator = Arc::clone(&generator);
+        let thumb_db = Arc::clone(&thumb_db);
+        let cache_db = Arc::clone(&cache_db);
+        let folder_path = folder.clone();
+
+        let result = scheduler
+            .scheduler
+            .enqueue_blocking(
+                "filebrowser-folder-scan",
+                folder_path.clone(),
+                move || -> Result<FolderScanResult, String> {
+                    match find_candidate_for_folder(&fs_manager, &folder_path)? {
+                        None => Ok(FolderScanResult {
+                            folder: folder_path,
+                            matched_path: None,
+                            matched_type: None,
+                            generated: false,
+                            message: Some("未找到图片或压缩包".to_string()),
+                        }),
+                        Some((target_path, match_kind)) => {
+                            let thumbnail_data = {
+                                let mut guard = generator
+                                    .lock()
+                                    .map_err(|e| format!("获取缩略图生成器锁失败: {}", e))?;
+                                match match_kind {
+                                    FolderMatchKind::Image => {
+                                        guard.generate_file_thumbnail(&target_path)
+                                    }
+                                    FolderMatchKind::Archive => {
+                                        guard.generate_archive_thumbnail(&target_path)
+                                    }
+                                }
+                            }?;
+
+                            // 将结果写入 folder 记录
+                            if let Err(err) = thumb_db.save_thumbnail_with_category(
+                                &folder_path,
+                                0,
+                                0,
+                                &thumbnail_data,
+                                Some("folder"),
+                            ) {
+                                eprintln!("⚠️ 保存文件夹缩略图失败: {} - {}", folder_path, err);
+                            }
+
+                            let _ = cache_db.upsert_thumbnail_entry(ThumbnailCacheUpsert {
+                                path_key: &folder_path,
+                                category: "folder",
+                                hash: None,
+                                size: Some(thumbnail_data.len() as i64),
+                                source: Some("scan_folder_thumbnails"),
+                                blob_key: None,
+                            });
+
+                            Ok(FolderScanResult {
+                                folder: folder_path,
+                                matched_path: Some(target_path),
+                                matched_type: Some(match_kind.to_string()),
+                                generated: true,
+                                message: None,
+                            })
+                        }
+                    }
+                },
+            )
+            .await?;
+
+        results.push(result);
+    }
+
+    Ok(results)
+}
+
+impl FolderMatchKind {
+    fn as_str(&self) -> &'static str {
+        match self {
+            FolderMatchKind::Image => "image",
+            FolderMatchKind::Archive => "archive",
+        }
+    }
+}
+
+impl ToString for FolderMatchKind {
+    fn to_string(&self) -> String {
+        self.as_str().to_string()
+    }
+}
+
+fn find_candidate_for_folder(
+    fs_manager: &Arc<Mutex<FsManager>>,
+    folder_path: &str,
+) -> Result<Option<(String, FolderMatchKind)>, String> {
+    let mut queue = vec![(folder_path.to_string(), 0usize)];
+
+    while let Some((current_path, depth)) = queue.pop() {
+        let items = read_directory_items(fs_manager, &current_path)?;
+
+        if let Some(image) = items.iter().find(|item| !item.is_dir && item.is_image) {
+            return Ok(Some((image.path.clone(), FolderMatchKind::Image)));
+        }
+
+        if let Some(archive) = items
+            .iter()
+            .find(|item| !item.is_dir && is_archive_path(&item.path))
+        {
+            return Ok(Some((archive.path.clone(), FolderMatchKind::Archive)));
+        }
+
+        if depth == 0 {
+            if let Some(subfolder) = items.iter().find(|item| item.is_dir) {
+                queue.push((subfolder.path.clone(), depth + 1));
+            }
+        }
+    }
+
+    Ok(None)
+}
+
+fn read_directory_items(
+    fs_manager: &Arc<Mutex<FsManager>>,
+    path: &str,
+) -> Result<Vec<FsItem>, String> {
+    let path_buf = PathBuf::from(path);
+    let manager = fs_manager
+        .lock()
+        .map_err(|e| format!("获取 FsManager 锁失败: {}", e))?;
+    manager.read_directory(&path_buf)
+}
+
+fn is_archive_path(path: &str) -> bool {
+    Path::new(path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| {
+            matches!(
+                ext.to_lowercase().as_str(),
+                "zip" | "cbz" | "rar" | "cbr" | "7z" | "cb7"
+            )
+        })
+        .unwrap_or(false)
 }

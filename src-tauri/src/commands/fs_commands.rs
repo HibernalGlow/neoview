@@ -1148,6 +1148,19 @@ pub async fn cache_index_gc(
     cache_index.db.run_gc()
 }
 
+/// 将缓存 GC 提交到后台调度器
+#[tauri::command]
+pub async fn enqueue_cache_maintenance(
+    cache_index: State<'_, CacheIndexState>,
+    scheduler: State<'_, BackgroundSchedulerState>,
+) -> Result<CacheGcResult, String> {
+    let db = Arc::clone(&cache_index.db);
+    scheduler
+        .scheduler
+        .enqueue_blocking("cache-maintenance", "cache_index_gc", move || db.run_gc())
+        .await
+}
+
 /// 取消目录流
 #[tauri::command]
 pub async fn cancel_directory_stream(stream_id: String) -> Result<(), String> {

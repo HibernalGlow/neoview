@@ -682,9 +682,16 @@ export class ImageLoader {
 
 			const currentIndex = bookStore.currentPageIndex;
 			const totalPages = bookStore.totalPages;
+			const furthestPreUpscaledIndex = bookStore.getFurthestPreUpscaledIndex();
 
 			// 初始化预超分进度
-			this.totalPreUpscalePages = Math.min(preloadPages, totalPages - currentIndex - 1);
+			const firstCandidateIndex = Math.max(currentIndex + 1, furthestPreUpscaledIndex + 1);
+			if (firstCandidateIndex >= totalPages) {
+				console.log('所有页面都已预超分，跳过本轮预加载');
+				return;
+			}
+			const availablePagesAhead = Math.max(0, totalPages - firstCandidateIndex);
+			this.totalPreUpscalePages = Math.min(preloadPages, availablePagesAhead);
 			this.preUpscaleProgress = 0;
 
 			if (this.totalPreUpscalePages <= 0) {
@@ -696,9 +703,13 @@ export class ImageLoader {
 
 			// 预加载后续页面
 			const batchJobs: PreloadBatchJobInput[] = [];
-			for (let i = 1; i <= preloadPages; i++) {
-				const targetIndex = currentIndex + i;
+			const lastCandidateIndex = Math.min(totalPages - 1, firstCandidateIndex + preloadPages - 1);
+			for (let targetIndex = firstCandidateIndex; targetIndex <= lastCandidateIndex; targetIndex++) {
 				if (targetIndex >= totalPages) break;
+				if (targetIndex <= furthestPreUpscaledIndex) {
+					console.log(`第 ${targetIndex + 1} 页已在预超分覆盖范围内，跳过`);
+					continue;
+				}
 
 				const pageInfo = currentBook.pages[targetIndex];
 				if (!pageInfo) continue;

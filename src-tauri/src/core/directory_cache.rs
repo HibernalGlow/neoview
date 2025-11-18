@@ -45,13 +45,18 @@ impl DirectoryCache {
     }
 
     pub fn get(&mut self, path: &str, mtime: Option<u64>) -> Option<DirectoryCacheEntry> {
-        if let Some(entry) = self.entries.get_mut(path) {
+        if let Some(entry) = self.entries.get(path) {
             if self.is_stale(entry, mtime) {
                 self.entries.remove(path);
                 return None;
             }
+            let mut entry = entry.clone();
             entry.touch();
-            return Some(entry.clone());
+            // 更新缓存中的条目
+            if let Some(cached_entry) = self.entries.get_mut(path) {
+                cached_entry.touch();
+            }
+            return Some(entry);
         }
         None
     }

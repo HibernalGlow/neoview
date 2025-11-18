@@ -11,7 +11,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::UNIX_EPOCH;
 use tauri::State;
 
 /// 文件系统状态
@@ -214,9 +214,9 @@ pub async fn load_directory_snapshot(
     let fs_manager = Arc::clone(&state.fs_manager);
     let job_path = path.clone();
     let path_for_job = path_buf.clone();
-    let items = scheduler
+    let items: Vec<FsItem> = scheduler
         .scheduler
-        .enqueue_blocking("filebrowser-directory-load", job_path, move || {
+        .enqueue_blocking("filebrowser-directory-load", job_path, move || -> Result<Vec<FsItem>, String> {
             let fs_manager = fs_manager
                 .lock()
                 .map_err(|e| format!("获取锁失败: {}", e))?;
@@ -396,14 +396,13 @@ pub async fn batch_scan_archives(
     state: State<'_, FsState>,
     scheduler: State<'_, BackgroundSchedulerState>,
 ) -> Result<Vec<ArchiveScanResult>, String> {
-    use crate::core::archive::ArchiveEntry;
 
     let archive_manager = Arc::clone(&state.archive_manager);
     let paths: Vec<PathBuf> = archive_paths.iter().map(PathBuf::from).collect();
 
-    let results = scheduler
+    let results: Vec<ArchiveScanResult> = scheduler
         .scheduler
-        .enqueue_blocking("archive-batch-scan", "filebrowser", move || {
+        .enqueue_blocking("archive-batch-scan", "filebrowser", move || -> Result<Vec<ArchiveScanResult>, String> {
             let mut results = Vec::with_capacity(paths.len());
             let manager = archive_manager
                 .lock()
@@ -429,7 +428,7 @@ pub async fn batch_scan_archives(
                 }
             }
 
-            Ok::<Vec<ArchiveScanResult>, String>(results)
+            Ok(results)
         })
         .await?;
 
@@ -1213,7 +1212,9 @@ pub async fn enqueue_cache_maintenance(
     let db = Arc::clone(&cache_index.db);
     scheduler
         .scheduler
-        .enqueue_blocking("cache-maintenance", "cache_index_gc", move || db.run_gc())
+        .enqueue_blocking("cache-maintenance", "cache_index_gc", move || -> Result<CacheGcResult, String> {
+            db.run_gc().map_err(|e| e)
+        })
         .await
 }
 

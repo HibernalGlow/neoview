@@ -4,7 +4,6 @@
 use super::task_queue_commands::BackgroundSchedulerState;
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use tauri::State;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,14 +38,14 @@ pub async fn prepare_comparison_preview(
     let image_data = request.image_data.clone();
     let mime_type = request.mime_type.clone();
 
-    let data_url = scheduler
+    let data_url: String = scheduler
         .scheduler
-        .enqueue_blocking("comparison-prepare", job_source, move || {
+        .enqueue_blocking("comparison-prepare", job_source, move || -> Result<String, String> {
             // 将二进制数据编码为 base64
             let base64_data = general_purpose::STANDARD.encode(&image_data);
             // 构造 DataURL
             let data_url = format!("data:{};base64,{}", mime_type, base64_data);
-            Ok::<String, String>(data_url)
+            Ok(data_url)
         })
         .await?;
 

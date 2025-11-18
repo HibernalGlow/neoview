@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use chrono::{DateTime, Utc};
 use tauri::async_runtime::JoinHandle;
@@ -43,7 +43,7 @@ impl BackgroundTaskScheduler {
         self.metrics.snapshot()
     }
 
-    pub async fn enqueue_blocking<T, E, F, R>(
+    pub async fn enqueue_blocking<T, E, F>(
         &self,
         job_type: impl Into<String>,
         source: impl Into<String>,

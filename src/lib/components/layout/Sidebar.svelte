@@ -8,14 +8,16 @@
 import { activePanel, setActivePanelTab, sidebarWidth, sidebarPinned, sidebarOpen } from '$lib/stores';
 import type { PanelTabType } from '$lib/stores';
 	import * as Sidebar from '$lib/components/ui/sidebar';
-	import FileBrowser from '$lib/components/panels/FileBrowser.svelte';
-	import HistoryPanel from '$lib/components/panels/HistoryPanel.svelte';
-	import BookmarkPanel from '$lib/components/panels/BookmarkPanel.svelte';
-	import ThumbnailsPanel from '$lib/components/panels/ThumbnailsPanel.svelte';
-	import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
-	import { Button } from '$lib/components/ui/button';
-	import HoverWrapper from './HoverWrapper.svelte';
-	import { appState, type StateSelector } from '$lib/core/state/appState';
+import FileBrowser from '$lib/components/panels/FileBrowser.svelte';
+import HistoryPanel from '$lib/components/panels/HistoryPanel.svelte';
+import BookmarkPanel from '$lib/components/panels/BookmarkPanel.svelte';
+import ThumbnailsPanel from '$lib/components/panels/ThumbnailsPanel.svelte';
+import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
+import { Button } from '$lib/components/ui/button';
+import HoverWrapper from './HoverWrapper.svelte';
+import PanelContextMenu from '$lib/components/ui/PanelContextMenu.svelte';
+import { appState, type StateSelector } from '$lib/core/state/appState';
+import { Maximize2, ExternalLink, X } from '@lucide/svelte';
 
 	interface Props {
 		onResize?: (width: number) => void;
@@ -282,22 +284,57 @@ import type { PanelTabType } from '$lib/stores';
 				<Sidebar.Content>
 					<Sidebar.Group class="px-0">
 						<Sidebar.GroupContent>
-							{#if activeItem.value === 'folder'}
-								<FileBrowser />
-							{:else if activeItem.value === 'history'}
-								<HistoryPanel />
-							{:else if activeItem.value === 'bookmark'}
-								<BookmarkPanel />
-							{:else if activeItem.value === 'thumbnail'}
-								<ThumbnailsPanel />
-							{:else if activeItem.value === 'playlist'}
-								<div class="p-4">
-									<h3 class="text-lg font-semibold mb-4">播放列表</h3>
-									<p class="text-sm text-muted-foreground">播放列表功能正在开发中...</p>
-								</div>
-							{:else if activeItem.value === 'info'}
-								<InfoPanel />
-							{/if}
+							<PanelContextMenu
+								items={[
+									{
+										label: '在新窗口中打开',
+										action: () => {
+											console.log('在新窗口中打开:', activeItem.value);
+											// TODO: 实现新窗口打开逻辑
+										},
+										icon: ExternalLink
+									},
+									{
+										label: $sidebarPinned ? '取消钉住' : '钉住',
+										action: () => {
+											togglePin();
+										},
+										icon: $sidebarPinned ? PinOff : Pin
+									},
+									{
+										label: '',
+										action: () => {},
+										separator: true
+									},
+									{
+										label: '关闭面板',
+										action: () => {
+											sidebarOpen.set(false);
+										},
+										icon: X
+									}
+								]}
+								zIndex={10000}
+							>
+								{#snippet children()}
+									{#if activeItem.value === 'folder'}
+										<FileBrowser />
+									{:else if activeItem.value === 'history'}
+										<HistoryPanel />
+									{:else if activeItem.value === 'bookmark'}
+										<BookmarkPanel />
+									{:else if activeItem.value === 'thumbnail'}
+										<ThumbnailsPanel />
+									{:else if activeItem.value === 'playlist'}
+										<div class="p-4">
+											<h3 class="text-lg font-semibold mb-4">播放列表</h3>
+											<p class="text-sm text-muted-foreground">播放列表功能正在开发中...</p>
+										</div>
+									{:else if activeItem.value === 'info'}
+										<InfoPanel />
+									{/if}
+								{/snippet}
+							</PanelContextMenu>
 						</Sidebar.GroupContent>
 					</Sidebar.Group>
 				</Sidebar.Content>

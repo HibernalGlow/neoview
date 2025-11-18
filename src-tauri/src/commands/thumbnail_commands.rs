@@ -4,18 +4,17 @@
 use super::fs_commands::{CacheIndexState, FsState};
 use super::task_queue_commands::BackgroundSchedulerState;
 use crate::core::blob_registry::BlobRegistry;
-use crate::core::cache_index_db::ThumbnailCacheUpsert;
+use crate::core::cache_index_db::{CacheIndexDb, ThumbnailCacheUpsert};
 use crate::core::fs_manager::{FsItem, FsManager};
 use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::thumbnail_generator::{ThumbnailGenerator, ThumbnailGeneratorConfig};
 use crate::core::video_thumbnail::VideoThumbnailGenerator;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use std::io::Cursor;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tauri::Manager;
+use tauri::{Manager, State};
 
 /// 缩略图管理器状态
 pub struct ThumbnailState {
@@ -98,9 +97,9 @@ pub async fn generate_file_thumbnail_new(
     let job_source = format!("file:{}", file_path);
     let path_for_job = file_path.clone();
 
-    let thumbnail_data = scheduler
+    let thumbnail_data: Vec<u8> = scheduler
         .scheduler
-        .enqueue_blocking("thumbnail-generate", job_source, move || {
+        .enqueue_blocking("thumbnail-generate", job_source, move || -> Result<Vec<u8>, String> {
             let mut generator = generator
                 .lock()
                 .map_err(|e| format!("获取缩略图生成器锁失败: {}", e))?;
@@ -153,7 +152,7 @@ pub async fn generate_archive_thumbnail_new(
         .enqueue_blocking(
             "thumbnail-generate",
             format!("archive:{}", archive_path),
-            move || {
+            move || -> Result<Vec<u8>, String> {
                 let mut generator = generator
                     .lock()
                     .map_err(|e| format!("获取缩略图生成器锁失败: {}", e))?;
@@ -201,13 +200,13 @@ pub async fn generate_video_thumbnail_new(
     time_seconds: Option<f64>,
 ) -> Result<String, String> {
     use image::ImageFormat;
+    use std::io::Cursor;
     use std::path::Path;
 
     let state = app.state::<ThumbnailState>();
     let cache_index = app.state::<CacheIndexState>();
     let scheduler = app.state::<BackgroundSchedulerState>();
     let job_source = format!("video:{}", video_path);
-    let path_for_job = video_path.clone();
     let time = time_seconds.unwrap_or(10.0);
 
     // 检查是否为视频文件
@@ -221,11 +220,13 @@ pub async fn generate_video_thumbnail_new(
         return Err("FFmpeg 不可用，请安装 FFmpeg".to_string());
     }
 
-    let thumbnail_data = scheduler
+    let video_path_for_job = video_path.clone();
+    let path_for_job = PathBuf::from(&video_path_for_job);
+    let thumbnail_data: Vec<u8> = scheduler
         .scheduler
-        .enqueue_blocking("thumbnail-generate", job_source, move || {
+        .enqueue_blocking("thumbnail-generate", job_source, move || -> Result<Vec<u8>, String> {
             // 提取视频帧
-            let frame = VideoThumbnailGenerator::extract_frame(path, time)
+            let frame = VideoThumbnailGenerator::extract_frame(&path_for_job, time)
                 .map_err(|e| format!("提取视频帧失败: {}", e))?;
 
             // 将图片编码为 PNG 字节数组
@@ -237,7 +238,7 @@ pub async fn generate_video_thumbnail_new(
                     .map_err(|e| format!("编码图片失败: {}", e))?;
             }
 
-            Ok::<Vec<u8>, String>(buffer)
+            Ok(buffer)
         })
         .await?;
 
@@ -282,7 +283,7 @@ pub async fn batch_preload_thumbnails(
     let generator = Arc::clone(&state.generator);
     let batch_paths = paths.clone();
 
-    let results = scheduler
+    let results: HashMap<String, Result<Vec<u8>, String>> = scheduler
         .scheduler
         .enqueue_blocking(
             "thumbnail-generate",
@@ -291,14 +292,14 @@ pub async fn batch_preload_thumbnails(
                 if is_archive { "archive" } else { "file" },
                 batch_paths.len()
             ),
-            move || {
+            move || -> Result<HashMap<String, Result<Vec<u8>, String>>, String> {
                 let generator = generator
                     .lock()
                     .map_err(|e| format!("获取缩略图生成器锁失败: {}", e))?;
                 Ok(generator.batch_generate_thumbnails(batch_paths, is_archive))
             },
         )
-        .await??;
+        .await?;
 
     let mut blob_keys = Vec::new();
     for (path, result) in results {
@@ -644,9 +645,9 @@ pub async fn scan_folder_thumbnails(
     }
 
     let fs_manager = Arc::clone(&fs_state.fs_manager);
-    let generator = Arc::clone(&thumb_state.generator);
-    let thumb_db = Arc::clone(&thumb_state.db);
-    let cache_db = Arc::clone(&cache_index.db);
+    let generator: Arc<Mutex<ThumbnailGenerator>> = Arc::clone(&thumb_state.generator);
+    let thumb_db: Arc<ThumbnailDb> = Arc::clone(&thumb_state.db);
+    let cache_db: Arc<CacheIndexDb> = Arc::clone(&cache_index.db);
 
     let mut results = Vec::with_capacity(folders.len());
 
@@ -657,7 +658,7 @@ pub async fn scan_folder_thumbnails(
         let cache_db = Arc::clone(&cache_db);
         let folder_path = folder.clone();
 
-        let result = scheduler
+        let result: FolderScanResult = scheduler
             .scheduler
             .enqueue_blocking(
                 "filebrowser-folder-scan",

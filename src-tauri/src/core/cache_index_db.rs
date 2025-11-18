@@ -134,7 +134,7 @@ impl CacheIndexDb {
                 "SELECT payload, mtime, updated_at FROM directory_cache WHERE path = ?1 LIMIT 1",
             )?;
             let mut rows = stmt.query(params![path])?;
-            if let Some(row) = rows.next() {
+            if let Ok(Some(row)) = rows.next() {
                 let payload: String = row.get(0)?;
                 let stored_mtime: Option<u64> = row.get(1)?;
                 let updated_at: i64 = row.get(2)?;
@@ -251,7 +251,7 @@ impl CacheIndexDb {
                      FROM thumbnail_cache WHERE path_key = ?1 AND category = ?2 LIMIT 1",
                 )?;
                 let mut rows = stmt.query(params![path_key, category])?;
-                if let Some(row) = rows.next() {
+                if let Ok(Some(row)) = rows.next() {
                     results.push(ThumbnailCacheEntry {
                         path_key: row.get(0)?,
                         category: row.get(1)?,

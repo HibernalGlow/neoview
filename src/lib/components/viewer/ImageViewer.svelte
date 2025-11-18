@@ -287,6 +287,20 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 						return;
 					}
 					
+					// 🔥 额外验证：确保当前页索引仍然匹配（防止翻页后错误替换）
+					const currentPageIndexNow = bookStore.currentPageIndex;
+					if (currentPageIndexNow !== targetIndex) {
+						console.warn(`⚠️ 超分结果页面索引不匹配！当前页: ${currentPageIndexNow + 1}, 超分目标页: ${targetIndex + 1}，忽略此结果`);
+						return;
+					}
+					
+					// 🔥 再次验证 hash（双重保险）
+					const currentHashNow = bookStore.getCurrentPageHash();
+					if (currentHashNow && originalImageHash !== currentHashNow) {
+						console.warn(`⚠️ 超分结果 hash 与当前页不匹配（二次验证）！当前页 hash: ${currentHashNow}, 超分结果的 hash: ${originalImageHash}，忽略此结果`);
+						return;
+					}
+					
 					if (imageBlob) {
 						bookStore.setUpscaledImageBlob(imageBlob);
 					} else if (upscaledImageData) {
@@ -477,7 +491,22 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 	// 根据 Blob 生成独立的 object URL，避免复用已被释放的 URL
 	$effect(() => {
 		const blob = bookStore.upscaledImageBlob;
+		const currentPageIndex = bookStore.currentPageIndex;
+		const currentHash = bookStore.getCurrentPageHash();
+		
 		if (blob && blob !== lastUpscaledBlob) {
+			// 🔥 验证：确保当前页索引匹配（防止翻页后错误替换）
+			if (lastRequestedPageIndex !== -1 && lastRequestedPageIndex !== currentPageIndex) {
+				console.warn(`⚠️ 超分 blob 页面索引不匹配！当前页: ${currentPageIndex + 1}, 请求页: ${lastRequestedPageIndex + 1}，忽略此结果`);
+				return;
+			}
+			
+			// 🔥 验证：确保 hash 匹配（如果可用）
+			if (currentHash && lastLoadedHash && currentHash !== lastLoadedHash) {
+				console.warn(`⚠️ 超分 blob hash 不匹配！当前页 hash: ${currentHash}, 请求页 hash: ${lastLoadedHash}，忽略此结果`);
+				return;
+			}
+			
 			try {
 				const newUrl = URL.createObjectURL(blob);
 				if (lastUpscaledObjectUrl) {
@@ -486,19 +515,26 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 				derivedUpscaledUrl = newUrl;
 				lastUpscaledObjectUrl = newUrl;
 				lastUpscaledBlob = blob;
-				bookStore.setUpscaledImage(newUrl);
-				imageData = newUrl;
-				upscaledImageDataForComparison = newUrl;
+				
+				// 🔥 只在当前页匹配时才更新显示
+				if (lastRequestedPageIndex === currentPageIndex || lastRequestedPageIndex === -1) {
+					bookStore.setUpscaledImage(newUrl);
+					imageData = newUrl;
+					upscaledImageDataForComparison = newUrl;
+				}
 			} catch (error) {
 				console.warn('创建超分 object URL 失败:', error);
 			}
 		} else if (!blob && lastUpscaledObjectUrl) {
-			URL.revokeObjectURL(lastUpscaledObjectUrl);
-			lastUpscaledObjectUrl = null;
-			lastUpscaledBlob = null;
-			derivedUpscaledUrl = null;
-			bookStore.setUpscaledImage(null);
-			upscaledImageDataForComparison = '';
+			// 🔥 只在当前页匹配时才清除显示
+			if (lastRequestedPageIndex === currentPageIndex || lastRequestedPageIndex === -1) {
+				URL.revokeObjectURL(lastUpscaledObjectUrl);
+				lastUpscaledObjectUrl = null;
+				lastUpscaledBlob = null;
+				derivedUpscaledUrl = null;
+				bookStore.setUpscaledImage(null);
+				upscaledImageDataForComparison = '';
+			}
 		}
 	});
 

@@ -1,12 +1,12 @@
 //! NeoView - Image Upscaling Module
 //! 图片超分辨率处理模块
 
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::fs;
-use serde::{Deserialize, Serialize};
 use tauri::Window;
-use chrono::Utc;
 
 /// 超分高级选项
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,7 +51,7 @@ impl UpscaleManager {
     /// 检查超分工具是否可用
     pub fn check_availability(&self) -> Result<(), String> {
         let command = self.get_upscale_command();
-        
+
         let output = Command::new(&command)
             .arg("-v")
             .output()
@@ -77,7 +77,7 @@ impl UpscaleManager {
         if project_models_dir.exists() {
             return project_models_dir.to_string_lossy().to_string();
         }
-        
+
         // 使用realesrgan-ncnn-vulkan默认的模型路径
         // 通常程序会自动在安装目录下查找models文件夹
         "".to_string() // 空字符串让程序使用默认路径
@@ -97,14 +97,13 @@ impl UpscaleManager {
     pub fn calculate_file_md5(&self, file_path: &Path) -> Result<String, String> {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::Hasher;
-        
-        let data = fs::read(file_path)
-            .map_err(|e| format!("读取文件失败: {}", e))?;
-        
+
+        let data = fs::read(file_path).map_err(|e| format!("读取文件失败: {}", e))?;
+
         let mut hasher = DefaultHasher::new();
         hasher.write(&data);
         let result = hasher.finish();
-        
+
         Ok(format!("{:x}", result))
     }
 
@@ -118,14 +117,17 @@ impl UpscaleManager {
     ) -> Result<String, String> {
         // 计算原文件MD5
         let md5 = self.calculate_file_md5(original_path)?;
-        
+
         // 生成参数字符串
-        let params = format!("{}_{}_{}_{}", model, factor, options.gpu_id, options.tile_size);
+        let params = format!(
+            "{}_{}_{}_{}",
+            model, factor, options.gpu_id, options.tile_size
+        );
         if options.tta {
             let params_tta = format!("{}_tta", params);
             return Ok(format!("{}_sr{}.webp", md5, params_tta));
         }
-        
+
         Ok(format!("{}_sr{}.webp", md5, params))
     }
 
@@ -152,7 +154,11 @@ impl UpscaleManager {
         options: UpscaleOptions,
         window: Option<Window>,
     ) -> Result<String, String> {
-        println!("🚀 开始超分处理: {} -> {}", image_path.display(), save_path.display());
+        println!(
+            "🚀 开始超分处理: {} -> {}",
+            image_path.display(),
+            save_path.display()
+        );
 
         // 检查输入文件是否存在
         if !image_path.exists() {
@@ -161,8 +167,7 @@ impl UpscaleManager {
 
         // 确保输出目录存在
         if let Some(parent) = save_path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("创建输出目录失败: {}", e))?;
+            fs::create_dir_all(parent).map_err(|e| format!("创建输出目录失败: {}", e))?;
         }
 
         // 构建命令参数
@@ -171,11 +176,16 @@ impl UpscaleManager {
         let model_name = self.get_model_name(model);
 
         let mut args = vec![
-            "-i", image_path.to_str().unwrap(),
-            "-o", save_path.to_str().unwrap(),
-            "-n", model_name,
-            "-s", factor,
-            "-f", "webp",  // 指定输出格式为 WebP
+            "-i",
+            image_path.to_str().unwrap(),
+            "-o",
+            save_path.to_str().unwrap(),
+            "-n",
+            model_name,
+            "-s",
+            factor,
+            "-f",
+            "webp", // 指定输出格式为 WebP
         ];
 
         // 只有当模型路径不为空时才添加-m参数
@@ -214,7 +224,8 @@ impl UpscaleManager {
             println!("执行超分命令并等待完成...");
         } else {
             // 等待进程完成
-            let status = child.wait()
+            let status = child
+                .wait()
                 .map_err(|e| format!("等待超分进程失败: {}", e))?;
 
             if !status.success() {
@@ -262,8 +273,7 @@ impl UpscaleManager {
         let mut removed_count = 0;
         let cutoff_time = Utc::now() - chrono::Duration::days(max_age_days as i64);
 
-        for entry in fs::read_dir(&neosr_dir)
-            .map_err(|e| format!("读取缓存目录失败: {}", e))?
+        for entry in fs::read_dir(&neosr_dir).map_err(|e| format!("读取缓存目录失败: {}", e))?
         {
             let entry = entry.map_err(|e| format!("读取目录条目失败: {}", e))?;
             let path = entry.path();
@@ -296,8 +306,7 @@ impl UpscaleManager {
         let mut total_files = 0;
         let mut total_size = 0;
 
-        for entry in fs::read_dir(&neosr_dir)
-            .map_err(|e| format!("读取缓存目录失败: {}", e))?
+        for entry in fs::read_dir(&neosr_dir).map_err(|e| format!("读取缓存目录失败: {}", e))?
         {
             let entry = entry.map_err(|e| format!("读取目录条目失败: {}", e))?;
             let path = entry.path();

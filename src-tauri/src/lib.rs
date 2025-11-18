@@ -8,17 +8,19 @@ mod commands;
 mod core;
 mod models;
 
-use tauri::Manager;
-use std::sync::Mutex;
-use std::path::PathBuf;
-use core::{BookManager, ImageLoader, FsManager, ArchiveManager};
-use core::upscale_scheduler::{UpscaleScheduler, UpscaleSchedulerState};
-use commands::fs_commands::FsState;
-use commands::upscale_commands::UpscaleManagerState;
+use commands::fs_commands::{DirectoryCacheState, FsState};
 use commands::generic_upscale_commands::GenericUpscalerState;
-use commands::upscale_settings_commands::UpscaleSettingsState;
 use commands::pyo3_upscale_commands::PyO3UpscalerState;
+use commands::upscale_commands::UpscaleManagerState;
+use commands::upscale_settings_commands::UpscaleSettingsState;
+use core::directory_cache_db::DirectoryCacheDb;
+use core::upscale_scheduler::{UpscaleScheduler, UpscaleSchedulerState};
+use core::{ArchiveManager, BookManager, FsManager, ImageLoader};
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::Duration;
+use tauri::Manager;
 
 #[allow(clippy::missing_panics_doc)]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -29,14 +31,20 @@ pub fn run() {
         // 检查是否是图像解码相关的 panic（dav1d/avif-native）
         let is_image_panic = if let Some(location) = panic_info.location() {
             let file = location.file();
-            file.contains("dav1d") || file.contains("avif") || file.contains("avif-native") || 
-            file.contains("image") || file.contains("decoder")
+            file.contains("dav1d")
+                || file.contains("avif")
+                || file.contains("avif-native")
+                || file.contains("image")
+                || file.contains("decoder")
         } else {
             // 如果没有位置信息，检查 panic 消息
             let msg = format!("{:?}", panic_info);
-            msg.contains("dav1d") || msg.contains("avif") || msg.contains("image") || msg.contains("decoder")
+            msg.contains("dav1d")
+                || msg.contains("avif")
+                || msg.contains("image")
+                || msg.contains("decoder")
         };
-        
+
         if is_image_panic {
             // 图像解码相关的 panic，静默处理，不终止进程
             eprintln!("⚠️ 图像解码 panic (已捕获，不影响运行)");
@@ -46,74 +54,91 @@ pub fn run() {
             // 不调用 std::process::abort()，让程序继续运行
             return;
         }
-        
+
         // 其他 panic 记录详细信息，但不终止进程
         eprintln!("⚠️ Panic caught: {:?}", panic_info);
         if let Some(location) = panic_info.location() {
-            eprintln!("   Location: {}:{}:{}", location.file(), location.line(), location.column());
+            eprintln!(
+                "   Location: {}:{}:{}",
+                location.file(),
+                location.line(),
+                location.column()
+            );
         }
         // 注意：这里不调用 abort，让程序继续运行
     }));
-    
+
     // 设置日志级别，屏蔽 avif-native/mp4parse 的 TRACE 日志
     std::env::set_var("RUST_LOG", "info,mp4parse=info,avif_native=info");
-    
+
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Info)
                 .filter(|metadata| {
                     // 过滤掉 mp4parse 和 avif_native 的 TRACE 和 DEBUG 日志
-                    if metadata.target().starts_with("mp4parse") || 
-                       metadata.target().starts_with("avif_native") {
+                    if metadata.target().starts_with("mp4parse")
+                        || metadata.target().starts_with("avif_native")
+                    {
                         metadata.level() <= log::Level::Info
                     } else {
                         true
                     }
                 })
-                .build()
+                .build(),
         )
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            
             // 初始化文件系统管理器和压缩包管理器
             let fs_manager = FsManager::new();
             let archive_manager = ArchiveManager::new();
-            
+
+            let app_data_root = app
+                .path()
+                .app_data_dir()
+                .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+
             app.manage(FsState {
                 fs_manager: Mutex::new(fs_manager),
                 archive_manager: Mutex::new(archive_manager),
             });
-            
+
+            let directory_cache =
+                core::directory_cache::DirectoryCache::new(128, Duration::from_secs(30));
+            let directory_cache_db = DirectoryCacheDb::new(
+                app_data_root.join("directory_cache.db"),
+                Duration::from_secs(300),
+            );
+            app.manage(DirectoryCacheState {
+                cache: Mutex::new(directory_cache),
+                db: Arc::new(directory_cache_db),
+            });
+
             // 初始化超分管理器
-            let thumbnail_path = app.path().app_data_dir()
-                .unwrap_or_else(|_| {
-                    // 如果无法获取应用数据目录，使用当前目录
-                    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
-                })
-                .join("thumbnails");
-            
+            let thumbnail_path = app_data_root.join("thumbnails");
+
             let upscale_manager = core::upscale::UpscaleManager::new(thumbnail_path.clone());
             app.manage(UpscaleManagerState {
                 manager: Arc::new(Mutex::new(Some(upscale_manager))),
             });
-            
+
             // 初始化通用超分管理器
             app.manage(GenericUpscalerState::default());
-            
+
             // 初始化 PyO3 超分管理器
             let pyo3_state = PyO3UpscalerState::default();
             let pyo3_state_arc = Arc::new(pyo3_state.clone());
             let worker_count = num_cpus::get().clamp(1, 4);
-            let scheduler = UpscaleScheduler::new(app.handle().clone(), pyo3_state_arc, worker_count);
+            let scheduler =
+                UpscaleScheduler::new(app.handle().clone(), pyo3_state_arc, worker_count);
             app.manage(pyo3_state);
             app.manage(UpscaleSchedulerState {
                 scheduler: Arc::new(scheduler),
             });
-            
+
             // 初始化设置管理器
             app.manage(UpscaleSettingsState::default());
-            
+
             Ok(())
         })
         .manage(Mutex::new(BookManager::new()))
@@ -136,6 +161,7 @@ pub fn run() {
             commands::path_exists,
             // File system commands (new)
             commands::browse_directory,
+            commands::fs_commands::load_directory_snapshot,
             commands::get_images_in_directory,
             // File system commands (paginated/streaming)
             commands::fs_commands::browse_directory_page,
@@ -244,8 +270,10 @@ pub fn run() {
             commands::generate_archive_thumbnail_new,
             commands::batch_preload_thumbnails,
             commands::has_thumbnail,
+            commands::has_thumbnail_by_key_category,
             commands::load_thumbnail_from_db,
             commands::get_thumbnail_blob_data,
+            commands::preload_thumbnail_index,
             commands::get_video_duration,
             commands::is_video_file,
         ])

@@ -2,8 +2,8 @@
 //! 超分设置持久化存储
 
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
 /// Real-CUGAN 算法设置
@@ -225,35 +225,32 @@ impl UpscaleSettingsManager {
             .path()
             .app_data_dir()
             .map_err(|e| format!("获取应用数据目录失败: {}", e))?;
-        
+
         // 确保目录存在
-        fs::create_dir_all(&app_data_dir)
-            .map_err(|e| format!("创建应用数据目录失败: {}", e))?;
-        
+        fs::create_dir_all(&app_data_dir).map_err(|e| format!("创建应用数据目录失败: {}", e))?;
+
         let settings_file = app_data_dir.join("upscale_settings.json");
-        
+
         Ok(Self {
             app_handle,
             settings_file,
         })
     }
-    
+
     /// 读取设置
     pub fn load_settings(&self) -> UpscaleSettings {
         if self.settings_file.exists() {
             match fs::read_to_string(&self.settings_file) {
-                Ok(content) => {
-                    match serde_json::from_str::<UpscaleSettings>(&content) {
-                        Ok(settings) => {
-                            println!("✅ 成功加载超分设置");
-                            settings
-                        }
-                        Err(e) => {
-                            println!("⚠️ 解析超分设置失败，使用默认设置: {}", e);
-                            UpscaleSettings::default()
-                        }
+                Ok(content) => match serde_json::from_str::<UpscaleSettings>(&content) {
+                    Ok(settings) => {
+                        println!("✅ 成功加载超分设置");
+                        settings
                     }
-                }
+                    Err(e) => {
+                        println!("⚠️ 解析超分设置失败，使用默认设置: {}", e);
+                        UpscaleSettings::default()
+                    }
+                },
                 Err(e) => {
                     println!("⚠️ 读取超分设置文件失败，使用默认设置: {}", e);
                     UpscaleSettings::default()
@@ -264,60 +261,59 @@ impl UpscaleSettingsManager {
             UpscaleSettings::default()
         }
     }
-    
+
     /// 保存设置
     pub fn save_settings(&self, settings: &UpscaleSettings) -> Result<(), String> {
-        let content = serde_json::to_string_pretty(settings)
-            .map_err(|e| format!("序列化设置失败: {}", e))?;
-        
-        fs::write(&self.settings_file, content)
-            .map_err(|e| format!("写入设置文件失败: {}", e))?;
-        
+        let content =
+            serde_json::to_string_pretty(settings).map_err(|e| format!("序列化设置失败: {}", e))?;
+
+        fs::write(&self.settings_file, content).map_err(|e| format!("写入设置文件失败: {}", e))?;
+
         println!("✅ 成功保存超分设置");
         Ok(())
     }
-    
+
     /// 获取设置文件路径
     pub fn get_settings_path(&self) -> &PathBuf {
         &self.settings_file
     }
-    
+
     /// 检查图片是否满足超分要求
     pub fn should_upscale_image(&self, width: u32, height: u32) -> bool {
         let settings = self.load_settings();
-        
+
         // 首先检查全局开关
         if !settings.global_upscale_enabled {
             return false;
         }
-        
+
         let condition = &settings.conditional_upscale;
-        
+
         // 如果未启用条件超分，直接返回 true
         if !condition.enabled {
             return true;
         }
-        
+
         // 检查最小宽度
         if condition.min_width > 0 && width < condition.min_width {
             return false;
         }
-        
+
         // 检查最小高度
         if condition.min_height > 0 && height < condition.min_height {
             return false;
         }
-        
+
         // 检查最大宽度
         if condition.max_width > 0 && width > condition.max_width {
             return false;
         }
-        
+
         // 检查最大高度
         if condition.max_height > 0 && height > condition.max_height {
             return false;
         }
-        
+
         // 检查宽高比条件
         if let Some(ratio_condition) = &condition.aspect_ratio_condition {
             let ratio = width as f32 / height as f32;
@@ -325,7 +321,7 @@ impl UpscaleSettingsManager {
                 return false;
             }
         }
-        
+
         true
     }
 }
@@ -337,25 +333,25 @@ impl ConditionalUpscaleSettings {
         if self.min_width > 0 && width < self.min_width {
             return false;
         }
-        
+
         // 检查最小高度
         if self.min_height > 0 && height < self.min_height {
             return false;
         }
-        
+
         // 检查最大宽度
         if self.max_width > 0 && width > self.max_width {
             return false;
         }
-        
+
         // 检查最大高度
         if self.max_height > 0 && height > self.max_height {
             return false;
         }
-        
+
         true
     }
-    
+
     /// 检查宽高比是否满足条件
     pub fn check_aspect_ratio(&self, width: u32, height: u32) -> bool {
         if let Some(ratio_condition) = &self.aspect_ratio_condition {
@@ -365,7 +361,7 @@ impl ConditionalUpscaleSettings {
             true // 没有宽高比条件时总是通过
         }
     }
-    
+
     /// 完整的图片条件检查
     pub fn check_image(&self, width: u32, height: u32) -> bool {
         self.check_dimensions(width, height) && self.check_aspect_ratio(width, height)

@@ -202,42 +202,66 @@ class ThumbnailManager {
    * 预加载数据库索引（批量检查哪些路径有缓存）
    * 简化：只使用 key + category，减少计算
    */
-  async preloadDbIndex(paths: string[]): Promise<Map<string, boolean>> {
-    const results = new Map<string, boolean>();
-    const { invoke } = await import('@tauri-apps/api/core');
-    
-    // 批量检查（简化：只使用 key + category）
-    await Promise.all(
-      paths.map(async (path) => {
-        const pathKey = this.buildPathKey(path);
-        const cached = this.dbIndexCache.get(pathKey);
-        if (cached !== undefined) {
-          results.set(path, cached);
-          return;
-        }
+	async preloadDbIndex(paths: string[]): Promise<Map<string, boolean>> {
+		const results = new Map<string, boolean>();
+		if (paths.length === 0) {
+			return results;
+		}
 
-        try {
-          // 判断类别
-          const isFolder = !pathKey.includes("::") && !pathKey.match(/\.(jpg|jpeg|png|gif|bmp|webp|avif|jxl|tiff|tif|zip|cbz|rar|cbr|mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/i);
-          const category = isFolder ? 'folder' : 'file';
-          
-          // 检查数据库（只使用 key + category，不再需要 size 和 ghash）
-          const exists = await invoke<boolean>('has_thumbnail_by_key_category', {
-            path: pathKey,
-            category,
-          });
+		const pending: Array<{ path: string; key: string; category: string }> = [];
 
-          this.dbIndexCache.set(pathKey, exists);
-          results.set(path, exists);
-        } catch (error) {
-          console.debug('预加载索引失败:', path, error);
-          results.set(path, false);
-        }
-      })
-    );
+		for (const path of paths) {
+			const key = this.buildPathKey(path);
+			const cached = this.dbIndexCache.get(key);
+			if (cached !== undefined) {
+				results.set(path, cached);
+				continue;
+			}
+			pending.push({
+				path,
+				key,
+				category: this.inferCategory(key)
+			});
+		}
 
-    return results;
-  }
+		if (pending.length === 0) {
+			return results;
+		}
+
+		try {
+			const { invoke } = await import('@tauri-apps/api/core');
+			const response = await invoke<Array<{ path: string; exists: boolean }>>('preload_thumbnail_index', {
+				entries: pending.map((entry) => ({
+					path: entry.key,
+					category: entry.category
+				}))
+			});
+
+			for (const entry of response) {
+				this.dbIndexCache.set(entry.path, entry.exists);
+			}
+
+			for (const entry of pending) {
+				const exists = this.dbIndexCache.get(entry.key) ?? false;
+				results.set(entry.path, exists);
+			}
+		} catch (error) {
+			console.debug('批量预加载索引失败:', error);
+			for (const entry of pending) {
+				this.dbIndexCache.set(entry.key, false);
+				results.set(entry.path, false);
+			}
+		}
+
+		return results;
+	}
+
+	private inferCategory(pathKey: string): string {
+		const isFolder =
+			!pathKey.includes('::') &&
+			!pathKey.match(/\.(jpg|jpeg|png|gif|bmp|webp|avif|jxl|tiff|tif|zip|cbz|rar|cbr|mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/i);
+		return isFolder ? 'folder' : 'file';
+	}
 
   /**
    * 从数据库加载缩略图（返回 blob URL）

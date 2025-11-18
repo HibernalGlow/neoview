@@ -1,12 +1,12 @@
 //! NeoView - Generic Upscaler Module
 //! 通用超分器模块，支持多种超分算法
 
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::fs;
-use serde::{Deserialize, Serialize};
 use tauri::Window;
-use chrono::Utc;
 
 /// 超分算法类型
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,12 +100,10 @@ impl GenericUpscaler {
     /// 检查指定算法是否可用
     pub fn check_algorithm_availability(&self, algorithm: &UpscaleAlgorithm) -> Result<(), String> {
         let command = algorithm.get_command();
-        
+
         // 使用 -h 参数检查命令是否存在（更通用）
-        let output = Command::new(&command)
-            .arg("-h")
-            .output();
-            
+        let output = Command::new(&command).arg("-h").output();
+
         match output {
             Ok(result) => {
                 if result.status.success() {
@@ -115,19 +113,11 @@ impl GenericUpscaler {
                     Err(format!("{} 工具未正确安装", command))
                 }
             }
-            Err(_e) => {
-                match algorithm {
-                    UpscaleAlgorithm::RealESRGAN => {
-                        Err(format!("{} 工具未安装", command))
-                    }
-                    UpscaleAlgorithm::Waifu2x => {
-                        Err(format!("{} 工具未安装", command))
-                    }
-                    UpscaleAlgorithm::RealCUGAN => {
-                        Err(format!("{} 工具未安装", command))
-                    }
-                }
-            }
+            Err(_e) => match algorithm {
+                UpscaleAlgorithm::RealESRGAN => Err(format!("{} 工具未安装", command)),
+                UpscaleAlgorithm::Waifu2x => Err(format!("{} 工具未安装", command)),
+                UpscaleAlgorithm::RealCUGAN => Err(format!("{} 工具未安装", command)),
+            },
         }
     }
 
@@ -138,7 +128,7 @@ impl GenericUpscaler {
         if project_models_dir.exists() {
             return project_models_dir.to_string_lossy().to_string();
         }
-        
+
         // 使用默认的模型路径
         "".to_string()
     }
@@ -147,14 +137,13 @@ impl GenericUpscaler {
     pub fn calculate_file_md5(&self, file_path: &Path) -> Result<String, String> {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::Hasher;
-        
-        let data = fs::read(file_path)
-            .map_err(|e| format!("读取文件失败: {}", e))?;
-        
+
+        let data = fs::read(file_path).map_err(|e| format!("读取文件失败: {}", e))?;
+
         let mut hasher = DefaultHasher::new();
         hasher.write(&data);
         let result = hasher.finish();
-        
+
         Ok(format!("{:x}", result))
     }
 
@@ -166,25 +155,26 @@ impl GenericUpscaler {
     ) -> Result<String, String> {
         // 计算原文件MD5
         let md5 = self.calculate_file_md5(original_path)?;
-        
+
         // 获取原文件格式
         let _original_format = original_path
             .extension()
             .and_then(|ext| ext.to_str())
             .unwrap_or("webp");
-        
+
         // 获取算法名称
         let _algorithm_name = match options.algorithm {
             UpscaleAlgorithm::RealESRGAN => "esrgan",
             UpscaleAlgorithm::Waifu2x => "waifu2x",
             UpscaleAlgorithm::RealCUGAN => "realcugan",
         };
-        
+
         // 使用新的命名规则: md5.format -> md5_sr[model].webp
         // 提取模型名称（去掉路径前缀）
         let model_name = if options.model.contains('/') || options.model.contains('\\') {
             // 如果是路径，提取最后部分
-            options.model
+            options
+                .model
                 .split('/')
                 .last()
                 .unwrap_or(&options.model)
@@ -195,7 +185,7 @@ impl GenericUpscaler {
         } else {
             options.model.clone()
         };
-        
+
         Ok(format!("{}_sr[{}].webp", md5, model_name))
     }
 
@@ -239,7 +229,11 @@ impl GenericUpscaler {
         // 获取文件信息
         if let Ok(metadata) = fs::metadata(image_path) {
             let file_size = metadata.len();
-            println!("  📊 文件大小: {} bytes ({:.2} MB)", file_size, file_size as f64 / 1024.0 / 1024.0);
+            println!(
+                "  📊 文件大小: {} bytes ({:.2} MB)",
+                file_size,
+                file_size as f64 / 1024.0 / 1024.0
+            );
         }
 
         // 检查算法可用性
@@ -252,15 +246,14 @@ impl GenericUpscaler {
         // 确保输出目录存在
         println!("  📁 创建输出目录...");
         if let Some(parent) = save_path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("创建输出目录失败: {}", e))?;
+            fs::create_dir_all(parent).map_err(|e| format!("创建输出目录失败: {}", e))?;
         }
         println!("  ✅ 输出目录已准备");
 
         // 构建命令参数
         let command = options.algorithm.get_command();
         let models_path = self.get_models_path();
-        
+
         println!("  🔧 构建命令参数...");
         let args = self.build_command_args(image_path, save_path, &options, &models_path)?;
         println!("  📝 执行命令: {} {}", command, args.join(" "));
@@ -268,12 +261,12 @@ impl GenericUpscaler {
         // 执行命令
         println!("  🚀 启动超分进程...");
         let start_time = std::time::Instant::now();
-        
+
         let mut child = Command::new(&command)
             .args(&args)
             .spawn()
             .map_err(|e| format!("启动超分进程失败: {}", e))?;
-        
+
         println!("  ⏱️  进程已启动，PID: {:?}", child.id());
 
         // 等待进程完成
@@ -282,7 +275,8 @@ impl GenericUpscaler {
             println!("  ⏳ 执行超分命令并等待完成...");
         }
 
-        let status = child.wait()
+        let status = child
+            .wait()
             .map_err(|e| format!("等待超分进程失败: {}", e))?;
 
         let elapsed = start_time.elapsed();
@@ -303,8 +297,12 @@ impl GenericUpscaler {
         // 获取输出文件信息
         if let Ok(metadata) = fs::metadata(save_path) {
             let output_size = metadata.len();
-            println!("  📊 输出文件大小: {} bytes ({:.2} MB)", output_size, output_size as f64 / 1024.0 / 1024.0);
-            
+            println!(
+                "  📊 输出文件大小: {} bytes ({:.2} MB)",
+                output_size,
+                output_size as f64 / 1024.0 / 1024.0
+            );
+
             // 计算压缩比
             if let Ok(input_metadata) = fs::metadata(image_path) {
                 let input_size = input_metadata.len();
@@ -438,8 +436,7 @@ impl GenericUpscaler {
         let mut removed_count = 0;
         let cutoff_time = Utc::now() - chrono::Duration::days(max_age_days as i64);
 
-        for entry in fs::read_dir(&upscale_dir)
-            .map_err(|e| format!("读取缓存目录失败: {}", e))?
+        for entry in fs::read_dir(&upscale_dir).map_err(|e| format!("读取缓存目录失败: {}", e))?
         {
             let entry = entry.map_err(|e| format!("读取目录条目失败: {}", e))?;
             let path = entry.path();
@@ -472,8 +469,7 @@ impl GenericUpscaler {
         let mut total_files = 0;
         let mut total_size = 0;
 
-        for entry in fs::read_dir(&upscale_dir)
-            .map_err(|e| format!("读取缓存目录失败: {}", e))?
+        for entry in fs::read_dir(&upscale_dir).map_err(|e| format!("读取缓存目录失败: {}", e))?
         {
             let entry = entry.map_err(|e| format!("读取目录条目失败: {}", e))?;
             let path = entry.path();

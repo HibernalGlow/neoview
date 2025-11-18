@@ -145,9 +145,7 @@ pub async fn enqueue_preload_batch(
             page_index: descriptor.page_index as i32,
             image_hash,
             image_data,
-            priority: descriptor
-                .priority
-                .unwrap_or(UpscaleJobPriority::Normal),
+            priority: descriptor.priority.unwrap_or(UpscaleJobPriority::Normal),
             origin: crate::core::upscale_scheduler::UpscaleJobOrigin::Preload,
             condition_id: descriptor.condition_id.clone(),
             model_name: descriptor.model_name.clone(),
@@ -165,4 +163,3 @@ pub async fn enqueue_preload_batch(
 
     Ok(job_ids)
 }
-

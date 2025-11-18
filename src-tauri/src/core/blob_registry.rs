@@ -1,10 +1,10 @@
 //! NeoView - Blob Registry
 //! 统一管理图片 blob 的注册和缓存
 
+use md5;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use md5;
 
 /// Blob 条目
 #[derive(Debug, Clone)]
@@ -77,12 +77,18 @@ impl BlobRegistry {
     }
 
     /// 获取或注册 blob
-    pub fn get_or_register(&self, data: &[u8], mime: &str, ttl: Duration, path: Option<String>) -> String {
+    pub fn get_or_register(
+        &self,
+        data: &[u8],
+        mime: &str,
+        ttl: Duration,
+        path: Option<String>,
+    ) -> String {
         let hash = md5::compute(data);
         let key = format!("blob:{:x}", hash);
 
         let mut map = self.map.lock().unwrap();
-        
+
         // 检查是否已存在
         if let Some(entry) = map.get_mut(&key) {
             entry.bump();
@@ -93,7 +99,7 @@ impl BlobRegistry {
         if map.len() >= self.max_entries {
             // 清理过期条目
             self.cleanup_expired_internal(&mut map);
-            
+
             // 如果还是满了，移除最旧的条目
             if map.len() >= self.max_entries {
                 if let Some(oldest_key) = map
@@ -109,17 +115,29 @@ impl BlobRegistry {
 
         // 创建新条目
         let blob_url = key.clone();
-        map.insert(key, BlobEntry::new(data.to_vec(), mime.to_string(), ttl, path.clone()));
-        
+        map.insert(
+            key,
+            BlobEntry::new(data.to_vec(), mime.to_string(), ttl, path.clone()),
+        );
+
         // 显示路径信息（如果有）
         if let Some(ref p) = path {
-            println!("📝 BlobRegistry: 注册新 blob {} ({} bytes, {}) - {}", 
-                blob_url, data.len(), mime, p);
+            println!(
+                "📝 BlobRegistry: 注册新 blob {} ({} bytes, {}) - {}",
+                blob_url,
+                data.len(),
+                mime,
+                p
+            );
         } else {
-            println!("📝 BlobRegistry: 注册新 blob {} ({} bytes, {})", 
-                blob_url, data.len(), mime);
+            println!(
+                "📝 BlobRegistry: 注册新 blob {} ({} bytes, {})",
+                blob_url,
+                data.len(),
+                mime
+            );
         }
-        
+
         blob_url
     }
 
@@ -152,25 +170,25 @@ impl BlobRegistry {
     pub fn sweep_expired(&self) -> usize {
         let mut map = self.map.lock().unwrap();
         let initial_len = map.len();
-        
+
         // 保留未过期的条目
         map.retain(|_, entry| !entry.is_expired());
-        
+
         let removed = initial_len - map.len();
         if removed > 0 {
             println!("🧹 BlobRegistry: 清理了 {} 个过期条目", removed);
         }
-        
+
         removed
     }
 
     /// 内部清理方法（已持有锁）
     fn cleanup_expired_internal(&self, map: &mut HashMap<String, BlobEntry>) {
         let initial_len = map.len();
-        
+
         // 保留未过期的条目
         map.retain(|_, entry| !entry.is_expired());
-        
+
         let removed = initial_len - map.len();
         if removed > 0 {
             println!("🧹 BlobRegistry: 清理了 {} 个过期条目", removed);
@@ -181,13 +199,9 @@ impl BlobRegistry {
     pub fn get_stats(&self) -> BlobStats {
         let map = self.map.lock().unwrap();
         let total_entries = map.len();
-        let total_bytes: usize = map.values()
-            .map(|entry| entry.data.len())
-            .sum();
-        let expired_count = map.values()
-            .filter(|entry| entry.is_expired())
-            .count();
-        
+        let total_bytes: usize = map.values().map(|entry| entry.data.len()).sum();
+        let expired_count = map.values().filter(|entry| entry.is_expired()).count();
+
         BlobStats {
             total_entries,
             total_bytes,

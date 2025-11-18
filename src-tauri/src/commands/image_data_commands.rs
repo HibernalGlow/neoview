@@ -1,11 +1,11 @@
 //! NeoView - Image Data Processing Commands
 //! 图片数据处理相关的 Tauri 命令
 
-use tauri::command;
+use serde::Serialize;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::collections::HashMap;
-use serde::Serialize;
+use tauri::command;
 
 /// 缓存元数据结构
 #[derive(Debug, Serialize)]
@@ -16,40 +16,32 @@ pub struct CacheMeta {
     pub algorithm: String,
 }
 
-
-
 /// 计算字节数组的MD5哈希值
 #[command]
 pub async fn calculate_blob_md5(bytes: Vec<u8>) -> Result<String, String> {
     use md5;
-    
+
     // 计算MD5
     let digest = md5::compute(&bytes);
-    
+
     Ok(format!("{:x}", digest))
 }
-
-
-
-
-
-
 
 /// 计算基于路径的哈希（使用缩略图统一算法）
 /// @deprecated 建议直接使用 Page.stableHash
 #[command]
 pub async fn calculate_path_hash(path: String) -> Result<String, String> {
-    use sha1::{Sha1, Digest};
+    use sha1::{Digest, Sha1};
     use std::path::Path;
-    
+
     // 规范化路径（统一使用正斜杠）
     let normalized_path = Path::new(&path).to_string_lossy().replace('\\', "/");
-    
+
     // 计算 SHA1 哈希
     let mut hasher = Sha1::new();
     hasher.update(normalized_path.as_bytes());
     let hash = hex::encode(hasher.finalize());
-    
+
     Ok(hash)
 }
 
@@ -66,7 +58,8 @@ pub async fn check_upscale_cache(
         "generic".to_string(), // 固定算法名
         thumbnail_path,
         Some(max_age_seconds as u64),
-    ).await
+    )
+    .await
 }
 
 /// 检查指定算法的超分缓存（支持可选的最大年龄过滤，单位秒）。
@@ -89,7 +82,9 @@ pub async fn check_upscale_cache_for_algorithm(
         if let Ok(content) = fs::read_to_string(&index_file) {
             for line in content.lines() {
                 let parts: Vec<&str> = line.splitn(4, '|').collect();
-                if parts.len() < 4 { continue; }
+                if parts.len() < 4 {
+                    continue;
+                }
                 let h = parts[0];
                 let p = parts[1];
                 let mtime = parts[2].parse::<u64>().unwrap_or(0);
@@ -101,7 +96,9 @@ pub async fn check_upscale_cache_for_algorithm(
                         if let Some(max_age) = max_age_seconds {
                             if let Ok(metadata) = fs::metadata(&path_buf) {
                                 if let Ok(modified) = metadata.modified() {
-                                    if let Ok(elapsed) = std::time::SystemTime::now().duration_since(modified) {
+                                    if let Ok(elapsed) =
+                                        std::time::SystemTime::now().duration_since(modified)
+                                    {
                                         if elapsed.as_secs() > max_age {
                                             // 过期，跳过此索引项并继续查找（不要中断整个索引遍历）
                                             continue;
@@ -111,7 +108,12 @@ pub async fn check_upscale_cache_for_algorithm(
                             }
                         }
                         let size = fs::metadata(&path_buf).map(|m| m.len()).unwrap_or(0);
-                        return Ok(CacheMeta { path: path_buf.to_string_lossy().to_string(), mtime, size, algorithm: alg.to_string() });
+                        return Ok(CacheMeta {
+                            path: path_buf.to_string_lossy().to_string(),
+                            mtime,
+                            size,
+                            algorithm: alg.to_string(),
+                        });
                     }
                 }
             }
@@ -133,7 +135,9 @@ pub async fn check_upscale_cache_for_algorithm(
                             if let Some(max_age) = max_age_seconds {
                                 if let Ok(metadata) = fs::metadata(&path) {
                                     if let Ok(modified) = metadata.modified() {
-                                        if let Ok(elapsed) = std::time::SystemTime::now().duration_since(modified) {
+                                        if let Ok(elapsed) =
+                                            std::time::SystemTime::now().duration_since(modified)
+                                        {
                                             if elapsed.as_secs() > max_age {
                                                 // 已过期，跳过此文件
                                                 continue;
@@ -144,24 +148,43 @@ pub async fn check_upscale_cache_for_algorithm(
                             }
                             // 找到匹配的缓存文件，记录到索引并返回 metadata
                             if let Ok(metadata) = fs::metadata(&path) {
-                                let mtime = metadata.modified()
+                                let mtime = metadata
+                                    .modified()
                                     .ok()
                                     .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                                    .map(|d| d.as_secs()).unwrap_or(0);
+                                    .map(|d| d.as_secs())
+                                    .unwrap_or(0);
                                 let size = metadata.len();
-                                new_index.insert(image_hash.clone(), (path.to_string_lossy().to_string(), mtime, algorithm.clone()));
-                                return Ok(CacheMeta { path: path.to_string_lossy().to_string(), mtime, size, algorithm: algorithm.clone() });
+                                new_index.insert(
+                                    image_hash.clone(),
+                                    (path.to_string_lossy().to_string(), mtime, algorithm.clone()),
+                                );
+                                return Ok(CacheMeta {
+                                    path: path.to_string_lossy().to_string(),
+                                    mtime,
+                                    size,
+                                    algorithm: algorithm.clone(),
+                                });
                             }
                         } else {
                             // 也把其他文件加入索引候选（简单策略）
                             if let Some(pos) = filename_str.find("_") {
                                 let key = &filename_str[..pos];
                                 if let Ok(metadata) = fs::metadata(&path) {
-                                    let mtime = metadata.modified()
+                                    let mtime = metadata
+                                        .modified()
                                         .ok()
                                         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                                        .map(|d| d.as_secs()).unwrap_or(0);
-                                    new_index.insert(key.to_string(), (path.to_string_lossy().to_string(), mtime, algorithm.clone()));
+                                        .map(|d| d.as_secs())
+                                        .unwrap_or(0);
+                                    new_index.insert(
+                                        key.to_string(),
+                                        (
+                                            path.to_string_lossy().to_string(),
+                                            mtime,
+                                            algorithm.clone(),
+                                        ),
+                                    );
                                 }
                             }
                         }
@@ -180,7 +203,7 @@ pub async fn check_upscale_cache_for_algorithm(
             let _ = fs::write(&index_file, content);
         }
     }
-    
+
     Err("未找到缓存".to_string())
 }
 
@@ -188,10 +211,9 @@ pub async fn check_upscale_cache_for_algorithm(
 #[command]
 pub async fn save_binary_file(file_path: String, data: Vec<u8>) -> Result<(), String> {
     use std::fs;
-    
-    fs::write(&file_path, data)
-        .map_err(|e| format!("保存文件失败: {}", e))?;
-    
+
+    fs::write(&file_path, data).map_err(|e| format!("保存文件失败: {}", e))?;
+
     Ok(())
 }
 
@@ -201,4 +223,3 @@ pub async fn read_binary_file(file_path: String) -> Result<Vec<u8>, String> {
     use std::fs;
     fs::read(&file_path).map_err(|e| format!("读取文件失败: {}", e))
 }
-

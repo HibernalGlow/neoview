@@ -1,11 +1,11 @@
 //! NeoView - PyO3 Upscaler Module
 //! 使用 PyO3 调用 Python sr_vulkan 模块进行超分
 
-use std::path::{Path, PathBuf};
-use std::fs;
-use std::sync::{Arc, Mutex, Once};
-use serde::{Deserialize, Serialize};
 use super::python_upscale_wrapper::PythonUpscaleModule;
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, Once};
 
 static INIT: Once = Once::new();
 static mut PYTHON_INITIALIZED: bool = false;
@@ -72,19 +72,23 @@ impl PyO3Upscaler {
     /// 创建新的 PyO3 超分管理器
     pub fn new(python_module_path: PathBuf, cache_dir: PathBuf) -> Result<Self, String> {
         ensure_python_initialized();
-        
+
         // 创建缓存目录
         if let Err(e) = fs::create_dir_all(&cache_dir) {
             eprintln!("创建缓存目录失败: {}", e);
         }
-        
+
         // 初始化 Python 模块包装器
-        let python_module = match PythonUpscaleModule::new(&python_module_path.parent()
-            .ok_or_else(|| "无法获取模块目录".to_string())?.to_path_buf()) {
+        let python_module = match PythonUpscaleModule::new(
+            &python_module_path
+                .parent()
+                .ok_or_else(|| "无法获取模块目录".to_string())?
+                .to_path_buf(),
+        ) {
             Ok(module) => module,
             Err(e) => return Err(format!("初始化 Python 模块失败: {}", e)),
         };
-        
+
         Ok(Self {
             python_module_path,
             cache_dir,
@@ -92,39 +96,47 @@ impl PyO3Upscaler {
             python_module: Arc::new(Mutex::new(Some(python_module))),
         })
     }
-    
+
     /// 检查 Python 模块是否可用
     pub fn check_availability(&self) -> Result<bool, String> {
-        let module_guard = self.python_module.lock()
+        let module_guard = self
+            .python_module
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
-        
+
         if let Some(module) = module_guard.as_ref() {
-            module.check_sr_available()
+            module
+                .check_sr_available()
                 .map_err(|e| format!("检查可用性失败: {}", e))
         } else {
             Err("Python 模块未初始化".to_string())
         }
     }
-    
+
     /// 初始化 Python 模块
     pub fn initialize(&self) -> Result<(), String> {
-        let mut initialized = self.initialized.lock()
+        let mut initialized = self
+            .initialized
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
-        
+
         if *initialized {
             return Ok(());
         }
-        
-        let module_guard = self.python_module.lock()
+
+        let module_guard = self
+            .python_module
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
-        
+
         if let Some(module) = module_guard.as_ref() {
             // 检查是否可用
-            let available = module.check_sr_available()
+            let available = module
+                .check_sr_available()
                 .map_err(|e| format!("检查可用性失败: {}", e))?;
-            
+
             println!("📊 sr_vulkan 可用性: {}", available);
-            
+
             if available {
                 *initialized = true;
                 println!("✅ PyO3 超分管理器初始化成功");
@@ -136,7 +148,7 @@ impl PyO3Upscaler {
             Err("Python 模块未初始化".to_string())
         }
     }
-    
+
     /// 执行超分处理 (内存流版本)
     pub fn upscale_image_memory(
         &self,
@@ -149,40 +161,46 @@ impl PyO3Upscaler {
     ) -> Result<Vec<u8>, String> {
         // 确保已初始化
         self.initialize()?;
-        
+
         println!("🚀 开始 PyO3 超分处理 (内存流)");
         println!("  🎯 模型: {} (ID: {})", model.model_name, model.model_id);
         println!("  📏 缩放: {}x", model.scale);
         println!("  🧩 Tile Size: {}", model.tile_size);
         println!("  🔊 降噪等级: {}", model.noise_level);
         println!("  📐 图像尺寸: {}x{}", width, height);
-        println!("  📊 输入数据大小: {} bytes ({:.2} MB)", 
-            image_data.len(), 
+        println!(
+            "  📊 输入数据大小: {} bytes ({:.2} MB)",
+            image_data.len(),
             image_data.len() as f64 / 1024.0 / 1024.0
         );
-        
+
         // 使用 Python 模块包装器
-        let module_guard = self.python_module.lock()
+        let module_guard = self
+            .python_module
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
-        
+
         if let Some(module) = module_guard.as_ref() {
             // 调用 Python 函数
-            let result = module.upscale_image(
-                image_data,
-                model.model_id,
-                model.scale,
-                model.tile_size,
-                model.noise_level,
-                timeout,
-                width,
-                height,
-                job_key,
-            ).map_err(|e| format!("调用 Python 超分函数失败: {}", e))?;
-            
+            let result = module
+                .upscale_image(
+                    image_data,
+                    model.model_id,
+                    model.scale,
+                    model.tile_size,
+                    model.noise_level,
+                    timeout,
+                    width,
+                    height,
+                    job_key,
+                )
+                .map_err(|e| format!("调用 Python 超分函数失败: {}", e))?;
+
             if let Some(data) = result {
                 println!("✅ 超分处理完成 (内存流)");
-                println!("  📊 输出数据大小: {} bytes ({:.2} MB)", 
-                    data.len(), 
+                println!(
+                    "  📊 输出数据大小: {} bytes ({:.2} MB)",
+                    data.len(),
                     data.len() as f64 / 1024.0 / 1024.0
                 );
                 Ok(data)
@@ -205,15 +223,14 @@ impl PyO3Upscaler {
         if let Err(e) = fs::create_dir_all(&self.cache_dir) {
             eprintln!("创建缓存目录失败: {}", e);
         }
-        
+
         // 生成缓存文件名: hash_sr[model].webp
         let cache_filename = format!("{}_sr[{}].webp", image_hash, model.model_name);
         let cache_path = self.cache_dir.join(cache_filename);
-        
+
         // 异步保存到文件
-        fs::write(&cache_path, result_data)
-            .map_err(|e| format!("保存缓存文件失败: {}", e))?;
-        
+        fs::write(&cache_path, result_data).map_err(|e| format!("保存缓存文件失败: {}", e))?;
+
         println!("💾 超分结果已缓存: {}", cache_path.display());
         Ok(cache_path)
     }
@@ -227,36 +244,36 @@ impl PyO3Upscaler {
     ) -> Result<Vec<u8>, String> {
         // 确保已初始化
         self.initialize()?;
-        
+
         println!("🚀 开始 PyO3 超分处理 (文件路径)");
         println!("  📁 输入路径: {}", image_path.display());
         println!("  🎯 模型: {} (ID: {})", model.model_name, model.model_id);
         println!("  📏 缩放: {}x", model.scale);
         println!("  🧩 Tile Size: {}", model.tile_size);
         println!("  🔊 降噪等级: {}", model.noise_level);
-        
+
         // 读取图像数据
-        let image_data = fs::read(image_path)
-            .map_err(|e| format!("读取图像文件失败: {}", e))?;
-        
-        println!("  📊 输入文件大小: {} bytes ({:.2} MB)", 
-            image_data.len(), 
+        let image_data = fs::read(image_path).map_err(|e| format!("读取图像文件失败: {}", e))?;
+
+        println!(
+            "  📊 输入文件大小: {} bytes ({:.2} MB)",
+            image_data.len(),
             image_data.len() as f64 / 1024.0 / 1024.0
         );
-        
+
         // 调用内存流版本
         // 对于文件路径版本，我们需要先获取图像尺寸
         // 这里暂时使用 0，让 Python 端来获取实际尺寸
         let result = self.upscale_image_memory(&image_data, model, _timeout, 0, 0, None)?;
-        
+
         Ok(result)
     }
-    
+
     /// 获取缓存统计
     pub fn get_cache_stats(&self) -> Result<CacheStats, String> {
         let mut total_files = 0;
         let mut total_size = 0i64;
-        
+
         if let Ok(entries) = fs::read_dir(&self.cache_dir) {
             for entry in entries.flatten() {
                 if let Ok(metadata) = entry.metadata() {
@@ -265,19 +282,19 @@ impl PyO3Upscaler {
                 }
             }
         }
-        
+
         Ok(CacheStats {
             total_files,
             total_size,
             cache_dir: self.cache_dir.to_string_lossy().to_string(),
         })
     }
-    
+
     /// 清理缓存
     pub fn cleanup_cache(&self, max_age_days: u32) -> Result<usize, String> {
         let mut removed = 0;
         let max_age = std::time::Duration::from_secs((max_age_days as u64) * 86400);
-        
+
         if let Ok(entries) = fs::read_dir(&self.cache_dir) {
             for entry in entries.flatten() {
                 if let Ok(metadata) = entry.metadata() {
@@ -292,17 +309,21 @@ impl PyO3Upscaler {
                 }
             }
         }
-        
+
         Ok(removed)
     }
-    
+
     /// 获取缓存路径（基于 image_hash）
-    pub fn get_cache_path(&self, image_hash: &str, model: &UpscaleModel) -> Result<PathBuf, String> {
+    pub fn get_cache_path(
+        &self,
+        image_hash: &str,
+        model: &UpscaleModel,
+    ) -> Result<PathBuf, String> {
         // 生成缓存文件名: hash_sr[model].webp
         let cache_filename = format!("{}_sr[{}].webp", image_hash, model.model_name);
         Ok(self.cache_dir.join(cache_filename))
     }
-    
+
     /// 执行超分并缓存
     pub fn upscale_and_cache(
         &self,
@@ -312,26 +333,29 @@ impl PyO3Upscaler {
     ) -> Result<Vec<u8>, String> {
         self.upscale_image(image_path, model, timeout)
     }
-    
+
     /// 获取模型 ID
     pub fn get_model_id(&self, model_name: &str) -> Result<i32, String> {
-        let module_guard = self.python_module.lock()
+        let module_guard = self
+            .python_module
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
-        
+
         if let Some(module) = module_guard.as_ref() {
-            module.get_model_id(model_name)
+            module
+                .get_model_id(model_name)
                 .map_err(|e| format!("获取模型 ID 失败: {}", e))
         } else {
             Err("Python 模块未初始化".to_string())
         }
     }
-    
+
     /// 检查缓存（基于 image_hash）
     pub fn check_cache(&self, image_hash: &str, model: &UpscaleModel) -> Option<PathBuf> {
         // 生成缓存文件名: hash_sr[model].webp
         let cache_filename = format!("{}_sr[{}].webp", image_hash, model.model_name);
         let cache_path = self.cache_dir.join(cache_filename);
-        
+
         if cache_path.exists() {
             println!("💾 找到缓存: {}", cache_path.display());
             Some(cache_path)
@@ -339,14 +363,17 @@ impl PyO3Upscaler {
             None
         }
     }
-    
+
     /// 获取可用模型
     pub fn get_available_models(&self) -> Result<Vec<String>, String> {
-        let module_guard = self.python_module.lock()
+        let module_guard = self
+            .python_module
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
-        
+
         if let Some(module) = module_guard.as_ref() {
-            module.get_available_models()
+            module
+                .get_available_models()
                 .map_err(|e| format!("获取可用模型失败: {}", e))
         } else {
             Err("Python 模块未初始化".to_string())
@@ -355,11 +382,14 @@ impl PyO3Upscaler {
 
     /// 请求取消正在执行的任务
     pub fn cancel_job(&self, job_key: &str) -> Result<(), String> {
-        let module_guard = self.python_module.lock()
+        let module_guard = self
+            .python_module
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
 
         if let Some(module) = module_guard.as_ref() {
-            module.cancel_job(job_key)
+            module
+                .cancel_job(job_key)
                 .map_err(|e| format!("取消 Python 任务失败: {}", e))
         } else {
             Err("Python 模块未初始化".to_string())

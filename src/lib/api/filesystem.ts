@@ -7,6 +7,12 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { FsItem } from '$lib/types';
 
+export interface DirectorySnapshot {
+  items: FsItem[];
+  mtime?: number;
+  cached: boolean;
+}
+
 /**
  * 打开文件夹选择对话框
  */
@@ -23,7 +29,12 @@ export async function selectFolder(): Promise<string | null> {
  * 浏览目录内容
  */
 export async function browseDirectory(path: string): Promise<FsItem[]> {
-  return await invoke<FsItem[]>('browse_directory', { path });
+  const snapshot = await loadDirectorySnapshot(path);
+  return snapshot.items;
+}
+
+export async function loadDirectorySnapshot(path: string): Promise<DirectorySnapshot> {
+  return await invoke<DirectorySnapshot>('load_directory_snapshot', { path });
 }
 
 /**

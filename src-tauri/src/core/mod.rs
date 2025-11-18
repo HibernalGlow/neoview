@@ -1,28 +1,30 @@
 //! NeoView - Core Module
 //! 导出所有核心功能模块
 
-pub mod book_manager;
-pub mod image_loader;
-pub mod image_cache;
-pub mod fs_manager;
 pub mod archive;
 pub mod blob_registry;
+pub mod book_manager;
+pub mod directory_cache;
+pub mod directory_cache_db;
 pub mod file_indexer;
-pub mod upscale;
+pub mod fs_manager;
 pub mod generic_upscaler;
-pub mod upscale_settings;
+pub mod image_cache;
+pub mod image_loader;
+pub mod path_utils;
 pub mod pyo3_upscaler;
 pub mod python_upscale_wrapper;
-pub mod video_thumbnail;
-pub mod path_utils;
 pub mod thumbnail_db;
 pub mod thumbnail_generator;
+pub mod upscale;
 pub mod upscale_scheduler;
+pub mod upscale_settings;
+pub mod video_thumbnail;
 
 pub use book_manager::BookManager;
 pub use image_loader::ImageLoader;
 // ImageCache 仅供内部使用
-pub use fs_manager::FsManager;
 pub use archive::ArchiveManager;
+pub use fs_manager::FsManager;
 // FileIndexer 暂时未使用，注释掉以避免警告
 // pub use file_indexer::FileIndexer;

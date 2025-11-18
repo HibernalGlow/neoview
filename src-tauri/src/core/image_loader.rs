@@ -1,12 +1,12 @@
 //! NeoView - Image Loader
 //! 图像加载和处理模块
 
-use std::fs;
-use std::path::Path;
-use std::io::Cursor;
-use std::sync::Arc;
-use image::{GenericImageView, ImageFormat};
 use super::image_cache::ImageCache;
+use image::{GenericImageView, ImageFormat};
+use std::fs;
+use std::io::Cursor;
+use std::path::Path;
+use std::sync::Arc;
 use threadpool::ThreadPool;
 
 #[derive(Clone)]
@@ -19,7 +19,7 @@ pub struct ImageLoader {
 
 impl ImageLoader {
     pub fn new(cache_size_mb: usize, num_threads: usize) -> Self {
-        Self { 
+        Self {
             cache: Arc::new(ImageCache::new(cache_size_mb)),
             thread_pool: Arc::new(ThreadPool::new(num_threads)),
         }
@@ -38,14 +38,14 @@ impl ImageLoader {
     /// 加载图像文件为二进制数据 (带缓存)
     pub fn load_image_as_binary(&self, path: &str) -> Result<Vec<u8>, String> {
         let path_obj = Path::new(path);
-        
+
         if !path_obj.exists() {
             return Err(format!("Image file not found: {}", path_obj.display()));
         }
 
         // 读取文件
-        let image_data = fs::read(path_obj)
-            .map_err(|e| format!("Failed to read image file: {}", e))?;
+        let image_data =
+            fs::read(path_obj).map_err(|e| format!("Failed to read image file: {}", e))?;
 
         // 检查是否为 JXL 文件 - 需要解码为 PNG
         if let Some(ext) = path_obj.extension().and_then(|e| e.to_str()) {
@@ -53,12 +53,12 @@ impl ImageLoader {
             if ext_lower == "jxl" {
                 // JXL 解码图像（浏览器不原生支持，需要转换）
                 let img = self.decode_jxl_image(&image_data)?;
-                
+
                 // 编码为 PNG
                 let mut png_data = Vec::new();
                 img.write_to(&mut Cursor::new(&mut png_data), ImageFormat::Png)
                     .map_err(|e| format!("Failed to encode PNG: {}", e))?;
-                
+
                 return Ok(png_data);
             }
         }
@@ -66,8 +66,6 @@ impl ImageLoader {
         // 直接返回原始二进制数据
         Ok(image_data)
     }
-
-    
 
     /// 清除缓存
     pub fn clear_cache(&self) {
@@ -82,14 +80,13 @@ impl ImageLoader {
     /// 获取图像尺寸
     pub fn get_image_dimensions(&self, path: &str) -> Result<(u32, u32), String> {
         let path = Path::new(path);
-        
+
         if !path.exists() {
             return Err(format!("Image file not found: {}", path.display()));
         }
 
         // 读取文件
-        let image_data = fs::read(path)
-            .map_err(|e| format!("Failed to read image file: {}", e))?;
+        let image_data = fs::read(path).map_err(|e| format!("Failed to read image file: {}", e))?;
 
         // 检查是否为 JXL 文件
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
@@ -100,7 +97,8 @@ impl ImageLoader {
         }
 
         // 尝试从文件扩展名推断格式
-        let format = path.extension()
+        let format = path
+            .extension()
             .and_then(|ext| ext.to_str())
             .and_then(|ext| match ext.to_lowercase().as_str() {
                 "jpg" | "jpeg" => Some(ImageFormat::Jpeg),
@@ -138,14 +136,13 @@ impl ImageLoader {
         max_height: u32,
     ) -> Result<Vec<u8>, String> {
         let path = Path::new(path);
-        
+
         if !path.exists() {
             return Err(format!("Image file not found: {}", path.display()));
         }
 
         // 读取文件
-        let image_data = fs::read(path)
-            .map_err(|e| format!("Failed to read image file: {}", e))?;
+        let image_data = fs::read(path).map_err(|e| format!("Failed to read image file: {}", e))?;
 
         // 检查是否为 JXL 文件
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
@@ -157,9 +154,10 @@ impl ImageLoader {
 
         // 使用 image crate 加载和处理图像
         use image::ImageFormat;
-        
+
         // 尝试从文件扩展名推断格式
-        let format = path.extension()
+        let format = path
+            .extension()
             .and_then(|ext| ext.to_str())
             .and_then(|ext| match ext.to_lowercase().as_str() {
                 "jpg" | "jpeg" => Some(ImageFormat::Jpeg),
@@ -181,8 +179,7 @@ impl ImageLoader {
             }
             None => {
                 // 没有识别到格式,尝试自动检测
-                image::load_from_memory(&image_data)
-                    .map_err(|e| format!("加载图片失败: {}", e))?
+                image::load_from_memory(&image_data).map_err(|e| format!("加载图片失败: {}", e))?
             }
         };
 
@@ -192,38 +189,39 @@ impl ImageLoader {
     /// 解码 JXL 图像
     fn decode_jxl_image(&self, image_data: &[u8]) -> Result<image::DynamicImage, String> {
         use jxl_oxide::JxlImage;
-        
+
         // 使用 JxlImage::builder() 读取
         let mut reader = Cursor::new(image_data);
         let jxl_image = JxlImage::builder()
             .read(&mut reader)
             .map_err(|e| format!("Failed to decode JXL: {}", e))?;
-        
+
         // 渲染第一帧
-        let render = jxl_image.render_frame(0)
+        let render = jxl_image
+            .render_frame(0)
             .map_err(|e| format!("Failed to render JXL frame: {}", e))?;
-        
+
         // 获取帧缓冲区
         let fb = render.image_all_channels();
         let width = fb.width() as u32;
         let height = fb.height() as u32;
         let channels = fb.channels();
-        
+
         // 获取原始像素数据 (f32, 范围 0.0-1.0)
         let float_buf = fb.buf();
-        
+
         // 如果是灰度图
         if channels == 1 {
             let gray_data: Vec<u8> = float_buf
                 .iter()
                 .map(|&v| (v.clamp(0.0, 1.0) * 255.0) as u8)
                 .collect();
-            
+
             let gray_img = image::GrayImage::from_raw(width, height, gray_data)
                 .ok_or_else(|| "Failed to create gray image from JXL data".to_string())?;
             return Ok(image::DynamicImage::ImageLuma8(gray_img));
         }
-        
+
         // RGB 或 RGBA
         if channels == 3 {
             // RGB
@@ -231,7 +229,7 @@ impl ImageLoader {
                 .iter()
                 .map(|&v| (v.clamp(0.0, 1.0) * 255.0) as u8)
                 .collect();
-            
+
             let rgb_img = image::RgbImage::from_raw(width, height, rgb_data)
                 .ok_or_else(|| "Failed to create RGB image from JXL data".to_string())?;
             return Ok(image::DynamicImage::ImageRgb8(rgb_img));
@@ -248,12 +246,12 @@ impl ImageLoader {
                     ]
                 })
                 .collect();
-            
+
             let rgba_img = image::RgbaImage::from_raw(width, height, rgba_data)
                 .ok_or_else(|| "Failed to create RGBA image from JXL data".to_string())?;
             return Ok(image::DynamicImage::ImageRgba8(rgba_img));
         }
-        
+
         Err(format!("Unsupported channel count: {}", channels))
     }
 
@@ -269,16 +267,12 @@ impl ImageLoader {
         let ratio = (max_width as f32 / original_width as f32)
             .min(max_height as f32 / original_height as f32)
             .min(1.0);
-        
+
         let new_width = (original_width as f32 * ratio) as u32;
         let new_height = (original_height as f32 * ratio) as u32;
 
         // 调整图像大小
-        let resized_img = img.resize(
-            new_width,
-            new_height,
-            image::imageops::FilterType::Lanczos3,
-        );
+        let resized_img = img.resize(new_width, new_height, image::imageops::FilterType::Lanczos3);
 
         // 转换为 RGB8 格式
         let rgb_img = resized_img.to_rgb8();
@@ -286,11 +280,12 @@ impl ImageLoader {
         // 编码为 JPEG 格式（质量 85%）
         let mut thumbnail_data = Vec::new();
         let mut cursor = Cursor::new(&mut thumbnail_data);
-        
+
         // 使用动态图像直接编码
         let dynamic_img = image::DynamicImage::ImageRgb8(rgb_img);
-        
-        dynamic_img.write_to(&mut cursor, ImageFormat::Jpeg)
+
+        dynamic_img
+            .write_to(&mut cursor, ImageFormat::Jpeg)
             .map_err(|e| format!("Failed to encode thumbnail: {}", e))?;
 
         // 返回二进制数据

@@ -149,11 +149,7 @@ struct UpscaleSchedulerInner {
 }
 
 impl UpscaleSchedulerInner {
-    fn new(
-        app_handle: AppHandle,
-        py_state: Arc<PyO3UpscalerState>,
-        workers: usize,
-    ) -> Arc<Self> {
+    fn new(app_handle: AppHandle, py_state: Arc<PyO3UpscalerState>, workers: usize) -> Arc<Self> {
         Arc::new(Self {
             queue_high: Mutex::new(VecDeque::new()),
             queue_normal: Mutex::new(VecDeque::new()),
@@ -451,7 +447,11 @@ impl UpscaleScheduler {
         false
     }
 
-    pub async fn cancel_page_jobs(&self, book_path: Option<String>, page_index: Option<i32>) -> usize {
+    pub async fn cancel_page_jobs(
+        &self,
+        book_path: Option<String>,
+        page_index: Option<i32>,
+    ) -> usize {
         let mut cancelled = 0usize;
         let predicate = |handle: &Arc<UpscaleJobHandle>| -> bool {
             if let Some(target_index) = page_index {
@@ -522,4 +522,3 @@ impl UpscaleScheduler {
 pub struct UpscaleSchedulerState {
     pub scheduler: Arc<UpscaleScheduler>,
 }
-

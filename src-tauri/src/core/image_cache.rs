@@ -101,7 +101,7 @@ impl ImageCache {
     pub fn clear(&self) {
         let mut cache = self.cache.lock().unwrap();
         let mut current_size = self.current_size.lock().unwrap();
-        
+
         cache.clear();
         *current_size = 0;
     }
@@ -110,7 +110,7 @@ impl ImageCache {
     pub fn stats(&self) -> (usize, usize, usize) {
         let cache = self.cache.lock().unwrap();
         let current_size = self.current_size.lock().unwrap();
-        
+
         (cache.len(), *current_size, self.max_size)
     }
 
@@ -121,7 +121,10 @@ impl ImageCache {
         let mut current_size = self.current_size.lock().unwrap();
 
         if let Some(removed) = cache.remove(&key) {
-            println!("🧹 ImageCache::remove - removed key='{}' size={} bytes", key, removed.size);
+            println!(
+                "🧹 ImageCache::remove - removed key='{}' size={} bytes",
+                key, removed.size
+            );
             *current_size -= removed.size;
         }
     }
@@ -169,7 +172,7 @@ impl ImageCache {
     pub fn validate_all_file_urls(&self) -> usize {
         let mut invalid_count = 0;
         let mut paths_to_remove = Vec::new();
-        
+
         if let Ok(cache) = self.cache.lock() {
             for (path, entry) in cache.iter() {
                 if entry.is_file_url {
@@ -190,12 +193,12 @@ impl ImageCache {
                 }
             }
         }
-        
+
         // 移除无效的缓存项
         for path in paths_to_remove {
             self.remove(&path);
         }
-        
+
         invalid_count
     }
 }
@@ -224,13 +227,13 @@ mod tests {
     #[test]
     fn test_cache_basic() {
         let cache = ImageCache::new(1); // 1MB
-        
+
         // 添加数据
         cache.set("test1".to_string(), "data1".to_string());
-        
+
         // 获取数据
         assert_eq!(cache.get("test1"), Some("data1".to_string()));
-        
+
         // 获取不存在的数据
         assert_eq!(cache.get("test2"), None);
     }
@@ -238,12 +241,12 @@ mod tests {
     #[test]
     fn test_cache_eviction() {
         let cache = ImageCache::new(1); // 1MB
-        
+
         // 添加大量数据触发清理
         let large_data = "x".repeat(500 * 1024); // 500KB
         cache.set("test1".to_string(), large_data.clone());
         cache.set("test2".to_string(), large_data.clone());
-        
+
         // test1 应该被清理
         let (count, _, _) = cache.stats();
         assert!(count <= 2);
@@ -252,12 +255,12 @@ mod tests {
     #[test]
     fn test_cache_clear() {
         let cache = ImageCache::new(1);
-        
+
         cache.set("test1".to_string(), "data1".to_string());
         cache.set("test2".to_string(), "data2".to_string());
-        
+
         cache.clear();
-        
+
         let (count, size, _) = cache.stats();
         assert_eq!(count, 0);
         assert_eq!(size, 0);

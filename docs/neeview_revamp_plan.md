@@ -62,6 +62,8 @@
 
 > **进度（2025-11-19 夜间）**：History / Bookmark / FileBrowser 面板已接入 `appState`，在 UI 中同步当前书籍与任务窗口；相关后台流程（历史/书签缩略图、目录缓存校验、FileBrowser 目录重建、文件夹批量扫描）统一通过 `taskScheduler` (`history-thumbnail-load`, `bookmark-thumbnail-load`, `filebrowser-directory-load`, `filebrowser-cache-validate`, `filebrowser-thumbnail-preload`, `filebrowser-folder-scan`) 承载，确保随机访问与索引操作都有统一的调度指标。
 
+> **进度（2025-11-20）**：`load_directory_snapshot` 已挂接 Rust 双层缓存（内存 LRU + SQLite `directory_cache.db`），并根据 mtime/TTL 自动失效，前端仅需一次 IPC 即可命中持久快照；`thumbnailManager.preloadDbIndex` 改为调用 `preload_thumbnail_index`，由 Rust 批量查询 `thumbnail_cache`，彻底移除前端逐条 `has_thumbnail_by_key_category` 的阻塞。
+
 **2.1 StateService**
 - 合并 `bookStore`, `settingsManager`, 分散 $state 到 `appState`，组件统一走 selector。
 - 新增 `viewer.pageWindow`（包含 `center`, `forward`, `backward`, `stale`）与 `viewer.taskCursor`（记录 `oldestPendingIdx`, `furthestReadyIdx`），支持 UI 实时展示缓存覆盖范围。
@@ -71,6 +73,7 @@
 - ✅ Sidebar 接入 `appState.book/viewer`，在 UI 中显示当前页进度与窗口覆盖状态，减少局部 store 分歧。
 - ✅ ThumbnailsPanel 已迁移到 `appState` + `taskScheduler`，缩略图生成任务以 `panel-thumbnail-load` 排队，UI 可实时显示桶深度和运行并发。
 - ✅ History / Bookmark / FileBrowser 面板已完成 ViewModel 化，统一显示当前页/任务状态；FileBrowser 的目录校验、缩略图预取、批量扫描等任务通过 `taskScheduler` 排程，形成面板级别的调度可视化。
+- ✅ FileBrowser 目录快照命中优先走 Rust 端缓存（内存 + SQLite），前端删除了重复 `getFileMetadata`/`pathExists` 轮询，继续聚焦 ViewModel。
 
 **3.1 Rust TaskScheduler**
 - 把 TS 版调度迁移到 Rust：使用 async queue（Tokio + prioritised queue）。
@@ -126,9 +129,22 @@
 >    - `folder_scan_log(id INTEGER PRIMARY KEY AUTOINCREMENT, root_path TEXT, discovered INTEGER, created_at INTEGER)`
 > 3. IPC 契约将按照 `invoke(command, payload)` → `TaskScheduler.enqueue(job)` → `CacheService` 链路映射，Phase 3 仅需补完 Rust 侧 job handler 与 DB 访问层。
 
+#### 3.1.2 前端 vs Rust：职责划分（2025-11-19 策略调整）
+| 持续保留在前端 (TS) | 理由 | 需迁移/下沉至 Rust | 判定依据 |
+| --- | --- | --- | --- |
+| `appState` / UI ViewModel（Sidebar、BottomThumbnailBar、History/Bookmark 列表） | 需高频调整、与 Svelte Runes 紧耦合，纯状态/展示 | 大规模目录扫描、批量缩略图/缓存清理 (`filebrowser-directory-load`, `filebrowser-folder-scan`, `thumbnail-generate`) | CPU / IO 重；阻塞主线程或导致 blob 闪烁 |
+| 轻量任务调度（单实例缩略图、面板交互、跳页窗口） | 方便实验 NeeView 行为、无需跨线程 | PyO3 超分、比较/缓存维护、archive 解包 | 已有 Rust/PyO3 实现或需长期运行 |
+| 快速迭代的交互逻辑（Search UI、History/Bookmark 管理、Task metrics 可视化） | 前端改动敏捷、无需触磁盘 | SQLite cache index (`thumbnail_cache`, `directory_cache`)、多级缓存复用 | 需要 ACID/持久化、跨平台 IO |
+
+> **迁移准则**  
+> 1. 只要任务有可能让前端 `taskScheduler` ≥ concurrency、或频繁触发 `blob`/`Failed to fetch`，优先改为 Rust Job。  
+> 2. 前端 `taskScheduler` 仍保留相同 `type/source`，只需将 executor 改为调用新的 Rust IPC；UI 侧无需变更。  
+> 3. 迁移顺序建议：`thumbnail-generate` → `filebrowser-directory-load` → `cache-maintenance` → `comparison-prepare` → 其它长耗时任务。
+
 **3.2 Cache Index 持久化**
 - 引入 SQLite (via `tauri-plugin-sql` 或自研) 存储 hash -> cache info。
 - Rust API: `cache_lookup`, `cache_insert`, `cache_gc`.
+- ✅ `directory_cache.db` 已上线：`load_directory_snapshot` 先查 SQLite，再落地 `cache_insert`；`preload_thumbnail_index` 批量调用 `has_thumbnail_by_key_category`，为 Phase 3 的统一 `cache_lookup` 打下基础。
 
 **3.3 IPC 规范**
 - 所有命令集中管理（`src-tauri/src/api/mod.rs`），生成 TS 类型（使用 `ts-rs` 或手写声明）。

@@ -1,11 +1,11 @@
 //! NeoView - Book Manager
 //! 书籍管理核心模块
 
-use crate::models::{BookInfo, BookType, Page};
 use crate::core::path_utils::{build_path_key, calculate_path_hash};
+use crate::models::{BookInfo, BookType, Page};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 pub struct BookManager {
@@ -34,19 +34,22 @@ impl BookManager {
     pub fn preload_pages(&self, image_loader: &super::ImageLoader) {
         // 限制预加载数量，避免过度占用资源
         if self.preload_size > 20 {
-            println!("Warning: Preload size {} is too large, limiting to 20", self.preload_size);
+            println!(
+                "Warning: Preload size {} is too large, limiting to 20",
+                self.preload_size
+            );
             return;
         }
-        
+
         if let Some(book) = &self.current_book {
             let current_page = book.current_page;
             let total_pages = book.total_pages;
-            
+
             // 计算需要预加载的页面范围
             let preload_count = std::cmp::min(self.preload_size, 20);
             let start = current_page.saturating_sub(1);
             let end = (current_page + preload_count).min(total_pages - 1);
-            
+
             // 清理旧的预加载缓存
             if let Ok(mut cache) = self.preload_cache.lock() {
                 cache.retain(|&page_idx, _| {
@@ -54,28 +57,28 @@ impl BookManager {
                     page_idx >= current_page.saturating_sub(1) && page_idx <= current_page + 1
                 });
             }
-            
+
             // 预加载新页面（限制并发数）
             for page_idx in start..=end {
                 if page_idx == current_page {
                     continue; // 跳过当前页
                 }
-                
+
                 if let Some(page) = book.pages.get(page_idx) {
                     let path = page.path.clone();
                     let cache_clone = Arc::clone(&self.preload_cache);
-                    
+
                     // 检查是否已经在缓存中
                     if let Ok(cache) = self.preload_cache.lock() {
                         if cache.contains_key(&page_idx) {
                             continue;
                         }
                     }
-                    
+
                     // 获取线程池引用
                     let thread_pool = Arc::clone(&image_loader.thread_pool);
                     let image_loader_ref = image_loader.clone();
-                    
+
                     // 异步加载，避免阻塞
                     thread_pool.execute(move || {
                         if let Ok(image_data) = image_loader_ref.load_image_as_binary(&path) {
@@ -101,7 +104,7 @@ impl BookManager {
     /// 打开书籍
     pub fn open_book(&mut self, path: &str) -> Result<BookInfo, String> {
         let path_buf = PathBuf::from(path);
-        
+
         if !path_buf.exists() {
             return Err(format!("Path does not exist: {}", path));
         }
@@ -158,8 +161,8 @@ impl BookManager {
     fn load_folder_pages(&self, path: &Path, book: &mut BookInfo) -> Result<(), String> {
         let mut entries = Vec::new();
 
-        let read_dir = fs::read_dir(path)
-            .map_err(|e| format!("Failed to read directory: {}", e))?;
+        let read_dir =
+            fs::read_dir(path).map_err(|e| format!("Failed to read directory: {}", e))?;
 
         for entry in read_dir {
             if let Ok(entry) = entry {
@@ -182,20 +185,14 @@ impl BookManager {
                 .and_then(|n| n.to_str())
                 .unwrap_or("Unknown")
                 .to_string();
-            
+
             let path_str = path.to_string_lossy().to_string();
-            
+
             // 为文件夹类型计算 stable_hash
-            let path_key = build_path_key(
-                &book.path,
-                &path_str,
-                &book.book_type,
-                None
-            );
+            let path_key = build_path_key(&book.path, &path_str, &book.book_type, None);
             let stable_hash = calculate_path_hash(&path_key);
-            
-            let page = Page::new(index, path_str, name, *size)
-                .with_stable_hash(stable_hash);
+
+            let page = Page::new(index, path_str, name, *size).with_stable_hash(stable_hash);
             book.pages.push(page);
         }
 
@@ -206,35 +203,32 @@ impl BookManager {
     /// 加载压缩包中的图片页面
     fn load_archive_pages(&self, path: &Path, book: &mut BookInfo) -> Result<(), String> {
         use crate::core::archive::ArchiveManager;
-        
+
         let archive_manager = ArchiveManager::new();
         let items = archive_manager.list_zip_contents(path)?;
-        
+
         // 过滤出图片文件并按名称排序
-        let mut image_items: Vec<_> = items.into_iter()
+        let mut image_items: Vec<_> = items
+            .into_iter()
             .filter(|item| !item.is_dir && self.is_image_file(&PathBuf::from(&item.name)))
             .collect();
-        
+
         image_items.sort_by(|a, b| a.name.cmp(&b.name));
-        
+
         // 创建页面列表
         for (index, item) in image_items.iter().enumerate() {
             // 对于压缩包，计算 stable_hash
-            let path_key = build_path_key(
-                &book.path,
-                &item.path,
-                &book.book_type,
-                Some(&item.name)
-            );
+            let path_key =
+                build_path_key(&book.path, &item.path, &book.book_type, Some(&item.name));
             let stable_hash = calculate_path_hash(&path_key);
-            
+
             // 对于压缩包,path 使用压缩包内的文件路径
             let page = Page::new(index, item.path.clone(), item.name.clone(), item.size)
                 .with_stable_hash(stable_hash)
                 .with_inner_path(Some(item.name.clone()));
             book.pages.push(page);
         }
-        
+
         book.total_pages = book.pages.len();
         Ok(())
     }
@@ -308,9 +302,11 @@ impl BookManager {
             for (index, page) in book.pages.iter().enumerate() {
                 // 对于压缩包，page.path 是相对路径
                 // 对于文件夹，page.path 是绝对路径
-                if page.path == image_path || 
-                   (book.book_type == BookType::Archive && page.path.contains(image_path)) ||
-                   (book.book_type == BookType::Folder && PathBuf::from(&page.path) == PathBuf::from(image_path)) {
+                if page.path == image_path
+                    || (book.book_type == BookType::Archive && page.path.contains(image_path))
+                    || (book.book_type == BookType::Folder
+                        && PathBuf::from(&page.path) == PathBuf::from(image_path))
+                {
                     book.current_page = index;
                     return Ok(index);
                 }

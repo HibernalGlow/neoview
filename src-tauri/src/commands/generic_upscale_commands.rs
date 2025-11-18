@@ -1,10 +1,10 @@
 //! NeoView - Generic Upscale Commands
 //! 通用超分相关的 Tauri 命令
 
+use crate::core::generic_upscaler::{GenericUpscaleOptions, GenericUpscaler, UpscaleAlgorithm};
+use std::fs;
 use std::sync::{Arc, Mutex};
 use tauri::{command, Window};
-use std::fs;
-use crate::core::generic_upscaler::{GenericUpscaler, GenericUpscaleOptions, UpscaleAlgorithm};
 
 /// 全局通用超分管理器状态
 pub struct GenericUpscalerState {
@@ -57,7 +57,9 @@ pub async fn init_generic_upscale_manager(
     let thumbnail_path = std::path::PathBuf::from(thumbnail_path);
     let manager = GenericUpscaler::new(thumbnail_path);
 
-    let manager_guard = state.manager.lock()
+    let manager_guard = state
+        .manager
+        .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
     let mut manager_guard = manager_guard;
     *manager_guard = Some(manager);
@@ -84,7 +86,9 @@ pub async fn check_generic_upscale_availability(
     };
 
     let manager_result = {
-        let manager_guard = state.manager.lock()
+        let manager_guard = state
+            .manager
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         manager_guard.clone()
     };
@@ -107,16 +111,22 @@ pub async fn get_available_algorithms(
     }
 
     let manager_result = {
-        let manager_guard = state.manager.lock()
+        let manager_guard = state
+            .manager
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         manager_guard.clone()
     };
 
     if let Some(manager) = manager_result {
         let mut available_algorithms = Vec::new();
-        
+
         // 检查每种算法的可用性
-        for algorithm in [UpscaleAlgorithm::RealESRGAN, UpscaleAlgorithm::Waifu2x, UpscaleAlgorithm::RealCUGAN] {
+        for algorithm in [
+            UpscaleAlgorithm::RealESRGAN,
+            UpscaleAlgorithm::Waifu2x,
+            UpscaleAlgorithm::RealCUGAN,
+        ] {
             if manager.check_algorithm_availability(&algorithm).is_ok() {
                 let algorithm_name = match algorithm {
                     UpscaleAlgorithm::RealESRGAN => "realesrgan".to_string(),
@@ -126,7 +136,7 @@ pub async fn get_available_algorithms(
                 available_algorithms.push(algorithm_name);
             }
         }
-        
+
         return Ok(available_algorithms);
     }
 
@@ -144,7 +154,9 @@ pub async fn scan_models_directory(
     }
 
     let manager_result = {
-        let manager_guard = state.manager.lock()
+        let manager_guard = state
+            .manager
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         manager_guard.clone()
     };
@@ -152,7 +164,7 @@ pub async fn scan_models_directory(
     if let Some(manager) = manager_result {
         let models_dir = manager.thumbnail_root.join("models");
         let mut model_files = Vec::new();
-        
+
         if models_dir.exists() {
             // 扫描目录中的所有 .bin 和 .param 文件对
             if let Ok(entries) = fs::read_dir(&models_dir) {
@@ -174,11 +186,11 @@ pub async fn scan_models_directory(
                     }
                 }
             }
-            
+
             // 去重并排序
             model_files.sort();
             model_files.dedup();
-            
+
             println!("🔍 扫描到 {} 个模型", model_files.len());
             Ok(model_files)
         } else {
@@ -191,9 +203,7 @@ pub async fn scan_models_directory(
 
 /// 获取算法的默认模型
 #[command]
-pub async fn get_algorithm_default_models(
-    algorithm: String,
-) -> Result<Vec<String>, String> {
+pub async fn get_algorithm_default_models(algorithm: String) -> Result<Vec<String>, String> {
     let algorithm_enum = match algorithm.as_str() {
         "realcugan" => UpscaleAlgorithm::RealCUGAN,
         "esrgan" => UpscaleAlgorithm::RealESRGAN,
@@ -203,7 +213,7 @@ pub async fn get_algorithm_default_models(
 
     let default_model = algorithm_enum.get_default_model();
     let anime_model = algorithm_enum.get_anime_model();
-    
+
     Ok(vec![default_model.to_string(), anime_model.to_string()])
 }
 
@@ -235,7 +245,9 @@ pub async fn generic_upscale_image(
     };
 
     let manager_result = {
-        let manager_guard = state.manager.lock()
+        let manager_guard = state
+            .manager
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         manager_guard.clone()
     };
@@ -243,7 +255,7 @@ pub async fn generic_upscale_image(
     if let Some(manager) = manager_result {
         let image_path = std::path::PathBuf::from(image_path);
         let save_path = std::path::PathBuf::from(save_path);
-        
+
         let options = GenericUpscaleOptions {
             algorithm: algorithm_enum,
             model,
@@ -258,23 +270,25 @@ pub async fn generic_upscale_image(
         if let Some(cached_path) = manager.check_upscale_cache(&image_path, &options) {
             println!("📦 使用通用超分缓存: {}", cached_path.display());
             // 直接返回缓存文件的二进制数据
-            let image_data = std::fs::read(&cached_path)
-                .map_err(|e| format!("读取缓存文件失败: {}", e))?;
+            let image_data =
+                std::fs::read(&cached_path).map_err(|e| format!("读取缓存文件失败: {}", e))?;
             return Ok(image_data);
         }
 
         // 执行超分
-        let result_path = manager.upscale_image(
-            &image_path,
-            &save_path,
-            options,
-            None, // 暂时不使用 window 参数
-        ).await?;
+        let result_path = manager
+            .upscale_image(
+                &image_path,
+                &save_path,
+                options,
+                None, // 暂时不使用 window 参数
+            )
+            .await?;
 
         // 直接返回超分后的文件的二进制数据
-        let image_data = std::fs::read(&result_path)
-            .map_err(|e| format!("读取超分文件失败: {}", e))?;
-        
+        let image_data =
+            std::fs::read(&result_path).map_err(|e| format!("读取超分文件失败: {}", e))?;
+
         Ok(image_data)
     } else {
         Err("通用超分管理器未初始化".to_string())
@@ -307,14 +321,16 @@ pub async fn get_generic_upscale_save_path(
     };
 
     let manager_result = {
-        let manager_guard = state.manager.lock()
+        let manager_guard = state
+            .manager
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         manager_guard.clone()
     };
 
     if let Some(manager) = manager_result {
         let image_path = std::path::PathBuf::from(image_path);
-        
+
         let options = GenericUpscaleOptions {
             algorithm: algorithm_enum,
             model,
@@ -324,7 +340,7 @@ pub async fn get_generic_upscale_save_path(
             noise_level,
             num_threads,
         };
-        
+
         let save_path = manager.get_upscale_save_path(&image_path, &options)?;
         return Ok(save_path.to_string_lossy().to_string());
     }
@@ -343,7 +359,9 @@ pub async fn get_generic_upscale_cache_stats(
     }
 
     let manager_result = {
-        let manager_guard = state.manager.lock()
+        let manager_guard = state
+            .manager
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         manager_guard.clone()
     };
@@ -366,14 +384,16 @@ pub async fn test_all_algorithms(
     }
 
     let manager_result = {
-        let manager_guard = state.manager.lock()
+        let manager_guard = state
+            .manager
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         manager_guard.clone()
     };
 
     if let Some(manager) = manager_result {
         let mut results = Vec::new();
-        
+
         // 获取测试图片目录
         let test_img_dir = manager.thumbnail_root.join("models").join("testimg");
         if !test_img_dir.exists() {
@@ -387,7 +407,10 @@ pub async fn test_all_algorithms(
                 let path = entry.path();
                 if path.is_file() {
                     if let Some(ext) = path.extension() {
-                        if matches!(ext.to_str(), Some("jpg") | Some("jpeg") | Some("png") | Some("webp")) {
+                        if matches!(
+                            ext.to_str(),
+                            Some("jpg") | Some("jpeg") | Some("png") | Some("webp")
+                        ) {
                             test_images.push(path);
                         }
                     }
@@ -400,20 +423,24 @@ pub async fn test_all_algorithms(
         }
 
         let test_image = &test_images[0]; // 使用第一张图片进行测试
-        
+
         // 测试每种算法
-        for algorithm in [UpscaleAlgorithm::RealESRGAN, UpscaleAlgorithm::Waifu2x, UpscaleAlgorithm::RealCUGAN] {
+        for algorithm in [
+            UpscaleAlgorithm::RealESRGAN,
+            UpscaleAlgorithm::Waifu2x,
+            UpscaleAlgorithm::RealCUGAN,
+        ] {
             println!("🧪 测试算法: {:?}", algorithm);
-            
+
             // 检查算法可用性
             match manager.check_algorithm_availability(&algorithm) {
                 Ok(_) => {
                     println!("  ✅ 算法可用");
-                    
+
                     // 获取默认模型
                     let model = algorithm.get_default_model();
                     println!("  🎯 使用模型: {}", model);
-                    
+
                     // 创建测试选项
                     let options = GenericUpscaleOptions {
                         algorithm: algorithm.clone(),
@@ -424,7 +451,7 @@ pub async fn test_all_algorithms(
                         noise_level: "1".to_string(),
                         num_threads: "1".to_string(),
                     };
-                    
+
                     // 生成保存路径
                     let save_path = match manager.get_upscale_save_path(test_image, &options) {
                         Ok(path) => path,
@@ -435,14 +462,21 @@ pub async fn test_all_algorithms(
                             continue;
                         }
                     };
-                    
+
                     // 执行超分测试
-                    match manager.upscale_image(test_image, &save_path, options, None).await {
+                    match manager
+                        .upscale_image(test_image, &save_path, options, None)
+                        .await
+                    {
                         Ok(output_path) => {
                             let success_msg = format!(
-                                "✅ {:?} 测试成功: {} -> {}", 
-                                algorithm, 
-                                test_image.file_name().unwrap_or_default().to_str().unwrap_or("unknown"),
+                                "✅ {:?} 测试成功: {} -> {}",
+                                algorithm,
+                                test_image
+                                    .file_name()
+                                    .unwrap_or_default()
+                                    .to_str()
+                                    .unwrap_or("unknown"),
                                 output_path
                             );
                             println!("  {}", success_msg);
@@ -461,10 +495,10 @@ pub async fn test_all_algorithms(
                     results.push(error_msg);
                 }
             }
-            
+
             println!(""); // 空行分隔
         }
-        
+
         Ok(results)
     } else {
         Err("通用超分管理器未初始化".to_string())
@@ -490,14 +524,16 @@ pub async fn test_algorithm_models(
     };
 
     let manager_result = {
-        let manager_guard = state.manager.lock()
+        let manager_guard = state
+            .manager
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         manager_guard.clone()
     };
 
     if let Some(manager) = manager_result {
         let mut results = Vec::new();
-        
+
         // 获取测试图片目录
         let test_img_dir = manager.thumbnail_root.join("models").join("testimg");
         if !test_img_dir.exists() {
@@ -511,7 +547,10 @@ pub async fn test_algorithm_models(
                 let path = entry.path();
                 if path.is_file() {
                     if let Some(ext) = path.extension() {
-                        if matches!(ext.to_str(), Some("jpg") | Some("jpeg") | Some("png") | Some("webp")) {
+                        if matches!(
+                            ext.to_str(),
+                            Some("jpg") | Some("jpeg") | Some("png") | Some("webp")
+                        ) {
                             test_images.push(path);
                         }
                     }
@@ -524,21 +563,21 @@ pub async fn test_algorithm_models(
         }
 
         let test_image = &test_images[0]; // 使用第一张图片进行测试
-        
+
         println!("🧪 测试 {:?} 算法的所有模型", algorithm_enum);
-        
+
         // 检查算法可用性
         manager.check_algorithm_availability(&algorithm_enum)?;
-        
+
         // 测试默认模型和动漫模型
         let models_to_test = vec![
             algorithm_enum.get_default_model(),
             algorithm_enum.get_anime_model(),
         ];
-        
+
         for model in models_to_test {
             println!("  🎯 测试模型: {}", model);
-            
+
             // 创建测试选项
             let options = GenericUpscaleOptions {
                 algorithm: algorithm_enum.clone(),
@@ -549,7 +588,7 @@ pub async fn test_algorithm_models(
                 noise_level: "1".to_string(),
                 num_threads: "1".to_string(),
             };
-            
+
             // 生成保存路径
             let save_path = match manager.get_upscale_save_path(test_image, &options) {
                 Ok(path) => path,
@@ -560,15 +599,14 @@ pub async fn test_algorithm_models(
                     continue;
                 }
             };
-            
+
             // 执行超分测试
-            match manager.upscale_image(test_image, &save_path, options, None).await {
+            match manager
+                .upscale_image(test_image, &save_path, options, None)
+                .await
+            {
                 Ok(output_path) => {
-                    let success_msg = format!(
-                        "✅ {} 模型测试成功: {}", 
-                        model,
-                        output_path
-                    );
+                    let success_msg = format!("✅ {} 模型测试成功: {}", model, output_path);
                     println!("    {}", success_msg);
                     results.push(success_msg);
                 }
@@ -579,7 +617,7 @@ pub async fn test_algorithm_models(
                 }
             }
         }
-        
+
         Ok(results)
     } else {
         Err("通用超分管理器未初始化".to_string())
@@ -597,24 +635,29 @@ pub async fn debug_models_info(
     }
 
     let manager_result = {
-        let manager_guard = state.manager.lock()
+        let manager_guard = state
+            .manager
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         manager_guard.clone()
     };
 
     if let Some(manager) = manager_result {
         let mut info = String::new();
-        
+
         // 检查缩略图根目录
-        info.push_str(&format!("缩略图根目录: {}\n", manager.thumbnail_root.display()));
-        
+        info.push_str(&format!(
+            "缩略图根目录: {}\n",
+            manager.thumbnail_root.display()
+        ));
+
         // 检查模型目录
         let models_dir = manager.thumbnail_root.join("models");
         info.push_str(&format!("模型目录: {}\n", models_dir.display()));
-        
+
         if models_dir.exists() {
             info.push_str("模型目录存在\n");
-            
+
             // 列出所有模型文件
             if let Ok(entries) = fs::read_dir(&models_dir) {
                 info.push_str("模型文件:\n");
@@ -627,11 +670,11 @@ pub async fn debug_models_info(
                     }
                 }
             }
-            
+
             // 检查测试图片目录
             let test_img_dir = models_dir.join("testimg");
             info.push_str(&format!("测试图片目录: {}\n", test_img_dir.display()));
-            
+
             if test_img_dir.exists() {
                 info.push_str("测试图片目录存在\n");
                 if let Ok(entries) = fs::read_dir(&test_img_dir) {
@@ -651,10 +694,14 @@ pub async fn debug_models_info(
         } else {
             info.push_str("模型目录不存在\n");
         }
-        
+
         // 检查每种算法的可用性
         info.push_str("\n算法可用性:\n");
-        for algorithm in [UpscaleAlgorithm::RealESRGAN, UpscaleAlgorithm::Waifu2x, UpscaleAlgorithm::RealCUGAN] {
+        for algorithm in [
+            UpscaleAlgorithm::RealESRGAN,
+            UpscaleAlgorithm::Waifu2x,
+            UpscaleAlgorithm::RealCUGAN,
+        ] {
             match manager.check_algorithm_availability(&algorithm) {
                 Ok(_) => {
                     info.push_str(&format!("  ✅ {:?}: 可用\n", algorithm));
@@ -664,7 +711,7 @@ pub async fn debug_models_info(
                 }
             }
         }
-        
+
         Ok(info)
     } else {
         Err("通用超分管理器未初始化".to_string())
@@ -685,7 +732,9 @@ pub async fn cleanup_generic_upscale_cache(
     let max_age_days = max_age_days.unwrap_or(30); // 默认30天
 
     let manager_result = {
-        let manager_guard = state.manager.lock()
+        let manager_guard = state
+            .manager
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         manager_guard.clone()
     };

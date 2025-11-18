@@ -1,10 +1,10 @@
 //! NeoView - Image Commands
 //! 图像加载相关的 Tauri 命令
 
-use crate::core::{ImageLoader, BookManager, ArchiveManager};
+use crate::core::{ArchiveManager, BookManager, ImageLoader};
 use crate::models::BookType;
-use std::sync::Mutex;
 use std::path::Path;
+use std::sync::Mutex;
 use tauri::State;
 
 #[tauri::command]
@@ -15,7 +15,7 @@ pub async fn load_image(
 ) -> Result<Vec<u8>, String> {
     // 检查当前书籍类型
     let book_manager_lock = book_manager.lock().map_err(|e| e.to_string())?;
-    
+
     if let Some(book) = book_manager_lock.get_current_book() {
         match book.book_type {
             BookType::Archive => {
@@ -23,10 +23,7 @@ pub async fn load_image(
                 let book_path = book.path.clone(); // 克隆路径
                 drop(book_manager_lock); // 释放锁
                 let archive_manager = ArchiveManager::new();
-                return archive_manager.load_image_from_zip_binary(
-                    Path::new(&book_path),
-                    &path
-                );
+                return archive_manager.load_image_from_zip_binary(Path::new(&book_path), &path);
             }
             _ => {
                 // 其他类型使用常规加载
@@ -36,7 +33,7 @@ pub async fn load_image(
             }
         }
     }
-    
+
     // 如果没有打开的书籍,尝试常规加载
     let loader = image_loader.lock().map_err(|e| e.to_string())?;
     loader.load_image_as_binary(&path)
@@ -50,5 +47,3 @@ pub async fn get_image_dimensions(
     let loader = state.lock().map_err(|e| e.to_string())?;
     loader.get_image_dimensions(&path)
 }
-
-

@@ -581,18 +581,14 @@ import { getPerformanceSettings } from '$lib/api/performance';
    * 从后端重新加载目录数据（完全分离文件浏览和缩略图加载）
    */
   async function reloadDirectoryFromBackend(path: string) {
-    console.log('🔄 Calling FileSystemAPI.browseDirectory...');
-    const loadedItems = await FileSystemAPI.browseDirectory(path);
-    console.log('✅ Loaded', loadedItems.length, 'items:', loadedItems.map(i => i.name));
-    
-    // 获取目录修改时间用于缓存验证
-    let mtime: number | undefined;
-    try {
-      const fileInfo = await FileSystemAPI.getFileMetadata(path);
-      mtime = fileInfo.modified ? new Date(fileInfo.modified).getTime() : undefined;
-    } catch (e) {
-      console.debug('Failed to get directory mtime:', e);
-    }
+    console.log('🔄 Calling FileSystemAPI.loadDirectorySnapshot...');
+    const snapshot = await FileSystemAPI.loadDirectorySnapshot(path);
+    const loadedItems = snapshot.items;
+    const directoryMtime = snapshot.mtime ? snapshot.mtime * 1000 : undefined;
+    console.log(
+      `✅ Loaded ${loadedItems.length} items${snapshot.cached ? ' (cache hit)' : ''}:`,
+      loadedItems.map(i => i.name)
+    );
     
     // 立即设置数据，不等待缩略图
     fileBrowserStore.setItems(loadedItems);
@@ -600,7 +596,7 @@ import { getPerformanceSettings } from '$lib/api/performance';
     await prefillThumbnailsFromCache(loadedItems, path);
     
     // 缓存目录数据（不包含缩略图）
-    navigationHistory.cacheDirectory(path, loadedItems, new Map(), mtime);
+    navigationHistory.cacheDirectory(path, loadedItems, new Map(), directoryMtime);
     
     // 立即加载缩略图（不阻塞文件浏览，但立即开始处理）
     runWithScheduler({

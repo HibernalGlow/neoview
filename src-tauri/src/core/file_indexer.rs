@@ -1,13 +1,13 @@
 //! NeoView - File Indexer
 //! 文件索引管理器，用于快速搜索文件
 
+use crate::core::fs_manager::FsItem;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::core::fs_manager::FsItem;
 
 /// 文件索引项
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,7 +61,7 @@ impl FileIndexer {
         let mut index_file_path = std::env::temp_dir();
         index_file_path.push("neoview");
         index_file_path.push("file_index.json");
-        
+
         // 确保目录存在
         if let Some(parent) = index_file_path.parent() {
             let _ = fs::create_dir_all(parent);
@@ -96,14 +96,14 @@ impl FileIndexer {
         let content = fs::read_to_string(&self.index_file_path)
             .map_err(|e| format!("读取索引文件失败: {}", e))?;
 
-        let saved_data: serde_json::Value = serde_json::from_str(&content)
-            .map_err(|e| format!("解析索引文件失败: {}", e))?;
+        let saved_data: serde_json::Value =
+            serde_json::from_str(&content).map_err(|e| format!("解析索引文件失败: {}", e))?;
 
         // 加载索引数据
         if let Some(index_data) = saved_data.get("index") {
             let index_map: HashMap<String, IndexEntry> = serde_json::from_value(index_data.clone())
                 .map_err(|e| format!("解析索引数据失败: {}", e))?;
-            
+
             if let Ok(mut index) = self.index.lock() {
                 *index = index_map;
             }
@@ -111,9 +111,10 @@ impl FileIndexer {
 
         // 加载关键词索引
         if let Some(keyword_data) = saved_data.get("keyword_index") {
-            let keyword_map: HashMap<String, Vec<String>> = serde_json::from_value(keyword_data.clone())
-                .map_err(|e| format!("解析关键词索引失败: {}", e))?;
-            
+            let keyword_map: HashMap<String, Vec<String>> =
+                serde_json::from_value(keyword_data.clone())
+                    .map_err(|e| format!("解析关键词索引失败: {}", e))?;
+
             if let Ok(mut keyword_index) = self.keyword_index.lock() {
                 *keyword_index = keyword_map;
             }
@@ -123,7 +124,7 @@ impl FileIndexer {
         if let Some(stats_data) = saved_data.get("stats") {
             let stats: IndexStats = serde_json::from_value(stats_data.clone())
                 .map_err(|e| format!("解析统计信息失败: {}", e))?;
-            
+
             if let Ok(mut stats_guard) = self.stats.lock() {
                 *stats_guard = stats;
             }
@@ -143,7 +144,10 @@ impl FileIndexer {
 
         // 收集关键词索引
         if let Ok(keyword_index) = self.keyword_index.lock() {
-            data.insert("keyword_index".to_string(), serde_json::to_value(&*keyword_index).unwrap());
+            data.insert(
+                "keyword_index".to_string(),
+                serde_json::to_value(&*keyword_index).unwrap(),
+            );
         }
 
         // 收集统计信息
@@ -151,8 +155,8 @@ impl FileIndexer {
             data.insert("stats".to_string(), serde_json::to_value(&*stats).unwrap());
         }
 
-        let json_content = serde_json::to_string_pretty(&data)
-            .map_err(|e| format!("序列化索引失败: {}", e))?;
+        let json_content =
+            serde_json::to_string_pretty(&data).map_err(|e| format!("序列化索引失败: {}", e))?;
 
         fs::write(&self.index_file_path, json_content)
             .map_err(|e| format!("写入索引文件失败: {}", e))?;
@@ -188,7 +192,13 @@ impl FileIndexer {
         };
 
         // 开始索引
-        let result = self.index_recursive(path, recursive, &mut new_index, &mut new_keyword_index, &mut stats);
+        let result = self.index_recursive(
+            path,
+            recursive,
+            &mut new_index,
+            &mut new_keyword_index,
+            &mut stats,
+        );
 
         // 更新进度状态
         if let Ok(mut progress) = self.progress.lock() {
@@ -240,8 +250,7 @@ impl FileIndexer {
 
         stats.indexed_paths.push(path.to_string_lossy().to_string());
 
-        let entries = fs::read_dir(path)
-            .map_err(|e| format!("读取目录失败: {}", e))?;
+        let entries = fs::read_dir(path).map_err(|e| format!("读取目录失败: {}", e))?;
 
         for entry in entries {
             let entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
@@ -254,7 +263,8 @@ impl FileIndexer {
                 }
             }
 
-            let metadata = entry.metadata()
+            let metadata = entry
+                .metadata()
                 .map_err(|e| format!("获取元数据失败: {}", e))?;
 
             let name = entry.file_name().to_string_lossy().to_string();
@@ -266,7 +276,8 @@ impl FileIndexer {
             } else {
                 metadata.len()
             };
-            let modified = metadata.modified()
+            let modified = metadata
+                .modified()
                 .ok()
                 .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
                 .map(|d| d.as_secs())
@@ -287,7 +298,10 @@ impl FileIndexer {
             };
 
             // 添加到索引
-            index.insert(entry_path.to_string_lossy().to_string(), index_entry.clone());
+            index.insert(
+                entry_path.to_string_lossy().to_string(),
+                index_entry.clone(),
+            );
 
             // 更新关键词索引
             for keyword in &index_entry.keywords {
@@ -329,7 +343,12 @@ impl FileIndexer {
     }
 
     /// 搜索索引
-    pub fn search(&self, query: &str, max_results: usize, options: Option<&SearchOptions>) -> Result<Vec<FsItem>, String> {
+    pub fn search(
+        &self,
+        query: &str,
+        max_results: usize,
+        options: Option<&SearchOptions>,
+    ) -> Result<Vec<FsItem>, String> {
         if let Ok(index) = self.index.lock() {
             if let Ok(keyword_index) = self.keyword_index.lock() {
                 let query_lower = query.to_lowercase();
@@ -371,7 +390,7 @@ impl FileIndexer {
                                         if !self.matches_search_options(entry, search_options) {
                                             continue;
                                         }
-                                        
+
                                         results.push(FsItem {
                                             name: entry.name.clone(),
                                             path: entry.path.clone(),
@@ -389,29 +408,27 @@ impl FileIndexer {
                 }
 
                 // 排序结果
-                results.sort_by(|a, b| {
-                    match (a.is_dir, b.is_dir) {
-                        (true, false) => std::cmp::Ordering::Less,
-                        (false, true) => std::cmp::Ordering::Greater,
-                        _ => {
-                            let a_name = a.name.to_lowercase();
-                            let b_name = b.name.to_lowercase();
-                            
-                            let a_exact = a_name == query_lower;
-                            let b_exact = b_name == query_lower;
-                            
-                            match (a_exact, b_exact) {
-                                (true, false) => std::cmp::Ordering::Less,
-                                (false, true) => std::cmp::Ordering::Greater,
-                                _ => {
-                                    let a_prefix = a_name.starts_with(&query_lower);
-                                    let b_prefix = b_name.starts_with(&query_lower);
-                                    
-                                    match (a_prefix, b_prefix) {
-                                        (true, false) => std::cmp::Ordering::Less,
-                                        (false, true) => std::cmp::Ordering::Greater,
-                                        _ => a_name.cmp(&b_name),
-                                    }
+                results.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+                    (true, false) => std::cmp::Ordering::Less,
+                    (false, true) => std::cmp::Ordering::Greater,
+                    _ => {
+                        let a_name = a.name.to_lowercase();
+                        let b_name = b.name.to_lowercase();
+
+                        let a_exact = a_name == query_lower;
+                        let b_exact = b_name == query_lower;
+
+                        match (a_exact, b_exact) {
+                            (true, false) => std::cmp::Ordering::Less,
+                            (false, true) => std::cmp::Ordering::Greater,
+                            _ => {
+                                let a_prefix = a_name.starts_with(&query_lower);
+                                let b_prefix = b_name.starts_with(&query_lower);
+
+                                match (a_prefix, b_prefix) {
+                                    (true, false) => std::cmp::Ordering::Less,
+                                    (false, true) => std::cmp::Ordering::Greater,
+                                    _ => a_name.cmp(&b_name),
                                 }
                             }
                         }
@@ -470,17 +487,21 @@ impl FileIndexer {
     }
 
     /// 获取索引中的路径列表
-    pub fn get_indexed_paths(&self, parent_path: Option<&str>, recursive: bool) -> Result<Vec<String>, String> {
+    pub fn get_indexed_paths(
+        &self,
+        parent_path: Option<&str>,
+        recursive: bool,
+    ) -> Result<Vec<String>, String> {
         if let Ok(index) = self.index.lock() {
             let mut paths = Vec::new();
-            
+
             for (_path, entry) in index.iter() {
                 // 如果指定了父路径，只返回该路径下的内容
                 if let Some(parent) = parent_path {
                     if !entry.path.starts_with(parent) {
                         continue;
                     }
-                    
+
                     // 如果不递归，只返回直接子项
                     if !recursive {
                         let relative_path = &entry.path[parent.len()..];
@@ -489,16 +510,17 @@ impl FileIndexer {
                             continue;
                         }
                         // 检查是否为直接子项（不包含额外的路径分隔符）
-                        if relative_path.contains(['/', '\\']) && 
-                           relative_path.matches(['/', '\\']).count() > 1 {
+                        if relative_path.contains(['/', '\\'])
+                            && relative_path.matches(['/', '\\']).count() > 1
+                        {
                             continue;
                         }
                     }
                 }
-                
+
                 paths.push(entry.path.clone());
             }
-            
+
             paths.sort();
             Ok(paths)
         } else {

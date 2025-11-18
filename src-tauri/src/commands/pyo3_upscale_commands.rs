@@ -1,10 +1,10 @@
 //! NeoView - PyO3 Upscale Commands
 //! 基于 PyO3 的超分相关 Tauri 命令
 
-use std::sync::{Arc, Mutex};
+use crate::core::pyo3_upscaler::{CacheStats, PyO3Upscaler, UpscaleModel};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use tauri::command;
-use crate::core::pyo3_upscaler::{PyO3Upscaler, UpscaleModel, CacheStats};
 
 /// 全局 PyO3 超分管理器状态
 #[derive(Clone)]
@@ -58,19 +58,21 @@ pub async fn init_pyo3_upscaler(
 ) -> Result<(), String> {
     let python_module_path = PathBuf::from(python_module_path);
     let cache_dir = PathBuf::from(cache_dir);
-    
+
     let manager = PyO3Upscaler::new(python_module_path, cache_dir)?;
-    
+
     // 初始化 Python 模块
     println!("🔍 开始初始化 Python 模块...");
     manager.initialize()?;
     println!("✅ Python 模块初始化完成");
-    
-    let mut manager_guard = state.manager.lock()
+
+    let mut manager_guard = state
+        .manager
+        .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
-    
+
     *manager_guard = Some(manager);
-    
+
     Ok(())
 }
 
@@ -83,17 +85,19 @@ pub async fn check_pyo3_upscaler_availability(
     if let Err(e) = ensure_manager_ready(&state, 5000).await {
         return Err(e);
     }
-    
+
     let manager_result = {
-        let manager_guard = state.manager.lock()
+        let manager_guard = state
+            .manager
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         manager_guard.clone()
     };
-    
+
     if let Some(manager) = manager_result {
         return manager.check_availability();
     }
-    
+
     Err("PyO3 超分管理器未初始化".to_string())
 }
 
@@ -106,17 +110,19 @@ pub async fn get_pyo3_available_models(
     if let Err(e) = ensure_manager_ready(&state, 5000).await {
         return Err(e);
     }
-    
+
     let manager_result = {
-        let manager_guard = state.manager.lock()
+        let manager_guard = state
+            .manager
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         manager_guard.clone()
     };
-    
+
     if let Some(manager) = manager_result {
         return manager.get_available_models();
     }
-    
+
     Err("PyO3 超分管理器未初始化".to_string())
 }
 
@@ -130,17 +136,19 @@ pub async fn get_pyo3_model_id(
     if let Err(e) = ensure_manager_ready(&state, 5000).await {
         return Err(e);
     }
-    
+
     let manager_result = {
-        let manager_guard = state.manager.lock()
+        let manager_guard = state
+            .manager
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         manager_guard.clone()
     };
-    
+
     if let Some(manager) = manager_result {
         return manager.get_model_id(&model_name);
     }
-    
+
     Err("PyO3 超分管理器未初始化".to_string())
 }
 
@@ -159,17 +167,19 @@ pub async fn pyo3_save_upscale_cache(
     if let Err(e) = ensure_manager_ready(&state, 5000).await {
         return Err(e);
     }
-    
+
     let manager_result = {
-        let manager_guard = state.manager.lock()
+        let manager_guard = state
+            .manager
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         manager_guard.clone()
     };
-    
+
     if let Some(manager) = manager_result {
         // 获取模型 ID
         let model_id = manager.get_model_id(&model_name)?;
-        
+
         let model = UpscaleModel {
             model_id,
             model_name,
@@ -177,7 +187,7 @@ pub async fn pyo3_save_upscale_cache(
             tile_size,
             noise_level,
         };
-        
+
         // 保存到缓存
         let cache_path = manager.save_upscale_cache(&image_hash, &model, &result_data)?;
         Ok(cache_path.to_string_lossy().to_string())
@@ -210,17 +220,19 @@ pub async fn pyo3_upscale_image_memory(
     if let Err(e) = ensure_manager_ready(&state, 5000).await {
         return Err(e);
     }
-    
+
     let manager_result = {
-        let manager_guard = state.manager.lock()
+        let manager_guard = state
+            .manager
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         manager_guard.clone()
     };
-    
+
     if let Some(manager) = manager_result {
         // 获取模型 ID
         let model_id = manager.get_model_id(&model_name)?;
-        
+
         let model = UpscaleModel {
             model_id,
             model_name,
@@ -228,9 +240,10 @@ pub async fn pyo3_upscale_image_memory(
             tile_size,
             noise_level,
         };
-        
+
         // 直接使用内存数据进行超分
-        let result = manager.upscale_image_memory(&image_data, &model, timeout, width, height, None)?;
+        let result =
+            manager.upscale_image_memory(&image_data, &model, timeout, width, height, None)?;
         Ok(result)
     } else {
         Err("PyO3 超分管理器未初始化".to_string())
@@ -252,19 +265,21 @@ pub async fn pyo3_upscale_image(
     if let Err(e) = ensure_manager_ready(&state, 5000).await {
         return Err(e);
     }
-    
+
     let manager_result = {
-        let manager_guard = state.manager.lock()
+        let manager_guard = state
+            .manager
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         manager_guard.clone()
     };
-    
+
     if let Some(manager) = manager_result {
         let image_path = PathBuf::from(image_path);
-        
+
         // 获取模型 ID
         let model_id = manager.get_model_id(&model_name)?;
-        
+
         let model = UpscaleModel {
             model_id,
             model_name,
@@ -272,11 +287,11 @@ pub async fn pyo3_upscale_image(
             tile_size,
             noise_level,
         };
-        
+
         // 执行超分并缓存
         return manager.upscale_and_cache(&image_path, &model, timeout);
     }
-    
+
     Err("PyO3 超分管理器未初始化".to_string())
 }
 
@@ -294,17 +309,19 @@ pub async fn check_pyo3_upscale_cache(
     if let Err(e) = ensure_manager_ready(&state, 5000).await {
         return Err(e);
     }
-    
+
     let manager_result = {
-        let manager_guard = state.manager.lock()
+        let manager_guard = state
+            .manager
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         manager_guard.clone()
     };
-    
+
     if let Some(manager) = manager_result {
         // 获取模型 ID
         let model_id = manager.get_model_id(&model_name)?;
-        
+
         let model = UpscaleModel {
             model_id,
             model_name,
@@ -312,15 +329,15 @@ pub async fn check_pyo3_upscale_cache(
             tile_size,
             noise_level,
         };
-        
+
         // 检查缓存
         if let Some(cache_path) = manager.check_cache(&image_hash, &model) {
             return Ok(Some(cache_path.to_string_lossy().to_string()));
         }
-        
+
         return Ok(None);
     }
-    
+
     Err("PyO3 超分管理器未初始化".to_string())
 }
 
@@ -333,17 +350,19 @@ pub async fn get_pyo3_cache_stats(
     if let Err(e) = ensure_manager_ready(&state, 5000).await {
         return Err(e);
     }
-    
+
     let manager_result = {
-        let manager_guard = state.manager.lock()
+        let manager_guard = state
+            .manager
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         manager_guard.clone()
     };
-    
+
     if let Some(manager) = manager_result {
         return manager.get_cache_stats();
     }
-    
+
     Err("PyO3 超分管理器未初始化".to_string())
 }
 
@@ -357,19 +376,21 @@ pub async fn cleanup_pyo3_cache(
     if let Err(e) = ensure_manager_ready(&state, 5000).await {
         return Err(e);
     }
-    
+
     let max_age_days = max_age_days.unwrap_or(30);
-    
+
     let manager_result = {
-        let manager_guard = state.manager.lock()
+        let manager_guard = state
+            .manager
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         manager_guard.clone()
     };
-    
+
     if let Some(manager) = manager_result {
         return manager.cleanup_cache(max_age_days);
     }
-    
+
     Err("PyO3 超分管理器未初始化".to_string())
 }
 
@@ -383,21 +404,23 @@ pub async fn test_pyo3_upscaler(
     if let Err(e) = ensure_manager_ready(&state, 5000).await {
         return Err(e);
     }
-    
+
     let manager_result = {
-        let manager_guard = state.manager.lock()
+        let manager_guard = state
+            .manager
+            .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         manager_guard.clone()
     };
-    
+
     if let Some(manager) = manager_result {
         let test_image_path = PathBuf::from(test_image_path);
-        
+
         // 检查测试图片是否存在
         if !test_image_path.exists() {
             return Err(format!("测试图片不存在: {}", test_image_path.display()));
         }
-        
+
         // 使用默认模型进行测试
         let model = UpscaleModel {
             model_id: 0,
@@ -406,10 +429,10 @@ pub async fn test_pyo3_upscaler(
             tile_size: 0,
             noise_level: 0,
         };
-        
+
         // 执行超分
         let result = manager.upscale_and_cache(&test_image_path, &model, 60.0)?;
-        
+
         // 计算测试图片的 hash
         use crate::core::path_utils::{build_path_key, calculate_path_hash};
         use crate::models::BookType;
@@ -417,12 +440,12 @@ pub async fn test_pyo3_upscaler(
             test_image_path.to_str().unwrap_or(""),
             test_image_path.to_str().unwrap_or(""),
             &BookType::Folder, // 假设是文件夹类型
-            None
+            None,
         );
         let image_hash = calculate_path_hash(&path_key);
-        
+
         let cache_path = manager.get_cache_path(&image_hash, &model)?;
-        
+
         Ok(format!(
             "✅ 测试成功！\n输入: {}\n输出大小: {} bytes\n缓存路径: {}",
             test_image_path.display(),
@@ -436,11 +459,9 @@ pub async fn test_pyo3_upscaler(
 
 /// 读取超分缓存文件
 #[tauri::command]
-pub async fn read_upscale_cache_file(
-    cache_path: String,
-) -> Result<Vec<u8>, String> {
+pub async fn read_upscale_cache_file(cache_path: String) -> Result<Vec<u8>, String> {
     use std::fs;
-    
+
     match fs::read(&cache_path) {
         Ok(data) => Ok(data),
         Err(e) => Err(format!("读取缓存文件失败: {}", e)),
@@ -454,7 +475,7 @@ pub async fn get_image_data_for_upscale(
     _inner_path: Option<String>,
 ) -> Result<Vec<u8>, String> {
     use std::fs;
-    
+
     // 暂时只支持普通文件，直接读取
     match fs::read(&image_path) {
         Ok(data) => Ok(data),

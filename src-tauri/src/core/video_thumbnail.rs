@@ -1,7 +1,7 @@
-use std::path::Path;
-use std::process::Command;
 use image::DynamicImage;
 use std::fs;
+use std::path::Path;
+use std::process::Command;
 
 /// 视频缩略图生成器
 pub struct VideoThumbnailGenerator;
@@ -17,16 +17,10 @@ impl VideoThumbnailGenerator {
     }
 
     /// 从视频提取帧
-    pub fn extract_frame(
-        video_path: &Path,
-        time_seconds: f64,
-    ) -> Result<DynamicImage, String> {
+    pub fn extract_frame(video_path: &Path, time_seconds: f64) -> Result<DynamicImage, String> {
         // 创建临时文件用于存储提取的帧
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join(format!(
-            "neoview_frame_{}.png",
-            std::process::id()
-        ));
+        let temp_file = temp_dir.join(format!("neoview_frame_{}.png", std::process::id()));
 
         // 使用 FFmpeg 提取指定时间的帧
         let output = Command::new("ffmpeg")
@@ -50,15 +44,13 @@ impl VideoThumbnailGenerator {
         }
 
         // 读取提取的帧
-        let frame_data = fs::read(&temp_file)
-            .map_err(|e| format!("读取帧文件失败: {}", e))?;
+        let frame_data = fs::read(&temp_file).map_err(|e| format!("读取帧文件失败: {}", e))?;
 
         // 清理临时文件
         let _ = fs::remove_file(&temp_file);
 
         // 加载图片
-        image::load_from_memory(&frame_data)
-            .map_err(|e| format!("加载图片失败: {}", e))
+        image::load_from_memory(&frame_data).map_err(|e| format!("加载图片失败: {}", e))
     }
 
     /// 检查是否为视频文件
@@ -106,8 +98,14 @@ mod tests {
 
     #[test]
     fn test_is_video_file() {
-        assert!(VideoThumbnailGenerator::is_video_file(Path::new("video.mp4")));
-        assert!(VideoThumbnailGenerator::is_video_file(Path::new("movie.mkv")));
-        assert!(!VideoThumbnailGenerator::is_video_file(Path::new("image.jpg")));
+        assert!(VideoThumbnailGenerator::is_video_file(Path::new(
+            "video.mp4"
+        )));
+        assert!(VideoThumbnailGenerator::is_video_file(Path::new(
+            "movie.mkv"
+        )));
+        assert!(!VideoThumbnailGenerator::is_video_file(Path::new(
+            "image.jpg"
+        )));
     }
 }

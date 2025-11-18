@@ -1,12 +1,12 @@
+use super::blob_registry::BlobRegistry;
+use image::GenericImageView;
+use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
-use std::io::{Read, Cursor};
+use std::io::{Cursor, Read};
 use std::path::Path;
 use std::sync::Arc;
-use std::time::{Instant, SystemTime, UNIX_EPOCH, Duration};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use zip::ZipArchive;
-use serde::{Deserialize, Serialize};
-use image::GenericImageView;
-use super::blob_registry::BlobRegistry;
 
 const FIRST_IMAGE_CACHE_LIMIT: usize = 512;
 
@@ -42,9 +42,14 @@ pub struct ArchiveManager {
     /// 图片缓存
     cache: Arc<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>>,
     /// 压缩包文件缓存（避免重复打开）
-    archive_cache: Arc<std::sync::Mutex<std::collections::HashMap<String, Arc<std::sync::Mutex<ZipArchive<std::fs::File>>>>>>,
+    archive_cache: Arc<
+        std::sync::Mutex<
+            std::collections::HashMap<String, Arc<std::sync::Mutex<ZipArchive<std::fs::File>>>>,
+        >,
+    >,
     /// 压缩包首图缓存
-    first_image_cache: Arc<std::sync::Mutex<std::collections::HashMap<String, CachedFirstImageEntry>>>,
+    first_image_cache:
+        Arc<std::sync::Mutex<std::collections::HashMap<String, CachedFirstImageEntry>>>,
     /// Blob 注册表
     blob_registry: Arc<BlobRegistry>,
 }
@@ -71,7 +76,7 @@ impl ArchiveManager {
             blob_registry: Arc::new(BlobRegistry::new(512)),
         }
     }
-    
+
     /// 创建使用共享 BlobRegistry 的压缩包管理器
     pub fn with_shared_blob_registry(blob_registry: Arc<BlobRegistry>) -> Self {
         Self {
@@ -93,7 +98,7 @@ impl ArchiveManager {
             blob_registry,
         }
     }
-    
+
     /// 创建带自定义 blob 缓存大小的压缩包管理器
     pub fn with_blob_cache_size(blob_cache_size: usize) -> Self {
         Self {
@@ -117,7 +122,10 @@ impl ArchiveManager {
     }
 
     /// 获取或创建压缩包缓存
-    pub fn get_cached_archive(&self, archive_path: &Path) -> Result<Arc<std::sync::Mutex<ZipArchive<std::fs::File>>>, String> {
+    pub fn get_cached_archive(
+        &self,
+        archive_path: &Path,
+    ) -> Result<Arc<std::sync::Mutex<ZipArchive<std::fs::File>>>, String> {
         // 规范化缓存键，统一使用正斜杠，避免 Windows 上的 "\\""/" 差异导致命中失败
         let path_str = Self::normalize_archive_key(archive_path);
 
@@ -130,11 +138,9 @@ impl ArchiveManager {
         }
 
         // 创建新的压缩包实例
-        let file = File::open(archive_path)
-            .map_err(|e| format!("打开压缩包失败: {}", e))?;
+        let file = File::open(archive_path).map_err(|e| format!("打开压缩包失败: {}", e))?;
 
-        let archive = ZipArchive::new(file)
-            .map_err(|e| format!("读取压缩包失败: {}", e))?;
+        let archive = ZipArchive::new(file).map_err(|e| format!("读取压缩包失败: {}", e))?;
 
         let cached = Arc::new(std::sync::Mutex::new(archive));
 
@@ -159,17 +165,19 @@ impl ArchiveManager {
 
     /// 读取 ZIP 压缩包内容列表
     pub fn list_zip_contents(&self, archive_path: &Path) -> Result<Vec<ArchiveEntry>, String> {
-        println!("📦 ArchiveManager::list_zip_contents start: {}", archive_path.display());
-        let file = File::open(archive_path)
-            .map_err(|e| format!("打开压缩包失败: {}", e))?;
+        println!(
+            "📦 ArchiveManager::list_zip_contents start: {}",
+            archive_path.display()
+        );
+        let file = File::open(archive_path).map_err(|e| format!("打开压缩包失败: {}", e))?;
 
-        let mut archive = ZipArchive::new(file)
-            .map_err(|e| format!("读取压缩包失败: {}", e))?;
+        let mut archive = ZipArchive::new(file).map_err(|e| format!("读取压缩包失败: {}", e))?;
 
         let mut entries = Vec::new();
 
         for i in 0..archive.len() {
-            let file = archive.by_index(i)
+            let file = archive
+                .by_index(i)
                 .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
 
             let name = file.name().to_string();
@@ -186,15 +194,16 @@ impl ArchiveManager {
             });
         }
 
-        println!("📦 ArchiveManager::list_zip_contents end: {} entries", entries.len());
+        println!(
+            "📦 ArchiveManager::list_zip_contents end: {} entries",
+            entries.len()
+        );
 
         // 排序：目录优先，然后按名称
-        entries.sort_by(|a, b| {
-            match (a.is_dir, b.is_dir) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-            }
+        entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
         });
 
         Ok(entries)
@@ -206,25 +215,35 @@ impl ArchiveManager {
         archive_path: &Path,
         file_path: &str,
     ) -> Result<Vec<u8>, String> {
-        println!("📦 extract_file_from_zip start: archive={} inner={}", archive_path.display(), file_path);
+        println!(
+            "📦 extract_file_from_zip start: archive={} inner={}",
+            archive_path.display(),
+            file_path
+        );
 
         // 使用缓存的压缩包实例
         let cached_archive = self.get_cached_archive(archive_path)?;
         let mut archive = cached_archive.lock().unwrap();
 
-        let mut zip_file = archive.by_name(file_path)
+        let mut zip_file = archive
+            .by_name(file_path)
             .map_err(|e| format!("在压缩包中找不到文件: {}", e))?;
 
         let mut buffer = Vec::new();
         let start = Instant::now();
-        zip_file.read_to_end(&mut buffer)
+        zip_file
+            .read_to_end(&mut buffer)
             .map_err(|e| format!("读取文件失败: {}", e))?;
 
         let elapsed = start.elapsed();
         // try to get compressed size if available
         let compressed = zip_file.compressed_size();
         let uncompressed = buffer.len() as u64;
-        let ratio = if uncompressed > 0 { (compressed as f64) / (uncompressed as f64) } else { 0.0 };
+        let ratio = if uncompressed > 0 {
+            (compressed as f64) / (uncompressed as f64)
+        } else {
+            0.0
+        };
         println!("📦 extract_file_from_zip end: read_bytes={} compressed={} ratio={:.3} elapsed_ms={} archive={} inner={}", uncompressed, compressed, ratio, elapsed.as_millis(), archive_path.display(), file_path);
 
         Ok(buffer)
@@ -264,7 +283,8 @@ impl ArchiveManager {
             .read(&mut reader)
             .map_err(|e| format!("Failed to decode JXL: {}", e))?;
 
-        let render = jxl_image.render_frame(0)
+        let render = jxl_image
+            .render_frame(0)
             .map_err(|e| format!("Failed to render JXL frame: {}", e))?;
 
         let fb = render.image_all_channels();
@@ -331,7 +351,8 @@ impl ArchiveManager {
             .read(&mut reader)
             .map_err(|e| format!("Failed to decode JXL: {}", e))?;
 
-        let render = jxl_image.render_frame(0)
+        let render = jxl_image
+            .render_frame(0)
             .map_err(|e| format!("Failed to render JXL frame: {}", e))?;
 
         let fb = render.image_all_channels();
@@ -423,7 +444,10 @@ impl ArchiveManager {
     /// 快速查找压缩包中的第一张图片（早停扫描）
     /// 找到第一张图片即返回，避免遍历全部条目
     pub fn find_first_image_entry(&self, archive_path: &Path) -> Result<Option<String>, String> {
-        println!("⚡ ArchiveManager::find_first_image_entry start: {}", archive_path.display());
+        println!(
+            "⚡ ArchiveManager::find_first_image_entry start: {}",
+            archive_path.display()
+        );
 
         let archive_key = Self::normalize_archive_key(archive_path);
         let metadata = self.get_archive_metadata(archive_path)?;
@@ -444,21 +468,20 @@ impl ArchiveManager {
     }
 
     fn scan_first_image_entry(&self, archive_path: &Path) -> Result<Option<String>, String> {
-        let file = File::open(archive_path)
-            .map_err(|e| format!("打开压缩包失败: {}", e))?;
+        let file = File::open(archive_path).map_err(|e| format!("打开压缩包失败: {}", e))?;
 
-        let mut archive = ZipArchive::new(file)
-            .map_err(|e| format!("读取压缩包失败: {}", e))?;
+        let mut archive = ZipArchive::new(file).map_err(|e| format!("读取压缩包失败: {}", e))?;
 
         // 优先查找常见的图片命名模式
         let priority_patterns = [
-            "cover", "front", "title", "page-001", "page_001", "001",
-            "vol", "chapter", "ch", "p001", "p_001", "img"
+            "cover", "front", "title", "page-001", "page_001", "001", "vol", "chapter", "ch",
+            "p001", "p_001", "img",
         ];
 
         // 先按优先级查找
         for i in 0..archive.len() {
-            let entry = archive.by_index(i)
+            let entry = archive
+                .by_index(i)
                 .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
 
             let name = entry.name().to_string();
@@ -482,7 +505,8 @@ impl ArchiveManager {
 
         // 如果没找到优先图片，再次扫描找到第一张图片
         for i in 0..archive.len() {
-            let entry = archive.by_index(i)
+            let entry = archive
+                .by_index(i)
                 .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
 
             let name = entry.name().to_string();
@@ -503,27 +527,34 @@ impl ArchiveManager {
 
     /// 扫描压缩包内的前N张图片（限制扫描数量）
     /// 用于快速获取首图，避免扫描整个压缩包
-    pub fn scan_archive_images_fast(&self, archive_path: &Path, limit: usize) -> Result<Vec<String>, String> {
-        println!("⚡ ArchiveManager::scan_archive_images_fast start: {} limit={}", archive_path.display(), limit);
+    pub fn scan_archive_images_fast(
+        &self,
+        archive_path: &Path,
+        limit: usize,
+    ) -> Result<Vec<String>, String> {
+        println!(
+            "⚡ ArchiveManager::scan_archive_images_fast start: {} limit={}",
+            archive_path.display(),
+            limit
+        );
 
-        let file = File::open(archive_path)
-            .map_err(|e| format!("打开压缩包失败: {}", e))?;
+        let file = File::open(archive_path).map_err(|e| format!("打开压缩包失败: {}", e))?;
 
-        let mut archive = ZipArchive::new(file)
-            .map_err(|e| format!("读取压缩包失败: {}", e))?;
+        let mut archive = ZipArchive::new(file).map_err(|e| format!("读取压缩包失败: {}", e))?;
 
         let mut images = Vec::new();
         let scan_limit = limit.min(archive.len()); // 限制扫描数量
 
         // 优先查找常见的图片命名模式
         let priority_patterns = [
-            "cover", "front", "title", "page-001", "page_001", "001",
-            "vol", "chapter", "ch", "p001", "p_001", "img"
+            "cover", "front", "title", "page-001", "page_001", "001", "vol", "chapter", "ch",
+            "p001", "p_001", "img",
         ];
 
         // 先按优先级查找
         for i in 0..scan_limit {
-            let entry = archive.by_index(i)
+            let entry = archive
+                .by_index(i)
                 .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
 
             let name = entry.name().to_string();
@@ -548,7 +579,8 @@ impl ArchiveManager {
 
         // 如果没找到优先图片，扫描前limit个文件
         for i in 0..scan_limit {
-            let entry = archive.by_index(i)
+            let entry = archive
+                .by_index(i)
                 .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
 
             let name = entry.name().to_string();
@@ -582,9 +614,12 @@ impl ArchiveManager {
         }
     }
 
-
     /// 等比例缩放图片
-    fn resize_keep_aspect_ratio(&self, img: &image::DynamicImage, max_size: u32) -> image::DynamicImage {
+    fn resize_keep_aspect_ratio(
+        &self,
+        img: &image::DynamicImage,
+        max_size: u32,
+    ) -> image::DynamicImage {
         let (width, height) = img.dimensions();
 
         // 如果图片尺寸小于等于最大尺寸，直接返回
@@ -623,7 +658,8 @@ impl ArchiveManager {
             height,
             image::ColorType::Rgba8,
             image::ImageFormat::WebP,
-        ).map_err(|e| format!("编码WebP失败: {}", e))?;
+        )
+        .map_err(|e| format!("编码WebP失败: {}", e))?;
 
         Ok(buffer)
     }
@@ -645,7 +681,8 @@ impl ArchiveManager {
             height,
             image::ColorType::Rgb8,
             image::ImageFormat::Jpeg,
-        ).map_err(|e| format!("编码JPEG失败: {}", e))?;
+        )
+        .map_err(|e| format!("编码JPEG失败: {}", e))?;
 
         Ok(buffer)
     }
@@ -660,7 +697,8 @@ impl ArchiveManager {
             .read(&mut reader)
             .map_err(|e| format!("Failed to decode JXL: {}", e))?;
 
-        let render = jxl_image.render_frame(0)
+        let render = jxl_image
+            .render_frame(0)
             .map_err(|e| format!("Failed to render JXL frame: {}", e))?;
 
         let fb = render.image_all_channels();
@@ -712,10 +750,11 @@ impl ArchiveManager {
     }
 
     fn get_archive_metadata(&self, archive_path: &Path) -> Result<ArchiveMetadata, String> {
-        let meta = fs::metadata(archive_path)
-            .map_err(|e| format!("获取压缩包元数据失败: {}", e))?;
+        let meta =
+            fs::metadata(archive_path).map_err(|e| format!("获取压缩包元数据失败: {}", e))?;
 
-        let modified = meta.modified()
+        let modified = meta
+            .modified()
             .unwrap_or(SystemTime::UNIX_EPOCH)
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -727,10 +766,18 @@ impl ArchiveManager {
         })
     }
 
-    fn get_cached_first_image(&self, archive_key: &str, metadata: ArchiveMetadata) -> Option<Option<String>> {
+    fn get_cached_first_image(
+        &self,
+        archive_key: &str,
+        metadata: ArchiveMetadata,
+    ) -> Option<Option<String>> {
         if let Ok(mut cache) = self.first_image_cache.lock() {
-            if let std::collections::hash_map::Entry::Occupied(mut occ) = cache.entry(archive_key.to_string()) {
-                if occ.get().modified == metadata.modified && occ.get().file_size == metadata.file_size {
+            if let std::collections::hash_map::Entry::Occupied(mut occ) =
+                cache.entry(archive_key.to_string())
+            {
+                if occ.get().modified == metadata.modified
+                    && occ.get().file_size == metadata.file_size
+                {
                     occ.get_mut().last_used = Instant::now();
                     return Some(occ.get().inner_path.clone());
                 } else {
@@ -759,18 +806,24 @@ impl ArchiveManager {
                 }
             }
 
-            cache.insert(archive_key, CachedFirstImageEntry {
-                inner_path,
-                modified: metadata.modified,
-                file_size: metadata.file_size,
-                last_used: Instant::now(),
-                blob_url,
-            });
+            cache.insert(
+                archive_key,
+                CachedFirstImageEntry {
+                    inner_path,
+                    modified: metadata.modified,
+                    file_size: metadata.file_size,
+                    last_used: Instant::now(),
+                    blob_url,
+                },
+            );
         }
     }
 
     /// 获取首图 blob 或扫描（返回 blob URL 和内部路径）
-    pub fn get_first_image_blob_or_scan(&self, archive_path: &Path) -> Result<(String, Option<String>), String> {
+    pub fn get_first_image_blob_or_scan(
+        &self,
+        archive_path: &Path,
+    ) -> Result<(String, Option<String>), String> {
         let archive_key = Self::normalize_archive_key(archive_path);
         let metadata = self.get_archive_metadata(archive_path)?;
 
@@ -779,7 +832,11 @@ impl ArchiveManager {
             if let Some(entry) = cache.get(&archive_key) {
                 if entry.modified == metadata.modified && entry.file_size == metadata.file_size {
                     if let Some(ref blob_url) = entry.blob_url {
-                        println!("🎯 首图 blob 缓存命中: {} -> {}", archive_path.display(), blob_url);
+                        println!(
+                            "🎯 首图 blob 缓存命中: {} -> {}",
+                            archive_path.display(),
+                            blob_url
+                        );
                         return Ok((blob_url.clone(), entry.inner_path.clone()));
                     }
                 }
@@ -795,21 +852,30 @@ impl ArchiveManager {
         // 提取图片数据
         let image_data = self.extract_file(archive_path, &inner_path)?;
         let mime_type = self.detect_image_mime_type(&inner_path);
-        
+
         // 注册到 BlobRegistry
-          let blob_url = self.blob_registry.get_or_register(
-            &image_data, 
-            &mime_type, 
+        let blob_url = self.blob_registry.get_or_register(
+            &image_data,
+            &mime_type,
             Duration::from_secs(600), // 10分钟 TTL
-            Some(format!("{}::{}", archive_path.display(), inner_path)) // 传递路径用于日志
+            Some(format!("{}::{}", archive_path.display(), inner_path)), // 传递路径用于日志
         );
 
         // 更新缓存
-        self.store_cached_first_image(archive_key, metadata, Some(inner_path.clone()), Some(blob_url.clone()));
+        self.store_cached_first_image(
+            archive_key,
+            metadata,
+            Some(inner_path.clone()),
+            Some(blob_url.clone()),
+        );
 
-        println!("🎯 首图 blob 注册完成: {} -> {} bytes (inner: {})", 
-            archive_path.display(), image_data.len(), inner_path);
-        
+        println!(
+            "🎯 首图 blob 注册完成: {} -> {} bytes (inner: {})",
+            archive_path.display(),
+            image_data.len(),
+            inner_path
+        );
+
         Ok((blob_url, Some(inner_path)))
     }
 
@@ -820,9 +886,12 @@ impl ArchiveManager {
     }
 
     /// 获取首图原始字节数据
-    pub fn get_first_image_bytes(&self, archive_path: &Path) -> Result<(Vec<u8>, Option<String>, ArchiveMetadata), String> {
+    pub fn get_first_image_bytes(
+        &self,
+        archive_path: &Path,
+    ) -> Result<(Vec<u8>, Option<String>, ArchiveMetadata), String> {
         let metadata = self.get_archive_metadata(archive_path)?;
-        
+
         // 查找首图路径
         let inner_path = match self.find_first_image_entry(archive_path)? {
             Some(path) => path,
@@ -831,7 +900,7 @@ impl ArchiveManager {
 
         // 提取图片数据
         let image_data = self.extract_file(archive_path, &inner_path)?;
-        
+
         Ok((image_data, Some(inner_path), metadata))
     }
 
@@ -854,13 +923,16 @@ impl ArchiveManager {
                 }
             }
 
-            cache.insert(archive_key, CachedFirstImageEntry {
-                inner_path,
-                modified: metadata.modified,
-                file_size: metadata.file_size,
-                last_used: Instant::now(),
-                blob_url,
-            });
+            cache.insert(
+                archive_key,
+                CachedFirstImageEntry {
+                    inner_path,
+                    modified: metadata.modified,
+                    file_size: metadata.file_size,
+                    last_used: Instant::now(),
+                    blob_url,
+                },
+            );
         }
     }
 
@@ -905,8 +977,13 @@ impl ArchiveManager {
 
         // 限制压缩包缓存
         if let Ok(mut archive_cache) = self.archive_cache.lock() {
-            if archive_cache.len() > 5 { // 压缩包实例通常较大，限制更严格
-                let keys_to_remove: Vec<_> = archive_cache.keys().take(archive_cache.len() / 2).cloned().collect();
+            if archive_cache.len() > 5 {
+                // 压缩包实例通常较大，限制更严格
+                let keys_to_remove: Vec<_> = archive_cache
+                    .keys()
+                    .take(archive_cache.len() / 2)
+                    .cloned()
+                    .collect();
                 for key in keys_to_remove {
                     archive_cache.remove(&key);
                 }
@@ -916,7 +993,11 @@ impl ArchiveManager {
         // 限制首图缓存
         if let Ok(mut first_image_cache) = self.first_image_cache.lock() {
             if first_image_cache.len() > FIRST_IMAGE_CACHE_LIMIT {
-                let keys_to_remove: Vec<_> = first_image_cache.keys().take(first_image_cache.len() / 2).cloned().collect();
+                let keys_to_remove: Vec<_> = first_image_cache
+                    .keys()
+                    .take(first_image_cache.len() / 2)
+                    .cloned()
+                    .collect();
                 for key in keys_to_remove {
                     first_image_cache.remove(&key);
                 }
@@ -931,7 +1012,10 @@ impl ArchiveManager {
 
         let mut loaded_count = 0;
         for entry in image_entries {
-            if self.load_image_from_zip_binary(archive_path, &entry.path).is_ok() {
+            if self
+                .load_image_from_zip_binary(archive_path, &entry.path)
+                .is_ok()
+            {
                 loaded_count += 1;
             }
         }
@@ -940,17 +1024,21 @@ impl ArchiveManager {
     }
 
     /// 从 ZIP 压缩包中流式提取文件
-    pub fn extract_file_stream(&self, archive_path: &Path, file_path: &str) -> Result<impl Read + Send, String> {
+    pub fn extract_file_stream(
+        &self,
+        archive_path: &Path,
+        file_path: &str,
+    ) -> Result<impl Read + Send, String> {
         use std::thread;
 
         // 获取缓存的压缩包实例
         let cached_archive = self.get_cached_archive(archive_path)?;
         let _archive_path = archive_path.to_path_buf();
         let file_path = file_path.to_string();
-        
+
         // 创建通道用于流式传输
         let (tx, rx) = std::sync::mpsc::channel::<Result<Vec<u8>, String>>();
-        
+
         // 在新线程中处理读取
         thread::spawn(move || {
             let archive_result = {
@@ -962,7 +1050,7 @@ impl ArchiveManager {
                     std::io::copy(&mut zip_file, &mut data).map(|_| data)
                 })
             };
-            
+
             match archive_result {
                 Ok(Ok(data)) => {
                     // 分块发送数据
@@ -984,7 +1072,7 @@ impl ArchiveManager {
                 }
             }
         });
-        
+
         // 返回一个实现 Read 的迭代器
         Ok(StreamReader::new(rx))
     }
@@ -1017,19 +1105,17 @@ impl Read for StreamReader {
             self.position += to_copy;
             return Ok(to_copy);
         }
-        
+
         // 获取下一块数据
         match self.receiver.recv() {
             Ok(Ok(chunk)) => {
                 self.buffer = chunk;
                 self.position = 0;
-                
+
                 // 递归调用以返回新数据
                 self.read(buf)
             }
-            Ok(Err(e)) => {
-                Err(std::io::Error::new(std::io::ErrorKind::Other, e))
-            }
+            Ok(Err(e)) => Err(std::io::Error::new(std::io::ErrorKind::Other, e)),
             Err(_) => {
                 // 通道关闭，表示 EOF
                 Ok(0)

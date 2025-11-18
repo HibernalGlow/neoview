@@ -3,7 +3,7 @@
 //! 使用 SQLite 存储 webp 格式的缩略图 blob
 
 use chrono::{Duration, Local};
-use rusqlite::{Connection, params, Result as SqliteResult};
+use rusqlite::{params, Connection, Result as SqliteResult};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -25,12 +25,12 @@ impl ThumbnailDb {
     /// 打开数据库连接（减少日志输出，避免频繁检查）
     fn open(&self) -> SqliteResult<()> {
         let mut conn_opt = self.connection.lock().unwrap();
-        
+
         if conn_opt.is_some() {
             // 连接已存在，直接返回（不打印日志，减少输出）
             return Ok(());
         }
-        
+
         // 只在首次打开时打印日志
         println!("🔓 首次打开数据库连接: {}", self.db_path.display());
 
@@ -40,7 +40,7 @@ impl ThumbnailDb {
                 eprintln!("❌ 创建数据库目录失败: {} - {}", parent.display(), e);
                 return Err(rusqlite::Error::SqliteFailure(
                     rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CANTOPEN),
-                    Some(format!("创建数据库目录失败: {}", e))
+                    Some(format!("创建数据库目录失败: {}", e)),
                 ));
             }
         }
@@ -52,7 +52,7 @@ impl ThumbnailDb {
                 return Err(e);
             }
         };
-        
+
         // 初始化数据库
         match Self::initialize_db(&conn) {
             Ok(_) => {}
@@ -61,12 +61,11 @@ impl ThumbnailDb {
                 return Err(e);
             }
         }
-        
+
         *conn_opt = Some(conn);
         println!("✅ 数据库连接已初始化");
         Ok(())
     }
-
 
     /// 初始化数据库表结构
     fn initialize_db(conn: &Connection) -> SqliteResult<()> {
@@ -74,7 +73,7 @@ impl ThumbnailDb {
         conn.execute_batch(
             "PRAGMA auto_vacuum = FULL;
              PRAGMA journal_mode = WAL;
-             PRAGMA synchronous = NORMAL;"
+             PRAGMA synchronous = NORMAL;",
         )?;
 
         // 创建缩略图表
@@ -134,9 +133,9 @@ impl ThumbnailDb {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
-        
+
         let date = Self::current_timestamp_string();
-        
+
         // 自动判断类别：如果没有扩展名且不是压缩包内部路径，则为文件夹
         let cat = category.unwrap_or_else(|| {
             if !key.contains("::") && !key.contains(".") {
@@ -150,18 +149,23 @@ impl ThumbnailDb {
         let mut stmt = conn.prepare(
             "INSERT OR REPLACE INTO thumbs (key, size, date, ghash, category, value) VALUES (?1, ?2, ?3, ?4, ?5, ?6)"
         )?;
-        
+
         // execute 返回受影响的行数
         let _rows_affected = stmt.execute(params![key, size, date, ghash, cat, thumbnail_data])?;
-        
+
         // 释放语句，确保数据已写入
         drop(stmt);
-        
+
         // 只在调试模式下打印日志
         if cfg!(debug_assertions) {
-            println!("✅ 缩略图已保存到数据库: key={}, category={}, size={} bytes", key, cat, thumbnail_data.len());
+            println!(
+                "✅ 缩略图已保存到数据库: key={}, category={}, size={} bytes",
+                key,
+                cat,
+                thumbnail_data.len()
+            );
         }
-        
+
         Ok(())
     }
 
@@ -185,24 +189,30 @@ impl ThumbnailDb {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
-        
-        let mut stmt = conn.prepare(
-            "SELECT value FROM thumbs WHERE key = ?1 AND category = ?2 LIMIT 1"
-        )?;
-        
-        let mut rows = stmt.query_map(params![key, category], |row| {
-            Ok(row.get::<_, Vec<u8>>(0)?)
-        })?;
+
+        let mut stmt =
+            conn.prepare("SELECT value FROM thumbs WHERE key = ?1 AND category = ?2 LIMIT 1")?;
+
+        let mut rows =
+            stmt.query_map(params![key, category], |row| Ok(row.get::<_, Vec<u8>>(0)?))?;
 
         if let Some(row) = rows.next() {
             let data = row?;
             if cfg!(debug_assertions) {
-                println!("✅ 从数据库加载缩略图（key+category）: key={}, category={}, size={} bytes", key, category, data.len());
+                println!(
+                    "✅ 从数据库加载缩略图（key+category）: key={}, category={}, size={} bytes",
+                    key,
+                    category,
+                    data.len()
+                );
             }
             Ok(Some(data))
         } else {
             if cfg!(debug_assertions) {
-                println!("📭 数据库中没有找到缩略图（key+category）: key={}, category={}", key, category);
+                println!(
+                    "📭 数据库中没有找到缩略图（key+category）: key={}, category={}",
+                    key, category
+                );
             }
             Ok(None)
         }
@@ -217,7 +227,7 @@ impl ThumbnailDb {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
-        
+
         // 查找所有以 folder_path/ 或 folder_path\ 开头的记录，按 date 排序，取最早的
         // 只查找文件（category='file'），不查找文件夹
         // 使用 OR 条件匹配两种路径分隔符
@@ -226,7 +236,7 @@ impl ThumbnailDb {
         let mut stmt = conn.prepare(
             "SELECT key, value, date FROM thumbs WHERE (key LIKE ?1 OR key LIKE ?2) AND category = 'file' ORDER BY date ASC LIMIT 1"
         )?;
-        
+
         let mut rows = stmt.query_map(params![search_pattern1, search_pattern2], |row| {
             let key: String = row.get(0)?;
             let value: Vec<u8> = row.get(1)?;
@@ -258,7 +268,7 @@ impl ThumbnailDb {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
-        
+
         // 如果指定了类别，只在对应类别中搜索
         let result = if let Some(cat) = category {
             let mut stmt = conn.prepare(
@@ -269,9 +279,8 @@ impl ThumbnailDb {
             })?;
             rows.next().transpose()
         } else {
-            let mut stmt = conn.prepare(
-                "SELECT value FROM thumbs WHERE key = ?1 AND size = ?2 AND ghash = ?3"
-            )?;
+            let mut stmt = conn
+                .prepare("SELECT value FROM thumbs WHERE key = ?1 AND size = ?2 AND ghash = ?3")?;
             let mut rows = stmt.query_map(params![key, size, ghash], |row| {
                 Ok(row.get::<_, Vec<u8>>(0)?)
             })?;
@@ -282,14 +291,22 @@ impl ThumbnailDb {
             Ok(Some(data)) => {
                 // 只在调试模式下打印日志
                 if cfg!(debug_assertions) {
-                    println!("✅ 从数据库加载缩略图: key={}, category={:?}, size={} bytes", key, category, data.len());
+                    println!(
+                        "✅ 从数据库加载缩略图: key={}, category={:?}, size={} bytes",
+                        key,
+                        category,
+                        data.len()
+                    );
                 }
                 Ok(Some(data))
             }
             Ok(None) => {
                 // 只在调试模式下打印日志
                 if cfg!(debug_assertions) {
-                    println!("📭 数据库中没有找到缩略图: key={}, category={:?}", key, category);
+                    println!(
+                        "📭 数据库中没有找到缩略图: key={}, category={:?}",
+                        key, category
+                    );
                 }
                 Ok(None)
             }
@@ -298,23 +315,16 @@ impl ThumbnailDb {
     }
 
     /// 批量加载缩略图（用于预加载索引）
-    pub fn batch_load_thumbnails(
-        &self,
-        keys: &[String],
-    ) -> SqliteResult<Vec<(String, Vec<u8>)>> {
+    pub fn batch_load_thumbnails(&self, keys: &[String]) -> SqliteResult<Vec<(String, Vec<u8>)>> {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
         let mut results = Vec::new();
 
         for key in keys {
-            let mut stmt = conn.prepare(
-                "SELECT value FROM thumbs WHERE key = ?1"
-            )?;
+            let mut stmt = conn.prepare("SELECT value FROM thumbs WHERE key = ?1")?;
 
-            let mut rows = stmt.query_map([key], |row| {
-                Ok(row.get::<_, Vec<u8>>(0)?)
-            })?;
+            let mut rows = stmt.query_map([key], |row| Ok(row.get::<_, Vec<u8>>(0)?))?;
 
             if let Some(row) = rows.next() {
                 if let Ok(data) = row {
@@ -337,10 +347,9 @@ impl ThumbnailDb {
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
 
-        let mut stmt = conn.prepare(
-            "SELECT 1 FROM thumbs WHERE key = ?1 AND category = ?2 LIMIT 1"
-        )?;
-        
+        let mut stmt =
+            conn.prepare("SELECT 1 FROM thumbs WHERE key = ?1 AND category = ?2 LIMIT 1")?;
+
         let exists = stmt.exists(params![key, category])?;
         Ok(exists)
     }
@@ -397,10 +406,7 @@ impl ThumbnailDb {
         let cutoff_time = Local::now() - Duration::days(days);
         let cutoff = cutoff_time.format("%Y-%m-%d %H:%M:%S").to_string();
 
-        let count = conn.execute(
-            "DELETE FROM thumbs WHERE date < ?1",
-            params![cutoff],
-        )?;
+        let count = conn.execute("DELETE FROM thumbs WHERE date < ?1", params![cutoff])?;
 
         Ok(count)
     }
@@ -419,10 +425,12 @@ impl ThumbnailDb {
         if self.db_path.exists() {
             std::fs::metadata(&self.db_path)
                 .map(|m| m.len())
-                .map_err(|e| rusqlite::Error::SqliteFailure(
-                    rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_IOERR),
-                    Some(format!("Failed to get file metadata: {}", e))
-                ))
+                .map_err(|e| {
+                    rusqlite::Error::SqliteFailure(
+                        rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_IOERR),
+                        Some(format!("Failed to get file metadata: {}", e)),
+                    )
+                })
         } else {
             Ok(0)
         }
@@ -437,4 +445,3 @@ impl Clone for ThumbnailDb {
         }
     }
 }
-

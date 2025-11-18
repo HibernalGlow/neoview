@@ -2,7 +2,7 @@
 //! 路径相关的工具函数
 
 use crate::models::BookType;
-use sha1::{Sha1, Digest};
+use sha1::{Digest, Sha1};
 
 /// 规范化路径（统一使用正斜杠）
 fn normalize_path(path: &str) -> String {
@@ -22,7 +22,7 @@ pub fn build_path_key(
     // 规范化路径（统一使用正斜杠）
     let normalized_book_path = normalize_path(book_path);
     let normalized_page_path = normalize_path(page_path);
-    
+
     match book_type {
         BookType::Archive => {
             if let Some(inner) = inner_path {
@@ -45,4 +45,3 @@ pub fn calculate_path_hash(path_key: &str) -> String {
     hasher.update(path_key.as_bytes());
     hex::encode(hasher.finalize())
 }
-

@@ -1,9 +1,9 @@
 //! NeoView - Upscale Settings Commands
 //! 超分设置相关的 Tauri 命令
 
-use tauri::{command, State};
 use crate::core::upscale_settings::{UpscaleSettings, UpscaleSettingsManager};
 use std::sync::Mutex;
+use tauri::{command, State};
 
 /// 全局设置管理器状态
 pub struct UpscaleSettingsState {
@@ -25,12 +25,14 @@ pub async fn init_upscale_settings_manager(
     state: State<'_, UpscaleSettingsState>,
 ) -> Result<(), String> {
     let manager = UpscaleSettingsManager::new(app_handle)?;
-    
-    let manager_guard = state.manager.lock()
+
+    let manager_guard = state
+        .manager
+        .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
     let mut manager_guard = manager_guard;
     *manager_guard = Some(manager);
-    
+
     Ok(())
 }
 
@@ -39,9 +41,11 @@ pub async fn init_upscale_settings_manager(
 pub async fn get_upscale_settings(
     state: State<'_, UpscaleSettingsState>,
 ) -> Result<UpscaleSettings, String> {
-    let manager_guard = state.manager.lock()
+    let manager_guard = state
+        .manager
+        .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         Ok(manager.load_settings())
     } else {
@@ -55,9 +59,11 @@ pub async fn save_upscale_settings(
     settings: UpscaleSettings,
     state: State<'_, UpscaleSettingsState>,
 ) -> Result<(), String> {
-    let manager_guard = state.manager.lock()
+    let manager_guard = state
+        .manager
+        .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         manager.save_settings(&settings)
     } else {
@@ -71,10 +77,12 @@ pub async fn reset_upscale_settings(
     state: State<'_, UpscaleSettingsState>,
 ) -> Result<UpscaleSettings, String> {
     let default_settings = UpscaleSettings::default();
-    
-    let manager_guard = state.manager.lock()
+
+    let manager_guard = state
+        .manager
+        .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         manager.save_settings(&default_settings)?;
         Ok(default_settings)
@@ -90,9 +98,11 @@ pub async fn check_upscale_conditions(
     height: u32,
     state: State<'_, UpscaleSettingsState>,
 ) -> Result<bool, String> {
-    let manager_guard = state.manager.lock()
+    let manager_guard = state
+        .manager
+        .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         Ok(manager.should_upscale_image(width, height))
     } else {
@@ -102,12 +112,12 @@ pub async fn check_upscale_conditions(
 
 /// 获取预加载页数设置
 #[command]
-pub async fn get_preload_pages(
-    state: State<'_, UpscaleSettingsState>,
-) -> Result<u32, String> {
-    let manager_guard = state.manager.lock()
+pub async fn get_preload_pages(state: State<'_, UpscaleSettingsState>) -> Result<u32, String> {
+    let manager_guard = state
+        .manager
+        .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         let settings = manager.load_settings();
         Ok(settings.preload_pages)
@@ -122,9 +132,11 @@ pub async fn set_preload_pages(
     pages: u32,
     state: State<'_, UpscaleSettingsState>,
 ) -> Result<(), String> {
-    let manager_guard = state.manager.lock()
+    let manager_guard = state
+        .manager
+        .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         let mut settings = manager.load_settings();
         settings.preload_pages = pages;
@@ -139,9 +151,11 @@ pub async fn set_preload_pages(
 pub async fn get_conditional_upscale_settings(
     state: State<'_, UpscaleSettingsState>,
 ) -> Result<crate::core::upscale_settings::ConditionalUpscaleSettings, String> {
-    let manager_guard = state.manager.lock()
+    let manager_guard = state
+        .manager
+        .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         let settings = manager.load_settings();
         Ok(settings.conditional_upscale)
@@ -156,9 +170,11 @@ pub async fn update_conditional_upscale_settings(
     conditional_settings: crate::core::upscale_settings::ConditionalUpscaleSettings,
     state: State<'_, UpscaleSettingsState>,
 ) -> Result<(), String> {
-    let manager_guard = state.manager.lock()
+    let manager_guard = state
+        .manager
+        .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         let mut settings = manager.load_settings();
         settings.conditional_upscale = conditional_settings;
@@ -173,9 +189,11 @@ pub async fn update_conditional_upscale_settings(
 pub async fn get_global_upscale_enabled(
     state: State<'_, UpscaleSettingsState>,
 ) -> Result<bool, String> {
-    let manager_guard = state.manager.lock()
+    let manager_guard = state
+        .manager
+        .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         let settings = manager.load_settings();
         Ok(settings.global_upscale_enabled)
@@ -190,9 +208,11 @@ pub async fn set_global_upscale_enabled(
     enabled: bool,
     state: State<'_, UpscaleSettingsState>,
 ) -> Result<(), String> {
-    let manager_guard = state.manager.lock()
+    let manager_guard = state
+        .manager
+        .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         let mut settings = manager.load_settings();
         settings.global_upscale_enabled = enabled;
@@ -207,9 +227,11 @@ pub async fn set_global_upscale_enabled(
 pub async fn get_upscale_settings_path(
     state: State<'_, UpscaleSettingsState>,
 ) -> Result<String, String> {
-    let manager_guard = state.manager.lock()
+    let manager_guard = state
+        .manager
+        .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         Ok(manager.get_settings_path().to_string_lossy().to_string())
     } else {
@@ -222,9 +244,11 @@ pub async fn get_upscale_settings_path(
 pub async fn get_comparison_settings(
     state: State<'_, UpscaleSettingsState>,
 ) -> Result<crate::core::upscale_settings::ComparisonSettings, String> {
-    let manager_guard = state.manager.lock()
+    let manager_guard = state
+        .manager
+        .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         let settings = manager.load_settings();
         Ok(settings.comparison)
@@ -239,9 +263,11 @@ pub async fn update_comparison_settings(
     comparison_settings: crate::core::upscale_settings::ComparisonSettings,
     state: State<'_, UpscaleSettingsState>,
 ) -> Result<(), String> {
-    let manager_guard = state.manager.lock()
+    let manager_guard = state
+        .manager
+        .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         let mut settings = manager.load_settings();
         settings.comparison = comparison_settings;
@@ -256,9 +282,11 @@ pub async fn update_comparison_settings(
 pub async fn toggle_comparison_mode(
     state: State<'_, UpscaleSettingsState>,
 ) -> Result<bool, String> {
-    let manager_guard = state.manager.lock()
+    let manager_guard = state
+        .manager
+        .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         let mut settings = manager.load_settings();
         settings.comparison.enabled = !settings.comparison.enabled;
@@ -276,9 +304,11 @@ pub async fn set_comparison_mode(
     mode: String,
     state: State<'_, UpscaleSettingsState>,
 ) -> Result<(), String> {
-    let manager_guard = state.manager.lock()
+    let manager_guard = state
+        .manager
+        .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
-    
+
     if let Some(manager) = manager_guard.as_ref() {
         let mut settings = manager.load_settings();
         settings.comparison.mode = match mode.as_str() {

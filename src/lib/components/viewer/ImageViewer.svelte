@@ -46,6 +46,10 @@ let upscaledImageDataForComparison = $state<string>('');
 let derivedUpscaledUrl = $state<string | null>(null);
 let lastUpscaledBlob: Blob | null = null;
 let lastUpscaledObjectUrl: string | null = null;
+let lastRequestedPageIndex = -1;
+let lastLoadedPageIndex = -1;
+let lastLoadedHash: string | null = null;
+let lastViewMode: 'single' | 'double' | 'panorama' | null = null;
 
 	// 注意：progressColor 和 progressBlinking 现在由 ImageViewerProgressBar 内部管理
 
@@ -86,7 +90,6 @@ function createAppStateStore<T>(selector: StateSelector<T>) {
 }
 
 const viewerState = createAppStateStore((state) => state.viewer);
-let lastViewMode: 'single' | 'double' | 'panorama' | null = null;
 
 function updateViewerState(partial: Partial<AppStateSnapshot['viewer']>) {
 	const snapshot = appState.getSnapshot();
@@ -204,6 +207,17 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 					console.log('当前页已超分完成，跳过原图加载以避免闪屏');
 					return;
 				}
+				const currentHash = bookStore.getCurrentPageHash() ?? null;
+				if (
+					lastLoadedPageIndex === currentPageIndex &&
+					lastLoadedHash === currentHash &&
+					imageData === (objectUrl ?? null) &&
+					imageData2 === (objectUrl2 ?? null)
+				) {
+					return;
+				}
+				lastLoadedPageIndex = currentPageIndex;
+				lastLoadedHash = currentHash;
 				imageData = objectUrl ?? null;
 				imageData2 = objectUrl2 ?? null;
 			},
@@ -432,14 +446,19 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 	// 监听当前页面变化
 	$effect(() => {
 		const currentPage = bookStore.currentPage;
+		const currentIndex = bookStore.currentPageIndex;
 		if (currentPage) {
 			bookStore.setCurrentImage(currentPage);
 			// 使用预加载管理器加载图片
-			if (preloadManager) {
+			if (preloadManager && currentIndex !== lastRequestedPageIndex) {
+				lastRequestedPageIndex = currentIndex;
 				preloadManager.loadCurrentImage();
 			}
 			void updateInfoPanelForCurrentPage();
 		} else {
+			lastRequestedPageIndex = -1;
+			lastLoadedPageIndex = -1;
+			lastLoadedHash = null;
 			infoPanelStore.resetImageInfo();
 		}
 	});

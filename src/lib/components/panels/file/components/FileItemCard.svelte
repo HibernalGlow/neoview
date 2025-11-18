@@ -71,22 +71,40 @@
   // EMM 元数据
   let emmMetadata = $state<{ translatedTitle?: string; tags?: Record<string, string[]> } | null>(null);
   let collectTags = $state<EMMCollectTag[]>([]);
+  let metadataLoading = $state(false);
+  let lastLoadedPath = $state<string | null>(null);
 
-  // 加载 EMM 元数据
+  // 加载收藏标签（只加载一次）
   $effect(() => {
-    if (item.path && !item.isDir) {
-      emmMetadataStore.loadMetadataByPath(item.path).then(metadata => {
-        if (metadata) {
-          emmMetadata = {
-            translatedTitle: metadata.translated_title,
-            tags: metadata.tags
-          };
-        }
-      });
-    }
-    
-    // 加载收藏标签
     collectTags = emmMetadataStore.getCollectTags();
+  });
+
+  // 加载 EMM 元数据（延迟加载，避免同时加载太多）
+  $effect(() => {
+    if (item.path && !item.isDir && item.path !== lastLoadedPath && !metadataLoading) {
+      metadataLoading = true;
+      lastLoadedPath = item.path;
+      
+      // 延迟加载，避免同时发起太多请求
+      const timeoutId = setTimeout(() => {
+        emmMetadataStore.loadMetadataByPath(item.path).then(metadata => {
+          if (metadata && item.path === lastLoadedPath) {
+            emmMetadata = {
+              translatedTitle: metadata.translated_title,
+              tags: metadata.tags
+            };
+          }
+          metadataLoading = false;
+        }).catch(() => {
+          metadataLoading = false;
+        });
+      }, Math.random() * 500); // 随机延迟 0-500ms，分散请求
+      
+      return () => {
+        clearTimeout(timeoutId);
+        metadataLoading = false;
+      };
+    }
   });
 
   // 检查标签是否为收藏标签

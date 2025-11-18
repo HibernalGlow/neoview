@@ -86,32 +86,38 @@ export const emmMetadataStore = {
 		try {
 			// 合并自动检测和手动配置的数据库路径
 			const autoDatabases = await EMMAPI.findEMMDatabases();
+			let currentState: EMMMetadataState;
 			subscribe(state => {
-				const allDatabases = [...autoDatabases, ...state.manualDatabasePaths];
-				// 去重
-				const uniqueDatabases = Array.from(new Set(allDatabases));
-				update(s => ({
-					...s,
-					databasePaths: uniqueDatabases
-				}));
+				currentState = state;
 			})();
 			
+			const allDatabases = [...autoDatabases, ...(currentState!.manualDatabasePaths || [])];
+			// 去重
+			const uniqueDatabases = Array.from(new Set(allDatabases));
+			update(s => ({
+				...s,
+				databasePaths: uniqueDatabases
+			}));
+			
 			// 优先使用手动配置的设置文件，否则尝试自动查找
-			subscribe(async (state) => {
-				const settingPath = state.manualSettingPath || await EMMAPI.findEMMSettingFile();
-				if (settingPath) {
-					try {
-						const tags = await EMMAPI.loadEMMCollectTags(settingPath);
-						update(s => ({
-							...s,
-							collectTags: tags,
-							settingPath
-						}));
-					} catch (e) {
-						console.debug('加载收藏标签失败:', e);
-					}
-				}
+			let stateForSetting: EMMMetadataState;
+			subscribe(s => {
+				stateForSetting = s;
 			})();
+			
+			const settingPath = stateForSetting!.manualSettingPath || await EMMAPI.findEMMSettingFile();
+			if (settingPath) {
+				try {
+					const tags = await EMMAPI.loadEMMCollectTags(settingPath);
+					update(s => ({
+						...s,
+						collectTags: tags,
+						settingPath
+					}));
+				} catch (e) {
+					console.debug('加载收藏标签失败:', e);
+				}
+			}
 		} catch (err) {
 			console.error('初始化 EMM 元数据失败:', err);
 		}
@@ -180,64 +186,66 @@ export const emmMetadataStore = {
 	 * 加载元数据（通过 hash）
 	 */
 	async loadMetadataByHash(hash: string): Promise<EMMMetadata | null> {
-		return new Promise((resolve) => {
-			subscribe(async (state) => {
-				// 检查缓存
-				if (state.metadataCache.has(hash)) {
-					resolve(state.metadataCache.get(hash)!);
-					return;
+		let currentState: EMMMetadataState;
+		subscribe(state => {
+			currentState = state;
+		})();
+		
+		// 检查缓存
+		if (currentState!.metadataCache.has(hash)) {
+			return currentState!.metadataCache.get(hash)!;
+		}
+		
+		// 从所有数据库尝试加载
+		for (const dbPath of currentState!.databasePaths) {
+			try {
+				const metadata = await EMMAPI.loadEMMMetadata(dbPath, hash);
+				if (metadata) {
+					update(s => {
+						const newCache = new Map(s.metadataCache);
+						newCache.set(hash, metadata);
+						return { ...s, metadataCache: newCache };
+					});
+					return metadata;
 				}
-				
-				// 从所有数据库尝试加载
-				for (const dbPath of state.databasePaths) {
-					try {
-						const metadata = await EMMAPI.loadEMMMetadata(dbPath, hash);
-						if (metadata) {
-							update(s => {
-								const newCache = new Map(s.metadataCache);
-								newCache.set(hash, metadata);
-								return { ...s, metadataCache: newCache };
-							});
-							resolve(metadata);
-							return;
-						}
-					} catch (e) {
-						console.debug(`从 ${dbPath} 加载元数据失败:`, e);
-					}
-				}
-				
-				resolve(null);
-			})();
-		});
+			} catch (e) {
+				console.debug(`从 ${dbPath} 加载元数据失败:`, e);
+			}
+		}
+		
+		return null;
 	},
 	
 	/**
 	 * 加载元数据（通过文件路径）
 	 */
 	async loadMetadataByPath(filePath: string): Promise<EMMMetadata | null> {
-		return new Promise((resolve) => {
-			subscribe(async (state) => {
-				// 从所有数据库尝试加载
-				for (const dbPath of state.databasePaths) {
-					try {
-						const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, filePath);
-						if (metadata) {
-							update(s => {
-								const newCache = new Map(s.metadataCache);
-								newCache.set(metadata.hash, metadata);
-								return { ...s, metadataCache: newCache };
-							});
-							resolve(metadata);
-							return;
-						}
-					} catch (e) {
-						console.debug(`从 ${dbPath} 加载元数据失败:`, e);
-					}
+		// 先检查缓存（通过文件路径的 hash）
+		// 这里简化处理，直接查询数据库
+		
+		let currentState: EMMMetadataState;
+		subscribe(state => {
+			currentState = state;
+		})();
+		
+		// 从所有数据库尝试加载
+		for (const dbPath of currentState!.databasePaths) {
+			try {
+				const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, filePath);
+				if (metadata) {
+					update(s => {
+						const newCache = new Map(s.metadataCache);
+						newCache.set(metadata.hash, metadata);
+						return { ...s, metadataCache: newCache };
+					});
+					return metadata;
 				}
-				
-				resolve(null);
-			})();
-		});
+			} catch (e) {
+				console.debug(`从 ${dbPath} 加载元数据失败:`, e);
+			}
+		}
+		
+		return null;
 	},
 	
 	/**

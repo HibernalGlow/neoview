@@ -86,6 +86,7 @@ function createAppStateStore<T>(selector: StateSelector<T>) {
 }
 
 const viewerState = createAppStateStore((state) => state.viewer);
+let lastViewMode: 'single' | 'double' | 'panorama' | null = null;
 
 function updateViewerState(partial: Partial<AppStateSnapshot['viewer']>) {
 	const snapshot = appState.getSnapshot();
@@ -592,12 +593,15 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 	// 监听视图模式变化，更新 PreloadManager 配置
 	$effect(() => {
 		const mode = $viewerState.viewMode;
-		if (mode && preloadManager) {
-			// 更新 ImageLoader 的视图模式配置
-			preloadManager.updateImageLoaderConfigWithViewMode(mode);
-			// 重新加载当前页面
-			preloadManager.loadCurrentImage();
+		if (!mode || !preloadManager) {
+			return;
 		}
+		if (lastViewMode === mode) {
+			return;
+		}
+		lastViewMode = mode;
+		preloadManager.updateImageLoaderConfigWithViewMode(mode);
+		preloadManager.loadCurrentImage();
 	});
 
 	// 执行命令

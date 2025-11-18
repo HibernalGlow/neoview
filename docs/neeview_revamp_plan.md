@@ -64,7 +64,7 @@
 
 **2.3 CacheService**
 - 实现内存 LRU（Map + 双向链表）＋ IndexedDB （持久化 Blob 索引）。
-- 统一封装 `getBlob`, `getBitmap`, `getThumbnail`, `getUpscaleCache`。
+- 统一封装 `getBlob`, `getThumbnail`, `getUpscaleCache`（已放弃 `ImageBitmap` 流程，直接使用 Blob/Object URL）。
 - 加入缓存监控接口（容量、命中率、清理）。
 
 交付物：

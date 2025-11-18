@@ -414,14 +414,19 @@ export class PreloadManager {
 	 * 更新 ImageLoader 配置
 	 */
 	updateImageLoaderConfig(config: { preloadPages?: number; maxThreads?: number }): void {
-		if (config.preloadPages !== undefined) {
-			this.performancePreloadPages = config.preloadPages;
+		const nextPreload = config.preloadPages ?? this.performancePreloadPages;
+		const nextThreads = config.maxThreads ?? this.performanceMaxThreads;
+
+		if (
+			nextPreload === this.performancePreloadPages &&
+			nextThreads === this.performanceMaxThreads
+		) {
+			return;
 		}
-		if (config.maxThreads !== undefined) {
-			this.performanceMaxThreads = config.maxThreads;
-		}
+
+		this.performancePreloadPages = nextPreload;
+		this.performanceMaxThreads = nextThreads;
 		
-		// 更新 ImageLoader 配置
 		this.imageLoader.updateConfig({
 			preloadPages: this.performancePreloadPages,
 			maxThreads: this.performanceMaxThreads

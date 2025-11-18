@@ -18,7 +18,7 @@
 	import ImageViewerDisplay from './flow/ImageViewerDisplay.svelte';
 	import ImageViewerProgressBar from './flow/ImageViewerProgressBar.svelte';
 	import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
-	import { appState, type StateSelector } from '$lib/core/state/appState';
+	import { appState, type StateSelector, type AppStateSnapshot } from '$lib/core/state/appState';
 	
 	// 新模块导入
 	import { createPreloadManager } from './flow/preloadManager.svelte';
@@ -87,6 +87,16 @@ function createAppStateStore<T>(selector: StateSelector<T>) {
 }
 
 const viewerState = createAppStateStore((state) => state.viewer);
+
+function updateViewerState(partial: Partial<AppStateSnapshot['viewer']>) {
+	const snapshot = appState.getSnapshot();
+	appState.update({
+		viewer: {
+			...snapshot.viewer,
+			...partial
+		}
+	});
+}
 
 function buildDisplayPath(book: BookInfo, page: Page): string {
 	if (book.type === 'archive' && page.innerPath) {
@@ -218,6 +228,7 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 			onLoadingStateChange: (loadingState, visible) => {
 				loading = loadingState;
 				loadingVisible = visible;
+				updateViewerState({ loading: loadingState });
 			},
 			onError: (errorMessage) => {
 				error = errorMessage;

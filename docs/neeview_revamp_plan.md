@@ -47,6 +47,8 @@
 ---
 
 ### 2. 基础设施改造（Week 5-8）
+> **进度（2025-11-18）**：核心服务目录已创建，`appState`、`taskScheduler`、`CacheService` 初版就绪，并在 `ImageLoader` / `preloadRuntime` / `ImageViewer` 中开始接入。
+
 **2.1 StateService**
 - 把 `bookStore`, `settingsManager`, 各种 $state 合并到统一的 `appState`.
 - 提供 `appState.subscribe(selector, listener)` API；Svelte 组件改为消费 selector。

@@ -625,6 +625,16 @@ class BookStore {
       infoPanelStore.resetBookInfo();
       return;
     }
+
+    infoPanelStore.setBookInfo({
+      path: book.path,
+      name: book.name,
+      type: book.type,
+      totalPages: book.totalPages,
+      currentPage: book.totalPages === 0 ? 0 : book.currentPage + 1,
+    });
+  }
+
   private syncAppStateBookSlice() {
     const currentBook = this.state.currentBook;
     appState.update({
@@ -633,15 +643,6 @@ class BookStore {
         currentPageIndex: currentBook?.currentPage ?? 0,
         totalPages: currentBook?.totalPages ?? 0
       }
-    });
-  }
-
-    infoPanelStore.setBookInfo({
-      path: book.path,
-      name: book.name,
-      type: book.type,
-      totalPages: book.totalPages,
-      currentPage: book.totalPages === 0 ? 0 : book.currentPage + 1,
     });
   }
 }

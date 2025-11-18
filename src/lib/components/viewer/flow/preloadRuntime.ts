@@ -8,8 +8,10 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { upscaleState, startUpscale, completeUpscale, setUpscaleError } from '$lib/stores/upscale/upscaleState.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
 import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
+import type { UpscaleCondition } from '$lib/components/panels/UpscalePanel';
 import { collectPageMetadata, evaluateConditions } from '$lib/utils/upscale/conditions';
 import { bookStore } from '$lib/stores/book.svelte';
+import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 
 export interface ImageDataWithHash {
 	data?: string; // 兼容旧的 data URL 格式
@@ -136,9 +138,10 @@ function ensureConditionBinding(imageData: ImageDataWithHash): { conditionId?: s
 		return { conditionId: imageData.conditionId, skip: false };
 	}
 
-	let condition =
-		imageData.conditionId &&
-		panelSettings.conditionsList.find((c) => c.id === imageData.conditionId);
+	let condition: UpscaleCondition | undefined;
+	if (imageData.conditionId) {
+		condition = panelSettings.conditionsList.find((c) => c.id === imageData.conditionId);
+	}
 
 	if (!condition) {
 		const page = book.pages?.[pageIndex];
@@ -151,9 +154,9 @@ function ensureConditionBinding(imageData: ImageDataWithHash): { conditionId?: s
 		if (result.action?.skip) {
 			return { conditionId: imageData.conditionId, skip: true };
 		}
-		condition =
-			result.conditionId &&
-			panelSettings.conditionsList.find((c) => c.id === result.conditionId);
+		if (result.conditionId) {
+			condition = panelSettings.conditionsList.find((c) => c.id === result.conditionId);
+		}
 	}
 
 	return {
@@ -242,26 +245,25 @@ export async function enqueuePreloadBatchJobs(
 		return [];
 	}
 
-	const payload: PreloadBatchJobPayload[] = jobs
-		.map((job) => {
-			const model = resolveModelSettings(job.conditionId);
-			if (!model) {
-				console.log('批量预超分: 条件要求跳过任务, hash:', job.imageHash, 'conditionId:', job.conditionId);
-				return null;
-			}
-			return {
-				page_index: job.pageIndex,
-				image_hash: job.imageHash,
-				condition_id: job.conditionId ?? null,
-				model_name: model.modelName,
-				scale: model.scale,
-				tile_size: model.tileSize,
-				noise_level: model.noiseLevel,
-				gpu_id: model.gpuId ?? null,
-				priority: job.priority ?? 'normal'
-			};
-		})
-		.filter((job): job is PreloadBatchJobPayload => job !== null);
+	const payload: PreloadBatchJobPayload[] = [];
+	for (const job of jobs) {
+		const model = resolveModelSettings(job.conditionId);
+		if (!model) {
+			console.log('批量预超分: 条件要求跳过任务, hash:', job.imageHash, 'conditionId:', job.conditionId);
+			continue;
+		}
+		payload.push({
+			page_index: job.pageIndex,
+			image_hash: job.imageHash,
+			condition_id: job.conditionId ?? null,
+			model_name: model.modelName,
+			scale: model.scale,
+			tile_size: model.tileSize,
+			noise_level: model.noiseLevel,
+			gpu_id: model.gpuId ?? null,
+			priority: job.priority ?? 'normal'
+		});
+	}
 
 	if (!payload.length) {
 		return [];
@@ -405,33 +407,25 @@ export async function triggerAutoUpscale(
 			imageDataWithHash.conditionId
 		);
 
-		if (isPreload) {
-			await submitSchedulerJob({
-				blob: imageBlob,
-				hash: imageHash,
-				pageIndex: targetPageIndex,
-				conditionId: imageDataWithHash.conditionId,
-				priority: 'normal',
-				origin: 'preload',
-				background: true
-			});
-			return;
-		}
-
-		// 当前页自动超分与手动路径共用，仍需串行执行
-		if (upscaleState.isUpscaling) {
-			console.log('超分正在进行中，跳过当前页面自动超分');
-			return;
-		}
-
-		await submitSchedulerJob({
-			blob: imageBlob,
-			hash: imageHash,
-			pageIndex: targetPageIndex,
-			conditionId: imageDataWithHash.conditionId,
-			priority: 'high',
-			origin: 'current',
-			background: false
+		// 中文注释：通过任务调度器统一管理自动超分任务，避免并发冲突
+		taskScheduler.enqueue({
+			type: isPreload ? 'auto-upscale-preload' : 'auto-upscale-current',
+			priority: isPreload ? 'normal' : 'high',
+			executor: async () => {
+				if (!isPreload && upscaleState.isUpscaling) {
+					console.log('超分正在进行中，跳过当前页面自动超分');
+					return;
+				}
+				await submitSchedulerJob({
+					blob: imageBlob,
+					hash: imageHash,
+					pageIndex: targetPageIndex,
+					conditionId: imageDataWithHash.conditionId,
+					priority: isPreload ? 'normal' : 'high',
+					origin: isPreload ? 'preload' : 'current',
+					background: isPreload
+				});
+			}
 		});
 	} catch (error) {
 		console.error('自动超分失败:', error);

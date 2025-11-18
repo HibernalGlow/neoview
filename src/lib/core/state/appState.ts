@@ -10,6 +10,8 @@ export interface ViewerSlice {
 	viewMode: 'single' | 'double' | 'panorama';
 	zoom: number;
 	loading: boolean;
+	comparisonVisible: boolean;
+	comparisonMode: 'slider' | 'side-by-side';
 }
 
 export interface AppStateSnapshot {
@@ -119,7 +121,9 @@ export function createDefaultAppState(): AppStateSnapshot {
 		viewer: {
 			viewMode: 'single',
 			zoom: 1,
-			loading: false
+			loading: false,
+			comparisonVisible: false,
+			comparisonMode: 'slider'
 		},
 		lastUpdated: Date.now()
 	};

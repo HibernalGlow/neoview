@@ -39,7 +39,6 @@ let hideCursorTimeout: ReturnType<typeof window.setTimeout> | null = null;
 	let settings = $state(settingsManager.getSettings());
 
 	// 对比模式状态
-let comparisonVisible = $state(false);
 let originalImageDataForComparison = $state<string>('');
 let upscaledImageDataForComparison = $state<string>('');
 let derivedUpscaledUrl = $state<string | null>(null);
@@ -364,10 +363,10 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 				totalPreUpscalePages = 0;
 			},
 			onComparisonModeChanged: async (detail) => {
-				const { enabled } = detail;
+				const { enabled, mode = 'slider' } = detail;
 				const upscaledSource = derivedUpscaledUrl || bookStore.upscaledImageData;
 				if (enabled && imageBitmap && upscaledSource) {
-					comparisonVisible = true;
+					updateViewerState({ comparisonVisible: true, comparisonMode: mode });
 					try {
 						originalImageDataForComparison = await bitmapToDataURL(imageBitmap);
 					} catch (error) {
@@ -376,7 +375,7 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 					}
 					upscaledImageDataForComparison = upscaledSource;
 				} else {
-					comparisonVisible = false;
+					updateViewerState({ comparisonVisible: false });
 				}
 			},
 			onCacheHit: (detail) => {
@@ -629,8 +628,8 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 
 	function handleKeydown(e: KeyboardEvent) {
 		// 处理对比模式下的 ESC 键
-		if (comparisonVisible && e.key === 'Escape') {
-			comparisonVisible = false;
+		if ($viewerState.comparisonVisible && e.key === 'Escape') {
+			updateViewerState({ comparisonVisible: false });
 			return;
 		}
 
@@ -648,7 +647,7 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 
 	// 关闭对比模式
 	function closeComparison() {
-		comparisonVisible = false;
+		updateViewerState({ comparisonVisible: false });
 	}
 
 	/**
@@ -724,7 +723,7 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 	<ComparisonViewer
 		originalImageData={originalImageDataForComparison}
 		upscaledImageData={derivedUpscaledUrl || upscaledImageDataForComparison}
-		isVisible={comparisonVisible}
+		isVisible={$viewerState.comparisonVisible}
 		onClose={closeComparison}
 	/>
 	

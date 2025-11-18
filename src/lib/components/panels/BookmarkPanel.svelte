@@ -6,8 +6,8 @@
 	 */
 import { Bookmark, X, Star, Grid3x3, List, Activity, Trash2, ExternalLink, FolderOpen } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
-import { Input } from '$lib/components/ui/input';
 import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
+import SearchBar from '$lib/components/ui/SearchBar.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import FileItemCard from './file/components/FileItemCard.svelte';
 import type { FsItem } from '$lib/types';
@@ -248,11 +248,12 @@ function loadThumbnails(bookmarkList: any[]) {
 				/>
 			</div>
 		</div>
-		<Input
-			type="search"
+		<SearchBar
 			placeholder="搜索书签..."
-			bind:value={searchQuery}
-			class="w-full"
+			onSearchChange={(query: string) => {
+				searchQuery = query;
+			}}
+			storageKey="neoview-bookmark-search-history"
 		/>
 	</div>
 	<div class="px-4 py-2 border-b flex flex-wrap gap-3 text-[11px] text-muted-foreground bg-muted/30">

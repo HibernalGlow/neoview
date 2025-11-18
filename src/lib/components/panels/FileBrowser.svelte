@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Folder, File, Image, Trash2, RefreshCw, FileArchive, FolderOpen, Home, ChevronLeft, ChevronRight, ChevronUp, CheckSquare, Grid3x3, List, MoreVertical, Search, ChevronDown, Settings, AlertCircle, Bookmark, Star } from '@lucide/svelte';
+  import { Folder, File, Image, Trash2, RefreshCw, FileArchive, FolderOpen, Home, ChevronLeft, ChevronRight, ChevronUp, CheckSquare, Grid3x3, List, MoreVertical, Settings, AlertCircle, Bookmark, Star } from '@lucide/svelte';
   import VirtualizedFileList from './file/components/VirtualizedFileList.svelte';
   import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
   import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
@@ -12,8 +12,8 @@ import PathBar from '../ui/PathBar.svelte';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 import { NavigationHistory } from '$lib/utils/navigationHistory';
 import { Button } from '$lib/components/ui/button';
-import * as Input from '$lib/components/ui/input';
 import * as ContextMenu from '$lib/components/ui/context-menu';
+import SearchBar from '$lib/components/ui/SearchBar.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { homeDir } from '@tauri-apps/api/path';
 import { thumbnailManager, type ThumbnailConfig } from '$lib/utils/thumbnailManager';
@@ -165,8 +165,6 @@ import { getPerformanceSettings } from '$lib/api/performance';
   // 搜索功能状态
   let searchQuery = $state('');
   let searchHistory = $state<{ query: string; timestamp: number }[]>([]);
-  let showSearchHistory = $state(false);
-  let showSearchSettings = $state(false);
   let searchSettings = $state({
     includeSubfolders: true,
     showHistoryOnFocus: true
@@ -265,56 +263,6 @@ import { getPerformanceSettings } from '$lib/api/performance';
 
   
   
-  /**
-   * 执行搜索（使用 ripgrep）
-   */
-  async function performSearch(query: string) {
-    if (!query.trim()) {
-      searchResults = [];
-      return;
-    }
-
-    isSearching = true;
-    try {
-      const options = {
-        includeSubfolders: searchSettings.includeSubfolders,
-        maxResults: 100,
-      };
-      
-      searchResults = await FileSystemAPI.searchFiles(currentPath, query, options);
-      console.log(`✅ 搜索完成，找到 ${searchResults.length} 个结果`);
-      console.log('搜索结果详情:', searchResults);
-      
-      // 显示每个结果的详细信息
-      searchResults.forEach((item, index) => {
-        console.log(`[${index + 1}] ${item.isDir ? '📁' : '📄'} ${item.name}`);
-        console.log(`    路径: ${item.path}`);
-        console.log(`    大小: ${formatFileSize(item.size, item.isDir)}`);
-        console.log(`    修改时间: ${item.modified ? new Date(item.modified * 1000).toLocaleString() : '未知'}`);
-        console.log(`    是否图片: ${item.isImage ? '是' : '否'}`);
-      });
-
-      // 搜索完成后自动应用默认排序（路径升序）
-      if (searchResults.length > 0) {
-        const sorted = [...searchResults].sort((a, b) => {
-          // 文件夹始终在前面
-          if (a.isDir !== b.isDir) {
-            return a.isDir ? -1 : 1;
-          }
-          // 按路径升序排序
-          return a.path.localeCompare(b.path, undefined, { numeric: true });
-        });
-        searchResults = sorted;
-      }
-    } catch (err) {
-      console.error('❌ 搜索失败:', err);
-      console.error('错误详情:', err);
-      fileBrowserStore.setError(String(err));
-      searchResults = [];
-    } finally {
-      isSearching = false;
-    }
-  }
   
   /**
    * 格式化文件大小
@@ -401,17 +349,10 @@ import { getPerformanceSettings } from '$lib/api/performance';
 
   // 组件挂载时添加全局点击事件和加载主页
   onMount(() => {
-    const handleClick = (e: MouseEvent) => {
+      const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (!target.closest('.context-menu')) {
         hideContextMenu();
-      }
-      // 只有当点击的不是搜索框、搜索历史或搜索设置时才隐藏
-      if (!target.closest('.search-history') && 
-          !target.closest('.search-settings') && 
-          !target.closest('input[placeholder*="搜索"]')) {
-        showSearchHistory = false;
-        showSearchSettings = false;
       }
     };
     
@@ -419,9 +360,6 @@ import { getPerformanceSettings } from '$lib/api/performance';
     
     // 加载主页
     loadHomepage();
-
-    // 加载搜索历史
-    loadSearchHistory();
 
     // 注册缩略图生成回调 - 从设置读取配置
     const applyThumbnailSettings = async () => {
@@ -1203,19 +1141,6 @@ import { getPerformanceSettings } from '$lib/api/performance';
     return date.toLocaleString();
   }
 
-  /**
-   * 格式化搜索历史时间戳
-   */
-  function formatSearchHistoryTime(timestamp: number): string {
-    const date = new Date(timestamp);
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    const seconds = date.getSeconds().toString().padStart(2, '0');
-    
-    return `${month}月${day}日 ${hours}:${minutes}:${seconds}`;
-  }
 
   /**
    * 键盘导航处理
@@ -1460,112 +1385,44 @@ import { getPerformanceSettings } from '$lib/api/performance';
 
   // ===== 搜索功能 =====
 
-  /**
-   * 加载搜索历史
-   */
-  function loadSearchHistory() {
-    try {
-      const saved = localStorage.getItem('neoview-search-history');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // 兼容旧版本数据结构
-        if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string') {
-          // 旧版本：字符串数组，转换为新格式
-          searchHistory = (parsed as string[]).map(query => ({ query, timestamp: Date.now() - 86400000 })); // 默认昨天
-        } else {
-          // 新版本：对象数组
-          searchHistory = parsed;
-        }
-      }
-    } catch (err) {
-      console.error('加载搜索历史失败:', err);
-    }
-  }
-
-  /**
-   * 保存搜索历史
-   */
-  function saveSearchHistory() {
-    try {
-      localStorage.setItem('neoview-search-history', JSON.stringify(searchHistory));
-    } catch (err) {
-      console.error('保存搜索历史失败:', err);
-    }
-  }
-
-  /**
-   * 添加搜索历史
-   */
-  function addSearchHistory(query: string) {
-    if (!query.trim()) return;
-    
-    // 移除已存在的相同查询
-    searchHistory = searchHistory.filter(item => item.query !== query);
-    // 添加到开头
-    searchHistory.unshift({ query, timestamp: Date.now() });
-    // 限制历史记录数量
-    searchHistory = searchHistory.slice(0, 20);
-    
-    saveSearchHistory();
-  }
-
-  /**
-   * 清除搜索历史
-   */
-  function clearSearchHistory() {
-    searchHistory = [];
-    saveSearchHistory();
-    showSearchHistory = false;
-  }
-
-  /**
-   * 搜索文件
-   */
-  async function searchFiles(query: string) {
+  // 搜索处理函数
+  async function handleFileSearch(query: string) {
     if (!query.trim()) {
       searchResults = [];
       return;
     }
 
-    addSearchHistory(query);
-    await performSearch(query);
-  }
-
-  /**
-   * 处理搜索输入
-   */
-  function handleSearchInput(e: Event) {
-    const target = e.target as HTMLInputElement;
-    searchQuery = target.value;
-    
-    // 实时搜索
-    if (searchQuery.trim()) {
-      const timeout = setTimeout(() => {
-        searchFiles(searchQuery);
-      }, 300);
+    isSearching = true;
+    try {
+      const options = {
+        includeSubfolders: searchSettings.includeSubfolders,
+        maxResults: 100,
+      };
       
-      // 清除之前的超时
-      return () => clearTimeout(timeout);
-    } else {
+      searchResults = await FileSystemAPI.searchFiles(currentPath, query, options);
+      console.log(`✅ 搜索完成，找到 ${searchResults.length} 个结果`);
+
+      // 搜索完成后自动应用默认排序（路径升序）
+      if (searchResults.length > 0) {
+        const sorted = [...searchResults].sort((a, b) => {
+          // 文件夹始终在前面
+          if (a.isDir !== b.isDir) {
+            return a.isDir ? -1 : 1;
+          }
+          // 按路径升序排序
+          return a.path.localeCompare(b.path, undefined, { numeric: true });
+        });
+        searchResults = sorted;
+      }
+    } catch (err) {
+      console.error('❌ 搜索失败:', err);
+      fileBrowserStore.setError(String(err));
       searchResults = [];
+    } finally {
+      isSearching = false;
     }
   }
 
-  /**
-   * 选择搜索历史
-   */
-  function selectSearchHistory(item: { query: string; timestamp: number }) {
-    searchQuery = item.query;
-    showSearchHistory = false;
-    searchFiles(item.query);
-  }
-  
-  function handleSearchHistoryKeydown(event: KeyboardEvent, item: { query: string; timestamp: number }) {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      selectSearchHistory(item);
-    }
-  }
 
   /**
    * 打开搜索结果
@@ -1581,18 +1438,6 @@ import { getPerformanceSettings } from '$lib/api/performance';
     }
   }
   
-  /**
-   * 处理搜索框聚焦
-   */
-  function handleSearchFocus() {
-    // 添加一个小延迟，确保点击事件不会立即隐藏历史记录
-    setTimeout(() => {
-      if (searchSettings.showHistoryOnFocus && searchHistory.length > 0) {
-        showSearchHistory = true;
-      }
-    }, 10);
-    showSearchSettings = false;
-  }
 </script>
 
 <div class="flex h-full flex-col">
@@ -1760,144 +1605,14 @@ import { getPerformanceSettings } from '$lib/api/performance';
   </div>
 
   <!-- 搜索栏 -->
-  <div class="flex items-center gap-2 border-b px-2 py-2 bg-background/30">
-    <div class="relative flex-1">
-      <!-- 搜索输入框 -->
-      <div class="relative">
-        <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <Input.Root
-          placeholder="搜索当前目录下的文件..."
-          bind:value={searchQuery}
-          oninput={handleSearchInput}
-          onfocus={handleSearchFocus}
-          class="pl-10 pr-24"
-          disabled={!currentPath || isArchiveView}
-        />
-        
-        <!-- 清空按钮 -->
-        {#if searchQuery}
-          <button
-            class="absolute right-16 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
-            onclick={() => {
-              searchQuery = '';
-              searchResults = [];
-            }}
-            title="清空搜索"
-          >
-            <svg class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        {/if}
-        
-        <!-- 搜索历史按钮 -->
-        <button
-          class="absolute right-8 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
-          onclick={() => {
-            showSearchHistory = !showSearchHistory;
-            showSearchSettings = false;
-          }}
-          disabled={searchHistory.length === 0}
-          title="搜索历史"
-        >
-          <ChevronDown class="h-4 w-4 text-gray-500" />
-        </button>
-        
-        <!-- 搜索设置按钮 -->
-        <button
-          class="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
-          onclick={(e) => {
-            e.stopPropagation();
-            console.log('搜索设置按钮被点击');
-            showSearchSettings = !showSearchSettings;
-            showSearchHistory = false;
-          }}
-          title="搜索设置"
-        >
-          <MoreVertical class="h-4 w-4 text-gray-500" />
-        </button>
-      </div>
-      
-      <!-- 搜索历史下拉 -->
-      {#if showSearchHistory}
-        <div class="search-history absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
-          {#each searchHistory as item (item.query)}
-            <div
-              class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center justify-between group cursor-pointer"
-              role="button"
-              tabindex="0"
-              onclick={() => selectSearchHistory(item)}
-              onkeydown={(event) => handleSearchHistoryKeydown(event, item)}
-            >
-              <div class="flex items-center gap-2 flex-1 min-w-0">
-                <Search class="h-4 w-4 text-gray-400 flex-shrink-0" />
-                <span class="truncate">{item.query}</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-gray-400">{formatSearchHistoryTime(item.timestamp)}</span>
-                <button
-                  class="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded flex-shrink-0"
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    searchHistory = searchHistory.filter(historyItem => historyItem.query !== item.query);
-                    saveSearchHistory();
-                  }}
-                  title="删除"
-                >
-                  <svg class="h-3 w-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          {/each}
-          {#if searchHistory.length > 0}
-            <div class="border-t border-gray-200 p-2">
-              <button
-                class="w-full px-3 py-1 text-xs text-gray-500 hover:bg-gray-100 rounded"
-                onclick={clearSearchHistory}
-              >
-                清除搜索历史
-              </button>
-            </div>
-          {:else}
-            <div class="p-3 text-center text-sm text-gray-500">
-              暂无搜索历史
-            </div>
-          {/if}
-        </div>
-      {/if}
-      
-      <!-- 搜索设置下拉 -->
-      {#if showSearchSettings}
-        <div class="search-settings absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[200px] p-2">
-          <div class="space-y-3">
-            <div class="pb-2">
-              <h4 class="text-xs font-semibold text-gray-700 mb-2">搜索选项</h4>
-              
-              <label class="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  bind:checked={searchSettings.includeSubfolders}
-                  class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span>搜索子文件夹</span>
-              </label>
-              
-              <label class="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  bind:checked={searchSettings.showHistoryOnFocus}
-                  class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span>聚焦时显示历史</span>
-              </label>
-            </div>
-          </div>
-        </div>
-      {/if}
-    </div>
-  </div>
+  <SearchBar
+    placeholder="搜索当前目录下的文件..."
+    disabled={!currentPath || isArchiveView}
+    onSearch={handleFileSearch}
+    bind:searchHistory
+    bind:searchSettings
+    storageKey="neoview-file-search-history"
+  />
 
   <!-- 错误提示 -->
   {#if error}
@@ -1925,7 +1640,9 @@ import { getPerformanceSettings } from '$lib/api/performance';
   {:else if searchQuery && searchResults.length === 0}
     <div class="flex flex-1 items-center justify-center">
       <div class="text-center text-gray-400">
-        <Search class="mx-auto mb-2 h-16 w-16 opacity-50" />
+        <svg class="mx-auto mb-2 h-16 w-16 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
         <p class="text-sm">未找到匹配的文件</p>
         <p class="text-xs text-gray-500 mt-1">搜索词: "{searchQuery}"</p>
       </div>
@@ -2163,3 +1880,4 @@ import { getPerformanceSettings } from '$lib/api/performance';
     />
   {/if}
 </div>
+

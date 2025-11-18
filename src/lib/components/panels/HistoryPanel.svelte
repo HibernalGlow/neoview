@@ -7,6 +7,7 @@
 	import { Clock, X, Grid3x3, List, Activity, Bookmark, Trash2, ExternalLink, FolderOpen } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { historyStore, type HistoryEntry } from '$lib/stores/history.svelte';
+	import SearchBar from '$lib/components/ui/SearchBar.svelte';
 	import FileItemCard from './file/components/FileItemCard.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { thumbnailManager } from '$lib/utils/thumbnailManager';
@@ -23,6 +24,15 @@
 	let thumbnails = $state<Map<string, string>>(new Map());
 	const thumbnailJobs = new Map<string, string>();
 	let contextMenu = $state<{ x: number; y: number; entry: HistoryEntry | null }>({ x: 0, y: 0, entry: null });
+	let searchQuery = $state('');
+	let filteredHistory = $derived(
+		searchQuery.trim()
+			? history.filter(entry =>
+					entry.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					entry.path.toLowerCase().includes(searchQuery.toLowerCase())
+			  )
+			: history
+	);
 
 	function createAppStateStore<T>(selector: StateSelector<T>) {
 		const initial = selector(appState.getSnapshot());
@@ -228,9 +238,25 @@
 		</span>
 	</div>
 
+	<!-- 搜索栏 -->
+	<SearchBar
+		placeholder="搜索历史记录..."
+		onSearchChange={(query) => {
+			searchQuery = query;
+		}}
+		storageKey="neoview-history-search-history"
+	/>
+
 	<!-- 历史列表 -->
 	<div class="flex-1 overflow-auto">
-		{#if history.length === 0}
+		{#if filteredHistory.length === 0 && searchQuery.trim()}
+			<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
+				<div class="text-center space-y-2">
+					<p class="text-lg font-medium">未找到匹配的历史记录</p>
+					<p class="text-sm opacity-70">搜索词: "{searchQuery}"</p>
+				</div>
+			</div>
+		{:else if filteredHistory.length === 0}
 			<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
 				<div class="relative mb-4">
 					<Clock class="h-16 w-16 opacity-30" />
@@ -246,7 +272,7 @@
 		{:else if viewMode === 'list'}
 			<!-- 列表视图 -->
 			<div class="p-2 space-y-2">
-				{#each history as entry (entry.id)}
+				{#each filteredHistory as entry (entry.id)}
 					<div class="relative group">
 						<FileItemCard
 							item={historyToFsItem(entry)}
@@ -279,7 +305,7 @@
 			<!-- 网格视图 -->
 			<div class="p-2">
 				<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
-					{#each history as entry (entry.id)}
+					{#each filteredHistory as entry (entry.id)}
 						<div class="relative group">
 							<FileItemCard
 								item={historyToFsItem(entry)}

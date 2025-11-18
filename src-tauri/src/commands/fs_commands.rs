@@ -540,121 +540,25 @@ pub async fn show_in_file_manager(path: String) -> Result<(), String> {
     Ok(())
 }
 
-/// 搜索文件（使用 fd）
+/// 搜索文件（使用后端实现，不再依赖 fd CLI）
 #[tauri::command]
 pub async fn search_files(
     path: String,
     query: String,
     options: Option<SearchOptions>,
+    state: State<'_, FsState>,
 ) -> Result<Vec<crate::core::fs_manager::FsItem>, String> {
-    use std::process::Command;
-
     let search_options = options.unwrap_or_default();
-    let include_subfolders = search_options.include_subfolders.unwrap_or(true);
-    let max_results = search_options.max_results.unwrap_or(100);
+    
+    let fs_manager = state
+        .fs_manager
+        .lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
 
-    // 构建 fd 命令
-    let mut cmd = Command::new("fd");
-    cmd.arg("-t") // 指定类型
-        .arg("f") // 只搜索文件
-        .arg("-a") // 输出绝对路径
-        .arg("-F") // 固定字符串匹配（不使用正则）
-        .arg("-u") // 包含被忽略和隐藏的文件
-        .arg(&query) // 搜索查询
-        .arg(&path); // 搜索路径
-
-    // 如果不包含子文件夹，添加 --maxdepth 1
-    if !include_subfolders {
-        cmd.arg("--maxdepth").arg("1");
-    }
-
-    // 添加调试信息
-    println!(
-        "执行 fd 搜索: 查询='{}', 路径='{}', 包含子文件夹={}",
-        query, path, include_subfolders
-    );
-
-    // 执行命令
-    let output = cmd.output().map_err(|e| format!("执行 fd 失败: {}", e))?;
-
-    // 输出调试信息
-    println!("fd 退出码: {}", output.status);
-    if !output.stderr.is_empty() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        println!("fd stderr: {}", stderr);
-    }
-
-    if !output.status.success() {
-        return Err(format!(
-            "fd 错误: 退出码 {}",
-            output.status.code().unwrap_or(-1)
-        ));
-    }
-
-    // 解析输出（fd 输出的是纯文本路径，每行一个）
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    println!("fd stdout: {}", stdout);
-    let mut results = Vec::new();
-
-    for line in stdout.lines() {
-        if line.trim().is_empty() {
-            continue;
-        }
-
-        println!("找到文件: {}", line.trim());
-
-        let path = line.trim();
-
-        // 获取文件元数据
-        let path_buf = PathBuf::from(path);
-        if let Ok(metadata) = std::fs::metadata(&path_buf) {
-            let name = path_buf
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("Unknown")
-                .to_string();
-
-            let is_dir = metadata.is_dir();
-            let size = if is_dir {
-                // 对于目录，计算子项数量
-                std::fs::read_dir(&path_buf)
-                    .map(|entries| entries.count() as u64)
-                    .unwrap_or(0)
-            } else {
-                metadata.len()
-            };
-
-            let modified = metadata
-                .modified()
-                .ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| d.as_secs());
-            let created = metadata
-                .created()
-                .ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| d.as_secs());
-
-            let is_image = !is_dir && is_image_file(&path_buf);
-
-            results.push(crate::core::fs_manager::FsItem {
-                name,
-                path: path.to_string(),
-                is_dir,
-                size,
-                modified,
-                created,
-                is_image,
-            });
-
-            // 限制结果数量
-            if results.len() >= max_results {
-                break;
-            }
-        }
-    }
-
-    Ok(results)
+    let path_buf = PathBuf::from(path);
+    
+    // 使用 fs_manager 的 search_files 方法（支持索引和递归搜索）
+    fs_manager.search_files(&path_buf, &query, &search_options)
 }
 
 /// 检查文件是否为图片

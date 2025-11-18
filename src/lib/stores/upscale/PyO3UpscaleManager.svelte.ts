@@ -198,7 +198,14 @@ export class PyO3UpscaleManager {
 			console.log('  noiseLevel:', this._currentModel.noiseLevel);
 			console.log('  timeout:', timeout);
 			
-			const result = await invoke<number[]>('pyo3_upscale_image_memory', {
+			// 添加超时保护，避免无限等待
+			const timeoutPromise = new Promise<never>((_, reject) => {
+				setTimeout(() => {
+					reject(new Error(`PyO3 超分超时 (${timeout}s)`));
+				}, timeout * 1000);
+			});
+			
+			const upscalePromise = invoke<number[]>('pyo3_upscale_image_memory', {
 				imageData: Array.from(imageData),
 				modelName: this._currentModel.modelName,
 				scale: this._currentModel.scale,
@@ -208,6 +215,8 @@ export class PyO3UpscaleManager {
 				width: this._imageWidth || 0,
 				height: this._imageHeight || 0
 			});
+
+			const result = await Promise.race([upscalePromise, timeoutPromise]);
 
 			console.log('✅ PyO3 超分完成 (内存流), 数据大小:', result.length);
 			return new Uint8Array(result);

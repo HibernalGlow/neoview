@@ -674,6 +674,48 @@ let showUpscaledPreview = $state(false);
 					return; // 使用缓存，直接返回
 				}
 			}
+
+			// 检查磁盘缓存
+			if (imageHash) {
+				try {
+					const cachePath = await invoke<string | null>('check_pyo3_upscale_cache', {
+						imageHash,
+						modelName: selectedModel,
+						scale,
+						tileSize: pyo3UpscaleManager.tileSize,
+						noiseLevel: 0
+					});
+
+					if (cachePath) {
+						console.log('✅ 发现磁盘缓存，直接使用:', cachePath);
+						progress = 100;
+						status = '磁盘缓存命中';
+						
+						// 设置当前页面超分状态
+						bookStore.setCurrentPageUpscaled(true);
+						
+						const processingTime = (Date.now() - startTime) / 1000;
+						console.log('[UpscalePanel] 使用磁盘缓存！', {
+							page: bookStore.currentPageIndex + 1,
+							time: processingTime.toFixed(1),
+							path: cachePath
+						});
+						
+						// 读取磁盘缓存文件
+						const bytes = await invoke<number[]>('read_binary_file', { filePath: cachePath });
+						const arr = new Uint8Array(bytes);
+						const blob = new Blob([arr], { type: 'image/webp' });
+						const url = URL.createObjectURL(blob);
+						
+						// 使用统一处理函数
+						await handleUpscaleResult(imageHash, blob, url, arr);
+						
+						return; // 使用磁盘缓存，直接返回
+					}
+				} catch (error) {
+					console.warn('检查磁盘缓存失败:', error);
+				}
+			}
 			
 			console.log('📥 从 ImageViewer 获取图像数据...');
 			const imageData = await getCurrentImageBlob();

@@ -612,8 +612,13 @@ export class ImageLoader {
 					const autoUpscaleEnabled = await getAutoUpscaleEnabled();
 					if (autoUpscaleEnabled) {
 						console.log('内存和磁盘都没有缓存，开始现场超分，页码:', currentPageIndex + 1);
+						try {
 							await triggerAutoUpscale(imageDataWithHash);
 							this.lastAutoUpscalePageIndex = currentPageIndex;
+						} catch (error) {
+							console.error('现场超分失败:', error);
+							// 超分失败不影响正常显示，继续使用原图
+						}
 					} else {
 						console.log('自动超分开关已关闭，不进行现场超分');
 					}

@@ -167,6 +167,47 @@ const defaultSettings: NeoViewSettings = {
   }
 };
 
+function deepClone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value));
+}
+
+type AnyObject = Record<string, any>;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function deepMerge(target: AnyObject, source?: AnyObject): AnyObject {
+  if (!source) {
+    return target;
+  }
+
+  for (const [key, value] of Object.entries(source)) {
+    if (value === undefined) continue;
+
+    if (Array.isArray(value)) {
+      target[key] = value.slice();
+      continue;
+    }
+
+    if (isPlainObject(value)) {
+      const current = isPlainObject(target[key]) ? (target[key] as Record<string, unknown>) : {};
+      target[key] = deepMerge({ ...current }, value as Record<string, unknown>);
+      continue;
+    }
+
+    target[key] = value;
+  }
+
+  return target;
+}
+
+function mergeWithDefaults(overrides?: Partial<NeoViewSettings>): NeoViewSettings {
+  const clone = deepClone(defaultSettings);
+  if (!overrides) return clone;
+  return deepMerge(clone as AnyObject, overrides as AnyObject) as NeoViewSettings;
+}
+
 export class SettingsManager {
   private static instance: SettingsManager;
   private settings: NeoViewSettings = { ...defaultSettings };
@@ -232,21 +273,7 @@ export class SettingsManager {
       // Basic validation: must have system and view
       if (!cfg || !cfg.system || !cfg.view) throw new Error('配置格式不完整');
       
-      // 深合并 image 子对象，确保新字段不会被覆盖
-      const mergedImage = {
-        ...defaultSettings.image,
-        ...cfg.image,
-        // 显式补齐新字段，确保导入旧配置时不会丢失
-        currentImageUpscaleEnabled: cfg.image?.currentImageUpscaleEnabled ?? defaultSettings.image.currentImageUpscaleEnabled,
-        useCachedFirst: cfg.image?.useCachedFirst ?? defaultSettings.image.useCachedFirst
-      };
-      
-      // 合并其他设置
-      this.settings = {
-        ...defaultSettings,
-        ...cfg,
-        image: mergedImage
-      } as NeoViewSettings;
+      this.settings = mergeWithDefaults(cfg);
       
       this.saveSettings();
       this.notifyListeners();
@@ -275,7 +302,7 @@ export class SettingsManager {
       const raw = localStorage.getItem('neoview-settings');
       if (raw) {
         const parsed = JSON.parse(raw);
-        this.settings = { ...defaultSettings, ...parsed };
+        this.settings = mergeWithDefaults(parsed);
         console.log('📂 从 localStorage 加载设置:', {
           enableSuperResolution: this.settings.image.enableSuperResolution
         });
@@ -284,7 +311,7 @@ export class SettingsManager {
       }
     } catch (err) {
       console.error('❌ loadSettings failed:', err);
-      this.settings = { ...defaultSettings };
+      this.settings = mergeWithDefaults();
     }
   }
 

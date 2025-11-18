@@ -3,7 +3,7 @@
 	 * Top Toolbar Component
 	 * 顶部工具栏 - 自动隐藏，包含标题栏、面包屑和图片操作按钮
 	 */
-	import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewWindow';
 	import { Button } from '$lib/components/ui/button';
 	import * as Separator from '$lib/components/ui/separator';
 	import * as Tooltip from '$lib/components/ui/tooltip';
@@ -12,19 +12,18 @@
 	
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { 
-		zoomLevel, 
 		zoomIn, 
 		zoomOut, 
 		resetZoom, 
 		rotateClockwise,
 		rotationAngle,
-		viewMode,
 		setViewMode,
-		toggleViewMode,
 		toggleSidebar,
 		topToolbarPinned,
 		topToolbarHeight
 	} from '$lib/stores';
+import { readable } from 'svelte/store';
+import { appState, type StateSelector } from '$lib/core/state/appState';
 	import PathBar from '../ui/PathBar.svelte';
 	import {
 		ChevronLeft,
@@ -47,11 +46,17 @@
 		GripHorizontal,
 		ExternalLink,
 		Eye,
-		Code,
 		Split
 	} from '@lucide/svelte';
 
-	const appWindow = getCurrentWebviewWindow();
+const appWindow = getCurrentWebviewWindow();
+
+function createAppStateStore<T>(selector: StateSelector<T>) {
+	const initial = selector(appState.getSnapshot());
+	return readable(initial, (set) => appState.subscribe(selector, (value) => set(value)));
+}
+
+const viewerState = createAppStateStore((state) => state.viewer);
 	
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
@@ -134,10 +139,10 @@
 		}
 	});
 
-	async function handlePreviousPage() {
+async function handlePreviousPage() {
 		if (!bookStore.canPreviousPage) return;
 		try {
-			if ($viewMode === 'double') {
+		if ($viewerState.viewMode === 'double') {
 				const currentIndex = bookStore.currentPageIndex;
 				const targetIndex = Math.max(currentIndex - 2, 0);
 				await bookStore.navigateToPage(targetIndex);
@@ -149,10 +154,10 @@
 		}
 	}
 
-	async function handleNextPage() {
+async function handleNextPage() {
 		if (!bookStore.canNextPage) return;
 		try {
-			if ($viewMode === 'double') {
+		if ($viewerState.viewMode === 'double') {
 				const currentIndex = bookStore.currentPageIndex;
 				const targetIndex = Math.min(currentIndex + 2, bookStore.totalPages - 1);
 				await bookStore.navigateToPage(targetIndex);
@@ -204,36 +209,19 @@
 		await appWindow.close();
 	}
 
-	async function openDevTools() {
-		try {
-			await appWindow.openDevtools();
-		} catch (error) {
-			console.error('Failed to open dev tools:', error);
-		}
-	}
+function openStandaloneViewer() {
+	const url = `${window.location.origin}/standalone/viewer`;
+	const features = 'width=1200,height=800,resizable=yes,scrollbars=yes,status=yes,toolbar=no,menubar=no,location=no';
+	window.open(url, 'NeoView 独立查看器', features);
+}
 
-	function openStandaloneViewer() {
-		const url = `${window.location.origin}/standalone/viewer`;
-		const features = 'width=1200,height=800,resizable=yes,scrollbars=yes,status=yes,toolbar=no,menubar=no,location=no';
-		window.open(url, 'NeoView 独立查看器', features);
-	}
-
-	// 对比模式功能
-	let comparisonEnabled = $state(false);
-
-	// 监听对比模式设置变化
-	$effect(() => {
-		// 这里可以从store获取对比模式设置
-	});
-
-	// 点击对比按钮切换对比模式
-	function toggleComparisonMode() {
-		comparisonEnabled = !comparisonEnabled;
-		// 触发全局事件通知其他组件（始终使用滑动对比）
-		window.dispatchEvent(new CustomEvent('comparison-mode-changed', {
-			detail: { enabled: comparisonEnabled, mode: 'slider' }
-		}));
-	}
+function toggleComparisonMode() {
+	const nextEnabled = !$viewerState.comparisonVisible;
+	const mode = $viewerState.comparisonMode ?? 'slider';
+	window.dispatchEvent(new CustomEvent('comparison-mode-changed', {
+		detail: { enabled: nextEnabled, mode }
+	}));
+}
 </script>
 
 <div
@@ -243,6 +231,9 @@
 		: '-translate-y-full'}"
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}
+	role="complementary"
+	aria-label="顶部工具栏"
+	tabindex="-1"
 >
 	<!-- 标题栏（窗口控制） -->
 	<div
@@ -281,10 +272,6 @@
 
 			<Button variant="ghost" size="icon" class="h-6 w-6" style="pointer-events: auto;" onclick={openStandaloneViewer} title="在独立窗口中打开查看器">
 				<ExternalLink class="h-4 w-4" />
-			</Button>
-
-			<Button variant="ghost" size="icon" class="h-6 w-6" style="pointer-events: auto;" onclick={openDevTools} title="打开开发者工具">
-				<Code class="h-4 w-4" />
 			</Button>
 		</div>
 
@@ -340,7 +327,7 @@
 			<div class="flex items-center gap-1 flex-shrink-0">
 				<!-- 导航按钮 -->
 				<Tooltip.Root>
-					<Tooltip.Trigger asChild>
+					<Tooltip.Trigger>
 						<Button
 							variant="ghost"
 							size="icon"
@@ -357,7 +344,7 @@
 				</Tooltip.Root>
 
 				<Tooltip.Root>
-					<Tooltip.Trigger asChild>
+					<Tooltip.Trigger>
 						<Button
 							variant="ghost"
 							size="icon"
@@ -378,7 +365,7 @@
 
 				<!-- 缩放按钮 -->
 				<Tooltip.Root>
-					<Tooltip.Trigger asChild>
+					<Tooltip.Trigger>
 						<Button variant="ghost" size="icon" class="h-8 w-8" onclick={zoomOut}>
 							<ZoomOut class="h-4 w-4" />
 						</Button>
@@ -389,14 +376,14 @@
 				</Tooltip.Root>
 
 				<Tooltip.Root>
-					<Tooltip.Trigger asChild>
+					<Tooltip.Trigger>
 						<Button
 							variant="ghost"
 							size="sm"
 							class="h-8 px-2 font-mono text-xs"
 							onclick={resetZoom}
 						>
-							{($zoomLevel * 100).toFixed(0)}%
+							{($viewerState.zoom * 100).toFixed(0)}%
 						</Button>
 					</Tooltip.Trigger>
 					<Tooltip.Content>
@@ -405,7 +392,7 @@
 				</Tooltip.Root>
 
 				<Tooltip.Root>
-					<Tooltip.Trigger asChild>
+					<Tooltip.Trigger>
 						<Button variant="ghost" size="icon" class="h-8 w-8" onclick={zoomIn}>
 							<ZoomIn class="h-4 w-4" />
 						</Button>
@@ -420,22 +407,22 @@
 
 				<!-- 视图模式切换 - 下拉菜单 -->
 				<DropdownMenu.Root>
-					<DropdownMenu.Trigger asChild>
+					<DropdownMenu.Trigger>
 						<Button variant="outline" size="sm" class="h-8 px-3">
 							<Eye class="h-4 w-4 mr-2" />
-							{#if $viewMode === 'single'}单页{:else if $viewMode === 'double'}双页{:else}全景{/if}
+							{#if $viewerState.viewMode === 'single'}单页{:else if $viewerState.viewMode === 'double'}双页{:else}全景{/if}
 						</Button>
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content class="w-48">
-						<DropdownMenu.Item onclick={() => setViewMode('single')} class={$viewMode === 'single' ? 'bg-accent' : ''}>
+						<DropdownMenu.Item onclick={() => setViewMode('single')} class={$viewerState.viewMode === 'single' ? 'bg-accent' : ''}>
 							<RectangleVertical class="h-4 w-4 mr-2" />
 							<span>单页模式</span>
 						</DropdownMenu.Item>
-						<DropdownMenu.Item onclick={() => setViewMode('double')} class={$viewMode === 'double' ? 'bg-accent' : ''}>
+						<DropdownMenu.Item onclick={() => setViewMode('double')} class={$viewerState.viewMode === 'double' ? 'bg-accent' : ''}>
 							<Columns2 class="h-4 w-4 mr-2" />
 							<span>双页模式</span>
 						</DropdownMenu.Item>
-						<DropdownMenu.Item onclick={() => setViewMode('panorama')} class={$viewMode === 'panorama' ? 'bg-accent' : ''}>
+						<DropdownMenu.Item onclick={() => setViewMode('panorama')} class={$viewerState.viewMode === 'panorama' ? 'bg-accent' : ''}>
 							<PanelsTopLeft class="h-4 w-4 mr-2" />
 							<span>全景模式</span>
 						</DropdownMenu.Item>
@@ -447,19 +434,19 @@
 
 				<!-- 对比模式按钮 -->
 				<Tooltip.Root>
-					<Tooltip.Trigger asChild>
+					<Tooltip.Trigger>
 						<Button 
-							variant={comparisonEnabled ? 'default' : 'ghost'} 
+							variant={$viewerState.comparisonVisible ? 'default' : 'ghost'} 
 							size="icon" 
 							class="h-8 w-8"
-							title={comparisonEnabled ? '关闭滑动对比' : '开启滑动对比'}
+							title={$viewerState.comparisonVisible ? '关闭滑动对比' : '开启滑动对比'}
 							onclick={toggleComparisonMode}
 						>
 							<Split class="h-4 w-4" />
 						</Button>
 					</Tooltip.Trigger>
 					<Tooltip.Content>
-						<p>{comparisonEnabled ? '关闭滑动对比' : '开启滑动对比'}</p>
+						<p>{$viewerState.comparisonVisible ? '关闭滑动对比' : '开启滑动对比'}</p>
 					</Tooltip.Content>
 				</Tooltip.Root>
 
@@ -468,7 +455,7 @@
 
 				<!-- 旋转按钮 -->
 				<Tooltip.Root>
-					<Tooltip.Trigger asChild>
+					<Tooltip.Trigger>
 						<Button variant="ghost" size="icon" class="h-8 w-8" onclick={rotateClockwise}>
 							<RotateCw class="h-4 w-4" />
 						</Button>
@@ -481,12 +468,13 @@
 		</div>
 
 		<!-- 拖拽手柄 -->
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<div
 			class="h-2 flex items-center justify-center cursor-ns-resize hover:bg-primary/20 transition-colors"
 			onmousedown={handleResizeStart}
 			role="separator"
 			aria-label="拖拽调整工具栏高度"
-			tabindex="0"
+			tabindex="-1"
 		>
 			<GripHorizontal class="h-3 w-3 text-muted-foreground" />
 		</div>

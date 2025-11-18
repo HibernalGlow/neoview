@@ -4,14 +4,30 @@
 	 * 对比模式组件 - 滑动对比
 	 */
 	import { bookStore } from '$lib/stores/book.svelte';
-	import { zoomLevel, rotationAngle } from '$lib/stores';
+	import { rotationAngle } from '$lib/stores';
+	import { readable } from 'svelte/store';
+	import { appState, type StateSelector } from '$lib/core/state/appState';
+
+	type ComparisonViewerProps = {
+		originalImageData?: string;
+		upscaledImageData?: string;
+		isVisible?: boolean;
+		onClose?: () => void;
+	};
 
 	let {
 		originalImageData = '',
 		upscaledImageData = '',
 		isVisible = false,
 		onClose = () => {}
-	} = $props();
+	}: ComparisonViewerProps = $props();
+
+	function createAppStateStore<T>(selector: StateSelector<T>) {
+		const initial = selector(appState.getSnapshot());
+		return readable(initial, (set) => appState.subscribe(selector, (value) => set(value)));
+	}
+
+	const viewerState = createAppStateStore((state) => state.viewer);
 
 	// 滑动对比相关状态
 	let sliderPosition = $state(50); // 滑块位置 (0-100)
@@ -105,6 +121,8 @@
 				class="relative w-full h-full bg-gray-900 rounded-lg overflow-hidden"
 				onmousedown={handleMouseDown}
 				style="cursor: col-resize"
+				role="presentation"
+				tabindex="-1"
 			>
 				<!-- 滑动对比模式 -->
 				<div class="relative w-full h-full">
@@ -113,7 +131,7 @@
 						src={originalImageData}
 						alt="原图"
 						class="absolute inset-0 w-full h-full object-contain"
-						style="transform: scale({$zoomLevel}) rotate({$rotationAngle}deg);"
+						style="transform: scale({$viewerState.zoom}) rotate({$rotationAngle}deg);"
 					/>
 					
 					<!-- 超分图（顶层，裁剪显示） -->
@@ -125,7 +143,7 @@
 							src={upscaledImageData}
 							alt="超分图"
 							class="w-full h-full object-contain"
-							style="transform: scale({$zoomLevel}) rotate({$rotationAngle}deg);"
+							style="transform: scale({$viewerState.zoom}) rotate({$rotationAngle}deg);"
 						/>
 					</div>
 

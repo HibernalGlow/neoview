@@ -106,6 +106,26 @@
 - Job 类型：`Preload`, `Upscale`, `Thumbnail`, `Metadata`.
 - 对接 PyO3（Python 超分）与未来扩展（Rust/ncnn 实现）。
 
+#### 3.1.1 IPC Mapping（FileBrowser / History / Bookmark）
+| 面板 | 前端入口（TS） | Tauri 命令 / 插件 | 载荷结构 | 目标 Rust Job / Cache 表 |
+| --- | --- | --- | --- | --- |
+| FileBrowser：目录读取 | `FileSystemAPI.browseDirectory(path)` | `browse_directory` | `{ path: string }` | `job_type = 'filebrowser-directory-load'`，结果写入 `directory_cache(path, items_json, mtime)` |
+| FileBrowser：元数据校验 | `FileSystemAPI.getFileMetadata(path)` | `get_file_info` | `{ path: string }` | `job_type = 'filebrowser-cache-validate'`，更新 `directory_cache.last_checked` |
+| FileBrowser：搜索 | `FileSystemAPI.searchFiles(path, query, options)` | `search_files` | `{ path, query, options }` | `job_type = 'filebrowser-search'`，记录入 `search_history` 表 |
+| FileBrowser：压缩包浏览 | `FileSystemAPI.listArchiveContents(path)` | `list_archive_contents` | `{ archivePath }` | `job_type = 'archive-list'`，缓存到 `archive_index` |
+| FileBrowser：缩略图预取 | `thumbnailManager.getThumbnail(...)` | `has_thumbnail_by_key_category` / `load_thumbnail_from_db` / `get_thumbnail_blob_data` / `generate_file_thumbnail_new` / `generate_archive_thumbnail_new` / `get_thumbnail_blob_data` | `{ pathKey, category }` | `job_type = 'thumbnail-generate'`，读写 `thumbnail_cache (path_key TEXT PRIMARY, blob_key TEXT, category TEXT, updated_at INTEGER)` |
+| FileBrowser：批量扫描 | `thumbnailManager.batchScanFoldersAndBindThumbnails` | `scan_folder_thumbnails`（待 Rust 版实现） | `{ root_path, limit }` | `job_type = 'filebrowser-folder-scan'`，写 `folder_scan_log` |
+| Bookmark：打开书签 | `FileSystemAPI.browseDirectory` / `FileSystemAPI.isSupportedArchive` / `bookStore.openBook` | `browse_directory` / `is_supported_archive` / `open_book` | 路径及书籍参数 | 复用 `directory_cache` / `book_cache`，Job `bookmark-open` |
+| Bookmark & History：缩略图 | `thumbnailManager.getThumbnail(entry.path...)` | 同上 | `pathKey`, `category`, `isArchive` | Job `history-thumbnail-load` / `bookmark-thumbnail-load`，共享 `thumbnail_cache` |
+
+> 说明：
+> 1. 面板层已将上述调用点绑定到 `taskScheduler`（TS 版），Rust 迁移后仅需保持 `type/source` 恒定即可沿用 UI 现有指标展示。
+> 2. SQLite 结构建议：
+>    - `thumbnail_cache(path_key TEXT PRIMARY KEY, category TEXT, blob_key TEXT, hash TEXT, size INTEGER, updated_at INTEGER, source TEXT)`
+>    - `directory_cache(path TEXT PRIMARY KEY, payload_json TEXT, mtime INTEGER, last_checked INTEGER)`
+>    - `folder_scan_log(id INTEGER PRIMARY KEY AUTOINCREMENT, root_path TEXT, discovered INTEGER, created_at INTEGER)`
+> 3. IPC 契约将按照 `invoke(command, payload)` → `TaskScheduler.enqueue(job)` → `CacheService` 链路映射，Phase 3 仅需补完 Rust 侧 job handler 与 DB 访问层。
+
 **3.2 Cache Index 持久化**
 - 引入 SQLite (via `tauri-plugin-sql` 或自研) 存储 hash -> cache info。
 - Rust API: `cache_lookup`, `cache_insert`, `cache_gc`.

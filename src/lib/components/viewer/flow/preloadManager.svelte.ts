@@ -30,7 +30,7 @@ export interface PreloadTaskWithCondition {
 
 export interface PreloadManagerOptions {
 	onImageLoaded?: (objectUrl: string, objectUrl2?: string) => void;
-	onImageBitmapReady?: (bitmap: ImageBitmap, bitmap2?: ImageBitmap) => void;
+	onImageMetadataReady?: (metadata: { width: number; height: number } | null, metadata2?: { width: number; height: number } | null) => void;
 	onPreloadProgress?: (progress: number, total: number) => void;
 	onError?: (error: string) => void;
 	onLoadingStateChange?: (loading: boolean, visible: boolean) => void;
@@ -84,7 +84,7 @@ export class PreloadManager {
 			performancePreloadPages: this.performancePreloadPages,
 			performanceMaxThreads: this.performanceMaxThreads,
 			onImageLoaded: options.onImageLoaded,
-			onImageBitmapReady: options.onImageBitmapReady,
+			onImageMetadataReady: options.onImageMetadataReady,
 			onPreloadProgress: options.onPreloadProgress,
 			onError: options.onError,
 			onLoadingStateChange: options.onLoadingStateChange
@@ -101,7 +101,7 @@ export class PreloadManager {
 					conditionId: task.conditionId,
 					pageIndex: task.pageIndex
 				}, true);
-				return;
+				return undefined;
 			},
 			onTaskSuccess: () => {
 				// 具体缓存与进度更新在调度事件回调中处理
@@ -307,13 +307,6 @@ export class PreloadManager {
 		const thumb = await this.imageLoader.getThumbnail(pageIndex);
 		this.options.onThumbnailReady?.(pageIndex, thumb);
 		return thumb;
-	}
-	
-	/**
-	 * 获取 ImageBitmap
-	 */
-	async getBitmap(pageIndex: number): Promise<ImageBitmap> {
-		return this.imageLoader.getBitmap(pageIndex);
 	}
 	
 	/**

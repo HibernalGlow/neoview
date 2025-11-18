@@ -42,14 +42,14 @@ interface BlobCacheItem {
 	lastAccessed: number;
 }
 
-interface BitmapCacheItem {
-	bitmap: ImageBitmap;
-	lastAccessed: number;
-}
-
 interface ThumbnailCacheItem {
 	dataURL: string;
 	lastAccessed: number;
+}
+
+interface ImageDimensions {
+	width: number;
+	height: number;
 }
 
 export interface ImageLoaderOptions {
@@ -57,7 +57,7 @@ export interface ImageLoaderOptions {
 	performanceMaxThreads: number;
 	viewMode?: 'single' | 'double' | 'panorama';
 	onImageLoaded?: (objectUrl: string, objectUrl2?: string) => void;
-	onImageBitmapReady?: (bitmap: ImageBitmap, bitmap2?: ImageBitmap) => void;
+	onImageMetadataReady?: (metadata: ImageDimensions | null, metadata2?: ImageDimensions | null) => void;
 	onPreloadProgress?: (progress: number, total: number) => void;
 	onError?: (error: string) => void;
 	onLoadingStateChange?: (loading: boolean, visible: boolean) => void;
@@ -68,7 +68,6 @@ export class ImageLoader {
 	
 	// 三层缓存架构
 	private blobCache = new Map<number, BlobCacheItem>();
-	private bitmapCache = new Map<number, BitmapCacheItem>();
 	private thumbnailCache = new Map<number, ThumbnailCacheItem>();
 	
 	// 预超分相关
@@ -172,16 +171,6 @@ export class ImageLoader {
 			});
 		}
 		
-		// 2. 确保 ImageBitmap 缓存
-		if (!this.bitmapCache.has(pageIndex)) {
-			const { blob } = this.blobCache.get(pageIndex)!;
-			const bitmap = await createImageBitmap(blob);
-			this.bitmapCache.set(pageIndex, {
-				bitmap,
-				lastAccessed: Date.now()
-			});
-		}
-		
 		// 更新访问时间
 		this.updateAccessTime(pageIndex);
 	}
@@ -233,22 +222,10 @@ export class ImageLoader {
 			const item = this.blobCache.get(pageIndex)!;
 			item.lastAccessed = now;
 		}
-		if (this.bitmapCache.has(pageIndex)) {
-			const item = this.bitmapCache.get(pageIndex)!;
-			item.lastAccessed = now;
-		}
 		if (this.thumbnailCache.has(pageIndex)) {
 			const item = this.thumbnailCache.get(pageIndex)!;
 			item.lastAccessed = now;
 		}
-	}
-	
-	/**
-	 * 获取 ImageBitmap
-	 */
-	async getBitmap(pageIndex: number): Promise<ImageBitmap> {
-		await this.ensureResources(pageIndex);
-		return this.bitmapCache.get(pageIndex)!.bitmap;
 	}
 	
 	/**
@@ -258,8 +235,8 @@ export class ImageLoader {
 		await this.ensureResources(pageIndex);
 		
 		if (!this.thumbnailCache.has(pageIndex)) {
-			const { bitmap } = this.bitmapCache.get(pageIndex)!;
-			const dataURL = await this.drawBitmapToDataURL(bitmap, THUMB_HEIGHT);
+			const { blob } = this.blobCache.get(pageIndex)!;
+			const dataURL = await this.drawBlobToDataURL(blob, THUMB_HEIGHT);
 			this.thumbnailCache.set(pageIndex, {
 				dataURL,
 				lastAccessed: Date.now()
@@ -286,21 +263,45 @@ export class ImageLoader {
 	}
 	
 	/**
-	 * 将 ImageBitmap 绘制为 DataURL 缩略图
+	 * 将 Blob 绘制为 DataURL 缩略图
 	 */
-	private async drawBitmapToDataURL(bitmap: ImageBitmap, height: number): Promise<string> {
+	private async drawBlobToDataURL(blob: Blob, height: number): Promise<string> {
+		const imageUrl = URL.createObjectURL(blob);
 		const canvas = document.createElement('canvas');
 		const ctx = canvas.getContext('2d')!;
-		
-		// 计算缩放比例
-		const scale = height / bitmap.height;
-		canvas.width = bitmap.width * scale;
-		canvas.height = height;
-		
-		// 绘制缩略图
-		ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-		
-		return canvas.toDataURL('image/jpeg', 0.85);
+		return await new Promise<string>((resolve, reject) => {
+			const img = new Image();
+			img.onload = () => {
+				const scale = height / img.naturalHeight;
+				canvas.width = img.naturalWidth * scale;
+				canvas.height = height;
+				ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+				URL.revokeObjectURL(imageUrl);
+				resolve(canvas.toDataURL('image/jpeg', 0.85));
+			};
+			img.onerror = (error) => {
+				URL.revokeObjectURL(imageUrl);
+				reject(error);
+			};
+			img.src = imageUrl;
+		});
+	}
+
+	private async getImageDimensions(blob: Blob): Promise<ImageDimensions | null> {
+		return new Promise((resolve) => {
+			const url = URL.createObjectURL(blob);
+			const img = new Image();
+			img.onload = () => {
+				const result: ImageDimensions = { width: img.naturalWidth, height: img.naturalHeight };
+				URL.revokeObjectURL(url);
+				resolve(result);
+			};
+			img.onerror = () => {
+				URL.revokeObjectURL(url);
+				resolve(null);
+			};
+			img.src = url;
+		});
 	}
 
 	/**
@@ -339,7 +340,6 @@ export class ImageLoader {
 	 */
 	private enforceCacheLimits(): void {
 		this.enforceBlobCacheLimit();
-		this.enforceBitmapCacheLimit();
 		this.enforceThumbnailCacheLimit();
 	}
 	
@@ -365,7 +365,7 @@ export class ImageLoader {
 			if (totalSize <= limit) break;
 			
 			// 检查是否有其他缓存依赖
-			if (this.bitmapCache.has(index) || this.thumbnailCache.has(index)) {
+			if (this.thumbnailCache.has(index)) {
 				continue; // 跳过仍在使用的项
 			}
 			
@@ -376,32 +376,8 @@ export class ImageLoader {
 	}
 	
 	/**
-	 * 限制 ImageBitmap 缓存
+	 * 限制缩略图缓存
 	 */
-	private enforceBitmapCacheLimit(): void {
-		const limit = 20; // 最多缓存 20 个 ImageBitmap
-		const entries = Array.from(this.bitmapCache.entries());
-		
-		if (entries.length <= limit) return;
-		
-		// 按访问时间排序
-		entries.sort(([, a], [, b]) => a.lastAccessed - b.lastAccessed);
-		
-		// 移除最旧的项
-		const toRemove = entries.length - limit;
-		for (let i = 0; i < toRemove; i++) {
-			const [index, item] = entries[i];
-			
-			// 检查是否有缩略图依赖
-			if (this.thumbnailCache.has(index)) {
-				continue; // 跳过仍在使用的项
-			}
-			
-			item.bitmap.close();
-			this.bitmapCache.delete(index);
-		}
-	}
-	
 	/**
 	 * 限制缩略图缓存
 	 */
@@ -500,19 +476,16 @@ export class ImageLoader {
 			// 确保当前页资源已加载
 			await this.ensureResources(currentPageIndex);
 			
-			// 获取 ImageBitmap 和 Object URL
-			const bitmap = await this.getBitmap(currentPageIndex);
+			// 获取 Object URL
 			const objectUrl = await this.getObjectUrl(currentPageIndex);
 			
 			// 双页模式：加载下一页
-			let bitmap2: ImageBitmap | undefined;
 			let objectUrl2: string | undefined;
 			
 			if (this.options.viewMode === 'double' && bookStore.canNextPage) {
 				const nextPageIndex = currentPageIndex + 1;
 				if (nextPageIndex < currentBook.pages.length) {
 					await this.ensureResources(nextPageIndex);
-					bitmap2 = await this.getBitmap(nextPageIndex);
 					objectUrl2 = await this.getObjectUrl(nextPageIndex);
 				}
 			}
@@ -639,7 +612,14 @@ export class ImageLoader {
 
 			// 调用外部回调 - 传递新的数据格式
 			this.options.onImageLoaded?.(objectUrl, objectUrl2 ?? undefined);
-			this.options.onImageBitmapReady?.(bitmap, bitmap2 ?? undefined);
+			const currentBlob = this.blobCache.get(currentPageIndex)?.blob;
+			const metadata = currentBlob ? await this.getImageDimensions(currentBlob) : null;
+			let metadata2: ImageDimensions | null = null;
+			if (objectUrl2) {
+				const nextBlob = this.blobCache.get(currentPageIndex + 1)?.blob;
+				metadata2 = nextBlob ? await this.getImageDimensions(nextBlob) : null;
+			}
+			this.options.onImageMetadataReady?.(metadata, metadata2 ?? undefined);
 
 			// ---- 无论是否 usedCache，都进行预超分队列调度 ----
 			setTimeout(() => {
@@ -766,7 +746,7 @@ export class ImageLoader {
 					continue;
 				}
 
-				// 确保核心缓存已准备（Blob + ImageBitmap），保证翻页时可以直接显示
+				// 确保核心缓存已准备（Blob + Object URL），保证翻页时可以直接显示
 				// 没有缓存：如果自动超分已开启，则添加到后端批量调度队列
 				try {
 					await this.ensureResources(targetIndex);
@@ -871,11 +851,6 @@ export class ImageLoader {
 			URL.revokeObjectURL(item.url);
 		}
 		this.blobCache.clear();
-		
-		for (const [, item] of this.bitmapCache) {
-			item.bitmap.close();
-		}
-		this.bitmapCache.clear();
 		
 		this.thumbnailCache.clear();
 		

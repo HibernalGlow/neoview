@@ -39,6 +39,8 @@ let hideCursorTimeout: ReturnType<typeof window.setTimeout> | null = null;
 	let settings = $state(settingsManager.getSettings());
 
 	// 对比模式状态
+type ImageDimensions = { width: number; height: number };
+
 let originalImageDataForComparison = $state<string>('');
 let upscaledImageDataForComparison = $state<string>('');
 let derivedUpscaledUrl = $state<string | null>(null);
@@ -55,8 +57,6 @@ let lastUpscaledObjectUrl: string | null = null;
 	// 图片数据状态
 	let imageData = $state<string | null>(null);
 	let imageData2 = $state<string | null>(null); // 双页模式的第二张图
-	let imageBitmap = $state<ImageBitmap | null>(null);
-	let imageBitmap2 = $state<ImageBitmap | null>(null); // 双页模式的第二张图
 	let loading = $state(false);
 let loadingVisible = $state(false); // 控制loading动画的可见性
 	let error = $state<string | null>(null);
@@ -130,7 +130,7 @@ async function fetchCachedFileMetadata(path: string): Promise<CachedFileMetadata
 	}
 }
 
-async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
+async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null) {
 	const book = bookStore.currentBook;
 	const page = bookStore.currentPage;
 	if (!book || !page) {
@@ -139,8 +139,8 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 	}
 
 	const requestId = ++metadataRequestId;
-	const widthsKnown = bitmap?.width ?? page.width;
-	const heightsKnown = bitmap?.height ?? page.height;
+	const widthsKnown = dimensions?.width ?? page.width;
+	const heightsKnown = dimensions?.height ?? page.height;
 
 	const baseInfo = {
 		path: buildDisplayPath(book, page),
@@ -200,7 +200,7 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 				imageData = objectUrl ?? null;
 				imageData2 = objectUrl2 ?? null;
 			},
-			onImageBitmapReady: async (bitmap, bitmap2) => {
+			onImageMetadataReady: async (metadata) => {
 				// 检查当前页是否已经是超分完成状态
 				const currentPageIndex = bookStore.currentPageIndex;
 				const currentStatus = bookStore.getPageUpscaleStatus(currentPageIndex);
@@ -210,19 +210,7 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 					console.log('当前页已超分完成，跳过原图 bitmap 更新');
 					return;
 				}
-				imageBitmap = bitmap ?? null;
-				imageBitmap2 = bitmap2 ?? null;
-				void updateInfoPanelForCurrentPage(bitmap);
-				if (bitmap) {
-					try {
-						originalImageDataForComparison = await bitmapToDataURL(bitmap);
-					} catch (error) {
-						console.error('转换 ImageBitmap 为 DataURL 失败:', error);
-						originalImageDataForComparison = '';
-					}
-				} else {
-					originalImageDataForComparison = '';
-				}
+				void updateInfoPanelForCurrentPage(metadata ?? null);
 			},
 			onLoadingStateChange: (loadingState, visible) => {
 				loading = loadingState;
@@ -281,8 +269,6 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 						bookStore.setUpscaledImageBlob(imageBlob);
 					}
 					
-					// 清掉当前页的 imageBitmap，强制使用 <img> 渲染
-					imageBitmap = null;
 					// 将 imageData 替换为超分 URL
 					imageData = upscaledImageData;
 					
@@ -365,12 +351,17 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 			onComparisonModeChanged: async (detail) => {
 				const { enabled, mode = 'slider' } = detail;
 				const upscaledSource = derivedUpscaledUrl || bookStore.upscaledImageData;
-				if (enabled && imageBitmap && upscaledSource) {
+				if (enabled && upscaledSource) {
+					const blob = preloadManager ? await preloadManager.getCurrentPageBlob() : null;
+					if (!blob) {
+						updateViewerState({ comparisonVisible: false });
+						return;
+					}
 					updateViewerState({ comparisonVisible: true, comparisonMode: mode });
 					try {
-						originalImageDataForComparison = await bitmapToDataURL(imageBitmap);
+						originalImageDataForComparison = await blobToDataURL(blob);
 					} catch (error) {
-						console.error('对比模式：转换 ImageBitmap 为 DataURL 失败:', error);
+						console.error('对比模式：转换 Blob 为 DataURL 失败:', error);
 						originalImageDataForComparison = '';
 					}
 					upscaledImageDataForComparison = upscaledSource;
@@ -651,33 +642,16 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 	}
 
 	/**
-	 * 将 ImageBitmap 转换为 DataURL
+	 * 将 Blob 转换为 DataURL
 	 */
-	async function bitmapToDataURL(bitmap: ImageBitmap): Promise<string> {
-		try {
-			// 检查 ImageBitmap 是否已 detached
-			const width = bitmap.width;
-			const height = bitmap.height;
-			
-			if (width === 0 || height === 0) {
-				console.warn('bitmapToDataURL: ImageBitmap 尺寸无效，可能已 detached');
-				return '';
-			}
-			
-			const canvas = document.createElement('canvas');
-			const ctx = canvas.getContext('2d')!;
-			canvas.width = width;
-			canvas.height = height;
-			
-			// 尝试绘制，如果失败则抛出错误
-			ctx.drawImage(bitmap, 0, 0);
-			
-			return canvas.toDataURL('image/png');
-		} catch (error) {
-			console.warn('bitmapToDataURL 失败，ImageBitmap 可能已 detached:', error);
-			return '';
-		}
-	}
+	async function blobToDataURL(blob: Blob): Promise<string> {
+	const reader = new FileReader();
+	return await new Promise((resolve, reject) => {
+		reader.onload = () => resolve(reader.result as string);
+		reader.onerror = (error) => reject(error);
+		reader.readAsDataURL(blob);
+	});
+}
 
 	// ...
 </script>
@@ -709,8 +683,6 @@ async function updateInfoPanelForCurrentPage(bitmap?: ImageBitmap | null) {
 			<ImageViewerDisplay
 				imageData={imageData}
 				imageData2={imageData2}
-				imageBitmap={imageBitmap}
-				imageBitmap2={imageBitmap2}
 				upscaledImageData={derivedUpscaledUrl || bookStore.upscaledImageData}
 				viewMode={$viewerState.viewMode as 'single' | 'double' | 'panorama'}
 				zoomLevel={$viewerState.zoom}

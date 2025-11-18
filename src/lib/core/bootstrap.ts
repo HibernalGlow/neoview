@@ -15,7 +15,7 @@ export function initializeCoreServices(): void {
 		settings: settingsManager.getSettings()
 	});
 
-	const listener = (settings: typeof appState.getSnapshot()['settings']) => {
+	const listener = (settings: any) => {
 		appState.update({ settings });
 	};
 

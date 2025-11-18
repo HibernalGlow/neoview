@@ -54,14 +54,16 @@
 	});
 
 	// 初始化时确保 mouseCursor 对象存在
-	if (!currentSettings.view.mouseCursor) {
-		currentSettings.view.mouseCursor = {
-			autoHide: true,
-			hideDelay: 1.0,
-			showMovementThreshold: 26,
-			showOnButtonClick: true
-		};
-	}
+	$effect(() => {
+		if (!currentSettings.view.mouseCursor) {
+			currentSettings.view.mouseCursor = {
+				autoHide: true,
+				hideDelay: 1.0,
+				showMovementThreshold: 26,
+				showOnButtonClick: true
+			};
+		}
+	});
 
 	// 加载性能设置
 	async function loadPerformanceSettings() {
@@ -496,10 +498,10 @@
 						<div class="space-y-2">
 							<h4 class="text-sm font-semibold">多线程</h4>
 							<div class="space-y-2">
-								<label class="flex items-center justify-between">
+								<div class="flex items-center justify-between">
 									<span class="text-sm">解码线程数</span>
 									<span class="text-xs text-muted-foreground">{performanceSettings.decoding_threads}</span>
-								</label>
+								</div>
 								<input 
 									type="range" 
 									min="1" 
@@ -518,10 +520,10 @@
 							<h4 class="text-sm font-semibold">🖼️ 缩略图</h4>
 							<div class="space-y-3">
 								<div class="space-y-2">
-									<label class="flex items-center justify-between">
+									<div class="flex items-center justify-between">
 										<span class="text-sm">本地文件并发数</span>
 										<span class="text-xs text-muted-foreground">{performanceSettings.thumbnail_concurrent_local || 6}</span>
-									</label>
+									</div>
 									<input 
 										type="range" 
 										min="1" 

@@ -333,10 +333,30 @@ class ThumbnailManager {
       const { invoke } = await import('@tauri-apps/api/core');
       const pathKey = this.buildPathKey(path, innerPath);
       
-      // 调用后端生成缩略图（返回 blob key）
-      const blobKey = isArchive
-        ? await invoke<string>('generate_archive_thumbnail_new', { archivePath: path })
-        : await invoke<string>('generate_file_thumbnail_new', { filePath: path });
+      // 检测是否为视频文件
+      const pathLower = path.toLowerCase();
+      const isVideo = /\.(mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/.test(pathLower);
+      
+      let blobKey: string | null = null;
+      
+      if (isArchive) {
+        // 压缩包缩略图
+        blobKey = await invoke<string>('generate_archive_thumbnail_new', { archivePath: path });
+      } else if (isVideo) {
+        // 视频缩略图：使用 generate_video_thumbnail_new 命令（返回 blob key）
+        try {
+          blobKey = await invoke<string>('generate_video_thumbnail_new', { 
+            videoPath: path,
+            timeSeconds: 10.0 // 默认提取第10秒的帧
+          });
+        } catch (videoError) {
+          console.warn('生成视频缩略图失败:', path, videoError);
+          return null;
+        }
+      } else {
+        // 普通图片文件缩略图
+        blobKey = await invoke<string>('generate_file_thumbnail_new', { filePath: path });
+      }
 
       if (blobKey) {
         // 获取 blob 数据并创建 Blob URL

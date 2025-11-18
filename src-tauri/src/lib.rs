@@ -284,6 +284,7 @@ pub fn run() {
             commands::init_thumbnail_manager,
             commands::generate_file_thumbnail_new,
             commands::generate_archive_thumbnail_new,
+            commands::generate_video_thumbnail_new,
             commands::batch_preload_thumbnails,
             commands::has_thumbnail,
             commands::has_thumbnail_by_key_category,

@@ -8,8 +8,10 @@ use crate::core::cache_index_db::ThumbnailCacheUpsert;
 use crate::core::fs_manager::{FsItem, FsManager};
 use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::thumbnail_generator::{ThumbnailGenerator, ThumbnailGeneratorConfig};
+use crate::core::video_thumbnail::VideoThumbnailGenerator;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -188,6 +190,82 @@ pub async fn generate_archive_thumbnail_new(
         "✅ generate_archive_thumbnail_new 完成: {} -> blob_key: {}",
         archive_path, blob_key
     );
+    Ok(blob_key)
+}
+
+/// 生成视频缩略图（返回 blob key，同步保存到数据库）
+#[tauri::command]
+pub async fn generate_video_thumbnail_new(
+    app: tauri::AppHandle,
+    video_path: String,
+    time_seconds: Option<f64>,
+) -> Result<String, String> {
+    use image::ImageFormat;
+    use std::path::Path;
+
+    let state = app.state::<ThumbnailState>();
+    let cache_index = app.state::<CacheIndexState>();
+    let scheduler = app.state::<BackgroundSchedulerState>();
+    let job_source = format!("video:{}", video_path);
+    let path_for_job = video_path.clone();
+    let time = time_seconds.unwrap_or(10.0);
+
+    // 检查是否为视频文件
+    let path = Path::new(&video_path);
+    if !VideoThumbnailGenerator::is_video_file(path) {
+        return Err("路径不是视频文件".to_string());
+    }
+
+    // 检查 FFmpeg 是否可用
+    if !VideoThumbnailGenerator::is_ffmpeg_available() {
+        return Err("FFmpeg 不可用，请安装 FFmpeg".to_string());
+    }
+
+    let thumbnail_data = scheduler
+        .scheduler
+        .enqueue_blocking("thumbnail-generate", job_source, move || {
+            // 提取视频帧
+            let frame = VideoThumbnailGenerator::extract_frame(path, time)
+                .map_err(|e| format!("提取视频帧失败: {}", e))?;
+
+            // 将图片编码为 PNG 字节数组
+            let mut buffer = Vec::new();
+            {
+                let mut cursor = std::io::Cursor::new(&mut buffer);
+                frame
+                    .write_to(&mut cursor, ImageFormat::Png)
+                    .map_err(|e| format!("编码图片失败: {}", e))?;
+            }
+
+            Ok::<Vec<u8>, String>(buffer)
+        })
+        .await?;
+
+    // 注册到 BlobRegistry，返回 blob key
+    let blob_key = state.blob_registry.get_or_register(
+        &thumbnail_data,
+        "image/png",
+        Duration::from_secs(3600), // 1 小时 TTL
+        Some(video_path.clone()),
+    );
+
+    // 写入缓存索引
+    if let Err(err) = cache_index.db.upsert_thumbnail_entry(ThumbnailCacheUpsert {
+        path_key: &video_path,
+        category: "file",
+        hash: None,
+        size: Some(thumbnail_data.len() as i64),
+        source: Some("generate_video_thumbnail_new"),
+        blob_key: Some(&blob_key),
+    }) {
+        eprintln!("⚠️ 写入视频缩略图缓存索引失败: {}", err);
+    }
+
+    println!(
+        "✅ generate_video_thumbnail_new 完成: {} -> blob_key: {}",
+        video_path, blob_key
+    );
+
     Ok(blob_key)
 }
 

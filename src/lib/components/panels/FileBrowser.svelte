@@ -644,11 +644,13 @@ import { getPerformanceSettings } from '$lib/api/performance';
       const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.avif', '.jxl', '.tiff', '.tif'];
       // 支持的压缩包扩展名
       const archiveExts = ['.zip', '.rar', '.7z', '.cbz', '.cbr', '.cb7'];
+      // 支持的视频扩展名
+      const videoExts = ['.mp4', '.mkv', '.avi', '.mov', '.flv', '.webm', '.wmv', '.m4v', '.mpg', '.mpeg'];
       
       const ext = name.substring(name.lastIndexOf('.'));
       
-      // 文件夹或支持的文件类型
-      return isDir || imageExts.includes(ext) || archiveExts.includes(ext);
+      // 文件夹或支持的文件类型（包括视频）
+      return isDir || imageExts.includes(ext) || archiveExts.includes(ext) || videoExts.includes(ext);
     });
 
     // 1. 立即预加载数据库索引（异步，不阻塞）

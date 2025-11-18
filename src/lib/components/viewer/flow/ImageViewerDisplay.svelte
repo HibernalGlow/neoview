@@ -8,7 +8,8 @@
 		viewMode = 'single',
 		zoomLevel = 1,
 		rotationAngle = 0,
-		verticalPages = $bindable([] as Array<{ index: number; data: string | null }>)
+		verticalPages = $bindable([] as Array<{ index: number; data: string | null }>),
+		panoramaPages = $bindable([] as Array<{ index: number; data: string | null; position: 'left' | 'center' | 'right' }>)
 	}: {
 		imageData?: string | null;
 		imageData2?: string | null;
@@ -17,6 +18,7 @@
 		zoomLevel?: number;
 		rotationAngle?: number;
 		verticalPages?: Array<{ index: number; data: string | null }>;
+		panoramaPages?: Array<{ index: number; data: string | null; position: 'left' | 'center' | 'right' }>;
 	} = $props();
 
 	function currentSrc(source: string | null, fallback: string | null) {
@@ -64,11 +66,42 @@
 				{/if}
 			{/each}
 		</div>
+	{:else if viewMode === 'panorama'}
+		<!-- 全景模式：使用相邻图片填充边框空隙 -->
+		<div class="relative w-full h-full flex items-center justify-center overflow-hidden" style={`transform: scale(${zoomLevel});`}>
+			{#if panoramaPages.length > 0}
+				<!-- 使用相邻图片填充 -->
+				<div class="flex items-center justify-center h-full">
+					{#each panoramaPages as page (page.index)}
+						{#if page.data}
+							<img
+								src={page.data}
+								alt={`Page ${page.index + 1}`}
+								class="h-full object-contain"
+								class:opacity-50={page.position !== 'center'}
+								class:absolute={page.position !== 'center'}
+								class:left-0={page.position === 'left'}
+								class:right-0={page.position === 'right'}
+								style={`transform: rotate(${rotationAngle}deg); transition: transform 0.2s; z-index: ${page.position === 'center' ? 10 : page.position === 'left' ? 5 : 5};`}
+							/>
+						{/if}
+					{/each}
+				</div>
+			{:else}
+				<!-- 回退到单张图片显示 -->
+				<img
+					src={currentSrc(upscaledImageData, imageData) ?? ''}
+					alt="Panorama"
+					class="max-w-full max-h-full object-contain"
+					style={`transform: rotate(${rotationAngle}deg); transition: transform 0.2s;`}
+				/>
+			{/if}
+		</div>
 	{:else}
-		<!-- 全景模式：当前仅显示单张图片，后续将实现相邻图片填充 -->
+		<!-- 默认单页模式 -->
 		<img
 			src={currentSrc(upscaledImageData, imageData) ?? ''}
-			alt="Panorama"
+			alt="Current page"
 			class="max-w-full max-h-full object-contain"
 			style={`transform: scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
 		/>

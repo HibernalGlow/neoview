@@ -68,6 +68,8 @@
 
 > **进度（2025-11-21）**：`filebrowser-folder-scan` / `thumbnailManager.batchScanFoldersAndBindThumbnails` 已改为调用 Rust 调度器（`scan_folder_thumbnails`），文件夹扫描 + 缩略图绑定在后台完成并直接写入 `thumbnail_cache`；缓存清理同样改为 `enqueue_cache_maintenance` Job。新增 `src/lib/api/backgroundTasks.ts` 暴露 `scanFolderThumbnails`/`runCacheMaintenance`/`fetchBackgroundQueueMetrics`，前端 TaskScheduler → Rust Scheduler 的映射开始在 SDK 与文档中固化。
 
+> **进度（2025-11-21 更新）**：`comparison-prepare` 和 `archive-batch-scan` 已迁移至 Rust 调度器。`prepare_comparison_preview` 命令接收前端传递的 blob 二进制数据，在 Rust 后台任务中转换为 base64 DataURL；`batch_scan_archives` 支持批量扫描多个压缩包，通过调度器串行执行，避免阻塞主线程。前端 `comparisonTaskService` 已更新为直接调用 Rust 命令，不再依赖前端 `taskScheduler`。文档映射表已更新，标记这两个任务为已完成。
+
 **2.1 StateService**
 - 合并 `bookStore`, `settingsManager`, 分散 $state 到 `appState`，组件统一走 selector。
 - 新增 `viewer.pageWindow`（包含 `center`, `forward`, `backward`, `stale`）与 `viewer.taskCursor`（记录 `oldestPendingIdx`, `furthestReadyIdx`），支持 UI 实时展示缓存覆盖范围。
@@ -164,8 +166,8 @@
 | `generate_*_thumbnail_new` (`thumbnail-generate`) | `panel-thumbnail-load` 等 | 组件直接触发 `getThumbnail` | 任务在 Rust 调度器中串行化，TS 仅发起命令 |
 | `enqueue_cache_maintenance` (`cache-maintenance`) | `cache-maintenance` | `runCacheMaintenance()` | SQLite 双表 GC、后续拓展到 Blob/thumbnail 真正删除 |
 | `get_background_queue_metrics` | N/A（监控） | `fetchBackgroundQueueMetrics()` | 提供 queue depth / running / 最近 64 条记录 |
-| （规划）`archive-batch-scan` | `archive-batch-scan` | **TODO** `scanArchiveBatch()` | Phase 3：Rust 侧串行解包并写入 cache，替换前端逐个 `listArchiveContents` |
-| （规划）`comparison-prepare` | `comparison-prepare` | **TODO** `scheduleComparisonPrepare()` | Phase 3：比较模式耗时流程（差值、缓存清理）直接交给 Rust Scheduler，沿用现有前端指标 |
+| `batch_scan_archives` (`archive-batch-scan`) | `archive-batch-scan` | `batchScanArchives()` | ✅ Rust 侧批量解包并返回内容列表，通过调度器执行，避免阻塞主线程 |
+| `prepare_comparison_preview` (`comparison-prepare`) | `comparison-prepare` | `scheduleComparisonPreview()` | ✅ 比较模式 Blob → DataURL 转换，通过 Rust 调度器执行，沿用现有前端指标 |
 
 **3.3 IPC 规范**
 - 所有命令集中管理（`src-tauri/src/api/mod.rs`），生成 TS 类型（使用 `ts-rs` 或手写声明）。

@@ -43,3 +43,41 @@ export async function runCacheMaintenance(): Promise<CacheMaintenanceResult> {
 	return invoke<CacheMaintenanceResult>('enqueue_cache_maintenance');
 }
 
+// ===== Comparison Commands =====
+
+export interface ComparisonPrepareRequest {
+	imageData: number[]; // Vec<u8> 作为 number[]
+	mimeType: string;
+	pageIndex?: number;
+}
+
+export interface ComparisonPrepareResponse {
+	dataUrl: string;
+}
+
+export async function prepareComparisonPreview(
+	request: ComparisonPrepareRequest
+): Promise<ComparisonPrepareResponse> {
+	return invoke<ComparisonPrepareResponse>('prepare_comparison_preview', { request });
+}
+
+// ===== Archive Batch Scan Commands =====
+
+export interface ArchiveScanResult {
+	archivePath: string;
+	entries: Array<{
+		name: string;
+		path: string;
+		size: number;
+		isDir: boolean;
+		isImage: boolean;
+	}>;
+	error?: string | null;
+}
+
+export async function batchScanArchives(archivePaths: string[]): Promise<ArchiveScanResult[]> {
+	if (archivePaths.length === 0) return [];
+	return invoke<ArchiveScanResult[]>('batch_scan_archives', { archivePaths });
+}
+
+

@@ -191,6 +191,9 @@ pub fn run() {
             commands::load_image_from_archive,
             commands::get_images_from_archive,
             commands::is_supported_archive,
+            commands::batch_scan_archives,
+            // Comparison commands
+            commands::prepare_comparison_preview,
             // File operation commands
             commands::fs_commands::copy_path,
             commands::fs_commands::move_path,

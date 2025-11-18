@@ -388,6 +388,62 @@ pub async fn is_supported_archive(path: String) -> Result<bool, String> {
     ))
 }
 
+/// 批量扫描压缩包内容
+/// 通过 Rust 调度器执行，避免阻塞主线程
+#[tauri::command]
+pub async fn batch_scan_archives(
+    archive_paths: Vec<String>,
+    state: State<'_, FsState>,
+    scheduler: State<'_, BackgroundSchedulerState>,
+) -> Result<Vec<ArchiveScanResult>, String> {
+    use crate::core::archive::ArchiveEntry;
+
+    let archive_manager = Arc::clone(&state.archive_manager);
+    let paths: Vec<PathBuf> = archive_paths.iter().map(PathBuf::from).collect();
+
+    let results = scheduler
+        .scheduler
+        .enqueue_blocking("archive-batch-scan", "filebrowser", move || {
+            let mut results = Vec::with_capacity(paths.len());
+            let manager = archive_manager
+                .lock()
+                .map_err(|e| format!("获取压缩包管理器锁失败: {}", e))?;
+
+            for path in paths {
+                let archive_path_str = path.to_string_lossy().to_string();
+                match manager.list_zip_contents(&path) {
+                    Ok(entries) => {
+                        results.push(ArchiveScanResult {
+                            archive_path: archive_path_str,
+                            entries,
+                            error: None,
+                        });
+                    }
+                    Err(e) => {
+                        results.push(ArchiveScanResult {
+                            archive_path: archive_path_str,
+                            entries: Vec::new(),
+                            error: Some(e),
+                        });
+                    }
+                }
+            }
+
+            Ok::<Vec<ArchiveScanResult>, String>(results)
+        })
+        .await?;
+
+    Ok(results)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveScanResult {
+    pub archive_path: String,
+    pub entries: Vec<crate::core::archive::ArchiveEntry>,
+    pub error: Option<String>,
+}
+
 // ===== 文件操作命令 =====
 
 /// 复制文件或文件夹

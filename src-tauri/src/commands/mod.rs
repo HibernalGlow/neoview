@@ -2,6 +2,7 @@
 //! 导出所有 Tauri 命令
 
 pub mod book_commands;
+pub mod comparison_commands;
 pub mod default;
 pub mod fs_commands;
 pub mod generic_upscale_commands;
@@ -16,6 +17,7 @@ pub mod upscale_settings_commands;
 pub mod video_commands;
 
 pub use book_commands::*;
+pub use comparison_commands::*;
 pub use default::*;
 pub use fs_commands::*;
 pub use generic_upscale_commands::*;

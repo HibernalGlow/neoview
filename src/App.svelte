@@ -4,6 +4,7 @@
 	 * 主应用程序组件
 	 */
 	import MainLayout from '$lib/components/layout/MainLayout.svelte';
+	import CanvasBoard from '$lib/components/canvas/CanvasBoard.svelte';
 	import ImageViewer from '$lib/components/viewer/ImageViewer.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
@@ -290,19 +291,8 @@ function handleGlobalMouseDown(e: MouseEvent) {
 
 <Tooltip.Provider>
 	<Toast />
-	<MainLayout>
-	<div class="h-full w-full flex items-center justify-center">
-		<ImageViewer />
-		
-		<!-- 欢迎界面 (当没有打开书籍时显示) -->
-		<!-- <div class="text-center">
-			<h1 class="text-4xl font-bold mb-4">NeoView</h1>
-			<p class="text-muted-foreground mb-8">Modern Image & Comic Viewer</p>
-			<Button onclick={handleOpenFolder} disabled={loading} size="lg">
-				<FolderOpen class="mr-2 h-5 w-5" />
-				{loading ? 'Opening...' : 'Open Folder'}
-			</Button>
-		</div> -->
+	<div class="h-full w-full overflow-hidden">
+		<CanvasBoard />
 	</div>
 </MainLayout>
 </Tooltip.Provider>

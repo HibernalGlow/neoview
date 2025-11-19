@@ -626,13 +626,18 @@ class BookStore {
   private async syncInfoPanelBookInfo() {
     const book = this.state.currentBook;
     if (!book) {
+      console.debug('[BookStore] syncInfoPanelBookInfo: 没有当前书籍');
       infoPanelStore.resetBookInfo();
       return;
     }
 
+    console.debug('[BookStore] syncInfoPanelBookInfo: 开始加载 EMM 元数据，book:', book.name, 'path:', book.path);
+    
     // 加载 EMM 元数据
     const emmMetadata = await emmMetadataStore.loadMetadataByPath(book.path);
-    infoPanelStore.setBookInfo({
+    console.debug('[BookStore] syncInfoPanelBookInfo: EMM 元数据加载完成，metadata:', emmMetadata);
+    
+    const bookInfo = {
       path: book.path,
       name: book.name,
       type: book.type,
@@ -642,7 +647,10 @@ class BookStore {
         translatedTitle: emmMetadata.translated_title,
         tags: emmMetadata.tags
       } : undefined,
-    });
+    };
+    
+    console.debug('[BookStore] syncInfoPanelBookInfo: 设置书籍信息到 InfoPanel，bookInfo:', bookInfo);
+    infoPanelStore.setBookInfo(bookInfo);
   }
 
   private computePageWindowState(currentIndex: number, totalPages: number, radius: number): PageWindowState {

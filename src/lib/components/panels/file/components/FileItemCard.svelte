@@ -74,9 +74,15 @@
   let metadataLoading = $state(false);
   let lastLoadedPath = $state<string | null>(null);
 
-  // 加载收藏标签（只加载一次）
+  // 加载收藏标签（确保初始化完成）
   $effect(() => {
-    collectTags = emmMetadataStore.getCollectTags();
+    // 确保初始化完成
+    emmMetadataStore.initialize().then(() => {
+      collectTags = emmMetadataStore.getCollectTags();
+      console.debug('[FileItemCard] 收藏标签已加载，数量:', collectTags.length);
+    }).catch(err => {
+      console.error('[FileItemCard] 初始化 EMM Store 失败:', err);
+    });
   });
 
   // 加载 EMM 元数据（延迟加载，避免同时加载太多）
@@ -85,17 +91,24 @@
       metadataLoading = true;
       lastLoadedPath = item.path;
       
+      console.debug('[FileItemCard] 开始加载 EMM 元数据，item:', item.name, 'path:', item.path);
+      
       // 延迟加载，避免同时发起太多请求
       const timeoutId = setTimeout(() => {
         emmMetadataStore.loadMetadataByPath(item.path).then(metadata => {
+          console.debug('[FileItemCard] EMM 元数据加载完成，item:', item.name, 'metadata:', metadata);
           if (metadata && item.path === lastLoadedPath) {
             emmMetadata = {
               translatedTitle: metadata.translated_title,
               tags: metadata.tags
             };
+            console.debug('[FileItemCard] EMM 元数据已设置，item:', item.name, 'translatedTitle:', metadata.translated_title, 'tags:', metadata.tags);
+          } else {
+            console.debug('[FileItemCard] EMM 元数据未设置（路径不匹配或元数据为空），item:', item.name, 'lastLoadedPath:', lastLoadedPath, 'metadata:', metadata);
           }
           metadataLoading = false;
-        }).catch(() => {
+        }).catch((err) => {
+          console.error('[FileItemCard] EMM 元数据加载失败，item:', item.name, 'error:', err);
           metadataLoading = false;
         });
       }, Math.random() * 500); // 随机延迟 0-500ms，分散请求
@@ -121,15 +134,24 @@
 
   // 获取显示的标签（前3个，高亮收藏的）
   const displayTags = $derived(() => {
-    if (!emmMetadata?.tags) return [];
+    if (!emmMetadata?.tags) {
+      console.debug('[FileItemCard] 没有标签数据，item:', item.name);
+      return [];
+    }
+    
+    console.debug('[FileItemCard] 开始处理标签，item:', item.name, 'tags:', $state.snapshot(emmMetadata.tags));
+    console.debug('[FileItemCard] 收藏标签列表:', $state.snapshot(collectTags));
     
     const allTags: Array<{ tag: string; isCollect: boolean; color?: string }> = [];
     for (const [category, tags] of Object.entries(emmMetadata.tags)) {
       for (const tag of tags) {
         const collectTag = isCollectTag(tag, category);
+        const isCollect = !!collectTag;
+        const fullTag = `${category}:${tag}`;
+        console.debug(`[FileItemCard] 标签检查: item="${item.name}", category="${category}", tag="${tag}", fullTag="${fullTag}", isCollect=${isCollect}, color=${collectTag?.color}`);
         allTags.push({
-          tag: `${category}:${tag}`,
-          isCollect: !!collectTag,
+          tag: fullTag,
+          isCollect,
           color: collectTag?.color
         });
       }
@@ -138,8 +160,10 @@
     // 收藏标签优先显示
     const collectTagsList = allTags.filter(t => t.isCollect);
     const normalTagsList = allTags.filter(t => !t.isCollect);
+    const result = [...collectTagsList, ...normalTagsList].slice(0, 3);
     
-    return [...collectTagsList, ...normalTagsList].slice(0, 3);
+    console.debug('[FileItemCard] 处理后的标签列表:', $state.snapshot(result));
+    return result;
   });
 
   // 格式化时间

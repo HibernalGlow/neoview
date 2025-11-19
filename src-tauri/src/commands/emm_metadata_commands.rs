@@ -219,9 +219,18 @@ pub async fn load_emm_collect_tags(
         .and_then(|v| v.as_array())
         .cloned()
         .unwrap_or_default();
+    
+    println!("[EMM] 从 setting.json 读取 collectTag 字段，找到 {} 个标签", collect_tags.len());
+    
+    if collect_tags.is_empty() {
+        println!("[EMM] 警告：collectTag 数组为空，可能字段名不匹配或文件格式不正确");
+        println!("[EMM] setting.json 的顶层键: {:?}", setting.as_object().map(|o| o.keys().collect::<Vec<_>>()));
+    }
 
     let mut tags = Vec::new();
-    for tag_obj in collect_tags {
+    println!("[EMM] 开始解析收藏标签，共 {} 个", collect_tags.len());
+    
+    for (index, tag_obj) in collect_tags.iter().enumerate() {
         // 从 JSON 中提取字段：id, letter, cat, tag, color
         // id 格式通常是 "cat:tag"，例如 "female:stirrup legwear"
         // 如果没有 id，可以从 cat 和 tag 构造
@@ -230,6 +239,9 @@ pub async fn load_emm_collect_tags(
         let cat = tag_obj.get("cat").and_then(|v| v.as_str()); // 分类，如 "female", "male", "character"
         let tag = tag_obj.get("tag").and_then(|v| v.as_str());
         let color = tag_obj.get("color").and_then(|v| v.as_str());
+        
+        println!("[EMM] 标签 #{}: id={:?}, letter={:?}, cat={:?}, tag={:?}, color={:?}", 
+                 index, id, letter, cat, tag, color);
         
         // 至少需要 tag 和 color，其他字段可以推断
         if let (Some(tag_str), Some(color_str)) = (tag, color) {
@@ -254,15 +266,24 @@ pub async fn load_emm_collect_tags(
                 tag_str.to_string()
             };
             
-            tags.push(EMMCollectTag {
-                id: id_str,
+            let collect_tag = EMMCollectTag {
+                id: id_str.clone(),
                 letter: letter.map(|s| s.to_string()).unwrap_or_default(),
                 tag: tag_str.to_string(),
                 color: color_str.to_string(),
-                display: display_str,
-            });
+                display: display_str.clone(),
+            };
+            
+            println!("[EMM] 解析后的标签 #{}: id={}, display={}, tag={}, color={}", 
+                     index, collect_tag.id, collect_tag.display, collect_tag.tag, collect_tag.color);
+            
+            tags.push(collect_tag);
+        } else {
+            println!("[EMM] 警告：标签 #{} 缺少 tag 或 color 字段，跳过", index);
         }
     }
+    
+    println!("[EMM] 成功解析 {} 个收藏标签", tags.len());
 
     Ok(tags)
 }

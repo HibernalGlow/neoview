@@ -90,6 +90,10 @@ function isCollectTag(tag: string, collectTags: EMMCollectTag[]): EMMCollectTag 
 	return null;
 }
 
+// 初始化状态标志
+let isInitializing = false;
+let isInitialized = false;
+
 export const emmMetadataStore = {
 	subscribe,
 	
@@ -97,23 +101,43 @@ export const emmMetadataStore = {
 	 * 初始化：查找数据库和加载收藏标签
 	 */
 	async initialize() {
+		// 如果正在初始化或已经初始化，直接返回
+		if (isInitializing) {
+			console.debug('[EMMStore] initialize: 正在初始化中，跳过');
+			return;
+		}
+		if (isInitialized) {
+			console.debug('[EMMStore] initialize: 已经初始化，跳过');
+			return;
+		}
+		
+		isInitializing = true;
 		try {
+			console.debug('[EMMStore] initialize: 开始初始化 EMM 元数据');
+			
 			// 合并自动检测和手动配置的主数据库路径
 			const autoDatabases = await EMMAPI.findEMMDatabases();
+			console.debug('[EMMStore] initialize: 自动检测到的主数据库:', autoDatabases);
+			
 			let currentState: EMMMetadataState;
 			subscribe(state => {
 				currentState = state;
 			})();
 			
+			console.debug('[EMMStore] initialize: 手动配置的主数据库:', currentState!.manualDatabasePaths);
+			
 			const allDatabases = [...autoDatabases, ...(currentState!.manualDatabasePaths || [])];
-			// 去重
-			const uniqueDatabases = Array.from(new Set(allDatabases));
+			// 去重，并过滤掉 translations.db（它应该只用于翻译数据库路径）
+			const uniqueDatabases = Array.from(new Set(allDatabases))
+				.filter(db => !db.toLowerCase().includes('translations.db'));
+			console.debug('[EMMStore] initialize: 合并后的主数据库列表:', uniqueDatabases);
 			
 			// 确定翻译数据库路径（优先手动配置，否则自动检测）
 			let translationDbPath = currentState!.manualTranslationDbPath;
 			if (!translationDbPath) {
 				translationDbPath = await EMMAPI.findEMMTranslationDatabase() || undefined;
 			}
+			console.debug('[EMMStore] initialize: 翻译数据库路径:', translationDbPath);
 			
 			update(s => ({
 				...s,
@@ -128,20 +152,41 @@ export const emmMetadataStore = {
 			})();
 			
 			const settingPath = stateForSetting!.manualSettingPath || await EMMAPI.findEMMSettingFile();
+			console.debug('[EMMStore] initialize: 设置文件路径:', settingPath);
+			
 			if (settingPath) {
 				try {
+					console.debug('[EMMStore] initialize: 开始加载收藏标签，路径:', settingPath);
 					const tags = await EMMAPI.loadEMMCollectTags(settingPath);
+					console.debug('[EMMStore] initialize: 成功加载收藏标签，数量:', tags.length);
+					if (tags.length > 0) {
+						console.debug('[EMMStore] initialize: 前3个标签:', tags.slice(0, 3).map(t => ({ id: t.id, display: t.display, tag: t.tag })));
+					} else {
+						console.warn('[EMMStore] initialize: 警告：从设置文件加载的收藏标签为空，请检查 setting.json 中的 collectTag 字段');
+					}
 					update(s => ({
 						...s,
 						collectTags: tags,
 						settingPath
 					}));
+					console.debug('[EMMStore] initialize: 收藏标签已更新到 store');
 				} catch (e) {
-					console.debug('加载收藏标签失败:', e);
+					console.error('[EMMStore] initialize: 加载收藏标签失败:', e);
+					console.error('[EMMStore] initialize: 错误详情:', e instanceof Error ? e.message : String(e));
+					if (e instanceof Error && e.stack) {
+						console.error('[EMMStore] initialize: 错误堆栈:', e.stack);
+					}
 				}
+			} else {
+				console.warn('[EMMStore] initialize: 未找到设置文件，请手动配置 setting.json 路径');
 			}
+			
+			console.debug('[EMMStore] initialize: 初始化完成');
+			isInitialized = true;
 		} catch (err) {
-			console.error('初始化 EMM 元数据失败:', err);
+			console.error('[EMMStore] initialize: 初始化 EMM 元数据失败:', err);
+		} finally {
+			isInitializing = false;
 		}
 	},
 	
@@ -249,8 +294,12 @@ export const emmMetadataStore = {
 		
 		const translationDbPath = currentState!.translationDbPath;
 		
-		// 从所有主数据库尝试加载
-		for (const dbPath of currentState!.databasePaths) {
+		// 从所有主数据库尝试加载（过滤掉 translations.db）
+		const mainDatabases = currentState!.databasePaths.filter(db => 
+			!db.toLowerCase().includes('translations.db')
+		);
+		
+		for (const dbPath of mainDatabases) {
 			try {
 				const metadata = await EMMAPI.loadEMMMetadata(dbPath, hash, translationDbPath);
 				if (metadata) {
@@ -273,30 +322,44 @@ export const emmMetadataStore = {
 	 * 加载元数据（通过文件路径）
 	 */
 	async loadMetadataByPath(filePath: string): Promise<EMMMetadata | null> {
+		console.debug('[EMMStore] loadMetadataByPath: 开始加载，filePath:', filePath);
+		
 		let currentState: EMMMetadataState;
 		subscribe(state => {
 			currentState = state;
 		})();
 		
 		const translationDbPath = currentState!.translationDbPath;
+		console.debug('[EMMStore] loadMetadataByPath: 数据库路径列表:', currentState!.databasePaths);
+		console.debug('[EMMStore] loadMetadataByPath: 翻译数据库路径:', translationDbPath);
 		
-		// 从所有主数据库尝试加载
-		for (const dbPath of currentState!.databasePaths) {
+		// 从所有主数据库尝试加载（过滤掉 translations.db）
+		const mainDatabases = currentState!.databasePaths.filter(db => 
+			!db.toLowerCase().includes('translations.db')
+		);
+		console.debug('[EMMStore] loadMetadataByPath: 过滤后的主数据库列表:', mainDatabases);
+		
+		for (const dbPath of mainDatabases) {
 			try {
+				console.debug('[EMMStore] loadMetadataByPath: 尝试从数据库加载，dbPath:', dbPath);
 				const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, filePath, translationDbPath);
 				if (metadata) {
+					console.debug('[EMMStore] loadMetadataByPath: 成功加载元数据，metadata:', metadata);
 					update(s => {
 						const newCache = new Map(s.metadataCache);
 						newCache.set(metadata.hash, metadata);
 						return { ...s, metadataCache: newCache };
 					});
 					return metadata;
+				} else {
+					console.debug('[EMMStore] loadMetadataByPath: 数据库中没有找到元数据，dbPath:', dbPath);
 				}
 			} catch (e) {
-				console.debug(`从 ${dbPath} 加载元数据失败:`, e);
+				console.error(`[EMMStore] loadMetadataByPath: 从 ${dbPath} 加载元数据失败:`, e);
 			}
 		}
 		
+		console.debug('[EMMStore] loadMetadataByPath: 所有数据库都未找到元数据，filePath:', filePath);
 		return null;
 	},
 	
@@ -308,6 +371,10 @@ export const emmMetadataStore = {
 		subscribe(state => {
 			tags = state.collectTags;
 		})();
+		console.debug('[EMMStore] getCollectTags: 返回收藏标签数量:', tags.length);
+		if (tags.length > 0) {
+			console.debug('[EMMStore] getCollectTags: 前3个标签:', tags.slice(0, 3).map(t => ({ id: t.id, display: t.display, tag: t.tag })));
+		}
 		return tags;
 	},
 	
@@ -335,6 +402,63 @@ export const emmMetadataStore = {
 
 // 导出辅助函数
 export function isCollectTagHelper(tag: string, collectTags: EMMCollectTag[]): EMMCollectTag | null {
-	return isCollectTag(tag, collectTags);
+	console.debug('[EMM] isCollectTagHelper: 开始匹配标签，tag:', tag, '收藏标签数量:', collectTags.length);
+	
+	// 尝试多种匹配方式
+	for (const ct of collectTags) {
+		// 1. 完全匹配 id (格式: "category:tag")
+		if (ct.id === tag) {
+			console.debug('[EMM] 标签匹配 (id):', tag, '->', ct);
+			return ct;
+		}
+		// 2. 完全匹配 display (格式: "category:tag" 或 "letter:tag")
+		if (ct.display === tag) {
+			console.debug('[EMM] 标签匹配 (display):', tag, '->', ct);
+			return ct;
+		}
+		// 3. 完全匹配 tag (仅标签名，不含分类)
+		if (ct.tag === tag) {
+			console.debug('[EMM] 标签匹配 (tag):', tag, '->', ct);
+			return ct;
+		}
+		
+		// 4. 如果输入的 tag 是 "category:tag" 格式，尝试多种匹配方式
+		if (tag.includes(':')) {
+			const [tagCategory, tagName] = tag.split(':', 2);
+			
+			// 4.1 检查 display 是否匹配 "category:tagName"
+			if (ct.display === `${tagCategory}:${tagName}`) {
+				console.debug('[EMM] 标签匹配 (display category:tag):', tag, '->', ct);
+				return ct;
+			}
+			
+			// 4.2 检查 display 是否匹配 "letter:tagName" (使用收藏标签的 letter)
+			if (ct.display === `${ct.letter}:${tagName}`) {
+				console.debug('[EMM] 标签匹配 (display letter:tag):', tag, '->', ct);
+				return ct;
+			}
+			
+			// 4.3 检查 tag 字段是否匹配 tagName
+			if (ct.tag === tagName) {
+				console.debug('[EMM] 标签匹配 (tag name):', tag, '->', ct);
+				return ct;
+			}
+		} else {
+			// 5. 如果输入的 tag 不包含冒号，只匹配 tag 字段
+			if (ct.tag === tag) {
+				console.debug('[EMM] 标签匹配 (tag only):', tag, '->', ct);
+				return ct;
+			}
+		}
+	}
+	
+	console.debug('[EMM] 标签未匹配:', tag);
+	console.debug('[EMM] 收藏标签列表:', collectTags.map(ct => ({ 
+		id: ct.id, 
+		display: ct.display, 
+		tag: ct.tag, 
+		letter: ct.letter 
+	})));
+	return null;
 }
 

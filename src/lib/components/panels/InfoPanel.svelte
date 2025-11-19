@@ -13,6 +13,7 @@
 	import { open } from '@tauri-apps/plugin-dialog';
 	import * as Input from '$lib/components/ui/input';
 	import * as Button from '$lib/components/ui/button';
+	import * as Switch from '$lib/components/ui/switch';
 
 	let imageInfo = $state<ViewerImageInfo | null>(null);
 	let bookInfo = $state<ViewerBookInfo | null>(null);
@@ -25,8 +26,9 @@
 	let emmTranslationDbPath = $state<string>('');
 	let emmSettingPath = $state<string>('');
 	let emmDatabasePathInput = $state<string>('');
+	let enableEMM = $state(true);
+	let fileListTagDisplayMode = $state<'all' | 'collect' | 'none'>('collect');
 
-	// 加载收藏标签（确保初始化完成）
 	// 加载收藏标签（确保初始化完成）
 	$effect(() => {
 		// 确保初始化完成
@@ -183,6 +185,14 @@
 		emmDatabasePaths = emmMetadataStore.getDatabasePaths();
 		emmTranslationDbPath = emmMetadataStore.getTranslationDbPath() || '';
 		emmSettingPath = emmMetadataStore.getSettingPath() || '';
+		
+		// 从 store 订阅获取最新状态
+		const unsubscribe = emmMetadataStore.subscribe(state => {
+			enableEMM = state.enableEMM;
+			fileListTagDisplayMode = state.fileListTagDisplayMode;
+		});
+		// 立即取消订阅，我们只需要当前值
+		unsubscribe();
 	}
 	
 	// 选择数据库文件
@@ -307,9 +317,14 @@
 		if (emmSettingPath) {
 			await emmMetadataStore.setManualSettingPath(emmSettingPath);
 		}
+		
+		// 保存新设置
+		emmMetadataStore.setEnableEMM(enableEMM);
+		emmMetadataStore.setFileListTagDisplayMode(fileListTagDisplayMode);
+		
 		showEMMConfig = false;
 		// 重新加载当前书籍的元数据
-		if (bookInfo?.path) {
+		if (bookInfo?.path && enableEMM) {
 			const metadata = await emmMetadataStore.loadMetadataByPath(bookInfo.path);
 			if (metadata) {
 				infoPanelStore.setBookInfo({
@@ -567,6 +582,48 @@
 										<FolderOpen class="h-3 w-3 mr-1" />
 										选择
 									</Button.Root>
+								</div>
+							</div>
+
+							<!-- 全局设置 -->
+							<div class="space-y-3 pt-2 border-t">
+								<div class="flex items-center justify-between">
+									<div class="text-xs font-medium text-muted-foreground">启用 EMM 数据读取</div>
+									<Switch.Root
+										checked={enableEMM}
+										onCheckedChange={(v) => enableEMM = v}
+										class="scale-75"
+									/>
+								</div>
+								
+								<div class="space-y-2">
+									<div class="text-xs font-medium text-muted-foreground">文件列表标签显示模式</div>
+									<div class="flex gap-2">
+										<Button.Root
+											variant={fileListTagDisplayMode === 'all' ? 'default' : 'outline'}
+											size="sm"
+											class="h-7 text-xs flex-1"
+											onclick={() => fileListTagDisplayMode = 'all'}
+										>
+											全部显示
+										</Button.Root>
+										<Button.Root
+											variant={fileListTagDisplayMode === 'collect' ? 'default' : 'outline'}
+											size="sm"
+											class="h-7 text-xs flex-1"
+											onclick={() => fileListTagDisplayMode = 'collect'}
+										>
+											仅收藏
+										</Button.Root>
+										<Button.Root
+											variant={fileListTagDisplayMode === 'none' ? 'default' : 'outline'}
+											size="sm"
+											class="h-7 text-xs flex-1"
+											onclick={() => fileListTagDisplayMode = 'none'}
+										>
+											不显示
+										</Button.Root>
+									</div>
 								</div>
 							</div>
 							

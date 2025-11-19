@@ -23,33 +23,60 @@ interface EMMMetadataState {
 	// 手动配置的翻译数据库路径
 	manualTranslationDbPath?: string;
 	// 手动配置的设置文件路径
+	// 手动配置的设置文件路径
 	manualSettingPath?: string;
+	// 全局开关：是否启用 EMM 数据读取
+	enableEMM: boolean;
+	// 文件列表标签显示模式
+	fileListTagDisplayMode: 'all' | 'collect' | 'none';
 }
 
 const STORAGE_KEY_DB_PATHS = 'neoview-emm-database-paths';
 const STORAGE_KEY_TRANSLATION_DB_PATH = 'neoview-emm-translation-db-path';
 const STORAGE_KEY_SETTING_PATH = 'neoview-emm-setting-path';
+const STORAGE_KEY_ENABLE_EMM = 'neoview-emm-enable';
+const STORAGE_KEY_FILE_LIST_TAG_MODE = 'neoview-emm-file-list-tag-mode';
 
 // 从 localStorage 加载手动配置的路径
-function loadManualPaths(): { databasePaths: string[]; translationDbPath?: string; settingPath?: string } {
+function loadSettings(): {
+	databasePaths: string[];
+	translationDbPath?: string;
+	settingPath?: string;
+	enableEMM: boolean;
+	fileListTagDisplayMode: 'all' | 'collect' | 'none';
+} {
 	try {
 		const dbPathsStr = localStorage.getItem(STORAGE_KEY_DB_PATHS);
 		const translationDbPathStr = localStorage.getItem(STORAGE_KEY_TRANSLATION_DB_PATH);
 		const settingPathStr = localStorage.getItem(STORAGE_KEY_SETTING_PATH);
+		const enableEMMStr = localStorage.getItem(STORAGE_KEY_ENABLE_EMM);
+		const fileListTagModeStr = localStorage.getItem(STORAGE_KEY_FILE_LIST_TAG_MODE);
 
 		return {
 			databasePaths: dbPathsStr ? JSON.parse(dbPathsStr) : [],
 			translationDbPath: translationDbPathStr || undefined,
-			settingPath: settingPathStr || undefined
+			settingPath: settingPathStr || undefined,
+			enableEMM: enableEMMStr !== 'false', // 默认为 true
+			fileListTagDisplayMode: (fileListTagModeStr as 'all' | 'collect' | 'none') || 'collect' // 默认为 collect
 		};
 	} catch (e) {
-		console.error('加载 EMM 手动配置路径失败:', e);
-		return { databasePaths: [] };
+		console.error('加载 EMM 配置失败:', e);
+		return {
+			databasePaths: [],
+			enableEMM: true,
+			fileListTagDisplayMode: 'collect'
+		};
 	}
 }
 
-// 保存手动配置的路径到 localStorage
-function saveManualPaths(databasePaths: string[], translationDbPath?: string, settingPath?: string) {
+// 保存配置到 localStorage
+function saveSettings(
+	databasePaths: string[],
+	translationDbPath?: string,
+	settingPath?: string,
+	enableEMM?: boolean,
+	fileListTagDisplayMode?: 'all' | 'collect' | 'none'
+) {
 	try {
 		localStorage.setItem(STORAGE_KEY_DB_PATHS, JSON.stringify(databasePaths));
 		if (translationDbPath) {
@@ -62,12 +89,18 @@ function saveManualPaths(databasePaths: string[], translationDbPath?: string, se
 		} else {
 			localStorage.removeItem(STORAGE_KEY_SETTING_PATH);
 		}
+		if (enableEMM !== undefined) {
+			localStorage.setItem(STORAGE_KEY_ENABLE_EMM, String(enableEMM));
+		}
+		if (fileListTagDisplayMode) {
+			localStorage.setItem(STORAGE_KEY_FILE_LIST_TAG_MODE, fileListTagDisplayMode);
+		}
 	} catch (e) {
-		console.error('保存 EMM 手动配置路径失败:', e);
+		console.error('保存 EMM 配置失败:', e);
 	}
 }
 
-const manualPaths = loadManualPaths();
+const initialSettings = loadSettings();
 
 const { subscribe, set, update } = writable<EMMMetadataState>({
 	metadataCache: new Map(),
@@ -75,9 +108,11 @@ const { subscribe, set, update } = writable<EMMMetadataState>({
 	databasePaths: [],
 	translationDbPath: undefined,
 	settingPath: undefined,
-	manualDatabasePaths: manualPaths.databasePaths,
-	manualTranslationDbPath: manualPaths.translationDbPath,
-	manualSettingPath: manualPaths.settingPath
+	manualDatabasePaths: initialSettings.databasePaths,
+	manualTranslationDbPath: initialSettings.translationDbPath,
+	manualSettingPath: initialSettings.settingPath,
+	enableEMM: initialSettings.enableEMM,
+	fileListTagDisplayMode: initialSettings.fileListTagDisplayMode
 });
 
 // 检查标签是否为收藏标签
@@ -203,7 +238,7 @@ export const emmMetadataStore = {
 	 */
 	setManualDatabasePaths(paths: string[]) {
 		subscribe(state => {
-			saveManualPaths(paths, state.manualTranslationDbPath, state.manualSettingPath);
+			saveSettings(paths, state.manualTranslationDbPath, state.manualSettingPath, state.enableEMM, state.fileListTagDisplayMode);
 		})();
 		update(state => ({
 			...state,
@@ -218,7 +253,7 @@ export const emmMetadataStore = {
 	 */
 	setManualTranslationDbPath(path: string) {
 		subscribe(state => {
-			saveManualPaths(state.manualDatabasePaths, path, state.manualSettingPath);
+			saveSettings(state.manualDatabasePaths, path, state.manualSettingPath, state.enableEMM, state.fileListTagDisplayMode);
 		})();
 		update(state => ({
 			...state,
@@ -234,7 +269,7 @@ export const emmMetadataStore = {
 	 */
 	async setManualSettingPath(path: string) {
 		subscribe(state => {
-			saveManualPaths(state.manualDatabasePaths, state.manualTranslationDbPath, path);
+			saveSettings(state.manualDatabasePaths, state.manualTranslationDbPath, path, state.enableEMM, state.fileListTagDisplayMode);
 		})();
 		update(state => ({
 			...state,
@@ -251,6 +286,32 @@ export const emmMetadataStore = {
 		} catch (e) {
 			console.error('加载收藏标签失败:', e);
 		}
+	},
+
+	/**
+	 * 设置是否启用 EMM
+	 */
+	setEnableEMM(enable: boolean) {
+		subscribe(state => {
+			saveSettings(state.manualDatabasePaths, state.manualTranslationDbPath, state.manualSettingPath, enable, state.fileListTagDisplayMode);
+		})();
+		update(state => ({
+			...state,
+			enableEMM: enable
+		}));
+	},
+
+	/**
+	 * 设置文件列表标签显示模式
+	 */
+	setFileListTagDisplayMode(mode: 'all' | 'collect' | 'none') {
+		subscribe(state => {
+			saveSettings(state.manualDatabasePaths, state.manualTranslationDbPath, state.manualSettingPath, state.enableEMM, mode);
+		})();
+		update(state => ({
+			...state,
+			fileListTagDisplayMode: mode
+		}));
 	},
 
 	/**

@@ -73,10 +73,22 @@
   // let collectTags = $state<EMMCollectTag[]>([]); // No longer needed locally
   let metadataLoading = $state(false);
   let lastLoadedPath = $state<string | null>(null);
+  
+  // 订阅全局 EMM 设置
+  let enableEMM = $state(true);
+  let fileListTagDisplayMode = $state<'all' | 'collect' | 'none'>('collect');
+  
+  $effect(() => {
+    const unsubscribe = emmMetadataStore.subscribe(state => {
+      enableEMM = state.enableEMM;
+      fileListTagDisplayMode = state.fileListTagDisplayMode;
+    });
+    return unsubscribe;
+  });
 
   // 加载 EMM 元数据（仅针对压缩包，且路径变化时加载）
   $effect(() => {
-    if (isArchive && item.path && !item.isDir && item.path !== lastLoadedPath && !metadataLoading) {
+    if (enableEMM && isArchive && item.path && !item.isDir && item.path !== lastLoadedPath && !metadataLoading) {
       metadataLoading = true;
       lastLoadedPath = item.path;
       
@@ -100,12 +112,16 @@
       return () => {
         metadataLoading = false;
       };
+    } else if (!enableEMM) {
+      // 如果禁用了 EMM，清除元数据
+      emmMetadata = null;
+      lastLoadedPath = null;
     }
   });
 
   // 获取显示的标签（前3个，高亮收藏的）
   const displayTags = $derived(() => {
-    if (!emmMetadata?.tags) return [];
+    if (!emmMetadata?.tags || fileListTagDisplayMode === 'none') return [];
     
     const map = $collectTagMap; // Use the shared map
     const normalize = (s: string) => s.trim().toLowerCase();
@@ -124,6 +140,11 @@
         
         const isCollect = !!collectTag;
         
+        // 根据显示模式过滤
+        if (fileListTagDisplayMode === 'collect' && !isCollect) {
+          continue;
+        }
+        
         allTags.push({
           tag: `${category}:${tag}`,
           isCollect,
@@ -138,8 +159,8 @@
     const normalTagsList = allTags.filter(t => !t.isCollect);
     
     // 如果有收藏标签，优先展示收藏标签；否则展示普通标签
-    // 限制总数 3 个
-    return [...collectTagsList, ...normalTagsList].slice(0, 3);
+    // 不限制数量，显示完整
+    return [...collectTagsList, ...normalTagsList];
   });
 
   // 格式化时间
@@ -256,12 +277,16 @@
 
     <!-- 信息 -->
     <div class="min-w-0 flex-1">
-      <div class="font-medium break-words" title={emmMetadata?.translatedTitle || item.name}>
-        {emmMetadata?.translatedTitle || item.name}
+      <!-- 原文件名 -->
+      <div class="font-medium break-words" title={item.name}>
+        {item.name}
       </div>
+      <!-- 翻译标题 -->
       {#if emmMetadata?.translatedTitle && emmMetadata.translatedTitle !== item.name}
-        <div class="text-xs text-muted-foreground break-words mt-0.5" title={item.name}>
-          {item.name}
+        <div class="mt-1">
+          <span class="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100 break-words" title={emmMetadata.translatedTitle}>
+            {emmMetadata.translatedTitle}
+          </span>
         </div>
       {/if}
       <div class="text-sm text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
@@ -283,7 +308,7 @@
               style="background-color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '20' : 'rgba(0,0,0,0.05)'}; color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') : 'inherit'}; border: 1px solid {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '40' : 'transparent'};"
               title={tagInfo.tag}
             >
-              {tagInfo.tag.split(':')[1]}
+              {tagInfo.display}
             </span>
           {/each}
         </div>
@@ -359,12 +384,16 @@
 
     <!-- 信息区域 -->
     <div class="p-2 bg-background">
-      <div class="font-medium text-sm break-words" title={emmMetadata?.translatedTitle || item.name}>
-        {emmMetadata?.translatedTitle || item.name}
+      <!-- 原文件名 -->
+      <div class="font-medium text-sm break-words" title={item.name}>
+        {item.name}
       </div>
+      <!-- 翻译标题 -->
       {#if emmMetadata?.translatedTitle && emmMetadata.translatedTitle !== item.name}
-        <div class="text-xs text-muted-foreground break-words mt-0.5" title={item.name}>
-          {item.name}
+        <div class="mt-1">
+          <span class="text-[10px] bg-blue-50 text-blue-600 px-1 py-0.5 rounded border border-blue-100 break-words" title={emmMetadata.translatedTitle}>
+            {emmMetadata.translatedTitle}
+          </span>
         </div>
       {/if}
       <div class="text-xs text-muted-foreground mt-1">
@@ -380,11 +409,11 @@
         <div class="flex items-center gap-1 mt-1 flex-wrap">
           {#each displayTags() as tagInfo}
             <span
-              class="text-xs px-1 py-0.5 rounded {tagInfo.isCollect ? 'font-semibold' : ''}"
+              class="text-[10px] px-1 py-0.5 rounded {tagInfo.isCollect ? 'font-semibold' : ''}"
               style="background-color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '20' : 'rgba(0,0,0,0.05)'}; color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') : 'inherit'}; border: 1px solid {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '40' : 'transparent'};"
               title={tagInfo.tag}
             >
-              {tagInfo.tag.split(':')[1]}
+              {tagInfo.display}
             </span>
           {/each}
         </div>

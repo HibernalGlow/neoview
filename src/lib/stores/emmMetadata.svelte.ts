@@ -408,6 +408,29 @@ export const emmMetadataStore = {
 	}
 };
 
+// 导出收藏标签 Map (Derived Store)
+export const collectTagMap = derived(emmMetadataStore, ($state) => {
+	const map = new Map<string, EMMCollectTag>();
+	const normalize = (s: string) => s.trim().toLowerCase();
+
+	for (const ct of $state.collectTags) {
+		// 1. Map by ID (usually "category:tag")
+		if (ct.id) map.set(normalize(ct.id), ct);
+
+		// 2. Map by Display (usually "category:tag")
+		if (ct.display) map.set(normalize(ct.display), ct);
+
+		// 3. Map by Tag only (if unique enough)
+		if (ct.tag) map.set(normalize(ct.tag), ct);
+
+		// 4. Map by "Letter:Tag"
+		if (ct.letter && ct.tag) map.set(normalize(`${ct.letter}:${ct.tag}`), ct);
+	}
+
+	// console.debug('[EMMStore] collectTagMap updated, size:', map.size);
+	return map;
+});
+
 // 导出辅助函数
 export function isCollectTagHelper(tag: string, collectTags: EMMCollectTag[]): EMMCollectTag | null {
 	const normalize = (value?: string | null) => value ? value.trim().toLowerCase() : '';

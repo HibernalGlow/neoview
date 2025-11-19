@@ -8,7 +8,7 @@
 	import { infoPanelStore, type ViewerBookInfo, type ViewerImageInfo } from '$lib/stores/infoPanel.svelte';
 	import { FileSystemAPI } from '$lib/api';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
-	import { emmMetadataStore, isCollectTagHelper } from '$lib/stores/emmMetadata.svelte';
+	import { emmMetadataStore, isCollectTagHelper, collectTagMap } from '$lib/stores/emmMetadata.svelte';
 	import type { EMMCollectTag } from '$lib/api/emm';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import * as Input from '$lib/components/ui/input';
@@ -27,45 +27,15 @@
 	let emmDatabasePathInput = $state<string>('');
 
 	// 加载收藏标签（确保初始化完成）
+	// 加载收藏标签（确保初始化完成）
 	$effect(() => {
 		// 确保初始化完成
 		emmMetadataStore.initialize().then(() => {
-			const loadedTags = emmMetadataStore.getCollectTags();
-			collectTags = loadedTags;
-			console.debug('[InfoPanel] 收藏标签已加载，数量:', loadedTags.length);
-			if (loadedTags.length > 0) {
-				console.debug('[InfoPanel] 前3个收藏标签:', loadedTags.slice(0, 3).map(t => ({ id: t.id, display: t.display, tag: t.tag })));
-			} else {
-				console.warn('[InfoPanel] 警告：收藏标签列表为空，请检查 EMM 设置文件路径是否正确');
-			}
+			collectTags = emmMetadataStore.getCollectTags();
+			console.debug('[InfoPanel] 收藏标签已加载，数量:', collectTags.length);
 		}).catch(err => {
 			console.error('[InfoPanel] 初始化 EMM Store 失败:', err);
 		});
-	});
-
-	// 优化：建立收藏标签的快速查找 Map
-	// Key: normalized tag string (both "tag" and "category:tag")
-	// Value: EMMCollectTag
-	const collectTagMap = $derived(() => {
-		const map = new Map<string, EMMCollectTag>();
-		const normalize = (s: string) => s.trim().toLowerCase();
-		
-		for (const ct of collectTags) {
-			// 1. Map by ID (usually "category:tag")
-			if (ct.id) map.set(normalize(ct.id), ct);
-			
-			// 2. Map by Display (usually "category:tag")
-			if (ct.display) map.set(normalize(ct.display), ct);
-			
-			// 3. Map by Tag only (if unique enough)
-			if (ct.tag) map.set(normalize(ct.tag), ct);
-			
-			// 4. Map by "Letter:Tag"
-			if (ct.letter && ct.tag) map.set(normalize(`${ct.letter}:${ct.tag}`), ct);
-		}
-		
-		console.debug('[InfoPanel] 收藏标签 Map 构建完成，大小:', map.size);
-		return map;
 	});
 
 	// 获取所有标签（扁平化，高亮收藏的）
@@ -75,7 +45,8 @@
 		}
 		
 		const tags: Array<{ category: string; tag: string; isCollect: boolean; color?: string; display?: string }> = [];
-		const map = collectTagMap();
+		// 使用全局 store 中的 map
+		const map = $collectTagMap;
 		const normalize = (s: string) => s.trim().toLowerCase();
 
 		for (const [category, tagList] of Object.entries(bookInfo.emmMetadata.tags)) {

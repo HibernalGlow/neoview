@@ -43,67 +43,72 @@
 		});
 	});
 
-	// 检查标签是否为收藏标签（支持完整格式 "category:tag" 或单独 tag）
-	function isCollectTag(tag: string, category?: string): EMMCollectTag | null {
-		console.debug('[InfoPanel] isCollectTag 调用:', {
-			category,
-			tag,
-			collectTagsLength: collectTags.length
-		});
+	// 优化：建立收藏标签的快速查找 Map
+	// Key: normalized tag string (both "tag" and "category:tag")
+	// Value: EMMCollectTag
+	const collectTagMap = $derived(() => {
+		const map = new Map<string, EMMCollectTag>();
+		const normalize = (s: string) => s.trim().toLowerCase();
 		
-		// 先尝试完整格式 "category:tag"
-		if (category) {
-			const fullTag = `${category}:${tag}`;
-			const result = isCollectTagHelper(fullTag, collectTags);
-			console.debug('[InfoPanel] isCollectTag 完整格式结果:', {
-				fullTag,
-				result
-			});
-			if (result) return result;
+		for (const ct of collectTags) {
+			// 1. Map by ID (usually "category:tag")
+			if (ct.id) map.set(normalize(ct.id), ct);
+			
+			// 2. Map by Display (usually "category:tag")
+			if (ct.display) map.set(normalize(ct.display), ct);
+			
+			// 3. Map by Tag only (if unique enough)
+			if (ct.tag) map.set(normalize(ct.tag), ct);
+			
+			// 4. Map by "Letter:Tag"
+			if (ct.letter && ct.tag) map.set(normalize(`${ct.letter}:${ct.tag}`), ct);
 		}
-		// 再尝试单独 tag
-		const fallbackResult = isCollectTagHelper(tag, collectTags);
-		console.debug('[InfoPanel] isCollectTag 仅标签结果:', {
-			tag,
-			result: fallbackResult
-		});
-		return fallbackResult;
-	}
+		
+		console.debug('[InfoPanel] 收藏标签 Map 构建完成，大小:', map.size);
+		return map;
+	});
 
 	// 获取所有标签（扁平化，高亮收藏的）
 	const allTags = $derived(() => {
 		if (!bookInfo?.emmMetadata?.tags) {
-			console.debug('[InfoPanel] 没有标签数据，bookInfo:', bookInfo);
 			return [];
 		}
 		
-		console.debug('[InfoPanel] 开始处理标签，tags:', $state.snapshot(bookInfo.emmMetadata.tags));
-		console.debug('[InfoPanel] 收藏标签列表:', $state.snapshot(collectTags));
-		
-		const tags: Array<{ category: string; tag: string; isCollect: boolean; color?: string }> = [];
+		const tags: Array<{ category: string; tag: string; isCollect: boolean; color?: string; display?: string }> = [];
+		const map = collectTagMap();
+		const normalize = (s: string) => s.trim().toLowerCase();
+
 		for (const [category, tagList] of Object.entries(bookInfo.emmMetadata.tags)) {
 			for (const tag of tagList) {
-				const collectTag = isCollectTag(tag, category);
+				// 尝试多种组合查找
+				// 1. 完整 "category:tag"
+				const fullTagKey = normalize(`${category}:${tag}`);
+				let collectTag = map.get(fullTagKey);
+				
+				// 2. 仅 "tag"
+				if (!collectTag) {
+					collectTag = map.get(normalize(tag));
+				}
+				
 				const isCollect = !!collectTag;
-				console.debug(`[InfoPanel] 标签检查: category="${category}", tag="${tag}", isCollect=${isCollect}, color=${collectTag?.color}`);
+				
 				tags.push({
 					category,
 					tag,
 					isCollect,
-					color: collectTag?.color
+					color: collectTag?.color,
+					// 如果是收藏标签，优先使用收藏配置的 display，否则使用默认格式
+					display: collectTag?.display || `${category}:${tag}`
 				});
 			}
 		}
 		
 		// 收藏标签优先
-		const sorted = tags.sort((a, b) => {
+		return tags.sort((a, b) => {
 			if (a.isCollect && !b.isCollect) return -1;
 			if (!a.isCollect && b.isCollect) return 1;
 			return 0;
 		});
-		
-		console.debug('[InfoPanel] 处理后的标签列表:', $state.snapshot(sorted));
-		return sorted;
 	});
 
 	$effect(() => {
@@ -433,6 +438,36 @@
 						<div class="flex items-center gap-2 font-semibold text-sm">
 							<Tag class="h-4 w-4" />
 							<span>标签</span>
+							<span class="text-[10px] text-muted-foreground font-normal ml-2 opacity-50">
+								(已加载收藏: {collectTags.length})
+							</span>
+							<Button.Root
+								variant="ghost"
+								size="icon"
+								class="h-5 w-5 ml-auto"
+								title="重新加载收藏标签"
+								onclick={() => {
+									console.debug('[InfoPanel] 手动刷新收藏标签');
+									emmMetadataStore.initialize(true).then(() => {
+										collectTags = emmMetadataStore.getCollectTags();
+									});
+								}}
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="12"
+									height="12"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+									<path d="M3 3v5h5" />
+								</svg>
+							</Button.Root>
 						</div>
 						<div class="flex flex-wrap gap-1.5">
 							{#each allTags() as tagInfo}
@@ -441,7 +476,7 @@
 									style="background-color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '20' : 'rgba(0,0,0,0.05)'}; color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') : 'inherit'}; border: 1px solid {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '40' : 'transparent'};"
 									title="{tagInfo.category}:{tagInfo.tag}"
 								>
-									{tagInfo.category}:{tagInfo.tag}
+									{tagInfo.display}
 								</span>
 							{/each}
 						</div>

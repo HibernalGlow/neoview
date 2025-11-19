@@ -46,7 +46,7 @@ pub fn run() {
                 || msg.contains("image")
                 || msg.contains("decoder")
         };
-
+        
         if is_image_panic {
             // 图像解码相关的 panic，静默处理，不终止进程
             eprintln!("⚠️ 图像解码 panic (已捕获，不影响运行)");
@@ -56,7 +56,7 @@ pub fn run() {
             // 不调用 std::process::abort()，让程序继续运行
             return;
         }
-
+        
         // 其他 panic 记录详细信息，但不终止进程
         eprintln!("⚠️ Panic caught: {:?}", panic_info);
         if let Some(location) = panic_info.location() {
@@ -69,10 +69,10 @@ pub fn run() {
         }
         // 注意：这里不调用 abort，让程序继续运行
     }));
-
+    
     // 设置日志级别，屏蔽 avif-native/mp4parse 的 TRACE 日志
     std::env::set_var("RUST_LOG", "info,mp4parse=info,avif_native=info");
-
+    
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -94,7 +94,7 @@ pub fn run() {
             // 初始化文件系统管理器和压缩包管理器
             let fs_manager = FsManager::new();
             let archive_manager = ArchiveManager::new();
-
+            
             let app_data_root = app
                 .path()
                 .app_data_dir()
@@ -123,18 +123,18 @@ pub fn run() {
             app.manage(BackgroundSchedulerState {
                 scheduler: Arc::new(background_scheduler),
             });
-
+            
             // 初始化超分管理器
             let thumbnail_path = app_data_root.join("thumbnails");
-
+            
             let upscale_manager = core::upscale::UpscaleManager::new(thumbnail_path.clone());
             app.manage(UpscaleManagerState {
                 manager: Arc::new(Mutex::new(Some(upscale_manager))),
             });
-
+            
             // 初始化通用超分管理器
             app.manage(GenericUpscalerState::default());
-
+            
             // 初始化 PyO3 超分管理器
             let pyo3_state = PyO3UpscalerState::default();
             let pyo3_state_arc = Arc::new(pyo3_state.clone());
@@ -145,10 +145,10 @@ pub fn run() {
             app.manage(UpscaleSchedulerState {
                 scheduler: Arc::new(scheduler),
             });
-
+            
             // 初始化设置管理器
             app.manage(UpscaleSettingsState::default());
-
+            
             Ok(())
         })
         .manage(Mutex::new(BookManager::new()))

@@ -26,10 +26,10 @@ import { scheduleUpscaleCacheCleanup } from '$lib/core/cache/cacheMaintenance';
 	// 新模块导入
 	import { createPreloadManager } from './flow/preloadManager.svelte';
 	import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
-import { idbSet } from '$lib/utils/idb';
-import { getFileMetadata } from '$lib/api/fs';
+	import { idbSet } from '$lib/utils/idb';
+	import { getFileMetadata } from '$lib/api/fs';
 import { invoke } from '@tauri-apps/api/core';
-import type { BookInfo, Page } from '$lib/types';
+	import type { BookInfo, Page } from '$lib/types';
 
 	
 
@@ -68,7 +68,7 @@ let panoramaPagesData = $state<Array<{ index: number; data: string | null; posit
 	let imageData = $state<string | null>(null);
 	let imageData2 = $state<string | null>(null); // 双页模式的第二张图
 	let loading = $state(false);
-let loadingVisible = $state(false); // 控制loading动画的可见性
+	let loadingVisible = $state(false); // 控制loading动画的可见性
 	let error = $state<string | null>(null);
 let loadingTimeout: ReturnType<typeof window.setTimeout> | null = null; // 延迟显示loading的定时器
 	
@@ -310,7 +310,7 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 						bookStore.setUpscaledImage(upscaledImageData);
 					}
 					if (upscaledImageData) {
-						imageData = upscaledImageData;
+					imageData = upscaledImageData;
 						upscaledImageDataForComparison = upscaledImageData;
 					}
 					
@@ -463,7 +463,7 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 		if (lastUpscaledObjectUrl) {
 			URL.revokeObjectURL(lastUpscaledObjectUrl);
 		}
-		derivedUpscaledUrl = null;
+			derivedUpscaledUrl = null;
 		lastUpscaledObjectUrl = null;
 		lastUpscaledBlob = null;
 	});
@@ -534,7 +534,7 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 				URL.revokeObjectURL(lastUpscaledObjectUrl);
 				lastUpscaledObjectUrl = null;
 				lastUpscaledBlob = null;
-				derivedUpscaledUrl = null;
+			derivedUpscaledUrl = null;
 				bookStore.setUpscaledImage(null);
 				upscaledImageDataForComparison = '';
 			}
@@ -677,8 +677,8 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 			return;
 		}
 		lastViewMode = mode;
-		preloadManager.updateImageLoaderConfigWithViewMode(mode);
-		preloadManager.loadCurrentImage();
+			preloadManager.updateImageLoaderConfigWithViewMode(mode);
+			preloadManager.loadCurrentImage();
 		
 		// 根据模式加载相应的数据
 		if (mode === 'vertical') {

@@ -410,58 +410,60 @@ export const emmMetadataStore = {
 
 // 导出辅助函数
 export function isCollectTagHelper(tag: string, collectTags: EMMCollectTag[]): EMMCollectTag | null {
+	const normalize = (value?: string | null) => value ? value.trim().toLowerCase() : '';
+	const inputNormalized = normalize(tag);
+	const hasCategory = tag.includes(':');
+	const [inputCategoryRaw, inputTagRaw] = hasCategory ? tag.split(':', 2) : ['', tag];
+	const inputCategoryNormalized = normalize(inputCategoryRaw);
+	const inputTagOnlyNormalized = normalize(inputTagRaw);
+	
 	console.debug('[EMM] isCollectTagHelper: 开始匹配标签，tag:', tag, '收藏标签数量:', collectTags.length);
 	
-	// 尝试多种匹配方式
 	for (const ct of collectTags) {
-		// 1. 完全匹配 id (格式: "category:tag")
-		if (ct.id === tag) {
-			console.debug('[EMM] 标签匹配 (id):', tag, '->', ct);
+		const idNormalized = normalize(ct.id);
+		const displayNormalized = normalize(ct.display);
+		const tagNormalized = normalize(ct.tag);
+		const letterNormalized = normalize(ct.letter);
+		const categoryFromDisplay = ct.display?.includes(':') ? normalize(ct.display.split(':', 2)[0]) : '';
+		
+		// 1. 直接匹配 id / display / tag
+		if (idNormalized && idNormalized === inputNormalized) {
+			console.debug('[EMM] 标签匹配 (normalized id):', tag, '->', ct);
 			return ct;
 		}
-		// 2. 完全匹配 display (格式: "category:tag" 或 "letter:tag")
-		if (ct.display === tag) {
-			console.debug('[EMM] 标签匹配 (display):', tag, '->', ct);
+		if (displayNormalized && displayNormalized === inputNormalized) {
+			console.debug('[EMM] 标签匹配 (normalized display):', tag, '->', ct);
 			return ct;
 		}
-		// 3. 完全匹配 tag (仅标签名，不含分类)
-		if (ct.tag === tag) {
-			console.debug('[EMM] 标签匹配 (tag):', tag, '->', ct);
+		if (!hasCategory && tagNormalized && tagNormalized === inputTagOnlyNormalized) {
+			console.debug('[EMM] 标签匹配 (normalized tag only):', tag, '->', ct);
 			return ct;
 		}
 		
-		// 4. 如果输入的 tag 是 "category:tag" 格式，尝试多种匹配方式
-		if (tag.includes(':')) {
-			const [tagCategory, tagName] = tag.split(':', 2);
-			
-			// 4.1 检查 display 是否匹配 "category:tagName"
-			if (ct.display === `${tagCategory}:${tagName}`) {
-				console.debug('[EMM] 标签匹配 (display category:tag):', tag, '->', ct);
+		// 2. 输入为 category:tag 时，尝试不同组合
+		if (hasCategory) {
+			// 2.1 使用收藏标签的 display 提取的分类与输入分类比较
+			if (categoryFromDisplay && tagNormalized && categoryFromDisplay === inputCategoryNormalized && tagNormalized === inputTagOnlyNormalized) {
+				console.debug('[EMM] 标签匹配 (display category + tag):', tag, '->', ct);
 				return ct;
 			}
 			
-			// 4.2 检查 display 是否匹配 "letter:tagName" (使用收藏标签的 letter)
-			if (ct.display === `${ct.letter}:${tagName}`) {
-				console.debug('[EMM] 标签匹配 (display letter:tag):', tag, '->', ct);
+			// 2.2 使用收藏标签的 letter 作为分类
+			if (letterNormalized && tagNormalized && letterNormalized === inputCategoryNormalized && tagNormalized === inputTagOnlyNormalized) {
+				console.debug('[EMM] 标签匹配 (letter + tag):', tag, '->', ct);
 				return ct;
 			}
 			
-			// 4.3 检查 tag 字段是否匹配 tagName
-			if (ct.tag === tagName) {
-				console.debug('[EMM] 标签匹配 (tag name):', tag, '->', ct);
-				return ct;
-			}
-		} else {
-			// 5. 如果输入的 tag 不包含冒号，只匹配 tag 字段
-			if (ct.tag === tag) {
-				console.debug('[EMM] 标签匹配 (tag only):', tag, '->', ct);
+			// 2.3 仅比较标签名
+			if (tagNormalized && tagNormalized === inputTagOnlyNormalized) {
+				console.debug('[EMM] 标签匹配 (tag name only with category present):', tag, '->', ct);
 				return ct;
 			}
 		}
 	}
 	
 	console.debug('[EMM] 标签未匹配:', tag);
-	console.debug('[EMM] 收藏标签列表:', collectTags.map(ct => ({ 
+	console.debug('[EMM] 收藏标签列表(简要):', collectTags.slice(0, 10).map(ct => ({ 
 		id: ct.id, 
 		display: ct.display, 
 		tag: ct.tag, 

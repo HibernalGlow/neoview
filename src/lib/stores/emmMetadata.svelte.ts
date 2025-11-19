@@ -100,20 +100,21 @@ export const emmMetadataStore = {
 	/**
 	 * 初始化：查找数据库和加载收藏标签
 	 */
-	async initialize() {
-		// 如果正在初始化或已经初始化，直接返回
+	async initialize(force = false) {
+		// 如果正在初始化，直接返回
 		if (isInitializing) {
 			console.debug('[EMMStore] initialize: 正在初始化中，跳过');
 			return;
 		}
-		if (isInitialized) {
+		// 如果已经初始化且未强制刷新，直接返回
+		if (!force && isInitialized) {
 			console.debug('[EMMStore] initialize: 已经初始化，跳过');
 			return;
 		}
 		
 		isInitializing = true;
 		try {
-			console.debug('[EMMStore] initialize: 开始初始化 EMM 元数据');
+			console.debug('[EMMStore] initialize: 开始初始化 EMM 元数据，force =', force);
 			
 			// 合并自动检测和手动配置的主数据库路径
 			const autoDatabases = await EMMAPI.findEMMDatabases();
@@ -124,13 +125,20 @@ export const emmMetadataStore = {
 				currentState = state;
 			})();
 			
-			console.debug('[EMMStore] initialize: 手动配置的主数据库:', currentState!.manualDatabasePaths);
+			const manualDbPaths = currentState!.manualDatabasePaths || [];
+			console.debug('[EMMStore] initialize: 手动配置的主数据库:', manualDbPaths);
 			
-			const allDatabases = [...autoDatabases, ...(currentState!.manualDatabasePaths || [])];
+			const useManualOnly = manualDbPaths.length > 0;
+			const baseDatabases = useManualOnly ? manualDbPaths : autoDatabases;
 			// 去重，并过滤掉 translations.db（它应该只用于翻译数据库路径）
-			const uniqueDatabases = Array.from(new Set(allDatabases))
+			const uniqueDatabases = Array.from(new Set(baseDatabases))
 				.filter(db => !db.toLowerCase().includes('translations.db'));
-			console.debug('[EMMStore] initialize: 合并后的主数据库列表:', uniqueDatabases);
+			
+			if (useManualOnly) {
+				console.debug('[EMMStore] initialize: 使用手动配置的主数据库列表（忽略自动检测结果）:', uniqueDatabases);
+			} else {
+				console.debug('[EMMStore] initialize: 使用自动检测的主数据库列表:', uniqueDatabases);
+			}
 			
 			// 确定翻译数据库路径（优先手动配置，否则自动检测）
 			let translationDbPath = currentState!.manualTranslationDbPath;
@@ -202,7 +210,7 @@ export const emmMetadataStore = {
 			manualDatabasePaths: paths
 		}));
 		// 重新初始化以应用新路径
-		this.initialize();
+		this.initialize(true);
 	},
 	
 	/**
@@ -218,7 +226,7 @@ export const emmMetadataStore = {
 			translationDbPath: path
 		}));
 		// 重新初始化以应用新路径
-		this.initialize();
+		this.initialize(true);
 	},
 	
 	/**

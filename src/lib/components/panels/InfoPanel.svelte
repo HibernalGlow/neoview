@@ -45,14 +45,29 @@
 
 	// 检查标签是否为收藏标签（支持完整格式 "category:tag" 或单独 tag）
 	function isCollectTag(tag: string, category?: string): EMMCollectTag | null {
+		console.debug('[InfoPanel] isCollectTag 调用:', {
+			category,
+			tag,
+			collectTagsLength: collectTags.length
+		});
+		
 		// 先尝试完整格式 "category:tag"
 		if (category) {
 			const fullTag = `${category}:${tag}`;
 			const result = isCollectTagHelper(fullTag, collectTags);
+			console.debug('[InfoPanel] isCollectTag 完整格式结果:', {
+				fullTag,
+				result
+			});
 			if (result) return result;
 		}
 		// 再尝试单独 tag
-		return isCollectTagHelper(tag, collectTags);
+		const fallbackResult = isCollectTagHelper(tag, collectTags);
+		console.debug('[InfoPanel] isCollectTag 仅标签结果:', {
+			tag,
+			result: fallbackResult
+		});
+		return fallbackResult;
 	}
 
 	// 获取所有标签（扁平化，高亮收藏的）

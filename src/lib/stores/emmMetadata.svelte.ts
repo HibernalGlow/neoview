@@ -417,7 +417,13 @@ export function isCollectTagHelper(tag: string, collectTags: EMMCollectTag[]): E
 	const inputCategoryNormalized = normalize(inputCategoryRaw);
 	const inputTagOnlyNormalized = normalize(inputTagRaw);
 	
-	console.debug('[EMM] isCollectTagHelper: 开始匹配标签，tag:', tag, '收藏标签数量:', collectTags.length);
+	console.info('[EMM] isCollectTagHelper: 开始匹配标签', {
+		tag,
+		hasCategory,
+		inputCategoryNormalized,
+		inputTagOnlyNormalized,
+		collectTagsLength: collectTags.length
+	});
 	
 	for (const ct of collectTags) {
 		const idNormalized = normalize(ct.id);
@@ -428,15 +434,15 @@ export function isCollectTagHelper(tag: string, collectTags: EMMCollectTag[]): E
 		
 		// 1. 直接匹配 id / display / tag
 		if (idNormalized && idNormalized === inputNormalized) {
-			console.debug('[EMM] 标签匹配 (normalized id):', tag, '->', ct);
+			console.info('[EMM] 标签匹配 (normalized id):', tag, '->', ct);
 			return ct;
 		}
 		if (displayNormalized && displayNormalized === inputNormalized) {
-			console.debug('[EMM] 标签匹配 (normalized display):', tag, '->', ct);
+			console.info('[EMM] 标签匹配 (normalized display):', tag, '->', ct);
 			return ct;
 		}
 		if (!hasCategory && tagNormalized && tagNormalized === inputTagOnlyNormalized) {
-			console.debug('[EMM] 标签匹配 (normalized tag only):', tag, '->', ct);
+			console.info('[EMM] 标签匹配 (normalized tag only):', tag, '->', ct);
 			return ct;
 		}
 		
@@ -444,26 +450,26 @@ export function isCollectTagHelper(tag: string, collectTags: EMMCollectTag[]): E
 		if (hasCategory) {
 			// 2.1 使用收藏标签的 display 提取的分类与输入分类比较
 			if (categoryFromDisplay && tagNormalized && categoryFromDisplay === inputCategoryNormalized && tagNormalized === inputTagOnlyNormalized) {
-				console.debug('[EMM] 标签匹配 (display category + tag):', tag, '->', ct);
+				console.info('[EMM] 标签匹配 (display category + tag):', tag, '->', ct);
 				return ct;
 			}
 			
 			// 2.2 使用收藏标签的 letter 作为分类
 			if (letterNormalized && tagNormalized && letterNormalized === inputCategoryNormalized && tagNormalized === inputTagOnlyNormalized) {
-				console.debug('[EMM] 标签匹配 (letter + tag):', tag, '->', ct);
+				console.info('[EMM] 标签匹配 (letter + tag):', tag, '->', ct);
 				return ct;
 			}
 			
 			// 2.3 仅比较标签名
 			if (tagNormalized && tagNormalized === inputTagOnlyNormalized) {
-				console.debug('[EMM] 标签匹配 (tag name only with category present):', tag, '->', ct);
+				console.info('[EMM] 标签匹配 (tag name only with category present):', tag, '->', ct);
 				return ct;
 			}
 		}
 	}
 	
-	console.debug('[EMM] 标签未匹配:', tag);
-	console.debug('[EMM] 收藏标签列表(简要):', collectTags.slice(0, 10).map(ct => ({ 
+	console.warn('[EMM] 标签未匹配:', tag);
+	console.info('[EMM] 收藏标签列表(前10):', collectTags.slice(0, 10).map(ct => ({ 
 		id: ct.id, 
 		display: ct.display, 
 		tag: ct.tag, 

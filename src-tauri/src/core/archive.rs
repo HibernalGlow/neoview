@@ -1,5 +1,6 @@
 use super::blob_registry::BlobRegistry;
 use image::GenericImageView;
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::{Cursor, Read};
@@ -9,6 +10,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use zip::ZipArchive;
 
 const FIRST_IMAGE_CACHE_LIMIT: usize = 512;
+const IMAGE_CACHE_LIMIT: usize = 256;
 
 #[derive(Debug, Clone)]
 struct CachedFirstImageEntry {
@@ -17,6 +19,12 @@ struct CachedFirstImageEntry {
     file_size: u64,
     last_used: Instant,
     blob_url: Option<String>,
+}
+
+#[derive(Clone)]
+struct CachedImageEntry {
+    data: Vec<u8>,
+    last_used: Instant,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,7 +48,7 @@ pub struct ArchiveManager {
     /// 支持的图片格式
     image_extensions: Vec<String>,
     /// 图片缓存
-    cache: Arc<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>>,
+    cache: Arc<std::sync::Mutex<std::collections::HashMap<String, CachedImageEntry>>>,
     /// 压缩包文件缓存（避免重复打开）
     archive_cache: Arc<
         std::sync::Mutex<
@@ -215,7 +223,7 @@ impl ArchiveManager {
         archive_path: &Path,
         file_path: &str,
     ) -> Result<Vec<u8>, String> {
-        println!(
+        info!(
             "📦 extract_file_from_zip start: archive={} inner={}",
             archive_path.display(),
             file_path
@@ -244,7 +252,7 @@ impl ArchiveManager {
         } else {
             0.0
         };
-        println!("📦 extract_file_from_zip end: read_bytes={} compressed={} ratio={:.3} elapsed_ms={} archive={} inner={}", uncompressed, compressed, ratio, elapsed.as_millis(), archive_path.display(), file_path);
+        info!("📦 extract_file_from_zip end: read_bytes={} compressed={} ratio={:.3} elapsed_ms={} archive={} inner={}", uncompressed, compressed, ratio, elapsed.as_millis(), archive_path.display(), file_path);
 
         Ok(buffer)
     }
@@ -260,16 +268,29 @@ impl ArchiveManager {
         archive_path: &Path,
         file_path: &str,
     ) -> Result<Vec<u8>, String> {
+        let cache_key = format!("{}::{}", Self::normalize_archive_key(archive_path), file_path);
+        if let Some(cached) = self.get_cached_image(&cache_key) {
+            println!(
+                "🎯 Archive image cache hit: {} ({} bytes)",
+                file_path,
+                cached.len()
+            );
+            return Ok(cached);
+        }
+
         let data = self.extract_file_from_zip(archive_path, file_path)?;
 
         // 对于 JXL 格式，需要先解码再重新编码为通用格式
         if let Some(ext) = Path::new(file_path).extension() {
             if ext.to_string_lossy().to_lowercase() == "jxl" {
-                return self.load_jxl_binary_from_zip(&data);
+                let converted = self.load_jxl_binary_from_zip(&data)?;
+                self.store_cached_image(cache_key, converted.clone());
+                return Ok(converted);
             }
         }
 
         // 直接返回原始二进制数据
+        self.store_cached_image(cache_key, data.clone());
         Ok(data)
     }
 
@@ -902,6 +923,37 @@ impl ArchiveManager {
         let image_data = self.extract_file(archive_path, &inner_path)?;
 
         Ok((image_data, Some(inner_path), metadata))
+    }
+
+    fn get_cached_image(&self, key: &str) -> Option<Vec<u8>> {
+        if let Ok(mut cache) = self.cache.lock() {
+            if let Some(entry) = cache.get_mut(key) {
+                entry.last_used = Instant::now();
+                return Some(entry.data.clone());
+            }
+        }
+        None
+    }
+
+    fn store_cached_image(&self, key: String, data: Vec<u8>) {
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.insert(
+                key,
+                CachedImageEntry {
+                    data,
+                    last_used: Instant::now(),
+                },
+            );
+            if cache.len() > IMAGE_CACHE_LIMIT {
+                if let Some(oldest_key) = cache
+                    .iter()
+                    .min_by_key(|(_, entry)| entry.last_used)
+                    .map(|(k, _)| k.clone())
+                {
+                    cache.remove(&oldest_key);
+                }
+            }
+        }
     }
 
     /// 存储首图 blob 缓存

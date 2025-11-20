@@ -61,10 +61,15 @@ export class PreloadManager {
 	private preloadWorker: ReturnType<typeof createPreloadWorker<any>>;
 	private options: PreloadManagerOptions;
 	private preUpscaledPages = new Set<number>();
+	private thumbnailListeners = new Set<(pageIndex: number, dataURL: string) => void>();
+	private preloadRampTimer: ReturnType<typeof setTimeout> | null = null;
 
 	constructor(options: PreloadManagerOptions = {}) {
 		// 保存选项
 		this.options = options;
+		if (options.onThumbnailReady) {
+			this.thumbnailListeners.add(options.onThumbnailReady);
+		}
 		
 		// 初始化性能配置，优先使用面板配置
 		this.performancePreloadPages = options.initialPreloadPages ?? performanceSettings.preLoadSize;
@@ -164,6 +169,23 @@ export class PreloadManager {
 		this.setupBookChangeListener();
 	}
 
+	addThumbnailListener(listener: (pageIndex: number, dataURL: string) => void): () => void {
+		this.thumbnailListeners.add(listener);
+		return () => {
+			this.thumbnailListeners.delete(listener);
+		};
+	}
+
+	private emitThumbnailReady(pageIndex: number, dataURL: string) {
+		for (const listener of this.thumbnailListeners) {
+			try {
+				listener(pageIndex, dataURL);
+			} catch (error) {
+				console.error('Thumbnail listener failed:', error);
+			}
+		}
+	}
+
 	/**
 	 * 设置书籍变化监听器
 	 */
@@ -175,24 +197,28 @@ export class PreloadManager {
 			const currentBook = bookStore.currentBook;
 			const currentBookPath = currentBook?.path || null;
 			
-			// 只有当书籍路径真正改变时才清理缓存
-			if (lastBookPath !== null && currentBookPath !== lastBookPath) {
-				console.log('书籍路径发生变化，清理预加载缓存:', lastBookPath, '->', currentBookPath);
+			if (currentBookPath && currentBookPath !== lastBookPath) {
 				if (lastBookPath) {
+					console.log('书籍路径发生变化，清理预加载缓存:', lastBookPath, '->', currentBookPath);
 					invoke('cancel_upscale_jobs_for_book', { bookPath: lastBookPath }).catch((error) => {
 						console.warn('取消上一书籍超分任务失败:', error);
 					});
+					
+					// 重置预超分进度
+					this.resetPreUpscaleProgress();
+					this.preUpscaledPages.clear();
+					
+					// 重置图片加载器（保留可跨书复用的超分缓存）
+					this.imageLoader.resetForBookChange({ preservePreloadCache: true });
 				}
-				
-				// 重置预超分进度
-				this.resetPreUpscaleProgress();
-				this.preUpscaledPages.clear();
-				
-				// 重置图片加载器（保留可跨书复用的超分缓存）
-				this.imageLoader.resetForBookChange({ preservePreloadCache: true });
+
+				this.applyPreloadRamp();
+				lastBookPath = currentBookPath;
 			}
-			
-			lastBookPath = currentBookPath;
+
+			if (!currentBookPath) {
+				lastBookPath = null;
+			}
 		});
 	}
 
@@ -206,7 +232,8 @@ export class PreloadManager {
 		// 清理性能配置监听器
 		performanceSettings.removeListener(this.performanceSettingsListener);
 
-		
+		this.clearPreloadRampTimer();
+		this.thumbnailListeners.clear();
 
 		// 清理预加载 worker
 		this.preloadWorker.clear();
@@ -300,12 +327,43 @@ export class PreloadManager {
 		console.log('缓存命中，hash:', imageHash);
 	}
 
+	private applyPreloadRamp(): void {
+		const target = this.performancePreloadPages;
+		const rampValue = Math.min(target, 3);
+
+		this.clearPreloadRampTimer();
+
+		this.imageLoader.updateConfig({
+			preloadPages: rampValue,
+			maxThreads: this.performanceMaxThreads
+		});
+
+		if (typeof window === 'undefined') {
+			return;
+		}
+
+		this.preloadRampTimer = window.setTimeout(() => {
+			this.imageLoader.updateConfig({
+				preloadPages: this.performancePreloadPages,
+				maxThreads: this.performanceMaxThreads
+			});
+			this.preloadRampTimer = null;
+		}, 2000);
+	}
+
+	private clearPreloadRampTimer(): void {
+		if (this.preloadRampTimer) {
+			clearTimeout(this.preloadRampTimer);
+			this.preloadRampTimer = null;
+		}
+	}
+
 	/**
 	 * 请求缩略图
 	 */
 	async requestThumbnail(pageIndex: number): Promise<string> {
 		const thumb = await this.imageLoader.getThumbnail(pageIndex);
-		this.options.onThumbnailReady?.(pageIndex, thumb);
+		this.emitThumbnailReady(pageIndex, thumb);
 		return thumb;
 	}
 	

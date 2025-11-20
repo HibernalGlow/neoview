@@ -24,7 +24,8 @@ import { scheduleComparisonPreview, cancelComparisonPreviewTask } from '$lib/cor
 import { scheduleUpscaleCacheCleanup } from '$lib/core/cache/cacheMaintenance';
 	
 	// 新模块导入
-	import { createPreloadManager } from './flow/preloadManager.svelte';
+import { createPreloadManager } from './flow/preloadManager.svelte';
+import { setSharedPreloadManager } from './flow/sharedPreloadManager';
 	import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
 	import { idbSet } from '$lib/utils/idb';
 import { getFileMetadata } from '$lib/api/fs';
@@ -450,21 +451,23 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 		(window as unknown as { preloadManager?: typeof preloadManager }).preloadManager = preloadManager;
 
 		preloadManager.initialize();
+		setSharedPreloadManager(preloadManager);
 	});
 
 	// 组件卸载时清理
 	onDestroy(() => {
 		if (preloadManager) {
 			preloadManager.cleanup();
+			setSharedPreloadManager(null);
 		}
-	cancelComparisonPreviewTask('viewer destroyed');
+		cancelComparisonPreviewTask('viewer destroyed');
 		if ((window as { preloadManager?: typeof preloadManager }).preloadManager === preloadManager) {
 			delete (window as { preloadManager?: typeof preloadManager }).preloadManager;
 		}
 		if (lastUpscaledObjectUrl) {
 			URL.revokeObjectURL(lastUpscaledObjectUrl);
 		}
-			derivedUpscaledUrl = null;
+		derivedUpscaledUrl = null;
 		lastUpscaledObjectUrl = null;
 		lastUpscaledBlob = null;
 	});

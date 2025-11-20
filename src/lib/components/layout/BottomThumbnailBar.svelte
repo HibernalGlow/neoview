@@ -3,6 +3,7 @@
 	 * Bottom Thumbnail Bar
 	 * 底部缩略图栏 - 自动隐藏，鼠标悬停显示
 	 */
+	import { onDestroy, onMount } from 'svelte';
 	import { readable } from 'svelte/store';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { loadImage } from '$lib/api/fs';
@@ -11,7 +12,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Progress from '$lib/components/ui/progress';
 	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, ExternalLink, Minus, Target } from '@lucide/svelte';
-	import { createPreloadManager } from '$lib/components/viewer/flow/preloadManager.svelte';
+	import { subscribeSharedPreloadManager } from '$lib/components/viewer/flow/sharedPreloadManager';
+	import type { PreloadManager } from '$lib/components/viewer/flow/preloadManager.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
 
 	function createAppStateStore<T>(selector: StateSelector<T>) {
@@ -34,8 +36,10 @@
 	let hoverCount = $state(0); // 追踪悬停区域的计数
 	let showAreaOverlay = $state(false); // 显示区域覆盖层
 	
-	// 创建预加载管理器实例用于缩略图
-	let preloadManager: ReturnType<typeof createPreloadManager>;
+	// 共享预加载管理器引用
+	let preloadManager: PreloadManager | null = null;
+	let unsubscribeSharedManager: (() => void) | null = null;
+	let unsubscribeThumbnailListener: (() => void) | null = null;
 
 	// 响应钉住状态
 	$effect(() => {
@@ -52,10 +56,20 @@
 		}));
 	});
 
+	let loadThumbnailsDebounce: ReturnType<typeof setTimeout> | null = null;
+
+	function scheduleLoadVisibleThumbnails() {
+		if (loadThumbnailsDebounce) return;
+		loadThumbnailsDebounce = window.setTimeout(() => {
+			loadThumbnailsDebounce = null;
+			void loadVisibleThumbnails();
+		}, 80);
+	}
+
 	function showThumbnails() {
 		isVisible = true;
 		if (hideTimeout) clearTimeout(hideTimeout);
-		loadVisibleThumbnails();
+		scheduleLoadVisibleThumbnails();
 		// 不要在这里设置定时器，让 handleMouseLeave 来处理
 	}
 
@@ -335,49 +349,57 @@
 				rect.right <= containerRect.right + buffer
 			) {
 				if (!(i in thumbnails)) {
-					loadThumbnail(i);
+					void loadThumbnail(i);
 				}
 			}
 		});
 	}
 
-	// 初始化预加载管理器
-	$effect(() => {
-		const currentBook = bookStore.currentBook;
-		if (currentBook) {
-			// 创建预加载管理器
-			preloadManager = createPreloadManager({
-				onThumbnailReady: (pageIndex: number, dataURL: string) => {
-					// 解析 dataURL 获取图片尺寸
-					const img = new Image();
-					img.onload = () => {
-						const maxHeight = $bottomThumbnailBarHeight - 40;
-						let width = img.width;
-						let height = img.height;
-						if (height > maxHeight) {
-							width = (width * maxHeight) / height;
-							height = maxHeight;
-						}
-						thumbnails = { ...thumbnails, [pageIndex]: { url: dataURL, width, height } };
-					};
-					img.src = dataURL;
-				}
-			});
-			preloadManager.initialize();
-		}
-		
-		// 清理函数
-		return () => {
-			if (preloadManager) {
-				preloadManager.cleanup();
+	function handleSharedThumbnailReady(pageIndex: number, dataURL: string) {
+		const img = new Image();
+		img.onload = () => {
+			const maxHeight = $bottomThumbnailBarHeight - 40;
+			let width = img.width;
+			let height = img.height;
+			if (height > maxHeight) {
+				width = (width * maxHeight) / height;
+				height = maxHeight;
 			}
+			thumbnails = { ...thumbnails, [pageIndex]: { url: dataURL, width, height } };
 		};
+		img.src = dataURL;
+	}
+
+	onMount(() => {
+		unsubscribeSharedManager = subscribeSharedPreloadManager((manager) => {
+			if (unsubscribeThumbnailListener) {
+				unsubscribeThumbnailListener();
+				unsubscribeThumbnailListener = null;
+			}
+			preloadManager = manager;
+			if (preloadManager) {
+				// register thumbnail listener
+				unsubscribeThumbnailListener = preloadManager.addThumbnailListener(handleSharedThumbnailReady);
+				scheduleLoadVisibleThumbnails();
+			}
+		});
+	});
+
+	onDestroy(() => {
+		if (unsubscribeThumbnailListener) {
+			unsubscribeThumbnailListener();
+			unsubscribeThumbnailListener = null;
+		}
+		if (unsubscribeSharedManager) {
+			unsubscribeSharedManager();
+			unsubscribeSharedManager = null;
+		}
 	});
 
 	$effect(() => {
 		const windowState = $viewerState.pageWindow;
 		if (!bookStore.currentBook || !windowState) return;
-		void loadVisibleThumbnails();
+		scheduleLoadVisibleThumbnails();
 	});
 
 	// 清空缩略图缓存当书籍变化时
@@ -393,7 +415,7 @@
 		const currentBook = bookStore.currentBook;
 		if (currentBook && Object.keys(thumbnails).length > 0) {
 			// 重新加载当前可见的缩略图以适应新高度
-			loadVisibleThumbnails();
+			scheduleLoadVisibleThumbnails();
 		}
 	});
 </script>

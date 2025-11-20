@@ -29,7 +29,15 @@
 	let emmDatabasePathInput = $state<string>('');
 	let enableEMM = $state(true);
 	let fileListTagDisplayMode = $state<'all' | 'collect' | 'none'>('collect');
-	let translationDict = $state<EMMTranslationDict | undefined>(undefined);
+
+	// 从 store 中获取翻译字典
+	const translationDict = $derived.by(() => {
+		const dict = emmMetadataStore.getTranslationDict();
+		if (dict) {
+			console.log('[InfoPanel] 翻译字典已获取');
+		}
+		return dict;
+	});
 
 	// 加载收藏标签（确保初始化完成）
 	$effect(() => {
@@ -198,7 +206,7 @@
 		const unsubscribe = emmMetadataStore.subscribe(state => {
 			enableEMM = state.enableEMM;
 			fileListTagDisplayMode = state.fileListTagDisplayMode;
-			translationDict = state.translationDict;
+			// translationDict = state.translationDict;
 		});
 		// 立即取消订阅，我们只需要当前值
 		unsubscribe();

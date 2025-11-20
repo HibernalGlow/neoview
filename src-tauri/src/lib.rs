@@ -304,6 +304,8 @@ pub fn run() {
             commands::scan_folder_thumbnails,
             commands::get_video_duration,
             commands::is_video_file,
+            commands::load_video,
+            commands::load_video_from_archive,
             commands::get_background_queue_metrics,
         ])
         .run(tauri::generate_context!())

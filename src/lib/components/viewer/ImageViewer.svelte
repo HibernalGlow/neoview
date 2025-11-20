@@ -21,6 +21,7 @@
 		cancelComparisonPreviewTask
 	} from '$lib/core/tasks/comparisonTaskService';
 	import { scheduleUpscaleCacheCleanup } from '$lib/core/cache/cacheMaintenance';
+	import VideoPlayer from './VideoPlayer.svelte';
 
 	// 新模块导入
 	import { createPreloadManager } from './flow/preloadManager.svelte';
@@ -31,6 +32,7 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import type { BookInfo, Page } from '$lib/types';
 	import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
+	import { isVideoFile } from '$lib/utils/videoUtils';
 
 	// 进度条状态
 	let showProgressBar = $state(true);
@@ -71,6 +73,11 @@
 	let error = $state<string | null>(null);
 	let loadingTimeout: ReturnType<typeof window.setTimeout> | null = null; // 延迟显示loading的定时器
 
+	// 视频相关状态
+	let isCurrentPageVideo = $state(false);
+	let videoBlob = $state<Blob | null>(null);
+	let currentVideoRequestId = 0;
+
 	// 预超分进度管理
 	let preUpscaleProgress = $state(0); // 预超分进度 (0-100)
 	let totalPreUpscalePages = $state(0); // 总预超分页数
@@ -92,6 +99,25 @@
 			});
 			return unsubscribe;
 		});
+	}
+
+	const VIDEO_MIME_TYPES: Record<string, string> = {
+		mp4: 'video/mp4',
+		webm: 'video/webm',
+		ogg: 'video/ogg',
+		mov: 'video/quicktime',
+		avi: 'video/x-msvideo',
+		mkv: 'video/x-matroska',
+		m4v: 'video/x-m4v',
+		flv: 'video/x-flv',
+		wmv: 'video/x-ms-wmv'
+	};
+
+	function getVideoMimeType(name?: string): string | undefined {
+		if (!name) return undefined;
+		const ext = name.split('.').pop()?.toLowerCase();
+		if (!ext) return undefined;
+		return VIDEO_MIME_TYPES[ext];
 	}
 
 	const viewerState = createAppStateStore((state) => state.viewer);
@@ -184,6 +210,65 @@
 				createdAt: book.createdAt ?? baseInfo.createdAt,
 				modifiedAt: book.modifiedAt ?? baseInfo.modifiedAt
 			});
+		}
+	}
+
+	async function loadVideoForPage(page: Page) {
+		const book = bookStore.currentBook;
+		if (!book) {
+			return;
+		}
+
+		const requestId = ++currentVideoRequestId;
+		loading = true;
+		loadingVisible = true;
+		error = null;
+		updateViewerState({ loading: true });
+
+		try {
+			const traceId = createImageTraceId('viewer-video', page.index);
+			let binaryData: number[];
+
+			if (book.type === 'archive') {
+				binaryData = await invoke<number[]>('load_video_from_archive', {
+					archivePath: book.path,
+					filePath: page.path,
+					traceId,
+					pageIndex: page.index
+				});
+			} else {
+				binaryData = await invoke<number[]>('load_video', {
+					path: page.path,
+					traceId,
+					pageIndex: page.index
+				});
+			}
+
+			if (requestId !== currentVideoRequestId) {
+				return;
+			}
+
+			const mimeType = getVideoMimeType(page.name) ?? 'video/mp4';
+			videoBlob = new Blob([new Uint8Array(binaryData)], { type: mimeType });
+		} catch (err) {
+			if (requestId !== currentVideoRequestId) {
+				return;
+			}
+			console.error('加载视频失败:', err);
+			if (err instanceof Error) {
+				error = err.message;
+			} else if (typeof err === 'string') {
+				error = err;
+			} else {
+				error = '加载视频失败';
+			}
+			videoBlob = null;
+		} finally {
+			if (requestId === currentVideoRequestId) {
+				loading = false;
+				loadingVisible = false;
+				updateViewerState({ loading: false });
+			}
 		}
 	}
 
@@ -500,16 +585,38 @@
 		const currentIndex = bookStore.currentPageIndex;
 		if (currentPage) {
 			bookStore.setCurrentImage(currentPage);
-			// 使用预加载管理器加载图片
-			if (preloadManager && currentIndex !== lastRequestedPageIndex) {
-				lastRequestedPageIndex = currentIndex;
-				preloadManager.loadCurrentImage();
+			error = null;
+			const videoPage = isVideoFile(currentPage.name);
+			if (videoPage) {
+				isCurrentPageVideo = true;
+				videoBlob = null;
+				imageData = null;
+				imageData2 = null;
+				derivedUpscaledUrl = null;
+				lastRequestedPageIndex = -1;
+				lastLoadedPageIndex = -1;
+				lastLoadedHash = null;
+				void loadVideoForPage(currentPage);
+			} else {
+				if (isCurrentPageVideo || videoBlob) {
+					currentVideoRequestId++;
+					videoBlob = null;
+				}
+				isCurrentPageVideo = false;
+				if (preloadManager && currentIndex !== lastRequestedPageIndex) {
+					lastRequestedPageIndex = currentIndex;
+					preloadManager.loadCurrentImage();
+				}
 			}
 			void updateInfoPanelForCurrentPage();
 		} else {
+			currentVideoRequestId++;
 			lastRequestedPageIndex = -1;
 			lastLoadedPageIndex = -1;
 			lastLoadedHash = null;
+			videoBlob = null;
+			isCurrentPageVideo = false;
+			error = null;
 			infoPanelStore.resetImageInfo();
 		}
 	});
@@ -531,6 +638,9 @@
 			imageData = null;
 			imageData2 = null;
 			derivedUpscaledUrl = null;
+			videoBlob = null;
+			isCurrentPageVideo = false;
+			currentVideoRequestId++;
 			if (lastUpscaledObjectUrl) {
 				URL.revokeObjectURL(lastUpscaledObjectUrl);
 				lastUpscaledObjectUrl = null;
@@ -1024,6 +1134,12 @@
 			<div class="text-white">Loading...</div>
 		{:else if error}
 			<div class="text-red-500">Error: {error}</div>
+		{:else if isCurrentPageVideo}
+			{#if videoBlob}
+				<VideoPlayer videoBlob={videoBlob} />
+			{:else}
+				<div class="text-white">加载视频中...</div>
+			{/if}
 		{:else}
 			<ImageViewerDisplay
 				{imageData}

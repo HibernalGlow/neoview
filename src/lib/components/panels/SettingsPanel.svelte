@@ -9,6 +9,8 @@
 	import { Tabs, TabsContent, TabsList, TabsTrigger } from '$lib/components/ui/tabs';
 	import { Switch } from '$lib/components/ui/switch';
 	import * as Select from '$lib/components/ui/select';
+	import { settingsManager } from '$lib/stores/settingsManager.svelte';
+	import { Upload, Download, RotateCcw } from '@lucide/svelte';
 
 	// 设置状态
 	let settings = $state({
@@ -127,10 +129,43 @@
 
 	function resetSettings() {
 		if (confirm('确定要重置所有设置吗？')) {
+			settingsManager.resetAllSettings();
 			localStorage.removeItem('neoview-settings');
 			localStorage.removeItem('neoview-keybindings');
 			location.reload();
 		}
+	}
+
+	// 导出设置到JSON文件
+	async function exportSettings() {
+		try {
+			await settingsManager.exportToFile();
+			alert('设置已导出！');
+		} catch (error) {
+			console.error('导出设置失败:', error);
+			alert('导出设置失败，请检查控制台。');
+		}
+	}
+
+	// 导入设置从JSON文件
+	async function importSettings() {
+		const input = document.createElement('input');
+		input.type = 'file';
+		input.accept = 'application/json,.json';
+		input.onchange = async (e) => {
+			const file = (e.target as HTMLInputElement)?.files?.[0];
+			if (!file) return;
+
+			try {
+				await settingsManager.importFromFile(file);
+				alert('设置已导入！页面将重新加载。');
+				location.reload();
+			} catch (error) {
+				console.error('导入设置失败:', error);
+				alert('导入设置失败，请检查文件格式。');
+			}
+		};
+		input.click();
 	}
 
 	// 加载保存的设置
@@ -505,8 +540,23 @@
 	</div>
 
 	<!-- 底部按钮 -->
-	<div class="flex justify-end gap-2 border-t p-4">
-		<Button variant="outline" onclick={resetSettings}>重置</Button>
-		<Button onclick={saveSettings}>保存设置</Button>
+	<div class="flex items-center justify-between gap-2 border-t p-4">
+		<div class="flex gap-2">
+			<Button variant="outline" onclick={importSettings} class="gap-2">
+				<Upload class="h-4 w-4" />
+				导入设置
+			</Button>
+			<Button variant="outline" onclick={exportSettings} class="gap-2">
+				<Download class="h-4 w-4" />
+				导出设置
+			</Button>
+		</div>
+		<div class="flex gap-2">
+			<Button variant="outline" onclick={resetSettings} class="gap-2">
+				<RotateCcw class="h-4 w-4" />
+				重置
+			</Button>
+			<Button onclick={saveSettings}>保存设置</Button>
+		</div>
 	</div>
 </div>

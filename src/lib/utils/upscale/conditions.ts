@@ -23,6 +23,10 @@ function createConditionId(prefix = CONDITION_ID_PREFIX): string {
 	return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
 }
 
+function normalizePathForMatch(path: string): string {
+	return path.replace(/\\/g, '/');
+}
+
 function ensureMatchDefaults(match?: UpscaleCondition['match']): UpscaleCondition['match'] {
 	const safeMatch = match ?? {};
 	return {
@@ -182,10 +186,12 @@ export interface PageMetadata {
 }
 
 /**
- * 评估页面元数据是否匹配条件
- */
-function matchesCondition(matchRule: UpscaleCondition['match'], meta: PageMetadata): boolean {
-	const match = ensureMatchDefaults(matchRule);
+	 * 评估页面元数据是否匹配条件
+	 */
+function matchesCondition(condition: UpscaleCondition, meta: PageMetadata): boolean {
+	const match = ensureMatchDefaults(condition.match);
+	const conditionId = condition.id;
+	const conditionName = condition.name;
 
 	const hasWidthRule = match.minWidth !== undefined || match.maxWidth !== undefined;
 	const hasHeightRule = match.minHeight !== undefined || match.maxHeight !== undefined;
@@ -199,65 +205,121 @@ function matchesCondition(matchRule: UpscaleCondition['match'], meta: PageMetada
 
 	if (match.dimensionMode === 'or' && hasWidthRule && hasHeightRule) {
 		if (!widthOk && !heightOk) {
+			console.log('条件未通过尺寸(or)检查:', {
+				conditionId,
+				conditionName,
+				metaWidth: meta.width,
+				metaHeight: meta.height,
+				minWidth: match.minWidth,
+				maxWidth: match.maxWidth,
+				minHeight: match.minHeight,
+				maxHeight: match.maxHeight
+			});
 			return false;
 		}
 	} else {
-		if (hasWidthRule && !widthOk) return false;
-		if (hasHeightRule && !heightOk) return false;
+		if (hasWidthRule && !widthOk) {
+			console.log('条件未通过宽度检查:', {
+				conditionId,
+				conditionName,
+				metaWidth: meta.width,
+				minWidth: match.minWidth,
+				maxWidth: match.maxWidth
+			});
+			return false;
+		}
+		if (hasHeightRule && !heightOk) {
+			console.log('条件未通过高度检查:', {
+				conditionId,
+				conditionName,
+				metaHeight: meta.height,
+				minHeight: match.minHeight,
+				maxHeight: match.maxHeight
+			});
+			return false;
+		}
 	}
 
-	// 检查创建时间范围
 	if (match.createdBetween && meta.createdAt) {
 		const [start, end] = match.createdBetween;
 		if (meta.createdAt < start || meta.createdAt > end) {
+			console.log('条件未通过创建时间范围检查:', {
+				conditionId,
+				conditionName,
+				createdAt: meta.createdAt,
+				start,
+				end
+			});
 			return false;
 		}
 	}
 
-	// 检查修改时间范围
 	if (match.modifiedBetween && meta.modifiedAt) {
 		const [start, end] = match.modifiedBetween;
 		if (meta.modifiedAt < start || meta.modifiedAt > end) {
+			console.log('条件未通过修改时间范围检查:', {
+				conditionId,
+				conditionName,
+				modifiedAt: meta.modifiedAt,
+				start,
+				end
+			});
 			return false;
 		}
 	}
 
-	// 检查书籍路径正则
 	if (match.regexBookPath) {
-		try {
-			const regex = new RegExp(match.regexBookPath);
-			if (!regex.test(meta.bookPath)) {
-				return false;
-			}
-		} catch (error) {
-			console.warn('书籍路径正则表达式无效:', match.regexBookPath, error);
+		const target = meta.bookPath || '';
+		const keyword = String(match.regexBookPath).toLowerCase();
+		const ok = target.toLowerCase().includes(keyword);
+		console.log('条件书籍路径匹配结果:', {
+			conditionId,
+			conditionName,
+			keyword,
+			bookPath: target,
+			matched: ok
+		});
+		if (!ok) {
 			return false;
 		}
 	}
 
-	// 检查图片路径正则
 	if (match.regexImagePath) {
-		try {
-			const regex = new RegExp(match.regexImagePath);
-			if (!regex.test(meta.imagePath)) {
-				return false;
-			}
-		} catch (error) {
-			console.warn('图片路径正则表达式无效:', match.regexImagePath, error);
+		const target = meta.imagePath || '';
+		const keyword = String(match.regexImagePath).toLowerCase();
+		const ok = target.toLowerCase().includes(keyword);
+		console.log('条件图片路径匹配结果:', {
+			conditionId,
+			conditionName,
+			keyword,
+			imagePath: target,
+			matched: ok
+		});
+		if (!ok) {
 			return false;
 		}
 	}
 
-	// 检查自定义元数据
 	if (match.metadata && meta.metadata) {
 		for (const [key, expression] of Object.entries(match.metadata)) {
 			const metaValue = meta.metadata[key];
 			if (!evaluateExpression(expression, metaValue)) {
+				console.log('条件未通过元数据检查:', {
+					conditionId,
+					conditionName,
+					key,
+					value: metaValue,
+					expression
+				});
 				return false;
 			}
 		}
 	}
 
+	console.log('条件匹配通过:', {
+		conditionId,
+		conditionName
+	});
 	return true;
 }
 
@@ -304,15 +366,22 @@ export function evaluateConditions(
 	meta: PageMetadata,
 	conditions: UpscaleCondition[]
 ): ConditionResult {
-	// 过滤启用的条件并按优先级排序
 	const sortedConditions = conditions
-		.filter(c => c.enabled)
+		.filter((c) => c.enabled)
 		.sort((a, b) => a.priority - b.priority);
 
-	// 遍历条件，找到第一个匹配的
+	console.log('evaluateConditions: 开始评估条件', {
+		bookPath: meta.bookPath,
+		imagePath: meta.imagePath,
+		width: meta.width,
+		height: meta.height,
+		totalConditions: conditions.length,
+		enabledConditions: sortedConditions.length
+	});
+
 	for (const condition of sortedConditions) {
-		if (matchesCondition(condition.match, meta)) {
-			console.log(`条件匹配: "${condition.name}" (ID: ${condition.id})`);
+		const matched = matchesCondition(condition, meta);
+		if (matched) {
 			return {
 				conditionId: condition.id,
 				action: condition.action,
@@ -320,9 +389,17 @@ export function evaluateConditions(
 				skipUpscale: condition.action?.skip === true
 			};
 		}
+		console.log('evaluateConditions: 条件未命中', {
+			conditionId: condition.id,
+			conditionName: condition.name
+		});
 	}
 
-	// 没有条件匹配
+	console.log('evaluateConditions: 没有任何条件匹配，使用默认行为', {
+		bookPath: meta.bookPath,
+		imagePath: meta.imagePath
+	});
+
 	return {
 		conditionId: null,
 		action: null,
@@ -376,8 +453,8 @@ export function collectPageMetadata(page: any, bookPath: string): PageMetadata {
 	const metadata: PageMetadata = {
 		width: page.width || 0,
 		height: page.height || 0,
-		bookPath,
-		imagePath: page.path || page.innerPath || ''
+		bookPath: normalizePathForMatch(bookPath),
+		imagePath: normalizePathForMatch(page.path || page.innerPath || '')
 	};
 
 	// 尝试获取时间信息

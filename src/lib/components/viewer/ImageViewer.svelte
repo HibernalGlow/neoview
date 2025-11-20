@@ -5,13 +5,9 @@
 	 */
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { zoomIn, zoomOut, resetZoom, rotationAngle } from '$lib/stores';
-	import {
-		keyBindings,
-		generateKeyCombo,
-		findCommandByKeys
-	} from '$lib/stores/keyboard.svelte';
+	import { keyBindings, generateKeyCombo, findCommandByKeys } from '$lib/stores/keyboard.svelte';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
-import { settingsManager, performanceSettings } from '$lib/settings/settingsManager';
+	import { settingsManager, performanceSettings } from '$lib/settings/settingsManager';
 	import { onDestroy, onMount } from 'svelte';
 	import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
 	import { readable } from 'svelte/store';
@@ -19,49 +15,50 @@ import { settingsManager, performanceSettings } from '$lib/settings/settingsMana
 	import ImageViewerDisplay from './flow/ImageViewerDisplay.svelte';
 	import ImageViewerProgressBar from './flow/ImageViewerProgressBar.svelte';
 	import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
-import { appState, type StateSelector, type AppStateSnapshot } from '$lib/core/state/appState';
-import { scheduleComparisonPreview, cancelComparisonPreviewTask } from '$lib/core/tasks/comparisonTaskService';
-import { scheduleUpscaleCacheCleanup } from '$lib/core/cache/cacheMaintenance';
-	
+	import { appState, type StateSelector, type AppStateSnapshot } from '$lib/core/state/appState';
+	import {
+		scheduleComparisonPreview,
+		cancelComparisonPreviewTask
+	} from '$lib/core/tasks/comparisonTaskService';
+	import { scheduleUpscaleCacheCleanup } from '$lib/core/cache/cacheMaintenance';
+
 	// 新模块导入
-import { createPreloadManager } from './flow/preloadManager.svelte';
-import { setSharedPreloadManager } from './flow/sharedPreloadManager';
+	import { createPreloadManager } from './flow/preloadManager.svelte';
+	import { setSharedPreloadManager } from './flow/sharedPreloadManager';
 	import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
 	import { idbSet } from '$lib/utils/idb';
-import { getFileMetadata } from '$lib/api/fs';
-import { invoke } from '@tauri-apps/api/core';
+	import { getFileMetadata } from '$lib/api/fs';
+	import { invoke } from '@tauri-apps/api/core';
 	import type { BookInfo, Page } from '$lib/types';
-import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
-
-	
+	import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 
 	// 进度条状态
 	let showProgressBar = $state(true);
 
 	// 鼠标光标隐藏相关
 	let cursorVisible = $state(true);
-let hideCursorTimeout: ReturnType<typeof window.setTimeout> | null = null;
+	let hideCursorTimeout: ReturnType<typeof window.setTimeout> | null = null;
 	let lastMousePosition = $state({ x: 0, y: 0 });
 	let settings = $state(settingsManager.getSettings());
 
 	// 对比模式状态
-type ImageDimensions = { width: number; height: number };
+	type ImageDimensions = { width: number; height: number };
 
-let originalImageDataForComparison = $state<string>('');
-let upscaledImageDataForComparison = $state<string>('');
-let derivedUpscaledUrl = $state<string | null>(null);
-let lastUpscaledBlob: Blob | null = null;
-let lastUpscaledObjectUrl: string | null = null;
-let lastRequestedPageIndex = -1;
-let lastLoadedPageIndex = -1;
-let lastLoadedHash: string | null = null;
-let lastViewMode: 'single' | 'double' | 'panorama' | 'vertical' | null = null;
-let verticalPagesData = $state<Array<{ index: number; data: string | null }>>([]);
-let panoramaPagesData = $state<Array<{ index: number; data: string | null; position: 'left' | 'center' | 'right' }>>([]);
+	let originalImageDataForComparison = $state<string>('');
+	let upscaledImageDataForComparison = $state<string>('');
+	let derivedUpscaledUrl = $state<string | null>(null);
+	let lastUpscaledBlob: Blob | null = null;
+	let lastUpscaledObjectUrl: string | null = null;
+	let lastRequestedPageIndex = -1;
+	let lastLoadedPageIndex = -1;
+	let lastLoadedHash: string | null = null;
+	let lastViewMode: 'single' | 'double' | 'panorama' | 'vertical' | null = null;
+	let verticalPagesData = $state<Array<{ index: number; data: string | null }>>([]);
+	let panoramaPagesData = $state<
+		Array<{ index: number; data: string | null; position: 'left' | 'center' | 'right' }>
+	>([]);
 
 	// 注意：progressColor 和 progressBlinking 现在由 ImageViewerProgressBar 内部管理
-
-	
 
 	// 预加载管理器
 	let preloadManager: ReturnType<typeof createPreloadManager>;
@@ -72,123 +69,123 @@ let panoramaPagesData = $state<Array<{ index: number; data: string | null; posit
 	let loading = $state(false);
 	let loadingVisible = $state(false); // 控制loading动画的可见性
 	let error = $state<string | null>(null);
-let loadingTimeout: ReturnType<typeof window.setTimeout> | null = null; // 延迟显示loading的定时器
-	
-// 预超分进度管理
-let preUpscaleProgress = $state(0); // 预超分进度 (0-100)
-let totalPreUpscalePages = $state(0); // 总预超分页数
+	let loadingTimeout: ReturnType<typeof window.setTimeout> | null = null; // 延迟显示loading的定时器
 
-type CachedFileMetadata = {
-	size?: number;
-	createdAt?: string;
-	modifiedAt?: string;
-};
+	// 预超分进度管理
+	let preUpscaleProgress = $state(0); // 预超分进度 (0-100)
+	let totalPreUpscalePages = $state(0); // 总预超分页数
 
-const fileMetadataCache = new Map<string, CachedFileMetadata>();
-let metadataRequestId = 0;
-
-function createAppStateStore<T>(selector: StateSelector<T>) {
-	const initial = selector(appState.getSnapshot());
-	return readable(initial, (set) => {
-		const unsubscribe = appState.subscribe(selector, (value) => {
-			set(value);
-		});
-		return unsubscribe;
-	});
-}
-
-const viewerState = createAppStateStore((state) => state.viewer);
-
-function updateViewerState(partial: Partial<AppStateSnapshot['viewer']>) {
-	const snapshot = appState.getSnapshot();
-	appState.update({
-		viewer: {
-			...snapshot.viewer,
-			...partial
-		}
-	});
-}
-
-function buildDisplayPath(book: BookInfo, page: Page): string {
-	if (book.type === 'archive' && page.innerPath) {
-		return `${book.path}::${page.innerPath}`;
-	}
-	return page.path;
-}
-
-function guessFormat(name?: string): string | undefined {
-	if (!name) return undefined;
-	const dotIndex = name.lastIndexOf('.');
-	if (dotIndex === -1) return undefined;
-	return name.slice(dotIndex + 1).toUpperCase();
-}
-
-async function fetchCachedFileMetadata(path: string): Promise<CachedFileMetadata | null> {
-	if (fileMetadataCache.has(path)) {
-		return fileMetadataCache.get(path)!;
-	}
-	try {
-		const metadata = await getFileMetadata(path);
-		const parsed: CachedFileMetadata = {
-			size: metadata.size,
-			createdAt: metadata.created ? new Date(metadata.created * 1000).toISOString() : undefined,
-			modifiedAt: metadata.modified ? new Date(metadata.modified * 1000).toISOString() : undefined
-		};
-		fileMetadataCache.set(path, parsed);
-		return parsed;
-	} catch (error) {
-		console.warn('获取文件元数据失败:', error);
-		return null;
-	}
-}
-
-async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null) {
-	const book = bookStore.currentBook;
-	const page = bookStore.currentPage;
-	if (!book || !page) {
-		infoPanelStore.resetImageInfo();
-		return;
-	}
-
-	const requestId = ++metadataRequestId;
-	const widthsKnown = dimensions?.width ?? page.width;
-	const heightsKnown = dimensions?.height ?? page.height;
-
-	const baseInfo = {
-		path: buildDisplayPath(book, page),
-		name: page.name,
-		format: guessFormat(page.name),
-		width: widthsKnown,
-		height: heightsKnown,
-		fileSize: page.size,
-		colorDepth: undefined,
-		createdAt: undefined,
-		modifiedAt: undefined
+	type CachedFileMetadata = {
+		size?: number;
+		createdAt?: string;
+		modifiedAt?: string;
 	};
 
-	infoPanelStore.setImageInfo(baseInfo);
+	const fileMetadataCache = new Map<string, CachedFileMetadata>();
+	let metadataRequestId = 0;
 
-	if (book.type === 'folder' || book.type === 'media') {
-		const metadata = await fetchCachedFileMetadata(page.path);
-		if (metadata && requestId === metadataRequestId) {
-			infoPanelStore.setImageInfo({
-				...baseInfo,
-				fileSize: metadata.size ?? baseInfo.fileSize,
-				createdAt: metadata.createdAt ?? baseInfo.createdAt,
-				modifiedAt: metadata.modifiedAt ?? baseInfo.modifiedAt
+	function createAppStateStore<T>(selector: StateSelector<T>) {
+		const initial = selector(appState.getSnapshot());
+		return readable(initial, (set) => {
+			const unsubscribe = appState.subscribe(selector, (value) => {
+				set(value);
 			});
-		}
-		return;
-	}
-
-	if (requestId === metadataRequestId) {
-		infoPanelStore.setImageInfo({
-			...baseInfo,
-			createdAt: book.createdAt ?? baseInfo.createdAt,
-			modifiedAt: book.modifiedAt ?? baseInfo.modifiedAt
+			return unsubscribe;
 		});
 	}
-}
+
+	const viewerState = createAppStateStore((state) => state.viewer);
+
+	function updateViewerState(partial: Partial<AppStateSnapshot['viewer']>) {
+		const snapshot = appState.getSnapshot();
+		appState.update({
+			viewer: {
+				...snapshot.viewer,
+				...partial
+			}
+		});
+	}
+
+	function buildDisplayPath(book: BookInfo, page: Page): string {
+		if (book.type === 'archive' && page.innerPath) {
+			return `${book.path}::${page.innerPath}`;
+		}
+		return page.path;
+	}
+
+	function guessFormat(name?: string): string | undefined {
+		if (!name) return undefined;
+		const dotIndex = name.lastIndexOf('.');
+		if (dotIndex === -1) return undefined;
+		return name.slice(dotIndex + 1).toUpperCase();
+	}
+
+	async function fetchCachedFileMetadata(path: string): Promise<CachedFileMetadata | null> {
+		if (fileMetadataCache.has(path)) {
+			return fileMetadataCache.get(path)!;
+		}
+		try {
+			const metadata = await getFileMetadata(path);
+			const parsed: CachedFileMetadata = {
+				size: metadata.size,
+				createdAt: metadata.created ? new Date(metadata.created * 1000).toISOString() : undefined,
+				modifiedAt: metadata.modified ? new Date(metadata.modified * 1000).toISOString() : undefined
+			};
+			fileMetadataCache.set(path, parsed);
+			return parsed;
+		} catch (error) {
+			console.warn('获取文件元数据失败:', error);
+			return null;
+		}
+	}
+
+	async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null) {
+		const book = bookStore.currentBook;
+		const page = bookStore.currentPage;
+		if (!book || !page) {
+			infoPanelStore.resetImageInfo();
+			return;
+		}
+
+		const requestId = ++metadataRequestId;
+		const widthsKnown = dimensions?.width ?? page.width;
+		const heightsKnown = dimensions?.height ?? page.height;
+
+		const baseInfo = {
+			path: buildDisplayPath(book, page),
+			name: page.name,
+			format: guessFormat(page.name),
+			width: widthsKnown,
+			height: heightsKnown,
+			fileSize: page.size,
+			colorDepth: undefined,
+			createdAt: undefined,
+			modifiedAt: undefined
+		};
+
+		infoPanelStore.setImageInfo(baseInfo);
+
+		if (book.type === 'folder' || book.type === 'media') {
+			const metadata = await fetchCachedFileMetadata(page.path);
+			if (metadata && requestId === metadataRequestId) {
+				infoPanelStore.setImageInfo({
+					...baseInfo,
+					fileSize: metadata.size ?? baseInfo.fileSize,
+					createdAt: metadata.createdAt ?? baseInfo.createdAt,
+					modifiedAt: metadata.modifiedAt ?? baseInfo.modifiedAt
+				});
+			}
+			return;
+		}
+
+		if (requestId === metadataRequestId) {
+			infoPanelStore.setImageInfo({
+				...baseInfo,
+				createdAt: book.createdAt ?? baseInfo.createdAt,
+				modifiedAt: book.modifiedAt ?? baseInfo.modifiedAt
+			});
+		}
+	}
 
 	// 订阅设置变化
 	settingsManager.addListener((s) => {
@@ -201,8 +198,7 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 		emmMetadataStore.initialize();
 		const panelSettings = loadUpscalePanelSettings();
 		const initialPreloadPages =
-			(panelSettings as { preloadPages?: number }).preloadPages ??
-			performanceSettings.preLoadSize;
+			(panelSettings as { preloadPages?: number }).preloadPages ?? performanceSettings.preLoadSize;
 		const initialMaxThreads =
 			(panelSettings as { backgroundConcurrency?: number }).backgroundConcurrency ??
 			performanceSettings.maxThreads;
@@ -235,7 +231,7 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 				// 检查当前页是否已经是超分完成状态
 				const currentPageIndex = bookStore.currentPageIndex;
 				const currentStatus = bookStore.getPageUpscaleStatus(currentPageIndex);
-				
+
 				// 如果当前页已超分完成，不要用原图覆盖
 				if (currentStatus === 'done') {
 					console.log('当前页已超分完成，跳过原图 bitmap 更新');
@@ -260,20 +256,29 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 				console.log('超分开始事件触发');
 			},
 			onUpscaleComplete: (detail) => {
-				const { imageData: upscaledImageData, imageBlob, originalImageHash, background, pageIndex, writeToMemoryCache } = detail;
-				
+				const {
+					imageData: upscaledImageData,
+					imageBlob,
+					originalImageHash,
+					background,
+					pageIndex,
+					writeToMemoryCache
+				} = detail;
+
 				// 确定目标页面索引，优先使用事件中的 pageIndex
 				const targetIndex = typeof pageIndex === 'number' ? pageIndex : bookStore.currentPageIndex;
-				
+
 				// 🔥 关键修复：验证 hash 是否匹配目标页面的 hash
 				const targetPageHash = bookStore.getPageHash(targetIndex);
 				if (targetPageHash && originalImageHash !== targetPageHash) {
-					console.warn(`⚠️ 超分结果 hash 不匹配！目标页 ${targetIndex + 1} 的 hash: ${targetPageHash}, 超分结果的 hash: ${originalImageHash}，忽略此结果`);
+					console.warn(
+						`⚠️ 超分结果 hash 不匹配！目标页 ${targetIndex + 1} 的 hash: ${targetPageHash}, 超分结果的 hash: ${originalImageHash}，忽略此结果`
+					);
 					return; // 不匹配，直接返回，不更新显示
 				}
-				
+
 				const isCurrentPage = targetIndex === bookStore.currentPageIndex;
-				
+
 				// 写入内存缓存（如果请求）
 				if (writeToMemoryCache && upscaledImageData && imageBlob && originalImageHash) {
 					if (preloadManager) {
@@ -282,44 +287,54 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 						console.log('超分结果已写入内存缓存，hash:', originalImageHash);
 					}
 				}
-				
+
 				// 非后台任务且是当前页时，才更新显示和状态
 				if (!background && isCurrentPage) {
 					// 🔥 再次验证：确保当前页的 hash 匹配
 					const currentHash = bookStore.getCurrentPageHash();
 					if (currentHash && originalImageHash !== currentHash) {
-						console.warn(`⚠️ 超分结果 hash 与当前页不匹配！当前页 hash: ${currentHash}, 超分结果的 hash: ${originalImageHash}，忽略此结果`);
+						console.warn(
+							`⚠️ 超分结果 hash 与当前页不匹配！当前页 hash: ${currentHash}, 超分结果的 hash: ${originalImageHash}，忽略此结果`
+						);
 						return;
 					}
-					
+
 					// 🔥 额外验证：确保当前页索引仍然匹配（防止翻页后错误替换）
 					const currentPageIndexNow = bookStore.currentPageIndex;
 					if (currentPageIndexNow !== targetIndex) {
-						console.warn(`⚠️ 超分结果页面索引不匹配！当前页: ${currentPageIndexNow + 1}, 超分目标页: ${targetIndex + 1}，忽略此结果`);
+						console.warn(
+							`⚠️ 超分结果页面索引不匹配！当前页: ${currentPageIndexNow + 1}, 超分目标页: ${targetIndex + 1}，忽略此结果`
+						);
 						return;
 					}
-					
+
 					// 🔥 再次验证 hash（双重保险）
 					const currentHashNow = bookStore.getCurrentPageHash();
 					if (currentHashNow && originalImageHash !== currentHashNow) {
-						console.warn(`⚠️ 超分结果 hash 与当前页不匹配（二次验证）！当前页 hash: ${currentHashNow}, 超分结果的 hash: ${originalImageHash}，忽略此结果`);
+						console.warn(
+							`⚠️ 超分结果 hash 与当前页不匹配（二次验证）！当前页 hash: ${currentHashNow}, 超分结果的 hash: ${originalImageHash}，忽略此结果`
+						);
 						return;
 					}
-					
+
 					if (imageBlob) {
 						bookStore.setUpscaledImageBlob(imageBlob);
 					} else if (upscaledImageData) {
 						bookStore.setUpscaledImage(upscaledImageData);
 					}
 					if (upscaledImageData) {
-					imageData = upscaledImageData;
+						imageData = upscaledImageData;
 						upscaledImageDataForComparison = upscaledImageData;
 					}
-					
+
 					// 更新当前页面状态为已完成
 					bookStore.setPageUpscaleStatus(targetIndex, 'done');
-					
-					console.log('✅ 超分图已匹配当前页面，hash:', originalImageHash, '已替换，页面状态更新为完成');
+
+					console.log(
+						'✅ 超分图已匹配当前页面，hash:',
+						originalImageHash,
+						'已替换，页面状态更新为完成'
+					);
 				} else if (background) {
 					// 后台任务：只更新页面状态，不更新显示
 					bookStore.setPageUpscaleStatus(targetIndex, 'preupscaled');
@@ -327,7 +342,13 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 				} else {
 					// 非当前页的超分完成：只更新状态，不更新显示
 					bookStore.setPageUpscaleStatus(targetIndex, 'done');
-					console.log('其他页超分完成，页码:', targetIndex + 1, 'hash:', originalImageHash, '（不影响当前显示）');
+					console.log(
+						'其他页超分完成，页码:',
+						targetIndex + 1,
+						'hash:',
+						originalImageHash,
+						'（不影响当前显示）'
+					);
 				}
 			},
 			onUpscaleSaved: async (detail) => {
@@ -358,7 +379,7 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 			onRequestCurrentImageData: (detail) => {
 				console.log('ImageViewer: 收到图片数据请求');
 				const { callback } = detail;
-				
+
 				// 立即执行，不再添加额外延迟（eventListeners 已经移除了延迟）
 				(async () => {
 					if (typeof callback === 'function') {
@@ -376,7 +397,7 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 								console.warn('从 ImageLoader 获取 Blob 失败:', e);
 							}
 						}
-						
+
 						// 回退到 Object URL（如果可用）
 						if (imageData) {
 							console.log('ImageViewer: 返回缓存的 Object URL，长度:', imageData.length);
@@ -448,7 +469,8 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 			}
 		});
 
-		(window as unknown as { preloadManager?: typeof preloadManager }).preloadManager = preloadManager;
+		(window as unknown as { preloadManager?: typeof preloadManager }).preloadManager =
+			preloadManager;
 
 		preloadManager.initialize();
 		setSharedPreloadManager(preloadManager);
@@ -494,14 +516,17 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 
 	// 🔥 修复书籍导航Bug: 监听书籍切换,立即清空显示状态
 	let lastBookPath: string | null = null;
+	let containerElement = $state<HTMLDivElement | undefined>(undefined);
+
+	// 监听书籍变化，重置状态
 	$effect(() => {
+		const currentBookPath = bookStore.currentBook?.path;
 		const currentBook = bookStore.currentBook;
-		const currentBookPath = currentBook?.path ?? null;
-		
+
 		// 检测书籍是否真的发生了变化
 		if (currentBookPath !== lastBookPath) {
 			console.log('📚 书籍切换检测:', { from: lastBookPath, to: currentBookPath });
-			
+
 			// 立即清空所有显示状态,防止显示旧书籍的图片
 			imageData = null;
 			imageData2 = null;
@@ -514,13 +539,18 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 			lastRequestedPageIndex = -1;
 			lastLoadedPageIndex = -1;
 			lastLoadedHash = null;
-			
-			lastBookPath = currentBookPath;
-			
+
+			lastBookPath = currentBookPath ?? null;
+
 			if (!currentBook) {
 				console.log('📕 书籍已关闭,所有显示状态已清空');
 			} else {
 				console.log('📗 切换到新书籍,旧图片已清空,等待新书籍第一页加载');
+				// 切换书籍时，让查看器获取焦点，防止键盘事件被文件列表捕获
+				if (containerElement) {
+					containerElement.focus();
+					console.log('🎯 ImageViewer 已获取焦点');
+				}
 			}
 		}
 	});
@@ -533,20 +563,24 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 		const blob = bookStore.upscaledImageBlob;
 		const currentPageIndex = bookStore.currentPageIndex;
 		const currentHash = bookStore.getCurrentPageHash();
-		
+
 		if (blob && blob !== lastUpscaledBlob) {
 			// 🔥 验证：确保当前页索引匹配（防止翻页后错误替换）
 			if (lastRequestedPageIndex !== -1 && lastRequestedPageIndex !== currentPageIndex) {
-				console.warn(`⚠️ 超分 blob 页面索引不匹配！当前页: ${currentPageIndex + 1}, 请求页: ${lastRequestedPageIndex + 1}，忽略此结果`);
+				console.warn(
+					`⚠️ 超分 blob 页面索引不匹配！当前页: ${currentPageIndex + 1}, 请求页: ${lastRequestedPageIndex + 1}，忽略此结果`
+				);
 				return;
 			}
-			
+
 			// 🔥 验证：确保 hash 匹配（如果可用）
 			if (currentHash && lastLoadedHash && currentHash !== lastLoadedHash) {
-				console.warn(`⚠️ 超分 blob hash 不匹配！当前页 hash: ${currentHash}, 请求页 hash: ${lastLoadedHash}，忽略此结果`);
+				console.warn(
+					`⚠️ 超分 blob hash 不匹配！当前页 hash: ${currentHash}, 请求页 hash: ${lastLoadedHash}，忽略此结果`
+				);
 				return;
 			}
-			
+
 			try {
 				const newUrl = URL.createObjectURL(blob);
 				if (lastUpscaledObjectUrl) {
@@ -555,7 +589,7 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 				derivedUpscaledUrl = newUrl;
 				lastUpscaledObjectUrl = newUrl;
 				lastUpscaledBlob = blob;
-				
+
 				// 🔥 只在当前页匹配时才更新显示
 				if (lastRequestedPageIndex === currentPageIndex || lastRequestedPageIndex === -1) {
 					bookStore.setUpscaledImage(newUrl);
@@ -571,7 +605,7 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 				URL.revokeObjectURL(lastUpscaledObjectUrl);
 				lastUpscaledObjectUrl = null;
 				lastUpscaledBlob = null;
-			derivedUpscaledUrl = null;
+				derivedUpscaledUrl = null;
 				bookStore.setUpscaledImage(null);
 				upscaledImageDataForComparison = '';
 			}
@@ -581,13 +615,13 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 	// 鼠标光标隐藏功能
 	function showCursor() {
 		if (!settings.view.mouseCursor || !settings.view.mouseCursor.autoHide) return;
-		
+
 		cursorVisible = true;
 		if (hideCursorTimeout) {
 			clearTimeout(hideCursorTimeout);
 			hideCursorTimeout = null;
 		}
-		
+
 		// 设置新的隐藏定时器
 		hideCursorTimeout = setTimeout(() => {
 			cursorVisible = false;
@@ -596,15 +630,15 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 
 	function handleMouseMove(e: MouseEvent) {
 		if (!settings.view.mouseCursor || !settings.view.mouseCursor.autoHide) return;
-		
+
 		const currentX = e.clientX;
 		const currentY = e.clientY;
-		
+
 		// 检查移动距离是否超过阈值
 		const deltaX = Math.abs(currentX - lastMousePosition.x);
 		const deltaY = Math.abs(currentY - lastMousePosition.y);
 		const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-		
+
 		if (distance >= settings.view.mouseCursor.showMovementThreshold) {
 			lastMousePosition = { x: currentX, y: currentY };
 			showCursor();
@@ -612,19 +646,24 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 	}
 
 	function handleMouseClick() {
-		if (!settings.view.mouseCursor || !settings.view.mouseCursor.autoHide || !settings.view.mouseCursor.showOnButtonClick) return;
+		if (
+			!settings.view.mouseCursor ||
+			!settings.view.mouseCursor.autoHide ||
+			!settings.view.mouseCursor.showOnButtonClick
+		)
+			return;
 		showCursor();
 	}
-
-	
-
-	
 
 	// 处理鼠标滚轮事件
 	function handleWheel(e: WheelEvent) {
 		// 不在输入框时响应
 		const target = e.target as HTMLElement;
-		if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.getAttribute('contenteditable') === 'true') {
+		if (
+			target.tagName === 'INPUT' ||
+			target.tagName === 'TEXTAREA' ||
+			target.getAttribute('contenteditable') === 'true'
+		) {
 			return;
 		}
 
@@ -653,20 +692,12 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 		const handleProgressBarState = (e: CustomEvent) => {
 			showProgressBar = e.detail.show;
 		};
-		
+
 		window.addEventListener('progressBarStateChange', handleProgressBarState as EventListener);
 		return () => {
 			window.removeEventListener('progressBarStateChange', handleProgressBarState as EventListener);
 		};
 	});
-
-	
-
-	
-
-	
-
-	
 
 	async function handleNextPage() {
 		if (!bookStore.canNextPage) return;
@@ -714,9 +745,9 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 			return;
 		}
 		lastViewMode = mode;
-			preloadManager.updateImageLoaderConfigWithViewMode(mode);
-			preloadManager.loadCurrentImage();
-		
+		preloadManager.updateImageLoaderConfigWithViewMode(mode);
+		preloadManager.loadCurrentImage();
+
 		// 根据模式加载相应的数据
 		if (mode === 'vertical') {
 			loadVerticalPages();
@@ -736,22 +767,22 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 		if (!bookStore.currentBook || !preloadManager) {
 			return;
 		}
-		
+
 		const totalPages = bookStore.totalPages;
 		const currentIndex = bookStore.currentPageIndex;
 		const preloadPages = performanceSettings.preLoadSize;
-		
+
 		// 计算要加载的页面范围（当前页前后各 preloadPages 页）
 		const startIndex = Math.max(0, currentIndex - preloadPages);
 		const endIndex = Math.min(totalPages - 1, currentIndex + preloadPages);
-		
+
 		// 初始化数组
 		const pages: Array<{ index: number; data: string | null }> = [];
 		for (let i = startIndex; i <= endIndex; i++) {
 			pages.push({ index: i, data: null });
 		}
 		verticalPagesData = pages;
-		
+
 		// 异步加载每页的图片数据
 		for (const page of pages) {
 			try {
@@ -771,7 +802,7 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 					try {
 						const displayPath = buildDisplayPath(bookStore.currentBook!, pageInfo);
 						let blob: Blob | null = null;
-						
+
 						const traceId = createImageTraceId('viewer-vertical', page.index);
 						logImageTrace(traceId, 'fallback invoke', {
 							mode: 'vertical',
@@ -789,7 +820,11 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 							logImageTrace(traceId, 'fallback archive bytes ready', { bytes: binaryData.length });
 							blob = new Blob([new Uint8Array(binaryData)]);
 						} else {
-							const binaryData = await invoke<number[]>('load_image', { path: displayPath, traceId, pageIndex: page.index });
+							const binaryData = await invoke<number[]>('load_image', {
+								path: displayPath,
+								traceId,
+								pageIndex: page.index
+							});
 							logImageTrace(traceId, 'fallback file bytes ready', { bytes: binaryData.length });
 							blob = new Blob([new Uint8Array(binaryData)]);
 						}
@@ -797,7 +832,7 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 						if (blob) {
 							logImageTrace(traceId, 'fallback blob created', { size: blob.size });
 						}
-						
+
 						if (blob && blob.size > 0) {
 							const url = URL.createObjectURL(blob);
 							page.data = url;
@@ -827,28 +862,32 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 		if (!bookStore.currentBook || !preloadManager) {
 			return;
 		}
-		
+
 		const currentIndex = bookStore.currentPageIndex;
 		const totalPages = bookStore.totalPages;
-		
+
 		// 加载当前页、前一页、后一页
-		const pages: Array<{ index: number; data: string | null; position: 'left' | 'center' | 'right' }> = [];
-		
+		const pages: Array<{
+			index: number;
+			data: string | null;
+			position: 'left' | 'center' | 'right';
+		}> = [];
+
 		// 前一页（左侧）
 		if (currentIndex > 0) {
 			pages.push({ index: currentIndex - 1, data: null, position: 'left' });
 		}
-		
+
 		// 当前页（中间）
 		pages.push({ index: currentIndex, data: null, position: 'center' });
-		
+
 		// 后一页（右侧）
 		if (currentIndex < totalPages - 1) {
 			pages.push({ index: currentIndex + 1, data: null, position: 'right' });
 		}
-		
+
 		panoramaPagesData = pages;
-		
+
 		// 异步加载每页的图片数据
 		for (const page of pages) {
 			try {
@@ -867,7 +906,7 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 					try {
 						const displayPath = buildDisplayPath(bookStore.currentBook!, pageInfo);
 						let blob: Blob | null = null;
-						
+
 						const traceId = createImageTraceId('viewer-panorama', page.index);
 						logImageTrace(traceId, 'fallback invoke', {
 							mode: 'panorama',
@@ -885,7 +924,11 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 							logImageTrace(traceId, 'fallback archive bytes ready', { bytes: binaryData.length });
 							blob = new Blob([new Uint8Array(binaryData)]);
 						} else {
-							const binaryData = await invoke<number[]>('load_image', { path: displayPath, traceId, pageIndex: page.index });
+							const binaryData = await invoke<number[]>('load_image', {
+								path: displayPath,
+								traceId,
+								pageIndex: page.index
+							});
 							logImageTrace(traceId, 'fallback file bytes ready', { bytes: binaryData.length });
 							blob = new Blob([new Uint8Array(binaryData)]);
 						}
@@ -893,7 +936,7 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 						if (blob) {
 							logImageTrace(traceId, 'fallback blob created', { size: blob.size });
 						}
-						
+
 						if (blob && blob.size > 0) {
 							const url = URL.createObjectURL(blob);
 							page.data = url;
@@ -954,31 +997,37 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 
 <svelte:window onkeydown={handleKeydown} />
 
-	<!-- 中文：该容器需要捕获滚轮、键盘以及鼠标事件以实现自定义阅读交互，因此禁用默认的可访问性 lint -->
-	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-<div 
-		class="image-viewer-container h-full w-full flex flex-col bg-black relative" 
-		data-viewer="true" 
-		onwheel={handleWheel}
-		onmousemove={handleMouseMove}
-		onclick={handleMouseClick}
-		onkeydown={handleKeydown}
-		style:cursor={cursorVisible ? 'default' : 'none'}
-		role="application"
-		aria-label="图像查看器"
-		tabindex="-1"
-	>
+<!-- 中文：该容器需要捕获滚轮、键盘以及鼠标事件以实现自定义阅读交互，因此禁用默认的可访问性 lint -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<div
+	bind:this={containerElement}
+	class="image-viewer-container relative flex h-full w-full flex-col bg-black"
+	data-viewer="true"
+	onwheel={handleWheel}
+	onmousemove={handleMouseMove}
+	onclick={handleMouseClick}
+	onkeydown={handleKeydown}
+	style:cursor={cursorVisible ? 'default' : 'none'}
+	role="application"
+	aria-label="图像查看器"
+	tabindex="-1"
+>
 	<!-- 图像显示区域 -->
-	<div class="image-container flex-1 flex items-center justify-center overflow-auto" data-viewer="true" role="region" aria-label="图像显示区域">
+	<div
+		class="image-container flex flex-1 items-center justify-center overflow-auto"
+		data-viewer="true"
+		role="region"
+		aria-label="图像显示区域"
+	>
 		{#if loadingVisible}
 			<div class="text-white">Loading...</div>
 		{:else if error}
 			<div class="text-red-500">Error: {error}</div>
 		{:else}
 			<ImageViewerDisplay
-				imageData={imageData}
-				imageData2={imageData2}
+				{imageData}
+				{imageData2}
 				upscaledImageData={derivedUpscaledUrl || bookStore.upscaledImageData}
 				viewMode={$viewerState.viewMode as 'single' | 'double' | 'panorama' | 'vertical'}
 				zoomLevel={$viewerState.zoom}
@@ -996,12 +1045,12 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 		isVisible={$viewerState.comparisonVisible}
 		onClose={closeComparison}
 	/>
-	
+
 	<ImageViewerProgressBar
 		showProgressBar={showProgressBar && Boolean(bookStore.currentBook)}
 		totalPages={bookStore.currentBook?.pages.length ?? 0}
 		currentPageIndex={bookStore.currentPageIndex}
-		preUpscaleProgress={preUpscaleProgress}
-		totalPreUpscalePages={totalPreUpscalePages}
+		{preUpscaleProgress}
+		{totalPreUpscalePages}
 	/>
 </div>

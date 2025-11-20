@@ -5,7 +5,7 @@
 
 export type InputType = 'keyboard' | 'mouse' | 'touch' | 'area';
 
-export type ViewArea = 
+export type ViewArea =
 	| 'top-left'
 	| 'top-center'
 	| 'top-right'
@@ -114,6 +114,8 @@ const defaultBindings: ActionBinding[] = [
 		category: '导航',
 		description: '切换到排序列表中的下一个书籍/文件夹',
 		bindings: [
+			{ type: 'keyboard', key: 'ArrowDown' },
+			{ type: 'keyboard', key: 's' },
 			{ type: 'keyboard', key: 'Alt+PageDown' },
 			{ type: 'keyboard', key: 'Ctrl+]' }
 		]
@@ -124,6 +126,8 @@ const defaultBindings: ActionBinding[] = [
 		category: '导航',
 		description: '切换到排序列表中的上一个书籍/文件夹',
 		bindings: [
+			{ type: 'keyboard', key: 'ArrowUp' },
+			{ type: 'keyboard', key: 'w' },
 			{ type: 'keyboard', key: 'Alt+PageUp' },
 			{ type: 'keyboard', key: 'Ctrl+[' }
 		]
@@ -317,7 +321,7 @@ class KeyBindingsStore {
 				actionBinding.bindings = [];
 			}
 			// 检查是否已存在相同绑定
-			const exists = actionBinding.bindings.some(b => 
+			const exists = actionBinding.bindings.some(b =>
 				JSON.stringify(b) === JSON.stringify(binding)
 			);
 			if (!exists) {
@@ -370,7 +374,7 @@ class KeyBindingsStore {
 		for (const binding of this.bindings) {
 			if (!binding.bindings) continue;
 			const mouseBinding = binding.bindings.find(
-				b => b.type === 'mouse' && 
+				b => b.type === 'mouse' &&
 					(b as MouseGesture).gesture === gesture &&
 					((b as MouseGesture).button || 'left') === button &&
 					(!action || (b as MouseGesture).action === action)
@@ -411,7 +415,7 @@ class KeyBindingsStore {
 		for (const binding of this.bindings) {
 			if (!binding.bindings) continue;
 			const areaBinding = binding.bindings.find(
-				b => b.type === 'area' && 
+				b => b.type === 'area' &&
 					(b as AreaClick).area === area &&
 					((b as AreaClick).button || 'left') === button &&
 					((b as AreaClick).action || 'click') === action
@@ -429,21 +433,21 @@ class KeyBindingsStore {
 		const centerY = height / 2;
 		const isTop = y < centerY;
 		const isBottom = y >= centerY;
-		
+
 		// 将水平分为三等分
 		const leftThird = width / 3;
 		const rightThird = (width * 2) / 3;
 		const isLeft = x < leftThird;
 		const isCenter = x >= leftThird && x < rightThird;
 		const isRight = x >= rightThird;
-		
+
 		if (isTop && isLeft) return 'top-left';
 		if (isTop && isCenter) return 'top-center';
 		if (isTop && isRight) return 'top-right';
 		if (isBottom && isLeft) return 'bottom-left';
 		if (isBottom && isCenter) return 'bottom-center';
 		if (isBottom && isRight) return 'bottom-right';
-		
+
 		// 默认返回中心区域
 		return 'top-center';
 	}
@@ -498,7 +502,7 @@ class KeyBindingsStore {
 					case 'middle': buttonText = '中键'; break;
 					default: buttonText = '左键';
 				}
-				
+
 				let gestureText = '';
 				if (mouse.gesture?.startsWith('wheel-')) {
 					gestureText = mouse.gesture === 'wheel-up' ? '滚轮上' : '滚轮下';
@@ -509,7 +513,7 @@ class KeyBindingsStore {
 				} else if (mouse.gesture) {
 					gestureText = mouse.gesture;
 				}
-				
+
 				return `${buttonText} ${gestureText}`;
 			case 'touch':
 				return (binding as TouchGesture).gesture || '';
@@ -522,7 +526,7 @@ class KeyBindingsStore {
 					case 'middle': areaButtonText = '中键'; break;
 					default: areaButtonText = '左键';
 				}
-				
+
 				let areaText = '';
 				switch (area.area) {
 					case 'top-left': areaText = '左上'; break;
@@ -532,7 +536,7 @@ class KeyBindingsStore {
 					case 'bottom-center': areaText = '中下'; break;
 					case 'bottom-right': areaText = '右下'; break;
 				}
-				
+
 				let actionText = '';
 				switch (area.action) {
 					case 'click': actionText = '点击'; break;
@@ -540,7 +544,7 @@ class KeyBindingsStore {
 					case 'press': actionText = '按住'; break;
 					default: actionText = '点击';
 				}
-				
+
 				return `${areaButtonText} ${areaText} ${actionText}`;
 			default:
 				return '';

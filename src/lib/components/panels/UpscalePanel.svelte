@@ -158,6 +158,14 @@ interface ModelResolutionResult {
 	conditionId?: string | null;
 }
 
+interface ProcessingToken {
+	cancelled: boolean;
+	reason?: string;
+}
+
+let activeProcessingToken: ProcessingToken | null = null;
+let lastBookPath: string | null = null;
+
 	// 缓存统计
 	let cacheStats = $state({
 		totalFiles: 0,
@@ -274,6 +282,18 @@ interface ModelResolutionResult {
 	$effect(() => {
 		if (!autoUpscaleEnabled && pendingUpscaleRequest?.trigger === 'auto') {
 			pendingUpscaleRequest = null;
+		}
+	});
+
+	$effect(() => {
+		const currentBookPath = bookStore.currentBook?.path ?? null;
+		if (currentBookPath !== lastBookPath) {
+			if (lastBookPath) {
+				cancelCurrentProcessing('书籍已切换，停止超分');
+				pendingUpscaleRequest = null;
+				resetUpscaledDisplay();
+			}
+			lastBookPath = currentBookPath;
 		}
 	});
 
@@ -722,6 +742,34 @@ interface ModelResolutionResult {
 		};
 	}
 
+	function cancelCurrentProcessing(reason: string) {
+		if (activeProcessingToken) {
+			activeProcessingToken.cancelled = true;
+			activeProcessingToken.reason = reason;
+		}
+		if (isProcessing) {
+			status = reason;
+		}
+	}
+
+	function shouldAbortProcessing(
+		token: ProcessingToken,
+		bookPathAtStart: string | null,
+		expectedHash?: string | null
+	): boolean {
+		if (token.cancelled) {
+			return true;
+		}
+		const activeBookPath = bookStore.currentBook?.path ?? null;
+		if (bookPathAtStart && activeBookPath && activeBookPath !== bookPathAtStart) {
+			return true;
+		}
+		if (expectedHash && bookStore.getCurrentPageHash() !== expectedHash) {
+			return true;
+		}
+		return false;
+	}
+
 	/**
 	 * 执行超分处理
 	 */
@@ -755,6 +803,9 @@ interface ModelResolutionResult {
 
 		const modelConfig = resolution.config;
 		const resolvedConditionId = modelConfig.conditionId;
+		const processingBookPath = bookStore.currentBook?.path ?? null;
+		const token: ProcessingToken = { cancelled: false };
+		activeProcessingToken = token;
 
 		resetUpscaledDisplay();
 		isProcessing = true;
@@ -812,6 +863,11 @@ interface ModelResolutionResult {
 							time: processingTime.toFixed(1)
 						});
 						
+						if (shouldAbortProcessing(token, processingBookPath, imageHash)) {
+							status = '上下文已变化，缓存结果丢弃';
+							return;
+						}
+
 						// 直接使用内存缓存
 						applyUpscaledPreview(imageHash, cached.url);
 						
@@ -859,6 +915,11 @@ interface ModelResolutionResult {
 								path: cachePath
 							});
 							
+							if (shouldAbortProcessing(token, processingBookPath, imageHash)) {
+								status = '上下文已变化，磁盘缓存丢弃';
+								return;
+							}
+
 							const arr = new Uint8Array(bytes);
 							const blob = new Blob([arr], { type: 'image/webp' });
 							const url = URL.createObjectURL(blob);
@@ -905,6 +966,11 @@ interface ModelResolutionResult {
 				revokeOnMismatch: true
 			});
 
+			if (shouldAbortProcessing(token, processingBookPath, imageHash)) {
+				status = '上下文已变化，超分结果丢弃';
+				return;
+			}
+
 			progress = 100;
 			status = '转换完成';
 			updateProgress?.(progress, status);
@@ -929,6 +995,10 @@ interface ModelResolutionResult {
 		} finally {
 			clearInterval(timer);
 			isProcessing = false;
+			if (activeProcessingToken === token) {
+				activeProcessingToken = null;
+			}
+			processPendingUpscale();
 		}
 	}
 

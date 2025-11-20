@@ -90,13 +90,11 @@ import { Maximize2, ExternalLink, X } from '@lucide/svelte';
 			? `第 ${$bookState.currentPageIndex + 1}/${$bookState.totalPages} 页`
 			: '未打开书籍'
 	);
-	const sidebarWindowSummary = $derived(() => {
-		const windowState = $viewerState.pageWindow;
-		if (!windowState || windowState.stale) {
-			return '窗口初始化中';
-		}
-		return `窗口中心 ${windowState.center + 1} · 前 ${windowState.forward.length} / 后 ${windowState.backward.length}`;
-	});
+	const sidebarWindowSummary = $derived(
+		!$viewerState.pageWindow || $viewerState.pageWindow.stale
+			? '窗口初始化中'
+			: `窗口中心 ${$viewerState.pageWindow.center + 1} · 前 ${$viewerState.pageWindow.forward.length} / 后 ${$viewerState.pageWindow.backward.length}`
+	);
 
 	// 拖拽调整大小
 	let isResizing = $state(false);

@@ -148,25 +148,42 @@
       console.log(`👁️ 虚拟滚动范围更新: ${startIndex}-${endIndex}, 需要缩略图: ${needThumbnails.length}`);
       
       // 按虚拟列表顺序处理：视野上方的先加载，下方的后加载
-      // 计算每个项目在视野中的位置（距离顶部的距离）
-      const itemsWithPriority = needThumbnails.map((item, index) => {
+      const itemsWithOrder = needThumbnails.map((item, index) => {
         const itemIndex = items.findIndex(i => i.path === item.path);
         const distanceFromTop = itemIndex - startIndex; // 距离视野顶部的距离
         return { item, distanceFromTop, itemIndex };
       });
       
       // 按距离顶部距离排序（距离越近，优先级越高）
-      itemsWithPriority.sort((a, b) => a.distanceFromTop - b.distanceFromTop);
+      itemsWithOrder.sort((a, b) => a.distanceFromTop - b.distanceFromTop);
       
-      // 使用 scheduleIdleCallback 确保不阻塞UI，按顺序处理
-      scheduleIdleTask(() => {
-        // 按顺序入队，确保视野上方的先处理
-        itemsWithPriority.forEach(({ item }, index) => {
-          // 稍微延迟后面的项目，确保前面的先处理
-          setTimeout(() => {
-            enqueueVisible(currentPath, [item], { priority: 'immediate' });
-          }, index * 10); // 每个项目延迟 10ms，确保顺序
-        });
+      // 使用批量加载：先尝试从数据库批量加载已缓存的缩略图
+      const paths = itemsWithOrder.map(({ item }) => item.path);
+      const BATCH_SIZE = 50; // 一次批量查询 50 个
+      
+      scheduleIdleTask(async () => {
+        // 分批批量查询数据库
+        for (let i = 0; i < paths.length; i += BATCH_SIZE) {
+          const batch = paths.slice(i, i + BATCH_SIZE);
+          try {
+            await thumbnailManager.batchLoadFromDb(batch);
+          } catch (err) {
+            console.debug('批量加载缩略图失败:', err);
+          }
+        }
+        
+        // 等待一小段时间让批量加载完成，然后检查哪些还需要生成
+        setTimeout(() => {
+          itemsWithOrder.forEach(({ item }, index) => {
+            const key = getThumbnailKey(item);
+            // 如果还没有缓存，按顺序加入生成队列
+            if (!thumbnails.has(key)) {
+              setTimeout(() => {
+                enqueueVisible(currentPath, [item], { priority: 'immediate' });
+              }, index * 10); // 每个项目延迟 10ms，确保顺序
+            }
+          });
+        }, 100); // 等待 100ms 让批量加载完成
       });
     }
   }, 50); // 50ms 防抖延迟

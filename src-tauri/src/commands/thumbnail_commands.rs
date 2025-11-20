@@ -508,6 +508,86 @@ pub async fn get_thumbnail_blob_data(
     }
 }
 
+/// 批量从数据库加载缩略图（返回路径和 blob key 的映射）
+#[tauri::command]
+pub async fn batch_load_thumbnails_from_db(
+    app: tauri::AppHandle,
+    paths: Vec<String>,
+) -> Result<Vec<(String, String)>, String> {
+    let state = app.state::<ThumbnailState>();
+    let cache_index = app.state::<CacheIndexState>();
+
+    let mut results = Vec::new();
+
+    for path in paths {
+        // 构建路径键
+        let path_key = path.clone();
+
+        // 确定类别（根据路径判断）
+        let cat = if !path_key.contains("::") && !path_key.contains(".") {
+            "folder"
+        } else {
+            "file"
+        };
+
+        // 尝试从数据库加载
+        match state.db.load_thumbnail_by_key_and_category(&path_key, cat) {
+            Ok(Some(data)) => {
+                // 注册到 BlobRegistry，返回 blob key
+                let blob_key = state.blob_registry.get_or_register(
+                    &data,
+                    "image/webp",
+                    Duration::from_secs(3600),
+                    Some(path_key.clone()),
+                );
+                if let Err(err) = cache_index.db.upsert_thumbnail_entry(ThumbnailCacheUpsert {
+                    path_key: &path_key,
+                    category: cat,
+                    hash: None,
+                    size: Some(data.len() as i64),
+                    source: Some("batch_load_thumbnails_from_db"),
+                    blob_key: Some(&blob_key),
+                }) {
+                    eprintln!("⚠️ 写入缩略图缓存索引失败: {}", err);
+                }
+                results.push((path, blob_key));
+            }
+            Ok(None) => {
+                // 如果是文件夹且没有记录，尝试查找子文件
+                if cat == "folder" {
+                    if let Ok(Some((_, child_data))) = state.db.find_earliest_thumbnail_in_path(&path_key) {
+                        // 保存到文件夹
+                        if state.db.save_thumbnail_with_category(&path_key, 0, 0, &child_data, Some("folder")).is_ok() {
+                            let blob_key = state.blob_registry.get_or_register(
+                                &child_data,
+                                "image/webp",
+                                Duration::from_secs(3600),
+                                Some(path_key.clone()),
+                            );
+                            if let Err(err) = cache_index.db.upsert_thumbnail_entry(ThumbnailCacheUpsert {
+                                path_key: &path_key,
+                                category: "folder",
+                                hash: None,
+                                size: Some(child_data.len() as i64),
+                                source: Some("batch_load_thumbnails_from_db/folder_bind"),
+                                blob_key: Some(&blob_key),
+                            }) {
+                                eprintln!("⚠️ 写入缩略图缓存索引失败: {}", err);
+                            }
+                            results.push((path, blob_key));
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("❌ 批量加载缩略图失败 {}: {}", path, e);
+            }
+        }
+    }
+
+    Ok(results)
+}
+
 fn infer_category(path: &str, explicit: Option<String>) -> String {
     if let Some(cat) = explicit {
         return cat;

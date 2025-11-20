@@ -56,6 +56,9 @@ class ThumbnailManager {
   private readonly MAX_QUEUE_SIZE = 20000; // 最大队列大小（增加到20000，提高2倍）
   private readonly MAX_PROCESSING = 400; // 最大并发处理数（增加到400，拉满CPU，提高2倍）
 
+  // 批量加载配置
+  private readonly BATCH_LOAD_SIZE = 50; // 一次批量查询的数量
+
   constructor() {
     // 初始化缩略图管理器
     this.init();
@@ -102,35 +105,45 @@ class ThumbnailManager {
   setCurrentDirectory(path: string) {
     const oldPath = this.currentDirectory;
     this.currentDirectory = path;
-    
-    // 如果切换了目录，取消旧目录的任务，优先处理新目录的任务
+
+    // 如果切换了目录，取消旧目录的任务，但不删除缓存
     if (oldPath !== path && oldPath) {
-      // 取消旧目录的任务（不在当前目录的任务）
-      const beforeCount = this.taskQueue.length;
-      this.taskQueue = this.taskQueue.filter(task => task.path.startsWith(path));
-      const afterCount = this.taskQueue.length;
-      if (beforeCount !== afterCount) {
-        console.log(`🗑️ 取消 ${beforeCount - afterCount} 个旧目录任务`);
-      }
-      
-      // 取消旧目录的处理中任务（通过路径匹配）
-      const processingToRemove: string[] = [];
-      for (const taskKey of this.processingTasks) {
-        // 从 taskKey 中找到对应的任务，检查路径
-        const task = this.taskQueue.find(t => this.buildPathKey(t.path, t.innerPath) === taskKey);
-        if (!task || !task.path.startsWith(path)) {
-          processingToRemove.push(taskKey);
-        }
-      }
-      processingToRemove.forEach(key => this.processingTasks.delete(key));
-      if (processingToRemove.length > 0) {
-        console.log(`🗑️ 取消 ${processingToRemove.length} 个处理中的旧目录任务`);
-      }
-      
+      this.cancelAllTasksExceptDirectory(path);
       this.bumpCurrentDirectoryPriority();
       // 立即处理队列，不要等待
       setTimeout(() => this.processQueue(), 0);
     }
+  }
+
+  /**
+   * 取消所有任务，除了指定目录的任务（但不删除缓存）
+   */
+  private cancelAllTasksExceptDirectory(keepDirectory: string) {
+    // 取消任务队列中不在指定目录的任务
+    const beforeCount = this.taskQueue.length;
+    this.taskQueue = this.taskQueue.filter(task => task.path.startsWith(keepDirectory));
+    const afterCount = this.taskQueue.length;
+    if (beforeCount !== afterCount) {
+      console.log(`🗑️ 取消 ${beforeCount - afterCount} 个旧目录任务（保留缓存）`);
+    }
+
+    // 清空处理中的任务（不影响缓存）
+    const processingCount = this.processingTasks.size;
+    this.processingTasks.clear();
+    if (processingCount > 0) {
+      console.log(`🗑️ 清空 ${processingCount} 个处理中的任务（保留缓存）`);
+    }
+  }
+
+  /**
+   * 取消所有任务（但不删除缓存）
+   */
+  cancelAllTasks() {
+    const taskCount = this.taskQueue.length;
+    const processingCount = this.processingTasks.size;
+    this.taskQueue = [];
+    this.processingTasks.clear();
+    console.log(`🗑️ 取消所有任务: ${taskCount} 个队列任务 + ${processingCount} 个处理中任务（保留缓存）`);
   }
 
   /**
@@ -194,7 +207,7 @@ class ThumbnailManager {
   private async generateHash(pathKey: string, size: number): Promise<number> {
     // 使用统一的哈希函数
     const hash = await getStableImageHash(pathKey);
-    
+
     // 转换为 i32（取前8位字符的哈希值，然后取模避免溢出）
     const hashNum = parseInt(hash.substring(0, 8), 16) % 2147483647; // i32 max
     return hashNum;
@@ -204,66 +217,110 @@ class ThumbnailManager {
    * 预加载数据库索引（批量检查哪些路径有缓存）
    * 简化：只使用 key + category，减少计算
    */
-	async preloadDbIndex(paths: string[]): Promise<Map<string, boolean>> {
-		const results = new Map<string, boolean>();
-		if (paths.length === 0) {
-			return results;
-		}
+  async preloadDbIndex(paths: string[]): Promise<Map<string, boolean>> {
+    const results = new Map<string, boolean>();
+    if (paths.length === 0) {
+      return results;
+    }
 
-		const pending: Array<{ path: string; key: string; category: string }> = [];
+    const pending: Array<{ path: string; key: string; category: string }> = [];
 
-		for (const path of paths) {
-			const key = this.buildPathKey(path);
-			const cached = this.dbIndexCache.get(key);
-			if (cached !== undefined) {
-				results.set(path, cached);
-				continue;
-			}
-			pending.push({
-				path,
-				key,
-				category: this.inferCategory(key)
-			});
-		}
+    for (const path of paths) {
+      const key = this.buildPathKey(path);
+      const cached = this.dbIndexCache.get(key);
+      if (cached !== undefined) {
+        results.set(path, cached);
+        continue;
+      }
+      pending.push({
+        path,
+        key,
+        category: this.inferCategory(key)
+      });
+    }
 
-		if (pending.length === 0) {
-			return results;
-		}
+    if (pending.length === 0) {
+      return results;
+    }
 
-		try {
-			const { invoke } = await import('@tauri-apps/api/core');
-			const response = await invoke<Array<{ path: string; exists: boolean }>>('preload_thumbnail_index', {
-				entries: pending.map((entry) => ({
-					path: entry.key,
-					category: entry.category
-				}))
-			});
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const response = await invoke<Array<{ path: string; exists: boolean }>>('preload_thumbnail_index', {
+        entries: pending.map((entry) => ({
+          path: entry.key,
+          category: entry.category
+        }))
+      });
 
-			for (const entry of response) {
-				this.dbIndexCache.set(entry.path, entry.exists);
-			}
+      for (const entry of response) {
+        this.dbIndexCache.set(entry.path, entry.exists);
+      }
 
-			for (const entry of pending) {
-				const exists = this.dbIndexCache.get(entry.key) ?? false;
-				results.set(entry.path, exists);
-			}
-		} catch (error) {
-			console.debug('批量预加载索引失败:', error);
-			for (const entry of pending) {
-				this.dbIndexCache.set(entry.key, false);
-				results.set(entry.path, false);
-			}
-		}
+      for (const entry of pending) {
+        const exists = this.dbIndexCache.get(entry.key) ?? false;
+        results.set(entry.path, exists);
+      }
+    } catch (error) {
+      console.debug('批量预加载索引失败:', error);
+      for (const entry of pending) {
+        this.dbIndexCache.set(entry.key, false);
+        results.set(entry.path, false);
+      }
+    }
 
-		return results;
-	}
+    return results;
+  }
 
-	private inferCategory(pathKey: string): string {
-		const isFolder =
-			!pathKey.includes('::') &&
-			!pathKey.match(/\.(jpg|jpeg|png|gif|bmp|webp|avif|jxl|tiff|tif|zip|cbz|rar|cbr|mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/i);
-		return isFolder ? 'folder' : 'file';
-	}
+  /**
+   * 批量从数据库加载缩略图
+   */
+  async batchLoadFromDb(paths: string[]): Promise<Map<string, string>> {
+    const results = new Map<string, string>();
+    if (paths.length === 0) {
+      return results;
+    }
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const response = await invoke<Array<[string, string]>>('batch_load_thumbnails_from_db', {
+        paths,
+      });
+
+      // 处理响应，转换为 blob URL 并缓存
+      for (const [path, blobKey] of response) {
+        const blobUrl = await this.blobKeyToUrl(blobKey);
+        if (blobUrl) {
+          const pathKey = this.buildPathKey(path);
+          this.cache.set(pathKey, {
+            pathKey,
+            dataUrl: blobUrl,
+            timestamp: Date.now(),
+          });
+          this.dbIndexCache.set(pathKey, true);
+          results.set(path, blobUrl);
+          // 通知回调
+          if (this.onThumbnailReady) {
+            this.onThumbnailReady(path, blobUrl);
+          }
+        }
+      }
+
+      if (import.meta.env.DEV && results.size > 0) {
+        console.log(`✅ 批量从数据库加载 ${results.size}/${paths.length} 个缩略图`);
+      }
+    } catch (error) {
+      console.debug('批量从数据库加载缩略图失败:', error);
+    }
+
+    return results;
+  }
+
+  private inferCategory(pathKey: string): string {
+    const isFolder =
+      !pathKey.includes('::') &&
+      !pathKey.match(/\.(jpg|jpeg|png|gif|bmp|webp|avif|jxl|tiff|tif|zip|cbz|rar|cbr|mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/i);
+    return isFolder ? 'folder' : 'file';
+  }
 
   /**
    * 从数据库加载缩略图（返回 blob URL）
@@ -273,10 +330,10 @@ class ThumbnailManager {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const pathKey = this.buildPathKey(path, innerPath);
-      
+
       // 确定类别
       const category = isFolder ? 'folder' : 'file';
-      
+
       // 默认只使用 key + category 查询（减少计算，不需要 size 和 ghash）
       // 传递 0 作为 size 和 ghash（后端不使用这些值）
       // 如果是文件夹且没有记录，后端会自动查找路径下最早的文件记录并绑定
@@ -332,20 +389,20 @@ class ThumbnailManager {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const pathKey = this.buildPathKey(path, innerPath);
-      
+
       // 检测是否为视频文件
       const pathLower = path.toLowerCase();
       const isVideo = /\.(mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/.test(pathLower);
-      
+
       let blobKey: string | null = null;
-      
+
       if (isArchive) {
         // 压缩包缩略图
         blobKey = await invoke<string>('generate_archive_thumbnail_new', { archivePath: path });
       } else if (isVideo) {
         // 视频缩略图：使用 generate_video_thumbnail_new 命令（返回 blob key）
         try {
-          blobKey = await invoke<string>('generate_video_thumbnail_new', { 
+          blobKey = await invoke<string>('generate_video_thumbnail_new', {
             videoPath: path,
             timeSeconds: 10.0 // 默认提取第10秒的帧
           });
@@ -417,7 +474,7 @@ class ThumbnailManager {
     // 这样可以立即显示已缓存的缩略图，不需要等待索引预加载
     // 判断是否为文件夹：没有 innerPath 且不是压缩包，且路径没有扩展名
     const isFolder = !innerPath && !isArchive && !path.match(/\.(jpg|jpeg|png|gif|bmp|webp|avif|jxl|tiff|tif|zip|cbz|rar|cbr|mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/i);
-    
+
     try {
       const dbBlobUrl = await this.loadFromDb(path, innerPath, isFolder);
       if (dbBlobUrl) {
@@ -490,13 +547,13 @@ class ThumbnailManager {
     if (this.taskQueue.length >= this.MAX_QUEUE_SIZE) {
       // 优先移除非当前目录的低优先级任务
       const priorityOrder = { immediate: 0, high: 1, normal: 2 };
-      
+
       // 先移除非当前目录的 normal 优先级任务
-      const toRemove = this.taskQueue.filter(t => 
-        t.priority === 'normal' && 
+      const toRemove = this.taskQueue.filter(t =>
+        t.priority === 'normal' &&
         !t.path.startsWith(this.currentDirectory)
       );
-      
+
       if (toRemove.length > 0) {
         // 移除这些任务
         this.taskQueue = this.taskQueue.filter(t => !toRemove.includes(t));
@@ -520,7 +577,7 @@ class ThumbnailManager {
       const priorityOrder = { immediate: 0, high: 1, normal: 2 };
       const isCurrentDir = task.path.startsWith(this.currentDirectory);
       const existingIsCurrentDir = existing.path.startsWith(this.currentDirectory);
-      
+
       // 如果新任务属于当前目录而旧任务不是，提升优先级
       if (isCurrentDir && !existingIsCurrentDir) {
         existing.priority = task.priority;
@@ -528,17 +585,17 @@ class ThumbnailManager {
       } else if (priorityOrder[task.priority] < priorityOrder[existing.priority]) {
         existing.priority = task.priority;
       }
-      
+
       this.taskQueue.sort(
         (a, b) => {
           const priorityOrder = { immediate: 0, high: 1, normal: 2 };
           const aIsCurrent = a.path.startsWith(this.currentDirectory);
           const bIsCurrent = b.path.startsWith(this.currentDirectory);
-          
+
           // 当前目录优先
           if (aIsCurrent && !bIsCurrent) return -1;
           if (!aIsCurrent && bIsCurrent) return 1;
-          
+
           // 然后按优先级
           return priorityOrder[a.priority] - priorityOrder[b.priority];
         }
@@ -551,11 +608,11 @@ class ThumbnailManager {
           const priorityOrder = { immediate: 0, high: 1, normal: 2 };
           const aIsCurrent = a.path.startsWith(this.currentDirectory);
           const bIsCurrent = b.path.startsWith(this.currentDirectory);
-          
+
           // 当前目录优先
           if (aIsCurrent && !bIsCurrent) return -1;
           if (!aIsCurrent && bIsCurrent) return 1;
-          
+
           // 然后按优先级
           return priorityOrder[a.priority] - priorityOrder[b.priority];
         }
@@ -614,7 +671,7 @@ class ThumbnailManager {
         const hasImageExt = /\.(jpg|jpeg|png|gif|bmp|webp|avif|jxl|tiff|tif)$/.test(pathLower);
         const hasArchiveExt = /\.(zip|cbz|rar|cbr)$/.test(pathLower);
         const hasVideoExt = /\.(mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/.test(pathLower);
-        
+
         // 如果没有图片、压缩包或视频扩展名，可能是文件夹，不主动生成
         if (!hasImageExt && !hasArchiveExt && !hasVideoExt) {
           // 文件夹缩略图会在子文件生成时自动更新
@@ -655,7 +712,7 @@ class ThumbnailManager {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const blobData = await invoke<number[] | null>('get_thumbnail_blob_data', { blobKey });
-      
+
       if (blobData && blobData.length > 0) {
         // 转换为 Uint8Array
         const uint8Array = new Uint8Array(blobData);
@@ -668,7 +725,7 @@ class ThumbnailManager {
     } catch (error) {
       console.error('获取 blob 数据失败:', blobKey, error);
     }
-    
+
     return null;
   }
 
@@ -690,11 +747,11 @@ class ThumbnailManager {
       const priorityOrder = { immediate: 0, high: 1, normal: 2 };
       const aIsCurrent = a.path.startsWith(this.currentDirectory);
       const bIsCurrent = b.path.startsWith(this.currentDirectory);
-      
+
       // 当前目录优先
       if (aIsCurrent && !bIsCurrent) return -1;
       if (!aIsCurrent && bIsCurrent) return 1;
-      
+
       // 然后按优先级
       return priorityOrder[a.priority] - priorityOrder[b.priority];
     });
@@ -746,6 +803,7 @@ class ThumbnailManager {
 
   /**
    * 批量预加载缩略图（用于当前目录，带上限管理）
+   * 优化：先批量查询数据库，然后再生成未缓存的
    */
   async preloadThumbnails(
     items: FsItem[],
@@ -755,27 +813,34 @@ class ThumbnailManager {
     // 限制预加载数量，避免一次性加载太多
     const maxPreload = 200;
     const itemsToPreload = items.slice(0, maxPreload);
-    
-    // 预加载数据库索引（异步，不阻塞）
-    const paths = itemsToPreload
-      .filter((item) => item.isImage || item.isDir)
-      .map((item) => item.path);
 
-    // 异步预加载索引，不等待
-    this.preloadDbIndex(paths).catch(err => {
-      console.debug('预加载数据库索引失败:', err);
-    });
+    // 过滤需要缩略图的项目
+    const needThumbnailItems = itemsToPreload.filter((item) => item.isImage || item.isDir);
+    const paths = needThumbnailItems.map((item) => item.path);
 
-    // 为每个项目获取缩略图（异步，不阻塞）
-    itemsToPreload.forEach((item) => {
-      if (item.isImage) {
-        this.getThumbnail(item.path, undefined, false, priority);
-      } else if (item.isDir) {
-        // 文件夹：使用子路径下第一个条目的缩略图
-        this.getThumbnail(item.path, undefined, false, priority);
-      }
-    });
-    
+    // 1. 批量从数据库加载已缓存的缩略图
+    const batchSize = this.BATCH_LOAD_SIZE;
+    for (let i = 0; i < paths.length; i += batchSize) {
+      const batch = paths.slice(i, i + batchSize);
+      // 异步批量加载，不阻塞
+      this.batchLoadFromDb(batch).catch(err => {
+        console.debug('批量加载缩略图失败:', err);
+      });
+    }
+
+    // 2. 等待一小段时间让批量加载完成，然后检查哪些还需要生成
+    setTimeout(() => {
+      needThumbnailItems.forEach((item) => {
+        const pathKey = this.buildPathKey(item.path);
+        // 如果内存缓存中没有，加入生成队列
+        if (!this.cache.has(pathKey)) {
+          const isArchive = item.name?.endsWith('.zip') || item.name?.endsWith('.cbz') ||
+            item.name?.endsWith('.rar') || item.name?.endsWith('.cbr');
+          this.getThumbnail(item.path, undefined, isArchive, priority);
+        }
+      });
+    }, 100); // 等待 100ms 让批量加载有时间完成
+
     if (items.length > maxPreload) {
       console.log(`⚠️ 项目数量过多 (${items.length})，仅预加载前 ${maxPreload} 个`);
     }
@@ -788,17 +853,17 @@ class ThumbnailManager {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const pathKey = this.buildPathKey(path);
-      
+
       // 判断类别
       const isFolder = !pathKey.includes("::") && !pathKey.match(/\.(jpg|jpeg|png|gif|bmp|webp|avif|jxl|tiff|tif|zip|cbz|rar|cbr|mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/i);
       const category = isFolder ? 'folder' : 'file';
-      
+
       // 检查数据库（只使用 key + category）
       const exists = await invoke<boolean>('has_thumbnail_by_key_category', {
         path: pathKey,
         category,
       });
-      
+
       return exists;
     } catch {
       return false;

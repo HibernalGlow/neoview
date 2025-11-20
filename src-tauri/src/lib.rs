@@ -299,6 +299,7 @@ pub fn run() {
             commands::has_thumbnail_by_key_category,
             commands::load_thumbnail_from_db,
             commands::get_thumbnail_blob_data,
+            commands::batch_load_thumbnails_from_db,
             commands::preload_thumbnail_index,
             commands::scan_folder_thumbnails,
             commands::get_video_duration,

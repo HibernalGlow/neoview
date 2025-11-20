@@ -363,3 +363,129 @@ pub async fn find_emm_setting_file() -> Result<Option<String>, String> {
     Ok(None)
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct EMMTranslationRecord {
+    pub name: Option<String>,
+    pub intro: Option<String>,
+    pub description: Option<String>,
+}
+
+// Custom deserializer to handle string or object for translation record
+impl<'de> Deserialize<'de> for EMMTranslationRecord {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct EMMTranslationRecordVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for EMMTranslationRecordVisitor {
+            type Value = EMMTranslationRecord;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("string or object with name/intro/description")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(EMMTranslationRecord {
+                    name: Some(value.to_string()),
+                    intro: None,
+                    description: None,
+                })
+            }
+
+            fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+            where
+                M: serde::de::MapAccess<'de>,
+            {
+                let mut name = None;
+                let mut intro = None;
+                let mut description = None;
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "name" => name = map.next_value()?,
+                        "intro" => intro = map.next_value()?,
+                        "description" => description = map.next_value()?,
+                        _ => {
+                            let _ = map.next_value::<serde_json::Value>()?;
+                        }
+                    }
+                }
+
+                Ok(EMMTranslationRecord {
+                    name,
+                    intro,
+                    description,
+                })
+            }
+        }
+
+        deserializer.deserialize_any(EMMTranslationRecordVisitor)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EMMTranslationNamespace {
+    pub namespace: String,
+    pub data: HashMap<String, EMMTranslationRecord>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EMMTranslationDict {
+    pub data: Vec<EMMTranslationNamespace>,
+}
+
+/// 读取 EMM 翻译字典 (db.text.json)
+#[tauri::command]
+pub async fn load_emm_translation_dict(
+    file_path: String,
+) -> Result<HashMap<String, HashMap<String, EMMTranslationRecord>>, String> {
+    use std::fs;
+
+    let path = PathBuf::from(&file_path);
+    if !path.exists() {
+        return Err(format!("Translation file not found: {}", file_path));
+    }
+
+    let content = fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read translation file: {}", e))?;
+
+    let dict: EMMTranslationDict = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse translation file: {}", e))?;
+
+    // Convert to a more usable map: namespace -> key -> record
+    let mut result = HashMap::new();
+    for ns in dict.data {
+        result.insert(ns.namespace, ns.data);
+    }
+
+    Ok(result)
+}
+
+/// 查找 EMM 翻译字典文件路径
+#[tauri::command]
+pub async fn find_emm_translation_file() -> Result<Option<String>, String> {
+    let appdata = std::env::var("APPDATA").unwrap_or_default();
+    let localappdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
+    
+    let common_paths: Vec<String> = vec![
+        // 便携版
+        "portable/db.text.json".to_string(),
+        // 用户数据目录
+        format!("{}/exhentai-manga-manager/db.text.json", appdata),
+        format!("{}/exhentai-manga-manager/db.text.json", localappdata),
+    ];
+
+    for path_str in common_paths {
+        let path = PathBuf::from(&path_str);
+        if path.exists() {
+            return Ok(Some(path_str));
+        }
+    }
+
+    Ok(None)
+}
+

@@ -100,7 +100,7 @@ pub async fn generate_file_thumbnail_new(
     let thumbnail_data: Vec<u8> = scheduler
         .scheduler
         .enqueue_blocking("thumbnail-generate", job_source, move || -> Result<Vec<u8>, String> {
-            let mut generator = generator
+            let generator = generator
                 .lock()
                 .map_err(|e| format!("获取缩略图生成器锁失败: {}", e))?;
             generator.generate_file_thumbnail(&path_for_job)
@@ -153,7 +153,7 @@ pub async fn generate_archive_thumbnail_new(
             "thumbnail-generate",
             format!("archive:{}", archive_path),
             move || -> Result<Vec<u8>, String> {
-                let mut generator = generator
+                let generator = generator
                     .lock()
                     .map_err(|e| format!("获取缩略图生成器锁失败: {}", e))?;
                 generator.generate_archive_thumbnail(&path_for_job)
@@ -673,7 +673,7 @@ pub async fn scan_folder_thumbnails(
                         }),
                         Some((target_path, match_kind)) => {
                             let thumbnail_data = {
-                                let mut guard = generator
+                                let guard = generator
                                     .lock()
                                     .map_err(|e| format!("获取缩略图生成器锁失败: {}", e))?;
                                 match match_kind {

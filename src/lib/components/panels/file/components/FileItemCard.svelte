@@ -7,8 +7,8 @@
   import { Folder, File, Image, FileArchive, Check, Star } from '@lucide/svelte';
   import type { FsItem } from '$lib/types';
   import { bookmarkStore } from '$lib/stores/bookmark.svelte';
-  import { emmMetadataStore, isCollectTagHelper, collectTagMap } from '$lib/stores/emmMetadata.svelte';
-  import type { EMMCollectTag } from '$lib/api/emm';
+  import { emmMetadataStore, isCollectTagHelper, collectTagMap, emmTranslationStore } from '$lib/stores/emmMetadata.svelte';
+  import type { EMMCollectTag, EMMTranslationDict } from '$lib/api/emm';
 
   let {
     item,
@@ -77,11 +77,13 @@
   // 订阅全局 EMM 设置
   let enableEMM = $state(true);
   let fileListTagDisplayMode = $state<'all' | 'collect' | 'none'>('collect');
+  let translationDict = $state<EMMTranslationDict | undefined>(undefined);
   
   $effect(() => {
     const unsubscribe = emmMetadataStore.subscribe(state => {
       enableEMM = state.enableEMM;
       fileListTagDisplayMode = state.fileListTagDisplayMode;
+      translationDict = state.translationDict;
     });
     return unsubscribe;
   });
@@ -144,12 +146,17 @@
         if (fileListTagDisplayMode === 'collect' && !isCollect) {
           continue;
         }
+
+        // 翻译和缩写
+        const translatedTag = emmTranslationStore.translateTag(tag, category, translationDict);
+        const shortCategory = emmTranslationStore.getShortNamespace(category);
+        const displayStr = `${shortCategory}:${translatedTag}`;
         
         allTags.push({
           tag: `${category}:${tag}`,
           isCollect,
           color: collectTag?.color,
-          display: collectTag?.display || `${category}:${tag}`
+          display: displayStr // 使用翻译后的显示
         });
       }
     }

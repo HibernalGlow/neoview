@@ -8,8 +8,8 @@
 	import { infoPanelStore, type ViewerBookInfo, type ViewerImageInfo } from '$lib/stores/infoPanel.svelte';
 	import { FileSystemAPI } from '$lib/api';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
-	import { emmMetadataStore, isCollectTagHelper, collectTagMap } from '$lib/stores/emmMetadata.svelte';
-	import type { EMMCollectTag } from '$lib/api/emm';
+	import { emmMetadataStore, isCollectTagHelper, collectTagMap, emmTranslationStore } from '$lib/stores/emmMetadata.svelte';
+	import type { EMMCollectTag, EMMTranslationDict } from '$lib/api/emm';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import * as Input from '$lib/components/ui/input';
 	import * as Button from '$lib/components/ui/button';
@@ -25,9 +25,11 @@
 	let emmDatabasePaths = $state<string[]>([]);
 	let emmTranslationDbPath = $state<string>('');
 	let emmSettingPath = $state<string>('');
+	let emmTranslationDictPath = $state<string>('');
 	let emmDatabasePathInput = $state<string>('');
 	let enableEMM = $state(true);
 	let fileListTagDisplayMode = $state<'all' | 'collect' | 'none'>('collect');
+	let translationDict = $state<EMMTranslationDict | undefined>(undefined);
 
 	// 加载收藏标签（确保初始化完成）
 	$effect(() => {
@@ -64,14 +66,19 @@
 				}
 				
 				const isCollect = !!collectTag;
+
+				// 翻译和缩写
+				const translatedTag = emmTranslationStore.translateTag(tag, category, translationDict);
+				const shortCategory = emmTranslationStore.getShortNamespace(category);
+				const displayStr = `${shortCategory}:${translatedTag}`;
 				
 				tags.push({
 					category,
 					tag,
 					isCollect,
 					color: collectTag?.color,
-					// 如果是收藏标签，优先使用收藏配置的 display，否则使用默认格式
-					display: collectTag?.display || `${category}:${tag}`
+					// 优先使用翻译后的显示，忽略收藏配置的 display (通常是未翻译的)
+					display: displayStr
 				});
 			}
 		}
@@ -185,11 +192,13 @@
 		emmDatabasePaths = emmMetadataStore.getDatabasePaths();
 		emmTranslationDbPath = emmMetadataStore.getTranslationDbPath() || '';
 		emmSettingPath = emmMetadataStore.getSettingPath() || '';
+		emmTranslationDictPath = emmMetadataStore.getTranslationDictPath() || '';
 		
 		// 从 store 订阅获取最新状态
 		const unsubscribe = emmMetadataStore.subscribe(state => {
 			enableEMM = state.enableEMM;
 			fileListTagDisplayMode = state.fileListTagDisplayMode;
+			translationDict = state.translationDict;
 		});
 		// 立即取消订阅，我们只需要当前值
 		unsubscribe();
@@ -294,6 +303,40 @@
 			console.error('选择设置文件失败:', err);
 		}
 	}
+
+	// 选择翻译字典文件
+	async function selectTranslationDictFile() {
+		try {
+			const selected = await open({
+				filters: [{
+					name: 'JSON File',
+					extensions: ['json']
+				}]
+			});
+			
+			if (selected) {
+				let path = '';
+				if (typeof selected === 'string') {
+					path = selected;
+				} else if (Array.isArray(selected)) {
+					const arr = selected as unknown[];
+					if (arr.length > 0) {
+						const first = arr[0];
+						path = typeof first === 'string' ? first : 
+							(first && typeof first === 'object' && 'path' in first ? (first as { path: string }).path : '');
+					}
+				} else if (selected && typeof selected === 'object' && 'path' in selected) {
+					path = (selected as { path: string }).path;
+				}
+				
+				if (path) {
+					emmTranslationDictPath = path;
+				}
+			}
+		} catch (err) {
+			console.error('选择翻译字典文件失败:', err);
+		}
+	}
 	
 	// 添加数据库路径（手动输入）
 	function addDatabasePath() {
@@ -316,6 +359,9 @@
 		}
 		if (emmSettingPath) {
 			await emmMetadataStore.setManualSettingPath(emmSettingPath);
+		}
+		if (emmTranslationDictPath) {
+			await emmMetadataStore.setManualTranslationDictPath(emmTranslationDictPath);
 		}
 		
 		// 保存新设置
@@ -344,6 +390,130 @@
 			loadEMMConfig();
 		}
 	});
+</script>
+
+<div 
+	class="h-full flex flex-col bg-background"
+	oncontextmenu={showContextMenu}
+	role="region"
+	aria-label="信息面板"
+>
+		<!-- 标题栏 -->
+		<div class="p-4 border-b">
+			<div class="flex items-center gap-2">
+				<Info class="h-5 w-5" />
+				<h3 class="font-semibold">详细信息</h3>
+			</div>
+		</div>
+
+		<div class="flex-1 overflow-auto">
+		<div class="p-4 space-y-6">
+			<!-- 书籍信息 -->
+			{#if bookInfo}
+				<div class="space-y-3">
+					<div class="flex items-center gap-2 font-semibold text-sm">
+						<FileText class="h-4 w-4" />
+						<span>书籍信息</span>
+					</div>
+
+					<div class="space-y-2 text-sm">
+						<div class="flex justify-between">
+							<span class="text-muted-foreground">名称:</span>
+							<span class="font-medium break-words max-w-[200px]" title={bookInfo.emmMetadata?.translatedTitle || bookInfo.name}>
+								{bookInfo.emmMetadata?.translatedTitle || bookInfo.name}
+							</span>
+						</div>
+						{#if bookInfo.emmMetadata?.translatedTitle && bookInfo.emmMetadata.translatedTitle !== bookInfo.name}
+							<div class="flex justify-between">
+								<span class="text-muted-foreground">原名:</span>
+								<span class="font-mono text-xs break-words max-w-[200px]" title={bookInfo.name}>
+									{bookInfo.name}
+								</span>
+							</div>
+						{/if}
+						<div class="flex justify-between">
+							<span class="text-muted-foreground">路径:</span>
+							<span class="font-mono text-xs break-words max-w-[200px]" title={bookInfo.path}>
+								{bookInfo.path}
+							</span>
+						</div>
+						<div class="flex justify-between">
+							<span class="text-muted-foreground">类型:</span>
+							<span>{formatBookType(bookInfo.type)}</span>
+						</div>
+						<div class="flex justify-between">
+							<span class="text-muted-foreground">页码:</span>
+							<span>
+								{bookInfo.currentPage} / {bookInfo.totalPages}
+							</span>
+						</div>
+						<div class="flex justify-between">
+							<span class="text-muted-foreground">进度:</span>
+							<span>
+								{#if bookInfo.totalPages > 0}
+									{(
+										(Math.min(bookInfo.currentPage, bookInfo.totalPages) / bookInfo.totalPages) *
+										100
+									).toFixed(1)}%
+								{:else}
+									—
+								{/if}
+							</span>
+						</div>
+					</div>
+				</div>
+
+				<!-- 标签信息 -->
+				{#if allTags().length > 0}
+					<Separator.Root />
+					<div class="space-y-3">
+						<div class="flex items-center gap-2 font-semibold text-sm">
+							<Tag class="h-4 w-4" />
+							<span>标签</span>
+							<span class="text-[10px] text-muted-foreground font-normal ml-2 opacity-50">
+								(已加载收藏: {collectTags.length})
+							</span>
+							<Button.Root
+								variant="ghost"
+								size="icon"
+								class="h-5 w-5 ml-auto"
+								title="重新加载收藏标签"
+								onclick={() => {
+									console.debug('[InfoPanel] 手动刷新收藏标签');
+									emmMetadataStore.initialize(true).then(() => {
+										collectTags = emmMetadataStore.getCollectTags();
+									});
+								}}
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="12"
+									height="12"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+									<path d="M3 3v5h5" />
+								</svg>
+							</Button.Root>
+						</div>
+						<div class="flex flex-wrap gap-1.5">
+							{#each allTags() as tagInfo}
+								<span
+									class="text-xs px-2 py-1 rounded {tagInfo.isCollect ? 'font-semibold' : ''}"
+									style="background-color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '20' : 'rgba(0,0,0,0.05)'}; color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') : 'inherit'}; border: 1px solid {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '40' : 'transparent'};"
+									title="{tagInfo.category}:{tagInfo.tag}"
+								>
+									{tagInfo.display}
+								</span>
+							{/each}
+						</div>
+					</div>
+				{/if}
 </script>
 
 <div 
@@ -577,6 +747,27 @@
 										variant="outline"
 										size="sm"
 										onclick={selectSettingFile}
+										class="h-8"
+									>
+										<FolderOpen class="h-3 w-3 mr-1" />
+										选择
+									</Button.Root>
+								</div>
+							</div>
+
+							<!-- 翻译字典路径配置 -->
+							<div class="space-y-2">
+								<div class="text-xs font-medium text-muted-foreground">翻译字典路径 (db.text.json)</div>
+								<div class="flex items-center gap-2">
+									<Input.Root
+										bind:value={emmTranslationDictPath}
+										placeholder="输入翻译字典路径或点击选择..."
+										class="flex-1 text-xs font-mono"
+									/>
+									<Button.Root
+										variant="outline"
+										size="sm"
+										onclick={selectTranslationDictFile}
 										class="h-8"
 									>
 										<FolderOpen class="h-3 w-3 mr-1" />

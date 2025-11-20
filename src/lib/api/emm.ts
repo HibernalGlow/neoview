@@ -79,3 +79,26 @@ export async function findEMMSettingFile(): Promise<string | null> {
 	return await invoke<string | null>('find_emm_setting_file');
 }
 
+
+export interface EMMTranslationRecord {
+	name?: string;
+	intro?: string;
+	description?: string;
+}
+
+// namespace -> key -> record
+export type EMMTranslationDict = Record<string, Record<string, EMMTranslationRecord>>;
+
+/**
+ * 加载 EMM 翻译字典
+ */
+export async function loadEMMTranslationDict(filePath: string): Promise<EMMTranslationDict> {
+	return await invoke<EMMTranslationDict>('load_emm_translation_dict', { filePath });
+}
+
+/**
+ * 查找 EMM 翻译字典文件路径
+ */
+export async function findEMMTranslationFile(): Promise<string | null> {
+	return await invoke<string | null>('find_emm_translation_file');
+}

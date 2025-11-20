@@ -20,7 +20,6 @@ interface FileBrowserState {
 
 const archiveExtensions = ['.zip', '.cbz', '.rar', '.cbr', '.7z'];
 const videoExtensions = ['.mp4', '.mkv', '.avi', '.mov', '.flv', '.webm', '.wmv', '.m4v', '.mpg', '.mpeg'];
-const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.avif', '.jxl', '.tiff', '.tif'];
 
 function normalizePath(path: string): string {
   return path.replace(/\\/g, '/').toLowerCase();
@@ -36,14 +35,8 @@ function isVideoFile(path: string): boolean {
   return videoExtensions.some(ext => lower.endsWith(ext));
 }
 
-function isImageFile(item: FsItem): boolean {
-  if (item.isImage) return true;
-  const lower = item.path.toLowerCase();
-  return imageExtensions.some(ext => lower.endsWith(ext));
-}
-
 function isBookCandidate(item: FsItem): boolean {
-  return item.isDir || isArchiveFile(item.path) || isVideoFile(item.path) || isImageFile(item);
+  return isArchiveFile(item.path) || isVideoFile(item.path);
 }
 
 const initialState: FileBrowserState = {
@@ -85,13 +78,27 @@ function createFileBrowserStore() {
       return { ...state, selectedIndex: index };
     }),
     findAdjacentBookPath: (currentBookPath: string | null, direction: 'next' | 'previous'): string | null => {
-      if (!currentBookPath) return null;
-      const normalizedCurrent = normalizePath(currentBookPath);
       const bookItems = currentState.items.filter(isBookCandidate);
       if (bookItems.length === 0) return null;
 
-      const currentIndex = bookItems.findIndex((item) => normalizePath(item.path) === normalizedCurrent);
-      if (currentIndex === -1) return null;
+      const normalizedCurrent = currentBookPath ? normalizePath(currentBookPath) : null;
+      const findIndexByPath = (path: string | null) => {
+        if (!path) return -1;
+        return bookItems.findIndex(item => normalizePath(item.path) === path);
+      };
+
+      let currentIndex = findIndexByPath(normalizedCurrent);
+
+      if (currentIndex === -1 && currentState.selectedIndex >= 0) {
+        const selectedItem = currentState.items[currentState.selectedIndex];
+        if (selectedItem) {
+          currentIndex = findIndexByPath(normalizePath(selectedItem.path));
+        }
+      }
+
+      if (currentIndex === -1) {
+        currentIndex = direction === 'next' ? -1 : bookItems.length;
+      }
 
       const targetIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
       if (targetIndex < 0 || targetIndex >= bookItems.length) {

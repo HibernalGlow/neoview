@@ -139,8 +139,6 @@ class BookStore {
       this.state.viewerOpen = true;
       await this.syncInfoPanelBookInfo();
       this.syncFileBrowserSelection(path);
-      this.syncFileBrowserSelection(path);
-      this.syncFileBrowserSelection(path);
       
       // 记录历史
       const { historyStore } = await import('$lib/stores/history.svelte');

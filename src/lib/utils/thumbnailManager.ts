@@ -10,6 +10,9 @@ import type { FsItem } from '$lib/types';
 import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 import { scanFolderThumbnails } from '$lib/api/backgroundTasks';
 import * as FileSystemAPI from '$lib/api/filesystem';
+import { LRUCache } from './lruCache';
+import { PredictiveLoader } from './predictiveLoader';
+import { IncrementalBatchLoader } from './incrementalBatchLoader';
 
 export interface ThumbnailConfig {
   maxConcurrentLocal: number;
@@ -46,6 +49,15 @@ class ThumbnailManager {
   private cache = new Map<string, ThumbnailCache>();
   private dbIndexCache = new Map<string, boolean>(); // 预加载的数据库索引缓存
 
+  // LRU 缓存（智能缓存淘汰）
+  private lruCache: LRUCache<string>;
+  
+  // 预测性加载器
+  private predictiveLoader: PredictiveLoader;
+  
+  // 增量批量加载器
+  private incrementalLoader?: IncrementalBatchLoader<string>;
+
   // 当前目录路径（用于优先级判断）
   private currentDirectory: string = '';
 
@@ -58,8 +70,24 @@ class ThumbnailManager {
 
   // 批量加载配置
   private readonly BATCH_LOAD_SIZE = 50; // 一次批量查询的数量
+  
+  // 缓存配置（默认 100MB 内存缓存）
+  private readonly MAX_CACHE_SIZE = 100 * 1024 * 1024; // 100MB
 
   constructor() {
+    // 初始化 LRU 缓存（100MB 限制）
+    this.lruCache = new LRUCache<string>({
+      maxSize: this.MAX_CACHE_SIZE,
+      maxItems: 10000, // 最多 10000 个缓存项
+    });
+
+    // 初始化预测性加载器
+    this.predictiveLoader = new PredictiveLoader({
+      lookAhead: 20,
+      scrollThreshold: 50,
+      maxConcurrent: 10,
+    });
+
     // 初始化缩略图管理器
     this.init();
   }
@@ -180,9 +208,18 @@ class ThumbnailManager {
 
   /**
    * 获取已缓存的缩略图（存在内存缓存时立即返回）
+   * 优先从 LRU 缓存获取
    */
   getCachedThumbnail(path: string, innerPath?: string): string | null {
     const pathKey = this.buildPathKey(path, innerPath);
+    
+    // 先检查 LRU 缓存
+    const lruCached = this.lruCache.get(pathKey);
+    if (lruCached) {
+      return lruCached;
+    }
+    
+    // 回退到旧缓存
     return this.cache.get(pathKey)?.dataUrl ?? null;
   }
 
@@ -272,12 +309,17 @@ class ThumbnailManager {
   }
 
   /**
-   * 批量从数据库加载缩略图
+   * 批量从数据库加载缩略图（支持增量流式加载）
    */
   async batchLoadFromDb(paths: string[]): Promise<Map<string, string>> {
     const results = new Map<string, string>();
     if (paths.length === 0) {
       return results;
+    }
+
+    // 如果路径数量较大，使用增量批量加载
+    if (paths.length > this.BATCH_LOAD_SIZE) {
+      return this.incrementalBatchLoadFromDb(paths);
     }
 
     try {
@@ -291,13 +333,21 @@ class ThumbnailManager {
         const blobUrl = await this.blobKeyToUrl(blobKey);
         if (blobUrl) {
           const pathKey = this.buildPathKey(path);
+          
+          // 估算大小（粗略估算：每个 URL 约 100KB）
+          const estimatedSize = 100 * 1024;
+          
+          // 同时更新两个缓存
           this.cache.set(pathKey, {
             pathKey,
             dataUrl: blobUrl,
             timestamp: Date.now(),
           });
+          this.lruCache.set(pathKey, blobUrl, estimatedSize);
+          
           this.dbIndexCache.set(pathKey, true);
           results.set(path, blobUrl);
+          
           // 通知回调
           if (this.onThumbnailReady) {
             this.onThumbnailReady(path, blobUrl);
@@ -311,6 +361,73 @@ class ThumbnailManager {
     } catch (error) {
       console.debug('批量从数据库加载缩略图失败:', error);
     }
+
+    return results;
+  }
+
+  /**
+   * 增量批量加载（流式加载，边查询边显示）
+   */
+  private async incrementalBatchLoadFromDb(paths: string[]): Promise<Map<string, string>> {
+    const results = new Map<string, string>();
+
+    // 创建增量批量加载器
+    const loader = new IncrementalBatchLoader<string>(
+      async (items) => {
+        const batchPaths = items.map(item => item.path);
+        const { invoke } = await import('@tauri-apps/api/core');
+        const response = await invoke<Array<[string, string]>>('batch_load_thumbnails_from_db', {
+          paths: batchPaths,
+        });
+
+        const batchResults = new Map<string, string>();
+        for (const [path, blobKey] of response) {
+          const blobUrl = await this.blobKeyToUrl(blobKey);
+          if (blobUrl) {
+            batchResults.set(path, blobUrl);
+          }
+        }
+        return batchResults;
+      },
+      {
+        batchSize: this.BATCH_LOAD_SIZE,
+        streamDelay: 50, // 50ms 延迟，让用户看到进度
+        maxConcurrent: 3,
+      }
+    );
+
+    // 设置回调，边加载边显示
+    loader.setCallback((result) => {
+      if (result.data) {
+        const pathKey = this.buildPathKey(result.path);
+        const estimatedSize = 100 * 1024;
+        
+        // 更新缓存
+        this.cache.set(pathKey, {
+          pathKey,
+          dataUrl: result.data,
+          timestamp: Date.now(),
+        });
+        this.lruCache.set(pathKey, result.data, estimatedSize);
+        this.dbIndexCache.set(pathKey, true);
+        results.set(result.path, result.data);
+        
+        // 立即通知回调，实现流式显示
+        if (this.onThumbnailReady) {
+          this.onThumbnailReady(result.path, result.data);
+        }
+      }
+    });
+
+    // 准备加载项
+    const loadItems = paths.map((path, index) => ({
+      id: path,
+      path,
+      priority: index, // 前面的优先级更高
+    }));
+
+    loader.addItems(loadItems);
+    await loader.start();
 
     return results;
   }
@@ -357,12 +474,17 @@ class ThumbnailManager {
           const blob = new Blob([uint8Array], { type: 'image/webp' });
           const blobUrl = URL.createObjectURL(blob);
 
-          // 更新缓存
+          // 估算大小
+          const estimatedSize = blobData.length;
+          
+          // 更新两个缓存
           this.cache.set(pathKey, {
             pathKey,
             dataUrl: blobUrl,
             timestamp: Date.now(),
           });
+          this.lruCache.set(pathKey, blobUrl, estimatedSize);
+          
           console.log(`✅ 成功从数据库加载缩略图: ${pathKey} (${blobData.length} bytes)`);
           return blobUrl;
         } else {
@@ -427,12 +549,16 @@ class ThumbnailManager {
           const blob = new Blob([uint8Array], { type: 'image/webp' });
           const blobUrl = URL.createObjectURL(blob);
 
-          // 更新缓存
+          // 估算大小
+          const estimatedSize = blobData.length;
+          
+          // 更新两个缓存
           this.cache.set(pathKey, {
             pathKey,
             dataUrl: blobUrl,
             timestamp: Date.now(),
           });
+          this.lruCache.set(pathKey, blobUrl, estimatedSize);
 
           // 通知回调
           if (this.onThumbnailReady) {
@@ -685,12 +811,17 @@ class ThumbnailManager {
         // 转换为 blob URL
         const blobUrl = await this.blobKeyToUrl(blobKey);
         if (blobUrl) {
-          // 更新缓存
+          // 估算大小
+          const estimatedSize = 100 * 1024; // 粗略估算
+          
+          // 更新两个缓存
           this.cache.set(pathKey, {
             pathKey,
             dataUrl: blobUrl,
             timestamp: Date.now(),
           });
+          this.lruCache.set(pathKey, blobUrl, estimatedSize);
+          
           // 通知回调
           if (this.onThumbnailReady) {
             this.onThumbnailReady(task.path, blobUrl);
@@ -983,6 +1114,45 @@ class ThumbnailManager {
   clearCache() {
     this.cache.clear();
     this.dbIndexCache.clear();
+    this.lruCache.clear();
+  }
+
+  /**
+   * 更新滚动位置并触发预测性加载
+   */
+  updateScroll(scrollTop: number, scrollLeft: number, currentIndex: number, totalItems: number): void {
+    const direction = this.predictiveLoader.updateScroll(scrollTop, scrollLeft);
+    const range = this.predictiveLoader.getPredictiveRange(currentIndex, totalItems, direction);
+    
+    // 预测性加载范围内的缩略图
+    this.preloadPredictiveRange(range.start, range.end);
+  }
+
+  /**
+   * 预加载预测范围内的缩略图
+   */
+  private preloadPredictiveRange(start: number, end: number): void {
+    // 这个方法需要在调用时传入项目列表
+    // 暂时留空，由调用方传入具体项目
+  }
+
+  /**
+   * 获取缓存统计信息
+   */
+  getCacheStats() {
+    return {
+      lru: this.lruCache.getStats(),
+      legacy: {
+        count: this.cache.size,
+      },
+    };
+  }
+
+  /**
+   * 清理过期缓存
+   */
+  cleanupCache(): number {
+    return this.lruCache.cleanupExpired();
   }
 }
 

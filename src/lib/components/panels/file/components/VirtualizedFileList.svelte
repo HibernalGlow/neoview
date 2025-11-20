@@ -157,19 +157,15 @@
       // 按距离顶部距离排序（距离越近，优先级越高）
       itemsWithOrder.sort((a, b) => a.distanceFromTop - b.distanceFromTop);
       
-      // 使用批量加载：先尝试从数据库批量加载已缓存的缩略图
+      // 使用增量批量加载：支持流式加载，边查询边显示
       const paths = itemsWithOrder.map(({ item }) => item.path);
-      const BATCH_SIZE = 50; // 一次批量查询 50 个
       
       scheduleIdleTask(async () => {
-        // 分批批量查询数据库
-        for (let i = 0; i < paths.length; i += BATCH_SIZE) {
-          const batch = paths.slice(i, i + BATCH_SIZE);
-          try {
-            await thumbnailManager.batchLoadFromDb(batch);
-          } catch (err) {
-            console.debug('批量加载缩略图失败:', err);
-          }
+        try {
+          // 使用增量批量加载（自动支持流式加载）
+          await thumbnailManager.batchLoadFromDb(paths);
+        } catch (err) {
+          console.debug('批量加载缩略图失败:', err);
         }
         
         // 等待一小段时间让批量加载完成，然后检查哪些还需要生成
@@ -188,11 +184,17 @@
     }
   }, 50); // 50ms 防抖延迟
 
-  // 处理滚动事件（节流）
+  // 处理滚动事件（节流 + 预测性加载）
   const handleScroll = throttle(() => {
     if (!container) return;
     
-    scrollTop = container.scrollTop;
+    const newScrollTop = container.scrollTop;
+    const newScrollLeft = container.scrollLeft;
+    
+    // 更新预测性加载器的滚动位置
+    thumbnailManager.updateScroll(newScrollTop, newScrollLeft, startIndex, items.length);
+    
+    scrollTop = newScrollTop;
     
     // 节流处理
     if (scrollTimer) {

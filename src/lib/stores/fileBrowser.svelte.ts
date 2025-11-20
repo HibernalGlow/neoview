@@ -18,6 +18,21 @@ interface FileBrowserState {
   thumbnails: Map<string, string>;
 }
 
+const archiveExtensions = ['.zip', '.cbz', '.rar', '.cbr', '.7z'];
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/').toLowerCase();
+}
+
+function isArchiveFile(path: string): boolean {
+  const lower = path.toLowerCase();
+  return archiveExtensions.some((ext) => lower.endsWith(ext)) || lower.endsWith('.pdf');
+}
+
+function isBookCandidate(item: FsItem): boolean {
+  return item.isDir || isArchiveFile(item.path);
+}
+
 const initialState: FileBrowserState = {
   currentPath: '',
   items: [],
@@ -47,6 +62,21 @@ function createFileBrowserStore() {
     setArchiveView: (isArchive: boolean, archivePath: string = '') => 
       update(state => ({ ...state, isArchiveView: isArchive, currentArchivePath: archivePath })),
     setSelectedIndex: (index: number) => update(state => ({ ...state, selectedIndex: index })),
+    findAdjacentBookPath: (currentBookPath: string | null, direction: 'next' | 'previous'): string | null => {
+      if (!currentBookPath) return null;
+      const normalizedCurrent = normalizePath(currentBookPath);
+      const bookItems = currentState.items.filter(isBookCandidate);
+      if (bookItems.length === 0) return null;
+
+      const currentIndex = bookItems.findIndex((item) => normalizePath(item.path) === normalizedCurrent);
+      if (currentIndex === -1) return null;
+
+      const targetIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
+      if (targetIndex < 0 || targetIndex >= bookItems.length) {
+        return null;
+      }
+      return bookItems[targetIndex].path;
+    },
     addThumbnail: (path: string, thumbnail: string) => 
       update(state => {
         const newThumbnails = new Map(state.thumbnails);

@@ -115,6 +115,14 @@ async function dispatchAction(action: string) {
 			console.log('执行最后一页操作');
 			await bookStore.lastPage();
 			break;
+		case 'nextBook':
+			console.log('执行下一个书籍操作');
+			await bookStore.openNextBook();
+			break;
+		case 'prevBook':
+			console.log('执行上一个书籍操作');
+			await bookStore.openPreviousBook();
+			break;
 		case 'zoomIn':
 			console.log('执行放大操作');
 			zoomIn();

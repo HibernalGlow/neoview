@@ -8,6 +8,7 @@ import * as bookApi from '../api/book';
 import { infoPanelStore } from './infoPanel.svelte';
 import { appState, type ViewerJumpSource, type PageWindowState } from '$lib/core/state/appState';
 import { emmMetadataStore } from './emmMetadata.svelte';
+import { fileBrowserStore } from './fileBrowser.svelte';
 
 const PAGE_WINDOW_PADDING = 8;
 const JUMP_HISTORY_LIMIT = 20;
@@ -383,6 +384,27 @@ class BookStore {
       console.error('❌ Error going to previous page:', err);
       this.state.error = String(err);
     }
+  }
+
+  /**
+   * 打开当前排序列表的下一/上一部书
+   */
+  private async openAdjacentBook(direction: 'next' | 'previous') {
+    const currentPath = this.state.currentBook?.path ?? null;
+    const targetPath = fileBrowserStore.findAdjacentBookPath(currentPath, direction);
+    if (!targetPath) {
+      console.warn(`⚠️ No ${direction} book found from`, currentPath);
+      return;
+    }
+    await this.openBook(targetPath);
+  }
+
+  async openNextBook() {
+    await this.openAdjacentBook('next');
+  }
+
+  async openPreviousBook() {
+    await this.openAdjacentBook('previous');
   }
 
   /**

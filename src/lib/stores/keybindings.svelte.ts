@@ -108,6 +108,26 @@ const defaultBindings: ActionBinding[] = [
 			{ type: 'keyboard', key: 'Ctrl+End' }
 		]
 	},
+	{
+		action: 'nextBook',
+		name: '下一个书籍',
+		category: '导航',
+		description: '切换到排序列表中的下一个书籍/文件夹',
+		bindings: [
+			{ type: 'keyboard', key: 'Alt+PageDown' },
+			{ type: 'keyboard', key: 'Ctrl+]' }
+		]
+	},
+	{
+		action: 'prevBook',
+		name: '上一个书籍',
+		category: '导航',
+		description: '切换到排序列表中的上一个书籍/文件夹',
+		bindings: [
+			{ type: 'keyboard', key: 'Alt+PageUp' },
+			{ type: 'keyboard', key: 'Ctrl+[' }
+		]
+	},
 
 	// === 缩放操作 ===
 	{
@@ -243,6 +263,27 @@ class KeyBindingsStore {
 	constructor() {
 		// 从 localStorage 加载自定义绑定
 		this.loadFromStorage();
+	}
+
+	private mergeWithDefaults(stored: ActionBinding[]): ActionBinding[] {
+		const merged: ActionBinding[] = [];
+		const storedMap = new Map(stored.map(binding => [binding.action, binding] as const));
+		for (const def of defaultBindings) {
+			const storedBinding = storedMap.get(def.action);
+			if (storedBinding) {
+				merged.push({
+					...def,
+					bindings: storedBinding.bindings ?? def.bindings
+				});
+				storedMap.delete(def.action);
+			} else {
+				merged.push({ ...def });
+			}
+		}
+		for (const [, binding] of storedMap) {
+			merged.push(binding);
+		}
+		return merged;
 	}
 
 	// 根据操作查找绑定
@@ -404,10 +445,14 @@ class KeyBindingsStore {
 		try {
 			const stored = localStorage.getItem('neoview-keybindings');
 			if (stored) {
-				this.bindings = JSON.parse(stored);
+				const parsed: ActionBinding[] = JSON.parse(stored);
+				this.bindings = this.mergeWithDefaults(parsed);
+			} else {
+				this.bindings = [...defaultBindings];
 			}
 		} catch (error) {
 			console.error('Failed to load keybindings:', error);
+			this.bindings = [...defaultBindings];
 		}
 	}
 

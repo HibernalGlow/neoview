@@ -47,6 +47,8 @@
 		{ action: 'prevPage', key: 'ArrowLeft', description: '上一页', category: '导航' },
 		{ action: 'firstPage', key: 'Home', description: '第一页', category: '导航' },
 		{ action: 'lastPage', key: 'End', description: '最后一页', category: '导航' },
+		{ action: 'nextBook', key: 'Ctrl+]', description: '下一个书籍', category: '导航' },
+		{ action: 'prevBook', key: 'Ctrl+[', description: '上一个书籍', category: '导航' },
 		{ action: 'zoomIn', key: 'Ctrl++', description: '放大', category: '缩放' },
 		{ action: 'zoomOut', key: 'Ctrl+-', description: '缩小', category: '缩放' },
 		{ action: 'zoomReset', key: 'Ctrl+0', description: '重置缩放', category: '缩放' },

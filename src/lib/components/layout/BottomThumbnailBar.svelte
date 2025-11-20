@@ -56,20 +56,30 @@
 		}));
 	});
 
-	let loadThumbnailsDebounce: ReturnType<typeof setTimeout> | null = null;
+const THUMBNAIL_DEBOUNCE_MS = 250;
+let loadThumbnailsDebounce: number | null = null;
+let lastThumbnailRange: { start: number; end: number } | null = null;
 
-	function scheduleLoadVisibleThumbnails() {
-		if (loadThumbnailsDebounce) return;
-		loadThumbnailsDebounce = window.setTimeout(() => {
+function scheduleLoadVisibleThumbnails(immediate = false) {
+	if (immediate) {
+		if (loadThumbnailsDebounce) {
+			clearTimeout(loadThumbnailsDebounce);
 			loadThumbnailsDebounce = null;
-			void loadVisibleThumbnails();
-		}, 80);
+		}
+		void loadVisibleThumbnails();
+		return;
 	}
+	if (loadThumbnailsDebounce) return;
+	loadThumbnailsDebounce = window.setTimeout(() => {
+		loadThumbnailsDebounce = null;
+		void loadVisibleThumbnails();
+	}, THUMBNAIL_DEBOUNCE_MS);
+}
 
 	function showThumbnails() {
 		isVisible = true;
 		if (hideTimeout) clearTimeout(hideTimeout);
-		scheduleLoadVisibleThumbnails();
+	scheduleLoadVisibleThumbnails(true);
 		// 不要在这里设置定时器，让 handleMouseLeave 来处理
 	}
 
@@ -249,6 +259,15 @@
 		const { start, end } = getWindowRange(totalPages);
 		const desired = getMinVisibleThumbnails();
 
+	if (
+		lastThumbnailRange &&
+		lastThumbnailRange.start === start &&
+		lastThumbnailRange.end === end
+	) {
+		return;
+	}
+	lastThumbnailRange = { start, end };
+
 		console.log(`Loading thumbnails from ${start} to ${end} (total: ${end - start + 1}, desired: ${desired})`);
 
 		// 并行请求所有缩略图
@@ -378,6 +397,7 @@
 			}
 			preloadManager = manager;
 			if (preloadManager) {
+				lastThumbnailRange = null;
 				// register thumbnail listener
 				unsubscribeThumbnailListener = preloadManager.addThumbnailListener(handleSharedThumbnailReady);
 				scheduleLoadVisibleThumbnails();
@@ -394,6 +414,10 @@
 			unsubscribeSharedManager();
 			unsubscribeSharedManager = null;
 		}
+	if (loadThumbnailsDebounce) {
+		clearTimeout(loadThumbnailsDebounce);
+		loadThumbnailsDebounce = null;
+	}
 	});
 
 	$effect(() => {
@@ -407,6 +431,7 @@
 		const currentBook = bookStore.currentBook;
 		if (currentBook) {
 			thumbnails = {};
+		lastThumbnailRange = null;
 		}
 	});
 

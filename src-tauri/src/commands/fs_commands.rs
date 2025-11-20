@@ -372,13 +372,18 @@ pub async fn load_image_from_archive(
         trace_id, archive_path, file_path, page_index
     );
 
-    let archive_manager = state
-        .archive_manager
-        .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+    let archive_manager = Arc::clone(&state.archive_manager);
+    let archive_path_buf = PathBuf::from(&archive_path);
+    let inner_path = file_path.clone();
 
-    let path = PathBuf::from(archive_path);
-    let result = archive_manager.load_image_from_zip_binary(&path, &file_path);
+    let result = spawn_blocking(move || {
+        let manager = archive_manager
+            .lock()
+            .map_err(|e| format!("获取锁失败: {}", e))?;
+        manager.load_image_from_zip_binary(&archive_path_buf, &inner_path)
+    })
+    .await
+    .map_err(|e| format!("load_image_from_archive join error: {}", e))?;
 
     match &result {
         Ok(bytes) => info!(

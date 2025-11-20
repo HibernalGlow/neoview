@@ -156,6 +156,9 @@ export class PreloadManager {
 		};
 		
 		performanceSettings.addListener(this.performanceSettingsListener);
+
+		// 首次创建时立即执行预加载降级，确保打开第一本书不会拉满
+		this.applyPreloadRamp();
 	}
 
 	/**
@@ -337,6 +340,10 @@ export class PreloadManager {
 			preloadPages: rampValue,
 			maxThreads: this.performanceMaxThreads
 		});
+		console.log('[PreloadManager] 预加载降级启动', {
+			targetPreloadPages: target,
+			rampPreloadPages: rampValue
+		});
 
 		if (typeof window === 'undefined') {
 			return;
@@ -346,6 +353,9 @@ export class PreloadManager {
 			this.imageLoader.updateConfig({
 				preloadPages: this.performancePreloadPages,
 				maxThreads: this.performanceMaxThreads
+			});
+			console.log('[PreloadManager] 预加载降级结束', {
+				restorePreloadPages: this.performancePreloadPages
 			});
 			this.preloadRampTimer = null;
 		}, 2000);

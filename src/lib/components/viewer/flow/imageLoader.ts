@@ -8,6 +8,7 @@ import { loadImage } from '$lib/api/fs';
 import { loadImageFromArchive } from '$lib/api/filesystem';
 import { bookStore } from '$lib/stores/book.svelte';
 import { performanceSettings, settingsManager } from '$lib/settings/settingsManager';
+import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
 import {
 	triggerAutoUpscale,
 	checkUpscaleCache,
@@ -1035,6 +1036,10 @@ export class ImageLoader {
 	 * 从磁盘加载超分结果到内存缓存
 	 */
 	async loadDiskUpscaleToMemory(imageHash: string): Promise<boolean> {
+		if (!pyo3UpscaleManager.isInitialized() || !pyo3UpscaleManager.isAvailable()) {
+			console.debug('跳过 PyO3 磁盘缓存检查：PyO3 未初始化或不可用');
+			return false;
+		}
 		try {
 			// 通过 PyO3 命令检查当前模型下是否有该 hash 的缓存
 			const model = getPanelModelSettings();

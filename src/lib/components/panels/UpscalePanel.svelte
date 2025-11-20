@@ -120,6 +120,8 @@ import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
 	})();
 
 	// 处理状态
+	type UpscaleTrigger = 'manual' | 'auto';
+
 	let isProcessing = $state(false);
 	let progress = $state(0);
 	let status = $state('就绪');
@@ -138,6 +140,8 @@ let originalPreviewObjectUrl: string | null = null;
 let upscaledPreviewObjectUrl: string | null = null;
 let showOriginalPreview = $state(false);
 let showUpscaledPreview = $state(false);
+
+let pendingUpscaleRequest: { trigger: UpscaleTrigger; imageHash: string | null } | null = null;
 
 	// 缓存统计
 	let cacheStats = $state({
@@ -194,9 +198,9 @@ let showUpscaledPreview = $state(false);
 				console.log('📷 同步当前图片:', imagePath);
 				
 				// 如果启用自动超分，自动执行
-				if (autoUpscaleEnabled && !isProcessing) {
+				if (autoUpscaleEnabled) {
 					console.log('🚀 自动超分已启用，执行超分...');
-					performUpscale();
+					requestUpscale('auto');
 				}
 			}
 		}
@@ -243,9 +247,18 @@ let showUpscaledPreview = $state(false);
 			
 			if (autoUpscaleEnabled) {
 				console.log('✅ 自动超分已启用');
+				if (currentImagePath) {
+					requestUpscale('auto');
+				}
 			} else {
 				console.log('❌ 自动超分已关闭');
 			}
+		}
+	});
+
+	$effect(() => {
+		if (!autoUpscaleEnabled && pendingUpscaleRequest?.trigger === 'auto') {
+			pendingUpscaleRequest = null;
 		}
 	});
 
@@ -369,6 +382,9 @@ let showUpscaledPreview = $state(false);
 		currentImageHash = bookStore.getCurrentPageHash();
 		originalPreviewUrl = '';
 		void updateOriginalPreview();
+		if (autoUpscaleEnabled) {
+			requestUpscale('auto');
+		}
 
 		const currentPage = bookStore.currentPage as {
 			width?: number;
@@ -601,21 +617,61 @@ let showUpscaledPreview = $state(false);
 		status = statusValue;
 	}
 
+	function requestUpscale(trigger: UpscaleTrigger = 'manual') {
+		if (!currentImagePath) {
+			console.warn('[UpscalePanel] 当前没有可供超分的图片');
+			return;
+		}
+
+		const requestHash = currentImageHash;
+
+		if (isProcessing) {
+			pendingUpscaleRequest = { trigger, imageHash: requestHash };
+			console.log('[UpscalePanel] 正在超分，新的任务已排队', {
+				trigger,
+				requestHash
+			});
+			return;
+		}
+
+		pendingUpscaleRequest = null;
+		void performUpscale(trigger);
+	}
+
+	function processPendingUpscale() {
+		if (!pendingUpscaleRequest) {
+			return;
+		}
+
+		const next = pendingUpscaleRequest;
+		pendingUpscaleRequest = null;
+
+		if (next.trigger === 'auto' && !autoUpscaleEnabled) {
+			console.log('[UpscalePanel] 自动超分已关闭，丢弃排队任务');
+			return;
+		}
+
+		Promise.resolve().then(() => {
+			requestUpscale(next.trigger);
+		});
+	}
+
 	/**
 	 * 执行超分处理
 	 */
-	async function performUpscale() {
+	async function performUpscale(trigger: UpscaleTrigger = 'manual') {
 		if (!currentImagePath) {
 			console.error('[UpscalePanel] 没有选中的图片');
 			return;
 		}
 
 		if (isProcessing) {
-			console.error('[UpscalePanel] 正在处理中，请稍候');
+			console.log('[UpscalePanel] 当前已有任务执行，新的请求将等待');
+			pendingUpscaleRequest = { trigger, imageHash: currentImageHash };
 			return;
 		}
 
-	resetUpscaledDisplay();
+		resetUpscaledDisplay();
 		isProcessing = true;
 		progress = 0;
 		status = '准备中...';
@@ -1042,7 +1098,7 @@ let showUpscaledPreview = $state(false);
 		currentImagePath={currentImagePath}
 		progress={progress}
 		progressColorClass={getProgressColor(progress)}
-		on:perform={performUpscale}
+		on:perform={() => requestUpscale('manual')}
 	/>
 
 	<!-- 条件管理 -->

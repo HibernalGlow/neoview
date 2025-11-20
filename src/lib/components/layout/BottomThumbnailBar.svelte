@@ -59,6 +59,7 @@
 const THUMBNAIL_DEBOUNCE_MS = 250;
 let loadThumbnailsDebounce: number | null = null;
 let lastThumbnailRange: { start: number; end: number } | null = null;
+const noThumbnailPaths = new Set<string>();
 
 function scheduleLoadVisibleThumbnails(immediate = false) {
 	if (immediate) {
@@ -319,38 +320,50 @@ function scheduleLoadVisibleThumbnails(immediate = false) {
 
 	let loadingIndices = new Set<number>();
 
-	async function loadThumbnail(pageIndex: number) {
-		if (!preloadManager || loadingIndices.has(pageIndex)) return;
-		
-		loadingIndices.add(pageIndex);
-		try {
-			// 使用预加载管理器获取缩略图
-			await preloadManager.requestThumbnail(pageIndex);
-		} catch (err) {
-			console.error(`Failed to load thumbnail for page ${pageIndex}:`, err);
-			// 回退到原始方法
-			const currentBook = bookStore.currentBook;
-			if (!currentBook || !currentBook.pages[pageIndex]) return;
+async function loadThumbnail(pageIndex: number) {
+	if (!preloadManager || loadingIndices.has(pageIndex)) return;
 
-			try {
-				const page = currentBook.pages[pageIndex];
-				let fullImageData: string;
+	const currentBook = bookStore.currentBook;
+	const page = currentBook?.pages[pageIndex];
+	const pathKey =
+		currentBook && page ? `${currentBook.path}::${page.path}` : null;
 
-				if (currentBook.type === 'archive') {
-					fullImageData = await loadImageFromArchive(currentBook.path, page.path);
-				} else {
-					fullImageData = await loadImage(page.path);
-				}
-
-				const thumbnail = await generateThumbnailFromBase64(fullImageData);
-				thumbnails = { ...thumbnails, [pageIndex]: thumbnail };
-			} catch (fallbackErr) {
-				console.error(`Fallback also failed for page ${pageIndex}:`, fallbackErr);
-			}
-		} finally {
-			loadingIndices.delete(pageIndex);
-		}
+	if (pathKey && noThumbnailPaths.has(pathKey)) {
+		return;
 	}
+
+	loadingIndices.add(pageIndex);
+	try {
+		await preloadManager.requestThumbnail(pageIndex);
+		if (pathKey) {
+			noThumbnailPaths.delete(pathKey);
+		}
+	} catch (err) {
+		console.error(`Failed to load thumbnail for page ${pageIndex}:`, err);
+		if (!currentBook || !page) return;
+
+		try {
+			let fullImageData: string;
+
+			if (currentBook.type === 'archive') {
+				fullImageData = await loadImageFromArchive(currentBook.path, page.path);
+			} else {
+				fullImageData = await loadImage(page.path);
+			}
+
+			const thumbnail = await generateThumbnailFromBase64(fullImageData);
+			thumbnails = { ...thumbnails, [pageIndex]: thumbnail };
+			noThumbnailPaths.delete(pathKey!);
+		} catch (fallbackErr) {
+			console.error(`Fallback also failed for page ${pageIndex}:`, fallbackErr);
+			if (pathKey) {
+				noThumbnailPaths.add(pathKey);
+			}
+		}
+	} finally {
+		loadingIndices.delete(pageIndex);
+	}
+}
 
 	function handleScroll(e: Event) {
 		const container = e.target as HTMLElement;

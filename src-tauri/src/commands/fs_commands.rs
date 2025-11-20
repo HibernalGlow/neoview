@@ -376,7 +376,6 @@ pub async fn load_image_from_archive(
     let archive_manager = Arc::clone(&state.archive_manager);
     let archive_path_buf = PathBuf::from(&archive_path);
     let inner_path = file_path.clone();
-
     let result = spawn_blocking(move || {
         let manager = archive_manager
             .lock()

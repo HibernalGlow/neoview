@@ -284,9 +284,12 @@
 		});
 	}
 
+	let loadingIndices = new Set<number>();
+
 	async function loadThumbnail(pageIndex: number) {
-		if (!preloadManager) return;
+		if (!preloadManager || loadingIndices.has(pageIndex)) return;
 		
+		loadingIndices.add(pageIndex);
 		try {
 			// 使用预加载管理器获取缩略图
 			await preloadManager.requestThumbnail(pageIndex);
@@ -311,6 +314,8 @@
 			} catch (fallbackErr) {
 				console.error(`Fallback also failed for page ${pageIndex}:`, fallbackErr);
 			}
+		} finally {
+			loadingIndices.delete(pageIndex);
 		}
 	}
 

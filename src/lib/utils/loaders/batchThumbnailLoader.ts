@@ -42,12 +42,14 @@ export class BatchThumbnailLoader {
       });
 
       // 处理响应，转换为 blob URL
-      for (const [path, blobKey] of response) {
+      const promises = response.map(async ([path, blobKey]) => {
         const blobUrl = await this.blobKeyToUrl(blobKey);
         if (blobUrl) {
           results.set(path, blobUrl);
         }
-      }
+      });
+
+      await Promise.all(promises);
 
       if (import.meta.env.DEV && results.size > 0) {
         console.log(`✅ 批量加载 ${results.size}/${paths.length} 个缩略图`);

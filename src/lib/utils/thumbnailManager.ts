@@ -51,10 +51,10 @@ class ThumbnailManager {
 
   // LRU 缓存（智能缓存淘汰）
   private lruCache: LRUCache<string>;
-  
+
   // 预测性加载器
   private predictiveLoader: PredictiveLoader;
-  
+
   // 增量批量加载器
   private incrementalLoader?: IncrementalBatchLoader<string>;
 
@@ -70,7 +70,7 @@ class ThumbnailManager {
 
   // 批量加载配置
   private readonly BATCH_LOAD_SIZE = 50; // 一次批量查询的数量
-  
+
   // 缓存配置（默认 100MB 内存缓存）
   private readonly MAX_CACHE_SIZE = 100 * 1024 * 1024; // 100MB
 
@@ -212,13 +212,13 @@ class ThumbnailManager {
    */
   getCachedThumbnail(path: string, innerPath?: string): string | null {
     const pathKey = this.buildPathKey(path, innerPath);
-    
+
     // 先检查 LRU 缓存
     const lruCached = this.lruCache.get(pathKey);
     if (lruCached) {
       return lruCached;
     }
-    
+
     // 回退到旧缓存
     return this.cache.get(pathKey)?.dataUrl ?? null;
   }
@@ -329,14 +329,14 @@ class ThumbnailManager {
       });
 
       // 处理响应，转换为 blob URL 并缓存
-      for (const [path, blobKey] of response) {
+      const promises = response.map(async ([path, blobKey]) => {
         const blobUrl = await this.blobKeyToUrl(blobKey);
         if (blobUrl) {
           const pathKey = this.buildPathKey(path);
-          
+
           // 估算大小（粗略估算：每个 URL 约 100KB）
           const estimatedSize = 100 * 1024;
-          
+
           // 同时更新两个缓存
           this.cache.set(pathKey, {
             pathKey,
@@ -344,16 +344,18 @@ class ThumbnailManager {
             timestamp: Date.now(),
           });
           this.lruCache.set(pathKey, blobUrl, estimatedSize);
-          
+
           this.dbIndexCache.set(pathKey, true);
           results.set(path, blobUrl);
-          
+
           // 通知回调
           if (this.onThumbnailReady) {
             this.onThumbnailReady(path, blobUrl);
           }
         }
-      }
+      });
+
+      await Promise.all(promises);
 
       if (import.meta.env.DEV && results.size > 0) {
         console.log(`✅ 批量从数据库加载 ${results.size}/${paths.length} 个缩略图`);
@@ -381,12 +383,15 @@ class ThumbnailManager {
         });
 
         const batchResults = new Map<string, string>();
-        for (const [path, blobKey] of response) {
+
+        const promises = response.map(async ([path, blobKey]) => {
           const blobUrl = await this.blobKeyToUrl(blobKey);
           if (blobUrl) {
             batchResults.set(path, blobUrl);
           }
-        }
+        });
+
+        await Promise.all(promises);
         return batchResults;
       },
       {
@@ -401,7 +406,7 @@ class ThumbnailManager {
       if (result.data) {
         const pathKey = this.buildPathKey(result.path);
         const estimatedSize = 100 * 1024;
-        
+
         // 更新缓存
         this.cache.set(pathKey, {
           pathKey,
@@ -411,7 +416,7 @@ class ThumbnailManager {
         this.lruCache.set(pathKey, result.data, estimatedSize);
         this.dbIndexCache.set(pathKey, true);
         results.set(result.path, result.data);
-        
+
         // 立即通知回调，实现流式显示
         if (this.onThumbnailReady) {
           this.onThumbnailReady(result.path, result.data);
@@ -476,7 +481,7 @@ class ThumbnailManager {
 
           // 估算大小
           const estimatedSize = blobData.length;
-          
+
           // 更新两个缓存
           this.cache.set(pathKey, {
             pathKey,
@@ -484,7 +489,7 @@ class ThumbnailManager {
             timestamp: Date.now(),
           });
           this.lruCache.set(pathKey, blobUrl, estimatedSize);
-          
+
           console.log(`✅ 成功从数据库加载缩略图: ${pathKey} (${blobData.length} bytes)`);
           return blobUrl;
         } else {
@@ -551,7 +556,7 @@ class ThumbnailManager {
 
           // 估算大小
           const estimatedSize = blobData.length;
-          
+
           // 更新两个缓存
           this.cache.set(pathKey, {
             pathKey,
@@ -813,7 +818,7 @@ class ThumbnailManager {
         if (blobUrl) {
           // 估算大小
           const estimatedSize = 100 * 1024; // 粗略估算
-          
+
           // 更新两个缓存
           this.cache.set(pathKey, {
             pathKey,
@@ -821,7 +826,7 @@ class ThumbnailManager {
             timestamp: Date.now(),
           });
           this.lruCache.set(pathKey, blobUrl, estimatedSize);
-          
+
           // 通知回调
           if (this.onThumbnailReady) {
             this.onThumbnailReady(task.path, blobUrl);
@@ -1123,7 +1128,7 @@ class ThumbnailManager {
   updateScroll(scrollTop: number, scrollLeft: number, currentIndex: number, totalItems: number): void {
     const direction = this.predictiveLoader.updateScroll(scrollTop, scrollLeft);
     const range = this.predictiveLoader.getPredictiveRange(currentIndex, totalItems, direction);
-    
+
     // 预测性加载范围内的缩略图
     this.preloadPredictiveRange(range.start, range.end);
   }

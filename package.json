@@ -1,11 +1,11 @@
 {
-	"name": "tauri2-svelte5-shadcn",
+	"name": "neoview",
 	"private": true,
 	"version": "2.0.0",
 	"description": "A simple desktop application template combining Tauri 2 with Svelte 5 and shadcn-svelte with a basic ci/cd implemented.",
 	"author": {
-		"name": "Alysonhower Veras Vieira",
-		"email": "contato@alysonhower.dev"
+		"name": "HibernalGlow",
+		"email": "contato@HibernalGlow.dev"
 	},
 	"type": "module",
 	"resolutions": {

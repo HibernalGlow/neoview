@@ -18,26 +18,26 @@
 			backgroundColor: '#000000',
 			allowStretch: false,
 			keepAspectRatio: true,
-			smoothScaling: true,
+			smoothScaling: true
 		},
 		// 操作设置
 		operation: {
 			mouseWheelAction: 'zoom' as 'zoom' | 'page',
 			doubleClickAction: 'fullscreen' as 'fullscreen' | 'close' | 'none',
-			rightClickAction: 'menu' as 'menu' | 'back' | 'none',
+			rightClickAction: 'menu' as 'menu' | 'back' | 'none'
 		},
 		// 性能设置
 		performance: {
 			cacheSize: 500,
 			preloadPages: 3,
 			enableGpuAcceleration: true,
-			maxThreads: 4,
+			maxThreads: 4
 		},
 		// 文件关联
 		fileTypes: {
 			images: true,
 			archives: true,
-			pdf: false,
+			pdf: false
 		}
 	});
 
@@ -55,7 +55,7 @@
 		{ action: 'fullscreen', key: 'F11', description: '全屏', category: '视图' },
 		{ action: 'openFile', key: 'Ctrl+O', description: '打开文件', category: '文件' },
 		{ action: 'closeBook', key: 'Ctrl+W', description: '关闭书籍', category: '文件' },
-		{ action: 'toggleSidebar', key: 'F2', description: '切换侧边栏', category: '视图' },
+		{ action: 'toggleSidebar', key: 'F2', description: '切换侧边栏', category: '视图' }
 	]);
 
 	// 正在编辑的快捷键
@@ -71,7 +71,7 @@
 		const ctrl = event.ctrlKey;
 		const shift = event.shiftKey;
 		const alt = event.altKey;
-		
+
 		// 忽略单独的修饰键
 		if (['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) {
 			return;
@@ -79,19 +79,19 @@
 
 		// 格式化按键名称
 		let keyName = event.key;
-		
+
 		// 特殊键名映射（与 NeeView 一致）
 		const keyMap: Record<string, string> = {
 			' ': 'Space',
 			'+': 'Plus',
 			'-': 'Minus',
 			'=': 'Equal',
-			'ArrowUp': 'Up',
-			'ArrowDown': 'Down',
-			'ArrowLeft': 'Left',
-			'ArrowRight': 'Right',
+			ArrowUp: 'Up',
+			ArrowDown: 'Down',
+			ArrowLeft: 'Left',
+			ArrowRight: 'Right'
 		};
-		
+
 		if (keyMap[keyName]) {
 			keyName = keyMap[keyName];
 		} else if (keyName.length === 1) {
@@ -104,10 +104,8 @@
 		if (ctrl) modifiers.push('Ctrl');
 		if (shift) modifiers.push('Shift');
 		if (alt) modifiers.push('Alt');
-		
-		const keyString = modifiers.length > 0 
-			? `${modifiers.join('+')}+${keyName}`
-			: keyName;
+
+		const keyString = modifiers.length > 0 ? `${modifiers.join('+')}+${keyName}` : keyName;
 
 		keyBindings[index].key = keyString;
 		editingKeyIndex = null;
@@ -157,28 +155,58 @@
 	});
 </script>
 
-<div class="h-full flex flex-col bg-background">
-	<div class="p-4 border-b">
+<div class="bg-background flex h-full flex-col">
+	<div class="border-b p-4">
 		<h2 class="text-2xl font-bold">设置</h2>
-		<p class="text-sm text-muted-foreground">自定义 NeoView 的行为和外观</p>
+		<p class="text-muted-foreground text-sm">自定义 NeoView 的行为和外观</p>
 	</div>
 
 	<div class="flex-1 overflow-auto">
 		<Tabs value="display" class="w-full">
-			<TabsList class="w-full justify-start border-b rounded-none h-auto p-0">
-				<TabsTrigger value="display" class="rounded-none border-b-2 border-transparent data-[state=active]:border-primary">显示</TabsTrigger>
-				<TabsTrigger value="operation" class="rounded-none border-b-2 border-transparent data-[state=active]:border-primary">操作</TabsTrigger>
-				<TabsTrigger value="keyboard" class="rounded-none border-b-2 border-transparent data-[state=active]:border-primary">快捷键</TabsTrigger>
-				<TabsTrigger value="performance" class="rounded-none border-b-2 border-transparent data-[state=active]:border-primary">性能</TabsTrigger>
-				<TabsTrigger value="files" class="rounded-none border-b-2 border-transparent data-[state=active]:border-primary">文件</TabsTrigger>
+			<TabsList class="h-auto w-full justify-start rounded-none border-b p-0">
+				<TabsTrigger
+					value="display"
+					class="data-[state=active]:border-primary rounded-none border-b-2 border-transparent"
+					>显示</TabsTrigger
+				>
+				<TabsTrigger
+					value="operation"
+					class="data-[state=active]:border-primary rounded-none border-b-2 border-transparent"
+					>操作</TabsTrigger
+				>
+				<TabsTrigger
+					value="keyboard"
+					class="data-[state=active]:border-primary rounded-none border-b-2 border-transparent"
+					>快捷键</TabsTrigger
+				>
+				<TabsTrigger
+					value="performance"
+					class="data-[state=active]:border-primary rounded-none border-b-2 border-transparent"
+					>性能</TabsTrigger
+				>
+				<TabsTrigger
+					value="files"
+					class="data-[state=active]:border-primary rounded-none border-b-2 border-transparent"
+					>文件</TabsTrigger
+				>
 			</TabsList>
 
 			<!-- 显示设置 -->
-			<TabsContent value="display" class="p-4 space-y-6">
+			<TabsContent value="display" class="space-y-6 p-4">
 				<div class="space-y-2">
 					<Label>图像缩放模式</Label>
 					<Select.Root
-						selected={{ value: settings.display.imageScaling, label: settings.display.imageScaling === 'fit' ? '适应窗口' : settings.display.imageScaling === 'width' ? '适应宽度' : settings.display.imageScaling === 'height' ? '适应高度' : '原始大小' }}
+						selected={{
+							value: settings.display.imageScaling,
+							label:
+								settings.display.imageScaling === 'fit'
+									? '适应窗口'
+									: settings.display.imageScaling === 'width'
+										? '适应宽度'
+										: settings.display.imageScaling === 'height'
+											? '适应高度'
+											: '原始大小'
+						}}
 						onSelectedChange={(v) => v && (settings.display.imageScaling = v.value as any)}
 					>
 						<Select.Trigger class="w-full" />
@@ -213,11 +241,14 @@
 			</TabsContent>
 
 			<!-- 操作设置 -->
-			<TabsContent value="operation" class="p-4 space-y-6">
+			<TabsContent value="operation" class="space-y-6 p-4">
 				<div class="space-y-2">
 					<Label>鼠标滚轮动作</Label>
 					<Select.Root
-						selected={{ value: settings.operation.mouseWheelAction, label: settings.operation.mouseWheelAction === 'zoom' ? '缩放' : '翻页' }}
+						selected={{
+							value: settings.operation.mouseWheelAction,
+							label: settings.operation.mouseWheelAction === 'zoom' ? '缩放' : '翻页'
+						}}
 						onSelectedChange={(v) => v && (settings.operation.mouseWheelAction = v.value as any)}
 					>
 						<Select.Trigger class="w-full" />
@@ -231,7 +262,15 @@
 				<div class="space-y-2">
 					<Label>双击动作</Label>
 					<Select.Root
-						selected={{ value: settings.operation.doubleClickAction, label: settings.operation.doubleClickAction === 'fullscreen' ? '全屏' : settings.operation.doubleClickAction === 'close' ? '关闭' : '无' }}
+						selected={{
+							value: settings.operation.doubleClickAction,
+							label:
+								settings.operation.doubleClickAction === 'fullscreen'
+									? '全屏'
+									: settings.operation.doubleClickAction === 'close'
+										? '关闭'
+										: '无'
+						}}
 						onSelectedChange={(v) => v && (settings.operation.doubleClickAction = v.value as any)}
 					>
 						<Select.Trigger class="w-full" />
@@ -246,7 +285,15 @@
 				<div class="space-y-2">
 					<Label>右键动作</Label>
 					<Select.Root
-						selected={{ value: settings.operation.rightClickAction, label: settings.operation.rightClickAction === 'menu' ? '菜单' : settings.operation.rightClickAction === 'back' ? '返回' : '无' }}
+						selected={{
+							value: settings.operation.rightClickAction,
+							label:
+								settings.operation.rightClickAction === 'menu'
+									? '菜单'
+									: settings.operation.rightClickAction === 'back'
+										? '返回'
+										: '无'
+						}}
 						onSelectedChange={(v) => v && (settings.operation.rightClickAction = v.value as any)}
 					>
 						<Select.Trigger class="w-full" />
@@ -263,16 +310,18 @@
 			<TabsContent value="keyboard" class="p-4">
 				<div class="space-y-4">
 					<!-- 快捷键分组显示（参考 NeeView） -->
-					{#each [...new Set(keyBindings.map(k => k.category))] as category}
+					{#each [...new Set(keyBindings.map((k) => k.category))] as category}
 						<div class="space-y-2">
-							<h4 class="font-semibold text-sm text-muted-foreground px-2">{category}</h4>
+							<h4 class="text-muted-foreground px-2 text-sm font-semibold">{category}</h4>
 							<div class="space-y-1">
-								{#each keyBindings.filter(k => k.category === category) as binding, index}
+								{#each keyBindings.filter((k) => k.category === category) as binding, index}
 									{@const globalIndex = keyBindings.indexOf(binding)}
-									<div class="flex items-center gap-3 py-2 px-2 rounded-md hover:bg-accent/50 transition-colors">
+									<div
+										class="hover:bg-accent/50 flex items-center gap-3 rounded-md px-2 py-2 transition-colors"
+									>
 										<div class="flex-1">
 											<div class="text-sm font-medium">{binding.description}</div>
-											<div class="text-xs text-muted-foreground">{binding.action}</div>
+											<div class="text-muted-foreground text-xs">{binding.action}</div>
 										</div>
 										<div class="flex items-center gap-2">
 											{#if editingKeyIndex === globalIndex}
@@ -291,7 +340,7 @@
 														variant="ghost"
 														size="sm"
 														onclick={cancelEditKey}
-														class="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+														class="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 p-0"
 													>
 														×
 													</Button>
@@ -327,11 +376,11 @@
 			</TabsContent>
 
 			<!-- 性能设置 -->
-			<TabsContent value="performance" class="p-4 space-y-6">
+			<TabsContent value="performance" class="space-y-6 p-4">
 				<div class="space-y-2">
 					<div class="flex items-center justify-between">
 						<Label>缓存大小 (MB)</Label>
-						<span class="text-sm text-muted-foreground">{settings.performance.cacheSize}</span>
+						<span class="text-muted-foreground text-sm">{settings.performance.cacheSize}</span>
 					</div>
 					<input
 						type="range"
@@ -346,7 +395,7 @@
 				<div class="space-y-2">
 					<div class="flex items-center justify-between">
 						<Label>预加载页数</Label>
-						<span class="text-sm text-muted-foreground">{settings.performance.preloadPages}</span>
+						<span class="text-muted-foreground text-sm">{settings.performance.preloadPages}</span>
 					</div>
 					<input
 						type="range"
@@ -366,7 +415,7 @@
 				<div class="space-y-2">
 					<div class="flex items-center justify-between">
 						<Label>最大线程数</Label>
-						<span class="text-sm text-muted-foreground">{settings.performance.maxThreads}</span>
+						<span class="text-muted-foreground text-sm">{settings.performance.maxThreads}</span>
 					</div>
 					<input
 						type="range"
@@ -380,12 +429,14 @@
 
 				<!-- 缩略图设置 -->
 				<div class="border-t pt-6">
-					<h3 class="font-semibold mb-4">🖼️ 缩略图设置</h3>
-					
+					<h3 class="mb-4 font-semibold">🖼️ 缩略图设置</h3>
+
 					<div class="space-y-2">
 						<div class="flex items-center justify-between">
 							<Label>本地文件并发数</Label>
-							<span class="text-sm text-muted-foreground">{settings.performance.thumbnail?.maxConcurrentLocal || 6}</span>
+							<span class="text-muted-foreground text-sm"
+								>{settings.performance.thumbnail?.maxConcurrentLocal || 6}</span
+							>
 						</div>
 						<input
 							type="range"
@@ -396,11 +447,13 @@
 							class="w-full"
 						/>
 					</div>
-					
+
 					<div class="space-y-2">
 						<div class="flex items-center justify-between">
 							<Label>压缩包并发数</Label>
-							<span class="text-sm text-muted-foreground">{settings.performance.thumbnail?.maxConcurrentArchive || 3}</span>
+							<span class="text-muted-foreground text-sm"
+								>{settings.performance.thumbnail?.maxConcurrentArchive || 3}</span
+							>
 						</div>
 						<input
 							type="range"
@@ -411,11 +464,13 @@
 							class="w-full"
 						/>
 					</div>
-					
+
 					<div class="space-y-2">
 						<div class="flex items-center justify-between">
 							<Label>视频处理并发数</Label>
-							<span class="text-sm text-muted-foreground">{settings.performance.thumbnail?.maxConcurrentVideo || 2}</span>
+							<span class="text-muted-foreground text-sm"
+								>{settings.performance.thumbnail?.maxConcurrentVideo || 2}</span
+							>
 						</div>
 						<input
 							type="range"
@@ -430,7 +485,7 @@
 			</TabsContent>
 
 			<!-- 文件设置 -->
-			<TabsContent value="files" class="p-4 space-y-6">
+			<TabsContent value="files" class="space-y-6 p-4">
 				<div class="flex items-center justify-between">
 					<Label>支持图像文件</Label>
 					<Switch bind:checked={settings.fileTypes.images} />
@@ -450,7 +505,7 @@
 	</div>
 
 	<!-- 底部按钮 -->
-	<div class="p-4 border-t flex justify-end gap-2">
+	<div class="flex justify-end gap-2 border-t p-4">
 		<Button variant="outline" onclick={resetSettings}>重置</Button>
 		<Button onclick={saveSettings}>保存设置</Button>
 	</div>

@@ -201,54 +201,59 @@
 	});
 </script>
 
-<div class="h-full flex flex-col bg-background">
-	<!-- 标题栏 -->
-	<div class="p-4 border-b flex items-center justify-between">
-		<div class="flex items-center gap-2">
-			<Clock class="h-5 w-5" />
-			<h3 class="font-semibold">历史记录</h3>
-			<span class="text-sm text-muted-foreground">({history.length})</span>
+<div class="h-full flex flex-col bg-background overflow-hidden">
+	<div class="sticky top-0 z-20 flex flex-col border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/70">
+		<!-- 标题栏 -->
+		<div class="p-4 border-b flex items-center justify-between">
+			<div class="flex items-center gap-2">
+				<Clock class="h-5 w-5" />
+				<h3 class="font-semibold">历史记录</h3>
+				<span class="text-sm text-muted-foreground">({history.length})</span>
+			</div>
+			<div class="flex items-center gap-2">
+				<Button variant="ghost" size="sm" onclick={toggleViewMode} title="切换视图">
+					{#if viewMode === 'list'}
+						<Grid3x3 class="h-4 w-4" />
+					{:else}
+						<List class="h-4 w-4" />
+					{/if}
+				</Button>
+				<Button variant="ghost" size="sm" onclick={clearHistory}>
+					清除全部
+				</Button>
+			</div>
 		</div>
-		<div class="flex items-center gap-2">
-			<Button variant="ghost" size="sm" onclick={toggleViewMode} title="切换视图">
-				{#if viewMode === 'list'}
-					<Grid3x3 class="h-4 w-4" />
+		<div class="px-4 py-2 border-b text-[11px] text-muted-foreground flex flex-wrap gap-3 items-center bg-muted/30">
+			<span>当前书籍：{$bookState.currentBookPath ?? '—'}</span>
+			<span>
+				页码：
+				{#if $bookState.currentBookPath}
+					{$bookState.currentPageIndex + 1}/{Math.max($bookState.totalPages, 1)}
 				{:else}
-					<List class="h-4 w-4" />
+					—
 				{/if}
-			</Button>
-			<Button variant="ghost" size="sm" onclick={clearHistory}>
-				清除全部
-			</Button>
+			</span>
+			<span class="flex items-center gap-1">
+				<Activity class="w-3 h-3" />
+				任务 {$viewerState.taskCursor.running}/{$viewerState.taskCursor.concurrency}
+			</span>
+		</div>
+
+		<!-- 搜索栏 -->
+		<div class="border-b border-border bg-background/95 px-4 py-3">
+			<SearchBar
+				placeholder="搜索历史记录..."
+				onSearchChange={(query) => {
+					searchQuery = query;
+				}}
+				storageKey="neoview-history-search-history"
+			/>
 		</div>
 	</div>
-	<div class="px-4 py-2 border-b text-[11px] text-muted-foreground flex flex-wrap gap-3 items-center bg-muted/30">
-		<span>当前书籍：{$bookState.currentBookPath ?? '—'}</span>
-		<span>
-			页码：
-			{#if $bookState.currentBookPath}
-				{$bookState.currentPageIndex + 1}/{Math.max($bookState.totalPages, 1)}
-			{:else}
-				—
-			{/if}
-		</span>
-		<span class="flex items-center gap-1">
-			<Activity class="w-3 h-3" />
-			任务 {$viewerState.taskCursor.running}/{$viewerState.taskCursor.concurrency}
-		</span>
-	</div>
 
-	<!-- 搜索栏 -->
-	<SearchBar
-		placeholder="搜索历史记录..."
-		onSearchChange={(query) => {
-			searchQuery = query;
-		}}
-		storageKey="neoview-history-search-history"
-	/>
-
-	<!-- 历史列表 -->
-	<div class="flex-1 overflow-auto">
+	<div class="flex-1 min-h-0 overflow-hidden">
+		<!-- 历史列表 -->
+		<div class="flex-1 overflow-auto">
 		{#if filteredHistory.length === 0 && searchQuery.trim()}
 			<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
 				<div class="text-center space-y-2">
@@ -336,6 +341,7 @@
 				</div>
 			</div>
 		{/if}
+		</div>
 	</div>
 
 	<!-- 右键菜单 -->

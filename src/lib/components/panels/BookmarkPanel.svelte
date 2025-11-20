@@ -225,55 +225,60 @@ function loadThumbnails(bookmarkList: any[]) {
 	});
 </script>
 
-<div class="h-full flex flex-col bg-background">
-	<!-- 标题栏 -->
-	<div class="p-4 border-b">
-		<div class="flex items-center justify-between mb-3">
-			<div class="flex items-center gap-2">
-				<Bookmark class="h-5 w-5" />
-				<h3 class="font-semibold">书签</h3>
-				<span class="text-sm text-muted-foreground">({filteredBookmarks.length})</span>
+<div class="h-full flex flex-col bg-background overflow-hidden">
+	<div class="sticky top-0 z-20 flex flex-col border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/70">
+		<!-- 标题栏 -->
+		<div class="p-4 border-b">
+			<div class="flex items-center justify-between mb-3">
+				<div class="flex items-center gap-2">
+					<Bookmark class="h-5 w-5" />
+					<h3 class="font-semibold">书签</h3>
+					<span class="text-sm text-muted-foreground">({filteredBookmarks.length})</span>
+				</div>
+				<div class="flex items-center gap-2">
+					<Button variant="ghost" size="sm" onclick={toggleViewMode} title="切换视图">
+						{#if viewMode === 'list'}
+							<Grid3x3 class="h-4 w-4" />
+						{:else}
+							<List class="h-4 w-4" />
+						{/if}
+					</Button>
+					<BookmarkSortPanel 
+						bookmarks={bookmarks} 
+						onSort={handleBookmarkSort}
+					/>
+				</div>
 			</div>
-			<div class="flex items-center gap-2">
-				<Button variant="ghost" size="sm" onclick={toggleViewMode} title="切换视图">
-					{#if viewMode === 'list'}
-						<Grid3x3 class="h-4 w-4" />
-					{:else}
-						<List class="h-4 w-4" />
-					{/if}
-				</Button>
-				<BookmarkSortPanel 
-					bookmarks={bookmarks} 
-					onSort={handleBookmarkSort}
+			<div class="border-b border-border bg-background/95 px-4 pb-4">
+				<SearchBar
+					placeholder="搜索书签..."
+					onSearchChange={(query: string) => {
+						searchQuery = query;
+					}}
+					storageKey="neoview-bookmark-search-history"
 				/>
 			</div>
 		</div>
-		<SearchBar
-			placeholder="搜索书签..."
-			onSearchChange={(query: string) => {
-				searchQuery = query;
-			}}
-			storageKey="neoview-bookmark-search-history"
-		/>
-	</div>
-	<div class="px-4 py-2 border-b flex flex-wrap gap-3 text-[11px] text-muted-foreground bg-muted/30">
-		<span>当前书籍：{$bookState.currentBookPath ?? '—'}</span>
-		<span>
-			页码：
-			{#if $bookState.currentBookPath}
-				{$bookState.currentPageIndex + 1}/{Math.max($bookState.totalPages, 1)}
-			{:else}
-				—
-			{/if}
-		</span>
-		<span class="flex items-center gap-1">
-			<Activity class="w-3 h-3" />
-			任务 {$viewerState.taskCursor.running}/{$viewerState.taskCursor.concurrency}
-		</span>
+		<div class="px-4 py-2 border-b flex flex-wrap gap-3 text-[11px] text-muted-foreground bg-muted/30">
+			<span>当前书籍：{$bookState.currentBookPath ?? '—'}</span>
+			<span>
+				页码：
+				{#if $bookState.currentBookPath}
+					{$bookState.currentPageIndex + 1}/{Math.max($bookState.totalPages, 1)}
+				{:else}
+					—
+				{/if}
+			</span>
+			<span class="flex items-center gap-1">
+				<Activity class="w-3 h-3" />
+				任务 {$viewerState.taskCursor.running}/{$viewerState.taskCursor.concurrency}
+			</span>
+		</div>
 	</div>
 
-	<!-- 书签列表 -->
-	<div class="flex-1 overflow-auto">
+	<div class="flex-1 min-h-0 overflow-hidden">
+		<!-- 书签列表 -->
+		<div class="flex-1 overflow-auto">
 			{#if filteredBookmarks.length === 0 || !filteredBookmarks}
 			<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
 				<div class="relative mb-4">
@@ -360,6 +365,7 @@ function loadThumbnails(bookmarkList: any[]) {
 				</div>
 			</div>
 		{/if}
+		</div>
 	</div>
 
 	<!-- 右键菜单 -->

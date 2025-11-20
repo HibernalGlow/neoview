@@ -29,7 +29,7 @@
 	import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
 	import { idbSet } from '$lib/utils/idb';
 	import { getFileMetadata } from '$lib/api/fs';
-	import { invoke } from '@tauri-apps/api/core';
+	import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 	import type { BookInfo, Page } from '$lib/types';
 	import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 	import { isVideoFile } from '$lib/utils/videoUtils';
@@ -75,8 +75,9 @@
 
 	// 视频相关状态
 	let isCurrentPageVideo = $state(false);
-	let videoBlob = $state<Blob | null>(null);
+	let videoUrl = $state<string | null>(null);
 	let currentVideoRequestId = 0;
+	let videoUrlRevokeNeeded = false;
 
 	// 预超分进度管理
 	let preUpscaleProgress = $state(0); // 预超分进度 (0-100)
@@ -118,6 +119,26 @@
 		const ext = name.split('.').pop()?.toLowerCase();
 		if (!ext) return undefined;
 		return VIDEO_MIME_TYPES[ext];
+	}
+
+	function isVideoPage(page: Page): boolean {
+		return Boolean(page && (isVideoFile(page.name) || isVideoFile(page.path)));
+	}
+
+	function clearVideoPlaybackState() {
+		if (videoUrlRevokeNeeded && videoUrl) {
+			URL.revokeObjectURL(videoUrl);
+		}
+		videoUrl = null;
+		videoUrlRevokeNeeded = false;
+	}
+
+	function setVideoUrl(url: string, revokeNeeded: boolean) {
+		if (videoUrlRevokeNeeded && videoUrl) {
+			URL.revokeObjectURL(videoUrl);
+		}
+		videoUrl = url;
+		videoUrlRevokeNeeded = revokeNeeded;
 	}
 
 	const viewerState = createAppStateStore((state) => state.viewer);
@@ -220,36 +241,37 @@
 		}
 
 		const requestId = ++currentVideoRequestId;
-		loading = true;
-		loadingVisible = true;
 		error = null;
-		updateViewerState({ loading: true });
+
+		if (book.type === 'archive') {
+			loading = true;
+			loadingVisible = true;
+			updateViewerState({ loading: true });
+		}
 
 		try {
-			const traceId = createImageTraceId('viewer-video', page.index);
-			let binaryData: number[];
-
 			if (book.type === 'archive') {
-				binaryData = await invoke<number[]>('load_video_from_archive', {
+				const traceId = createImageTraceId('viewer-video', page.index);
+				const binaryData = await invoke<number[]>('load_video_from_archive', {
 					archivePath: book.path,
 					filePath: page.path,
 					traceId,
 					pageIndex: page.index
 				});
+				if (requestId !== currentVideoRequestId) {
+					return;
+				}
+				const mimeType = getVideoMimeType(page.name) ?? 'video/mp4';
+				const blob = new Blob([new Uint8Array(binaryData)], { type: mimeType });
+				const objectUrl = URL.createObjectURL(blob);
+				setVideoUrl(objectUrl, true);
 			} else {
-				binaryData = await invoke<number[]>('load_video', {
-					path: page.path,
-					traceId,
-					pageIndex: page.index
-				});
+				const fileUrl = convertFileSrc(page.path);
+				if (requestId !== currentVideoRequestId) {
+					return;
+				}
+				setVideoUrl(fileUrl, false);
 			}
-
-			if (requestId !== currentVideoRequestId) {
-				return;
-			}
-
-			const mimeType = getVideoMimeType(page.name) ?? 'video/mp4';
-			videoBlob = new Blob([new Uint8Array(binaryData)], { type: mimeType });
 		} catch (err) {
 			if (requestId !== currentVideoRequestId) {
 				return;
@@ -262,9 +284,9 @@
 			} else {
 				error = '加载视频失败';
 			}
-			videoBlob = null;
+			clearVideoPlaybackState();
 		} finally {
-			if (requestId === currentVideoRequestId) {
+			if (book.type === 'archive' && requestId === currentVideoRequestId) {
 				loading = false;
 				loadingVisible = false;
 				updateViewerState({ loading: false });
@@ -586,10 +608,10 @@
 		if (currentPage) {
 			bookStore.setCurrentImage(currentPage);
 			error = null;
-			const videoPage = isVideoFile(currentPage.name);
+			const videoPage = isVideoPage(currentPage);
 			if (videoPage) {
 				isCurrentPageVideo = true;
-				videoBlob = null;
+				clearVideoPlaybackState();
 				imageData = null;
 				imageData2 = null;
 				derivedUpscaledUrl = null;
@@ -598,9 +620,9 @@
 				lastLoadedHash = null;
 				void loadVideoForPage(currentPage);
 			} else {
-				if (isCurrentPageVideo || videoBlob) {
+				if (isCurrentPageVideo || videoUrl) {
 					currentVideoRequestId++;
-					videoBlob = null;
+					clearVideoPlaybackState();
 				}
 				isCurrentPageVideo = false;
 				if (preloadManager && currentIndex !== lastRequestedPageIndex) {
@@ -614,7 +636,7 @@
 			lastRequestedPageIndex = -1;
 			lastLoadedPageIndex = -1;
 			lastLoadedHash = null;
-			videoBlob = null;
+			clearVideoPlaybackState();
 			isCurrentPageVideo = false;
 			error = null;
 			infoPanelStore.resetImageInfo();
@@ -638,7 +660,7 @@
 			imageData = null;
 			imageData2 = null;
 			derivedUpscaledUrl = null;
-			videoBlob = null;
+			clearVideoPlaybackState();
 			isCurrentPageVideo = false;
 			currentVideoRequestId++;
 			if (lastUpscaledObjectUrl) {
@@ -1135,8 +1157,8 @@
 		{:else if error}
 			<div class="text-red-500">Error: {error}</div>
 		{:else if isCurrentPageVideo}
-			{#if videoBlob}
-				<VideoPlayer videoBlob={videoBlob} />
+			{#if videoUrl}
+				<VideoPlayer src={videoUrl} />
 			{:else}
 				<div class="text-white">加载视频中...</div>
 			{/if}

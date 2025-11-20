@@ -29,8 +29,8 @@ export async function loadEMMMetadata(
 	hash: string,
 	translationDbPath?: string
 ): Promise<EMMMetadata | null> {
-	return await invoke<EMMMetadata | null>('load_emm_metadata', { 
-		dbPath, 
+	return await invoke<EMMMetadata | null>('load_emm_metadata', {
+		dbPath,
 		hash,
 		translationDbPath: translationDbPath || null
 	});
@@ -44,8 +44,8 @@ export async function loadEMMMetadataByPath(
 	filePath: string,
 	translationDbPath?: string
 ): Promise<EMMMetadata | null> {
-	return await invoke<EMMMetadata | null>('load_emm_metadata_by_path', { 
-		dbPath, 
+	return await invoke<EMMMetadata | null>('load_emm_metadata_by_path', {
+		dbPath,
 		filePath,
 		translationDbPath: translationDbPath || null
 	});

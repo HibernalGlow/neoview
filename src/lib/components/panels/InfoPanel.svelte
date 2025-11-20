@@ -8,7 +8,7 @@
 	import { infoPanelStore, type ViewerBookInfo, type ViewerImageInfo } from '$lib/stores/infoPanel.svelte';
 	import { FileSystemAPI } from '$lib/api';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
-	import { emmMetadataStore, isCollectTagHelper, collectTagMap } from '$lib/stores/emmMetadata.svelte';
+	import { emmMetadataStore, isCollectTagHelper, collectTagMap, getTranslatedTag } from '$lib/stores/emmMetadata.svelte';
 	import type { EMMCollectTag } from '$lib/api/emm';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import * as Input from '$lib/components/ui/input';
@@ -25,9 +25,11 @@
 	let emmDatabasePaths = $state<string[]>([]);
 	let emmTranslationDbPath = $state<string>('');
 	let emmSettingPath = $state<string>('');
+	let emmTranslationJsonPath = $state<string>('');
 	let emmDatabasePathInput = $state<string>('');
 	let enableEMM = $state(true);
 	let fileListTagDisplayMode = $state<'all' | 'collect' | 'none'>('collect');
+	let translationMap = $state<Map<string, string>>(new Map());
 
 	// 加载收藏标签（确保初始化完成）
 	$effect(() => {
@@ -40,16 +42,30 @@
 		});
 	});
 
+	// 订阅 EMM Store 变化
+	$effect(() => {
+		const unsubscribe = emmMetadataStore.subscribe(state => {
+			enableEMM = state.enableEMM;
+			fileListTagDisplayMode = state.fileListTagDisplayMode;
+			emmTranslationJsonPath = state.translationJsonPath || '';
+			translationMap = state.translationMap;
+		});
+		return unsubscribe;
+	});
+
 	// 获取所有标签（扁平化，高亮收藏的）
 	const allTags = $derived(() => {
 		if (!bookInfo?.emmMetadata?.tags) {
 			return [];
 		}
 		
-		const tags: Array<{ category: string; tag: string; isCollect: boolean; color?: string; display?: string }> = [];
+		const tags: Array<{ category: string; tag: string; isCollect: boolean; color?: string; display: string }> = [];
 		// 使用全局 store 中的 map
 		const map = $collectTagMap;
 		const normalize = (s: string) => s.trim().toLowerCase();
+		
+		// 使用响应式的 translationMap
+		const currentTranslationMap = translationMap;
 
 		for (const [category, tagList] of Object.entries(bookInfo.emmMetadata.tags)) {
 			for (const tag of tagList) {
@@ -65,13 +81,16 @@
 				
 				const isCollect = !!collectTag;
 				
+				// 获取翻译后的显示
+				const translated = getTranslatedTag(`${category}:${tag}`, currentTranslationMap);
+				
 				tags.push({
 					category,
 					tag,
 					isCollect,
 					color: collectTag?.color,
-					// 如果是收藏标签，优先使用收藏配置的 display，否则使用默认格式
-					display: collectTag?.display || `${category}:${tag}`
+					// 如果是收藏标签，优先使用收藏配置的 display，否则使用翻译后的格式
+					display: collectTag?.display || translated.display
 				});
 			}
 		}
@@ -83,117 +102,6 @@
 			return 0;
 		});
 	});
-
-	$effect(() => {
-		const unsubscribe = infoPanelStore.subscribe((state) => {
-			imageInfo = state.imageInfo;
-			bookInfo = state.bookInfo;
-		});
-		return unsubscribe;
-	});
-
-	function formatFileSize(bytes?: number): string {
-		if (bytes === undefined) return '—';
-		if (bytes < 1024) return `${bytes} B`;
-		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
-		if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-		return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-	}
-
-	function formatDate(date?: string): string {
-		if (!date) return '—';
-		const parsed = new Date(date);
-		if (Number.isNaN(parsed.getTime())) {
-			return date;
-		}
-		return parsed.toLocaleString('zh-CN');
-	}
-
-	function formatBookType(type?: string): string {
-		if (!type) return '未知';
-		switch (type.toLowerCase()) {
-			case 'folder':
-				return '文件夹';
-			case 'archive':
-				return '压缩包';
-			case 'pdf':
-				return 'PDF';
-			case 'media':
-				return '媒体';
-			default:
-				return type;
-		}
-	}
-
-	// 复制路径
-	function copyPath() {
-		if (bookInfo?.path) {
-			navigator.clipboard.writeText(bookInfo.path);
-		} else if (imageInfo?.path) {
-			navigator.clipboard.writeText(imageInfo.path);
-		}
-		hideContextMenu();
-	}
-
-	// 在资源管理器中打开
-	async function openInExplorer() {
-		const path = bookInfo?.path || imageInfo?.path;
-		if (path) {
-			try {
-				await FileSystemAPI.showInFileManager(path);
-			} catch (err) {
-				console.error('在资源管理器中打开失败:', err);
-			}
-		}
-		hideContextMenu();
-	}
-
-	// 显示右键菜单
-	function showContextMenu(e: MouseEvent) {
-		e.preventDefault();
-		e.stopPropagation();
-		
-		const viewportWidth = window.innerWidth;
-		const viewportHeight = window.innerHeight;
-		
-		let menuX = e.clientX;
-		let menuY = e.clientY;
-		
-		const menuWidth = 180;
-		if (e.clientX + menuWidth > viewportWidth) {
-			menuX = viewportWidth - menuWidth - 10;
-		}
-		if (menuX < 10) {
-			menuX = 10;
-		}
-		
-		const maxMenuHeight = viewportHeight * 0.7;
-		if (menuY + maxMenuHeight > viewportHeight) {
-			menuY = viewportHeight - maxMenuHeight - 10;
-		}
-		
-		contextMenu = { x: menuX, y: menuY, open: true };
-	}
-
-	// 隐藏右键菜单
-	function hideContextMenu() {
-		contextMenu = { x: 0, y: 0, open: false };
-	}
-	
-	// 加载 EMM 配置
-	function loadEMMConfig() {
-		emmDatabasePaths = emmMetadataStore.getDatabasePaths();
-		emmTranslationDbPath = emmMetadataStore.getTranslationDbPath() || '';
-		emmSettingPath = emmMetadataStore.getSettingPath() || '';
-		
-		// 从 store 订阅获取最新状态
-		const unsubscribe = emmMetadataStore.subscribe(state => {
-			enableEMM = state.enableEMM;
-			fileListTagDisplayMode = state.fileListTagDisplayMode;
-		});
-		// 立即取消订阅，我们只需要当前值
-		unsubscribe();
-	}
 	
 	// 选择数据库文件
 	async function selectDatabaseFile() {
@@ -261,6 +169,40 @@
 		}
 	}
 	
+	// 选择翻译源文件 (db.text.json)
+	async function selectTranslationJsonFile() {
+		try {
+			const selected = await open({
+				filters: [{
+					name: 'JSON File',
+					extensions: ['json']
+				}]
+			});
+			
+			if (selected) {
+				let path = '';
+				if (typeof selected === 'string') {
+					path = selected;
+				} else if (Array.isArray(selected)) {
+					const arr = selected as unknown[];
+					if (arr.length > 0) {
+						const first = arr[0];
+						path = typeof first === 'string' ? first : 
+							(first && typeof first === 'object' && 'path' in first ? (first as { path: string }).path : '');
+					}
+				} else if (selected && typeof selected === 'object' && 'path' in selected) {
+					path = (selected as { path: string }).path;
+				}
+				
+				if (path) {
+					emmTranslationJsonPath = path;
+				}
+			}
+		} catch (err) {
+			console.error('选择翻译源文件失败:', err);
+		}
+	}
+	
 	// 选择设置文件
 	async function selectSettingFile() {
 		try {
@@ -316,6 +258,9 @@
 		}
 		if (emmSettingPath) {
 			await emmMetadataStore.setManualSettingPath(emmSettingPath);
+		}
+		if (emmTranslationJsonPath) {
+			await emmMetadataStore.setTranslationJsonPath(emmTranslationJsonPath);
 		}
 		
 		// 保存新设置
@@ -556,6 +501,27 @@
 										variant="outline"
 										size="sm"
 										onclick={selectTranslationDbFile}
+										class="h-8"
+									>
+										<FolderOpen class="h-3 w-3 mr-1" />
+										选择
+									</Button.Root>
+								</div>
+							</div>
+
+							<!-- 翻译 JSON 路径配置 (db.text.json) -->
+							<div class="space-y-2">
+								<div class="text-xs font-medium text-muted-foreground">翻译源文件路径 (db.text.json)</div>
+								<div class="flex items-center gap-2">
+									<Input.Root
+										bind:value={emmTranslationJsonPath}
+										placeholder="输入 db.text.json 路径或点击选择..."
+										class="flex-1 text-xs font-mono"
+									/>
+									<Button.Root
+										variant="outline"
+										size="sm"
+										onclick={selectTranslationJsonFile}
 										class="h-8"
 									>
 										<FolderOpen class="h-3 w-3 mr-1" />

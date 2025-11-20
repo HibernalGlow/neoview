@@ -3,7 +3,8 @@
  * 管理 exhentai-manga-manager 的元数据缓存
  */
 
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
+import { readTextFile } from '@tauri-apps/plugin-fs';
 import * as EMMAPI from '$lib/api/emm';
 import type { EMMMetadata, EMMCollectTag } from '$lib/api/emm';
 
@@ -23,12 +24,15 @@ interface EMMMetadataState {
 	// 手动配置的翻译数据库路径
 	manualTranslationDbPath?: string;
 	// 手动配置的设置文件路径
-	// 手动配置的设置文件路径
 	manualSettingPath?: string;
 	// 全局开关：是否启用 EMM 数据读取
 	enableEMM: boolean;
 	// 文件列表标签显示模式
 	fileListTagDisplayMode: 'all' | 'collect' | 'none';
+	// 翻译映射: namespace:tag -> translated_name
+	translationMap: Map<string, string>;
+	// 翻译数据库路径 (db.text.json)
+	translationJsonPath?: string;
 }
 
 const STORAGE_KEY_DB_PATHS = 'neoview-emm-database-paths';
@@ -36,6 +40,7 @@ const STORAGE_KEY_TRANSLATION_DB_PATH = 'neoview-emm-translation-db-path';
 const STORAGE_KEY_SETTING_PATH = 'neoview-emm-setting-path';
 const STORAGE_KEY_ENABLE_EMM = 'neoview-emm-enable';
 const STORAGE_KEY_FILE_LIST_TAG_MODE = 'neoview-emm-file-list-tag-mode';
+const STORAGE_KEY_TRANSLATION_JSON_PATH = 'neoview-emm-translation-json-path';
 
 // 从 localStorage 加载手动配置的路径
 function loadSettings(): {
@@ -44,6 +49,7 @@ function loadSettings(): {
 	settingPath?: string;
 	enableEMM: boolean;
 	fileListTagDisplayMode: 'all' | 'collect' | 'none';
+	translationJsonPath?: string;
 } {
 	try {
 		const dbPathsStr = localStorage.getItem(STORAGE_KEY_DB_PATHS);
@@ -51,13 +57,15 @@ function loadSettings(): {
 		const settingPathStr = localStorage.getItem(STORAGE_KEY_SETTING_PATH);
 		const enableEMMStr = localStorage.getItem(STORAGE_KEY_ENABLE_EMM);
 		const fileListTagModeStr = localStorage.getItem(STORAGE_KEY_FILE_LIST_TAG_MODE);
+		const translationJsonPathStr = localStorage.getItem(STORAGE_KEY_TRANSLATION_JSON_PATH);
 
 		return {
 			databasePaths: dbPathsStr ? JSON.parse(dbPathsStr) : [],
 			translationDbPath: translationDbPathStr || undefined,
 			settingPath: settingPathStr || undefined,
 			enableEMM: enableEMMStr !== 'false', // 默认为 true
-			fileListTagDisplayMode: (fileListTagModeStr as 'all' | 'collect' | 'none') || 'collect' // 默认为 collect
+			fileListTagDisplayMode: (fileListTagModeStr as 'all' | 'collect' | 'none') || 'collect', // 默认为 collect
+			translationJsonPath: translationJsonPathStr || undefined
 		};
 	} catch (e) {
 		console.error('加载 EMM 配置失败:', e);
@@ -75,7 +83,8 @@ function saveSettings(
 	translationDbPath?: string,
 	settingPath?: string,
 	enableEMM?: boolean,
-	fileListTagDisplayMode?: 'all' | 'collect' | 'none'
+	fileListTagDisplayMode?: 'all' | 'collect' | 'none',
+	translationJsonPath?: string
 ) {
 	try {
 		localStorage.setItem(STORAGE_KEY_DB_PATHS, JSON.stringify(databasePaths));
@@ -95,6 +104,11 @@ function saveSettings(
 		if (fileListTagDisplayMode) {
 			localStorage.setItem(STORAGE_KEY_FILE_LIST_TAG_MODE, fileListTagDisplayMode);
 		}
+		if (translationJsonPath) {
+			localStorage.setItem(STORAGE_KEY_TRANSLATION_JSON_PATH, translationJsonPath);
+		} else {
+			localStorage.removeItem(STORAGE_KEY_TRANSLATION_JSON_PATH);
+		}
 	} catch (e) {
 		console.error('保存 EMM 配置失败:', e);
 	}
@@ -112,7 +126,9 @@ const { subscribe, set, update } = writable<EMMMetadataState>({
 	manualTranslationDbPath: initialSettings.translationDbPath,
 	manualSettingPath: initialSettings.settingPath,
 	enableEMM: initialSettings.enableEMM,
-	fileListTagDisplayMode: initialSettings.fileListTagDisplayMode
+	fileListTagDisplayMode: initialSettings.fileListTagDisplayMode,
+	translationMap: new Map(),
+	translationJsonPath: initialSettings.translationJsonPath
 });
 
 // 检查标签是否为收藏标签
@@ -125,12 +141,126 @@ function isCollectTag(tag: string, collectTags: EMMCollectTag[]): EMMCollectTag 
 	return null;
 }
 
+// 类别缩写映射
+const CATEGORY_ABBR: Record<string, string> = {
+	'artist': 'a',
+	'character': 'c',
+	'female': 'f',
+	'male': 'm',
+	'parody': 'p',
+	'group': 'g',
+	'language': 'l',
+	'reclass': 'r',
+	'mixed': 'mx',
+	'other': 'o',
+	'cosplayer': 'cos'
+};
+
+/**
+ * 获取翻译后的标签显示
+ * @param fullTag 完整标签 "category:tag"
+ * @param translationMap 翻译映射
+ * @returns 格式化后的标签 "abbr:translated"
+ */
+export function getTranslatedTag(fullTag: string, translationMap: Map<string, string>): { display: string; original: string } {
+	const [category, tag] = fullTag.includes(':') ? fullTag.split(':', 2) : ['', fullTag];
+	const normalize = (s: string) => s.trim().toLowerCase();
+
+	const categoryNorm = normalize(category);
+	const tagNorm = normalize(tag);
+
+	let translatedTag = tag;
+
+	// 尝试查找翻译
+	// 1. 精确匹配 "category:tag"
+	const key1 = `${categoryNorm}:${tagNorm}`;
+	if (translationMap.has(key1)) {
+		translatedTag = translationMap.get(key1)!;
+	} else {
+		// 2. 尝试在 'rows' namespace 中查找 (假设 rows 是通用)
+		const key2 = `rows:${tagNorm}`;
+		if (translationMap.has(key2)) {
+			translatedTag = translationMap.get(key2)!;
+		}
+	}
+
+	// 获取类别缩写
+	const abbr = CATEGORY_ABBR[categoryNorm] || categoryNorm;
+
+	return {
+		display: abbr ? `${abbr}:${translatedTag}` : translatedTag,
+		original: fullTag
+	};
+}
+
 // 初始化状态标志
 let isInitializing = false;
 let isInitialized = false;
 
 export const emmMetadataStore = {
 	subscribe,
+
+	/**
+	 * 设置翻译 JSON 路径并加载
+	 */
+	async setTranslationJsonPath(path: string) {
+		subscribe(state => {
+			saveSettings(state.manualDatabasePaths, state.manualTranslationDbPath, state.manualSettingPath, state.enableEMM, state.fileListTagDisplayMode, path);
+		})();
+		update(state => ({
+			...state,
+			translationJsonPath: path
+		}));
+		await this.loadTranslationDb(path);
+	},
+
+	/**
+	 * 加载翻译数据库 (db.text.json)
+	 */
+	async loadTranslationDb(path: string) {
+		if (!path) return;
+
+		try {
+			console.debug('[EMM] Loading translation DB from:', path);
+			const content = await readTextFile(path);
+			const json = JSON.parse(content);
+
+			const map = new Map<string, string>();
+
+			if (json.data && Array.isArray(json.data)) {
+				for (const item of json.data) {
+					const ns = item.namespace;
+					const data = item.data;
+					if (ns && data) {
+						for (const [key, value] of Object.entries(data)) {
+							const tagName = key.trim().toLowerCase();
+							// value 可以是 string 或 { name: string, intro: string }
+							let translatedName = '';
+							if (typeof value === 'string') {
+								translatedName = value;
+							} else if (typeof value === 'object' && value !== null) {
+								translatedName = (value as any).name || '';
+							}
+
+							if (translatedName) {
+								map.set(`${ns}:${tagName}`, translatedName);
+							}
+						}
+					}
+				}
+			}
+
+			console.debug(`[EMM] Loaded ${map.size} translations`);
+
+			update(state => ({
+				...state,
+				translationMap: map
+			}));
+
+		} catch (e) {
+			console.error('[EMM] Failed to load translation DB:', e);
+		}
+	},
 
 	/**
 	 * 初始化：查找数据库和加载收藏标签
@@ -222,6 +352,11 @@ export const emmMetadataStore = {
 				}
 			} else {
 				console.warn('[EMMStore] initialize: 未找到设置文件，请手动配置 setting.json 路径');
+			}
+
+			// 加载翻译数据库
+			if (stateForSetting!.translationJsonPath) {
+				await this.loadTranslationDb(stateForSetting!.translationJsonPath);
 			}
 
 			console.debug('[EMMStore] initialize: 初始化完成');

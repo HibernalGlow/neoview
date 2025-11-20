@@ -11,7 +11,7 @@
 		findCommandByKeys
 	} from '$lib/stores/keyboard.svelte';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
-	import { settingsManager, performanceSettings } from '$lib/settings/settingsManager';
+import { settingsManager, performanceSettings } from '$lib/settings/settingsManager';
 	import { onDestroy, onMount } from 'svelte';
 	import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
 	import { readable } from 'svelte/store';
@@ -27,9 +27,10 @@ import { scheduleUpscaleCacheCleanup } from '$lib/core/cache/cacheMaintenance';
 	import { createPreloadManager } from './flow/preloadManager.svelte';
 	import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
 	import { idbSet } from '$lib/utils/idb';
-	import { getFileMetadata } from '$lib/api/fs';
+import { getFileMetadata } from '$lib/api/fs';
 import { invoke } from '@tauri-apps/api/core';
 	import type { BookInfo, Page } from '$lib/types';
+import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 
 	
 
@@ -735,15 +736,30 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 						const displayPath = buildDisplayPath(bookStore.currentBook!, pageInfo);
 						let blob: Blob | null = null;
 						
+						const traceId = createImageTraceId('viewer-vertical', page.index);
+						logImageTrace(traceId, 'fallback invoke', {
+							mode: 'vertical',
+							pageIndex: page.index,
+							source: bookStore.currentBook!.type
+						});
+
 						if (bookStore.currentBook!.type === 'archive') {
 							const binaryData = await invoke<number[]>('load_image_from_archive', {
 								archivePath: bookStore.currentBook!.path,
-								filePath: pageInfo.path
+								filePath: pageInfo.path,
+								traceId,
+								pageIndex: page.index
 							});
+							logImageTrace(traceId, 'fallback archive bytes ready', { bytes: binaryData.length });
 							blob = new Blob([new Uint8Array(binaryData)]);
 						} else {
-							const binaryData = await invoke<number[]>('load_image', { path: displayPath });
+							const binaryData = await invoke<number[]>('load_image', { path: displayPath, traceId, pageIndex: page.index });
+							logImageTrace(traceId, 'fallback file bytes ready', { bytes: binaryData.length });
 							blob = new Blob([new Uint8Array(binaryData)]);
+						}
+
+						if (blob) {
+							logImageTrace(traceId, 'fallback blob created', { size: blob.size });
 						}
 						
 						if (blob && blob.size > 0) {
@@ -816,15 +832,30 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 						const displayPath = buildDisplayPath(bookStore.currentBook!, pageInfo);
 						let blob: Blob | null = null;
 						
+						const traceId = createImageTraceId('viewer-panorama', page.index);
+						logImageTrace(traceId, 'fallback invoke', {
+							mode: 'panorama',
+							pageIndex: page.index,
+							source: bookStore.currentBook!.type
+						});
+
 						if (bookStore.currentBook!.type === 'archive') {
 							const binaryData = await invoke<number[]>('load_image_from_archive', {
 								archivePath: bookStore.currentBook!.path,
-								filePath: pageInfo.path
+								filePath: pageInfo.path,
+								traceId,
+								pageIndex: page.index
 							});
+							logImageTrace(traceId, 'fallback archive bytes ready', { bytes: binaryData.length });
 							blob = new Blob([new Uint8Array(binaryData)]);
 						} else {
-							const binaryData = await invoke<number[]>('load_image', { path: displayPath });
+							const binaryData = await invoke<number[]>('load_image', { path: displayPath, traceId, pageIndex: page.index });
+							logImageTrace(traceId, 'fallback file bytes ready', { bytes: binaryData.length });
 							blob = new Blob([new Uint8Array(binaryData)]);
+						}
+
+						if (blob) {
+							logImageTrace(traceId, 'fallback blob created', { size: blob.size });
 						}
 						
 						if (blob && blob.size > 0) {

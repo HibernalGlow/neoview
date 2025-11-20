@@ -6,6 +6,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { FsItem } from '$lib/types';
+import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 
 export interface DirectorySnapshot {
   items: FsItem[];
@@ -181,13 +182,38 @@ export async function listArchiveContents(archivePath: string): Promise<FsItem[]
 /**
  * 从压缩包加载图片
  */
+export interface LoadImageFromArchiveOptions {
+  traceId?: string;
+  pageIndex?: number;
+}
+
 export async function loadImageFromArchive(
   archivePath: string,
-  filePath: string
+  filePath: string,
+  options: LoadImageFromArchiveOptions = {}
 ): Promise<string> {
-  const binaryData = await invoke<number[]>('load_image', { path: filePath });
+  const traceId = options.traceId ?? createImageTraceId('archive', options.pageIndex);
+  logImageTrace(traceId, 'invoke load_image_from_archive', {
+    archivePath,
+    innerPath: filePath,
+    pageIndex: options.pageIndex
+  });
+
+  const binaryData = await invoke<number[]>('load_image_from_archive', {
+    archivePath,
+    filePath,
+    traceId,
+    pageIndex: options.pageIndex
+  });
+
+  logImageTrace(traceId, 'archive image bytes ready', { bytes: binaryData.length });
+
   const blob = new Blob([new Uint8Array(binaryData)]);
-  return URL.createObjectURL(blob);
+  const url = URL.createObjectURL(blob);
+
+  logImageTrace(traceId, 'blob url created', { size: blob.size });
+
+  return url;
 }
 
 /**

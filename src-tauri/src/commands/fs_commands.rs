@@ -13,6 +13,8 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 use tauri::State;
+use log::{info, warn};
+use std::time::{SystemTime};
 
 /// 文件系统状态
 pub struct FsState {
@@ -353,15 +355,44 @@ pub async fn list_archive_contents(
 pub async fn load_image_from_archive(
     archive_path: String,
     file_path: String,
+    trace_id: Option<String>,
+    page_index: Option<i32>,
     state: State<'_, FsState>,
 ) -> Result<Vec<u8>, String> {
+    let trace_id = trace_id.unwrap_or_else(|| {
+        let millis = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or_default();
+        format!("rust-archive-{}-{}", page_index.unwrap_or(-1), millis)
+    });
+
+    info!(
+        "📥 [ImagePipeline:{}] load_image_from_archive request archive={} inner={} page_index={:?}",
+        trace_id, archive_path, file_path, page_index
+    );
+
     let archive_manager = state
         .archive_manager
         .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
 
     let path = PathBuf::from(archive_path);
-    archive_manager.load_image_from_zip_binary(&path, &file_path)
+    let result = archive_manager.load_image_from_zip_binary(&path, &file_path);
+
+    match &result {
+        Ok(bytes) => info!(
+            "📤 [ImagePipeline:{}] load_image_from_archive success bytes={}",
+            trace_id,
+            bytes.len()
+        ),
+        Err(err) => warn!(
+            "⚠️ [ImagePipeline:{}] load_image_from_archive failed: {}",
+            trace_id, err
+        ),
+    }
+
+    result
 }
 
 /// 获取压缩包中的所有图片

@@ -22,6 +22,7 @@ import { showSuccessToast } from '$lib/utils/toast';
 import { collectPageMetadata, evaluateConditions } from '$lib/utils/upscale/conditions';
 import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
 import { taskScheduler } from '$lib/core/tasks/taskScheduler';
+import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 function getPanelModelSettings() {
 	const settings = loadUpscalePanelSettings();
 	return {
@@ -69,6 +70,7 @@ export class ImageLoader {
 	// 三层缓存架构
 	private blobCache = new Map<number, BlobCacheItem>();
 	private thumbnailCache = new Map<number, ThumbnailCacheItem>();
+	private pageTraceMap = new Map<number, string>();
 
 	// 预超分相关
 	private totalPreUpscalePages = 0;
@@ -116,6 +118,19 @@ export class ImageLoader {
 				}
 			}
 		});
+	}
+
+	private assignTraceId(pageIndex: number, source: string): string {
+		const traceId = createImageTraceId(source, pageIndex);
+		this.pageTraceMap.set(pageIndex, traceId);
+		return traceId;
+	}
+
+	private ensureTraceId(pageIndex: number, source: string): string {
+		if (!this.pageTraceMap.has(pageIndex)) {
+			this.pageTraceMap.set(pageIndex, createImageTraceId(source, pageIndex));
+		}
+		return this.pageTraceMap.get(pageIndex)!;
 	}
 
 	/**
@@ -175,14 +190,18 @@ export class ImageLoader {
 	 * 确保页面资源已加载
 	 */
 	private async ensureResources(pageIndex: number): Promise<void> {
+		const traceId = this.pageTraceMap.get(pageIndex);
+
 		// 1. 确保 Blob 缓存
 		if (this.blobCache.has(pageIndex)) {
+			logImageTrace(traceId ?? this.ensureTraceId(pageIndex, 'cache'), 'blob cache hit', { pageIndex });
 			this.updateAccessTime(pageIndex);
 			return;
 		}
 
 		// 检查是否有正在进行的加载
 		if (this.pendingLoads.has(pageIndex)) {
+			logImageTrace(traceId ?? this.ensureTraceId(pageIndex, 'cache-wait'), 'pending load wait', { pageIndex });
 			await this.pendingLoads.get(pageIndex);
 			this.updateAccessTime(pageIndex);
 			return;
@@ -197,6 +216,10 @@ export class ImageLoader {
 					blob,
 					url,
 					lastAccessed: Date.now()
+				});
+				logImageTrace(this.ensureTraceId(pageIndex, 'loader'), 'blob cached', {
+					pageIndex,
+					size: blob.size
 				});
 			} finally {
 				this.pendingLoads.delete(pageIndex);
@@ -218,24 +241,46 @@ export class ImageLoader {
 		if (this.blobCache.has(pageIndex)) {
 			const item = this.blobCache.get(pageIndex)!;
 			item.lastAccessed = Date.now();
+			logImageTrace(this.ensureTraceId(pageIndex, 'cache'), 'readPageBlob cache reuse', {
+				pageIndex,
+				size: item.blob.size
+			});
 			return item.blob;
 		}
 
-		const pageInfo = bookStore.currentBook?.pages[pageIndex];
-		if (!pageInfo) {
+		const currentBook = bookStore.currentBook;
+		const pageInfo = currentBook?.pages[pageIndex];
+		if (!pageInfo || !currentBook) {
 			throw new Error(`页面 ${pageIndex} 不存在`);
 		}
 
+		const traceId = this.assignTraceId(pageIndex, currentBook.type ?? 'fs');
+		logImageTrace(traceId, 'readPageBlob start', {
+			pageIndex,
+			path: pageInfo.path,
+			bookType: currentBook.type
+		});
+
 		let base64Data: string;
-		if (bookStore.currentBook?.type === 'archive') {
-			base64Data = await loadImageFromArchive(bookStore.currentBook.path, pageInfo.path);
+		if (currentBook.type === 'archive') {
+			base64Data = await loadImageFromArchive(currentBook.path, pageInfo.path, {
+				traceId,
+				pageIndex
+			});
 		} else {
-			base64Data = await loadImage(pageInfo.path);
+			base64Data = await loadImage(pageInfo.path, {
+				traceId,
+				pageIndex,
+				bookPath: currentBook.path
+			});
 		}
 
+		logImageTrace(traceId, 'readPageBlob fetch blob url');
 		// 将 base64 转换为 Blob
 		const response = await fetch(base64Data);
 		const blob = await response.blob();
+
+		logImageTrace(traceId, 'readPageBlob blob decoded', { size: blob.size });
 
 		// 缓存 Blob
 		const url = URL.createObjectURL(blob);
@@ -244,6 +289,8 @@ export class ImageLoader {
 			url,
 			lastAccessed: Date.now()
 		});
+
+		logImageTrace(traceId, 'readPageBlob cached', { pageIndex, cacheEntries: this.blobCache.size });
 
 		return blob;
 	}
@@ -526,9 +573,17 @@ export class ImageLoader {
 		try {
 			// 确保当前页资源已加载
 			await this.ensureResources(currentPageIndex);
+			const currentTraceId = this.ensureTraceId(currentPageIndex, 'display');
+			logImageTrace(currentTraceId, 'loadCurrentImage resources ready', {
+				pageIndex: currentPageIndex
+			});
 
 			// 获取 Object URL
 			const objectUrl = await this.getObjectUrl(currentPageIndex);
+			logImageTrace(currentTraceId, 'loadCurrentImage object URL ready', {
+				pageIndex: currentPageIndex,
+				urlLength: objectUrl.length
+			});
 
 			// 双页模式：加载下一页
 			let objectUrl2: string | undefined;
@@ -669,6 +724,10 @@ export class ImageLoader {
 
 			// 调用外部回调 - 传递新的数据格式
 			this.options.onImageLoaded?.(objectUrl, objectUrl2 ?? undefined);
+			logImageTrace(currentTraceId, 'loadCurrentImage callback dispatched', {
+				pageIndex: currentPageIndex,
+				hasSecond: Boolean(objectUrl2)
+			});
 			const currentBlob = this.blobCache.get(currentPageIndex)?.blob;
 			const metadata = currentBlob ? await this.getImageDimensions(currentBlob) : null;
 			let metadata2: ImageDimensions | null = null;
@@ -912,6 +971,7 @@ export class ImageLoader {
 		this.blobCache.clear();
 
 		this.thumbnailCache.clear();
+		this.pageTraceMap.clear();
 
 		// 根据需求决定是否保留超分内存缓存（允许跨书复用）
 		if (!preservePreloadCache) {

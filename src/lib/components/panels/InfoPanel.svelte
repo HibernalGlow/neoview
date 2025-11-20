@@ -514,130 +514,7 @@
 						</div>
 					</div>
 				{/if}
-</script>
 
-<div 
-	class="h-full flex flex-col bg-background"
-	oncontextmenu={showContextMenu}
-	role="region"
-	aria-label="信息面板"
->
-		<!-- 标题栏 -->
-		<div class="p-4 border-b">
-			<div class="flex items-center gap-2">
-				<Info class="h-5 w-5" />
-				<h3 class="font-semibold">详细信息</h3>
-			</div>
-		</div>
-
-		<div class="flex-1 overflow-auto">
-		<div class="p-4 space-y-6">
-			<!-- 书籍信息 -->
-			{#if bookInfo}
-				<div class="space-y-3">
-					<div class="flex items-center gap-2 font-semibold text-sm">
-						<FileText class="h-4 w-4" />
-						<span>书籍信息</span>
-					</div>
-
-					<div class="space-y-2 text-sm">
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">名称:</span>
-							<span class="font-medium break-words max-w-[200px]" title={bookInfo.emmMetadata?.translatedTitle || bookInfo.name}>
-								{bookInfo.emmMetadata?.translatedTitle || bookInfo.name}
-							</span>
-						</div>
-						{#if bookInfo.emmMetadata?.translatedTitle && bookInfo.emmMetadata.translatedTitle !== bookInfo.name}
-							<div class="flex justify-between">
-								<span class="text-muted-foreground">原名:</span>
-								<span class="font-mono text-xs break-words max-w-[200px]" title={bookInfo.name}>
-									{bookInfo.name}
-								</span>
-							</div>
-						{/if}
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">路径:</span>
-							<span class="font-mono text-xs break-words max-w-[200px]" title={bookInfo.path}>
-								{bookInfo.path}
-							</span>
-						</div>
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">类型:</span>
-							<span>{formatBookType(bookInfo.type)}</span>
-						</div>
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">页码:</span>
-							<span>
-								{bookInfo.currentPage} / {bookInfo.totalPages}
-							</span>
-						</div>
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">进度:</span>
-							<span>
-								{#if bookInfo.totalPages > 0}
-									{(
-										(Math.min(bookInfo.currentPage, bookInfo.totalPages) / bookInfo.totalPages) *
-										100
-									).toFixed(1)}%
-								{:else}
-									—
-								{/if}
-							</span>
-						</div>
-					</div>
-				</div>
-
-				<!-- 标签信息 -->
-				{#if allTags().length > 0}
-					<Separator.Root />
-					<div class="space-y-3">
-						<div class="flex items-center gap-2 font-semibold text-sm">
-							<Tag class="h-4 w-4" />
-							<span>标签</span>
-							<span class="text-[10px] text-muted-foreground font-normal ml-2 opacity-50">
-								(已加载收藏: {collectTags.length})
-							</span>
-							<Button.Root
-								variant="ghost"
-								size="icon"
-								class="h-5 w-5 ml-auto"
-								title="重新加载收藏标签"
-								onclick={() => {
-									console.debug('[InfoPanel] 手动刷新收藏标签');
-									emmMetadataStore.initialize(true).then(() => {
-										collectTags = emmMetadataStore.getCollectTags();
-									});
-								}}
-							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="12"
-									height="12"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-									<path d="M3 3v5h5" />
-								</svg>
-							</Button.Root>
-						</div>
-						<div class="flex flex-wrap gap-1.5">
-							{#each allTags() as tagInfo}
-								<span
-									class="text-xs px-2 py-1 rounded {tagInfo.isCollect ? 'font-semibold' : ''}"
-									style="background-color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '20' : 'rgba(0,0,0,0.05)'}; color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') : 'inherit'}; border: 1px solid {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '40' : 'transparent'};"
-									title="{tagInfo.category}:{tagInfo.tag}"
-								>
-									{tagInfo.display}
-								</span>
-							{/each}
-						</div>
-					</div>
-				{/if}
 
 				<!-- EMM 元数据配置 -->
 				<Separator.Root />
@@ -836,8 +713,6 @@
 
 				<Separator.Root />
 			{/if}
-
-			<!-- 图像信息 -->
 			{#if imageInfo}
 				<div class="space-y-3">
 					<div class="flex items-center gap-2 font-semibold text-sm">

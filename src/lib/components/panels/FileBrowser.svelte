@@ -1476,19 +1476,20 @@ import { getPerformanceSettings } from '$lib/api/performance';
   
 </script>
 
-<div class="flex h-full flex-col">
-  <!-- 路径面包屑导航 -->
-  <PathBar 
-    bind:currentPath={currentPath} 
-    isArchive={isArchiveView}
-    onNavigate={handlePathNavigate}
-    onSetHomepage={setHomepage}
-  />
+<div class="flex h-full flex-col overflow-hidden">
+  <div class="sticky top-0 z-20 flex flex-col gap-0 border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/70">
+    <!-- 路径面包屑导航 -->
+    <PathBar 
+      bind:currentPath={currentPath} 
+      isArchive={isArchiveView}
+      onNavigate={handlePathNavigate}
+      onSetHomepage={setHomepage}
+    />
 
-  <!-- 工具栏 -->
-  <div class="flex items-center gap-1 border-b px-2 py-1.5 bg-background/50">
-    <!-- 左侧：导航按钮 -->
-    <div class="flex items-center gap-1">
+    <!-- 工具栏 -->
+    <div class="flex items-center gap-1 border-b px-2 py-1.5 bg-background/50">
+      <!-- 左侧：导航按钮 -->
+      <div class="flex items-center gap-1">
       <Button
         variant="ghost"
         size="icon"
@@ -1624,44 +1625,48 @@ import { getPerformanceSettings } from '$lib/api/performance';
         <Trash2 class="h-4 w-4" />
       </Button>
     </div>
-  </div>
-  <div class="border-b px-3 py-1 text-[11px] text-muted-foreground flex flex-wrap gap-3 bg-muted/30">
-    <span>当前书籍：{$bookState.currentBookPath ?? '—'}</span>
-    <span>
-      页码：
-      {#if $bookState.currentBookPath}
-        {$bookState.currentPageIndex + 1}/{Math.max($bookState.totalPages, 1)}
-      {:else}
-        —
-      {/if}
-    </span>
-    <span>正在处理：{$viewerState.taskCursor.running}/{$viewerState.taskCursor.concurrency}</span>
-    <span>
-      桶深度 C {$viewerState.taskCursor.activeBuckets.current} · F {$viewerState.taskCursor.activeBuckets.forward} · B {$viewerState.taskCursor.activeBuckets.backward} · BG {$viewerState.taskCursor.activeBuckets.background}
-    </span>
-  </div>
-
-  <!-- 搜索栏 -->
-  <SearchBar
-    placeholder="搜索当前目录下的文件..."
-    disabled={!currentPath || isArchiveView}
-    onSearch={handleFileSearch}
-    bind:searchHistory
-    bind:searchSettings
-    storageKey="neoview-file-search-history"
-  />
-
-  <!-- 错误提示 -->
-  {#if error}
-    <div class="m-2 rounded bg-red-50 p-3 text-sm text-red-600">
-      {error}
     </div>
-  {/if}
+    <div class="border-b px-3 py-1 text-[11px] text-muted-foreground flex flex-wrap gap-3 bg-muted/30">
+      <span>当前书籍：{$bookState.currentBookPath ?? '—'}</span>
+      <span>
+        页码：
+        {#if $bookState.currentBookPath}
+          {$bookState.currentPageIndex + 1}/{Math.max($bookState.totalPages, 1)}
+        {:else}
+          —
+        {/if}
+      </span>
+      <span>正在处理：{$viewerState.taskCursor.running}/{$viewerState.taskCursor.concurrency}</span>
+      <span>
+        桶深度 C {$viewerState.taskCursor.activeBuckets.current} · F {$viewerState.taskCursor.activeBuckets.forward} · B {$viewerState.taskCursor.activeBuckets.backward} · BG {$viewerState.taskCursor.activeBuckets.background}
+      </span>
+    </div>
 
-  
-    <!-- 加载状态 -->
-  {#if loading}
-    <div class="flex flex-1 items-center justify-center">
+    <!-- 搜索栏 -->
+    <div class="border-b border-border bg-background/95 px-2 py-2">
+      <SearchBar
+        placeholder="搜索当前目录下的文件..."
+        disabled={!currentPath || isArchiveView}
+        onSearch={handleFileSearch}
+        bind:searchHistory
+        bind:searchSettings
+        storageKey="neoview-file-search-history"
+      />
+    </div>
+  </div>
+
+  <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
+    <!-- 错误提示 -->
+    {#if error}
+      <div class="m-2 rounded bg-red-50 p-3 text-sm text-red-600">
+        {error}
+      </div>
+    {/if}
+
+    
+      <!-- 加载状态 -->
+    {#if loading}
+      <div class="flex flex-1 items-center justify-center">
       <div class="flex flex-col items-center gap-3">
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
         <div class="text-sm text-gray-500">加载中...</div>
@@ -1684,16 +1689,16 @@ import { getPerformanceSettings } from '$lib/api/performance';
         <p class="text-xs text-gray-500 mt-1">搜索词: "{searchQuery}"</p>
       </div>
     </div>
-  {:else if searchQuery && searchResults.length > 0}
-    <!-- 搜索结果列表 -->
-    <div 
-      bind:this={fileListContainer}
-      class="flex-1 overflow-y-auto p-2 focus:outline-none" 
-      tabindex="0" 
-      role="listbox"
-      aria-label="搜索结果列表"
-      onkeydown={handleKeydown}
-    >
+    {:else if searchQuery && searchResults.length > 0}
+      <!-- 搜索结果列表 -->
+      <div 
+        bind:this={fileListContainer}
+        class="flex-1 overflow-y-auto p-2 focus:outline-none" 
+        tabindex="0" 
+        role="listbox"
+        aria-label="搜索结果列表"
+        onkeydown={handleKeydown}
+      >
       <div class="mb-3 text-sm text-gray-600 px-2">
         找到 {searchResults.length} 个结果 (搜索: "{searchQuery}")
       </div>
@@ -1711,7 +1716,7 @@ import { getPerformanceSettings } from '$lib/api/performance';
             <!-- 勾选框（勾选模式） -->
             {#if isCheckMode}
               <button
-                class="flex-shrink-0"
+                class="shrink-0"
                 onclick={(e) => {
                   e.stopPropagation();
                   toggleItemSelection(item.path);
@@ -1730,7 +1735,7 @@ import { getPerformanceSettings } from '$lib/api/performance';
             <!-- 删除按钮（删除模式） -->
             {#if isDeleteMode && !isArchiveView}
               <button
-                class="flex-shrink-0"
+                class="shrink-0"
                 onclick={(e) => {
                   e.stopPropagation();
                   deleteItem(item.path);
@@ -1744,7 +1749,7 @@ import { getPerformanceSettings } from '$lib/api/performance';
             {/if}
 
             <!-- 图标或缩略图 -->
-            <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded">
+            <div class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded">
               {#if false && thumbnails.has(toRelativeKey(item.path))}
                 <!-- TODO: 显示缩略图 - 功能已移除，待重新实现 -->
                 <img 
@@ -1847,16 +1852,16 @@ import { getPerformanceSettings } from '$lib/api/performance';
             </ContextMenu.Root>
         {/each}
       </div>
-    </div>
-  {:else if items.length === 0 && currentPath}
-    <div class="flex flex-1 items-center justify-center">
+      </div>
+    {:else if items.length === 0 && currentPath}
+      <div class="flex flex-1 items-center justify-center">
       <div class="text-center text-gray-400">
         <Folder class="mx-auto mb-2 h-16 w-16 opacity-50" />
         <p class="text-sm">此目录为空</p>
       </div>
-    </div>
-  {:else if items.length === 0}
-    <div class="flex flex-1 items-center justify-center">
+      </div>
+    {:else if items.length === 0}
+      <div class="flex flex-1 items-center justify-center">
       <div class="text-center">
         <FolderOpen class="mx-auto mb-4 h-20 w-20 text-gray-300" />
         <p class="text-lg font-medium text-gray-600 mb-2">选择文件夹开始浏览</p>
@@ -1868,52 +1873,55 @@ import { getPerformanceSettings } from '$lib/api/performance';
           选择文件夹
         </button>
       </div>
-    </div>
-  {:else}
-    <!-- 文件列表 -->
-    <VirtualizedFileList 
-      {items}
-      {currentPath}
-      {thumbnails}
-      {selectedIndex}
-      {isCheckMode}
-      {isDeleteMode}
-      {selectedItems}
-      {viewMode}
-      on:itemClick={(e) => {
-        const { item, index } = e.detail;
-        if (!isCheckMode && !isDeleteMode) {
-          fileBrowserStore.setSelectedIndex(index);
-          openFile(item);
-        }
-      }}
-      on:itemDoubleClick={(e) => {
-        const { item, index } = e.detail;
-        // 双击直接打开，无需检查模式
-        fileBrowserStore.setSelectedIndex(index);
-        openFile(item);
-      }}
-      on:itemSelect={(e) => {
-        const { item, index, multiSelect } = e.detail;
-        if (isCheckMode) {
-          toggleItemSelection(item.path);
-        } else {
-          fileBrowserStore.setSelectedIndex(index);
-        }
-      }}
-      on:itemContextMenu={(e) => {
-        const { event, item } = e.detail;
-        showContextMenu(event, item);
-      }}
-      on:deleteItem={(e) => {
-        deleteItem(e.detail.item.path);
-      }}
-      on:selectionChange={(e) => {
-        selectedItems = new Set(e.detail.selectedItems);
-      }}
-      on:selectedIndexChange={(e) => {
-        fileBrowserStore.setSelectedIndex(e.detail.index);
-      }}
-    />
-  {/if}
+      </div>
+    {:else}
+      <!-- 文件列表 -->
+      <div class="flex-1 min-h-0">
+        <VirtualizedFileList 
+          {items}
+          {currentPath}
+          {thumbnails}
+          {selectedIndex}
+          {isCheckMode}
+          {isDeleteMode}
+          {selectedItems}
+          {viewMode}
+          on:itemClick={(e) => {
+            const { item, index } = e.detail;
+            if (!isCheckMode && !isDeleteMode) {
+              fileBrowserStore.setSelectedIndex(index);
+              openFile(item);
+            }
+          }}
+          on:itemDoubleClick={(e) => {
+            const { item, index } = e.detail;
+            // 双击直接打开，无需检查模式
+            fileBrowserStore.setSelectedIndex(index);
+            openFile(item);
+          }}
+          on:itemSelect={(e) => {
+            const { item, index, multiSelect } = e.detail;
+            if (isCheckMode) {
+              toggleItemSelection(item.path);
+            } else {
+              fileBrowserStore.setSelectedIndex(index);
+            }
+          }}
+          on:itemContextMenu={(e) => {
+            const { event, item } = e.detail;
+            showContextMenu(event, item);
+          }}
+          on:deleteItem={(e) => {
+            deleteItem(e.detail.item.path);
+          }}
+          on:selectionChange={(e) => {
+            selectedItems = new Set(e.detail.selectedItems);
+          }}
+          on:selectedIndexChange={(e) => {
+            fileBrowserStore.setSelectedIndex(e.detail.index);
+          }}
+        />
+      </div>
+    {/if}
+  </div>
 </div>

@@ -442,81 +442,90 @@ import { getPerformanceSettings } from '$lib/api/performance';
 
   /**
    * 加载目录内容（不添加历史记录，用于前进/后退）
+   * 优化：立即显示缓存数据，异步验证和加载
    */
   async function loadDirectoryWithoutHistory(path: string) {
     console.log('📂 loadDirectory called with path:', path);
     
-    // 取消之前的任务
-    cancelBySource(currentPath);
+    // 立即更新 UI（乐观更新）
+    const oldPath = currentPath;
+    currentPath = path;
     
-    fileBrowserStore.setLoading(true);
+    // 立即取消之前的任务
+    if (oldPath && oldPath !== path) {
+      cancelBySource(oldPath);
+    }
+    
+    // 立即清空旧数据，提供即时反馈
     fileBrowserStore.setError('');
-    fileBrowserStore.clearThumbnails();
     fileBrowserStore.setArchiveView(false);
     fileBrowserStore.setSelectedIndex(-1);
     fileBrowserStore.setCurrentPath(path);
-    
-    // 清空选择
     selectedItems.clear();
-
-    try {
-      // 首先检查缓存
-      const cachedData = navigationHistory.getCachedDirectory(path);
+    
+    // 首先检查缓存（同步操作，立即返回）
+    const cachedData = navigationHistory.getCachedDirectory(path);
+    
+    if (cachedData) {
+      // 有缓存：立即显示，不设置 loading 状态
+      console.log('📋 使用缓存数据（立即显示）:', path);
+      fileBrowserStore.setItems(cachedData.items);
+      fileBrowserStore.setThumbnails(cachedData.thumbnails);
+      thumbnails = new Map(cachedData.thumbnails);
       
-      let loadedItems: FsItem[] = [];
-      let cachedThumbnails = new Map<string, string>();
-      
-      if (cachedData) {
-        // 使用缓存数据
-        console.log('📋 使用缓存数据:', path);
-        loadedItems = cachedData.items;
-        cachedThumbnails = cachedData.thumbnails;
-        
-        // 设置缓存数据
-      fileBrowserStore.setItems(loadedItems);
-      fileBrowserStore.setThumbnails(cachedThumbnails);
-      thumbnails = new Map(cachedThumbnails);
-        
-        // 后台验证缓存是否仍然有效
-        runWithScheduler({
-          type: 'filebrowser-cache-validate',
-          source: `cache:${path}`,
-          bucket: 'background',
-          priority: 'low',
-          executor: async () => {
-            const isValid = await navigationHistory.validateCache(path);
-            if (!isValid) {
-              console.log('🔄 缓存失效，重新加载:', path);
-              await reloadDirectoryFromBackend(path);
-            } else {
-              await loadThumbnailsForItems(loadedItems, path, cachedThumbnails);
-            }
+      // 异步验证缓存并更新缩略图
+      runWithScheduler({
+        type: 'filebrowser-cache-validate',
+        source: `cache:${path}`,
+        bucket: 'background',
+        priority: 'low',
+        executor: async () => {
+          const isValid = await navigationHistory.validateCache(path);
+          if (!isValid) {
+            console.log('🔄 缓存失效，重新加载:', path);
+            await reloadDirectoryFromBackend(path);
+          } else {
+            // 缓存有效，继续加载缺失的缩略图
+            await loadThumbnailsForItems(cachedData.items, path, cachedData.thumbnails);
           }
-        }).catch((err) => {
-          console.debug('缓存验证任务失败:', err);
-        });
-      } else {
-        // 没有缓存，从后端加载
-        console.log('🔄 从后端加载:', path);
-        await runWithScheduler({
-          type: 'filebrowser-directory-load',
-          source: `load:${path}`,
-          bucket: 'background',
-          priority: 'normal',
-          executor: () => reloadDirectoryFromBackend(path)
-        });
-      }
-    } catch (err) {
-      console.error('❌ Error loading directory:', err);
-      fileBrowserStore.setError(String(err));
+        }
+      }).catch((err) => {
+        console.debug('缓存验证任务失败:', err);
+      });
+    } else {
+      // 无缓存：显示 loading，异步加载
+      fileBrowserStore.setLoading(true);
+      fileBrowserStore.clearThumbnails();
       fileBrowserStore.setItems([]);
-    } finally {
-      fileBrowserStore.setLoading(false);
+      
+      // 异步加载，不阻塞 UI
+      runWithScheduler({
+        type: 'filebrowser-directory-load',
+        source: `load:${path}`,
+        bucket: 'background',
+        priority: 'high', // 提高优先级，因为用户主动导航
+        executor: async () => {
+          try {
+            await reloadDirectoryFromBackend(path);
+          } catch (err) {
+            console.error('❌ Error loading directory:', err);
+            fileBrowserStore.setError(String(err));
+            fileBrowserStore.setItems([]);
+          } finally {
+            fileBrowserStore.setLoading(false);
+          }
+        }
+      }).catch((err) => {
+        console.error('❌ Error in load task:', err);
+        fileBrowserStore.setError(String(err));
+        fileBrowserStore.setLoading(false);
+      });
     }
   }
 
   /**
    * 从后端重新加载目录数据（完全分离文件浏览和缩略图加载）
+   * 优化：立即设置数据，不等待任何异步操作
    */
   async function reloadDirectoryFromBackend(path: string) {
     console.log('🔄 Calling FileSystemAPI.loadDirectorySnapshot...');
@@ -531,7 +540,12 @@ import { getPerformanceSettings } from '$lib/api/performance';
     // 立即设置数据，不等待缩略图
     fileBrowserStore.setItems(loadedItems);
     fileBrowserStore.setThumbnails(new Map());
-    await prefillThumbnailsFromCache(loadedItems, path);
+    fileBrowserStore.setLoading(false); // 立即取消 loading 状态
+    
+    // 异步预填充缓存缩略图（不阻塞）
+    prefillThumbnailsFromCache(loadedItems, path).catch(err => {
+      console.debug('预填充缩略图失败:', err);
+    });
     
     // 缓存目录数据（不包含缩略图）
     navigationHistory.cacheDirectory(path, loadedItems, new Map(), directoryMtime);
@@ -545,7 +559,7 @@ import { getPerformanceSettings } from '$lib/api/performance';
       executor: () => loadThumbnailsForItemsAsync(loadedItems, path)
     }).catch((err) => console.debug('缩略图预加载任务失败:', err));
     
-    // 预加载相邻目录
+    // 预加载相邻目录（低优先级）
     runWithScheduler({
       type: 'filebrowser-prefetch-adjacent',
       source: `prefetch:${path}`,
@@ -963,50 +977,48 @@ import { getPerformanceSettings } from '$lib/api/performance';
   }
 
   /**
-   * 返回上一级（优化响应性）
+   * 返回上一级（优化响应性 - 立即显示缓存）
    */
   async function goBack() {
-    // 立即设置加载状态，提供即时反馈
-    fileBrowserStore.setLoading(true);
-    
-    // 使用 requestIdleCallback 确保UI更新优先
-    requestIdleCallback(async () => {
-      try {
-        if (isArchiveView) {
-          // 从压缩包视图返回到文件系统
-          isArchiveView = false;
-          const lastBackslash = currentArchivePath.lastIndexOf('\\');
-          const lastSlash = currentArchivePath.lastIndexOf('/');
-          const lastSeparator = Math.max(lastBackslash, lastSlash);
-          const parentDir = lastSeparator > 0 ? currentArchivePath.substring(0, lastSeparator) : currentPath;
-          await loadDirectory(parentDir);
-        } else if (currentPath) {
-          // 文件系统中返回上一级
-          const lastBackslash = currentPath.lastIndexOf('\\');
-          const lastSlash = currentPath.lastIndexOf('/');
-          const lastSeparator = Math.max(lastBackslash, lastSlash);
-          
-          if (lastSeparator > 0) {
-            const parentDir = currentPath.substring(0, lastSeparator);
-            // 确保不是驱动器根目录后面的路径
-            if (parentDir && !parentDir.endsWith(':')) {
-              await loadDirectory(parentDir);
-            }
+    try {
+      let parentDir: string | null = null;
+      
+      if (isArchiveView) {
+        // 从压缩包视图返回到文件系统
+        isArchiveView = false;
+        const lastBackslash = currentArchivePath.lastIndexOf('\\');
+        const lastSlash = currentArchivePath.lastIndexOf('/');
+        const lastSeparator = Math.max(lastBackslash, lastSlash);
+        parentDir = lastSeparator > 0 ? currentArchivePath.substring(0, lastSeparator) : currentPath;
+      } else if (currentPath) {
+        // 文件系统中返回上一级
+        const lastBackslash = currentPath.lastIndexOf('\\');
+        const lastSlash = currentPath.lastIndexOf('/');
+        const lastSeparator = Math.max(lastBackslash, lastSlash);
+        
+        if (lastSeparator > 0) {
+          parentDir = currentPath.substring(0, lastSeparator);
+          // 确保不是驱动器根目录后面的路径
+          if (parentDir && parentDir.endsWith(':')) {
+            parentDir = null;
           }
         }
-      } catch (error) {
-        console.error('❌ 返回上一级失败:', error);
-        fileBrowserStore.setError(String(error));
-      } finally {
-        fileBrowserStore.setLoading(false);
       }
-    });
+      
+      if (parentDir) {
+        // 立即加载（会立即显示缓存数据）
+        await loadDirectory(parentDir);
+      }
+    } catch (error) {
+      console.error('❌ 返回上一级失败:', error);
+      fileBrowserStore.setError(String(error));
+    }
   }
 
   
 
   /**
-   * 导航到目录
+   * 导航到目录（优化：立即显示缓存，异步取消旧任务）
    */
   async function navigateToDirectory(path: string) {
     console.log('🚀 navigateToDirectory called with path:', path);
@@ -1015,22 +1027,31 @@ import { getPerformanceSettings } from '$lib/api/performance';
       return;
     }
     
-    // 取消当前目录的所有缩略图任务
+    // 立即开始加载新目录（会立即显示缓存数据）
+    const loadPromise = loadDirectory(path);
+    
+    // 异步取消旧目录的任务（不阻塞新目录加载）
     if (currentPath && currentPath !== path) {
-      try {
-        const cancelled = await cancelFolderTasks(currentPath);
-        if (cancelled > 0) {
-          console.log(`🚫 已取消旧目录 ${currentPath} 的 ${cancelled} 个缩略图任务`);
+      runWithScheduler({
+        type: 'filebrowser-cancel-old',
+        source: `cancel:${currentPath}`,
+        bucket: 'background',
+        priority: 'low',
+        executor: async () => {
+          try {
+            const cancelled = await cancelFolderTasks(currentPath);
+            if (cancelled > 0) {
+              console.log(`🚫 已取消旧目录 ${currentPath} 的 ${cancelled} 个缩略图任务`);
+            }
+            cancelBySource(currentPath);
+          } catch (e) {
+            console.debug('取消任务失败:', e);
+          }
         }
-        
-        // 清空前端队列
-        cancelBySource(currentPath);
-      } catch (e) {
-        console.debug('取消任务失败:', e);
-      }
+      }).catch(() => {});
     }
     
-    await loadDirectory(path);
+    await loadPromise;
   }
 
   /**

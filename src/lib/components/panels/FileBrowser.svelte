@@ -9,7 +9,7 @@ import type { FsItem } from '$lib/types';
 import { bookStore } from '$lib/stores/book.svelte';
 import * as BookAPI from '$lib/api/book';
 import PathBar from '../ui/PathBar.svelte';
-import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
+import { fileBrowserStore, sortItems, type SortField, type SortOrder } from '$lib/stores/fileBrowser.svelte';
 import { NavigationHistory } from '$lib/utils/navigationHistory';
 import { Button } from '$lib/components/ui/button';
 import * as ContextMenu from '$lib/components/ui/context-menu';
@@ -135,6 +135,8 @@ import { getPerformanceSettings } from '$lib/api/performance';
   let bookmarkContextMenu = $state<{ x: number; y: number; bookmark: any | null }>({ x: 0, y: 0, bookmark: null });
   let copyToSubmenu = $state<{ show: boolean; x: number; y: number }>({ show: false, x: 0, y: 0 });
   let clipboardItem = $state<{ path: string; operation: 'copy' | 'cut' } | null>(null);
+  let sortField = $state<SortField>('name');
+  let sortOrder = $state<SortOrder>('asc');
 
   // 导航历史管理器
   let navigationHistory = new NavigationHistory();
@@ -196,6 +198,8 @@ import { getPerformanceSettings } from '$lib/api/performance';
       currentArchivePath = state.currentArchivePath;
       selectedIndex = state.selectedIndex;
       thumbnails = state.thumbnails;
+      sortField = state.sortField;
+      sortOrder = state.sortOrder;
     });
     
     return unsubscribe;
@@ -538,7 +542,8 @@ import { getPerformanceSettings } from '$lib/api/performance';
     );
     
     // 立即设置数据，不等待缩略图
-    fileBrowserStore.setItems(loadedItems);
+    const sortedItems = sortItems(loadedItems, fileBrowserStore.getState().sortField, fileBrowserStore.getState().sortOrder);
+    fileBrowserStore.setItems(sortedItems);
     fileBrowserStore.setThumbnails(new Map());
     fileBrowserStore.setLoading(false); // 立即取消 loading 状态
     
@@ -1458,6 +1463,16 @@ import { getPerformanceSettings } from '$lib/api/performance';
       void openSearchResult(item);
     }
   }
+
+  function handleSortChange(field: SortField, order: SortOrder) {
+    fileBrowserStore.setSort(field, order);
+    if (searchQuery && searchResults.length > 0) {
+      searchResults = sortItems(searchResults, field, order);
+    } else {
+      const sorted = sortItems(items, field, order);
+      fileBrowserStore.setItems(sorted);
+    }
+  }
   
 </script>
 
@@ -1594,8 +1609,9 @@ import { getPerformanceSettings } from '$lib/api/performance';
 
       <!-- 排序面板 -->
       <SortPanel 
-        items={searchQuery && searchResults.length > 0 ? searchResults : items} 
-        onSort={handleSort}
+        {sortField}
+        {sortOrder}
+        onSortChange={handleSortChange}
       />
 
       <Button
@@ -1901,4 +1917,3 @@ import { getPerformanceSettings } from '$lib/api/performance';
     />
   {/if}
 </div>
-

@@ -1,21 +1,17 @@
 <script lang="ts">
-  import { ArrowUpDown, ArrowUp, ArrowDown, Type, Calendar, HardDrive, FileImage, FileArchive, Folder } from '@lucide/svelte';
-  import type { FsItem } from '$lib/types';
+  import { ArrowUpDown, ArrowUp, ArrowDown, Type, Calendar, HardDrive, FileImage, Folder } from '@lucide/svelte';
+  import type { SortField, SortOrder } from '$lib/stores/fileBrowser.svelte';
 
   let { 
-    items = [], 
-    onSort = () => {} 
+    sortField = 'name',
+    sortOrder = 'asc',
+    onSortChange = () => {} 
   }: {
-    items: FsItem[];
-    onSort: (sortedItems: FsItem[]) => void;
+    sortField: SortField;
+    sortOrder: SortOrder;
+    onSortChange: (field: SortField, order: SortOrder) => void;
   } = $props();
 
-  // 排序选项
-  type SortField = 'name' | 'modified' | 'size' | 'type' | 'path';
-  type SortOrder = 'asc' | 'desc';
-
-  let sortField = $state<SortField>('path');
-  let sortOrder = $state<SortOrder>('asc');
   let showSortMenu = $state(false);
 
   // 排序配置
@@ -28,68 +24,18 @@
   ];
 
   /**
-   * 获取文件类型用于排序
-   */
-  function getItemType(item: FsItem): string {
-    if (item.isDir) return '0_folder';
-    if (item.name.endsWith('.zip') || item.name.endsWith('.cbz') || 
-        item.name.endsWith('.rar') || item.name.endsWith('.cbr')) return '1_archive';
-    if (item.isImage) return '2_image';
-    return '3_file';
-  }
-
-  /**
-   * 执行排序
-   */
-  function performSort() {
-    const sorted = [...items].sort((a, b) => {
-      // 文件夹始终在前面
-      if (a.isDir !== b.isDir) {
-        return a.isDir ? -1 : 1;
-      }
-
-      let comparison = 0;
-
-      switch (sortField) {
-        case 'path':
-          comparison = a.path.localeCompare(b.path, undefined, { numeric: true });
-          break;
-        case 'name':
-          comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
-          break;
-        case 'modified':
-          comparison = (a.modified || 0) - (b.modified || 0);
-          break;
-        case 'size':
-          comparison = a.size - b.size;
-          break;
-        case 'type':
-          comparison = getItemType(a).localeCompare(getItemType(b));
-          if (comparison === 0) {
-            comparison = a.name.localeCompare(b.name);
-          }
-          break;
-      }
-
-      return sortOrder === 'asc' ? comparison : -comparison;
-    });
-
-    onSort(sorted);
-    showSortMenu = false;
-  }
-
-  /**
    * 切换排序字段
    */
   function setSortField(field: SortField) {
+    let newOrder: SortOrder = 'asc';
     if (sortField === field) {
       // 如果点击相同字段，切换排序顺序
-      sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+      newOrder = sortOrder === 'asc' ? 'desc' : 'asc';
     } else {
-      sortField = field;
-      sortOrder = 'asc';
+      newOrder = 'asc';
     }
-    performSort();
+    onSortChange(field, newOrder);
+    // showSortMenu = false; // Optional: keep menu open for quick toggling? Usually close it.
   }
 
   /**
@@ -129,7 +75,7 @@
 
   <!-- 排序菜单 -->
   {#if showSortMenu}
-    <div class="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[180px] py-1">
+    <div class="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[180px] py-1">
       {#each sortOptions as option}
         {@const IconComponent = option.icon}
         {@const SortIconComponent = getSortIcon(option.field)}
@@ -154,8 +100,7 @@
           <button
             class="flex-1 px-2 py-1 text-xs {sortOrder === 'asc' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700'} rounded transition-colors"
             onclick={() => {
-              sortOrder = 'asc';
-              performSort();
+              onSortChange(sortField, 'asc');
             }}
           >
             升序
@@ -163,8 +108,7 @@
           <button
             class="flex-1 px-2 py-1 text-xs {sortOrder === 'desc' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700'} rounded transition-colors"
             onclick={() => {
-              sortOrder = 'desc';
-              performSort();
+              onSortChange(sortField, 'desc');
             }}
           >
             降序

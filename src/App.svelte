@@ -15,6 +15,7 @@
 	// import { init_thumbnail_manager } from '$lib/api';
 	import Toast from '$lib/components/ui/toast.svelte';
 	import { onMount } from 'svelte';
+	import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
 
 	let loading = $state(false);
 
@@ -38,8 +39,13 @@
 			// await init_thumbnail_manager(thumbnailPath, rootPath, 256);
 			// console.log('✅ 缩略图管理器初始化成功');
 			console.warn('缩略图管理器初始化已跳过，功能已移除，待重新实现');
+			
+			// 初始化 EMM 元数据存储(加载翻译字典等)
+			console.log('🔧 初始化 EMM 元数据存储...');
+			await emmMetadataStore.initialize();
+			console.log('✅ EMM 元数据存储初始化成功');
 		} catch (error) {
-			console.error('❌ 缩略图管理器初始化失败:', error);
+			console.error('❌ 初始化失败:', error);
 		}
 	});
 

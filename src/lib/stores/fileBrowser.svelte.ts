@@ -7,6 +7,9 @@ import { writable } from 'svelte/store';
 import { toAssetUrl } from '$lib/utils/assetProxy';
 import type { FsItem } from '$lib/types';
 
+export type SortField = 'name' | 'modified' | 'size' | 'type' | 'path';
+export type SortOrder = 'asc' | 'desc';
+
 interface FileBrowserState {
   currentPath: string;
   items: FsItem[];
@@ -16,6 +19,8 @@ interface FileBrowserState {
   currentArchivePath: string;
   selectedIndex: number;
   thumbnails: Map<string, string>;
+  sortField: SortField;
+  sortOrder: SortOrder;
 }
 
 const archiveExtensions = ['.zip', '.cbz', '.rar', '.cbr', '.7z'];
@@ -47,8 +52,55 @@ const initialState: FileBrowserState = {
   isArchiveView: false,
   currentArchivePath: '',
   selectedIndex: -1,
-  thumbnails: new Map()
+  thumbnails: new Map(),
+  sortField: 'name',
+  sortOrder: 'asc'
 };
+
+/**
+ * 获取文件类型用于排序
+ */
+function getItemType(item: FsItem): string {
+  if (item.isDir) return '0_folder';
+  if (item.name.endsWith('.zip') || item.name.endsWith('.cbz') ||
+    item.name.endsWith('.rar') || item.name.endsWith('.cbr')) return '1_archive';
+  if (item.isImage) return '2_image';
+  return '3_file';
+}
+
+export function sortItems(items: FsItem[], field: SortField, order: SortOrder): FsItem[] {
+  return [...items].sort((a, b) => {
+    // 文件夹始终在前面
+    if (a.isDir !== b.isDir) {
+      return a.isDir ? -1 : 1;
+    }
+
+    let comparison = 0;
+
+    switch (field) {
+      case 'path':
+        comparison = a.path.localeCompare(b.path, undefined, { numeric: true });
+        break;
+      case 'name':
+        comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+        break;
+      case 'modified':
+        comparison = (a.modified || 0) - (b.modified || 0);
+        break;
+      case 'size':
+        comparison = a.size - b.size;
+        break;
+      case 'type':
+        comparison = getItemType(a).localeCompare(getItemType(b));
+        if (comparison === 0) {
+          comparison = a.name.localeCompare(b.name);
+        }
+        break;
+    }
+
+    return order === 'asc' ? comparison : -comparison;
+  });
+}
 
 function createFileBrowserStore() {
   const { subscribe, set, update } = writable<FileBrowserState>(initialState);
@@ -65,9 +117,10 @@ function createFileBrowserStore() {
     setItems: (items: FsItem[]) => update(state => ({ ...state, items })),
     setLoading: (loading: boolean) => update(state => ({ ...state, loading })),
     setError: (error: string) => update(state => ({ ...state, error })),
-    setArchiveView: (isArchive: boolean, archivePath: string = '') => 
+    setArchiveView: (isArchive: boolean, archivePath: string = '') =>
       update(state => ({ ...state, isArchiveView: isArchive, currentArchivePath: archivePath })),
     setSelectedIndex: (index: number) => update(state => ({ ...state, selectedIndex: index })),
+    setSort: (field: SortField, order: SortOrder) => update(state => ({ ...state, sortField: field, sortOrder: order })),
     selectPath: (path: string | null | undefined) => update(state => {
       if (!path) return state;
       const normalized = normalizePath(path);
@@ -106,7 +159,7 @@ function createFileBrowserStore() {
       }
       return bookItems[targetIndex].path;
     },
-    addThumbnail: (path: string, thumbnail: string) => 
+    addThumbnail: (path: string, thumbnail: string) =>
       update(state => {
         const newThumbnails = new Map(state.thumbnails);
         // 统一通过 asset 转换中转，避免存入 raw file:// URL 导致前端无法显示
@@ -120,7 +173,7 @@ function createFileBrowserStore() {
         }
         return { ...state, thumbnails: newThumbnails };
       }),
-    setThumbnails: (thumbnails: Map<string, string>) => 
+    setThumbnails: (thumbnails: Map<string, string>) =>
       update(state => ({ ...state, thumbnails: new Map(thumbnails) })),
     clearThumbnails: () => update(state => ({ ...state, thumbnails: new Map() })),
     reset: () => set(initialState)

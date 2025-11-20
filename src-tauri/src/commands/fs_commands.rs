@@ -9,6 +9,7 @@ use crate::core::{ArchiveManager, FsManager};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+use tauri::async_runtime::spawn_blocking;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::UNIX_EPOCH;

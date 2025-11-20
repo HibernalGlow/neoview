@@ -138,6 +138,9 @@ class BookStore {
       this.syncAppStateBookSlice();
       this.state.viewerOpen = true;
       await this.syncInfoPanelBookInfo();
+      this.syncFileBrowserSelection(path);
+      this.syncFileBrowserSelection(path);
+      this.syncFileBrowserSelection(path);
       
       // 记录历史
       const { historyStore } = await import('$lib/stores/history.svelte');
@@ -397,6 +400,14 @@ class BookStore {
       return;
     }
     await this.openBook(targetPath);
+  }
+
+  private syncFileBrowserSelection(path: string) {
+    try {
+      fileBrowserStore.selectPath(path);
+    } catch (error) {
+      console.debug('syncFileBrowserSelection failed:', error);
+    }
   }
 
   async openNextBook() {

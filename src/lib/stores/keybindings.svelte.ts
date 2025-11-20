@@ -263,7 +263,24 @@ class KeyBindingsStore {
 	constructor() {
 		// 从 localStorage 加载自定义绑定
 		this.loadFromStorage();
+		if (typeof window !== 'undefined') {
+			window.addEventListener('storage', this.handleStorageChange);
+		}
 	}
+
+	private handleStorageChange = (event: StorageEvent) => {
+		if (event.key !== 'neoview-keybindings') return;
+		try {
+			if (event.newValue) {
+				const parsed: ActionBinding[] = JSON.parse(event.newValue);
+				this.bindings = this.mergeWithDefaults(parsed);
+			} else {
+				this.bindings = [...defaultBindings];
+			}
+		} catch (error) {
+			console.error('Failed to sync keybindings from storage event:', error);
+		}
+	};
 
 	private mergeWithDefaults(stored: ActionBinding[]): ActionBinding[] {
 		const merged: ActionBinding[] = [];

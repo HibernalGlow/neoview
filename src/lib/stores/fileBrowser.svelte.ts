@@ -19,6 +19,8 @@ interface FileBrowserState {
 }
 
 const archiveExtensions = ['.zip', '.cbz', '.rar', '.cbr', '.7z'];
+const videoExtensions = ['.mp4', '.mkv', '.avi', '.mov', '.flv', '.webm', '.wmv', '.m4v', '.mpg', '.mpeg'];
+const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.avif', '.jxl', '.tiff', '.tif'];
 
 function normalizePath(path: string): string {
   return path.replace(/\\/g, '/').toLowerCase();
@@ -29,8 +31,19 @@ function isArchiveFile(path: string): boolean {
   return archiveExtensions.some((ext) => lower.endsWith(ext)) || lower.endsWith('.pdf');
 }
 
+function isVideoFile(path: string): boolean {
+  const lower = path.toLowerCase();
+  return videoExtensions.some(ext => lower.endsWith(ext));
+}
+
+function isImageFile(item: FsItem): boolean {
+  if (item.isImage) return true;
+  const lower = item.path.toLowerCase();
+  return imageExtensions.some(ext => lower.endsWith(ext));
+}
+
 function isBookCandidate(item: FsItem): boolean {
-  return item.isDir || isArchiveFile(item.path);
+  return item.isDir || isArchiveFile(item.path) || isVideoFile(item.path) || isImageFile(item);
 }
 
 const initialState: FileBrowserState = {
@@ -62,6 +75,15 @@ function createFileBrowserStore() {
     setArchiveView: (isArchive: boolean, archivePath: string = '') => 
       update(state => ({ ...state, isArchiveView: isArchive, currentArchivePath: archivePath })),
     setSelectedIndex: (index: number) => update(state => ({ ...state, selectedIndex: index })),
+    selectPath: (path: string | null | undefined) => update(state => {
+      if (!path) return state;
+      const normalized = normalizePath(path);
+      const index = state.items.findIndex(item => normalizePath(item.path) === normalized);
+      if (index === -1 || index === state.selectedIndex) {
+        return state;
+      }
+      return { ...state, selectedIndex: index };
+    }),
     findAdjacentBookPath: (currentBookPath: string | null, direction: 'next' | 'previous'): string | null => {
       if (!currentBookPath) return null;
       const normalizedCurrent = normalizePath(currentBookPath);

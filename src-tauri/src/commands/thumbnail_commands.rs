@@ -241,6 +241,42 @@ pub async fn generate_video_thumbnail_new(
         })
         .await?;
 
+    // 保存到数据库（异步后台任务）
+    let db = Arc::clone(&state.db);
+    let video_path_clone = video_path.clone();
+    let thumb_data_clone = thumbnail_data.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        // 获取文件大小
+        let size = std::fs::metadata(&video_path_clone)
+            .map(|m| m.len() as i64)
+            .unwrap_or(0);
+
+        // 生成哈希
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        video_path_clone.hash(&mut hasher);
+        size.hash(&mut hasher);
+        let ghash = hasher.finish() as i32;
+
+        // 保存
+        if let Err(e) = db.save_thumbnail_with_category(
+            &video_path_clone,
+            size,
+            ghash,
+            &thumb_data_clone,
+            Some("file"),
+        ) {
+            eprintln!(
+                "❌ 保存视频缩略图到数据库失败: {} - {}",
+                video_path_clone, e
+            );
+        } else if cfg!(debug_assertions) {
+            println!("✅ 视频缩略图已保存到数据库: {}", video_path_clone);
+        }
+    });
+
     // 注册到 BlobRegistry，返回 blob key
     let blob_key = state.blob_registry.get_or_register(
         &thumbnail_data,

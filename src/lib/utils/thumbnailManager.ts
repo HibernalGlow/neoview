@@ -48,6 +48,7 @@ class ThumbnailManager {
   private processingTasks = new Set<string>();
   private cache = new Map<string, ThumbnailCache>();
   private dbIndexCache = new Map<string, boolean>(); // 预加载的数据库索引缓存
+  private dbMissCache = new Set<string>(); // 记录数据库未命中的路径 key
 
   // LRU 缓存（智能缓存淘汰）
   private lruCache: LRUCache<string>;
@@ -301,6 +302,7 @@ class ThumbnailManager {
       console.debug('批量预加载索引失败:', error);
       for (const entry of pending) {
         this.dbIndexCache.set(entry.key, false);
+        this.dbMissCache.add(entry.key);
         results.set(entry.path, false);
       }
     }
@@ -453,6 +455,10 @@ class ThumbnailManager {
       const { invoke } = await import('@tauri-apps/api/core');
       const pathKey = this.buildPathKey(path, innerPath);
 
+      if (this.dbMissCache.has(pathKey)) {
+        return null;
+      }
+
       // 确定类别
       const category = isFolder ? 'folder' : 'file';
 
@@ -497,9 +503,12 @@ class ThumbnailManager {
         }
       } else {
         console.debug(`📭 数据库中没有缩略图: ${pathKey} (category=${category})`);
+        this.dbMissCache.add(pathKey);
       }
     } catch (error) {
       console.debug('从数据库加载缩略图失败:', path, error);
+      const pathKey = this.buildPathKey(path, innerPath);
+      this.dbMissCache.add(pathKey);
     }
 
     return null;

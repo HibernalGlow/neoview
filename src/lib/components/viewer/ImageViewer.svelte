@@ -492,6 +492,39 @@ async function updateInfoPanelForCurrentPage(dimensions?: ImageDimensions | null
 		}
 	});
 
+	// 🔥 修复书籍导航Bug: 监听书籍切换,立即清空显示状态
+	let lastBookPath: string | null = null;
+	$effect(() => {
+		const currentBook = bookStore.currentBook;
+		const currentBookPath = currentBook?.path ?? null;
+		
+		// 检测书籍是否真的发生了变化
+		if (currentBookPath !== lastBookPath) {
+			console.log('📚 书籍切换检测:', { from: lastBookPath, to: currentBookPath });
+			
+			// 立即清空所有显示状态,防止显示旧书籍的图片
+			imageData = null;
+			imageData2 = null;
+			derivedUpscaledUrl = null;
+			if (lastUpscaledObjectUrl) {
+				URL.revokeObjectURL(lastUpscaledObjectUrl);
+				lastUpscaledObjectUrl = null;
+			}
+			lastUpscaledBlob = null;
+			lastRequestedPageIndex = -1;
+			lastLoadedPageIndex = -1;
+			lastLoadedHash = null;
+			
+			lastBookPath = currentBookPath;
+			
+			if (!currentBook) {
+				console.log('📕 书籍已关闭,所有显示状态已清空');
+			} else {
+				console.log('📗 切换到新书籍,旧图片已清空,等待新书籍第一页加载');
+			}
+		}
+	});
+
 	// 书籍切换现在由 PreloadManager 内部的 setupBookChangeListener 处理
 	// 删除了会导致缓存被清空的 $effect
 

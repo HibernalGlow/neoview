@@ -44,7 +44,7 @@ export interface PreloadManagerOptions {
 	onUpscaleStart?: () => void;
 	onCacheHit?: (detail: any) => void;
 	onCheckPreloadCache?: (detail: any) => void;
-	onThumbnailReady?: (pageIndex: number, dataURL: string) => void;
+	onThumbnailReady?: (pageIndex: number, dataURL: string, source?: string) => void;
 	// 初始配置
 	initialPreloadPages?: number;
 	initialMaxThreads?: number;
@@ -172,17 +172,17 @@ export class PreloadManager {
 		this.setupBookChangeListener();
 	}
 
-	addThumbnailListener(listener: (pageIndex: number, dataURL: string) => void): () => void {
+	addThumbnailListener(listener: (pageIndex: number, dataURL: string, source?: string) => void): () => void {
 		this.thumbnailListeners.add(listener);
 		return () => {
 			this.thumbnailListeners.delete(listener);
 		};
 	}
 
-	private emitThumbnailReady(pageIndex: number, dataURL: string) {
+	private emitThumbnailReady(pageIndex: number, dataURL: string, source?: string) {
 		for (const listener of this.thumbnailListeners) {
 			try {
-				listener(pageIndex, dataURL);
+				listener(pageIndex, dataURL, source);
 			} catch (error) {
 				console.error('Thumbnail listener failed:', error);
 			}
@@ -371,9 +371,9 @@ export class PreloadManager {
 	/**
 	 * 请求缩略图
 	 */
-	async requestThumbnail(pageIndex: number): Promise<string> {
+	async requestThumbnail(pageIndex: number, source?: string): Promise<string> {
 		const thumb = await this.imageLoader.getThumbnail(pageIndex);
-		this.emitThumbnailReady(pageIndex, thumb);
+		this.emitThumbnailReady(pageIndex, thumb, source);
 		return thumb;
 	}
 	

@@ -334,7 +334,7 @@ async function loadThumbnail(pageIndex: number) {
 
 	loadingIndices.add(pageIndex);
 	try {
-		await preloadManager.requestThumbnail(pageIndex);
+		await preloadManager.requestThumbnail(pageIndex, 'bottom-bar');
 		if (pathKey) {
 			noThumbnailPaths.delete(pathKey);
 		}
@@ -402,21 +402,25 @@ async function loadThumbnail(pageIndex: number) {
 		img.src = dataURL;
 	}
 
-	onMount(() => {
-		unsubscribeSharedManager = subscribeSharedPreloadManager((manager) => {
-			if (unsubscribeThumbnailListener) {
-				unsubscribeThumbnailListener();
-				unsubscribeThumbnailListener = null;
-			}
-			preloadManager = manager;
-			if (preloadManager) {
-				lastThumbnailRange = null;
-				// register thumbnail listener
-				unsubscribeThumbnailListener = preloadManager.addThumbnailListener(handleSharedThumbnailReady);
-				scheduleLoadVisibleThumbnails();
-			}
-		});
+onMount(() => {
+	unsubscribeSharedManager = subscribeSharedPreloadManager((manager) => {
+		if (unsubscribeThumbnailListener) {
+			unsubscribeThumbnailListener();
+			unsubscribeThumbnailListener = null;
+		}
+		preloadManager = manager;
+		if (preloadManager) {
+			lastThumbnailRange = null;
+			unsubscribeThumbnailListener = preloadManager.addThumbnailListener((pageIndex, dataURL, source) => {
+				if (source !== 'bottom-bar') {
+					return;
+				}
+				handleSharedThumbnailReady(pageIndex, dataURL);
+			});
+			scheduleLoadVisibleThumbnails();
+		}
 	});
+});
 
 	onDestroy(() => {
 		if (unsubscribeThumbnailListener) {

@@ -13,7 +13,7 @@ import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 	import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
-	import {
+import {
 		defaultPanelSettings,
 		loadUpscalePanelSettings,
 		persistUpscalePanelSettings,
@@ -31,6 +31,7 @@ import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 	import UpscalePanelConditionTabs from './UpscalePanelConditionTabs.svelte';
 import './UpscalePanel.styles.css';
 import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
+import { collectPageMetadata, evaluateConditions } from '$lib/utils/upscale/conditions';
 
 	// ==================== 状态管理 ====================
 	
@@ -142,6 +143,20 @@ let showOriginalPreview = $state(false);
 let showUpscaledPreview = $state(false);
 
 let pendingUpscaleRequest: { trigger: UpscaleTrigger; imageHash: string | null } | null = null;
+
+interface ResolvedModelConfig {
+	modelName: string;
+	scale: number;
+	tileSize: number;
+	noiseLevel: number;
+	conditionId: string | null;
+}
+
+interface ModelResolutionResult {
+	config: ResolvedModelConfig | null;
+	reason?: string;
+	conditionId?: string | null;
+}
 
 	// 缓存统计
 	let cacheStats = $state({
@@ -656,6 +671,57 @@ let pendingUpscaleRequest: { trigger: UpscaleTrigger; imageHash: string | null }
 		});
 	}
 
+	function resolveModelConfigForPage(page: any): ModelResolutionResult {
+		if (!page) {
+			return { config: null, reason: '没有可用的页面数据' };
+		}
+
+		if (!conditionalUpscaleEnabled) {
+			return {
+				config: {
+					modelName: selectedModel,
+					scale,
+					tileSize,
+					noiseLevel,
+					conditionId: null
+				}
+			};
+		}
+
+		const currentBook = bookStore.currentBook;
+		if (!currentBook) {
+			return { config: null, reason: '未打开书籍，无法匹配条件' };
+		}
+
+		const metadata = collectPageMetadata(page, currentBook.path ?? '');
+		const result = evaluateConditions(metadata, conditionsList ?? []);
+
+		if (result.skipUpscale) {
+			return {
+				config: null,
+				reason: '条件规则标记为跳过',
+				conditionId: result.conditionId ?? null
+			};
+		}
+
+		if (!result.action) {
+			return {
+				config: null,
+				reason: '条件模式启用但没有匹配项'
+			};
+		}
+
+		return {
+			config: {
+				modelName: result.action.model,
+				scale: result.action.scale,
+				tileSize: result.action.tileSize,
+				noiseLevel: result.action.noiseLevel,
+				conditionId: result.conditionId ?? null
+			}
+		};
+	}
+
 	/**
 	 * 执行超分处理
 	 */
@@ -671,6 +737,25 @@ let pendingUpscaleRequest: { trigger: UpscaleTrigger; imageHash: string | null }
 			return;
 		}
 
+		const currentPage = bookStore.currentPage;
+		if (!currentPage) {
+			console.error('[UpscalePanel] 没有找到当前页面');
+			return;
+		}
+
+		const resolution = resolveModelConfigForPage(currentPage);
+		if (!resolution.config) {
+			const message = resolution.reason ?? '条件限制，已跳过超分';
+			status = message;
+			progress = 0;
+			console.log('[UpscalePanel] 跳过超分:', message);
+			bookStore.setCurrentPageUpscaled(false);
+			return;
+		}
+
+		const modelConfig = resolution.config;
+		const resolvedConditionId = modelConfig.conditionId;
+
 		resetUpscaledDisplay();
 		isProcessing = true;
 		progress = 0;
@@ -684,17 +769,20 @@ let pendingUpscaleRequest: { trigger: UpscaleTrigger; imageHash: string | null }
 		}, 100);
 
 		try {
-			// 应用当前设置
-			console.log('🔧 应用设置 - tileSize:', tileSize, 'selectedModel:', selectedModel, 'scale:', scale);
-			await pyo3UpscaleManager.setModel(selectedModel, scale);
-			pyo3UpscaleManager.setTileSize(tileSize);
+			// 应用当前/条件设置
+			console.log('🔧 应用设置', {
+				model: modelConfig.modelName,
+				scale: modelConfig.scale,
+				tileSize: modelConfig.tileSize,
+				noiseLevel: modelConfig.noiseLevel,
+				conditionId: resolvedConditionId
+			});
+			await pyo3UpscaleManager.setModel(modelConfig.modelName, modelConfig.scale);
+			pyo3UpscaleManager.setTileSize(modelConfig.tileSize);
+			pyo3UpscaleManager.setNoiseLevel(modelConfig.noiseLevel);
 			console.log('✅ 设置已应用到 PyO3UpscaleManager');
 
 			// 从当前页面获取图像数据
-			const currentPage = bookStore.currentPage;
-			if (!currentPage) {
-				throw new Error('没有当前图片');
-			}
 
 			// 检查当前页是否已有内存缓存
 			console.log('🔍 检查内存超分缓存...');
@@ -728,7 +816,13 @@ let pendingUpscaleRequest: { trigger: UpscaleTrigger; imageHash: string | null }
 						applyUpscaledPreview(imageHash, cached.url);
 						
 						// 使用统一处理函数（resultData 为空表示无需重新保存）
-						await handleUpscaleResult(imageHash, cached.blob, cached.url, new Uint8Array());
+						await handleUpscaleResult(
+							imageHash,
+							cached.blob,
+							cached.url,
+							new Uint8Array(),
+							resolvedConditionId
+						);
 						
 						return; // 使用缓存，直接返回
 					}
@@ -770,7 +864,7 @@ let pendingUpscaleRequest: { trigger: UpscaleTrigger; imageHash: string | null }
 							const url = URL.createObjectURL(blob);
 							
 							// 使用统一处理函数
-							await handleUpscaleResult(imageHash, blob, url, arr);
+							await handleUpscaleResult(imageHash, blob, url, arr, resolvedConditionId);
 							
 							return; // 使用磁盘缓存，直接返回
 						}
@@ -825,7 +919,7 @@ let pendingUpscaleRequest: { trigger: UpscaleTrigger; imageHash: string | null }
 				});
 
 			// 使用统一处理函数
-			await handleUpscaleResult(imageHash, blob, objectUrl, result);
+			await handleUpscaleResult(imageHash, blob, objectUrl, result, resolvedConditionId);
 			
 		} catch (err) {
 			console.error('[UpscalePanel] 超分失败:', err);
@@ -912,7 +1006,8 @@ let pendingUpscaleRequest: { trigger: UpscaleTrigger; imageHash: string | null }
 		imageHash: string,
 		blob: Blob,
 		url: string,
-		resultData: Uint8Array
+		resultData: Uint8Array,
+		conditionId?: string | null
 	) {
 		const currentPageIndex = bookStore.currentPageIndex;
 		const currentPage = bookStore.currentPage;
@@ -974,6 +1069,7 @@ let pendingUpscaleRequest: { trigger: UpscaleTrigger; imageHash: string | null }
 				originalImageHash: imageHash,
 				background: false,
 				pageIndex: currentPageIndex,
+				conditionId: conditionId ?? undefined,
 				writeToMemoryCache: false   // 已经写入内存缓存
 			}
 		}));

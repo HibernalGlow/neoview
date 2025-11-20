@@ -120,7 +120,12 @@ export function resolveModelSettings(conditionId?: string): SchedulerModelSettin
 		}
 	}
 
-			return {
+	if (panelSettings.conditionalUpscaleEnabled) {
+		console.log('条件模式启用且没有匹配的条件，跳过默认模型');
+		return null;
+	}
+
+	return {
 		modelName: panelSettings.selectedModel,
 		scale: panelSettings.scale,
 		tileSize: panelSettings.tileSize,
@@ -132,6 +137,7 @@ export function resolveModelSettings(conditionId?: string): SchedulerModelSettin
 function ensureConditionBinding(imageData: ImageDataWithHash): { conditionId?: string; skip: boolean } {
 	const book = bookStore.currentBook;
 	const panelSettings = loadUpscalePanelSettings();
+	const conditionsEnabled = panelSettings.conditionalUpscaleEnabled;
 	const pageIndex = imageData.pageIndex ?? bookStore.currentPageIndex;
 
 	if (!book || typeof pageIndex !== 'number') {
@@ -154,9 +160,17 @@ function ensureConditionBinding(imageData: ImageDataWithHash): { conditionId?: s
 		if (result.action?.skip) {
 			return { conditionId: imageData.conditionId, skip: true };
 		}
+		if (!result.conditionId && conditionsEnabled) {
+			console.log('条件模式启用但未匹配任何条件，跳过当前任务');
+			return { conditionId: undefined, skip: true };
+		}
 		if (result.conditionId) {
 			condition = panelSettings.conditionsList.find((c) => c.id === result.conditionId);
 		}
+	}
+
+	if (conditionsEnabled && !condition) {
+		return { conditionId: undefined, skip: true };
 	}
 
 	return {

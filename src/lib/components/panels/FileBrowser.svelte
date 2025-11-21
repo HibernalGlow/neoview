@@ -18,7 +18,8 @@
 		Settings,
 		AlertCircle,
 		Bookmark,
-		Star
+		Star,
+		ExternalLink
 	} from '@lucide/svelte';
 	import VirtualizedFileList from './file/components/VirtualizedFileList.svelte';
 	import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
@@ -1803,14 +1804,94 @@
 		</div>
 	</div>
 
-	<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
-		<!-- 错误提示 -->
-		{#if error}
-			<div class="m-2 rounded bg-red-50 p-3 text-sm text-red-600">
-				{error}
-			</div>
-		{/if}
+	<!-- 右键菜单：文件列表 -->
+	{#if contextMenu.item}
+		<div
+			class="context-menu fixed z-[10000] min-w-[180px] rounded-md border bg-popover text-popover-foreground shadow-lg py-1"
+			style={`left: ${contextMenu.x}px; top: ${contextMenu.y}px;`}
+			onmousedown={(e) => e.stopPropagation()}
+		>
+			<button
+				type="button"
+				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				onclick={() => openFile(contextMenu.item!)}
+			>
+				<Folder class="mr-2 h-4 w-4" />
+				<span>打开</span>
+			</button>
+			<hr class="my-1 border-border/60" />
+			<button
+				type="button"
+				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				onclick={() => addToBookmark(contextMenu.item!)}
+			>
+				<Bookmark class="mr-2 h-4 w-4" />
+				<span>添加到书签</span>
+			</button>
+			<hr class="my-1 border-border/60" />
+			<button
+				type="button"
+				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				onclick={() => cutItem(contextMenu.item!)}
+			>
+				<span class="mr-2 text-xs">✂</span>
+				<span>剪切</span>
+			</button>
+			<button
+				type="button"
+				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				onclick={() => copyItem(contextMenu.item!)}
+			>
+				<span class="mr-2 text-xs">📄</span>
+				<span>复制</span>
+			</button>
+			<button
+				type="button"
+				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent disabled:text-muted-foreground/70"
+				disabled={!clipboardItem}
+				onclick={pasteItem}
+			>
+				<span class="mr-2 text-xs">📥</span>
+				<span>粘贴</span>
+			</button>
+			<hr class="my-1 border-border/60" />
+			<button
+				type="button"
+				class="flex w-full items-center px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
+				onclick={() => deleteItemFromMenu(contextMenu.item!)}
+			>
+				<Trash2 class="mr-2 h-4 w-4" />
+				<span>删除</span>
+			</button>
+			<button
+				type="button"
+				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				onclick={() => renameItem(contextMenu.item!)}
+			>
+				<span class="mr-2 text-xs">✏</span>
+				<span>重命名</span>
+			</button>
+			<hr class="my-1 border-border/60" />
+			<button
+				type="button"
+				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				onclick={() => openInExplorer(contextMenu.item!)}
+			>
+				<ExternalLink class="mr-2 h-4 w-4" />
+				<span>在资源管理器中打开</span>
+			</button>
+			<button
+				type="button"
+				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				onclick={() => openWithExternalApp(contextMenu.item!)}
+			>
+				<ExternalLink class="mr-2 h-4 w-4" />
+				<span>在外部应用中打开</span>
+			</button>
+		</div>
+	{/if}
 
+	<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
 		<!-- 加载状态 -->
 		{#if loading}
 			<div class="flex flex-1 items-center justify-center">

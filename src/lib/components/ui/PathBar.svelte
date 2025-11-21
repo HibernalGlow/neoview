@@ -233,6 +233,8 @@
 								<ContextMenuTrigger>
 									<Breadcrumb.Link
 										href="#"
+										class="text-muted-foreground hover:text-foreground"
+										style="color: hsl(var(--muted-foreground));"
 										onclick={(e) => {
 											e.stopPropagation();
 											handleNavigate('');
@@ -261,6 +263,8 @@
 										{:else}
 											<Breadcrumb.Link
 												href="#"
+												class="text-muted-foreground hover:text-foreground"
+												style="color: hsl(var(--muted-foreground));"
 												onclick={(e) => {
 													e.stopPropagation();
 													handleNavigate(breadcrumb.path);

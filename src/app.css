@@ -148,4 +148,43 @@
 		scrollbar-width: thin;
 		scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
 	}
+	
+	/* Breadcrumb 样式修复 */
+	[data-slot="breadcrumb-link"] {
+		color: hsl(var(--muted-foreground)) !important;
+		transition: color 0.2s ease;
+	}
+	
+	[data-slot="breadcrumb-link"]:hover {
+		color: hsl(var(--foreground)) !important;
+	}
+	
+	/* 确保 PathBar 中的链接样式正确 */
+	.flex.cursor-text [data-slot="breadcrumb-link"] {
+		color: hsl(var(--muted-foreground)) !important;
+	}
+	
+	.flex.cursor-text [data-slot="breadcrumb-link"]:hover {
+		color: hsl(var(--foreground)) !important;
+	}
+	
+	/* ContextMenu 内的链接样式 */
+	[data-state="open"] [data-slot="breadcrumb-link"],
+	[data-radix-context-menu-trigger] [data-slot="breadcrumb-link"] {
+		color: hsl(var(--muted-foreground)) !important;
+	}
+	
+	[data-state="open"] [data-slot="breadcrumb-link"]:hover,
+	[data-radix-context-menu-trigger] [data-slot="breadcrumb-link"]:hover {
+		color: hsl(var(--foreground)) !important;
+	}
+	
+	/* 所有 a 标签的通用样式 */
+	a[data-slot="breadcrumb-link"] {
+		color: hsl(var(--muted-foreground)) !important;
+	}
+	
+	a[data-slot="breadcrumb-link"]:hover {
+		color: hsl(var(--foreground)) !important;
+	}
 }

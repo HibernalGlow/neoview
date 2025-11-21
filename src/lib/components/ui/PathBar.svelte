@@ -4,6 +4,7 @@
 	 */
 	import { Home, FolderOpen, HomeIcon } from '@lucide/svelte';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
+	import { onMount } from 'svelte';
 	import {
 		ContextMenu,
 		ContextMenuContent,
@@ -74,6 +75,13 @@
 	}
 
 	const breadcrumbs = $derived(getBreadcrumbs(currentPath));
+	let isOverflow = $state(false);
+	let containerEl = $state<HTMLDivElement | null>(null);
+
+	const renderedBreadcrumbs = $derived(() => {
+		if (!isOverflow) return breadcrumbs;
+		return [...breadcrumbs].reverse();
+	});
 
 	function handleNavigate(path: string) {
 		onNavigate?.(path);
@@ -87,6 +95,42 @@
 	let isEditing = $state(false);
 	let editValue = $state('');
 	let inputElement = $state<HTMLInputElement | null>(null);
+
+	function updateOverflow() {
+		if (!containerEl) {
+			isOverflow = false;
+			return;
+		}
+
+		const el = containerEl;
+		const next = el.scrollWidth - 1 > el.clientWidth;
+		isOverflow = next;
+	}
+
+	onMount(() => {
+		updateOverflow();
+
+		let resizeObserver: ResizeObserver | null = null;
+		if (typeof ResizeObserver !== 'undefined' && containerEl) {
+			resizeObserver = new ResizeObserver(() => updateOverflow());
+			resizeObserver.observe(containerEl);
+		}
+
+		const handleWindowResize = () => updateOverflow();
+		window.addEventListener('resize', handleWindowResize);
+
+		return () => {
+			if (resizeObserver) {
+				resizeObserver.disconnect();
+			}
+			window.removeEventListener('resize', handleWindowResize);
+		};
+	});
+
+	$effect(() => {
+		// breadcrumbs 变化后，等待一帧再重新计算溢出状态
+		setTimeout(updateOverflow, 0);
+	});
 
 	function startEdit() {
 		editValue = currentPath;
@@ -152,7 +196,8 @@
 </script>
 
 <div
-	class="flex h-8 items-center justify-end gap-1 overflow-x-auto whitespace-nowrap border-b bg-gray-50 px-2 py-1"
+	bind:this={containerEl}
+	class="flex h-8 items-center justify-end gap-1 overflow-x-auto whitespace-nowrap border-b bg-muted/60 px-2 py-1"
 >
 	{#if isEditing}
 		<form
@@ -165,7 +210,7 @@
 			<input
 				bind:this={inputElement}
 				bind:value={editValue}
-				class="h-full w-full rounded border border-blue-500 bg-white px-2 text-sm focus:outline-none"
+				class="h-full w-full rounded border border-primary bg-background px-2 text-sm focus:outline-none"
 				onblur={cancelEdit}
 				onkeydown={(e) => {
 					if (e.key === 'Escape') cancelEdit();
@@ -176,7 +221,7 @@
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="flex h-full flex-1 cursor-text items-center rounded px-1 transition-colors hover:bg-gray-100"
+			class="flex h-full flex-1 cursor-text items-center rounded px-1 transition-colors hover:bg-accent/10"
 			onclick={startEdit}
 		>
 			{#if currentPath}
@@ -193,7 +238,7 @@
 											handleNavigate('');
 										}}
 									>
-										<Home class="h-4 w-4 text-gray-600" />
+										<Home class="h-4 w-4" />
 									</Breadcrumb.Link>
 								</ContextMenuTrigger>
 								<ContextMenuContent>
@@ -206,12 +251,12 @@
 						</Breadcrumb.Item>
 
 						<!-- 面包屑路径 -->
-						{#each breadcrumbs as breadcrumb, index}
+						{#each renderedBreadcrumbs as breadcrumb}
 							<Breadcrumb.Separator />
 							<Breadcrumb.Item>
 								<ContextMenu>
 									<ContextMenuTrigger>
-										{#if index === breadcrumbs.length - 1}
+										{#if breadcrumb.path === currentPath}
 											<Breadcrumb.Page>{breadcrumb.name}</Breadcrumb.Page>
 										{:else}
 											<Breadcrumb.Link
@@ -237,7 +282,7 @@
 					</Breadcrumb.List>
 				</Breadcrumb.Root>
 			{:else}
-				<div class="flex items-center gap-2 text-sm text-gray-500">
+				<div class="flex items-center gap-2 text-sm text-muted-foreground">
 					<FolderOpen class="h-4 w-4" />
 					<span>选择文件夹开始浏览</span>
 				</div>

@@ -313,59 +313,22 @@
 					<Sidebar.Content>
 						<Sidebar.Group class="px-0">
 							<Sidebar.GroupContent>
-								<PanelContextMenu
-									items={[
-										{
-											label: '在新窗口中打开',
-											action: () => {
-												console.log('在新窗口中打开:', activeItem.value);
-												// TODO: 实现新窗口打开逻辑
-											},
-											icon: ExternalLink
-										},
-										{
-											label: $sidebarPinned ? '取消钉住' : '钉住',
-											action: () => {
-												togglePin();
-											},
-											icon: $sidebarPinned ? PinOff : Pin
-										},
-										{
-											label: '',
-											action: () => {},
-											separator: true
-										},
-										{
-											label: '关闭面板',
-											action: () => {
-												localSidebarOpen = false;
-												sidebarOpen.set(false);
-											},
-											icon: X
-										}
-									]}
-									zIndex={10000}
-									position="mouse"
-								>
-									{#snippet children()}
-										{#if activeItem.value === 'folder'}
-											<FileBrowser />
-										{:else if activeItem.value === 'history'}
-											<HistoryPanel />
-										{:else if activeItem.value === 'bookmark'}
-											<BookmarkPanel />
-										{:else if activeItem.value === 'thumbnail'}
-											<ThumbnailsPanel />
-										{:else if activeItem.value === 'playlist'}
-											<div class="p-4">
-												<h3 class="mb-4 text-lg font-semibold">播放列表</h3>
-												<p class="text-muted-foreground text-sm">播放列表功能正在开发中...</p>
-											</div>
-										{:else if activeItem.value === 'info'}
-											<InfoPanel />
-										{/if}
-									{/snippet}
-								</PanelContextMenu>
+								{#if activeItem.value === 'folder'}
+									<FileBrowser />
+								{:else if activeItem.value === 'history'}
+									<HistoryPanel />
+								{:else if activeItem.value === 'bookmark'}
+									<BookmarkPanel />
+								{:else if activeItem.value === 'thumbnail'}
+									<ThumbnailsPanel />
+								{:else if activeItem.value === 'playlist'}
+									<div class="p-4">
+										<h3 class="mb-4 text-lg font-semibold">播放列表</h3>
+										<p class="text-muted-foreground text-sm">播放列表功能正在开发中...</p>
+									</div>
+								{:else if activeItem.value === 'info'}
+									<InfoPanel />
+								{/if}
 							</Sidebar.GroupContent>
 						</Sidebar.Group>
 					</Sidebar.Content>

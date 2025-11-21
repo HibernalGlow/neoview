@@ -991,11 +991,17 @@
 		if (mode === 'vertical' && currentIndex !== undefined) {
 			loadVerticalPages();
 		} else if (mode === 'panorama' && currentIndex !== undefined) {
-			// 只有当页码真正改变时才加载
-			if (currentIndex !== lastPanoramaIndex) {
+			// 当页码改变，或者从其他模式切换到全景模式时，重新加载
+			if (currentIndex !== lastPanoramaIndex || lastViewMode !== 'panorama') {
 				lastPanoramaIndex = currentIndex;
+				lastViewMode = 'panorama';
 				loadPanoramaPages();
 			}
+		}
+		
+		// 更新 lastViewMode
+		if (mode !== 'panorama') {
+			lastViewMode = mode;
 		}
 	});
 

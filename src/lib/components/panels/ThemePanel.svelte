@@ -11,9 +11,22 @@
 	let currentMode = $state<ThemeMode>('system');
 	let systemPrefersDark = $state(false);
 	let themeUrl = $state('');
+	let customThemeName = $state('');
+	let editingVariant = $state<'light' | 'dark'>('light');
+
+	type ThemeColorsVariant = Record<string, string>;
+
+	interface ThemeConfig {
+		name: string;
+		description: string;
+		colors: {
+			light: ThemeColorsVariant;
+			dark: ThemeColorsVariant;
+		};
+	}
 
 	// 预设主题颜色方案
-	const presetThemes = [
+	const presetThemes: ThemeConfig[] = [
 		{
 			name: 'Amethyst Haze',
 			description: '优雅的紫色调主题',
@@ -80,7 +93,8 @@
 		}
 	];
 
-	let selectedTheme = $state(presetThemes[0]);
+	let selectedTheme = $state<ThemeConfig>(presetThemes[0]);
+	let customThemes = $state<ThemeConfig[]>([]);
 
 	// 检测系统主题偏好
 	function checkSystemTheme() {
@@ -90,7 +104,7 @@
 	}
 
 	// 应用主题
-	function applyTheme(mode: ThemeMode, theme: (typeof presetThemes)[0]) {
+	function applyTheme(mode: ThemeMode, theme: ThemeConfig) {
 		const root = document.documentElement;
 		const isDark = mode === 'dark' || (mode === 'system' && systemPrefersDark);
 
@@ -130,9 +144,75 @@
 	}
 
 	// 选择预设主题
-	function selectPresetTheme(theme: (typeof presetThemes)[0]) {
+	function selectPresetTheme(theme: ThemeConfig) {
 		selectedTheme = theme;
 		applyTheme(currentMode, theme);
+	}
+
+	function persistCustomThemes() {
+		try {
+			localStorage.setItem('custom-themes', JSON.stringify(customThemes));
+		} catch {}
+	}
+
+	function addCustomTheme(theme: ThemeConfig) {
+		const index = customThemes.findIndex((t) => t.name === theme.name);
+		if (index >= 0) {
+			customThemes = [
+				...customThemes.slice(0, index),
+				theme,
+				...customThemes.slice(index + 1)
+			];
+		} else {
+			customThemes = [...customThemes, theme];
+		}
+		persistCustomThemes();
+	}
+
+	function saveCurrentThemeAsCustom() {
+		const name = (customThemeName || selectedTheme.name || '自定义主题').trim();
+		const theme: ThemeConfig = {
+			name,
+			description: '自定义主题',
+			colors: {
+				light: { ...selectedTheme.colors.light },
+				dark: { ...selectedTheme.colors.dark }
+			}
+		};
+		addCustomTheme(theme);
+		customThemeName = name;
+		selectedTheme = theme;
+		applyTheme(currentMode, selectedTheme);
+	}
+
+	function updateThemeColor(variant: 'light' | 'dark', key: string, value: string) {
+		const baseColors = selectedTheme.colors[variant] || {};
+		const newVariantColors = { ...baseColors, [key]: value };
+		const newTheme: ThemeConfig = {
+			...selectedTheme,
+			colors: {
+				...selectedTheme.colors,
+				[variant]: newVariantColors
+			}
+		};
+
+		const presetIndex = presetThemes.findIndex((t) => t.name === selectedTheme.name);
+		if (presetIndex !== -1) {
+			(presetThemes as any)[presetIndex] = newTheme;
+		} else {
+			const customIndex = customThemes.findIndex((t) => t.name === selectedTheme.name);
+			if (customIndex !== -1) {
+				customThemes = [
+					...customThemes.slice(0, customIndex),
+					newTheme,
+					...customThemes.slice(customIndex + 1)
+				];
+				persistCustomThemes();
+			}
+		}
+
+		selectedTheme = newTheme;
+		applyTheme(currentMode, newTheme);
 	}
 
 	async function importThemeFromUrl() {
@@ -142,7 +222,7 @@
 			const base = theme.cssVars.theme ?? {};
 			const light = { ...base, ...theme.cssVars.light };
 			const dark = { ...base, ...theme.cssVars.dark };
-			const importedTheme = {
+			const importedTheme: ThemeConfig = {
 				name: theme.name || 'Custom Theme',
 				description: '来自 tweakcn 的主题',
 				colors: {
@@ -150,8 +230,8 @@
 					dark
 				}
 			};
-			(presetThemes as any).push(importedTheme);
-			selectedTheme = importedTheme as (typeof presetThemes)[0];
+			addCustomTheme(importedTheme);
+			selectedTheme = importedTheme;
 			applyTheme(currentMode, selectedTheme);
 		} catch (error) {
 			console.error('导入主题失败', error);
@@ -162,6 +242,16 @@
 	onMount(() => {
 		checkSystemTheme();
 
+		try {
+			const rawCustom = localStorage.getItem('custom-themes');
+			if (rawCustom) {
+				const parsed = JSON.parse(rawCustom);
+				if (Array.isArray(parsed)) {
+					customThemes = parsed as ThemeConfig[];
+				}
+			}
+		} catch {}
+
 		// 从 localStorage 加载保存的设置
 		const savedMode = localStorage.getItem('theme-mode') as ThemeMode;
 		const savedThemeName = localStorage.getItem('theme-name');
@@ -171,7 +261,12 @@
 		}
 
 		if (savedThemeName) {
-			const theme = presetThemes.find((t) => t.name === savedThemeName);
+			let theme = presetThemes.find((t) => t.name === savedThemeName) as
+				| ThemeConfig
+				| undefined;
+			if (!theme) {
+				theme = customThemes.find((t) => t.name === savedThemeName);
+			}
 			if (theme) {
 				selectedTheme = theme;
 			}
@@ -295,6 +390,55 @@
 		</div>
 	</div>
 
+	{#if customThemes.length}
+		<div class="space-y-3">
+			<Label class="text-sm font-semibold">自定义主题</Label>
+			<div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+				{#each customThemes as theme}
+					<button
+						onclick={() => selectPresetTheme(theme)}
+						class="hover:bg-accent flex flex-col items-start gap-2 rounded-lg border p-4 text-left transition-colors {selectedTheme.name ===
+						theme.name
+							? 'border-primary bg-primary/5'
+							: ''}"
+					>
+						<div class="flex w-full items-center justify-between">
+							<h4 class="font-medium">{theme.name}</h4>
+							{#if selectedTheme.name === theme.name}
+								<Check class="text-primary h-4 w-4" />
+							{/if}
+						</div>
+						<p class="text-muted-foreground text-sm">{theme.description}</p>
+
+						<div class="mt-2 flex gap-2">
+							<div
+								class="h-6 w-6 rounded-full border"
+								style="background: {theme.colors.light.primary}"
+								title="浅色主色"
+							></div>
+							<div
+								class="h-6 w-6 rounded-full border"
+								style="background: {theme.colors.dark.primary}"
+								title="深色主色"
+							></div>
+						</div>
+					</button>
+				{/each}
+			</div>
+		</div>
+	{/if}
+
+	<div class="space-y-3">
+		<Label class="text-sm font-semibold">保存当前主题</Label>
+		<div class="flex gap-2">
+			<Input
+				placeholder="自定义主题名称"
+				bind:value={customThemeName}
+			/>
+			<Button size="sm" onclick={saveCurrentThemeAsCustom}>保存</Button>
+		</div>
+	</div>
+
 	<div class="space-y-3">
 		<Label class="text-sm font-semibold">从 URL 导入主题</Label>
 		<div class="flex gap-2">
@@ -322,6 +466,47 @@
 			<div class="bg-muted text-muted-foreground rounded-lg border p-3">
 				<p class="text-sm font-medium">Muted</p>
 			</div>
+		</div>
+	</div>
+
+	<div class="space-y-3">
+		<div class="flex items-center justify-between">
+			<Label class="text-sm font-semibold">详细颜色</Label>
+			<div class="inline-flex gap-2 rounded-md border p-1">
+				<Button
+					size="sm"
+					variant={editingVariant === 'light' ? 'default' : 'ghost'}
+					onclick={() => (editingVariant = 'light')}
+				>
+					浅色
+				</Button>
+				<Button
+					size="sm"
+					variant={editingVariant === 'dark' ? 'default' : 'ghost'}
+					onclick={() => (editingVariant = 'dark')}
+				>
+					深色
+				</Button>
+			</div>
+		</div>
+		<div class="grid gap-2 md:grid-cols-2">
+			{#each Object.entries(selectedTheme.colors[editingVariant] || {}) as [key, value]}
+				<div class="flex items-center gap-3 rounded-md border px-3 py-2">
+					<div
+						class="h-6 w-6 rounded border"
+						style="background: {value}"
+						title={key}
+					></div>
+					<div class="flex-1 space-y-1">
+						<div class="text-xs font-medium">{key}</div>
+						<Input
+							value={value}
+							on:input={(e) =>
+								updateThemeColor(editingVariant, key, e.currentTarget.value)}
+						/>
+					</div>
+				</div>
+			{/each}
 		</div>
 	</div>
 

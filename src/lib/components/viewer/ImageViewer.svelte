@@ -992,33 +992,36 @@
 	// 全景模式：加载当前页及相邻页（用于填充边框空隙）
 	async function loadPanoramaPages() {
 		if (!bookStore.currentBook || !preloadManager) {
+			console.warn('全景模式：缺少 book 或 preloadManager');
 			return;
 		}
 
 		const currentIndex = bookStore.currentPageIndex;
 		const totalPages = bookStore.totalPages;
 
-		// 加载当前页、前一页、后一页
+		// 加载当前页及前后各2页
+		const range = 2;
 		const pages: Array<{
 			index: number;
 			data: string | null;
 			position: 'left' | 'center' | 'right';
 		}> = [];
 
-		// 前一页（左侧）
-		if (currentIndex > 0) {
-			pages.push({ index: currentIndex - 1, data: null, position: 'left' });
-		}
+		const start = Math.max(0, currentIndex - range);
+		const end = Math.min(totalPages - 1, currentIndex + range);
 
-		// 当前页（中间）
-		pages.push({ index: currentIndex, data: null, position: 'center' });
+		console.log(`🖼️ 全景模式：加载页面范围 ${start + 1} - ${end + 1}，当前页 ${currentIndex + 1}`);
 
-		// 后一页（右侧）
-		if (currentIndex < totalPages - 1) {
-			pages.push({ index: currentIndex + 1, data: null, position: 'right' });
+		for (let i = start; i <= end; i++) {
+			let position: 'left' | 'center' | 'right' = 'center';
+			if (i < currentIndex) position = 'left';
+			else if (i > currentIndex) position = 'right';
+
+			pages.push({ index: i, data: null, position });
 		}
 
 		panoramaPagesData = pages;
+		console.log('🖼️ 全景模式：初始化页面数组', pages.length, '页');
 
 		// 异步加载每页的图片数据
 		for (const page of pages) {
@@ -1027,8 +1030,13 @@
 				if (blob && blob.size > 0) {
 					const url = URL.createObjectURL(blob);
 					page.data = url;
+					console.log(
+						`✅ 全景模式：页面 ${page.index + 1} 加载成功 (${page.position})，大小: ${blob.size} bytes`
+					);
 					// 更新数组以触发响应式更新
 					panoramaPagesData = [...panoramaPagesData];
+				} else {
+					console.warn(`⚠️ 全景模式：页面 ${page.index + 1} blob 为空`);
 				}
 			} catch (error) {
 				console.warn(`加载全景模式第 ${page.index + 1} 页失败:`, error);

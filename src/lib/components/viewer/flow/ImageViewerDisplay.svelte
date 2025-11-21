@@ -70,13 +70,13 @@
 	>
 		{#if hasPanoramaImages}
 			<!-- 使用相邻图片填充 -->
-			<div class="flex h-full min-w-full items-center justify-center gap-4 p-4">
+			<div class="flex h-full min-w-full items-center justify-center gap-4 py-0 px-4">
 				{#each panoramaPages as page (page.index)}
 					{#if page.data}
 						<img
 							src={page.data}
 							alt={`Page ${page.index + 1}`}
-							class="max-h-full w-auto flex-shrink-0 rounded-sm object-contain shadow-2xl"
+							class="h-full w-auto flex-shrink-0 rounded-sm object-cover shadow-2xl"
 							style={`transform: rotate(${rotationAngle}deg); transition: transform 0.2s;`}
 							use:scrollToCenter={page.position === 'center'}
 						/>

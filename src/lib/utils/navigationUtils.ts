@@ -18,9 +18,10 @@ export async function openFileSystemItem(
         page?: number; // For books: target page
         totalPages?: number; // For books: total pages (for validation if needed)
         forceBookOpen?: boolean;
+        folderSyncMode?: 'enter' | 'select';
     } = {}
 ) {
-    const { syncFileTree = false, page = 0 } = options;
+    const { syncFileTree = false, page = 0, folderSyncMode = 'enter' } = options;
 
     console.log(`📂 Open Item: ${path}, isDir: ${isDir}, sync: ${syncFileTree}`);
 
@@ -29,9 +30,10 @@ export async function openFileSystemItem(
         try {
             let targetPath = path;
 
-            // If it is a folder, we append a separator so that getParentDirectory returns the folder itself.
+            // If it is a folder and mode is 'enter', we append a separator so that getParentDirectory returns the folder itself.
             // This causes the file browser to ENTER the folder.
-            if (isDir) {
+            // If mode is 'select', we leave it as is, so it navigates to parent and selects the folder.
+            if (isDir && folderSyncMode === 'enter') {
                 const hasBackslash = targetPath.includes('\\');
                 const separator = hasBackslash ? '\\' : '/';
                 if (!targetPath.endsWith(separator)) {

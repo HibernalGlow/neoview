@@ -114,7 +114,8 @@
 	async function openBookmark(bookmark: any) {
 		const isDir = bookmark.type === 'folder';
 		await openFileSystemItem(bookmark.path, isDir, {
-			syncFileTree: syncFileTreeOnBookmarkSelect
+			syncFileTree: syncFileTreeOnBookmarkSelect,
+			folderSyncMode: 'select'
 		});
 	}
 

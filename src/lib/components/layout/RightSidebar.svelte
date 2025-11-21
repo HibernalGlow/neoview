@@ -141,7 +141,7 @@
 	onVisibilityChange={handleVisibilityChange}
 >
 	<div
-		class="relative flex h-full bg-sidebar/90 backdrop-blur-md border-l border-sidebar-border"
+		class="relative flex h-full"
 		style="--sidebar-width: {$rightSidebarWidth}px; width: {$rightSidebarWidth}px;"
 	>
 		<Sidebar.Provider 

@@ -196,7 +196,7 @@
 
 <HoverWrapper bind:isVisible pinned={$sidebarPinned} onVisibilityChange={handleVisibilityChange}>
 	<div
-		class="relative flex h-full bg-sidebar/90 backdrop-blur-md border-r border-sidebar-border"
+		class="relative flex h-full"
 		style="--sidebar-width: {$sidebarWidth}px; width: {$sidebarWidth}px;"
 	>
 		<Sidebar.Provider

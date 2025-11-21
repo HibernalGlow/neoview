@@ -1029,12 +1029,13 @@
 				const blob = await preloadManager.getBlob(page.index);
 				if (blob && blob.size > 0) {
 					const url = URL.createObjectURL(blob);
-					page.data = url;
 					console.log(
 						`✅ 全景模式：页面 ${page.index + 1} 加载成功 (${page.position})，大小: ${blob.size} bytes`
 					);
-					// 更新数组以触发响应式更新
-					panoramaPagesData = [...panoramaPagesData];
+					// 使用 map 创建新对象数组以触发响应式更新
+					panoramaPagesData = panoramaPagesData.map(p => 
+						p.index === page.index ? { ...p, data: url } : p
+					);
 				} else {
 					console.warn(`⚠️ 全景模式：页面 ${page.index + 1} blob 为空`);
 				}

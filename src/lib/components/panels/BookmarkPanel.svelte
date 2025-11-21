@@ -28,7 +28,7 @@
 	import { appState, type StateSelector } from '$lib/core/state/appState';
 	import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
-	import { Checkbox } from '$lib/components/ui/checkbox';
+	import * as Switch from '$lib/components/ui/switch';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 	import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 	import { setActivePanelTab } from '$lib/stores';
@@ -254,12 +254,14 @@
 					<span class="text-muted-foreground text-sm">({filteredBookmarks.length})</span>
 				</div>
 				<div class="flex items-center gap-3">
-					<div class="text-muted-foreground flex items-center gap-1 text-xs">
-						<Checkbox
-							bind:checked={syncFileTreeOnBookmarkSelect}
+					<div class="text-muted-foreground flex items-center gap-2 text-xs">
+						<span>同步文件树</span>
+						<Switch.Root
+							checked={syncFileTreeOnBookmarkSelect}
+							onCheckedChange={(v) => (syncFileTreeOnBookmarkSelect = v)}
+							class="scale-75"
 							aria-label="选中书签时同步文件树"
 						/>
-						<span>同步文件树</span>
 					</div>
 					<Button variant="ghost" size="sm" onclick={toggleViewMode} title="切换视图">
 						{#if viewMode === 'list'}

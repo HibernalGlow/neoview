@@ -156,6 +156,7 @@
 	let currentArchivePath = $state('');
 	let selectedIndex = $state(-1);
 	let scrollToSelectedToken = $state(0);
+	let scrollTargetIndex = $state(-1);
 	let fileListContainer = $state<HTMLDivElement | undefined>(undefined);
 	let contextMenu = $state<{ x: number; y: number; item: FsItem | null; direction: 'up' | 'down' }>(
 		{ x: 0, y: 0, item: null, direction: 'down' }
@@ -233,6 +234,7 @@
 			sortField = state.sortField;
 			sortOrder = state.sortOrder;
 			scrollToSelectedToken = state.scrollToSelectedToken;
+			scrollTargetIndex = state.scrollTargetIndex;
 		});
 
 		return unsubscribe;
@@ -390,8 +392,15 @@
 
 		document.addEventListener('click', handleClick);
 
-		// 加载主页
-		loadHomepage();
+		// 加载主页 - 仅在当前没有路径时加载（避免覆盖从其他面板跳转过来的导航）
+		if (!fileBrowserStore.getState().currentPath) {
+			loadHomepage();
+		} else {
+			console.log(
+				'📍 FileBrowser mounted, preserving current path:',
+				fileBrowserStore.getState().currentPath
+			);
+		}
 
 		// 注册缩略图生成回调 - 从设置读取配置
 		const applyThumbnailSettings = async () => {
@@ -1762,26 +1771,6 @@
 				</Button>
 			</div>
 		</div>
-		<div
-			class="text-muted-foreground bg-muted/30 flex flex-wrap gap-3 border-b px-3 py-1 text-[11px]"
-		>
-			<span>当前书籍：{$bookState.currentBookPath ?? '—'}</span>
-			<span>
-				页码：
-				{#if $bookState.currentBookPath}
-					{$bookState.currentPageIndex + 1}/{Math.max($bookState.totalPages, 1)}
-				{:else}
-					—
-				{/if}
-			</span>
-			<span>正在处理：{$viewerState.taskCursor.running}/{$viewerState.taskCursor.concurrency}</span>
-			<span>
-				桶深度 C {$viewerState.taskCursor.activeBuckets.current} · F {$viewerState.taskCursor
-					.activeBuckets.forward} · B {$viewerState.taskCursor.activeBuckets.backward} · BG {$viewerState
-					.taskCursor.activeBuckets.background}
-			</span>
-		</div>
-
 		<!-- 搜索栏 -->
 		<div class="border-border bg-background/95 border-b px-2 py-2">
 			<SearchBar
@@ -1906,7 +1895,7 @@
 					{currentPath}
 					{thumbnails}
 					{selectedIndex}
-					scrollToSelectedToken={scrollToSelectedToken}
+					{scrollToSelectedToken}
 					{isCheckMode}
 					{isDeleteMode}
 					{selectedItems}

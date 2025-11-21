@@ -31,6 +31,7 @@
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import { FileSystemAPI } from '$lib/api';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
+	import { setActivePanelTab } from '$lib/stores';
 
 	let history = $state<HistoryEntry[]>([]);
 	let viewMode = $state<'list' | 'grid'>('list');
@@ -110,17 +111,20 @@
 				entry.totalPages
 			);
 
-			// 使用 bookStore 打开
-			await bookStore.openBook(entry.path);
-
-			// 根据设置决定是否同步文件树
+			// 根据设置决定是否同步文件树（在打开书籍之前）
 			if (historySettingsStore.syncFileTreeOnHistorySelect) {
 				try {
+					console.log('🌳 同步文件树到:', entry.path);
+					// 立即切换到文件夹面板，让用户看到加载状态
+					setActivePanelTab('folder');
 					await fileBrowserStore.navigateToPath(entry.path);
 				} catch (err) {
 					console.debug('同步文件树失败:', err);
 				}
 			}
+
+			// 使用 bookStore 打开
+			await bookStore.openBook(entry.path);
 
 			// 如果记录了页码，导航到该页（需要等待书籍完全加载）
 			if (entry.currentPage > 0 && entry.currentPage < entry.totalPages) {
@@ -285,23 +289,6 @@
 					<Button variant="ghost" size="sm" onclick={clearHistory}>清除全部</Button>
 				</div>
 			</div>
-		</div>
-		<div
-			class="text-muted-foreground bg-muted/30 flex flex-wrap items-center gap-3 border-b px-4 py-2 text-[11px]"
-		>
-			<span>当前书籍：{$bookState.currentBookPath ?? '—'}</span>
-			<span>
-				页码：
-				{#if $bookState.currentBookPath}
-					{$bookState.currentPageIndex + 1}/{Math.max($bookState.totalPages, 1)}
-				{:else}
-					—
-				{/if}
-			</span>
-			<span class="flex items-center gap-1">
-				<Activity class="h-3 w-3" />
-				任务 {$viewerState.taskCursor.running}/{$viewerState.taskCursor.concurrency}
-			</span>
 		</div>
 
 		<!-- 搜索栏 -->

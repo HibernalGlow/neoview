@@ -40,6 +40,17 @@
 				node.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
 			}, 0);
 		}
+		
+		// 返回 update 函数，当 isCenter 变化时重新执行
+		return {
+			update(newIsCenter: boolean) {
+				if (newIsCenter) {
+					setTimeout(() => {
+						node.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+					}, 0);
+				}
+			}
+		};
 	}
 
 	// 调试：监控 panoramaPages 变化

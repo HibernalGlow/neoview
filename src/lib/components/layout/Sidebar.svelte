@@ -345,6 +345,7 @@
 										}
 									]}
 									zIndex={10000}
+									position="mouse"
 								>
 									{#snippet children()}
 										{#if activeItem.value === 'folder'}

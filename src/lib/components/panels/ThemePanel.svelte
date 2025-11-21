@@ -13,6 +13,7 @@
 	let themeUrl = $state('');
 	let themeJson = $state('');
 	let customThemeName = $state('');
+	const placeholderText = '{"name":"My Theme","cssVars":{"theme":{},"light":{},"dark":{}}}';
 	let editingVariant = $state<'light' | 'dark'>('light');
 
 	type ThemeColorsVariant = Record<string, string>;
@@ -492,7 +493,7 @@
 			<textarea
 				class="font-mono text-xs bg-muted/50 rounded-md border p-2 min-h-[120px] resize-y outline-none focus-visible:ring-1 focus-visible:ring-ring"
 				bind:value={themeJson}
-				placeholder='{"name":"My Theme","cssVars":{"theme":{},"light":{},"dark":{}}}'
+				placeholder={placeholderText}
 			></textarea>
 			<div class="flex justify-end">
 				<Button size="sm" onclick={importThemeFromJson}>导入 JSON</Button>

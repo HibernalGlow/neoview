@@ -6,12 +6,36 @@
 	import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 	// 使用动态导入以避免在非 Tauri 环境下 vite 预解析失败
 	import { Button } from '$lib/components/ui/button';
-	import { Settings, Keyboard, Palette, Zap, Mouse, X, Minimize, Info, Download, Upload, RotateCcw, Save as SaveIcon, Monitor, Archive, Eye, BookOpen, Layout, PanelLeft } from '@lucide/svelte';
+	import {
+		Settings,
+		Keyboard,
+		Palette,
+		Zap,
+		Mouse,
+		X,
+		Minimize,
+		Info,
+		Download,
+		Upload,
+		RotateCcw,
+		Save as SaveIcon,
+		Monitor,
+		Archive,
+		Eye,
+		BookOpen,
+		Layout,
+		PanelLeft
+	} from '@lucide/svelte';
 	import ViewerSettingsPanel from '$lib/components/dialogs/ViewerSettingsPanel.svelte';
 	import UnifiedBindingPanel from '$lib/components/dialogs/UnifiedBindingPanel.svelte';
 	import SidebarManagementPanel from '$lib/components/panels/SidebarManagementPanel.svelte';
+	import ThemePanel from '$lib/components/panels/ThemePanel.svelte';
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
-	import { getPerformanceSettings, savePerformanceSettings, type PerformanceSettings } from '$lib/api/performance';
+	import {
+		getPerformanceSettings,
+		savePerformanceSettings,
+		type PerformanceSettings
+	} from '$lib/api/performance';
 
 	const appWindow = getCurrentWebviewWindow();
 
@@ -117,7 +141,10 @@
 			const { save } = await import(/* @vite-ignore */ '@tauri-apps' + '/api/dialog');
 			const { writeTextFile } = await import(/* @vite-ignore */ '@tauri-apps' + '/api/fs');
 			const json = settingsManager.exportSettings();
-			const path = await save({ defaultPath: 'UserSetting.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
+			const path = await save({
+				defaultPath: 'UserSetting.json',
+				filters: [{ name: 'JSON', extensions: ['json'] }]
+			});
 			if (path) {
 				await writeTextFile(path, json);
 				alert('导出成功：' + path);
@@ -133,7 +160,10 @@
 		try {
 			const { open } = await import(/* @vite-ignore */ '@tauri-apps' + '/api/dialog');
 			const { readTextFile } = await import(/* @vite-ignore */ '@tauri-apps' + '/api/fs');
-			const selected = await open({ filters: [{ name: 'JSON', extensions: ['json'] }], multiple: false });
+			const selected = await open({
+				filters: [{ name: 'JSON', extensions: ['json'] }],
+				multiple: false
+			});
 			if (selected && typeof selected === 'string') {
 				const content = await readTextFile(selected);
 				const ok = settingsManager.importSettings(content);
@@ -157,7 +187,11 @@
 			const { readTextFile } = await import(/* @vite-ignore */ '@tauri-apps' + '/api/fs');
 			// 使用 open 对话框并设置默认路径到 repo 下的 rule 目录
 			const defaultPath = '../rule/UserSetting.json';
-			const selected = await open({ defaultPath, filters: [{ name: 'JSON', extensions: ['json'] }], multiple: false });
+			const selected = await open({
+				defaultPath,
+				filters: [{ name: 'JSON', extensions: ['json'] }],
+				multiple: false
+			});
 			if (selected && typeof selected === 'string') {
 				const content = await readTextFile(selected);
 				const ok = settingsManager.importSettings(content);
@@ -175,11 +209,11 @@
 	}
 </script>
 
-<div class="h-screen w-screen flex flex-col bg-background">
+<div class="bg-background flex h-screen w-screen flex-col">
 	<!-- 自定义标题栏 -->
 	<div
 		data-tauri-drag-region
-		class="h-10 bg-secondary/50 flex items-center justify-between px-4 select-none border-b"
+		class="bg-secondary/50 flex h-10 select-none items-center justify-between border-b px-4"
 	>
 		<div class="flex items-center gap-2">
 			<Settings class="h-4 w-4" />
@@ -197,13 +231,13 @@
 	</div>
 
 	<!-- 主内容区 -->
-	<div class="flex-1 flex overflow-hidden">
+	<div class="flex flex-1 overflow-hidden">
 		<!-- 左侧标签栏 -->
-		<div class="w-48 border-r p-2 space-y-1 bg-secondary/30">
+		<div class="bg-secondary/30 w-48 space-y-1 border-r p-2">
 			{#each tabs as tab}
 				{@const IconComponent = tab.icon}
 				<button
-					class="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-accent transition-colors {activeTab ===
+					class="hover:bg-accent flex w-full items-center gap-3 rounded-lg px-4 py-3 transition-colors {activeTab ===
 					tab.value
 						? 'bg-primary text-primary-foreground'
 						: ''}"
@@ -219,20 +253,20 @@
 		<!-- 右侧内容区 -->
 		<div class="flex-1 overflow-auto">
 			{#if activeTab === 'general'}
-				<div class="p-6 space-y-6">
+				<div class="space-y-6 p-6">
 					<div class="space-y-2">
-						<h3 class="text-lg font-semibold flex items-center gap-2">
+						<h3 class="flex items-center gap-2 text-lg font-semibold">
 							<Settings class="h-5 w-5" />
 							通用设置
 						</h3>
-						<p class="text-sm text-muted-foreground">配置 NeoView 的基本行为和外观</p>
+						<p class="text-muted-foreground text-sm">配置 NeoView 的基本行为和外观</p>
 					</div>
 
 					<div class="space-y-4">
 						<!-- 语言设置 -->
 						<div class="space-y-2">
 							<h4 class="text-sm font-semibold">语言</h4>
-							<select class="w-full max-w-xs p-2 border rounded-md">
+							<select class="w-full max-w-xs rounded-md border p-2">
 								<option value="zh-CN">简体中文</option>
 								<option value="en-US">English</option>
 								<option value="ja-JP">日本語</option>
@@ -242,7 +276,7 @@
 						<!-- 主题设置 -->
 						<div class="space-y-2">
 							<h4 class="text-sm font-semibold">主题</h4>
-							<select class="w-full max-w-xs p-2 border rounded-md">
+							<select class="w-full max-w-xs rounded-md border p-2">
 								<option value="light">浅色</option>
 								<option value="dark">深色</option>
 								<option value="auto">跟随系统</option>
@@ -283,20 +317,23 @@
 					</div>
 				</div>
 			{:else if activeTab === 'view'}
-				<div class="p-6 space-y-6">
+				<div class="space-y-6 p-6">
 					<div class="space-y-2">
-						<h3 class="text-lg font-semibold flex items-center gap-2">
+						<h3 class="flex items-center gap-2 text-lg font-semibold">
 							<Settings class="h-5 w-5" />
 							视图设置
 						</h3>
-						<p class="text-sm text-muted-foreground">配置图片查看和显示选项</p>
+						<p class="text-muted-foreground text-sm">配置图片查看和显示选项</p>
 					</div>
 
 					<div class="space-y-4">
 						<!-- 缩放模式 -->
 						<div class="space-y-2">
 							<h4 class="text-sm font-semibold">默认缩放模式</h4>
-							<select class="w-full max-w-xs p-2 border rounded-md" bind:value={currentSettings.view.defaultZoomMode}>
+							<select
+								class="w-full max-w-xs rounded-md border p-2"
+								bind:value={currentSettings.view.defaultZoomMode}
+							>
 								<option value="fit">适应窗口</option>
 								<option value="fitWidth">适应宽度</option>
 								<option value="fitHeight">适应高度</option>
@@ -309,11 +346,19 @@
 							<h4 class="text-sm font-semibold">显示选项</h4>
 							<div class="space-y-2">
 								<label class="flex items-center gap-2">
-									<input type="checkbox" class="rounded" bind:checked={currentSettings.view.showGrid} />
+									<input
+										type="checkbox"
+										class="rounded"
+										bind:checked={currentSettings.view.showGrid}
+									/>
 									<span class="text-sm">显示网格</span>
 								</label>
 								<label class="flex items-center gap-2">
-									<input type="checkbox" class="rounded" bind:checked={currentSettings.view.showInfoBar} />
+									<input
+										type="checkbox"
+										class="rounded"
+										bind:checked={currentSettings.view.showInfoBar}
+									/>
 									<span class="text-sm">显示信息栏</span>
 								</label>
 							</div>
@@ -322,24 +367,34 @@
 						<!-- 背景颜色 -->
 						<div class="space-y-2">
 							<h4 class="text-sm font-semibold">背景颜色</h4>
-							<input type="color" class="w-20 h-10 border rounded-md" bind:value={currentSettings.view.backgroundColor} />
+							<input
+								type="color"
+								class="h-10 w-20 rounded-md border"
+								bind:value={currentSettings.view.backgroundColor}
+							/>
 						</div>
 
 						<!-- 鼠标设置 -->
 						<div class="space-y-4">
-							<h4 class="text-sm font-semibold flex items-center gap-2">
+							<h4 class="flex items-center gap-2 text-sm font-semibold">
 								<Mouse class="h-4 w-4" />
 								鼠标设置
 							</h4>
-							
+
 							<div class="space-y-3 pl-6">
 								<!-- 自动隐藏光标 -->
 								<div class="space-y-2">
 									<label class="flex items-center gap-2">
-										<input type="checkbox" class="rounded" bind:checked={currentSettings.view.mouseCursor.autoHide} />
+										<input
+											type="checkbox"
+											class="rounded"
+											bind:checked={currentSettings.view.mouseCursor.autoHide}
+										/>
 										<span class="text-sm font-medium">自动隐藏光标</span>
 									</label>
-									<p class="text-xs text-muted-foreground">没有鼠标操作时隐藏光标。如果在设定时间内未操作鼠标，则隐藏光标。</p>
+									<p class="text-muted-foreground text-xs">
+										没有鼠标操作时隐藏光标。如果在设定时间内未操作鼠标，则隐藏光标。
+									</p>
 								</div>
 
 								{#if currentSettings.view.mouseCursor.autoHide}
@@ -348,24 +403,24 @@
 										<div class="flex items-center justify-between">
 											<span class="text-sm">隐藏时间（秒）</span>
 											<div class="flex items-center gap-2">
-												<input 
-													type="number" 
-													min="0.5" 
-													max="5.0" 
-													step="0.1" 
+												<input
+													type="number"
+													min="0.5"
+													max="5.0"
+													step="0.1"
 													bind:value={currentSettings.view.mouseCursor.hideDelay}
-													class="w-16 px-2 py-1 text-sm border rounded-md"
+													class="w-16 rounded-md border px-2 py-1 text-sm"
 												/>
-												<span class="text-xs text-muted-foreground">秒</span>
+												<span class="text-muted-foreground text-xs">秒</span>
 											</div>
 										</div>
-										<input 
-											type="range" 
-											min="0.5" 
-											max="5.0" 
-											step="0.1" 
+										<input
+											type="range"
+											min="0.5"
+											max="5.0"
+											step="0.1"
 											bind:value={currentSettings.view.mouseCursor.hideDelay}
-											class="w-full max-w-xs" 
+											class="w-full max-w-xs"
 										/>
 									</div>
 
@@ -374,31 +429,35 @@
 										<div class="flex items-center justify-between">
 											<span class="text-sm">重新显示的移动距离</span>
 											<div class="flex items-center gap-2">
-												<input 
-													type="number" 
-													min="5" 
-													max="100" 
-													step="1" 
+												<input
+													type="number"
+													min="5"
+													max="100"
+													step="1"
 													bind:value={currentSettings.view.mouseCursor.showMovementThreshold}
-													class="w-16 px-2 py-1 text-sm border rounded-md"
+													class="w-16 rounded-md border px-2 py-1 text-sm"
 												/>
-												<span class="text-xs text-muted-foreground">像素</span>
+												<span class="text-muted-foreground text-xs">像素</span>
 											</div>
 										</div>
-										<input 
-											type="range" 
-											min="5" 
-											max="100" 
-											step="1" 
+										<input
+											type="range"
+											min="5"
+											max="100"
+											step="1"
 											bind:value={currentSettings.view.mouseCursor.showMovementThreshold}
-											class="w-full max-w-xs" 
+											class="w-full max-w-xs"
 										/>
 									</div>
 
 									<!-- 操作鼠标按钮以重新显示 -->
 									<div class="space-y-2">
 										<label class="flex items-center gap-2">
-											<input type="checkbox" class="rounded" bind:checked={currentSettings.view.mouseCursor.showOnButtonClick} />
+											<input
+												type="checkbox"
+												class="rounded"
+												bind:checked={currentSettings.view.mouseCursor.showOnButtonClick}
+											/>
 											<span class="text-sm">操作鼠标按钮以重新显示</span>
 										</label>
 									</div>
@@ -413,14 +472,16 @@
 				<UnifiedBindingPanel />
 			{:else if activeTab === 'panels'}
 				<SidebarManagementPanel />
+			{:else if activeTab === 'theme'}
+				<ThemePanel />
 			{:else if activeTab === 'performance'}
-				<div class="p-6 space-y-6">
+				<div class="space-y-6 p-6">
 					<div class="space-y-2">
-						<h3 class="text-lg font-semibold flex items-center gap-2">
+						<h3 class="flex items-center gap-2 text-lg font-semibold">
 							<Zap class="h-5 w-5" />
 							性能设置
 						</h3>
-						<p class="text-sm text-muted-foreground">优化应用性能和资源使用</p>
+						<p class="text-muted-foreground text-sm">优化应用性能和资源使用</p>
 					</div>
 
 					<div class="space-y-4">
@@ -429,18 +490,20 @@
 							<h4 class="text-sm font-semibold">缓存</h4>
 							<div class="space-y-2">
 								<div class="flex items-center justify-between">
-								<span class="text-sm">图像缓存大小</span>
-								<span class="text-xs text-muted-foreground">{performanceSettings.cache_memory_size} MB</span>
-							</div>
-							<input 
-								type="range" 
-								min="128" 
-								max="2048" 
-								step="128" 
-								bind:value={performanceSettings.cache_memory_size}
-								class="w-full" 
-								aria-label="图像缓存大小"
-							/>
+									<span class="text-sm">图像缓存大小</span>
+									<span class="text-muted-foreground text-xs"
+										>{performanceSettings.cache_memory_size} MB</span
+									>
+								</div>
+								<input
+									type="range"
+									min="128"
+									max="2048"
+									step="128"
+									bind:value={performanceSettings.cache_memory_size}
+									class="w-full"
+									aria-label="图像缓存大小"
+								/>
 							</div>
 						</div>
 
@@ -448,9 +511,9 @@
 						<div class="space-y-2">
 							<h4 class="text-sm font-semibold">预加载</h4>
 							<label class="flex items-center gap-2">
-								<input 
-									type="checkbox" 
-									class="rounded" 
+								<input
+									type="checkbox"
+									class="rounded"
 									bind:checked={performanceSettings.preload_enabled}
 								/>
 								<span class="text-sm">启用页面预加载</span>
@@ -459,12 +522,14 @@
 								<div class="space-y-2">
 									<div class="flex items-center justify-between">
 										<span class="text-sm">预加载页面数</span>
-										<span class="text-xs text-muted-foreground">{performanceSettings.preload_size}</span>
+										<span class="text-muted-foreground text-xs"
+											>{performanceSettings.preload_size}</span
+										>
 									</div>
-									<input 
-										type="range" 
-										min="1" 
-										max="20" 
+									<input
+										type="range"
+										min="1"
+										max="20"
 										bind:value={performanceSettings.preload_size}
 										class="w-full"
 										aria-label="预加载页面数"
@@ -477,20 +542,16 @@
 						<div class="space-y-2">
 							<h4 class="text-sm font-semibold">硬件加速</h4>
 							<label class="flex items-center gap-2">
-								<input 
-									type="checkbox" 
-									class="rounded" 
+								<input
+									type="checkbox"
+									class="rounded"
 									bind:checked={performanceSettings.gpu_acceleration}
 								/>
 								<span class="text-sm">启用 GPU 渲染</span>
 							</label>
 							<label class="flex items-center gap-2">
-								<input 
-									type="checkbox" 
-									class="rounded"
-									disabled
-								/>
-								<span class="text-sm text-muted-foreground">使用硬件解码（暂未实现）</span>
+								<input type="checkbox" class="rounded" disabled />
+								<span class="text-muted-foreground text-sm">使用硬件解码（暂未实现）</span>
 							</label>
 						</div>
 
@@ -500,16 +561,18 @@
 							<div class="space-y-2">
 								<div class="flex items-center justify-between">
 									<span class="text-sm">解码线程数</span>
-									<span class="text-xs text-muted-foreground">{performanceSettings.decoding_threads}</span>
+									<span class="text-muted-foreground text-xs"
+										>{performanceSettings.decoding_threads}</span
+									>
 								</div>
-								<input 
-									type="range" 
-									min="1" 
-									max="16" 
+								<input
+									type="range"
+									min="1"
+									max="16"
 									bind:value={performanceSettings.decoding_threads}
 									class="w-full"
 								/>
-								<p class="text-xs text-muted-foreground">
+								<p class="text-muted-foreground text-xs">
 									{performanceSettings.multi_threaded_rendering ? '多线程解码已启用' : '单线程解码'}
 								</p>
 							</div>
@@ -522,12 +585,14 @@
 								<div class="space-y-2">
 									<div class="flex items-center justify-between">
 										<span class="text-sm">本地文件并发数</span>
-										<span class="text-xs text-muted-foreground">{performanceSettings.thumbnail_concurrent_local || 6}</span>
+										<span class="text-muted-foreground text-xs"
+											>{performanceSettings.thumbnail_concurrent_local || 6}</span
+										>
 									</div>
-									<input 
-										type="range" 
-										min="1" 
-										max="16" 
+									<input
+										type="range"
+										min="1"
+										max="16"
 										bind:value={performanceSettings.thumbnail_concurrent_local}
 										class="w-full"
 										aria-label="本地文件并发数"
@@ -536,12 +601,14 @@
 								<div class="space-y-2">
 									<label class="flex items-center justify-between">
 										<span class="text-sm">压缩包并发数</span>
-										<span class="text-xs text-muted-foreground">{performanceSettings.thumbnail_concurrent_archive || 3}</span>
+										<span class="text-muted-foreground text-xs"
+											>{performanceSettings.thumbnail_concurrent_archive || 3}</span
+										>
 									</label>
-									<input 
-										type="range" 
-										min="1" 
-										max="8" 
+									<input
+										type="range"
+										min="1"
+										max="8"
 										bind:value={performanceSettings.thumbnail_concurrent_archive}
 										class="w-full"
 										aria-label="压缩包并发数"
@@ -550,21 +617,23 @@
 								<div class="space-y-2">
 									<label class="flex items-center justify-between">
 										<span class="text-sm">视频处理并发数</span>
-										<span class="text-xs text-muted-foreground">{performanceSettings.thumbnail_concurrent_video || 2}</span>
+										<span class="text-muted-foreground text-xs"
+											>{performanceSettings.thumbnail_concurrent_video || 2}</span
+										>
 									</label>
-									<input 
-										type="range" 
-										min="1" 
-										max="4" 
+									<input
+										type="range"
+										min="1"
+										max="4"
 										bind:value={performanceSettings.thumbnail_concurrent_video}
 										class="w-full"
 										aria-label="视频处理并发数"
 									/>
 								</div>
 								<label class="flex items-center gap-2">
-									<input 
-										type="checkbox" 
-										class="rounded" 
+									<input
+										type="checkbox"
+										class="rounded"
 										bind:checked={performanceSettings.enable_video_thumbnail}
 									/>
 									<span class="text-sm">启用视频缩略图</span>
@@ -578,8 +647,8 @@
 	</div>
 
 	<!-- 底部按钮 -->
-	<div class="h-14 border-t flex items-center justify-between px-4 gap-2 bg-secondary/30">
-		<div class="flex items-center gap-2 text-xs text-muted-foreground">
+	<div class="bg-secondary/30 flex h-14 items-center justify-between gap-2 border-t px-4">
+		<div class="text-muted-foreground flex items-center gap-2 text-xs">
 			<Info class="h-3 w-3" />
 			<span>普通设置将自动保存，性能设置需要重启应用</span>
 		</div>

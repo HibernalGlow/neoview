@@ -3,11 +3,7 @@
 
 export type RuntimeThemeMode = 'light' | 'dark' | 'system';
 
-interface RuntimeThemeColors {
-  primary: string;
-  background: string;
-  foreground: string;
-}
+type RuntimeThemeColors = Record<string, string>;
 
 export interface RuntimeThemePayload {
   mode: RuntimeThemeMode;
@@ -73,9 +69,11 @@ export function applyRuntimeThemeFromStorage() {
   const colors = isDark ? payload.themes.dark : payload.themes.light;
   if (!colors) return;
 
-  root.style.setProperty('--primary', colors.primary);
-  root.style.setProperty('--background', colors.background);
-  root.style.setProperty('--foreground', colors.foreground);
+  for (const [key, value] of Object.entries(colors)) {
+    if (typeof value === 'string') {
+      root.style.setProperty(`--${key}`, value);
+    }
+  }
 }
 
 /**

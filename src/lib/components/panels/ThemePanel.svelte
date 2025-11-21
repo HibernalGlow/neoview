@@ -2,12 +2,15 @@
 	import { Palette, Sun, Moon, Monitor, Check } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
+	import { Input } from '$lib/components/ui/input';
 	import { onMount } from 'svelte';
+	import { fetchThemeFromURL } from '$lib/utils/themeManager';
 
 	type ThemeMode = 'light' | 'dark' | 'system';
 
 	let currentMode = $state<ThemeMode>('system');
 	let systemPrefersDark = $state(false);
+	let themeUrl = $state('');
 
 	// 预设主题颜色方案
 	const presetThemes = [
@@ -100,9 +103,11 @@
 
 		// 应用颜色
 		const colors = isDark ? theme.colors.dark : theme.colors.light;
-		root.style.setProperty('--primary', colors.primary);
-		root.style.setProperty('--background', colors.background);
-		root.style.setProperty('--foreground', colors.foreground);
+		for (const [key, value] of Object.entries(colors)) {
+			if (typeof value === 'string') {
+				root.style.setProperty(`--${key}`, value);
+			}
+		}
 
 		try {
 			localStorage.setItem('theme-mode', mode);
@@ -128,6 +133,29 @@
 	function selectPresetTheme(theme: (typeof presetThemes)[0]) {
 		selectedTheme = theme;
 		applyTheme(currentMode, theme);
+	}
+
+	async function importThemeFromUrl() {
+		if (!themeUrl) return;
+		try {
+			const theme = await fetchThemeFromURL(themeUrl);
+			const base = theme.cssVars.theme ?? {};
+			const light = { ...base, ...theme.cssVars.light };
+			const dark = { ...base, ...theme.cssVars.dark };
+			const importedTheme = {
+				name: theme.name || 'Custom Theme',
+				description: '来自 tweakcn 的主题',
+				colors: {
+					light,
+					dark
+				}
+			};
+			(presetThemes as any).push(importedTheme);
+			selectedTheme = importedTheme as (typeof presetThemes)[0];
+			applyTheme(currentMode, selectedTheme);
+		} catch (error) {
+			console.error('导入主题失败', error);
+		}
 	}
 
 	// 监听系统主题变化
@@ -264,6 +292,17 @@
 					</div>
 				</button>
 			{/each}
+		</div>
+	</div>
+
+	<div class="space-y-3">
+		<Label class="text-sm font-semibold">从 URL 导入主题</Label>
+		<div class="flex gap-2">
+			<Input
+				placeholder="https://tweakcn.com/r/themes/perpetuity.json"
+				bind:value={themeUrl}
+			/>
+			<Button size="sm" onclick={importThemeFromUrl}>导入</Button>
 		</div>
 	</div>
 

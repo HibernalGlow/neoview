@@ -6,6 +6,8 @@
 import { keyBindingsStore } from './keybindings.svelte';
 import { emmMetadataStore } from './emmMetadata.svelte';
 import { fileBrowserStore } from './fileBrowser.svelte';
+import { applyRuntimeThemeFromStorage } from '$lib/utils/runtimeTheme';
+import type { RuntimeThemeMode, RuntimeThemePayload } from '$lib/utils/runtimeTheme';
 
 export interface AppSettings {
     version: string;
@@ -22,6 +24,11 @@ export interface AppSettings {
         sortField: string;
         sortOrder: string;
     };
+    theme?: {
+        mode: RuntimeThemeMode;
+        name?: string | null;
+        runtimeTheme?: RuntimeThemePayload | null;
+    };
 }
 
 class SettingsManager {
@@ -29,6 +36,28 @@ class SettingsManager {
      * 导出所有设置到JSON
      */
     exportSettings(): AppSettings {
+        let themeMode: RuntimeThemeMode = 'system';
+        let themeName: string | null = null;
+        let runtimeTheme: RuntimeThemePayload | null = null;
+
+        if (typeof window !== 'undefined' && window.localStorage) {
+            const storedMode = window.localStorage.getItem('theme-mode') as RuntimeThemeMode | null;
+            const storedName = window.localStorage.getItem('theme-name');
+            const rawRuntime = window.localStorage.getItem('runtime-theme');
+
+            if (storedMode === 'light' || storedMode === 'dark' || storedMode === 'system') {
+                themeMode = storedMode;
+            }
+
+            themeName = storedName;
+
+            if (rawRuntime) {
+                try {
+                    runtimeTheme = JSON.parse(rawRuntime) as RuntimeThemePayload;
+                } catch {}
+            }
+        }
+
         const settings: AppSettings = {
             version: '1.0.0',
             timestamp: Date.now(),
@@ -43,6 +72,11 @@ class SettingsManager {
             fileBrowser: {
                 sortField: fileBrowserStore.state.sortField,
                 sortOrder: fileBrowserStore.state.sortOrder
+            },
+            theme: {
+                mode: themeMode,
+                name: themeName,
+                runtimeTheme
             }
         };
 
@@ -96,6 +130,25 @@ class SettingsManager {
                     settings.fileBrowser.sortField as any,
                     settings.fileBrowser.sortOrder as any
                 );
+            }
+
+            if (settings.theme && typeof window !== 'undefined' && window.localStorage) {
+                const { mode, name, runtimeTheme } = settings.theme;
+                if (mode) {
+                    window.localStorage.setItem('theme-mode', mode);
+                }
+                if (name) {
+                    window.localStorage.setItem('theme-name', name);
+                } else {
+                    window.localStorage.removeItem('theme-name');
+                }
+                if (runtimeTheme) {
+                    window.localStorage.setItem('runtime-theme', JSON.stringify(runtimeTheme));
+                } else {
+                    window.localStorage.removeItem('runtime-theme');
+                }
+
+                applyRuntimeThemeFromStorage();
             }
 
             console.log('✅ 设置已导入');

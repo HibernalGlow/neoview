@@ -7,9 +7,7 @@
 		Folder,
 		History,
 		Bookmark,
-		Info,
 		Image as ImageIcon,
-		List,
 		Pin,
 		PinOff
 	} from '@lucide/svelte';
@@ -27,7 +25,6 @@
 	import HistoryPanel from '$lib/components/panels/HistoryPanel.svelte';
 	import BookmarkPanel from '$lib/components/panels/BookmarkPanel.svelte';
 	import ThumbnailsPanel from '$lib/components/panels/ThumbnailsPanel.svelte';
-	import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import HoverWrapper from './HoverWrapper.svelte';
 	import PanelContextMenu from '$lib/components/ui/PanelContextMenu.svelte';
@@ -75,18 +72,6 @@
 			url: '#',
 			icon: ImageIcon,
 			value: 'thumbnail'
-		},
-		{
-			title: '播放列表',
-			url: '#',
-			icon: List,
-			value: 'playlist'
-		},
-		{
-			title: '信息',
-			url: '#',
-			icon: Info,
-			value: 'info'
 		}
 	];
 
@@ -316,13 +301,6 @@
 									<BookmarkPanel />
 								{:else if activeItem.value === 'thumbnail'}
 									<ThumbnailsPanel />
-								{:else if activeItem.value === 'playlist'}
-									<div class="p-4">
-										<h3 class="mb-4 text-lg font-semibold">播放列表</h3>
-										<p class="text-muted-foreground text-sm">播放列表功能正在开发中...</p>
-									</div>
-								{:else if activeItem.value === 'info'}
-									<InfoPanel />
 								{/if}
 							</Sidebar.GroupContent>
 						</Sidebar.Group>

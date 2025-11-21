@@ -1000,7 +1000,6 @@
 		const totalPages = bookStore.totalPages;
 
 		// 只加载当前页及后面的页面
-		const range = 0; // 不加载前面的页面
 		const pages: Array<{
 			index: number;
 			data: string | null;
@@ -1008,7 +1007,9 @@
 		}> = [];
 
 		const start = currentIndex; // 从当前页开始
-		const end = Math.min(totalPages - 1, currentIndex + 4); // 加载当前页 + 后面4页
+		const end = currentIndex === 0 
+			? currentIndex  // 第一页只加载自己
+			: Math.min(totalPages - 1, currentIndex + 4); // 其他页加载当前页 + 后面4页
 
 		console.log(`🖼️ 全景模式：加载页面范围 ${start + 1} - ${end + 1}，当前页 ${currentIndex + 1}`);
 
@@ -1021,73 +1022,33 @@
 		}
 
 		panoramaPagesData = pages;
-		console.log('🖼️ 全景模式：初始化页面数组', pages.length, '页');
 
 		// 批量异步加载所有页面的图片数据
-		const loadPromises = pages.map(async (page) => {
-			try {
-				const blob = await preloadManager.getBlob(page.index);
-				if (blob && blob.size > 0) {
-					const url = URL.createObjectURL(blob);
-					console.log(
-						`✅ 全景模式：页面 ${page.index + 1} 加载成功 (${page.position})，大小: ${blob.size} bytes`
-					);
-					return { index: page.index, url };
-				} else {
-					console.warn(`⚠️ 全景模式：页面 ${page.index + 1} blob 为空`);
-					return null;
-				}
-			} catch (error) {
-				console.warn(`加载全景模式第 ${page.index + 1} 页失败:`, error);
-				// 如果 PreloadManager 失败，尝试直接通过 invoke 加载
-				const pageInfo = bookStore.currentBook?.pages[page.index];
-				if (pageInfo) {
-					try {
-						const displayPath = buildDisplayPath(bookStore.currentBook!, pageInfo);
-						let blob: Blob | null = null;
-
-						const traceId = createImageTraceId('viewer-panorama', page.index);
-						logImageTrace(traceId, 'fallback invoke', {
-							mode: 'panorama',
-							pageIndex: page.index,
-							source: bookStore.currentBook!.type
-						});
-
-						if (bookStore.currentBook!.type === 'archive') {
-							const binaryData = await invoke<number[]>('load_image_from_archive', {
-								archivePath: bookStore.currentBook!.path,
-								filePath: pageInfo.path,
-								traceId,
-								pageIndex: page.index
-							});
-							logImageTrace(traceId, 'fallback archive bytes ready', { bytes: binaryData.length });
-							blob = new Blob([new Uint8Array(binaryData)]);
-						} else {
-							const binaryData = await invoke<number[]>('load_image', {
-								path: displayPath,
-								traceId,
-								pageIndex: page.index
-							});
-							logImageTrace(traceId, 'fallback file bytes ready', { bytes: binaryData.length });
-							blob = new Blob([new Uint8Array(binaryData)]);
-						}
-
-						if (blob) {
-							logImageTrace(traceId, 'fallback blob created', { size: blob.size });
-						}
-
-						if (blob && blob.size > 0) {
-							const url = URL.createObjectURL(blob);
-							page.data = url;
-							// 更新数组以触发响应式更新
-							panoramaPagesData = [...panoramaPagesData];
-						}
-					} catch (loadError) {
-						console.warn(`通过 invoke 加载全景模式第 ${page.index + 1} 页失败:`, loadError);
+		const results = await Promise.all(
+			pages.map(async (page) => {
+				try {
+					const blob = await preloadManager.getBlob(page.index);
+					if (blob && blob.size > 0) {
+						const url = URL.createObjectURL(blob);
+						console.log(
+							`✅ 全景模式：页面 ${page.index + 1} 加载成功 (${page.position})，大小: ${blob.size} bytes`
+						);
+						return { index: page.index, url };
 					}
+				} catch (error) {
+					console.warn(`加载全景模式第 ${page.index + 1} 页失败:`, error);
 				}
-			}
-		}
+				return null;
+			})
+		);
+
+		// 一次性更新所有加载成功的图片
+		panoramaPagesData = panoramaPagesData.map(p => {
+			const result = results.find(r => r && r.index === p.index);
+			return result ? { ...p, data: result.url } : p;
+		});
+
+		console.log('🎉 全景模式：批量加载完成');
 	}
 
 	// 执行命令

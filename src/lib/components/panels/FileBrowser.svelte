@@ -1467,6 +1467,7 @@
 	// 搜索处理函数
 	async function handleFileSearch(query: string) {
 		console.log('🔍 [Search] handleFileSearch called with query:', query);
+		searchQuery = query; // 更新搜索查询状态，确保 UI 正确切换显示
 
 		if (!query.trim()) {
 			console.log('🔍 [Search] Empty query, clearing results');
@@ -1527,7 +1528,7 @@
 			console.log('🔍 [Search] Step 3: Searching local files...');
 			const options = {
 				includeSubfolders: searchSettings.includeSubfolders,
-				maxResults: 100,
+				maxResults: 1000,
 				searchInPath: searchSettings.searchInPath
 			};
 			console.log('🔍 [Search] Calling FileSystemAPI.searchFiles with:', {

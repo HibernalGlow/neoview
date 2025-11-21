@@ -1276,7 +1276,36 @@
 	 */
 	async function handlePathNavigate(path: string) {
 		if (path) {
-			await navigateToDirectory(path);
+			// 检查是否是文件（通过扩展名判断）
+			const isFile =
+				/\.(zip|cbz|rar|cbr|7z|pdf|mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg|jpg|jpeg|png|gif|webp|avif|jxl|bmp|tiff)$/i.test(
+					path
+				);
+
+			if (isFile) {
+				console.log('📂 导航到文件:', path);
+
+				// 同时也导航到该文件所在的文件夹（静默同步）
+				const lastSeparator = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+				if (lastSeparator > 0) {
+					const parentDir = path.substring(0, lastSeparator);
+					// 不等待目录加载完成，直接打开文件，让目录在后台加载
+					navigateToDirectory(parentDir).catch((err) => console.error('同步目录失败:', err));
+				}
+
+				const name = path.split(/[\\/]/).pop() || path;
+				const item: FsItem = {
+					name,
+					path,
+					isDir: false,
+					isImage: /\.(jpg|jpeg|png|gif|webp|avif|jxl|bmp|tiff)$/i.test(path),
+					size: 0,
+					modified: Date.now() // Dummy timestamp
+				};
+				await openFile(item);
+			} else {
+				await navigateToDirectory(path);
+			}
 		} else {
 			// 返回根目录/主页
 			currentPath = '';

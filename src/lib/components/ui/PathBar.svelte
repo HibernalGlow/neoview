@@ -1,140 +1,247 @@
 <script lang="ts">
-  /**
-   * 路径面包屑导航栏 - 使用 shadcn-svelte Breadcrumb 重构
-   */
-  import { Home, FolderOpen, HomeIcon } from '@lucide/svelte';
-  import * as Breadcrumb from '$lib/components/ui/breadcrumb';
-  import {
-    ContextMenu,
-    ContextMenuContent,
-    ContextMenuTrigger,
-    ContextMenuItem,
-  } from '$lib/components/ui/context-menu';
+	/**
+	 * 路径面包屑导航栏 - 使用 shadcn-svelte Breadcrumb 重构
+	 */
+	import { Home, FolderOpen, HomeIcon } from '@lucide/svelte';
+	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
+	import {
+		ContextMenu,
+		ContextMenuContent,
+		ContextMenuTrigger,
+		ContextMenuItem
+	} from '$lib/components/ui/context-menu';
 
-  interface BreadcrumbItem {
-    name: string;
-    path: string;
-  }
+	interface BreadcrumbItem {
+		name: string;
+		path: string;
+	}
 
-  interface Props {
-    currentPath: string;
-    isArchive?: boolean;
-    onNavigate?: (path: string) => void;
-    onSetHomepage?: (path: string) => void;
-  }
+	interface Props {
+		currentPath: string;
+		isArchive?: boolean;
+		onNavigate?: (path: string) => void;
+		onSetHomepage?: (path: string) => void;
+	}
 
-  let {
-    currentPath = $bindable(''),
-    isArchive = false,
-    onNavigate,
-    onSetHomepage
-  }: Props = $props();
+	let {
+		currentPath = $bindable(''),
+		isArchive = false,
+		onNavigate,
+		onSetHomepage
+	}: Props = $props();
 
-  /**
-   * 获取路径的面包屑导航 - 保持原有顺序（从根到当前）
-   */
-  function getBreadcrumbs(path: string): BreadcrumbItem[] {
-    if (!path) return [];
-    
-    // 检测路径分隔符
-    const hasBackslash = path.includes('\\');
-    const separator = hasBackslash ? '\\' : '/';
-    
-    const parts = path.split(/[\\/]/).filter(Boolean);
-    const breadcrumbs: BreadcrumbItem[] = [];
-    
-    if (parts.length === 0) return breadcrumbs;
-    
-    // Windows 驱动器 (如 C:)
-    if (parts[0].includes(':')) {
-      const drivePath = parts[0] + separator;
-      breadcrumbs.push({ name: parts[0], path: drivePath });
-      
-      // 添加子目录
-      let currentPath = drivePath;
-      for (let i = 1; i < parts.length; i++) {
-        currentPath = currentPath + parts[i];
-        breadcrumbs.push({ name: parts[i], path: currentPath });
-        if (i < parts.length - 1) {
-          currentPath += separator;
-        }
-      }
-    } else {
-      // Unix 路径
-      breadcrumbs.push({ name: '/', path: '/' });
-      let currentPath = '/';
-      
-      for (let i = 0; i < parts.length; i++) {
-        if (i > 0) currentPath += '/';
-        currentPath += parts[i];
-        breadcrumbs.push({ name: parts[i], path: currentPath });
-      }
-    }
-    
-    return breadcrumbs;
-  }
+	/**
+	 * 获取路径的面包屑导航 - 保持原有顺序（从根到当前）
+	 */
+	function getBreadcrumbs(path: string): BreadcrumbItem[] {
+		if (!path) return [];
 
-  const breadcrumbs = $derived(getBreadcrumbs(currentPath));
+		// 检测路径分隔符
+		const hasBackslash = path.includes('\\');
+		const separator = hasBackslash ? '\\' : '/';
 
-  function handleNavigate(path: string) {
-    onNavigate?.(path);
-  }
+		const parts = path.split(/[\\/]/).filter(Boolean);
+		const breadcrumbs: BreadcrumbItem[] = [];
 
-  function handleSetHomepage(path: string) {
-    onSetHomepage?.(path);
-  }
+		if (parts.length === 0) return breadcrumbs;
+
+		// Windows 驱动器 (如 C:)
+		if (parts[0].includes(':')) {
+			const drivePath = parts[0] + separator;
+			breadcrumbs.push({ name: parts[0], path: drivePath });
+
+			// 添加子目录
+			let currentPath = drivePath;
+			for (let i = 1; i < parts.length; i++) {
+				currentPath = currentPath + parts[i];
+				breadcrumbs.push({ name: parts[i], path: currentPath });
+				if (i < parts.length - 1) {
+					currentPath += separator;
+				}
+			}
+		} else {
+			// Unix 路径
+			breadcrumbs.push({ name: '/', path: '/' });
+			let currentPath = '/';
+
+			for (let i = 0; i < parts.length; i++) {
+				if (i > 0) currentPath += '/';
+				currentPath += parts[i];
+				breadcrumbs.push({ name: parts[i], path: currentPath });
+			}
+		}
+		return breadcrumbs;
+	}
+
+	const breadcrumbs = $derived(getBreadcrumbs(currentPath));
+
+	function handleNavigate(path: string) {
+		onNavigate?.(path);
+	}
+
+	function handleSetHomepage(path: string) {
+		onSetHomepage?.(path);
+	}
+
+	// 编辑模式状态
+	let isEditing = $state(false);
+	let editValue = $state('');
+	let inputElement = $state<HTMLInputElement | null>(null);
+
+	function startEdit() {
+		editValue = currentPath;
+		isEditing = true;
+		// 等待 DOM 更新后聚焦
+		setTimeout(() => {
+			inputElement?.focus();
+			inputElement?.select();
+		}, 0);
+	}
+
+	function cancelEdit() {
+		isEditing = false;
+	}
+
+	async function submitEdit() {
+		const path = editValue.trim();
+		if (path && path !== currentPath) {
+			// 尝试判断是文件还是文件夹
+			// 这里简单处理：如果是文件浏览器支持的扩展名，尝试作为文件打开
+			// 否则作为文件夹导航
+			// 实际上应该由父组件或 API 来判断，但这里我们通过 onNavigate 传递
+			// 父组件 FileBrowser 会处理 navigateToPath
+
+			// 如果是文件路径，我们希望 FileBrowser 能处理
+			// FileBrowser.svelte 的 navigateToPath 会调用 loadDirectorySnapshot
+			// 如果是文件，loadDirectorySnapshot 可能会失败或者只加载父目录
+			// 我们需要更智能的跳转
+
+			// 检查是否是文件扩展名
+			const isFile =
+				/\.(zip|cbz|rar|cbr|7z|pdf|mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg|jpg|jpeg|png|gif|webp|avif|jxl|bmp|tiff)$/i.test(
+					path
+				);
+
+			if (isFile) {
+				// 如果是文件，尝试打开它
+				// 这里我们需要一种方式告诉父组件这是一个文件打开请求
+				// 现有的 onNavigate 只是简单的回调
+				// 我们可以尝试直接调用 store 或者 API，但最好通过 props 回调
+				// 既然 onNavigate 最终调用 fileBrowserStore.navigateToPath
+				// 我们可以在那里处理
+
+				// 特殊处理：如果是文件，我们可能需要先打开书，然后同步文件树
+				// 但 PathBar 是通用的，不应该耦合太多业务逻辑
+				// 简单的做法：直接导航，让 FileBrowser 处理
+				// 如果 FileBrowser 发现是文件，它应该能处理（或者我们需要修改 FileBrowser）
+
+				// 实际上，FileBrowser.navigateToPath 主要用于文件夹
+				// 如果输入的是文件路径，我们可能希望：
+				// 1. 打开该文件（作为书籍）
+				// 2. 跳转到该文件所在的文件夹
+
+				// 由于 PathBar 不知道具体的 store，我们通过 onNavigate 传递
+				// 约定：父组件需要处理文件路径
+				onNavigate?.(path);
+			} else {
+				onNavigate?.(path);
+			}
+		}
+		isEditing = false;
+	}
 </script>
 
-<div class="flex items-center gap-1 px-2 py-1 bg-gray-50 border-b overflow-x-auto whitespace-nowrap justify-end">
-  {#if currentPath}
-    <Breadcrumb.Root>
-      <Breadcrumb.List class="flex items-center gap-1 flex-nowrap whitespace-nowrap">
-        <!-- 主页 -->
-        <Breadcrumb.Item>
-          <ContextMenu>
-            <ContextMenuTrigger>
-              <Breadcrumb.Link href="#" onclick={() => handleNavigate('')}>
-                <Home class="h-4 w-4 text-gray-600" />
-              </Breadcrumb.Link>
-            </ContextMenuTrigger>
-            <ContextMenuContent>
-              <ContextMenuItem onclick={() => handleSetHomepage('')}>
-                <HomeIcon class="h-4 w-4 mr-2" />
-                设置为主页
-              </ContextMenuItem>
-            </ContextMenuContent>
-          </ContextMenu>
-        </Breadcrumb.Item>
+<div
+	class="flex h-8 items-center justify-end gap-1 overflow-x-auto whitespace-nowrap border-b bg-gray-50 px-2 py-1"
+>
+	{#if isEditing}
+		<form
+			class="flex h-full flex-1 items-center"
+			onsubmit={(e) => {
+				e.preventDefault();
+				submitEdit();
+			}}
+		>
+			<input
+				bind:this={inputElement}
+				bind:value={editValue}
+				class="h-full w-full rounded border border-blue-500 bg-white px-2 text-sm focus:outline-none"
+				onblur={cancelEdit}
+				onkeydown={(e) => {
+					if (e.key === 'Escape') cancelEdit();
+				}}
+			/>
+		</form>
+	{:else}
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="flex h-full flex-1 cursor-text items-center rounded px-1 transition-colors hover:bg-gray-100"
+			onclick={startEdit}
+		>
+			{#if currentPath}
+				<Breadcrumb.Root>
+					<Breadcrumb.List class="flex flex-nowrap items-center gap-1 whitespace-nowrap">
+						<!-- 主页 -->
+						<Breadcrumb.Item>
+							<ContextMenu>
+								<ContextMenuTrigger>
+									<Breadcrumb.Link
+										href="#"
+										onclick={(e) => {
+											e.stopPropagation();
+											handleNavigate('');
+										}}
+									>
+										<Home class="h-4 w-4 text-gray-600" />
+									</Breadcrumb.Link>
+								</ContextMenuTrigger>
+								<ContextMenuContent>
+									<ContextMenuItem onclick={() => handleSetHomepage('')}>
+										<HomeIcon class="mr-2 h-4 w-4" />
+										设置为主页
+									</ContextMenuItem>
+								</ContextMenuContent>
+							</ContextMenu>
+						</Breadcrumb.Item>
 
-        <!-- 面包屑路径 -->
-        {#each breadcrumbs as breadcrumb, index}
-          <Breadcrumb.Separator />
-          <Breadcrumb.Item>
-            <ContextMenu>
-              <ContextMenuTrigger>
-                {#if index === breadcrumbs.length - 1}
-                  <Breadcrumb.Page>{breadcrumb.name}</Breadcrumb.Page>
-                {:else}
-                  <Breadcrumb.Link href="#" onclick={() => handleNavigate(breadcrumb.path)}>
-                    {breadcrumb.name}
-                  </Breadcrumb.Link>
-                {/if}
-              </ContextMenuTrigger>
-              <ContextMenuContent>
-                <ContextMenuItem onclick={() => handleSetHomepage(breadcrumb.path)}>
-                  <HomeIcon class="h-4 w-4 mr-2" />
-                  设置为主页
-                </ContextMenuItem>
-              </ContextMenuContent>
-            </ContextMenu>
-          </Breadcrumb.Item>
-        {/each}
-      </Breadcrumb.List>
-    </Breadcrumb.Root>
-  {:else}
-    <div class="text-sm text-gray-500 flex items-center gap-2">
-      <FolderOpen class="h-4 w-4" />
-      <span>选择文件夹开始浏览</span>
-    </div>
-  {/if}
+						<!-- 面包屑路径 -->
+						{#each breadcrumbs as breadcrumb, index}
+							<Breadcrumb.Separator />
+							<Breadcrumb.Item>
+								<ContextMenu>
+									<ContextMenuTrigger>
+										{#if index === breadcrumbs.length - 1}
+											<Breadcrumb.Page>{breadcrumb.name}</Breadcrumb.Page>
+										{:else}
+											<Breadcrumb.Link
+												href="#"
+												onclick={(e) => {
+													e.stopPropagation();
+													handleNavigate(breadcrumb.path);
+												}}
+											>
+												{breadcrumb.name}
+											</Breadcrumb.Link>
+										{/if}
+									</ContextMenuTrigger>
+									<ContextMenuContent>
+										<ContextMenuItem onclick={() => handleSetHomepage(breadcrumb.path)}>
+											<HomeIcon class="mr-2 h-4 w-4" />
+											设置为主页
+										</ContextMenuItem>
+									</ContextMenuContent>
+								</ContextMenu>
+							</Breadcrumb.Item>
+						{/each}
+					</Breadcrumb.List>
+				</Breadcrumb.Root>
+			{:else}
+				<div class="flex items-center gap-2 text-sm text-gray-500">
+					<FolderOpen class="h-4 w-4" />
+					<span>选择文件夹开始浏览</span>
+				</div>
+			{/if}
+		</div>
+	{/if}
 </div>

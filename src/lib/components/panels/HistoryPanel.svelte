@@ -112,11 +112,11 @@
 			);
 
 			// 根据设置决定是否同步文件树（在打开书籍之前）
+			// 根据设置决定是否同步文件树（在打开书籍之前）
 			if (historySettingsStore.syncFileTreeOnHistorySelect) {
 				try {
 					console.log('🌳 同步文件树到:', entry.path);
-					// 立即切换到文件夹面板，让用户看到加载状态
-					setActivePanelTab('folder');
+					// 静默同步文件树，不切换面板
 					await fileBrowserStore.navigateToPath(entry.path);
 				} catch (err) {
 					console.debug('同步文件树失败:', err);

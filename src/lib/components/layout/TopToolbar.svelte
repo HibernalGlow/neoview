@@ -23,6 +23,7 @@ import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewW
 		topToolbarHeight
 	} from '$lib/stores';
 import { readable } from 'svelte/store';
+import { onMount } from 'svelte';
 import { appState, type StateSelector } from '$lib/core/state/appState';
 	import PathBar from '../ui/PathBar.svelte';
 	import {
@@ -47,8 +48,19 @@ import { appState, type StateSelector } from '$lib/core/state/appState';
 		GripHorizontal,
 		ExternalLink,
 		Eye,
-		Split
+		Split,
+		Palette,
+		Sun,
+		Moon,
+		Monitor,
+		Check
 	} from '@lucide/svelte';
+
+import {
+	applyRuntimeThemeFromStorage,
+	loadRuntimeThemeFromStorage,
+	type RuntimeThemeMode
+} from '$lib/utils/runtimeTheme';
 
 const appWindow = getCurrentWebviewWindow();
 
@@ -58,7 +70,229 @@ function createAppStateStore<T>(selector: StateSelector<T>) {
 }
 
 const viewerState = createAppStateStore((state) => state.viewer);
-	
+
+type QuickThemeConfig = {
+	name: string;
+	description?: string;
+	colors: {
+		light: Record<string, string>;
+		dark: Record<string, string>;
+	};
+};
+
+const builtinQuickThemes: QuickThemeConfig[] = [
+	{
+		name: 'Amethyst Haze',
+		description: '优雅的紫色调主题',
+		colors: {
+			light: {
+				primary: 'oklch(0.5569 0.2403 293.3426)',
+				background: 'oklch(0.9777 0.0041 301.4256)',
+				foreground: 'oklch(0.3651 0.0325 287.0807)'
+			},
+			dark: {
+				primary: 'oklch(0.7137 0.2210 293.5570)',
+				background: 'oklch(0.2166 0.0215 292.8474)',
+				foreground: 'oklch(0.9053 0.0245 293.5570)'
+			}
+		}
+	},
+	{
+		name: 'Ocean Breeze',
+		description: '清新的海洋蓝主题',
+		colors: {
+			light: {
+				primary: 'oklch(0.5569 0.1803 240.0000)',
+				background: 'oklch(0.9777 0.0041 240.0000)',
+				foreground: 'oklch(0.3651 0.0325 240.0000)'
+			},
+			dark: {
+				primary: 'oklch(0.7137 0.1610 240.0000)',
+				background: 'oklch(0.2166 0.0215 240.0000)',
+				foreground: 'oklch(0.9053 0.0245 240.0000)'
+			}
+		}
+	},
+	{
+		name: 'Forest Mist',
+		description: '自然的森林绿主题',
+		colors: {
+			light: {
+				primary: 'oklch(0.5569 0.1803 140.0000)',
+				background: 'oklch(0.9777 0.0041 140.0000)',
+				foreground: 'oklch(0.3651 0.0325 140.0000)'
+			},
+			dark: {
+				primary: 'oklch(0.7137 0.1610 140.0000)',
+				background: 'oklch(0.2166 0.0215 140.0000)',
+				foreground: 'oklch(0.9053 0.0245 140.0000)'
+			}
+		}
+	},
+	{
+		name: 'Sunset Glow',
+		description: '温暖的日落橙主题',
+		colors: {
+			light: {
+				primary: 'oklch(0.5569 0.1803 40.0000)',
+				background: 'oklch(0.9777 0.0041 40.0000)',
+				foreground: 'oklch(0.3651 0.0325 40.0000)'
+			},
+			dark: {
+				primary: 'oklch(0.7137 0.1610 40.0000)',
+				background: 'oklch(0.2166 0.0215 40.0000)',
+				foreground: 'oklch(0.9053 0.0245 40.0000)'
+			}
+		}
+	}
+];
+
+let themeMode = $state<RuntimeThemeMode>('system');
+let themeName = $state<string | null>(null);
+let quickThemes = $state<QuickThemeConfig[]>([]);
+
+function syncQuickThemesFromStorage() {
+	if (typeof window === 'undefined') return;
+
+	const merged = new Map<string, QuickThemeConfig>();
+	for (const t of builtinQuickThemes) {
+		merged.set(t.name, t);
+	}
+
+	try {
+		const raw = window.localStorage.getItem('custom-themes');
+		if (raw) {
+			const parsed = JSON.parse(raw);
+			if (Array.isArray(parsed)) {
+				for (const item of parsed as QuickThemeConfig[]) {
+					if (
+						item &&
+						typeof item.name === 'string' &&
+						item.colors &&
+						item.colors.light &&
+						item.colors.dark
+					) {
+						merged.set(item.name, {
+							name: item.name,
+							description: item.description,
+							colors: {
+								light: item.colors.light,
+								dark: item.colors.dark
+							}
+						});
+					}
+				}
+			}
+		}
+	} catch {}
+
+	quickThemes = Array.from(merged.values());
+}
+
+function applyQuickTheme(theme: QuickThemeConfig) {
+	if (typeof window === 'undefined') return;
+
+	const mode: RuntimeThemeMode = themeMode;
+	const payload = {
+		mode,
+		themeName: theme.name,
+		themes: theme.colors
+	};
+
+	try {
+		window.localStorage.setItem('runtime-theme', JSON.stringify(payload));
+		window.localStorage.setItem('theme-mode', mode);
+		window.localStorage.setItem('theme-name', theme.name);
+	} catch {}
+
+	themeName = theme.name;
+	applyRuntimeThemeFromStorage();
+}
+
+function cycleThemeMode() {
+	if (typeof window === 'undefined') return;
+
+	const order: RuntimeThemeMode[] = ['light', 'dark', 'system'];
+	const index = order.indexOf(themeMode);
+	const next = order[(index + 1) % order.length];
+	themeMode = next;
+
+	const existing = loadRuntimeThemeFromStorage();
+	if (existing) {
+		const updated = { ...existing, mode: next };
+		try {
+			window.localStorage.setItem('runtime-theme', JSON.stringify(updated));
+			window.localStorage.setItem('theme-mode', next);
+		} catch {}
+		applyRuntimeThemeFromStorage();
+		return;
+	}
+
+	if (typeof document !== 'undefined') {
+		const root = document.documentElement;
+		const systemPrefersDark =
+			typeof window.matchMedia === 'function'
+				? window.matchMedia('(prefers-color-scheme: dark)').matches
+				: false;
+		const isDark =
+			next === 'dark' || (next === 'system' && systemPrefersDark);
+		if (isDark) {
+			root.classList.add('dark');
+		} else {
+			root.classList.remove('dark');
+		}
+		try {
+			window.localStorage.setItem('theme-mode', next);
+		} catch {}
+	}
+}
+
+onMount(() => {
+	if (typeof window === 'undefined') return;
+
+	const payload = loadRuntimeThemeFromStorage();
+	if (payload) {
+		themeMode = payload.mode;
+		themeName = payload.themeName ?? null;
+	} else {
+		const savedMode = window.localStorage.getItem('theme-mode') as RuntimeThemeMode;
+		if (savedMode) {
+			themeMode = savedMode;
+		}
+		themeName = window.localStorage.getItem('theme-name');
+	}
+
+	syncQuickThemesFromStorage();
+
+	const handleStorage = (e: StorageEvent) => {
+		if (
+			e.key === 'runtime-theme' ||
+			e.key === 'theme-mode' ||
+			e.key === 'theme-name' ||
+			e.key === 'custom-themes'
+		) {
+			const latest = loadRuntimeThemeFromStorage();
+			if (latest) {
+				themeMode = latest.mode;
+				themeName = latest.themeName ?? null;
+			} else {
+				const saved = window.localStorage.getItem('theme-mode') as RuntimeThemeMode;
+				if (saved) {
+					themeMode = saved;
+				}
+				themeName = window.localStorage.getItem('theme-name');
+			}
+
+			if (e.key === 'custom-themes') {
+				syncQuickThemesFromStorage();
+			}
+		}
+	};
+
+	window.addEventListener('storage', handleStorage);
+	return () => window.removeEventListener('storage', handleStorage);
+});
+
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
 	let isResizing = $state(false);
@@ -266,6 +500,78 @@ function toggleComparisonMode() {
 					<PinOff class="h-4 w-4" />
 				{/if}
 			</Button>
+
+			<!-- 主题模式切换：在浅色 / 深色 / 跟随系统之间循环 -->
+			<Button
+				variant="ghost"
+				size="icon"
+				class="h-6 w-6"
+				style="pointer-events: auto;"
+				onclick={cycleThemeMode}
+				title={`主题模式：${
+					themeMode === 'light'
+						? '浅色'
+						: themeMode === 'dark'
+							? '深色'
+							: '跟随系统'
+				}`}
+			>
+				{#if themeMode === 'light'}
+					<Sun class="h-4 w-4" />
+				{:else if themeMode === 'dark'}
+					<Moon class="h-4 w-4" />
+				{:else}
+					<Monitor class="h-4 w-4" />
+				{/if}
+			</Button>
+
+			<!-- 快速主题切换：预设 + 自定义主题列表 -->
+			<DropdownMenu.Root>
+				<DropdownMenu.Trigger>
+					<Button
+						variant="ghost"
+						size="icon"
+						class="h-6 w-6"
+						style="pointer-events: auto;"
+						title={themeName ? `当前主题：${themeName}` : '切换主题'}
+					>
+						<Palette class="h-4 w-4" />
+					</Button>
+				</DropdownMenu.Trigger>
+				<DropdownMenu.Content class="w-52">
+					{#if quickThemes.length}
+						<DropdownMenu.Label>主题</DropdownMenu.Label>
+						<DropdownMenu.Separator />
+						{#each quickThemes as theme}
+							<DropdownMenu.Item
+								onclick={() => applyQuickTheme(theme)}
+								class={themeName === theme.name ? 'bg-accent' : ''}
+							>
+								<div class="flex items-center gap-2">
+									<div class="flex h-4 w-4 items-center justify-center">
+										{#if themeName === theme.name}
+											<Check class="h-3 w-3" />
+										{/if}
+									</div>
+									<div class="flex flex-col gap-0.5">
+										<span class="text-xs font-medium leading-tight">{theme.name}</span>
+										{#if theme.description}
+											<span class="text-[10px] text-muted-foreground leading-tight line-clamp-1">
+												{theme.description}
+											</span>
+										{/if}
+									</div>
+								</div>
+							</DropdownMenu.Item>
+						{/each}
+						<DropdownMenu.Separator />
+					{/if}
+					<DropdownMenu.Item onclick={openSettings}>
+						<Settings class="mr-2 h-4 w-4" />
+						<span class="text-xs">打开主题设置…</span>
+					</DropdownMenu.Item>
+				</DropdownMenu.Content>
+			</DropdownMenu.Root>
 
 			<Button variant="ghost" size="icon" class="h-6 w-6" style="pointer-events: auto;" onclick={openSettings} title="设置">
 				<Settings class="h-4 w-4" />

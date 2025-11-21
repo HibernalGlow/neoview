@@ -133,20 +133,20 @@ class BookStore {
 
       // 重置页码到第一页
       book.currentPage = 0;
-      
+
       this.state.currentBook = book;
       this.syncAppStateBookSlice();
       this.state.viewerOpen = true;
       await this.syncInfoPanelBookInfo();
       this.syncFileBrowserSelection(path);
-      
-      // 记录历史
+
+      // 添加到历史记录（初始页码为0）
       const { historyStore } = await import('$lib/stores/history.svelte');
-      historyStore.add(path, book.name, book.currentPage, book.totalPages);
-      
+      historyStore.add(path, book.name, 0, book.totalPages);
+
       // 重置所有页面的超分状态
       this.resetAllPageUpscaleStatus();
-      
+
       // 触发重置预超分进度事件
       window.dispatchEvent(new CustomEvent('reset-pre-upscale-progress'));
     } catch (err) {
@@ -182,19 +182,19 @@ class BookStore {
 
       // 重置页码到第一页
       book.currentPage = 0;
-      
+
       this.state.currentBook = book;
       this.syncAppStateBookSlice();
       this.state.viewerOpen = true;
       await this.syncInfoPanelBookInfo();
-      
-      // 记录历史
+
+      // 添加到历史记录（初始页码为0）
       const { historyStore } = await import('$lib/stores/history.svelte');
-      historyStore.add(path, book.name, book.currentPage, book.totalPages);
-      
+      historyStore.add(path, book.name, 0, book.totalPages);
+
       // 重置所有页面的超分状态
       this.resetAllPageUpscaleStatus();
-      
+
       // 触发重置预超分进度事件
       window.dispatchEvent(new CustomEvent('reset-pre-upscale-progress'));
     } catch (err) {
@@ -230,19 +230,19 @@ class BookStore {
 
       // 重置页码到第一页
       book.currentPage = 0;
-      
+
       this.state.currentBook = book;
       this.syncAppStateBookSlice();
       this.state.viewerOpen = true;
       await this.syncInfoPanelBookInfo();
-      
-      // 记录历史
+
+      // 添加到历史记录（初始页码为0）
       const { historyStore } = await import('$lib/stores/history.svelte');
-      historyStore.add(path, book.name, book.currentPage, book.totalPages);
-      
+      historyStore.add(path, book.name, 0, book.totalPages);
+
       // 重置所有页面的超分状态
       this.resetAllPageUpscaleStatus();
-      
+
       // 触发重置预超分进度事件
       window.dispatchEvent(new CustomEvent('reset-pre-upscale-progress'));
     } catch (err) {
@@ -268,10 +268,10 @@ class BookStore {
     this.state.upscaledImageBlob = null;
     this.state.currentPageUpscaled = false;
     infoPanelStore.resetAll();
-    
+
     // 重置页面超分状态
     this.resetAllPageUpscaleStatus();
-    
+
     // 触发重置预超分进度事件
     window.dispatchEvent(new CustomEvent('reset-pre-upscale-progress'));
   }
@@ -323,11 +323,15 @@ class BookStore {
     try {
       console.log(`📄 Navigating to page ${index + 1}/${this.state.currentBook.totalPages}`);
       await bookApi.navigateToPage(index);
-      
+
       // 更新本地状态
       this.state.currentBook.currentPage = index;
       this.syncAppStateBookSlice('user');
       this.syncInfoPanelBookInfo();
+
+      // 更新历史记录的页数
+      const { historyStore } = await import('$lib/stores/history.svelte');
+      historyStore.update(this.state.currentBook.path, index, this.state.currentBook.totalPages);
     } catch (err) {
       console.error('❌ Error navigating to page:', err);
       this.state.error = String(err);
@@ -349,6 +353,10 @@ class BookStore {
         this.state.currentBook.currentPage = newIndex;
         await this.syncInfoPanelBookInfo();
         this.syncAppStateBookSlice('user');
+
+        // 更新历史记录的页数
+        const { historyStore } = await import('$lib/stores/history.svelte');
+        historyStore.update(this.state.currentBook.path, newIndex, this.state.currentBook.totalPages);
       }
       return newIndex;
     } catch (err) {
@@ -379,6 +387,10 @@ class BookStore {
         this.state.currentBook.currentPage = newIndex;
         await this.syncInfoPanelBookInfo();
         this.syncAppStateBookSlice('user');
+
+        // 更新历史记录的页数
+        const { historyStore } = await import('$lib/stores/history.svelte');
+        historyStore.update(this.state.currentBook.path, newIndex, this.state.currentBook.totalPages);
       }
       return newIndex;
     } catch (err) {
@@ -560,7 +572,7 @@ class BookStore {
   cleanupExpiredCaches(maxAge: number = 30 * 24 * 60 * 60 * 1000) { // 默认30天
     const now = Date.now();
     let cleaned = 0;
-    
+
     for (const [bookPath, cacheMap] of this.upscaleCacheMapByBook.entries()) {
       for (const [hash, cache] of cacheMap.entries()) {
         if (now - cache.timestamp > maxAge) {
@@ -572,7 +584,7 @@ class BookStore {
         this.upscaleCacheMapByBook.delete(bookPath);
       }
     }
-    
+
     console.log('🧹 清理过期缓存:', cleaned, '个');
     return cleaned;
   }
@@ -663,11 +675,11 @@ class BookStore {
     }
 
     console.debug('[BookStore] syncInfoPanelBookInfo: 开始加载 EMM 元数据，book:', book.name, 'path:', book.path);
-    
+
     // 加载 EMM 元数据
     const emmMetadata = await emmMetadataStore.loadMetadataByPath(book.path);
     console.debug('[BookStore] syncInfoPanelBookInfo: EMM 元数据加载完成，metadata:', emmMetadata);
-    
+
     const bookInfo = {
       path: book.path,
       name: book.name,
@@ -679,7 +691,7 @@ class BookStore {
         tags: emmMetadata.tags
       } : undefined,
     };
-    
+
     console.debug('[BookStore] syncInfoPanelBookInfo: 设置书籍信息到 InfoPanel，bookInfo:', bookInfo);
     infoPanelStore.setBookInfo(bookInfo);
   }

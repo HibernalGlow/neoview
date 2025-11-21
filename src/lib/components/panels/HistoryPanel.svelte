@@ -4,12 +4,24 @@
 	 * 历史记录面板 - 参考 NeeView HistoryPanel.cs
 	 * 使用 FileItemCard 组件，支持列表和网格视图
 	 */
-	import { Clock, X, Grid3x3, List, Activity, Bookmark, Trash2, ExternalLink, FolderOpen } from '@lucide/svelte';
+	import {
+		Clock,
+		X,
+		Grid3x3,
+		List,
+		Activity,
+		Bookmark,
+		Trash2,
+		ExternalLink,
+		FolderOpen
+	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { historyStore, type HistoryEntry } from '$lib/stores/history.svelte';
+	import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 	import SearchBar from '$lib/components/ui/SearchBar.svelte';
 	import FileItemCard from './file/components/FileItemCard.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
+	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 	import { thumbnailManager } from '$lib/utils/thumbnailManager';
 	import type { FsItem } from '$lib/types';
 	import { readable } from 'svelte/store';
@@ -23,14 +35,19 @@
 	let viewMode = $state<'list' | 'grid'>('list');
 	let thumbnails = $state<Map<string, string>>(new Map());
 	const thumbnailJobs = new Map<string, string>();
-	let contextMenu = $state<{ x: number; y: number; entry: HistoryEntry | null }>({ x: 0, y: 0, entry: null });
+	let contextMenu = $state<{ x: number; y: number; entry: HistoryEntry | null }>({
+		x: 0,
+		y: 0,
+		entry: null
+	});
 	let searchQuery = $state('');
 	let filteredHistory = $derived(
 		searchQuery.trim()
-			? history.filter(entry =>
-					entry.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					entry.path.toLowerCase().includes(searchQuery.toLowerCase())
-			  )
+			? history.filter(
+					(entry) =>
+						entry.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+						entry.path.toLowerCase().includes(searchQuery.toLowerCase())
+				)
 			: history
 	);
 
@@ -55,7 +72,12 @@
 				source: 'history-panel',
 				executor: async () => {
 					try {
-						const thumbnail = await thumbnailManager.getThumbnail(entry.path, undefined, false, 'normal');
+						const thumbnail = await thumbnailManager.getThumbnail(
+							entry.path,
+							undefined,
+							false,
+							'normal'
+						);
 						if (thumbnail) {
 							thumbnails = new Map(thumbnails).set(entry.path, thumbnail);
 						}
@@ -75,10 +97,19 @@
 		try {
 			// 使用 bookStore 打开
 			await bookStore.openBook(entry.path);
+
+			// 根据设置决定是否同步文件树
+			if (historySettingsStore.syncFileTreeOnHistorySelect) {
+				try {
+					fileBrowserStore.selectPath(entry.path);
+				} catch (err) {
+					console.debug('同步文件树失败:', err);
+				}
+			}
+
 			// 如果记录了页码，导航到该页
 			if (entry.currentPage > 0 && entry.currentPage < entry.totalPages) {
-				// TODO: 导航到指定页码
-				console.log('导航到页码:', entry.currentPage);
+				await bookStore.navigateToPage(entry.currentPage);
 			}
 		} catch (err) {
 			console.error('打开历史记录失败:', err);
@@ -120,13 +151,13 @@
 	function showContextMenu(e: MouseEvent, entry: HistoryEntry) {
 		e.preventDefault();
 		e.stopPropagation();
-		
+
 		const viewportWidth = window.innerWidth;
 		const viewportHeight = window.innerHeight;
-		
+
 		let menuX = e.clientX;
 		let menuY = e.clientY;
-		
+
 		const menuWidth = 180;
 		if (e.clientX + menuWidth > viewportWidth) {
 			menuX = viewportWidth - menuWidth - 10;
@@ -134,12 +165,12 @@
 		if (menuX < 10) {
 			menuX = 10;
 		}
-		
+
 		const maxMenuHeight = viewportHeight * 0.7;
 		if (menuY + maxMenuHeight > viewportHeight) {
 			menuY = viewportHeight - maxMenuHeight - 10;
 		}
-		
+
 		contextMenu = { x: menuX, y: menuY, entry };
 	}
 
@@ -201,14 +232,16 @@
 	});
 </script>
 
-<div class="h-full flex flex-col bg-background overflow-hidden">
-	<div class="sticky top-0 z-20 flex flex-col border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/70">
+<div class="bg-background flex h-full flex-col overflow-hidden">
+	<div
+		class="border-border bg-background/95 supports-backdrop-filter:bg-background/70 sticky top-0 z-20 flex flex-col border-b backdrop-blur"
+	>
 		<!-- 标题栏 -->
-		<div class="p-4 border-b flex items-center justify-between">
+		<div class="flex items-center justify-between border-b p-4">
 			<div class="flex items-center gap-2">
 				<Clock class="h-5 w-5" />
 				<h3 class="font-semibold">历史记录</h3>
-				<span class="text-sm text-muted-foreground">({history.length})</span>
+				<span class="text-muted-foreground text-sm">({history.length})</span>
 			</div>
 			<div class="flex items-center gap-2">
 				<Button variant="ghost" size="sm" onclick={toggleViewMode} title="切换视图">
@@ -218,12 +251,12 @@
 						<List class="h-4 w-4" />
 					{/if}
 				</Button>
-				<Button variant="ghost" size="sm" onclick={clearHistory}>
-					清除全部
-				</Button>
+				<Button variant="ghost" size="sm" onclick={clearHistory}>清除全部</Button>
 			</div>
 		</div>
-		<div class="px-4 py-2 border-b text-[11px] text-muted-foreground flex flex-wrap gap-3 items-center bg-muted/30">
+		<div
+			class="text-muted-foreground bg-muted/30 flex flex-wrap items-center gap-3 border-b px-4 py-2 text-[11px]"
+		>
 			<span>当前书籍：{$bookState.currentBookPath ?? '—'}</span>
 			<span>
 				页码：
@@ -234,13 +267,13 @@
 				{/if}
 			</span>
 			<span class="flex items-center gap-1">
-				<Activity class="w-3 h-3" />
+				<Activity class="h-3 w-3" />
 				任务 {$viewerState.taskCursor.running}/{$viewerState.taskCursor.concurrency}
 			</span>
 		</div>
 
 		<!-- 搜索栏 -->
-		<div class="border-b border-border bg-background/95 px-4 py-3">
+		<div class="border-border bg-background/95 border-b px-4 py-3">
 			<SearchBar
 				placeholder="搜索历史记录..."
 				onSearchChange={(query) => {
@@ -251,71 +284,38 @@
 		</div>
 	</div>
 
-	<div class="flex-1 min-h-0 overflow-hidden">
+	<div class="min-h-0 flex-1 overflow-hidden">
 		<!-- 历史列表 -->
 		<div class="flex-1 overflow-auto">
-		{#if filteredHistory.length === 0 && searchQuery.trim()}
-			<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
-				<div class="text-center space-y-2">
-					<p class="text-lg font-medium">未找到匹配的历史记录</p>
-					<p class="text-sm opacity-70">搜索词: "{searchQuery}"</p>
-				</div>
-			</div>
-		{:else if filteredHistory.length === 0}
-			<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
-				<div class="relative mb-4">
-					<Clock class="h-16 w-16 opacity-30" />
-					<div class="absolute inset-0 flex items-center justify-center">
-						<div class="h-2 w-2 bg-muted-foreground rounded-full animate-pulse"></div>
+			{#if filteredHistory.length === 0 && searchQuery.trim()}
+				<div class="text-muted-foreground flex flex-col items-center justify-center py-12">
+					<div class="space-y-2 text-center">
+						<p class="text-lg font-medium">未找到匹配的历史记录</p>
+						<p class="text-sm opacity-70">搜索词: "{searchQuery}"</p>
 					</div>
 				</div>
-				<div class="text-center space-y-2">
-					<p class="text-lg font-medium">暂无历史记录</p>
-					<p class="text-sm opacity-70">浏览过的文件将在这里显示</p>
-				</div>
-			</div>
-		{:else if viewMode === 'list'}
-			<!-- 列表视图 -->
-			<div class="p-2 space-y-2">
-				{#each filteredHistory as entry (entry.id)}
-					<div class="relative group">
-						<FileItemCard
-							item={historyToFsItem(entry)}
-							thumbnail={thumbnails.get(entry.path)}
-							viewMode="list"
-							showReadMark={true}
-							showBookmarkMark={true}
-							currentPage={entry.currentPage}
-							totalPages={entry.totalPages}
-							timestamp={entry.timestamp}
-							onClick={() => openHistory(entry)}
-							onDoubleClick={() => openHistory(entry)}
-							onContextMenu={(e) => showContextMenu(e, entry)}
-						/>
-						<Button
-							variant="ghost"
-							size="icon"
-							class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-							onclick={(e) => {
-								e.stopPropagation();
-								removeHistory(entry.id);
-							}}
-						>
-							<X class="h-4 w-4" />
-						</Button>
+			{:else if filteredHistory.length === 0}
+				<div class="text-muted-foreground flex flex-col items-center justify-center py-12">
+					<div class="relative mb-4">
+						<Clock class="h-16 w-16 opacity-30" />
+						<div class="absolute inset-0 flex items-center justify-center">
+							<div class="bg-muted-foreground h-2 w-2 animate-pulse rounded-full"></div>
+						</div>
 					</div>
-				{/each}
-			</div>
-		{:else}
-			<!-- 网格视图 -->
-			<div class="p-2">
-				<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+					<div class="space-y-2 text-center">
+						<p class="text-lg font-medium">暂无历史记录</p>
+						<p class="text-sm opacity-70">浏览过的文件将在这里显示</p>
+					</div>
+				</div>
+			{:else if viewMode === 'list'}
+				<!-- 列表视图 -->
+				<div class="space-y-2 p-2">
 					{#each filteredHistory as entry (entry.id)}
-						<div class="relative group">
+						<div class="group relative">
 							<FileItemCard
 								item={historyToFsItem(entry)}
 								thumbnail={thumbnails.get(entry.path)}
-								viewMode="grid"
+								viewMode="list"
 								showReadMark={true}
 								showBookmarkMark={true}
 								currentPage={entry.currentPage}
@@ -328,7 +328,7 @@
 							<Button
 								variant="ghost"
 								size="icon"
-								class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80"
+								class="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100"
 								onclick={(e) => {
 									e.stopPropagation();
 									removeHistory(entry.id);
@@ -339,43 +339,82 @@
 						</div>
 					{/each}
 				</div>
-			</div>
-		{/if}
+			{:else}
+				<!-- 网格视图 -->
+				<div class="p-2">
+					<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+						{#each filteredHistory as entry (entry.id)}
+							<div class="group relative">
+								<FileItemCard
+									item={historyToFsItem(entry)}
+									thumbnail={thumbnails.get(entry.path)}
+									viewMode="grid"
+									showReadMark={true}
+									showBookmarkMark={true}
+									currentPage={entry.currentPage}
+									totalPages={entry.totalPages}
+									timestamp={entry.timestamp}
+									onClick={() => openHistory(entry)}
+									onDoubleClick={() => openHistory(entry)}
+									onContextMenu={(e) => showContextMenu(e, entry)}
+								/>
+								<Button
+									variant="ghost"
+									size="icon"
+									class="bg-background/80 absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100"
+									onclick={(e) => {
+										e.stopPropagation();
+										removeHistory(entry.id);
+									}}
+								>
+									<X class="h-4 w-4" />
+								</Button>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
 		</div>
 	</div>
 
 	<!-- 右键菜单 -->
 	{#if contextMenu.entry}
-		<ContextMenu.Root open={true} onOpenChange={(open) => { if (!open) hideContextMenu(); }}>
+		<ContextMenu.Root
+			open={true}
+			onOpenChange={(open) => {
+				if (!open) hideContextMenu();
+			}}
+		>
 			<ContextMenu.Trigger />
 			<ContextMenu.Content
 				style="position: fixed; left: {contextMenu.x}px; top: {contextMenu.y}px; z-index: 10000;"
 			>
 				<ContextMenu.Item onclick={() => openHistory(contextMenu.entry!)}>
-					<FolderOpen class="h-4 w-4 mr-2" />
+					<FolderOpen class="mr-2 h-4 w-4" />
 					打开
 				</ContextMenu.Item>
 				<ContextMenu.Separator />
 				<ContextMenu.Item onclick={() => addToBookmark(contextMenu.entry!)}>
-					<Bookmark class="h-4 w-4 mr-2" />
+					<Bookmark class="mr-2 h-4 w-4" />
 					添加到书签
 				</ContextMenu.Item>
 				<ContextMenu.Separator />
 				<ContextMenu.Item onclick={() => openInExplorer(contextMenu.entry!)}>
-					<ExternalLink class="h-4 w-4 mr-2" />
+					<ExternalLink class="mr-2 h-4 w-4" />
 					在资源管理器中打开
 				</ContextMenu.Item>
 				<ContextMenu.Item onclick={() => openWithExternalApp(contextMenu.entry!)}>
-					<ExternalLink class="h-4 w-4 mr-2" />
+					<ExternalLink class="mr-2 h-4 w-4" />
 					在外部应用中打开
 				</ContextMenu.Item>
 				<ContextMenu.Separator />
-				<ContextMenu.Item onclick={() => copyPath(contextMenu.entry!)}>
-					复制路径
-				</ContextMenu.Item>
+				<ContextMenu.Item onclick={() => copyPath(contextMenu.entry!)}>复制路径</ContextMenu.Item>
 				<ContextMenu.Separator />
-				<ContextMenu.Item onclick={() => removeHistory(contextMenu.entry!.id)} class="text-red-600 focus:text-red-600">
-					<Trash2 class="h-4 w-4 mr-2" />
+				<ContextMenu.Item
+					onclick={() => removeHistory(contextMenu.entry!.id)}
+					class="text-red-600 focus:text-red-600"
+				>
+					<Trash2 class="mr-2 h-4 w-4" />
 					删除
 				</ContextMenu.Item>
 			</ContextMenu.Content>

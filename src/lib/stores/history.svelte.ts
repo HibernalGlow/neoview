@@ -50,7 +50,7 @@ function saveToStorage(history: HistoryEntry[]) {
 
 export const historyStore = {
   subscribe,
-  
+
   /**
    * 添加历史记录（如果已存在则更新）
    */
@@ -58,7 +58,7 @@ export const historyStore = {
     update(history => {
       // 检查是否已存在相同路径的历史记录
       const existingIndex = history.findIndex(h => h.path === path);
-      
+
       const entry: HistoryEntry = {
         id: existingIndex >= 0 ? history[existingIndex].id : crypto.randomUUID(),
         path,
@@ -68,7 +68,7 @@ export const historyStore = {
         totalPages,
         thumbnail
       };
-      
+
       let newHistory: HistoryEntry[];
       if (existingIndex >= 0) {
         // 更新现有记录
@@ -80,12 +80,12 @@ export const historyStore = {
         // 添加新记录
         newHistory = [entry, ...history];
       }
-      
+
       saveToStorage(newHistory);
       return newHistory;
     });
   },
-  
+
   /**
    * 移除历史记录
    */
@@ -96,7 +96,7 @@ export const historyStore = {
       return newHistory;
     });
   },
-  
+
   /**
    * 清空所有历史记录
    */
@@ -105,7 +105,7 @@ export const historyStore = {
     set(newHistory);
     saveToStorage(newHistory);
   },
-  
+
   /**
    * 获取所有历史记录
    */
@@ -114,13 +114,36 @@ export const historyStore = {
     subscribe(value => history = value)();
     return history;
   },
-  
+
   /**
    * 根据路径查找历史记录
    */
   findByPath(path: string): HistoryEntry | undefined {
     const history = this.getAll();
     return history.find(h => h.path === path);
+  },
+
+  /**
+   * 更新历史记录的页数（不改变时间戳）
+   */
+  update(path: string, currentPage: number, totalPages: number) {
+    update(history => {
+      const existingIndex = history.findIndex(h => h.path === path);
+      if (existingIndex >= 0) {
+        const entry = history[existingIndex];
+        // 只更新页数，保持原有时间戳
+        const updatedEntry: HistoryEntry = {
+          ...entry,
+          currentPage,
+          totalPages
+        };
+        const newHistory = [...history];
+        newHistory[existingIndex] = updatedEntry;
+        saveToStorage(newHistory);
+        return newHistory;
+      }
+      return history;
+    });
   }
 };
 

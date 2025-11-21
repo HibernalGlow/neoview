@@ -1006,17 +1006,20 @@
 			position: 'left' | 'center' | 'right';
 		}> = [];
 
-		const start = currentIndex; // 从当前页开始
+		const start = currentIndex === 0 
+			? 0  // 第一页从0开始
+			: Math.max(0, currentIndex - 2); // 其他页：当前页前2页
 		const end = currentIndex === 0 
-			? currentIndex  // 第一页只加载自己
-			: Math.min(totalPages - 1, currentIndex + 4); // 其他页加载当前页 + 后面4页
+			? 0  // 第一页只加载自己
+			: Math.min(totalPages - 1, currentIndex + 2); // 其他页：当前页后2页
 
 		console.log(`🖼️ 全景模式：加载页面范围 ${start + 1} - ${end + 1}，当前页 ${currentIndex + 1}`);
 
 		for (let i = start; i <= end; i++) {
 			let position: 'left' | 'center' | 'right' = 'center';
-			if (i === currentIndex) position = 'center';
-			else position = 'right'; // 其他都是右边的
+			if (i < currentIndex) position = 'left';
+			else if (i === currentIndex) position = 'center';
+			else position = 'right';
 
 			pages.push({ index: i, data: null, position });
 		}

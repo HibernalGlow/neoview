@@ -213,10 +213,7 @@
 										>
 											<Folder class="size-4" />
 										</div>
-										<div class="grid flex-1 text-left text-sm leading-tight">
-											<span class="truncate font-medium">NeoView</span>
-											<span class="truncate text-xs">Image Viewer</span>
-										</div>
+										
 									{/snippet}
 								</Sidebar.MenuButton>
 							</Sidebar.MenuItem>

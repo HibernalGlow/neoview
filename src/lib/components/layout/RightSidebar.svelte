@@ -167,10 +167,7 @@
 									<div class="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
 										<Info class="size-4" />
 									</div>
-									<div class="grid flex-1 text-left text-sm leading-tight">
-										<span class="truncate font-medium">信息</span>
-										<span class="truncate text-xs">面板</span>
-									</div>
+									
 								{/snippet}
 							</Sidebar.MenuButton>
 						</Sidebar.MenuItem>
@@ -208,10 +205,7 @@
 			<!-- 二级菜单 - 内容面板 -->
 			<Sidebar.Root collapsible="none" class="hidden flex-1 md:flex" style="width: calc(var(--sidebar-width) - var(--sidebar-width-icon) - 1px);">
 				<Sidebar.Header class="gap-3.5 border-b p-4">
-					<div class="flex w-full items-center justify-between">
-						<div class="text-foreground text-base font-medium">
-							{activeItem.title}
-						</div>
+					<div class="flex w-full items-center justify-end">
 						<div class="flex items-center gap-2">
 							<Button variant="ghost" size="sm" onclick={togglePin}>
 								{#if $rightSidebarPinned}

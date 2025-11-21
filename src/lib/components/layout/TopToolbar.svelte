@@ -787,7 +787,7 @@ function toggleComparisonMode() {
 			aria-label="拖拽调整工具栏高度"
 			tabindex="-1"
 		>
-			<GripHorizontal class="h-3 w-3 text-muted-foreground" />
+			<!-- 保留可拖拽区域但不显示图标 -->
 		</div>
 	</div>
 </div>

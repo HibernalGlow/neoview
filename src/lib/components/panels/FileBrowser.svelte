@@ -199,7 +199,8 @@
 	let searchHistory = $state<{ query: string; timestamp: number }[]>([]);
 	let searchSettings = $state({
 		includeSubfolders: true,
-		showHistoryOnFocus: true
+		showHistoryOnFocus: true,
+		searchInPath: false // 是否在路径中搜索（而不仅仅是文件名）
 	});
 	let searchResults = $state<SearchResultItem[]>([]);
 	let isSearching = $state(false);
@@ -1526,7 +1527,8 @@
 			console.log('🔍 [Search] Step 3: Searching local files...');
 			const options = {
 				includeSubfolders: searchSettings.includeSubfolders,
-				maxResults: 100
+				maxResults: 100,
+				searchInPath: searchSettings.searchInPath
 			};
 			console.log('🔍 [Search] Calling FileSystemAPI.searchFiles with:', {
 				currentPath,

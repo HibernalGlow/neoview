@@ -26,6 +26,8 @@ pub struct SearchOptions {
     pub include_subfolders: Option<bool>,
     /// 最大结果数量
     pub max_results: Option<usize>,
+    /// 是否在完整路径中搜索（而不仅仅是文件名）
+    pub search_in_path: Option<bool>,
 }
 
 /// 文件系统管理器
@@ -485,11 +487,18 @@ impl FsManager {
 
         // 使用 rust_search 进行搜索
         println!("🔍 [Rust Search] Using rust_search fallback");
+        
+        let search_in_path = options.search_in_path.unwrap_or(false);
+        println!("🔍 [Rust Search] search_in_path: {}", search_in_path);
+        
+        // rust_search 默认会搜索完整路径
         let mut search_builder = rust_search::SearchBuilder::default()
             .location(path)
             .search_input(query)
             .ignore_case()
             .hidden(); // 默认忽略隐藏文件
+        
+        println!("🔍 [Rust Search] Search will match in {}", if search_in_path { "full path" } else { "file name only" });
 
         if !include_subfolders {
             search_builder = search_builder.depth(1);
@@ -519,6 +528,20 @@ impl FsManager {
                     .file_name()
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_default();
+                
+                // 根据 search_in_path 选项过滤结果
+                let query_lower = query.to_lowercase();
+                let matches = if search_in_path {
+                    // 在完整路径中搜索
+                    p.to_lowercase().contains(&query_lower)
+                } else {
+                    // 只在文件名中搜索
+                    name.to_lowercase().contains(&query_lower)
+                };
+                
+                if !matches {
+                    continue;
+                }
                     
                 let is_dir = metadata.is_dir();
                 let size = if is_dir {

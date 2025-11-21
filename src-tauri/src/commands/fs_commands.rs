@@ -597,6 +597,7 @@ pub async fn search_files(
     let fs_search_options = crate::core::fs_manager::SearchOptions {
         include_subfolders: search_options.include_subfolders,
         max_results: search_options.max_results,
+        search_in_path: search_options.search_in_path,
     };
     
     // 使用 fs_manager 的 search_files 方法（支持索引和递归搜索）
@@ -621,6 +622,7 @@ fn is_image_file(path: &Path) -> bool {
 pub struct SearchOptions {
     pub include_subfolders: Option<bool>,
     pub max_results: Option<usize>,
+    pub search_in_path: Option<bool>, // 是否在完整路径中搜索（而不仅仅是文件名）
 }
 
 /// 初始化文件索引

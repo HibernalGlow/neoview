@@ -78,7 +78,7 @@
 	>
 		{#if hasPanoramaImages}
 			<!-- 使用相邻图片填充 -->
-			<div class="flex h-full min-w-full items-center justify-start gap-4 py-0 px-4 overflow-x-auto scroll-smooth">
+			<div class="flex h-full min-w-full items-center justify-center gap-4 py-0 px-4 overflow-x-auto scroll-smooth" style="overflow-x: hidden;">
 				{#each panoramaPages as page (page.index)}
 					{#if page.data}
 						<img

@@ -201,7 +201,7 @@
 {#if viewMode === 'list'}
   <!-- 列表视图 -->
   <div
-    class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors {isSelected ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}"
+    class="group flex items-center gap-3 rounded border border-border p-2 cursor-pointer transition-colors {isSelected ? 'bg-primary/10 border-primary' : 'hover:bg-accent/10'}"
     onclick={onClick}
     ondblclick={onDoubleClick}
     oncontextmenu={onContextMenu}
@@ -223,7 +223,7 @@
           onToggleSelection?.();
         }}
       >
-        <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 hover:border-blue-400'}">
+        <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {isSelected ? 'bg-primary border-primary' : 'border-border hover:border-primary'}">
           {#if isSelected}
             <Check class="h-3 w-3 text-white" />
           {/if}
@@ -325,7 +325,7 @@
 {:else}
   <!-- 网格视图 -->
   <div
-    class="group relative flex flex-col rounded border overflow-hidden cursor-pointer transition-all hover:shadow-md {isSelected ? 'border-blue-500 ring-2 ring-blue-300' : 'border-gray-200'}"
+    class="group relative flex flex-col rounded border border-border overflow-hidden cursor-pointer transition-all hover:shadow-md {isSelected ? 'border-primary ring-2' : ''}"
     onclick={onClick}
     ondblclick={onDoubleClick}
     oncontextmenu={onContextMenu}

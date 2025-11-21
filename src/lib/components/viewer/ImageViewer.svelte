@@ -999,23 +999,23 @@
 		const currentIndex = bookStore.currentPageIndex;
 		const totalPages = bookStore.totalPages;
 
-		// 加载当前页及前后各2页
-		const range = 2;
+		// 只加载当前页及后面的页面
+		const range = 0; // 不加载前面的页面
 		const pages: Array<{
 			index: number;
 			data: string | null;
 			position: 'left' | 'center' | 'right';
 		}> = [];
 
-		const start = Math.max(0, currentIndex - range);
-		const end = Math.min(totalPages - 1, currentIndex + range);
+		const start = currentIndex; // 从当前页开始
+		const end = Math.min(totalPages - 1, currentIndex + 4); // 加载当前页 + 后面4页
 
 		console.log(`🖼️ 全景模式：加载页面范围 ${start + 1} - ${end + 1}，当前页 ${currentIndex + 1}`);
 
 		for (let i = start; i <= end; i++) {
 			let position: 'left' | 'center' | 'right' = 'center';
-			if (i < currentIndex) position = 'left';
-			else if (i > currentIndex) position = 'right';
+			if (i === currentIndex) position = 'center';
+			else position = 'right'; // 其他都是右边的
 
 			pages.push({ index: i, data: null, position });
 		}
@@ -1023,8 +1023,8 @@
 		panoramaPagesData = pages;
 		console.log('🖼️ 全景模式：初始化页面数组', pages.length, '页');
 
-		// 异步加载每页的图片数据
-		for (const page of pages) {
+		// 批量异步加载所有页面的图片数据
+		const loadPromises = pages.map(async (page) => {
 			try {
 				const blob = await preloadManager.getBlob(page.index);
 				if (blob && blob.size > 0) {
@@ -1032,12 +1032,10 @@
 					console.log(
 						`✅ 全景模式：页面 ${page.index + 1} 加载成功 (${page.position})，大小: ${blob.size} bytes`
 					);
-					// 使用 map 创建新对象数组以触发响应式更新
-					panoramaPagesData = panoramaPagesData.map(p => 
-						p.index === page.index ? { ...p, data: url } : p
-					);
+					return { index: page.index, url };
 				} else {
 					console.warn(`⚠️ 全景模式：页面 ${page.index + 1} blob 为空`);
+					return null;
 				}
 			} catch (error) {
 				console.warn(`加载全景模式第 ${page.index + 1} 页失败:`, error);

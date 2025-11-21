@@ -284,11 +284,6 @@
 								</div>
 							</div>
 							<div class="flex items-center gap-3">
-								<span
-									class={`text-xs ${$viewerState.loading ? 'text-amber-500' : 'text-emerald-500'}`}
-								>
-									{$viewerState.loading ? '加载中' : '就绪'} · {$viewerState.viewMode}
-								</span>
 								<Button variant="ghost" size="sm" onclick={togglePin}>
 									{#if $sidebarPinned}
 										<PinOff class="h-4 w-4" />

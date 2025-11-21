@@ -538,7 +538,7 @@ function toggleComparisonMode() {
 						<Palette class="h-4 w-4" />
 					</Button>
 				</DropdownMenu.Trigger>
-				<DropdownMenu.Content class="w-52">
+				<DropdownMenu.Content class="z-60 w-52">
 					{#if quickThemes.length}
 						<DropdownMenu.Label>主题</DropdownMenu.Label>
 						<DropdownMenu.Separator />
@@ -597,7 +597,7 @@ function toggleComparisonMode() {
 	</div>
 
 	<!-- 工具栏（图片操作） -->
-	<div class="bg-sidebar/95 backdrop-blur-sm border-b shadow-lg overflow-hidden" style="height: {$topToolbarHeight}px;">
+	<div class="bg-sidebar/95 backdrop-blur-sm border-b shadow-lg" style="height: {$topToolbarHeight}px;">
 	<div class="px-2 py-1 flex items-center justify-between gap-2 h-full overflow-y-auto">
 			<!-- 左侧：关闭按钮 + 面包屑导航 -->
 			<div class="flex items-center gap-2 flex-1 min-w-0">
@@ -720,7 +720,7 @@ function toggleComparisonMode() {
 							{#if $viewerState.viewMode === 'single'}单页{:else if $viewerState.viewMode === 'double'}双页{:else if $viewerState.viewMode === 'vertical'}纵向{:else}全景{/if}
 						</Button>
 					</DropdownMenu.Trigger>
-					<DropdownMenu.Content class="w-48">
+					<DropdownMenu.Content class="z-60 w-48">
 						<DropdownMenu.Item onclick={() => setViewMode('single')} class={$viewerState.viewMode === 'single' ? 'bg-accent' : ''}>
 							<RectangleVertical class="h-4 w-4 mr-2" />
 							<span>单页模式</span>

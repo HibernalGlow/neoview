@@ -11,6 +11,7 @@
 	let currentMode = $state<ThemeMode>('system');
 	let systemPrefersDark = $state(false);
 	let themeUrl = $state('');
+	let themeJson = $state('');
 	let customThemeName = $state('');
 	let editingVariant = $state<'light' | 'dark'>('light');
 
@@ -238,6 +239,41 @@
 		}
 	}
 
+	async function importThemeFromJson() {
+		const raw = themeJson.trim();
+		if (!raw) return;
+		try {
+			const parsed = JSON.parse(raw) as {
+				name?: string;
+				cssVars?: {
+					light?: Record<string, string>;
+					dark?: Record<string, string>;
+					theme?: Record<string, string>;
+				};
+			};
+			if (!parsed || !parsed.cssVars || !parsed.cssVars.light || !parsed.cssVars.dark) {
+				console.error('JSON 格式不正确，缺少 cssVars.light / cssVars.dark');
+				return;
+			}
+			const base = parsed.cssVars.theme ?? {};
+			const light = { ...base, ...parsed.cssVars.light };
+			const dark = { ...base, ...parsed.cssVars.dark };
+			const importedTheme: ThemeConfig = {
+				name: parsed.name || 'Custom Theme',
+				description: '来自 JSON 的主题',
+				colors: {
+					light,
+					dark
+				}
+			};
+			addCustomTheme(importedTheme);
+			selectedTheme = importedTheme;
+			applyTheme(currentMode, selectedTheme);
+		} catch (error) {
+			console.error('从 JSON 导入主题失败', error);
+		}
+	}
+
 	// 监听系统主题变化
 	onMount(() => {
 		checkSystemTheme();
@@ -447,6 +483,20 @@
 				bind:value={themeUrl}
 			/>
 			<Button size="sm" onclick={importThemeFromUrl}>导入</Button>
+		</div>
+	</div>
+
+	<div class="space-y-3">
+		<Label class="text-sm font-semibold">从 JSON 导入主题</Label>
+		<div class="flex flex-col gap-2">
+			<textarea
+				class="font-mono text-xs bg-muted/50 rounded-md border p-2 min-h-[120px] resize-y outline-none focus-visible:ring-1 focus-visible:ring-ring"
+				bind:value={themeJson}
+				placeholder='{"name":"My Theme","cssVars":{"theme":{},"light":{},"dark":{}}}'
+			></textarea>
+			<div class="flex justify-end">
+				<Button size="sm" onclick={importThemeFromJson}>导入 JSON</Button>
+			</div>
 		</div>
 	</div>
 

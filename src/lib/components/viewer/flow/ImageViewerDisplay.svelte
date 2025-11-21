@@ -35,19 +35,26 @@
 
 	function scrollToCenter(node: HTMLElement, isCenter: boolean) {
 		if (isCenter) {
-			// 使用 setTimeout 确保 DOM 布局完成后再滚动
-			setTimeout(() => {
-				node.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-			}, 0);
+			// 立即滚动到中心，不使用 setTimeout
+			requestAnimationFrame(() => {
+				node.scrollIntoView({ 
+					behavior: 'auto',  // 首次加载立即滚动
+					block: 'nearest', 
+					inline: 'center' 
+				});
+			});
 		}
 		
 		// 返回 update 函数，当 isCenter 变化时重新执行
 		return {
 			update(newIsCenter: boolean) {
 				if (newIsCenter) {
-					setTimeout(() => {
-						node.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-					}, 0);
+					// 翻页时使用平滑滚动
+					node.scrollIntoView({ 
+						behavior: 'smooth', 
+						block: 'nearest', 
+						inline: 'center' 
+					});
 				}
 			}
 		};
@@ -71,7 +78,7 @@
 	>
 		{#if hasPanoramaImages}
 			<!-- 使用相邻图片填充 -->
-			<div class="flex h-full min-w-full items-center justify-center gap-4 py-0 px-4">
+			<div class="flex h-full min-w-full items-center justify-start gap-4 py-0 px-4 overflow-x-auto scroll-smooth">
 				{#each panoramaPages as page (page.index)}
 					{#if page.data}
 						<img

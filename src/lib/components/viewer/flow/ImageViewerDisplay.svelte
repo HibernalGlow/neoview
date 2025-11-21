@@ -53,20 +53,10 @@
 		};
 	}
 
-	// 调试：监控 panoramaPages 变化
+	// 监控 panoramaPages 变化
 	$effect(() => {
 		if (viewMode === 'panorama') {
 			hasPanoramaImages = panoramaPages.some((p) => !!p.data);
-			console.log('ImageViewerDisplay - 全景模式数据:', {
-				viewMode,
-				panoramaPagesLength: panoramaPages.length,
-				panoramaPages: panoramaPages.map((p) => ({
-					index: p.index,
-					hasData: !!p.data,
-					dataPreview: p.data ? p.data.substring(0, 50) : 'null',
-					position: p.position
-				}))
-			});
 		} else {
 			hasPanoramaImages = false;
 		}

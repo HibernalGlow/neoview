@@ -104,9 +104,18 @@
 		root.style.setProperty('--background', colors.background);
 		root.style.setProperty('--foreground', colors.foreground);
 
-		// 保存到 localStorage
-		localStorage.setItem('theme-mode', mode);
-		localStorage.setItem('theme-name', theme.name);
+		try {
+			localStorage.setItem('theme-mode', mode);
+			localStorage.setItem('theme-name', theme.name);
+			localStorage.setItem(
+				'runtime-theme',
+				JSON.stringify({
+					mode,
+					themeName: theme.name,
+					themes: theme.colors
+				})
+			);
+		} catch {}
 	}
 
 	// 切换主题模式

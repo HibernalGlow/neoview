@@ -1833,264 +1833,52 @@
 						></path>
 					</svg>
 					<p class="text-sm">未找到匹配的文件</p>
-					<p class="mt-1 text-xs text-gray-500">搜索词: "{searchQuery}"</p>
+					<p class="text-sm">此目录为空</p>
 				</div>
 			</div>
 		{:else if searchQuery && searchResults.length > 0}
 			<!-- 搜索结果列表 -->
-			<div
-				bind:this={fileListContainer}
-				class="flex-1 overflow-y-auto p-2 focus:outline-none"
-				tabindex="0"
-				role="listbox"
-				aria-label="搜索结果列表"
-				onkeydown={handleKeydown}
-			>
-				<div class="mb-3 px-2 text-sm text-gray-600">
+			<div class="flex min-h-0 flex-1 flex-col">
+				<div class="border-b px-3 py-1 text-xs text-gray-500">
 					找到 {searchResults.length} 个结果 (搜索: "{searchQuery}")
 				</div>
-				<div class="grid grid-cols-1 gap-2">
-					{#each searchResults as item, index (item.path)}
-						<ContextMenu.Root>
-							<ContextMenu.Trigger>
-								<div
-									class="group flex cursor-pointer items-center gap-3 rounded border border-gray-200 p-2 transition-colors hover:bg-gray-50"
-									role="button"
-									tabindex="0"
-									onclick={() => openSearchResult(item)}
-									onkeydown={(event) => handleSearchResultKeydown(event, item)}
-								>
-									<!-- 勾选框（勾选模式） -->
-									{#if isCheckMode}
-										<button
-											class="shrink-0"
-											onclick={(e) => {
-												e.stopPropagation();
-												toggleItemSelection(item.path);
-											}}
-										>
-											<div
-												class="flex h-5 w-5 items-center justify-center rounded border-2 transition-colors {selectedItems.has(
-													item.path
-												)
-													? 'border-blue-500 bg-blue-500'
-													: 'border-gray-300 hover:border-blue-400'}"
-											>
-												{#if selectedItems.has(item.path)}
-													<svg
-														class="h-3 w-3 text-white"
-														fill="none"
-														viewBox="0 0 24 24"
-														stroke="currentColor"
-													>
-														<path
-															stroke-linecap="round"
-															stroke-linejoin="round"
-															stroke-width="3"
-															d="M5 13l4 4L19 7"
-														></path>
-													</svg>
-												{/if}
-											</div>
-										</button>
-									{/if}
-
-									<!-- 删除按钮（删除模式） -->
-									{#if isDeleteMode && !isArchiveView}
-										<button
-											class="shrink-0"
-											onclick={(e) => {
-												e.stopPropagation();
-												deleteItem(item.path);
-											}}
-											title="删除"
-										>
-											<div
-												class="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 transition-colors hover:bg-red-600"
-											>
-												<Trash2 class="h-3 w-3 text-white" />
-											</div>
-										</button>
-									{/if}
-
-									<!-- 图标或缩略图 -->
-									<div
-										class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded"
-									>
-										{#if false && thumbnails.has(toRelativeKey(item.path))}
-											<!-- TODO: 显示缩略图 - 功能已移除，待重新实现 -->
-											<img
-												src={thumbnails.get(toRelativeKey(item.path))}
-												alt={item.name}
-												class="h-full w-full object-cover transition-transform group-hover:scale-105"
-											/>
-										{:else if item.isDir}
-											<Folder
-												class="h-8 w-8 text-blue-500 transition-colors group-hover:text-blue-600"
-											/>
-										{:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
-											<FileArchive
-												class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600"
-											/>
-										{:else if item.isImage}
-											<Image
-												class="h-8 w-8 text-green-500 transition-colors group-hover:text-green-600"
-											/>
-										{:else}
-											<File
-												class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500"
-											/>
-										{/if}
-									</div>
-
-									<!-- 信息 -->
-									<div class="min-w-0 flex-1">
-										<div class="flex items-center gap-2">
-											<div class="truncate font-medium">{item.name}</div>
-											{#if item.source === 'bookmark'}
-												<span
-													class="rounded border border-yellow-200 bg-yellow-100 px-1.5 py-0.5 text-[10px] text-yellow-700"
-													>书签</span
-												>
-											{:else if item.source === 'history'}
-												<span
-													class="rounded border border-blue-200 bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700"
-													>历史</span
-												>
-											{:else if item.source === 'local'}
-												<span
-													class="rounded border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600"
-													>本地</span
-												>
-											{/if}
-										</div>
-										<div class="text-xs text-gray-500">
-											{item.path}
-										</div>
-										<div class="text-xs text-gray-500">
-											{formatSize(item.size, item.isDir)} · {formatDate(item.modified)}
-										</div>
-									</div>
-								</div>
-							</ContextMenu.Trigger>
-							<ContextMenu.Content>
-								<ContextMenu.Item onclick={() => addToBookmark(item)}>
-									<Bookmark class="mr-2 h-4 w-4" />
-									添加到书签
-								</ContextMenu.Item>
-								<ContextMenu.Separator />
-								<ContextMenu.Item onclick={() => openInExplorer(item)}>
-									<svg class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-										></path>
-									</svg>
-									在资源管理器中打开
-								</ContextMenu.Item>
-								<ContextMenu.Item onclick={() => openWithExternalApp(item)}>
-									<svg class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-										></path>
-									</svg>
-									在外部应用中打开
-								</ContextMenu.Item>
-								<ContextMenu.Separator />
-								<ContextMenu.Item onclick={() => cutItem(item)}>
-									<svg class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z"
-										></path>
-									</svg>
-									剪切
-								</ContextMenu.Item>
-								<ContextMenu.Item onclick={() => copyItem(item)}>
-									<svg class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-										></path>
-									</svg>
-									复制
-								</ContextMenu.Item>
-								<ContextMenu.Separator />
-								<ContextMenu.Item
-									onclick={() => deleteItemFromMenu(item)}
-									class="text-red-600 focus:text-red-600"
-								>
-									<Trash2 class="mr-2 h-4 w-4" />
-									删除
-								</ContextMenu.Item>
-								<ContextMenu.Item onclick={moveToFolder}>
-									<svg class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-										></path>
-									</svg>
-									移动到文件夹(E)
-								</ContextMenu.Item>
-								<ContextMenu.Item onclick={() => renameItem(item)}>
-									<svg class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-										></path>
-									</svg>
-									重命名(M)
-								</ContextMenu.Item>
-								{#if item.name.endsWith('.zip') || item.name.endsWith('.cbz') || item.name.endsWith('.rar') || item.name.endsWith('.cbr')}
-									<ContextMenu.Separator />
-									<ContextMenu.Item onclick={() => openArchiveAsBook(item)}>
-										<FolderOpen class="mr-2 h-4 w-4" />
-										作为书籍打开
-									</ContextMenu.Item>
-									<ContextMenu.Item onclick={() => browseArchive(item)}>
-										<Folder class="mr-2 h-4 w-4" />
-										浏览内容
-									</ContextMenu.Item>
-								{/if}
-								<ContextMenu.Separator />
-								<ContextMenu.Item
-									onclick={() => {
-										navigator.clipboard.writeText(item.path);
-									}}
-								>
-									<svg class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-										></path>
-									</svg>
-									复制路径
-								</ContextMenu.Item>
-							</ContextMenu.Content>
-						</ContextMenu.Root>
-					{/each}
-				</div>
-			</div>
-		{:else if items.length === 0 && currentPath}
-			<div class="flex flex-1 items-center justify-center">
-				<div class="text-center text-gray-400">
-					<Folder class="mx-auto mb-2 h-16 w-16 opacity-50" />
-					<p class="text-sm">此目录为空</p>
+				<div class="min-h-0 flex-1">
+					<VirtualizedFileList
+						items={searchResults}
+						{currentPath}
+						{thumbnails}
+						{selectedIndex}
+						{isCheckMode}
+						{isDeleteMode}
+						{selectedItems}
+						{viewMode}
+						on:itemClick={(e) => {
+							const { item, index } = e.detail;
+							if (!isCheckMode && !isDeleteMode) {
+								openSearchResult(item);
+							}
+						}}
+						on:itemDoubleClick={(e) => {
+							const { item } = e.detail;
+							openSearchResult(item);
+						}}
+						on:itemSelect={(e) => {
+							const { item, multiSelect } = e.detail;
+							if (isCheckMode) {
+								toggleItemSelection(item.path);
+							}
+						}}
+						on:itemContextMenu={(e) => {
+							const { event, item } = e.detail;
+							showContextMenu(event, item);
+						}}
+						on:deleteItem={(e) => {
+							deleteItem(e.detail.item.path);
+						}}
+						on:selectionChange={(e) => {
+							selectedItems = new Set(e.detail.selectedItems);
+						}}
+					/>
 				</div>
 			</div>
 		{:else if items.length === 0}

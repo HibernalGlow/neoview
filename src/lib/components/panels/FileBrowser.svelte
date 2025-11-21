@@ -1788,16 +1788,6 @@
 
 				<!-- 排序面板 -->
 				<SortPanel {sortField} {sortOrder} onSortChange={handleSortChange} />
-
-				<Button
-					variant="ghost"
-					size="icon"
-					class="h-8 w-8"
-					onclick={clearThumbnailCache}
-					title="清理缩略图缓存"
-				>
-					<Trash2 class="h-4 w-4" />
-				</Button>
 			</div>
 		</div>
 		<!-- 搜索栏 -->

@@ -239,7 +239,7 @@ function toggleComparisonMode() {
 	<!-- 标题栏（窗口控制） -->
 	<div
 		data-tauri-drag-region
-		class="h-8 bg-secondary/95 backdrop-blur-sm flex items-center justify-between px-2 select-none border-b"
+		class="h-8 bg-sidebar/95 backdrop-blur-sm flex items-center justify-between px-2 select-none border-b"
 	>
 		<!-- 左侧：菜单和应用名 -->
 		<div class="flex items-center gap-1">
@@ -291,7 +291,7 @@ function toggleComparisonMode() {
 	</div>
 
 	<!-- 工具栏（图片操作） -->
-	<div class="bg-secondary/95 backdrop-blur-sm border-b shadow-lg overflow-hidden" style="height: {$topToolbarHeight}px;">
+	<div class="bg-sidebar/95 backdrop-blur-sm border-b shadow-lg overflow-hidden" style="height: {$topToolbarHeight}px;">
 	<div class="px-2 py-1 flex items-center justify-between gap-2 h-full overflow-y-auto">
 			<!-- 左侧：关闭按钮 + 面包屑导航 -->
 			<div class="flex items-center gap-2 flex-1 min-w-0">

@@ -483,7 +483,7 @@ onMount(() => {
 		role="application"
 		aria-label="底部缩略图栏"
 	>
-		<div class="bg-secondary/95 backdrop-blur-sm border-t shadow-lg overflow-hidden" style="height: {$bottomThumbnailBarHeight}px;">
+		<div class="bg-sidebar/95 backdrop-blur-sm border-t shadow-lg overflow-hidden" style="height: {$bottomThumbnailBarHeight}px;">
 			<!-- 拖拽手柄 -->
 			<button
 				type="button"
@@ -563,12 +563,12 @@ onMount(() => {
 				<div class="flex gap-2 overflow-x-auto h-full pb-1 items-center" onscroll={handleScroll}>
 					{#each bookStore.currentBook.pages as page, index (page.path)}
 						<button
-							class="flex-shrink-0 rounded overflow-hidden border-2 transition-colors relative group
-								{index === bookStore.currentPageIndex ? 'outline outline-2 outline-yellow-400' : ''}
+							class="flex-shrink-0 rounded overflow-hidden border-2 border-border transition-colors relative group
+								{index === bookStore.currentPageIndex ? 'outline outline-2 outline-sidebar-ring' : ''}
 								{bookStore.getPageUpscaleStatus(index) === 'preupscaled' ? 'ring-2 ring-blue-500' : ''}
 								{bookStore.getPageUpscaleStatus(index) === 'done' ? 'ring-2 ring-green-500' : ''}
 								{bookStore.getPageUpscaleStatus(index) === 'failed' ? 'ring-2 ring-red-500' : ''}
-								border-gray-300 hover:border-primary/50"
+								hover:border-primary/50"
 							style="width: auto; height: {$bottomThumbnailBarHeight - 40}px; min-width: 60px; max-width: 120px;"
 							onclick={() => bookStore.navigateToPage(index)}
 							title="Page {index + 1}"

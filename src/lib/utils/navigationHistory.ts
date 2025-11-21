@@ -117,18 +117,11 @@ export class NavigationHistory {
   }
 
   /**
-   * 获取历史记录统计
+   * 获取所有历史记录
    */
-  getStats() {
-    return {
-      total: this.history.length,
-      currentIndex: this.currentIndex,
-      canGoBack: this.canGoBack(),
-      canGoForward: this.canGoForward()
-    };
+  getHistory(): string[] {
+    return [...this.history];
   }
-
-  // ===== 缓存相关方法 =====
 
   /**
    * 缓存目录数据

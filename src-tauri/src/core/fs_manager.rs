@@ -470,14 +470,69 @@ impl FsManager {
             }
         }
 
-        // 回退到传统搜索方式
-        let mut results = Vec::new();
-        let query_lower = query.to_lowercase();
+        // 使用 rust_search 进行搜索
+        let mut search_builder = rust_search::SearchBuilder::default()
+            .location(path)
+            .search_input(query)
+            .ignore_case()
+            .hidden(); // 默认忽略隐藏文件
 
-        if include_subfolders {
-            self.search_recursive(path, &query_lower, &mut results, max_results)?;
+        if !include_subfolders {
+            search_builder = search_builder.depth(1);
         } else {
-            self.search_directory(path, &query_lower, &mut results, max_results)?;
+            // 限制最大深度以防止无限循环或过深
+            search_builder = search_builder.depth(20);
+        }
+
+        // rust_search 返回 Vec<String>
+        let paths: Vec<String> = search_builder.build().collect();
+        
+        let mut results = Vec::new();
+        
+        for p in paths {
+            if results.len() >= max_results {
+                break;
+            }
+            
+            let path_buf = PathBuf::from(&p);
+            // 获取元数据
+            if let Ok(metadata) = fs::metadata(&path_buf) {
+                let name = path_buf
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                    
+                let is_dir = metadata.is_dir();
+                let size = if is_dir {
+                    0 // 搜索时不计算目录大小以提高速度
+                } else {
+                    metadata.len()
+                };
+                
+                let modified = metadata
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs());
+                    
+                let created = metadata
+                    .created()
+                    .ok()
+                    .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs());
+                    
+                let is_image = !is_dir && Self::is_image_file(&path_buf);
+                
+                results.push(FsItem {
+                    name,
+                    path: p,
+                    is_dir,
+                    size,
+                    modified,
+                    created,
+                    is_image,
+                });
+            }
         }
 
         // 排序结果：目录优先，然后按匹配度
@@ -489,6 +544,7 @@ impl FsManager {
                     // 按名称匹配度排序：完全匹配 > 前缀匹配 > 包含匹配
                     let a_name = a.name.to_lowercase();
                     let b_name = b.name.to_lowercase();
+                    let query_lower = query.to_lowercase();
 
                     let a_exact = a_name == query_lower;
                     let b_exact = b_name == query_lower;
@@ -510,11 +566,6 @@ impl FsManager {
                 }
             }
         });
-
-        // 限制结果数量
-        if results.len() > max_results {
-            results.truncate(max_results);
-        }
 
         Ok(results)
     }

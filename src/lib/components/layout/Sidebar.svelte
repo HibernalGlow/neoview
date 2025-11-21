@@ -3,21 +3,36 @@
 	 * NeoView - Sidebar Component (shadcn-svelte 二级菜单重构 + 原生交互)
 	 * 左侧边栏组件 - 使用 shadcn-svelte Sidebar 二级菜单结构，恢复拖拽和悬停逻辑
 	 */
-	import { Folder, History, Bookmark, Info, Image as ImageIcon, List, Pin, PinOff } from '@lucide/svelte';
+	import {
+		Folder,
+		History,
+		Bookmark,
+		Info,
+		Image as ImageIcon,
+		List,
+		Pin,
+		PinOff
+	} from '@lucide/svelte';
 	import { readable } from 'svelte/store';
-import { activePanel, setActivePanelTab, sidebarWidth, sidebarPinned, sidebarOpen } from '$lib/stores';
-import type { PanelTabType } from '$lib/stores';
+	import {
+		activePanel,
+		setActivePanelTab,
+		sidebarWidth,
+		sidebarPinned,
+		sidebarOpen
+	} from '$lib/stores';
+	import type { PanelTabType } from '$lib/stores';
 	import * as Sidebar from '$lib/components/ui/sidebar';
-import FileBrowser from '$lib/components/panels/FileBrowser.svelte';
-import HistoryPanel from '$lib/components/panels/HistoryPanel.svelte';
-import BookmarkPanel from '$lib/components/panels/BookmarkPanel.svelte';
-import ThumbnailsPanel from '$lib/components/panels/ThumbnailsPanel.svelte';
-import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
-import { Button } from '$lib/components/ui/button';
-import HoverWrapper from './HoverWrapper.svelte';
-import PanelContextMenu from '$lib/components/ui/PanelContextMenu.svelte';
-import { appState, type StateSelector } from '$lib/core/state/appState';
-import { Maximize2, ExternalLink, X } from '@lucide/svelte';
+	import FileBrowser from '$lib/components/panels/FileBrowser.svelte';
+	import HistoryPanel from '$lib/components/panels/HistoryPanel.svelte';
+	import BookmarkPanel from '$lib/components/panels/BookmarkPanel.svelte';
+	import ThumbnailsPanel from '$lib/components/panels/ThumbnailsPanel.svelte';
+	import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
+	import { Button } from '$lib/components/ui/button';
+	import HoverWrapper from './HoverWrapper.svelte';
+	import PanelContextMenu from '$lib/components/ui/PanelContextMenu.svelte';
+	import { appState, type StateSelector } from '$lib/core/state/appState';
+	import { Maximize2, ExternalLink, X } from '@lucide/svelte';
 
 	interface Props {
 		onResize?: (width: number) => void;
@@ -27,7 +42,7 @@ import { Maximize2, ExternalLink, X } from '@lucide/svelte';
 	let isVisible = $state($sidebarOpen);
 	let localSidebarOpen = $state($sidebarOpen);
 
-	const sidebar = Sidebar.useSidebar();
+	// const sidebar = Sidebar.useSidebar(); // Context not available here
 
 	type NavItem = {
 		title: string;
@@ -113,7 +128,7 @@ import { Maximize2, ExternalLink, X } from '@lucide/svelte';
 
 		const delta = e.clientX - startX;
 		const newWidth = Math.max(200, Math.min(600, startWidth + delta));
-		
+
 		sidebarWidth.set(newWidth);
 		onResize?.(newWidth);
 	}
@@ -137,17 +152,18 @@ import { Maximize2, ExternalLink, X } from '@lucide/svelte';
 
 	function handleTabChange(item: NavItem) {
 		activeItem = item;
-		
+
 		// 设置活动面板
 		setActivePanelTab(item.value as PanelTabType);
-		
+
 		// 确保侧边栏打开
-		sidebar.setOpen(true);
+		localSidebarOpen = true;
+		sidebarOpen.set(true);
 	}
 
 	// 响应 activePanel 变化（避免无限循环）
 	$effect(() => {
-		const currentActive = navMain.find(nav => nav.value === $activePanel);
+		const currentActive = navMain.find((nav) => nav.value === $activePanel);
 		if (currentActive && currentActive.value !== activeItem.value) {
 			activeItem = currentActive;
 		}
@@ -178,17 +194,13 @@ import { Maximize2, ExternalLink, X } from '@lucide/svelte';
 	});
 </script>
 
-<HoverWrapper 
-	bind:isVisible 
-	pinned={$sidebarPinned} 
-	onVisibilityChange={handleVisibilityChange}
->
+<HoverWrapper bind:isVisible pinned={$sidebarPinned} onVisibilityChange={handleVisibilityChange}>
 	<div
 		class="relative flex h-full"
 		style="--sidebar-width: {$sidebarWidth}px; width: {$sidebarWidth}px;"
 	>
-		<Sidebar.Provider 
-			bind:open={localSidebarOpen} 
+		<Sidebar.Provider
+			bind:open={localSidebarOpen}
 			onOpenChange={(v) => {
 				localSidebarOpen = v;
 				sidebarOpen.set(v);
@@ -200,157 +212,177 @@ import { Maximize2, ExternalLink, X } from '@lucide/svelte';
 				collapsible="offcanvas"
 				class="overflow-hidden [&>[data-sidebar=sidebar]]:flex-row"
 			>
-			<!-- 一级菜单 - 图标模式 -->
-			<Sidebar.Root collapsible="none" class="!w-[calc(var(--sidebar-width-icon)_+_1px)] border-r" style="width: calc(var(--sidebar-width-icon) + 1px);">
-				<Sidebar.Header>
-					<Sidebar.Menu>
-						<Sidebar.MenuItem>
-							<Sidebar.MenuButton size="lg" class="md:h-8 md:p-0">
-								{#snippet child({ props })}
-									<div class="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-										<Folder class="size-4" />
-									</div>
-									<div class="grid flex-1 text-left text-sm leading-tight">
-										<span class="truncate font-medium">NeoView</span>
-										<span class="truncate text-xs">Image Viewer</span>
-									</div>
-								{/snippet}
-							</Sidebar.MenuButton>
-						</Sidebar.MenuItem>
-					</Sidebar.Menu>
-				</Sidebar.Header>
-				
-				<Sidebar.Content>
-					<Sidebar.Group>
-						<Sidebar.GroupContent class="px-1.5 md:px-0">
-							<Sidebar.Menu>
-								{#each navMain as item (item.value)}
-									<Sidebar.MenuItem>
-										<Sidebar.MenuButton
-											tooltipContentProps={{
-												hidden: false,
-											}}
-											onclick={() => handleTabChange(item)}
-											isActive={$activePanel === item.value}
-											class="px-2.5 md:px-2"
+				<!-- 一级菜单 - 图标模式 -->
+				<Sidebar.Root
+					collapsible="none"
+					class="!w-[calc(var(--sidebar-width-icon)_+_1px)] border-r"
+					style="width: calc(var(--sidebar-width-icon) + 1px);"
+				>
+					<Sidebar.Header>
+						<Sidebar.Menu>
+							<Sidebar.MenuItem>
+								<Sidebar.MenuButton size="lg" class="md:h-8 md:p-0">
+									{#snippet child({ props })}
+										<div
+											class="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg"
 										>
-											{#snippet tooltipContent()}
-												{item.title}
-											{/snippet}
-											<item.icon />
-											<span>{item.title}</span>
-										</Sidebar.MenuButton>
-									</Sidebar.MenuItem>
-								{/each}
-							</Sidebar.Menu>
-						</Sidebar.GroupContent>
-					</Sidebar.Group>
-				</Sidebar.Content>
-			</Sidebar.Root>
+											<Folder class="size-4" />
+										</div>
+										<div class="grid flex-1 text-left text-sm leading-tight">
+											<span class="truncate font-medium">NeoView</span>
+											<span class="truncate text-xs">Image Viewer</span>
+										</div>
+									{/snippet}
+								</Sidebar.MenuButton>
+							</Sidebar.MenuItem>
+						</Sidebar.Menu>
+					</Sidebar.Header>
 
-			<!-- 二级菜单 - 内容面板 -->
-			<Sidebar.Root collapsible="none" class="hidden flex-1 md:flex" style="width: calc(var(--sidebar-width) - var(--sidebar-width-icon) - 1px);">
-				<Sidebar.Header class="gap-3.5 border-b p-4">
-					<div class="flex w-full items-center justify-between">
-						<div class="text-foreground text-base font-medium">
-							{activeItem.title}
-							<div class="text-xs text-muted-foreground mt-1 space-x-2">
-								<span>{sidebarBookSummary}</span>
-								{#if $viewerState.pageWindow && !$viewerState.pageWindow.stale}
-									<span>{sidebarWindowSummary}</span>
-								{/if}
+					<Sidebar.Content>
+						<Sidebar.Group>
+							<Sidebar.GroupContent class="px-1.5 md:px-0">
+								<Sidebar.Menu>
+									{#each navMain as item (item.value)}
+										<Sidebar.MenuItem>
+											<Sidebar.MenuButton
+												tooltipContentProps={{
+													hidden: false
+												}}
+												onclick={() => handleTabChange(item)}
+												isActive={$activePanel === item.value}
+												class="px-2.5 md:px-2"
+											>
+												{#snippet tooltipContent()}
+													{item.title}
+												{/snippet}
+												<item.icon />
+												<span>{item.title}</span>
+											</Sidebar.MenuButton>
+										</Sidebar.MenuItem>
+									{/each}
+								</Sidebar.Menu>
+							</Sidebar.GroupContent>
+						</Sidebar.Group>
+					</Sidebar.Content>
+				</Sidebar.Root>
+
+				<!-- 二级菜单 - 内容面板 -->
+				<Sidebar.Root
+					collapsible="none"
+					class="hidden flex-1 md:flex"
+					style="width: calc(var(--sidebar-width) - var(--sidebar-width-icon) - 1px);"
+				>
+					<Sidebar.Header class="gap-3.5 border-b p-4">
+						<div class="flex w-full items-center justify-between">
+							<div class="text-foreground text-base font-medium">
+								{activeItem.title}
+								<div class="text-muted-foreground mt-1 space-x-2 text-xs">
+									<span>{sidebarBookSummary}</span>
+									{#if $viewerState.pageWindow && !$viewerState.pageWindow.stale}
+										<span>{sidebarWindowSummary}</span>
+									{/if}
+								</div>
+							</div>
+							<div class="flex items-center gap-3">
+								<span
+									class={`text-xs ${$viewerState.loading ? 'text-amber-500' : 'text-emerald-500'}`}
+								>
+									{$viewerState.loading ? '加载中' : '就绪'} · {$viewerState.viewMode}
+								</span>
+								<Button variant="ghost" size="sm" onclick={togglePin}>
+									{#if $sidebarPinned}
+										<PinOff class="h-4 w-4" />
+									{:else}
+										<Pin class="h-4 w-4" />
+									{/if}
+								</Button>
+								<Button
+									variant="ghost"
+									size="sm"
+									onclick={() => {
+										localSidebarOpen = false;
+										sidebarOpen.set(false);
+									}}
+								>
+									<X class="h-4 w-4" />
+								</Button>
 							</div>
 						</div>
-						<div class="flex items-center gap-3">
-							<span class={`text-xs ${$viewerState.loading ? 'text-amber-500' : 'text-emerald-500'}`}>
-								{$viewerState.loading ? '加载中' : '就绪'} · {$viewerState.viewMode}
-							</span>
-							<Button variant="ghost" size="sm" onclick={togglePin}>
-								{#if $sidebarPinned}
-									<PinOff class="h-4 w-4" />
-								{:else}
-									<Pin class="h-4 w-4" />
-								{/if}
-							</Button>
-							<Button variant="ghost" size="sm" onclick={() => sidebar.setOpen(false)}>
-								×
-							</Button>
-						</div>
-					</div>
-				</Sidebar.Header>
-				
-				<Sidebar.Content>
-					<Sidebar.Group class="px-0">
-						<Sidebar.GroupContent>
-							<PanelContextMenu
-								items={[
-									{
-										label: '在新窗口中打开',
-										action: () => {
-											console.log('在新窗口中打开:', activeItem.value);
-											// TODO: 实现新窗口打开逻辑
-										},
-										icon: ExternalLink
-									},
-									{
-										label: $sidebarPinned ? '取消钉住' : '钉住',
-										action: () => {
-											togglePin();
-										},
-										icon: $sidebarPinned ? PinOff : Pin
-									},
-									{
-										label: '',
-										action: () => {},
-										separator: true
-									},
-									{
-										label: '关闭面板',
-										action: () => {
-											sidebarOpen.set(false);
-										},
-										icon: X
-									}
-								]}
-								zIndex={10000}
-							>
-								{#snippet children()}
-									{#if activeItem.value === 'folder'}
-										<FileBrowser />
-									{:else if activeItem.value === 'history'}
-										<HistoryPanel />
-									{:else if activeItem.value === 'bookmark'}
-										<BookmarkPanel />
-									{:else if activeItem.value === 'thumbnail'}
-										<ThumbnailsPanel />
-									{:else if activeItem.value === 'playlist'}
-										<div class="p-4">
-											<h3 class="text-lg font-semibold mb-4">播放列表</h3>
-											<p class="text-sm text-muted-foreground">播放列表功能正在开发中...</p>
-										</div>
-									{:else if activeItem.value === 'info'}
-										<InfoPanel />
-									{/if}
-								{/snippet}
-							</PanelContextMenu>
-						</Sidebar.GroupContent>
-					</Sidebar.Group>
-				</Sidebar.Content>
-			</Sidebar.Root>
-		</Sidebar.Root>
-	</Sidebar.Provider>
+					</Sidebar.Header>
 
-	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-	<!-- 拖拽调整大小的分隔条（div 仅承载鼠标事件，不处理键盘） -->
-	<div
-		class="absolute top-0 bottom-0 right-0 w-4 cursor-col-resize transition-colors z-50"
-		onmousedown={handleMouseDown}
-		role="separator"
-		aria-label="调整侧边栏宽度"
-		aria-orientation="vertical"
-	>
-		<!-- 拖拽区域（加大点击区域） -->
-		<div class="absolute top-0 bottom-0 -left-2 -right-2"></div>
+					<Sidebar.Content>
+						<Sidebar.Group class="px-0">
+							<Sidebar.GroupContent>
+								<PanelContextMenu
+									items={[
+										{
+											label: '在新窗口中打开',
+											action: () => {
+												console.log('在新窗口中打开:', activeItem.value);
+												// TODO: 实现新窗口打开逻辑
+											},
+											icon: ExternalLink
+										},
+										{
+											label: $sidebarPinned ? '取消钉住' : '钉住',
+											action: () => {
+												togglePin();
+											},
+											icon: $sidebarPinned ? PinOff : Pin
+										},
+										{
+											label: '',
+											action: () => {},
+											separator: true
+										},
+										{
+											label: '关闭面板',
+											action: () => {
+												localSidebarOpen = false;
+												sidebarOpen.set(false);
+											},
+											icon: X
+										}
+									]}
+									zIndex={10000}
+								>
+									{#snippet children()}
+										{#if activeItem.value === 'folder'}
+											<FileBrowser />
+										{:else if activeItem.value === 'history'}
+											<HistoryPanel />
+										{:else if activeItem.value === 'bookmark'}
+											<BookmarkPanel />
+										{:else if activeItem.value === 'thumbnail'}
+											<ThumbnailsPanel />
+										{:else if activeItem.value === 'playlist'}
+											<div class="p-4">
+												<h3 class="mb-4 text-lg font-semibold">播放列表</h3>
+												<p class="text-muted-foreground text-sm">播放列表功能正在开发中...</p>
+											</div>
+										{:else if activeItem.value === 'info'}
+											<InfoPanel />
+										{/if}
+									{/snippet}
+								</PanelContextMenu>
+							</Sidebar.GroupContent>
+						</Sidebar.Group>
+					</Sidebar.Content>
+				</Sidebar.Root>
+			</Sidebar.Root>
+		</Sidebar.Provider>
+
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+		<!-- 拖拽调整大小的分隔条（div 仅承载鼠标事件，不处理键盘） -->
+		<div
+			class="absolute bottom-0 right-0 top-0 z-50 w-4 cursor-col-resize transition-colors"
+			onmousedown={handleMouseDown}
+			role="separator"
+			aria-label="调整侧边栏宽度"
+			aria-orientation="vertical"
+		>
+			<!-- 拖拽区域（加大点击区域） -->
+			<div class="absolute -left-2 -right-2 bottom-0 top-0"></div>
+		</div>
 	</div>
-</div>
 </HoverWrapper>

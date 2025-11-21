@@ -47,3 +47,4 @@ wasm-bindgen-futures = "0.4"
 ffmpeg-sidecar = "2.3.0"
 uuid = { version = "1", features = ["serde", "v4"] }
 num_cpus = "1.16"
+rust_search = "2.1.0"

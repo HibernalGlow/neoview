@@ -101,21 +101,38 @@
 	// 打开历史记录
 	async function openHistory(entry: HistoryEntry) {
 		try {
+			console.log(
+				'📖 打开历史记录:',
+				entry.name,
+				'页码:',
+				entry.currentPage,
+				'/',
+				entry.totalPages
+			);
+
 			// 使用 bookStore 打开
 			await bookStore.openBook(entry.path);
 
 			// 根据设置决定是否同步文件树
 			if (historySettingsStore.syncFileTreeOnHistorySelect) {
 				try {
-					fileBrowserStore.selectPath(entry.path);
+					await fileBrowserStore.navigateToPath(entry.path);
 				} catch (err) {
 					console.debug('同步文件树失败:', err);
 				}
 			}
 
-			// 如果记录了页码，导航到该页
+			// 如果记录了页码，导航到该页（需要等待书籍完全加载）
 			if (entry.currentPage > 0 && entry.currentPage < entry.totalPages) {
-				await bookStore.navigateToPage(entry.currentPage);
+				// 使用 setTimeout 确保在书籍加载完成后执行
+				setTimeout(async () => {
+					try {
+						console.log('🔖 跳转到历史页码:', entry.currentPage);
+						await bookStore.navigateToPage(entry.currentPage);
+					} catch (err) {
+						console.error('跳转到历史页码失败:', err);
+					}
+				}, 100);
 			}
 		} catch (err) {
 			console.error('打开历史记录失败:', err);
@@ -250,7 +267,7 @@
 				<span class="text-muted-foreground text-sm">({history.length})</span>
 			</div>
 			<div class="flex items-center gap-3">
-				<div class="flex items-center gap-1 text-xs text-muted-foreground">
+				<div class="text-muted-foreground flex items-center gap-1 text-xs">
 					<Checkbox
 						bind:checked={syncFileTreeOnHistorySelect}
 						aria-label="选中历史记录时同步文件树"

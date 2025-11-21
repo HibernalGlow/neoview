@@ -6,6 +6,7 @@
 import { writable } from 'svelte/store';
 import { toAssetUrl } from '$lib/utils/assetProxy';
 import type { FsItem } from '$lib/types';
+import { FileSystemAPI } from '$lib/api';
 
 export type SortField = 'name' | 'modified' | 'size' | 'type' | 'path';
 export type SortOrder = 'asc' | 'desc';
@@ -21,6 +22,8 @@ interface FileBrowserState {
   thumbnails: Map<string, string>;
   sortField: SortField;
   sortOrder: SortOrder;
+  scrollToSelectedToken: number;
+  scrollTargetIndex: number;
 }
 
 const archiveExtensions = ['.zip', '.cbz', '.rar', '.cbr', '.7z'];
@@ -44,6 +47,19 @@ function isBookCandidate(item: FsItem): boolean {
   return isArchiveFile(item.path) || isVideoFile(item.path);
 }
 
+function getParentDirectory(path: string): string | null {
+  if (!path) {
+    return null;
+  }
+  const lastBackslash = path.lastIndexOf('\\');
+  const lastSlash = path.lastIndexOf('/');
+  const separatorIndex = Math.max(lastBackslash, lastSlash);
+  if (separatorIndex <= 0) {
+    return null;
+  }
+  return path.slice(0, separatorIndex);
+}
+
 const initialState: FileBrowserState = {
   currentPath: '',
   items: [],
@@ -54,7 +70,9 @@ const initialState: FileBrowserState = {
   selectedIndex: -1,
   thumbnails: new Map(),
   sortField: 'name',
-  sortOrder: 'asc'
+  sortOrder: 'asc',
+  scrollToSelectedToken: 0,
+  scrollTargetIndex: -1
 };
 
 /**
@@ -110,6 +128,8 @@ function createFileBrowserStore() {
     currentState = state;
   });
 
+  let pendingNavigation: Promise<void> | null = null;
+
   return {
     subscribe,
     getState: () => currentState,
@@ -121,6 +141,87 @@ function createFileBrowserStore() {
       update(state => ({ ...state, isArchiveView: isArchive, currentArchivePath: archivePath })),
     setSelectedIndex: (index: number) => update(state => ({ ...state, selectedIndex: index })),
     setSort: (field: SortField, order: SortOrder) => update(state => ({ ...state, sortField: field, sortOrder: order })),
+    requestScrollToSelected: (indexOverride?: number) =>
+      update(state => ({
+        ...state,
+        scrollTargetIndex: typeof indexOverride === 'number' ? indexOverride : state.selectedIndex,
+        scrollToSelectedToken: state.scrollToSelectedToken + 1
+      })),
+    navigateToPath: async (targetPath: string | null | undefined, selectIndex?: number) => {
+      if (!targetPath) return;
+
+      if (pendingNavigation) {
+        try {
+          await pendingNavigation;
+        } catch (err) {
+          console.debug('Previous navigation failed:', err);
+        } finally {
+          pendingNavigation = null;
+        }
+      }
+
+      const task = (async () => {
+        const parentPath = getParentDirectory(targetPath) ?? targetPath;
+
+        update(state => ({
+          ...state,
+          loading: true,
+          error: '',
+          isArchiveView: false,
+          currentArchivePath: '',
+          currentPath: parentPath,
+          selectedIndex: -1
+        }));
+
+        try {
+          const snapshot = await FileSystemAPI.loadDirectorySnapshot(parentPath);
+          const sortedItems = sortItems(
+            snapshot.items,
+            currentState.sortField,
+            currentState.sortOrder
+          );
+
+          update(state => ({
+            ...state,
+            items: sortedItems,
+            thumbnails: new Map(),
+            loading: false
+          }));
+
+          const normalizedTarget = normalizePath(targetPath);
+          const targetIndex = sortedItems.findIndex((item) => normalizePath(item.path) === normalizedTarget);
+          if (targetIndex >= 0) {
+            update(state => ({
+              ...state,
+              selectedIndex: targetIndex,
+              scrollTargetIndex: targetIndex,
+              scrollToSelectedToken: state.scrollToSelectedToken + 1
+            }));
+          }
+          if (selectIndex !== undefined) {
+            update(state => ({
+              ...state,
+              selectedIndex: selectIndex,
+              scrollTargetIndex: selectIndex,
+              scrollToSelectedToken: state.scrollToSelectedToken + 1
+            }));
+          }
+        } catch (err) {
+          console.error('navigateToPath failed:', err);
+          update(state => ({ ...state, error: String(err), loading: false }));
+          throw err;
+        }
+      })();
+
+      pendingNavigation = task;
+      try {
+        await task;
+      } finally {
+        if (pendingNavigation === task) {
+          pendingNavigation = null;
+        }
+      }
+    },
     selectPath: (path: string | null | undefined) => update(state => {
       if (!path) return state;
       const normalized = normalizePath(path);

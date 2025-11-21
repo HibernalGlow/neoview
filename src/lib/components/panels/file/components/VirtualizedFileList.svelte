@@ -52,6 +52,7 @@
 		currentPath = '',
 		thumbnails = new Map(),
 		selectedIndex = -1,
+		scrollToSelectedToken = 0,
 		isCheckMode = false,
 		isDeleteMode = false,
 		selectedItems = new Set(),
@@ -69,6 +70,7 @@
 		isDeleteMode?: boolean;
 		selectedItems?: Set<string>;
 		viewMode?: 'list' | 'thumbnails';
+		scrollToSelectedToken?: number;
 		onSelectionChange?: (payload: { selectedItems: Set<string> }) => void;
 		onSelectedIndexChange?: (payload: { index: number }) => void;
 		onItemSelect?: (payload: { item: FsItem; index: number; multiSelect: boolean }) => void;
@@ -362,6 +364,21 @@
 		// 列表视图：60px，网格视图：200px（包含缩略图和信息）
 		itemHeight = viewMode === 'list' ? 60 : 200;
 		calculateVisibleRange();
+	});
+
+	let lastScrollToken = -1;
+	$effect(() => {
+		if (!container) {
+			return;
+		}
+		if (scrollToSelectedToken > lastScrollToken) {
+			lastScrollToken = scrollToSelectedToken;
+			if (selectedIndex >= 0) {
+				requestAnimationFrame(() => {
+					scrollToItem(selectedIndex);
+				});
+			}
+		}
 	});
 
 	// 键盘导航支持

@@ -155,6 +155,7 @@
 	let isArchiveView = $state(false);
 	let currentArchivePath = $state('');
 	let selectedIndex = $state(-1);
+	let scrollToSelectedToken = $state(0);
 	let fileListContainer = $state<HTMLDivElement | undefined>(undefined);
 	let contextMenu = $state<{ x: number; y: number; item: FsItem | null; direction: 'up' | 'down' }>(
 		{ x: 0, y: 0, item: null, direction: 'down' }
@@ -231,6 +232,7 @@
 			thumbnails = state.thumbnails;
 			sortField = state.sortField;
 			sortOrder = state.sortOrder;
+			scrollToSelectedToken = state.scrollToSelectedToken;
 		});
 
 		return unsubscribe;
@@ -1848,6 +1850,7 @@
 						{currentPath}
 						{thumbnails}
 						{selectedIndex}
+						scrollToSelectedToken={$fileBrowserStore.scrollToSelectedToken}
 						{isCheckMode}
 						{isDeleteMode}
 						{selectedItems}
@@ -1903,6 +1906,7 @@
 					{currentPath}
 					{thumbnails}
 					{selectedIndex}
+					scrollToSelectedToken={scrollToSelectedToken}
 					{isCheckMode}
 					{isDeleteMode}
 					{selectedItems}

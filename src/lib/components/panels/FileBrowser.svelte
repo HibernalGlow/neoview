@@ -1465,17 +1465,26 @@
 
 	// 搜索处理函数
 	async function handleFileSearch(query: string) {
+		console.log('🔍 [Search] handleFileSearch called with query:', query);
+
 		if (!query.trim()) {
+			console.log('🔍 [Search] Empty query, clearing results');
 			searchResults = [];
 			return;
 		}
 
 		isSearching = true;
+		console.log('🔍 [Search] Starting search, currentPath:', currentPath);
+		console.log('🔍 [Search] searchSettings:', searchSettings);
+
 		try {
 			const queryLower = query.toLowerCase();
 
 			// 1. 搜索书签
+			console.log('🔍 [Search] Step 1: Searching bookmarks...');
 			const bookmarks = bookmarkStore.getAll();
+			console.log('🔍 [Search] Total bookmarks:', bookmarks.length);
+
 			const bookmarkResults: SearchResultItem[] = bookmarks
 				.filter((b) => b.name.toLowerCase().includes(queryLower))
 				.map((b) => ({
@@ -1487,9 +1496,13 @@
 					modified: b.createdAt.getTime() / 1000,
 					source: 'bookmark'
 				}));
+			console.log('🔍 [Search] Bookmark results:', bookmarkResults.length);
 
 			// 2. 搜索历史
+			console.log('🔍 [Search] Step 2: Searching history...');
 			const history = navigationHistory.getHistory();
+			console.log('🔍 [Search] Total history entries:', history.length);
+
 			// 去重：移除已在书签中出现或重复的路径
 			const historySet = new Set(history);
 			bookmarkResults.forEach((b) => historySet.delete(b.path));
@@ -1507,14 +1520,23 @@
 						source: 'history'
 					};
 				});
+			console.log('🔍 [Search] History results:', historyResults.length);
 
 			// 3. 本地文件搜索
+			console.log('🔍 [Search] Step 3: Searching local files...');
 			const options = {
 				includeSubfolders: searchSettings.includeSubfolders,
 				maxResults: 100
 			};
+			console.log('🔍 [Search] Calling FileSystemAPI.searchFiles with:', {
+				currentPath,
+				query,
+				options
+			});
 
 			const localFiles = await FileSystemAPI.searchFiles(currentPath, query, options);
+			console.log('🔍 [Search] Local files returned:', localFiles.length);
+
 			const localResults: SearchResultItem[] = localFiles.map((item) => ({
 				...item,
 				source: 'local'
@@ -1524,11 +1546,13 @@
 			searchResults = [...bookmarkResults, ...historyResults, ...localResults];
 
 			console.log(
-				`✅ 搜索完成，找到 ${searchResults.length} 个结果 (书签: ${bookmarkResults.length}, 历史: ${historyResults.length}, 本地: ${localResults.length})`
+				`✅ [Search] 搜索完成，找到 ${searchResults.length} 个结果 (书签: ${bookmarkResults.length}, 历史: ${historyResults.length}, 本地: ${localResults.length})`
 			);
+			console.log('🔍 [Search] Search results:', searchResults);
 
 			// 搜索完成后自动应用默认排序（路径升序）
 			if (searchResults.length > 0) {
+				console.log('🔍 [Search] Sorting results...');
 				// 保持分类排序：书签 > 历史 > 本地
 				// 内部按名称排序
 				searchResults.sort((a, b) => {
@@ -1544,13 +1568,19 @@
 					// 2. Sort by Name
 					return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
 				});
+				console.log('🔍 [Search] Results sorted');
 			}
 		} catch (err) {
-			console.error('❌ 搜索失败:', err);
+			console.error('❌ [Search] 搜索失败:', err);
+			console.error(
+				'❌ [Search] Error stack:',
+				err instanceof Error ? err.stack : 'No stack trace'
+			);
 			fileBrowserStore.setError(String(err));
 			searchResults = [];
 		} finally {
 			isSearching = false;
+			console.log('🔍 [Search] Search completed, isSearching set to false');
 		}
 	}
 

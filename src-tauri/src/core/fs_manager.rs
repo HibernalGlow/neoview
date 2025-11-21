@@ -431,16 +431,26 @@ impl FsManager {
         query: &str,
         options: &SearchOptions,
     ) -> Result<Vec<FsItem>, String> {
+        println!("🔍 [Rust Search] search_files called");
+        println!("🔍 [Rust Search] path: {:?}", path);
+        println!("🔍 [Rust Search] query: {:?}", query);
+        println!("🔍 [Rust Search] options: {:?}", options);
+        
         self.validate_path(path)?;
 
         let include_subfolders = options.include_subfolders.unwrap_or(false);
         let max_results = options.max_results.unwrap_or(1000);
+        
+        println!("🔍 [Rust Search] include_subfolders: {}, max_results: {}", include_subfolders, max_results);
 
         // 尝试使用索引搜索（更快）
         if let Ok(has_index) = self.has_index() {
+            println!("🔍 [Rust Search] has_index: {}", has_index);
             if has_index {
                 // 使用索引搜索
                 if let Ok(mut results) = self.search_with_index(query, max_results) {
+                    println!("🔍 [Rust Search] Index search returned {} results", results.len());
+                    
                     // 如果指定了路径，过滤结果
                     if path.to_string_lossy() != "/" {
                         let path_str = path.to_string_lossy();
@@ -448,6 +458,7 @@ impl FsManager {
                             .into_iter()
                             .filter(|item| item.path.starts_with(&*path_str))
                             .collect();
+                        println!("🔍 [Rust Search] After path filter: {} results", results.len());
                     }
 
                     // 如果不包含子文件夹，只返回当前目录的结果
@@ -463,14 +474,17 @@ impl FsManager {
                                 }
                             })
                             .collect();
+                        println!("🔍 [Rust Search] After subfolder filter: {} results", results.len());
                     }
 
+                    println!("🔍 [Rust Search] Returning {} index results", results.len());
                     return Ok(results);
                 }
             }
         }
 
         // 使用 rust_search 进行搜索
+        println!("🔍 [Rust Search] Using rust_search fallback");
         let mut search_builder = rust_search::SearchBuilder::default()
             .location(path)
             .search_input(query)
@@ -479,13 +493,17 @@ impl FsManager {
 
         if !include_subfolders {
             search_builder = search_builder.depth(1);
+            println!("🔍 [Rust Search] Set depth to 1 (no subfolders)");
         } else {
             // 限制最大深度以防止无限循环或过深
             search_builder = search_builder.depth(20);
+            println!("🔍 [Rust Search] Set depth to 20 (with subfolders)");
         }
 
         // rust_search 返回 Vec<String>
+        println!("🔍 [Rust Search] Building search...");
         let paths: Vec<String> = search_builder.build().collect();
+        println!("🔍 [Rust Search] rust_search returned {} paths", paths.len());
         
         let mut results = Vec::new();
         
@@ -567,6 +585,7 @@ impl FsManager {
             }
         });
 
+        println!("🔍 [Rust Search] Returning {} total results", results.len());
         Ok(results)
     }
 

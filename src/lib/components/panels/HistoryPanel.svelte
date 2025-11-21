@@ -16,6 +16,7 @@
 		FolderOpen
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { historyStore, type HistoryEntry } from '$lib/stores/history.svelte';
 	import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 	import SearchBar from '$lib/components/ui/SearchBar.svelte';
@@ -50,6 +51,11 @@
 				)
 			: history
 	);
+	let syncFileTreeOnHistorySelect = $state(historySettingsStore.syncFileTreeOnHistorySelect);
+
+	$effect(() => {
+		historySettingsStore.setSyncFileTreeOnHistorySelect(syncFileTreeOnHistorySelect);
+	});
 
 	function createAppStateStore<T>(selector: StateSelector<T>) {
 		const initial = selector(appState.getSnapshot());
@@ -243,15 +249,24 @@
 				<h3 class="font-semibold">历史记录</h3>
 				<span class="text-muted-foreground text-sm">({history.length})</span>
 			</div>
-			<div class="flex items-center gap-2">
-				<Button variant="ghost" size="sm" onclick={toggleViewMode} title="切换视图">
-					{#if viewMode === 'list'}
-						<Grid3x3 class="h-4 w-4" />
-					{:else}
-						<List class="h-4 w-4" />
-					{/if}
-				</Button>
-				<Button variant="ghost" size="sm" onclick={clearHistory}>清除全部</Button>
+			<div class="flex items-center gap-3">
+				<div class="flex items-center gap-1 text-xs text-muted-foreground">
+					<Checkbox
+						bind:checked={syncFileTreeOnHistorySelect}
+						aria-label="选中历史记录时同步文件树"
+					/>
+					<span>同步文件树</span>
+				</div>
+				<div class="flex items-center gap-2">
+					<Button variant="ghost" size="sm" onclick={toggleViewMode} title="切换视图">
+						{#if viewMode === 'list'}
+							<Grid3x3 class="h-4 w-4" />
+						{:else}
+							<List class="h-4 w-4" />
+						{/if}
+					</Button>
+					<Button variant="ghost" size="sm" onclick={clearHistory}>清除全部</Button>
+				</div>
 			</div>
 		</div>
 		<div

@@ -5,6 +5,8 @@
 interface HistorySettings {
     /** 选中历史记录后是否同步切换文件树 */
     syncFileTreeOnHistorySelect: boolean;
+    /** 选中书签后是否同步切换文件树 */
+    syncFileTreeOnBookmarkSelect: boolean;
 }
 
 const STORAGE_KEY = 'neoview-history-settings';
@@ -14,14 +16,20 @@ function loadSettings(): HistorySettings {
     try {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored) {
-            return JSON.parse(stored);
+            const parsed = JSON.parse(stored);
+            // 确保新字段有默认值
+            return {
+                syncFileTreeOnHistorySelect: parsed.syncFileTreeOnHistorySelect ?? false,
+                syncFileTreeOnBookmarkSelect: parsed.syncFileTreeOnBookmarkSelect ?? false
+            };
         }
     } catch (err) {
         console.error('Failed to load history settings:', err);
     }
     // 默认值：不同步文件树（参考 NeeView 默认行为）
     return {
-        syncFileTreeOnHistorySelect: false
+        syncFileTreeOnHistorySelect: false,
+        syncFileTreeOnBookmarkSelect: false
     };
 }
 
@@ -41,8 +49,17 @@ class HistorySettingsStore {
         return this.settings.syncFileTreeOnHistorySelect;
     }
 
+    get syncFileTreeOnBookmarkSelect() {
+        return this.settings.syncFileTreeOnBookmarkSelect;
+    }
+
     setSyncFileTreeOnHistorySelect(value: boolean) {
         this.settings.syncFileTreeOnHistorySelect = value;
+        saveSettings(this.settings);
+    }
+
+    setSyncFileTreeOnBookmarkSelect(value: boolean) {
+        this.settings.syncFileTreeOnBookmarkSelect = value;
         saveSettings(this.settings);
     }
 
@@ -52,7 +69,8 @@ class HistorySettingsStore {
 
     reset() {
         this.settings = {
-            syncFileTreeOnHistorySelect: false
+            syncFileTreeOnHistorySelect: false,
+            syncFileTreeOnBookmarkSelect: false
         };
         saveSettings(this.settings);
     }

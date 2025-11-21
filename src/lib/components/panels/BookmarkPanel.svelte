@@ -30,7 +30,9 @@
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
+	import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 	import { setActivePanelTab } from '$lib/stores';
+	import { openFileSystemItem } from '$lib/utils/navigationUtils';
 
 	let bookmarks: any[] = $state([]);
 	let searchQuery = $state('');
@@ -42,7 +44,11 @@
 		y: 0,
 		bookmark: null
 	});
-	let syncFileTreeOnBookmarkSelect = $state(false);
+	let syncFileTreeOnBookmarkSelect = $state(historySettingsStore.syncFileTreeOnBookmarkSelect);
+
+	$effect(() => {
+		historySettingsStore.setSyncFileTreeOnBookmarkSelect(syncFileTreeOnBookmarkSelect);
+	});
 
 	function createAppStateStore<T>(selector: StateSelector<T>) {
 		const initial = selector(appState.getSnapshot());
@@ -106,52 +112,10 @@
 
 	// 打开书签
 	async function openBookmark(bookmark: any) {
-		try {
-			// 计算目标路径：如果是文件，则定位到其父目录
-			let targetPath = bookmark.path;
-			if (bookmark.type !== 'folder') {
-				const lastSeparator = Math.max(
-					bookmark.path.lastIndexOf('/'),
-					bookmark.path.lastIndexOf('\\')
-				);
-				if (lastSeparator > 0) {
-					targetPath = bookmark.path.substring(0, lastSeparator);
-				}
-			}
-
-			// 同步文件树逻辑
-			if (syncFileTreeOnBookmarkSelect) {
-				try {
-					console.log('🌳 同步文件树到:', targetPath);
-					// 静默同步
-					await fileBrowserStore.navigateToPath(targetPath);
-				} catch (err) {
-					console.debug('同步文件树失败:', err);
-				}
-			}
-
-			if (bookmark.type === 'folder') {
-				// 如果是文件夹
-				if (!syncFileTreeOnBookmarkSelect) {
-					// 如果没有开启静默同步，则跳转到文件浏览器并打开该文件夹
-					await fileBrowserStore.navigateToPath(targetPath);
-					setActivePanelTab('folder');
-				}
-				// 如果开启了静默同步，上面已经导航了，且不切换 Tab
-			} else {
-				// 检查是否为压缩包
-				const isArchive = await FileSystemAPI.isSupportedArchive(bookmark.path);
-				if (isArchive) {
-					// 使用 bookStore 打开
-					await bookStore.openBook(bookmark.path);
-				} else {
-					// 使用系统默认应用打开
-					await FileSystemAPI.openWithSystem(bookmark.path);
-				}
-			}
-		} catch (err) {
-			console.error('打开书签失败:', err);
-		}
+		const isDir = bookmark.type === 'folder';
+		await openFileSystemItem(bookmark.path, isDir, {
+			syncFileTree: syncFileTreeOnBookmarkSelect
+		});
 	}
 
 	// 将书签转换为 FsItem

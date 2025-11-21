@@ -32,6 +32,7 @@
 	import { FileSystemAPI } from '$lib/api';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 	import { setActivePanelTab } from '$lib/stores';
+	import { openFileSystemItem } from '$lib/utils/navigationUtils';
 
 	let history = $state<HistoryEntry[]>([]);
 	let viewMode = $state<'list' | 'grid'>('list');
@@ -101,46 +102,12 @@
 
 	// 打开历史记录
 	async function openHistory(entry: HistoryEntry) {
-		try {
-			console.log(
-				'📖 打开历史记录:',
-				entry.name,
-				'页码:',
-				entry.currentPage,
-				'/',
-				entry.totalPages
-			);
-
-			// 根据设置决定是否同步文件树（在打开书籍之前）
-			// 根据设置决定是否同步文件树（在打开书籍之前）
-			if (historySettingsStore.syncFileTreeOnHistorySelect) {
-				try {
-					console.log('🌳 同步文件树到:', entry.path);
-					// 静默同步文件树，不切换面板
-					await fileBrowserStore.navigateToPath(entry.path);
-				} catch (err) {
-					console.debug('同步文件树失败:', err);
-				}
-			}
-
-			// 使用 bookStore 打开
-			await bookStore.openBook(entry.path);
-
-			// 如果记录了页码，导航到该页（需要等待书籍完全加载）
-			if (entry.currentPage > 0 && entry.currentPage < entry.totalPages) {
-				// 使用 setTimeout 确保在书籍加载完成后执行
-				setTimeout(async () => {
-					try {
-						console.log('🔖 跳转到历史页码:', entry.currentPage);
-						await bookStore.navigateToPage(entry.currentPage);
-					} catch (err) {
-						console.error('跳转到历史页码失败:', err);
-					}
-				}, 100);
-			}
-		} catch (err) {
-			console.error('打开历史记录失败:', err);
-		}
+		await openFileSystemItem(entry.path, false, {
+			syncFileTree: historySettingsStore.syncFileTreeOnHistorySelect,
+			page: entry.currentPage,
+			totalPages: entry.totalPages,
+			forceBookOpen: true
+		});
 	}
 
 	// 移除历史记录

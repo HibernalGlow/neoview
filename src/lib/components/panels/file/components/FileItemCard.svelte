@@ -4,7 +4,17 @@
 	 * 支持列表视图和网格视图，显示缩略图、名称、信息等
 	 * 用于 FileBrowser、HistoryPanel、BookmarkPanel
 	 */
-	import { Folder, File, Image, FileArchive, Check, Star } from '@lucide/svelte';
+	import {
+		Folder,
+		File,
+		Image,
+		FileArchive,
+		Check,
+		Star,
+		FolderOpen,
+		Package,
+		Video
+	} from '@lucide/svelte';
 	import type { FsItem } from '$lib/types';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 	import {
@@ -324,20 +334,32 @@
 				<span>{item.name}</span>
 				<!-- 文件夹统计信息 -->
 				{#if item.isDir}
-					<div class="text-muted-foreground flex items-center gap-1.5 text-xs">
+					<div class="flex items-center gap-1.5 text-xs">
 						{#if item.folderCount !== undefined && item.folderCount > 0}
-							<span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700" title="子文件夹数量">
-								📁 {item.folderCount}
+							<span
+								class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5"
+								title="子文件夹数量"
+							>
+								<FolderOpen class="h-3 w-3" />
+								<span class="font-medium">{item.folderCount}</span>
 							</span>
 						{/if}
 						{#if item.archiveCount !== undefined && item.archiveCount > 0}
-							<span class="rounded bg-purple-100 px-1.5 py-0.5 text-purple-700" title="压缩包数量">
-								📦 {item.archiveCount}
+							<span
+								class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5"
+								title="压缩包数量"
+							>
+								<Package class="h-3 w-3" />
+								<span class="font-medium">{item.archiveCount}</span>
 							</span>
 						{/if}
 						{#if item.videoCount !== undefined && item.videoCount > 0}
-							<span class="rounded bg-green-100 px-1.5 py-0.5 text-green-700" title="视频数量">
-								🎬 {item.videoCount}
+							<span
+								class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5"
+								title="视频数量"
+							>
+								<Video class="h-3 w-3" />
+								<span class="font-medium">{item.videoCount}</span>
 							</span>
 						{/if}
 					</div>
@@ -466,26 +488,29 @@
 				<div class="mt-1 flex flex-wrap items-center gap-1">
 					{#if item.folderCount !== undefined && item.folderCount > 0}
 						<span
-							class="rounded bg-blue-100 px-1 py-0.5 text-[10px] text-blue-700"
+							class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
 							title="子文件夹数量"
 						>
-							📁 {item.folderCount}
+							<FolderOpen class="h-2.5 w-2.5" />
+							<span class="font-medium">{item.folderCount}</span>
 						</span>
 					{/if}
 					{#if item.archiveCount !== undefined && item.archiveCount > 0}
 						<span
-							class="rounded bg-purple-100 px-1 py-0.5 text-[10px] text-purple-700"
+							class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
 							title="压缩包数量"
 						>
-							📦 {item.archiveCount}
+							<Package class="h-2.5 w-2.5" />
+							<span class="font-medium">{item.archiveCount}</span>
 						</span>
 					{/if}
 					{#if item.videoCount !== undefined && item.videoCount > 0}
 						<span
-							class="rounded bg-green-100 px-1 py-0.5 text-[10px] text-green-700"
+							class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
 							title="视频数量"
 						>
-							🎬 {item.videoCount}
+							<Video class="h-2.5 w-2.5" />
+							<span class="font-medium">{item.videoCount}</span>
 						</span>
 					{/if}
 				</div>

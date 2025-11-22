@@ -70,6 +70,27 @@
 			</div>
 		</div>
 
+		<!-- 阅读设置 -->
+		<div class="space-y-2">
+			<h4 class="text-sm font-semibold">阅读设置</h4>
+			<div class="space-y-2">
+				<div class="space-y-2">
+					<span class="text-sm">阅读方向</span>
+					<select
+						class="w-full max-w-xs rounded-md border p-2"
+						bind:value={currentSettings.book.readingDirection}
+						onchange={() => settingsManager.updateNestedSettings('book', { readingDirection: currentSettings.book.readingDirection })}
+					>
+						<option value="left-to-right">左到右（西式）</option>
+						<option value="right-to-left">右到左（日式）</option>
+					</select>
+					<p class="text-muted-foreground text-xs">
+						选择阅读方向。右到左模式适用于日式漫画，会反向排列双页模式中的图片。
+					</p>
+				</div>
+			</div>
+		</div>
+
 		<!-- 背景颜色 -->
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">背景颜色</h4>

@@ -3,8 +3,7 @@
 	 * NeoView - Image Viewer Component
 	 * 图像查看器主组件 (Svelte 5 Runes)
 	 */
-	import { bookStore } from '$lib/stores/book.svelte';
-	import { zoomIn, zoomOut, resetZoom, rotationAngle } from '$lib/stores';
+	import { bookStore, zoomIn, zoomOut, resetZoom, rotationAngle } from '$lib/stores';
 	import { keyBindings, generateKeyCombo, findCommandByKeys } from '$lib/stores/keyboard.svelte';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { settingsManager, performanceSettings } from '$lib/settings/settingsManager';
@@ -839,7 +838,14 @@
 			// 双页模式：跳过两页
 			if ($viewerState.viewMode === 'double') {
 				const currentIndex = bookStore.currentPageIndex;
-				const targetIndex = Math.min(currentIndex + 2, bookStore.totalPages - 1);
+				const settings = settingsManager.getSettings();
+				const readingDirection = settings.book.readingDirection;
+				
+				// 右开阅读模式下，"下一页"实际上是向前翻两页
+				const targetIndex = readingDirection === 'right-to-left' 
+					? Math.max(currentIndex - 2, 0)
+					: Math.min(currentIndex + 2, bookStore.totalPages - 1);
+				
 				await bookStore.navigateToPage(targetIndex);
 			} else {
 				await bookStore.nextPage();
@@ -855,7 +861,14 @@
 			// 双页模式：后退两页
 			if ($viewerState.viewMode === 'double') {
 				const currentIndex = bookStore.currentPageIndex;
-				const targetIndex = Math.max(currentIndex - 2, 0);
+				const settings = settingsManager.getSettings();
+				const readingDirection = settings.book.readingDirection;
+				
+				// 右开阅读模式下，"上一页"实际上是向后翻两页
+				const targetIndex = readingDirection === 'right-to-left' 
+					? Math.min(currentIndex + 2, bookStore.totalPages - 1)
+					: Math.max(currentIndex - 2, 0);
+				
 				await bookStore.navigateToPage(targetIndex);
 			} else {
 				await bookStore.previousPage();

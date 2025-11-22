@@ -4,6 +4,7 @@
  */
 
 export type ZoomMode = 'fit' | 'fitWidth' | 'fitHeight' | 'original';
+export type ReadingDirection = 'left-to-right' | 'right-to-left';
 
 export interface NeoViewSettings {
   system: {
@@ -46,6 +47,7 @@ export interface NeoViewSettings {
     preloadPages: number;
     rememberProgress: boolean;
     doublePageView: boolean;
+    readingDirection: ReadingDirection;
   };
   theme: {
     theme: 'system' | 'light' | 'dark';
@@ -126,7 +128,8 @@ const defaultSettings: NeoViewSettings = {
     autoPageTurnInterval: 3,
     preloadPages: 2,
     rememberProgress: true,
-    doublePageView: false
+    doublePageView: false,
+    readingDirection: 'left-to-right' as 'left-to-right' | 'right-to-left'
   },
   theme: {
     theme: 'system',

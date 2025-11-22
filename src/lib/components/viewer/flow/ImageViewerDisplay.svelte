@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { settingsManager } from '$lib/settings/settingsManager';
+	import type { ReadingDirection } from '$lib/settings/settingsManager';
+	
 	type ViewMode = 'single' | 'double' | 'panorama' | 'vertical';
 
 	let {
@@ -26,6 +29,14 @@
 			position: 'left' | 'center' | 'right';
 		}>;
 	} = $props();
+
+	let settings = $state(settingsManager.getSettings());
+	let readingDirection: ReadingDirection = $derived(settings.book.readingDirection);
+
+	// 监听设置变化
+	settingsManager.addListener((newSettings) => {
+		settings = newSettings;
+	});
 
 	let hasPanoramaImages = $state(false);
 
@@ -135,20 +146,39 @@
 			style={`transform: scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
 		/>
 	{:else if viewMode === 'double'}
-		<div class="flex items-center justify-center gap-4">
-			<img
-				src={currentSrc(upscaledImageData, imageData) ?? ''}
-				alt="Current page"
-				class="max-h-full max-w-[45%] object-contain"
-				style={`transform: scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
-			/>
-			{#if imageData2}
+		<div class="flex items-center {readingDirection === 'right-to-left' ? 'justify-end' : 'justify-center'} gap-4">
+			{#if readingDirection === 'right-to-left'}
+				<!-- 右开阅读：反向排列 -->
+				{#if imageData2}
+					<img
+						src={imageData2}
+						alt="Previous page"
+						class="max-h-full max-w-[45%] object-contain"
+						style={`transform: scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
+					/>
+				{/if}
 				<img
-					src={imageData2}
-					alt="Next page"
+					src={currentSrc(upscaledImageData, imageData) ?? ''}
+					alt="Current page"
 					class="max-h-full max-w-[45%] object-contain"
 					style={`transform: scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
 				/>
+			{:else}
+				<!-- 左开阅读：正常排列 -->
+				<img
+					src={currentSrc(upscaledImageData, imageData) ?? ''}
+					alt="Current page"
+					class="max-h-full max-w-[45%] object-contain"
+					style={`transform: scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
+				/>
+				{#if imageData2}
+					<img
+						src={imageData2}
+						alt="Next page"
+						class="max-h-full max-w-[45%] object-contain"
+						style={`transform: scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
+					/>
+				{/if}
 			{/if}
 		</div>
 	{:else}

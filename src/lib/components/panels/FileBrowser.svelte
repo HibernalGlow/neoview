@@ -19,7 +19,8 @@
 		AlertCircle,
 		Bookmark,
 		Star,
-		ExternalLink
+		ExternalLink,
+		CornerDownRight
 	} from '@lucide/svelte';
 	import VirtualizedFileList from './file/components/VirtualizedFileList.svelte';
 	import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
@@ -189,6 +190,7 @@
 	// UI 模式状态
 	let isCheckMode = $state(false);
 	let isDeleteMode = $state(false);
+	let isPenetrateMode = $state(false);
 	let viewMode = $state<'list' | 'thumbnails'>('list'); // 列表 or 缩略图视图
 	let selectedItems = $state<Set<string>>(new Set());
 
@@ -997,6 +999,14 @@
 				// 📁 文件夹：浏览或作为 book 打开
 				console.log('📁 Folder clicked:', item.path);
 
+				if (isPenetrateMode) {
+					const penetrated = await tryPenetrateFolder(item.path);
+					if (penetrated) {
+						await openFile(penetrated);
+						return;
+					}
+				}
+
 				// 右键 = 浏览,左键 = 作为 book 打开 (先实现浏览,后续添加上下文菜单)
 				// 目前默认行为: 浏览
 				await navigateToDirectory(item.path);
@@ -1032,6 +1042,20 @@
 			console.error('❌ Error in openFile:', err);
 			fileBrowserStore.setError(String(err));
 		}
+	}
+
+	async function tryPenetrateFolder(folderPath: string): Promise<FsItem | null> {
+		try {
+			const children = await FileSystemAPI.browseDirectory(folderPath);
+			if (children.length === 1 && !children[0].isDir) {
+				console.log('📂 Penetrate mode: opening single child file:', children[0].path);
+				return children[0];
+			}
+		} catch (error) {
+			console.debug('穿透模式读取目录失败:', folderPath, error);
+		}
+
+		return null;
 	}
 
 	/**
@@ -1769,6 +1793,16 @@
 					title={isDeleteMode ? '退出删除模式' : '删除模式'}
 				>
 					<Trash2 class="h-4 w-4" />
+				</Button>
+
+				<Button
+					variant={isPenetrateMode ? 'default' : 'ghost'}
+					size="icon"
+					class="h-8 w-8"
+					onclick={() => (isPenetrateMode = !isPenetrateMode)}
+					title={isPenetrateMode ? '穿透模式：当文件夹只有一个子文件时直接打开子文件' : '穿透模式'}
+				>
+					<CornerDownRight class="h-4 w-4" />
 				</Button>
 
 				<div class="bg-border mx-1 h-6 w-px"></div>

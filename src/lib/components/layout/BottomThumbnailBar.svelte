@@ -117,6 +117,14 @@ function scheduleLoadVisibleThumbnails(immediate = false) {
 		bottomThumbnailBarPinned.update(p => !p);
 	}
 
+	function handlePinContextMenu(e: MouseEvent) {
+		e.preventDefault();
+		bottomThumbnailBarPinned.set(false);
+		if (hideTimeout) clearTimeout(hideTimeout);
+		hoverCount = 0;
+		isVisible = false;
+	}
+
 	function toggleProgressBar() {
 		showProgressBar = !showProgressBar;
 		// 通知ImageViewer进度条状态变化
@@ -525,6 +533,7 @@ onMount(() => {
 					size="sm"
 					class="h-6"
 					onclick={togglePin}
+					oncontextmenu={handlePinContextMenu}
 				>
 					{#if $bottomThumbnailBarPinned}
 						<Pin class="h-3 w-3 mr-1" />

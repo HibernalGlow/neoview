@@ -360,6 +360,14 @@ onMount(() => {
 		topToolbarPinned.update(p => !p);
 	}
 
+	function handlePinContextMenu(e: MouseEvent) {
+		e.preventDefault();
+		topToolbarPinned.set(false);
+		if (hideTimeout) clearTimeout(hideTimeout);
+		hoverCount = 0;
+		isVisible = false;
+	}
+
 	function handleResizeStart(e: MouseEvent) {
 		isResizing = true;
 		resizeStartY = e.clientY;
@@ -507,6 +515,7 @@ function toggleComparisonMode() {
 				class="h-6 w-6"
 				style="pointer-events: auto;"
 				onclick={togglePin}
+				oncontextmenu={handlePinContextMenu}
 				title={$topToolbarPinned ? '松开工具栏（自动隐藏）' : '钉住工具栏（始终显示）'}
 			>
 				{#if $topToolbarPinned}

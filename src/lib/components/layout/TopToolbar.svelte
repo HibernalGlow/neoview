@@ -553,7 +553,11 @@ function toggleComparisonMode() {
 						<Palette class="h-4 w-4" />
 					</Button>
 				</DropdownMenu.Trigger>
-				<DropdownMenu.Content class="z-60 w-52">
+				<DropdownMenu.Content
+					class="z-60 w-52"
+					onmouseenter={handleMouseEnter}
+					onmouseleave={handleMouseLeave}
+				>
 					{#if quickThemes.length}
 						<DropdownMenu.Label>主题</DropdownMenu.Label>
 						<DropdownMenu.Separator />
@@ -735,7 +739,11 @@ function toggleComparisonMode() {
 							{#if $viewerState.viewMode === 'single'}单页{:else if $viewerState.viewMode === 'double'}双页{:else if $viewerState.viewMode === 'vertical'}纵向{:else}全景{/if}
 						</Button>
 					</DropdownMenu.Trigger>
-					<DropdownMenu.Content class="z-60 w-48">
+					<DropdownMenu.Content
+						class="z-60 w-48"
+						onmouseenter={handleMouseEnter}
+						onmouseleave={handleMouseLeave}
+					>
 						<DropdownMenu.Item onclick={() => setViewMode('single')} class={$viewerState.viewMode === 'single' ? 'bg-accent' : ''}>
 							<RectangleVertical class="h-4 w-4 mr-2" />
 							<span>单页模式</span>

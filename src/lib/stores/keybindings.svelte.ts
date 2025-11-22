@@ -109,6 +109,20 @@ const defaultBindings: ActionBinding[] = [
 		]
 	},
 	{
+		action: 'pageLeft',
+		name: '向左翻页',
+		category: '导航',
+		description: '向左翻页（方向性翻页，不受阅读方向影响）',
+		bindings: []  // 默认无绑定，用户可自定义
+	},
+	{
+		action: 'pageRight',
+		name: '向右翻页',
+		category: '导航',
+		description: '向右翻页（方向性翻页，不受阅读方向影响）',
+		bindings: []  // 默认无绑定，用户可自定义
+	},
+	{
 		action: 'nextBook',
 		name: '下一个书籍',
 		category: '导航',

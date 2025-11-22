@@ -8,7 +8,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { open } from '@tauri-apps/plugin-dialog';
-	import { bookStore, zoomIn, zoomOut, resetZoom, toggleSidebar, toggleFullscreen, rotateClockwise, toggleViewMode, sidebarOpen, rightSidebarOpen } from '$lib/stores';
+	import { bookStore, zoomIn, zoomOut, resetZoom, toggleSidebar, toggleFullscreen, rotateClockwise, toggleViewMode, sidebarOpen, rightSidebarOpen, pageLeft, pageRight } from '$lib/stores';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { FolderOpen } from '@lucide/svelte';
 	// TODO: 缩略图功能已移除，待重新实现
@@ -178,6 +178,14 @@ async function dispatchAction(action: string) {
 			console.log('执行删除文件操作');
 			// 删除需要额外确认/实现，这里调用 bookStore.closeBook() 作为占位
 			await bookStore.closeBook();
+			break;
+		case 'pageLeft':
+			console.log('执行向左翻页操作');
+			await pageLeft();
+			break;
+		case 'pageRight':
+			console.log('执行向右翻页操作');
+			await pageRight();
 			break;
 		default:
 			console.warn('未实现的快捷操作：', action);

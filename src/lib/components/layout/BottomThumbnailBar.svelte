@@ -9,6 +9,7 @@
 	import { loadImage } from '$lib/api/fs';
 	import { loadImageFromArchive } from '$lib/api/filesystem';
 	import { bottomThumbnailBarPinned, bottomThumbnailBarHeight } from '$lib/stores';
+	import { settingsManager } from '$lib/settings/settingsManager';
 	import { Button } from '$lib/components/ui/button';
 	import * as Progress from '$lib/components/ui/progress';
 	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, ExternalLink, Minus, Target } from '@lucide/svelte';
@@ -22,6 +23,15 @@
 	}
 
 	const viewerState = createAppStateStore((state) => state.viewer);
+
+	// 阅读方向状态
+	let settings = $state(settingsManager.getSettings());
+	let readingDirection = $derived(settings.book.readingDirection);
+
+	// 监听设置变化
+	settingsManager.addListener((newSettings) => {
+		settings = newSettings;
+	});
 
 	const LOCAL_MIN_THUMBNAILS = 6;
 	const ARCHIVE_MIN_THUMBNAILS = 3;
@@ -443,6 +453,20 @@ onMount(() => {
 		scheduleLoadVisibleThumbnails();
 	});
 
+	// 根据阅读方向获取排序后的页面
+	function getOrderedPages() {
+		if (!bookStore.currentBook) return [];
+		
+		const pages = bookStore.currentBook.pages;
+		if (readingDirection === 'right-to-left') {
+			// 右开阅读：反向排列
+			return pages.map((page, index) => ({ ...page, originalIndex: index })).reverse();
+		} else {
+			// 左开阅读：正常排列
+			return pages.map((page, index) => ({ ...page, originalIndex: index }));
+		}
+	}
+
 	// 清空缩略图缓存当书籍变化时
 	$effect(() => {
 		const currentBook = bookStore.currentBook;
@@ -561,22 +585,23 @@ onMount(() => {
 
 			<div class="px-2 pb-2 h-[calc(100%-theme(spacing.12))] overflow-hidden">
 				<div class="flex gap-2 overflow-x-auto h-full pb-1 items-center" onscroll={handleScroll}>
-					{#each bookStore.currentBook.pages as page, index (page.path)}
+					{#each getOrderedPages() as page, index (page.path)}
+						{@const originalIndex = page.originalIndex}
 						<button
 							class="flex-shrink-0 rounded overflow-hidden border-2 border-border transition-colors relative group
-								{index === bookStore.currentPageIndex ? 'outline outline-2 outline-sidebar-ring' : ''}
-								{bookStore.getPageUpscaleStatus(index) === 'preupscaled' ? 'ring-2 ring-blue-500' : ''}
-								{bookStore.getPageUpscaleStatus(index) === 'done' ? 'ring-2 ring-green-500' : ''}
-								{bookStore.getPageUpscaleStatus(index) === 'failed' ? 'ring-2 ring-red-500' : ''}
+								{originalIndex === bookStore.currentPageIndex ? 'outline outline-2 outline-sidebar-ring' : ''}
+								{bookStore.getPageUpscaleStatus(originalIndex) === 'preupscaled' ? 'ring-2 ring-blue-500' : ''}
+								{bookStore.getPageUpscaleStatus(originalIndex) === 'done' ? 'ring-2 ring-green-500' : ''}
+								{bookStore.getPageUpscaleStatus(originalIndex) === 'failed' ? 'ring-2 ring-red-500' : ''}
 								hover:border-primary/50"
 							style="width: auto; height: {$bottomThumbnailBarHeight - 40}px; min-width: 60px; max-width: 120px;"
-							onclick={() => bookStore.navigateToPage(index)}
-							title="Page {index + 1}"
+							onclick={() => bookStore.navigateToPage(originalIndex)}
+							title="Page {originalIndex + 1}"
 						>
-							{#if index in thumbnails}
+							{#if originalIndex in thumbnails}
 								<img
-									src={thumbnails[index].url}
-									alt="Page {index + 1}"
+									src={thumbnails[originalIndex].url}
+									alt="Page {originalIndex + 1}"
 									class="w-full h-full object-contain"
 									style="object-position: center;"
 								/>
@@ -586,15 +611,15 @@ onMount(() => {
 									style="min-width: 60px; max-width: 120px;"
 								>
 									<ImageIcon class="h-6 w-6 mb-1" />
-									<span class="font-mono">{index + 1}</span>
+									<span class="font-mono">{originalIndex + 1}</span>
 								</div>
 							{/if}
 
-							{#if windowBadgeLabel(index)}
+							{#if windowBadgeLabel(originalIndex)}
 								<div
-									class={`absolute top-0 right-0 text-[10px] px-1 py-[1px] text-white font-mono ${windowBadgeClass(index)}`}
+									class={`absolute top-0 right-0 text-[10px] px-1 py-[1px] text-white font-mono ${windowBadgeClass(originalIndex)}`}
 								>
-									{windowBadgeLabel(index)}
+									{windowBadgeLabel(originalIndex)}
 								</div>
 							{/if}
 

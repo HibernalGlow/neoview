@@ -647,7 +647,7 @@ onMount(() => {
 	<!-- 阅读进度条 -->
 	{#if showProgressBar && bookStore.currentBook}
 		<!-- 底部进度条 -->
-		<div class="fixed bottom-0 left-0 right-0 h-1 z-[51] pointer-events-none">
+		<div class={`fixed bottom-0 left-0 right-0 h-1 z-[51] pointer-events-none ${readingDirection === 'right-to-left' ? 'rtl-progress-wrapper' : ''}`}>
 			<Progress.Root
 				value={((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}
 				class="h-full"
@@ -656,3 +656,10 @@ onMount(() => {
 	{/if}
 </div>
 {/if}
+
+<style>
+	.rtl-progress-wrapper {
+		transform: scaleX(-1);
+		transform-origin: center;
+	}
+</style>

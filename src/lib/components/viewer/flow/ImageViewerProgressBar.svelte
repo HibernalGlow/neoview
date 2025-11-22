@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { upscaleState } from '$lib/stores/upscale/upscaleState.svelte';
+	import { settingsManager } from '$lib/settings/settingsManager';
+	import type { ReadingDirection } from '$lib/settings/settingsManager';
 
 	let {
 		showProgressBar = true,
@@ -13,6 +15,14 @@
 	// 内部状态，不再从外部传入
 	let progressColor = $state('#FDFBF7');
 	let progressBlinking = $state(false);
+
+	// 阅读方向
+	let settings = $state(settingsManager.getSettings());
+	let readingDirection: ReadingDirection = $derived(settings.book.readingDirection);
+
+	settingsManager.addListener((newSettings) => {
+		settings = newSettings;
+	});
 
 	// 计算预超分覆盖范围
 	const furthestPreUpscaledIndex = $derived(bookStore.getFurthestPreUpscaledIndex());
@@ -42,21 +52,24 @@
 	});
 </script>
 
+
 {#if showProgressBar && totalPages > 0}
 	<div class="viewer-progress pointer-events-none">
-		<!-- 下层：预超分覆盖进度条 -->
-		{#if preUpscaleBarWidth > 0}
-			<div
-				class="preup-bar"
-				style={`width: ${Math.min(preUpscaleBarWidth, 100)}%;`}
-			></div>
-		{/if}
+		<div class={`bar-track ${readingDirection === 'right-to-left' ? 'rtl' : ''}`}>
+			<!-- 下层：预超分覆盖进度条 -->
+			{#if preUpscaleBarWidth > 0}
+				<div
+					class="preup-bar"
+					style={`width: ${Math.min(preUpscaleBarWidth, 100)}%;`}
+				></div>
+			{/if}
 
-		<!-- 上层：阅读进度 + 当前页状态 -->
-		<div
-			class={`reading-bar ${progressBlinking ? 'animate-pulse' : ''}`}
-			style={`width: ${((currentPageIndex + 1) / totalPages) * 100}%; background-color: ${progressColor};`}
-		></div>
+			<!-- 上层：阅读进度 + 当前页状态 -->
+			<div
+				class={`reading-bar ${progressBlinking ? 'animate-pulse' : ''}`}
+				style={`width: ${((currentPageIndex + 1) / totalPages) * 100}%; background-color: ${progressColor};`}
+			></div>
+		</div>
 
 		<div class="progress-info">
 			<div class="info-left">
@@ -89,6 +102,17 @@
 		height: 1.25rem;
 		padding: 0.1rem 0.5rem 0.35rem;
 		background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent);
+	}
+
+	.bar-track {
+		position: relative;
+		width: 100%;
+		height: 100%;
+	}
+
+	.bar-track.rtl {
+		transform: scaleX(-1);
+		transform-origin: center;
 	}
 
 	.preup-bar {

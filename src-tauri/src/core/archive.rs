@@ -9,17 +9,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use zip::ZipArchive;
 
-const FIRST_IMAGE_CACHE_LIMIT: usize = 512;
 const IMAGE_CACHE_LIMIT: usize = 256;
 
-#[derive(Debug, Clone)]
-struct CachedFirstImageEntry {
-    inner_path: Option<String>,
-    modified: u64,
-    file_size: u64,
-    last_used: Instant,
-    blob_url: Option<String>,
-}
+
+
 
 #[derive(Clone)]
 struct CachedImageEntry {
@@ -55,9 +48,7 @@ pub struct ArchiveManager {
             std::collections::HashMap<String, Arc<std::sync::Mutex<ZipArchive<std::fs::File>>>>,
         >,
     >,
-    /// 压缩包首图缓存
-    first_image_cache:
-        Arc<std::sync::Mutex<std::collections::HashMap<String, CachedFirstImageEntry>>>,
+
     /// Blob 注册表
     blob_registry: Arc<BlobRegistry>,
 }
@@ -80,7 +71,7 @@ impl ArchiveManager {
             ],
             cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
             archive_cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
-            first_image_cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+
             blob_registry: Arc::new(BlobRegistry::new(512)),
         }
     }
@@ -102,7 +93,7 @@ impl ArchiveManager {
             ],
             cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
             archive_cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
-            first_image_cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+
             blob_registry,
         }
     }
@@ -124,7 +115,7 @@ impl ArchiveManager {
             ],
             cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
             archive_cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
-            first_image_cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+
             blob_registry: Arc::new(BlobRegistry::new(blob_cache_size)),
         }
     }
@@ -470,23 +461,9 @@ impl ArchiveManager {
             archive_path.display()
         );
 
-        let archive_key = Self::normalize_archive_key(archive_path);
-        let metadata = self.get_archive_metadata(archive_path)?;
-
-        if let Some(cached) = self.get_cached_first_image(&archive_key, metadata) {
-            if let Some(inner) = &cached {
-                println!("⚡ 首图缓存命中: {} :: {}", archive_path.display(), inner);
-            } else {
-                println!("⚡ 首图缓存命中 (无图片): {}", archive_path.display());
-            }
-            return Ok(cached);
-        }
-
-        let scan_result = self.scan_first_image_entry(archive_path)?;
-        self.store_cached_first_image(archive_key, metadata, scan_result.clone(), None);
-
-        Ok(scan_result)
+        self.scan_first_image_entry(archive_path)
     }
+
 
     fn scan_first_image_entry(&self, archive_path: &Path) -> Result<Option<String>, String> {
         let file = File::open(archive_path).map_err(|e| format!("打开压缩包失败: {}", e))?;
@@ -787,84 +764,14 @@ impl ArchiveManager {
         })
     }
 
-    fn get_cached_first_image(
-        &self,
-        archive_key: &str,
-        metadata: ArchiveMetadata,
-    ) -> Option<Option<String>> {
-        if let Ok(mut cache) = self.first_image_cache.lock() {
-            if let std::collections::hash_map::Entry::Occupied(mut occ) =
-                cache.entry(archive_key.to_string())
-            {
-                if occ.get().modified == metadata.modified
-                    && occ.get().file_size == metadata.file_size
-                {
-                    occ.get_mut().last_used = Instant::now();
-                    return Some(occ.get().inner_path.clone());
-                } else {
-                    occ.remove();
-                }
-            }
-        }
-        None
-    }
 
-    fn store_cached_first_image(
-        &self,
-        archive_key: String,
-        metadata: ArchiveMetadata,
-        inner_path: Option<String>,
-        blob_url: Option<String>,
-    ) {
-        if let Ok(mut cache) = self.first_image_cache.lock() {
-            if cache.len() >= FIRST_IMAGE_CACHE_LIMIT {
-                if let Some(oldest_key) = cache
-                    .iter()
-                    .min_by_key(|(_, entry)| entry.last_used)
-                    .map(|(k, _)| k.clone())
-                {
-                    cache.remove(&oldest_key);
-                }
-            }
-
-            cache.insert(
-                archive_key,
-                CachedFirstImageEntry {
-                    inner_path,
-                    modified: metadata.modified,
-                    file_size: metadata.file_size,
-                    last_used: Instant::now(),
-                    blob_url,
-                },
-            );
-        }
-    }
 
     /// 获取首图 blob 或扫描（返回 blob URL 和内部路径）
     pub fn get_first_image_blob_or_scan(
         &self,
         archive_path: &Path,
     ) -> Result<(String, Option<String>), String> {
-        let archive_key = Self::normalize_archive_key(archive_path);
-        let metadata = self.get_archive_metadata(archive_path)?;
-
-        // 检查缓存
-        if let Ok(cache) = self.first_image_cache.lock() {
-            if let Some(entry) = cache.get(&archive_key) {
-                if entry.modified == metadata.modified && entry.file_size == metadata.file_size {
-                    if let Some(ref blob_url) = entry.blob_url {
-                        println!(
-                            "🎯 首图 blob 缓存命中: {} -> {}",
-                            archive_path.display(),
-                            blob_url
-                        );
-                        return Ok((blob_url.clone(), entry.inner_path.clone()));
-                    }
-                }
-            }
-        }
-
-        // 缓存未命中，需要提取
+        // 查找首图路径
         let inner_path = match self.find_first_image_entry(archive_path)? {
             Some(path) => path,
             None => return Err("压缩包中没有图片".to_string()),
@@ -880,14 +787,6 @@ impl ArchiveManager {
             &mime_type,
             Duration::from_secs(600), // 10分钟 TTL
             Some(format!("{}::{}", archive_path.display(), inner_path)), // 传递路径用于日志
-        );
-
-        // 更新缓存
-        self.store_cached_first_image(
-            archive_key,
-            metadata,
-            Some(inner_path.clone()),
-            Some(blob_url.clone()),
         );
 
         println!(
@@ -956,37 +855,6 @@ impl ArchiveManager {
         }
     }
 
-    /// 存储首图 blob 缓存
-    fn store_first_image_blob(
-        &self,
-        archive_key: String,
-        metadata: ArchiveMetadata,
-        inner_path: Option<String>,
-        blob_url: Option<String>,
-    ) {
-        if let Ok(mut cache) = self.first_image_cache.lock() {
-            if cache.len() >= FIRST_IMAGE_CACHE_LIMIT {
-                if let Some(oldest_key) = cache
-                    .iter()
-                    .min_by_key(|(_, entry)| entry.last_used)
-                    .map(|(k, _)| k.clone())
-                {
-                    cache.remove(&oldest_key);
-                }
-            }
-
-            cache.insert(
-                archive_key,
-                CachedFirstImageEntry {
-                    inner_path,
-                    modified: metadata.modified,
-                    file_size: metadata.file_size,
-                    last_used: Instant::now(),
-                    blob_url,
-                },
-            );
-        }
-    }
 
     /// 获取 BlobRegistry 引用
     pub fn blob_registry(&self) -> &Arc<BlobRegistry> {
@@ -1008,9 +876,6 @@ impl ArchiveManager {
         }
         if let Ok(mut archive_cache) = self.archive_cache.lock() {
             archive_cache.clear();
-        }
-        if let Ok(mut first_image_cache) = self.first_image_cache.lock() {
-            first_image_cache.clear();
         }
     }
 
@@ -1038,20 +903,6 @@ impl ArchiveManager {
                     .collect();
                 for key in keys_to_remove {
                     archive_cache.remove(&key);
-                }
-            }
-        }
-
-        // 限制首图缓存
-        if let Ok(mut first_image_cache) = self.first_image_cache.lock() {
-            if first_image_cache.len() > FIRST_IMAGE_CACHE_LIMIT {
-                let keys_to_remove: Vec<_> = first_image_cache
-                    .keys()
-                    .take(first_image_cache.len() / 2)
-                    .cloned()
-                    .collect();
-                for key in keys_to_remove {
-                    first_image_cache.remove(&key);
                 }
             }
         }

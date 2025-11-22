@@ -60,7 +60,7 @@
 	}
 </script>
 
-<div class="bg-background flex h-screen w-screen flex-col">
+<div class="fixed inset-0 bg-background flex flex-col">
 	<!-- 自定义标题栏 -->
 	<div
 		data-tauri-drag-region

@@ -3,8 +3,8 @@
  * 窗口管理器 - 支持应用多开和多窗口管理
  */
 
-import { WebviewWindow, getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { appWindow } from '@tauri-apps/api/window';
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 export interface WindowInfo {
 	id: string;
@@ -135,13 +135,41 @@ class WindowManager {
 			}
 		}
 	}
+
+	/**
+	 * 获取当前窗口是否为全屏
+	 */
+	async isFullscreen(): Promise<boolean> {
+		try {
+			const win = getCurrentWindow();
+			return await win.isFullscreen();
+		} catch (error) {
+			console.error('获取全屏状态失败:', error);
+			return false;
+		}
+	}
+
+	/**
+	 * 设置当前窗口全屏状态
+	 */
+	async setFullscreen(fullscreen: boolean): Promise<void> {
+		try {
+			const win = getCurrentWindow();
+			await win.setFullscreen(fullscreen);
+		} catch (error) {
+			console.error('设置全屏状态失败:', error);
+		}
+	}
+
+	/**
+	 * 切换当前窗口全屏状态
+	 */
+	async toggleFullscreen(): Promise<boolean> {
+		const current = await this.isFullscreen();
+		await this.setFullscreen(!current);
+		return !current;
+	}
 }
 
 // 单例
 export const windowManager = new WindowManager();
-
-
-
-
-
-

@@ -3,7 +3,7 @@
 	 * NeoView - Image Viewer Component
 	 * 图像查看器主组件 (Svelte 5 Runes)
 	 */
-	import { bookStore, zoomIn, zoomOut, resetZoom, rotationAngle } from '$lib/stores';
+	import { bookStore, zoomIn, zoomOut, resetZoom, rotationAngle, toggleFullscreen } from '$lib/stores';
 	import { keyBindings, generateKeyCombo, findCommandByKeys } from '$lib/stores/keyboard.svelte';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { settingsManager, performanceSettings } from '$lib/settings/settingsManager';
@@ -1128,7 +1128,9 @@
 			previous_page: handlePreviousPage,
 			zoom_in: zoomIn,
 			zoom_out: zoomOut,
-			zoom_reset: resetZoom
+			zoom_reset: resetZoom,
+			// 全屏切换
+			toggle_fullscreen: toggleFullscreen
 			// 更多命令可以在这里添加
 		};
 

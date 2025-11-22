@@ -157,7 +157,7 @@
 	
 </script>
 
-<div class="h-screen w-screen relative bg-background" role="application" aria-label="NeoView 主界面">
+<div class="fixed inset-0 bg-background" role="application" aria-label="NeoView 主界面">
 	<!-- 自动隐藏顶部工具栏（包含标题栏） -->
 	<TopToolbar />
 

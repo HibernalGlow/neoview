@@ -14,6 +14,7 @@
 		BookOpen,
 		Book
 	} from '@lucide/svelte';
+	import { isFullscreen, toggleFullscreen } from '$lib/stores';
 
 	let isVisible = $state(false);
 	let hideTimer: number | null = null;
@@ -27,7 +28,6 @@
 
 	// 视图状态
 	let viewMode = $state<'single' | 'double'>('single');
-	let isFullscreen = $state(false);
 
 	// 鼠标进入顶部区域
 	function handleMouseEnter() {
@@ -51,9 +51,9 @@
 	}
 
 	// 切换全屏
-	function toggleFullscreen() {
-		isFullscreen = !isFullscreen;
+	function handleToggleFullscreen() {
 		// TODO: 调用 Tauri API 切换全屏
+		toggleFullscreen();
 	}
 </script>
 
@@ -148,10 +148,10 @@
 
 				<!-- 全屏 -->
 				<Button
-					variant={isFullscreen ? 'default' : 'ghost'}
+					variant={$isFullscreen ? 'default' : 'ghost'}
 					size="icon"
 					class="h-8 w-8"
-					onclick={toggleFullscreen}
+					onclick={handleToggleFullscreen}
 					title="全屏"
 				>
 					<Maximize class="h-4 w-4" />

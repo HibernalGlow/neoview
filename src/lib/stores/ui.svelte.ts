@@ -7,6 +7,7 @@ import { writable } from 'svelte/store';
 import { appState, type AppStateSnapshot } from '$lib/core/state/appState';
 import { bookStore } from './book.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
+import { windowManager } from '$lib/core/windows/windowManager';
 
 // 从本地存储加载状态
 function loadFromStorage<T>(key: string, defaultValue: T): T {
@@ -144,6 +145,8 @@ export function setActiveRightPanel(panel: RightPanelType) {
  */
 export function toggleFullscreen() {
 	isFullscreen.update((fullscreen) => !fullscreen);
+	// 同步到原生窗口全屏状态（不阻塞 UI）
+	void windowManager.toggleFullscreen();
 }
 
 /**

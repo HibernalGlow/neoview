@@ -85,7 +85,7 @@
 	<title>NeoView 独立查看器</title>
 </svelte:head>
 
-<div class="h-screen w-screen flex flex-col bg-background">
+<div class="fixed inset-0 flex flex-col bg-background">
 	<!-- 标题栏 -->
 	<div class="h-8 bg-secondary/95 backdrop-blur-sm flex items-center justify-between px-2 select-none border-b">
 		<span class="text-sm font-semibold">NeoView 独立查看器</span>

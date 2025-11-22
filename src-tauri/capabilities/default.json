@@ -19,6 +19,7 @@
 		"core:webview:allow-webview-close",
 		"dialog:allow-open",
 		"dialog:allow-save",
-		"dialog:default"
+		"dialog:default",
+		"cli:default"
 	]
 }

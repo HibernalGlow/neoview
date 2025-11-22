@@ -754,6 +754,13 @@
     "@tauri-apps/cli-win32-ia32-msvc" "2.9.3"
     "@tauri-apps/cli-win32-x64-msvc" "2.9.3"
 
+"@tauri-apps/plugin-cli@^2.4.0":
+  version "2.4.1"
+  resolved "https://registry.npmmirror.com/@tauri-apps/plugin-cli/-/plugin-cli-2.4.1.tgz#5cd8353c6cb7f079ac86c21a0e11305fdd32b041"
+  integrity sha512-8JXofQFI5cmiGolh1PlU4hzE2YJgrgB1lyaztyBYiiMCy13luVxBXaXChYPeqMkUo46J1UadxvYdjRjj0E8zaw==
+  dependencies:
+    "@tauri-apps/api" "^2.8.0"
+
 "@tauri-apps/plugin-dialog@^2.4.2":
   version "2.4.2"
   resolved "https://registry.npmmirror.com/@tauri-apps/plugin-dialog/-/plugin-dialog-2.4.2.tgz#59937d28757ce834838ad69530ea36cd439acc4f"

@@ -90,6 +90,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_cli::init())
         .setup(|app| {
             // 初始化文件系统管理器和压缩包管理器
             let fs_manager = FsManager::new();

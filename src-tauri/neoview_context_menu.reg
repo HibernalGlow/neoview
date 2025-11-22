@@ -1,0 +1,22 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\*\shell\OpenInNeoView]
+@="Open in NeoView"
+"Icon"="\"%LOCALAPPDATA%\\Programs\\neoview\\neoview.exe\",0"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\*\shell\OpenInNeoView\command]
+@="\"%LOCALAPPDATA%\\Programs\\neoview\\neoview.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\Directory\shell\OpenInNeoView]
+@="Open in NeoView"
+"Icon"="\"%LOCALAPPDATA%\\Programs\\neoview\\neoview.exe\",0"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\Directory\shell\OpenInNeoView\command]
+@="\"%LOCALAPPDATA%\\Programs\\neoview\\neoview.exe\" \"%1\""
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\Directory\Background\shell\OpenInNeoView]
+@="Open in NeoView"
+"Icon"="\"%LOCALAPPDATA%\\Programs\\neoview\\neoview.exe\",0"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\Directory\Background\shell\OpenInNeoView\command]
+@="\"%LOCALAPPDATA%\\Programs\\neoview\\neoview.exe\" \"%V\""

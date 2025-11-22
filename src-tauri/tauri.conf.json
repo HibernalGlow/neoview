@@ -2,6 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "neoview",
   "version": "2.0.0",
+  "mainBinaryName": "neoview",
   "identifier": "com.neoview.app",
   "build": {
     "frontendDist": "../dist",
@@ -33,6 +34,16 @@
   "plugins": {
     "fs": {
       "scope": ["$APPDATA/**", "D:\\temp\\**", "C:\\Users\\**\\AppData\\**"]
+    },
+    "cli": {
+      "description": "NeoView command line interface",
+      "args": [
+        {
+          "name": "path",
+          "index": 1,
+          "takesValue": true
+        }
+      ]
     }
   },
   "bundle": {

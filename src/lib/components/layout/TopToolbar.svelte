@@ -19,6 +19,7 @@ import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewW
 		rotationAngle,
 		setViewMode,
 		toggleSidebar,
+		toggleReadingDirection,
 		topToolbarPinned,
 		topToolbarHeight
 	} from '$lib/stores';
@@ -739,6 +740,23 @@ function toggleComparisonMode() {
 						</DropdownMenu.Item>
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
+
+				<!-- 阅读方向切换按钮 -->
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button 
+                            variant="ghost" 
+                            size="icon" 
+                            class="h-8 w-8"
+                            onclick={toggleReadingDirection}
+                        >
+                            <ArrowLeftRight class="h-4 w-4" />
+                        </Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>{readingDirection === 'left-to-right' ? '左开模式 (点击切换到右开)' : '右开模式 (点击切换到左开)'}</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
 
 				<!-- 分隔线 -->
 				<Separator.Root orientation="vertical" class="h-6 mx-1" />

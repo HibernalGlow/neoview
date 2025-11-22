@@ -59,8 +59,6 @@
 		Array<{ index: number; data: string | null; position: 'left' | 'center' | 'right' }>
 	>([]);
 
-	
-
 	// 注意：progressColor 和 progressBlinking 现在由 ImageViewerProgressBar 内部管理
 
 	// 预加载管理器
@@ -840,12 +838,13 @@
 				const currentIndex = bookStore.currentPageIndex;
 				const settings = settingsManager.getSettings();
 				const readingDirection = settings.book.readingDirection;
-				
+
 				// 右开阅读模式下，"下一页"实际上是向前翻两页
-				const targetIndex = readingDirection === 'right-to-left' 
-					? Math.max(currentIndex - 2, 0)
-					: Math.min(currentIndex + 2, bookStore.totalPages - 1);
-				
+				const targetIndex =
+					readingDirection === 'right-to-left'
+						? Math.max(currentIndex - 2, 0)
+						: Math.min(currentIndex + 2, bookStore.totalPages - 1);
+
 				await bookStore.navigateToPage(targetIndex);
 			} else {
 				await bookStore.nextPage();
@@ -863,18 +862,43 @@
 				const currentIndex = bookStore.currentPageIndex;
 				const settings = settingsManager.getSettings();
 				const readingDirection = settings.book.readingDirection;
-				
+
 				// 右开阅读模式下，"上一页"实际上是向后翻两页
-				const targetIndex = readingDirection === 'right-to-left' 
-					? Math.min(currentIndex + 2, bookStore.totalPages - 1)
-					: Math.max(currentIndex - 2, 0);
-				
+				const targetIndex =
+					readingDirection === 'right-to-left'
+						? Math.min(currentIndex + 2, bookStore.totalPages - 1)
+						: Math.max(currentIndex - 2, 0);
+
 				await bookStore.navigateToPage(targetIndex);
 			} else {
 				await bookStore.previousPage();
 			}
 		} catch (err) {
 			console.error('Failed to go to previous page:', err);
+		}
+	}
+
+	// 向左翻页（方向性翻页，不受阅读方向影响）
+	async function handlePageLeft() {
+		try {
+			const currentIndex = bookStore.currentPageIndex;
+			const step = $viewerState.viewMode === 'double' ? 2 : 1;
+			const targetIndex = Math.max(currentIndex - step, 0);
+			await bookStore.navigateToPage(targetIndex);
+		} catch (err) {
+			console.error('Failed to turn page left:', err);
+		}
+	}
+
+	// 向右翻页（方向性翻页，不受阅读方向影响）
+	async function handlePageRight() {
+		try {
+			const currentIndex = bookStore.currentPageIndex;
+			const step = $viewerState.viewMode === 'double' ? 2 : 1;
+			const targetIndex = Math.min(currentIndex + step, bookStore.totalPages - 1);
+			await bookStore.navigateToPage(targetIndex);
+		} catch (err) {
+			console.error('Failed to turn page right:', err);
 		}
 	}
 
@@ -996,11 +1020,11 @@
 
 	// 监听当前页变化，在相应模式下更新数据
 	let lastPanoramaIndex = -1;
-	
+
 	$effect(() => {
 		const mode = $viewerState.viewMode;
 		const currentIndex = bookStore.currentPageIndex;
-		
+
 		if (mode === 'vertical' && currentIndex !== undefined) {
 			loadVerticalPages();
 		} else if (mode === 'panorama' && currentIndex !== undefined) {
@@ -1011,7 +1035,7 @@
 				loadPanoramaPages();
 			}
 		}
-		
+
 		// 更新 lastViewMode
 		if (mode !== 'panorama') {
 			lastViewMode = mode;
@@ -1029,12 +1053,8 @@
 		const totalPages = bookStore.totalPages;
 
 		// 计算需要加载的页面范围
-		const start = currentIndex === 0 
-			? 0 
-			: Math.max(0, currentIndex - 2);
-		const end = currentIndex === 0 
-			? 0 
-			: Math.min(totalPages - 1, currentIndex + 2);
+		const start = currentIndex === 0 ? 0 : Math.max(0, currentIndex - 2);
+		const end = currentIndex === 0 ? 0 : Math.min(totalPages - 1, currentIndex + 2);
 
 		console.log(`🖼️ 全景模式：加载页面范围 ${start + 1} - ${end + 1}，当前页 ${currentIndex + 1}`);
 
@@ -1052,11 +1072,11 @@
 			else position = 'right';
 
 			// 复用已加载的数据
-			const existing = panoramaPagesData.find(p => p.index === i);
-			newPages.push({ 
-				index: i, 
-				data: existing?.data || null, 
-				position 
+			const existing = panoramaPagesData.find((p) => p.index === i);
+			newPages.push({
+				index: i,
+				data: existing?.data || null,
+				position
 			});
 		}
 
@@ -1064,8 +1084,8 @@
 		panoramaPagesData = newPages;
 
 		// 只加载缺失的图片
-		const toLoad = newPages.filter(p => !p.data);
-		
+		const toLoad = newPages.filter((p) => !p.data);
+
 		if (toLoad.length === 0) {
 			// console.log('🎉 全景模式：所有图片已缓存'); // 注释掉这行
 			return;
@@ -1091,8 +1111,8 @@
 		);
 
 		// 更新新加载的图片
-		panoramaPagesData = panoramaPagesData.map(p => {
-			const result = results.find(r => r && r.index === p.index);
+		panoramaPagesData = panoramaPagesData.map((p) => {
+			const result = results.find((r) => r && r.index === p.index);
 			return result ? { ...p, data: result.url } : p;
 		});
 

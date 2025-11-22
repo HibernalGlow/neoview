@@ -5,6 +5,8 @@
 
 import { writable } from 'svelte/store';
 import { appState, type AppStateSnapshot } from '$lib/core/state/appState';
+import { bookStore } from './book.svelte';
+import { settingsManager } from '$lib/settings/settingsManager';
 
 // 从本地存储加载状态
 function loadFromStorage<T>(key: string, defaultValue: T): T {
@@ -216,4 +218,48 @@ export function toggleViewMode() {
  */
 export function setViewMode(mode: ViewMode) {
 	viewMode.set(mode);
+}
+
+/**
+ * 切换阅读方向
+ */
+export function toggleReadingDirection() {
+	const settings = settingsManager.getSettings();
+	const newDirection = settings.book.readingDirection === 'left-to-right' ? 'right-to-left' : 'left-to-right';
+	settingsManager.updateSettings({
+		book: {
+			...settings.book,
+			readingDirection: newDirection
+		}
+	});
+}
+
+/**
+ * 向左翻页（方向性翻页，不受阅读方向影响）
+ */
+export async function pageLeft() {
+	try {
+		const snapshot = appState.getSnapshot();
+		const currentIndex = bookStore.currentPageIndex;
+		const step = snapshot.viewer.viewMode === 'double' ? 2 : 1;
+		const targetIndex = Math.max(currentIndex - step, 0);
+		await bookStore.navigateToPage(targetIndex);
+	} catch (err) {
+		console.error('Failed to turn page left:', err);
+	}
+}
+
+/**
+ * 向右翻页（方向性翻页，不受阅读方向影响）
+ */
+export async function pageRight() {
+	try {
+		const snapshot = appState.getSnapshot();
+		const currentIndex = bookStore.currentPageIndex;
+		const step = snapshot.viewer.viewMode === 'double' ? 2 : 1;
+		const targetIndex = Math.min(currentIndex + step, bookStore.totalPages - 1);
+		await bookStore.navigateToPage(targetIndex);
+	} catch (err) {
+		console.error('Failed to turn page right:', err);
+	}
 }

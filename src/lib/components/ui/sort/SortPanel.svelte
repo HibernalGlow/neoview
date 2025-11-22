@@ -70,7 +70,6 @@
     title="排序选项"
   >
     <ArrowUpDown class="h-4 w-4" />
-    <span>排序</span>
   </button>
 
   <!-- 排序菜单 -->

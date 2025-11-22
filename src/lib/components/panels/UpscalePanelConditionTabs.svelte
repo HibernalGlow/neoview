@@ -658,10 +658,8 @@
 			</Card>
 		{/if}
 	{:else}
-		<Card>
-			<CardContent class="pt-6">
-				<p class="text-sm text-muted-foreground">启用条件超分后可以配置多个条件规则</p>
-			</CardContent>
+		<Card class="p-4">
+			<p class="text-center text-sm text-muted-foreground">启用条件超分后可以配置多个条件规则</p>
 		</Card>
 	{/if}
 </div>

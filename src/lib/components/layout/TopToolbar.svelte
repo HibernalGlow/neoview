@@ -37,6 +37,9 @@ import { appState, type StateSelector } from '$lib/core/state/appState';
 		Columns2,
 		PanelsTopLeft,
 		ArrowDownUp,
+		ArrowLeftRight,
+		ArrowRight,
+		ArrowLeft,
 		X,
 		Folder,
 		FileArchive,
@@ -63,6 +66,8 @@ import {
 	type RuntimeThemeMode
 } from '$lib/utils/runtimeTheme';
 
+import { settingsManager } from '$lib/settings/settingsManager';
+
 const appWindow = getCurrentWebviewWindow();
 
 function createAppStateStore<T>(selector: StateSelector<T>) {
@@ -71,6 +76,15 @@ function createAppStateStore<T>(selector: StateSelector<T>) {
 }
 
 const viewerState = createAppStateStore((state) => state.viewer);
+
+// 阅读方向状态
+let settings = $state(settingsManager.getSettings());
+let readingDirection = $derived(settings.book.readingDirection);
+
+// 监听设置变化
+settingsManager.addListener((newSettings) => {
+	settings = newSettings;
+});
 
 type QuickThemeConfig = {
 	name: string;
@@ -750,7 +764,11 @@ function toggleComparisonMode() {
                             class="h-8 w-8"
                             onclick={toggleReadingDirection}
                         >
-                            <ArrowLeftRight class="h-4 w-4" />
+                            {#if readingDirection === 'left-to-right'}
+                                <ArrowRight class="h-4 w-4" />
+                            {:else}
+                                <ArrowLeft class="h-4 w-4" />
+                            {/if}
                         </Button>
 					</Tooltip.Trigger>
 					<Tooltip.Content>

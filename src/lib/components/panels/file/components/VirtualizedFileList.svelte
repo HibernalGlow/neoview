@@ -84,7 +84,7 @@
 	let viewportHeight = $state(600);
 	let viewportWidth = $state(800);
 	let scrollTop = $state(0);
-	let itemHeight = $state(60);
+	let itemHeight = $state(96);
 	let overscan = $state(20); // 增加预渲染数量，提高滚动流畅度
 
 	// 计算可见范围
@@ -361,8 +361,8 @@
 
 	// 监听视图模式变化，调整项目高度
 	$effect(() => {
-		// 列表视图：60px，网格视图：200px（包含缩略图和信息）
-		itemHeight = viewMode === 'list' ? 60 : 200;
+		// 列表视图：96px，网格视图：240px（包含缩略图和信息）
+		itemHeight = viewMode === 'list' ? 96 : 240;
 		calculateVisibleRange();
 	});
 

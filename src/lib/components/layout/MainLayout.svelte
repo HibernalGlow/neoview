@@ -3,7 +3,7 @@
 	 * NeoView - Main Layout Component
 	 * 主布局组件 - 集成自动隐藏功能
 	 */
-	import { sidebarOpen, sidebarWidth, rightSidebarOpen, rightSidebarWidth } from '$lib/stores';
+	import { sidebarOpen, sidebarWidth, rightSidebarOpen, rightSidebarWidth, pageLeft, pageRight, zoomIn, zoomOut } from '$lib/stores';
 	import { sidebars, setPanelSidebarSize, leftPanels, rightPanels, bottomPanels, activePanel } from '$lib/stores/panels.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import Sidebar from './Sidebar.svelte';
@@ -12,6 +12,7 @@
 	import BottomThumbnailBar from './BottomThumbnailBar.svelte';
 	import ImageViewer from '../viewer/ImageViewer.svelte';
 	import AreaOverlay from '../ui/AreaOverlay.svelte';
+	import { settingsManager } from '$lib/settings/settingsManager';
 
 	let { children } = $props();
 
@@ -98,17 +99,41 @@
 		// 这里可以根据action执行相应的操作
 		// 例如：翻页、缩放等
 		switch (action) {
-			case 'nextPage':
-				bookStore.nextPage();
+			case 'nextPage': {
+				void pageRight();
 				break;
-			case 'prevPage':
-				bookStore.prevPage();
+			}
+			case 'prevPage': {
+				void pageLeft();
 				break;
+			}
+			case 'pageLeft': {
+				const settings = settingsManager.getSettings();
+				const readingDirection = settings.book.readingDirection;
+				if (readingDirection === 'right-to-left') {
+					// 右开模式下，逻辑“向左翻页”对应物理向右翻
+					void pageRight();
+				} else {
+					void pageLeft();
+				}
+				break;
+			}
+			case 'pageRight': {
+				const settings = settingsManager.getSettings();
+				const readingDirection = settings.book.readingDirection;
+				if (readingDirection === 'right-to-left') {
+					// 右开模式下，逻辑“向右翻页”对应物理向左翻
+					void pageLeft();
+				} else {
+					void pageRight();
+				}
+				break;
+			}
 			case 'zoomIn':
-				bookStore.zoomIn();
+				zoomIn();
 				break;
 			case 'zoomOut':
-				bookStore.zoomOut();
+				zoomOut();
 				break;
 			// 其他操作...
 		}

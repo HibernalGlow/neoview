@@ -804,13 +804,31 @@
 		console.log('找到的操作:', action); // 调试信息
 		if (action) {
 			e.preventDefault();
-			// 执行操作
+			// 根据阅读方向执行操作
+			const settings = settingsManager.getSettings();
+			const readingDirection = settings.book.readingDirection;
 			switch (action) {
 				case 'nextPage':
-					bookStore.nextPage();
+					void handleNextPage();
 					break;
 				case 'prevPage':
-					bookStore.previousPage();
+					void handlePreviousPage();
+					break;
+				case 'pageLeft':
+					if (readingDirection === 'right-to-left') {
+						// 右开模式下，逻辑“向左翻页”对应物理向右翻
+						void handlePageRight();
+					} else {
+						void handlePageLeft();
+					}
+					break;
+				case 'pageRight':
+					if (readingDirection === 'right-to-left') {
+						// 右开模式下，逻辑“向右翻页”对应物理向左翻
+						void handlePageLeft();
+					} else {
+						void handlePageRight();
+					}
 					break;
 				default:
 					console.warn('未实现的滚轮操作：', action);
@@ -833,18 +851,10 @@
 	async function handleNextPage() {
 		if (!bookStore.canNextPage) return;
 		try {
-			// 双页模式：跳过两页
+			// 双页模式：按阅读顺序跳过两页（不反转索引）
 			if ($viewerState.viewMode === 'double') {
 				const currentIndex = bookStore.currentPageIndex;
-				const settings = settingsManager.getSettings();
-				const readingDirection = settings.book.readingDirection;
-
-				// 右开阅读模式下，"下一页"实际上是向前翻两页
-				const targetIndex =
-					readingDirection === 'right-to-left'
-						? Math.max(currentIndex - 2, 0)
-						: Math.min(currentIndex + 2, bookStore.totalPages - 1);
-
+				const targetIndex = Math.min(currentIndex + 2, bookStore.totalPages - 1);
 				await bookStore.navigateToPage(targetIndex);
 			} else {
 				await bookStore.nextPage();
@@ -857,18 +867,10 @@
 	async function handlePreviousPage() {
 		if (!bookStore.canPreviousPage) return;
 		try {
-			// 双页模式：后退两页
+			// 双页模式：按阅读顺序后退两页（不反转索引）
 			if ($viewerState.viewMode === 'double') {
 				const currentIndex = bookStore.currentPageIndex;
-				const settings = settingsManager.getSettings();
-				const readingDirection = settings.book.readingDirection;
-
-				// 右开阅读模式下，"上一页"实际上是向后翻两页
-				const targetIndex =
-					readingDirection === 'right-to-left'
-						? Math.min(currentIndex + 2, bookStore.totalPages - 1)
-						: Math.max(currentIndex - 2, 0);
-
+				const targetIndex = Math.max(currentIndex - 2, 0);
 				await bookStore.navigateToPage(targetIndex);
 			} else {
 				await bookStore.previousPage();

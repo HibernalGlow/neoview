@@ -11,6 +11,7 @@
 	import { bookStore, zoomIn, zoomOut, resetZoom, toggleSidebar, toggleFullscreen, rotateClockwise, toggleViewMode, sidebarOpen, rightSidebarOpen, pageLeft, pageRight } from '$lib/stores';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { FolderOpen } from '@lucide/svelte';
+	import { settingsManager } from '$lib/settings/settingsManager';
 	// TODO: 缩略图功能已移除，待重新实现
 	// import { init_thumbnail_manager } from '$lib/api';
 	import Toast from '$lib/components/ui/toast.svelte';
@@ -105,14 +106,16 @@ async function dispatchAction(action: string) {
 	keyBindingsStore.debugBindings();
 	
 	switch (action) {
-		case 'nextPage':
+		case 'nextPage': {
 			console.log('执行下一页操作');
-			await bookStore.nextPage();
+			await pageRight();
 			break;
-		case 'prevPage':
+		}
+		case 'prevPage': {
 			console.log('执行上一页操作');
-			await bookStore.previousPage();
+			await pageLeft();
 			break;
+		}
 		case 'firstPage':
 			console.log('执行第一页操作');
 			await bookStore.firstPage();
@@ -179,14 +182,30 @@ async function dispatchAction(action: string) {
 			// 删除需要额外确认/实现，这里调用 bookStore.closeBook() 作为占位
 			await bookStore.closeBook();
 			break;
-		case 'pageLeft':
+		case 'pageLeft': {
 			console.log('执行向左翻页操作');
-			await pageLeft();
+			const settings = settingsManager.getSettings();
+			const readingDirection = settings.book.readingDirection;
+			if (readingDirection === 'right-to-left') {
+				// 右开模式下，逻辑上的“向左翻页”对应物理向右翻
+				await pageRight();
+			} else {
+				await pageLeft();
+			}
 			break;
-		case 'pageRight':
+		}
+		case 'pageRight': {
 			console.log('执行向右翻页操作');
-			await pageRight();
+			const settings = settingsManager.getSettings();
+			const readingDirection = settings.book.readingDirection;
+			if (readingDirection === 'right-to-left') {
+				// 右开模式下，逻辑上的“向右翻页”对应物理向左翻
+				await pageLeft();
+			} else {
+				await pageRight();
+			}
 			break;
+		}
 		default:
 			console.warn('未实现的快捷操作：', action);
 	}

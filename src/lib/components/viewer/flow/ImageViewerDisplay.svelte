@@ -90,7 +90,7 @@
 		{#if hasPanoramaImages}
 			<!-- 使用相邻图片填充 -->
 			<div 
-				class="flex h-full min-w-full items-center justify-start gap-4 py-0 px-4 overflow-x-auto scroll-smooth"
+				class={`flex h-full min-w-full items-center justify-start gap-4 py-0 px-4 overflow-x-auto scroll-smooth ${readingDirection === 'right-to-left' ? 'flex-row-reverse' : ''}`}
 				style="scroll-snap-type: x mandatory;"
 			>
 				{#each panoramaPages as page (page.index)}

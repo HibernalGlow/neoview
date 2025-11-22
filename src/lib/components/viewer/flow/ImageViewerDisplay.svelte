@@ -45,27 +45,38 @@
 	}
 
 	function scrollToCenter(node: HTMLElement, isCenter: boolean) {
+		// 将目标图片的中心对齐到滚动容器的中心
+		const scrollToNodeCenter = (behavior: ScrollBehavior) => {
+			if (!isCenter) return;
+			const container = node.parentElement as HTMLElement | null;
+			if (!container) return;
+
+			const containerRect = container.getBoundingClientRect();
+			const nodeRect = node.getBoundingClientRect();
+			const containerCenter = containerRect.left + containerRect.width / 2;
+			const nodeCenter = nodeRect.left + nodeRect.width / 2;
+			const delta = nodeCenter - containerCenter;
+
+			container.scrollTo({
+				left: container.scrollLeft + delta,
+				behavior
+			});
+		};
+
 		if (isCenter) {
-			// 立即滚动到中心，不使用 setTimeout
+			// 首次加载：立即对齐中心
 			requestAnimationFrame(() => {
-				node.scrollIntoView({ 
-					behavior: 'auto',  // 首次加载立即滚动
-					block: 'nearest', 
-					inline: 'center' 
-				});
+				scrollToNodeCenter('auto');
 			});
 		}
-		
+
 		// 返回 update 函数，当 isCenter 变化时重新执行
 		return {
 			update(newIsCenter: boolean) {
+				isCenter = newIsCenter;
 				if (newIsCenter) {
-					// 翻页时使用平滑滚动
-					node.scrollIntoView({ 
-						behavior: 'smooth', 
-						block: 'nearest', 
-						inline: 'center' 
-					});
+					// 翻页时使用平滑滚动到中心
+					scrollToNodeCenter('smooth');
 				}
 			}
 		};

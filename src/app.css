@@ -151,40 +151,49 @@
 	
 	/* Breadcrumb 样式修复 */
 	[data-slot="breadcrumb-link"] {
-		color: hsl(var(--muted-foreground)) !important;
+		color: var(--foreground) !important;
 		transition: color 0.2s ease;
 	}
 	
 	[data-slot="breadcrumb-link"]:hover {
-		color: hsl(var(--foreground)) !important;
+		color: var(--primary) !important;
 	}
 	
 	/* 确保 PathBar 中的链接样式正确 */
 	.flex.cursor-text [data-slot="breadcrumb-link"] {
-		color: hsl(var(--muted-foreground)) !important;
+		color: var(--foreground) !important;
 	}
 	
 	.flex.cursor-text [data-slot="breadcrumb-link"]:hover {
-		color: hsl(var(--foreground)) !important;
+		color: var(--foreground) !important;
+	}
+	
+	/* PathBar 当前页 breadcrumb 文本和编辑输入框文本显式指定前景色 */
+	.flex.cursor-text [data-slot="breadcrumb-page"] {
+		color: var(--foreground) !important;
+	}
+	
+	.flex.cursor-text [data-slot="breadcrumb-edit"] {
+		color: var(--foreground) !important;
 	}
 	
 	/* ContextMenu 内的链接样式 */
 	[data-state="open"] [data-slot="breadcrumb-link"],
 	[data-radix-context-menu-trigger] [data-slot="breadcrumb-link"] {
-		color: hsl(var(--muted-foreground)) !important;
+		color: var(--muted-foreground) !important;
 	}
 	
 	[data-state="open"] [data-slot="breadcrumb-link"]:hover,
 	[data-radix-context-menu-trigger] [data-slot="breadcrumb-link"]:hover {
-		color: hsl(var(--foreground)) !important;
+		color: var(--foreground) !important;
 	}
 	
 	/* 所有 a 标签的通用样式 */
 	a[data-slot="breadcrumb-link"] {
-		color: hsl(var(--muted-foreground)) !important;
+		color: var(--muted-foreground) !important;
 	}
 	
 	a[data-slot="breadcrumb-link"]:hover {
-		color: hsl(var(--foreground)) !important;
+		color: var(--foreground) !important;
 	}
 }

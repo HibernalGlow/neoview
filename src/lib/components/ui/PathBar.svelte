@@ -74,13 +74,18 @@
 		return breadcrumbs;
 	}
 
-	const breadcrumbs = $derived(getBreadcrumbs(currentPath));
+	let breadcrumbs = $state<BreadcrumbItem[]>([]);
 	let isOverflow = $state(false);
 	let containerEl = $state<HTMLDivElement | null>(null);
 
-	const renderedBreadcrumbs = $derived(() => {
-		if (!isOverflow) return breadcrumbs;
-		return [...breadcrumbs].reverse();
+	let renderedBreadcrumbs = $state<BreadcrumbItem[]>([]);
+
+	$effect(() => {
+		breadcrumbs = getBreadcrumbs(currentPath);
+	});
+
+	$effect(() => {
+		renderedBreadcrumbs = !isOverflow ? breadcrumbs : [...breadcrumbs].reverse();
 	});
 
 	function handleNavigate(path: string) {
@@ -234,7 +239,7 @@
 									<Breadcrumb.Link
 										href="#"
 										class="text-muted-foreground hover:text-foreground"
-										style="color: hsl(var(--muted-foreground));"
+										style="color: var(--foreground);"
 										onclick={(e) => {
 											e.stopPropagation();
 											handleNavigate('');
@@ -259,12 +264,14 @@
 								<ContextMenu>
 									<ContextMenuTrigger>
 										{#if breadcrumb.path === currentPath}
-											<Breadcrumb.Page>{breadcrumb.name}</Breadcrumb.Page>
+											<Breadcrumb.Page style="color: var(--foreground);">
+												{breadcrumb.name}
+											</Breadcrumb.Page>
 										{:else}
 											<Breadcrumb.Link
 												href="#"
 												class="text-muted-foreground hover:text-foreground"
-												style="color: hsl(var(--muted-foreground));"
+												style="color: var(--foreground);"
 												onclick={(e) => {
 													e.stopPropagation();
 													handleNavigate(breadcrumb.path);

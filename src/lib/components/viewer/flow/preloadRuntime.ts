@@ -140,11 +140,16 @@ function ensureConditionBinding(imageData: ImageDataWithHash): { conditionId?: s
 	const conditionsEnabled = panelSettings.conditionalUpscaleEnabled;
 	const pageIndex = imageData.pageIndex ?? bookStore.currentPageIndex;
 
+	if (!conditionsEnabled) {
+		return { conditionId: imageData.conditionId, skip: false };
+	}
+
 	if (!book || typeof pageIndex !== 'number') {
 		return { conditionId: imageData.conditionId, skip: false };
 	}
 
 	let condition: UpscaleCondition | undefined;
+
 	if (imageData.conditionId) {
 		condition = panelSettings.conditionsList.find((c) => c.id === imageData.conditionId);
 	}

@@ -615,12 +615,14 @@ export class ImageLoader {
 			let currentConditionId: string | undefined;
 			if (pageInfo && currentBook) {
 				const panelSettings = loadUpscalePanelSettings();
-				const pageMetadata = collectPageMetadata(pageInfo, currentBook.path);
-				const conditionResult = evaluateConditions(pageMetadata, panelSettings.conditionsList);
-				currentConditionId = conditionResult.conditionId ?? undefined;
-				shouldSkipUpscale = conditionResult.action?.skip === true;
-				if (imageDataWithHash) {
-					imageDataWithHash.conditionId = currentConditionId;
+				if (panelSettings.conditionalUpscaleEnabled) {
+					const pageMetadata = collectPageMetadata(pageInfo, currentBook.path);
+					const conditionResult = evaluateConditions(pageMetadata, panelSettings.conditionsList);
+					currentConditionId = conditionResult.conditionId ?? undefined;
+					shouldSkipUpscale = conditionResult.action?.skip === true;
+					if (imageDataWithHash) {
+						imageDataWithHash.conditionId = currentConditionId;
+					}
 				}
 			}
 
@@ -877,16 +879,21 @@ export class ImageLoader {
 						if (currentBook) {
 							const pageMetadata = collectPageMetadata(pageInfo, currentBook.path);
 							const panelSettings = loadUpscalePanelSettings();
-							const conditionResult = evaluateConditions(pageMetadata, panelSettings.conditionsList);
+							let conditionId: string | undefined;
+							if (panelSettings.conditionalUpscaleEnabled) {
+								const conditionResult = evaluateConditions(pageMetadata, panelSettings.conditionsList);
 
-							if (conditionResult.excludeFromPreload) {
-								console.log(`第 ${targetIndex + 1} 页被条件排除，跳过预超分。条件ID: ${conditionResult.conditionId}`);
-								continue;
-							}
+								if (conditionResult.excludeFromPreload) {
+									console.log(`第 ${targetIndex + 1} 页被条件排除，跳过预超分。条件ID: ${conditionResult.conditionId}`);
+									continue;
+								}
 
-							if (conditionResult.action?.skip) {
-								console.log(`第 ${targetIndex + 1} 页条件指定跳过超分，conditionId: ${conditionResult.conditionId}`);
-								continue;
+								if (conditionResult.action?.skip) {
+									console.log(`第 ${targetIndex + 1} 页条件指定跳过超分，conditionId: ${conditionResult.conditionId}`);
+									continue;
+								}
+
+								conditionId = conditionResult.conditionId || undefined;
 							}
 
 							// 检查是否已经在处理中（去重）
@@ -899,7 +906,6 @@ export class ImageLoader {
 							this.pendingPreloadTasks.add(hash);
 
 							// 使用批量调度接口，携带条件ID
-							const conditionId = conditionResult.conditionId || undefined;
 							const task: PreloadBatchJobInput = {
 								pageIndex: targetIndex,
 								imageHash: hash,
@@ -912,7 +918,7 @@ export class ImageLoader {
 								'pageIndex:',
 								targetIndex,
 								'conditionId:',
-								conditionResult.conditionId
+								conditionId
 							);
 						}
 					} else {

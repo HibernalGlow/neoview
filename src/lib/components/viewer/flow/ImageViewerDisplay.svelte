@@ -45,8 +45,8 @@
 	}
 
 	function scrollToCenter(node: HTMLElement, isCenter: boolean) {
-		// 将目标图片的中心对齐到滚动容器的中心
-		const scrollToNodeCenter = (behavior: ScrollBehavior) => {
+		// 将目标图片的中心对齐到滚动容器的中心（无任何平滑动画）
+		const scrollToNodeCenter = () => {
 			if (!isCenter) return;
 			const container = node.parentElement as HTMLElement | null;
 			if (!container) return;
@@ -57,16 +57,14 @@
 			const nodeCenter = nodeRect.left + nodeRect.width / 2;
 			const delta = nodeCenter - containerCenter;
 
-			container.scrollTo({
-				left: container.scrollLeft + delta,
-				behavior
-			});
+			// 直接修改 scrollLeft，避免 scrollTo/scroll-behavior 带来的平滑动画
+			container.scrollLeft = container.scrollLeft + delta;
 		};
 
 		if (isCenter) {
 			// 首次加载：立即对齐中心
 			requestAnimationFrame(() => {
-				scrollToNodeCenter('auto');
+				scrollToNodeCenter();
 			});
 		}
 
@@ -75,8 +73,8 @@
 			update(newIsCenter: boolean) {
 				isCenter = newIsCenter;
 				if (newIsCenter) {
-					// 翻页时使用平滑滚动到中心
-					scrollToNodeCenter('smooth');
+					// 翻页时也立即对齐到中心（无平滑动画）
+					scrollToNodeCenter();
 				}
 			}
 		};
@@ -101,8 +99,7 @@
 		{#if hasPanoramaImages}
 			<!-- 使用相邻图片填充 -->
 			<div 
-				class={`flex h-full min-w-full items-center justify-start gap-4 py-0 px-4 overflow-x-auto scroll-smooth ${readingDirection === 'right-to-left' ? 'flex-row-reverse' : ''}`}
-				style="scroll-snap-type: x mandatory;"
+				class={`flex h-full min-w-full items-center justify-start gap-4 py-0 px-4 overflow-x-auto ${readingDirection === 'right-to-left' ? 'flex-row-reverse' : ''}`}
 			>
 				{#each panoramaPages as page (page.index)}
 					{#if page.data}
@@ -110,9 +107,7 @@
 							src={page.data}
 							alt={`Page ${page.index + 1}`}
 							class="h-full w-auto flex-shrink-0 rounded-sm object-cover shadow-2xl"
-							style={`transform: rotate(${rotationAngle}deg); transition: transform 0.2s; ${
-								page.position === 'center' ? 'scroll-snap-align: center;' : ''
-							}`}
+							style={`transform: rotate(${rotationAngle}deg); transition: transform 0.2s;`}
 							use:scrollToCenter={page.position === 'center'}
 						/>
 					{/if}

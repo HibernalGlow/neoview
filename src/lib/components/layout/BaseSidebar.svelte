@@ -164,6 +164,15 @@
 		pinnedStore.update(p => !p);
 	}
 
+	function handlePinContextMenu(e: MouseEvent) {
+		e.preventDefault();
+		pinnedStore.set(false);
+		isVisible = false;
+		if (onVisibilityChange) {
+			onVisibilityChange(false);
+		}
+	}
+
 	// 在新窗口中打开
 	function openInNewWindow(panel: string) {
 		if (onOpenInNewWindow) {
@@ -334,6 +343,7 @@
 					size="icon"
 					class="h-10 w-10"
 					onclick={togglePin}
+					oncontextmenu={handlePinContextMenu}
 					title={isPinned ? '松开侧边栏（自动隐藏）' : '钉住侧边栏（始终显示）'}
 				>
 					{#if isPinned}
@@ -411,6 +421,7 @@
 					size="icon"
 					class="h-10 w-10"
 					onclick={togglePin}
+					oncontextmenu={handlePinContextMenu}
 					title={isPinned ? '松开右侧边栏（自动隐藏）' : '钉住右侧边栏（始终显示）'}
 				>
 					{#if isPinned}

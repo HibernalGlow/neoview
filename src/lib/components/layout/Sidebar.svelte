@@ -127,6 +127,13 @@
 		sidebarPinned.set(!$sidebarPinned);
 	}
 
+	function handlePinContextMenu(e: MouseEvent) {
+		e.preventDefault();
+		sidebarPinned.set(false);
+		localSidebarOpen = false;
+		sidebarOpen.set(false);
+	}
+
 	// 悬停显示/隐藏逻辑 - 使用 HoverWrapper 管理
 	function handleVisibilityChange(visible: boolean) {
 		if (!$sidebarPinned) {
@@ -266,7 +273,12 @@
 								</div>
 							</div>
 							<div class="flex items-center gap-3">
-								<Button variant="ghost" size="sm" onclick={togglePin}>
+								<Button
+									variant="ghost"
+									size="sm"
+									onclick={togglePin}
+									oncontextmenu={handlePinContextMenu}
+								>
 									{#if $sidebarPinned}
 										<PinOff class="h-4 w-4" />
 									{:else}

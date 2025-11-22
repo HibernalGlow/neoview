@@ -13,7 +13,8 @@
 		Star,
 		FolderOpen,
 		Package,
-		Video
+		Video,
+		Eye
 	} from '@lucide/svelte';
 	import type { FsItem } from '$lib/types';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
@@ -198,6 +199,30 @@
 		return [...collectTagsList, ...normalTagsList];
 	});
 
+	// 文件夹预览相关
+	let showPreview = $state(false);
+	let previewItems = $state<FsItem[]>([]);
+	let previewLoading = $state(false);
+	let previewIconElement = $state<HTMLElement | null>(null);
+
+	// 加载文件夹预览内容
+	async function loadFolderPreview() {
+		if (!item.isDir || previewLoading) return;
+
+		previewLoading = true;
+		try {
+			const { invoke } = await import('@tauri-apps/api/core');
+			const items = await invoke<FsItem[]>('read_directory', { path: item.path });
+			// 只取前10个项目作为预览
+			previewItems = items.slice(0, 10);
+		} catch (error) {
+			console.error('加载文件夹预览失败:', error);
+			previewItems = [];
+		} finally {
+			previewLoading = false;
+		}
+	}
+
 	// 格式化时间
 	function formatTime(ts?: number): string {
 		if (!ts) return '';
@@ -229,7 +254,7 @@
 {#if viewMode === 'list'}
 	<!-- 列表视图 -->
 	<div
-		class="border-border group flex cursor-pointer items-center gap-3 rounded border p-2 transition-colors {isSelected
+		class="border-border group relative flex cursor-pointer items-center gap-3 rounded border p-2 transition-colors {isSelected
 			? 'bg-primary/10 border-primary'
 			: 'hover:bg-accent/10'}"
 		onclick={onClick}
@@ -362,9 +387,73 @@
 								<span class="font-medium">{item.videoCount}</span>
 							</span>
 						{/if}
+						<!-- 预览图标 -->
+						<button
+							bind:this={previewIconElement}
+							class="hover:bg-accent inline-flex items-center justify-center rounded-md p-1 transition-colors"
+							title="预览文件夹内容"
+							onmouseenter={() => {
+								showPreview = true;
+								loadFolderPreview();
+							}}
+							onmouseleave={() => {
+								showPreview = false;
+							}}
+							onclick={(e) => {
+								e.stopPropagation();
+							}}
+						>
+							<Eye class="text-muted-foreground h-3.5 w-3.5" />
+						</button>
 					</div>
 				{/if}
 			</div>
+
+			<!-- 预览弹窗 -->
+			{#if item.isDir && showPreview}
+				<div
+					class="border-border bg-popover absolute left-0 top-full z-50 mt-1 w-64 rounded-md border p-2 shadow-lg"
+					role="tooltip"
+					tabindex="-1"
+					onmouseenter={() => {
+						showPreview = true;
+					}}
+					onmouseleave={() => {
+						showPreview = false;
+					}}
+				>
+					<div class="text-popover-foreground mb-2 text-xs font-medium">文件夹预览</div>
+					{#if previewLoading}
+						<div class="text-muted-foreground py-2 text-center text-xs">加载中...</div>
+					{:else if previewItems.length === 0}
+						<div class="text-muted-foreground py-2 text-center text-xs">空文件夹</div>
+					{:else}
+						<div class="max-h-64 space-y-1 overflow-y-auto">
+							{#each previewItems as previewItem}
+								<div class="hover:bg-accent flex items-center gap-2 rounded px-2 py-1 text-xs">
+									{#if previewItem.isDir}
+										<Folder class="h-3 w-3 flex-shrink-0 text-blue-500" />
+									{:else if previewItem.isImage}
+										<Image class="h-3 w-3 flex-shrink-0 text-green-500" />
+									{:else if previewItem.name.endsWith('.zip') || previewItem.name.endsWith('.cbz') || previewItem.name.endsWith('.rar') || previewItem.name.endsWith('.cbr')}
+										<FileArchive class="h-3 w-3 flex-shrink-0 text-purple-500" />
+									{:else}
+										<File class="h-3 w-3 flex-shrink-0 text-gray-400" />
+									{/if}
+									<span class="text-foreground truncate">{previewItem.name}</span>
+								</div>
+							{/each}
+							{#if item.size > 10}
+								<div
+									class="text-muted-foreground border-border mt-1 border-t px-2 py-1 text-center text-xs"
+								>
+									还有 {item.size - 10} 个项目...
+								</div>
+							{/if}
+						</div>
+					{/if}
+				</div>
+			{/if}
 			<!-- 翻译标题 -->
 			{#if emmMetadata?.translatedTitle && emmMetadata.translatedTitle !== item.name}
 				<div class="mt-1">

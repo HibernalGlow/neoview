@@ -563,7 +563,10 @@ function toggleComparisonMode() {
 						<DropdownMenu.Separator />
 						{#each quickThemes as theme}
 							<DropdownMenu.Item
-								onclick={() => applyQuickTheme(theme)}
+								onclick={() => {
+									applyQuickTheme(theme);
+									handleMouseLeave();
+								}}
 								class={themeName === theme.name ? 'bg-accent' : ''}
 							>
 								<div class="flex items-center gap-2">
@@ -585,7 +588,12 @@ function toggleComparisonMode() {
 						{/each}
 						<DropdownMenu.Separator />
 					{/if}
-					<DropdownMenu.Item onclick={openSettings}>
+					<DropdownMenu.Item
+						onclick={() => {
+							openSettings();
+							handleMouseLeave();
+						}}
+					>
 						<Settings class="mr-2 h-4 w-4" />
 						<span class="text-xs">打开主题设置…</span>
 					</DropdownMenu.Item>
@@ -744,19 +752,43 @@ function toggleComparisonMode() {
 						onmouseenter={handleMouseEnter}
 						onmouseleave={handleMouseLeave}
 					>
-						<DropdownMenu.Item onclick={() => setViewMode('single')} class={$viewerState.viewMode === 'single' ? 'bg-accent' : ''}>
+						<DropdownMenu.Item
+							onclick={() => {
+								setViewMode('single');
+								handleMouseLeave();
+							}}
+							class={$viewerState.viewMode === 'single' ? 'bg-accent' : ''}
+						>
 							<RectangleVertical class="h-4 w-4 mr-2" />
 							<span>单页模式</span>
 						</DropdownMenu.Item>
-						<DropdownMenu.Item onclick={() => setViewMode('double')} class={$viewerState.viewMode === 'double' ? 'bg-accent' : ''}>
+						<DropdownMenu.Item
+							onclick={() => {
+								setViewMode('double');
+								handleMouseLeave();
+							}}
+							class={$viewerState.viewMode === 'double' ? 'bg-accent' : ''}
+						>
 							<Columns2 class="h-4 w-4 mr-2" />
 							<span>双页模式</span>
 						</DropdownMenu.Item>
-						<DropdownMenu.Item onclick={() => setViewMode('panorama')} class={$viewerState.viewMode === 'panorama' ? 'bg-accent' : ''}>
+						<DropdownMenu.Item
+							onclick={() => {
+								setViewMode('panorama');
+								handleMouseLeave();
+							}}
+							class={$viewerState.viewMode === 'panorama' ? 'bg-accent' : ''}
+						>
 							<PanelsTopLeft class="h-4 w-4 mr-2" />
 							<span>全景模式</span>
 						</DropdownMenu.Item>
-						<DropdownMenu.Item onclick={() => setViewMode('vertical')} class={$viewerState.viewMode === 'vertical' ? 'bg-accent' : ''}>
+						<DropdownMenu.Item
+							onclick={() => {
+								setViewMode('vertical');
+								handleMouseLeave();
+							}}
+							class={$viewerState.viewMode === 'vertical' ? 'bg-accent' : ''}
+						>
 							<ArrowDownUp class="h-4 w-4 mr-2" />
 							<span>纵向滚动</span>
 						</DropdownMenu.Item>

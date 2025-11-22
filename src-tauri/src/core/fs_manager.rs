@@ -16,6 +16,18 @@ pub struct FsItem {
     pub modified: Option<u64>,
     pub created: Option<u64>,
     pub is_image: bool,
+    /// 文件夹内的子文件夹数量（仅对文件夹有效，不递归）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub folder_count: Option<u32>,
+    /// 文件夹内的图片文件数量（仅对文件夹有效，不递归）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_count: Option<u32>,
+    /// 文件夹内的压缩包数量（仅对文件夹有效，不递归）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub archive_count: Option<u32>,
+    /// 文件夹内的视频文件数量（仅对文件夹有效，不递归）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub video_count: Option<u32>,
 }
 
 /// 搜索选项
@@ -107,15 +119,49 @@ impl FsManager {
 
             let name = entry.file_name().to_string_lossy().to_string();
             let is_dir = metadata.is_dir();
-            // 对于目录，只计算直接子项数量，不递归（避免性能问题）
-            let size = if is_dir {
-                // 计算直接子项数量
-                fs::read_dir(&path)
-                    .map(|entries| entries.count() as u64)
-                    .unwrap_or(0)
+            
+            // 对于目录，统计子项信息
+            let (size, folder_count, image_count, archive_count, video_count) = if is_dir {
+                // 统计子项
+                let mut folders = 0u32;
+                let mut images = 0u32;
+                let mut archives = 0u32;
+                let mut videos = 0u32;
+                let mut total = 0u64;
+                
+                if let Ok(sub_entries) = fs::read_dir(&path) {
+                    for sub_entry in sub_entries.flatten() {
+                        // 跳过隐藏文件
+                        if let Some(sub_name) = sub_entry.file_name().to_str() {
+                            if sub_name.starts_with('.') {
+                                continue;
+                            }
+                        }
+                        
+                        total += 1;
+                        let sub_path = sub_entry.path();
+                        
+                        if sub_path.is_dir() {
+                            folders += 1;
+                        } else {
+                            if Self::is_image_file(&sub_path) {
+                                images += 1;
+                            }
+                            if Self::is_archive_file(&sub_path) {
+                                archives += 1;
+                            }
+                            if Self::is_video_file(&sub_path) {
+                                videos += 1;
+                            }
+                        }
+                    }
+                }
+                
+                (total, Some(folders), Some(images), Some(archives), Some(videos))
             } else {
-                metadata.len()
+                (metadata.len(), None, None, None, None)
             };
+            
             let modified = metadata
                 .modified()
                 .ok()
@@ -137,6 +183,10 @@ impl FsManager {
                 modified,
                 created,
                 is_image,
+                folder_count,
+                image_count,
+                archive_count,
+                video_count,
             });
         }
 
@@ -221,6 +271,10 @@ impl FsManager {
             modified,
             created,
             is_image,
+            folder_count: None,
+            image_count: None,
+            archive_count: None,
+            video_count: None,
         })
     }
 
@@ -231,6 +285,32 @@ impl FsManager {
             matches!(
                 ext.as_str(),
                 "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "avif" | "jxl" | "tiff" | "tif"
+            )
+        } else {
+            false
+        }
+    }
+
+    /// 检查是否为压缩包文件
+    fn is_archive_file(path: &Path) -> bool {
+        if let Some(ext) = path.extension() {
+            let ext = ext.to_string_lossy().to_lowercase();
+            matches!(
+                ext.as_str(),
+                "zip" | "cbz" | "rar" | "cbr" | "7z" | "cb7"
+            )
+        } else {
+            false
+        }
+    }
+
+    /// 检查是否为视频文件
+    fn is_video_file(path: &Path) -> bool {
+        if let Some(ext) = path.extension() {
+            let ext = ext.to_string_lossy().to_lowercase();
+            matches!(
+                ext.as_str(),
+                "mp4" | "mkv" | "avi" | "mov" | "wmv" | "flv" | "webm" | "m4v" | "mpg" | "mpeg"
             )
         } else {
             false
@@ -572,6 +652,10 @@ impl FsManager {
                     modified,
                     created,
                     is_image,
+                    folder_count: None,
+                    image_count: None,
+                    archive_count: None,
+                    video_count: None,
                 });
             }
         }
@@ -678,6 +762,10 @@ impl FsManager {
                     modified,
                     created,
                     is_image,
+                    folder_count: None,
+                    image_count: None,
+                    archive_count: None,
+                    video_count: None,
                 });
             }
         }

@@ -374,6 +374,10 @@ impl FileIndexer {
                                 modified: Some(entry.modified),
                                 created: None,
                                 is_image: entry.is_image,
+                                folder_count: None,
+                                image_count: None,
+                                archive_count: None,
+                                video_count: None,
                             });
                         }
                     }
@@ -399,6 +403,10 @@ impl FileIndexer {
                                             modified: Some(entry.modified),
                                             created: None,
                                             is_image: entry.is_image,
+                                            folder_count: None,
+                                            image_count: None,
+                                            archive_count: None,
+                                            video_count: None,
                                         });
                                     }
                                 }

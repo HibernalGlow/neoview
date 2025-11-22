@@ -9,6 +9,11 @@ export interface FsItem {
   modified?: number;
   created?: number;
   isImage: boolean;
+  // 文件夹统计（仅对文件夹有效，不递归）
+  folderCount?: number;
+  imageCount?: number;
+  archiveCount?: number;
+  videoCount?: number;
   // EMM 元数据（可选）
   emmMetadata?: {
     translatedTitle?: string;

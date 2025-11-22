@@ -14,6 +14,9 @@
 	import { historyStore } from '$lib/stores/history.svelte';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 
+	// 记录每个路径的滚动位置，用于返回上级或再次进入时恢复列表位置
+	const scrollPositions = new Map<string, number>();
+
 	function toRelativeKey(path: string): string {
 		return path.replace(/\\/g, '/');
 	}
@@ -107,6 +110,9 @@
 
 	// 性能监控
 	let lastScrollTime = 0;
+
+	// 上一次的路径，用于检测路径切换
+	let lastPath = $state('');
 
 	// 获取缩略图键 - 统一使用toRelativeKey
 	function getThumbnailKey(item: FsItem): string {
@@ -221,6 +227,10 @@
 		thumbnailManager.updateScroll(newScrollTop, newScrollLeft, startIndex, items.length);
 
 		scrollTop = newScrollTop;
+		// 按路径记录当前滚动位置，用于下次返回时精确恢复
+		if (currentPath) {
+			scrollPositions.set(currentPath, newScrollTop);
+		}
 
 		// 节流处理
 		if (scrollTimer) {
@@ -364,6 +374,31 @@
 		// 列表视图：96px，网格视图：240px（包含缩略图和信息）
 		itemHeight = viewMode === 'list' ? 96 : 240;
 		calculateVisibleRange();
+	});
+
+	// 监听路径变化，按路径恢复滚动位置
+	$effect(() => {
+		if (!container) return;
+
+		// 没有有效路径时重置状态
+		if (!currentPath) {
+			lastPath = '';
+			return;
+		}
+
+		if (currentPath !== lastPath) {
+			const savedTop = scrollPositions.get(currentPath) ?? 0;
+
+			// 等 DOM 和高度更新后再恢复滚动位置，保证虚拟列表计算正确
+			requestAnimationFrame(() => {
+				if (!container) return;
+				container.scrollTo({ top: savedTop, behavior: 'auto' });
+				scrollTop = savedTop;
+				calculateVisibleRange();
+			});
+
+			lastPath = currentPath;
+		}
 	});
 
 	let lastScrollToken = -1;

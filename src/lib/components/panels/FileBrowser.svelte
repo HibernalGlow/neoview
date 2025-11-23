@@ -200,6 +200,7 @@
 	let showFolderTree = $state(false);
 	let treeItems = $state<FsItem[]>([]);
 	let drivesLoaded = false;
+	let loadedDriveRoots = new Set<string>();
 	let treeWidth = $state(260);
 	const FILE_TREE_WIDTH_KEY = 'neoview-filetree-width';
 	let isTreeResizing = false;
@@ -227,6 +228,36 @@
 		// 空函数，因为书签功能已迁移到独立 tab
 	}
 
+	function getDriveRoot(path: string): string | null {
+		const match = path.match(/^([A-Za-z]:)/);
+		if (!match) return null;
+		return `${match[1]}\\`;
+	}
+
+	async function ensureDriveRootLoadedForPath(path: string) {
+		const root = getDriveRoot(path);
+		if (!root) return;
+		if (loadedDriveRoots.has(root)) return;
+
+		try {
+			const entries = await FileSystemAPI.browseDirectory(root);
+			const dirs = entries.filter((item) => item.isDir);
+			if (dirs.length === 0) {
+				loadedDriveRoots.add(root);
+				return;
+			}
+
+			const map = new Map(treeItems.map((item) => [item.path, item]));
+			for (const dir of dirs) {
+				map.set(dir.path, dir);
+			}
+			treeItems = Array.from(map.values());
+			loadedDriveRoots.add(root);
+		} catch (e) {
+			console.error('自动加载盘符根目录失败:', root, e);
+		}
+	}
+
 	// 订阅全局状态 - 使用 Svelte 5 的响应式
 	$effect(() => {
 		const unsubscribe = fileBrowserStore.subscribe((state) => {
@@ -250,6 +281,10 @@
 			sortOrder = state.sortOrder;
 			scrollToSelectedToken = state.scrollToSelectedToken;
 			scrollTargetIndex = state.scrollTargetIndex;
+
+			if (showFolderTree && state.currentPath) {
+				void ensureDriveRootLoadedForPath(state.currentPath);
+			}
 		});
 
 		return unsubscribe;
@@ -1802,9 +1837,10 @@
 </script>
 
 
+
 <div class="bg-background flex h-full flex-col overflow-hidden">
 	<div
-		class="border-border bg-background/95 supports-backdrop-filter:bg-background/70 z-20 flex flex-col gap-0 border-b backdrop-blur"
+		class="border-border bg-background/95 supports-backdrop-filter:bg-background/70 sticky top-0 z-20 flex flex-col gap-0 border-b backdrop-blur"
 	>
 		<!-- 路径面包屑导航 -->
 		<PathBar
@@ -2200,7 +2236,7 @@
 				</div>
 			{:else}
 				<!-- 文件列表 -->
-				<div class="min-h-0 flex-1">
+				<div class="min-h-0 flex-1 overflow-auto">
 					<VirtualizedFileList
 						{items}
 						{currentPath}

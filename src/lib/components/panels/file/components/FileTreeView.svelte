@@ -1,43 +1,52 @@
-		item?: FsItem;
-		children: Map<string, TreeNode>;
-		fileCount: number; // 此节点下的文件总数
-		expanded: boolean;
-	}
+	<script lang="ts">
+		import { createEventDispatcher } from 'svelte';
+		import type { FsItem } from '$lib/types';
+		import { Folder, File, Image as ImageIcon, FileArchive, ChevronDown, ChevronRight } from '@lucide/svelte';
 
-	const {
-		items = [],
-		currentPath = '',
-		thumbnails = new Map(),
-		selectedIndex = -1,
-		isCheckMode = false,
-		isDeleteMode = false,
-		selectedItems = new Set()
-	}: {
-		items?: FsItem[];
-		currentPath?: string;
-		thumbnails?: Map<string, string>;
-		selectedIndex?: number;
-		isCheckMode?: boolean;
-		isDeleteMode?: boolean;
-		selectedItems?: Set<string>;
-	} = $props();
+		interface TreeNode {
+			name: string;
+			path: string;
+			isDir: boolean;
+			item?: FsItem;
+			children: Map<string, TreeNode>;
+			fileCount: number; // 此节点下的文件总数
+			expanded: boolean;
+		}
 
-	const dispatch = createEventDispatcher();
+		const {
+			items = [],
+			currentPath = '',
+			thumbnails = new Map(),
+			selectedIndex = -1,
+			isCheckMode = false,
+			isDeleteMode = false,
+			selectedItems = new Set()
+		}: {
+			items?: FsItem[];
+			currentPath?: string;
+			thumbnails?: Map<string, string>;
+			selectedIndex?: number;
+			isCheckMode?: boolean;
+			isDeleteMode?: boolean;
+			selectedItems?: Set<string>;
+		} = $props();
 
-	// 构建树状结构
-	function buildTree(items: FsItem[]): TreeNode {
-		const root: TreeNode = {
-			name: '',
-			path: '',
-			isDir: true,
-			children: new Map(),
-			fileCount: 0,
-			expanded: true
-		};
+		const dispatch = createEventDispatcher();
 
-		items.forEach((item) => {
-			const parts = item.path.split(/[\\/]/).filter((p) => p);
-			let currentNode = root;
+		// 构建树状结构
+		function buildTree(items: FsItem[]): TreeNode {
+			const root: TreeNode = {
+				name: '',
+				path: '',
+				isDir: true,
+				children: new Map(),
+				fileCount: 0,
+				expanded: true
+			};
+
+			items.forEach((item) => {
+				const parts = item.path.split(/[\\/]/).filter((p) => p);
+				let currentNode = root;
 
 			// 遍历路径的每一部分
 			parts.forEach((part, index) => {
@@ -161,7 +170,7 @@
 		if (item.name.match(/\.(zip|cbz|rar|cbr|7z)$/i)) return FileArchive;
 		return File;
 	}
-</script>
+	</script>
 
 <div class="file-tree-view flex-1 overflow-y-auto p-2">
 	<div class="mb-2 px-2 text-xs text-gray-500">
@@ -183,6 +192,16 @@
 					toggleNode(node.path);
 				} else if (item) {
 					handleItemClick(item, index);
+				}
+			}}
+			onkeydown={(event: KeyboardEvent) => {
+				if (event.key === 'Enter' || event.key === ' ') {
+					event.preventDefault();
+					if (hasChildren) {
+						toggleNode(node.path);
+					} else if (item) {
+						handleItemClick(item, index);
+					}
 				}
 			}}
 			ondblclick={() => {
@@ -247,8 +266,7 @@
 			{/if}
 
 			<!-- 文件/文件夹图标 -->
-			<svelte:component
-				this={Icon}
+			<Icon
 				class="h-4 w-4 shrink-0 {node.isDir
 					? 'text-blue-500'
 					: item?.isImage

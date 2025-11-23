@@ -25,6 +25,7 @@
 		FolderTree
 	} from '@lucide/svelte';
 	import VirtualizedFileList from './file/components/VirtualizedFileList.svelte';
+	import FileTreeView from './file/components/FileTreeView.svelte';
 	import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
 	import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
 	import { onMount } from 'svelte';
@@ -197,6 +198,8 @@
 	let selectedItems = $state<Set<string>>(new Set());
 	let showSearchBar = $state(false);
 	let showFolderTree = $state(false);
+	let treeItems = $state<FsItem[]>([]);
+	let drivesLoaded = false;
 
 	// 缩略图入队管理
 	let lastEnqueueTimeout: ReturnType<typeof setTimeout> | null = null; // 用于取消上一个入队任务
@@ -370,8 +373,58 @@
 		}
 	}
 
-	function toggleFolderTree() {
+	async function toggleFolderTree() {
 		showFolderTree = !showFolderTree;
+		if (showFolderTree) {
+			await ensureDriveRoots();
+			if (currentPath && items.length > 0) {
+				updateTreeWithDirectory(currentPath, items);
+			}
+		}
+	}
+
+	async function ensureDriveRoots() {
+		if (drivesLoaded) return;
+
+		const driveLetters = 'CDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+		const roots: FsItem[] = [];
+
+		for (const letter of driveLetters) {
+			const rootPath = `${letter}:\\`;
+			try {
+				const exists = await FileSystemAPI.pathExists(rootPath);
+				if (exists) {
+					roots.push({
+						path: rootPath,
+						name: `${letter}:`,
+						isDir: true,
+						isImage: false,
+						size: 0,
+						modified: 0
+					});
+				}
+			} catch (e) {
+				console.debug('检测盘符失败:', rootPath, e);
+			}
+		}
+
+		const map = new Map(treeItems.map((item) => [item.path, item]));
+		for (const item of roots) {
+			map.set(item.path, item);
+		}
+		treeItems = Array.from(map.values());
+		drivesLoaded = true;
+	}
+
+	function updateTreeWithDirectory(path: string, dirItems: FsItem[]) {
+		const dirs = dirItems.filter((item) => item.isDir);
+		if (dirs.length === 0) return;
+
+		const map = new Map(treeItems.map((item) => [item.path, item]));
+		for (const dir of dirs) {
+			map.set(dir.path, dir);
+		}
+		treeItems = Array.from(map.values());
 	}
 
 	function toggleItemSelection(path: string) {
@@ -515,6 +568,7 @@
 			fileBrowserStore.setItems(cachedData.items);
 			fileBrowserStore.setThumbnails(cachedData.thumbnails);
 			thumbnails = new Map(cachedData.thumbnails);
+			updateTreeWithDirectory(path, cachedData.items);
 
 			// 异步验证缓存并更新缩略图
 			runWithScheduler({
@@ -589,6 +643,7 @@
 		fileBrowserStore.setItems(sortedItems);
 		fileBrowserStore.setThumbnails(new Map());
 		fileBrowserStore.setLoading(false); // 立即取消 loading 状态
+		updateTreeWithDirectory(path, sortedItems);
 
 		// 异步预填充缓存缩略图（不阻塞）
 		prefillThumbnailsFromCache(loadedItems, path).catch((err) => {
@@ -1823,30 +1878,6 @@
 				<SortPanel {sortField} {sortOrder} onSortChange={handleSortChange} />
 			</div>
 		</div>
-		{#if showFolderTree}
-			<div class="border-border bg-background/95 border-b max-h-40 overflow-y-auto px-2 py-1 text-xs">
-				<div class="flex items-center justify-between gap-2 pb-1">
-					<span class="text-muted-foreground">文件夹历史</span>
-					<span class="text-muted-foreground text-[10px]">
-						{navigationHistory.getHistory().length}
-					</span>
-				</div>
-				<div class="space-y-0.5">
-					{#each navigationHistory.getHistory() as path (path)}
-						<button
-							type="button"
-							class="flex w-full items-center justify-between rounded px-2 py-0.5 text-left text-xs hover:bg-accent/40"
-							onclick={() => navigateToDirectory(path)}
-						>
-							<span class="truncate">{path}</span>
-						</button>
-					{/each}
-					{#if navigationHistory.getHistory().length === 0}
-						<div class="text-muted-foreground py-1 text-[11px]">暂无历史记录</div>
-					{/if}
-				</div>
-			</div>
-		{/if}
 		{#if showSearchBar}
 			<!-- 搜索栏 -->
 			<div class="border-border bg-background/95 border-b px-2 py-2">
@@ -1864,10 +1895,13 @@
 
 	<!-- 右键菜单：文件列表 -->
 	{#if contextMenu.item}
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="context-menu fixed z-[10000] min-w-[180px] rounded-md border bg-popover text-popover-foreground shadow-lg py-1"
+			class="context-menu fixed z-10000 min-w-[180px] rounded-md border bg-popover text-popover-foreground shadow-lg py-1"
 			style={`left: ${contextMenu.x}px; top: ${contextMenu.y}px;`}
-			onmousedown={(e) => e.stopPropagation()}
+			role="menu"
+			tabindex="-1"
+			onmousedown={(e: MouseEvent) => e.stopPropagation()}
 		>
 			<button
 				type="button"
@@ -1949,55 +1983,149 @@
 		</div>
 	{/if}
 
-	<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
-		<!-- 加载状态 -->
-		{#if loading}
-			<div class="flex flex-1 items-center justify-center">
-				<div class="flex flex-col items-center gap-3">
-					<div class="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-500"></div>
-					<div class="text-sm text-gray-500">加载中...</div>
-				</div>
+	<div class="flex min-h-0 flex-1 overflow-hidden">
+		{#if showFolderTree}
+			<div class="border-r bg-background/80 w-64 max-w-xs shrink-0 flex flex-col">
+				<FileTreeView
+					items={treeItems}
+					{currentPath}
+					{thumbnails}
+					{selectedIndex}
+					{isCheckMode}
+					{isDeleteMode}
+					{selectedItems}
+					on:itemClick={(e: CustomEvent<{ item: FsItem; index: number }>) => {
+						const { item } = e.detail;
+						if (item?.isDir) {
+							navigateToDirectory(item.path);
+						} else {
+							openFile(item);
+						}
+					}}
+					on:itemDoubleClick={(e: CustomEvent<{ item: FsItem; index: number }>) => {
+						const { item } = e.detail;
+						if (item?.isDir) {
+							navigateToDirectory(item.path);
+						} else {
+							openFile(item);
+						}
+					}}
+					on:itemContextMenu={(e: CustomEvent<{ event: MouseEvent; item: FsItem }>) => {
+						const { event, item } = e.detail;
+						showContextMenu(event, item);
+					}}
+					on:selectionChange={(e: CustomEvent<{ selectedItems: Set<string> }>) => {
+						selectedItems = new Set(e.detail.selectedItems);
+					}}
+				/>
 			</div>
-		{:else if isSearching}
-			<div class="flex flex-1 items-center justify-center">
-				<div class="flex flex-col items-center gap-3">
-					<div class="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-500"></div>
-					<div class="text-sm text-gray-500">搜索中...</div>
+		{/if}
+
+		<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+			<!-- 加载状态 -->
+			{#if loading}
+				<div class="flex flex-1 items-center justify-center">
+					<div class="flex flex-col items-center gap-3">
+						<div class="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-500"></div>
+						<div class="text-sm text-gray-500">加载中...</div>
+					</div>
 				</div>
-			</div>
-		{:else if searchQuery && searchResults.length === 0}
-			<div class="flex flex-1 items-center justify-center">
-				<div class="text-center text-gray-400">
-					<svg
-						class="mx-auto mb-2 h-16 w-16 opacity-50"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke="currentColor"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-						></path>
-					</svg>
-					<p class="text-sm">未找到匹配的文件</p>
-					<p class="text-sm">此目录为空</p>
+			{:else if isSearching}
+				<div class="flex flex-1 items-center justify-center">
+					<div class="flex flex-col items-center gap-3">
+						<div class="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-500"></div>
+						<div class="text-sm text-gray-500">搜索中...</div>
+					</div>
 				</div>
-			</div>
-		{:else if searchQuery && searchResults.length > 0}
-			<!-- 搜索结果列表 -->
-			<div class="flex min-h-0 flex-1 flex-col">
-				<div class="border-b px-3 py-1 text-xs text-gray-500">
-					找到 {searchResults.length} 个结果 (搜索: "{searchQuery}")
+			{:else if searchQuery && searchResults.length === 0}
+				<div class="flex flex-1 items-center justify-center">
+					<div class="text-center text-gray-400">
+						<svg
+							class="mx-auto mb-2 h-16 w-16 opacity-50"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+							></path>
+						</svg>
+						<p class="text-sm">未找到匹配的文件</p>
+						<p class="text-sm">此目录为空</p>
+					</div>
 				</div>
+			{:else if searchQuery && searchResults.length > 0}
+				<!-- 搜索结果列表 -->
+				<div class="flex min-h-0 flex-1 flex-col">
+					<div class="border-b px-3 py-1 text-xs text-gray-500">
+						找到 {searchResults.length} 个结果 (搜索: "{searchQuery}")
+					</div>
+					<div class="min-h-0 flex-1">
+						<VirtualizedFileList
+							items={searchResults}
+							{currentPath}
+							{thumbnails}
+							{selectedIndex}
+							scrollToSelectedToken={$fileBrowserStore.scrollToSelectedToken}
+							{isCheckMode}
+							{isDeleteMode}
+							{selectedItems}
+							{viewMode}
+							on:itemClick={(e) => {
+								const { item, index } = e.detail;
+								if (!isCheckMode && !isDeleteMode) {
+									openSearchResult(item);
+								}
+							}}
+							on:itemDoubleClick={(e) => {
+								const { item } = e.detail;
+								openSearchResult(item);
+							}}
+							on:itemSelect={(e) => {
+								const { item, multiSelect } = e.detail;
+								if (isCheckMode) {
+									toggleItemSelection(item.path);
+								}
+							}}
+							on:itemContextMenu={(e) => {
+								const { event, item } = e.detail;
+								showContextMenu(event, item);
+							}}
+							on:deleteItem={(e) => {
+								deleteItem(e.detail.item.path);
+							}}
+							on:selectionChange={(e) => {
+								selectedItems = new Set(e.detail.selectedItems);
+							}}
+						/>
+					</div>
+				</div>
+			{:else if items.length === 0}
+				<div class="flex flex-1 items-center justify-center">
+					<div class="text-center">
+						<FolderOpen class="mx-auto mb-4 h-20 w-20 text-gray-300" />
+						<p class="mb-2 text-lg font-medium text-gray-600">选择文件夹开始浏览</p>
+						<p class="mb-6 text-sm text-gray-400">点击上方的"选择文件夹"按钮</p>
+						<button
+							onclick={selectFolder}
+							class="rounded-lg bg-blue-500 px-6 py-3 font-medium text-white transition-colors hover:bg-blue-600"
+						>
+							选择文件夹
+						</button>
+					</div>
+				</div>
+			{:else}
+				<!-- 文件列表 -->
 				<div class="min-h-0 flex-1">
 					<VirtualizedFileList
-						items={searchResults}
+						{items}
 						{currentPath}
 						{thumbnails}
 						{selectedIndex}
-						scrollToSelectedToken={$fileBrowserStore.scrollToSelectedToken}
+						{scrollToSelectedToken}
 						{isCheckMode}
 						{isDeleteMode}
 						{selectedItems}
@@ -2005,17 +2133,22 @@
 						on:itemClick={(e) => {
 							const { item, index } = e.detail;
 							if (!isCheckMode && !isDeleteMode) {
-								openSearchResult(item);
+								fileBrowserStore.setSelectedIndex(index);
+								openFile(item);
 							}
 						}}
 						on:itemDoubleClick={(e) => {
-							const { item } = e.detail;
-							openSearchResult(item);
+							const { item, index } = e.detail;
+							// 双击直接打开，无需检查模式
+							fileBrowserStore.setSelectedIndex(index);
+							openFile(item);
 						}}
 						on:itemSelect={(e) => {
-							const { item, multiSelect } = e.detail;
+							const { item, index, multiSelect } = e.detail;
 							if (isCheckMode) {
 								toggleItemSelection(item.path);
+							} else {
+								fileBrowserStore.setSelectedIndex(index);
 							}
 						}}
 						on:itemContextMenu={(e) => {
@@ -2028,72 +2161,12 @@
 						on:selectionChange={(e) => {
 							selectedItems = new Set(e.detail.selectedItems);
 						}}
+						on:selectedIndexChange={(e) => {
+							fileBrowserStore.setSelectedIndex(e.detail.index);
+						}}
 					/>
 				</div>
-			</div>
-		{:else if items.length === 0}
-			<div class="flex flex-1 items-center justify-center">
-				<div class="text-center">
-					<FolderOpen class="mx-auto mb-4 h-20 w-20 text-gray-300" />
-					<p class="mb-2 text-lg font-medium text-gray-600">选择文件夹开始浏览</p>
-					<p class="mb-6 text-sm text-gray-400">点击上方的"选择文件夹"按钮</p>
-					<button
-						onclick={selectFolder}
-						class="rounded-lg bg-blue-500 px-6 py-3 font-medium text-white transition-colors hover:bg-blue-600"
-					>
-						选择文件夹
-					</button>
-				</div>
-			</div>
-		{:else}
-			<!-- 文件列表 -->
-			<div class="min-h-0 flex-1">
-				<VirtualizedFileList
-					{items}
-					{currentPath}
-					{thumbnails}
-					{selectedIndex}
-					{scrollToSelectedToken}
-					{isCheckMode}
-					{isDeleteMode}
-					{selectedItems}
-					{viewMode}
-					on:itemClick={(e) => {
-						const { item, index } = e.detail;
-						if (!isCheckMode && !isDeleteMode) {
-							fileBrowserStore.setSelectedIndex(index);
-							openFile(item);
-						}
-					}}
-					on:itemDoubleClick={(e) => {
-						const { item, index } = e.detail;
-						// 双击直接打开，无需检查模式
-						fileBrowserStore.setSelectedIndex(index);
-						openFile(item);
-					}}
-					on:itemSelect={(e) => {
-						const { item, index, multiSelect } = e.detail;
-						if (isCheckMode) {
-							toggleItemSelection(item.path);
-						} else {
-							fileBrowserStore.setSelectedIndex(index);
-						}
-					}}
-					on:itemContextMenu={(e) => {
-						const { event, item } = e.detail;
-						showContextMenu(event, item);
-					}}
-					on:deleteItem={(e) => {
-						deleteItem(e.detail.item.path);
-					}}
-					on:selectionChange={(e) => {
-						selectedItems = new Set(e.detail.selectedItems);
-					}}
-					on:selectedIndexChange={(e) => {
-						fileBrowserStore.setSelectedIndex(e.detail.index);
-					}}
-				/>
-			</div>
-		{/if}
+			{/if}
+		</div>
 	</div>
 </div>

@@ -167,6 +167,13 @@
 	function showContextMenu(e: MouseEvent) {
 		e.preventDefault();
 		e.stopPropagation();
+		console.log('[InfoPanel] showContextMenu input', {
+			clientX: e.clientX,
+			clientY: e.clientY,
+			targetTag: (e.target as HTMLElement | null)?.tagName,
+			bookPath: bookInfo?.path,
+			imagePath: imageInfo?.path
+		});
 		
 		let menuX = e.clientX;
 		let menuY = e.clientY;
@@ -192,6 +199,13 @@
 		if (menuY + maxMenuHeight > viewportHeight) {
 			menuY = viewportHeight - maxMenuHeight - 10;
 		}
+		
+		console.log('[InfoPanel] showContextMenu computed', {
+			menuX,
+			menuY,
+			viewportWidth,
+			viewportHeight
+		});
 		
 		contextMenu = { x: menuX, y: menuY, open: true };
 	}
@@ -829,24 +843,32 @@
 
 	<!-- 右键菜单 -->
 	{#if contextMenu.open}
-		<ContextMenu.Root open={true} onOpenChange={(open) => { if (!open) hideContextMenu(); }}>
-			<ContextMenu.Trigger />
-			<ContextMenu.Content
-				style="position: fixed; left: {contextMenu.x}px; top: {contextMenu.y}px; z-index: 10000;"
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="context-menu fixed z-10000 min-w-[180px] rounded-md border bg-popover text-popover-foreground shadow-lg py-1"
+			style={`left: ${contextMenu.x}px; top: ${contextMenu.y}px;`}
+			role="menu"
+			tabindex="-1"
+			onmousedown={(e: MouseEvent) => e.stopPropagation()}
+		>
+			<button
+				type="button"
+				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				onclick={copyPath}
 			>
-				<ContextMenu.Item onclick={copyPath}>
-					<Copy class="h-4 w-4 mr-2" />
-					复制路径
-				</ContextMenu.Item>
-				<ContextMenu.Separator />
-				<ContextMenu.Item 
-					onclick={openInExplorer}
-					disabled={!bookInfo?.path && !imageInfo?.path}
-				>
-					<ExternalLink class="h-4 w-4 mr-2" />
-					在资源管理器中打开
-				</ContextMenu.Item>
-			</ContextMenu.Content>
-		</ContextMenu.Root>
+				<Copy class="h-4 w-4 mr-2" />
+				<span>复制路径</span>
+			</button>
+			<hr class="my-1 border-border/60" />
+			<button
+				type="button"
+				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent disabled:text-muted-foreground/70"
+				onclick={openInExplorer}
+				disabled={!bookInfo?.path && !imageInfo?.path}
+			>
+				<ExternalLink class="h-4 w-4 mr-2" />
+				<span>在资源管理器中打开</span>
+			</button>
+		</div>
 	{/if}
 </div>

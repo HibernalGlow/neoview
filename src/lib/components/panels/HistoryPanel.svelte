@@ -148,6 +148,13 @@
 		e.preventDefault();
 		e.stopPropagation();
 
+		console.log('[HistoryPanel] showContextMenu input', {
+			clientX: e.clientX,
+			clientY: e.clientY,
+			targetTag: (e.target as HTMLElement | null)?.tagName,
+			path: entry.path
+		});
+
 		let menuX = e.clientX;
 		let menuY = e.clientY;
 
@@ -172,6 +179,13 @@
 		if (menuY + maxMenuHeight > viewportHeight) {
 			menuY = viewportHeight - maxMenuHeight - 10;
 		}
+
+		console.log('[HistoryPanel] showContextMenu computed', {
+			menuX,
+			menuY,
+			viewportWidth,
+			viewportHeight
+		});
 
 		contextMenu = { x: menuX, y: menuY, entry };
 	}
@@ -383,45 +397,65 @@
 
 	<!-- 右键菜单 -->
 	{#if contextMenu.entry}
-		<ContextMenu.Root
-			open={true}
-			onOpenChange={(open) => {
-				if (!open) hideContextMenu();
-			}}
+		<div
+			class="context-menu fixed z-10000 min-w-[180px] rounded-md border bg-popover text-popover-foreground shadow-lg py-1"
+			style={`left: ${contextMenu.x}px; top: ${contextMenu.y}px;`}
+			role="menu"
+			tabindex="-1"
+			onmousedown={(e: MouseEvent) => e.stopPropagation()}
 		>
-			<ContextMenu.Trigger />
-			<ContextMenu.Content
-				style="position: fixed; left: {contextMenu.x}px; top: {contextMenu.y}px; z-index: 10000;"
+			<button
+				type="button"
+				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				onclick={() => openHistory(contextMenu.entry!)}
 			>
-				<ContextMenu.Item onclick={() => openHistory(contextMenu.entry!)}>
-					<FolderOpen class="mr-2 h-4 w-4" />
-					打开
-				</ContextMenu.Item>
-				<ContextMenu.Separator />
-				<ContextMenu.Item onclick={() => addToBookmark(contextMenu.entry!)}>
-					<Bookmark class="mr-2 h-4 w-4" />
-					添加到书签
-				</ContextMenu.Item>
-				<ContextMenu.Separator />
-				<ContextMenu.Item onclick={() => openInExplorer(contextMenu.entry!)}>
-					<ExternalLink class="mr-2 h-4 w-4" />
-					在资源管理器中打开
-				</ContextMenu.Item>
-				<ContextMenu.Item onclick={() => openWithExternalApp(contextMenu.entry!)}>
-					<ExternalLink class="mr-2 h-4 w-4" />
-					在外部应用中打开
-				</ContextMenu.Item>
-				<ContextMenu.Separator />
-				<ContextMenu.Item onclick={() => copyPath(contextMenu.entry!)}>复制路径</ContextMenu.Item>
-				<ContextMenu.Separator />
-				<ContextMenu.Item
-					onclick={() => removeHistory(contextMenu.entry!.id)}
-					class="text-red-600 focus:text-red-600"
-				>
-					<Trash2 class="mr-2 h-4 w-4" />
-					删除
-				</ContextMenu.Item>
-			</ContextMenu.Content>
-		</ContextMenu.Root>
+				<FolderOpen class="mr-2 h-4 w-4" />
+				<span>打开</span>
+			</button>
+			<hr class="my-1 border-border/60" />
+			<button
+				type="button"
+				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				onclick={() => addToBookmark(contextMenu.entry!)}
+			>
+				<Bookmark class="mr-2 h-4 w-4" />
+				<span>添加到书签</span>
+			</button>
+			<hr class="my-1 border-border/60" />
+			<button
+				type="button"
+				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				onclick={() => openInExplorer(contextMenu.entry!)}
+			>
+				<ExternalLink class="mr-2 h-4 w-4" />
+				<span>在资源管理器中打开</span>
+			</button>
+			<button
+				type="button"
+				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				onclick={() => openWithExternalApp(contextMenu.entry!)}
+			>
+				<ExternalLink class="mr-2 h-4 w-4" />
+				<span>在外部应用中打开</span>
+			</button>
+			<hr class="my-1 border-border/60" />
+			<button
+				type="button"
+				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				onclick={() => copyPath(contextMenu.entry!)}
+			>
+				<span class="mr-2 text-xs">📋</span>
+				<span>复制路径</span>
+			</button>
+			<hr class="my-1 border-border/60" />
+			<button
+				type="button"
+				class="flex w-full items-center px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
+				onclick={() => removeHistory(contextMenu.entry!.id)}
+			>
+				<Trash2 class="mr-2 h-4 w-4" />
+				<span>删除</span>
+			</button>
+		</div>
 	{/if}
 </div>

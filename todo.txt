@@ -1,5 +1,0 @@
-## TODO
-
-- [ ] Investigate why UpscalePanel settings no longer persist after modularization.
-- [ ] Fix UpscalePanel persistence (toggles, model settings, Apply button) and verify changes save to localStorage.
-

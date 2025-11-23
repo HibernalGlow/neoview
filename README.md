@@ -3,9 +3,7 @@
 ![NeoView 图标](./app-icon.png)
 
 NeoView 是一个桌面端图片 / 漫画查看器应用。
-本目录基于 **Tauri 2 + Svelte 5 + Rust + PyO3**，目标是在现代技术栈上复刻 Windows 经典阅读器的核心体验，同时针对大体积本地图库做了大量性能优化（缩略图缓存、批量加载、后台任务调度等）。
-
-> 本 README 仅针对 `neoview/neoview-tauri` 子项目，不包含其他后端 / 模型服务。
+本目录基于 **Tauri 2 + Svelte 5 + Rust + PyO3**，目标是在现代技术栈上复刻 [NeeView](https://github.com/neelabo/NeeView)阅读器的核心体验，同时针对大体积本地图库做了大量性能优化（缩略图缓存、批量加载、后台任务调度等）。
 
 ## 功能概览
 
@@ -27,8 +25,6 @@ NeoView 是一个桌面端图片 / 漫画查看器应用。
 - **超分与图像处理（规划中）**
   - 通过 PyO3 调用 Python 模型（如 RealCUGAN / Waifu2x 等）
   - 计划支持多模型管理与比较模式
-- **CLI 与工具**
-  - `scripts/thumbnail_batch_cli.py`：独立 Python CLI，用于批量预热缩略图数据库（见下文）
 
 更多架构与规划请参考：`docs/neeview_revamp_plan.md`。
 
@@ -59,7 +55,7 @@ NeoView 是一个桌面端图片 / 漫画查看器应用。
   - `neeview_revamp_plan.md`：NeeView 功能复刻总体规划与阶段进度
   - `thumbnail-optimization.md` / `THUMBNAIL_OPTIMIZATION_FEATURES.md`：缩略图加载与缓存优化
   - `THEME_SYSTEM.md` / `THEME_SETTINGS.md`：主题系统与外观设置说明
-- `doc/THUMBNAIL_BATCH_CLI.md`  
+- `docs/THUMBNAIL_BATCH_CLI.md`  
   缩略图批量 CLI 工具说明。
 - `scripts/`  
   辅助脚本（例如 `thumbnail_batch_cli.py`）。
@@ -150,7 +146,7 @@ Tauri 会针对当前平台生成安装包与可执行程序。
 ## 缩略图批量 CLI（可选）
 
 为了在首次打开大型图库时避免卡顿，可以使用独立 CLI 预先生成缩略图并写入数据库。  
-详细说明见 `doc/THUMBNAIL_BATCH_CLI.md`，这里仅给出简要概览。
+详细说明见 `docs/THUMBNAIL_BATCH_CLI.md`，这里仅给出简要概览。
 
 ### 依赖
 

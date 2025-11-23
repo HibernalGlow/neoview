@@ -21,16 +21,18 @@ dist-ssr
 /src-tauri/target/
 /src-tauri/gen/schemas
 *.ymll
-__pycache__/thumbnail_preprocessor.cpython-311.pyc
+__pycache__/
+.venv/
 temp/*
 temp/test_images/test_image.png
 ref/upscale*
 
-/cache/pyo3-upscale
-/cache/pyo3-upscale/*
+/cache/
 
 test_image.png
 test_image_upscaled.png
 /output_dir
+/output/
+/model_outputs/
 *.jpg
 src-tauri/.cache/thumbnails/thumbnails.db

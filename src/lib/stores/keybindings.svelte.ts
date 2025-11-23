@@ -9,6 +9,9 @@ export type ViewArea =
 	| 'top-left'
 	| 'top-center'
 	| 'top-right'
+	| 'middle-left'
+	| 'middle-center'
+	| 'middle-right'
 	| 'bottom-left'
 	| 'bottom-center'
 	| 'bottom-right';
@@ -386,10 +389,12 @@ class KeyBindingsStore {
 
 	// 根据坐标计算点击区域
 	calculateClickArea(x: number, y: number, width: number, height: number): ViewArea {
-		const centerX = width / 2;
-		const centerY = height / 2;
-		const isTop = y < centerY;
-		const isBottom = y >= centerY;
+		// 将视图划分为 3x3 网格
+		const topThird = height / 3;
+		const bottomThird = (height * 2) / 3;
+		const isTop = y < topThird;
+		const isMiddle = y >= topThird && y < bottomThird;
+		const isBottom = y >= bottomThird;
 
 		// 将水平分为三等分
 		const leftThird = width / 3;
@@ -401,12 +406,15 @@ class KeyBindingsStore {
 		if (isTop && isLeft) return 'top-left';
 		if (isTop && isCenter) return 'top-center';
 		if (isTop && isRight) return 'top-right';
+		if (isMiddle && isLeft) return 'middle-left';
+		if (isMiddle && isCenter) return 'middle-center';
+		if (isMiddle && isRight) return 'middle-right';
 		if (isBottom && isLeft) return 'bottom-left';
 		if (isBottom && isCenter) return 'bottom-center';
 		if (isBottom && isRight) return 'bottom-right';
 
-		// 默认返回中心区域
-		return 'top-center';
+		// 默认返回中间中心区域
+		return 'middle-center';
 	}
 
 	// 保存到 localStorage
@@ -489,9 +497,13 @@ class KeyBindingsStore {
 					case 'top-left': areaText = '左上'; break;
 					case 'top-center': areaText = '中上'; break;
 					case 'top-right': areaText = '右上'; break;
+					case 'middle-left': areaText = '左中'; break;
+					case 'middle-center': areaText = '中中'; break;
+					case 'middle-right': areaText = '右中'; break;
 					case 'bottom-left': areaText = '左下'; break;
 					case 'bottom-center': areaText = '中下'; break;
 					case 'bottom-right': areaText = '右下'; break;
+					default: areaText = area.area;
 				}
 
 				let actionText = '';

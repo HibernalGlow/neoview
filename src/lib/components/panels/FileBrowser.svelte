@@ -207,6 +207,7 @@
 	let isTreeResizing = false;
 	let treeResizeStartX = 0;
 	let treeResizeStartWidth = 0;
+	let lastTreeSyncPath = '';
 
 	// 缩略图入队管理
 	let lastEnqueueTimeout: ReturnType<typeof setTimeout> | null = null; // 用于取消上一个入队任务
@@ -285,6 +286,10 @@
 
 			if (showFolderTree && state.currentPath) {
 				void ensureDriveRootLoadedForPath(state.currentPath);
+				if (state.currentPath !== lastTreeSyncPath) {
+					updateTreeWithDirectory(state.currentPath, state.items);
+					lastTreeSyncPath = state.currentPath;
+				}
 			}
 		});
 
@@ -457,9 +462,20 @@
 
 	function updateTreeWithDirectory(path: string, dirItems: FsItem[]) {
 		const dirs = dirItems.filter((item) => item.isDir);
-		if (dirs.length === 0) return;
-
 		const map = new Map(treeItems.map((item) => [item.path, item]));
+		if (path && !map.has(path)) {
+			const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '');
+			const segments = normalized.split('/');
+			const name = segments[segments.length - 1] || normalized;
+			map.set(path, {
+				path,
+				name,
+				isDir: true,
+				isImage: false,
+				size: 0,
+				modified: 0
+			});
+		}
 		for (const dir of dirs) {
 			map.set(dir.path, dir);
 		}
@@ -2255,7 +2271,7 @@
 				</div>
 			{:else}
 				<!-- 文件列表 -->
-				<div class="min-h-0 flex-1 overflow-auto">
+				<div class="min-h-0 flex-1 overflow-hidden">
 					<VirtualizedFileList
 						{items}
 						{currentPath}

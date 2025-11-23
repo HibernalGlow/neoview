@@ -302,14 +302,22 @@ class KeyBindingsStore {
 
 	// 根据按键组合字符串查找操作（支持包含修饰键的组合，例如 Ctrl+ArrowLeft）
 	findActionByKeyCombo(keyCombo: string): string | null {
-		const normalized = keyCombo.toLowerCase();
+		// 归一化大小写，并兼容 ArrowLeft/← 等不同表示形式
+		const normalize = (value: string) =>
+			value
+				.toLowerCase()
+				.replace(/←/g, 'arrowleft')
+				.replace(/→/g, 'arrowright')
+				.replace(/↑/g, 'arrowup')
+				.replace(/↓/g, 'arrowdown');
+		const normalized = normalize(keyCombo);
 		for (const binding of this.bindings) {
 			if (!binding.bindings) continue;
 			const keyBinding = binding.bindings.find(
 				(b) =>
 					b.type === 'keyboard' &&
 					(typeof (b as KeyBinding).key === 'string' &&
-						(b as KeyBinding).key.toLowerCase() === normalized)
+						normalize((b as KeyBinding).key) === normalized)
 			);
 			if (keyBinding) {
 				return binding.action;

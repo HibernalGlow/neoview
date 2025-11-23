@@ -256,12 +256,18 @@
 				}
 			}}
 		>
-			<!-- 展开/折叠图标 -->
-			{#if hasChildren}
+			<!-- 展开/折叠图标：所有目录节点始终显示箭头 -->
+			{#if node.isDir}
 				<button
 					class="shrink-0 rounded p-0.5 hover:bg-gray-200"
 					onclick={(e) => {
 						e.stopPropagation();
+						dispatch('toggleNode', {
+							path: node.path,
+							fsPath: item?.path ?? node.path,
+							isDir: node.isDir,
+							hasChildren
+						});
 						toggleNode(node.path);
 					}}
 				>

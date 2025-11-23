@@ -432,6 +432,31 @@
 		treeItems = Array.from(map.values());
 	}
 
+	async function handleTreeToggleNode(
+		event: CustomEvent<{ path: string; fsPath: string; isDir: boolean; hasChildren: boolean }>
+	) {
+		const { fsPath, isDir, hasChildren } = event.detail;
+
+		// 仅在目录第一次展开（尚无子节点）时懒加载子目录
+		if (!isDir || hasChildren) {
+			return;
+		}
+
+		try {
+			const entries = await FileSystemAPI.browseDirectory(fsPath);
+			const dirs = entries.filter((item) => item.isDir);
+			if (dirs.length === 0) return;
+
+			const map = new Map(treeItems.map((item) => [item.path, item]));
+			for (const dir of dirs) {
+				map.set(dir.path, dir);
+			}
+			treeItems = Array.from(map.values());
+		} catch (err) {
+			console.error('加载文件树子目录失败:', fsPath, err);
+		}
+	}
+
 	function toggleItemSelection(path: string) {
 		if (selectedItems.has(path)) {
 			selectedItems.delete(path);
@@ -2065,6 +2090,7 @@
 					on:selectionChange={(e: CustomEvent<{ selectedItems: Set<string> }>) => {
 						selectedItems = new Set(e.detail.selectedItems);
 					}}
+					on:toggleNode={handleTreeToggleNode}
 				/>
 				<!-- 文件树宽度调整分隔条 -->
 				<div

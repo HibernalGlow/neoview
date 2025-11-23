@@ -1838,7 +1838,7 @@
 
 
 
-<div class="bg-background flex h-full flex-col overflow-hidden">
+<div class="bg-background flex h-full flex-col">
 	<div
 		class="border-border bg-background/95 supports-backdrop-filter:bg-background/70 sticky top-0 z-20 flex flex-col gap-0 border-b backdrop-blur"
 	>

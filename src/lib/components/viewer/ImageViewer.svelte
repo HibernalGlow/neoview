@@ -1152,10 +1152,24 @@
 
 		// 查找对应的命令
 		const command = findCommandByKeys(keyCombo, $keyBindings);
+		let effectiveCommand = command;
 
-		if (command) {
+		// 右开模式下，逻辑上一页/下一页与物理方向相反
+		if (command === 'next_page' || command === 'previous_page') {
+			const settings = settingsManager.getSettings();
+			const readingDirection = settings.book.readingDirection;
+			if (readingDirection === 'right-to-left') {
+				if (command === 'next_page') {
+					effectiveCommand = 'previous_page';
+				} else {
+					effectiveCommand = 'next_page';
+				}
+			}
+		}
+
+		if (effectiveCommand) {
 			e.preventDefault();
-			executeCommand(command);
+			executeCommand(effectiveCommand);
 		}
 	}
 

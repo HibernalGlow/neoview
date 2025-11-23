@@ -29,6 +29,7 @@
 	import SidebarManagementPanel from '$lib/components/panels/SidebarManagementPanel.svelte';
 	import ThemePanel from '$lib/components/panels/ThemePanel.svelte';
 	import PerformanceSettingsPanel from '$lib/components/panels/PerformanceSettingsPanel.svelte';
+	import DataSettingsPanel from '$lib/components/panels/DataSettingsPanel.svelte';
 
 	const appWindow = getCurrentWebviewWindow();
 
@@ -42,7 +43,8 @@
 		{ value: 'theme', label: '外观', icon: Layout },
 		{ value: 'performance', label: '性能', icon: Zap },
 		{ value: 'panels', label: '边栏管理', icon: PanelLeft },
-		{ value: 'bindings', label: '操作绑定', icon: Keyboard }
+		{ value: 'bindings', label: '操作绑定', icon: Keyboard },
+		{ value: 'data', label: '数据', icon: Monitor }
 	];
 
 	let activeTab = $state<string>('general');
@@ -117,6 +119,8 @@
 				<ThemePanel />
 			{:else if activeTab === 'performance'}
 				<PerformanceSettingsPanel />
+			{:else if activeTab === 'data'}
+				<DataSettingsPanel />
 			{:else}
 				<!-- 其他标签暂未实现 -->
 				<div class="p-6">

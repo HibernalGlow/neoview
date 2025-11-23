@@ -757,7 +757,7 @@ function toggleComparisonMode() {
 								<Button
 									variant={$viewerState.viewMode === 'single' ? 'default' : 'ghost'}
 									size="icon"
-									class={`h-8 w-8 rounded-full ${$viewerState.lockedViewMode === 'single' ? 'ring-2 ring-primary' : ''}`}
+									class={`h-8 w-8 rounded-full ${$viewerState.lockedViewMode === 'single' ? 'ring-2 ring-primary bg-primary/20 text-primary' : ''}`}
 									onclick={() => setViewMode('single')}
 									oncontextmenu={(event) => {
 										event.preventDefault();
@@ -768,7 +768,7 @@ function toggleComparisonMode() {
 								</Button>
 							</Tooltip.Trigger>
 							<Tooltip.Content>
-								<p>单页模式</p>
+								<p>单页模式{$viewerState.lockedViewMode === 'single' ? '（已锁定）' : ''}</p>
 							</Tooltip.Content>
 						</Tooltip.Root>
 
@@ -777,7 +777,7 @@ function toggleComparisonMode() {
 								<Button
 									variant={$viewerState.viewMode === 'double' ? 'default' : 'ghost'}
 									size="icon"
-									class={`h-8 w-8 rounded-full ${$viewerState.lockedViewMode === 'double' ? 'ring-2 ring-primary' : ''}`}
+									class={`h-8 w-8 rounded-full ${$viewerState.lockedViewMode === 'double' ? 'ring-2 ring-primary bg-primary/20 text-primary' : ''}`}
 									onclick={() => setViewMode('double')}
 									oncontextmenu={(event) => {
 										event.preventDefault();
@@ -788,7 +788,7 @@ function toggleComparisonMode() {
 								</Button>
 							</Tooltip.Trigger>
 							<Tooltip.Content>
-								<p>双页模式</p>
+								<p>双页模式{$viewerState.lockedViewMode === 'double' ? '（已锁定）' : ''}</p>
 							</Tooltip.Content>
 						</Tooltip.Root>
 
@@ -797,7 +797,7 @@ function toggleComparisonMode() {
 								<Button
 									variant={$viewerState.viewMode === 'panorama' ? 'default' : 'ghost'}
 									size="icon"
-									class={`h-8 w-8 rounded-full ${$viewerState.lockedViewMode === 'panorama' ? 'ring-2 ring-primary' : ''}`}
+									class={`h-8 w-8 rounded-full ${$viewerState.lockedViewMode === 'panorama' ? 'ring-2 ring-primary bg-primary/20 text-primary' : ''}`}
 									onclick={() => setViewMode('panorama')}
 									oncontextmenu={(event) => {
 										event.preventDefault();
@@ -808,7 +808,7 @@ function toggleComparisonMode() {
 								</Button>
 							</Tooltip.Trigger>
 							<Tooltip.Content>
-								<p>全景模式</p>
+								<p>全景模式{$viewerState.lockedViewMode === 'panorama' ? '（已锁定）' : ''}</p>
 							</Tooltip.Content>
 						</Tooltip.Root>
 
@@ -817,7 +817,7 @@ function toggleComparisonMode() {
 								<Button
 									variant={$viewerState.viewMode === 'vertical' ? 'default' : 'ghost'}
 									size="icon"
-									class={`h-8 w-8 rounded-full ${$viewerState.lockedViewMode === 'vertical' ? 'ring-2 ring-primary' : ''}`}
+									class={`h-8 w-8 rounded-full ${$viewerState.lockedViewMode === 'vertical' ? 'ring-2 ring-primary bg-primary/20 text-primary' : ''}`}
 									onclick={() => setViewMode('vertical')}
 									oncontextmenu={(event) => {
 										event.preventDefault();
@@ -828,7 +828,7 @@ function toggleComparisonMode() {
 								</Button>
 							</Tooltip.Trigger>
 							<Tooltip.Content>
-								<p>纵向滚动</p>
+								<p>纵向滚动{$viewerState.lockedViewMode === 'vertical' ? '（已锁定）' : ''}</p>
 							</Tooltip.Content>
 						</Tooltip.Root>
 					</div>

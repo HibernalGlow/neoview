@@ -167,13 +167,13 @@
 				<Button
 					variant={$viewMode === 'single' ? 'default' : 'ghost'}
 					size="icon"
-					class={`h-8 w-8 ${$lockedViewMode === 'single' ? 'ring-2 ring-primary rounded-full' : ''}`}
+					class={`h-8 w-8 rounded-full ${$lockedViewMode === 'single' ? 'ring-2 ring-primary bg-primary/20 text-primary' : ''}`}
 					onclick={() => setViewMode('single')}
 					oncontextmenu={(event) => {
 						event.preventDefault();
 						toggleViewModeLock('single');
 					}}
-					title="单页模式"
+					title={$lockedViewMode === 'single' ? '单页模式（已锁定）' : '单页模式'}
 				>
 					<RectangleVertical class="h-4 w-4" />
 				</Button>
@@ -181,13 +181,13 @@
 				<Button
 					variant={$viewMode === 'double' ? 'default' : 'ghost'}
 					size="icon"
-					class={`h-8 w-8 ${$lockedViewMode === 'double' ? 'ring-2 ring-primary rounded-full' : ''}`}
+					class={`h-8 w-8 rounded-full ${$lockedViewMode === 'double' ? 'ring-2 ring-primary bg-primary/20 text-primary' : ''}`}
 					onclick={() => setViewMode('double')}
 					oncontextmenu={(event) => {
 						event.preventDefault();
 						toggleViewModeLock('double');
 					}}
-					title="双页模式"
+					title={$lockedViewMode === 'double' ? '双页模式（已锁定）' : '双页模式'}
 				>
 					<Columns2 class="h-4 w-4" />
 				</Button>
@@ -195,13 +195,13 @@
 				<Button
 					variant={$viewMode === 'panorama' ? 'default' : 'ghost'}
 					size="icon"
-					class={`h-8 w-8 ${$lockedViewMode === 'panorama' ? 'ring-2 ring-primary rounded-full' : ''}`}
+					class={`h-8 w-8 rounded-full ${$lockedViewMode === 'panorama' ? 'ring-2 ring-primary bg-primary/20 text-primary' : ''}`}
 					onclick={() => setViewMode('panorama')}
 					oncontextmenu={(event) => {
 						event.preventDefault();
 						toggleViewModeLock('panorama');
 					}}
-					title="全景模式"
+					title={$lockedViewMode === 'panorama' ? '全景模式（已锁定）' : '全景模式'}
 				>
 					<PanelsTopLeft class="h-4 w-4" />
 				</Button>

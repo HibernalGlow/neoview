@@ -33,6 +33,7 @@
 	// 根据当前页面状态和全局状态计算进度条状态
 	const currentPageStatus = $derived(totalPages > 0 ? bookStore.getPageUpscaleStatus(currentPageIndex) : 'none');
 	const isCurrentPageUpscaling = $derived(upscaleState.isUpscaling && upscaleState.currentImageHash !== null);
+	const isLastPage = $derived(totalPages > 0 && currentPageIndex === totalPages - 1);
 	
 	// 更新进度条状态
 	$effect(() => {
@@ -44,6 +45,9 @@
 			progressBlinking = false;
 		} else if (currentPageStatus === 'failed') {
 			progressColor = '#ef4444'; // 红色
+			progressBlinking = false;
+		} else if (isLastPage) {
+			progressColor = 'var(--primary)'; // 主题色
 			progressBlinking = false;
 		} else {
 			progressColor = '#FDFBF7'; // 奶白色

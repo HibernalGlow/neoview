@@ -20,7 +20,9 @@
 		Bookmark,
 		Star,
 		ExternalLink,
-		CornerDownRight
+		CornerDownRight,
+		Search,
+		FolderTree
 	} from '@lucide/svelte';
 	import VirtualizedFileList from './file/components/VirtualizedFileList.svelte';
 	import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
@@ -193,6 +195,8 @@
 	let isPenetrateMode = $state(false);
 	let viewMode = $state<'list' | 'thumbnails'>('list'); // 列表 or 缩略图视图
 	let selectedItems = $state<Set<string>>(new Set());
+	let showSearchBar = $state(false);
+	let showFolderTree = $state(false);
 
 	// 缩略图入队管理
 	let lastEnqueueTimeout: ReturnType<typeof setTimeout> | null = null; // 用于取消上一个入队任务
@@ -353,16 +357,10 @@
 		}
 	}
 
-	/**
-	 * 切换删除模式
-	 */
 	function toggleDeleteMode() {
 		isDeleteMode = !isDeleteMode;
 	}
 
-	/**
-	 * 切换视图模式
-	 */
 	function toggleViewMode() {
 		// 循环切换：list -> grid -> list
 		if (viewMode === 'list') {
@@ -372,9 +370,10 @@
 		}
 	}
 
-	/**
-	 * 切换项目选中状态
-	 */
+	function toggleFolderTree() {
+		showFolderTree = !showFolderTree;
+	}
+
 	function toggleItemSelection(path: string) {
 		if (selectedItems.has(path)) {
 			selectedItems.delete(path);
@@ -1741,13 +1740,17 @@
 				<div class="bg-border mx-1 h-6 w-px"></div>
 
 				<Button
-					variant="ghost"
+					variant={showFolderTree ? 'default' : 'ghost'}
 					size="icon"
 					class="h-8 w-8"
-					onclick={selectFolder}
-					title="选择文件夹"
+					onclick={toggleFolderTree}
+					oncontextmenu={(e) => {
+						e.preventDefault();
+						selectFolder();
+					}}
+					title={showFolderTree ? '隐藏文件夹列表（右键选择文件夹）' : '显示文件夹列表（右键选择文件夹）'}
 				>
-					<FolderOpen class="h-4 w-4" />
+					<FolderTree class="h-4 w-4" />
 				</Button>
 
 				<Button
@@ -1760,21 +1763,6 @@
 				>
 					<RefreshCw class="h-4 w-4" />
 				</Button>
-			</div>
-
-			<div class="flex-1"></div>
-
-			<!-- 右侧：操作按钮 -->
-			<div class="flex items-center gap-1">
-				{#if isArchiveView}
-					<div class="text-muted-foreground flex items-center gap-1.5 px-2 text-xs">
-						<FileArchive class="h-3.5 w-3.5 text-purple-500" />
-						<span>压缩包</span>
-					</div>
-					<div class="bg-border mx-1 h-6 w-px"></div>
-				{/if}
-
-				<div class="bg-border mx-1 h-6 w-px"></div>
 
 				<Button
 					variant={isCheckMode ? 'default' : 'ghost'}
@@ -1822,21 +1810,56 @@
 					{/if}
 				</Button>
 
-				<!-- 排序面板 -->
+				<Button
+					variant={showSearchBar ? 'default' : 'ghost'}
+					size="icon"
+					class="h-8 w-8"
+					onclick={() => (showSearchBar = !showSearchBar)}
+					title={showSearchBar ? '隐藏搜索栏' : '显示搜索栏'}
+				>
+					<Search class="h-4 w-4" />
+				</Button>
+
 				<SortPanel {sortField} {sortOrder} onSortChange={handleSortChange} />
 			</div>
 		</div>
-		<!-- 搜索栏 -->
-		<div class="border-border bg-background/95 border-b px-2 py-2">
-			<SearchBar
-				placeholder="搜索当前目录下的文件..."
-				disabled={!currentPath || isArchiveView}
-				onSearch={handleFileSearch}
-				bind:searchHistory
-				bind:searchSettings
-				storageKey="neoview-file-search-history"
-			/>
-		</div>
+		{#if showFolderTree}
+			<div class="border-border bg-background/95 border-b max-h-40 overflow-y-auto px-2 py-1 text-xs">
+				<div class="flex items-center justify-between gap-2 pb-1">
+					<span class="text-muted-foreground">文件夹历史</span>
+					<span class="text-muted-foreground text-[10px]">
+						{navigationHistory.getHistory().length}
+					</span>
+				</div>
+				<div class="space-y-0.5">
+					{#each navigationHistory.getHistory() as path (path)}
+						<button
+							type="button"
+							class="flex w-full items-center justify-between rounded px-2 py-0.5 text-left text-xs hover:bg-accent/40"
+							onclick={() => navigateToDirectory(path)}
+						>
+							<span class="truncate">{path}</span>
+						</button>
+					{/each}
+					{#if navigationHistory.getHistory().length === 0}
+						<div class="text-muted-foreground py-1 text-[11px]">暂无历史记录</div>
+					{/if}
+				</div>
+			</div>
+		{/if}
+		{#if showSearchBar}
+			<!-- 搜索栏 -->
+			<div class="border-border bg-background/95 border-b px-2 py-2">
+				<SearchBar
+					placeholder="搜索当前目录下的文件..."
+					disabled={!currentPath || isArchiveView}
+					onSearch={handleFileSearch}
+					bind:searchHistory
+					bind:searchSettings
+					storageKey="neoview-file-search-history"
+				/>
+			</div>
+		{/if}
 	</div>
 
 	<!-- 右键菜单：文件列表 -->

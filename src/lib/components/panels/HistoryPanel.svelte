@@ -13,7 +13,8 @@
 		Bookmark,
 		Trash2,
 		ExternalLink,
-		FolderOpen
+		FolderOpen,
+		Search
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
@@ -54,6 +55,7 @@
 			: history
 	);
 	let syncFileTreeOnHistorySelect = $state(historySettingsStore.syncFileTreeOnHistorySelect);
+	let showSearchBar = $state(false);
 
 	$effect(() => {
 		historySettingsStore.setSyncFileTreeOnHistorySelect(syncFileTreeOnHistorySelect);
@@ -253,21 +255,31 @@
 							<List class="h-4 w-4" />
 						{/if}
 					</Button>
+					<Button
+						variant={showSearchBar ? 'default' : 'ghost'}
+						size="sm"
+						onclick={() => (showSearchBar = !showSearchBar)}
+						title={showSearchBar ? '隐藏搜索栏' : '显示搜索栏'}
+					>
+						<Search class="h-4 w-4" />
+					</Button>
 					<Button variant="ghost" size="sm" onclick={clearHistory}>清除全部</Button>
 				</div>
 			</div>
 		</div>
 
 		<!-- 搜索栏 -->
-		<div class="border-border bg-background/95 border-b px-4 py-3">
-			<SearchBar
-				placeholder="搜索历史记录..."
-				onSearchChange={(query) => {
-					searchQuery = query;
-				}}
-				storageKey="neoview-history-search-history"
-			/>
-		</div>
+		{#if showSearchBar}
+			<div class="border-border bg-background/95 border-b px-4 py-3">
+				<SearchBar
+					placeholder="搜索历史记录..."
+					onSearchChange={(query) => {
+						searchQuery = query;
+					}}
+					storageKey="neoview-history-search-history"
+				/>
+			</div>
+		{/if}
 	</div>
 
 	<div class="min-h-0 flex-1 overflow-hidden">

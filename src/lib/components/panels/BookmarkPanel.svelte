@@ -13,7 +13,8 @@
 		Activity,
 		Trash2,
 		ExternalLink,
-		FolderOpen
+		FolderOpen,
+		Search
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
@@ -45,6 +46,7 @@
 		bookmark: null
 	});
 	let syncFileTreeOnBookmarkSelect = $state(historySettingsStore.syncFileTreeOnBookmarkSelect);
+	let showSearchBar = $state(false);
 
 	$effect(() => {
 		historySettingsStore.setSyncFileTreeOnBookmarkSelect(syncFileTreeOnBookmarkSelect);
@@ -270,18 +272,28 @@
 							<List class="h-4 w-4" />
 						{/if}
 					</Button>
+					<Button
+						variant={showSearchBar ? 'default' : 'ghost'}
+						size="sm"
+						onclick={() => (showSearchBar = !showSearchBar)}
+						title={showSearchBar ? '隐藏搜索栏' : '显示搜索栏'}
+					>
+						<Search class="h-4 w-4" />
+					</Button>
 					<BookmarkSortPanel {bookmarks} onSort={handleBookmarkSort} />
 				</div>
 			</div>
-			<div class="border-border bg-background/95 border-b px-4 pb-4">
-				<SearchBar
-					placeholder="搜索书签..."
-					onSearchChange={(query: string) => {
-						searchQuery = query;
-					}}
-					storageKey="neoview-bookmark-search-history"
-				/>
-			</div>
+			{#if showSearchBar}
+				<div class="border-border bg-background/95 border-b px-4 pb-4">
+					<SearchBar
+						placeholder="搜索书签..."
+						onSearchChange={(query: string) => {
+							searchQuery = query;
+						}}
+						storageKey="neoview-bookmark-search-history"
+					/>
+				</div>
+			{/if}
 		</div>
 	</div>
 

@@ -149,6 +149,39 @@
 		scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
 	}
 	
+	/* 面板滚动区域滚动条样式：默认细小，悬停时加粗，使用主题色 */
+	[data-sidebar="content"],
+	[data-sidebar="content"] * {
+		scrollbar-width: thin; /* Firefox */
+		scrollbar-color: var(--primary) transparent;
+		-ms-overflow-style: auto;
+	}
+
+	[data-sidebar="content"]::-webkit-scrollbar,
+	[data-sidebar="content"] *::-webkit-scrollbar {
+		display: block;
+		width: 4px;
+		height: 4px;
+	}
+
+	[data-sidebar="content"]::-webkit-scrollbar-track,
+	[data-sidebar="content"] *::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	[data-sidebar="content"]::-webkit-scrollbar-thumb,
+	[data-sidebar="content"] *::-webkit-scrollbar-thumb {
+		background-color: var(--primary);
+		border-radius: 999px;
+	}
+
+	/* 悬停整个面板区域时放大滚动条尺寸 */
+	[data-sidebar="content"]:hover::-webkit-scrollbar,
+	[data-sidebar="content"]:hover *::-webkit-scrollbar {
+		width: 8px;
+		height: 8px;
+	}
+	
 	/* Breadcrumb 样式修复 */
 	[data-slot="breadcrumb-link"] {
 		color: var(--foreground) !important;

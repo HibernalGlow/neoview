@@ -514,14 +514,9 @@
 				<div class="mt-1 flex flex-wrap items-center gap-1">
 					{#each displayTags() as tagInfo}
 						<span
-							class="rounded px-1.5 py-0.5 text-xs {tagInfo.isCollect ? 'font-semibold' : ''}"
-							style="background-color: {tagInfo.isCollect
-								? (tagInfo.color || '#409EFF') + '20'
-								: 'rgba(0,0,0,0.05)'}; color: {tagInfo.isCollect
-								? tagInfo.color || '#409EFF'
-								: 'inherit'}; border: 1px solid {tagInfo.isCollect
-								? (tagInfo.color || '#409EFF') + '40'
-								: 'transparent'};"
+							class="inline-flex items-center rounded px-1.5 py-0.5 text-xs border {tagInfo.isCollect
+								? 'bg-primary/10 border-primary/40 text-primary font-semibold'
+								: 'bg-muted border-border/60 text-muted-foreground'}"
 							title={tagInfo.tag}
 						>
 							{tagInfo.display}
@@ -672,14 +667,9 @@
 				<div class="mt-1 flex flex-wrap items-center gap-1">
 					{#each displayTags() as tagInfo}
 						<span
-							class="rounded px-1 py-0.5 text-[10px] {tagInfo.isCollect ? 'font-semibold' : ''}"
-							style="background-color: {tagInfo.isCollect
-								? (tagInfo.color || '#409EFF') + '20'
-								: 'rgba(0,0,0,0.05)'}; color: {tagInfo.isCollect
-								? tagInfo.color || '#409EFF'
-								: 'inherit'}; border: 1px solid {tagInfo.isCollect
-								? (tagInfo.color || '#409EFF') + '40'
-								: 'transparent'};"
+							class="inline-flex items-center rounded px-1 py-0.5 text-[10px] border {tagInfo.isCollect
+								? 'bg-primary/10 border-primary/40 text-primary font-semibold'
+								: 'bg-muted border-border/60 text-muted-foreground'}"
 							title={tagInfo.tag}
 						>
 							{tagInfo.display}

@@ -115,14 +115,20 @@
 		const parts = normalizedCurrentPath.split('/');
 		// 不清空已有展开状态，只追加当前路径链路，避免其他展开节点被折叠
 		const next = new Set<string>(expandedNodes);
+		let changed = false;
 		let segment = '';
 		for (let i = 0; i < parts.length; i++) {
 			const p = parts[i];
 			if (!p) continue;
 			segment = i === 0 ? p : `${segment}/${p}`;
-			next.add(segment);
+			if (!next.has(segment)) {
+				next.add(segment);
+				changed = true;
+			}
 		}
-		expandedNodes = next;
+		if (changed) {
+			expandedNodes = next;
+		}
 	}
 
 	// 切换节点展开状态

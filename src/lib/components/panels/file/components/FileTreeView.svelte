@@ -307,8 +307,8 @@
 						class="flex h-4 w-4 items-center justify-center rounded border-2 transition-colors {selectedItems.has(
 							item.path
 						)
-							? 'border-blue-500 bg-blue-500'
-							: 'border-gray-300 hover:border-blue-400'}"
+							? 'border-primary bg-primary'
+							: 'border-gray-300 hover:border-primary'}"
 					>
 						{#if selectedItems.has(item.path)}
 							<svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -327,7 +327,7 @@
 			<!-- 文件/文件夹图标 -->
 			<Icon
 				class="h-4 w-4 shrink-0 {node.isDir
-					? 'text-blue-500'
+					? 'text-primary'
 					: item?.isImage
 						? 'text-green-500'
 						: 'text-gray-500'}"

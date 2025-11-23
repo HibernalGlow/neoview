@@ -350,7 +350,7 @@
 					class="h-full w-full object-cover transition-transform group-hover:scale-105"
 				/>
 			{:else if item.isDir}
-				<Folder class="h-8 w-8 text-blue-500 transition-colors group-hover:text-blue-600" />
+				<Folder class="h-8 w-8 text-primary transition-colors group-hover:text-primary" />
 			{:else if isArchive}
 				<FileArchive
 					class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600"
@@ -456,7 +456,7 @@
 							{#each previewItems as previewItem}
 								<div class="hover:bg-accent flex items-center gap-2 rounded px-2 py-1 text-xs">
 									{#if previewItem.isDir}
-										<Folder class="h-3 w-3 flex-shrink-0 text-blue-500" />
+										<Folder class="h-3 w-3 flex-shrink-0 text-primary" />
 									{:else if previewItem.isImage}
 										<Image class="h-3 w-3 flex-shrink-0 text-green-500" />
 									{:else if previewItem.name.endsWith('.zip') || previewItem.name.endsWith('.cbz') || previewItem.name.endsWith('.rar') || previewItem.name.endsWith('.cbr')}
@@ -559,7 +559,7 @@
 				/>
 			{:else if item.isDir}
 				<div class="flex h-full w-full items-center justify-center">
-					<Folder class="h-16 w-16 text-blue-500" />
+					<Folder class="h-16 w-16 text-primary" />
 				</div>
 			{:else if isArchive}
 				<div class="flex h-full w-full items-center justify-center">

@@ -142,7 +142,7 @@
         {#if index >= visibleRange.start - 5 && index <= visibleRange.end + 5}
           <!-- 渲染可见项目及少量额外项目 -->
           <div
-            class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors {selectedIndex === index ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}"
+            class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors {selectedIndex === index ? 'bg-primary/10 border-primary' : 'hover:bg-gray-50 border-gray-200'}"
             style="height: {itemHeight}px;"
             onclick={() => handleItemClick(item, index)}
             oncontextmenu={(e) => handleItemContextMenu(e, item)}
@@ -156,7 +156,7 @@
                   toggleItemSelection(item.path);
                 }}
               >
-                <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {selectedItems.has(item.path) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 hover:border-blue-400'}">
+                <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {selectedItems.has(item.path) ? 'bg-primary border-primary' : 'border-gray-300 hover:border-primary'}">
                   {#if selectedItems.has(item.path)}
                     <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
@@ -194,7 +194,7 @@
                   class="h-full w-full object-cover transition-transform group-hover:scale-105"
                 />
               {:else if item.is_dir}
-                <Folder class="h-8 w-8 text-blue-500 transition-colors group-hover:text-blue-600" />
+                <Folder class="h-8 w-8 text-primary transition-colors group-hover:text-primary" />
               {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
                 <FileArchive class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600" />
               {:else if item.isImage}
@@ -223,7 +223,7 @@
     <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
       {#each items as item, index (item.path)}
         <div
-          class="group flex flex-col items-center gap-2 p-2 rounded border cursor-pointer transition-colors {selectedIndex === index ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50 border-gray-200'}"
+          class="group flex flex-col items-center gap-2 p-2 rounded border cursor-pointer transition-colors {selectedIndex === index ? 'bg-primary/10 border-primary' : 'hover:bg-gray-50 border-gray-200'}"
           onclick={() => handleItemClick(item, index)}
           oncontextmenu={(e) => handleItemContextMenu(e, item)}
         >
@@ -236,7 +236,7 @@
                 toggleItemSelection(item.path);
               }}
             >
-              <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {selectedItems.has(item.path) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 hover:border-blue-400'}">
+              <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {selectedItems.has(item.path) ? 'bg-primary border-primary' : 'border-gray-300 hover:border-primary'}">
                 {#if selectedItems.has(item.path)}
                   <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
@@ -256,7 +256,7 @@
                 class="w-full h-full object-cover transition-transform group-hover:scale-105"
               />
             {:else if item.is_dir}
-              <Folder class="h-12 w-12 text-blue-500" />
+              <Folder class="h-12 w-12 text-primary" />
             {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
               <FileArchive class="h-12 w-12 text-purple-500" />
             {:else if item.isImage}

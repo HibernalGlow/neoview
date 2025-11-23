@@ -1075,9 +1075,9 @@
 		const currentIndex = bookStore.currentPageIndex;
 		const totalPages = bookStore.totalPages;
 
-		// 计算需要加载的页面范围
-		const start = currentIndex === 0 ? 0 : Math.max(0, currentIndex - 2);
-		const end = currentIndex === 0 ? 0 : Math.min(totalPages - 1, currentIndex + 2);
+		// 计算需要加载的页面范围（当前页前后各 2 页，自动裁剪到边界）
+		const start = Math.max(0, currentIndex - 2);
+		const end = Math.min(totalPages - 1, currentIndex + 2);
 
 		console.log(`🖼️ 全景模式：加载页面范围 ${start + 1} - ${end + 1}，当前页 ${currentIndex + 1}`);
 

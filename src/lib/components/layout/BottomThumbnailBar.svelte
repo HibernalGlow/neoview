@@ -43,7 +43,7 @@
 	let isResizing = $state(false);
 	let resizeStartY = 0;
 	let resizeStartHeight = 0;
-	let showProgressBar = $state(true);
+	let showBottomProgressBar = $state(true);
 	let hoverCount = $state(0); // 追踪悬停区域的计数
 	let showAreaOverlay = $state(false); // 显示区域覆盖层
 	
@@ -61,11 +61,7 @@
 	});
 
 	// 初始化时同步进度条状态
-	$effect(() => {
-		window.dispatchEvent(new CustomEvent('progressBarStateChange', {
-			detail: { show: showProgressBar }
-		}));
-	});
+	// Removed global progressBarStateChange initialization effect
 
 const THUMBNAIL_DEBOUNCE_MS = 250;
 let loadThumbnailsDebounce: number | null = null;
@@ -127,11 +123,7 @@ function scheduleLoadVisibleThumbnails(immediate = false) {
 	}
 
 	function toggleProgressBar() {
-		showProgressBar = !showProgressBar;
-		// 通知ImageViewer进度条状态变化
-		window.dispatchEvent(new CustomEvent('progressBarStateChange', {
-			detail: { show: showProgressBar }
-		}));
+		showBottomProgressBar = !showBottomProgressBar;
 	}
 
 	function toggleAreaOverlay() {
@@ -562,7 +554,7 @@ onMount(() => {
 				<Tooltip.Root>
 					<Tooltip.Trigger>
 						<Button
-							variant={showProgressBar ? 'default' : 'ghost'}
+							variant={showBottomProgressBar ? 'default' : 'ghost'}
 							size="sm"
 							class="h-6"
 							onclick={toggleProgressBar}
@@ -686,7 +678,7 @@ onMount(() => {
 	</div>
 {/if}
 
-{#if showProgressBar && bookStore.currentBook}
+{#if showBottomProgressBar && bookStore.currentBook}
 	<!-- 底部进度条 -->
 	<div class={`fixed bottom-0 left-0 right-0 h-1 z-[51] pointer-events-none ${readingDirection === 'right-to-left' ? 'rtl-progress-wrapper' : ''}`}>
 		<Progress.Root

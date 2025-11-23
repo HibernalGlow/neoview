@@ -884,18 +884,6 @@
 		}
 	}
 
-	// 监听进度条状态变化
-	$effect(() => {
-		const handleProgressBarState = (e: CustomEvent) => {
-			showProgressBar = e.detail.show;
-		};
-
-		window.addEventListener('progressBarStateChange', handleProgressBarState as EventListener);
-		return () => {
-			window.removeEventListener('progressBarStateChange', handleProgressBarState as EventListener);
-		};
-	});
-
 	async function handleNextPage() {
 		if (!bookStore.canNextPage) return;
 		try {

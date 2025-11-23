@@ -447,7 +447,12 @@
 					<div class="space-y-2 text-sm">
 						<div class="flex justify-between">
 							<span class="text-muted-foreground">名称:</span>
-							<span class="font-medium break-words max-w-[200px]" title={bookInfo.emmMetadata?.translatedTitle || bookInfo.name}>
+							<span
+								class={bookInfo.emmMetadata?.translatedTitle && bookInfo.emmMetadata.translatedTitle !== bookInfo.name
+									? 'break-words max-w-[200px] rounded border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-xs text-primary text-right'
+									: 'font-medium break-words max-w-[200px]'}
+								title={bookInfo.emmMetadata?.translatedTitle || bookInfo.name}
+							>
 								{bookInfo.emmMetadata?.translatedTitle || bookInfo.name}
 							</span>
 						</div>
@@ -532,8 +537,12 @@
 						<div class="flex flex-wrap gap-1.5">
 							{#each allTags() as tagInfo}
 								<span
-									class="text-xs px-2 py-1 rounded {tagInfo.isCollect ? 'font-semibold' : ''}"
-									style="background-color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '20' : 'rgba(0,0,0,0.05)'}; color: {tagInfo.isCollect ? (tagInfo.color || '#409EFF') : 'inherit'}; border: 1px solid {tagInfo.isCollect ? (tagInfo.color || '#409EFF') + '40' : 'transparent'};"
+									class="inline-flex items-center rounded px-2 py-1 text-xs border {tagInfo.isCollect
+										? 'font-semibold'
+										: 'bg-muted border-border/60 text-muted-foreground'}"
+									style={tagInfo.isCollect
+										? `background-color: ${(tagInfo.color || '#409EFF')}20; border-color: ${(tagInfo.color || '#409EFF')}40; color: ${tagInfo.color || '#409EFF'};`
+										: ''}
 									title="{tagInfo.category}:{tagInfo.tag}"
 								>
 									{tagInfo.display}

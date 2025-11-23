@@ -327,7 +327,7 @@
 											onSettingsChange(searchSettings);
 										}
 									}}
-									class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+									class="rounded border-gray-300 text-primary focus:ring-primary"
 								/>
 								<span>搜索子文件夹</span>
 							</label>
@@ -343,7 +343,7 @@
 											onSettingsChange(searchSettings);
 										}
 									}}
-									class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+									class="rounded border-gray-300 text-primary focus:ring-primary"
 								/>
 								<span>聚焦时显示历史</span>
 							</label>

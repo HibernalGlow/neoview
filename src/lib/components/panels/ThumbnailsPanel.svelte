@@ -583,9 +583,9 @@ import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 				{#each testResults as result}
 					<div class="flex items-center gap-2 text-xs">
 						{#if result.success}
-							<CheckCircle class="h-3 w-3 text-green-500 flex-shrink-0" />
+							<CheckCircle class="h-3 w-3 text-primary flex-shrink-0" />
 						{:else}
-							<XCircle class="h-3 w-3 text-red-500 flex-shrink-0" />
+							<XCircle class="h-3 w-3 text-destructive flex-shrink-0" />
 						{/if}
 						<span class="truncate">{result.name}</span>
 						{#if result.duration}
@@ -593,7 +593,7 @@ import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 						{/if}
 					</div>
 					{#if !result.success && result.message}
-						<div class="text-xs text-red-600 ml-5 truncate">
+						<div class="text-xs text-destructive ml-5 truncate">
 							{result.message}
 						</div>
 					{/if}

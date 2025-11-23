@@ -326,7 +326,7 @@
 						<Bookmark class="h-16 w-16 opacity-30" />
 						{#if !searchQuery}
 							<div class="absolute -right-1 -top-1">
-								<Star class="h-4 w-4 animate-pulse fill-yellow-400 text-yellow-400" />
+								<Star class="h-4 w-4 animate-pulse fill-primary text-primary" />
 							</div>
 						{/if}
 					</div>

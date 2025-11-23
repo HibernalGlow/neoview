@@ -353,19 +353,19 @@
 			{#if item?.source}
 				{#if item.source === 'bookmark'}
 					<span
-						class="shrink-0 rounded border border-yellow-200 bg-yellow-100 px-1 py-0.5 text-[9px] text-yellow-700"
+						class="shrink-0 rounded border border-primary/20 bg-primary/10 px-1 py-0.5 text-[9px] text-primary"
 					>
 						书签
 					</span>
 				{:else if item.source === 'history'}
 					<span
-						class="shrink-0 rounded border border-blue-200 bg-blue-100 px-1 py-0.5 text-[9px] text-blue-700"
+						class="shrink-0 rounded border border-accent/40 bg-accent/10 px-1 py-0.5 text-[9px] text-accent-foreground"
 					>
 						历史
 					</span>
 				{:else if item.source === 'local'}
 					<span
-						class="shrink-0 rounded border border-gray-200 bg-gray-100 px-1 py-0.5 text-[9px] text-gray-600"
+						class="shrink-0 rounded border border-border bg-muted px-1 py-0.5 text-[9px] text-muted-foreground"
 					>
 						本地
 					</span>

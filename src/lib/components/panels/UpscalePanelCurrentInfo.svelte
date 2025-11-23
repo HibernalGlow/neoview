@@ -31,22 +31,22 @@
 			
 			// 根据模式设置不同的颜色
 			if (upscaleState.mode === 'auto') {
-				progressColorClass = 'bg-yellow-500';
-				statusClass = 'text-yellow-600';
+				progressColorClass = 'bg-accent';
+				statusClass = 'text-accent-foreground';
 			} else {
-				progressColorClass = 'bg-blue-500';
-				statusClass = 'text-blue-600';
+				progressColorClass = 'bg-primary';
+				statusClass = 'text-primary';
 			}
 		} else if (upscaleState.error) {
 			isProcessing = false;
 			status = '处理失败';
-			statusClass = 'text-red-600';
-			progressColorClass = 'bg-red-500';
+			statusClass = 'text-destructive';
+			progressColorClass = 'bg-destructive';
 		} else if (progress === 100 || status === '缓存命中') {
 			isProcessing = false;
 			status = status === '缓存命中' ? '缓存命中' : '转换完成';
-			statusClass = 'text-green-600';
-			progressColorClass = 'bg-green-500';
+			statusClass = 'text-primary';
+			progressColorClass = 'bg-primary';
 		} else {
 			isProcessing = false;
 			status = '就绪';

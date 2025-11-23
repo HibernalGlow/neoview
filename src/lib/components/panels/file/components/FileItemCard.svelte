@@ -363,14 +363,14 @@
 
 			<!-- 阅读标记（对勾） -->
 			{#if showReadMark}
-				<div class="absolute right-0 top-0 rounded-full bg-green-500 p-0.5">
+				<div class="absolute right-0 top-0 rounded-full bg-primary p-0.5">
 					<Check class="h-3 w-3 text-white" />
 				</div>
 			{/if}
 
 			<!-- 收藏标记（星标） -->
 			{#if isBookmarked}
-				<div class="absolute bottom-0 right-0 rounded-full bg-yellow-500 p-0.5">
+				<div class="absolute bottom-0 right-0 rounded-full bg-primary p-0.5">
 					<Star class="h-3 w-3 fill-white text-white" />
 				</div>
 			{/if}
@@ -456,11 +456,11 @@
 							{#each previewItems as previewItem}
 								<div class="hover:bg-accent flex items-center gap-2 rounded px-2 py-1 text-xs">
 									{#if previewItem.isDir}
-										<Folder class="h-3 w-3 flex-shrink-0 text-primary" />
+										<Folder class="h-3 w-3 flex-shrink-0 text-blue-500" />
 									{:else if previewItem.isImage}
-										<Image class="h-3 w-3 flex-shrink-0 text-primary" />
+										<Image class="h-3 w-3 flex-shrink-0 text-green-500" />
 									{:else if previewItem.name.endsWith('.zip') || previewItem.name.endsWith('.cbz') || previewItem.name.endsWith('.rar') || previewItem.name.endsWith('.cbr')}
-										<FileArchive class="h-3 w-3 flex-shrink-0 text-primary" />
+										<FileArchive class="h-3 w-3 flex-shrink-0 text-purple-500" />
 									{:else}
 										<File class="h-3 w-3 flex-shrink-0 text-gray-400" />
 									{/if}
@@ -549,38 +549,38 @@
 		role="button"
 		tabindex="0"
 	>
-		<!-- 缩略图区域 -->
-		<div class="bg-secondary relative aspect-[3/4] w-full overflow-hidden">
-			{#if thumbnail}
-				<img
-					src={thumbnail}
-					alt={item.name}
-					class="h-full w-full object-cover transition-transform group-hover:scale-105"
-				/>
-			{:else if item.isDir}
-				<div class="flex h-full w-full items-center justify-center">
+			<!-- 缩略图区域 -->
+			<div class="bg-secondary relative aspect-[3/4] w-full overflow-hidden">
+				{#if thumbnail}
+					<img
+						src={thumbnail}
+						alt={item.name}
+						class="h-full w-full object-cover transition-transform group-hover:scale-105"
+					/>
+				{:else if item.isDir}
+					<div class="flex h-full w-full items-center justify-center">
 					<Folder class="h-16 w-16 text-primary" />
-				</div>
-			{:else if isArchive}
-				<div class="flex h-full w-full items-center justify-center">
+					</div>
+				{:else if isArchive}
+					<div class="flex h-full w-full items-center justify-center">
 					<FileArchive class="h-16 w-16 text-primary" />
-				</div>
-			{:else if item.isImage}
-				<div class="flex h-full w-full items-center justify-center">
+					</div>
+				{:else if item.isImage}
+					<div class="flex h-full w-full items-center justify-center">
 					<Image class="h-16 w-16 text-primary" />
-				</div>
-			{:else}
-				<div class="flex h-full w-full items-center justify-center">
-					<File class="h-16 w-16 text-gray-400" />
-				</div>
-			{/if}
+					</div>
+				{:else}
+					<div class="flex h-full w-full items-center justify-center">
+						<File class="h-16 w-16 text-gray-400" />
+					</div>
+				{/if}
 
-			<!-- 阅读标记（对勾） -->
-			{#if showReadMark}
-				<div class="absolute right-2 top-2 rounded-full bg-green-500 p-1">
-					<Check class="h-4 w-4 text-white" />
-				</div>
-			{/if}
+				<!-- 阅读标记（对勾） -->
+				{#if showReadMark}
+				<div class="absolute right-2 top-2 rounded-full bg-primary p-1">
+						<Check class="h-4 w-4 text-white" />
+					</div>
+				{/if}
 
 			<!-- 收藏标记（星标） -->
 			{#if isBookmarked}
@@ -642,7 +642,7 @@
 			{#if emmMetadata?.translatedTitle && emmMetadata.translatedTitle !== item.name}
 				<div class="mt-1">
 					<span
-						class="break-words rounded border border-blue-100 bg-blue-50 px-1 py-0.5 text-[10px] text-blue-600"
+						class="break-words rounded border border-primary/20 bg-primary/10 px-1 py-0.5 text-[10px] text-primary"
 						title={emmMetadata.translatedTitle}
 					>
 						{emmMetadata.translatedTitle}

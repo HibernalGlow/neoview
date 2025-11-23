@@ -200,6 +200,11 @@
 	let showFolderTree = $state(false);
 	let treeItems = $state<FsItem[]>([]);
 	let drivesLoaded = false;
+	let treeWidth = $state(260);
+	const FILE_TREE_WIDTH_KEY = 'neoview-filetree-width';
+	let isTreeResizing = false;
+	let treeResizeStartX = 0;
+	let treeResizeStartWidth = 0;
 
 	// 缩略图入队管理
 	let lastEnqueueTimeout: ReturnType<typeof setTimeout> | null = null; // 用于取消上一个入队任务
@@ -447,6 +452,19 @@
 
 		document.addEventListener('click', handleClick);
 
+		// 读取持久化的文件树宽度
+		try {
+			const savedWidth = localStorage.getItem(FILE_TREE_WIDTH_KEY);
+			if (savedWidth) {
+				const w = parseInt(savedWidth, 10);
+				if (!Number.isNaN(w) && w >= 180 && w <= 480) {
+					treeWidth = w;
+				}
+			}
+		} catch (e) {
+			console.debug('读取文件树宽度失败:', e);
+		}
+
 		// 加载主页 - 仅在当前没有路径时加载（避免覆盖从其他面板跳转过来的导航）
 		if (!fileBrowserStore.getState().currentPath) {
 			loadHomepage();
@@ -504,6 +522,33 @@
 			clearInterval(settingsCheckInterval);
 		};
 	});
+
+	function handleTreeResizeMouseDown(e: MouseEvent) {
+		isTreeResizing = true;
+		treeResizeStartX = e.clientX;
+		treeResizeStartWidth = treeWidth;
+		document.addEventListener('mousemove', handleTreeResizeMouseMove);
+		document.addEventListener('mouseup', handleTreeResizeMouseUp);
+	}
+
+	function handleTreeResizeMouseMove(e: MouseEvent) {
+		if (!isTreeResizing) return;
+		const delta = e.clientX - treeResizeStartX;
+		const next = Math.min(480, Math.max(180, treeResizeStartWidth + delta));
+		treeWidth = next;
+	}
+
+	function handleTreeResizeMouseUp() {
+		if (!isTreeResizing) return;
+		isTreeResizing = false;
+		try {
+			localStorage.setItem(FILE_TREE_WIDTH_KEY, String(treeWidth));
+		} catch (e) {
+			console.debug('保存文件树宽度失败:', e);
+		}
+		document.removeEventListener('mousemove', handleTreeResizeMouseMove);
+		document.removeEventListener('mouseup', handleTreeResizeMouseUp);
+	}
 
 	/**
 	 * 选择文件夹
@@ -1985,7 +2030,10 @@
 
 	<div class="flex min-h-0 flex-1 overflow-hidden">
 		{#if showFolderTree}
-			<div class="border-r bg-background/80 w-64 max-w-xs shrink-0 flex flex-col">
+			<div
+				class="relative border-r bg-background/80 shrink-0 flex flex-col"
+				style={`width: ${treeWidth}px; min-width: 180px; max-width: 480px;`}
+			>
 				<FileTreeView
 					items={treeItems}
 					{currentPath}
@@ -2018,6 +2066,13 @@
 						selectedItems = new Set(e.detail.selectedItems);
 					}}
 				/>
+				<!-- 文件树宽度调整分隔条 -->
+				<div
+					class="absolute top-0 right-0 h-full w-1 cursor-col-resize hover:bg-border/70"
+					role="separator"
+					aria-orientation="vertical"
+					onmousedown={handleTreeResizeMouseDown}
+				></div>
 			</div>
 		{/if}
 

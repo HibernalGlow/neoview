@@ -173,7 +173,7 @@
 	</script>
 
 <div class="file-tree-view flex-1 overflow-y-auto p-2">
-	<div class="mb-2 px-2 text-xs text-gray-500">
+	<div class="mb-2 px-2 text-xs text-muted-foreground">
 		找到 {items.length} 个结果
 	</div>
 
@@ -277,15 +277,15 @@
 			<!-- 名称 -->
 			<span
 				class="flex-1 truncate text-sm {item && !item.isDir
-					? 'text-gray-900'
-					: 'font-medium text-gray-700'}"
+					? 'text-foreground'
+					: 'font-medium text-foreground'}"
 			>
 				{node.name}
 			</span>
 
 			<!-- 文件数量标记 -->
 			{#if hasChildren && node.fileCount > 0}
-				<span class="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-[10px] text-gray-600">
+				<span class="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
 					{node.fileCount}
 				</span>
 			{/if}

@@ -228,19 +228,19 @@
 			role="button"
 			tabindex="0"
 			onclick={() => {
-				if (hasChildren) {
-					toggleNode(node.path);
-				} else if (item) {
+				if (item) {
 					handleItemClick(item, index);
+				} else if (hasChildren) {
+					toggleNode(node.path);
 				}
 			}}
 			onkeydown={(event: KeyboardEvent) => {
 				if (event.key === 'Enter' || event.key === ' ') {
 					event.preventDefault();
-					if (hasChildren) {
-						toggleNode(node.path);
-					} else if (item) {
+					if (item) {
 						handleItemClick(item, index);
+					} else if (hasChildren) {
+						toggleNode(node.path);
 					}
 				}
 			}}
@@ -367,7 +367,7 @@
 	}
 
 	.tree-node:focus {
-		outline: 2px solid #3b82f6;
+		outline: 2px solid hsl(var(--ring));
 		outline-offset: -2px;
 	}
 </style>

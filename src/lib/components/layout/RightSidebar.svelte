@@ -182,18 +182,6 @@
 							{/if}
 						</Button>
 					</div>
-					<Sidebar.Menu>
-						<Sidebar.MenuItem>
-							<Sidebar.MenuButton size="lg" class="md:h-8 md:p-0">
-								{#snippet child({ props })}
-									<div class="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-										<Info class="size-4" />
-									</div>
-									
-								{/snippet}
-							</Sidebar.MenuButton>
-						</Sidebar.MenuItem>
-					</Sidebar.Menu>
 				</Sidebar.Header>
 				
 				<Sidebar.Content>

@@ -273,6 +273,13 @@
 		if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 		return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
 	}
+
+	const isReadCompleted = $derived(
+		currentPage !== undefined &&
+			totalPages !== undefined &&
+			totalPages > 0 &&
+			currentPage >= totalPages - 1
+	);
 </script>
 
 {#if viewMode === 'list'}
@@ -363,9 +370,15 @@
 
 			<!-- 阅读标记（对勾） -->
 			{#if showReadMark}
-				<div class="absolute right-0 top-0 rounded-full bg-primary p-0.5">
-					<Check class="h-3 w-3 text-white" />
-				</div>
+				{#if isReadCompleted}
+					<div class="absolute right-0 top-0 rounded-full bg-primary p-0.5">
+						<Check class="h-3 w-3 text-white" />
+					</div>
+				{:else}
+					<div class="absolute right-0 top-0 rounded-full border border-dashed border-primary bg-background/80 p-0.5">
+						<Check class="h-3 w-3 text-primary" />
+					</div>
+				{/if}
 			{/if}
 
 			<!-- 收藏标记（星标） -->
@@ -575,9 +588,15 @@
 
 				<!-- 阅读标记（对勾） -->
 				{#if showReadMark}
-				<div class="absolute right-2 top-2 rounded-full bg-primary p-1">
-						<Check class="h-4 w-4 text-white" />
-					</div>
+					{#if isReadCompleted}
+						<div class="absolute right-2 top-2 rounded-full bg-primary p-1">
+							<Check class="h-4 w-4 text-white" />
+						</div>
+					{:else}
+						<div class="absolute right-2 top-2 rounded-full border border-dashed border-primary bg-background/80 p-1">
+							<Check class="h-4 w-4 text-primary" />
+						</div>
+					{/if}
 				{/if}
 
 			<!-- 收藏标记（星标） -->

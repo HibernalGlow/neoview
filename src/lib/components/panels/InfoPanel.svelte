@@ -168,11 +168,17 @@
 		e.preventDefault();
 		e.stopPropagation();
 		
-		const viewportWidth = window.innerWidth;
-		const viewportHeight = window.innerHeight;
-		
 		let menuX = e.clientX;
 		let menuY = e.clientY;
+		
+		if (menuX === 0 && menuY === 0 && e.target instanceof HTMLElement) {
+			const rect = e.target.getBoundingClientRect();
+			menuX = rect.left + rect.width / 2;
+			menuY = rect.top + rect.height / 2;
+		}
+		
+		const viewportWidth = window.innerWidth;
+		const viewportHeight = window.innerHeight;
 		
 		const menuWidth = 180;
 		if (e.clientX + menuWidth > viewportWidth) {

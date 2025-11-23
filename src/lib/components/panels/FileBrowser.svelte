@@ -1033,13 +1033,20 @@
 	function showContextMenu(e: MouseEvent, item: FsItem) {
 		e.preventDefault();
 
+		let menuX = e.clientX;
+		let menuY = e.clientY;
+
+		if (menuX === 0 && menuY === 0 && e.target instanceof HTMLElement) {
+			const rect = e.target.getBoundingClientRect();
+			menuX = rect.left + rect.width / 2;
+			menuY = rect.top + rect.height / 2;
+		}
+
 		// 获取视口尺寸
 		const viewportWidth = window.innerWidth;
 		const viewportHeight = window.innerHeight;
 		const viewportMiddle = viewportHeight / 2;
 
-		let menuX = e.clientX;
-		let menuY = e.clientY;
 		let menuDirection = 'down'; // 默认向下展开
 
 		// 确保菜单不超出视口右侧

@@ -55,7 +55,12 @@
 	let lastViewMode: 'single' | 'double' | 'panorama' | 'vertical' | null = null;
 	let verticalPagesData = $state<Array<{ index: number; data: string | null }>>([]);
 	let panoramaPagesData = $state<
-		Array<{ index: number; data: string | null; position: 'left' | 'center' | 'right' }>
+		Array<{
+			index: number;
+			data: string | null;
+			position: 'left' | 'center' | 'right';
+			slot: number;
+		}>
 	>([]);
 
 	// 注意：progressColor 和 progressBlinking 现在由 ImageViewerProgressBar 内部管理
@@ -1072,11 +1077,31 @@
 		const currentIndex = bookStore.currentPageIndex;
 		const totalPages = bookStore.totalPages;
 
-		// 计算需要加载的页面范围（当前页前后各 2 页，自动裁剪到边界）
-		const start = Math.max(0, currentIndex - 2);
-		const end = Math.min(totalPages - 1, currentIndex + 2);
+		if (totalPages <= 0) {
+			panoramaPagesData = [];
+			return;
+		}
 
-		console.log(`🖼️ 全景模式：加载页面范围 ${start + 1} - ${end + 1}，当前页 ${currentIndex + 1}`);
+		// 计算需要加载的页面范围（当前页前后各 2 页，自动裁剪到边界）
+		const windowSize = 5;
+		const halfWindow = Math.floor(windowSize / 2);
+		const indices: number[] = [];
+
+		for (let offset = -halfWindow; offset <= halfWindow; offset++) {
+			let pageIndex = currentIndex + offset;
+			if (pageIndex < 0) pageIndex = 0;
+			if (pageIndex >= totalPages) pageIndex = totalPages - 1;
+			indices.push(pageIndex);
+		}
+
+		const start = Math.min(...indices);
+		const end = Math.max(...indices);
+
+		console.log(
+			`🖼️ 全景模式：加载页面范围 ${start + 1} - ${end + 1}，当前页 ${
+				currentIndex + 1
+			}，实际索引: ${indices.map((i) => i + 1).join(', ')}`
+		);
 
 		// 构建新的页面数组
 		const newPages: Array<{
@@ -1085,46 +1110,50 @@
 			position: 'left' | 'center' | 'right';
 		}> = [];
 
-		for (let i = start; i <= end; i++) {
+		for (let idx = 0; idx < indices.length; idx++) {
+			const pageIndex = indices[idx];
 			let position: 'left' | 'center' | 'right' = 'center';
-			if (i < currentIndex) position = 'left';
-			else if (i === currentIndex) position = 'center';
+			if (idx < halfWindow) position = 'left';
+			else if (idx === halfWindow) position = 'center';
 			else position = 'right';
 
 			// 复用已加载的数据
-			const existing = panoramaPagesData.find((p) => p.index === i);
+			const existing = panoramaPagesData.find((p) => p.index === pageIndex);
 			newPages.push({
-				index: i,
+				index: pageIndex,
 				data: existing?.data || null,
-				position
+				position,
+				slot: idx
 			});
 		}
 
 		// 立即更新数组（保留已有数据，避免闪烁）
 		panoramaPagesData = newPages;
 
-		// 只加载缺失的图片
-		const toLoad = newPages.filter((p) => !p.data);
+		// 只加载缺失的图片（按页面索引去重）
+		const toLoadIndices = Array.from(
+			new Set(newPages.filter((p) => !p.data).map((p) => p.index))
+		);
 
-		if (toLoad.length === 0) {
+		if (toLoadIndices.length === 0) {
 			// console.log('🎉 全景模式：所有图片已缓存'); // 注释掉这行
 			return;
 		}
 
 		// 批量加载缺失的图片
 		const results = await Promise.all(
-			toLoad.map(async (page) => {
+			toLoadIndices.map(async (pageIndex) => {
 				try {
-					const blob = await preloadManager.getBlob(page.index);
+					const blob = await preloadManager.getBlob(pageIndex);
 					if (blob && blob.size > 0) {
 						const url = URL.createObjectURL(blob);
 						console.log(
-							`✅ 全景模式：页面 ${page.index + 1} 加载成功 (${page.position})，大小: ${blob.size} bytes`
+							`✅ 全景模式：页面 ${pageIndex + 1} 加载成功，大小: ${blob.size} bytes`
 						);
-						return { index: page.index, url };
+						return { index: pageIndex, url };
 					}
 				} catch (error) {
-					console.warn(`加载全景模式第 ${page.index + 1} 页失败:`, error);
+					console.warn(`加载全景模式第 ${pageIndex + 1} 页失败:`, error);
 				}
 				return null;
 			})

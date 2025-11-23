@@ -13,7 +13,12 @@
 		rotationAngle = 0,
 		verticalPages = $bindable([] as Array<{ index: number; data: string | null }>),
 		panoramaPages = $bindable(
-			[] as Array<{ index: number; data: string | null; position: 'left' | 'center' | 'right' }>
+			[] as Array<{
+				index: number;
+				data: string | null;
+				position: 'left' | 'center' | 'right';
+				slot: number;
+			}>
 		)
 	}: {
 		imageData?: string | null;
@@ -27,6 +32,7 @@
 			index: number;
 			data: string | null;
 			position: 'left' | 'center' | 'right';
+			slot: number;
 		}>;
 	} = $props();
 
@@ -97,16 +103,16 @@
 		style={`transform: scale(${zoomLevel});`}
 	>
 		{#if hasPanoramaImages}
-			<!-- 使用相邻图片填充 -->
+			<!-- 使用相邻图片填充：全景模式下去掉间隔和阴影，让图片紧密排列 -->
 			<div 
-				class={`flex h-full min-w-full items-center justify-start gap-4 py-0 overflow-x-auto ${readingDirection === 'right-to-left' ? 'flex-row-reverse' : ''}`}
+				class={`flex h-full min-w-full items-center justify-start gap-0 py-0 overflow-x-auto ${readingDirection === 'right-to-left' ? 'flex-row-reverse' : ''}`}
 			>
-				{#each panoramaPages as page (page.index)}
+				{#each panoramaPages as page (page.slot)}
 					{#if page.data}
 						<img
 							src={page.data}
 							alt={`Page ${page.index + 1}`}
-							class="h-full w-auto flex-shrink-0 rounded-sm object-cover shadow-2xl"
+							class="h-full w-auto flex-shrink-0 object-cover"
 							style={`transform: rotate(${rotationAngle}deg); transition: transform 0.2s;`}
 							use:scrollToCenter={page.position === 'center'}
 						/>

@@ -290,12 +290,20 @@
 				break;
 			case 'ContextMenu':
 				event.preventDefault();
-				// 模拟右键点击
+				// 模拟右键点击：使用当前元素的中心点作为坐标，避免菜单出现在 (0,0)
+				let clientX = 0;
+				let clientY = 0;
+				const target = event.target as HTMLElement | null;
+				if (target && typeof target.getBoundingClientRect === 'function') {
+					const rect = target.getBoundingClientRect();
+					clientX = rect.left + rect.width / 2;
+					clientY = rect.top + rect.height / 2;
+				}
 				const mouseEvent = new MouseEvent('contextmenu', {
 					bubbles: true,
 					cancelable: true,
-					clientX: 0,
-					clientY: 0
+					clientX,
+					clientY
 				});
 				handleItemContextMenu(mouseEvent, item);
 				break;

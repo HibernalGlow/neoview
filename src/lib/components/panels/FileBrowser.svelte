@@ -51,6 +51,7 @@
 	import { readable } from 'svelte/store';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
 	import { taskScheduler } from '$lib/core/tasks/taskScheduler';
+	import { loadPanelViewMode, savePanelViewMode } from '$lib/utils/panelViewMode';
 
 	function itemIsDirectory(item: any): boolean {
 		return item.isDir || item.is_directory;
@@ -194,7 +195,7 @@
 	let isCheckMode = $state(false);
 	let isDeleteMode = $state(false);
 	let isPenetrateMode = $state(false);
-	let viewMode = $state<'list' | 'thumbnails'>('list'); // 列表 or 缩略图视图
+	let viewMode = $state<'list' | 'thumbnails'>(loadPanelViewMode('file-browser', 'list') as 'list' | 'thumbnails'); // 列表 or 缩略图视图
 	let selectedItems = $state<Set<string>>(new Set());
 	let showSearchBar = $state(false);
 	let showFolderTree = $state(false);
@@ -406,11 +407,9 @@
 
 	function toggleViewMode() {
 		// 循环切换：list -> grid -> list
-		if (viewMode === 'list') {
-			viewMode = 'thumbnails'; // 使用 'thumbnails' 作为网格视图的标识（兼容现有代码）
-		} else {
-			viewMode = 'list';
-		}
+		const next = viewMode === 'list' ? 'thumbnails' : 'list';
+		viewMode = next; // 使用 'thumbnails' 作为网格视图的标识（兼容现有代码）
+		savePanelViewMode('file-browser', next);
 	}
 
 	async function toggleFolderTree() {

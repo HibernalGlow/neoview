@@ -482,7 +482,7 @@
 			{#if emmMetadata?.translatedTitle && emmMetadata.translatedTitle !== item.name}
 				<div class="mt-1">
 					<span
-						class="break-words rounded border border-blue-100 bg-blue-50 px-1.5 py-0.5 text-xs text-blue-600"
+						class="break-words rounded border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-xs text-primary"
 						title={emmMetadata.translatedTitle}
 					>
 						{emmMetadata.translatedTitle}

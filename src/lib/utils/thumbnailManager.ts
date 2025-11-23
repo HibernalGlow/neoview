@@ -13,6 +13,7 @@ import * as FileSystemAPI from '$lib/api/filesystem';
 import { LRUCache } from './lruCache';
 import { PredictiveLoader } from './predictiveLoader';
 import { IncrementalBatchLoader } from './incrementalBatchLoader';
+import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
 
 export interface ThumbnailConfig {
   maxConcurrentLocal: number;
@@ -108,6 +109,7 @@ class ThumbnailManager {
         size: this.config.thumbnailSize,
       });
       console.log('✅ 缩略图管理器初始化成功');
+      await emmMetadataStore.initialize();
     } catch (error) {
       console.error('❌ 缩略图管理器初始化失败:', error);
     }

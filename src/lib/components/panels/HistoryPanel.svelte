@@ -34,9 +34,10 @@
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 	import { setActivePanelTab } from '$lib/stores';
 	import { openFileSystemItem } from '$lib/utils/navigationUtils';
+	import { loadPanelViewMode, savePanelViewMode } from '$lib/utils/panelViewMode';
 
 	let history = $state<HistoryEntry[]>([]);
-	let viewMode = $state<'list' | 'grid'>('list');
+	let viewMode = $state<'list' | 'grid'>(loadPanelViewMode('history', 'list') as 'list' | 'grid');
 	let thumbnails = $state<Map<string, string>>(new Map());
 	const thumbnailJobs = new Map<string, string>();
 	let contextMenu = $state<{ x: number; y: number; entry: HistoryEntry | null }>({
@@ -128,7 +129,9 @@
 
 	// 切换视图模式
 	function toggleViewMode() {
-		viewMode = viewMode === 'list' ? 'grid' : 'list';
+		const next = viewMode === 'list' ? 'grid' : 'list';
+		viewMode = next;
+		savePanelViewMode('history', next);
 	}
 
 	// 将历史记录转换为 FsItem

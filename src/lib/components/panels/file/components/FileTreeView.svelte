@@ -110,6 +110,22 @@
 	let normalizedCurrentPath = $derived(currentPath ? normalizePath(currentPath) : '');
 	let lastScrolledPath = $state('');
 
+	function findActiveTreePath(node: TreeNode, currentPath: string, best: string): string {
+		node.children.forEach((child) => {
+			const candidate = normalizePath(child.item?.path ?? child.path);
+			if (!candidate) {
+				return;
+			}
+			if (currentPath === candidate || currentPath.startsWith(candidate + '/')) {
+				if (candidate.length > best.length) {
+					best = candidate;
+				}
+			}
+			best = findActiveTreePath(child, currentPath, best);
+		});
+		return best;
+	}
+
 	function ensureCurrentPathExpanded() {
 		if (!normalizedCurrentPath) return;
 		const parts = normalizedCurrentPath.split('/');
@@ -164,20 +180,23 @@
 	}
 
 	let flattenedTree = $derived(renderNode(treeRoot));
+	let activeTreePath = $derived(
+		normalizedCurrentPath ? findActiveTreePath(treeRoot, normalizedCurrentPath, '') : ''
+	);
 
 	$effect(() => {
-		if (!normalizedCurrentPath) return;
-		if (normalizedCurrentPath === lastScrolledPath) return;
+		if (!activeTreePath) return;
+		if (activeTreePath === lastScrolledPath) return;
 		ensureCurrentPathExpanded();
 		queueMicrotask(() => {
-			if (!normalizedCurrentPath) return;
+			if (!activeTreePath) return;
 			const el = document.querySelector<HTMLDivElement>(
-				`.file-tree-view [data-path="${normalizedCurrentPath}"]`
+				`.file-tree-view [data-path="${activeTreePath}"]`
 			);
 			if (el) {
 				el.scrollIntoView({ block: 'nearest' });
 			}
-			lastScrolledPath = normalizedCurrentPath;
+			lastScrolledPath = activeTreePath;
 		});
 	});
 
@@ -232,7 +251,7 @@
 		{@const hasChildren = node.children.size > 0}
 		{@const Icon = item ? getFileIcon(item) : Folder}
 		{@const nodePath = normalizePath(item?.path ?? node.path)}
-		{@const isActive = normalizedCurrentPath && nodePath === normalizedCurrentPath}
+		{@const isActive = activeTreePath && nodePath === activeTreePath}
 
 		<div
 			class="tree-node flex cursor-pointer items-center gap-1 rounded px-2 py-1 {isActive ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/70'}"

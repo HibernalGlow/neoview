@@ -34,10 +34,11 @@
 	import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 	import { setActivePanelTab } from '$lib/stores';
 	import { openFileSystemItem } from '$lib/utils/navigationUtils';
+	import { loadPanelViewMode, savePanelViewMode } from '$lib/utils/panelViewMode';
 
 	let bookmarks: any[] = $state([]);
 	let searchQuery = $state('');
-	let viewMode = $state<'list' | 'grid'>('list');
+	let viewMode = $state<'list' | 'grid'>(loadPanelViewMode('bookmark', 'list') as 'list' | 'grid');
 	let thumbnails = $state<Map<string, string>>(new Map());
 	const thumbnailJobs = new Map<string, string>();
 	let contextMenu = $state<{ x: number; y: number; bookmark: any | null }>({
@@ -135,7 +136,9 @@
 
 	// 切换视图模式
 	function toggleViewMode() {
-		viewMode = viewMode === 'list' ? 'grid' : 'list';
+		const next = viewMode === 'list' ? 'grid' : 'list';
+		viewMode = next;
+		savePanelViewMode('bookmark', next);
 	}
 
 	// 显示右键菜单

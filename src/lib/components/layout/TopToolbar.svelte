@@ -748,61 +748,74 @@ function toggleComparisonMode() {
 				<!-- 分隔线 -->
 				<Separator.Root orientation="vertical" class="h-6 mx-1" />
 
-				<!-- 视图模式切换 - 下拉菜单 -->
-				<DropdownMenu.Root>
-					<DropdownMenu.Trigger>
-						<Button variant="outline" size="sm" class="h-8 px-3">
-							<Eye class="h-4 w-4 mr-2" />
-							{#if $viewerState.viewMode === 'single'}单页{:else if $viewerState.viewMode === 'double'}双页{:else if $viewerState.viewMode === 'vertical'}纵向{:else}全景{/if}
-						</Button>
-					</DropdownMenu.Trigger>
-					<DropdownMenu.Content
-						class="z-60 w-48"
-						onmouseenter={handleMouseEnter}
-						onmouseleave={handleMouseLeave}
-					>
-						<DropdownMenu.Item
-							onclick={() => {
-								setViewMode('single');
-								handleMouseLeave();
-							}}
-							class={$viewerState.viewMode === 'single' ? 'bg-accent' : ''}
-						>
-							<RectangleVertical class="h-4 w-4 mr-2" />
-							<span>单页模式</span>
-						</DropdownMenu.Item>
-						<DropdownMenu.Item
-							onclick={() => {
-								setViewMode('double');
-								handleMouseLeave();
-							}}
-							class={$viewerState.viewMode === 'double' ? 'bg-accent' : ''}
-						>
-							<Columns2 class="h-4 w-4 mr-2" />
-							<span>双页模式</span>
-						</DropdownMenu.Item>
-						<DropdownMenu.Item
-							onclick={() => {
-								setViewMode('panorama');
-								handleMouseLeave();
-							}}
-							class={$viewerState.viewMode === 'panorama' ? 'bg-accent' : ''}
-						>
-							<PanelsTopLeft class="h-4 w-4 mr-2" />
-							<span>全景模式</span>
-						</DropdownMenu.Item>
-						<DropdownMenu.Item
-							onclick={() => {
-								setViewMode('vertical');
-								handleMouseLeave();
-							}}
-							class={$viewerState.viewMode === 'vertical' ? 'bg-accent' : ''}
-						>
-							<ArrowDownUp class="h-4 w-4 mr-2" />
-							<span>纵向滚动</span>
-						</DropdownMenu.Item>
-					</DropdownMenu.Content>
-				</DropdownMenu.Root>
+				<!-- 视图模式切换 - 图标列 -->
+				<div class="flex items-center">
+					<div class="inline-flex items-center rounded-full bg-muted/60 p-0.5 shadow-inner">
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<Button
+									variant={$viewerState.viewMode === 'single' ? 'default' : 'ghost'}
+									size="icon"
+									class="h-8 w-8 rounded-full"
+									onclick={() => setViewMode('single')}
+								>
+									<RectangleVertical class="h-4 w-4" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>单页模式</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
+
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<Button
+									variant={$viewerState.viewMode === 'double' ? 'default' : 'ghost'}
+									size="icon"
+									class="h-8 w-8 rounded-full"
+									onclick={() => setViewMode('double')}
+								>
+									<Columns2 class="h-4 w-4" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>双页模式</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
+
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<Button
+									variant={$viewerState.viewMode === 'panorama' ? 'default' : 'ghost'}
+									size="icon"
+									class="h-8 w-8 rounded-full"
+									onclick={() => setViewMode('panorama')}
+								>
+									<PanelsTopLeft class="h-4 w-4" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>全景模式</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
+
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<Button
+									variant={$viewerState.viewMode === 'vertical' ? 'default' : 'ghost'}
+									size="icon"
+									class="h-8 w-8 rounded-full"
+									onclick={() => setViewMode('vertical')}
+								>
+									<ArrowDownUp class="h-4 w-4" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>纵向滚动</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
+					</div>
+				</div>
 
 				<!-- 阅读方向切换按钮 -->
 				<Tooltip.Root>

@@ -207,6 +207,7 @@
 	let isTreeResizing = false;
 	let treeResizeStartX = 0;
 	let treeResizeStartWidth = 0;
+	let treeCurrentPath = $state('');
 	let lastTreeSyncPath = '';
 
 	// 缩略图入队管理
@@ -283,6 +284,16 @@
 			sortOrder = state.sortOrder;
 			scrollToSelectedToken = state.scrollToSelectedToken;
 			scrollTargetIndex = state.scrollTargetIndex;
+
+			let nextTreePath = state.currentPath;
+			const idx = state.selectedIndex;
+			if (idx >= 0 && idx < state.items.length) {
+				const sel = state.items[idx];
+				if (sel.isDir) {
+					nextTreePath = sel.path;
+				}
+			}
+			treeCurrentPath = nextTreePath;
 
 			if (showFolderTree && state.currentPath) {
 				void ensureDriveRootLoadedForPath(state.currentPath);
@@ -2132,7 +2143,7 @@
 			>
 				<FileTreeView
 					items={treeItems}
-					{currentPath}
+					currentPath={treeCurrentPath}
 					{thumbnails}
 					{selectedIndex}
 					{isCheckMode}

@@ -670,6 +670,27 @@
 			lastRequestedPageIndex = -1;
 			lastLoadedPageIndex = -1;
 			lastLoadedHash = null;
+			if (panoramaPagesData.length > 0) {
+				for (const page of panoramaPagesData) {
+					if (page.data && page.data.startsWith('blob:')) {
+						try {
+							URL.revokeObjectURL(page.data);
+						} catch (e) {}
+					}
+				}
+			}
+			if (verticalPagesData.length > 0) {
+				for (const page of verticalPagesData) {
+					if (page.data && page.data.startsWith('blob:')) {
+						try {
+							URL.revokeObjectURL(page.data);
+						} catch (e) {}
+					}
+				}
+			}
+			panoramaPagesData = [];
+			verticalPagesData = [];
+			lastPanoramaIndex = -1;
 
 			lastBookPath = currentBookPath ?? null;
 

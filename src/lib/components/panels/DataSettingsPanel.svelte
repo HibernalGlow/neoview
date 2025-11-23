@@ -1,15 +1,33 @@
 <script lang="ts">
+	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import { Database, Download, Upload, ListFilter, RefreshCcw } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
+	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
+	import { Input } from '$lib/components/ui/input';
+	import {
+		DropdownMenu,
+		DropdownMenuCheckboxItem,
+		DropdownMenuContent,
+		DropdownMenuTrigger
+	} from '$lib/components/ui/dropdown-menu';
+	import * as Table from '$lib/components/ui/table';
+	import { FlexRender, createSvelteTable } from '$lib/components/ui/data-table';
+	import type {
+		ColumnDef,
+		ColumnFiltersState,
+		PaginationState,
+		RowSelectionState,
+		SortingState,
+		VisibilityState
+	} from '@tanstack/table-core';
+	import {
+		getCoreRowModel,
+		getFilteredRowModel,
+		getPaginationRowModel,
+		getSortedRowModel
+	} from '@tanstack/table-core';
 	import { settingsManager, type FullExportPayload } from '$lib/stores/settingsManager.svelte';
-	import Table from '$lib/components/ui/table/table.svelte';
-	import TableHeader from '$lib/components/ui/table/table-header.svelte';
-	import TableBody from '$lib/components/ui/table/table-body.svelte';
-	import TableRow from '$lib/components/ui/table/table-row.svelte';
-	import TableHead from '$lib/components/ui/table/table-head.svelte';
-	import TableCell from '$lib/components/ui/table/table-cell.svelte';
-	import TableCaption from '$lib/components/ui/table/table-caption.svelte';
 
 	type ModuleId =
 		| 'nativeSettings'
@@ -147,6 +165,14 @@
 	let isImporting = $state(false);
 	let lastMessage = $state('');
 	let importFile: File | null = $state(null);
+	let fileInputEl: HTMLInputElement | null = $state(null);
+
+	// DataTable state
+	let pagination = $state<PaginationState>({ pageIndex: 0, pageSize: 10 });
+	let sorting = $state<SortingState>([]);
+	let columnFilters = $state<ColumnFiltersState>([]);
+	let rowSelection = $state<RowSelectionState>({});
+	let columnVisibility = $state<VisibilityState>({});
 
 	function initSelections() {
 		const exp: Record<ModuleId, boolean> = {} as Record<ModuleId, boolean>;
@@ -160,6 +186,123 @@
 	}
 
 	initSelections();
+
+	const columns: ColumnDef<DataModuleRow & { isNative?: boolean }>[] = [
+		{
+			id: 'selectExport',
+			header: '导出',
+			enableHiding: false
+		},
+		{
+			id: 'selectImport',
+			header: '导入',
+			enableHiding: false
+		},
+		{
+			accessorKey: 'name',
+			header: '模块',
+			cell: ({ row }) => row.getValue('name') as string
+		},
+		{
+			accessorKey: 'panel',
+			header: '所属面板',
+			cell: ({ row }) => row.getValue('panel') as string
+		},
+		{
+			accessorKey: 'storage',
+			header: '存储位置',
+			cell: ({ row }) => row.getValue('storage') as string
+		},
+		{
+			accessorKey: 'description',
+			header: '说明',
+			cell: ({ row }) => row.getValue('description') as string,
+			// 组合过滤：在说明列上注册过滤函数，用于“模块/面板/说明”联查
+			filterFn: (row, _columnId, value) => {
+				const v = (value as string | undefined)?.toLowerCase() ?? '';
+				if (!v) return true;
+				const data = row.original;
+				const target = `${data.name} ${data.panel} ${data.description}`.toLowerCase();
+				return target.includes(v);
+			}
+		}
+	];
+
+	const table = createSvelteTable({
+		get data() {
+			const allRows: (DataModuleRow & { isNative?: boolean })[] = [
+				{
+					id: 'nativeSettings',
+					name: '原生设置',
+					panel: '设置窗口',
+					storage: 'localStorage: neoview-settings',
+					description: '核心 NeoViewSettings（系统、查看器、性能等）。',
+					defaultExport: true,
+					defaultImport: true,
+					isNative: true
+				},
+				...rows
+			];
+			return allRows;
+		},
+		columns,
+		state: {
+			get pagination() {
+				return pagination;
+			},
+			get sorting() {
+				return sorting;
+			},
+			get columnVisibility() {
+				return columnVisibility;
+			},
+			get rowSelection() {
+				return rowSelection;
+			},
+			get columnFilters() {
+				return columnFilters;
+			}
+		},
+		getCoreRowModel: getCoreRowModel(),
+		getPaginationRowModel: getPaginationRowModel(),
+		getSortedRowModel: getSortedRowModel(),
+		getFilteredRowModel: getFilteredRowModel(),
+		onPaginationChange: (updater) => {
+			if (typeof updater === 'function') {
+				pagination = updater(pagination);
+			} else {
+				pagination = updater;
+			}
+		},
+		onSortingChange: (updater) => {
+			if (typeof updater === 'function') {
+				sorting = updater(sorting);
+			} else {
+				sorting = updater;
+			}
+		},
+		onColumnFiltersChange: (updater) => {
+			if (typeof updater === 'function') {
+				columnFilters = updater(columnFilters);
+			} else {
+				columnFilters = updater;
+			}
+		},
+		onColumnVisibilityChange: (updater) => {
+			if (typeof updater === 'function') {
+				columnVisibility = updater(columnVisibility);
+			} else {
+				columnVisibility = updater;
+			}
+		},
+		onRowSelectionChange: (updater) => {
+			if (typeof updater === 'function') {
+				rowSelection = updater(rowSelection);
+			} else {
+				rowSelection = updater;
+			}
+		}
+	});
 
 	function anyExportSelected() {
 		return Object.values(exportSelection).some(Boolean) || includeNativeSettings;
@@ -317,76 +460,154 @@
 	</div>
 
 	<div class="space-y-4">
-		<div class="flex items-center justify-between gap-3">
+		<div class="flex items-center gap-3 py-1">
 			<div class="flex items-center gap-2 text-sm text-muted-foreground">
 				<ListFilter class="h-4 w-4" />
 				<span>勾选需要导出 / 导入的模块。历史记录和搜索历史默认不勾选。</span>
 			</div>
-			<Button variant="ghost" size="sm" class="gap-1" onclick={resetSelections}>
+			<Button variant="ghost" size="sm" class="ml-auto gap-1" onclick={resetSelections}>
 				<RefreshCcw class="h-3 w-3" />
 				重置选择
 			</Button>
 		</div>
 
-		<Table class="mt-2">
-			<TableHeader>
-				<TableRow>
-					<TableHead class="w-[70px] text-xs">导出</TableHead>
-					<TableHead class="w-[70px] text-xs">导入</TableHead>
-					<TableHead class="w-[140px] text-xs">模块</TableHead>
-					<TableHead class="w-[160px] text-xs">所属面板</TableHead>
-					<TableHead class="w-[220px] text-xs">存储位置</TableHead>
-					<TableHead class="text-xs">说明</TableHead>
-				</TableRow>
-			</TableHeader>
-			<TableBody>
-				<TableRow>
-					<TableCell>
-						<input
-							type="checkbox"
-							class="rounded"
-							bind:checked={includeNativeSettings}
-						/>
-					</TableCell>
-					<TableCell>
-						<input
-							type="checkbox"
-							class="rounded"
-							bind:checked={importNativeSettings}
-						/>
-					</TableCell>
-					<TableCell class="text-xs font-medium">原生设置</TableCell>
-					<TableCell class="text-xs text-muted-foreground">设置窗口</TableCell>
-					<TableCell class="text-xs text-muted-foreground">localStorage: neoview-settings</TableCell>
-					<TableCell class="text-xs text-muted-foreground">核心 NeoViewSettings（系统、查看器、性能等）。</TableCell>
-				</TableRow>
-				{#each rows as row}
-					<TableRow>
-						<TableCell>
-							<input
-								type="checkbox"
-								class="rounded"
-								bind:checked={exportSelection[row.id]}
-							/>
-						</TableCell>
-						<TableCell>
-							<input
-								type="checkbox"
-								class="rounded"
-								bind:checked={importSelection[row.id]}
-							/>
-						</TableCell>
-						<TableCell class="text-xs font-medium">{row.name}</TableCell>
-						<TableCell class="text-xs text-muted-foreground">{row.panel}</TableCell>
-						<TableCell class="text-xs text-muted-foreground">{row.storage}</TableCell>
-						<TableCell class="text-xs text-muted-foreground">{row.description}</TableCell>
-					</TableRow>
-				{/each}
-			</TableBody>
-			<TableCaption class="text-[11px] text-muted-foreground">
-				部分模块（如 EMM 配置、自定义主题）在导入后可能需要重新打开应用或设置窗口才会完全生效。
-			</TableCaption>
-		</Table>
+		<div class="flex items-center gap-3 py-2">
+			<Input
+				placeholder="按模块 / 面板 / 说明过滤..."
+				value={(table.getColumn('description')?.getFilterValue() as string) ?? ''}
+				oninput={(e) => {
+					const v = (e.currentTarget as HTMLInputElement).value;
+					table.getColumn('description')?.setFilterValue(v);
+				}}
+				class="max-w-xs"
+			/>
+			<DropdownMenu>
+				<DropdownMenuTrigger>
+					{#snippet child({ props })}
+						<Button {...props} variant="outline" class="ml-auto gap-1">
+							列可见性
+							<ChevronDownIcon class="ml-1 h-4 w-4" />
+						</Button>
+					{/snippet}
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="end">
+					{#each table.getAllColumns().filter((col) => col.getCanHide()) as column (column.id)}
+						<DropdownMenuCheckboxItem
+							class="capitalize"
+							checked={column.getIsVisible()}
+							onCheckedChange={(v) => column.toggleVisibility(!!v)}
+						>
+							{column.id}
+						</DropdownMenuCheckboxItem>
+					{/each}
+				</DropdownMenuContent>
+			</DropdownMenu>
+		</div>
+
+		<div class="mt-2 rounded-md border">
+			<Table.Root>
+				<Table.Header>
+					{#each table.getHeaderGroups() as headerGroup (headerGroup.id)}
+						<Table.Row>
+							{#each headerGroup.headers as header (header.id)}
+								<Table.Head class="text-xs [&:has([role=checkbox])]:ps-3">
+									{#if !header.isPlaceholder}
+										<FlexRender
+											content={header.column.columnDef.header}
+											context={header.getContext()}
+										/>
+									{/if}
+								</Table.Head>
+							{/each}
+						</Table.Row>
+					{/each}
+				</Table.Header>
+				<Table.Body>
+					{#each table.getRowModel().rows as row (row.id)}
+						<Table.Row>
+							{#each row.getVisibleCells() as cell (cell.id)}
+								<Table.Cell class="text-xs [&:has([role=checkbox])]:ps-3">
+									{#if cell.column.id === 'selectExport'}
+										<Checkbox
+											role="checkbox"
+											checked={row.original.id === 'nativeSettings'
+												? includeNativeSettings
+												: exportSelection[row.original.id as ModuleId]}
+											on:click={() => {
+												if (row.original.id === 'nativeSettings') {
+													includeNativeSettings = !includeNativeSettings;
+												} else {
+													const id = row.original.id as ModuleId;
+													exportSelection = {
+														...exportSelection,
+														[id]: !exportSelection[id]
+													};
+												}
+											}}
+											aria-label={`导出 ${row.original.name}`}
+										/>
+									{:else if cell.column.id === 'selectImport'}
+										<Checkbox
+											role="checkbox"
+											checked={row.original.id === 'nativeSettings'
+												? importNativeSettings
+												: importSelection[row.original.id as ModuleId]}
+											on:click={() => {
+												if (row.original.id === 'nativeSettings') {
+													importNativeSettings = !importNativeSettings;
+												} else {
+													const id = row.original.id as ModuleId;
+													importSelection = {
+														...importSelection,
+														[id]: !importSelection[id]
+													};
+												}
+											}}
+											aria-label={`导入 ${row.original.name}`}
+										/>
+									{:else}
+										<FlexRender
+											content={cell.column.columnDef.cell}
+											context={cell.getContext()}
+										/>
+									{/if}
+								</Table.Cell>
+							{/each}
+						</Table.Row>
+					{:else}
+						<Table.Row>
+							<Table.Cell colspan={table.getAllColumns().length} class="h-20 text-center text-xs">
+								暂无结果。
+							</Table.Cell>
+						</Table.Row>
+					{/each}
+				</Table.Body>
+			</Table.Root>
+		</div>
+
+		<div class="flex items-center justify-end space-x-2 pt-3 text-xs text-muted-foreground">
+			<div class="flex-1">
+				{Object.values(exportSelection).filter(Boolean).length + (includeNativeSettings ? 1 : 0)} / {rows.length + 1} 模块勾选导出
+			</div>
+			<div class="space-x-2">
+				<Button
+					variant="outline"
+					size="sm"
+					onclick={() => table.previousPage()}
+					disabled={!table.getCanPreviousPage()}
+				>
+					上一页
+				</Button>
+				<Button
+					variant="outline"
+					size="sm"
+					onclick={() => table.nextPage()}
+					disabled={!table.getCanNextPage()}
+				>
+					下一页
+				</Button>
+			</div>
+		</div>
 	</div>
 
 	<div class="grid gap-4 md:grid-cols-2">
@@ -412,10 +633,25 @@
 				<strong>合并</strong>（仅追加/覆盖已有记录）或 <strong>覆盖</strong>（先清空再导入）。
 			</p>
 			<div class="flex flex-col gap-2 text-xs text-muted-foreground">
+				<div class="flex items-center gap-3">
+					<Button
+						variant="outline"
+						size="sm"
+						class="gap-1"
+						onclick={() => fileInputEl?.click()}
+					>
+						选择文件
+					</Button>
+					<span class="truncate text-[11px] text-muted-foreground">
+						{importFile ? importFile.name : '未选择文件'}
+					</span>
+				</div>
 				<input
+					bind:this={fileInputEl}
 					type="file"
+					class="hidden"
 					accept="application/json"
-					on:change={(e) => (importFile = (e.currentTarget as HTMLInputElement).files?.[0] ?? null)}
+					onchange={(e) => (importFile = (e.currentTarget as HTMLInputElement).files?.[0] ?? null)}
 				/>
 				<div class="flex items-center gap-4">
 					<label class="flex items-center gap-1">

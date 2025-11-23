@@ -6,7 +6,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
-	import { keyBindingsStore } from '$lib/stores/keybindings.svelte.ts';
+	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { RotateCcw, Plus, X, Keyboard, Mouse, Hand } from '@lucide/svelte';
 
 	let searchQuery = $state('');

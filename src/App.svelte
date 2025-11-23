@@ -217,7 +217,8 @@ function handleGlobalKeydown(e: KeyboardEvent) {
 
 	const combo = formatKeyCombo(e);
 	console.log('按键按下:', combo); // 调试信息
-	const action = keyBindingsStore.findActionByKey(combo);
+	// 使用统一的按键组合查找逻辑（与绑定面板、ImageViewer 保持一致）
+	const action = keyBindingsStore.findActionByKeyCombo(combo);
 	console.log('找到的操作:', action); // 调试信息
 	if (action) {
 		e.preventDefault();

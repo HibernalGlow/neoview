@@ -582,7 +582,7 @@
 
 			<!-- 收藏标记（星标） -->
 			{#if isBookmarked}
-				<div class="absolute left-2 top-2 rounded-full bg-yellow-500 p-1">
+				<div class="absolute left-2 top-2 rounded-full bg-primary p-1">
 					<Star class="h-4 w-4 fill-white text-white" />
 				</div>
 			{/if}

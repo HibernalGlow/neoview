@@ -99,15 +99,15 @@
 		{#if hasPanoramaImages}
 			<!-- 使用相邻图片填充 -->
 			<div 
-				class={`flex h-full min-w-full items-center justify-start gap-4 py-0 overflow-x-auto ${readingDirection === 'right-to-left' ? 'flex-row-reverse' : ''}`}
+				class={`flex h-full min-w-full items-center justify-start py-0 overflow-x-auto ${readingDirection === 'right-to-left' ? 'flex-row-reverse' : ''}`}
 			>
 				{#each panoramaPages as page (page.index)}
 					{#if page.data}
 						<img
 							src={page.data}
 							alt={`Page ${page.index + 1}`}
-							class="h-full w-auto flex-shrink-0 rounded-sm object-cover shadow-2xl"
-							style={`transform: rotate(${rotationAngle}deg); transition: transform 0.2s;`}
+							class="h-full w-auto shrink-0 object-cover"
+							style={`transform: rotate(${rotationAngle}deg); transition: transform 0.2s; margin: 0 -1px;`}
 							use:scrollToCenter={page.position === 'center'}
 						/>
 					{/if}

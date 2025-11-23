@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { Eye, Mouse, Settings } from '@lucide/svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
+	import { Label } from '$lib/components/ui/label';
+	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select';
+	import { Switch } from '$lib/components/ui/switch';
+	import { Input } from '$lib/components/ui/input';
+	import { Slider } from '$lib/components/ui/slider';
 
 	let currentSettings = $state(settingsManager.getSettings());
 
@@ -44,29 +49,41 @@
 		<!-- 缩放模式 -->
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">默认缩放模式</h4>
-			<select
-				class="w-full max-w-xs rounded-md border p-2"
+			<NativeSelect
+				class="w-full max-w-xs"
 				bind:value={currentSettings.view.defaultZoomMode}
 			>
-				<option value="fit">适应窗口</option>
-				<option value="fitWidth">适应宽度</option>
-				<option value="fitHeight">适应高度</option>
-				<option value="original">原始大小</option>
-			</select>
+				<NativeSelectOption value="fit">适应窗口</NativeSelectOption>
+				<NativeSelectOption value="fitWidth">适应宽度</NativeSelectOption>
+				<NativeSelectOption value="fitHeight">适应高度</NativeSelectOption>
+				<NativeSelectOption value="original">原始大小</NativeSelectOption>
+			</NativeSelect>
 		</div>
 
 		<!-- 显示选项 -->
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">显示选项</h4>
 			<div class="space-y-2">
-				<label class="flex items-center gap-2">
-					<input type="checkbox" class="rounded" bind:checked={currentSettings.view.showGrid} />
-					<span class="text-sm">显示网格</span>
-				</label>
-				<label class="flex items-center gap-2">
-					<input type="checkbox" class="rounded" bind:checked={currentSettings.view.showInfoBar} />
-					<span class="text-sm">显示信息栏</span>
-				</label>
+				<div class="flex items-center justify-between gap-2">
+					<Label class="text-sm">显示网格</Label>
+					<Switch
+						checked={currentSettings.view.showGrid}
+						onCheckedChange={(checked) =>
+							settingsManager.updateNestedSettings('view', {
+								showGrid: checked
+							})}
+					/>
+				</div>
+				<div class="flex items-center justify-between gap-2">
+					<Label class="text-sm">显示信息栏</Label>
+					<Switch
+						checked={currentSettings.view.showInfoBar}
+						onCheckedChange={(checked) =>
+							settingsManager.updateNestedSettings('view', {
+								showInfoBar: checked
+							})}
+					/>
+				</div>
 			</div>
 		</div>
 
@@ -75,15 +92,18 @@
 			<h4 class="text-sm font-semibold">阅读设置</h4>
 			<div class="space-y-2">
 				<div class="space-y-2">
-					<span class="text-sm">阅读方向</span>
-					<select
-						class="w-full max-w-xs rounded-md border p-2"
+					<Label class="text-sm">阅读方向</Label>
+					<NativeSelect
+						class="w-full max-w-xs"
 						bind:value={currentSettings.book.readingDirection}
-						onchange={() => settingsManager.updateNestedSettings('book', { readingDirection: currentSettings.book.readingDirection })}
+						onchange={() =>
+							settingsManager.updateNestedSettings('book', {
+								readingDirection: currentSettings.book.readingDirection
+							})}
 					>
-						<option value="left-to-right">左到右（西式）</option>
-						<option value="right-to-left">右到左（日式）</option>
-					</select>
+						<NativeSelectOption value="left-to-right">左到右（西式）</NativeSelectOption>
+						<NativeSelectOption value="right-to-left">右到左（日式）</NativeSelectOption>
+					</NativeSelect>
 					<p class="text-muted-foreground text-xs">
 						选择阅读方向。右到左模式适用于日式漫画，会反向排列双页模式中的图片。
 					</p>
@@ -94,11 +114,29 @@
 		<!-- 背景颜色 -->
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">背景颜色</h4>
-			<input
-				type="color"
-				class="h-10 w-20 rounded-md border"
-				bind:value={currentSettings.view.backgroundColor}
-			/>
+			<div class="flex items-center gap-2">
+				<Input
+					type="color"
+					class="h-10 w-20"
+					bind:value={currentSettings.view.backgroundColor}
+					onchange={() =>
+						settingsManager.updateNestedSettings('view', {
+							backgroundColor: currentSettings.view.backgroundColor
+						})}
+					disabled={currentSettings.view.backgroundMode === 'auto'}
+				/>
+				<NativeSelect
+					class="w-full max-w-xs"
+					bind:value={currentSettings.view.backgroundMode}
+					onchange={() =>
+						settingsManager.updateNestedSettings('view', {
+							backgroundMode: currentSettings.view.backgroundMode
+						})}
+				>
+					<NativeSelectOption value="solid">固定颜色</NativeSelectOption>
+					<NativeSelectOption value="auto">自动匹配图片</NativeSelectOption>
+				</NativeSelect>
+			</div>
 		</div>
 
 		<!-- 鼠标设置 -->
@@ -112,11 +150,7 @@
 				<!-- 自动隐藏光标 -->
 				<div class="space-y-2">
 					<label class="flex items-center gap-2">
-						<input
-							type="checkbox"
-							class="rounded"
-							bind:checked={currentSettings.view.mouseCursor.autoHide}
-						/>
+						<Switch bind:checked={currentSettings.view.mouseCursor.autoHide} />
 						<span class="text-sm font-medium">自动隐藏光标</span>
 					</label>
 					<p class="text-muted-foreground text-xs">
@@ -130,24 +164,24 @@
 						<div class="flex items-center justify-between">
 							<span class="text-sm">隐藏时间（秒）</span>
 							<div class="flex items-center gap-2">
-								<input
+								<Input
 									type="number"
 									min="0.5"
 									max="5.0"
 									step="0.1"
 									bind:value={currentSettings.view.mouseCursor.hideDelay}
-									class="w-16 rounded-md border px-2 py-1 text-sm"
+									class="w-20"
 								/>
 								<span class="text-muted-foreground text-xs">秒</span>
 							</div>
 						</div>
-						<input
-							type="range"
-							min="0.5"
-							max="5.0"
-							step="0.1"
-							bind:value={currentSettings.view.mouseCursor.hideDelay}
+						<Slider
+							min={0.5}
+							max={5.0}
+							step={0.1}
+							bind:value={currentSettings.view.mouseCursor.hideDelay as any}
 							class="w-full max-w-xs"
+							type="single"
 						/>
 					</div>
 
@@ -156,35 +190,31 @@
 						<div class="flex items-center justify-between">
 							<span class="text-sm">重新显示的移动距离</span>
 							<div class="flex items-center gap-2">
-								<input
+								<Input
 									type="number"
 									min="5"
 									max="100"
 									step="1"
 									bind:value={currentSettings.view.mouseCursor.showMovementThreshold}
-									class="w-16 rounded-md border px-2 py-1 text-sm"
+									class="w-20"
 								/>
 								<span class="text-muted-foreground text-xs">像素</span>
 							</div>
 						</div>
-						<input
-							type="range"
-							min="5"
-							max="100"
-							step="1"
-							bind:value={currentSettings.view.mouseCursor.showMovementThreshold}
+						<Slider
+							min={5}
+							max={100}
+							step={1}
+							bind:value={currentSettings.view.mouseCursor.showMovementThreshold as any}
 							class="w-full max-w-xs"
+							type="single"
 						/>
 					</div>
 
 					<!-- 操作鼠标按钮以重新显示 -->
 					<div class="space-y-2">
 						<label class="flex items-center gap-2">
-							<input
-								type="checkbox"
-								class="rounded"
-								bind:checked={currentSettings.view.mouseCursor.showOnButtonClick}
-							/>
+							<Switch bind:checked={currentSettings.view.mouseCursor.showOnButtonClick} />
 							<span class="text-sm">操作鼠标按钮以重新显示</span>
 						</label>
 					</div>

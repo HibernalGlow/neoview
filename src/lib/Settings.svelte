@@ -110,7 +110,19 @@
 			{:else if activeTab === 'view'}
 				<ViewSettingsPanel />
 			{:else if activeTab === 'viewer' || activeTab === 'image'}
-				<ViewerSettingsPanel />
+				{#if activeTab === 'image'}
+					<div class="space-y-4 p-6">
+						<div class="rounded-lg border bg-card text-card-foreground p-4">
+							<h3 class="text-base font-semibold">图片设置（预留）</h3>
+							<p class="text-sm text-muted-foreground mt-1">
+								这里将放置全局图片相关设置，例如格式支持、默认超分行为等。
+							</p>
+						</div>
+						<ViewerSettingsPanel />
+					</div>
+				{:else}
+					<ViewerSettingsPanel />
+				{/if}
 			{:else if activeTab === 'bindings'}
 				<UnifiedBindingPanel />
 			{:else if activeTab === 'panels'}

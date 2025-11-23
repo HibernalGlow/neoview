@@ -101,6 +101,7 @@ export function createDefaultAppState(): AppStateSnapshot {
 				showGrid: false,
 				showInfoBar: true,
 				backgroundColor: '#000000',
+				backgroundMode: 'solid',
 				mouseCursor: {
 					autoHide: true,
 					hideDelay: 1.0,

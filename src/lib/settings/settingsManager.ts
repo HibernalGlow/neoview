@@ -35,6 +35,7 @@ export interface NeoViewSettings {
     showGrid: boolean;
     showInfoBar: boolean;
     backgroundColor: string;
+    backgroundMode: 'solid' | 'auto';
     mouseCursor: {
       autoHide: boolean;
       hideDelay: number; // seconds
@@ -117,6 +118,7 @@ const defaultSettings: NeoViewSettings = {
     showGrid: false,
     showInfoBar: true,
     backgroundColor: '#000000',
+    backgroundMode: 'solid',
     mouseCursor: {
       autoHide: true,
       hideDelay: 1.0,
@@ -174,6 +176,7 @@ function deepClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
 }
 
+// NOTE: 用于通用深度合并工具，这里允许使用 any 以避免复杂的索引签名约束
 type AnyObject = Record<string, any>;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -218,6 +221,20 @@ export class SettingsManager {
 
   private constructor() {
     this.loadSettings();
+
+    // 在多窗口环境下，同步 localStorage 中的设置到当前 SettingsManager
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', (event: StorageEvent) => {
+        if (event.key !== 'neoview-settings' || !event.newValue) return;
+        try {
+          const parsed = JSON.parse(event.newValue) as Partial<NeoViewSettings>;
+          this.settings = mergeWithDefaults(parsed);
+          this.notifyListeners();
+        } catch (err) {
+          console.error('❌ 同步设置失败 (storage event):', err);
+        }
+      });
+    }
   }
 
   static getInstance() {

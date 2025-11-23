@@ -18,6 +18,7 @@ import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewW
 		rotateClockwise,
 		rotationAngle,
 		setViewMode,
+		toggleViewModeLock,
 		toggleSidebar,
 		toggleReadingDirection,
 		topToolbarPinned,
@@ -756,8 +757,12 @@ function toggleComparisonMode() {
 								<Button
 									variant={$viewerState.viewMode === 'single' ? 'default' : 'ghost'}
 									size="icon"
-									class="h-8 w-8 rounded-full"
+									class={`h-8 w-8 rounded-full ${$viewerState.lockedViewMode === 'single' ? 'ring-2 ring-primary' : ''}`}
 									onclick={() => setViewMode('single')}
+									oncontextmenu={(event) => {
+										event.preventDefault();
+										toggleViewModeLock('single');
+									}}
 								>
 									<RectangleVertical class="h-4 w-4" />
 								</Button>
@@ -772,8 +777,12 @@ function toggleComparisonMode() {
 								<Button
 									variant={$viewerState.viewMode === 'double' ? 'default' : 'ghost'}
 									size="icon"
-									class="h-8 w-8 rounded-full"
+									class={`h-8 w-8 rounded-full ${$viewerState.lockedViewMode === 'double' ? 'ring-2 ring-primary' : ''}`}
 									onclick={() => setViewMode('double')}
+									oncontextmenu={(event) => {
+										event.preventDefault();
+										toggleViewModeLock('double');
+									}}
 								>
 									<Columns2 class="h-4 w-4" />
 								</Button>
@@ -788,8 +797,12 @@ function toggleComparisonMode() {
 								<Button
 									variant={$viewerState.viewMode === 'panorama' ? 'default' : 'ghost'}
 									size="icon"
-									class="h-8 w-8 rounded-full"
+									class={`h-8 w-8 rounded-full ${$viewerState.lockedViewMode === 'panorama' ? 'ring-2 ring-primary' : ''}`}
 									onclick={() => setViewMode('panorama')}
+									oncontextmenu={(event) => {
+										event.preventDefault();
+										toggleViewModeLock('panorama');
+									}}
 								>
 									<PanelsTopLeft class="h-4 w-4" />
 								</Button>
@@ -804,8 +817,12 @@ function toggleComparisonMode() {
 								<Button
 									variant={$viewerState.viewMode === 'vertical' ? 'default' : 'ghost'}
 									size="icon"
-									class="h-8 w-8 rounded-full"
+									class={`h-8 w-8 rounded-full ${$viewerState.lockedViewMode === 'vertical' ? 'ring-2 ring-primary' : ''}`}
 									onclick={() => setViewMode('vertical')}
+									oncontextmenu={(event) => {
+										event.preventDefault();
+										toggleViewModeLock('vertical');
+									}}
 								>
 									<ArrowDownUp class="h-4 w-4" />
 								</Button>

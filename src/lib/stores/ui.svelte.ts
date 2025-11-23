@@ -64,6 +64,7 @@ export const rotationAngle = writable<number>(loadFromStorage('rotationAngle', 0
 // 视图模式
 export type ViewMode = 'single' | 'double' | 'panorama' | 'vertical';
 export const viewMode = writable<ViewMode>(loadFromStorage('viewMode', 'single'));
+export const lockedViewMode = writable<ViewMode | null>(loadFromStorage('lockedViewMode', null));
 
 // 边栏钉住状态（钉住时不自动隐藏）
 export const topToolbarPinned = writable<boolean>(loadFromStorage('topToolbarPinned', false));
@@ -110,6 +111,11 @@ zoomLevel.subscribe((value) => {
 viewMode.subscribe((value) => {
 	saveToStorage('viewMode', value);
 	updateViewerSlice({ viewMode: value });
+});
+
+lockedViewMode.subscribe((value) => {
+	saveToStorage('lockedViewMode', value);
+	updateViewerSlice({ lockedViewMode: value });
 });
 
 isLoading.subscribe((value) => {
@@ -209,6 +215,17 @@ export function resetRotation() {
  * 切换视图模式
  */
 export function toggleViewMode() {
+	const snapshot = appState.getSnapshot();
+	const currentMode = snapshot.viewer.viewMode;
+	const locked = snapshot.viewer.lockedViewMode;
+
+	if (locked) {
+		const alt: ViewMode = locked === 'single' ? 'panorama' : 'single';
+		const next: ViewMode = currentMode === locked ? alt : locked;
+		viewMode.set(next);
+		return;
+	}
+
 	viewMode.update((mode) => {
 		if (mode === 'single') return 'double';
 		if (mode === 'double') return 'panorama';
@@ -221,6 +238,10 @@ export function toggleViewMode() {
  */
 export function setViewMode(mode: ViewMode) {
 	viewMode.set(mode);
+}
+
+export function toggleViewModeLock(mode: ViewMode) {
+	lockedViewMode.update((current) => (current === mode ? null : mode));
 }
 
 /**

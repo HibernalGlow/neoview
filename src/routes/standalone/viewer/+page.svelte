@@ -18,7 +18,9 @@
 		rotationAngle,
 		viewMode,
 		setViewMode,
-		toggleViewMode
+		toggleViewMode,
+		lockedViewMode,
+		toggleViewModeLock
 	} from '$lib/stores';
 	import {
 		ChevronLeft,
@@ -165,18 +167,26 @@
 				<Button
 					variant={$viewMode === 'single' ? 'default' : 'ghost'}
 					size="icon"
-					class="h-8 w-8"
+					class={`h-8 w-8 ${$lockedViewMode === 'single' ? 'ring-2 ring-primary rounded-full' : ''}`}
 					onclick={() => setViewMode('single')}
+					oncontextmenu={(event) => {
+						event.preventDefault();
+						toggleViewModeLock('single');
+					}}
 					title="单页模式"
 				>
 					<RectangleVertical class="h-4 w-4" />
 				</Button>
-
+				
 				<Button
 					variant={$viewMode === 'double' ? 'default' : 'ghost'}
 					size="icon"
-					class="h-8 w-8"
+					class={`h-8 w-8 ${$lockedViewMode === 'double' ? 'ring-2 ring-primary rounded-full' : ''}`}
 					onclick={() => setViewMode('double')}
+					oncontextmenu={(event) => {
+						event.preventDefault();
+						toggleViewModeLock('double');
+					}}
 					title="双页模式"
 				>
 					<Columns2 class="h-4 w-4" />
@@ -185,8 +195,12 @@
 				<Button
 					variant={$viewMode === 'panorama' ? 'default' : 'ghost'}
 					size="icon"
-					class="h-8 w-8"
+					class={`h-8 w-8 ${$lockedViewMode === 'panorama' ? 'ring-2 ring-primary rounded-full' : ''}`}
 					onclick={() => setViewMode('panorama')}
+					oncontextmenu={(event) => {
+						event.preventDefault();
+						toggleViewModeLock('panorama');
+					}}
 					title="全景模式"
 				>
 					<PanelsTopLeft class="h-4 w-4" />

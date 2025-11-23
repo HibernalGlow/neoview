@@ -36,6 +36,7 @@ export interface TaskCursorState {
 
 export interface ViewerSlice {
 	viewMode: 'single' | 'double' | 'panorama' | 'vertical';
+	lockedViewMode: 'single' | 'double' | 'panorama' | 'vertical' | null;
 	zoom: number;
 	loading: boolean;
 	comparisonVisible: boolean;
@@ -111,7 +112,8 @@ export function createDefaultAppState(): AppStateSnapshot {
 				autoPageTurnInterval: 3,
 				preloadPages: 2,
 				rememberProgress: true,
-				doublePageView: false
+				doublePageView: false,
+				readingDirection: 'left-to-right'
 			},
 			theme: {
 				theme: 'system',
@@ -158,6 +160,7 @@ export function createDefaultAppState(): AppStateSnapshot {
 		},
 		viewer: {
 			viewMode: 'single',
+			lockedViewMode: null,
 			zoom: 1,
 			loading: false,
 			comparisonVisible: false,

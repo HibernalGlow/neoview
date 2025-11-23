@@ -353,10 +353,10 @@
 				<Folder class="h-8 w-8 text-primary transition-colors group-hover:text-primary" />
 			{:else if isArchive}
 				<FileArchive
-					class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600"
+					class="h-8 w-8 text-primary transition-colors group-hover:text-primary"
 				/>
 			{:else if item.isImage}
-				<Image class="h-8 w-8 text-green-500 transition-colors group-hover:text-green-600" />
+				<Image class="h-8 w-8 text-primary transition-colors group-hover:text-primary" />
 			{:else}
 				<File class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500" />
 			{/if}
@@ -458,9 +458,9 @@
 									{#if previewItem.isDir}
 										<Folder class="h-3 w-3 flex-shrink-0 text-primary" />
 									{:else if previewItem.isImage}
-										<Image class="h-3 w-3 flex-shrink-0 text-green-500" />
+										<Image class="h-3 w-3 flex-shrink-0 text-primary" />
 									{:else if previewItem.name.endsWith('.zip') || previewItem.name.endsWith('.cbz') || previewItem.name.endsWith('.rar') || previewItem.name.endsWith('.cbr')}
-										<FileArchive class="h-3 w-3 flex-shrink-0 text-purple-500" />
+										<FileArchive class="h-3 w-3 flex-shrink-0 text-primary" />
 									{:else}
 										<File class="h-3 w-3 flex-shrink-0 text-gray-400" />
 									{/if}
@@ -563,11 +563,11 @@
 				</div>
 			{:else if isArchive}
 				<div class="flex h-full w-full items-center justify-center">
-					<FileArchive class="h-16 w-16 text-purple-500" />
+					<FileArchive class="h-16 w-16 text-primary" />
 				</div>
 			{:else if item.isImage}
 				<div class="flex h-full w-full items-center justify-center">
-					<Image class="h-16 w-16 text-green-500" />
+					<Image class="h-16 w-16 text-primary" />
 				</div>
 			{:else}
 				<div class="flex h-full w-full items-center justify-center">

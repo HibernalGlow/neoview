@@ -202,22 +202,6 @@
 								class="flex items-center gap-2 p-2 rounded-md hover:bg-accent border border-transparent hover:border-border transition-colors group"
 							>
 								<!-- 拖动手柄 -->
-								<button class="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab">
-									<GripVertical class="h-4 w-4 text-muted-foreground" />
-								</button>
-
-								<!-- 类型图标 -->
-								{#if item.type === 'archive'}
-									<FileArchive class="h-4 w-4 text-blue-500 flex-shrink-0" />
-								{:else}
-									<Folder class="h-4 w-4 text-yellow-500 flex-shrink-0" />
-								{/if}
-
-								<!-- 信息 -->
-								<div class="flex-1 min-w-0">
-									<div class="text-xs font-medium truncate" title={item.name}>{item.name}</div>
-									<div class="text-[10px] text-muted-foreground">{item.pages} 页</div>
-								</div>
 
 								<!-- 操作按钮 -->
 								<div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

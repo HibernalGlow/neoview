@@ -196,9 +196,9 @@
               {:else if item.is_dir}
                 <Folder class="h-8 w-8 text-primary transition-colors group-hover:text-primary" />
               {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
-                <FileArchive class="h-8 w-8 text-purple-500 transition-colors group-hover:text-purple-600" />
+                <FileArchive class="h-8 w-8 text-primary transition-colors group-hover:text-primary" />
               {:else if item.isImage}
-                <Image class="h-8 w-8 text-green-500 transition-colors group-hover:text-green-600" />
+                <Image class="h-8 w-8 text-primary transition-colors group-hover:text-primary" />
               {:else}
                 <File class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500" />
               {/if}
@@ -258,9 +258,9 @@
             {:else if item.is_dir}
               <Folder class="h-12 w-12 text-primary" />
             {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
-              <FileArchive class="h-12 w-12 text-purple-500" />
+              <FileArchive class="h-12 w-12 text-primary" />
             {:else if item.isImage}
-              <Image class="h-12 w-12 text-green-500" />
+              <Image class="h-12 w-12 text-primary" />
             {:else}
               <File class="h-12 w-12 text-gray-400" />
             {/if}

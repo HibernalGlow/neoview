@@ -845,7 +845,7 @@
 	{#if contextMenu.open}
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="context-menu fixed z-10000 min-w-[180px] rounded-md border bg-popover text-popover-foreground shadow-lg py-1"
+			class="context-menu fixed z-50 max-h-(--bits-context-menu-content-available-height) origin-(--bits-context-menu-content-transform-origin) min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover text-popover-foreground p-1 shadow-md"
 			style={`left: ${contextMenu.x}px; top: ${contextMenu.y}px;`}
 			role="menu"
 			tabindex="-1"
@@ -853,16 +853,16 @@
 		>
 			<button
 				type="button"
-				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
 				onclick={copyPath}
 			>
 				<Copy class="h-4 w-4 mr-2" />
 				<span>复制路径</span>
 			</button>
-			<hr class="my-1 border-border/60" />
+			<hr class="bg-border -mx-1 my-1 h-px border-0" />
 			<button
 				type="button"
-				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent disabled:text-muted-foreground/70"
+				class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
 				onclick={openInExplorer}
 				disabled={!bookInfo?.path && !imageInfo?.path}
 			>

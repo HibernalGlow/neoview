@@ -329,7 +329,7 @@
 				class="h-4 w-4 shrink-0 {node.isDir
 					? 'text-primary'
 					: item?.isImage
-						? 'text-green-500'
+						? 'text-primary'
 						: 'text-gray-500'}"
 			/>
 

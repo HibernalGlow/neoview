@@ -398,7 +398,7 @@
 	<!-- 右键菜单 -->
 	{#if contextMenu.entry}
 		<div
-			class="context-menu fixed z-10000 min-w-[180px] rounded-md border bg-popover text-popover-foreground shadow-lg py-1"
+			class="context-menu fixed z-50 max-h-(--bits-context-menu-content-available-height) origin-(--bits-context-menu-content-transform-origin) min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover text-popover-foreground p-1 shadow-md"
 			style={`left: ${contextMenu.x}px; top: ${contextMenu.y}px;`}
 			role="menu"
 			tabindex="-1"
@@ -406,25 +406,25 @@
 		>
 			<button
 				type="button"
-				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
 				onclick={() => openHistory(contextMenu.entry!)}
 			>
 				<FolderOpen class="mr-2 h-4 w-4" />
 				<span>打开</span>
 			</button>
-			<hr class="my-1 border-border/60" />
+			<hr class="bg-border -mx-1 my-1 h-px border-0" />
 			<button
 				type="button"
-				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
 				onclick={() => addToBookmark(contextMenu.entry!)}
 			>
 				<Bookmark class="mr-2 h-4 w-4" />
 				<span>添加到书签</span>
 			</button>
-			<hr class="my-1 border-border/60" />
+			<hr class="bg-border -mx-1 my-1 h-px border-0" />
 			<button
 				type="button"
-				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
 				onclick={() => openInExplorer(contextMenu.entry!)}
 			>
 				<ExternalLink class="mr-2 h-4 w-4" />
@@ -432,25 +432,25 @@
 			</button>
 			<button
 				type="button"
-				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
 				onclick={() => openWithExternalApp(contextMenu.entry!)}
 			>
 				<ExternalLink class="mr-2 h-4 w-4" />
 				<span>在外部应用中打开</span>
 			</button>
-			<hr class="my-1 border-border/60" />
+			<hr class="bg-border -mx-1 my-1 h-px border-0" />
 			<button
 				type="button"
-				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
 				onclick={() => copyPath(contextMenu.entry!)}
 			>
 				<span class="mr-2 text-xs">📋</span>
 				<span>复制路径</span>
 			</button>
-			<hr class="my-1 border-border/60" />
+			<hr class="bg-border -mx-1 my-1 h-px border-0" />
 			<button
 				type="button"
-				class="flex w-full items-center px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
+				class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10 dark:hover:bg-destructive/20"
 				onclick={() => removeHistory(contextMenu.entry!.id)}
 			>
 				<Trash2 class="mr-2 h-4 w-4" />

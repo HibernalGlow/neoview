@@ -197,6 +197,13 @@ const defaultBindings: ActionBinding[] = [
 		description: '旋转图片90度',
 		bindings: []
 	},
+	{
+		action: 'toggleSinglePanoramaView',
+		name: '全景/单页切换',
+		category: '视图',
+		description: '在全景和单页视图模式之间互相切换（视图模式被锁定时不生效）',
+		bindings: []
+	},
 
 	// === 文件操作 ===
 	{

@@ -245,6 +245,31 @@ export function toggleViewModeLock(mode: ViewMode) {
 }
 
 /**
+ * 在单页和全景视图之间互相切换
+ * 当 lockedViewMode 有值时，不执行任何切换（尊重视图锁定状态）
+ */
+export function toggleSinglePanoramaView() {
+	const snapshot = appState.getSnapshot();
+	const locked = snapshot.viewer.lockedViewMode as ViewMode | null;
+	if (locked) {
+		return;
+	}
+
+	const current = snapshot.viewer.viewMode as ViewMode;
+	let next: ViewMode | null = null;
+
+	if (current === 'panorama') {
+		next = 'single';
+	} else if (current === 'single') {
+		next = 'panorama';
+	}
+
+	if (next) {
+		viewMode.set(next);
+	}
+}
+
+/**
  * 切换阅读方向
  */
 export function toggleReadingDirection() {

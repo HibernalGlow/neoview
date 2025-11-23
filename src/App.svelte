@@ -8,7 +8,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { open } from '@tauri-apps/plugin-dialog';
-	import { bookStore, zoomIn, zoomOut, resetZoom, toggleSidebar, toggleRightSidebar, toggleFullscreen, rotateClockwise, toggleViewMode, sidebarOpen, rightSidebarOpen, pageLeft, pageRight, topToolbarPinned, bottomThumbnailBarPinned, toggleReadingDirection } from '$lib/stores';
+	import { bookStore, zoomIn, zoomOut, resetZoom, toggleSidebar, toggleRightSidebar, toggleFullscreen, rotateClockwise, toggleViewMode, sidebarOpen, rightSidebarOpen, pageLeft, pageRight, topToolbarPinned, bottomThumbnailBarPinned, toggleReadingDirection, toggleSinglePanoramaView } from '$lib/stores';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { FolderOpen } from '@lucide/svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
@@ -158,6 +158,10 @@ async function dispatchAction(action: string) {
 		case 'toggleBookMode':
 			console.log('执行切换书籍模式操作');
 			toggleViewMode();
+			break;
+		case 'toggleSinglePanoramaView':
+			console.log('执行全景/单页视图互切操作');
+			toggleSinglePanoramaView();
 			break;
 		case 'rotate':
 			console.log('执行旋转操作');

@@ -113,7 +113,8 @@
 	function ensureCurrentPathExpanded() {
 		if (!normalizedCurrentPath) return;
 		const parts = normalizedCurrentPath.split('/');
-		const next = new Set<string>();
+		// 不清空已有展开状态，只追加当前路径链路，避免其他展开节点被折叠
+		const next = new Set<string>(expandedNodes);
 		let segment = '';
 		for (let i = 0; i < parts.length; i++) {
 			const p = parts[i];

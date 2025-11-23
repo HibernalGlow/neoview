@@ -265,14 +265,16 @@
 					<Sidebar.Content>
 						<Sidebar.Group class="px-0">
 							<Sidebar.GroupContent>
-								{#if activeItem.value === 'folder'}
-									<FileBrowser />
-								{:else if activeItem.value === 'history'}
-									<HistoryPanel />
-								{:else if activeItem.value === 'bookmark'}
-									<BookmarkPanel />
-								{:else if activeItem.value === 'thumbnail'}
-									<ThumbnailsPanel />
+								{#if localSidebarOpen}
+									{#if activeItem.value === 'folder'}
+										<FileBrowser />
+									{:else if activeItem.value === 'history'}
+										<HistoryPanel />
+									{:else if activeItem.value === 'bookmark'}
+										<BookmarkPanel />
+									{:else if activeItem.value === 'thumbnail'}
+										<ThumbnailsPanel />
+									{/if}
 								{/if}
 							</Sidebar.GroupContent>
 						</Sidebar.Group>

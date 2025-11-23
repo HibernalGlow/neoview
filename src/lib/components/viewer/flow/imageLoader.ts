@@ -427,6 +427,14 @@ export class ImageLoader {
 	}
 
 	/**
+	 * 主动触发缓存整理（供外部调用，例如增量预加载循环）
+	 */
+	public trimCaches(): void {
+		this.enforceCacheLimits();
+		this.enforcePreloadMemoryLimit();
+	}
+
+	/**
 	 * 限制 Blob 缓存
 	 */
 	private enforceBlobCacheLimit(): void {

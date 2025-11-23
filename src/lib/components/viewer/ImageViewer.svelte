@@ -8,7 +8,6 @@
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { settingsManager, performanceSettings } from '$lib/settings/settingsManager';
 	import { onDestroy, onMount } from 'svelte';
-	import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
 	import { readable } from 'svelte/store';
 	import ComparisonViewer from './ComparisonViewer.svelte';
 	import ImageViewerDisplay from './flow/ImageViewerDisplay.svelte';
@@ -300,8 +299,6 @@
 
 	// 初始化预加载管理器
 	onMount(() => {
-		// 初始化 EMM 元数据 store
-		emmMetadataStore.initialize();
 		const panelSettings = loadUpscalePanelSettings();
 		const initialPreloadPages =
 			(panelSettings as { preloadPages?: number }).preloadPages ?? performanceSettings.preLoadSize;

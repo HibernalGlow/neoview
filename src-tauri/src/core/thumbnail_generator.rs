@@ -88,7 +88,7 @@ impl ThumbnailGenerator {
     }
 
     /// 解码 JXL 图像
-    fn decode_jxl_image(&self, image_data: &[u8]) -> Result<DynamicImage, String> {
+    fn decode_jxl_image(image_data: &[u8]) -> Result<DynamicImage, String> {
         use jxl_oxide::JxlImage;
 
         let mut reader = Cursor::new(image_data);
@@ -294,75 +294,60 @@ impl ThumbnailGenerator {
             .and_then(|e| e.to_str())
             .map(|e| e.to_lowercase() == "avif")
             .unwrap_or(false);
+        let is_jxl = file_path_buf
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_lowercase() == "jxl")
+            .unwrap_or(false);
 
         std::thread::spawn(move || {
+            let ffmpeg_input_path = PathBuf::from(&path_key_clone);
+
             let webp_data = if is_avif {
-                // AVIF 格式：优先使用 avif-native（image crate），回退到 ffmpeg
-                // 先尝试使用 image crate 的 avif-native feature 解码
-                match Self::decode_image_safe(&image_data_clone) {
-                    Ok(img) => {
-                        // avif-native 解码成功，使用 image 库生成 webp
-                        match Self::generate_webp_thumbnail_fallback(&img, &config_clone) {
+                // 先尝试使用 FFmpeg 生成 webp，失败时再回退到 avif-native
+                let ffmpeg_result = Self::generate_webp_with_ffmpeg(
+                    &ffmpeg_input_path,
+                    &config_clone,
+                    &path_key_clone,
+                );
+
+                if ffmpeg_result.is_some() {
+                    ffmpeg_result
+                } else {
+                    // FFmpeg 失败后，回退到 avif-native 解码 + image crate 生成 webp
+                    match Self::decode_image_safe(&image_data_clone) {
+                        Ok(img) => match Self::generate_webp_thumbnail_fallback(&img, &config_clone) {
                             Ok(data) => Some(data),
                             Err(e) => {
                                 eprintln!(
-                                    "⚠️ avif-native 解码成功但生成 webp 失败: {} - {}, 尝试 ffmpeg",
+                                    "❌ avif-native 回退生成 webp 失败: {} - {}",
                                     path_key_clone, e
                                 );
-                                // 回退到 ffmpeg
-                                let temp_dir = std::env::temp_dir();
-                                let temp_input = temp_dir.join(format!(
-                                    "thumb_avif_input_{}_{}.avif",
-                                    std::process::id(),
-                                    std::time::SystemTime::now()
-                                        .duration_since(std::time::UNIX_EPOCH)
-                                        .unwrap()
-                                        .as_nanos()
-                                ));
-
-                                if let Err(e) = std::fs::write(&temp_input, &image_data_clone) {
-                                    eprintln!("❌ 写入临时文件失败: {} - {}", path_key_clone, e);
-                                    None
-                                } else {
-                                    let result = Self::generate_webp_with_ffmpeg(
-                                        &temp_input,
-                                        &config_clone,
-                                        &path_key_clone,
-                                    );
-                                    let _ = std::fs::remove_file(&temp_input);
-                                    result
-                                }
+                                None
                             }
+                        },
+                        Err(e) => {
+                            eprintln!(
+                                "❌ avif-native 回退解码失败: {} - {}",
+                                path_key_clone, e
+                            );
+                            None
                         }
                     }
-                    Err(e) => {
-                        // avif-native 解码失败，回退到 ffmpeg
-                        eprintln!(
-                            "⚠️ avif-native 解码失败: {} - {}, 尝试 ffmpeg",
-                            path_key_clone, e
-                        );
-                        let temp_dir = std::env::temp_dir();
-                        let temp_input = temp_dir.join(format!(
-                            "thumb_avif_input_{}_{}.avif",
-                            std::process::id(),
-                            std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .unwrap()
-                                .as_nanos()
-                        ));
-
-                        if let Err(e) = std::fs::write(&temp_input, &image_data_clone) {
-                            eprintln!("❌ 写入临时文件失败: {} - {}", path_key_clone, e);
+                }
+            } else if is_jxl {
+                // JXL 使用 jxl_oxide 解码后转 webp
+                match Self::decode_jxl_image(&image_data_clone) {
+                    Ok(img) => match Self::generate_webp_thumbnail_fallback(&img, &config_clone) {
+                        Ok(data) => Some(data),
+                        Err(e) => {
+                            eprintln!("❌ 生成 JXL webp 缩略图失败: {} - {}", path_key_clone, e);
                             None
-                        } else {
-                            let result = Self::generate_webp_with_ffmpeg(
-                                &temp_input,
-                                &config_clone,
-                                &path_key_clone,
-                            );
-                            let _ = std::fs::remove_file(&temp_input);
-                            result
                         }
+                    },
+                    Err(e) => {
+                        eprintln!("❌ 解码 JXL 图像失败: {} - {}", path_key_clone, e);
+                        None
                     }
                 }
             } else {
@@ -867,84 +852,89 @@ impl ThumbnailGenerator {
                     let image_name_clone = name.clone(); // 克隆文件名用于后台线程
 
                     // 检测是否为 AVIF 格式
-                    let is_avif = image_name_clone.to_lowercase().ends_with(".avif");
+                    let lower_name = image_name_clone.to_lowercase();
+                    let is_avif = lower_name.ends_with(".avif");
+                    let is_jxl = lower_name.ends_with(".jxl");
 
                     std::thread::spawn(move || {
                         let webp_data = if is_avif {
-                            // AVIF 格式：优先使用 avif-native（image crate），回退到 ffmpeg
-                            // 先尝试使用 image crate 的 avif-native feature 解码
-                            match Self::decode_image_safe(&image_data_clone) {
+                            // 先尝试使用 FFmpeg 生成 webp，失败时再回退到 avif-native
+                            let temp_dir = std::env::temp_dir();
+                            let temp_input = temp_dir.join(format!(
+                                "thumb_archive_avif_input_{}_{}.avif",
+                                std::process::id(),
+                                std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_nanos()
+                            ));
+
+                            let ffmpeg_result = if let Err(e) =
+                                std::fs::write(&temp_input, &image_data_clone)
+                            {
+                                eprintln!("❌ 写入临时文件失败: {} - {}", path_key_clone, e);
+                                None
+                            } else {
+                                let result = Self::generate_webp_with_ffmpeg(
+                                    &temp_input,
+                                    &config_clone,
+                                    &path_key_clone,
+                                );
+                                let _ = std::fs::remove_file(&temp_input);
+                                result
+                            };
+
+                            if ffmpeg_result.is_some() {
+                                ffmpeg_result
+                            } else {
+                                match Self::decode_image_safe(&image_data_clone) {
+                                    Ok(img) => {
+                                        match Self::generate_webp_thumbnail_fallback(
+                                            &img,
+                                            &config_clone,
+                                        ) {
+                                            Ok(data) => Some(data),
+                                            Err(e) => {
+                                                eprintln!(
+                                                    "❌ avif-native 回退生成 webp 失败: {} - {}",
+                                                    path_key_clone, e
+                                                );
+                                                None
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        eprintln!(
+                                            "❌ avif-native 回退解码失败: {} - {}",
+                                            path_key_clone, e
+                                        );
+                                        None
+                                    }
+                                }
+                            }
+                        } else if is_jxl {
+                            match Self::decode_jxl_image(&image_data_clone) {
                                 Ok(img) => {
-                                    // avif-native 解码成功，使用 image 库生成 webp
                                     match Self::generate_webp_thumbnail_fallback(
                                         &img,
                                         &config_clone,
                                     ) {
                                         Ok(data) => Some(data),
                                         Err(e) => {
-                                            eprintln!("⚠️ avif-native 解码成功但生成 webp 失败: {} - {}, 尝试 ffmpeg", path_key_clone, e);
-                                            // 回退到 ffmpeg
-                                            let temp_dir = std::env::temp_dir();
-                                            let temp_input = temp_dir.join(format!(
-                                                "thumb_archive_avif_input_{}_{}.avif",
-                                                std::process::id(),
-                                                std::time::SystemTime::now()
-                                                    .duration_since(std::time::UNIX_EPOCH)
-                                                    .unwrap()
-                                                    .as_nanos()
-                                            ));
-
-                                            if let Err(e) =
-                                                std::fs::write(&temp_input, &image_data_clone)
-                                            {
-                                                eprintln!(
-                                                    "❌ 写入临时文件失败: {} - {}",
-                                                    path_key_clone, e
-                                                );
-                                                None
-                                            } else {
-                                                let result = Self::generate_webp_with_ffmpeg(
-                                                    &temp_input,
-                                                    &config_clone,
-                                                    &path_key_clone,
-                                                );
-                                                let _ = std::fs::remove_file(&temp_input);
-                                                result
-                                            }
+                                            eprintln!(
+                                                "❌ 生成 JXL webp 缩略图失败: {} - {}",
+                                                path_key_clone, e
+                                            );
+                                            None
                                         }
                                     }
                                 }
                                 Err(e) => {
-                                    // avif-native 解码失败，回退到 ffmpeg
                                     eprintln!(
-                                        "⚠️ avif-native 解码失败: {} - {}, 尝试 ffmpeg",
+                                        "❌ 解码 JXL 图像失败: {} - {}",
                                         path_key_clone, e
                                     );
-                                    let temp_dir = std::env::temp_dir();
-                                    let temp_input = temp_dir.join(format!(
-                                        "thumb_archive_avif_input_{}_{}.avif",
-                                        std::process::id(),
-                                        std::time::SystemTime::now()
-                                            .duration_since(std::time::UNIX_EPOCH)
-                                            .unwrap()
-                                            .as_nanos()
-                                    ));
-
-                                    if let Err(e) = std::fs::write(&temp_input, &image_data_clone) {
-                                        eprintln!(
-                                            "❌ 写入临时文件失败: {} - {}",
-                                            path_key_clone, e
-                                        );
-                                        None
-                                    } else {
-                                        let result = Self::generate_webp_with_ffmpeg(
-                                            &temp_input,
-                                            &config_clone,
-                                            &path_key_clone,
-                                        );
-                                        let _ = std::fs::remove_file(&temp_input);
-                                        result
-                                    }
+                                    None
                                 }
                             }
                         } else {

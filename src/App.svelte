@@ -16,7 +16,6 @@
 	// import { init_thumbnail_manager } from '$lib/api';
 	import Toast from '$lib/components/ui/toast.svelte';
 	import { onMount } from 'svelte';
-	import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
 
 	let loading = $state(false);
 
@@ -40,11 +39,6 @@
 			// await init_thumbnail_manager(thumbnailPath, rootPath, 256);
 			// console.log('✅ 缩略图管理器初始化成功');
 			console.warn('缩略图管理器初始化已跳过，功能已移除，待重新实现');
-			
-			// 初始化 EMM 元数据存储(加载翻译字典等)
-			console.log('🔧 初始化 EMM 元数据存储...');
-			await emmMetadataStore.initialize();
-			console.log('✅ EMM 元数据存储初始化成功');
 		} catch (error) {
 			console.error('❌ 初始化失败:', error);
 		}
@@ -333,18 +327,18 @@ function handleGlobalMouseDown(e: MouseEvent) {
 <Tooltip.Provider>
 	<Toast />
 	<MainLayout>
-	<div class="h-full w-full flex items-center justify-center">
-		<ImageViewer />
-		
-		<!-- 欢迎界面 (当没有打开书籍时显示) -->
-		<!-- <div class="text-center">
-			<h1 class="text-4xl font-bold mb-4">NeoView</h1>
-			<p class="text-muted-foreground mb-8">Modern Image & Comic Viewer</p>
-			<Button onclick={handleOpenFolder} disabled={loading} size="lg">
-				<FolderOpen class="mr-2 h-5 w-5" />
-				{loading ? 'Opening...' : 'Open Folder'}
-			</Button>
-		</div> -->
-	</div>
-</MainLayout>
+		<div class="h-full w-full flex items-center justify-center">
+			<!-- 欢迎界面 (当没有打开书籍时显示)
+				实际的 ImageViewer 由 MainLayout 在 bookStore.viewerOpen 为 true 时挂载
+			-->
+			<div class="text-center">
+				<h1 class="text-4xl font-bold mb-4">NeoView</h1>
+				<p class="text-muted-foreground mb-8">Modern Image & Comic Viewer</p>
+				<Button onclick={handleOpenFolder} disabled={loading} size="lg">
+					<FolderOpen class="mr-2 h-5 w-5" />
+					{loading ? 'Opening...' : 'Open Folder'}
+				</Button>
+			</div>
+		</div>
+	</MainLayout>
 </Tooltip.Provider>

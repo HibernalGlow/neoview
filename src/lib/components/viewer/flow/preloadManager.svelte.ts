@@ -63,6 +63,10 @@ export class PreloadManager {
 	private preUpscaledPages = new Set<number>();
 	private thumbnailListeners = new Set<(pageIndex: number, dataURL: string) => void>();
 	private preloadRampTimer: ReturnType<typeof setTimeout> | null = null;
+	private incrementalPreloadTimer: ReturnType<typeof setTimeout> | null = null;
+	private incrementalPreloadCursor: number | null = null;
+	private readonly incrementalPreloadIntervalMs = 5000;
+	private readonly incrementalPreloadMaxChunk = 16;
 
 	constructor(options: PreloadManagerOptions = {}) {
 		// 保存选项
@@ -162,6 +166,53 @@ export class PreloadManager {
 	}
 
 	/**
+	 * 预加载阶梯：刚进入书籍时先用较保守的预加载配置，稍后恢复为完整配置
+	 */
+	private applyPreloadRamp(): void {
+		if (typeof window === 'undefined') {
+			return;
+		}
+
+		// 清理旧的定时器，避免重复叠加
+		this.clearPreloadRampTimer();
+
+		// 以当前性能配置作为目标值
+		const targetPreload = this.performancePreloadPages;
+		const targetThreads = this.performanceMaxThreads;
+
+		// 阶梯阶段使用更保守的参数，避免一开始就拉满
+		const rampPreload = Math.max(1, Math.min(targetPreload, 8));
+		const rampThreads = Math.max(1, Math.min(targetThreads, 2));
+
+		// 如果目标本身已经很小，就不做阶梯
+		if (rampPreload === targetPreload && rampThreads === targetThreads) {
+			return;
+		}
+
+		// 先应用保守配置
+		this.updateImageLoaderConfig({
+			preloadPages: rampPreload,
+			maxThreads: rampThreads
+		});
+
+		// 一段时间后恢复为完整配置
+		this.preloadRampTimer = window.setTimeout(() => {
+			this.preloadRampTimer = null;
+			this.updateImageLoaderConfig({
+				preloadPages: targetPreload,
+				maxThreads: targetThreads
+			});
+		}, 5000);
+	}
+
+	private clearPreloadRampTimer(): void {
+		if (this.preloadRampTimer) {
+			clearTimeout(this.preloadRampTimer);
+			this.preloadRampTimer = null;
+		}
+	}
+
+	/**
 	 * 初始化管理器（在组件onMount时调用）
 	 */
 	initialize(): void {
@@ -216,11 +267,13 @@ export class PreloadManager {
 				}
 
 				this.applyPreloadRamp();
+				this.startIncrementalPreloadForCurrentBook();
 				lastBookPath = currentBookPath;
 			}
 
 			if (!currentBookPath) {
 				lastBookPath = null;
+				this.stopIncrementalPreloadLoop();
 			}
 		});
 	}
@@ -236,6 +289,7 @@ export class PreloadManager {
 		performanceSettings.removeListener(this.performanceSettingsListener);
 
 		this.clearPreloadRampTimer();
+		this.stopIncrementalPreloadLoop();
 		this.thumbnailListeners.clear();
 
 		// 清理预加载 worker
@@ -280,8 +334,6 @@ export class PreloadManager {
 		return this.imageLoader.getPreloadMemoryCache();
 	}
 
-	
-
 	/**
 	 * 公开的配置更新方法（支持视图模式）
 	 */
@@ -293,79 +345,122 @@ export class PreloadManager {
 		});
 	}
 
-	
-
 	/**
-	 * 处理检查预加载缓存事件
+	 * 更新 ImageLoader 配置
 	 */
-	private handleCheckPreloadCache(detail: any): void {
-		const { imageHash, preview } = detail;
-		const cache = this.imageLoader.getPreloadMemoryCache();
-		
-		if (cache.has(imageHash)) {
-			const cached = cache.get(imageHash);
-			if (cached) {
-				if (preview) {
-					bookStore.setUpscaledImage(cached.url);
-					bookStore.setUpscaledImageBlob(cached.blob);
-				}
-				console.log('从内存预加载缓存命中 upscaled，MD5:', imageHash);
-			}
-		}
-	}
+	updateImageLoaderConfig(config: { preloadPages?: number; maxThreads?: number }): void {
+		const nextPreload = config.preloadPages ?? this.performancePreloadPages;
+		const nextThreads = config.maxThreads ?? this.performanceMaxThreads;
 
-	/**
-	 * 处理缓存命中事件
-	 */
-	private handleCacheHit(detail: any): void {
-		const { imageHash, url, blob, preview } = detail;
-		
-		if (preview) {
-			bookStore.setUpscaledImage(url);
-			bookStore.setUpscaledImageBlob(blob);
-		}
-		
-		// 更新内存索引，便于后续快速命中
-		// 这里可以添加更多逻辑
-		console.log('缓存命中，hash:', imageHash);
-	}
-
-	private applyPreloadRamp(): void {
-		const target = this.performancePreloadPages;
-		const rampValue = Math.min(target, 3);
-
-		this.clearPreloadRampTimer();
-
-		this.imageLoader.updateConfig({
-			preloadPages: rampValue,
-			maxThreads: this.performanceMaxThreads
-		});
-		console.log('[PreloadManager] 预加载降级启动', {
-			targetPreloadPages: target,
-			rampPreloadPages: rampValue
-		});
-
-		if (typeof window === 'undefined') {
+		if (
+			nextPreload === this.performancePreloadPages &&
+			nextThreads === this.performanceMaxThreads
+		) {
 			return;
 		}
 
-		this.preloadRampTimer = window.setTimeout(() => {
-			this.imageLoader.updateConfig({
-				preloadPages: this.performancePreloadPages,
-				maxThreads: this.performanceMaxThreads
-			});
-			console.log('[PreloadManager] 预加载降级结束', {
-				restorePreloadPages: this.performancePreloadPages
-			});
-			this.preloadRampTimer = null;
-		}, 2000);
+		this.performancePreloadPages = nextPreload;
+		this.performanceMaxThreads = nextThreads;
+		
+		this.imageLoader.updateConfig({
+			preloadPages: this.performancePreloadPages,
+			maxThreads: this.performanceMaxThreads
+		});
+		
+		// 更新 worker 并发数
+		this.preloadWorker.updateConcurrency(() => this.performanceMaxThreads);
+		
+		console.log('PreloadManager 配置已更新:', {
+			preloadPages: this.performancePreloadPages,
+			maxThreads: this.performanceMaxThreads
+		});
 	}
 
-	private clearPreloadRampTimer(): void {
-		if (this.preloadRampTimer) {
-			clearTimeout(this.preloadRampTimer);
-			this.preloadRampTimer = null;
+	private startIncrementalPreloadForCurrentBook(): void {
+		if (typeof window === 'undefined') {
+			return;
 		}
+		const currentBook = bookStore.currentBook;
+		if (!currentBook || currentBook.totalPages <= 0) {
+			this.stopIncrementalPreloadLoop();
+			return;
+		}
+		this.incrementalPreloadCursor = null;
+		this.scheduleIncrementalPreloadTick();
+	}
+
+	private scheduleIncrementalPreloadTick(): void {
+		if (typeof window === 'undefined') {
+			return;
+		}
+		if (this.incrementalPreloadTimer) {
+			clearTimeout(this.incrementalPreloadTimer);
+			this.incrementalPreloadTimer = null;
+		}
+		this.incrementalPreloadTimer = window.setTimeout(() => {
+			void this.runIncrementalPreloadTick();
+		}, this.incrementalPreloadIntervalMs);
+	}
+
+	private async runIncrementalPreloadTick(): Promise<void> {
+		this.incrementalPreloadTimer = null;
+		const currentBook = bookStore.currentBook;
+		if (!currentBook) {
+			this.incrementalPreloadCursor = null;
+			return;
+		}
+
+		const totalPages = currentBook.totalPages;
+		if (totalPages <= 0) {
+			this.incrementalPreloadCursor = null;
+			return;
+		}
+
+		const currentIndex = bookStore.currentPageIndex;
+		const minCursor = Math.min(totalPages, currentIndex + 1);
+
+		let cursor = this.incrementalPreloadCursor;
+		if (cursor === null || cursor < minCursor) {
+			cursor = minCursor;
+		}
+
+		if (cursor >= totalPages) {
+			this.incrementalPreloadCursor = totalPages;
+			return;
+		}
+
+		const baseChunk = this.performancePreloadPages > 0 ? this.performancePreloadPages : 8;
+		const chunkSize = Math.max(1, Math.min(this.incrementalPreloadMaxChunk, baseChunk));
+		const endExclusive = Math.min(totalPages, cursor + chunkSize);
+
+		for (let pageIndex = cursor; pageIndex < endExclusive; pageIndex++) {
+			try {
+				await this.imageLoader.getBlob(pageIndex);
+				await this.requestThumbnail(pageIndex, 'incremental');
+			} catch (error) {
+				console.debug('增量预加载页面失败:', pageIndex, error);
+			}
+		}
+
+		this.incrementalPreloadCursor = endExclusive;
+
+		try {
+			this.imageLoader.trimCaches();
+		} catch (error) {
+			console.debug('增量预加载缓存整理失败:', error);
+		}
+
+		if (this.incrementalPreloadCursor < totalPages) {
+			this.scheduleIncrementalPreloadTick();
+		}
+	}
+
+	private stopIncrementalPreloadLoop(): void {
+		if (this.incrementalPreloadTimer) {
+			clearTimeout(this.incrementalPreloadTimer);
+			this.incrementalPreloadTimer = null;
+		}
+		this.incrementalPreloadCursor = null;
 	}
 
 	/**
@@ -435,8 +530,6 @@ export class PreloadManager {
 		}
 	}
 	
-	
-	
 	/**
 	 * 更新预超分进度
 	 */
@@ -479,34 +572,43 @@ export class PreloadManager {
 	}
 
 	/**
-	 * 更新 ImageLoader 配置
+	 * 处理缓存命中事件（来自磁盘超分缓存）
 	 */
-	updateImageLoaderConfig(config: { preloadPages?: number; maxThreads?: number }): void {
-		const nextPreload = config.preloadPages ?? this.performancePreloadPages;
-		const nextThreads = config.maxThreads ?? this.performanceMaxThreads;
-
-		if (
-			nextPreload === this.performancePreloadPages &&
-			nextThreads === this.performanceMaxThreads
-		) {
+	private handleCacheHit(detail: any): void {
+		if (!detail) return;
+		const { imageHash, url, blob, preview } = detail;
+		if (!imageHash || !blob || !url) {
+			console.warn('cache-hit 事件缺少必要字段:', detail);
 			return;
 		}
 
-		this.performancePreloadPages = nextPreload;
-		this.performanceMaxThreads = nextThreads;
-		
-		this.imageLoader.updateConfig({
-			preloadPages: this.performancePreloadPages,
-			maxThreads: this.performanceMaxThreads
-		});
-		
-		// 更新 worker 并发数
-		this.preloadWorker.updateConcurrency(() => this.performanceMaxThreads);
-		
-		console.log('PreloadManager 配置已更新:', {
-			preloadPages: this.performancePreloadPages,
-			maxThreads: this.performanceMaxThreads
-		});
+		const cache = this.imageLoader.getPreloadMemoryCache();
+		cache.set(imageHash, { url, blob });
+
+		if (preview) {
+			bookStore.setUpscaledImage(url);
+			bookStore.setUpscaledImageBlob(blob);
+		}
+
+		console.log('从磁盘超分缓存写入内存预加载缓存，MD5:', imageHash);
+	}
+
+	/**
+	 * 处理检查预加载缓存事件
+	 */
+	private handleCheckPreloadCache(detail: any): void {
+		const { imageHash, preview } = detail;
+		const cache = this.imageLoader.getPreloadMemoryCache();
+		if (cache.has(imageHash)) {
+			const cached = cache.get(imageHash);
+			if (cached) {
+				if (preview) {
+					bookStore.setUpscaledImage(cached.url);
+					bookStore.setUpscaledImageBlob(cached.blob);
+				}
+				console.log('从内存预加载缓存命中 upscaled，MD5:', imageHash);
+			}
+		}
 	}
 }
 

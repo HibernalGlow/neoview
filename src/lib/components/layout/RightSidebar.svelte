@@ -217,12 +217,14 @@
 				<Sidebar.Content>
 					<Sidebar.Group class="px-0">
 						<Sidebar.GroupContent>
-							{#if activeItem.value === 'info'}
-								<InfoPanel />
-							{:else if activeItem.value === 'properties'}
-								<ImagePropertiesPanel />
-							{:else if activeItem.value === 'upscale'}
-								<UpscalePanel />
+							{#if localRightSidebarOpen}
+								{#if activeItem.value === 'info'}
+									<InfoPanel />
+								{:else if activeItem.value === 'properties'}
+									<ImagePropertiesPanel />
+								{:else if activeItem.value === 'upscale'}
+									<UpscalePanel />
+								{/if}
 							{/if}
 						</Sidebar.GroupContent>
 					</Sidebar.Group>

@@ -9,6 +9,7 @@
 	import { settingsManager, performanceSettings } from '$lib/settings/settingsManager';
 	import { onDestroy, onMount } from 'svelte';
 	import { readable } from 'svelte/store';
+	import { computeAutoBackgroundColor } from '$lib/utils/autoBackground';
 	import ComparisonViewer from './ComparisonViewer.svelte';
 	import ImageViewerDisplay from './flow/ImageViewerDisplay.svelte';
 	import ImageViewerProgressBar from './flow/ImageViewerProgressBar.svelte';
@@ -40,6 +41,8 @@
 	let hideCursorTimeout: ReturnType<typeof window.setTimeout> | null = null;
 	let lastMousePosition = $state({ x: 0, y: 0 });
 	let settings = $state(settingsManager.getSettings());
+	let viewerBackgroundColor = $state(settings.view.backgroundColor || '#000000');
+	let lastBackgroundSource = $state<string | null>(null);
 
 	// 对比模式状态
 	type ImageDimensions = { width: number; height: number };
@@ -295,6 +298,33 @@
 	// 订阅设置变化
 	settingsManager.addListener((s) => {
 		settings = s;
+	});
+
+	$effect(() => {
+		const mode = settings.view.backgroundMode ?? 'solid';
+		const baseColor = settings.view.backgroundColor || '#000000';
+		if (mode === 'solid') {
+			viewerBackgroundColor = baseColor;
+			lastBackgroundSource = null;
+			return;
+		}
+		const src = derivedUpscaledUrl || imageData || imageData2;
+		if (!src) {
+			viewerBackgroundColor = baseColor;
+			lastBackgroundSource = null;
+			return;
+		}
+		if (src === lastBackgroundSource && viewerBackgroundColor !== baseColor) {
+			return;
+		}
+		lastBackgroundSource = src;
+		void (async () => {
+			const color = await computeAutoBackgroundColor(src);
+			if (lastBackgroundSource !== src) {
+				return;
+			}
+			viewerBackgroundColor = color || baseColor;
+		})();
 	});
 
 	// 初始化预加载管理器
@@ -1220,17 +1250,17 @@
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
-	bind:this={containerElement}
-	class="image-viewer-container relative flex h-full w-full flex-col bg-black"
-	data-viewer="true"
-	onwheel={handleWheel}
-	onmousemove={handleMouseMove}
-	onclick={handleMouseClick}
-	onkeydown={handleKeydown}
-	style:cursor={cursorVisible ? 'default' : 'none'}
-	role="application"
-	aria-label="图像查看器"
-	tabindex="-1"
+  bind:this={containerElement}
+  class="image-viewer-container relative flex h-full w-full flex-col"
+  style={`background-color: ${viewerBackgroundColor};`}
+  data-viewer="true"
+  onwheel={handleWheel}
+  onmousemove={handleMouseMove}
+  onclick={handleMouseClick}
+  onkeydown={handleKeydown}
+  style:cursor={cursorVisible ? 'default' : 'none'}
+  role="application"
+  tabindex="-1"
 >
 	<!-- 图像显示区域 -->
 	<div

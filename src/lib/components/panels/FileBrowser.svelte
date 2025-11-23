@@ -1032,6 +1032,12 @@
 	 */
 	function showContextMenu(e: MouseEvent, item: FsItem) {
 		e.preventDefault();
+		console.log('[FileBrowser] showContextMenu input', {
+			clientX: e.clientX,
+			clientY: e.clientY,
+			targetTag: (e.target as HTMLElement | null)?.tagName,
+			path: item.path
+		});
 
 		let menuX = e.clientX;
 		let menuY = e.clientY;
@@ -1077,6 +1083,13 @@
 		if (menuDirection === 'up' && menuY < 10) {
 			menuY = 10;
 		}
+		console.log('[FileBrowser] showContextMenu computed', {
+			menuX,
+			menuY,
+			menuDirection,
+			viewportWidth,
+			viewportHeight
+		});
 
 		contextMenu = {
 			x: menuX,

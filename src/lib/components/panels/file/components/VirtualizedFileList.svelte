@@ -265,6 +265,13 @@
 
 	// 处理项目右键
 	function handleItemContextMenu(event: MouseEvent, item: FsItem) {
+		console.log('[VirtualizedFileList] handleItemContextMenu', {
+			clientX: event.clientX,
+			clientY: event.clientY,
+			targetTag: (event.target as HTMLElement | null)?.tagName,
+			viewMode,
+			path: item.path
+		});
 		dispatch('itemContextMenu', { event, item });
 	}
 

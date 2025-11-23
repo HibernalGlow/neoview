@@ -515,8 +515,11 @@
 					{#each displayTags() as tagInfo}
 						<span
 							class="inline-flex items-center rounded px-1.5 py-0.5 text-xs border {tagInfo.isCollect
-								? 'bg-primary/10 border-primary/40 text-primary font-semibold'
+								? 'font-semibold'
 								: 'bg-muted border-border/60 text-muted-foreground'}"
+							style={tagInfo.isCollect
+								? `background-color: ${(tagInfo.color || '#409EFF')}20; border-color: ${(tagInfo.color || '#409EFF')}40; color: ${tagInfo.color || '#409EFF'};`
+								: ''}
 							title={tagInfo.tag}
 						>
 							{tagInfo.display}
@@ -668,8 +671,11 @@
 					{#each displayTags() as tagInfo}
 						<span
 							class="inline-flex items-center rounded px-1 py-0.5 text-[10px] border {tagInfo.isCollect
-								? 'bg-primary/10 border-primary/40 text-primary font-semibold'
+								? 'font-semibold'
 								: 'bg-muted border-border/60 text-muted-foreground'}"
+							style={tagInfo.isCollect
+								? `background-color: ${(tagInfo.color || '#409EFF')}20; border-color: ${(tagInfo.color || '#409EFF')}40; color: ${tagInfo.color || '#409EFF'};`
+								: ''}
 							title={tagInfo.tag}
 						>
 							{tagInfo.display}

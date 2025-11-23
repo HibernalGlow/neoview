@@ -13,12 +13,7 @@
 		rotationAngle = 0,
 		verticalPages = $bindable([] as Array<{ index: number; data: string | null }>),
 		panoramaPages = $bindable(
-			[] as Array<{
-				index: number;
-				data: string | null;
-				position: 'left' | 'center' | 'right';
-				slot: number;
-			}>
+			[] as Array<{ index: number; data: string | null; position: 'left' | 'center' | 'right' }>
 		)
 	}: {
 		imageData?: string | null;
@@ -32,7 +27,6 @@
 			index: number;
 			data: string | null;
 			position: 'left' | 'center' | 'right';
-			slot: number;
 		}>;
 	} = $props();
 
@@ -54,55 +48,34 @@
 		// 将目标图片的中心对齐到滚动容器的中心（无任何平滑动画）
 		const scrollToNodeCenter = () => {
 			if (!isCenter) return;
-			// 优先使用标记为 data-panorama-scroll 的外层容器
-			const container =
-				(node.closest('[data-panorama-scroll="true"]') as HTMLElement | null) ||
-				(node.parentElement as HTMLElement | null);
+			const container = node.parentElement as HTMLElement | null;
 			if (!container) return;
 
-			// 使用 offset 计算：目标 scrollLeft = 图片中心 - 容器宽度一半
-			const containerWidth = container.clientWidth;
-			const nodeCenter = node.offsetLeft + node.offsetWidth / 2;
-			const targetScrollLeft = Math.max(0, nodeCenter - containerWidth / 2);
+			const containerRect = container.getBoundingClientRect();
+			const nodeRect = node.getBoundingClientRect();
+			const containerCenter = containerRect.left + containerRect.width / 2;
+			const nodeCenter = nodeRect.left + nodeRect.width / 2;
+			const delta = nodeCenter - containerCenter;
 
-			// 直接设置 scrollLeft，避免平滑动画导致的位置偏移
-			container.scrollLeft = targetScrollLeft;
-		};
-
-		let cleanup: (() => void) | null = null;
-
-		const setup = () => {
-			if (!isCenter) return;
-			// 初次挂载时先尝试居中一次
-			requestAnimationFrame(() => {
-				scrollToNodeCenter();
-			});
-			// 图片加载完成后再居中一次，使用真实尺寸
-			node.addEventListener('load', scrollToNodeCenter);
-			cleanup = () => {
-				node.removeEventListener('load', scrollToNodeCenter);
-				cleanup = null;
-			};
+			// 直接修改 scrollLeft，避免 scrollTo/scroll-behavior 带来的平滑动画
+			container.scrollLeft = container.scrollLeft + delta;
 		};
 
 		if (isCenter) {
-			setup();
+			// 首次加载：立即对齐中心
+			requestAnimationFrame(() => {
+				scrollToNodeCenter();
+			});
 		}
 
-		// 返回 update/destroy 函数，当 isCenter 或节点状态变化时重新执行
+		// 返回 update 函数，当 isCenter 变化时重新执行
 		return {
 			update(newIsCenter: boolean) {
 				isCenter = newIsCenter;
-				if (!newIsCenter) {
-					cleanup?.();
-					return;
+				if (newIsCenter) {
+					// 翻页时也立即对齐到中心（无平滑动画）
+					scrollToNodeCenter();
 				}
-				// 翻页或中心图片变化时，重新绑定 load 事件并居中
-				cleanup?.();
-				setup();
-			},
-			destroy() {
-				cleanup?.();
 			}
 		};
 	}
@@ -122,14 +95,13 @@
 	<div
 		class="relative flex h-full w-full items-center overflow-x-auto"
 		style={`transform: scale(${zoomLevel});`}
-		data-panorama-scroll="true"
 	>
 		{#if hasPanoramaImages}
 			<!-- 使用相邻图片填充 -->
 			<div 
-				class={`flex h-full min-w-full items-center justify-start gap-0 py-0 ${readingDirection === 'right-to-left' ? 'flex-row-reverse' : ''}`}
+				class={`flex h-full min-w-full items-center justify-start gap-4 py-0 overflow-x-auto ${readingDirection === 'right-to-left' ? 'flex-row-reverse' : ''}`}
 			>
-				{#each panoramaPages as page (page.slot)}
+				{#each panoramaPages as page (page.index)}
 					{#if page.data}
 						<img
 							src={page.data}

@@ -103,6 +103,12 @@
 	let treeRoot = $derived(buildTree(items));
 	let expandedNodes = $state(new Set<string>());
 
+	function normalizePath(path: string): string {
+		return path.replace(/\\/g, '/').replace(/\/+$/, '');
+	}
+
+	let normalizedCurrentPath = $derived(currentPath ? normalizePath(currentPath) : '');
+
 	// 切换节点展开状态
 	function toggleNode(path: string) {
 		if (expandedNodes.has(path)) {
@@ -181,9 +187,11 @@
 		{@const item = node.item}
 		{@const hasChildren = node.children.size > 0}
 		{@const Icon = item ? getFileIcon(item) : Folder}
+		{@const nodePath = normalizePath(item?.path ?? node.path)}
+		{@const isActive = normalizedCurrentPath && nodePath === normalizedCurrentPath}
 
 		<div
-			class="tree-node flex cursor-pointer items-center gap-1 rounded px-2 py-1 hover:bg-gray-100"
+			class="tree-node flex cursor-pointer items-center gap-1 rounded px-2 py-1 {isActive ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/70'}"
 			style="padding-left: {level * 16 + 8}px"
 			role="button"
 			tabindex="0"
@@ -278,7 +286,7 @@
 			<span
 				class="flex-1 truncate text-sm {item && !item.isDir
 					? 'text-foreground'
-					: 'font-medium text-foreground'}"
+					: 'font-medium text-foreground'} {isActive ? 'font-semibold' : ''}"
 			>
 				{node.name}
 			</span>

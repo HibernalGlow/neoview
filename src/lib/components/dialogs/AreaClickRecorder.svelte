@@ -16,13 +16,16 @@
 	let isRecording = $state(true);
 
 	// 区域配置
-	const areas: { value: ViewArea; label: string; position: string }[] = [
-		{ value: 'top-left', label: '左上', position: 'top-0 left-0' },
-		{ value: 'top-center', label: '中上', position: 'top-0 left-1/3 -translate-x-1/2' },
-		{ value: 'top-right', label: '右上', position: 'top-0 right-0' },
-		{ value: 'bottom-left', label: '左下', position: 'bottom-0 left-0' },
-		{ value: 'bottom-center', label: '中下', position: 'bottom-0 left-1/3 -translate-x-1/2' },
-		{ value: 'bottom-right', label: '右下', position: 'bottom-0 right-0' }
+	const areas: { value: ViewArea; label: string; gridClass: string }[] = [
+		{ value: 'top-left', label: '左上', gridClass: 'col-start-1 row-start-1' },
+		{ value: 'top-center', label: '中上', gridClass: 'col-start-2 row-start-1' },
+		{ value: 'top-right', label: '右上', gridClass: 'col-start-3 row-start-1' },
+		{ value: 'middle-left', label: '左中', gridClass: 'col-start-1 row-start-2' },
+		{ value: 'middle-center', label: '中中', gridClass: 'col-start-2 row-start-2' },
+		{ value: 'middle-right', label: '右中', gridClass: 'col-start-3 row-start-2' },
+		{ value: 'bottom-left', label: '左下', gridClass: 'col-start-1 row-start-3' },
+		{ value: 'bottom-center', label: '中下', gridClass: 'col-start-2 row-start-3' },
+		{ value: 'bottom-right', label: '右下', gridClass: 'col-start-3 row-start-3' }
 	];
 
 	// 按键选项
@@ -79,16 +82,18 @@
 		<div class="space-y-3">
 			<Label class="text-sm font-medium">1. 选择点击区域</Label>
 			<div class="relative w-full h-64 bg-muted/20 border-2 border-dashed border-muted-foreground/30 rounded-lg overflow-hidden">
-				{#each areas as area}
-					<button
-						class="absolute w-1/3 h-1/2 border border-muted-foreground/20 hover:bg-primary/10 transition-colors flex items-center justify-center {selectedArea === area.value ? 'bg-primary/20 border-primary' : ''} {area.position}"
-						onclick={() => handleAreaClick(area.value)}
-					>
-						<span class="text-sm font-medium {selectedArea === area.value ? 'text-primary' : 'text-muted-foreground'}">
-							{area.label}
-						</span>
-					</button>
-				{/each}
+				<div class="absolute inset-4 grid grid-cols-3 grid-rows-3 gap-2">
+					{#each areas as area}
+						<button
+							class="border border-muted-foreground/20 hover:bg-primary/10 transition-colors flex items-center justify-center {selectedArea === area.value ? 'bg-primary/20 border-primary' : ''} {area.gridClass}"
+							onclick={() => handleAreaClick(area.value)}
+						>
+							<span class="text-sm font-medium {selectedArea === area.value ? 'text-primary' : 'text-muted-foreground'}">
+								{area.label}
+							</span>
+						</button>
+					{/each}
+				</div>
 			</div>
 		</div>
 

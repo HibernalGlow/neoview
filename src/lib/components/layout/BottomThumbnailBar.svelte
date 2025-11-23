@@ -567,7 +567,7 @@ onMount(() => {
 					size="sm"
 					class="h-6"
 					onclick={toggleAreaOverlay}
-					title="显示/隐藏6区域点击测试"
+					title="显示/隐藏9区域点击测试"
 				>
 					<Target class="h-3 w-3 mr-1" />
 					<span class="text-xs">区域</span>

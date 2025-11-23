@@ -14,9 +14,12 @@
 		{ value: 'top-left', label: '左上', gridClass: 'col-start-1 row-start-1' },
 		{ value: 'top-center', label: '中上', gridClass: 'col-start-2 row-start-1' },
 		{ value: 'top-right', label: '右上', gridClass: 'col-start-3 row-start-1' },
-		{ value: 'bottom-left', label: '左下', gridClass: 'col-start-1 row-start-2' },
-		{ value: 'bottom-center', label: '中下', gridClass: 'col-start-2 row-start-2' },
-		{ value: 'bottom-right', label: '右下', gridClass: 'col-start-3 row-start-2' }
+		{ value: 'middle-left', label: '左中', gridClass: 'col-start-1 row-start-2' },
+		{ value: 'middle-center', label: '中中', gridClass: 'col-start-2 row-start-2' },
+		{ value: 'middle-right', label: '右中', gridClass: 'col-start-3 row-start-2' },
+		{ value: 'bottom-left', label: '左下', gridClass: 'col-start-1 row-start-3' },
+		{ value: 'bottom-center', label: '中下', gridClass: 'col-start-2 row-start-3' },
+		{ value: 'bottom-right', label: '右下', gridClass: 'col-start-3 row-start-3' }
 	];
 
 	// 处理区域点击
@@ -85,8 +88,8 @@
 		<!-- 半透明背景 -->
 		<div class="absolute inset-0 bg-black/20 pointer-events-none"></div>
 		
-		<!-- 6区域网格 - 根据边栏状态决定是否响应点击 -->
-		<div class="absolute inset-4 grid grid-cols-3 grid-rows-2 gap-2 {sidebarOpen || rightSidebarOpen ? 'pointer-events-none' : 'pointer-events-auto'}">
+		<!-- 9区域网格 - 根据边栏状态决定是否响应点击 -->
+		<div class="absolute inset-4 grid grid-cols-3 grid-rows-3 gap-2 {sidebarOpen || rightSidebarOpen ? 'pointer-events-none' : 'pointer-events-auto'}">
 			{#each areas as area}
 				<div
 				class="border-2 border-white/60 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center cursor-pointer transition-all duration-200 hover:scale-105 hover:border-white/80 {area.gridClass}"

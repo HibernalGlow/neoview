@@ -46,44 +46,91 @@ export async function computeAutoBackgroundColor(src: string, maxDimension = 64)
         ctx.drawImage(img, 0, 0, width, height);
         const imageData = ctx.getImageData(0, 0, width, height);
         const data = imageData.data;
-        let r = 0;
-        let g = 0;
-        let b = 0;
-        let count = 0;
         const step = Math.max(1, Math.floor(Math.min(width, height) / 32));
-        const sampleEdge = (x: number, y: number) => {
+        const edgeThickness = Math.max(1, Math.floor(Math.min(width, height) / 16));
+
+        type Bin = { count: number; r: number; g: number; b: number };
+        const bins = new Map<number, Bin>();
+        let totalCount = 0;
+
+        const quantize = (c: number) => Math.floor(c / 24);
+        const addSample = (r: number, g: number, b: number) => {
+          const qr = quantize(r);
+          const qg = quantize(g);
+          const qb = quantize(b);
+          const key = (qr << 8) | (qg << 4) | qb;
+          let bin = bins.get(key);
+          if (!bin) {
+            bin = { count: 0, r: 0, g: 0, b: 0 };
+            bins.set(key, bin);
+          }
+          bin.count += 1;
+          bin.r += r;
+          bin.g += g;
+          bin.b += b;
+          totalCount += 1;
+        };
+
+        const sample = (x: number, y: number) => {
+          if (x < 0 || x >= width || y < 0 || y >= height) return;
           const index = (y * width + x) * 4;
           const alpha = data[index + 3];
           if (alpha < 16) {
             return;
           }
-          r += data[index];
-          g += data[index + 1];
-          b += data[index + 2];
-          count += 1;
+          const r = data[index];
+          const g = data[index + 1];
+          const b = data[index + 2];
+          addSample(r, g, b);
         };
+
         for (let x = 0; x < width; x += step) {
-          sampleEdge(x, 0);
-          sampleEdge(x, height - 1);
+          for (let y = 0; y < edgeThickness; y += step) {
+            sample(x, y);
+          }
+          for (let y = height - edgeThickness; y < height; y += step) {
+            sample(x, y);
+          }
         }
+
         for (let y = 0; y < height; y += step) {
-          sampleEdge(0, y);
-          sampleEdge(width - 1, y);
+          for (let x = 0; x < edgeThickness; x += step) {
+            sample(x, y);
+          }
+          for (let x = width - edgeThickness; x < width; x += step) {
+            sample(x, y);
+          }
         }
-        if (count === 0) {
+
+        if (totalCount === 0) {
           for (let y = 0; y < height; y += step) {
             for (let x = 0; x < width; x += step) {
-              sampleEdge(x, y);
+              sample(x, y);
             }
           }
         }
-        if (count === 0) {
+
+        if (totalCount === 0) {
           done(null);
           return;
         }
-        const avgR = clamp(Math.round(r / count), 0, 255);
-        const avgG = clamp(Math.round(g / count), 0, 255);
-        const avgB = clamp(Math.round(b / count), 0, 255);
+
+        let bestBin: Bin | null = null;
+        bins.forEach((bin) => {
+          if (!bestBin || bin.count > bestBin.count) {
+            bestBin = bin;
+          }
+        });
+
+        if (!bestBin || bestBin.count === 0) {
+          done(null);
+          return;
+        }
+
+        const chosen = bestBin as Bin;
+        const avgR = clamp(Math.round(chosen.r / chosen.count), 0, 255);
+        const avgG = clamp(Math.round(chosen.g / chosen.count), 0, 255);
+        const avgB = clamp(Math.round(chosen.b / chosen.count), 0, 255);
         const color = `rgb(${avgR}, ${avgG}, ${avgB})`;
         done(color);
       } catch {

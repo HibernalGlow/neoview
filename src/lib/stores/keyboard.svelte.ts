@@ -12,108 +12,16 @@ import type {
 } from '../types/keyboard';
 
 // 默认键盘快捷键绑定
-const defaultKeyBindings: KeyBinding[] = [
-	// 导航
-	{ command: 'next_page', keys: 'ArrowRight', description: '下一页', category: 'navigation' },
-	{ command: 'previous_page', keys: 'ArrowLeft', description: '上一页', category: 'navigation' },
-	{ command: 'first_page', keys: 'Home', description: '第一页', category: 'navigation' },
-	{ command: 'last_page', keys: 'End', description: '最后一页', category: 'navigation' },
-	{ command: 'next_page', keys: 'PageDown', description: '下一页', category: 'navigation' },
-	{ command: 'previous_page', keys: 'PageUp', description: '上一页', category: 'navigation' },
-
-	// 缩放
-	{ command: 'zoom_in', keys: '+', description: '放大', category: 'zoom' },
-	{ command: 'zoom_out', keys: '-', description: '缩小', category: 'zoom' },
-	{ command: 'zoom_reset', keys: '0', description: '重置缩放', category: 'zoom' },
-	{ command: 'fit_width', keys: 'w', description: '适应宽度', category: 'zoom' },
-	{ command: 'fit_height', keys: 'h', description: '适应高度', category: 'zoom' },
-	{ command: 'fit_screen', keys: 'f', description: '适应屏幕', category: 'zoom' },
-
-	// 文件操作
-	{ command: 'open_file', keys: 'Ctrl+o', description: '打开文件', category: 'file' },
-	{ command: 'close_book', keys: 'Ctrl+w', description: '关闭书籍', category: 'file' },
-	{ command: 'refresh', keys: 'F5', description: '刷新', category: 'file' },
-
-	// 视图
-	{
-		command: 'toggle_fullscreen',
-		keys: 'F11',
-		description: '全屏切换',
-		category: 'view'
-	},
-	{
-		command: 'toggle_sidebar',
-		keys: 'Ctrl+b',
-		description: '侧边栏切换',
-		category: 'view'
-	},
-	{
-		command: 'toggle_statusbar',
-		keys: 'Ctrl+/',
-		description: '状态栏切换',
-		category: 'view'
-	},
-
-	// 旋转
-	{ command: 'rotate_left', keys: 'Ctrl+l', description: '向左旋转', category: 'transform' },
-	{ command: 'rotate_right', keys: 'Ctrl+r', description: '向右旋转', category: 'transform' },
-	{ command: 'flip_horizontal', keys: 'Ctrl+h', description: '水平翻转', category: 'transform' },
-	{ command: 'flip_vertical', keys: 'Ctrl+v', description: '垂直翻转', category: 'transform' },
-
-	// 书签
-	{
-		command: 'toggle_bookmark',
-		keys: 'Ctrl+d',
-		description: '添加/移除书签',
-		category: 'bookmark'
-	},
-	{
-		command: 'show_bookmarks',
-		keys: 'Ctrl+Shift+d',
-		description: '显示书签',
-		category: 'bookmark'
-	}
-];
+const defaultKeyBindings: KeyBinding[] = [];
 
 // 默认触摸手势绑定
-const defaultGestureBindings: GestureBinding[] = [
-	{ gesture: 'swipe-right', command: 'previous_page', description: '上一页', category: 'navigation' },
-	{ gesture: 'swipe-left', command: 'next_page', description: '下一页', category: 'navigation' },
-	{ gesture: 'swipe-up', command: 'toggle_sidebar', description: '显示/隐藏侧边栏', category: 'view' },
-	{ gesture: 'pinch-out', command: 'zoom_in', description: '放大', category: 'zoom' },
-	{ gesture: 'pinch-in', command: 'zoom_out', description: '缩小', category: 'zoom' },
-	{ gesture: 'rotate-clockwise', command: 'rotate_right', description: '向右旋转', category: 'transform' },
-	{ gesture: 'rotate-counter-clockwise', command: 'rotate_left', description: '向左旋转', category: 'transform' },
-	{ gesture: 'two-finger-swipe-up', command: 'first_page', description: '第一页', category: 'navigation' },
-	{ gesture: 'two-finger-swipe-down', command: 'last_page', description: '最后一页', category: 'navigation' },
-	{ gesture: 'three-finger-swipe-left', command: 'close_book', description: '关闭书籍', category: 'file' },
-	{ gesture: 'double-tap', command: 'toggle_fullscreen', description: '全屏切换', category: 'view' },
-	{ gesture: 'long-press', command: 'show_context_menu', description: '显示菜单', category: 'view' }
-];
+const defaultGestureBindings: GestureBinding[] = [];
 
 // 默认鼠标手势绑定 (右键拖拽)
-const defaultMouseGestureBindings: MouseGestureBinding[] = [
-	{ pattern: 'L', command: 'previous_page', description: '向左 - 上一页', category: 'navigation' },
-	{ pattern: 'R', command: 'next_page', description: '向右 - 下一页', category: 'navigation' },
-	{ pattern: 'U', command: 'first_page', description: '向上 - 第一页', category: 'navigation' },
-	{ pattern: 'D', command: 'last_page', description: '向下 - 最后一页', category: 'navigation' },
-	{ pattern: 'UR', command: 'rotate_right', description: '右上 - 向右旋转', category: 'transform' },
-	{ pattern: 'UL', command: 'rotate_left', description: '左上 - 向左旋转', category: 'transform' },
-	{ pattern: 'RU', command: 'zoom_in', description: '右上 - 放大', category: 'zoom' },
-	{ pattern: 'RD', command: 'zoom_out', description: '右下 - 缩小', category: 'zoom' },
-	{ pattern: 'RL', command: 'close_book', description: '右左 - 关闭书籍', category: 'file' },
-	{ pattern: 'DR', command: 'toggle_fullscreen', description: '下右 - 全屏', category: 'view' }
-];
+const defaultMouseGestureBindings: MouseGestureBinding[] = [];
 
 // 默认鼠标滚轮绑定
-const defaultMouseWheelBindings: MouseWheelBinding[] = [
-	{ direction: 'up', command: 'previous_page', description: '滚轮向上 - 上一页' },
-	{ direction: 'down', command: 'next_page', description: '滚轮向下 - 下一页' },
-	{ direction: 'up', modifiers: { ctrl: true }, command: 'zoom_in', description: 'Ctrl+滚轮向上 - 放大' },
-	{ direction: 'down', modifiers: { ctrl: true }, command: 'zoom_out', description: 'Ctrl+滚轮向下 - 缩小' },
-	{ direction: 'up', modifiers: { shift: true }, command: 'rotate_left', description: 'Shift+滚轮向上 - 向左旋转' },
-	{ direction: 'down', modifiers: { shift: true }, command: 'rotate_right', description: 'Shift+滚轮向下 - 向右旋转' }
-];
+const defaultMouseWheelBindings: MouseWheelBinding[] = [];
 
 // Store
 export const keyBindings = writable<KeyBinding[]>(defaultKeyBindings);

@@ -55,58 +55,28 @@ const defaultBindings: ActionBinding[] = [
 		name: '下一页',
 		category: '导航',
 		description: '翻到下一页',
-		bindings: [
-			{ type: 'keyboard', key: 'ArrowRight' },
-			{ type: 'keyboard', key: 'd' },
-			{ type: 'keyboard', key: 'R' },
-			{ type: 'keyboard', key: 'Space' },
-			{ type: 'keyboard', key: 'PageDown' },
-			{ type: 'mouse', gesture: 'L', button: 'left' },
-			{ type: 'mouse', gesture: 'wheel-down', button: 'middle', action: 'wheel' }, // 鼠标滚轮下
-			{ type: 'mouse', gesture: 'click', button: 'middle', action: 'click' }, // 中键单击
-			{ type: 'mouse', gesture: 'R', button: 'right' }, // 右键 R
-			{ type: 'touch', gesture: 'swipe-left' },
-			{ type: 'area', area: 'top-right', button: 'left', action: 'click' }, // 左键点击右上区域
-			{ type: 'area', area: 'bottom-right', button: 'left', action: 'click' } // 左键点击右下区域
-		]
+		bindings: []
 	},
 	{
 		action: 'prevPage',
 		name: '上一页',
 		category: '导航',
 		description: '翻到上一页',
-		bindings: [
-			{ type: 'keyboard', key: 'ArrowLeft' },
-			{ type: 'keyboard', key: 'a' },
-			{ type: 'keyboard', key: 'Backspace' },
-			{ type: 'keyboard', key: 'PageUp' },
-			{ type: 'mouse', gesture: 'R', button: 'left' },
-			{ type: 'mouse', gesture: 'wheel-up', button: 'middle', action: 'wheel' }, // 鼠标滚轮上
-			{ type: 'mouse', gesture: 'L', button: 'right' }, // 右键 L
-			{ type: 'touch', gesture: 'swipe-right' },
-			{ type: 'area', area: 'top-left', button: 'left', action: 'click' }, // 左键点击左上区域
-			{ type: 'area', area: 'bottom-left', button: 'left', action: 'click' } // 左键点击左下区域
-		]
+		bindings: []
 	},
 	{
 		action: 'firstPage',
 		name: '第一页',
 		category: '导航',
 		description: '跳转到第一页',
-		bindings: [
-			{ type: 'keyboard', key: 'Home' },
-			{ type: 'keyboard', key: 'Ctrl+Home' }
-		]
+		bindings: []
 	},
 	{
 		action: 'lastPage',
 		name: '最后一页',
 		category: '导航',
 		description: '跳转到最后一页',
-		bindings: [
-			{ type: 'keyboard', key: 'End' },
-			{ type: 'keyboard', key: 'Ctrl+End' }
-		]
+		bindings: []
 	},
 	{
 		action: 'pageLeft',
@@ -127,24 +97,14 @@ const defaultBindings: ActionBinding[] = [
 		name: '下一个书籍',
 		category: '导航',
 		description: '切换到排序列表中的下一个书籍/文件夹',
-		bindings: [
-			{ type: 'keyboard', key: 'ArrowDown' },
-			{ type: 'keyboard', key: 's' },
-			{ type: 'keyboard', key: 'Alt+PageDown' },
-			{ type: 'keyboard', key: 'Ctrl+]' }
-		]
+		bindings: []
 	},
 	{
 		action: 'prevBook',
 		name: '上一个书籍',
 		category: '导航',
 		description: '切换到排序列表中的上一个书籍/文件夹',
-		bindings: [
-			{ type: 'keyboard', key: 'ArrowUp' },
-			{ type: 'keyboard', key: 'w' },
-			{ type: 'keyboard', key: 'Alt+PageUp' },
-			{ type: 'keyboard', key: 'Ctrl+[' }
-		]
+		bindings: []
 	},
 
 	// === 缩放操作 ===
@@ -153,50 +113,28 @@ const defaultBindings: ActionBinding[] = [
 		name: '放大',
 		category: '缩放',
 		description: '放大图片',
-		bindings: [
-			{ type: 'keyboard', key: 'Plus' },
-			{ type: 'keyboard', key: 'Ctrl+Plus' },
-			{ type: 'mouse', gesture: 'wheel-up', button: 'middle', action: 'wheel' }, // 鼠标滚轮上
-			{ type: 'mouse', gesture: 'U', button: 'right' },
-			{ type: 'touch', gesture: 'pinch-out' },
-			{ type: 'area', area: 'top-center', button: 'left', action: 'click' }, // 左键点击中上区域
-			{ type: 'area', area: 'top-center', button: 'right', action: 'click' } // 右键点击中上区域
-		]
+		bindings: []
 	},
 	{
 		action: 'zoomOut',
 		name: '缩小',
 		category: '缩放',
 		description: '缩小图片',
-		bindings: [
-			{ type: 'keyboard', key: 'Minus' },
-			{ type: 'keyboard', key: 'Ctrl+Minus' },
-			{ type: 'mouse', gesture: 'wheel-down', button: 'middle', action: 'wheel' }, // 鼠标滚轮下
-			{ type: 'mouse', gesture: 'D', button: 'right' },
-			{ type: 'touch', gesture: 'pinch-in' },
-			{ type: 'area', area: 'bottom-center', button: 'left', action: 'click' }, // 左键点击中下区域
-			{ type: 'area', area: 'bottom-center', button: 'right', action: 'click' } // 右键点击中下区域
-		]
+		bindings: []
 	},
 	{
 		action: 'fitWindow',
 		name: '适应窗口',
 		category: '缩放',
 		description: '图片适应窗口大小',
-		bindings: [
-			{ type: 'keyboard', key: 'F' },
-			{ type: 'keyboard', key: '0' }
-		]
+		bindings: []
 	},
 	{
 		action: 'actualSize',
 		name: '实际大小',
 		category: '缩放',
 		description: '显示图片实际尺寸',
-		bindings: [
-			{ type: 'keyboard', key: 'Ctrl+0' },
-			{ type: 'keyboard', key: 'Ctrl+1' }
-		]
+		bindings: []
 	},
 
 	// === 视图操作 ===
@@ -205,41 +143,28 @@ const defaultBindings: ActionBinding[] = [
 		name: '全屏',
 		category: '视图',
 		description: '切换全屏模式',
-		bindings: [
-			{ type: 'keyboard', key: 'F11' },
-			{ type: 'keyboard', key: 'Enter' },
-			{ type: 'touch', gesture: 'double-tap' }
-		]
+		bindings: []
 	},
 	{
 		action: 'toggleSidebar',
 		name: '侧边栏',
 		category: '视图',
 		description: '显示/隐藏侧边栏',
-		bindings: [
-			{ type: 'keyboard', key: 'Tab' },
-			{ type: 'keyboard', key: 'Ctrl+B' }
-		]
+		bindings: []
 	},
 	{
 		action: 'toggleBookMode',
 		name: '书籍模式',
 		category: '视图',
 		description: '切换单页/双页模式',
-		bindings: [
-			{ type: 'keyboard', key: 'B' },
-			{ type: 'keyboard', key: 'Ctrl+D' }
-		]
+		bindings: []
 	},
 	{
 		action: 'rotate',
 		name: '旋转',
 		category: '视图',
 		description: '旋转图片90度',
-		bindings: [
-			{ type: 'keyboard', key: 'R' },
-			{ type: 'mouse', gesture: 'RU', button: 'right' }
-		]
+		bindings: []
 	},
 
 	// === 文件操作 ===
@@ -248,29 +173,21 @@ const defaultBindings: ActionBinding[] = [
 		name: '打开文件',
 		category: '文件',
 		description: '打开文件对话框',
-		bindings: [
-			{ type: 'keyboard', key: 'Ctrl+O' }
-		]
+		bindings: []
 	},
 	{
 		action: 'closeFile',
 		name: '关闭文件',
 		category: '文件',
 		description: '关闭当前文件',
-		bindings: [
-			{ type: 'keyboard', key: 'Ctrl+W' },
-			{ type: 'keyboard', key: 'Escape' }
-		]
+		bindings: []
 	},
 	{
 		action: 'deleteFile',
 		name: '删除文件',
 		category: '文件',
 		description: '删除当前文件',
-		bindings: [
-			{ type: 'keyboard', key: 'Delete' },
-			{ type: 'keyboard', key: 'Shift+Delete' }
-		]
+		bindings: []
 	}
 ];
 
@@ -375,6 +292,24 @@ class KeyBindingsStore {
 			if (!binding.bindings) continue;
 			const keyBinding = binding.bindings.find(
 				b => b.type === 'keyboard' && (b as KeyBinding).key === key
+			);
+			if (keyBinding) {
+				return binding.action;
+			}
+		}
+		return null;
+	}
+
+	// 根据按键组合字符串查找操作（支持包含修饰键的组合，例如 Ctrl+ArrowLeft）
+	findActionByKeyCombo(keyCombo: string): string | null {
+		const normalized = keyCombo.toLowerCase();
+		for (const binding of this.bindings) {
+			if (!binding.bindings) continue;
+			const keyBinding = binding.bindings.find(
+				(b) =>
+					b.type === 'keyboard' &&
+					(typeof (b as KeyBinding).key === 'string' &&
+						(b as KeyBinding).key.toLowerCase() === normalized)
 			);
 			if (keyBinding) {
 				return binding.action;

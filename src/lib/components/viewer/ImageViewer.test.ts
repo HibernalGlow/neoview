@@ -47,7 +47,8 @@ vi.mock('$lib/stores/keyboard.svelte', () => ({
 
 vi.mock('$lib/stores/keybindings.svelte', () => ({
 	keyBindingsStore: {
-		findActionByMouseWheel: vi.fn()
+		findActionByMouseWheel: vi.fn(),
+		findActionByKeyCombo: vi.fn()
 	}
 }));
 
@@ -335,12 +336,15 @@ describe('ImageViewer 集成测试', () => {
 	it('应该正确处理键盘事件', async () => {
 		const { component } = render(ImageViewer);
 
-		// Mock keyBindings和命令
-		const { keyBindings, generateKeyCombo, findCommandByKeys } = await import('$lib/stores/keyboard.svelte');
+		// Mock 组合键生成
+		const { generateKeyCombo } = await import('$lib/stores/keyboard.svelte');
 		const mockGenerateKeyCombo = vi.fn().mockReturnValue('space');
-		const mockFindCommandByKeys = vi.fn().mockReturnValue('next_page');
 		generateKeyCombo.mockImplementation(mockGenerateKeyCombo);
-		findCommandByKeys.mockImplementation(mockFindCommandByKeys);
+
+		// Mock 统一 keybindings 动作查找
+		const { keyBindingsStore } = await import('$lib/stores/keybindings.svelte');
+		const mockFindActionByKeyCombo = vi.fn().mockReturnValue('nextPage');
+		keyBindingsStore.findActionByKeyCombo = mockFindActionByKeyCombo;
 
 		// Mock bookStore.nextPage
 		const { bookStore } = await import('$lib/stores/book.svelte');
@@ -353,7 +357,7 @@ describe('ImageViewer 集成测试', () => {
 
 		// 验证行为
 		expect(mockGenerateKeyCombo).toHaveBeenCalledWith(keyboardEvent);
-		expect(mockFindCommandByKeys).toHaveBeenCalledWith('space', keyBindings);
+		expect(mockFindActionByKeyCombo).toHaveBeenCalledWith('space');
 		expect(mockNextPage).toHaveBeenCalled();
 	});
 });

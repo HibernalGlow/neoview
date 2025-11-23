@@ -312,12 +312,12 @@ class SettingsManager {
         return result;
     }
 
-    async exportFullToFile(options: { includeNativeSettings: boolean; includeExtendedData: boolean }): Promise<void> {
+    buildFullPayload(options: { includeNativeSettings: boolean; includeExtendedData: boolean }): FullExportPayload | null {
         const includeNativeSettings = options.includeNativeSettings;
         const includeExtendedData = options.includeExtendedData;
 
         if (!includeNativeSettings && !includeExtendedData) {
-            return;
+            return null;
         }
 
         const payload: FullExportPayload = {
@@ -391,6 +391,13 @@ class SettingsManager {
             payload.extended = extended;
         }
 
+        return payload;
+    }
+
+    async exportFullToFile(options: { includeNativeSettings: boolean; includeExtendedData: boolean }): Promise<void> {
+        const payload = this.buildFullPayload(options);
+        if (!payload) return;
+
         try {
             const json = JSON.stringify(payload, null, 2);
             const blob = new Blob([json], { type: 'application/json' });
@@ -408,6 +415,213 @@ class SettingsManager {
         } catch (error) {
             console.error('❌ 导出完整设置失败:', error);
             throw error;
+        }
+    }
+
+    async applyFullPayload(
+        payload: FullExportPayload,
+        options: {
+            importNativeSettings: boolean;
+            modules: {
+                nativeSettings?: boolean;
+                keybindings?: boolean;
+                emmConfig?: boolean;
+                fileBrowserSort?: boolean;
+                uiState?: boolean;
+                panelsLayout?: boolean;
+                bookmarks?: boolean;
+                history?: boolean;
+                historySettings?: boolean;
+                searchHistory?: boolean;
+                upscaleSettings?: boolean;
+                customThemes?: boolean;
+            };
+            strategy: 'merge' | 'overwrite';
+        }
+    ): Promise<void> {
+        const { importNativeSettings, modules, strategy } = options;
+
+        if (importNativeSettings && payload.nativeSettings) {
+            try {
+                // 原生设置总是覆盖式导入
+                coreSettingsManager.importSettings(JSON.stringify(payload.nativeSettings));
+            } catch (error) {
+                console.error('导入原生设置失败:', error);
+            }
+        }
+
+        const extended = payload.extended;
+        if (!extended) return;
+
+        // keybindings
+        if (modules.keybindings && payload.appSettings?.keybindings) {
+            try {
+                keyBindingsStore.bindings = payload.appSettings.keybindings;
+                // 私有方法，这里暂时直接写入 localStorage 以避免访问私有方法
+                if (typeof window !== 'undefined' && window.localStorage) {
+                    try {
+                        window.localStorage.setItem('neoview-keybindings', JSON.stringify(payload.appSettings.keybindings));
+                    } catch (error) {
+                        console.error('写入快捷键存储失败:', error);
+                    }
+                }
+            } catch (error) {
+                console.error('导入快捷键失败:', error);
+            }
+        }
+
+        // EMM 配置：写回 localStorage，让 emmMetadataStore 下一次初始化时生效
+        if (modules.emmConfig && payload.appSettings?.emmMetadata && typeof window !== 'undefined' && window.localStorage) {
+            try {
+                const meta = payload.appSettings.emmMetadata;
+                if (meta.manualDatabasePath) {
+                    window.localStorage.setItem('neoview-emm-database-paths', JSON.stringify([meta.manualDatabasePath]));
+                }
+                if (meta.manualSettingPath) {
+                    window.localStorage.setItem('neoview-emm-setting-path', meta.manualSettingPath);
+                }
+                if (meta.manualTranslationDictPath) {
+                    window.localStorage.setItem('neoview-emm-translation-dict-path', meta.manualTranslationDictPath);
+                }
+                window.localStorage.setItem('neoview-emm-enable', String(meta.enableEMM));
+                window.localStorage.setItem('neoview-emm-file-list-tag-mode', meta.fileListTagDisplayMode);
+            } catch (error) {
+                console.error('导入 EMM 配置失败:', error);
+            }
+        }
+
+        // 文件浏览排序
+        if (modules.fileBrowserSort && payload.appSettings?.fileBrowser) {
+            try {
+                fileBrowserStore.setSort(
+                    payload.appSettings.fileBrowser.sortField as any,
+                    payload.appSettings.fileBrowser.sortOrder as any
+                );
+            } catch (error) {
+                console.error('导入文件浏览排序失败:', error);
+            }
+        }
+
+        // UI 状态
+        if (modules.uiState && typeof window !== 'undefined' && window.localStorage) {
+            try {
+                const uiState = extended.uiState || {};
+                const keys = Object.keys(uiState);
+                for (const key of keys) {
+                    const fullKey = `neoview-ui-${key}`;
+                    const value = uiState[key];
+                    window.localStorage.setItem(fullKey, JSON.stringify(value));
+                }
+            } catch (error) {
+                console.error('导入 UI 状态失败:', error);
+            }
+        }
+
+        // 面板布局
+        if (modules.panelsLayout && typeof window !== 'undefined' && window.localStorage) {
+            try {
+                if (extended.panelsLayout.panels) {
+                    window.localStorage.setItem('neoview-panels', JSON.stringify(extended.panelsLayout.panels));
+                }
+                if (extended.panelsLayout.sidebars) {
+                    window.localStorage.setItem('neoview-sidebars', JSON.stringify(extended.panelsLayout.sidebars));
+                }
+                if (extended.panelsLayout.sidebarManagement) {
+                    window.localStorage.setItem('neoview-sidebar-management', JSON.stringify(extended.panelsLayout.sidebarManagement));
+                }
+            } catch (error) {
+                console.error('导入面板布局失败:', error);
+            }
+        }
+
+        // 书签
+        if (modules.bookmarks && extended.bookmarks && Array.isArray(extended.bookmarks)) {
+            try {
+                if (strategy === 'overwrite') {
+                    bookmarkStore.clear();
+                }
+                for (const b of extended.bookmarks as any[]) {
+                    try {
+                        bookmarkStore.add({
+                            name: b.name,
+                            path: b.path,
+                            isDir: b.type === 'folder'
+                        } as any);
+                    } catch (error) {
+                        console.error('导入单条书签失败:', error, b);
+                    }
+                }
+            } catch (error) {
+                console.error('导入书签失败:', error);
+            }
+        }
+
+        // 历史记录
+        if (modules.history && extended.history && Array.isArray(extended.history)) {
+            try {
+                if (strategy === 'overwrite') {
+                    historyStore.clear();
+                }
+                for (const h of extended.history as any[]) {
+                    try {
+                        historyStore.add(h.path, h.name, h.currentPage, h.totalPages, h.thumbnail);
+                    } catch (error) {
+                        console.error('导入单条历史失败:', error, h);
+                    }
+                }
+            } catch (error) {
+                console.error('导入历史记录失败:', error);
+            }
+        }
+
+        // 历史设置
+        if (modules.historySettings && extended.historySettings) {
+            try {
+                const hs = extended.historySettings;
+                historySettingsStore.reset();
+                historySettingsStore.setSyncFileTreeOnHistorySelect(hs.syncFileTreeOnHistorySelect);
+                historySettingsStore.setSyncFileTreeOnBookmarkSelect(hs.syncFileTreeOnBookmarkSelect);
+            } catch (error) {
+                console.error('导入历史记录设置失败:', error);
+            }
+        }
+
+        // 搜索历史
+        if (modules.searchHistory && extended.searchHistory && typeof window !== 'undefined' && window.localStorage) {
+            try {
+                const m = extended.searchHistory as Record<string, unknown>;
+                if (m.file) {
+                    window.localStorage.setItem('neoview-file-search-history', JSON.stringify(m.file));
+                }
+                if (m.bookmark) {
+                    window.localStorage.setItem('neoview-bookmark-search-history', JSON.stringify(m.bookmark));
+                }
+                if (m.history) {
+                    window.localStorage.setItem('neoview-history-search-history', JSON.stringify(m.history));
+                }
+            } catch (error) {
+                console.error('导入搜索历史失败:', error);
+            }
+        }
+
+        // 超分设置
+        if (modules.upscaleSettings && extended.upscalePanelSettings && typeof window !== 'undefined' && window.localStorage) {
+            try {
+                window.localStorage.setItem('pyo3_upscale_settings', JSON.stringify(extended.upscalePanelSettings));
+            } catch (error) {
+                console.error('导入超分设置失败:', error);
+            }
+        }
+
+        // 自定义主题
+        if (modules.customThemes && extended.themeStorage && typeof window !== 'undefined' && window.localStorage) {
+            try {
+                if (extended.themeStorage.customThemes !== undefined) {
+                    window.localStorage.setItem('custom-themes', JSON.stringify(extended.themeStorage.customThemes));
+                }
+            } catch (error) {
+                console.error('导入自定义主题失败:', error);
+            }
         }
     }
 

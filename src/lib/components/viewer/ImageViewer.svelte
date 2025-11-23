@@ -4,7 +4,7 @@
 	 * 图像查看器主组件 (Svelte 5 Runes)
 	 */
 	import { bookStore, zoomIn, zoomOut, resetZoom, rotationAngle, toggleFullscreen } from '$lib/stores';
-	import { keyBindings, generateKeyCombo, findCommandByKeys } from '$lib/stores/keyboard.svelte';
+	import { generateKeyCombo } from '$lib/stores/keyboard.svelte';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { settingsManager, performanceSettings } from '$lib/settings/settingsManager';
 	import { onDestroy, onMount } from 'svelte';
@@ -1121,17 +1121,46 @@
 		console.log('🎉 全景模式：批量加载完成');
 	}
 
-	// 执行命令
+	// 执行命令 / 动作（兼容旧命令 ID 与新 action ID）
 	function executeCommand(command: string) {
+		// 优先处理与阅读方向相关的导航动作
+		if (command === 'pageLeft' || command === 'pageRight') {
+			const settings = settingsManager.getSettings();
+			const readingDirection = settings.book.readingDirection;
+			if (command === 'pageLeft') {
+				if (readingDirection === 'right-to-left') {
+					// 右开模式下，逻辑“向左翻页”对应物理向右翻
+					void handlePageRight();
+				} else {
+					void handlePageLeft();
+				}
+			} else {
+				if (readingDirection === 'right-to-left') {
+					// 右开模式下，逻辑“向右翻页”对应物理向左翻
+					void handlePageLeft();
+				} else {
+					void handlePageRight();
+				}
+			}
+			return;
+		}
+
 		const commands: Record<string, () => void> = {
+			// 旧命令 ID（keyboard.svelte.ts）
 			next_page: handleNextPage,
 			previous_page: handlePreviousPage,
 			zoom_in: zoomIn,
 			zoom_out: zoomOut,
 			zoom_reset: resetZoom,
+			// 新 action ID（keybindings.svelte.ts）
+			nextPage: handleNextPage,
+			prevPage: handlePreviousPage,
+			zoomIn: zoomIn,
+			zoomOut: zoomOut,
+			zoomReset: resetZoom,
 			// 全屏切换
 			toggle_fullscreen: toggleFullscreen
-			// 更多命令可以在这里添加
+			// 更多命令/动作可以在这里添加
 		};
 
 		const handler = commands[command];
@@ -1150,26 +1179,12 @@
 		// 生成按键组合
 		const keyCombo = generateKeyCombo(e);
 
-		// 查找对应的命令
-		const command = findCommandByKeys(keyCombo, $keyBindings);
-		let effectiveCommand = command;
-
-		// 右开模式下，逻辑上一页/下一页与物理方向相反
-		if (command === 'next_page' || command === 'previous_page') {
-			const settings = settingsManager.getSettings();
-			const readingDirection = settings.book.readingDirection;
-			if (readingDirection === 'right-to-left') {
-				if (command === 'next_page') {
-					effectiveCommand = 'previous_page';
-				} else {
-					effectiveCommand = 'next_page';
-				}
-			}
-		}
-
-		if (effectiveCommand) {
+		// 1）优先使用统一 keybindings 动作系统（支持 pageLeft/pageRight/nextPage/prevPage 等）
+		const action = keyBindingsStore.findActionByKeyCombo(keyCombo);
+		if (action) {
 			e.preventDefault();
-			executeCommand(effectiveCommand);
+			executeCommand(action);
+			return;
 		}
 	}
 

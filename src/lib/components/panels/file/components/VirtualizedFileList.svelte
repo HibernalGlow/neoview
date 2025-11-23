@@ -597,16 +597,10 @@
 	.virtual-list-container {
 		height: 100%;
 		overflow-y: auto;
-		scrollbar-width: thin;
-		scrollbar-color: var(--primary) transparent;
 	}
 
 	/* 自定义滚动条样式 */
 	.virtual-list-container::-webkit-scrollbar {
-		width: 4px;
-	}
-
-	.virtual-list-container:hover::-webkit-scrollbar {
 		width: 8px;
 	}
 
@@ -615,12 +609,14 @@
 	}
 
 	.virtual-list-container::-webkit-scrollbar-thumb {
-		background-color: var(--primary);
-		border-radius: 999px;
+		background-color: rgba(0, 0, 0, 0.2);
+		border-radius: 4px;
+		border: 2px solid transparent;
+		background-clip: content-box;
 	}
 
 	.virtual-list-container::-webkit-scrollbar-thumb:hover {
-		background-color: var(--primary);
+		background-color: rgba(0, 0, 0, 0.3);
 	}
 
 	/* 确保项目高度一致 */

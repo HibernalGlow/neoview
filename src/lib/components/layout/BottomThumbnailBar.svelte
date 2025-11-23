@@ -12,6 +12,7 @@
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { Button } from '$lib/components/ui/button';
 	import * as Progress from '$lib/components/ui/progress';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, ExternalLink, Minus, Target } from '@lucide/svelte';
 	import { subscribeSharedPreloadManager } from '$lib/components/viewer/flow/sharedPreloadManager';
 	import type { PreloadManager } from '$lib/components/viewer/flow/preloadManager.svelte';
@@ -264,9 +265,9 @@ function scheduleLoadVisibleThumbnails(immediate = false) {
 	function windowBadgeClass(index: number): string {
 		const windowState = $viewerState.pageWindow;
 		if (!windowState || windowState.stale) return '';
-		if (index === windowState.center) return 'bg-amber-500/80';
-		if (windowState.forward.includes(index)) return 'bg-blue-500/70';
-		if (windowState.backward.includes(index)) return 'bg-purple-500/70';
+		if (index === windowState.center) return 'bg-primary/80';
+		if (windowState.forward.includes(index)) return 'bg-accent/80';
+		if (windowState.backward.includes(index)) return 'bg-secondary/80';
 		return '';
 	}
 
@@ -542,36 +543,54 @@ onMount(() => {
 					{/if}
 					<span class="text-xs">{$bottomThumbnailBarPinned ? '已钉住' : '钉住'}</span>
 				</Button>
-				<Button
-					variant="ghost"
-					size="sm"
-					class="h-6"
-					onclick={openInNewWindow}
-					title="在独立窗口中打开"
-				>
-					<ExternalLink class="h-3 w-3 mr-1" />
-					<span class="text-xs">独立窗口</span>
-				</Button>
-				<Button
-					variant={showProgressBar ? 'default' : 'ghost'}
-					size="sm"
-					class="h-6"
-					onclick={toggleProgressBar}
-					title="显示阅读进度条"
-				>
-					<Minus class="h-3 w-3 mr-1" />
-					<span class="text-xs">进度条</span>
-				</Button>
-				<Button
-					variant={showAreaOverlay ? 'default' : 'ghost'}
-					size="sm"
-					class="h-6"
-					onclick={toggleAreaOverlay}
-					title="显示/隐藏9区域点击测试"
-				>
-					<Target class="h-3 w-3 mr-1" />
-					<span class="text-xs">区域</span>
-				</Button>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant="ghost"
+							size="sm"
+							class="h-6"
+							onclick={openInNewWindow}
+						>
+							<ExternalLink class="h-3 w-3 mr-1" />
+							<span class="text-xs">独立窗口</span>
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>在独立窗口中打开</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant={showProgressBar ? 'default' : 'ghost'}
+							size="sm"
+							class="h-6"
+							onclick={toggleProgressBar}
+						>
+							<Minus class="h-3 w-3 mr-1" />
+							<span class="text-xs">进度条</span>
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>显示阅读进度条</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant={showAreaOverlay ? 'default' : 'ghost'}
+							size="sm"
+							class="h-6"
+							onclick={toggleAreaOverlay}
+						>
+							<Target class="h-3 w-3 mr-1" />
+							<span class="text-xs">区域</span>
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>显示/隐藏 9 区域点击测试</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
 			</div>
 
 			{#if $viewerState.pageWindow && !$viewerState.pageWindow.stale}
@@ -596,74 +615,85 @@ onMount(() => {
 				<div class="flex gap-2 overflow-x-auto h-full pb-1 items-center" onscroll={handleScroll}>
 					{#each getOrderedPages() as page, index (page.path)}
 						{@const originalIndex = page.originalIndex}
-						<button
-							class="flex-shrink-0 rounded overflow-hidden border-2 border-border transition-colors relative group
-								{originalIndex === bookStore.currentPageIndex ? 'outline outline-2 outline-sidebar-ring' : ''}
-								{bookStore.getPageUpscaleStatus(originalIndex) === 'preupscaled' ? 'ring-2 ring-blue-500' : ''}
-								{bookStore.getPageUpscaleStatus(originalIndex) === 'done' ? 'ring-2 ring-green-500' : ''}
-								{bookStore.getPageUpscaleStatus(originalIndex) === 'failed' ? 'ring-2 ring-red-500' : ''}
-								hover:border-primary/50"
-							style="width: auto; height: {$bottomThumbnailBarHeight - 40}px; min-width: 60px; max-width: 120px;"
-							onclick={() => bookStore.navigateToPage(originalIndex)}
-							title="Page {originalIndex + 1}"
-						>
-							{#if originalIndex in thumbnails}
-								<img
-									src={thumbnails[originalIndex].url}
-									alt="Page {originalIndex + 1}"
-									class="w-full h-full object-contain"
-									style="object-position: center;"
-								/>
-							{:else}
-								<div
-									class="w-full h-full flex flex-col items-center justify-center bg-muted text-xs text-muted-foreground"
-									style="min-width: 60px; max-width: 120px;"
+						{@const status = bookStore.getPageUpscaleStatus(originalIndex)}
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<button
+									class="flex-shrink-0 rounded overflow-hidden border-2 border-border transition-colors relative group
+										{originalIndex === bookStore.currentPageIndex ? 'outline outline-2 outline-sidebar-ring' : ''}
+										{status === 'preupscaled' ? 'ring-2 ring-accent' : ''}
+										{status === 'done' ? 'ring-2 ring-primary' : ''}
+										{status === 'failed' ? 'ring-2 ring-destructive' : ''}
+										hover:border-primary/50"
+									style="width: auto; height: {$bottomThumbnailBarHeight - 40}px; min-width: 60px; max-width: 120px;"
+									onclick={() => bookStore.navigateToPage(originalIndex)}
 								>
-									<ImageIcon class="h-6 w-6 mb-1" />
-									<span class="font-mono">{originalIndex + 1}</span>
-								</div>
-							{/if}
+									{#if originalIndex in thumbnails}
+										<img
+											src={thumbnails[originalIndex].url}
+											alt="Page {originalIndex + 1}"
+											class="w-full h-full object-contain"
+											style="object-position: center;"
+										/>
+									{:else}
+										<div
+											class="w-full h-full flex flex-col items-center justify-center bg-muted text-xs text-muted-foreground"
+											style="min-width: 60px; max-width: 120px;"
+										>
+											<ImageIcon class="h-6 w-6 mb-1" />
+											<span class="font-mono">{originalIndex + 1}</span>
+										</div>
+									{/if}
 
-							{#if windowBadgeLabel(originalIndex)}
-								<div
-									class={`absolute top-0 right-0 text-[10px] px-1 py-[1px] text-white font-mono ${windowBadgeClass(originalIndex)}`}
-								>
-									{windowBadgeLabel(originalIndex)}
-								</div>
-							{/if}
+									{#if windowBadgeLabel(originalIndex)}
+										<div
+											class={`absolute top-0 right-0 text-[10px] px-1 py-[1px] text-white font-mono ${windowBadgeClass(originalIndex)}`}
+										>
+											{windowBadgeLabel(originalIndex)}
+										</div>
+									{/if}
 
-							<!-- 页码标签 -->
-							<div
-								class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[10px] text-center py-0.5 font-mono"
-							>
-								{index + 1}
-							</div>
-							
-							<!-- 状态角标 -->
-							{#if bookStore.getPageUpscaleStatus(index) === 'done'}
-								<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-green-500" title="已超分"></span>
-							{:else if bookStore.getPageUpscaleStatus(index) === 'preupscaled'}
-								<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-blue-500" title="已预超分"></span>
-							{:else if bookStore.getPageUpscaleStatus(index) === 'failed'}
-								<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-red-500" title="超分失败"></span>
-							{/if}
-						</button>
+									<!-- 页码标签 -->
+									<div
+										class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[10px] text-center py-0.5 font-mono"
+									>
+										{index + 1}
+									</div>
+
+									<!-- 状态角标 -->
+									{#if status === 'done'}
+										<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-primary"></span>
+									{:else if status === 'preupscaled'}
+										<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-accent"></span>
+									{:else if status === 'failed'}
+										<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-destructive"></span>
+									{/if}
+								</button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>
+									第 {originalIndex + 1} 页
+									{#if status === 'done'} · 已超分{/if}
+									{#if status === 'preupscaled'} · 已预超分{/if}
+									{#if status === 'failed'} · 超分失败{/if}
+								</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
 					{/each}
 				</div>
 			</div>
 		</div>
-	
-	<!-- 阅读进度条 -->
-	{#if showProgressBar && bookStore.currentBook}
-		<!-- 底部进度条 -->
-		<div class={`fixed bottom-0 left-0 right-0 h-1 z-[51] pointer-events-none ${readingDirection === 'right-to-left' ? 'rtl-progress-wrapper' : ''}`}>
-			<Progress.Root
-				value={((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}
-				class="h-full"
-			/>
-		</div>
-	{/if}
-</div>
+	</div>
+{/if}
+
+{#if showProgressBar && bookStore.currentBook}
+	<!-- 底部进度条 -->
+	<div class={`fixed bottom-0 left-0 right-0 h-1 z-[51] pointer-events-none ${readingDirection === 'right-to-left' ? 'rtl-progress-wrapper' : ''}`}>
+		<Progress.Root
+			value={((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}
+			class="h-full"
+		/>
+	</div>
 {/if}
 
 <style>

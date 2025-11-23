@@ -5,6 +5,7 @@
 	 */
 	import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewWindow';
 	import { Button } from '$lib/components/ui/button';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { Menu, Minimize, Maximize, X, Settings, PanelRightOpen } from '@lucide/svelte';
 	import { toggleSidebar, toggleRightSidebar } from '$lib/stores';
 
@@ -69,12 +70,26 @@
 
 	<!-- 中间：功能按钮 -->
 	<div class="flex items-center gap-1">
-		<Button variant="ghost" size="icon" class="h-6 w-6" onclick={toggleRightSidebar} title="右侧边栏">
-			<PanelRightOpen class="h-4 w-4" />
-		</Button>
-		<Button variant="ghost" size="icon" class="h-6 w-6" onclick={openSettings} title="设置">
-			<Settings class="h-4 w-4" />
-		</Button>
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button variant="ghost" size="icon" class="h-6 w-6" onclick={toggleRightSidebar}>
+					<PanelRightOpen class="h-4 w-4" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>右侧边栏</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button variant="ghost" size="icon" class="h-6 w-6" onclick={openSettings}>
+					<Settings class="h-4 w-4" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>设置</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
 	</div>
 
 	<!-- 右侧：窗口控制按钮 -->

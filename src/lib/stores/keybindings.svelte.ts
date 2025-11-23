@@ -156,6 +156,34 @@ const defaultBindings: ActionBinding[] = [
 		bindings: []
 	},
 	{
+		action: 'toggleRightSidebar',
+		name: '右侧边栏',
+		category: '视图',
+		description: '显示/隐藏右侧边栏（信息/属性/超分）',
+		bindings: []
+	},
+	{
+		action: 'toggleTopToolbarPin',
+		name: '固定顶部工具栏',
+		category: '视图',
+		description: '切换顶部工具栏的固定/自动隐藏状态',
+		bindings: []
+	},
+	{
+		action: 'toggleBottomThumbnailBarPin',
+		name: '固定底部缩略图栏',
+		category: '视图',
+		description: '切换底部缩略图栏的固定/自动隐藏状态',
+		bindings: []
+	},
+	{
+		action: 'toggleReadingDirection',
+		name: '阅读方向切换',
+		category: '视图',
+		description: '在左开/右开阅读方向之间切换',
+		bindings: []
+	},
+	{
 		action: 'toggleBookMode',
 		name: '书籍模式',
 		category: '视图',
@@ -190,6 +218,15 @@ const defaultBindings: ActionBinding[] = [
 		name: '删除文件',
 		category: '文件',
 		description: '删除当前文件',
+		bindings: []
+	},
+
+	// === 超分操作 ===
+	{
+		action: 'toggleAutoUpscale',
+		name: '自动超分开关',
+		category: '超分',
+		description: '开启或关闭自动超分（全局超分设置）',
 		bindings: []
 	}
 ];

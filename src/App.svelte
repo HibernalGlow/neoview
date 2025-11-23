@@ -8,10 +8,11 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { open } from '@tauri-apps/plugin-dialog';
-	import { bookStore, zoomIn, zoomOut, resetZoom, toggleSidebar, toggleFullscreen, rotateClockwise, toggleViewMode, sidebarOpen, rightSidebarOpen, pageLeft, pageRight } from '$lib/stores';
+	import { bookStore, zoomIn, zoomOut, resetZoom, toggleSidebar, toggleRightSidebar, toggleFullscreen, rotateClockwise, toggleViewMode, sidebarOpen, rightSidebarOpen, pageLeft, pageRight, topToolbarPinned, bottomThumbnailBarPinned, toggleReadingDirection } from '$lib/stores';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { FolderOpen } from '@lucide/svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
+	import { updateUpscaleSettings } from '$lib/utils/upscale/settings';
 	// TODO: 缩略图功能已移除，待重新实现
 	// import { init_thumbnail_manager } from '$lib/api';
 	import Toast from '$lib/components/ui/toast.svelte';
@@ -150,6 +151,10 @@ async function dispatchAction(action: string) {
 			console.log('执行切换侧边栏操作');
 			toggleSidebar();
 			break;
+		case 'toggleRightSidebar':
+			console.log('执行切换右侧边栏操作');
+			toggleRightSidebar();
+			break;
 		case 'toggleBookMode':
 			console.log('执行切换书籍模式操作');
 			toggleViewMode();
@@ -157,6 +162,32 @@ async function dispatchAction(action: string) {
 		case 'rotate':
 			console.log('执行旋转操作');
 			rotateClockwise();
+			break;
+		case 'toggleTopToolbarPin':
+			console.log('执行顶部工具栏钉住切换');
+			topToolbarPinned.update((p) => !p);
+			break;
+		case 'toggleBottomThumbnailBarPin':
+			console.log('执行底部缩略图栏钉住切换');
+			bottomThumbnailBarPinned.update((p) => !p);
+			break;
+		case 'toggleReadingDirection':
+			console.log('执行阅读方向切换');
+			toggleReadingDirection();
+			break;
+		case 'toggleAutoUpscale':
+			console.log('执行自动超分开关切换');
+			const settings = settingsManager.getSettings();
+			const current = settings.image.enableSuperResolution ?? false;
+			const next = !current;
+			settingsManager.updateNestedSettings('image', {
+				enableSuperResolution: next
+			});
+			updateUpscaleSettings({
+				autoUpscaleEnabled: next,
+				globalUpscaleEnabled: next,
+				currentImageUpscaleEnabled: next
+			});
 			break;
 		case 'openFile':
 			console.log('执行打开文件操作');
@@ -202,8 +233,8 @@ async function dispatchAction(action: string) {
 		}
 		default:
 			console.warn('未实现的快捷操作：', action);
+		}
 	}
-}
 
 function handleGlobalKeydown(e: KeyboardEvent) {
 	// 不在输入框时响应

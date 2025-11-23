@@ -108,6 +108,21 @@
 	}
 
 	let normalizedCurrentPath = $derived(currentPath ? normalizePath(currentPath) : '');
+	let lastScrolledPath = $state('');
+
+	function ensureCurrentPathExpanded() {
+		if (!normalizedCurrentPath) return;
+		const parts = normalizedCurrentPath.split('/');
+		const next = new Set<string>();
+		let segment = '';
+		for (let i = 0; i < parts.length; i++) {
+			const p = parts[i];
+			if (!p) continue;
+			segment = i === 0 ? p : `${segment}/${p}`;
+			next.add(segment);
+		}
+		expandedNodes = next;
+	}
 
 	// 切换节点展开状态
 	function toggleNode(path: string) {
@@ -142,6 +157,22 @@
 	}
 
 	let flattenedTree = $derived(renderNode(treeRoot));
+
+	$effect(() => {
+		if (!normalizedCurrentPath) return;
+		if (normalizedCurrentPath === lastScrolledPath) return;
+		ensureCurrentPathExpanded();
+		queueMicrotask(() => {
+			if (!normalizedCurrentPath) return;
+			const el = document.querySelector<HTMLDivElement>(
+				`.file-tree-view [data-path="${normalizedCurrentPath}"]`
+			);
+			if (el) {
+				el.scrollIntoView({ block: 'nearest' });
+			}
+			lastScrolledPath = normalizedCurrentPath;
+		});
+	});
 
 	// 处理项目点击
 	function handleItemClick(item: FsItem, index: number) {
@@ -193,6 +224,7 @@
 		<div
 			class="tree-node flex cursor-pointer items-center gap-1 rounded px-2 py-1 {isActive ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/70'}"
 			style="padding-left: {level * 16 + 8}px"
+			data-path={nodePath}
 			role="button"
 			tabindex="0"
 			onclick={() => {

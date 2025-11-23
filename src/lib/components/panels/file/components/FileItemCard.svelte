@@ -25,6 +25,7 @@
 		emmTranslationStore
 	} from '$lib/stores/emmMetadata.svelte';
 	import type { EMMCollectTag, EMMTranslationDict } from '$lib/api/emm';
+	import { getFileMetadata } from '$lib/api';
 
 	let {
 		item,
@@ -35,6 +36,7 @@
 		isDeleteMode = false,
 		showReadMark = false,
 		showBookmarkMark = true,
+		showSizeAndModified = false,
 		currentPage = undefined,
 		totalPages = undefined,
 		timestamp = undefined,
@@ -52,6 +54,7 @@
 		isDeleteMode?: boolean;
 		showReadMark?: boolean;
 		showBookmarkMark?: boolean;
+		showSizeAndModified?: boolean;
 		currentPage?: number;
 		totalPages?: number;
 		timestamp?: number;
@@ -204,6 +207,8 @@
 	let previewItems = $state<FsItem[]>([]);
 	let previewLoading = $state(false);
 	let previewIconElement = $state<HTMLElement | null>(null);
+	let folderTotalSize = $state<number | null>(null);
+	let folderSizeLoading = $state(false);
 
 	// 加载文件夹预览内容
 	async function loadFolderPreview() {
@@ -222,6 +227,25 @@
 			previewLoading = false;
 		}
 	}
+
+	// 异步加载目录总字节大小（仅在需要显示大小+时间时，对目录生效）
+	$effect(() => {
+		if (!showSizeAndModified) return;
+		if (!item.isDir) return;
+		if (folderTotalSize !== null || folderSizeLoading) return;
+
+		folderSizeLoading = true;
+		getFileMetadata(item.path)
+			.then((meta) => {
+				folderTotalSize = meta.size ?? 0;
+			})
+			.catch((err) => {
+				console.debug('获取文件夹总大小失败:', item.path, err);
+			})
+			.finally(() => {
+				folderSizeLoading = false;
+			});
+	});
 
 	// 格式化时间
 	function formatTime(ts?: number): string {
@@ -466,14 +490,24 @@
 				</div>
 			{/if}
 			<div class="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-sm">
-				{#if currentPage !== undefined && totalPages !== undefined}
-					<span>页码: {currentPage}/{totalPages}</span>
-				{/if}
-				{#if timestamp}
-					<span>{formatTime(timestamp)}</span>
-				{/if}
-				{#if !currentPage && !timestamp}
+				{#if showSizeAndModified}
 					<span>{formatSize(item.size || 0, item.isDir || false)}</span>
+					{#if timestamp}
+						<span>· {formatTime(timestamp)}</span>
+					{/if}
+					{#if item.isDir && folderTotalSize !== null}
+						<span>· {formatSize(folderTotalSize || 0, false)}</span>
+					{/if}
+				{:else}
+					{#if currentPage !== undefined && totalPages !== undefined}
+						<span>页码: {currentPage}/{totalPages}</span>
+					{/if}
+					{#if timestamp}
+						<span>{formatTime(timestamp)}</span>
+					{/if}
+					{#if !currentPage && !timestamp}
+						<span>{formatSize(item.size || 0, item.isDir || false)}</span>
+					{/if}
 				{/if}
 			</div>
 			{#if displayTags().length > 0}
@@ -616,12 +650,22 @@
 				</div>
 			{/if}
 			<div class="text-muted-foreground mt-1 text-xs">
-				{#if currentPage !== undefined && totalPages !== undefined}
-					<span>{currentPage}/{totalPages}</span>
-				{:else if timestamp}
-					<span>{formatTime(timestamp)}</span>
-				{:else}
+				{#if showSizeAndModified}
 					<span>{formatSize(item.size || 0, item.isDir || false)}</span>
+					{#if timestamp}
+						<span>· {formatTime(timestamp)}</span>
+					{/if}
+					{#if item.isDir && folderTotalSize !== null}
+						<span>· {formatSize(folderTotalSize || 0, false)}</span>
+					{/if}
+				{:else}
+					{#if currentPage !== undefined && totalPages !== undefined}
+						<span>{currentPage}/{totalPages}</span>
+					{:else if timestamp}
+						<span>{formatTime(timestamp)}</span>
+					{:else}
+						<span>{formatSize(item.size || 0, item.isDir || false)}</span>
+					{/if}
 				{/if}
 			</div>
 			{#if displayTags().length > 0}

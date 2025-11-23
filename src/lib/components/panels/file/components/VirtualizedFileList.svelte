@@ -515,9 +515,10 @@
 						{isDeleteMode}
 						showReadMark={!!historyEntry}
 						showBookmarkMark={true}
+						showSizeAndModified={true}
 						currentPage={historyEntry?.currentPage}
 						totalPages={historyEntry?.totalPages}
-						timestamp={historyEntry?.timestamp}
+						timestamp={item.modified ? item.modified * 1000 : undefined}
 						onClick={() => handleItemClick(item, actualIndex)}
 						onDoubleClick={() => handleItemDoubleClick(item, actualIndex)}
 						onContextMenu={(e) => handleItemContextMenu(e, item)}
@@ -560,9 +561,10 @@
 							{isDeleteMode}
 							showReadMark={!!historyEntry}
 							showBookmarkMark={true}
+							showSizeAndModified={true}
 							currentPage={historyEntry?.currentPage}
 							totalPages={historyEntry?.totalPages}
-							timestamp={historyEntry?.timestamp}
+							timestamp={item.modified ? item.modified * 1000 : undefined}
 							onClick={() => handleItemClick(item, actualIndex)}
 							onDoubleClick={() => handleItemDoubleClick(item, actualIndex)}
 							onContextMenu={(e) => handleItemContextMenu(e, item)}

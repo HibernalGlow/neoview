@@ -1,0 +1,319 @@
+<script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
+	import { readable } from 'svelte/store';
+	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
+	import { Label } from '$lib/components/ui/label';
+	import { Image as ImageIcon, FileText, Search, Grid3x3, Grid2x2, LayoutGrid } from '@lucide/svelte';
+	import { bookStore } from '$lib/stores/book.svelte';
+	import { appState, type StateSelector } from '$lib/core/state/appState';
+	import type { Page } from '$lib/types';
+	import type { PreloadManager } from '$lib/components/viewer/flow/preloadManager.svelte';
+	import { subscribeSharedPreloadManager } from '$lib/components/viewer/flow/sharedPreloadManager';
+
+	type GridSize = 'small' | 'medium' | 'large';
+
+	interface PageListItem {
+		index: number;
+		name: string;
+		path: string;
+		thumbUrl: string | null;
+		loading: boolean;
+		error: boolean;
+	}
+
+	const gridSizes: Record<GridSize, string> = {
+		small: 'w-12 h-16',
+		medium: 'w-16 h-20',
+		large: 'w-20 h-28'
+	};
+
+	let items = $state<PageListItem[]>([]);
+	let searchQuery = $state('');
+	let gridSize = $state<GridSize>('medium');
+
+	const filteredItems = $derived(
+		searchQuery.trim()
+			? items.filter((item) => {
+					const q = searchQuery.toLowerCase();
+					const idxStr = (item.index + 1).toString();
+					return (
+						item.name.toLowerCase().includes(q) ||
+						item.path.toLowerCase().includes(q) ||
+						idxStr.includes(q)
+					);
+				})
+			: items
+	);
+
+	let preloadManager: PreloadManager | null = null;
+	let unsubscribeShared: (() => void) | null = null;
+	let unsubscribeThumbs: (() => void) | null = null;
+	let listContainer = $state<HTMLDivElement | null>(null);
+	let lastBookPath = $state<string | null>(null);
+
+	function createAppStateStore<T>(selector: StateSelector<T>) {
+		const initial = selector(appState.getSnapshot());
+		return readable(initial, (set) => appState.subscribe(selector, (value) => set(value)));
+	}
+
+	const bookState = createAppStateStore((state) => state.book);
+
+	function setItemState(index: number, patch: Partial<PageListItem>) {
+		if (index < 0 || index >= items.length) return;
+		const current = items[index];
+		items[index] = { ...current, ...patch };
+		items = [...items];
+	}
+
+	function handleThumbnailReady(pageIndex: number, dataURL: string, source?: string) {
+		if (!dataURL) return;
+		if (pageIndex < 0 || pageIndex >= items.length) return;
+		setItemState(pageIndex, {
+			thumbUrl: dataURL,
+			loading: false,
+			error: false
+		});
+	}
+
+	async function requestThumbnailsAroundCurrent() {
+		if (!preloadManager || items.length === 0) return;
+		const center = bookStore.currentPageIndex;
+		const total = items.length;
+		const radius = 40;
+		const start = Math.max(0, center - radius);
+		const end = Math.min(total - 1, center + radius);
+
+		for (let i = start; i <= end; i++) {
+			const item = items[i];
+			if (!item || item.thumbUrl || item.loading || item.error) continue;
+			setItemState(i, { loading: true, error: false });
+			void preloadManager
+				.requestThumbnail(i, 'page-list')
+				.catch((error) => {
+					console.debug('请求缩略图失败:', i, error);
+					setItemState(i, { loading: false, error: true });
+				});
+		}
+	}
+
+	function scrollToCurrent() {
+		if (!listContainer) return;
+		const currentIndex = bookStore.currentPageIndex;
+		const el = listContainer.querySelector<HTMLButtonElement>(
+			`[data-page-index="${currentIndex}"]`
+		);
+		if (el) {
+			el.scrollIntoView({ block: 'nearest' });
+		}
+	}
+
+	async function goToPage(index: number) {
+		await bookStore.navigateToPage(index);
+	}
+
+	function setGrid(size: GridSize) {
+		gridSize = size;
+	}
+
+	onMount(() => {
+		unsubscribeShared = subscribeSharedPreloadManager((manager) => {
+			if (unsubscribeThumbs) {
+				unsubscribeThumbs();
+				unsubscribeThumbs = null;
+			}
+			preloadManager = manager;
+			if (preloadManager) {
+				unsubscribeThumbs = preloadManager.addThumbnailListener((pageIndex, dataURL, source) => {
+					handleThumbnailReady(pageIndex, dataURL, source);
+				});
+				void requestThumbnailsAroundCurrent();
+			}
+		});
+	});
+
+	onDestroy(() => {
+		if (unsubscribeShared) {
+			unsubscribeShared();
+			unsubscribeShared = null;
+		}
+		if (unsubscribeThumbs) {
+			unsubscribeThumbs();
+			unsubscribeThumbs = null;
+		}
+	});
+
+	$effect(() => {
+		const book = bookStore.currentBook;
+		const path = book?.path ?? null;
+		if (path === lastBookPath) {
+			return;
+		}
+		lastBookPath = path;
+		if (!book || !book.pages || book.pages.length === 0) {
+			items = [];
+			return;
+		}
+		const pages: Page[] = book.pages;
+		items = pages.map((page, index) => ({
+			index,
+			name: page.name ?? `Page ${index + 1}`,
+			path: page.path,
+			thumbUrl: null,
+			loading: false,
+			error: false
+		}));
+		void requestThumbnailsAroundCurrent();
+		setTimeout(scrollToCurrent, 50);
+	});
+
+	$effect(() => {
+		const _current = bookStore.currentPageIndex;
+		if (items.length === 0) return;
+		setTimeout(scrollToCurrent, 0);
+		void requestThumbnailsAroundCurrent();
+	});
+</script>
+
+<div class="h-full flex flex-col bg-background">
+	<div class="p-3 border-b space-y-2">
+		<div class="flex items-center justify-between">
+			<h3 class="text-sm font-semibold flex items-center gap-2">
+				<FileText class="h-4 w-4" />
+				<span>页面列表</span>
+			</h3>
+			<div class="flex items-center gap-1">
+				<Label class="text-[10px] text-muted-foreground mr-1">缩略图</Label>
+				<Button
+					variant={gridSize === 'small' ? 'default' : 'outline'}
+					size="icon"
+					class="h-6 w-6"
+					onclick={() => setGrid('small')}
+					title="小"
+				>
+					<Grid3x3 class="h-3 w-3" />
+				</Button>
+				<Button
+					variant={gridSize === 'medium' ? 'default' : 'outline'}
+					size="icon"
+					class="h-6 w-6"
+					onclick={() => setGrid('medium')}
+					title="中"
+				>
+					<Grid2x2 class="h-3 w-3" />
+				</Button>
+				<Button
+					variant={gridSize === 'large' ? 'default' : 'outline'}
+					size="icon"
+					class="h-6 w-6"
+					onclick={() => setGrid('large')}
+					title="大"
+				>
+					<LayoutGrid class="h-3 w-3" />
+				</Button>
+			</div>
+		</div>
+		<div class="text-[10px] text-muted-foreground space-y-0.5">
+			<div class="truncate">
+				{#if $bookState.currentBookPath}
+					<span>当前书籍: {$bookState.currentBookPath}</span>
+				{:else}
+					<span>未打开书籍</span>
+				{/if}
+			</div>
+			<div>
+				{#if bookStore.totalPages > 0}
+					<span>页: {bookStore.currentPageIndex + 1} / {bookStore.totalPages}</span>
+				{:else}
+					<span>无页面</span>
+				{/if}
+			</div>
+		</div>
+		<div class="relative">
+			<Search class="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+			<Input
+					type="text"
+					placeholder="搜索页面..."
+					bind:value={searchQuery}
+					class="pl-7 h-8 text-xs"
+				/>
+		</div>
+	</div>
+
+	<div class="flex-1 overflow-y-auto" bind:this={listContainer}>
+		{#if !$bookState.currentBookPath}
+			<div class="p-4 text-center text-sm text-muted-foreground">
+				打开一本书后，这里会显示页面列表
+			</div>
+		{:else if filteredItems.length === 0}
+			<div class="p-4 text-center text-sm text-muted-foreground">
+				未找到匹配的页面
+			</div>
+		{:else}
+			<div class="p-2 space-y-1">
+				{#each filteredItems as item}
+					<button
+						class="w-full flex items-center gap-3 p-2 rounded-md hover:bg-accent transition-colors text-left {bookStore.currentPageIndex ===
+							item.index
+								? 'bg-primary/10 border border-primary/40'
+								: 'border border-transparent'}"
+						onclick={() => goToPage(item.index)}
+						data-page-index={item.index}
+					>
+						<div
+							class="{gridSizes[
+								gridSize
+							]} rounded bg-muted flex items-center justify-center overflow-hidden relative flex-shrink-0"
+						>
+							{#if item.thumbUrl}
+								<img
+									src={item.thumbUrl}
+									alt={item.name}
+									class="absolute inset-0 w-full h-full object-contain"
+								/>
+							{:else if item.loading}
+								<div class="w-4 h-4 border-2 border-muted-foreground/40 border-t-foreground rounded-full animate-spin" />
+							{:else if item.error}
+								<span class="text-[10px] text-destructive">ERR</span>
+							{:else}
+								<ImageIcon class="h-5 w-5 text-muted-foreground" />
+							{/if}
+						</div>
+						<div class="flex-1 min-w-0">
+							<div class="flex items-center gap-2">
+								<span class="text-xs font-mono font-semibold text-primary">#{item.index + 1}</span>
+								{#if bookStore.currentPageIndex === item.index}
+									<span
+										class="px-1.5 py-0.5 text-[10px] font-semibold bg-primary text-primary-foreground rounded"
+									>
+										当前
+									</span>
+								{/if}
+							</div>
+							<div class="text-xs text-foreground truncate" title={item.name}>
+								{item.name}
+							</div>
+							<div class="text-[10px] text-muted-foreground truncate" title={item.path}>
+								{item.path}
+							</div>
+						</div>
+					</button>
+				{/each}
+			</div>
+		{/if}
+	</div>
+
+	<div class="p-2 border-t text-[10px] text-muted-foreground text-center">
+		{#if bookStore.totalPages > 0}
+			<span>共 {bookStore.totalPages} 页</span>
+		{:else}
+			<span>没有页面</span>
+		{/if}
+	</div>
+</div>
+
+<style>
+	button {
+		position: relative;
+	}
+</style>

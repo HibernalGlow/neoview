@@ -210,7 +210,22 @@
 					class="!w-[calc(var(--sidebar-width-icon)_+_1px)] border-r"
 					style="width: calc(var(--sidebar-width-icon) + 1px);"
 				>
-					<Sidebar.Header>
+					<Sidebar.Header class="flex flex-col gap-2 border-b px-1.5 py-2">
+						<div class="flex flex-col gap-1">
+							<Button
+								variant={$sidebarPinned ? 'default' : 'ghost'}
+								size="icon"
+								class="h-9 w-9"
+								onclick={togglePin}
+								oncontextmenu={handlePinContextMenu}
+							>
+								{#if $sidebarPinned}
+									<PinOff class="h-4 w-4" />
+								{:else}
+									<Pin class="h-4 w-4" />
+								{/if}
+							</Button>
+						</div>
 						<Sidebar.Menu>
 							<Sidebar.MenuItem>
 								<Sidebar.MenuButton size="lg" class="md:h-8 md:p-0">
@@ -261,44 +276,6 @@
 					class="hidden flex-1 md:flex"
 					style="width: calc(var(--sidebar-width) - var(--sidebar-width-icon) - 1px);"
 				>
-					<Sidebar.Header class="gap-3.5 border-b p-4">
-						<div class="flex w-full items-center justify-between">
-							<div class="text-foreground text-base font-medium">
-								{activeItem.title}
-								<div class="text-muted-foreground mt-1 space-x-2 text-xs">
-									<span>{sidebarBookSummary}</span>
-									{#if $viewerState.pageWindow && !$viewerState.pageWindow.stale}
-										<span>{sidebarWindowSummary}</span>
-									{/if}
-								</div>
-							</div>
-							<div class="flex items-center gap-3">
-								<Button
-									variant="ghost"
-									size="sm"
-									onclick={togglePin}
-									oncontextmenu={handlePinContextMenu}
-								>
-									{#if $sidebarPinned}
-										<PinOff class="h-4 w-4" />
-									{:else}
-										<Pin class="h-4 w-4" />
-									{/if}
-								</Button>
-								<Button
-									variant="ghost"
-									size="sm"
-									onclick={() => {
-										localSidebarOpen = false;
-										sidebarOpen.set(false);
-									}}
-								>
-									<X class="h-4 w-4" />
-								</Button>
-							</div>
-						</div>
-					</Sidebar.Header>
-
 					<Sidebar.Content>
 						<Sidebar.Group class="px-0">
 							<Sidebar.GroupContent>

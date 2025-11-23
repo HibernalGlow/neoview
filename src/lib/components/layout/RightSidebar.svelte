@@ -166,7 +166,22 @@
 		>
 			<!-- 一级菜单 - 图标模式 -->
 			<Sidebar.Root collapsible="none" class="!w-[calc(var(--sidebar-width-icon)_+_1px)] border-l" style="width: calc(var(--sidebar-width-icon) + 1px);">
-				<Sidebar.Header>
+				<Sidebar.Header class="flex flex-col gap-2 border-b px-1.5 py-2">
+					<div class="flex flex-col gap-1">
+						<Button
+							variant={$rightSidebarPinned ? 'default' : 'ghost'}
+							size="icon"
+							class="h-9 w-9"
+							onclick={togglePin}
+							oncontextmenu={handlePinContextMenu}
+						>
+							{#if $rightSidebarPinned}
+								<PinOff class="h-4 w-4" />
+							{:else}
+								<Pin class="h-4 w-4" />
+							{/if}
+						</Button>
+					</div>
 					<Sidebar.Menu>
 						<Sidebar.MenuItem>
 							<Sidebar.MenuButton size="lg" class="md:h-8 md:p-0">
@@ -211,30 +226,6 @@
 
 			<!-- 二级菜单 - 内容面板 -->
 			<Sidebar.Root collapsible="none" class="hidden flex-1 md:flex" style="width: calc(var(--sidebar-width) - var(--sidebar-width-icon) - 1px);">
-				<Sidebar.Header class="gap-3.5 border-b p-4">
-					<div class="flex w-full items-center justify-end">
-						<div class="flex items-center gap-2">
-							<Button
-								variant="ghost"
-								size="sm"
-								onclick={togglePin}
-								oncontextmenu={handlePinContextMenu}
-							>
-								{#if $rightSidebarPinned}
-									<PinOff class="h-4 w-4" />
-								{:else}
-									<Pin class="h-4 w-4" />
-								{/if}
-							</Button>
-							<Sidebar.Trigger asChild>
-								<Button variant="ghost" size="sm">
-									×
-								</Button>
-							</Sidebar.Trigger>
-						</div>
-					</div>
-				</Sidebar.Header>
-				
 				<Sidebar.Content>
 					<Sidebar.Group class="px-0">
 						<Sidebar.GroupContent>

@@ -3,8 +3,24 @@
 	 * NeoView - Main Layout Component
 	 * 主布局组件 - 集成自动隐藏功能
 	 */
-	import { sidebarOpen, sidebarWidth, rightSidebarOpen, rightSidebarWidth, pageLeft, pageRight, zoomIn, zoomOut } from '$lib/stores';
-	import { sidebars, setPanelSidebarSize, leftPanels, rightPanels, bottomPanels, activePanel } from '$lib/stores/panels.svelte';
+	import {
+		sidebarOpen,
+		sidebarWidth,
+		rightSidebarOpen,
+		rightSidebarWidth,
+		pageLeft,
+		pageRight,
+		zoomIn,
+		zoomOut
+	} from '$lib/stores';
+	import {
+		sidebars,
+		setPanelSidebarSize,
+		leftPanels,
+		rightPanels,
+		bottomPanels,
+		activePanel
+	} from '$lib/stores/panels.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import Sidebar from './Sidebar.svelte';
 	import RightSidebar from './RightSidebar.svelte';
@@ -24,60 +40,8 @@
 		rightSidebarWidth.set(width);
 	}
 
-	// 左侧边栏拖拽调整大小
-	let isResizingLeft = $state(false);
-	let startLeftX = 0;
-	let startLeftWidth = 0;
-
-	// 右侧边栏拖拽调整大小
-	let isResizingRight = $state(false);
-	let startRightX = 0;
-	let startRightWidth = 0;
-
 	// 区域覆盖层状态
 	let showAreaOverlay = $state(false);
-
-	function handleLeftResizeStart(e: MouseEvent) {
-		isResizingLeft = true;
-		startLeftX = e.clientX;
-		startLeftWidth = $sidebarWidth;
-		e.preventDefault();
-	}
-
-	function handleLeftResizeMove(e: MouseEvent) {
-		if (!isResizingLeft) return;
-
-		const delta = e.clientX - startLeftX;
-		const newWidth = Math.max(200, Math.min(600, startLeftWidth + delta));
-		
-		sidebarWidth.set(newWidth);
-		handleSidebarResize(newWidth);
-	}
-
-	function handleLeftResizeEnd() {
-		isResizingLeft = false;
-	}
-
-	function handleRightResizeStart(e: MouseEvent) {
-		isResizingRight = true;
-		startRightX = e.clientX;
-		startRightWidth = $rightSidebarWidth;
-		e.preventDefault();
-	}
-
-	function handleRightResizeMove(e: MouseEvent) {
-		if (!isResizingRight) return;
-
-		const delta = startRightX - e.clientX; // 右侧边栏，向左拖拽时delta为正（增加宽度）
-		const newWidth = Math.max(200, Math.min(600, startRightWidth + delta));
-		
-		rightSidebarWidth.set(newWidth);
-		handleRightSidebarResize(newWidth);
-	}
-
-	function handleRightResizeEnd() {
-		isResizingRight = false;
-	}
 
 	// 监听区域覆盖层切换事件
 	$effect(() => {
@@ -95,7 +59,7 @@
 	function handleAreaAction(e: CustomEvent) {
 		const { action } = e.detail;
 		console.log('执行区域操作:', action);
-		
+
 		// 这里可以根据action执行相应的操作
 		// 例如：翻页、缩放等
 		switch (action) {
@@ -140,24 +104,9 @@
 	}
 
 	// 全局鼠标事件
-	$effect(() => {
-		document.addEventListener('mousemove', handleRightResizeMove);
-		document.addEventListener('mousemove', handleLeftResizeMove);
-		document.addEventListener('mouseup', handleRightResizeEnd);
-		document.addEventListener('mouseup', handleLeftResizeEnd);
-
-		return () => {
-			document.removeEventListener('mousemove', handleRightResizeMove);
-			document.removeEventListener('mousemove', handleLeftResizeMove);
-			document.removeEventListener('mouseup', handleRightResizeEnd);
-			document.removeEventListener('mouseup', handleLeftResizeEnd);
-		};
-	});
-
-	
 </script>
 
-<div class="fixed inset-0 bg-background" role="application" aria-label="NeoView 主界面">
+<div class="bg-background fixed inset-0" role="application" aria-label="NeoView 主界面">
 	<!-- 自动隐藏顶部工具栏（包含标题栏） -->
 	<TopToolbar />
 
@@ -176,49 +125,29 @@
 	<BottomThumbnailBar />
 
 	<!-- 左侧边栏（悬浮，始终可用） -->
-	<div class="absolute left-0 top-0 bottom-0 z-[55] {$sidebarOpen ? 'pointer-events-auto' : 'pointer-events-none'}">
+	<div
+		class="absolute bottom-0 left-0 top-0 z-[55] {$sidebarOpen
+			? 'pointer-events-auto'
+			: 'pointer-events-none'}"
+	>
 		<!-- 只在图标栏区域（约48px宽）响应悬停 -->
-		<div class="absolute left-0 top-0 bottom-0 w-12 pointer-events-auto">
-			<Sidebar onResize={handleSidebarResize} bind:isVisible={$sidebarOpen} />
+		<div class="pointer-events-auto absolute bottom-0 left-0 top-0 w-12">
+			<Sidebar onResize={handleSidebarResize} />
 		</div>
 	</div>
-
-	<!-- 左侧边栏拖拽区域 - 独立层 -->
-	{#if $sidebarOpen}
-		<div
-			class="absolute top-0 bottom-0 z-[45] cursor-col-resize"
-			style="left: {$sidebarWidth}px; width: 8px;"
-			onmousedown={handleLeftResizeStart}
-			role="separator"
-			aria-label="调整左侧边栏宽度"
-			aria-orientation="vertical"
-		></div>
-	{/if}
 
 	<!-- 右侧边栏（悬浮，始终可用） -->
-	<div class="absolute right-0 top-0 bottom-0 z-[55] pointer-events-none">
+	<div class="pointer-events-none absolute bottom-0 right-0 top-0 z-[55]">
 		<!-- 只在图标栏区域（约48px宽）响应悬停 -->
-		<div class="absolute right-0 top-0 bottom-0 w-12 pointer-events-auto">
-			<RightSidebar onResize={handleRightSidebarResize} bind:isVisible={$rightSidebarOpen} />
+		<div class="pointer-events-auto absolute bottom-0 right-0 top-0 w-12">
+			<RightSidebar onResize={handleRightSidebarResize} />
 		</div>
 	</div>
 
-	<!-- 右侧边栏拖拽区域 - 独立层 -->
-	{#if $rightSidebarOpen}
-		<div
-			class="absolute top-0 bottom-0 z-[45] cursor-col-resize"
-			style="right: {$rightSidebarWidth}px; width: 8px;"
-			onmousedown={handleRightResizeStart}
-			role="separator"
-			aria-label="调整右侧边栏宽度"
-			aria-orientation="vertical"
-		></div>
-	{/if}
-
 	<!-- 区域覆盖层 -->
-	<AreaOverlay 
-		bind:show={showAreaOverlay} 
-		onareaAction={handleAreaAction} 
+	<AreaOverlay
+		bind:show={showAreaOverlay}
+		onareaAction={handleAreaAction}
 		sidebarOpen={$sidebarOpen}
 		rightSidebarOpen={$rightSidebarOpen}
 	/>

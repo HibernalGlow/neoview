@@ -12,6 +12,7 @@
 	} from '$lib/stores';
 	import { get } from 'svelte/store';
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
+	import { onMount } from 'svelte';
 
 	// 边栏管理状态
 	let sidebarManagement = $state({
@@ -208,8 +209,8 @@
 		}
 	}
 
-	// 初始化
-	$effect(() => {
+	// 初始化（仅在组件挂载时运行一次，避免循环）
+	onMount(() => {
 		initializeSidebarPanels();
 		syncPanelsStoreFromSidebarLayout();
 	});
@@ -237,10 +238,9 @@
 		};
 	});
 
-	$effect(() => {
-		settingsManager.addListener((next) => {
-			settings = next;
-		});
+	// 监听设置变化（只注册一次，不放在 $effect 里防止循环）
+	settingsManager.addListener((next) => {
+		settings = next;
 	});
 
 	function updateHoverAreas(partial: Partial<NeoViewSettings['panels']['hoverAreas']>) {

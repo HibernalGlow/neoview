@@ -172,30 +172,9 @@
 
 	// 响应 activePanel 变化（避免无限循环）
 	$effect(() => {
-		const info = panelInfo;
-		const currentActiveId = $activePanel as PanelTabType | null;
-		let next: NavItem | undefined;
-
-		if (currentActiveId) {
-			const candidate = navMain.find((nav) => nav.value === currentActiveId);
-			const entry = candidate && info[candidate.value];
-			if (candidate && entry && entry.visible && entry.location === 'left') {
-				next = candidate;
-			}
-		}
-
-		if (!next) {
-			next = navMain.find((nav) => {
-				const entry = info[nav.value];
-				return entry && entry.visible && entry.location === 'left';
-			});
-		}
-
-		if (!next) return;
-
-		if (next.value !== activeItem.value) {
-			activeItem = next;
-			setActivePanelTab(next.value as PanelTabType);
+		const currentActive = navMain.find((nav) => nav.value === $activePanel);
+		if (currentActive && currentActive.value !== activeItem.value) {
+			activeItem = currentActive;
 		}
 	});
 

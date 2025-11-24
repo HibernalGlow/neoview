@@ -126,8 +126,8 @@
 	// 响应 activeRightPanel 变化
 	$effect(() => {
 		const enabledInfo = infoPanelEnabled;
-		const currentActive = navMain.find((nav) => nav.value === $activeRightPanel);
-		let next = currentActive;
+		const currentValue = $activeRightPanel;
+		let next = navMain.find((nav) => nav.value === currentValue);
 
 		if (next?.value === 'info' && !enabledInfo) {
 			next = navMain.find((nav) => nav.value !== 'info');
@@ -139,8 +139,13 @@
 
 		if (!next) return;
 
+		// 同步本地激活项
 		if (next.value !== activeItem.value) {
 			activeItem = next;
+		}
+
+		// 仅在目标值与当前 store 不同时才写回，避免无限循环
+		if (next.value !== currentValue) {
 			setActiveRightPanel(next.value as RightPanelType);
 		}
 	});

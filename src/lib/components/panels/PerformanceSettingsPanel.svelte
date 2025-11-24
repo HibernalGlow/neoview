@@ -211,8 +211,10 @@
 			</div>
 		</div>
 
-		<!-- 操作区 -->
-		<div class="flex justify-end pt-2 border-t mt-2 border-border/60">
+		<!-- 操作区（底部固定） -->
+		<div
+			class="sticky bottom-0 flex justify-end pt-2 border-t mt-2 border-border/60 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80"
+		>
 			<Button variant="outline" size="sm" onclick={saveSettings}>
 				保存性能设置（需重启）
 			</Button>

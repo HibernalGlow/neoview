@@ -2,7 +2,7 @@
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import type { ReadingDirection } from '$lib/settings/settingsManager';
 	
-	type ViewMode = 'single' | 'double' | 'panorama' | 'vertical';
+	type ViewMode = 'single' | 'double' | 'panorama';
 
 	let {
 		imageData = null,
@@ -11,7 +11,7 @@
 		viewMode = 'single',
 		zoomLevel = 1,
 		rotationAngle = 0,
-		verticalPages = $bindable([] as Array<{ index: number; data: string | null }>),
+		orientation = 'horizontal',
 		panoramaPages = $bindable(
 			[] as Array<{ index: number; data: string | null; position: 'left' | 'center' | 'right' }>
 		)
@@ -22,7 +22,7 @@
 		viewMode?: ViewMode;
 		zoomLevel?: number;
 		rotationAngle?: number;
-		verticalPages?: Array<{ index: number; data: string | null }>;
+		orientation?: 'horizontal' | 'vertical';
 		panoramaPages?: Array<{
 			index: number;
 			data: string | null;
@@ -44,7 +44,12 @@
 		return source || fallback;
 	}
 
-	function scrollToCenter(node: HTMLElement, isCenter: boolean) {
+	function scrollToCenter(
+		node: HTMLElement,
+		params: { isCenter: boolean; orientation: 'horizontal' | 'vertical' }
+	) {
+		let { isCenter, orientation } = params;
+
 		// 将目标图片的中心对齐到滚动容器的中心（无任何平滑动画）
 		const scrollToNodeCenter = () => {
 			if (!isCenter) return;
@@ -53,12 +58,19 @@
 
 			const containerRect = container.getBoundingClientRect();
 			const nodeRect = node.getBoundingClientRect();
-			const containerCenter = containerRect.left + containerRect.width / 2;
-			const nodeCenter = nodeRect.left + nodeRect.width / 2;
-			const delta = nodeCenter - containerCenter;
 
-			// 直接修改 scrollLeft，避免 scrollTo/scroll-behavior 带来的平滑动画
-			container.scrollLeft = container.scrollLeft + delta;
+			if (orientation === 'horizontal') {
+				const containerCenter = containerRect.left + containerRect.width / 2;
+				const nodeCenter = nodeRect.left + nodeRect.width / 2;
+				const delta = nodeCenter - containerCenter;
+				// 直接修改 scrollLeft，避免 scrollTo/scroll-behavior 带来的平滑动画
+				container.scrollLeft = container.scrollLeft + delta;
+			} else {
+				const containerCenter = containerRect.top + containerRect.height / 2;
+				const nodeCenter = nodeRect.top + nodeRect.height / 2;
+				const delta = nodeCenter - containerCenter;
+				container.scrollTop = container.scrollTop + delta;
+			}
 		};
 
 		if (isCenter) {
@@ -68,12 +80,13 @@
 			});
 		}
 
-		// 返回 update 函数，当 isCenter 变化时重新执行
+		// 返回 update 函数，当参数变化时重新执行
 		return {
-			update(newIsCenter: boolean) {
-				isCenter = newIsCenter;
-				if (newIsCenter) {
-					// 翻页时也立即对齐到中心（无平滑动画）
+			update(newParams: { isCenter: boolean; orientation: 'horizontal' | 'vertical' }) {
+				isCenter = newParams.isCenter;
+				orientation = newParams.orientation;
+				if (isCenter) {
+					// 翻页或方向切换时立即对齐中心（无平滑动画）
 					scrollToNodeCenter();
 				}
 			}
@@ -91,24 +104,38 @@
 </script>
 
 {#if viewMode === 'panorama'}
-	<!-- 全景模式：使用相邻图片填充边框空隙 -->
+	<!-- 全景模式：使用相邻图片填充边框空隙，支持横向/纵向两种布局 -->
 	<div
-		class="relative flex h-full w-full items-center overflow-x-auto"
+		class={`relative flex h-full w-full ${
+			orientation === 'horizontal' ? 'items-center overflow-x-auto' : 'items-start overflow-y-auto'
+		}`}
 		style={`transform: scale(${zoomLevel});`}
 	>
 		{#if hasPanoramaImages}
 			<!-- 使用相邻图片填充 -->
-			<div 
-				class={`flex h-full min-w-full items-center justify-start py-0 overflow-x-auto ${readingDirection === 'right-to-left' ? 'flex-row-reverse' : ''}`}
+			<div
+				class={
+					orientation === 'horizontal'
+						? `flex h-full min-w-full items-center justify-start py-0 overflow-x-auto ${
+								readingDirection === 'right-to-left' ? 'flex-row-reverse' : ''
+							}`
+						: 'flex w-full min-h-full flex-col items-center justify-start py-0 overflow-y-auto'
+				}
 			>
 				{#each panoramaPages as page (page.index)}
 					{#if page.data}
 						<img
 							src={page.data}
 							alt={`Page ${page.index + 1}`}
-							class="h-full w-auto shrink-0 object-cover"
-							style={`transform: rotate(${rotationAngle}deg); transition: transform 0.2s; margin: 0 -1px;`}
-							use:scrollToCenter={page.position === 'center'}
+							class={
+								orientation === 'horizontal'
+									? 'h-full w-auto shrink-0 object-cover'
+									: 'w-full h-auto object-cover'
+							}
+							style={`transform: rotate(${rotationAngle}deg); transition: transform 0.2s; ${
+								orientation === 'horizontal' ? 'margin: 0 -1px;' : 'margin: -1px 0;'
+							}`}
+							use:scrollToCenter={{ isCenter: page.position === 'center', orientation }}
 						/>
 					{/if}
 				{/each}
@@ -124,24 +151,6 @@
 				/>
 			</div>
 		{/if}
-	</div>
-{:else if viewMode === 'vertical'}
-	<!-- 纵向滚动模式：垂直排列多张图片 -->
-	<div
-		class="flex h-full w-full flex-col items-center overflow-y-auto"
-		style={`transform: scale(${zoomLevel});`}
-	>
-		{#each verticalPages as page (page.index)}
-			{#if page.data}
-				<img
-					src={page.data}
-					alt={`Page ${page.index + 1}`}
-					class="mb-2 w-full object-contain"
-					style={`transform: rotate(${rotationAngle}deg); transition: transform 0.2s;`}
-					loading="lazy"
-				/>
-			{/if}
-		{/each}
 	</div>
 {:else if currentSrc(upscaledImageData, imageData)}
 	{#if viewMode === 'single'}

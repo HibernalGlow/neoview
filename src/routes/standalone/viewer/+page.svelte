@@ -20,7 +20,9 @@
 		setViewMode,
 		toggleViewMode,
 		lockedViewMode,
-		toggleViewModeLock
+		toggleViewModeLock,
+		orientation,
+		toggleOrientation
 	} from '$lib/stores';
 	import {
 		ChevronLeft,
@@ -30,7 +32,9 @@
 		RotateCw,
 		RectangleVertical,
 		Columns2,
-		PanelsTopLeft
+		PanelsTopLeft,
+		ArrowLeftRight,
+		ArrowDownUp
 	} from '@lucide/svelte';
 
 	const appWindow = getCurrentWebviewWindow();
@@ -163,39 +167,45 @@
 				<!-- 分隔线 -->
 				<div class="w-px h-6 bg-border mx-1"></div>
 
-				<!-- 视图模式切换 -->
-				<Button
-					variant={$viewMode === 'single' ? 'default' : 'ghost'}
-					size="icon"
-					class={`h-8 w-8 rounded-full ${$lockedViewMode === 'single' ? 'ring-2 ring-primary bg-primary/20 text-primary' : ''}`}
-					onclick={() => setViewMode('single')}
-					oncontextmenu={(event) => {
-						event.preventDefault();
-						toggleViewModeLock('single');
-					}}
-					title={$lockedViewMode === 'single' ? '单页模式（已锁定）' : '单页模式'}
-				>
-					<RectangleVertical class="h-4 w-4" />
-				</Button>
-				
+				<!-- 视图模式切换：单 / 双页合并为一个按钮，点击在两者之间切换，右键锁定当前模式 -->
 				<Button
 					variant={$viewMode === 'double' ? 'default' : 'ghost'}
 					size="icon"
-					class={`h-8 w-8 rounded-full ${$lockedViewMode === 'double' ? 'ring-2 ring-primary bg-primary/20 text-primary' : ''}`}
-					onclick={() => setViewMode('double')}
+					class={`h-8 w-8 rounded-full ${
+						$lockedViewMode === 'double' || $lockedViewMode === 'single'
+							? 'ring-2 ring-primary bg-primary/20 text-primary'
+							: ''
+					}`}
+					onclick={() => setViewMode($viewMode === 'double' ? 'single' : 'double')}
 					oncontextmenu={(event) => {
 						event.preventDefault();
-						toggleViewModeLock('double');
+						const mode = $viewMode === 'double' ? 'double' : 'single';
+						toggleViewModeLock(mode);
 					}}
-					title={$lockedViewMode === 'double' ? '双页模式（已锁定）' : '双页模式'}
+					title={
+						$viewMode === 'double'
+							? $lockedViewMode === 'double'
+									? '双页模式（已锁定）'
+									: '双页模式（点击切换为单页）'
+							: $lockedViewMode === 'single'
+								? '单页模式（已锁定）'
+								: '单页模式（点击切换为双页）'
+					}
 				>
-					<Columns2 class="h-4 w-4" />
+					{#if $viewMode === 'double'}
+						<Columns2 class="h-4 w-4" />
+					{:else}
+						<RectangleVertical class="h-4 w-4" />
+					{/if}
 				</Button>
 
+				<!-- 全景模式按钮：保持独立，右键锁定全景模式 -->
 				<Button
 					variant={$viewMode === 'panorama' ? 'default' : 'ghost'}
 					size="icon"
-					class={`h-8 w-8 rounded-full ${$lockedViewMode === 'panorama' ? 'ring-2 ring-primary bg-primary/20 text-primary' : ''}`}
+					class={`h-8 w-8 rounded-full ${
+						$lockedViewMode === 'panorama' ? 'ring-2 ring-primary bg-primary/20 text-primary' : ''
+					}`}
 					onclick={() => setViewMode('panorama')}
 					oncontextmenu={(event) => {
 						event.preventDefault();
@@ -204,6 +214,21 @@
 					title={$lockedViewMode === 'panorama' ? '全景模式（已锁定）' : '全景模式'}
 				>
 					<PanelsTopLeft class="h-4 w-4" />
+				</Button>
+
+				<!-- 方向切换：横向 / 纵向，全景模式下改变填充方向 -->
+				<Button
+					variant={$orientation === 'horizontal' ? 'default' : 'ghost'}
+					size="icon"
+					class="h-8 w-8 rounded-full ml-1"
+					onclick={toggleOrientation}
+					title={$orientation === 'horizontal' ? '横向布局（点击切换为纵向）' : '纵向布局（点击切换为横向）'}
+				>
+					{#if $orientation === 'horizontal'}
+						<ArrowLeftRight class="h-4 w-4" />
+					{:else}
+						<ArrowDownUp class="h-4 w-4" />
+					{/if}
 				</Button>
 
 				<!-- 分隔线 -->

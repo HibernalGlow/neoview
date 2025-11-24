@@ -21,6 +21,7 @@ import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewW
 		toggleViewModeLock,
 		toggleSidebar,
 		toggleReadingDirection,
+		toggleOrientation,
 		topToolbarPinned,
 		topToolbarHeight
 	} from '$lib/stores';
@@ -755,46 +756,6 @@ function toggleComparisonMode() {
 						<Tooltip.Root>
 							<Tooltip.Trigger>
 								<Button
-									variant={$viewerState.viewMode === 'single' ? 'default' : 'ghost'}
-									size="icon"
-									class={`h-8 w-8 rounded-full ${$viewerState.lockedViewMode === 'single' ? 'ring-2 ring-primary bg-primary/20 text-primary' : ''}`}
-									onclick={() => setViewMode('single')}
-									oncontextmenu={(event) => {
-										event.preventDefault();
-										toggleViewModeLock('single');
-									}}
-								>
-									<RectangleVertical class="h-4 w-4" />
-								</Button>
-							</Tooltip.Trigger>
-							<Tooltip.Content>
-								<p>单页模式{$viewerState.lockedViewMode === 'single' ? '（已锁定）' : ''}</p>
-							</Tooltip.Content>
-						</Tooltip.Root>
-
-						<Tooltip.Root>
-							<Tooltip.Trigger>
-								<Button
-									variant={$viewerState.viewMode === 'double' ? 'default' : 'ghost'}
-									size="icon"
-									class={`h-8 w-8 rounded-full ${$viewerState.lockedViewMode === 'double' ? 'ring-2 ring-primary bg-primary/20 text-primary' : ''}`}
-									onclick={() => setViewMode('double')}
-									oncontextmenu={(event) => {
-										event.preventDefault();
-										toggleViewModeLock('double');
-									}}
-								>
-									<Columns2 class="h-4 w-4" />
-								</Button>
-							</Tooltip.Trigger>
-							<Tooltip.Content>
-								<p>双页模式{$viewerState.lockedViewMode === 'double' ? '（已锁定）' : ''}</p>
-							</Tooltip.Content>
-						</Tooltip.Root>
-
-						<Tooltip.Root>
-							<Tooltip.Trigger>
-								<Button
 									variant={$viewerState.viewMode === 'panorama' ? 'default' : 'ghost'}
 									size="icon"
 									class={`h-8 w-8 rounded-full ${$viewerState.lockedViewMode === 'panorama' ? 'ring-2 ring-primary bg-primary/20 text-primary' : ''}`}
@@ -812,25 +773,69 @@ function toggleComparisonMode() {
 							</Tooltip.Content>
 						</Tooltip.Root>
 
+						<!-- 视图方向切换（横/竖），主要影响全景模式的填充方向 -->
 						<Tooltip.Root>
 							<Tooltip.Trigger>
 								<Button
-									variant={$viewerState.viewMode === 'vertical' ? 'default' : 'ghost'}
+									variant={$viewerState.orientation === 'horizontal' ? 'default' : 'ghost'}
 									size="icon"
-									class={`h-8 w-8 rounded-full ${$viewerState.lockedViewMode === 'vertical' ? 'ring-2 ring-primary bg-primary/20 text-primary' : ''}`}
-									onclick={() => setViewMode('vertical')}
-									oncontextmenu={(event) => {
-										event.preventDefault();
-										toggleViewModeLock('vertical');
-									}}
+									class="h-8 w-8 rounded-full ml-1"
+									onclick={toggleOrientation}
 								>
-									<ArrowDownUp class="h-4 w-4" />
+									{#if $viewerState.orientation === 'horizontal'}
+										<ArrowLeftRight class="h-4 w-4" />
+									{:else}
+										<ArrowDownUp class="h-4 w-4" />
+									{/if}
 								</Button>
 							</Tooltip.Trigger>
 							<Tooltip.Content>
-								<p>纵向滚动{$viewerState.lockedViewMode === 'vertical' ? '（已锁定）' : ''}</p>
+								<p>
+									{$viewerState.orientation === 'horizontal'
+										? '横向布局（点击切换为纵向）'
+										: '纵向布局（点击切换为横向）'}
+								</p>
 							</Tooltip.Content>
 						</Tooltip.Root>
+
+						<!-- 视图模式切换按钮 -->
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<Button
+									variant={$viewerState.viewMode === 'double' ? 'default' : 'ghost'}
+									size="icon"
+									class={`h-8 w-8 rounded-full ${
+										$viewerState.lockedViewMode === 'double' || $viewerState.lockedViewMode === 'single'
+											? 'ring-2 ring-primary bg-primary/20 text-primary'
+											: ''
+									}`}
+									onclick={() => setViewMode($viewerState.viewMode === 'double' ? 'single' : 'double')}
+									oncontextmenu={(event) => {
+										event.preventDefault();
+										const mode = $viewerState.viewMode === 'double' ? 'double' : 'single';
+										toggleViewModeLock(mode);
+									}}
+								>
+									{#if $viewerState.viewMode === 'double'}
+										<Columns2 class="h-4 w-4" />
+									{:else}
+										<RectangleVertical class="h-4 w-4" />
+									{/if}
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>
+									{$viewerState.viewMode === 'double'
+										? $viewerState.lockedViewMode === 'double'
+												? '双页模式（已锁定）'
+												: '双页模式（点击切换为单页）'
+										: $viewerState.lockedViewMode === 'single'
+												? '单页模式（已锁定）'
+												: '单页模式（点击切换为双页）'}
+								</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
+
 					</div>
 				</div>
 

@@ -35,8 +35,9 @@ export interface TaskCursorState {
 }
 
 export interface ViewerSlice {
-	viewMode: 'single' | 'double' | 'panorama' | 'vertical';
-	lockedViewMode: 'single' | 'double' | 'panorama' | 'vertical' | null;
+	viewMode: 'single' | 'double' | 'panorama';
+	lockedViewMode: 'single' | 'double' | 'panorama' | null;
+	orientation: 'horizontal' | 'vertical';
 	zoom: number;
 	loading: boolean;
 	comparisonVisible: boolean;
@@ -94,7 +95,9 @@ export function createDefaultAppState(): AppStateSnapshot {
 				enableSuperResolution: false,
 				superResolutionModel: null,
 				currentImageUpscaleEnabled: false,
-				useCachedFirst: true
+				useCachedFirst: true,
+				autoPlayAnimatedImages: true,
+				longImageScrollMode: 'continuous'
 			},
 			view: {
 				defaultZoomMode: 'fit',
@@ -162,6 +165,7 @@ export function createDefaultAppState(): AppStateSnapshot {
 		viewer: {
 			viewMode: 'single',
 			lockedViewMode: null,
+			orientation: 'horizontal',
 			zoom: 1,
 			loading: false,
 			comparisonVisible: false,

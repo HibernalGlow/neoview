@@ -55,8 +55,7 @@
 	let lastRequestedPageIndex = -1;
 	let lastLoadedPageIndex = -1;
 	let lastLoadedHash: string | null = null;
-	let lastViewMode: 'single' | 'double' | 'panorama' | 'vertical' | null = null;
-	let verticalPagesData = $state<Array<{ index: number; data: string | null }>>([]);
+	let lastViewMode: 'single' | 'double' | 'panorama' | null = null;
 	let panoramaPagesData = $state<
 		Array<{ index: number; data: string | null; position: 'left' | 'center' | 'right' }>
 	>([]);
@@ -706,17 +705,7 @@
 					}
 				}
 			}
-			if (verticalPagesData.length > 0) {
-				for (const page of verticalPagesData) {
-					if (page.data && page.data.startsWith('blob:')) {
-						try {
-							URL.revokeObjectURL(page.data);
-						} catch (e) {}
-					}
-				}
-			}
 			panoramaPagesData = [];
-			verticalPagesData = [];
 			lastPanoramaIndex = -1;
 
 			lastBookPath = currentBookPath ?? null;
@@ -958,125 +947,27 @@
 		preloadManager.loadCurrentImage();
 
 		// 根据模式加载相应的数据
-		if (mode === 'vertical') {
-			loadVerticalPages();
-			panoramaPagesData = [];
-		} else if (mode === 'panorama') {
+		if (mode === 'panorama') {
 			loadPanoramaPages();
-			verticalPagesData = [];
 		} else {
-			// 切换到其他模式时清空数据
-			verticalPagesData = [];
 			panoramaPagesData = [];
 		}
 	});
 
-	// 纵向滚动模式：加载多页数据
-	async function loadVerticalPages() {
-		if (!bookStore.currentBook || !preloadManager) {
-			return;
-		}
-
-		const totalPages = bookStore.totalPages;
-		const currentIndex = bookStore.currentPageIndex;
-		const preloadPages = performanceSettings.preLoadSize;
-
-		// 计算要加载的页面范围（当前页前后各 preloadPages 页）
-		const startIndex = Math.max(0, currentIndex - preloadPages);
-		const endIndex = Math.min(totalPages - 1, currentIndex + preloadPages);
-
-		// 初始化数组
-		const pages: Array<{ index: number; data: string | null }> = [];
-		for (let i = startIndex; i <= endIndex; i++) {
-			pages.push({ index: i, data: null });
-		}
-		verticalPagesData = pages;
-
-		// 异步加载每页的图片数据
-		for (const page of pages) {
-			try {
-				// 优先使用 PreloadManager 的 getBlob 方法
-				const blob = await preloadManager.getBlob(page.index);
-				if (blob && blob.size > 0) {
-					const url = URL.createObjectURL(blob);
-					page.data = url;
-					// 更新数组以触发响应式更新
-					verticalPagesData = [...verticalPagesData];
-				}
-			} catch (error) {
-				console.warn(`加载第 ${page.index + 1} 页失败:`, error);
-				// 如果 PreloadManager 失败，尝试直接通过 invoke 加载
-				const pageInfo = bookStore.currentBook?.pages[page.index];
-				if (pageInfo) {
-					try {
-						const displayPath = buildDisplayPath(bookStore.currentBook!, pageInfo);
-						let blob: Blob | null = null;
-
-						const traceId = createImageTraceId('viewer-vertical', page.index);
-						logImageTrace(traceId, 'fallback invoke', {
-							mode: 'vertical',
-							pageIndex: page.index,
-							source: bookStore.currentBook!.type
-						});
-
-						if (bookStore.currentBook!.type === 'archive') {
-							const binaryData = await invoke<number[]>('load_image_from_archive', {
-								archivePath: bookStore.currentBook!.path,
-								filePath: pageInfo.path,
-								traceId,
-								pageIndex: page.index
-							});
-							logImageTrace(traceId, 'fallback archive bytes ready', { bytes: binaryData.length });
-							blob = new Blob([new Uint8Array(binaryData)]);
-						} else {
-							const binaryData = await invoke<number[]>('load_image', {
-								path: displayPath,
-								traceId,
-								pageIndex: page.index
-							});
-							logImageTrace(traceId, 'fallback file bytes ready', { bytes: binaryData.length });
-							blob = new Blob([new Uint8Array(binaryData)]);
-						}
-
-						if (blob) {
-							logImageTrace(traceId, 'fallback blob created', { size: blob.size });
-						}
-
-						if (blob && blob.size > 0) {
-							const url = URL.createObjectURL(blob);
-							page.data = url;
-							// 更新数组以触发响应式更新
-							verticalPagesData = [...verticalPagesData];
-						}
-					} catch (loadError) {
-						console.warn(`通过 invoke 加载第 ${page.index + 1} 页失败:`, loadError);
-					}
-				}
-			}
-		}
-	}
-
-	// 监听当前页变化，在相应模式下更新数据
+	// 监听当前页变化，在全景模式下更新相邻页数据
 	let lastPanoramaIndex = -1;
 
 	$effect(() => {
 		const mode = $viewerState.viewMode;
 		const currentIndex = bookStore.currentPageIndex;
 
-		if (mode === 'vertical' && currentIndex !== undefined) {
-			loadVerticalPages();
-		} else if (mode === 'panorama' && currentIndex !== undefined) {
-			// 当页码改变，或者从其他模式切换到全景模式时，重新加载
-			if (currentIndex !== lastPanoramaIndex || lastViewMode !== 'panorama') {
+		if (mode === 'panorama' && currentIndex !== undefined) {
+			if (currentIndex !== lastPanoramaIndex) {
 				lastPanoramaIndex = currentIndex;
-				lastViewMode = 'panorama';
 				loadPanoramaPages();
 			}
-		}
-
-		// 更新 lastViewMode
-		if (mode !== 'panorama') {
-			lastViewMode = mode;
+		} else {
+			lastPanoramaIndex = -1;
 		}
 	});
 
@@ -1272,10 +1163,10 @@
 				{imageData}
 				{imageData2}
 				upscaledImageData={derivedUpscaledUrl || bookStore.upscaledImageData}
-				viewMode={$viewerState.viewMode as 'single' | 'double' | 'panorama' | 'vertical'}
+				viewMode={$viewerState.viewMode as 'single' | 'double' | 'panorama'}
 				zoomLevel={$viewerState.zoom}
 				rotationAngle={$rotationAngle}
-				bind:verticalPages={verticalPagesData}
+				orientation={$viewerState.orientation}
 				bind:panoramaPages={panoramaPagesData}
 			/>
 		{/if}

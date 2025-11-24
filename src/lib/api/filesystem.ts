@@ -320,6 +320,14 @@ export async function setExplorerContextMenuEnabled(enabled: boolean): Promise<b
   return await invoke<boolean>('set_explorer_context_menu_enabled', { enabled });
 }
 
+/**
+ * 生成 Explorer 右键菜单注册表文件内容 (.reg)
+ * 基于当前 exe 路径，返回完整文本，前端可触发下载
+ */
+export async function generateExplorerContextMenuReg(): Promise<string> {
+  return await invoke<string>('generate_explorer_context_menu_reg');
+}
+
 
 /**
  * 快速获取压缩包内的第一张图片（旧版本，返回字节数组）

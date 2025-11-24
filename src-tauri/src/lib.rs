@@ -310,6 +310,7 @@ pub fn run() {
             commands::get_background_queue_metrics,
             commands::get_explorer_context_menu_enabled,
             commands::set_explorer_context_menu_enabled,
+            commands::generate_explorer_context_menu_reg,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

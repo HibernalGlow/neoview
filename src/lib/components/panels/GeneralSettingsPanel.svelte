@@ -5,11 +5,14 @@
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select';
 	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
 	import { Switch } from '$lib/components/ui/switch';
+	import { Button } from '$lib/components/ui/button';
 	import * as FileSystemAPI from '$lib/api/filesystem';
 
 	let explorerContextMenuEnabled = $state(false);
 	let explorerContextMenuLoading = $state(true);
 	let explorerContextMenuError: string | null = $state(null);
+	let explorerContextMenuInitialized = $state(false);
+	let explorerContextMenuSyncing = $state(false);
 
 	onMount(async () => {
 		try {
@@ -23,10 +26,21 @@
 		}
 	});
 
+	$effect(() => {
+		if (explorerContextMenuLoading || explorerContextMenuSyncing) return;
+		if (!explorerContextMenuInitialized) {
+			explorerContextMenuInitialized = true;
+			return;
+		}
+		// 用户切换开关时，同步到后端
+		void toggleExplorerContextMenu(explorerContextMenuEnabled);
+	});
+
 	async function toggleExplorerContextMenu(value: boolean) {
 		const previous = explorerContextMenuEnabled;
 		explorerContextMenuEnabled = value;
 		explorerContextMenuError = null;
+		explorerContextMenuSyncing = true;
 		try {
 			const result = await FileSystemAPI.setExplorerContextMenuEnabled(value);
 			explorerContextMenuEnabled = result;
@@ -34,6 +48,26 @@
 			console.error('更新资源管理器上下文菜单失败:', err);
 			explorerContextMenuEnabled = previous;
 			explorerContextMenuError = '更新失败，请检查权限';
+		} finally {
+			explorerContextMenuSyncing = false;
+		}
+	}
+
+	async function downloadExplorerContextMenuReg() {
+		try {
+			const content = await FileSystemAPI.generateExplorerContextMenuReg();
+			const blob = new Blob([content], { type: 'application/octet-stream' });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = 'neoview_explorer_context_menu.reg';
+			document.body.appendChild(a);
+			a.click();
+			a.remove();
+			URL.revokeObjectURL(url);
+		} catch (err) {
+			console.error('导出注册表文件失败:', err);
+			explorerContextMenuError = '导出 .reg 失败';
 		}
 	}
 </script>
@@ -70,9 +104,14 @@
 					<Switch
 						bind:checked={explorerContextMenuEnabled}
 						disabled={explorerContextMenuLoading}
-						on:click={() => toggleExplorerContextMenu(!explorerContextMenuEnabled)}
 					/>
 				</label>
+				<div class="flex items-center justify-between gap-2">
+					<span class="text-xs text-muted-foreground">需要时可下载 .reg 手动导入注册表</span>
+					<Button variant="outline" size="xs" onclick={downloadExplorerContextMenuReg}>
+						导出 .reg
+					</Button>
+				</div>
 				{#if explorerContextMenuError}
 					<p class="text-xs text-destructive">{explorerContextMenuError}</p>
 				{:else if explorerContextMenuLoading}

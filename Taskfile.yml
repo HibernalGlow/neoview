@@ -1,0 +1,97 @@
+version: '3'
+
+vars:
+  GREETING: Hello, World!
+
+tasks:
+  default:
+    desc: List all available tasks
+    cmds:
+      - task --list
+
+  toolchain:
+    desc: Check versions of required tools
+    cmds:
+      - rustup -V
+      - rustc -V
+      - cargo -V
+      - cargo fmt --version
+      - cargo clippy -V
+      - node -v
+      - npm -v
+      - pnpm -v
+      - pnpm tauri -V
+
+  fmt:
+    desc: Format code
+    cmds:
+      - node --run fmt
+      - cargo fmt
+      - taplo fmt
+
+  check:
+    desc: Run all checks
+    deps: [fmt]
+    cmds:
+      - cargo fmt --check
+      - taplo fmt --check
+      - cargo clippy --all-features -- -D warnings
+      - task: typecheck
+
+  typecheck:
+    desc: Run TypeScript type checking
+    cmds:
+      - node --run typecheck:ui
+      - node --run typecheck:other
+
+  prepare:
+    desc: Prepare a release with the given tag
+    cmds:
+      - pnpm tsx ./scripts/set-pkg-version.ts {{.CLI_ARGS}}
+      - cargo set-version {{.CLI_ARGS}}
+      - task: fmt
+      - git commit -am "prepare release {{.CLI_ARGS}}"
+
+  push-tag:
+    desc: Push a tag to remote repository
+    cmds:
+      - git tag {{.CLI_ARGS}}
+      - git push origin {{.CLI_ARGS}}
+
+  delete-tag:
+    desc: Delete a tag locally and remotely
+    cmds:
+      - git tag -d {{.CLI_ARGS}}
+      - git push origin --delete {{.CLI_ARGS}}
+
+  pnpm:
+    desc: Run pnpm commands on the ui package
+    cmds:
+      - pnpm {{.CLI_ARGS}} --filter ./ui
+
+  bundle-test-app:
+    desc: Build and bundle test app
+    cmds:
+      - node --run build:ui
+      - pnpm tauri build -d --bundles app
+
+  bundle-test-ffmpeg-app:
+    desc: Build and bundle test ffmpeg app
+    cmds:
+      - node --run build:ui
+      - pnpm tauri build -d --bundles app -c ./tauri/tauri.ffmpeg.conf.json -f ffmpeg
+
+  # Aliases
+  pr:
+    desc: Alias for prepare
+    cmds:
+      - task: prepare
+        vars:
+          CLI_ARGS: '{{.CLI_ARGS}}'
+
+  pt:
+    desc: Alias for push-tag
+    cmds:
+      - task: push-tag
+        vars:
+          CLI_ARGS: '{{.CLI_ARGS}}'

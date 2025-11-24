@@ -34,7 +34,7 @@ jobs:
         shell: powershell
         run: |
           yarn install --frozen-lockfile
-          yarn tauri build --bundles none
+          yarn tauri build
 
       - name: verify executable
         shell: powershell

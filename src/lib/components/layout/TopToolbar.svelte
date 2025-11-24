@@ -759,7 +759,7 @@ function toggleComparisonMode() {
 									variant={$viewerState.viewMode === 'panorama' ? 'default' : 'ghost'}
 									size="icon"
 									class={`h-8 w-8 rounded-full ${$viewerState.lockedViewMode === 'panorama' ? 'ring-2 ring-primary bg-primary/20 text-primary' : ''}`}
-									onclick={() => setViewMode('panorama')}
+									onclick={() => setViewMode($viewerState.viewMode === 'panorama' ? 'single' : 'panorama')}
 									oncontextmenu={(event) => {
 										event.preventDefault();
 										toggleViewModeLock('panorama');

@@ -206,7 +206,7 @@
 					class={`h-8 w-8 rounded-full ${
 						$lockedViewMode === 'panorama' ? 'ring-2 ring-primary bg-primary/20 text-primary' : ''
 					}`}
-					onclick={() => setViewMode('panorama')}
+					onclick={() => setViewMode($viewMode === 'panorama' ? 'single' : 'panorama')}
 					oncontextmenu={(event) => {
 						event.preventDefault();
 						toggleViewModeLock('panorama');

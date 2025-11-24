@@ -6,6 +6,7 @@
 		type PerformanceSettings
 	} from '$lib/api/performance';
 	import { Switch } from '$lib/components/ui/switch';
+	import { Slider } from '$lib/components/ui/slider';
 	import { Button } from '$lib/components/ui/button';
 
 	// 使用独立字段，避免直接在对象属性上双向绑定造成复杂副作用
@@ -81,14 +82,17 @@
 					<span class="text-sm">图像缓存大小</span>
 					<span class="text-muted-foreground text-xs">{cacheMemorySize} MB</span>
 				</div>
-				<input
+				<Slider
+					min={128}
+					max={2048}
+					step={128}
+					type="single"
+					value={[cacheMemorySize]}
+					onValueChange={(vals) => {
+						const v = vals[0];
+						if (typeof v === 'number') cacheMemorySize = v;
+					}}
 					class="w-full"
-					type="range"
-					min="128"
-					max="2048"
-					step="128"
-					bind:value={cacheMemorySize}
-					aria-label="图像缓存大小"
 				/>
 			</div>
 		</div>
@@ -106,14 +110,17 @@
 						<span class="text-sm">预加载页面数</span>
 						<span class="text-muted-foreground text-xs">{preloadSize}</span>
 					</div>
-					<input
+					<Slider
+						min={1}
+						max={20}
+						step={1}
+						type="single"
+						value={[preloadSize]}
+						onValueChange={(vals) => {
+							const v = vals[0];
+							if (typeof v === 'number') preloadSize = Math.round(v);
+						}}
 						class="w-full"
-						type="range"
-						min="1"
-						max="20"
-						step="1"
-						bind:value={preloadSize}
-						aria-label="预加载页面数"
 					/>
 				</div>
 			{/if}
@@ -140,14 +147,17 @@
 					<span class="text-sm">解码线程数</span>
 					<span class="text-muted-foreground text-xs">{decodingThreads}</span>
 				</div>
-				<input
+				<Slider
+					min={1}
+					max={16}
+					step={1}
+					type="single"
+					value={[decodingThreads]}
+					onValueChange={(vals) => {
+						const v = vals[0];
+						if (typeof v === 'number') decodingThreads = Math.round(v);
+					}}
 					class="w-full"
-					type="range"
-					min="1"
-					max="16"
-					step="1"
-					bind:value={decodingThreads}
-					aria-label="解码线程数"
 				/>
 				<p class="text-muted-foreground text-xs">
 					{multiThreadedRendering ? '多线程解码已启用' : '单线程解码'}
@@ -164,14 +174,17 @@
 						<span class="text-sm">本地文件并发数</span>
 						<span class="text-muted-foreground text-xs">{thumbnailConcurrentLocal}</span>
 					</div>
-					<input
+					<Slider
+						min={1}
+						max={16}
+						step={1}
+						type="single"
+						value={[thumbnailConcurrentLocal]}
+						onValueChange={(vals) => {
+							const v = vals[0];
+							if (typeof v === 'number') thumbnailConcurrentLocal = Math.round(v);
+						}}
 						class="w-full"
-						type="range"
-						min="1"
-						max="16"
-						step="1"
-						bind:value={thumbnailConcurrentLocal}
-						aria-label="本地文件并发数"
 					/>
 				</div>
 				<div class="space-y-2">
@@ -179,14 +192,17 @@
 						<span class="text-sm">压缩包并发数</span>
 						<span class="text-muted-foreground text-xs">{thumbnailConcurrentArchive}</span>
 					</div>
-					<input
+					<Slider
+						min={1}
+						max={8}
+						step={1}
+						type="single"
+						value={[thumbnailConcurrentArchive]}
+						onValueChange={(vals) => {
+							const v = vals[0];
+							if (typeof v === 'number') thumbnailConcurrentArchive = Math.round(v);
+						}}
 						class="w-full"
-						type="range"
-						min="1"
-						max="8"
-						step="1"
-						bind:value={thumbnailConcurrentArchive}
-						aria-label="压缩包并发数"
 					/>
 				</div>
 				<div class="space-y-2">
@@ -194,14 +210,17 @@
 						<span class="text-sm">视频处理并发数</span>
 						<span class="text-muted-foreground text-xs">{thumbnailConcurrentVideo}</span>
 					</div>
-					<input
+					<Slider
+						min={1}
+						max={4}
+						step={1}
+						type="single"
+						value={[thumbnailConcurrentVideo]}
+						onValueChange={(vals) => {
+							const v = vals[0];
+							if (typeof v === 'number') thumbnailConcurrentVideo = Math.round(v);
+						}}
 						class="w-full"
-						type="range"
-						min="1"
-						max="4"
-						step="1"
-						bind:value={thumbnailConcurrentVideo}
-						aria-label="视频处理并发数"
 					/>
 				</div>
 				<label class="flex items-center gap-2">
@@ -213,7 +232,7 @@
 
 		<!-- 操作区（底部固定） -->
 		<div
-			class="sticky bottom-0 flex justify-end pt-2 border-t mt-2 border-border/60 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80"
+			class="sticky bottom-0 flex justify-end pt-2 border-t mt-2 border-border/60 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80"
 		>
 			<Button variant="outline" size="sm" onclick={saveSettings}>
 				保存性能设置（需重启）

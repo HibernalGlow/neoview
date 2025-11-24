@@ -54,7 +54,6 @@ import { appState, type StateSelector } from '$lib/core/state/appState';
 		GripHorizontal,
 		ExternalLink,
 		Eye,
-		Split,
 		Palette,
 		Sun,
 		Moon,
@@ -857,27 +856,6 @@ function toggleComparisonMode() {
 					</Tooltip.Trigger>
 					<Tooltip.Content>
 						<p>{readingDirection === 'left-to-right' ? '左开模式 (点击切换到右开)' : '右开模式 (点击切换到左开)'}</p>
-					</Tooltip.Content>
-				</Tooltip.Root>
-
-				<!-- 分隔线 -->
-				<Separator.Root orientation="vertical" class="h-6 mx-1" />
-
-				<!-- 对比模式按钮 -->
-				<Tooltip.Root>
-					<Tooltip.Trigger>
-						<Button 
-							variant={$viewerState.comparisonVisible ? 'default' : 'ghost'} 
-							size="icon" 
-							class="h-8 w-8"
-							title={$viewerState.comparisonVisible ? '关闭滑动对比' : '开启滑动对比'}
-							onclick={toggleComparisonMode}
-						>
-							<Split class="h-4 w-4" />
-						</Button>
-					</Tooltip.Trigger>
-					<Tooltip.Content>
-						<p>{$viewerState.comparisonVisible ? '关闭滑动对比' : '开启滑动对比'}</p>
 					</Tooltip.Content>
 				</Tooltip.Root>
 

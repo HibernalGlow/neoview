@@ -707,7 +707,7 @@
 									<div
 										class="absolute bottom-0 left-0 right-0 bg-black/70 py-0.5 text-center font-mono text-[10px] text-white"
 									>
-										{index + 1}
+										{originalIndex + 1}
 									</div>
 
 									<!-- 状态角标 -->

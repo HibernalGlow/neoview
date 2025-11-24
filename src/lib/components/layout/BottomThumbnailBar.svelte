@@ -533,7 +533,7 @@ onMount(() => {
 		role="application"
 		aria-label="底部缩略图栏"
 	>
-		<div class="bg-sidebar/95 backdrop-blur-sm border-t shadow-lg overflow-hidden" style="height: {$bottomThumbnailBarHeight}px;">
+		<div class="bg-sidebar/95 backdrop-blur-sm border-t shadow-lg overflow-hidden relative" style="height: {$bottomThumbnailBarHeight}px;">
 			<!-- 拖拽手柄 -->
 			<button
 				type="button"
@@ -697,22 +697,21 @@ onMount(() => {
 								</p>
 							</Tooltip.Content>
 						</Tooltip.Root>
-					{/each}
+						{/each}
+					</div>
 				</div>
+				{#if showBottomProgressBar && bookStore.currentBook}
+					<!-- 底部进度条（跟随缩略图栏） -->
+					<div class={`absolute left-0 right-0 bottom-0 h-1 z-[60] pointer-events-none ${readingDirection === 'right-to-left' ? 'rtl-progress-wrapper' : ''}`}>
+						<Progress.Root
+							value={((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}
+							class="h-full"
+						/>
+					</div>
+				{/if}
 			</div>
 		</div>
-	</div>
-{/if}
-
-{#if showBottomProgressBar && bookStore.currentBook}
-	<!-- 底部进度条 -->
-	<div class={`fixed bottom-0 left-0 right-0 h-1 z-[51] pointer-events-none ${readingDirection === 'right-to-left' ? 'rtl-progress-wrapper' : ''}`}>
-		<Progress.Root
-			value={((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}
-			class="h-full"
-		/>
-	</div>
-{/if}
+	{/if}
 
 <style>
 	.rtl-progress-wrapper {

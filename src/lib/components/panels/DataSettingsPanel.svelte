@@ -28,6 +28,7 @@
 		getSortedRowModel
 	} from '@tanstack/table-core';
 	import { settingsManager, type FullExportPayload } from '$lib/stores/settingsManager.svelte';
+	import { getPerformanceSettings } from '$lib/api/performance';
 
 	type ModuleId =
 		| 'nativeSettings'
@@ -41,7 +42,8 @@
 		| 'historySettings'
 		| 'searchHistory'
 		| 'upscaleSettings'
-		| 'customThemes';
+		| 'customThemes'
+		| 'performanceSettings';
 
 	interface DataModuleRow {
 		id: ModuleId;
@@ -150,6 +152,15 @@
 			panel: '外观 / 主题面板',
 			storage: 'localStorage: custom-themes',
 			description: '用户自定义的配色主题列表',
+			defaultExport: true,
+			defaultImport: true
+		},
+		{
+			id: 'performanceSettings',
+			name: '性能设置（后端）',
+			panel: '性能设置面板',
+			storage: 'Tauri 后端配置',
+			description: 'Tauri 性能参数（缓存、预加载、线程等）',
 			defaultExport: true,
 			defaultImport: true
 		}
@@ -325,7 +336,8 @@
 			historySettings: exportSelection.historySettings,
 			searchHistory: exportSelection.searchHistory,
 			upscaleSettings: exportSelection.upscaleSettings,
-			customThemes: exportSelection.customThemes
+			customThemes: exportSelection.customThemes,
+			performanceSettings: exportSelection.performanceSettings
 		};
 	}
 
@@ -342,7 +354,8 @@
 			historySettings: importSelection.historySettings,
 			searchHistory: importSelection.searchHistory,
 			upscaleSettings: importSelection.upscaleSettings,
-			customThemes: importSelection.customThemes
+			customThemes: importSelection.customThemes,
+			performanceSettings: importSelection.performanceSettings
 		};
 	}
 
@@ -363,6 +376,14 @@
 				return;
 			}
 			const modules = buildModuleFlagsFromExport();
+			if (modules.performanceSettings && payload.extended) {
+				try {
+					const perf = await getPerformanceSettings();
+					payload.extended.performanceSettings = perf;
+				} catch (error) {
+					console.error('导出性能设置失败:', error);
+				}
+			}
 			// 根据导出选择裁剪 payload
 			if (!modules.nativeSettings) {
 				delete payload.nativeSettings;

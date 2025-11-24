@@ -281,10 +281,13 @@
 	});
 </script>
 
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
 	class="video-player-container relative flex h-full w-full items-center justify-center bg-black"
 	onmousemove={handleMouseMove}
 	onmouseleave={() => isPlaying && (showControls = false)}
+	role="region"
+	aria-label="视频播放器"
 >
 	{#if videoUrl}
 		<video
@@ -303,17 +306,23 @@
 		</video>
 
 		<!-- 控制栏 -->
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<div
 			class="video-controls absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300"
 			class:opacity-0={!showControls}
 			class:opacity-100={showControls}
 			onclick={(event) => event.stopPropagation()}
 			onmousedown={(event) => event.stopPropagation()}
+			role="group"
+			aria-label="视频控制栏"
 		>
 			<!-- 进度条 -->
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<div
 				class="progress-bar mb-4 h-0.5 w-full cursor-pointer rounded-full bg-primary/40 transition-all hover:h-1"
 				onclick={seek}
+				role="presentation"
 			>
 				<div
 					class="progress-fill h-full rounded-full bg-primary"

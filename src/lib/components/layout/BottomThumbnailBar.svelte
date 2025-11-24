@@ -18,7 +18,6 @@
 		Pin,
 		PinOff,
 		GripHorizontal,
-		ExternalLink,
 		Minus,
 		Target
 	} from '@lucide/svelte';
@@ -157,13 +156,6 @@
 				detail: { show: showHoverAreasOverlay }
 			})
 		);
-	}
-
-	function openInNewWindow() {
-		const url = `${window.location.origin}/standalone/bottom-thumbnails`;
-		const features =
-			'width=1200,height=300,resizable=yes,scrollbars=yes,status=yes,toolbar=no,menubar=no,location=no';
-		window.open(url, '缩略图栏', features);
 	}
 
 	function handleResizeStart(e: MouseEvent) {
@@ -653,17 +645,6 @@
 				</Button>
 				<Tooltip.Root>
 					<Tooltip.Trigger>
-						<Button variant="ghost" size="sm" class="h-6" onclick={openInNewWindow}>
-							<ExternalLink class="mr-1 h-3 w-3" />
-							<span class="text-xs">独立窗口</span>
-						</Button>
-					</Tooltip.Trigger>
-					<Tooltip.Content>
-						<p>在独立窗口中打开</p>
-					</Tooltip.Content>
-				</Tooltip.Root>
-				<Tooltip.Root>
-					<Tooltip.Trigger>
 						<Button
 							variant={showBottomProgressBar ? 'default' : 'ghost'}
 							size="sm"
@@ -703,7 +684,7 @@
 							onclick={toggleHoverAreasOverlay}
 						>
 							<Target class="mr-1 h-3 w-3" />
-							<span class="text-xs">边栏区域</span>
+							<span class="text-xs">边栏</span>
 						</Button>
 					</Tooltip.Trigger>
 					<Tooltip.Content>

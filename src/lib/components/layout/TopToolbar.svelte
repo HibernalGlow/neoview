@@ -52,7 +52,6 @@
 		Pin,
 		PinOff,
 		GripHorizontal,
-		ExternalLink,
 		Eye,
 		Palette,
 		Sun,
@@ -468,13 +467,6 @@
 		await appWindow.close();
 	}
 
-	function openStandaloneViewer() {
-		const url = `${window.location.origin}/standalone/viewer`;
-		const features =
-			'width=1200,height=800,resizable=yes,scrollbars=yes,status=yes,toolbar=no,menubar=no,location=no';
-		window.open(url, 'NeoView 独立查看器', features);
-	}
-
 	function toggleComparisonMode() {
 		const nextEnabled = !$viewerState.comparisonVisible;
 		const mode = $viewerState.comparisonMode ?? 'slider';
@@ -626,16 +618,6 @@
 				<Settings class="h-4 w-4" />
 			</Button>
 
-			<Button
-				variant="ghost"
-				size="icon"
-				class="h-6 w-6"
-				style="pointer-events: auto;"
-				onclick={openStandaloneViewer}
-				title="在独立窗口中打开查看器"
-			>
-				<ExternalLink class="h-4 w-4" />
-			</Button>
 		</div>
 
 		<!-- 右侧：窗口控制按钮 -->

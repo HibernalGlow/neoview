@@ -9,7 +9,8 @@
 		Bookmark,
 		Image as ImageIcon,
 		Pin,
-		PinOff
+		PinOff,
+		GripVertical
 	} from '@lucide/svelte';
 	import { readable } from 'svelte/store';
 	import {
@@ -281,20 +282,16 @@
 						</Sidebar.Group>
 					</Sidebar.Content>
 				</Sidebar.Root>
+				<!-- 拖拽手柄 -->
+				<button
+					type="button"
+					class="hover:bg-accent text-muted-foreground absolute bottom-1 right-0 z-50 cursor-ew-resize rounded-l-md p-1 transition-colors"
+					onmousedown={handleMouseDown}
+					aria-label="调整侧边栏宽度"
+				>
+					<GripVertical class="h-4 w-4" />
+				</button>
 			</Sidebar.Root>
 		</Sidebar.Provider>
-
-		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-		<!-- 拖拽调整大小的分隔条（div 仅承载鼠标事件，不处理键盘） -->
-		<div
-			class="absolute bottom-0 right-0 top-0 z-50 w-4 cursor-col-resize transition-colors"
-			onmousedown={handleMouseDown}
-			role="separator"
-			aria-label="调整侧边栏宽度"
-			aria-orientation="vertical"
-		>
-			<!-- 拖拽区域（加大点击区域） -->
-			<div class="absolute -left-2 -right-2 bottom-0 top-0"></div>
-		</div>
 	</div>
 </HoverWrapper>

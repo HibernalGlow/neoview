@@ -3,7 +3,7 @@
 	 * NeoView - Base Sidebar Component
 	 * 可复用的侧边栏基础组件 - 支持自动隐藏、钉住、拖拽调整、Tab排序
 	 */
-	import { Pin, PinOff, ExternalLink } from '@lucide/svelte';
+	import { Pin, PinOff, ExternalLink, GripVertical } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import type { Writable } from 'svelte/store';
 	import type { Snippet } from 'svelte';
@@ -17,23 +17,23 @@
 	interface Props {
 		// 位置配置
 		position: 'left' | 'right';
-		
+
 		// 状态管理
 		isVisible: boolean;
 		pinnedStore: Writable<boolean>;
 		widthStore: Writable<number>;
 		activeTabStore: Writable<string | null>;
 		tabs: Tab[];
-		
+
 		// 回调函数
 		onResize?: (width: number) => void;
 		onTabChange: (value: string) => void;
 		onVisibilityChange: (visible: boolean) => void;
 		onOpenInNewWindow?: (panel: string) => void;
-		
+
 		// 插槽内容
 		children: Snippet;
-		
+
 		// 配置
 		minWidth?: number;
 		maxWidth?: number;
@@ -87,13 +87,13 @@
 	// 加载 Tab 顺序
 	$effect(() => {
 		if (!storageKey) return;
-		
+
 		const savedOrder = localStorage.getItem(`${storageKey}-tabs-order`);
 		if (savedOrder) {
 			try {
 				const order = JSON.parse(savedOrder) as string[];
 				const orderedTabs = order
-					.map(value => tabs.find(t => t.value === value))
+					.map((value) => tabs.find((t) => t.value === value))
 					.filter(Boolean) as Tab[];
 				if (orderedTabs.length === tabs.length) {
 					tabs = orderedTabs;
@@ -133,7 +133,7 @@
 		isResizing = true;
 		startX = e.clientX;
 		startWidth = width;
-		
+
 		document.addEventListener('mousemove', handleResizeMove);
 		document.addEventListener('mouseup', handleResizeEnd);
 		e.preventDefault();
@@ -141,12 +141,10 @@
 
 	function handleResizeMove(e: MouseEvent) {
 		if (!isResizing) return;
-		
-		const deltaX = position === 'left' 
-			? e.clientX - startX 
-			: startX - e.clientX;
+
+		const deltaX = position === 'left' ? e.clientX - startX : startX - e.clientX;
 		const newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth + deltaX));
-		
+
 		widthStore.set(newWidth);
 		if (onResize) {
 			onResize(newWidth);
@@ -161,7 +159,7 @@
 
 	// 切换钉住
 	function togglePin() {
-		pinnedStore.update(p => !p);
+		pinnedStore.update((p) => !p);
 	}
 
 	function handlePinContextMenu(e: MouseEvent) {
@@ -207,7 +205,7 @@
 		function handleClickOutside() {
 			closeContextMenu();
 		}
-		
+
 		if (contextMenuVisible) {
 			document.addEventListener('click', handleClickOutside);
 			return () => document.removeEventListener('click', handleClickOutside);
@@ -237,13 +235,10 @@
 			const [draggedItem] = newTabs.splice(draggedIndex, 1);
 			newTabs.splice(dragOverIndex, 0, draggedItem);
 			tabs = newTabs;
-			
+
 			// 保存到 localStorage
 			if (storageKey) {
-				localStorage.setItem(
-					`${storageKey}-tabs-order`,
-					JSON.stringify(tabs.map(t => t.value))
-				);
+				localStorage.setItem(`${storageKey}-tabs-order`, JSON.stringify(tabs.map((t) => t.value)));
 			}
 		}
 		draggedIndex = null;
@@ -268,12 +263,6 @@
 			: `h-full flex bg-background transition-all duration-300 ${isVisible ? 'translate-x-0' : 'translate-x-full'} ${!isVisible ? 'opacity-0 pointer-events-none' : ''} border-0`
 	);
 
-	const resizeHandleClass = $derived(
-		position === 'left'
-			? `absolute top-0 bottom-0 right-0 w-1 cursor-col-resize group ${isResizing ? 'bg-primary' : 'hover:bg-primary/50 bg-border'} transition-colors`
-			: `absolute top-0 bottom-0 left-0 w-1 cursor-col-resize group ${isResizing ? 'bg-primary' : 'hover:bg-primary/50 bg-border'} transition-colors`
-	);
-
 	const iconBarClass = $derived(
 		position === 'left'
 			? 'w-12 flex flex-col border-r bg-secondary/30'
@@ -281,9 +270,7 @@
 	);
 
 	const activeTabBorderClass = $derived(
-		position === 'left'
-			? 'border-l-2 border-primary'
-			: 'border-r-2 border-primary'
+		position === 'left' ? 'border-l-2 border-primary' : 'border-r-2 border-primary'
 	);
 </script>
 
@@ -297,7 +284,7 @@
 	></div>
 {/if}
 
-<div 
+<div
 	class={containerClass}
 	style="width: {width}px;"
 	onmouseenter={handleMouseEnter}
@@ -305,39 +292,39 @@
 	role="complementary"
 >
 	<!-- 右键菜单 -->
-{#if contextMenuVisible && selectedTab}
-	<div
-		class="fixed bg-popover border rounded-md shadow-lg py-1 z-50 min-w-[150px]"
-		style="left: {contextMenuPosition.x}px; top: {contextMenuPosition.y}px;"
-		role="menu"
-		onclick={(e) => e.stopPropagation()}
-		onkeydown={(e) => {
-			if (e.key === 'Escape') {
-				closeContextMenu();
-			} else if (e.key === 'Enter' || e.key === ' ') {
-				e.preventDefault();
-				openTabInNewWindow();
-			}
-		}}
-		tabindex="-1"
-	>
-		<button
-			class="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center gap-2"
-			onclick={openTabInNewWindow}
-			role="menuitem"
-			type="button"
+	{#if contextMenuVisible && selectedTab}
+		<div
+			class="bg-popover fixed z-50 min-w-[150px] rounded-md border py-1 shadow-lg"
+			style="left: {contextMenuPosition.x}px; top: {contextMenuPosition.y}px;"
+			role="menu"
+			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => {
+				if (e.key === 'Escape') {
+					closeContextMenu();
+				} else if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault();
+					openTabInNewWindow();
+				}
+			}}
+			tabindex="-1"
 		>
-			<ExternalLink class="h-4 w-4" />
-			在独立窗口中打开
-		</button>
-	</div>
-{/if}
+			<button
+				class="hover:bg-accent flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
+				onclick={openTabInNewWindow}
+				role="menuitem"
+				type="button"
+			>
+				<ExternalLink class="h-4 w-4" />
+				在独立窗口中打开
+			</button>
+		</div>
+	{/if}
 
-{#if position === 'left'}
+	{#if position === 'left'}
 		<!-- 左侧布局：图标栏 | 内容 | 拖拽条 -->
 		<div class={iconBarClass}>
 			<!-- 钉住按钮 -->
-			<div class="p-1 border-b space-y-1">
+			<div class="space-y-1 border-b p-1">
 				<Button
 					variant={isPinned ? 'default' : 'ghost'}
 					size="icon"
@@ -372,14 +359,23 @@
 					ondragover={(e) => handleDragOver(e, index)}
 					ondragend={handleDragEnd}
 					ondrop={handleDrop}
-					class="relative group h-14 flex items-center justify-center hover:bg-accent transition-colors cursor-move {activeTab === tab.value ? `bg-accent ${activeTabBorderClass}` : ''} {dragOverIndex === index && draggedIndex !== index ? 'border-t-2 border-blue-500' : ''}"
+					class="hover:bg-accent group relative flex h-14 cursor-move items-center justify-center transition-colors {activeTab ===
+					tab.value
+						? `bg-accent ${activeTabBorderClass}`
+						: ''} {dragOverIndex === index && draggedIndex !== index
+						? 'border-t-2 border-blue-500'
+						: ''}"
 					onclick={() => onTabChange(tab.value)}
 					oncontextmenu={(e) => handleContextMenu(e, tab)}
 					title={tab.label}
 				>
-					<div class="absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover:opacity-50 bg-muted-foreground transition-opacity"></div>
+					<div
+						class="bg-muted-foreground absolute bottom-0 left-0 top-0 w-1 opacity-0 transition-opacity group-hover:opacity-50"
+					></div>
 					<IconComponent class="h-5 w-5" />
-					<div class="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-sm rounded shadow-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
+					<div
+						class="bg-popover text-popover-foreground pointer-events-none absolute left-full z-50 ml-2 whitespace-nowrap rounded px-2 py-1 text-sm opacity-0 shadow-md transition-opacity group-hover:opacity-100"
+					>
 						{tab.label}
 					</div>
 				</button>
@@ -394,18 +390,22 @@
 
 		<button
 			type="button"
-			class={resizeHandleClass}
+			class="hover:bg-accent text-muted-foreground absolute bottom-1 right-0 z-50 cursor-ew-resize rounded-l-md p-1 transition-colors"
 			onmousedown={handleResizeStart}
 			aria-label="调整侧边栏宽度"
-		></button>
+		>
+			<GripVertical class="h-4 w-4" />
+		</button>
 	{:else}
 		<!-- 右侧布局：拖拽条 | 内容 | 图标栏 -->
 		<button
 			type="button"
-			class={resizeHandleClass}
+			class="hover:bg-accent text-muted-foreground absolute bottom-1 left-0 z-50 cursor-ew-resize rounded-r-md p-1 transition-colors"
 			onmousedown={handleResizeStart}
 			aria-label="调整侧边栏宽度"
-		></button>
+		>
+			<GripVertical class="h-4 w-4" />
+		</button>
 
 		<div class="flex-1 overflow-hidden">
 			{#if children}
@@ -415,7 +415,7 @@
 
 		<div class={iconBarClass}>
 			<!-- 钉住按钮 -->
-			<div class="p-1 border-b space-y-1">
+			<div class="space-y-1 border-b p-1">
 				<Button
 					variant={isPinned ? 'default' : 'ghost'}
 					size="icon"
@@ -450,14 +450,23 @@
 					ondragover={(e) => handleDragOver(e, index)}
 					ondragend={handleDragEnd}
 					ondrop={handleDrop}
-					class="relative group h-14 flex items-center justify-center hover:bg-accent transition-colors cursor-move {activeTab === tab.value ? `bg-accent ${activeTabBorderClass}` : ''} {dragOverIndex === index && draggedIndex !== index ? 'border-t-2 border-blue-500' : ''}"
+					class="hover:bg-accent group relative flex h-14 cursor-move items-center justify-center transition-colors {activeTab ===
+					tab.value
+						? `bg-accent ${activeTabBorderClass}`
+						: ''} {dragOverIndex === index && draggedIndex !== index
+						? 'border-t-2 border-blue-500'
+						: ''}"
 					onclick={() => onTabChange(tab.value)}
 					oncontextmenu={(e) => handleContextMenu(e, tab)}
 					title={tab.label}
 				>
-					<div class="absolute right-0 top-0 bottom-0 w-1 opacity-0 group-hover:opacity-50 bg-muted-foreground transition-opacity"></div>
+					<div
+						class="bg-muted-foreground absolute bottom-0 right-0 top-0 w-1 opacity-0 transition-opacity group-hover:opacity-50"
+					></div>
 					<IconComponent class="h-5 w-5" />
-					<div class="absolute right-full mr-2 px-2 py-1 bg-popover text-popover-foreground text-sm rounded shadow-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
+					<div
+						class="bg-popover text-popover-foreground pointer-events-none absolute right-full z-50 mr-2 whitespace-nowrap rounded px-2 py-1 text-sm opacity-0 shadow-md transition-opacity group-hover:opacity-100"
+					>
 						{tab.label}
 					</div>
 				</button>

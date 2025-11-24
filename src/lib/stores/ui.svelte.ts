@@ -80,7 +80,7 @@ export const rightSidebarPinned = writable<boolean>(loadFromStorage('rightSideba
 
 // 边栏高度（用于上下边栏）
 export const topToolbarHeight = writable<number>(loadFromStorage('topToolbarHeight', 60));
-export const bottomThumbnailBarHeight = writable<number>(loadFromStorage('bottomThumbnailBarHeight', 140));
+export const bottomThumbnailBarHeight = writable<number>(loadFromStorage('bottomThumbnailBarHeight', 120));
 
 // 订阅并保存变化
 sidebarOpen.subscribe((value) => saveToStorage('sidebarOpen', value));

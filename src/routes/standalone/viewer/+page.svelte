@@ -218,7 +218,7 @@
 
 				<!-- 方向切换：横向 / 纵向，全景模式下改变填充方向 -->
 				<Button
-					variant={$orientation === 'horizontal' ? 'default' : 'ghost'}
+					variant={$orientation === 'vertical' ? 'default' : 'ghost'}
 					size="icon"
 					class="h-8 w-8 rounded-full ml-1"
 					onclick={toggleOrientation}

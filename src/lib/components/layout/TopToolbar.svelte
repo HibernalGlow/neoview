@@ -777,7 +777,7 @@ function toggleComparisonMode() {
 						<Tooltip.Root>
 							<Tooltip.Trigger>
 								<Button
-									variant={$viewerState.orientation === 'horizontal' ? 'default' : 'ghost'}
+									variant={$viewerState.orientation === 'vertical' ? 'default' : 'ghost'}
 									size="icon"
 									class="h-8 w-8 rounded-full ml-1"
 									onclick={toggleOrientation}

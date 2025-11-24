@@ -29,6 +29,8 @@ export interface NeoViewSettings {
     superResolutionModel: string | null;
     currentImageUpscaleEnabled: boolean;
     useCachedFirst: boolean;
+    autoPlayAnimatedImages: boolean;
+    longImageScrollMode: 'page' | 'continuous';
   };
   view: {
     defaultZoomMode: ZoomMode;
@@ -111,7 +113,9 @@ const defaultSettings: NeoViewSettings = {
     enableSuperResolution: false,
     superResolutionModel: null,
     currentImageUpscaleEnabled: false,
-    useCachedFirst: true
+    useCachedFirst: true,
+    autoPlayAnimatedImages: true,
+    longImageScrollMode: 'continuous'
   },
   view: {
     defaultZoomMode: 'fit',

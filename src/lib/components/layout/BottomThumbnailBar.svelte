@@ -417,20 +417,17 @@ async function loadThumbnail(pageIndex: number) {
 	}
 
 	function getThumbnailStyle(pageIndex: number): string {
-		const rawHeight = Math.max(40, $bottomThumbnailBarHeight - 40);
-		const containerHeight = Math.min(80, rawHeight);
-		const minWidth = 40;
-		const maxWidth = 160;
+		const containerHeight = Math.max(40, $bottomThumbnailBarHeight - 40);
+		const minWidth = 32;
 		const thumb = thumbnails[pageIndex];
 		if (!thumb) {
-			const placeholderWidth = Math.min(Math.max(containerHeight * 0.75, minWidth), maxWidth);
-			return `height:${containerHeight}px;min-width:${placeholderWidth}px;max-width:${maxWidth}px;`;
+			const placeholderWidth = Math.max(containerHeight * 0.6, minWidth);
+			return `height:${containerHeight}px;min-width:${placeholderWidth}px;`;
 		}
 		const aspect = thumb.height > 0 ? thumb.width / thumb.height : 1;
 		let width = containerHeight * aspect;
 		if (width < minWidth) width = minWidth;
-		if (width > maxWidth) width = maxWidth;
-		return `height:${containerHeight}px;width:${width}px;min-width:${width}px;max-width:${width}px;`;
+		return `height:${containerHeight}px;width:${width}px;min-width:${width}px;`;
 	}
 
 	function handleSharedThumbnailReady(pageIndex: number, dataURL: string) {

@@ -23,10 +23,10 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' blob: tauri: asset: http://asset.localhost; frame-src 'self' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' asset: http://asset.localhost blob: data: filesystem: http: https: tauri:;",
+      "csp": "default-src 'self'; connect-src 'self' blob: tauri: asset: http://asset.localhost; frame-src 'self' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' asset: http://asset.localhost blob: data: filesystem: http: https: tauri:; media-src 'self' asset: http://asset.localhost blob: data: filesystem: http: https: tauri:;",
       "assetProtocol": {
         "enable": true,
-        "scope": ["$APPDATA/**", "D:\\temp\\**", "C:\\Users\\**\\AppData\\**"]
+        "scope": ["$APPDATA/**", "D:\\temp\\**", "C:\\Users\\**\\AppData\\**", "C:\\**", "D:\\**", "E:\\**"]
       }
     },
     "withGlobalTauri": true

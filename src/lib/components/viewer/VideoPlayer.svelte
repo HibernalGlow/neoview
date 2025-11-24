@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward, Gauge } from '@lucide/svelte';
+	import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward, Gauge, Repeat, Repeat1 } from '@lucide/svelte';
 
 	const {
 		src = '',
@@ -18,6 +18,8 @@
 	const MAX_PLAYBACK_RATE = 16;
 	const PLAYBACK_RATE_STEP = 0.25;
 
+	type LoopMode = 'none' | 'list' | 'single';
+
 	let videoElement = $state<HTMLVideoElement | undefined>(undefined);
 	let isPlaying = $state(false);
 	let isMuted = $state(false);
@@ -26,6 +28,7 @@
 	let volume = $state(1);
 	let showControls = $state(true);
 	let playbackRate = $state(1);
+	let loopMode: LoopMode = $state('list');
 	let hideControlsTimeout: ReturnType<typeof setTimeout> | null = null;
 	let videoUrl = $state<string>('');
 
@@ -73,6 +76,7 @@
 	function handleLoadedMetadata() {
 		if (!videoElement) return;
 		duration = videoElement.duration;
+		applyLoopMode();
 	}
 
 	function handlePlay() {
@@ -84,8 +88,14 @@
 	}
 
 	function handleEnded() {
+		if (loopMode === 'single') {
+			// 使用原生 loop 行为，保持播放状态且不触发外部 onEnded
+			return;
+		}
 		isPlaying = false;
-		onEnded();
+		if (loopMode === 'list') {
+			onEnded();
+		}
 	}
 
 	function handleError(e: Event) {
@@ -119,6 +129,22 @@
 	function handlePlaybackSlider(e: Event) {
 		const value = parseFloat((e.target as HTMLInputElement).value);
 		setPlaybackRate(value);
+	}
+
+	function applyLoopMode() {
+		if (!videoElement) return;
+		videoElement.loop = loopMode === 'single';
+	}
+
+	function cycleLoopMode() {
+		if (loopMode === 'list') {
+			loopMode = 'single';
+		} else if (loopMode === 'single') {
+			loopMode = 'none';
+		} else {
+			loopMode = 'list';
+		}
+		applyLoopMode();
 	}
 
 	function skipForward() {
@@ -200,11 +226,11 @@
 		>
 			<!-- 进度条 -->
 			<div
-				class="progress-bar mb-4 h-1 w-full cursor-pointer rounded-full bg-white/30 transition-all hover:h-2"
+				class="progress-bar mb-4 h-0.5 w-full cursor-pointer rounded-full bg-primary/40 transition-all hover:h-1"
 				onclick={seek}
 			>
 				<div
-					class="progress-fill h-full rounded-full bg-blue-500"
+					class="progress-fill h-full rounded-full bg-primary"
 					style="width: {duration > 0 ? (currentTime / duration) * 100 : 0}%"
 				></div>
 			</div>
@@ -240,6 +266,30 @@
 					aria-label="前进10秒"
 				>
 					<SkipForward class="h-5 w-5 text-white" />
+				</button>
+
+				<!-- 循环模式 -->
+				<button
+					class="control-btn rounded-full p-2 transition-colors hover:bg-white/20"
+					onclick={(event) => {
+						event.stopPropagation();
+						cycleLoopMode();
+					}}
+					aria-label={
+						loopMode === 'none'
+							? '不循环'
+							: loopMode === 'single'
+								? '单个循环'
+								: '列表循环'
+					}
+				>
+					{#if loopMode === 'single'}
+						<Repeat1 class="h-5 w-5 text-white" />
+					{:else if loopMode === 'list'}
+						<Repeat class="h-5 w-5 text-white" />
+					{:else}
+						<Repeat class="h-5 w-5 text-white opacity-40" />
+					{/if}
 				</button>
 
 				<!-- 时间显示 -->

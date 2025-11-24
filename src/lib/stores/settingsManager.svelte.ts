@@ -13,6 +13,8 @@ import { applyRuntimeThemeFromStorage } from '$lib/utils/runtimeTheme';
 import type { RuntimeThemeMode, RuntimeThemePayload } from '$lib/utils/runtimeTheme';
 import { settingsManager as coreSettingsManager } from '$lib/settings/settingsManager';
 import type { NeoViewSettings } from '$lib/settings/settingsManager';
+import type { PerformanceSettings as TauriPerformanceSettings } from '$lib/api/performance';
+import { savePerformanceSettings } from '$lib/api/performance';
 
 export interface AppSettings {
     version: string;
@@ -54,6 +56,7 @@ export interface ExtendedSettingsData {
     themeStorage?: {
         customThemes?: unknown;
     };
+    performanceSettings?: TauriPerformanceSettings;
 }
 
 export interface FullExportPayload {
@@ -435,6 +438,7 @@ class SettingsManager {
                 searchHistory?: boolean;
                 upscaleSettings?: boolean;
                 customThemes?: boolean;
+                performanceSettings?: boolean;
             };
             strategy: 'merge' | 'overwrite';
         }
@@ -621,6 +625,14 @@ class SettingsManager {
                 }
             } catch (error) {
                 console.error('导入自定义主题失败:', error);
+            }
+        }
+
+        if (modules.performanceSettings && extended.performanceSettings) {
+            try {
+                await savePerformanceSettings(extended.performanceSettings);
+            } catch (error) {
+                console.error('导入性能设置失败:', error);
             }
         }
     }

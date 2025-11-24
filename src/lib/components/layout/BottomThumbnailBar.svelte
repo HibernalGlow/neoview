@@ -36,6 +36,7 @@
 	// 阅读方向状态
 	let settings = $state(settingsManager.getSettings());
 	let readingDirection = $derived(settings.book.readingDirection);
+	let lastReadingDirection = $state<'left-to-right' | 'right-to-left' | null>(null);
 
 	// 监听设置变化
 	settingsManager.addListener((newSettings) => {
@@ -536,8 +537,17 @@
 		const _currentIndex = bookStore.currentPageIndex;
 		if (!bookStore.currentBook) return;
 		if (!isVisible) return;
-		if (readingDirection !== 'right-to-left') return;
 		scrollCurrentThumbnailIntoCenter();
+	});
+
+	$effect(() => {
+		const dir = readingDirection;
+		if (!bookStore.currentBook) return;
+		if (!isVisible) return;
+		if (lastReadingDirection && lastReadingDirection !== dir) {
+			scrollCurrentThumbnailIntoCenter();
+		}
+		lastReadingDirection = dir;
 	});
 </script>
 

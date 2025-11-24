@@ -2,7 +2,7 @@
 	/**
 	 * 路径面包屑导航栏 - 使用 shadcn-svelte Breadcrumb 重构
 	 */
-	import { Home, FolderOpen, HomeIcon } from '@lucide/svelte';
+	import { FolderOpen } from '@lucide/svelte';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 	import { onMount } from 'svelte';
 	import {
@@ -202,7 +202,7 @@
 
 <div
 	bind:this={containerEl}
-	class="flex h-8 items-center justify-end gap-1 overflow-x-auto whitespace-nowrap border-b bg-muted/60 px-2 py-1"
+	class="bg-muted/60 flex h-8 items-center justify-end gap-1 overflow-x-auto whitespace-nowrap border-b px-2 py-1"
 >
 	{#if isEditing}
 		<form
@@ -215,7 +215,7 @@
 			<input
 				bind:this={inputElement}
 				bind:value={editValue}
-				class="h-full w-full rounded border border-primary bg-background px-2 text-sm focus:outline-none"
+				class="border-primary bg-background h-full w-full rounded border px-2 text-sm focus:outline-none"
 				onblur={cancelEdit}
 				onkeydown={(e) => {
 					if (e.key === 'Escape') cancelEdit();
@@ -226,37 +226,12 @@
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="flex h-full flex-1 cursor-text items-center rounded px-1 transition-colors hover:bg-accent/10"
+			class="hover:bg-accent/10 flex h-full flex-1 cursor-text items-center rounded px-1 transition-colors"
 			onclick={startEdit}
 		>
 			{#if currentPath}
 				<Breadcrumb.Root>
 					<Breadcrumb.List class="flex flex-nowrap items-center gap-1 whitespace-nowrap">
-						<!-- 主页 -->
-						<Breadcrumb.Item>
-							<ContextMenu>
-								<ContextMenuTrigger>
-									<Breadcrumb.Link
-										href="#"
-										class="text-muted-foreground hover:text-foreground"
-										style="color: var(--foreground);"
-										onclick={(e) => {
-											e.stopPropagation();
-											handleNavigate('');
-										}}
-									>
-										<Home class="h-4 w-4" />
-									</Breadcrumb.Link>
-								</ContextMenuTrigger>
-								<ContextMenuContent>
-									<ContextMenuItem onclick={() => handleSetHomepage('')}>
-										<HomeIcon class="mr-2 h-4 w-4" />
-										设置为主页
-									</ContextMenuItem>
-								</ContextMenuContent>
-							</ContextMenu>
-						</Breadcrumb.Item>
-
 						<!-- 面包屑路径 -->
 						{#each renderedBreadcrumbs as breadcrumb}
 							<Breadcrumb.Separator />
@@ -293,7 +268,7 @@
 					</Breadcrumb.List>
 				</Breadcrumb.Root>
 			{:else}
-				<div class="flex items-center gap-2 text-sm text-muted-foreground">
+				<div class="text-muted-foreground flex items-center gap-2 text-sm">
 					<FolderOpen class="h-4 w-4" />
 					<span>选择文件夹开始浏览</span>
 				</div>

@@ -43,7 +43,7 @@
 	} from '$lib/stores/fileBrowser.svelte';
 	import { NavigationHistory } from '$lib/utils/navigationHistory';
 	import { Button } from '$lib/components/ui/button';
-	import * as ContextMenu from '$lib/components/ui/context-menu';
+	import * as UIContextMenu from '$lib/components/ui/context-menu';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import SearchBar from '$lib/components/ui/SearchBar.svelte';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
@@ -338,6 +338,17 @@
 			// TODO: 可以添加 toast 通知
 		} catch (err) {
 			console.error('❌ 保存主页路径失败:', err);
+		}
+	}
+
+	async function selectAndSetHome() {
+		try {
+			const path = await FileSystemAPI.selectFolder();
+			if (path) {
+				setHomepage(path);
+			}
+		} catch (err) {
+			console.error('Failed to select home folder:', err);
 		}
 	}
 
@@ -1998,22 +2009,36 @@
 		<div class="bg-background/50 flex items-center gap-1 border-b px-2 py-1.5">
 			<!-- 左侧：导航按钮 -->
 			<div class="flex items-center gap-1">
-				<Tooltip.Root>
-					<Tooltip.Trigger>
-						<Button
-							variant="ghost"
-							size="icon"
-							class="h-8 w-8"
-							onclick={goHome}
-							disabled={!navigationHistory.getHomepage()}
-						>
-							<Home class="h-4 w-4" />
-						</Button>
-					</Tooltip.Trigger>
-					<Tooltip.Content>
-						<p>主页</p>
-					</Tooltip.Content>
-				</Tooltip.Root>
+				<UIContextMenu.Root>
+					<UIContextMenu.Trigger>
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<Button
+									variant="ghost"
+									size="icon"
+									class="h-8 w-8"
+									onclick={goHome}
+									disabled={!navigationHistory.getHomepage()}
+								>
+									<Home class="h-4 w-4" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>主页</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
+					</UIContextMenu.Trigger>
+					<UIContextMenu.Content>
+						<UIContextMenu.Item onclick={() => setHomepage(currentPath)} disabled={!currentPath}>
+							<Home class="mr-2 h-4 w-4" />
+							<span>将当前文件夹设为主页</span>
+						</UIContextMenu.Item>
+						<UIContextMenu.Item onclick={selectAndSetHome}>
+							<FolderOpen class="mr-2 h-4 w-4" />
+							<span>选择文件夹为主页...</span>
+						</UIContextMenu.Item>
+					</UIContextMenu.Content>
+				</UIContextMenu.Root>
 
 				<Tooltip.Root>
 					<Tooltip.Trigger>

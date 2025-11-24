@@ -8,14 +8,15 @@
 	import * as Progress from '$lib/components/ui/progress';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 
-import { Image as ImageIcon, Grid3x3, Grid2x2, LayoutGrid, Loader2, AlertCircle, TestTube, CheckCircle, XCircle, Database, FolderOpen, Zap, Activity } from '@lucide/svelte';
-import { invoke } from '@tauri-apps/api/core';
-import { open } from '@tauri-apps/plugin-dialog';
-import { onMount } from 'svelte';
-import { readable } from 'svelte/store';
-import { bookStore } from '$lib/stores/book.svelte';
-import { appState, type StateSelector } from '$lib/core/state/appState';
-import { taskScheduler } from '$lib/core/tasks/taskScheduler';
+	import { Image as ImageIcon, Grid3x3, Grid2x2, LayoutGrid, Loader2, AlertCircle, TestTube, CheckCircle, XCircle, Database, FolderOpen, Zap, Activity } from '@lucide/svelte';
+	import { invoke } from '@tauri-apps/api/core';
+	import { open } from '@tauri-apps/plugin-dialog';
+	import { onMount } from 'svelte';
+	import { readable } from 'svelte/store';
+	import { bookStore } from '$lib/stores/book.svelte';
+	import { appState, type StateSelector } from '$lib/core/state/appState';
+	import { taskScheduler } from '$lib/core/tasks/taskScheduler';
+
 	// TODO: 缩略图测试功能已移除，待重新实现
 	// import { runThumbnailTests } from '$lib/utils/thumbnail-test';
 
@@ -57,6 +58,7 @@ import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 	let unindexedArchives = $state<string[]>([]);
 
 	const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'avif', 'jxl', 'tiff', 'tif'];
+	const videoExtensions = ['mp4', 'mkv', 'avi', 'mov', 'flv', 'webm', 'wmv', 'm4v', 'mpg', 'mpeg'];
 
 	function createAppStateStore<T>(selector: StateSelector<T>) {
 		const initial = selector(appState.getSnapshot());
@@ -115,11 +117,52 @@ import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 	async function loadThumbnail(thumb: Thumbnail, filePath: string) {
 		thumb.loading = true;
 		thumb.error = false;
-		
+
+		const currentBook = bookStore.currentBook;
+		// 压缩包书籍的每页缩略图暂时使用占位符，避免复杂的逐页解压/处理
+		if (currentBook?.type === 'archive') {
+			thumb.loading = false;
+			thumb.error = false;
+			return;
+		}
+
 		try {
-			// 调用 Tauri 命令生成缩略图
-			const thumbnailUrl = await invoke<string>('generate_file_thumbnail_new', { filePath });
-			thumb.imageUrl = thumbnailUrl;
+			const ext = getFileExtension(filePath);
+			const isVideo = videoExtensions.includes(ext);
+			const isImage = imageExtensions.includes(ext);
+
+			let blobKey: string | null = null;
+
+			if (isVideo) {
+				// 视频缩略图：使用 generate_video_thumbnail_new（写入数据库并返回 blob key）
+				blobKey = await invoke<string>('generate_video_thumbnail_new', {
+					videoPath: filePath,
+					timeSeconds: 10.0
+				});
+			} else if (isImage) {
+				// 图片缩略图：使用新的文件缩略图命令
+				blobKey = await invoke<string>('generate_file_thumbnail_new', { filePath });
+			} else {
+				// 其他类型暂不生成缩略图，使用占位符
+				thumb.loading = false;
+				thumb.error = false;
+				return;
+			}
+
+			// 根据 blob key 获取实际图像数据并生成 Blob URL
+			const blobData = await invoke<number[] | null>('get_thumbnail_blob_data', {
+				blobKey
+			});
+
+			if (!blobData || blobData.length === 0) {
+				thumb.error = true;
+				return;
+			}
+
+			const uint8 = new Uint8Array(blobData);
+			const blob = new Blob([uint8], { type: 'image/webp' });
+			const url = URL.createObjectURL(blob);
+			thumb.imageUrl = url;
 		} catch (error) {
 			console.error(`生成缩略图失败 ${filePath}:`, error);
 			thumb.error = true;

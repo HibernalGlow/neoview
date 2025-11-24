@@ -7,7 +7,7 @@
 	import { readable } from 'svelte/store';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { loadImage } from '$lib/api/fs';
-	import { loadImageFromArchive } from '$lib/api/filesystem';
+	import { loadImageFromArchive, generateVideoThumbnail } from '$lib/api/filesystem';
 	import { bottomThumbnailBarPinned, bottomThumbnailBarHeight } from '$lib/stores';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { Button } from '$lib/components/ui/button';
@@ -25,6 +25,7 @@
 	import { subscribeSharedPreloadManager } from '$lib/components/viewer/flow/sharedPreloadManager';
 	import type { PreloadManager } from '$lib/components/viewer/flow/preloadManager.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
+	import { isVideoFile } from '$lib/utils/videoUtils';
 
 	function createAppStateStore<T>(selector: StateSelector<T>) {
 		const initial = selector(appState.getSnapshot());
@@ -369,6 +370,41 @@
 		const pathKey = currentBook && page ? `${currentBook.path}::${page.path}` : null;
 
 		if (pathKey && noThumbnailPaths.has(pathKey)) {
+			return;
+		}
+
+		// 视频页面：使用视频缩略图 API，而不是图片管线
+		const isVideoPage =
+			!!currentBook &&
+			!!page &&
+			(isVideoFile(page.name || '') || isVideoFile(page.path || ''));
+
+		if (isVideoPage) {
+			// 压缩包中的视频暂时不生成独立缩略图，使用占位符避免复杂度/性能问题
+			if (currentBook.type === 'archive') {
+				if (pathKey) {
+					noThumbnailPaths.add(pathKey);
+				}
+				return;
+			}
+
+			loadingIndices.add(pageIndex);
+			try {
+				// 调用后端视频缩略图接口，返回 data:image/... URL
+				const videoThumbDataUrl = await generateVideoThumbnail(page.path);
+				const thumb = await generateThumbnailFromBase64(videoThumbDataUrl);
+				thumbnails = { ...thumbnails, [pageIndex]: thumb };
+				if (pathKey) {
+					noThumbnailPaths.delete(pathKey);
+				}
+			} catch (videoErr) {
+				console.error(`Failed to generate video thumbnail for page ${pageIndex}:`, videoErr);
+				if (pathKey) {
+					noThumbnailPaths.add(pathKey);
+				}
+			} finally {
+				loadingIndices.delete(pageIndex);
+			}
 			return;
 		}
 

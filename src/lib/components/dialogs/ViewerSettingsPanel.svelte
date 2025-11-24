@@ -11,7 +11,8 @@
 	let backgroundColor = $state('#000000');
 	let showGrid = $state(false);
 	let smoothZoom = $state(true);
-	let defaultZoom = $state(100);
+	// 使用数组形式以适配 bits-ui Slider 的值类型
+	let defaultZoom = $state<number[]>([100]);
 </script>
 
 <div class="space-y-6">
@@ -48,8 +49,8 @@
 	<div class="space-y-2">
 		<div class="flex items-center justify-between">
 			<Label>默认缩放级别</Label>
-			<span class="text-sm text-muted-foreground">{defaultZoom}%</span>
+			<span class="text-sm text-muted-foreground">{defaultZoom[0]}%</span>
 		</div>
-		<Slider min={10} max={500} step={10} bind:value={defaultZoom} />
+		<Slider min={10} max={500} step={10} type="single"  />
 	</div>
 </div>

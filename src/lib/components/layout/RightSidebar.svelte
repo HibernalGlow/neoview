@@ -9,9 +9,10 @@
 		setActiveRightPanel,
 		rightSidebarWidth,
 		rightSidebarPinned,
-		rightSidebarOpen
+		rightSidebarOpen,
+		panels
 	} from '$lib/stores';
-	import type { RightPanelType } from '$lib/stores';
+	import type { RightPanelType, PanelConfig } from '$lib/stores';
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import ImagePropertiesPanel from '$lib/components/panels/ImagePropertiesPanel.svelte';
 	import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
@@ -49,6 +50,15 @@
 	];
 
 	let activeItem = $state(navMain[0]);
+
+	const infoPanelEnabled = $derived(
+		(() => {
+			const list = $panels as PanelConfig[];
+			const infoPanel = list.find((p) => p.id === 'info');
+			if (!infoPanel) return true;
+			return infoPanel.visible && infoPanel.location === 'right';
+		})()
+	);
 
 	// 拖拽调整大小
 	let isResizing = $state(false);
@@ -115,9 +125,23 @@
 
 	// 响应 activeRightPanel 变化
 	$effect(() => {
+		const enabledInfo = infoPanelEnabled;
 		const currentActive = navMain.find((nav) => nav.value === $activeRightPanel);
-		if (currentActive) {
-			activeItem = currentActive;
+		let next = currentActive;
+
+		if (next?.value === 'info' && !enabledInfo) {
+			next = navMain.find((nav) => nav.value !== 'info');
+		}
+
+		if (!next) {
+			next = navMain.find((nav) => nav.value !== 'info' || enabledInfo);
+		}
+
+		if (!next) return;
+
+		if (next.value !== activeItem.value) {
+			activeItem = next;
+			setActiveRightPanel(next.value as RightPanelType);
 		}
 	});
 
@@ -199,22 +223,24 @@
 							<Sidebar.GroupContent class="px-1.5 md:px-0">
 								<Sidebar.Menu>
 									{#each navMain as item (item.value)}
-										<Sidebar.MenuItem>
-											<Sidebar.MenuButton
-												tooltipContentProps={{
-													hidden: false
-												}}
-												onclick={() => handleTabChange(item)}
-												isActive={$activeRightPanel === item.value}
-												class="px-2.5 md:px-2"
-											>
-												{#snippet tooltipContent()}
-													{item.title}
-												{/snippet}
-												<item.icon />
-												<span>{item.title}</span>
-											</Sidebar.MenuButton>
-										</Sidebar.MenuItem>
+										{#if item.value !== 'info' || infoPanelEnabled}
+											<Sidebar.MenuItem>
+												<Sidebar.MenuButton
+													tooltipContentProps={{
+														hidden: false
+													}}
+													onclick={() => handleTabChange(item)}
+													isActive={$activeRightPanel === item.value}
+													class="px-2.5 md:px-2"
+												>
+													{#snippet tooltipContent()}
+														{item.title}
+													{/snippet}
+													<item.icon />
+													<span>{item.title}</span>
+												</Sidebar.MenuButton>
+											</Sidebar.MenuItem>
+										{/if}
 									{/each}
 								</Sidebar.Menu>
 							</Sidebar.GroupContent>
@@ -232,7 +258,7 @@
 						<Sidebar.Group class="px-0">
 							<Sidebar.GroupContent>
 								{#if localRightSidebarOpen}
-									{#if activeItem.value === 'info'}
+									{#if activeItem.value === 'info' && infoPanelEnabled}
 										<InfoPanel />
 									{:else if activeItem.value === 'properties'}
 										<ImagePropertiesPanel />

@@ -44,6 +44,7 @@
 	import { NavigationHistory } from '$lib/utils/navigationHistory';
 	import { Button } from '$lib/components/ui/button';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 	import SearchBar from '$lib/components/ui/SearchBar.svelte';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 	import { homeDir } from '@tauri-apps/api/path';
@@ -196,7 +197,9 @@
 	let isCheckMode = $state(false);
 	let isDeleteMode = $state(false);
 	let isPenetrateMode = $state(false);
-	let viewMode = $state<'list' | 'thumbnails'>(loadPanelViewMode('file-browser', 'list') as 'list' | 'thumbnails'); // 列表 or 缩略图视图
+	let viewMode = $state<'list' | 'thumbnails'>(
+		loadPanelViewMode('file-browser', 'list') as 'list' | 'thumbnails'
+	); // 列表 or 缩略图视图
 	let selectedItems = $state<Set<string>>(new Set());
 	let showSearchBar = $state(false);
 	let showFolderTree = $state(false);
@@ -1888,8 +1891,6 @@
 	}
 </script>
 
-
-
 <div class="bg-background flex h-full flex-col">
 	<div
 		class="border-border bg-background/95 supports-backdrop-filter:bg-background/70 sticky top-0 z-20 flex flex-col gap-0 border-b backdrop-blur"
@@ -1906,132 +1907,204 @@
 		<div class="bg-background/50 flex items-center gap-1 border-b px-2 py-1.5">
 			<!-- 左侧：导航按钮 -->
 			<div class="flex items-center gap-1">
-				<Button
-					variant="ghost"
-					size="icon"
-					class="h-8 w-8"
-					onclick={goHome}
-					disabled={!navigationHistory.getHomepage()}
-					title="主页"
-				>
-					<Home class="h-4 w-4" />
-				</Button>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant="ghost"
+							size="icon"
+							class="h-8 w-8"
+							onclick={goHome}
+							disabled={!navigationHistory.getHomepage()}
+						>
+							<Home class="h-4 w-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>主页</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
 
-				<Button
-					variant="ghost"
-					size="icon"
-					class="h-8 w-8"
-					onclick={goBackInHistory}
-					disabled={!navigationHistory.canGoBack()}
-					title="后退"
-				>
-					<ChevronLeft class="h-4 w-4" />
-				</Button>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant="ghost"
+							size="icon"
+							class="h-8 w-8"
+							onclick={goBackInHistory}
+							disabled={!navigationHistory.canGoBack()}
+						>
+							<ChevronLeft class="h-4 w-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>后退</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
 
-				<Button
-					variant="ghost"
-					size="icon"
-					class="h-8 w-8"
-					onclick={goForwardInHistory}
-					disabled={!navigationHistory.canGoForward()}
-					title="前进"
-				>
-					<ChevronRight class="h-4 w-4" />
-				</Button>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant="ghost"
+							size="icon"
+							class="h-8 w-8"
+							onclick={goForwardInHistory}
+							disabled={!navigationHistory.canGoForward()}
+						>
+							<ChevronRight class="h-4 w-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>前进</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
 
-				<Button
-					variant="ghost"
-					size="icon"
-					class="h-8 w-8"
-					onclick={goBack}
-					disabled={!currentPath && !isArchiveView}
-					title="上一级 (Backspace)"
-				>
-					<ChevronUp class="h-4 w-4" />
-				</Button>
-
-				<div class="bg-border mx-1 h-6 w-px"></div>
-
-				<Button
-					variant={showFolderTree ? 'default' : 'ghost'}
-					size="icon"
-					class="h-8 w-8"
-					onclick={toggleFolderTree}
-					oncontextmenu={(e) => {
-						e.preventDefault();
-						selectFolder();
-					}}
-					title={showFolderTree ? '隐藏文件夹列表（右键选择文件夹）' : '显示文件夹列表（右键选择文件夹）'}
-				>
-					<FolderTree class="h-4 w-4" />
-				</Button>
-
-				<Button
-					variant="ghost"
-					size="icon"
-					class="h-8 w-8"
-					onclick={refresh}
-					disabled={!currentPath && !isArchiveView}
-					title="刷新 (F5)"
-				>
-					<RefreshCw class="h-4 w-4" />
-				</Button>
-
-				<Button
-					variant={isCheckMode ? 'default' : 'ghost'}
-					size="icon"
-					class="h-8 w-8"
-					onclick={toggleCheckMode}
-					title={isCheckMode ? '退出勾选模式' : '勾选模式'}
-				>
-					<CheckSquare class="h-4 w-4" />
-				</Button>
-
-				<Button
-					variant={isDeleteMode ? 'destructive' : 'ghost'}
-					size="icon"
-					class="h-8 w-8"
-					onclick={toggleDeleteMode}
-					title={isDeleteMode ? '退出删除模式' : '删除模式'}
-				>
-					<Trash2 class="h-4 w-4" />
-				</Button>
-
-				<Button
-					variant={isPenetrateMode ? 'default' : 'ghost'}
-					size="icon"
-					class="h-8 w-8"
-					onclick={() => (isPenetrateMode = !isPenetrateMode)}
-					title={isPenetrateMode ? '穿透模式：当文件夹只有一个子文件时直接打开子文件' : '穿透模式'}
-				>
-					<CornerDownRight class="h-4 w-4" />
-				</Button>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant="ghost"
+							size="icon"
+							class="h-8 w-8"
+							onclick={goBack}
+							disabled={!currentPath && !isArchiveView}
+						>
+							<ChevronUp class="h-4 w-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>上一级 (Backspace)</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
 
 				<div class="bg-border mx-1 h-6 w-px"></div>
 
-				<Button
-					variant={viewMode === 'list' ? 'default' : 'ghost'}
-					size="icon"
-					class="h-8 w-8"
-					onclick={toggleViewMode}
-					title={viewMode === 'list' ? '切换到缩略图视图' : '切换到列表视图'}
-				>
-					{#if viewMode === 'list'}
-						<List class="h-4 w-4" />
-					{:else}
-						<Grid3x3 class="h-4 w-4" />
-					{/if}
-				</Button>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant={showFolderTree ? 'default' : 'ghost'}
+							size="icon"
+							class="h-8 w-8"
+							onclick={toggleFolderTree}
+							oncontextmenu={(e) => {
+								e.preventDefault();
+								selectFolder();
+							}}
+						>
+							<FolderTree class="h-4 w-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>
+							{showFolderTree
+								? '隐藏文件夹列表（右键选择文件夹）'
+								: '显示文件夹列表（右键选择文件夹）'}
+						</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
 
-				<Button
-					variant={showSearchBar ? 'default' : 'ghost'}
-					size="icon"
-					class="h-8 w-8"
-					onclick={() => (showSearchBar = !showSearchBar)}
-					title={showSearchBar ? '隐藏搜索栏' : '显示搜索栏'}
-				>
-					<Search class="h-4 w-4" />
-				</Button>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant="ghost"
+							size="icon"
+							class="h-8 w-8"
+							onclick={refresh}
+							disabled={!currentPath && !isArchiveView}
+						>
+							<RefreshCw class="h-4 w-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>刷新 (F5)</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant={isCheckMode ? 'default' : 'ghost'}
+							size="icon"
+							class="h-8 w-8"
+							onclick={toggleCheckMode}
+						>
+							<CheckSquare class="h-4 w-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>{isCheckMode ? '退出勾选模式' : '勾选模式'}</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant={isDeleteMode ? 'destructive' : 'ghost'}
+							size="icon"
+							class="h-8 w-8"
+							onclick={toggleDeleteMode}
+						>
+							<Trash2 class="h-4 w-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>{isDeleteMode ? '退出删除模式' : '删除模式'}</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant={isPenetrateMode ? 'default' : 'ghost'}
+							size="icon"
+							class="h-8 w-8"
+							onclick={() => (isPenetrateMode = !isPenetrateMode)}
+						>
+							<CornerDownRight class="h-4 w-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>
+							{isPenetrateMode ? '穿透模式：当文件夹只有一个子文件时直接打开子文件' : '穿透模式'}
+						</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+
+				<div class="bg-border mx-1 h-6 w-px"></div>
+
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant={viewMode === 'list' ? 'default' : 'ghost'}
+							size="icon"
+							class="h-8 w-8"
+							onclick={toggleViewMode}
+						>
+							{#if viewMode === 'list'}
+								<List class="h-4 w-4" />
+							{:else}
+								<Grid3x3 class="h-4 w-4" />
+							{/if}
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>{viewMode === 'list' ? '切换到缩略图视图' : '切换到列表视图'}</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant={showSearchBar ? 'default' : 'ghost'}
+							size="icon"
+							class="h-8 w-8"
+							onclick={() => (showSearchBar = !showSearchBar)}
+						>
+							<Search class="h-4 w-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>{showSearchBar ? '隐藏搜索栏' : '显示搜索栏'}</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
 
 				<SortPanel {sortField} {sortOrder} onSortChange={handleSortChange} />
 			</div>
@@ -2055,7 +2128,7 @@
 	{#if contextMenu.item}
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="context-menu fixed z-10000 min-w-[180px] rounded-md border bg-popover text-popover-foreground shadow-lg py-1"
+			class="context-menu z-10000 bg-popover text-popover-foreground fixed min-w-[180px] rounded-md border py-1 shadow-lg"
 			style={`left: ${contextMenu.x}px; top: ${contextMenu.y}px;`}
 			role="menu"
 			tabindex="-1"
@@ -2063,7 +2136,7 @@
 		>
 			<button
 				type="button"
-				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				class="hover:bg-accent flex w-full items-center px-3 py-1.5 text-sm"
 				onclick={() => openFile(contextMenu.item!)}
 			>
 				<Folder class="mr-2 h-4 w-4" />
@@ -2072,26 +2145,26 @@
 			{#if contextMenu.item.isDir}
 				<button
 					type="button"
-					class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+					class="hover:bg-accent flex w-full items-center px-3 py-1.5 text-sm"
 					onclick={() => openFolderAsBook(contextMenu.item!)}
 				>
 					<BookOpen class="mr-2 h-4 w-4" />
 					<span>作为书籍打开</span>
 				</button>
 			{/if}
-			<hr class="my-1 border-border/60" />
+			<hr class="border-border/60 my-1" />
 			<button
 				type="button"
-				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				class="hover:bg-accent flex w-full items-center px-3 py-1.5 text-sm"
 				onclick={() => addToBookmark(contextMenu.item!)}
 			>
 				<Bookmark class="mr-2 h-4 w-4" />
 				<span>添加到书签</span>
 			</button>
-			<hr class="my-1 border-border/60" />
+			<hr class="border-border/60 my-1" />
 			<button
 				type="button"
-				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				class="hover:bg-accent flex w-full items-center px-3 py-1.5 text-sm"
 				onclick={() => cutItem(contextMenu.item!)}
 			>
 				<span class="mr-2 text-xs">✂</span>
@@ -2099,7 +2172,7 @@
 			</button>
 			<button
 				type="button"
-				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				class="hover:bg-accent flex w-full items-center px-3 py-1.5 text-sm"
 				onclick={() => copyItem(contextMenu.item!)}
 			>
 				<span class="mr-2 text-xs">📄</span>
@@ -2107,14 +2180,14 @@
 			</button>
 			<button
 				type="button"
-				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent disabled:text-muted-foreground/70"
+				class="hover:bg-accent disabled:text-muted-foreground/70 flex w-full items-center px-3 py-1.5 text-sm"
 				disabled={!clipboardItem}
 				onclick={pasteItem}
 			>
 				<span class="mr-2 text-xs">📥</span>
 				<span>粘贴</span>
 			</button>
-			<hr class="my-1 border-border/60" />
+			<hr class="border-border/60 my-1" />
 			<button
 				type="button"
 				class="flex w-full items-center px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
@@ -2125,16 +2198,16 @@
 			</button>
 			<button
 				type="button"
-				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				class="hover:bg-accent flex w-full items-center px-3 py-1.5 text-sm"
 				onclick={() => renameItem(contextMenu.item!)}
 			>
 				<span class="mr-2 text-xs">✏</span>
 				<span>重命名</span>
 			</button>
-			<hr class="my-1 border-border/60" />
+			<hr class="border-border/60 my-1" />
 			<button
 				type="button"
-				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				class="hover:bg-accent flex w-full items-center px-3 py-1.5 text-sm"
 				onclick={() => openInExplorer(contextMenu.item!)}
 			>
 				<ExternalLink class="mr-2 h-4 w-4" />
@@ -2142,7 +2215,7 @@
 			</button>
 			<button
 				type="button"
-				class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+				class="hover:bg-accent flex w-full items-center px-3 py-1.5 text-sm"
 				onclick={() => openWithExternalApp(contextMenu.item!)}
 			>
 				<ExternalLink class="mr-2 h-4 w-4" />
@@ -2154,7 +2227,7 @@
 	<div class="flex min-h-0 flex-1 overflow-hidden">
 		{#if showFolderTree}
 			<div
-				class="relative border-r bg-background/80 shrink-0 flex flex-col"
+				class="bg-background/80 relative flex shrink-0 flex-col border-r"
 				style={`width: ${treeWidth}px; min-width: 180px; max-width: 480px;`}
 			>
 				<FileTreeView
@@ -2192,7 +2265,7 @@
 				/>
 				<!-- 文件树宽度调整分隔条 -->
 				<div
-					class="absolute top-0 right-0 h-full w-1 cursor-col-resize hover:bg-border/70"
+					class="hover:bg-border/70 absolute right-0 top-0 h-full w-1 cursor-col-resize"
 					role="separator"
 					aria-orientation="vertical"
 					onmousedown={handleTreeResizeMouseDown}

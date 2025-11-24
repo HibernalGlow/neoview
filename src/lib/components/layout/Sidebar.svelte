@@ -18,9 +18,10 @@
 		setActivePanelTab,
 		sidebarWidth,
 		sidebarPinned,
-		sidebarOpen
+		sidebarOpen,
+		panels
 	} from '$lib/stores';
-	import type { PanelTabType } from '$lib/stores';
+	import type { PanelTabType, PanelConfig, PanelLocation } from '$lib/stores';
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import FileBrowser from '$lib/components/panels/FileBrowser.svelte';
 	import HistoryPanel from '$lib/components/panels/HistoryPanel.svelte';
@@ -78,6 +79,20 @@
 	];
 
 	let activeItem = $state(navMain[0]);
+
+	const panelInfo = $derived(
+		(() => {
+			const list = $panels as PanelConfig[];
+			const map: Record<PanelTabType, { visible: boolean; location: PanelLocation }> = {} as Record<
+				PanelTabType,
+				{ visible: boolean; location: PanelLocation }
+			>;
+			for (const p of list) {
+				map[p.id as PanelTabType] = { visible: p.visible, location: p.location };
+			}
+			return map;
+		})()
+	);
 
 	function createAppStateStore<T>(selector: StateSelector<T>) {
 		const initial = selector(appState.getSnapshot());
@@ -157,9 +172,30 @@
 
 	// 响应 activePanel 变化（避免无限循环）
 	$effect(() => {
-		const currentActive = navMain.find((nav) => nav.value === $activePanel);
-		if (currentActive && currentActive.value !== activeItem.value) {
-			activeItem = currentActive;
+		const info = panelInfo;
+		const currentActiveId = $activePanel as PanelTabType | null;
+		let next: NavItem | undefined;
+
+		if (currentActiveId) {
+			const candidate = navMain.find((nav) => nav.value === currentActiveId);
+			const entry = candidate && info[candidate.value];
+			if (candidate && entry && entry.visible && entry.location === 'left') {
+				next = candidate;
+			}
+		}
+
+		if (!next) {
+			next = navMain.find((nav) => {
+				const entry = info[nav.value];
+				return entry && entry.visible && entry.location === 'left';
+			});
+		}
+
+		if (!next) return;
+
+		if (next.value !== activeItem.value) {
+			activeItem = next;
+			setActivePanelTab(next.value as PanelTabType);
 		}
 	});
 
@@ -235,22 +271,24 @@
 							<Sidebar.GroupContent class="px-1.5 md:px-0">
 								<Sidebar.Menu>
 									{#each navMain as item (item.value)}
-										<Sidebar.MenuItem>
-											<Sidebar.MenuButton
-												tooltipContentProps={{
-													hidden: false
-												}}
-												onclick={() => handleTabChange(item)}
-												isActive={$activePanel === item.value}
-												class="px-2.5 md:px-2"
-											>
-												{#snippet tooltipContent()}
-													{item.title}
-												{/snippet}
-												<item.icon />
-												<span>{item.title}</span>
-											</Sidebar.MenuButton>
-										</Sidebar.MenuItem>
+										{#if !panelInfo[item.value] || (panelInfo[item.value].visible && panelInfo[item.value].location === 'left')}
+											<Sidebar.MenuItem>
+												<Sidebar.MenuButton
+													tooltipContentProps={{
+														hidden: false
+													}}
+													onclick={() => handleTabChange(item)}
+													isActive={$activePanel === item.value}
+													class="px-2.5 md:px-2"
+												>
+													{#snippet tooltipContent()}
+														{item.title}
+													{/snippet}
+													<item.icon />
+													<span>{item.title}</span>
+												</Sidebar.MenuButton>
+											</Sidebar.MenuItem>
+										{/if}
 									{/each}
 								</Sidebar.Menu>
 							</Sidebar.GroupContent>

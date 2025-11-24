@@ -1310,9 +1310,17 @@
 
 					if (isVideo) {
 						// 🎬 视频文件：作为 media book 打开
-						console.log('🎬 Video clicked as media book:', item.path);
-						await bookStore.openBook(item.path);
-						console.log('✅ Video opened as media book');
+						console.log('🎬 Video clicked:', item.path);
+
+						if (isArchiveView) {
+							// 从压缩包中打开图片
+							await openImageFromArchive(item.path);
+						} else {
+							// 从文件系统打开图片
+							await openImage(item.path);
+						}
+
+						console.log('✅ Video opened in folder/archive book');
 					} else if (item.isImage) {
 						// 🖼️ 图片：打开查看
 						console.log('🖼️ Image clicked:', item.path);

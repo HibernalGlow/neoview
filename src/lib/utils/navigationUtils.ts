@@ -86,7 +86,8 @@ export async function openFileSystemItem(
             const isArchive = await FileSystemAPI.isSupportedArchive(path);
             const isVideo = !isArchive && isVideoFile(path);
 
-            if (isArchive || isVideo) {
+            if (isArchive) {
+                // 压缩包：作为书籍直接打开
                 await bookStore.openBook(path);
 
                 // Navigate to page if specified
@@ -101,6 +102,19 @@ export async function openFileSystemItem(
                         }
                     }, 100);
                 }
+            } else if (isVideo) {
+                // 独立视频文件：与单张图片相同逻辑
+                console.log('🎬 openFileSystemItem: opening video via parent folder book', path);
+                let parentDir = path;
+                const lastBackslash = path.lastIndexOf('\\');
+                const lastSlash = path.lastIndexOf('/');
+                const lastSeparator = Math.max(lastBackslash, lastSlash);
+                if (lastSeparator > 0) {
+                    parentDir = path.substring(0, lastSeparator);
+                }
+                console.log('📁 Video parent directory:', parentDir);
+                await bookStore.openDirectoryAsBook(parentDir);
+                await bookStore.navigateToImage(path);
             } else {
                 // Open with system default application
                 await FileSystemAPI.openWithSystem(path);

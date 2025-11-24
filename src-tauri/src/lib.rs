@@ -308,6 +308,8 @@ pub fn run() {
             commands::load_video,
             commands::load_video_from_archive,
             commands::get_background_queue_metrics,
+            commands::get_explorer_context_menu_enabled,
+            commands::set_explorer_context_menu_enabled,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

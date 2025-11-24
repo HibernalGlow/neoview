@@ -628,7 +628,7 @@
 
 			<button
 				type="button"
-				class="text-muted-foreground hover:bg-accent absolute left-1/2 top-0 z-50 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize rounded-md p-1 transition-colors"
+				class="text-muted-foreground hover:bg-accent absolute left-1/2 top-0 z-50 -translate-x-1/2 cursor-ns-resize rounded-md p-1 transition-colors"
 				onmousedown={handleResizeStart}
 				aria-label="拖拽调整缩略图栏高度"
 			>

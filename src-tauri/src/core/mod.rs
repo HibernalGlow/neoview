@@ -9,6 +9,7 @@ pub mod cache_index_db;
 pub mod directory_cache;
 pub mod file_indexer;
 pub mod fs_manager;
+pub mod explorer_context_menu;
 pub mod generic_upscaler;
 pub mod image_cache;
 pub mod image_loader;

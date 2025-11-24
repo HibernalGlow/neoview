@@ -3,7 +3,14 @@
 	 * NeoView - Image Viewer Component
 	 * 图像查看器主组件 (Svelte 5 Runes)
 	 */
-	import { bookStore, zoomIn, zoomOut, resetZoom, rotationAngle, toggleFullscreen } from '$lib/stores';
+	import {
+		bookStore,
+		zoomIn,
+		zoomOut,
+		resetZoom,
+		rotationAngle,
+		toggleFullscreen
+	} from '$lib/stores';
 	import { generateKeyCombo } from '$lib/stores/keyboard.svelte';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { settingsManager, performanceSettings } from '$lib/settings/settingsManager';
@@ -236,12 +243,19 @@
 
 	async function loadVideoForPage(page: Page) {
 		const book = bookStore.currentBook;
+		console.log('🎬 loadVideoForPage 被调用:', {
+			page: page.name,
+			bookType: book?.type,
+			path: page.path
+		});
 		if (!book) {
+			console.log('⚠️ loadVideoForPage: 没有当前书籍');
 			return;
 		}
 
 		const requestId = ++currentVideoRequestId;
 		error = null;
+		console.log('🎬 开始加载视频, requestId:', requestId, 'bookType:', book.type);
 
 		if (book.type === 'archive') {
 			loading = true;
@@ -630,11 +644,20 @@
 	$effect(() => {
 		const currentPage = bookStore.currentPage;
 		const currentIndex = bookStore.currentPageIndex;
+		console.log('📄 页面切换 effect 触发:', {
+			pageName: currentPage?.name,
+			pageIndex: currentIndex,
+			isVideo: currentPage ? isVideoPage(currentPage) : false
+		});
+
 		if (currentPage) {
 			bookStore.setCurrentImage(currentPage);
 			error = null;
 			const videoPage = isVideoPage(currentPage);
+			console.log('🎬 isVideoPage 检测结果:', videoPage, '页面名称:', currentPage.name);
+
 			if (videoPage) {
+				console.log('✅ 检测到视频页面，准备加载视频');
 				isCurrentPageVideo = true;
 				clearVideoPlaybackState();
 				imageData = null;
@@ -1129,17 +1152,17 @@
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
-  bind:this={containerElement}
-  class="image-viewer-container relative flex h-full w-full flex-col"
-  style={`background-color: ${viewerBackgroundColor};`}
-  data-viewer="true"
-  onwheel={handleWheel}
-  onmousemove={handleMouseMove}
-  onclick={handleMouseClick}
-  onkeydown={handleKeydown}
-  style:cursor={cursorVisible ? 'default' : 'none'}
-  role="application"
-  tabindex="-1"
+	bind:this={containerElement}
+	class="image-viewer-container relative flex h-full w-full flex-col"
+	style={`background-color: ${viewerBackgroundColor};`}
+	data-viewer="true"
+	onwheel={handleWheel}
+	onmousemove={handleMouseMove}
+	onclick={handleMouseClick}
+	onkeydown={handleKeydown}
+	style:cursor={cursorVisible ? 'default' : 'none'}
+	role="application"
+	tabindex="-1"
 >
 	<!-- 图像显示区域 -->
 	<div
@@ -1154,8 +1177,10 @@
 			<div class="text-red-500">Error: {error}</div>
 		{:else if isCurrentPageVideo}
 			{#if videoUrl}
+				{@const _ = console.log('🎥 渲染 VideoPlayer, videoUrl:', videoUrl)}
 				<VideoPlayer src={videoUrl} />
 			{:else}
+				{@const _ = console.log('⚠️ isCurrentPageVideo=true 但 videoUrl 为空')}
 				<div class="text-white">加载视频中...</div>
 			{/if}
 		{:else}

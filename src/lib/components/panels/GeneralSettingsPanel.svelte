@@ -1,8 +1,41 @@
 <script lang="ts">
-	import { Settings } from '@lucide/svelte';
+	import { onMount } from 'svelte';
+	import { Settings, FolderOpen } from '@lucide/svelte';
 	import { Label } from '$lib/components/ui/label';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select';
 	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
+	import { Switch } from '$lib/components/ui/switch';
+	import * as FileSystemAPI from '$lib/api/filesystem';
+
+	let explorerContextMenuEnabled = $state(false);
+	let explorerContextMenuLoading = $state(true);
+	let explorerContextMenuError: string | null = $state(null);
+
+	onMount(async () => {
+		try {
+			const enabled = await FileSystemAPI.getExplorerContextMenuEnabled();
+			explorerContextMenuEnabled = enabled;
+		} catch (err) {
+			console.error('读取资源管理器上下文菜单状态失败:', err);
+			explorerContextMenuError = '读取状态失败';
+		} finally {
+			explorerContextMenuLoading = false;
+		}
+	});
+
+	async function toggleExplorerContextMenu(value: boolean) {
+		const previous = explorerContextMenuEnabled;
+		explorerContextMenuEnabled = value;
+		explorerContextMenuError = null;
+		try {
+			const result = await FileSystemAPI.setExplorerContextMenuEnabled(value);
+			explorerContextMenuEnabled = result;
+		} catch (err) {
+			console.error('更新资源管理器上下文菜单失败:', err);
+			explorerContextMenuEnabled = previous;
+			explorerContextMenuError = '更新失败，请检查权限';
+		}
+	}
 </script>
 
 <div class="space-y-6 p-6">
@@ -23,6 +56,33 @@
 				<NativeSelectOption value="en-US">English</NativeSelectOption>
 				<NativeSelectOption value="ja-JP">日本語</NativeSelectOption>
 			</NativeSelect>
+		</div>
+
+		<!-- 资源管理器集成 -->
+		<div class="space-y-2">
+			<div class="flex items-center gap-2">
+				<FolderOpen class="h-4 w-4 text-muted-foreground" />
+				<Label class="text-sm font-semibold">资源管理器集成</Label>
+			</div>
+			<div class="space-y-1">
+				<label class="flex items-center justify-between gap-2">
+					<span class="text-sm">在资源管理器右键菜单中添加“在 NeoView 中打开”</span>
+					<Switch
+						bind:checked={explorerContextMenuEnabled}
+						disabled={explorerContextMenuLoading}
+						on:change={(e) => toggleExplorerContextMenu((e.currentTarget as HTMLInputElement).checked)}
+					/>
+				</label>
+				{#if explorerContextMenuError}
+					<p class="text-xs text-destructive">{explorerContextMenuError}</p>
+				{:else if explorerContextMenuLoading}
+					<p class="text-xs text-muted-foreground">正在读取当前状态...</p>
+				{:else}
+					<p class="text-xs text-muted-foreground">
+						该设置使用当前可执行文件路径在 HKCU\Software\Classes 中注册右键菜单，适用于便携版。
+					</p>
+				{/if}
+			</div>
 		</div>
 
 		<!-- 主题设置 -->

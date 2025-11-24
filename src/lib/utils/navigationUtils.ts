@@ -103,7 +103,6 @@ export async function openFileSystemItem(
                     }, 100);
                 }
             } else if (isVideo) {
-                // 独立视频文件：与单张图片相同逻辑
                 console.log('🎬 openFileSystemItem: opening video via parent folder book', path);
                 let parentDir = path;
                 const lastBackslash = path.lastIndexOf('\\');
@@ -115,6 +114,13 @@ export async function openFileSystemItem(
                 console.log('📁 Video parent directory:', parentDir);
                 await bookStore.openDirectoryAsBook(parentDir);
                 await bookStore.navigateToImage(path);
+                try {
+                    const { historyStore } = await import('$lib/stores/history.svelte');
+                    const name = path.split(/[\\/]/).pop() || path;
+                    historyStore.add(path, name, 0, 1);
+                } catch (historyError) {
+                    console.error('Failed to add video history entry from openFileSystemItem:', historyError);
+                }
             } else {
                 // Open with system default application
                 await FileSystemAPI.openWithSystem(path);

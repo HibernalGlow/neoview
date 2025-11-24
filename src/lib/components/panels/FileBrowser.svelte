@@ -1318,6 +1318,12 @@
 						} else {
 							// 从文件系统打开图片
 							await openImage(item.path);
+							try {
+								const { historyStore } = await import('$lib/stores/history.svelte');
+								historyStore.add(item.path, item.name, 0, 1);
+							} catch (historyError) {
+								console.error('Failed to add video history entry:', historyError);
+							}
 						}
 
 						console.log('✅ Video opened in folder/archive book');

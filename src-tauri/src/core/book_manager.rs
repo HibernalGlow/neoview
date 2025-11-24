@@ -131,8 +131,8 @@ impl BookManager {
                 return Err("PDF support not yet implemented".to_string());
             }
             BookType::Media => {
-                // TODO: 实现媒体文件支持
-                return Err("Media support not yet implemented".to_string());
+                // 单文件媒体类型（视频等）：构造仅包含一个页面的 Book
+                self.load_media_pages(&path_buf, &mut book)?;
             }
         }
 
@@ -150,6 +150,9 @@ impl BookManager {
             match ext.to_lowercase().as_str() {
                 "zip" | "rar" | "7z" | "cbz" | "cbr" => Ok(BookType::Archive),
                 "pdf" => Ok(BookType::Pdf),
+                // 常见视频扩展名，作为 Media 类型处理
+                "mp4" | "webm" | "ogg" | "mov" | "avi" | "mkv" | "m4v" | "flv" | "wmv"
+                | "mpg" | "mpeg" => Ok(BookType::Media),
                 _ => Err(format!("Unsupported file type: {}", ext)),
             }
         } else {
@@ -197,6 +200,30 @@ impl BookManager {
         }
 
         book.total_pages = book.pages.len();
+        Ok(())
+    }
+
+    /// 加载单文件媒体页面（视频等）
+    fn load_media_pages(&self, path: &Path, book: &mut BookInfo) -> Result<(), String> {
+        let metadata = fs::metadata(path)
+            .map_err(|e| format!("Failed to read media file metadata: {}", e))?;
+
+        let size = metadata.len();
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("Unknown")
+            .to_string();
+
+        let path_str = path.to_string_lossy().to_string();
+
+        // 为媒体类型计算 stable_hash
+        let path_key = build_path_key(&book.path, &path_str, &book.book_type, None);
+        let stable_hash = calculate_path_hash(&path_key);
+
+        let page = Page::new(0, path_str, name, size).with_stable_hash(stable_hash);
+        book.pages.push(page);
+        book.total_pages = 1;
         Ok(())
     }
 

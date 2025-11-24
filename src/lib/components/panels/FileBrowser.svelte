@@ -50,6 +50,7 @@
 	import { homeDir } from '@tauri-apps/api/path';
 	import { thumbnailManager, type ThumbnailConfig } from '$lib/utils/thumbnailManager';
 	import { buildImagePathKey } from '$lib/utils/pathHash';
+	import { isVideoFile as isVideoPath } from '$lib/utils/videoUtils';
 	import { readable } from 'svelte/store';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
 	import { taskScheduler } from '$lib/core/tasks/taskScheduler';
@@ -1237,19 +1238,30 @@
 					// 打开压缩包作为书籍
 					await bookStore.openBook(item.path);
 					console.log('✅ Archive opened as book');
-				} else if (item.isImage) {
-					// 🖼️ 图片：打开查看
-					console.log('🖼️ Image clicked:', item.path);
-
-					if (isArchiveView) {
-						// 从压缩包中打开图片
-						await openImageFromArchive(item.path);
-					} else {
-						// 从文件系统打开图片
-						await openImage(item.path);
-					}
 				} else {
-					console.log('⚠️ Unknown file type, ignoring');
+					// 非压缩包：检查是否为视频或普通图片（前端通过扩展名判断）
+					const isVideo = isVideoPath(item.path);
+					console.log('Is video:', isVideo);
+
+					if (isVideo) {
+						// 🎬 视频文件：作为 media book 打开
+						console.log('🎬 Video clicked as media book:', item.path);
+						await bookStore.openBook(item.path);
+						console.log('✅ Video opened as media book');
+					} else if (item.isImage) {
+						// 🖼️ 图片：打开查看
+						console.log('🖼️ Image clicked:', item.path);
+
+						if (isArchiveView) {
+							// 从压缩包中打开图片
+							await openImageFromArchive(item.path);
+						} else {
+							// 从文件系统打开图片
+							await openImage(item.path);
+						}
+					} else {
+						console.log('⚠️ Unknown file type, ignoring');
+					}
 				}
 			}
 		} catch (err) {

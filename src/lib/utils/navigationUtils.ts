@@ -2,6 +2,7 @@ import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 import { bookStore } from '$lib/stores/book.svelte';
 import { FileSystemAPI } from '$lib/api';
 import { setActivePanelTab } from '$lib/stores';
+import { isVideoFile } from '$lib/utils/videoUtils';
 
 /**
  * Opens a file system item (file or folder) with support for "Silent Sync" (updating file browser without switching tabs).
@@ -81,10 +82,11 @@ export async function openFileSystemItem(
     } else {
         // File
         try {
-            // Check if it is a supported archive/book
+            // Check if it is a supported archive/book or a standalone video file
             const isArchive = await FileSystemAPI.isSupportedArchive(path);
+            const isVideo = !isArchive && isVideoFile(path);
 
-            if (isArchive) {
+            if (isArchive || isVideo) {
                 await bookStore.openBook(path);
 
                 // Navigate to page if specified

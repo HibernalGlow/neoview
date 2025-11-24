@@ -1281,6 +1281,8 @@
 			{#if videoUrl}
 				<VideoPlayer
 					src={videoUrl}
+					initialTime={videoStartTime}
+					onProgress={handleVideoProgress}
 					onEnded={handleVideoListLoopEnded}
 					initialVolume={videoPlayerSettings.volume}
 					initialMuted={videoPlayerSettings.muted}

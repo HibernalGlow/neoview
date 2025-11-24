@@ -37,7 +37,7 @@
 	const tabs = [
 		{ value: 'general', label: '通用', icon: Settings },
 		{ value: 'system', label: '系统', icon: Monitor },
-		{ value: 'image', label: '图片', icon: Palette },
+		{ value: 'image', label: '影像', icon: Palette },
 		{ value: 'archive', label: '压缩包', icon: Archive },
 		{ value: 'view', label: '视图', icon: Eye },
 		{ value: 'book', label: '书籍', icon: BookOpen },
@@ -114,9 +114,9 @@
 				{#if activeTab === 'image'}
 					<div class="space-y-4 p-6">
 						<div class="rounded-lg border bg-card text-card-foreground p-4">
-							<h3 class="text-base font-semibold">图片设置（预留）</h3>
+							<h3 class="text-base font-semibold">影像</h3>
 							<p class="text-sm text-muted-foreground mt-1">
-								这里将放置全局图片相关设置，例如格式支持、默认超分行为等。
+								这里将放置全局影像（图片和视频）相关设置，例如格式支持、默认超分行为等。
 							</p>
 						</div>
 						<ImageSettingsPanel />

@@ -12,6 +12,9 @@ export interface HistoryEntry {
   currentPage: number;
   totalPages: number;
   thumbnail?: string;
+  videoPosition?: number;
+  videoDuration?: number;
+  videoCompleted?: boolean;
 }
 
 const STORAGE_KEY = 'neoview-history';
@@ -143,6 +146,60 @@ export const historyStore = {
         return newHistory;
       }
       return history;
+    });
+  },
+
+  /**
+   * 更新视频观看进度（基于路径），并同步到 currentPage/totalPages 以复用进度条和已读标记
+   */
+  updateVideoProgress(
+    path: string,
+    position: number,
+    duration: number,
+    completed: boolean,
+    progressPage?: number,
+    progressTotal?: number
+  ) {
+    update(history => {
+      const existingIndex = history.findIndex(h => h.path === path);
+
+      const scale = progressTotal && progressTotal > 0 ? progressTotal : 1000;
+      const safeDuration = duration > 0 && isFinite(duration) ? duration : 0;
+      const clampedPos = safeDuration > 0 ? Math.max(0, Math.min(position, safeDuration)) : 0;
+
+      let derivedCurrentPage = progressPage ?? 0;
+      let derivedTotalPages = scale;
+
+      if (safeDuration > 0) {
+        const ratio = clampedPos / safeDuration;
+        derivedCurrentPage = Math.floor(ratio * scale);
+      }
+
+      if (completed) {
+        derivedCurrentPage = derivedTotalPages;
+      }
+
+      // 仅在已有历史记录时更新，避免为压缩包内视频等创建新的条目
+      if (existingIndex < 0) {
+        return history;
+      }
+
+      const prev = history[existingIndex];
+      const entry: HistoryEntry = {
+        ...prev,
+        currentPage: derivedCurrentPage,
+        totalPages: derivedTotalPages,
+        videoPosition: clampedPos,
+        videoDuration: safeDuration,
+        videoCompleted: completed
+      };
+
+      const newHistory = [...history];
+      newHistory[existingIndex] = entry;
+      const reordered = [entry, ...newHistory.filter((_, i) => i !== existingIndex)];
+
+      saveToStorage(reordered);
+      return reordered;
     });
   }
 };

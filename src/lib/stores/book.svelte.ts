@@ -338,6 +338,25 @@ class BookStore {
     }
   }
 
+  async navigateToImage(imagePath: string) {
+    if (!this.state.currentBook) return;
+
+    try {
+      const index = await bookApi.navigateToImage(imagePath);
+      if (!this.state.currentBook) return;
+
+      this.state.currentBook.currentPage = index;
+      this.syncAppStateBookSlice('user');
+      await this.syncInfoPanelBookInfo();
+
+      const { historyStore } = await import('$lib/stores/history.svelte');
+      historyStore.update(this.state.currentBook.path, index, this.state.currentBook.totalPages);
+    } catch (err) {
+      console.error('❌ Error navigating to image:', err);
+      this.state.error = String(err);
+    }
+  }
+
   /**
    * 下一页
    */

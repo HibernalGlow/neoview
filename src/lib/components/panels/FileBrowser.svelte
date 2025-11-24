@@ -1261,7 +1261,7 @@
 			// 打开整个压缩包作为 book
 			await bookStore.openArchiveAsBook(currentArchivePath);
 			// 跳转到指定图片
-			await BookAPI.navigateToImage(filePath);
+			await bookStore.navigateToImage(filePath);
 			console.log('✅ Image opened from archive');
 		} catch (err) {
 			console.error('❌ Error opening image from archive:', err);
@@ -1362,7 +1362,7 @@
 			// 打开整个文件夹作为 book
 			await bookStore.openDirectoryAsBook(parentDir);
 			// 跳转到指定图片
-			await BookAPI.navigateToImage(path);
+			await bookStore.navigateToImage(path);
 			console.log('✅ Image opened');
 		} catch (err) {
 			console.error('❌ Error opening image:', err);

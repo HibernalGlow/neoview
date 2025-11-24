@@ -15,6 +15,7 @@ export interface NeoViewSettings {
   startup: {
     openLastFile: boolean;
     minimizeToTray: boolean;
+    openLastFolder: boolean;
   };
   performance: {
     cacheMemorySize: number; // MB
@@ -105,7 +106,8 @@ const defaultSettings: NeoViewSettings = {
   },
   startup: {
     openLastFile: true,
-    minimizeToTray: false
+    minimizeToTray: false,
+    openLastFolder: true
   },
   performance: {
     cacheMemorySize: 512,

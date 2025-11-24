@@ -292,8 +292,10 @@
 		class="border-border group relative flex cursor-pointer items-center gap-3 rounded-md border p-2 transition-colors {isSelected
 			? 'bg-accent text-accent-foreground border-accent'
 			: 'hover:bg-accent/40'}"
-		onclick={onClick}
-		ondblclick={onDoubleClick}
+		onclick={(e) => {
+			e.stopPropagation();
+			onClick?.();
+		}}
 		oncontextmenu={onContextMenu}
 		onkeydown={(e) => {
 			if ((e.key === 'Enter' || e.key === ' ') && onClick) {
@@ -594,8 +596,10 @@
 		class="border-border group relative flex cursor-pointer flex-col overflow-hidden rounded border transition-all hover:shadow-md {isSelected
 			? 'border-primary ring-2'
 			: ''}"
-		onclick={onClick}
-		ondblclick={onDoubleClick}
+		onclick={(e) => {
+			e.stopPropagation();
+			onClick?.();
+		}}
 		oncontextmenu={onContextMenu}
 		onkeydown={(e) => {
 			if ((e.key === 'Enter' || e.key === ' ') && onClick) {

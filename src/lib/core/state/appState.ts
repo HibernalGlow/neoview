@@ -81,7 +81,8 @@ export function createDefaultAppState(): AppStateSnapshot {
 			},
 			startup: {
 				openLastFile: true,
-				minimizeToTray: false
+				minimizeToTray: false,
+				openLastFolder: true
 			},
 			performance: {
 				cacheMemorySize: 512,
@@ -128,7 +129,13 @@ export function createDefaultAppState(): AppStateSnapshot {
 				leftSidebarVisible: true,
 				rightSidebarVisible: false,
 				bottomPanelVisible: false,
-				autoHideToolbar: true
+				autoHideToolbar: true,
+				hoverAreas: {
+					topTriggerHeight: 4,
+					bottomTriggerHeight: 4,
+					leftTriggerWidth: 12,
+					rightTriggerWidth: 12
+				}
 			},
 			bindings: {
 				mouse: {

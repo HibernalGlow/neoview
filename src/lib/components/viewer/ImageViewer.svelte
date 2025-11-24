@@ -271,13 +271,14 @@
 				const mimeType = getVideoMimeType(page.name) ?? 'video/mp4';
 				const blob = new Blob([new Uint8Array(binaryData)], { type: mimeType });
 				const objectUrl = URL.createObjectURL(blob);
-				setVideoUrl(objectUrl, true);
+				videoUrl = objectUrl; // 直接赋值
+				videoUrlRevokeNeeded = true; // 标记
 			} else {
 				const fileUrl = convertFileSrc(page.path);
 				if (requestId !== currentVideoRequestId) {
 					return;
 				}
-				setVideoUrl(fileUrl, false);
+				videoUrl = fileUrl; // 直接赋值
 			}
 		} catch (err) {
 			if (requestId !== currentVideoRequestId) {

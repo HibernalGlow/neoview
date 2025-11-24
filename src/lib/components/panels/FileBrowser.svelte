@@ -55,6 +55,7 @@
 	import { appState, type StateSelector } from '$lib/core/state/appState';
 	import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 	import { loadPanelViewMode, savePanelViewMode } from '$lib/utils/panelViewMode';
+	import { settingsManager } from '$lib/settings/settingsManager';
 
 	function itemIsDirectory(item: any): boolean {
 		return item.isDir || item.is_directory;
@@ -115,6 +116,10 @@
 		thumbnailManager.cancelByPath(path);
 		return 0;
 	}
+	// 防抖变量
+	let lastOpenFileTime = 0;
+	let lastOpenFilePath = '';
+
 	function createAppStateStore<T>(selector: StateSelector<T>) {
 		const initial = selector(appState.getSnapshot());
 		return readable(initial, (set) => appState.subscribe(selector, (value) => set(value)));
@@ -265,6 +270,24 @@
 		}
 	}
 
+	function setLastFolder(path: string) {
+		try {
+			localStorage.setItem(LAST_FOLDER_STORAGE_KEY, path);
+			console.log('✅ 上次浏览文件夹路径已更新:', path);
+		} catch (err) {
+			console.error('❌ 保存上次浏览文件夹路径失败:', err);
+		}
+	}
+
+	function getLastFolder(): string | null {
+		try {
+			return localStorage.getItem(LAST_FOLDER_STORAGE_KEY);
+		} catch (err) {
+			console.error('❌ 读取上次浏览文件夹路径失败:', err);
+			return null;
+		}
+	}
+
 	// 订阅全局状态 - 使用 Svelte 5 的响应式
 	$effect(() => {
 		const unsubscribe = fileBrowserStore.subscribe((state) => {
@@ -303,6 +326,7 @@
 
 	// 主页路径的本地存储键
 	const HOMEPAGE_STORAGE_KEY = 'neoview-homepage-path';
+	const LAST_FOLDER_STORAGE_KEY = 'neoview-last-folder-path';
 
 	/**
 	 * 设置主页路径
@@ -348,6 +372,30 @@
 			}
 		} catch (err) {
 			console.error('❌ 加载主页路径失败:', err);
+		}
+	}
+
+	async function loadStartupDirectory() {
+		try {
+			const settings = settingsManager.getSettings();
+			if (settings.startup && settings.startup.openLastFolder) {
+				const lastFolder = getLastFolder();
+				if (lastFolder) {
+					const exists = await FileSystemAPI.pathExists(lastFolder);
+					if (exists) {
+						console.log('📂 加载上次浏览的文件夹:', lastFolder);
+						navigationHistory.setHomepage(lastFolder);
+						await loadDirectory(lastFolder);
+						return;
+					} else {
+						console.warn('⚠️ 上次浏览的文件夹已不存在，回退到主页:', lastFolder);
+					}
+				}
+			}
+			await loadHomepage();
+		} catch (err) {
+			console.error('❌ 加载启动目录失败，回退到主页:', err);
+			await loadHomepage();
 		}
 	}
 
@@ -547,7 +595,7 @@
 
 		// 加载主页 - 仅在当前没有路径时加载（避免覆盖从其他面板跳转过来的导航）
 		if (!fileBrowserStore.getState().currentPath) {
-			loadHomepage();
+			void loadStartupDirectory();
 		} else {
 			console.log(
 				'📍 FileBrowser mounted, preserving current path:',
@@ -694,6 +742,7 @@
 			fileBrowserStore.setThumbnails(cachedData.thumbnails);
 			thumbnails = new Map(cachedData.thumbnails);
 			updateTreeWithDirectory(path, cachedData.items);
+			setLastFolder(path);
 
 			// 异步验证缓存并更新缩略图
 			runWithScheduler({
@@ -797,6 +846,8 @@
 				navigationHistory.prefetchAdjacentPaths(path);
 			}
 		}).catch((err) => console.debug('相邻目录预取失败:', err));
+
+		setLastFolder(path);
 	}
 
 	/**
@@ -1213,6 +1264,15 @@
 			path: item.path,
 			size: item.size
 		});
+
+		// 防抖：如果在 300ms 内重复打开同一个文件，则忽略
+		const now = Date.now();
+		if (item.path === lastOpenFilePath && now - lastOpenFileTime < 300) {
+			console.log('⚠️ 防抖：忽略重复的 openFile 调用');
+			return;
+		}
+		lastOpenFileTime = now;
+		lastOpenFilePath = item.path;
 
 		try {
 			if (item.isDir) {

@@ -7,12 +7,14 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import { Button } from '$lib/components/ui/button';
 	import * as FileSystemAPI from '$lib/api/filesystem';
+	import { settingsManager } from '$lib/settings/settingsManager';
 
 	let explorerContextMenuEnabled = $state(false);
 	let explorerContextMenuLoading = $state(true);
 	let explorerContextMenuError: string | null = $state(null);
 	let explorerContextMenuInitialized = $state(false);
 	let explorerContextMenuSyncing = $state(false);
+	let currentSettings = $state(settingsManager.getSettings());
 
 	onMount(async () => {
 		try {
@@ -24,6 +26,10 @@
 		} finally {
 			explorerContextMenuLoading = false;
 		}
+	});
+
+	settingsManager.addListener((s) => {
+		currentSettings = s;
 	});
 
 	$effect(() => {
@@ -139,11 +145,51 @@
 			<Label class="text-sm font-semibold">启动</Label>
 			<label class="flex items-center justify-between gap-2">
 				<span class="text-sm">启动时打开上次的文件</span>
-				<Checkbox aria-label="启动时打开上次的文件" />
+				<button
+					type="button"
+					class="cursor-pointer"
+					onclick={() =>
+						settingsManager.updateNestedSettings('startup', {
+							openLastFile: !currentSettings.startup.openLastFile
+						})}
+				>
+					<Checkbox
+						checked={currentSettings.startup.openLastFile}
+						aria-label="启动时打开上次的文件"
+					/>
+				</button>
 			</label>
 			<label class="flex items-center justify-between gap-2">
 				<span class="text-sm">最小化到系统托盘</span>
-				<Checkbox aria-label="最小化到系统托盘" />
+				<button
+					type="button"
+					class="cursor-pointer"
+					onclick={() =>
+						settingsManager.updateNestedSettings('startup', {
+							minimizeToTray: !currentSettings.startup.minimizeToTray
+						})}
+				>
+					<Checkbox
+						checked={currentSettings.startup.minimizeToTray}
+						aria-label="最小化到系统托盘"
+					/>
+				</button>
+			</label>
+			<label class="flex items-center justify-between gap-2">
+				<span class="text-sm">启动时恢复上次浏览的文件夹（书架位置）</span>
+				<button
+					type="button"
+					class="cursor-pointer"
+					onclick={() =>
+						settingsManager.updateNestedSettings('startup', {
+							openLastFolder: !currentSettings.startup.openLastFolder
+						})}
+				>
+					<Checkbox
+						checked={currentSettings.startup.openLastFolder}
+						aria-label="启动时恢复上次浏览的文件夹（书架位置）"
+					/>
+				</button>
 			</label>
 		</div>
 

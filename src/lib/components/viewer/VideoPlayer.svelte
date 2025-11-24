@@ -339,9 +339,9 @@
 					aria-label={isPlaying ? '暂停' : '播放'}
 				>
 					{#if isPlaying}
-						<Pause class="h-6 w-6 text-white" />
+						<Pause class="h-6 w-6 text-primary" />
 					{:else}
-						<Play class="h-6 w-6 text-white" />
+						<Play class="h-6 w-6 text-primary" />
 					{/if}
 				</button>
 
@@ -351,7 +351,7 @@
 					onclick={skipBackward}
 					aria-label="后退10秒"
 				>
-					<SkipBack class="h-5 w-5 text-white" />
+					<SkipBack class="h-5 w-5 text-primary" />
 				</button>
 
 				<!-- 快进 -->
@@ -360,7 +360,7 @@
 					onclick={skipForward}
 					aria-label="前进10秒"
 				>
-					<SkipForward class="h-5 w-5 text-white" />
+					<SkipForward class="h-5 w-5 text-primary" />
 				</button>
 
 				<!-- 循环模式 -->
@@ -379,16 +379,16 @@
 					}
 				>
 					{#if loopMode === 'single'}
-						<Repeat1 class="h-5 w-5 text-white" />
+						<Repeat1 class="h-5 w-5 text-primary" />
 					{:else if loopMode === 'list'}
-						<Repeat class="h-5 w-5 text-white" />
+						<Repeat class="h-5 w-5 text-primary" />
 					{:else}
-						<Repeat class="h-5 w-5 text-white opacity-40" />
+						<Repeat class="h-5 w-5 text-primary opacity-40" />
 					{/if}
 				</button>
 
 				<!-- 时间显示 -->
-				<div class="time-display text-sm text-white">
+				<div class="time-display text-sm text-primary">
 					{formatTime(currentTime)} / {formatTime(duration)}
 				</div>
 
@@ -402,9 +402,9 @@
 						aria-label={isMuted ? '取消静音' : '静音'}
 					>
 						{#if isMuted || volume === 0}
-							<VolumeX class="h-5 w-5 text-white" />
+							<VolumeX class="h-5 w-5 text-primary" />
 						{:else}
-							<Volume2 class="h-5 w-5 text-white" />
+							<Volume2 class="h-5 w-5 text-primary" />
 						{/if}
 					</button>
 					<input
@@ -419,7 +419,7 @@
 				</div>
 
 				<!-- 倍速 -->
-				<div class="playback-rate flex items-center gap-2 text-xs text-white">
+				<div class="playback-rate flex items-center gap-2 text-xs text-primary">
 					<button
 						class="control-btn rounded-full p-2 transition-colors hover:bg-white/20"
 						onclick={(event) => {
@@ -428,7 +428,7 @@
 						}}
 						aria-label="重置为1倍速"
 					>
-						<Gauge class="h-5 w-5 text-white" />
+						<Gauge class="h-5 w-5 text-primary" />
 					</button>
 					<input
 						type="range"
@@ -450,7 +450,7 @@
 					onclick={toggleFullscreen}
 					aria-label="全屏"
 				>
-					<Maximize class="h-5 w-5 text-white" />
+					<Maximize class="h-5 w-5 text-primary" />
 				</button>
 			</div>
 		</div>
@@ -465,7 +465,11 @@
 	}
 
 	.volume-slider {
-		accent-color: white;
+		accent-color: var(--primary);
+	}
+
+	.playback-slider {
+		accent-color: var(--primary);
 	}
 
 	.progress-bar {

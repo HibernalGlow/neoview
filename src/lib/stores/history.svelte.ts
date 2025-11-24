@@ -62,14 +62,21 @@ export const historyStore = {
       // 检查是否已存在相同路径的历史记录
       const existingIndex = history.findIndex(h => h.path === path);
 
+      const existing = existingIndex >= 0 ? history[existingIndex] : undefined;
+
+      // 对已存在的记录进行合并更新，保留视频进度等扩展字段
       const entry: HistoryEntry = {
-        id: existingIndex >= 0 ? history[existingIndex].id : crypto.randomUUID(),
+        ...existing,
+        id: existing?.id ?? crypto.randomUUID(),
         path,
         name,
         timestamp: Date.now(),
         currentPage,
         totalPages,
-        thumbnail
+        thumbnail: thumbnail ?? existing?.thumbnail,
+        videoPosition: existing?.videoPosition,
+        videoDuration: existing?.videoDuration,
+        videoCompleted: existing?.videoCompleted
       };
 
       let newHistory: HistoryEntry[];

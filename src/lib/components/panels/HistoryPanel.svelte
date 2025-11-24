@@ -35,6 +35,7 @@
 	import { setActivePanelTab } from '$lib/stores';
 	import { openFileSystemItem } from '$lib/utils/navigationUtils';
 	import { loadPanelViewMode, savePanelViewMode } from '$lib/utils/panelViewMode';
+	import { isVideoFile } from '$lib/utils/videoUtils';
 
 	let history = $state<HistoryEntry[]>([]);
 	let viewMode = $state<'list' | 'grid'>(loadPanelViewMode('history', 'list') as 'list' | 'grid');
@@ -105,12 +106,21 @@
 
 	// 打开历史记录
 	async function openHistory(entry: HistoryEntry) {
-		await openFileSystemItem(entry.path, false, {
-			syncFileTree: historySettingsStore.syncFileTreeOnHistorySelect,
-			page: entry.currentPage,
-			totalPages: entry.totalPages,
-			forceBookOpen: true
-		});
+		const isVideo = isVideoFile(entry.path);
+		if (isVideo) {
+			// 视频历史：按文件浏览器逻辑打开所在文件夹 book，并定位到该视频
+			await openFileSystemItem(entry.path, false, {
+				syncFileTree: historySettingsStore.syncFileTreeOnHistorySelect
+			});
+		} else {
+			// 书籍历史（文件夹/压缩包）：保持原有行为，直接按 book 打开并跳转到对应页
+			await openFileSystemItem(entry.path, false, {
+				syncFileTree: historySettingsStore.syncFileTreeOnHistorySelect,
+				page: entry.currentPage,
+				totalPages: entry.totalPages,
+				forceBookOpen: true
+			});
+		}
 	}
 
 	// 移除历史记录

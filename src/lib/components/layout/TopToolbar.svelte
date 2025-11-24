@@ -921,7 +921,7 @@
 		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<button
 			type="button"
-			class="text-muted-foreground hover:bg-accent absolute bottom-0 left-1/2 z-50 -translate-x-1/2 translate-y-1/2 cursor-ns-resize rounded-md p-1 transition-colors"
+			class="text-muted-foreground hover:bg-accent absolute bottom-0 left-1/2 z-50 -translate-x-1/2 cursor-ns-resize rounded-md p-1 transition-colors"
 			onmousedown={handleResizeStart}
 			aria-label="拖拽调整工具栏高度"
 		>

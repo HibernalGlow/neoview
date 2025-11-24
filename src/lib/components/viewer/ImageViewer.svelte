@@ -132,6 +132,38 @@
 		return Boolean(page && (isVideoFile(page.name) || isVideoFile(page.path)));
 	}
 
+	function findNextVideoPageIndex(currentIndex: number): number | null {
+		const book = bookStore.currentBook;
+		const pages = book?.pages;
+		if (!book || !pages || pages.length === 0) return null;
+
+		const total = pages.length;
+		for (let offset = 1; offset < total; offset++) {
+			const index = (currentIndex + offset) % total;
+			const page = pages[index];
+			if (page && isVideoPage(page)) {
+				return index;
+			}
+		}
+		return null;
+	}
+
+	async function handleVideoListLoopEnded() {
+		const book = bookStore.currentBook;
+		if (!book) return;
+
+		const currentIndex = bookStore.currentPageIndex;
+		const nextVideoIndex = findNextVideoPageIndex(currentIndex);
+		if (nextVideoIndex == null) {
+			return;
+		}
+		try {
+			await bookStore.navigateToPage(nextVideoIndex);
+		} catch (err) {
+			console.error('Failed to navigate to next video page:', err);
+		}
+	}
+
 	function clearVideoPlaybackState() {
 		if (videoUrlRevokeNeeded && videoUrl) {
 			URL.revokeObjectURL(videoUrl);
@@ -1169,7 +1201,7 @@
 			<div class="text-red-500">Error: {error}</div>
 		{:else if isCurrentPageVideo}
 			{#if videoUrl}
-				<VideoPlayer src={videoUrl} />
+				<VideoPlayer src={videoUrl} onEnded={handleVideoListLoopEnded} />
 			{:else}
 				<div class="text-white">加载视频中...</div>
 			{/if}

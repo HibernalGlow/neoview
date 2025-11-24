@@ -28,9 +28,9 @@
 	<div class="space-y-2">
 		<h3 class="flex items-center gap-2 text-lg font-semibold">
 			<Palette class="h-5 w-5" />
-			图片设置
+			影像综合管理图片和视频
 		</h3>
-		<p class="text-muted-foreground text-sm">配置全局图片加载行为</p>
+		<p class="text-muted-foreground text-sm">配置全局图片和视频的加载与播放行为</p>
 	</div>
 
 	<div class="space-y-4">
@@ -83,6 +83,72 @@
 			<p class="text-muted-foreground text-xs">
 				控制 NeoView 默认识别为图片的文件扩展名。
 			</p>
+		</div>
+
+		<!-- 视频倍速范围 -->
+		<div class="space-y-2">
+			<h4 class="text-sm font-semibold">视频倍速范围</h4>
+			<div class="space-y-2">
+				<div class="flex items-center justify-between gap-2">
+					<Label class="text-sm">最小倍速</Label>
+					<input
+						type="number"
+						min="0.05"
+						step="0.05"
+						value={currentSettings.image.videoMinPlaybackRate}
+						class="w-24 rounded border bg-background px-2 py-1 text-right text-sm"
+						onchange={(event) => {
+							const target = event.target as HTMLInputElement;
+							const raw = parseFloat(target.value);
+							const max = currentSettings.image.videoMaxPlaybackRate;
+							const value = Number.isNaN(raw) ? 0.25 : raw;
+							const clamped = Math.max(0.05, Math.min(value, max));
+							settingsManager.updateNestedSettings('image', {
+								videoMinPlaybackRate: clamped
+							});
+						}}
+					/>
+				</div>
+				<div class="flex items-center justify-between gap-2">
+					<Label class="text-sm">最大倍速</Label>
+					<input
+						type="number"
+						min={currentSettings.image.videoMinPlaybackRate}
+						step="0.25"
+						value={currentSettings.image.videoMaxPlaybackRate}
+						class="w-24 rounded border bg-background px-2 py-1 text-right text-sm"
+						onchange={(event) => {
+							const target = event.target as HTMLInputElement;
+							const raw = parseFloat(target.value);
+							const min = currentSettings.image.videoMinPlaybackRate;
+							const value = Number.isNaN(raw) ? 16 : raw;
+							const clamped = Math.max(min, Math.min(value, 64));
+							settingsManager.updateNestedSettings('image', {
+								videoMaxPlaybackRate: clamped
+							});
+						}}
+					/>
+				</div>
+				<div class="flex items-center justify-between gap-2">
+					<Label class="text-sm">调节步长</Label>
+					<input
+						type="number"
+						min="0.01"
+						step="0.01"
+						value={currentSettings.image.videoPlaybackRateStep}
+						class="w-24 rounded border bg-background px-2 py-1 text-right text-sm"
+						onchange={(event) => {
+							const target = event.target as HTMLInputElement;
+							const raw = parseFloat(target.value);
+							const value = Number.isNaN(raw) ? 0.25 : raw;
+							const clamped = Math.max(0.01, Math.min(value, 4));
+							settingsManager.updateNestedSettings('image', {
+								videoPlaybackRateStep: clamped
+							});
+						}}
+					/>
+				</div>
+			</div>
 		</div>
 	</div>
 </div>

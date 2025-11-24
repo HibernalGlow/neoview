@@ -32,6 +32,9 @@ export interface NeoViewSettings {
     useCachedFirst: boolean;
     autoPlayAnimatedImages: boolean;
     longImageScrollMode: 'page' | 'continuous';
+    videoMinPlaybackRate: number;
+    videoMaxPlaybackRate: number;
+    videoPlaybackRateStep: number;
   };
   view: {
     defaultZoomMode: ZoomMode;
@@ -123,7 +126,10 @@ const defaultSettings: NeoViewSettings = {
     currentImageUpscaleEnabled: false,
     useCachedFirst: true,
     autoPlayAnimatedImages: true,
-    longImageScrollMode: 'continuous'
+    longImageScrollMode: 'continuous',
+    videoMinPlaybackRate: 0.25,
+    videoMaxPlaybackRate: 16,
+    videoPlaybackRateStep: 0.25
   },
   view: {
     defaultZoomMode: 'fit',

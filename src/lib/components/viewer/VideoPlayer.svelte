@@ -1,34 +1,70 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward, Gauge, Repeat, Repeat1 } from '@lucide/svelte';
+	import {
+		Play,
+		Pause,
+		Volume2,
+		VolumeX,
+		Maximize,
+		SkipBack,
+		SkipForward,
+		Gauge,
+		Repeat,
+		Repeat1
+	} from '@lucide/svelte';
+	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
+
+	type LoopMode = 'none' | 'list' | 'single';
+	type PlayerSettings = {
+		volume: number;
+		muted: boolean;
+		playbackRate: number;
+		loopMode: LoopMode;
+	};
 
 	const {
 		src = '',
 		videoBlob = null,
 		onEnded = () => {},
-		onError = (error: any) => {}
+		onError = (error: any) => {},
+		initialTime = 0,
+		onProgress = undefined,
+		initialVolume = 1,
+		initialPlaybackRate = 1,
+		initialLoopMode = 'list' as LoopMode,
+		initialMuted = false,
+		onSettingsChange = () => {}
 	}: {
 		src?: string;
 		videoBlob?: Blob | null;
 		onEnded?: () => void;
 		onError?: (error: any) => void;
+		initialTime?: number;
+		onProgress?: (currentTime: number, duration: number, ended: boolean) => void;
+		initialVolume?: number;
+		initialPlaybackRate?: number;
+		initialLoopMode?: LoopMode;
+		initialMuted?: boolean;
+		onSettingsChange?: (settings: PlayerSettings) => void;
 	} = $props();
 
-	const MIN_PLAYBACK_RATE = 0.25;
-	const MAX_PLAYBACK_RATE = 16;
-	const PLAYBACK_RATE_STEP = 0.25;
+	let settings = $state<NeoViewSettings>(settingsManager.getSettings());
 
-	type LoopMode = 'none' | 'list' | 'single';
+	function handleSettingsChange(newSettings: NeoViewSettings) {
+		settings = newSettings;
+	}
+
+	settingsManager.addListener(handleSettingsChange);
 
 	let videoElement = $state<HTMLVideoElement | undefined>(undefined);
 	let isPlaying = $state(false);
-	let isMuted = $state(false);
+	let isMuted = $state(initialMuted);
 	let currentTime = $state(0);
 	let duration = $state(0);
-	let volume = $state(1);
+	let volume = $state(initialVolume);
 	let showControls = $state(true);
-	let playbackRate = $state(1);
-	let loopMode: LoopMode = $state('list');
+	let playbackRate = $state(initialPlaybackRate);
+	let loopMode: LoopMode = $state(initialLoopMode);
 	let hideControlsTimeout: ReturnType<typeof setTimeout> | null = null;
 	let videoUrl = $state<string>('');
 
@@ -52,6 +88,13 @@
 		};
 	});
 
+	$effect(() => {
+		if (!videoElement) return;
+		videoElement.volume = volume;
+		videoElement.muted = isMuted;
+		videoElement.playbackRate = playbackRate;
+	});
+
 	function togglePlay() {
 		if (!videoElement) return;
 
@@ -66,17 +109,29 @@
 		if (!videoElement) return;
 		isMuted = !isMuted;
 		videoElement.muted = isMuted;
+		emitSettings();
 	}
 
 	function handleTimeUpdate() {
 		if (!videoElement) return;
 		currentTime = videoElement.currentTime;
+		if (onProgress) {
+			const safeDuration = duration || (videoElement.duration || 0);
+			onProgress(currentTime, safeDuration, false);
+		}
 	}
 
 	function handleLoadedMetadata() {
 		if (!videoElement) return;
 		duration = videoElement.duration;
 		applyLoopMode();
+		// 恢复上一次的播放配置
+		videoElement.playbackRate = playbackRate;
+		videoElement.volume = volume;
+		videoElement.muted = isMuted;
+		if (initialTime && isFinite(initialTime) && initialTime > 0 && initialTime < duration) {
+			videoElement.currentTime = initialTime;
+		}
 	}
 
 	function handlePlay() {
@@ -93,6 +148,10 @@
 			return;
 		}
 		isPlaying = false;
+		if (onProgress) {
+			const safeDuration = duration || (videoElement?.duration || 0);
+			onProgress(safeDuration, safeDuration, true);
+		}
 		if (loopMode === 'list') {
 			onEnded();
 		}
@@ -116,19 +175,44 @@
 		volume = value;
 		videoElement.volume = value;
 		isMuted = value === 0;
+		emitSettings();
+	}
+
+	function getMinPlaybackRate() {
+		return settings.image.videoMinPlaybackRate;
+	}
+
+	function getMaxPlaybackRate() {
+		return settings.image.videoMaxPlaybackRate;
+	}
+
+	function getPlaybackRateStep() {
+		return settings.image.videoPlaybackRateStep;
 	}
 
 	function setPlaybackRate(rate: number) {
-		const clamped = Math.min(MAX_PLAYBACK_RATE, Math.max(MIN_PLAYBACK_RATE, rate));
+		const min = getMinPlaybackRate();
+		const max = getMaxPlaybackRate();
+		const clamped = Math.min(max, Math.max(min, rate));
 		playbackRate = clamped;
 		if (videoElement) {
 			videoElement.playbackRate = clamped;
 		}
+		emitSettings();
 	}
 
 	function handlePlaybackSlider(e: Event) {
 		const value = parseFloat((e.target as HTMLInputElement).value);
 		setPlaybackRate(value);
+	}
+
+	function emitSettings() {
+		onSettingsChange({
+			volume,
+			muted: isMuted,
+			playbackRate,
+			loopMode
+		});
 	}
 
 	function applyLoopMode() {
@@ -145,6 +229,7 @@
 			loopMode = 'list';
 		}
 		applyLoopMode();
+		emitSettings();
 	}
 
 	function skipForward() {
@@ -192,6 +277,7 @@
 		if (videoUrl && !src) {
 			URL.revokeObjectURL(videoUrl);
 		}
+		settingsManager.removeListener(handleSettingsChange);
 	});
 </script>
 
@@ -337,9 +423,9 @@
 					</button>
 					<input
 						type="range"
-						min={MIN_PLAYBACK_RATE}
-						max={MAX_PLAYBACK_RATE}
-						step={PLAYBACK_RATE_STEP}
+						min={getMinPlaybackRate()}
+						max={getMaxPlaybackRate()}
+						step={getPlaybackRateStep()}
 						value={playbackRate}
 						oninput={handlePlaybackSlider}
 						class="playback-slider w-28"

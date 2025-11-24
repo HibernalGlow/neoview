@@ -40,6 +40,7 @@
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
 	let thumbnails = $state<Record<number, {url: string, width: number, height: number}>>({});
+	let thumbnailScrollContainer = $state<HTMLDivElement | null>(null);
 	let isResizing = $state(false);
 	let resizeStartY = 0;
 	let resizeStartHeight = 0;
@@ -398,6 +399,22 @@ async function loadThumbnail(pageIndex: number) {
 		});
 	}
 
+	function scrollCurrentThumbnailIntoCenter() {
+		if (!thumbnailScrollContainer) return;
+		const currentIndex = bookStore.currentPageIndex;
+		const currentButton = thumbnailScrollContainer.querySelector<HTMLButtonElement>(
+			`[data-page-index="${currentIndex}"]`
+		);
+		if (!currentButton) return;
+		const containerRect = thumbnailScrollContainer.getBoundingClientRect();
+		const itemRect = currentButton.getBoundingClientRect();
+		const offset = itemRect.left - containerRect.left;
+		const itemCenter = offset + itemRect.width / 2;
+		const targetScrollLeft =
+			thumbnailScrollContainer.scrollLeft + itemCenter - containerRect.width / 2;
+		thumbnailScrollContainer.scrollTo({ left: targetScrollLeft, behavior: 'smooth' });
+	}
+
 	function handleSharedThumbnailReady(pageIndex: number, dataURL: string) {
 		const img = new Image();
 		img.onload = () => {
@@ -484,6 +501,14 @@ onMount(() => {
 			// 重新加载当前可见的缩略图以适应新高度
 			scheduleLoadVisibleThumbnails();
 		}
+	});
+
+	$effect(() => {
+		const _currentIndex = bookStore.currentPageIndex;
+		if (!bookStore.currentBook) return;
+		if (!isVisible) return;
+		if (readingDirection !== 'right-to-left') return;
+		scrollCurrentThumbnailIntoCenter();
 	});
 </script>
 
@@ -604,7 +629,7 @@ onMount(() => {
 			{/if}
 
 			<div class="px-2 pb-2 h-[calc(100%-theme(spacing.12))] overflow-hidden">
-				<div class="flex gap-2 overflow-x-auto h-full pb-1 items-center" onscroll={handleScroll}>
+				<div class="flex gap-2 overflow-x-auto h-full pb-1 items-center" onscroll={handleScroll} bind:this={thumbnailScrollContainer}>
 					{#each getOrderedPages() as page, index (page.path)}
 						{@const originalIndex = page.originalIndex}
 						{@const status = bookStore.getPageUpscaleStatus(originalIndex)}
@@ -619,6 +644,7 @@ onMount(() => {
 										hover:border-primary/50"
 									style="width: auto; height: {$bottomThumbnailBarHeight - 40}px; min-width: 60px; max-width: 120px;"
 									onclick={() => bookStore.navigateToPage(originalIndex)}
+									data-page-index={originalIndex}
 								>
 									{#if originalIndex in thumbnails}
 										<img

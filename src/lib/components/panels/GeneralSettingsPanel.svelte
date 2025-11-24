@@ -8,6 +8,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as FileSystemAPI from '$lib/api/filesystem';
 	import { settingsManager } from '$lib/settings/settingsManager';
+	import { DEFAULT_THUMBNAIL_DIRECTORY } from '$lib/config/paths';
 
 	let explorerContextMenuEnabled = $state(false);
 	let explorerContextMenuLoading = $state(true);
@@ -57,6 +58,26 @@
 		} finally {
 			explorerContextMenuSyncing = false;
 		}
+	}
+
+	function getThumbnailDirectoryLabel() {
+		const dir = currentSettings.system.thumbnailDirectory?.trim();
+		return dir || DEFAULT_THUMBNAIL_DIRECTORY;
+	}
+
+	async function selectThumbnailDirectory() {
+		try {
+			const path = await FileSystemAPI.selectFolder();
+			if (path) {
+				settingsManager.updateNestedSettings('system', { thumbnailDirectory: path });
+			}
+		} catch (err) {
+			console.error('选择缩略图目录失败:', err);
+		}
+	}
+
+	function resetThumbnailDirectory() {
+		settingsManager.updateNestedSettings('system', { thumbnailDirectory: '' });
 	}
 
 	async function downloadExplorerContextMenuReg() {
@@ -191,6 +212,34 @@
 					/>
 				</button>
 			</label>
+		</div>
+
+		<!-- 缩略图目录 -->
+		<div class="space-y-2">
+			<div class="flex items-center gap-2">
+				<FolderOpen class="h-4 w-4 text-muted-foreground" />
+				<Label class="text-sm font-semibold">缩略图目录</Label>
+			</div>
+			<p class="text-xs text-muted-foreground">
+				用于存储缩略图数据库和缓存文件。若未设置，将使用默认目录 {DEFAULT_THUMBNAIL_DIRECTORY}。
+			</p>
+			<div class="flex items-center gap-2">
+				<div class="flex-1 truncate rounded-md border px-2 py-1 text-xs">
+					{getThumbnailDirectoryLabel()}
+				</div>
+				<Button variant="outline" size="sm" class="gap-1" onclick={selectThumbnailDirectory}>
+					<FolderOpen class="h-4 w-4" />
+					选择文件夹
+				</Button>
+				<Button
+					variant="ghost"
+					size="sm"
+					class="text-xs text-muted-foreground"
+					onclick={resetThumbnailDirectory}
+				>
+					重置
+				</Button>
+			</div>
 		</div>
 
 		<!-- 文件关联 -->

@@ -11,6 +11,7 @@ export interface NeoViewSettings {
     language: string;
     hardwareAcceleration: boolean;
     temporaryDirectory: string;
+    thumbnailDirectory: string;
   };
   startup: {
     openLastFile: boolean;
@@ -105,7 +106,8 @@ const defaultSettings: NeoViewSettings = {
   system: {
     language: 'zh-CN',
     hardwareAcceleration: true,
-    temporaryDirectory: ''
+    temporaryDirectory: '',
+    thumbnailDirectory: 'D\\\\temp\\\\neoview'
   },
   startup: {
     openLastFile: true,

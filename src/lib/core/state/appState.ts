@@ -77,7 +77,8 @@ export function createDefaultAppState(): AppStateSnapshot {
 			system: {
 				language: 'zh-CN',
 				hardwareAcceleration: true,
-				temporaryDirectory: ''
+				temporaryDirectory: '',
+				thumbnailDirectory: 'D\\\\temp\\\\neoview'
 			},
 			startup: {
 				openLastFile: true,

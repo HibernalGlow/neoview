@@ -57,14 +57,14 @@ const defaultBindings: ActionBinding[] = [
 		action: 'nextPage',
 		name: '下一页',
 		category: '导航',
-		description: '翻到下一页（当前页为视频时优先作为视频快进10秒）',
+		description: '翻到下一页',
 		bindings: []
 	},
 	{
 		action: 'prevPage',
 		name: '上一页',
 		category: '导航',
-		description: '翻到上一页（当前页为视频时优先作为视频快退10秒）',
+		description: '翻到上一页',
 		bindings: []
 	},
 	{
@@ -85,14 +85,14 @@ const defaultBindings: ActionBinding[] = [
 		action: 'pageLeft',
 		name: '向左翻页',
 		category: '导航',
-		description: '向左翻页（方向性翻页，不受阅读方向影响；当前页为视频时优先作为视频快退10秒）',
+		description: '向左翻页（方向性翻页，不受阅读方向影响）',
 		bindings: []  // 默认无绑定，用户可自定义
 	},
 	{
 		action: 'pageRight',
 		name: '向右翻页',
 		category: '导航',
-		description: '向右翻页（方向性翻页，不受阅读方向影响；当前页为视频时优先作为视频快进10秒）',
+		description: '向右翻页（方向性翻页，不受阅读方向影响）',
 		bindings: []  // 默认无绑定，用户可自定义
 	},
 	{

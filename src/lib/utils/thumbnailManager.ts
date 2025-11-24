@@ -14,6 +14,8 @@ import { LRUCache } from './lruCache';
 import { PredictiveLoader } from './predictiveLoader';
 import { IncrementalBatchLoader } from './incrementalBatchLoader';
 import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
+import { settingsManager } from '$lib/settings/settingsManager';
+import { DEFAULT_THUMBNAIL_DIRECTORY } from '$lib/config/paths';
 
 export interface ThumbnailConfig {
   maxConcurrentLocal: number;
@@ -119,8 +121,17 @@ class ThumbnailManager {
    * 获取缩略图存储路径
    */
   private async getThumbnailPath(): Promise<string> {
-    // 强制使用 D:\temp\neoview
-    return 'D:\\temp\\neoview';
+    try {
+      const settings = settingsManager.getSettings();
+      const configured = settings.system?.thumbnailDirectory?.trim();
+      if (configured) {
+        return configured;
+      }
+    } catch (error) {
+      console.warn('读取缩略图目录设置失败，使用默认路径:', error);
+    }
+
+    return DEFAULT_THUMBNAIL_DIRECTORY;
   }
 
   /**

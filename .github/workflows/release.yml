@@ -1,0 +1,60 @@
+name: release
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - "[0-9]+.*"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  release:
+    runs-on: windows-latest
+    name: release (Windows)
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 23
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: build windows bundles
+        timeout-minutes: 60
+        shell: powershell
+        run: |
+          yarn install --frozen-lockfile
+          yarn tauri build --bundles none
+
+      - name: verify executable
+        shell: powershell
+        run: |
+          $exePath = ".\src-tauri\target\release\neoview.exe"
+
+          if (Test-Path $exePath) {
+            Write-Host "Executable found at $exePath"
+            exit 0
+          } else {
+            Write-Error "Executable not found at $exePath"
+            Get-ChildItem ".\src-tauri\target\release" -Recurse | Select-Object FullName
+            exit 1
+          }
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            ./src-tauri/target/release/neoview.exe

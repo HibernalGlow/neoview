@@ -248,7 +248,7 @@
 				<!-- 拖拽手柄 -->
 				<button
 					type="button"
-					class="hover:bg-accent text-muted-foreground absolute bottom-1 left-0 z-[60] cursor-ew-resize rounded-r-md p-1 transition-colors"
+					class="hover:bg-accent text-muted-foreground absolute left-0 top-1/2 z-[60] -translate-y-1/2 cursor-ew-resize rounded-r-md p-1 transition-colors"
 					onmousedown={handleMouseDown}
 					aria-label="调整右侧边栏宽度"
 				>

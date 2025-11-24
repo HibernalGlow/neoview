@@ -6,6 +6,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import * as Progress from '$lib/components/ui/progress';
+	import * as Tooltip from '$lib/components/ui/tooltip';
+
 import { Image as ImageIcon, Grid3x3, Grid2x2, LayoutGrid, Loader2, AlertCircle, TestTube, CheckCircle, XCircle, Database, FolderOpen, Zap, Activity } from '@lucide/svelte';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -429,49 +431,70 @@ import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 				缩略图 ({thumbnails.length})
 			</h3>
 			<div class="flex items-center gap-1">
-				<Button
-					variant="outline"
-					size="sm"
-					class="h-7 px-2 text-xs"
-					onclick={selectFolder}
-					disabled={isIndexing}
-					title="选择要索引的文件夹"
-				>
-					<FolderOpen class="h-3 w-3 mr-1" />
-					选择文件夹
-				</Button>
-				<Button
-					variant="outline"
-					size="sm"
-					class="h-7 px-2 text-xs"
-					onclick={startIndexing}
-					disabled={isIndexing || !selectedFolder || isScanningFolder}
-				>
-					{#if isIndexing}
-						<Loader2 class="h-3 w-3 mr-1 animate-spin" />
-						索引中...
-					{:else}
-						<Database class="h-3 w-3 mr-1" />
-						一键索引
-					{/if}
-				</Button>
-				<Button
-					variant="outline"
-					size="sm"
-					class="h-7 px-2 text-xs"
-					onclick={runTests}
-					disabled={isTesting}
-				>
-					{#if isTesting}
-						<Loader2 class="h-3 w-3 mr-1 animate-spin" />
-						测试中...
-					{:else}
-						<TestTube class="h-3 w-3 mr-1" />
-						测试
-					{/if}
-				</Button>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant="outline"
+							size="sm"
+							class="h-7 px-2 text-xs"
+							onclick={selectFolder}
+							disabled={isIndexing}
+						>
+							<FolderOpen class="h-3 w-3 mr-1" />
+							选择文件夹
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>选择要索引的文件夹</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant="outline"
+							size="sm"
+							class="h-7 px-2 text-xs"
+							onclick={startIndexing}
+							disabled={isIndexing || !selectedFolder || isScanningFolder}
+						>
+							{#if isIndexing}
+								<Loader2 class="h-3 w-3 mr-1 animate-spin" />
+								索引中...
+							{:else}
+								<Database class="h-3 w-3 mr-1" />
+								一键索引
+							{/if}
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>一键索引</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant="outline"
+							size="sm"
+							class="h-7 px-2 text-xs"
+							onclick={runTests}
+							disabled={isTesting}
+						>
+							{#if isTesting}
+								<Loader2 class="h-3 w-3 mr-1 animate-spin" />
+								测试中...
+							{:else}
+								<TestTube class="h-3 w-3 mr-1" />
+								测试
+							{/if}
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>测试</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
 			</div>
 		</div>
+
 		<div class="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
 			<div class="flex items-center gap-1">
 				<Zap class="w-3 h-3" />
@@ -535,33 +558,51 @@ import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 		<!-- 网格尺寸控制 -->
 		<div class="flex items-center gap-1">
 			<Label class="text-[10px] text-muted-foreground mr-1">尺寸</Label>
-			<Button
-				variant={gridSize === 'small' ? 'default' : 'outline'}
-				size="icon"
-				class="h-6 w-6"
-				onclick={() => setGridSize('small')}
-				title="小"
-			>
-				<Grid3x3 class="h-3 w-3" />
-			</Button>
-			<Button
-				variant={gridSize === 'medium' ? 'default' : 'outline'}
-				size="icon"
-				class="h-6 w-6"
-				onclick={() => setGridSize('medium')}
-				title="中"
-			>
-				<Grid2x2 class="h-3 w-3" />
-			</Button>
-			<Button
-				variant={gridSize === 'large' ? 'default' : 'outline'}
-				size="icon"
-				class="h-6 w-6"
-				onclick={() => setGridSize('large')}
-				title="大"
-			>
-				<LayoutGrid class="h-3 w-3" />
-			</Button>
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					<Button
+						variant={gridSize === 'small' ? 'default' : 'outline'}
+						size="icon"
+						class="h-6 w-6"
+						onclick={() => setGridSize('small')}
+					>
+						<Grid3x3 class="h-3 w-3" />
+					</Button>
+				</Tooltip.Trigger>
+				<Tooltip.Content>
+					<p>小</p>
+				</Tooltip.Content>
+			</Tooltip.Root>
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					<Button
+						variant={gridSize === 'medium' ? 'default' : 'outline'}
+						size="icon"
+						class="h-6 w-6"
+						onclick={() => setGridSize('medium')}
+					>
+						<Grid2x2 class="h-3 w-3" />
+					</Button>
+				</Tooltip.Trigger>
+				<Tooltip.Content>
+					<p>中</p>
+				</Tooltip.Content>
+			</Tooltip.Root>
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					<Button
+						variant={gridSize === 'large' ? 'default' : 'outline'}
+						size="icon"
+						class="h-6 w-6"
+						onclick={() => setGridSize('large')}
+					>
+						<LayoutGrid class="h-3 w-3" />
+					</Button>
+				</Tooltip.Trigger>
+				<Tooltip.Content>
+					<p>大</p>
+				</Tooltip.Content>
+			</Tooltip.Root>
 		</div>
 	</div>
 

@@ -161,6 +161,8 @@
 			bind:this={videoElement}
 			class="h-full w-full"
 			src={videoUrl}
+			controls
+			autoplay
 			ontimeupdate={handleTimeUpdate}
 			onloadedmetadata={handleLoadedMetadata}
 			onplay={handlePlay}

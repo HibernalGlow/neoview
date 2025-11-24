@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward } from '@lucide/svelte';
+	import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward, Gauge } from '@lucide/svelte';
 
 	const {
 		src = '',
@@ -13,6 +13,10 @@
 		onEnded?: () => void;
 		onError?: (error: any) => void;
 	} = $props();
+
+	const MIN_PLAYBACK_RATE = 0.25;
+	const MAX_PLAYBACK_RATE = 16;
+	const PLAYBACK_RATE_STEP = 0.25;
 
 	let videoElement = $state<HTMLVideoElement | undefined>(undefined);
 	let isPlaying = $state(false);
@@ -105,10 +109,16 @@
 	}
 
 	function setPlaybackRate(rate: number) {
-		playbackRate = rate;
+		const clamped = Math.min(MAX_PLAYBACK_RATE, Math.max(MIN_PLAYBACK_RATE, rate));
+		playbackRate = clamped;
 		if (videoElement) {
-			videoElement.playbackRate = rate;
+			videoElement.playbackRate = clamped;
 		}
+	}
+
+	function handlePlaybackSlider(e: Event) {
+		const value = parseFloat((e.target as HTMLInputElement).value);
+		setPlaybackRate(value);
 	}
 
 	function skipForward() {
@@ -264,43 +274,29 @@
 				</div>
 
 				<!-- 倍速 -->
-				<div class="playback-rate flex items-center gap-1 text-xs text-white">
+				<div class="playback-rate flex items-center gap-2 text-xs text-white">
 					<button
-						class={`control-btn rounded px-2 py-1 transition-colors hover:bg-white/20 ${playbackRate === 0.5 ? 'bg-white/30' : ''}`}
-						onclick={(event) => {
-							event.stopPropagation();
-							setPlaybackRate(0.5);
-						}}
-					>
-						0.5x
-					</button>
-					<button
-						class={`control-btn rounded px-2 py-1 transition-colors hover:bg-white/20 ${playbackRate === 1 ? 'bg-white/30' : ''}`}
+						class="control-btn rounded-full p-2 transition-colors hover:bg-white/20"
 						onclick={(event) => {
 							event.stopPropagation();
 							setPlaybackRate(1);
 						}}
+						aria-label="重置为1倍速"
 					>
-						1x
+						<Gauge class="h-5 w-5 text-white" />
 					</button>
-					<button
-						class={`control-btn rounded px-2 py-1 transition-colors hover:bg-white/20 ${playbackRate === 1.5 ? 'bg-white/30' : ''}`}
-						onclick={(event) => {
-							event.stopPropagation();
-							setPlaybackRate(1.5);
-						}}
-					>
-						1.5x
-					</button>
-					<button
-						class={`control-btn rounded px-2 py-1 transition-colors hover:bg-white/20 ${playbackRate === 2 ? 'bg-white/30' : ''}`}
-						onclick={(event) => {
-							event.stopPropagation();
-							setPlaybackRate(2);
-						}}
-					>
-						2x
-					</button>
+					<input
+						type="range"
+						min={MIN_PLAYBACK_RATE}
+						max={MAX_PLAYBACK_RATE}
+						step={PLAYBACK_RATE_STEP}
+						value={playbackRate}
+						oninput={handlePlaybackSlider}
+						class="playback-slider w-28"
+					/>
+					<div class="w-10 text-right">
+						{playbackRate.toFixed(2)}x
+					</div>
 				</div>
 
 				<!-- 全屏 -->

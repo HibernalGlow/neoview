@@ -5,31 +5,57 @@
 		savePerformanceSettings,
 		type PerformanceSettings
 	} from '$lib/api/performance';
+	import { Switch } from '$lib/components/ui/switch';
+	import { Button } from '$lib/components/ui/button';
 
-	let performanceSettings = $state<PerformanceSettings>({
-		cache_memory_size: 512,
-		preload_enabled: true,
-		preload_size: 3,
-		gpu_acceleration: true,
-		multi_threaded_rendering: true,
-		decoding_threads: 4
-	});
+	// 使用独立字段，避免直接在对象属性上双向绑定造成复杂副作用
+	let cacheMemorySize = $state(512);
+	let preloadEnabled = $state(true);
+	let preloadSize = $state(3);
+	let gpuAcceleration = $state(true);
+	let multiThreadedRendering = $state(true);
+	let decodingThreads = $state(4);
+	let thumbnailConcurrentLocal = $state(6);
+	let thumbnailConcurrentArchive = $state(3);
+	let thumbnailConcurrentVideo = $state(2);
+	let enableVideoThumbnail = $state(false);
 
-	// 加载性能设置
+	// 从后端加载性能设置
 	async function loadPerformanceSettings() {
 		try {
-			performanceSettings = await getPerformanceSettings();
+			const loaded = await getPerformanceSettings();
+			cacheMemorySize = loaded.cache_memory_size;
+			preloadEnabled = loaded.preload_enabled;
+			preloadSize = loaded.preload_size;
+			gpuAcceleration = loaded.gpu_acceleration;
+			multiThreadedRendering = loaded.multi_threaded_rendering;
+			decodingThreads = loaded.decoding_threads;
+			thumbnailConcurrentLocal = loaded.thumbnail_concurrent_local ?? 6;
+			thumbnailConcurrentArchive = loaded.thumbnail_concurrent_archive ?? 3;
+			thumbnailConcurrentVideo = loaded.thumbnail_concurrent_video ?? 2;
+			enableVideoThumbnail = loaded.enable_video_thumbnail ?? false;
 		} catch (err) {
 			console.error('Failed to load performance settings:', err);
 		}
 	}
 
-	// 组件挂载时加载性能设置
 	loadPerformanceSettings();
 
 	export async function saveSettings() {
 		try {
-			await savePerformanceSettings(performanceSettings);
+			const settings: PerformanceSettings = {
+				cache_memory_size: cacheMemorySize ?? 512,
+				preload_enabled: preloadEnabled,
+				preload_size: preloadSize ?? 3,
+				gpu_acceleration: gpuAcceleration,
+				multi_threaded_rendering: multiThreadedRendering,
+				decoding_threads: decodingThreads ?? 4,
+				thumbnail_concurrent_local: thumbnailConcurrentLocal ?? 6,
+				thumbnail_concurrent_archive: thumbnailConcurrentArchive ?? 3,
+				thumbnail_concurrent_video: thumbnailConcurrentVideo ?? 2,
+				enable_video_thumbnail: enableVideoThumbnail
+			};
+			await savePerformanceSettings(settings);
 		} catch (err) {
 			console.error('Failed to save performance settings:', err);
 			alert('保存性能设置失败');
@@ -53,17 +79,15 @@
 			<div class="space-y-2">
 				<div class="flex items-center justify-between">
 					<span class="text-sm">图像缓存大小</span>
-					<span class="text-muted-foreground text-xs"
-						>{performanceSettings.cache_memory_size} MB</span
-					>
+					<span class="text-muted-foreground text-xs">{cacheMemorySize} MB</span>
 				</div>
 				<input
+					class="w-full"
 					type="range"
 					min="128"
 					max="2048"
 					step="128"
-					bind:value={performanceSettings.cache_memory_size}
-					class="w-full"
+					bind:value={cacheMemorySize}
 					aria-label="图像缓存大小"
 				/>
 			</div>
@@ -73,21 +97,22 @@
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">预加载</h4>
 			<label class="flex items-center gap-2">
-				<input type="checkbox" class="rounded" bind:checked={performanceSettings.preload_enabled} />
+				<Switch bind:checked={preloadEnabled} />
 				<span class="text-sm">启用页面预加载</span>
 			</label>
-			{#if performanceSettings.preload_enabled}
+			{#if preloadEnabled}
 				<div class="space-y-2">
 					<div class="flex items-center justify-between">
 						<span class="text-sm">预加载页面数</span>
-						<span class="text-muted-foreground text-xs">{performanceSettings.preload_size}</span>
+						<span class="text-muted-foreground text-xs">{preloadSize}</span>
 					</div>
 					<input
+						class="w-full"
 						type="range"
 						min="1"
 						max="20"
-						bind:value={performanceSettings.preload_size}
-						class="w-full"
+						step="1"
+						bind:value={preloadSize}
 						aria-label="预加载页面数"
 					/>
 				</div>
@@ -98,15 +123,11 @@
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">硬件加速</h4>
 			<label class="flex items-center gap-2">
-				<input
-					type="checkbox"
-					class="rounded"
-					bind:checked={performanceSettings.gpu_acceleration}
-				/>
+				<Switch bind:checked={gpuAcceleration} />
 				<span class="text-sm">启用 GPU 渲染</span>
 			</label>
 			<label class="flex items-center gap-2">
-				<input type="checkbox" class="rounded" disabled />
+				<Switch disabled />
 				<span class="text-muted-foreground text-sm">使用硬件解码（暂未实现）</span>
 			</label>
 		</div>
@@ -117,17 +138,19 @@
 			<div class="space-y-2">
 				<div class="flex items-center justify-between">
 					<span class="text-sm">解码线程数</span>
-					<span class="text-muted-foreground text-xs">{performanceSettings.decoding_threads}</span>
+					<span class="text-muted-foreground text-xs">{decodingThreads}</span>
 				</div>
 				<input
+					class="w-full"
 					type="range"
 					min="1"
 					max="16"
-					bind:value={performanceSettings.decoding_threads}
-					class="w-full"
+					step="1"
+					bind:value={decodingThreads}
+					aria-label="解码线程数"
 				/>
 				<p class="text-muted-foreground text-xs">
-					{performanceSettings.multi_threaded_rendering ? '多线程解码已启用' : '单线程解码'}
+					{multiThreadedRendering ? '多线程解码已启用' : '单线程解码'}
 				</p>
 			</div>
 		</div>
@@ -139,60 +162,60 @@
 				<div class="space-y-2">
 					<div class="flex items-center justify-between">
 						<span class="text-sm">本地文件并发数</span>
-						<span class="text-muted-foreground text-xs"
-							>{performanceSettings.thumbnail_concurrent_local || 6}</span
-						>
+						<span class="text-muted-foreground text-xs">{thumbnailConcurrentLocal}</span>
 					</div>
 					<input
+						class="w-full"
 						type="range"
 						min="1"
 						max="16"
-						bind:value={performanceSettings.thumbnail_concurrent_local}
-						class="w-full"
+						step="1"
+						bind:value={thumbnailConcurrentLocal}
 						aria-label="本地文件并发数"
 					/>
 				</div>
 				<div class="space-y-2">
-					<label class="flex items-center justify-between">
+					<div class="flex items-center justify-between">
 						<span class="text-sm">压缩包并发数</span>
-						<span class="text-muted-foreground text-xs"
-							>{performanceSettings.thumbnail_concurrent_archive || 3}</span
-						>
-					</label>
+						<span class="text-muted-foreground text-xs">{thumbnailConcurrentArchive}</span>
+					</div>
 					<input
+						class="w-full"
 						type="range"
 						min="1"
 						max="8"
-						bind:value={performanceSettings.thumbnail_concurrent_archive}
-						class="w-full"
+						step="1"
+						bind:value={thumbnailConcurrentArchive}
 						aria-label="压缩包并发数"
 					/>
 				</div>
 				<div class="space-y-2">
-					<label class="flex items-center justify-between">
+					<div class="flex items-center justify-between">
 						<span class="text-sm">视频处理并发数</span>
-						<span class="text-muted-foreground text-xs"
-							>{performanceSettings.thumbnail_concurrent_video || 2}</span
-						>
-					</label>
+						<span class="text-muted-foreground text-xs">{thumbnailConcurrentVideo}</span>
+					</div>
 					<input
+						class="w-full"
 						type="range"
 						min="1"
 						max="4"
-						bind:value={performanceSettings.thumbnail_concurrent_video}
-						class="w-full"
+						step="1"
+						bind:value={thumbnailConcurrentVideo}
 						aria-label="视频处理并发数"
 					/>
 				</div>
 				<label class="flex items-center gap-2">
-					<input
-						type="checkbox"
-						class="rounded"
-						bind:checked={performanceSettings.enable_video_thumbnail}
-					/>
+					<Switch bind:checked={enableVideoThumbnail} />
 					<span class="text-sm">启用视频缩略图</span>
 				</label>
 			</div>
+		</div>
+
+		<!-- 操作区 -->
+		<div class="flex justify-end pt-2 border-t mt-2 border-border/60">
+			<Button variant="outline" size="sm" onclick={saveSettings}>
+				保存性能设置（需重启）
+			</Button>
 		</div>
 	</div>
 </div>

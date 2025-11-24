@@ -3,7 +3,7 @@
   "productName": "neoview",
   "version": "2.0.0",
   "mainBinaryName": "neoview",
-  "identifier": "com.neoview.app",
+  "identifier": "NeoView",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",

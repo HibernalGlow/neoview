@@ -415,6 +415,22 @@ async function loadThumbnail(pageIndex: number) {
 		thumbnailScrollContainer.scrollTo({ left: targetScrollLeft, behavior: 'smooth' });
 	}
 
+	function getThumbnailStyle(pageIndex: number): string {
+		const containerHeight = Math.max(40, $bottomThumbnailBarHeight - 40);
+		const minWidth = 40;
+		const maxWidth = 200;
+		const thumb = thumbnails[pageIndex];
+		if (!thumb) {
+			const placeholderWidth = Math.min(Math.max(containerHeight * 0.75, minWidth), maxWidth);
+			return `height:${containerHeight}px;min-width:${placeholderWidth}px;max-width:${maxWidth}px;`;
+		}
+		const aspect = thumb.height > 0 ? thumb.width / thumb.height : 1;
+		let width = containerHeight * aspect;
+		if (width < minWidth) width = minWidth;
+		if (width > maxWidth) width = maxWidth;
+		return `height:${containerHeight}px;width:${width}px;min-width:${width}px;max-width:${width}px;`;
+	}
+
 	function handleSharedThumbnailReady(pageIndex: number, dataURL: string) {
 		const img = new Image();
 		img.onload = () => {
@@ -642,7 +658,7 @@ onMount(() => {
 										{status === 'done' ? 'ring-2 ring-primary' : ''}
 										{status === 'failed' ? 'ring-2 ring-destructive' : ''}
 										hover:border-primary/50"
-									style="width: auto; height: {$bottomThumbnailBarHeight - 40}px; min-width: 60px; max-width: 120px;"
+									style={getThumbnailStyle(originalIndex)}
 									onclick={() => bookStore.navigateToPage(originalIndex)}
 									data-page-index={originalIndex}
 								>

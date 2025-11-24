@@ -417,9 +417,10 @@ async function loadThumbnail(pageIndex: number) {
 	}
 
 	function getThumbnailStyle(pageIndex: number): string {
-		const containerHeight = Math.max(40, $bottomThumbnailBarHeight - 40);
+		const rawHeight = Math.max(40, $bottomThumbnailBarHeight - 40);
+		const containerHeight = Math.min(80, rawHeight);
 		const minWidth = 40;
-		const maxWidth = 200;
+		const maxWidth = 160;
 		const thumb = thumbnails[pageIndex];
 		if (!thumb) {
 			const placeholderWidth = Math.min(Math.max(containerHeight * 0.75, minWidth), maxWidth);

@@ -28,9 +28,12 @@
 	import BottomThumbnailBar from './BottomThumbnailBar.svelte';
 	import ImageViewer from '../viewer/ImageViewer.svelte';
 	import AreaOverlay from '../ui/AreaOverlay.svelte';
+	import HoverAreasOverlay from '../ui/HoverAreasOverlay.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
 
 	let { children } = $props();
+	let settings = $state(settingsManager.getSettings());
+	let hoverAreas = $derived(settings.panels?.hoverAreas);
 
 	function handleSidebarResize(width: number) {
 		sidebarWidth.set(width);
@@ -42,6 +45,7 @@
 
 	// 区域覆盖层状态
 	let showAreaOverlay = $state(false);
+	let showHoverAreasOverlay = $state(false);
 
 	// 监听区域覆盖层切换事件
 	$effect(() => {
@@ -53,6 +57,26 @@
 		return () => {
 			window.removeEventListener('areaOverlayToggle', handleAreaOverlayToggle as EventListener);
 		};
+	});
+
+	$effect(() => {
+		const handleHoverAreasToggle = (e: CustomEvent) => {
+			showHoverAreasOverlay = e.detail.show;
+		};
+
+		window.addEventListener('hoverAreasOverlayToggle', handleHoverAreasToggle as EventListener);
+		return () => {
+			window.removeEventListener(
+				'hoverAreasOverlayToggle',
+				handleHoverAreasToggle as EventListener
+			);
+		};
+	});
+
+	$effect(() => {
+		settingsManager.addListener((newSettings) => {
+			settings = newSettings;
+		});
 	});
 
 	// 处理区域操作事件
@@ -131,7 +155,10 @@
 			: 'pointer-events-none'}"
 	>
 		<!-- 只在图标栏区域（约48px宽）响应悬停 -->
-		<div class="pointer-events-auto absolute bottom-0 left-0 top-0 w-12">
+		<div
+			class="pointer-events-auto absolute bottom-0 left-0 top-0"
+			style={`width: ${hoverAreas?.leftTriggerWidth ?? 12}px;`}
+		>
 			<Sidebar onResize={handleSidebarResize} />
 		</div>
 	</div>
@@ -139,7 +166,10 @@
 	<!-- 右侧边栏（悬浮，始终可用） -->
 	<div class="pointer-events-none absolute bottom-0 right-0 top-0 z-[55]">
 		<!-- 只在图标栏区域（约48px宽）响应悬停 -->
-		<div class="pointer-events-auto absolute bottom-0 right-0 top-0 w-12">
+		<div
+			class="pointer-events-auto absolute bottom-0 right-0 top-0"
+			style={`width: ${hoverAreas?.rightTriggerWidth ?? 12}px;`}
+		>
 			<RightSidebar onResize={handleRightSidebarResize} />
 		</div>
 	</div>
@@ -147,8 +177,9 @@
 	<!-- 区域覆盖层 -->
 	<AreaOverlay
 		bind:show={showAreaOverlay}
-		onareaAction={handleAreaAction}
+		on:areaAction={handleAreaAction}
 		sidebarOpen={$sidebarOpen}
 		rightSidebarOpen={$rightSidebarOpen}
 	/>
+	<HoverAreasOverlay bind:show={showHoverAreasOverlay} />
 </div>

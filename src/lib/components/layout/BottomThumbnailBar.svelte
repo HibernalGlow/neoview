@@ -36,6 +36,7 @@
 	// 阅读方向状态
 	let settings = $state(settingsManager.getSettings());
 	let readingDirection = $derived(settings.book.readingDirection);
+	let hoverAreas = $derived(settings.panels?.hoverAreas);
 	let lastReadingDirection = $state<'left-to-right' | 'right-to-left' | null>(null);
 
 	// 监听设置变化
@@ -56,6 +57,7 @@
 	let showBottomProgressBar = $state(true);
 	let hoverCount = $state(0); // 追踪悬停区域的计数
 	let showAreaOverlay = $state(false); // 显示区域覆盖层
+	let showHoverAreasOverlay = $state(false); // 显示边栏悬停触发区域覆盖层
 	const showDebugInfo = false; // 底栏调试信息开关
 
 	// 共享预加载管理器引用
@@ -143,6 +145,15 @@
 		window.dispatchEvent(
 			new CustomEvent('areaOverlayToggle', {
 				detail: { show: showAreaOverlay }
+			})
+		);
+	}
+
+	function toggleHoverAreasOverlay() {
+		showHoverAreasOverlay = !showHoverAreasOverlay;
+		window.dispatchEvent(
+			new CustomEvent('hoverAreasOverlayToggle', {
+				detail: { show: showHoverAreasOverlay }
 			})
 		);
 	}
@@ -554,7 +565,8 @@
 {#if bookStore.currentBook && bookStore.currentBook.pages.length > 0}
 	<!-- 缩略图栏触发区域（独立） -->
 	<div
-		class="fixed bottom-0 left-0 right-0 z-[57] h-4"
+		class="fixed bottom-0 left-0 right-0 z-[57]"
+		style={`height: ${hoverAreas?.bottomTriggerHeight ?? 4}px;`}
 		onmouseenter={handleMouseEnter}
 		onmouseleave={handleMouseLeave}
 		role="presentation"
@@ -644,6 +656,22 @@
 					</Tooltip.Trigger>
 					<Tooltip.Content>
 						<p>显示/隐藏 9 区域点击测试</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant={showHoverAreasOverlay ? 'default' : 'ghost'}
+							size="sm"
+							class="h-6"
+							onclick={toggleHoverAreasOverlay}
+						>
+							<Target class="mr-1 h-3 w-3" />
+							<span class="text-xs">边栏区域</span>
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>显示/隐藏 上下左右边栏悬停触发区域</p>
 					</Tooltip.Content>
 				</Tooltip.Root>
 			</div>

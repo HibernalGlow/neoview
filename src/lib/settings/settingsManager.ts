@@ -62,6 +62,12 @@ export interface NeoViewSettings {
     rightSidebarVisible: boolean;
     bottomPanelVisible: boolean;
     autoHideToolbar: boolean;
+    hoverAreas: {
+      topTriggerHeight: number;
+      bottomTriggerHeight: number;
+      leftTriggerWidth: number;
+      rightTriggerWidth: number;
+    };
   };
   bindings: {
     mouse: {
@@ -146,7 +152,13 @@ const defaultSettings: NeoViewSettings = {
     leftSidebarVisible: true,
     rightSidebarVisible: false,
     bottomPanelVisible: false,
-    autoHideToolbar: true
+    autoHideToolbar: true,
+    hoverAreas: {
+      topTriggerHeight: 4,
+      bottomTriggerHeight: 4,
+      leftTriggerWidth: 12,
+      rightTriggerWidth: 12
+    }
   },
   bindings: {
     mouse: {

@@ -81,6 +81,7 @@
 	// 阅读方向状态
 	let settings = $state(settingsManager.getSettings());
 	let readingDirection = $derived(settings.book.readingDirection);
+	let hoverAreas = $derived(settings.panels?.hoverAreas);
 
 	// 监听设置变化
 	settingsManager.addListener((newSettings) => {
@@ -931,9 +932,10 @@
 
 <!-- 触发区域（独立于工具栏，始终存在） -->
 <div
-	class="fixed left-0 right-0 top-0 z-[57] h-4"
+	class="fixed left-0 right-0 top-0 z-[57]"
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}
 	role="presentation"
 	aria-label="顶部工具栏触发区域"
+	style={`height: ${hoverAreas?.topTriggerHeight ?? 4}px;`}
 ></div>

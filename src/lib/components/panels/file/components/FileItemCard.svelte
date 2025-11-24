@@ -27,6 +27,7 @@
 	} from '$lib/stores/emmMetadata.svelte';
 	import type { EMMCollectTag, EMMTranslationDict } from '$lib/api/emm';
 	import { getFileMetadata } from '$lib/api';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 
 	let {
 		item,
@@ -360,13 +361,11 @@
 					class="h-full w-full object-cover transition-transform group-hover:scale-105"
 				/>
 			{:else if item.isDir}
-				<Folder class="h-8 w-8 text-primary transition-colors group-hover:text-primary" />
+				<Folder class="text-primary group-hover:text-primary h-8 w-8 transition-colors" />
 			{:else if isArchive}
-				<FileArchive
-					class="h-8 w-8 text-primary transition-colors group-hover:text-primary"
-				/>
+				<FileArchive class="text-primary group-hover:text-primary h-8 w-8 transition-colors" />
 			{:else if item.isImage}
-				<Image class="h-8 w-8 text-primary transition-colors group-hover:text-primary" />
+				<Image class="text-primary group-hover:text-primary h-8 w-8 transition-colors" />
 			{:else}
 				<File class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500" />
 			{/if}
@@ -374,19 +373,21 @@
 			<!-- 阅读标记（对勾） -->
 			{#if showReadMark}
 				{#if isReadCompleted}
-					<div class="absolute right-0 top-0 rounded-full bg-primary p-0.5">
+					<div class="bg-primary absolute right-0 top-0 rounded-full p-0.5">
 						<Check class="h-3 w-3 text-white" />
 					</div>
 				{:else}
-					<div class="absolute right-0 top-0 rounded-full border border-dashed border-primary bg-background/80 p-0.5">
-						<Check class="h-3 w-3 text-primary" />
+					<div
+						class="border-primary bg-background/80 absolute right-0 top-0 rounded-full border border-dashed p-0.5"
+					>
+						<Check class="text-primary h-3 w-3" />
 					</div>
 				{/if}
 			{/if}
 
 			<!-- 收藏标记（星标） -->
 			{#if isBookmarked}
-				<div class="absolute bottom-0 right-0 rounded-full bg-primary p-0.5">
+				<div class="bg-primary absolute bottom-0 right-0 rounded-full p-0.5">
 					<Star class="h-3 w-3 fill-white text-white" />
 				</div>
 			{/if}
@@ -401,61 +402,91 @@
 				{#if item.isDir}
 					<div class="flex items-center gap-1.5 text-xs">
 						{#if item.folderCount !== undefined && item.folderCount > 0}
-							<span
-								class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5"
-								title="子文件夹数量"
-							>
-								<FolderOpen class="h-3 w-3" />
-								<span class="font-medium">{item.folderCount}</span>
-							</span>
+							<Tooltip.Root>
+								<Tooltip.Trigger>
+									<span
+										class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5"
+									>
+										<FolderOpen class="h-3 w-3" />
+										<span class="font-medium">{item.folderCount}</span>
+									</span>
+								</Tooltip.Trigger>
+								<Tooltip.Content>
+									<p>子文件夹数量</p>
+								</Tooltip.Content>
+							</Tooltip.Root>
 						{/if}
 						{#if item.archiveCount !== undefined && item.archiveCount > 0}
-							<span
-								class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5"
-								title="压缩包数量"
-							>
-								<Package class="h-3 w-3" />
-								<span class="font-medium">{item.archiveCount}</span>
-							</span>
+							<Tooltip.Root>
+								<Tooltip.Trigger>
+									<span
+										class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5"
+									>
+										<Package class="h-3 w-3" />
+										<span class="font-medium">{item.archiveCount}</span>
+									</span>
+								</Tooltip.Trigger>
+								<Tooltip.Content>
+									<p>压缩包数量</p>
+								</Tooltip.Content>
+							</Tooltip.Root>
 						{/if}
 						{#if item.videoCount !== undefined && item.videoCount > 0}
-							<span
-								class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5"
-								title="视频数量"
-							>
-								<Video class="h-3 w-3" />
-								<span class="font-medium">{item.videoCount}</span>
-							</span>
+							<Tooltip.Root>
+								<Tooltip.Trigger>
+									<span
+										class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5"
+									>
+										<Video class="h-3 w-3" />
+										<span class="font-medium">{item.videoCount}</span>
+									</span>
+								</Tooltip.Trigger>
+								<Tooltip.Content>
+									<p>视频数量</p>
+								</Tooltip.Content>
+							</Tooltip.Root>
 						{/if}
 						<!-- 预览图标 -->
-						<button
-							bind:this={previewIconElement}
-							class="hover:bg-accent inline-flex items-center justify-center rounded-md p-1 transition-colors"
-							title="预览文件夹内容"
-							onmouseenter={() => {
-								showPreview = true;
-								loadFolderPreview();
-							}}
-							onmouseleave={() => {
-								showPreview = false;
-							}}
-							onclick={(e) => {
-								e.stopPropagation();
-							}}
-						>
-							<Eye class="text-muted-foreground h-3.5 w-3.5" />
-						</button>
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<button
+									bind:this={previewIconElement}
+									class="hover:bg-accent inline-flex items-center justify-center rounded-md p-1 transition-colors"
+									onmouseenter={() => {
+										showPreview = true;
+										loadFolderPreview();
+									}}
+									onmouseleave={() => {
+										showPreview = false;
+									}}
+									onclick={(e) => {
+										e.stopPropagation();
+									}}
+								>
+									<Eye class="text-muted-foreground h-3.5 w-3.5" />
+								</button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>预览文件夹内容</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
 						<!-- 作为书籍打开图标 -->
-						<button
-							class="hover:bg-accent inline-flex items-center justify-center rounded-md p-1 transition-colors"
-							title="作为书籍打开此文件夹"
-							onclick={(e) => {
-								e.stopPropagation();
-								onOpenAsBook?.();
-							}}
-						>
-							<BookOpen class="text-muted-foreground h-3.5 w-3.5" />
-						</button>
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<button
+									class="hover:bg-accent inline-flex items-center justify-center rounded-md p-1 transition-colors"
+									onclick={(e) => {
+										e.stopPropagation();
+										onOpenAsBook?.();
+									}}
+								>
+									<BookOpen class="text-muted-foreground h-3.5 w-3.5" />
+								</button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>作为书籍打开此文件夹</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
 					</div>
 				{/if}
 			</div>
@@ -509,7 +540,7 @@
 			{#if emmMetadata?.translatedTitle && emmMetadata.translatedTitle !== item.name}
 				<div class="mt-1">
 					<span
-						class="break-words rounded border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-xs text-primary"
+						class="border-primary/20 bg-primary/10 text-primary break-words rounded border px-1.5 py-0.5 text-xs"
 						title={emmMetadata.translatedTitle}
 					>
 						{emmMetadata.translatedTitle}
@@ -541,11 +572,11 @@
 				<div class="mt-1 flex flex-wrap items-center gap-1">
 					{#each displayTags() as tagInfo}
 						<span
-							class="inline-flex items-center rounded px-1.5 py-0.5 text-xs border {tagInfo.isCollect
+							class="inline-flex items-center rounded border px-1.5 py-0.5 text-xs {tagInfo.isCollect
 								? 'font-semibold'
 								: 'bg-muted border-border/60 text-muted-foreground'}"
 							style={tagInfo.isCollect
-								? `background-color: ${(tagInfo.color || '#409EFF')}20; border-color: ${(tagInfo.color || '#409EFF')}40; color: ${tagInfo.color || '#409EFF'};`
+								? `background-color: ${tagInfo.color || '#409EFF'}20; border-color: ${tagInfo.color || '#409EFF'}40; color: ${tagInfo.color || '#409EFF'};`
 								: ''}
 							title={tagInfo.tag}
 						>
@@ -574,48 +605,50 @@
 		role="button"
 		tabindex="0"
 	>
-			<!-- 缩略图区域 -->
-			<div class="bg-secondary relative aspect-[3/4] w-full overflow-hidden">
-				{#if thumbnail}
-					<img
-						src={thumbnail}
-						alt={item.name}
-						class="h-full w-full object-cover transition-transform group-hover:scale-105"
-					/>
-				{:else if item.isDir}
-					<div class="flex h-full w-full items-center justify-center">
-					<Folder class="h-16 w-16 text-primary" />
-					</div>
-				{:else if isArchive}
-					<div class="flex h-full w-full items-center justify-center">
-					<FileArchive class="h-16 w-16 text-primary" />
-					</div>
-				{:else if item.isImage}
-					<div class="flex h-full w-full items-center justify-center">
-					<Image class="h-16 w-16 text-primary" />
+		<!-- 缩略图区域 -->
+		<div class="bg-secondary relative aspect-[3/4] w-full overflow-hidden">
+			{#if thumbnail}
+				<img
+					src={thumbnail}
+					alt={item.name}
+					class="h-full w-full object-cover transition-transform group-hover:scale-105"
+				/>
+			{:else if item.isDir}
+				<div class="flex h-full w-full items-center justify-center">
+					<Folder class="text-primary h-16 w-16" />
+				</div>
+			{:else if isArchive}
+				<div class="flex h-full w-full items-center justify-center">
+					<FileArchive class="text-primary h-16 w-16" />
+				</div>
+			{:else if item.isImage}
+				<div class="flex h-full w-full items-center justify-center">
+					<Image class="text-primary h-16 w-16" />
+				</div>
+			{:else}
+				<div class="flex h-full w-full items-center justify-center">
+					<File class="h-16 w-16 text-gray-400" />
+				</div>
+			{/if}
+
+			<!-- 阅读标记（对勾） -->
+			{#if showReadMark}
+				{#if isReadCompleted}
+					<div class="bg-primary absolute right-2 top-2 rounded-full p-1">
+						<Check class="h-4 w-4 text-white" />
 					</div>
 				{:else}
-					<div class="flex h-full w-full items-center justify-center">
-						<File class="h-16 w-16 text-gray-400" />
+					<div
+						class="border-primary bg-background/80 absolute right-2 top-2 rounded-full border border-dashed p-1"
+					>
+						<Check class="text-primary h-4 w-4" />
 					</div>
 				{/if}
-
-				<!-- 阅读标记（对勾） -->
-				{#if showReadMark}
-					{#if isReadCompleted}
-						<div class="absolute right-2 top-2 rounded-full bg-primary p-1">
-							<Check class="h-4 w-4 text-white" />
-						</div>
-					{:else}
-						<div class="absolute right-2 top-2 rounded-full border border-dashed border-primary bg-background/80 p-1">
-							<Check class="h-4 w-4 text-primary" />
-						</div>
-					{/if}
-				{/if}
+			{/if}
 
 			<!-- 收藏标记（星标） -->
 			{#if isBookmarked}
-				<div class="absolute left-2 top-2 rounded-full bg-primary p-1">
+				<div class="bg-primary absolute left-2 top-2 rounded-full p-1">
 					<Star class="h-4 w-4 fill-white text-white" />
 				</div>
 			{/if}
@@ -641,43 +674,67 @@
 			{#if item.isDir}
 				<div class="mt-1 flex flex-wrap items-center gap-1">
 					{#if item.folderCount !== undefined && item.folderCount > 0}
-						<span
-							class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
-							title="子文件夹数量"
-						>
-							<FolderOpen class="h-2.5 w-2.5" />
-							<span class="font-medium">{item.folderCount}</span>
-						</span>
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<span
+									class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
+								>
+									<FolderOpen class="h-2.5 w-2.5" />
+									<span class="font-medium">{item.folderCount}</span>
+								</span>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>子文件夹数量</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
 					{/if}
 					{#if item.archiveCount !== undefined && item.archiveCount > 0}
-						<span
-							class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
-							title="压缩包数量"
-						>
-							<Package class="h-2.5 w-2.5" />
-							<span class="font-medium">{item.archiveCount}</span>
-						</span>
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<span
+									class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
+								>
+									<Package class="h-2.5 w-2.5" />
+									<span class="font-medium">{item.archiveCount}</span>
+								</span>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>压缩包数量</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
 					{/if}
 					{#if item.videoCount !== undefined && item.videoCount > 0}
-						<span
-							class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
-							title="视频数量"
-						>
-							<Video class="h-2.5 w-2.5" />
-							<span class="font-medium">{item.videoCount}</span>
-						</span>
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<span
+									class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
+								>
+									<Video class="h-2.5 w-2.5" />
+									<span class="font-medium">{item.videoCount}</span>
+								</span>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>视频数量</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
 					{/if}
 					{#if onOpenAsBook}
-						<button
-							class="hover:bg-accent inline-flex items-center justify-center rounded-md p-1 text-[10px] transition-colors"
-							title="作为书籍打开此文件夹"
-							onclick={(e) => {
-								e.stopPropagation();
-								onOpenAsBook?.();
-							}}
-						>
-							<BookOpen class="text-muted-foreground h-3 w-3" />
-						</button>
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<button
+									class="hover:bg-accent inline-flex items-center justify-center rounded-md p-1 text-[10px] transition-colors"
+									onclick={(e) => {
+										e.stopPropagation();
+										onOpenAsBook?.();
+									}}
+								>
+									<BookOpen class="text-muted-foreground h-3 w-3" />
+								</button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>作为书籍打开此文件夹</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
 					{/if}
 				</div>
 			{/if}
@@ -685,7 +742,7 @@
 			{#if emmMetadata?.translatedTitle && emmMetadata.translatedTitle !== item.name}
 				<div class="mt-1">
 					<span
-						class="break-words rounded border border-primary/20 bg-primary/10 px-1 py-0.5 text-[10px] text-primary"
+						class="border-primary/20 bg-primary/10 text-primary break-words rounded border px-1 py-0.5 text-[10px]"
 						title={emmMetadata.translatedTitle}
 					>
 						{emmMetadata.translatedTitle}
@@ -701,25 +758,23 @@
 					{#if item.isDir && folderTotalSize !== null}
 						<span>· {formatSize(folderTotalSize || 0, false)}</span>
 					{/if}
+				{:else if currentPage !== undefined && totalPages !== undefined}
+					<span>{currentPage}/{totalPages}</span>
+				{:else if timestamp}
+					<span>{formatTime(timestamp)}</span>
 				{:else}
-					{#if currentPage !== undefined && totalPages !== undefined}
-						<span>{currentPage}/{totalPages}</span>
-					{:else if timestamp}
-						<span>{formatTime(timestamp)}</span>
-					{:else}
-						<span>{formatSize(item.size || 0, item.isDir || false)}</span>
-					{/if}
+					<span>{formatSize(item.size || 0, item.isDir || false)}</span>
 				{/if}
 			</div>
 			{#if displayTags().length > 0}
 				<div class="mt-1 flex flex-wrap items-center gap-1">
 					{#each displayTags() as tagInfo}
 						<span
-							class="inline-flex items-center rounded px-1 py-0.5 text-[10px] border {tagInfo.isCollect
+							class="inline-flex items-center rounded border px-1 py-0.5 text-[10px] {tagInfo.isCollect
 								? 'font-semibold'
 								: 'bg-muted border-border/60 text-muted-foreground'}"
 							style={tagInfo.isCollect
-								? `background-color: ${(tagInfo.color || '#409EFF')}20; border-color: ${(tagInfo.color || '#409EFF')}40; color: ${tagInfo.color || '#409EFF'};`
+								? `background-color: ${tagInfo.color || '#409EFF'}20; border-color: ${tagInfo.color || '#409EFF'}40; color: ${tagInfo.color || '#409EFF'};`
 								: ''}
 							title={tagInfo.tag}
 						>

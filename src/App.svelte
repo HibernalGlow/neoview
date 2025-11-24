@@ -12,6 +12,7 @@
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { FolderOpen } from '@lucide/svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
+	import { isVideoFile } from '$lib/utils/videoUtils';
 	import { updateUpscaleSettings } from '$lib/utils/upscale/settings';
 	// TODO: 缩略图功能已移除，待重新实现
 	// import { init_thumbnail_manager } from '$lib/api';
@@ -100,6 +101,141 @@ async function dispatchAction(action: string) {
 	// 添加调试信息
 	keyBindingsStore.debugBindings();
 	
+	// 如果当前是视频页，对部分导航动作做视频模式优先的重解释
+	const currentPage = bookStore.currentPage;
+	const isVideoPage = Boolean(
+		currentPage && (isVideoFile(currentPage.name) || isVideoFile(currentPage.path))
+	);
+
+	if (isVideoPage) {
+		switch (action) {
+			case 'nextPage':
+			case 'pageRight':
+				action = 'videoSeekForward';
+				break;
+			case 'prevPage':
+			case 'pageLeft':
+				action = 'videoSeekBackward';
+				break;
+			case 'videoPlayPause': {
+				console.log('执行视频 播放/暂停');
+				const dispatchViewerAction = (viewerAction: string) => {
+					if (typeof window !== 'undefined') {
+						window.dispatchEvent(
+							new CustomEvent('neoview-viewer-action', { detail: { action: viewerAction } })
+						);
+					}
+				};
+				dispatchViewerAction('videoPlayPause');
+				break;
+			}
+			case 'videoSeekForward': {
+				console.log('执行视频 快进10秒');
+				const dispatchViewerAction = (viewerAction: string) => {
+					if (typeof window !== 'undefined') {
+						window.dispatchEvent(
+							new CustomEvent('neoview-viewer-action', { detail: { action: viewerAction } })
+						);
+					}
+				};
+				dispatchViewerAction('videoSeekForward');
+				break;
+			}
+			case 'videoSeekBackward': {
+				console.log('执行视频 快退10秒');
+				const dispatchViewerAction = (viewerAction: string) => {
+					if (typeof window !== 'undefined') {
+						window.dispatchEvent(
+							new CustomEvent('neoview-viewer-action', { detail: { action: viewerAction } })
+						);
+					}
+				};
+				dispatchViewerAction('videoSeekBackward');
+				break;
+			}
+			case 'videoToggleMute': {
+				console.log('执行视频 静音切换');
+				const dispatchViewerAction = (viewerAction: string) => {
+					if (typeof window !== 'undefined') {
+						window.dispatchEvent(
+							new CustomEvent('neoview-viewer-action', { detail: { action: viewerAction } })
+						);
+					}
+				};
+				dispatchViewerAction('videoToggleMute');
+				break;
+			}
+			case 'videoToggleLoopMode': {
+				console.log('执行视频 循环模式切换');
+				const dispatchViewerAction = (viewerAction: string) => {
+					if (typeof window !== 'undefined') {
+						window.dispatchEvent(
+							new CustomEvent('neoview-viewer-action', { detail: { action: viewerAction } })
+						);
+					}
+				};
+				dispatchViewerAction('videoToggleLoopMode');
+				break;
+			}
+			case 'videoVolumeUp': {
+				console.log('执行视频 音量增加');
+				const dispatchViewerAction = (viewerAction: string) => {
+					if (typeof window !== 'undefined') {
+						window.dispatchEvent(
+							new CustomEvent('neoview-viewer-action', { detail: { action: viewerAction } })
+						);
+					}
+				};
+				dispatchViewerAction('videoVolumeUp');
+				break;
+			}
+			case 'videoVolumeDown': {
+				console.log('执行视频 音量降低');
+				const dispatchViewerAction = (viewerAction: string) => {
+					if (typeof window !== 'undefined') {
+						window.dispatchEvent(
+							new CustomEvent('neoview-viewer-action', { detail: { action: viewerAction } })
+						);
+					}
+				};
+				dispatchViewerAction('videoVolumeDown');
+				break;
+			}
+			case 'videoSpeedUp': {
+				console.log('执行视频 倍速增加');
+				const dispatchViewerAction = (viewerAction: string) => {
+					if (typeof window !== 'undefined') {
+						window.dispatchEvent(
+							new CustomEvent('neoview-viewer-action', { detail: { action: viewerAction } })
+						);
+					}
+				};
+				dispatchViewerAction('videoSpeedUp');
+				break;
+			}
+			case 'videoSpeedDown': {
+				console.log('执行视频 倍速降低');
+				const dispatchViewerAction = (viewerAction: string) => {
+					if (typeof window !== 'undefined') {
+						window.dispatchEvent(
+							new CustomEvent('neoview-viewer-action', { detail: { action: viewerAction } })
+						);
+					}
+				};
+				dispatchViewerAction('videoSpeedDown');
+				break;
+			}
+		}
+	}
+
+	const dispatchViewerAction = (viewerAction: string) => {
+		if (typeof window !== 'undefined') {
+			window.dispatchEvent(
+				new CustomEvent('neoview-viewer-action', { detail: { action: viewerAction } })
+			);
+		}
+	};
+
 	switch (action) {
 		case 'nextPage': {
 			console.log('执行下一页操作');

@@ -57,14 +57,14 @@ const defaultBindings: ActionBinding[] = [
 		action: 'nextPage',
 		name: '下一页',
 		category: '导航',
-		description: '翻到下一页',
+		description: '翻到下一页（当前页为视频时优先作为视频快进10秒）',
 		bindings: []
 	},
 	{
 		action: 'prevPage',
 		name: '上一页',
 		category: '导航',
-		description: '翻到上一页',
+		description: '翻到上一页（当前页为视频时优先作为视频快退10秒）',
 		bindings: []
 	},
 	{
@@ -85,14 +85,14 @@ const defaultBindings: ActionBinding[] = [
 		action: 'pageLeft',
 		name: '向左翻页',
 		category: '导航',
-		description: '向左翻页（方向性翻页，不受阅读方向影响）',
+		description: '向左翻页（方向性翻页，不受阅读方向影响；当前页为视频时优先作为视频快退10秒）',
 		bindings: []  // 默认无绑定，用户可自定义
 	},
 	{
 		action: 'pageRight',
 		name: '向右翻页',
 		category: '导航',
-		description: '向右翻页（方向性翻页，不受阅读方向影响）',
+		description: '向右翻页（方向性翻页，不受阅读方向影响；当前页为视频时优先作为视频快进10秒）',
 		bindings: []  // 默认无绑定，用户可自定义
 	},
 	{
@@ -225,6 +225,71 @@ const defaultBindings: ActionBinding[] = [
 		name: '删除文件',
 		category: '文件',
 		description: '删除当前文件',
+		bindings: []
+	},
+
+	// === 视频操作 ===
+	{
+		action: 'videoPlayPause',
+		name: '视频播放/暂停',
+		category: '视频',
+		description: '播放或暂停当前视频',
+		bindings: []
+	},
+	{
+		action: 'videoSeekForward',
+		name: '视频快进10秒',
+		category: '视频',
+		description: '将当前视频快进10秒',
+		bindings: []
+	},
+	{
+		action: 'videoSeekBackward',
+		name: '视频快退10秒',
+		category: '视频',
+		description: '将当前视频快退10秒',
+		bindings: []
+	},
+	{
+		action: 'videoToggleMute',
+		name: '视频静音切换',
+		category: '视频',
+		description: '切换当前视频的静音状态',
+		bindings: []
+	},
+	{
+		action: 'videoToggleLoopMode',
+		name: '视频循环模式切换',
+		category: '视频',
+		description: '在列表循环/单个循环/不循环之间切换',
+		bindings: []
+	},
+	{
+		action: 'videoVolumeUp',
+		name: '视频音量增加',
+		category: '视频',
+		description: '提高当前视频的音量',
+		bindings: []
+	},
+	{
+		action: 'videoVolumeDown',
+		name: '视频音量降低',
+		category: '视频',
+		description: '降低当前视频的音量',
+		bindings: []
+	},
+	{
+		action: 'videoSpeedUp',
+		name: '视频倍速增加',
+		category: '视频',
+		description: '提高当前视频的播放速度',
+		bindings: []
+	},
+	{
+		action: 'videoSpeedDown',
+		name: '视频倍速降低',
+		category: '视频',
+		description: '降低当前视频的播放速度',
 		bindings: []
 	},
 

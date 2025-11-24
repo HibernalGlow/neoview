@@ -88,6 +88,7 @@
 	let videoUrlRevokeNeeded = false;
 	let videoStartTime = $state(0);
 	let lastVideoHistoryUpdateAt = 0;
+	let videoPlayerRef: any = null;
 
 	type VideoLoopMode = 'none' | 'list' | 'single';
 	type VideoPlayerSettings = {
@@ -103,6 +104,98 @@
 		playbackRate: 1,
 		loopMode: 'list'
 	});
+
+	function adjustVideoVolume(direction: 1 | -1) {
+		if (!isCurrentPageVideo) return;
+		const step = 0.1;
+		const next = Math.min(1, Math.max(0, videoPlayerSettings.volume + direction * step));
+		videoPlayerSettings = {
+			...videoPlayerSettings,
+			volume: next,
+			muted: next === 0
+		};
+	}
+
+	function adjustVideoSpeed(direction: 1 | -1) {
+		if (!isCurrentPageVideo) return;
+		const s = settingsManager.getSettings();
+		const min = s.image.videoMinPlaybackRate;
+		const max = s.image.videoMaxPlaybackRate;
+		const step = s.image.videoPlaybackRateStep;
+		const next = Math.min(max, Math.max(min, videoPlayerSettings.playbackRate + direction * step));
+		videoPlayerSettings = {
+			...videoPlayerSettings,
+			playbackRate: next
+		};
+	}
+
+	function handleViewerAction(action: string) {
+		const isVideo = isCurrentPageVideo;
+		if (!isVideo && action.startsWith('video')) {
+			// 非视频页时忽略所有 video* 操作，保留图片模式行为
+			return;
+		}
+
+		switch (action) {
+			case 'videoPlayPause': {
+				if (videoPlayerRef && typeof videoPlayerRef.playPause === 'function') {
+					videoPlayerRef.playPause();
+				}
+				break;
+			}
+			case 'videoSeekForward': {
+				if (videoPlayerRef && typeof videoPlayerRef.seekForward === 'function') {
+					videoPlayerRef.seekForward();
+				}
+				break;
+			}
+			case 'videoSeekBackward': {
+				if (videoPlayerRef && typeof videoPlayerRef.seekBackward === 'function') {
+					videoPlayerRef.seekBackward();
+				}
+				break;
+			}
+			case 'videoToggleMute': {
+				// 通过设置状态驱动 VideoPlayer，同步到 UI
+				videoPlayerSettings = {
+					...videoPlayerSettings,
+					muted: !videoPlayerSettings.muted
+				};
+				break;
+			}
+			case 'videoToggleLoopMode': {
+				let next: VideoLoopMode;
+				if (videoPlayerSettings.loopMode === 'list') {
+					next = 'single';
+				} else if (videoPlayerSettings.loopMode === 'single') {
+					next = 'none';
+				} else {
+					next = 'list';
+				}
+				videoPlayerSettings = {
+					...videoPlayerSettings,
+					loopMode: next
+				};
+				break;
+			}
+			case 'videoVolumeUp': {
+				adjustVideoVolume(1);
+				break;
+			}
+			case 'videoVolumeDown': {
+				adjustVideoVolume(-1);
+				break;
+			}
+			case 'videoSpeedUp': {
+				adjustVideoSpeed(1);
+				break;
+			}
+			case 'videoSpeedDown': {
+				adjustVideoSpeed(-1);
+				break;
+			}
+		}
+	}
 
 	// 预超分进度管理
 	let preUpscaleProgress = $state(0); // 预超分进度 (0-100)
@@ -1211,7 +1304,12 @@
 			zoomOut: zoomOut,
 			zoomReset: resetZoom,
 			// 全屏切换
-			toggle_fullscreen: toggleFullscreen
+			toggle_fullscreen: toggleFullscreen,
+			// 视频相关操作（对当前视频页生效）
+			videoVolumeUp: () => adjustVideoVolume(1),
+			videoVolumeDown: () => adjustVideoVolume(-1),
+			videoSpeedUp: () => adjustVideoSpeed(1),
+			videoSpeedDown: () => adjustVideoSpeed(-1)
 			// 更多命令/动作可以在这里添加
 		};
 
@@ -1222,7 +1320,7 @@
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
-		// 处理对比模式下的 ESC 键
+		// 仅在此处理对比模式下的 ESC，其余按键交给 App.svelte 的全局处理
 		if ($viewerState.comparisonVisible && e.key === 'Escape') {
 			updateViewerState({ comparisonVisible: false });
 			return;

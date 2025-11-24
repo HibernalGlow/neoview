@@ -95,6 +95,26 @@
 		videoElement.playbackRate = playbackRate;
 	});
 
+	// 同步来自父组件的初始设置（用于外部快捷键控制）
+	$effect(() => {
+		if (volume !== initialVolume) {
+			volume = initialVolume;
+		}
+		if (isMuted !== initialMuted) {
+			isMuted = initialMuted;
+		}
+		if (playbackRate !== initialPlaybackRate) {
+			const min = getMinPlaybackRate();
+			const max = getMaxPlaybackRate();
+			const clamped = Math.min(max, Math.max(min, initialPlaybackRate));
+			playbackRate = clamped;
+		}
+		if (loopMode !== initialLoopMode) {
+			loopMode = initialLoopMode;
+			applyLoopMode();
+		}
+	});
+
 	function togglePlay() {
 		if (!videoElement) return;
 
@@ -279,6 +299,19 @@
 		}
 		settingsManager.removeListener(handleSettingsChange);
 	});
+
+	// 对外暴露的控制函数，方便父组件通过 bind:this 调用
+	export function playPause() {
+		togglePlay();
+	}
+
+	export function seekForward() {
+		skipForward();
+	}
+
+	export function seekBackward() {
+		skipBackward();
+	}
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->

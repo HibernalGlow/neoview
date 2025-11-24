@@ -21,6 +21,7 @@
 	let duration = $state(0);
 	let volume = $state(1);
 	let showControls = $state(true);
+	let playbackRate = $state(1);
 	let hideControlsTimeout: ReturnType<typeof setTimeout> | null = null;
 	let videoUrl = $state<string>('');
 
@@ -103,6 +104,13 @@
 		isMuted = value === 0;
 	}
 
+	function setPlaybackRate(rate: number) {
+		playbackRate = rate;
+		if (videoElement) {
+			videoElement.playbackRate = rate;
+		}
+	}
+
 	function skipForward() {
 		if (!videoElement) return;
 		videoElement.currentTime = Math.min(videoElement.currentTime + 10, duration);
@@ -161,7 +169,6 @@
 			bind:this={videoElement}
 			class="h-full w-full"
 			src={videoUrl}
-			controls
 			autoplay
 			ontimeupdate={handleTimeUpdate}
 			onloadedmetadata={handleLoadedMetadata}
@@ -178,6 +185,8 @@
 			class="video-controls absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300"
 			class:opacity-0={!showControls}
 			class:opacity-100={showControls}
+			onclick={(event) => event.stopPropagation()}
+			onmousedown={(event) => event.stopPropagation()}
 		>
 			<!-- 进度条 -->
 			<div
@@ -252,6 +261,46 @@
 						oninput={changeVolume}
 						class="volume-slider w-20"
 					/>
+				</div>
+
+				<!-- 倍速 -->
+				<div class="playback-rate flex items-center gap-1 text-xs text-white">
+					<button
+						class={`control-btn rounded px-2 py-1 transition-colors hover:bg-white/20 ${playbackRate === 0.5 ? 'bg-white/30' : ''}`}
+						onclick={(event) => {
+							event.stopPropagation();
+							setPlaybackRate(0.5);
+						}}
+					>
+						0.5x
+					</button>
+					<button
+						class={`control-btn rounded px-2 py-1 transition-colors hover:bg-white/20 ${playbackRate === 1 ? 'bg-white/30' : ''}`}
+						onclick={(event) => {
+							event.stopPropagation();
+							setPlaybackRate(1);
+						}}
+					>
+						1x
+					</button>
+					<button
+						class={`control-btn rounded px-2 py-1 transition-colors hover:bg-white/20 ${playbackRate === 1.5 ? 'bg-white/30' : ''}`}
+						onclick={(event) => {
+							event.stopPropagation();
+							setPlaybackRate(1.5);
+						}}
+					>
+						1.5x
+					</button>
+					<button
+						class={`control-btn rounded px-2 py-1 transition-colors hover:bg-white/20 ${playbackRate === 2 ? 'bg-white/30' : ''}`}
+						onclick={(event) => {
+							event.stopPropagation();
+							setPlaybackRate(2);
+						}}
+					>
+						2x
+					</button>
 				</div>
 
 				<!-- 全屏 -->

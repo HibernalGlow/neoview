@@ -636,7 +636,7 @@
 			</button>
 
 			<!-- 控制按钮 -->
-			<div class="flex justify-center gap-2 px-2 pb-1">
+			<div class="flex justify-center gap-2 px-2 pt-3 pb-1">
 				<Button
 					variant={$bottomThumbnailBarPinned ? 'default' : 'ghost'}
 					size="sm"

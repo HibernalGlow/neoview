@@ -78,7 +78,7 @@ export function createDefaultAppState(): AppStateSnapshot {
 				language: 'zh-CN',
 				hardwareAcceleration: true,
 				temporaryDirectory: '',
-				thumbnailDirectory: 'D\\\\temp\\\\neoview'
+				thumbnailDirectory: 'D\\temp\\neoview'
 			},
 			startup: {
 				openLastFile: true,
@@ -99,7 +99,10 @@ export function createDefaultAppState(): AppStateSnapshot {
 				currentImageUpscaleEnabled: false,
 				useCachedFirst: true,
 				autoPlayAnimatedImages: true,
-				longImageScrollMode: 'continuous'
+				longImageScrollMode: 'continuous',
+				videoMinPlaybackRate: 0.25,
+				videoMaxPlaybackRate: 16,
+				videoPlaybackRateStep: 0.25
 			},
 			view: {
 				defaultZoomMode: 'fit',

@@ -13,6 +13,7 @@
 		Bookmark,
 		Trash2,
 		ExternalLink,
+		Copy,
 		FolderOpen,
 		Search
 	} from '@lucide/svelte';
@@ -457,7 +458,7 @@
 				class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
 				onclick={() => copyPath(contextMenu.entry!)}
 			>
-				<span class="mr-2 text-xs">📋</span>
+				<Copy class="mr-2 h-4 w-4" />
 				<span>复制路径</span>
 			</button>
 			<hr class="bg-border -mx-1 my-1 h-px border-0" />

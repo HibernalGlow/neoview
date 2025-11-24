@@ -12,7 +12,8 @@
 		ExternalLink,
 		Scissors,
 		Copy as CopyIcon,
-		ClipboardPaste
+		ClipboardPaste,
+		Pencil
 	} from '@lucide/svelte';
 
 	type FileContextMenuEvents = {
@@ -73,7 +74,7 @@
 </ContextMenuItem>
 
 <ContextMenuItem on:click={() => emit('rename')}>
-	<span class="mr-2 text-xs">✏</span>
+	<Pencil class="mr-2 h-4 w-4" />
 	<span>重命名</span>
 </ContextMenuItem>
 

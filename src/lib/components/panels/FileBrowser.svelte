@@ -23,7 +23,11 @@
 		CornerDownRight,
 		Search,
 		FolderTree,
-		BookOpen
+		BookOpen,
+		Scissors,
+		Copy,
+		ClipboardPaste,
+		Pencil
 	} from '@lucide/svelte';
 	import VirtualizedFileList from './file/components/VirtualizedFileList.svelte';
 	import FileTreeView from './file/components/FileTreeView.svelte';
@@ -2283,7 +2287,7 @@
 				class="hover:bg-accent flex w-full items-center px-3 py-1.5 text-sm"
 				onclick={() => cutItem(contextMenu.item!)}
 			>
-				<span class="mr-2 text-xs">✂</span>
+				<Scissors class="mr-2 h-4 w-4" />
 				<span>剪切</span>
 			</button>
 			<button
@@ -2291,7 +2295,7 @@
 				class="hover:bg-accent flex w-full items-center px-3 py-1.5 text-sm"
 				onclick={() => copyItem(contextMenu.item!)}
 			>
-				<span class="mr-2 text-xs">📄</span>
+				<Copy class="mr-2 h-4 w-4" />
 				<span>复制</span>
 			</button>
 			<button
@@ -2300,7 +2304,7 @@
 				disabled={!clipboardItem}
 				onclick={pasteItem}
 			>
-				<span class="mr-2 text-xs">📥</span>
+				<ClipboardPaste class="mr-2 h-4 w-4" />
 				<span>粘贴</span>
 			</button>
 			<hr class="border-border/60 my-1" />
@@ -2317,7 +2321,7 @@
 				class="hover:bg-accent flex w-full items-center px-3 py-1.5 text-sm"
 				onclick={() => renameItem(contextMenu.item!)}
 			>
-				<span class="mr-2 text-xs">✏</span>
+				<Pencil class="mr-2 h-4 w-4" />
 				<span>重命名</span>
 			</button>
 			<hr class="border-border/60 my-1" />

@@ -13,6 +13,7 @@
 		Activity,
 		Trash2,
 		ExternalLink,
+		Copy,
 		FolderOpen,
 		Search
 	} from '@lucide/svelte';
@@ -441,24 +442,6 @@
 					type="button"
 					class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
 					onclick={() => openWithExternalApp(contextMenu.bookmark!)}
-				>
-					<ExternalLink class="mr-2 h-4 w-4" />
-					<span>在外部应用中打开</span>
-				</button>
-				<hr class="bg-border -mx-1 my-1 h-px border-0" />
-				<button
-					type="button"
-					class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-					onclick={() => copyPath(contextMenu.bookmark!)}
-				>
-					<span class="mr-2 text-xs">📋</span>
-					<span>复制路径</span>
-				</button>
-				<hr class="bg-border -mx-1 my-1 h-px border-0" />
-				<button
-					type="button"
-					class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10 dark:hover:bg-destructive/20"
-					onclick={() => removeBookmark(contextMenu.bookmark!.id)}
 				>
 					<Trash2 class="mr-2 h-4 w-4" />
 					<span>删除</span>

@@ -163,16 +163,16 @@
 
 		// 过滤需要缩略图的项目（文件夹、图片、视频、压缩包）
 		const thumbnailItems = visibleItems.filter((item) => {
-				return (
-					item.isDir ||
-					item.isImage ||
-					isVideoFile(item.path) ||
-					item.name.endsWith('.zip') ||
-					item.name.endsWith('.cbz') ||
-					item.name.endsWith('.rar') ||
-					item.name.endsWith('.cbr')
-				);
-			});
+			return (
+				item.isDir ||
+				item.isImage ||
+				isVideoFile(item.path) ||
+				item.name.endsWith('.zip') ||
+				item.name.endsWith('.cbz') ||
+				item.name.endsWith('.rar') ||
+				item.name.endsWith('.cbr')
+			);
+		});
 
 		// 过滤已有缩略图的项目
 		const needThumbnails = thumbnailItems.filter((item) => {
@@ -594,7 +594,9 @@
 							onContextMenu={(e) => handleItemContextMenu(e, item)}
 							onToggleSelection={() => toggleItemSelection(item.path)}
 							onDelete={() => dispatch('deleteItem', { item })}
-							onOpenAsBook={item.isDir ? () => handleOpenFolderAsBook(item, actualIndex) : undefined}
+							onOpenAsBook={item.isDir
+								? () => handleOpenFolderAsBook(item, actualIndex)
+								: undefined}
 						/>
 					{/each}
 				</div>

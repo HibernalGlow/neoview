@@ -298,6 +298,7 @@ export class SettingsManager {
       if (!cfg || !cfg.system || !cfg.view) throw new Error('配置格式不完整');
       
       this.settings = mergeWithDefaults(cfg);
+      this.normalizeSettings();
       
       this.saveSettings();
       this.notifyListeners();
@@ -321,12 +322,26 @@ export class SettingsManager {
     this.listeners.forEach((l) => l(snapshot));
   }
 
+  private normalizeSettings() {
+    const perf = this.settings.performance;
+    if (!perf) return;
+    const { cacheMemorySize, preLoadSize, multiThreadedRendering, maxThreads } = perf;
+    this.settings.performance = {
+      cacheMemorySize: cacheMemorySize ?? defaultSettings.performance.cacheMemorySize,
+      preLoadSize: preLoadSize ?? defaultSettings.performance.preLoadSize,
+      multiThreadedRendering:
+        multiThreadedRendering ?? defaultSettings.performance.multiThreadedRendering,
+      maxThreads: maxThreads ?? defaultSettings.performance.maxThreads
+    };
+  }
+
   private loadSettings() {
     try {
       const raw = localStorage.getItem('neoview-settings');
       if (raw) {
         const parsed = JSON.parse(raw);
         this.settings = mergeWithDefaults(parsed);
+        this.normalizeSettings();
         console.log('📂 从 localStorage 加载设置:', {
           enableSuperResolution: this.settings.image.enableSuperResolution
         });

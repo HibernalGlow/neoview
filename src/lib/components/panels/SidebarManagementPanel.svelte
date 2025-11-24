@@ -3,6 +3,14 @@
 	 * NeoView - Sidebar Management Panel Component
 	 * 边栏管理面板 - 类似Notion的三区域拖拽布局管理
 	 */
+	import {
+		panels,
+		movePanelToLocation,
+		togglePanelVisibility,
+		type PanelLocation,
+		type PanelTabType
+	} from '$lib/stores';
+	import { get } from 'svelte/store';
 	
 	// 边栏管理状态
 	let sidebarManagement = $state({
@@ -32,9 +40,64 @@
 	let isPointerDragging = $state(false);
 	let dragPreview = $state<{ x: number; y: number } | null>(null);
 
+	// 面板 ID 映射到真实 PanelType（panels.svelte）
+	const panelIdMap: Record<string, PanelTabType | null> = {
+		fileBrowser: 'folder',
+		history: 'history',
+		bookmark: 'bookmark',
+		thumbnail: 'thumbnail',
+		metadata: 'info',
+		// 下面这些暂时没有对应的真实 PanelType，只在管理界面中展示
+		search: null,
+		filter: null,
+		tools: null
+	};
+
+	function applyPanelLayoutToStore(uiPanelId: string, targetArea: AreaId) {
+		const panelId = panelIdMap[uiPanelId] as PanelTabType | null | undefined;
+		if (!panelId) return;
+
+		const list = get(panels);
+		const panelConfig = list.find((p) => p.id === panelId);
+		if (!panelConfig) return;
+
+		if (targetArea === 'waitingArea') {
+			// 等待区：仅隐藏，不改变原来的 location
+			if (panelConfig.visible) {
+				togglePanelVisibility(panelId);
+			}
+			return;
+		}
+
+		const newLocation: PanelLocation = targetArea === 'leftSidebar' ? 'left' : 'right';
+
+		if (panelConfig.location !== newLocation) {
+			movePanelToLocation(panelId, newLocation);
+		}
+		if (!panelConfig.visible) {
+			// 确保目标区域中的面板处于可见状态
+			togglePanelVisibility(panelId);
+		}
+	}
+
+	function syncPanelsStoreFromSidebarLayout() {
+		const areas: { area: AreaId; list: Array<{ id: string }> }[] = [
+			{ area: 'waitingArea', list: sidebarManagement.waitingArea },
+			{ area: 'leftSidebar', list: sidebarManagement.leftSidebar },
+			{ area: 'rightSidebar', list: sidebarManagement.rightSidebar }
+		];
+
+		for (const { area, list } of areas) {
+			for (const panel of list) {
+				applyPanelLayoutToStore(panel.id, area);
+			}
+		}
+	}
+
 	// 拖拽处理函数
 	function handlePointerDown(event: PointerEvent, panel: any, source: AreaId) {
 		event.preventDefault();
+
 		draggedPanel = { panel, source };
 		isPointerDragging = true;
 		dragPreview = { x: event.clientX + 12, y: event.clientY + 12 };
@@ -55,6 +118,7 @@
 	function finalizeDrop() {
 		if (!isPointerDragging || !draggedPanel || !dragOverArea) {
 			draggedPanel = null;
+
 			isPointerDragging = false;
 			dragOverArea = null;
 			dragPreview = null;
@@ -90,8 +154,11 @@
 
 		// 保存到localStorage
 		saveSidebarLayout();
+		// 同步到真实面板 Store
+		applyPanelLayoutToStore(panel.id, targetArea);
 
 		draggedPanel = null;
+
 		isPointerDragging = false;
 		dragOverArea = null;
 		dragPreview = null;
@@ -133,12 +200,14 @@
 			sidebarManagement.leftSidebar = [];
 			sidebarManagement.rightSidebar = [];
 			saveSidebarLayout();
+			syncPanelsStoreFromSidebarLayout();
 		}
 	}
 
 	// 初始化
 	$effect(() => {
 		initializeSidebarPanels();
+		syncPanelsStoreFromSidebarLayout();
 	});
 
 	$effect(() => {

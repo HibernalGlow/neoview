@@ -13,7 +13,15 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Progress from '$lib/components/ui/progress';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, ExternalLink, Minus, Target } from '@lucide/svelte';
+	import {
+		Image as ImageIcon,
+		Pin,
+		PinOff,
+		GripHorizontal,
+		ExternalLink,
+		Minus,
+		Target
+	} from '@lucide/svelte';
 	import { subscribeSharedPreloadManager } from '$lib/components/viewer/flow/sharedPreloadManager';
 	import type { PreloadManager } from '$lib/components/viewer/flow/preloadManager.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
@@ -39,7 +47,7 @@
 
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
-	let thumbnails = $state<Record<number, {url: string, width: number, height: number}>>({});
+	let thumbnails = $state<Record<number, { url: string; width: number; height: number }>>({});
 	let thumbnailScrollContainer = $state<HTMLDivElement | null>(null);
 	let isResizing = $state(false);
 	let resizeStartY = 0;
@@ -48,7 +56,7 @@
 	let hoverCount = $state(0); // 追踪悬停区域的计数
 	let showAreaOverlay = $state(false); // 显示区域覆盖层
 	const showDebugInfo = false; // 底栏调试信息开关
-	
+
 	// 共享预加载管理器引用
 	let preloadManager: PreloadManager | null = null;
 	let unsubscribeSharedManager: (() => void) | null = null;
@@ -65,31 +73,31 @@
 	// 初始化时同步进度条状态
 	// Removed global progressBarStateChange initialization effect
 
-const THUMBNAIL_DEBOUNCE_MS = 250;
-let loadThumbnailsDebounce: number | null = null;
-let lastThumbnailRange: { start: number; end: number } | null = null;
-const noThumbnailPaths = new Set<string>();
+	const THUMBNAIL_DEBOUNCE_MS = 250;
+	let loadThumbnailsDebounce: number | null = null;
+	let lastThumbnailRange: { start: number; end: number } | null = null;
+	const noThumbnailPaths = new Set<string>();
 
-function scheduleLoadVisibleThumbnails(immediate = false) {
-	if (immediate) {
-		if (loadThumbnailsDebounce) {
-			clearTimeout(loadThumbnailsDebounce);
-			loadThumbnailsDebounce = null;
+	function scheduleLoadVisibleThumbnails(immediate = false) {
+		if (immediate) {
+			if (loadThumbnailsDebounce) {
+				clearTimeout(loadThumbnailsDebounce);
+				loadThumbnailsDebounce = null;
+			}
+			void loadVisibleThumbnails();
+			return;
 		}
-		void loadVisibleThumbnails();
-		return;
+		if (loadThumbnailsDebounce) return;
+		loadThumbnailsDebounce = window.setTimeout(() => {
+			loadThumbnailsDebounce = null;
+			void loadVisibleThumbnails();
+		}, THUMBNAIL_DEBOUNCE_MS);
 	}
-	if (loadThumbnailsDebounce) return;
-	loadThumbnailsDebounce = window.setTimeout(() => {
-		loadThumbnailsDebounce = null;
-		void loadVisibleThumbnails();
-	}, THUMBNAIL_DEBOUNCE_MS);
-}
 
 	function showThumbnails() {
 		isVisible = true;
 		if (hideTimeout) clearTimeout(hideTimeout);
-	scheduleLoadVisibleThumbnails(true);
+		scheduleLoadVisibleThumbnails(true);
 		// 不要在这里设置定时器，让 handleMouseLeave 来处理
 	}
 
@@ -113,7 +121,7 @@ function scheduleLoadVisibleThumbnails(immediate = false) {
 	}
 
 	function togglePin() {
-		bottomThumbnailBarPinned.update(p => !p);
+		bottomThumbnailBarPinned.update((p) => !p);
 	}
 
 	function handlePinContextMenu(e: MouseEvent) {
@@ -131,14 +139,17 @@ function scheduleLoadVisibleThumbnails(immediate = false) {
 	function toggleAreaOverlay() {
 		showAreaOverlay = !showAreaOverlay;
 		// 通知主窗口显示/隐藏区域覆盖层
-		window.dispatchEvent(new CustomEvent('areaOverlayToggle', {
-			detail: { show: showAreaOverlay }
-		}));
+		window.dispatchEvent(
+			new CustomEvent('areaOverlayToggle', {
+				detail: { show: showAreaOverlay }
+			})
+		);
 	}
 
 	function openInNewWindow() {
 		const url = `${window.location.origin}/standalone/bottom-thumbnails`;
-		const features = 'width=1200,height=300,resizable=yes,scrollbars=yes,status=yes,toolbar=no,menubar=no,location=no';
+		const features =
+			'width=1200,height=300,resizable=yes,scrollbars=yes,status=yes,toolbar=no,menubar=no,location=no';
 		window.open(url, '缩略图栏', features);
 	}
 
@@ -273,16 +284,18 @@ function scheduleLoadVisibleThumbnails(immediate = false) {
 		const { start, end } = getWindowRange(totalPages);
 		const desired = getMinVisibleThumbnails();
 
-	if (
-		lastThumbnailRange &&
-		lastThumbnailRange.start === start &&
-		lastThumbnailRange.end === end
-	) {
-		return;
-	}
-	lastThumbnailRange = { start, end };
+		if (
+			lastThumbnailRange &&
+			lastThumbnailRange.start === start &&
+			lastThumbnailRange.end === end
+		) {
+			return;
+		}
+		lastThumbnailRange = { start, end };
 
-		console.log(`Loading thumbnails from ${start} to ${end} (total: ${end - start + 1}, desired: ${desired})`);
+		console.log(
+			`Loading thumbnails from ${start} to ${end} (total: ${end - start + 1}, desired: ${desired})`
+		);
 
 		// 并行请求所有缩略图
 		const promises: Promise<void>[] = [];
@@ -295,7 +308,10 @@ function scheduleLoadVisibleThumbnails(immediate = false) {
 	}
 
 	// 在前端从 base64 生成缩略图
-	function generateThumbnailFromBase64(base64Data: string, maxHeight: number = $bottomThumbnailBarHeight - 40): Promise<{url: string, width: number, height: number}> {
+	function generateThumbnailFromBase64(
+		base64Data: string,
+		maxHeight: number = $bottomThumbnailBarHeight - 40
+	): Promise<{ url: string; width: number; height: number }> {
 		return new Promise((resolve, reject) => {
 			const img = new Image();
 			img.onload = () => {
@@ -333,50 +349,49 @@ function scheduleLoadVisibleThumbnails(immediate = false) {
 
 	let loadingIndices = new Set<number>();
 
-async function loadThumbnail(pageIndex: number) {
-	if (!preloadManager || loadingIndices.has(pageIndex)) return;
+	async function loadThumbnail(pageIndex: number) {
+		if (!preloadManager || loadingIndices.has(pageIndex)) return;
 
-	const currentBook = bookStore.currentBook;
-	const page = currentBook?.pages[pageIndex];
-	const pathKey =
-		currentBook && page ? `${currentBook.path}::${page.path}` : null;
+		const currentBook = bookStore.currentBook;
+		const page = currentBook?.pages[pageIndex];
+		const pathKey = currentBook && page ? `${currentBook.path}::${page.path}` : null;
 
-	if (pathKey && noThumbnailPaths.has(pathKey)) {
-		return;
-	}
-
-	loadingIndices.add(pageIndex);
-	try {
-		await preloadManager.requestThumbnail(pageIndex, 'bottom-bar');
-		if (pathKey) {
-			noThumbnailPaths.delete(pathKey);
+		if (pathKey && noThumbnailPaths.has(pathKey)) {
+			return;
 		}
-	} catch (err) {
-		console.error(`Failed to load thumbnail for page ${pageIndex}:`, err);
-		if (!currentBook || !page) return;
 
+		loadingIndices.add(pageIndex);
 		try {
-			let fullImageData: string;
-
-			if (currentBook.type === 'archive') {
-				fullImageData = await loadImageFromArchive(currentBook.path, page.path);
-			} else {
-				fullImageData = await loadImage(page.path);
-			}
-
-			const thumbnail = await generateThumbnailFromBase64(fullImageData);
-			thumbnails = { ...thumbnails, [pageIndex]: thumbnail };
-			noThumbnailPaths.delete(pathKey!);
-		} catch (fallbackErr) {
-			console.error(`Fallback also failed for page ${pageIndex}:`, fallbackErr);
+			await preloadManager.requestThumbnail(pageIndex, 'bottom-bar');
 			if (pathKey) {
-				noThumbnailPaths.add(pathKey);
+				noThumbnailPaths.delete(pathKey);
 			}
+		} catch (err) {
+			console.error(`Failed to load thumbnail for page ${pageIndex}:`, err);
+			if (!currentBook || !page) return;
+
+			try {
+				let fullImageData: string;
+
+				if (currentBook.type === 'archive') {
+					fullImageData = await loadImageFromArchive(currentBook.path, page.path);
+				} else {
+					fullImageData = await loadImage(page.path);
+				}
+
+				const thumbnail = await generateThumbnailFromBase64(fullImageData);
+				thumbnails = { ...thumbnails, [pageIndex]: thumbnail };
+				noThumbnailPaths.delete(pathKey!);
+			} catch (fallbackErr) {
+				console.error(`Fallback also failed for page ${pageIndex}:`, fallbackErr);
+				if (pathKey) {
+					noThumbnailPaths.add(pathKey);
+				}
+			}
+		} finally {
+			loadingIndices.delete(pageIndex);
 		}
-	} finally {
-		loadingIndices.delete(pageIndex);
 	}
-}
 
 	function handleScroll(e: Event) {
 		const container = e.target as HTMLElement;
@@ -389,10 +404,7 @@ async function loadThumbnail(pageIndex: number) {
 
 			// 扩大可见范围，提前加载即将进入视野的缩略图
 			const buffer = 200; // 200px 缓冲区
-			if (
-				rect.left >= containerRect.left - buffer &&
-				rect.right <= containerRect.right + buffer
-			) {
+			if (rect.left >= containerRect.left - buffer && rect.right <= containerRect.right + buffer) {
 				if (!(i in thumbnails)) {
 					void loadThumbnail(i);
 				}
@@ -445,25 +457,27 @@ async function loadThumbnail(pageIndex: number) {
 		img.src = dataURL;
 	}
 
-onMount(() => {
-	unsubscribeSharedManager = subscribeSharedPreloadManager((manager) => {
-		if (unsubscribeThumbnailListener) {
-			unsubscribeThumbnailListener();
-			unsubscribeThumbnailListener = null;
-		}
-		preloadManager = manager;
-		if (preloadManager) {
-			lastThumbnailRange = null;
-			unsubscribeThumbnailListener = preloadManager.addThumbnailListener((pageIndex, dataURL, source) => {
-				if (source !== 'bottom-bar') {
-					return;
-				}
-				handleSharedThumbnailReady(pageIndex, dataURL);
-			});
-			scheduleLoadVisibleThumbnails();
-		}
+	onMount(() => {
+		unsubscribeSharedManager = subscribeSharedPreloadManager((manager) => {
+			if (unsubscribeThumbnailListener) {
+				unsubscribeThumbnailListener();
+				unsubscribeThumbnailListener = null;
+			}
+			preloadManager = manager;
+			if (preloadManager) {
+				lastThumbnailRange = null;
+				unsubscribeThumbnailListener = preloadManager.addThumbnailListener(
+					(pageIndex, dataURL, source) => {
+						if (source !== 'bottom-bar') {
+							return;
+						}
+						handleSharedThumbnailReady(pageIndex, dataURL);
+					}
+				);
+				scheduleLoadVisibleThumbnails();
+			}
+		});
 	});
-});
 
 	onDestroy(() => {
 		if (unsubscribeThumbnailListener) {
@@ -474,10 +488,10 @@ onMount(() => {
 			unsubscribeSharedManager();
 			unsubscribeSharedManager = null;
 		}
-	if (loadThumbnailsDebounce) {
-		clearTimeout(loadThumbnailsDebounce);
-		loadThumbnailsDebounce = null;
-	}
+		if (loadThumbnailsDebounce) {
+			clearTimeout(loadThumbnailsDebounce);
+			loadThumbnailsDebounce = null;
+		}
 	});
 
 	$effect(() => {
@@ -489,7 +503,7 @@ onMount(() => {
 	// 根据阅读方向获取排序后的页面
 	function getOrderedPages() {
 		if (!bookStore.currentBook) return [];
-		
+
 		const pages = bookStore.currentBook.pages;
 		if (readingDirection === 'right-to-left') {
 			// 右开阅读：反向排列
@@ -505,7 +519,7 @@ onMount(() => {
 		const currentBook = bookStore.currentBook;
 		if (currentBook) {
 			thumbnails = {};
-		lastThumbnailRange = null;
+			lastThumbnailRange = null;
 		}
 	});
 
@@ -530,7 +544,7 @@ onMount(() => {
 {#if bookStore.currentBook && bookStore.currentBook.pages.length > 0}
 	<!-- 缩略图栏触发区域（独立） -->
 	<div
-		class="fixed bottom-0 left-0 right-0 h-4 z-[57]"
+		class="fixed bottom-0 left-0 right-0 z-[57] h-4"
 		onmouseenter={handleMouseEnter}
 		onmouseleave={handleMouseLeave}
 		role="presentation"
@@ -548,19 +562,23 @@ onMount(() => {
 		role="application"
 		aria-label="底部缩略图栏"
 	>
-		<div class="bg-sidebar/95 backdrop-blur-sm border-t shadow-lg overflow-hidden relative" style="height: {$bottomThumbnailBarHeight}px;">
+		<div
+			class="bg-sidebar/95 relative border-t shadow-lg backdrop-blur-sm"
+			style="height: {$bottomThumbnailBarHeight}px;"
+		>
 			<!-- 拖拽手柄 -->
+
 			<button
 				type="button"
-				class="h-2 w-full flex items-center justify-center cursor-ns-resize hover:bg-primary/20 transition-colors"
+				class="text-muted-foreground hover:bg-accent absolute left-1/2 top-0 z-50 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize rounded-md p-1 transition-colors"
 				onmousedown={handleResizeStart}
 				aria-label="拖拽调整缩略图栏高度"
 			>
-				<GripHorizontal class="h-3 w-3 text-muted-foreground" />
+				<GripHorizontal class="h-4 w-4" />
 			</button>
 
 			<!-- 控制按钮 -->
-			<div class="px-2 pb-1 flex justify-center gap-2">
+			<div class="flex justify-center gap-2 px-2 pb-1">
 				<Button
 					variant={$bottomThumbnailBarPinned ? 'default' : 'ghost'}
 					size="sm"
@@ -569,21 +587,16 @@ onMount(() => {
 					oncontextmenu={handlePinContextMenu}
 				>
 					{#if $bottomThumbnailBarPinned}
-						<Pin class="h-3 w-3 mr-1" />
+						<Pin class="mr-1 h-3 w-3" />
 					{:else}
-						<PinOff class="h-3 w-3 mr-1" />
+						<PinOff class="mr-1 h-3 w-3" />
 					{/if}
 					<span class="text-xs">{$bottomThumbnailBarPinned ? '已钉住' : '钉住'}</span>
 				</Button>
 				<Tooltip.Root>
 					<Tooltip.Trigger>
-						<Button
-							variant="ghost"
-							size="sm"
-							class="h-6"
-							onclick={openInNewWindow}
-						>
-							<ExternalLink class="h-3 w-3 mr-1" />
+						<Button variant="ghost" size="sm" class="h-6" onclick={openInNewWindow}>
+							<ExternalLink class="mr-1 h-3 w-3" />
 							<span class="text-xs">独立窗口</span>
 						</Button>
 					</Tooltip.Trigger>
@@ -599,7 +612,7 @@ onMount(() => {
 							class="h-6"
 							onclick={toggleProgressBar}
 						>
-							<Minus class="h-3 w-3 mr-1" />
+							<Minus class="mr-1 h-3 w-3" />
 							<span class="text-xs">进度条</span>
 						</Button>
 					</Tooltip.Trigger>
@@ -615,7 +628,7 @@ onMount(() => {
 							class="h-6"
 							onclick={toggleAreaOverlay}
 						>
-							<Target class="h-3 w-3 mr-1" />
+							<Target class="mr-1 h-3 w-3" />
 							<span class="text-xs">区域</span>
 						</Button>
 					</Tooltip.Trigger>
@@ -626,7 +639,7 @@ onMount(() => {
 			</div>
 
 			{#if showDebugInfo && $viewerState.pageWindow && !$viewerState.pageWindow.stale}
-				<div class="px-3 pb-1 text-[11px] text-muted-foreground flex flex-wrap gap-3">
+				<div class="text-muted-foreground flex flex-wrap gap-3 px-3 pb-1 text-[11px]">
 					<span>窗口中心：{$viewerState.pageWindow.center + 1}</span>
 					<span>前向覆盖：{$viewerState.pageWindow.forward.length} 页</span>
 					<span>后向覆盖：{$viewerState.pageWindow.backward.length} 页</span>
@@ -634,7 +647,7 @@ onMount(() => {
 			{/if}
 
 			{#if showDebugInfo && $viewerState.taskCursor}
-				<div class="px-3 text-[11px] text-muted-foreground flex flex-wrap gap-3 pb-1">
+				<div class="text-muted-foreground flex flex-wrap gap-3 px-3 pb-1 text-[11px]">
 					<span>任务：{$viewerState.taskCursor.running}/{$viewerState.taskCursor.concurrency}</span>
 					<span>Current {$viewerState.taskCursor.activeBuckets.current}</span>
 					<span>Forward {$viewerState.taskCursor.activeBuckets.forward}</span>
@@ -643,19 +656,23 @@ onMount(() => {
 				</div>
 			{/if}
 
-			<div class="px-2 pb-2 h-[calc(100%-theme(spacing.12))] overflow-hidden">
-				<div class="flex gap-2 overflow-x-auto h-full pb-1 items-center" onscroll={handleScroll} bind:this={thumbnailScrollContainer}>
+			<div class="h-[calc(100%-theme(spacing.12))] overflow-hidden px-2 pb-2">
+				<div
+					class="flex h-full items-center gap-2 overflow-x-auto pb-1"
+					onscroll={handleScroll}
+					bind:this={thumbnailScrollContainer}
+				>
 					{#each getOrderedPages() as page, index (page.path)}
 						{@const originalIndex = page.originalIndex}
 						{@const status = bookStore.getPageUpscaleStatus(originalIndex)}
 						<Tooltip.Root>
 							<Tooltip.Trigger>
 								<button
-									class="flex-shrink-0 rounded overflow-hidden border-2 border-border transition-colors relative group
-										{originalIndex === bookStore.currentPageIndex ? 'outline outline-2 outline-sidebar-ring' : ''}
-										{status === 'preupscaled' ? 'ring-2 ring-accent' : ''}
-										{status === 'done' ? 'ring-2 ring-primary' : ''}
-										{status === 'failed' ? 'ring-2 ring-destructive' : ''}
+									class="border-border group relative flex-shrink-0 overflow-hidden rounded border-2 transition-colors
+										{originalIndex === bookStore.currentPageIndex ? 'outline-sidebar-ring outline outline-2' : ''}
+										{status === 'preupscaled' ? 'ring-accent ring-2' : ''}
+										{status === 'done' ? 'ring-primary ring-2' : ''}
+										{status === 'failed' ? 'ring-destructive ring-2' : ''}
 										hover:border-primary/50"
 									style={getThumbnailStyle(originalIndex)}
 									onclick={() => bookStore.navigateToPage(originalIndex)}
@@ -665,22 +682,22 @@ onMount(() => {
 										<img
 											src={thumbnails[originalIndex].url}
 											alt="Page {originalIndex + 1}"
-											class="w-full h-full object-contain"
+											class="h-full w-full object-contain"
 											style="object-position: center;"
 										/>
 									{:else}
 										<div
-											class="w-full h-full flex flex-col items-center justify-center bg-muted text-xs text-muted-foreground"
+											class="bg-muted text-muted-foreground flex h-full w-full flex-col items-center justify-center text-xs"
 											style="min-width: 60px; max-width: 120px;"
 										>
-											<ImageIcon class="h-6 w-6 mb-1" />
+											<ImageIcon class="mb-1 h-6 w-6" />
 											<span class="font-mono">{originalIndex + 1}</span>
 										</div>
 									{/if}
 
 									{#if windowBadgeLabel(originalIndex)}
 										<div
-											class={`absolute top-0 right-0 text-[10px] px-1 py-[1px] text-white font-mono ${windowBadgeClass(originalIndex)}`}
+											class={`absolute right-0 top-0 px-1 py-[1px] font-mono text-[10px] text-white ${windowBadgeClass(originalIndex)}`}
 										>
 											{windowBadgeLabel(originalIndex)}
 										</div>
@@ -688,45 +705,50 @@ onMount(() => {
 
 									<!-- 页码标签 -->
 									<div
-										class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[10px] text-center py-0.5 font-mono"
+										class="absolute bottom-0 left-0 right-0 bg-black/70 py-0.5 text-center font-mono text-[10px] text-white"
 									>
 										{index + 1}
 									</div>
 
 									<!-- 状态角标 -->
 									{#if status === 'done'}
-										<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-primary"></span>
+										<span class="bg-primary absolute right-1 top-1 h-2 w-2 rounded-full"></span>
 									{:else if status === 'preupscaled'}
-										<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-accent"></span>
+										<span class="bg-accent absolute right-1 top-1 h-2 w-2 rounded-full"></span>
 									{:else if status === 'failed'}
-										<span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-destructive"></span>
+										<span class="bg-destructive absolute right-1 top-1 h-2 w-2 rounded-full"></span>
 									{/if}
 								</button>
 							</Tooltip.Trigger>
 							<Tooltip.Content>
 								<p>
 									第 {originalIndex + 1} 页
-									{#if status === 'done'} · 已超分{/if}
-									{#if status === 'preupscaled'} · 已预超分{/if}
-									{#if status === 'failed'} · 超分失败{/if}
+									{#if status === 'done'}
+										· 已超分{/if}
+									{#if status === 'preupscaled'}
+										· 已预超分{/if}
+									{#if status === 'failed'}
+										· 超分失败{/if}
 								</p>
 							</Tooltip.Content>
 						</Tooltip.Root>
-						{/each}
-					</div>
+					{/each}
 				</div>
-				{#if showBottomProgressBar && bookStore.currentBook}
-					<!-- 底部进度条（跟随缩略图栏） -->
-					<div class={`absolute left-0 right-0 bottom-0 h-1 z-[60] pointer-events-none ${readingDirection === 'right-to-left' ? 'rtl-progress-wrapper' : ''}`}>
-						<Progress.Root
-							value={((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}
-							class="h-full"
-						/>
-					</div>
-				{/if}
 			</div>
+			{#if showBottomProgressBar && bookStore.currentBook}
+				<!-- 底部进度条（跟随缩略图栏） -->
+				<div
+					class={`pointer-events-none absolute bottom-0 left-0 right-0 z-[60] h-1 ${readingDirection === 'right-to-left' ? 'rtl-progress-wrapper' : ''}`}
+				>
+					<Progress.Root
+						value={((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}
+						class="h-full"
+					/>
+				</div>
+			{/if}
 		</div>
-	{/if}
+	</div>
+{/if}
 
 <style>
 	.rtl-progress-wrapper {

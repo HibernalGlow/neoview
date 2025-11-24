@@ -4,64 +4,29 @@
 	 * 边栏管理面板 - 类似Notion的三区域拖拽布局管理
 	 */
 	
-	import * as Table from '$lib/components/ui/table';
-	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
-	
-	type PanelItem = {
-		id: string;
-		name: string;
-		icon: string;
-		category: string;
-		enabled: boolean;
-	};
-	
 	// 边栏管理状态
 	let sidebarManagement = $state({
 		// 可用面板列表
 		availablePanels: [
-			{ id: 'fileBrowser', name: '文件浏览器', icon: '📁', category: '导航', enabled: true },
-			{ id: 'bookmark', name: '书签', icon: '🔖', category: '导航', enabled: true },
-			{ id: 'thumbnail', name: '缩略图', icon: '🖼️', category: '导航', enabled: true },
-			{ id: 'metadata', name: '元数据', icon: '📋', category: '信息', enabled: true },
-			{ id: 'history', name: '历史记录', icon: '📚', category: '导航', enabled: true },
-			{ id: 'search', name: '搜索', icon: '🔍', category: '工具', enabled: true },
-			{ id: 'filter', name: '过滤器', icon: '🎛️', category: '工具', enabled: true },
-			{ id: 'tools', name: '工具', icon: '🔧', category: '工具', enabled: true }
+			{ id: 'fileBrowser', name: '文件浏览器', icon: '📁', category: '导航' },
+			{ id: 'bookmark', name: '书签', icon: '🔖', category: '导航' },
+			{ id: 'thumbnail', name: '缩略图', icon: '🖼️', category: '导航' },
+			{ id: 'metadata', name: '元数据', icon: '📋', category: '信息' },
+			{ id: 'history', name: '历史记录', icon: '📚', category: '导航' },
+			{ id: 'search', name: '搜索', icon: '🔍', category: '工具' },
+			{ id: 'filter', name: '过滤器', icon: '🎛️', category: '工具' },
+			{ id: 'tools', name: '工具', icon: '🔧', category: '工具' }
 		],
 		// 等待区面板
-		waitingArea: [] as PanelItem[],
+		waitingArea: [] as Array<{ id: string, name: string, icon: string, category: string }>,
 		// 左侧栏面板
-		leftSidebar: [] as PanelItem[],
+		leftSidebar: [] as Array<{ id: string, name: string, icon: string, category: string }>,
 		// 右侧栏面板
-		rightSidebar: [] as PanelItem[],
+		rightSidebar: [] as Array<{ id: string, name: string, icon: string, category: string }>,
 	});
-
-	function normalizePanelList(list: any[] | undefined): PanelItem[] {
-		if (!Array.isArray(list)) return [];
-		return list.map((p) => ({
-			id: p.id,
-			name: p.name,
-			icon: p.icon,
-			category: p.category,
-			enabled: p.enabled ?? true
-		}));
-	}
-
-	function updatePanelEnabled(panelId: string, enabled: boolean) {
-		sidebarManagement.waitingArea = sidebarManagement.waitingArea.map((p) =>
-			p.id === panelId ? { ...p, enabled } : p
-		);
-		sidebarManagement.leftSidebar = sidebarManagement.leftSidebar.map((p) =>
-			p.id === panelId ? { ...p, enabled } : p
-		);
-		sidebarManagement.rightSidebar = sidebarManagement.rightSidebar.map((p) =>
-			p.id === panelId ? { ...p, enabled } : p
-		);
-	}
 
 	// 拖拽状态
 	type AreaId = 'waitingArea' | 'leftSidebar' | 'rightSidebar';
-	
 	let draggedPanel = $state<{ panel: any, source: AreaId } | null>(null);
 	let dragOverArea = $state<AreaId | null>(null);
 	let isPointerDragging = $state(false);
@@ -147,9 +112,9 @@
 		if (savedPanels) {
 			try {
 				const saved = JSON.parse(savedPanels);
-				sidebarManagement.waitingArea = normalizePanelList(saved.waitingArea);
-				sidebarManagement.leftSidebar = normalizePanelList(saved.leftSidebar);
-				sidebarManagement.rightSidebar = normalizePanelList(saved.rightSidebar);
+				sidebarManagement.waitingArea = saved.waitingArea || [];
+				sidebarManagement.leftSidebar = saved.leftSidebar || [];
+				sidebarManagement.rightSidebar = saved.rightSidebar || [];
 			} catch (e) {
 				console.error('Failed to load sidebar management:', e);
 				// 默认将所有面板放入等待区
@@ -171,17 +136,6 @@
 		}
 	}
 
-	// 监听启用状态变化并持久化
-	$effect(() => {
-		const _marker = {
-			waiting: sidebarManagement.waitingArea.map((p) => p.enabled),
-			left: sidebarManagement.leftSidebar.map((p) => p.enabled),
-			right: sidebarManagement.rightSidebar.map((p) => p.enabled)
-		};
-		// 使用当前布局保存到本地存储
-		saveSidebarLayout();
-	});
-
 	// 初始化
 	$effect(() => {
 		initializeSidebarPanels();
@@ -201,7 +155,6 @@
 
 	$effect(() => {
 		if (!isPointerDragging) return;
-
 		function handleWindowPointerMove(e: PointerEvent) {
 			dragPreview = { x: e.clientX + 12, y: e.clientY + 12 };
 		}
@@ -238,63 +191,34 @@
 			onpointerleave={() => handleAreaPointerLeave('waitingArea')}
 		>
 			<h4 class="font-medium text-sm mb-3 text-center">等待区</h4>
-			<div class="min-h-[300px] rounded-md border bg-card">
-				<Table.Root>
-					<Table.Header>
-						<Table.Row>
-							<Table.Head class="w-8"></Table.Head>
-							<Table.Head class="w-10 text-xs text-center">启用</Table.Head>
-							<Table.Head class="w-8"></Table.Head>
-							<Table.Head class="text-xs">名称</Table.Head>
-							<Table.Head class="text-xs">分类</Table.Head>
-							<Table.Head class="text-xs">位置</Table.Head>
-						</Table.Row>
-					</Table.Header>
-					<Table.Body>
-						{#if sidebarManagement.waitingArea.length === 0}
-							<Table.Row>
-								<Table.Cell colspan={6} class="h-20 text-center text-xs text-muted-foreground">
-									拖拽面板到这里
-								</Table.Cell>
-							</Table.Row>
-						{:else}
-							{#each sidebarManagement.waitingArea as panel}
-								<Table.Row
-									class={isPointerDragging && draggedPanel && draggedPanel.panel.id === panel.id ? 'opacity-50' : ''}
-								>
-									<Table.Cell class="w-8 align-middle">
-										<div 
-											class="cursor-grab active:cursor-grabbing p-1 hover:bg-accent/50 rounded"
-											onpointerdown={(e) => handlePointerDown(e, panel, 'waitingArea')}
-										>
-											<svg class="w-4 h-4 text-muted-foreground" fill="currentColor" viewBox="0 0 20 20">
-												<path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
-											</svg>
-										</div>
-									</Table.Cell>
-									<Table.Cell class="w-10 align-middle text-center">
-										<Checkbox
-											bind:checked={panel.enabled}
-											aria-label={`启用 ${panel.name}`}
-										/>
-									</Table.Cell>
-									<Table.Cell class="w-8 align-middle">
-										<span class="text-lg">{panel.icon}</span>
-									</Table.Cell>
-									<Table.Cell class="align-middle">
-										<div class="font-medium text-sm">{panel.name}</div>
-									</Table.Cell>
-									<Table.Cell class="align-middle">
-										<div class="text-xs text-muted-foreground">{panel.category}</div>
-									</Table.Cell>
-									<Table.Cell class="align-middle">
-										<div class="text-xs text-muted-foreground">等待区</div>
-									</Table.Cell>
-								</Table.Row>
-							{/each}
-						{/if}
-					</Table.Body>
-				</Table.Root>
+			<div class="space-y-2 min-h-[300px]">
+				{#each sidebarManagement.waitingArea as panel}
+					<div 
+						class="bg-card border rounded-md p-3 hover:bg-accent/50 transition-colors {isPointerDragging && draggedPanel && draggedPanel.panel.id === panel.id ? 'opacity-50' : ''}"
+					>
+						<div class="flex items-center gap-2">
+							<!-- 拖拽手柄 -->
+							<div 
+								class="cursor-grab active:cursor-grabbing p-1 hover:bg-accent/50 rounded"
+								onpointerdown={(e) => handlePointerDown(e, panel, 'waitingArea')}
+							>
+								<svg class="w-4 h-4 text-muted-foreground" fill="currentColor" viewBox="0 0 20 20">
+									<path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+								</svg>
+							</div>
+							<span class="text-lg">{panel.icon}</span>
+							<div>
+								<div class="font-medium text-sm">{panel.name}</div>
+								<div class="text-xs text-muted-foreground">{panel.category}</div>
+							</div>
+						</div>
+					</div>
+				{/each}
+				{#if sidebarManagement.waitingArea.length === 0}
+					<div class="text-center text-muted-foreground text-sm py-8">
+						拖拽面板到这里
+					</div>
+				{/if}
 			</div>
 		</div>
 
@@ -305,63 +229,34 @@
 			onpointerleave={() => handleAreaPointerLeave('leftSidebar')}
 		>
 			<h4 class="font-medium text-sm mb-3 text-center">左侧栏</h4>
-			<div class="min-h-[300px] rounded-md border bg-card">
-				<Table.Root>
-					<Table.Header>
-						<Table.Row>
-							<Table.Head class="w-8"></Table.Head>
-							<Table.Head class="w-10 text-xs text-center">启用</Table.Head>
-							<Table.Head class="w-8"></Table.Head>
-							<Table.Head class="text-xs">名称</Table.Head>
-							<Table.Head class="text-xs">分类</Table.Head>
-							<Table.Head class="text-xs">位置</Table.Head>
-						</Table.Row>
-					</Table.Header>
-					<Table.Body>
-						{#if sidebarManagement.leftSidebar.length === 0}
-							<Table.Row>
-								<Table.Cell colspan={6} class="h-20 text-center text-xs text-muted-foreground">
-									拖拽面板到这里
-								</Table.Cell>
-							</Table.Row>
-						{:else}
-							{#each sidebarManagement.leftSidebar as panel}
-								<Table.Row
-									class={isPointerDragging && draggedPanel && draggedPanel.panel.id === panel.id ? 'opacity-50' : ''}
-								>
-									<Table.Cell class="w-8 align-middle">
-										<div 
-											class="cursor-grab active:cursor-grabbing p-1 hover:bg-accent/50 rounded"
-											onpointerdown={(e) => handlePointerDown(e, panel, 'leftSidebar')}
-										>
-											<svg class="w-4 h-4 text-muted-foreground" fill="currentColor" viewBox="0 0 20 20">
-												<path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
-											</svg>
-										</div>
-									</Table.Cell>
-									<Table.Cell class="w-10 align-middle text-center">
-										<Checkbox
-											bind:checked={panel.enabled}
-											aria-label={`启用 ${panel.name}`}
-										/>
-									</Table.Cell>
-									<Table.Cell class="w-8 align-middle">
-										<span class="text-lg">{panel.icon}</span>
-									</Table.Cell>
-									<Table.Cell class="align-middle">
-										<div class="font-medium text-sm">{panel.name}</div>
-									</Table.Cell>
-									<Table.Cell class="align-middle">
-										<div class="text-xs text-muted-foreground">{panel.category}</div>
-									</Table.Cell>
-									<Table.Cell class="align-middle">
-										<div class="text-xs text-muted-foreground">左侧栏</div>
-									</Table.Cell>
-								</Table.Row>
-							{/each}
-						{/if}
-					</Table.Body>
-				</Table.Root>
+			<div class="space-y-2 min-h-[300px]">
+				{#each sidebarManagement.leftSidebar as panel}
+					<div 
+						class="bg-card border rounded-md p-3 hover:bg-accent/50 transition-colors {isPointerDragging && draggedPanel && draggedPanel.panel.id === panel.id ? 'opacity-50' : ''}"
+					>
+						<div class="flex items-center gap-2">
+							<!-- 拖拽手柄 -->
+							<div 
+								class="cursor-grab active:cursor-grabbing p-1 hover:bg-accent/50 rounded"
+								onpointerdown={(e) => handlePointerDown(e, panel, 'leftSidebar')}
+							>
+								<svg class="w-4 h-4 text-muted-foreground" fill="currentColor" viewBox="0 0 20 20">
+									<path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+								</svg>
+							</div>
+							<span class="text-lg">{panel.icon}</span>
+							<div>
+								<div class="font-medium text-sm">{panel.name}</div>
+								<div class="text-xs text-muted-foreground">{panel.category}</div>
+							</div>
+						</div>
+					</div>
+				{/each}
+				{#if sidebarManagement.leftSidebar.length === 0}
+					<div class="text-center text-muted-foreground text-sm py-8">
+						拖拽面板到这里
+					</div>
+				{/if}
 			</div>
 		</div>
 
@@ -372,63 +267,34 @@
 			onpointerleave={() => handleAreaPointerLeave('rightSidebar')}
 		>
 			<h4 class="font-medium text-sm mb-3 text-center">右侧栏</h4>
-			<div class="min-h-[300px] rounded-md border bg-card">
-				<Table.Root>
-					<Table.Header>
-						<Table.Row>
-							<Table.Head class="w-8"></Table.Head>
-							<Table.Head class="w-10 text-xs text-center">启用</Table.Head>
-							<Table.Head class="w-8"></Table.Head>
-							<Table.Head class="text-xs">名称</Table.Head>
-							<Table.Head class="text-xs">分类</Table.Head>
-							<Table.Head class="text-xs">位置</Table.Head>
-						</Table.Row>
-					</Table.Header>
-					<Table.Body>
-						{#if sidebarManagement.rightSidebar.length === 0}
-							<Table.Row>
-								<Table.Cell colspan={6} class="h-20 text-center text-xs text-muted-foreground">
-									拖拽面板到这里
-								</Table.Cell>
-							</Table.Row>
-						{:else}
-							{#each sidebarManagement.rightSidebar as panel}
-								<Table.Row
-									class={isPointerDragging && draggedPanel && draggedPanel.panel.id === panel.id ? 'opacity-50' : ''}
-								>
-									<Table.Cell class="w-8 align-middle">
-										<div 
-											class="cursor-grab active:cursor-grabbing p-1 hover:bg-accent/50 rounded"
-											onpointerdown={(e) => handlePointerDown(e, panel, 'rightSidebar')}
-										>
-											<svg class="w-4 h-4 text-muted-foreground" fill="currentColor" viewBox="0 0 20 20">
-												<path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
-											</svg>
-										</div>
-									</Table.Cell>
-									<Table.Cell class="w-10 align-middle text-center">
-										<Checkbox
-											bind:checked={panel.enabled}
-											aria-label={`启用 ${panel.name}`}
-										/>
-									</Table.Cell>
-									<Table.Cell class="w-8 align-middle">
-										<span class="text-lg">{panel.icon}</span>
-									</Table.Cell>
-									<Table.Cell class="align-middle">
-										<div class="font-medium text-sm">{panel.name}</div>
-									</Table.Cell>
-									<Table.Cell class="align-middle">
-										<div class="text-xs text-muted-foreground">{panel.category}</div>
-									</Table.Cell>
-									<Table.Cell class="align-middle">
-										<div class="text-xs text-muted-foreground">右侧栏</div>
-									</Table.Cell>
-								</Table.Row>
-							{/each}
-						{/if}
-					</Table.Body>
-				</Table.Root>
+			<div class="space-y-2 min-h-[300px]">
+				{#each sidebarManagement.rightSidebar as panel}
+					<div 
+						class="bg-card border rounded-md p-3 hover:bg-accent/50 transition-colors {isPointerDragging && draggedPanel && draggedPanel.panel.id === panel.id ? 'opacity-50' : ''}"
+					>
+						<div class="flex items-center gap-2">
+							<!-- 拖拽手柄 -->
+							<div 
+								class="cursor-grab active:cursor-grabbing p-1 hover:bg-accent/50 rounded"
+								onpointerdown={(e) => handlePointerDown(e, panel, 'rightSidebar')}
+							>
+								<svg class="w-4 h-4 text-muted-foreground" fill="currentColor" viewBox="0 0 20 20">
+									<path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+								</svg>
+							</div>
+							<span class="text-lg">{panel.icon}</span>
+							<div>
+								<div class="font-medium text-sm">{panel.name}</div>
+								<div class="text-xs text-muted-foreground">{panel.category}</div>
+							</div>
+						</div>
+					</div>
+				{/each}
+				{#if sidebarManagement.rightSidebar.length === 0}
+					<div class="text-center text-muted-foreground text-sm py-8">
+						拖拽面板到这里
+					</div>
+				{/if}
 			</div>
 		</div>
 	</div>

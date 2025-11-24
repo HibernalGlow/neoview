@@ -39,6 +39,7 @@
 	import type { BookInfo, Page } from '$lib/types';
 	import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 	import { isVideoFile } from '$lib/utils/videoUtils';
+	import { historyStore } from '$lib/stores/history.svelte';
 
 	// 进度条状态
 	let showProgressBar = $state(true);
@@ -85,6 +86,23 @@
 	let videoUrl = $state<string | null>(null);
 	let currentVideoRequestId = 0;
 	let videoUrlRevokeNeeded = false;
+	let videoStartTime = $state(0);
+	let lastVideoHistoryUpdateAt = 0;
+
+	type VideoLoopMode = 'none' | 'list' | 'single';
+	type VideoPlayerSettings = {
+		volume: number;
+		muted: boolean;
+		playbackRate: number;
+		loopMode: VideoLoopMode;
+	};
+
+	let videoPlayerSettings = $state<VideoPlayerSettings>({
+		volume: 1,
+		muted: false,
+		playbackRate: 1,
+		loopMode: 'list'
+	});
 
 	// 预超分进度管理
 	let preUpscaleProgress = $state(0); // 预超分进度 (0-100)
@@ -178,6 +196,64 @@
 		}
 		videoUrl = url;
 		videoUrlRevokeNeeded = revokeNeeded;
+	}
+
+	function handleVideoProgress(currentTimeSec: number, durationSec: number, ended: boolean) {
+		const page = bookStore.currentPage;
+		if (!page) return;
+		if (!durationSec || !isFinite(durationSec) || durationSec <= 0) return;
+
+		const now = Date.now();
+		// 节流：未结束时最多每 5 秒写一次历史
+		if (!ended && now - lastVideoHistoryUpdateAt < 5000) {
+			return;
+		}
+		lastVideoHistoryUpdateAt = now;
+
+		const safeDuration = durationSec;
+		const clampedTime = Math.max(0, Math.min(currentTimeSec, safeDuration));
+		const completed =
+			ended || clampedTime >= safeDuration - Math.min(5, safeDuration * 0.05);
+
+		// 映射到进度条字段（沿用 currentPage/totalPages）
+		const scale = 1000;
+		const ratio = clampedTime / safeDuration;
+		let progressPage = Math.floor(ratio * scale);
+		const progressTotal = scale;
+		if (completed) {
+			progressPage = progressTotal;
+		}
+
+		try {
+			historyStore.updateVideoProgress(
+				page.path,
+				clampedTime,
+				safeDuration,
+				completed,
+				progressPage,
+				progressTotal
+			);
+		} catch (err) {
+			console.error('Failed to update video progress history:', err);
+		}
+	}
+
+	function prepareVideoStartTimeForPage(page: Page) {
+		try {
+			const entry = historyStore.findByPath(page.path);
+			if (entry && typeof entry.videoPosition === 'number') {
+				if (entry.videoCompleted) {
+					videoStartTime = 0;
+				} else {
+					videoStartTime = entry.videoPosition ?? 0;
+				}
+			} else {
+				videoStartTime = 0;
+			}
+		} catch (err) {
+			console.debug('Failed to read video history for start time:', err);
+			videoStartTime = 0;
+		}
 	}
 
 	const viewerState = createAppStateStore((state) => state.viewer);
@@ -690,6 +766,7 @@
 				lastRequestedPageIndex = -1;
 				lastLoadedPageIndex = -1;
 				lastLoadedHash = null;
+				prepareVideoStartTimeForPage(currentPage);
 				void loadVideoForPage(currentPage);
 			} else {
 				if (isCurrentPageVideo || videoUrl) {
@@ -697,6 +774,7 @@
 					clearVideoPlaybackState();
 				}
 				isCurrentPageVideo = false;
+				videoStartTime = 0;
 				if (preloadManager && currentIndex !== lastRequestedPageIndex) {
 					lastRequestedPageIndex = currentIndex;
 					preloadManager.loadCurrentImage();
@@ -1201,7 +1279,17 @@
 			<div class="text-red-500">Error: {error}</div>
 		{:else if isCurrentPageVideo}
 			{#if videoUrl}
-				<VideoPlayer src={videoUrl} onEnded={handleVideoListLoopEnded} />
+				<VideoPlayer
+					src={videoUrl}
+					onEnded={handleVideoListLoopEnded}
+					initialVolume={videoPlayerSettings.volume}
+					initialMuted={videoPlayerSettings.muted}
+					initialPlaybackRate={videoPlayerSettings.playbackRate}
+					initialLoopMode={videoPlayerSettings.loopMode}
+					onSettingsChange={(settings) => {
+						videoPlayerSettings = settings;
+					}}
+				/>
 			{:else}
 				<div class="text-white">加载视频中...</div>
 			{/if}

@@ -70,7 +70,7 @@
 					<Switch
 						bind:checked={explorerContextMenuEnabled}
 						disabled={explorerContextMenuLoading}
-						on:change={(e) => toggleExplorerContextMenu((e.currentTarget as HTMLInputElement).checked)}
+						on:click={() => toggleExplorerContextMenu(!explorerContextMenuEnabled)}
 					/>
 				</label>
 				{#if explorerContextMenuError}

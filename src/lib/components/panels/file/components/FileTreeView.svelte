@@ -291,7 +291,7 @@
 			<!-- 展开/折叠图标：所有目录节点始终显示箭头 -->
 			{#if node.isDir}
 				<button
-					class="shrink-0 rounded p-0.5 hover:bg-gray-200"
+					class="shrink-0 rounded p-0.5 hover:bg-muted/60"
 					onclick={(e) => {
 						e.stopPropagation();
 						dispatch('toggleNode', {
@@ -304,9 +304,9 @@
 					}}
 				>
 					{#if isExpanded}
-						<ChevronDown class="h-3.5 w-3.5 text-gray-600" />
+						<ChevronDown class="h-3.5 w-3.5 text-muted-foreground" />
 					{:else}
-						<ChevronRight class="h-3.5 w-3.5 text-gray-600" />
+						<ChevronRight class="h-3.5 w-3.5 text-muted-foreground" />
 					{/if}
 				</button>
 			{:else}
@@ -323,14 +323,14 @@
 					}}
 				>
 					<div
-						class="flex h-4 w-4 items-center justify-center rounded border-2 transition-colors {selectedItems.has(
+						class="flex h-4 w-4 items-center justify-center rounded-sm border border-border bg-background text-foreground transition-colors {selectedItems.has(
 							item.path
 						)
-							? 'border-primary bg-primary'
-							: 'border-gray-300 hover:border-primary'}"
+							? 'bg-primary text-primary-foreground border-primary shadow-sm'
+							: 'hover:border-primary hover:bg-accent/80'}"
 					>
 						{#if selectedItems.has(item.path)}
-							<svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 								<path
 									stroke-linecap="round"
 									stroke-linejoin="round"
@@ -349,7 +349,7 @@
 					? 'text-primary'
 					: item?.isImage
 						? 'text-primary'
-						: 'text-gray-500'}"
+						: 'text-muted-foreground'}"
 			/>
 
 			<!-- 名称 -->

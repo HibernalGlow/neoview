@@ -289,9 +289,9 @@
 {#if viewMode === 'list'}
 	<!-- 列表视图 -->
 	<div
-		class="border-border group relative flex cursor-pointer items-center gap-3 rounded border p-2 transition-colors {isSelected
-			? 'bg-primary/10 border-primary'
-			: 'hover:bg-accent/10'}"
+		class="border-border group relative flex cursor-pointer items-center gap-3 rounded-md border p-2 transition-colors {isSelected
+			? 'bg-accent text-accent-foreground border-accent'
+			: 'hover:bg-accent/40'}"
 		onclick={onClick}
 		ondblclick={onDoubleClick}
 		oncontextmenu={onContextMenu}
@@ -314,12 +314,12 @@
 				}}
 			>
 				<div
-					class="flex h-5 w-5 items-center justify-center rounded border-2 transition-colors {isSelected
-						? 'bg-primary border-primary'
-						: 'border-border hover:border-primary'}"
+					class="flex h-5 w-5 items-center justify-center rounded-sm border border-border bg-background transition-colors {isSelected
+						? 'bg-primary text-primary-foreground border-primary shadow-sm'
+						: 'hover:border-primary hover:bg-accent/80'}"
 				>
 					{#if isSelected}
-						<Check class="h-3 w-3 text-white" />
+						<Check class="h-3 w-3" />
 					{/if}
 				</div>
 			</button>
@@ -336,9 +336,9 @@
 				title="删除"
 			>
 				<div
-					class="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 transition-colors hover:bg-red-600"
+					class="flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm transition-colors hover:bg-destructive/90"
 				>
-					<svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 						<path
 							stroke-linecap="round"
 							stroke-linejoin="round"

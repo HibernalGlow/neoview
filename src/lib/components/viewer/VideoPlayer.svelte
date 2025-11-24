@@ -26,21 +26,14 @@
 
 	// 当有新的 blob 时创建 URL
 	$effect(() => {
-		console.log('🎬 VideoPlayer $effect 触发:', { src, videoBlob, currentVideoUrl: videoUrl });
-
 		if (videoBlob) {
 			// 清理旧的 URL
 			if (videoUrl && !src) {
 				URL.revokeObjectURL(videoUrl);
 			}
 			videoUrl = URL.createObjectURL(videoBlob);
-			console.log('🎬 从 videoBlob 创建 URL:', videoUrl);
 		} else if (src) {
 			videoUrl = src;
-			console.log('🎬 使用传入的 src:', videoUrl);
-		} else {
-			console.log('⚠️ VideoPlayer: 没有 src 也没有 videoBlob');
-			videoUrl = '';
 		}
 
 		return () => {

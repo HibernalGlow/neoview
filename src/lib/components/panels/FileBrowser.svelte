@@ -2398,30 +2398,6 @@
 						{thumbnails}
 						{selectedIndex}
 						{scrollToSelectedToken}
-						{isCheckMode}
-						{isDeleteMode}
-						{selectedItems}
-						{viewMode}
-						on:itemClick={(e) => {
-							const { item, index } = e.detail;
-							if (!isCheckMode && !isDeleteMode) {
-								fileBrowserStore.setSelectedIndex(index);
-								openFile(item);
-							}
-						}}
-						on:itemDoubleClick={(e) => {
-							const { item, index } = e.detail;
-							// 双击直接打开，无需检查模式
-							fileBrowserStore.setSelectedIndex(index);
-							openFile(item);
-						}}
-						on:itemSelect={(e) => {
-							const { item, index, multiSelect } = e.detail;
-							if (isCheckMode) {
-								toggleItemSelection(item.path);
-							} else {
-								fileBrowserStore.setSelectedIndex(index);
-							}
 						}}
 						on:itemContextMenu={(e) => {
 							const { event, item } = e.detail;

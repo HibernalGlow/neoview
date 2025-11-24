@@ -47,6 +47,7 @@
 	let showBottomProgressBar = $state(true);
 	let hoverCount = $state(0); // 追踪悬停区域的计数
 	let showAreaOverlay = $state(false); // 显示区域覆盖层
+	const showDebugInfo = false; // 底栏调试信息开关
 	
 	// 共享预加载管理器引用
 	let preloadManager: PreloadManager | null = null;
@@ -626,7 +627,7 @@ onMount(() => {
 				</Tooltip.Root>
 			</div>
 
-			{#if $viewerState.pageWindow && !$viewerState.pageWindow.stale}
+			{#if showDebugInfo && $viewerState.pageWindow && !$viewerState.pageWindow.stale}
 				<div class="px-3 pb-1 text-[11px] text-muted-foreground flex flex-wrap gap-3">
 					<span>窗口中心：{$viewerState.pageWindow.center + 1}</span>
 					<span>前向覆盖：{$viewerState.pageWindow.forward.length} 页</span>
@@ -634,7 +635,7 @@ onMount(() => {
 				</div>
 			{/if}
 
-			{#if $viewerState.taskCursor}
+			{#if showDebugInfo && $viewerState.taskCursor}
 				<div class="px-3 text-[11px] text-muted-foreground flex flex-wrap gap-3 pb-1">
 					<span>任务：{$viewerState.taskCursor.running}/{$viewerState.taskCursor.concurrency}</span>
 					<span>Current {$viewerState.taskCursor.activeBuckets.current}</span>

@@ -2349,10 +2349,6 @@
 									openSearchResult(item);
 								}
 							}}
-							on:itemDoubleClick={(e) => {
-								const { item } = e.detail;
-								openSearchResult(item);
-							}}
 							on:itemSelect={(e) => {
 								const { item, multiSelect } = e.detail;
 								if (isCheckMode) {
@@ -2398,6 +2394,25 @@
 						{thumbnails}
 						{selectedIndex}
 						{scrollToSelectedToken}
+						{isCheckMode}
+						{isDeleteMode}
+						{selectedItems}
+						{viewMode}
+						on:itemClick={(e) => {
+							const { item, index } = e.detail;
+							fileBrowserStore.setSelectedIndex(index);
+							if (!isCheckMode && !isDeleteMode) {
+								// 单击直接打开文件
+								openFile(item);
+							}
+						}}
+						on:itemSelect={(e) => {
+							const { item, index, multiSelect } = e.detail;
+							if (isCheckMode) {
+								toggleItemSelection(item.path);
+							} else {
+								fileBrowserStore.setSelectedIndex(index);
+							}
 						}}
 						on:itemContextMenu={(e) => {
 							const { event, item } = e.detail;

@@ -243,19 +243,12 @@
 
 	async function loadVideoForPage(page: Page) {
 		const book = bookStore.currentBook;
-		console.log('🎬 loadVideoForPage 被调用:', {
-			page: page.name,
-			bookType: book?.type,
-			path: page.path
-		});
 		if (!book) {
-			console.log('⚠️ loadVideoForPage: 没有当前书籍');
 			return;
 		}
 
 		const requestId = ++currentVideoRequestId;
 		error = null;
-		console.log('🎬 开始加载视频, requestId:', requestId, 'bookType:', book.type);
 
 		if (book.type === 'archive') {
 			loading = true;
@@ -654,10 +647,8 @@
 			bookStore.setCurrentImage(currentPage);
 			error = null;
 			const videoPage = isVideoPage(currentPage);
-			console.log('🎬 isVideoPage 检测结果:', videoPage, '页面名称:', currentPage.name);
 
 			if (videoPage) {
-				console.log('✅ 检测到视频页面，准备加载视频');
 				isCurrentPageVideo = true;
 				clearVideoPlaybackState();
 				imageData = null;
@@ -1177,10 +1168,8 @@
 			<div class="text-red-500">Error: {error}</div>
 		{:else if isCurrentPageVideo}
 			{#if videoUrl}
-				{@const _ = console.log('🎥 渲染 VideoPlayer, videoUrl:', videoUrl)}
 				<VideoPlayer src={videoUrl} />
 			{:else}
-				{@const _ = console.log('⚠️ isCurrentPageVideo=true 但 videoUrl 为空')}
 				<div class="text-white">加载视频中...</div>
 			{/if}
 		{:else}

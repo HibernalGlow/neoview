@@ -307,19 +307,20 @@
 		<!-- 勾选框（勾选模式） -->
 		{#if isCheckMode}
 			<button
-				class="flex-shrink-0"
+				class="group/checkbox flex-shrink-0 rounded-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 				onclick={(e) => {
 					e.stopPropagation();
 					onToggleSelection?.();
 				}}
+				aria-label={isSelected ? '取消选择' : '选择'}
 			>
 				<div
-					class="flex h-5 w-5 items-center justify-center rounded-sm border border-border bg-background transition-colors {isSelected
-						? 'bg-primary text-primary-foreground border-primary shadow-sm'
-						: 'hover:border-primary hover:bg-accent/80'}"
+					class="flex h-5 w-5 items-center justify-center rounded-md border-2 transition-all duration-200 {isSelected
+						? 'border-primary bg-primary text-primary-foreground shadow-md scale-105'
+						: 'border-input bg-background hover:border-primary hover:bg-accent group-hover/checkbox:scale-110'}"
 				>
 					{#if isSelected}
-						<Check class="h-3 w-3" />
+						<Check class="h-3.5 w-3.5 animate-in zoom-in-50 duration-200" />
 					{/if}
 				</div>
 			</button>
@@ -328,21 +329,21 @@
 		<!-- 删除按钮（删除模式） -->
 		{#if isDeleteMode}
 			<button
-				class="flex-shrink-0"
+				class="group/delete flex-shrink-0 rounded-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2"
 				onclick={(e) => {
 					e.stopPropagation();
 					onDelete?.();
 				}}
 				title="删除"
+				aria-label="删除"
 			>
 				<div
-					class="flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm transition-colors hover:bg-destructive/90"
+					class="flex h-5 w-5 items-center justify-center rounded-full bg-destructive/90 text-destructive-foreground shadow-md transition-all duration-200 hover:bg-destructive hover:shadow-lg group-hover/delete:scale-110"
 				>
-					<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
 						<path
 							stroke-linecap="round"
 							stroke-linejoin="round"
-							stroke-width="2"
 							d="M6 18L18 6M6 6l12 12"
 						></path>
 					</svg>

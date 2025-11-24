@@ -22,7 +22,8 @@
 		ExternalLink,
 		CornerDownRight,
 		Search,
-		FolderTree
+		FolderTree,
+		BookOpen
 	} from '@lucide/svelte';
 	import VirtualizedFileList from './file/components/VirtualizedFileList.svelte';
 	import FileTreeView from './file/components/FileTreeView.svelte';
@@ -1167,6 +1168,22 @@
 	}
 
 	/**
+	 * 作为书籍打开文件夹
+	 */
+	async function openFolderAsBook(item: FsItem) {
+		if (!item.isDir) return;
+		try {
+			console.log('📁 Opening folder as book:', item.path);
+			await bookStore.openDirectoryAsBook(item.path);
+		} catch (err) {
+			console.error('❌ Error opening folder as book:', err);
+			fileBrowserStore.setError(String(err));
+		} finally {
+			hideContextMenu();
+		}
+	}
+
+	/**
 	 * 作为书籍打开压缩包
 	 */
 	async function openArchiveAsBook(item: FsItem) {
@@ -2052,6 +2069,16 @@
 				<Folder class="mr-2 h-4 w-4" />
 				<span>打开</span>
 			</button>
+			{#if contextMenu.item.isDir}
+				<button
+					type="button"
+					class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent"
+					onclick={() => openFolderAsBook(contextMenu.item!)}
+				>
+					<BookOpen class="mr-2 h-4 w-4" />
+					<span>作为书籍打开</span>
+				</button>
+			{/if}
 			<hr class="my-1 border-border/60" />
 			<button
 				type="button"
@@ -2252,6 +2279,9 @@
 							on:selectionChange={(e) => {
 								selectedItems = new Set(e.detail.selectedItems);
 							}}
+							on:openFolderAsBook={(e) => {
+								openFolderAsBook(e.detail.item);
+							}}
 						/>
 					</div>
 				</div>
@@ -2315,6 +2345,9 @@
 						}}
 						on:selectedIndexChange={(e) => {
 							fileBrowserStore.setSelectedIndex(e.detail.index);
+						}}
+						on:openFolderAsBook={(e) => {
+							openFolderAsBook(e.detail.item);
 						}}
 					/>
 				</div>

@@ -14,7 +14,8 @@
 		FolderOpen,
 		Package,
 		Video,
-		Eye
+		Eye,
+		BookOpen
 	} from '@lucide/svelte';
 	import type { FsItem } from '$lib/types';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
@@ -44,7 +45,8 @@
 		onDoubleClick = undefined,
 		onContextMenu = undefined,
 		onToggleSelection = undefined,
-		onDelete = undefined
+		onDelete = undefined,
+		onOpenAsBook = undefined
 	}: {
 		item: FsItem;
 		thumbnail?: string;
@@ -63,6 +65,7 @@
 		onContextMenu?: (e: MouseEvent) => void;
 		onToggleSelection?: () => void;
 		onDelete?: () => void;
+		onOpenAsBook?: () => void;
 	} = $props();
 
 	// 检查是否为收藏（使用 $derived 避免在每次渲染时调用）
@@ -442,6 +445,17 @@
 						>
 							<Eye class="text-muted-foreground h-3.5 w-3.5" />
 						</button>
+						<!-- 作为书籍打开图标 -->
+						<button
+							class="hover:bg-accent inline-flex items-center justify-center rounded-md p-1 transition-colors"
+							title="作为书籍打开此文件夹"
+							onclick={(e) => {
+								e.stopPropagation();
+								onOpenAsBook?.();
+							}}
+						>
+							<BookOpen class="text-muted-foreground h-3.5 w-3.5" />
+						</button>
 					</div>
 				{/if}
 			</div>
@@ -651,6 +665,15 @@
 						>
 							<Video class="h-2.5 w-2.5" />
 							<span class="font-medium">{item.videoCount}</span>
+						</span>
+					{/if}
+					{#if onOpenAsBook}
+						<span
+							class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
+							title="打开为书籍"
+						>
+							<Book class="h-2.5 w-2.5" />
+							<span class="font-medium">打开为书籍</span>
 						</span>
 					{/if}
 				</div>

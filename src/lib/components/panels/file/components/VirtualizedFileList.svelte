@@ -263,6 +263,10 @@
 		onItemSelect({ item, index, multiSelect: false });
 	}
 
+	function handleOpenFolderAsBook(item: FsItem, index: number) {
+		dispatch('openFolderAsBook', { item, index });
+	}
+
 	// 处理项目右键
 	function handleItemContextMenu(event: MouseEvent, item: FsItem) {
 		console.log('[VirtualizedFileList] handleItemContextMenu', {
@@ -539,6 +543,7 @@
 						onContextMenu={(e) => handleItemContextMenu(e, item)}
 						onToggleSelection={() => toggleItemSelection(item.path)}
 						onDelete={() => dispatch('deleteItem', { item })}
+						onOpenAsBook={item.isDir ? () => handleOpenFolderAsBook(item, actualIndex) : undefined}
 					/>
 				{/each}
 			</div>
@@ -585,6 +590,7 @@
 							onContextMenu={(e) => handleItemContextMenu(e, item)}
 							onToggleSelection={() => toggleItemSelection(item.path)}
 							onDelete={() => dispatch('deleteItem', { item })}
+							onOpenAsBook={item.isDir ? () => handleOpenFolderAsBook(item, actualIndex) : undefined}
 						/>
 					{/each}
 				</div>

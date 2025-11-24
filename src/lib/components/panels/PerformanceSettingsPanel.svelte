@@ -5,8 +5,6 @@
 		savePerformanceSettings,
 		type PerformanceSettings
 	} from '$lib/api/performance';
-	import { Switch } from '$lib/components/ui/switch';
-	import { Slider } from '$lib/components/ui/slider';
 
 	let performanceSettings = $state<PerformanceSettings>({
 		cache_memory_size: 512,
@@ -59,13 +57,14 @@
 						>{performanceSettings.cache_memory_size} MB</span
 					>
 				</div>
-				<Slider
-					min={128}
-					max={2048}
-					step={128}
-					bind:value={performanceSettings.cache_memory_size as any}
+				<input
+					type="range"
+					min="128"
+					max="2048"
+					step="128"
+					bind:value={performanceSettings.cache_memory_size}
 					class="w-full"
-					type="single"
+					aria-label="图像缓存大小"
 				/>
 			</div>
 		</div>
@@ -74,7 +73,7 @@
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">预加载</h4>
 			<label class="flex items-center gap-2">
-				<Switch bind:checked={performanceSettings.preload_enabled} />
+				<input type="checkbox" class="rounded" bind:checked={performanceSettings.preload_enabled} />
 				<span class="text-sm">启用页面预加载</span>
 			</label>
 			{#if performanceSettings.preload_enabled}
@@ -83,13 +82,13 @@
 						<span class="text-sm">预加载页面数</span>
 						<span class="text-muted-foreground text-xs">{performanceSettings.preload_size}</span>
 					</div>
-					<Slider
-						min={1}
-						max={20}
-						step={1}
-						bind:value={performanceSettings.preload_size as any}
+					<input
+						type="range"
+						min="1"
+						max="20"
+						bind:value={performanceSettings.preload_size}
 						class="w-full"
-						type="single"
+						aria-label="预加载页面数"
 					/>
 				</div>
 			{/if}
@@ -99,11 +98,15 @@
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">硬件加速</h4>
 			<label class="flex items-center gap-2">
-				<Switch bind:checked={performanceSettings.gpu_acceleration} />
+				<input
+					type="checkbox"
+					class="rounded"
+					bind:checked={performanceSettings.gpu_acceleration}
+				/>
 				<span class="text-sm">启用 GPU 渲染</span>
 			</label>
 			<label class="flex items-center gap-2">
-				<Switch disabled />
+				<input type="checkbox" class="rounded" disabled />
 				<span class="text-muted-foreground text-sm">使用硬件解码（暂未实现）</span>
 			</label>
 		</div>
@@ -116,13 +119,12 @@
 					<span class="text-sm">解码线程数</span>
 					<span class="text-muted-foreground text-xs">{performanceSettings.decoding_threads}</span>
 				</div>
-				<Slider
-					min={1}
-					max={16}
-					step={1}
-					bind:value={performanceSettings.decoding_threads as any}
+				<input
+					type="range"
+					min="1"
+					max="16"
+					bind:value={performanceSettings.decoding_threads}
 					class="w-full"
-					type="single"
 				/>
 				<p class="text-muted-foreground text-xs">
 					{performanceSettings.multi_threaded_rendering ? '多线程解码已启用' : '单线程解码'}
@@ -141,49 +143,53 @@
 							>{performanceSettings.thumbnail_concurrent_local || 6}</span
 						>
 					</div>
-					<Slider
-						min={1}
-						max={16}
-						step={1}
-						bind:value={performanceSettings.thumbnail_concurrent_local as any}
+					<input
+						type="range"
+						min="1"
+						max="16"
+						bind:value={performanceSettings.thumbnail_concurrent_local}
 						class="w-full"
-						type="single"
+						aria-label="本地文件并发数"
 					/>
 				</div>
 				<div class="space-y-2">
-					<div class="flex items-center justify-between">
+					<label class="flex items-center justify-between">
 						<span class="text-sm">压缩包并发数</span>
 						<span class="text-muted-foreground text-xs"
 							>{performanceSettings.thumbnail_concurrent_archive || 3}</span
 						>
-					</div>
-					<Slider
-						min={1}
-						max={8}
-						step={1}
-						bind:value={performanceSettings.thumbnail_concurrent_archive as any}
+					</label>
+					<input
+						type="range"
+						min="1"
+						max="8"
+						bind:value={performanceSettings.thumbnail_concurrent_archive}
 						class="w-full"
-						type="single"
+						aria-label="压缩包并发数"
 					/>
 				</div>
 				<div class="space-y-2">
-					<div class="flex items-center justify-between">
+					<label class="flex items-center justify-between">
 						<span class="text-sm">视频处理并发数</span>
 						<span class="text-muted-foreground text-xs"
 							>{performanceSettings.thumbnail_concurrent_video || 2}</span
 						>
-					</div>
-					<Slider
-						min={1}
-						max={4}
-						step={1}
-						bind:value={performanceSettings.thumbnail_concurrent_video as any}
+					</label>
+					<input
+						type="range"
+						min="1"
+						max="4"
+						bind:value={performanceSettings.thumbnail_concurrent_video}
 						class="w-full"
-						type="single"
+						aria-label="视频处理并发数"
 					/>
 				</div>
 				<label class="flex items-center gap-2">
-					<Switch bind:checked={performanceSettings.enable_video_thumbnail} />
+					<input
+						type="checkbox"
+						class="rounded"
+						bind:checked={performanceSettings.enable_video_thumbnail}
+					/>
 					<span class="text-sm">启用视频缩略图</span>
 				</label>
 			</div>

@@ -25,6 +25,7 @@
 	import GeneralSettingsPanel from '$lib/components/panels/GeneralSettingsPanel.svelte';
 	import ViewSettingsPanel from '$lib/components/panels/ViewSettingsPanel.svelte';
 	import ViewerSettingsPanel from '$lib/components/dialogs/ViewerSettingsPanel.svelte';
+	import ImageSettingsPanel from '$lib/components/panels/ImageSettingsPanel.svelte';
 	import UnifiedBindingPanel from '$lib/components/dialogs/UnifiedBindingPanel.svelte';
 	import SidebarManagementPanel from '$lib/components/panels/SidebarManagementPanel.svelte';
 	import ThemePanel from '$lib/components/panels/ThemePanel.svelte';
@@ -118,6 +119,7 @@
 								这里将放置全局图片相关设置，例如格式支持、默认超分行为等。
 							</p>
 						</div>
+						<ImageSettingsPanel />
 						<ViewerSettingsPanel />
 					</div>
 				{:else}

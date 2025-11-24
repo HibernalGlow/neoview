@@ -26,57 +26,61 @@
 	});
 
 	// 拖拽状态
-	let draggedPanel = $state<{ panel: any, source: string } | null>(null);
-	let dragOverArea = $state<string | null>(null);
+	type AreaId = 'waitingArea' | 'leftSidebar' | 'rightSidebar';
+	let draggedPanel = $state<{ panel: any, source: AreaId } | null>(null);
+	let dragOverArea = $state<AreaId | null>(null);
+	let isPointerDragging = $state(false);
 
 	// 拖拽处理函数
-	function handleDragStart(event: DragEvent, panel: any, source: string) {
+	function handlePointerDown(event: PointerEvent, panel: any, source: AreaId) {
+		event.preventDefault();
 		draggedPanel = { panel, source };
-		if (event.dataTransfer) {
-			event.dataTransfer.effectAllowed = 'move';
-		}
+		isPointerDragging = true;
 	}
 
-	function handleDragOver(event: DragEvent, targetArea: string) {
-		event.preventDefault();
+	function handleAreaPointerEnter(targetArea: AreaId) {
+		if (!isPointerDragging) return;
 		dragOverArea = targetArea;
-		if (event.dataTransfer) {
-			event.dataTransfer.dropEffect = 'move';
+	}
+
+	function handleAreaPointerLeave(targetArea: AreaId) {
+		if (!isPointerDragging) return;
+		if (dragOverArea === targetArea) {
+			dragOverArea = null;
 		}
 	}
 
-	function handleDragLeave() {
-		dragOverArea = null;
-	}
-
-	function handleDrop(event: DragEvent, targetArea: string) {
-		event.preventDefault();
-		dragOverArea = null;
-
-		if (!draggedPanel) return;
+	function finalizeDrop() {
+		if (!isPointerDragging || !draggedPanel || !dragOverArea) {
+			draggedPanel = null;
+			isPointerDragging = false;
+			dragOverArea = null;
+			return;
+		}
 
 		const { panel, source } = draggedPanel;
+		const targetArea = dragOverArea;
 
 		// 从源区域移除
 		if (source === 'waitingArea') {
-			sidebarManagement.waitingArea = sidebarManagement.waitingArea.filter(p => p.id !== panel.id);
+			sidebarManagement.waitingArea = sidebarManagement.waitingArea.filter((p) => p.id !== panel.id);
 		} else if (source === 'leftSidebar') {
-			sidebarManagement.leftSidebar = sidebarManagement.leftSidebar.filter(p => p.id !== panel.id);
+			sidebarManagement.leftSidebar = sidebarManagement.leftSidebar.filter((p) => p.id !== panel.id);
 		} else if (source === 'rightSidebar') {
-			sidebarManagement.rightSidebar = sidebarManagement.rightSidebar.filter(p => p.id !== panel.id);
+			sidebarManagement.rightSidebar = sidebarManagement.rightSidebar.filter((p) => p.id !== panel.id);
 		}
 
 		// 添加到目标区域
 		if (targetArea === 'waitingArea') {
-			if (!sidebarManagement.waitingArea.find(p => p.id === panel.id)) {
+			if (!sidebarManagement.waitingArea.find((p) => p.id === panel.id)) {
 				sidebarManagement.waitingArea.push(panel);
 			}
 		} else if (targetArea === 'leftSidebar') {
-			if (!sidebarManagement.leftSidebar.find(p => p.id === panel.id)) {
+			if (!sidebarManagement.leftSidebar.find((p) => p.id === panel.id)) {
 				sidebarManagement.leftSidebar.push(panel);
 			}
 		} else if (targetArea === 'rightSidebar') {
-			if (!sidebarManagement.rightSidebar.find(p => p.id === panel.id)) {
+			if (!sidebarManagement.rightSidebar.find((p) => p.id === panel.id)) {
 				sidebarManagement.rightSidebar.push(panel);
 			}
 		}
@@ -85,6 +89,8 @@
 		saveSidebarLayout();
 
 		draggedPanel = null;
+		isPointerDragging = false;
+		dragOverArea = null;
 	}
 
 	// 保存布局到localStorage
@@ -130,6 +136,18 @@
 	$effect(() => {
 		initializeSidebarPanels();
 	});
+
+	$effect(() => {
+		function handleWindowPointerUp() {
+			if (!isPointerDragging) return;
+			finalizeDrop();
+		}
+
+		window.addEventListener('pointerup', handleWindowPointerUp);
+		return () => {
+			window.removeEventListener('pointerup', handleWindowPointerUp);
+		};
+	});
 </script>
 
 <div class="p-6 space-y-6">
@@ -154,9 +172,8 @@
 		<!-- 等待区 -->
 		<div 
 			class="border-2 border-dashed rounded-lg p-4 {dragOverArea === 'waitingArea' ? 'border-primary bg-primary/5' : 'border-muted-foreground/30'}"
-			ondragover={(e) => handleDragOver(e, 'waitingArea')}
-			ondragleave={handleDragLeave}
-			ondrop={(e) => handleDrop(e, 'waitingArea')}
+			onpointerenter={() => handleAreaPointerEnter('waitingArea')}
+			onpointerleave={() => handleAreaPointerLeave('waitingArea')}
 		>
 			<h4 class="font-medium text-sm mb-3 text-center">等待区</h4>
 			<div class="space-y-2 min-h-[300px]">
@@ -168,8 +185,7 @@
 							<!-- 拖拽手柄 -->
 							<div 
 								class="cursor-grab active:cursor-grabbing p-1 hover:bg-accent/50 rounded"
-								draggable="true"
-								ondragstart={(e) => handleDragStart(e, panel, 'waitingArea')}
+								onpointerdown={(e) => handlePointerDown(e, panel, 'waitingArea')}
 							>
 								<svg class="w-4 h-4 text-muted-foreground" fill="currentColor" viewBox="0 0 20 20">
 									<path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
@@ -194,9 +210,8 @@
 		<!-- 左侧栏 -->
 		<div 
 			class="border-2 border-dashed rounded-lg p-4 {dragOverArea === 'leftSidebar' ? 'border-primary bg-primary/5' : 'border-muted-foreground/30'}"
-			ondragover={(e) => handleDragOver(e, 'leftSidebar')}
-			ondragleave={handleDragLeave}
-			ondrop={(e) => handleDrop(e, 'leftSidebar')}
+			onpointerenter={() => handleAreaPointerEnter('leftSidebar')}
+			onpointerleave={() => handleAreaPointerLeave('leftSidebar')}
 		>
 			<h4 class="font-medium text-sm mb-3 text-center">左侧栏</h4>
 			<div class="space-y-2 min-h-[300px]">
@@ -208,8 +223,7 @@
 							<!-- 拖拽手柄 -->
 							<div 
 								class="cursor-grab active:cursor-grabbing p-1 hover:bg-accent/50 rounded"
-								draggable="true"
-								ondragstart={(e) => handleDragStart(e, panel, 'leftSidebar')}
+								onpointerdown={(e) => handlePointerDown(e, panel, 'leftSidebar')}
 							>
 								<svg class="w-4 h-4 text-muted-foreground" fill="currentColor" viewBox="0 0 20 20">
 									<path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
@@ -234,9 +248,8 @@
 		<!-- 右侧栏 -->
 		<div 
 			class="border-2 border-dashed rounded-lg p-4 {dragOverArea === 'rightSidebar' ? 'border-primary bg-primary/5' : 'border-muted-foreground/30'}"
-			ondragover={(e) => handleDragOver(e, 'rightSidebar')}
-			ondragleave={handleDragLeave}
-			ondrop={(e) => handleDrop(e, 'rightSidebar')}
+			onpointerenter={() => handleAreaPointerEnter('rightSidebar')}
+			onpointerleave={() => handleAreaPointerLeave('rightSidebar')}
 		>
 			<h4 class="font-medium text-sm mb-3 text-center">右侧栏</h4>
 			<div class="space-y-2 min-h-[300px]">
@@ -248,8 +261,7 @@
 							<!-- 拖拽手柄 -->
 							<div 
 								class="cursor-grab active:cursor-grabbing p-1 hover:bg-accent/50 rounded"
-								draggable="true"
-								ondragstart={(e) => handleDragStart(e, panel, 'rightSidebar')}
+								onpointerdown={(e) => handlePointerDown(e, panel, 'rightSidebar')}
 							>
 								<svg class="w-4 h-4 text-muted-foreground" fill="currentColor" viewBox="0 0 20 20">
 									<path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>

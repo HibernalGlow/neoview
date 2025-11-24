@@ -13,6 +13,7 @@
 	import FileItemCard from './FileItemCard.svelte';
 	import { historyStore } from '$lib/stores/history.svelte';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
+	import { isVideoFile } from '$lib/utils/videoUtils';
 
 	// 记录每个路径的滚动位置，用于返回上级或再次进入时恢复列表位置
 	const scrollPositions = new Map<string, number>();
@@ -29,6 +30,7 @@
 				item.name.endsWith('.cbz') ||
 				item.name.endsWith('.rar') ||
 				item.name.endsWith('.cbr');
+			const isVideo = isVideoFile(item.path);
 
 			if (item.isDir) {
 				// 文件夹：只从数据库加载，不主动查找（避免超多子文件夹影响性能）
@@ -40,7 +42,7 @@
 					}
 					// 如果没有找到，不主动查找，避免性能问题
 				});
-			} else if (item.isImage || isArchive) {
+			} else if (item.isImage || isArchive || isVideo) {
 				thumbnailManager.getThumbnail(item.path, undefined, isArchive, priority);
 			}
 		});
@@ -159,16 +161,18 @@
 
 		const visibleItems = items.slice(startIndex, endIndex + 1);
 
-		// 过滤需要缩略图的项目
-		const thumbnailItems = visibleItems.filter(
-			(item) =>
-				item.isDir ||
-				item.isImage ||
-				item.name.endsWith('.zip') ||
-				item.name.endsWith('.cbz') ||
-				item.name.endsWith('.rar') ||
-				item.name.endsWith('.cbr')
-		);
+		// 过滤需要缩略图的项目（文件夹、图片、视频、压缩包）
+		const thumbnailItems = visibleItems.filter((item) => {
+				return (
+					item.isDir ||
+					item.isImage ||
+					isVideoFile(item.path) ||
+					item.name.endsWith('.zip') ||
+					item.name.endsWith('.cbz') ||
+					item.name.endsWith('.rar') ||
+					item.name.endsWith('.cbr')
+				);
+			});
 
 		// 过滤已有缩略图的项目
 		const needThumbnails = thumbnailItems.filter((item) => {

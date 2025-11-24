@@ -170,7 +170,8 @@ impl BookManager {
         for entry in read_dir {
             if let Ok(entry) = entry {
                 let path = entry.path();
-                if self.is_image_file(&path) {
+                // 文件夹书籍支持图片和视频作为页面
+                if self.is_image_file(&path) || self.is_video_file(&path) {
                     if let Ok(metadata) = entry.metadata() {
                         entries.push((path, metadata.len()));
                     }
@@ -234,16 +235,22 @@ impl BookManager {
         let archive_manager = ArchiveManager::new();
         let items = archive_manager.list_zip_contents(path)?;
 
-        // 过滤出图片文件并按名称排序
-        let mut image_items: Vec<_> = items
+        // 过滤出图片/视频文件并按名称排序
+        let mut page_items: Vec<_> = items
             .into_iter()
-            .filter(|item| !item.is_dir && self.is_image_file(&PathBuf::from(&item.name)))
+            .filter(|item| {
+                if item.is_dir {
+                    return false;
+                }
+                let path = PathBuf::from(&item.name);
+                self.is_image_file(&path) || self.is_video_file(&path)
+            })
             .collect();
 
-        image_items.sort_by(|a, b| a.name.cmp(&b.name));
+        page_items.sort_by(|a, b| a.name.cmp(&b.name));
 
         // 创建页面列表
-        for (index, item) in image_items.iter().enumerate() {
+        for (index, item) in page_items.iter().enumerate() {
             // 对于压缩包，计算 stable_hash
             let path_key =
                 build_path_key(&book.path, &item.path, &book.book_type, Some(&item.name));
@@ -266,6 +273,18 @@ impl BookManager {
             matches!(
                 ext.to_lowercase().as_str(),
                 "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "avif" | "jxl" | "tiff" | "tif"
+            )
+        } else {
+            false
+        }
+    }
+
+    /// 检查是否是视频文件（用于将视频作为页面纳入 Folder/Archive 书籍）
+    fn is_video_file(&self, path: &Path) -> bool {
+        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+            matches!(
+                ext.to_lowercase().as_str(),
+                "mp4" | "webm" | "ogg" | "mov" | "avi" | "mkv" | "m4v" | "flv" | "wmv" | "mpg" | "mpeg"
             )
         } else {
             false

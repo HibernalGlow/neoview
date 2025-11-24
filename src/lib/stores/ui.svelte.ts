@@ -63,8 +63,21 @@ export const rotationAngle = writable<number>(loadFromStorage('rotationAngle', 0
 
 // 视图模式（仅描述单页/双页/全景）
 export type ViewMode = 'single' | 'double' | 'panorama';
-export const viewMode = writable<ViewMode>(loadFromStorage('viewMode', 'single'));
-export const lockedViewMode = writable<ViewMode | null>(loadFromStorage('lockedViewMode', null));
+
+const initialViewMode = (() => {
+	const saved = loadFromStorage<ViewMode>('viewMode', 'single');
+	if (saved === 'panorama') return 'single';
+	return saved;
+})();
+
+const initialLockedViewMode = (() => {
+	const saved = loadFromStorage<ViewMode | null>('lockedViewMode', null) as ViewMode | null;
+	if (saved === 'panorama') return null;
+	return saved;
+})();
+
+export const viewMode = writable<ViewMode>(initialViewMode);
+export const lockedViewMode = writable<ViewMode | null>(initialLockedViewMode);
 
 // 视图方向（横向/纵向），主要影响全景模式的填充方向
 export type ViewOrientation = 'horizontal' | 'vertical';

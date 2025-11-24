@@ -804,6 +804,8 @@
 	 */
 	async function loadThumbnailsForItemsAsync(items: FsItem[], path: string) {
 		console.log('🖼️ 异步缩略图扫描：项目总数', items.length);
+		const SMALL_DIR_THRESHOLD = 50;
+		const isSmallDirectory = items.length > 0 && items.length <= SMALL_DIR_THRESHOLD;
 
 		// 设置当前目录（用于优先级判断）
 		thumbnailManager.setCurrentDirectory(path);
@@ -897,9 +899,12 @@
 			priority: 'low',
 			executor: async () => {
 				await new Promise((resolve) => setTimeout(resolve, 500));
-				const foldersWithoutThumbnails: FsItem[] = [];
-				for (const item of itemsNeedingThumbnails) {
-					if (item.isDir) {
+				const folderCandidates: FsItem[] = itemsNeedingThumbnails.filter((item) => item.isDir);
+				let foldersWithoutThumbnails: FsItem[] = [];
+				if (isSmallDirectory) {
+					foldersWithoutThumbnails = folderCandidates;
+				} else {
+					for (const item of folderCandidates) {
 						const hasThumbnail = await thumbnailManager.checkThumbnailInDb(item.path);
 						if (!hasThumbnail) {
 							foldersWithoutThumbnails.push(item);
@@ -907,7 +912,7 @@
 					}
 				}
 				if (foldersWithoutThumbnails.length > 0) {
-					console.log(`🔍 批量扫描 ${foldersWithoutThumbnails.length} 个无记录文件夹...`);
+					console.log(`🔍 批量扫描 ${foldersWithoutThumbnails.length} 个文件夹...`);
 					await thumbnailManager.batchScanFoldersAndBindThumbnails(foldersWithoutThumbnails, path);
 				}
 			}

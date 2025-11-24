@@ -27,11 +27,18 @@ jobs:
         with:
           node-version: 23
 
+      - name: setup python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - uses: dtolnay/rust-toolchain@stable
 
       - name: build windows bundles
         timeout-minutes: 60
         shell: powershell
+        env:
+          PYO3_PYTHON: python
         run: |
           yarn install --frozen-lockfile
           yarn tauri build

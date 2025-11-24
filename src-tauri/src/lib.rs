@@ -24,6 +24,30 @@ use std::sync::Mutex;
 use std::time::Duration;
 use tauri::Manager;
 
+fn configure_embedded_python(app: &tauri::AppHandle) {
+    if std::env::var_os("PYTHONHOME").is_some() {
+        return;
+    }
+
+    #[cfg(debug_assertions)]
+    {
+        if let Ok(current_dir) = std::env::current_dir() {
+            let candidate = current_dir.join("src-tauri").join("python");
+            if candidate.join("python311.dll").exists() {
+                std::env::set_var("PYTHONHOME", &candidate);
+                return;
+            }
+        }
+    }
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let candidate = resource_dir.join("python");
+        if candidate.join("python311.dll").exists() {
+            std::env::set_var("PYTHONHOME", &candidate);
+        }
+    }
+}
+
 #[allow(clippy::missing_panics_doc)]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -92,6 +116,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_cli::init())
         .setup(|app| {
+            configure_embedded_python(&app.handle());
             // 初始化文件系统管理器和压缩包管理器
             let fs_manager = FsManager::new();
             let archive_manager = ArchiveManager::new();

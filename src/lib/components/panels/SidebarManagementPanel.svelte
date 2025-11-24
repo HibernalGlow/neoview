@@ -30,12 +30,14 @@
 	let draggedPanel = $state<{ panel: any, source: AreaId } | null>(null);
 	let dragOverArea = $state<AreaId | null>(null);
 	let isPointerDragging = $state(false);
+	let dragPreview = $state<{ x: number; y: number } | null>(null);
 
 	// 拖拽处理函数
 	function handlePointerDown(event: PointerEvent, panel: any, source: AreaId) {
 		event.preventDefault();
 		draggedPanel = { panel, source };
 		isPointerDragging = true;
+		dragPreview = { x: event.clientX + 12, y: event.clientY + 12 };
 	}
 
 	function handleAreaPointerEnter(targetArea: AreaId) {
@@ -55,6 +57,7 @@
 			draggedPanel = null;
 			isPointerDragging = false;
 			dragOverArea = null;
+			dragPreview = null;
 			return;
 		}
 
@@ -91,6 +94,7 @@
 		draggedPanel = null;
 		isPointerDragging = false;
 		dragOverArea = null;
+		dragPreview = null;
 	}
 
 	// 保存布局到localStorage
@@ -148,6 +152,17 @@
 			window.removeEventListener('pointerup', handleWindowPointerUp);
 		};
 	});
+
+	$effect(() => {
+		if (!isPointerDragging) return;
+		function handleWindowPointerMove(e: PointerEvent) {
+			dragPreview = { x: e.clientX + 12, y: e.clientY + 12 };
+		}
+		window.addEventListener('pointermove', handleWindowPointerMove);
+		return () => {
+			window.removeEventListener('pointermove', handleWindowPointerMove);
+		};
+	});
 </script>
 
 <div class="p-6 space-y-6">
@@ -179,7 +194,7 @@
 			<div class="space-y-2 min-h-[300px]">
 				{#each sidebarManagement.waitingArea as panel}
 					<div 
-						class="bg-card border rounded-md p-3 hover:bg-accent/50 transition-colors"
+						class="bg-card border rounded-md p-3 hover:bg-accent/50 transition-colors {isPointerDragging && draggedPanel && draggedPanel.panel.id === panel.id ? 'opacity-50' : ''}"
 					>
 						<div class="flex items-center gap-2">
 							<!-- 拖拽手柄 -->
@@ -217,7 +232,7 @@
 			<div class="space-y-2 min-h-[300px]">
 				{#each sidebarManagement.leftSidebar as panel}
 					<div 
-						class="bg-card border rounded-md p-3 hover:bg-accent/50 transition-colors"
+						class="bg-card border rounded-md p-3 hover:bg-accent/50 transition-colors {isPointerDragging && draggedPanel && draggedPanel.panel.id === panel.id ? 'opacity-50' : ''}"
 					>
 						<div class="flex items-center gap-2">
 							<!-- 拖拽手柄 -->
@@ -255,7 +270,7 @@
 			<div class="space-y-2 min-h-[300px]">
 				{#each sidebarManagement.rightSidebar as panel}
 					<div 
-						class="bg-card border rounded-md p-3 hover:bg-accent/50 transition-colors"
+						class="bg-card border rounded-md p-3 hover:bg-accent/50 transition-colors {isPointerDragging && draggedPanel && draggedPanel.panel.id === panel.id ? 'opacity-50' : ''}"
 					>
 						<div class="flex items-center gap-2">
 							<!-- 拖拽手柄 -->
@@ -294,4 +309,19 @@
 			<li>• 布局会自动保存</li>
 		</ul>
 	</div>
+
+	{#if isPointerDragging && dragPreview && draggedPanel}
+		<div
+			class="pointer-events-none fixed z-50"
+			style={`left: ${dragPreview.x}px; top: ${dragPreview.y}px;`}
+		>
+			<div class="bg-card border rounded-md px-3 py-2 shadow-lg flex items-center gap-2 opacity-90">
+				<span class="text-lg">{draggedPanel.panel.icon}</span>
+				<div>
+					<div class="text-sm font-medium">{draggedPanel.panel.name}</div>
+					<div class="text-xs text-muted-foreground">{draggedPanel.panel.category}</div>
+				</div>
+			</div>
+		</div>
+	{/if}
 </div>

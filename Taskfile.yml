@@ -20,7 +20,7 @@ tasks:
   version:set:
     desc: Set version in package.json, tauri.conf.json and Cargo.toml
     dir: '{{.PROJECT_DIR}}'
+    vars:
+      VERSION_ARG: '{{.CLI_ARGS | default .VERSION}}'
     cmds:
-      - node scripts/version.mjs set {{.VERSION}}
-    requires:
-      vars: [VERSION]
+      - node scripts/version.mjs set {{.VERSION_ARG}}

@@ -30,7 +30,10 @@ impl SrVulkanManager {
         Python::with_gil(|py| -> PyResult<()> {
             // 调试：打印 Python 环境和 sr_vulkan 模块信息
             let sys_module = PyModule::import_bound(py, "sys")?;
-            let py_exe: String = sys_module.getattr("executable")?.extract().unwrap_or_default();
+            let py_exe: String = sys_module
+                .getattr("executable")?
+                .extract()
+                .unwrap_or_default();
             let py_ver: String = sys_module.getattr("version")?.extract().unwrap_or_default();
             println!("[SrVulkanManager] Python executable: {}", py_exe);
             println!("[SrVulkanManager] Python version: {}", py_ver);
@@ -76,7 +79,10 @@ impl SrVulkanManager {
                 .getattr("initSet")?
                 .call1((gpu_id, 0))?
                 .extract()?;
-            println!("[SrVulkanManager] sr.initSet({}, 0) -> {}", gpu_id, _init_set_result);
+            println!(
+                "[SrVulkanManager] sr.initSet({}, 0) -> {}",
+                gpu_id, _init_set_result
+            );
 
             // 设置 WebP 输出质量为 85
             if let Ok(set_q) = sr_module.getattr("setWebpQuality") {
@@ -187,9 +193,7 @@ impl SrVulkanManager {
                 self.on_timeout(task_id);
                 Err("任务超时".to_string())
             }
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                Err("结果通道已断开".to_string())
-            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => Err("结果通道已断开".to_string()),
         }
     }
 
@@ -210,7 +214,9 @@ impl SrVulkanManager {
             let mut inner = self.inner.lock().map_err(|e| e.to_string())?;
             inner.next_task_id += 1;
             task_id = inner.next_task_id;
-            inner.tasks.insert(task_id, SrTaskEntry { sender: Some(tx) });
+            inner
+                .tasks
+                .insert(task_id, SrTaskEntry { sender: Some(tx) });
             if let Some(key) = job_key {
                 inner.job_key_map.insert(key.to_string(), task_id);
                 inner.task_key_map.insert(task_id, key.to_string());
@@ -255,7 +261,10 @@ impl SrVulkanManager {
             kwargs.set_item("format", "webp")?;
             kwargs.set_item("tileSize", tile_size)?;
             let status: i32 = add_func.call(args, Some(&kwargs))?.extract()?;
-            println!("[SrVulkanManager] sr.add(...) -> status={} (task_id={})", status, task_id);
+            println!(
+                "[SrVulkanManager] sr.add(...) -> status={} (task_id={})",
+                status, task_id
+            );
             Ok(status)
         });
 
@@ -343,9 +352,7 @@ impl SrVulkanManager {
 
 fn preprocess_image_for_sr(image_data: &[u8]) -> Result<Vec<u8>, String> {
     if is_jxl_image(image_data) {
-        println!(
-            "[SrVulkanManager] Detected JXL image, transcoding to JPEG(Q80) before sr_vulkan"
-        );
+        println!("[SrVulkanManager] Detected JXL image, transcoding to JPEG(Q80) before sr_vulkan");
         transcode_jxl_to_jpeg_q80(image_data)
     } else if is_avif_image(image_data) {
         println!(
@@ -495,12 +502,7 @@ fn decode_jxl_to_dynamic_image(data: &[u8]) -> Result<image::DynamicImage, Strin
                     (chunk[0].clamp(0.0, 1.0) * 255.0) as u8,
                     (chunk[1].clamp(0.0, 1.0) * 255.0) as u8,
                     (chunk[2].clamp(0.0, 1.0) * 255.0) as u8,
-                    (chunk
-                        .get(3)
-                        .copied()
-                        .unwrap_or(1.0)
-                        .clamp(0.0, 1.0)
-                        * 255.0) as u8,
+                    (chunk.get(3).copied().unwrap_or(1.0).clamp(0.0, 1.0) * 255.0) as u8,
                 ]
             })
             .collect();

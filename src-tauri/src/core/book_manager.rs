@@ -2,11 +2,15 @@
 //! 书籍管理核心模块
 
 use crate::core::path_utils::{build_path_key, calculate_path_hash};
-use crate::models::{BookInfo, BookType, Page};
+use crate::models::{BookInfo, BookType, Page, PageSortMode};
+use rand::seq::SliceRandom;
+use rand::thread_rng;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct BookManager {
     current_book: Option<BookInfo>,
@@ -136,6 +140,7 @@ impl BookManager {
             }
         }
 
+        Self::apply_page_sort(&mut book, true);
         self.current_book = Some(book.clone());
         Ok(book)
     }
@@ -151,8 +156,8 @@ impl BookManager {
                 "zip" | "rar" | "7z" | "cbz" | "cbr" => Ok(BookType::Archive),
                 "pdf" => Ok(BookType::Pdf),
                 // 常见视频扩展名，作为 Media 类型处理
-                "mp4" | "webm" | "ogg" | "mov" | "avi" | "mkv" | "m4v" | "flv" | "wmv"
-                | "mpg" | "mpeg" => Ok(BookType::Media),
+                "mp4" | "webm" | "ogg" | "mov" | "avi" | "mkv" | "m4v" | "flv" | "wmv" | "mpg"
+                | "mpeg" => Ok(BookType::Media),
                 _ => Err(format!("Unsupported file type: {}", ext)),
             }
         } else {
@@ -162,7 +167,8 @@ impl BookManager {
 
     /// 加载文件夹中的图片页面
     fn load_folder_pages(&self, path: &Path, book: &mut BookInfo) -> Result<(), String> {
-        let mut entries = Vec::new();
+        let mut entries: Vec<(usize, PathBuf, u64, Option<i64>)> = Vec::new();
+        let mut entry_counter = 0usize;
 
         let read_dir =
             fs::read_dir(path).map_err(|e| format!("Failed to read directory: {}", e))?;
@@ -173,17 +179,19 @@ impl BookManager {
                 // 文件夹书籍支持图片和视频作为页面
                 if self.is_image_file(&path) || self.is_video_file(&path) {
                     if let Ok(metadata) = entry.metadata() {
-                        entries.push((path, metadata.len()));
+                        let modified = metadata.modified().ok().and_then(Self::system_time_to_unix);
+                        entries.push((entry_counter, path, metadata.len(), modified));
+                        entry_counter += 1;
                     }
                 }
             }
         }
 
         // 按文件名排序
-        entries.sort_by(|a, b| a.0.file_name().cmp(&b.0.file_name()));
+        entries.sort_by(|a, b| a.1.file_name().cmp(&b.1.file_name()));
 
         // 创建页面列表
-        for (index, (path, size)) in entries.iter().enumerate() {
+        for (index, (entry_index, path, size, modified)) in entries.into_iter().enumerate() {
             let name = path
                 .file_name()
                 .and_then(|n| n.to_str())
@@ -196,7 +204,10 @@ impl BookManager {
             let path_key = build_path_key(&book.path, &path_str, &book.book_type, None);
             let stable_hash = calculate_path_hash(&path_key);
 
-            let page = Page::new(index, path_str, name, *size).with_stable_hash(stable_hash);
+            let page = Page::new(index, path_str, name, size)
+                .with_stable_hash(stable_hash)
+                .with_entry_index(entry_index)
+                .with_modified(modified);
             book.pages.push(page);
         }
 
@@ -206,10 +217,11 @@ impl BookManager {
 
     /// 加载单文件媒体页面（视频等）
     fn load_media_pages(&self, path: &Path, book: &mut BookInfo) -> Result<(), String> {
-        let metadata = fs::metadata(path)
-            .map_err(|e| format!("Failed to read media file metadata: {}", e))?;
+        let metadata =
+            fs::metadata(path).map_err(|e| format!("Failed to read media file metadata: {}", e))?;
 
         let size = metadata.len();
+        let modified = metadata.modified().ok().and_then(Self::system_time_to_unix);
         let name = path
             .file_name()
             .and_then(|n| n.to_str())
@@ -222,7 +234,9 @@ impl BookManager {
         let path_key = build_path_key(&book.path, &path_str, &book.book_type, None);
         let stable_hash = calculate_path_hash(&path_key);
 
-        let page = Page::new(0, path_str, name, size).with_stable_hash(stable_hash);
+        let page = Page::new(0, path_str, name, size)
+            .with_stable_hash(stable_hash)
+            .with_modified(modified);
         book.pages.push(page);
         book.total_pages = 1;
         Ok(())
@@ -259,7 +273,9 @@ impl BookManager {
             // 对于压缩包,path 使用压缩包内的文件路径
             let page = Page::new(index, item.path.clone(), item.name.clone(), item.size)
                 .with_stable_hash(stable_hash)
-                .with_inner_path(Some(item.name.clone()));
+                .with_inner_path(Some(item.name.clone()))
+                .with_entry_index(item.entry_index)
+                .with_modified(item.modified);
             book.pages.push(page);
         }
 
@@ -284,7 +300,17 @@ impl BookManager {
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
             matches!(
                 ext.to_lowercase().as_str(),
-                "mp4" | "webm" | "ogg" | "mov" | "avi" | "mkv" | "m4v" | "flv" | "wmv" | "mpg" | "mpeg"
+                "mp4"
+                    | "webm"
+                    | "ogg"
+                    | "mov"
+                    | "avi"
+                    | "mkv"
+                    | "m4v"
+                    | "flv"
+                    | "wmv"
+                    | "mpg"
+                    | "mpeg"
             )
         } else {
             false
@@ -294,6 +320,19 @@ impl BookManager {
     /// 获取当前书籍
     pub fn get_current_book(&self) -> Option<&BookInfo> {
         self.current_book.as_ref()
+    }
+
+    /// 设置当前书籍的排序模式
+    pub fn set_sort_mode(&mut self, sort_mode: PageSortMode) -> Result<BookInfo, String> {
+        if let Some(book) = &mut self.current_book {
+            if book.sort_mode != sort_mode {
+                book.sort_mode = sort_mode;
+                Self::apply_page_sort(book, false);
+            }
+            Ok(book.clone())
+        } else {
+            Err("No book is currently open".to_string())
+        }
     }
 
     /// 导航到指定页面
@@ -366,6 +405,104 @@ impl BookManager {
     /// 关闭当前书籍
     pub fn close_book(&mut self) {
         self.current_book = None;
+    }
+
+    fn apply_page_sort(book: &mut BookInfo, initial_load: bool) {
+        if book.pages.is_empty() {
+            return;
+        }
+
+        let sort_mode = book.sort_mode.clone();
+        let current_hash = book
+            .pages
+            .get(book.current_page)
+            .map(|page| page.stable_hash.clone());
+
+        let skip_sort = initial_load && matches!(sort_mode, PageSortMode::FileName);
+
+        if !skip_sort {
+            match sort_mode {
+                PageSortMode::FileName => book.pages.sort_by(Self::cmp_name_asc),
+                PageSortMode::FileNameDescending => book.pages.sort_by(Self::cmp_name_desc),
+                PageSortMode::FileSize => book.pages.sort_by(Self::cmp_size_asc),
+                PageSortMode::FileSizeDescending => book.pages.sort_by(Self::cmp_size_desc),
+                PageSortMode::TimeStamp => book.pages.sort_by(Self::cmp_timestamp_asc),
+                PageSortMode::TimeStampDescending => book.pages.sort_by(Self::cmp_timestamp_desc),
+                PageSortMode::Random => {
+                    let mut rng = thread_rng();
+                    book.pages.shuffle(&mut rng);
+                }
+                PageSortMode::Entry => book.pages.sort_by(Self::cmp_entry_asc),
+                PageSortMode::EntryDescending => book.pages.sort_by(Self::cmp_entry_desc),
+            }
+        }
+
+        let mut new_current = book.current_page.min(book.pages.len() - 1);
+        if let Some(ref hash) = current_hash {
+            if let Some(idx) = book.pages.iter().position(|p| &p.stable_hash == hash) {
+                new_current = idx;
+            }
+        }
+
+        for (idx, page) in book.pages.iter_mut().enumerate() {
+            page.index = idx;
+        }
+
+        book.current_page = new_current;
+        book.total_pages = book.pages.len();
+    }
+
+    fn cmp_name_asc(a: &Page, b: &Page) -> Ordering {
+        Self::cmp_insensitive(&a.name, &b.name).then_with(|| a.entry_index.cmp(&b.entry_index))
+    }
+
+    fn cmp_name_desc(a: &Page, b: &Page) -> Ordering {
+        Self::cmp_name_asc(b, a)
+    }
+
+    fn cmp_size_asc(a: &Page, b: &Page) -> Ordering {
+        a.size
+            .cmp(&b.size)
+            .then_with(|| Self::cmp_insensitive(&a.name, &b.name))
+            .then_with(|| a.entry_index.cmp(&b.entry_index))
+    }
+
+    fn cmp_size_desc(a: &Page, b: &Page) -> Ordering {
+        Self::cmp_size_asc(b, a)
+    }
+
+    fn cmp_timestamp_asc(a: &Page, b: &Page) -> Ordering {
+        let a_ts = a.modified.unwrap_or(i64::MIN);
+        let b_ts = b.modified.unwrap_or(i64::MIN);
+        a_ts.cmp(&b_ts)
+            .then_with(|| Self::cmp_insensitive(&a.name, &b.name))
+            .then_with(|| a.entry_index.cmp(&b.entry_index))
+    }
+
+    fn cmp_timestamp_desc(a: &Page, b: &Page) -> Ordering {
+        Self::cmp_timestamp_asc(b, a)
+    }
+
+    fn cmp_entry_asc(a: &Page, b: &Page) -> Ordering {
+        a.entry_index
+            .cmp(&b.entry_index)
+            .then_with(|| Self::cmp_insensitive(&a.name, &b.name))
+    }
+
+    fn cmp_entry_desc(a: &Page, b: &Page) -> Ordering {
+        Self::cmp_entry_asc(b, a)
+    }
+
+    fn cmp_insensitive(a: &str, b: &str) -> Ordering {
+        let al = a.to_lowercase();
+        let bl = b.to_lowercase();
+        al.cmp(&bl).then_with(|| a.cmp(b))
+    }
+
+    fn system_time_to_unix(time: SystemTime) -> Option<i64> {
+        time.duration_since(UNIX_EPOCH)
+            .ok()
+            .map(|d| d.as_secs() as i64)
     }
 }
 

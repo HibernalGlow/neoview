@@ -6,16 +6,16 @@ use crate::core::cache_index_db::{CacheGcResult, CacheIndexDb, CacheIndexStats};
 use crate::core::directory_cache::DirectoryCache;
 use crate::core::fs_manager::FsItem;
 use crate::core::{ArchiveManager, FsManager};
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use tauri::async_runtime::spawn_blocking;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
+use tauri::async_runtime::spawn_blocking;
 use tauri::State;
-use log::{info, warn};
-use std::time::{SystemTime};
 
 /// 文件系统状态
 pub struct FsState {
@@ -219,12 +219,16 @@ pub async fn load_directory_snapshot(
     let path_for_job = path_buf.clone();
     let items: Vec<FsItem> = scheduler
         .scheduler
-        .enqueue_blocking("filebrowser-directory-load", job_path, move || -> Result<Vec<FsItem>, String> {
-            let fs_manager = fs_manager
-                .lock()
-                .map_err(|e| format!("获取锁失败: {}", e))?;
-            fs_manager.read_directory(&path_for_job)
-        })
+        .enqueue_blocking(
+            "filebrowser-directory-load",
+            job_path,
+            move || -> Result<Vec<FsItem>, String> {
+                let fs_manager = fs_manager
+                    .lock()
+                    .map_err(|e| format!("获取锁失败: {}", e))?;
+                fs_manager.read_directory(&path_for_job)
+            },
+        )
         .await?;
 
     {
@@ -432,40 +436,43 @@ pub async fn batch_scan_archives(
     state: State<'_, FsState>,
     scheduler: State<'_, BackgroundSchedulerState>,
 ) -> Result<Vec<ArchiveScanResult>, String> {
-
     let archive_manager = Arc::clone(&state.archive_manager);
     let paths: Vec<PathBuf> = archive_paths.iter().map(PathBuf::from).collect();
 
     let results: Vec<ArchiveScanResult> = scheduler
         .scheduler
-        .enqueue_blocking("archive-batch-scan", "filebrowser", move || -> Result<Vec<ArchiveScanResult>, String> {
-            let mut results = Vec::with_capacity(paths.len());
-            let manager = archive_manager
-                .lock()
-                .map_err(|e| format!("获取压缩包管理器锁失败: {}", e))?;
+        .enqueue_blocking(
+            "archive-batch-scan",
+            "filebrowser",
+            move || -> Result<Vec<ArchiveScanResult>, String> {
+                let mut results = Vec::with_capacity(paths.len());
+                let manager = archive_manager
+                    .lock()
+                    .map_err(|e| format!("获取压缩包管理器锁失败: {}", e))?;
 
-            for path in paths {
-                let archive_path_str = path.to_string_lossy().to_string();
-                match manager.list_zip_contents(&path) {
-                    Ok(entries) => {
-                        results.push(ArchiveScanResult {
-                            archive_path: archive_path_str,
-                            entries,
-                            error: None,
-                        });
-                    }
-                    Err(e) => {
-                        results.push(ArchiveScanResult {
-                            archive_path: archive_path_str,
-                            entries: Vec::new(),
-                            error: Some(e),
-                        });
+                for path in paths {
+                    let archive_path_str = path.to_string_lossy().to_string();
+                    match manager.list_zip_contents(&path) {
+                        Ok(entries) => {
+                            results.push(ArchiveScanResult {
+                                archive_path: archive_path_str,
+                                entries,
+                                error: None,
+                            });
+                        }
+                        Err(e) => {
+                            results.push(ArchiveScanResult {
+                                archive_path: archive_path_str,
+                                entries: Vec::new(),
+                                error: Some(e),
+                            });
+                        }
                     }
                 }
-            }
 
-            Ok(results)
-        })
+                Ok(results)
+            },
+        )
         .await?;
 
     Ok(results)
@@ -585,21 +592,21 @@ pub async fn search_files(
     state: State<'_, FsState>,
 ) -> Result<Vec<crate::core::fs_manager::FsItem>, String> {
     let search_options = options.unwrap_or_default();
-    
+
     let fs_manager = state
         .fs_manager
         .lock()
         .map_err(|e| format!("获取锁失败: {}", e))?;
 
     let path_buf = PathBuf::from(path);
-    
+
     // 转换 SearchOptions 类型
     let fs_search_options = crate::core::fs_manager::SearchOptions {
         include_subfolders: search_options.include_subfolders,
         max_results: search_options.max_results,
         search_in_path: search_options.search_in_path,
     };
-    
+
     // 使用 fs_manager 的 search_files 方法（支持索引和递归搜索）
     fs_manager.search_files(&path_buf, &query, &fs_search_options)
 }
@@ -1160,9 +1167,11 @@ pub async fn enqueue_cache_maintenance(
     let db = Arc::clone(&cache_index.db);
     scheduler
         .scheduler
-        .enqueue_blocking("cache-maintenance", "cache_index_gc", move || -> Result<CacheGcResult, String> {
-            db.run_gc().map_err(|e| e)
-        })
+        .enqueue_blocking(
+            "cache-maintenance",
+            "cache_index_gc",
+            move || -> Result<CacheGcResult, String> { db.run_gc().map_err(|e| e) },
+        )
         .await
 }
 

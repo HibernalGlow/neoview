@@ -23,8 +23,8 @@ pub async fn generate_explorer_context_menu_reg() -> Result<String, String> {
     {
         use std::path::PathBuf;
 
-        let exe: PathBuf = std::env::current_exe()
-            .map_err(|e| format!("Get exe path error: {}", e))?;
+        let exe: PathBuf =
+            std::env::current_exe().map_err(|e| format!("Get exe path error: {}", e))?;
         let exe_str = exe.to_string_lossy().to_string();
         // 在 .reg 文件中需要转义反斜杠
         let exe_escaped = exe_str.replace('\\', "\\\\");
@@ -46,12 +46,7 @@ pub async fn generate_explorer_context_menu_reg() -> Result<String, String> {
 \"Icon\"=\"\\\"{}\\\",0\"\r\n\r\n\
 [HKEY_CURRENT_USER\\Software\\Classes\\Directory\\Background\\shell\\OpenInNeoView\\command]\r\n\
 @=\"\\\"{}\\\" \"%V\"\"\r\n",
-            exe_escaped,
-            exe_escaped,
-            exe_escaped,
-            exe_escaped,
-            exe_escaped,
-            exe_escaped,
+            exe_escaped, exe_escaped, exe_escaped, exe_escaped, exe_escaped, exe_escaped,
         );
 
         Ok(reg_content)

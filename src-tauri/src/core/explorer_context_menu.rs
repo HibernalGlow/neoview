@@ -35,7 +35,13 @@ fn build_command() -> io::Result<(String, String, String, String)> {
 }
 
 #[cfg(target_os = "windows")]
-fn create_subkey(root: &RegKey, key: &str, label: &str, icon: &str, command: &str) -> io::Result<()> {
+fn create_subkey(
+    root: &RegKey,
+    key: &str,
+    label: &str,
+    icon: &str,
+    command: &str,
+) -> io::Result<()> {
     let (subkey, _) = root.create_subkey(key)?;
     subkey.set_value("", &label)?;
     subkey.set_value("Icon", &icon)?;
@@ -88,7 +94,9 @@ pub fn create_explorer_context_menu() -> Result<(), String> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        Err(String::from("Explorer context menu is only supported on Windows"))
+        Err(String::from(
+            "Explorer context menu is only supported on Windows",
+        ))
     }
 }
 
@@ -97,8 +105,7 @@ pub fn delete_explorer_context_menu() -> Result<(), String> {
     {
         let root = open_root().map_err(|e| format!("Registry open error: {}", e))?;
         delete_subkey(&root, KEY_FILE).map_err(|e| format!("Registry delete error: {}", e))?;
-        delete_subkey(&root, KEY_DIRECTORY)
-            .map_err(|e| format!("Registry delete error: {}", e))?;
+        delete_subkey(&root, KEY_DIRECTORY).map_err(|e| format!("Registry delete error: {}", e))?;
         delete_subkey(&root, KEY_DIRECTORY_BACKGROUND)
             .map_err(|e| format!("Registry delete error: {}", e))?;
         Ok(())

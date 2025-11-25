@@ -107,12 +107,16 @@ pub async fn generate_file_thumbnail_new(
 
     let thumbnail_data: Vec<u8> = scheduler
         .scheduler
-        .enqueue_blocking("thumbnail-generate", job_source, move || -> Result<Vec<u8>, String> {
-            let generator = generator
-                .lock()
-                .map_err(|e| format!("获取缩略图生成器锁失败: {}", e))?;
-            generator.generate_file_thumbnail(&path_for_job)
-        })
+        .enqueue_blocking(
+            "thumbnail-generate",
+            job_source,
+            move || -> Result<Vec<u8>, String> {
+                let generator = generator
+                    .lock()
+                    .map_err(|e| format!("获取缩略图生成器锁失败: {}", e))?;
+                generator.generate_file_thumbnail(&path_for_job)
+            },
+        )
         .await?;
 
     // 注册到 BlobRegistry，返回 blob key（带路径信息）
@@ -231,22 +235,26 @@ pub async fn generate_video_thumbnail_new(
     let path_for_job = PathBuf::from(&video_path_for_job);
     let thumbnail_data: Vec<u8> = scheduler
         .scheduler
-        .enqueue_blocking("thumbnail-generate", job_source, move || -> Result<Vec<u8>, String> {
-            // 提取视频帧
-            let frame = VideoThumbnailGenerator::extract_frame(&path_for_job, time)
-                .map_err(|e| format!("提取视频帧失败: {}", e))?;
+        .enqueue_blocking(
+            "thumbnail-generate",
+            job_source,
+            move || -> Result<Vec<u8>, String> {
+                // 提取视频帧
+                let frame = VideoThumbnailGenerator::extract_frame(&path_for_job, time)
+                    .map_err(|e| format!("提取视频帧失败: {}", e))?;
 
-            // 将图片编码为 PNG 字节数组
-            let mut buffer = Vec::new();
-            {
-                let mut cursor = std::io::Cursor::new(&mut buffer);
-                frame
-                    .write_to(&mut cursor, ImageFormat::Png)
-                    .map_err(|e| format!("编码图片失败: {}", e))?;
-            }
+                // 将图片编码为 PNG 字节数组
+                let mut buffer = Vec::new();
+                {
+                    let mut cursor = std::io::Cursor::new(&mut buffer);
+                    frame
+                        .write_to(&mut cursor, ImageFormat::Png)
+                        .map_err(|e| format!("编码图片失败: {}", e))?;
+                }
 
-            Ok(buffer)
-        })
+                Ok(buffer)
+            },
+        )
         .await?;
 
     // 保存到数据库（异步后台任务）
@@ -599,23 +607,37 @@ pub async fn batch_load_thumbnails_from_db(
             Ok(None) => {
                 // 如果是文件夹且没有记录，尝试查找子文件
                 if cat == "folder" {
-                    if let Ok(Some((_, child_data))) = state.db.find_earliest_thumbnail_in_path(&path_key) {
+                    if let Ok(Some((_, child_data))) =
+                        state.db.find_earliest_thumbnail_in_path(&path_key)
+                    {
                         // 保存到文件夹
-                        if state.db.save_thumbnail_with_category(&path_key, 0, 0, &child_data, Some("folder")).is_ok() {
+                        if state
+                            .db
+                            .save_thumbnail_with_category(
+                                &path_key,
+                                0,
+                                0,
+                                &child_data,
+                                Some("folder"),
+                            )
+                            .is_ok()
+                        {
                             let blob_key = state.blob_registry.get_or_register(
                                 &child_data,
                                 "image/webp",
                                 Duration::from_secs(3600),
                                 Some(path_key.clone()),
                             );
-                            if let Err(err) = cache_index.db.upsert_thumbnail_entry(ThumbnailCacheUpsert {
-                                path_key: &path_key,
-                                category: "folder",
-                                hash: None,
-                                size: Some(child_data.len() as i64),
-                                source: Some("batch_load_thumbnails_from_db/folder_bind"),
-                                blob_key: Some(&blob_key),
-                            }) {
+                            if let Err(err) =
+                                cache_index.db.upsert_thumbnail_entry(ThumbnailCacheUpsert {
+                                    path_key: &path_key,
+                                    category: "folder",
+                                    hash: None,
+                                    size: Some(child_data.len() as i64),
+                                    source: Some("batch_load_thumbnails_from_db/folder_bind"),
+                                    blob_key: Some(&blob_key),
+                                })
+                            {
                                 eprintln!("⚠️ 写入缩略图缓存索引失败: {}", err);
                             }
                             results.push((path, blob_key));

@@ -316,21 +316,20 @@ impl ThumbnailGenerator {
                 } else {
                     // FFmpeg 失败后，回退到 avif-native 解码 + image crate 生成 webp
                     match Self::decode_image_safe(&image_data_clone) {
-                        Ok(img) => match Self::generate_webp_thumbnail_fallback(&img, &config_clone) {
-                            Ok(data) => Some(data),
-                            Err(e) => {
-                                eprintln!(
-                                    "❌ avif-native 回退生成 webp 失败: {} - {}",
-                                    path_key_clone, e
-                                );
-                                None
+                        Ok(img) => {
+                            match Self::generate_webp_thumbnail_fallback(&img, &config_clone) {
+                                Ok(data) => Some(data),
+                                Err(e) => {
+                                    eprintln!(
+                                        "❌ avif-native 回退生成 webp 失败: {} - {}",
+                                        path_key_clone, e
+                                    );
+                                    None
+                                }
                             }
-                        },
+                        }
                         Err(e) => {
-                            eprintln!(
-                                "❌ avif-native 回退解码失败: {} - {}",
-                                path_key_clone, e
-                            );
+                            eprintln!("❌ avif-native 回退解码失败: {} - {}", path_key_clone, e);
                             None
                         }
                     }
@@ -869,20 +868,19 @@ impl ThumbnailGenerator {
                                     .as_nanos()
                             ));
 
-                            let ffmpeg_result = if let Err(e) =
-                                std::fs::write(&temp_input, &image_data_clone)
-                            {
-                                eprintln!("❌ 写入临时文件失败: {} - {}", path_key_clone, e);
-                                None
-                            } else {
-                                let result = Self::generate_webp_with_ffmpeg(
-                                    &temp_input,
-                                    &config_clone,
-                                    &path_key_clone,
-                                );
-                                let _ = std::fs::remove_file(&temp_input);
-                                result
-                            };
+                            let ffmpeg_result =
+                                if let Err(e) = std::fs::write(&temp_input, &image_data_clone) {
+                                    eprintln!("❌ 写入临时文件失败: {} - {}", path_key_clone, e);
+                                    None
+                                } else {
+                                    let result = Self::generate_webp_with_ffmpeg(
+                                        &temp_input,
+                                        &config_clone,
+                                        &path_key_clone,
+                                    );
+                                    let _ = std::fs::remove_file(&temp_input);
+                                    result
+                                };
 
                             if ffmpeg_result.is_some() {
                                 ffmpeg_result
@@ -930,10 +928,7 @@ impl ThumbnailGenerator {
                                     }
                                 }
                                 Err(e) => {
-                                    eprintln!(
-                                        "❌ 解码 JXL 图像失败: {} - {}",
-                                        path_key_clone, e
-                                    );
+                                    eprintln!("❌ 解码 JXL 图像失败: {} - {}", path_key_clone, e);
                                     None
                                 }
                             }

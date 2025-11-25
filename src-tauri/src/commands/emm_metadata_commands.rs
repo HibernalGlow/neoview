@@ -9,7 +9,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EMMMetadata {
     pub hash: String,
-    pub translated_title: Option<String>, // 译名
+    pub translated_title: Option<String>,   // 译名
     pub tags: HashMap<String, Vec<String>>, // 分类 -> 标签列表
     pub title: Option<String>,
     pub title_jpn: Option<String>,
@@ -18,9 +18,9 @@ pub struct EMMMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EMMCollectTag {
     pub id: String,
-    pub letter: String, // 分类字母
-    pub tag: String,    // 标签名
-    pub color: String, // 颜色
+    pub letter: String,  // 分类字母
+    pub tag: String,     // 标签名
+    pub color: String,   // 颜色
     pub display: String, // 显示格式 "分类:标签"
 }
 
@@ -46,8 +46,8 @@ pub async fn load_emm_metadata(
     let mut rows = stmt
         .query_map([&hash], |row| {
             let tags_json: String = row.get(3)?;
-            let tags: HashMap<String, Vec<String>> = serde_json::from_str(&tags_json)
-                .unwrap_or_default();
+            let tags: HashMap<String, Vec<String>> =
+                serde_json::from_str(&tags_json).unwrap_or_default();
 
             Ok(EMMMetadata {
                 hash: row.get(0)?,
@@ -70,8 +70,8 @@ pub async fn load_emm_metadata(
         let mut rows = stmt
             .query_map([&hash], |row| {
                 let tags_json: String = row.get(3)?;
-                let tags: HashMap<String, Vec<String>> = serde_json::from_str(&tags_json)
-                    .unwrap_or_default();
+                let tags: HashMap<String, Vec<String>> =
+                    serde_json::from_str(&tags_json).unwrap_or_default();
 
                 Ok(EMMMetadata {
                     hash: row.get(0)?,
@@ -99,7 +99,9 @@ pub async fn load_emm_metadata(
                     .prepare("SELECT chinese_title FROM translations WHERE hash = ?1")
                     .map_err(|e| format!("准备查询失败: {}", e))?;
 
-                if let Ok(chinese_title) = stmt.query_row([&hash], |row| row.get::<_, Option<String>>(0)) {
+                if let Ok(chinese_title) =
+                    stmt.query_row([&hash], |row| row.get::<_, Option<String>>(0))
+                {
                     if let Some(title) = chinese_title {
                         metadata.translated_title = Some(title);
                     }
@@ -145,16 +147,19 @@ pub async fn load_emm_metadata_by_path(
         .query_map([&file_path], |row| {
             let hash: String = row.get(0)?;
             let tags_json: String = row.get(3)?;
-            let tags: HashMap<String, Vec<String>> = serde_json::from_str(&tags_json)
-                .unwrap_or_default();
+            let tags: HashMap<String, Vec<String>> =
+                serde_json::from_str(&tags_json).unwrap_or_default();
 
-            Ok((hash.clone(), EMMMetadata {
-                hash,
-                translated_title: None,
-                tags,
-                title: row.get(1)?,
-                title_jpn: row.get(2)?,
-            }))
+            Ok((
+                hash.clone(),
+                EMMMetadata {
+                    hash,
+                    translated_title: None,
+                    tags,
+                    title: row.get(1)?,
+                    title_jpn: row.get(2)?,
+                },
+            ))
         })
         .map_err(|e| format!("查询失败: {}", e))?;
 
@@ -173,7 +178,9 @@ pub async fn load_emm_metadata_by_path(
                     .prepare("SELECT chinese_title FROM translations WHERE hash = ?1")
                     .map_err(|e| format!("准备查询失败: {}", e))?;
 
-                if let Ok(chinese_title) = stmt.query_row([&hash], |row| row.get::<_, Option<String>>(0)) {
+                if let Ok(chinese_title) =
+                    stmt.query_row([&hash], |row| row.get::<_, Option<String>>(0))
+                {
                     if let Some(title) = chinese_title {
                         metadata.translated_title = Some(title);
                     }
@@ -198,9 +205,7 @@ pub async fn load_emm_metadata_by_path(
 
 /// 读取收藏标签配置（从设置文件）
 #[tauri::command]
-pub async fn load_emm_collect_tags(
-    setting_path: String,
-) -> Result<Vec<EMMCollectTag>, String> {
+pub async fn load_emm_collect_tags(setting_path: String) -> Result<Vec<EMMCollectTag>, String> {
     use std::fs;
 
     let path = PathBuf::from(&setting_path);
@@ -208,28 +213,33 @@ pub async fn load_emm_collect_tags(
         return Ok(vec![]);
     }
 
-    let content = fs::read_to_string(&path)
-        .map_err(|e| format!("读取设置文件失败: {}", e))?;
+    let content = fs::read_to_string(&path).map_err(|e| format!("读取设置文件失败: {}", e))?;
 
-    let setting: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| format!("解析设置文件失败: {}", e))?;
+    let setting: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| format!("解析设置文件失败: {}", e))?;
 
     let collect_tags = setting
         .get("collectTag")
         .and_then(|v| v.as_array())
         .cloned()
         .unwrap_or_default();
-    
-    println!("[EMM] 从 setting.json 读取 collectTag 字段，找到 {} 个标签", collect_tags.len());
-    
+
+    println!(
+        "[EMM] 从 setting.json 读取 collectTag 字段，找到 {} 个标签",
+        collect_tags.len()
+    );
+
     if collect_tags.is_empty() {
         println!("[EMM] 警告：collectTag 数组为空，可能字段名不匹配或文件格式不正确");
-        println!("[EMM] setting.json 的顶层键: {:?}", setting.as_object().map(|o| o.keys().collect::<Vec<_>>()));
+        println!(
+            "[EMM] setting.json 的顶层键: {:?}",
+            setting.as_object().map(|o| o.keys().collect::<Vec<_>>())
+        );
     }
 
     let mut tags = Vec::new();
     println!("[EMM] 开始解析收藏标签，共 {} 个", collect_tags.len());
-    
+
     for (index, tag_obj) in collect_tags.iter().enumerate() {
         // 从 JSON 中提取字段：id, letter, cat, tag, color
         // id 格式通常是 "cat:tag"，例如 "female:stirrup legwear"
@@ -239,24 +249,25 @@ pub async fn load_emm_collect_tags(
         let cat = tag_obj.get("cat").and_then(|v| v.as_str()); // 分类，如 "female", "male", "character"
         let tag = tag_obj.get("tag").and_then(|v| v.as_str());
         let color = tag_obj.get("color").and_then(|v| v.as_str());
-        
-        println!("[EMM] 标签 #{}: id={:?}, letter={:?}, cat={:?}, tag={:?}, color={:?}", 
-                 index, id, letter, cat, tag, color);
-        
+
+        println!(
+            "[EMM] 标签 #{}: id={:?}, letter={:?}, cat={:?}, tag={:?}, color={:?}",
+            index, id, letter, cat, tag, color
+        );
+
         // 至少需要 tag 和 color，其他字段可以推断
         if let (Some(tag_str), Some(color_str)) = (tag, color) {
             // 如果有 id，使用它；否则从 cat 和 tag 构造
-            let id_str = id.map(|s| s.to_string())
-                .unwrap_or_else(|| {
-                    if let Some(cat_str) = cat {
-                        format!("{}:{}", cat_str, tag_str)
-                    } else if let Some(letter_str) = letter {
-                        format!("{}:{}", letter_str, tag_str)
-                    } else {
-                        tag_str.to_string()
-                    }
-                });
-            
+            let id_str = id.map(|s| s.to_string()).unwrap_or_else(|| {
+                if let Some(cat_str) = cat {
+                    format!("{}:{}", cat_str, tag_str)
+                } else if let Some(letter_str) = letter {
+                    format!("{}:{}", letter_str, tag_str)
+                } else {
+                    tag_str.to_string()
+                }
+            });
+
             // display 格式：使用 cat:tag（如果 cat 存在），否则使用 letter:tag
             let display_str = if let Some(cat_str) = cat {
                 format!("{}:{}", cat_str, tag_str)
@@ -265,7 +276,7 @@ pub async fn load_emm_collect_tags(
             } else {
                 tag_str.to_string()
             };
-            
+
             let collect_tag = EMMCollectTag {
                 id: id_str.clone(),
                 letter: letter.map(|s| s.to_string()).unwrap_or_default(),
@@ -273,16 +284,18 @@ pub async fn load_emm_collect_tags(
                 color: color_str.to_string(),
                 display: display_str.clone(),
             };
-            
-            println!("[EMM] 解析后的标签 #{}: id={}, display={}, tag={}, color={}", 
-                     index, collect_tag.id, collect_tag.display, collect_tag.tag, collect_tag.color);
-            
+
+            println!(
+                "[EMM] 解析后的标签 #{}: id={}, display={}, tag={}, color={}",
+                index, collect_tag.id, collect_tag.display, collect_tag.tag, collect_tag.color
+            );
+
             tags.push(collect_tag);
         } else {
             println!("[EMM] 警告：标签 #{} 缺少 tag 或 color 字段，跳过", index);
         }
     }
-    
+
     println!("[EMM] 成功解析 {} 个收藏标签", tags.len());
 
     Ok(tags)
@@ -296,7 +309,7 @@ pub async fn find_emm_databases() -> Result<Vec<String>, String> {
     // 常见的 EMM 主数据库位置（不包括 translations.db）
     let appdata = std::env::var("APPDATA").unwrap_or_default();
     let localappdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
-    
+
     let common_paths: Vec<String> = vec![
         // 便携版（相对于当前工作目录）
         "portable/db.sqlite".to_string(),
@@ -320,7 +333,7 @@ pub async fn find_emm_databases() -> Result<Vec<String>, String> {
 pub async fn find_emm_translation_database() -> Result<Option<String>, String> {
     let appdata = std::env::var("APPDATA").unwrap_or_default();
     let localappdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
-    
+
     let common_paths: Vec<String> = vec![
         // 便携版
         "portable/translations.db".to_string(),
@@ -344,7 +357,7 @@ pub async fn find_emm_translation_database() -> Result<Option<String>, String> {
 pub async fn find_emm_setting_file() -> Result<Option<String>, String> {
     let appdata = std::env::var("APPDATA").unwrap_or_default();
     let localappdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
-    
+
     let common_paths: Vec<String> = vec![
         // 便携版
         "portable/setting.json".to_string(),
@@ -450,8 +463,8 @@ pub async fn load_emm_translation_dict(
         return Err(format!("Translation file not found: {}", file_path));
     }
 
-    let content = fs::read_to_string(&path)
-        .map_err(|e| format!("Failed to read translation file: {}", e))?;
+    let content =
+        fs::read_to_string(&path).map_err(|e| format!("Failed to read translation file: {}", e))?;
 
     let dict: EMMTranslationDict = serde_json::from_str(&content)
         .map_err(|e| format!("Failed to parse translation file: {}", e))?;
@@ -470,7 +483,7 @@ pub async fn load_emm_translation_dict(
 pub async fn find_emm_translation_file() -> Result<Option<String>, String> {
     let appdata = std::env::var("APPDATA").unwrap_or_default();
     let localappdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
-    
+
     let common_paths: Vec<String> = vec![
         // 便携版
         "portable/db.text.json".to_string(),
@@ -488,4 +501,3 @@ pub async fn find_emm_translation_file() -> Result<Option<String>, String> {
 
     Ok(None)
 }
-

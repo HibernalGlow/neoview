@@ -241,8 +241,7 @@ impl PythonUpscaleModule {
 
     /// 取消指定 job_key 的任务
     pub fn cancel_job(&self, job_key: &str) -> Result<(), PyErr> {
-        self
-            .sr_manager
+        self.sr_manager
             .cancel_job(job_key)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
     }

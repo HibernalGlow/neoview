@@ -33,6 +33,7 @@ walkdir = "2.5"
 threadpool = "1.8"
 rusqlite = { version = "0.32.0", features = ["bundled"] }
 chrono = { version = "0.4", features = ["serde"] }
+rand = { version = "0.8", features = ["std"] }
 url = "2.5"
 md5 = "0.7.0"
 sha1 = "0.10"

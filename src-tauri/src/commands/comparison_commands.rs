@@ -31,24 +31,24 @@ pub async fn prepare_comparison_preview(
     request: ComparisonPrepareRequest,
     scheduler: State<'_, BackgroundSchedulerState>,
 ) -> Result<ComparisonPrepareResponse, String> {
-    let job_source = format!(
-        "comparison-viewer:page-{}",
-        request.page_index.unwrap_or(0)
-    );
+    let job_source = format!("comparison-viewer:page-{}", request.page_index.unwrap_or(0));
     let image_data = request.image_data.clone();
     let mime_type = request.mime_type.clone();
 
     let data_url: String = scheduler
         .scheduler
-        .enqueue_blocking("comparison-prepare", job_source, move || -> Result<String, String> {
-            // 将二进制数据编码为 base64
-            let base64_data = general_purpose::STANDARD.encode(&image_data);
-            // 构造 DataURL
-            let data_url = format!("data:{};base64,{}", mime_type, base64_data);
-            Ok(data_url)
-        })
+        .enqueue_blocking(
+            "comparison-prepare",
+            job_source,
+            move || -> Result<String, String> {
+                // 将二进制数据编码为 base64
+                let base64_data = general_purpose::STANDARD.encode(&image_data);
+                // 构造 DataURL
+                let data_url = format!("data:{};base64,{}", mime_type, base64_data);
+                Ok(data_url)
+            },
+        )
         .await?;
 
     Ok(ComparisonPrepareResponse { data_url })
 }
-

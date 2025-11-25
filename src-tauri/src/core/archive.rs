@@ -1,4 +1,5 @@
 use super::blob_registry::BlobRegistry;
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use image::GenericImageView;
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -10,9 +11,6 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use zip::ZipArchive;
 
 const IMAGE_CACHE_LIMIT: usize = 256;
-
-
-
 
 #[derive(Clone)]
 struct CachedImageEntry {
@@ -34,6 +32,8 @@ pub struct ArchiveEntry {
     pub size: u64,
     pub is_dir: bool,
     pub is_image: bool,
+    pub entry_index: usize,
+    pub modified: Option<i64>,
 }
 
 /// 压缩包管理器
@@ -183,6 +183,7 @@ impl ArchiveManager {
             let is_dir = file.is_dir();
             let size = file.size();
             let is_image = !is_dir && self.is_image_file(&name);
+            let modified = Self::zip_datetime_to_unix(file.last_modified());
 
             entries.push(ArchiveEntry {
                 name: name.clone(),
@@ -190,6 +191,8 @@ impl ArchiveManager {
                 size,
                 is_dir,
                 is_image,
+                entry_index: i,
+                modified,
             });
         }
 
@@ -259,7 +262,11 @@ impl ArchiveManager {
         archive_path: &Path,
         file_path: &str,
     ) -> Result<Vec<u8>, String> {
-        let cache_key = format!("{}::{}", Self::normalize_archive_key(archive_path), file_path);
+        let cache_key = format!(
+            "{}::{}",
+            Self::normalize_archive_key(archive_path),
+            file_path
+        );
         if let Some(cached) = self.get_cached_image(&cache_key) {
             println!(
                 "🎯 Archive image cache hit: {} ({} bytes)",
@@ -463,7 +470,6 @@ impl ArchiveManager {
 
         self.scan_first_image_entry(archive_path)
     }
-
 
     fn scan_first_image_entry(&self, archive_path: &Path) -> Result<Option<String>, String> {
         let file = File::open(archive_path).map_err(|e| format!("打开压缩包失败: {}", e))?;
@@ -764,7 +770,13 @@ impl ArchiveManager {
         })
     }
 
-
+    fn zip_datetime_to_unix(dt: zip::DateTime) -> Option<i64> {
+        let date = NaiveDate::from_ymd_opt(dt.year() as i32, dt.month() as u32, dt.day() as u32)?;
+        let time =
+            NaiveTime::from_hms_opt(dt.hour() as u32, dt.minute() as u32, dt.second() as u32)?;
+        let datetime = NaiveDateTime::new(date, time);
+        Some(datetime.and_utc().timestamp())
+    }
 
     /// 获取首图 blob 或扫描（返回 blob URL 和内部路径）
     pub fn get_first_image_blob_or_scan(
@@ -854,7 +866,6 @@ impl ArchiveManager {
             }
         }
     }
-
 
     /// 获取 BlobRegistry 引用
     pub fn blob_registry(&self) -> &Arc<BlobRegistry> {

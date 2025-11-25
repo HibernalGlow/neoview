@@ -3034,6 +3034,7 @@ dependencies = [
  "md5",
  "num_cpus",
  "pyo3",
+ "rand 0.8.5",
  "rayon",
  "rusqlite",
  "rust_search",

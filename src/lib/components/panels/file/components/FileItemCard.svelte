@@ -15,7 +15,8 @@
 		Package,
 		Video,
 		Eye,
-		BookOpen
+		BookOpen,
+		X
 	} from '@lucide/svelte';
 	import type { FsItem } from '$lib/types';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
@@ -342,15 +343,9 @@
 				aria-label="删除"
 			>
 				<div
-					class="flex h-5 w-5 items-center justify-center rounded-full bg-destructive/90 text-destructive-foreground shadow-md transition-all duration-200 hover:bg-destructive hover:shadow-lg group-hover/delete:scale-110"
+					class="flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-md transition-all duration-200 hover:bg-destructive/90 hover:shadow-lg group-hover/delete:scale-110"
 				>
-					<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M6 18L18 6M6 6l12 12"
-						></path>
-					</svg>
+					<X class="h-3.5 w-3.5" />
 				</div>
 			</button>
 		{/if}

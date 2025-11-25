@@ -3,8 +3,17 @@
  * 提供：获取/更新/重置/导入/导出/订阅 功能，持久化到 localStorage
  */
 
-export type ZoomMode = 'fit' | 'fitWidth' | 'fitHeight' | 'original';
+export type ZoomMode = 'fit' | 'fill' | 'fitWidth' | 'fitHeight' | 'original';
 export type ReadingDirection = 'left-to-right' | 'right-to-left';
+export type TailOverflowBehavior =
+  | 'doNothing'
+  | 'stayOnLastPage'
+  | 'nextBook'
+  | 'loopTopBottom'
+  | 'seamlessLoop'
+  | 'promptDialog';
+
+export type AutoRotateMode = 'none' | 'left' | 'right' | 'forcedLeft' | 'forcedRight';
 
 export interface NeoViewSettings {
   system: {
@@ -48,6 +57,13 @@ export interface NeoViewSettings {
       showMovementThreshold: number; // pixels
       showOnButtonClick: boolean;
     };
+    pageLayout: {
+      splitHorizontalPages: boolean;
+      treatHorizontalAsDoublePage: boolean;
+    };
+    autoRotate: {
+      mode: AutoRotateMode;
+    };
   };
   book: {
     autoPageTurnInterval: number;
@@ -55,6 +71,7 @@ export interface NeoViewSettings {
     rememberProgress: boolean;
     doublePageView: boolean;
     readingDirection: ReadingDirection;
+    tailOverflowBehavior: TailOverflowBehavior;
   };
   theme: {
     theme: 'system' | 'light' | 'dark';
@@ -142,6 +159,13 @@ const defaultSettings: NeoViewSettings = {
       hideDelay: 1.0,
       showMovementThreshold: 26,
       showOnButtonClick: true
+    },
+    pageLayout: {
+      splitHorizontalPages: false,
+      treatHorizontalAsDoublePage: false
+    },
+    autoRotate: {
+      mode: 'none'
     }
   },
   book: {
@@ -149,7 +173,8 @@ const defaultSettings: NeoViewSettings = {
     preloadPages: 2,
     rememberProgress: true,
     doublePageView: false,
-    readingDirection: 'left-to-right' as 'left-to-right' | 'right-to-left'
+    readingDirection: 'left-to-right' as 'left-to-right' | 'right-to-left',
+    tailOverflowBehavior: 'stayOnLastPage'
   },
   theme: {
     theme: 'system',
@@ -242,6 +267,7 @@ export class SettingsManager {
   private static instance: SettingsManager;
   private settings: NeoViewSettings = { ...defaultSettings };
   private listeners: Set<(s: NeoViewSettings) => void> = new Set();
+  private tailOverflowPromptResolver: ((choice: TailOverflowBehavior | null, direction: 'forward' | 'backward') => void) | null = null;
 
   private constructor() {
     this.loadSettings();
@@ -280,14 +306,14 @@ export class SettingsManager {
     console.log('📝 updateNestedSettings 调用:', {
       category,
       updates,
-     	before: this.settings[category]
+      before: this.settings[category]
     });
     
     this.settings[category] = { ...this.settings[category], ...updates } as NeoViewSettings[K];
     
     console.log('✅ updateNestedSettings 完成:', {
       category,
-     	after: this.settings[category]
+      after: this.settings[category]
     });
     
     this.saveSettings();
@@ -386,6 +412,15 @@ export class SettingsManager {
     } catch (err) {
       console.error('❌ saveSettings failed:', err);
     }
+  }
+
+  setTailOverflowPromptResolver(handler: (choice: TailOverflowBehavior | null, direction: 'forward' | 'backward') => void) {
+    this.tailOverflowPromptResolver = handler;
+  }
+
+  resolveTailOverflowPrompt(choice: TailOverflowBehavior | null, direction: 'forward' | 'backward') {
+    this.tailOverflowPromptResolver?.(choice, direction);
+    this.tailOverflowPromptResolver = null;
   }
 }
 

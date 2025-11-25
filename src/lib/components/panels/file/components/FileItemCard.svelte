@@ -36,6 +36,7 @@
 		isSelected = false,
 		isCheckMode = false,
 		isDeleteMode = false,
+		isChecked = false,
 		showReadMark = false,
 		showBookmarkMark = true,
 		showSizeAndModified = false,
@@ -53,6 +54,7 @@
 		thumbnail?: string;
 		viewMode?: 'list' | 'grid';
 		isSelected?: boolean;
+		isChecked?: boolean;
 		isCheckMode?: boolean;
 		isDeleteMode?: boolean;
 		showReadMark?: boolean;
@@ -314,14 +316,14 @@
 					e.stopPropagation();
 					onToggleSelection?.();
 				}}
-				aria-label={isSelected ? '取消选择' : '选择'}
+				aria-label={isChecked ? '取消选择' : '选择'}
 			>
 				<div
-					class="flex h-5 w-5 items-center justify-center rounded-md border-2 transition-all duration-200 {isSelected
+					class="flex h-5 w-5 items-center justify-center rounded-md border-2 transition-all duration-200 {isChecked
 						? 'border-primary bg-primary text-primary-foreground shadow-md scale-105'
 						: 'border-input bg-background hover:border-primary hover:bg-accent group-hover/checkbox:scale-110'}"
 				>
-					{#if isSelected}
+					{#if isChecked}
 						<Check class="h-3.5 w-3.5 animate-in zoom-in-50 duration-200" />
 					{/if}
 				</div>

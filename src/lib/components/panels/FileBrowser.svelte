@@ -2454,14 +2454,8 @@
 							{viewMode}
 							on:itemClick={(e) => {
 								const { item, index } = e.detail;
-								if (!isCheckMode && !isDeleteMode) {
+								if (!isDeleteMode) {
 									openSearchResult(item);
-								}
-							}}
-							on:itemSelect={(e) => {
-								const { item, multiSelect } = e.detail;
-								if (isCheckMode) {
-									toggleItemSelection(item.path);
 								}
 							}}
 							on:itemContextMenu={(e) => {
@@ -2510,16 +2504,14 @@
 						on:itemClick={(e) => {
 							const { item, index } = e.detail;
 							fileBrowserStore.setSelectedIndex(index);
-							if (!isCheckMode && !isDeleteMode) {
-								// 单击直接打开文件
+							if (!isDeleteMode) {
+								// 单击直接打开文件（勾选模式下也保持原行为）
 								openFile(item);
 							}
 						}}
 						on:itemSelect={(e) => {
 							const { item, index, multiSelect } = e.detail;
-							if (isCheckMode) {
-								toggleItemSelection(item.path);
-							} else {
+							if (!isCheckMode) {
 								fileBrowserStore.setSelectedIndex(index);
 							}
 						}}

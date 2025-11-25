@@ -521,7 +521,8 @@
 			>
 				{#each items.slice(startIndex, endIndex + 1) as item, i (item.path)}
 					{@const actualIndex = startIndex + i}
-					{@const isSelected = selectedIndex === actualIndex}
+					{@const rowSelected = selectedIndex === actualIndex}
+					{@const isChecked = selectedItems.has(item.path)}
 					{@const historyEntry = (() => {
 						try {
 							return historyStore.findByPath(item.path);
@@ -533,7 +534,8 @@
 						{item}
 						thumbnail={thumbnails.get(getThumbnailKey(item))}
 						viewMode="list"
-						{isSelected}
+						isSelected={rowSelected}
+						isChecked={isChecked}
 						{isCheckMode}
 						{isDeleteMode}
 						showReadMark={!!historyEntry}
@@ -568,7 +570,8 @@
 				<div class="grid grid-cols-2 gap-2 p-2 sm:grid-cols-3" role="presentation">
 					{#each items.slice(startIndex, endIndex + 1) as item, i (item.path)}
 						{@const actualIndex = startIndex + i}
-						{@const isSelected = selectedIndex === actualIndex}
+						{@const rowSelected = selectedIndex === actualIndex}
+						{@const isChecked = selectedItems.has(item.path)}
 						{@const historyEntry = (() => {
 							try {
 								return historyStore.findByPath(item.path);
@@ -580,7 +583,8 @@
 							{item}
 							thumbnail={thumbnails.get(getThumbnailKey(item))}
 							viewMode="grid"
-							{isSelected}
+							isSelected={rowSelected}
+							isChecked={isChecked}
 							{isCheckMode}
 							{isDeleteMode}
 							showReadMark={!!historyEntry}

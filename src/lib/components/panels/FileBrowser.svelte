@@ -206,15 +206,15 @@
 	// UI 模式状态
 	let isCheckMode = $state(fileBrowserStore.getState().isCheckMode);
 	let isDeleteMode = $state(fileBrowserStore.getState().isDeleteMode);
-	let isPenetrateMode = $state(false);
+	let isPenetrateMode = $state(fileBrowserStore.getState().isPenetrateMode);
 	let viewMode = $state<'list' | 'thumbnails'>(
 		loadPanelViewMode('file-browser', 'list') as 'list' | 'thumbnails'
 	); // 列表 or 缩略图视图
 	let selectedItems = $state<Set<string>>(new Set());
-	let showSearchBar = $state(false);
-	let showMigrationBar = $state(false);
-	let showMigrationManagerTab = $state(false);
-	let showFolderTree = $state(false);
+	let showSearchBar = $state(fileBrowserStore.getState().showSearchBar);
+	let showMigrationBar = $state(fileBrowserStore.getState().showMigrationBar);
+	let showMigrationManagerTab = $state(fileBrowserStore.getState().showMigrationManager);
+	let showFolderTree = $state(fileBrowserStore.getState().showFolderTree);
 	let treeItems = $state<FsItem[]>([]);
 	let drivesLoaded = false;
 	let loadedDriveRoots = new Set<string>();
@@ -274,6 +274,30 @@
 		} catch (e) {
 			console.error('自动加载盘符根目录失败:', root, e);
 		}
+	}
+
+	function togglePenetrateMode() {
+		const next = !isPenetrateMode;
+		isPenetrateMode = next;
+		fileBrowserStore.setPenetrateMode(next);
+	}
+
+	function toggleSearchBar() {
+		const next = !showSearchBar;
+		showSearchBar = next;
+		fileBrowserStore.setShowSearchBar(next);
+	}
+
+	function toggleMigrationBar() {
+		const next = !showMigrationBar;
+		showMigrationBar = next;
+		fileBrowserStore.setShowMigrationBar(next);
+	}
+
+	function toggleMigrationManagerTab() {
+		const next = !showMigrationManagerTab;
+		showMigrationManagerTab = next;
+		fileBrowserStore.setShowMigrationManager(next);
 	}
 
 	function setLastFolder(path: string) {
@@ -495,6 +519,7 @@
 
 	async function toggleFolderTree() {
 		showFolderTree = !showFolderTree;
+		fileBrowserStore.setShowFolderTree(showFolderTree);
 		if (showFolderTree) {
 			await ensureDriveRoots();
 			if (currentPath && items.length > 0) {
@@ -1882,7 +1907,9 @@
 		copyToSubmenu.show = false;
 		hideContextMenu();
 		showMigrationBar = true;
+		fileBrowserStore.setShowMigrationBar(true);
 		showMigrationManagerTab = !showMigrationManagerTab;
+		fileBrowserStore.setShowMigrationManager(showMigrationManagerTab);
 	}
 
 	/**
@@ -2415,7 +2442,7 @@
 							variant={isPenetrateMode ? 'default' : 'ghost'}
 							size="icon"
 							class="h-8 w-8"
-							onclick={() => (isPenetrateMode = !isPenetrateMode)}
+							onclick={togglePenetrateMode}
 						>
 							<CornerDownRight class="h-4 w-4" />
 						</Button>
@@ -2455,7 +2482,7 @@
 							variant={showSearchBar ? 'default' : 'ghost'}
 							size="icon"
 							class="h-8 w-8"
-							onclick={() => (showSearchBar = !showSearchBar)}
+							onclick={toggleSearchBar}
 						>
 							<Search class="h-4 w-4" />
 						</Button>
@@ -2471,7 +2498,7 @@
 							variant={showMigrationBar ? 'default' : 'ghost'}
 							size="icon"
 							class="h-8 w-8"
-							onclick={() => (showMigrationBar = !showMigrationBar)}
+							onclick={toggleMigrationBar}
 						>
 							<ClipboardPaste class="h-4 w-4" />
 						</Button>
@@ -2680,6 +2707,7 @@
 				class="hover:bg-accent flex w-full items-center px-3 py-1.5 text-sm"
 				onclick={() => {
 					showMigrationBar = true;
+					fileBrowserStore.setShowMigrationBar(true);
 					hideContextMenu();
 				}}
 			>

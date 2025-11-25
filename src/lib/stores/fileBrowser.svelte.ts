@@ -26,6 +26,12 @@ interface FileBrowserState {
   scrollTargetIndex: number;
   isCheckMode: boolean;
   isDeleteMode: boolean;
+  // 持久化的 UI 模式开关
+  isPenetrateMode: boolean;
+  showSearchBar: boolean;
+  showMigrationBar: boolean;
+  showMigrationManager: boolean;
+  showFolderTree: boolean;
 }
 
 const archiveExtensions = ['.zip', '.cbz', '.rar', '.cbr', '.7z'];
@@ -76,7 +82,12 @@ const initialState: FileBrowserState = {
   scrollToSelectedToken: 0,
   scrollTargetIndex: -1,
   isCheckMode: false,
-  isDeleteMode: false
+  isDeleteMode: false,
+  isPenetrateMode: false,
+  showSearchBar: false,
+  showMigrationBar: false,
+  showMigrationManager: false,
+  showFolderTree: false
 };
 
 /**
@@ -146,6 +157,11 @@ function createFileBrowserStore() {
     setSelectedIndex: (index: number) => update(state => ({ ...state, selectedIndex: index })),
     setCheckMode: (value: boolean) => update(state => ({ ...state, isCheckMode: value })),
     setDeleteMode: (value: boolean) => update(state => ({ ...state, isDeleteMode: value })),
+    setPenetrateMode: (value: boolean) => update(state => ({ ...state, isPenetrateMode: value })),
+    setShowSearchBar: (value: boolean) => update(state => ({ ...state, showSearchBar: value })),
+    setShowMigrationBar: (value: boolean) => update(state => ({ ...state, showMigrationBar: value })),
+    setShowMigrationManager: (value: boolean) => update(state => ({ ...state, showMigrationManager: value })),
+    setShowFolderTree: (value: boolean) => update(state => ({ ...state, showFolderTree: value })),
     setSort: (field: SortField, order: SortOrder) => update(state => ({ ...state, sortField: field, sortOrder: order })),
     requestScrollToSelected: (indexOverride?: number) =>
       update(state => ({

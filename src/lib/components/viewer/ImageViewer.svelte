@@ -63,6 +63,7 @@ import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoo
 	let lastMeasuredImageSource: string | null = null;
 	let containerResizeObserver: ResizeObserver | null = null;
 	let lastAppliedZoomContext: { mode: ZoomMode; dimsKey: string; viewportKey: string } | null = null;
+	let dimensionMeasureId = 0;
 
 	function calculateZoomScale(mode: ZoomMode, dims: ImageDimensions, viewport: { width: number; height: number }) {
 		const iw = Math.max(dims.width || 0, 1);
@@ -130,6 +131,62 @@ import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoo
 			img.onerror = () => resolve(null);
 			img.src = source;
 		});
+	}
+
+	function getCurrentImageSource(): string | null {
+		return derivedUpscaledUrl || imageData || imageData2;
+	}
+
+	function clearImageDimensions() {
+		dimensionMeasureId++;
+		currentImageDimensions = null;
+		lastMeasuredImageSource = null;
+	}
+
+	async function refreshImageDimensions(force = false) {
+		if (isCurrentPageVideo) {
+			clearImageDimensions();
+			return;
+		}
+		const page = bookStore.currentPage;
+		if (!page) {
+			clearImageDimensions();
+			return;
+		}
+		const requestId = ++dimensionMeasureId;
+		let dims: ImageDimensions | null = null;
+		if (page.width && page.height) {
+			dims = { width: page.width, height: page.height };
+		}
+		if (!dims) {
+			const src = getCurrentImageSource();
+			if (!src) {
+				clearImageDimensions();
+				return;
+			}
+			if (!force && src === lastMeasuredImageSource && currentImageDimensions) {
+				applyCurrentZoomMode();
+				return;
+			}
+			const measured = await measureImageDimensions(src);
+			if (requestId !== dimensionMeasureId) return;
+			if (measured) {
+				dims = measured;
+				lastMeasuredImageSource = src;
+			}
+		}
+		if (requestId !== dimensionMeasureId) return;
+		if (dims) {
+			currentImageDimensions = dims;
+			applyCurrentZoomMode();
+			void updateInfoPanelForCurrentPage(dims);
+		} else {
+			clearImageDimensions();
+		}
+	}
+
+	function handleApplyZoomModeEvent(event: CustomEvent<ApplyZoomModeDetail>) {
+		applyCurrentZoomMode(event.detail?.mode);
 	}
 
 	let originalImageDataForComparison = $state<string>('');

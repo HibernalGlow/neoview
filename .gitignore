@@ -25,7 +25,7 @@ __pycache__/
 .venv/
 temp/*
 temp/test_images/test_image.png
-ref/upscale*
+ref/*
 
 /cache/
 

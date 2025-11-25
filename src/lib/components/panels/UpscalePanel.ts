@@ -71,7 +71,6 @@ export interface UpscalePanelEventDetail {
 	conditionalMinWidth: number;
 	conditionalMinHeight: number;
 	currentImageUpscaleEnabled: boolean;
-	useCachedFirst: boolean;
 	conditionsList: UpscaleCondition[];
 }
 
@@ -82,14 +81,12 @@ const initialImageSettings = (() => {
 		const imageSettings = settingsManager.getSettings().image ?? {};
 		return {
 			enableSuperResolution:
-				imageSettings.enableSuperResolution ?? DEFAULT_UPSCALE_SETTINGS.currentImageUpscaleEnabled,
-			useCachedFirst: imageSettings.useCachedFirst ?? DEFAULT_UPSCALE_SETTINGS.useCachedFirst
+				imageSettings.enableSuperResolution ?? DEFAULT_UPSCALE_SETTINGS.currentImageUpscaleEnabled
 		};
 	} catch (error) {
 		console.warn('无法读取全局图像设置，使用默认值', error);
 		return {
-			enableSuperResolution: DEFAULT_UPSCALE_SETTINGS.currentImageUpscaleEnabled,
-			useCachedFirst: DEFAULT_UPSCALE_SETTINGS.useCachedFirst
+			enableSuperResolution: DEFAULT_UPSCALE_SETTINGS.currentImageUpscaleEnabled
 		};
 	}
 })();
@@ -99,7 +96,6 @@ const DEFAULT_CONDITION_PRESETS = getDefaultConditionPresets();
 export const defaultPanelSettings: UpscalePanelSettings = {
 	...DEFAULT_UPSCALE_SETTINGS,
 	currentImageUpscaleEnabled: initialImageSettings.enableSuperResolution,
-	useCachedFirst: initialImageSettings.useCachedFirst,
 	preloadPages: 3,
 	backgroundConcurrency: 2,
 	showPanelPreview: false,
@@ -189,8 +185,7 @@ export function persistUpscalePanelSettings(settings: UpscalePanelSettings): voi
 			minWidth: settings.conditionalMinWidth,
 			minHeight: settings.conditionalMinHeight
 		},
-		currentImageUpscaleEnabled: settings.currentImageUpscaleEnabled,
-		useCachedFirst: settings.useCachedFirst
+		currentImageUpscaleEnabled: settings.currentImageUpscaleEnabled
 	};
 
 	setUpscaleSettings(upscaleSettings);
@@ -204,7 +199,6 @@ export function toUpscalePanelEventDetail(settings: UpscalePanelSettings): Upsca
 		conditionalMinWidth: settings.conditionalMinWidth,
 		conditionalMinHeight: settings.conditionalMinHeight,
 		currentImageUpscaleEnabled: settings.currentImageUpscaleEnabled,
-		useCachedFirst: settings.useCachedFirst,
 		conditionsList: settings.conditionsList
 	};
 }

@@ -97,7 +97,6 @@ export function createDefaultAppState(): AppStateSnapshot {
 				enableSuperResolution: false,
 				superResolutionModel: null,
 				currentImageUpscaleEnabled: false,
-				useCachedFirst: true,
 				autoPlayAnimatedImages: true,
 				longImageScrollMode: 'continuous',
 				videoMinPlaybackRate: 0.25,

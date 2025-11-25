@@ -12,7 +12,6 @@
 		conditionalMinWidth = $bindable(0),
 		conditionalMinHeight = $bindable(0),
 		currentImageUpscaleEnabled = $bindable(false),
-		useCachedFirst = $bindable(true),
 		preloadPages = $bindable(3),
 		backgroundConcurrency = $bindable(2)
 	} = $props();
@@ -118,16 +117,6 @@
 				onchange={handleSettingChange} 
 			/>
 			<Label>本张图开启 Waifu2x (F2)</Label>
-		</div>
-	</div>
-
-	<div class="setting-row">
-		<div class="flex items-center gap-2">
-			<Switch 
-				bind:checked={useCachedFirst} 
-				onchange={handleSettingChange} 
-			/>
-			<Label>优先使用下载转换好的</Label>
 		</div>
 	</div>
 </div>

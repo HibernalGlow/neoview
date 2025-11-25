@@ -30,7 +30,6 @@ export interface NeoViewSettings {
     enableSuperResolution: boolean;
     superResolutionModel: string | null;
     currentImageUpscaleEnabled: boolean;
-    useCachedFirst: boolean;
     autoPlayAnimatedImages: boolean;
     longImageScrollMode: 'page' | 'continuous';
     videoMinPlaybackRate: number;
@@ -126,7 +125,6 @@ const defaultSettings: NeoViewSettings = {
     enableSuperResolution: false,
     superResolutionModel: null,
     currentImageUpscaleEnabled: false,
-    useCachedFirst: true,
     autoPlayAnimatedImages: true,
     longImageScrollMode: 'continuous',
     videoMinPlaybackRate: 0.25,

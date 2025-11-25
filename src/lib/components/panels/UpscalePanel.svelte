@@ -44,7 +44,6 @@ import { collectPageMetadata, evaluateConditions } from '$lib/utils/upscale/cond
 	let conditionalMinWidth = $state(0);
 	let conditionalMinHeight = $state(0);
 	let currentImageUpscaleEnabled = $state(false);
-	let useCachedFirst = $state(true);
 	let showPanelPreview = $state(false); // 新增：侧边预览开关
 	let settingsInitialized = $state(false);
 	
@@ -311,7 +310,6 @@ let lastBookPath: string | null = null;
 		conditionalMinWidth = settings.conditionalMinWidth;
 		conditionalMinHeight = settings.conditionalMinHeight;
 		currentImageUpscaleEnabled = settings.currentImageUpscaleEnabled;
-		useCachedFirst = settings.useCachedFirst;
 		selectedModel = settings.selectedModel;
 		scale = settings.scale;
 		tileSize = settings.tileSize;
@@ -335,7 +333,6 @@ let lastBookPath: string | null = null;
 			conditionalMinWidth,
 			conditionalMinHeight,
 			currentImageUpscaleEnabled,
-			useCachedFirst,
 			selectedModel,
 			scale,
 			tileSize,
@@ -1256,7 +1253,6 @@ let lastBookPath: string | null = null;
 		bind:conditionalMinWidth
 		bind:conditionalMinHeight
 		bind:currentImageUpscaleEnabled
-		bind:useCachedFirst
 		bind:preloadPages
 		bind:backgroundConcurrency
 		on:change={handleGlobalControlsChange}

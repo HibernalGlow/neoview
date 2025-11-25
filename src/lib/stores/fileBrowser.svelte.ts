@@ -32,6 +32,8 @@ interface FileBrowserState {
   showMigrationBar: boolean;
   showMigrationManager: boolean;
   showFolderTree: boolean;
+  visibleItems: FsItem[];
+  useVisibleItemsOverride: boolean;
 }
 
 const archiveExtensions = ['.zip', '.cbz', '.rar', '.cbr', '.7z'];
@@ -96,7 +98,9 @@ const initialState: FileBrowserState = {
   showSearchBar: false,
   showMigrationBar: false,
   showMigrationManager: false,
-  showFolderTree: false
+  showFolderTree: false,
+  visibleItems: [],
+  useVisibleItemsOverride: false
 };
 
 /**
@@ -165,7 +169,11 @@ function createFileBrowserStore() {
     subscribe,
     getState: () => currentState,
     setCurrentPath: (path: string) => update(state => ({ ...state, currentPath: path })),
-    setItems: (items: FsItem[]) => update(state => ({ ...state, items })),
+    setItems: (items: FsItem[]) => update(state => ({
+      ...state,
+      items,
+      visibleItems: state.useVisibleItemsOverride ? state.visibleItems : items
+    })),
     setLoading: (loading: boolean) => update(state => ({ ...state, loading })),
     setError: (error: string) => update(state => ({ ...state, error })),
     setArchiveView: (isArchive: boolean, archivePath: string = '') =>
@@ -270,7 +278,8 @@ function createFileBrowserStore() {
       return { ...state, selectedIndex: index };
     }),
     findAdjacentBookPath: (currentBookPath: string | null, direction: 'next' | 'previous'): string | null => {
-      const bookItems = currentState.items.filter(isBookCandidate);
+      const sourceItems = currentState.useVisibleItemsOverride ? currentState.visibleItems : currentState.items;
+      const bookItems = sourceItems.filter(isBookCandidate);
       if (bookItems.length === 0) return null;
 
       const normalizedCurrent = currentBookPath ? normalizePath(currentBookPath) : null;

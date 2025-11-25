@@ -15,12 +15,24 @@ pub enum BookType {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum PageSortMode {
+    /// 文件名升序
     FileName,
+    /// 文件名降序
     FileNameDescending,
+    /// 文件大小升序
     FileSize,
+    /// 文件大小降序
+    FileSizeDescending,
+    /// 修改时间升序
     TimeStamp,
+    /// 修改时间降序
+    TimeStampDescending,
+    /// 随机顺序
     Random,
+    /// 按读取顺序（Entry 顺序）
     Entry,
+    /// 按读取顺序反向
+    EntryDescending,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -43,6 +55,8 @@ pub enum PageMode {
 pub struct Page {
     /// 页面索引
     pub index: usize,
+    /// 页面原始顺序（Entry 顺序）
+    pub entry_index: usize,
     /// 页面路径
     pub path: String,
     /// 内部路径（用于压缩包内的文件）
@@ -63,6 +77,8 @@ pub struct Page {
     pub thumbnail: Option<String>,
     /// 稳定哈希值（用于缓存键）
     pub stable_hash: String,
+    /// 最后修改时间（unix 时间戳，单位：秒）
+    pub modified: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -133,6 +149,7 @@ impl Page {
     pub fn new(index: usize, path: String, name: String, size: u64) -> Self {
         Self {
             index,
+            entry_index: index,
             path,
             inner_path: None,
             name,
@@ -143,6 +160,7 @@ impl Page {
             is_cover: None,
             thumbnail: None,
             stable_hash: String::new(), // 将在 BookManager 中计算
+            modified: None,
         }
     }
 
@@ -153,6 +171,16 @@ impl Page {
 
     pub fn with_inner_path(mut self, inner_path: Option<String>) -> Self {
         self.inner_path = inner_path;
+        self
+    }
+
+    pub fn with_entry_index(mut self, entry_index: usize) -> Self {
+        self.entry_index = entry_index;
+        self
+    }
+
+    pub fn with_modified(mut self, modified: Option<i64>) -> Self {
+        self.modified = modified;
         self
     }
 }

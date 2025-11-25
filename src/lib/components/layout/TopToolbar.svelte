@@ -73,6 +73,7 @@
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import type { ZoomMode } from '$lib/settings/settingsManager';
 	import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
+	import type { PageSortMode } from '$lib/types/book';
 
 	const appWindow = getCurrentWebviewWindow();
 
@@ -82,6 +83,21 @@
 	}
 
 	const viewerState = createAppStateStore((state) => state.viewer);
+const sortModeOptions: { value: PageSortMode; label: string; description: string }[] = [
+	{ value: 'fileName', label: '文件名 ↑', description: '按文件名升序排序' },
+	{ value: 'fileNameDescending', label: '文件名 ↓', description: '按文件名降序排序' },
+	{ value: 'fileSize', label: '文件大小 ↑', description: '按文件大小升序排序' },
+	{ value: 'fileSizeDescending', label: '文件大小 ↓', description: '按文件大小降序排序' },
+	{ value: 'timeStamp', label: '修改时间 ↑', description: '按修改时间从旧到新' },
+	{ value: 'timeStampDescending', label: '修改时间 ↓', description: '按修改时间从新到旧' },
+	{ value: 'entry', label: 'Entry 顺序 ↑', description: '按原始读取顺序' },
+	{ value: 'entryDescending', label: 'Entry 顺序 ↓', description: '原始顺序反向' },
+	{ value: 'random', label: '随机顺序', description: '随机排列所有页面' }
+];
+let currentSortModeLabel = $derived(() => {
+	const mode = bookStore.currentBook?.sortMode ?? 'fileName';
+	return sortModeOptions.find((o) => o.value === mode)?.label ?? '文件名 ↑';
+});
 
 	// 阅读方向状态
 	let settings = $state(settingsManager.getSettings());
@@ -119,6 +135,11 @@
 		settingsManager.updateNestedSettings('view', { defaultZoomMode: mode });
 		dispatchApplyZoomMode(mode);
 	}
+
+async function handleSortModeChange(mode: PageSortMode) {
+	if (!bookStore.currentBook || bookStore.currentBook.sortMode === mode) return;
+	await bookStore.setSortMode(mode);
+}
 
 	function handleZoomReset() {
 		dispatchApplyZoomMode();
@@ -733,6 +754,61 @@
 						{bookStore.currentPageIndex + 1} / {bookStore.totalPages}
 					</span>
 					<!-- progress removed: not needed in top toolbar -->
+				</div>
+			{/if}
+
+			<!-- 中间：页码信息、排序 -->
+			{#if bookStore.currentBook}
+				<div class="text-muted-foreground flex items-center gap-3 whitespace-nowrap text-sm">
+					{#if bookStore.currentBook.type === 'archive'}
+						<FileArchive class="h-3 w-3" />
+					{:else}
+						<Folder class="h-3 w-3" />
+					{/if}
+					<span class="font-mono text-xs">
+						{bookStore.currentPageIndex + 1} / {bookStore.totalPages}
+					</span>
+				</div>
+				<div class="flex items-center gap-1">
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger>
+							<Button
+								variant="ghost"
+								size="icon"
+								class="h-8 w-8"
+								style="pointer-events: auto;"
+								title={`页面排序：${currentSortModeLabel}`}
+							>
+								<ArrowDownUp class="h-3.5 w-3.5" />
+							</Button>
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content
+							class="z-60 w-60"
+							onmouseenter={handleMouseEnter}
+							onmouseleave={handleMouseLeave}
+						>
+							<DropdownMenu.Label>页面排序</DropdownMenu.Label>
+							<DropdownMenu.Separator />
+							{#each sortModeOptions as option}
+								<DropdownMenu.Item
+									class={bookStore.currentBook?.sortMode === option.value ? 'bg-accent' : ''}
+									onclick={() => handleSortModeChange(option.value)}
+								>
+									<div class="flex flex-col gap-0.5 text-left">
+										<div class="flex items-center gap-2">
+											<div class="flex h-4 w-4 items-center justify-center">
+												{#if bookStore.currentBook?.sortMode === option.value}
+													<Check class="h-3 w-3" />
+												{/if}
+											</div>
+											<span class="text-xs font-medium">{option.label}</span>
+										</div>
+										<span class="text-[10px] text-muted-foreground">{option.description}</span>
+									</div>
+								</DropdownMenu.Item>
+							{/each}
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
 				</div>
 			{/if}
 

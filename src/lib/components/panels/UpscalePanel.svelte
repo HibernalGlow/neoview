@@ -1207,12 +1207,7 @@ let lastBookPath: string | null = null;
 	 */
 
 	// 快捷键处理
-	function handleKeyPress(event: KeyboardEvent) {
-		if (event.key === 'F2') {
-			event.preventDefault();
-			currentImageUpscaleEnabled = !currentImageUpscaleEnabled;
-		}
-	}
+
 
 	function stopAllUpscaleForCurrentBook() {
 		console.log('[UpscalePanel] 手动停止当前书籍的所有超分任务');
@@ -1228,7 +1223,6 @@ let lastBookPath: string | null = null;
 	}
 </script>
 
-<svelte:window onkeydown={handleKeyPress} />
 
 <div class="upscale-panel">
 	<!-- 标题栏 -->

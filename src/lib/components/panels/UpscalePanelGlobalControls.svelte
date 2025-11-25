@@ -116,7 +116,7 @@
 				bind:checked={currentImageUpscaleEnabled} 
 				onchange={handleSettingChange} 
 			/>
-			<Label>本张图开启 Waifu2x (F2)</Label>
+			<Label>切换当前图原图/缓存</Label>
 		</div>
 	</div>
 </div>

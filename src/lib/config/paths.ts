@@ -1,1 +1,1 @@
-export const DEFAULT_THUMBNAIL_DIRECTORY = 'D\\temp\\neoview';
+export const DEFAULT_THUMBNAIL_DIRECTORY = 'D:\\temp\\neoview';

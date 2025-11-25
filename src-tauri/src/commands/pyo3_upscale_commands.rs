@@ -57,7 +57,11 @@ pub async fn init_pyo3_upscaler(
     state: tauri::State<'_, PyO3UpscalerState>,
 ) -> Result<(), String> {
     let python_module_path = PathBuf::from(python_module_path);
-    let cache_dir = PathBuf::from(cache_dir);
+
+    // 使用前端传入的目录作为根目录，在其下创建 pyo3-upscale 子目录
+    // 约定：前端应传入缩略图根目录（通用设置里的 thumbnailDirectory 或其默认值）
+    let base_cache_dir = PathBuf::from(cache_dir);
+    let cache_dir = base_cache_dir.join("pyo3-upscale");
 
     let manager = PyO3Upscaler::new(python_module_path, cache_dir)?;
 

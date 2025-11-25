@@ -9,6 +9,7 @@ import { onMount, onDestroy, createEventDispatcher } from 'svelte';
 import { Switch } from '$lib/components/ui/switch';
 import { Label } from '$lib/components/ui/label';
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
+import { DEFAULT_THUMBNAIL_DIRECTORY } from '$lib/config/paths';
 	// Toast 已改为控制台输出，避免右上角弹窗干扰
 	import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
@@ -367,11 +368,18 @@ let lastBookPath: string | null = null;
 			// 使用绝对路径
 			// 在开发环境中，使用项目根目录的绝对路径
 			const pythonModulePath = 'D:/1VSCODE/Projects/ImageAll/NeeWaifu/neoview/neoview-tauri/src-tauri/python/upscale_wrapper.py';
-			const cacheDir = 'D:/1VSCODE/Projects/ImageAll/NeeWaifu/neoview/neoview-tauri/cache/pyo3-upscale';
+			
+			// 超分缓存目录：跟随通用设置里的缩略图目录，默认 DEFAULT_THUMBNAIL_DIRECTORY
+			const globalSettings = settingsManager.getSettings();
+			const configuredThumbDir = globalSettings.system?.thumbnailDirectory?.trim();
+			const thumbnailRoot = configuredThumbDir && configuredThumbDir.length > 0
+				? configuredThumbDir
+				: DEFAULT_THUMBNAIL_DIRECTORY;
+			const cacheDir = `${thumbnailRoot}/pyo3-upscale`;
 			
 			console.log('🔧 初始化 PyO3 超分管理器...');
 			console.log('  Python 模块路径:', pythonModulePath);
-			console.log('  缓存目录:', cacheDir);
+			console.log('  缓存目录 (根自通用设置 thumbnailDirectory):', cacheDir);
 			
 			await pyo3UpscaleManager.initialize(pythonModulePath, cacheDir);
 			

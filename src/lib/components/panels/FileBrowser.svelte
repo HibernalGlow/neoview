@@ -640,6 +640,9 @@
 			console.debug('读取文件树宽度失败:', e);
 		}
 
+		// 读取快速目标文件夹列表
+		loadQuickFolderTargets();
+
 		// 加载主页 - 仅在当前没有路径时加载（避免覆盖从其他面板跳转过来的导航）
 		if (!fileBrowserStore.getState().currentPath) {
 			void loadStartupDirectory();
@@ -1745,6 +1748,75 @@
 		hideContextMenu();
 	}
 
+	type QuickFolderTarget = { id: string; name: string; path: string };
+	let quickFolderTargets = $state<QuickFolderTarget[]>([]);
+	let quickFolderMode = $state<'copy' | 'move'>('copy');
+	const QUICK_FOLDER_STORAGE_KEY = 'neoview-filebrowser-quick-folders';
+
+	function loadQuickFolderTargets() {
+		try {
+			const raw = localStorage.getItem(QUICK_FOLDER_STORAGE_KEY);
+			if (!raw) return;
+			const parsed = JSON.parse(raw);
+			if (Array.isArray(parsed)) {
+				quickFolderTargets = parsed
+					.map((t) => ({ id: String(t.id ?? ''), name: String(t.name ?? ''), path: String(t.path ?? '') }))
+					.filter((t) => t.name && t.path);
+			}
+		} catch (err) {
+			console.debug('读取快速目标文件夹失败:', err);
+		}
+	}
+
+	function saveQuickFolderTargets() {
+		try {
+			localStorage.setItem(QUICK_FOLDER_STORAGE_KEY, JSON.stringify(quickFolderTargets));
+		} catch (err) {
+			console.debug('保存快速目标文件夹失败:', err);
+		}
+	}
+
+	async function quickApplyToFolder(target: QuickFolderTarget) {
+		if (!contextMenu.item) return;
+		const targets = resolveActionTargets(contextMenu.item);
+
+		try {
+			for (const item of targets) {
+				const fileName = item.path.split(/[\\/]/).pop();
+				if (!fileName) continue;
+				const destPath = `${target.path}/${fileName}`;
+				if (quickFolderMode === 'move') {
+					await FileSystemAPI.movePath(item.path, destPath);
+				} else {
+					await FileSystemAPI.copyPath(item.path, destPath);
+				}
+			}
+			await refresh();
+		} catch (err) {
+			fileBrowserStore.setError(String(err));
+		} finally {
+			copyToSubmenu.show = false;
+			hideContextMenu();
+		}
+	}
+
+	async function openQuickFolderManager() {
+		copyToSubmenu.show = false;
+		hideContextMenu();
+		try {
+			const selected = await FileSystemAPI.selectFolder();
+			if (!selected) return;
+			const defaultName = selected.split(/[\\/]/).pop() || selected;
+			const name = prompt('请输入目标名称:', defaultName);
+			if (!name) return;
+			const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+			quickFolderTargets = [...quickFolderTargets, { id, name, path: selected }];
+			saveQuickFolderTargets();
+		} catch (err) {
+			fileBrowserStore.setError(String(err));
+		}
+	}
+
 	/**
 	 * 复制文件
 	 */
@@ -1754,6 +1826,17 @@
 		clipboardItem = { paths, operation: 'copy' };
 		try {
 			const text = paths.join('\n');
+			if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+				void navigator.clipboard.writeText(text).catch(() => {});
+			}
+		} catch {}
+		hideContextMenu();
+	}
+
+	function copyItemPath(item: FsItem) {
+		const targets = resolveActionTargets(item);
+		const text = targets.map((t) => t.path).join('\n');
+		try {
 			if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
 				void navigator.clipboard.writeText(text).catch(() => {});
 			}
@@ -2388,12 +2471,28 @@
 			</button>
 			<button
 				type="button"
+				class="hover:bg-accent flex w-full items-center px-3 py-1.5 text-sm"
+				onclick={() => copyItemPath(contextMenu.item!)}
+			>
+				<File class="mr-2 h-4 w-4" />
+				<span>复制路径</span>
+			</button>
+			<button
+				type="button"
 				class="hover:bg-accent disabled:text-muted-foreground/70 flex w-full items-center px-3 py-1.5 text-sm"
 				disabled={!clipboardItem}
 				onclick={pasteItem}
 			>
 				<ClipboardPaste class="mr-2 h-4 w-4" />
 				<span>粘贴</span>
+			</button>
+			<button
+				type="button"
+				class="hover:bg-accent flex w-full items-center px-3 py-1.5 text-sm"
+				onmouseenter={showCopyToSubmenu}
+			>
+				<Folder class="mr-2 h-4 w-4" />
+				<span>{quickFolderMode === 'move' ? '移动到…' : '复制到…'}</span>
 			</button>
 			<hr class="border-border/60 my-1" />
 			<button
@@ -2428,6 +2527,68 @@
 			>
 				<ExternalLink class="mr-2 h-4 w-4" />
 				<span>在外部应用中打开</span>
+			</button>
+		</div>
+	{/if}
+
+	{#if copyToSubmenu.show}
+		<!-- 复制/移动到：二级子菜单 -->
+		<div
+			class="context-menu z-[10001] bg-popover text-popover-foreground fixed min-w-[220px] max-h-[60vh] rounded-md border py-1 shadow-lg flex flex-col"
+			style={`left: ${copyToSubmenu.x}px; top: ${copyToSubmenu.y}px;`}
+			role="menu"
+			tabindex="-1"
+			onmousedown={(e: MouseEvent) => e.stopPropagation()}
+		>
+			<div class="flex items-center justify-between px-3 pb-1 text-xs text-muted-foreground">
+				<span>快速目标</span>
+				<div class="inline-flex rounded-md border bg-background p-0.5 text-[11px]">
+					<button
+						type="button"
+						class={`px-2 py-0.5 rounded-sm ${quickFolderMode === 'copy' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
+						onclick={() => (quickFolderMode = 'copy')}
+					>
+						复制
+					</button>
+					<button
+						type="button"
+						class={`px-2 py-0.5 rounded-sm ${quickFolderMode === 'move' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
+						onclick={() => (quickFolderMode = 'move')}
+					>
+						移动
+					</button>
+				</div>
+			</div>
+			<hr class="border-border/60 my-1" />
+			<div class="max-h-[40vh] overflow-auto px-1">
+				{#if quickFolderTargets.length === 0}
+					<div class="px-2 py-1 text-xs text-muted-foreground">
+						暂无快速目标，请使用下方“管理器”添加。
+					</div>
+				{:else}
+					{#each quickFolderTargets as target (target.id)}
+						<button
+							type="button"
+							class="hover:bg-accent flex w-full items-center px-2 py-1 text-xs"
+							onclick={() => quickApplyToFolder(target)}
+						>
+							<Folder class="mr-2 h-3.5 w-3.5" />
+							<div class="flex flex-col items-start gap-0.5">
+								<span class="text-[11px] font-medium">{target.name}</span>
+								<span class="text-[10px] text-muted-foreground break-all">{target.path}</span>
+							</div>
+						</button>
+					{/each}
+				{/if}
+			</div>
+			<hr class="border-border/60 my-1" />
+			<button
+				type="button"
+				class="hover:bg-accent flex w-full items-center px-3 py-1.5 text-xs text-muted-foreground"
+				onclick={openQuickFolderManager}
+			>
+				<Settings class="mr-2 h-3.5 w-3.5" />
+				<span>管理快速目标…</span>
 			</button>
 		</div>
 	{/if}

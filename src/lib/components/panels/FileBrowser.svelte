@@ -212,6 +212,7 @@
 	); // 列表 or 缩略图视图
 	let selectedItems = $state<Set<string>>(new Set());
 	let showSearchBar = $state(false);
+	let showMigrationBar = $state(false);
 	let showFolderTree = $state(false);
 	let treeItems = $state<FsItem[]>([]);
 	let drivesLoaded = false;
@@ -614,6 +615,35 @@
 		}
 
 		return results.length > 0 ? results : [primary];
+	}
+
+	function findItemByPath(path: string): FsItem | null {
+		const sources: FsItem[][] = [items, searchResults as unknown as FsItem[], treeItems];
+		for (const list of sources) {
+			const found = list.find((it) => it.path === path);
+			if (found) return found;
+		}
+		return null;
+	}
+
+	function getPrimaryForQuickAction(): FsItem | null {
+		// 勾选模式优先：使用勾选集合中的第一个项目
+		if (isCheckMode && selectedItems.size > 0) {
+			for (const p of selectedItems) {
+				const found = findItemByPath(p);
+				if (found) return found;
+			}
+		}
+
+		// 其次：使用当前右键项
+		if (contextMenu.item) return contextMenu.item;
+
+		// 最后：使用当前选中索引
+		if (selectedIndex >= 0 && items[selectedIndex]) {
+			return items[selectedIndex];
+		}
+
+		return null;
 	}
 
 	// 组件挂载时添加全局点击事件和加载主页
@@ -1777,8 +1807,9 @@
 	}
 
 	async function quickApplyToFolder(target: QuickFolderTarget) {
-		if (!contextMenu.item) return;
-		const targets = resolveActionTargets(contextMenu.item);
+		const primary = getPrimaryForQuickAction();
+		if (!primary) return;
+		const targets = resolveActionTargets(primary);
 
 		try {
 			for (const item of targets) {
@@ -2397,6 +2428,22 @@
 					</Tooltip.Content>
 				</Tooltip.Root>
 
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant={showMigrationBar ? 'default' : 'ghost'}
+							size="icon"
+							class="h-8 w-8"
+							onclick={() => (showMigrationBar = !showMigrationBar)}
+						>
+							<ClipboardPaste class="h-4 w-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>{showMigrationBar ? '隐藏迁移栏' : '显示迁移栏'}</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+
 				<SortPanel {sortField} {sortOrder} onSortChange={handleSortChange} />
 			</div>
 		</div>
@@ -2411,6 +2458,59 @@
 					bind:searchSettings
 					storageKey="neoview-file-search-history"
 				/>
+			</div>
+		{/if}
+
+		{#if showMigrationBar}
+			<!-- 迁移栏：快速复制/移动到预设文件夹 -->
+			<div class="border-border bg-background/95 flex items-center gap-2 border-b px-2 py-1.5 text-xs">
+				<div class="flex items-center gap-2 text-muted-foreground">
+					<span>快速迁移</span>
+					<div class="inline-flex rounded-md border bg-background p-0.5 text-[11px]">
+						<button
+							type="button"
+							class={`px-2 py-0.5 rounded-sm ${quickFolderMode === 'copy' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
+							onclick={() => (quickFolderMode = 'copy')}
+						>
+							复制
+						</button>
+						<button
+							type="button"
+							class={`px-2 py-0.5 rounded-sm ${quickFolderMode === 'move' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
+							onclick={() => (quickFolderMode = 'move')}
+						>
+							移动
+						</button>
+					</div>
+				</div>
+				<div class="flex-1 overflow-x-auto">
+					<div class="flex items-center gap-1">
+						{#if quickFolderTargets.length === 0}
+							<span class="text-muted-foreground">暂无快速目标，请点击“管理”添加。</span>
+						{:else}
+							{#each quickFolderTargets as target (target.id)}
+								<Button
+									variant="outline"
+									size="sm"
+									class="h-7 px-2 text-[11px]"
+									onclick={() => quickApplyToFolder(target)}
+								>
+									<Folder class="mr-1 h-3.5 w-3.5" />
+									<span>{target.name}</span>
+								</Button>
+							{/each}
+						{/if}
+					</div>
+				</div>
+				<Button
+					variant="ghost"
+					size="sm"
+					class="h-7 px-2 text-[11px] text-muted-foreground"
+					onclick={openQuickFolderManager}
+				>
+					<Settings class="mr-1 h-3.5 w-3.5" />
+					<span>管理</span>
+				</Button>
 			</div>
 		{/if}
 	</div>
@@ -2489,10 +2589,13 @@
 			<button
 				type="button"
 				class="hover:bg-accent flex w-full items-center px-3 py-1.5 text-sm"
-				onmouseenter={showCopyToSubmenu}
+				onclick={() => {
+					showMigrationBar = true;
+					hideContextMenu();
+				}}
 			>
 				<Folder class="mr-2 h-4 w-4" />
-				<span>{quickFolderMode === 'move' ? '移动到…' : '复制到…'}</span>
+				<span>打开迁移栏…</span>
 			</button>
 			<hr class="border-border/60 my-1" />
 			<button

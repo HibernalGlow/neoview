@@ -265,7 +265,6 @@ export class SettingsManager {
   private static instance: SettingsManager;
   private settings: NeoViewSettings = { ...defaultSettings };
   private listeners: Set<(s: NeoViewSettings) => void> = new Set();
-  private tailOverflowPromptResolver: ((choice: TailOverflowBehavior | null, direction: 'forward' | 'backward') => void) | null = null;
 
   private constructor() {
     this.loadSettings();
@@ -425,14 +424,6 @@ export class SettingsManager {
     }
   }
 
-  setTailOverflowPromptResolver(handler: (choice: TailOverflowBehavior | null, direction: 'forward' | 'backward') => void) {
-    this.tailOverflowPromptResolver = handler;
-  }
-
-  resolveTailOverflowPrompt(choice: TailOverflowBehavior | null, direction: 'forward' | 'backward') {
-    this.tailOverflowPromptResolver?.(choice, direction);
-    this.tailOverflowPromptResolver = null;
-  }
 }
 
 export const settingsManager = SettingsManager.getInstance();

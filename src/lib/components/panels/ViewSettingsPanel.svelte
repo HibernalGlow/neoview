@@ -21,6 +21,15 @@
 				showOnButtonClick: true
 			};
 		}
+		if (!currentSettings.view.pageLayout) {
+			currentSettings.view.pageLayout = {
+				splitHorizontalPages: false,
+				treatHorizontalAsDoublePage: false
+			};
+		}
+		if (!currentSettings.view.autoRotate) {
+			currentSettings.view.autoRotate = { mode: 'none' };
+		}
 	});
 
 	// 初始化时确保 mouseCursor 对象存在
@@ -32,6 +41,15 @@
 				showMovementThreshold: 26,
 				showOnButtonClick: true
 			};
+		}
+		if (!currentSettings.view.pageLayout) {
+			currentSettings.view.pageLayout = {
+				splitHorizontalPages: false,
+				treatHorizontalAsDoublePage: false
+			};
+		}
+		if (!currentSettings.view.autoRotate) {
+			currentSettings.view.autoRotate = { mode: 'none' };
 		}
 	});
 </script>

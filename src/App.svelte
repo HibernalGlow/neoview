@@ -15,12 +15,54 @@
 	import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
 	import { isVideoFile } from '$lib/utils/videoUtils';
 	import { updateUpscaleSettings } from '$lib/utils/upscale/settings';
+	import { deleteArchiveEntry } from '$lib/api/archive';
 	// TODO: 缩略图功能已移除，待重新实现
 	// import { init_thumbnail_manager } from '$lib/api';
 	import Toast from '$lib/components/ui/toast.svelte';
 	import { onMount } from 'svelte';
 
 	let loading = $state(false);
+
+async function handleDeleteCurrentArchivePage() {
+	const book = bookStore.currentBook;
+	if (!book || book.type !== 'archive') {
+		console.warn('删除操作仅适用于压缩包书籍');
+		return;
+	}
+
+	const currentPage = bookStore.currentPage;
+	if (!currentPage) {
+		console.warn('当前没有页面可删除');
+		return;
+	}
+
+	const archivePath = book.path;
+	const innerPath = currentPage.innerPath ?? currentPage.path;
+	if (!innerPath) {
+		console.warn('无法确定压缩包内路径，删除已取消');
+		return;
+	}
+
+	const archiveSettings = settingsManager.getSettings().archive;
+	if (!archiveSettings?.allowFileOperations) {
+		alert('请先在设置 > 压缩包中启用“允许压缩包文件操作”。');
+		return;
+	}
+
+	if (archiveSettings.confirmBeforeDelete) {
+		const confirmed = confirm(`确定从压缩包中删除当前页面吗？\n文件：${currentPage.name}`);
+		if (!confirmed) return;
+	}
+
+	try {
+		await deleteArchiveEntry(archivePath, innerPath);
+		await bookStore.reloadCurrentBook();
+		console.info('✅ 压缩包页面已删除');
+	} catch (error) {
+		console.error('❌ 删除压缩包页面失败:', error);
+		alert('删除失败，请查看控制台日志。');
+	}
+}
 
 	// TODO: 缩略图功能已移除，待重新实现
 	// 初始化缩略图管理器
@@ -347,6 +389,10 @@ async function dispatchAction(action: string) {
 			console.log('执行删除文件操作');
 			// 删除需要额外确认/实现，这里调用 bookStore.closeBook() 作为占位
 			await bookStore.closeBook();
+			break;
+		case 'deleteCurrentPage':
+			console.log('执行删除当前页操作');
+			await handleDeleteCurrentArchivePage();
 			break;
 		case 'pageLeft': {
 			console.log('执行向左翻页操作');

@@ -25,3 +25,7 @@ export async function getBlobStats(): Promise<{
 }> {
   return await invoke('get_blob_stats');
 }
+
+export async function deleteArchiveEntry(archivePath: string, innerPath: string): Promise<void> {
+  await invoke('delete_archive_entry', { archivePath, innerPath });
+}

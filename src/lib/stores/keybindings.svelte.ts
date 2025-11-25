@@ -227,6 +227,13 @@ const defaultBindings: ActionBinding[] = [
 		description: '删除当前文件',
 		bindings: []
 	},
+	{
+		action: 'deleteCurrentPage',
+		name: '删除当前页',
+		category: '文件',
+		description: '对当前 ZIP 页执行删除（需要启用压缩包文件操作）',
+		bindings: []
+	},
 
 	// === 视频操作 ===
 	{

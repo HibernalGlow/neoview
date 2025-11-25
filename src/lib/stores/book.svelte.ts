@@ -3,7 +3,7 @@
  * 书籍状态管理 Store (Svelte 5 Runes)
  */
 
-import type { BookInfo, Page } from '../types';
+import type { BookInfo, Page, PageSortMode } from '../types';
 import * as bookApi from '../api/book';
 import { infoPanelStore } from './infoPanel.svelte';
 import { appState, type ViewerJumpSource, type PageWindowState } from '$lib/core/state/appState';
@@ -52,6 +52,36 @@ class BookStore {
   // === Getters ===
   get currentBook() {
     return this.state.currentBook;
+  }
+
+  async reloadCurrentBook(options: { keepPage?: boolean } = {}) {
+    const current = this.state.currentBook;
+    if (!current) return;
+
+    const targetPage = options.keepPage === false ? 0 : current.currentPage;
+
+    try {
+      const latest = await bookApi.getCurrentBook();
+      if (!latest) {
+        this.closeViewer();
+        return;
+      }
+
+      const nextPage = Math.min(targetPage, Math.max(latest.totalPages - 1, 0));
+      if (latest.totalPages === 0) {
+        this.closeViewer();
+        return;
+      }
+
+      latest.currentPage = nextPage;
+      this.state.currentBook = latest;
+      this.syncAppStateBookSlice();
+      await bookApi.navigateToPage(nextPage);
+      await this.syncInfoPanelBookInfo();
+    } catch (err) {
+      console.error('❌ Error reloading current book:', err);
+      this.state.error = String(err);
+    }
   }
 
   get loading() {
@@ -309,6 +339,34 @@ class BookStore {
   }
 
   /**
+   * 更新页面的宽高信息
+   */
+  updatePageDimensions(pageIndex: number, dimensions: { width?: number | null; height?: number | null }) {
+    const book = this.state.currentBook;
+    if (!book || !Array.isArray(book.pages)) return;
+    if (pageIndex < 0 || pageIndex >= book.pages.length) return;
+
+    const page = book.pages[pageIndex];
+    if (!page) return;
+
+    let updated = false;
+
+    if (typeof dimensions.width === 'number' && dimensions.width > 0 && page.width !== dimensions.width) {
+      page.width = dimensions.width;
+      updated = true;
+    }
+
+    if (typeof dimensions.height === 'number' && dimensions.height > 0 && page.height !== dimensions.height) {
+      page.height = dimensions.height;
+      updated = true;
+    }
+
+    if (updated && pageIndex === book.currentPage) {
+      void this.syncInfoPanelBookInfo();
+    }
+  }
+
+  /**
    * 翻到指定页
    */
   async navigateToPage(index: number) {
@@ -467,6 +525,27 @@ class BookStore {
    */
   async goToPage(index: number) {
     await this.navigateToPage(index);
+  }
+
+  /**
+   * 切换页面排序模式
+   */
+  async setSortMode(sortMode: PageSortMode) {
+    if (!this.state.currentBook) return;
+    if (this.state.currentBook.sortMode === sortMode) return;
+
+    try {
+      const updatedBook = await bookApi.setBookSortMode(sortMode);
+      this.state.currentBook = updatedBook;
+      this.syncAppStateBookSlice('user');
+      await this.syncInfoPanelBookInfo();
+
+      const { historyStore } = await import('$lib/stores/history.svelte');
+      historyStore.update(updatedBook.path, updatedBook.currentPage, updatedBook.totalPages);
+    } catch (err) {
+      console.error('❌ Error setting sort mode:', err);
+      this.state.error = String(err);
+    }
   }
 
   /**

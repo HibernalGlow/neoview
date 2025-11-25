@@ -529,8 +529,17 @@
 		fileBrowserStore.setDeleteStrategy(next);
 	}
 
+	function handleDeleteStrategyContextMenu(event: MouseEvent) {
+		event.preventDefault();
+		toggleDeleteStrategy();
+	}
+
 	function getDeleteStrategyText(strategy: DeleteStrategy) {
 		return strategy === 'trash' ? '移动到回收站' : '永久删除';
+	}
+
+	async function requestDeleteSingle(item: FsItem) {
+		await deleteItems([item]);
 	}
 
 	function toggleViewMode() {
@@ -2478,14 +2487,23 @@
 						<Button
 							variant={isDeleteMode ? 'destructive' : 'ghost'}
 							size="icon"
-							class="h-8 w-8"
+							class={`h-8 w-8 ${deleteStrategy === 'trash' ? '' : 'ring-2 ring-destructive/70'}`}
 							onclick={toggleDeleteMode}
+							oncontextmenu={handleDeleteStrategyContextMenu}
+							title="左键切换删除模式，右键切换删除策略"
 						>
-							<Trash2 class="h-4 w-4" />
+							<Trash2
+								class={`h-4 w-4 ${deleteStrategy === 'trash' ? '' : 'text-destructive'}`}
+							/>
 						</Button>
 					</Tooltip.Trigger>
 					<Tooltip.Content>
-						<p>{isDeleteMode ? '退出删除模式' : '删除模式'}</p>
+						<div class="flex flex-col gap-0.5">
+							<span>{isDeleteMode ? '退出删除模式 (左键)' : '进入删除模式 (左键)'}</span>
+							<span class="text-xs text-muted-foreground">
+								当前：{getDeleteStrategyText(deleteStrategy)}（右键切换）
+							</span>
+						</div>
 					</Tooltip.Content>
 				</Tooltip.Root>
 

@@ -10,8 +10,7 @@ export type TailOverflowBehavior =
   | 'stayOnLastPage'
   | 'nextBook'
   | 'loopTopBottom'
-  | 'seamlessLoop'
-  | 'promptDialog';
+  | 'seamlessLoop';
 
 export type AutoRotateMode = 'none' | 'left' | 'right' | 'forcedLeft' | 'forcedRight';
 
@@ -225,8 +224,7 @@ function deepClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
 }
 
-// NOTE: 用于通用深度合并工具，这里允许使用 any 以避免复杂的索引签名约束
-type AnyObject = Record<string, any>;
+type AnyObject = Record<string, unknown>;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -369,6 +367,11 @@ export class SettingsManager {
   }
 
   private normalizeSettings() {
+    this.normalizePerformanceSettings();
+    this.normalizeBookSettings();
+  }
+
+  private normalizePerformanceSettings() {
     const perf = this.settings.performance;
     if (!perf) return;
     const { cacheMemorySize, preLoadSize, multiThreadedRendering, maxThreads } = perf;
@@ -379,6 +382,14 @@ export class SettingsManager {
         multiThreadedRendering ?? defaultSettings.performance.multiThreadedRendering,
       maxThreads: maxThreads ?? defaultSettings.performance.maxThreads
     };
+  }
+
+  private normalizeBookSettings() {
+    const allowed: TailOverflowBehavior[] = ['doNothing', 'stayOnLastPage', 'nextBook', 'loopTopBottom', 'seamlessLoop'];
+    const behavior = this.settings.book?.tailOverflowBehavior;
+    if (!allowed.includes(behavior)) {
+      this.settings.book.tailOverflowBehavior = 'stayOnLastPage';
+    }
   }
 
   private loadSettings() {

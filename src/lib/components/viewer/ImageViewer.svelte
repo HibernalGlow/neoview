@@ -9,11 +9,13 @@
 		zoomOut,
 		resetZoom,
 		rotationAngle,
-		toggleFullscreen
+		toggleFullscreen,
+		setZoomLevel
 	} from '$lib/stores';
 	import { generateKeyCombo } from '$lib/stores/keyboard.svelte';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { settingsManager, performanceSettings } from '$lib/settings/settingsManager';
+	import type { ZoomMode } from '$lib/settings/settingsManager';
 	import { onDestroy, onMount } from 'svelte';
 	import { readable } from 'svelte/store';
 	import { computeAutoBackgroundColor } from '$lib/utils/autoBackground';
@@ -28,6 +30,7 @@
 	} from '$lib/core/tasks/comparisonTaskService';
 	import { scheduleUpscaleCacheCleanup } from '$lib/core/cache/cacheMaintenance';
 	import VideoPlayer from './VideoPlayer.svelte';
+import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoomMode';
 
 	// 新模块导入
 	import { createPreloadManager } from './flow/preloadManager.svelte';
@@ -54,6 +57,79 @@
 
 	// 对比模式状态
 	type ImageDimensions = { width: number; height: number };
+
+	let viewportSize = $state({ width: 0, height: 0 });
+	let currentImageDimensions = $state<ImageDimensions | null>(null);
+	let lastMeasuredImageSource: string | null = null;
+	let containerResizeObserver: ResizeObserver | null = null;
+	let lastAppliedZoomContext: { mode: ZoomMode; dimsKey: string; viewportKey: string } | null = null;
+
+	function calculateZoomScale(mode: ZoomMode, dims: ImageDimensions, viewport: { width: number; height: number }) {
+		const iw = Math.max(dims.width || 0, 1);
+		const ih = Math.max(dims.height || 0, 1);
+		const vw = Math.max(viewport.width || 0, 1);
+		const vh = Math.max(viewport.height || 0, 1);
+		const ratioW = vw / iw;
+		const ratioH = vh / ih;
+		switch (mode) {
+			case 'original':
+				return 1;
+			case 'fill':
+				return Math.max(ratioW, ratioH);
+			case 'fitWidth':
+				return ratioW;
+			case 'fitHeight':
+				return ratioH;
+			case 'fit':
+			default:
+				return Math.min(ratioW, ratioH);
+		}
+	}
+
+	function applyCurrentZoomMode(overrideMode?: ZoomMode) {
+		if (isCurrentPageVideo) return;
+		const dims = currentImageDimensions;
+		if (!dims) return;
+		const { width: vw, height: vh } = viewportSize;
+		if (vw <= 0 || vh <= 0) return;
+		const effectiveMode = overrideMode ?? (settings.view.defaultZoomMode as ZoomMode) ?? 'fit';
+		const dimsKey = `${dims.width}x${dims.height}`;
+		const viewportKey = `${vw}x${vh}`;
+		if (
+			lastAppliedZoomContext &&
+			lastAppliedZoomContext.mode === effectiveMode &&
+			lastAppliedZoomContext.dimsKey === dimsKey &&
+			lastAppliedZoomContext.viewportKey === viewportKey
+		) {
+			return;
+		}
+		const scale = calculateZoomScale(effectiveMode, dims, { width: vw, height: vh });
+		setZoomLevel(scale);
+		lastAppliedZoomContext = { mode: effectiveMode, dimsKey, viewportKey };
+	}
+
+	function updateViewportSize() {
+		if (!containerElement) return;
+		const width = containerElement.clientWidth;
+		const height = containerElement.clientHeight;
+		if (viewportSize.width === width && viewportSize.height === height) return;
+		viewportSize = { width, height };
+	}
+
+	function measureImageDimensions(source: string): Promise<ImageDimensions | null> {
+		return new Promise((resolve) => {
+			if (!source) {
+				resolve(null);
+				return;
+			}
+			const img = new Image();
+			img.onload = () => {
+				resolve({ width: img.naturalWidth, height: img.naturalHeight });
+			};
+			img.onerror = () => resolve(null);
+			img.src = source;
+		});
+	}
 
 	let originalImageDataForComparison = $state<string>('');
 	let upscaledImageDataForComparison = $state<string>('');

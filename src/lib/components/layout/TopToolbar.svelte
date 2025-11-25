@@ -57,8 +57,7 @@
 		Sun,
 		Moon,
 		Monitor,
-		Check,
-		Maximize2
+		Check
 	} from '@lucide/svelte';
 
 	import {
@@ -810,7 +809,7 @@
 							style="pointer-events: auto;"
 							title={`缩放模式：${getZoomModeLabel(defaultZoomMode)}`}
 						>
-							<Maximize2 class="h-4 w-4" />
+							<Maximize class="h-4 w-4" />
 						</Button>
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content

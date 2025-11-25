@@ -57,7 +57,11 @@
 		Sun,
 		Moon,
 		Monitor,
-		Check
+		Check,
+		Frame,
+		Scan,
+		StretchHorizontal,
+		StretchVertical
 	} from '@lucide/svelte';
 
 	import {
@@ -96,6 +100,18 @@
 		if (mode === 'fitWidth') return '适应宽度';
 		if (mode === 'fitHeight') return '适应高度';
 		return '原始大小';
+	}
+
+	const zoomModeIconMap = {
+		fit: Maximize,
+		fill: Scan,
+		fitWidth: StretchHorizontal,
+		fitHeight: StretchVertical,
+		original: Frame
+	} as const satisfies Record<ZoomMode, typeof Maximize>;
+
+	function getZoomModeIcon(mode: ZoomMode) {
+		return zoomModeIconMap[mode] ?? Frame;
 	}
 
 	function handleZoomModeChange(mode: ZoomMode) {
@@ -809,7 +825,7 @@
 							style="pointer-events: auto;"
 							title={`缩放模式：${getZoomModeLabel(defaultZoomMode)}`}
 						>
-							<Maximize class="h-4 w-4" />
+							<svelte:component this={getZoomModeIcon(defaultZoomMode)} class="h-4 w-4" />
 						</Button>
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content
@@ -826,6 +842,7 @@
 										<Check class="h-3 w-3" />
 									{/if}
 								</div>
+								<svelte:component this={getZoomModeIcon('fit')} class="h-3.5 w-3.5 text-muted-foreground" />
 								<span class="text-xs">适应窗口</span>
 							</div>
 						</DropdownMenu.Item>
@@ -836,6 +853,7 @@
 										<Check class="h-3 w-3" />
 									{/if}
 								</div>
+								<svelte:component this={getZoomModeIcon('fill')} class="h-3.5 w-3.5 text-muted-foreground" />
 								<span class="text-xs">铺满整个窗口</span>
 							</div>
 						</DropdownMenu.Item>
@@ -846,6 +864,7 @@
 										<Check class="h-3 w-3" />
 									{/if}
 								</div>
+								<svelte:component this={getZoomModeIcon('fitWidth')} class="h-3.5 w-3.5 text-muted-foreground" />
 								<span class="text-xs">适应宽度</span>
 							</div>
 						</DropdownMenu.Item>
@@ -856,6 +875,7 @@
 										<Check class="h-3 w-3" />
 									{/if}
 								</div>
+								<svelte:component this={getZoomModeIcon('fitHeight')} class="h-3.5 w-3.5 text-muted-foreground" />
 								<span class="text-xs">适应高度</span>
 							</div>
 						</DropdownMenu.Item>
@@ -866,6 +886,7 @@
 										<Check class="h-3 w-3" />
 									{/if}
 								</div>
+								<svelte:component this={getZoomModeIcon('original')} class="h-3.5 w-3.5 text-muted-foreground" />
 								<span class="text-xs">原始大小</span>
 							</div>
 						</DropdownMenu.Item>

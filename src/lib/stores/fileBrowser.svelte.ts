@@ -24,6 +24,8 @@ interface FileBrowserState {
   sortOrder: SortOrder;
   scrollToSelectedToken: number;
   scrollTargetIndex: number;
+  isCheckMode: boolean;
+  isDeleteMode: boolean;
 }
 
 const archiveExtensions = ['.zip', '.cbz', '.rar', '.cbr', '.7z'];
@@ -72,7 +74,9 @@ const initialState: FileBrowserState = {
   sortField: 'name',
   sortOrder: 'asc',
   scrollToSelectedToken: 0,
-  scrollTargetIndex: -1
+  scrollTargetIndex: -1,
+  isCheckMode: false,
+  isDeleteMode: false
 };
 
 /**
@@ -140,6 +144,8 @@ function createFileBrowserStore() {
     setArchiveView: (isArchive: boolean, archivePath: string = '') =>
       update(state => ({ ...state, isArchiveView: isArchive, currentArchivePath: archivePath })),
     setSelectedIndex: (index: number) => update(state => ({ ...state, selectedIndex: index })),
+    setCheckMode: (value: boolean) => update(state => ({ ...state, isCheckMode: value })),
+    setDeleteMode: (value: boolean) => update(state => ({ ...state, isDeleteMode: value })),
     setSort: (field: SortField, order: SortOrder) => update(state => ({ ...state, sortField: field, sortOrder: order })),
     requestScrollToSelected: (indexOverride?: number) =>
       update(state => ({

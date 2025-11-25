@@ -57,35 +57,23 @@ jobs:
             exit 1
           }
 
-      - name: extract portable exe from nsis
+      - name: prepare portable exe
         shell: powershell
         run: |
+          $exePath = ".\src-tauri\target\release\neoview.exe"
+
+          if (!(Test-Path $exePath)) {
+            Write-Error "neoview.exe not found at $exePath"
+            Get-ChildItem ".\src-tauri\target\release" -Recurse | Select-Object FullName
+            exit 1
+          }
+
           $bundleRoot = ".\src-tauri\target\release\bundle"
-          $setup = Get-ChildItem $bundleRoot -Recurse -Filter "*setup*.exe" | Select-Object -First 1
-
-          if ($null -eq $setup) {
-            Write-Error "NSIS setup.exe not found for extraction"
-            exit 1
-          }
-
-          $extractDir = Join-Path $bundleRoot "extracted"
-          New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
-
-          Write-Host "Running NSIS installer to extract files to $extractDir"
-          & $setup.FullName /S /D=$extractDir
-
-          $exe = Get-ChildItem $extractDir -Recurse -Filter "neoview.exe" | Select-Object -First 1
-          if ($null -eq $exe) {
-            Write-Error "neoview.exe not found after running installer"
-            Get-ChildItem $extractDir -Recurse | Select-Object FullName
-            exit 1
-          }
-
           $portableDir = Join-Path $bundleRoot "portable"
           New-Item -ItemType Directory -Path $portableDir -Force | Out-Null
 
           $portableExe = Join-Path $portableDir "neoview.exe"
-          Copy-Item $exe.FullName $portableExe -Force
+          Copy-Item $exePath $portableExe -Force
 
           Write-Host "Portable exe created at $portableExe"
 

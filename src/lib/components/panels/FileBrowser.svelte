@@ -204,8 +204,8 @@
 	});
 
 	// UI 模式状态
-	let isCheckMode = $state(false);
-	let isDeleteMode = $state(false);
+	let isCheckMode = $state(fileBrowserStore.getState().isCheckMode);
+	let isDeleteMode = $state(fileBrowserStore.getState().isDeleteMode);
 	let isPenetrateMode = $state(false);
 	let viewMode = $state<'list' | 'thumbnails'>(
 		loadPanelViewMode('file-browser', 'list') as 'list' | 'thumbnails'
@@ -315,6 +315,8 @@
 			sortOrder = state.sortOrder;
 			scrollToSelectedToken = state.scrollToSelectedToken;
 			scrollTargetIndex = state.scrollTargetIndex;
+			isCheckMode = state.isCheckMode;
+			isDeleteMode = state.isDeleteMode;
 
 			if (showFolderTree && state.currentPath) {
 				void ensureDriveRootLoadedForPath(state.currentPath);
@@ -468,14 +470,18 @@
 	 * 切换勾选模式
 	 */
 	function toggleCheckMode() {
-		isCheckMode = !isCheckMode;
-		if (!isCheckMode) {
+		const next = !isCheckMode;
+		isCheckMode = next;
+		fileBrowserStore.setCheckMode(next);
+		if (!next) {
 			selectedItems.clear();
 		}
 	}
 
 	function toggleDeleteMode() {
-		isDeleteMode = !isDeleteMode;
+		const next = !isDeleteMode;
+		isDeleteMode = next;
+		fileBrowserStore.setDeleteMode(next);
 	}
 
 	function toggleViewMode() {

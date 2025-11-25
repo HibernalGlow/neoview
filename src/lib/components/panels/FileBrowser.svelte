@@ -213,6 +213,7 @@
 	let selectedItems = $state<Set<string>>(new Set());
 	let showSearchBar = $state(false);
 	let showMigrationBar = $state(false);
+	let showMigrationManagerTab = $state(false);
 	let showFolderTree = $state(false);
 	let treeItems = $state<FsItem[]>([]);
 	let drivesLoaded = false;
@@ -1789,9 +1790,22 @@
 			if (!raw) return;
 			const parsed = JSON.parse(raw);
 			if (Array.isArray(parsed)) {
+				// 兼容旧格式：直接存储数组
 				quickFolderTargets = parsed
-					.map((t) => ({ id: String(t.id ?? ''), name: String(t.name ?? ''), path: String(t.path ?? '') }))
-					.filter((t) => t.name && t.path);
+					.map((t: any) => ({ id: String(t.id ?? ''), name: String(t.name ?? ''), path: String(t.path ?? '') }))
+					.filter((t: QuickFolderTarget) => t.name && t.path);
+				quickFolderMode = 'copy';
+			} else if (parsed && typeof parsed === 'object') {
+				const rawTargets = Array.isArray((parsed as any).targets) ? (parsed as any).targets : [];
+				quickFolderTargets = rawTargets
+					.map((t: any) => ({ id: String(t.id ?? ''), name: String(t.name ?? ''), path: String(t.path ?? '') }))
+					.filter((t: QuickFolderTarget) => t.name && t.path);
+				const mode = parsed.mode;
+				if (mode === 'copy' || mode === 'move') {
+					quickFolderMode = mode;
+				} else {
+					quickFolderMode = 'copy';
+				}
 			}
 		} catch (err) {
 			console.debug('读取快速目标文件夹失败:', err);
@@ -1800,10 +1814,43 @@
 
 	function saveQuickFolderTargets() {
 		try {
-			localStorage.setItem(QUICK_FOLDER_STORAGE_KEY, JSON.stringify(quickFolderTargets));
+			const payload = {
+				mode: quickFolderMode,
+				targets: quickFolderTargets
+			};
+			localStorage.setItem(QUICK_FOLDER_STORAGE_KEY, JSON.stringify(payload));
 		} catch (err) {
 			console.debug('保存快速目标文件夹失败:', err);
 		}
+	}
+
+	function addQuickFolderTarget() {
+		const basePath = currentPath || '';
+		const lastSegment = basePath.split(/[\\/]/).filter(Boolean).pop();
+		const defaultName = lastSegment || '新目标';
+		const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+		quickFolderTargets = [...quickFolderTargets, { id, name: defaultName, path: basePath }];
+		saveQuickFolderTargets();
+	}
+
+	function updateQuickFolderName(id: string, name: string) {
+		const trimmed = name.trim();
+		quickFolderTargets = quickFolderTargets.map((t) =>
+			t.id === id ? { ...t, name: trimmed || t.name } : t
+		);
+		saveQuickFolderTargets();
+	}
+
+	function updateQuickFolderPath(id: string, path: string) {
+		quickFolderTargets = quickFolderTargets.map((t) =>
+			t.id === id ? { ...t, path: path.trim() } : t
+		);
+		saveQuickFolderTargets();
+	}
+
+	function deleteQuickFolderTarget(id: string) {
+		quickFolderTargets = quickFolderTargets.filter((t) => t.id !== id);
+		saveQuickFolderTargets();
 	}
 
 	async function quickApplyToFolder(target: QuickFolderTarget) {
@@ -1834,18 +1881,8 @@
 	async function openQuickFolderManager() {
 		copyToSubmenu.show = false;
 		hideContextMenu();
-		try {
-			const selected = await FileSystemAPI.selectFolder();
-			if (!selected) return;
-			const defaultName = selected.split(/[\\/]/).pop() || selected;
-			const name = prompt('请输入目标名称:', defaultName);
-			if (!name) return;
-			const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-			quickFolderTargets = [...quickFolderTargets, { id, name, path: selected }];
-			saveQuickFolderTargets();
-		} catch (err) {
-			fileBrowserStore.setError(String(err));
-		}
+		showMigrationBar = true;
+		showMigrationManagerTab = !showMigrationManagerTab;
 	}
 
 	/**
@@ -2470,14 +2507,20 @@
 						<button
 							type="button"
 							class={`px-2 py-0.5 rounded-sm ${quickFolderMode === 'copy' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
-							onclick={() => (quickFolderMode = 'copy')}
+							onclick={() => {
+								quickFolderMode = 'copy';
+								saveQuickFolderTargets();
+							}}
 						>
 							复制
 						</button>
 						<button
 							type="button"
 							class={`px-2 py-0.5 rounded-sm ${quickFolderMode === 'move' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
-							onclick={() => (quickFolderMode = 'move')}
+							onclick={() => {
+								quickFolderMode = 'move';
+								saveQuickFolderTargets();
+							}}
 						>
 							移动
 						</button>
@@ -2509,9 +2552,55 @@
 					onclick={openQuickFolderManager}
 				>
 					<Settings class="mr-1 h-3.5 w-3.5" />
-					<span>管理</span>
+					<span>{showMigrationManagerTab ? '隐藏管理' : '管理'}</span>
 				</Button>
 			</div>
+			{#if showMigrationManagerTab}
+				<div class="border-border bg-background/95 border-t px-2 py-2 text-xs space-y-2">
+					<div class="flex items-center justify-between">
+						<span class="font-medium text-foreground">管理快速目标</span>
+						<Button variant="outline" size="sm" class="h-7 px-2 text-[11px]" onclick={addQuickFolderTarget}>
+							<span>新增目标</span>
+						</Button>
+					</div>
+					{#if quickFolderTargets.length === 0}
+						<div class="text-muted-foreground">暂无目标，请点击“新增目标”添加。</div>
+					{:else}
+						<div class="flex flex-col gap-2">
+							{#each quickFolderTargets as target (target.id)}
+								<div class="flex items-center gap-2">
+									<input
+										class="border-input bg-background h-7 w-28 rounded border px-2 text-[11px] focus:outline-none"
+										value={target.name}
+										onchange={(e) => {
+											const input = e.currentTarget as HTMLInputElement;
+											updateQuickFolderName(target.id, input.value);
+										}}
+										placeholder="名称"
+									/>
+									<input
+										class="border-input bg-background h-7 flex-1 rounded border px-2 text-[11px] focus:outline-none"
+										value={target.path}
+										onchange={(e) => {
+											const input = e.currentTarget as HTMLInputElement;
+											updateQuickFolderPath(target.id, input.value);
+										}}
+										placeholder="目标文件夹路径"
+									/>
+									<Button
+										variant="ghost"
+										size="icon"
+										class="h-7 w-7 text-destructive"
+										onclick={() => deleteQuickFolderTarget(target.id)}
+									>
+										<Trash2 class="h-3.5 w-3.5" />
+									</Button>
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/if}
 		{/if}
 	</div>
 

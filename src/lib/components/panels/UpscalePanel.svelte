@@ -372,7 +372,8 @@ let lastBookPath: string | null = null;
 			// 超分缓存目录：跟随通用设置里的缩略图目录，默认 DEFAULT_THUMBNAIL_DIRECTORY
 			const globalSettings = settingsManager.getSettings();
 			const thumbnailRoot = normalizeThumbnailDirectoryPath(globalSettings.system?.thumbnailDirectory);
-			const cacheDir = `${thumbnailRoot}/pyo3-upscale`;
+			// 这里只传缩略图根目录，具体的 pyo3-upscale 子目录由 Rust 端统一追加，避免重复
+			const cacheDir = thumbnailRoot;
 			
 			console.log('🔧 初始化 PyO3 超分管理器...');
 			console.log('  Python 模块路径:', pythonModulePath);

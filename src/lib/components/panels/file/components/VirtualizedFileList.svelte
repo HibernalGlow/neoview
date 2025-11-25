@@ -496,6 +496,18 @@
 			behavior: 'smooth'
 		});
 	}
+
+	export function isIndexVisible(index: number): boolean {
+		if (!container || index < 0 || index >= items.length) return false;
+
+		const row = Math.floor(index / columns);
+		const rowTop = row * itemHeight;
+		const rowBottom = rowTop + itemHeight;
+		const viewTop = scrollTop;
+		const viewBottom = viewTop + viewportHeight;
+
+		return rowBottom > viewTop && rowTop < viewBottom;
+	}
 </script>
 
 <div

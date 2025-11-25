@@ -219,6 +219,7 @@
 	let drivesLoaded = false;
 	let loadedDriveRoots = new Set<string>();
 	let treeWidth = $state(260);
+	let mainListRef: any;
 	const FILE_TREE_WIDTH_KEY = 'neoview-filetree-width';
 	let isTreeResizing = false;
 	let treeResizeStartX = 0;
@@ -1524,7 +1525,16 @@
 				const lastChild = navigationHistory.getLastActiveChild(parentDir);
 				if (lastChild) {
 					fileBrowserStore.selectPath(lastChild);
-					fileBrowserStore.requestScrollToSelected();
+
+					if (typeof window !== 'undefined' && mainListRef && typeof mainListRef.isIndexVisible === 'function') {
+						requestAnimationFrame(() => {
+							const state = fileBrowserStore.getState();
+							const index = state.selectedIndex;
+							if (index >= 0 && !mainListRef.isIndexVisible(index)) {
+								fileBrowserStore.requestScrollToSelected();
+							}
+						});
+					}
 				}
 			}
 		} catch (error) {
@@ -2968,6 +2978,7 @@
 				<!-- 文件列表 -->
 				<div class="min-h-0 flex-1 overflow-auto">
 					<VirtualizedFileList
+						bind:this={mainListRef}
 						{items}
 						{currentPath}
 						{thumbnails}

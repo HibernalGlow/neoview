@@ -542,17 +542,6 @@
 		await deleteItems([item]);
 	}
 
-	function invertSelection() {
-		if (!isCheckMode) return;
-		const nextSelection = new Set<string>();
-		for (const item of items) {
-			if (!selectedItems.has(item.path)) {
-				nextSelection.add(item.path);
-			}
-		}
-		selectedItems = nextSelection;
-	}
-
 	function toggleViewMode() {
 		// 循环切换：list -> grid -> list
 		const next = viewMode === 'list' ? 'thumbnails' : 'list';
@@ -2742,20 +2731,6 @@
 				</button>
 			{/if}
 			<hr class="border-border/60 my-1" />
-			{#if isCheckMode}
-				<button
-					type="button"
-					class="hover:bg-accent flex w-full items-center px-3 py-1.5 text-sm"
-					onclick={() => {
-						invertSelection();
-						hideContextMenu();
-					}}
-				>
-					<RefreshCw class="mr-2 h-4 w-4" />
-					<span>反选当前列表</span>
-				</button>
-				<hr class="border-border/60 my-1" />
-			{/if}
 			<button
 				type="button"
 				class="hover:bg-accent flex w-full items-center px-3 py-1.5 text-sm"

@@ -129,7 +129,7 @@
 		if (partial.opacity !== undefined) {
 			const raw = partial.opacity;
 			const base = Number.isFinite(raw) ? (raw as number) : prev.opacity ?? 0.85;
-			const clamped = Math.min(1, Math.max(0.2, base));
+			const clamped = Math.min(1, Math.max(0, base));
 			next.opacity = clamped;
 		}
 
@@ -801,7 +801,7 @@
 							<div class="flex items-center gap-2">
 								<Input.Root
 									type="number"
-									min="20"
+									min="0"
 									max="100"
 									step="5"
 									class="h-7 w-20 px-2 text-xs"
@@ -815,9 +815,9 @@
 									}}
 								/>
 								<span class="text-[11px]">{Math.round(infoOverlayOpacity * 100)}%</span>
-							</div>
 						</div>
-						<p>调节悬浮信息窗的背景透明度（20% - 100%）。</p>
+						</div>
+						<p>调节悬浮信息窗的背景透明度（0% - 100%，0% 为仅文字无底色）。</p>
 					</div>
 				</div>
 

@@ -4,6 +4,7 @@
 	 * 图片属性面板 - 显示当前图片的详细信息
 	 */
 	import { Info, FileImage, Palette, Calendar, HardDrive } from '@lucide/svelte';
+	import EmmPanelSection from '$lib/components/panels/emm/EmmPanelSection.svelte';
 
 	interface ImageProperties {
 		// 文件信息
@@ -220,6 +221,8 @@
 				</div>
 			</div>
 		{/if}
+
+		<EmmPanelSection />
 
 		<!-- 提示 -->
 		<div class="pt-2 border-t">

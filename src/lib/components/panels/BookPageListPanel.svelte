@@ -10,6 +10,8 @@
 	import type { Page } from '$lib/types';
 	import type { PreloadManager } from '$lib/components/viewer/flow/preloadManager.svelte';
 	import { subscribeSharedPreloadManager } from '$lib/components/viewer/flow/sharedPreloadManager';
+	import { thumbnailManager } from '$lib/utils/thumbnailManager';
+	import { isVideoFile } from '$lib/utils/videoUtils';
 
 	type GridSize = 'small' | 'medium' | 'large';
 
@@ -51,6 +53,7 @@
 	let unsubscribeThumbs: (() => void) | null = null;
 	let listContainer = $state<HTMLDivElement | null>(null);
 	let lastBookPath = $state<string | null>(null);
+	const requestedVideoThumbnails = new Set<string>();
 
 	function createAppStateStore<T>(selector: StateSelector<T>) {
 		const initial = selector(appState.getSnapshot());
@@ -76,6 +79,78 @@
 		});
 	}
 
+	async function requestThumbnailForPageIndex(pageIndex: number) {
+		const currentBook = bookStore.currentBook;
+		const page = currentBook?.pages?.[pageIndex];
+		if (!currentBook || !page) {
+			setItemState(pageIndex, { loading: false, error: true });
+			return;
+		}
+
+		const isVideoPage =
+			isVideoFile(page.name || '') ||
+			isVideoFile(page.path || '');
+
+		if (isVideoPage) {
+			// 与底部缩略图栏保持一致：当前仅对本地书籍生成视频缩略图
+			if (currentBook.type === 'archive') {
+				setItemState(pageIndex, { loading: false, error: false, thumbUrl: null });
+				return;
+			}
+
+			const videoKey = `${currentBook.path}::${page.path}`;
+			if (requestedVideoThumbnails.has(videoKey)) {
+				// 已经尝试过该视频（成功或失败），避免重复请求
+				setItemState(pageIndex, { loading: false });
+				return;
+			}
+			requestedVideoThumbnails.add(videoKey);
+
+			const MAX_ATTEMPTS = 3;
+			const RETRY_DELAY_MS = 500;
+
+			const tryLoadFromThumbnailManager = async (attempt: number) => {
+				try {
+					const url = await thumbnailManager.getThumbnail(page.path, undefined, false, 'immediate');
+					if (url) {
+						setItemState(pageIndex, {
+							thumbUrl: url,
+							loading: false,
+							error: false
+						});
+						return;
+					}
+				} catch (error) {
+					console.error('视频缩略图缓存/生成失败:', pageIndex, page.path, error);
+				}
+
+				if (attempt >= MAX_ATTEMPTS) {
+					setItemState(pageIndex, { loading: false, error: true });
+					return;
+				}
+
+				setTimeout(() => {
+					void tryLoadFromThumbnailManager(attempt + 1);
+				}, RETRY_DELAY_MS);
+			};
+
+			void tryLoadFromThumbnailManager(0);
+			return;
+		}
+
+		if (!preloadManager) {
+			setItemState(pageIndex, { loading: false, error: true });
+			return;
+		}
+
+		try {
+			await preloadManager.requestThumbnail(pageIndex, 'page-list');
+		} catch (error) {
+			console.debug('请求缩略图失败:', pageIndex, error);
+			setItemState(pageIndex, { loading: false, error: true });
+		}
+	}
+
 	async function requestThumbnailsAroundCurrent() {
 		if (!preloadManager || items.length === 0) return;
 		const center = bookStore.currentPageIndex;
@@ -88,12 +163,7 @@
 			const item = items[i];
 			if (!item || item.thumbUrl || item.loading || item.error) continue;
 			setItemState(i, { loading: true, error: false });
-			void preloadManager
-				.requestThumbnail(i, 'page-list')
-				.catch((error) => {
-					console.debug('请求缩略图失败:', i, error);
-					setItemState(i, { loading: false, error: true });
-				});
+			void requestThumbnailForPageIndex(i);
 		}
 	}
 
@@ -150,6 +220,7 @@
 			return;
 		}
 		lastBookPath = path;
+		requestedVideoThumbnails.clear();
 		if (!book || !book.pages || book.pages.length === 0) {
 			items = [];
 			return;
@@ -272,7 +343,7 @@
 									class="absolute inset-0 w-full h-full object-contain"
 								/>
 							{:else if item.loading}
-								<div class="w-4 h-4 border-2 border-muted-foreground/40 border-t-foreground rounded-full animate-spin" />
+								<div class="w-4 h-4 border-2 border-muted-foreground/40 border-t-foreground rounded-full animate-spin"></div>
 							{:else if item.error}
 								<span class="text-[10px] text-destructive">ERR</span>
 							{:else}

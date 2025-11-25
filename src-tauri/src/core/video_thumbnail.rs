@@ -2,6 +2,7 @@ use image::DynamicImage;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use uuid::Uuid;
 
 /// 视频缩略图生成器
 pub struct VideoThumbnailGenerator;
@@ -20,11 +21,17 @@ impl VideoThumbnailGenerator {
     pub fn extract_frame(video_path: &Path, time_seconds: f64) -> Result<DynamicImage, String> {
         // 创建临时文件用于存储提取的帧
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join(format!("neoview_frame_{}.png", std::process::id()));
+        let unique_id = Uuid::new_v4();
+        let temp_file = temp_dir.join(format!(
+            "neoview_frame_{}_{}.png",
+            std::process::id(),
+            unique_id
+        ));
 
         // 使用 FFmpeg 提取指定时间的帧
         let output = Command::new("ffmpeg")
             .args(&[
+                "-y", // 覆盖输出文件（即使极端情况下重名也不会报错）
                 "-i",
                 video_path.to_string_lossy().as_ref(),
                 "-ss",

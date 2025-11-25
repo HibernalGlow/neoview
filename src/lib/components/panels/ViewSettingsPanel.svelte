@@ -54,6 +54,7 @@
 				bind:value={currentSettings.view.defaultZoomMode}
 			>
 				<NativeSelectOption value="fit">适应窗口</NativeSelectOption>
+				<NativeSelectOption value="fill">铺满整个窗口</NativeSelectOption>
 				<NativeSelectOption value="fitWidth">适应宽度</NativeSelectOption>
 				<NativeSelectOption value="fitHeight">适应高度</NativeSelectOption>
 				<NativeSelectOption value="original">原始大小</NativeSelectOption>
@@ -106,6 +107,27 @@
 					</NativeSelect>
 					<p class="text-muted-foreground text-xs">
 						选择阅读方向。右到左模式适用于日式漫画，会反向排列双页模式中的图片。
+					</p>
+				</div>
+				<div class="space-y-2">
+					<Label class="text-sm">超过尾页时的行为</Label>
+					<NativeSelect
+						class="w-full max-w-xs"
+						bind:value={currentSettings.book.tailOverflowBehavior}
+						onchange={() =>
+							settingsManager.updateNestedSettings('book', {
+								tailOverflowBehavior: currentSettings.book.tailOverflowBehavior
+							})}
+					>
+						<NativeSelectOption value="doNothing">无变化（忽略操作）</NativeSelectOption>
+						<NativeSelectOption value="stayOnLastPage">无变化（停留在尾页）</NativeSelectOption>
+						<NativeSelectOption value="nextBook">进入下一本书籍</NativeSelectOption>
+						<NativeSelectOption value="loopTopBottom">循环（尾页回首页）</NativeSelectOption>
+						<NativeSelectOption value="seamlessLoop">无缝循环</NativeSelectOption>
+						<NativeSelectOption value="promptDialog">在对话框中选择</NativeSelectOption>
+					</NativeSelect>
+					<p class="text-muted-foreground text-xs">
+						定义翻页超过尾页时的处理方式，方便在书籍之间或书内循环阅读。
 					</p>
 				</div>
 			</div>

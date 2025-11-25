@@ -114,6 +114,7 @@ import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoo
 		const height = containerElement.clientHeight;
 		if (viewportSize.width === width && viewportSize.height === height) return;
 		viewportSize = { width, height };
+		applyCurrentZoomMode();
 	}
 
 	function measureImageDimensions(source: string): Promise<ImageDimensions | null> {
@@ -579,9 +580,10 @@ import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoo
 		}
 	}
 
-	// 订阅设置变化
+	// 监听设置变化
 	settingsManager.addListener((s) => {
 		settings = s;
+		applyCurrentZoomMode();
 	});
 
 	$effect(() => {

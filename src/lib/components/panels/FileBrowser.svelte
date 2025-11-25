@@ -185,7 +185,7 @@
 		bookmark: null
 	});
 	let copyToSubmenu = $state<{ show: boolean; x: number; y: number }>({ show: false, x: 0, y: 0 });
-	let clipboardItem = $state<{ path: string; operation: 'copy' | 'cut' } | null>(null);
+	let clipboardItem = $state<{ paths: string[]; operation: 'copy' | 'cut' } | null>(null);
 	let sortField = $state<SortField>('name');
 	let sortOrder = $state<SortOrder>('asc');
 
@@ -1733,7 +1733,15 @@
 	 * 剪切文件
 	 */
 	function cutItem(item: FsItem) {
-		clipboardItem = { path: item.path, operation: 'cut' };
+		const targets = resolveActionTargets(item);
+		const paths = targets.map((t) => t.path);
+		clipboardItem = { paths, operation: 'cut' };
+		try {
+			const text = paths.join('\n');
+			if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+				void navigator.clipboard.writeText(text).catch(() => {});
+			}
+		} catch {}
 		hideContextMenu();
 	}
 
@@ -1741,29 +1749,67 @@
 	 * 复制文件
 	 */
 	function copyItem(item: FsItem) {
-		clipboardItem = { path: item.path, operation: 'copy' };
+		const targets = resolveActionTargets(item);
+		const paths = targets.map((t) => t.path);
+		clipboardItem = { paths, operation: 'copy' };
+		try {
+			const text = paths.join('\n');
+			if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+				void navigator.clipboard.writeText(text).catch(() => {});
+			}
+		} catch {}
 		hideContextMenu();
+	}
+
+	function getPasteTargetDirectory(): string | null {
+		// 优先：如果右键的是文件夹，则粘贴到该文件夹内
+		if (contextMenu.item?.isDir) {
+			return contextMenu.item.path;
+		}
+
+		// 其次：使用当前浏览路径
+		if (currentPath) {
+			return currentPath;
+		}
+
+		// 兜底：使用右键项所在的目录
+		if (contextMenu.item?.path) {
+			const parts = contextMenu.item.path.split(/[\\/]/);
+			parts.pop();
+			return parts.join('/');
+		}
+
+		return null;
 	}
 
 	/**
 	 * 粘贴文件
 	 */
 	async function pasteItem() {
-		if (!clipboardItem || !currentPath) return;
+		if (!clipboardItem || clipboardItem.paths.length === 0) return;
+
+		const baseDir = getPasteTargetDirectory();
+		if (!baseDir) return;
 
 		try {
-			const targetPath = `${currentPath}/${clipboardItem.path.split(/[\\/]/).pop()}`;
+			for (const from of clipboardItem.paths) {
+				const fileName = from.split(/[\\/]/).pop();
+				if (!fileName) continue;
+				const targetPath = `${baseDir}/${fileName}`;
 
-			if (clipboardItem.operation === 'cut') {
-				await FileSystemAPI.movePath(clipboardItem.path, targetPath);
-			} else {
-				await FileSystemAPI.copyPath(clipboardItem.path, targetPath);
+				if (clipboardItem.operation === 'cut') {
+					await FileSystemAPI.movePath(from, targetPath);
+				} else {
+					await FileSystemAPI.copyPath(from, targetPath);
+				}
 			}
 
 			clipboardItem = null;
 			await refresh();
 		} catch (err) {
 			fileBrowserStore.setError(String(err));
+		} finally {
+			hideContextMenu();
 		}
 	}
 

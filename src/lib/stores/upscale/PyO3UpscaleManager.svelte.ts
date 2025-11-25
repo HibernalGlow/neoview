@@ -174,7 +174,8 @@ export class PyO3UpscaleManager {
 	 */
 	async upscaleImageMemory(
 		imageData: Uint8Array,
-		timeout: number = 120.0
+		timeout: number = 120.0,
+		jobKey?: string
 	): Promise<Uint8Array> {
 		if (!this.initialized) {
 			throw new Error('PyO3 超分管理器未初始化');
@@ -213,7 +214,8 @@ export class PyO3UpscaleManager {
 				noiseLevel: this._currentModel.noiseLevel,
 				timeout,
 				width: this._imageWidth || 0,
-				height: this._imageHeight || 0
+				height: this._imageHeight || 0,
+				jobKey: jobKey ?? null
 			});
 
 			const result = await Promise.race([upscalePromise, timeoutPromise]);
@@ -376,6 +378,21 @@ export class PyO3UpscaleManager {
 			tileSize: 64,
 			noiseLevel: 0
 		};
+	}
+
+	/**
+	 * 取消指定 jobKey 的任务
+	 */
+	async cancelJob(jobKey: string): Promise<void> {
+		if (!this.initialized) {
+			return;
+		}
+		try {
+			await invoke('pyo3_cancel_job', { jobKey });
+			console.log('✅ 已请求取消 PyO3 任务', { jobKey });
+		} catch (error) {
+			console.error('❌ 取消 PyO3 任务失败:', error);
+		}
 	}
 }
 

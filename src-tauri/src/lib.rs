@@ -281,6 +281,7 @@ pub fn run() {
             commands::check_pyo3_upscale_cache,
             commands::get_pyo3_cache_stats,
             commands::cleanup_pyo3_cache,
+            commands::pyo3_cancel_job,
             commands::test_pyo3_upscaler,
             // Upscale scheduler commands
             commands::enqueue_upscale_job,

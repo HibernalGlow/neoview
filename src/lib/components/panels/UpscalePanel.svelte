@@ -8,6 +8,7 @@ import { Sparkles, AlertCircle } from '@lucide/svelte';
 import { onMount, onDestroy, createEventDispatcher } from 'svelte';
 import { Switch } from '$lib/components/ui/switch';
 import { Label } from '$lib/components/ui/label';
+import { Button } from '$lib/components/ui/button';
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import { normalizeThumbnailDirectoryPath } from '$lib/config/paths';
 	// Toast 已改为控制台输出，避免右上角弹窗干扰
@@ -293,6 +294,8 @@ let lastBookPath: string | null = null;
 				cancelCurrentProcessing('书籍已切换，停止超分');
 				pendingUpscaleRequest = null;
 				resetUpscaledDisplay();
+				// 同时通知后端取消上一部书的 PyO3 任务
+				void pyo3UpscaleManager.cancelJob(lastBookPath);
 			}
 			lastBookPath = currentBookPath;
 		}
@@ -950,8 +953,10 @@ let lastBookPath: string | null = null;
 			status = '执行超分...';
 			updateProgress?.(progress, status);
 			
+			// 为当前任务生成 jobKey（按书籍路径区分），便于后端取消
+			const bookPath = bookStore.currentBook?.path ?? 'pyo3_panel_current';
 			// 调用 PyO3 超分管理器
-			const result = await pyo3UpscaleManager.upscaleImageMemory(imageData);
+			const result = await pyo3UpscaleManager.upscaleImageMemory(imageData, 120.0, bookPath);
 			console.log('✅ 超分完成，输出大小:', result.length);
 			
 			// 检查 imageHash 是否存在
@@ -1211,6 +1216,19 @@ let lastBookPath: string | null = null;
 			currentImageUpscaleEnabled = !currentImageUpscaleEnabled;
 		}
 	}
+
+	function stopAllUpscaleForCurrentBook() {
+		console.log('[UpscalePanel] 手动停止当前书籍的所有超分任务');
+		cancelCurrentProcessing('手动停止当前书籍超分');
+		pendingUpscaleRequest = null;
+		const bookPath = bookStore.currentBook?.path ?? null;
+		if (bookPath) {
+			// 1. 取消当前书籍对应的 PyO3 直连任务
+			void pyo3UpscaleManager.cancelJob(bookPath);
+			// 2. 同时通知 UpscaleScheduler 取消该书的所有后台超分任务
+			void tauriInvoke('cancel_upscale_jobs_for_book', { bookPath });
+		}
+	}
 </script>
 
 <svelte:window onkeydown={handleKeyPress} />
@@ -1272,6 +1290,12 @@ let lastBookPath: string | null = null;
 		progressColorClass={getProgressColor(progress)}
 		on:perform={() => requestUpscale('manual')}
 	/>
+
+	<div class="flex justify-end">
+		<Button variant="outline" onclick={stopAllUpscaleForCurrentBook}>
+			停止当前书籍超分
+		</Button>
+	</div>
 
 	<!-- 条件管理 -->
 	<UpscalePanelConditionTabs

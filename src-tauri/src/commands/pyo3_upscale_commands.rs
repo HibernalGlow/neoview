@@ -211,6 +211,7 @@ pub async fn pyo3_upscale_image_memory(
     timeout: f64,
     width: i32,
     height: i32,
+    job_key: Option<String>,
     state: tauri::State<'_, PyO3UpscalerState>,
 ) -> Result<Vec<u8>, String> {
     println!("🔍 Rust 收到参数:");
@@ -220,6 +221,7 @@ pub async fn pyo3_upscale_image_memory(
     println!("  tile_size: {}", tile_size);
     println!("  noise_level: {}", noise_level);
     println!("  timeout: {}", timeout);
+    println!("  job_key: {:?}", job_key);
     // 等待管理器初始化
     if let Err(e) = ensure_manager_ready(&state, 5000).await {
         return Err(e);
@@ -246,8 +248,14 @@ pub async fn pyo3_upscale_image_memory(
         };
 
         // 直接使用内存数据进行超分
-        let result =
-            manager.upscale_image_memory(&image_data, &model, timeout, width, height, None)?;
+        let result = manager.upscale_image_memory(
+            &image_data,
+            &model,
+            timeout,
+            width,
+            height,
+            job_key.as_deref(),
+        )?;
         Ok(result)
     } else {
         Err("PyO3 超分管理器未初始化".to_string())
@@ -393,6 +401,32 @@ pub async fn cleanup_pyo3_cache(
 
     if let Some(manager) = manager_result {
         return manager.cleanup_cache(max_age_days);
+    }
+
+    Err("PyO3 超分管理器未初始化".to_string())
+}
+
+/// 取消指定 job_key 的 PyO3 超分任务
+#[command]
+pub async fn pyo3_cancel_job(
+    job_key: String,
+    state: tauri::State<'_, PyO3UpscalerState>,
+) -> Result<(), String> {
+    // 等待管理器初始化
+    if let Err(e) = ensure_manager_ready(&state, 5000).await {
+        return Err(e);
+    }
+
+    let manager_result = {
+        let manager_guard = state
+            .manager
+            .lock()
+            .map_err(|e| format!("获取锁失败: {}", e))?;
+        manager_guard.clone()
+    };
+
+    if let Some(manager) = manager_result {
+        return manager.cancel_job(&job_key);
     }
 
     Err("PyO3 超分管理器未初始化".to_string())

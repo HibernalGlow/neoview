@@ -269,6 +269,16 @@ function mergeWithDefaults(overrides?: Partial<NeoViewSettings>): NeoViewSetting
   return deepMerge(clone as unknown as AnyObject, overrides as unknown as AnyObject) as unknown as NeoViewSettings;
 }
 
+function reviveSettings(raw: NeoViewSettings): NeoViewSettings {
+  return {
+    ...raw,
+    archive: {
+      ...defaultSettings.archive,
+      ...raw.archive
+    }
+  };
+}
+
 export class SettingsManager {
   private static instance: SettingsManager;
   private settings: NeoViewSettings = { ...defaultSettings };
@@ -302,7 +312,7 @@ export class SettingsManager {
   }
 
   updateSettings(updates: Partial<NeoViewSettings>) {
-    this.settings = { ...this.settings, ...updates } as NeoViewSettings;
+    this.settings = reviveSettings({ ...this.settings, ...updates } as NeoViewSettings);
     this.saveSettings();
     this.notifyListeners();
   }

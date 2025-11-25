@@ -3,7 +3,7 @@
 
 use crate::core::BookManager;
 use crate::core::ImageLoader;
-use crate::models::BookInfo;
+use crate::models::{BookInfo, PageSortMode};
 use std::sync::Mutex;
 use tauri::State;
 
@@ -78,4 +78,13 @@ pub async fn navigate_to_image(
 ) -> Result<usize, String> {
     let mut manager = state.lock().map_err(|e| e.to_string())?;
     manager.navigate_to_image(&image_path)
+}
+
+#[tauri::command]
+pub async fn set_book_sort_mode(
+    sort_mode: PageSortMode,
+    state: State<'_, Mutex<BookManager>>,
+) -> Result<BookInfo, String> {
+    let mut manager = state.lock().map_err(|e| e.to_string())?;
+    manager.set_sort_mode(sort_mode)
 }

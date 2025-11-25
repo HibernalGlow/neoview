@@ -1517,8 +1517,15 @@
 			}
 
 			if (parentDir) {
-				// 立即加载（会立即显示缓存数据）
+				// 立即加载（会立即显示缓存数据），VirtualizedFileList 会根据 scrollPositions 恢复父目录的滚动位置
 				await loadDirectory(parentDir);
+
+				// 额外：如果记录过从该父目录进入的子目录，则高亮并滚动到该子目录
+				const lastChild = navigationHistory.getLastActiveChild(parentDir);
+				if (lastChild) {
+					fileBrowserStore.selectPath(lastChild);
+					fileBrowserStore.requestScrollToSelected();
+				}
 			}
 		} catch (error) {
 			console.error('❌ 返回上一级失败:', error);

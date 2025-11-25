@@ -27,12 +27,20 @@ pub struct ThumbnailState {
 #[tauri::command]
 pub async fn init_thumbnail_manager(
     app: tauri::AppHandle,
-    _thumbnail_path: String,
+    thumbnail_path: String,
     _root_path: String,
     size: u32,
 ) -> Result<(), String> {
-    // 强制使用 D:\temp\neoview 作为数据库路径
-    let db_dir = PathBuf::from("D:\\temp\\neoview");
+    // 使用前端传入的缩略图根目录（前端已做路径规范化），并在此处再做一层兜底：
+    // - 如果为空字符串
+    // - 或者不是绝对路径
+    // 则退回默认路径 D:\temp\neoview
+    let raw = thumbnail_path.trim();
+    let db_dir = if raw.is_empty() || !Path::new(raw).is_absolute() {
+        PathBuf::from("D:\\temp\\neoview")
+    } else {
+        PathBuf::from(raw)
+    };
 
     // 确保目录存在
     if let Err(e) = std::fs::create_dir_all(&db_dir) {

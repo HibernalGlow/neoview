@@ -26,6 +26,10 @@ export interface NeoViewSettings {
     minimizeToTray: boolean;
     openLastFolder: boolean;
   };
+  archive: {
+    allowFileOperations: boolean;
+    confirmBeforeDelete: boolean;
+  };
   performance: {
     cacheMemorySize: number; // MB
     preLoadSize: number; // number of items
@@ -122,12 +126,16 @@ const defaultSettings: NeoViewSettings = {
     language: 'zh-CN',
     hardwareAcceleration: true,
     temporaryDirectory: '',
-    thumbnailDirectory: 'D\\\\temp\\\\neoview'
+    thumbnailDirectory: 'D\\temp\\neoview'
   },
   startup: {
     openLastFile: true,
     minimizeToTray: false,
     openLastFolder: true
+  },
+  archive: {
+    allowFileOperations: false,
+    confirmBeforeDelete: true
   },
   performance: {
     cacheMemorySize: 512,
@@ -258,7 +266,7 @@ function deepMerge(target: AnyObject, source?: AnyObject): AnyObject {
 function mergeWithDefaults(overrides?: Partial<NeoViewSettings>): NeoViewSettings {
   const clone = deepClone(defaultSettings);
   if (!overrides) return clone;
-  return deepMerge(clone as AnyObject, overrides as AnyObject) as NeoViewSettings;
+  return deepMerge(clone as unknown as AnyObject, overrides as unknown as AnyObject) as unknown as NeoViewSettings;
 }
 
 export class SettingsManager {

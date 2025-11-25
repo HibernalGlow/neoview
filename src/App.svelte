@@ -29,7 +29,7 @@
 			
 			// TODO: 缩略图功能已移除，待重新实现
 			// 使用统一的缩略图路径
-			// const thumbnailPath = 'D:\\temp\\neoview_thumbnails_test';
+			// const thumbnailPath = 'D:\\temp\\neoview';
 			
 			// 设置根目录为系统根目录，这样可以处理任何路径
 			// const rootPath = 'C:\\';

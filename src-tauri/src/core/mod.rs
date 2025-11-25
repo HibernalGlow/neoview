@@ -16,6 +16,7 @@ pub mod image_loader;
 pub mod path_utils;
 pub mod pyo3_upscaler;
 pub mod python_upscale_wrapper;
+pub mod sr_vulkan_manager;
 pub mod thumbnail_db;
 pub mod thumbnail_generator;
 pub mod upscale;

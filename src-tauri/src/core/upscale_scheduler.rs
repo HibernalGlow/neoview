@@ -278,6 +278,10 @@ impl UpscaleSchedulerInner {
         let request = &handle.record.request;
 
         let model_id = manager.get_model_id(&request.model_name)?;
+        println!(
+            "[UpscaleScheduler] resolve model_name='{}' -> model_id={}",
+            request.model_name, model_id
+        );
         let upscale_model = UpscaleModel {
             model_id,
             model_name: request.model_name.clone(),

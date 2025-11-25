@@ -57,7 +57,8 @@
 		Sun,
 		Moon,
 		Monitor,
-		Check
+		Check,
+		Maximize2
 	} from '@lucide/svelte';
 
 	import {
@@ -67,6 +68,8 @@
 	} from '$lib/utils/runtimeTheme';
 
 	import { settingsManager } from '$lib/settings/settingsManager';
+	import type { ZoomMode } from '$lib/settings/settingsManager';
+	import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
 
 	const appWindow = getCurrentWebviewWindow();
 
@@ -81,11 +84,30 @@
 	let settings = $state(settingsManager.getSettings());
 	let readingDirection = $derived(settings.book.readingDirection);
 	let hoverAreas = $derived(settings.panels?.hoverAreas);
+	let defaultZoomMode: ZoomMode = $derived(settings.view.defaultZoomMode);
 
 	// 监听设置变化
 	settingsManager.addListener((newSettings) => {
 		settings = newSettings;
 	});
+
+	function getZoomModeLabel(mode: ZoomMode): string {
+		if (mode === 'fit') return '适应窗口';
+		if (mode === 'fill') return '铺满整个窗口';
+		if (mode === 'fitWidth') return '适应宽度';
+		if (mode === 'fitHeight') return '适应高度';
+		return '原始大小';
+	}
+
+	function handleZoomModeChange(mode: ZoomMode) {
+		if (settings.view.defaultZoomMode === mode) return;
+		settingsManager.updateNestedSettings('view', { defaultZoomMode: mode });
+		dispatchApplyZoomMode(mode);
+	}
+
+	function handleZoomReset() {
+		dispatchApplyZoomMode();
+	}
 
 	type QuickThemeConfig = {
 		name: string;
@@ -592,6 +614,16 @@
 									</div>
 								</div>
 							</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={() => handleZoomModeChange('fill')}>
+							<div class="flex items-center gap-2">
+								<div class="flex h-4 w-4 items-center justify-center">
+									{#if defaultZoomMode === 'fill'}
+										<Check class="h-3 w-3" />
+									{/if}
+								</div>
+								<span class="text-xs">铺满整个窗口</span>
+							</div>
+						</DropdownMenu.Item>
 						{/each}
 						<DropdownMenu.Separator />
 					{/if}
@@ -747,7 +779,7 @@
 							variant="ghost"
 							size="sm"
 							class="h-8 px-2 font-mono text-xs"
-							onclick={resetZoom}
+							onclick={handleZoomReset}
 						>
 							{($viewerState.zoom * 100).toFixed(0)}%
 						</Button>
@@ -767,6 +799,79 @@
 						<p>放大</p>
 					</Tooltip.Content>
 				</Tooltip.Root>
+
+				<!-- 缩放模式切换 -->
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						<Button
+							variant="ghost"
+							size="icon"
+							class="h-8 w-8"
+							style="pointer-events: auto;"
+							title={`缩放模式：${getZoomModeLabel(defaultZoomMode)}`}
+						>
+							<Maximize2 class="h-4 w-4" />
+						</Button>
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content
+						class="z-60 w-40"
+						onmouseenter={handleMouseEnter}
+						onmouseleave={handleMouseLeave}
+					>
+						<DropdownMenu.Label>缩放模式</DropdownMenu.Label>
+						<DropdownMenu.Separator />
+						<DropdownMenu.Item onclick={() => handleZoomModeChange('fit')}>
+							<div class="flex items-center gap-2">
+								<div class="flex h-4 w-4 items-center justify-center">
+									{#if defaultZoomMode === 'fit'}
+										<Check class="h-3 w-3" />
+									{/if}
+								</div>
+								<span class="text-xs">适应窗口</span>
+							</div>
+						</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={() => handleZoomModeChange('fill')}>
+							<div class="flex items-center gap-2">
+								<div class="flex h-4 w-4 items-center justify-center">
+									{#if defaultZoomMode === 'fill'}
+										<Check class="h-3 w-3" />
+									{/if}
+								</div>
+								<span class="text-xs">铺满整个窗口</span>
+							</div>
+						</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={() => handleZoomModeChange('fitWidth')}>
+							<div class="flex items-center gap-2">
+								<div class="flex h-4 w-4 items-center justify-center">
+									{#if defaultZoomMode === 'fitWidth'}
+										<Check class="h-3 w-3" />
+									{/if}
+								</div>
+								<span class="text-xs">适应宽度</span>
+							</div>
+						</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={() => handleZoomModeChange('fitHeight')}>
+							<div class="flex items-center gap-2">
+								<div class="flex h-4 w-4 items-center justify-center">
+									{#if defaultZoomMode === 'fitHeight'}
+										<Check class="h-3 w-3" />
+									{/if}
+								</div>
+								<span class="text-xs">适应高度</span>
+							</div>
+						</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={() => handleZoomModeChange('original')}>
+							<div class="flex items-center gap-2">
+								<div class="flex h-4 w-4 items-center justify-center">
+									{#if defaultZoomMode === 'original'}
+										<Check class="h-3 w-3" />
+									{/if}
+								</div>
+								<span class="text-xs">原始大小</span>
+							</div>
+						</DropdownMenu.Item>
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
 
 				<!-- 分隔线 -->
 				<Separator.Root orientation="vertical" class="mx-1 h-6" />

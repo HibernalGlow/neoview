@@ -590,6 +590,32 @@
 		selectedItems = selectedItems; // 触发响应式更新
 	}
 
+	function resolveActionTargets(primary: FsItem): FsItem[] {
+		if (!isCheckMode || selectedItems.size === 0) {
+			return [primary];
+		}
+
+		const pathSet = new Set<string>();
+		for (const p of selectedItems) {
+			pathSet.add(p);
+		}
+		pathSet.add(primary.path);
+
+		const sources: FsItem[][] = [items, searchResults as unknown as FsItem[], treeItems];
+		const results: FsItem[] = [];
+		const seen = new Set<string>();
+
+		for (const list of sources) {
+			for (const it of list) {
+				if (!pathSet.has(it.path) || seen.has(it.path)) continue;
+				results.push(it);
+				seen.add(it.path);
+			}
+		}
+
+		return results.length > 0 ? results : [primary];
+	}
+
 	// 组件挂载时添加全局点击事件和加载主页
 	onMount(() => {
 		const handleClick = (e: MouseEvent) => {
@@ -1671,7 +1697,10 @@
 	 * 添加到书签
 	 */
 	function addToBookmark(item: FsItem) {
-		bookmarkStore.add(item);
+		const targets = resolveActionTargets(item);
+		for (const t of targets) {
+			bookmarkStore.add(t);
+		}
 		loadBookmarks(); // 立即刷新书签列表
 		hideContextMenu();
 	}
@@ -1804,10 +1833,17 @@
 	 * 删除文件
 	 */
 	async function deleteItemFromMenu(item: FsItem) {
-		if (!confirm(`确定要删除 "${item.name}" 吗？`)) return;
+		const targets = resolveActionTargets(item);
+		if (targets.length === 1) {
+			if (!confirm(`确定要删除 "${item.name}" 吗？`)) return;
+		} else {
+			if (!confirm(`确定要删除选中的 ${targets.length} 个项目吗？`)) return;
+		}
 
 		try {
-			await FileSystemAPI.moveToTrash(item.path);
+			for (const t of targets) {
+				await FileSystemAPI.moveToTrash(t.path);
+			}
 			await refresh();
 		} catch (err) {
 			fileBrowserStore.setError(String(err));

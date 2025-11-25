@@ -310,12 +310,15 @@ impl SrVulkanManager {
     }
 
     pub fn cancel_job(&self, job_key: &str) -> Result<(), String> {
+        // 先从任务表中移除，并通知等待方任务已被取消
         let task_id_opt = {
             let mut inner = self.inner.lock().map_err(|e| e.to_string())?;
             if let Some(task_id) = inner.job_key_map.remove(job_key) {
                 inner.task_key_map.remove(&task_id);
-                if let Some(entry) = inner.tasks.get_mut(&task_id) {
-                    entry.sender = None;
+                if let Some(entry) = inner.tasks.remove(&task_id) {
+                    if let Some(sender) = entry.sender {
+                        let _ = sender.send(Err("任务被取消".to_string()));
+                    }
                 }
                 Some(task_id)
             } else {
@@ -323,6 +326,7 @@ impl SrVulkanManager {
             }
         };
 
+        // 再通知 sr_vulkan 侧移除底层任务
         if let Some(task_id) = task_id_opt {
             let _ = Python::with_gil(|py| -> PyResult<()> {
                 let sr_module = PyModule::import_bound(py, "sr_vulkan.sr_vulkan")?;

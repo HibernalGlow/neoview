@@ -4,7 +4,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import type { BookInfo } from '../types';
+import type { BookInfo, PageSortMode } from '../types';
 
 export async function openBook(path: string): Promise<BookInfo> {
 	return await invoke<BookInfo>('open_book', { path });
@@ -32,4 +32,8 @@ export async function previousPage(): Promise<number> {
 
 export async function navigateToImage(imagePath: string): Promise<number> {
 	return await invoke<number>('navigate_to_image', { imagePath });
+}
+
+export async function setBookSortMode(sortMode: PageSortMode): Promise<BookInfo> {
+	return await invoke<BookInfo>('set_book_sort_mode', { sortMode });
 }

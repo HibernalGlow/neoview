@@ -61,7 +61,8 @@
 		Frame,
 		Scan,
 		StretchHorizontal,
-		StretchVertical
+		StretchVertical,
+		Expand
 	} from '@lucide/svelte';
 
 	import {
@@ -120,7 +121,7 @@ let currentSortModeLabel = $derived(() => {
 
 	const zoomModeIconMap = {
 		fit: Maximize,
-		fill: Scan,
+		fill: Expand,
 		fitWidth: StretchHorizontal,
 		fitHeight: StretchVertical,
 		original: Frame

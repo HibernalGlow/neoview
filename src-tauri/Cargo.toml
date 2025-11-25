@@ -1,12 +1,12 @@
 [package]
-name = "app"
+name = "neoview"
 version = "1.1.0"
 description = "A simple desktop application template combining Tauri 2 with Svelte 5 and shadcn-svelte with a basic ci/cd implemented."
 authors = ["HibernalGlow Veras Vieira"]
 license = "MIT"
 repository = "HibernalGlow/neoview"
 edition = "2021"
-rust-version = "1.77.2"
+rust-version = "1.91.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

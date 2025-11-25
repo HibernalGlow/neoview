@@ -182,45 +182,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
 
 [[package]]
-name = "app"
-version = "1.1.0"
-dependencies = [
- "base64 0.22.1",
- "chrono",
- "ffmpeg-sidecar",
- "hex",
- "image",
- "js-sys",
- "jxl-oxide",
- "log",
- "md5",
- "num_cpus",
- "pyo3",
- "rayon",
- "rusqlite",
- "rust_search",
- "serde",
- "serde_json",
- "sha1",
- "tauri",
- "tauri-build",
- "tauri-plugin-cli",
- "tauri-plugin-dialog",
- "tauri-plugin-log",
- "thiserror 2.0.12",
- "threadpool",
- "tokio",
- "url",
- "uuid",
- "walkdir",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "winreg 0.52.0",
- "zip 6.0.0",
-]
-
-[[package]]
 name = "arbitrary"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3056,6 +3017,45 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee6cda3051665f1fb8d9e08fc35c96d5a244fb1be711a03b71118828afc9a873"
 dependencies = [
  "jni-sys",
+]
+
+[[package]]
+name = "neoview"
+version = "1.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "ffmpeg-sidecar",
+ "hex",
+ "image",
+ "js-sys",
+ "jxl-oxide",
+ "log",
+ "md5",
+ "num_cpus",
+ "pyo3",
+ "rayon",
+ "rusqlite",
+ "rust_search",
+ "serde",
+ "serde_json",
+ "sha1",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-cli",
+ "tauri-plugin-dialog",
+ "tauri-plugin-log",
+ "thiserror 2.0.12",
+ "threadpool",
+ "tokio",
+ "url",
+ "uuid",
+ "walkdir",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "winreg 0.52.0",
+ "zip 6.0.0",
 ]
 
 [[package]]

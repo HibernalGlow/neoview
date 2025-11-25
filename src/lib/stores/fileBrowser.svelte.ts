@@ -187,6 +187,16 @@ function createFileBrowserStore() {
     setShowMigrationManager: (value: boolean) => update(state => ({ ...state, showMigrationManager: value })),
     setShowFolderTree: (value: boolean) => update(state => ({ ...state, showFolderTree: value })),
     setSort: (field: SortField, order: SortOrder) => update(state => ({ ...state, sortField: field, sortOrder: order })),
+    setVisibleItems: (items: FsItem[]) => update(state => ({
+      ...state,
+      visibleItems: items,
+      useVisibleItemsOverride: true
+    })),
+    clearVisibleItemsOverride: () => update(state => ({
+      ...state,
+      useVisibleItemsOverride: false,
+      visibleItems: state.items
+    })),
     requestScrollToSelected: (indexOverride?: number) =>
       update(state => ({
         ...state,

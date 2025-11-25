@@ -242,6 +242,15 @@
 	let searchResults = $state<SearchResultItem[]>([]);
 	let isSearching = $state(false);
 
+	$effect(() => {
+		const showingSearchResults = Boolean(searchQuery) && searchResults.length > 0;
+		if (showingSearchResults) {
+			fileBrowserStore.setVisibleItems(searchResults as unknown as FsItem[]);
+		} else {
+			fileBrowserStore.clearVisibleItemsOverride();
+		}
+	});
+
 	// 书签相关 - 使用 bookmarkStore
 	function loadBookmarks() {
 		// 空函数，因为书签功能已迁移到独立 tab

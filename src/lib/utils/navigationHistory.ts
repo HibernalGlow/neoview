@@ -22,6 +22,8 @@ export class NavigationHistory {
   private cache = new Map<string, DirectoryCache>();
   private maxCacheSize: number = 20;
   private cacheTimeout: number = 5 * 60 * 1000; // 5分钟缓存超时
+  // 记录每个父目录最近一次进入的子目录路径，用于返回上一级时可选地高亮/定位
+  private lastActiveChild: Map<string, string> = new Map();
 
   constructor(homepage: string = '') {
     this.homepage = homepage;
@@ -39,6 +41,22 @@ export class NavigationHistory {
    */
   getHomepage(): string {
     return this.homepage;
+  }
+
+  /**
+   * 记录从某个父目录进入的最后一个子目录
+   */
+  setLastActiveChild(parentPath: string | null | undefined, childPath: string | null | undefined) {
+    if (!parentPath || !childPath) return;
+    this.lastActiveChild.set(parentPath, childPath);
+  }
+
+  /**
+   * 获取某个父目录最近一次进入的子目录路径
+   */
+  getLastActiveChild(parentPath: string | null | undefined): string | null {
+    if (!parentPath) return null;
+    return this.lastActiveChild.get(parentPath) ?? null;
   }
 
   /**

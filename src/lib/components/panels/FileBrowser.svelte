@@ -1536,6 +1536,9 @@
 			return;
 		}
 
+		// 记录从当前目录进入的子目录，供返回上一级时可选地用于定位
+		navigationHistory.setLastActiveChild(currentPath, path);
+
 		// 立即开始加载新目录（会立即显示缓存数据）
 		const loadPromise = loadDirectory(path);
 
@@ -2834,6 +2837,11 @@
 						} else {
 							openFile(item);
 						}
+					}}
+					on:locateItem={async (e: CustomEvent<{ path: string; isDir: boolean }>) => {
+						const { path } = e.detail;
+						// 使用 store 内置的 navigateToPath 进行“定位”：进入父目录并选中/滚动到目标项
+						await fileBrowserStore.navigateToPath(path);
 					}}
 					on:itemDoubleClick={(e: CustomEvent<{ item: FsItem; index: number }>) => {
 						const { item } = e.detail;

@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tempfile::NamedTempFile;
-use zip::write::FileOptions;
+use zip::write::{FileOptions, SimpleFileOptions};
 use zip::{ZipArchive, ZipWriter};
 
 const IMAGE_CACHE_LIMIT: usize = 256;
@@ -296,7 +296,11 @@ impl ArchiveManager {
                     continue;
                 }
 
-                let mut options = FileOptions::default().last_modified_time(entry.last_modified());
+                let last_modified = entry
+                    .last_modified()
+                    .unwrap_or_else(zip::DateTime::default);
+                let mut options =
+                    SimpleFileOptions::default().last_modified_time(last_modified);
                 if let Some(mode) = entry.unix_mode() {
                     options = options.unix_permissions(mode);
                 }

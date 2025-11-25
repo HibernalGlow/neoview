@@ -22,6 +22,7 @@
 	import ComparisonViewer from './ComparisonViewer.svelte';
 	import ImageViewerDisplay from './flow/ImageViewerDisplay.svelte';
 	import ImageViewerProgressBar from './flow/ImageViewerProgressBar.svelte';
+	import ImageInfoOverlay from './ImageInfoOverlay.svelte';
 	import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
 	import { appState, type StateSelector, type AppStateSnapshot } from '$lib/core/state/appState';
 	import {
@@ -1608,6 +1609,8 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 			/>
 		{/if}
 	</div>
+
+	<ImageInfoOverlay />
 
 	<!-- 对比模式查看器 -->
 	<ComparisonViewer

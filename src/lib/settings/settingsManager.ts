@@ -67,6 +67,10 @@ export interface NeoViewSettings {
     autoRotate: {
       mode: AutoRotateMode;
     };
+    infoOverlay: {
+      enabled: boolean;
+      opacity: number; // 0.0 - 1.0
+    };
   };
   book: {
     autoPageTurnInterval: number;
@@ -173,6 +177,10 @@ const defaultSettings: NeoViewSettings = {
     },
     autoRotate: {
       mode: 'none'
+    },
+    infoOverlay: {
+      enabled: false,
+      opacity: 0.85
     }
   },
   book: {

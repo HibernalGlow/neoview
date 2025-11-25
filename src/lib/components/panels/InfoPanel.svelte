@@ -6,6 +6,7 @@
 	import { Info, Image as ImageIcon, FileText, Calendar, HardDrive, ExternalLink, Copy, Tag, Settings, FolderOpen, Save } from '@lucide/svelte';
 	import * as Separator from '$lib/components/ui/separator';
 	import { infoPanelStore, type ViewerBookInfo, type ViewerImageInfo } from '$lib/stores/infoPanel.svelte';
+	import { settingsManager } from '$lib/settings/settingsManager';
 	import { FileSystemAPI } from '$lib/api';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import { emmMetadataStore, isCollectTagHelper, collectTagMap, emmTranslationStore } from '$lib/stores/emmMetadata.svelte';
@@ -29,6 +30,9 @@
 	let emmDatabasePathInput = $state<string>('');
 	let enableEMM = $state(true);
 	let fileListTagDisplayMode = $state<'all' | 'collect' | 'none'>('collect');
+
+	let infoOverlayEnabled = $state(false);
+	let infoOverlayOpacity = $state(0.85);
 
 	// 从 store 中获取翻译字典
 	const translationDict = $derived.by(() => {
@@ -106,6 +110,36 @@
 		});
 		return unsubscribe;
 	});
+
+	$effect(() => {
+		const s = settingsManager.getSettings();
+		const overlay = s.view?.infoOverlay;
+		infoOverlayEnabled = overlay?.enabled ?? false;
+		infoOverlayOpacity = overlay?.opacity ?? 0.85;
+	});
+
+	function updateInfoOverlay(partial: { enabled?: boolean; opacity?: number }) {
+		const current = settingsManager.getSettings();
+		const prev = current.view?.infoOverlay ?? { enabled: false, opacity: 0.85 };
+		const next = { ...prev };
+
+		if (partial.enabled !== undefined) {
+			next.enabled = partial.enabled;
+		}
+		if (partial.opacity !== undefined) {
+			const raw = partial.opacity;
+			const base = Number.isFinite(raw) ? (raw as number) : prev.opacity ?? 0.85;
+			const clamped = Math.min(1, Math.max(0.2, base));
+			next.opacity = clamped;
+		}
+
+		infoOverlayEnabled = next.enabled;
+		infoOverlayOpacity = next.opacity;
+
+		settingsManager.updateNestedSettings('view', {
+			infoOverlay: next
+		});
+	}
 
 	function formatFileSize(bytes?: number): string {
 		if (bytes === undefined) return '—';
@@ -746,6 +780,45 @@
 							</div>
 						</div>
 					{/if}
+				</div>
+
+				<!-- 信息悬浮窗 -->
+				<div class="space-y-3">
+					<div class="flex items-center justify-between">
+						<div class="flex items-center gap-2 font-semibold text-sm">
+							<Info class="h-4 w-4" />
+							<span>信息悬浮窗</span>
+						</div>
+						<Switch.Root
+							checked={infoOverlayEnabled}
+							onCheckedChange={(v) => updateInfoOverlay({ enabled: v })}
+							class="scale-75"
+						/>
+					</div>
+					<div class="space-y-2 text-xs text-muted-foreground">
+						<div class="flex items-center justify-between gap-2">
+							<span>透明度</span>
+							<div class="flex items-center gap-2">
+								<Input.Root
+									type="number"
+									min="20"
+									max="100"
+									step="5"
+									class="h-7 w-20 px-2 text-xs"
+									value={Math.round(infoOverlayOpacity * 100).toString()}
+									oninput={(e) => {
+										const target = e.currentTarget as HTMLInputElement;
+										const v = parseFloat(target.value);
+										if (!Number.isNaN(v)) {
+											updateInfoOverlay({ opacity: v / 100 });
+										}
+									}}
+								/>
+								<span class="text-[11px]">{Math.round(infoOverlayOpacity * 100)}%</span>
+							</div>
+						</div>
+						<p>调节悬浮信息窗的背景透明度（20% - 100%）。</p>
+					</div>
 				</div>
 
 				<Separator.Root />

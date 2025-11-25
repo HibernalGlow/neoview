@@ -188,6 +188,7 @@ pub fn run() {
             commands::next_page,
             commands::previous_page,
             commands::navigate_to_image,
+            commands::set_book_sort_mode,
             // Image commands
             commands::load_image,
             commands::get_image_dimensions,

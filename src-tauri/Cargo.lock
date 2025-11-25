@@ -3046,6 +3046,7 @@ dependencies = [
  "tauri-plugin-cli",
  "tauri-plugin-dialog",
  "tauri-plugin-log",
+ "tempfile",
  "thiserror 2.0.12",
  "threadpool",
  "tokio",

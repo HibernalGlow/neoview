@@ -355,6 +355,22 @@ pub async fn list_archive_contents(
     archive_manager.list_zip_contents(&path)
 }
 
+/// 删除压缩包中的指定条目
+#[tauri::command]
+pub async fn delete_archive_entry(
+    archive_path: String,
+    inner_path: String,
+    state: State<'_, FsState>,
+) -> Result<(), String> {
+    let archive_manager = state
+        .archive_manager
+        .lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+
+    let path = PathBuf::from(&archive_path);
+    archive_manager.delete_entry_from_zip(&path, &inner_path)
+}
+
 /// 从压缩包加载图片
 #[tauri::command]
 pub async fn load_image_from_archive(

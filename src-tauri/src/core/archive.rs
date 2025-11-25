@@ -4,11 +4,13 @@ use image::GenericImageView;
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
-use std::io::{Cursor, Read};
-use std::path::Path;
+use std::io::{self, Cursor, Read, Write};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use zip::ZipArchive;
+use tempfile::NamedTempFile;
+use zip::write::FileOptions;
+use zip::{ZipArchive, ZipWriter};
 
 const IMAGE_CACHE_LIMIT: usize = 256;
 
@@ -254,6 +256,88 @@ impl ArchiveManager {
     /// 从压缩包中提取文件（统一接口）
     pub fn extract_file(&self, archive_path: &Path, file_path: &str) -> Result<Vec<u8>, String> {
         self.extract_file_from_zip(archive_path, file_path)
+    }
+
+    pub fn delete_entry_from_zip(
+        &self,
+        archive_path: &Path,
+        inner_path: &str,
+    ) -> Result<(), String> {
+        let normalized_target = Self::normalize_inner_path(inner_path);
+
+        let parent_dir = archive_path
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."));
+
+        let temp_file = NamedTempFile::new_in(&parent_dir)
+            .map_err(|e| format!("创建临时文件失败: {}", e))?;
+        let temp_writer = temp_file
+            .reopen()
+            .map_err(|e| format!("打开临时文件失败: {}", e))?;
+        let mut zip_writer = ZipWriter::new(temp_writer);
+
+        {
+            let source_file = File::open(archive_path)
+                .map_err(|e| format!("打开压缩包失败: {}", e))?;
+            let mut archive = ZipArchive::new(source_file)
+                .map_err(|e| format!("读取压缩包失败: {}", e))?;
+
+            let mut found = false;
+            for index in 0..archive.len() {
+                let mut entry = archive
+                    .by_index(index)
+                    .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
+                let entry_name = entry.name().to_string();
+                let normalized_name = Self::normalize_inner_path(&entry_name);
+
+                if normalized_name == normalized_target {
+                    found = true;
+                    continue;
+                }
+
+                let mut options = FileOptions::default().last_modified_time(entry.last_modified());
+                if let Some(mode) = entry.unix_mode() {
+                    options = options.unix_permissions(mode);
+                }
+
+                if entry.is_dir() {
+                    zip_writer
+                        .add_directory(entry_name, options)
+                        .map_err(|e| format!("写入目录失败: {}", e))?;
+                } else {
+                    let options = options.compression_method(entry.compression());
+                    zip_writer
+                        .start_file(entry_name, options)
+                        .map_err(|e| format!("写入文件失败: {}", e))?;
+                    io::copy(&mut entry, &mut zip_writer)
+                        .map_err(|e| format!("写入文件内容失败: {}", e))?;
+                }
+            }
+
+            if !found {
+                return Err(format!("在压缩包中找不到文件: {}", inner_path));
+            }
+        }
+
+        let mut writer = zip_writer
+            .finish()
+            .map_err(|e| format!("写入压缩包失败: {}", e))?;
+        writer
+            .flush()
+            .map_err(|e| format!("刷新压缩包失败: {}", e))?;
+        drop(writer);
+
+        let temp_path = temp_file.into_temp_path();
+        fs::remove_file(archive_path)
+            .map_err(|e| format!("删除原压缩包失败: {}", e))?;
+        temp_path
+            .persist(archive_path)
+            .map_err(|e| format!("替换压缩包失败: {}", e.error))?;
+
+        self.evict_archive_cache(archive_path);
+
+        Ok(())
     }
 
     /// 从 ZIP 压缩包中加载图片（返回二进制数据）
@@ -751,6 +835,21 @@ impl ArchiveManager {
 
     fn normalize_archive_key(path: &Path) -> String {
         path.to_string_lossy().replace('\\', "/")
+    }
+
+    fn normalize_inner_path(path: &str) -> String {
+        path.replace('\\', "/")
+    }
+
+    fn evict_archive_cache(&self, archive_path: &Path) {
+        let key = Self::normalize_archive_key(archive_path);
+        if let Ok(mut cache) = self.archive_cache.lock() {
+            cache.remove(&key);
+        }
+
+        if let Ok(mut image_cache) = self.cache.lock() {
+            image_cache.retain(|entry_key, _| !entry_key.starts_with(&format!("{}::", key)));
+        }
     }
 
     fn get_archive_metadata(&self, archive_path: &Path) -> Result<ArchiveMetadata, String> {

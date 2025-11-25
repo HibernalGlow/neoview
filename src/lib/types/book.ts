@@ -5,7 +5,16 @@
 
 export type BookType = 'archive' | 'folder' | 'pdf' | 'media';
 
-export type PageSortMode = 'fileName' | 'fileNameDescending' | 'fileSize' | 'timeStamp' | 'random' | 'entry';
+export type PageSortMode =
+  | 'fileName'
+  | 'fileNameDescending'
+  | 'fileSize'
+  | 'fileSizeDescending'
+  | 'timeStamp'
+  | 'timeStampDescending'
+  | 'random'
+  | 'entry'
+  | 'entryDescending';
 
 export type ReadOrder = 'leftToRight' | 'rightToLeft';
 
@@ -14,6 +23,8 @@ export type PageMode = 'singlePage' | 'widePage' | 'twoPage';
 export interface Page {
   /** 页面索引 */
   index: number;
+  /** 页面原始顺序（Entry 顺序） */
+  entryIndex: number;
   /** 页面路径 */
   path: string;
   /** 内部路径（用于压缩包内的文件） */
@@ -34,6 +45,8 @@ export interface Page {
   thumbnail?: string;
   /** 稳定哈希值（用于缓存键） */
   stableHash: string;
+  /** 最后修改时间（unix 时间戳，单位：秒） */
+  modified?: number;
 }
 
 export interface BookInfo {

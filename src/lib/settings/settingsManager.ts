@@ -134,7 +134,7 @@ const defaultSettings: NeoViewSettings = {
     openLastFolder: true
   },
   archive: {
-    allowFileOperations: false,
+    allowFileOperations: true,
     confirmBeforeDelete: true
   },
   performance: {

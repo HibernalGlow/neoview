@@ -1152,9 +1152,16 @@
 		loadThumbnailsForItemsAsync(items, path);
 	}
 
-	/**
-	 * 加载压缩包内容
-	 */
+	async function getHistoryCurrentPage(path: string): Promise<number> {
+		try {
+			const { historyStore } = await import('$lib/stores/history.svelte');
+			return historyStore.findByPath(path)?.currentPage ?? 0;
+		} catch (err) {
+			console.debug('Failed to read history progress for path:', path, err);
+			return 0;
+		}
+	}
+
 	async function loadArchive(path: string) {
 		console.log('📦 loadArchive called with path:', path);
 
@@ -1350,19 +1357,20 @@
 		}
 	}
 
-	/**
-	 * 作为书籍打开压缩包
-	 */
-	async function openArchiveAsBook(item: FsItem) {
-		console.log('📦 Opening archive as book:', item.path);
-		await bookStore.openBook(item.path);
-		hideContextMenu();
-	}
+		/**
+		 * 作为书籍打开压缩包
+		 */
+		async function openArchiveAsBook(item: FsItem) {
+			console.log('📦 Opening archive as book:', item.path);
+			const rememberedPage = await getHistoryCurrentPage(item.path);
+			await bookStore.openBook(item.path, { initialPage: rememberedPage });
+			hideContextMenu();
+		}
 
-	/**
-	 * 检查并打开文件
-	 */
-	async function openFile(item: FsItem) {
+		/**
+		 * 检查并打开文件
+		 */
+		async function openFile(item: FsItem) {
 		console.log('=== openFile called ===');
 		console.log('Item:', {
 			name: item.name,
@@ -1399,21 +1407,22 @@
 				await navigateToDirectory(item.path);
 				console.log('✅ Directory navigation completed');
 			} else {
-				// 检查是否为压缩包
-				const isArchive = await FileSystemAPI.isSupportedArchive(item.path);
-				console.log('Is archive:', isArchive);
+			// 检查是否为压缩包
+			const isArchive = await FileSystemAPI.isSupportedArchive(item.path);
+			console.log('Is archive:', isArchive);
 
-				if (isArchive) {
-					// 📦 压缩包：作为 book 打开
-					console.log('📦 Archive clicked as book:', item.path);
+			if (isArchive) {
+				// 📦 压缩包：作为 book 打开
+				console.log('📦 Archive clicked as book:', item.path);
 
-					// 打开压缩包作为书籍
-					await bookStore.openBook(item.path);
-					console.log('✅ Archive opened as book');
-				} else {
-					// 非压缩包：检查是否为视频或普通图片（前端通过扩展名判断）
-					const isVideo = isVideoPath(item.path);
-					console.log('Is video:', isVideo);
+				// 打开压缩包作为书籍（优先使用历史记录中的页码）
+				const rememberedPage = await getHistoryCurrentPage(item.path);
+				await bookStore.openBook(item.path, { initialPage: rememberedPage });
+				console.log('✅ Archive opened as book');
+			} else {
+				// 非压缩包：检查是否为视频或普通图片（前端通过扩展名判断）
+				const isVideo = isVideoPath(item.path);
+				console.log('Is video:', isVideo);
 
 					if (isVideo) {
 						// 🎬 视频文件：作为 media book 打开
@@ -1468,23 +1477,26 @@
 		}
 
 		return null;
-	}
-
-	/**
-	 * 从压缩包打开图片
-	 */
-	async function openImageFromArchive(filePath: string) {
-		try {
-			console.log('📦 Opening image from archive:', filePath);
-			// 打开整个压缩包作为 book
-			await bookStore.openArchiveAsBook(currentArchivePath);
-			// 跳转到指定图片
-			await bookStore.navigateToImage(filePath);
-			console.log('✅ Image opened from archive');
-		} catch (err) {
-			console.error('❌ Error opening image from archive:', err);
-			fileBrowserStore.setError(String(err));
 		}
+
+		/**
+		 * 从压缩包打开图片
+		 */
+		async function openImageFromArchive(filePath: string) {
+			try {
+				console.log('📦 Opening image from archive:', filePath);
+				// 打开整个压缩包作为 book，并传入当前图片的索引用于恢复页码
+				const archiveItems = fileBrowserStore.getState().items;
+				const targetIndex = archiveItems.findIndex((item) => item.path === filePath);
+				const initialPage = targetIndex >= 0 ? targetIndex : 0;
+				await bookStore.openArchiveAsBook(currentArchivePath, { initialPage });
+				// 跳转到指定图片
+				await bookStore.navigateToImage(filePath);
+				console.log('✅ Image opened from archive');
+			} catch (err) {
+				console.error('❌ Error opening image from archive:', err);
+				fileBrowserStore.setError(String(err));
+			}
 	}
 
 	/**

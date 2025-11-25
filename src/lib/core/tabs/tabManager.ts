@@ -61,7 +61,7 @@ class TabManager {
 		if (tab.bookInfo) {
 			// 这里需要更新 bookStore 以支持多标签
 			// 暂时先直接设置
-			bookStore.openBook(tab.bookInfo.path, tab.bookInfo.type);
+			bookStore.openBook(tab.bookInfo.path, { initialPage: tab.bookInfo.currentPage });
 		}
 
 		return true;

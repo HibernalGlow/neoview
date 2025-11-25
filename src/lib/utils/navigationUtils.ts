@@ -51,17 +51,7 @@ export async function openFileSystemItem(
 
     // 2. Open Content
     if (options.forceBookOpen) {
-        await bookStore.openBook(path);
-        if (page > 0) {
-            setTimeout(async () => {
-                try {
-                    console.log('🔖 Jumping to page:', page);
-                    await bookStore.navigateToPage(page);
-                } catch (err) {
-                    console.error('Jump to page failed:', err);
-                }
-            }, 100);
-        }
+        await bookStore.openBook(path, { initialPage: page });
         return;
     }
 
@@ -88,20 +78,7 @@ export async function openFileSystemItem(
 
             if (isArchive) {
                 // 压缩包：作为书籍直接打开
-                await bookStore.openBook(path);
-
-                // Navigate to page if specified
-                if (page > 0) {
-                    // Use setTimeout to ensure book is loaded (simple approach, ideally listen to event)
-                    setTimeout(async () => {
-                        try {
-                            console.log('🔖 Jumping to page:', page);
-                            await bookStore.navigateToPage(page);
-                        } catch (err) {
-                            console.error('Jump to page failed:', err);
-                        }
-                    }, 100);
-                }
+                await bookStore.openBook(path, { initialPage: page });
             } else if (isVideo) {
                 console.log('🎬 openFileSystemItem: opening video via parent folder book', path);
                 let parentDir = path;

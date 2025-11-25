@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "neoview",
-  "version": "2.0.0",
+  "version": "1.1.0",
   "mainBinaryName": "neoview",
   "identifier": "NeoView",
   "build": {
@@ -26,14 +26,25 @@
       "csp": "default-src 'self'; connect-src 'self' blob: tauri: asset: http://asset.localhost; frame-src 'self' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' asset: http://asset.localhost blob: data: filesystem: http: https: tauri:; media-src 'self' asset: http://asset.localhost blob: data: filesystem: http: https: tauri:;",
       "assetProtocol": {
         "enable": true,
-        "scope": ["$APPDATA/**", "D:\\temp\\**", "C:\\Users\\**\\AppData\\**", "C:\\**", "D:\\**", "E:\\**"]
+        "scope": [
+          "$APPDATA/**",
+          "D:\\temp\\**",
+          "C:\\Users\\**\\AppData\\**",
+          "C:\\**",
+          "D:\\**",
+          "E:\\**"
+        ]
       }
     },
     "withGlobalTauri": true
   },
   "plugins": {
     "fs": {
-      "scope": ["$APPDATA/**", "D:\\temp\\**", "C:\\Users\\**\\AppData\\**"]
+      "scope": [
+        "$APPDATA/**",
+        "D:\\temp\\**",
+        "C:\\Users\\**\\AppData\\**"
+      ]
     },
     "cli": {
       "description": "NeoView command line interface",

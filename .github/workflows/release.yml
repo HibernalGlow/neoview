@@ -57,6 +57,38 @@ jobs:
             exit 1
           }
 
+      - name: extract portable exe from nsis
+        shell: powershell
+        run: |
+          $bundleRoot = ".\src-tauri\target\release\bundle"
+          $setup = Get-ChildItem $bundleRoot -Recurse -Filter "*setup*.exe" | Select-Object -First 1
+
+          if ($null -eq $setup) {
+            Write-Error "NSIS setup.exe not found for extraction"
+            exit 1
+          }
+
+          $extractDir = Join-Path $bundleRoot "extracted"
+          New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+
+          Write-Host "Running NSIS installer to extract files to $extractDir"
+          & $setup.FullName /S /D=$extractDir
+
+          $exe = Get-ChildItem $extractDir -Recurse -Filter "neoview.exe" | Select-Object -First 1
+          if ($null -eq $exe) {
+            Write-Error "neoview.exe not found after running installer"
+            Get-ChildItem $extractDir -Recurse | Select-Object FullName
+            exit 1
+          }
+
+          $portableDir = Join-Path $bundleRoot "portable"
+          New-Item -ItemType Directory -Path $portableDir -Force | Out-Null
+
+          $portableExe = Join-Path $portableDir "neoview.exe"
+          Copy-Item $exe.FullName $portableExe -Force
+
+          Write-Host "Portable exe created at $portableExe"
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -65,3 +97,5 @@ jobs:
           generate_release_notes: true
           files: |
             ./src-tauri/target/release/bundle/**/*setup*.exe
+            ./src-tauri/target/release/bundle/**/*.msi
+            ./src-tauri/target/release/bundle/portable/neoview.exe

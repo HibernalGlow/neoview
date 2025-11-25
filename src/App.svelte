@@ -8,10 +8,11 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { open } from '@tauri-apps/plugin-dialog';
-	import { bookStore, zoomIn, zoomOut, resetZoom, toggleSidebar, toggleRightSidebar, toggleFullscreen, rotateClockwise, toggleViewMode, sidebarOpen, rightSidebarOpen, pageLeft, pageRight, topToolbarPinned, bottomThumbnailBarPinned, toggleReadingDirection, toggleSinglePanoramaView } from '$lib/stores';
+	import { bookStore, zoomIn, zoomOut, toggleSidebar, toggleRightSidebar, toggleFullscreen, rotateClockwise, toggleViewMode, sidebarOpen, rightSidebarOpen, pageLeft, pageRight, topToolbarPinned, bottomThumbnailBarPinned, toggleReadingDirection, toggleSinglePanoramaView } from '$lib/stores';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { FolderOpen } from '@lucide/svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
+	import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
 	import { isVideoFile } from '$lib/utils/videoUtils';
 	import { updateUpscaleSettings } from '$lib/utils/upscale/settings';
 	// TODO: 缩略图功能已移除，待重新实现
@@ -273,11 +274,11 @@ async function dispatchAction(action: string) {
 			break;
 		case 'fitWindow':
 			console.log('执行适应窗口操作');
-			resetZoom();
+			dispatchApplyZoomMode('fit');
 			break;
 		case 'actualSize':
 			console.log('执行实际大小操作');
-			resetZoom();
+			dispatchApplyZoomMode('original');
 			break;
 		case 'fullscreen':
 			console.log('执行全屏操作');

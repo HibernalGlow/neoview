@@ -621,7 +621,9 @@ class BookStore {
    * 设置指定页面的超分状态
    */
   setPageUpscaleStatus(pageIndex: number, status: 'none' | 'preupscaled' | 'done' | 'failed') {
-    this.upscaleStatusByPage.set(pageIndex, status);
+    const nextMap = new Map(this.upscaleStatusByPage);
+    nextMap.set(pageIndex, status);
+    this.upscaleStatusByPage = nextMap;
     console.log(`📄 页面 ${pageIndex + 1} 超分状态更新为:`, status);
   }
 
@@ -636,7 +638,7 @@ class BookStore {
    * 重置所有页面的超分状态（书籍切换时调用）
    */
   resetAllPageUpscaleStatus() {
-    this.upscaleStatusByPage.clear();
+    this.upscaleStatusByPage = new Map();
     console.log('🔄 已重置所有页面超分状态');
   }
 

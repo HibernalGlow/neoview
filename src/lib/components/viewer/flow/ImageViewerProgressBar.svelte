@@ -83,26 +83,6 @@
 				style={`width: ${((currentPageIndex + 1) / totalPages) * 100}%; background-color: ${progressColor};`}
 			></div>
 		</div>
-
-		<div class="progress-info">
-			<div class="info-left">
-				<span>第 {currentPageIndex + 1}/{totalPages} 页</span>
-				{#if isCurrentPageUpscaling}
-					<span class="status in-progress">超分中 {Math.round(upscaleState.progress)}%</span>
-				{:else if currentPageStatus === 'done'}
-					<span class="status done">超分完成</span>
-				{:else if currentPageStatus === 'failed'}
-					<span class="status failed">超分失败</span>
-				{/if}
-			</div>
-			{#if preUpscaleBarWidth > 0}
-				<div class="info-right">
-					<span class="preup-label">
-						预超分 {preUpscaledCount}/{totalPreUpscalePages || Math.max(preUpscaledCount, 0)}
-					</span>
-				</div>
-			{/if}
-		</div>
 	</div>
 {/if}
 
@@ -165,62 +145,4 @@
 		right: 0;
 		border-radius: 2px 0 0 2px;
 	}
-
-	.progress-info {
-		position: absolute;
-		left: 0.8rem;
-		right: 0.8rem;
-		bottom: 6px;
-		display: flex;
-		justify-content: space-between;
-		font-size: 0.7rem;
-		color: rgba(255, 255, 255, 0.9);
-		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-		pointer-events: none;
-		align-items: center;
-	}
-
-	.info-left,
-	.info-right {
-		display: flex;
-		gap: 0.5rem;
-		align-items: center;
-	}
-
-	.status {
-		padding: 0.05rem 0.4rem;
-		border-radius: 4px;
-		font-size: 0.65rem;
-		text-shadow: none;
-		font-weight: 500;
-	}
-
-	.status.in-progress {
-		background: rgba(255, 255, 255, 0.8);
-		color: #111;
-		backdrop-filter: blur(4px);
-	}
-
-	.status.done {
-		background: rgba(187, 247, 208, 0.8);
-		color: #14532d;
-		backdrop-filter: blur(4px);
-	}
-
-	.status.failed {
-		background: rgba(248, 113, 113, 0.8);
-		color: #450a0a;
-		backdrop-filter: blur(4px);
-	}
-
-	.preup-label {
-		background: rgba(250, 204, 21, 0.7);
-		color: #422006;
-		border-radius: 4px;
-		padding: 0.05rem 0.4rem;
-		text-shadow: none;
-		font-size: 0.65rem;
-		font-weight: 500;
-		backdrop-filter: blur(4px);
-	}
-</style>
+	</style>

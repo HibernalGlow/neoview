@@ -71,12 +71,15 @@
 		<div class={`bar-track ${readingDirection === 'right-to-left' ? 'rtl' : ''}`}>
 			<!-- 下层：预超分覆盖进度条 -->
 			{#if preUpscaleBarWidth > 0}
-				<div class="preup-bar" style={`width: ${Math.min(preUpscaleBarWidth, 100)}%;`}></div>
+				<div
+					class={`preup-bar ${readingDirection === 'right-to-left' ? 'rtl' : ''}`}
+					style={`width: ${Math.min(preUpscaleBarWidth, 100)}%;`}
+				></div>
 			{/if}
 
 			<!-- 上层：阅读进度 + 当前页状态 -->
 			<div
-				class={`reading-bar ${progressBlinking ? 'animate-pulse' : ''}`}
+				class={`reading-bar ${progressBlinking ? 'animate-pulse' : ''} ${readingDirection === 'right-to-left' ? 'rtl' : ''}`}
 				style={`width: ${((currentPageIndex + 1) / totalPages) * 100}%; background-color: ${progressColor};`}
 			></div>
 		</div>
@@ -126,8 +129,7 @@
 	}
 
 	.bar-track.rtl {
-		transform: scaleX(-1);
-		transform-origin: center;
+		direction: rtl;
 	}
 
 	.preup-bar {
@@ -140,6 +142,12 @@
 		border-radius: 0 2px 2px 0;
 	}
 
+	.preup-bar.rtl {
+		left: auto;
+		right: 0;
+		border-radius: 2px 0 0 2px;
+	}
+
 	.reading-bar {
 		position: absolute;
 		left: 0;
@@ -150,6 +158,12 @@
 			width 0.3s ease,
 			background-color 0.3s ease;
 		box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+	}
+
+	.reading-bar.rtl {
+		left: auto;
+		right: 0;
+		border-radius: 2px 0 0 2px;
 	}
 
 	.progress-info {

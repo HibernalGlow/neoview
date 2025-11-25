@@ -3,6 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import { Settings } from '@lucide/svelte';
+	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select';
 
 	const dispatch = createEventDispatcher();
 
@@ -47,40 +48,46 @@
 
 	<div class="setting-row">
 		<Label>模型：</Label>
-		<select bind:value={selectedModel} class="select-input">
+		<NativeSelect class="min-w-[150px]" bind:value={selectedModel}>
 			{#each availableModels as model}
-				<option value={model}>
+				<NativeSelectOption value={model}>
 					{modelLabels[model] || model}
-				</option>
+				</NativeSelectOption>
 			{/each}
-		</select>
+		</NativeSelect>
 	</div>
 
 	<div class="setting-row">
 		<Label>GPU：</Label>
-		<select bind:value={gpuId} class="select-input">
+		<NativeSelect class="min-w-[150px]" bind:value={gpuId}>
 			{#each gpuOptions as option}
-				<option value={option.value}>{option.label}</option>
+				<NativeSelectOption value={option.value}>
+					{option.label}
+				</NativeSelectOption>
 			{/each}
-		</select>
+		</NativeSelect>
 	</div>
 
 	<div class="setting-row">
 		<Label>Tile Size：</Label>
-		<select bind:value={tileSize} class="select-input">
+		<NativeSelect class="min-w-[150px]" bind:value={tileSize}>
 			{#each tileSizeOptions as option}
-				<option value={option.value}>{option.label}</option>
+				<NativeSelectOption value={option.value}>
+					{option.label}
+				</NativeSelectOption>
 			{/each}
-		</select>
+		</NativeSelect>
 	</div>
 
 	<div class="setting-row">
 		<Label>降噪等级：</Label>
-		<select bind:value={noiseLevel} class="select-input">
+		<NativeSelect class="min-w-[150px]" bind:value={noiseLevel}>
 			{#each noiseLevelOptions as option}
-				<option value={option.value}>{option.label}</option>
+				<NativeSelectOption value={option.value}>
+					{option.label}
+				</NativeSelectOption>
 			{/each}
-		</select>
+		</NativeSelect>
 	</div>
 
 	<Button onclick={handleApply} class="w-full mt-2" variant="outline">

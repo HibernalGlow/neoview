@@ -73,19 +73,26 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 		const vh = Math.max(viewport.height || 0, 1);
 		const ratioW = vw / iw;
 		const ratioH = vh / ih;
+		const baseScale = Math.min(ratioW, ratioH) || 1;
+		let targetScale: number;
 		switch (mode) {
 			case 'original':
-				return 1;
+				targetScale = 1;
+				break;
 			case 'fill':
-				return Math.max(ratioW, ratioH);
+				targetScale = Math.max(ratioW, ratioH);
+				break;
 			case 'fitWidth':
-				return ratioW;
+				targetScale = ratioW;
+				break;
 			case 'fitHeight':
-				return ratioH;
+				targetScale = ratioH;
+				break;
 			case 'fit':
 			default:
-				return Math.min(ratioW, ratioH);
+				targetScale = baseScale;
 		}
+		return targetScale / baseScale;
 	}
 
 	function applyCurrentZoomMode(overrideMode?: ZoomMode) {

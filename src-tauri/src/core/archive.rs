@@ -770,7 +770,8 @@ impl ArchiveManager {
         })
     }
 
-    fn zip_datetime_to_unix(dt: zip::DateTime) -> Option<i64> {
+    fn zip_datetime_to_unix(dt: Option<zip::DateTime>) -> Option<i64> {
+        let dt = dt?;
         let date = NaiveDate::from_ymd_opt(dt.year() as i32, dt.month() as u32, dt.day() as u32)?;
         let time =
             NaiveTime::from_hms_opt(dt.hour() as u32, dt.minute() as u32, dt.second() as u32)?;

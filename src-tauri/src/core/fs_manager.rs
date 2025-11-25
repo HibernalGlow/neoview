@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
+use trash;
 
 /// 文件系统项（文件或目录）
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -404,41 +405,11 @@ impl FsManager {
         fs::rename(from, to).map_err(|e| format!("重命名失败: {}", e))
     }
 
-    /// 移动到回收站（Windows）
-    #[cfg(target_os = "windows")]
+    /// 移动到回收站
     pub fn move_to_trash(&self, path: &Path) -> Result<(), String> {
         self.validate_path(path)?;
 
-        // 使用 Windows Shell API 移动到回收站
-        // 这里简化处理，实际应该使用 trash crate
-        use std::process::Command;
-
-        let path_str = path.to_string_lossy().to_string();
-        let output = Command::new("powershell")
-            .args(&[
-                "-Command",
-                &format!(
-                    "Add-Type -AssemblyName Microsoft.VisualBasic; \
-                     [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile('{}', \
-                     'OnlyErrorDialogs', 'SendToRecycleBin')",
-                    path_str.replace("'", "''")
-                ),
-            ])
-            .output()
-            .map_err(|e| format!("执行回收站命令失败: {}", e))?;
-
-        if output.status.success() {
-            Ok(())
-        } else {
-            Err("移动到回收站失败".to_string())
-        }
-    }
-
-    /// 移动到回收站（非 Windows）
-    #[cfg(not(target_os = "windows"))]
-    pub fn move_to_trash(&self, path: &Path) -> Result<(), String> {
-        self.validate_path(path)?;
-        Err("当前平台不支持回收站功能".to_string())
+        trash::delete(path).map_err(|e| format!("移动到回收站失败: {}", e))
     }
 
     /// 复制文件或目录

@@ -10,6 +10,7 @@ import { FileSystemAPI } from '$lib/api';
 
 export type SortField = 'name' | 'modified' | 'size' | 'type' | 'path' | 'random';
 export type SortOrder = 'asc' | 'desc';
+export type DeleteStrategy = 'trash' | 'permanent';
 
 interface FileBrowserState {
   currentPath: string;
@@ -34,6 +35,7 @@ interface FileBrowserState {
   showFolderTree: boolean;
   visibleItems: FsItem[];
   useVisibleItemsOverride: boolean;
+  deleteStrategy: DeleteStrategy;
 }
 
 const archiveExtensions = ['.zip', '.cbz', '.rar', '.cbr', '.7z'];
@@ -100,7 +102,8 @@ const initialState: FileBrowserState = {
   showMigrationManager: false,
   showFolderTree: false,
   visibleItems: [],
-  useVisibleItemsOverride: false
+  useVisibleItemsOverride: false,
+  deleteStrategy: 'trash'
 };
 
 /**
@@ -181,6 +184,7 @@ function createFileBrowserStore() {
     setSelectedIndex: (index: number) => update(state => ({ ...state, selectedIndex: index })),
     setCheckMode: (value: boolean) => update(state => ({ ...state, isCheckMode: value })),
     setDeleteMode: (value: boolean) => update(state => ({ ...state, isDeleteMode: value })),
+    setDeleteStrategy: (value: DeleteStrategy) => update(state => ({ ...state, deleteStrategy: value })),
     setPenetrateMode: (value: boolean) => update(state => ({ ...state, isPenetrateMode: value })),
     setShowSearchBar: (value: boolean) => update(state => ({ ...state, showSearchBar: value })),
     setShowMigrationBar: (value: boolean) => update(state => ({ ...state, showMigrationBar: value })),

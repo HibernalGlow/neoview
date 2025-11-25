@@ -43,7 +43,8 @@
 		fileBrowserStore,
 		sortItems,
 		type SortField,
-		type SortOrder
+		type SortOrder,
+		type DeleteStrategy
 	} from '$lib/stores/fileBrowser.svelte';
 	import { NavigationHistory } from '$lib/utils/navigationHistory';
 	import { Button } from '$lib/components/ui/button';
@@ -206,6 +207,7 @@
 	// UI 模式状态
 	let isCheckMode = $state(fileBrowserStore.getState().isCheckMode);
 	let isDeleteMode = $state(fileBrowserStore.getState().isDeleteMode);
+	let deleteStrategy = $state(fileBrowserStore.getState().deleteStrategy);
 	let isPenetrateMode = $state(fileBrowserStore.getState().isPenetrateMode);
 	let viewMode = $state<'list' | 'thumbnails'>(
 		loadPanelViewMode('file-browser', 'list') as 'list' | 'thumbnails'
@@ -353,6 +355,7 @@
 			scrollTargetIndex = state.scrollTargetIndex;
 			isCheckMode = state.isCheckMode;
 			isDeleteMode = state.isDeleteMode;
+			deleteStrategy = state.deleteStrategy;
 
 			if (showFolderTree && state.currentPath) {
 				void ensureDriveRootLoadedForPath(state.currentPath);
@@ -518,6 +521,16 @@
 		const next = !isDeleteMode;
 		isDeleteMode = next;
 		fileBrowserStore.setDeleteMode(next);
+	}
+
+	function toggleDeleteStrategy() {
+		const next: DeleteStrategy = deleteStrategy === 'trash' ? 'permanent' : 'trash';
+		deleteStrategy = next;
+		fileBrowserStore.setDeleteStrategy(next);
+	}
+
+	function getDeleteStrategyText(strategy: DeleteStrategy) {
+		return strategy === 'trash' ? '移动到回收站' : '永久删除';
 	}
 
 	function toggleViewMode() {
@@ -1631,12 +1644,25 @@
 	/**
 	 * 删除文件
 	 */
-	async function deleteItem(path: string) {
-		if (!confirm('确定要删除此项吗？')) return;
+	async function deleteItems(targets: FsItem[]) {
+		if (!targets || targets.length === 0) return;
+
+		const actionLabel = getDeleteStrategyText(deleteStrategy);
+		const confirmMessage =
+			targets.length === 1
+				? `确定要将 "${targets[0].name}" ${actionLabel}吗？`
+				: `确定要${actionLabel}选中的 ${targets.length} 个项目吗？`;
+		if (!confirm(confirmMessage)) return;
 
 		try {
-			await FileSystemAPI.moveToTrash(path);
-			await loadDirectory(currentPath);
+			for (const target of targets) {
+				if (deleteStrategy === 'trash') {
+					await FileSystemAPI.moveToTrash(target.path);
+				} else {
+					await FileSystemAPI.deletePath(target.path);
+				}
+			}
+			await refresh();
 		} catch (err) {
 			fileBrowserStore.setError(String(err));
 		}
@@ -2098,21 +2124,7 @@
 	 * 删除文件
 	 */
 	async function deleteItemFromMenu(item: FsItem) {
-		const targets = resolveActionTargets(item);
-		if (targets.length === 1) {
-			if (!confirm(`确定要删除 "${item.name}" 吗？`)) return;
-		} else {
-			if (!confirm(`确定要删除选中的 ${targets.length} 个项目吗？`)) return;
-		}
-
-		try {
-			for (const t of targets) {
-				await FileSystemAPI.moveToTrash(t.path);
-			}
-			await refresh();
-		} catch (err) {
-			fileBrowserStore.setError(String(err));
-		}
+		await deleteItems(resolveActionTargets(item));
 		hideContextMenu();
 	}
 

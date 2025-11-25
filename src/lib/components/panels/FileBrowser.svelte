@@ -2454,9 +2454,7 @@
 							{viewMode}
 							on:itemClick={(e) => {
 								const { item, index } = e.detail;
-								if (!isDeleteMode) {
-									openSearchResult(item);
-								}
+								openSearchResult(item);
 							}}
 							on:itemContextMenu={(e) => {
 								const { event, item } = e.detail;
@@ -2504,10 +2502,8 @@
 						on:itemClick={(e) => {
 							const { item, index } = e.detail;
 							fileBrowserStore.setSelectedIndex(index);
-							if (!isDeleteMode) {
-								// 单击直接打开文件（勾选模式下也保持原行为）
-								openFile(item);
-							}
+							// 单击直接打开文件（勾选/删除模式下行为保持一致）
+							openFile(item);
 						}}
 						on:itemSelect={(e) => {
 							const { item, index, multiSelect } = e.detail;

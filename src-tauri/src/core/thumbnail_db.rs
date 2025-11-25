@@ -13,6 +13,24 @@ pub struct ThumbnailDb {
     db_path: PathBuf,
 }
 
+#[derive(Debug, Clone)]
+pub struct ThumbnailDbStats {
+    pub total_entries: i64,
+    pub file_entries: i64,
+    pub folder_entries: i64,
+    pub total_size_bytes: i64,
+    pub oldest_entry: Option<String>,
+    pub newest_entry: Option<String>,
+    pub database_size_bytes: u64,
+}
+
+#[derive(Debug)]
+pub struct ThumbnailDbRecord {
+    pub key: String,
+    pub category: String,
+    pub blob: Option<Vec<u8>>,
+}
+
 impl ThumbnailDb {
     /// 创建新的缩略图数据库管理器
     pub fn new(db_path: PathBuf) -> Self {

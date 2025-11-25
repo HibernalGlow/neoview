@@ -64,6 +64,7 @@ import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoo
 	let containerResizeObserver: ResizeObserver | null = null;
 	let lastAppliedZoomContext: { mode: ZoomMode; dimsKey: string; viewportKey: string } | null = null;
 	let dimensionMeasureId = 0;
+let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) | null = null;
 
 	function calculateZoomScale(mode: ZoomMode, dims: ImageDimensions, viewport: { width: number; height: number }) {
 		const iw = Math.max(dims.width || 0, 1);
@@ -672,6 +673,18 @@ import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoo
 
 	// 初始化预加载管理器
 	onMount(() => {
+		containerResizeObserver = new ResizeObserver(() => updateViewportSize());
+		if (containerElement) {
+			containerResizeObserver.observe(containerElement);
+			updateViewportSize();
+		}
+
+		const handleResize = () => updateViewportSize();
+		window.addEventListener('resize', handleResize);
+
+		applyZoomModeListener = (event) => handleApplyZoomModeEvent(event);
+		window.addEventListener(applyZoomModeEventName, applyZoomModeListener as EventListener);
+
 		const panelSettings = loadUpscalePanelSettings();
 		const initialPreloadPages =
 			(panelSettings as { preloadPages?: number }).preloadPages ?? performanceSettings.preLoadSize;
@@ -948,12 +961,27 @@ import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoo
 		(window as unknown as { preloadManager?: typeof preloadManager }).preloadManager =
 			preloadManager;
 
-		preloadManager.initialize();
+ 		preloadManager.initialize();
 		setSharedPreloadManager(preloadManager);
+
+		return () => {
+			window.removeEventListener('resize', handleResize);
+			if (applyZoomModeListener) {
+				window.removeEventListener(
+					applyZoomModeEventName,
+					applyZoomModeListener as unknown as EventListener
+				);
+				applyZoomModeListener = null;
+			}
+		};
 	});
 
 	// 组件卸载时清理
 	onDestroy(() => {
+		if (containerResizeObserver) {
+			containerResizeObserver.disconnect();
+			containerResizeObserver = null;
+		}
 		if (preloadManager) {
 			preloadManager.cleanup();
 			setSharedPreloadManager(null);
@@ -971,6 +999,16 @@ import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoo
 	});
 
 	// 监听当前页面变化
+	$effect(() => {
+		const el = containerElement;
+		if (!containerResizeObserver) return;
+		containerResizeObserver.disconnect();
+		if (el) {
+			containerResizeObserver.observe(el);
+			updateViewportSize();
+		}
+	});
+
 	$effect(() => {
 		const currentPage = bookStore.currentPage;
 		const currentIndex = bookStore.currentPageIndex;
@@ -996,6 +1034,7 @@ import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoo
 				lastLoadedHash = null;
 				prepareVideoStartTimeForPage(currentPage);
 				void loadVideoForPage(currentPage);
+				clearImageDimensions();
 			} else {
 				if (isCurrentPageVideo || videoUrl) {
 					currentVideoRequestId++;
@@ -1007,6 +1046,7 @@ import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoo
 					lastRequestedPageIndex = currentIndex;
 					preloadManager.loadCurrentImage();
 				}
+				void refreshImageDimensions(true);
 			}
 			void updateInfoPanelForCurrentPage();
 		} else {
@@ -1018,6 +1058,26 @@ import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoo
 			isCurrentPageVideo = false;
 			error = null;
 			infoPanelStore.resetImageInfo();
+			clearImageDimensions();
+		}
+	});
+
+	$effect(() => {
+		const source = getCurrentImageSource();
+		if (!source || isCurrentPageVideo) {
+			if (!isCurrentPageVideo) {
+				clearImageDimensions();
+			}
+			return;
+		}
+		void refreshImageDimensions();
+	});
+
+	$effect(() => {
+		const viewMode = $viewerState.viewMode;
+		lastViewMode = viewMode;
+		if (!isCurrentPageVideo) {
+			applyCurrentZoomMode();
 		}
 	});
 

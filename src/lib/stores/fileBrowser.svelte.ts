@@ -8,7 +8,7 @@ import { toAssetUrl } from '$lib/utils/assetProxy';
 import type { FsItem } from '$lib/types';
 import { FileSystemAPI } from '$lib/api';
 
-export type SortField = 'name' | 'modified' | 'size' | 'type' | 'path';
+export type SortField = 'name' | 'modified' | 'size' | 'type' | 'path' | 'random';
 export type SortOrder = 'asc' | 'desc';
 
 interface FileBrowserState {
@@ -53,6 +53,15 @@ function isVideoFile(path: string): boolean {
 
 function isBookCandidate(item: FsItem): boolean {
   return isArchiveFile(item.path) || isVideoFile(item.path);
+}
+
+function shuffleItems<T>(input: T[]): T[] {
+  const list = [...input];
+  for (let i = list.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+  return list;
 }
 
 function getParentDirectory(path: string): string | null {
@@ -102,6 +111,13 @@ function getItemType(item: FsItem): string {
 }
 
 export function sortItems(items: FsItem[], field: SortField, order: SortOrder): FsItem[] {
+  if (field === 'random') {
+    const folders = items.filter(item => item.isDir);
+    const nonFolders = items.filter(item => !item.isDir);
+    const randomized = [...shuffleItems(folders), ...shuffleItems(nonFolders)];
+    return order === 'asc' ? randomized : randomized.reverse();
+  }
+
   return [...items].sort((a, b) => {
     // 文件夹始终在前面
     if (a.isDir !== b.isDir) {

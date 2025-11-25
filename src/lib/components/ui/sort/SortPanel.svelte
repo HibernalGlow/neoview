@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { ArrowUpDown, ArrowUp, ArrowDown, Type, Calendar, HardDrive, FileImage, Folder } from '@lucide/svelte';
+  import { ArrowUpDown, ArrowUp, ArrowDown, Type, Calendar, HardDrive, FileImage, Folder, Shuffle } from '@lucide/svelte';
+
   import type { SortField, SortOrder } from '$lib/stores/fileBrowser.svelte';
 
   let { 
@@ -20,7 +21,8 @@
     { field: 'name' as SortField, label: '名称', icon: Type },
     { field: 'modified' as SortField, label: '修改时间', icon: Calendar },
     { field: 'size' as SortField, label: '大小', icon: HardDrive },
-    { field: 'type' as SortField, label: '类型', icon: FileImage }
+    { field: 'type' as SortField, label: '类型', icon: FileImage },
+    { field: 'random' as SortField, label: '随机', icon: Shuffle }
   ];
 
   /**

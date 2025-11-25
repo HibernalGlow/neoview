@@ -24,6 +24,11 @@ interface BookState {
   currentPageUpscaled: boolean; // 当前页面是否已超分成功
 }
 
+interface OpenBookOptions {
+  /** 打开时希望跳转到的页面 */
+  initialPage?: number;
+}
+
 class BookStore {
   private state = $state<BookState>({
     currentBook: null,
@@ -144,7 +149,7 @@ class BookStore {
   /**
    * 打开 Book (自动检测类型)
    */
-  async openBook(path: string) {
+  async openBook(path: string, options: OpenBookOptions = {}) {
     try {
       console.log('📖 Opening book:', path);
       this.state.loading = true;
@@ -161,18 +166,25 @@ class BookStore {
       const book = await bookApi.openBook(path);
       console.log('✅ Book opened:', book.name, 'with', book.totalPages, 'pages');
 
-      // 重置页码到第一页
-      book.currentPage = 0;
+      const targetPage = this.clampInitialPage(book.totalPages, options.initialPage);
+      book.currentPage = targetPage;
 
       this.state.currentBook = book;
       this.syncAppStateBookSlice();
       this.state.viewerOpen = true;
+      if (targetPage > 0 && book.totalPages > 0) {
+        try {
+          await bookApi.navigateToPage(targetPage);
+        } catch (navErr) {
+          console.error('❌ Error navigating to initial page after open:', navErr);
+        }
+      }
       await this.syncInfoPanelBookInfo();
       this.syncFileBrowserSelection(path);
 
-      // 添加到历史记录（初始页码为0）
+      // 添加到历史记录（使用实际起始页）
       const { historyStore } = await import('$lib/stores/history.svelte');
-      historyStore.add(path, book.name, 0, book.totalPages);
+      historyStore.add(path, book.name, targetPage, book.totalPages);
 
       // 重置所有页面的超分状态
       this.resetAllPageUpscaleStatus();
@@ -193,97 +205,17 @@ class BookStore {
   /**
    * 打开文件夹作为 Book
    */
-  async openDirectoryAsBook(path: string) {
-    try {
-      console.log('📖 Opening directory as book:', path);
-      this.state.loading = true;
-      this.state.error = '';
-
-      // 清除旧书的状态
-      this.state.currentImage = null;
-      this.state.upscaledImageData = null;
-      this.state.upscaledImageBlob = null;
-      this.state.currentPageUpscaled = false;
-      infoPanelStore.resetAll();
-
-      // 使用通用的 openBook API (它会自动检测类型)
-      const book = await bookApi.openBook(path);
-      console.log('✅ Book opened:', book.name, 'with', book.totalPages, 'pages');
-
-      // 重置页码到第一页
-      book.currentPage = 0;
-
-      this.state.currentBook = book;
-      this.syncAppStateBookSlice();
-      this.state.viewerOpen = true;
-      await this.syncInfoPanelBookInfo();
-
-      // 添加到历史记录（初始页码为0）
-      const { historyStore } = await import('$lib/stores/history.svelte');
-      historyStore.add(path, book.name, 0, book.totalPages);
-
-      // 重置所有页面的超分状态
-      this.resetAllPageUpscaleStatus();
-
-      // 触发重置预超分进度事件
-      window.dispatchEvent(new CustomEvent('reset-pre-upscale-progress'));
-    } catch (err) {
-      console.error('❌ Error opening directory as book:', err);
-      this.state.error = String(err);
-      this.state.currentBook = null;
-      this.syncAppStateBookSlice();
-      infoPanelStore.resetBookInfo();
-    } finally {
-      this.state.loading = false;
-    }
+  async openDirectoryAsBook(path: string, options: OpenBookOptions = {}) {
+    console.log('📖 Opening directory as book:', path);
+    await this.openBook(path, options);
   }
 
   /**
    * 打开压缩包作为 Book
    */
-  async openArchiveAsBook(path: string) {
-    try {
-      console.log('📦 Opening archive as book:', path);
-      this.state.loading = true;
-      this.state.error = '';
-
-      // 清除旧书的状态
-      this.state.currentImage = null;
-      this.state.upscaledImageData = null;
-      this.state.upscaledImageBlob = null;
-      this.state.currentPageUpscaled = false;
-      infoPanelStore.resetAll();
-
-      // 使用通用的 openBook API (它会自动检测类型)
-      const book = await bookApi.openBook(path);
-      console.log('✅ Book opened:', book.name, 'with', book.totalPages, 'pages');
-
-      // 重置页码到第一页
-      book.currentPage = 0;
-
-      this.state.currentBook = book;
-      this.syncAppStateBookSlice();
-      this.state.viewerOpen = true;
-      await this.syncInfoPanelBookInfo();
-
-      // 添加到历史记录（初始页码为0）
-      const { historyStore } = await import('$lib/stores/history.svelte');
-      historyStore.add(path, book.name, 0, book.totalPages);
-
-      // 重置所有页面的超分状态
-      this.resetAllPageUpscaleStatus();
-
-      // 触发重置预超分进度事件
-      window.dispatchEvent(new CustomEvent('reset-pre-upscale-progress'));
-    } catch (err) {
-      console.error('❌ Error opening archive as book:', err);
-      this.state.error = String(err);
-      this.state.currentBook = null;
-      this.syncAppStateBookSlice();
-      infoPanelStore.resetBookInfo();
-    } finally {
-      this.state.loading = false;
-    }
+  async openArchiveAsBook(path: string, options: OpenBookOptions = {}) {
+    console.log('📦 Opening archive as book:', path);
+    await this.openBook(path, options);
   }
 
   /**
@@ -495,6 +427,18 @@ class BookStore {
     } catch (error) {
       console.debug('syncFileBrowserSelection failed:', error);
     }
+  }
+
+  private clampInitialPage(totalPages: number, requested?: number): number {
+    if (!totalPages || totalPages <= 0) {
+      return 0;
+    }
+    if (requested === undefined || requested === null || Number.isNaN(requested)) {
+      return 0;
+    }
+    const safeValue = Math.trunc(requested);
+    const maxIndex = Math.max(totalPages - 1, 0);
+    return Math.min(Math.max(safeValue, 0), maxIndex);
   }
 
   async openNextBook() {

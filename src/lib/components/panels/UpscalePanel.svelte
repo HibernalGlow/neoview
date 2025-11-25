@@ -1228,7 +1228,7 @@ let lastBookPath: string | null = null;
 	<!-- 标题栏 -->
 	<div class="panel-header">
 		<div class="flex items-center gap-2">
-			<Sparkles class="w-5 h-5 text-purple-500" />
+			<Sparkles class="w-5 h-5 text-primary" />
 			<h3 class="text-lg font-semibold">PyO3 超分面板</h3>
 		</div>
 		{#if !pyo3UpscaleManager.isAvailable()}

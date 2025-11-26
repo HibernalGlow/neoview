@@ -85,6 +85,12 @@ export interface NeoViewSettings {
       messageStyle: 'none' | 'normal' | 'normalIconOnly' | 'tiny' | 'tinyIconOnly';
       durationMs: number;
       maxVisible: number;
+      placeholders?: {
+        fileOperations?: boolean;
+        taskProgress?: boolean;
+        performanceTips?: boolean;
+        systemMessages?: boolean;
+      };
     };
     switchToast?: {
       enableBook: boolean;

@@ -12,6 +12,10 @@
 	let style = $state<MessageStyle>('normal');
 	let durationMs = $state(3000);
 	let maxVisible = $state(3);
+	let placeholderFileOps = $state(true);
+	let placeholderTaskProgress = $state(true);
+	let placeholderPerformanceTips = $state(false);
+	let placeholderSystemMessages = $state(true);
 
 	function loadFromSettings() {
 		const s = settingsManager.getSettings();
@@ -20,11 +24,21 @@
 			durationMs: 3000,
 			maxVisible: 3
 		};
+		const p = base.placeholders ?? {
+			fileOperations: true,
+			taskProgress: true,
+			performanceTips: false,
+			systemMessages: true
+		};
 
 		enabled = base.messageStyle !== 'none';
 		style = base.messageStyle;
 		durationMs = base.durationMs ?? 3000;
 		maxVisible = base.maxVisible ?? 3;
+		placeholderFileOps = p.fileOperations ?? true;
+		placeholderTaskProgress = p.taskProgress ?? true;
+		placeholderPerformanceTips = p.performanceTips ?? false;
+		placeholderSystemMessages = p.systemMessages ?? true;
 	}
 
 	$effect(() => {
@@ -38,6 +52,12 @@
 			maxVisible,
 			...partial
 		};
+		const placeholders = {
+			fileOperations: placeholderFileOps,
+			taskProgress: placeholderTaskProgress,
+			performanceTips: placeholderPerformanceTips,
+			systemMessages: placeholderSystemMessages
+		};
 
 		enabled = next.messageStyle !== 'none';
 		style = next.messageStyle;
@@ -45,7 +65,10 @@
 		maxVisible = next.maxVisible;
 
 		settingsManager.updateNestedSettings('view', {
-			notification: next
+			notification: {
+				...next,
+				placeholders
+			}
 		});
 	}
 
@@ -153,6 +176,54 @@
 				}}
 				class="w-full max-w-xs"
 			/>
+		</div>
+
+		<!-- 其他通知占位 -->
+		<div class="space-y-2">
+			<h4 class="text-sm font-semibold">其他通知（占位）</h4>
+			<p class="text-muted-foreground text-xs">以下选项仅作为通知类型的占位，当前版本中尚未接入具体逻辑。</p>
+			<div class="space-y-2 text-xs text-muted-foreground">
+				<div class="flex items-center justify-between gap-2">
+					<span>文件操作结果通知</span>
+					<Switch
+						checked={placeholderFileOps}
+						onCheckedChange={(v) => {
+							placeholderFileOps = v;
+							saveNotification();
+						}}
+					/>
+				</div>
+				<div class="flex items-center justify-between gap-2">
+					<span>任务进度通知</span>
+					<Switch
+						checked={placeholderTaskProgress}
+						onCheckedChange={(v) => {
+							placeholderTaskProgress = v;
+							saveNotification();
+						}}
+					/>
+				</div>
+				<div class="flex items-center justify-between gap-2">
+					<span>性能提示通知</span>
+					<Switch
+						checked={placeholderPerformanceTips}
+						onCheckedChange={(v) => {
+							placeholderPerformanceTips = v;
+							saveNotification();
+						}}
+					/>
+				</div>
+				<div class="flex items-center justify-between gap-2">
+					<span>系统提示通知</span>
+					<Switch
+						checked={placeholderSystemMessages}
+						onCheckedChange={(v) => {
+							placeholderSystemMessages = v;
+							saveNotification();
+						}}
+					/>
+				</div>
+			</div>
 		</div>
 	</div>
 </div>

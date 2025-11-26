@@ -92,7 +92,7 @@
 		left: 0;
 		right: 0;
 		bottom: 0;
-		height: 2.2rem;
+		height: 1.8rem;
 		background: transparent;
 		transition: opacity 0.3s ease;
 		z-index: 10;
@@ -104,7 +104,7 @@
 		right: 0;
 		bottom: 0;
 		width: 100%;
-		height: 6px;
+		height: 4px;
 		background: color-mix(in srgb, var(--muted), transparent 50%);
 	}
 

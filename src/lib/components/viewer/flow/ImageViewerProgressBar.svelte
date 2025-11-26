@@ -57,7 +57,7 @@
 			progressColor = '#ef4444'; // 红色
 			progressBlinking = false;
 		} else if (isLastPage) {
-			progressColor = 'var(--accent)'; // 辅助色
+			progressColor = 'var(--primary)'; // 辅助色
 			progressBlinking = false;
 		} else {
 			progressColor = 'var(--accent)'; // 辅助色

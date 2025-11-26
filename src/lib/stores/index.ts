@@ -3,6 +3,7 @@
  * 统一导出所有 Store
  */
 
+export * from './book.svelte';
 export * from './bookmark.svelte';
 export * from './ui.svelte';
 export * from './keyboard.svelte';

@@ -4,6 +4,10 @@
 	import * as Input from '$lib/components/ui/input';
 	import * as Button from '$lib/components/ui/button';
 	import * as Switch from '$lib/components/ui/switch';
+	import * as Table from '$lib/components/ui/table';
+	import { FlexRender, createSvelteTable } from '$lib/components/ui/data-table';
+	import type { ColumnDef, SortingState, ColumnFiltersState } from '@tanstack/table-core';
+	import { getCoreRowModel, getSortedRowModel, getFilteredRowModel } from '@tanstack/table-core';
 	import { onMount } from 'svelte';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { infoPanelStore, type ViewerBookInfo } from '$lib/stores/infoPanel.svelte';
@@ -132,6 +136,64 @@
 		// 固定顺序：按 key 排一下，避免每次渲染顺序抖动
 		entries.sort((a, b) => a.key.localeCompare(b.key));
 		return entries;
+	});
+
+	type EMMRawRow = { key: string; value: string };
+
+	const emmRawColumns: ColumnDef<EMMRawRow>[] = [
+		{
+			accessorKey: 'key',
+			header: '字段',
+			cell: ({ row }) => row.getValue('key') as string,
+			// 简单过滤：在 key 列上注册 filterFn，同时对 key + value 做模糊匹配
+			filterFn: (row, _columnId, value) => {
+				const v = (value as string | undefined)?.toLowerCase() ?? '';
+				if (!v) return true;
+				const key = String(row.getValue('key') ?? '').toLowerCase();
+				const val = String(row.getValue('value') ?? '').toLowerCase();
+				return (key + ' ' + val).includes(v);
+			}
+		},
+		{
+			accessorKey: 'value',
+			header: '值',
+			cell: ({ row }) => row.getValue('value') as string
+		}
+	];
+
+	let emmRawSorting = $state<SortingState>([]);
+	let emmRawFilters = $state<ColumnFiltersState>([]);
+
+	const emmRawTable = createSvelteTable({
+		get data() {
+			return emmRawEntries();
+		},
+		columns: emmRawColumns,
+		state: {
+			get sorting() {
+				return emmRawSorting;
+			},
+			get columnFilters() {
+				return emmRawFilters;
+			}
+		},
+		getCoreRowModel: getCoreRowModel(),
+		getSortedRowModel: getSortedRowModel(),
+		getFilteredRowModel: getFilteredRowModel(),
+		onSortingChange: (updater) => {
+			if (typeof updater === 'function') {
+				emmRawSorting = updater(emmRawSorting);
+			} else {
+				emmRawSorting = updater;
+			}
+		},
+		onColumnFiltersChange: (updater) => {
+			if (typeof updater === 'function') {
+				emmRawFilters = updater(emmRawFilters);
+			} else {
+				emmRawFilters = updater;
+			}
+		}
 	});
 
 	function getTagTitle(tagInfo: { category: string; tag: string; display?: string; isCollect: boolean }) {
@@ -778,15 +840,73 @@
 					<Settings class="h-4 w-4" />
 					<span>EMM 原始记录（mangas）</span>
 				</div>
-				<span class="text-[10px] text-muted-foreground">只读 · 调试用</span>
+				<div class="flex items-center gap-2">
+					<span class="text-[10px] text-muted-foreground">只读 · 调试用</span>
+					<Input.Root
+							class="h-6 w-40 px-2 text-[10px]"
+							placeholder="过滤字段/值..."
+							value={(emmRawTable.getColumn('key')?.getFilterValue() as string) ?? ''}
+							oninput={(e) => {
+								const v = (e.currentTarget as HTMLInputElement).value;
+								emmRawTable.getColumn('key')?.setFilterValue(v);
+							}}
+					/>
+				</div>
 			</div>
-			<div class="max-h-40 overflow-auto rounded border bg-muted/40 px-2 py-1.5 text-[11px] font-mono space-y-0.5">
-				{#each emmRawEntries() as entry}
-					<div class="flex items-start gap-2">
-						<span class="min-w-[90px] text-muted-foreground truncate" title={entry.key}>{entry.key}</span>
-						<span class="flex-1 text-right truncate" title={entry.value}>{entry.value}</span>
-					</div>
-				{/each}
+			<div class="max-h-40 overflow-auto rounded border bg-muted/40">
+				<Table.Root class="text-[11px] font-mono">
+					<Table.Header>
+						{#each emmRawTable.getHeaderGroups() as headerGroup (headerGroup.id)}
+							<Table.Row>
+								{#each headerGroup.headers as header (header.id)}
+									<Table.Head class="px-2 py-1 text-[10px] text-muted-foreground">
+										{#if !header.isPlaceholder}
+											<button
+												type="button"
+												class="flex w-full items-center justify-between gap-1"
+												onclick={header.column.getToggleSortingHandler()}
+											>
+												<FlexRender
+													content={header.column.columnDef.header}
+													context={header.getContext()}
+												/>
+												{#if header.column.getIsSorted() === 'asc'}
+													<span>▲</span>
+												{:else if header.column.getIsSorted() === 'desc'}
+													<span>▼</span>
+												{:else}
+													<span class="opacity-40">⇅</span>
+												{/if}
+											</button>
+										{/if}
+									</Table.Head>
+								{/each}
+							</Table.Row>
+						{/each}
+					</Table.Header>
+					<Table.Body>
+						{#each emmRawTable.getRowModel().rows as row (row.id)}
+							<Table.Row>
+								{#each row.getVisibleCells() as cell (cell.id)}
+									<Table.Cell
+										class={cell.column.id === 'key'
+											? 'px-2 py-0.5 align-top text-muted-foreground max-w-[140px] truncate'
+											: 'px-2 py-0.5 align-top text-right max-w-[260px] truncate'}
+										title={String(cell.getValue() ?? '')}
+									>
+										<FlexRender content={cell.column.columnDef.cell} context={cell.getContext()} />
+									</Table.Cell>
+								{/each}
+							</Table.Row>
+						{:else}
+							<Table.Row>
+								<Table.Cell colspan={2} class="px-2 py-1 text-center text-[10px] text-muted-foreground">
+									暂无记录
+								</Table.Cell>
+							</Table.Row>
+						{/each}
+					</Table.Body>
+				</Table.Root>
 			</div>
 		</div>
 	{/if}

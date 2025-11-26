@@ -27,6 +27,7 @@
 	let items = $state<PageListItem[]>([]);
 	let searchQuery = $state('');
 	let viewMode = $state<PageViewMode>('standard');
+	let imageColumns = $state<number>(3);
 
 	const filteredItems = $derived(
 		searchQuery.trim()
@@ -276,6 +277,24 @@
 				>
 					<LayoutGrid class="h-3 w-3" />
 				</Button>
+				{#if viewMode === 'image'}
+					<div class="flex items-center gap-1 ml-2">
+						<Label class="text-[10px] text-muted-foreground">每行</Label>
+						<input
+							type="range"
+							min="1"
+							max="6"
+							value={imageColumns}
+							class="h-4 w-20"
+							on:input={(e) => {
+								imageColumns = Number(e.currentTarget.value);
+							}}
+						/>
+						<span class="text-[10px] text-muted-foreground w-4 text-center">
+							{imageColumns}
+						</span>
+					</div>
+				{/if}
 			</div>
 		</div>
 		<div class="text-[10px] text-muted-foreground space-y-0.5">

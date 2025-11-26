@@ -7,6 +7,7 @@
   let imageInfo = $state<ViewerImageInfo | null>(null);
   let enabled = $state(false);
   let opacity = $state(0.85);
+  let showBorder = $state(false);
 
   const unsubscribeInfo = infoPanelStore.subscribe((state) => {
     imageInfo = state.imageInfo;
@@ -17,6 +18,7 @@
     const overlay = s.view?.infoOverlay;
     enabled = overlay?.enabled ?? false;
     opacity = overlay?.opacity ?? 0.85;
+    showBorder = overlay?.showBorder ?? false;
   }
 
   syncFromSettings();
@@ -25,6 +27,7 @@
     const overlay = s.view?.infoOverlay;
     enabled = overlay?.enabled ?? false;
     opacity = overlay?.opacity ?? 0.85;
+    showBorder = overlay?.showBorder ?? false;
   };
 
   settingsManager.addListener(settingsListener);
@@ -51,8 +54,12 @@
 
 {#if enabled && imageInfo}
   <div class="pointer-events-none absolute left-1/2 top-4 z-40 -translate-x-1/2">
-    <div class="relative pointer-events-auto max-w-[70vw] rounded-md border border-border/60 text-xs shadow-lg backdrop-blur-md">
-      <div class="absolute inset-0 rounded-md bg-background" style:opacity={backgroundOpacity} />
+    <div
+      class={`relative pointer-events-auto max-w-[70vw] rounded-md text-xs shadow-lg ${
+        showBorder ? 'border border-border/60' : ''
+      }`}
+      style:backgroundColor={`hsl(var(--background) / ${backgroundOpacity})`}
+    >
       <div class="relative flex items-center gap-3 px-3 py-2">
         <Info class="h-3.5 w-3.5 text-primary" />
         <div class="flex flex-col gap-0.5">

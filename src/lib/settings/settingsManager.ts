@@ -74,6 +74,7 @@ export interface NeoViewSettings {
     infoOverlay: {
       enabled: boolean;
       opacity: number; // 0.0 - 1.0
+      showBorder: boolean;
     };
   };
   book: {
@@ -186,7 +187,8 @@ const defaultSettings: NeoViewSettings = {
     },
     infoOverlay: {
       enabled: false,
-      opacity: 0.85
+      opacity: 0.85,
+      showBorder: false
     }
   },
   book: {

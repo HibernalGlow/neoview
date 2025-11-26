@@ -20,7 +20,6 @@
 	import { infoPanelStore, type ViewerBookInfo, type ViewerImageInfo } from '$lib/stores/infoPanel.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { FileSystemAPI } from '$lib/api';
-	import * as Input from '$lib/components/ui/input';
 	import * as Switch from '$lib/components/ui/switch';
 	import { onMount } from 'svelte';
 
@@ -30,6 +29,7 @@
 
 	let infoOverlayEnabled = $state(false);
 	let infoOverlayOpacity = $state(0.85);
+	let infoOverlayShowBorder = $state(false);
 
 	let showBookInfoCard = $state(true);
 	let showInfoOverlayCard = $state(true);
@@ -55,11 +55,12 @@
 		const overlay = s.view?.infoOverlay;
 		infoOverlayEnabled = overlay?.enabled ?? false;
 		infoOverlayOpacity = overlay?.opacity ?? 0.85;
+		infoOverlayShowBorder = overlay?.showBorder ?? false;
 	});
 
-	function updateInfoOverlay(partial: { enabled?: boolean; opacity?: number }) {
+	function updateInfoOverlay(partial: { enabled?: boolean; opacity?: number; showBorder?: boolean }) {
 		const current = settingsManager.getSettings();
-		const prev = current.view?.infoOverlay ?? { enabled: false, opacity: 0.85 };
+		const prev = current.view?.infoOverlay ?? { enabled: false, opacity: 0.85, showBorder: false };
 		const next = { ...prev };
 
 		if (partial.enabled !== undefined) {
@@ -71,9 +72,13 @@
 			const clamped = Math.min(1, Math.max(0, base));
 			next.opacity = clamped;
 		}
+		if (partial.showBorder !== undefined) {
+			next.showBorder = partial.showBorder;
+		}
 
 		infoOverlayEnabled = next.enabled;
 		infoOverlayOpacity = next.opacity;
+		infoOverlayShowBorder = next.showBorder;
 
 		settingsManager.updateNestedSettings('view', {
 			infoOverlay: next
@@ -436,12 +441,12 @@
 								<div class="flex items-center justify-between gap-2">
 									<span>透明度</span>
 									<div class="flex items-center gap-2">
-										<Input.Root
+										<input
 											type="number"
 											min="0"
 											max="100"
 											step="5"
-											class="h-7 w-20 px-2 text-xs"
+											class="h-7 w-20 px-2 text-xs border-input bg-background selection:bg-primary dark:bg-input/30 selection:text-primary-foreground ring-offset-background placeholder:text-muted-foreground shadow-xs rounded-md border outline-none transition-[color,box-shadow] disabled:cursor-not-allowed disabled:opacity-50"
 											value={Math.round(infoOverlayOpacity * 100).toString()}
 											oninput={(e) => {
 												const target = e.currentTarget as HTMLInputElement;
@@ -452,6 +457,16 @@
 											}}
 										/>
 										<span class="text-[11px]">{Math.round(infoOverlayOpacity * 100)}%</span>
+									</div>
+								</div>
+								<div class="flex items-center justify-between gap-2">
+									<span>显示边框</span>
+									<div class="flex items-center gap-2">
+										<Switch.Root
+											checked={infoOverlayShowBorder}
+											onCheckedChange={(v) => updateInfoOverlay({ showBorder: v })}
+											class="scale-75"
+										/>
 									</div>
 								</div>
 								<p>调节悬浮信息窗的背景透明度（0% - 100%，0% 为仅文字无底色）。</p>

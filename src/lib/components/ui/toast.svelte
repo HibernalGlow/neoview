@@ -5,6 +5,10 @@
     Info,
     X
   } from '@lucide/svelte';
+  import { settingsManager } from '$lib/settings/settingsManager';
+
+  type NotificationMessageStyle = 'none' | 'normal' | 'normalIconOnly' | 'tiny' | 'tinyIconOnly';
+  type ToastStyle = Exclude<NotificationMessageStyle, 'none'>;
 
   interface ToastItem {
     id: string;
@@ -12,17 +16,54 @@
     title: string;
     description?: string;
     duration?: number;
+    style: ToastStyle;
   }
 
-  type ToastEventDetail = Omit<ToastItem, 'id'>;
+  type ToastEventDetail = Omit<ToastItem, 'id' | 'style'>;
+
+  interface NotificationConfig {
+    messageStyle: NotificationMessageStyle;
+    durationMs: number;
+    maxVisible: number;
+  }
+
+  function getNotificationConfig(): NotificationConfig {
+    const settings = settingsManager.getSettings();
+    const view = settings.view;
+    const base: NotificationConfig = {
+      messageStyle: 'normal',
+      durationMs: 3000,
+      maxVisible: 3
+    };
+
+    const raw = view.notification;
+    if (!raw) return base;
+
+    return {
+      messageStyle: (raw.messageStyle ?? base.messageStyle) as NotificationMessageStyle,
+      durationMs: raw.durationMs ?? base.durationMs,
+      maxVisible: raw.maxVisible ?? base.maxVisible
+    };
+  }
 
   let toasts = $state<ToastItem[]>([]);
   let toastIdCounter = 0;
 
   function addToast(toast: ToastEventDetail) {
+    const cfg = getNotificationConfig();
+    if (cfg.messageStyle === 'none') {
+      return;
+    }
+
     const id = `toast-${toastIdCounter++}`;
-    toasts = [...toasts, { ...toast, id }];
-    const duration = toast.duration ?? 3000;
+    const style: ToastStyle = (cfg.messageStyle as ToastStyle) ?? 'normal';
+    const duration = toast.duration ?? cfg.durationMs ?? 3000;
+
+    const next: ToastItem[] = [...toasts, { ...toast, id, style }];
+    const maxVisible = cfg.maxVisible ?? 3;
+    const overflow = Math.max(0, next.length - maxVisible);
+    toasts = overflow > 0 ? next.slice(overflow) : next;
+
     setTimeout(() => removeToast(id), duration);
   }
 
@@ -44,7 +85,7 @@
 {#if toasts.length > 0}
   <div class="toast-container">
     {#each toasts as toast (toast.id)}
-      <div class="toast-item" data-type={toast.type}>
+      <div class="toast-item" data-type={toast.type} data-style={toast.style}>
         <div class="toast-icon" aria-hidden="true">
           {#if toast.type === 'success'}
             <Check style="width: 1rem; height: 1rem" />
@@ -54,12 +95,16 @@
             <Info style="width: 1rem; height: 1rem" />
           {/if}
         </div>
-        <div class="toast-body">
-          <p class="toast-title">{toast.title}</p>
-          {#if toast.description}
-            <p class="toast-description">{toast.description}</p>
-          {/if}
-        </div>
+        {#if toast.style === 'normalIconOnly' || toast.style === 'tinyIconOnly'}
+          <!-- icon-only style: no text body -->
+        {:else}
+          <div class="toast-body">
+            <p class="toast-title">{toast.title}</p>
+            {#if toast.description}
+              <p class="toast-description">{toast.description}</p>
+            {/if}
+          </div>
+        {/if}
         <button type="button" class="toast-close" onclick={() => removeToast(toast.id)}>
           <span class="sr-only">关闭</span>
           <X style="width: 1rem; height: 1rem" />
@@ -106,6 +151,28 @@
     box-shadow: 0 18px 40px rgba(15, 23, 42, 0.25);
     backdrop-filter: blur(20px);
     animation: toast-enter 220ms ease forwards;
+  }
+
+  .toast-item[data-style='tiny'],
+  .toast-item[data-style='tinyIconOnly'] {
+    min-width: 12rem;
+    max-width: 18rem;
+    padding: 0.5rem 0.75rem;
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.2);
+  }
+
+  .toast-item[data-style='tiny'] .toast-title {
+    font-size: 0.8rem;
+  }
+
+  .toast-item[data-style='tiny'] .toast-description {
+    font-size: 0.75rem;
+  }
+
+  .toast-item[data-style='normalIconOnly'],
+  .toast-item[data-style='tinyIconOnly'] {
+    min-width: auto;
+    max-width: auto;
   }
 
   .toast-item[data-type='success'] {

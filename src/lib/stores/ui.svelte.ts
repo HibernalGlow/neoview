@@ -279,6 +279,7 @@ export function toggleViewModeLock(mode: ViewMode) {
  * 在单页和全景视图之间互相切换
  * 当 lockedViewMode 有值时，不执行任何切换（尊重视图锁定状态）
  */
+let lastViewModeBeforeSingleToggle: ViewMode | null = null;
 export function toggleSinglePanoramaView() {
 	const snapshot = appState.getSnapshot();
 	const locked = snapshot.viewer.lockedViewMode as ViewMode | null;
@@ -287,16 +288,20 @@ export function toggleSinglePanoramaView() {
 	}
 
 	const current = snapshot.viewer.viewMode as ViewMode;
-	let next: ViewMode | null = null;
 
-	if (current === 'panorama') {
-		next = 'single';
-	} else if (current === 'single') {
-		next = 'panorama';
+	if (lastViewModeBeforeSingleToggle === null) {
+		lastViewModeBeforeSingleToggle = current;
+		if (current !== 'single') {
+			viewMode.set('single');
+		}
+		return;
 	}
 
-	if (next) {
-		viewMode.set(next);
+	const restore = lastViewModeBeforeSingleToggle;
+	lastViewModeBeforeSingleToggle = null;
+
+	if (restore !== current) {
+		viewMode.set(restore);
 	}
 }
 

@@ -81,6 +81,11 @@ export interface NeoViewSettings {
       width?: number; // px, undefined = auto
       height?: number; // px, undefined = auto
     };
+    notification?: {
+      messageStyle: 'none' | 'normal' | 'normalIconOnly' | 'tiny' | 'tinyIconOnly';
+      durationMs: number;
+      maxVisible: number;
+    };
     switchToast?: {
       enableBook: boolean;
       enablePage: boolean;
@@ -228,6 +233,11 @@ const defaultSettings: NeoViewSettings = {
       enabled: false,
       opacity: 0.85,
       showBorder: false
+    },
+    notification: {
+      messageStyle: 'normal',
+      durationMs: 3000,
+      maxVisible: 3
     },
     switchToast: {
       enableBook: false,
@@ -497,6 +507,15 @@ export class SettingsManager {
       singleFirstPageMode: layout.singleFirstPageMode ?? defaultSettings.view.pageLayout.singleFirstPageMode,
       singleLastPageMode: layout.singleLastPageMode ?? defaultSettings.view.pageLayout.singleLastPageMode
     };
+
+    if (!this.settings.view.notification) {
+      const def = defaultSettings.view.notification!;
+      this.settings.view.notification = {
+        messageStyle: def.messageStyle,
+        durationMs: def.durationMs,
+        maxVisible: def.maxVisible
+      };
+    }
   }
 
   private loadSettings() {

@@ -18,7 +18,8 @@
 		Eye,
 		BookOpen,
 		Layout,
-		PanelLeft
+		PanelLeft,
+		Bell
 	} from '@lucide/svelte';
 
 	// 导入所有设置面板组件
@@ -29,9 +30,10 @@
 	import UnifiedBindingPanel from '$lib/components/dialogs/UnifiedBindingPanel.svelte';
 	import SidebarManagementPanel from '$lib/components/panels/SidebarManagementPanel.svelte';
 	import ThemePanel from '$lib/components/panels/ThemePanel.svelte';
-import ArchiveSettingsPanel from '$lib/components/panels/ArchiveSettingsPanel.svelte';
+	import ArchiveSettingsPanel from '$lib/components/panels/ArchiveSettingsPanel.svelte';
 	import PerformanceSettingsPanel from '$lib/components/panels/PerformanceSettingsPanel.svelte';
 	import DataSettingsPanel from '$lib/components/panels/DataSettingsPanel.svelte';
+	import NotificationSettingsPanel from '$lib/components/panels/NotificationSettingsPanel.svelte';
 
 	const appWindow = getCurrentWebviewWindow();
 
@@ -41,6 +43,7 @@ import ArchiveSettingsPanel from '$lib/components/panels/ArchiveSettingsPanel.sv
 		{ value: 'image', label: '影像', icon: Palette },
 		{ value: 'archive', label: '压缩包', icon: Archive },
 		{ value: 'view', label: '视图', icon: Eye },
+		{ value: 'notify', label: '通知', icon: Bell },
 		{ value: 'book', label: '书籍', icon: BookOpen },
 		{ value: 'theme', label: '外观', icon: Layout },
 		{ value: 'performance', label: '性能', icon: Zap },
@@ -111,6 +114,8 @@ import ArchiveSettingsPanel from '$lib/components/panels/ArchiveSettingsPanel.sv
 				<GeneralSettingsPanel />
 			{:else if activeTab === 'view'}
 				<ViewSettingsPanel />
+			{:else if activeTab === 'notify'}
+				<NotificationSettingsPanel />
 			{:else if activeTab === 'viewer' || activeTab === 'image'}
 				{#if activeTab === 'image'}
 					<div class="space-y-4 p-6">

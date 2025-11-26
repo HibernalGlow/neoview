@@ -107,7 +107,7 @@
       style:backgroundColor={`hsl(var(--background) / ${backgroundOpacity})`}
     >
       <div
-        class="relative flex items-center gap-3 px-3 py-2 cursor-move select-none"
+        class="relative flex items-center gap-3 px-3 py-2 cursor-move select-none overflow-hidden"
         onmousedown={handleDragStart}
         role="button"
         aria-label="拖动以移动信息条"

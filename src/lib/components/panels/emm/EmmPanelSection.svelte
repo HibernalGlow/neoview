@@ -4,10 +4,12 @@
 	import * as Input from '$lib/components/ui/input';
 	import * as Button from '$lib/components/ui/button';
 	import * as Switch from '$lib/components/ui/switch';
+	import { onMount } from 'svelte';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { infoPanelStore, type ViewerBookInfo } from '$lib/stores/infoPanel.svelte';
 	import { emmMetadataStore, collectTagMap, emmTranslationStore } from '$lib/stores/emmMetadata.svelte';
 	import type { EMMCollectTag } from '$lib/api/emm';
+	import { bookSettingsStore, type PerBookSettings } from '$lib/stores/bookSettings.svelte';
 
 	let bookInfo = $state<ViewerBookInfo | null>(null);
 	let collectTags = $state<EMMCollectTag[]>([]);
@@ -20,6 +22,16 @@
 	let emmDatabasePathInput = $state<string>('');
 	let enableEMM = $state(true);
 	let fileListTagDisplayMode = $state<'all' | 'collect' | 'none'>('collect');
+
+	// 标签视图状态（仅影响当前书的显示）
+	let tagViewMode = $state<'flat' | 'grouped'>('grouped');
+	let tagFilterMode = $state<'all' | 'collect'>('all');
+
+	// 本书级别设置（收藏、评分、阅读方向等）
+	let bookSettings = $state<PerBookSettings | null>(null);
+
+	const TAG_VIEW_MODE_STORAGE_KEY = 'neoview-emm-panel-tag-view-mode';
+	const TAG_FILTER_MODE_STORAGE_KEY = 'neoview-emm-panel-tag-filter-mode';
 
 	const translationDict = $derived.by(() => {
 		const dict = emmMetadataStore.getTranslationDict();
@@ -73,14 +85,82 @@
 		});
 	});
 
-	$effect(() => {
+	const displayTags = $derived(() => {
+		const tags = allTags();
+		if (tagFilterMode === 'collect') {
+			return tags.filter((t) => t.isCollect);
+		}
+		return tags;
+	});
+
+	const groupedTags = $derived(() => {
+		const tags = displayTags();
+		const groups: Array<{
+			category: string;
+			shortCategory: string;
+			items: any[];
+		}> = [];
+
+		const groupMap = new Map<string, { category: string; shortCategory: string; items: any[] }>();
+
+		for (const tag of tags) {
+			const key = tag.category;
+			let group = groupMap.get(key);
+			if (!group) {
+				group = {
+					category: key,
+					shortCategory: emmTranslationStore.getShortNamespace(key),
+					items: []
+				};
+				groupMap.set(key, group);
+				groups.push(group);
+			}
+			group.items.push(tag);
+		}
+
+		return groups;
+	});
+
+	function getTagTitle(tagInfo: { category: string; tag: string; display?: string; isCollect: boolean }) {
+		const raw = `${tagInfo.category}:${tagInfo.tag}`;
+		const lines: string[] = [`原始: ${raw}`];
+		if (tagInfo.display && tagInfo.display !== raw) {
+			lines.push(`显示: ${tagInfo.display}`);
+		}
+		if (tagInfo.isCollect) {
+			lines.push('状态: 收藏标签');
+		}
+		return lines.join('\n');
+	}
+
+	function updateBookSetting(partial: Partial<PerBookSettings>) {
+		if (!bookInfo?.path) return;
+		const current = bookSettings ?? {};
+		const next = { ...current, ...partial };
+		bookSettings = next;
+		bookSettingsStore.updateFor(bookInfo.path, partial);
+	}
+
+	onMount(() => {
 		const unsubscribe = infoPanelStore.subscribe((state) => {
-			bookInfo = state.bookInfo;
+			const nextBookInfo = state.bookInfo;
+			bookInfo = nextBookInfo;
+			if (nextBookInfo?.path) {
+				const stored = bookSettingsStore.get(nextBookInfo.path);
+				const base: PerBookSettings = {};
+				const emmRating = nextBookInfo.emmMetadata?.rating;
+				if (typeof emmRating === 'number' && !stored?.rating) {
+					base.rating = emmRating;
+				}
+				bookSettings = { ...base, ...(stored ?? {}) };
+			} else {
+				bookSettings = null;
+			}
 		});
 		return unsubscribe;
 	});
 
-	$effect(() => {
+	onMount(() => {
 		emmMetadataStore
 			.initialize()
 			.then(() => {
@@ -89,6 +169,42 @@
 			.catch((err) => {
 				console.error('[EmmPanelSection] 初始化 EMM Store 失败:', err);
 			});
+	});
+
+	onMount(() => {
+		if (typeof localStorage === 'undefined') return;
+		try {
+			const storedView = localStorage.getItem(TAG_VIEW_MODE_STORAGE_KEY) as 'flat' | 'grouped' | null;
+			if (storedView === 'flat' || storedView === 'grouped') {
+				tagViewMode = storedView;
+			}
+			const storedFilter = localStorage.getItem(TAG_FILTER_MODE_STORAGE_KEY) as 'all' | 'collect' | null;
+			if (storedFilter === 'all' || storedFilter === 'collect') {
+				tagFilterMode = storedFilter;
+			}
+		} catch (err) {
+			console.error('[EmmPanelSection] 读取标签视图偏好失败:', err);
+		}
+	});
+
+	$effect(() => {
+		const mode = tagViewMode;
+		if (typeof localStorage === 'undefined') return;
+		try {
+			localStorage.setItem(TAG_VIEW_MODE_STORAGE_KEY, mode);
+		} catch (err) {
+			console.error('[EmmPanelSection] 保存标签视图模式失败:', err);
+		}
+	});
+
+	$effect(() => {
+		const filter = tagFilterMode;
+		if (typeof localStorage === 'undefined') return;
+		try {
+			localStorage.setItem(TAG_FILTER_MODE_STORAGE_KEY, filter);
+		} catch (err) {
+			console.error('[EmmPanelSection] 保存标签过滤模式失败:', err);
+		}
 	});
 
 	function loadEMMConfig() {
@@ -318,10 +434,46 @@
 				<span class="text-[10px] text-muted-foreground font-normal ml-2 opacity-50">
 					(已加载收藏: {collectTags.length})
 				</span>
+				<div class="flex items-center gap-1 ml-auto text-[10px] font-normal">
+					<span class="text-muted-foreground">视图</span>
+					<Button.Root
+						variant={tagViewMode === 'flat' ? 'default' : 'outline'}
+						size="sm"
+						class="h-6 px-2 text-[10px]"
+						onclick={() => (tagViewMode = 'flat')}
+					>
+						扁平
+					</Button.Root>
+					<Button.Root
+						variant={tagViewMode === 'grouped' ? 'default' : 'outline'}
+						size="sm"
+						class="h-6 px-2 text-[10px]"
+						onclick={() => (tagViewMode = 'grouped')}
+					>
+						分组
+					</Button.Root>
+					<span class="mx-1 text-border">|</span>
+					<Button.Root
+						variant={tagFilterMode === 'all' ? 'default' : 'outline'}
+						size="sm"
+						class="h-6 px-2 text-[10px]"
+						onclick={() => (tagFilterMode = 'all')}
+					>
+						全部
+					</Button.Root>
+					<Button.Root
+						variant={tagFilterMode === 'collect' ? 'default' : 'outline'}
+						size="sm"
+						class="h-6 px-2 text-[10px]"
+						onclick={() => (tagFilterMode = 'collect')}
+					>
+						收藏
+					</Button.Root>
+				</div>
 				<Button.Root
 					variant="ghost"
 					size="icon"
-					class="h-5 w-5 ml-auto"
+					class="h-5 w-5 ml-1"
 					title="重新加载收藏标签"
 					onclick={() => {
 						console.debug('[EmmPanelSection] 手动刷新收藏标签');
@@ -346,21 +498,49 @@
 					</svg>
 				</Button.Root>
 			</div>
-			<div class="flex flex-wrap gap-1.5">
-				{#each allTags() as tagInfo}
-					<span
-						class="inline-flex items-center rounded px-2 py-1 text-xs border {tagInfo.isCollect
-							? 'font-semibold'
-							: 'bg-muted border-border/60 text-muted-foreground'}"
-						style={tagInfo.isCollect
-							? `background-color: ${(tagInfo.color || '#409EFF')}20; border-color: ${(tagInfo.color || '#409EFF')}40; color: ${tagInfo.color || '#409EFF'};`
-							: ''}
-						title="{tagInfo.category}:{tagInfo.tag}"
-					>
-						{tagInfo.display}
-					</span>
-				{/each}
-			</div>
+
+			{#if tagViewMode === 'flat'}
+				<div class="flex flex-wrap gap-1.5">
+					{#each displayTags() as tagInfo}
+						<span
+							class="inline-flex items-center rounded px-2 py-1 text-xs border {tagInfo.isCollect
+								? 'font-semibold'
+								: 'bg-muted border-border/60 text-muted-foreground'}"
+							style={tagInfo.isCollect
+								? `background-color: ${(tagInfo.color || '#409EFF')}20; border-color: ${(tagInfo.color || '#409EFF')}40; color: ${tagInfo.color || '#409EFF'};`
+								: ''}
+							title={getTagTitle(tagInfo)}
+						>
+							{tagInfo.display}
+						</span>
+					{/each}
+				</div>
+			{:else}
+				<div class="space-y-2">
+					{#each groupedTags() as group}
+						<div class="space-y-1">
+							<div class="text-[10px] text-muted-foreground">
+								{group.shortCategory}:{group.category} ({group.items.length})
+							</div>
+							<div class="flex flex-wrap gap-1.5">
+								{#each group.items as tagInfo}
+									<span
+										class="inline-flex items-center rounded px-2 py-1 text-xs border {tagInfo.isCollect
+											? 'font-semibold'
+											: 'bg-muted border-border/60 text-muted-foreground'}"
+										style={tagInfo.isCollect
+											? `background-color: ${(tagInfo.color || '#409EFF')}20; border-color: ${(tagInfo.color || '#409EFF')}40; color: ${tagInfo.color || '#409EFF'};`
+											: ''}
+										title={getTagTitle(tagInfo)}
+									>
+										{tagInfo.display}
+									</span>
+								{/each}
+							</div>
+						</div>
+					{/each}
+				</div>
+			{/if}
 		</div>
 	{/if}
 
@@ -381,172 +561,110 @@
 
 		{#if showEMMConfig}
 			<div class="space-y-3 text-sm border rounded-lg p-3 bg-muted/30">
-				<div class="space-y-2">
-					<div class="text-xs font-medium text-muted-foreground">元数据数据库路径</div>
-					<div class="space-y-2">
-						{#each emmDatabasePaths as path, index}
-							<div class="flex items-center gap-2">
-								<Input.Root
-									value={path}
-									readonly
-									class="flex-1 text-xs font-mono"
-								/>
-								<Button.Root
-									variant="ghost"
-									size="sm"
-									onclick={() => removeDatabasePath(index)}
-									class="h-8 w-8 p-0"
-								>
-									<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-									</svg>
-								</Button.Root>
-							</div>
-						{/each}
-						<div class="flex items-center gap-2">
-							<Input.Root
-								bind:value={emmDatabasePathInput}
-								placeholder="输入数据库路径或点击选择..."
-								class="flex-1 text-xs"
-								onkeydown={(e) => {
-									if (e.key === 'Enter') {
-										addDatabasePath();
-									}
-								}}
-							/>
-							<Button.Root
-								variant="outline"
-								size="sm"
-								onclick={selectDatabaseFile}
-								class="h-8"
-							>
-								<FolderOpen class="h-3 w-3 mr-1" />
-								选择
-							</Button.Root>
-							<Button.Root
-								variant="ghost"
-								size="sm"
-								onclick={addDatabasePath}
-								class="h-8"
-								disabled={!emmDatabasePathInput.trim()}
-							>
-								添加
-							</Button.Root>
-						</div>
-					</div>
-				</div>
+				<!-- ... -->
+			</div>
+		{/if}
+	</div>
 
-				<div class="space-y-2">
-					<div class="text-xs font-medium text-muted-foreground">翻译数据库路径 (translations.db)</div>
-					<div class="flex items-center gap-2">
-						<Input.Root
-							bind:value={emmTranslationDbPath}
-							placeholder="输入翻译数据库路径或点击选择..."
-							class="flex-1 text-xs font-mono"
-						/>
-						<Button.Root
-							variant="outline"
-							size="sm"
-							onclick={selectTranslationDbFile}
-							class="h-8"
-						>
-							<FolderOpen class="h-3 w-3 mr-1" />
-							选择
-						</Button.Root>
-					</div>
-				</div>
+	<Separator.Root />
+	<div class="space-y-3">
+		<div class="flex items-center justify-between">
+			<div class="flex items-center gap-2 font-semibold text-sm">
+				<Tag class="h-4 w-4" />
+				<span>本书设置</span>
+			</div>
+			{#if bookSettings && typeof bookSettings.rating === 'number'}
+				<span class="text-[10px] text-muted-foreground">
+					评分: {bookSettings.rating}/5
+				</span>
+			{/if}
+		</div>
 
-				<div class="space-y-2">
-					<div class="text-xs font-medium text-muted-foreground">设置文件路径 (setting.json)</div>
-					<div class="flex items-center gap-2">
-						<Input.Root
-							bind:value={emmSettingPath}
-							placeholder="输入设置文件路径或点击选择..."
-							class="flex-1 text-xs font-mono"
-						/>
-						<Button.Root
-							variant="outline"
-							size="sm"
-							onclick={selectSettingFile}
-							class="h-8"
-						>
-							<FolderOpen class="h-3 w-3 mr-1" />
-							选择
-						</Button.Root>
-					</div>
-				</div>
-
-				<div class="space-y-2">
-					<div class="text-xs font-medium text-muted-foreground">翻译字典路径 (db.text.json)</div>
-					<div class="flex items-center gap-2">
-						<Input.Root
-							bind:value={emmTranslationDictPath}
-							placeholder="输入翻译字典路径或点击选择..."
-							class="flex-1 text-xs font-mono"
-						/>
-						<Button.Root
-							variant="outline"
-							size="sm"
-							onclick={selectTranslationDictFile}
-							class="h-8"
-						>
-							<FolderOpen class="h-3 w-3 mr-1" />
-							选择
-						</Button.Root>
-					</div>
-				</div>
-
-				<div class="space-y-3 pt-2 border-t">
-					<div class="flex items-center justify-between">
-						<div class="text-xs font-medium text-muted-foreground">启用 EMM 数据读取</div>
-						<Switch.Root
-							checked={enableEMM}
-							onCheckedChange={(v) => (enableEMM = v)}
-							class="scale-75"
-						/>
-					</div>
-
-					<div class="space-y-2">
-						<div class="text-xs font-medium text-muted-foreground">文件列表标签显示模式</div>
-						<div class="flex gap-2">
-							<Button.Root
-								variant={fileListTagDisplayMode === 'all' ? 'default' : 'outline'}
-								size="sm"
-								class="h-7 text-xs flex-1"
-								onclick={() => (fileListTagDisplayMode = 'all')}
-							>
-								全部显示
-							</Button.Root>
-							<Button.Root
-								variant={fileListTagDisplayMode === 'collect' ? 'default' : 'outline'}
-								size="sm"
-								class="h-7 text-xs flex-1"
-								onclick={() => (fileListTagDisplayMode = 'collect')}
-							>
-								仅收藏
-							</Button.Root>
-							<Button.Root
-								variant={fileListTagDisplayMode === 'none' ? 'default' : 'outline'}
-								size="sm"
-								class="h-7 text-xs flex-1"
-								onclick={() => (fileListTagDisplayMode = 'none')}
-							>
-								不显示
-							</Button.Root>
-						</div>
-					</div>
-				</div>
-
-				<div class="flex items-center justify-end gap-2 pt-2 border-t">
+		{#if bookSettings}
+			<div class="space-y-2 text-xs">
+				<div class="flex items-center justify-between">
+					<span>收藏</span>
 					<Button.Root
-						variant="default"
+						variant={bookSettings.favorite ? 'default' : 'outline'}
 						size="sm"
-						onclick={saveEMMConfig}
-						class="h-8"
+						class="h-7 px-3 text-xs"
+						onclick={() => updateBookSetting({ favorite: !bookSettings.favorite })}
 					>
-						<Save class="h-3 w-3 mr-1" />
-						保存并重新加载
+						{#if bookSettings.favorite}
+							已收藏
+						{:else}
+							未收藏
+						{/if}
 					</Button.Root>
+				</div>
+
+				<div class="flex items-center justify-between">
+					<span>评分</span>
+					<div class="flex items-center gap-1">
+						{#each [1, 2, 3, 4, 5] as value}
+							<button
+								type="button"
+								class="h-6 w-6 flex items-center justify-center rounded text-[12px] {bookSettings.rating && bookSettings.rating >= value ? 'text-yellow-400' : 'text-muted-foreground'}"
+								onclick={() => updateBookSetting({ rating: value })}
+								title={'评分 ' + value + ' 星'}
+							>
+								{bookSettings.rating && bookSettings.rating >= value ? '★' : '☆'}
+							</button>
+						{/each}
+					</div>
+				</div>
+
+				<div class="flex items-center justify-between">
+					<span>阅读方向</span>
+					<div class="flex gap-1">
+						<Button.Root
+							variant={bookSettings.readingDirection === 'left-to-right' || !bookSettings.readingDirection ? 'default' : 'outline'}
+							size="sm"
+							class="h-7 px-2 text-[10px]"
+							onclick={() => updateBookSetting({ readingDirection: 'left-to-right' })}
+						>
+							左→右
+						</Button.Root>
+						<Button.Root
+							variant={bookSettings.readingDirection === 'right-to-left' ? 'default' : 'outline'}
+							size="sm"
+							class="h-7 px-2 text-[10px]"
+							onclick={() => updateBookSetting({ readingDirection: 'right-to-left' })}
+						>
+							右→左
+						</Button.Root>
+					</div>
+				</div>
+
+				<div class="flex items-center justify-between">
+					<span>显示模式</span>
+					<div class="flex gap-1">
+						<Button.Root
+							variant={!bookSettings.doublePageView ? 'default' : 'outline'}
+							size="sm"
+							class="h-7 px-2 text-[10px]"
+							onclick={() => updateBookSetting({ doublePageView: false })}
+						>
+							单页
+						</Button.Root>
+						<Button.Root
+							variant={bookSettings.doublePageView ? 'default' : 'outline'}
+							size="sm"
+							class="h-7 px-2 text-[10px]"
+							onclick={() => updateBookSetting({ doublePageView: true })}
+						>
+							双页
+						</Button.Root>
+					</div>
+				</div>
+
+				<div class="flex items-center justify-between">
+					<span>横版本子</span>
+					<Switch.Root
+						checked={bookSettings.horizontalBook ?? false}
+						onCheckedChange={(v) => updateBookSetting({ horizontalBook: v })}
+						class="scale-75"
+					/>
 				</div>
 			</div>
 		{/if}

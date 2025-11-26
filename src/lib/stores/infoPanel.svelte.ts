@@ -15,6 +15,7 @@ export interface ViewerBookInfo {
 	emmMetadata?: {
 		translatedTitle?: string;
 		tags?: Record<string, string[]>;
+		rating?: number;
 	};
 }
 

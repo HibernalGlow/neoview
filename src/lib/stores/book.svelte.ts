@@ -732,7 +732,8 @@ class BookStore {
       currentPage: book.totalPages === 0 ? 0 : book.currentPage + 1,
       emmMetadata: emmMetadata ? {
         translatedTitle: emmMetadata.translated_title,
-        tags: emmMetadata.tags
+        tags: emmMetadata.tags,
+        rating: emmMetadata.rating,
       } : undefined,
     };
 

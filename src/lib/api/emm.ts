@@ -11,6 +11,7 @@ export interface EMMMetadata {
 	tags: Record<string, string[]>; // 分类 -> 标签列表
 	title?: string;
 	title_jpn?: string;
+	rating?: number;
 }
 
 export interface EMMCollectTag {

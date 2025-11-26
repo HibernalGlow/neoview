@@ -14,7 +14,8 @@
 		ChevronUp,
 		ChevronDown,
 		ArrowUp,
-		ArrowDown
+		ArrowDown,
+		Bell
 	} from '@lucide/svelte';
 	import * as Separator from '$lib/components/ui/separator';
 	import { infoPanelStore, type ViewerBookInfo, type ViewerImageInfo } from '$lib/stores/infoPanel.svelte';
@@ -36,14 +37,15 @@
 
 	let showBookInfoCard = $state(true);
 	let showInfoOverlayCard = $state(true);
+	let showSwitchToastCard = $state(true);
 	let showImageInfoCard = $state(true);
 	let showStorageInfoCard = $state(true);
 	let showTimeInfoCard = $state(true);
 
-	type InfoCardId = 'bookInfo' | 'infoOverlay' | 'imageInfo' | 'storage' | 'time';
+	type InfoCardId = 'bookInfo' | 'infoOverlay' | 'switchToast' | 'imageInfo' | 'storage' | 'time';
 	const INFO_CARD_ORDER_STORAGE_KEY = 'neoview-info-panel-card-order';
 
-	let infoCardOrder = $state<InfoCardId[]>(['bookInfo', 'infoOverlay', 'imageInfo', 'storage', 'time']);
+	let infoCardOrder = $state<InfoCardId[]>(['bookInfo', 'infoOverlay', 'switchToast', 'imageInfo', 'storage', 'time']);
 
 	$effect(() => {
 		const unsubscribe = infoPanelStore.subscribe((state) => {
@@ -62,6 +64,77 @@
 		infoOverlayWidth = overlay?.width;
 		infoOverlayHeight = overlay?.height;
 	});
+
+	let switchToastEnableBook = $state(false);
+	let switchToastEnablePage = $state(false);
+	let switchToastShowBookPath = $state(true);
+	let switchToastShowBookPageProgress = $state(true);
+	let switchToastShowBookType = $state(false);
+	let switchToastShowPageIndex = $state(true);
+	let switchToastShowPageSize = $state(false);
+	let switchToastShowPageDimensions = $state(true);
+
+	function loadSwitchToastFromSettings() {
+		const s = settingsManager.getSettings();
+		const base = s.view?.switchToast ?? {
+			enableBook: s.view?.showBookSwitchToast ?? false,
+			enablePage: false,
+			showBookPath: true,
+			showBookPageProgress: true,
+			showBookType: false,
+			showPageIndex: true,
+			showPageSize: false,
+			showPageDimensions: true
+		};
+		switchToastEnableBook = base.enableBook;
+		switchToastEnablePage = base.enablePage;
+		switchToastShowBookPath = base.showBookPath;
+		switchToastShowBookPageProgress = base.showBookPageProgress;
+		switchToastShowBookType = base.showBookType;
+		switchToastShowPageIndex = base.showPageIndex;
+		switchToastShowPageSize = base.showPageSize;
+		switchToastShowPageDimensions = base.showPageDimensions;
+	}
+
+	$effect(() => {
+		loadSwitchToastFromSettings();
+	});
+
+	function updateSwitchToast(partial: {
+		enableBook?: boolean;
+		enablePage?: boolean;
+		showBookPath?: boolean;
+		showBookPageProgress?: boolean;
+		showBookType?: boolean;
+		showPageIndex?: boolean;
+		showPageSize?: boolean;
+		showPageDimensions?: boolean;
+	}) {
+		const current = settingsManager.getSettings();
+		const prev = current.view?.switchToast ?? {
+			enableBook: current.view?.showBookSwitchToast ?? false,
+			enablePage: false,
+			showBookPath: true,
+			showBookPageProgress: true,
+			showBookType: false,
+			showPageIndex: true,
+			showPageSize: false,
+			showPageDimensions: true
+		};
+		const next = { ...prev, ...partial };
+		switchToastEnableBook = next.enableBook;
+		switchToastEnablePage = next.enablePage;
+		switchToastShowBookPath = next.showBookPath;
+		switchToastShowBookPageProgress = next.showBookPageProgress;
+		switchToastShowBookType = next.showBookType;
+		switchToastShowPageIndex = next.showPageIndex;
+		switchToastShowPageSize = next.showPageSize;
+		switchToastShowPageDimensions = next.showPageDimensions;
+		settingsManager.updateNestedSettings('view', {
+			switchToast: next,
+			showBookSwitchToast: next.enableBook
+		});
+	}
 
 	function updateInfoOverlay(partial: {
 		enabled?: boolean;
@@ -237,6 +310,7 @@
 		if (imageInfo) {
 			present.push('imageInfo', 'storage', 'time');
 		}
+		present.push('switchToast');
 		return infoCardOrder.filter((id) => present.includes(id));
 	}
 
@@ -275,6 +349,7 @@
 						if (
 							(id === 'bookInfo' ||
 									id === 'infoOverlay' ||
+									id === 'switchToast' ||
 									id === 'imageInfo' ||
 									id === 'storage' ||
 									id === 'time') &&
@@ -283,7 +358,7 @@
 							valid.push(id);
 						}
 					}
-					const defaults: InfoCardId[] = ['bookInfo', 'infoOverlay', 'imageInfo', 'storage', 'time'];
+					const defaults: InfoCardId[] = ['bookInfo', 'infoOverlay', 'switchToast', 'imageInfo', 'storage', 'time'];
 					for (const id of defaults) {
 						if (!valid.includes(id)) valid.push(id);
 					}
@@ -415,6 +490,149 @@
 											—
 										{/if}
 									</span>
+								</div>
+							</div>
+						{/if}
+					</div>
+
+					<!-- 切换提示设置 -->
+					<div class="rounded-lg border bg-muted/10 p-3 space-y-3" style={`order: ${getInfoCardOrder('switchToast')}`}>
+						<div class="flex items-center justify-between">
+							<div class="flex items-center gap-2 font-semibold text-sm">
+								<Bell class="h-4 w-4" />
+								<span>切换提示</span>
+							</div>
+							<div class="flex items-center gap-1 text-[10px]">
+								<button
+									type="button"
+									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+									onclick={() => (showSwitchToastCard = !showSwitchToastCard)}
+									title={showSwitchToastCard ? '收起' : '展开'}
+								>
+									{#if showSwitchToastCard}
+										<ChevronUp class="h-3 w-3" />
+									{:else}
+										<ChevronDown class="h-3 w-3" />
+									{/if}
+								</button>
+								<button
+									type="button"
+									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+									onclick={() => moveInfoCard('switchToast', 'up')}
+									disabled={!canMoveInfoCard('switchToast', 'up')}
+									title="上移"
+								>
+									<ArrowUp class="h-3 w-3" />
+								</button>
+								<button
+									type="button"
+									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+									onclick={() => moveInfoCard('switchToast', 'down')}
+									disabled={!canMoveInfoCard('switchToast', 'down')}
+									title="下移"
+								>
+									<ArrowDown class="h-3 w-3" />
+								</button>
+							</div>
+						</div>
+						{#if showSwitchToastCard}
+							<div class="space-y-3 text-xs text-muted-foreground">
+								<div class="space-y-1">
+									<div class="flex items-center justify-between gap-2">
+										<span>切换书籍时显示提示</span>
+										<Switch.Root
+											checked={switchToastEnableBook}
+											onCheckedChange={(v) => updateSwitchToast({ enableBook: v })}
+											class="scale-75"
+										/>
+									</div>
+									<div class="flex flex-wrap gap-2 pl-1 text-[11px]">
+										<label class="inline-flex items-center gap-1 cursor-pointer select-none">
+											<input
+												type="checkbox"
+												checked={switchToastShowBookPageProgress}
+												onchange={(e) =>
+													updateSwitchToast({
+														showBookPageProgress: (e.currentTarget as HTMLInputElement).checked
+													})}
+												class="h-3 w-3 rounded border border-input bg-background text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+											/>
+											<span>显示页码/总页</span>
+										</label>
+										<label class="inline-flex items-center gap-1 cursor-pointer select-none">
+											<input
+												type="checkbox"
+												checked={switchToastShowBookPath}
+												onchange={(e) =>
+													updateSwitchToast({
+														showBookPath: (e.currentTarget as HTMLInputElement).checked
+													})}
+												class="h-3 w-3 rounded border border-input bg-background text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+											/>
+											<span>显示路径</span>
+										</label>
+										<label class="inline-flex items-center gap-1 cursor-pointer select-none">
+											<input
+												type="checkbox"
+												checked={switchToastShowBookType}
+												onchange={(e) =>
+													updateSwitchToast({
+														showBookType: (e.currentTarget as HTMLInputElement).checked
+													})}
+												class="h-3 w-3 rounded border border-input bg-background text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+											/>
+											<span>显示类型</span>
+										</label>
+									</div>
+								</div>
+								<Separator.Root class="my-1" />
+								<div class="space-y-1">
+									<div class="flex items-center justify-between gap-2">
+										<span>切换页面时显示提示</span>
+										<Switch.Root
+											checked={switchToastEnablePage}
+											onCheckedChange={(v) => updateSwitchToast({ enablePage: v })}
+											class="scale-75"
+										/>
+									</div>
+									<div class="flex flex-wrap gap-2 pl-1 text-[11px]">
+										<label class="inline-flex items-center gap-1 cursor-pointer select-none">
+											<input
+												type="checkbox"
+												checked={switchToastShowPageIndex}
+												onchange={(e) =>
+													updateSwitchToast({
+														showPageIndex: (e.currentTarget as HTMLInputElement).checked
+													})}
+												class="h-3 w-3 rounded border border-input bg-background text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+											/>
+											<span>显示页码/总页</span>
+										</label>
+										<label class="inline-flex items-center gap-1 cursor-pointer select-none">
+											<input
+												type="checkbox"
+												checked={switchToastShowPageDimensions}
+												onchange={(e) =>
+													updateSwitchToast({
+														showPageDimensions: (e.currentTarget as HTMLInputElement).checked
+													})}
+												class="h-3 w-3 rounded border border-input bg-background text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+											/>
+											<span>显示分辨率</span>
+										</label>
+										<label class="inline-flex items-center gap-1 cursor-pointer select-none">
+											<input
+												type="checkbox"
+												checked={switchToastShowPageSize}
+												onchange={(e) =>
+													updateSwitchToast({
+														showPageSize: (e.currentTarget as HTMLInputElement).checked
+													})}
+												class="h-3 w-3 rounded border border-input bg-background text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+											/>
+											<span>显示文件大小</span>
+										</label>
+									</div>
 								</div>
 							</div>
 						{/if}

@@ -188,15 +188,7 @@ class BookStore {
       const { historyStore } = await import('$lib/stores/history.svelte');
       historyStore.add(path, book.name, targetPage, book.totalPages);
 
-
-      const settings = settingsManager.getSettings();
-      if (settings.view && settings.view.showBookSwitchToast) {
-        showToast({
-          title: book.name,
-          description: book.path,
-          variant: 'info'
-        });
-      }
+      this.showBookSwitchToastIfEnabled();
 
       // 重置所有页面的超分状态
       this.resetAllPageUpscaleStatus();
@@ -334,6 +326,8 @@ class BookStore {
       // 更新历史记录的页数
       const { historyStore } = await import('$lib/stores/history.svelte');
       historyStore.update(this.state.currentBook.path, index, this.state.currentBook.totalPages);
+
+      this.showPageSwitchToastIfEnabled();
     } catch (err) {
       console.error('❌ Error navigating to page:', err);
       this.state.error = String(err);
@@ -379,6 +373,8 @@ class BookStore {
         const { historyStore } = await import('$lib/stores/history.svelte');
         historyStore.update(this.state.currentBook.path, newIndex, this.state.currentBook.totalPages);
       }
+
+      this.showPageSwitchToastIfEnabled();
       return newIndex;
     } catch (err) {
       console.error('❌ Error going to next page:', err);
@@ -720,6 +716,111 @@ class BookStore {
    */
   getCurrentPageHash(): string | null {
     return this.getPageHash(this.currentPageIndex);
+  }
+
+  private getSwitchToastConfig() {
+    const settings = settingsManager.getSettings();
+    const view = settings.view;
+    const base = view.switchToast ?? {
+      enableBook: view.showBookSwitchToast ?? false,
+      enablePage: false,
+      showBookPath: true,
+      showBookPageProgress: true,
+      showBookType: false,
+      showPageIndex: true,
+      showPageSize: false,
+      showPageDimensions: true
+    };
+    return base;
+  }
+
+  private showBookSwitchToastIfEnabled() {
+    const book = this.state.currentBook;
+    if (!book) return;
+
+    const cfg = this.getSwitchToastConfig();
+    if (!cfg.enableBook) return;
+
+    const parts: string[] = [];
+
+    if (cfg.showBookPageProgress && book.totalPages > 0) {
+      const current = Math.min(book.currentPage + 1, book.totalPages);
+      parts.push(`第 ${current} / ${book.totalPages} 页`);
+    }
+
+    if (cfg.showBookType && book.type) {
+      const label = this.formatBookTypeLabel(book.type as string);
+      if (label) parts.push(label);
+    }
+
+    if (cfg.showBookPath && book.path) {
+      parts.push(book.path);
+    }
+
+    const description = parts.join(' • ') || undefined;
+
+    showToast({
+      title: book.name,
+      description,
+      variant: 'info'
+    });
+  }
+
+  private showPageSwitchToastIfEnabled() {
+    const book = this.state.currentBook;
+    const page = this.currentPage;
+    if (!book || !page) return;
+
+    const cfg = this.getSwitchToastConfig();
+    if (!cfg.enablePage) return;
+
+    const parts: string[] = [];
+
+    if (cfg.showPageIndex && book.totalPages > 0) {
+      const current = Math.min(book.currentPage + 1, book.totalPages);
+      parts.push(`第 ${current} / ${book.totalPages} 页`);
+    }
+
+    if (cfg.showPageDimensions && page.width && page.height) {
+      parts.push(`${page.width} × ${page.height}`);
+    }
+
+    if (cfg.showPageSize && typeof page.size === 'number') {
+      const sizeStr = this.formatBytesShort(page.size);
+      if (sizeStr) parts.push(sizeStr);
+    }
+
+    const description = parts.join(' • ') || undefined;
+
+    showToast({
+      title: page.name || `第 ${book.currentPage + 1} 页`,
+      description,
+      variant: 'info'
+    });
+  }
+
+  private formatBytesShort(bytes?: number): string | null {
+    if (bytes === undefined || bytes === null) return null;
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  }
+
+  private formatBookTypeLabel(type?: string): string | null {
+    if (!type) return null;
+    switch (type.toLowerCase()) {
+      case 'folder':
+        return '文件夹';
+      case 'archive':
+        return '压缩包';
+      case 'pdf':
+        return 'PDF';
+      case 'media':
+        return '媒体';
+      default:
+        return type;
+    }
   }
 
   private async syncInfoPanelBookInfo() {

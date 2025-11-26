@@ -80,6 +80,16 @@ export interface NeoViewSettings {
       width?: number; // px, undefined = auto
       height?: number; // px, undefined = auto
     };
+    switchToast?: {
+      enableBook: boolean;
+      enablePage: boolean;
+      showBookPath: boolean;
+      showBookPageProgress: boolean;
+      showBookType: boolean;
+      showPageIndex: boolean;
+      showPageSize: boolean;
+      showPageDimensions: boolean;
+    };
   };
   book: {
     autoPageTurnInterval: number;
@@ -212,6 +222,16 @@ const defaultSettings: NeoViewSettings = {
       enabled: false,
       opacity: 0.85,
       showBorder: false
+    },
+    switchToast: {
+      enableBook: false,
+      enablePage: false,
+      showBookPath: true,
+      showBookPageProgress: true,
+      showBookType: false,
+      showPageIndex: true,
+      showPageSize: false,
+      showPageDimensions: true
     }
   },
   book: {

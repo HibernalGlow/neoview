@@ -4,7 +4,8 @@
 		ChevronDown,
 		ChevronUp,
 		RefreshCw,
-		GripVertical
+		ArrowUp,
+		ArrowDown
 	} from '@lucide/svelte';
 	import * as Card from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
@@ -40,8 +41,6 @@
 	let historyEntries = $state<HistoryEntry[]>([]);
 	let bookmarks = $state<ReturnType<typeof bookmarkStore.getAll>>([]);
 	let collectTags = $state<EMMCollectTag[]>([]);
-	let draggingCard: InsightsCardId | null = null;
-	let dragOverCard: InsightsCardId | null = null;
 
 	$effect(() => {
 		const unsubscribe = insightsPanelStore.subscribe((value) => {
@@ -196,45 +195,17 @@
 		insightsPanelStore.toggleCollapsed(cardId);
 	}
 
-	function handleDragStart(event: DragEvent, cardId: InsightsCardId) {
-		if (!event.dataTransfer) return;
-		event.dataTransfer.setData('text/plain', cardId);
-		event.dataTransfer.effectAllowed = 'move';
-		draggingCard = cardId;
-	}
+	function moveCard(cardId: InsightsCardId, direction: 'up' | 'down') {
+		const currentIndex = cardOrder.indexOf(cardId);
+		if (currentIndex === -1) return;
 
-	function handleDragOver(event: DragEvent, cardId: InsightsCardId) {
-		event.preventDefault();
-		if (draggingCard && draggingCard !== cardId) {
-			dragOverCard = cardId;
-		}
-	}
-
-	function handleDrop(event: DragEvent, targetCard: InsightsCardId) {
-		event.preventDefault();
-		const sourceCard = draggingCard ?? (event.dataTransfer?.getData('text/plain') as InsightsCardId | null);
-		if (!sourceCard || sourceCard === targetCard) {
-			resetDragState();
-			return;
-		}
-
-		const fromIndex = cardOrder.indexOf(sourceCard);
-		const toIndex = cardOrder.indexOf(targetCard);
-		if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
-			resetDragState();
-			return;
-		}
+		const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+		if (targetIndex < 0 || targetIndex >= cardOrder.length) return;
 
 		const nextOrder = [...cardOrder];
-		nextOrder.splice(fromIndex, 1);
-		nextOrder.splice(toIndex, 0, sourceCard);
+		const [removed] = nextOrder.splice(currentIndex, 1);
+		nextOrder.splice(targetIndex, 0, removed);
 		insightsPanelStore.reorder(nextOrder);
-		resetDragState();
-	}
-
-	function resetDragState() {
-		draggingCard = null;
-		dragOverCard = null;
 	}
 </script>
 
@@ -257,18 +228,28 @@
 			{#each cardOrder as cardId (cardId)}
 				{@const meta = CARD_META[cardId]}
 				{@const isCollapsed = collapsed[cardId]}
-				<Card.Root
-					class={`group relative border transition-all ${dragOverCard === cardId ? 'border-primary/70 shadow-sm' : ''}`}
-					draggable="true"
-					on:dragstart={(e) => handleDragStart(e, cardId)}
-					on:dragover={(e) => handleDragOver(e, cardId)}
-					on:drop={(e) => handleDrop(e, cardId)}
-					on:dragend={resetDragState}
-				>
+				<Card.Root class="group relative border transition-all">
 					<Card.Header class="flex flex-row items-center justify-between space-y-0 py-3">
 						<div class="flex items-center gap-3">
-							<div class="text-muted-foreground flex h-6 w-6 items-center justify-center rounded-md border bg-muted cursor-grab active:cursor-grabbing">
-								<GripVertical class="h-3.5 w-3.5" />
+							<div class="flex items-center gap-1">
+								<Button
+									variant="ghost"
+									size="icon"
+									class="h-6 w-6"
+									onclick={() => moveCard(cardId, 'up')}
+									disabled={cardOrder.indexOf(cardId) === 0}
+								>
+									<ArrowUp class="h-3.5 w-3.5" />
+								</Button>
+								<Button
+									variant="ghost"
+									size="icon"
+									class="h-6 w-6"
+									onclick={() => moveCard(cardId, 'down')}
+									disabled={cardOrder.indexOf(cardId) === cardOrder.length - 1}
+								>
+									<ArrowDown class="h-3.5 w-3.5" />
+								</Button>
 							</div>
 							<div>
 								<Card.Title class="text-sm">{meta.title}</Card.Title>

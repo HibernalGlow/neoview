@@ -11,6 +11,7 @@
 		onVisibilityChange: (visible: boolean) => void;
 		children: Snippet;
 		hideDelay?: number;
+		showDelay?: number;
 	}
 
 	let {
@@ -18,10 +19,12 @@
 		pinned,
 		onVisibilityChange,
 		children,
-		hideDelay = 300
+		hideDelay = 300,
+		showDelay = 0
 	}: Props = $props();
 
 	let hideTimer: number | null = null;
+	let showTimer: number | null = null;
 	let isContextMenuOpen = $state(false);
 
 	// 悬停显示/隐藏逻辑
@@ -31,13 +34,29 @@
 				clearTimeout(hideTimer);
 				hideTimer = null;
 			}
-			isVisible = true;
-			onVisibilityChange?.(true);
+			if (showTimer) {
+				clearTimeout(showTimer);
+				showTimer = null;
+			}
+			const delay = showDelay ?? 0;
+			if (!isVisible && delay > 0) {
+				showTimer = setTimeout(() => {
+					isVisible = true;
+					onVisibilityChange?.(true);
+				}, delay) as unknown as number;
+			} else {
+				isVisible = true;
+				onVisibilityChange?.(true);
+			}
 		}
 	}
 
 	function handleMouseLeave() {
 		if (!pinned && !isContextMenuOpen) {
+			if (showTimer) {
+				clearTimeout(showTimer);
+				showTimer = null;
+			}
 			hideTimer = setTimeout(() => {
 				if (!isContextMenuOpen) {
 					isVisible = false;
@@ -54,6 +73,10 @@
 			if (hideTimer) {
 				clearTimeout(hideTimer);
 				hideTimer = null;
+			}
+			if (showTimer) {
+				clearTimeout(showTimer);
+				showTimer = null;
 			}
 		}
 	}
@@ -80,6 +103,10 @@
 				clearTimeout(hideTimer);
 				hideTimer = null;
 			}
+			if (showTimer) {
+				clearTimeout(showTimer);
+				showTimer = null;
+			}
 			onVisibilityChange?.(true);
 		}
 	});
@@ -94,7 +121,8 @@
 
 		const handleGlobalContextMenu = (e: MouseEvent) => {
 			// 如果右键点击不在当前组件内，关闭之前的右键菜单状态
-			if (!e.target?.closest('[data-hover-wrapper="true"]')) {
+			const target = e.target as HTMLElement | null;
+			if (!target?.closest('[data-hover-wrapper="true"]')) {
 				isContextMenuOpen = false;
 			}
 		};
@@ -113,6 +141,9 @@
 		return () => {
 			if (hideTimer) {
 				clearTimeout(hideTimer);
+			}
+			if (showTimer) {
+				clearTimeout(showTimer);
 			}
 		};
 	});

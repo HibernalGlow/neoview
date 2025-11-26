@@ -19,6 +19,7 @@
 	import DataInsightsPanel from '$lib/components/panels/DataInsightsPanel.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import HoverWrapper from './HoverWrapper.svelte';
+	import { settingsManager } from '$lib/settings/settingsManager';
 
 	interface Props {
 		onResize?: (width: number) => void;
@@ -27,6 +28,8 @@
 	let { onResize }: Props = $props();
 	let isVisible = $state($rightSidebarOpen);
 	let localRightSidebarOpen = $state($rightSidebarOpen);
+	let settings = $state(settingsManager.getSettings());
+	let autoHideTiming = $derived(settings.panels?.autoHideTiming ?? { showDelaySec: 0, hideDelaySec: 0 });
 
 	const navMain = [
 		{
@@ -153,12 +156,18 @@
 			document.removeEventListener('mouseup', handleMouseUp);
 		};
 	});
+
+	settingsManager.addListener((next) => {
+		settings = next;
+	});
 </script>
 
 <HoverWrapper
 	bind:isVisible
 	pinned={$rightSidebarPinned}
 	onVisibilityChange={handleVisibilityChange}
+	hideDelay={autoHideTiming.hideDelaySec * 1000}
+	showDelay={autoHideTiming.showDelaySec * 1000}
 >
 	<div
 		class="relative flex h-full"

@@ -32,6 +32,7 @@
 	import PanelContextMenu from '$lib/components/ui/PanelContextMenu.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
 	import { Maximize2, ExternalLink, X } from '@lucide/svelte';
+	import { settingsManager } from '$lib/settings/settingsManager';
 
 	interface Props {
 		onResize?: (width: number) => void;
@@ -40,6 +41,8 @@
 	let { onResize }: Props = $props();
 	let isVisible = $state($sidebarOpen);
 	let localSidebarOpen = $state($sidebarOpen);
+	let settings = $state(settingsManager.getSettings());
+	let autoHideTiming = $derived(settings.panels?.autoHideTiming ?? { showDelaySec: 0, hideDelaySec: 0 });
 
 	// const sidebar = Sidebar.useSidebar(); // Context not available here
 
@@ -171,6 +174,10 @@
 		}
 	});
 
+	settingsManager.addListener((next) => {
+		settings = next;
+	});
+
 	// 同步本地状态与store
 	$effect(() => {
 		localSidebarOpen = $sidebarOpen;
@@ -188,7 +195,13 @@
 	});
 </script>
 
-<HoverWrapper bind:isVisible pinned={$sidebarPinned} onVisibilityChange={handleVisibilityChange}>
+<HoverWrapper
+	bind:isVisible
+	pinned={$sidebarPinned}
+	onVisibilityChange={handleVisibilityChange}
+	hideDelay={autoHideTiming.hideDelaySec * 1000}
+	showDelay={autoHideTiming.showDelaySec * 1000}
+>
 	<div
 		class="relative flex h-full"
 		style="--sidebar-width: {$sidebarWidth}px; width: {$sidebarWidth}px;"

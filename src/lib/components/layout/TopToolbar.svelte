@@ -104,6 +104,7 @@ let currentSortModeLabel = $derived(() => {
 	let settings = $state(settingsManager.getSettings());
 	let readingDirection = $derived(settings.book.readingDirection);
 	let hoverAreas = $derived(settings.panels?.hoverAreas);
+	let autoHideTiming = $derived(settings.panels?.autoHideTiming ?? { showDelaySec: 0, hideDelaySec: 0 });
 	let defaultZoomMode: ZoomMode = $derived(settings.view.defaultZoomMode);
 
 	// 监听设置变化
@@ -369,6 +370,7 @@ async function handleSortModeChange(mode: PageSortMode) {
 
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
+	let showTimeout: number | undefined;
 	let isResizing = $state(false);
 	let resizeStartY = 0;
 	let resizeStartHeight = 0;
@@ -379,6 +381,7 @@ async function handleSortModeChange(mode: PageSortMode) {
 		if ($topToolbarPinned) {
 			isVisible = true;
 			if (hideTimeout) clearTimeout(hideTimeout);
+			if (showTimeout) clearTimeout(showTimeout);
 		}
 	});
 
@@ -386,16 +389,34 @@ async function handleSortModeChange(mode: PageSortMode) {
 		console.log('showToolbar called, setting isVisible to true');
 		isVisible = true;
 		if (hideTimeout) {
-			console.log('Clearing existing timeout');
+			console.log('Clearing existing hide timeout');
 			clearTimeout(hideTimeout);
 		}
-		// 不要在这里设置定时器，让 handleMouseLeave 来处理
 	}
 
 	function handleMouseEnter() {
 		hoverCount++;
 		console.log('TopToolbar handleMouseEnter, hoverCount:', hoverCount);
-		showToolbar();
+		if ($topToolbarPinned) {
+			showToolbar();
+			return;
+		}
+		if (hideTimeout) {
+			clearTimeout(hideTimeout);
+		}
+		if (showTimeout) {
+			clearTimeout(showTimeout);
+		}
+		const showDelayMs = (autoHideTiming?.showDelaySec ?? 0) * 1000;
+		if (showDelayMs > 0) {
+			showTimeout = setTimeout(() => {
+				if (hoverCount > 0 && !$topToolbarPinned) {
+					showToolbar();
+				}
+			}, showDelayMs) as unknown as number;
+		} else {
+			showToolbar();
+		}
 	}
 
 	function handleMouseLeave() {
@@ -403,15 +424,17 @@ async function handleSortModeChange(mode: PageSortMode) {
 		console.log('TopToolbar handleMouseLeave, hoverCount:', hoverCount);
 		if ($topToolbarPinned || isResizing) return;
 		if (hideTimeout) clearTimeout(hideTimeout);
+		if (showTimeout) clearTimeout(showTimeout);
 		// 只有当计数为0时（即鼠标离开了所有相关区域）才开始延迟隐藏
 		if (hoverCount <= 0) {
 			console.log('Setting hide timeout for TopToolbar');
+			const hideDelayMs = (autoHideTiming?.hideDelaySec ?? 0) * 1000;
 			hideTimeout = setTimeout(() => {
 				console.log('Timeout triggered, hoverCount:', hoverCount);
 				if (hoverCount <= 0) {
 					isVisible = false;
 				}
-			}, 300) as unknown as number;
+			}, hideDelayMs) as unknown as number;
 		}
 	}
 
@@ -423,6 +446,7 @@ async function handleSortModeChange(mode: PageSortMode) {
 		e.preventDefault();
 		topToolbarPinned.set(false);
 		if (hideTimeout) clearTimeout(hideTimeout);
+		if (showTimeout) clearTimeout(showTimeout);
 		hoverCount = 0;
 		isVisible = false;
 	}

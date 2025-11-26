@@ -37,6 +37,7 @@
 
 	let settings = $state<NeoViewSettings>(settingsManager.getSettings());
 	let hoverAreas = $derived(settings.panels.hoverAreas);
+	let autoHideTiming = $derived(settings.panels.autoHideTiming);
 
 	// 拖拽状态
 	type AreaId = 'waitingArea' | 'leftSidebar' | 'rightSidebar';
@@ -256,12 +257,60 @@
 		};
 		settingsManager.updateNestedSettings('panels', { hoverAreas: next });
 	}
+
+	function updateAutoHideTiming(
+		partial: Partial<NeoViewSettings['panels']['autoHideTiming']>
+	) {
+		const next = {
+			...autoHideTiming,
+			...partial
+		};
+		settingsManager.updateNestedSettings('panels', { autoHideTiming: next });
+	}
 </script>
 
 <div class="p-6 space-y-6">
 	<div class="space-y-2">
 		<h3 class="text-lg font-semibold">边栏管理</h3>
 		<p class="text-sm text-muted-foreground">拖拽面板到不同区域来自定义您的界面布局</p>
+	</div>
+
+	<!-- 自动隐藏时间设置 -->
+	<div class="mt-4 grid grid-cols-2 gap-4 rounded-lg border bg-card/40 p-4">
+		<div class="space-y-2">
+			<h4 class="text-sm font-medium">自动隐藏面板的显示时间（秒）</h4>
+			<div class="flex items-center gap-2">
+				<input
+					type="number"
+					min="0"
+					step="0.1"
+					value={autoHideTiming.showDelaySec}
+					oninput={(event) =>
+						updateAutoHideTiming({
+							showDelaySec: Number((event.currentTarget as HTMLInputElement).value)
+						})}
+					class="w-24 rounded border px-2 py-1 text-sm"
+				/>
+				<span class="text-xs text-muted-foreground">秒</span>
+			</div>
+		</div>
+		<div class="space-y-2">
+			<h4 class="text-sm font-medium">自动隐藏面板的隐藏时间（秒）</h4>
+			<div class="flex items-center gap-2">
+				<input
+					type="number"
+					min="0"
+					step="0.1"
+					value={autoHideTiming.hideDelaySec}
+					oninput={(event) =>
+						updateAutoHideTiming({
+							hideDelaySec: Number((event.currentTarget as HTMLInputElement).value)
+						})}
+					class="w-24 rounded border px-2 py-1 text-sm"
+				/>
+				<span class="text-xs text-muted-foreground">秒</span>
+			</div>
+		</div>
 	</div>
 
 	<!-- 悬停触发区域设置 -->
@@ -276,7 +325,7 @@
 					</label>
 					<input
 						type="range"
-						min="2"
+						min="1"
 						max="32"
 						step="1"
 						value={hoverAreas.topTriggerHeight}
@@ -294,7 +343,7 @@
 					</label>
 					<input
 						type="range"
-						min="2"
+						min="1"
 						max="32"
 						step="1"
 						value={hoverAreas.bottomTriggerHeight}
@@ -317,7 +366,7 @@
 					</label>
 					<input
 						type="range"
-						min="4"
+						min="1"
 						max="48"
 						step="1"
 						value={hoverAreas.leftTriggerWidth}
@@ -335,7 +384,7 @@
 					</label>
 					<input
 						type="range"
-						min="4"
+						min="1"
 						max="48"
 						step="1"
 						value={hoverAreas.rightTriggerWidth}

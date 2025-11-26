@@ -37,6 +37,7 @@
 	let settings = $state(settingsManager.getSettings());
 	let readingDirection = $derived(settings.book.readingDirection);
 	let hoverAreas = $derived(settings.panels?.hoverAreas);
+	let autoHideTiming = $derived(settings.panels?.autoHideTiming ?? { showDelaySec: 0, hideDelaySec: 0 });
 	let lastReadingDirection = $state<'left-to-right' | 'right-to-left' | null>(null);
 
 	// 监听设置变化
@@ -49,6 +50,7 @@
 
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
+	let showTimeout: number | undefined;
 	let thumbnails = $state<Record<number, { url: string; width: number; height: number }>>({});
 	let thumbnailScrollContainer = $state<HTMLDivElement | null>(null);
 	let isResizing = $state(false);
@@ -106,20 +108,37 @@
 
 	function handleMouseEnter() {
 		hoverCount++;
-		showThumbnails();
+		if ($bottomThumbnailBarPinned) {
+			showThumbnails();
+			return;
+		}
+		if (hideTimeout) clearTimeout(hideTimeout);
+		if (showTimeout) clearTimeout(showTimeout);
+		const showDelayMs = (autoHideTiming?.showDelaySec ?? 0) * 1000;
+		if (showDelayMs > 0) {
+			showTimeout = setTimeout(() => {
+				if (hoverCount > 0 && !$bottomThumbnailBarPinned) {
+					showThumbnails();
+				}
+			}, showDelayMs) as unknown as number;
+		} else {
+			showThumbnails();
+		}
 	}
 
 	function handleMouseLeave() {
 		hoverCount--;
 		if ($bottomThumbnailBarPinned || isResizing) return;
 		if (hideTimeout) clearTimeout(hideTimeout);
+		if (showTimeout) clearTimeout(showTimeout);
 		// 只有当计数为0时（即鼠标离开了所有相关区域）才开始延迟隐藏
 		if (hoverCount <= 0) {
+			const hideDelayMs = (autoHideTiming?.hideDelaySec ?? 0) * 1000;
 			hideTimeout = setTimeout(() => {
 				if (hoverCount <= 0) {
 					isVisible = false;
 				}
-			}, 300) as unknown as number;
+			}, hideDelayMs) as unknown as number;
 		}
 	}
 
@@ -131,6 +150,7 @@
 		e.preventDefault();
 		bottomThumbnailBarPinned.set(false);
 		if (hideTimeout) clearTimeout(hideTimeout);
+		if (showTimeout) clearTimeout(showTimeout);
 		hoverCount = 0;
 		isVisible = false;
 	}

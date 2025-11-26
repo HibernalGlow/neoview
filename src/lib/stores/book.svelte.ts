@@ -773,10 +773,10 @@ class BookStore {
       showPageIndex: true,
       showPageSize: false,
       showPageDimensions: true,
-      bookTitleTemplate: '',
-      bookDescriptionTemplate: '',
-      pageTitleTemplate: '',
-      pageDescriptionTemplate: ''
+      bookTitleTemplate: '已切换到 {{book.displayName}}（第 {{book.currentPageDisplay}} / {{book.totalPages}} 页）',
+      bookDescriptionTemplate: '路径：{{book.path}}',
+      pageTitleTemplate: '第 {{page.indexDisplay}} / {{book.totalPages}} 页',
+      pageDescriptionTemplate: '{{page.dimensionsFormatted}}  {{page.sizeFormatted}}'
     };
     return base;
   }

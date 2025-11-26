@@ -94,19 +94,13 @@
 			showPageIndex: true,
 			showPageSize: false,
 			showPageDimensions: true,
-			bookTitleTemplate: '',
-			bookDescriptionTemplate: '',
-			pageTitleTemplate: '',
-			pageDescriptionTemplate: ''
+			bookTitleTemplate: '已切换到 {{book.displayName}}（第 {{book.currentPageDisplay}} / {{book.totalPages}} 页）',
+			bookDescriptionTemplate: '路径：{{book.path}}',
+			pageTitleTemplate: '第 {{page.indexDisplay}} / {{book.totalPages}} 页',
+			pageDescriptionTemplate: '{{page.dimensionsFormatted}}  {{page.sizeFormatted}}'
 		};
 		switchToastEnableBook = base.enableBook;
 		switchToastEnablePage = base.enablePage;
-		switchToastShowBookPath = base.showBookPath;
-		switchToastShowBookPageProgress = base.showBookPageProgress;
-		switchToastShowBookType = base.showBookType;
-		switchToastShowPageIndex = base.showPageIndex;
-		switchToastShowPageSize = base.showPageSize;
-		switchToastShowPageDimensions = base.showPageDimensions;
 		switchToastBookTitleTemplate = base.bookTitleTemplate ?? '';
 		switchToastBookDescriptionTemplate = base.bookDescriptionTemplate ?? '';
 		switchToastPageTitleTemplate = base.pageTitleTemplate ?? '';
@@ -571,44 +565,6 @@
 											class="scale-75"
 										/>
 									</div>
-									<div class="flex flex-wrap gap-2 pl-1 text-[11px]">
-										<label class="inline-flex items-center gap-1 cursor-pointer select-none">
-											<input
-												type="checkbox"
-												checked={switchToastShowBookPageProgress}
-												onchange={(e) =>
-													updateSwitchToast({
-														showBookPageProgress: (e.currentTarget as HTMLInputElement).checked
-													})}
-												class="h-3 w-3 rounded border border-input bg-background text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-											/>
-											<span>显示页码/总页</span>
-										</label>
-										<label class="inline-flex items-center gap-1 cursor-pointer select-none">
-											<input
-												type="checkbox"
-												checked={switchToastShowBookPath}
-												onchange={(e) =>
-													updateSwitchToast({
-														showBookPath: (e.currentTarget as HTMLInputElement).checked
-													})}
-												class="h-3 w-3 rounded border border-input bg-background text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-											/>
-											<span>显示路径</span>
-										</label>
-										<label class="inline-flex items-center gap-1 cursor-pointer select-none">
-											<input
-												type="checkbox"
-												checked={switchToastShowBookType}
-												onchange={(e) =>
-													updateSwitchToast({
-														showBookType: (e.currentTarget as HTMLInputElement).checked
-													})}
-												class="h-3 w-3 rounded border border-input bg-background text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-											/>
-											<span>显示类型</span>
-										</label>
-									</div>
 								</div>
 								<Separator.Root class="my-1" />
 								<div class="space-y-1">
@@ -619,44 +575,6 @@
 											onCheckedChange={(v) => updateSwitchToast({ enablePage: v })}
 											class="scale-75"
 										/>
-									</div>
-									<div class="flex flex-wrap gap-2 pl-1 text-[11px]">
-										<label class="inline-flex items-center gap-1 cursor-pointer select-none">
-											<input
-												type="checkbox"
-												checked={switchToastShowPageIndex}
-												onchange={(e) =>
-													updateSwitchToast({
-														showPageIndex: (e.currentTarget as HTMLInputElement).checked
-													})}
-												class="h-3 w-3 rounded border border-input bg-background text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-											/>
-											<span>显示页码/总页</span>
-										</label>
-										<label class="inline-flex items-center gap-1 cursor-pointer select-none">
-											<input
-												type="checkbox"
-												checked={switchToastShowPageDimensions}
-												onchange={(e) =>
-													updateSwitchToast({
-														showPageDimensions: (e.currentTarget as HTMLInputElement).checked
-													})}
-												class="h-3 w-3 rounded border border-input bg-background text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-											/>
-											<span>显示分辨率</span>
-										</label>
-										<label class="inline-flex items-center gap-1 cursor-pointer select-none">
-											<input
-												type="checkbox"
-												checked={switchToastShowPageSize}
-												onchange={(e) =>
-													updateSwitchToast({
-														showPageSize: (e.currentTarget as HTMLInputElement).checked
-													})}
-												class="h-3 w-3 rounded border border-input bg-background text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-											/>
-											<span>显示文件大小</span>
-										</label>
 									</div>
 								</div>
 								<Separator.Root class="my-1" />

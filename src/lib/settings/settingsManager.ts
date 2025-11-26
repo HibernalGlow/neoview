@@ -46,6 +46,7 @@ export interface NeoViewSettings {
     currentImageUpscaleEnabled: boolean;
     autoPlayAnimatedImages: boolean;
     longImageScrollMode: 'page' | 'continuous';
+    hoverScrollEnabled: boolean;
     videoMinPlaybackRate: number;
     videoMaxPlaybackRate: number;
     videoPlaybackRateStep: number;
@@ -89,6 +90,10 @@ export interface NeoViewSettings {
       showPageIndex: boolean;
       showPageSize: boolean;
       showPageDimensions: boolean;
+      bookTitleTemplate?: string;
+      bookDescriptionTemplate?: string;
+      pageTitleTemplate?: string;
+      pageDescriptionTemplate?: string;
     };
   };
   book: {
@@ -178,6 +183,7 @@ const defaultSettings: NeoViewSettings = {
     currentImageUpscaleEnabled: false,
     autoPlayAnimatedImages: true,
     longImageScrollMode: 'continuous',
+    hoverScrollEnabled: true,
     videoMinPlaybackRate: 0.25,
     videoMaxPlaybackRate: 16,
     videoPlaybackRateStep: 0.25,
@@ -231,7 +237,11 @@ const defaultSettings: NeoViewSettings = {
       showBookType: false,
       showPageIndex: true,
       showPageSize: false,
-      showPageDimensions: true
+      showPageDimensions: true,
+      bookTitleTemplate: '已切换到 {{book.displayName}}（第 {{book.currentPageDisplay}} / {{book.totalPages}} 页）',
+      bookDescriptionTemplate: '路径：{{book.path}}',
+      pageTitleTemplate: '第 {{page.indexDisplay}} / {{book.totalPages}} 页',
+      pageDescriptionTemplate: '{{page.dimensionsFormatted}}  {{page.sizeFormatted}}'
     }
   },
   book: {

@@ -16,11 +16,21 @@
 	import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
 	import { insightsPanelStore, type InsightsCardId } from '$lib/stores/insightsPanel.svelte';
 	import type { EMMCollectTag } from '$lib/api/emm';
+	import ReadingHeatmapChart, { type HeatmapCell } from './insights/ReadingHeatmapChart.svelte';
+	import ReadingStreakChart, { type StreakPoint } from './insights/ReadingStreakChart.svelte';
 
 	const CARD_META: Record<InsightsCardId, { title: string; description: string }> = {
 		'daily-trend': {
 			title: '最近 7 日阅读趋势',
 			description: '基于历史记录的活跃度'
+		},
+		'reading-streak': {
+			title: '连续阅读 Streak',
+			description: '记录连续阅读天数，避免断档'
+		},
+		'reading-heatmap': {
+			title: '阅读时段热力图',
+			description: '一周 24 小时活跃度热力分布'
 		},
 		'bookmark-overview': {
 			title: '书签概览',
@@ -191,6 +201,97 @@
 		return { total, topLetters, previewTags };
 	}
 
+	const weekdayLabelMap = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+	function buildReadingHeatmapData() {
+		const matrix = Array.from({ length: 7 }, () => Array(24).fill(0));
+
+		for (const entry of historyEntries) {
+			const date = new Date(entry.timestamp);
+			if (Number.isNaN(date.getTime())) continue;
+			const weekday = date.getDay();
+			const hour = date.getHours();
+			matrix[weekday][hour]++;
+		}
+
+		let maxCount = 0;
+		const cells: HeatmapCell[] = [];
+		let topSlot: HeatmapCell | null = null;
+
+		for (let weekday = 0; weekday < 7; weekday++) {
+			for (let hour = 0; hour < 24; hour++) {
+				const count = matrix[weekday][hour];
+				if (count > maxCount) maxCount = count;
+				const cell: HeatmapCell = {
+					weekday,
+					hour,
+					count,
+					weekdayLabel: weekdayLabelMap[weekday],
+					hourLabel: `${String(hour).padStart(2, '0')}:00`
+				};
+				cells.push(cell);
+				if (!topSlot || cell.count > topSlot.count) topSlot = cell;
+			}
+		}
+
+		return { cells, maxCount, topSlot };
+	}
+
+	function normalizeDateKey(timestamp: number) {
+		const date = new Date(timestamp);
+		if (Number.isNaN(date.getTime())) return null;
+		const year = date.getFullYear();
+		const month = date.getMonth() + 1;
+		const day = date.getDate();
+		return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+	}
+
+	function buildReadingStreakData() {
+		const uniqueDays = new Set<string>();
+		for (const entry of historyEntries) {
+			const key = normalizeDateKey(entry.timestamp);
+			if (key) uniqueDays.add(key);
+		}
+
+		const sortedDays = Array.from(uniqueDays)
+			.map((key) => ({ key, time: new Date(key).getTime() }))
+			.filter((item) => Number.isFinite(item.time))
+			.sort((a, b) => a.time - b.time);
+
+		let currentStreak = 0;
+		let longestStreak = 0;
+		let lastTime: number | null = null;
+		const points: StreakPoint[] = [];
+
+		for (const { key, time } of sortedDays) {
+			if (lastTime !== null && time - lastTime <= DAY) {
+				currentStreak += 1;
+			} else {
+				currentStreak = 1;
+			}
+			lastTime = time;
+			if (currentStreak > longestStreak) longestStreak = currentStreak;
+
+			const dateObj = new Date(time);
+			points.push({
+				date: key,
+				label: `${dateObj.getMonth() + 1}/${dateObj.getDate()}`,
+				value: currentStreak
+			});
+		}
+
+		return {
+			points,
+			currentStreak,
+			longestStreak,
+			maxValue: longestStreak,
+			lastActiveDate: sortedDays.length ? sortedDays[sortedDays.length - 1].key : null
+		};
+	}
+
+	const readingHeatmap = $derived(buildReadingHeatmapData());
+	const readingStreak = $derived(buildReadingStreakData());
+
 	function toggleCollapsed(cardId: InsightsCardId) {
 		insightsPanelStore.toggleCollapsed(cardId);
 	}
@@ -286,6 +387,37 @@
 									</div>
 								{/each}
 							</div>
+						{:else if cardId === 'reading-streak'}
+							{@const streak = readingStreak}
+							<div class="grid grid-cols-3 gap-3 text-center">
+								<div>
+									<p class="text-xs text-muted-foreground">当前连续</p>
+									<p class="text-lg font-semibold">{streak.currentStreak} 天</p>
+								</div>
+								<div>
+									<p class="text-xs text-muted-foreground">历史最长</p>
+									<p class="text-lg font-semibold">{streak.longestStreak} 天</p>
+								</div>
+								<div>
+									<p class="text-xs text-muted-foreground">最近活跃</p>
+									<p class="text-lg font-semibold">{streak.lastActiveDate ?? '—'}</p>
+								</div>
+							</div>
+							<ReadingStreakChart points={streak.points} maxValue={Math.max(streak.maxValue, 1)} />
+						{:else if cardId === 'reading-heatmap'}
+							{@const heatmap = readingHeatmap}
+							<div class="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+								{#if heatmap.topSlot}
+									<span>
+										高峰：{heatmap.topSlot.weekdayLabel} {heatmap.topSlot.hourLabel}
+										<b class="text-foreground">{heatmap.topSlot.count}</b> 次
+									</span>
+								{:else}
+									<span>暂无活跃记录</span>
+								{/if}
+								<span>覆盖：{historyEntries.length} 条历史记录</span>
+							</div>
+							<ReadingHeatmapChart cells={heatmap.cells} maxCount={Math.max(heatmap.maxCount, 1)} />
 						{:else if cardId === 'bookmark-overview'}
 							{@const stats = buildBookmarkStats()}
 							<div class="grid grid-cols-3 gap-3 text-center">

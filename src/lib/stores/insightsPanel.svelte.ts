@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
 
-export type InsightsCardId =	'daily-trend' | 'bookmark-overview' | 'source-breakdown' | 'emm-tags';
+export type InsightsCardId =	'daily-trend' | 'bookmark-overview' | 'source-breakdown' | 'emm-tags' | 'reading-heatmap' | 'reading-streak';
 
 export interface InsightsPanelState {
 	order: InsightsCardId[];
@@ -10,6 +10,8 @@ export interface InsightsPanelState {
 const STORAGE_KEY = 'neoview-insights-cards';
 const DEFAULT_CARD_ORDER: InsightsCardId[] = [
 	'daily-trend',
+	'reading-streak',
+	'reading-heatmap',
 	'bookmark-overview',
 	'source-breakdown',
 	'emm-tags'

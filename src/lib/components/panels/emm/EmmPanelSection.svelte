@@ -8,6 +8,7 @@
 	import { FlexRender, createSvelteTable } from '$lib/components/ui/data-table';
 	import type { ColumnDef, SortingState, ColumnFiltersState } from '@tanstack/table-core';
 	import { getCoreRowModel, getSortedRowModel, getFilteredRowModel } from '@tanstack/table-core';
+	import { FileSystemAPI } from '$lib/api';
 	import { onMount } from 'svelte';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { infoPanelStore, type ViewerBookInfo } from '$lib/stores/infoPanel.svelte';
@@ -139,6 +140,95 @@
 	});
 
 	type EMMRawRow = { key: string; value: string };
+	type EMMFieldType = 'string' | 'path' | 'url' | 'datetime' | 'timestamp' | 'number' | 'boolean';
+
+	const EMM_FIELD_META: Record<string, { label: string; type: EMMFieldType }> = {
+		bundleSize: { label: '打包大小', type: 'number' },
+		category: { label: '类别', type: 'string' },
+		coverHash: { label: '封面哈希', type: 'string' },
+		coverPath: { label: '封面路径', type: 'path' },
+		createdAt: { label: '创建时间', type: 'datetime' },
+		updatedAt: { label: '更新时间', type: 'datetime' },
+		mtime: { label: '修改时间', type: 'datetime' },
+		exist: { label: '存在', type: 'boolean' },
+		filecount: { label: '文件数', type: 'number' },
+		filepath: { label: '文件路径', type: 'path' },
+		filesize: { label: '文件大小', type: 'number' },
+		hash: { label: '哈希', type: 'string' },
+		hiddenBook: { label: '隐藏书籍', type: 'boolean' },
+		id: { label: 'ID', type: 'string' },
+		mark: { label: '标记', type: 'number' },
+		pageCount: { label: '页数', type: 'number' },
+		posted: { label: '发布时间', type: 'timestamp' },
+		readCount: { label: '阅读次数', type: 'number' },
+		title: { label: '标题', type: 'string' },
+		title_jpn: { label: '日文标题', type: 'string' },
+		type: { label: '类型', type: 'string' },
+		url: { label: '链接', type: 'url' },
+		rating: { label: '评分', type: 'number' },
+		status: { label: '状态', type: 'string' },
+		date: { label: '日期', type: 'timestamp' }
+	};
+
+	function getFieldMeta(key: string): { label: string; type: EMMFieldType } {
+		const meta = EMM_FIELD_META[key];
+		if (meta) return meta;
+		return { label: key, type: 'string' };
+	}
+
+	function formatFileSizeNumber(bytes: number): string {
+		if (!Number.isFinite(bytes) || bytes < 0) return String(bytes);
+		if (bytes < 1024) return `${bytes} B`;
+		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+		if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+		return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+	}
+
+	function formatDateTime(value: string): string {
+		const d = new Date(value);
+		if (!Number.isFinite(d.getTime())) return value;
+		return d.toLocaleString('zh-CN');
+	}
+
+	function formatTimestampSeconds(value: string): string {
+		const n = Number(value);
+		if (!Number.isFinite(n)) return value;
+		const d = new Date(n * 1000);
+		if (!Number.isFinite(d.getTime())) return value;
+		return d.toLocaleString('zh-CN');
+	}
+
+	function formatNumberValue(key: string, value: string): string {
+		const n = Number(value);
+		if (!Number.isFinite(n)) return value;
+		if (key === 'filesize' || key === 'bundleSize') {
+			return formatFileSizeNumber(n);
+		}
+		if (key === 'rating') {
+			return n.toFixed(1);
+		}
+		return value;
+	}
+
+	function formatBoolean(value: string): string {
+		return value === '1' || value.toLowerCase() === 'true' ? '是' : '否';
+	}
+
+	async function openPath(path: string) {
+		try {
+			await FileSystemAPI.showInFileManager(path);
+		} catch (err) {
+			console.error('[EmmPanelSection] 打开路径失败:', err);
+		}
+	}
+
+	function openUrl(url: string) {
+		try {
+			window.open(url, '_blank');
+		} catch (err) {
+			console.error('[EmmPanelSection] 打开链接失败:', err);
+		}
+	}
 
 	const emmRawColumns: ColumnDef<EMMRawRow>[] = [
 		{
@@ -853,30 +943,23 @@
 					/>
 				</div>
 			</div>
-			<div class="max-h-40 overflow-auto rounded border bg-muted/40">
-				<Table.Root class="text-[11px] font-mono">
+			<div class="max-h-40 overflow-auto rounded-md border">
+				<Table.Root class="text-xs">
 					<Table.Header>
 						{#each emmRawTable.getHeaderGroups() as headerGroup (headerGroup.id)}
 							<Table.Row>
 								{#each headerGroup.headers as header (header.id)}
-									<Table.Head class="px-2 py-1 text-[10px] text-muted-foreground">
+									<Table.Head class="px-2 py-1 text-[11px] text-muted-foreground first:text-left last:text-right">
 										{#if !header.isPlaceholder}
 											<button
 												type="button"
-												class="flex w-full items-center justify-between gap-1"
+												class="flex w-full items-center justify-between gap-1 hover:text-foreground"
 												onclick={header.column.getToggleSortingHandler()}
 											>
 												<FlexRender
 													content={header.column.columnDef.header}
 													context={header.getContext()}
 												/>
-												{#if header.column.getIsSorted() === 'asc'}
-													<span>▲</span>
-												{:else if header.column.getIsSorted() === 'desc'}
-													<span>▼</span>
-												{:else}
-													<span class="opacity-40">⇅</span>
-												{/if}
 											</button>
 										{/if}
 									</Table.Head>
@@ -888,14 +971,51 @@
 						{#each emmRawTable.getRowModel().rows as row (row.id)}
 							<Table.Row>
 								{#each row.getVisibleCells() as cell (cell.id)}
-									<Table.Cell
-										class={cell.column.id === 'key'
-											? 'px-2 py-0.5 align-top text-muted-foreground max-w-[140px] truncate'
-											: 'px-2 py-0.5 align-top text-right max-w-[260px] truncate'}
-										title={String(cell.getValue() ?? '')}
-									>
-										<FlexRender content={cell.column.columnDef.cell} context={cell.getContext()} />
-									</Table.Cell>
+									{#if cell.column.id === 'key'}
+										{@const original = row.original as EMMRawRow}
+										{@const meta = getFieldMeta(original.key)}
+										<Table.Cell
+											class="px-2 py-0.5 align-top text-muted-foreground max-w-[160px] truncate"
+											title={original.key}
+										>
+											{meta.label}
+										</Table.Cell>
+									{:else}
+										{@const original = row.original as EMMRawRow}
+										{@const meta = getFieldMeta(original.key)}
+										<Table.Cell
+											class="px-2 py-0.5 align-top text-right max-w-[260px] truncate"
+											title={original.value}
+										>
+											{#if meta.type === 'url'}
+												<button
+													type="button"
+													class="underline-offset-2 hover:underline text-xs text-blue-500 w-full text-right"
+													onclick={() => openUrl(original.value)}
+												>
+													{original.value}
+												</button>
+											{:else if meta.type === 'path'}
+												<button
+													type="button"
+													class="underline-offset-2 hover:underline text-xs text-foreground/80 w-full text-right"
+													onclick={() => openPath(original.value)}
+												>
+													{original.value}
+												</button>
+											{:else if meta.type === 'datetime'}
+												<span>{formatDateTime(original.value)}</span>
+											{:else if meta.type === 'timestamp'}
+												<span>{formatTimestampSeconds(original.value)}</span>
+											{:else if meta.type === 'number'}
+												<span>{formatNumberValue(original.key, original.value)}</span>
+											{:else if meta.type === 'boolean'}
+												<span>{formatBoolean(original.value)}</span>
+											{:else}
+												<span>{original.value}</span>
+											{/if}
+										</Table.Cell>
+									{/if}
 								{/each}
 							</Table.Row>
 						{:else}

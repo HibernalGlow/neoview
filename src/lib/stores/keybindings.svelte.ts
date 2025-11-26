@@ -199,9 +199,9 @@ const defaultBindings: ActionBinding[] = [
 	},
 	{
 		action: 'toggleSinglePanoramaView',
-		name: '全景/单页切换',
+		name: '单页切换',
 		category: '视图',
-		description: '在全景和单页视图模式之间互相切换（视图模式被锁定时不生效）',
+		description: '在其他模式和单页视图模式之间互相切换（视图模式被锁定时不生效）',
 		bindings: []
 	},
 

@@ -11,6 +11,7 @@
 		type PanelTabType
 	} from '$lib/stores';
 	import { get } from 'svelte/store';
+	import { onMount } from 'svelte';
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
 
 	// 边栏管理状态
@@ -209,7 +210,7 @@
 	}
 
 	// 初始化
-	$effect(() => {
+	onMount(() => {
 		initializeSidebarPanels();
 		syncPanelsStoreFromSidebarLayout();
 	});
@@ -237,10 +238,15 @@
 		};
 	});
 
-	$effect(() => {
-		settingsManager.addListener((next) => {
-			settings = next;
-		});
+	const handleSettingsUpdate = (next: NeoViewSettings) => {
+		settings = next;
+	};
+
+	onMount(() => {
+		settingsManager.addListener(handleSettingsUpdate);
+		return () => {
+			settingsManager.removeListener(handleSettingsUpdate);
+		};
 	});
 
 	function updateHoverAreas(partial: Partial<NeoViewSettings['panels']['hoverAreas']>) {

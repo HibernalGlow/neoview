@@ -127,6 +127,55 @@
 		return groups;
 	});
 
+	type EmmCardId = 'tags' | 'config' | 'raw' | 'bookSettings';
+	const EMM_CARD_ORDER_STORAGE_KEY = 'neoview-emm-panel-card-order';
+
+	let emmCardOrder = $state<EmmCardId[]>(['tags', 'config', 'raw', 'bookSettings']);
+
+	const emmCardOrderIndex = $derived(() => {
+		const map = new Map<EmmCardId, number>();
+		for (let i = 0; i < emmCardOrder.length; i++) {
+			map.set(emmCardOrder[i], i);
+		}
+		return map;
+	});
+
+	function getEmmCardOrder(id: EmmCardId): number {
+		return emmCardOrderIndex().get(id) ?? 0;
+	}
+
+	function getVisibleEmmCards(): EmmCardId[] {
+		const present: EmmCardId[] = [];
+		if (allTags().length > 0) present.push('tags');
+		present.push('config');
+		if (emmRawEntries().length > 0) present.push('raw');
+		if (bookSettings) present.push('bookSettings');
+		return emmCardOrder.filter((id) => present.includes(id));
+	}
+
+	function canMoveEmmCard(id: EmmCardId, dir: 'up' | 'down'): boolean {
+		const visible = getVisibleEmmCards();
+		const idx = visible.indexOf(id);
+		if (idx === -1) return false;
+		if (dir === 'up') return idx > 0;
+		return idx < visible.length - 1;
+	}
+
+	function moveEmmCard(id: EmmCardId, dir: 'up' | 'down') {
+		const visible = getVisibleEmmCards();
+		const idx = visible.indexOf(id);
+		if (idx === -1) return;
+		const targetIdx = dir === 'up' ? idx - 1 : idx + 1;
+		if (targetIdx < 0 || targetIdx >= visible.length) return;
+		const otherId = visible[targetIdx];
+		const next = [...emmCardOrder];
+		const a = next.indexOf(id);
+		const b = next.indexOf(otherId);
+		if (a === -1 || b === -1) return;
+		[next[a], next[b]] = [next[b], next[a]];
+		emmCardOrder = next;
+	}
+
 	const emmRawEntries = $derived(() => {
 		const raw = bookInfo?.emmMetadata?.raw as Record<string, unknown> | undefined;
 		if (!raw) return [] as Array<{ key: string; value: string }>;
@@ -373,6 +422,43 @@
 		}
 	});
 
+	onMount(() => {
+		if (typeof localStorage === 'undefined') return;
+		try {
+			const raw = localStorage.getItem(EMM_CARD_ORDER_STORAGE_KEY);
+			if (raw) {
+				const parsed = JSON.parse(raw) as unknown;
+				if (Array.isArray(parsed)) {
+					const valid: EmmCardId[] = [];
+					for (const id of parsed) {
+						if (id === 'tags' || id === 'config' || id === 'raw' || id === 'bookSettings') {
+							if (!valid.includes(id)) valid.push(id);
+						}
+					}
+					const defaults: EmmCardId[] = ['tags', 'config', 'raw', 'bookSettings'];
+					for (const id of defaults) {
+						if (!valid.includes(id)) valid.push(id);
+					}
+					if (valid.length) {
+						emmCardOrder = valid;
+					}
+				}
+			}
+		} catch (err) {
+			console.error('[EmmPanelSection] 读取卡片顺序失败:', err);
+		}
+	});
+
+	$effect(() => {
+		const order = emmCardOrder;
+		if (typeof localStorage === 'undefined') return;
+		try {
+			localStorage.setItem(EMM_CARD_ORDER_STORAGE_KEY, JSON.stringify(order));
+		} catch (err) {
+			console.error('[EmmPanelSection] 保存卡片顺序失败:', err);
+		}
+	});
+
 	function loadEMMConfig() {
 		emmDatabasePaths = emmMetadataStore.getDatabasePaths();
 		emmTranslationDbPath = emmMetadataStore.getTranslationDbPath() || '';
@@ -591,558 +677,652 @@
 </script>
 
 {#if bookInfo}
-	{#if allTags().length > 0}
-		<Separator.Root />
-		<div class="space-y-3">
-			<div class="flex items-center gap-2 font-semibold text-sm">
-				<Tag class="h-4 w-4" />
-				<span>标签</span>
-				<span class="text-[10px] text-muted-foreground font-normal ml-2 opacity-50">
-					(已加载收藏: {collectTags.length})
-				</span>
-				<div class="flex items-center gap-1 ml-auto text-[10px] font-normal">
-					<span class="text-muted-foreground">视图</span>
-					<Button.Root
-						variant={tagViewMode === 'flat' ? 'default' : 'outline'}
-						size="sm"
-						class="h-6 px-2 text-[10px]"
-						onclick={() => (tagViewMode = 'flat')}
-					>
-						扁平
-					</Button.Root>
-					<Button.Root
-						variant={tagViewMode === 'grouped' ? 'default' : 'outline'}
-						size="sm"
-						class="h-6 px-2 text-[10px]"
-						onclick={() => (tagViewMode = 'grouped')}
-					>
-						分组
-					</Button.Root>
-					<span class="mx-1 text-border">|</span>
-					<Button.Root
-						variant={tagFilterMode === 'all' ? 'default' : 'outline'}
-						size="sm"
-						class="h-6 px-2 text-[10px]"
-						onclick={() => (tagFilterMode = 'all')}
-					>
-						全部
-					</Button.Root>
-					<Button.Root
-						variant={tagFilterMode === 'collect' ? 'default' : 'outline'}
-						size="sm"
-						class="h-6 px-2 text-[10px]"
-						onclick={() => (tagFilterMode = 'collect')}
-					>
-						收藏
-					</Button.Root>
-				</div>
-				<Button.Root
-					variant="ghost"
-					size="icon"
-					class="h-5 w-5 ml-1"
-					title="重新加载收藏标签"
-					onclick={() => {
-						console.debug('[EmmPanelSection] 手动刷新收藏标签');
-						emmMetadataStore.initialize(true).then(() => {
-							collectTags = emmMetadataStore.getCollectTags();
-						});
-					}}
-				>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="12"
-						height="12"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					>
-						<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-						<path d="M3 3v5h5" />
-					</svg>
-				</Button.Root>
-			</div>
-
-			{#if tagViewMode === 'flat'}
-				<div class="flex flex-wrap gap-1.5">
-					{#each displayTags() as tagInfo}
-						<span
-							class="inline-flex items-center rounded px-2 py-1 text-xs border {tagInfo.isCollect
-								? 'font-semibold'
-								: 'bg-muted border-border/60 text-muted-foreground'}"
-							style={tagInfo.isCollect
-								? `background-color: ${(tagInfo.color || '#409EFF')}20; border-color: ${(tagInfo.color || '#409EFF')}40; color: ${tagInfo.color || '#409EFF'};`
-								: ''}
-							title={getTagTitle(tagInfo)}
-						>
-							{tagInfo.display}
+	<div class="flex flex-col gap-3">
+		{#if allTags().length > 0}
+			<div class="rounded-lg border bg-muted/10 p-3 space-y-3" style={`order: ${getEmmCardOrder('tags')}`}>
+				<div class="flex items-center justify-between gap-2">
+					<div class="flex items-center gap-2 font-semibold text-sm">
+						<Tag class="h-4 w-4" />
+						<span>标签</span>
+						<span class="text-[10px] text-muted-foreground font-normal ml-2 opacity-50">
+							(已加载收藏: {collectTags.length})
 						</span>
-					{/each}
-				</div>
-			{:else}
-				<div class="space-y-2">
-					{#each groupedTags() as group}
-						<div class="space-y-1">
-							<div class="text-[10px] text-muted-foreground">
-								{group.shortCategory}:{group.category} ({group.items.length})
-							</div>
-							<div class="flex flex-wrap gap-1.5">
-								{#each group.items as tagInfo}
-									<span
-										class="inline-flex items-center rounded px-2 py-1 text-xs border {tagInfo.isCollect
-											? 'font-semibold'
-											: 'bg-muted border-border/60 text-muted-foreground'}"
-										style={tagInfo.isCollect
-											? `background-color: ${(tagInfo.color || '#409EFF')}20; border-color: ${(tagInfo.color || '#409EFF')}40; color: ${tagInfo.color || '#409EFF'};`
-											: ''}
-										title={getTagTitle(tagInfo)}
-									>
-										{tagInfo.display}
-									</span>
-								{/each}
-							</div>
+						<div class="flex items-center gap-1 ml-auto text-[10px] font-normal">
+							<span class="text-muted-foreground">视图</span>
+							<Button.Root
+								variant={tagViewMode === 'flat' ? 'default' : 'outline'}
+								size="sm"
+								class="h-6 px-2 text-[10px]"
+								onclick={() => (tagViewMode = 'flat')}
+							>
+								扁平
+							</Button.Root>
+							<Button.Root
+								variant={tagViewMode === 'grouped' ? 'default' : 'outline'}
+								size="sm"
+								class="h-6 px-2 text-[10px]"
+								onclick={() => (tagViewMode = 'grouped')}
+							>
+								分组
+							</Button.Root>
+							<span class="mx-1 text-border">|</span>
+							<Button.Root
+								variant={tagFilterMode === 'all' ? 'default' : 'outline'}
+								size="sm"
+								class="h-6 px-2 text-[10px]"
+								onclick={() => (tagFilterMode = 'all')}
+							>
+								全部
+							</Button.Root>
+							<Button.Root
+								variant={tagFilterMode === 'collect' ? 'default' : 'outline'}
+								size="sm"
+								class="h-6 px-2 text-[10px]"
+								onclick={() => (tagFilterMode = 'collect')}
+							>
+								收藏
+							</Button.Root>
 						</div>
-					{/each}
-				</div>
-			{/if}
-		</div>
-	{/if}
-
-	<Separator.Root />
-	<div class="space-y-3">
-		<div class="flex items-center justify-between">
-			<div class="flex items-center gap-2 font-semibold text-sm">
-				<Settings class="h-4 w-4" />
-				<span>EMM 元数据配置</span>
-			</div>
-			<button
-				class="text-xs text-muted-foreground hover:text-foreground"
-				onclick={() => (showEMMConfig = !showEMMConfig)}
-			>
-				{showEMMConfig ? '收起' : '展开'}
-			</button>
-		</div>
-
-		{#if showEMMConfig}
-			<div class="space-y-3 text-sm border rounded-lg p-3 bg-muted/30">
-				<!-- 主数据库路径 -->
-				<div class="space-y-2">
-					<div class="flex items-center justify-between">
-						<span class="text-xs text-muted-foreground">主数据库路径</span>
 						<Button.Root
-							variant="outline"
-							size="sm"
-							class="h-7 px-2 text-[11px] flex items-center gap-1"
-							onclick={selectDatabaseFile}
-						>
-							<FolderOpen class="h-3 w-3" />
-							<span>浏览</span>
-						</Button.Root>
-					</div>
-					<div class="flex items-center gap-2">
-						<Input.Root
-								class="h-8 flex-1 text-xs"
-								placeholder="手动添加数据库路径"
-								value={emmDatabasePathInput}
-								oninput={(e) => {
-									const target = e.currentTarget as HTMLInputElement;
-									emmDatabasePathInput = target.value;
-								}}
-						/>
-						<Button.Root
-							variant="outline"
-							size="sm"
-							class="h-8 px-2 text-[11px]"
-							onclick={addDatabasePath}
-						>
-							添加
-						</Button.Root>
-					</div>
-					{#if emmDatabasePaths.length > 0}
-						<ul class="space-y-1 max-h-32 overflow-auto text-xs mt-1">
-							{#each emmDatabasePaths as path, index}
-								<li class="flex items-center justify-between gap-2">
-									<span class="truncate" title={path}>{path}</span>
-									<Button.Root
-										variant="ghost"
-										size="icon"
-										class="h-6 w-6 text-[11px]"
-										onclick={() => removeDatabasePath(index)}
-									>
-										×
-									</Button.Root>
-								</li>
-							{/each}
-						</ul>
-					{:else}
-						<p class="text-xs text-muted-foreground mt-1">
-							未手动配置数据库路径时，将尝试自动检测。
-						</p>
-					{/if}
-				</div>
-
-				<Separator.Root />
-
-				<!-- 翻译数据库路径 -->
-				<div class="space-y-1">
-					<div class="flex items-center justify-between">
-						<span class="text-xs text-muted-foreground">翻译数据库路径</span>
-						<Button.Root
-							variant="outline"
-							size="sm"
-							class="h-7 px-2 text-[11px] flex items-center gap-1"
-							onclick={selectTranslationDbFile}
-						>
-							<FolderOpen class="h-3 w-3" />
-							<span>浏览</span>
-						</Button.Root>
-					</div>
-					<Input.Root
-							class="h-8 text-xs"
-							placeholder="留空则自动查找 translations.db"
-							value={emmTranslationDbPath}
-							oninput={(e) => {
-								const target = e.currentTarget as HTMLInputElement;
-								emmTranslationDbPath = target.value;
+							variant="ghost"
+							size="icon"
+							class="h-5 w-5 ml-1"
+							title="重新加载收藏标签"
+							onclick={() => {
+								console.debug('[EmmPanelSection] 手动刷新收藏标签');
+								emmMetadataStore.initialize(true).then(() => {
+									collectTags = emmMetadataStore.getCollectTags();
+								});
 							}}
-					/>
-				</div>
-
-				<!-- 设置文件路径 -->
-				<div class="space-y-1">
-					<div class="flex items-center justify-between">
-						<span class="text-xs text-muted-foreground">设置文件路径 (setting.json)</span>
-						<Button.Root
-							variant="outline"
-							size="sm"
-							class="h-7 px-2 text-[11px] flex items-center gap-1"
-							onclick={selectSettingFile}
 						>
-							<FolderOpen class="h-3 w-3" />
-							<span>浏览</span>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="12"
+								height="12"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+								<path d="M3 3v5h5" />
+							</svg>
 						</Button.Root>
 					</div>
-					<Input.Root
-							class="h-8 text-xs"
-							placeholder="用于加载收藏标签等设置"
-							value={emmSettingPath}
-							oninput={(e) => {
-								const target = e.currentTarget as HTMLInputElement;
-								emmSettingPath = target.value;
-							}}
-					/>
-				</div>
-
-				<!-- 翻译字典路径 -->
-				<div class="space-y-1">
-					<div class="flex items-center justify-between">
-						<span class="text-xs text-muted-foreground">翻译字典路径 (db.text.json)</span>
+					<div class="flex items-center gap-1 text-[10px]">
 						<Button.Root
-							variant="outline"
-							size="sm"
-							class="h-7 px-2 text-[11px] flex items-center gap-1"
-							onclick={selectTranslationDictFile}
+							variant="ghost"
+							size="icon"
+							class="h-5 w-5"
+							onclick={() => moveEmmCard('tags', 'up')}
+							disabled={!canMoveEmmCard('tags', 'up')}
+							title="上移"
 						>
-							<FolderOpen class="h-3 w-3" />
-							<span>浏览</span>
+							↑
+						</Button.Root>
+						<Button.Root
+							variant="ghost"
+							size="icon"
+							class="h-5 w-5"
+							onclick={() => moveEmmCard('tags', 'down')}
+							disabled={!canMoveEmmCard('tags', 'down')}
+							title="下移"
+						>
+							↓
 						</Button.Root>
 					</div>
-					<Input.Root
-							class="h-8 text-xs"
-							placeholder="留空则自动查找 db.text.json"
-							value={emmTranslationDictPath}
-							oninput={(e) => {
-								const target = e.currentTarget as HTMLInputElement;
-								emmTranslationDictPath = target.value;
-							}}
-					/>
 				</div>
 
-				<Separator.Root />
-
-				<!-- 行为设置 -->
-				<div class="space-y-2 text-xs">
-					<div class="flex items-center justify-between">
-						<span>启用 EMM</span>
-						<Switch.Root
-								checked={enableEMM}
-								onCheckedChange={(v) => (enableEMM = v)}
-								class="scale-75"
-						/>
+				{#if tagViewMode === 'flat'}
+					<div class="flex flex-wrap gap-1.5">
+						{#each displayTags() as tagInfo}
+							<span
+								class="inline-flex items-center rounded px-2 py-1 text-xs border {tagInfo.isCollect
+									? 'font-semibold'
+									: 'bg-muted border-border/60 text-muted-foreground'}"
+								style={tagInfo.isCollect
+									? `background-color: ${(tagInfo.color || '#409EFF')}20; border-color: ${(tagInfo.color || '#409EFF')}40; color: ${tagInfo.color || '#409EFF'};`
+									: ''}
+								title={getTagTitle(tagInfo)}
+							>
+								{tagInfo.display}
+							</span>
+						{/each}
 					</div>
-					<div class="space-y-1">
-						<div class="flex items-center justify-between">
-							<span>文件列表标签显示</span>
-							<div class="flex gap-1">
-								<Button.Root
-										variant={fileListTagDisplayMode === 'all' ? 'default' : 'outline'}
-										size="sm"
-										class="h-7 px-2 text-[10px]"
-										onclick={() => (fileListTagDisplayMode = 'all')}
-									>
-										全部
-									</Button.Root>
-									<Button.Root
-										variant={fileListTagDisplayMode === 'collect' ? 'default' : 'outline'}
-										size="sm"
-										class="h-7 px-2 text-[10px]"
-										onclick={() => (fileListTagDisplayMode = 'collect')}
-									>
-										收藏
-									</Button.Root>
-									<Button.Root
-										variant={fileListTagDisplayMode === 'none' ? 'default' : 'outline'}
-										size="sm"
-										class="h-7 px-2 text-[10px]"
-										onclick={() => (fileListTagDisplayMode = 'none')}
-									>
-										隐藏
-									</Button.Root>
+				{:else}
+					<div class="space-y-2">
+						{#each groupedTags() as group}
+							<div class="space-y-1">
+								<div class="text-[10px] text-muted-foreground">
+									{group.shortCategory}:{group.category} ({group.items.length})
 								</div>
-						</div>
-						<p class="text-[11px] text-muted-foreground">
-							仅影响文件列表中的标签显示，不影响当前属性面板的标签视图。
-						</p>
+								<div class="flex flex-wrap gap-1.5">
+									{#each group.items as tagInfo}
+										<span
+											class="inline-flex items-center rounded px-2 py-1 text-xs border {tagInfo.isCollect
+												? 'font-semibold'
+												: 'bg-muted border-border/60 text-muted-foreground'}"
+											style={tagInfo.isCollect
+												? `background-color: ${(tagInfo.color || '#409EFF')}20; border-color: ${(tagInfo.color || '#409EFF')}40; color: ${tagInfo.color || '#409EFF'};`
+												: ''}
+											title={getTagTitle(tagInfo)}
+										>
+											{tagInfo.display}
+										</span>
+									{/each}
+								</div>
+							</div>
+						{/each}
 					</div>
-				</div>
-
-				<div class="flex justify-end pt-1">
-					<Button.Root
-						variant="default"
-						size="sm"
-						class="h-7 px-3 text-xs flex items-center gap-1"
-						onclick={saveEMMConfig}
-					>
-						<Save class="h-3 w-3" />
-						<span>保存配置</span>
-					</Button.Root>
-				</div>
+				{/if}
 			</div>
 		{/if}
-	</div>
 
-	{#if emmRawEntries().length > 0}
-		<Separator.Root />
-		<div class="space-y-2">
+		<div class="rounded-lg border bg-muted/10 p-3 space-y-3" style={`order: ${getEmmCardOrder('config')}`}>
 			<div class="flex items-center justify-between">
 				<div class="flex items-center gap-2 font-semibold text-sm">
 					<Settings class="h-4 w-4" />
-					<span>EMM 原始记录（mangas）</span>
+					<span>EMM 元数据配置</span>
 				</div>
 				<div class="flex items-center gap-2">
-					<span class="text-[10px] text-muted-foreground">只读 · 调试用</span>
-					<Input.Root
-							class="h-6 w-40 px-2 text-[10px]"
-							placeholder="过滤字段/值..."
-							value={(emmRawTable.getColumn('key')?.getFilterValue() as string) ?? ''}
-							oninput={(e) => {
-								const v = (e.currentTarget as HTMLInputElement).value;
-								emmRawTable.getColumn('key')?.setFilterValue(v);
-							}}
-					/>
+					<button
+						class="text-xs text-muted-foreground hover:text-foreground"
+						onclick={() => (showEMMConfig = !showEMMConfig)}
+					>
+						{showEMMConfig ? '收起' : '展开'}
+					</button>
+					<div class="flex items-center gap-1 text-[10px]">
+						<Button.Root
+							variant="ghost"
+							size="icon"
+							class="h-5 w-5"
+							onclick={() => moveEmmCard('config', 'up')}
+							disabled={!canMoveEmmCard('config', 'up')}
+							title="上移"
+						>
+							↑
+						</Button.Root>
+						<Button.Root
+							variant="ghost"
+							size="icon"
+							class="h-5 w-5"
+							onclick={() => moveEmmCard('config', 'down')}
+							disabled={!canMoveEmmCard('config', 'down')}
+							title="下移"
+						>
+							↓
+						</Button.Root>
+					</div>
 				</div>
 			</div>
-			<div class="max-h-40 overflow-auto rounded-md border">
-				<Table.Root class="text-xs">
-					<Table.Header>
-						{#each emmRawTable.getHeaderGroups() as headerGroup (headerGroup.id)}
-							<Table.Row>
-								{#each headerGroup.headers as header (header.id)}
-									<Table.Head class="px-2 py-1 text-[11px] text-muted-foreground first:text-left last:text-right">
-										{#if !header.isPlaceholder}
-											<button
-												type="button"
-												class="flex w-full items-center justify-between gap-1 hover:text-foreground"
-												onclick={header.column.getToggleSortingHandler()}
-											>
-												<FlexRender
-													content={header.column.columnDef.header}
-													context={header.getContext()}
-												/>
-											</button>
-										{/if}
-									</Table.Head>
-								{/each}
-							</Table.Row>
-						{/each}
-					</Table.Header>
-					<Table.Body>
-						{#each emmRawTable.getRowModel().rows as row (row.id)}
-							<Table.Row>
-								{#each row.getVisibleCells() as cell (cell.id)}
-									{#if cell.column.id === 'key'}
-										{@const original = row.original as EMMRawRow}
-										{@const meta = getFieldMeta(original.key)}
-										<Table.Cell class="px-2 py-0.5 align-top text-muted-foreground max-w-[160px] truncate">
-											<Tooltip.Root>
-												<Tooltip.Trigger>
-													<span class="inline-block w-full text-left truncate">{meta.label}</span>
-												</Tooltip.Trigger>
-												<Tooltip.Content>
-													<p class="break-all text-[10px]">{original.key}</p>
-												</Tooltip.Content>
-											</Tooltip.Root>
-										</Table.Cell>
-									{:else}
-										{@const original = row.original as EMMRawRow}
-										{@const meta = getFieldMeta(original.key)}
-										<Table.Cell class="px-2 py-0.5 align-top text-right max-w-[260px] truncate">
-											<Tooltip.Root>
-												<Tooltip.Trigger>
-													<span class="inline-block w-full truncate">
-														{#if meta.type === 'url'}
-															<button
-																type="button"
-																class="underline-offset-2 hover:underline text-xs text-primary w-full text-right"
-																onclick={() => openUrl(original.value)}
-															>
-																{original.value}
-															</button>
-														{:else if meta.type === 'path'}
-															<button
-																type="button"
-																class="underline-offset-2 hover:underline text-xs text-foreground/80 w-full text-right"
-																onclick={() => openPath(original.value)}
-															>
-																{original.value}
-															</button>
-														{:else if meta.type === 'datetime'}
-															<span>{formatDateTime(original.value)}</span>
-														{:else if meta.type === 'timestamp'}
-															<span>{formatTimestampSeconds(original.value)}</span>
-														{:else if meta.type === 'number'}
-															<span>{formatNumberValue(original.key, original.value)}</span>
-														{:else if meta.type === 'boolean'}
-															<span>{formatBoolean(original.value)}</span>
-														{:else}
-															<span>{original.value}</span>
-														{/if}
-													</span>
-												</Tooltip.Trigger>
-												<Tooltip.Content>
-													<p class="break-all text-[10px] max-w-[320px] text-right">{original.value}</p>
-												</Tooltip.Content>
-											</Tooltip.Root>
-										</Table.Cell>
-									{/if}
-								{/each}
-							</Table.Row>
-						{:else}
-							<Table.Row>
-								<Table.Cell colspan={2} class="px-2 py-1 text-center text-[10px] text-muted-foreground">
-									暂无记录
-								</Table.Cell>
-							</Table.Row>
-						{/each}
-					</Table.Body>
-				</Table.Root>
-			</div>
-		</div>
-	{/if}
 
-	<Separator.Root />
-	<div class="space-y-3">
-		<div class="flex items-center justify-between">
-			<div class="flex items-center gap-2 font-semibold text-sm">
-				<Tag class="h-4 w-4" />
-				<span>本书设置</span>
-			</div>
-			{#if bookSettings && typeof bookSettings.rating === 'number'}
-				<span class="text-[10px] text-muted-foreground">
-					评分: {bookSettings.rating}/5
-				</span>
+			{#if showEMMConfig}
+				<div class="space-y-3 text-sm">
+					<!-- 主数据库路径 -->
+					<div class="space-y-2">
+						<div class="flex items-center justify-between">
+							<span class="text-xs text-muted-foreground">主数据库路径</span>
+							<Button.Root
+								variant="outline"
+								size="sm"
+								class="h-7 px-2 text-[11px] flex items-center gap-1"
+								onclick={selectDatabaseFile}
+							>
+								<FolderOpen class="h-3 w-3" />
+								<span>浏览</span>
+							</Button.Root>
+						</div>
+						<div class="flex items-center gap-2">
+							<Input.Root
+									class="h-8 flex-1 text-xs"
+									placeholder="手动添加数据库路径"
+									value={emmDatabasePathInput}
+									oninput={(e) => {
+										const target = e.currentTarget as HTMLInputElement;
+										emmDatabasePathInput = target.value;
+									}}
+								/>
+							<Button.Root
+								variant="outline"
+								size="sm"
+								class="h-8 px-2 text-[11px]"
+								onclick={addDatabasePath}
+							>
+								添加
+							</Button.Root>
+						</div>
+						{#if emmDatabasePaths.length > 0}
+							<ul class="space-y-1 max-h-32 overflow-auto text-xs mt-1">
+								{#each emmDatabasePaths as path, index}
+									<li class="flex items-center justify-between gap-2">
+										<span class="truncate" title={path}>{path}</span>
+										<Button.Root
+											variant="ghost"
+											size="icon"
+											class="h-6 w-6 text-[11px]"
+											onclick={() => removeDatabasePath(index)}
+										>
+											×
+										</Button.Root>
+									</li>
+								{/each}
+							</ul>
+						{:else}
+							<p class="text-xs text-muted-foreground mt-1">
+								未手动配置数据库路径时，将尝试自动检测。
+							</p>
+						{/if}
+					</div>
+
+					<Separator.Root />
+
+					<!-- 翻译数据库路径 -->
+					<div class="space-y-1">
+						<div class="flex items-center justify-between">
+							<span class="text-xs text-muted-foreground">翻译数据库路径</span>
+							<Button.Root
+								variant="outline"
+								size="sm"
+								class="h-7 px-2 text-[11px] flex items-center gap-1"
+								onclick={selectTranslationDbFile}
+							>
+								<FolderOpen class="h-3 w-3" />
+								<span>浏览</span>
+							</Button.Root>
+						</div>
+						<Input.Root
+								class="h-8 text-xs"
+								placeholder="留空则自动查找 translations.db"
+								value={emmTranslationDbPath}
+								oninput={(e) => {
+									const target = e.currentTarget as HTMLInputElement;
+									emmTranslationDbPath = target.value;
+								}}
+						/>
+					</div>
+
+					<!-- 设置文件路径 -->
+					<div class="space-y-1">
+						<div class="flex items-center justify-between">
+							<span class="text-xs text-muted-foreground">设置文件路径 (setting.json)</span>
+							<Button.Root
+								variant="outline"
+								size="sm"
+								class="h-7 px-2 text-[11px] flex items-center gap-1"
+								onclick={selectSettingFile}
+							>
+								<FolderOpen class="h-3 w-3" />
+								<span>浏览</span>
+							</Button.Root>
+						</div>
+						<Input.Root
+								class="h-8 text-xs"
+								placeholder="用于加载收藏标签等设置"
+								value={emmSettingPath}
+								oninput={(e) => {
+									const target = e.currentTarget as HTMLInputElement;
+									emmSettingPath = target.value;
+								}}
+						/>
+					</div>
+
+					<!-- 翻译字典路径 -->
+					<div class="space-y-1">
+						<div class="flex items-center justify-between">
+							<span class="text-xs text-muted-foreground">翻译字典路径 (db.text.json)</span>
+							<Button.Root
+								variant="outline"
+								size="sm"
+								class="h-7 px-2 text-[11px] flex items-center gap-1"
+								onclick={selectTranslationDictFile}
+							>
+								<FolderOpen class="h-3 w-3" />
+								<span>浏览</span>
+							</Button.Root>
+						</div>
+						<Input.Root
+								class="h-8 text-xs"
+								placeholder="留空则自动查找 db.text.json"
+								value={emmTranslationDictPath}
+								oninput={(e) => {
+									const target = e.currentTarget as HTMLInputElement;
+									emmTranslationDictPath = target.value;
+								}}
+						/>
+					</div>
+
+					<Separator.Root />
+
+					<!-- 行为设置 -->
+					<div class="space-y-2 text-xs">
+						<div class="flex items-center justify-between">
+							<span>启用 EMM</span>
+							<Switch.Root
+									checked={enableEMM}
+									onCheckedChange={(v) => (enableEMM = v)}
+									class="scale-75"
+								/>
+						</div>
+						<div class="space-y-1">
+							<div class="flex items-center justify-between">
+								<span>文件列表标签显示</span>
+								<div class="flex gap-1">
+									<Button.Root
+											variant={fileListTagDisplayMode === 'all' ? 'default' : 'outline'}
+											size="sm"
+											class="h-7 px-2 text-[10px]"
+											onclick={() => (fileListTagDisplayMode = 'all')}
+										>
+											全部
+										</Button.Root>
+										<Button.Root
+											variant={fileListTagDisplayMode === 'collect' ? 'default' : 'outline'}
+											size="sm"
+											class="h-7 px-2 text-[10px]"
+											onclick={() => (fileListTagDisplayMode = 'collect')}
+										>
+											收藏
+										</Button.Root>
+										<Button.Root
+											variant={fileListTagDisplayMode === 'none' ? 'default' : 'outline'}
+											size="sm"
+											class="h-7 px-2 text-[10px]"
+											onclick={() => (fileListTagDisplayMode = 'none')}
+										>
+											隐藏
+										</Button.Root>
+									</div>
+							</div>
+							<p class="text-[11px] text-muted-foreground">
+								仅影响文件列表中的标签显示，不影响当前属性面板的标签视图。
+							</p>
+						</div>
+					</div>
+
+					<div class="flex justify-end pt-1">
+						<Button.Root
+							variant="default"
+							size="sm"
+							class="h-7 px-3 text-xs flex items-center gap-1"
+							onclick={saveEMMConfig}
+						>
+							<Save class="h-3 w-3" />
+							<span>保存配置</span>
+						</Button.Root>
+					</div>
+				</div>
 			{/if}
 		</div>
 
-		{#if bookSettings}
-			<div class="space-y-2 text-xs">
+		{#if emmRawEntries().length > 0}
+			<div class="rounded-lg border bg-muted/10 p-3 space-y-2" style={`order: ${getEmmCardOrder('raw')}`}>
 				<div class="flex items-center justify-between">
-					<span>收藏</span>
-					<Button.Root
-						variant={bookSettings.favorite ? 'default' : 'outline'}
-						size="sm"
-						class="h-7 px-3 text-xs"
-						onclick={() => updateBookSetting({ favorite: !bookSettings.favorite })}
-					>
-						{#if bookSettings.favorite}
-							已收藏
-						{:else}
-							未收藏
-						{/if}
-					</Button.Root>
-				</div>
-
-				<div class="flex items-center justify-between">
-					<span>评分</span>
-					<div class="flex items-center gap-1">
-						{#each [1, 2, 3, 4, 5] as value}
-							<button
-								type="button"
-								class="h-6 w-6 flex items-center justify-center rounded text-[12px] {bookSettings.rating && bookSettings.rating >= value ? 'text-yellow-400' : 'text-muted-foreground'}"
-								onclick={() => updateBookSetting({ rating: value })}
-								title={'评分 ' + value + ' 星'}
+					<div class="flex items-center gap-2 font-semibold text-sm">
+						<Settings class="h-4 w-4" />
+						<span>EMM 原始记录（mangas）</span>
+					</div>
+					<div class="flex items-center gap-2">
+						<span class="text-[10px] text-muted-foreground">只读 · 调试用</span>
+						<Input.Root
+								class="h-6 w-40 px-2 text-[10px]"
+								placeholder="过滤字段/值..."
+								value={(emmRawTable.getColumn('key')?.getFilterValue() as string) ?? ''}
+								oninput={(e) => {
+									const v = (e.currentTarget as HTMLInputElement).value;
+									emmRawTable.getColumn('key')?.setFilterValue(v);
+								}}
+							/>
+						<div class="flex items-center gap-1 text-[10px]">
+							<Button.Root
+								variant="ghost"
+								size="icon"
+								class="h-5 w-5"
+								onclick={() => moveEmmCard('raw', 'up')}
+								disabled={!canMoveEmmCard('raw', 'up')}
+								title="上移"
 							>
-								{bookSettings.rating && bookSettings.rating >= value ? '★' : '☆'}
-							</button>
-						{/each}
+								↑
+							</Button.Root>
+							<Button.Root
+								variant="ghost"
+								size="icon"
+								class="h-5 w-5"
+								onclick={() => moveEmmCard('raw', 'down')}
+								disabled={!canMoveEmmCard('raw', 'down')}
+								title="下移"
+							>
+								↓
+							</Button.Root>
+						</div>
 					</div>
 				</div>
-
-				<div class="flex items-center justify-between">
-					<span>阅读方向</span>
-					<div class="flex gap-1">
-						<Button.Root
-							variant={bookSettings.readingDirection === 'left-to-right' || !bookSettings.readingDirection ? 'default' : 'outline'}
-							size="sm"
-							class="h-7 px-2 text-[10px]"
-							onclick={() => updateBookSetting({ readingDirection: 'left-to-right' })}
-						>
-							左→右
-						</Button.Root>
-						<Button.Root
-							variant={bookSettings.readingDirection === 'right-to-left' ? 'default' : 'outline'}
-							size="sm"
-							class="h-7 px-2 text-[10px]"
-							onclick={() => updateBookSetting({ readingDirection: 'right-to-left' })}
-						>
-							右→左
-						</Button.Root>
-					</div>
-				</div>
-
-				<div class="flex items-center justify-between">
-					<span>显示模式</span>
-					<div class="flex gap-1">
-						<Button.Root
-							variant={!bookSettings.doublePageView ? 'default' : 'outline'}
-							size="sm"
-							class="h-7 px-2 text-[10px]"
-							onclick={() => updateBookSetting({ doublePageView: false })}
-						>
-							单页
-						</Button.Root>
-						<Button.Root
-							variant={bookSettings.doublePageView ? 'default' : 'outline'}
-							size="sm"
-							class="h-7 px-2 text-[10px]"
-							onclick={() => updateBookSetting({ doublePageView: true })}
-						>
-							双页
-						</Button.Root>
-					</div>
-				</div>
-
-				<div class="flex items-center justify-between">
-					<span>横版本子</span>
-					<Switch.Root
-						checked={bookSettings.horizontalBook ?? false}
-						onCheckedChange={(v) => updateBookSetting({ horizontalBook: v })}
-						class="scale-75"
-					/>
+				<div class="max-h-40 overflow-auto rounded-md border">
+					<Table.Root class="text-xs">
+						<Table.Header>
+							{#each emmRawTable.getHeaderGroups() as headerGroup (headerGroup.id)}
+								<Table.Row>
+									{#each headerGroup.headers as header (header.id)}
+										<Table.Head class="px-2 py-1 text-[11px] text-muted-foreground first:text-left last:text-right">
+											{#if !header.isPlaceholder}
+												<button
+													type="button"
+													class="flex w-full items-center justify-between gap-1 hover:text-foreground"
+													onclick={header.column.getToggleSortingHandler()}
+												>
+													<FlexRender
+														content={header.column.columnDef.header}
+														context={header.getContext()}
+													/>
+												</button>
+											{/if}
+										</Table.Head>
+									{/each}
+								</Table.Row>
+							{/each}
+						</Table.Header>
+						<Table.Body>
+							{#each emmRawTable.getRowModel().rows as row (row.id)}
+								<Table.Row>
+									{#each row.getVisibleCells() as cell (cell.id)}
+										{#if cell.column.id === 'key'}
+											{@const original = row.original as EMMRawRow}
+											{@const meta = getFieldMeta(original.key)}
+											<Table.Cell class="px-2 py-0.5 align-top text-muted-foreground max-w-[160px] truncate">
+												<Tooltip.Root>
+													<Tooltip.Trigger>
+														<span class="inline-block w-full text-left truncate">{meta.label}</span>
+													</Tooltip.Trigger>
+													<Tooltip.Content>
+														<p class="break-all text-[10px]">{original.key}</p>
+													</Tooltip.Content>
+												</Tooltip.Root>
+											</Table.Cell>
+										{:else}
+											{@const original = row.original as EMMRawRow}
+											{@const meta = getFieldMeta(original.key)}
+											<Table.Cell class="px-2 py-0.5 align-top text-right max-w-[260px] truncate">
+												<Tooltip.Root>
+													<Tooltip.Trigger>
+														<span class="inline-block w-full truncate">
+															{#if meta.type === 'url'}
+																<button
+																	type="button"
+																	class="underline-offset-2 hover:underline text-xs text-primary w-full text-right"
+																	onclick={() => openUrl(original.value)}
+																>
+																	{original.value}
+																</button>
+															{:else if meta.type === 'path'}
+																<button
+																	type="button"
+																	class="underline-offset-2 hover:underline text-xs text-foreground/80 w-full text-right"
+																	onclick={() => openPath(original.value)}
+																>
+																	{original.value}
+																</button>
+															{:else if meta.type === 'datetime'}
+																<span>{formatDateTime(original.value)}</span>
+															{:else if meta.type === 'timestamp'}
+																<span>{formatTimestampSeconds(original.value)}</span>
+															{:else if meta.type === 'number'}
+																<span>{formatNumberValue(original.key, original.value)}</span>
+															{:else if meta.type === 'boolean'}
+																<span>{formatBoolean(original.value)}</span>
+															{:else}
+																<span>{original.value}</span>
+															{/if}
+														</span>
+													</Tooltip.Trigger>
+													<Tooltip.Content>
+														<p class="break-all text-[10px] max-w-[320px] text-right">{original.value}</p>
+													</Tooltip.Content>
+												</Tooltip.Root>
+											</Table.Cell>
+										{/if}
+									{/each}
+								</Table.Row>
+							{:else}
+								<Table.Row>
+									<Table.Cell colspan={2} class="px-2 py-1 text-center text-[10px] text-muted-foreground">
+										暂无记录
+									</Table.Cell>
+								</Table.Row>
+							{/each}
+						</Table.Body>
+					</Table.Root>
 				</div>
 			</div>
 		{/if}
+
+		<div class="rounded-lg border bg-muted/10 p-3 space-y-3" style={`order: ${getEmmCardOrder('bookSettings')}`}>
+			<div class="flex items-center justify-between">
+				<div class="flex items-center gap-2 font-semibold text-sm">
+					<Tag class="h-4 w-4" />
+					<span>本书设置</span>
+				</div>
+				<div class="flex items-center gap-2">
+					{#if bookSettings && typeof bookSettings.rating === 'number'}
+						<span class="text-[10px] text-muted-foreground">
+							评分: {bookSettings.rating}/5
+						</span>
+					{/if}
+					<div class="flex items-center gap-1 text-[10px]">
+						<Button.Root
+							variant="ghost"
+							size="icon"
+							class="h-5 w-5"
+							onclick={() => moveEmmCard('bookSettings', 'up')}
+							disabled={!canMoveEmmCard('bookSettings', 'up')}
+							title="上移"
+						>
+							↑
+						</Button.Root>
+						<Button.Root
+							variant="ghost"
+							size="icon"
+							class="h-5 w-5"
+							onclick={() => moveEmmCard('bookSettings', 'down')}
+							disabled={!canMoveEmmCard('bookSettings', 'down')}
+							title="下移"
+						>
+							↓
+						</Button.Root>
+					</div>
+				</div>
+			</div>
+
+			{#if bookSettings}
+				{@const bs = bookSettings}
+				<div class="space-y-2 text-xs">
+					<div class="flex items-center justify-between">
+						<span>收藏</span>
+						<Button.Root
+							variant={bs.favorite ? 'default' : 'outline'}
+							size="sm"
+							class="h-7 px-3 text-xs"
+							onclick={() => updateBookSetting({ favorite: !bs.favorite })}
+						>
+							{#if bs.favorite}
+								已收藏
+							{:else}
+								未收藏
+							{/if}
+						</Button.Root>
+					</div>
+
+					<div class="flex items-center justify-between">
+						<span>评分</span>
+						<div class="flex items-center gap-1">
+							{#each [1, 2, 3, 4, 5] as value}
+								<button
+									type="button"
+									class="h-6 w-6 flex items-center justify-center rounded text-[12px] {bs.rating && bs.rating >= value ? 'text-yellow-400' : 'text-muted-foreground'}"
+									onclick={() => updateBookSetting({ rating: value })}
+									title={'评分 ' + value + ' 星'}
+								>
+									{bs.rating && bs.rating >= value ? '★' : '☆'}
+								</button>
+							{/each}
+						</div>
+					</div>
+
+					<div class="flex items-center justify-between">
+						<span>阅读方向</span>
+						<div class="flex gap-1">
+							<Button.Root
+								variant={bs.readingDirection === 'left-to-right' || !bs.readingDirection ? 'default' : 'outline'}
+								size="sm"
+								class="h-7 px-2 text-[10px]"
+								onclick={() => updateBookSetting({ readingDirection: 'left-to-right' })}
+							>
+								左→右
+							</Button.Root>
+							<Button.Root
+								variant={bs.readingDirection === 'right-to-left' ? 'default' : 'outline'}
+								size="sm"
+								class="h-7 px-2 text-[10px]"
+								onclick={() => updateBookSetting({ readingDirection: 'right-to-left' })}
+							>
+								右→左
+							</Button.Root>
+						</div>
+					</div>
+
+					<div class="flex items-center justify-between">
+						<span>显示模式</span>
+						<div class="flex gap-1">
+							<Button.Root
+								variant={!bs.doublePageView ? 'default' : 'outline'}
+								size="sm"
+								class="h-7 px-2 text-[10px]"
+								onclick={() => updateBookSetting({ doublePageView: false })}
+							>
+								单页
+							</Button.Root>
+							<Button.Root
+								variant={bs.doublePageView ? 'default' : 'outline'}
+								size="sm"
+								class="h-7 px-2 text-[10px]"
+								onclick={() => updateBookSetting({ doublePageView: true })}
+							>
+								双页
+							</Button.Root>
+						</div>
+					</div>
+
+					<div class="flex items-center justify-between">
+						<span>横版本子</span>
+						<Switch.Root
+							checked={bs.horizontalBook ?? false}
+							onCheckedChange={(v) => updateBookSetting({ horizontalBook: v })}
+							class="scale-75"
+						/>
+					</div>
+				</div>
+			{/if}
+		</div>
 	</div>
 {/if}
+

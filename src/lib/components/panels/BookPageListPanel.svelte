@@ -286,7 +286,7 @@
 							max="6"
 							value={imageColumns}
 							class="h-4 w-20"
-							on:input={(e) => {
+							oninput={(e) => {
 								imageColumns = Number(e.currentTarget.value);
 							}}
 						/>
@@ -335,7 +335,10 @@
 			</div>
 		{:else}
 			<div
-				class={`p-2 ${viewMode === 'image' ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2' : 'space-y-1'}`}
+				class={`p-2 ${viewMode === 'image' ? 'grid gap-2' : 'space-y-1'}`}
+				style={viewMode === 'image'
+					? `grid-template-columns: repeat(${imageColumns}, minmax(0, 1fr));`
+					: ''}
 			>
 				{#each filteredItems as item}
 					<button

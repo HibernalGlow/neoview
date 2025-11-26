@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { Info } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
   import { infoPanelStore, type ViewerImageInfo } from '$lib/stores/infoPanel.svelte';
   import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
@@ -8,6 +7,13 @@
   let enabled = $state(false);
   let opacity = $state(0.85);
   let showBorder = $state(false);
+  let dragOffsetX = $state(0);
+  let dragOffsetY = $state(0);
+  let isDragging = false;
+  let dragStartMouseX = 0;
+  let dragStartMouseY = 0;
+  let dragStartOffsetX = 0;
+  let dragStartOffsetY = 0;
 
   const unsubscribeInfo = infoPanelStore.subscribe((state) => {
     imageInfo = state.imageInfo;
@@ -37,6 +43,35 @@
     settingsManager.removeListener(settingsListener);
   });
 
+  function handleDragStart(event: MouseEvent) {
+    // 仅在启用时允许拖拽
+    if (!enabled) return;
+    event.preventDefault();
+    event.stopPropagation();
+    isDragging = true;
+    dragStartMouseX = event.clientX;
+    dragStartMouseY = event.clientY;
+    dragStartOffsetX = dragOffsetX;
+    dragStartOffsetY = dragOffsetY;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+      const dx = e.clientX - dragStartMouseX;
+      const dy = e.clientY - dragStartMouseY;
+      dragOffsetX = dragStartOffsetX + dx;
+      dragOffsetY = dragStartOffsetY + dy;
+    };
+
+    const handleMouseUp = () => {
+      isDragging = false;
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }
+
   function formatDate(date?: string): string {
     if (!date) return '';
     const parsed = new Date(date);
@@ -53,15 +88,24 @@
 </script>
 
 {#if enabled && imageInfo}
-  <div class="pointer-events-none absolute left-1/2 top-4 z-40 -translate-x-1/2">
+  <div
+    class="pointer-events-none absolute z-40"
+    style:left={dragOffsetX === 0 ? '50%' : `calc(50% + ${dragOffsetX}px)`}
+    style:top={dragOffsetY === 0 ? '1rem' : `calc(1rem + ${dragOffsetY}px)`}
+    style:transform={dragOffsetX === 0 ? 'translate(-50%, 0)' : 'translate(0, 0)'}
+  >
     <div
-      class={`relative pointer-events-auto max-w-[70vw] rounded-md text-xs shadow-lg ${
+      class={`relative pointer-events-auto max-w-[70vw] rounded-md text-xs ${
         showBorder ? 'border border-border/60' : ''
       }`}
       style:backgroundColor={`hsl(var(--background) / ${backgroundOpacity})`}
     >
-      <div class="relative flex items-center gap-3 px-3 py-2">
-        <Info class="h-3.5 w-3.5 text-primary" />
+      <div
+        class="relative flex items-center gap-3 px-3 py-2 cursor-move select-none"
+        onmousedown={handleDragStart}
+        role="button"
+        aria-label="拖动以移动信息条"
+      >
         <div class="flex flex-col gap-0.5">
           <div class="flex items-center gap-2">
             <span

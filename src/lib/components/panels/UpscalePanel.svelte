@@ -46,6 +46,7 @@ import { collectPageMetadata, evaluateConditions } from '$lib/utils/upscale/cond
 	let currentImageUpscaleEnabled = $state(false);
 	let showPanelPreview = $state(false); // 新增：侧边预览开关
 	let settingsInitialized = $state(false);
+	let lastSyncedAutoUpscale: boolean | null = null;
 	
 	// 保存超分图相关状态
 	let lastUpscaledBlob = $state<Blob | null>(null);
@@ -238,6 +239,10 @@ let lastBookPath: string | null = null;
 		});
 		
 		if (settingsInitialized) {
+			if (lastSyncedAutoUpscale === autoUpscaleEnabled) {
+				return;
+			}
+			lastSyncedAutoUpscale = autoUpscaleEnabled;
 			// 读取当前全局设置以便对比
 			const currentGlobalSettings = settingsManager.getSettings();
 			console.log('🔍 更新前全局设置:', {

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import type { ReadingDirection } from '$lib/settings/settingsManager';
+	import { hoverScroll } from '$lib/utils/scroll/hoverScroll';
 	
 	type ViewMode = 'single' | 'double' | 'panorama';
 
@@ -32,6 +33,7 @@
 
 	let settings = $state(settingsManager.getSettings());
 	let readingDirection: ReadingDirection = $derived(settings.book.readingDirection);
+	let hoverScrollEnabled = $derived(settings.image.hoverScrollEnabled ?? true);
 
 	// 监听设置变化
 	settingsManager.addListener((newSettings) => {
@@ -186,6 +188,10 @@
 				}
 				bind:this={scrollContainer}
 				onscroll={handleScroll}
+				use:hoverScroll={{
+					enabled: hoverScrollEnabled,
+					axis: 'both'
+				}}
 			>
 				{#each panoramaPages as page (page.index)}
 					{#if page.data}

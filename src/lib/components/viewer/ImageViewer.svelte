@@ -54,10 +54,7 @@
 	let hideCursorTimeout: ReturnType<typeof window.setTimeout> | null = null;
 	let lastMousePosition = $state({ x: 0, y: 0 });
 	let settings = $state(settingsManager.getSettings());
-	let hoverScrollEnabled = $derived(
-		(settings.image.hoverScrollEnabled ?? true) &&
-		settings.image.longImageScrollMode === 'continuous'
-	);
+	let hoverScrollEnabled = $derived(settings.image.hoverScrollEnabled ?? true);
 	let viewerBackgroundColor = $state(settings.view.backgroundColor || '#000000');
 	let lastBackgroundSource = $state<string | null>(null);
 
@@ -1579,8 +1576,11 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 		role="region"
 		aria-label="图像显示区域"
 		use:hoverScroll={{
-			enabled: hoverScrollEnabled && !isCurrentPageVideo,
-			axis: $viewerState.orientation === 'horizontal' ? 'horizontal' : 'vertical'
+			enabled:
+				hoverScrollEnabled &&
+				!isCurrentPageVideo &&
+				$viewerState.viewMode !== 'panorama',
+			axis: 'both'
 		}}
 	>
 		{#if loadingVisible}

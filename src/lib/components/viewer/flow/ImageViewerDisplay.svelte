@@ -249,7 +249,7 @@
 			style={`transform: scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
 		/>
 	{:else if viewMode === 'double'}
-		<div class="flex items-center {readingDirection === 'right-to-left' ? 'justify-end' : 'justify-center'} gap-4">
+		<div class="flex items-center {readingDirection === 'right-to-left' ? 'justify-end' : 'justify-center'} gap-0">
 			{#if readingDirection === 'right-to-left'}
 				<!-- 右开阅读：反向排列 -->
 				{#if imageData2}

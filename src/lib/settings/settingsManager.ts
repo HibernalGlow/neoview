@@ -12,6 +12,8 @@ export type TailOverflowBehavior =
   | 'loopTopBottom'
   | 'seamlessLoop';
 
+export type BookSettingSelectMode = 'default' | 'continue' | 'restoreOrDefault' | 'restoreOrContinue';
+
 export type AutoRotateMode = 'none' | 'left' | 'right' | 'forcedLeft' | 'forcedRight';
 
 export interface NeoViewSettings {
@@ -63,6 +65,8 @@ export interface NeoViewSettings {
     pageLayout: {
       splitHorizontalPages: boolean;
       treatHorizontalAsDoublePage: boolean;
+      singleFirstPageMode: BookSettingSelectMode;
+      singleLastPageMode: BookSettingSelectMode;
     };
     autoRotate: {
       mode: AutoRotateMode;
@@ -173,7 +177,9 @@ const defaultSettings: NeoViewSettings = {
     },
     pageLayout: {
       splitHorizontalPages: false,
-      treatHorizontalAsDoublePage: false
+      treatHorizontalAsDoublePage: false,
+      singleFirstPageMode: 'restoreOrDefault',
+      singleLastPageMode: 'restoreOrDefault'
     },
     autoRotate: {
       mode: 'none'
@@ -394,6 +400,7 @@ export class SettingsManager {
   private normalizeSettings() {
     this.normalizePerformanceSettings();
     this.normalizeBookSettings();
+    this.normalizeViewSettings();
   }
 
   private normalizePerformanceSettings() {
@@ -415,6 +422,22 @@ export class SettingsManager {
     if (!allowed.includes(behavior)) {
       this.settings.book.tailOverflowBehavior = 'stayOnLastPage';
     }
+  }
+
+  private normalizeViewSettings() {
+    if (!this.settings.view) {
+      this.settings.view = { ...defaultSettings.view };
+      return;
+    }
+
+    const layout = this.settings.view.pageLayout ?? defaultSettings.view.pageLayout;
+    this.settings.view.pageLayout = {
+      splitHorizontalPages: layout.splitHorizontalPages ?? defaultSettings.view.pageLayout.splitHorizontalPages,
+      treatHorizontalAsDoublePage:
+        layout.treatHorizontalAsDoublePage ?? defaultSettings.view.pageLayout.treatHorizontalAsDoublePage,
+      singleFirstPageMode: layout.singleFirstPageMode ?? defaultSettings.view.pageLayout.singleFirstPageMode,
+      singleLastPageMode: layout.singleLastPageMode ?? defaultSettings.view.pageLayout.singleLastPageMode
+    };
   }
 
   private loadSettings() {

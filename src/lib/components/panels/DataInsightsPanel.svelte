@@ -326,11 +326,11 @@
 
 	<div class="flex-1 overflow-y-auto px-3 py-4">
 		<div class="space-y-3">
-			{#each cardOrder as cardId (cardId)}
-				{@const meta = CARD_META[cardId]}
-				{@const isCollapsed = collapsed[cardId]}
-				<Card.Root class="group relative border transition-all">
-					<Card.Header class="flex flex-row items-center justify-between space-y-0 py-3">
+				{#each cardOrder as cardId (cardId)}
+					{@const meta = CARD_META[cardId]}
+					{@const isCollapsed = collapsed[cardId]}
+					<Card.Root class="group relative rounded-lg border bg-muted/10 transition-all">
+						<Card.Header class="flex flex-row items-center justify-between space-y-0 px-3 py-2">
 						<div class="flex items-center gap-3">
 							<div class="flex items-center gap-1">
 								<Button
@@ -365,7 +365,7 @@
 							{/if}
 						</Button>
 					</Card.Header>
-					<Card.Content class={`space-y-3 pb-4 ${isCollapsed ? 'hidden' : ''}`}>
+					<Card.Content class={`p-3 ${isCollapsed ? 'hidden' : ''}`}>
 						{#if cardId === 'daily-trend'}
 							{@const data = buildHistoryTrend()}
 							<div class="flex items-center justify-between text-xs text-muted-foreground">

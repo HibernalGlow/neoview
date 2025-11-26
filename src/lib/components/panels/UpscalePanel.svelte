@@ -4,7 +4,7 @@
 	 * 超分面板 - 使用 PyO3 直接调用 Python sr_vulkan
 	 * 参考 picacg-qt 的 Waifu2x 面板功能
 	 */
-import { Sparkles, AlertCircle } from '@lucide/svelte';
+import { Sparkles, AlertCircle, ChevronUp, ChevronDown, ArrowUp, ArrowDown } from '@lucide/svelte';
 import { onMount, onDestroy, createEventDispatcher } from 'svelte';
 import { Switch } from '$lib/components/ui/switch';
 import { Label } from '$lib/components/ui/label';
@@ -122,6 +122,31 @@ import { collectPageMetadata, evaluateConditions } from '$lib/utils/upscale/cond
 		return Object.fromEntries(map);
 	})();
 
+	// GPU 选项
+	const gpuOptions = [
+		{ value: 0, label: 'GPU 0 (默认)' },
+		{ value: 1, label: 'GPU 1' },
+		{ value: 2, label: 'GPU 2' },
+		{ value: 3, label: 'GPU 3' }
+	];
+
+	// Tile Size 选项
+	const tileSizeOptions = [
+		{ value: 0, label: '自动' },
+		{ value: 256, label: '256' },
+		{ value: 512, label: '512' },
+		{ value: 1024, label: '1024' }
+	];
+
+	// 降噪等级选项
+	const noiseLevelOptions = [
+		{ value: -1, label: '无降噪' },
+		{ value: 0, label: '等级 0' },
+		{ value: 1, label: '等级 1' },
+		{ value: 2, label: '等级 2' },
+		{ value: 3, label: '等级 3' }
+	];
+
 	// 处理状态
 	type UpscaleTrigger = 'manual' | 'auto';
 
@@ -175,6 +200,36 @@ let lastBookPath: string | null = null;
 		cacheDir: ''
 	});
 
+	// 卡片折叠与排序
+	type UpscaleCardId =
+		| 'global'
+		| 'model'
+		| 'current'
+		| 'conditions'
+		| 'cache'
+		| 'previewControls'
+		| 'preview';
+
+	const UPSCALE_CARD_ORDER_STORAGE_KEY = 'neoview-upscale-panel-card-order';
+
+	let showGlobalCard = $state(true);
+	let showModelCard = $state(true);
+	let showCurrentCard = $state(true);
+	let showConditionsCard = $state(true);
+	let showCacheCard = $state(true);
+	let showPreviewControlsCard = $state(true);
+	let showPreviewCard = $state(true);
+
+	let upscaleCardOrder = $state<UpscaleCardId[]>([
+		'global',
+		'model',
+		'current',
+		'conditions',
+		'cache',
+		'previewControls',
+		'preview'
+	]);
+
 	function getResolutionString(width?: number, height?: number): string {
 		if (typeof width !== 'number' || typeof height !== 'number') {
 			return '';
@@ -185,30 +240,102 @@ let lastBookPath: string | null = null;
 		return `${Math.round(width)}×${Math.round(height)}`;
 	}
 
-	// GPU 选项
-	const gpuOptions = [
-		{ value: 0, label: 'GPU 0 (默认)' },
-		{ value: 1, label: 'GPU 1' },
-		{ value: 2, label: 'GPU 2' },
-		{ value: 3, label: 'GPU 3' }
-	];
+	function getUpscaleCardOrder(id: UpscaleCardId): number {
+		const idx = upscaleCardOrder.indexOf(id);
+		return idx === -1 ? 0 : idx;
+	}
 
-	// Tile Size 选项
-	const tileSizeOptions = [
-		{ value: 0, label: '自动' },
-		{ value: 256, label: '256' },
-		{ value: 512, label: '512' },
-		{ value: 1024, label: '1024' }
-	];
+	function getVisibleUpscaleCards(): UpscaleCardId[] {
+		const present: UpscaleCardId[] = [
+			'global',
+			'model',
+			'current',
+			'conditions',
+			'cache',
+			'previewControls'
+		];
+		if (showOriginalPreview || showUpscaledPreview) {
+			present.push('preview');
+		}
+		return upscaleCardOrder.filter((id) => present.includes(id));
+	}
 
-	// 降噪等级选项
-	const noiseLevelOptions = [
-		{ value: -1, label: '无降噪' },
-		{ value: 0, label: '等级 0' },
-		{ value: 1, label: '等级 1' },
-		{ value: 2, label: '等级 2' },
-		{ value: 3, label: '等级 3' }
-	];
+	function canMoveUpscaleCard(id: UpscaleCardId, dir: 'up' | 'down'): boolean {
+		const visible = getVisibleUpscaleCards();
+		const idx = visible.indexOf(id);
+		if (idx === -1) return false;
+		if (dir === 'up') return idx > 0;
+		return idx < visible.length - 1;
+	}
+
+	function moveUpscaleCard(id: UpscaleCardId, dir: 'up' | 'down') {
+		const visible = getVisibleUpscaleCards();
+		const idx = visible.indexOf(id);
+		if (idx === -1) return;
+		const targetIdx = dir === 'up' ? idx - 1 : idx + 1;
+		if (targetIdx < 0 || targetIdx >= visible.length) return;
+		const otherId = visible[targetIdx];
+		const next = [...upscaleCardOrder];
+		const a = next.indexOf(id);
+		const b = next.indexOf(otherId);
+		if (a === -1 || b === -1) return;
+		[next[a], next[b]] = [next[b], next[a]];
+		upscaleCardOrder = next;
+	}
+
+	onMount(() => {
+		if (typeof localStorage === 'undefined') return;
+		try {
+			const raw = localStorage.getItem(UPSCALE_CARD_ORDER_STORAGE_KEY);
+			if (raw) {
+				const parsed = JSON.parse(raw) as unknown;
+				if (Array.isArray(parsed)) {
+					const valid: UpscaleCardId[] = [];
+					for (const id of parsed) {
+						if (
+							(id === 'global' ||
+								id === 'model' ||
+								id === 'current' ||
+								id === 'conditions' ||
+								id === 'cache' ||
+								id === 'previewControls' ||
+								id === 'preview') &&
+							!valid.includes(id)
+						) {
+							valid.push(id);
+						}
+					}
+					const defaults: UpscaleCardId[] = [
+						'global',
+						'model',
+						'current',
+						'conditions',
+						'cache',
+						'previewControls',
+						'preview'
+					];
+					for (const id of defaults) {
+						if (!valid.includes(id)) valid.push(id);
+					}
+					if (valid.length) {
+						upscaleCardOrder = valid;
+					}
+				}
+			}
+		} catch (err) {
+			console.error('[UpscalePanel] 读取卡片顺序失败:', err);
+		}
+	});
+
+	$effect(() => {
+		const order = upscaleCardOrder;
+		if (typeof localStorage === 'undefined') return;
+		try {
+			localStorage.setItem(UPSCALE_CARD_ORDER_STORAGE_KEY, JSON.stringify(order));
+		} catch (err) {
+			console.error('[UpscalePanel] 保存卡片顺序失败:', err);
+		}
+	});
 
 	// ==================== 生命周期 ====================
 
@@ -221,7 +348,7 @@ let lastBookPath: string | null = null;
 			if (imagePath && imagePath !== currentImagePath) {
 				updateCurrentImageInfo(imagePath);
 				console.log('📷 同步当前图片:', imagePath);
-				
+
 				// 如果启用自动超分，自动执行
 				if (autoUpscaleEnabled) {
 					console.log('🚀 自动超分已启用，执行超分...');
@@ -237,7 +364,7 @@ let lastBookPath: string | null = null;
 			settingsInitialized,
 			autoUpscaleEnabled
 		});
-		
+
 		if (settingsInitialized) {
 			if (lastSyncedAutoUpscale === autoUpscaleEnabled) {
 				return;
@@ -249,21 +376,21 @@ let lastBookPath: string | null = null;
 				enableSuperResolution: currentGlobalSettings.image.enableSuperResolution,
 				autoUpscaleEnabled: autoUpscaleEnabled
 			});
-			
+
 			// 使用 updateNestedSettings 更新全局设置
 			settingsManager.updateNestedSettings('image', {
 				enableSuperResolution: autoUpscaleEnabled
 			});
-			
+
 			// 验证更新是否成功
 			const updatedGlobalSettings = settingsManager.getSettings();
 			console.log('🔍 更新后全局设置:', {
 				enableSuperResolution: updatedGlobalSettings.image.enableSuperResolution,
 				updateSuccess: updatedGlobalSettings.image.enableSuperResolution === autoUpscaleEnabled
 			});
-			
+
 			console.log('⚙️ 自动超分全局设置 =>', autoUpscaleEnabled ? '已开启' : '已关闭');
-			
+
 			// 同时更新面板设置
 			const panelSettings = gatherPanelSettings();
 			console.log('💾 保存面板设置:', {
@@ -273,7 +400,7 @@ let lastBookPath: string | null = null;
 			});
 			persistAndBroadcast(panelSettings);
 			syncPreloadConfig(panelSettings);
-			
+
 			if (autoUpscaleEnabled) {
 				console.log('✅ 自动超分已启用');
 				if (currentImagePath) {
@@ -324,7 +451,7 @@ let lastBookPath: string | null = null;
 		backgroundConcurrency = settings.backgroundConcurrency;
 		showPanelPreview = settings.showPanelPreview ?? false;
 		conditionsList = settings.conditionsList;
-		
+
 		// 同步预加载配置到 PreloadManager
 		syncPreloadConfig(settings);
 	}
@@ -373,24 +500,24 @@ let lastBookPath: string | null = null;
 			// 使用绝对路径
 			// 在开发环境中，使用项目根目录的绝对路径
 			const pythonModulePath = 'D:/1VSCODE/Projects/ImageAll/NeeWaifu/neoview/neoview-tauri/src-tauri/python/upscale_wrapper.py';
-			
+
 			// 超分缓存目录：跟随通用设置里的缩略图目录，默认 DEFAULT_THUMBNAIL_DIRECTORY
 			const globalSettings = settingsManager.getSettings();
 			const thumbnailRoot = normalizeThumbnailDirectoryPath(globalSettings.system?.thumbnailDirectory);
 			// 这里只传缩略图根目录，具体的 pyo3-upscale 子目录由 Rust 端统一追加，避免重复
 			const cacheDir = thumbnailRoot;
-			
+
 			console.log('🔧 初始化 PyO3 超分管理器...');
 			console.log('  Python 模块路径:', pythonModulePath);
 			console.log('  缓存目录 (根自通用设置 thumbnailDirectory):', cacheDir);
-			
+
 			await pyo3UpscaleManager.initialize(pythonModulePath, cacheDir);
-			
+
 			if (pyo3UpscaleManager.isAvailable()) {
 				availableModels = pyo3UpscaleManager.getAvailableModels();
 				console.log('✅ PyO3 超分功能可用');
 				console.log('可用模型:', availableModels);
-				
+
 				// 更新缓存统计
 				await updateCacheStats();
 			} else {
@@ -557,10 +684,10 @@ let lastBookPath: string | null = null;
 			URL.revokeObjectURL(originalPreviewObjectUrl);
 			originalPreviewObjectUrl = null;
 		}
-	if (upscaledPreviewObjectUrl) {
-		URL.revokeObjectURL(upscaledPreviewObjectUrl);
-		upscaledPreviewObjectUrl = null;
-	}
+		if (upscaledPreviewObjectUrl) {
+			URL.revokeObjectURL(upscaledPreviewObjectUrl);
+			upscaledPreviewObjectUrl = null;
+		}
 	});
 
 	/**
@@ -792,12 +919,6 @@ let lastBookPath: string | null = null;
 			return;
 		}
 
-		if (isProcessing) {
-			console.log('[UpscalePanel] 当前已有任务执行，新的请求将等待');
-			pendingUpscaleRequest = { trigger, imageHash: currentImageHash };
-			return;
-		}
-
 		const currentPage = bookStore.currentPage;
 		if (!currentPage) {
 			console.error('[UpscalePanel] 没有找到当前页面');
@@ -851,13 +972,13 @@ let lastBookPath: string | null = null;
 			// 检查当前页是否已有内存缓存
 			console.log('🔍 检查内存超分缓存...');
 			const imageHash = await getCurrentImageHash();
-			
+
 			// 通过全局 window 对象获取 preloadManager
 			const preloadManager = (window as any).preloadManager;
 			if (preloadManager && imageHash) {
 				const memCache = preloadManager.getPreloadMemoryCache();
 				const cached = memCache.get(imageHash);
-				
+
 				if (cached) {
 					if (!cached.blob || cached.blob.size === 0) {
 						console.warn('[UpscalePanel] 内存缓存为空，移除后重新超分:', imageHash);
@@ -866,16 +987,16 @@ let lastBookPath: string | null = null;
 						console.log('✅ 使用内存缓存数据，无需重新生成');
 						progress = 100;
 						status = '缓存命中';
-						
+
 						// 设置当前页面超分状态
 						bookStore.setCurrentPageUpscaled(true);
-						
+
 						const processingTime = (Date.now() - startTime) / 1000;
 						console.log('[UpscalePanel] 使用缓存！', {
 							page: bookStore.currentPageIndex + 1,
 							time: processingTime.toFixed(1)
 						});
-						
+
 						if (shouldAbortProcessing(token, processingBookPath, imageHash)) {
 							status = '上下文已变化，缓存结果丢弃';
 							return;
@@ -883,7 +1004,7 @@ let lastBookPath: string | null = null;
 
 						// 直接使用内存缓存
 						applyUpscaledPreview(imageHash, cached.url);
-						
+
 						// 使用统一处理函数（resultData 为空表示无需重新保存）
 						await handleUpscaleResult(
 							imageHash,
@@ -892,7 +1013,7 @@ let lastBookPath: string | null = null;
 							new Uint8Array(),
 							resolvedConditionId
 						);
-						
+
 						return; // 使用缓存，直接返回
 					}
 				}
@@ -917,17 +1038,17 @@ let lastBookPath: string | null = null;
 							console.log('✅ 发现磁盘缓存，直接使用:', cachePath);
 							progress = 100;
 							status = '磁盘缓存命中';
-							
+
 							// 设置当前页面超分状态
 							bookStore.setCurrentPageUpscaled(true);
-							
+
 							const processingTime = (Date.now() - startTime) / 1000;
 							console.log('[UpscalePanel] 使用磁盘缓存！', {
 								page: bookStore.currentPageIndex + 1,
 								time: processingTime.toFixed(1),
 								path: cachePath
 							});
-							
+
 							if (shouldAbortProcessing(token, processingBookPath, imageHash)) {
 								status = '上下文已变化，磁盘缓存丢弃';
 								return;
@@ -936,10 +1057,10 @@ let lastBookPath: string | null = null;
 							const arr = new Uint8Array(bytes);
 							const blob = new Blob([arr], { type: 'image/webp' });
 							const url = URL.createObjectURL(blob);
-							
+
 							// 使用统一处理函数
 							await handleUpscaleResult(imageHash, blob, url, arr, resolvedConditionId);
-							
+
 							return; // 使用磁盘缓存，直接返回
 						}
 					}
@@ -947,22 +1068,22 @@ let lastBookPath: string | null = null;
 					console.warn('检查磁盘缓存失败:', error);
 				}
 			}
-			
+
 			console.log('📥 从 ImageViewer 获取图像数据...');
 			const imageData = await getCurrentImageBlob();
 			console.log('✅ 成功获取图像数据，大小:', imageData.length);
-			
+
 			// 执行超分
 			progress = 20;
 			status = '执行超分...';
 			updateProgress?.(progress, status);
-			
+
 			// 为当前任务生成 jobKey（按书籍路径区分），便于后端取消
 			const bookPath = bookStore.currentBook?.path ?? 'pyo3_panel_current';
 			// 调用 PyO3 超分管理器
 			const result = await pyo3UpscaleManager.upscaleImageMemory(imageData, 120.0, bookPath);
 			console.log('✅ 超分完成，输出大小:', result.length);
-			
+
 			// 检查 imageHash 是否存在
 			if (!imageHash) {
 				console.warn('[UpscalePanel] 无法获取当前页 hash，跳过缓存保存');
@@ -989,10 +1110,10 @@ let lastBookPath: string | null = null;
 			progress = 100;
 			status = '转换完成';
 			updateProgress?.(progress, status);
-			
+
 			// 设置当前页面超分状态
 			bookStore.setCurrentPageUpscaled(true);
-			
+
 			const processingTime = (Date.now() - startTime) / 1000;
 			console.log('[UpscalePanel] 超分完成', {
 					page: bookStore.currentPageIndex + 1,
@@ -1001,7 +1122,7 @@ let lastBookPath: string | null = null;
 
 			// 使用统一处理函数
 			await handleUpscaleResult(imageHash, blob, objectUrl, result, resolvedConditionId);
-			
+
 		} catch (err) {
 			console.error('[UpscalePanel] 超分失败:', err);
 			error = err instanceof Error ? err.message : String(err);
@@ -1028,19 +1149,19 @@ let lastBookPath: string | null = null;
 			}
 
 			console.log('🎯 从 ImageViewer 内存获取图像数据:', currentPage.path);
-			
+
 			// 使用 Promise 等待 ImageViewer 响应
 			return new Promise<Uint8Array>((resolve, reject) => {
 				// 设置超时
 				const timeout = setTimeout(() => {
 					reject(new Error('等待 ImageViewer 响应超时'));
 				}, 5000);
-				
+
 				// 定义回调函数
 				const callback = (imageData: string) => {
 					clearTimeout(timeout);
 					console.log('✅ 收到 ImageViewer 返回的数据，长度:', imageData.length);
-					
+
 					// 转换 data URL 或 blob URL 为 Uint8Array
 					if (imageData.startsWith('data:') || imageData.startsWith('blob:')) {
 						fetch(imageData)
@@ -1058,14 +1179,14 @@ let lastBookPath: string | null = null;
 						reject(new Error('无效的图像数据格式: ' + imageData.substring(0, 50)));
 					}
 				};
-				
+
 				// 使用 window.dispatchEvent 发送 CustomEvent
 				const event = new CustomEvent('request-current-image-data', {
 					detail: { callback }
 				});
 				window.dispatchEvent(event);
 			});
-			
+
 		} catch (error) {
 			console.error('获取图像数据失败:', error);
 			throw error;
@@ -1096,7 +1217,7 @@ let lastBookPath: string | null = null;
 	) {
 		const currentPageIndex = bookStore.currentPageIndex;
 		const currentPage = bookStore.currentPage;
-		
+
 		// 记住最新超分结果（用于保存功能）
 		lastUpscaledBlob = blob;
 		// 简单从路径提文件名（可自行优化）
@@ -1224,7 +1345,7 @@ let lastBookPath: string | null = null;
 		if (bookPath) {
 			// 1. 取消当前书籍对应的 PyO3 直连任务
 			void pyo3UpscaleManager.cancelJob(bookPath);
-			// 2. 同时通知 UpscaleScheduler 取消该书的所有后台超分任务
+			// 2. 同时通知后端取消上一部书的所有后台超分任务
 			void tauriInvoke('cancel_upscale_jobs_for_book', { bookPath });
 		}
 	}
@@ -1247,100 +1368,398 @@ let lastBookPath: string | null = null;
 	</div>
 
 	<!-- 全局开关 -->
-	<UpscalePanelGlobalControls
-		bind:autoUpscaleEnabled
-		bind:preUpscaleEnabled
-		bind:conditionalUpscaleEnabled
-		bind:conditionalMinWidth
-		bind:conditionalMinHeight
-		bind:currentImageUpscaleEnabled
-		bind:preloadPages
-		bind:backgroundConcurrency
-		on:change={handleGlobalControlsChange}
-	/>
+	<div
+		class="rounded-lg border bg-muted/10 p-3 space-y-3"
+		style={`order: ${getUpscaleCardOrder('global')}`}
+	>
+		<div class="flex items-center justify-between">
+			<div class="font-semibold text-sm">全局开关</div>
+			<div class="flex items-center gap-1 text-[10px]">
+				<button
+					type="button"
+					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+					onclick={() => (showGlobalCard = !showGlobalCard)}
+					title={showGlobalCard ? '收起' : '展开'}
+				>
+					{#if showGlobalCard}
+						<ChevronUp class="h-3 w-3" />
+					{:else}
+						<ChevronDown class="h-3 w-3" />
+					{/if}
+				</button>
+				<button
+					type="button"
+					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+					onclick={() => moveUpscaleCard('global', 'up')}
+					disabled={!canMoveUpscaleCard('global', 'up')}
+					title="上移"
+				>
+					<ArrowUp class="h-3 w-3" />
+				</button>
+				<button
+					type="button"
+					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+					onclick={() => moveUpscaleCard('global', 'down')}
+					disabled={!canMoveUpscaleCard('global', 'down')}
+					title="下移"
+				>
+					<ArrowDown class="h-3 w-3" />
+				</button>
+			</div>
+		</div>
+
+		{#if showGlobalCard}
+			<UpscalePanelGlobalControls
+				bind:autoUpscaleEnabled
+				bind:preUpscaleEnabled
+				bind:conditionalUpscaleEnabled
+				bind:conditionalMinWidth
+				bind:conditionalMinHeight
+				bind:currentImageUpscaleEnabled
+				bind:preloadPages
+				bind:backgroundConcurrency
+				on:change={handleGlobalControlsChange}
+			/>
+		{/if}
+	</div>
 
 	<!-- 修改参数 -->
-	<UpscalePanelModelSettings
-		bind:scale
-		bind:selectedModel
-		availableModels={availableModels}
-		modelLabels={modelLabels}
-		bind:gpuId
-		gpuOptions={gpuOptions}
-		bind:tileSize
-		tileSizeOptions={tileSizeOptions}
-		bind:noiseLevel
-		noiseLevelOptions={noiseLevelOptions}
-		on:apply={applyModelSettings}
-	/>
+	<div
+		class="rounded-lg border bg-muted/10 p-3 space-y-3"
+		style={`order: ${getUpscaleCardOrder('model')}`}
+	>
+		<div class="flex items-center justify-between">
+			<div class="font-semibold text-sm">修改参数</div>
+			<div class="flex items-center gap-1 text-[10px]">
+				<button
+					type="button"
+					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+					onclick={() => (showModelCard = !showModelCard)}
+					title={showModelCard ? '收起' : '展开'}
+				>
+					{#if showModelCard}
+						<ChevronUp class="h-3 w-3" />
+					{:else}
+						<ChevronDown class="h-3 w-3" />
+					{/if}
+				</button>
+				<button
+					type="button"
+					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+					onclick={() => moveUpscaleCard('model', 'up')}
+					disabled={!canMoveUpscaleCard('model', 'up')}
+					title="上移"
+				>
+					<ArrowUp class="h-3 w-3" />
+				</button>
+				<button
+					type="button"
+					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+					onclick={() => moveUpscaleCard('model', 'down')}
+					disabled={!canMoveUpscaleCard('model', 'down')}
+					title="下移"
+				>
+					<ArrowDown class="h-3 w-3" />
+				</button>
+			</div>
+		</div>
+
+		{#if showModelCard}
+			<UpscalePanelModelSettings
+				bind:scale
+				bind:selectedModel
+				availableModels={availableModels}
+				modelLabels={modelLabels}
+				bind:gpuId
+				gpuOptions={gpuOptions}
+				bind:tileSize
+				tileSizeOptions={tileSizeOptions}
+				bind:noiseLevel
+				noiseLevelOptions={noiseLevelOptions}
+				on:apply={applyModelSettings}
+			/>
+		{/if}
+	</div>
 
 	<!-- 当前图片信息 -->
-	<UpscalePanelCurrentInfo
-		currentImageResolution={currentImageResolution}
-		currentImageSize={currentImageSize}
-		processingTime={processingTime}
-		status={status}
-		statusClass={status === '转换完成' ? 'text-green-500' : status === '超分失败' ? 'text-red-500' : ''}
-		isProcessing={isProcessing}
-		currentImagePath={currentImagePath}
-		progress={progress}
-		progressColorClass={getProgressColor(progress)}
-		on:perform={() => requestUpscale('manual')}
-	/>
+	<div
+		class="rounded-lg border bg-muted/10 p-3 space-y-3"
+		style={`order: ${getUpscaleCardOrder('current')}`}
+	>
+		<div class="flex items-center justify-between">
+			<div class="font-semibold text-sm">当前图片信息</div>
+			<div class="flex items-center gap-1 text-[10px]">
+				<button
+					type="button"
+					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+					onclick={() => (showCurrentCard = !showCurrentCard)}
+					title={showCurrentCard ? '收起' : '展开'}
+				>
+					{#if showCurrentCard}
+						<ChevronUp class="h-3 w-3" />
+					{:else}
+						<ChevronDown class="h-3 w-3" />
+					{/if}
+				</button>
+				<button
+					type="button"
+					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+					onclick={() => moveUpscaleCard('current', 'up')}
+					disabled={!canMoveUpscaleCard('current', 'up')}
+					title="上移"
+				>
+					<ArrowUp class="h-3 w-3" />
+				</button>
+				<button
+					type="button"
+					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+					onclick={() => moveUpscaleCard('current', 'down')}
+					disabled={!canMoveUpscaleCard('current', 'down')}
+					title="下移"
+				>
+					<ArrowDown class="h-3 w-3" />
+				</button>
+			</div>
+		</div>
 
-	<div class="flex justify-end">
-		<Button variant="outline" onclick={stopAllUpscaleForCurrentBook}>
-			停止当前书籍超分
-		</Button>
+		{#if showCurrentCard}
+			<UpscalePanelCurrentInfo
+				currentImageResolution={currentImageResolution}
+				currentImageSize={currentImageSize}
+				processingTime={processingTime}
+				status={status}
+				statusClass={status === '转换完成' ? 'text-green-500' : status === '超分失败' ? 'text-red-500' : ''}
+				isProcessing={isProcessing}
+				currentImagePath={currentImagePath}
+				progress={progress}
+				progressColorClass={getProgressColor(progress)}
+				on:perform={() => requestUpscale('manual')}
+			/>
+			<div class="flex justify-end">
+				<Button variant="outline" onclick={stopAllUpscaleForCurrentBook}>
+					停止当前书籍超分
+				</Button>
+			</div>
+		{/if}
 	</div>
 
 	<!-- 条件管理 -->
-	<UpscalePanelConditionTabs
-		bind:conditions={conditionsList}
-		bind:conditionalUpscaleEnabled
-		availableModels={availableModels}
-		modelLabels={modelLabels}
-		gpuOptions={gpuOptions}
-		tileSizeOptions={tileSizeOptions}
-		noiseLevelOptions={noiseLevelOptions}
-		on:conditionsChanged={(e) => {
-			conditionsList = e.detail.conditions;
-			const settings = gatherPanelSettings();
-			persistAndBroadcast(settings);
-		}}
-	/>
+	<div
+		class="rounded-lg border bg-muted/10 p-3 space-y-3"
+		style={`order: ${getUpscaleCardOrder('conditions')}`}
+	>
+		<div class="flex items-center justify-between">
+			<div class="font-semibold text-sm">条件管理</div>
+			<div class="flex items-center gap-1 text-[10px]">
+				<button
+					type="button"
+					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+					onclick={() => (showConditionsCard = !showConditionsCard)}
+					title={showConditionsCard ? '收起' : '展开'}
+				>
+					{#if showConditionsCard}
+						<ChevronUp class="h-3 w-3" />
+					{:else}
+						<ChevronDown class="h-3 w-3" />
+					{/if}
+				</button>
+				<button
+					type="button"
+					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+					onclick={() => moveUpscaleCard('conditions', 'up')}
+					disabled={!canMoveUpscaleCard('conditions', 'up')}
+					title="上移"
+				>
+					<ArrowUp class="h-3 w-3" />
+				</button>
+				<button
+					type="button"
+					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+					onclick={() => moveUpscaleCard('conditions', 'down')}
+					disabled={!canMoveUpscaleCard('conditions', 'down')}
+					title="下移"
+				>
+					<ArrowDown class="h-3 w-3" />
+				</button>
+			</div>
+		</div>
+
+		{#if showConditionsCard}
+			<UpscalePanelConditionTabs
+				bind:conditions={conditionsList}
+				bind:conditionalUpscaleEnabled
+				availableModels={availableModels}
+				modelLabels={modelLabels}
+				gpuOptions={gpuOptions}
+				tileSizeOptions={tileSizeOptions}
+				noiseLevelOptions={noiseLevelOptions}
+				on:conditionsChanged={(e) => {
+					conditionsList = e.detail.conditions;
+					const settings = gatherPanelSettings();
+					persistAndBroadcast(settings);
+				}}
+			/>
+		{/if}
+	</div>
 
 	<!-- 缓存管理 -->
-	<UpscalePanelCacheSection
-		cacheStats={cacheStats}
-		formattedSize={formatFileSize(cacheStats.totalSize)}
-		on:clear={cleanupCache}
-	/>
+	<div
+		class="rounded-lg border bg-muted/10 p-3 space-y-3"
+		style={`order: ${getUpscaleCardOrder('cache')}`}
+	>
+		<div class="flex items-center justify-between">
+			<div class="font-semibold text-sm">缓存管理</div>
+			<div class="flex items-center gap-1 text-[10px]">
+				<button
+					type="button"
+					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+					onclick={() => (showCacheCard = !showCacheCard)}
+					title={showCacheCard ? '收起' : '展开'}
+				>
+					{#if showCacheCard}
+						<ChevronUp class="h-3 w-3" />
+					{:else}
+						<ChevronDown class="h-3 w-3" />
+					{/if}
+				</button>
+				<button
+					type="button"
+					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+					onclick={() => moveUpscaleCard('cache', 'up')}
+					disabled={!canMoveUpscaleCard('cache', 'up')}
+					title="上移"
+				>
+					<ArrowUp class="h-3 w-3" />
+				</button>
+				<button
+					type="button"
+					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+					onclick={() => moveUpscaleCard('cache', 'down')}
+					disabled={!canMoveUpscaleCard('cache', 'down')}
+					title="下移"
+				>
+					<ArrowDown class="h-3 w-3" />
+				</button>
+			</div>
+		</div>
+
+		{#if showCacheCard}
+			<UpscalePanelCacheSection
+				cacheStats={cacheStats}
+				formattedSize={formatFileSize(cacheStats.totalSize)}
+				on:clear={cleanupCache}
+			/>
+		{/if}
+	</div>
 
 	<!-- 预览控制 -->
-	<div class="rounded-md border border-border/70 p-4 space-y-3">
-		<div class="text-xs text-muted-foreground">预览显示（默认关闭以节约性能）</div>
-		<div class="flex flex-wrap gap-6">
-			<label class="flex items-center gap-2 text-sm">
-				<Switch bind:checked={showOriginalPreview} />
-				<span>显示原图预览</span>
-			</label>
-			<label class="flex items-center gap-2 text-sm">
-				<Switch bind:checked={showUpscaledPreview} />
-				<span>显示超分结果预览</span>
-			</label>
+	<div
+		class="rounded-lg border bg-muted/10 p-3 space-y-3"
+		style={`order: ${getUpscaleCardOrder('previewControls')}`}
+	>
+		<div class="flex items-center justify-between">
+			<div class="font-semibold text-sm">预览控制</div>
+			<div class="flex items-center gap-1 text-[10px]">
+				<button
+					type="button"
+					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+					onclick={() => (showPreviewControlsCard = !showPreviewControlsCard)}
+					title={showPreviewControlsCard ? '收起' : '展开'}
+				>
+					{#if showPreviewControlsCard}
+						<ChevronUp class="h-3 w-3" />
+					{:else}
+						<ChevronDown class="h-3 w-3" />
+					{/if}
+				</button>
+				<button
+					type="button"
+					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+					onclick={() => moveUpscaleCard('previewControls', 'up')}
+					disabled={!canMoveUpscaleCard('previewControls', 'up')}
+					title="上移"
+				>
+					<ArrowUp class="h-3 w-3" />
+				</button>
+				<button
+					type="button"
+					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+					onclick={() => moveUpscaleCard('previewControls', 'down')}
+					disabled={!canMoveUpscaleCard('previewControls', 'down')}
+					title="下移"
+				>
+					<ArrowDown class="h-3 w-3" />
+				</button>
+			</div>
 		</div>
+
+		{#if showPreviewControlsCard}
+			<div class="text-xs text-muted-foreground">预览显示（默认关闭以节约性能）</div>
+			<div class="flex flex-wrap gap-6">
+				<label class="flex items-center gap-2 text-sm">
+					<Switch bind:checked={showOriginalPreview} />
+					<span>显示原图预览</span>
+				</label>
+				<label class="flex items-center gap-2 text-sm">
+					<Switch bind:checked={showUpscaledPreview} />
+					<span>显示超分结果预览</span>
+				</label>
+			</div>
+		{/if}
 	</div>
 
 	<!-- 预览区域 -->
 	{#if showOriginalPreview || showUpscaledPreview}
-		<UpscalePanelPreview
-			upscaledImageUrl={upscaledImageUrl}
-			originalImageUrl={originalPreviewUrl}
-			isProcessing={isProcessing}
-			showOriginal={showOriginalPreview}
-			showUpscaled={showUpscaledPreview}
-		/>
+		<div
+			class="rounded-lg border bg-muted/10 p-3 space-y-3"
+			style={`order: ${getUpscaleCardOrder('preview')}`}
+		>
+			<div class="flex items-center justify-between">
+				<div class="font-semibold text-sm">预览区域</div>
+				<div class="flex items-center gap-1 text-[10px]">
+					<button
+						type="button"
+						class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+						onclick={() => (showPreviewCard = !showPreviewCard)}
+						title={showPreviewCard ? '收起' : '展开'}
+					>
+						{#if showPreviewCard}
+							<ChevronUp class="h-3 w-3" />
+						{:else}
+							<ChevronDown class="h-3 w-3" />
+						{/if}
+					</button>
+					<button
+						type="button"
+						class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+						onclick={() => moveUpscaleCard('preview', 'up')}
+						disabled={!canMoveUpscaleCard('preview', 'up')}
+						title="上移"
+					>
+						<ArrowUp class="h-3 w-3" />
+					</button>
+					<button
+						type="button"
+						class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+						onclick={() => moveUpscaleCard('preview', 'down')}
+						disabled={!canMoveUpscaleCard('preview', 'down')}
+						title="下移"
+					>
+						<ArrowDown class="h-3 w-3" />
+					</button>
+				</div>
+			</div>
+
+			{#if showPreviewCard}
+				<UpscalePanelPreview
+					upscaledImageUrl={upscaledImageUrl}
+					originalImageUrl={originalPreviewUrl}
+					isProcessing={isProcessing}
+					showOriginal={showOriginalPreview}
+					showUpscaled={showUpscaledPreview}
+				/>
+			{/if}
+		</div>
 	{/if}
 </div>
 

@@ -6,47 +6,8 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import { Input } from '$lib/components/ui/input';
 	import { Slider } from '$lib/components/ui/slider';
-	import type { BookSettingSelectMode } from '$lib/settings/settingsManager';
-	import {
-		BOOK_SETTING_SELECT_MODE_OPTIONS,
-		getBookSettingSelectModeDescription
-	} from '$lib/settings/bookSettingSelectModes';
 
 	let currentSettings = $state(settingsManager.getSettings());
-
-	const defaultPageLayoutState = {
-		splitHorizontalPages: false,
-		treatHorizontalAsDoublePage: false,
-		singleFirstPageMode: 'restoreOrDefault' as BookSettingSelectMode,
-		singleLastPageMode: 'restoreOrDefault' as BookSettingSelectMode
-	};
-
-	function ensurePageLayoutDefaults(target = currentSettings) {
-		if (!target.view.pageLayout) {
-			target.view.pageLayout = { ...defaultPageLayoutState };
-			return;
-		}
-
-		target.view.pageLayout = {
-			splitHorizontalPages:
-				target.view.pageLayout.splitHorizontalPages ?? defaultPageLayoutState.splitHorizontalPages,
-			treatHorizontalAsDoublePage:
-				target.view.pageLayout.treatHorizontalAsDoublePage ?? defaultPageLayoutState.treatHorizontalAsDoublePage,
-			singleFirstPageMode:
-				target.view.pageLayout.singleFirstPageMode ?? defaultPageLayoutState.singleFirstPageMode,
-			singleLastPageMode:
-				target.view.pageLayout.singleLastPageMode ?? defaultPageLayoutState.singleLastPageMode
-		};
-	}
-
-	function handleSelectModeChange(field: 'singleFirstPageMode' | 'singleLastPageMode', value: BookSettingSelectMode) {
-		settingsManager.updateNestedSettings('view', {
-			pageLayout: {
-				...currentSettings.view.pageLayout,
-				[field]: value
-			}
-		});
-	}
 
 	// 订阅设置变化
 	settingsManager.addListener((s) => {
@@ -60,7 +21,12 @@
 				showOnButtonClick: true
 			};
 		}
-		ensurePageLayoutDefaults();
+		if (!currentSettings.view.pageLayout) {
+			currentSettings.view.pageLayout = {
+				splitHorizontalPages: false,
+				treatHorizontalAsDoublePage: false
+			};
+		}
 		if (!currentSettings.view.autoRotate) {
 			currentSettings.view.autoRotate = { mode: 'none' };
 		}
@@ -76,7 +42,12 @@
 				showOnButtonClick: true
 			};
 		}
-		ensurePageLayoutDefaults();
+		if (!currentSettings.view.pageLayout) {
+			currentSettings.view.pageLayout = {
+				splitHorizontalPages: false,
+				treatHorizontalAsDoublePage: false
+			};
+		}
 		if (!currentSettings.view.autoRotate) {
 			currentSettings.view.autoRotate = { mode: 'none' };
 		}

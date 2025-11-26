@@ -242,12 +242,14 @@
 	</div>
 {:else if currentSrc(upscaledImageData, imageData)}
 	{#if viewMode === 'single'}
-		<img
-			src={currentSrc(upscaledImageData, imageData) ?? ''}
-			alt="Current page"
-			class="max-h-full max-w-full object-contain"
-			style={`transform: scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
-		/>
+		<div class="flex h-full w-full items-center justify-center">
+			<img
+				src={currentSrc(upscaledImageData, imageData) ?? ''}
+				alt="Current page"
+				class="max-h-full max-w-full object-contain"
+				style={`transform: scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
+			/>
+		</div>
 	{:else if viewMode === 'double'}
 		<div class="flex items-center justify-center gap-0">
 			{#if readingDirection === 'right-to-left'}
@@ -286,11 +288,13 @@
 		</div>
 	{:else}
 		<!-- 默认单页模式 -->
-		<img
-			src={currentSrc(upscaledImageData, imageData) ?? ''}
-			alt="Current page"
-			class="max-h-full max-w-full object-contain"
-			style={`transform: scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
-		/>
+		<div class="flex h-full w-full items-center justify-center">
+			<img
+				src={currentSrc(upscaledImageData, imageData) ?? ''}
+				alt="Current page"
+				class="max-h-full max-w-full object-contain"
+				style={`transform: scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
+			/>
+		</div>
 	{/if}
 {/if}

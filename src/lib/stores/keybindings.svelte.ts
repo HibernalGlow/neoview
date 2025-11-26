@@ -139,6 +139,13 @@ const defaultBindings: ActionBinding[] = [
 		description: '显示图片实际尺寸',
 		bindings: []
 	},
+	{
+		action: 'toggleTemporaryFitZoom',
+		name: '临时适应窗口',
+		category: '缩放',
+		description: '在当前缩放与适应窗口之间临时切换（尊重缩放锁定）',
+		bindings: []
+	},
 
 	// === 视图操作 ===
 	{

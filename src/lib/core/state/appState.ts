@@ -37,6 +37,7 @@ export interface TaskCursorState {
 export interface ViewerSlice {
 	viewMode: 'single' | 'double' | 'panorama';
 	lockedViewMode: 'single' | 'double' | 'panorama' | null;
+	lockedZoomMode: 'fit' | 'fill' | 'fitWidth' | 'fitHeight' | 'original' | null;
 	orientation: 'horizontal' | 'vertical';
 	zoom: number;
 	loading: boolean;
@@ -80,6 +81,10 @@ export function createDefaultAppState(): AppStateSnapshot {
 				temporaryDirectory: '',
 				thumbnailDirectory: 'D\\temp\\neoview'
 			},
+			archive: {
+				allowFileOperations: true,
+				confirmBeforeDelete: true
+			},
 			startup: {
 				openLastFile: true,
 				minimizeToTray: false,
@@ -102,12 +107,14 @@ export function createDefaultAppState(): AppStateSnapshot {
 				hoverScrollEnabled: true,
 				videoMinPlaybackRate: 0.25,
 				videoMaxPlaybackRate: 16,
-				videoPlaybackRateStep: 0.25
+				videoPlaybackRateStep: 0.25,
+				videoFormats: ['mp4', 'm4v', 'mov', 'webm', 'ogg', 'ogv', '3gp', '3g2', 'mkv', 'avi', 'flv', 'wmv']
 			},
 			view: {
 				defaultZoomMode: 'fit',
 				showGrid: false,
 				showInfoBar: true,
+				showBookSwitchToast: false,
 				backgroundColor: '#000000',
 				backgroundMode: 'solid',
 				mouseCursor: {
@@ -115,6 +122,39 @@ export function createDefaultAppState(): AppStateSnapshot {
 					hideDelay: 1.0,
 					showMovementThreshold: 26,
 					showOnButtonClick: true
+				},
+				pageLayout: {
+					splitHorizontalPages: false,
+					treatHorizontalAsDoublePage: false,
+					singleFirstPageMode: 'restoreOrDefault',
+					singleLastPageMode: 'restoreOrDefault'
+				},
+				autoRotate: {
+					mode: 'none'
+				},
+				infoOverlay: {
+					enabled: false,
+					opacity: 0.85,
+					showBorder: false
+				},
+				notification: {
+					messageStyle: 'normal',
+					durationMs: 3000,
+					maxVisible: 3
+				},
+				switchToast: {
+					enableBook: false,
+					enablePage: false,
+					showBookPath: true,
+					showBookPageProgress: true,
+					showBookType: false,
+					showPageIndex: true,
+					showPageSize: false,
+					showPageDimensions: true,
+					bookTitleTemplate: '已切换到 {{book.displayName}}（第 {{book.currentPageDisplay}} / {{book.totalPages}} 页）',
+					bookDescriptionTemplate: '路径：{{book.path}}',
+					pageTitleTemplate: '第 {{page.indexDisplay}} / {{book.totalPages}} 页',
+					pageDescriptionTemplate: '{{page.dimensionsFormatted}}  {{page.sizeFormatted}}'
 				}
 			},
 			book: {
@@ -122,7 +162,8 @@ export function createDefaultAppState(): AppStateSnapshot {
 				preloadPages: 2,
 				rememberProgress: true,
 				doublePageView: false,
-				readingDirection: 'left-to-right'
+				readingDirection: 'left-to-right',
+				tailOverflowBehavior: 'stayOnLastPage'
 			},
 			theme: {
 				theme: 'system',
@@ -180,6 +221,7 @@ export function createDefaultAppState(): AppStateSnapshot {
 		viewer: {
 			viewMode: 'single',
 			lockedViewMode: null,
+			lockedZoomMode: null,
 			orientation: 'horizontal',
 			zoom: 1,
 			loading: false,
@@ -206,9 +248,15 @@ export function createDefaultAppState(): AppStateSnapshot {
 	};
 }
 
+type ListenerEntry = {
+	selector: StateSelector<unknown>;
+	listener: StateListener<unknown>;
+	prev: unknown;
+};
+
 export class AppState {
 	private state: AppStateSnapshot;
-	private listeners = new Map<number, { selector: StateSelector<any>; listener: StateListener<any>; prev: any }>();
+	private listeners = new Map<number, ListenerEntry>();
 	private nextListenerId = 1;
 
 	constructor(initialState: AppStateSnapshot = createDefaultAppState()) {
@@ -239,7 +287,11 @@ export class AppState {
 	subscribe<T>(selector: StateSelector<T>, listener: StateListener<T>): () => void {
 		const id = this.nextListenerId++;
 		const current = selector(this.state);
-		this.listeners.set(id, { selector, listener, prev: structuredCopy(current) });
+		this.listeners.set(id, {
+			selector: selector as StateSelector<unknown>,
+			listener: listener as StateListener<unknown>,
+			prev: structuredCopy(current)
+		});
 
 		return () => {
 			this.listeners.delete(id);

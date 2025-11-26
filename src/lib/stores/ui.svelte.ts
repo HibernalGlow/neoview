@@ -6,8 +6,9 @@
 import { writable } from 'svelte/store';
 import { appState, type AppStateSnapshot } from '$lib/core/state/appState';
 import { bookStore } from './book.svelte';
-import { settingsManager } from '$lib/settings/settingsManager';
+import { settingsManager, type ZoomMode } from '$lib/settings/settingsManager';
 import { windowManager } from '$lib/core/windows/windowManager';
+import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
 
 // 从本地存储加载状态
 function loadFromStorage<T>(key: string, defaultValue: T): T {
@@ -76,8 +77,11 @@ const initialLockedViewMode = (() => {
 	return saved;
 })();
 
+const initialLockedZoomMode = loadFromStorage<ZoomMode | null>('lockedZoomMode', null) as ZoomMode | null;
+
 export const viewMode = writable<ViewMode>(initialViewMode);
 export const lockedViewMode = writable<ViewMode | null>(initialLockedViewMode);
+export const lockedZoomMode = writable<ZoomMode | null>(initialLockedZoomMode);
 
 // 视图方向（横向/纵向），主要影响全景模式的填充方向
 export type ViewOrientation = 'horizontal' | 'vertical';
@@ -135,6 +139,15 @@ viewMode.subscribe((value) => {
 lockedViewMode.subscribe((value) => {
 	saveToStorage('lockedViewMode', value);
 	updateViewerSlice({ lockedViewMode: value });
+});
+
+lockedZoomMode.subscribe((value) => {
+	saveToStorage('lockedZoomMode', value);
+	updateViewerSlice({ lockedZoomMode: value });
+	if (value) {
+		dispatchApplyZoomMode(value);
+		lastZoomModeBeforeTemporaryFit = null;
+	}
 });
 
 orientation.subscribe((value) => {
@@ -280,6 +293,7 @@ export function toggleViewModeLock(mode: ViewMode) {
  * 当 lockedViewMode 有值时，不执行任何切换（尊重视图锁定状态）
  */
 let lastViewModeBeforeSingleToggle: ViewMode | null = null;
+let lastZoomModeBeforeTemporaryFit: ZoomMode | null = null;
 export function toggleSinglePanoramaView() {
 	const snapshot = appState.getSnapshot();
 	const locked = snapshot.viewer.lockedViewMode as ViewMode | null;
@@ -303,6 +317,43 @@ export function toggleSinglePanoramaView() {
 	if (restore !== current) {
 		viewMode.set(restore);
 	}
+}
+
+function getCurrentDefaultZoomMode(): ZoomMode {
+	return settingsManager.getSettings().view.defaultZoomMode ?? 'fit';
+}
+
+export function toggleZoomModeLock(mode: ZoomMode) {
+	lockedZoomMode.update((current) => (current === mode ? null : mode));
+}
+
+export function requestZoomMode(mode: ZoomMode): boolean {
+	const locked = appState.getSnapshot().viewer.lockedZoomMode as ZoomMode | null;
+	if (locked && locked !== mode) {
+		dispatchApplyZoomMode(locked);
+		return false;
+	}
+	dispatchApplyZoomMode(mode);
+	return true;
+}
+
+export function toggleTemporaryFitZoom() {
+	const locked = appState.getSnapshot().viewer.lockedZoomMode as ZoomMode | null;
+	if (locked) {
+		return;
+	}
+
+	if (lastZoomModeBeforeTemporaryFit === null) {
+		lastZoomModeBeforeTemporaryFit = getCurrentDefaultZoomMode();
+		if (lastZoomModeBeforeTemporaryFit !== 'fit') {
+			dispatchApplyZoomMode('fit');
+		}
+		return;
+	}
+
+	const restore = lastZoomModeBeforeTemporaryFit;
+	lastZoomModeBeforeTemporaryFit = null;
+	dispatchApplyZoomMode(restore);
 }
 
 /**

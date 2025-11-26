@@ -59,15 +59,15 @@
 {:else}
 	<ChartContainer
 		config={{
-			streak: { label: 'Streak', color: 'hsl(215 90% 55%)' }
+			streak: { label: 'Streak', color: 'hsl(var(--primary))' }
 		}}
 		class="h-40 w-full"
 	>
 		<svg viewBox={`0 0 ${viewWidth} ${viewHeight}`} class="h-full w-full">
 			<defs>
 				<linearGradient id="streak-fill" x1="0%" x2="0%" y1="0%" y2="100%">
-					<stop offset="0%" stop-color="hsl(215 90% 55%)" stop-opacity="0.25" />
-					<stop offset="100%" stop-color="hsl(215 80% 50%)" stop-opacity="0" />
+					<stop offset="0%" stop-color="hsl(var(--primary))" stop-opacity="0.25" />
+					<stop offset="100%" stop-color="hsl(var(--primary))" stop-opacity="0" />
 				</linearGradient>
 			</defs>
 
@@ -88,7 +88,7 @@
 				<path
 					d={pathData}
 					fill="none"
-					stroke="hsl(215 90% 60%)"
+					stroke="hsl(var(--primary))"
 					stroke-width="2"
 					stroke-linecap="round"
 					stroke-linejoin="round"
@@ -102,8 +102,9 @@
 					cx={getX(index)}
 					cy={getY(point.value)}
 					r={isPeak ? 4 : 3}
-					fill={isLast ? 'hsl(215 95% 65%)' : 'hsl(215 60% 70%)'}
-					stroke="hsl(222 50% 20%)"
+					fill="hsl(var(--primary))"
+					fill-opacity={isLast ? 0.95 : 0.65}
+					stroke="hsl(var(--primary))"
 					stroke-width="1"
 				>
 					<title>{`${point.date} · 连续 ${point.value} 天`}</title>

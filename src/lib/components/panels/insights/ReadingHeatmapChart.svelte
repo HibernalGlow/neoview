@@ -11,14 +11,6 @@
 <script lang="ts">
 	import ChartContainer from '$lib/components/ui/chart/chart-container.svelte';
 
-	type HslColor = {
-		h: number;
-		s: number;
-		l: number;
-	};
-
-	const defaultPrimary: HslColor = { h: 215, s: 85, l: 55 };
-
 	let { cells = [], maxCount = 0 } = $props<{
 		cells?: HeatmapCell[];
 		maxCount?: number;
@@ -30,48 +22,12 @@
 	const viewWidth = 24 * 14 + 40;
 	const viewHeight = 7 * 20 + 20;
 
-	let themePrimary = $state<HslColor>(defaultPrimary);
 	let tooltip = $state({ visible: false, text: '', x: 0, y: 0 });
 
-	function clamp(value: number, min: number, max: number) {
-		return Math.min(Math.max(value, min), max);
-	}
-
-	function parseCssHsl(raw: string | null): HslColor {
-		if (!raw) return defaultPrimary;
-		const parts = raw.trim().split(/\s+/);
-		const [hStr, sStr, lStr] = parts;
-		return {
-			h: Number.parseFloat(hStr ?? `${defaultPrimary.h}`) || defaultPrimary.h,
-			s: Number.parseFloat((sStr ?? `${defaultPrimary.s}%`).replace('%', '')) || defaultPrimary.s,
-			l: Number.parseFloat((lStr ?? `${defaultPrimary.l}%`).replace('%', '')) || defaultPrimary.l
-		};
-	}
-
-	function readThemePrimary() {
-		if (typeof window === 'undefined') return defaultPrimary;
-		const raw = getComputedStyle(document.documentElement).getPropertyValue('--primary');
-		return parseCssHsl(raw);
-	}
-
-	$effect(() => {
-		if (typeof window === 'undefined') return;
-		const update = () => (themePrimary = readThemePrimary());
-		update();
-		const observer = new MutationObserver(update);
-		observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
-		return () => observer.disconnect();
-	});
-
-	function formatHsl(color: HslColor, lightnessDelta = 0) {
-		const l = clamp(color.l + lightnessDelta, 5, 90);
-		return `hsl(${color.h} ${color.s}% ${l}%)`;
-	}
-
-	function getFill(count: number) {
-		if (count === 0 || maxCount === 0) return 'hsl(var(--muted))';
+	function getOpacity(count: number) {
+		if (count === 0 || maxCount === 0) return 0.18;
 		const ratio = count / maxCount;
-		return formatHsl(themePrimary, ratio * 40 - 10);
+		return 0.25 + ratio * 0.75;
 	}
 
 	function showTooltip(event: PointerEvent, cell: HeatmapCell) {
@@ -92,7 +48,7 @@
 	config={{
 		count: {
 			label: '阅读次数',
-			color: `hsl(${themePrimary.h} ${themePrimary.s}% ${themePrimary.l}%)`
+			color: 'hsl(var(--primary))'
 		}
 	}}
 	class="h-48 w-full"
@@ -105,8 +61,9 @@
 						rx="3"
 						width="12"
 						height="16"
-						fill={getFill(cell.count)}
-						class="transition-colors duration-200"
+						fill={cell.count === 0 ? 'hsl(var(--muted))' : 'hsl(var(--primary))'}
+						fill-opacity={getOpacity(cell.count)}
+						class="transition-[fill-opacity] duration-200"
 						onpointerenter={(event) => showTooltip(event, cell)}
 						onpointermove={(event) => showTooltip(event, cell)}
 						onpointerleave={hideTooltip}

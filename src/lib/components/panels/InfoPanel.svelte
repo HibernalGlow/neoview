@@ -73,6 +73,15 @@
 	let switchToastShowPageIndex = $state(true);
 	let switchToastShowPageSize = $state(false);
 	let switchToastShowPageDimensions = $state(true);
+	let switchToastBookTitleTemplate = $state('');
+	let switchToastBookDescriptionTemplate = $state('');
+	let switchToastPageTitleTemplate = $state('');
+	let switchToastPageDescriptionTemplate = $state('');
+
+	const BOOK_TEMPLATE_HINT =
+		'{{book.name}}, {{book.path}}, {{book.currentPageDisplay}}, {{book.totalPages}}, {{book.emmTranslatedTitle}}, {{book.emmRating}}';
+	const PAGE_TEMPLATE_HINT =
+		'{{page.name}}, {{page.indexDisplay}}, {{page.width}}, {{page.height}}, {{page.dimensionsFormatted}}, {{page.sizeFormatted}}';
 
 	function loadSwitchToastFromSettings() {
 		const s = settingsManager.getSettings();
@@ -84,7 +93,11 @@
 			showBookType: false,
 			showPageIndex: true,
 			showPageSize: false,
-			showPageDimensions: true
+			showPageDimensions: true,
+			bookTitleTemplate: '',
+			bookDescriptionTemplate: '',
+			pageTitleTemplate: '',
+			pageDescriptionTemplate: ''
 		};
 		switchToastEnableBook = base.enableBook;
 		switchToastEnablePage = base.enablePage;
@@ -94,6 +107,10 @@
 		switchToastShowPageIndex = base.showPageIndex;
 		switchToastShowPageSize = base.showPageSize;
 		switchToastShowPageDimensions = base.showPageDimensions;
+		switchToastBookTitleTemplate = base.bookTitleTemplate ?? '';
+		switchToastBookDescriptionTemplate = base.bookDescriptionTemplate ?? '';
+		switchToastPageTitleTemplate = base.pageTitleTemplate ?? '';
+		switchToastPageDescriptionTemplate = base.pageDescriptionTemplate ?? '';
 	}
 
 	$effect(() => {
@@ -109,6 +126,10 @@
 		showPageIndex?: boolean;
 		showPageSize?: boolean;
 		showPageDimensions?: boolean;
+		bookTitleTemplate?: string;
+		bookDescriptionTemplate?: string;
+		pageTitleTemplate?: string;
+		pageDescriptionTemplate?: string;
 	}) {
 		const current = settingsManager.getSettings();
 		const prev = current.view?.switchToast ?? {
@@ -130,6 +151,10 @@
 		switchToastShowPageIndex = next.showPageIndex;
 		switchToastShowPageSize = next.showPageSize;
 		switchToastShowPageDimensions = next.showPageDimensions;
+		switchToastBookTitleTemplate = next.bookTitleTemplate ?? '';
+		switchToastBookDescriptionTemplate = next.bookDescriptionTemplate ?? '';
+		switchToastPageTitleTemplate = next.pageTitleTemplate ?? '';
+		switchToastPageDescriptionTemplate = next.pageDescriptionTemplate ?? '';
 		settingsManager.updateNestedSettings('view', {
 			switchToast: next,
 			showBookSwitchToast: next.enableBook
@@ -633,6 +658,59 @@
 											<span>显示文件大小</span>
 										</label>
 									</div>
+								</div>
+								<Separator.Root class="my-1" />
+								<div class="space-y-2">
+									<div class="text-[11px] font-semibold text-foreground">书籍提示模板</div>
+									<textarea
+										class="w-full min-h-10 rounded-md border bg-background px-2 py-1 text-[11px] font-mono"
+										value={switchToastBookTitleTemplate}
+										oninput={(e) => {
+											const v = (e.currentTarget as HTMLTextAreaElement).value;
+											switchToastBookTitleTemplate = v;
+											updateSwitchToast({ bookTitleTemplate: v });
+										}}
+										placeholder={'例如：已切换到 {{book.emmTranslatedTitle}}（第 {{book.currentPageDisplay}} / {{book.totalPages}} 页）'}
+									/>
+									<textarea
+										class="w-full min-h-13 rounded-md border bg-background px-2 py-1 text-[11px] font-mono"
+										value={switchToastBookDescriptionTemplate}
+										oninput={(e) => {
+											const v = (e.currentTarget as HTMLTextAreaElement).value;
+											switchToastBookDescriptionTemplate = v;
+											updateSwitchToast({ bookDescriptionTemplate: v });
+										}}
+										placeholder={'例如：路径：{{book.path}}，评分：{{book.emmRating}}'}
+									/>
+									<p class="text-[11px] text-muted-foreground">
+										可用变量：{BOOK_TEMPLATE_HINT}
+									</p>
+								</div>
+								<div class="space-y-2">
+									<div class="text-[11px] font-semibold text-foreground">页面提示模板</div>
+									<textarea
+										class="w-full min-h-10 rounded-md border bg-background px-2 py-1 text-[11px] font-mono"
+										value={switchToastPageTitleTemplate}
+										oninput={(e) => {
+											const v = (e.currentTarget as HTMLTextAreaElement).value;
+											switchToastPageTitleTemplate = v;
+											updateSwitchToast({ pageTitleTemplate: v });
+										}}
+										placeholder={'例如：第 {{page.indexDisplay}} / {{book.totalPages}} 页'}
+									/>
+									<textarea
+										class="w-full min-h-13 rounded-md border bg-background px-2 py-1 text-[11px] font-mono"
+										value={switchToastPageDescriptionTemplate}
+										oninput={(e) => {
+											const v = (e.currentTarget as HTMLTextAreaElement).value;
+											switchToastPageDescriptionTemplate = v;
+											updateSwitchToast({ pageDescriptionTemplate: v });
+										}}
+										placeholder={'例如：分辨率 {{page.dimensionsFormatted}}，大小 {{page.sizeFormatted}}'}
+									/>
+									<p class="text-[11px] text-muted-foreground">
+										可用变量：{PAGE_TEMPLATE_HINT}
+									</p>
 								</div>
 							</div>
 						{/if}

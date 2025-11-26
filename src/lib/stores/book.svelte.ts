@@ -6,11 +6,12 @@
 import type { BookInfo, Page, PageSortMode } from '../types';
 import * as bookApi from '../api/book';
 import { infoPanelStore } from './infoPanel.svelte';
-import { appState, type ViewerJumpSource, type PageWindowState } from '$lib/core/state/appState';
+import { appState, type ViewerJumpSource } from '$lib/core/state/appState';
 import { emmMetadataStore } from './emmMetadata.svelte';
 import { fileBrowserStore } from './fileBrowser.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
 import { showToast } from '$lib/utils/toast';
+import type { EMMMetadata } from '$lib/api/emm';
 
 const PAGE_WINDOW_PADDING = 8;
 const JUMP_HISTORY_LIMIT = 20;
@@ -29,6 +30,40 @@ interface BookState {
 interface OpenBookOptions {
   /** 打开时希望跳转到的页面 */
   initialPage?: number;
+}
+
+interface SwitchToastBookContext {
+  name: string;
+  displayName: string;
+  path: string;
+  type: string;
+  totalPages: number;
+  currentPageIndex: number;
+  currentPageDisplay: number;
+  progressPercent: number | null;
+  emmTranslatedTitle?: string;
+  emmRating?: number | null;
+  emmTags?: Record<string, string[]> | undefined;
+  emmRaw?: Record<string, unknown> | undefined;
+}
+
+interface SwitchToastPageContext {
+  name: string;
+  displayName: string;
+  path: string;
+  innerPath?: string;
+  index: number;
+  indexDisplay: number;
+  width?: number;
+  height?: number;
+  dimensionsFormatted?: string;
+  size?: number;
+  sizeFormatted?: string;
+}
+
+export interface SwitchToastContext {
+  book: SwitchToastBookContext | null;
+  page: SwitchToastPageContext | null;
 }
 
 class BookStore {
@@ -55,6 +90,8 @@ class BookStore {
     innerPath?: string;
     timestamp: number;
   }>>>(new Map());
+
+  private lastEmmMetadataForCurrentBook: EMMMetadata | null = null;
 
   // === Getters ===
   get currentBook() {
@@ -200,6 +237,7 @@ class BookStore {
       this.state.error = String(err);
       this.state.currentBook = null;
       this.syncAppStateBookSlice();
+      this.lastEmmMetadataForCurrentBook = null;
       infoPanelStore.resetBookInfo();
     } finally {
       this.state.loading = false;
@@ -229,6 +267,7 @@ class BookStore {
     this.state.viewerOpen = false;
     this.state.currentBook = null;
     this.syncAppStateBookSlice();
+    this.lastEmmMetadataForCurrentBook = null;
     this.state.currentImage = null;
     this.state.upscaledImageData = null;
     this.state.upscaledImageBlob = null;
@@ -718,6 +757,10 @@ class BookStore {
     return this.getPageHash(this.currentPageIndex);
   }
 
+  getCurrentBookPageContext(): SwitchToastContext {
+    return this.buildSwitchToastContext();
+  }
+
   private getSwitchToastConfig() {
     const settings = settingsManager.getSettings();
     const view = settings.view;
@@ -729,9 +772,140 @@ class BookStore {
       showBookType: false,
       showPageIndex: true,
       showPageSize: false,
-      showPageDimensions: true
+      showPageDimensions: true,
+      bookTitleTemplate: '',
+      bookDescriptionTemplate: '',
+      pageTitleTemplate: '',
+      pageDescriptionTemplate: ''
     };
     return base;
+  }
+
+  private buildSwitchToastContext(): SwitchToastContext {
+    const book = this.state.currentBook;
+    const page = this.currentPage;
+
+    let bookCtx: SwitchToastBookContext | null = null;
+    if (book) {
+      const emm = this.lastEmmMetadataForCurrentBook;
+      const totalPages = book.totalPages ?? 0;
+      const currentPageIndex = book.currentPage ?? 0;
+      const currentPageDisplay = totalPages === 0 ? 0 : currentPageIndex + 1;
+      const safeCurrent = totalPages > 0 ? Math.min(currentPageDisplay, totalPages) : 0;
+      const progressPercent =
+        totalPages > 0 ? (safeCurrent / totalPages) * 100 : null;
+
+      const emmRaw: Record<string, unknown> | undefined = emm
+        ? {
+            id: emm.id,
+            title: emm.title,
+            title_jpn: emm.title_jpn,
+            hash: emm.hash,
+            coverPath: emm.cover_path,
+            filepath: emm.filepath,
+            type: emm.type,
+            pageCount: emm.page_count,
+            bundleSize: emm.bundle_size,
+            mtime: emm.mtime,
+            coverHash: emm.cover_hash,
+            status: emm.status,
+            date: emm.date,
+            filecount: emm.filecount,
+            posted: emm.posted,
+            filesize: emm.filesize,
+            category: emm.category,
+            url: emm.url,
+            mark: emm.mark,
+            hiddenBook: emm.hidden_book,
+            readCount: emm.read_count,
+            exist: emm.exist,
+            createdAt: emm.created_at,
+            updatedAt: emm.updated_at
+          }
+        : undefined;
+
+      const emmTranslatedTitle = emm?.translated_title;
+
+      bookCtx = {
+        name: book.name,
+        displayName:
+          emmTranslatedTitle && emmTranslatedTitle !== book.name
+            ? emmTranslatedTitle
+            : book.name,
+        path: book.path,
+        type: book.type,
+        totalPages,
+        currentPageIndex,
+        currentPageDisplay,
+        progressPercent: progressPercent !== null ? Number(progressPercent.toFixed(1)) : null,
+        emmTranslatedTitle,
+        emmRating: emm?.rating ?? null,
+        emmTags: emm?.tags,
+        emmRaw
+      };
+    }
+
+    let pageCtx: SwitchToastPageContext | null = null;
+    if (page) {
+      const dimensionsFormatted =
+        page.width && page.height ? `${page.width} × ${page.height}` : undefined;
+      const sizeFormatted =
+        typeof page.size === 'number'
+          ? this.formatBytesShort(page.size) ?? undefined
+          : undefined;
+      const indexDisplay = page.index + 1;
+
+      pageCtx = {
+        name: page.name,
+        displayName: page.name || `第 ${indexDisplay} 页`,
+        path: page.path,
+        innerPath: page.innerPath,
+        index: page.index,
+        indexDisplay,
+        width: page.width,
+        height: page.height,
+        dimensionsFormatted,
+        size: page.size,
+        sizeFormatted
+      };
+    }
+
+    return { book: bookCtx, page: pageCtx };
+  }
+
+  private renderSwitchToastTemplate(template: string | undefined, context: SwitchToastContext): string {
+    if (!template) return '';
+
+    return template.replace(/{{\s*([^}]+?)\s*}}/g, (match, expr) => {
+      const path = String(expr || '');
+      if (!path.startsWith('book.') && !path.startsWith('page.')) {
+        return match;
+      }
+
+      const [root, ...segments] = path.split('.');
+      let value: unknown =
+        root === 'book' ? context.book : root === 'page' ? context.page : undefined;
+
+      for (const segment of segments) {
+        if (value == null || typeof value !== 'object') {
+          value = undefined;
+          break;
+        }
+        const obj = value as Record<string, unknown>;
+        value = obj[segment];
+      }
+
+      if (value === undefined || value === null) {
+        return '';
+      }
+      if (typeof value === 'number') {
+        return Number.isFinite(value) ? String(value) : '';
+      }
+      if (typeof value === 'boolean') {
+        return value ? 'true' : 'false';
+      }
+      return String(value);
+    });
   }
 
   private showBookSwitchToastIfEnabled() {
@@ -740,6 +914,26 @@ class BookStore {
 
     const cfg = this.getSwitchToastConfig();
     if (!cfg.enableBook) return;
+
+    const context = this.buildSwitchToastContext();
+    const titleFromTemplate = cfg.bookTitleTemplate
+      ? this.renderSwitchToastTemplate(cfg.bookTitleTemplate, context).trim()
+      : '';
+    const descriptionFromTemplate = cfg.bookDescriptionTemplate
+      ? this.renderSwitchToastTemplate(cfg.bookDescriptionTemplate, context).trim()
+      : '';
+
+    if (titleFromTemplate || descriptionFromTemplate) {
+      const effectiveTitle =
+        titleFromTemplate || (context.book?.displayName ?? book.name);
+
+      showToast({
+        title: effectiveTitle,
+        description: descriptionFromTemplate || undefined,
+        variant: 'info'
+      });
+      return;
+    }
 
     const parts: string[] = [];
 
@@ -773,6 +967,27 @@ class BookStore {
 
     const cfg = this.getSwitchToastConfig();
     if (!cfg.enablePage) return;
+
+    const context = this.buildSwitchToastContext();
+    const titleFromTemplate = cfg.pageTitleTemplate
+      ? this.renderSwitchToastTemplate(cfg.pageTitleTemplate, context).trim()
+      : '';
+    const descriptionFromTemplate = cfg.pageDescriptionTemplate
+      ? this.renderSwitchToastTemplate(cfg.pageDescriptionTemplate, context).trim()
+      : '';
+
+    if (titleFromTemplate || descriptionFromTemplate) {
+      const effectiveTitle =
+        titleFromTemplate ||
+        (context.page?.displayName || page.name || `第 ${book.currentPage + 1} 页`);
+
+      showToast({
+        title: effectiveTitle,
+        description: descriptionFromTemplate || undefined,
+        variant: 'info'
+      });
+      return;
+    }
 
     const parts: string[] = [];
 
@@ -835,6 +1050,7 @@ class BookStore {
 
     // 加载 EMM 元数据
     const emmMetadata = await emmMetadataStore.loadMetadataByPath(book.path);
+    this.lastEmmMetadataForCurrentBook = emmMetadata;
     console.debug('[BookStore] syncInfoPanelBookInfo: EMM 元数据加载完成，metadata:', emmMetadata);
 
     const bookInfo = {

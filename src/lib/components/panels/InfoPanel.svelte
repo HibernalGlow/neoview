@@ -180,205 +180,201 @@
 		</div>
 
 		<div class="flex-1 overflow-auto">
-		<div class="p-4 space-y-6">
-			<!-- 书籍信息 -->
-			{#if bookInfo}
-				<div class="space-y-3">
-					<div class="flex items-center gap-2 font-semibold text-sm">
-						<FileText class="h-4 w-4" />
-						<span>书籍信息</span>
-					</div>
-
-					<div class="space-y-2 text-sm">
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">名称:</span>
-							<span
-								class={bookInfo.emmMetadata?.translatedTitle && bookInfo.emmMetadata.translatedTitle !== bookInfo.name
-									? 'break-words max-w-[200px] rounded border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-xs text-primary text-right'
-									: 'font-medium break-words max-w-[200px]'}
-								title={bookInfo.emmMetadata?.translatedTitle || bookInfo.name}
-							>
-								{bookInfo.emmMetadata?.translatedTitle || bookInfo.name}
-							</span>
+			<div class="p-4 space-y-3">
+				<!-- 书籍信息 -->
+				{#if bookInfo}
+					<div class="rounded-lg border bg-muted/10 p-3 space-y-3">
+						<div class="flex items-center gap-2 font-semibold text-sm">
+							<FileText class="h-4 w-4" />
+							<span>书籍信息</span>
 						</div>
-						{#if bookInfo.emmMetadata?.translatedTitle && bookInfo.emmMetadata.translatedTitle !== bookInfo.name}
+
+						<div class="space-y-2 text-sm">
 							<div class="flex justify-between">
-								<span class="text-muted-foreground">原名:</span>
-								<span class="font-mono text-xs break-words max-w-[200px]" title={bookInfo.name}>
-									{bookInfo.name}
+								<span class="text-muted-foreground">名称:</span>
+								<span
+									class={bookInfo.emmMetadata?.translatedTitle && bookInfo.emmMetadata.translatedTitle !== bookInfo.name
+										? 'break-words max-w-[200px] rounded border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-xs text-primary text-right'
+										: 'font-medium break-words max-w-[200px]'}
+									title={bookInfo.emmMetadata?.translatedTitle || bookInfo.name}
+								>
+									{bookInfo.emmMetadata?.translatedTitle || bookInfo.name}
 								</span>
 							</div>
-						{/if}
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">路径:</span>
-							<span class="font-mono text-xs break-words max-w-[200px]" title={bookInfo.path}>
-								{bookInfo.path}
-							</span>
-						</div>
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">类型:</span>
-							<span>{formatBookType(bookInfo.type)}</span>
-						</div>
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">页码:</span>
-							<span>
-								{bookInfo.currentPage} / {bookInfo.totalPages}
-							</span>
-						</div>
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">进度:</span>
-							<span>
-								{#if bookInfo.totalPages > 0}
-									{(
-										(Math.min(bookInfo.currentPage, bookInfo.totalPages) / bookInfo.totalPages) *
-										100
-									).toFixed(1)}%
-								{:else}
-									—
-								{/if}
-							</span>
+							{#if bookInfo.emmMetadata?.translatedTitle && bookInfo.emmMetadata.translatedTitle !== bookInfo.name}
+								<div class="flex justify-between">
+									<span class="text-muted-foreground">原名:</span>
+									<span class="font-mono text-xs break-words max-w-[200px]" title={bookInfo.name}>
+										{bookInfo.name}
+									</span>
+								</div>
+							{/if}
+							<div class="flex justify-between">
+								<span class="text-muted-foreground">路径:</span>
+								<span class="font-mono text-xs break-words max-w-[200px]" title={bookInfo.path}>
+									{bookInfo.path}
+								</span>
+							</div>
+							<div class="flex justify-between">
+								<span class="text-muted-foreground">类型:</span>
+								<span>{formatBookType(bookInfo.type)}</span>
+							</div>
+							<div class="flex justify-between">
+								<span class="text-muted-foreground">页码:</span>
+								<span>
+									{bookInfo.currentPage} / {bookInfo.totalPages}
+								</span>
+							</div>
+							<div class="flex justify-between">
+								<span class="text-muted-foreground">进度:</span>
+								<span>
+									{#if bookInfo.totalPages > 0}
+										{(
+											(Math.min(bookInfo.currentPage, bookInfo.totalPages) / bookInfo.totalPages) *
+											100
+										).toFixed(1)}%
+									{:else}
+										—
+									{/if}
+								</span>
+							</div>
 						</div>
 					</div>
-				</div>
 
-				<!-- 信息悬浮窗 -->
-				<div class="space-y-3">
-					<div class="flex items-center justify-between">
+					<!-- 信息悬浮窗 -->
+					<div class="rounded-lg border bg-muted/10 p-3 space-y-3">
+						<div class="flex items-center justify-between">
+							<div class="flex items-center gap-2 font-semibold text-sm">
+								<Info class="h-4 w-4" />
+								<span>信息悬浮窗</span>
+							</div>
+							<Switch.Root
+								checked={infoOverlayEnabled}
+								onCheckedChange={(v) => updateInfoOverlay({ enabled: v })}
+								class="scale-75"
+							/>
+						</div>
+						<div class="space-y-2 text-xs text-muted-foreground">
+							<div class="flex items-center justify-between gap-2">
+								<span>透明度</span>
+								<div class="flex items-center gap-2">
+									<Input.Root
+										type="number"
+										min="0"
+										max="100"
+										step="5"
+										class="h-7 w-20 px-2 text-xs"
+										value={Math.round(infoOverlayOpacity * 100).toString()}
+										oninput={(e) => {
+											const target = e.currentTarget as HTMLInputElement;
+											const v = parseFloat(target.value);
+											if (!Number.isNaN(v)) {
+												updateInfoOverlay({ opacity: v / 100 });
+											}
+										}}
+									/>
+									<span class="text-[11px]">{Math.round(infoOverlayOpacity * 100)}%</span>
+								</div>
+							</div>
+							<p>调节悬浮信息窗的背景透明度（0% - 100%，0% 为仅文字无底色）。</p>
+						</div>
+					</div>
+				{/if}
+				{#if imageInfo}
+					<!-- 图像信息 -->
+					<div class="rounded-lg border bg-muted/10 p-3 space-y-3">
 						<div class="flex items-center gap-2 font-semibold text-sm">
-							<Info class="h-4 w-4" />
-							<span>信息悬浮窗</span>
+							<ImageIcon class="h-4 w-4" />
+							<span>图像信息</span>
 						</div>
-						<Switch.Root
-							checked={infoOverlayEnabled}
-							onCheckedChange={(v) => updateInfoOverlay({ enabled: v })}
-							class="scale-75"
-						/>
-					</div>
-					<div class="space-y-2 text-xs text-muted-foreground">
-						<div class="flex items-center justify-between gap-2">
-							<span>透明度</span>
-							<div class="flex items-center gap-2">
-								<Input.Root
-									type="number"
-									min="0"
-									max="100"
-									step="5"
-									class="h-7 w-20 px-2 text-xs"
-									value={Math.round(infoOverlayOpacity * 100).toString()}
-									oninput={(e) => {
-										const target = e.currentTarget as HTMLInputElement;
-										const v = parseFloat(target.value);
-										if (!Number.isNaN(v)) {
-											updateInfoOverlay({ opacity: v / 100 });
-										}
-									}}
-								/>
-								<span class="text-[11px]">{Math.round(infoOverlayOpacity * 100)}%</span>
-						</div>
-						</div>
-						<p>调节悬浮信息窗的背景透明度（0% - 100%，0% 为仅文字无底色）。</p>
-					</div>
-				</div>
 
-				<Separator.Root />
-			{/if}
-			{#if imageInfo}
-				<div class="space-y-3">
-					<div class="flex items-center gap-2 font-semibold text-sm">
-						<ImageIcon class="h-4 w-4" />
-						<span>图像信息</span>
+						<div class="space-y-2 text-sm">
+							<div class="flex justify-between">
+								<span class="text-muted-foreground">文件名:</span>
+								<span class="font-mono text-xs" title={imageInfo.name}>
+									{imageInfo.name}
+								</span>
+							</div>
+							<div class="flex justify-between">
+								<span class="text-muted-foreground">格式:</span>
+								<span>{imageInfo.format ?? '—'}</span>
+							</div>
+							<div class="flex justify-between">
+								<span class="text-muted-foreground">尺寸:</span>
+								<span>
+									{#if imageInfo.width && imageInfo.height}
+										{imageInfo.width} × {imageInfo.height}
+									{:else}
+										—
+									{/if}
+								</span>
+							</div>
+							<div class="flex justify-between">
+								<span class="text-muted-foreground">色深:</span>
+								<span>{imageInfo.colorDepth ?? '—'}</span>
+							</div>
+						</div>
 					</div>
 
-					<div class="space-y-2 text-sm">
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">文件名:</span>
-							<span class="font-mono text-xs" title={imageInfo.name}>
-								{imageInfo.name}
-							</span>
+					<!-- 存储信息 -->
+					<div class="rounded-lg border bg-muted/10 p-3 space-y-3">
+						<div class="flex items-center gap-2 font-semibold text-sm">
+							<HardDrive class="h-4 w-4" />
+							<span>存储信息</span>
 						</div>
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">格式:</span>
-							<span>{imageInfo.format ?? '—'}</span>
-						</div>
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">尺寸:</span>
-							<span>
-								{#if imageInfo.width && imageInfo.height}
-									{imageInfo.width} × {imageInfo.height}
-								{:else}
-									—
-								{/if}
-							</span>
-						</div>
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">色深:</span>
-							<span>{imageInfo.colorDepth ?? '—'}</span>
-						</div>
-					</div>
-				</div>
 
-				<Separator.Root />
-
-				<div class="space-y-3">
-					<div class="flex items-center gap-2 font-semibold text-sm">
-						<HardDrive class="h-4 w-4" />
-						<span>存储信息</span>
+						<div class="space-y-2 text-sm">
+							<div class="flex justify-between">
+								<span class="text-muted-foreground">路径:</span>
+								<span class="font-mono text-xs break-words max-w-[200px]" title={imageInfo.path}>
+									{imageInfo.path ?? '—'}
+								</span>
+							</div>
+							<div class="flex justify-between">
+								<span class="text-muted-foreground">大小:</span>
+								<span>{formatFileSize(imageInfo.fileSize)}</span>
+							</div>
+						</div>
 					</div>
 
-					<div class="space-y-2 text-sm">
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">路径:</span>
-							<span class="font-mono text-xs break-words max-w-[200px]" title={imageInfo.path}>
-								{imageInfo.path ?? '—'}
-							</span>
+					<!-- 时间信息 -->
+					<div class="rounded-lg border bg-muted/10 p-3 space-y-3">
+						<div class="flex items-center gap-2 font-semibold text-sm">
+							<Calendar class="h-4 w-4" />
+							<span>时间信息</span>
 						</div>
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">大小:</span>
-							<span>{formatFileSize(imageInfo.fileSize)}</span>
-						</div>
-					</div>
-				</div>
 
-				<Separator.Root />
-
-				<!-- 时间信息 -->
-				<div class="space-y-3">
-					<div class="flex items-center gap-2 font-semibold text-sm">
-						<Calendar class="h-4 w-4" />
-						<span>时间信息</span>
-					</div>
-
-					<div class="space-y-2 text-sm">
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">创建时间:</span>
-							<span class="text-xs">{formatDate(imageInfo.createdAt)}</span>
-						</div>
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">修改时间:</span>
-							<span class="text-xs">{formatDate(imageInfo.modifiedAt)}</span>
+						<div class="space-y-2 text-sm">
+							<div class="flex justify-between">
+								<span class="text-muted-foreground">创建时间:</span>
+								<span class="text-xs">{formatDate(imageInfo.createdAt)}</span>
+							</div>
+							<div class="flex justify-between">
+								<span class="text-muted-foreground">修改时间:</span>
+								<span class="text-xs">{formatDate(imageInfo.modifiedAt)}</span>
+							</div>
 						</div>
 					</div>
-				</div>
-			{:else}
-				<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
-					<div class="relative mb-4">
-						<Info class="h-16 w-16 opacity-30" />
-						<div class="absolute inset-0 flex items-center justify-center">
-							<div class="h-2 w-2 bg-muted-foreground rounded-full animate-pulse"></div>
+				{:else}
+					<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
+						<div class="relative mb-4">
+							<Info class="h-16 w-16 opacity-30" />
+							<div class="absolute inset-0 flex items-center justify-center">
+								<div class="h-2 w-2 bg-muted-foreground rounded-full animate-pulse"></div>
+							</div>
+						</div>
+						<div class="text-center space-y-2">
+							<p class="text-lg font-medium">暂无图像信息</p>
+							<p class="text-sm opacity-70">打开图像文件后查看详细信息</p>
+							<div class="mt-4 p-3 bg-muted/50 rounded-lg text-xs space-y-1">
+								<p class="font-medium text-foreground">支持格式：</p>
+								<p>• 图像：JPG, PNG, GIF, WebP, AVIF</p>
+								<p>• 文档：PDF, CBZ, CBR</p>
+								<p>• 视频：MP4, WebM (缩略图)</p>
+							</div>
 						</div>
 					</div>
-					<div class="text-center space-y-2">
-						<p class="text-lg font-medium">暂无图像信息</p>
-						<p class="text-sm opacity-70">打开图像文件后查看详细信息</p>
-						<div class="mt-4 p-3 bg-muted/50 rounded-lg text-xs space-y-1">
-							<p class="font-medium text-foreground">支持格式：</p>
-							<p>• 图像：JPG, PNG, GIF, WebP, AVIF</p>
-							<p>• 文档：PDF, CBZ, CBR</p>
-							<p>• 视频：MP4, WebM (缩略图)</p>
-						</div>
-					</div>
-				</div>
-			{/if}
+				{/if}
 		</div>
 	</div>
 

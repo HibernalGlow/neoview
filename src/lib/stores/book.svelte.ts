@@ -730,18 +730,47 @@ class BookStore {
       type: book.type,
       totalPages: book.totalPages,
       currentPage: book.totalPages === 0 ? 0 : book.currentPage + 1,
-      emmMetadata: emmMetadata ? {
-        translatedTitle: emmMetadata.translated_title,
-        tags: emmMetadata.tags,
-        rating: emmMetadata.rating,
-      } : undefined,
+      emmMetadata: emmMetadata
+        ? {
+          translatedTitle: emmMetadata.translated_title,
+          tags: emmMetadata.tags,
+          rating: emmMetadata.rating,
+          raw: {
+            id: emmMetadata.id,
+            title: emmMetadata.title,
+            title_jpn: emmMetadata.title_jpn,
+            hash: emmMetadata.hash,
+            coverPath: emmMetadata.cover_path,
+            filepath: emmMetadata.filepath,
+            type: emmMetadata.type,
+            pageCount: emmMetadata.page_count,
+            bundleSize: emmMetadata.bundle_size,
+            mtime: emmMetadata.mtime,
+            coverHash: emmMetadata.cover_hash,
+            status: emmMetadata.status,
+            date: emmMetadata.date,
+            filecount: emmMetadata.filecount,
+            posted: emmMetadata.posted,
+            filesize: emmMetadata.filesize,
+            category: emmMetadata.category,
+            url: emmMetadata.url,
+            mark: emmMetadata.mark,
+            hiddenBook: emmMetadata.hidden_book,
+            readCount: emmMetadata.read_count,
+            exist: emmMetadata.exist,
+            createdAt: emmMetadata.created_at,
+            updatedAt: emmMetadata.updated_at,
+            // rating 和 tags 在外层已有，这里不重复
+          },
+        }
+        : undefined,
     };
 
     console.debug('[BookStore] syncInfoPanelBookInfo: 设置书籍信息到 InfoPanel，bookInfo:', bookInfo);
     infoPanelStore.setBookInfo(bookInfo);
   }
 
-  private computePageWindowState(currentIndex: number, totalPages: number, radius: number): PageWindowState {
+  private computePageWindowState(currentIndex: number, totalPages: number, radius: number) {
     const forward: number[] = [];
     const backward: number[] = [];
     for (let i = 1; i <= radius; i++) {

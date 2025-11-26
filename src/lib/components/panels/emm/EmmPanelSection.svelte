@@ -121,6 +121,19 @@
 		return groups;
 	});
 
+	const emmRawEntries = $derived(() => {
+		const raw = bookInfo?.emmMetadata?.raw as Record<string, unknown> | undefined;
+		if (!raw) return [] as Array<{ key: string; value: string }>;
+		const entries: Array<{ key: string; value: string }> = [];
+		for (const [key, value] of Object.entries(raw)) {
+			if (value === undefined || value === null) continue;
+			entries.push({ key, value: String(value) });
+		}
+		// 固定顺序：按 key 排一下，避免每次渲染顺序抖动
+		entries.sort((a, b) => a.key.localeCompare(b.key));
+		return entries;
+	});
+
 	function getTagTitle(tagInfo: { category: string; tag: string; display?: string; isCollect: boolean }) {
 		const raw = `${tagInfo.category}:${tagInfo.tag}`;
 		const lines: string[] = [`原始: ${raw}`];
@@ -756,6 +769,27 @@
 			</div>
 		{/if}
 	</div>
+
+	{#if emmRawEntries().length > 0}
+		<Separator.Root />
+		<div class="space-y-2">
+			<div class="flex items-center justify-between">
+				<div class="flex items-center gap-2 font-semibold text-sm">
+					<Settings class="h-4 w-4" />
+					<span>EMM 原始记录（mangas）</span>
+				</div>
+				<span class="text-[10px] text-muted-foreground">只读 · 调试用</span>
+			</div>
+			<div class="max-h-40 overflow-auto rounded border bg-muted/40 px-2 py-1.5 text-[11px] font-mono space-y-0.5">
+				{#each emmRawEntries() as entry}
+					<div class="flex items-start gap-2">
+						<span class="min-w-[90px] text-muted-foreground truncate" title={entry.key}>{entry.key}</span>
+						<span class="flex-1 text-right truncate" title={entry.value}>{entry.value}</span>
+					</div>
+				{/each}
+			</div>
+		</div>
+	{/if}
 
 	<Separator.Root />
 	<div class="space-y-3">

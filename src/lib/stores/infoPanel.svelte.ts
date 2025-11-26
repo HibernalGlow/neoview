@@ -16,6 +16,8 @@ export interface ViewerBookInfo {
 		translatedTitle?: string;
 		tags?: Record<string, string[]>;
 		rating?: number;
+		// 来自 EMM 数据库 mangas 表的原始字段映射，用于在属性面板中完整展示
+		raw?: Record<string, unknown>;
 	};
 }
 

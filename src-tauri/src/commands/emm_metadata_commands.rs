@@ -13,6 +13,30 @@ pub struct EMMMetadata {
     pub tags: HashMap<String, Vec<String>>, // 分类 -> 标签列表
     pub title: Option<String>,
     pub title_jpn: Option<String>,
+    // 下面这些字段对应 mangas 表中的主要列，方便前端完整展示原始记录
+    pub rating: Option<f64>,
+    pub id: Option<String>,
+    pub cover_path: Option<String>,
+    pub filepath: Option<String>,
+    #[serde(rename = "type")]
+    pub r#type: Option<String>,
+    pub page_count: Option<i64>,
+    pub bundle_size: Option<i64>,
+    pub mtime: Option<String>,
+    pub cover_hash: Option<String>,
+    pub status: Option<String>,
+    pub date: Option<i64>,
+    pub filecount: Option<i64>,
+    pub posted: Option<i64>,
+    pub filesize: Option<i64>,
+    pub category: Option<String>,
+    pub url: Option<String>,
+    pub mark: Option<i64>,
+    pub hidden_book: Option<i64>,
+    pub read_count: Option<i64>,
+    pub exist: Option<i64>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,23 +62,53 @@ pub async fn load_emm_metadata(
 
     let conn = Connection::open(&path).map_err(|e| format!("打开数据库失败: {}", e))?;
 
-    // 先尝试从 Mangas 表读取
+    // 先尝试从 Mangas 表读取（一次性把主要字段都取出）
     let mut stmt = conn
-        .prepare("SELECT hash, title, title_jpn, tags FROM Mangas WHERE hash = ?1")
+        .prepare(
+            "SELECT \
+                id, title, coverPath, hash, filepath, type, pageCount, bundleSize, mtime, coverHash, \
+                status, date, rating, tags, title_jpn, filecount, posted, filesize, category, url, \
+                mark, hiddenBook, readCount, exist, createdAt, updatedAt \
+                FROM Mangas WHERE hash = ?1",
+        )
         .map_err(|e| format!("准备查询失败: {}", e))?;
 
     let mut rows = stmt
         .query_map([&hash], |row| {
-            let tags_json: String = row.get(3)?;
+            let tags_json: String = row.get(13)?;
             let tags: HashMap<String, Vec<String>> =
                 serde_json::from_str(&tags_json).unwrap_or_default();
 
             Ok(EMMMetadata {
-                hash: row.get(0)?,
+                // 基本字段
+                hash: row.get(3)?,
                 translated_title: None, // 需要从翻译数据库读取
                 tags,
                 title: row.get(1)?,
-                title_jpn: row.get(2)?,
+                title_jpn: row.get(14)?,
+                // 额外字段（可能部分为空）
+                rating: row.get(12).ok(),
+                id: row.get(0).ok(),
+                cover_path: row.get(2).ok(),
+                filepath: row.get(4).ok(),
+                r#type: row.get(5).ok(),
+                page_count: row.get(6).ok(),
+                bundle_size: row.get(7).ok(),
+                mtime: row.get(8).ok(),
+                cover_hash: row.get(9).ok(),
+                status: row.get(10).ok(),
+                date: row.get(11).ok(),
+                filecount: row.get(15).ok(),
+                posted: row.get(16).ok(),
+                filesize: row.get(17).ok(),
+                category: row.get(18).ok(),
+                url: row.get(19).ok(),
+                mark: row.get(20).ok(),
+                hidden_book: row.get(21).ok(),
+                read_count: row.get(22).ok(),
+                exist: row.get(23).ok(),
+                created_at: row.get(24).ok(),
+                updated_at: row.get(25).ok(),
             })
         })
         .map_err(|e| format!("查询失败: {}", e))?;
@@ -79,6 +133,28 @@ pub async fn load_emm_metadata(
                     tags,
                     title: row.get(1)?,
                     title_jpn: row.get(2)?,
+                    rating: None,
+                    id: None,
+                    cover_path: None,
+                    filepath: None,
+                    r#type: None,
+                    page_count: None,
+                    bundle_size: None,
+                    mtime: None,
+                    cover_hash: None,
+                    status: None,
+                    date: None,
+                    filecount: None,
+                    posted: None,
+                    filesize: None,
+                    category: None,
+                    url: None,
+                    mark: None,
+                    hidden_book: None,
+                    read_count: None,
+                    exist: None,
+                    created_at: None,
+                    updated_at: None,
                 })
             })
             .map_err(|e| format!("查询失败: {}", e))?;
@@ -138,15 +214,21 @@ pub async fn load_emm_metadata_by_path(
 
     let conn = Connection::open(&path).map_err(|e| format!("打开数据库失败: {}", e))?;
 
-    // 从 Mangas 表通过 filepath 查找
+    // 从 Mangas 表通过 filepath 查找（同样一次性取出主要字段）
     let mut stmt = conn
-        .prepare("SELECT hash, title, title_jpn, tags FROM Mangas WHERE filepath = ?1")
+        .prepare(
+            "SELECT \
+                id, title, coverPath, hash, filepath, type, pageCount, bundleSize, mtime, coverHash, \
+                status, date, rating, tags, title_jpn, filecount, posted, filesize, category, url, \
+                mark, hiddenBook, readCount, exist, createdAt, updatedAt \
+                FROM Mangas WHERE filepath = ?1",
+        )
         .map_err(|e| format!("准备查询失败: {}", e))?;
 
     let mut rows = stmt
         .query_map([&file_path], |row| {
-            let hash: String = row.get(0)?;
-            let tags_json: String = row.get(3)?;
+            let hash: String = row.get(3)?;
+            let tags_json: String = row.get(13)?;
             let tags: HashMap<String, Vec<String>> =
                 serde_json::from_str(&tags_json).unwrap_or_default();
 
@@ -156,8 +238,30 @@ pub async fn load_emm_metadata_by_path(
                     hash,
                     translated_title: None,
                     tags,
-                    title: row.get(1)?,
-                    title_jpn: row.get(2)?,
+                    title: row.get(1).ok(),
+                    title_jpn: row.get(14).ok(),
+                    rating: row.get(12).ok(),
+                    id: row.get(0).ok(),
+                    cover_path: row.get(2).ok(),
+                    filepath: row.get(4).ok(),
+                    r#type: row.get(5).ok(),
+                    page_count: row.get(6).ok(),
+                    bundle_size: row.get(7).ok(),
+                    mtime: row.get(8).ok(),
+                    cover_hash: row.get(9).ok(),
+                    status: row.get(10).ok(),
+                    date: row.get(11).ok(),
+                    filecount: row.get(15).ok(),
+                    posted: row.get(16).ok(),
+                    filesize: row.get(17).ok(),
+                    category: row.get(18).ok(),
+                    url: row.get(19).ok(),
+                    mark: row.get(20).ok(),
+                    hidden_book: row.get(21).ok(),
+                    read_count: row.get(22).ok(),
+                    exist: row.get(23).ok(),
+                    created_at: row.get(24).ok(),
+                    updated_at: row.get(25).ok(),
                 },
             ))
         })

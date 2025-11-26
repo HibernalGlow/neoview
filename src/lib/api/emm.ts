@@ -11,7 +11,29 @@ export interface EMMMetadata {
 	tags: Record<string, string[]>; // 分类 -> 标签列表
 	title?: string;
 	title_jpn?: string;
-	rating?: number;
+	// 以下字段对应 mangas 表的主要列，用于在前端完整展示原始记录
+	rating?: number; // rating (FLOAT)
+	id?: string;
+	cover_path?: string; // coverPath
+	filepath?: string;
+	type?: string;
+	page_count?: number; // pageCount
+	bundle_size?: number; // bundleSize
+	mtime?: string;
+	cover_hash?: string; // coverHash
+	status?: string;
+	date?: number;
+	filecount?: number;
+	posted?: number;
+	filesize?: number;
+	category?: string;
+	url?: string;
+	mark?: number;
+	hidden_book?: number; // hiddenBook
+	read_count?: number; // readCount
+	exist?: number;
+	created_at?: string;
+	updated_at?: string;
 }
 
 export interface EMMCollectTag {

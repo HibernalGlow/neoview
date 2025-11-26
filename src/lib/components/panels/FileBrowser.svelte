@@ -61,7 +61,7 @@
 	import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 	import { loadPanelViewMode, savePanelViewMode } from '$lib/utils/panelViewMode';
 	import { settingsManager } from '$lib/settings/settingsManager';
-	import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
+	import { showSuccessToast, showErrorToast } from '$lib/utils/toast.ts';
 
 	function itemIsDirectory(item: any): boolean {
 		return item.isDir || item.is_directory;

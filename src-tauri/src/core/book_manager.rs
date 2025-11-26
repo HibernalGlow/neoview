@@ -2,6 +2,7 @@
 //! 书籍管理核心模块
 
 use crate::core::path_utils::{build_path_key, calculate_path_hash};
+use crate::core::video_exts;
 use crate::models::{BookInfo, BookType, Page, PageSortMode};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
@@ -152,12 +153,12 @@ impl BookManager {
         }
 
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            match ext.to_lowercase().as_str() {
+            let lower = ext.to_lowercase();
+            match lower.as_str() {
                 "zip" | "rar" | "7z" | "cbz" | "cbr" => Ok(BookType::Archive),
                 "pdf" => Ok(BookType::Pdf),
                 // 常见视频扩展名，作为 Media 类型处理
-                "mp4" | "webm" | "ogg" | "mov" | "avi" | "mkv" | "m4v" | "flv" | "wmv" | "mpg"
-                | "mpeg" | "nov" => Ok(BookType::Media),
+                _ if video_exts::is_video_extension(&lower) => Ok(BookType::Media),
                 _ => Err(format!("Unsupported file type: {}", ext)),
             }
         } else {
@@ -297,25 +298,7 @@ impl BookManager {
 
     /// 检查是否是视频文件（用于将视频作为页面纳入 Folder/Archive 书籍）
     fn is_video_file(&self, path: &Path) -> bool {
-        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            matches!(
-                ext.to_lowercase().as_str(),
-                "mp4"
-                    | "webm"
-                    | "ogg"
-                    | "mov"
-                    | "avi"
-                    | "mkv"
-                    | "m4v"
-                    | "flv"
-                    | "wmv"
-                    | "mpg"
-                    | "mpeg"
-                    | "nov"
-            )
-        } else {
-            false
-        }
+        video_exts::is_video_path(path)
     }
 
     /// 获取当前书籍

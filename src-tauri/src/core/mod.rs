@@ -22,6 +22,7 @@ pub mod thumbnail_generator;
 pub mod upscale;
 pub mod upscale_scheduler;
 pub mod upscale_settings;
+pub mod video_exts;
 pub mod video_thumbnail;
 
 pub use book_manager::BookManager;

@@ -1,3 +1,4 @@
+use crate::core::video_exts;
 use image::DynamicImage;
 use std::fs;
 use std::path::Path;
@@ -62,14 +63,7 @@ impl VideoThumbnailGenerator {
 
     /// 检查是否为视频文件
     pub fn is_video_file(path: &Path) -> bool {
-        let extensions = [
-            "mp4", "mkv", "avi", "mov", "flv", "webm", "wmv", "m4v", "mpg", "mpeg", "nov",
-        ];
-
-        path.extension()
-            .and_then(|ext| ext.to_str())
-            .map(|ext| extensions.contains(&ext.to_lowercase().as_str()))
-            .unwrap_or(false)
+        video_exts::is_video_path(path)
     }
 
     /// 获取视频时长（秒）

@@ -2,6 +2,7 @@
 //! 缩略图生成器模块 - 支持多线程、压缩包流式处理、webp 格式
 
 use crate::core::thumbnail_db::ThumbnailDb;
+use crate::core::video_exts;
 use image::{DynamicImage, GenericImageView, ImageFormat};
 use std::collections::HashMap;
 use std::io::{Cursor, Read};
@@ -176,13 +177,7 @@ impl ThumbnailGenerator {
 
     /// 检查是否为视频文件
     fn is_video_file(path: &Path) -> bool {
-        let extensions = [
-            "mp4", "mkv", "avi", "mov", "flv", "webm", "wmv", "m4v", "mpg", "mpeg", "nov",
-        ];
-        path.extension()
-            .and_then(|ext| ext.to_str())
-            .map(|ext| extensions.contains(&ext.to_lowercase().as_str()))
-            .unwrap_or(false)
+        video_exts::is_video_path(path)
     }
 
     /// 生成视频缩略图（使用 ffmpeg 提取帧）

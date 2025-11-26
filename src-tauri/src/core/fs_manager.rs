@@ -1,4 +1,5 @@
 use super::file_indexer::FileIndexer;
+use super::video_exts;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -310,15 +311,7 @@ impl FsManager {
 
     /// 检查是否为视频文件
     fn is_video_file(path: &Path) -> bool {
-        if let Some(ext) = path.extension() {
-            let ext = ext.to_string_lossy().to_lowercase();
-            matches!(
-                ext.as_str(),
-                "mp4" | "mkv" | "avi" | "mov" | "wmv" | "flv" | "webm" | "m4v" | "mpg" | "mpeg" | "nov"
-            )
-        } else {
-            false
-        }
+        video_exts::is_video_path(path)
     }
 
     /// 获取目录中的所有图片文件（递归）

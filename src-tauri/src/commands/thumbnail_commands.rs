@@ -9,6 +9,7 @@ use crate::core::fs_manager::{FsItem, FsManager};
 use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::thumbnail_generator::{ThumbnailGenerator, ThumbnailGeneratorConfig};
 use crate::core::video_thumbnail::VideoThumbnailGenerator;
+use crate::core::video_exts;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -222,7 +223,7 @@ pub async fn generate_video_thumbnail_new(
 
     // 检查是否为视频文件
     let path = Path::new(&video_path);
-    if !VideoThumbnailGenerator::is_video_file(path) {
+    if !video_exts::is_video_path(path) {
         return Err("路径不是视频文件".to_string());
     }
 

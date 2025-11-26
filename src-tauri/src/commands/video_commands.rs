@@ -1,4 +1,5 @@
 use crate::core::video_thumbnail::VideoThumbnailGenerator;
+use crate::core::video_exts;
 use std::path::PathBuf;
 use tauri::command;
 
@@ -61,7 +62,7 @@ pub async fn get_video_duration(video_path: String) -> Result<f64, String> {
 #[command]
 pub async fn is_video_file(file_path: String) -> Result<bool, String> {
     let path = PathBuf::from(&file_path);
-    Ok(VideoThumbnailGenerator::is_video_file(&path))
+    Ok(video_exts::is_video_path(&path))
 }
 
 /// 直接加载视频文件

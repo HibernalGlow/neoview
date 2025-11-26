@@ -18,6 +18,7 @@
 		Bell
 	} from '@lucide/svelte';
 	import * as Separator from '$lib/components/ui/separator';
+	import * as Table from '$lib/components/ui/table';
 	import { infoPanelStore, type ViewerBookInfo, type ViewerImageInfo } from '$lib/stores/infoPanel.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { FileSystemAPI } from '$lib/api';
@@ -78,10 +79,7 @@
 	let switchToastPageTitleTemplate = $state('');
 	let switchToastPageDescriptionTemplate = $state('');
 
-	const BOOK_TEMPLATE_HINT =
-		'{{book.name}}, {{book.path}}, {{book.currentPageDisplay}}, {{book.totalPages}}, {{book.emmTranslatedTitle}}, {{book.emmRating}}';
-	const PAGE_TEMPLATE_HINT =
-		'{{page.name}}, {{page.indexDisplay}}, {{page.width}}, {{page.height}}, {{page.dimensionsFormatted}}, {{page.sizeFormatted}}';
+	
 
 	function loadSwitchToastFromSettings() {
 		const s = settingsManager.getSettings();
@@ -515,7 +513,10 @@
 					</div>
 
 					<!-- 切换提示设置 -->
-					<div class="rounded-lg border bg-muted/10 p-3 space-y-3" style={`order: ${getInfoCardOrder('switchToast')}`}>
+					<div
+						class="rounded-lg border bg-muted/10 p-3 space-y-3"
+						style={`order: ${getInfoCardOrder('switchToast')}`}
+					>
 						<div class="flex items-center justify-between">
 							<div class="flex items-center gap-2 font-semibold text-sm">
 								<Bell class="h-4 w-4" />
@@ -554,8 +555,10 @@
 								</button>
 							</div>
 						</div>
+
 						{#if showSwitchToastCard}
 							<div class="space-y-3 text-xs text-muted-foreground">
+								<!-- 总开关 -->
 								<div class="space-y-1">
 									<div class="flex items-center justify-between gap-2">
 										<span>切换书籍时显示提示</span>
@@ -578,6 +581,8 @@
 									</div>
 								</div>
 								<Separator.Root class="my-1" />
+
+								<!-- 书籍模板 + 变量表 -->
 								<div class="space-y-2">
 									<div class="text-[11px] font-semibold text-foreground">书籍提示模板</div>
 									<textarea
@@ -600,10 +605,58 @@
 										}}
 										placeholder={'例如：路径：{{book.path}}，评分：{{book.emmRating}}'}
 									/>
-									<p class="text-[11px] text-muted-foreground">
-										可用变量：{BOOK_TEMPLATE_HINT}
-									</p>
+
+									<div class="mt-1 rounded-md border bg-background/60 overflow-hidden">
+										<Table.Root class="w-full text-[11px]">
+											<Table.Header>
+												<Table.Row>
+													<Table.Head class="px-2 py-1 w-28">变量</Table.Head>
+													<Table.Head class="px-2 py-1">说明 / 示例</Table.Head>
+												</Table.Row>
+											</Table.Header>
+											<Table.Body>
+												<Table.Row>
+													<Table.Cell class="px-2 py-1 font-mono whitespace-nowrap">
+														{'{{book.displayName}}'}
+													</Table.Cell>
+													<Table.Cell class="px-2 py-1">书籍显示名（优先使用 EMM 翻译标题）</Table.Cell>
+												</Table.Row>
+												<Table.Row>
+													<Table.Cell class="px-2 py-1 font-mono whitespace-nowrap">
+														{'{{book.currentPageDisplay}}'}
+													</Table.Cell>
+													<Table.Cell class="px-2 py-1">当前页码（从 1 开始）</Table.Cell>
+												</Table.Row>
+												<Table.Row>
+													<Table.Cell class="px-2 py-1 font-mono whitespace-nowrap">
+														{'{{book.totalPages}}'}
+													</Table.Cell>
+													<Table.Cell class="px-2 py-1">书籍总页数</Table.Cell>
+												</Table.Row>
+												<Table.Row>
+													<Table.Cell class="px-2 py-1 font-mono whitespace-nowrap">
+														{'{{book.path}}'}
+													</Table.Cell>
+													<Table.Cell class="px-2 py-1">书籍路径</Table.Cell>
+												</Table.Row>
+												<Table.Row>
+													<Table.Cell class="px-2 py-1 font-mono whitespace-nowrap">
+														{'{{book.emmTranslatedTitle}}'}
+													</Table.Cell>
+													<Table.Cell class="px-2 py-1">EMM 翻译标题（如有）</Table.Cell>
+												</Table.Row>
+												<Table.Row>
+													<Table.Cell class="px-2 py-1 font-mono whitespace-nowrap">
+														{'{{book.emmRating}}'}
+													</Table.Cell>
+													<Table.Cell class="px-2 py-1">EMM 评分（0–5，可能为空）</Table.Cell>
+												</Table.Row>
+											</Table.Body>
+										</Table.Root>
+									</div>
 								</div>
+
+								<!-- 页面模板 + 变量表 -->
 								<div class="space-y-2">
 									<div class="text-[11px] font-semibold text-foreground">页面提示模板</div>
 									<textarea
@@ -626,8 +679,46 @@
 										}}
 										placeholder={'例如：分辨率 {{page.dimensionsFormatted}}，大小 {{page.sizeFormatted}}'}
 									/>
-									<p class="text-[11px] text-muted-foreground">
-										可用变量：{PAGE_TEMPLATE_HINT}
+
+									<div class="mt-1 rounded-md border bg-background/60 overflow-hidden">
+										<Table.Root class="w-full text-[11px]">
+											<Table.Header>
+												<Table.Row>
+													<Table.Head class="px-2 py-1 w-28">变量</Table.Head>
+													<Table.Head class="px-2 py-1">说明 / 示例</Table.Head>
+												</Table.Row>
+											</Table.Header>
+											<Table.Body>
+												<Table.Row>
+													<Table.Cell class="px-2 py-1 font-mono whitespace-nowrap">
+														{'{{page.indexDisplay}}'}
+													</Table.Cell>
+													<Table.Cell class="px-2 py-1">当前页码（从 1 开始）</Table.Cell>
+												</Table.Row>
+												<Table.Row>
+													<Table.Cell class="px-2 py-1 font-mono whitespace-nowrap">
+														{'{{page.dimensionsFormatted}}'}
+													</Table.Cell>
+													<Table.Cell class="px-2 py-1">分辨率，例如 1920 × 1080</Table.Cell>
+												</Table.Row>
+												<Table.Row>
+													<Table.Cell class="px-2 py-1 font-mono whitespace-nowrap">
+														{'{{page.sizeFormatted}}'}
+													</Table.Cell>
+													<Table.Cell class="px-2 py-1">文件大小，例如 3.45 MB</Table.Cell>
+												</Table.Row>
+												<Table.Row>
+													<Table.Cell class="px-2 py-1 font-mono whitespace-nowrap">
+														{'{{page.name}}'}
+													</Table.Cell>
+													<Table.Cell class="px-2 py-1">页面文件名</Table.Cell>
+												</Table.Row>
+											</Table.Body>
+										</Table.Root>
+									</div>
+
+									<p class="mt-1 text-[10px] text-muted-foreground">
+										页面模板同样可以使用上面的 <span class="font-mono">{'{{book.*}}'}</span> 变量。
 									</p>
 								</div>
 							</div>

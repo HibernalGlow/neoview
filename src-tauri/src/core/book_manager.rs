@@ -157,7 +157,7 @@ impl BookManager {
                 "pdf" => Ok(BookType::Pdf),
                 // 常见视频扩展名，作为 Media 类型处理
                 "mp4" | "webm" | "ogg" | "mov" | "avi" | "mkv" | "m4v" | "flv" | "wmv" | "mpg"
-                | "mpeg" => Ok(BookType::Media),
+                | "mpeg" | "nov" => Ok(BookType::Media),
                 _ => Err(format!("Unsupported file type: {}", ext)),
             }
         } else {
@@ -311,6 +311,7 @@ impl BookManager {
                     | "wmv"
                     | "mpg"
                     | "mpeg"
+                    | "nov"
             )
         } else {
             false

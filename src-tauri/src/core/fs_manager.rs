@@ -314,7 +314,7 @@ impl FsManager {
             let ext = ext.to_string_lossy().to_lowercase();
             matches!(
                 ext.as_str(),
-                "mp4" | "mkv" | "avi" | "mov" | "wmv" | "flv" | "webm" | "m4v" | "mpg" | "mpeg"
+                "mp4" | "mkv" | "avi" | "mov" | "wmv" | "flv" | "webm" | "m4v" | "mpg" | "mpeg" | "nov"
             )
         } else {
             false

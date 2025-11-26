@@ -63,7 +63,7 @@ impl VideoThumbnailGenerator {
     /// 检查是否为视频文件
     pub fn is_video_file(path: &Path) -> bool {
         let extensions = [
-            "mp4", "mkv", "avi", "mov", "flv", "webm", "wmv", "m4v", "mpg", "mpeg",
+            "mp4", "mkv", "avi", "mov", "flv", "webm", "wmv", "m4v", "mpg", "mpeg", "nov",
         ];
 
         path.extension()

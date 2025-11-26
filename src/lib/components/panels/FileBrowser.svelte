@@ -218,6 +218,7 @@
 	let showMigrationManagerTab = $state(fileBrowserStore.getState().showMigrationManager);
 	let showFolderTree = $state(fileBrowserStore.getState().showFolderTree);
 	let treeItems = $state<FsItem[]>([]);
+	let homepagePath = $state('');
 	let drivesLoaded = false;
 	let loadedDriveRoots = new Set<string>();
 	let treeWidth = $state(260);
@@ -373,27 +374,23 @@
 	const HOMEPAGE_STORAGE_KEY = 'neoview-homepage-path';
 	const LAST_FOLDER_STORAGE_KEY = 'neoview-last-folder-path';
 
+	function updateHomepageState(path: string | null) {
+		homepagePath = path ?? '';
+		navigationHistory.setHomepage(homepagePath);
+	}
+
 	/**
 	 * 设置主页路径
 	 */
 	function setHomepage(path: string) {
+		if (!path) return;
 		try {
 			localStorage.setItem(HOMEPAGE_STORAGE_KEY, path);
+			updateHomepageState(path);
 			console.log('✅ 主页路径已设置:', path);
 			// TODO: 可以添加 toast 通知
 		} catch (err) {
 			console.error('❌ 保存主页路径失败:', err);
-		}
-	}
-
-	async function selectAndSetHome() {
-		try {
-			const path = await FileSystemAPI.selectFolder();
-			if (path) {
-				setHomepage(path);
-			}
-		} catch (err) {
-			console.error('Failed to select home folder:', err);
 		}
 	}
 
@@ -420,7 +417,7 @@
 
 			if (homepage) {
 				console.log('📍 加载主页路径:', homepage);
-				navigationHistory.setHomepage(homepage);
+				updateHomepageState(homepage);
 				// 注意：不在此处 await 阻塞 UI，如果需要可以等待
 				await loadDirectory(homepage);
 			} else {
@@ -440,7 +437,7 @@
 					const exists = await FileSystemAPI.pathExists(lastFolder);
 					if (exists) {
 						console.log('📂 加载上次浏览的文件夹:', lastFolder);
-						navigationHistory.setHomepage(lastFolder);
+						updateHomepageState(lastFolder);
 						await loadDirectory(lastFolder);
 						return;
 					} else {
@@ -463,6 +460,12 @@
 		if (homepage) {
 			navigateToDirectory(homepage);
 		}
+	}
+
+	function handleHomeContextMenu(event: MouseEvent) {
+		event.preventDefault();
+		if (!currentPath) return;
+		setHomepage(currentPath);
 	}
 
 	/**
@@ -2350,13 +2353,13 @@
 									size="icon"
 									class="h-8 w-8"
 									onclick={goHome}
-									disabled={!navigationHistory.getHomepage()}
+									oncontextmenu={handleHomeContextMenu}
 								>
 									<Home class="h-4 w-4" />
 								</Button>
 							</Tooltip.Trigger>
 							<Tooltip.Content>
-								<p>主页</p>
+								<p>{homepagePath ? '主页' : '右键设置主页'}</p>
 							</Tooltip.Content>
 						</Tooltip.Root>
 					</UIContextMenu.Trigger>
@@ -2364,10 +2367,6 @@
 						<UIContextMenu.Item onclick={() => setHomepage(currentPath)} disabled={!currentPath}>
 							<Home class="mr-2 h-4 w-4" />
 							<span>将当前文件夹设为主页</span>
-						</UIContextMenu.Item>
-						<UIContextMenu.Item onclick={selectAndSetHome}>
-							<FolderOpen class="mr-2 h-4 w-4" />
-							<span>选择文件夹为主页...</span>
 						</UIContextMenu.Item>
 					</UIContextMenu.Content>
 				</UIContextMenu.Root>

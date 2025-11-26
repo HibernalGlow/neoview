@@ -99,6 +99,7 @@ export function createDefaultAppState(): AppStateSnapshot {
 				currentImageUpscaleEnabled: false,
 				autoPlayAnimatedImages: true,
 				longImageScrollMode: 'continuous',
+				hoverScrollEnabled: true,
 				videoMinPlaybackRate: 0.25,
 				videoMaxPlaybackRate: 16,
 				videoPlaybackRateStep: 0.25

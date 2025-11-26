@@ -31,13 +31,14 @@
 	} from '$lib/core/tasks/comparisonTaskService';
 	import { scheduleUpscaleCacheCleanup } from '$lib/core/cache/cacheMaintenance';
 	import VideoPlayer from './VideoPlayer.svelte';
-import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoomMode';
+	import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoomMode';
 
 	// 新模块导入
 	import { createPreloadManager } from './flow/preloadManager.svelte';
 	import { setSharedPreloadManager } from './flow/sharedPreloadManager';
 	import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
 	import { idbSet } from '$lib/utils/idb';
+	import { hoverScroll } from '$lib/utils/scroll/hoverScroll';
 	import { getFileMetadata } from '$lib/api/fs';
 	import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 	import type { BookInfo, Page } from '$lib/types';
@@ -53,6 +54,10 @@ import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoo
 	let hideCursorTimeout: ReturnType<typeof window.setTimeout> | null = null;
 	let lastMousePosition = $state({ x: 0, y: 0 });
 	let settings = $state(settingsManager.getSettings());
+	let hoverScrollEnabled = $derived(
+		(settings.image.hoverScrollEnabled ?? true) &&
+		settings.image.longImageScrollMode === 'continuous'
+	);
 	let viewerBackgroundColor = $state(settings.view.backgroundColor || '#000000');
 	let lastBackgroundSource = $state<string | null>(null);
 
@@ -1573,6 +1578,10 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 		data-viewer="true"
 		role="region"
 		aria-label="图像显示区域"
+		use:hoverScroll={{
+			enabled: hoverScrollEnabled && !isCurrentPageVideo,
+			axis: $viewerState.orientation === 'horizontal' ? 'horizontal' : 'vertical'
+		}}
 	>
 		{#if loadingVisible}
 			<div class="text-white">Loading...</div>

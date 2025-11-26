@@ -102,6 +102,7 @@ let currentSortModeLabel = $derived(() => {
 
 	// 阅读方向状态
 	let settings = $state(settingsManager.getSettings());
+	let hoverScrollEnabled = $derived(settings.image.hoverScrollEnabled ?? true);
 	let readingDirection = $derived(settings.book.readingDirection);
 	let hoverAreas = $derived(settings.panels?.hoverAreas);
 	let autoHideTiming = $derived(settings.panels?.autoHideTiming ?? { showDelaySec: 0, hideDelaySec: 0 });
@@ -145,6 +146,11 @@ async function handleSortModeChange(mode: PageSortMode) {
 
 	function handleZoomReset() {
 		dispatchApplyZoomMode();
+	}
+
+	function toggleHoverScroll() {
+		const next = !(settings.image.hoverScrollEnabled ?? true);
+		settingsManager.updateNestedSettings('image', { hoverScrollEnabled: next });
 	}
 
 	type QuickThemeConfig = {
@@ -1120,6 +1126,22 @@ async function handleSortModeChange(mode: PageSortMode) {
 					</Tooltip.Trigger>
 					<Tooltip.Content>
 						<p>旋转 90°</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant={hoverScrollEnabled ? 'default' : 'ghost'}
+							size="icon"
+							class="h-8 w-8"
+							onclick={toggleHoverScroll}
+						>
+							<Scan class="h-4 w-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>{hoverScrollEnabled ? '悬停滚动：开' : '悬停滚动：关'}</p>
 					</Tooltip.Content>
 				</Tooltip.Root>
 			</div>

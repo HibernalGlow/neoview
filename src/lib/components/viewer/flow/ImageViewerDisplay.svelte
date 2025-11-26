@@ -39,6 +39,69 @@
 	});
 
 	let hasPanoramaImages = $state(false);
+	let scrollContainer = $state<HTMLElement | null>(null);
+	let scrollWidth = $state(0);
+	let scrollHeight = $state(0);
+	let clientWidth = $state(0);
+	let clientHeight = $state(0);
+	let scrollLeft = $state(0);
+	let scrollTop = $state(0);
+
+	function updateScrollMetrics(node: HTMLElement) {
+		scrollWidth = node.scrollWidth;
+		scrollHeight = node.scrollHeight;
+		clientWidth = node.clientWidth;
+		clientHeight = node.clientHeight;
+		scrollLeft = node.scrollLeft;
+		scrollTop = node.scrollTop;
+	}
+
+	function handleScroll(event: Event) {
+		const target = event.currentTarget as HTMLElement;
+		updateScrollMetrics(target);
+	}
+
+	const horizontalViewportWidthPercent = $derived(() => {
+		if (!scrollWidth || !clientWidth) return 100;
+		return Math.min(100, (clientWidth / scrollWidth) * 100);
+	});
+
+	const horizontalViewportLeftPercent = $derived(() => {
+		if (!scrollWidth || !clientWidth) return 0;
+		const maxScroll = scrollWidth - clientWidth;
+		if (maxScroll <= 0) return 0;
+		return Math.max(
+			0,
+			Math.min(
+				100 - horizontalViewportWidthPercent,
+				(scrollLeft / maxScroll) * (100 - horizontalViewportWidthPercent)
+			)
+		);
+	});
+
+	const verticalViewportHeightPercent = $derived(() => {
+		if (!scrollHeight || !clientHeight) return 100;
+		return Math.min(100, (clientHeight / scrollHeight) * 100);
+	});
+
+	const verticalViewportTopPercent = $derived(() => {
+		if (!scrollHeight || !clientHeight) return 0;
+		const maxScroll = scrollHeight - clientHeight;
+		if (maxScroll <= 0) return 0;
+		return Math.max(
+			0,
+			Math.min(
+				100 - verticalViewportHeightPercent,
+				(scrollTop / maxScroll) * (100 - verticalViewportHeightPercent)
+			)
+		);
+	});
+
+	$effect(() => {
+		if (viewMode === 'panorama' && scrollContainer) {
+			updateScrollMetrics(scrollContainer);
+		}
+	});
 
 	function currentSrc(source: string | null, fallback: string | null) {
 		return source || fallback;
@@ -121,6 +184,8 @@
 							}`
 						: 'flex w-full min-h-full flex-col items-center justify-start py-0 overflow-y-auto'
 				}
+				bind:this={scrollContainer}
+				onscroll={handleScroll}
 			>
 				{#each panoramaPages as page (page.index)}
 					{#if page.data}
@@ -140,6 +205,23 @@
 					{/if}
 				{/each}
 			</div>
+			{#if scrollWidth > 0 && scrollHeight > 0}
+				{#if orientation === 'horizontal'}
+					<div class="pointer-events-none absolute bottom-2 right-2 h-2 w-24 rounded bg-black/40 overflow-hidden">
+						<div
+							class="h-full bg-white/80"
+							style={`margin-left: ${horizontalViewportLeftPercent}%; width: ${horizontalViewportWidthPercent}%;`}
+						/>
+					</div>
+				{:else}
+					<div class="pointer-events-none absolute bottom-2 right-2 h-24 w-2 rounded bg-black/40 overflow-hidden">
+						<div
+							class="w-full bg-white/80"
+							style={`margin-top: ${verticalViewportTopPercent}%; height: ${verticalViewportHeightPercent}%;`}
+						/>
+					</div>
+				{/if}
+			{/if}
 		{:else}
 			<!-- 回退到单张图片显示 -->
 			<div class="flex h-full min-w-full items-center justify-center">

@@ -4,7 +4,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select';
 	import { Switch } from '$lib/components/ui/switch';
-	import { Slider } from '$lib/components/ui/slider';
+	import { Input } from '$lib/components/ui/input';
 
 	type MessageStyle = 'none' | 'normal' | 'normalIconOnly' | 'tiny' | 'tinyIconOnly';
 
@@ -86,13 +86,18 @@
 	}
 
 	function handleDurationChange(value: number) {
-		const clamped = Math.min(10000, Math.max(1000, value));
-		saveNotification({ durationMs: clamped });
+		if (!Number.isFinite(value)) return;
+		const clampedSec = Math.min(10, Math.max(1, value));
+		const ms = Math.round(clampedSec * 1000);
+		durationMs = ms;
+		saveNotification();
 	}
 
 	function handleMaxVisibleChange(value: number) {
-		const clamped = Math.min(5, Math.max(1, value));
-		saveNotification({ maxVisible: clamped });
+		if (!Number.isFinite(value)) return;
+		const clamped = Math.min(5, Math.max(1, Math.round(value)));
+		maxVisible = clamped;
+		saveNotification();
 	}
 </script>
 
@@ -139,43 +144,42 @@
 		<!-- 显示时间 -->
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">显示时间</h4>
-			<div class="flex items-center justify-between">
+			<div class="flex items-center gap-2">
 				<span class="text-sm">每条通知持续时间</span>
-				<span class="text-muted-foreground text-xs">{(durationMs / 1000).toFixed(1)} 秒</span>
+				<Input
+					type="number"
+					min="1"
+					max="10"
+					step="0.5"
+					class="h-8 w-24"
+					value={(durationMs / 1000).toFixed(1)}
+					oninput={(e) => {
+						const v = parseFloat((e.currentTarget as HTMLInputElement).value);
+						if (!Number.isNaN(v)) handleDurationChange(v);
+					}}
+				/>
+				<span class="text-muted-foreground text-xs">秒</span>
 			</div>
-			<Slider
-				min={1000}
-				max={10000}
-				step={500}
-				type="single"
-				value={[durationMs]}
-				onValueChange={(vals) => {
-					const v = vals[0];
-					if (typeof v === 'number') handleDurationChange(v);
-				}}
-				class="w-full max-w-xs"
-			/>
 		</div>
 
 		<!-- 同时显示数量 -->
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">同时显示数量</h4>
-			<div class="flex items-center justify-between">
+			<div class="flex items-center gap-2">
 				<span class="text-sm">最多同时显示通知数</span>
-				<span class="text-muted-foreground text-xs">{maxVisible}</span>
+				<Input
+					type="number"
+					min="1"
+					max="5"
+					step="1"
+					class="h-8 w-20"
+					value={maxVisible}
+					oninput={(e) => {
+						const v = parseInt((e.currentTarget as HTMLInputElement).value, 10);
+						if (!Number.isNaN(v)) handleMaxVisibleChange(v);
+					}}
+				/>
 			</div>
-			<Slider
-				min={1}
-				max={5}
-				step={1}
-				type="single"
-				value={[maxVisible]}
-				onValueChange={(vals) => {
-					const v = vals[0];
-					if (typeof v === 'number') handleMaxVisibleChange(v);
-				}}
-				class="w-full max-w-xs"
-			/>
 		</div>
 
 		<!-- 其他通知占位 -->

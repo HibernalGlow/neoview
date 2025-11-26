@@ -55,6 +55,7 @@ export interface NeoViewSettings {
     defaultZoomMode: ZoomMode;
     showGrid: boolean;
     showInfoBar: boolean;
+    showBookSwitchToast: boolean;
     backgroundColor: string;
     backgroundMode: 'solid' | 'auto';
     mouseCursor: {
@@ -189,6 +190,7 @@ const defaultSettings: NeoViewSettings = {
     defaultZoomMode: 'fit',
     showGrid: false,
     showInfoBar: true,
+    showBookSwitchToast: false,
     backgroundColor: '#000000',
     backgroundMode: 'solid',
     mouseCursor: {

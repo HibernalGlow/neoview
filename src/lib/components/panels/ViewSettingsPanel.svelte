@@ -24,7 +24,9 @@
 		if (!currentSettings.view.pageLayout) {
 			currentSettings.view.pageLayout = {
 				splitHorizontalPages: false,
-				treatHorizontalAsDoublePage: false
+				treatHorizontalAsDoublePage: false,
+				singleFirstPageMode: 'restoreOrDefault',
+				singleLastPageMode: 'restoreOrDefault'
 			};
 		}
 		if (!currentSettings.view.autoRotate) {
@@ -45,7 +47,9 @@
 		if (!currentSettings.view.pageLayout) {
 			currentSettings.view.pageLayout = {
 				splitHorizontalPages: false,
-				treatHorizontalAsDoublePage: false
+				treatHorizontalAsDoublePage: false,
+				singleFirstPageMode: 'restoreOrDefault',
+				singleLastPageMode: 'restoreOrDefault'
 			};
 		}
 		if (!currentSettings.view.autoRotate) {
@@ -100,6 +104,16 @@
 						onCheckedChange={(checked) =>
 							settingsManager.updateNestedSettings('view', {
 								showInfoBar: checked
+							})}
+					/>
+				</div>
+				<div class="flex items-center justify-between gap-2">
+					<Label class="text-sm">切换书籍时显示提示</Label>
+					<Switch
+						checked={currentSettings.view.showBookSwitchToast}
+						onCheckedChange={(checked) =>
+							settingsManager.updateNestedSettings('view', {
+								showBookSwitchToast: checked
 							})}
 					/>
 				</div>

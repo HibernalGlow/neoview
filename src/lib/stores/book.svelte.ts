@@ -9,6 +9,8 @@ import { infoPanelStore } from './infoPanel.svelte';
 import { appState, type ViewerJumpSource, type PageWindowState } from '$lib/core/state/appState';
 import { emmMetadataStore } from './emmMetadata.svelte';
 import { fileBrowserStore } from './fileBrowser.svelte';
+import { settingsManager } from '$lib/settings/settingsManager';
+import { showToast } from '$lib/utils/toast';
 
 const PAGE_WINDOW_PADDING = 8;
 const JUMP_HISTORY_LIMIT = 20;
@@ -185,6 +187,16 @@ class BookStore {
       // 添加到历史记录（使用实际起始页）
       const { historyStore } = await import('$lib/stores/history.svelte');
       historyStore.add(path, book.name, targetPage, book.totalPages);
+
+
+      const settings = settingsManager.getSettings();
+      if (settings.view && settings.view.showBookSwitchToast) {
+        showToast({
+          title: book.name,
+          description: book.path,
+          variant: 'info'
+        });
+      }
 
       // 重置所有页面的超分状态
       this.resetAllPageUpscaleStatus();

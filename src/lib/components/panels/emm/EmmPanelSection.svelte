@@ -5,6 +5,7 @@
 	import * as Button from '$lib/components/ui/button';
 	import * as Switch from '$lib/components/ui/switch';
 	import * as Table from '$lib/components/ui/table';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { FlexRender, createSvelteTable } from '$lib/components/ui/data-table';
 	import type { ColumnDef, SortingState, ColumnFiltersState } from '@tanstack/table-core';
 	import { getCoreRowModel, getSortedRowModel, getFilteredRowModel } from '@tanstack/table-core';
@@ -974,46 +975,56 @@
 									{#if cell.column.id === 'key'}
 										{@const original = row.original as EMMRawRow}
 										{@const meta = getFieldMeta(original.key)}
-										<Table.Cell
-											class="px-2 py-0.5 align-top text-muted-foreground max-w-[160px] truncate"
-											title={original.key}
-										>
-											{meta.label}
+										<Table.Cell class="px-2 py-0.5 align-top text-muted-foreground max-w-[160px] truncate">
+											<Tooltip.Root>
+												<Tooltip.Trigger>
+													<span class="inline-block w-full text-left truncate">{meta.label}</span>
+												</Tooltip.Trigger>
+												<Tooltip.Content>
+													<p class="break-all text-[10px]">{original.key}</p>
+												</Tooltip.Content>
+											</Tooltip.Root>
 										</Table.Cell>
 									{:else}
 										{@const original = row.original as EMMRawRow}
 										{@const meta = getFieldMeta(original.key)}
-										<Table.Cell
-											class="px-2 py-0.5 align-top text-right max-w-[260px] truncate"
-											title={original.value}
-										>
-											{#if meta.type === 'url'}
-												<button
-													type="button"
-													class="underline-offset-2 hover:underline text-xs text-primary w-full text-right"
-													onclick={() => openUrl(original.value)}
-												>
-													{original.value}
-												</button>
-											{:else if meta.type === 'path'}
-												<button
-													type="button"
-													class="underline-offset-2 hover:underline text-xs text-foreground/80 w-full text-right"
-													onclick={() => openPath(original.value)}
-												>
-													{original.value}
-												</button>
-											{:else if meta.type === 'datetime'}
-												<span>{formatDateTime(original.value)}</span>
-											{:else if meta.type === 'timestamp'}
-												<span>{formatTimestampSeconds(original.value)}</span>
-											{:else if meta.type === 'number'}
-												<span>{formatNumberValue(original.key, original.value)}</span>
-											{:else if meta.type === 'boolean'}
-												<span>{formatBoolean(original.value)}</span>
-											{:else}
-												<span>{original.value}</span>
-											{/if}
+										<Table.Cell class="px-2 py-0.5 align-top text-right max-w-[260px] truncate">
+											<Tooltip.Root>
+												<Tooltip.Trigger>
+													<span class="inline-block w-full truncate">
+														{#if meta.type === 'url'}
+															<button
+																type="button"
+																class="underline-offset-2 hover:underline text-xs text-primary w-full text-right"
+																onclick={() => openUrl(original.value)}
+															>
+																{original.value}
+															</button>
+														{:else if meta.type === 'path'}
+															<button
+																type="button"
+																class="underline-offset-2 hover:underline text-xs text-foreground/80 w-full text-right"
+																onclick={() => openPath(original.value)}
+															>
+																{original.value}
+															</button>
+														{:else if meta.type === 'datetime'}
+															<span>{formatDateTime(original.value)}</span>
+														{:else if meta.type === 'timestamp'}
+															<span>{formatTimestampSeconds(original.value)}</span>
+														{:else if meta.type === 'number'}
+															<span>{formatNumberValue(original.key, original.value)}</span>
+														{:else if meta.type === 'boolean'}
+															<span>{formatBoolean(original.value)}</span>
+														{:else}
+															<span>{original.value}</span>
+														{/if}
+													</span>
+												</Tooltip.Trigger>
+												<Tooltip.Content>
+													<p class="break-all text-[10px] max-w-[320px] text-right">{original.value}</p>
+												</Tooltip.Content>
+											</Tooltip.Root>
 										</Table.Cell>
 									{/if}
 								{/each}

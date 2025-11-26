@@ -446,29 +446,33 @@
 							{#if source.total === 0}
 								<p class="text-center text-xs text-muted-foreground">暂无历史数据</p>
 							{:else}
-								<div class="space-y-2 text-xs">
-									{#each source.segments as segment}
-										<div>
-											<div class="flex justify-between text-[11px] text-muted-foreground">
-												<span>{segment.label}</span>
-												<span>{segment.count} · {segment.percent}%</span>
-											</div>
-											<div class="h-1.5 rounded bg-muted">
-												<div
-													class="h-full rounded bg-primary"
-													style={`width: ${segment.percent}%`}
-												></div>
-											</div>
+							<div class="space-y-2 text-xs">
+								{#each source.segments as segment}
+									<div>
+										<div class="flex justify-between text-[11px]">
+											<span class="text-primary">{segment.label}</span>
+											<span class="text-muted-foreground">{segment.count} · {segment.percent}%</span>
 										</div>
-									{/each}
-								</div>
-							{/if}
+										<div class="h-1.5 rounded bg-muted">
+											<div
+												class="h-full rounded bg-primary"
+												style={`width: ${segment.percent}%`}
+											></div>
+										</div>
+									</div>
+								{/each}
+							</div>
+						{/if}
 						{:else if cardId === 'emm-tags'}
 							{@const tags = buildTagSummary()}
 							{#if tags.total === 0}
 								<p class="text-center text-xs text-muted-foreground">未检测到 EMM 标签，请在设置中连接数据库。</p>
 							{:else}
-								<div class="text-xs text-muted-foreground">共 {tags.total} 个收藏标签</div>
+								<div class="text-xs">
+									<span class="text-muted-foreground">共</span>
+									<span class="text-primary font-semibold"> {tags.total} </span>
+									<span class="text-muted-foreground">个收藏标签</span>
+								</div>
 								<div class="mt-2 flex flex-wrap gap-2">
 									{#each tags.previewTags as tag}
 										<Badge class="gap-1" style={`border-color: ${tag.color}; color: ${tag.color}`}>{tag.display}</Badge>
@@ -478,7 +482,7 @@
 									{#each tags.topLetters as letter}
 										<div class="flex items-center justify-between">
 											<span>分类 {letter.letter}</span>
-											<span class="text-muted-foreground">{letter.count} 个标签</span>
+											<span><span class="text-primary">{letter.count}</span> <span class="text-muted-foreground">个标签</span></span>
 										</div>
 									{/each}
 								</div>

@@ -61,6 +61,7 @@
 	import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 	import { loadPanelViewMode, savePanelViewMode } from '$lib/utils/panelViewMode';
 	import { settingsManager } from '$lib/settings/settingsManager';
+	import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
 
 	function itemIsDirectory(item: any): boolean {
 		return item.isDir || item.is_directory;
@@ -388,9 +389,11 @@
 			localStorage.setItem(HOMEPAGE_STORAGE_KEY, path);
 			updateHomepageState(path);
 			console.log('✅ 主页路径已设置:', path);
-			// TODO: 可以添加 toast 通知
+			showSuccessToast('主页已更新', path);
 		} catch (err) {
 			console.error('❌ 保存主页路径失败:', err);
+			const description = err instanceof Error ? err.message : String(err);
+			showErrorToast('保存主页失败', description);
 		}
 	}
 

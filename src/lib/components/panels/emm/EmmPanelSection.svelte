@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Tag, Settings, FolderOpen, Save } from '@lucide/svelte';
+	import { Tag, Settings, FolderOpen, Save, ChevronUp, ChevronDown, ArrowUp, ArrowDown } from '@lucide/svelte';
 	import * as Separator from '$lib/components/ui/separator';
 	import * as Input from '$lib/components/ui/input';
 	import * as Button from '$lib/components/ui/button';
@@ -35,6 +35,11 @@
 
 	// 本书级别设置（收藏、评分、阅读方向等）
 	let bookSettings = $state<PerBookSettings | null>(null);
+
+	// 卡片折叠状态
+	let showTagsCard = $state(true);
+	let showRawCard = $state(true);
+	let showBookSettingsCard = $state(true);
 
 	const TAG_VIEW_MODE_STORAGE_KEY = 'neoview-emm-panel-tag-view-mode';
 	const TAG_FILTER_MODE_STORAGE_KEY = 'neoview-emm-panel-tag-filter-mode';
@@ -756,11 +761,24 @@
 							variant="ghost"
 							size="icon"
 							class="h-5 w-5"
+							onclick={() => (showTagsCard = !showTagsCard)}
+							title={showTagsCard ? '收起' : '展开'}
+						>
+							{#if showTagsCard}
+								<ChevronUp class="h-3 w-3" />
+							{:else}
+								<ChevronDown class="h-3 w-3" />
+							{/if}
+						</Button.Root>
+						<Button.Root
+							variant="ghost"
+							size="icon"
+							class="h-5 w-5"
 							onclick={() => moveEmmCard('tags', 'up')}
 							disabled={!canMoveEmmCard('tags', 'up')}
 							title="上移"
 						>
-							↑
+							<ArrowUp class="h-3 w-3" />
 						</Button.Root>
 						<Button.Root
 							variant="ghost"
@@ -770,52 +788,54 @@
 							disabled={!canMoveEmmCard('tags', 'down')}
 							title="下移"
 						>
-							↓
+							<ArrowDown class="h-3 w-3" />
 						</Button.Root>
 					</div>
 				</div>
 
-				{#if tagViewMode === 'flat'}
-					<div class="flex flex-wrap gap-1.5">
-						{#each displayTags() as tagInfo}
-							<span
-								class="inline-flex items-center rounded px-2 py-1 text-xs border {tagInfo.isCollect
-									? 'font-semibold'
-									: 'bg-muted border-border/60 text-muted-foreground'}"
-								style={tagInfo.isCollect
-									? `background-color: ${(tagInfo.color || '#409EFF')}20; border-color: ${(tagInfo.color || '#409EFF')}40; color: ${tagInfo.color || '#409EFF'};`
-									: ''}
-								title={getTagTitle(tagInfo)}
-							>
-								{tagInfo.display}
-							</span>
-						{/each}
-					</div>
-				{:else}
-					<div class="space-y-2">
-						{#each groupedTags() as group}
-							<div class="space-y-1">
-								<div class="text-[10px] text-muted-foreground">
-									{group.shortCategory}:{group.category} ({group.items.length})
+				{#if showTagsCard}
+					{#if tagViewMode === 'flat'}
+						<div class="flex flex-wrap gap-1.5">
+							{#each displayTags() as tagInfo}
+								<span
+									class="inline-flex items-center rounded px-2 py-1 text-xs border {tagInfo.isCollect
+										? 'font-semibold'
+										: 'bg-muted border-border/60 text-muted-foreground'}"
+									style={tagInfo.isCollect
+										? `background-color: ${(tagInfo.color || '#409EFF')}20; border-color: ${(tagInfo.color || '#409EFF')}40; color: ${tagInfo.color || '#409EFF'};`
+										: ''}
+									title={getTagTitle(tagInfo)}
+								>
+									{tagInfo.display}
+								</span>
+							{/each}
+						</div>
+					{:else}
+						<div class="space-y-2">
+							{#each groupedTags() as group}
+								<div class="space-y-1">
+									<div class="text-[10px] text-muted-foreground">
+										{group.shortCategory}:{group.category} ({group.items.length})
+									</div>
+									<div class="flex flex-wrap gap-1.5">
+										{#each group.items as tagInfo}
+											<span
+												class="inline-flex items-center rounded px-2 py-1 text-xs border {tagInfo.isCollect
+													? 'font-semibold'
+													: 'bg-muted border-border/60 text-muted-foreground'}"
+												style={tagInfo.isCollect
+													? `background-color: ${(tagInfo.color || '#409EFF')}20; border-color: ${(tagInfo.color || '#409EFF')}40; color: ${tagInfo.color || '#409EFF'};`
+													: ''}
+												title={getTagTitle(tagInfo)}
+											>
+												{tagInfo.display}
+											</span>
+										{/each}
+									</div>
 								</div>
-								<div class="flex flex-wrap gap-1.5">
-									{#each group.items as tagInfo}
-										<span
-											class="inline-flex items-center rounded px-2 py-1 text-xs border {tagInfo.isCollect
-												? 'font-semibold'
-												: 'bg-muted border-border/60 text-muted-foreground'}"
-											style={tagInfo.isCollect
-												? `background-color: ${(tagInfo.color || '#409EFF')}20; border-color: ${(tagInfo.color || '#409EFF')}40; color: ${tagInfo.color || '#409EFF'};`
-												: ''}
-											title={getTagTitle(tagInfo)}
-										>
-											{tagInfo.display}
-										</span>
-									{/each}
-								</div>
-							</div>
-						{/each}
-					</div>
+							{/each}
+						</div>
+					{/if}
 				{/if}
 			</div>
 		{/if}
@@ -827,12 +847,19 @@
 					<span>EMM 元数据配置</span>
 				</div>
 				<div class="flex items-center gap-2">
-					<button
-						class="text-xs text-muted-foreground hover:text-foreground"
+					<Button.Root
+						variant="ghost"
+						size="icon"
+						class="h-5 w-5"
 						onclick={() => (showEMMConfig = !showEMMConfig)}
+						title={showEMMConfig ? '收起' : '展开'}
 					>
-						{showEMMConfig ? '收起' : '展开'}
-					</button>
+						{#if showEMMConfig}
+							<ChevronUp class="h-3 w-3" />
+						{:else}
+							<ChevronDown class="h-3 w-3" />
+						{/if}
+					</Button.Root>
 					<div class="flex items-center gap-1 text-[10px]">
 						<Button.Root
 							variant="ghost"
@@ -842,7 +869,7 @@
 							disabled={!canMoveEmmCard('config', 'up')}
 							title="上移"
 						>
-							↑
+							<ArrowUp class="h-3 w-3" />
 						</Button.Root>
 						<Button.Root
 							variant="ghost"
@@ -852,7 +879,7 @@
 							disabled={!canMoveEmmCard('config', 'down')}
 							title="下移"
 						>
-							↓
+							<ArrowDown class="h-3 w-3" />
 						</Button.Root>
 					</div>
 				</div>
@@ -1074,6 +1101,19 @@
 									emmRawTable.getColumn('key')?.setFilterValue(v);
 								}}
 							/>
+						<Button.Root
+							variant="ghost"
+							size="icon"
+							class="h-5 w-5"
+							onclick={() => (showRawCard = !showRawCard)}
+							title={showRawCard ? '收起' : '展开'}
+						>
+							{#if showRawCard}
+								<ChevronUp class="h-3 w-3" />
+							{:else}
+								<ChevronDown class="h-3 w-3" />
+							{/if}
+						</Button.Root>
 						<div class="flex items-center gap-1 text-[10px]">
 							<Button.Root
 								variant="ghost"
@@ -1083,7 +1123,7 @@
 								disabled={!canMoveEmmCard('raw', 'up')}
 								title="上移"
 							>
-								↑
+								<ArrowUp class="h-3 w-3" />
 							</Button.Root>
 							<Button.Root
 								variant="ghost"
@@ -1093,12 +1133,13 @@
 								disabled={!canMoveEmmCard('raw', 'down')}
 								title="下移"
 							>
-								↓
+								<ArrowDown class="h-3 w-3" />
 							</Button.Root>
 						</div>
 					</div>
 				</div>
-				<div class="max-h-40 overflow-auto rounded-md border">
+				{#if showRawCard}
+					<div class="max-h-40 overflow-auto rounded-md border">
 					<Table.Root class="text-xs">
 						<Table.Header>
 							{#each emmRawTable.getHeaderGroups() as headerGroup (headerGroup.id)}
@@ -1193,6 +1234,7 @@
 						</Table.Body>
 					</Table.Root>
 				</div>
+				{/if}
 			</div>
 		{/if}
 
@@ -1213,11 +1255,24 @@
 							variant="ghost"
 							size="icon"
 							class="h-5 w-5"
+							onclick={() => (showBookSettingsCard = !showBookSettingsCard)}
+							title={showBookSettingsCard ? '收起' : '展开'}
+						>
+							{#if showBookSettingsCard}
+								<ChevronUp class="h-3 w-3" />
+							{:else}
+								<ChevronDown class="h-3 w-3" />
+							{/if}
+						</Button.Root>
+						<Button.Root
+							variant="ghost"
+							size="icon"
+							class="h-5 w-5"
 							onclick={() => moveEmmCard('bookSettings', 'up')}
 							disabled={!canMoveEmmCard('bookSettings', 'up')}
 							title="上移"
 						>
-							↑
+							<ArrowUp class="h-3 w-3" />
 						</Button.Root>
 						<Button.Root
 							variant="ghost"
@@ -1227,13 +1282,13 @@
 							disabled={!canMoveEmmCard('bookSettings', 'down')}
 							title="下移"
 						>
-							↓
+							<ArrowDown class="h-3 w-3" />
 						</Button.Root>
 					</div>
 				</div>
 			</div>
 
-			{#if bookSettings}
+			{#if bookSettings && showBookSettingsCard}
 				{@const bs = bookSettings}
 				<div class="space-y-2 text-xs">
 					<div class="flex items-center justify-between">

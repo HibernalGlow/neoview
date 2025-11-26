@@ -209,6 +209,7 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 	let lastLoadedPageIndex = -1;
 	let lastLoadedHash: string | null = null;
 	let lastViewMode: 'single' | 'double' | 'panorama' | null = null;
+	let lastZoomAppliedViewMode: 'single' | 'double' | 'panorama' | null = null;
 	let panoramaPagesData = $state<
 		Array<{ index: number; data: string | null; position: 'left' | 'center' | 'right' }>
 	>([]);
@@ -1085,11 +1086,14 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 
 	$effect(() => {
 		const viewMode = $viewerState.viewMode;
-		lastViewMode = viewMode;
-		if (!isCurrentPageVideo) {
-			applyCurrentZoomMode();
-		}
-	});
+	if (lastZoomAppliedViewMode === viewMode) {
+		return;
+	}
+	lastZoomAppliedViewMode = viewMode;
+	if (!isCurrentPageVideo) {
+		applyCurrentZoomMode();
+	}
+});
 
 	// 🔥 修复书籍导航Bug: 监听书籍切换,立即清空显示状态
 	let lastBookPath: string | null = null;

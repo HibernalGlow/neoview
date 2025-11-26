@@ -422,7 +422,9 @@ let lastBookPath: string | null = null;
 		isProcessing = false;
 		currentImageHash = bookStore.getCurrentPageHash();
 		originalPreviewUrl = '';
-		void updateOriginalPreview();
+		if (showOriginalPreview) {
+			void updateOriginalPreview();
+		}
 		if (autoUpscaleEnabled) {
 			requestUpscale('auto');
 		}

@@ -16,6 +16,7 @@
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
 	import { taskScheduler } from '$lib/core/tasks/taskScheduler';
+	import { isVideoFile } from '$lib/utils/videoUtils';
 
 	// TODO: 缩略图测试功能已移除，待重新实现
 	// import { runThumbnailTests } from '$lib/utils/thumbnail-test';
@@ -58,7 +59,6 @@
 	let unindexedArchives = $state<string[]>([]);
 
 	const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'avif', 'jxl', 'tiff', 'tif'];
-	const videoExtensions = ['mp4', 'mkv', 'avi', 'mov', 'flv', 'webm', 'wmv', 'm4v', 'mpg', 'mpeg'];
 
 	function createAppStateStore<T>(selector: StateSelector<T>) {
 		const initial = selector(appState.getSnapshot());
@@ -128,7 +128,7 @@
 
 		try {
 			const ext = getFileExtension(filePath);
-			const isVideo = videoExtensions.includes(ext);
+			const isVideo = isVideoFile(filePath);
 			const isImage = imageExtensions.includes(ext);
 
 			let blobKey: string | null = null;

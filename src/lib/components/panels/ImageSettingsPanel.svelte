@@ -85,6 +85,30 @@
 			</p>
 		</div>
 
+		<div class="space-y-2">
+			<h4 class="text-sm font-semibold">支持的视频格式</h4>
+			<input
+				type="text"
+				class="w-full rounded border bg-background px-2 py-1 text-sm"
+				placeholder="mp4, webm, mkv, flv, ..."
+				value={currentSettings.image.videoFormats?.join(', ') ?? ''}
+				onchange={(event) => {
+					const target = event.target as HTMLInputElement;
+					const raw = target.value || '';
+					const parts = raw
+						.split(',')
+						.map((s) => s.trim())
+						.filter((s) => s.length > 0);
+					settingsManager.updateNestedSettings('image', {
+						videoFormats: parts
+					});
+				}}
+			/>
+			<p class="text-muted-foreground text-xs">
+				使用逗号分隔扩展名（不区分大小写，可选带或不带点），用于判断文件是否作为视频打开。
+			</p>
+		</div>
+
 		<!-- 视频倍速范围 -->
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">视频倍速范围</h4>

@@ -49,6 +49,7 @@ export interface NeoViewSettings {
     videoMinPlaybackRate: number;
     videoMaxPlaybackRate: number;
     videoPlaybackRateStep: number;
+    videoFormats: string[];
   };
   view: {
     defaultZoomMode: ZoomMode;
@@ -168,7 +169,21 @@ const defaultSettings: NeoViewSettings = {
     longImageScrollMode: 'continuous',
     videoMinPlaybackRate: 0.25,
     videoMaxPlaybackRate: 16,
-    videoPlaybackRateStep: 0.25
+    videoPlaybackRateStep: 0.25,
+    videoFormats: [
+      'mp4',
+      'm4v',
+      'mov',
+      'webm',
+      'ogg',
+      'ogv',
+      '3gp',
+      '3g2',
+      'mkv',
+      'avi',
+      'flv',
+      'wmv'
+    ]
   },
   view: {
     defaultZoomMode: 'fit',

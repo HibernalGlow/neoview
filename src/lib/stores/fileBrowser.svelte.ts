@@ -7,6 +7,7 @@ import { writable } from 'svelte/store';
 import { toAssetUrl } from '$lib/utils/assetProxy';
 import type { FsItem } from '$lib/types';
 import { FileSystemAPI } from '$lib/api';
+import { isVideoFile } from '$lib/utils/videoUtils';
 
 export type SortField = 'name' | 'modified' | 'size' | 'type' | 'path' | 'random';
 export type SortOrder = 'asc' | 'desc';
@@ -39,7 +40,6 @@ interface FileBrowserState {
 }
 
 const archiveExtensions = ['.zip', '.cbz', '.rar', '.cbr', '.7z'];
-const videoExtensions = ['.mp4', '.mkv', '.avi', '.mov', '.flv', '.webm', '.wmv', '.m4v', '.mpg', '.mpeg'];
 
 function normalizePath(path: string): string {
   return path.replace(/\\/g, '/').toLowerCase();
@@ -48,11 +48,6 @@ function normalizePath(path: string): string {
 function isArchiveFile(path: string): boolean {
   const lower = path.toLowerCase();
   return archiveExtensions.some((ext) => lower.endsWith(ext)) || lower.endsWith('.pdf');
-}
-
-function isVideoFile(path: string): boolean {
-  const lower = path.toLowerCase();
-  return videoExtensions.some(ext => lower.endsWith(ext));
 }
 
 function isBookCandidate(item: FsItem): boolean {

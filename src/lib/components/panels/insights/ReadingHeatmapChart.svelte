@@ -1,4 +1,4 @@
-<script lang="ts" context="module">
+<script module lang="ts">
 	export type HeatmapCell = {
 		weekday: number;
 		hour: number;
@@ -11,6 +11,14 @@
 <script lang="ts">
 	import ChartContainer from '$lib/components/ui/chart/chart-container.svelte';
 
+	type HslColor = {
+		h: number;
+		s: number;
+		l: number;
+	};
+
+	const defaultPrimary: HslColor = { h: 215, s: 85, l: 55 };
+
 	let { cells = [], maxCount = 0 } = $props<{
 		cells?: HeatmapCell[];
 		maxCount?: number;
@@ -19,14 +27,64 @@
 	const dayLabels = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 	const hourLabels = ['0时', '3时', '6时', '9时', '12时', '15时', '18时', '21时'];
 
-	const viewWidth: number = 24 * 14 + 40;
-	const viewHeight: number = 7 * 20 + 20;
+	const viewWidth = 24 * 14 + 40;
+	const viewHeight = 7 * 20 + 20;
+
+	let themePrimary = $state<HslColor>(defaultPrimary);
+	let tooltip = $state({ visible: false, text: '', x: 0, y: 0 });
+
+	function clamp(value: number, min: number, max: number) {
+		return Math.min(Math.max(value, min), max);
+	}
+
+	function parseCssHsl(raw: string | null): HslColor {
+		if (!raw) return defaultPrimary;
+		const parts = raw.trim().split(/\s+/);
+		const [hStr, sStr, lStr] = parts;
+		return {
+			h: Number.parseFloat(hStr ?? `${defaultPrimary.h}`) || defaultPrimary.h,
+			s: Number.parseFloat((sStr ?? `${defaultPrimary.s}%`).replace('%', '')) || defaultPrimary.s,
+			l: Number.parseFloat((lStr ?? `${defaultPrimary.l}%`).replace('%', '')) || defaultPrimary.l
+		};
+	}
+
+	function readThemePrimary() {
+		if (typeof window === 'undefined') return defaultPrimary;
+		const raw = getComputedStyle(document.documentElement).getPropertyValue('--primary');
+		return parseCssHsl(raw);
+	}
+
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		const update = () => (themePrimary = readThemePrimary());
+		update();
+		const observer = new MutationObserver(update);
+		observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+		return () => observer.disconnect();
+	});
+
+	function formatHsl(color: HslColor, lightnessDelta = 0) {
+		const l = clamp(color.l + lightnessDelta, 5, 90);
+		return `hsl(${color.h} ${color.s}% ${l}%)`;
+	}
 
 	function getFill(count: number) {
-		if (count === 0 || maxCount === 0) return 'hsl(220 15% 18%)';
+		if (count === 0 || maxCount === 0) return 'hsl(var(--muted))';
 		const ratio = count / maxCount;
-		const lightness = 30 + ratio * 40;
-		return `hsl(215 90% ${lightness}%)`;
+		return formatHsl(themePrimary, ratio * 40 - 10);
+	}
+
+	function showTooltip(event: PointerEvent, cell: HeatmapCell) {
+		tooltip = {
+			visible: true,
+			text: `${cell.weekdayLabel} ${cell.hourLabel} · ${cell.count} 次`,
+			x: event.clientX,
+			y: event.clientY
+		};
+	}
+
+	function hideTooltip() {
+		tooltip = { ...tooltip, visible: false };
 	}
 </script>
 
@@ -34,7 +92,7 @@
 	config={{
 		count: {
 			label: '阅读次数',
-			color: 'hsl(215 90% 55%)'
+			color: `hsl(${themePrimary.h} ${themePrimary.s}% ${themePrimary.l}%)`
 		}
 	}}
 	class="h-48 w-full"
@@ -49,22 +107,30 @@
 						height="16"
 						fill={getFill(cell.count)}
 						class="transition-colors duration-200"
-					>
-						<title>{`${cell.weekdayLabel} ${cell.hourLabel} · ${cell.count} 次`}</title>
-					</rect>
+						onpointerenter={(event) => showTooltip(event, cell)}
+						onpointermove={(event) => showTooltip(event, cell)}
+						onpointerleave={hideTooltip}
+					/>
 				</g>
 			{/each}
 		</g>
 
-		<!-- 左侧星期标签 -->
 		{#each dayLabels as label, index}
 			<text x="0" y={index * 20 + 20} class="fill-muted-foreground text-[10px]">{label}</text>
 		{/each}
 
-		<!-- 底部小时刻度 -->
 		{#each hourLabels as label, hIndex}
 			{@const x = 32 + hIndex * 3 * 14}
 			<text x={x} y={viewHeight - 2} class="fill-muted-foreground text-[10px]">{label}</text>
 		{/each}
 	</svg>
 </ChartContainer>
+
+{#if tooltip.visible}
+	<div
+		class="pointer-events-none fixed z-50 rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md"
+		style={`left: ${tooltip.x + 12}px; top: ${tooltip.y + 12}px;`}
+	>
+		{tooltip.text}
+	</div>
+{/if}

@@ -14,7 +14,7 @@
 	let bookInfo = $state<ViewerBookInfo | null>(null);
 	let collectTags = $state<EMMCollectTag[]>([]);
 
-	let showEMMConfig = $state(false);
+	let showEMMConfig = $state(true);
 	let emmDatabasePaths = $state<string[]>([]);
 	let emmTranslationDbPath = $state<string>('');
 	let emmSettingPath = $state<string>('');

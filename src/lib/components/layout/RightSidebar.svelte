@@ -3,7 +3,7 @@
 	 * NeoView - Right Sidebar Component (shadcn-svelte 重构)
 	 * 右侧边栏组件 - 使用 shadcn-svelte Sidebar 结构
 	 */
-	import { Info, FileText, Pin, PinOff, Sparkles, GripVertical } from '@lucide/svelte';
+	import { Info, FileText, Pin, PinOff, Sparkles, GripVertical, BarChart3 } from '@lucide/svelte';
 	import {
 		activeRightPanel,
 		setActiveRightPanel,
@@ -16,6 +16,7 @@
 	import ImagePropertiesPanel from '$lib/components/panels/ImagePropertiesPanel.svelte';
 	import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
 	import UpscalePanel from '$lib/components/panels/UpscalePanel.svelte';
+	import DataInsightsPanel from '$lib/components/panels/DataInsightsPanel.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import HoverWrapper from './HoverWrapper.svelte';
 
@@ -45,6 +46,12 @@
 			url: '#',
 			icon: Sparkles,
 			value: 'upscale'
+		},
+		{
+			title: '洞察',
+			url: '#',
+			icon: BarChart3,
+			value: 'insights'
 		}
 	];
 
@@ -238,6 +245,8 @@
 										<ImagePropertiesPanel />
 									{:else if activeItem.value === 'upscale'}
 										<UpscalePanel />
+									{:else if activeItem.value === 'insights'}
+										<DataInsightsPanel />
 									{/if}
 								{/if}
 							</Sidebar.GroupContent>

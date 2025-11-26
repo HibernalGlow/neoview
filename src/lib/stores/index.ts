@@ -3,11 +3,12 @@
  * 统一导出所有 Store
  */
 
-export * from './book.svelte';
+export * from './bookmark.svelte';
 export * from './ui.svelte';
 export * from './keyboard.svelte';
 export * from './fileBrowser.svelte';
 export * from './infoPanel.svelte';
+export * from './insightsPanel.svelte';
 // panels.svelte 导出的 PanelType 与 ui.svelte 冲突，需要单独导入
 export {
 	panels,

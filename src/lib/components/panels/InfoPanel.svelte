@@ -21,6 +21,7 @@
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { FileSystemAPI } from '$lib/api';
 	import * as Switch from '$lib/components/ui/switch';
+	import { Slider } from '$lib/components/ui/slider';
 	import { onMount } from 'svelte';
 
 	let imageInfo = $state<ViewerImageInfo | null>(null);
@@ -489,53 +490,49 @@
 										<span class="text-[11px]">{Math.round(infoOverlayOpacity * 100)}%</span>
 									</div>
 								</div>
-								<div class="flex items-center justify-between gap-2">
-									<span>宽度</span>
-									<div class="flex items-center gap-2">
-										<input
-											type="number"
-											min="120"
-											max="1600"
-											step="20"
-											class="h-7 w-24 px-2 text-xs border-input bg-background selection:bg-primary dark:bg-input/30 selection:text-primary-foreground ring-offset-background placeholder:text-muted-foreground shadow-xs rounded-md border outline-none transition-[color,box-shadow] disabled:cursor-not-allowed disabled:opacity-50"
-											placeholder="自动"
-											value={infoOverlayWidth !== undefined ? infoOverlayWidth.toString() : ''}
-											oninput={(e) => {
-												const target = e.currentTarget as HTMLInputElement;
-												const v = parseFloat(target.value);
-												if (Number.isNaN(v)) {
-													updateInfoOverlay({ width: 0 });
-												} else {
-													updateInfoOverlay({ width: v });
-												}
-											}}
-										/>
-										<span class="text-[11px]">px</span>
+								<div class="space-y-1">
+									<div class="flex items-center justify-between gap-2">
+										<span>宽度</span>
+										<span class="text-[11px] text-muted-foreground">
+											{infoOverlayWidth != null ? `${infoOverlayWidth} px` : '自动'}
+										</span>
 									</div>
+									<Slider
+										min={120}
+										max={1600}
+										step={20}
+										type="single"
+										value={[infoOverlayWidth ?? 480]}
+										onValueChange={(vals) => {
+											const v = vals[0];
+											if (typeof v === 'number') {
+												updateInfoOverlay({ width: v });
+											}
+										}}
+										class="w-full"
+									/>
 								</div>
-								<div class="flex items-center justify-between gap-2">
-									<span>高度</span>
-									<div class="flex items-center gap-2">
-										<input
-											type="number"
-											min="32"
-											max="600"
-											step="10"
-											class="h-7 w-24 px-2 text-xs border-input bg-background selection:bg-primary dark:bg-input/30 selection:text-primary-foreground ring-offset-background placeholder:text-muted-foreground shadow-xs rounded-md border outline-none transition-[color,box-shadow] disabled:cursor-not-allowed disabled:opacity-50"
-											placeholder="自动"
-											value={infoOverlayHeight !== undefined ? infoOverlayHeight.toString() : ''}
-											oninput={(e) => {
-												const target = e.currentTarget as HTMLInputElement;
-												const v = parseFloat(target.value);
-												if (Number.isNaN(v)) {
-													updateInfoOverlay({ height: 0 });
-												} else {
-													updateInfoOverlay({ height: v });
-												}
-											}}
-										/>
-										<span class="text-[11px]">px</span>
+								<div class="space-y-1">
+									<div class="flex items-center justify-between gap-2">
+										<span>高度</span>
+										<span class="text-[11px] text-muted-foreground">
+											{infoOverlayHeight != null ? `${infoOverlayHeight} px` : '自动'}
+										</span>
 									</div>
+									<Slider
+										min={32}
+										max={600}
+										step={8}
+										type="single"
+										value={[infoOverlayHeight ?? 56]}
+										onValueChange={(vals) => {
+											const v = vals[0];
+											if (typeof v === 'number') {
+												updateInfoOverlay({ height: v });
+											}
+										}}
+										class="w-full"
+									/>
 								</div>
 								<div class="flex items-center justify-between gap-2">
 									<span>显示边框</span>

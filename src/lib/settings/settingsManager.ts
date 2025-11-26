@@ -75,6 +75,8 @@ export interface NeoViewSettings {
       enabled: boolean;
       opacity: number; // 0.0 - 1.0
       showBorder: boolean;
+      width?: number; // px, undefined = auto
+      height?: number; // px, undefined = auto
     };
   };
   book: {
@@ -100,6 +102,10 @@ export interface NeoViewSettings {
       bottomTriggerHeight: number;
       leftTriggerWidth: number;
       rightTriggerWidth: number;
+    };
+    autoHideTiming: {
+      showDelaySec: number;
+      hideDelaySec: number;
     };
   };
   bindings: {
@@ -210,10 +216,14 @@ const defaultSettings: NeoViewSettings = {
     bottomPanelVisible: false,
     autoHideToolbar: true,
     hoverAreas: {
-      topTriggerHeight: 4,
-      bottomTriggerHeight: 4,
-      leftTriggerWidth: 12,
-      rightTriggerWidth: 12
+      topTriggerHeight: 32,
+      bottomTriggerHeight: 32,
+      leftTriggerWidth: 32,
+      rightTriggerWidth: 32
+    },
+    autoHideTiming: {
+      showDelaySec: 0.0,
+      hideDelaySec: 0.0
     }
   },
   bindings: {

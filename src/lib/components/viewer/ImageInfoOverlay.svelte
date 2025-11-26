@@ -7,6 +7,8 @@
   let enabled = $state(false);
   let opacity = $state(0.85);
   let showBorder = $state(false);
+  let overlayWidth = $state<number | undefined>(undefined);
+  let overlayHeight = $state<number | undefined>(undefined);
   let dragOffsetX = $state(0);
   let dragOffsetY = $state(0);
   let isDragging = false;
@@ -25,6 +27,8 @@
     enabled = overlay?.enabled ?? false;
     opacity = overlay?.opacity ?? 0.85;
     showBorder = overlay?.showBorder ?? false;
+    overlayWidth = overlay?.width;
+    overlayHeight = overlay?.height;
   }
 
   syncFromSettings();
@@ -34,6 +38,8 @@
     enabled = overlay?.enabled ?? false;
     opacity = overlay?.opacity ?? 0.85;
     showBorder = overlay?.showBorder ?? false;
+    overlayWidth = overlay?.width;
+    overlayHeight = overlay?.height;
   };
 
   settingsManager.addListener(settingsListener);
@@ -105,6 +111,9 @@
         onmousedown={handleDragStart}
         role="button"
         aria-label="拖动以移动信息条"
+        tabindex="0"
+        style:width={overlayWidth != null ? `${overlayWidth}px` : undefined}
+        style:height={overlayHeight != null ? `${overlayHeight}px` : undefined}
       >
         <div class="flex flex-col gap-0.5">
           <div class="flex items-center gap-2">

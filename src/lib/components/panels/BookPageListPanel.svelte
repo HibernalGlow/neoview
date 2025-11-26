@@ -315,7 +315,9 @@
 				未找到匹配的页面
 			</div>
 		{:else}
-			<div class="p-2 space-y-1">
+			<div
+				class={`p-2 ${viewMode === 'image' ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2' : 'space-y-1'}`}
+			>
 				{#each filteredItems as item}
 					<button
 						class="w-full p-2 rounded-md hover:bg-accent transition-colors text-left border {bookStore.currentPageIndex ===

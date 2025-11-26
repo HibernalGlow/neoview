@@ -990,7 +990,7 @@
 											{#if meta.type === 'url'}
 												<button
 													type="button"
-													class="underline-offset-2 hover:underline text-xs text-blue-500 w-full text-right"
+													class="underline-offset-2 hover:underline text-xs text-primary w-full text-right"
 													onclick={() => openUrl(original.value)}
 												>
 													{original.value}

@@ -5,7 +5,7 @@
 import { writable } from 'svelte/store';
 import type { FsItem } from '$lib/types';
 
-interface Bookmark {
+export interface Bookmark {
   id: string;
   name: string;
   path: string;

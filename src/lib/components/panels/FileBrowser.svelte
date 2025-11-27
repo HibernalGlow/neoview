@@ -834,6 +834,9 @@
 		}
 	}
 
+	// 文件树子目录缓存：路径 -> 子目录列表
+	let treeChildrenCache = new Map<string, FsItem[]>();
+	
 	async function handleTreeToggleNode(
 		event: CustomEvent<{ path: string; fsPath: string; isDir: boolean; hasChildren: boolean }>
 	) {
@@ -844,8 +847,33 @@
 			return;
 		}
 
+		// 优化：先检查缓存
+		const cached = treeChildrenCache.get(fsPath);
+		if (cached) {
+			// 缓存命中，直接使用
+			const dirs = cached.filter((item) => item.isDir);
+			if (dirs.length === 0) return;
+			
+			let hasChanges = false;
+			for (const dir of dirs) {
+				if (!treeItemsMap.has(dir.path)) {
+					treeItemsMap.set(dir.path, dir);
+					hasChanges = true;
+				}
+			}
+			if (hasChanges) {
+				treeItems = Array.from(treeItemsMap.values());
+			}
+			return;
+		}
+
+		// 缓存未命中，从后端加载
 		try {
 			const entries = await FileSystemAPI.browseDirectory(fsPath);
+			
+			// 缓存结果
+			treeChildrenCache.set(fsPath, entries);
+			
 			const dirs = entries.filter((item) => item.isDir);
 			if (dirs.length === 0) return;
 
@@ -1074,7 +1102,7 @@
 
 	/**
 	 * 加载目录内容（不添加历史记录，用于前进/后退）
-	 * 优化：立即显示缓存数据，异步验证和加载
+	 * 优化：立即显示缓存数据，直接加载不使用调度器
 	 */
 	async function loadDirectoryWithoutHistory(path: string) {
 		console.log('📂 loadDirectory called with path:', path);
@@ -1105,61 +1133,44 @@
 			fileBrowserStore.setThumbnails(cachedData.thumbnails);
 			thumbnails = new Map(cachedData.thumbnails);
 			updateTreeWithDirectory(path, cachedData.items);
+			
+			// 同时缓存到文件树缓存
+			treeChildrenCache.set(path, cachedData.items);
+			
 			setLastFolder(path);
 
-			// 异步验证缓存并更新缩略图
-			runWithScheduler({
-				type: 'filebrowser-cache-validate',
-				source: `cache:${path}`,
-				bucket: 'background',
-				priority: 'low',
-				executor: async () => {
-					const isValid = await navigationHistory.validateCache(path);
-					if (!isValid) {
-						console.log('🔄 缓存失效，重新加载:', path);
-						await reloadDirectoryFromBackend(path);
-					} else {
-						// 缓存有效，继续加载缺失的缩略图
-						await loadThumbnailsForItems(cachedData.items, path, cachedData.thumbnails);
-					}
+			// 异步验证缓存（低优先级，不阻塞）
+			requestIdleCallback(async () => {
+				const isValid = await navigationHistory.validateCache(path);
+				if (!isValid) {
+					console.log('🔄 缓存失效，重新加载:', path);
+					await reloadDirectoryFromBackend(path);
+				} else {
+					// 缓存有效，继续加载缺失的缩略图
+					await loadThumbnailsForItems(cachedData.items, path, cachedData.thumbnails);
 				}
-			}).catch((err) => {
-				console.debug('缓存验证任务失败:', err);
 			});
 		} else {
-			// 无缓存：显示 loading，异步加载
+			// 无缓存：显示 loading，直接加载（不使用调度器）
 			fileBrowserStore.setLoading(true);
 			fileBrowserStore.clearThumbnails();
 			fileBrowserStore.setItems([]);
 
-			// 异步加载，不阻塞 UI
-			runWithScheduler({
-				type: 'filebrowser-directory-load',
-				source: `load:${path}`,
-				bucket: 'background',
-				priority: 'high', // 提高优先级，因为用户主动导航
-				executor: async () => {
-					try {
-						await reloadDirectoryFromBackend(path);
-					} catch (err) {
-						console.error('❌ Error loading directory:', err);
-						fileBrowserStore.setError(String(err));
-						fileBrowserStore.setItems([]);
-					} finally {
-						fileBrowserStore.setLoading(false);
-					}
-				}
-			}).catch((err) => {
-				console.error('❌ Error in load task:', err);
+			try {
+				await reloadDirectoryFromBackend(path);
+			} catch (err) {
+				console.error('❌ Error loading directory:', err);
 				fileBrowserStore.setError(String(err));
+				fileBrowserStore.setItems([]);
+			} finally {
 				fileBrowserStore.setLoading(false);
-			});
+			}
 		}
 	}
 
 	/**
 	 * 从后端重新加载目录数据（完全分离文件浏览和缩略图加载）
-	 * 优化：立即设置数据，不等待任何异步操作
+	 * 优化：立即设置数据，不使用调度器
 	 */
 	async function reloadDirectoryFromBackend(path: string) {
 		console.log('🔄 Calling FileSystemAPI.loadDirectorySnapshot...');
@@ -1167,8 +1178,7 @@
 		const loadedItems = snapshot.items;
 		const directoryMtime = snapshot.mtime ? snapshot.mtime * 1000 : undefined;
 		console.log(
-			`✅ Loaded ${loadedItems.length} items${snapshot.cached ? ' (cache hit)' : ''}:`,
-			loadedItems.map((i) => i.name)
+			`✅ Loaded ${loadedItems.length} items${snapshot.cached ? ' (cache hit)' : ''}`
 		);
 
 		// 立即设置数据，不等待缩略图
@@ -1182,33 +1192,30 @@
 		fileBrowserStore.setLoading(false); // 立即取消 loading 状态
 		updateTreeWithDirectory(path, sortedItems);
 
-		// 异步预填充缓存缩略图（不阻塞）
-		prefillThumbnailsFromCache(loadedItems, path).catch((err) => {
-			console.debug('预填充缩略图失败:', err);
-		});
+		// 同时缓存到文件树缓存
+		treeChildrenCache.set(path, sortedItems);
 
 		// 缓存目录数据（不包含缩略图）
 		navigationHistory.cacheDirectory(path, loadedItems, new Map(), directoryMtime);
 
-		// 立即加载缩略图（不阻塞文件浏览，但立即开始处理）
-		runWithScheduler({
-			type: 'filebrowser-thumbnail-preload',
-			source: `thumb:${path}`,
-			bucket: 'background',
-			priority: 'low',
-			executor: () => loadThumbnailsForItemsAsync(loadedItems, path)
-		}).catch((err) => console.debug('缩略图预加载任务失败:', err));
+		// 异步预填充缓存缩略图（使用 requestIdleCallback，不阻塞）
+		requestIdleCallback(() => {
+			prefillThumbnailsFromCache(loadedItems, path).catch((err) => {
+				console.debug('预填充缩略图失败:', err);
+			});
+		});
 
-		// 预加载相邻目录（低优先级）
-		runWithScheduler({
-			type: 'filebrowser-prefetch-adjacent',
-			source: `prefetch:${path}`,
-			bucket: 'background',
-			priority: 'low',
-			executor: async () => {
-				navigationHistory.prefetchAdjacentPaths(path);
-			}
-		}).catch((err) => console.debug('相邻目录预取失败:', err));
+		// 异步加载缩略图（使用 requestIdleCallback，不阻塞）
+		requestIdleCallback(() => {
+			loadThumbnailsForItemsAsync(loadedItems, path).catch((err) => {
+				console.debug('缩略图预加载失败:', err);
+			});
+		});
+
+		// 预加载相邻目录（使用 requestIdleCallback，低优先级）
+		requestIdleCallback(() => {
+			navigationHistory.prefetchAdjacentPaths(path);
+		});
 
 		setLastFolder(path);
 	}

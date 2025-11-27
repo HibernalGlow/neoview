@@ -1,21 +1,39 @@
-export type HoverScrollAxis = 'both' | 'horizontal' | 'vertical';
+// hoverPan.ts
+export type HoverPanAxis = 'both' | 'horizontal' | 'vertical';
 
-export interface HoverScrollOptions {
-  enabled?: boolean;
-  axis?: HoverScrollAxis;
-  maxSpeed?: number;
-  deadZoneRatio?: number;
+export interface HoverPanBounds {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
 }
 
-const DEFAULT_OPTIONS: Required<Pick<HoverScrollOptions, 'enabled' | 'axis' | 'maxSpeed' | 'deadZoneRatio'>> = {
+export interface HoverPanPosition {
+  x: number;
+  y: number;
+}
+
+export interface HoverPanOptions {
+  enabled?: boolean;
+  axis?: HoverPanAxis;
+  maxSpeed?: number;        // px/s
+  deadZoneRatio?: number;   // 0~0.49，边缘触发宽度比例
+  getBounds?: () => HoverPanBounds;
+  getPosition?: () => HoverPanPosition;
+  setPosition?: (pos: HoverPanPosition) => void;
+}
+
+const DEFAULT_OPTIONS: Required<
+  Pick<HoverPanOptions, 'enabled' | 'axis' | 'maxSpeed' | 'deadZoneRatio'>
+> = {
   enabled: true,
   axis: 'both',
   maxSpeed: 1500,
-  deadZoneRatio: 0.3,
+  deadZoneRatio: 0.3
 };
 
-export function hoverScroll(node: HTMLElement, options: HoverScrollOptions = {}) {
-  let opts = { ...DEFAULT_OPTIONS, ...options };
+export function hoverPan(node: HTMLElement, options: HoverPanOptions) {
+  let opts: HoverPanOptions = { ...DEFAULT_OPTIONS, ...options };
 
   let frameId: number | null = null;
   let lastTimestamp = 0;
@@ -52,7 +70,6 @@ export function hoverScroll(node: HTMLElement, options: HoverScrollOptions = {})
 
     const dtSec = (timestamp - lastTimestamp) / 1000;
     lastTimestamp = timestamp;
-
     if (dtSec <= 0) {
       scheduleLoop();
       return;
@@ -64,14 +81,6 @@ export function hoverScroll(node: HTMLElement, options: HoverScrollOptions = {})
       return;
     }
 
-    const maxScrollLeft = node.scrollWidth - node.clientWidth;
-    const maxScrollTop = node.scrollHeight - node.clientHeight;
-
-    if (maxScrollLeft <= 0 && maxScrollTop <= 0) {
-      scheduleLoop();
-      return;
-    }
-
     const pxRaw = (pointerX - rect.left) / rect.width;
     const pyRaw = (pointerY - rect.top) / rect.height;
     const px = Math.min(Math.max(pxRaw, 0), 1);
@@ -79,13 +88,11 @@ export function hoverScroll(node: HTMLElement, options: HoverScrollOptions = {})
 
     const edge = Math.min(
       Math.max(opts.deadZoneRatio ?? DEFAULT_OPTIONS.deadZoneRatio, 0.01),
-      0.49,
+      0.49
     );
     const maxSpeed = opts.maxSpeed ?? DEFAULT_OPTIONS.maxSpeed;
 
-    const computeEdgeDelta = (p: number, maxScrollable: number): number => {
-      if (maxScrollable <= 0) return 0;
-
+    const computeEdgeSpeed = (p: number): number => {
       const leftZoneEnd = edge;
       const rightZoneStart = 1 - edge;
 
@@ -105,27 +112,34 @@ export function hoverScroll(node: HTMLElement, options: HoverScrollOptions = {})
       if (t <= 0) return 0;
       if (t > 1) t = 1;
 
-      const v = direction * t * maxSpeed;
-      return v * dtSec;
+      return direction * t * maxSpeed;
     };
 
-    let dx = 0;
-    let dy = 0;
+    const bounds = opts.getBounds?.() ?? {
+      minX: 0,
+      maxX: 0,
+      minY: 0,
+      maxY: 0
+    };
+    const pos = opts.getPosition?.() ?? { x: 0, y: 0 };
+
+    let nextX = pos.x;
+    let nextY = pos.y;
 
     if (opts.axis === 'horizontal' || opts.axis === 'both') {
-      dx = computeEdgeDelta(px, maxScrollLeft);
-    }
-    if (opts.axis === 'vertical' || opts.axis === 'both') {
-      dy = computeEdgeDelta(py, maxScrollTop);
+      const vx = -computeEdgeSpeed(px);
+      const dx = vx * dtSec;
+      nextX = Math.min(bounds.maxX, Math.max(bounds.minX, pos.x + dx));
     }
 
-    if (dx !== 0) {
-      const nextLeft = Math.min(maxScrollLeft, Math.max(0, node.scrollLeft + dx));
-      node.scrollLeft = nextLeft;
+    if (opts.axis === 'vertical' || opts.axis === 'both') {
+      const vy = -computeEdgeSpeed(py);
+      const dy = vy * dtSec;
+      nextY = Math.min(bounds.maxY, Math.max(bounds.minY, pos.y + dy));
     }
-    if (dy !== 0) {
-      const nextTop = Math.min(maxScrollTop, Math.max(0, node.scrollTop + dy));
-      node.scrollTop = nextTop;
+
+    if (opts.setPosition) {
+      opts.setPosition({ x: nextX, y: nextY });
     }
 
     scheduleLoop();
@@ -147,7 +161,7 @@ export function hoverScroll(node: HTMLElement, options: HoverScrollOptions = {})
   node.addEventListener('mouseleave', handleMouseLeave);
 
   return {
-    update(newOptions?: HoverScrollOptions) {
+    update(newOptions?: HoverPanOptions) {
       opts = { ...DEFAULT_OPTIONS, ...newOptions };
       if (!opts.enabled) {
         cancelLoop();
@@ -157,6 +171,6 @@ export function hoverScroll(node: HTMLElement, options: HoverScrollOptions = {})
       cancelLoop();
       node.removeEventListener('mousemove', handleMouseMove);
       node.removeEventListener('mouseleave', handleMouseLeave);
-    },
+    }
   };
 }

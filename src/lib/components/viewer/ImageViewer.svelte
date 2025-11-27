@@ -278,8 +278,9 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 		const mode = $viewerState.viewMode;
 		const angle = $rotationAngle;
 		const pageIndex = bookStore.currentPageIndex;
+		const hoverEnabled = hoverScrollEnabled;
 
-		if (zoom <= 1 || mode === 'panorama' || isCurrentPageVideo) {
+		if (!hoverEnabled || zoom <= 1 || mode === 'panorama' || isCurrentPageVideo) {
 			pan = { x: 0, y: 0 };
 			return;
 		}

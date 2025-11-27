@@ -46,6 +46,7 @@ interface FileBrowserState {
   }>;
   inlineTreeRootPath: string;
   inlineTreeScrollTops: Record<string, number>;
+  scrollPositions: Record<string, number>; // 保存文件列表的滚动位置
 }
 
 const archiveExtensions = ['.zip', '.cbz', '.rar', '.cbr', '.7z'];
@@ -111,7 +112,8 @@ const initialState: FileBrowserState = {
   inlineTreeMode: false,
   inlineTreeState: {},
   inlineTreeRootPath: '',
-  inlineTreeScrollTops: {}
+  inlineTreeScrollTops: {},
+  scrollPositions: {}
 };
 
 /**

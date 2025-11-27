@@ -144,7 +144,10 @@ let currentSortModeLabel = $derived(() => {
 	}
 
 	function handleZoomModeChange(mode: ZoomMode) {
-		requestZoomMode(mode);
+		const applied = requestZoomMode(mode);
+		if (!applied) return;
+		if (settings.view.defaultZoomMode === mode) return;
+		settingsManager.updateNestedSettings('view', { defaultZoomMode: mode });
 	}
 
 async function handleSortModeChange(mode: PageSortMode) {

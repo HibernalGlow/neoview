@@ -126,6 +126,13 @@ const updateViewerSlice = (partial: Partial<AppStateSnapshot['viewer']>) => {
 	});
 };
 
+function applyZoomModeWithTracking(mode?: ZoomMode) {
+	const fallbackMode = settingsManager.getSettings().view.defaultZoomMode ?? 'fit';
+	const targetMode = (mode ?? fallbackMode) as ZoomMode;
+	updateViewerSlice({ currentZoomMode: targetMode });
+	dispatchApplyZoomMode(mode);
+}
+
 zoomLevel.subscribe((value) => {
 	saveToStorage('zoomLevel', value);
 	updateViewerSlice({ zoom: value });
@@ -145,7 +152,7 @@ lockedZoomMode.subscribe((value) => {
 	saveToStorage('lockedZoomMode', value);
 	updateViewerSlice({ lockedZoomMode: value });
 	if (value) {
-		dispatchApplyZoomMode(value);
+		applyZoomModeWithTracking(value);
 		lastZoomModeBeforeTemporaryFit = null;
 	}
 });
@@ -324,16 +331,20 @@ function getCurrentDefaultZoomMode(): ZoomMode {
 }
 
 export function toggleZoomModeLock(mode: ZoomMode) {
-	lockedZoomMode.update((current) => (current === mode ? null : mode));
+	const current = appState.getSnapshot().viewer.lockedZoomMode;
+	const newMode = current === mode ? null : mode;
+	lockedZoomMode.set(newMode);
+	// 立即更新 appState 以确保同步
+	updateViewerSlice({ lockedZoomMode: newMode });
 }
 
 export function requestZoomMode(mode: ZoomMode): boolean {
 	const locked = appState.getSnapshot().viewer.lockedZoomMode as ZoomMode | null;
 	if (locked && locked !== mode) {
-		dispatchApplyZoomMode(locked);
+		applyZoomModeWithTracking(locked);
 		return false;
 	}
-	dispatchApplyZoomMode(mode);
+	applyZoomModeWithTracking(mode);
 	return true;
 }
 
@@ -346,14 +357,14 @@ export function toggleTemporaryFitZoom() {
 	if (lastZoomModeBeforeTemporaryFit === null) {
 		lastZoomModeBeforeTemporaryFit = getCurrentDefaultZoomMode();
 		if (lastZoomModeBeforeTemporaryFit !== 'fit') {
-			dispatchApplyZoomMode('fit');
+			applyZoomModeWithTracking('fit');
 		}
 		return;
 	}
 
 	const restore = lastZoomModeBeforeTemporaryFit;
 	lastZoomModeBeforeTemporaryFit = null;
-	dispatchApplyZoomMode(restore);
+	applyZoomModeWithTracking(restore);
 }
 
 /**

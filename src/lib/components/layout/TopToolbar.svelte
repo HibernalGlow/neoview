@@ -117,6 +117,7 @@ let currentSortModeLabel = $derived(() => {
 	let hoverAreas = $derived(settings.panels?.hoverAreas);
 	let autoHideTiming = $derived(settings.panels?.autoHideTiming ?? { showDelaySec: 0, hideDelaySec: 0 });
 	let defaultZoomMode: ZoomMode = $derived(settings.view.defaultZoomMode);
+	let currentZoomDisplayMode: ZoomMode = $derived($viewerState.lockedZoomMode ?? $viewerState.currentZoomMode ?? defaultZoomMode);
 
 	// 监听设置变化
 	settingsManager.addListener((newSettings) => {
@@ -935,17 +936,17 @@ async function handleSortModeChange(mode: PageSortMode) {
 
 				<!-- 缩放模式切换 -->
 				<DropdownMenu.Root>
-					{@const CurrentZoomIcon = getZoomModeIcon(defaultZoomMode)}
+					{@const CurrentZoomIcon = getZoomModeIcon(currentZoomDisplayMode)}
 					<DropdownMenu.Trigger>
 						<Button
 							variant="ghost"
 							size="icon"
-							class={`h-8 w-8 ${$viewerState.lockedZoomMode === defaultZoomMode ? 'rounded-full ring-2 ring-primary bg-primary/10 text-primary' : ''}`}
+							class={`h-8 w-8 ${$viewerState.lockedZoomMode ? 'rounded-full ring-2 ring-primary bg-primary/10 text-primary' : ''}`}
 							style="pointer-events: auto;"
-							title={`缩放模式：${getZoomModeLabel(defaultZoomMode)}${$viewerState.lockedZoomMode === defaultZoomMode ? '（已锁定）' : ''}`}
+							title={`缩放模式：${getZoomModeLabel(currentZoomDisplayMode)}${$viewerState.lockedZoomMode ? '（已锁定）' : ''}`}
 							oncontextmenu={(event) => {
 								event.preventDefault();
-								toggleZoomModeLock(defaultZoomMode);
+								toggleZoomModeLock(currentZoomDisplayMode);
 							}}
 						>
 							<CurrentZoomIcon class="h-4 w-4" />
@@ -963,12 +964,15 @@ async function handleSortModeChange(mode: PageSortMode) {
 							<DropdownMenu.Item onclick={() => handleZoomModeChange(mode)}>
 								<div class="flex items-center gap-2">
 									<div class="flex h-4 w-4 items-center justify-center">
-										{#if defaultZoomMode === mode}
+										{#if currentZoomDisplayMode === mode}
 											<Check class="h-3 w-3" />
 										{/if}
 									</div>
 									<svelte:component this={getZoomModeIcon(mode)} class="h-3.5 w-3.5 text-muted-foreground" />
-									<span class="text-xs">{label}</span>
+									<span class="text-xs">
+										{label}
+										{$viewerState.lockedZoomMode === mode ? '（锁定）' : ''}
+									</span>
 								</div>
 							</DropdownMenu.Item>
 						{/each}

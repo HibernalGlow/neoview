@@ -17,7 +17,9 @@ import {
 	folderPanelActions,
 	selectedItems,
 	multiSelectMode,
-	deleteMode
+	deleteMode,
+	sortConfig,
+	searchKeyword
 } from '../stores/folderPanelStore.svelte';
 import { Loader2, FolderOpen, AlertCircle } from '@lucide/svelte';
 
@@ -61,6 +63,54 @@ let thumbnails = $derived(fileBrowserStore.getState().thumbnails);
 
 // 视图模式映射
 let viewMode = $derived(($viewStyle === 'thumbnail' ? 'thumbnails' : 'list') as 'list' | 'thumbnails');
+
+// 排序函数
+function sortItems(items: FsItem[], field: string, order: string): FsItem[] {
+	const sorted = [...items].sort((a, b) => {
+		// 文件夹始终在前
+		if (a.isDir !== b.isDir) {
+			return a.isDir ? -1 : 1;
+		}
+
+		let comparison = 0;
+		switch (field) {
+			case 'name':
+				comparison = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+				break;
+			case 'date':
+				comparison = (a.modified || 0) - (b.modified || 0);
+				break;
+			case 'size':
+				comparison = (a.size || 0) - (b.size || 0);
+				break;
+			case 'type':
+				const extA = a.name.split('.').pop()?.toLowerCase() || '';
+				const extB = b.name.split('.').pop()?.toLowerCase() || '';
+				comparison = extA.localeCompare(extB);
+				break;
+		}
+
+		return order === 'desc' ? -comparison : comparison;
+	});
+	return sorted;
+}
+
+// 过滤函数
+function filterItems(items: FsItem[], keyword: string): FsItem[] {
+	if (!keyword.trim()) return items;
+	const lowerKeyword = keyword.toLowerCase();
+	return items.filter(item => item.name.toLowerCase().includes(lowerKeyword));
+}
+
+// 获取层的显示项（应用排序和过滤）
+function getDisplayItems(layer: FolderLayer): FsItem[] {
+	const config = $sortConfig;
+	const keyword = $searchKeyword;
+	let result = layer.items;
+	result = filterItems(result, keyword);
+	result = sortItems(result, config.field, config.order);
+	return result;
+}
 
 // 初始化根层
 async function initRoot(path: string) {
@@ -261,27 +311,32 @@ function handleSelectedIndexChange(layerIndex: number, payload: { index: number 
 					<AlertCircle class="text-destructive h-8 w-8" />
 					<p class="text-destructive text-sm">{layer.error}</p>
 				</div>
-			{:else if layer.items.length === 0}
-				<!-- 空状态 -->
-				<div class="flex h-full flex-col items-center justify-center gap-2 p-4">
-					<FolderOpen class="text-muted-foreground h-12 w-12" />
-					<p class="text-muted-foreground text-sm">文件夹为空</p>
-				</div>
 			{:else}
-				<!-- 虚拟化列表 -->
-				<VirtualizedFileList
-					items={layer.items}
-					currentPath={layer.path}
-					{thumbnails}
-					selectedIndex={layer.selectedIndex}
-					isCheckMode={$multiSelectMode}
-					isDeleteMode={$deleteMode}
-					selectedItems={$selectedItems}
-					{viewMode}
-					onItemSelect={(payload) => handleItemSelect(index, payload)}
-					onItemDoubleClick={(payload) => handleItemDoubleClick(index, payload)}
-					onSelectedIndexChange={(payload) => handleSelectedIndexChange(index, payload)}
-				/>
+				{@const displayItems = getDisplayItems(layer)}
+				{#if displayItems.length === 0}
+					<!-- 空状态（过滤后无结果） -->
+					<div class="flex h-full flex-col items-center justify-center gap-2 p-4">
+						<FolderOpen class="text-muted-foreground h-12 w-12" />
+						<p class="text-muted-foreground text-sm">
+							{$searchKeyword ? '没有匹配的文件' : '文件夹为空'}
+						</p>
+					</div>
+				{:else}
+					<!-- 虚拟化列表 -->
+					<VirtualizedFileList
+						items={displayItems}
+						currentPath={layer.path}
+						{thumbnails}
+						selectedIndex={layer.selectedIndex}
+						isCheckMode={$multiSelectMode}
+						isDeleteMode={$deleteMode}
+						selectedItems={$selectedItems}
+						{viewMode}
+						onItemSelect={(payload) => handleItemSelect(index, payload)}
+						onItemDoubleClick={(payload) => handleItemDoubleClick(index, payload)}
+						onSelectedIndexChange={(payload) => handleSelectedIndexChange(index, payload)}
+					/>
+				{/if}
 			{/if}
 		</div>
 	{/each}

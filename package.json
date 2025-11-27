@@ -51,6 +51,8 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.7",
+    "@tanstack/svelte-virtual": "^3.13.12",
+    "@tanstack/virtual-core": "^3.13.12",
     "@tauri-apps/api": "^2.5.0",
     "@tauri-apps/plugin-cli": "^2.4.0",
     "@tauri-apps/plugin-dialog": "^2.4.2",

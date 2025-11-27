@@ -731,10 +731,22 @@
     "@tailwindcss/oxide" "4.1.17"
     tailwindcss "4.1.17"
 
+"@tanstack/svelte-virtual@^3.13.12":
+  version "3.13.12"
+  resolved "https://registry.npmmirror.com/@tanstack/svelte-virtual/-/svelte-virtual-3.13.12.tgz#719f1583f6f8950cd58b70a25bc53d539fa53861"
+  integrity sha512-SsOinCktvpMFbdSW61X6jeUNaJvD1tmt30AFVSLe1FQxGxjdPkZo0gAsoVPqM9FFZqidvvXQ4gpadDaTz/yGxA==
+  dependencies:
+    "@tanstack/virtual-core" "3.13.12"
+
 "@tanstack/table-core@^8.21.3":
   version "8.21.3"
   resolved "https://registry.npmmirror.com/@tanstack/table-core/-/table-core-8.21.3.tgz#2977727d8fc8dfa079112d9f4d4c019110f1732c"
   integrity sha512-ldZXEhOBb8Is7xLs01fR3YEc3DERiz5silj8tnGkFZytt1abEvl/GhUmCE0PMLaMPTa3Jk4HbKmRlHmu+gCftg==
+
+"@tanstack/virtual-core@3.13.12", "@tanstack/virtual-core@^3.13.12":
+  version "3.13.12"
+  resolved "https://registry.npmmirror.com/@tanstack/virtual-core/-/virtual-core-3.13.12.tgz#1dff176df9cc8f93c78c5e46bcea11079b397578"
+  integrity sha512-1YBOJfRHV4sXUmWsFSf5rQor4Ss82G8dQWLRbnk3GA4jeP8hQt1hxXh0tmflpC0dz3VgEv/1+qwPyLeWkQuPFA==
 
 "@tauri-apps/api@^2.5.0", "@tauri-apps/api@^2.8.0":
   version "2.9.0"

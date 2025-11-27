@@ -19,7 +19,6 @@ pub mod python_upscale_wrapper;
 pub mod sr_vulkan_manager;
 pub mod thumbnail_db;
 pub mod thumbnail_generator;
-pub mod thumbnail_lru;
 pub mod upscale;
 pub mod upscale_scheduler;
 pub mod upscale_settings;

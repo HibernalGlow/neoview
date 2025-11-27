@@ -262,7 +262,7 @@ function createFileBrowserStore() {
             currentArchivePath: '',
             currentPath: parentPath,
             items: sortedItems,
-            // 不清空缩略图，保留已有的缓存
+            thumbnails: new Map(),
             selectedIndex: -1
           }));
 
@@ -312,7 +312,7 @@ function createFileBrowserStore() {
           update(state => ({
             ...state,
             items: sortedItems,
-            // 不清空缩略图，保留已有的缓存
+            thumbnails: new Map(),
             loading: false
           }));
 

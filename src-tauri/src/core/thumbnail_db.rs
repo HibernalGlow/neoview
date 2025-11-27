@@ -199,21 +199,11 @@ impl ThumbnailDb {
 
     /// 加载缩略图（仅根据 key 和 category，忽略 size 和 ghash，减少计算）
     /// 这是默认的查询方式，适用于所有文件和文件夹
-    /// 优先从 LRU 缓存加载，未命中再查数据库
     pub fn load_thumbnail_by_key_and_category(
         &self,
         key: &str,
         category: &str,
     ) -> SqliteResult<Option<Vec<u8>>> {
-        // 构建缓存 key
-        let cache_key = format!("{}::{}", key, category);
-        
-        // 1. 优先从 LRU 缓存获取
-        if let Some(data) = super::thumbnail_lru::THUMBNAIL_LRU_CACHE.get(&cache_key) {
-            return Ok(Some(data));
-        }
-        
-        // 2. LRU 未命中，查数据库
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
@@ -226,8 +216,6 @@ impl ThumbnailDb {
 
         if let Some(row) = rows.next() {
             let data = row?;
-            // 3. 写入 LRU 缓存
-            super::thumbnail_lru::THUMBNAIL_LRU_CACHE.set(cache_key, data.clone());
             Ok(Some(data))
         } else {
             Ok(None)

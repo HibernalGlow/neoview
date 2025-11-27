@@ -1174,11 +1174,11 @@
 				fileBrowserStore.getState().sortOrder
 			);
 			fileBrowserStore.setItems(sortedItems);
-			// 不清空缩略图，保留已有的缓存
+			fileBrowserStore.setThumbnails(new Map());
 			updateTreeWithDirectory(path, sortedItems);
 			setLastFolder(path);
 			
-			// 异步加载缺失的缩略图
+			// 异步加载缩略图
 			requestIdleCallback(() => {
 				loadThumbnailsForItemsAsync(sortedItems, path).catch(() => {});
 			});
@@ -1239,7 +1239,7 @@
 			fileBrowserStore.getState().sortOrder
 		);
 		fileBrowserStore.setItems(sortedItems);
-		// 不清空缩略图，保留已有的缓存
+		fileBrowserStore.setThumbnails(new Map());
 		fileBrowserStore.setLoading(false); // 立即取消 loading 状态
 		updateTreeWithDirectory(path, sortedItems);
 

@@ -1,7 +1,5 @@
 	<script lang="ts">
-		import { createEventDispatcher, tick, onMount, onDestroy } from 'svelte';
-		import { createVirtualizer } from '@tanstack/svelte-virtual';
-		import { get } from 'svelte/store';
+		import { createEventDispatcher, tick } from 'svelte';
 		import type { FsItem } from '$lib/types';
 		import { Folder, File, Image as ImageIcon, FileArchive, ChevronDown, ChevronRight } from '@lucide/svelte';
 		import { debounce } from '$lib/utils/performance';
@@ -209,21 +207,6 @@
 		normalizedCurrentPath ? findActiveTreePath(treeRoot, normalizedCurrentPath, '') : ''
 	);
 
-	// --- 虚拟化支持 ---
-	let container: HTMLDivElement | undefined = $state();
-	const ITEM_HEIGHT = 28; // 每个树节点的高度
-
-	const virtualizer = createVirtualizer({
-		get count() {
-			return flattenedTree.length;
-		},
-		getScrollElement: () => container ?? null,
-		estimateSize: () => ITEM_HEIGHT,
-		overscan: 10
-	});
-
-	const virtualItems = $derived($virtualizer.getVirtualItems());
-
 	$effect(() => {
 		if (!activeTreePath) return;
 		if (activeTreePath === lastScrolledPath) return;
@@ -281,21 +264,12 @@
 	}
 	</script>
 
-<div 
-	bind:this={container}
-	class="file-tree-view flex-1 overflow-y-auto p-2"
->
+<div class="file-tree-view flex-1 overflow-y-auto p-2">
 	<div class="mb-2 px-2 text-xs text-muted-foreground">
 		找到 {items.length} 个结果
 	</div>
 
-	<div style="height: {$virtualizer.getTotalSize()}px; position: relative; width: 100%;">
-	{#each virtualItems as virtualItem (flattenedTree[virtualItem.index]?.node.path ?? virtualItem.index)}
-		{@const treeItem = flattenedTree[virtualItem.index]}
-		{@const node = treeItem.node}
-		{@const level = treeItem.level}
-		{@const isExpanded = treeItem.isExpanded}
-		{@const index = virtualItem.index}
+	{#each flattenedTree as { node, level, isExpanded }, index}
 		{@const item = node.item}
 		{@const hasChildren = node.children.size > 0}
 		{@const Icon = item ? getFileIcon(item) : Folder}
@@ -304,7 +278,7 @@
 
 		<div
 			class="tree-node flex cursor-pointer items-center gap-1 rounded px-2 py-1 {isActive ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/70'}"
-			style="position: absolute; top: 0; left: 0; width: 100%; height: {ITEM_HEIGHT}px; transform: translateY({virtualItem.start}px); padding-left: {level * 16 + 8}px"
+			style="padding-left: {level * 16 + 8}px"
 			data-path={nodePath}
 			role="button"
 			tabindex="0"
@@ -441,7 +415,6 @@
 			{/if}
 		</div>
 	{/each}
-	</div>
 </div>
 
 <style>

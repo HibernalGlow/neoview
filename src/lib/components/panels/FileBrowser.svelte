@@ -31,7 +31,7 @@
 		Pencil
 	} from '@lucide/svelte';
 	import VirtualizedFileList from './file/components/VirtualizedFileListV2.svelte';
-	import FileTreeView from './file/components/FileTreeView.svelte';
+	import FileTreeView from './file/components/FileTreeViewLazy.svelte';
 	import FileItemCard from './file/components/FileItemCard.svelte';
 	import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
 	import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';

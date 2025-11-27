@@ -175,11 +175,6 @@ pub async fn load_directory_snapshot(
             .lock()
             .map_err(|e| format!("获取目录缓存锁失败: {}", e))?;
         if let Some(entry) = cache.get(&path, mtime) {
-            println!(
-                "📁 DirectorySnapshot 命中内存缓存: {} (entries={})",
-                path,
-                entry.items.len()
-            );
             return Ok(DirectorySnapshotResponse {
                 items: entry.items,
                 mtime: entry.mtime,
@@ -190,11 +185,6 @@ pub async fn load_directory_snapshot(
 
     // SQLite 缓存
     if let Some(persisted_items) = cache_index.db.load_directory_snapshot(&path, mtime)? {
-        println!(
-            "📁 DirectorySnapshot 命中 SQLite 缓存: {} (entries={})",
-            path,
-            persisted_items.len()
-        );
         {
             let mut cache = cache_state
                 .cache
@@ -209,11 +199,7 @@ pub async fn load_directory_snapshot(
         });
     }
 
-    // 文件系统读取
-    println!(
-        "📁 DirectorySnapshot miss: {} -> 调度 filebrowser-directory-load",
-        path
-    );
+    // 文件系统读取（缓存未命中）
     let fs_manager = Arc::clone(&state.fs_manager);
     let job_path = path.clone();
     let path_for_job = path_buf.clone();

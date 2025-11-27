@@ -1100,11 +1100,9 @@
 
 	/**
 	 * 加载目录内容（不添加历史记录，用于前进/后退）
-	 * 优化：立即显示缓存数据，直接加载不使用调度器
+	 * 优化：优先使用全局文件树缓存，避免后端调用
 	 */
 	async function loadDirectoryWithoutHistory(path: string) {
-		console.log('📂 loadDirectory called with path:', path);
-
 		// 立即更新 UI（乐观更新）
 		const oldPath = currentPath;
 		currentPath = path;
@@ -1121,47 +1119,61 @@
 		fileBrowserStore.setCurrentPath(path);
 		selectedItems.clear();
 
-		// 首先检查缓存（同步操作，立即返回）
-		const cachedData = navigationHistory.getCachedDirectory(path);
+		// 1. 优先检查全局文件树缓存（最快）
+		const treeCachedItems = fileTreeCache.getChildren(path);
+		if (treeCachedItems && treeCachedItems.length > 0) {
+			const sortedItems = sortItems(
+				treeCachedItems,
+				fileBrowserStore.getState().sortField,
+				fileBrowserStore.getState().sortOrder
+			);
+			fileBrowserStore.setItems(sortedItems);
+			fileBrowserStore.setThumbnails(new Map());
+			updateTreeWithDirectory(path, sortedItems);
+			setLastFolder(path);
+			
+			// 异步加载缩略图
+			requestIdleCallback(() => {
+				loadThumbnailsForItemsAsync(sortedItems, path).catch(() => {});
+			});
+			return;
+		}
 
+		// 2. 检查导航历史缓存
+		const cachedData = navigationHistory.getCachedDirectory(path);
 		if (cachedData) {
-			// 有缓存：立即显示，不设置 loading 状态
 			fileBrowserStore.setItems(cachedData.items);
 			fileBrowserStore.setThumbnails(cachedData.thumbnails);
 			thumbnails = new Map(cachedData.thumbnails);
 			updateTreeWithDirectory(path, cachedData.items);
-			
-			// 同时更新全局文件树缓存
 			fileTreeCache.addChildren(path, cachedData.items);
-			
 			setLastFolder(path);
 
-			// 异步验证缓存（低优先级，不阻塞）
+			// 异步验证缓存
 			requestIdleCallback(async () => {
 				const isValid = await navigationHistory.validateCache(path);
 				if (!isValid) {
-					console.log('🔄 缓存失效，重新加载:', path);
 					await reloadDirectoryFromBackend(path);
 				} else {
-					// 缓存有效，继续加载缺失的缩略图
 					await loadThumbnailsForItems(cachedData.items, path, cachedData.thumbnails);
 				}
 			});
-		} else {
-			// 无缓存：显示 loading，直接加载（不使用调度器）
-			fileBrowserStore.setLoading(true);
-			fileBrowserStore.clearThumbnails();
-			fileBrowserStore.setItems([]);
+			return;
+		}
 
-			try {
-				await reloadDirectoryFromBackend(path);
-			} catch (err) {
-				console.error('❌ Error loading directory:', err);
-				fileBrowserStore.setError(String(err));
-				fileBrowserStore.setItems([]);
-			} finally {
-				fileBrowserStore.setLoading(false);
-			}
+		// 3. 无缓存：从后端加载
+		fileBrowserStore.setLoading(true);
+		fileBrowserStore.clearThumbnails();
+		fileBrowserStore.setItems([]);
+
+		try {
+			await reloadDirectoryFromBackend(path);
+		} catch (err) {
+			console.error('❌ Error loading directory:', err);
+			fileBrowserStore.setError(String(err));
+			fileBrowserStore.setItems([]);
+		} finally {
+			fileBrowserStore.setLoading(false);
 		}
 	}
 

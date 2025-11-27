@@ -8,6 +8,7 @@ import { toAssetUrl } from '$lib/utils/assetProxy';
 import type { FsItem } from '$lib/types';
 import { FileSystemAPI } from '$lib/api';
 import { isVideoFile } from '$lib/utils/videoUtils';
+import { fileTreeCache } from '$lib/stores/fileTreeCache.svelte';
 
 export type SortField = 'name' | 'modified' | 'size' | 'type' | 'path' | 'random';
 export type SortOrder = 'asc' | 'desc';
@@ -242,6 +243,51 @@ function createFileBrowserStore() {
       const task = (async () => {
         const parentPath = getParentDirectory(targetPath) ?? targetPath;
 
+        // 优先从全局缓存获取
+        const cachedItems = fileTreeCache.getChildren(parentPath);
+        
+        if (cachedItems && cachedItems.length > 0) {
+          // 缓存命中，直接使用
+          const sortedItems = sortItems(
+            cachedItems,
+            currentState.sortField,
+            currentState.sortOrder
+          );
+
+          update(state => ({
+            ...state,
+            loading: false,
+            error: '',
+            isArchiveView: false,
+            currentArchivePath: '',
+            currentPath: parentPath,
+            items: sortedItems,
+            thumbnails: new Map(),
+            selectedIndex: -1
+          }));
+
+          const normalizedTarget = normalizePath(targetPath);
+          const targetIndex = sortedItems.findIndex((item) => normalizePath(item.path) === normalizedTarget);
+          if (targetIndex >= 0) {
+            update(state => ({
+              ...state,
+              selectedIndex: targetIndex,
+              scrollTargetIndex: targetIndex,
+              scrollToSelectedToken: state.scrollToSelectedToken + 1
+            }));
+          }
+          if (selectIndex !== undefined) {
+            update(state => ({
+              ...state,
+              selectedIndex: selectIndex,
+              scrollTargetIndex: selectIndex,
+              scrollToSelectedToken: state.scrollToSelectedToken + 1
+            }));
+          }
+          return;
+        }
+
+        // 缓存未命中，从后端加载
         update(state => ({
           ...state,
           loading: true,
@@ -259,6 +305,9 @@ function createFileBrowserStore() {
             currentState.sortField,
             currentState.sortOrder
           );
+
+          // 更新全局缓存
+          fileTreeCache.addChildren(parentPath, snapshot.items);
 
           update(state => ({
             ...state,

@@ -51,7 +51,6 @@
 	let rootNodes = $state<LazyTreeNode[]>([]);
 	let flatList = $state<LazyTreeNode[]>([]);
 	let expandedPaths = $state(new Set<string>());
-	let lastItemsLength = $state(0);
 	
 	const ITEM_HEIGHT = 28;
 
@@ -236,11 +235,21 @@
 		flatList = result;
 	}
 
-	// --- 监听 items 变化 ---
+	// --- 监听 items 变化（只在根节点变化时重建） ---
+	let lastRootPaths = $state<string>('');
+	
 	$effect(() => {
-		// 只在 items 数量变化时重建根节点
-		if (items.length !== lastItemsLength) {
-			lastItemsLength = items.length;
+		// 计算当前根节点路径的签名
+		const rootPaths = items
+			.filter(item => item.isDir)
+			.map(item => normalizePath(item.path).split('/')[0])
+			.filter((v, i, a) => a.indexOf(v) === i)
+			.sort()
+			.join('|');
+		
+		// 只在根节点变化时重建
+		if (rootPaths !== lastRootPaths) {
+			lastRootPaths = rootPaths;
 			
 			// 保存展开状态
 			const wasExpanded = new Set(expandedPaths);
@@ -248,7 +257,7 @@
 			// 重建根节点
 			rootNodes = buildRootNodes(items);
 			
-			// 恢复展开状态
+			// 恢复展开状态（只使用缓存，不触发后端请求）
 			function restoreExpanded(nodes: LazyTreeNode[]) {
 				for (const node of nodes) {
 					if (wasExpanded.has(node.path)) {
@@ -256,8 +265,27 @@
 						expandedPaths.add(node.path);
 						
 						if (!node.childrenLoaded) {
-							node.children = loadChildren(node, items);
-							node.childrenLoaded = true;
+							// 只从全局缓存加载，不触发后端请求
+							const fsPath = node.item?.path || node.path;
+							const cachedChildren = fileTreeCache.getChildren(fsPath);
+							
+							if (cachedChildren && cachedChildren.length > 0) {
+								node.children = cachedChildren
+									.filter(item => item.isDir)
+									.map(item => ({
+										name: item.name,
+										path: normalizePath(item.path),
+										isDir: item.isDir,
+										item: item,
+										children: null,
+										childrenLoaded: false,
+										expanded: false,
+										level: node.level + 1
+									}))
+									.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+								node.childrenLoaded = true;
+							}
+							// 如果缓存没有，不加载，等用户手动展开
 						}
 						
 						if (node.children) {

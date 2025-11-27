@@ -16,6 +16,7 @@ import { IncrementalBatchLoader } from './incrementalBatchLoader';
 import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
 import { normalizeThumbnailDirectoryPath } from '$lib/config/paths';
+import { thumbnailPersistentCache } from './thumbnailPersistentCache';
 
 export interface ThumbnailConfig {
   maxConcurrentLocal: number;
@@ -75,14 +76,14 @@ class ThumbnailManager {
   // 批量加载配置
   private readonly BATCH_LOAD_SIZE = 50; // 一次批量查询的数量
 
-  // 缓存配置（默认 100MB 内存缓存）
-  private readonly MAX_CACHE_SIZE = 100 * 1024 * 1024; // 100MB
+  // 缓存配置（2048MB 内存缓存）
+  private readonly MAX_CACHE_SIZE = 2048 * 1024 * 1024; // 2048MB
 
   constructor() {
-    // 初始化 LRU 缓存（100MB 限制）
+    // 初始化 LRU 缓存（2048MB 限制）
     this.lruCache = new LRUCache<string>({
       maxSize: this.MAX_CACHE_SIZE,
-      maxItems: 10000, // 最多 10000 个缓存项
+      maxItems: 100000, // 最多 100000 个缓存项
     });
 
     // 初始化预测性加载器
@@ -613,27 +614,45 @@ class ThumbnailManager {
       return cached.dataUrl;
     }
 
-    // 2. 尝试从数据库加载（不依赖索引缓存，直接尝试）
-    // 这样可以立即显示已缓存的缩略图，不需要等待索引预加载
+    // 2. 检查持久性缓存（IndexedDB）
+    try {
+      const persistentCached = await thumbnailPersistentCache.get(pathKey);
+      if (persistentCached) {
+        // 更新内存缓存
+        this.cache.set(pathKey, {
+          pathKey,
+          dataUrl: persistentCached,
+          timestamp: Date.now(),
+        });
+        // 通知回调
+        if (this.onThumbnailReady) {
+          this.onThumbnailReady(path, persistentCached);
+        }
+        return persistentCached;
+      }
+    } catch {
+      // 持久性缓存读取失败，继续
+    }
+
+    // 3. 尝试从后端数据库加载
     // 判断是否为文件夹：没有 innerPath 且不是压缩包，且路径没有扩展名
     const isFolder = !innerPath && !isArchive && !path.match(/\.(jpg|jpeg|png|gif|bmp|webp|avif|jxl|tiff|tif|zip|cbz|rar|cbr|mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/i);
 
     try {
       const dbBlobUrl = await this.loadFromDb(path, innerPath, isFolder);
       if (dbBlobUrl) {
-        // loadFromDb 已经返回 blobUrl，不需要再转换
-        // 更新缓存和索引缓存
+        // 更新内存缓存
         this.cache.set(pathKey, {
           pathKey,
           dataUrl: dbBlobUrl,
           timestamp: Date.now(),
         });
         this.dbIndexCache.set(pathKey, true);
-        // 只在调试模式下打印日志
-        if (import.meta.env.DEV) {
-          console.log(`✅ 从数据库加载缩略图: ${pathKey}${isFolder ? ' (文件夹)' : ''}`);
-        }
-        // 通知回调（重要：确保文件夹缩略图能正确显示）
+        
+        // 异步保存到持久性缓存（不阻塞）
+        thumbnailPersistentCache.set(pathKey, dbBlobUrl).catch(() => {});
+        
+        // 通知回调
         if (this.onThumbnailReady) {
           this.onThumbnailReady(path, dbBlobUrl);
         }
@@ -794,12 +813,14 @@ class ThumbnailManager {
       const dbThumbnail = await this.loadFromDb(task.path, task.innerPath);
       if (dbThumbnail) {
         // loadFromDb 已经返回 blobUrl，不需要再转换
-        // 更新缓存
+        // 更新内存缓存
         this.cache.set(pathKey, {
           pathKey,
           dataUrl: dbThumbnail,
           timestamp: Date.now(),
         });
+        // 异步保存到持久性缓存（不阻塞）
+        thumbnailPersistentCache.set(pathKey, dbThumbnail).catch(() => {});
         // 通知回调
         if (this.onThumbnailReady) {
           this.onThumbnailReady(task.path, dbThumbnail);
@@ -831,13 +852,16 @@ class ThumbnailManager {
           // 估算大小
           const estimatedSize = 100 * 1024; // 粗略估算
 
-          // 更新两个缓存
+          // 更新内存缓存
           this.cache.set(pathKey, {
             pathKey,
             dataUrl: blobUrl,
             timestamp: Date.now(),
           });
           this.lruCache.set(pathKey, blobUrl, estimatedSize);
+
+          // 异步保存到持久性缓存（不阻塞）
+          thumbnailPersistentCache.set(pathKey, blobUrl).catch(() => {});
 
           // 通知回调
           if (this.onThumbnailReady) {

@@ -13,7 +13,10 @@ import FolderToolbar from './components/FolderToolbar.svelte';
 import BreadcrumbBar from './components/BreadcrumbBar.svelte';
 import FolderStack from './components/FolderStack.svelte';
 import FolderTree from './components/FolderTree.svelte';
+import FolderContextMenu from './components/FolderContextMenu.svelte';
 import SearchBar from '$lib/components/ui/SearchBar.svelte';
+import { bookStore } from '$lib/stores/book.svelte';
+import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 
 import {
 	currentPath,
@@ -26,12 +29,78 @@ import {
 // 导航命令 store（用于父子组件通信）
 const navigationCommand = writable<{ type: 'init' | 'push' | 'pop' | 'goto'; path?: string; index?: number } | null>(null);
 
+// 右键菜单状态
+let contextMenu = $state<{ x: number; y: number; item: FsItem | null; visible: boolean }>({
+	x: 0,
+	y: 0,
+	item: null,
+	visible: false
+});
+
 // 处理项打开（文件双击）
-function handleItemOpen(item: FsItem) {
+async function handleItemOpen(item: FsItem) {
 	if (!item.isDir) {
 		console.log('[FolderPanel] Open file:', item.path);
-		// TODO: 集成到主应用的文件打开逻辑
+		// 作为书籍打开
+		try {
+			await bookStore.openBook(item.path);
+		} catch (err) {
+			console.error('[FolderPanel] Failed to open file:', err);
+		}
 	}
+}
+
+// 处理右键菜单
+function handleContextMenu(event: MouseEvent, item: FsItem) {
+	event.preventDefault();
+	contextMenu = {
+		x: event.clientX,
+		y: event.clientY,
+		item,
+		visible: true
+	};
+}
+
+// 关闭右键菜单
+function closeContextMenu() {
+	contextMenu = { ...contextMenu, visible: false, item: null };
+}
+
+// 作为书籍打开文件夹
+async function handleOpenFolderAsBook(item: FsItem) {
+	if (!item.isDir) return;
+	try {
+		await bookStore.openDirectoryAsBook(item.path);
+	} catch (err) {
+		console.error('[FolderPanel] Failed to open folder as book:', err);
+	}
+}
+
+// 添加书签
+function handleAddBookmark(item: FsItem) {
+	bookmarkStore.add({
+		path: item.path,
+		name: item.name,
+		isDirectory: item.isDir
+	});
+}
+
+// 设为主页
+function handleSetAsHomepage(item: FsItem) {
+	if (item.isDir) {
+		folderPanelActions.setHomePath(item.path);
+		localStorage.setItem('neoview-homepage-path', item.path);
+	}
+}
+
+// 复制路径
+function handleCopyPath(item: FsItem) {
+	navigator.clipboard.writeText(item.path);
+}
+
+// 复制文件名
+function handleCopyName(item: FsItem) {
+	navigator.clipboard.writeText(item.name);
 }
 
 // 处理刷新
@@ -142,6 +211,8 @@ onMount(async () => {
 					<FolderStack
 						{navigationCommand}
 						onItemOpen={handleItemOpen}
+						onItemContextMenu={handleContextMenu}
+						onOpenFolderAsBook={handleOpenFolderAsBook}
 					/>
 				</div>
 			</div>
@@ -150,7 +221,24 @@ onMount(async () => {
 			<FolderStack
 				{navigationCommand}
 				onItemOpen={handleItemOpen}
+				onItemContextMenu={handleContextMenu}
+				onOpenFolderAsBook={handleOpenFolderAsBook}
 			/>
 		{/if}
 	</div>
 </div>
+
+<!-- 右键菜单 -->
+<FolderContextMenu
+	item={contextMenu.item}
+	x={contextMenu.x}
+	y={contextMenu.y}
+	visible={contextMenu.visible}
+	onClose={closeContextMenu}
+	onOpenAsBook={handleItemOpen}
+	onBrowse={(item) => navigationCommand.set({ type: 'push', path: item.path })}
+	onAddBookmark={handleAddBookmark}
+	onSetAsHomepage={handleSetAsHomepage}
+	onCopyPath={handleCopyPath}
+	onCopyName={handleCopyName}
+/>

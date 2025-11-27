@@ -34,9 +34,10 @@ interface Props {
 	onItemOpen?: (item: FsItem) => void;
 	onItemDelete?: (item: FsItem) => void;
 	onItemContextMenu?: (event: MouseEvent, item: FsItem) => void;
+	onOpenFolderAsBook?: (item: FsItem) => void;
 }
 
-let { navigationCommand, onItemOpen, onItemDelete, onItemContextMenu }: Props = $props();
+let { navigationCommand, onItemOpen, onItemDelete, onItemContextMenu, onOpenFolderAsBook }: Props = $props();
 
 // 层叠数据结构
 interface FolderLayer {
@@ -291,6 +292,20 @@ function handleSelectedIndexChange(layerIndex: number, payload: { index: number 
 	if (layerIndex !== activeIndex) return;
 	layers[layerIndex].selectedIndex = payload.index;
 }
+
+// 处理右键菜单
+function handleItemContextMenu(layerIndex: number, payload: { event: MouseEvent; item: FsItem }) {
+	if (layerIndex !== activeIndex) return;
+	onItemContextMenu?.(payload.event, payload.item);
+}
+
+// 处理作为书籍打开文件夹
+function handleOpenFolderAsBook(layerIndex: number, item: FsItem) {
+	if (layerIndex !== activeIndex) return;
+	if (item.isDir) {
+		onOpenFolderAsBook?.(item);
+	}
+}
 </script>
 
 <div class="folder-stack relative h-full w-full overflow-hidden">
@@ -335,6 +350,9 @@ function handleSelectedIndexChange(layerIndex: number, payload: { index: number 
 						onItemSelect={(payload) => handleItemSelect(index, payload)}
 						onItemDoubleClick={(payload) => handleItemDoubleClick(index, payload)}
 						onSelectedIndexChange={(payload) => handleSelectedIndexChange(index, payload)}
+						on:itemContextMenu={(e) => handleItemContextMenu(index, e.detail)}
+						on:openFolderAsBook={(e) => handleOpenFolderAsBook(index, e.detail.item)}
+						on:deleteItem={(e) => onItemDelete?.(e.detail.item)}
 					/>
 				{/if}
 			{/if}

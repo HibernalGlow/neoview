@@ -45,6 +45,7 @@ interface FileBrowserState {
     error?: string;
   }>;
   inlineTreeRootPath: string;
+  inlineTreeScrollTops: Record<string, number>;
 }
 
 const archiveExtensions = ['.zip', '.cbz', '.rar', '.cbr', '.7z'];
@@ -109,7 +110,8 @@ const initialState: FileBrowserState = {
   deleteStrategy: 'trash',
   inlineTreeMode: false,
   inlineTreeState: {},
-  inlineTreeRootPath: ''
+  inlineTreeRootPath: '',
+  inlineTreeScrollTops: {}
 };
 
 /**
@@ -201,6 +203,8 @@ function createFileBrowserStore() {
       update(state => ({ ...state, inlineTreeState: value })),
     setInlineTreeRootPath: (value: string) =>
       update(state => ({ ...state, inlineTreeRootPath: value })),
+    setInlineTreeScrollTops: (value: FileBrowserState['inlineTreeScrollTops']) =>
+      update(state => ({ ...state, inlineTreeScrollTops: value })),
     setSort: (field: SortField, order: SortOrder) => update(state => ({ ...state, sortField: field, sortOrder: order })),
     setVisibleItems: (items: FsItem[]) => update(state => ({
       ...state,

@@ -346,6 +346,11 @@
 		fileBrowserStore.getState().inlineTreeState ?? {}
 	);
 	let inlineTreeRootPath = fileBrowserStore.getState().inlineTreeRootPath ?? '';
+	let inlineTreeContainer = $state<HTMLDivElement | undefined>(undefined);
+	let inlineTreeScrollTops = $state<Record<string, number>>(
+		fileBrowserStore.getState().inlineTreeScrollTops ?? {}
+	);
+	let lastInlineTreeContainer: HTMLDivElement | undefined;
 
 	// 缩略图入队管理
 	let lastEnqueueTimeout: ReturnType<typeof setTimeout> | null = null; // 用于取消上一个入队任务
@@ -387,6 +392,20 @@
 		if (inlineTreeRootPath !== currentPath) {
 			inlineTreeRootPath = currentPath;
 			fileBrowserStore.setInlineTreeRootPath(currentPath);
+		}
+	});
+
+	// 恢复主视图树滚动位置（面板重新挂载或容器重建时）
+	$effect(() => {
+		const container = inlineTreeContainer;
+		if (!inlineTreeMode || !container) return;
+		// 只在容器实例变化时恢复一次，避免后续状态更新反复抢滚动条
+		if (container === lastInlineTreeContainer) return;
+		lastInlineTreeContainer = container;
+		const key = inlineTreeRootPath || currentPath;
+		const savedTop = inlineTreeScrollTops[key];
+		if (savedTop != null) {
+			container.scrollTo({ top: savedTop, behavior: 'auto' });
 		}
 	});
 
@@ -3163,7 +3182,20 @@
 			{:else}
 				<!-- 文件列表 -->
 				{#if inlineTreeMode}
-					<div class="inline-tree-panel min-h-0 flex-1 overflow-auto" role="tree">
+					<div
+						class="inline-tree-panel min-h-0 flex-1 overflow-auto"
+						bind:this={inlineTreeContainer}
+						onscroll={(e) => {
+							const el = e.currentTarget as HTMLDivElement;
+							const key = inlineTreeRootPath || currentPath;
+							inlineTreeScrollTops = {
+								...inlineTreeScrollTops,
+								[key]: el.scrollTop
+							};
+							fileBrowserStore.setInlineTreeScrollTops(inlineTreeScrollTops);
+						}}
+						role="tree"
+					>
 						{#if inlineTreeDisplayItems.length === 0}
 							<div class="text-muted-foreground py-6 text-center text-sm">暂无可显示的条目</div>
 						{:else}

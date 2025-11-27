@@ -133,6 +133,8 @@ function applyZoomModeWithTracking(mode?: ZoomMode) {
 	dispatchApplyZoomMode(mode);
 }
 
+let lastZoomModeBeforeTemporaryFit: ZoomMode | null = null;
+
 zoomLevel.subscribe((value) => {
 	saveToStorage('zoomLevel', value);
 	updateViewerSlice({ zoom: value });
@@ -300,7 +302,6 @@ export function toggleViewModeLock(mode: ViewMode) {
  * 当 lockedViewMode 有值时，不执行任何切换（尊重视图锁定状态）
  */
 let lastViewModeBeforeSingleToggle: ViewMode | null = null;
-let lastZoomModeBeforeTemporaryFit: ZoomMode | null = null;
 export function toggleSinglePanoramaView() {
 	const snapshot = appState.getSnapshot();
 	const locked = snapshot.viewer.lockedViewMode as ViewMode | null;

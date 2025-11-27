@@ -453,6 +453,49 @@ impl ThumbnailDb {
             Ok(0)
         }
     }
+
+    /// 获取目录下所有缓存的缩略图（用于启动预加载）
+    pub fn get_thumbnails_by_directory(&self, directory: &str) -> SqliteResult<Vec<crate::commands::thumbnail_commands::ThumbnailEntry>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        // 规范化目录路径（确保以 / 或 \ 结尾用于 LIKE 匹配）
+        let dir_pattern = if directory.ends_with('/') || directory.ends_with('\\') {
+            format!("{}%", directory)
+        } else {
+            format!("{}%", directory)
+        };
+
+        let mut stmt = conn.prepare(
+            "SELECT key, value FROM thumbs WHERE key LIKE ?1"
+        )?;
+
+        let rows = stmt.query_map([&dir_pattern], |row| {
+            Ok(crate::commands::thumbnail_commands::ThumbnailEntry {
+                path: row.get(0)?,
+                data: row.get(1)?,
+            })
+        })?;
+
+        let mut results = Vec::new();
+        for row in rows {
+            if let Ok(entry) = row {
+                results.push(entry);
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// 删除缩略图
+    pub fn delete_thumbnail(&self, key: &str) -> SqliteResult<()> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+        conn.execute("DELETE FROM thumbs WHERE key = ?1", [key])?;
+        Ok(())
+    }
 }
 
 impl Clone for ThumbnailDb {

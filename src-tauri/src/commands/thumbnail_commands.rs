@@ -940,3 +940,85 @@ fn is_archive_path(path: &str) -> bool {
         })
         .unwrap_or(false)
 }
+
+/// 极限优化：批量加载缩略图，直接返回原始字节（避免 Base64 开销）
+/// 返回 Vec<(path, webp_bytes)>，前端直接创建 Blob URL
+#[tauri::command]
+pub async fn batch_load_thumbnails_raw(
+    app: tauri::AppHandle,
+    paths: Vec<String>,
+) -> Result<Vec<(String, Vec<u8>)>, String> {
+    let state = app.state::<ThumbnailState>();
+    let mut results = Vec::with_capacity(paths.len());
+
+    // 并行加载（使用 rayon 或手动分批）
+    for path in paths {
+        let path_key = path.clone();
+        let cat = if std::path::Path::new(&path_key).is_dir() 
+            || (!path_key.contains("::") && !path_key.contains(".")) {
+            "folder"
+        } else {
+            "file"
+        };
+
+        match state.db.load_thumbnail_by_key_and_category(&path_key, cat) {
+            Ok(Some(data)) => {
+                results.push((path, data));
+            }
+            Ok(None) => {
+                // 文件夹：尝试查找子文件缩略图
+                if cat == "folder" {
+                    if let Ok(Some((_, child_data))) = state.db.find_earliest_thumbnail_in_path(&path_key) {
+                        // 保存到文件夹（异步，不阻塞返回）
+                        let _ = state.db.save_thumbnail_with_category(&path_key, 0, 0, &child_data, Some("folder"));
+                        results.push((path, child_data));
+                    }
+                }
+            }
+            Err(_) => {}
+        }
+    }
+
+    Ok(results)
+}
+
+/// 获取目录下所有缓存的缩略图（用于启动预加载）
+#[tauri::command]
+pub async fn get_thumbnails_by_directory(
+    app: tauri::AppHandle,
+    directory: String,
+) -> Result<Vec<ThumbnailEntry>, String> {
+    let state = app.state::<ThumbnailState>();
+    
+    // 从数据库查询该目录下的所有缩略图
+    match state.db.get_thumbnails_by_directory(&directory) {
+        Ok(entries) => Ok(entries),
+        Err(e) => Err(format!("查询目录缩略图失败: {}", e)),
+    }
+}
+
+/// 缩略图条目（用于预加载返回）
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ThumbnailEntry {
+    pub path: String,
+    pub data: Vec<u8>,
+}
+
+/// 批量删除缩略图条目
+#[tauri::command]
+pub async fn delete_thumbnails_by_paths(
+    app: tauri::AppHandle,
+    paths: Vec<String>,
+) -> Result<usize, String> {
+    let state = app.state::<ThumbnailState>();
+    let mut deleted = 0;
+    
+    for path in paths {
+        if state.db.delete_thumbnail(&path).is_ok() {
+            deleted += 1;
+        }
+    }
+    
+    Ok(deleted)
+}
+

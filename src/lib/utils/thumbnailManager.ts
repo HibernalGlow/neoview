@@ -321,7 +321,7 @@ class ThumbnailManager {
   }
 
   /**
-   * 批量从数据库加载缩略图（支持增量流式加载）
+   * 批量从数据库加载缩略图（极限优化版：直接返回原始字节，前端创建 Blob URL）
    */
   async batchLoadFromDb(paths: string[]): Promise<Map<string, string>> {
     const results = new Map<string, string>();
@@ -335,42 +335,35 @@ class ThumbnailManager {
     }
 
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const response = await invoke<Array<[string, string]>>('batch_load_thumbnails_from_db', {
-        paths,
-      });
+      const { batchLoadThumbnailsRaw } = await import('$lib/api/filesystem');
+      const response = await batchLoadThumbnailsRaw(paths);
 
-      // 处理响应，转换为 blob URL 并缓存
-      const promises = response.map(async ([path, blobKey]) => {
-        const blobUrl = await this.blobKeyToUrl(blobKey);
-        if (blobUrl) {
-          const pathKey = this.buildPathKey(path);
+      // 直接从原始字节创建 Blob URL（避免 Base64 开销）
+      for (const [path, data] of response) {
+        // 直接使用 Uint8Array，Blob 构造函数支持它
+        const blob = new Blob([data as BlobPart], { type: 'image/webp' });
+        const blobUrl = URL.createObjectURL(blob);
+        const pathKey = this.buildPathKey(path);
 
-          // 估算大小（粗略估算：每个 URL 约 100KB）
-          const estimatedSize = 100 * 1024;
+        // 同时更新两个缓存
+        this.cache.set(pathKey, {
+          pathKey,
+          dataUrl: blobUrl,
+          timestamp: Date.now(),
+        });
+        this.lruCache.set(pathKey, blobUrl, data.length);
 
-          // 同时更新两个缓存
-          this.cache.set(pathKey, {
-            pathKey,
-            dataUrl: blobUrl,
-            timestamp: Date.now(),
-          });
-          this.lruCache.set(pathKey, blobUrl, estimatedSize);
+        this.dbIndexCache.set(pathKey, true);
+        results.set(path, blobUrl);
 
-          this.dbIndexCache.set(pathKey, true);
-          results.set(path, blobUrl);
-
-          // 通知回调
-          if (this.onThumbnailReady) {
-            this.onThumbnailReady(path, blobUrl);
-          }
+        // 通知回调
+        if (this.onThumbnailReady) {
+          this.onThumbnailReady(path, blobUrl);
         }
-      });
-
-      await Promise.all(promises);
+      }
 
       if (import.meta.env.DEV && results.size > 0) {
-        console.log(`✅ 批量从数据库加载 ${results.size}/${paths.length} 个缩略图`);
+        console.log(`✅ 批量从数据库加载 ${results.size}/${paths.length} 个缩略图 (raw bytes)`);
       }
     } catch (error) {
       console.debug('批量从数据库加载缩略图失败:', error);
@@ -1194,11 +1187,9 @@ class ThumbnailManager {
     let cleaned = 0;
 
     try {
-      // 1. 从数据库获取该目录下所有缓存的缩略图
-      const cachedThumbnails = await invoke<Array<{ path: string; data_url: string }>>(
-        'get_thumbnails_by_directory',
-        { directory: directoryPath }
-      );
+      // 1. 从数据库获取该目录下所有缓存的缩略图（直接返回原始字节）
+      const { getThumbnailsByDirectory, pathExists, deleteThumbnailsByPaths } = await import('$lib/api/filesystem');
+      const cachedThumbnails = await getThumbnailsByDirectory(directoryPath);
 
       if (!cachedThumbnails || cachedThumbnails.length === 0) {
         console.log(`[ThumbnailManager] 目录 ${directoryPath} 无缓存`);
@@ -1213,22 +1204,25 @@ class ThumbnailManager {
       for (const item of cachedThumbnails) {
         try {
           // 检查文件是否存在
-          const exists = await invoke<boolean>('path_exists', { path: item.path });
+          const exists = await pathExists(item.path);
           
           if (exists) {
-            // 加载到内存缓存
+            // 直接从原始字节创建 Blob URL
+            const blob = new Blob([item.data as BlobPart], { type: 'image/webp' });
+            const blobUrl = URL.createObjectURL(blob);
             const pathKey = this.buildPathKey(item.path);
+            
             this.cache.set(pathKey, {
               pathKey,
-              dataUrl: item.data_url,
+              dataUrl: blobUrl,
               timestamp: Date.now(),
             });
-            this.lruCache.set(pathKey, item.data_url);
+            this.lruCache.set(pathKey, blobUrl, item.data.length);
             loaded++;
 
             // 回调通知
             if (onThumbnailLoaded) {
-              onThumbnailLoaded(item.path, item.data_url);
+              onThumbnailLoaded(item.path, blobUrl);
             }
           } else {
             // 文件不存在，标记为无效
@@ -1244,7 +1238,7 @@ class ThumbnailManager {
       if (invalidPaths.length > 0) {
         console.log(`[ThumbnailManager] 清理 ${invalidPaths.length} 个无效条目`);
         try {
-          await invoke('delete_thumbnails_by_paths', { paths: invalidPaths });
+          await deleteThumbnailsByPaths(invalidPaths);
           cleaned = invalidPaths.length;
         } catch (err) {
           console.error('[ThumbnailManager] 清理无效条目失败:', err);

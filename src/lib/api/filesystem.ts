@@ -363,3 +363,28 @@ export async function getArchiveFirstImageBlob(archivePath: string): Promise<str
     throw error;
   }
 }
+
+/**
+ * 极限优化：批量加载缩略图原始字节
+ * 返回 [path, Uint8Array][] 数组，前端直接创建 Blob URL
+ */
+export async function batchLoadThumbnailsRaw(paths: string[]): Promise<Array<[string, Uint8Array]>> {
+  const results = await invoke<Array<[string, number[]]>>('batch_load_thumbnails_raw', { paths });
+  // 将 number[] 转换为 Uint8Array
+  return results.map(([path, data]) => [path, new Uint8Array(data)]);
+}
+
+/**
+ * 获取目录下所有缓存的缩略图（用于启动预加载）
+ */
+export async function getThumbnailsByDirectory(directory: string): Promise<Array<{ path: string; data: Uint8Array }>> {
+  const results = await invoke<Array<{ path: string; data: number[] }>>('get_thumbnails_by_directory', { directory });
+  return results.map(({ path, data }) => ({ path, data: new Uint8Array(data) }));
+}
+
+/**
+ * 批量删除缩略图条目
+ */
+export async function deleteThumbnailsByPaths(paths: string[]): Promise<number> {
+  return await invoke<number>('delete_thumbnails_by_paths', { paths });
+}

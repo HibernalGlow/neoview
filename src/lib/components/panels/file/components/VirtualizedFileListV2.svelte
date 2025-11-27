@@ -79,7 +79,7 @@
 		},
 		getScrollElement: () => container ?? null,
 		estimateSize: () => itemHeight,
-		overscan: 5,
+		overscan: 20, // 增加预渲染数量，提高滚动流畅度
 		get lanes() {
 			return columns;
 		}

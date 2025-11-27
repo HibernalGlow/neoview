@@ -99,13 +99,6 @@ export const rightSidebarPinned = writable<boolean>(loadFromStorage('rightSideba
 export const topToolbarHeight = writable<number>(loadFromStorage('topToolbarHeight', 60));
 export const bottomThumbnailBarHeight = writable<number>(loadFromStorage('bottomThumbnailBarHeight', 120));
 
-// 布局模式：传统布局 vs Flow 画布布局
-export type LayoutMode = 'classic' | 'flow';
-export const layoutMode = writable<LayoutMode>(loadFromStorage('layoutMode', 'classic'));
-
-// 布局切换模式：无缝切换（保持两个布局加载）vs 冷切换（销毁非活动布局节省性能）
-export type LayoutSwitchMode = 'seamless' | 'cold';
-export const layoutSwitchMode = writable<LayoutSwitchMode>(loadFromStorage('layoutSwitchMode', 'seamless'));
 
 // 订阅并保存变化
 sidebarOpen.subscribe((value) => saveToStorage('sidebarOpen', value));
@@ -123,8 +116,6 @@ sidebarPinned.subscribe((value) => saveToStorage('sidebarPinned', value));
 rightSidebarPinned.subscribe((value) => saveToStorage('rightSidebarPinned', value));
 topToolbarHeight.subscribe((value) => saveToStorage('topToolbarHeight', value));
 bottomThumbnailBarHeight.subscribe((value) => saveToStorage('bottomThumbnailBarHeight', value));
-layoutMode.subscribe((value) => saveToStorage('layoutMode', value));
-layoutSwitchMode.subscribe((value) => saveToStorage('layoutSwitchMode', value));
 
 const updateViewerSlice = (partial: Partial<AppStateSnapshot['viewer']>) => {
 	const snapshot = appState.getSnapshot();
@@ -422,30 +413,3 @@ export async function pageRight() {
 	}
 }
 
-/**
- * 切换布局模式（传统 vs Flow 画布）
- */
-export function toggleLayoutMode() {
-	layoutMode.update((mode) => (mode === 'classic' ? 'flow' : 'classic'));
-}
-
-/**
- * 设置布局模式
- */
-export function setLayoutMode(mode: LayoutMode) {
-	layoutMode.set(mode);
-}
-
-/**
- * 切换布局切换模式（无缝 vs 冷切换）
- */
-export function toggleLayoutSwitchMode() {
-	layoutSwitchMode.update((mode) => (mode === 'seamless' ? 'cold' : 'seamless'));
-}
-
-/**
- * 设置布局切换模式
- */
-export function setLayoutSwitchMode(mode: LayoutSwitchMode) {
-	layoutSwitchMode.set(mode);
-}

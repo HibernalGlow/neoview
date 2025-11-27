@@ -15,8 +15,16 @@
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 	import { isVideoFile } from '$lib/utils/videoUtils';
 
-	// 记录每个路径的滚动位置，用于返回上级或再次进入时恢复列表位置
-	const scrollPositions = new Map<string, number>();
+	// 使用全局 store 记录滚动位置，实现跨布局共享
+	// 这样在无缝切换模式下，传统布局和 Flow 布局可以共享滚动位置
+	function getScrollPosition(path: string): number {
+		return fileBrowserStore.getState().scrollPositions[path] ?? 0;
+	}
+
+	function setScrollPosition(path: string, position: number): void {
+		const current = fileBrowserStore.getState().scrollPositions;
+		fileBrowserStore.setScrollPositions({ ...current, [path]: position });
+	}
 
 	function toRelativeKey(path: string): string {
 		return path.replace(/\\/g, '/');
@@ -231,10 +239,10 @@
 		thumbnailManager.updateScroll(newScrollTop, newScrollLeft, startIndex, items.length);
 
 		scrollTop = newScrollTop;
-		// 按路径记录当前滚动位置，用于下次返回时精确恢复
+		// 按路径记录当前滚动位置到全局 store，用于下次返回时精确恢复
 		if (currentPath) {
-			scrollPositions.set(currentPath, newScrollTop);
-			console.debug('[VirtualizedFileList] save scroll', {
+			setScrollPosition(currentPath, newScrollTop);
+			console.debug('[VirtualizedFileList] save scroll to store', {
 				path: currentPath,
 				scrollTop: newScrollTop
 			});
@@ -414,8 +422,8 @@
 		}
 
 		if (currentPath !== lastPath) {
-			const savedTop = scrollPositions.get(currentPath) ?? 0;
-			console.debug('[VirtualizedFileList] restore scroll', {
+			const savedTop = getScrollPosition(currentPath);
+			console.debug('[VirtualizedFileList] restore scroll from store', {
 				path: currentPath,
 				savedTop
 			});

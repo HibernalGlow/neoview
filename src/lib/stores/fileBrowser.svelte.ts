@@ -207,6 +207,8 @@ function createFileBrowserStore() {
       update(state => ({ ...state, inlineTreeRootPath: value })),
     setInlineTreeScrollTops: (value: FileBrowserState['inlineTreeScrollTops']) =>
       update(state => ({ ...state, inlineTreeScrollTops: value })),
+    setScrollPositions: (value: FileBrowserState['scrollPositions']) =>
+      update(state => ({ ...state, scrollPositions: value })),
     setSort: (field: SortField, order: SortOrder) => update(state => ({ ...state, sortField: field, sortOrder: order })),
     setVisibleItems: (items: FsItem[]) => update(state => ({
       ...state,

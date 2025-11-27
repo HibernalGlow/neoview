@@ -105,10 +105,10 @@ const zoomModeOptions: { mode: ZoomMode; label: string }[] = [
 	{ mode: 'fitHeight', label: '适应高度' },
 	{ mode: 'original', label: '原始大小' }
 ];
-let currentSortModeLabel = $derived(() => {
-	const mode = bookStore.currentBook?.sortMode ?? 'fileName';
-	return sortModeOptions.find((o) => o.value === mode)?.label ?? '文件名 ↑';
-});
+let currentSortModeLabel = $derived(
+	sortModeOptions.find((o) => o.value === (bookStore.currentBook?.sortMode ?? 'fileName'))
+		?.label ?? '文件名 ↑'
+);
 
 	// 阅读方向状态
 	let settings = $state(settingsManager.getSettings());

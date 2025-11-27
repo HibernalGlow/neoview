@@ -597,6 +597,10 @@
 			if (homepage) {
 				console.log('📍 加载主页路径:', homepage);
 				updateHomepageState(homepage);
+				
+				// 启动时异步预加载主页目录的缩略图缓存（不阻塞 UI）
+				preloadHomepageThumbnailCache(homepage);
+				
 				// 注意：不在此处 await 阻塞 UI，如果需要可以等待
 				await loadDirectory(homepage);
 			} else {
@@ -605,6 +609,25 @@
 		} catch (err) {
 			console.error('❌ 加载主页路径失败:', err);
 		}
+	}
+
+	/**
+	 * 启动时预加载主页目录的缩略图缓存（异步，不阻塞 UI）
+	 */
+	function preloadHomepageThumbnailCache(homepage: string) {
+		// 使用 requestIdleCallback 确保不阻塞启动
+		requestIdleCallback(async () => {
+			console.log('🔄 开始预加载主页缩略图缓存...');
+			const result = await thumbnailManager.preloadDirectoryCache(
+				homepage,
+				(path, dataUrl) => {
+					// 缩略图加载回调：更新到 store
+					const key = toRelativeKey(path);
+					fileBrowserStore.addThumbnail(key, dataUrl);
+				}
+			);
+			console.log(`✅ 预加载完成: 加载 ${result.loaded} 个, 清理 ${result.cleaned} 个无效条目`);
+		});
 	}
 
 	async function loadStartupDirectory() {

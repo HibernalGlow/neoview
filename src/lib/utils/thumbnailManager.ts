@@ -1178,6 +1178,100 @@ class ThumbnailManager {
   cleanupCache(): number {
     return this.lruCache.cleanupExpired();
   }
+
+  /**
+   * 启动时预加载目录缓存并清理无效条目
+   * @param directoryPath 目录路径
+   * @param onThumbnailLoaded 缩略图加载回调
+   */
+  async preloadDirectoryCache(
+    directoryPath: string,
+    onThumbnailLoaded?: (path: string, dataUrl: string) => void
+  ): Promise<{ loaded: number; cleaned: number }> {
+    console.log(`[ThumbnailManager] 预加载目录缓存: ${directoryPath}`);
+    
+    let loaded = 0;
+    let cleaned = 0;
+
+    try {
+      // 1. 从数据库获取该目录下所有缓存的缩略图
+      const cachedThumbnails = await invoke<Array<{ path: string; data_url: string }>>(
+        'get_thumbnails_by_directory',
+        { directory: directoryPath }
+      );
+
+      if (!cachedThumbnails || cachedThumbnails.length === 0) {
+        console.log(`[ThumbnailManager] 目录 ${directoryPath} 无缓存`);
+        return { loaded: 0, cleaned: 0 };
+      }
+
+      console.log(`[ThumbnailManager] 找到 ${cachedThumbnails.length} 个缓存条目`);
+
+      // 2. 验证文件是否存在并加载到内存缓存
+      const invalidPaths: string[] = [];
+
+      for (const item of cachedThumbnails) {
+        try {
+          // 检查文件是否存在
+          const exists = await invoke<boolean>('path_exists', { path: item.path });
+          
+          if (exists) {
+            // 加载到内存缓存
+            const pathKey = this.buildPathKey(item.path);
+            this.cache.set(pathKey, {
+              pathKey,
+              dataUrl: item.data_url,
+              timestamp: Date.now(),
+            });
+            this.lruCache.set(pathKey, item.data_url);
+            loaded++;
+
+            // 回调通知
+            if (onThumbnailLoaded) {
+              onThumbnailLoaded(item.path, item.data_url);
+            }
+          } else {
+            // 文件不存在，标记为无效
+            invalidPaths.push(item.path);
+          }
+        } catch (err) {
+          console.debug(`[ThumbnailManager] 检查文件失败: ${item.path}`, err);
+          invalidPaths.push(item.path);
+        }
+      }
+
+      // 3. 清理无效条目
+      if (invalidPaths.length > 0) {
+        console.log(`[ThumbnailManager] 清理 ${invalidPaths.length} 个无效条目`);
+        try {
+          await invoke('delete_thumbnails_by_paths', { paths: invalidPaths });
+          cleaned = invalidPaths.length;
+        } catch (err) {
+          console.error('[ThumbnailManager] 清理无效条目失败:', err);
+        }
+      }
+
+      console.log(`[ThumbnailManager] 预加载完成: 加载 ${loaded} 个, 清理 ${cleaned} 个`);
+      return { loaded, cleaned };
+    } catch (err) {
+      console.error('[ThumbnailManager] 预加载目录缓存失败:', err);
+      return { loaded: 0, cleaned: 0 };
+    }
+  }
+
+  /**
+   * 启动时预热缓存（异步，不阻塞启动）
+   */
+  async warmupCache(directories: string[]): Promise<void> {
+    console.log(`[ThumbnailManager] 开始预热缓存: ${directories.length} 个目录`);
+    
+    for (const dir of directories) {
+      // 使用 requestIdleCallback 确保不阻塞 UI
+      requestIdleCallback(async () => {
+        await this.preloadDirectoryCache(dir);
+      });
+    }
+  }
 }
 
 // 单例

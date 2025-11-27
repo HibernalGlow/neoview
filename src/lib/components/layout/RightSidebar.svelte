@@ -3,7 +3,7 @@
 	 * NeoView - Right Sidebar Component (shadcn-svelte 重构)
 	 * 右侧边栏组件 - 使用 shadcn-svelte Sidebar 结构
 	 */
-	import { Info, FileText, Pin, PinOff, Sparkles, GripVertical, BarChart3 } from '@lucide/svelte';
+	import { Info, FileText, Pin, PinOff, Sparkles, GripVertical, BarChart3, File } from '@lucide/svelte';
 	import {
 		activeRightPanel,
 		setActiveRightPanel,
@@ -17,6 +17,7 @@
 	import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
 	import UpscalePanel from '$lib/components/panels/UpscalePanel.svelte';
 	import DataInsightsPanel from '$lib/components/panels/DataInsightsPanel.svelte';
+	import { FolderPanel } from '$lib/components/panels/folderPanel';
 	import { Button } from '$lib/components/ui/button';
 	import HoverWrapper from './HoverWrapper.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
@@ -32,6 +33,12 @@
 	let autoHideTiming = $derived(settings.panels?.autoHideTiming ?? { showDelaySec: 0, hideDelaySec: 0 });
 
 	const navMain = [
+		{
+			title: '文件',
+			url: '#',
+			icon: File,
+			value: 'files'
+		},
 		{
 			title: '信息',
 			url: '#',
@@ -248,6 +255,9 @@
 						<Sidebar.Group class="px-0">
 							<Sidebar.GroupContent>
 								<!-- 使用 CSS 隐藏而非条件渲染，保持组件实例不被销毁 -->
+								<div class="h-full {activeItem.value === 'files' ? '' : 'hidden'}">
+									<FolderPanel />
+								</div>
 								<div class={activeItem.value === 'info' ? '' : 'hidden'}>
 									<InfoPanel />
 								</div>

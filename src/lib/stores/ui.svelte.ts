@@ -39,7 +39,7 @@ export const sidebarWidth = writable<number>(loadFromStorage('sidebarWidth', 250
 // 右侧边栏状态
 export const rightSidebarOpen = writable<boolean>(loadFromStorage('rightSidebarOpen', false));
 export const rightSidebarWidth = writable<number>(loadFromStorage('rightSidebarWidth', 250));
-export type RightPanelType = 'info' | 'properties' | 'upscale' | 'insights' | null;
+export type RightPanelType = 'info' | 'properties' | 'upscale' | 'insights' | 'files' | null;
 export const activeRightPanel = writable<RightPanelType>(loadFromStorage('activeRightPanel', null));
 
 // 全屏状态

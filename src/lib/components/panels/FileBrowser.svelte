@@ -440,17 +440,71 @@
 		}
 	});
 
-	// 使用 $derived 替代 $effect，避免不必要的重建
-	let inlineTreeDisplayItemsComputed = $derived.by(() => {
-		if (!inlineTreeMode) return [];
-		// 依赖 inlineTreeState 和 items
-		const _ = inlineTreeState;
-		return buildInlineTreeItems(items);
-	});
+	// 动态加载配置
+	const INITIAL_LOAD = 50; // 初始加载数量
+	const LOAD_MORE_THRESHOLD = 20; // 距离底部多少项时加载更多
+	const LOAD_MORE_COUNT = 50; // 每次加载更多的数量
+	let fullTreeItems: InlineTreeDisplayItem[] = []; // 完整的树项目（缓存）
+	let loadedCount = $state(INITIAL_LOAD); // 当前已加载的数量
+	let lastTreeSignature = ''; // 用于检测树是否变化
 	
-	// 同步到 inlineTreeDisplayItems（避免直接赋值导致的循环）
+	// 计算树签名（用于检测变化）
+	function getTreeSignature(): string {
+		const expandedPaths = Object.entries(inlineTreeState)
+			.filter(([_, state]) => state.expanded)
+			.map(([path]) => path)
+			.sort()
+			.join('|');
+		return `${items.length}:${expandedPaths}`;
+	}
+	
+	// 动态加载更多项目（由滚动触发）
+	function loadMoreInlineTreeItems() {
+		if (loadedCount >= fullTreeItems.length) return;
+		
+		const newCount = Math.min(loadedCount + LOAD_MORE_COUNT, fullTreeItems.length);
+		loadedCount = newCount;
+		inlineTreeDisplayItems = fullTreeItems.slice(0, newCount);
+	}
+	
+	// 检查是否需要加载更多（滚动时调用）
+	function checkLoadMore(scrollTop: number, containerHeight: number) {
+		if (fullTreeItems.length === 0) return;
+		
+		const itemHeight = 96; // 每项高度
+		const visibleEnd = Math.ceil((scrollTop + containerHeight) / itemHeight);
+		
+		// 如果接近已加载的末尾，加载更多
+		if (visibleEnd >= loadedCount - LOAD_MORE_THRESHOLD) {
+			loadMoreInlineTreeItems();
+		}
+	}
+	
+	// 树结构变化时重建
 	$effect(() => {
-		inlineTreeDisplayItems = inlineTreeDisplayItemsComputed;
+		if (!inlineTreeMode) {
+			inlineTreeDisplayItems = [];
+			fullTreeItems = [];
+			loadedCount = INITIAL_LOAD;
+			return;
+		}
+		
+		const signature = getTreeSignature();
+		
+		// 如果树没有变化，不重新构建
+		if (signature === lastTreeSignature && fullTreeItems.length > 0) {
+			return;
+		}
+		
+		// 树变化了，重新构建
+		lastTreeSignature = signature;
+		
+		// 构建完整的树（只构建数据，不渲染）
+		fullTreeItems = buildInlineTreeItems(items);
+		
+		// 只显示初始数量
+		loadedCount = Math.min(INITIAL_LOAD, fullTreeItems.length);
+		inlineTreeDisplayItems = fullTreeItems.slice(0, loadedCount);
 	});
 
 	$effect(() => {
@@ -470,8 +524,19 @@
 		lastInlineTreeContainer = container;
 		const key = inlineTreeRootPath || currentPath;
 		const savedTop = inlineTreeScrollTops[key];
-		if (savedTop != null) {
-			container.scrollTo({ top: savedTop, behavior: 'auto' });
+		if (savedTop != null && savedTop > 0) {
+			// 恢复滚动位置前，确保加载足够的项目
+			const itemHeight = 96;
+			const neededItems = Math.ceil((savedTop + container.clientHeight) / itemHeight) + LOAD_MORE_THRESHOLD;
+			if (neededItems > loadedCount && fullTreeItems.length > loadedCount) {
+				const newCount = Math.min(neededItems, fullTreeItems.length);
+				loadedCount = newCount;
+				inlineTreeDisplayItems = fullTreeItems.slice(0, newCount);
+			}
+			// 延迟恢复滚动位置，等待 DOM 更新
+			requestAnimationFrame(() => {
+				container.scrollTo({ top: savedTop, behavior: 'auto' });
+			});
 		}
 	});
 
@@ -3313,6 +3378,8 @@
 								[key]: el.scrollTop
 							};
 							fileBrowserStore.setInlineTreeScrollTops(inlineTreeScrollTops);
+							// 动态加载：检查是否需要加载更多
+							checkLoadMore(el.scrollTop, el.clientHeight);
 						}}
 						role="tree"
 					>

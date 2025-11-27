@@ -1575,7 +1575,7 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 >
 	<!-- 图像显示区域 -->
 	<div
-		class="image-container flex flex-1 items-center justify-center overflow-auto"
+		class="image-container flex flex-1 items-start justify-start overflow-auto"
 		data-viewer="true"
 		role="region"
 		aria-label="图像显示区域"

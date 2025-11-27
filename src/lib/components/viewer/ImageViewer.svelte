@@ -46,7 +46,10 @@
 	import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 	import { isVideoFile } from '$lib/utils/videoUtils';
 	import { historyStore } from '$lib/stores/history.svelte';
-	import { isHorizontalSize, type HorizontalSplitHalf } from '$lib/utils/viewer/horizontalPageLayout';
+	import {
+		isHorizontalSize,
+		type HorizontalSplitHalf
+	} from '$lib/utils/viewer/horizontalPageLayout';
 
 	// 进度条状态
 	let showProgressBar = $state(true);
@@ -85,11 +88,16 @@
 	let currentHorizontalHalf = $derived(horizontalSplitState?.half ?? null);
 	let lastMeasuredImageSource: string | null = null;
 	let containerResizeObserver: ResizeObserver | null = null;
-	let lastAppliedZoomContext: { mode: ZoomMode; dimsKey: string; viewportKey: string } | null = null;
+	let lastAppliedZoomContext: { mode: ZoomMode; dimsKey: string; viewportKey: string } | null =
+		null;
 	let dimensionMeasureId = 0;
-let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) | null = null;
+	let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) | null = null;
 
-	function calculateZoomScale(mode: ZoomMode, dims: ImageDimensions, viewport: { width: number; height: number }) {
+	function calculateZoomScale(
+		mode: ZoomMode,
+		dims: ImageDimensions,
+		viewport: { width: number; height: number }
+	) {
 		const iw = Math.max(dims.width || 0, 1);
 		const ih = Math.max(dims.height || 0, 1);
 		const vw = Math.max(viewport.width || 0, 1);
@@ -120,8 +128,14 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 
 	function applyCurrentZoomMode(overrideMode?: ZoomMode) {
 		if (isCurrentPageVideo) return;
-		const dims = currentImageDimensions;
+		let dims = currentImageDimensions;
 		if (!dims) return;
+
+		// 如果处于横向拆分模式，计算缩放时使用一半宽度
+		if (horizontalSplitState) {
+			dims = { ...dims, width: dims.width / 2 };
+		}
+
 		const { width: vw, height: vh } = viewportSize;
 		if (vw <= 0 || vh <= 0) return;
 		const effectiveMode = overrideMode ?? (settings.view.defaultZoomMode as ZoomMode) ?? 'fit';
@@ -543,8 +557,7 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 
 		const safeDuration = durationSec;
 		const clampedTime = Math.max(0, Math.min(currentTimeSec, safeDuration));
-		const completed =
-			ended || clampedTime >= safeDuration - Math.min(5, safeDuration * 0.05);
+		const completed = ended || clampedTime >= safeDuration - Math.min(5, safeDuration * 0.05);
 
 		// 映射到进度条字段（沿用 currentPage/totalPages）
 		const scale = 1000;
@@ -1052,7 +1065,7 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 		(window as unknown as { preloadManager?: typeof preloadManager }).preloadManager =
 			preloadManager;
 
- 		preloadManager.initialize();
+		preloadManager.initialize();
 		setSharedPreloadManager(preloadManager);
 
 		return () => {
@@ -1186,14 +1199,14 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 
 	$effect(() => {
 		const viewMode = $viewerState.viewMode;
-	if (lastZoomAppliedViewMode === viewMode) {
-		return;
-	}
-	lastZoomAppliedViewMode = viewMode;
-	if (!isCurrentPageVideo) {
-		applyCurrentZoomMode();
-	}
-});
+		if (lastZoomAppliedViewMode === viewMode) {
+			return;
+		}
+		lastZoomAppliedViewMode = viewMode;
+		if (!isCurrentPageVideo) {
+			applyCurrentZoomMode();
+		}
+	});
 
 	// 🔥 修复书籍导航Bug: 监听书籍切换,立即清空显示状态
 	let lastBookPath: string | null = null;
@@ -1398,25 +1411,28 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 					console.warn('未实现的滚轮操作：', action);
 			}
 		}
-	}
 
 	async function handleNextPage() {
 		try {
 			const currentIndex = bookStore.currentPageIndex;
-			const canSplitCurrent =
-				splitHorizontalPagesEnabled &&
-				isCurrentPageHorizontal &&
-				!isCurrentPageVideo &&
-				$viewerState.viewMode === 'single';
-
-			// 单页模式下：先在当前物理页内从前半翻到后半
-			if (canSplitCurrent) {
-				if (!horizontalSplitState || horizontalSplitState.pageIndex !== currentIndex) {
-					horizontalSplitState = { pageIndex: currentIndex, half: 'leading' };
-					return;
-				}
+			
+			// 1. 处理当前已激活的拆分状态导航
+			if (horizontalSplitState && horizontalSplitState.pageIndex === currentIndex) {
 				if (horizontalSplitState.half === 'leading') {
 					horizontalSplitState = { pageIndex: currentIndex, half: 'trailing' };
+					return;
+				}
+				// 如果是 trailing，则继续执行翻页逻辑（进入下一页）
+			} else {
+				// 2. 检查是否需要启动拆分（仅单页模式、横向图、非视频）
+				const canSplitCurrent =
+					splitHorizontalPagesEnabled &&
+					isCurrentPageHorizontal &&
+					!isCurrentPageVideo &&
+					$viewerState.viewMode === 'single';
+
+				if (canSplitCurrent) {
+					horizontalSplitState = { pageIndex: currentIndex, half: 'leading' };
 					return;
 				}
 			}
@@ -1425,7 +1441,35 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 
 			// 双页模式：按阅读顺序跳过两页（不反转索引）
 			if ($viewerState.viewMode === 'double') {
-				const targetIndex = Math.min(currentIndex + 2, bookStore.totalPages - 1);
+				let step = 2;
+				// 智能分组逻辑：
+				// 1. 如果当前页是横向且视为双页，则只进 1 页（因为它独占）
+				if (treatHorizontalAsDoublePage && isCurrentPageHorizontal) {
+					step = 1;
+				} else {
+					// 2. 如果当前是竖向（或横向单页），检查下一页
+					const nextIndex = currentIndex + 1;
+					const nextPage = bookStore.currentBook?.pages[nextIndex];
+					if (nextPage) {
+						// 尝试获取下一页的尺寸信息
+						const nextWidth = nextPage.width ?? 0;
+						const nextHeight = nextPage.height ?? 0;
+						
+						// 如果下一页尺寸未知，且开启了“横向视为双页”，为了安全起见（避免把横向图拼进来），
+						// 我们假设它可能是横向的，因此不进行分组，只进 1 页。
+						if (treatHorizontalAsDoublePage && (nextWidth === 0 || nextHeight === 0)) {
+							step = 1;
+						} else {
+							// 如果尺寸已知，检查是否为横向
+							const nextIsHorizontal = isHorizontalSize({ width: nextWidth, height: nextHeight });
+							if (treatHorizontalAsDoublePage && nextIsHorizontal) {
+								step = 1;
+							}
+						}
+					}
+				}
+				
+				const targetIndex = Math.min(currentIndex + step, bookStore.totalPages - 1);
 				await bookStore.navigateToPage(targetIndex);
 			} else {
 				await bookStore.nextPage();
@@ -1438,31 +1482,73 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 	async function handlePreviousPage() {
 		try {
 			const currentIndex = bookStore.currentPageIndex;
-			const canSplitCurrent =
-				splitHorizontalPagesEnabled &&
-				isCurrentPageHorizontal &&
-				!isCurrentPageVideo &&
-				$viewerState.viewMode === 'single';
 
-			// 单页模式下：先在当前物理页内从后半翻回前半
-			if (
-				canSplitCurrent &&
-				horizontalSplitState &&
-				horizontalSplitState.pageIndex === currentIndex &&
-				horizontalSplitState.half === 'trailing'
-			) {
-				horizontalSplitState = { pageIndex: currentIndex, half: 'leading' };
-				return;
+			// 1. 处理当前已激活的拆分状态导航
+			if (horizontalSplitState && horizontalSplitState.pageIndex === currentIndex) {
+				if (horizontalSplitState.half === 'trailing') {
+					horizontalSplitState = { pageIndex: currentIndex, half: 'leading' };
+					return;
+				}
+				// 如果是 leading，则继续执行翻页逻辑（进入上一页）
 			}
 
 			if (!bookStore.canPreviousPage) return;
 
-			// 双页模式：按阅读顺序后退两页（不反转索引）
+			// 双页模式：按阅读顺序后退
 			if ($viewerState.viewMode === 'double') {
-				const targetIndex = Math.max(currentIndex - 2, 0);
+				let step = 2;
+				const prevIndex = currentIndex - 1;
+				const prevPage = bookStore.currentBook?.pages[prevIndex];
+				
+				if (prevPage) {
+					const prevWidth = prevPage.width ?? 0;
+					const prevHeight = prevPage.height ?? 0;
+					const prevIsHorizontal = isHorizontalSize({ width: prevWidth, height: prevHeight });
+					
+					// 1. 如果上一页是横向且视为双页，则只退 1 页
+					// 同样，如果尺寸未知，保守起见只退 1 页
+					if (treatHorizontalAsDoublePage && (prevWidth === 0 || prevHeight === 0 || prevIsHorizontal)) {
+						step = 1;
+					} else {
+						// 2. 上一页是竖向。检查上上页
+						const prevPrevIndex = currentIndex - 2;
+						if (prevPrevIndex >= 0) {
+							const prevPrevPage = bookStore.currentBook?.pages[prevPrevIndex];
+							if (prevPrevPage) {
+								const ppWidth = prevPrevPage.width ?? 0;
+								const ppHeight = prevPrevPage.height ?? 0;
+								const prevPrevIsHorizontal = isHorizontalSize({ width: ppWidth, height: ppHeight });
+								
+								// 如果上上页是横向且视为双页，则上一页是单独显示的，所以只退 1 页
+								// 同样，尺寸未知也保守处理
+								if (treatHorizontalAsDoublePage && (ppWidth === 0 || ppHeight === 0 || prevPrevIsHorizontal)) {
+									step = 1;
+								}
+							}
+						} else {
+							// 没有上上页，只能退 1 页
+							step = 1;
+						}
+					}
+				}
+
+				const targetIndex = Math.max(currentIndex - step, 0);
 				await bookStore.navigateToPage(targetIndex);
 			} else {
-				await bookStore.previousPage();
+				const newIndex = await bookStore.previousPage();
+				
+				// 单页模式下，从下一页翻回上一页，如果上一页是横向且开启拆分，应该显示 trailing half
+				if (
+					splitHorizontalPagesEnabled &&
+					$viewerState.viewMode === 'single' &&
+					!isCurrentPageVideo &&
+					newIndex !== undefined
+				) {
+					const newPage = bookStore.currentBook?.pages[newIndex];
+					if (newPage && isHorizontalSize({ width: newPage.width ?? 0, height: newPage.height ?? 0 })) {
+						horizontalSplitState = { pageIndex: newIndex, half: 'trailing' };
+					}
+				}
 			}
 		} catch (err) {
 			console.error('Failed to go to previous page:', err);
@@ -1717,10 +1803,7 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 		role="region"
 		aria-label="图像显示区域"
 		use:hoverPan={{
-			enabled:
-				hoverScrollEnabled &&
-				!isCurrentPageVideo &&
-				$viewerState.viewMode !== 'panorama',
+			enabled: hoverScrollEnabled && !isCurrentPageVideo && $viewerState.viewMode !== 'panorama',
 			axis: 'both',
 			getBounds: getPanBounds,
 			getPosition: () => pan,
@@ -1763,11 +1846,9 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 				panX={pan.x}
 				panY={pan.y}
 				horizontalSplitHalf={currentHorizontalHalf}
-				treatHorizontalAsDoublePage={
-					treatHorizontalAsDoublePage &&
+				treatHorizontalAsDoublePage={treatHorizontalAsDoublePage &&
 					isCurrentPageHorizontal &&
-					$viewerState.viewMode === 'double'
-				}
+					$viewerState.viewMode === 'double'}
 				bind:panoramaPages={panoramaPagesData}
 			/>
 		{/if}

@@ -4,7 +4,7 @@
 	import { hoverScroll } from '$lib/utils/scroll/hoverScroll';
 	import { mapLogicalHalfToPhysical } from '$lib/utils/viewer/horizontalPageLayout';
 	import type { HorizontalSplitHalf } from '$lib/utils/viewer/horizontalPageLayout';
-	
+
 	type ViewMode = 'single' | 'double' | 'panorama';
 
 	let {
@@ -192,13 +192,11 @@
 		{#if hasPanoramaImages}
 			<!-- 使用相邻图片填充 -->
 			<div
-				class={
-					orientation === 'horizontal'
-						? `flex h-full min-w-full items-center justify-start py-0 overflow-x-auto ${
-								readingDirection === 'right-to-left' ? 'flex-row-reverse' : ''
-							}`
-						: 'flex w-full min-h-full flex-col items-center justify-start py-0 overflow-y-auto'
-				}
+				class={orientation === 'horizontal'
+					? `flex h-full min-w-full items-center justify-start overflow-x-auto py-0 ${
+							readingDirection === 'right-to-left' ? 'flex-row-reverse' : ''
+						}`
+					: 'flex min-h-full w-full flex-col items-center justify-start overflow-y-auto py-0'}
 				bind:this={scrollContainer}
 				onscroll={handleScroll}
 				use:hoverScroll={{
@@ -211,11 +209,9 @@
 						<img
 							src={page.data}
 							alt={`Page ${page.index + 1}`}
-							class={
-								orientation === 'horizontal'
-									? 'h-full w-auto shrink-0 object-cover'
-									: 'w-full h-auto object-cover'
-							}
+							class={orientation === 'horizontal'
+								? 'h-full w-auto shrink-0 object-cover'
+								: 'h-auto w-full object-cover'}
 							style={`transform: rotate(${rotationAngle}deg); transition: transform 0.2s; ${
 								orientation === 'horizontal' ? 'margin: 0 -1px;' : 'margin: -1px 0;'
 							}`}
@@ -243,11 +239,13 @@
 				src={currentSrc(upscaledImageData, imageData) ?? ''}
 				alt="Current page"
 				class="max-h-full max-w-full object-contain"
-				style={`transform: translate(${panX}px, ${panY}px) scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s; ${horizontalSplitHalf
-					? physicalSplitHalf === 'left'
-						? 'clip-path: inset(0 50% 0 0);'
-						: 'clip-path: inset(0 0 0 50%);'
-					: ''}`}
+				style={`transform: translate(${panX}px, ${panY}px) ${horizontalSplitHalf ? (physicalSplitHalf === 'left' ? 'translateX(25%)' : 'translateX(-25%)') : ''} scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s; ${
+					horizontalSplitHalf
+						? physicalSplitHalf === 'left'
+							? 'clip-path: inset(0 50% 0 0);'
+							: 'clip-path: inset(0 0 0 50%);'
+						: ''
+				}`}
 			/>
 		</div>
 	{:else if viewMode === 'double'}

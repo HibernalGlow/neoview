@@ -11,6 +11,12 @@ tasks:
     cmds:
       - task: version:show
 
+
+  dev:
+    desc: Start Tauri development server
+    cmds:
+      - yarn tauri dev
+
   version:show:
     desc: Show versions in package.json, tauri.conf.json and Cargo.toml
     dir: '{{.PROJECT_DIR}}'

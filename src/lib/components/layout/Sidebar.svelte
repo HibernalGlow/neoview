@@ -280,17 +280,19 @@
 					<Sidebar.Content>
 						<Sidebar.Group class="px-0">
 							<Sidebar.GroupContent>
-								{#if localSidebarOpen}
-									{#if activeItem.value === 'folder'}
-										<FileBrowser />
-									{:else if activeItem.value === 'history'}
-										<HistoryPanel />
-									{:else if activeItem.value === 'bookmark'}
-										<BookmarkPanel />
-									{:else if activeItem.value === 'thumbnail'}
-										<BookPageListPanel />
-									{/if}
-								{/if}
+								<!-- 使用 CSS 隐藏而非条件渲染，保持组件实例不被销毁 -->
+								<div class={activeItem.value === 'folder' ? '' : 'hidden'}>
+									<FileBrowser />
+								</div>
+								<div class={activeItem.value === 'history' ? '' : 'hidden'}>
+									<HistoryPanel />
+								</div>
+								<div class={activeItem.value === 'bookmark' ? '' : 'hidden'}>
+									<BookmarkPanel />
+								</div>
+								<div class={activeItem.value === 'thumbnail' ? '' : 'hidden'}>
+									<BookPageListPanel />
+								</div>
 							</Sidebar.GroupContent>
 						</Sidebar.Group>
 					</Sidebar.Content>

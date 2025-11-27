@@ -247,17 +247,19 @@
 					<Sidebar.Content>
 						<Sidebar.Group class="px-0">
 							<Sidebar.GroupContent>
-								{#if localRightSidebarOpen}
-									{#if activeItem.value === 'info'}
-										<InfoPanel />
-									{:else if activeItem.value === 'properties'}
-										<ImagePropertiesPanel />
-									{:else if activeItem.value === 'upscale'}
-										<UpscalePanel />
-									{:else if activeItem.value === 'insights'}
-										<DataInsightsPanel />
-									{/if}
-								{/if}
+								<!-- 使用 CSS 隐藏而非条件渲染，保持组件实例不被销毁 -->
+								<div class={activeItem.value === 'info' ? '' : 'hidden'}>
+									<InfoPanel />
+								</div>
+								<div class={activeItem.value === 'properties' ? '' : 'hidden'}>
+									<ImagePropertiesPanel />
+								</div>
+								<div class={activeItem.value === 'upscale' ? '' : 'hidden'}>
+									<UpscalePanel />
+								</div>
+								<div class={activeItem.value === 'insights' ? '' : 'hidden'}>
+									<DataInsightsPanel />
+								</div>
 							</Sidebar.GroupContent>
 						</Sidebar.Group>
 					</Sidebar.Content>

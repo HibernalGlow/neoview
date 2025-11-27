@@ -25,7 +25,9 @@
 		topToolbarPinned,
 		topToolbarHeight,
 		toggleZoomModeLock,
-		requestZoomMode
+		requestZoomMode,
+		layoutMode,
+		toggleLayoutMode
 	} from '$lib/stores';
 	import { readable } from 'svelte/store';
 	import { onMount } from 'svelte';
@@ -64,7 +66,8 @@
 		Scan,
 		StretchHorizontal,
 		StretchVertical,
-		Expand
+		Expand,
+		LayoutGrid
 	} from '@lucide/svelte';
 
 	import {
@@ -755,6 +758,24 @@ async function handleSortModeChange(mode: PageSortMode) {
 			</Tooltip.Trigger>
 			<Tooltip.Content>
 				<p>设置</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
+		<!-- 布局模式切换按钮 -->
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={$layoutMode === 'flow' ? 'default' : 'ghost'}
+					size="icon"
+					class="h-6 w-6"
+					style="pointer-events: auto;"
+					onclick={toggleLayoutMode}
+				>
+					<LayoutGrid class="h-4 w-4" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>{$layoutMode === 'flow' ? '切换到传统布局' : '切换到 Flow 画布布局'}</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 

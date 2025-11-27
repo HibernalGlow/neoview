@@ -16,7 +16,7 @@
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { settingsManager, performanceSettings } from '$lib/settings/settingsManager';
 	import type { ZoomMode } from '$lib/settings/settingsManager';
-	import { onDestroy, onMount } from 'svelte';
+	import { onDestroy, onMount, untrack } from 'svelte';
 	import { readable } from 'svelte/store';
 	import { computeAutoBackgroundColor } from '$lib/utils/autoBackground';
 	import ComparisonViewer from './ComparisonViewer.svelte';
@@ -1209,58 +1209,65 @@
 	});
 
 	// 🔥 修复书籍导航Bug: 监听书籍切换,立即清空显示状态
-	let lastBookPath: string | null = null;
+	let lastBookPathRef = { value: null as string | null }; // 使用对象引用避免响应式问题
 	let containerElement = $state<HTMLDivElement | undefined>(undefined);
 
 	// 监听书籍变化，重置状态
 	$effect(() => {
+		// 只追踪 currentBook 的 path 变化
 		const currentBookPath = bookStore.currentBook?.path;
 		const currentBook = bookStore.currentBook;
 
-		// 检测书籍是否真的发生了变化
-		if (currentBookPath !== lastBookPath) {
-			console.log('📚 书籍切换检测:', { from: lastBookPath, to: currentBookPath });
+		// 使用 untrack 来执行副作用，避免创建额外的依赖
+		untrack(() => {
+			const lastBookPath = lastBookPathRef.value;
 
-			// 立即清空所有显示状态,防止显示旧书籍的图片
-			imageData = null;
-			imageData2 = null;
-			derivedUpscaledUrl = null;
-			clearVideoPlaybackState();
-			isCurrentPageVideo = false;
-			currentVideoRequestId++;
-			if (lastUpscaledObjectUrl) {
-				URL.revokeObjectURL(lastUpscaledObjectUrl);
-				lastUpscaledObjectUrl = null;
-			}
-			lastUpscaledBlob = null;
-			lastRequestedPageIndex = -1;
-			lastLoadedPageIndex = -1;
-			lastLoadedHash = null;
-			if (panoramaPagesData.length > 0) {
-				for (const page of panoramaPagesData) {
-					if (page.data && page.data.startsWith('blob:')) {
-						try {
-							URL.revokeObjectURL(page.data);
-						} catch (e) {}
+			// 检测书籍是否真的发生了变化
+			if (currentBookPath !== lastBookPath) {
+				console.log('📚 书籍切换检测:', { from: lastBookPath, to: currentBookPath });
+
+				// 立即清空所有显示状态,防止显示旧书籍的图片
+				imageData = null;
+				imageData2 = null;
+				derivedUpscaledUrl = null;
+				clearVideoPlaybackState();
+				isCurrentPageVideo = false;
+				currentVideoRequestId++;
+				if (lastUpscaledObjectUrl) {
+					URL.revokeObjectURL(lastUpscaledObjectUrl);
+					lastUpscaledObjectUrl = null;
+				}
+				lastUpscaledBlob = null;
+				lastRequestedPageIndex = -1;
+				lastLoadedPageIndex = -1;
+				lastLoadedHash = null;
+				if (panoramaPagesData.length > 0) {
+					for (const page of panoramaPagesData) {
+						if (page.data && page.data.startsWith('blob:')) {
+							try {
+								URL.revokeObjectURL(page.data);
+							} catch (e) {}
+						}
+					}
+				}
+				panoramaPagesData = [];
+				lastPanoramaIndex = -1;
+
+				// 更新引用值
+				lastBookPathRef.value = currentBookPath ?? null;
+
+				if (!currentBook) {
+					console.log('📕 书籍已关闭,所有显示状态已清空');
+				} else {
+					console.log('📗 切换到新书籍,旧图片已清空,等待新书籍第一页加载');
+					// 切换书籍时，让查看器获取焦点，防止键盘事件被文件列表捕获
+					if (containerElement) {
+						containerElement.focus();
+						console.log('🎯 ImageViewer 已获取焦点');
 					}
 				}
 			}
-			panoramaPagesData = [];
-			lastPanoramaIndex = -1;
-
-			lastBookPath = currentBookPath ?? null;
-
-			if (!currentBook) {
-				console.log('📕 书籍已关闭,所有显示状态已清空');
-			} else {
-				console.log('📗 切换到新书籍,旧图片已清空,等待新书籍第一页加载');
-				// 切换书籍时，让查看器获取焦点，防止键盘事件被文件列表捕获
-				if (containerElement) {
-					containerElement.focus();
-					console.log('🎯 ImageViewer 已获取焦点');
-				}
-			}
-		}
+		});
 	});
 
 	// 书籍切换现在由 PreloadManager 内部的 setupBookChangeListener 处理

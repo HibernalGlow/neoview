@@ -101,15 +101,37 @@
 
 	function buildInlineTreeItems(source: FsItem[], depth = 0, parentPath?: string): InlineTreeDisplayItem[] {
 		const rows: InlineTreeDisplayItem[] = [];
-		for (const entry of source) {
-			const decorated: InlineTreeDisplayItem = { ...entry, __depth: depth, __parentPath: parentPath };
-			rows.push(decorated);
-			if (!entry.isDir) continue;
-			const nodeState = inlineTreeState[entry.path];
-			if (nodeState?.expanded && nodeState.children.length > 0) {
-				rows.push(...buildInlineTreeItems(nodeState.children, depth + 1, entry.path));
+		const stack: { items: FsItem[]; depth: number; parentPath?: string; index: number }[] = [
+			{ items: source, depth, parentPath, index: 0 }
+		];
+		
+		// 使用栈替代递归，避免大目录时的栈溢出和性能问题
+		while (stack.length > 0) {
+			const current = stack[stack.length - 1];
+			
+			if (current.index >= current.items.length) {
+				stack.pop();
+				continue;
+			}
+			
+			const entry = current.items[current.index];
+			current.index++;
+			
+			rows.push({ ...entry, __depth: current.depth, __parentPath: current.parentPath });
+			
+			if (entry.isDir) {
+				const nodeState = inlineTreeState[entry.path];
+				if (nodeState?.expanded && nodeState.children.length > 0) {
+					stack.push({
+						items: nodeState.children,
+						depth: current.depth + 1,
+						parentPath: entry.path,
+						index: 0
+					});
+				}
 			}
 		}
+		
 		return rows;
 	}
 
@@ -127,9 +149,31 @@
 			return;
 		}
 
-		// 首次展开或尚未加载子目录 -> 懒加载
+		// 首次展开或尚未加载子目录 -> 优先使用内存缓存
 		if (!prev || !prev.children || prev.children.length === 0) {
-			// 立即设置 loading 状态
+			// 1. 优先从内存缓存获取
+			const cached = fileTreeCache.getChildren(item.path);
+			if (cached && cached.length > 0) {
+				const sorted = sortItems(cached, sortField, sortOrder);
+				inlineTreeState = {
+					...inlineTreeState,
+					[item.path]: {
+						children: sorted,
+						expanded: true,
+						loading: false,
+						error: undefined
+					}
+				};
+				fileBrowserStore.setInlineTreeState(inlineTreeState);
+				
+				// 异步加载缩略图
+				requestIdleCallback(() => {
+					enqueueDirectoryThumbnails(item.path, sorted, { lazy: true, maxItems: 10 });
+				});
+				return;
+			}
+			
+			// 2. 缓存未命中，从后端加载
 			inlineTreeState = {
 				...inlineTreeState,
 				[item.path]: {
@@ -142,11 +186,12 @@
 			fileBrowserStore.setInlineTreeState(inlineTreeState);
 			
 			try {
-				// 1. 先加载目录内容（速度优先）
 				const entries = await FileSystemAPI.browseDirectory(item.path);
 				const sorted = sortItems(entries, sortField, sortOrder);
 				
-				// 2. 立即更新 UI 显示 items（不等待缩略图）
+				// 更新内存缓存
+				fileTreeCache.addChildren(item.path, entries);
+				
 				inlineTreeState = {
 					...inlineTreeState,
 					[item.path]: {
@@ -158,8 +203,6 @@
 				};
 				fileBrowserStore.setInlineTreeState(inlineTreeState);
 				
-				// 3. 异步加载缩略图（不阻塞 UI）
-				// 使用 requestIdleCallback 确保 UI 先渲染
 				requestIdleCallback(() => {
 					enqueueDirectoryThumbnails(item.path, sorted, { lazy: true, maxItems: 10 });
 				});
@@ -396,14 +439,17 @@
 		}
 	});
 
+	// 使用 $derived 替代 $effect，避免不必要的重建
+	let inlineTreeDisplayItemsComputed = $derived.by(() => {
+		if (!inlineTreeMode) return [];
+		// 依赖 inlineTreeState 和 items
+		const _ = inlineTreeState;
+		return buildInlineTreeItems(items);
+	});
+	
+	// 同步到 inlineTreeDisplayItems（避免直接赋值导致的循环）
 	$effect(() => {
-		// 依赖 inlineTreeState，保证展开/折叠时刷新
-		inlineTreeState;
-		if (!inlineTreeMode) {
-			inlineTreeDisplayItems = [];
-			return;
-		}
-		inlineTreeDisplayItems = buildInlineTreeItems(items);
+		inlineTreeDisplayItems = inlineTreeDisplayItemsComputed;
 	});
 
 	$effect(() => {

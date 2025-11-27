@@ -211,23 +211,6 @@
 					{/if}
 				{/each}
 			</div>
-			{#if scrollWidth > 0 && scrollHeight > 0}
-				{#if orientation === 'horizontal'}
-					<div class="pointer-events-none absolute bottom-2 right-2 h-2 w-24 rounded bg-black/40 overflow-hidden">
-						<div
-							class="h-full bg-white/80"
-							style={`margin-left: ${horizontalViewportLeftPercent}%; width: ${horizontalViewportWidthPercent}%;`}
-						/>
-					</div>
-				{:else}
-					<div class="pointer-events-none absolute bottom-2 right-2 h-24 w-2 rounded bg-black/40 overflow-hidden">
-						<div
-							class="w-full bg-white/80"
-							style={`margin-top: ${verticalViewportTopPercent}%; height: ${verticalViewportHeightPercent}%;`}
-						/>
-					</div>
-				{/if}
-			{/if}
 		{:else}
 			<!-- 回退到单张图片显示 -->
 			<div class="flex h-full min-w-full items-center justify-center">

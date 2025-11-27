@@ -318,16 +318,23 @@ function createFileBrowserStore() {
     },
     addThumbnail: (path: string, thumbnail: string) =>
       update(state => {
-        const newThumbnails = new Map(state.thumbnails);
-        // 统一通过 asset 转换中转，避免存入 raw file:// URL 导致前端无法显示
+        let normalized: string;
         try {
-          const url = toAssetUrl(thumbnail) || thumbnail;
-          console.log('fileBrowserStore.addThumbnail:', { key: path, raw: thumbnail, converted: url });
-          newThumbnails.set(path, url as string);
+          normalized = (toAssetUrl(thumbnail) || thumbnail) as string;
         } catch (e) {
           console.debug('addThumbnail: toAssetUrl failed, storing raw thumbnail', e);
-          newThumbnails.set(path, thumbnail);
+          normalized = thumbnail;
         }
+
+        const current = state.thumbnails.get(path);
+        if (current === normalized) {
+          // 缩略图未变化，避免触发无意义的 store 更新/日志
+          return state;
+        }
+
+        const newThumbnails = new Map(state.thumbnails);
+        newThumbnails.set(path, normalized);
+        console.log('fileBrowserStore.addThumbnail:', { key: path, raw: thumbnail, converted: normalized });
         return { ...state, thumbnails: newThumbnails };
       }),
     setThumbnails: (thumbnails: Map<string, string>) =>

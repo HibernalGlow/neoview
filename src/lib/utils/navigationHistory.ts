@@ -12,6 +12,10 @@ interface DirectoryCache {
   thumbnails: Map<string, string>;
   timestamp: number;
   mtime?: number; // 目录修改时间，用于验证缓存是否过期
+  scrollPosition?: number; // 滚动位置
+  sortField?: string; // 排序字段
+  sortOrder?: 'asc' | 'desc'; // 排序顺序
+  accessCount: number; // 访问次数，用于 LRU 淘汰
 }
 
 export class NavigationHistory {
@@ -20,8 +24,9 @@ export class NavigationHistory {
   private homepage: string = '';
   private maxHistorySize: number = 50;
   private cache = new Map<string, DirectoryCache>();
-  private maxCacheSize: number = 20;
-  private cacheTimeout: number = 5 * 60 * 1000; // 5分钟缓存超时
+  private maxCacheSize: number = 50; // 增加缓存大小
+  private cacheTimeout: number = 10 * 60 * 1000; // 10分钟缓存超时
+  private currentPath: string = ''; // 当前路径，用于保护父目录缓存
   // 记录每个父目录最近一次进入的子目录路径，用于返回上一级时可选地高亮/定位
   private lastActiveChild: Map<string, string> = new Map();
 
@@ -142,27 +147,138 @@ export class NavigationHistory {
   }
 
   /**
-   * 缓存目录数据
+   * 设置当前路径（用于保护父目录缓存）
    */
-  cacheDirectory(path: string, items: FsItem[], thumbnails: Map<string, string>, mtime?: number) {
-    // 限制缓存大小
+  setCurrentPath(path: string) {
+    this.currentPath = path;
+  }
+
+  /**
+   * 缓存目录数据（带排序状态和滚动位置）
+   */
+  cacheDirectory(
+    path: string, 
+    items: FsItem[], 
+    thumbnails: Map<string, string>, 
+    mtime?: number,
+    sortField?: string,
+    sortOrder?: 'asc' | 'desc',
+    scrollPosition?: number
+  ) {
+    // 更新已存在的缓存
+    const existing = this.cache.get(path);
+    if (existing) {
+      existing.items = [...items];
+      existing.thumbnails = new Map(thumbnails);
+      existing.timestamp = Date.now();
+      existing.mtime = mtime;
+      existing.accessCount++;
+      if (sortField !== undefined) existing.sortField = sortField;
+      if (sortOrder !== undefined) existing.sortOrder = sortOrder;
+      if (scrollPosition !== undefined) existing.scrollPosition = scrollPosition;
+      console.log(`📁 更新缓存: ${path}, 项目数: ${items.length}, 访问次数: ${existing.accessCount}`);
+      return;
+    }
+
+    // 限制缓存大小 - 使用智能淘汰策略
     if (this.cache.size >= this.maxCacheSize) {
-      // 删除最旧的缓存项
-      const oldestKey = this.cache.keys().next().value;
-      if (oldestKey) {
-        this.cache.delete(oldestKey);
-      }
+      this.evictCache();
     }
 
     this.cache.set(path, {
       path,
-      items: [...items], // 深拷贝避免引用问题
+      items: [...items],
       thumbnails: new Map(thumbnails),
       timestamp: Date.now(),
-      mtime
+      mtime,
+      sortField,
+      sortOrder,
+      scrollPosition,
+      accessCount: 1
     });
 
     console.log(`📁 缓存目录: ${path}, 项目数: ${items.length}, 缩略图数: ${thumbnails.size}`);
+  }
+
+  /**
+   * 智能缓存淘汰策略
+   * 优先保留：父目录、最近访问、访问次数多的
+   */
+  private evictCache() {
+    const parentPaths = this.getAncestorPaths(this.currentPath);
+    const now = Date.now();
+    
+    // 计算每个缓存项的优先级分数（分数越低越容易被淘汰）
+    const scores: Array<{ path: string; score: number }> = [];
+    
+    for (const [path, cache] of this.cache.entries()) {
+      let score = 0;
+      
+      // 父目录路径：高优先级保护
+      if (parentPaths.includes(path)) {
+        score += 1000;
+      }
+      
+      // 最近访问时间（越近分数越高）
+      const age = now - cache.timestamp;
+      score += Math.max(0, 100 - age / 60000); // 每分钟减1分
+      
+      // 访问次数
+      score += cache.accessCount * 10;
+      
+      scores.push({ path, score });
+    }
+    
+    // 按分数排序，删除分数最低的
+    scores.sort((a, b) => a.score - b.score);
+    
+    // 删除分数最低的缓存项
+    const toDelete = scores.slice(0, Math.max(1, Math.floor(this.maxCacheSize * 0.1)));
+    for (const { path } of toDelete) {
+      this.cache.delete(path);
+      console.log(`🗑️ 淘汰缓存: ${path}`);
+    }
+  }
+
+  /**
+   * 获取路径的所有祖先路径
+   */
+  private getAncestorPaths(path: string): string[] {
+    if (!path) return [];
+    const ancestors: string[] = [];
+    let current = path.replace(/\\/g, '/');
+    
+    while (true) {
+      const lastSlash = current.lastIndexOf('/');
+      if (lastSlash <= 0) break;
+      current = current.substring(0, lastSlash);
+      ancestors.push(current);
+      // 也添加 Windows 风格路径
+      ancestors.push(current.replace(/\//g, '\\'));
+    }
+    
+    return ancestors;
+  }
+
+  /**
+   * 更新缓存的滚动位置
+   */
+  updateScrollPosition(path: string, scrollPosition: number) {
+    const cached = this.cache.get(path);
+    if (cached) {
+      cached.scrollPosition = scrollPosition;
+    }
+  }
+
+  /**
+   * 更新缓存的排序状态
+   */
+  updateSortState(path: string, sortField: string, sortOrder: 'asc' | 'desc') {
+    const cached = this.cache.get(path);
+    if (cached) {
+      cached.sortField = sortField;
+      cached.sortOrder = sortOrder;
+    }
   }
 
   /**

@@ -31,7 +31,7 @@
 		Pencil
 	} from '@lucide/svelte';
 	import VirtualizedFileList from './file/components/VirtualizedFileList.svelte';
-	import FileTreeView from './file/components/FileTreeView.svelte';
+	import FileTreeViewLazy from './file/components/FileTreeViewLazy.svelte';
 	import FileItemCard from './file/components/FileItemCard.svelte';
 	import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
 	import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
@@ -3106,7 +3106,7 @@
 				class="bg-background/80 relative flex shrink-0 flex-col border-r"
 				style={`width: ${treeWidth}px; min-width: 180px; max-width: 480px;`}
 			>
-				<FileTreeView
+				<FileTreeViewLazy
 					items={treeItems}
 					{currentPath}
 					{thumbnails}
@@ -3121,11 +3121,6 @@
 						} else {
 							openFile(item);
 						}
-					}}
-					on:locateItem={async (e: CustomEvent<{ path: string; isDir: boolean }>) => {
-						const { path } = e.detail;
-						// 使用 store 内置的 navigateToPath 进行“定位”：进入父目录并选中/滚动到目标项
-						await fileBrowserStore.navigateToPath(path);
 					}}
 					on:itemDoubleClick={(e: CustomEvent<{ item: FsItem; index: number }>) => {
 						const { item } = e.detail;

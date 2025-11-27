@@ -190,10 +190,16 @@
 		// 限制每批次加载数量
 		const batchItems = needThumbnails.slice(0, MAX_THUMBNAILS_PER_BATCH);
 
+		// 优化：使用 Map 避免 O(n²) 的 findIndex
+		const pathToIndex = new Map<string, number>();
+		for (let i = startIndex; i <= endIndex && i < items.length; i++) {
+			pathToIndex.set(items[i].path, i);
+		}
+
 		// 按距离中心排序
 		const centerIndex = Math.floor((startIndex + endIndex) / 2);
 		const itemsWithOrder = batchItems.map((item) => {
-			const itemIndex = items.findIndex((i) => i.path === item.path);
+			const itemIndex = pathToIndex.get(item.path) ?? startIndex;
 			const distanceFromCenter = Math.abs(itemIndex - centerIndex);
 			return { item, distanceFromCenter, itemIndex };
 		});

@@ -234,6 +234,10 @@
 		// 按路径记录当前滚动位置，用于下次返回时精确恢复
 		if (currentPath) {
 			scrollPositions.set(currentPath, newScrollTop);
+			console.debug('[VirtualizedFileList] save scroll', {
+				path: currentPath,
+				scrollTop: newScrollTop
+			});
 		}
 
 		// 节流处理
@@ -411,6 +415,10 @@
 
 		if (currentPath !== lastPath) {
 			const savedTop = scrollPositions.get(currentPath) ?? 0;
+			console.debug('[VirtualizedFileList] restore scroll', {
+				path: currentPath,
+				savedTop
+			});
 
 			// 等 DOM 和高度更新后再恢复滚动位置，保证虚拟列表计算正确
 			requestAnimationFrame(() => {

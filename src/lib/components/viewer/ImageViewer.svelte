@@ -39,13 +39,14 @@
 	import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
 	import { idbSet } from '$lib/utils/idb';
 	import { hoverScroll } from '$lib/utils/scroll/hoverScroll';
-import { hoverPan } from '$lib/utils/scroll/hoverPan';
+	import { hoverPan } from '$lib/utils/scroll/hoverPan';
 	import { getFileMetadata } from '$lib/api/fs';
 	import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 	import type { BookInfo, Page } from '$lib/types';
 	import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 	import { isVideoFile } from '$lib/utils/videoUtils';
 	import { historyStore } from '$lib/stores/history.svelte';
+	import { isHorizontalSize, type HorizontalSplitHalf } from '$lib/utils/viewer/horizontalPageLayout';
 
 	// 进度条状态
 	let showProgressBar = $state(true);
@@ -64,9 +65,24 @@ import { hoverPan } from '$lib/utils/scroll/hoverPan';
 
 	let viewportSize = $state({ width: 0, height: 0 });
 	let currentImageDimensions = $state<ImageDimensions | null>(null);
+	let splitHorizontalPagesEnabled = $derived(
+		settings.view.pageLayout?.splitHorizontalPages ?? false
+	);
+	let treatHorizontalAsDoublePage = $derived(
+		settings.view.pageLayout?.treatHorizontalAsDoublePage ?? false
+	);
+	let isCurrentPageHorizontal = $derived(
+		currentImageDimensions ? isHorizontalSize(currentImageDimensions) : false
+	);
 
 	// 平移偏移（仅单/双页，非视频）
 	let pan = $state({ x: 0, y: 0 });
+	// 当前横向拆分页状态（仅单页视图使用）
+	let horizontalSplitState = $state<{
+		pageIndex: number;
+		half: HorizontalSplitHalf;
+	} | null>(null);
+	let currentHorizontalHalf = $derived(horizontalSplitState?.half ?? null);
 	let lastMeasuredImageSource: string | null = null;
 	let containerResizeObserver: ResizeObserver | null = null;
 	let lastAppliedZoomContext: { mode: ZoomMode; dimsKey: string; viewportKey: string } | null = null;
@@ -1148,6 +1164,26 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 		void refreshImageDimensions();
 	});
 
+	// 横向页面拆分：进入新页面或模式变化时初始化拆分状态
+	$effect(() => {
+		const idx = bookStore.currentPageIndex;
+		const mode = $viewerState.viewMode;
+		const canSplit =
+			splitHorizontalPagesEnabled &&
+			mode === 'single' &&
+			isCurrentPageHorizontal &&
+			!isCurrentPageVideo;
+
+		if (!canSplit) {
+			horizontalSplitState = null;
+			return;
+		}
+
+		if (!horizontalSplitState || horizontalSplitState.pageIndex !== idx) {
+			horizontalSplitState = { pageIndex: idx, half: 'leading' };
+		}
+	});
+
 	$effect(() => {
 		const viewMode = $viewerState.viewMode;
 	if (lastZoomAppliedViewMode === viewMode) {
@@ -1365,11 +1401,30 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 	}
 
 	async function handleNextPage() {
-		if (!bookStore.canNextPage) return;
 		try {
+			const currentIndex = bookStore.currentPageIndex;
+			const canSplitCurrent =
+				splitHorizontalPagesEnabled &&
+				isCurrentPageHorizontal &&
+				!isCurrentPageVideo &&
+				$viewerState.viewMode === 'single';
+
+			// 单页模式下：先在当前物理页内从前半翻到后半
+			if (canSplitCurrent) {
+				if (!horizontalSplitState || horizontalSplitState.pageIndex !== currentIndex) {
+					horizontalSplitState = { pageIndex: currentIndex, half: 'leading' };
+					return;
+				}
+				if (horizontalSplitState.half === 'leading') {
+					horizontalSplitState = { pageIndex: currentIndex, half: 'trailing' };
+					return;
+				}
+			}
+
+			if (!bookStore.canNextPage) return;
+
 			// 双页模式：按阅读顺序跳过两页（不反转索引）
 			if ($viewerState.viewMode === 'double') {
-				const currentIndex = bookStore.currentPageIndex;
 				const targetIndex = Math.min(currentIndex + 2, bookStore.totalPages - 1);
 				await bookStore.navigateToPage(targetIndex);
 			} else {
@@ -1381,11 +1436,29 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 	}
 
 	async function handlePreviousPage() {
-		if (!bookStore.canPreviousPage) return;
 		try {
+			const currentIndex = bookStore.currentPageIndex;
+			const canSplitCurrent =
+				splitHorizontalPagesEnabled &&
+				isCurrentPageHorizontal &&
+				!isCurrentPageVideo &&
+				$viewerState.viewMode === 'single';
+
+			// 单页模式下：先在当前物理页内从后半翻回前半
+			if (
+				canSplitCurrent &&
+				horizontalSplitState &&
+				horizontalSplitState.pageIndex === currentIndex &&
+				horizontalSplitState.half === 'trailing'
+			) {
+				horizontalSplitState = { pageIndex: currentIndex, half: 'leading' };
+				return;
+			}
+
+			if (!bookStore.canPreviousPage) return;
+
 			// 双页模式：按阅读顺序后退两页（不反转索引）
 			if ($viewerState.viewMode === 'double') {
-				const currentIndex = bookStore.currentPageIndex;
 				const targetIndex = Math.max(currentIndex - 2, 0);
 				await bookStore.navigateToPage(targetIndex);
 			} else {
@@ -1689,6 +1762,12 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 				orientation={$viewerState.orientation}
 				panX={pan.x}
 				panY={pan.y}
+				horizontalSplitHalf={currentHorizontalHalf}
+				treatHorizontalAsDoublePage={
+					treatHorizontalAsDoublePage &&
+					isCurrentPageHorizontal &&
+					$viewerState.viewMode === 'double'
+				}
 				bind:panoramaPages={panoramaPagesData}
 			/>
 		{/if}

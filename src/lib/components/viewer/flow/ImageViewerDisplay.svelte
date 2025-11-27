@@ -2,6 +2,8 @@
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import type { ReadingDirection } from '$lib/settings/settingsManager';
 	import { hoverScroll } from '$lib/utils/scroll/hoverScroll';
+	import { mapLogicalHalfToPhysical } from '$lib/utils/viewer/horizontalPageLayout';
+	import type { HorizontalSplitHalf } from '$lib/utils/viewer/horizontalPageLayout';
 	
 	type ViewMode = 'single' | 'double' | 'panorama';
 
@@ -17,7 +19,9 @@
 			[] as Array<{ index: number; data: string | null; position: 'left' | 'center' | 'right' }>
 		),
 		panX = 0,
-		panY = 0
+		panY = 0,
+		horizontalSplitHalf = null,
+		treatHorizontalAsDoublePage = false
 	}: {
 		imageData?: string | null;
 		imageData2?: string | null;
@@ -33,10 +37,15 @@
 		}>;
 		panX?: number;
 		panY?: number;
+		horizontalSplitHalf?: HorizontalSplitHalf | null;
+		treatHorizontalAsDoublePage?: boolean;
 	} = $props();
 
 	let settings = $state(settingsManager.getSettings());
 	let readingDirection: ReadingDirection = $derived(settings.book.readingDirection);
+	let physicalSplitHalf = $derived<ReturnType<typeof mapLogicalHalfToPhysical> | null>(
+		horizontalSplitHalf ? mapLogicalHalfToPhysical(horizontalSplitHalf, readingDirection) : null
+	);
 	let hoverScrollEnabled = $derived(settings.image.hoverScrollEnabled ?? true);
 
 	// 监听设置变化
@@ -234,45 +243,61 @@
 				src={currentSrc(upscaledImageData, imageData) ?? ''}
 				alt="Current page"
 				class="max-h-full max-w-full object-contain"
-				style={`transform: translate(${panX}px, ${panY}px) scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
+				style={`transform: translate(${panX}px, ${panY}px) scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s; ${horizontalSplitHalf
+					? physicalSplitHalf === 'left'
+						? 'clip-path: inset(0 50% 0 0);'
+						: 'clip-path: inset(0 0 0 50%);'
+					: ''}`}
 			/>
 		</div>
 	{:else if viewMode === 'double'}
-		<div class="flex items-center justify-center gap-0">
-			{#if readingDirection === 'right-to-left'}
-				<!-- 右开阅读：反向排列 -->
-				{#if imageData2}
-					<img
-						src={imageData2}
-						alt="Previous page"
-						class="max-h-full max-w-[45%] object-contain"
-						style={`transform: translate(${panX}px, ${panY}px) scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
-					/>
-				{/if}
+		{#if treatHorizontalAsDoublePage}
+			<!-- 横向页面视为双页：当前页独占整幅跨页 -->
+			<div class="flex h-full w-full items-center justify-center">
 				<img
 					src={currentSrc(upscaledImageData, imageData) ?? ''}
 					alt="Current page"
-					class="max-h-full max-w-[45%] object-contain"
+					class="max-h-full max-w-full object-contain"
 					style={`transform: translate(${panX}px, ${panY}px) scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
 				/>
-			{:else}
-				<!-- 左开阅读：正常排列 -->
-				<img
-					src={currentSrc(upscaledImageData, imageData) ?? ''}
-					alt="Current page"
-					class="max-h-full max-w-[45%] object-contain"
-					style={`transform: translate(${panX}px, ${panY}px) scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
-				/>
-				{#if imageData2}
+			</div>
+		{:else}
+			<div class="flex items-center justify-center gap-0">
+				{#if readingDirection === 'right-to-left'}
+					<!-- 右开阅读：反向排列 -->
+					{#if imageData2}
+						<img
+							src={imageData2}
+							alt="Previous page"
+							class="max-h-full max-w-[45%] object-contain"
+							style={`transform: translate(${panX}px, ${panY}px) scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
+						/>
+					{/if}
 					<img
-						src={imageData2}
-						alt="Next page"
+						src={currentSrc(upscaledImageData, imageData) ?? ''}
+						alt="Current page"
 						class="max-h-full max-w-[45%] object-contain"
 						style={`transform: translate(${panX}px, ${panY}px) scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
 					/>
+				{:else}
+					<!-- 左开阅读：正常排列 -->
+					<img
+						src={currentSrc(upscaledImageData, imageData) ?? ''}
+						alt="Current page"
+						class="max-h-full max-w-[45%] object-contain"
+						style={`transform: translate(${panX}px, ${panY}px) scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
+					/>
+					{#if imageData2}
+						<img
+							src={imageData2}
+							alt="Next page"
+							class="max-h-full max-w-[45%] object-contain"
+							style={`transform: translate(${panX}px, ${panY}px) scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
+						/>
+					{/if}
 				{/if}
-			{/if}
-		</div>
+			</div>
+		{/if}
 	{:else}
 		<!-- 默认单页模式 -->
 		<div class="flex h-full w-full items-center justify-center">

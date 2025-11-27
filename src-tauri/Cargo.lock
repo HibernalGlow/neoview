@@ -3039,6 +3039,7 @@ dependencies = [
  "image",
  "js-sys",
  "jxl-oxide",
+ "lazy_static",
  "log",
  "md5",
  "num_cpus",

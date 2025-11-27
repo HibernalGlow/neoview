@@ -75,14 +75,14 @@ class ThumbnailManager {
   // 批量加载配置
   private readonly BATCH_LOAD_SIZE = 50; // 一次批量查询的数量
 
-  // 缓存配置（默认 100MB 内存缓存）
-  private readonly MAX_CACHE_SIZE = 100 * 1024 * 1024; // 100MB
+  // 缓存配置（2GB 内存缓存）
+  private readonly MAX_CACHE_SIZE = 2048 * 1024 * 1024; // 2GB
 
   constructor() {
-    // 初始化 LRU 缓存（100MB 限制）
+    // 初始化 LRU 缓存（2GB 限制）
     this.lruCache = new LRUCache<string>({
       maxSize: this.MAX_CACHE_SIZE,
-      maxItems: 10000, // 最多 10000 个缓存项
+      maxItems: 100000, // 最多 100000 个缓存项
     });
 
     // 初始化预测性加载器

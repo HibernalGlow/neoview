@@ -199,11 +199,21 @@ impl ThumbnailDb {
 
     /// 加载缩略图（仅根据 key 和 category，忽略 size 和 ghash，减少计算）
     /// 这是默认的查询方式，适用于所有文件和文件夹
+    /// 优先从 LRU 缓存加载，未命中再查数据库
     pub fn load_thumbnail_by_key_and_category(
         &self,
         key: &str,
         category: &str,
     ) -> SqliteResult<Option<Vec<u8>>> {
+        // 构建缓存 key
+        let cache_key = format!("{}::{}", key, category);
+        
+        // 1. 优先从 LRU 缓存获取
+        if let Some(data) = super::thumbnail_lru::THUMBNAIL_LRU_CACHE.get(&cache_key) {
+            return Ok(Some(data));
+        }
+        
+        // 2. LRU 未命中，查数据库
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
@@ -216,22 +226,10 @@ impl ThumbnailDb {
 
         if let Some(row) = rows.next() {
             let data = row?;
-            if cfg!(debug_assertions) {
-                println!(
-                    "✅ 从数据库加载缩略图（key+category）: key={}, category={}, size={} bytes",
-                    key,
-                    category,
-                    data.len()
-                );
-            }
+            // 3. 写入 LRU 缓存
+            super::thumbnail_lru::THUMBNAIL_LRU_CACHE.set(cache_key, data.clone());
             Ok(Some(data))
         } else {
-            if cfg!(debug_assertions) {
-                println!(
-                    "📭 数据库中没有找到缩略图（key+category）: key={}, category={}",
-                    key, category
-                );
-            }
             Ok(None)
         }
     }
@@ -263,14 +261,8 @@ impl ThumbnailDb {
 
         if let Some(row) = rows.next() {
             let result = row?;
-            if cfg!(debug_assertions) {
-                println!("🔍 找到路径下最早的缩略图: {}", result.0);
-            }
             Ok(Some(result))
         } else {
-            if cfg!(debug_assertions) {
-                println!("📭 路径下没有找到缩略图: {}", folder_path);
-            }
             Ok(None)
         }
     }
@@ -306,28 +298,8 @@ impl ThumbnailDb {
         };
 
         match result {
-            Ok(Some(data)) => {
-                // 只在调试模式下打印日志
-                if cfg!(debug_assertions) {
-                    println!(
-                        "✅ 从数据库加载缩略图: key={}, category={:?}, size={} bytes",
-                        key,
-                        category,
-                        data.len()
-                    );
-                }
-                Ok(Some(data))
-            }
-            Ok(None) => {
-                // 只在调试模式下打印日志
-                if cfg!(debug_assertions) {
-                    println!(
-                        "📭 数据库中没有找到缩略图: key={}, category={:?}",
-                        key, category
-                    );
-                }
-                Ok(None)
-            }
+            Ok(Some(data)) => Ok(Some(data)),
+            Ok(None) => Ok(None),
             Err(e) => Err(e),
         }
     }

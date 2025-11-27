@@ -17,7 +17,10 @@ import {
 	CheckSquare,
 	Trash2,
 	MoreVertical,
-	ArrowUpDown
+	ArrowUpDown,
+	Search,
+	CornerDownRight,
+	ClipboardPaste
 } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import * as Tooltip from '$lib/components/ui/tooltip';
@@ -32,6 +35,9 @@ import {
 	deleteMode,
 	sortConfig,
 	itemCount,
+	showSearchBar,
+	showMigrationBar,
+	penetrateMode,
 	type FolderViewStyle,
 	type FolderSortField
 } from '../stores/folderPanelStore.svelte';
@@ -250,6 +256,54 @@ function getCurrentViewIcon() {
 			</Tooltip.Trigger>
 			<Tooltip.Content>
 				<p>文件夹树</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={$showSearchBar ? 'secondary' : 'ghost'}
+					size="icon"
+					class="h-7 w-7"
+					onclick={() => folderPanelActions.toggleShowSearchBar()}
+				>
+					<Search class="h-4 w-4" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>{$showSearchBar ? '隐藏搜索栏' : '显示搜索栏'}</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={$showMigrationBar ? 'secondary' : 'ghost'}
+					size="icon"
+					class="h-7 w-7"
+					onclick={() => folderPanelActions.toggleShowMigrationBar()}
+				>
+					<ClipboardPaste class="h-4 w-4" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>{$showMigrationBar ? '隐藏迁移栏' : '显示迁移栏'}</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={$penetrateMode ? 'secondary' : 'ghost'}
+					size="icon"
+					class="h-7 w-7"
+					onclick={() => folderPanelActions.togglePenetrateMode()}
+				>
+					<CornerDownRight class="h-4 w-4" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>{$penetrateMode ? '穿透模式：当文件夹只有一个子文件时直接打开' : '穿透模式'}</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 

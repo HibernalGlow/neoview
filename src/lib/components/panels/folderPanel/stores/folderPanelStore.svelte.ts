@@ -58,6 +58,12 @@ export interface FolderPanelState {
 	folderTreeLayout: 'top' | 'left';
 	// 文件夹树宽度/高度
 	folderTreeSize: number;
+	// 搜索栏可见
+	showSearchBar: boolean;
+	// 迁移栏可见
+	showMigrationBar: boolean;
+	// 穿透模式（当文件夹只有一个子文件时直接打开）
+	penetrateMode: boolean;
 }
 
 // ============ Initial State ============
@@ -111,7 +117,10 @@ const initialState: FolderPanelState = {
 	searchKeyword: '',
 	folderTreeVisible: savedState.folderTreeVisible ?? false,
 	folderTreeLayout: savedState.folderTreeLayout ?? 'left',
-	folderTreeSize: savedState.folderTreeSize ?? 200
+	folderTreeSize: savedState.folderTreeSize ?? 200,
+	showSearchBar: false,
+	showMigrationBar: false,
+	penetrateMode: false
 };
 
 // ============ Stores ============
@@ -224,6 +233,15 @@ export const folderTreeConfig = derived(state, ($state) => ({
 	layout: $state.folderTreeLayout,
 	size: $state.folderTreeSize
 }));
+
+// 搜索栏可见
+export const showSearchBar = derived(state, ($state) => $state.showSearchBar);
+
+// 迁移栏可见
+export const showMigrationBar = derived(state, ($state) => $state.showMigrationBar);
+
+// 穿透模式
+export const penetrateMode = derived(state, ($state) => $state.penetrateMode);
 
 // 可以后退
 export const canGoBack = derived(
@@ -607,6 +625,27 @@ export const folderPanelActions = {
 			saveState(newState);
 			return newState;
 		});
+	},
+
+	/**
+	 * 切换搜索栏可见性
+	 */
+	toggleShowSearchBar() {
+		state.update((s) => ({ ...s, showSearchBar: !s.showSearchBar }));
+	},
+
+	/**
+	 * 切换迁移栏可见性
+	 */
+	toggleShowMigrationBar() {
+		state.update((s) => ({ ...s, showMigrationBar: !s.showMigrationBar }));
+	},
+
+	/**
+	 * 切换穿透模式
+	 */
+	togglePenetrateMode() {
+		state.update((s) => ({ ...s, penetrateMode: !s.penetrateMode }));
 	},
 
 	/**

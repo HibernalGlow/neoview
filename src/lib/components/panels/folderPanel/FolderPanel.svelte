@@ -19,7 +19,8 @@ import {
 	currentPath,
 	folderPanelActions,
 	folderTreeConfig,
-	searchKeyword
+	searchKeyword,
+	showSearchBar
 } from './stores/folderPanelStore.svelte';
 
 // 导航命令 store（用于父子组件通信）
@@ -97,13 +98,15 @@ onMount(async () => {
 		onGoHome={handleGoHome}
 	/>
 
-	<!-- 搜索栏 -->
-	<div class="border-b px-2 py-1.5">
-		<SearchBar
-			placeholder="搜索文件..."
-			onSearch={handleSearch}
-		/>
-	</div>
+	<!-- 搜索栏（可切换显示） -->
+	{#if $showSearchBar}
+		<div class="border-b px-2 py-1.5">
+			<SearchBar
+				placeholder="搜索文件..."
+				onSearch={handleSearch}
+			/>
+		</div>
+	{/if}
 
 	<!-- 主内容区 -->
 	<div class="relative flex-1 overflow-hidden">

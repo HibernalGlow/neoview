@@ -64,6 +64,7 @@
 	import { loadPanelViewMode, savePanelViewMode } from '$lib/utils/panelViewMode';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
+	import { fileTreeCache } from '$lib/stores/fileTreeCache.svelte';
 
 	function itemIsDirectory(item: any): boolean {
 		return item.isDir || item.is_directory;
@@ -834,9 +835,6 @@
 		}
 	}
 
-	// 文件树子目录缓存：路径 -> 子目录列表
-	let treeChildrenCache = new Map<string, FsItem[]>();
-	
 	async function handleTreeToggleNode(
 		event: CustomEvent<{ path: string; fsPath: string; isDir: boolean; hasChildren: boolean }>
 	) {
@@ -847,8 +845,8 @@
 			return;
 		}
 
-		// 优化：先检查缓存
-		const cached = treeChildrenCache.get(fsPath);
+		// 优化：使用全局文件树缓存
+		const cached = fileTreeCache.getChildren(fsPath);
 		if (cached) {
 			// 缓存命中，直接使用
 			const dirs = cached.filter((item) => item.isDir);
@@ -871,8 +869,8 @@
 		try {
 			const entries = await FileSystemAPI.browseDirectory(fsPath);
 			
-			// 缓存结果
-			treeChildrenCache.set(fsPath, entries);
+			// 添加到全局缓存
+			fileTreeCache.addChildren(fsPath, entries);
 			
 			const dirs = entries.filter((item) => item.isDir);
 			if (dirs.length === 0) return;
@@ -1128,14 +1126,13 @@
 
 		if (cachedData) {
 			// 有缓存：立即显示，不设置 loading 状态
-			console.log('📋 使用缓存数据（立即显示）:', path);
 			fileBrowserStore.setItems(cachedData.items);
 			fileBrowserStore.setThumbnails(cachedData.thumbnails);
 			thumbnails = new Map(cachedData.thumbnails);
 			updateTreeWithDirectory(path, cachedData.items);
 			
-			// 同时缓存到文件树缓存
-			treeChildrenCache.set(path, cachedData.items);
+			// 同时更新全局文件树缓存
+			fileTreeCache.addChildren(path, cachedData.items);
 			
 			setLastFolder(path);
 
@@ -1173,13 +1170,9 @@
 	 * 优化：立即设置数据，不使用调度器
 	 */
 	async function reloadDirectoryFromBackend(path: string) {
-		console.log('🔄 Calling FileSystemAPI.loadDirectorySnapshot...');
 		const snapshot = await FileSystemAPI.loadDirectorySnapshot(path);
 		const loadedItems = snapshot.items;
 		const directoryMtime = snapshot.mtime ? snapshot.mtime * 1000 : undefined;
-		console.log(
-			`✅ Loaded ${loadedItems.length} items${snapshot.cached ? ' (cache hit)' : ''}`
-		);
 
 		// 立即设置数据，不等待缩略图
 		const sortedItems = sortItems(
@@ -1192,8 +1185,12 @@
 		fileBrowserStore.setLoading(false); // 立即取消 loading 状态
 		updateTreeWithDirectory(path, sortedItems);
 
-		// 同时缓存到文件树缓存
-		treeChildrenCache.set(path, sortedItems);
+		// 初始化/更新全局文件树缓存
+		if (!fileTreeCache.isRootLoaded(path)) {
+			fileTreeCache.initTree(path, sortedItems);
+		} else {
+			fileTreeCache.addChildren(path, sortedItems);
+		}
 
 		// 缓存目录数据（不包含缩略图）
 		navigationHistory.cacheDirectory(path, loadedItems, new Map(), directoryMtime);

@@ -5,12 +5,14 @@
 	 * 1. 只在展开时才加载子节点
 	 * 2. 使用虚拟化只渲染可见节点
 	 * 3. 增量更新，不重建整棵树
+	 * 4. 使用全局文件树缓存，避免重复加载
 	 */
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import { createVirtualizer } from '@tanstack/svelte-virtual';
 	import { get } from 'svelte/store';
 	import type { FsItem } from '$lib/types';
 	import { Folder, File, Image as ImageIcon, FileArchive, ChevronDown, ChevronRight } from '@lucide/svelte';
+	import { fileTreeCache } from '$lib/stores/fileTreeCache.svelte';
 
 	interface LazyTreeNode {
 		name: string;
@@ -172,17 +174,40 @@
 			
 			// 延迟加载子节点
 			if (!node.childrenLoaded) {
-				node.children = loadChildren(node, items);
-				node.childrenLoaded = true;
+				// 优先从全局缓存加载
+				const fsPath = node.item?.path || node.path;
+				const cachedChildren = fileTreeCache.getChildren(fsPath);
 				
-				// 触发后端加载更多子目录
-				if (node.item) {
-					dispatch('toggleNode', {
-						path: node.path,
-						fsPath: node.item.path,
-						isDir: node.isDir,
-						hasChildren: (node.children?.length ?? 0) > 0
-					});
+				if (cachedChildren && cachedChildren.length > 0) {
+					// 缓存命中，直接构建子节点
+					node.children = cachedChildren
+						.filter(item => item.isDir)
+						.map(item => ({
+							name: item.name,
+							path: normalizePath(item.path),
+							isDir: item.isDir,
+							item: item,
+							children: null,
+							childrenLoaded: false,
+							expanded: false,
+							level: node.level + 1
+						}))
+						.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+					node.childrenLoaded = true;
+				} else {
+					// 缓存未命中，从 items 加载并触发后端请求
+					node.children = loadChildren(node, items);
+					node.childrenLoaded = true;
+					
+					// 触发后端加载更多子目录
+					if (node.item) {
+						dispatch('toggleNode', {
+							path: node.path,
+							fsPath: node.item.path,
+							isDir: node.isDir,
+							hasChildren: (node.children?.length ?? 0) > 0
+						});
+					}
 				}
 			}
 		} else {

@@ -34,10 +34,13 @@ export interface TaskCursorState {
 	updatedAt: number;
 }
 
+export type ZoomMode = 'fit' | 'fill' | 'fitWidth' | 'fitHeight' | 'original';
+
 export interface ViewerSlice {
 	viewMode: 'single' | 'double' | 'panorama';
 	lockedViewMode: 'single' | 'double' | 'panorama' | null;
-	lockedZoomMode: 'fit' | 'fill' | 'fitWidth' | 'fitHeight' | 'original' | null;
+	lockedZoomMode: ZoomMode | null;
+	currentZoomMode: ZoomMode;
 	orientation: 'horizontal' | 'vertical';
 	zoom: number;
 	loading: boolean;
@@ -222,6 +225,7 @@ export function createDefaultAppState(): AppStateSnapshot {
 			viewMode: 'single',
 			lockedViewMode: null,
 			lockedZoomMode: null,
+			currentZoomMode: 'fit',
 			orientation: 'horizontal',
 			zoom: 1,
 			loading: false,

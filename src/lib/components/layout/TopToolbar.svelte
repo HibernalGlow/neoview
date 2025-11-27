@@ -23,7 +23,9 @@
 		toggleReadingDirection,
 		toggleOrientation,
 		topToolbarPinned,
-		topToolbarHeight
+		topToolbarHeight,
+		toggleZoomModeLock,
+		requestZoomMode
 	} from '$lib/stores';
 	import { readable } from 'svelte/store';
 	import { onMount } from 'svelte';
@@ -95,6 +97,14 @@ const sortModeOptions: { value: PageSortMode; label: string; description: string
 	{ value: 'entryDescending', label: 'Entry 顺序 ↓', description: '原始顺序反向' },
 	{ value: 'random', label: '随机顺序', description: '随机排列所有页面' }
 ];
+
+const zoomModeOptions: { mode: ZoomMode; label: string }[] = [
+	{ mode: 'fit', label: '适应窗口' },
+	{ mode: 'fill', label: '铺满整个窗口' },
+	{ mode: 'fitWidth', label: '适应宽度' },
+	{ mode: 'fitHeight', label: '适应高度' },
+	{ mode: 'original', label: '原始大小' }
+];
 let currentSortModeLabel = $derived(() => {
 	const mode = bookStore.currentBook?.sortMode ?? 'fileName';
 	return sortModeOptions.find((o) => o.value === mode)?.label ?? '文件名 ↑';
@@ -134,9 +144,7 @@ let currentSortModeLabel = $derived(() => {
 	}
 
 	function handleZoomModeChange(mode: ZoomMode) {
-		if (settings.view.defaultZoomMode === mode) return;
-		settingsManager.updateNestedSettings('view', { defaultZoomMode: mode });
-		dispatchApplyZoomMode(mode);
+		requestZoomMode(mode);
 	}
 
 async function handleSortModeChange(mode: PageSortMode) {
@@ -924,17 +932,23 @@ async function handleSortModeChange(mode: PageSortMode) {
 
 				<!-- 缩放模式切换 -->
 				<DropdownMenu.Root>
+					{@const CurrentZoomIcon = getZoomModeIcon(defaultZoomMode)}
 					<DropdownMenu.Trigger>
 						<Button
 							variant="ghost"
 							size="icon"
-							class="h-8 w-8"
+							class={`h-8 w-8 ${$viewerState.lockedZoomMode === defaultZoomMode ? 'rounded-full ring-2 ring-primary bg-primary/10 text-primary' : ''}`}
 							style="pointer-events: auto;"
-							title={`缩放模式：${getZoomModeLabel(defaultZoomMode)}`}
+							title={`缩放模式：${getZoomModeLabel(defaultZoomMode)}${$viewerState.lockedZoomMode === defaultZoomMode ? '（已锁定）' : ''}`}
+							oncontextmenu={(event) => {
+								event.preventDefault();
+								toggleZoomModeLock(defaultZoomMode);
+							}}
 						>
-							<svelte:component this={getZoomModeIcon(defaultZoomMode)} class="h-4 w-4" />
+							<CurrentZoomIcon class="h-4 w-4" />
 						</Button>
 					</DropdownMenu.Trigger>
+
 					<DropdownMenu.Content
 						class="z-60 w-40"
 						onmouseenter={handleMouseEnter}
@@ -942,61 +956,19 @@ async function handleSortModeChange(mode: PageSortMode) {
 					>
 						<DropdownMenu.Label>缩放模式</DropdownMenu.Label>
 						<DropdownMenu.Separator />
-						<DropdownMenu.Item onclick={() => handleZoomModeChange('fit')}>
-							<div class="flex items-center gap-2">
-								<div class="flex h-4 w-4 items-center justify-center">
-									{#if defaultZoomMode === 'fit'}
-										<Check class="h-3 w-3" />
-									{/if}
+						{#each zoomModeOptions as { mode, label }}
+							<DropdownMenu.Item onclick={() => handleZoomModeChange(mode)}>
+								<div class="flex items-center gap-2">
+									<div class="flex h-4 w-4 items-center justify-center">
+										{#if defaultZoomMode === mode}
+											<Check class="h-3 w-3" />
+										{/if}
+									</div>
+									<svelte:component this={getZoomModeIcon(mode)} class="h-3.5 w-3.5 text-muted-foreground" />
+									<span class="text-xs">{label}</span>
 								</div>
-								<svelte:component this={getZoomModeIcon('fit')} class="h-3.5 w-3.5 text-muted-foreground" />
-								<span class="text-xs">适应窗口</span>
-							</div>
-						</DropdownMenu.Item>
-						<DropdownMenu.Item onclick={() => handleZoomModeChange('fill')}>
-							<div class="flex items-center gap-2">
-								<div class="flex h-4 w-4 items-center justify-center">
-									{#if defaultZoomMode === 'fill'}
-										<Check class="h-3 w-3" />
-									{/if}
-								</div>
-								<svelte:component this={getZoomModeIcon('fill')} class="h-3.5 w-3.5 text-muted-foreground" />
-								<span class="text-xs">铺满整个窗口</span>
-							</div>
-						</DropdownMenu.Item>
-						<DropdownMenu.Item onclick={() => handleZoomModeChange('fitWidth')}>
-							<div class="flex items-center gap-2">
-								<div class="flex h-4 w-4 items-center justify-center">
-									{#if defaultZoomMode === 'fitWidth'}
-										<Check class="h-3 w-3" />
-									{/if}
-								</div>
-								<svelte:component this={getZoomModeIcon('fitWidth')} class="h-3.5 w-3.5 text-muted-foreground" />
-								<span class="text-xs">适应宽度</span>
-							</div>
-						</DropdownMenu.Item>
-						<DropdownMenu.Item onclick={() => handleZoomModeChange('fitHeight')}>
-							<div class="flex items-center gap-2">
-								<div class="flex h-4 w-4 items-center justify-center">
-									{#if defaultZoomMode === 'fitHeight'}
-										<Check class="h-3 w-3" />
-									{/if}
-								</div>
-								<svelte:component this={getZoomModeIcon('fitHeight')} class="h-3.5 w-3.5 text-muted-foreground" />
-								<span class="text-xs">适应高度</span>
-							</div>
-						</DropdownMenu.Item>
-						<DropdownMenu.Item onclick={() => handleZoomModeChange('original')}>
-							<div class="flex items-center gap-2">
-								<div class="flex h-4 w-4 items-center justify-center">
-									{#if defaultZoomMode === 'original'}
-										<Check class="h-3 w-3" />
-									{/if}
-								</div>
-								<svelte:component this={getZoomModeIcon('original')} class="h-3.5 w-3.5 text-muted-foreground" />
-								<span class="text-xs">原始大小</span>
-							</div>
-						</DropdownMenu.Item>
+							</DropdownMenu.Item>
+						{/each}
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
 

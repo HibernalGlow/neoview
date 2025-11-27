@@ -1411,11 +1411,12 @@
 					console.warn('未实现的滚轮操作：', action);
 			}
 		}
+	}
 
 	async function handleNextPage() {
 		try {
 			const currentIndex = bookStore.currentPageIndex;
-			
+
 			// 1. 处理当前已激活的拆分状态导航
 			if (horizontalSplitState && horizontalSplitState.pageIndex === currentIndex) {
 				if (horizontalSplitState.half === 'leading') {
@@ -1454,7 +1455,7 @@
 						// 尝试获取下一页的尺寸信息
 						const nextWidth = nextPage.width ?? 0;
 						const nextHeight = nextPage.height ?? 0;
-						
+
 						// 如果下一页尺寸未知，且开启了“横向视为双页”，为了安全起见（避免把横向图拼进来），
 						// 我们假设它可能是横向的，因此不进行分组，只进 1 页。
 						if (treatHorizontalAsDoublePage && (nextWidth === 0 || nextHeight === 0)) {
@@ -1468,7 +1469,7 @@
 						}
 					}
 				}
-				
+
 				const targetIndex = Math.min(currentIndex + step, bookStore.totalPages - 1);
 				await bookStore.navigateToPage(targetIndex);
 			} else {
@@ -1499,15 +1500,18 @@
 				let step = 2;
 				const prevIndex = currentIndex - 1;
 				const prevPage = bookStore.currentBook?.pages[prevIndex];
-				
+
 				if (prevPage) {
 					const prevWidth = prevPage.width ?? 0;
 					const prevHeight = prevPage.height ?? 0;
 					const prevIsHorizontal = isHorizontalSize({ width: prevWidth, height: prevHeight });
-					
+
 					// 1. 如果上一页是横向且视为双页，则只退 1 页
 					// 同样，如果尺寸未知，保守起见只退 1 页
-					if (treatHorizontalAsDoublePage && (prevWidth === 0 || prevHeight === 0 || prevIsHorizontal)) {
+					if (
+						treatHorizontalAsDoublePage &&
+						(prevWidth === 0 || prevHeight === 0 || prevIsHorizontal)
+					) {
 						step = 1;
 					} else {
 						// 2. 上一页是竖向。检查上上页
@@ -1518,10 +1522,13 @@
 								const ppWidth = prevPrevPage.width ?? 0;
 								const ppHeight = prevPrevPage.height ?? 0;
 								const prevPrevIsHorizontal = isHorizontalSize({ width: ppWidth, height: ppHeight });
-								
+
 								// 如果上上页是横向且视为双页，则上一页是单独显示的，所以只退 1 页
 								// 同样，尺寸未知也保守处理
-								if (treatHorizontalAsDoublePage && (ppWidth === 0 || ppHeight === 0 || prevPrevIsHorizontal)) {
+								if (
+									treatHorizontalAsDoublePage &&
+									(ppWidth === 0 || ppHeight === 0 || prevPrevIsHorizontal)
+								) {
 									step = 1;
 								}
 							}
@@ -1536,7 +1543,7 @@
 				await bookStore.navigateToPage(targetIndex);
 			} else {
 				const newIndex = await bookStore.previousPage();
-				
+
 				// 单页模式下，从下一页翻回上一页，如果上一页是横向且开启拆分，应该显示 trailing half
 				if (
 					splitHorizontalPagesEnabled &&
@@ -1545,7 +1552,10 @@
 					newIndex !== undefined
 				) {
 					const newPage = bookStore.currentBook?.pages[newIndex];
-					if (newPage && isHorizontalSize({ width: newPage.width ?? 0, height: newPage.height ?? 0 })) {
+					if (
+						newPage &&
+						isHorizontalSize({ width: newPage.width ?? 0, height: newPage.height ?? 0 })
+					) {
 						horizontalSplitState = { pageIndex: newIndex, half: 'trailing' };
 					}
 				}

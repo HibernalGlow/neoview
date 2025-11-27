@@ -51,6 +51,12 @@ function handleGoBack() {
 	navigationCommand.set({ type: 'pop' });
 }
 
+// 处理回到 Home
+async function handleGoHome() {
+	const home = await homeDir();
+	navigationCommand.set({ type: 'init', path: home });
+}
+
 // 处理搜索
 function handleSearch(keyword: string) {
 	folderPanelActions.setSearchKeyword(keyword);
@@ -88,6 +94,7 @@ onMount(async () => {
 		onRefresh={handleRefresh} 
 		onToggleFolderTree={handleToggleFolderTree}
 		onGoBack={handleGoBack}
+		onGoHome={handleGoHome}
 	/>
 
 	<!-- 搜索栏 -->

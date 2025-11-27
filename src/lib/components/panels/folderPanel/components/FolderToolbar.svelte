@@ -41,9 +41,10 @@ interface Props {
 	onToggleFolderTree?: () => void;
 	onGoBack?: () => void;
 	onGoForward?: () => void;
+	onGoHome?: () => void;
 }
 
-let { onRefresh, onToggleFolderTree, onGoBack, onGoForward }: Props = $props();
+let { onRefresh, onToggleFolderTree, onGoBack, onGoForward, onGoHome }: Props = $props();
 
 const viewStyles: { value: FolderViewStyle; icon: typeof List; label: string }[] = [
 	{ value: 'list', icon: List, label: '列表' },
@@ -68,13 +69,12 @@ function handleGoForward() {
 }
 
 function handleGoUp() {
-	const path = folderPanelActions.goUp();
-	if (path) onRefresh?.();
+	// 在层叠模式下，返回上级等同于后退
+	onGoBack?.();
 }
 
 function handleGoHome() {
-	const path = folderPanelActions.goHome();
-	if (path) onRefresh?.();
+	onGoHome?.();
 }
 
 function handleSetViewStyle(style: FolderViewStyle) {

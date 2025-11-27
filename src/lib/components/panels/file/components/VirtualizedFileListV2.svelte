@@ -129,19 +129,11 @@
 		});
 	}
 
-	// --- 滚动停止检测和缩略图加载 ---
-	const MAX_THUMBNAILS_PER_BATCH = 20;
+	// --- 实时缩略图加载 ---
+	const MAX_THUMBNAILS_PER_BATCH = 30;
 	let pendingThumbnailPaths = new Set<string>();
-	let scrollStopTimeout: ReturnType<typeof setTimeout> | null = null;
-	let isScrolling = false;
 	let lastLoadedRange = { start: -1, end: -1 };
 	let currentLoadEpoch = 0;
-
-	// 滚动停止后加载可见区域缩略图
-	function onScrollStop() {
-		isScrolling = false;
-		loadVisibleThumbnails();
-	}
 
 	// 加载可见项目的缩略图
 	function loadVisibleThumbnails() {
@@ -239,13 +231,10 @@
 		});
 	}
 
-	// 旧的防抖处理（保留用于 effect 触发）
+	// 可见范围变化时加载缩略图（防抖）
 	const handleVisibleRangeChange = debounce(() => {
-		// 只在非滚动状态下触发
-		if (!isScrolling) {
-			loadVisibleThumbnails();
-		}
-	}, 100);
+		loadVisibleThumbnails();
+	}, 50);
 
 	// 监听路径变化，切换文件夹时立即取消旧任务并恢复滚动位置
 	$effect(() => {
@@ -300,13 +289,10 @@
 
 	// --- Event Handlers ---
 
-	// 滚动处理（节流 + 保存位置到全局 store + 滚动停止检测）
+	// 滚动处理（节流 + 保存位置到全局 store + 实时加载缩略图）
 	const handleScroll = throttle(() => {
 		if (!container) return;
 		const scrollTop = container.scrollTop;
-
-		// 标记正在滚动
-		isScrolling = true;
 
 		// 更新预测性加载器的滚动位置
 		const startIndex = virtualItems[0]?.index ?? 0;
@@ -317,14 +303,9 @@
 			setScrollPosition(currentPath, scrollTop);
 		}
 
-		// 清除之前的定时器
-		if (scrollStopTimeout) {
-			clearTimeout(scrollStopTimeout);
-		}
-
-		// 滚动停止 150ms 后触发加载
-		scrollStopTimeout = setTimeout(onScrollStop, 150);
-	}, 16); // ~60fps
+		// 实时加载可见区域缩略图
+		loadVisibleThumbnails();
+	}, 50); // 50ms 节流
 
 	function handleItemClick(item: FsItem, index: number) {
 		onItemSelect({ item, index, multiSelect: false });

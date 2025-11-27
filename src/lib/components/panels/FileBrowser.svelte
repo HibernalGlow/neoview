@@ -31,6 +31,7 @@
 		Pencil
 	} from '@lucide/svelte';
 	import VirtualizedFileList from './file/components/VirtualizedFileList.svelte';
+	import VirtualizedInlineTree from './file/components/VirtualizedInlineTree.svelte';
 	import FileTreeView from './file/components/FileTreeView.svelte';
 	import FileItemCard from './file/components/FileItemCard.svelte';
 	import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
@@ -63,7 +64,7 @@
 	import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 	import { loadPanelViewMode, savePanelViewMode } from '$lib/utils/panelViewMode';
 	import { settingsManager } from '$lib/settings/settingsManager';
-	import { showSuccessToast, showErrorToast } from '$lib/utils/toast.ts';
+	import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
 
 	function itemIsDirectory(item: any): boolean {
 		return item.isDir || item.is_directory;
@@ -128,6 +129,7 @@
 
 		// 首次展开或尚未加载子目录 -> 懒加载
 		if (!prev || !prev.children || prev.children.length === 0) {
+			// 立即设置 loading 状态
 			inlineTreeState = {
 				...inlineTreeState,
 				[item.path]: {
@@ -138,10 +140,13 @@
 				}
 			};
 			fileBrowserStore.setInlineTreeState(inlineTreeState);
+			
 			try {
+				// 1. 先加载目录内容（速度优先）
 				const entries = await FileSystemAPI.browseDirectory(item.path);
 				const sorted = sortItems(entries, sortField, sortOrder);
-				enqueueDirectoryThumbnails(item.path, sorted);
+				
+				// 2. 立即更新 UI 显示 items（不等待缩略图）
 				inlineTreeState = {
 					...inlineTreeState,
 					[item.path]: {
@@ -152,6 +157,12 @@
 					}
 				};
 				fileBrowserStore.setInlineTreeState(inlineTreeState);
+				
+				// 3. 异步加载缩略图（不阻塞 UI）
+				// 使用 requestIdleCallback 确保 UI 先渲染
+				requestIdleCallback(() => {
+					enqueueDirectoryThumbnails(item.path, sorted, { lazy: true, maxItems: 10 });
+				});
 			} catch (err) {
 				const description = err instanceof Error ? err.message : String(err);
 				inlineTreeState = {
@@ -213,10 +224,18 @@
 		});
 	}
 
-	function enqueueDirectoryThumbnails(path: string, items: any[]): void {
+	function enqueueDirectoryThumbnails(path: string, items: any[], options?: { lazy?: boolean; maxItems?: number }): void {
 		// 当前目录优先
 		thumbnailManager.setCurrentDirectory(path);
-		thumbnailManager.preloadThumbnails(items, path, 'immediate');
+		
+		// 懒加载模式：只预加载前几个项目，其余由虚拟列表按需加载
+		if (options?.lazy) {
+			const maxItems = options.maxItems ?? 10;
+			const limitedItems = items.slice(0, maxItems);
+			thumbnailManager.preloadThumbnails(limitedItems, path, 'normal');
+		} else {
+			thumbnailManager.preloadThumbnails(items, path, 'immediate');
+		}
 	}
 
 	async function prefillThumbnailsFromCache(items: FsItem[], path: string) {
@@ -3182,101 +3201,47 @@
 			{:else}
 				<!-- 文件列表 -->
 				{#if inlineTreeMode}
-					<div
-						class="inline-tree-panel min-h-0 flex-1 overflow-auto"
-						bind:this={inlineTreeContainer}
-						onscroll={(e) => {
-							const el = e.currentTarget as HTMLDivElement;
-							const key = inlineTreeRootPath || currentPath;
-							inlineTreeScrollTops = {
-								...inlineTreeScrollTops,
-								[key]: el.scrollTop
-							};
-							fileBrowserStore.setInlineTreeScrollTops(inlineTreeScrollTops);
-						}}
-						role="tree"
-					>
-						{#if inlineTreeDisplayItems.length === 0}
-							<div class="text-muted-foreground py-6 text-center text-sm">暂无可显示的条目</div>
-						{:else}
-							<div class="flex flex-col gap-1 py-2">
-								{#each inlineTreeDisplayItems as inlineItem (inlineItem.path + ':' + (inlineItem.__parentPath || 'root') + ':' + inlineItem.__depth)}
-									{@const indent = inlineItem.__depth * 16}
-									<div
-										class="flex items-stretch px-2"
-										role="treeitem"
-										aria-expanded={inlineItem.isDir ? !!inlineTreeState[inlineItem.path]?.expanded : undefined}
-									>
-										<div class="flex items-center" style={`margin-left: ${indent}px`}>
-											{#if inlineItem.isDir}
-												{#if inlineTreeState[inlineItem.path]?.loading}
-													<RefreshCw class="mr-1 h-4 w-4 animate-spin text-muted-foreground" />
-												{:else}
-													<button
-														class="mr-1 inline-flex h-6 w-6 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-accent"
-														type="button"
-														onclick={(e) => {
-															e.stopPropagation();
-															void toggleInlineTreeNode(inlineItem);
-														}}
-														title={inlineTreeState[inlineItem.path]?.expanded ? '收起子项' : '展开子项'}
-													>
-														{#if inlineTreeState[inlineItem.path]?.expanded}
-															<ChevronDown class="h-4 w-4" />
-														{:else}
-															<ChevronRight class="h-4 w-4" />
-														{/if}
-													</button>
-												{/if}
-											{:else}
-												<!-- 对齐占位 -->
-												<div class="mr-1 h-6 w-6"></div>
-											{/if}
-										</div>
-										<div class="flex-1">
-											<FileItemCard
-												item={inlineItem}
-												thumbnail={thumbnails.get(toRelativeKey(inlineItem.path))}
-												viewMode="list"
-												isSelected={false}
-												isChecked={selectedItems.has(inlineItem.path)}
-												{isCheckMode}
-												{isDeleteMode}
-												showReadMark={false}
-												showBookmarkMark={true}
-												showSizeAndModified={true}
-												timestamp={inlineItem.modified ? inlineItem.modified * 1000 : undefined}
-												onClick={async () => {
-													if (inlineItem.isDir) {
-														if (isPenetrateMode) {
-															const penetrated = await tryPenetrateFolder(inlineItem.path);
-															if (penetrated) {
-																await openFile(penetrated);
-																return;
-															}
-														}
-														await toggleInlineTreeNode(inlineItem);
-														return;
-													}
-													await openFile(inlineItem);
-												}}
-												onContextMenu={(e) => {
-													e.stopPropagation();
-													showContextMenu(e, inlineItem);
-												}}
-												onToggleSelection={() => toggleItemSelection(inlineItem.path)}
-												onOpenAsBook={inlineItem.isDir ? () => openFolderAsBook(inlineItem) : undefined}
-											/>
-										</div>
-									</div>
-									{#if inlineTreeState[inlineItem.path]?.error}
-										<div class="text-destructive bg-destructive/10 px-5 py-1 text-xs" style={`margin-left: ${indent + 32}px;`}>
-											{inlineTreeState[inlineItem.path]?.error}
-										</div>
-									{/if}
-								{/each}
-							</div>
-						{/if}
+					<!-- 使用虚拟化文件树组件 -->
+					<div class="inline-tree-panel min-h-0 flex-1">
+						<VirtualizedInlineTree
+							items={inlineTreeDisplayItems}
+							{inlineTreeState}
+							{thumbnails}
+							{selectedItems}
+							{isCheckMode}
+							{isDeleteMode}
+							{isPenetrateMode}
+							onToggleNode={toggleInlineTreeNode}
+							onItemClick={async (item) => {
+								if (item.isDir) {
+									if (isPenetrateMode) {
+										const penetrated = await tryPenetrateFolder(item.path);
+										if (penetrated) {
+											await openFile(penetrated);
+											return;
+										}
+									}
+									await toggleInlineTreeNode(item);
+									return;
+								}
+								await openFile(item);
+							}}
+							onItemContextMenu={(e, item) => {
+								e.stopPropagation();
+								showContextMenu(e, item);
+							}}
+							onToggleSelection={toggleItemSelection}
+							onOpenAsBook={openFolderAsBook}
+							onScroll={(scrollTop) => {
+								const key = inlineTreeRootPath || currentPath;
+								inlineTreeScrollTops = {
+									...inlineTreeScrollTops,
+									[key]: scrollTop
+								};
+								fileBrowserStore.setInlineTreeScrollTops(inlineTreeScrollTops);
+							}}
+							initialScrollTop={inlineTreeScrollTops[inlineTreeRootPath || currentPath] ?? 0}
+						/>
 					</div>
 				{:else}
 					<div class="min-h-0 flex-1 overflow-auto">

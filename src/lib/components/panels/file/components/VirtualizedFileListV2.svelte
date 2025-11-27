@@ -77,7 +77,7 @@
 		get count() {
 			return items.length;
 		},
-		getScrollElement: () => container,
+		getScrollElement: () => container ?? null,
 		estimateSize: () => itemHeight,
 		overscan: 5,
 		get lanes() {
@@ -129,16 +129,42 @@
 		});
 	}
 
-	// Thumbnail loading for visible items - 优化版本
-	const handleVisibleRangeChange = debounce(() => {
-		if (!currentPath || items.length === 0 || virtualItems.length === 0) return;
+	// --- 滚动停止检测和缩略图加载 ---
+	const MAX_THUMBNAILS_PER_BATCH = 20;
+	let pendingThumbnailPaths = new Set<string>();
+	let scrollStopTimeout: ReturnType<typeof setTimeout> | null = null;
+	let isScrolling = false;
+	let lastLoadedRange = { start: -1, end: -1 };
+	let currentLoadEpoch = 0;
 
-		const now = performance.now();
-		if (now - lastScrollTime < scrollThrottleDelay) return;
-		lastScrollTime = now;
+	// 滚动停止后加载可见区域缩略图
+	function onScrollStop() {
+		isScrolling = false;
+		loadVisibleThumbnails();
+	}
+
+	// 加载可见项目的缩略图
+	function loadVisibleThumbnails() {
+		if (!currentPath || items.length === 0 || virtualItems.length === 0) return;
 
 		const startIndex = virtualItems[0].index;
 		const endIndex = virtualItems[virtualItems.length - 1].index;
+
+		// 如果范围没有变化，不重复加载
+		if (startIndex === lastLoadedRange.start && endIndex === lastLoadedRange.end) {
+			return;
+		}
+
+		// 更新范围并增加 epoch（取消旧任务）
+		lastLoadedRange = { start: startIndex, end: endIndex };
+		currentLoadEpoch++;
+		const loadEpoch = currentLoadEpoch;
+
+		// 取消之前的缩略图任务
+		thumbnailManager.cancelAllTasks();
+		pendingThumbnailPaths.clear();
+
+		// 只处理可见范围内的项目
 		const visibleItems = items.slice(startIndex, endIndex + 1);
 
 		// 过滤需要缩略图的项目
@@ -154,46 +180,66 @@
 		);
 
 		// 过滤已有缩略图的项目
-		const needThumbnails = thumbnailItems.filter(
-			(item) => !thumbnails.has(toRelativeKey(item.path))
-		);
+		const needThumbnails = thumbnailItems.filter((item) => {
+			const key = toRelativeKey(item.path);
+			return !thumbnails.has(key);
+		});
 
-		if (needThumbnails.length > 0) {
-			// 按虚拟列表顺序处理：视野上方的先加载
-			const itemsWithOrder = needThumbnails.map((item) => {
-				const itemIndex = items.findIndex((i) => i.path === item.path);
-				const distanceFromTop = itemIndex - startIndex;
-				return { item, distanceFromTop, itemIndex };
-			});
+		if (needThumbnails.length === 0) return;
 
-			// 按距离顶部距离排序
-			itemsWithOrder.sort((a, b) => a.distanceFromTop - b.distanceFromTop);
+		// 限制每批次加载数量
+		const batchItems = needThumbnails.slice(0, MAX_THUMBNAILS_PER_BATCH);
 
-			const paths = itemsWithOrder.map(({ item }) => item.path);
+		// 按距离中心排序
+		const centerIndex = Math.floor((startIndex + endIndex) / 2);
+		const itemsWithOrder = batchItems.map((item) => {
+			const itemIndex = items.findIndex((i) => i.path === item.path);
+			const distanceFromCenter = Math.abs(itemIndex - centerIndex);
+			return { item, distanceFromCenter, itemIndex };
+		});
+		itemsWithOrder.sort((a, b) => a.distanceFromCenter - b.distanceFromCenter);
 
-			scheduleIdleTask(async () => {
-				try {
-					// 先从数据库批量加载
-					await thumbnailManager.batchLoadFromDb(paths);
-				} catch (err) {
-					console.debug('批量加载缩略图失败:', err);
-				}
+		const paths = itemsWithOrder.map(({ item }) => item.path);
+		paths.forEach(p => pendingThumbnailPaths.add(p));
 
-				// 等待一小段时间让批量加载完成，然后检查哪些还需要生成
-				setTimeout(() => {
-					itemsWithOrder.forEach(({ item }, index) => {
-						const key = toRelativeKey(item.path);
-						// 如果还没有缓存，按顺序加入生成队列
-						if (!thumbnails.has(key)) {
-							setTimeout(() => {
+		console.debug(`[VirtualizedFileListV2] 加载缩略图: ${paths.length} 个, 范围 ${startIndex}-${endIndex}`);
+
+		scheduleIdleTask(async () => {
+			// 检查是否已被取消
+			if (loadEpoch !== currentLoadEpoch) return;
+
+			try {
+				await thumbnailManager.batchLoadFromDb(paths);
+			} catch (err) {
+				console.debug('批量加载缩略图失败:', err);
+			}
+
+			// 检查哪些还需要生成
+			setTimeout(() => {
+				if (loadEpoch !== currentLoadEpoch) return;
+
+				itemsWithOrder.forEach(({ item }, index) => {
+					const key = toRelativeKey(item.path);
+					if (!thumbnails.has(key)) {
+						setTimeout(() => {
+							if (loadEpoch === currentLoadEpoch) {
 								enqueueVisible(currentPath, [item], { priority: 'immediate' });
-							}, index * 10); // 每个项目延迟 10ms，确保顺序
-						}
-					});
-				}, 100);
-			});
+							}
+						}, index * 5);
+					}
+					pendingThumbnailPaths.delete(item.path);
+				});
+			}, 50);
+		});
+	}
+
+	// 旧的防抖处理（保留用于 effect 触发）
+	const handleVisibleRangeChange = debounce(() => {
+		// 只在非滚动状态下触发
+		if (!isScrolling) {
+			loadVisibleThumbnails();
 		}
-	}, 50); // 50ms 防抖延迟
+	}, 100);
 
 	// 监听路径变化，切换文件夹时立即取消旧任务并恢复滚动位置
 	$effect(() => {
@@ -248,10 +294,13 @@
 
 	// --- Event Handlers ---
 
-	// 滚动处理（节流 + 保存位置到全局 store）
+	// 滚动处理（节流 + 保存位置到全局 store + 滚动停止检测）
 	const handleScroll = throttle(() => {
 		if (!container) return;
 		const scrollTop = container.scrollTop;
+
+		// 标记正在滚动
+		isScrolling = true;
 
 		// 更新预测性加载器的滚动位置
 		const startIndex = virtualItems[0]?.index ?? 0;
@@ -260,11 +309,15 @@
 		// 保存滚动位置到全局 store
 		if (currentPath) {
 			setScrollPosition(currentPath, scrollTop);
-			console.debug('[VirtualizedFileListV2] save scroll to store', {
-				path: currentPath,
-				scrollTop
-			});
 		}
+
+		// 清除之前的定时器
+		if (scrollStopTimeout) {
+			clearTimeout(scrollStopTimeout);
+		}
+
+		// 滚动停止 150ms 后触发加载
+		scrollStopTimeout = setTimeout(onScrollStop, 150);
 	}, 16); // ~60fps
 
 	function handleItemClick(item: FsItem, index: number) {

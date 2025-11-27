@@ -612,55 +612,78 @@ async function handleSortModeChange(mode: PageSortMode) {
 		<!-- 中间：功能按钮 -->
 		<div class="flex items-center gap-1">
 			<!-- 钉住按钮 -->
-			<Button
-				variant={$topToolbarPinned ? 'default' : 'ghost'}
-				size="icon"
-				class="h-6 w-6"
-				style="pointer-events: auto;"
-				onclick={togglePin}
-				oncontextmenu={handlePinContextMenu}
-				title={$topToolbarPinned ? '松开工具栏（自动隐藏）' : '钉住工具栏（始终显示）'}
-			>
-				{#if $topToolbarPinned}
-					<Pin class="h-4 w-4" />
-				{:else}
-					<PinOff class="h-4 w-4" />
-				{/if}
-			</Button>
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					<Button
+						variant={$topToolbarPinned ? 'default' : 'ghost'}
+						size="icon"
+						class="h-6 w-6"
+						style="pointer-events: auto;"
+						onclick={togglePin}
+						oncontextmenu={handlePinContextMenu}
+					>
+						{#if $topToolbarPinned}
+							<Pin class="h-4 w-4" />
+						{:else}
+							<PinOff class="h-4 w-4" />
+						{/if}
+					</Button>
+				</Tooltip.Trigger>
+				<Tooltip.Content>
+					<p>
+						{$topToolbarPinned
+							? '松开工具栏（自动隐藏）'
+							: '钉住工具栏（始终显示）'}
+					</p>
+				</Tooltip.Content>
+			</Tooltip.Root>
 
 			<!-- 主题模式切换：在浅色 / 深色 / 跟随系统之间循环 -->
-			<Button
-				variant="ghost"
-				size="icon"
-				class="h-6 w-6"
-				style="pointer-events: auto;"
-				onclick={cycleThemeMode}
-				title={`主题模式：${
-					themeMode === 'light' ? '浅色' : themeMode === 'dark' ? '深色' : '跟随系统'
-				}`}
-			>
-				{#if themeMode === 'light'}
-					<Sun class="h-4 w-4" />
-				{:else if themeMode === 'dark'}
-					<Moon class="h-4 w-4" />
-				{:else}
-					<Monitor class="h-4 w-4" />
-				{/if}
-			</Button>
-
-			<!-- 快速主题切换：预设 + 自定义主题列表 -->
-			<DropdownMenu.Root>
-				<DropdownMenu.Trigger>
+			<Tooltip.Root>
+				<Tooltip.Trigger>
 					<Button
 						variant="ghost"
 						size="icon"
 						class="h-6 w-6"
 						style="pointer-events: auto;"
-						title={themeName ? `当前主题：${themeName}` : '切换主题'}
+						onclick={cycleThemeMode}
 					>
-						<Palette class="h-4 w-4" />
+						{#if themeMode === 'light'}
+							<Sun class="h-4 w-4" />
+						{:else if themeMode === 'dark'}
+							<Moon class="h-4 w-4" />
+						{:else}
+							<Monitor class="h-4 w-4" />
+						{/if}
 					</Button>
-				</DropdownMenu.Trigger>
+				</Tooltip.Trigger>
+				<Tooltip.Content>
+					<p>
+						主题模式：
+						{themeMode === 'light' ? '浅色' : themeMode === 'dark' ? '深色' : '跟随系统'}
+					</p>
+				</Tooltip.Content>
+			</Tooltip.Root>
+
+			<!-- 快速主题切换：预设 + 自定义主题列表 -->
+			<DropdownMenu.Root>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<DropdownMenu.Trigger>
+							<Button
+								variant="ghost"
+								size="icon"
+								class="h-6 w-6"
+								style="pointer-events: auto;"
+							>
+								<Palette class="h-4 w-4" />
+							</Button>
+						</DropdownMenu.Trigger>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>{themeName ? `当前主题：${themeName}` : '切换主题'}</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
 				<DropdownMenu.Content
 					class="z-60 w-52"
 					onmouseenter={handleMouseEnter}
@@ -718,16 +741,22 @@ async function handleSortModeChange(mode: PageSortMode) {
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
 
-			<Button
-				variant="ghost"
-				size="icon"
-				class="h-6 w-6"
-				style="pointer-events: auto;"
-				onclick={openSettings}
-				title="设置"
-			>
-				<Settings class="h-4 w-4" />
-			</Button>
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant="ghost"
+					size="icon"
+					class="h-6 w-6"
+					style="pointer-events: auto;"
+					onclick={openSettings}
+				>
+					<Settings class="h-4 w-4" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>设置</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
 
 		</div>
 
@@ -814,17 +843,23 @@ async function handleSortModeChange(mode: PageSortMode) {
 				</div>
 				<div class="flex items-center gap-1">
 					<DropdownMenu.Root>
-						<DropdownMenu.Trigger>
-							<Button
-								variant="ghost"
-								size="icon"
-								class="h-8 w-8"
-								style="pointer-events: auto;"
-								title={`页面排序：${currentSortModeLabel}`}
-							>
-								<ArrowDownUp class="h-3.5 w-3.5" />
-							</Button>
-						</DropdownMenu.Trigger>
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<DropdownMenu.Trigger>
+									<Button
+										variant="ghost"
+										size="icon"
+										class="h-8 w-8"
+										style="pointer-events: auto;"
+									>
+										<ArrowDownUp class="h-3.5 w-3.5" />
+									</Button>
+								</DropdownMenu.Trigger>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>页面排序：{currentSortModeLabel}</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
 						<DropdownMenu.Content
 							class="z-60 w-60"
 							onmouseenter={handleMouseEnter}
@@ -937,21 +972,30 @@ async function handleSortModeChange(mode: PageSortMode) {
 				<!-- 缩放模式切换 -->
 				<DropdownMenu.Root>
 					{@const CurrentZoomIcon = getZoomModeIcon(currentZoomDisplayMode)}
-					<DropdownMenu.Trigger>
-						<Button
-							variant="ghost"
-							size="icon"
-							class={`h-8 w-8 ${$viewerState.lockedZoomMode ? 'rounded-full ring-2 ring-primary bg-primary/10 text-primary' : ''}`}
-							style="pointer-events: auto;"
-							title={`缩放模式：${getZoomModeLabel(currentZoomDisplayMode)}${$viewerState.lockedZoomMode ? '（已锁定）' : ''}`}
-							oncontextmenu={(event) => {
-								event.preventDefault();
-								toggleZoomModeLock(currentZoomDisplayMode);
-							}}
-						>
-							<CurrentZoomIcon class="h-4 w-4" />
-						</Button>
-					</DropdownMenu.Trigger>
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							<DropdownMenu.Trigger>
+								<Button
+									variant="ghost"
+									size="icon"
+									class={`h-8 w-8 ${$viewerState.lockedZoomMode ? 'rounded-full ring-2 ring-primary bg-primary/10 text-primary' : ''}`}
+									style="pointer-events: auto;"
+									oncontextmenu={(event) => {
+										event.preventDefault();
+										toggleZoomModeLock(currentZoomDisplayMode);
+									}}
+								>
+									<CurrentZoomIcon class="h-4 w-4" />
+								</Button>
+							</DropdownMenu.Trigger>
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							<p>
+								缩放模式：{getZoomModeLabel(currentZoomDisplayMode)}
+								{$viewerState.lockedZoomMode ? '（已锁定）' : ''}
+							</p>
+						</Tooltip.Content>
+					</Tooltip.Root>
 
 					<DropdownMenu.Content
 						class="z-60 w-40"

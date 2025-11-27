@@ -189,12 +189,16 @@
 		});
 
 		if (needThumbnails.length > 0) {
-			// console.log(`👁️ 虚拟滚动范围更新: ${startIndex}-${endIndex}, 需要缩略图: ${needThumbnails.length}`);
+			// 优化：使用 Map 避免 O(n²) 的 findIndex
+			const pathToIndex = new Map<string, number>();
+			for (let i = startIndex; i <= endIndex && i < items.length; i++) {
+				pathToIndex.set(items[i].path, i);
+			}
 
 			// 按虚拟列表顺序处理：视野上方的先加载，下方的后加载
-			const itemsWithOrder = needThumbnails.map((item, index) => {
-				const itemIndex = items.findIndex((i) => i.path === item.path);
-				const distanceFromTop = itemIndex - startIndex; // 距离视野顶部的距离
+			const itemsWithOrder = needThumbnails.map((item) => {
+				const itemIndex = pathToIndex.get(item.path) ?? startIndex;
+				const distanceFromTop = itemIndex - startIndex;
 				return { item, distanceFromTop, itemIndex };
 			});
 
@@ -214,19 +218,19 @@
 
 				// 等待一小段时间让批量加载完成，然后检查哪些还需要生成
 				setTimeout(() => {
-					itemsWithOrder.forEach(({ item }, index) => {
+					// 批量处理而不是每个都 setTimeout
+					const itemsToEnqueue = itemsWithOrder.filter(({ item }) => {
 						const key = getThumbnailKey(item);
-						// 如果还没有缓存，按顺序加入生成队列
-						if (!thumbnails.has(key)) {
-							setTimeout(() => {
-								enqueueVisible(currentPath, [item], { priority: 'immediate' });
-							}, index * 10); // 每个项目延迟 10ms，确保顺序
-						}
-					});
-				}, 100); // 等待 100ms 让批量加载完成
+						return !thumbnails.has(key);
+					}).map(({ item }) => item);
+					
+					if (itemsToEnqueue.length > 0) {
+						enqueueVisible(currentPath, itemsToEnqueue, { priority: 'immediate' });
+					}
+				}, 100);
 			});
 		}
-	}, 50); // 50ms 防抖延迟
+	}, 100); // 增加防抖延迟到 100ms
 
 	// 处理滚动事件（节流 + 预测性加载）
 	const handleScroll = throttle(() => {

@@ -797,14 +797,20 @@
 		drivesLoaded = true;
 	}
 
+	// 优化：使用 Map 缓存避免重复创建
+	let treeItemsMap = new Map<string, FsItem>();
+	
 	function updateTreeWithDirectory(path: string, dirItems: FsItem[]) {
 		const dirs = dirItems.filter((item) => item.isDir);
-		const map = new Map(treeItems.map((item) => [item.path, item]));
-		if (path && !map.has(path)) {
+		
+		// 检查是否有变化，避免不必要的更新
+		let hasChanges = false;
+		
+		if (path && !treeItemsMap.has(path)) {
 			const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '');
 			const segments = normalized.split('/');
 			const name = segments[segments.length - 1] || normalized;
-			map.set(path, {
+			treeItemsMap.set(path, {
 				path,
 				name,
 				isDir: true,
@@ -812,11 +818,20 @@
 				size: 0,
 				modified: 0
 			});
+			hasChanges = true;
 		}
+		
 		for (const dir of dirs) {
-			map.set(dir.path, dir);
+			if (!treeItemsMap.has(dir.path)) {
+				treeItemsMap.set(dir.path, dir);
+				hasChanges = true;
+			}
 		}
-		treeItems = Array.from(map.values());
+		
+		// 只在有变化时更新数组
+		if (hasChanges) {
+			treeItems = Array.from(treeItemsMap.values());
+		}
 	}
 
 	async function handleTreeToggleNode(
@@ -834,11 +849,17 @@
 			const dirs = entries.filter((item) => item.isDir);
 			if (dirs.length === 0) return;
 
-			const map = new Map(treeItems.map((item) => [item.path, item]));
+			// 使用缓存的 Map，避免重复创建
+			let hasChanges = false;
 			for (const dir of dirs) {
-				map.set(dir.path, dir);
+				if (!treeItemsMap.has(dir.path)) {
+					treeItemsMap.set(dir.path, dir);
+					hasChanges = true;
+				}
 			}
-			treeItems = Array.from(map.values());
+			if (hasChanges) {
+				treeItems = Array.from(treeItemsMap.values());
+			}
 		} catch (err) {
 			console.error('加载文件树子目录失败:', fsPath, err);
 		}

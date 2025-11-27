@@ -1,7 +1,8 @@
 	<script lang="ts">
-		import { createEventDispatcher } from 'svelte';
+		import { createEventDispatcher, tick } from 'svelte';
 		import type { FsItem } from '$lib/types';
 		import { Folder, File, Image as ImageIcon, FileArchive, ChevronDown, ChevronRight } from '@lucide/svelte';
+		import { debounce } from '$lib/utils/performance';
 
 		interface TreeNode {
 			name: string;
@@ -100,8 +101,30 @@
 		return root;
 	}
 
-	let treeRoot = $derived(buildTree(items));
+	// 优化：使用 $state 而不是 $derived，避免每次 items 变化都重建树
+	// 只在 items 长度变化或首次加载时重建
+	let treeRoot = $state<TreeNode>(buildTree([]));
+	let lastItemsLength = $state(0);
 	let expandedNodes = $state(new Set<string>());
+	
+	// 防抖重建树，避免频繁更新
+	const debouncedBuildTree = debounce((newItems: FsItem[]) => {
+		treeRoot = buildTree(newItems);
+	}, 100);
+	
+	$effect(() => {
+		// 只在 items 长度变化时重建树（避免缩略图更新触发重建）
+		if (items.length !== lastItemsLength) {
+			lastItemsLength = items.length;
+			if (items.length > 200) {
+				// 大量项目时使用防抖
+				debouncedBuildTree(items);
+			} else {
+				// 少量项目直接构建
+				treeRoot = buildTree(items);
+			}
+		}
+	});
 
 	function normalizePath(path: string): string {
 		return path.replace(/\\/g, '/').replace(/\/+$/, '');

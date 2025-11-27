@@ -340,27 +340,26 @@ function createFileBrowserStore() {
       }
       return bookItems[targetIndex].path;
     },
-    addThumbnail: (path: string, thumbnail: string) =>
-      update(state => {
-        let normalized: string;
-        try {
-          normalized = (toAssetUrl(thumbnail) || thumbnail) as string;
-        } catch (e) {
-          console.debug('addThumbnail: toAssetUrl failed, storing raw thumbnail', e);
-          normalized = thumbnail;
-        }
+    addThumbnail: (path: string, thumbnail: string) => {
+      // 优化：直接修改 Map 而不是创建新 Map（性能关键路径）
+      let normalized: string;
+      try {
+        normalized = (toAssetUrl(thumbnail) || thumbnail) as string;
+      } catch {
+        normalized = thumbnail;
+      }
 
-        const current = state.thumbnails.get(path);
-        if (current === normalized) {
-          // 缩略图未变化，避免触发无意义的 store 更新/日志
-          return state;
-        }
+      const current = currentState.thumbnails.get(path);
+      if (current === normalized) {
+        // 缩略图未变化，跳过更新
+        return;
+      }
 
-        const newThumbnails = new Map(state.thumbnails);
-        newThumbnails.set(path, normalized);
-        console.log('fileBrowserStore.addThumbnail:', { key: path, raw: thumbnail, converted: normalized });
-        return { ...state, thumbnails: newThumbnails };
-      }),
+      // 直接修改现有 Map，然后触发更新
+      currentState.thumbnails.set(path, normalized);
+      // 使用浅拷贝触发响应式更新，但不复制整个 Map
+      update(state => ({ ...state, thumbnails: state.thumbnails }));
+    },
     setThumbnails: (thumbnails: Map<string, string>) =>
       update(state => ({ ...state, thumbnails: new Map(thumbnails) })),
     clearThumbnails: () => update(state => ({ ...state, thumbnails: new Map() })),

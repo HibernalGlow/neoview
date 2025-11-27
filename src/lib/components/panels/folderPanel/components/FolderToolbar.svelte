@@ -39,10 +39,11 @@ import {
 interface Props {
 	onRefresh?: () => void;
 	onToggleFolderTree?: () => void;
-	onNavigateWithPosition?: (path: string, position: { path: string | null; index: number } | null) => void;
+	onGoBack?: () => void;
+	onGoForward?: () => void;
 }
 
-let { onRefresh, onToggleFolderTree, onNavigateWithPosition }: Props = $props();
+let { onRefresh, onToggleFolderTree, onGoBack, onGoForward }: Props = $props();
 
 const viewStyles: { value: FolderViewStyle; icon: typeof List; label: string }[] = [
 	{ value: 'list', icon: List, label: '列表' },
@@ -59,17 +60,11 @@ const sortFields: { value: FolderSortField; label: string }[] = [
 ];
 
 function handleGoBack() {
-	const result = folderPanelActions.goBack();
-	if (result) {
-		onNavigateWithPosition?.(result.path, result.position);
-	}
+	onGoBack?.();
 }
 
 function handleGoForward() {
-	const result = folderPanelActions.goForward();
-	if (result) {
-		onNavigateWithPosition?.(result.path, result.position);
-	}
+	onGoForward?.();
 }
 
 function handleGoUp() {

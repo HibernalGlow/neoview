@@ -1,18 +1,17 @@
 <script lang="ts">
 /**
  * FolderPanel - 文件面板主组件
- * 参考 NeeView 的 FolderListView 设计
- * 模块化架构，每个子模块不超过 800 行
+ * 采用层叠式导航，每个目录是独立的层
+ * 进入子目录推入新层，返回弹出当前层，上一层保持原状
  */
 import { onMount } from 'svelte';
-import { FileSystemAPI } from '$lib/api';
 import type { FsItem } from '$lib/types';
 import { homeDir } from '@tauri-apps/api/path';
-import { thumbnailManager } from '$lib/utils/thumbnailManager';
+import { writable } from 'svelte/store';
 
 import FolderToolbar from './components/FolderToolbar.svelte';
 import BreadcrumbBar from './components/BreadcrumbBar.svelte';
-import FolderList from './components/FolderList.svelte';
+import FolderStack from './components/FolderStack.svelte';
 import FolderTree from './components/FolderTree.svelte';
 import SearchBar from '$lib/components/ui/SearchBar.svelte';
 
@@ -20,164 +19,36 @@ import {
 	currentPath,
 	folderPanelActions,
 	folderTreeConfig,
-	searchKeyword,
-	recursiveMode,
-	selectedItems,
-	sortedItems
+	searchKeyword
 } from './stores/folderPanelStore.svelte';
 
-// 缩略图缓存
-let thumbnailCache = $state(new Map<string, string>());
+// 导航命令 store（用于父子组件通信）
+const navigationCommand = writable<{ type: 'init' | 'push' | 'pop' | 'goto'; path?: string; index?: number } | null>(null);
 
-// 待恢复的状态（用于前进/后退时恢复滚动位置和选中项）
-let pendingRestore = $state<{ scrollTop: number; selectedItemPath: string | null } | null>(null);
-
-// FolderList 组件引用
-let folderListRef: { scrollToPosition: (top: number) => void; scrollToItem: (path: string) => void } | null = null;
-
-// 加载目录内容（优先使用缓存）
-async function loadDirectory(path: string, restoreState?: { scrollTop: number; selectedItemPath: string | null }) {
-	if (!path) return;
-
-	// 先检查缓存
-	const cachedItems = folderPanelActions.getCachedItems(path);
-	if (cachedItems) {
-		// 使用缓存，不显示加载状态
-		folderPanelActions.setItems(cachedItems);
-		
-		// 如果有待恢复的状态，设置它
-		if (restoreState) {
-			pendingRestore = restoreState;
-		}
-		
-		// 异步加载缩略图
-		loadThumbnails(cachedItems);
-		return;
-	}
-
-	// 没有缓存，从磁盘加载
-	folderPanelActions.setLoading(true);
-
-	try {
-		const items = await FileSystemAPI.browseDirectory(path);
-		folderPanelActions.setItems(items);
-		
-		// 如果有待恢复的状态，设置它
-		if (restoreState) {
-			pendingRestore = restoreState;
-		}
-
-		// 异步加载缩略图
-		loadThumbnails(items);
-	} catch (err) {
-		console.error('[FolderPanel] Failed to load directory:', err);
-		folderPanelActions.setError(err instanceof Error ? err.message : '加载失败');
-	}
-}
-
-// 加载缩略图
-async function loadThumbnails(items: FsItem[]) {
-	const imageItems = items.filter((item) => {
-		if (item.isDir) return false;
-		const ext = item.name.split('.').pop()?.toLowerCase() || '';
-		return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'avif'].includes(ext);
-	});
-
-	// 批量加载缩略图
-	for (const item of imageItems.slice(0, 50)) {
-		// 限制初始加载数量
-		try {
-			const thumbnail = await thumbnailManager.getThumbnail(item.path);
-			if (thumbnail) {
-				thumbnailCache.set(item.path, thumbnail);
-				thumbnailCache = new Map(thumbnailCache); // 触发响应式更新
-			}
-		} catch (err) {
-			// 忽略单个缩略图加载错误
-		}
-	}
-}
-
-// 获取缩略图
-function getThumbnail(item: FsItem): string | null {
-	return thumbnailCache.get(item.path) ?? null;
-}
-
-// 处理项打开
-async function handleItemOpen(item: FsItem) {
-	if (item.isDir) {
-		// 先保存当前位置（参考 NeeView 的 SavePlace）
-		saveCurrentPosition();
-		// 获取目标路径的保存位置
-		const position = folderPanelActions.setPath(item.path);
-		// 转换为恢复状态格式
-		const restoreState = position ? { scrollTop: 0, selectedItemPath: position.path } : undefined;
-		await loadDirectory(item.path, restoreState);
-	} else {
-		// 打开文件 - 可以触发事件或直接处理
+// 处理项打开（文件双击）
+function handleItemOpen(item: FsItem) {
+	if (!item.isDir) {
 		console.log('[FolderPanel] Open file:', item.path);
 		// TODO: 集成到主应用的文件打开逻辑
 	}
 }
 
-// 保存当前位置到字典
-function saveCurrentPosition() {
-	// 获取当前选中项
-	const selected = $selectedItems;
-	const selectedPaths = Array.from(selected);
-	if (selectedPaths.length > 0) {
-		const items = $sortedItems;
-		const selectedPath = selectedPaths[0];
-		const index = items.findIndex((item: FsItem) => item.path === selectedPath);
-		const selectedItem = items.find((item: FsItem) => item.path === selectedPath);
-		if (selectedItem && index >= 0) {
-			folderPanelActions.savePlace(selectedItem, index);
-		}
-	}
-}
-
-// 处理项删除
-async function handleItemDelete(item: FsItem) {
-	try {
-		// TODO: 实现删除逻辑
-		console.log('[FolderPanel] Delete item:', item.path);
-	} catch (err) {
-		console.error('[FolderPanel] Failed to delete:', err);
-	}
-}
-
-// 处理右键菜单
-function handleItemContextMenu(event: MouseEvent, item: FsItem) {
-	// TODO: 实现右键菜单
-	console.log('[FolderPanel] Context menu:', item.path);
-}
-
 // 处理刷新
-async function handleRefresh() {
+function handleRefresh() {
 	const path = $currentPath;
 	if (path) {
-		await loadDirectory(path);
+		navigationCommand.set({ type: 'init', path });
 	}
 }
 
-// 处理导航（点击文件夹进入，如面包屑导航）
-async function handleNavigate(path: string) {
-	// 先保存当前位置
-	saveCurrentPosition();
-	// 获取目标路径的保存位置
-	const position = folderPanelActions.setPath(path);
-	// 转换为恢复状态格式
-	const restoreState = position ? { scrollTop: 0, selectedItemPath: position.path } : undefined;
-	await loadDirectory(path, restoreState);
+// 处理导航（面包屑、文件夹树点击）
+function handleNavigate(path: string) {
+	navigationCommand.set({ type: 'push', path });
 }
 
-// 处理带位置恢复的导航（前进/后退）
-async function handleNavigateWithPosition(path: string, position: { path: string | null; index: number } | null) {
-	// 先保存当前位置
-	saveCurrentPosition();
-	// 转换为恢复状态格式
-	const restoreState = position ? { scrollTop: 0, selectedItemPath: position.path } : undefined;
-	await loadDirectory(path, restoreState);
+// 处理后退
+function handleGoBack() {
+	navigationCommand.set({ type: 'pop' });
 }
 
 // 处理搜索
@@ -197,24 +68,11 @@ onMount(async () => {
 		const home = await homeDir();
 		folderPanelActions.setHomePath(home);
 
-		// 如果没有当前路径，导航到 Home
-		if (!$currentPath) {
-			folderPanelActions.setPath(home);
-			await loadDirectory(home);
-		} else {
-			await loadDirectory($currentPath);
-		}
+		// 初始化层叠导航
+		const initialPath = $currentPath || home;
+		navigationCommand.set({ type: 'init', path: initialPath });
 	} catch (err) {
 		console.error('[FolderPanel] Failed to initialize:', err);
-	}
-});
-
-// 监听路径变化
-$effect(() => {
-	const path = $currentPath;
-	if (path) {
-		// 路径变化时清空缩略图缓存
-		thumbnailCache.clear();
 	}
 });
 </script>
@@ -229,7 +87,7 @@ $effect(() => {
 	<FolderToolbar 
 		onRefresh={handleRefresh} 
 		onToggleFolderTree={handleToggleFolderTree}
-		onNavigateWithPosition={handleNavigateWithPosition}
+		onGoBack={handleGoBack}
 	/>
 
 	<!-- 搜索栏 -->
@@ -269,27 +127,19 @@ $effect(() => {
 					class:cursor-ns-resize={$folderTreeConfig.layout === 'top'}
 				></div>
 
-				<!-- 文件列表 -->
+				<!-- 文件列表（层叠式） -->
 				<div class="flex-1 overflow-hidden">
-					<FolderList
+					<FolderStack
+						{navigationCommand}
 						onItemOpen={handleItemOpen}
-						onItemDelete={handleItemDelete}
-						onItemContextMenu={handleItemContextMenu}
-						{getThumbnail}
-						{pendingRestore}
-						onRestoreComplete={() => { pendingRestore = null; }}
 					/>
 				</div>
 			</div>
 		{:else}
-			<!-- 纯文件列表 -->
-			<FolderList
+			<!-- 纯文件列表（层叠式） -->
+			<FolderStack
+				{navigationCommand}
 				onItemOpen={handleItemOpen}
-				onItemDelete={handleItemDelete}
-				onItemContextMenu={handleItemContextMenu}
-				{getThumbnail}
-				{pendingRestore}
-				onRestoreComplete={() => { pendingRestore = null; }}
 			/>
 		{/if}
 	</div>

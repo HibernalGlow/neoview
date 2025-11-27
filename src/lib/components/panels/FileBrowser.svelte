@@ -1,4 +1,4 @@
-<script lang="ts">
+	<script lang="ts">
 	import {
 		Folder,
 		File,
@@ -11,6 +11,7 @@
 		ChevronLeft,
 		ChevronRight,
 		ChevronUp,
+		ChevronDown,
 		CheckSquare,
 		Grid3x3,
 		List,
@@ -31,6 +32,7 @@
 	} from '@lucide/svelte';
 	import VirtualizedFileList from './file/components/VirtualizedFileList.svelte';
 	import FileTreeView from './file/components/FileTreeView.svelte';
+	import FileItemCard from './file/components/FileItemCard.svelte';
 	import SortPanel from '$lib/components/ui/sort/SortPanel.svelte';
 	import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
 	import { onMount } from 'svelte';
@@ -67,10 +69,111 @@
 		return item.isDir || item.is_directory;
 	}
 
+	function handleFolderTreeContextMenu(event: MouseEvent) {
+		event.preventDefault();
+		inlineTreeMode = !inlineTreeMode;
+		if (inlineTreeMode) {
+			inlineTreeRootPath = currentPath;
+			inlineTreeState = {};
+			inlineTreeDisplayItems = buildInlineTreeItems(items);
+		} else {
+			inlineTreeDisplayItems = [];
+			inlineTreeState = {};
+		}
+		showSuccessToast('主视图文件树', inlineTreeMode ? '已开启' : '已关闭');
+	}
+
+	type InlineTreeDisplayItem = FsItem & {
+		__depth: number;
+		__parentPath?: string;
+	};
+
+	type InlineTreeNodeState = {
+		expanded: boolean;
+		loading: boolean;
+		children: FsItem[];
+		error?: string;
+	};
+
+	function buildInlineTreeItems(source: FsItem[], depth = 0, parentPath?: string): InlineTreeDisplayItem[] {
+		const rows: InlineTreeDisplayItem[] = [];
+		for (const entry of source) {
+			const decorated: InlineTreeDisplayItem = { ...entry, __depth: depth, __parentPath: parentPath };
+			rows.push(decorated);
+			if (!entry.isDir) continue;
+			const nodeState = inlineTreeState[entry.path];
+			if (nodeState?.expanded && nodeState.children.length > 0) {
+				rows.push(...buildInlineTreeItems(nodeState.children, depth + 1, entry.path));
+			}
+		}
+		return rows;
+	}
+
+	async function toggleInlineTreeNode(item: FsItem) {
+		if (!item.isDir) return;
+		const prev = inlineTreeState[item.path];
+
+		// 已展开 -> 折叠
+		if (prev?.expanded) {
+			inlineTreeState = {
+				...inlineTreeState,
+				[item.path]: { ...prev, expanded: false }
+			};
+			return;
+		}
+
+		// 首次展开或尚未加载子目录 -> 懒加载
+		if (!prev || !prev.children || prev.children.length === 0) {
+			inlineTreeState = {
+				...inlineTreeState,
+				[item.path]: {
+					children: prev?.children ?? [],
+					expanded: prev?.expanded ?? false,
+					loading: true,
+					error: undefined
+				}
+			};
+			try {
+				const entries = await FileSystemAPI.browseDirectory(item.path);
+				const sorted = sortItems(entries, sortField, sortOrder);
+				enqueueDirectoryThumbnails(item.path, sorted);
+				inlineTreeState = {
+					...inlineTreeState,
+					[item.path]: {
+						children: sorted,
+						expanded: true,
+						loading: false,
+						error: undefined
+					}
+				};
+			} catch (err) {
+				const description = err instanceof Error ? err.message : String(err);
+				inlineTreeState = {
+					...inlineTreeState,
+					[item.path]: {
+						children: prev?.children ?? [],
+						expanded: false,
+						loading: false,
+						error: description
+					}
+				};
+				showErrorToast('加载子目录失败', description);
+			}
+			return;
+		}
+
+		// 已有子目录但未展开 -> 直接展开
+		inlineTreeState = {
+			...inlineTreeState,
+			[item.path]: { ...prev, expanded: true, loading: false }
+		};
+	}
+
 	function itemIsImage(item: any): boolean {
 		return item.is_image || false;
 	}
 
+	// ...
 	function toRelativeKey(path: string): string {
 		return path.replace(/\\/g, '/');
 	}
@@ -229,6 +332,10 @@
 	let treeResizeStartX = 0;
 	let treeResizeStartWidth = 0;
 	let lastTreeSyncPath = '';
+	let inlineTreeMode = $state(false);
+	let inlineTreeDisplayItems = $state<InlineTreeDisplayItem[]>([]);
+	let inlineTreeState = $state<Record<string, InlineTreeNodeState>>({});
+	let inlineTreeRootPath = '';
 
 	// 缩略图入队管理
 	let lastEnqueueTimeout: ReturnType<typeof setTimeout> | null = null; // 用于取消上一个入队任务
@@ -252,6 +359,25 @@
 			fileBrowserStore.setVisibleItems(searchResults as unknown as FsItem[]);
 		} else {
 			fileBrowserStore.clearVisibleItemsOverride();
+		}
+	});
+
+	$effect(() => {
+		// 依赖 inlineTreeState，保证展开/折叠时刷新
+		inlineTreeState;
+		if (!inlineTreeMode) {
+			inlineTreeDisplayItems = [];
+			return;
+		}
+		inlineTreeDisplayItems = buildInlineTreeItems(items);
+	});
+
+	$effect(() => {
+		if (!inlineTreeMode) return;
+		if (inlineTreeRootPath !== currentPath) {
+			inlineTreeRootPath = currentPath;
+			inlineTreeState = {};
+			inlineTreeDisplayItems = buildInlineTreeItems(items);
 		}
 	});
 
@@ -2434,19 +2560,14 @@
 							size="icon"
 							class="h-8 w-8"
 							onclick={toggleFolderTree}
-							oncontextmenu={(e) => {
-								e.preventDefault();
-								selectFolder();
-							}}
+							oncontextmenu={handleFolderTreeContextMenu}
 						>
 							<FolderTree class="h-4 w-4" />
 						</Button>
 					</Tooltip.Trigger>
 					<Tooltip.Content>
 						<p>
-							{showFolderTree
-								? '隐藏文件夹列表（右键选择文件夹）'
-								: '显示文件夹列表（右键选择文件夹）'}
+							{showFolderTree ? '隐藏侧边文件夹列表（右键切换主视图树）' : '显示侧边文件夹列表（右键切换主视图树）'}
 						</p>
 					</Tooltip.Content>
 				</Tooltip.Root>
@@ -3029,48 +3150,134 @@
 				</div>
 			{:else}
 				<!-- 文件列表 -->
-				<div class="min-h-0 flex-1 overflow-auto">
-					<VirtualizedFileList
-						bind:this={mainListRef}
-						{items}
-						{currentPath}
-						{thumbnails}
-						{selectedIndex}
-						{scrollToSelectedToken}
-						{isCheckMode}
-						{isDeleteMode}
-						{selectedItems}
-						{viewMode}
-						on:itemClick={(e) => {
-							const { item, index } = e.detail;
-							fileBrowserStore.setSelectedIndex(index);
-							// 单击直接打开文件（勾选/删除模式下行为保持一致）
-							openFile(item);
-						}}
-						on:itemSelect={(e) => {
-							const { item, index, multiSelect } = e.detail;
-							if (!isCheckMode) {
+				{#if inlineTreeMode}
+					<div class="inline-tree-panel min-h-0 flex-1 overflow-auto" role="tree">
+						{#if inlineTreeDisplayItems.length === 0}
+							<div class="text-muted-foreground py-6 text-center text-sm">暂无可显示的条目</div>
+						{:else}
+							<div class="flex flex-col gap-1 py-2">
+								{#each inlineTreeDisplayItems as inlineItem (inlineItem.path + ':' + (inlineItem.__parentPath || 'root') + ':' + inlineItem.__depth)}
+									{@const indent = inlineItem.__depth * 16}
+									<div
+										class="flex items-stretch px-2"
+										role="treeitem"
+										aria-expanded={inlineItem.isDir ? !!inlineTreeState[inlineItem.path]?.expanded : undefined}
+									>
+										<div class="flex items-center" style={`margin-left: ${indent}px`}>
+											{#if inlineItem.isDir}
+												{#if inlineTreeState[inlineItem.path]?.loading}
+													<RefreshCw class="mr-1 h-4 w-4 animate-spin text-muted-foreground" />
+												{:else}
+													<button
+														class="mr-1 inline-flex h-6 w-6 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-accent"
+														type="button"
+														onclick={(e) => {
+															e.stopPropagation();
+															void toggleInlineTreeNode(inlineItem);
+														}}
+														title={inlineTreeState[inlineItem.path]?.expanded ? '收起子项' : '展开子项'}
+													>
+														{#if inlineTreeState[inlineItem.path]?.expanded}
+															<ChevronDown class="h-4 w-4" />
+														{:else}
+															<ChevronRight class="h-4 w-4" />
+														{/if}
+													</button>
+												{/if}
+											{:else}
+												<!-- 对齐占位 -->
+												<div class="mr-1 h-6 w-6"></div>
+											{/if}
+										</div>
+										<div class="flex-1">
+											<FileItemCard
+												item={inlineItem}
+												thumbnail={thumbnails.get(toRelativeKey(inlineItem.path))}
+												viewMode="list"
+												isSelected={false}
+												isChecked={selectedItems.has(inlineItem.path)}
+												{isCheckMode}
+												{isDeleteMode}
+												showReadMark={false}
+												showBookmarkMark={true}
+												showSizeAndModified={true}
+												timestamp={inlineItem.modified ? inlineItem.modified * 1000 : undefined}
+												onClick={async () => {
+													if (inlineItem.isDir) {
+														if (isPenetrateMode) {
+															const penetrated = await tryPenetrateFolder(inlineItem.path);
+															if (penetrated) {
+																await openFile(penetrated);
+																return;
+															}
+														}
+														await toggleInlineTreeNode(inlineItem);
+														return;
+													}
+													await openFile(inlineItem);
+												}}
+												onContextMenu={(e) => {
+													e.stopPropagation();
+													showContextMenu(e, inlineItem);
+												}}
+												onToggleSelection={() => toggleItemSelection(inlineItem.path)}
+												onOpenAsBook={inlineItem.isDir ? () => openFolderAsBook(inlineItem) : undefined}
+											/>
+										</div>
+									</div>
+									{#if inlineTreeState[inlineItem.path]?.error}
+										<div class="text-destructive bg-destructive/10 px-5 py-1 text-xs" style={`margin-left: ${indent + 32}px;`}>
+											{inlineTreeState[inlineItem.path]?.error}
+										</div>
+									{/if}
+								{/each}
+							</div>
+						{/if}
+					</div>
+				{:else}
+					<div class="min-h-0 flex-1 overflow-auto">
+						<VirtualizedFileList
+							bind:this={mainListRef}
+							{items}
+							{currentPath}
+							{thumbnails}
+							{selectedIndex}
+							{scrollToSelectedToken}
+							{isCheckMode}
+							{isDeleteMode}
+							{selectedItems}
+							{viewMode}
+							on:itemClick={(e) => {
+								const { item, index } = e.detail;
 								fileBrowserStore.setSelectedIndex(index);
-							}
-						}}
-						on:itemContextMenu={(e) => {
-							const { event, item } = e.detail;
-							showContextMenu(event, item);
-						}}
-						on:deleteItem={(e) => {
-							deleteItem(e.detail.item.path);
-						}}
-						on:selectionChange={(e) => {
-							selectedItems = new Set(e.detail.selectedItems);
-						}}
-						on:selectedIndexChange={(e) => {
-							fileBrowserStore.setSelectedIndex(e.detail.index);
-						}}
-						on:openFolderAsBook={(e) => {
-							openFolderAsBook(e.detail.item);
-						}}
-					/>
-				</div>
+								// 单击直接打开文件（勾选/删除模式下行为保持一致）
+								openFile(item);
+							}}
+							on:itemSelect={(e) => {
+								const { item, index, multiSelect } = e.detail;
+								if (!isCheckMode) {
+									fileBrowserStore.setSelectedIndex(index);
+								}
+							}}
+							on:itemContextMenu={(e) => {
+								const { event, item } = e.detail;
+								showContextMenu(event, item);
+							}}
+							on:deleteItem={(e) => {
+								deleteItem(e.detail.item.path);
+							}}
+							on:selectionChange={(e) => {
+								selectedItems = new Set(e.detail.selectedItems);
+							}}
+							on:selectedIndexChange={(e) => {
+								fileBrowserStore.setSelectedIndex(e.detail.index);
+							}}
+							on:openFolderAsBook={(e) => {
+								openFolderAsBook(e.detail.item);
+							}}
+						/>
+					</div>
+				{/if}
 			{/if}
 		</div>
 	</div>

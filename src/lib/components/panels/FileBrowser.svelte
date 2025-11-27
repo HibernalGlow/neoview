@@ -122,6 +122,7 @@
 				...inlineTreeState,
 				[item.path]: { ...prev, expanded: false }
 			};
+			fileBrowserStore.setInlineTreeState(inlineTreeState);
 			return;
 		}
 
@@ -136,6 +137,7 @@
 					error: undefined
 				}
 			};
+			fileBrowserStore.setInlineTreeState(inlineTreeState);
 			try {
 				const entries = await FileSystemAPI.browseDirectory(item.path);
 				const sorted = sortItems(entries, sortField, sortOrder);
@@ -149,6 +151,7 @@
 						error: undefined
 					}
 				};
+				fileBrowserStore.setInlineTreeState(inlineTreeState);
 			} catch (err) {
 				const description = err instanceof Error ? err.message : String(err);
 				inlineTreeState = {
@@ -160,6 +163,7 @@
 						error: description
 					}
 				};
+				fileBrowserStore.setInlineTreeState(inlineTreeState);
 				showErrorToast('加载子目录失败', description);
 			}
 			return;
@@ -170,6 +174,7 @@
 			...inlineTreeState,
 			[item.path]: { ...prev, expanded: true, loading: false }
 		};
+		fileBrowserStore.setInlineTreeState(inlineTreeState);
 	}
 
 	function itemIsImage(item: any): boolean {
@@ -337,8 +342,10 @@
 	let lastTreeSyncPath = '';
 	let inlineTreeMode = $state(fileBrowserStore.getState().inlineTreeMode);
 	let inlineTreeDisplayItems = $state<InlineTreeDisplayItem[]>([]);
-	let inlineTreeState = $state<Record<string, InlineTreeNodeState>>({});
-	let inlineTreeRootPath = '';
+	let inlineTreeState = $state<Record<string, InlineTreeNodeState>>(
+		fileBrowserStore.getState().inlineTreeState ?? {}
+	);
+	let inlineTreeRootPath = fileBrowserStore.getState().inlineTreeRootPath ?? '';
 
 	// 缩略图入队管理
 	let lastEnqueueTimeout: ReturnType<typeof setTimeout> | null = null; // 用于取消上一个入队任务
@@ -379,8 +386,7 @@
 		if (!inlineTreeMode) return;
 		if (inlineTreeRootPath !== currentPath) {
 			inlineTreeRootPath = currentPath;
-			inlineTreeState = {};
-			inlineTreeDisplayItems = buildInlineTreeItems(items);
+			fileBrowserStore.setInlineTreeRootPath(currentPath);
 		}
 	});
 
@@ -488,6 +494,8 @@
 			isDeleteMode = state.isDeleteMode;
 			deleteStrategy = state.deleteStrategy;
 			inlineTreeMode = state.inlineTreeMode;
+			inlineTreeState = state.inlineTreeState ?? inlineTreeState;
+			inlineTreeRootPath = state.inlineTreeRootPath ?? inlineTreeRootPath;
 
 			if (showFolderTree && state.currentPath) {
 				void ensureDriveRootLoadedForPath(state.currentPath);

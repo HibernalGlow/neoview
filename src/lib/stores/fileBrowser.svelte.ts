@@ -38,6 +38,13 @@ interface FileBrowserState {
   useVisibleItemsOverride: boolean;
   deleteStrategy: DeleteStrategy;
   inlineTreeMode: boolean;
+  inlineTreeState: Record<string, {
+    expanded: boolean;
+    loading: boolean;
+    children: FsItem[];
+    error?: string;
+  }>;
+  inlineTreeRootPath: string;
 }
 
 const archiveExtensions = ['.zip', '.cbz', '.rar', '.cbr', '.7z'];
@@ -100,7 +107,9 @@ const initialState: FileBrowserState = {
   visibleItems: [],
   useVisibleItemsOverride: false,
   deleteStrategy: 'trash',
-  inlineTreeMode: false
+  inlineTreeMode: false,
+  inlineTreeState: {},
+  inlineTreeRootPath: ''
 };
 
 /**
@@ -188,6 +197,10 @@ function createFileBrowserStore() {
     setShowMigrationManager: (value: boolean) => update(state => ({ ...state, showMigrationManager: value })),
     setShowFolderTree: (value: boolean) => update(state => ({ ...state, showFolderTree: value })),
     setInlineTreeMode: (value: boolean) => update(state => ({ ...state, inlineTreeMode: value })),
+    setInlineTreeState: (value: FileBrowserState['inlineTreeState']) =>
+      update(state => ({ ...state, inlineTreeState: value })),
+    setInlineTreeRootPath: (value: string) =>
+      update(state => ({ ...state, inlineTreeRootPath: value })),
     setSort: (field: SortField, order: SortOrder) => update(state => ({ ...state, sortField: field, sortOrder: order })),
     setVisibleItems: (items: FsItem[]) => update(state => ({
       ...state,

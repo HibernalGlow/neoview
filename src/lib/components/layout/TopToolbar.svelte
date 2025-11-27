@@ -27,7 +27,9 @@
 		toggleZoomModeLock,
 		requestZoomMode,
 		layoutMode,
-		toggleLayoutMode
+		toggleLayoutMode,
+		layoutSwitchMode,
+		toggleLayoutSwitchMode
 	} from '$lib/stores';
 	import { readable } from 'svelte/store';
 	import { onMount } from 'svelte';
@@ -75,6 +77,7 @@
 		loadRuntimeThemeFromStorage,
 		type RuntimeThemeMode
 	} from '$lib/utils/runtimeTheme';
+	import { showToast } from '$lib/utils/toast';
 
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import type { ZoomMode } from '$lib/settings/settingsManager';
@@ -770,12 +773,29 @@ async function handleSortModeChange(mode: PageSortMode) {
 					class="h-6 w-6"
 					style="pointer-events: auto;"
 					onclick={toggleLayoutMode}
+					oncontextmenu={(e) => {
+						e.preventDefault();
+						toggleLayoutSwitchMode();
+						// 显示 toast 通知
+						const newMode = $layoutSwitchMode === 'seamless' ? 'cold' : 'seamless';
+						showToast({
+							title: '布局切换模式',
+							description: newMode === 'seamless' 
+								? '已切换到无缝模式 (保持状态，占用更多内存)' 
+								: '已切换到冷切换模式 (节省性能，状态可能丢失)',
+							variant: 'info',
+							duration: 2000
+						});
+					}}
 				>
 					<LayoutGrid class="h-4 w-4" />
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
 				<p>{$layoutMode === 'flow' ? '切换到传统布局' : '切换到 Flow 画布布局'}</p>
+				<p class="text-muted-foreground text-xs">
+					右键切换: {$layoutSwitchMode === 'seamless' ? '无缝模式 (保持状态)' : '冷切换 (节省性能)'}
+				</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 

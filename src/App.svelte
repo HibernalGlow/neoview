@@ -10,7 +10,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { open } from '@tauri-apps/plugin-dialog';
-	import { bookStore, zoomIn, zoomOut, toggleSidebar, toggleRightSidebar, toggleFullscreen, rotateClockwise, toggleViewMode, sidebarOpen, rightSidebarOpen, pageLeft, pageRight, topToolbarPinned, bottomThumbnailBarPinned, toggleReadingDirection, toggleSinglePanoramaView, toggleTemporaryFitZoom, layoutMode, toggleLayoutMode } from '$lib/stores';
+	import { bookStore, zoomIn, zoomOut, toggleSidebar, toggleRightSidebar, toggleFullscreen, rotateClockwise, toggleViewMode, sidebarOpen, rightSidebarOpen, pageLeft, pageRight, topToolbarPinned, bottomThumbnailBarPinned, toggleReadingDirection, toggleSinglePanoramaView, toggleTemporaryFitZoom, layoutMode, toggleLayoutMode, layoutSwitchMode } from '$lib/stores';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { FolderOpen } from '@lucide/svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
@@ -554,29 +554,62 @@ function handleGlobalMouseDown(e: MouseEvent) {
 
 <Tooltip.Provider>
 	<Toast />
-	{#if $layoutMode === 'flow'}
+	
+	{#if $layoutSwitchMode === 'seamless'}
+		<!-- 无缝切换模式：使用 CSS 隐藏，两个布局都保持加载状态 -->
+		
 		<!-- Flow 画布布局模式 -->
-		<div class="bg-background relative h-screen w-screen" role="application" aria-label="NeoView Flow 布局">
+		<div 
+			class="bg-background relative h-screen w-screen" 
+			class:hidden={$layoutMode !== 'flow'}
+			role="application" 
+			aria-label="NeoView Flow 布局"
+		>
 			<SvelteFlowProvider>
 				<CanvasBoard />
 			</SvelteFlowProvider>
 		</div>
-	{:else}
+		
 		<!-- 传统布局模式 -->
-		<MainLayout>
-			<div class="flex h-full w-full items-center justify-center">
-				<!-- 欢迎界面 (当没有打开书籍时显示)
-					实际的 ImageViewer 由 MainLayout 在 bookStore.viewerOpen 为 true 时挂载
-				-->
-				<div class="text-center">
-					<h1 class="mb-4 text-4xl font-bold">NeoView</h1>
-					<p class="text-muted-foreground mb-8">Modern Image & Comic Viewer</p>
-					<Button onclick={handleOpenFolder} disabled={loading} size="lg">
-						<FolderOpen class="mr-2 h-5 w-5" />
-						{loading ? 'Opening...' : 'Open Folder'}
-					</Button>
+		<div class:hidden={$layoutMode !== 'classic'}>
+			<MainLayout>
+				<div class="flex h-full w-full items-center justify-center">
+					<div class="text-center">
+						<h1 class="mb-4 text-4xl font-bold">NeoView</h1>
+						<p class="text-muted-foreground mb-8">Modern Image & Comic Viewer</p>
+						<Button onclick={handleOpenFolder} disabled={loading} size="lg">
+							<FolderOpen class="mr-2 h-5 w-5" />
+							{loading ? 'Opening...' : 'Open Folder'}
+						</Button>
+					</div>
 				</div>
+			</MainLayout>
+		</div>
+	{:else}
+		<!-- 冷切换模式：使用条件渲染，节省性能 -->
+		{#if $layoutMode === 'flow'}
+			<div 
+				class="bg-background relative h-screen w-screen" 
+				role="application" 
+				aria-label="NeoView Flow 布局"
+			>
+				<SvelteFlowProvider>
+					<CanvasBoard />
+				</SvelteFlowProvider>
 			</div>
-		</MainLayout>
+		{:else}
+			<MainLayout>
+				<div class="flex h-full w-full items-center justify-center">
+					<div class="text-center">
+						<h1 class="mb-4 text-4xl font-bold">NeoView</h1>
+						<p class="text-muted-foreground mb-8">Modern Image & Comic Viewer</p>
+						<Button onclick={handleOpenFolder} disabled={loading} size="lg">
+							<FolderOpen class="mr-2 h-5 w-5" />
+							{loading ? 'Opening...' : 'Open Folder'}
+						</Button>
+					</div>
+				</div>
+			</MainLayout>
+		{/if}
 	{/if}
 </Tooltip.Provider>

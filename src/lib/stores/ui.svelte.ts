@@ -103,6 +103,10 @@ export const bottomThumbnailBarHeight = writable<number>(loadFromStorage('bottom
 export type LayoutMode = 'classic' | 'flow';
 export const layoutMode = writable<LayoutMode>(loadFromStorage('layoutMode', 'classic'));
 
+// 布局切换模式：无缝切换（保持两个布局加载）vs 冷切换（销毁非活动布局节省性能）
+export type LayoutSwitchMode = 'seamless' | 'cold';
+export const layoutSwitchMode = writable<LayoutSwitchMode>(loadFromStorage('layoutSwitchMode', 'seamless'));
+
 // 订阅并保存变化
 sidebarOpen.subscribe((value) => saveToStorage('sidebarOpen', value));
 sidebarWidth.subscribe((value) => saveToStorage('sidebarWidth', value));
@@ -120,6 +124,7 @@ rightSidebarPinned.subscribe((value) => saveToStorage('rightSidebarPinned', valu
 topToolbarHeight.subscribe((value) => saveToStorage('topToolbarHeight', value));
 bottomThumbnailBarHeight.subscribe((value) => saveToStorage('bottomThumbnailBarHeight', value));
 layoutMode.subscribe((value) => saveToStorage('layoutMode', value));
+layoutSwitchMode.subscribe((value) => saveToStorage('layoutSwitchMode', value));
 
 const updateViewerSlice = (partial: Partial<AppStateSnapshot['viewer']>) => {
 	const snapshot = appState.getSnapshot();
@@ -429,4 +434,18 @@ export function toggleLayoutMode() {
  */
 export function setLayoutMode(mode: LayoutMode) {
 	layoutMode.set(mode);
+}
+
+/**
+ * 切换布局切换模式（无缝 vs 冷切换）
+ */
+export function toggleLayoutSwitchMode() {
+	layoutSwitchMode.update((mode) => (mode === 'seamless' ? 'cold' : 'seamless'));
+}
+
+/**
+ * 设置布局切换模式
+ */
+export function setLayoutSwitchMode(mode: LayoutSwitchMode) {
+	layoutSwitchMode.set(mode);
 }

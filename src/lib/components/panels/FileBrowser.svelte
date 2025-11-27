@@ -71,14 +71,17 @@
 
 	function handleFolderTreeContextMenu(event: MouseEvent) {
 		event.preventDefault();
-		inlineTreeMode = !inlineTreeMode;
-		if (inlineTreeMode) {
-			inlineTreeRootPath = currentPath;
-			inlineTreeState = {};
-			inlineTreeDisplayItems = buildInlineTreeItems(items);
+		const next = !inlineTreeMode;
+		inlineTreeMode = next;
+		fileBrowserStore.setInlineTreeMode(next);
+		if (next) {
+			// 打开主视图树：仅标记当前根路径，具体构建和必要的清理交给下面的 $effect 处理
+			if (!inlineTreeRootPath) {
+				inlineTreeRootPath = currentPath;
+			}
 		} else {
+			// 关闭主视图树：仅清空显示列表，保留 inlineTreeState 以便同一路径下再次打开时保留展开状态
 			inlineTreeDisplayItems = [];
-			inlineTreeState = {};
 		}
 		showSuccessToast('主视图文件树', inlineTreeMode ? '已开启' : '已关闭');
 	}
@@ -332,7 +335,7 @@
 	let treeResizeStartX = 0;
 	let treeResizeStartWidth = 0;
 	let lastTreeSyncPath = '';
-	let inlineTreeMode = $state(false);
+	let inlineTreeMode = $state(fileBrowserStore.getState().inlineTreeMode);
 	let inlineTreeDisplayItems = $state<InlineTreeDisplayItem[]>([]);
 	let inlineTreeState = $state<Record<string, InlineTreeNodeState>>({});
 	let inlineTreeRootPath = '';
@@ -484,6 +487,7 @@
 			isCheckMode = state.isCheckMode;
 			isDeleteMode = state.isDeleteMode;
 			deleteStrategy = state.deleteStrategy;
+			inlineTreeMode = state.inlineTreeMode;
 
 			if (showFolderTree && state.currentPath) {
 				void ensureDriveRootLoadedForPath(state.currentPath);

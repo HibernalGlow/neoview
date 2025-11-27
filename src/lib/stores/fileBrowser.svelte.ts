@@ -37,6 +37,7 @@ interface FileBrowserState {
   visibleItems: FsItem[];
   useVisibleItemsOverride: boolean;
   deleteStrategy: DeleteStrategy;
+  inlineTreeMode: boolean;
 }
 
 const archiveExtensions = ['.zip', '.cbz', '.rar', '.cbr', '.7z'];
@@ -98,7 +99,8 @@ const initialState: FileBrowserState = {
   showFolderTree: false,
   visibleItems: [],
   useVisibleItemsOverride: false,
-  deleteStrategy: 'trash'
+  deleteStrategy: 'trash',
+  inlineTreeMode: false
 };
 
 /**
@@ -185,6 +187,7 @@ function createFileBrowserStore() {
     setShowMigrationBar: (value: boolean) => update(state => ({ ...state, showMigrationBar: value })),
     setShowMigrationManager: (value: boolean) => update(state => ({ ...state, showMigrationManager: value })),
     setShowFolderTree: (value: boolean) => update(state => ({ ...state, showFolderTree: value })),
+    setInlineTreeMode: (value: boolean) => update(state => ({ ...state, inlineTreeMode: value })),
     setSort: (field: SortField, order: SortOrder) => update(state => ({ ...state, sortField: field, sortOrder: order })),
     setVisibleItems: (items: FsItem[]) => update(state => ({
       ...state,

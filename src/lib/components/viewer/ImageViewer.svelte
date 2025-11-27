@@ -39,6 +39,7 @@
 	import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
 	import { idbSet } from '$lib/utils/idb';
 	import { hoverScroll } from '$lib/utils/scroll/hoverScroll';
+import { hoverPan } from '$lib/utils/scroll/hoverPan';
 	import { getFileMetadata } from '$lib/api/fs';
 	import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 	import type { BookInfo, Page } from '$lib/types';
@@ -63,6 +64,9 @@
 
 	let viewportSize = $state({ width: 0, height: 0 });
 	let currentImageDimensions = $state<ImageDimensions | null>(null);
+
+	// 平移偏移（仅单/双页，非视频）
+	let pan = $state({ x: 0, y: 0 });
 	let lastMeasuredImageSource: string | null = null;
 	let containerResizeObserver: ResizeObserver | null = null;
 	let lastAppliedZoomContext: { mode: ZoomMode; dimsKey: string; viewportKey: string } | null = null;
@@ -213,6 +217,77 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 	let panoramaPagesData = $state<
 		Array<{ index: number; data: string | null; position: 'left' | 'center' | 'right' }>
 	>([]);
+
+	const viewerState = readable(appState.getSnapshot().viewer, (set) => {
+		return appState.subscribe((state) => state.viewer, set);
+	});
+
+	function updateViewerState(partial: Partial<AppStateSnapshot['viewer']>) {
+		const snapshot = appState.getSnapshot();
+		appState.update({
+			viewer: {
+				...snapshot.viewer,
+				...partial
+			}
+		});
+	}
+
+	// 计算平移边界
+	function getPanBounds() {
+		if (!currentImageDimensions) {
+			return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+		}
+
+		const zoom = $viewerState.zoom || 1;
+		if (zoom <= 1) {
+			// 不放大时不需要平移
+			return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+		}
+
+		const vw = viewportSize.width;
+		const vh = viewportSize.height;
+		if (!vw || !vh) {
+			return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+		}
+
+		// 先按 object-contain 计算基础缩放，再叠加 transform: scale(zoom)
+		const iw = Math.max(currentImageDimensions.width || 0, 1);
+		const ih = Math.max(currentImageDimensions.height || 0, 1);
+		const ratioW = vw / iw;
+		const ratioH = vh / ih;
+		const baseScale = Math.min(ratioW, ratioH) || 1;
+		const effectiveScale = baseScale * zoom;
+		const imgW = iw * effectiveScale;
+		const imgH = ih * effectiveScale;
+
+		const extraX = Math.max(0, imgW - vw);
+		const extraY = Math.max(0, imgH - vh);
+
+		// 以中心为 0，左右 / 上下对称
+		return {
+			minX: -extraX / 2,
+			maxX: extraX / 2,
+			minY: -extraY / 2,
+			maxY: extraY / 2
+		};
+	}
+
+	// 依赖变动时重置平移（翻页 / 旋转 / 模式 / 缩放 <= 1 / 视频）
+	$effect(() => {
+		const zoom = $viewerState.zoom;
+		const mode = $viewerState.viewMode;
+		const angle = $rotationAngle;
+		const pageIndex = bookStore.currentPageIndex;
+
+		if (zoom <= 1 || mode === 'panorama' || isCurrentPageVideo) {
+			pan = { x: 0, y: 0 };
+			return;
+		}
+
+		// 读这些依赖确保 effect 在翻页/旋转时重跑
+		void angle;
+		void pageIndex;
+	});
 
 	// 注意：progressColor 和 progressBlinking 现在由 ImageViewerProgressBar 内部管理
 
@@ -493,18 +568,6 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 			console.debug('Failed to read video history for start time:', err);
 			videoStartTime = 0;
 		}
-	}
-
-	const viewerState = createAppStateStore((state) => state.viewer);
-
-	function updateViewerState(partial: Partial<AppStateSnapshot['viewer']>) {
-		const snapshot = appState.getSnapshot();
-		appState.update({
-			viewer: {
-				...snapshot.viewer,
-				...partial
-			}
-		});
 	}
 
 	function buildDisplayPath(book: BookInfo, page: Page): string {
@@ -1579,12 +1642,17 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 		data-viewer="true"
 		role="region"
 		aria-label="图像显示区域"
-		use:hoverScroll={{
+		use:hoverPan={{
 			enabled:
 				hoverScrollEnabled &&
 				!isCurrentPageVideo &&
 				$viewerState.viewMode !== 'panorama',
-			axis: 'both'
+			axis: 'both',
+			getBounds: getPanBounds,
+			getPosition: () => pan,
+			setPosition: (next) => {
+				pan = next;
+			}
 		}}
 	>
 		{#if loadingVisible}
@@ -1618,6 +1686,8 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 				zoomLevel={$viewerState.zoom}
 				rotationAngle={$rotationAngle}
 				orientation={$viewerState.orientation}
+				panX={pan.x}
+				panY={pan.y}
 				bind:panoramaPages={panoramaPagesData}
 			/>
 		{/if}

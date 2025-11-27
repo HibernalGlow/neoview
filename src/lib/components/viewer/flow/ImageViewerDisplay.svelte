@@ -15,7 +15,9 @@
 		orientation = 'horizontal',
 		panoramaPages = $bindable(
 			[] as Array<{ index: number; data: string | null; position: 'left' | 'center' | 'right' }>
-		)
+		),
+		panX = 0,
+		panY = 0
 	}: {
 		imageData?: string | null;
 		imageData2?: string | null;
@@ -29,6 +31,8 @@
 			data: string | null;
 			position: 'left' | 'center' | 'right';
 		}>;
+		panX?: number;
+		panY?: number;
 	} = $props();
 
 	let settings = $state(settingsManager.getSettings());
@@ -230,7 +234,7 @@
 				src={currentSrc(upscaledImageData, imageData) ?? ''}
 				alt="Current page"
 				class="max-h-full max-w-full object-contain"
-				style={`transform: scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
+				style={`transform: translate(${panX}px, ${panY}px) scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
 			/>
 		</div>
 	{:else if viewMode === 'double'}
@@ -242,14 +246,14 @@
 						src={imageData2}
 						alt="Previous page"
 						class="max-h-full max-w-[45%] object-contain"
-						style={`transform: scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
+						style={`transform: translate(${panX}px, ${panY}px) scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
 					/>
 				{/if}
 				<img
 					src={currentSrc(upscaledImageData, imageData) ?? ''}
 					alt="Current page"
 					class="max-h-full max-w-[45%] object-contain"
-					style={`transform: scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
+					style={`transform: translate(${panX}px, ${panY}px) scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
 				/>
 			{:else}
 				<!-- 左开阅读：正常排列 -->
@@ -257,14 +261,14 @@
 					src={currentSrc(upscaledImageData, imageData) ?? ''}
 					alt="Current page"
 					class="max-h-full max-w-[45%] object-contain"
-					style={`transform: scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
+					style={`transform: translate(${panX}px, ${panY}px) scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
 				/>
 				{#if imageData2}
 					<img
 						src={imageData2}
 						alt="Next page"
 						class="max-h-full max-w-[45%] object-contain"
-						style={`transform: scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
+						style={`transform: translate(${panX}px, ${panY}px) scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
 					/>
 				{/if}
 			{/if}
@@ -276,7 +280,7 @@
 				src={currentSrc(upscaledImageData, imageData) ?? ''}
 				alt="Current page"
 				class="max-h-full max-w-full object-contain"
-				style={`transform: scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
+				style={`transform: translate(${panX}px, ${panY}px) scale(${zoomLevel}) rotate(${rotationAngle}deg); transition: transform 0.2s;`}
 			/>
 		</div>
 	{/if}

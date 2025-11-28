@@ -165,26 +165,38 @@ async function loadThumbnailsForLayer(items: FsItem[]) {
 	}
 }
 
-// 推入新层（进入子目录）
+// 检查路径是否是另一个路径的子目录
+function isChildPath(childPath: string, parentPath: string): boolean {
+	const normalizedChild = childPath.replace(/\\/g, '/').toLowerCase();
+	const normalizedParent = parentPath.replace(/\\/g, '/').toLowerCase();
+	return normalizedChild.startsWith(normalizedParent + '/');
+}
+
+// 推入新层（进入子目录）或跳转到新路径
 async function pushLayer(path: string) {
 	if (isAnimating) return;
 	
 	isAnimating = true;
 	
-	// 保存当前层的选中状态
-	if (layers[activeIndex]) {
-		// 状态已经在 layers 中保持
+	// 获取当前层的路径
+	const currentLayer = layers[activeIndex];
+	const currentPath = currentLayer?.path || '';
+	
+	// 判断目标路径是否是当前路径的子目录
+	const isChild = currentPath && isChildPath(path, currentPath);
+	
+	if (isChild) {
+		// 正常的子目录导航：推入新层
+		const newLayer = await createLayer(path);
+		layers = [...layers.slice(0, activeIndex + 1), newLayer];
+		await tick();
+		activeIndex = layers.length - 1;
+	} else {
+		// 跳转到不相关的路径：重新初始化栈
+		const newLayer = await createLayer(path);
+		layers = [newLayer];
+		activeIndex = 0;
 	}
-	
-	// 创建新层
-	const newLayer = await createLayer(path);
-	
-	// 移除当前层之后的所有层（如果有的话，比如后退后又前进）
-	layers = [...layers.slice(0, activeIndex + 1), newLayer];
-	
-	// 动画切换到新层
-	await tick();
-	activeIndex = layers.length - 1;
 	
 	// 更新 store 中的路径
 	folderPanelActions.setPath(path);
@@ -194,28 +206,65 @@ async function pushLayer(path: string) {
 	}, 300);
 }
 
+// 获取父目录路径
+function getParentPath(path: string): string | null {
+	const normalized = path.replace(/\\/g, '/');
+	const parts = normalized.split('/').filter(Boolean);
+	if (parts.length <= 1) return null; // 已经是根目录
+	parts.pop();
+	// 保持 Windows 盘符格式
+	if (path.includes(':')) {
+		return parts.join('/');
+	}
+	return '/' + parts.join('/');
+}
+
 // 弹出当前层（返回上级）
-function popLayer(): boolean {
-	if (isAnimating || activeIndex <= 0) return false;
+async function popLayer(): Promise<boolean> {
+	if (isAnimating) return false;
 	
-	isAnimating = true;
-	
-	// 切换到上一层
-	activeIndex = activeIndex - 1;
-	
-	// 更新 store 中的路径
-	const prevLayer = layers[activeIndex];
-	if (prevLayer) {
-		folderPanelActions.setPath(prevLayer.path);
+	// 如果有上一层，直接切换
+	if (activeIndex > 0) {
+		isAnimating = true;
+		activeIndex = activeIndex - 1;
+		
+		const prevLayer = layers[activeIndex];
+		if (prevLayer) {
+			folderPanelActions.setPath(prevLayer.path);
+		}
+		
+		setTimeout(() => {
+			isAnimating = false;
+		}, 300);
+		
+		return true;
 	}
 	
-	setTimeout(() => {
-		// 可选：移除弹出的层以释放内存
-		// layers = layers.slice(0, activeIndex + 1);
-		isAnimating = false;
-	}, 300);
+	// 如果没有上一层，尝试导航到父目录
+	const currentLayer = layers[activeIndex];
+	if (currentLayer) {
+		const parentPath = getParentPath(currentLayer.path);
+		if (parentPath) {
+			isAnimating = true;
+			
+			// 创建父目录层并插入到栈的开头
+			const parentLayer = await createLayer(parentPath);
+			layers = [parentLayer, ...layers];
+			// activeIndex 保持不变，因为新层插入到了开头
+			// 但我们要切换到新插入的层
+			activeIndex = 0;
+			
+			folderPanelActions.setPath(parentPath);
+			
+			setTimeout(() => {
+				isAnimating = false;
+			}, 300);
+			
+			return true;
+		}
+	}
 	
-	return true;
+	return false;
 }
 
 // 跳转到指定层

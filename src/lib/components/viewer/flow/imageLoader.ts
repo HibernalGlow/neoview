@@ -333,6 +333,12 @@ export class ImageLoader {
 	 * 获取 Blob
 	 */
 	async getBlob(pageIndex: number): Promise<Blob> {
+		// 如果已有缓存，直接返回，避免重复日志
+		const cached = this.blobCache.get(pageIndex);
+		if (cached) {
+			this.updateAccessTime(pageIndex);
+			return cached.blob;
+		}
 		await this.ensureResources(pageIndex);
 		return this.blobCache.get(pageIndex)!.blob;
 	}
@@ -341,6 +347,12 @@ export class ImageLoader {
 	 * 获取 Object URL
 	 */
 	async getObjectUrl(pageIndex: number): Promise<string> {
+		// 如果已有缓存，直接返回，避免重复日志
+		const cached = this.blobCache.get(pageIndex);
+		if (cached) {
+			this.updateAccessTime(pageIndex);
+			return cached.url;
+		}
 		await this.ensureResources(pageIndex);
 		return this.blobCache.get(pageIndex)!.url;
 	}

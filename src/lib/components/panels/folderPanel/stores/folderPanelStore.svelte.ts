@@ -53,6 +53,10 @@ export interface FolderPanelState {
 	recursiveMode: boolean;
 	// 搜索关键词
 	searchKeyword: string;
+	// 搜索结果
+	searchResults: FsItem[];
+	// 是否正在搜索
+	isSearching: boolean;
 	// 文件夹树可见
 	folderTreeVisible: boolean;
 	// 文件夹树布局
@@ -131,6 +135,8 @@ const initialState: FolderPanelState = {
 	deleteMode: false,
 	recursiveMode: savedState.recursiveMode ?? false,
 	searchKeyword: '',
+	searchResults: [],
+	isSearching: false,
 	folderTreeVisible: savedState.folderTreeVisible ?? false,
 	folderTreeLayout: savedState.folderTreeLayout ?? 'left',
 	folderTreeSize: savedState.folderTreeSize ?? 200,
@@ -257,6 +263,12 @@ export const recursiveMode = derived(state, ($state) => $state.recursiveMode);
 
 // 搜索关键词
 export const searchKeyword = derived(state, ($state) => $state.searchKeyword);
+
+// 搜索结果
+export const searchResults = derived(state, ($state) => $state.searchResults);
+
+// 是否正在搜索
+export const isSearching = derived(state, ($state) => $state.isSearching);
 
 // 文件夹树配置
 export const folderTreeConfig = derived(state, ($state) => ({
@@ -665,6 +677,27 @@ export const folderPanelActions = {
 	 */
 	setSearchKeyword(keyword: string) {
 		state.update((s) => ({ ...s, searchKeyword: keyword }));
+	},
+
+	/**
+	 * 设置搜索结果
+	 */
+	setSearchResults(results: FsItem[]) {
+		state.update((s) => ({ ...s, searchResults: results }));
+	},
+
+	/**
+	 * 设置搜索状态
+	 */
+	setIsSearching(searching: boolean) {
+		state.update((s) => ({ ...s, isSearching: searching }));
+	},
+
+	/**
+	 * 清除搜索
+	 */
+	clearSearch() {
+		state.update((s) => ({ ...s, searchKeyword: '', searchResults: [], isSearching: false }));
 	},
 
 	/**

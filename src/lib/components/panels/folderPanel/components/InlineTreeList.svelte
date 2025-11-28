@@ -18,12 +18,16 @@ interface TreeItem extends FsItem {
 }
 
 interface Props {
-	onItemClick?: (item: FsItem) => void;
-	onItemDoubleClick?: (item: FsItem) => void;
+	onItemClick?: (item: FsItem) => void | Promise<void>;
+	onItemDoubleClick?: (item: FsItem) => void | Promise<void>;
 	onItemContextMenu?: (event: MouseEvent, item: FsItem) => void;
 }
 
-let { onItemClick, onItemDoubleClick, onItemContextMenu }: Props = $props();
+let { 
+	onItemClick = () => {}, 
+	onItemDoubleClick = () => {}, 
+	onItemContextMenu = () => {} 
+}: Props = $props();
 
 // 根目录内容
 let rootItems = $state<FsItem[]>([]);

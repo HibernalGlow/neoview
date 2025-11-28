@@ -16,6 +16,7 @@ import FolderTree from './components/FolderTree.svelte';
 import FolderContextMenu from './components/FolderContextMenu.svelte';
 import MigrationBar from './components/MigrationBar.svelte';
 import InlineTreeList from './components/InlineTreeList.svelte';
+import SearchResultList from './components/SearchResultList.svelte';
 import SearchBar from '$lib/components/ui/SearchBar.svelte';
 import { bookStore } from '$lib/stores/book.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
@@ -36,7 +37,9 @@ import {
 	multiSelectMode,
 	sortedItems,
 	externalNavigationRequest,
-	inlineTreeMode
+	inlineTreeMode,
+	searchResults,
+	isSearching
 } from './stores/folderPanelStore.svelte';
 
 // 导航命令 store（用于父子组件通信）
@@ -187,9 +190,36 @@ function handleSetHome() {
 	}
 }
 
-// 处理搜索
-function handleSearch(keyword: string) {
+// 处理搜索（使用后端搜索）
+async function handleSearch(keyword: string) {
 	folderPanelActions.setSearchKeyword(keyword);
+	
+	if (!keyword.trim()) {
+		folderPanelActions.clearSearch();
+		return;
+	}
+	
+	folderPanelActions.setIsSearching(true);
+	
+	try {
+		const path = $currentPath;
+		if (!path) return;
+		
+		// 调用后端搜索 API
+		const results = await FileSystemAPI.searchFiles(path, keyword, {
+			includeSubfolders: true,
+			maxResults: 1000
+		});
+		
+		folderPanelActions.setSearchResults(results);
+		console.log(`[FolderPanel] 搜索完成，找到 ${results.length} 个结果`);
+	} catch (err) {
+		console.error('[FolderPanel] 搜索失败:', err);
+		showErrorToast('搜索失败', String(err));
+		folderPanelActions.setSearchResults([]);
+	} finally {
+		folderPanelActions.setIsSearching(false);
+	}
 }
 
 // 处理文件夹树切换
@@ -500,7 +530,14 @@ onMount(() => {
 					: `left: ${$folderTreeConfig.size + 6}px;`
 				: ''}
 		>
-			{#if $inlineTreeMode}
+			{#if $searchKeyword || $isSearching || $searchResults.length > 0}
+				<!-- 搜索结果模式 -->
+				<SearchResultList
+					onItemClick={handleItemOpen}
+					onItemDoubleClick={handleItemOpen}
+					onItemContextMenu={handleContextMenu}
+				/>
+			{:else if $inlineTreeMode}
 				<!-- 主视图树模式 -->
 				<InlineTreeList
 					onItemClick={handleItemOpen}

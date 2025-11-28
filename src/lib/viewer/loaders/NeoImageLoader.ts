@@ -254,8 +254,9 @@ export class NeoImageLoader {
       
       const virtualPage = bookStore2.getVirtualPage(nextIndex);
       if (virtualPage && !this.blobCache.has(virtualPage.physicalPage.index)) {
-        // 异步预加载，不等待
-        this.ensureBlob(virtualPage.physicalPage.index).catch(() => {
+        const physicalIndex = virtualPage.physicalPage.index;
+        // 异步预加载并获取尺寸
+        this.preloadWithSize(physicalIndex).catch(() => {
           // 预加载失败不报错
         });
       }
@@ -263,6 +264,18 @@ export class NeoImageLoader {
     
     // 清理过期缓存
     this.enforceCacheLimit();
+  }
+  
+  /**
+   * 预加载图片并获取尺寸，更新到 bookStore2
+   * 这样翻页前就知道是否需要分割
+   */
+  private async preloadWithSize(physicalIndex: number): Promise<void> {
+    const entry = await this.ensureBlob(physicalIndex);
+    
+    // 获取尺寸并更新
+    const dimensions = await this.getImageDimensions(entry.blob);
+    bookStore2.updatePhysicalPageSize(physicalIndex, dimensions.width, dimensions.height);
   }
   
   private enforceCacheLimit(): void {

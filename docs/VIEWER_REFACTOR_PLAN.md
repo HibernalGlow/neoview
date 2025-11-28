@@ -209,8 +209,10 @@ src/lib/
 9. [x] 修复分割页面居中问题（添加 translateX 补偿）
 10. [x] 禁用滚轮缩放（用户另外绑定翻页）
 11. [x] 创建 imageSizePreloader 模块
-12. [ ] 验证分割和自动旋转功能
-13. [ ] 解决翻页闪现问题（需要预加载尺寸）
+12. [x] 创建 NeoImageLoader 模块
+13. [x] NeoImageLoader 预加载时获取尺寸并更新 bookStore2
+14. [ ] 验证分割和自动旋转功能
+15. [ ] 集成 NeoImageLoader 到 NeoViewer 使用虚拟列表）
 
 ### 阶段 3: 在现有 ImageViewer 中引入新组件
 1. [ ] 分析现有 ImageViewer 结构

@@ -74,6 +74,18 @@ export function toggleNeoViewer() {
 	});
 }
 
+// StackViewer 开关（层叠式查看器）- 默认关闭
+export const useStackViewer = writable<boolean>(loadFromStorage('useStackViewer', false));
+
+// 切换 StackViewer
+export function toggleStackViewer() {
+	useStackViewer.update(v => {
+		const newValue = !v;
+		saveToStorage('useStackViewer', newValue);
+		return newValue;
+	});
+}
+
 // 视图模式（仅描述单页/双页/全景）
 export type ViewMode = 'single' | 'double' | 'panorama';
 

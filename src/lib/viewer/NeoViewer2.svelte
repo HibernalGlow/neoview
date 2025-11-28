@@ -1,41 +1,33 @@
 <!--
-  NeoViewer - 新一代图片查看器
+  NeoViewer2 - 完全基于 bookStore2 的图片查看器
   
-  模块化架构，支持：
-  - 图片渲染（ImageRenderer）
-  - 手势处理（GestureHandler）
-  - 缩放/旋转（集成 UI stores）
-  - 横向分割、自动旋转
+  特点：
+  - 完全使用 bookStore2 的虚拟页面系统
+  - 自动处理横向分割和自动旋转
+  - 图片加载后自动更新尺寸信息
+  - 预加载后续页面
 -->
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
   import ImageRenderer from './ImageRenderer.svelte';
   import { GestureHandler, type GestureEvents } from './GestureHandler';
-  import { getNeoImageLoader } from './loaders/NeoImageLoader';
   
-  // 导入 UI stores
-  import { 
-    zoomLevel, 
-    rotationAngle, 
-    zoomIn as storeZoomIn, 
-    zoomOut as storeZoomOut,
-    resetZoom as storeResetZoom,
-  } from '$lib/stores';
+  // 导入 stores
+  import { zoomLevel, rotationAngle, resetZoom as storeResetZoom } from '$lib/stores';
   import { bookStore2 } from '$lib/stores/bookStore2';
+  import { bookStore } from '$lib/stores/book.svelte';
   import { settingsManager } from '$lib/settings/settingsManager';
   import type { ReadingDirection } from '$lib/settings/settingsManager';
-  import { hoverScroll } from '$lib/utils/scroll/hoverScroll';
-  import { mapLogicalHalfToPhysical } from '$lib/utils/viewer/horizontalPageLayout';
-  import type { HorizontalSplitHalf } from '$lib/utils/viewer/horizontalPageLayout';
   
   // ============================================================================
-  // Props - 兼容 ImageViewerDisplay 接口
+  // Props
   // ============================================================================
   
   type ViewMode = 'single' | 'double' | 'panorama';
   type Point = { x: number; y: number };
   
   let {
+    // 兼容旧接口的 props，但优先使用 bookStore2
     imageData = null,
     imageData2 = null,
     upscaledImageData = null,
@@ -44,7 +36,6 @@
     panoramaPages = $bindable([] as Array<{ index: number; data: string | null; position: 'left' | 'center' | 'right' }>),
     panX = 0,
     panY = 0,
-    horizontalSplitHalf = null,
     treatHorizontalAsDoublePage = false,
     onPrevPage,
     onNextPage,
@@ -57,7 +48,6 @@
     panoramaPages?: Array<{ index: number; data: string | null; position: 'left' | 'center' | 'right' }>;
     panX?: number;
     panY?: number;
-    horizontalSplitHalf?: HorizontalSplitHalf | null;
     treatHorizontalAsDoublePage?: boolean;
     onPrevPage?: () => void;
     onNextPage?: () => void;
@@ -78,72 +68,54 @@
   // 设置
   let settings = $state(settingsManager.getSettings());
   let readingDirection: ReadingDirection = $derived(settings.book.readingDirection);
-  let hoverScrollEnabled = $derived(settings.image.hoverScrollEnabled ?? true);
   
   settingsManager.addListener((newSettings) => {
     settings = newSettings;
   });
   
-  // 计算当前显示的图片 URL
-  let currentSrc = $derived(upscaledImageData || imageData);
+  // ============================================================================
+  // bookStore2 数据
+  // ============================================================================
   
-  // 计算旋转角度
-  let normalizedRotation = $derived.by(() => {
-    const r = uiRotation % 360;
-    if (r === 0 || r === 90 || r === 180 || r === 270) {
-      return r as 0 | 90 | 180 | 270;
-    }
-    return 0 as const;
-  });
-  
-  // 从 bookStore2 获取虚拟页面信息
   let bookState = $derived($bookStore2);
+  
+  // 当前虚拟页面信息
   let virtualPageInfo = $derived.by(() => {
     const frame = bookState.currentFrame;
     if (!frame || !frame.elements.length) return null;
     return frame.elements[0].virtualPage;
   });
   
-  // 计算分割半边 - 优先使用 bookStore2 的虚拟页面信息
-  let splitHalf = $derived.by(() => {
-    // 优先从 bookStore2 获取
+  // 计算分割半边 - 完全从 bookStore2 获取
+  let splitHalf = $derived.by((): 'left' | 'right' | null => {
     if (virtualPageInfo?.isDivided) {
       return virtualPageInfo.part === 0 ? 'left' : 'right';
     }
-    // 回退到 props
-    if (!horizontalSplitHalf) return null;
-    const physicalHalf = mapLogicalHalfToPhysical(horizontalSplitHalf, readingDirection);
-    return physicalHalf as 'left' | 'right' | null;
+    return null;
   });
   
-  // 计算旋转 - 优先使用虚拟页面的旋转
-  let effectiveRotation = $derived.by((): 0 | 90 | 180 | 270 => {
-    // 优先从 bookStore2 获取自动旋转
-    const vpRotation = virtualPageInfo?.rotation;
-    if (vpRotation !== undefined && vpRotation !== 0) {
-      if (vpRotation === 90 || vpRotation === 180 || vpRotation === 270) {
-        return vpRotation;
-      }
+  // 计算旋转 - 虚拟页面旋转 + UI 旋转
+  let effectiveRotation = $derived.by(() => {
+    const vpRotation = virtualPageInfo?.rotation ?? 0;
+    const normalizedUI = uiRotation % 360;
+    const total = (vpRotation + normalizedUI) % 360;
+    if (total === 0 || total === 90 || total === 180 || total === 270) {
+      return total as 0 | 90 | 180 | 270;
     }
-    // 回退到 UI 旋转
-    return normalizedRotation;
+    return 0 as const;
   });
   
-  // 合并平移
+  // 当前显示的图片 URL（优先使用超分后的）
+  let currentSrc = $derived(upscaledImageData || imageData);
+  
+  // 总平移量
   let totalPanX = $derived(panX + localPan.x);
   let totalPanY = $derived(panY + localPan.y);
   
-  // 全景模式
-  let hasPanoramaImages = $state(false);
-  let scrollContainer = $state<HTMLElement | null>(null);
-  
-  $effect(() => {
-    if (viewMode === 'panorama') {
-      hasPanoramaImages = panoramaPages.some((p) => !!p.data);
-    } else {
-      hasPanoramaImages = false;
-    }
-  });
+  // 全景模式检查
+  let hasPanoramaImages = $derived(
+    viewMode === 'panorama' && panoramaPages.some(p => p.data !== null)
+  );
   
   // ============================================================================
   // 手势处理
@@ -151,72 +123,37 @@
   
   const gestureEvents: GestureEvents = {
     onPan: (delta) => {
-      localPan = {
-        x: localPan.x + delta.x,
-        y: localPan.y + delta.y,
-      };
+      localPan = { x: localPan.x + delta.x, y: localPan.y + delta.y };
     },
-    
-    onZoom: (zoomScale) => {
-      if (zoomScale > 1) {
-        storeZoomIn();
-      } else if (zoomScale < 1) {
-        storeZoomOut();
-      }
-    },
-    
-    onDoubleTap: () => {
-      if ($zoomLevel > 1.5) {
-        resetView();
-      } else {
-        zoomLevel.set(2);
-      }
-    },
-    
     onTap: (point) => {
+      // 点击左侧 30% 上一页，右侧 30% 下一页
       if (containerRef) {
         const rect = containerRef.getBoundingClientRect();
-        const x = point.x / rect.width;
+        const relX = (point.x - rect.left) / rect.width;
         
-        if (x < 0.3) {
-          onPrevPage?.();
-        } else if (x > 0.7) {
-          onNextPage?.();
+        if (relX < 0.3) {
+          handlePrevPage();
+        } else if (relX > 0.7) {
+          handleNextPage();
         }
       }
     },
   };
   
-  // 获取 NeoImageLoader 实例
-  const neoImageLoader = getNeoImageLoader({
-    preloadCount: 3,
-    onImageLoaded: (result) => {
-      console.log('[NeoViewer] Image loaded:', result.virtualPage.virtualIndex);
-    },
-  });
+  // ============================================================================
+  // 生命周期
+  // ============================================================================
   
   onMount(() => {
     if (containerRef) {
       gestureHandler = new GestureHandler(containerRef, gestureEvents, {
-        enableZoom: false, // 禁用滚轮缩放，用户另外绑定了翻页
+        enableZoom: false,
       });
-    }
-    
-    // 初始加载当前帧
-    if (bookState.isOpen) {
-      neoImageLoader.loadCurrentFrame();
     }
   });
   
   onDestroy(() => {
     gestureHandler?.destroy();
-  });
-  
-  // 监听页面变化，触发预加载
-  $effect(() => {
-    if (bookState.isOpen && bookState.currentIndex >= 0) {
-      neoImageLoader.loadCurrentFrame();
-    }
   });
   
   // ============================================================================
@@ -230,58 +167,37 @@
   
   /** 处理图片尺寸检测，更新到 bookStore2 */
   function handleSizeDetected(width: number, height: number) {
-    // 需要使用物理索引，不是虚拟索引
     if (virtualPageInfo) {
       const physicalIndex = virtualPageInfo.physicalPage.index;
-      console.log(`[NeoViewer] Size detected: ${width}x${height}, physicalIndex=${physicalIndex}, divideLandscape=${bookState.divideLandscape}`);
       bookStore2.updatePhysicalPageSize(physicalIndex, width, height);
-    } else {
-      console.log(`[NeoViewer] Size detected but no virtualPageInfo: ${width}x${height}`);
     }
   }
   
-  function scrollToCenter(
-    node: HTMLElement,
-    params: { isCenter: boolean; orientation: 'horizontal' | 'vertical' }
-  ) {
-    let { isCenter, orientation: orient } = params;
-
-    const scrollToNodeCenter = () => {
-      if (!isCenter) return;
-      const container = node.parentElement as HTMLElement | null;
-      if (!container) return;
-
-      const containerRect = container.getBoundingClientRect();
-      const nodeRect = node.getBoundingClientRect();
-
-      if (orient === 'horizontal') {
-        const containerCenter = containerRect.left + containerRect.width / 2;
-        const nodeCenter = nodeRect.left + nodeRect.width / 2;
-        const delta = nodeCenter - containerCenter;
-        container.scrollLeft = container.scrollLeft + delta;
-      } else {
-        const containerCenter = containerRect.top + containerRect.height / 2;
-        const nodeCenter = nodeRect.top + nodeRect.height / 2;
-        const delta = nodeCenter - containerCenter;
-        container.scrollTop = container.scrollTop + delta;
+  /** 下一页 - 使用 bookStore2 */
+  function handleNextPage() {
+    // 使用 bookStore2 的虚拟页面翻页
+    const success = bookStore2.nextPage();
+    if (success) {
+      // 同步到旧系统（保持兼容）
+      const vp = bookStore2.getVirtualPage(untrack(() => $bookStore2.currentIndex));
+      if (vp) {
+        bookStore.navigateToPage(vp.physicalPage.index);
       }
-    };
-
-    if (isCenter) {
-      requestAnimationFrame(() => {
-        scrollToNodeCenter();
-      });
     }
-
-    return {
-      update(newParams: { isCenter: boolean; orientation: 'horizontal' | 'vertical' }) {
-        isCenter = newParams.isCenter;
-        orient = newParams.orientation;
-        if (isCenter) {
-          scrollToNodeCenter();
-        }
+    // 也调用外部回调（如果有）
+    onNextPage?.();
+  }
+  
+  /** 上一页 - 使用 bookStore2 */
+  function handlePrevPage() {
+    const success = bookStore2.prevPage();
+    if (success) {
+      const vp = bookStore2.getVirtualPage(untrack(() => $bookStore2.currentIndex));
+      if (vp) {
+        bookStore.navigateToPage(vp.physicalPage.index);
       }
-    };
+    }
+    onPrevPage?.();
   }
   
   export { resetView };
@@ -305,8 +221,6 @@
           class:neo-viewer__panorama-inner--horizontal={orientation === 'horizontal'}
           class:neo-viewer__panorama-inner--vertical={orientation === 'vertical'}
           class:neo-viewer__panorama-inner--rtl={readingDirection === 'right-to-left'}
-          bind:this={scrollContainer}
-          use:hoverScroll={{ enabled: hoverScrollEnabled, axis: 'both' }}
         >
           {#each panoramaPages as page (page.index)}
             {#if page.data}
@@ -314,22 +228,17 @@
                 src={page.data}
                 alt={`Page ${page.index + 1}`}
                 class="neo-viewer__panorama-image"
-                class:neo-viewer__panorama-image--horizontal={orientation === 'horizontal'}
-                class:neo-viewer__panorama-image--vertical={orientation === 'vertical'}
                 style={`transform: rotate(${uiRotation}deg);`}
-                use:scrollToCenter={{ isCenter: page.position === 'center', orientation }}
+                draggable="false"
               />
             {/if}
           {/each}
         </div>
-      {:else if currentSrc}
-        <div class="neo-viewer__fallback">
-          <ImageRenderer
-            src={currentSrc}
-            rotation={effectiveRotation}
-            scale={1}
-            fitMode="contain"
-          />
+      {:else}
+        <div class="neo-viewer__empty">
+          <slot name="empty">
+            <span class="text-muted-foreground">暂无图片</span>
+          </slot>
         </div>
       {/if}
     </div>
@@ -348,6 +257,7 @@
         />
       </div>
     {:else if viewMode === 'double'}
+      <!-- 双页模式 -->
       {#if treatHorizontalAsDoublePage}
         <div class="neo-viewer__double">
           <ImageRenderer
@@ -356,6 +266,7 @@
             scale={scale}
             offset={{ x: totalPanX, y: totalPanY }}
             fitMode="contain"
+            onSizeDetected={handleSizeDetected}
           />
         </div>
       {:else}
@@ -376,6 +287,7 @@
               scale={scale}
               offset={{ x: totalPanX, y: totalPanY }}
               fitMode="contain"
+              onSizeDetected={handleSizeDetected}
             />
           {:else}
             <ImageRenderer
@@ -384,6 +296,7 @@
               scale={scale}
               offset={{ x: totalPanX, y: totalPanY }}
               fitMode="contain"
+              onSizeDetected={handleSizeDetected}
             />
             {#if imageData2}
               <ImageRenderer
@@ -399,14 +312,23 @@
       {/if}
     {/if}
   {:else}
+    <!-- 空状态 -->
     <div class="neo-viewer__empty">
-      <span>无图片</span>
+      <slot name="empty">
+        <span class="text-muted-foreground">暂无图片</span>
+      </slot>
     </div>
   {/if}
   
-  {#if scale !== 1}
-    <div class="neo-viewer__zoom-indicator">
-      {Math.round(scale * 100)}%
+  <!-- 页面信息覆盖层 -->
+  {#if bookState.isOpen}
+    <div class="neo-viewer__page-info">
+      <span class="text-xs text-muted-foreground">
+        {bookState.currentIndex + 1} / {bookState.virtualPageCount}
+        {#if bookState.divideLandscape}
+          (分割)
+        {/if}
+      </span>
     </div>
   {/if}
 </div>
@@ -416,102 +338,62 @@
     position: relative;
     width: 100%;
     height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     overflow: hidden;
-    background: var(--viewer-background, #000);
-    cursor: grab;
-  }
-  
-  .neo-viewer:active {
-    cursor: grabbing;
+    background: var(--background);
   }
   
   .neo-viewer__single,
   .neo-viewer__double {
+    width: 100%;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 100%;
-    height: 100%;
   }
   
   .neo-viewer__double-spread {
+    width: 100%;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0;
-  }
-  
-  .neo-viewer__double-spread :global(.image-renderer) {
-    max-width: 45%;
-    max-height: 100%;
+    gap: 4px;
   }
   
   .neo-viewer__panorama {
-    position: relative;
-    display: flex;
     width: 100%;
     height: 100%;
-  }
-  
-  .neo-viewer__panorama--horizontal {
+    display: flex;
     align-items: center;
-    overflow-x: auto;
-  }
-  
-  .neo-viewer__panorama--vertical {
-    align-items: flex-start;
-    overflow-y: auto;
+    justify-content: center;
+    transform-origin: center center;
   }
   
   .neo-viewer__panorama-inner {
     display: flex;
-    padding: 0;
+    gap: 4px;
   }
   
   .neo-viewer__panorama-inner--horizontal {
     flex-direction: row;
-    height: 100%;
-    min-width: 100%;
-    align-items: center;
-    overflow-x: auto;
-  }
-  
-  .neo-viewer__panorama-inner--horizontal.neo-viewer__panorama-inner--rtl {
-    flex-direction: row-reverse;
   }
   
   .neo-viewer__panorama-inner--vertical {
     flex-direction: column;
-    width: 100%;
-    min-height: 100%;
-    align-items: center;
-    overflow-y: auto;
+  }
+  
+  .neo-viewer__panorama-inner--rtl {
+    flex-direction: row-reverse;
   }
   
   .neo-viewer__panorama-image {
-    flex-shrink: 0;
-    object-fit: cover;
-    transition: transform 0.2s;
-  }
-  
-  .neo-viewer__panorama-image--horizontal {
-    height: 100%;
-    width: auto;
-    margin: 0 -1px;
-  }
-  
-  .neo-viewer__panorama-image--vertical {
-    width: 100%;
-    height: auto;
-    margin: -1px 0;
-  }
-  
-  .neo-viewer__fallback {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    user-select: none;
+    -webkit-user-drag: none;
   }
   
   .neo-viewer__empty {
@@ -520,18 +402,15 @@
     justify-content: center;
     width: 100%;
     height: 100%;
-    color: #666;
   }
   
-  .neo-viewer__zoom-indicator {
+  .neo-viewer__page-info {
     position: absolute;
-    bottom: 1rem;
-    right: 1rem;
-    padding: 0.25rem 0.5rem;
-    background: rgba(0, 0, 0, 0.6);
-    color: white;
-    font-size: 0.75rem;
-    border-radius: 0.25rem;
+    bottom: 8px;
+    right: 8px;
+    padding: 2px 8px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 4px;
     pointer-events: none;
   }
 </style>

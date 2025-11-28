@@ -606,3 +606,26 @@ export const canNavigate = derived(bookStore2, ($state) => {
     canNext: $state.isOpen && $state.currentIndex < $state.virtualPageCount - 1,
   };
 });
+
+/**
+ * 虚拟页面列表 - 用于页面列表组件
+ */
+export const virtualPageList = derived(bookStore2, ($state) => {
+  if (!$state.isOpen) return [];
+  
+  const pages = [];
+  for (let i = 0; i < $state.virtualPageCount; i++) {
+    const vp = bookStore2.getVirtualPage(i);
+    if (vp) {
+      pages.push({
+        virtualIndex: vp.virtualIndex,
+        physicalIndex: vp.physicalPage.index,
+        name: vp.physicalPage.path,
+        isDivided: vp.isDivided,
+        part: vp.part,
+        rotation: vp.rotation,
+      });
+    }
+  }
+  return pages;
+});

@@ -17,7 +17,9 @@ export * from './core';
 
 // 组件
 export { default as NeoViewer } from './NeoViewer.svelte';
-export { default as ImageRenderer } from './ImageRenderer.svelte';
+export { default as NeoViewer2 } from './NeoViewer2.svelte';
+export { default as StackViewer } from './StackViewer.svelte';
+export { default as StackViewer2 } from './StackViewer2.svelte';
 export { default as NewViewer } from './NewViewer.svelte';
 
 // 工具类

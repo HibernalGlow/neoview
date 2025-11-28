@@ -208,24 +208,24 @@
 	});
 </script>
 
-<div class="search-bar-container flex items-center gap-2 border-b px-2 py-2 bg-background/30">
+<div class="search-bar-container flex items-center gap-2 border-b border-border px-2 py-2 bg-background/50">
 	<div class="relative flex-1">
 		<!-- 搜索输入框 -->
 		<div class="relative">
-			<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+			<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
 			<Input.Root
 				placeholder={placeholder}
 				bind:value={searchQuery}
 				oninput={handleSearchInput}
 				onfocus={handleSearchFocus}
-				class="pl-10 pr-24"
+				class="pl-10 pr-24 bg-background border-border"
 				{disabled}
 			/>
 			
 			<!-- 清空按钮 -->
 			{#if searchQuery}
 				<button
-					class="absolute right-16 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
+					class="absolute right-16 top-1/2 transform -translate-y-1/2 p-1 hover:bg-accent rounded"
 					onclick={() => {
 						searchQuery = '';
 						if (onSearch) {
@@ -234,14 +234,14 @@
 					}}
 					title="清空搜索"
 				>
-					<X class="h-4 w-4 text-gray-500" />
+					<X class="h-4 w-4 text-muted-foreground" />
 				</button>
 			{/if}
 			
 			<!-- 搜索历史按钮 -->
 			{#if storageKey}
 				<button
-					class="absolute right-8 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
+					class="absolute right-8 top-1/2 transform -translate-y-1/2 p-1 hover:bg-accent rounded disabled:opacity-50"
 					onclick={() => {
 						showHistory = !showHistory;
 						showSettings = false;
@@ -249,14 +249,14 @@
 					disabled={searchHistory.length === 0}
 					title="搜索历史"
 				>
-					<ChevronDown class="h-4 w-4 text-gray-500" />
+					<ChevronDown class="h-4 w-4 text-muted-foreground" />
 				</button>
 			{/if}
 			
 			<!-- 搜索设置按钮 -->
 			{#if searchSettings && onSettingsChange}
 				<button
-					class="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
+					class="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 hover:bg-accent rounded"
 					onclick={(e) => {
 						e.stopPropagation();
 						showSettings = !showSettings;
@@ -264,44 +264,44 @@
 					}}
 					title="搜索设置"
 				>
-					<MoreVertical class="h-4 w-4 text-gray-500" />
+					<MoreVertical class="h-4 w-4 text-muted-foreground" />
 				</button>
 			{/if}
 		</div>
 		
 		<!-- 搜索历史下拉 -->
 		{#if showHistory && searchHistory.length > 0}
-			<div class="search-history absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+			<div class="search-history absolute top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
 				{#each searchHistory as item (item.query)}
 					<div
-						class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center justify-between group cursor-pointer"
+						class="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center justify-between group cursor-pointer"
 						role="button"
 						tabindex="0"
 						onclick={() => selectSearchHistory(item)}
 						onkeydown={(event) => handleSearchHistoryKeydown(event, item)}
 					>
 						<div class="flex items-center gap-2 flex-1 min-w-0">
-							<Search class="h-4 w-4 text-gray-400 flex-shrink-0" />
-							<span class="truncate">{item.query}</span>
+							<Search class="h-4 w-4 text-muted-foreground shrink-0" />
+							<span class="truncate text-foreground">{item.query}</span>
 						</div>
 						<div class="flex items-center gap-2">
-							<span class="text-xs text-gray-400">{formatSearchHistoryTime(item.timestamp)}</span>
+							<span class="text-xs text-muted-foreground">{formatSearchHistoryTime(item.timestamp)}</span>
 							<button
-								class="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded flex-shrink-0"
+								class="opacity-0 group-hover:opacity-100 p-1 hover:bg-accent-foreground/10 rounded shrink-0"
 								onclick={(e) => {
 									e.stopPropagation();
 									deleteHistoryItem(item);
 								}}
 								title="删除"
 							>
-								<X class="h-3 w-3 text-gray-500" />
+								<X class="h-3 w-3 text-muted-foreground" />
 							</button>
 						</div>
 					</div>
 				{/each}
-				<div class="border-t border-gray-200 p-2">
+				<div class="border-t border-border p-2">
 					<button
-						class="w-full px-3 py-1 text-xs text-gray-500 hover:bg-gray-100 rounded"
+						class="w-full px-3 py-1 text-xs text-muted-foreground hover:bg-accent rounded"
 						onclick={clearSearchHistory}
 					>
 						清除搜索历史
@@ -312,13 +312,13 @@
 		
 		<!-- 搜索设置下拉 -->
 		{#if showSettings && searchSettings && onSettingsChange}
-			<div class="search-settings absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[200px] p-2">
+			<div class="search-settings absolute top-full right-0 mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 min-w-[200px] p-2">
 				<div class="space-y-3">
 					<div class="pb-2">
-						<h4 class="text-xs font-semibold text-gray-700 mb-2">搜索选项</h4>
+						<h4 class="text-xs font-semibold text-foreground mb-2">搜索选项</h4>
 						
 						{#if searchSettings.includeSubfolders !== undefined}
-							<label class="flex items-center gap-2 text-sm">
+							<label class="flex items-center gap-2 text-sm text-foreground">
 								<input
 									type="checkbox"
 									bind:checked={searchSettings.includeSubfolders}
@@ -327,14 +327,14 @@
 											onSettingsChange(searchSettings);
 										}
 									}}
-									class="rounded border-gray-300 text-primary focus:ring-primary"
+									class="rounded border-border text-primary focus:ring-primary accent-primary"
 								/>
 								<span>搜索子文件夹</span>
 							</label>
 						{/if}
 						
 						{#if searchSettings.showHistoryOnFocus !== undefined}
-							<label class="flex items-center gap-2 text-sm">
+							<label class="flex items-center gap-2 text-sm text-foreground">
 								<input
 									type="checkbox"
 									bind:checked={searchSettings.showHistoryOnFocus}
@@ -343,14 +343,14 @@
 											onSettingsChange(searchSettings);
 										}
 									}}
-									class="rounded border-gray-300 text-primary focus:ring-primary"
+									class="rounded border-border text-primary focus:ring-primary accent-primary"
 								/>
 								<span>聚焦时显示历史</span>
 							</label>
 						{/if}
 						
 						{#if searchSettings.searchInPath !== undefined}
-							<label class="flex items-center gap-2 text-sm">
+							<label class="flex items-center gap-2 text-sm text-foreground">
 								<input
 									type="checkbox"
 									bind:checked={searchSettings.searchInPath}
@@ -359,7 +359,7 @@
 											onSettingsChange(searchSettings);
 										}
 									}}
-									class="rounded border-gray-300 text-primary focus:ring-primary"
+									class="rounded border-border text-primary focus:ring-primary accent-primary"
 								/>
 								<span>匹配路径</span>
 							</label>

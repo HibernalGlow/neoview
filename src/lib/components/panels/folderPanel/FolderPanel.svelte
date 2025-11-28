@@ -397,7 +397,7 @@ onMount(async () => {
 		<!-- 文件夹树层（绝对定位，在文件列表上方） -->
 		{#if $folderTreeConfig.visible}
 			<div
-				class="border-muted absolute z-10 overflow-hidden bg-background"
+				class="border-muted absolute z-10 overflow-auto bg-background"
 				class:border-b={$folderTreeConfig.layout === 'top'}
 				class:border-r={$folderTreeConfig.layout === 'left'}
 				style={$folderTreeConfig.layout === 'top'

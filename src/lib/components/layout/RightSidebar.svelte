@@ -33,7 +33,7 @@
 	let rightPanels = $derived($sidebarRightPanels);
 	
 	// 当前激活的面板 ID
-	let activePanelId = $state<PanelId>('files');
+	let activePanelId = $state<PanelId>('info');
 	
 	// 使用共用的面板组件映射
 	const panelComponents = PANEL_COMPONENTS;

@@ -43,7 +43,6 @@ export const PANEL_COMPONENTS: Record<PanelId, any> = {
 	thumbnail: BookPageListPanel,
 	playlist: FolderPanel, // 占位，后续实现
 	// 右侧默认面板
-	files: FolderPanel, // 文件面板使用 FolderPanel
 	info: InfoPanel,
 	properties: ImagePropertiesPanel,
 	upscale: UpscalePanel,

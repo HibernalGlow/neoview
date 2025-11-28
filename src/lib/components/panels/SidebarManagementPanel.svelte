@@ -97,11 +97,11 @@
 	// 保存提示消息
 	let saveMessage = $state<string | null>(null);
 
-	// 应用布局（刷新页面）
+	// 应用布局（强制刷新整个应用）
 	function applyLayout() {
 		// store 已经自动保存到 localStorage
-		// 刷新页面以应用新的布局
-		window.location.reload();
+		// 强制刷新整个页面
+		window.top?.location.reload() || window.location.reload();
 	}
 
 	// 重置布局

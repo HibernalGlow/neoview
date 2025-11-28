@@ -68,23 +68,13 @@ export const PANEL_DEFINITIONS = {
 		canHide: true
 	},
 	// 右侧边栏面板
-	files: {
-		title: '文件',
-		icon: File,
-		emoji: '📄',
-		defaultPosition: 'right' as PanelPosition,
-		defaultVisible: true,
-		defaultOrder: 0,
-		canMove: true,
-		canHide: true
-	},
 	info: {
 		title: '信息',
 		icon: Info,
 		emoji: '📋',
 		defaultPosition: 'right' as PanelPosition,
 		defaultVisible: true,
-		defaultOrder: 1,
+		defaultOrder: 0,
 		canMove: true,
 		canHide: true
 	},
@@ -94,7 +84,7 @@ export const PANEL_DEFINITIONS = {
 		emoji: '📑',
 		defaultPosition: 'right' as PanelPosition,
 		defaultVisible: true,
-		defaultOrder: 2,
+		defaultOrder: 1,
 		canMove: true,
 		canHide: true
 	},
@@ -104,7 +94,7 @@ export const PANEL_DEFINITIONS = {
 		emoji: '✨',
 		defaultPosition: 'right' as PanelPosition,
 		defaultVisible: true,
-		defaultOrder: 3,
+		defaultOrder: 2,
 		canMove: true,
 		canHide: true
 	},
@@ -114,7 +104,7 @@ export const PANEL_DEFINITIONS = {
 		emoji: '📊',
 		defaultPosition: 'right' as PanelPosition,
 		defaultVisible: true,
-		defaultOrder: 4,
+		defaultOrder: 3,
 		canMove: true,
 		canHide: true
 	},

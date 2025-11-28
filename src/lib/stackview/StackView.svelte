@@ -20,6 +20,7 @@
     UpscaleLayer,
     InfoLayer,
     GestureLayer,
+    HoverLayer,
   } from './layers';
   import { 
     currentFrame, 
@@ -239,6 +240,13 @@
     showProgress={showProgress}
     showLoading={showLoading}
   />
+  
+  <!-- Layer 8: 悬停层（暂时禁用，等待设置项添加） -->
+  <!-- <HoverLayer 
+    enableHoverScroll={false}
+    enableHoverPan={false}
+    onPan={handlePan}
+  /> -->
   
   <!-- Layer 9: 手势层 -->
   <GestureLayer 

@@ -82,47 +82,89 @@
   }
 </script>
 
+<!-- 外层容器不捕获事件 -->
 <div 
-  class="gesture-layer"
-  class:video-mode={isVideoMode}
+  class="gesture-layer-container"
   style:z-index={LayerZIndex.GESTURE}
-  bind:this={layerRef}
-  onpointerdown={handlePointerDown}
-  onpointermove={handlePointerMove}
-  onpointerup={handlePointerUp}
-  onpointercancel={handlePointerUp}
-  onclick={handleClick}
-  role="presentation"
-></div>
+>
+  <!-- 内层区域捕获事件，但不覆盖边栏 -->
+  <div 
+    class="gesture-layer"
+    class:video-mode={isVideoMode}
+    bind:this={layerRef}
+    onpointerdown={handlePointerDown}
+    onpointermove={handlePointerMove}
+    onpointerup={handlePointerUp}
+    onpointercancel={handlePointerUp}
+    onclick={handleClick}
+    role="presentation"
+  ></div>
+  
+  {#if isVideoMode}
+    <!-- 视频模式：左右边缘区域 -->
+    <button 
+      type="button" 
+      class="edge-zone left" 
+      onclick={() => onTapLeft?.()}
+      aria-label="上一页"
+    ></button>
+    <button 
+      type="button" 
+      class="edge-zone right" 
+      onclick={() => onTapRight?.()}
+      aria-label="下一页"
+    ></button>
+  {/if}
+</div>
 
 <style>
+  .gesture-layer-container {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    /* 确保不会覆盖边栏，使用较低的 z-index */
+    z-index: 1 !important;
+  }
+  
   .gesture-layer {
     position: absolute;
     inset: 0;
-    /* 默认捕获所有事件 */
+    pointer-events: auto;
     touch-action: none;
+    cursor: grab;
+    /* 阻止图片拖拽 */
+    -webkit-user-drag: none;
+    user-select: none;
   }
   
-  /* 视频模式：只在边缘区域捕获事件 */
+  .gesture-layer:active {
+    cursor: grabbing;
+  }
+  
+  /* 视频模式：主区域不捕获事件 */
   .gesture-layer.video-mode {
     pointer-events: none;
   }
   
-  .gesture-layer.video-mode::before,
-  .gesture-layer.video-mode::after {
-    content: '';
+  /* 边缘区域 */
+  .edge-zone {
     position: absolute;
     top: 0;
     bottom: 0;
     width: 20%;
     pointer-events: auto;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
   }
   
-  .gesture-layer.video-mode::before {
+  .edge-zone.left {
     left: 0;
   }
   
-  .gesture-layer.video-mode::after {
+  .edge-zone.right {
     right: 0;
   }
 </style>

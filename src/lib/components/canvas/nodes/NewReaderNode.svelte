@@ -237,6 +237,16 @@
 				>
 					{bookState.pageMode === 'wide' ? '双页' : '单页'}
 				</button>
+				<button 
+					class="rounded px-2 py-1 text-xs hover:bg-muted"
+					onclick={() => {
+						const newValue = !bookState.autoRotate;
+						log(`设置自动旋转: ${newValue}`);
+						bookStore2.setAutoRotate(newValue);
+					}}
+				>
+					{bookState.autoRotate ? '✓ 自动旋转' : '自动旋转'}
+				</button>
 			</div>
 			
 			<!-- 图片显示区域 -->
@@ -245,6 +255,7 @@
 					{@const element = bookState.currentFrame?.elements[0]}
 					{@const isDivided = element?.virtualPage?.isDivided}
 					{@const isLeftHalf = element?.virtualPage?.part === 0}
+					{@const rotation = element?.virtualPage?.rotation ?? 0}
 					
 					{#if isDivided}
 						<!-- 
@@ -259,6 +270,18 @@
 							class="max-w-full max-h-full object-contain"
 							class:opacity-50={imageLoading}
 							style="clip-path: inset(0 {isLeftHalf ? '50%' : '0'} 0 {isLeftHalf ? '0' : '50%'});"
+						/>
+					{:else if rotation !== 0}
+						<!-- 旋转页面 -->
+						<img 
+							src={currentImageUrl} 
+							alt="Page {bookState.currentIndex + 1}"
+							class="object-contain"
+							class:opacity-50={imageLoading}
+							style="
+								transform: rotate({rotation}deg);
+								{rotation === 90 || rotation === 270 ? 'max-height: 100vw; max-width: 100vh;' : 'max-width: 100%; max-height: 100%;'}
+							"
 						/>
 					{:else}
 						<!-- 普通页面 -->

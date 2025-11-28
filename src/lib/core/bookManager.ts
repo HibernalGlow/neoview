@@ -351,6 +351,13 @@ export class BookManager {
   }
 
   /**
+   * 设置是否自动旋转横向页面
+   */
+  setAutoRotate(enabled: boolean): void {
+    this._virtualPageList.setConfig({ autoRotate: enabled });
+  }
+
+  /**
    * 设置页面模式
    */
   setPageMode(mode: 'single' | 'wide'): void {

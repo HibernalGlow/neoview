@@ -266,6 +266,7 @@ export class VirtualPageList {
             part,
             cropRect: crop,
             isDivided: true,
+            rotation: 0, // 分割页面不旋转
           };
           this._virtualPages.push(vp);
           this._virtualToPhysicalMap.set(virtualIndex, physical.index);
@@ -274,11 +275,13 @@ export class VirtualPageList {
         }
       } else {
         // 不分割
+        const rotation = this.shouldAutoRotate(physical) ? 90 : 0;
         const vp: VirtualPage = {
           virtualIndex,
           physicalPage: physical,
           part: 0,
           isDivided: false,
+          rotation: rotation as 0 | 90 | 180 | 270,
         };
         this._virtualPages.push(vp);
         this._virtualToPhysicalMap.set(virtualIndex, physical.index);
@@ -300,8 +303,20 @@ export class VirtualPageList {
     if (this._config.pageMode !== 'single') return false;
     // 检查是否启用分割
     if (!this._config.divideLandscape) return false;
+    // 如果启用了自动旋转，则不分割（旋转优先）
+    if (this._config.autoRotate) return false;
     // 检查宽高比
     return page.aspectRatio > this._config.divideThreshold;
+  }
+
+  /**
+   * 判断是否应该自动旋转页面
+   */
+  private shouldAutoRotate(page: PhysicalPage): boolean {
+    // 检查是否启用自动旋转
+    if (!this._config.autoRotate) return false;
+    // 只旋转横向页面
+    return page.isLandscape && page.aspectRatio > this._config.divideThreshold;
   }
 
   /**

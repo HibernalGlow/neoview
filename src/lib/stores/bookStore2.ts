@@ -43,6 +43,7 @@ export interface BookStoreState {
   
   // 设置
   divideLandscape: boolean;
+  autoRotate: boolean;
   pageMode: 'single' | 'wide';
   readOrder: 'ltr' | 'rtl';
   sortMode: string;
@@ -73,6 +74,7 @@ const initialState: BookStoreState = {
   isLoading: false,
   loadProgress: 0,
   divideLandscape: false,
+  autoRotate: false,
   pageMode: 'single',
   readOrder: 'rtl',
   sortMode: 'entry',
@@ -283,6 +285,14 @@ function createBookStore() {
     setDivideLandscape: (enabled: boolean) => {
       state.update(s => ({ ...s, divideLandscape: enabled }));
       bookManager?.setDivideLandscape(enabled);
+    },
+    
+    /**
+     * 设置自动旋转横向页面
+     */
+    setAutoRotate: (enabled: boolean) => {
+      state.update(s => ({ ...s, autoRotate: enabled }));
+      bookManager?.setAutoRotate(enabled);
     },
     
     /**

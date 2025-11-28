@@ -219,6 +219,8 @@ export interface VirtualPage {
   cropRect?: Rect;
   /** 是否为分割页面 */
   isDivided: boolean;
+  /** 旋转角度 (0, 90, 180, 270) */
+  rotation: 0 | 90 | 180 | 270;
 }
 
 // ============================================================================
@@ -335,6 +337,8 @@ export interface VirtualPageListConfig {
   singleLastPage: boolean;
   /** 横向页面视为双页 */
   supportWidePage: boolean;
+  /** 自动旋转横向页面 */
+  autoRotate: boolean;
 }
 
 export interface PageFrameConfig {
@@ -398,6 +402,7 @@ export const defaultVirtualPageListConfig: VirtualPageListConfig = {
   singleFirstPage: true,
   singleLastPage: true,
   supportWidePage: true,
+  autoRotate: false,
 };
 
 export const defaultPageFrameConfig: PageFrameConfig = {

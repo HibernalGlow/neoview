@@ -33,3 +33,6 @@ export {
 export type { PanelConfig, SidebarConfig, PanelLocation } from './panels.svelte';
 // 重命名 panels.svelte 的 PanelType 避免冲突
 export type { PanelType as PanelTabType } from './panels.svelte';
+
+// 侧边栏配置
+export * from './sidebarConfig.svelte';

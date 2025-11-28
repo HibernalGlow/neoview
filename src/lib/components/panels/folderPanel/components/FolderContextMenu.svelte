@@ -2,9 +2,9 @@
 /**
  * FolderContextMenu - 文件/文件夹右键菜单
  * 参考旧版 FileBrowser 的右键菜单功能
+ * 使用 Portal 将菜单渲染到 body，避免被父容器的 overflow 裁剪
  */
 import type { FsItem } from '$lib/types';
-import * as ContextMenu from '$lib/components/ui/context-menu';
 import {
 	Folder,
 	File,
@@ -56,6 +56,21 @@ let {
 	onCopyPath,
 	onCopyName
 }: Props = $props();
+
+// Portal action - 将元素移动到 body
+function portal(node: HTMLElement) {
+	// 将元素移动到 body
+	document.body.appendChild(node);
+	
+	return {
+		destroy() {
+			// 组件销毁时移除元素
+			if (node.parentNode) {
+				node.parentNode.removeChild(node);
+			}
+		}
+	};
+}
 
 function handleOpenAsBook() {
 	if (item) onOpenAsBook?.(item);
@@ -117,8 +132,9 @@ function handleCopyName() {
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
-		class="context-menu fixed z-50"
-		style="left: {x}px; top: {y}px;"
+		use:portal
+		class="context-menu pointer-events-auto fixed"
+		style="left: {x}px; top: {y}px; z-index: 9999;"
 		onclick={(e) => e.stopPropagation()}
 	>
 		<div class="bg-popover text-popover-foreground min-w-[180px] rounded-md border p-1 shadow-md">
@@ -245,5 +261,5 @@ function handleCopyName() {
 {#if visible}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="fixed inset-0 z-40" onclick={onClose}></div>
+	<div use:portal class="fixed inset-0" style="z-index: 9998;" onclick={onClose}></div>
 {/if}

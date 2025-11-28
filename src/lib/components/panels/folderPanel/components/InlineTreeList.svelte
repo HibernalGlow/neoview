@@ -4,8 +4,8 @@
  * 在文件列表中显示可展开的树结构，复用 FileItemCard 保持原有样式
  */
 import type { FsItem } from '$lib/types';
-import { FileSystemAPI } from '$lib/api';
 import { folderPanelActions, expandedFolders, currentPath, viewStyle } from '../stores/folderPanelStore.svelte';
+import { directoryTreeCache } from '../utils/directoryTreeCache';
 import { ChevronRight, ChevronDown, Loader2 } from '@lucide/svelte';
 import FileItemCard from '$lib/components/panels/file/components/FileItemCard.svelte';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
@@ -51,15 +51,16 @@ async function loadRootItems(path: string) {
 	
 	isLoading = true;
 	try {
-		const items = await FileSystemAPI.browseDirectory(path);
+		// 使用全局目录树缓存
+		const items = await directoryTreeCache.getDirectory(path);
 		// 排序：文件夹在前
-		items.sort((a, b) => {
+		const sorted = [...items].sort((a, b) => {
 			if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
 			return a.name.localeCompare(b.name, undefined, { numeric: true });
 		});
-		rootItems = items;
+		rootItems = sorted;
 		// 加载缩略图
-		loadThumbnails(items, path);
+		loadThumbnails(sorted, path);
 	} catch (err) {
 		console.error('[InlineTreeList] Failed to load root:', path, err);
 		rootItems = [];
@@ -162,13 +163,16 @@ async function loadChildren(path: string) {
 	loadingFolders = new Set([...loadingFolders, path]);
 	
 	try {
-		const children = await FileSystemAPI.browseDirectory(path);
+		// 使用全局目录树缓存
+		const children = await directoryTreeCache.getDirectory(path);
 		// 排序：文件夹在前
-		children.sort((a, b) => {
+		const sorted = [...children].sort((a, b) => {
 			if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
 			return a.name.localeCompare(b.name, undefined, { numeric: true });
 		});
-		childrenCache.set(path, children);
+		childrenCache.set(path, sorted);
+		// 加载子项的缩略图
+		loadThumbnails(sorted, path);
 	} catch (err) {
 		console.error('[InlineTreeList] Failed to load children:', path, err);
 	} finally {

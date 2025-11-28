@@ -342,54 +342,48 @@ onMount(async () => {
 		/>
 	{/if}
 
-	<!-- 主内容区 -->
+	<!-- 主内容区 - 使用层叠式布局 -->
 	<div class="relative flex-1 overflow-hidden">
+		<!-- 文件夹树层（绝对定位，在文件列表上方） -->
 		{#if $folderTreeConfig.visible}
-			<!-- 带文件夹树的布局 -->
 			<div
-				class="flex h-full"
-				class:flex-col={$folderTreeConfig.layout === 'top'}
-				class:flex-row={$folderTreeConfig.layout === 'left'}
+				class="border-muted absolute z-10 overflow-hidden bg-background"
+				class:border-b={$folderTreeConfig.layout === 'top'}
+				class:border-r={$folderTreeConfig.layout === 'left'}
+				style={$folderTreeConfig.layout === 'top'
+					? `top: 0; left: 0; right: 0; height: ${$folderTreeConfig.size}px;`
+					: `top: 0; left: 0; bottom: 0; width: ${$folderTreeConfig.size}px;`}
 			>
-				<!-- 文件夹树区域 -->
-				<div
-					class="border-muted overflow-hidden"
-					class:border-b={$folderTreeConfig.layout === 'top'}
-					class:border-r={$folderTreeConfig.layout === 'left'}
-					style={$folderTreeConfig.layout === 'top'
-						? `height: ${$folderTreeConfig.size}px;`
-						: `width: ${$folderTreeConfig.size}px;`}
-				>
-					<FolderTree onNavigate={handleNavigate} />
-				</div>
-
-				<!-- 分隔条 -->
-				<div
-					class="bg-border hover:bg-primary cursor-ew-resize transition-colors"
-					class:h-1.5={$folderTreeConfig.layout === 'top'}
-					class:w-1.5={$folderTreeConfig.layout === 'left'}
-					class:cursor-ns-resize={$folderTreeConfig.layout === 'top'}
-				></div>
-
-				<!-- 文件列表（层叠式） -->
-				<div class="flex-1 overflow-hidden">
-					<FolderStack
-						{navigationCommand}
-						onItemOpen={handleItemOpen}
-						onItemContextMenu={handleContextMenu}
-						onOpenFolderAsBook={handleOpenFolderAsBook}
-					/>
-				</div>
+				<FolderTree onNavigate={handleNavigate} />
 			</div>
-		{:else}
-			<!-- 纯文件列表（层叠式） -->
+
+			<!-- 分隔条 -->
+			<div
+				class="bg-border hover:bg-primary absolute z-10 transition-colors"
+				class:cursor-ns-resize={$folderTreeConfig.layout === 'top'}
+				class:cursor-ew-resize={$folderTreeConfig.layout === 'left'}
+				style={$folderTreeConfig.layout === 'top'
+					? `top: ${$folderTreeConfig.size}px; left: 0; right: 0; height: 6px;`
+					: `top: 0; left: ${$folderTreeConfig.size}px; bottom: 0; width: 6px;`}
+			></div>
+		{/if}
+
+		<!-- 文件列表（层叠式）- 始终渲染，根据文件树状态调整位置 -->
+		<div
+			class="absolute inset-0 overflow-hidden"
+			style={$folderTreeConfig.visible
+				? $folderTreeConfig.layout === 'top'
+					? `top: ${$folderTreeConfig.size + 6}px;`
+					: `left: ${$folderTreeConfig.size + 6}px;`
+				: ''}
+		>
 			<FolderStack
 				{navigationCommand}
 				onItemOpen={handleItemOpen}
 				onItemContextMenu={handleContextMenu}
 				onOpenFolderAsBook={handleOpenFolderAsBook}
 			/>
-		{/if}
+		</div>
 	</div>
 </div>
 

@@ -188,7 +188,9 @@
   
   onMount(() => {
     if (containerRef) {
-      gestureHandler = new GestureHandler(containerRef, gestureEvents);
+      gestureHandler = new GestureHandler(containerRef, gestureEvents, {
+        enableZoom: false, // 禁用滚轮缩放，用户另外绑定了翻页
+      });
     }
   });
   
@@ -203,6 +205,12 @@
   function resetView() {
     storeResetZoom();
     localPan = { x: 0, y: 0 };
+  }
+  
+  /** 处理图片尺寸检测，更新到 bookStore2 */
+  function handleSizeDetected(width: number, height: number) {
+    const currentIndex = bookState.currentIndex;
+    bookStore2.updatePhysicalPageSize(currentIndex, width, height);
   }
   
   function scrollToCenter(
@@ -309,6 +317,7 @@
           offset={{ x: totalPanX, y: totalPanY }}
           fitMode="contain"
           {splitHalf}
+          onSizeDetected={handleSizeDetected}
         />
       </div>
     {:else if viewMode === 'double'}

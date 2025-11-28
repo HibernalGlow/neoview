@@ -23,10 +23,18 @@ src/lib/viewer/
 │   ├── index.ts                # 核心导出
 │   └── types.ts                # 类型定义
 │
-└── composables/                # 可组合函数（后续完善）
-    ├── index.ts                # Composables 导出
-    ├── useViewState.svelte.ts  # 视图状态管理
-    └── usePageInfo.svelte.ts   # 页面信息管理
+├── composables/                # 可组合函数（后续完善）
+│   ├── index.ts                # Composables 导出
+│   ├── useViewState.svelte.ts  # 视图状态管理
+│   └── usePageInfo.svelte.ts   # 页面信息管理
+│
+├── utils/                      # 工具函数
+│   ├── index.ts                # Utils 导出
+│   └── imageSizePreloader.ts   # 图片尺寸预加载器
+│
+└── loaders/                    # 图片加载器
+    ├── index.ts                # Loaders 导出
+    └── NeoImageLoader.ts       # 新一代图片加载器
 ```
 
 ## 组件说明
@@ -53,8 +61,7 @@ src/lib/viewer/
 
 **特性:**
 - 自动从 `zoomLevel` 和 `rotationAngle` stores 获取缩放和旋转状态
-- 支持手势操作（拖拽平移、滚轮缩放、双击缩放）
-- 点击左侧 30% 区域翻上一页，右侧 30% 翻下一页
+- 支持手势操作 使用设置的操作绑定系统
 
 ### ImageRenderer.svelte
 

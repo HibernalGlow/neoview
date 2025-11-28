@@ -26,3 +26,9 @@ export type { GestureEvents, GestureConfig } from './GestureHandler';
 
 // Composables (后续完善)
 // export * from './composables';
+
+// Utils
+export * from './utils';
+
+// Loaders
+export * from './loaders';

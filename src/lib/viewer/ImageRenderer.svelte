@@ -56,6 +56,8 @@
     onLoad?: (event: Event) => void;
     /** 加载错误回调 */
     onError?: (event: Event) => void;
+    /** 尺寸检测回调（图片加载后） */
+    onSizeDetected?: (width: number, height: number) => void;
   }
   
   let {
@@ -69,6 +71,7 @@
     loading = false,
     onLoad,
     onError,
+    onSizeDetected,
   }: Props = $props();
   
   // ============================================================================
@@ -189,6 +192,11 @@
   // ============================================================================
   
   function handleLoad(event: Event) {
+    // 获取图片尺寸并通知
+    const img = event.target as HTMLImageElement;
+    if (img && onSizeDetected) {
+      onSizeDetected(img.naturalWidth, img.naturalHeight);
+    }
     onLoad?.(event);
   }
   

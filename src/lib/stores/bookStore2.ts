@@ -506,6 +506,21 @@ function createBookStore() {
       return bookManager?.requestThumbnail(virtualIndex) ?? null;
     },
     
+    /**
+     * 更新物理页面尺寸
+     * 用于在图片加载后更新尺寸信息，触发虚拟页面列表重建
+     */
+    updatePhysicalPageSize: (physicalIndex: number, width: number, height: number): void => {
+      bookManager?.updatePageSize(physicalIndex, width, height);
+    },
+    
+    /**
+     * 批量更新物理页面尺寸
+     */
+    updatePhysicalPageSizes: (updates: Array<{ index: number; width: number; height: number }>): void => {
+      bookManager?.updatePageSizes(updates);
+    },
+    
     // ============================================================================
     // 预加载控制
     // ============================================================================

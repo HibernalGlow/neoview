@@ -169,15 +169,7 @@ src/lib/
 
 ### 布局控制
 - [ ] 布局模式 (layoutMode)
-- [ ] 侧边栏切换
 
-### 主题
-- [ ] 主题切换 (light, dark, system)
-- [ ] 快速主题
-
-### 窗口控制
-- [ ] 最小化, 最大化, 关闭
-- [ ] 工具栏固定
 
 ## 已完成
 
@@ -210,8 +202,15 @@ src/lib/
 2. [x] 在 NewReaderNode 中集成 ImageRenderer 组件
 3. [x] 修复 ImageRenderer 的 splitHalf 属性
 4. [x] 创建 ImageViewerDisplay2（兼容旧接口的新实现）
-5. [ ] 验证分割和自动旋转功能
-6. [ ] 完善 PipelineDebugNode 的监控功能
+5. [x] 创建 NeoViewer 主组件
+6. [x] 在 TopToolbar 添加 NeoViewer 开关
+7. [x] 在 Classic 模式集成 NeoViewer
+8. [x] NeoViewer 集成 bookStore2 虚拟页面系统
+9. [x] 修复分割页面居中问题（添加 translateX 补偿）
+10. [x] 禁用滚轮缩放（用户另外绑定翻页）
+11. [x] 创建 imageSizePreloader 模块
+12. [ ] 验证分割和自动旋转功能
+13. [ ] 解决翻页闪现问题（需要预加载尺寸）
 
 ### 阶段 3: 在现有 ImageViewer 中引入新组件
 1. [ ] 分析现有 ImageViewer 结构

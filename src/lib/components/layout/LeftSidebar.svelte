@@ -46,8 +46,9 @@
 	// 当前激活的面板 ID
 	let activePanelId = $state<PanelId>('folder');
 	
-	// 面板组件映射
-	const panelComponents: Record<PanelId, typeof FolderPanel> = {
+	// 面板组件映射 - 左侧边栏只需要左侧面板的组件
+	// 右侧面板的组件在 RightSidebar 中定义
+	const panelComponents: Partial<Record<PanelId, typeof FolderPanel>> = {
 		folder: FolderPanel,
 		history: HistoryPanel,
 		bookmark: BookmarkPanel,

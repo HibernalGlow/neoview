@@ -9,6 +9,7 @@
 		sidebarLeftPanels,
 		sidebarRightPanels,
 		sidebarHiddenPanels,
+		getPanelEmoji,
 		type PanelId,
 		type PanelConfig
 	} from '$lib/stores/sidebarConfig.svelte';
@@ -128,20 +129,7 @@
 		settingsManager.updateNestedSettings('panels', { autoHideTiming: { ...autoHideTiming, ...partial } });
 	}
 
-	// 获取图标的 emoji 表示
-	function getPanelEmoji(panelId: PanelId): string {
-		const emojiMap: Record<PanelId, string> = {
-			folder: '📁',
-			history: '📚',
-			bookmark: '🔖',
-			thumbnail: '🖼️',
-			info: '📋',
-			settings: '⚙️',
-			playlist: '📝'
-		};
-		return emojiMap[panelId] || '📄';
-	}
-</script>
+	</script>
 
 <div class="space-y-6 p-6">
 	<div class="space-y-2">

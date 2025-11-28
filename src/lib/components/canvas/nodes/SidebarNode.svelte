@@ -4,7 +4,7 @@
 	 * Flow 画布中的左侧边栏节点
 	 */
 	import { Handle, Position, type NodeProps } from '@xyflow/svelte';
-	import Sidebar from '$lib/components/layout/Sidebar.svelte';
+	import LeftSidebar from '$lib/components/layout/LeftSidebar.svelte';
 
 	type $$Props = NodeProps;
 </script>
@@ -14,7 +14,7 @@
 	style="width: fit-content; height: 100%;"
 >
 	<div class="nodrag h-full">
-		<Sidebar />
+		<LeftSidebar />
 	</div>
 
 	<!-- 拖拽手柄 -->

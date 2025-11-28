@@ -1,22 +1,168 @@
 /**
  * Sidebar Configuration Store
  * 侧边栏配置存储 - 管理面板的显示、顺序和位置
+ * 
+ * 添加新面板只需在 PANEL_DEFINITIONS 中添加一条记录即可
  */
 
 import { writable, derived, get } from 'svelte/store';
-import { Folder, History, Bookmark, Image as ImageIcon, Info, FileText } from '@lucide/svelte';
-
-// 面板类型
-export type PanelId = 'folder' | 'history' | 'bookmark' | 'thumbnail' | 'info' | 'settings' | 'playlist';
+import { Folder, History, Bookmark, Image as ImageIcon, Info, FileText, File, Sparkles, BarChart3, Settings, ListMusic } from '@lucide/svelte';
 
 // 面板位置
 export type PanelPosition = 'left' | 'right' | 'bottom' | 'floating';
 
-// 面板配置
+/**
+ * 面板定义 - 添加新面板只需在这里添加一条记录
+ * 系统会自动处理类型、图标、emoji、默认配置等
+ */
+export const PANEL_DEFINITIONS = {
+	// 左侧边栏面板
+	folder: {
+		title: '文件夹',
+		icon: Folder,
+		emoji: '📁',
+		defaultPosition: 'left' as PanelPosition,
+		defaultVisible: true,
+		defaultOrder: 0,
+		canMove: true,
+		canHide: false
+	},
+	history: {
+		title: '历史记录',
+		icon: History,
+		emoji: '📚',
+		defaultPosition: 'left' as PanelPosition,
+		defaultVisible: true,
+		defaultOrder: 1,
+		canMove: true,
+		canHide: true
+	},
+	bookmark: {
+		title: '书签',
+		icon: Bookmark,
+		emoji: '🔖',
+		defaultPosition: 'left' as PanelPosition,
+		defaultVisible: true,
+		defaultOrder: 2,
+		canMove: true,
+		canHide: true
+	},
+	thumbnail: {
+		title: '缩略图',
+		icon: ImageIcon,
+		emoji: '🖼️',
+		defaultPosition: 'left' as PanelPosition,
+		defaultVisible: true,
+		defaultOrder: 3,
+		canMove: true,
+		canHide: true
+	},
+	playlist: {
+		title: '播放列表',
+		icon: ListMusic,
+		emoji: '📝',
+		defaultPosition: 'left' as PanelPosition,
+		defaultVisible: false,
+		defaultOrder: 4,
+		canMove: true,
+		canHide: true
+	},
+	// 右侧边栏面板
+	files: {
+		title: '文件',
+		icon: File,
+		emoji: '📄',
+		defaultPosition: 'right' as PanelPosition,
+		defaultVisible: true,
+		defaultOrder: 0,
+		canMove: true,
+		canHide: true
+	},
+	info: {
+		title: '信息',
+		icon: Info,
+		emoji: '📋',
+		defaultPosition: 'right' as PanelPosition,
+		defaultVisible: true,
+		defaultOrder: 1,
+		canMove: true,
+		canHide: true
+	},
+	properties: {
+		title: '属性',
+		icon: FileText,
+		emoji: '📑',
+		defaultPosition: 'right' as PanelPosition,
+		defaultVisible: true,
+		defaultOrder: 2,
+		canMove: true,
+		canHide: true
+	},
+	upscale: {
+		title: '超分',
+		icon: Sparkles,
+		emoji: '✨',
+		defaultPosition: 'right' as PanelPosition,
+		defaultVisible: true,
+		defaultOrder: 3,
+		canMove: true,
+		canHide: true
+	},
+	insights: {
+		title: '洞察',
+		icon: BarChart3,
+		emoji: '📊',
+		defaultPosition: 'right' as PanelPosition,
+		defaultVisible: true,
+		defaultOrder: 4,
+		canMove: true,
+		canHide: true
+	},
+	// 设置面板（特殊）
+	settings: {
+		title: '设置',
+		icon: Settings,
+		emoji: '⚙️',
+		defaultPosition: 'left' as PanelPosition,
+		defaultVisible: false,
+		defaultOrder: 99,
+		canMove: false,
+		canHide: true
+	}
+} as const;
+
+// 从定义中自动生成面板 ID 类型
+export type PanelId = keyof typeof PANEL_DEFINITIONS;
+
+// 获取所有面板 ID 列表
+export const ALL_PANEL_IDS = Object.keys(PANEL_DEFINITIONS) as PanelId[];
+
+// 获取面板定义
+export function getPanelDefinition(id: PanelId) {
+	return PANEL_DEFINITIONS[id];
+}
+
+// 获取面板 emoji
+export function getPanelEmoji(id: PanelId): string {
+	return PANEL_DEFINITIONS[id]?.emoji || '📄';
+}
+
+// 获取面板图标
+export function getPanelIcon(id: PanelId) {
+	return PANEL_DEFINITIONS[id]?.icon || File;
+}
+
+// 获取面板标题
+export function getPanelTitle(id: PanelId): string {
+	return PANEL_DEFINITIONS[id]?.title || id;
+}
+
+// 面板配置（运行时状态）
 export interface PanelConfig {
 	id: PanelId;
 	title: string;
 	icon: typeof Folder;
+	emoji: string;
 	visible: boolean;
 	order: number;
 	position: PanelPosition;
@@ -36,75 +182,22 @@ export interface SidebarConfigState {
 	rightSidebarOpen: boolean;
 }
 
-// 默认面板配置
-const defaultPanels: PanelConfig[] = [
-	{
-		id: 'folder',
-		title: '文件夹',
-		icon: Folder,
-		visible: true,
-		order: 0,
-		position: 'left',
-		defaultPosition: 'left',
-		canMove: true,
-		canHide: false // 文件夹面板不能隐藏
-	},
-	{
-		id: 'history',
-		title: '历史记录',
-		icon: History,
-		visible: true,
-		order: 1,
-		position: 'left',
-		defaultPosition: 'left',
-		canMove: true,
-		canHide: true
-	},
-	{
-		id: 'bookmark',
-		title: '书签',
-		icon: Bookmark,
-		visible: true,
-		order: 2,
-		position: 'left',
-		defaultPosition: 'left',
-		canMove: true,
-		canHide: true
-	},
-	{
-		id: 'thumbnail',
-		title: '缩略图',
-		icon: ImageIcon,
-		visible: true,
-		order: 3,
-		position: 'left',
-		defaultPosition: 'left',
-		canMove: true,
-		canHide: true
-	},
-	{
-		id: 'info',
-		title: '信息',
-		icon: Info,
-		visible: false,
-		order: 0,
-		position: 'right',
-		defaultPosition: 'right',
-		canMove: true,
-		canHide: true
-	},
-	{
-		id: 'playlist',
-		title: '播放列表',
-		icon: FileText,
-		visible: false,
-		order: 4,
-		position: 'left',
-		defaultPosition: 'left',
-		canMove: true,
-		canHide: true
-	}
-];
+// 从 PANEL_DEFINITIONS 自动生成默认面板配置
+const defaultPanels: PanelConfig[] = ALL_PANEL_IDS.map(id => {
+	const def = PANEL_DEFINITIONS[id];
+	return {
+		id,
+		title: def.title,
+		icon: def.icon,
+		emoji: def.emoji,
+		visible: def.defaultVisible,
+		order: def.defaultOrder,
+		position: def.defaultPosition,
+		defaultPosition: def.defaultPosition,
+		canMove: def.canMove,
+		canHide: def.canHide
+	};
+});
 
 const initialState: SidebarConfigState = {
 	panels: defaultPanels,

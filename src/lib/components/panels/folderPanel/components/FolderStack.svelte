@@ -5,7 +5,7 @@
  * 每个目录是一个独立的层，进入子目录推入新层，返回弹出当前层
  * 上一层的 DOM 和状态保持不变，实现秒切换
  */
-import { tick } from 'svelte';
+import { tick, onMount } from 'svelte';
 import type { FsItem } from '$lib/types';
 import type { Writable } from 'svelte/store';
 import { FileSystemAPI } from '$lib/api';
@@ -60,11 +60,33 @@ let activeIndex = $state(0);
 // 动画状态
 let isAnimating = $state(false);
 
-// 缩略图 Map
-let thumbnails = $derived(fileBrowserStore.getState().thumbnails);
+// 缩略图 Map - 使用 $state 并通过订阅更新
+let thumbnails = $state<Map<string, string>>(new Map());
+
+// 订阅 fileBrowserStore 的缩略图更新
+$effect(() => {
+	const unsubscribe = fileBrowserStore.subscribe((state) => {
+		thumbnails = state.thumbnails;
+	});
+	return unsubscribe;
+});
 
 // 视图模式映射
 let viewMode = $derived(($viewStyle === 'thumbnail' ? 'thumbnails' : 'list') as 'list' | 'thumbnails');
+
+// 将路径转换为相对 key（用于缩略图存储）- 与老面板保持一致
+function toRelativeKey(path: string): string {
+	return path.replace(/\\/g, '/');
+}
+
+// 设置缩略图回调
+onMount(() => {
+	// 设置缩略图加载完成回调
+	thumbnailManager.setOnThumbnailReady((path, dataUrl) => {
+		const key = toRelativeKey(path);
+		fileBrowserStore.addThumbnail(key, dataUrl);
+	});
+});
 
 // 排序函数
 function sortItems(items: FsItem[], field: string, order: string): FsItem[] {
@@ -140,7 +162,7 @@ async function createLayer(path: string): Promise<FolderLayer> {
 		layer.loading = false;
 		
 		// 异步加载缩略图
-		loadThumbnailsForLayer(items);
+		loadThumbnailsForLayer(items, path);
 	} catch (err) {
 		layer.error = err instanceof Error ? err.message : String(err);
 		layer.loading = false;
@@ -149,21 +171,54 @@ async function createLayer(path: string): Promise<FolderLayer> {
 	return layer;
 }
 
-// 加载缩略图
-async function loadThumbnailsForLayer(items: FsItem[]) {
-	const imageItems = items.filter((item) => {
-		if (item.isDir) return false;
-		const ext = item.name.split('.').pop()?.toLowerCase() || '';
-		return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'avif'].includes(ext);
+// 加载缩略图 - 参考老面板的完整实现
+async function loadThumbnailsForLayer(items: FsItem[], path: string) {
+	// 设置当前目录（用于优先级判断）
+	thumbnailManager.setCurrentDirectory(path);
+
+	// 过滤出需要缩略图的项目
+	const itemsNeedingThumbnails = items.filter((item) => {
+		const name = item.name.toLowerCase();
+		const isDir = item.isDir;
+
+		// 支持的图片扩展名
+		const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.avif', '.jxl', '.tiff', '.tif'];
+		// 支持的压缩包扩展名
+		const archiveExts = ['.zip', '.rar', '.7z', '.cbz', '.cbr', '.cb7'];
+		// 支持的视频扩展名
+		const videoExts = ['.mp4', '.mkv', '.avi', '.mov', '.flv', '.webm', '.wmv', '.m4v', '.mpg', '.mpeg'];
+
+		const ext = name.substring(name.lastIndexOf('.'));
+
+		// 文件夹或支持的文件类型
+		return isDir || imageExts.includes(ext) || archiveExts.includes(ext) || videoExts.includes(ext);
 	});
 
-	for (const item of imageItems.slice(0, 50)) {
-		try {
-			await thumbnailManager.getThumbnail(item.path);
-		} catch {
-			// 忽略错误
+	// 预加载数据库索引
+	const paths = itemsNeedingThumbnails.map((item) => item.path);
+	thumbnailManager.preloadDbIndex(paths).catch((err) => {
+		console.debug('预加载数据库索引失败:', err);
+	});
+
+	// 为所有项目加载缩略图
+	itemsNeedingThumbnails.forEach((item) => {
+		if (item.isDir) {
+			// 文件夹
+			thumbnailManager.getThumbnail(item.path, undefined, false, 'immediate');
+		} else {
+			// 文件：检查是否为压缩包
+			const nameLower = item.name.toLowerCase();
+			const isArchive =
+				nameLower.endsWith('.zip') ||
+				nameLower.endsWith('.cbz') ||
+				nameLower.endsWith('.rar') ||
+				nameLower.endsWith('.cbr') ||
+				nameLower.endsWith('.7z') ||
+				nameLower.endsWith('.cb7');
+
+			thumbnailManager.getThumbnail(item.path, undefined, isArchive, 'immediate');
 		}
-	}
+	});
 }
 
 // 检查路径是否是另一个路径的子目录

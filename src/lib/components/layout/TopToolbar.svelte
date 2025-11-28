@@ -11,6 +11,7 @@
 	// Progress component removed — not used in this toolbar
 
 	import { bookStore } from '$lib/stores/book.svelte';
+	import { bookStore2 } from '$lib/stores/bookStore2';
 	import {
 		zoomIn,
 		zoomOut,
@@ -1039,7 +1040,7 @@ async function handleSortModeChange(mode: PageSortMode) {
 					</Tooltip.Root>
 
 					<DropdownMenu.Content
-						class="z-60 w-40"
+						class="z-60 w-48"
 						onmouseenter={handleMouseEnter}
 						onmouseleave={handleMouseLeave}
 					>
@@ -1061,6 +1062,30 @@ async function handleSortModeChange(mode: PageSortMode) {
 								</div>
 							</DropdownMenu.Item>
 						{/each}
+						<DropdownMenu.Separator />
+						<DropdownMenu.Label>横向页面处理</DropdownMenu.Label>
+						<DropdownMenu.Item onclick={() => bookStore2.setDivideLandscape(!$bookStore2.divideLandscape)}>
+							<div class="flex items-center gap-2">
+								<div class="flex h-4 w-4 items-center justify-center">
+									{#if $bookStore2.divideLandscape}
+										<Check class="h-3 w-3" />
+									{/if}
+								</div>
+								<Columns2 class="h-3.5 w-3.5 text-muted-foreground" />
+								<span class="text-xs">分割横向页面</span>
+							</div>
+						</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={() => bookStore2.setAutoRotate(!$bookStore2.autoRotate)}>
+							<div class="flex items-center gap-2">
+								<div class="flex h-4 w-4 items-center justify-center">
+									{#if $bookStore2.autoRotate}
+										<Check class="h-3 w-3" />
+									{/if}
+								</div>
+								<RotateCw class="h-3.5 w-3.5 text-muted-foreground" />
+								<span class="text-xs">自动旋转横向页面</span>
+							</div>
+						</DropdownMenu.Item>
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
 

@@ -252,29 +252,14 @@ function getCurrentViewIcon() {
 					size="icon"
 					class="h-7 w-7"
 					onclick={() => folderPanelActions.toggleDeleteMode()}
-				>
-					<Trash2 class="h-4 w-4" />
-				</Button>
-			</Tooltip.Trigger>
-			<Tooltip.Content>
-				<p>删除模式</p>
-			</Tooltip.Content>
-		</Tooltip.Root>
-
-		<Tooltip.Root>
-			<Tooltip.Trigger>
-				<Button
-					variant="ghost"
-					size="icon"
-					class="h-7 w-7"
-					onclick={handleToggleDeleteStrategy}
 					oncontextmenu={handleToggleDeleteStrategy}
 				>
 					<Trash2 class={$deleteStrategy === 'permanent' ? 'h-4 w-4 text-destructive' : 'h-4 w-4'} />
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
-				<p>删除策略: {$deleteStrategy === 'trash' ? '移动到回收站' : '永久删除'}</p>
+				<p>删除模式 ({$deleteStrategy === 'trash' ? '回收站' : '永久'})</p>
+				<p class="text-muted-foreground text-xs">右键切换策略</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 

@@ -62,8 +62,8 @@ export const zoomLevel = writable<number>(loadFromStorage('zoomLevel', 1.0));
 // 旋转角度 (0, 90, 180, 270)
 export const rotationAngle = writable<number>(loadFromStorage('rotationAngle', 0));
 
-// NeoViewer 开关（新版查看器）
-export const useNeoViewer = writable<boolean>(loadFromStorage('useNeoViewer', false));
+// NeoViewer 开关（新版查看器）- 默认启用
+export const useNeoViewer = writable<boolean>(loadFromStorage('useNeoViewer', true));
 
 // 切换 NeoViewer
 export function toggleNeoViewer() {

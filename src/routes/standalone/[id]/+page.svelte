@@ -92,8 +92,8 @@
 	async function getPanelComponent() {
 		switch (panelContent) {
 			case 'folder':
-				const { default: FileBrowser } = await import('$lib/components/panels/FileBrowser.svelte');
-				return FileBrowser;
+				const { default: FolderPanel } = await import('$lib/components/panels/folderPanel/FolderPanel.svelte');
+				return FolderPanel;
 			case 'history':
 				const { default: HistoryPanel } = await import('$lib/components/panels/HistoryPanel.svelte');
 				return HistoryPanel;

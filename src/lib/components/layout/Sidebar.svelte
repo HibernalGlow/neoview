@@ -22,7 +22,7 @@
 	} from '$lib/stores';
 	import type { PanelTabType } from '$lib/stores';
 	import * as Sidebar from '$lib/components/ui/sidebar';
-	import FileBrowser from '$lib/components/panels/FileBrowser.svelte';
+	import FolderPanel from '$lib/components/panels/folderPanel/FolderPanel.svelte';
 	import HistoryPanel from '$lib/components/panels/HistoryPanel.svelte';
 	import BookmarkPanel from '$lib/components/panels/BookmarkPanel.svelte';
 	import ThumbnailsPanel from '$lib/components/panels/ThumbnailsPanel.svelte';
@@ -282,7 +282,7 @@
 							<Sidebar.GroupContent>
 								<!-- 使用 CSS 隐藏而非条件渲染，保持组件实例不被销毁 -->
 								<div class={activeItem.value === 'folder' ? '' : 'hidden'}>
-									<FileBrowser />
+									<FolderPanel />
 								</div>
 								<div class={activeItem.value === 'history' ? '' : 'hidden'}>
 									<HistoryPanel />

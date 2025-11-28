@@ -158,11 +158,11 @@
 			// 这里简单处理：如果是文件浏览器支持的扩展名，尝试作为文件打开
 			// 否则作为文件夹导航
 			// 实际上应该由父组件或 API 来判断，但这里我们通过 onNavigate 传递
-			// 父组件 FileBrowser 会处理 navigateToPath
+			// 父组件 FolderPanel 会处理导航
 
-			// 如果是文件路径，我们希望 FileBrowser 能处理
-			// FileBrowser.svelte 的 navigateToPath 会调用 loadDirectorySnapshot
-			// 如果是文件，loadDirectorySnapshot 可能会失败或者只加载父目录
+			// 如果是文件路径，我们希望 FolderPanel 能处理
+			// FolderPanel 会通过 navigationCommand 来处理导航
+			// 如果是文件，会尝试打开文件或只加载父目录
 			// 我们需要更智能的跳转
 
 			// 检查是否是文件扩展名

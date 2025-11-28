@@ -1,9 +1,9 @@
 <script lang="ts">
 	/**
 	 * FileSystem Browser
-	 * 文件系统浏览器 - 包装FileBrowser组件
+	 * 文件系统浏览器 - 包装FolderPanel组件
 	 */
-	import FileBrowser from '../panels/FileBrowser.svelte';
+	import FolderPanel from '../panels/folderPanel/FolderPanel.svelte';
 </script>
 
-<FileBrowser />
+<FolderPanel />

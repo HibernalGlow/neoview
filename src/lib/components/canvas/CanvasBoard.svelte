@@ -19,6 +19,7 @@
 	import RightSidebarNode from './nodes/RightSidebarNode.svelte';
 	import TopToolbarNode from './nodes/TopToolbarNode.svelte';
 	import BottomThumbnailBarNode from './nodes/BottomThumbnailBarNode.svelte';
+	import NewReaderNode from './nodes/NewReaderNode.svelte';
 
 	// 注册自定义节点类型
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,7 +28,8 @@
 		sidebarNode: SidebarNode,
 		rightSidebarNode: RightSidebarNode,
 		topToolbarNode: TopToolbarNode,
-		bottomThumbnailBarNode: BottomThumbnailBarNode
+		bottomThumbnailBarNode: BottomThumbnailBarNode,
+		newReaderNode: NewReaderNode
 	};
 
 	// 初始节点：包含主图片查看器和各个侧边栏
@@ -68,6 +70,15 @@
 			position: { x: 400, y: 750 },
 			data: { label: 'Bottom Bar' },
 			dragHandle: '.drag-handle'
+		},
+		{
+			id: 'new-reader',
+			type: 'newReaderNode',
+			position: { x: 1300, y: 100 },
+			data: { label: 'New Reader' },
+			dragHandle: '.drag-handle',
+			width: 700,
+			height: 500
 		}
 	]);
 

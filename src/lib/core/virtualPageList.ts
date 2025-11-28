@@ -149,6 +149,60 @@ export class VirtualPageList {
     this._virtualToPhysicalMap.clear();
   }
 
+  /**
+   * 更新物理页面的尺寸信息
+   * 当异步加载图片后获取到真实尺寸时调用
+   */
+  updatePhysicalPageSize(physicalIndex: number, width: number, height: number): boolean {
+    const page = this._physicalPages[physicalIndex];
+    if (!page) return false;
+
+    // 检查是否有变化
+    if (page.size.width === width && page.size.height === height) {
+      return false;
+    }
+
+    // 更新尺寸
+    page.size = { width, height };
+    page.aspectRatio = height > 0 ? width / height : 1;
+    page.isLandscape = page.aspectRatio > 1;
+
+    // 检查是否需要重建（如果分割设置开启且页面变成横向）
+    if (this._config.divideLandscape && page.isLandscape && page.aspectRatio > this._config.divideThreshold) {
+      this.rebuild();
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * 批量更新物理页面尺寸
+   */
+  updatePhysicalPageSizes(updates: Array<{ index: number; width: number; height: number }>): void {
+    let needRebuild = false;
+
+    for (const { index, width, height } of updates) {
+      const page = this._physicalPages[index];
+      if (!page) continue;
+
+      if (page.size.width !== width || page.size.height !== height) {
+        page.size = { width, height };
+        page.aspectRatio = height > 0 ? width / height : 1;
+        page.isLandscape = page.aspectRatio > 1;
+
+        // 检查是否需要重建
+        if (this._config.divideLandscape && page.isLandscape && page.aspectRatio > this._config.divideThreshold) {
+          needRebuild = true;
+        }
+      }
+    }
+
+    if (needRebuild) {
+      this.rebuild();
+    }
+  }
+
   // ============================================================================
   // 排序和过滤
   // ============================================================================

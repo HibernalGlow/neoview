@@ -366,6 +366,21 @@ export class BookManager {
     this._pageFrameManager.setConfig({ readOrder: order });
   }
 
+  /**
+   * 更新物理页面尺寸
+   * 当异步加载图片后获取到真实尺寸时调用
+   */
+  updatePageSize(physicalIndex: number, width: number, height: number): void {
+    this._virtualPageList.updatePhysicalPageSize(physicalIndex, width, height);
+  }
+
+  /**
+   * 批量更新物理页面尺寸
+   */
+  updatePageSizes(updates: Array<{ index: number; width: number; height: number }>): void {
+    this._virtualPageList.updatePhysicalPageSizes(updates);
+  }
+
   // ============================================================================
   // 数据访问
   // ============================================================================

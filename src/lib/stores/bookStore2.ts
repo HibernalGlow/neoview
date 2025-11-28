@@ -309,6 +309,21 @@ function createBookStore() {
       bookManager?.setSortMode(mode as 'entry' | 'entryDesc' | 'fileName' | 'fileNameDesc' | 'timestamp' | 'timestampDesc' | 'size' | 'sizeDesc' | 'random');
     },
     
+    /**
+     * 更新物理页面尺寸
+     * 当异步加载图片后获取到真实尺寸时调用
+     */
+    updatePageSize: (physicalIndex: number, width: number, height: number) => {
+      bookManager?.updatePageSize(physicalIndex, width, height);
+    },
+    
+    /**
+     * 批量更新物理页面尺寸
+     */
+    updatePageSizes: (updates: Array<{ index: number; width: number; height: number }>) => {
+      bookManager?.updatePageSizes(updates);
+    },
+    
     // ============================================================================
     // 视图控制
     // ============================================================================

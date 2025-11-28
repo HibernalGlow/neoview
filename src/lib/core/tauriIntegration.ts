@@ -97,7 +97,8 @@ export async function loadImageFromFile(
   }
   
   try {
-    const data = await invoke<number[]>('read_image_file', { path: filePath });
+    // 使用现有的 load_image 命令
+    const data = await invoke<number[]>('load_image', { path: filePath });
     
     // 再次检查是否已取消
     if (signal?.aborted) {
@@ -126,9 +127,9 @@ export async function loadImageFromArchive(
   }
   
   try {
-    const data = await invoke<number[]>('read_archive_image', {
-      archivePath,
-      entryPath,
+    // 使用现有的 load_image 命令，它会根据当前打开的书籍类型自动处理
+    const data = await invoke<number[]>('load_image', {
+      path: entryPath,
     });
     
     if (signal?.aborted) {

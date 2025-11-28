@@ -17,18 +17,40 @@
 	let errorMessage = $state('');
 	let currentImageUrl = $state<string | null>(null);
 	let imageLoading = $state(false);
+	let logs = $state<string[]>([]);
+	let showDebug = $state(true);
+	
+	// 使用普通变量避免 effect 循环
+	let _lastSyncedPath: string | null = null;
+	let _lastPageIndex: number = -1;
+	
+	function log(msg: string) {
+		const time = new Date().toLocaleTimeString();
+		console.log(`[NewReader] ${msg}`);
+		// 延迟更新日志状态
+		setTimeout(() => {
+			logs = [...logs.slice(-19), `[${time}] ${msg}`];
+		}, 0);
+	}
 	
 	// 监听旧系统书籍变化，自动同步
 	$effect(() => {
 		const oldBook = bookStore.currentBook;
-		if (oldBook && !bookState.isOpen) {
+		if (oldBook && oldBook.path !== _lastSyncedPath) {
+			_lastSyncedPath = oldBook.path;
 			syncFromOldSystem();
 		}
 	});
 	
 	// 监听页面变化，加载图片
 	$effect(() => {
-		if (bookState.isOpen && bookState.currentFrame) {
+		const currentIndex = bookState.currentIndex;
+		const isOpen = bookState.isOpen;
+		const frame = bookState.currentFrame;
+		
+		if (isOpen && frame && currentIndex !== _lastPageIndex) {
+			_lastPageIndex = currentIndex;
+			log(`页面变化: ${currentIndex}`);
 			loadCurrentImage();
 		}
 	});
@@ -57,10 +79,10 @@
 			// 获取尺寸信息
 			fetchImageSizes(oldBook);
 			
-			console.log('[NewReaderNode] 同步成功');
+			log(`同步成功: ${files.length} 页`);
 		} catch (error) {
 			errorMessage = error instanceof Error ? error.message : String(error);
-			console.error('[NewReaderNode] 同步失败:', error);
+			log(`同步失败: ${errorMessage}`);
 		} finally {
 			isLoading = false;
 		}
@@ -79,6 +101,12 @@
 		
 		if (updates.length > 0) {
 			bookStore2.updatePageSizes(updates);
+			log(`尺寸更新: ${updates.length} 页`);
+			// 显示一些样本
+			const sample = updates.slice(0, 3).map(u => `${u.index}:${u.width}x${u.height}`).join(', ');
+			log(`样本: ${sample}`);
+		} else {
+			log(`警告: 没有尺寸信息可更新`);
 		}
 	}
 	
@@ -105,9 +133,25 @@
 					URL.revokeObjectURL(currentImageUrl);
 				}
 				currentImageUrl = URL.createObjectURL(blob);
+				
+				// 获取图片尺寸并更新
+				const physicalIndex = element.virtualPage.physicalPage.index;
+				const physicalPage = element.virtualPage.physicalPage;
+				if (physicalPage.size.width === 0 || physicalPage.size.height === 0) {
+					// 尺寸未知，从图片获取
+					const img = new Image();
+					img.onload = () => {
+						const width = img.naturalWidth;
+						const height = img.naturalHeight;
+						log(`获取尺寸: ${physicalIndex} -> ${width}x${height}`);
+						bookStore2.updatePageSize(physicalIndex, width, height);
+					};
+					img.src = currentImageUrl;
+				}
 			}
+			log(`图片加载成功`);
 		} catch (error) {
-			console.error('[NewReaderNode] 加载图片失败:', error);
+			log(`图片加载失败: ${error}`);
 		} finally {
 			imageLoading = false;
 		}
@@ -122,11 +166,20 @@
 	}
 	
 	function handlePrev() {
-		bookStore2.prevPage();
+		log(`点击上一页, 当前: ${bookState.currentIndex}`);
+		const result = bookStore2.prevPage();
+		log(`prevPage 结果: ${result}`);
 	}
 	
 	function handleNext() {
-		bookStore2.nextPage();
+		log(`点击下一页, 当前: ${bookState.currentIndex}`);
+		const result = bookStore2.nextPage();
+		log(`nextPage 结果: ${result}`);
+	}
+	
+	function copyLogs() {
+		navigator.clipboard.writeText(logs.join('\n'));
+		log('日志已复制');
 	}
 </script>
 
@@ -166,7 +219,15 @@
 				<span class="mx-2 text-muted-foreground">|</span>
 				<button 
 					class="rounded px-2 py-1 text-xs hover:bg-muted"
-					onclick={() => bookStore2.setDivideLandscape(!bookState.divideLandscape)}
+					onclick={() => {
+						const newValue = !bookState.divideLandscape;
+						log(`设置分割: ${newValue}, 物理页: ${bookState.physicalPageCount}, 虚拟页: ${bookState.virtualPageCount}`);
+						bookStore2.setDivideLandscape(newValue);
+						// 延迟检查结果
+						setTimeout(() => {
+							log(`分割后: 虚拟页=${bookState.virtualPageCount}`);
+						}, 100);
+					}}
 				>
 					{bookState.divideLandscape ? '✓ 分割横向' : '分割横向'}
 				</button>
@@ -181,12 +242,33 @@
 			<!-- 图片显示区域 -->
 			<div class="flex-1 flex items-center justify-center bg-black/80 overflow-hidden relative">
 				{#if currentImageUrl}
-					<img 
-						src={currentImageUrl} 
-						alt="Page {bookState.currentIndex + 1}"
-						class="max-w-full max-h-full object-contain"
-						class:opacity-50={imageLoading}
-					/>
+					{@const element = bookState.currentFrame?.elements[0]}
+					{@const isDivided = element?.virtualPage?.isDivided}
+					{@const isLeftHalf = element?.virtualPage?.part === 0}
+					
+					{#if isDivided}
+						<!-- 
+							分割页面：使用 clip-path 裁剪
+							- 左半边: clip-path: inset(0 50% 0 0)
+							- 右半边: clip-path: inset(0 0 0 50%)
+							这样图片可以正常缩放，只是显示区域被裁剪
+						-->
+						<img 
+							src={currentImageUrl} 
+							alt="Page {bookState.currentIndex + 1}"
+							class="max-w-full max-h-full object-contain"
+							class:opacity-50={imageLoading}
+							style="clip-path: inset(0 {isLeftHalf ? '50%' : '0'} 0 {isLeftHalf ? '0' : '50%'});"
+						/>
+					{:else}
+						<!-- 普通页面 -->
+						<img 
+							src={currentImageUrl} 
+							alt="Page {bookState.currentIndex + 1}"
+							class="max-w-full max-h-full object-contain"
+							class:opacity-50={imageLoading}
+						/>
+					{/if}
 				{:else if imageLoading}
 					<div class="text-white text-sm">加载中...</div>
 				{:else}
@@ -195,7 +277,12 @@
 				
 				<!-- 页面信息覆盖层 -->
 				<div class="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-3 py-1 rounded">
-					物理页: {bookState.physicalPageCount} | 虚拟页: {bookState.virtualPageCount} | 模式: {bookState.pageMode}
+					物理页: {bookState.physicalPageCount} | 虚拟页: {bookState.virtualPageCount} | 
+					{#if bookState.currentFrame?.elements[0]?.virtualPage?.isDivided}
+						分割: {bookState.currentFrame.elements[0].virtualPage.part === 0 ? '左' : '右'}
+					{:else}
+						模式: {bookState.pageMode}
+					{/if}
 				</div>
 			</div>
 		{:else if isLoading}
@@ -238,6 +325,32 @@
 			</div>
 		{/if}
 	</div>
+
+	<!-- 调试面板 -->
+	{#if showDebug}
+		<div class="absolute bottom-0 left-0 right-0 bg-black/90 text-white text-xs max-h-32 overflow-auto p-2 border-t border-gray-700">
+			<div class="flex justify-between items-center mb-1">
+				<span class="font-bold">调试日志</span>
+				<div class="flex gap-2">
+					<button class="px-2 py-0.5 bg-blue-600 rounded hover:bg-blue-700" onclick={copyLogs}>复制</button>
+					<button class="px-2 py-0.5 bg-gray-600 rounded hover:bg-gray-700" onclick={() => logs = []}>清空</button>
+					<button class="px-2 py-0.5 bg-gray-600 rounded hover:bg-gray-700" onclick={() => showDebug = false}>隐藏</button>
+				</div>
+			</div>
+			<div class="font-mono">
+				{#each logs as entry}
+					<div class="text-gray-300">{entry}</div>
+				{/each}
+			</div>
+		</div>
+	{:else}
+		<button 
+			class="absolute bottom-2 right-2 px-2 py-1 bg-gray-700 text-white text-xs rounded hover:bg-gray-600"
+			onclick={() => showDebug = true}
+		>
+			显示日志
+		</button>
+	{/if}
 
 	<!-- 拖拽手柄 -->
 	<div

@@ -6,6 +6,7 @@
 
 // 组件
 export { default as ImageRenderer } from './ImageRenderer.svelte';
+export { default as NewViewer } from './NewViewer.svelte';
 
 // 工具类
 export { GestureHandler } from './GestureHandler';

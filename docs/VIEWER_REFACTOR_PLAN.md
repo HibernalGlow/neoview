@@ -120,9 +120,46 @@ src/lib/
 2. **渐进替换** - 功能验证后逐步替换旧组件
 3. **保持兼容** - 新系统 API 与旧系统兼容
 
+## 现有 TopToolbar 功能清单
+
+需要在新 Viewer 中支持的功能：
+
+### 视图控制
+- [x] 缩放 (zoomIn, zoomOut, resetZoom)
+- [x] 旋转 (rotateClockwise)
+- [ ] 缩放模式 (fit, fill, fitWidth, fitHeight, original)
+- [ ] 视图模式锁定
+
+### 页面控制
+- [x] 翻页 (上一页, 下一页)
+- [x] 页面模式 (单页, 双页)
+- [x] 阅读方向 (LTR, RTL)
+- [x] 横向分割
+- [x] 自动旋转
+- [ ] 排序模式
+
+### 布局控制
+- [ ] 布局模式 (layoutMode)
+- [ ] 侧边栏切换
+
+### 主题
+- [ ] 主题切换 (light, dark, system)
+- [ ] 快速主题
+
+### 窗口控制
+- [ ] 最小化, 最大化, 关闭
+- [ ] 工具栏固定
+
+## 已完成
+
+1. ✅ 创建 `src/lib/viewer/` 目录
+2. ✅ 实现 `ImageRenderer.svelte` - 图片渲染组件
+3. ✅ 实现 `GestureHandler.ts` - 手势处理器
+4. ✅ 创建 `index.ts` 导出
+
 ## 下一步
 
-1. 创建 `src/lib/viewer/` 目录
-2. 实现 `ImageRenderer.svelte`
-3. 实现 `GestureHandler.ts`
-4. 在 `NewReaderNode` 中集成测试
+1. 在 `NewReaderNode` 中集成 `ImageRenderer` 和 `GestureHandler`
+2. 实现 `ZoomController.ts` - 缩放控制
+3. 实现 `PanController.ts` - 平移控制
+4. 创建 `NewViewer.svelte` - 主视图组件

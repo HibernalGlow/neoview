@@ -20,6 +20,7 @@ import { bookStore } from '$lib/stores/book.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { FileSystemAPI } from '$lib/api';
 import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
+import { createKeyboardHandler } from './utils/keyboardHandler';
 
 import {
 	currentPath,
@@ -363,82 +364,21 @@ function handleToggleDeleteStrategy() {
 	showSuccessToast('删除策略已切换', text);
 }
 
-// 键盘快捷键处理
-function handleKeydown(e: KeyboardEvent) {
-	// 如果在输入框中，不处理快捷键
-	const target = e.target as HTMLElement;
-	if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-		return;
-	}
-
-	const selected = $selectedItems;
-	const items = $sortedItems;
-
-	switch (e.key) {
-		case 'ArrowDown':
-			e.preventDefault();
-			// TODO: 实现向下导航
-			break;
-
-		case 'ArrowUp':
-			e.preventDefault();
-			// TODO: 实现向上导航
-			break;
-
-		case 'Enter':
-			e.preventDefault();
-			if (selected.size > 0) {
-				const firstPath = Array.from(selected)[0];
-				const item = items.find((i: FsItem) => i.path === firstPath);
-				if (item) {
-					if (item.isDir) {
-						navigationCommand.set({ type: 'push', path: item.path });
-					} else {
-						handleItemOpen(item);
-					}
-				}
-			}
-			break;
-
-		case 'Backspace':
-			e.preventDefault();
-			handleGoBack();
-			break;
-
-		case 'F5':
-			e.preventDefault();
-			handleRefresh();
-			break;
-
-		case 'Delete':
-			e.preventDefault();
-			if ($deleteMode && selected.size > 0) {
-				handleBatchDelete();
-			}
-			break;
-
-		case 'a':
-			if (e.ctrlKey || e.metaKey) {
-				e.preventDefault();
-				folderPanelActions.selectAll();
-			}
-			break;
-
-		case 'f':
-			if (e.ctrlKey || e.metaKey) {
-				e.preventDefault();
-				folderPanelActions.toggleShowSearchBar();
-			}
-			break;
-
-		case 'Escape':
-			e.preventDefault();
-			if ($multiSelectMode) {
-				folderPanelActions.deselectAll();
-			}
-			break;
-	}
-}
+// 键盘快捷键处理（使用独立模块）
+const handleKeydown = createKeyboardHandler(() => ({
+	selectedItems: $selectedItems,
+	sortedItems: $sortedItems,
+	multiSelectMode: $multiSelectMode,
+	deleteMode: $deleteMode,
+	onNavigate: (path: string) => navigationCommand.set({ type: 'push', path }),
+	onOpenItem: handleItemOpen,
+	onGoBack: handleGoBack,
+	onRefresh: handleRefresh,
+	onBatchDelete: handleBatchDelete,
+	onSelectAll: () => folderPanelActions.selectAll(),
+	onDeselectAll: () => folderPanelActions.deselectAll(),
+	onToggleSearchBar: () => folderPanelActions.toggleShowSearchBar()
+}));
 
 // 初始化
 onMount(() => {

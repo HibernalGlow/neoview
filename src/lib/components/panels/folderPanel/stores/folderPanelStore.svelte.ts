@@ -67,6 +67,14 @@ export interface FolderPanelState {
 	penetrateMode: boolean;
 	// 删除策略
 	deleteStrategy: DeleteStrategy;
+	// 搜索历史
+	searchHistory: { query: string; timestamp: number }[];
+	// 搜索设置
+	searchSettings: {
+		includeSubfolders: boolean;
+		showHistoryOnFocus: boolean;
+		searchInPath: boolean;
+	};
 }
 
 // ============ Initial State ============
@@ -125,7 +133,13 @@ const initialState: FolderPanelState = {
 	showSearchBar: false,
 	showMigrationBar: false,
 	penetrateMode: false,
-	deleteStrategy: savedState.deleteStrategy ?? 'trash'
+	deleteStrategy: savedState.deleteStrategy ?? 'trash',
+	searchHistory: [],
+	searchSettings: {
+		includeSubfolders: true,
+		showHistoryOnFocus: true,
+		searchInPath: false
+	}
 };
 
 // ============ Stores ============

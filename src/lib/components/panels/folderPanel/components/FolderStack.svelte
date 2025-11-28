@@ -23,6 +23,7 @@ import {
 	penetrateMode
 } from '../stores/folderPanelStore.svelte';
 import { Loader2, FolderOpen, AlertCircle } from '@lucide/svelte';
+import { directoryTreeCache } from '../utils/directoryTreeCache';
 
 interface NavigationCommand {
 	type: 'init' | 'push' | 'pop' | 'goto';
@@ -59,30 +60,6 @@ let activeIndex = $state(0);
 
 // 动画状态
 let isAnimating = $state(false);
-
-// 目录内容缓存（LRU 策略，最多缓存 50 个目录）
-const directoryCache = new Map<string, { items: FsItem[]; timestamp: number }>();
-const MAX_DIRECTORY_CACHE = 50;
-const CACHE_TTL = 60 * 60 * 1000; // 5 分钟缓存有效期
-
-// 清理过期缓存
-function cleanupDirectoryCache() {
-	const now = Date.now();
-	for (const [path, cache] of directoryCache) {
-		if (now - cache.timestamp > CACHE_TTL) {
-			directoryCache.delete(path);
-		}
-	}
-	// 如果缓存超过限制，删除最旧的
-	if (directoryCache.size > MAX_DIRECTORY_CACHE) {
-		const entries = Array.from(directoryCache.entries());
-		entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
-		const toDelete = entries.slice(0, entries.length - MAX_DIRECTORY_CACHE);
-		for (const [path] of toDelete) {
-			directoryCache.delete(path);
-		}
-	}
-}
 
 // 缩略图 Map - 使用 $state 并通过订阅更新
 let thumbnails = $state<Map<string, string>>(new Map());
@@ -181,33 +158,13 @@ async function createLayer(path: string): Promise<FolderLayer> {
 	};
 
 	try {
-		// 检查缓存
-		const cached = directoryCache.get(path);
-		const now = Date.now();
+		// 使用全局目录树缓存
+		const items = await directoryTreeCache.getDirectory(path);
+		layer.items = items;
+		layer.loading = false;
 		
-		if (cached && (now - cached.timestamp < CACHE_TTL)) {
-			// 使用缓存
-			layer.items = cached.items;
-			layer.loading = false;
-			// 异步加载缩略图
-			loadThumbnailsForLayer(cached.items, path);
-			// 后台预加载相邻目录
-			preloadAdjacentDirectories(cached.items, path);
-		} else {
-			// 从后端加载
-			const items = await FileSystemAPI.browseDirectory(path);
-			layer.items = items;
-			layer.loading = false;
-			
-			// 更新缓存
-			directoryCache.set(path, { items, timestamp: now });
-			cleanupDirectoryCache();
-			
-			// 异步加载缩略图
-			loadThumbnailsForLayer(items, path);
-			// 后台预加载相邻目录
-			preloadAdjacentDirectories(items, path);
-		}
+		// 异步加载缩略图
+		loadThumbnailsForLayer(items, path);
 	} catch (err) {
 		layer.error = err instanceof Error ? err.message : String(err);
 		layer.loading = false;
@@ -271,40 +228,6 @@ function isChildPath(childPath: string, parentPath: string): boolean {
 	const normalizedChild = childPath.replace(/\\/g, '/').toLowerCase();
 	const normalizedParent = parentPath.replace(/\\/g, '/').toLowerCase();
 	return normalizedChild.startsWith(normalizedParent + '/');
-}
-
-// 预加载相邻目录（后台静默加载，不影响 UI）
-async function preloadAdjacentDirectories(items: FsItem[], currentPath: string) {
-	// 只预加载前 5 个子目录
-	const directories = items.filter(item => item.isDir).slice(0, 5);
-	
-	for (const dir of directories) {
-		// 检查是否已缓存
-		if (!directoryCache.has(dir.path)) {
-			try {
-				// 静默加载，不阻塞
-				FileSystemAPI.browseDirectory(dir.path).then(subItems => {
-					directoryCache.set(dir.path, { items: subItems, timestamp: Date.now() });
-					cleanupDirectoryCache();
-				}).catch(() => {
-					// 忽略预加载错误
-				});
-			} catch {
-				// 忽略预加载错误
-			}
-		}
-	}
-	
-	// 预加载父目录
-	const parentPath = getParentPath(currentPath);
-	if (parentPath && !directoryCache.has(parentPath)) {
-		FileSystemAPI.browseDirectory(parentPath).then(parentItems => {
-			directoryCache.set(parentPath, { items: parentItems, timestamp: Date.now() });
-			cleanupDirectoryCache();
-		}).catch(() => {
-			// 忽略预加载错误
-		});
-	}
 }
 
 // 推入新层（进入子目录）或跳转到新路径

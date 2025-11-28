@@ -270,6 +270,9 @@ export const searchResults = derived(state, ($state) => $state.searchResults);
 // 是否正在搜索
 export const isSearching = derived(state, ($state) => $state.isSearching);
 
+// 搜索设置
+export const searchSettings = derived(state, ($state) => $state.searchSettings);
+
 // 文件夹树配置
 export const folderTreeConfig = derived(state, ($state) => ({
 	visible: $state.folderTreeVisible,
@@ -378,6 +381,13 @@ function getParentPath(path: string): string | null {
 let currentScrollTop = 0;
 
 export const folderPanelActions = {
+	/**
+	 * 获取当前状态
+	 */
+	getState() {
+		return get(state);
+	},
+
 	/**
 	 * 更新当前滚动位置（由列表组件调用）
 	 */
@@ -698,6 +708,16 @@ export const folderPanelActions = {
 	 */
 	clearSearch() {
 		state.update((s) => ({ ...s, searchKeyword: '', searchResults: [], isSearching: false }));
+	},
+
+	/**
+	 * 设置搜索设置
+	 */
+	setSearchSettings(settings: { includeSubfolders?: boolean; showHistoryOnFocus?: boolean; searchInPath?: boolean }) {
+		state.update((s) => ({
+			...s,
+			searchSettings: { ...s.searchSettings, ...settings }
+		}));
 	},
 
 	/**

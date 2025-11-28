@@ -39,7 +39,8 @@ import {
 	externalNavigationRequest,
 	inlineTreeMode,
 	searchResults,
-	isSearching
+	isSearching,
+	searchSettings
 } from './stores/folderPanelStore.svelte';
 
 // 导航命令 store（用于父子组件通信）
@@ -206,9 +207,11 @@ async function handleSearch(keyword: string) {
 		if (!path) return;
 		
 		// 调用后端搜索 API
+		const settings = folderPanelActions.getState().searchSettings;
 		const results = await FileSystemAPI.searchFiles(path, keyword, {
-			includeSubfolders: true,
-			maxResults: 1000
+			includeSubfolders: settings.includeSubfolders,
+			maxResults: 1000,
+			searchInPath: settings.searchInPath
 		});
 		
 		folderPanelActions.setSearchResults(results);
@@ -225,6 +228,11 @@ async function handleSearch(keyword: string) {
 // 处理文件夹树切换
 function handleToggleFolderTree() {
 	folderPanelActions.toggleFolderTree();
+}
+
+// 处理搜索设置变更
+function handleSearchSettingsChange(settings: { includeSubfolders?: boolean; showHistoryOnFocus?: boolean; searchInPath?: boolean }) {
+	folderPanelActions.setSearchSettings(settings);
 }
 
 // 迁移栏管理器显示状态
@@ -479,12 +487,17 @@ onMount(() => {
 
 	<!-- 搜索栏（可切换显示） -->
 	{#if $showSearchBar}
-		<div class="border-b px-2 py-1.5">
-			<SearchBar
-				placeholder="搜索文件..."
-				onSearch={handleSearch}
-			/>
-		</div>
+		<SearchBar
+			placeholder="搜索文件..."
+			onSearch={handleSearch}
+			storageKey="neoview-folder-search-history"
+			searchSettings={{
+				includeSubfolders: $searchSettings.includeSubfolders,
+				showHistoryOnFocus: $searchSettings.showHistoryOnFocus,
+				searchInPath: $searchSettings.searchInPath
+			}}
+			onSettingsChange={handleSearchSettingsChange}
+		/>
 	{/if}
 
 	<!-- 迁移栏（可切换显示） -->

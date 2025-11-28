@@ -348,6 +348,22 @@
 								<span>聚焦时显示历史</span>
 							</label>
 						{/if}
+						
+						{#if searchSettings.searchInPath !== undefined}
+							<label class="flex items-center gap-2 text-sm">
+								<input
+									type="checkbox"
+									bind:checked={searchSettings.searchInPath}
+									onchange={() => {
+										if (onSettingsChange) {
+											onSettingsChange(searchSettings);
+										}
+									}}
+									class="rounded border-gray-300 text-primary focus:ring-primary"
+								/>
+								<span>匹配路径</span>
+							</label>
+						{/if}
 					</div>
 				</div>
 			</div>

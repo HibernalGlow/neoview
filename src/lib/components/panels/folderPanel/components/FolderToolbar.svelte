@@ -48,9 +48,10 @@ interface Props {
 	onGoBack?: () => void;
 	onGoForward?: () => void;
 	onGoHome?: () => void;
+	onSetHome?: () => void;
 }
 
-let { onRefresh, onToggleFolderTree, onGoBack, onGoForward, onGoHome }: Props = $props();
+let { onRefresh, onToggleFolderTree, onGoBack, onGoForward, onGoHome, onSetHome }: Props = $props();
 
 const viewStyles: { value: FolderViewStyle; icon: typeof List; label: string }[] = [
 	{ value: 'list', icon: List, label: '列表' },
@@ -83,6 +84,11 @@ function handleGoHome() {
 	onGoHome?.();
 }
 
+function handleSetHome(e: MouseEvent) {
+	e.preventDefault();
+	onSetHome?.();
+}
+
 function handleSetViewStyle(style: FolderViewStyle) {
 	folderPanelActions.setViewStyle(style);
 }
@@ -106,14 +112,14 @@ function getCurrentViewIcon() {
 					variant="ghost"
 					size="icon"
 					class="h-7 w-7"
-					disabled={!$canGoBack}
-					onclick={handleGoBack}
+					onclick={handleGoHome}
+					oncontextmenu={handleSetHome}
 				>
 					<Home class="h-4 w-4" />
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
-				<p>主页 (Alt+Home)</p>
+				<p>主页 (单击返回主页，右键设置当前路径为主页)</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 

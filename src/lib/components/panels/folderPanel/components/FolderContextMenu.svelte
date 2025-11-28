@@ -16,7 +16,6 @@ import {
 	Trash2,
 	Star,
 	Pencil,
-	Home,
 	Play,
 	FolderOpen
 } from '@lucide/svelte';
@@ -35,7 +34,6 @@ interface Props {
 	onDelete?: (item: FsItem) => void;
 	onRename?: (item: FsItem) => void;
 	onAddBookmark?: (item: FsItem) => void;
-	onSetAsHomepage?: (item: FsItem) => void;
 	onCopyPath?: (item: FsItem) => void;
 	onCopyName?: (item: FsItem) => void;
 	onOpenInExplorer?: (item: FsItem) => void;
@@ -56,7 +54,6 @@ let {
 	onDelete,
 	onRename,
 	onAddBookmark,
-	onSetAsHomepage,
 	onCopyPath,
 	onCopyName,
 	onOpenInExplorer,
@@ -118,10 +115,6 @@ function handleAddBookmark() {
 	onClose();
 }
 
-function handleSetAsHomepage() {
-	if (item) onSetAsHomepage?.(item);
-	onClose();
-}
 
 function handleCopyPath() {
 	if (item) onCopyPath?.(item);
@@ -169,14 +162,6 @@ function handleOpenWithSystem() {
 				>
 					<BookOpen class="h-4 w-4" />
 					<span>作为书籍打开</span>
-				</button>
-				<div class="bg-border my-1 h-px"></div>
-				<button
-					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-					onclick={handleSetAsHomepage}
-				>
-					<Home class="h-4 w-4" />
-					<span>设为主页</span>
 				</button>
 			{:else}
 				<!-- 文件菜单 -->

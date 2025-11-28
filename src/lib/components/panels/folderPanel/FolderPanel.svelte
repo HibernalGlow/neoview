@@ -133,14 +133,6 @@ function handleAddBookmark(item: FsItem) {
 	});
 }
 
-// 设为主页
-function handleSetAsHomepage(item: FsItem) {
-	if (item.isDir) {
-		folderPanelActions.setHomePath(item.path);
-		localStorage.setItem('neoview-homepage-path', item.path);
-	}
-}
-
 // 复制路径
 function handleCopyPath(item: FsItem) {
 	navigator.clipboard.writeText(item.path);
@@ -170,9 +162,22 @@ function handleGoBack() {
 }
 
 // 处理回到 Home
-async function handleGoHome() {
-	const home = await homeDir();
-	navigationCommand.set({ type: 'init', path: home });
+function handleGoHome() {
+	const home = folderPanelActions.goHome();
+	if (home) {
+		navigationCommand.set({ type: 'init', path: home });
+	}
+}
+
+// 设置当前路径为主页
+function handleSetHome() {
+	const path = $currentPath;
+	if (path) {
+		folderPanelActions.setHomePath(path);
+		// 持久化到 localStorage
+		localStorage.setItem('neoview-homepage-path', path);
+		showSuccessToast('设置成功', `已将 ${path} 设置为主页`);
+	}
 }
 
 // 处理搜索
@@ -339,8 +344,10 @@ async function handleOpenWithSystem(item: FsItem) {
 // 初始化
 onMount(async () => {
 	try {
-		// 设置默认 Home 路径
-		const home = await homeDir();
+		// 从 localStorage 读取保存的主页路径，如果没有则使用用户目录
+		const savedHomePath = localStorage.getItem('neoview-homepage-path');
+		const defaultHome = await homeDir();
+		const home = savedHomePath || defaultHome;
 		folderPanelActions.setHomePath(home);
 
 		// 初始化层叠导航
@@ -364,6 +371,7 @@ onMount(async () => {
 		onToggleFolderTree={handleToggleFolderTree}
 		onGoBack={handleGoBack}
 		onGoHome={handleGoHome}
+		onSetHome={handleSetHome}
 	/>
 
 	<!-- 搜索栏（可切换显示） -->
@@ -444,7 +452,6 @@ onMount(async () => {
 	onDelete={handleDelete}
 	onRename={handleRename}
 	onAddBookmark={handleAddBookmark}
-	onSetAsHomepage={handleSetAsHomepage}
 	onCopyPath={handleCopyPath}
 	onCopyName={handleCopyName}
 	onOpenInExplorer={handleOpenInExplorer}

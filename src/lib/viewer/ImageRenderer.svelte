@@ -115,6 +115,14 @@
     return isLeft ? 'inset(0 50% 0 0)' : 'inset(0 0 0 50%)';
   });
   
+  /** 分割页面的位移补偿 */
+  let splitTranslate = $derived.by(() => {
+    if (!isDivided) return '';
+    // 左半边需要向右移动 25%，右半边需要向左移动 25%
+    const isLeft = splitHalf === 'left';
+    return isLeft ? 'translateX(25%)' : 'translateX(-25%)';
+  });
+  
   /** 计算容器样式 */
   let containerStyle = $derived.by(() => {
     const styles: string[] = [];
@@ -132,9 +140,16 @@
   let imageStyle = $derived.by(() => {
     const styles: string[] = [];
     
-    // transform
+    // transform - 合并所有变换
+    const transforms: string[] = [];
+    if (splitTranslate) {
+      transforms.push(splitTranslate);
+    }
     if (transformStyle !== 'none') {
-      styles.push(`transform: ${transformStyle}`);
+      transforms.push(transformStyle);
+    }
+    if (transforms.length > 0) {
+      styles.push(`transform: ${transforms.join(' ')}`);
     }
     
     // clip-path

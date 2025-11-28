@@ -20,6 +20,7 @@
     zoomOut as storeZoomOut,
     resetZoom as storeResetZoom,
   } from '$lib/stores';
+  import { bookStore2 } from '$lib/stores/bookStore2';
   import { settingsManager } from '$lib/settings/settingsManager';
   import type { ReadingDirection } from '$lib/settings/settingsManager';
   import { hoverScroll } from '$lib/utils/scroll/hoverScroll';
@@ -94,13 +95,37 @@
     return 0 as const;
   });
   
-  // 计算分割半边
-  let physicalSplitHalf = $derived<ReturnType<typeof mapLogicalHalfToPhysical> | null>(
-    horizontalSplitHalf ? mapLogicalHalfToPhysical(horizontalSplitHalf, readingDirection) : null
-  );
+  // 从 bookStore2 获取虚拟页面信息
+  let bookState = $derived($bookStore2);
+  let virtualPageInfo = $derived.by(() => {
+    const frame = bookState.currentFrame;
+    if (!frame || !frame.elements.length) return null;
+    return frame.elements[0].virtualPage;
+  });
+  
+  // 计算分割半边 - 优先使用 bookStore2 的虚拟页面信息
   let splitHalf = $derived.by(() => {
+    // 优先从 bookStore2 获取
+    if (virtualPageInfo?.isDivided) {
+      return virtualPageInfo.part === 0 ? 'left' : 'right';
+    }
+    // 回退到 props
     if (!horizontalSplitHalf) return null;
-    return physicalSplitHalf as 'left' | 'right' | null;
+    const physicalHalf = mapLogicalHalfToPhysical(horizontalSplitHalf, readingDirection);
+    return physicalHalf as 'left' | 'right' | null;
+  });
+  
+  // 计算旋转 - 优先使用虚拟页面的旋转
+  let effectiveRotation = $derived.by((): 0 | 90 | 180 | 270 => {
+    // 优先从 bookStore2 获取自动旋转
+    const vpRotation = virtualPageInfo?.rotation;
+    if (vpRotation !== undefined && vpRotation !== 0) {
+      if (vpRotation === 90 || vpRotation === 180 || vpRotation === 270) {
+        return vpRotation;
+      }
+    }
+    // 回退到 UI 旋转
+    return normalizedRotation;
   });
   
   // 合并平移
@@ -266,7 +291,7 @@
         <div class="neo-viewer__fallback">
           <ImageRenderer
             src={currentSrc}
-            rotation={normalizedRotation}
+            rotation={effectiveRotation}
             scale={1}
             fitMode="contain"
           />
@@ -279,7 +304,7 @@
       <div class="neo-viewer__single">
         <ImageRenderer
           src={currentSrc}
-          rotation={normalizedRotation}
+          rotation={effectiveRotation}
           scale={scale}
           offset={{ x: totalPanX, y: totalPanY }}
           fitMode="contain"
@@ -291,7 +316,7 @@
         <div class="neo-viewer__double">
           <ImageRenderer
             src={currentSrc}
-            rotation={normalizedRotation}
+            rotation={effectiveRotation}
             scale={scale}
             offset={{ x: totalPanX, y: totalPanY }}
             fitMode="contain"
@@ -303,7 +328,7 @@
             {#if imageData2}
               <ImageRenderer
                 src={imageData2}
-                rotation={normalizedRotation}
+                rotation={effectiveRotation}
                 scale={scale}
                 offset={{ x: totalPanX, y: totalPanY }}
                 fitMode="contain"
@@ -311,7 +336,7 @@
             {/if}
             <ImageRenderer
               src={currentSrc}
-              rotation={normalizedRotation}
+              rotation={effectiveRotation}
               scale={scale}
               offset={{ x: totalPanX, y: totalPanY }}
               fitMode="contain"
@@ -319,7 +344,7 @@
           {:else}
             <ImageRenderer
               src={currentSrc}
-              rotation={normalizedRotation}
+              rotation={effectiveRotation}
               scale={scale}
               offset={{ x: totalPanX, y: totalPanY }}
               fitMode="contain"
@@ -327,7 +352,7 @@
             {#if imageData2}
               <ImageRenderer
                 src={imageData2}
-                rotation={normalizedRotation}
+                rotation={effectiveRotation}
                 scale={scale}
                 offset={{ x: totalPanX, y: totalPanY }}
                 fitMode="contain"

@@ -88,6 +88,27 @@
 		}
 	}
 
+	// 移动面板顺序
+	function movePanelUp(panel: PanelConfig, panels: PanelConfig[]) {
+		const currentIndex = panels.findIndex(p => p.id === panel.id);
+		if (currentIndex <= 0) return;
+		
+		const prevPanel = panels[currentIndex - 1];
+		// 交换顺序
+		sidebarConfigStore.setPanelOrder(panel.id, prevPanel.order);
+		sidebarConfigStore.setPanelOrder(prevPanel.id, panel.order);
+	}
+
+	function movePanelDown(panel: PanelConfig, panels: PanelConfig[]) {
+		const currentIndex = panels.findIndex(p => p.id === panel.id);
+		if (currentIndex < 0 || currentIndex >= panels.length - 1) return;
+		
+		const nextPanel = panels[currentIndex + 1];
+		// 交换顺序
+		sidebarConfigStore.setPanelOrder(panel.id, nextPanel.order);
+		sidebarConfigStore.setPanelOrder(nextPanel.id, panel.order);
+	}
+
 	$effect(() => {
 		function handleWindowPointerUp() {
 			if (!isPointerDragging) return;
@@ -216,7 +237,7 @@
 		>
 			<h4 class="mb-3 text-center text-sm font-medium">左侧栏</h4>
 			<div class="min-h-[200px] space-y-2">
-				{#each leftPanels as panel (panel.id)}
+				{#each leftPanels as panel, index (panel.id)}
 					<div
 						class="bg-card rounded-md border p-3 transition-colors hover:bg-accent/50 {isPointerDragging && draggedPanel?.panel.id === panel.id ? 'opacity-50' : ''}"
 					>
@@ -230,7 +251,32 @@
 								</svg>
 							</div>
 							<span class="text-lg">{getPanelEmoji(panel.id)}</span>
-							<span class="text-sm font-medium">{panel.title}</span>
+							<span class="flex-1 text-sm font-medium">{panel.title}</span>
+							<!-- 上下箭头 -->
+							<div class="flex flex-col gap-0.5">
+								<button
+									type="button"
+									class="rounded p-0.5 hover:bg-accent/50 disabled:opacity-30"
+									disabled={index === 0}
+									onclick={() => movePanelUp(panel, leftPanels)}
+									title="上移"
+								>
+									<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+									</svg>
+								</button>
+								<button
+									type="button"
+									class="rounded p-0.5 hover:bg-accent/50 disabled:opacity-30"
+									disabled={index === leftPanels.length - 1}
+									onclick={() => movePanelDown(panel, leftPanels)}
+									title="下移"
+								>
+									<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+									</svg>
+								</button>
+							</div>
 						</div>
 					</div>
 				{/each}
@@ -248,7 +294,7 @@
 		>
 			<h4 class="mb-3 text-center text-sm font-medium">右侧栏</h4>
 			<div class="min-h-[200px] space-y-2">
-				{#each rightPanels as panel (panel.id)}
+				{#each rightPanels as panel, index (panel.id)}
 					<div
 						class="bg-card rounded-md border p-3 transition-colors hover:bg-accent/50 {isPointerDragging && draggedPanel?.panel.id === panel.id ? 'opacity-50' : ''}"
 					>
@@ -262,7 +308,32 @@
 								</svg>
 							</div>
 							<span class="text-lg">{getPanelEmoji(panel.id)}</span>
-							<span class="text-sm font-medium">{panel.title}</span>
+							<span class="flex-1 text-sm font-medium">{panel.title}</span>
+							<!-- 上下箭头 -->
+							<div class="flex flex-col gap-0.5">
+								<button
+									type="button"
+									class="rounded p-0.5 hover:bg-accent/50 disabled:opacity-30"
+									disabled={index === 0}
+									onclick={() => movePanelUp(panel, rightPanels)}
+									title="上移"
+								>
+									<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+									</svg>
+								</button>
+								<button
+									type="button"
+									class="rounded p-0.5 hover:bg-accent/50 disabled:opacity-30"
+									disabled={index === rightPanels.length - 1}
+									onclick={() => movePanelDown(panel, rightPanels)}
+									title="下移"
+								>
+									<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+									</svg>
+								</button>
+							</div>
 						</div>
 					</div>
 				{/each}

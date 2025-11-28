@@ -6,19 +6,21 @@
 	import { Dialog } from '$lib/components/ui/dialog';
 	import { Tabs } from '$lib/components/ui/tabs';
 	import { Button } from '$lib/components/ui/button';
-	import { Settings, Keyboard, Palette, Zap, Mouse, Hand, Paintbrush } from '@lucide/svelte';
+	import { Settings, Keyboard, Palette, Zap, Mouse, Hand, Paintbrush, PanelLeft } from '@lucide/svelte';
 	import KeyBindingPanel from './KeyBindingPanel.svelte';
 	import UnifiedBindingPanel from './UnifiedBindingPanel.svelte';
 	import ViewerSettingsPanel from './ViewerSettingsPanel.svelte';
 	import MouseSettingsPanel from './MouseSettingsPanel.svelte';
 	import GestureSettingsPanel from './GestureSettingsPanel.svelte';
 	import ThemePanel from '$lib/components/panels/ThemePanel.svelte';
+	import SidebarPanelManager from '$lib/components/settings/SidebarPanelManager.svelte';
 
 	let { open = $bindable(false) } = $props();
 
 	const tabs = [
 		{ value: 'general', label: '通用', icon: Settings },
 		{ value: 'appearance', label: '外观', icon: Paintbrush },
+		{ value: 'panels', label: '面板', icon: PanelLeft },
 		{ value: 'viewer', label: '查看器', icon: Palette },
 		{ value: 'keyboard', label: '快捷键', icon: Keyboard },
 		{ value: 'mouse', label: '鼠标', icon: Mouse },
@@ -58,6 +60,10 @@
 
 				<Tabs.Content value="appearance">
 					<ThemePanel />
+				</Tabs.Content>
+
+				<Tabs.Content value="panels">
+					<SidebarPanelManager />
 				</Tabs.Content>
 
 				<Tabs.Content value="viewer">

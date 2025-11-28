@@ -32,9 +32,12 @@ function saveToStorage<T>(key: string, value: T) {
 	}
 }
 
-// 侧边栏状态 - 默认隐藏
-export const sidebarOpen = writable<boolean>(loadFromStorage('sidebarOpen', false));
-export const sidebarWidth = writable<number>(loadFromStorage('sidebarWidth', 250));
+// 左侧边栏状态 - 默认隐藏
+export const leftSidebarOpen = writable<boolean>(loadFromStorage('leftSidebarOpen', false));
+export const leftSidebarWidth = writable<number>(loadFromStorage('leftSidebarWidth', 250));
+// 兼容性别名
+export const sidebarOpen = leftSidebarOpen;
+export const sidebarWidth = leftSidebarWidth;
 
 // 右侧边栏状态
 export const rightSidebarOpen = writable<boolean>(loadFromStorage('rightSidebarOpen', false));
@@ -92,8 +95,10 @@ export const orientation = writable<ViewOrientation>(
 // 边栏钉住状态（钉住时不自动隐藏）
 export const topToolbarPinned = writable<boolean>(loadFromStorage('topToolbarPinned', false));
 export const bottomThumbnailBarPinned = writable<boolean>(loadFromStorage('bottomThumbnailBarPinned', false));
-export const sidebarPinned = writable<boolean>(loadFromStorage('sidebarPinned', false));
+export const leftSidebarPinned = writable<boolean>(loadFromStorage('leftSidebarPinned', false));
 export const rightSidebarPinned = writable<boolean>(loadFromStorage('rightSidebarPinned', false));
+// 兼容性别名
+export const sidebarPinned = leftSidebarPinned;
 
 // 边栏高度（用于上下边栏）
 export const topToolbarHeight = writable<number>(loadFromStorage('topToolbarHeight', 60));
@@ -108,8 +113,8 @@ export type LayoutSwitchMode = 'seamless' | 'cold';
 export const layoutSwitchMode = writable<LayoutSwitchMode>(loadFromStorage('layoutSwitchMode', 'seamless'));
 
 // 订阅并保存变化
-sidebarOpen.subscribe((value) => saveToStorage('sidebarOpen', value));
-sidebarWidth.subscribe((value) => saveToStorage('sidebarWidth', value));
+leftSidebarOpen.subscribe((value) => saveToStorage('leftSidebarOpen', value));
+leftSidebarWidth.subscribe((value) => saveToStorage('leftSidebarWidth', value));
 rightSidebarOpen.subscribe((value) => saveToStorage('rightSidebarOpen', value));
 rightSidebarWidth.subscribe((value) => saveToStorage('rightSidebarWidth', value));
 activeRightPanel.subscribe((value) => saveToStorage('activeRightPanel', value));
@@ -119,7 +124,7 @@ themeMode.subscribe((value) => saveToStorage('themeMode', value));
 rotationAngle.subscribe((value) => saveToStorage('rotationAngle', value));
 topToolbarPinned.subscribe((value) => saveToStorage('topToolbarPinned', value));
 bottomThumbnailBarPinned.subscribe((value) => saveToStorage('bottomThumbnailBarPinned', value));
-sidebarPinned.subscribe((value) => saveToStorage('sidebarPinned', value));
+leftSidebarPinned.subscribe((value) => saveToStorage('leftSidebarPinned', value));
 rightSidebarPinned.subscribe((value) => saveToStorage('rightSidebarPinned', value));
 topToolbarHeight.subscribe((value) => saveToStorage('topToolbarHeight', value));
 bottomThumbnailBarHeight.subscribe((value) => saveToStorage('bottomThumbnailBarHeight', value));
@@ -179,11 +184,13 @@ isLoading.subscribe((value) => {
 });
 
 /**
- * 切换侧边栏
+ * 切换左侧边栏
  */
-export function toggleSidebar() {
-	sidebarOpen.update((open) => !open);
+export function toggleLeftSidebar() {
+	leftSidebarOpen.update((open) => !open);
 }
+// 兼容性别名
+export const toggleSidebar = toggleLeftSidebar;
 
 /**
  * 切换右侧边栏

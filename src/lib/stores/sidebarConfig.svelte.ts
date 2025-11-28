@@ -295,7 +295,15 @@ function createSidebarConfigStore() {
 
 export const sidebarConfigStore = createSidebarConfigStore();
 
-// 派生 stores - 使用 sidebarConfig 前缀避免与 panels.svelte.ts 冲突
+// 当前激活的面板
+export const activePanel = writable<PanelId | null>('folder');
+
+// 设置激活的面板
+export function setActivePanelTab(panelId: PanelId | null) {
+	activePanel.set(panelId);
+}
+
+// 派生 stores
 export const sidebarLeftPanels = derived(sidebarConfigStore, $state => 
 	$state.panels
 		.filter(p => p.position === 'left' && p.visible)
@@ -310,4 +318,11 @@ export const sidebarRightPanels = derived(sidebarConfigStore, $state =>
 
 export const sidebarAllPanels = derived(sidebarConfigStore, $state => 
 	$state.panels.sort((a, b) => a.order - b.order)
+);
+
+// 隐藏的面板（等待区）
+export const sidebarHiddenPanels = derived(sidebarConfigStore, $state =>
+	$state.panels
+		.filter(p => !p.visible)
+		.sort((a, b) => a.order - b.order)
 );

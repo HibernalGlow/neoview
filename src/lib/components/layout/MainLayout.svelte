@@ -17,7 +17,7 @@
 		activePanel
 	} from '$lib/stores';
 	import { bookStore } from '$lib/stores/book.svelte';
-	import Sidebar from './Sidebar.svelte';
+	import LeftSidebar from './LeftSidebar.svelte';
 	import RightSidebar from './RightSidebar.svelte';
 	import TopToolbar from './TopToolbar.svelte';
 	import BottomThumbnailBar from './BottomThumbnailBar.svelte';
@@ -154,7 +154,7 @@
 			class="pointer-events-auto absolute bottom-0 left-0 top-0"
 			style={`width: ${hoverAreas?.leftTriggerWidth ?? 12}px;`}
 		>
-			<Sidebar onResize={handleSidebarResize} />
+			<LeftSidebar onResize={handleSidebarResize} />
 		</div>
 	</div>
 

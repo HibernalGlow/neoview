@@ -16,7 +16,9 @@ import {
 	Trash2,
 	Star,
 	Pencil,
-	Home
+	Home,
+	Play,
+	FolderOpen
 } from '@lucide/svelte';
 
 interface Props {
@@ -36,6 +38,8 @@ interface Props {
 	onSetAsHomepage?: (item: FsItem) => void;
 	onCopyPath?: (item: FsItem) => void;
 	onCopyName?: (item: FsItem) => void;
+	onOpenInExplorer?: (item: FsItem) => void;
+	onOpenWithSystem?: (item: FsItem) => void;
 }
 
 let {
@@ -54,7 +58,9 @@ let {
 	onAddBookmark,
 	onSetAsHomepage,
 	onCopyPath,
-	onCopyName
+	onCopyName,
+	onOpenInExplorer,
+	onOpenWithSystem
 }: Props = $props();
 
 // Portal action - 将元素移动到 body
@@ -126,6 +132,16 @@ function handleCopyName() {
 	if (item) onCopyName?.(item);
 	onClose();
 }
+
+function handleOpenInExplorer() {
+	if (item) onOpenInExplorer?.(item);
+	onClose();
+}
+
+function handleOpenWithSystem() {
+	if (item) onOpenWithSystem?.(item);
+	onClose();
+}
 </script>
 
 {#if visible && item}
@@ -173,17 +189,23 @@ function handleCopyName() {
 				</button>
 				<button
 					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-					onclick={() => {
-						if (item) {
-							window.open(`file://${item.path}`, '_blank');
-						}
-						onClose();
-					}}
+					onclick={handleOpenWithSystem}
 				>
-					<ExternalLink class="h-4 w-4" />
-					<span>在资源管理器中打开</span>
+					<Play class="h-4 w-4" />
+					<span>用默认软件打开</span>
 				</button>
 			{/if}
+
+			<div class="bg-border my-1 h-px"></div>
+
+			<!-- 在资源管理器中打开（通用） -->
+			<button
+				class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
+				onclick={handleOpenInExplorer}
+			>
+				<FolderOpen class="h-4 w-4" />
+				<span>在资源管理器中打开</span>
+			</button>
 
 			<div class="bg-border my-1 h-px"></div>
 

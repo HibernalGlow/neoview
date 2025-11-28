@@ -150,10 +150,17 @@ function handleToggleMigrationManager() {
 	showMigrationManager = !showMigrationManager;
 }
 
+// 剪贴板状态
+let clipboardItem = $state<{ paths: string[]; operation: 'copy' | 'cut' } | null>(null);
+
 // 处理删除
 async function handleDelete(item: FsItem) {
+	const confirmMessage = `确定要删除 "${item.name}" 吗？`;
+	if (!confirm(confirmMessage)) return;
+
 	try {
-		await FileSystemAPI.deletePath(item.path);
+		// 默认移动到回收站
+		await FileSystemAPI.moveToTrash(item.path);
 		showSuccessToast('删除成功', item.name);
 		// 刷新当前目录
 		handleRefresh();
@@ -172,9 +179,12 @@ async function handleBatchDelete() {
 	}
 
 	const paths = Array.from(selected);
+	const confirmMessage = `确定要删除选中的 ${paths.length} 个项目吗？`;
+	if (!confirm(confirmMessage)) return;
+
 	try {
 		for (const path of paths) {
-			await FileSystemAPI.deletePath(path);
+			await FileSystemAPI.moveToTrash(path);
 		}
 		showSuccessToast('删除成功', `已删除 ${paths.length} 个文件`);
 		folderPanelActions.deselectAll();
@@ -187,27 +197,101 @@ async function handleBatchDelete() {
 
 // 处理剪切
 function handleCut(item: FsItem) {
-	// TODO: 实现剪切功能
-	navigator.clipboard.writeText(item.path);
+	clipboardItem = { paths: [item.path], operation: 'cut' };
+	try {
+		navigator.clipboard.writeText(item.path);
+	} catch {}
 	showSuccessToast('已剪切', item.name);
 }
 
 // 处理复制
 function handleCopy(item: FsItem) {
-	navigator.clipboard.writeText(item.path);
-	showSuccessToast('已复制路径', item.name);
+	clipboardItem = { paths: [item.path], operation: 'copy' };
+	try {
+		navigator.clipboard.writeText(item.path);
+	} catch {}
+	showSuccessToast('已复制', item.name);
 }
 
 // 处理粘贴
 async function handlePaste() {
-	// TODO: 实现粘贴功能
-	showSuccessToast('粘贴', '功能开发中...');
+	if (!clipboardItem || clipboardItem.paths.length === 0) {
+		showErrorToast('粘贴失败', '剪贴板为空');
+		return;
+	}
+
+	const targetDir = $currentPath;
+	if (!targetDir) {
+		showErrorToast('粘贴失败', '请先打开一个目录');
+		return;
+	}
+
+	try {
+		for (const sourcePath of clipboardItem.paths) {
+			const fileName = sourcePath.split(/[\\/]/).pop();
+			if (!fileName) continue;
+			const destPath = `${targetDir}/${fileName}`;
+
+			if (clipboardItem.operation === 'cut') {
+				await FileSystemAPI.movePath(sourcePath, destPath);
+			} else {
+				await FileSystemAPI.copyPath(sourcePath, destPath);
+			}
+		}
+
+		showSuccessToast(
+			clipboardItem.operation === 'cut' ? '移动成功' : '复制成功',
+			`已${clipboardItem.operation === 'cut' ? '移动' : '复制'} ${clipboardItem.paths.length} 个文件`
+		);
+
+		// 如果是剪切，清空剪贴板
+		if (clipboardItem.operation === 'cut') {
+			clipboardItem = null;
+		}
+
+		handleRefresh();
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		showErrorToast('粘贴失败', message);
+	}
 }
 
 // 处理重命名
-function handleRename(item: FsItem) {
-	// TODO: 实现重命名功能
-	showSuccessToast('重命名', '功能开发中...');
+async function handleRename(item: FsItem) {
+	const newName = prompt('请输入新名称:', item.name);
+	if (!newName || newName === item.name) return;
+
+	try {
+		// 构建新路径
+		const parentPath = item.path.substring(0, item.path.lastIndexOf(item.name));
+		const newPath = parentPath + newName;
+		await FileSystemAPI.renamePath(item.path, newPath);
+		showSuccessToast('重命名成功', `${item.name} → ${newName}`);
+		handleRefresh();
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		showErrorToast('重命名失败', message);
+	}
+}
+
+// 在资源管理器中打开
+async function handleOpenInExplorer(item: FsItem) {
+	try {
+		await FileSystemAPI.showInFileManager(item.path);
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		showErrorToast('打开失败', message);
+	}
+}
+
+// 用默认软件打开
+async function handleOpenWithSystem(item: FsItem) {
+	try {
+		await FileSystemAPI.openWithSystem(item.path);
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		showErrorToast('打开失败', message);
+	}
 }
 
 // 初始化
@@ -327,4 +411,6 @@ onMount(async () => {
 	onSetAsHomepage={handleSetAsHomepage}
 	onCopyPath={handleCopyPath}
 	onCopyName={handleCopyName}
+	onOpenInExplorer={handleOpenInExplorer}
+	onOpenWithSystem={handleOpenWithSystem}
 />

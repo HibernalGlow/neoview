@@ -251,9 +251,9 @@
 					class="hidden flex-1 md:flex"
 					style="width: calc(var(--sidebar-width) - var(--sidebar-width-icon) - 1px);"
 				>
-					<Sidebar.Content>
-						<Sidebar.Group class="px-0">
-							<Sidebar.GroupContent>
+					<Sidebar.Content class="h-full">
+						<Sidebar.Group class="h-full flex-1 p-0">
+							<Sidebar.GroupContent class="h-full">
 								<!-- 使用 CSS 隐藏而非条件渲染，保持组件实例不被销毁 -->
 								<div class="h-full {activeItem.value === 'files' ? '' : 'hidden'}">
 									<FolderPanel />

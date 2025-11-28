@@ -96,7 +96,8 @@ export class VirtualPageList {
       oldConfig.divideLandscape !== this._config.divideLandscape ||
       oldConfig.divideThreshold !== this._config.divideThreshold ||
       oldConfig.pageMode !== this._config.pageMode ||
-      oldConfig.readOrder !== this._config.readOrder;
+      oldConfig.readOrder !== this._config.readOrder ||
+      oldConfig.autoRotate !== this._config.autoRotate;
 
     if (needRebuild) {
       this.rebuild();

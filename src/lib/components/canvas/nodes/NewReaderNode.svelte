@@ -42,7 +42,27 @@
 		}
 	});
 	
-	// 监听页面变化，加载图片
+	// 监听旧系统页面变化，同步到新系统
+	// 使用 debounce 避免循环
+	let _lastOldPageIndex: number = -1;
+	let _syncTimeout: ReturnType<typeof setTimeout> | null = null;
+	$effect(() => {
+		const oldBook = bookStore.currentBook;
+		if (oldBook && bookState.isOpen) {
+			const oldPageIndex = oldBook.currentPage;
+			if (oldPageIndex !== _lastOldPageIndex && oldPageIndex !== bookState.currentIndex) {
+				_lastOldPageIndex = oldPageIndex;
+				// 使用 setTimeout 避免在 effect 中直接调用可能触发循环的操作
+				if (_syncTimeout) clearTimeout(_syncTimeout);
+				_syncTimeout = setTimeout(() => {
+					bookStore2.goToPage(oldPageIndex);
+					log(`同步旧系统页面: ${oldPageIndex}`);
+				}, 50);
+			}
+		}
+	});
+	
+	// 监听新系统页面变化，加载图片
 	$effect(() => {
 		const currentIndex = bookState.currentIndex;
 		const isOpen = bookState.isOpen;

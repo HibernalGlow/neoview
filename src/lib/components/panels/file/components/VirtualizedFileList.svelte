@@ -234,10 +234,10 @@
 		// 按路径记录当前滚动位置，用于下次返回时精确恢复
 		if (currentPath) {
 			scrollPositions.set(currentPath, newScrollTop);
-			console.debug('[VirtualizedFileList] save scroll', {
-				path: currentPath,
-				scrollTop: newScrollTop
-			});
+			// console.debug('[VirtualizedFileList] save scroll', {
+			// 	path: currentPath,
+			// 	scrollTop: newScrollTop
+			// });
 		}
 
 		// 节流处理

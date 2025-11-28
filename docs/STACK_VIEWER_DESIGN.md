@@ -714,6 +714,183 @@ function updateUpscaleCache(currentIndex: number) {
 
 ---
 
+## LayerSet 设计（多 Book 支持）
+
+### 核心思路
+
+**不同 book 使用不同的 layer 集合，方便快速切换和缓存**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    LayerSet 架构                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Book A (当前)                    Book B (后台)              │
+│  ┌─────────────────────┐         ┌─────────────────────┐    │
+│  │ LayerSet A          │         │ LayerSet B          │    │
+│  │ ┌─────────────────┐ │         │ ┌─────────────────┐ │    │
+│  │ │ CurrentFrame    │ │         │ │ CurrentFrame    │ │    │
+│  │ │ (page 5)        │ │         │ │ (page 12)       │ │    │
+│  │ └─────────────────┘ │         │ └─────────────────┘ │    │
+│  │ ┌─────────────────┐ │         │ ┌─────────────────┐ │    │
+│  │ │ PrevFrame       │ │         │ │ PrevFrame       │ │    │
+│  │ │ (page 4)        │ │         │ │ (page 11)       │ │    │
+│  │ └─────────────────┘ │         │ └─────────────────┘ │    │
+│  │ ┌─────────────────┐ │         │ ┌─────────────────┐ │    │
+│  │ │ NextFrame       │ │         │ │ NextFrame       │ │    │
+│  │ │ (page 6)        │ │         │ │ (page 13)       │ │    │
+│  │ └─────────────────┘ │         │ └─────────────────┘ │    │
+│  │ ┌─────────────────┐ │         │ ┌─────────────────┐ │    │
+│  │ │ UpscaleCache    │ │         │ │ UpscaleCache    │ │    │
+│  │ │ (pages 3-7)     │ │         │ │ (pages 10-14)   │ │    │
+│  │ └─────────────────┘ │         │ └─────────────────┘ │    │
+│  └─────────────────────┘         └─────────────────────┘    │
+│                                                              │
+│  切换 Book 时：                                              │
+│  1. 保存当前 LayerSet 状态                                   │
+│  2. 切换到目标 LayerSet                                      │
+│  3. 恢复目标 LayerSet 状态（页面位置、缩放等）               │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 接口设计
+
+```typescript
+interface LayerSet {
+  id: string;              // book id
+  bookPath: string;        // book 路径
+  currentIndex: number;    // 当前页索引
+  transform: Transform;    // 变换状态（缩放、旋转、平移）
+  
+  // 帧缓存
+  frames: {
+    current: Frame;
+    prev: Frame;
+    next: Frame;
+  };
+  
+  // 超分缓存
+  upscaleCache: Map<number, string>;
+  
+  // 预加载队列
+  preloadQueue: number[];
+}
+
+interface LayerSetManager {
+  // 当前活动的 LayerSet
+  active: LayerSet | null;
+  
+  // 所有 LayerSet（LRU 缓存）
+  sets: Map<string, LayerSet>;
+  
+  // 最大缓存数量
+  maxSets: number;
+  
+  // 切换 LayerSet
+  switchTo(bookId: string): void;
+  
+  // 创建新 LayerSet
+  create(bookPath: string): LayerSet;
+  
+  // 销毁 LayerSet
+  destroy(bookId: string): void;
+  
+  // 清理最旧的 LayerSet
+  evictOldest(): void;
+}
+```
+
+### 优点
+
+1. **快速切换** - 切换 book 时只需切换 LayerSet 引用
+2. **状态保持** - 每个 book 的阅读位置、缩放等独立保存
+3. **缓存复用** - 预加载的图片和超分结果可以复用
+4. **内存可控** - 通过 LRU 策略控制缓存数量
+
+---
+
+## HoverLayer 悬停层
+
+### 功能
+
+1. **悬停滚动** - 鼠标靠近边缘时自动滚动图片
+2. **悬停平移** - 鼠标位置控制图片平移方向
+
+### 配置
+
+```typescript
+interface HoverConfig {
+  // 悬停滚动
+  enableHoverScroll: boolean;
+  hoverScrollSpeed: number;      // 滚动速度
+  hoverScrollZone: number;       // 边缘区域占比 (0-0.5)
+  
+  // 悬停平移
+  enableHoverPan: boolean;
+  hoverPanSensitivity: number;   // 平移灵敏度
+}
+```
+
+### 层级
+
+- z-index: 85（在手势层之下，信息层之上）
+- 与手势层互斥：悬停平移时禁用拖拽平移
+
+---
+
+## Flow 模式调试层
+
+### 功能
+
+在 Flow 模式下显示每个层的状态，用于调试和可视化：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Flow 模式调试视图                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │ 层状态面板                                            │   │
+│  │ ┌────────────────────────────────────────────────┐   │   │
+│  │ │ Layer 9: Gesture    [✓] pointer-events: auto   │   │   │
+│  │ │ Layer 8: Hover      [✗] disabled               │   │   │
+│  │ │ Layer 7: Info       [✓] visible                │   │   │
+│  │ │ Layer 5: Upscale    [✗] no upscaled image      │   │   │
+│  │ │ Layer 4: Current    [✓] page 5, loaded         │   │   │
+│  │ │ Layer 3: Next       [✓] page 6, preloaded      │   │   │
+│  │ │ Layer 2: Prev       [✓] page 4, preloaded      │   │   │
+│  │ │ Layer 0: Background [✓] #1a1a1a                │   │   │
+│  │ └────────────────────────────────────────────────┘   │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │ 预加载状态                                            │   │
+│  │ [■■■■■□□□□□] 5/10 pages preloaded                    │   │
+│  │ [■■□□□□□□□□] 2/10 pages upscaled                     │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 实现
+
+- 只在 Flow 模式下渲染调试面板
+- 使用 `$inspect` 或自定义 store 收集层状态
+- 不影响 Classic 模式性能
+
+```svelte
+{#if $isFlowMode && $showDebugPanel}
+  <DebugLayer 
+    layers={$layerStates}
+    preloadStatus={$preloadStatus}
+    upscaleStatus={$upscaleStatus}
+  />
+{/if}
+```
+
+---
+
 ## 迁移策略
 
 采用"忒休斯之船"策略，逐步替换：

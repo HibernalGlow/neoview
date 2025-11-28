@@ -308,7 +308,7 @@ $effect(() => {
 	navigationCommand.set(null);
 });
 
-// 处理项选中
+// 处理项选中（单击）
 function handleItemSelect(layerIndex: number, payload: { item: FsItem; index: number; multiSelect: boolean }) {
 	if (layerIndex !== activeIndex) return;
 	
@@ -316,12 +316,16 @@ function handleItemSelect(layerIndex: number, payload: { item: FsItem; index: nu
 	layers[layerIndex].selectedIndex = payload.index;
 	
 	if (payload.multiSelect) {
+		// 多选模式：只切换选中状态
 		folderPanelActions.selectItem(payload.item.path, true);
 	} else {
 		folderPanelActions.selectItem(payload.item.path);
-		// 文件夹单击直接进入
+		// 单击直接打开（文件夹进入，文件打开）
 		if (payload.item.isDir) {
 			pushLayer(payload.item.path);
+		} else {
+			// 文件单击直接打开
+			onItemOpen?.(payload.item);
 		}
 	}
 }
@@ -330,7 +334,7 @@ function handleItemSelect(layerIndex: number, payload: { item: FsItem; index: nu
 function handleItemDoubleClick(layerIndex: number, payload: { item: FsItem; index: number }) {
 	if (layerIndex !== activeIndex) return;
 	
-	// 文件双击打开
+	// 双击也打开文件（与单击行为一致）
 	if (!payload.item.isDir) {
 		onItemOpen?.(payload.item);
 	}

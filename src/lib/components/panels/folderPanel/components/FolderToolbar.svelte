@@ -219,7 +219,7 @@ function getCurrentViewIcon() {
 		<Tooltip.Root>
 			<Tooltip.Trigger>
 				<Button
-					variant={$multiSelectMode ? 'secondary' : 'ghost'}
+					variant={$multiSelectMode ? 'default' : 'ghost'}
 					size="icon"
 					class="h-7 w-7"
 					onclick={() => folderPanelActions.toggleMultiSelectMode()}
@@ -235,7 +235,7 @@ function getCurrentViewIcon() {
 		<Tooltip.Root>
 			<Tooltip.Trigger>
 				<Button
-					variant={$deleteMode ? 'destructive' : 'ghost'}
+					variant={$deleteMode ? 'default' : 'ghost'}
 					size="icon"
 					class="h-7 w-7"
 					onclick={() => folderPanelActions.toggleDeleteMode()}
@@ -262,7 +262,7 @@ function getCurrentViewIcon() {
 		<Tooltip.Root>
 			<Tooltip.Trigger>
 				<Button
-					variant={$showSearchBar ? 'secondary' : 'ghost'}
+					variant={$showSearchBar ? 'default' : 'ghost'}
 					size="icon"
 					class="h-7 w-7"
 					onclick={() => folderPanelActions.toggleShowSearchBar()}
@@ -278,7 +278,7 @@ function getCurrentViewIcon() {
 		<Tooltip.Root>
 			<Tooltip.Trigger>
 				<Button
-					variant={$showMigrationBar ? 'secondary' : 'ghost'}
+					variant={$showMigrationBar ? 'default' : 'ghost'}
 					size="icon"
 					class="h-7 w-7"
 					onclick={() => folderPanelActions.toggleShowMigrationBar()}
@@ -294,7 +294,7 @@ function getCurrentViewIcon() {
 		<Tooltip.Root>
 			<Tooltip.Trigger>
 				<Button
-					variant={$penetrateMode ? 'secondary' : 'ghost'}
+					variant={$penetrateMode ? 'default' : 'ghost'}
 					size="icon"
 					class="h-7 w-7"
 					onclick={() => folderPanelActions.togglePenetrateMode()}

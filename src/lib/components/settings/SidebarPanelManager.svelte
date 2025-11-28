@@ -3,7 +3,7 @@
  * SidebarPanelManager - 侧边栏面板管理器
  * 用于在设置中配置面板的显示、顺序和位置
  */
-import { sidebarConfigStore, allPanels, type PanelId, type PanelPosition } from '$lib/stores/sidebarConfig.svelte';
+import { sidebarConfigStore, sidebarAllPanels, type PanelId, type PanelPosition } from '$lib/stores/sidebarConfig.svelte';
 import { Button } from '$lib/components/ui/button';
 import * as Switch from '$lib/components/ui/switch';
 import { GripVertical, Eye, EyeOff, ArrowLeft, ArrowRight, RotateCcw } from '@lucide/svelte';
@@ -41,9 +41,9 @@ function handleDrop(e: DragEvent, targetPanelId: PanelId) {
 	e.preventDefault();
 	if (!draggedPanel || draggedPanel === targetPanelId) return;
 	
-	const panels = $allPanels;
-	const draggedIndex = panels.findIndex(p => p.id === draggedPanel);
-	const targetIndex = panels.findIndex(p => p.id === targetPanelId);
+	const panels = $sidebarAllPanels;
+	const draggedIndex = panels.findIndex((p: { id: PanelId }) => p.id === draggedPanel);
+	const targetIndex = panels.findIndex((p: { id: PanelId }) => p.id === targetPanelId);
 	
 	if (draggedIndex !== -1 && targetIndex !== -1) {
 		const targetPanel = panels[targetIndex];
@@ -86,7 +86,7 @@ function resetPanels() {
 	</p>
 	
 	<div class="space-y-2">
-		{#each $allPanels as panel (panel.id)}
+		{#each $sidebarAllPanels as panel (panel.id)}
 			<div
 				class="flex items-center gap-3 rounded-lg border p-3 transition-colors {dragOverPanel === panel.id ? 'border-primary bg-accent' : 'bg-card'} {draggedPanel === panel.id ? 'opacity-50' : ''}"
 				draggable={panel.canMove}

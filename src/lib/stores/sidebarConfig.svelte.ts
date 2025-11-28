@@ -295,19 +295,19 @@ function createSidebarConfigStore() {
 
 export const sidebarConfigStore = createSidebarConfigStore();
 
-// 派生 stores
-export const leftPanels = derived(sidebarConfigStore, $state => 
+// 派生 stores - 使用 sidebarConfig 前缀避免与 panels.svelte.ts 冲突
+export const sidebarLeftPanels = derived(sidebarConfigStore, $state => 
 	$state.panels
 		.filter(p => p.position === 'left' && p.visible)
 		.sort((a, b) => a.order - b.order)
 );
 
-export const rightPanels = derived(sidebarConfigStore, $state => 
+export const sidebarRightPanels = derived(sidebarConfigStore, $state => 
 	$state.panels
 		.filter(p => p.position === 'right' && p.visible)
 		.sort((a, b) => a.order - b.order)
 );
 
-export const allPanels = derived(sidebarConfigStore, $state => 
+export const sidebarAllPanels = derived(sidebarConfigStore, $state => 
 	$state.panels.sort((a, b) => a.order - b.order)
 );

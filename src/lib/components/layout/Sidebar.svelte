@@ -1,13 +1,9 @@
 <script lang="ts">
 	/**
-	 * NeoView - Sidebar Component (shadcn-svelte 二级菜单重构 + 原生交互)
-	 * 左侧边栏组件 - 使用 shadcn-svelte Sidebar 二级菜单结构，恢复拖拽和悬停逻辑
+	 * NeoView - Sidebar Component (shadcn-svelte 二级菜单重构 + 动态面板配置)
+	 * 左侧边栏组件 - 使用 sidebarConfig 动态管理面板显示、顺序和位置
 	 */
 	import {
-		Folder,
-		History,
-		Bookmark,
-		Image as ImageIcon,
 		Pin,
 		PinOff,
 		GripVertical
@@ -18,20 +14,20 @@
 		setActivePanelTab,
 		sidebarWidth,
 		sidebarPinned,
-		sidebarOpen
+		sidebarOpen,
+		sidebarLeftPanels,
+		type PanelId
 	} from '$lib/stores';
 	import type { PanelTabType } from '$lib/stores';
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import FolderPanel from '$lib/components/panels/folderPanel/FolderPanel.svelte';
 	import HistoryPanel from '$lib/components/panels/HistoryPanel.svelte';
 	import BookmarkPanel from '$lib/components/panels/BookmarkPanel.svelte';
-	import ThumbnailsPanel from '$lib/components/panels/ThumbnailsPanel.svelte';
 	import BookPageListPanel from '$lib/components/panels/BookPageListPanel.svelte';
+	import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import HoverWrapper from './HoverWrapper.svelte';
-	import PanelContextMenu from '$lib/components/ui/PanelContextMenu.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
-	import { Maximize2, ExternalLink, X } from '@lucide/svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
 
 	interface Props {
@@ -44,43 +40,22 @@
 	let settings = $state(settingsManager.getSettings());
 	let autoHideTiming = $derived(settings.panels?.autoHideTiming ?? { showDelaySec: 0, hideDelaySec: 0 });
 
-	// const sidebar = Sidebar.useSidebar(); // Context not available here
-
-	type NavItem = {
-		title: string;
-		url: string;
-		icon: typeof Folder;
-		value: PanelTabType;
+	// 从配置获取左侧面板列表
+	let leftPanels = $derived($sidebarLeftPanels);
+	
+	// 当前激活的面板 ID
+	let activePanelId = $state<PanelId>('folder');
+	
+	// 面板组件映射
+	const panelComponents: Record<PanelId, typeof FolderPanel> = {
+		folder: FolderPanel,
+		history: HistoryPanel,
+		bookmark: BookmarkPanel,
+		thumbnail: BookPageListPanel,
+		info: InfoPanel,
+		settings: FolderPanel, // 占位
+		playlist: FolderPanel  // 占位
 	};
-
-	const navMain: NavItem[] = [
-		{
-			title: '文件夹',
-			url: '#',
-			icon: Folder,
-			value: 'folder'
-		},
-		{
-			title: '历史记录',
-			url: '#',
-			icon: History,
-			value: 'history'
-		},
-		{
-			title: '书签',
-			url: '#',
-			icon: Bookmark,
-			value: 'bookmark'
-		},
-		{
-			title: '缩略图',
-			url: '#',
-			icon: ImageIcon,
-			value: 'thumbnail'
-		}
-	];
-
-	let activeItem = $state(navMain[0]);
 
 	function createAppStateStore<T>(selector: StateSelector<T>) {
 		const initial = selector(appState.getSnapshot());
@@ -147,11 +122,11 @@
 		}
 	}
 
-	function handleTabChange(item: NavItem) {
-		activeItem = item;
+	function handleTabChange(panelId: PanelId) {
+		activePanelId = panelId;
 
 		// 设置活动面板
-		setActivePanelTab(item.value as PanelTabType);
+		setActivePanelTab(panelId as PanelTabType);
 
 		// 确保侧边栏打开
 		localSidebarOpen = true;
@@ -160,9 +135,9 @@
 
 	// 响应 activePanel 变化（避免无限循环）
 	$effect(() => {
-		const currentActive = navMain.find((nav) => nav.value === $activePanel);
-		if (currentActive && currentActive.value !== activeItem.value) {
-			activeItem = currentActive;
+		const currentActive = leftPanels.find((p) => p.id === $activePanel);
+		if (currentActive && currentActive.id !== activePanelId) {
+			activePanelId = currentActive.id;
 		}
 	});
 
@@ -247,21 +222,22 @@
 						<Sidebar.Group>
 							<Sidebar.GroupContent class="px-1.5 md:px-0">
 								<Sidebar.Menu>
-									{#each navMain as item (item.value)}
+									{#each leftPanels as panel (panel.id)}
+										{@const Icon = panel.icon}
 										<Sidebar.MenuItem>
 											<Sidebar.MenuButton
 												tooltipContentProps={{
 													hidden: false
 												}}
-												onclick={() => handleTabChange(item)}
-												isActive={$activePanel === item.value}
+												onclick={() => handleTabChange(panel.id)}
+												isActive={$activePanel === panel.id}
 												class="px-2.5 md:px-2"
 											>
 												{#snippet tooltipContent()}
-													{item.title}
+													{panel.title}
 												{/snippet}
-												<item.icon />
-												<span>{item.title}</span>
+												<Icon />
+												<span>{panel.title}</span>
 											</Sidebar.MenuButton>
 										</Sidebar.MenuItem>
 									{/each}
@@ -281,18 +257,12 @@
 						<Sidebar.Group class="px-0">
 							<Sidebar.GroupContent>
 								<!-- 使用 CSS 隐藏而非条件渲染，保持组件实例不被销毁 -->
-								<div class={activeItem.value === 'folder' ? '' : 'hidden'}>
-									<FolderPanel />
-								</div>
-								<div class={activeItem.value === 'history' ? '' : 'hidden'}>
-									<HistoryPanel />
-								</div>
-								<div class={activeItem.value === 'bookmark' ? '' : 'hidden'}>
-									<BookmarkPanel />
-								</div>
-								<div class={activeItem.value === 'thumbnail' ? '' : 'hidden'}>
-									<BookPageListPanel />
-								</div>
+								{#each leftPanels as panel (panel.id)}
+									{@const PanelComponent = panelComponents[panel.id]}
+									<div class={activePanelId === panel.id ? '' : 'hidden'}>
+										<PanelComponent />
+									</div>
+								{/each}
 							</Sidebar.GroupContent>
 						</Sidebar.Group>
 					</Sidebar.Content>

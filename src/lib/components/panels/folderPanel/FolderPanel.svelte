@@ -30,7 +30,9 @@ import {
 	showMigrationBar,
 	selectedItems,
 	deleteMode,
-	deleteStrategy
+	deleteStrategy,
+	multiSelectMode,
+	sortedItems
 } from './stores/folderPanelStore.svelte';
 
 // 导航命令 store（用于父子组件通信）
@@ -361,21 +363,109 @@ function handleToggleDeleteStrategy() {
 	showSuccessToast('删除策略已切换', text);
 }
 
-// 初始化
-onMount(async () => {
-	try {
-		// 从 localStorage 读取保存的主页路径，如果没有则使用用户目录
-		const savedHomePath = localStorage.getItem('neoview-homepage-path');
-		const defaultHome = await homeDir();
-		const home = savedHomePath || defaultHome;
-		folderPanelActions.setHomePath(home);
-
-		// 初始化层叠导航
-		const initialPath = $currentPath || home;
-		navigationCommand.set({ type: 'init', path: initialPath });
-	} catch (err) {
-		console.error('[FolderPanel] Failed to initialize:', err);
+// 键盘快捷键处理
+function handleKeydown(e: KeyboardEvent) {
+	// 如果在输入框中，不处理快捷键
+	const target = e.target as HTMLElement;
+	if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+		return;
 	}
+
+	const selected = $selectedItems;
+	const items = $sortedItems;
+
+	switch (e.key) {
+		case 'ArrowDown':
+			e.preventDefault();
+			// TODO: 实现向下导航
+			break;
+
+		case 'ArrowUp':
+			e.preventDefault();
+			// TODO: 实现向上导航
+			break;
+
+		case 'Enter':
+			e.preventDefault();
+			if (selected.size > 0) {
+				const firstPath = Array.from(selected)[0];
+				const item = items.find((i: FsItem) => i.path === firstPath);
+				if (item) {
+					if (item.isDir) {
+						navigationCommand.set({ type: 'push', path: item.path });
+					} else {
+						handleItemOpen(item);
+					}
+				}
+			}
+			break;
+
+		case 'Backspace':
+			e.preventDefault();
+			handleGoBack();
+			break;
+
+		case 'F5':
+			e.preventDefault();
+			handleRefresh();
+			break;
+
+		case 'Delete':
+			e.preventDefault();
+			if ($deleteMode && selected.size > 0) {
+				handleBatchDelete();
+			}
+			break;
+
+		case 'a':
+			if (e.ctrlKey || e.metaKey) {
+				e.preventDefault();
+				folderPanelActions.selectAll();
+			}
+			break;
+
+		case 'f':
+			if (e.ctrlKey || e.metaKey) {
+				e.preventDefault();
+				folderPanelActions.toggleShowSearchBar();
+			}
+			break;
+
+		case 'Escape':
+			e.preventDefault();
+			if ($multiSelectMode) {
+				folderPanelActions.deselectAll();
+			}
+			break;
+	}
+}
+
+// 初始化
+onMount(() => {
+	// 异步初始化
+	(async () => {
+		try {
+			// 从 localStorage 读取保存的主页路径，如果没有则使用用户目录
+			const savedHomePath = localStorage.getItem('neoview-homepage-path');
+			const defaultHome = await homeDir();
+			const home = savedHomePath || defaultHome;
+			folderPanelActions.setHomePath(home);
+
+			// 初始化层叠导航
+			const initialPath = $currentPath || home;
+			navigationCommand.set({ type: 'init', path: initialPath });
+		} catch (err) {
+			console.error('[FolderPanel] Failed to initialize:', err);
+		}
+	})();
+
+	// 添加键盘事件监听
+	document.addEventListener('keydown', handleKeydown);
+
+	return () => {
+		// 清理键盘事件监听
+		document.removeEventListener('keydown', handleKeydown);
+	};
 });
 </script>
 

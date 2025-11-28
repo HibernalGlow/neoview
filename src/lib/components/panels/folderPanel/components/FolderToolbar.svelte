@@ -20,7 +20,8 @@ import {
 	ArrowUpDown,
 	Search,
 	CornerDownRight,
-	ClipboardPaste
+	ClipboardPaste,
+	ListTree
 } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import * as Tooltip from '$lib/components/ui/tooltip';
@@ -39,6 +40,7 @@ import {
 	showMigrationBar,
 	penetrateMode,
 	deleteStrategy,
+	inlineTreeMode,
 	type FolderViewStyle,
 	type FolderSortField
 } from '../stores/folderPanelStore.svelte';
@@ -51,9 +53,10 @@ interface Props {
 	onGoHome?: () => void;
 	onSetHome?: () => void;
 	onToggleDeleteStrategy?: () => void;
+	onToggleInlineTree?: () => void;
 }
 
-let { onRefresh, onToggleFolderTree, onGoBack, onGoForward, onGoHome, onSetHome, onToggleDeleteStrategy }: Props = $props();
+let { onRefresh, onToggleFolderTree, onGoBack, onGoForward, onGoHome, onSetHome, onToggleDeleteStrategy, onToggleInlineTree }: Props = $props();
 
 const viewStyles: { value: FolderViewStyle; icon: typeof List; label: string }[] = [
 	{ value: 'list', icon: List, label: '列表' },
@@ -265,12 +268,23 @@ function getCurrentViewIcon() {
 
 		<Tooltip.Root>
 			<Tooltip.Trigger>
-				<Button variant="ghost" size="icon" class="h-7 w-7" onclick={onToggleFolderTree}>
-					<FolderTree class="h-4 w-4" />
+				<Button 
+					variant={$inlineTreeMode ? 'default' : 'ghost'} 
+					size="icon" 
+					class="h-7 w-7" 
+					onclick={onToggleFolderTree}
+					oncontextmenu={(e: MouseEvent) => { e.preventDefault(); onToggleInlineTree?.(); }}
+				>
+					{#if $inlineTreeMode}
+						<ListTree class="h-4 w-4" />
+					{:else}
+						<FolderTree class="h-4 w-4" />
+					{/if}
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
-				<p>文件夹树</p>
+				<p>文件夹树 {$inlineTreeMode ? '(主视图树模式)' : ''}</p>
+				<p class="text-muted-foreground text-xs">右键切换主视图树</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 

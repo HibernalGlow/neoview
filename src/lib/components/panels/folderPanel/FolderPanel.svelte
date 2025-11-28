@@ -15,6 +15,7 @@ import FolderStack from './components/FolderStack.svelte';
 import FolderTree from './components/FolderTree.svelte';
 import FolderContextMenu from './components/FolderContextMenu.svelte';
 import MigrationBar from './components/MigrationBar.svelte';
+import InlineTreeList from './components/InlineTreeList.svelte';
 import SearchBar from '$lib/components/ui/SearchBar.svelte';
 import { bookStore } from '$lib/stores/book.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
@@ -34,7 +35,8 @@ import {
 	deleteStrategy,
 	multiSelectMode,
 	sortedItems,
-	externalNavigationRequest
+	externalNavigationRequest,
+	inlineTreeMode
 } from './stores/folderPanelStore.svelte';
 
 // 导航命令 store（用于父子组件通信）
@@ -365,6 +367,13 @@ function handleToggleDeleteStrategy() {
 	showSuccessToast('删除策略已切换', text);
 }
 
+// 切换主视图树模式
+function handleToggleInlineTree() {
+	folderPanelActions.toggleInlineTreeMode();
+	const mode = $inlineTreeMode;
+	showSuccessToast('主视图树', mode ? '已开启' : '已关闭');
+}
+
 // 键盘快捷键处理（使用独立模块）
 const handleKeydown = createKeyboardHandler(() => ({
 	selectedItems: $selectedItems,
@@ -435,6 +444,7 @@ onMount(() => {
 		onGoHome={handleGoHome}
 		onSetHome={handleSetHome}
 		onToggleDeleteStrategy={handleToggleDeleteStrategy}
+		onToggleInlineTree={handleToggleInlineTree}
 	/>
 
 	<!-- 搜索栏（可切换显示） -->
@@ -490,12 +500,22 @@ onMount(() => {
 					: `left: ${$folderTreeConfig.size + 6}px;`
 				: ''}
 		>
-			<FolderStack
-				{navigationCommand}
-				onItemOpen={handleItemOpen}
-				onItemContextMenu={handleContextMenu}
-				onOpenFolderAsBook={handleOpenFolderAsBook}
-			/>
+			{#if $inlineTreeMode}
+				<!-- 主视图树模式 -->
+				<InlineTreeList
+					onItemClick={handleItemOpen}
+					onItemDoubleClick={handleItemOpen}
+					onItemContextMenu={handleContextMenu}
+				/>
+			{:else}
+				<!-- 层叠式文件列表 -->
+				<FolderStack
+					{navigationCommand}
+					onItemOpen={handleItemOpen}
+					onItemContextMenu={handleContextMenu}
+					onOpenFolderAsBook={handleOpenFolderAsBook}
+				/>
+			{/if}
 		</div>
 	</div>
 </div>

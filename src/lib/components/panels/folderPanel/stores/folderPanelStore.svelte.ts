@@ -75,6 +75,10 @@ export interface FolderPanelState {
 		showHistoryOnFocus: boolean;
 		searchInPath: boolean;
 	};
+	// 主视图树模式
+	inlineTreeMode: boolean;
+	// 展开的文件夹路径集合
+	expandedFolders: Set<string>;
 }
 
 // ============ Initial State ============
@@ -139,7 +143,9 @@ const initialState: FolderPanelState = {
 		includeSubfolders: true,
 		showHistoryOnFocus: true,
 		searchInPath: false
-	}
+	},
+	inlineTreeMode: false,
+	expandedFolders: new Set<string>()
 };
 
 // ============ Stores ============
@@ -270,6 +276,12 @@ export const penetrateMode = derived(state, ($state) => $state.penetrateMode);
 
 // 删除策略
 export const deleteStrategy = derived(state, ($state) => $state.deleteStrategy);
+
+// 主视图树模式
+export const inlineTreeMode = derived(state, ($state) => $state.inlineTreeMode);
+
+// 展开的文件夹
+export const expandedFolders = derived(state, ($state) => $state.expandedFolders);
 
 // 可以后退
 export const canGoBack = derived(
@@ -730,6 +742,60 @@ export const folderPanelActions = {
 			saveState(newState);
 			return newState;
 		});
+	},
+
+	/**
+	 * 切换主视图树模式
+	 */
+	toggleInlineTreeMode() {
+		state.update((s) => ({ ...s, inlineTreeMode: !s.inlineTreeMode }));
+	},
+
+	/**
+	 * 展开文件夹（主视图树）
+	 */
+	expandFolder(path: string) {
+		state.update((s) => {
+			const newExpanded = new Set(s.expandedFolders);
+			newExpanded.add(path);
+			return { ...s, expandedFolders: newExpanded };
+		});
+	},
+
+	/**
+	 * 折叠文件夹（主视图树）
+	 */
+	collapseFolder(path: string) {
+		state.update((s) => {
+			const newExpanded = new Set(s.expandedFolders);
+			newExpanded.delete(path);
+			// 同时折叠所有子文件夹
+			for (const p of newExpanded) {
+				if (p.startsWith(path + '/') || p.startsWith(path + '\\')) {
+					newExpanded.delete(p);
+				}
+			}
+			return { ...s, expandedFolders: newExpanded };
+		});
+	},
+
+	/**
+	 * 切换文件夹展开状态（主视图树）
+	 */
+	toggleFolderExpand(path: string) {
+		const currentState = get(state);
+		if (currentState.expandedFolders.has(path)) {
+			this.collapseFolder(path);
+		} else {
+			this.expandFolder(path);
+		}
+	},
+
+	/**
+	 * 清除所有展开状态
+	 */
+	clearExpandedFolders() {
+		state.update((s) => ({ ...s, expandedFolders: new Set<string>() }));
 	},
 
 	/**

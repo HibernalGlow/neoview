@@ -14,16 +14,22 @@ import BreadcrumbBar from './components/BreadcrumbBar.svelte';
 import FolderStack from './components/FolderStack.svelte';
 import FolderTree from './components/FolderTree.svelte';
 import FolderContextMenu from './components/FolderContextMenu.svelte';
+import MigrationBar from './components/MigrationBar.svelte';
 import SearchBar from '$lib/components/ui/SearchBar.svelte';
 import { bookStore } from '$lib/stores/book.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
+import { FileSystemAPI } from '$lib/api';
+import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
 
 import {
 	currentPath,
 	folderPanelActions,
 	folderTreeConfig,
 	searchKeyword,
-	showSearchBar
+	showSearchBar,
+	showMigrationBar,
+	selectedItems,
+	deleteMode
 } from './stores/folderPanelStore.svelte';
 
 // 导航命令 store（用于父子组件通信）
@@ -137,6 +143,73 @@ function handleToggleFolderTree() {
 	folderPanelActions.toggleFolderTree();
 }
 
+// 迁移栏管理器显示状态
+let showMigrationManager = $state(false);
+
+function handleToggleMigrationManager() {
+	showMigrationManager = !showMigrationManager;
+}
+
+// 处理删除
+async function handleDelete(item: FsItem) {
+	try {
+		await FileSystemAPI.deletePath(item.path);
+		showSuccessToast('删除成功', item.name);
+		// 刷新当前目录
+		handleRefresh();
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		showErrorToast('删除失败', message);
+	}
+}
+
+// 处理批量删除（删除模式下）
+async function handleBatchDelete() {
+	const selected = $selectedItems;
+	if (selected.size === 0) {
+		showErrorToast('没有选中的文件', '请先选择要删除的文件');
+		return;
+	}
+
+	const paths = Array.from(selected);
+	try {
+		for (const path of paths) {
+			await FileSystemAPI.deletePath(path);
+		}
+		showSuccessToast('删除成功', `已删除 ${paths.length} 个文件`);
+		folderPanelActions.deselectAll();
+		handleRefresh();
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		showErrorToast('删除失败', message);
+	}
+}
+
+// 处理剪切
+function handleCut(item: FsItem) {
+	// TODO: 实现剪切功能
+	navigator.clipboard.writeText(item.path);
+	showSuccessToast('已剪切', item.name);
+}
+
+// 处理复制
+function handleCopy(item: FsItem) {
+	navigator.clipboard.writeText(item.path);
+	showSuccessToast('已复制路径', item.name);
+}
+
+// 处理粘贴
+async function handlePaste() {
+	// TODO: 实现粘贴功能
+	showSuccessToast('粘贴', '功能开发中...');
+}
+
+// 处理重命名
+function handleRename(item: FsItem) {
+	// TODO: 实现重命名功能
+	showSuccessToast('重命名', '功能开发中...');
+}
+
 // 初始化
 onMount(async () => {
 	try {
@@ -175,6 +248,14 @@ onMount(async () => {
 				onSearch={handleSearch}
 			/>
 		</div>
+	{/if}
+
+	<!-- 迁移栏（可切换显示） -->
+	{#if $showMigrationBar}
+		<MigrationBar
+			showManager={showMigrationManager}
+			onToggleManager={handleToggleMigrationManager}
+		/>
 	{/if}
 
 	<!-- 主内容区 -->
@@ -237,6 +318,11 @@ onMount(async () => {
 	onClose={closeContextMenu}
 	onOpenAsBook={handleItemOpen}
 	onBrowse={(item) => navigationCommand.set({ type: 'push', path: item.path })}
+	onCopy={handleCopy}
+	onCut={handleCut}
+	onPaste={handlePaste}
+	onDelete={handleDelete}
+	onRename={handleRename}
 	onAddBookmark={handleAddBookmark}
 	onSetAsHomepage={handleSetAsHomepage}
 	onCopyPath={handleCopyPath}

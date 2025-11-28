@@ -890,8 +890,13 @@ export class ImageLoader {
 				// 确保核心缓存已准备（Blob + Object URL），保证翻页时可以直接显示
 				// 没有缓存：如果自动超分已开启，则添加到后端批量调度队列
 				try {
-					await this.ensureResources(targetIndex);
-					console.log('预加载已写入核心缓存，index:', targetIndex + 1);
+					// 先检查是否已有 blob 缓存，避免重复日志
+					if (this.blobCache.has(targetIndex)) {
+						// 已有缓存，跳过加载
+					} else {
+						await this.ensureResources(targetIndex);
+						console.log('预加载已写入核心缓存，index:', targetIndex + 1);
+					}
 
 					if (autoUpscaleEnabled) {
 						// 评估条件并检查是否应该排除预超分

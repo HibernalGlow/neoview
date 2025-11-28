@@ -37,8 +37,13 @@
     rotation?: 0 | 90 | 180 | 270;
     /** 裁剪区域（分割页面时使用） */
     cropRect?: Rect | null;
-    /** 是否为左半边（分割时） */
-    isLeftHalf?: boolean;
+    /** 
+     * 横向分割半边
+     * - 'left': 显示左半边
+     * - 'right': 显示右半边
+     * - null/undefined: 不分割
+     */
+    splitHalf?: 'left' | 'right' | null;
     /** 缩放比例 */
     scale?: number;
     /** 偏移量 */
@@ -57,7 +62,7 @@
     src,
     rotation = 0,
     cropRect = null,
-    isLeftHalf = true,
+    splitHalf = null,
     scale = 1,
     offset = { x: 0, y: 0 },
     fitMode = 'contain',
@@ -71,7 +76,7 @@
   // ============================================================================
   
   /** 是否为分割页面 */
-  let isDivided = $derived(cropRect !== null);
+  let isDivided = $derived(cropRect !== null || splitHalf !== null);
   
   /** 是否需要旋转 */
   let isRotated = $derived(rotation !== 0);
@@ -106,7 +111,8 @@
     if (!isDivided) return 'none';
     // 左半边: inset(0 50% 0 0) - 裁掉右边 50%
     // 右半边: inset(0 0 0 50%) - 裁掉左边 50%
-    return isLeftHalf ? 'inset(0 50% 0 0)' : 'inset(0 0 0 50%)';
+    const isLeft = splitHalf === 'left';
+    return isLeft ? 'inset(0 50% 0 0)' : 'inset(0 0 0 50%)';
   });
   
   /** 计算容器样式 */

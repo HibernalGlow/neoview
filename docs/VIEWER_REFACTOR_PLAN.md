@@ -11,6 +11,35 @@
 3. **文档完善** - 每个模块配详细文档和实现原理
 4. **可替换** - 新系统可直接替换旧系统
 
+## 迁移策略：忒休斯之船
+
+采用渐进式替换策略，在保持现有 Viewer 功能的同时，逐步将内部组件替换为新实现：
+
+```
+阶段 1: 在 Flow 模式创建独立测试环境
+        ├── NewReaderNode (测试节点)
+        └── PipelineDebugNode (性能监控)
+
+阶段 2: 创建新的核心组件，但不替换旧组件
+        ├── ImageRenderer (新) ← 测试完成后替换旧的图片渲染
+        ├── GestureHandler (新) ← 测试完成后替换旧的手势处理
+        └── 其他组件...
+
+阶段 3: 在现有 ImageViewer 中逐步引入新组件
+        ├── 先替换图片渲染部分
+        ├── 再替换手势处理部分
+        └── 最后替换状态管理
+
+阶段 4: 完全切换到新系统
+        └── 删除旧代码
+```
+
+**优势**：
+- 每一步都可以实时看到变化
+- 出问题可以快速回滚
+- 不影响用户正常使用
+- 可以逐步验证每个组件
+
 ## 模块划分
 
 ### 1. 核心模块 (已完成)
@@ -152,14 +181,45 @@ src/lib/
 
 ## 已完成
 
+### 阶段 1: 测试环境 ✅
 1. ✅ 创建 `src/lib/viewer/` 目录
 2. ✅ 实现 `ImageRenderer.svelte` - 图片渲染组件
 3. ✅ 实现 `GestureHandler.ts` - 手势处理器
-4. ✅ 创建 `index.ts` 导出
+4. ✅ 创建 `NewViewer.svelte` - 主视图组件
+5. ✅ 创建 `index.ts` 导出
+6. ✅ 创建 `NewReaderNode.svelte` - Flow 测试节点
+7. ✅ 创建 `PipelineDebugNode.svelte` - 性能监控节点
+8. ✅ 在 TopToolbar 缩放菜单添加分割/自动旋转选项
+
+### 核心系统 ✅
+1. ✅ `virtualPageList.ts` - 支持分割、自动旋转
+2. ✅ `bookManager.ts` - 书籍管理
+3. ✅ `bookStore2.ts` - 状态管理
+4. ✅ 修复尺寸更新时的 rebuild 触发逻辑
+
+## 当前问题
+
+1. **$effect 循环** - 需要使用 `untrack` 避免
+2. **尺寸信息延迟** - 初始化时 width/height 为 0，需要异步更新后 rebuild
+3. **新旧系统同步** - 需要稳定的双向同步机制
 
 ## 下一步
 
-1. 在 `NewReaderNode` 中集成 `ImageRenderer` 和 `GestureHandler`
-2. 实现 `ZoomController.ts` - 缩放控制
-3. 实现 `PanController.ts` - 平移控制
-4. 创建 `NewViewer.svelte` - 主视图组件
+### 阶段 2: 完善测试环境
+1. [x] 修复 NewReaderNode 的 $effect 循环问题（使用 untrack）
+2. [x] 在 NewReaderNode 中集成 ImageRenderer 组件
+3. [x] 修复 ImageRenderer 的 splitHalf 属性
+4. [x] 创建 ImageViewerDisplay2（兼容旧接口的新实现）
+5. [ ] 验证分割和自动旋转功能
+6. [ ] 完善 PipelineDebugNode 的监控功能
+
+### 阶段 3: 在现有 ImageViewer 中引入新组件
+1. [ ] 分析现有 ImageViewer 结构
+2. [ ] 识别可替换的组件边界
+3. [ ] 逐步替换图片渲染部分
+4. [ ] 逐步替换手势处理部分
+
+### 阶段 4: 完全切换
+1. [ ] 验证所有功能正常
+2. [ ] 删除旧代码
+3. [ ] 更新文档

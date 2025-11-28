@@ -33,8 +33,8 @@
     rotation?: 0 | 90 | 180 | 270;
     /** 裁剪区域 */
     cropRect?: Rect | null;
-    /** 是否为左半边 */
-    isLeftHalf?: boolean;
+    /** 横向分割半边 */
+    splitHalf?: 'left' | 'right' | null;
     /** 加载中 */
     loading?: boolean;
     /** 上一页回调 */
@@ -49,7 +49,7 @@
     src,
     rotation = 0,
     cropRect = null,
-    isLeftHalf = true,
+    splitHalf = null,
     loading = false,
     onPrevPage,
     onNextPage,
@@ -172,7 +172,7 @@
     {src}
     {rotation}
     {cropRect}
-    {isLeftHalf}
+    {splitHalf}
     {scale}
     {offset}
     {loading}

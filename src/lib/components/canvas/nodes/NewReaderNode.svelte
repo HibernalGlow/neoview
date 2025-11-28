@@ -9,6 +9,7 @@
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { bookInfoToFileList } from '$lib/stores/bookBridge';
 	import { createImageLoader, createThumbnailLoader } from '$lib/core/tauriIntegration';
+	import ImageRenderer from '$lib/viewer/ImageRenderer.svelte';
 
 	type $$Props = NodeProps;
 	
@@ -210,7 +211,7 @@
 	<div class="bg-background h-full w-full overflow-hidden rounded-md border shadow-sm flex flex-col">
 		{#if bookState.isOpen}
 			<!-- 工具栏 -->
-			<div class="flex items-center justify-between border-b bg-muted/30 px-3 py-2 flex-shrink-0">
+			<div class="flex items-center justify-between border-b bg-muted/30 px-3 py-2 shrink-0">
 				<div class="text-sm font-medium truncate max-w-[200px]">{bookState.bookName}</div>
 				<div class="text-xs text-muted-foreground">
 					{bookState.currentIndex + 1} / {bookState.virtualPageCount}
@@ -221,7 +222,7 @@
 			</div>
 			
 			<!-- 控制按钮 -->
-			<div class="flex items-center gap-2 border-b bg-muted/20 px-3 py-1 flex-shrink-0">
+			<div class="flex items-center gap-2 border-b bg-muted/20 px-3 py-1 shrink-0">
 				<button 
 					class="rounded px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
 					onclick={handlePrev}
@@ -274,44 +275,19 @@
 				{#if currentImageUrl}
 					{@const element = bookState.currentFrame?.elements[0]}
 					{@const isDivided = element?.virtualPage?.isDivided}
-					{@const isLeftHalf = element?.virtualPage?.part === 0}
+					{@const part = element?.virtualPage?.part ?? 0}
 					{@const rotation = element?.virtualPage?.rotation ?? 0}
+					{@const splitHalf = isDivided ? (part === 0 ? 'left' : 'right') : null}
+					{@const normalizedRotation = (rotation === 0 || rotation === 90 || rotation === 180 || rotation === 270) ? rotation : 0}
 					
-					{#if isDivided}
-						<!-- 
-							分割页面：使用 clip-path 裁剪
-							- 左半边: clip-path: inset(0 50% 0 0)
-							- 右半边: clip-path: inset(0 0 0 50%)
-							这样图片可以正常缩放，只是显示区域被裁剪
-						-->
-						<img 
-							src={currentImageUrl} 
-							alt="Page {bookState.currentIndex + 1}"
-							class="max-w-full max-h-full object-contain"
-							class:opacity-50={imageLoading}
-							style="clip-path: inset(0 {isLeftHalf ? '50%' : '0'} 0 {isLeftHalf ? '0' : '50%'});"
-						/>
-					{:else if rotation !== 0}
-						<!-- 旋转页面 -->
-						<img 
-							src={currentImageUrl} 
-							alt="Page {bookState.currentIndex + 1}"
-							class="object-contain"
-							class:opacity-50={imageLoading}
-							style="
-								transform: rotate({rotation}deg);
-								{rotation === 90 || rotation === 270 ? 'max-height: 100vw; max-width: 100vh;' : 'max-width: 100%; max-height: 100%;'}
-							"
-						/>
-					{:else}
-						<!-- 普通页面 -->
-						<img 
-							src={currentImageUrl} 
-							alt="Page {bookState.currentIndex + 1}"
-							class="max-w-full max-h-full object-contain"
-							class:opacity-50={imageLoading}
-						/>
-					{/if}
+					<!-- 使用新的 ImageRenderer 组件 -->
+					<ImageRenderer
+						src={currentImageUrl}
+						rotation={normalizedRotation as 0 | 90 | 180 | 270}
+						{splitHalf}
+						loading={imageLoading}
+						fitMode="contain"
+					/>
 				{:else if imageLoading}
 					<div class="text-white text-sm">加载中...</div>
 				{:else}

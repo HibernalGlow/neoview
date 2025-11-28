@@ -60,6 +60,30 @@ let activeIndex = $state(0);
 // 动画状态
 let isAnimating = $state(false);
 
+// 目录内容缓存（LRU 策略，最多缓存 50 个目录）
+const directoryCache = new Map<string, { items: FsItem[]; timestamp: number }>();
+const MAX_DIRECTORY_CACHE = 50;
+const CACHE_TTL = 60 * 60 * 1000; // 5 分钟缓存有效期
+
+// 清理过期缓存
+function cleanupDirectoryCache() {
+	const now = Date.now();
+	for (const [path, cache] of directoryCache) {
+		if (now - cache.timestamp > CACHE_TTL) {
+			directoryCache.delete(path);
+		}
+	}
+	// 如果缓存超过限制，删除最旧的
+	if (directoryCache.size > MAX_DIRECTORY_CACHE) {
+		const entries = Array.from(directoryCache.entries());
+		entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+		const toDelete = entries.slice(0, entries.length - MAX_DIRECTORY_CACHE);
+		for (const [path] of toDelete) {
+			directoryCache.delete(path);
+		}
+	}
+}
+
 // 缩略图 Map - 使用 $state 并通过订阅更新
 let thumbnails = $state<Map<string, string>>(new Map());
 
@@ -157,12 +181,29 @@ async function createLayer(path: string): Promise<FolderLayer> {
 	};
 
 	try {
-		const items = await FileSystemAPI.browseDirectory(path);
-		layer.items = items;
-		layer.loading = false;
+		// 检查缓存
+		const cached = directoryCache.get(path);
+		const now = Date.now();
 		
-		// 异步加载缩略图
-		loadThumbnailsForLayer(items, path);
+		if (cached && (now - cached.timestamp < CACHE_TTL)) {
+			// 使用缓存
+			layer.items = cached.items;
+			layer.loading = false;
+			// 异步加载缩略图
+			loadThumbnailsForLayer(cached.items, path);
+		} else {
+			// 从后端加载
+			const items = await FileSystemAPI.browseDirectory(path);
+			layer.items = items;
+			layer.loading = false;
+			
+			// 更新缓存
+			directoryCache.set(path, { items, timestamp: now });
+			cleanupDirectoryCache();
+			
+			// 异步加载缩略图
+			loadThumbnailsForLayer(items, path);
+		}
 	} catch (err) {
 		layer.error = err instanceof Error ? err.message : String(err);
 		layer.loading = false;

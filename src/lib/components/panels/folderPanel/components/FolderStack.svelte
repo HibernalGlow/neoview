@@ -191,6 +191,8 @@ async function createLayer(path: string): Promise<FolderLayer> {
 			layer.loading = false;
 			// 异步加载缩略图
 			loadThumbnailsForLayer(cached.items, path);
+			// 后台预加载相邻目录
+			preloadAdjacentDirectories(cached.items, path);
 		} else {
 			// 从后端加载
 			const items = await FileSystemAPI.browseDirectory(path);
@@ -203,6 +205,8 @@ async function createLayer(path: string): Promise<FolderLayer> {
 			
 			// 异步加载缩略图
 			loadThumbnailsForLayer(items, path);
+			// 后台预加载相邻目录
+			preloadAdjacentDirectories(items, path);
 		}
 	} catch (err) {
 		layer.error = err instanceof Error ? err.message : String(err);
@@ -267,6 +271,40 @@ function isChildPath(childPath: string, parentPath: string): boolean {
 	const normalizedChild = childPath.replace(/\\/g, '/').toLowerCase();
 	const normalizedParent = parentPath.replace(/\\/g, '/').toLowerCase();
 	return normalizedChild.startsWith(normalizedParent + '/');
+}
+
+// 预加载相邻目录（后台静默加载，不影响 UI）
+async function preloadAdjacentDirectories(items: FsItem[], currentPath: string) {
+	// 只预加载前 5 个子目录
+	const directories = items.filter(item => item.isDir).slice(0, 5);
+	
+	for (const dir of directories) {
+		// 检查是否已缓存
+		if (!directoryCache.has(dir.path)) {
+			try {
+				// 静默加载，不阻塞
+				FileSystemAPI.browseDirectory(dir.path).then(subItems => {
+					directoryCache.set(dir.path, { items: subItems, timestamp: Date.now() });
+					cleanupDirectoryCache();
+				}).catch(() => {
+					// 忽略预加载错误
+				});
+			} catch {
+				// 忽略预加载错误
+			}
+		}
+	}
+	
+	// 预加载父目录
+	const parentPath = getParentPath(currentPath);
+	if (parentPath && !directoryCache.has(parentPath)) {
+		FileSystemAPI.browseDirectory(parentPath).then(parentItems => {
+			directoryCache.set(parentPath, { items: parentItems, timestamp: Date.now() });
+			cleanupDirectoryCache();
+		}).catch(() => {
+			// 忽略预加载错误
+		});
+	}
 }
 
 // 推入新层（进入子目录）或跳转到新路径

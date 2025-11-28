@@ -154,6 +154,12 @@ const historyIndex = writable<number>(-1);
 // Home 路径
 const homePath = writable<string>('');
 
+// 外部导航请求（供历史面板、书签面板等外部组件触发导航）
+const externalNavigationRequest = writable<{ path: string; timestamp: number } | null>(null);
+
+// 导出外部导航请求 store
+export { externalNavigationRequest };
+
 // ============ 文件系统缓存（参考 NeeView 的 FolderEntryCollection）============
 // 缓存已加载的目录内容，避免重复从磁盘读取
 const directoryCache = new Map<string, { items: FsItem[]; timestamp: number }>();
@@ -533,6 +539,39 @@ export const folderPanelActions = {
 	 */
 	setHomePath(path: string) {
 		homePath.set(path);
+	},
+
+	/**
+	 * 导航到指定路径（供外部调用，如历史面板、书签面板同步）
+	 * 这个方法会触发 FolderStack 的导航命令
+	 */
+	async navigateToPath(targetPath: string | null | undefined) {
+		if (!targetPath) return;
+		
+		// 规范化路径
+		let normalizedPath = targetPath.replace(/\\/g, '/');
+		// 移除末尾的分隔符（除非是根目录）
+		if (normalizedPath.length > 1 && normalizedPath.endsWith('/')) {
+			normalizedPath = normalizedPath.slice(0, -1);
+		}
+		
+		// 获取父目录（如果路径指向文件）
+		// 通过检查路径是否有扩展名来判断是否是文件
+		const lastPart = normalizedPath.split('/').pop() || '';
+		const hasExtension = lastPart.includes('.') && !lastPart.startsWith('.');
+		
+		let dirPath = normalizedPath;
+		if (hasExtension) {
+			// 可能是文件，获取父目录
+			const lastSlash = normalizedPath.lastIndexOf('/');
+			if (lastSlash > 0) {
+				dirPath = normalizedPath.substring(0, lastSlash);
+			}
+		}
+		
+		// 发送外部导航请求（FolderPanel 会监听并处理）
+		externalNavigationRequest.set({ path: dirPath, timestamp: Date.now() });
+		console.log('[FolderPanelStore] navigateToPath:', dirPath);
 	},
 
 	/**

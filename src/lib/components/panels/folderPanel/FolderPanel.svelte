@@ -33,7 +33,8 @@ import {
 	deleteMode,
 	deleteStrategy,
 	multiSelectMode,
-	sortedItems
+	sortedItems,
+	externalNavigationRequest
 } from './stores/folderPanelStore.svelte';
 
 // 导航命令 store（用于父子组件通信）
@@ -379,6 +380,17 @@ const handleKeydown = createKeyboardHandler(() => ({
 	onDeselectAll: () => folderPanelActions.deselectAll(),
 	onToggleSearchBar: () => folderPanelActions.toggleShowSearchBar()
 }));
+
+// 监听外部导航请求（来自历史面板、书签面板等）
+$effect(() => {
+	const request = $externalNavigationRequest;
+	if (request) {
+		console.log('[FolderPanel] External navigation request:', request.path);
+		navigationCommand.set({ type: 'push', path: request.path });
+		// 清除请求
+		externalNavigationRequest.set(null);
+	}
+});
 
 // 初始化
 onMount(() => {

@@ -20,11 +20,7 @@
 		type PanelTabType
 	} from '$lib/stores';
 	import * as Sidebar from '$lib/components/ui/sidebar';
-	import FolderPanel from '$lib/components/panels/folderPanel/FolderPanel.svelte';
-	import HistoryPanel from '$lib/components/panels/HistoryPanel.svelte';
-	import BookmarkPanel from '$lib/components/panels/BookmarkPanel.svelte';
-	import BookPageListPanel from '$lib/components/panels/BookPageListPanel.svelte';
-	import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
+	import { PANEL_COMPONENTS } from '$lib/components/panels';
 	import { Button } from '$lib/components/ui/button';
 	import HoverWrapper from './HoverWrapper.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
@@ -46,17 +42,8 @@
 	// 当前激活的面板 ID
 	let activePanelId = $state<PanelId>('folder');
 	
-	// 面板组件映射 - 左侧边栏只需要左侧面板的组件
-	// 右侧面板的组件在 RightSidebar 中定义
-	const panelComponents: Partial<Record<PanelId, typeof FolderPanel>> = {
-		folder: FolderPanel,
-		history: HistoryPanel,
-		bookmark: BookmarkPanel,
-		thumbnail: BookPageListPanel,
-		info: InfoPanel,
-		settings: FolderPanel, // 占位
-		playlist: FolderPanel  // 占位
-	};
+	// 使用共用的面板组件映射
+	const panelComponents = PANEL_COMPONENTS;
 
 	function createAppStateStore<T>(selector: StateSelector<T>) {
 		const initial = selector(appState.getSnapshot());
@@ -260,9 +247,11 @@
 								<!-- 使用 CSS 隐藏而非条件渲染，保持组件实例不被销毁 -->
 								{#each leftPanels as panel (panel.id)}
 									{@const PanelComponent = panelComponents[panel.id]}
-									<div class={activePanelId === panel.id ? '' : 'hidden'}>
-										<PanelComponent />
-									</div>
+									{#if PanelComponent}
+										<div class={activePanelId === panel.id ? '' : 'hidden'}>
+											<PanelComponent />
+										</div>
+									{/if}
 								{/each}
 							</Sidebar.GroupContent>
 						</Sidebar.Group>

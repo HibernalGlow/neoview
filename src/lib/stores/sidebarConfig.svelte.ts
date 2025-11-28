@@ -314,19 +314,19 @@ function createSidebarConfigStore() {
 			update(state => {
 				const panel = state.panels.find(p => p.id === id);
 				if (!panel) return state;
-
-				const targetPosition = newPosition ?? panel.position;
 				
-				// 获取同位置的面板并重新排序
+				// 如果指定了新位置且面板不能移动，则不改变位置
+				const targetPosition = (newPosition && panel.canMove) ? newPosition : panel.position;
+				
+				// 计算目标位置的最大顺序
+				const samePosPanel = state.panels.filter(p => p.position === targetPosition && p.id !== id);
+				const maxOrder = samePosPanel.length > 0 ? Math.max(...samePosPanel.map(p => p.order)) + 1 : 0;
+				const finalOrder = Math.min(newOrder, maxOrder);
 				
 				// 重新排序
 				const panels = state.panels.map(p => {
 					if (p.id === id) {
-						return { ...p, order: newOrder, position: targetPosition };
-					}
-					// 调整其他面板的顺序
-					if (p.position === targetPosition && p.order >= newOrder) {
-						return { ...p, order: p.order + 1 };
+						return { ...p, order: finalOrder, position: targetPosition };
 					}
 					return p;
 				});

@@ -31,7 +31,7 @@
 	let hoverAreas = $derived(settings.panels?.hoverAreas);
 
 	function handleSidebarResize(width: number) {
-		sidebarWidth.set(width);
+		leftSidebarWidth.set(width);
 	}
 
 	function handleRightSidebarResize(width: number) {

@@ -1,23 +1,20 @@
 <script lang="ts">
 	/**
 	 * NeoView - Right Sidebar Component (shadcn-svelte 重构)
-	 * 右侧边栏组件 - 使用 shadcn-svelte Sidebar 结构
+	 * 右侧边栏组件 - 使用 sidebarConfig 动态管理面板显示、顺序和位置
 	 */
-	import { Info, FileText, Pin, PinOff, Sparkles, GripVertical, BarChart3, File } from '@lucide/svelte';
+	import { Pin, PinOff, GripVertical } from '@lucide/svelte';
 	import {
 		activeRightPanel,
 		setActiveRightPanel,
 		rightSidebarWidth,
 		rightSidebarPinned,
-		rightSidebarOpen
+		rightSidebarOpen,
+		sidebarRightPanels,
+		type PanelId
 	} from '$lib/stores';
-	import type { RightPanelType } from '$lib/stores';
 	import * as Sidebar from '$lib/components/ui/sidebar';
-	import ImagePropertiesPanel from '$lib/components/panels/ImagePropertiesPanel.svelte';
-	import InfoPanel from '$lib/components/panels/InfoPanel.svelte';
-	import UpscalePanel from '$lib/components/panels/UpscalePanel.svelte';
-	import DataInsightsPanel from '$lib/components/panels/DataInsightsPanel.svelte';
-	import { FolderPanel } from '$lib/components/panels/folderPanel';
+	import { PANEL_COMPONENTS } from '$lib/components/panels';
 	import { Button } from '$lib/components/ui/button';
 	import HoverWrapper from './HoverWrapper.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
@@ -32,40 +29,14 @@
 	let settings = $state(settingsManager.getSettings());
 	let autoHideTiming = $derived(settings.panels?.autoHideTiming ?? { showDelaySec: 0, hideDelaySec: 0 });
 
-	const navMain = [
-		{
-			title: '文件',
-			url: '#',
-			icon: File,
-			value: 'files'
-		},
-		{
-			title: '信息',
-			url: '#',
-			icon: Info,
-			value: 'info'
-		},
-		{
-			title: '属性',
-			url: '#',
-			icon: FileText,
-			value: 'properties'
-		},
-		{
-			title: '超分',
-			url: '#',
-			icon: Sparkles,
-			value: 'upscale'
-		},
-		{
-			title: '洞察',
-			url: '#',
-			icon: BarChart3,
-			value: 'insights'
-		}
-	];
-
-	let activeItem = $state(navMain[0]);
+	// 从配置获取右侧面板列表
+	let rightPanels = $derived($sidebarRightPanels);
+	
+	// 当前激活的面板 ID
+	let activePanelId = $state<PanelId>('files');
+	
+	// 使用共用的面板组件映射
+	const panelComponents = PANEL_COMPONENTS;
 
 	// 拖拽调整大小
 	let isResizing = $state(false);
@@ -123,18 +94,16 @@
 		}
 	}
 
-	function handleTabChange(item: (typeof navMain)[0]) {
-		activeItem = item;
-
+	function handleTabChange(panelId: PanelId) {
+		activePanelId = panelId;
 		// 设置活动面板
-		setActiveRightPanel(item.value as RightPanelType);
+		setActiveRightPanel(panelId as any);
 	}
 
 	// 响应 activeRightPanel 变化
 	$effect(() => {
-		const currentActive = navMain.find((nav) => nav.value === $activeRightPanel);
-		if (currentActive) {
-			activeItem = currentActive;
+		if ($activeRightPanel && rightPanels.some(p => p.id === $activeRightPanel)) {
+			activePanelId = $activeRightPanel as PanelId;
 		}
 	});
 
@@ -221,21 +190,22 @@
 						<Sidebar.Group>
 							<Sidebar.GroupContent class="px-1.5 md:px-0">
 								<Sidebar.Menu>
-									{#each navMain as item (item.value)}
+									{#each rightPanels as panel (panel.id)}
+										{@const Icon = panel.icon}
 										<Sidebar.MenuItem>
 											<Sidebar.MenuButton
 												tooltipContentProps={{
 													hidden: false
 												}}
-												onclick={() => handleTabChange(item)}
-												isActive={$activeRightPanel === item.value}
+												onclick={() => handleTabChange(panel.id)}
+												isActive={activePanelId === panel.id}
 												class="px-2.5 md:px-2"
 											>
 												{#snippet tooltipContent()}
-													{item.title}
+													{panel.title}
 												{/snippet}
-												<item.icon />
-												<span>{item.title}</span>
+												<Icon />
+												<span>{panel.title}</span>
 											</Sidebar.MenuButton>
 										</Sidebar.MenuItem>
 									{/each}
@@ -255,21 +225,14 @@
 						<Sidebar.Group class="h-full flex-1 p-0">
 							<Sidebar.GroupContent class="h-full">
 								<!-- 使用 CSS 隐藏而非条件渲染，保持组件实例不被销毁 -->
-								<div class="h-full {activeItem.value === 'files' ? '' : 'hidden'}">
-									<FolderPanel />
-								</div>
-								<div class={activeItem.value === 'info' ? '' : 'hidden'}>
-									<InfoPanel />
-								</div>
-								<div class={activeItem.value === 'properties' ? '' : 'hidden'}>
-									<ImagePropertiesPanel />
-								</div>
-								<div class={activeItem.value === 'upscale' ? '' : 'hidden'}>
-									<UpscalePanel />
-								</div>
-								<div class={activeItem.value === 'insights' ? '' : 'hidden'}>
-									<DataInsightsPanel />
-								</div>
+								{#each rightPanels as panel (panel.id)}
+									{@const PanelComponent = panelComponents[panel.id]}
+									{#if PanelComponent}
+										<div class="h-full {activePanelId === panel.id ? '' : 'hidden'}">
+											<PanelComponent />
+										</div>
+									{/if}
+								{/each}
 							</Sidebar.GroupContent>
 						</Sidebar.Group>
 					</Sidebar.Content>

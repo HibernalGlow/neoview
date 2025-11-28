@@ -94,10 +94,24 @@
 		dragPreview = null;
 	}
 
+	// 保存提示消息
+	let saveMessage = $state<string | null>(null);
+
+	// 应用布局（刷新页面）
+	function applyLayout() {
+		// store 已经自动保存到 localStorage
+		// 刷新页面以应用新的布局
+		window.location.reload();
+	}
+
 	// 重置布局
 	function resetLayout() {
 		if (confirm('确定要重置所有面板布局吗？')) {
 			sidebarConfigStore.resetPanels();
+			saveMessage = '✓ 布局已重置';
+			setTimeout(() => {
+				saveMessage = null;
+			}, 2000);
 		}
 	}
 
@@ -201,11 +215,21 @@
 	<div class="flex items-center gap-2">
 		<button
 			type="button"
+			class="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-1.5 text-sm transition-colors"
+			onclick={applyLayout}
+		>
+			应用布局
+		</button>
+		<button
+			type="button"
 			class="bg-secondary hover:bg-secondary/80 rounded-md px-3 py-1.5 text-sm transition-colors"
 			onclick={resetLayout}
 		>
 			重置布局
 		</button>
+		{#if saveMessage}
+			<span class="text-sm text-green-600">{saveMessage}</span>
+		{/if}
 	</div>
 
 	<!-- 三栏布局 -->

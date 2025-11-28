@@ -156,8 +156,8 @@ const defaultBindings: ActionBinding[] = [
 		bindings: []
 	},
 	{
-		action: 'toggleSidebar',
-		name: '侧边栏',
+		action: 'toggleLeftSidebar',
+		name: '左侧边栏',
 		category: '视图',
 		description: '显示/隐藏侧边栏',
 		bindings: []

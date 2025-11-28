@@ -10,7 +10,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { open } from '@tauri-apps/plugin-dialog';
-	import { bookStore, zoomIn, zoomOut, toggleSidebar, toggleRightSidebar, toggleFullscreen, rotateClockwise, toggleViewMode, sidebarOpen, rightSidebarOpen, pageLeft, pageRight, topToolbarPinned, bottomThumbnailBarPinned, toggleReadingDirection, toggleSinglePanoramaView, toggleTemporaryFitZoom, layoutMode, toggleLayoutMode, layoutSwitchMode } from '$lib/stores';
+	import { bookStore, zoomIn, zoomOut, toggleLeftSidebar, toggleRightSidebar, toggleFullscreen, rotateClockwise, toggleViewMode, leftSidebarOpen, rightSidebarOpen, pageLeft, pageRight, topToolbarPinned, bottomThumbnailBarPinned, toggleReadingDirection, toggleSinglePanoramaView, toggleTemporaryFitZoom, layoutMode, toggleLayoutMode, layoutSwitchMode } from '$lib/stores';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { FolderOpen } from '@lucide/svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
@@ -328,9 +328,9 @@ async function dispatchAction(action: string) {
 			console.log('执行全屏操作');
 			toggleFullscreen();
 			break;
-		case 'toggleSidebar':
-			console.log('执行切换侧边栏操作');
-			toggleSidebar();
+		case 'toggleLeftSidebar':
+			console.log('执行切换左侧边栏操作');
+			toggleLeftSidebar();
 			break;
 		case 'toggleRightSidebar':
 			console.log('执行切换右侧边栏操作');
@@ -461,9 +461,9 @@ function handleGlobalMouseClick(e: MouseEvent) {
 	const isInBottomBar = target.closest('[data-bottom-bar]') !== null;
 	
 	// 如果任一边栏打开，或点击在上下栏区域内，则不处理区域点击
-	if ($sidebarOpen || $rightSidebarOpen || isInTopToolbar || isInBottomBar) {
+	if ($leftSidebarOpen || $rightSidebarOpen || isInTopToolbar || isInBottomBar) {
 		console.log('边栏已打开或点击在上下栏区域内，禁用全局区域点击响应', { 
-			sidebarOpen: $sidebarOpen, 
+			leftSidebarOpen: $leftSidebarOpen, 
 			rightSidebarOpen: $rightSidebarOpen, 
 			isInTopToolbar, 
 			isInBottomBar,
@@ -510,9 +510,9 @@ function handleGlobalMouseDown(e: MouseEvent) {
 	const isInBottomBar = target.closest('[data-bottom-bar]') !== null;
 	
 	// 如果任一边栏打开，或点击在上下栏区域内，则不处理区域点击
-	if ($sidebarOpen || $rightSidebarOpen || isInTopToolbar || isInBottomBar) {
+	if ($leftSidebarOpen || $rightSidebarOpen || isInTopToolbar || isInBottomBar) {
 		console.log('边栏已打开或点击在上下栏区域内，禁用全局区域按下响应', { 
-			sidebarOpen: $sidebarOpen, 
+			leftSidebarOpen: $leftSidebarOpen, 
 			rightSidebarOpen: $rightSidebarOpen, 
 			isInTopToolbar, 
 			isInBottomBar,

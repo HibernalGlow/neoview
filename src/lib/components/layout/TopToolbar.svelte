@@ -19,7 +19,7 @@
 		rotationAngle,
 		setViewMode,
 		toggleViewModeLock,
-		toggleSidebar,
+		toggleLeftSidebar,
 		toggleReadingDirection,
 		toggleOrientation,
 		topToolbarPinned,
@@ -607,7 +607,7 @@ async function handleSortModeChange(mode: PageSortMode) {
 				variant="ghost"
 				size="icon"
 				class="h-6 w-6"
-				onclick={toggleSidebar}
+				onclick={toggleLeftSidebar}
 				style="pointer-events: auto;"
 			>
 				<Menu class="h-4 w-4" />

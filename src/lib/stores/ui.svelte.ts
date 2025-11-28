@@ -35,9 +35,6 @@ function saveToStorage<T>(key: string, value: T) {
 // 左侧边栏状态 - 默认隐藏
 export const leftSidebarOpen = writable<boolean>(loadFromStorage('leftSidebarOpen', false));
 export const leftSidebarWidth = writable<number>(loadFromStorage('leftSidebarWidth', 250));
-// 兼容性别名
-export const sidebarOpen = leftSidebarOpen;
-export const sidebarWidth = leftSidebarWidth;
 
 // 右侧边栏状态
 export const rightSidebarOpen = writable<boolean>(loadFromStorage('rightSidebarOpen', false));
@@ -97,8 +94,6 @@ export const topToolbarPinned = writable<boolean>(loadFromStorage('topToolbarPin
 export const bottomThumbnailBarPinned = writable<boolean>(loadFromStorage('bottomThumbnailBarPinned', false));
 export const leftSidebarPinned = writable<boolean>(loadFromStorage('leftSidebarPinned', false));
 export const rightSidebarPinned = writable<boolean>(loadFromStorage('rightSidebarPinned', false));
-// 兼容性别名
-export const sidebarPinned = leftSidebarPinned;
 
 // 边栏高度（用于上下边栏）
 export const topToolbarHeight = writable<number>(loadFromStorage('topToolbarHeight', 60));
@@ -189,8 +184,6 @@ isLoading.subscribe((value) => {
 export function toggleLeftSidebar() {
 	leftSidebarOpen.update((open) => !open);
 }
-// 兼容性别名
-export const toggleSidebar = toggleLeftSidebar;
 
 /**
  * 切换右侧边栏

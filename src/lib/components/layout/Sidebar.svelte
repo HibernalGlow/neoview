@@ -12,13 +12,13 @@
 	import {
 		activePanel,
 		setActivePanelTab,
-		sidebarWidth,
-		sidebarPinned,
-		sidebarOpen,
+		leftSidebarWidth,
+		leftSidebarPinned,
+		leftSidebarOpen,
 		sidebarLeftPanels,
-		type PanelId
+		type PanelId,
+		type PanelTabType
 	} from '$lib/stores';
-	import type { PanelTabType } from '$lib/stores';
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import FolderPanel from '$lib/components/panels/folderPanel/FolderPanel.svelte';
 	import HistoryPanel from '$lib/components/panels/HistoryPanel.svelte';
@@ -35,8 +35,8 @@
 	}
 
 	let { onResize }: Props = $props();
-	let isVisible = $state($sidebarOpen);
-	let localSidebarOpen = $state($sidebarOpen);
+	let isVisible = $state($leftSidebarOpen);
+	let localSidebarOpen = $state($leftSidebarOpen);
 	let settings = $state(settingsManager.getSettings());
 	let autoHideTiming = $derived(settings.panels?.autoHideTiming ?? { showDelaySec: 0, hideDelaySec: 0 });
 
@@ -84,7 +84,7 @@
 	function handleMouseDown(e: MouseEvent) {
 		isResizing = true;
 		startX = e.clientX;
-		startWidth = $sidebarWidth;
+		startWidth = $leftSidebarWidth;
 		e.preventDefault();
 	}
 
@@ -94,7 +94,7 @@
 		const delta = e.clientX - startX;
 		const newWidth = Math.max(200, Math.min(600, startWidth + delta));
 
-		sidebarWidth.set(newWidth);
+		leftSidebarWidth.set(newWidth);
 		onResize?.(newWidth);
 	}
 
@@ -104,21 +104,21 @@
 
 	// 钉住/取消钉住
 	function togglePin() {
-		sidebarPinned.set(!$sidebarPinned);
+		leftSidebarPinned.set(!$leftSidebarPinned);
 	}
 
 	function handlePinContextMenu(e: MouseEvent) {
 		e.preventDefault();
-		sidebarPinned.set(false);
+		leftSidebarPinned.set(false);
 		localSidebarOpen = false;
-		sidebarOpen.set(false);
+		leftSidebarOpen.set(false);
 	}
 
 	// 悬停显示/隐藏逻辑 - 使用 HoverWrapper 管理
 	function handleVisibilityChange(visible: boolean) {
-		if (!$sidebarPinned) {
+		if (!$leftSidebarPinned) {
 			localSidebarOpen = visible;
-			sidebarOpen.set(visible);
+			leftSidebarOpen.set(visible);
 		}
 	}
 
@@ -130,7 +130,7 @@
 
 		// 确保侧边栏打开
 		localSidebarOpen = true;
-		sidebarOpen.set(true);
+		leftSidebarOpen.set(true);
 	}
 
 	// 响应 activePanel 变化（避免无限循环）
@@ -143,9 +143,9 @@
 
 	// 响应钉住状态
 	$effect(() => {
-		if ($sidebarPinned) {
+		if ($leftSidebarPinned) {
 			localSidebarOpen = true;
-			sidebarOpen.set(true);
+			leftSidebarOpen.set(true);
 		}
 	});
 
@@ -155,7 +155,7 @@
 
 	// 同步本地状态与store
 	$effect(() => {
-		localSidebarOpen = $sidebarOpen;
+		localSidebarOpen = $leftSidebarOpen;
 	});
 
 	// 全局鼠标事件
@@ -172,22 +172,22 @@
 
 <HoverWrapper
 	bind:isVisible
-	pinned={$sidebarPinned}
+	pinned={$leftSidebarPinned}
 	onVisibilityChange={handleVisibilityChange}
 	hideDelay={autoHideTiming.hideDelaySec * 1000}
 	showDelay={autoHideTiming.showDelaySec * 1000}
 >
 	<div
 		class="relative flex h-full"
-		style="--sidebar-width: {$sidebarWidth}px; width: {$sidebarWidth}px;"
+		style="--sidebar-width: {$leftSidebarWidth}px; width: {$leftSidebarWidth}px;"
 	>
 		<Sidebar.Provider
 			bind:open={localSidebarOpen}
 			onOpenChange={(v) => {
 				localSidebarOpen = v;
-				sidebarOpen.set(v);
+				leftSidebarOpen.set(v);
 			}}
-			style="--sidebar-width: {$sidebarWidth}px;"
+			style="--sidebar-width: {$leftSidebarWidth}px;"
 		>
 			<Sidebar.Root
 				side="left"
@@ -203,13 +203,13 @@
 					<Sidebar.Header class="flex flex-col gap-2 border-b px-1.5 py-2">
 						<div class="flex flex-col gap-1">
 							<Button
-								variant={$sidebarPinned ? 'default' : 'ghost'}
+								variant={$leftSidebarPinned ? 'default' : 'ghost'}
 								size="icon"
 								class="h-9 w-9"
 								onclick={togglePin}
 								oncontextmenu={handlePinContextMenu}
 							>
-								{#if $sidebarPinned}
+								{#if $leftSidebarPinned}
 									<PinOff class="h-4 w-4" />
 								{:else}
 									<Pin class="h-4 w-4" />

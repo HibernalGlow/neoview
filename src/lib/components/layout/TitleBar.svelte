@@ -7,7 +7,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { Menu, Minimize, Maximize, X, Settings, PanelRightOpen } from '@lucide/svelte';
-	import { toggleSidebar, toggleRightSidebar } from '$lib/stores';
+	import { toggleLeftSidebar, toggleRightSidebar } from '$lib/stores';
 
 	const appWindow = getCurrentWebviewWindow();
 
@@ -62,7 +62,7 @@
 >
 	<!-- 左侧：菜单按钮 -->
 	<div class="flex items-center gap-1">
-		<Button variant="ghost" size="icon" class="h-6 w-6" onclick={toggleSidebar}>
+		<Button variant="ghost" size="icon" class="h-6 w-6" onclick={toggleLeftSidebar}>
 			<Menu class="h-4 w-4" />
 		</Button>
 		<span class="text-sm font-semibold ml-2">NeoView</span>

@@ -4,23 +4,18 @@
 	 * 主布局组件 - 集成自动隐藏功能
 	 */
 	import {
-		sidebarOpen,
-		sidebarWidth,
+		leftSidebarOpen,
+		leftSidebarWidth,
 		rightSidebarOpen,
 		rightSidebarWidth,
 		pageLeft,
 		pageRight,
 		zoomIn,
-		zoomOut
-	} from '$lib/stores';
-	import {
-		sidebars,
-		setPanelSidebarSize,
-		leftPanels,
-		rightPanels,
-		bottomPanels,
+		zoomOut,
+		sidebarLeftPanels,
+		sidebarRightPanels,
 		activePanel
-	} from '$lib/stores/panels.svelte';
+	} from '$lib/stores';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import Sidebar from './Sidebar.svelte';
 	import RightSidebar from './RightSidebar.svelte';
@@ -150,7 +145,7 @@
 
 	<!-- 左侧边栏（悬浮，始终可用） -->
 	<div
-		class="absolute bottom-0 left-0 top-0 z-[55] {$sidebarOpen
+		class="absolute bottom-0 left-0 top-0 z-[55] {$leftSidebarOpen
 			? 'pointer-events-auto'
 			: 'pointer-events-none'}"
 	>
@@ -178,7 +173,7 @@
 	<AreaOverlay
 		bind:show={showAreaOverlay}
 		on:areaAction={handleAreaAction}
-		sidebarOpen={$sidebarOpen}
+		sidebarOpen={$leftSidebarOpen}
 		rightSidebarOpen={$rightSidebarOpen}
 	/>
 	<HoverAreasOverlay bind:show={showHoverAreasOverlay} />

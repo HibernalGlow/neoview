@@ -57,7 +57,7 @@
 		{ action: 'fullscreen', key: 'F11', description: '全屏', category: '视图' },
 		{ action: 'openFile', key: 'Ctrl+O', description: '打开文件', category: '文件' },
 		{ action: 'closeBook', key: 'Ctrl+W', description: '关闭书籍', category: '文件' },
-		{ action: 'toggleSidebar', key: 'F2', description: '切换侧边栏', category: '视图' }
+		{ action: 'toggleLeftSidebar', key: 'F2', description: '切换左侧边栏', category: '视图' }
 	]);
 
 	// 正在编辑的快捷键

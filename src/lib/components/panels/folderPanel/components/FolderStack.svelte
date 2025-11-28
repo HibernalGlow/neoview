@@ -19,7 +19,8 @@ import {
 	multiSelectMode,
 	deleteMode,
 	sortConfig,
-	searchKeyword
+	searchKeyword,
+	penetrateMode
 } from '../stores/folderPanelStore.svelte';
 import { Loader2, FolderOpen, AlertCircle } from '@lucide/svelte';
 
@@ -308,8 +309,23 @@ $effect(() => {
 	navigationCommand.set(null);
 });
 
-// 处理项选中（单击）
-function handleItemSelect(layerIndex: number, payload: { item: FsItem; index: number; multiSelect: boolean }) {
+// 尝试穿透文件夹（只有一个子文件时才穿透）
+async function tryPenetrateFolder(folderPath: string): Promise<FsItem | null> {
+	try {
+		const children = await FileSystemAPI.browseDirectory(folderPath);
+		// 只有当文件夹只有一个子文件时才穿透
+		if (children.length === 1 && !children[0].isDir) {
+			console.log('[FolderStack] Penetrate mode: found single child file:', children[0].path);
+			return children[0];
+		}
+	} catch (error) {
+		console.debug('[FolderStack] 穿透模式读取目录失败:', folderPath, error);
+	}
+	return null;
+}
+
+// 处理项选中（单击）- 参考老面板的实现
+async function handleItemSelect(layerIndex: number, payload: { item: FsItem; index: number; multiSelect: boolean }) {
 	if (layerIndex !== activeIndex) return;
 	
 	// 更新层的选中索引
@@ -320,11 +336,21 @@ function handleItemSelect(layerIndex: number, payload: { item: FsItem; index: nu
 		folderPanelActions.selectItem(payload.item.path, true);
 	} else {
 		folderPanelActions.selectItem(payload.item.path);
-		// 单击直接打开（文件夹进入，文件打开）
+		
 		if (payload.item.isDir) {
+			// 文件夹：检查穿透模式
+			if ($penetrateMode) {
+				const penetrated = await tryPenetrateFolder(payload.item.path);
+				if (penetrated) {
+					// 穿透成功，打开子文件
+					onItemOpen?.(penetrated);
+					return;
+				}
+			}
+			// 正常进入目录
 			pushLayer(payload.item.path);
 		} else {
-			// 文件单击直接打开
+			// 文件：直接打开
 			onItemOpen?.(payload.item);
 		}
 	}

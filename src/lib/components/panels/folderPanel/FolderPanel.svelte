@@ -29,8 +29,7 @@ import {
 	showSearchBar,
 	showMigrationBar,
 	selectedItems,
-	deleteMode,
-	penetrateMode
+	deleteMode
 } from './stores/folderPanelStore.svelte';
 
 // 导航命令 store（用于父子组件通信）
@@ -56,64 +55,42 @@ function isImagePath(path: string): boolean {
 	return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'jxl', 'bmp', 'tiff'].includes(ext);
 }
 
-// 尝试穿透文件夹（只有一个子文件时才穿透）
-async function tryPenetrateFolder(folderPath: string): Promise<FsItem | null> {
-	try {
-		const children = await FileSystemAPI.browseDirectory(folderPath);
-		// 只有当文件夹只有一个子文件时才穿透
-		if (children.length === 1 && !children[0].isDir) {
-			console.log('[FolderPanel] Penetrate mode: opening single child file:', children[0].path);
-			return children[0];
-		}
-	} catch (error) {
-		console.debug('[FolderPanel] 穿透模式读取目录失败:', folderPath, error);
-	}
-	return null;
-}
-
-// 处理项打开（文件双击或单击）
+// 处理项打开（文件的单击）- 完全参考老面板的 openFile 实现
+// 注意：文件夹的导航和穿透模式在 FolderStack 中处理
 async function handleItemOpen(item: FsItem) {
 	console.log('[FolderPanel] handleItemOpen:', item.path, 'isDir:', item.isDir);
 	
+	// 文件夹不应该到达这里（由 FolderStack 处理）
+	if (item.isDir) {
+		console.warn('[FolderPanel] Unexpected folder in handleItemOpen, should be handled by FolderStack');
+		return;
+	}
+	
 	try {
-		if (item.isDir) {
-			// 文件夹处理
-			if ($penetrateMode) {
-				// 穿透模式：尝试找到第一个可打开的文件
-				const penetrated = await tryPenetrateFolder(item.path);
-				if (penetrated) {
-					await handleItemOpen(penetrated);
-					return;
-				}
-			}
-			// 正常模式：导航到目录（由 FolderStack 处理）
-			// 这里不需要做任何事，因为 FolderStack 会处理目录导航
+		// 文件处理
+		const isArchive = await FileSystemAPI.isSupportedArchive(item.path);
+		
+		if (isArchive) {
+			// 压缩包：作为书籍打开
+			console.log('[FolderPanel] Opening archive as book:', item.path);
+			await bookStore.openBook(item.path);
+		} else if (isVideoPath(item.path)) {
+			// 视频：作为书籍打开
+			console.log('[FolderPanel] Opening video:', item.path);
+			await bookStore.openBook(item.path);
+		} else if (item.isImage || isImagePath(item.path)) {
+			// 图片：打开所在目录作为书籍，并跳转到该图片
+			console.log('[FolderPanel] Opening image:', item.path);
+			// 获取父目录路径
+			const lastSep = Math.max(item.path.lastIndexOf('/'), item.path.lastIndexOf('\\'));
+			const parentPath = lastSep > 0 ? item.path.substring(0, lastSep) : item.path;
+			await bookStore.openDirectoryAsBook(parentPath);
+			// 跳转到指定图片
+			await bookStore.navigateToImage(item.path);
 		} else {
-			// 文件处理
-			const isArchive = await FileSystemAPI.isSupportedArchive(item.path);
-			
-			if (isArchive) {
-				// 压缩包：作为书籍打开
-				console.log('[FolderPanel] Opening archive as book:', item.path);
-				await bookStore.openBook(item.path);
-			} else if (isVideoPath(item.path)) {
-				// 视频：作为书籍打开
-				console.log('[FolderPanel] Opening video:', item.path);
-				await bookStore.openBook(item.path);
-			} else if (item.isImage || isImagePath(item.path)) {
-				// 图片：打开所在目录作为书籍，并跳转到该图片
-				console.log('[FolderPanel] Opening image:', item.path);
-				// 获取父目录路径
-				const lastSep = Math.max(item.path.lastIndexOf('/'), item.path.lastIndexOf('\\'));
-				const parentPath = lastSep > 0 ? item.path.substring(0, lastSep) : item.path;
-				await bookStore.openDirectoryAsBook(parentPath);
-				// 跳转到指定图片
-				await bookStore.navigateToImage(item.path);
-			} else {
-				// 其他文件：尝试作为书籍打开
-				console.log('[FolderPanel] Opening file as book:', item.path);
-				await bookStore.openBook(item.path);
-			}
+			// 其他文件：尝试作为书籍打开
+			console.log('[FolderPanel] Opening file as book:', item.path);
+			await bookStore.openBook(item.path);
 		}
 	} catch (err) {
 		console.error('[FolderPanel] Failed to open file:', err);

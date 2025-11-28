@@ -168,8 +168,9 @@ export class VirtualPageList {
     page.aspectRatio = height > 0 ? width / height : 1;
     page.isLandscape = page.aspectRatio > 1;
 
-    // 检查是否需要重建（如果分割设置开启且页面变成横向）
-    if (this._config.divideLandscape && page.isLandscape && page.aspectRatio > this._config.divideThreshold) {
+    // 检查是否需要重建（如果分割或自动旋转开启且页面变成横向）
+    const needsSpecialHandling = page.isLandscape && page.aspectRatio > this._config.divideThreshold;
+    if (needsSpecialHandling && (this._config.divideLandscape || this._config.autoRotate)) {
       this.rebuild();
       return true;
     }
@@ -192,8 +193,9 @@ export class VirtualPageList {
         page.aspectRatio = height > 0 ? width / height : 1;
         page.isLandscape = page.aspectRatio > 1;
 
-        // 检查是否需要重建
-        if (this._config.divideLandscape && page.isLandscape && page.aspectRatio > this._config.divideThreshold) {
+        // 检查是否需要重建（分割或自动旋转开启且页面变成横向）
+        const needsSpecialHandling = page.isLandscape && page.aspectRatio > this._config.divideThreshold;
+        if (needsSpecialHandling && (this._config.divideLandscape || this._config.autoRotate)) {
           needRebuild = true;
         }
       }

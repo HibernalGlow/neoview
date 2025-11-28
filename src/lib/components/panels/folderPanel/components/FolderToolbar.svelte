@@ -38,6 +38,7 @@ import {
 	showSearchBar,
 	showMigrationBar,
 	penetrateMode,
+	deleteStrategy,
 	type FolderViewStyle,
 	type FolderSortField
 } from '../stores/folderPanelStore.svelte';
@@ -49,9 +50,10 @@ interface Props {
 	onGoForward?: () => void;
 	onGoHome?: () => void;
 	onSetHome?: () => void;
+	onToggleDeleteStrategy?: () => void;
 }
 
-let { onRefresh, onToggleFolderTree, onGoBack, onGoForward, onGoHome, onSetHome }: Props = $props();
+let { onRefresh, onToggleFolderTree, onGoBack, onGoForward, onGoHome, onSetHome, onToggleDeleteStrategy }: Props = $props();
 
 const viewStyles: { value: FolderViewStyle; icon: typeof List; label: string }[] = [
 	{ value: 'list', icon: List, label: '列表' },
@@ -95,6 +97,11 @@ function handleSetViewStyle(style: FolderViewStyle) {
 
 function handleSetSort(field: FolderSortField) {
 	folderPanelActions.setSort(field);
+}
+
+function handleToggleDeleteStrategy(e: MouseEvent) {
+	e.preventDefault();
+	onToggleDeleteStrategy?.();
 }
 
 function getCurrentViewIcon() {
@@ -251,6 +258,23 @@ function getCurrentViewIcon() {
 			</Tooltip.Trigger>
 			<Tooltip.Content>
 				<p>删除模式</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant="ghost"
+					size="icon"
+					class="h-7 w-7"
+					onclick={handleToggleDeleteStrategy}
+					oncontextmenu={handleToggleDeleteStrategy}
+				>
+					<Trash2 class={$deleteStrategy === 'permanent' ? 'h-4 w-4 text-destructive' : 'h-4 w-4'} />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>删除策略: {$deleteStrategy === 'trash' ? '移动到回收站' : '永久删除'}</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 

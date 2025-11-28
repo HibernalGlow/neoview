@@ -29,7 +29,8 @@ import {
 	showSearchBar,
 	showMigrationBar,
 	selectedItems,
-	deleteMode
+	deleteMode,
+	deleteStrategy
 } from './stores/folderPanelStore.svelte';
 
 // 导航命令 store（用于父子组件通信）
@@ -202,18 +203,23 @@ let clipboardItem = $state<{ paths: string[]; operation: 'copy' | 'cut' } | null
 
 // 处理删除
 async function handleDelete(item: FsItem) {
-	const confirmMessage = `确定要删除 "${item.name}" 吗？`;
+	const strategy = $deleteStrategy;
+	const actionText = strategy === 'trash' ? '删除' : '永久删除';
+	const confirmMessage = `确定要${actionText} "${item.name}" 吗？`;
 	if (!confirm(confirmMessage)) return;
 
 	try {
-		// 默认移动到回收站
-		await FileSystemAPI.moveToTrash(item.path);
-		showSuccessToast('删除成功', item.name);
+		if (strategy === 'trash') {
+			await FileSystemAPI.moveToTrash(item.path);
+		} else {
+			await FileSystemAPI.deletePath(item.path);
+		}
+		showSuccessToast(`${actionText}成功`, item.name);
 		// 刷新当前目录
 		handleRefresh();
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
-		showErrorToast('删除失败', message);
+		showErrorToast(`${actionText}失败`, message);
 	}
 }
 
@@ -225,20 +231,26 @@ async function handleBatchDelete() {
 		return;
 	}
 
+	const strategy = $deleteStrategy;
+	const actionText = strategy === 'trash' ? '删除' : '永久删除';
 	const paths = Array.from(selected);
-	const confirmMessage = `确定要删除选中的 ${paths.length} 个项目吗？`;
+	const confirmMessage = `确定要${actionText}选中的 ${paths.length} 个项目吗？`;
 	if (!confirm(confirmMessage)) return;
 
 	try {
 		for (const path of paths) {
-			await FileSystemAPI.moveToTrash(path);
+			if (strategy === 'trash') {
+				await FileSystemAPI.moveToTrash(path);
+			} else {
+				await FileSystemAPI.deletePath(path);
+			}
 		}
-		showSuccessToast('删除成功', `已删除 ${paths.length} 个文件`);
+		showSuccessToast(`${actionText}成功`, `已${actionText} ${paths.length} 个文件`);
 		folderPanelActions.deselectAll();
 		handleRefresh();
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
-		showErrorToast('删除失败', message);
+		showErrorToast(`${actionText}失败`, message);
 	}
 }
 
@@ -341,6 +353,14 @@ async function handleOpenWithSystem(item: FsItem) {
 	}
 }
 
+// 切换删除策略
+function handleToggleDeleteStrategy() {
+	folderPanelActions.toggleDeleteStrategy();
+	const strategy = $deleteStrategy;
+	const text = strategy === 'trash' ? '移动到回收站' : '永久删除';
+	showSuccessToast('删除策略已切换', text);
+}
+
 // 初始化
 onMount(async () => {
 	try {
@@ -372,6 +392,7 @@ onMount(async () => {
 		onGoBack={handleGoBack}
 		onGoHome={handleGoHome}
 		onSetHome={handleSetHome}
+		onToggleDeleteStrategy={handleToggleDeleteStrategy}
 	/>
 
 	<!-- 搜索栏（可切换显示） -->

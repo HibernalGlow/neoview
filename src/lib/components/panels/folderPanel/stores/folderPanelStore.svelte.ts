@@ -11,6 +11,7 @@ import type { FsItem } from '$lib/types';
 export type FolderViewStyle = 'list' | 'content' | 'banner' | 'thumbnail';
 export type FolderSortField = 'name' | 'date' | 'size' | 'type';
 export type FolderSortOrder = 'asc' | 'desc';
+export type DeleteStrategy = 'trash' | 'permanent';
 
 export interface FolderHistoryEntry {
 	path: string;
@@ -64,6 +65,8 @@ export interface FolderPanelState {
 	showMigrationBar: boolean;
 	// 穿透模式（当文件夹只有一个子文件时直接打开）
 	penetrateMode: boolean;
+	// 删除策略
+	deleteStrategy: DeleteStrategy;
 }
 
 // ============ Initial State ============
@@ -91,7 +94,8 @@ function saveState(state: Partial<FolderPanelState>) {
 			folderTreeVisible: state.folderTreeVisible,
 			folderTreeLayout: state.folderTreeLayout,
 			folderTreeSize: state.folderTreeSize,
-			recursiveMode: state.recursiveMode
+			recursiveMode: state.recursiveMode,
+			deleteStrategy: state.deleteStrategy
 		};
 		localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
 	} catch (e) {
@@ -120,7 +124,8 @@ const initialState: FolderPanelState = {
 	folderTreeSize: savedState.folderTreeSize ?? 200,
 	showSearchBar: false,
 	showMigrationBar: false,
-	penetrateMode: false
+	penetrateMode: false,
+	deleteStrategy: savedState.deleteStrategy ?? 'trash'
 };
 
 // ============ Stores ============
@@ -242,6 +247,9 @@ export const showMigrationBar = derived(state, ($state) => $state.showMigrationB
 
 // 穿透模式
 export const penetrateMode = derived(state, ($state) => $state.penetrateMode);
+
+// 删除策略
+export const deleteStrategy = derived(state, ($state) => $state.deleteStrategy);
 
 // 可以后退
 export const canGoBack = derived(
@@ -646,6 +654,29 @@ export const folderPanelActions = {
 	 */
 	togglePenetrateMode() {
 		state.update((s) => ({ ...s, penetrateMode: !s.penetrateMode }));
+	},
+
+	/**
+	 * 设置删除策略
+	 */
+	setDeleteStrategy(strategy: DeleteStrategy) {
+		state.update((s) => {
+			const newState = { ...s, deleteStrategy: strategy };
+			saveState(newState);
+			return newState;
+		});
+	},
+
+	/**
+	 * 切换删除策略
+	 */
+	toggleDeleteStrategy() {
+		state.update((s) => {
+			const next: DeleteStrategy = s.deleteStrategy === 'trash' ? 'permanent' : 'trash';
+			const newState = { ...s, deleteStrategy: next };
+			saveState(newState);
+			return newState;
+		});
 	},
 
 	/**

@@ -612,7 +612,7 @@ export class ImageLoader {
 			if (this.options.viewMode === 'double' && bookStore.canNextPage) {
 				const nextPageIndex = currentPageIndex + 1;
 				if (nextPageIndex < currentBook.pages.length) {
-					await this.ensureResources(nextPageIndex);
+					// getObjectUrl 内部会检查缓存并按需加载，无需先调用 ensureResources
 					objectUrl2 = await this.getObjectUrl(nextPageIndex);
 				}
 			}

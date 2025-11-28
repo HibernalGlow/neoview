@@ -18,9 +18,7 @@ export * from './core';
 // 组件
 export { default as NeoViewer } from './NeoViewer.svelte';
 export { default as NeoViewer2 } from './NeoViewer2.svelte';
-export { default as StackViewer } from './StackViewer.svelte';
-export { default as StackViewer2 } from './StackViewer2.svelte';
-export { default as NewViewer } from './NewViewer.svelte';
+// 注意：StackViewer 已迁移到 $lib/stackview
 
 // 工具类
 export { GestureHandler } from './GestureHandler';

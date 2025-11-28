@@ -35,6 +35,8 @@
 {#if visible && frame.images.length > 0}
   <div 
     class="upscale-layer {layoutClass}"
+    data-layer="UpscaleLayer"
+    data-layer-id="upscale"
     style:z-index={LayerZIndex.UPSCALE}
     style:transform={transform}
   >

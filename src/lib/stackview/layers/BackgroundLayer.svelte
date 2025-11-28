@@ -14,9 +14,11 @@
 
 <div 
   class="background-layer"
+  data-layer="BackgroundLayer"
+  data-layer-id="background"
   style:background-color={color}
   style:z-index={LayerZIndex.BACKGROUND}
-/>
+></div>
 
 <style>
   .background-layer {

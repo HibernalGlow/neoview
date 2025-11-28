@@ -35,6 +35,8 @@
 {#if frame.images.length > 0}
   <div 
     class="current-frame-layer {layoutClass}"
+    data-layer="CurrentFrameLayer"
+    data-layer-id="current"
     style:z-index={LayerZIndex.CURRENT_FRAME}
     style:transform={transform}
   >
@@ -53,6 +55,8 @@
 {:else}
   <div 
     class="current-frame-layer frame-empty"
+    data-layer="CurrentFrameLayer"
+    data-layer-id="current"
     style:z-index={LayerZIndex.CURRENT_FRAME}
   >
     <span class="text-muted-foreground">暂无图片</span>

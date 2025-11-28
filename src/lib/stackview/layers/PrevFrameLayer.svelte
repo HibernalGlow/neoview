@@ -25,6 +25,8 @@
 {#if frame.images.length > 0}
   <div 
     class="prev-frame-layer {layoutClass}"
+    data-layer="PrevFrameLayer"
+    data-layer-id="prev"
     style:z-index={LayerZIndex.PREV_FRAME}
   >
     {#each frame.images as img, i (i)}

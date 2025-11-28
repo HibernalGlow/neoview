@@ -21,6 +21,7 @@
 	import BottomThumbnailBarNode from './nodes/BottomThumbnailBarNode.svelte';
 	import NewReaderNode from './nodes/NewReaderNode.svelte';
 	import PipelineDebugNode from './nodes/PipelineDebugNode.svelte';
+	import StackViewerNode from './nodes/StackViewerNode.svelte';
 
 	// 注册自定义节点类型
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,7 +32,8 @@
 		topToolbarNode: TopToolbarNode,
 		bottomThumbnailBarNode: BottomThumbnailBarNode,
 		newReaderNode: NewReaderNode,
-		pipelineDebugNode: PipelineDebugNode
+		pipelineDebugNode: PipelineDebugNode,
+		stackViewerNode: StackViewerNode
 	};
 
 	// 初始节点：包含主图片查看器和各个侧边栏
@@ -88,6 +90,15 @@
 			position: { x: 1300, y: 650 },
 			data: { label: 'Pipeline Debug' },
 			dragHandle: '.drag-handle'
+		},
+		{
+			id: 'stack-viewer',
+			type: 'stackViewerNode',
+			position: { x: 50, y: 750 },
+			data: { label: 'StackViewer' },
+			dragHandle: '.drag-handle',
+			width: 900,
+			height: 500
 		}
 	]);
 

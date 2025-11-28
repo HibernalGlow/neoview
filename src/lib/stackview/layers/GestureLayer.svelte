@@ -85,6 +85,8 @@
 <!-- 外层容器不捕获事件 -->
 <div 
   class="gesture-layer-container"
+  data-layer="GestureLayer"
+  data-layer-id="gesture"
   style:z-index={LayerZIndex.GESTURE}
 >
   <!-- 内层区域捕获事件，但不覆盖边栏 -->

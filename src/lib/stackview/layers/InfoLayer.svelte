@@ -28,6 +28,8 @@
 
 <div 
   class="info-layer"
+  data-layer="InfoLayer"
+  data-layer-id="info"
   style:z-index={LayerZIndex.INFO}
 >
   <!-- 页面信息 -->

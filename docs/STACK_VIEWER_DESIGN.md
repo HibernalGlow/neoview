@@ -839,55 +839,153 @@ interface HoverConfig {
 
 ---
 
-## Flow 模式调试层
+## Flow 模式层可视化
 
 ### 功能
 
-在 Flow 模式下显示每个层的状态，用于调试和可视化：
+在 Flow 模式下真实显示当前层的节点结构，动态反映实际渲染的层：
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Flow 模式调试视图                         │
+│                    Flow 模式层可视化                         │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │ 层状态面板                                            │   │
-│  │ ┌────────────────────────────────────────────────┐   │   │
-│  │ │ Layer 9: Gesture    [✓] pointer-events: auto   │   │   │
-│  │ │ Layer 8: Hover      [✗] disabled               │   │   │
-│  │ │ Layer 7: Info       [✓] visible                │   │   │
-│  │ │ Layer 5: Upscale    [✗] no upscaled image      │   │   │
-│  │ │ Layer 4: Current    [✓] page 5, loaded         │   │   │
-│  │ │ Layer 3: Next       [✓] page 6, preloaded      │   │   │
-│  │ │ Layer 2: Prev       [✓] page 4, preloaded      │   │   │
-│  │ │ Layer 0: Background [✓] #1a1a1a                │   │   │
-│  │ └────────────────────────────────────────────────┘   │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │ 预加载状态                                            │   │
-│  │ [■■■■■□□□□□] 5/10 pages preloaded                    │   │
-│  │ [■■□□□□□□□□] 2/10 pages upscaled                     │   │
-│  └──────────────────────────────────────────────────────┘   │
+│  StackView 容器                                              │
+│  ├── BackgroundLayer (z:0)                                  │
+│  │   └── div.background [#1a1a1a]                           │
+│  │                                                          │
+│  ├── PrevFrameLayer (z:20) [hidden]                         │
+│  │   └── img [page 4, preloaded]                            │
+│  │                                                          │
+│  ├── NextFrameLayer (z:30) [hidden]                         │
+│  │   └── img [page 6, preloaded]                            │
+│  │                                                          │
+│  ├── CurrentFrameLayer (z:40)                               │
+│  │   └── img [page 5, 1920x1080, loaded]                    │
+│  │                                                          │
+│  ├── UpscaleLayer (z:50) [empty]                            │
+│  │   └── (no upscaled image)                                │
+│  │                                                          │
+│  ├── InfoLayer (z:70)                                       │
+│  │   ├── .page-info [5/20]                                  │
+│  │   └── .progress-bar [25%]                                │
+│  │                                                          │
+│  ├── HoverLayer (z:85) [disabled]                           │
+│  │                                                          │
+│  └── GestureLayer (z:90)                                    │
+│      └── div.gesture-layer [pointer-events: auto]           │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 实现
+### 实现方式
 
-- 只在 Flow 模式下渲染调试面板
-- 使用 `$inspect` 或自定义 store 收集层状态
-- 不影响 Classic 模式性能
+使用 Svelte 的 `{#snippet}` 或遍历实际渲染的层：
+
+```typescript
+// 层状态收集器
+interface LayerNode {
+  id: string;
+  name: string;
+  zIndex: number;
+  visible: boolean;
+  children: LayerNodeChild[];
+}
+
+interface LayerNodeChild {
+  tag: string;
+  className?: string;
+  info?: string;  // 额外信息，如 [page 5, loaded]
+}
+
+// 从实际 DOM 收集层信息
+function collectLayerNodes(container: HTMLElement): LayerNode[] {
+  const layers: LayerNode[] = [];
+  
+  container.querySelectorAll('[data-layer]').forEach(el => {
+    const layer: LayerNode = {
+      id: el.getAttribute('data-layer-id') || '',
+      name: el.getAttribute('data-layer') || '',
+      zIndex: parseInt(getComputedStyle(el).zIndex) || 0,
+      visible: getComputedStyle(el).display !== 'none',
+      children: [],
+    };
+    
+    // 收集子节点信息
+    el.querySelectorAll('img, video, div').forEach(child => {
+      layer.children.push({
+        tag: child.tagName.toLowerCase(),
+        className: child.className,
+        info: child.getAttribute('data-info'),
+      });
+    });
+    
+    layers.push(layer);
+  });
+  
+  return layers.sort((a, b) => a.zIndex - b.zIndex);
+}
+```
+
+### 组件结构
 
 ```svelte
-{#if $isFlowMode && $showDebugPanel}
-  <DebugLayer 
-    layers={$layerStates}
-    preloadStatus={$preloadStatus}
-    upscaleStatus={$upscaleStatus}
-  />
-{/if}
+<!-- LayerTreeView.svelte -->
+<script lang="ts">
+  let { layers }: { layers: LayerNode[] } = $props();
+</script>
+
+<div class="layer-tree">
+  <div class="tree-header">StackView 容器</div>
+  {#each layers as layer}
+    <div class="tree-node" class:hidden={!layer.visible}>
+      <span class="node-icon">├──</span>
+      <span class="node-name">{layer.name}</span>
+      <span class="node-zindex">(z:{layer.zIndex})</span>
+      {#if !layer.visible}
+        <span class="node-status">[hidden]</span>
+      {/if}
+      
+      {#each layer.children as child}
+        <div class="tree-child">
+          <span class="child-icon">│   └──</span>
+          <span class="child-tag">{child.tag}</span>
+          {#if child.className}
+            <span class="child-class">.{child.className}</span>
+          {/if}
+          {#if child.info}
+            <span class="child-info">[{child.info}]</span>
+          {/if}
+        </div>
+      {/each}
+    </div>
+  {/each}
+</div>
 ```
+
+### 数据属性标记
+
+每个层组件需要添加 `data-layer` 属性：
+
+```svelte
+<!-- CurrentFrameLayer.svelte -->
+<div 
+  class="current-frame-layer"
+  data-layer="CurrentFrameLayer"
+  data-layer-id="current"
+>
+  <img 
+    src={url} 
+    data-info="page {index}, {width}x{height}, {status}"
+  />
+</div>
+```
+
+### 性能考虑
+
+- 只在 Flow 模式下启用层收集
+- 使用 `requestIdleCallback` 延迟更新
+- Classic 模式完全不执行收集逻辑
 
 ---
 

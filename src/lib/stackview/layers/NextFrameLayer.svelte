@@ -25,6 +25,8 @@
 {#if frame.images.length > 0}
   <div 
     class="next-frame-layer {layoutClass}"
+    data-layer="NextFrameLayer"
+    data-layer-id="next"
     style:z-index={LayerZIndex.NEXT_FRAME}
   >
     {#each frame.images as img, i (i)}

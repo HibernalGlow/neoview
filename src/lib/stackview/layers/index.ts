@@ -10,3 +10,4 @@ export { default as UpscaleLayer } from './UpscaleLayer.svelte';
 export { default as InfoLayer } from './InfoLayer.svelte';
 export { default as GestureLayer } from './GestureLayer.svelte';
 export { default as HoverLayer } from './HoverLayer.svelte';
+export { default as LayerTreeView } from './LayerTreeView.svelte';

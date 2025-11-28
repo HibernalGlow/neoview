@@ -21,6 +21,8 @@
 	import { computeAutoBackgroundColor } from '$lib/utils/autoBackground';
 	import ComparisonViewer from './ComparisonViewer.svelte';
 	import ImageViewerDisplay from './flow/ImageViewerDisplay.svelte';
+	import { NeoViewer } from '$lib/viewer';
+	import { useNeoViewer } from '$lib/stores';
 	import ImageViewerProgressBar from './flow/ImageViewerProgressBar.svelte';
 	import ImageInfoOverlay from './ImageInfoOverlay.svelte';
 	import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
@@ -1852,22 +1854,43 @@
 				<div class="text-white">加载视频中...</div>
 			{/if}
 		{:else}
-			<ImageViewerDisplay
-				{imageData}
-				{imageData2}
-				upscaledImageData={derivedUpscaledUrl || bookStore.upscaledImageData}
-				viewMode={$viewerState.viewMode as 'single' | 'double' | 'panorama'}
-				zoomLevel={$viewerState.zoom}
-				rotationAngle={$rotationAngle}
-				orientation={$viewerState.orientation}
-				panX={pan.x}
-				panY={pan.y}
-				horizontalSplitHalf={currentHorizontalHalf}
-				treatHorizontalAsDoublePage={treatHorizontalAsDoublePage &&
-					isCurrentPageHorizontal &&
-					$viewerState.viewMode === 'double'}
-				bind:panoramaPages={panoramaPagesData}
-			/>
+			{#if $useNeoViewer}
+				<!-- NeoViewer（实验性） -->
+				<NeoViewer
+					{imageData}
+					{imageData2}
+					upscaledImageData={derivedUpscaledUrl || bookStore.upscaledImageData}
+					viewMode={$viewerState.viewMode as 'single' | 'double' | 'panorama'}
+					orientation={$viewerState.orientation}
+					panX={pan.x}
+					panY={pan.y}
+					horizontalSplitHalf={currentHorizontalHalf}
+					treatHorizontalAsDoublePage={treatHorizontalAsDoublePage &&
+						isCurrentPageHorizontal &&
+						$viewerState.viewMode === 'double'}
+					bind:panoramaPages={panoramaPagesData}
+					onPrevPage={() => bookStore.prevPage()}
+					onNextPage={() => bookStore.nextPage()}
+				/>
+			{:else}
+				<!-- 传统 ImageViewerDisplay -->
+				<ImageViewerDisplay
+					{imageData}
+					{imageData2}
+					upscaledImageData={derivedUpscaledUrl || bookStore.upscaledImageData}
+					viewMode={$viewerState.viewMode as 'single' | 'double' | 'panorama'}
+					zoomLevel={$viewerState.zoom}
+					rotationAngle={$rotationAngle}
+					orientation={$viewerState.orientation}
+					panX={pan.x}
+					panY={pan.y}
+					horizontalSplitHalf={currentHorizontalHalf}
+					treatHorizontalAsDoublePage={treatHorizontalAsDoublePage &&
+						isCurrentPageHorizontal &&
+						$viewerState.viewMode === 'double'}
+					bind:panoramaPages={panoramaPagesData}
+				/>
+			{/if}
 		{/if}
 	</div>
 

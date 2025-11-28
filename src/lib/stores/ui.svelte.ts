@@ -62,6 +62,18 @@ export const zoomLevel = writable<number>(loadFromStorage('zoomLevel', 1.0));
 // 旋转角度 (0, 90, 180, 270)
 export const rotationAngle = writable<number>(loadFromStorage('rotationAngle', 0));
 
+// NeoViewer 开关（新版查看器）
+export const useNeoViewer = writable<boolean>(loadFromStorage('useNeoViewer', false));
+
+// 切换 NeoViewer
+export function toggleNeoViewer() {
+	useNeoViewer.update(v => {
+		const newValue = !v;
+		saveToStorage('useNeoViewer', newValue);
+		return newValue;
+	});
+}
+
 // 视图模式（仅描述单页/双页/全景）
 export type ViewMode = 'single' | 'double' | 'panorama';
 

@@ -1,10 +1,14 @@
 /**
  * Viewer 模块导出
  * 
- * 提供图片查看器的所有组件和工具
+ * NeoViewer - 新一代图片查看器
+ * - NeoViewer: 主组件，兼容 ImageViewerDisplay 接口
+ * - ImageRenderer: 图片渲染组件
+ * - GestureHandler: 手势处理器
  */
 
 // 组件
+export { default as NeoViewer } from './NeoViewer.svelte';
 export { default as ImageRenderer } from './ImageRenderer.svelte';
 export { default as NewViewer } from './NewViewer.svelte';
 

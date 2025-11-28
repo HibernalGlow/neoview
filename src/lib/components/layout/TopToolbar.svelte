@@ -30,7 +30,9 @@
 		layoutMode,
 		toggleLayoutMode,
 		layoutSwitchMode,
-		toggleLayoutSwitchMode
+		toggleLayoutSwitchMode,
+		useNeoViewer,
+		toggleNeoViewer
 	} from '$lib/stores';
 	import { readable } from 'svelte/store';
 	import { onMount } from 'svelte';
@@ -797,6 +799,32 @@ async function handleSortModeChange(mode: PageSortMode) {
 				<p class="text-muted-foreground text-xs">
 					右键切换: {$layoutSwitchMode === 'seamless' ? '无缝模式 (保持状态)' : '冷切换 (节省性能)'}
 				</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
+		<!-- NeoViewer 开关 -->
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={$useNeoViewer ? 'default' : 'ghost'}
+					size="icon"
+					class="h-6 w-6"
+					style="pointer-events: auto;"
+					onclick={() => {
+						toggleNeoViewer();
+						showToast({
+							title: 'NeoViewer',
+							description: $useNeoViewer ? '已切换到传统查看器' : '已切换到 NeoViewer（实验性）',
+							variant: 'info',
+							duration: 2000
+						});
+					}}
+				>
+					<span class="text-xs font-bold">N</span>
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>{$useNeoViewer ? 'NeoViewer 已启用（点击切换到传统）' : '点击启用 NeoViewer（实验性）'}</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 

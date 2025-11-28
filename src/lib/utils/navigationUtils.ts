@@ -1,4 +1,3 @@
-import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 import { bookStore } from '$lib/stores/book.svelte';
 import { FileSystemAPI } from '$lib/api';
 import { setActivePanelTab } from '$lib/stores';
@@ -45,11 +44,8 @@ export async function openFileSystemItem(
 
             console.log('🌳 Syncing file tree to:', targetPath);
             
-            // 同时同步到新旧两个文件浏览面板
-            await Promise.all([
-                fileBrowserStore.navigateToPath(targetPath),
-                folderPanelActions.navigateToPath(targetPath)
-            ]);
+            // 导航到新文件浏览面板
+            await folderPanelActions.navigateToPath(targetPath);
         } catch (err) {
             console.debug('Sync file tree failed:', err);
         }
@@ -72,11 +68,8 @@ export async function openFileSystemItem(
                 targetPath += separator;
             }
 
-            // 同时导航到新旧两个文件浏览面板
-            await Promise.all([
-                fileBrowserStore.navigateToPath(targetPath),
-                folderPanelActions.navigateToPath(targetPath)
-            ]);
+            // 导航到新文件浏览面板
+            await folderPanelActions.navigateToPath(targetPath);
             setActivePanelTab('folder');
         }
     } else {

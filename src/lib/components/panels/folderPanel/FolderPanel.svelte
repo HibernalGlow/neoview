@@ -18,6 +18,7 @@ import MigrationBar from './components/MigrationBar.svelte';
 import InlineTreeList from './components/InlineTreeList.svelte';
 import SearchResultList from './components/SearchResultList.svelte';
 import SearchBar from '$lib/components/ui/SearchBar.svelte';
+import { directoryTreeCache } from './utils/directoryTreeCache';
 import { bookStore } from '$lib/stores/book.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { FileSystemAPI } from '$lib/api';
@@ -158,6 +159,8 @@ function handleCopyName(item: FsItem) {
 function handleRefresh() {
 	const path = $currentPath;
 	if (path) {
+		// 清除当前目录的缓存，强制重新加载
+		directoryTreeCache.invalidate(path);
 		navigationCommand.set({ type: 'init', path });
 	}
 }

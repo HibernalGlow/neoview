@@ -9,7 +9,6 @@
 		sidebarLeftPanels,
 		sidebarRightPanels,
 		sidebarHiddenPanels,
-		getPanelEmoji,
 		type PanelId,
 		type PanelConfig
 	} from '$lib/stores/sidebarConfig.svelte';
@@ -61,18 +60,32 @@
 			return;
 		}
 
-		const { panel } = draggedPanel;
+		const { panel, source } = draggedPanel;
 		const targetArea = dragOverArea;
 
-		// 直接更新 store
+		// 如果目标区域和源区域相同，不做任何操作
+		if (source === targetArea) {
+			draggedPanel = null;
+			isPointerDragging = false;
+			dragOverArea = null;
+			dragPreview = null;
+			return;
+		}
+
+		// 直接更新 store - 使用 movePanel 方法
 		if (targetArea === 'waitingArea') {
-			sidebarConfigStore.setPanelVisible(panel.id, false);
+			// 隐藏面板
+			if (panel.canHide) {
+				sidebarConfigStore.setPanelVisible(panel.id, false);
+			}
 		} else if (targetArea === 'leftSidebar') {
-			sidebarConfigStore.setPanelPosition(panel.id, 'left');
+			// 移动到左侧栏
 			sidebarConfigStore.setPanelVisible(panel.id, true);
+			sidebarConfigStore.movePanel(panel.id, 999, 'left'); // 放到最后
 		} else if (targetArea === 'rightSidebar') {
-			sidebarConfigStore.setPanelPosition(panel.id, 'right');
+			// 移动到右侧栏
 			sidebarConfigStore.setPanelVisible(panel.id, true);
+			sidebarConfigStore.movePanel(panel.id, 999, 'right'); // 放到最后
 		}
 
 		draggedPanel = null;
@@ -206,6 +219,7 @@
 			<h4 class="mb-3 text-center text-sm font-medium">等待区（隐藏）</h4>
 			<div class="min-h-[200px] space-y-2">
 				{#each hiddenPanels as panel (panel.id)}
+					{@const Icon = panel.icon}
 					<div
 						class="bg-card rounded-md border p-3 transition-colors hover:bg-accent/50 {isPointerDragging && draggedPanel?.panel.id === panel.id ? 'opacity-50' : ''}"
 					>
@@ -218,7 +232,7 @@
 									<path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
 								</svg>
 							</div>
-							<span class="text-lg">{getPanelEmoji(panel.id)}</span>
+							<Icon class="h-4 w-4" />
 							<span class="text-sm font-medium">{panel.title}</span>
 						</div>
 					</div>
@@ -238,6 +252,7 @@
 			<h4 class="mb-3 text-center text-sm font-medium">左侧栏</h4>
 			<div class="min-h-[200px] space-y-2">
 				{#each leftPanels as panel, index (panel.id)}
+					{@const Icon = panel.icon}
 					<div
 						class="bg-card rounded-md border p-3 transition-colors hover:bg-accent/50 {isPointerDragging && draggedPanel?.panel.id === panel.id ? 'opacity-50' : ''}"
 					>
@@ -250,7 +265,7 @@
 									<path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
 								</svg>
 							</div>
-							<span class="text-lg">{getPanelEmoji(panel.id)}</span>
+							<Icon class="h-4 w-4" />
 							<span class="flex-1 text-sm font-medium">{panel.title}</span>
 							<!-- 上下箭头 -->
 							<div class="flex flex-col gap-0.5">
@@ -295,6 +310,7 @@
 			<h4 class="mb-3 text-center text-sm font-medium">右侧栏</h4>
 			<div class="min-h-[200px] space-y-2">
 				{#each rightPanels as panel, index (panel.id)}
+					{@const Icon = panel.icon}
 					<div
 						class="bg-card rounded-md border p-3 transition-colors hover:bg-accent/50 {isPointerDragging && draggedPanel?.panel.id === panel.id ? 'opacity-50' : ''}"
 					>
@@ -307,7 +323,7 @@
 									<path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
 								</svg>
 							</div>
-							<span class="text-lg">{getPanelEmoji(panel.id)}</span>
+							<Icon class="h-4 w-4" />
 							<span class="flex-1 text-sm font-medium">{panel.title}</span>
 							<!-- 上下箭头 -->
 							<div class="flex flex-col gap-0.5">
@@ -346,9 +362,10 @@
 
 	<!-- 拖拽预览 -->
 	{#if isPointerDragging && dragPreview && draggedPanel}
+		{@const DragIcon = draggedPanel.panel.icon}
 		<div class="pointer-events-none fixed z-50" style="left: {dragPreview.x}px; top: {dragPreview.y}px;">
 			<div class="bg-card flex items-center gap-2 rounded-md border px-3 py-2 opacity-90 shadow-lg">
-				<span class="text-lg">{getPanelEmoji(draggedPanel.panel.id)}</span>
+				<DragIcon class="h-4 w-4" />
 				<span class="text-sm font-medium">{draggedPanel.panel.title}</span>
 			</div>
 		</div>

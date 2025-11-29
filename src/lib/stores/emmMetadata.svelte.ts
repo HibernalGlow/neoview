@@ -10,6 +10,8 @@ import type { EMMMetadata, EMMCollectTag } from '$lib/api/emm';
 interface EMMMetadataState {
 	// hash -> metadata
 	metadataCache: Map<string, EMMMetadata>;
+	// filePath -> metadata (用于路径查询缓存)
+	pathCache: Map<string, EMMMetadata | null>;
 	// 收藏标签列表
 	collectTags: EMMCollectTag[];
 	// 主数据库路径列表（自动检测 + 手动配置）
@@ -120,6 +122,7 @@ const initialSettings = loadSettings();
 
 const { subscribe, set, update } = writable<EMMMetadataState>({
 	metadataCache: new Map(),
+	pathCache: new Map(),
 	collectTags: [],
 	databasePaths: [],
 	translationDbPath: undefined,
@@ -477,44 +480,51 @@ export const emmMetadataStore = {
 	 * 加载元数据（通过文件路径）
 	 */
 	async loadMetadataByPath(filePath: string): Promise<EMMMetadata | null> {
-		console.debug('[EMMStore] loadMetadataByPath: 开始加载，filePath:', filePath);
+		// 规范化路径用于缓存键
+		const normalizedPath = filePath.replace(/\\/g, '/');
 
 		let currentState: EMMMetadataState;
 		subscribe(state => {
 			currentState = state;
 		})();
 
+		// 检查路径缓存（包括 null 结果，避免重复查询不存在的元数据）
+		if (currentState!.pathCache.has(normalizedPath)) {
+			const cached = currentState!.pathCache.get(normalizedPath);
+			return cached ?? null;
+		}
+
 		const translationDbPath = currentState!.translationDbPath;
-		console.debug('[EMMStore] loadMetadataByPath: 数据库路径列表:', currentState!.databasePaths);
-		console.debug('[EMMStore] loadMetadataByPath: 翻译数据库路径:', translationDbPath);
 
 		// 从所有主数据库尝试加载（过滤掉 translations.db）
 		const mainDatabases = currentState!.databasePaths.filter(db =>
 			!db.toLowerCase().includes('translations.db')
 		);
-		console.debug('[EMMStore] loadMetadataByPath: 过滤后的主数据库列表:', mainDatabases);
 
 		for (const dbPath of mainDatabases) {
 			try {
-				console.debug('[EMMStore] loadMetadataByPath: 尝试从数据库加载，dbPath:', dbPath);
 				const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, filePath, translationDbPath);
 				if (metadata) {
-					console.debug('[EMMStore] loadMetadataByPath: 成功加载元数据，metadata:', metadata);
 					update(s => {
 						const newCache = new Map(s.metadataCache);
 						newCache.set(metadata.hash, metadata);
-						return { ...s, metadataCache: newCache };
+						const newPathCache = new Map(s.pathCache);
+						newPathCache.set(normalizedPath, metadata);
+						return { ...s, metadataCache: newCache, pathCache: newPathCache };
 					});
 					return metadata;
-				} else {
-					console.debug('[EMMStore] loadMetadataByPath: 数据库中没有找到元数据，dbPath:', dbPath);
 				}
 			} catch (e) {
 				console.error(`[EMMStore] loadMetadataByPath: 从 ${dbPath} 加载元数据失败:`, e);
 			}
 		}
 
-		console.debug('[EMMStore] loadMetadataByPath: 所有数据库都未找到元数据，filePath:', filePath);
+		// 缓存 null 结果，避免重复查询
+		update(s => {
+			const newPathCache = new Map(s.pathCache);
+			newPathCache.set(normalizedPath, null);
+			return { ...s, pathCache: newPathCache };
+		});
 		return null;
 	},
 
@@ -550,8 +560,25 @@ export const emmMetadataStore = {
 	clearCache() {
 		update(state => ({
 			...state,
-			metadataCache: new Map()
+			metadataCache: new Map(),
+			pathCache: new Map()
 		}));
+	},
+
+	/**
+	 * 清空指定目录的路径缓存
+	 */
+	clearPathCacheForDirectory(dirPath: string) {
+		const normalizedDir = dirPath.replace(/\\/g, '/');
+		update(state => {
+			const newPathCache = new Map(state.pathCache);
+			for (const key of newPathCache.keys()) {
+				if (key.startsWith(normalizedDir)) {
+					newPathCache.delete(key);
+				}
+			}
+			return { ...state, pathCache: newPathCache };
+		});
 	}
 };
 

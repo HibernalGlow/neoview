@@ -398,25 +398,22 @@ export class ImageLoader {
 	 * 【关键】必须同步清理缓存，否则会显示旧书籍的图片
 	 */
 	resetForBookChange(options: { preservePreloadCache?: boolean } = {}): void {
+		// 【关键】先清空队列，停止所有进行中的加载任务
+		// 避免旧书籍的加载结果写入新书籍的缓存
+		this.core.clearQueue();
+		
 		// 同步清理，确保不会显示旧书籍的图片
 		if (!options.preservePreloadCache) {
 			this.upscaleHandler.clearMemoryCache();
 		}
 		this.pendingPreloadTasks.clear();
 		this.resetPreUpscaleProgress();
-		this.core.clearCache();
+		
+		// 完全重置核心加载器（清空缓存和待处理任务）
+		this.core.reset();
 		clearExtractCache(); // 清理预解压缓存
 		
-		// 【优化】如果新书是压缩包，立即触发预解压
-		const currentBook = bookStore.currentBook;
-		if (currentBook?.type === 'archive') {
-			console.log('📦 触发压缩包预解压:', currentBook.path);
-			preExtractArchive(currentBook.path).catch(err => {
-				console.warn('预解压失败:', err);
-			});
-		}
-		
-		console.log('📦 书籍缓存已清理');
+		console.log('📦 书籍切换：缓存和队列已清理');
 	}
 
 	/**

@@ -35,6 +35,8 @@ export class ImageLoaderCore {
 	private pendingLoads = new Map<number, Promise<LoadResult>>();
 	private thumbnailCache = new Map<number, string>();
 	private options: ImageLoaderCoreOptions;
+	// 【关键】会话 ID，用于防止旧书籍的加载结果污染新书籍
+	private sessionId = 0;
 
 	constructor(options: ImageLoaderCoreOptions = {}) {
 		this.options = options;
@@ -84,8 +86,17 @@ export class ImageLoaderCore {
 	 * 【优化】先返回图片，异步获取尺寸，不阻塞显示
 	 */
 	private async executeLoad(pageIndex: number, priority: number): Promise<LoadResult> {
+		// 【关键】记录当前会话 ID，用于检测书籍切换
+		const loadSessionId = this.sessionId;
+		
 		return new Promise((resolve, reject) => {
 			this.loadQueue.enqueue(pageIndex, priority, async () => {
+				// 【关键】检查会话是否已变更（书籍已切换）
+				if (loadSessionId !== this.sessionId) {
+					reject(new Error('Session changed, load cancelled'));
+					return;
+				}
+				
 				// 再次检查缓存（可能在排队时被加载）
 				if (this.blobCache.has(pageIndex)) {
 					const item = this.blobCache.get(pageIndex)!;
@@ -98,7 +109,9 @@ export class ImageLoaderCore {
 					});
 					// 异步获取尺寸并回调
 					getImageDimensions(item.blob).then(dimensions => {
-						this.options.onDimensionsReady?.(pageIndex, dimensions);
+						if (loadSessionId === this.sessionId) {
+							this.options.onDimensionsReady?.(pageIndex, dimensions);
+						}
 					});
 					return;
 				}
@@ -106,6 +119,12 @@ export class ImageLoaderCore {
 				try {
 					// 读取图片
 					const { blob, traceId } = await readPageBlob(pageIndex);
+					
+					// 【关键】再次检查会话（读取可能耗时较长）
+					if (loadSessionId !== this.sessionId) {
+						reject(new Error('Session changed during load'));
+						return;
+					}
 					
 					// 缓存
 					const url = this.blobCache.set(pageIndex, blob);
@@ -124,7 +143,9 @@ export class ImageLoaderCore {
 
 					// 异步获取尺寸并回调（不阻塞）
 					getImageDimensions(blob).then(dimensions => {
-						this.options.onDimensionsReady?.(pageIndex, dimensions);
+						if (loadSessionId === this.sessionId) {
+							this.options.onDimensionsReady?.(pageIndex, dimensions);
+						}
 					});
 				} catch (error) {
 					const err = error instanceof Error ? error : new Error(String(error));
@@ -349,8 +370,12 @@ export class ImageLoaderCore {
 
 	/**
 	 * 完全重置
+	 * 【关键】增加会话 ID，使所有进行中的加载任务失效
 	 */
 	reset(): void {
+		// 增加会话 ID，使所有进行中的加载任务失效
+		this.sessionId++;
+		console.log(`📦 会话重置: sessionId=${this.sessionId}`);
 		this.clearQueue();
 		this.clearCache();
 		this.pendingLoads.clear();

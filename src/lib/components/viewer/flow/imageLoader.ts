@@ -7,21 +7,23 @@ import { invoke } from '@tauri-apps/api/core';
 import { loadImage } from '$lib/api/fs';
 import { loadImageFromArchive } from '$lib/api/filesystem';
 import { bookStore } from '$lib/stores/book.svelte';
-import { settingsManager } from '$lib/settings/settingsManager';
+import { performanceSettings, settingsManager } from '$lib/settings/settingsManager';
 import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
 import {
 	triggerAutoUpscale,
 	checkUpscaleCache,
+	getImageDataWithHash,
 	getAutoUpscaleEnabled,
 	type ImageDataWithHash,
 	enqueuePreloadBatchJobs,
 	type PreloadBatchJobInput
 } from './preloadRuntime';
+import { upscaleState, startUpscale, updateUpscaleProgress, completeUpscale, setUpscaleError } from '$lib/stores/upscale/upscaleState.svelte';
+import { showSuccessToast } from '$lib/utils/toast';
 import { collectPageMetadata, evaluateConditions } from '$lib/utils/upscale/conditions';
 import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
 import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
-
 function getPanelModelSettings() {
 	const settings = loadUpscalePanelSettings();
 	return {
@@ -331,12 +333,6 @@ export class ImageLoader {
 	 * 获取 Blob
 	 */
 	async getBlob(pageIndex: number): Promise<Blob> {
-		// 如果已有缓存，直接返回，避免重复日志
-		const cached = this.blobCache.get(pageIndex);
-		if (cached) {
-			this.updateAccessTime(pageIndex);
-			return cached.blob;
-		}
 		await this.ensureResources(pageIndex);
 		return this.blobCache.get(pageIndex)!.blob;
 	}
@@ -345,12 +341,6 @@ export class ImageLoader {
 	 * 获取 Object URL
 	 */
 	async getObjectUrl(pageIndex: number): Promise<string> {
-		// 如果已有缓存，直接返回，避免重复日志
-		const cached = this.blobCache.get(pageIndex);
-		if (cached) {
-			this.updateAccessTime(pageIndex);
-			return cached.url;
-		}
 		await this.ensureResources(pageIndex);
 		return this.blobCache.get(pageIndex)!.url;
 	}
@@ -557,19 +547,24 @@ export class ImageLoader {
 		const currentBook = bookStore.currentBook;
 		if (!currentBook) return;
 
-		// 🔥 异步取消上一页超分任务，不阻塞当前页加载
 		if (
 			this.lastAutoUpscalePageIndex !== null &&
 			this.lastAutoUpscalePageIndex !== currentPageIndex
 		) {
-			const pageToCancel = this.lastAutoUpscalePageIndex;
-			this.lastAutoUpscalePageIndex = null;
-			invoke('cancel_upscale_jobs_for_page', {
-				bookPath: currentBook.path ?? undefined,
-				pageIndex: pageToCancel
-			}).catch(error => {
+			try {
+				await invoke('cancel_upscale_jobs_for_page', {
+					bookPath: currentBook.path ?? undefined,
+					pageIndex: this.lastAutoUpscalePageIndex
+				});
+				console.log(
+					'已请求取消上一页的超分任务:',
+					this.lastAutoUpscalePageIndex + 1
+				);
+			} catch (error) {
 				console.warn('取消上一页超分任务失败:', error);
-			});
+			} finally {
+				this.lastAutoUpscalePageIndex = null;
+			}
 		}
 
 		this.loading = true;
@@ -605,37 +600,158 @@ export class ImageLoader {
 			if (this.options.viewMode === 'double' && bookStore.canNextPage) {
 				const nextPageIndex = currentPageIndex + 1;
 				if (nextPageIndex < currentBook.pages.length) {
-					// getObjectUrl 内部会检查缓存并按需加载，无需先调用 ensureResources
+					await this.ensureResources(nextPageIndex);
 					objectUrl2 = await this.getObjectUrl(nextPageIndex);
 				}
 			}
 
-			// 🔥 优化：先调用回调显示图片，再异步处理超分逻辑
+			// 获取带hash的图片数据：用于超分缓存检查
+			const pageInfo = currentBook.pages[currentPageIndex];
+			let imageDataWithHash: ImageDataWithHash | null = null;
+			let shouldSkipUpscale = false;
+
+			// 使用 bookStore 的统一 hash API
+			const imageHash = bookStore.getPageHash(currentPageIndex);
+			if (imageHash) {
+				const { blob } = this.blobCache.get(currentPageIndex)!;
+				imageDataWithHash = { blob, hash: imageHash, pageIndex: currentPageIndex };
+				console.log(`使用稳定哈希，页码: ${currentPageIndex + 1}/${bookStore.totalPages}, hash: ${imageHash}`);
+			} else {
+				console.warn('当前页没有 stableHash，跳过自动超分');
+			}
+
+			let currentConditionId: string | undefined;
+			if (pageInfo && currentBook) {
+				const panelSettings = loadUpscalePanelSettings();
+				if (panelSettings.conditionalUpscaleEnabled) {
+					const pageMetadata = collectPageMetadata(pageInfo, currentBook.path);
+					const conditionResult = evaluateConditions(pageMetadata, panelSettings.conditionsList);
+					currentConditionId = conditionResult.conditionId ?? undefined;
+					shouldSkipUpscale = conditionResult.action?.skip === true;
+					if (imageDataWithHash) {
+						imageDataWithHash.conditionId = currentConditionId;
+					}
+				}
+			}
+
+			// ---- 缓存优先逻辑 ----
+			let usedCache = false;
+			// imageHash 已经在上面声明过了
+
+			if (imageHash) {
+				if (shouldSkipUpscale) {
+					console.log('条件要求跳过超分，直接显示原图，hash:', imageHash, 'conditionId:', currentConditionId);
+					bookStore.setPageUpscaleStatus(currentPageIndex, 'none');
+					this.preloadMemoryCache.delete(imageHash);
+					this.pendingPreloadTasks.delete(imageHash);
+					setTimeout(() => {
+						this.preloadNextPages();
+					}, 500);
+				} else {
+					// 1. 先检查内存缓存
+					const memCache = this.preloadMemoryCache.get(imageHash);
+					if (memCache) {
+						// 🔥 关键修复：验证缓存的 hash 是否真的匹配当前页
+						const currentPageHash = bookStore.getPageHash(currentPageIndex);
+						if (currentPageHash && currentPageHash !== imageHash) {
+							console.warn(`⚠️ 内存缓存 hash 不匹配！当前页 ${currentPageIndex + 1} 的 hash: ${currentPageHash}, 缓存的 hash: ${imageHash}，清除此缓存`);
+							this.preloadMemoryCache.delete(imageHash);
+						} else if (!memCache.blob || memCache.blob.size === 0) {
+							console.warn(`⚠️ 内存缓存 blob 为空，移除缓存 hash: ${imageHash}`);
+							this.preloadMemoryCache.delete(imageHash);
+						} else {
+							usedCache = true;
+							console.log('✅ 使用内存超分缓存，页码:', currentPageIndex + 1, 'hash:', imageHash);
+							// 直接使用内存中的超分结果
+							bookStore.setUpscaledImage(memCache.url);
+							bookStore.setUpscaledImageBlob(memCache.blob);
+							bookStore.setPageUpscaleStatus(currentPageIndex, 'done');
+							// 触发事件通知 Viewer 替换显示
+							window.dispatchEvent(new CustomEvent('upscale-complete', {
+								detail: {
+									imageData: memCache.url,
+									imageBlob: memCache.blob,
+									originalImageHash: imageHash,
+									background: false,
+									pageIndex: currentPageIndex
+								}
+							}));
+						}
+					}
+
+					// 2. 内存没有，尝试从磁盘加载到内存
+					if (!usedCache) {
+						const diskLoaded = await this.loadDiskUpscaleToMemory(imageHash);
+						if (diskLoaded) {
+							const diskCache = this.preloadMemoryCache.get(imageHash);
+							if (diskCache) {
+								// 🔥 关键修复：验证从磁盘加载的 hash 是否真的匹配当前页
+								const currentPageHash = bookStore.getPageHash(currentPageIndex);
+								if (currentPageHash && currentPageHash !== imageHash) {
+									console.warn(`⚠️ 磁盘缓存 hash 不匹配！当前页 ${currentPageIndex + 1} 的 hash: ${currentPageHash}, 缓存的 hash: ${imageHash}，清除此缓存`);
+									this.preloadMemoryCache.delete(imageHash);
+								} else if (!diskCache.blob || diskCache.blob.size === 0) {
+									console.warn(`⚠️ 磁盘缓存 blob 为空，移除 hash: ${imageHash}`);
+									this.preloadMemoryCache.delete(imageHash);
+								} else {
+									usedCache = true;
+									console.log('✅ 从磁盘加载超分结果到内存，页码:', currentPageIndex + 1, 'hash:', imageHash);
+									bookStore.setUpscaledImage(diskCache.url);
+									bookStore.setUpscaledImageBlob(diskCache.blob);
+									bookStore.setPageUpscaleStatus(currentPageIndex, 'done');
+									// 触发事件通知 Viewer 替换显示
+									window.dispatchEvent(new CustomEvent('upscale-complete', {
+										detail: {
+											imageData: diskCache.url,
+											imageBlob: diskCache.blob,
+											originalImageHash: imageHash,
+											background: false,
+											pageIndex: currentPageIndex
+										}
+									}));
+								}
+							}
+						}
+					}
+
+					// 3. 现场超分（仅在没有任何缓存时）
+					if (!usedCache && imageDataWithHash) {
+						const autoUpscaleEnabled = await getAutoUpscaleEnabled();
+						if (autoUpscaleEnabled) {
+							console.log('内存和磁盘都没有缓存，开始现场超分，页码:', currentPageIndex + 1);
+							try {
+								await triggerAutoUpscale(imageDataWithHash);
+								this.lastAutoUpscalePageIndex = currentPageIndex;
+							} catch (error) {
+								console.error('现场超分失败:', error);
+								// 超分失败不影响正常显示，继续使用原图
+							}
+						} else {
+							console.log('自动超分开关已关闭，不进行现场超分');
+						}
+					}
+				}
+			}
+
+			// 调用外部回调 - 传递新的数据格式
 			this.options.onImageLoaded?.(objectUrl, objectUrl2 ?? undefined);
 			logImageTrace(currentTraceId, 'loadCurrentImage callback dispatched', {
 				pageIndex: currentPageIndex,
 				hasSecond: Boolean(objectUrl2)
 			});
-
-			// 异步获取图片尺寸（不阻塞显示）
 			const currentBlob = this.blobCache.get(currentPageIndex)?.blob;
-			if (currentBlob) {
-				this.getImageDimensions(currentBlob).then(metadata => {
-					let metadata2Promise: Promise<ImageDimensions | null> = Promise.resolve(null);
-					if (objectUrl2) {
-						const nextBlob = this.blobCache.get(currentPageIndex + 1)?.blob;
-						if (nextBlob) {
-							metadata2Promise = this.getImageDimensions(nextBlob);
-						}
-					}
-					metadata2Promise.then(metadata2 => {
-						this.options.onImageMetadataReady?.(metadata, metadata2 ?? undefined);
-					});
-				});
+			const metadata = currentBlob ? await this.getImageDimensions(currentBlob) : null;
+			let metadata2: ImageDimensions | null = null;
+			if (objectUrl2) {
+				const nextBlob = this.blobCache.get(currentPageIndex + 1)?.blob;
+				metadata2 = nextBlob ? await this.getImageDimensions(nextBlob) : null;
 			}
+			this.options.onImageMetadataReady?.(metadata, metadata2 ?? undefined);
 
-			// 🔥 异步处理超分逻辑，不阻塞图片显示
-			this.processUpscaleLogicAsync(currentPageIndex, currentBook);
+			// ---- 无论是否 usedCache，都进行预超分队列调度 ----
+			setTimeout(() => {
+				this.preloadNextPages(); // 触发后台批量预超分调度
+			}, 1000);
 		} catch (err) {
 			const errorMessage = err instanceof Error ? err.message : 'Failed to load image';
 			console.error('Failed to load image:', err);
@@ -762,13 +878,8 @@ export class ImageLoader {
 				// 确保核心缓存已准备（Blob + Object URL），保证翻页时可以直接显示
 				// 没有缓存：如果自动超分已开启，则添加到后端批量调度队列
 				try {
-					// 先检查是否已有 blob 缓存，避免重复日志
-					if (this.blobCache.has(targetIndex)) {
-						// 已有缓存，跳过加载
-					} else {
-						await this.ensureResources(targetIndex);
-						console.log('预加载已写入核心缓存，index:', targetIndex + 1);
-					}
+					await this.ensureResources(targetIndex);
+					console.log('预加载已写入核心缓存，index:', targetIndex + 1);
 
 					if (autoUpscaleEnabled) {
 						// 评估条件并检查是否应该排除预超分
@@ -840,133 +951,6 @@ export class ImageLoader {
 		} catch (error) {
 			console.error('预超分失败:', error);
 		}
-	}
-
-	/**
-	 * 异步处理超分逻辑（不阻塞图片显示）
-	 */
-	private async processUpscaleLogicAsync(currentPageIndex: number, currentBook: NonNullable<typeof bookStore.currentBook>): Promise<void> {
-		const pageInfo = currentBook.pages[currentPageIndex];
-		if (!pageInfo) return;
-
-		// 使用 bookStore 的统一 hash API
-		const imageHash = bookStore.getPageHash(currentPageIndex);
-		if (!imageHash) {
-			console.warn('当前页没有 stableHash，跳过自动超分');
-			// 延迟触发预加载
-			setTimeout(() => {
-				this.preloadNextPages();
-			}, 500);
-			return;
-		}
-
-		const { blob } = this.blobCache.get(currentPageIndex) ?? {};
-		if (!blob) {
-			console.warn('当前页没有 blob 缓存，跳过自动超分');
-			setTimeout(() => {
-				this.preloadNextPages();
-			}, 500);
-			return;
-		}
-
-		const imageDataWithHash: ImageDataWithHash = { blob, hash: imageHash, pageIndex: currentPageIndex };
-		let shouldSkipUpscale = false;
-		let currentConditionId: string | undefined;
-
-		// 评估条件
-		const panelSettings = loadUpscalePanelSettings();
-		if (panelSettings.conditionalUpscaleEnabled) {
-			const pageMetadata = collectPageMetadata(pageInfo, currentBook.path);
-			const conditionResult = evaluateConditions(pageMetadata, panelSettings.conditionsList);
-			currentConditionId = conditionResult.conditionId ?? undefined;
-			shouldSkipUpscale = conditionResult.action?.skip === true;
-			imageDataWithHash.conditionId = currentConditionId;
-		}
-
-		if (shouldSkipUpscale) {
-			console.log('条件要求跳过超分，直接显示原图，hash:', imageHash, 'conditionId:', currentConditionId);
-			bookStore.setPageUpscaleStatus(currentPageIndex, 'none');
-			this.preloadMemoryCache.delete(imageHash);
-			this.pendingPreloadTasks.delete(imageHash);
-			setTimeout(() => {
-				this.preloadNextPages();
-			}, 500);
-			return;
-		}
-
-		// 1. 先检查内存缓存
-		let usedCache = false;
-		const memCache = this.preloadMemoryCache.get(imageHash);
-		if (memCache) {
-			const currentPageHash = bookStore.getPageHash(currentPageIndex);
-			if (currentPageHash && currentPageHash !== imageHash) {
-				console.warn(`⚠️ 内存缓存 hash 不匹配！清除此缓存`);
-				this.preloadMemoryCache.delete(imageHash);
-			} else if (!memCache.blob || memCache.blob.size === 0) {
-				console.warn(`⚠️ 内存缓存 blob 为空，移除缓存`);
-				this.preloadMemoryCache.delete(imageHash);
-			} else {
-				usedCache = true;
-				console.log('✅ 使用内存超分缓存，页码:', currentPageIndex + 1);
-				bookStore.setUpscaledImage(memCache.url);
-				bookStore.setUpscaledImageBlob(memCache.blob);
-				bookStore.setPageUpscaleStatus(currentPageIndex, 'done');
-				window.dispatchEvent(new CustomEvent('upscale-complete', {
-					detail: {
-						imageData: memCache.url,
-						imageBlob: memCache.blob,
-						originalImageHash: imageHash,
-						background: false,
-						pageIndex: currentPageIndex
-					}
-				}));
-			}
-		}
-
-		// 2. 内存没有，尝试从磁盘加载到内存
-		if (!usedCache) {
-			const diskLoaded = await this.loadDiskUpscaleToMemory(imageHash);
-			if (diskLoaded) {
-				const diskCache = this.preloadMemoryCache.get(imageHash);
-				if (diskCache && diskCache.blob && diskCache.blob.size > 0) {
-					usedCache = true;
-					console.log('✅ 从磁盘加载超分结果到内存，页码:', currentPageIndex + 1);
-					bookStore.setUpscaledImage(diskCache.url);
-					bookStore.setUpscaledImageBlob(diskCache.blob);
-					bookStore.setPageUpscaleStatus(currentPageIndex, 'done');
-					window.dispatchEvent(new CustomEvent('upscale-complete', {
-						detail: {
-							imageData: diskCache.url,
-							imageBlob: diskCache.blob,
-							originalImageHash: imageHash,
-							background: false,
-							pageIndex: currentPageIndex
-						}
-					}));
-				}
-			}
-		}
-
-		// 3. 现场超分（仅在没有任何缓存时）
-		if (!usedCache) {
-			const autoUpscaleEnabled = await getAutoUpscaleEnabled();
-			if (autoUpscaleEnabled) {
-				console.log('内存和磁盘都没有缓存，开始现场超分，页码:', currentPageIndex + 1);
-				try {
-					await triggerAutoUpscale(imageDataWithHash);
-					this.lastAutoUpscalePageIndex = currentPageIndex;
-				} catch (error) {
-					console.error('现场超分失败:', error);
-				}
-			} else {
-				console.log('自动超分开关已关闭，不进行现场超分');
-			}
-		}
-
-		// 延迟触发预加载
-		setTimeout(() => {
-			this.preloadNextPages();
-		}, 1000);
 	}
 
 	/**

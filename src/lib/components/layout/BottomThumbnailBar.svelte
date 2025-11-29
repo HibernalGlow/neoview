@@ -79,23 +79,12 @@
 	// Removed global progressBarStateChange initialization effect
 
 	const THUMBNAIL_DEBOUNCE_MS = 250;
-	const THUMBNAIL_INITIAL_DELAY_MS = 500; // 🔥 书籍刚打开时的额外延迟，让第一页优先加载
 	let loadThumbnailsDebounce: number | null = null;
 	let lastThumbnailRange: { start: number; end: number } | null = null;
 	const noThumbnailPaths = new Set<string>();
-	let lastBookPath: string | null = null; // 跟踪书籍变化
 
 	function scheduleLoadVisibleThumbnails(immediate = false) {
-		// 🔥 检测书籍是否刚变化，如果是则使用更长的延迟
-		const currentBookPath = bookStore.currentBook?.path ?? null;
-		const isNewBook = currentBookPath !== lastBookPath;
-		if (isNewBook) {
-			lastBookPath = currentBookPath;
-		}
-		
-		const delayMs = isNewBook ? THUMBNAIL_INITIAL_DELAY_MS : THUMBNAIL_DEBOUNCE_MS;
-		
-		if (immediate && !isNewBook) {
+		if (immediate) {
 			if (loadThumbnailsDebounce) {
 				clearTimeout(loadThumbnailsDebounce);
 				loadThumbnailsDebounce = null;
@@ -107,7 +96,7 @@
 		loadThumbnailsDebounce = window.setTimeout(() => {
 			loadThumbnailsDebounce = null;
 			void loadVisibleThumbnails();
-		}, delayMs);
+		}, THUMBNAIL_DEBOUNCE_MS);
 	}
 
 	function showThumbnails() {
@@ -333,31 +322,14 @@
 			`Loading thumbnails from ${start} to ${end} (total: ${end - start + 1}, desired: ${desired})`
 		);
 
-		// 🔥 优化：先加载当前页缩略图，再加载其他页
-		const currentIndex = bookStore.currentPageIndex;
-		
-		// 1. 优先加载当前页
-		if (currentIndex >= start && currentIndex <= end && !(currentIndex in thumbnails)) {
-			await loadThumbnail(currentIndex);
-		}
-		
-		// 2. 延迟 100ms 后再加载其他缩略图，避免阻塞当前页图片加载
-		await new Promise(resolve => setTimeout(resolve, 100));
-		
-		// 3. 按距离当前页的远近排序加载其他缩略图
-		const otherIndices: number[] = [];
+		// 并行请求所有缩略图
+		const promises: Promise<void>[] = [];
 		for (let i = start; i <= end; i++) {
-			if (i !== currentIndex && !(i in thumbnails)) {
-				otherIndices.push(i);
+			if (!(i in thumbnails)) {
+				promises.push(loadThumbnail(i));
 			}
 		}
-		// 按距离当前页的距离排序
-		otherIndices.sort((a, b) => Math.abs(a - currentIndex) - Math.abs(b - currentIndex));
-		
-		// 4. 串行加载其他缩略图，避免并发过多阻塞主图片加载
-		for (const i of otherIndices) {
-			await loadThumbnail(i);
-		}
+		await Promise.all(promises);
 	}
 
 	// 在前端从 base64 生成缩略图
@@ -406,11 +378,7 @@
 		if (!preloadManager || loadingIndices.has(pageIndex)) return;
 
 		const currentBook = bookStore.currentBook;
-		// 边界检查：确保页面索引有效
-		if (!currentBook || pageIndex < 0 || pageIndex >= currentBook.pages.length) {
-			return;
-		}
-		const page = currentBook.pages[pageIndex];
+		const page = currentBook?.pages[pageIndex];
 		const pathKey = currentBook && page ? `${currentBook.path}::${page.path}` : null;
 
 		if (pathKey && noThumbnailPaths.has(pathKey)) {
@@ -487,28 +455,18 @@
 
 	function handleScroll(e: Event) {
 		const container = e.target as HTMLElement;
-		const thumbnailElements = container.querySelectorAll('button[data-page-index]');
-		const totalPages = bookStore.currentBook?.pages.length ?? 0;
+		const thumbnailElements = container.querySelectorAll('button');
 
 		// 加载所有可见的缩略图，包括缓冲区
-		thumbnailElements.forEach((el) => {
-			const pageIndexAttr = el.getAttribute('data-page-index');
-			if (!pageIndexAttr) return;
-			
-			const pageIndex = parseInt(pageIndexAttr, 10);
-			// 边界检查：确保页面索引有效
-			if (isNaN(pageIndex) || pageIndex < 0 || pageIndex >= totalPages) {
-				return;
-			}
-
+		thumbnailElements.forEach((el, i) => {
 			const rect = el.getBoundingClientRect();
 			const containerRect = container.getBoundingClientRect();
 
 			// 扩大可见范围，提前加载即将进入视野的缩略图
 			const buffer = 200; // 200px 缓冲区
 			if (rect.left >= containerRect.left - buffer && rect.right <= containerRect.right + buffer) {
-				if (!(pageIndex in thumbnails)) {
-					void loadThumbnail(pageIndex);
+				if (!(i in thumbnails)) {
+					void loadThumbnail(i);
 				}
 			}
 		});

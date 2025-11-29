@@ -270,7 +270,6 @@ export async function searchFiles(
   options: {
     includeSubfolders?: boolean;
     maxResults?: number;
-    searchInPath?: boolean;
   } = {}
 ): Promise<FsItem[]> {
   return await invoke<FsItem[]>('search_files', { path, query, options });

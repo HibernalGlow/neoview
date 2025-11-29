@@ -11,6 +11,7 @@ import type { EMMMetadata, EMMCollectTag } from '$lib/api/emm';
 import type { EMMMetadataState } from './emm/types';
 import { loadSettings, saveSettings } from './emm/storage';
 import { isCollectTag } from './emm/helpers';
+import { emmMetadataLoader } from '$lib/utils/emm';
 
 const initialSettings = loadSettings();
 
@@ -93,6 +94,9 @@ export const emmMetadataStore = {
 				databasePaths: uniqueDatabases,
 				translationDbPath
 			}));
+
+			// 设置 loader 的数据库路径
+			emmMetadataLoader.setDatabasePaths(uniqueDatabases, translationDbPath);
 
 			// 优先使用手动配置的设置文件，否则尝试自动查找
 			let stateForSetting: EMMMetadataState;
@@ -428,6 +432,7 @@ export const emmMetadataStore = {
 
 	/**
 	 * 加载元数据（通过文件路径）
+	 * 使用 emmMetadataLoader 支持超时、并发控制和失败记录
 	 */
 	async loadMetadataByPath(filePath: string): Promise<EMMMetadata | null> {
 		// 规范化路径用于缓存键
@@ -444,29 +449,31 @@ export const emmMetadataStore = {
 			return cached ?? null;
 		}
 
-		const translationDbPath = currentState!.translationDbPath;
+		// 确保 loader 有数据库路径
+		if (currentState!.databasePaths.length > 0) {
+			emmMetadataLoader.setDatabasePaths(
+				currentState!.databasePaths.filter(db => !db.toLowerCase().includes('translations.db')),
+				currentState!.translationDbPath
+			);
+		}
 
-		// 从所有主数据库尝试加载（过滤掉 translations.db）
-		const mainDatabases = currentState!.databasePaths.filter(db =>
-			!db.toLowerCase().includes('translations.db')
-		);
-
-		for (const dbPath of mainDatabases) {
-			try {
-				const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, filePath, translationDbPath);
-				if (metadata) {
-					update(s => {
-						const newCache = new Map(s.metadataCache);
-						newCache.set(metadata.hash, metadata);
-						const newPathCache = new Map(s.pathCache);
-						newPathCache.set(normalizedPath, metadata);
-						return { ...s, metadataCache: newCache, pathCache: newPathCache };
-					});
-					return metadata;
-				}
-			} catch (e) {
-				console.error(`[EMMStore] loadMetadataByPath: 从 ${dbPath} 加载元数据失败:`, e);
+		// 使用 loader 加载（传入原始路径，内置超时和并发控制）
+		try {
+			const metadata = await emmMetadataLoader.loadMetadata(filePath);
+			
+			if (metadata) {
+				// 更新缓存（使用规范化路径作为键）
+				update(s => {
+					const newCache = new Map(s.metadataCache);
+					newCache.set(metadata.hash, metadata);
+					const newPathCache = new Map(s.pathCache);
+					newPathCache.set(normalizedPath, metadata);
+					return { ...s, metadataCache: newCache, pathCache: newPathCache };
+				});
+				return metadata;
 			}
+		} catch (e) {
+			console.error(`[EMMStore] loadMetadataByPath 失败:`, filePath, e);
 		}
 
 		// 缓存 null 结果，避免重复查询

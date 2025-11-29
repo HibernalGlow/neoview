@@ -145,6 +145,7 @@ function handleOpenWithSystem() {
 		class="context-menu pointer-events-auto fixed"
 		style="left: {x}px; top: {y}px; z-index: 9999;"
 		onclick={(e) => e.stopPropagation()}
+		onmousedown={(e) => e.stopPropagation()}
 	>
 		<div class="bg-popover text-popover-foreground min-w-[180px] rounded-md border p-1 shadow-md">
 			{#if item.isDir}
@@ -268,5 +269,11 @@ function handleOpenWithSystem() {
 {#if visible}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div use:portal class="fixed inset-0" style="z-index: 9998;" onclick={onClose}></div>
+	<div 
+		use:portal 
+		class="fixed inset-0" 
+		style="z-index: 9998;" 
+		onclick={onClose}
+		onmousedown={(e) => e.stopPropagation()}
+	></div>
 {/if}

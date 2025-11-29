@@ -120,14 +120,15 @@ export class ImageLoader {
 
 	/**
 	 * 加载当前页面图片（核心方法）
+	 * 【优化】非阻塞设计：先显示图片，后处理超分
 	 */
 	async loadCurrentImage(): Promise<void> {
 		const currentPageIndex = bookStore.currentPageIndex;
 		const currentBook = bookStore.currentBook;
 		if (!currentBook) return;
 
-		// 取消上一页的超分任务
-		await this.upscaleHandler.cancelPreviousUpscale(currentPageIndex);
+		// 异步取消上一页的超分任务（不阻塞）
+		this.upscaleHandler.cancelPreviousUpscale(currentPageIndex).catch(() => {});
 
 		this.loading = true;
 		this.loadingVisible = false;
@@ -153,30 +154,31 @@ export class ImageLoader {
 			const result = await this.core.loadPage(currentPageIndex, LoadPriority.CRITICAL);
 			const objectUrl = result.url;
 
-			// 双页模式：加载下一页
-			let objectUrl2: string | undefined;
+			// 立即显示图片（不等待双页和超分）
+			this.options.onImageLoaded?.(objectUrl);
+			this.options.onImageMetadataReady?.(result.dimensions, undefined);
+
+			// 【异步处理】双页模式加载（不阻塞主图显示）
 			if (this.options.viewMode === 'double' && bookStore.canNextPage) {
 				const nextPageIndex = currentPageIndex + 1;
 				if (nextPageIndex < currentBook.pages.length) {
-					const result2 = await this.core.loadPage(nextPageIndex, LoadPriority.HIGH);
-					objectUrl2 = result2.url;
+					this.core.loadPage(nextPageIndex, LoadPriority.HIGH).then(result2 => {
+						this.options.onImageLoaded?.(objectUrl, result2.url);
+					}).catch(() => {});
 				}
 			}
 
-			// 【关键】只在全局开关开启时处理超分
-			const upscaleEnabled = await getAutoUpscaleEnabled();
-			if (upscaleEnabled) {
-				const imageHash = bookStore.getPageHash(currentPageIndex);
-				if (imageHash && result.blob) {
-					await this.upscaleHandler.handlePageUpscale(currentPageIndex, result.blob, imageHash);
+			// 【异步处理】超分逻辑（不阻塞图片显示）
+			getAutoUpscaleEnabled().then(upscaleEnabled => {
+				if (upscaleEnabled) {
+					const imageHash = bookStore.getPageHash(currentPageIndex);
+					if (imageHash && result.blob) {
+						this.upscaleHandler.handlePageUpscale(currentPageIndex, result.blob, imageHash).catch(() => {});
+					}
 				}
-			}
+			});
 
-			// 调用回调
-			this.options.onImageLoaded?.(objectUrl, objectUrl2);
-			this.options.onImageMetadataReady?.(result.dimensions, undefined);
-
-			// 触发预加载（只在超分开启时预超分）
+			// 触发预加载
 			setTimeout(() => this.preloadNextPages(), 500);
 
 		} catch (err) {

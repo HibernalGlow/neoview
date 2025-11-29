@@ -1603,6 +1603,7 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 				upscaledUrl={derivedUpscaledUrl || bookStore.upscaledImageData}
 				layout={$viewerState.viewMode as 'single' | 'double' | 'panorama'}
 				direction={settings.book.readingDirection === 'right-to-left' ? 'rtl' : 'ltr'}
+				backgroundColor="rgba(0, 128, 0, 0.3)"
 				showPageInfo={true}
 				showProgress={true}
 			/>

@@ -10,6 +10,7 @@
     totalPages = 0,
     isLoading = false,
     isDivided = false,
+    splitHalf = null,
     showPageInfo = true,
     showProgress = true,
     showLoading = true,
@@ -18,10 +19,20 @@
     totalPages?: number;
     isLoading?: boolean;
     isDivided?: boolean;
+    splitHalf?: 'left' | 'right' | null;
     showPageInfo?: boolean;
     showProgress?: boolean;
     showLoading?: boolean;
   } = $props();
+  
+  // 页面显示文本
+  let pageDisplay = $derived.by(() => {
+    if (isDivided && splitHalf) {
+      const halfLabel = splitHalf === 'left' ? 'L' : 'R';
+      return `${currentIndex + 1}${halfLabel} / ${totalPages}`;
+    }
+    return `${currentIndex + 1} / ${totalPages}`;
+  });
   
   let progress = $derived(totalPages > 0 ? ((currentIndex + 1) / totalPages) * 100 : 0);
 </script>
@@ -35,7 +46,7 @@
   <!-- 页面信息 -->
   {#if showPageInfo && totalPages > 0}
     <div class="page-info">
-      <span>{currentIndex + 1} / {totalPages}</span>
+      <span>{pageDisplay}</span>
       {#if isDivided}
         <span class="badge">分割</span>
       {/if}

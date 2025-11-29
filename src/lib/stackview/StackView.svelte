@@ -9,6 +9,13 @@
   - Layer 5: 超分层
   - Layer 7: 信息层
   - Layer 9: 手势层
+  
+  模式支持：
+  - 单页模式：显示一张图
+  - 双页模式：并排显示两张图（横向图独占）
+  - 全景模式：连续滚动多张图
+  - 横向分割：横向图分成两个虚拟页
+  - 自动旋转：横向图旋转90度
 -->
 <script lang="ts">
   import {
@@ -26,10 +33,19 @@
     prevFrame, 
     nextFrame, 
     upscaledFrame,
-    updateImageUrl,
   } from './stores/frameStore';
   import { getBaseTransform } from './utils/transform';
-  import type { Frame, FrameLayout } from './types/frame';
+  import { 
+    isLandscape, 
+    getInitialSplitHalf, 
+    getNextSplitHalf, 
+    getPrevSplitHalf,
+    computeDoublePageImages,
+    computeDoublePageStep,
+    type SplitState,
+    type ViewModeConfig,
+  } from './utils/viewMode';
+  import type { Frame, FrameLayout, FrameImage } from './types/frame';
   import { emptyFrame } from './types/frame';
   
   // 导入外部 stores
@@ -50,27 +66,44 @@
     direction = 'ltr',
     // 是否为视频模式
     isVideoMode = false,
+    // 是否启用横向分割
+    divideLandscape = false,
+    // 是否将横向图视为双页（双页模式下横向图独占）
+    treatHorizontalAsDoublePage = false,
+    // 是否启用自动旋转
+    autoRotate = false,
     // 显示配置
     showPageInfo = true,
     showProgress = true,
     showLoading = true,
     // 外部传入的图片 URL（兼容旧系统）
     currentUrl = null,
+    currentUrl2 = null,
     prevUrl = null,
     nextUrl = null,
     upscaledUrl = null,
+    // 当前图片尺寸
+    currentImageSize = null,
+    // 全景模式页面
+    panoramaPages = [],
   }: {
     backgroundColor?: string;
     layout?: FrameLayout;
     direction?: 'ltr' | 'rtl';
     isVideoMode?: boolean;
+    divideLandscape?: boolean;
+    treatHorizontalAsDoublePage?: boolean;
+    autoRotate?: boolean;
     showPageInfo?: boolean;
     showProgress?: boolean;
     showLoading?: boolean;
     currentUrl?: string | null;
+    currentUrl2?: string | null;
     prevUrl?: string | null;
     nextUrl?: string | null;
     upscaledUrl?: string | null;
+    currentImageSize?: { width: number; height: number } | null;
+    panoramaPages?: Array<{ index: number; data: string | null }>;
   } = $props();
   
   // ============================================================================
@@ -79,6 +112,9 @@
   
   let localPan = $state({ x: 0, y: 0 });
   let isLoading = $state(false);
+  
+  // 横向分割状态
+  let splitState = $state<SplitState | null>(null);
   
   // 从 stores 获取状态
   let scale = $derived($zoomLevel);
@@ -90,19 +126,94 @@
     settings = newSettings;
   });
   
+  // 视图模式配置
+  let viewModeConfig = $derived<ViewModeConfig>({
+    layout,
+    direction,
+    divideLandscape,
+    treatHorizontalAsDoublePage,
+    autoRotate,
+  });
+  
+  // 判断当前图是否横向
+  let isCurrentLandscape = $derived(
+    currentImageSize ? isLandscape(currentImageSize) : false
+  );
+  
+  // 是否处于分割模式
+  let isInSplitMode = $derived(
+    divideLandscape && isCurrentLandscape && layout === 'single' && !isVideoMode
+  );
+  
   // ============================================================================
-  // 帧数据
+  // 帧数据计算
   // ============================================================================
   
-  // 使用外部 URL 或 store 中的帧
+  // 构建当前帧
   let currentFrameData = $derived.by((): Frame => {
-    if (currentUrl) {
+    // 全景模式
+    if (layout === 'panorama' && panoramaPages.length > 0) {
       return {
-        id: 'external-current',
-        images: [{ url: currentUrl, physicalIndex: 0, virtualIndex: 0 }],
-        layout: 'single',
+        id: `panorama-${bookStore.currentPageIndex}`,
+        images: panoramaPages
+          .filter(p => p.data)
+          .map(p => ({
+            url: p.data!,
+            physicalIndex: p.index,
+            virtualIndex: p.index,
+          })),
+        layout: 'panorama',
       };
     }
+    
+    // 外部传入 URL
+    if (currentUrl) {
+      const images: FrameImage[] = [];
+      
+      // 主图
+      let mainImage: FrameImage = {
+        url: currentUrl,
+        physicalIndex: bookStore.currentPageIndex,
+        virtualIndex: bookStore.currentPageIndex,
+      };
+      
+      // 处理分割状态
+      if (isInSplitMode && splitState) {
+        mainImage = {
+          ...mainImage,
+          splitHalf: splitState.half,
+        };
+      }
+      
+      // 处理自动旋转（仅单页模式，且不在分割模式下）
+      if (autoRotate && isCurrentLandscape && layout === 'single' && !isInSplitMode) {
+        mainImage = {
+          ...mainImage,
+          rotation: 90,
+        };
+      }
+      
+      images.push(mainImage);
+      
+      // 双页模式：添加第二张图
+      if (layout === 'double' && currentUrl2) {
+        // 如果当前图是横向且设置了横向独占，则不添加第二张
+        if (!(treatHorizontalAsDoublePage && isCurrentLandscape)) {
+          images.push({
+            url: currentUrl2,
+            physicalIndex: bookStore.currentPageIndex + 1,
+            virtualIndex: bookStore.currentPageIndex + 1,
+          });
+        }
+      }
+      
+      return {
+        id: `frame-${bookStore.currentPageIndex}`,
+        images,
+        layout,
+      };
+    }
+    
     return $currentFrame;
   });
   
@@ -152,6 +263,7 @@
   function resetView() {
     storeResetZoom();
     localPan = { x: 0, y: 0 };
+    splitState = null;
   }
   
   function handleImageLoad(e: Event, index: number) {
@@ -163,18 +275,77 @@
   }
   
   function handlePrevPage() {
-    bookStore.prevPage();
     localPan = { x: 0, y: 0 };
+    
+    // 处理分割模式
+    if (isInSplitMode && splitState) {
+      const prevHalf = getPrevSplitHalf(splitState.half, direction);
+      if (prevHalf !== 'prev') {
+        splitState = { pageIndex: splitState.pageIndex, half: prevHalf };
+        return;
+      }
+    }
+    
+    // 正常翻页
+    splitState = null;
+    
+    if (layout === 'double') {
+      // 双页模式：后退2页（或1页，取决于上一页是否横向）
+      const targetIndex = Math.max(0, bookStore.currentPageIndex - 2);
+      bookStore.navigateToPage(targetIndex);
+    } else {
+      bookStore.prevPage();
+      
+      // 如果上一页是横向且开启分割，显示最后一半
+      // TODO: 需要获取上一页尺寸信息
+    }
   }
   
   function handleNextPage() {
-    bookStore.nextPage();
     localPan = { x: 0, y: 0 };
+    
+    // 处理分割模式
+    if (isInSplitMode) {
+      if (!splitState) {
+        // 初始化分割状态
+        splitState = {
+          pageIndex: bookStore.currentPageIndex,
+          half: getInitialSplitHalf(direction),
+        };
+        return;
+      }
+      
+      const nextHalf = getNextSplitHalf(splitState.half, direction);
+      if (nextHalf !== 'next') {
+        splitState = { pageIndex: splitState.pageIndex, half: nextHalf };
+        return;
+      }
+    }
+    
+    // 正常翻页
+    splitState = null;
+    
+    if (layout === 'double') {
+      // 双页模式：前进2页（或1页，取决于当前/下一页是否横向）
+      const step = treatHorizontalAsDoublePage && isCurrentLandscape ? 1 : 2;
+      const targetIndex = Math.min(bookStore.totalPages - 1, bookStore.currentPageIndex + step);
+      bookStore.navigateToPage(targetIndex);
+    } else {
+      bookStore.nextPage();
+    }
   }
   
   function handlePan(delta: { x: number; y: number }) {
     localPan = { x: localPan.x + delta.x, y: localPan.y + delta.y };
   }
+  
+  // 页面变化时重置分割状态
+  $effect(() => {
+    const pageIndex = bookStore.currentPageIndex;
+    if (splitState && splitState.pageIndex !== pageIndex) {
+      splitState = null;
+    }
+  });
   
   // 根据阅读方向决定点击行为
   let isRTL = $derived(settings.book.readingDirection === 'right-to-left');
@@ -215,7 +386,8 @@
     currentIndex={bookStore.currentPageIndex}
     totalPages={bookStore.totalPages}
     isLoading={isLoading}
-    isDivided={false}
+    isDivided={isInSplitMode}
+    splitHalf={splitState?.half ?? null}
     showPageInfo={showPageInfo}
     showProgress={showProgress}
     showLoading={showLoading}

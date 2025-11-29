@@ -1600,9 +1600,15 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 		{:else if $useStackViewer}
 			<StackView
 				currentUrl={imageData}
+				currentUrl2={imageData2}
 				upscaledUrl={derivedUpscaledUrl || bookStore.upscaledImageData}
 				layout={$viewerState.viewMode as 'single' | 'double' | 'panorama'}
 				direction={settings.book.readingDirection === 'right-to-left' ? 'rtl' : 'ltr'}
+				divideLandscape={settings.view.pageLayout?.splitHorizontalPages ?? false}
+				treatHorizontalAsDoublePage={settings.view.pageLayout?.treatHorizontalAsDoublePage ?? false}
+				autoRotate={false}
+				currentImageSize={currentImageDimensions}
+				panoramaPages={panoramaPagesData.map(p => ({ index: p.index, data: p.data }))}
 				backgroundColor="rgba(0, 128, 0, 0.3)"
 				showPageInfo={true}
 				showProgress={true}

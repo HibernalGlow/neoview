@@ -248,10 +248,55 @@ export async function loadImageFromArchiveAsBlob(
 }
 
 /**
- * 获取压缩包中的所有图片
+ * 压缩包文件列表缓存
+ * 【优化】预热文件列表，加速切书
+ */
+const archiveListCache = new Map<string, { list: string[]; timestamp: number }>();
+const ARCHIVE_LIST_CACHE_TTL = 5 * 60 * 1000; // 5分钟过期
+
+/**
+ * 获取压缩包中的所有图片（带缓存）
  */
 export async function getImagesFromArchive(archivePath: string): Promise<string[]> {
-  return await invoke<string[]>('get_images_from_archive', { archivePath });
+  // 检查缓存
+  const cached = archiveListCache.get(archivePath);
+  if (cached && Date.now() - cached.timestamp < ARCHIVE_LIST_CACHE_TTL) {
+    console.log(`📦 压缩包列表缓存命中: ${archivePath}`);
+    return cached.list;
+  }
+  
+  const list = await invoke<string[]>('get_images_from_archive', { archivePath });
+  
+  // 更新缓存
+  archiveListCache.set(archivePath, { list, timestamp: Date.now() });
+  
+  return list;
+}
+
+/**
+ * 预热压缩包文件列表（不等待结果）
+ */
+export function preheatArchiveList(archivePath: string): void {
+  // 检查是否已缓存
+  const cached = archiveListCache.get(archivePath);
+  if (cached && Date.now() - cached.timestamp < ARCHIVE_LIST_CACHE_TTL) {
+    return; // 已缓存，无需预热
+  }
+  
+  // 异步预热
+  invoke<string[]>('get_images_from_archive', { archivePath })
+    .then(list => {
+      archiveListCache.set(archivePath, { list, timestamp: Date.now() });
+      console.log(`📦 压缩包列表预热完成: ${archivePath} (${list.length} 项)`);
+    })
+    .catch(() => {}); // 忽略错误
+}
+
+/**
+ * 清理压缩包列表缓存
+ */
+export function clearArchiveListCache(): void {
+  archiveListCache.clear();
 }
 
 

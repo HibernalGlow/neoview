@@ -8,7 +8,7 @@
 import { tick, onMount } from 'svelte';
 import type { FsItem } from '$lib/types';
 import type { Writable } from 'svelte/store';
-import { FileSystemAPI } from '$lib/api';
+import * as FileSystemAPI from '$lib/api/filesystem';
 import { thumbnailManager } from '$lib/utils/thumbnailManager';
 import VirtualizedFileList from '$lib/components/panels/file/components/VirtualizedFileList.svelte';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
@@ -226,6 +226,11 @@ async function loadThumbnailsForLayer(items: FsItem[], path: string) {
 				nameLower.endsWith('.cb7');
 
 			thumbnailManager.getThumbnail(item.path, undefined, isArchive, priority);
+			
+			// 【优化】预热压缩包文件列表，加速切书
+			if (isArchive) {
+				FileSystemAPI.preheatArchiveList(item.path);
+			}
 		}
 	});
 }

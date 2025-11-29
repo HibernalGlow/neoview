@@ -35,8 +35,8 @@ export class ImageLoaderCore {
 	private pendingLoads = new Map<number, Promise<LoadResult>>();
 	private thumbnailCache = new Map<number, string>();
 	private options: ImageLoaderCoreOptions;
-	// 【关键】会话 ID，用于防止旧书籍的加载结果污染新书籍
-	private sessionId = 0;
+	// 【架构优化】标记实例是否已失效（切书后旧实例失效）
+	private invalidated = false;
 
 	constructor(options: ImageLoaderCoreOptions = {}) {
 		this.options = options;
@@ -44,6 +44,22 @@ export class ImageLoaderCore {
 			maxSizeBytes: (options.maxCacheSizeMB ?? 500) * 1024 * 1024
 		});
 		this.loadQueue = getLoadQueue(options.maxConcurrentLoads ?? 4);
+	}
+	
+	/**
+	 * 标记实例失效（切书时调用）
+	 */
+	invalidate(): void {
+		this.invalidated = true;
+		this.clearQueue();
+		console.log('📦 ImageLoaderCore 实例已失效');
+	}
+	
+	/**
+	 * 检查实例是否有效
+	 */
+	isValid(): boolean {
+		return !this.invalidated;
 	}
 
 	/**
@@ -91,14 +107,11 @@ export class ImageLoaderCore {
 	 * 【优化】先返回图片，异步获取尺寸，不阻塞显示
 	 */
 	private async executeLoad(pageIndex: number, priority: number): Promise<LoadResult> {
-		// 【关键】记录当前会话 ID，用于检测书籍切换
-		const loadSessionId = this.sessionId;
-		
 		return new Promise((resolve, reject) => {
 			this.loadQueue.enqueue(pageIndex, priority, async () => {
-				// 【关键】检查会话是否已变更（书籍已切换）
-				if (loadSessionId !== this.sessionId) {
-					reject(new Error('Session changed, load cancelled'));
+				// 【架构优化】检查实例是否已失效
+				if (this.invalidated) {
+					reject(new Error('Loader invalidated'));
 					return;
 				}
 				
@@ -113,11 +126,13 @@ export class ImageLoaderCore {
 						fromCache: true
 					});
 					// 异步获取尺寸并回调
-					getImageDimensions(item.blob).then(dimensions => {
-						if (loadSessionId === this.sessionId) {
-							this.options.onDimensionsReady?.(pageIndex, dimensions);
-						}
-					});
+					if (!this.invalidated) {
+						getImageDimensions(item.blob).then(dimensions => {
+							if (!this.invalidated) {
+								this.options.onDimensionsReady?.(pageIndex, dimensions);
+							}
+						});
+					}
 					return;
 				}
 
@@ -125,9 +140,9 @@ export class ImageLoaderCore {
 					// 读取图片
 					const { blob, traceId } = await readPageBlob(pageIndex);
 					
-					// 【关键】再次检查会话（读取可能耗时较长）
-					if (loadSessionId !== this.sessionId) {
-						reject(new Error('Session changed during load'));
+					// 【架构优化】再次检查（读取可能耗时较长）
+					if (this.invalidated) {
+						reject(new Error('Loader invalidated during load'));
 						return;
 					}
 					
@@ -147,11 +162,13 @@ export class ImageLoaderCore {
 					});
 
 					// 异步获取尺寸并回调（不阻塞）
-					getImageDimensions(blob).then(dimensions => {
-						if (loadSessionId === this.sessionId) {
-							this.options.onDimensionsReady?.(pageIndex, dimensions);
-						}
-					});
+					if (!this.invalidated) {
+						getImageDimensions(blob).then(dimensions => {
+							if (!this.invalidated) {
+								this.options.onDimensionsReady?.(pageIndex, dimensions);
+							}
+						});
+					}
 				} catch (error) {
 					const err = error instanceof Error ? error : new Error(String(error));
 					this.options.onError?.(pageIndex, err);
@@ -375,15 +392,14 @@ export class ImageLoaderCore {
 
 	/**
 	 * 完全重置
-	 * 【关键】增加会话 ID，使所有进行中的加载任务失效
 	 */
 	reset(): void {
-		// 增加会话 ID，使所有进行中的加载任务失效
-		this.sessionId++;
-		console.log(`📦 会话重置: sessionId=${this.sessionId}`);
-		this.clearQueue();
+		this.invalidate();
 		this.clearCache();
 		this.pendingLoads.clear();
+		// 重置 invalidated 标记，允许新的加载
+		this.invalidated = false;
+		console.log('📦 ImageLoaderCore 已重置');
 	}
 }
 

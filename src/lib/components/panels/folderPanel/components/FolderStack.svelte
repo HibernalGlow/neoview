@@ -26,7 +26,7 @@ import { Loader2, FolderOpen, AlertCircle } from '@lucide/svelte';
 import { directoryTreeCache } from '../utils/directoryTreeCache';
 
 interface NavigationCommand {
-	type: 'init' | 'push' | 'pop' | 'goto';
+	type: 'init' | 'push' | 'pop' | 'goto' | 'history';
 	path?: string;
 	index?: number;
 }
@@ -143,6 +143,17 @@ async function initRoot(path: string) {
 	layers = [layer];
 	activeIndex = 0;
 	folderPanelActions.setPath(path);
+	// 同步 items 到 store（用于工具栏显示计数）
+	folderPanelActions.setItems(layer.items);
+}
+
+// 初始化根层（不添加历史记录，用于历史导航）
+async function initRootWithoutHistory(path: string) {
+	const layer = await createLayer(path);
+	layers = [layer];
+	activeIndex = 0;
+	// 使用 setPath 的第二个参数禁止添加历史记录
+	folderPanelActions.setPath(path, false);
 	// 同步 items 到 store（用于工具栏显示计数）
 	folderPanelActions.setItems(layer.items);
 }
@@ -382,6 +393,10 @@ $effect(() => {
 			break;
 		case 'goto':
 			if (cmd.index !== undefined) goToLayer(cmd.index);
+			break;
+		case 'history':
+			// 历史导航：只更新视图，不添加新历史记录
+			if (cmd.path) initRootWithoutHistory(cmd.path);
 			break;
 	}
 	

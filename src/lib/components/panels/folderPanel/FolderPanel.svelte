@@ -170,19 +170,21 @@ function handleNavigate(path: string) {
 	navigationCommand.set({ type: 'push', path });
 }
 
-// 处理后退
+// 处理后退（使用历史导航，不添加新历史记录）
 function handleGoBack() {
 	const result = folderPanelActions.goBack();
 	if (result) {
-		navigationCommand.set({ type: 'push', path: result.path });
+		// 使用 history 类型，这样 FolderStack 不会再次添加历史
+		navigationCommand.set({ type: 'history', path: result.path });
 	}
 }
 
-// 处理前进
+// 处理前进（使用历史导航，不添加新历史记录）
 function handleGoForward() {
 	const result = folderPanelActions.goForward();
 	if (result) {
-		navigationCommand.set({ type: 'push', path: result.path });
+		// 使用 history 类型，这样 FolderStack 不会再次添加历史
+		navigationCommand.set({ type: 'history', path: result.path });
 	}
 }
 

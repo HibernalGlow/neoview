@@ -525,17 +525,17 @@ onMount(() => {
 			>
 				<FolderTree onNavigate={handleNavigate} />
 			</div>
-
-			<!-- 分隔条 -->
-			<div
-				class="bg-border hover:bg-primary absolute z-10 transition-colors"
-				class:cursor-ns-resize={$folderTreeConfig.layout === 'top'}
-				class:cursor-ew-resize={$folderTreeConfig.layout === 'left'}
-				style={$folderTreeConfig.layout === 'top'
-					? `top: ${$folderTreeConfig.size}px; left: 0; right: 0; height: 6px;`
-					: `top: 0; left: ${$folderTreeConfig.size}px; bottom: 0; width: 6px;`}
-			></div>
 		{/if}
+
+		<!-- 分隔条（始终显示，可拖拽展开/调整文件树） -->
+		<div
+			class="bg-border hover:bg-primary absolute z-10 transition-colors"
+			class:cursor-ns-resize={$folderTreeConfig.layout === 'top'}
+			class:cursor-ew-resize={$folderTreeConfig.layout === 'left'}
+			style={$folderTreeConfig.layout === 'top'
+				? `top: ${$folderTreeConfig.visible ? $folderTreeConfig.size : 0}px; left: 0; right: 0; height: 6px;`
+				: `top: 0; left: ${$folderTreeConfig.visible ? $folderTreeConfig.size : 0}px; bottom: 0; width: 6px;`}
+		></div>
 
 		<!-- 文件列表（层叠式）- 始终渲染，根据文件树状态调整位置 -->
 		<div
@@ -544,7 +544,9 @@ onMount(() => {
 				? $folderTreeConfig.layout === 'top'
 					? `top: ${$folderTreeConfig.size + 6}px;`
 					: `left: ${$folderTreeConfig.size + 6}px;`
-				: ''}
+				: $folderTreeConfig.layout === 'top'
+					? 'top: 6px;'
+					: 'left: 6px;'}
 		>
 			{#if $searchKeyword || $isSearching || $searchResults.length > 0}
 				<!-- 搜索结果模式 -->

@@ -143,6 +143,8 @@ async function initRoot(path: string) {
 	layers = [layer];
 	activeIndex = 0;
 	folderPanelActions.setPath(path);
+	// 同步 items 到 store（用于工具栏显示计数）
+	folderPanelActions.setItems(layer.items);
 }
 
 // 创建新层
@@ -270,6 +272,11 @@ async function pushLayer(path: string) {
 	
 	// 更新 store 中的路径
 	folderPanelActions.setPath(path);
+	// 同步 items 到 store（用于工具栏显示计数）
+	const activeLayer = layers[activeIndex];
+	if (activeLayer) {
+		folderPanelActions.setItems(activeLayer.items);
+	}
 	
 	setTimeout(() => {
 		isAnimating = false;
@@ -301,6 +308,8 @@ async function popLayer(): Promise<boolean> {
 		const prevLayer = layers[activeIndex];
 		if (prevLayer) {
 			folderPanelActions.setPath(prevLayer.path);
+			// 同步 items 到 store（用于工具栏显示计数）
+			folderPanelActions.setItems(prevLayer.items);
 		}
 		
 		setTimeout(() => {
@@ -347,6 +356,8 @@ function goToLayer(index: number) {
 	const layer = layers[index];
 	if (layer) {
 		folderPanelActions.setPath(layer.path);
+		// 同步 items 到 store（用于工具栏显示计数）
+		folderPanelActions.setItems(layer.items);
 	}
 	
 	setTimeout(() => {

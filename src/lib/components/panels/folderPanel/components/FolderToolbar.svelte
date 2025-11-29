@@ -18,6 +18,8 @@ import {
 	Trash2,
 	MoreVertical,
 	ArrowUpDown,
+	ArrowUp,
+	ArrowDown,
 	Search,
 	CornerDownRight,
 	ClipboardPaste,
@@ -100,6 +102,11 @@ function handleSetViewStyle(style: FolderViewStyle) {
 
 function handleSetSort(field: FolderSortField) {
 	folderPanelActions.setSort(field);
+}
+
+function handleToggleSortOrder() {
+	const newOrder = $sortConfig.order === 'asc' ? 'desc' : 'asc';
+	folderPanelActions.setSort($sortConfig.field, newOrder);
 }
 
 function handleToggleDeleteStrategy(e: MouseEvent) {
@@ -215,12 +222,20 @@ function getCurrentViewIcon() {
 				<DropdownMenu.Item onclick={() => handleSetSort(field.value)}>
 					<span class="flex-1">{field.label}</span>
 					{#if $sortConfig.field === field.value}
-						<span class="text-muted-foreground text-xs">
-							{$sortConfig.order === 'asc' ? '↑' : '↓'}
-						</span>
+						<span class="text-primary">✓</span>
 					{/if}
 				</DropdownMenu.Item>
 			{/each}
+			<DropdownMenu.Separator />
+			<DropdownMenu.Item onclick={handleToggleSortOrder}>
+				{#if $sortConfig.order === 'asc'}
+					<ArrowUp class="mr-2 h-4 w-4" />
+					<span>升序</span>
+				{:else}
+					<ArrowDown class="mr-2 h-4 w-4" />
+					<span>降序</span>
+				{/if}
+			</DropdownMenu.Item>
 		</DropdownMenu.Content>
 	</DropdownMenu.Root>
 

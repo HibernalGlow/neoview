@@ -118,24 +118,24 @@
 	}
 </script>
 
-<div class="list-slider-container flex flex-col items-center gap-0.5">
-	<!-- 回顶按钮 -->
+<div class="list-slider-container group flex flex-col items-center">
+	<!-- 回顶按钮（悬停显示） -->
 	<button
-		class="p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+		class="hidden group-hover:block p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
 		onclick={() => { onScrollToProgress?.(0); onJumpToIndex?.(0); }}
 		title="回到顶部"
 	>
-		<ChevronsUp class="h-3.5 w-3.5" />
+		<ChevronsUp class="h-3 w-3" />
 	</button>
 
-	<!-- 索引显示/输入 -->
-	<div class="text-[10px] text-muted-foreground font-mono">
+	<!-- 索引显示（悬停显示） -->
+	<div class="hidden group-hover:block text-[9px] text-muted-foreground font-mono py-0.5">
 		{#if showInput && showIndexInput}
 			<input
 				type="number"
 				min="1"
 				max={totalItems}
-				class="w-10 h-4 text-center text-[9px] rounded border bg-background"
+				class="w-8 h-4 text-center text-[8px] rounded border bg-background"
 				bind:value={inputValue}
 				onkeydown={handleInputKeydown}
 				onblur={handleInputBlur}
@@ -155,7 +155,8 @@
 	<!-- 滑块轨道 -->
 	<div
 		bind:this={sliderRef}
-		class="slider-track relative w-3 flex-1 rounded-full bg-muted/50 cursor-pointer"
+		class="slider-track relative flex-1 rounded-full bg-muted/40 cursor-pointer transition-all duration-200
+			w-1 group-hover:w-3"
 		onclick={handleTrackClick}
 		onwheel={handleWheel}
 		role="slider"
@@ -166,43 +167,43 @@
 	>
 		<!-- 已滚动区域 -->
 		<div
-			class="absolute left-0 right-0 top-0 rounded-t-full bg-primary/20"
+			class="absolute left-0 right-0 top-0 rounded-t-full bg-primary/30"
 			style="height: {thumbPosition}%"
 		></div>
 
 		<!-- 滑块 -->
 		<div
 			class="slider-thumb absolute left-0 right-0 rounded-full transition-colors
-				{isDragging ? 'bg-primary' : 'bg-primary/70 hover:bg-primary'}"
-			style="top: {thumbPosition}%; height: {Math.max(8, thumbHeight)}%; min-height: 14px; transform: translateY(-50%);"
+				{isDragging ? 'bg-primary' : 'bg-primary/60 hover:bg-primary'}"
+			style="top: {thumbPosition}%; height: {Math.max(6, thumbHeight)}%; min-height: 12px; transform: translateY(-50%);"
 			onmousedown={handleThumbMouseDown}
 			role="presentation"
 		></div>
 	</div>
 
-	<!-- 总数显示 -->
-	<div class="text-[10px] text-muted-foreground font-mono">
+	<!-- 总数显示（悬停显示） -->
+	<div class="hidden group-hover:block text-[9px] text-muted-foreground font-mono py-0.5">
 		{totalItems}
 	</div>
 
-	<!-- 回底按钮 -->
+	<!-- 回底按钮（悬停显示） -->
 	<button
-		class="p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+		class="hidden group-hover:block p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
 		onclick={() => { onScrollToProgress?.(1); onJumpToIndex?.(totalItems - 1); }}
 		title="回到底部"
 	>
-		<ChevronsDown class="h-3.5 w-3.5" />
+		<ChevronsDown class="h-3 w-3" />
 	</button>
 </div>
 
 <style>
 	.list-slider-container {
 		height: 100%;
-		padding: 4px 0;
+		padding: 2px 0;
 	}
 
 	.slider-track {
-		min-height: 100px;
+		min-height: 80px;
 	}
 
 	.slider-thumb {

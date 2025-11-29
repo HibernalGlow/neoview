@@ -664,7 +664,7 @@
 
 	<!-- 侧边进度条滑块 -->
 	{#if showSlider}
-		<div class="slider-wrapper border-l border-border px-1">
+		<div class="slider-wrapper group h-full border-l border-border transition-all duration-200 hover:px-1 hover:py-2">
 			<ListSlider
 				totalItems={items.length}
 				currentIndex={selectedIndex >= 0 ? selectedIndex : 0}

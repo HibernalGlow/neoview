@@ -10,12 +10,14 @@ import type { EMMMetadata, EMMCollectTag, EMMTranslationDict } from '$lib/api/em
 export interface FolderRatingEntry {
 	// 文件夹路径
 	path: string;
-	// 平均评分
+	// 平均评分（来自 EMM 数据库计算）
 	averageRating: number;
 	// 评分数量（用于增量更新）
 	count: number;
 	// 最后更新时间戳
 	lastUpdated: number;
+	// 用户手动设置的评分（优先级高于平均评分）
+	manualRating?: number;
 }
 
 /**

@@ -278,6 +278,52 @@ export const folderRatingStore = {
 	},
 
 	/**
+	 * 设置文件夹的手动评分
+	 * @param folderPath 文件夹路径
+	 * @param rating 评分 (1-5)，null 表示清除手动评分
+	 */
+	setManualRating(folderPath: string, rating: number | null): void {
+		const normalized = normalizePath(folderPath);
+		const now = Date.now();
+
+		update(cache => {
+			const existing = cache.ratings[normalized];
+			if (rating === null) {
+				// 清除手动评分
+				if (existing) {
+					const { manualRating, ...rest } = existing;
+					cache.ratings[normalized] = rest as FolderRatingEntry;
+				}
+			} else {
+				// 设置手动评分
+				if (existing) {
+					cache.ratings[normalized] = { ...existing, manualRating: rating, lastUpdated: now };
+				} else {
+					cache.ratings[normalized] = {
+						path: normalized,
+						averageRating: 0,
+						count: 0,
+						lastUpdated: now,
+						manualRating: rating
+					};
+				}
+			}
+			cache.lastUpdated = now;
+			saveToStorage(cache);
+			return cache;
+		});
+	},
+
+	/**
+	 * 获取文件夹的有效评分（优先返回手动评分）
+	 */
+	getEffectiveRating(folderPath: string): number | null {
+		const entry = this.getFolderRating(folderPath);
+		if (!entry) return null;
+		return entry.manualRating ?? (entry.averageRating > 0 ? entry.averageRating : null);
+	},
+
+	/**
 	 * 按路径补充评分：根据现有子文件夹评分计算父文件夹评分
 	 * @param rootPath 根路径
 	 * @param maxLevels 最多向上计算的层数

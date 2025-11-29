@@ -6,7 +6,7 @@
  */
 
 import { writable, derived, get } from 'svelte/store';
-import { Folder, History, Bookmark, Image as ImageIcon, Info, FileText, File, Sparkles, BarChart3, Settings, ListMusic } from '@lucide/svelte';
+import { Folder, History, Bookmark, Info, FileText, File, Sparkles, BarChart3, Settings, ListMusic } from '@lucide/svelte';
 
 // 面板位置
 export type PanelPosition = 'left' | 'right' | 'bottom' | 'floating';
@@ -47,10 +47,10 @@ export const PANEL_DEFINITIONS = {
 		canMove: true,
 		canHide: true
 	},
-	thumbnail: {
-		title: '缩略图',
-		icon: ImageIcon,
-		emoji: '🖼️',
+	pageList: {
+		title: '页面列表',
+		icon: FileText,
+		emoji: '📄',
 		defaultPosition: 'left' as PanelPosition,
 		defaultVisible: true,
 		defaultOrder: 3,

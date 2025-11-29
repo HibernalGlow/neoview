@@ -40,7 +40,7 @@ export const PANEL_COMPONENTS: Record<PanelId, any> = {
 	folder: FolderPanel,
 	history: HistoryPanel,
 	bookmark: BookmarkPanel,
-	thumbnail: BookPageListPanel,
+	pageList: BookPageListPanel,
 	playlist: FolderPanel, // 占位，后续实现
 	// 右侧默认面板
 	info: InfoPanel,

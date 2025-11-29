@@ -814,11 +814,18 @@ impl ThumbnailGenerator {
             "jpg", "jpeg", "png", "gif", "bmp", "webp", "avif", "jxl", "tiff", "tif",
         ];
 
-        // 遍历压缩包条目，找到第一个图片文件
+        // 遍历压缩包条目，找到第一个可解码的图片文件
+        let mut found_image = false;
+        let mut last_error: Option<String> = None;
+        
         for i in 0..archive.len() {
-            let mut file = archive
-                .by_index(i)
-                .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
+            let mut file = match archive.by_index(i) {
+                Ok(f) => f,
+                Err(e) => {
+                    eprintln!("⚠️ 读取压缩包条目 {} 失败: {}", i, e);
+                    continue;
+                }
+            };
 
             let name = file.name().to_string();
             if let Some(ext) = Path::new(&name)
@@ -827,13 +834,41 @@ impl ThumbnailGenerator {
                 .map(|e| e.to_lowercase())
             {
                 if image_exts.contains(&ext.as_str()) {
-                    println!("🖼️ 找到图片文件: {} (索引: {})", name, i);
+                    println!("🖼️ 尝试图片文件: {} (索引: {})", name, i);
                     // 读取文件内容
                     let mut image_data = Vec::new();
-                    file.read_to_end(&mut image_data)
-                        .map_err(|e| format!("读取压缩包文件失败: {}", e))?;
+                    if let Err(e) = file.read_to_end(&mut image_data) {
+                        eprintln!("⚠️ 读取压缩包文件失败，尝试下一张: {} - {}", name, e);
+                        last_error = Some(format!("读取文件失败: {}", e));
+                        continue;
+                    }
 
                     println!("📊 图片文件大小: {} bytes", image_data.len());
+                    
+                    // 验证图片是否可解码（快速检查）
+                    let lower_name = name.to_lowercase();
+                    let is_avif = lower_name.ends_with(".avif");
+                    let is_jxl = lower_name.ends_with(".jxl");
+                    
+                    let decode_result = if is_avif || is_jxl {
+                        // AVIF/JXL 格式：使用对应解码器验证
+                        if is_jxl {
+                            Self::decode_jxl_image(&image_data).map(|_| ())
+                        } else {
+                            Self::decode_image_safe(&image_data).map(|_| ())
+                        }
+                    } else {
+                        // 其他格式：使用 image 库验证
+                        Self::decode_image_safe(&image_data).map(|_| ())
+                    };
+                    
+                    if let Err(e) = decode_result {
+                        eprintln!("⚠️ 图片解码失败，尝试下一张: {} - {}", name, e);
+                        last_error = Some(format!("解码失败: {}", e));
+                        continue;
+                    }
+                    
+                    found_image = true;
 
                     // 第一次：直接返回原图 blob（立即显示，不压缩）
                     // 后台异步生成 webp 缩略图并保存到数据库
@@ -993,8 +1028,13 @@ impl ThumbnailGenerator {
             }
         }
 
-        println!("⚠️ 压缩包中没有找到图片文件: {}", archive_path);
-        Err("压缩包中没有找到图片文件".to_string())
+        if let Some(err) = last_error {
+            println!("⚠️ 压缩包中所有图片都解码失败: {} - {}", archive_path, err);
+            Err(format!("所有图片解码失败: {}", err))
+        } else {
+            println!("⚠️ 压缩包中没有找到图片文件: {}", archive_path);
+            Err("压缩包中没有找到图片文件".to_string())
+        }
     }
 
     /// 批量生成缩略图（多线程）

@@ -11,6 +11,7 @@
 		getAdaptivePerformanceConfig
 	} from '$lib/utils/performance';
 	import FileItemCard from './FileItemCard.svelte';
+	import ListSlider from './ListSlider.svelte';
 	import { historyStore } from '$lib/stores/history.svelte';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 	import { isVideoFile } from '$lib/utils/videoUtils';
@@ -112,6 +113,15 @@
 
 	// 性能监控
 	let lastScrollTime = 0;
+
+	// 滚动进度（0-1）
+	let scrollProgress = $derived(() => {
+		if (totalHeight <= viewportHeight) return 0;
+		return scrollTop / (totalHeight - viewportHeight);
+	});
+
+	// 是否显示侧边滑块（至少5个项目时显示）
+	let showSlider = $derived(items.length > 5);
 
 	// 上一次的路径，用于检测路径切换
 	let lastPath = $state('');
@@ -521,17 +531,35 @@
 
 		return rowBottom > viewTop && rowTop < viewBottom;
 	}
+
+	// 滚动到指定进度（0-1）
+	function scrollToProgress(progress: number) {
+		if (!container) return;
+		const maxScroll = totalHeight - viewportHeight;
+		const targetScroll = Math.max(0, Math.min(maxScroll, progress * maxScroll));
+		container.scrollTo({ top: targetScroll, behavior: 'auto' });
+	}
+
+	// 跳转到指定索引
+	function jumpToIndex(index: number) {
+		if (!container || index < 0 || index >= items.length) return;
+		onSelectedIndexChange({ index });
+		dispatch('selectedIndexChange', { index });
+		scrollToItem(index);
+	}
 </script>
 
-<div
-	bind:this={container}
-	class="virtual-list-container flex-1 overflow-y-auto focus:outline-none"
-	tabindex="0"
-	role="listbox"
-	aria-label="文件列表"
-	onscroll={handleScroll}
-	onkeydown={handleKeydown}
->
+<div class="flex h-full w-full">
+	<!-- 主列表区域 -->
+	<div
+		bind:this={container}
+		class="virtual-list-container flex-1 overflow-y-auto focus:outline-none"
+		tabindex="0"
+		role="listbox"
+		aria-label="文件列表"
+		onscroll={handleScroll}
+		onkeydown={handleKeydown}
+	>
 	{#if viewMode === 'list'}
 		<!-- 列表视图 - 虚拟滚动 -->
 		<div
@@ -630,6 +658,22 @@
 					{/each}
 				</div>
 			</div>
+		</div>
+	{/if}
+	</div>
+
+	<!-- 侧边进度条滑块 -->
+	{#if showSlider}
+		<div class="slider-wrapper border-l border-border px-1">
+			<ListSlider
+				totalItems={items.length}
+				currentIndex={selectedIndex >= 0 ? selectedIndex : 0}
+				visibleStart={startIndex}
+				visibleEnd={endIndex}
+				scrollProgress={scrollProgress()}
+				onJumpToIndex={jumpToIndex}
+				onScrollToProgress={scrollToProgress}
+			/>
 		</div>
 	{/if}
 </div>

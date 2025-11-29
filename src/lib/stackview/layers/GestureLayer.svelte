@@ -1,11 +1,25 @@
 <!--
-  GestureLayer - 手势层
+  GestureLayer - 手势层（独立模式）
+  处理滚轮、键盘、点击区域等手势，通过 keybindingsStore 执行操作
   z-index: 90
 -->
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { LayerZIndex } from '../types/layer';
   import type { TapZones, GestureCallbacks, Point } from '../types/gesture';
+  import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
+  import { generateKeyCombo } from '$lib/stores/keyboard.svelte';
+  import { settingsManager } from '$lib/settings/settingsManager';
+  import { zoomIn, zoomOut, resetZoom, toggleFullscreen } from '$lib/stores';
+  import { showToast } from '$lib/utils/toast';
+  
+  // 调试模式
+  let debugMode = true;
+  function showActionToast(action: string) {
+    if (debugMode) {
+      showToast({ title: `[StackView] ${action}`, variant: 'info', duration: 800 });
+    }
+  }
   
   let {
     // 是否为视频模式（视频模式下只处理边缘区域）
@@ -15,6 +29,8 @@
     // 启用配置
     enablePan = true,
     enableTap = true,
+    enableWheel = true,
+    enableKeyboard = true,
     // 事件回调
     onTapLeft,
     onTapRight,
@@ -22,11 +38,23 @@
     onPan,
     onPanStart,
     onPanEnd,
+    onNextPage,
+    onPrevPage,
+    onZoomIn,
+    onZoomOut,
+    onResetZoom,
   }: {
     isVideoMode?: boolean;
     tapZones?: TapZones;
     enablePan?: boolean;
     enableTap?: boolean;
+    enableWheel?: boolean;
+    enableKeyboard?: boolean;
+    onNextPage?: () => void;
+    onPrevPage?: () => void;
+    onZoomIn?: () => void;
+    onZoomOut?: () => void;
+    onResetZoom?: () => void;
   } & GestureCallbacks = $props();
   
   let layerRef: HTMLDivElement | null = $state(null);
@@ -80,6 +108,117 @@
       onTapCenter?.();
     }
   }
+  
+  // ============================================================================
+  // 滚轮处理
+  // ============================================================================
+  
+  function executeAction(action: string, source: string) {
+    const settings = settingsManager.getSettings();
+    const readingDirection = settings.book.readingDirection;
+    
+    switch (action) {
+      case 'nextPage':
+        showActionToast(`${source}: 下一页`);
+        onNextPage?.();
+        break;
+      case 'prevPage':
+        showActionToast(`${source}: 上一页`);
+        onPrevPage?.();
+        break;
+      case 'pageLeft':
+        showActionToast(`${source}: 向左翻页`);
+        if (readingDirection === 'right-to-left') {
+          onNextPage?.();
+        } else {
+          onPrevPage?.();
+        }
+        break;
+      case 'pageRight':
+        showActionToast(`${source}: 向右翻页`);
+        if (readingDirection === 'right-to-left') {
+          onPrevPage?.();
+        } else {
+          onNextPage?.();
+        }
+        break;
+      case 'zoomIn':
+        showActionToast(`${source}: 放大`);
+        if (onZoomIn) onZoomIn(); else zoomIn();
+        break;
+      case 'zoomOut':
+        showActionToast(`${source}: 缩小`);
+        if (onZoomOut) onZoomOut(); else zoomOut();
+        break;
+      case 'resetZoom':
+        showActionToast(`${source}: 重置缩放`);
+        if (onResetZoom) onResetZoom(); else resetZoom();
+        break;
+      case 'toggleFullscreen':
+        showActionToast(`${source}: 切换全屏`);
+        toggleFullscreen();
+        break;
+    }
+  }
+  
+  function handleWheel(e: WheelEvent) {
+    if (!enableWheel) return;
+    
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+      return;
+    }
+    
+    const direction = e.deltaY < 0 ? 'up' : 'down';
+    const action = keyBindingsStore.findActionByMouseWheel(direction);
+    
+    if (action) {
+      e.preventDefault();
+      e.stopPropagation();
+      executeAction(action, '滚轮');
+    }
+  }
+  
+  // ============================================================================
+  // 键盘处理
+  // ============================================================================
+  
+  function handleKeydown(e: KeyboardEvent) {
+    if (!enableKeyboard) return;
+    
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+      return;
+    }
+    
+    const keyCombo = generateKeyCombo(e);
+    const action = keyBindingsStore.findActionByKeyCombo(keyCombo);
+    
+    if (action) {
+      e.preventDefault();
+      e.stopPropagation();
+      executeAction(action, '键盘');
+    }
+  }
+  
+  // 挂载时添加事件监听
+  onMount(() => {
+    if (layerRef) {
+      layerRef.addEventListener('wheel', handleWheel, { passive: false });
+      // 需要 tabindex 才能接收键盘事件
+      layerRef.tabIndex = 0;
+      layerRef.addEventListener('keydown', handleKeydown);
+      // 自动获取焦点
+      layerRef.focus();
+    }
+  });
+  
+  onDestroy(() => {
+    if (layerRef) {
+      layerRef.removeEventListener('wheel', handleWheel);
+      layerRef.removeEventListener('keydown', handleKeydown);
+    }
+  });
 </script>
 
 <!-- 外层容器不捕获事件 -->

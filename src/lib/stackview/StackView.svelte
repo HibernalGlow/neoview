@@ -4,7 +4,7 @@
   使用 imageStore 管理图片加载，复用现有手势和缩放
 -->
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onDestroy } from 'svelte';
   import {
     BackgroundLayer,
     CurrentFrameLayer,
@@ -13,7 +13,6 @@
   } from './layers';
   import { getBaseTransform } from './utils/transform';
   import { isLandscape, getInitialSplitHalf, getNextSplitHalf, getPrevSplitHalf, type SplitState } from './utils/viewMode';
-  import { createGestureManager, type GestureManager } from './utils/gestures';
   import type { Frame, FrameLayout, FrameImage } from './types/frame';
   import { emptyFrame } from './types/frame';
   import { getImageStore } from './stores/imageStore.svelte';
@@ -63,8 +62,6 @@
   
   let localPan = $state({ x: 0, y: 0 });
   let splitState = $state<SplitState | null>(null);
-  let containerRef: HTMLDivElement | null = $state(null);
-  let gestureManager: GestureManager | null = null;
   
   // 从 stores 获取状态
   let scale = $derived($zoomLevel);
@@ -242,22 +239,7 @@
     }
   });
   
-  // 初始化手势管理器
-  onMount(() => {
-    if (containerRef) {
-      gestureManager = createGestureManager({
-        onNextPage: handleNextPage,
-        onPrevPage: handlePrevPage,
-        onPageLeft: handlePrevPage,
-        onPageRight: handleNextPage,
-        onResetZoom: resetView,
-      });
-      gestureManager.attachTo(containerRef);
-    }
-  });
-  
   onDestroy(() => {
-    gestureManager?.destroy();
     imageStore.reset();
   });
   
@@ -266,8 +248,7 @@
   export { resetView };
 </script>
 
-<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-<div class="stack-view" bind:this={containerRef} tabindex="0" role="application">
+<div class="stack-view">
   <BackgroundLayer color={backgroundColor} />
   
   <CurrentFrameLayer 
@@ -302,6 +283,9 @@
     onTapLeft={isRTL ? handleNextPage : handlePrevPage}
     onTapRight={isRTL ? handlePrevPage : handleNextPage}
     onPan={handlePan}
+    onNextPage={handleNextPage}
+    onPrevPage={handlePrevPage}
+    onResetZoom={resetView}
   />
 </div>
 

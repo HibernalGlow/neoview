@@ -6,6 +6,20 @@
 import { zoomIn, zoomOut, resetZoom, setZoomLevel } from '$lib/stores';
 import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
+import { showToast } from '$lib/utils/toast';
+
+// 调试模式：显示操作 toast
+let debugMode = true;
+
+function showActionToast(action: string) {
+  if (debugMode) {
+    showToast({ title: `[StackView] ${action}`, variant: 'info', duration: 800 });
+  }
+}
+
+export function setGestureDebugMode(enabled: boolean) {
+  debugMode = enabled;
+}
 
 // ============================================================================
 // 类型定义
@@ -56,12 +70,15 @@ export function createWheelHandler(config: GestureConfig): WheelHandler {
       
       switch (action) {
         case 'nextPage':
+          showActionToast('滚轮: 下一页');
           config.onNextPage?.();
           break;
         case 'prevPage':
+          showActionToast('滚轮: 上一页');
           config.onPrevPage?.();
           break;
         case 'pageLeft':
+          showActionToast('滚轮: 向左翻页');
           if (readingDirection === 'right-to-left') {
             config.onPageRight?.();
           } else {
@@ -69,6 +86,7 @@ export function createWheelHandler(config: GestureConfig): WheelHandler {
           }
           break;
         case 'pageRight':
+          showActionToast('滚轮: 向右翻页');
           if (readingDirection === 'right-to-left') {
             config.onPageLeft?.();
           } else {
@@ -76,9 +94,11 @@ export function createWheelHandler(config: GestureConfig): WheelHandler {
           }
           break;
         case 'zoomIn':
+          showActionToast('滚轮: 放大');
           if (config.onZoomIn) config.onZoomIn(); else zoomIn();
           break;
         case 'zoomOut':
+          showActionToast('滚轮: 缩小');
           if (config.onZoomOut) config.onZoomOut(); else zoomOut();
           break;
       }
@@ -124,12 +144,15 @@ export function createKeyboardHandler(config: GestureConfig): KeyboardHandler {
       
       switch (action) {
         case 'nextPage':
+          showActionToast('键盘: 下一页');
           config.onNextPage?.();
           break;
         case 'prevPage':
+          showActionToast('键盘: 上一页');
           config.onPrevPage?.();
           break;
         case 'pageLeft':
+          showActionToast('键盘: 向左翻页');
           if (readingDirection === 'right-to-left') {
             config.onPageRight?.();
           } else {
@@ -137,6 +160,7 @@ export function createKeyboardHandler(config: GestureConfig): KeyboardHandler {
           }
           break;
         case 'pageRight':
+          showActionToast('键盘: 向右翻页');
           if (readingDirection === 'right-to-left') {
             config.onPageLeft?.();
           } else {
@@ -144,15 +168,19 @@ export function createKeyboardHandler(config: GestureConfig): KeyboardHandler {
           }
           break;
         case 'zoomIn':
+          showActionToast('键盘: 放大');
           if (config.onZoomIn) config.onZoomIn(); else zoomIn();
           break;
         case 'zoomOut':
+          showActionToast('键盘: 缩小');
           if (config.onZoomOut) config.onZoomOut(); else zoomOut();
           break;
         case 'resetZoom':
+          showActionToast('键盘: 重置缩放');
           if (config.onResetZoom) config.onResetZoom(); else resetZoom();
           break;
         case 'toggleFullscreen':
+          showActionToast('键盘: 切换全屏');
           config.onToggleFullscreen?.();
           break;
       }

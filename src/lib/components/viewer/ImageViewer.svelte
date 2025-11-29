@@ -1249,6 +1249,11 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 
 	// 处理鼠标滚轮事件
 	function handleWheel(e: WheelEvent) {
+		// StackViewer 模式下由 GestureLayer 处理
+		if ($useStackViewer) {
+			return;
+		}
+		
 		// 不在输入框时响应
 		const target = e.target as HTMLElement;
 		if (
@@ -1526,6 +1531,11 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
+		// StackViewer 模式下由 GestureLayer 处理
+		if ($useStackViewer) {
+			return;
+		}
+		
 		// 仅在此处理对比模式下的 ESC，其余按键交给 App.svelte 的全局处理
 		if ($viewerState.comparisonVisible && e.key === 'Escape') {
 			updateViewerState({ comparisonVisible: false });

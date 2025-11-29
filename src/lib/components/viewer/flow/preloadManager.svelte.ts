@@ -6,7 +6,7 @@
 import { performanceSettings } from '$lib/settings/settingsManager';
 import { bookStore } from '$lib/stores/book.svelte';
 import { invoke } from '@tauri-apps/api/core';
-import { ImageLoader, type ImageLoaderOptions } from './imageLoader';
+import { ImageLoader, type ImageLoaderOptions } from './imageLoaderFacade';
 import { createEventListeners, type EventListenersOptions } from './eventListeners';
 import { createPreloadWorker } from './preloadWorker';
 import { triggerAutoUpscale, getAutoUpscaleEnabled } from './preloadRuntime';

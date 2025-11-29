@@ -139,3 +139,4 @@ export function resetLoadQueue(): void {
 		instance = null;
 	}
 }
+

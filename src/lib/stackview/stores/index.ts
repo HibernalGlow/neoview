@@ -4,3 +4,4 @@
 
 export * from './frameStore';
 export * from './imageLoader';
+export * from './imageStore.svelte';

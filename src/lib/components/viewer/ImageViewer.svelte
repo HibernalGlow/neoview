@@ -1598,17 +1598,8 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 				<div class="text-white">加载视频中...</div>
 			{/if}
 		{:else if $useStackViewer}
+			<!-- StackView 独立模式：自己从 bookStore 获取数据 -->
 			<StackView
-				currentUrl={imageData}
-				currentUrl2={imageData2}
-				upscaledUrl={derivedUpscaledUrl || bookStore.upscaledImageData}
-				layout={$viewerState.viewMode as 'single' | 'double' | 'panorama'}
-				direction={settings.book.readingDirection === 'right-to-left' ? 'rtl' : 'ltr'}
-				divideLandscape={settings.view.pageLayout?.splitHorizontalPages ?? false}
-				treatHorizontalAsDoublePage={settings.view.pageLayout?.treatHorizontalAsDoublePage ?? false}
-				autoRotate={false}
-				currentImageSize={currentImageDimensions}
-				panoramaPages={panoramaPagesData.map(p => ({ index: p.index, data: p.data }))}
 				backgroundColor="rgba(0, 128, 0, 0.3)"
 				showPageInfo={true}
 				showProgress={true}

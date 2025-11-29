@@ -378,7 +378,11 @@
 		if (!preloadManager || loadingIndices.has(pageIndex)) return;
 
 		const currentBook = bookStore.currentBook;
-		const page = currentBook?.pages[pageIndex];
+		// 边界检查：确保页面索引有效
+		if (!currentBook || pageIndex < 0 || pageIndex >= currentBook.pages.length) {
+			return;
+		}
+		const page = currentBook.pages[pageIndex];
 		const pathKey = currentBook && page ? `${currentBook.path}::${page.path}` : null;
 
 		if (pathKey && noThumbnailPaths.has(pathKey)) {
@@ -455,18 +459,28 @@
 
 	function handleScroll(e: Event) {
 		const container = e.target as HTMLElement;
-		const thumbnailElements = container.querySelectorAll('button');
+		const thumbnailElements = container.querySelectorAll('button[data-page-index]');
+		const totalPages = bookStore.currentBook?.pages.length ?? 0;
 
 		// 加载所有可见的缩略图，包括缓冲区
-		thumbnailElements.forEach((el, i) => {
+		thumbnailElements.forEach((el) => {
+			const pageIndexAttr = el.getAttribute('data-page-index');
+			if (!pageIndexAttr) return;
+			
+			const pageIndex = parseInt(pageIndexAttr, 10);
+			// 边界检查：确保页面索引有效
+			if (isNaN(pageIndex) || pageIndex < 0 || pageIndex >= totalPages) {
+				return;
+			}
+
 			const rect = el.getBoundingClientRect();
 			const containerRect = container.getBoundingClientRect();
 
 			// 扩大可见范围，提前加载即将进入视野的缩略图
 			const buffer = 200; // 200px 缓冲区
 			if (rect.left >= containerRect.left - buffer && rect.right <= containerRect.right + buffer) {
-				if (!(i in thumbnails)) {
-					void loadThumbnail(i);
+				if (!(pageIndex in thumbnails)) {
+					void loadThumbnail(pageIndex);
 				}
 			}
 		});

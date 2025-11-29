@@ -52,6 +52,9 @@ class ThumbnailManager {
   private cache = new Map<string, ThumbnailCache>();
   private dbIndexCache = new Map<string, boolean>(); // 预加载的数据库索引缓存
   private dbMissCache = new Set<string>(); // 记录数据库未命中的路径 key
+  private failedThumbnails = new Set<string>(); // 记录生成失败的缩略图路径（参考 NeeView 的 ThumbnailType.Empty）
+  private failedRetryCount = new Map<string, number>(); // 失败重试计数
+  private readonly MAX_RETRY_COUNT = 2; // 最大重试次数
 
   // LRU 缓存（智能缓存淘汰）
   private lruCache: LRUCache<string>;
@@ -140,6 +143,7 @@ class ThumbnailManager {
 
   /**
    * 设置当前目录（用于优先级判断）
+   * 参考 NeeView 的 JobClient.CancelOrder
    */
   setCurrentDirectory(path: string) {
     const oldPath = this.currentDirectory;
@@ -149,8 +153,29 @@ class ThumbnailManager {
     if (oldPath !== path && oldPath) {
       this.cancelAllTasksExceptDirectory(path);
       this.bumpCurrentDirectoryPriority();
+      // 清理旧目录的失败标记（允许重新尝试，因为可能是临时错误）
+      this.clearFailedMarksForDirectory(oldPath);
       // 立即处理队列，不要等待
       setTimeout(() => this.processQueue(), 0);
+    }
+  }
+
+  /**
+   * 清理指定目录的失败标记
+   */
+  private clearFailedMarksForDirectory(directory: string): void {
+    const keysToRemove: string[] = [];
+    for (const key of this.failedThumbnails) {
+      if (key.startsWith(directory)) {
+        keysToRemove.push(key);
+      }
+    }
+    for (const key of keysToRemove) {
+      this.failedThumbnails.delete(key);
+      this.failedRetryCount.delete(key);
+    }
+    if (keysToRemove.length > 0) {
+      console.debug(`🧹 清理 ${keysToRemove.length} 个旧目录的失败标记: ${directory}`);
     }
   }
 
@@ -215,6 +240,37 @@ class ThumbnailManager {
       return `${path}::${innerPath}`;
     }
     return path;
+  }
+
+  /**
+   * 检查缩略图是否已标记为失败（参考 NeeView 的 IsThumbnailValid）
+   */
+  isThumbnailFailed(path: string, innerPath?: string): boolean {
+    const pathKey = this.buildPathKey(path, innerPath);
+    return this.failedThumbnails.has(pathKey);
+  }
+
+  /**
+   * 标记缩略图为失败状态（参考 NeeView 的 ThumbnailType.Empty）
+   */
+  private markThumbnailFailed(path: string, innerPath?: string): void {
+    const pathKey = this.buildPathKey(path, innerPath);
+    this.failedThumbnails.add(pathKey);
+    
+    // 更新重试计数
+    const currentCount = this.failedRetryCount.get(pathKey) || 0;
+    this.failedRetryCount.set(pathKey, currentCount + 1);
+    
+    console.debug(`📛 缩略图标记为失败: ${pathKey} (重试次数: ${currentCount + 1})`);
+  }
+
+  /**
+   * 检查是否可以重试加载失败的缩略图
+   */
+  private canRetryFailedThumbnail(path: string, innerPath?: string): boolean {
+    const pathKey = this.buildPathKey(path, innerPath);
+    const retryCount = this.failedRetryCount.get(pathKey) || 0;
+    return retryCount < this.MAX_RETRY_COUNT;
   }
 
   /**
@@ -526,15 +582,17 @@ class ThumbnailManager {
 
   /**
    * 生成缩略图（第一次生成，返回 blob URL）
+   * 参考 NeeView 的 PageThumbnail.LoadThumbnailAsync
    */
   private async generateThumbnail(
     path: string,
     innerPath?: string,
     isArchive: boolean = false
   ): Promise<string | null> {
+    const pathKey = this.buildPathKey(path, innerPath);
+    
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const pathKey = this.buildPathKey(path, innerPath);
 
       // 检测是否为视频文件
       const pathLower = path.toLowerCase();
@@ -554,6 +612,8 @@ class ThumbnailManager {
           });
         } catch (videoError) {
           console.warn('生成视频缩略图失败:', path, videoError);
+          // 标记为失败，避免重复尝试
+          this.markThumbnailFailed(path, innerPath);
           return null;
         }
       } else {
@@ -584,6 +644,10 @@ class ThumbnailManager {
           });
           this.lruCache.set(pathKey, blobUrl, estimatedSize);
 
+          // 清除失败标记（如果之前失败过，现在成功了）
+          this.failedThumbnails.delete(pathKey);
+          this.failedRetryCount.delete(pathKey);
+
           // 通知回调
           if (this.onThumbnailReady) {
             this.onThumbnailReady(path, blobUrl);
@@ -592,12 +656,17 @@ class ThumbnailManager {
           return blobUrl;
         }
       }
+      
+      // blobKey 为空或 blobData 为空，标记为失败
+      this.markThumbnailFailed(path, innerPath);
     } catch (error) {
       // 权限错误静默处理，其他错误才打印
       const errorMsg = String(error);
       if (!errorMsg.includes('权限被拒绝') && !errorMsg.includes('Permission denied')) {
         console.error('生成缩略图失败:', path, error);
       }
+      // 标记为失败，避免重复尝试
+      this.markThumbnailFailed(path, innerPath);
     }
 
     return null;
@@ -605,6 +674,7 @@ class ThumbnailManager {
 
   /**
    * 获取缩略图（优先从缓存/数据库加载，否则生成）
+   * 参考 NeeView 的 PageThumbnail.LoadAsync 流程
    */
   async getThumbnail(
     path: string,
@@ -613,6 +683,13 @@ class ThumbnailManager {
     priority: 'immediate' | 'high' | 'normal' = 'normal'
   ): Promise<string | null> {
     const pathKey = this.buildPathKey(path, innerPath);
+
+    // 0. 检查是否已标记为失败（参考 NeeView 的 IsThumbnailValid）
+    // 如果已失败且超过重试次数，直接返回 null，不再尝试加载
+    if (this.failedThumbnails.has(pathKey) && !this.canRetryFailedThumbnail(path, innerPath)) {
+      // 已标记为失败且超过重试次数，不再尝试
+      return null;
+    }
 
     // 1. 检查内存缓存
     const cached = this.cache.get(pathKey);
@@ -636,6 +713,9 @@ class ThumbnailManager {
           timestamp: Date.now(),
         });
         this.dbIndexCache.set(pathKey, true);
+        // 清除失败标记（如果之前失败过，现在成功了）
+        this.failedThumbnails.delete(pathKey);
+        this.failedRetryCount.delete(pathKey);
         // 只在调试模式下打印日志
         if (import.meta.env.DEV) {
           console.log(`✅ 从数据库加载缩略图: ${pathKey}${isFolder ? ' (文件夹)' : ''}`);
@@ -691,8 +771,18 @@ class ThumbnailManager {
 
   /**
    * 入队任务（带上限管理和当前目录优先）
+   * 参考 NeeView 的 JobScheduler.Order
    */
   private enqueueTask(task: ThumbnailTask) {
+    const pathKey = this.buildPathKey(task.path, task.innerPath);
+    
+    // 检查是否已标记为失败且超过重试次数（参考 NeeView 的 IsThumbnailValid）
+    if (this.failedThumbnails.has(pathKey) && !this.canRetryFailedThumbnail(task.path, task.innerPath)) {
+      // 已标记为失败且超过重试次数，不入队
+      console.debug(`⏭️ 跳过已失败的缩略图任务: ${pathKey}`);
+      return;
+    }
+    
     // 检查队列上限
     if (this.taskQueue.length >= this.MAX_QUEUE_SIZE) {
       // 优先移除非当前目录的低优先级任务
@@ -855,6 +945,8 @@ class ThumbnailManager {
       }
     } catch (error) {
       console.error('处理缩略图任务失败:', pathKey, error);
+      // 标记为失败，避免重复尝试
+      this.markThumbnailFailed(task.path, task.innerPath);
     }
 
     return null;
@@ -912,10 +1004,19 @@ class ThumbnailManager {
     });
 
     // 获取待处理的任务（优先当前目录和 immediate）
+    // 过滤掉已标记为失败且超过重试次数的任务（参考 NeeView 的 IsThumbnailValid）
     const tasksToProcess = this.taskQueue
       .filter(
-        (task) =>
-          !this.processingTasks.has(this.buildPathKey(task.path, task.innerPath))
+        (task) => {
+          const pathKey = this.buildPathKey(task.path, task.innerPath);
+          // 跳过正在处理的任务
+          if (this.processingTasks.has(pathKey)) return false;
+          // 跳过已标记为失败且超过重试次数的任务
+          if (this.failedThumbnails.has(pathKey) && !this.canRetryFailedThumbnail(task.path, task.innerPath)) {
+            return false;
+          }
+          return true;
+        }
       )
       .slice(0, maxConcurrent - currentProcessing);
 
@@ -987,8 +1088,9 @@ class ThumbnailManager {
     setTimeout(() => {
       needThumbnailItems.forEach((item) => {
         const pathKey = this.buildPathKey(item.path);
-        // 如果内存缓存中没有，加入生成队列
-        if (!this.cache.has(pathKey)) {
+        // 如果内存缓存中没有，且未标记为失败，加入生成队列
+        // 参考 NeeView 的 IsThumbnailValid 检查
+        if (!this.cache.has(pathKey) && !this.failedThumbnails.has(pathKey)) {
           const isArchive = item.name?.endsWith('.zip') || item.name?.endsWith('.cbz') ||
             item.name?.endsWith('.rar') || item.name?.endsWith('.cbr');
           this.getThumbnail(item.path, undefined, isArchive, priority);
@@ -1133,12 +1235,35 @@ class ThumbnailManager {
   }
 
   /**
-   * 清空缓存
+   * 清空缓存（包括失败标记）
    */
   clearCache() {
     this.cache.clear();
     this.dbIndexCache.clear();
     this.lruCache.clear();
+    this.failedThumbnails.clear();
+    this.failedRetryCount.clear();
+    this.dbMissCache.clear();
+  }
+
+  /**
+   * 清除指定路径的失败标记（允许重新尝试加载）
+   */
+  clearFailedMark(path: string, innerPath?: string): void {
+    const pathKey = this.buildPathKey(path, innerPath);
+    this.failedThumbnails.delete(pathKey);
+    this.failedRetryCount.delete(pathKey);
+    this.dbMissCache.delete(pathKey);
+  }
+
+  /**
+   * 获取失败统计信息
+   */
+  getFailedStats() {
+    return {
+      failedCount: this.failedThumbnails.size,
+      retryCountMap: Object.fromEntries(this.failedRetryCount),
+    };
   }
 
   /**

@@ -465,10 +465,12 @@
 	});
 
 	function loadEMMConfig() {
-		emmDatabasePaths = emmMetadataStore.getDatabasePaths();
-		emmTranslationDbPath = emmMetadataStore.getTranslationDbPath() || '';
-		emmSettingPath = emmMetadataStore.getSettingPath() || '';
-		emmTranslationDictPath = emmMetadataStore.getTranslationDictPath() || '';
+		// 【修复】加载手动配置的路径，而不是合并后的路径
+		// 这样保存时不会把自动检测的路径错误地保存为手动路径
+		emmDatabasePaths = emmMetadataStore.getManualDatabasePaths();
+		emmTranslationDbPath = emmMetadataStore.getManualTranslationDbPath() || '';
+		emmSettingPath = emmMetadataStore.getManualSettingPath() || '';
+		emmTranslationDictPath = emmMetadataStore.getManualTranslationDictPath() || '';
 
 		const unsubscribe = emmMetadataStore.subscribe((state) => {
 			enableEMM = state.enableEMM;

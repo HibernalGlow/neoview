@@ -393,6 +393,50 @@ export const emmMetadataStore = {
 	},
 
 	/**
+	 * 获取手动配置的数据库路径
+	 */
+	getManualDatabasePaths(): string[] {
+		let paths: string[] = [];
+		subscribe(state => {
+			paths = state.manualDatabasePaths;
+		})();
+		return paths;
+	},
+
+	/**
+	 * 获取手动配置的翻译数据库路径
+	 */
+	getManualTranslationDbPath(): string | undefined {
+		let path: string | undefined;
+		subscribe(state => {
+			path = state.manualTranslationDbPath;
+		})();
+		return path;
+	},
+
+	/**
+	 * 获取手动配置的设置文件路径
+	 */
+	getManualSettingPath(): string | undefined {
+		let path: string | undefined;
+		subscribe(state => {
+			path = state.manualSettingPath;
+		})();
+		return path;
+	},
+
+	/**
+	 * 获取手动配置的翻译字典路径
+	 */
+	getManualTranslationDictPath(): string | undefined {
+		let path: string | undefined;
+		subscribe(state => {
+			path = state.manualTranslationDictPath;
+		})();
+		return path;
+	},
+
+	/**
 	 * 获取当前配置的翻译数据库路径
 	 */
 	getTranslationDbPath(): string | undefined {

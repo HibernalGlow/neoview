@@ -128,8 +128,9 @@ export type LayoutMode = 'classic' | 'flow';
 export const layoutMode = writable<LayoutMode>(loadFromStorage('layoutMode', 'classic'));
 
 // 布局切换模式：无缝切换（保持两个布局加载）vs 冷切换（销毁非活动布局节省性能）
+// 默认使用冷切换以避免性能问题
 export type LayoutSwitchMode = 'seamless' | 'cold';
-export const layoutSwitchMode = writable<LayoutSwitchMode>(loadFromStorage('layoutSwitchMode', 'seamless'));
+export const layoutSwitchMode = writable<LayoutSwitchMode>(loadFromStorage('layoutSwitchMode', 'cold'));
 
 // 订阅并保存变化
 leftSidebarOpen.subscribe((value) => saveToStorage('leftSidebarOpen', value));

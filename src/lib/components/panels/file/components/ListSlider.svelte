@@ -118,10 +118,10 @@
 	}
 </script>
 
-<div class="list-slider-container group flex flex-col items-center">
+<div class="list-slider-container group/slider flex flex-col items-center h-full transition-all duration-200">
 	<!-- 回顶按钮（悬停显示） -->
 	<button
-		class="hidden group-hover:block p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+		class="h-0 overflow-hidden group-hover/slider:h-auto p-0 group-hover/slider:p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-all"
 		onclick={() => { onScrollToProgress?.(0); onJumpToIndex?.(0); }}
 		title="回到顶部"
 	>
@@ -129,7 +129,7 @@
 	</button>
 
 	<!-- 索引显示（悬停显示） -->
-	<div class="hidden group-hover:block text-[9px] text-muted-foreground font-mono py-0.5">
+	<div class="h-0 overflow-hidden group-hover/slider:h-auto text-[9px] text-muted-foreground font-mono transition-all">
 		{#if showInput && showIndexInput}
 			<input
 				type="number"
@@ -156,7 +156,7 @@
 	<div
 		bind:this={sliderRef}
 		class="slider-track relative flex-1 rounded-full bg-muted/40 cursor-pointer transition-all duration-200
-			w-1 group-hover:w-3"
+			w-[3px] group-hover/slider:w-2.5"
 		onclick={handleTrackClick}
 		onwheel={handleWheel}
 		role="slider"
@@ -175,20 +175,20 @@
 		<div
 			class="slider-thumb absolute left-0 right-0 rounded-full transition-colors
 				{isDragging ? 'bg-primary' : 'bg-primary/60 hover:bg-primary'}"
-			style="top: {thumbPosition}%; height: {Math.max(6, thumbHeight)}%; min-height: 12px; transform: translateY(-50%);"
+			style="top: {thumbPosition}%; height: {Math.max(6, thumbHeight)}%; min-height: 10px; transform: translateY(-50%);"
 			onmousedown={handleThumbMouseDown}
 			role="presentation"
 		></div>
 	</div>
 
 	<!-- 总数显示（悬停显示） -->
-	<div class="hidden group-hover:block text-[9px] text-muted-foreground font-mono py-0.5">
+	<div class="h-0 overflow-hidden group-hover/slider:h-auto text-[9px] text-muted-foreground font-mono transition-all">
 		{totalItems}
 	</div>
 
 	<!-- 回底按钮（悬停显示） -->
 	<button
-		class="hidden group-hover:block p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+		class="h-0 overflow-hidden group-hover/slider:h-auto p-0 group-hover/slider:p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-all"
 		onclick={() => { onScrollToProgress?.(1); onJumpToIndex?.(totalItems - 1); }}
 		title="回到底部"
 	>
@@ -198,12 +198,11 @@
 
 <style>
 	.list-slider-container {
-		height: 100%;
 		padding: 2px 0;
 	}
 
 	.slider-track {
-		min-height: 80px;
+		min-height: 60px;
 	}
 
 	.slider-thumb {

@@ -460,10 +460,20 @@ class BookStore {
 
   /**
    * 打开当前排序列表的下一/上一部书
+   * 优先使用 FolderPanel 的排序（异步加载），回退到 FileBrowser
    */
   private async openAdjacentBook(direction: 'next' | 'previous') {
     const currentPath = this.state.currentBook?.path ?? null;
-    const targetPath = fileBrowserStore.findAdjacentBookPath(currentPath, direction);
+    
+    // 使用 FolderPanel 的异步版本，会自动从文件系统加载
+    const { folderPanelActions } = await import('$lib/components/panels/folderPanel/stores/folderPanelStore.svelte');
+    let targetPath = await folderPanelActions.findAdjacentBookPathAsync(currentPath, direction);
+    
+    // 如果 FolderPanel 没有数据，回退到 FileBrowser
+    if (!targetPath) {
+      targetPath = fileBrowserStore.findAdjacentBookPath(currentPath, direction);
+    }
+    
     if (!targetPath) {
       console.warn(`⚠️ No ${direction} book found from`, currentPath);
       return;

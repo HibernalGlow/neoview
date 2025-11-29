@@ -5,6 +5,7 @@
 
 import { writable, derived, get } from 'svelte/store';
 import type { FsItem } from '$lib/types';
+import { browseDirectory } from '$lib/api/filesystem';
 
 // ============ Types ============
 
@@ -373,6 +374,24 @@ function getParentPath(path: string): string | null {
 		return parts.join('/');
 	}
 	return '/' + parts.join('/');
+}
+
+// 书籍候选判断函数
+const archiveExtensions = ['.zip', '.cbz', '.rar', '.cbr', '.7z', '.cb7', '.tar', '.tar.gz', '.tgz'];
+const videoExtensions = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg'];
+
+function isArchiveFile(path: string): boolean {
+	const lower = path.toLowerCase();
+	return archiveExtensions.some((ext) => lower.endsWith(ext)) || lower.endsWith('.pdf');
+}
+
+function isVideoFile(path: string): boolean {
+	const lower = path.toLowerCase();
+	return videoExtensions.some((ext) => lower.endsWith(ext));
+}
+
+function isBookCandidate(item: FsItem): boolean {
+	return isArchiveFile(item.path) || isVideoFile(item.path);
 }
 
 // ============ Actions ============
@@ -930,6 +949,100 @@ export const folderPanelActions = {
 		state.set(initialState);
 		historyStack.set([]);
 		historyIndex.set(-1);
+	},
+
+	/**
+	 * 查找相邻的书籍路径（按当前排序）- 同步版本
+	 */
+	findAdjacentBookPath(currentBookPath: string | null, direction: 'next' | 'previous'): string | null {
+		const currentState = get(state);
+		let itemsToUse = currentState.items;
+		
+		// 如果 items 为空但 currentPath 存在，尝试从缓存加载
+		if (itemsToUse.length === 0 && currentState.currentPath) {
+			const cached = getCachedDirectory(currentState.currentPath);
+			if (cached) {
+				itemsToUse = cached;
+			}
+		}
+		
+		if (itemsToUse.length === 0) return null;
+		
+		const sortedItemList = sortItems(itemsToUse, currentState.sortField, currentState.sortOrder);
+		const bookItems = sortedItemList.filter(isBookCandidate);
+		
+		if (bookItems.length === 0) return null;
+
+		const normalizedCurrent = currentBookPath ? normalizePath(currentBookPath) : null;
+		
+		let currentIndex = bookItems.findIndex(item => 
+			normalizedCurrent && normalizePath(item.path) === normalizedCurrent
+		);
+
+		if (currentIndex === -1) {
+			currentIndex = direction === 'next' ? -1 : bookItems.length;
+		}
+
+		const targetIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
+		
+		if (targetIndex < 0 || targetIndex >= bookItems.length) {
+			return null;
+		}
+		return bookItems[targetIndex].path;
+	},
+
+	/**
+	 * 查找相邻的书籍路径（按当前排序）- 异步版本
+	 */
+	async findAdjacentBookPathAsync(currentBookPath: string | null, direction: 'next' | 'previous'): Promise<string | null> {
+		const currentState = get(state);
+		let itemsToUse = currentState.items;
+		
+		// 如果 items 为空，尝试从文件系统加载
+		if (itemsToUse.length === 0) {
+			let dirPath = currentState.currentPath;
+			if (!dirPath && currentBookPath) {
+				const normalized = currentBookPath.replace(/\\/g, '/');
+				const lastSlash = normalized.lastIndexOf('/');
+				if (lastSlash > 0) {
+					dirPath = normalized.substring(0, lastSlash);
+				}
+			}
+			
+			if (dirPath) {
+				try {
+					itemsToUse = await browseDirectory(dirPath);
+					setCachedDirectory(dirPath, itemsToUse);
+				} catch (e) {
+					console.error(`[FolderPanel] 加载目录失败:`, e);
+					return null;
+				}
+			}
+		}
+		
+		if (itemsToUse.length === 0) return null;
+		
+		const sortedItemList = sortItems(itemsToUse, currentState.sortField, currentState.sortOrder);
+		const bookItems = sortedItemList.filter(isBookCandidate);
+		
+		if (bookItems.length === 0) return null;
+
+		const normalizedCurrent = currentBookPath ? normalizePath(currentBookPath) : null;
+		
+		let currentIndex = bookItems.findIndex(item => 
+			normalizedCurrent && normalizePath(item.path) === normalizedCurrent
+		);
+
+		if (currentIndex === -1) {
+			currentIndex = direction === 'next' ? -1 : bookItems.length;
+		}
+
+		const targetIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
+		
+		if (targetIndex < 0 || targetIndex >= bookItems.length) {
+			return null;
+		}
+		return bookItems[targetIndex].path;
 	}
 };
 

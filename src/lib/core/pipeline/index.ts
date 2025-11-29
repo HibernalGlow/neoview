@@ -85,3 +85,12 @@ export {
 	type PipelineState,
 	type PageLoadOptions
 } from './ImagePipeline';
+
+// 适配器（兼容旧接口）
+export {
+	PipelineAdapter,
+	getPipelineAdapter,
+	ImageLoaderCompat,
+	type AdapterConfig,
+	type AdapterCallbacks
+} from './adapter';

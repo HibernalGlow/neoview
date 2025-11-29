@@ -439,6 +439,71 @@ pipeline.addEventListener((event) => {
 
 ## 🔧 迁移指南
 
+### 快速迁移 - 使用适配器
+
+最简单的迁移方式是使用 `PipelineAdapter`，它提供与旧接口兼容的 API：
+
+```typescript
+// 1. 在 ImageViewer 初始化时
+import { getPipelineAdapter } from '$lib/core/pipeline';
+
+const adapter = getPipelineAdapter({
+  maxConcurrentLoads: 4,
+  thumbnailHeight: 120,
+  preloadRadius: 5,
+  autoUpscale: true
+});
+
+await adapter.initialize({
+  onImageLoaded: (pageIndex, url) => {
+    console.log(`Page ${pageIndex} loaded: ${url}`);
+  },
+  onThumbnailReady: (pageIndex, dataUrl, source) => {
+    console.log(`Thumbnail ${pageIndex} ready`);
+  },
+  onUpscaleComplete: (pageIndex, url) => {
+    console.log(`Upscale ${pageIndex} complete`);
+  }
+});
+
+// 2. 设置书籍上下文
+adapter.setBookContext(bookPath, pages.map(p => ({
+  index: p.index,
+  path: p.path,
+  name: p.name,
+  archivePath: isArchive ? bookPath : undefined,
+  hash: p.stableHash
+})));
+
+// 3. 加载当前页（最高优先级）
+const url = await adapter.loadPage(currentIndex, JobPriority.Critical);
+
+// 4. 获取缩略图（异步，不阻塞主图）
+const thumbnail = await adapter.getThumbnail(pageIndex, 'bottom-bar');
+
+// 5. 预加载
+await adapter.preloadRange(currentIndex, 5);
+```
+
+### 在 BottomThumbnailBar 中使用
+
+```typescript
+// 替换旧的 preloadManager.requestThumbnail
+import { getPipelineAdapter } from '$lib/core/pipeline';
+
+async function loadThumbnail(pageIndex: number) {
+  const adapter = getPipelineAdapter();
+  
+  try {
+    // 异步获取缩略图，不阻塞原图加载
+    const dataUrl = await adapter.getThumbnail(pageIndex, 'bottom-bar');
+    thumbnails = { ...thumbnails, [pageIndex]: { url: dataUrl, width: 0, height: 0 } };
+  } catch (error) {
+    console.error(`Thumbnail ${pageIndex} failed:`, error);
+  }
+}
+```
+
 ### 从旧 ImageLoader 迁移
 
 #### 旧代码 (imageLoader.ts):

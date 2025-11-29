@@ -79,12 +79,23 @@
 	// Removed global progressBarStateChange initialization effect
 
 	const THUMBNAIL_DEBOUNCE_MS = 250;
+	const THUMBNAIL_INITIAL_DELAY_MS = 500; // 🔥 书籍刚打开时的额外延迟，让第一页优先加载
 	let loadThumbnailsDebounce: number | null = null;
 	let lastThumbnailRange: { start: number; end: number } | null = null;
 	const noThumbnailPaths = new Set<string>();
+	let lastBookPath: string | null = null; // 跟踪书籍变化
 
 	function scheduleLoadVisibleThumbnails(immediate = false) {
-		if (immediate) {
+		// 🔥 检测书籍是否刚变化，如果是则使用更长的延迟
+		const currentBookPath = bookStore.currentBook?.path ?? null;
+		const isNewBook = currentBookPath !== lastBookPath;
+		if (isNewBook) {
+			lastBookPath = currentBookPath;
+		}
+		
+		const delayMs = isNewBook ? THUMBNAIL_INITIAL_DELAY_MS : THUMBNAIL_DEBOUNCE_MS;
+		
+		if (immediate && !isNewBook) {
 			if (loadThumbnailsDebounce) {
 				clearTimeout(loadThumbnailsDebounce);
 				loadThumbnailsDebounce = null;
@@ -96,7 +107,7 @@
 		loadThumbnailsDebounce = window.setTimeout(() => {
 			loadThumbnailsDebounce = null;
 			void loadVisibleThumbnails();
-		}, THUMBNAIL_DEBOUNCE_MS);
+		}, delayMs);
 	}
 
 	function showThumbnails() {

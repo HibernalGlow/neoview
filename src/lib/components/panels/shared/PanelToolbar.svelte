@@ -144,7 +144,7 @@ function getSortIcon() {
 	<!-- 排序下拉菜单 -->
 	{#if showSort}
 		<DropdownMenu.Root>
-			<DropdownMenu.Trigger asChild>
+			<DropdownMenu.Trigger>
 				{#snippet child({ props })}
 					<Button {...props} variant="ghost" size="icon" class="h-7 w-7" title="排序">
 						<ArrowUpDown class="h-4 w-4" />

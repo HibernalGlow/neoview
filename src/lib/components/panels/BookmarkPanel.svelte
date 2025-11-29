@@ -37,6 +37,7 @@
 	import { setActivePanelTab } from '$lib/stores';
 	import { openFileSystemItem } from '$lib/utils/navigationUtils';
 	import { loadPanelViewMode, savePanelViewMode } from '$lib/utils/panelViewMode';
+	import { folderRatingStore } from '$lib/stores/emm/folderRating';
 
 	let bookmarks: any[] = $state([]);
 	let searchQuery = $state('');
@@ -91,11 +92,14 @@
 						cmp = a.name.localeCompare(b.name);
 					}
 					break;
-
-					
-					// TODO: 需要从 EMM 元数据或文件夹评分获取 rating
-					cmp = 0;
+				case 'rating': {
+					// 规则：无 rating 默认 4 分，用户自定义 rating 优先
+					const DEFAULT_RATING = 4;
+					const ratingA = folderRatingStore.getEffectiveRating(a.path) ?? DEFAULT_RATING;
+					const ratingB = folderRatingStore.getEffectiveRating(b.path) ?? DEFAULT_RATING;
+					cmp = ratingA - ratingB;
 					break;
+				}
 			}
 			return sortOrder === 'asc' ? cmp : -cmp;
 		});

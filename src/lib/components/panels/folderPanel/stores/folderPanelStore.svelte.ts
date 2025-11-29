@@ -338,22 +338,23 @@ function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrd
 	}
 
 	// rating 排序特殊处理：需要获取评分数据
+	// 规则：文件夹在前，无 rating 默认 4 分，用户自定义 rating 优先
 	if (field === 'rating') {
+		const DEFAULT_RATING = 4;
 		const sorted = [...items].sort((a, b) => {
 			// 文件夹优先
 			if (a.isDir !== b.isDir) {
 				return a.isDir ? -1 : 1;
 			}
 
-			const ratingA = folderRatingStore.getEffectiveRating(a.path);
-			const ratingB = folderRatingStore.getEffectiveRating(b.path);
+			// 获取有效评分（用户自定义优先，否则使用平均评分，无评分默认 4 分）
+			const ratingA = folderRatingStore.getEffectiveRating(a.path) ?? DEFAULT_RATING;
+			const ratingB = folderRatingStore.getEffectiveRating(b.path) ?? DEFAULT_RATING;
 
-			// 没有评分的排在最后
-			if (ratingA === null && ratingB === null) {
+			// 评分相同则按名称排序
+			if (ratingA === ratingB) {
 				return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
 			}
-			if (ratingA === null) return 1;
-			if (ratingB === null) return -1;
 
 			const comparison = ratingA - ratingB;
 			return order === 'asc' ? comparison : -comparison;

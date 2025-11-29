@@ -29,6 +29,7 @@
 	import type { EMMCollectTag, EMMTranslationDict } from '$lib/api/emm';
 	import { getFileMetadata } from '$lib/api';
 	import * as Tooltip from '$lib/components/ui/tooltip';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 
 	let {
 		item,
@@ -118,18 +119,36 @@
 
 	// 文件夹平均评分
 	let folderAverageRating = $state<number | null>(null);
+	let folderManualRating = $state<number | null>(null);
+	let folderRatingStoreRef: typeof import('$lib/stores/emm/folderRating').folderRatingStore | null = null;
 
 	// 加载文件夹平均评分（仅针对文件夹）
 	$effect(() => {
 		if (enableEMM && item.isDir && item.path) {
 			import('$lib/stores/emm/folderRating').then(({ folderRatingStore }) => {
+				folderRatingStoreRef = folderRatingStore;
 				const entry = folderRatingStore.getFolderRating(item.path);
 				folderAverageRating = entry?.averageRating ?? null;
+				folderManualRating = entry?.manualRating ?? null;
 			});
 		} else {
 			folderAverageRating = null;
+			folderManualRating = null;
 		}
 	});
+
+	// 获取有效评分（手动评分优先）
+	function getEffectiveRating(): number | null {
+		return folderManualRating ?? (folderAverageRating && folderAverageRating > 0 ? folderAverageRating : null);
+	}
+
+	// 设置手动评分
+	function handleSetRating(rating: number | null) {
+		if (folderRatingStoreRef && item.path) {
+			folderRatingStoreRef.setManualRating(item.path, rating);
+			folderManualRating = rating;
+		}
+	}
 
 	// 加载 EMM 元数据（仅针对压缩包，且路径变化时加载）
 	$effect(() => {
@@ -462,18 +481,36 @@
 								</Tooltip.Content>
 							</Tooltip.Root>
 						{/if}
-						{#if folderAverageRating !== null}
-							<Tooltip.Root>
-								<Tooltip.Trigger>
-									<span class="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1.5 py-0.5 text-amber-600 dark:text-amber-400">
-										<Star class="h-3 w-3 fill-current" />
-										<span class="font-medium">{folderAverageRating.toFixed(1)}</span>
+						{#if getEffectiveRating() !== null || item.isDir}
+							<DropdownMenu.Root>
+								<DropdownMenu.Trigger onclick={(e) => e.stopPropagation()}>
+									<span class="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1.5 py-0.5 text-amber-600 dark:text-amber-400 cursor-pointer hover:bg-amber-500/20 transition-colors">
+										<Star class="h-3 w-3 {getEffectiveRating() !== null ? 'fill-current' : ''}" />
+										{#if getEffectiveRating() !== null}
+											<span class="font-medium">{getEffectiveRating()?.toFixed(1)}</span>
+										{/if}
 									</span>
-								</Tooltip.Trigger>
-								<Tooltip.Content>
-									<p>平均评分: {folderAverageRating.toFixed(2)}</p>
-								</Tooltip.Content>
-							</Tooltip.Root>
+								</DropdownMenu.Trigger>
+								<DropdownMenu.Content class="min-w-0 p-2" onclick={(e) => e.stopPropagation()}>
+									<div class="flex items-center gap-1">
+										{#each [1, 2, 3, 4, 5] as value}
+											<button
+												type="button"
+												class="h-6 w-6 flex items-center justify-center rounded text-[14px] hover:bg-accent transition-colors {folderManualRating !== null && folderManualRating >= value ? 'text-amber-400' : 'text-muted-foreground'}"
+												onclick={() => handleSetRating(folderManualRating === value ? null : value)}
+												title={folderManualRating === value ? '清除评分' : `评分 ${value} 星`}
+											>
+												{folderManualRating !== null && folderManualRating >= value ? '★' : '☆'}
+											</button>
+										{/each}
+									</div>
+									{#if folderAverageRating !== null && folderAverageRating > 0}
+										<p class="text-[10px] text-muted-foreground mt-1.5 text-center">
+											平均: {folderAverageRating.toFixed(2)}
+										</p>
+									{/if}
+								</DropdownMenu.Content>
+							</DropdownMenu.Root>
 						{/if}
 						<!-- 预览图标 -->
 						<Tooltip.Root>
@@ -764,18 +801,36 @@
 							</Tooltip.Content>
 						</Tooltip.Root>
 					{/if}
-					{#if folderAverageRating !== null}
-						<Tooltip.Root>
-							<Tooltip.Trigger>
-								<span class="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1 py-0.5 text-[10px] text-amber-600 dark:text-amber-400">
-									<Star class="h-2.5 w-2.5 fill-current" />
-									<span class="font-medium">{folderAverageRating.toFixed(1)}</span>
+					{#if getEffectiveRating() !== null || item.isDir}
+						<DropdownMenu.Root>
+							<DropdownMenu.Trigger onclick={(e) => e.stopPropagation()}>
+								<span class="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1 py-0.5 text-[10px] text-amber-600 dark:text-amber-400 cursor-pointer hover:bg-amber-500/20 transition-colors">
+									<Star class="h-2.5 w-2.5 {getEffectiveRating() !== null ? 'fill-current' : ''}" />
+									{#if getEffectiveRating() !== null}
+										<span class="font-medium">{getEffectiveRating()?.toFixed(1)}</span>
+									{/if}
 								</span>
-							</Tooltip.Trigger>
-							<Tooltip.Content>
-								<p>平均评分: {folderAverageRating.toFixed(2)}</p>
-							</Tooltip.Content>
-						</Tooltip.Root>
+							</DropdownMenu.Trigger>
+							<DropdownMenu.Content class="min-w-0 p-2" onclick={(e) => e.stopPropagation()}>
+								<div class="flex items-center gap-1">
+									{#each [1, 2, 3, 4, 5] as value}
+										<button
+											type="button"
+											class="h-5 w-5 flex items-center justify-center rounded text-[12px] hover:bg-accent transition-colors {folderManualRating !== null && folderManualRating >= value ? 'text-amber-400' : 'text-muted-foreground'}"
+											onclick={() => handleSetRating(folderManualRating === value ? null : value)}
+											title={folderManualRating === value ? '清除评分' : `评分 ${value} 星`}
+										>
+											{folderManualRating !== null && folderManualRating >= value ? '★' : '☆'}
+										</button>
+									{/each}
+								</div>
+								{#if folderAverageRating !== null && folderAverageRating > 0}
+									<p class="text-[9px] text-muted-foreground mt-1 text-center">
+										平均: {folderAverageRating.toFixed(2)}
+									</p>
+								{/if}
+							</DropdownMenu.Content>
+						</DropdownMenu.Root>
 					{/if}
 					{#if onOpenAsBook}
 						<Tooltip.Root>

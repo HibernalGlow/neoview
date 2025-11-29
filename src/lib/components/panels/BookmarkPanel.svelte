@@ -283,6 +283,7 @@
 						{showSearchBar}
 						{sortField}
 						{sortOrder}
+						showGroupOption={true}
 						onViewModeChange={handleViewModeChange}
 						onSearchToggle={() => (showSearchBar = !showSearchBar)}
 						onSortChange={handleSortChange}

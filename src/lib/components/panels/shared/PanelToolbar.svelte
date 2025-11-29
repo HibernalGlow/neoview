@@ -15,7 +15,9 @@ import {
 	Type,
 	Star,
 	Shuffle,
-	FolderOpen
+	FolderOpen,
+	Layers,
+	Check
 } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -34,18 +36,30 @@ interface Props {
 	sortField?: SortField;
 	/** 排序顺序 */
 	sortOrder?: SortOrder;
+	/** 是否分组（按日期） */
+	isGrouped?: boolean;
+	/** 仅显示当前文件夹 */
+	isCurrentFolderOnly?: boolean;
 	/** 是否显示视图切换 */
 	showViewToggle?: boolean;
 	/** 是否显示搜索按钮 */
 	showSearchToggle?: boolean;
 	/** 是否显示排序 */
 	showSort?: boolean;
+	/** 是否显示分组选项 */
+	showGroupOption?: boolean;
+	/** 是否显示当前文件夹选项 */
+	showCurrentFolderOption?: boolean;
 	/** 视图切换回调 */
 	onViewModeChange?: (mode: ViewMode) => void;
 	/** 搜索栏切换回调 */
 	onSearchToggle?: () => void;
 	/** 排序字段变更回调 */
 	onSortChange?: (field: SortField, order: SortOrder) => void;
+	/** 分组变更回调 */
+	onGroupChange?: (grouped: boolean) => void;
+	/** 仅当前文件夹变更回调 */
+	onCurrentFolderChange?: (currentOnly: boolean) => void;
 }
 
 let {
@@ -53,12 +67,18 @@ let {
 	showSearchBar = false,
 	sortField = 'timestamp',
 	sortOrder = 'desc',
+	isGrouped = false,
+	isCurrentFolderOnly = false,
 	showViewToggle = true,
 	showSearchToggle = true,
 	showSort = true,
+	showGroupOption = false,
+	showCurrentFolderOption = false,
 	onViewModeChange,
 	onSearchToggle,
-	onSortChange
+	onSortChange,
+	onGroupChange,
+	onCurrentFolderChange
 }: Props = $props();
 
 // 排序选项配置
@@ -128,7 +148,7 @@ function getSortIcon() {
 					<ArrowUpDown class="h-4 w-4" />
 				</Button>
 			</DropdownMenu.Trigger>
-			<DropdownMenu.Content class="w-40" align="end">
+			<DropdownMenu.Content class="w-44" align="end">
 				{#each sortOptions as option}
 					{@const Icon = option.icon}
 					{@const SortIcon = sortField === option.field ? getSortIcon() : ArrowUpDown}
@@ -140,6 +160,30 @@ function getSortIcon() {
 						{/if}
 					</DropdownMenu.Item>
 				{/each}
+				
+				{#if showGroupOption || showCurrentFolderOption}
+					<DropdownMenu.Separator />
+				{/if}
+				
+				{#if showGroupOption}
+					<DropdownMenu.Item onclick={() => onGroupChange?.(!isGrouped)}>
+						<Layers class="h-4 w-4 mr-2" />
+						<span class="flex-1">按日期分组</span>
+						{#if isGrouped}
+							<Check class="h-3 w-3 text-primary" />
+						{/if}
+					</DropdownMenu.Item>
+				{/if}
+				
+				{#if showCurrentFolderOption}
+					<DropdownMenu.Item onclick={() => onCurrentFolderChange?.(!isCurrentFolderOnly)}>
+						<FolderOpen class="h-4 w-4 mr-2" />
+						<span class="flex-1">仅当前文件夹</span>
+						{#if isCurrentFolderOnly}
+							<Check class="h-3 w-3 text-primary" />
+						{/if}
+					</DropdownMenu.Item>
+				{/if}
 			</DropdownMenu.Content>
 		</DropdownMenu.Root>
 	{/if}

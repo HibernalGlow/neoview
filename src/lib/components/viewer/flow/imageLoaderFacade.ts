@@ -384,23 +384,18 @@ export class ImageLoader {
 	}
 
 	/**
-	 * 书籍切换时重置（异步执行，不阻塞切换）
+	 * 书籍切换时重置
+	 * 【关键】必须同步清理缓存，否则会显示旧书籍的图片
 	 */
 	resetForBookChange(options: { preservePreloadCache?: boolean } = {}): void {
-		// 【优化】使用 queueMicrotask 异步清理，避免阻塞 UI
-		queueMicrotask(() => {
-			if (!options.preservePreloadCache) {
-				this.upscaleHandler.clearMemoryCache();
-			}
-			this.pendingPreloadTasks.clear();
-			this.resetPreUpscaleProgress();
-			
-			// 【优化】延迟清理 blob 缓存，让新书籍的加载先开始
-			setTimeout(() => {
-				this.core.clearCache();
-				console.log('📦 旧书籍缓存清理完成');
-			}, 100);
-		});
+		// 同步清理，确保不会显示旧书籍的图片
+		if (!options.preservePreloadCache) {
+			this.upscaleHandler.clearMemoryCache();
+		}
+		this.pendingPreloadTasks.clear();
+		this.resetPreUpscaleProgress();
+		this.core.clearCache();
+		console.log('📦 书籍缓存已清理');
 	}
 
 	/**

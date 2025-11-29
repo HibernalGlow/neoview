@@ -61,9 +61,9 @@ export class PreloadManager {
 	private preloadWorker: ReturnType<typeof createPreloadWorker<any>>;
 	private options: PreloadManagerOptions;
 	private preUpscaledPages = new Set<number>();
-	private thumbnailListeners = new Set<(pageIndex: number, dataURL: string) => void>();
-	private preloadRampTimer: ReturnType<typeof setTimeout> | null = null;
-	private incrementalPreloadTimer: ReturnType<typeof setTimeout> | null = null;
+	private thumbnailListeners = new Set<(pageIndex: number, dataURL: string, source?: string) => void>();
+	private preloadRampTimer: number | null = null;
+	private incrementalPreloadTimer: number | null = null;
 	private incrementalPreloadCursor: number | null = null;
 	private readonly incrementalPreloadIntervalMs = 5000;
 	private readonly incrementalPreloadMaxChunk = 16;

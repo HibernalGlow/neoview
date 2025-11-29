@@ -6,6 +6,7 @@
 
 // 主组件
 export { default as StackView } from './StackView.svelte';
+export { default as MinimalStackView } from './MinimalStackView.svelte';
 
 // 层组件
 export * from './layers';

@@ -3,3 +3,4 @@
  */
 
 export * from './frameStore';
+export * from './imageLoader';

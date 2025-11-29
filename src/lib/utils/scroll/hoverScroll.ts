@@ -22,6 +22,7 @@ export function hoverScroll(node: HTMLElement, options: HoverScrollOptions = {})
   let pointerInside = false;
   let pointerX = 0;
   let pointerY = 0;
+  let listenersAttached = false;
 
   function cancelLoop() {
     if (frameId !== null) {
@@ -143,20 +144,38 @@ export function hoverScroll(node: HTMLElement, options: HoverScrollOptions = {})
     cancelLoop();
   }
 
-  node.addEventListener('mousemove', handleMouseMove);
-  node.addEventListener('mouseleave', handleMouseLeave);
+  function attachListeners() {
+    if (listenersAttached) return;
+    node.addEventListener('mousemove', handleMouseMove);
+    node.addEventListener('mouseleave', handleMouseLeave);
+    listenersAttached = true;
+  }
+
+  function detachListeners() {
+    if (!listenersAttached) return;
+    node.removeEventListener('mousemove', handleMouseMove);
+    node.removeEventListener('mouseleave', handleMouseLeave);
+    listenersAttached = false;
+    pointerInside = false;
+    cancelLoop();
+  }
+
+  // 只在启用时添加事件监听器
+  if (opts.enabled) {
+    attachListeners();
+  }
 
   return {
     update(newOptions?: HoverScrollOptions) {
       opts = { ...DEFAULT_OPTIONS, ...newOptions };
-      if (!opts.enabled) {
-        cancelLoop();
+      if (opts.enabled) {
+        attachListeners();
+      } else {
+        detachListeners();
       }
     },
     destroy() {
-      cancelLoop();
-      node.removeEventListener('mousemove', handleMouseMove);
-      node.removeEventListener('mouseleave', handleMouseLeave);
+      detachListeners();
     },
   };
 }

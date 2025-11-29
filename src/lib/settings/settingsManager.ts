@@ -194,7 +194,7 @@ const defaultSettings: NeoViewSettings = {
     currentImageUpscaleEnabled: false,
     autoPlayAnimatedImages: true,
     longImageScrollMode: 'continuous',
-    hoverScrollEnabled: true,
+    hoverScrollEnabled: false,
     videoMinPlaybackRate: 0.25,
     videoMaxPlaybackRate: 16,
     videoPlaybackRateStep: 0.25,

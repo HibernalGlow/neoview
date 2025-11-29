@@ -33,10 +33,17 @@ export function clearExtractCache(): void {
  */
 export async function readPageBlob(pageIndex: number): Promise<ReadResult> {
 	const currentBook = bookStore.currentBook;
-	const pageInfo = currentBook?.pages[pageIndex];
-
-	if (!pageInfo || !currentBook) {
-		throw new Error(`页面 ${pageIndex} 不存在`);
+	
+	// 【关键】详细验证，防止切书后加载不存在的页面
+	if (!currentBook) {
+		throw new Error(`页面 ${pageIndex} 不存在: 没有打开的书籍`);
+	}
+	if (pageIndex < 0 || pageIndex >= currentBook.pages.length) {
+		throw new Error(`页面 ${pageIndex} 不存在: 索引越界 (总页数: ${currentBook.pages.length})`);
+	}
+	const pageInfo = currentBook.pages[pageIndex];
+	if (!pageInfo) {
+		throw new Error(`页面 ${pageIndex} 不存在: 页面信息为空`);
 	}
 
 	const traceId = createImageTraceId(currentBook.type ?? 'fs', pageIndex);

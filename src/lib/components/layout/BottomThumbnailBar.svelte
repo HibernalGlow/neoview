@@ -378,8 +378,12 @@
 		if (!preloadManager || loadingIndices.has(pageIndex)) return;
 
 		const currentBook = bookStore.currentBook;
-		const page = currentBook?.pages[pageIndex];
-		const pathKey = currentBook && page ? `${currentBook.path}::${page.path}` : null;
+		// 【关键】验证页面索引有效性，防止切书后加载不存在的页面
+		if (!currentBook || pageIndex < 0 || pageIndex >= currentBook.pages.length) {
+			return;
+		}
+		const page = currentBook.pages[pageIndex];
+		const pathKey = page ? `${currentBook.path}::${page.path}` : null;
 
 		if (pathKey && noThumbnailPaths.has(pathKey)) {
 			return;
@@ -580,6 +584,9 @@
 		if (currentBook) {
 			thumbnails = {};
 			lastThumbnailRange = null;
+			// 【关键】清空加载状态，防止旧任务继续执行
+			loadingIndices.clear();
+			noThumbnailPaths.clear();
 		}
 	});
 

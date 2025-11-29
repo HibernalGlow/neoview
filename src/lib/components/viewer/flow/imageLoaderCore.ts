@@ -7,7 +7,7 @@
 import { bookStore } from '$lib/stores/book.svelte';
 import { logImageTrace } from '$lib/utils/imageTrace';
 import { BlobCache, getBlobCache } from './blobCache';
-import { getLoadQueue, LoadPriority, type LoadQueueManager } from './loadQueue';
+import { LoadQueueManager, LoadPriority } from './loadQueue';
 import { readPageBlob, getImageDimensions, createThumbnailDataURL } from './imageReader';
 import { calculatePreloadPlan, trackPageDirection, planToQueue, type PreloadConfig } from './preloadStrategy';
 
@@ -40,11 +40,12 @@ export class ImageLoaderCore {
 
 	constructor(options: ImageLoaderCoreOptions = {}) {
 		this.options = options;
-		// 【关键】每个实例创建独立的 BlobCache，避免切书时数据污染
+		// 【关键】每个实例创建独立的 BlobCache 和 LoadQueue，避免切书时数据污染
 		this.blobCache = new BlobCache({
 			maxSizeBytes: (options.maxCacheSizeMB ?? 500) * 1024 * 1024
 		});
-		this.loadQueue = getLoadQueue(options.maxConcurrentLoads ?? 4);
+		// 每个实例独立的队列，切书后旧队列任务不会执行到新实例
+		this.loadQueue = new LoadQueueManager(options.maxConcurrentLoads ?? 4);
 	}
 	
 	/**

@@ -420,6 +420,88 @@ pub async fn load_image_from_archive(
     result
 }
 
+/// 【优化】从压缩包解压图片到临时文件，返回临时文件路径
+/// 前端可以使用 convertFileSrc 直接访问，绕过 IPC 序列化
+#[tauri::command]
+pub async fn extract_image_to_temp(
+    archive_path: String,
+    file_path: String,
+    trace_id: Option<String>,
+    page_index: Option<i32>,
+    state: State<'_, FsState>,
+) -> Result<String, String> {
+    let trace_id = trace_id.unwrap_or_else(|| {
+        let millis = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or_default();
+        format!("rust-extract-{}-{}", page_index.unwrap_or(-1), millis)
+    });
+
+    info!(
+        "📥 [ImagePipeline:{}] extract_image_to_temp request archive={} inner={} page_index={:?}",
+        trace_id, archive_path, file_path, page_index
+    );
+
+    let archive_manager = Arc::clone(&state.archive_manager);
+    let archive_path_buf = PathBuf::from(&archive_path);
+    let inner_path = file_path.clone();
+    
+    let result = spawn_blocking(move || {
+        let manager = archive_manager
+            .lock()
+            .map_err(|e| format!("获取锁失败: {}", e))?;
+        
+        // 读取图片数据
+        let bytes = manager.load_image_from_zip_binary(&archive_path_buf, &inner_path)?;
+        
+        // 获取文件扩展名
+        let ext = Path::new(&inner_path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("jpg");
+        
+        // 创建临时文件
+        let temp_dir = std::env::temp_dir().join("neoview_cache");
+        std::fs::create_dir_all(&temp_dir).map_err(|e| format!("创建临时目录失败: {}", e))?;
+        
+        // 使用 hash 作为文件名，避免重复解压
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        archive_path_buf.hash(&mut hasher);
+        inner_path.hash(&mut hasher);
+        let hash = hasher.finish();
+        
+        let temp_path = temp_dir.join(format!("{:x}.{}", hash, ext));
+        
+        // 如果文件已存在，直接返回路径
+        if temp_path.exists() {
+            return Ok(temp_path.to_string_lossy().to_string());
+        }
+        
+        // 写入临时文件
+        std::fs::write(&temp_path, &bytes).map_err(|e| format!("写入临时文件失败: {}", e))?;
+        
+        Ok(temp_path.to_string_lossy().to_string())
+    })
+    .await
+    .map_err(|e| format!("extract_image_to_temp join error: {}", e))?;
+
+    match &result {
+        Ok(path) => info!(
+            "📤 [ImagePipeline:{}] extract_image_to_temp success path={}",
+            trace_id, path
+        ),
+        Err(err) => warn!(
+            "⚠️ [ImagePipeline:{}] extract_image_to_temp failed: {}",
+            trace_id, err
+        ),
+    }
+
+    result
+}
+
 /// 获取压缩包中的所有图片
 #[tauri::command]
 pub async fn get_images_from_archive(

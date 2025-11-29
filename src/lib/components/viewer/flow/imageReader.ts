@@ -4,11 +4,10 @@
  * 
  * 【优化】
  * 1. 文件系统图片：使用 convertFileSrc (asset://) 直接访问，绕过 IPC
- * 2. 压缩包图片：使用 Tauri invoke 获取 Blob
+ * 2. 压缩包图片：解压到临时文件后使用 asset:// 协议访问
  */
 
-import { convertFileSrc } from '@tauri-apps/api/core';
-import { loadImageFromArchiveAsBlob } from '$lib/api/filesystem';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { bookStore } from '$lib/stores/book.svelte';
 import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 
@@ -19,7 +18,7 @@ export interface ReadResult {
 
 /**
  * 读取页面图片为 Blob
- * 【优化】文件系统图片使用 asset:// 协议直接访问
+ * 【优化】统一使用 asset:// 协议直接访问
  */
 export async function readPageBlob(pageIndex: number): Promise<ReadResult> {
 	const currentBook = bookStore.currentBook;
@@ -39,12 +38,33 @@ export async function readPageBlob(pageIndex: number): Promise<ReadResult> {
 	let blob: Blob;
 
 	if (currentBook.type === 'archive') {
-		// 压缩包：必须通过 Tauri invoke 获取
-		const result = await loadImageFromArchiveAsBlob(currentBook.path, pageInfo.path, {
-			traceId,
-			pageIndex
-		});
-		blob = result.blob;
+		// 【关键优化】压缩包：解压到临时文件，然后用 asset:// 访问
+		try {
+			const tempPath = await invoke<string>('extract_image_to_temp', {
+				archivePath: currentBook.path,
+				filePath: pageInfo.path,
+				traceId,
+				pageIndex
+			});
+			
+			logImageTrace(traceId, 'extracted to temp', { tempPath });
+			
+			const assetUrl = convertFileSrc(tempPath);
+			const response = await fetch(assetUrl);
+			if (!response.ok) {
+				throw new Error(`Asset fetch failed: ${response.status}`);
+			}
+			blob = await response.blob();
+		} catch (error) {
+			// 回退到旧方式
+			logImageTrace(traceId, 'extract failed, fallback to IPC', { error });
+			const { loadImageFromArchiveAsBlob } = await import('$lib/api/filesystem');
+			const result = await loadImageFromArchiveAsBlob(currentBook.path, pageInfo.path, {
+				traceId,
+				pageIndex
+			});
+			blob = result.blob;
+		}
 	} else {
 		// 【关键优化】文件系统：使用 asset:// 协议直接获取，绕过 IPC 序列化
 		try {

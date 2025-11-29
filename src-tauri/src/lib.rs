@@ -216,6 +216,7 @@ pub fn run() {
             // Archive commands
             commands::list_archive_contents,
             commands::load_image_from_archive,
+            commands::extract_image_to_temp,
             commands::get_images_from_archive,
             commands::is_supported_archive,
             commands::batch_scan_archives,

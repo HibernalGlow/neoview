@@ -348,6 +348,16 @@
 
 	// 导航历史管理器
 	let navigationHistory = new NavigationHistory();
+	
+	// 导航历史响应式状态（用于按钮 disabled 状态）
+	let canGoBackState = $state(false);
+	let canGoForwardState = $state(false);
+	
+	// 更新导航历史状态
+	function updateNavigationState() {
+		canGoBackState = navigationHistory.canGoBack();
+		canGoForwardState = navigationHistory.canGoForward();
+	}
 
 	// 缩略图功能已由 thumbnailManager 管理
 
@@ -677,6 +687,7 @@
 		const path = navigationHistory.back();
 		if (path) {
 			loadDirectoryWithoutHistory(path);
+			updateNavigationState();
 		}
 	}
 
@@ -687,6 +698,7 @@
 		const path = navigationHistory.forward();
 		if (path) {
 			loadDirectoryWithoutHistory(path);
+			updateNavigationState();
 		}
 	}
 
@@ -1030,6 +1042,7 @@
 	async function loadDirectory(path: string) {
 		await loadDirectoryWithoutHistory(path);
 		navigationHistory.push(path);
+		updateNavigationState();
 	}
 
 	/**
@@ -1750,6 +1763,7 @@
 					}
 					
 					navigationHistory.push(cache.path);
+					updateNavigationState();
 					return;
 				}
 			}
@@ -1862,6 +1876,7 @@
 				}
 				
 				navigationHistory.push(path);
+				updateNavigationState();
 				return;
 			}
 		}
@@ -2656,7 +2671,7 @@
 							size="icon"
 							class="h-8 w-8"
 							onclick={goBackInHistory}
-							disabled={!navigationHistory.canGoBack()}
+							disabled={!canGoBackState}
 						>
 							<ChevronLeft class="h-4 w-4" />
 						</Button>
@@ -2673,7 +2688,7 @@
 							size="icon"
 							class="h-8 w-8"
 							onclick={goForwardInHistory}
-							disabled={!navigationHistory.canGoForward()}
+							disabled={!canGoForwardState}
 						>
 							<ChevronRight class="h-4 w-4" />
 						</Button>

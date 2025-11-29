@@ -95,7 +95,7 @@
 	);
 
 	// EMM 元数据
-	let emmMetadata = $state<{ translatedTitle?: string; tags?: Record<string, string[]> } | null>(
+	let emmMetadata = $state<{ translatedTitle?: string; tags?: Record<string, string[]>; rating?: number } | null>(
 		null
 	);
 	// let collectTags = $state<EMMCollectTag[]>([]); // No longer needed locally
@@ -138,7 +138,8 @@
 					if (metadata && item.path === lastLoadedPath) {
 						emmMetadata = {
 							translatedTitle: metadata.translated_title,
-							tags: metadata.tags
+							tags: metadata.tags,
+							rating: metadata.rating
 						};
 						// console.debug('[FileItemCard] EMM 元数据加载成功:', item.name);
 					}
@@ -536,15 +537,30 @@
 					{/if}
 				</div>
 			{/if}
-			<!-- 翻译标题 -->
-			{#if emmMetadata?.translatedTitle && emmMetadata.translatedTitle !== item.name}
-				<div class="mt-1">
-					<span
-						class="border-primary/20 bg-primary/10 text-primary break-words rounded border px-1.5 py-0.5 text-xs"
-						title={emmMetadata.translatedTitle}
-					>
-						{emmMetadata.translatedTitle}
-					</span>
+			<!-- 翻译标题和评分 -->
+			{#if emmMetadata && (emmMetadata.translatedTitle || emmMetadata.rating !== undefined)}
+				<div class="mt-1 flex flex-wrap items-center gap-2">
+					{#if emmMetadata.translatedTitle && emmMetadata.translatedTitle !== item.name}
+						<span
+							class="border-primary/20 bg-primary/10 text-primary break-words rounded border px-1.5 py-0.5 text-xs"
+							title={emmMetadata.translatedTitle}
+						>
+							{emmMetadata.translatedTitle}
+						</span>
+					{/if}
+					{#if emmMetadata.rating !== undefined && emmMetadata.rating > 0}
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<span class="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-600 dark:text-amber-400">
+									<Star class="h-3 w-3 fill-current" />
+									<span class="font-medium">{emmMetadata.rating.toFixed(1)}</span>
+								</span>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>评分: {emmMetadata.rating.toFixed(2)}</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
+					{/if}
 				</div>
 			{/if}
 			<div class="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-sm">
@@ -740,15 +756,30 @@
 					{/if}
 				</div>
 			{/if}
-			<!-- 翻译标题 -->
-			{#if emmMetadata?.translatedTitle && emmMetadata.translatedTitle !== item.name}
-				<div class="mt-1">
-					<span
-						class="border-primary/20 bg-primary/10 text-primary break-words rounded border px-1 py-0.5 text-[10px]"
-						title={emmMetadata.translatedTitle}
-					>
-						{emmMetadata.translatedTitle}
-					</span>
+			<!-- 翻译标题和评分 -->
+			{#if emmMetadata && (emmMetadata.translatedTitle || emmMetadata.rating !== undefined)}
+				<div class="mt-1 flex flex-wrap items-center gap-1">
+					{#if emmMetadata.translatedTitle && emmMetadata.translatedTitle !== item.name}
+						<span
+							class="border-primary/20 bg-primary/10 text-primary break-words rounded border px-1 py-0.5 text-[10px]"
+							title={emmMetadata.translatedTitle}
+						>
+							{emmMetadata.translatedTitle}
+						</span>
+					{/if}
+					{#if emmMetadata.rating !== undefined && emmMetadata.rating > 0}
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<span class="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1 py-0.5 text-[10px] text-amber-600 dark:text-amber-400">
+									<Star class="h-2.5 w-2.5 fill-current" />
+									<span class="font-medium">{emmMetadata.rating.toFixed(1)}</span>
+								</span>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>评分: {emmMetadata.rating.toFixed(2)}</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
+					{/if}
 				</div>
 			{/if}
 			<div class="text-muted-foreground mt-1 text-xs">

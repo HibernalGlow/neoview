@@ -172,7 +172,18 @@ function handleNavigate(path: string) {
 
 // 处理后退
 function handleGoBack() {
-	navigationCommand.set({ type: 'pop' });
+	const result = folderPanelActions.goBack();
+	if (result) {
+		navigationCommand.set({ type: 'push', path: result.path });
+	}
+}
+
+// 处理前进
+function handleGoForward() {
+	const result = folderPanelActions.goForward();
+	if (result) {
+		navigationCommand.set({ type: 'push', path: result.path });
+	}
 }
 
 // 处理回到 Home
@@ -482,6 +493,7 @@ onMount(() => {
 		onRefresh={handleRefresh} 
 		onToggleFolderTree={handleToggleFolderTree}
 		onGoBack={handleGoBack}
+		onGoForward={handleGoForward}
 		onGoHome={handleGoHome}
 		onSetHome={handleSetHome}
 		onToggleDeleteStrategy={handleToggleDeleteStrategy}

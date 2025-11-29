@@ -221,8 +221,12 @@ export class ImageLoader {
 
 		const currentPageIndex = bookStore.currentPageIndex;
 		
-		// 先预加载图片（这个始终执行）
-		await this.core.preloadRange(currentPageIndex, preloadPages);
+		// 【优化】使用智能双向预加载替代简单的范围预加载
+		await this.core.smartPreload({
+			preloadSize: preloadPages,
+			isDoublePage: this.options.viewMode === 'double',
+			forwardRatio: 0.7 // 70% 前向预加载
+		});
 
 		// 【关键】只在全局开关开启时预超分
 		const upscaleEnabled = await getAutoUpscaleEnabled();

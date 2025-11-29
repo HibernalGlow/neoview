@@ -9,6 +9,7 @@ import { logImageTrace } from '$lib/utils/imageTrace';
 import { BlobCache, getBlobCache } from './blobCache';
 import { getLoadQueue, LoadPriority, type LoadQueueManager } from './loadQueue';
 import { readPageBlob, getImageDimensions, createThumbnailDataURL } from './imageReader';
+import { calculatePreloadPlan, trackPageDirection, planToQueue, type PreloadConfig } from './preloadStrategy';
 
 export interface ImageLoaderCoreOptions {
 	maxConcurrentLoads?: number;
@@ -176,7 +177,7 @@ export class ImageLoaderCore {
 	}
 
 	/**
-	 * 预加载页面范围
+	 * 预加载页面范围（简单版本）
 	 */
 	async preloadRange(centerIndex: number, radius: number): Promise<void> {
 		const currentBook = bookStore.currentBook;
@@ -194,6 +195,93 @@ export class ImageLoaderCore {
 		}
 
 		await Promise.allSettled(promises);
+	}
+
+	/**
+	 * 智能双向预加载（参考 NeeView 策略）
+	 * 根据翻页方向优化预加载顺序
+	 */
+	async smartPreload(config: Partial<PreloadConfig> = {}): Promise<void> {
+		const currentBook = bookStore.currentBook;
+		if (!currentBook) return;
+
+		const currentIndex = bookStore.currentPageIndex;
+		const totalPages = currentBook.pages.length;
+
+		// 追踪翻页方向
+		const direction = trackPageDirection(currentIndex);
+
+		// 计算预加载计划
+		const plan = calculatePreloadPlan(currentIndex, totalPages, {
+			...config,
+			direction
+		});
+
+		// 转换为优先级队列
+		const queue = planToQueue(plan);
+
+		console.log(`📦 智能预加载: 方向=${direction > 0 ? '前进' : '后退'}, 计划=`, {
+			immediate: plan.immediate,
+			nextHigh: plan.nextHigh,
+			prevHigh: plan.prevHigh,
+			normalCount: plan.normal.length
+		});
+
+		// 按优先级顺序加载
+		const loadPromises: Promise<LoadResult | void>[] = [];
+
+		for (const { pageIndex, priority } of queue) {
+			// 跳过已缓存的页面
+			if (this.blobCache.has(pageIndex)) {
+				continue;
+			}
+
+			// 立即页面同步等待，其他页面异步加载
+			if (priority >= 100) {
+				try {
+					await this.loadPage(pageIndex, priority);
+				} catch (e) {
+					console.warn(`预加载页面 ${pageIndex} 失败:`, e);
+				}
+			} else {
+				loadPromises.push(
+					this.loadPage(pageIndex, priority).catch((e) => {
+						console.warn(`预加载页面 ${pageIndex} 失败:`, e);
+					})
+				);
+			}
+		}
+
+		// 等待所有预加载完成（不阻塞）
+		if (loadPromises.length > 0) {
+			Promise.allSettled(loadPromises).then(() => {
+				console.log(`✅ 预加载完成: ${loadPromises.length} 页`);
+			});
+		}
+	}
+
+	/**
+	 * 批量预热缓存（用于书籍切换后的预加载）
+	 */
+	async warmupCache(pageIndices: number[]): Promise<void> {
+		const missing = this.blobCache.getMissingPages(pageIndices);
+		if (missing.length === 0) return;
+
+		console.log(`🔥 预热缓存: ${missing.length} 页`);
+
+		// 并行加载（限制并发）
+		const concurrency = Math.min(4, missing.length);
+		const chunks: number[][] = [];
+		
+		for (let i = 0; i < missing.length; i += concurrency) {
+			chunks.push(missing.slice(i, i + concurrency));
+		}
+
+		for (const chunk of chunks) {
+			await Promise.allSettled(
+				chunk.map(idx => this.loadPage(idx, LoadPriority.NORMAL))
+			);
+		}
 	}
 
 	/**

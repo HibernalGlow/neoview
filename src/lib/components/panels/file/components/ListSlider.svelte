@@ -1,11 +1,13 @@
 <script lang="ts">
 	/**
 	 * ListSlider - 列表进度条/滑块组件
-	 * 复刻 NeeView 的 PageSlider 功能
-	 * - 显示当前位置百分比
-	 * - 可拖拽跳转
-	 * - 显示项目索引
+	 * - 显示当前位置/总数
+	 * - 可拖拽滑块快速跳转
+	 * - 支持点击轨道跳转
+	 * - 支持鼠标滚轮
+	 * - 回顶/回底按钮
 	 */
+	import { ChevronsUp, ChevronsDown } from '@lucide/svelte';
 
 	interface Props {
 		/** 总项目数 */
@@ -116,15 +118,24 @@
 	}
 </script>
 
-<div class="list-slider-container flex flex-col items-center gap-1">
+<div class="list-slider-container flex flex-col items-center gap-0.5">
+	<!-- 回顶按钮 -->
+	<button
+		class="p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+		onclick={() => { onScrollToProgress?.(0); onJumpToIndex?.(0); }}
+		title="回到顶部"
+	>
+		<ChevronsUp class="h-3.5 w-3.5" />
+	</button>
+
 	<!-- 索引显示/输入 -->
-	<div class="index-display text-[10px] text-muted-foreground">
+	<div class="text-[10px] text-muted-foreground font-mono">
 		{#if showInput && showIndexInput}
 			<input
 				type="number"
 				min="1"
 				max={totalItems}
-				class="w-12 h-5 text-center text-[10px] rounded border bg-background"
+				class="w-10 h-4 text-center text-[9px] rounded border bg-background"
 				bind:value={inputValue}
 				onkeydown={handleInputKeydown}
 				onblur={handleInputBlur}
@@ -132,9 +143,9 @@
 			/>
 		{:else}
 			<button
-				class="hover:text-foreground transition-colors cursor-pointer"
+				class="hover:text-foreground transition-colors"
 				onclick={handleIndexClick}
-				title="点击输入索引跳转"
+				title="点击输入跳转"
 			>
 				{currentIndex + 1}
 			</button>
@@ -153,32 +164,35 @@
 		aria-valuemax={totalItems}
 		tabindex="0"
 	>
-		<!-- 已读区域指示 -->
+		<!-- 已滚动区域 -->
 		<div
-			class="absolute left-0 right-0 top-0 rounded-full bg-primary/20"
+			class="absolute left-0 right-0 top-0 rounded-t-full bg-primary/20"
 			style="height: {thumbPosition}%"
 		></div>
 
 		<!-- 滑块 -->
 		<div
 			class="slider-thumb absolute left-0 right-0 rounded-full transition-colors
-				{isDragging ? 'bg-primary scale-110' : 'bg-primary/70 hover:bg-primary'}"
-			style="top: {thumbPosition}%; height: {thumbHeight}%; min-height: 16px; transform: translateY(-50%);"
+				{isDragging ? 'bg-primary' : 'bg-primary/70 hover:bg-primary'}"
+			style="top: {thumbPosition}%; height: {Math.max(8, thumbHeight)}%; min-height: 14px; transform: translateY(-50%);"
 			onmousedown={handleThumbMouseDown}
 			role="presentation"
-		></div>
-
-		<!-- 可见区域指示器 -->
-		<div
-			class="absolute left-0 right-0 border border-primary/40 rounded-full pointer-events-none"
-			style="top: {(visibleStart / totalItems) * 100}%; height: {((visibleEnd - visibleStart + 1) / totalItems) * 100}%"
 		></div>
 	</div>
 
 	<!-- 总数显示 -->
-	<div class="total-display text-[10px] text-muted-foreground">
+	<div class="text-[10px] text-muted-foreground font-mono">
 		{totalItems}
 	</div>
+
+	<!-- 回底按钮 -->
+	<button
+		class="p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+		onclick={() => { onScrollToProgress?.(1); onJumpToIndex?.(totalItems - 1); }}
+		title="回到底部"
+	>
+		<ChevronsDown class="h-3.5 w-3.5" />
+	</button>
 </div>
 
 <style>

@@ -124,8 +124,10 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    /* 确保不会覆盖边栏，使用较低的 z-index */
-    z-index: 1 !important;
+    /* 使用较低的 z-index，但仍在容器内部 */
+    z-index: 90;
+    /* 确保不会溢出父容器 */
+    overflow: hidden;
   }
   
   .gesture-layer {

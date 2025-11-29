@@ -11,7 +11,6 @@
   - Layer 9: 手势层
 -->
 <script lang="ts">
-  import { untrack } from 'svelte';
   import {
     BackgroundLayer,
     PrevFrameLayer,
@@ -35,7 +34,6 @@
   
   // 导入外部 stores
   import { zoomLevel, rotationAngle, resetZoom as storeResetZoom } from '$lib/stores';
-  import { bookStore2 } from '$lib/stores/bookStore2';
   import { bookStore } from '$lib/stores/book.svelte';
   import { settingsManager } from '$lib/settings/settingsManager';
   
@@ -85,7 +83,6 @@
   // 从 stores 获取状态
   let scale = $derived($zoomLevel);
   let rotation = $derived($rotationAngle);
-  let bookState = $derived($bookStore2);
   
   // 设置
   let settings = $state(settingsManager.getSettings());
@@ -160,35 +157,18 @@
   function handleImageLoad(e: Event, index: number) {
     const img = e.target as HTMLImageElement;
     if (img) {
-      // 更新 bookStore2 的尺寸信息
-      const frame = currentFrameData;
-      if (frame.images[index]) {
-        const physicalIndex = frame.images[index].physicalIndex;
-        bookStore2.updatePhysicalPageSize(physicalIndex, img.naturalWidth, img.naturalHeight);
-      }
+      console.log('[StackView] Image loaded:', img.naturalWidth, 'x', img.naturalHeight);
     }
     isLoading = false;
   }
   
   function handlePrevPage() {
-    const success = bookStore2.prevPage();
-    if (success) {
-      const vp = bookStore2.getVirtualPage(untrack(() => $bookStore2.currentIndex));
-      if (vp) {
-        bookStore.navigateToPage(vp.physicalPage.index);
-      }
-    }
+    bookStore.prevPage();
     localPan = { x: 0, y: 0 };
   }
   
   function handleNextPage() {
-    const success = bookStore2.nextPage();
-    if (success) {
-      const vp = bookStore2.getVirtualPage(untrack(() => $bookStore2.currentIndex));
-      if (vp) {
-        bookStore.navigateToPage(vp.physicalPage.index);
-      }
-    }
+    bookStore.nextPage();
     localPan = { x: 0, y: 0 };
   }
   
@@ -232,10 +212,10 @@
   
   <!-- Layer 7: 信息层 -->
   <InfoLayer 
-    currentIndex={bookState.currentIndex}
-    totalPages={bookState.virtualPageCount}
+    currentIndex={bookStore.currentPageIndex}
+    totalPages={bookStore.totalPages}
     isLoading={isLoading}
-    isDivided={bookState.divideLandscape}
+    isDivided={false}
     showPageInfo={showPageInfo}
     showProgress={showProgress}
     showLoading={showLoading}
@@ -263,5 +243,9 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
+    /* 创建独立的堆叠上下文，确保内部 z-index 不会影响外部元素 */
+    isolation: isolate;
+    /* 确保不会被外部元素的 pointer-events 影响 */
+    contain: layout style;
   }
 </style>

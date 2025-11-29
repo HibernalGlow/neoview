@@ -23,7 +23,7 @@
 	import { computeAutoBackgroundColor } from '$lib/utils/autoBackground';
 	import ComparisonViewer from './ComparisonViewer.svelte';
 	import ImageViewerDisplay from './flow/ImageViewerDisplay.svelte';
-	import { StackViewer } from '$lib/viewer';
+	import { StackView } from '$lib/stackview';
 	import ImageViewerProgressBar from './flow/ImageViewerProgressBar.svelte';
 	import ImageInfoOverlay from './ImageInfoOverlay.svelte';
 	import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
@@ -1598,21 +1598,13 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 				<div class="text-white">加载视频中...</div>
 			{/if}
 		{:else if $useStackViewer}
-			<StackViewer
-				{imageData}
-				{imageData2}
-				upscaledImageData={derivedUpscaledUrl || bookStore.upscaledImageData}
-				viewMode={$viewerState.viewMode as 'single' | 'double' | 'panorama'}
-				zoomLevel={$zoomLevel}
-				rotationAngle={$rotationAngle}
-				orientation={$viewerState.orientation}
-				bind:panoramaPages={panoramaPagesData}
-				loading={loadingVisible}
-				onPrevPage={() => bookStore.prevPage()}
-				onNextPage={() => bookStore.nextPage()}
-				onSizeDetected={(w, h) => {
-					currentImageDimensions = { width: w, height: h };
-				}}
+			<StackView
+				currentUrl={imageData}
+				upscaledUrl={derivedUpscaledUrl || bookStore.upscaledImageData}
+				layout={$viewerState.viewMode as 'single' | 'double' | 'panorama'}
+				direction={settings.book.readingDirection === 'right-to-left' ? 'rtl' : 'ltr'}
+				showPageInfo={true}
+				showProgress={true}
 			/>
 		{:else}
 			<ImageViewerDisplay

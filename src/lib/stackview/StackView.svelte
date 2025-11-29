@@ -222,20 +222,11 @@
     const book = bookStore.currentBook;
     const page = bookStore.currentPage;
     
-    console.log('[StackView] Effect triggered:', {
-      pageIndex,
-      hasBook: !!book,
-      hasPage: !!page,
-      pagePath: page?.path,
-      layout,
-    });
-    
     if (splitState && splitState.pageIndex !== pageIndex) {
       splitState = null;
     }
     
     if (book && page) {
-      console.log('[StackView] Calling imageStore.loadCurrentPage');
       imageStore.loadCurrentPage(layout);
     }
   });

@@ -5,7 +5,7 @@
 
 import { bookStore } from '$lib/stores/book.svelte';
 import { SvelteMap } from 'svelte/reactivity';
-import { readPageBlob } from '$lib/components/viewer/flow/imageReader';
+import { readPageBlob } from '../utils/imageReader';
 import type { Page } from '$lib/types';
 
 // ============================================================================
@@ -46,13 +46,11 @@ export interface ImageCache {
  */
 export async function loadImageByIndex(pageIndex: number): Promise<{ url: string; blob: Blob } | null> {
   try {
-    console.log('[ImageStore] loadImageByIndex:', pageIndex);
     const { blob } = await readPageBlob(pageIndex);
     const url = URL.createObjectURL(blob);
-    console.log('[ImageStore] Created blob URL:', url?.substring(0, 50));
     return { url, blob };
   } catch (err) {
-    console.error('[ImageStore] Failed to load image:', err);
+    console.error('[ImageStore] Load error:', err);
     return null;
   }
 }
@@ -114,26 +112,15 @@ export function createImageStore() {
     const book = bookStore.currentBook;
     const page = bookStore.currentPage;
     
-    console.log('[ImageStore] loadCurrentPage:', {
-      currentIndex,
-      hasBook: !!book,
-      hasPage: !!page,
-      pagePath: page?.path,
-      pageInnerPath: page?.innerPath,
-      viewMode,
-    });
-    
     if (!book || !page) {
       state.currentUrl = null;
       state.secondUrl = null;
       state.dimensions = null;
-      console.log('[ImageStore] No book or page, clearing state');
       return;
     }
     
     // 避免重复加载
     if (currentIndex === lastLoadedIndex && state.currentUrl) {
-      console.log('[ImageStore] Already loaded, skipping');
       return;
     }
     
@@ -146,10 +133,8 @@ export function createImageStore() {
       const cached = cache.get(currentIndex);
       if (cached) {
         state.currentUrl = cached.url;
-        console.log('[ImageStore] Cache hit:', cached.url?.substring(0, 50));
       } else {
         // 加载当前页
-        console.log('[ImageStore] Loading image...');
         const result = await loadImageByIndex(currentIndex);
         if (result) {
           state.currentUrl = result.url;

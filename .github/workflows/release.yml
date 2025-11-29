@@ -53,22 +53,22 @@ jobs:
             exit 0
           } else {
             Write-Error "Installer not found in bundle directory"
-            Get-ChildItem ".\src-tauri\target\release\bundle" -Recurse | Select-Object FullName
+            Get-ChildItem ".\src-tauri\target\debug\bundle" -Recurse | Select-Object FullName
             exit 1
           }
 
       - name: prepare portable exe
         shell: powershell
         run: |
-          $exePath = ".\src-tauri\target\release\neoview.exe"
+          $exePath = ".\src-tauri\target\debug\neoview.exe"
 
           if (!(Test-Path $exePath)) {
             Write-Error "neoview.exe not found at $exePath"
-            Get-ChildItem ".\src-tauri\target\release" -Recurse | Select-Object FullName
+            Get-ChildItem ".\src-tauri\target\debug" -Recurse | Select-Object FullName
             exit 1
           }
 
-          $bundleRoot = ".\src-tauri\target\release\bundle"
+          $bundleRoot = ".\src-tauri\target\debug\bundle"
           $portableDir = Join-Path $bundleRoot "portable"
           New-Item -ItemType Directory -Path $portableDir -Force | Out-Null
 
@@ -84,6 +84,6 @@ jobs:
           prerelease: false
           generate_release_notes: true
           files: |
-            ./src-tauri/target/release/bundle/**/*setup*.exe
-            ./src-tauri/target/release/bundle/**/*.msi
-            ./src-tauri/target/release/bundle/portable/neoview.exe
+            ./src-tauri/target/debug/bundle/**/*setup*.exe
+            ./src-tauri/target/debug/bundle/**/*.msi
+            ./src-tauri/target/debug/bundle/portable/neoview.exe

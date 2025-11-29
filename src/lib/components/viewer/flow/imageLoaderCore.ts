@@ -75,7 +75,12 @@ export class ImageLoaderCore {
 		this.pendingLoads.set(pageIndex, loadPromise);
 
 		try {
-			return await loadPromise;
+			const result = await loadPromise;
+			return result;
+		} catch (error) {
+			// 【关键】失败时清除 pending 状态，允许重试
+			console.warn(`加载页面 ${pageIndex} 失败:`, error);
+			throw error;
 		} finally {
 			this.pendingLoads.delete(pageIndex);
 		}

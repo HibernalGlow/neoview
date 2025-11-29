@@ -1,4 +1,4 @@
-	<script lang="ts">
+﻿	<script lang="ts">
 	import {
 		Folder,
 		File,
@@ -271,6 +271,55 @@
 	import ThumbnailsPanel from './ThumbnailsPanel.svelte';
 	import { getPerformanceSettings } from '$lib/api/performance';
 
+	// ========== Stack 模式缓存 ==========
+	// 层叠式导航缓存：保存每层目录的完整状态，返回时直接恢复
+	interface FolderLayerCache {
+		path: string;
+		items: FsItem[];
+		thumbnails: Map<string, string>;
+		selectedIndex: number;
+		scrollTop: number;
+	}
+	
+	// 层叠栈缓存（最多保留 10 层）
+	const MAX_STACK_LAYERS = 10;
+	let layerStack = $state<FolderLayerCache[]>([]);
+	
+	// 保存当前层状态到栈
+	function pushLayerToStack(scrollTop: number = 0) {
+		if (!currentPath) return;
+		const cache: FolderLayerCache = {
+			path: currentPath,
+			items: [...items],
+			thumbnails: new Map(thumbnails),
+			selectedIndex,
+			scrollTop
+		};
+		layerStack = [...layerStack.slice(-(MAX_STACK_LAYERS - 1)), cache];
+		console.log('📚 Stack push:', currentPath, 'depth:', layerStack.length);
+	}
+	
+	// 从栈恢复上一层状态
+	function popLayerFromStack(): FolderLayerCache | null {
+		if (layerStack.length === 0) return null;
+		const cache = layerStack[layerStack.length - 1];
+		layerStack = layerStack.slice(0, -1);
+		console.log('📚 Stack pop:', cache?.path, 'remaining:', layerStack.length);
+		return cache ?? null;
+	}
+	
+	// 检查目标路径是否是当前路径的子目录
+	function isChildPath(childPath: string, parentPath: string): boolean {
+		const normalizedChild = childPath.replace(/\\/g, '/').toLowerCase();
+		const normalizedParent = parentPath.replace(/\\/g, '/').toLowerCase();
+		return normalizedChild.startsWith(normalizedParent + '/');
+	}
+	
+	// 检查目标路径是否是当前路径的父目录
+	function isParentPath(parentPath: string, childPath: string): boolean {
+		return isChildPath(childPath, parentPath);
+	}
+
 	// 使用全局状态
 	let currentPath = $state('');
 	let items = $state<FsItem[]>([]);
@@ -299,6 +348,16 @@
 
 	// 导航历史管理器
 	let navigationHistory = new NavigationHistory();
+	
+	// 导航历史响应式状态（用于按钮 disabled 状态）
+	let canGoBackState = $state(false);
+	let canGoForwardState = $state(false);
+	
+	// 更新导航历史状态
+	function updateNavigationState() {
+		canGoBackState = navigationHistory.canGoBack();
+		canGoForwardState = navigationHistory.canGoForward();
+	}
 
 	// 缩略图功能已由 thumbnailManager 管理
 
@@ -628,6 +687,7 @@
 		const path = navigationHistory.back();
 		if (path) {
 			loadDirectoryWithoutHistory(path);
+			updateNavigationState();
 		}
 	}
 
@@ -638,6 +698,7 @@
 		const path = navigationHistory.forward();
 		if (path) {
 			loadDirectoryWithoutHistory(path);
+			updateNavigationState();
 		}
 	}
 
@@ -981,6 +1042,7 @@
 	async function loadDirectory(path: string) {
 		await loadDirectoryWithoutHistory(path);
 		navigationHistory.push(path);
+		updateNavigationState();
 	}
 
 	/**
@@ -1667,10 +1729,46 @@
 	}
 
 	/**
-	 * 返回上一级（优化响应性 - 立即显示缓存）
+	 * 返回上一级（优化：Stack 模式秒切换）
 	 */
 	async function goBack() {
 		try {
+			// Stack 模式：优先从栈恢复
+			if (layerStack.length > 0) {
+				const cache = popLayerFromStack();
+				if (cache) {
+					console.log('📚 goBack: Stack restore:', cache.path);
+					
+					// 直接恢复状态（秒切换）
+					currentPath = cache.path;
+					items = cache.items;
+					thumbnails = cache.thumbnails;
+					selectedIndex = cache.selectedIndex;
+					
+					// 更新 store
+					fileBrowserStore.setCurrentPath(cache.path);
+					fileBrowserStore.setItems(cache.items);
+					// 恢复缩略图
+					fileBrowserStore.clearThumbnails();
+					cache.thumbnails.forEach((url, path) => {
+						fileBrowserStore.addThumbnail(path, url);
+					});
+					fileBrowserStore.setSelectedIndex(cache.selectedIndex);
+					
+					// 恢复滚动位置
+					if (cache.scrollTop > 0 && mainListRef?.scrollTo) {
+						requestAnimationFrame(() => {
+							mainListRef.scrollTo(cache.scrollTop);
+						});
+					}
+					
+					navigationHistory.push(cache.path);
+					updateNavigationState();
+					return;
+				}
+			}
+			
+			// 栈为空，使用传统方式返回上一级
 			let parentDir: string | null = null;
 
 			if (isArchiveView) {
@@ -1723,13 +1821,75 @@
 	}
 
 	/**
-	 * 导航到目录（优化：立即显示缓存，异步取消旧任务）
+	 * 导航到目录（优化：Stack 模式 + 缓存）
+	 * - 进入子目录：保存当前层状态到栈，然后加载新目录
+	 * - 返回父目录：从栈恢复状态（秒切换）
+	 * - 跳转到其他目录：清空栈，正常加载
 	 */
 	async function navigateToDirectory(path: string) {
 		console.log('🚀 navigateToDirectory called with path:', path);
 		if (!path) {
 			console.warn('⚠️ Empty path provided to navigateToDirectory');
 			return;
+		}
+
+		// 判断导航类型
+		const isGoingToChild = currentPath && isChildPath(path, currentPath);
+		const isGoingToParent = currentPath && isParentPath(path, currentPath);
+		
+		// Stack 模式：返回父目录时尝试从栈恢复
+		if (isGoingToParent && layerStack.length > 0) {
+			// 查找栈中是否有目标路径的缓存
+			const stackIndex = layerStack.findIndex(layer => 
+				layer.path.replace(/\\/g, '/').toLowerCase() === path.replace(/\\/g, '/').toLowerCase()
+			);
+			
+			if (stackIndex >= 0) {
+				// 找到缓存，直接恢复（秒切换）
+				const cache = layerStack[stackIndex];
+				console.log('📚 Stack restore:', path, 'from index:', stackIndex);
+				
+				// 移除该层及之后的所有层
+				layerStack = layerStack.slice(0, stackIndex);
+				
+				// 直接恢复状态（不触发加载）
+				currentPath = cache.path;
+				items = cache.items;
+				thumbnails = cache.thumbnails;
+				selectedIndex = cache.selectedIndex;
+				
+				// 更新 store
+				fileBrowserStore.setCurrentPath(cache.path);
+				fileBrowserStore.setItems(cache.items);
+				// 恢复缩略图
+				fileBrowserStore.clearThumbnails();
+				cache.thumbnails.forEach((url, key) => {
+					fileBrowserStore.addThumbnail(key, url);
+				});
+				fileBrowserStore.setSelectedIndex(cache.selectedIndex);
+				
+				// 恢复滚动位置
+				if (cache.scrollTop > 0 && mainListRef?.scrollTo) {
+					requestAnimationFrame(() => {
+						mainListRef.scrollTo(cache.scrollTop);
+					});
+				}
+				
+				navigationHistory.push(path);
+				updateNavigationState();
+				return;
+			}
+		}
+		
+		// 进入子目录：保存当前层状态到栈
+		if (isGoingToChild) {
+			// 获取当前滚动位置
+			const scrollTop = mainListRef?.getScrollTop?.() ?? 0;
+			pushLayerToStack(scrollTop);
+		} else if (!isGoingToParent) {
+			// 跳转到其他目录（非父子关系）：清空栈
+			layerStack = [];
+			console.log('📚 Stack cleared (jump to unrelated path)');
 		}
 
 		// 记录从当前目录进入的子目录，供返回上一级时可选地用于定位
@@ -2511,7 +2671,7 @@
 							size="icon"
 							class="h-8 w-8"
 							onclick={goBackInHistory}
-							disabled={!navigationHistory.canGoBack()}
+							disabled={!canGoBackState}
 						>
 							<ChevronLeft class="h-4 w-4" />
 						</Button>
@@ -2528,7 +2688,7 @@
 							size="icon"
 							class="h-8 w-8"
 							onclick={goForwardInHistory}
-							disabled={!navigationHistory.canGoForward()}
+							disabled={!canGoForwardState}
 						>
 							<ChevronRight class="h-4 w-4" />
 						</Button>

@@ -29,7 +29,7 @@
 	import type { EMMCollectTag, EMMTranslationDict } from '$lib/api/emm';
 	import { getFileMetadata } from '$lib/api';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import FolderRatingBadge from './FolderRatingBadge.svelte';
 
 	let {
 		item,
@@ -482,45 +482,13 @@
 							</Tooltip.Root>
 						{/if}
 						{#if getEffectiveRating() !== null || item.isDir}
-							<DropdownMenu.Root>
-								<DropdownMenu.Trigger onclick={(e) => e.stopPropagation()}>
-									<span class="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1.5 py-0.5 text-amber-600 dark:text-amber-400 cursor-pointer hover:bg-amber-500/20 transition-colors">
-										<Star class="h-3 w-3 {getEffectiveRating() !== null ? 'fill-current' : ''}" />
-										{#if getEffectiveRating() !== null}
-											<span class="font-medium">{getEffectiveRating()?.toFixed(1)}</span>
-										{/if}
-									</span>
-								</DropdownMenu.Trigger>
-								<DropdownMenu.Content class="min-w-0 p-2" onclick={(e) => e.stopPropagation()}>
-									<div class="flex items-center gap-2">
-										<input
-											type="number"
-											min="0"
-											max="10"
-											step="0.1"
-											class="h-7 w-16 rounded border bg-background px-2 text-xs text-center"
-											value={folderManualRating ?? ''}
-											onchange={(e) => {
-												const val = parseFloat((e.target as HTMLInputElement).value);
-												handleSetRating(isNaN(val) || val <= 0 ? null : Math.min(10, val));
-											}}
-											placeholder="评分"
-										/>
-										<button
-											type="button"
-											class="h-7 px-2 rounded text-[10px] hover:bg-accent transition-colors text-muted-foreground"
-											onclick={() => handleSetRating(null)}
-										>
-											清除
-										</button>
-									</div>
-									{#if folderAverageRating !== null && folderAverageRating > 0}
-										<p class="text-[10px] text-muted-foreground mt-1.5 text-center">
-											平均: {folderAverageRating.toFixed(2)}
-										</p>
-									{/if}
-								</DropdownMenu.Content>
-							</DropdownMenu.Root>
+							<FolderRatingBadge
+								effectiveRating={getEffectiveRating()}
+								manualRating={folderManualRating}
+								averageRating={folderAverageRating}
+								size="md"
+								onSetRating={handleSetRating}
+							/>
 						{/if}
 						<!-- 预览图标 -->
 						<Tooltip.Root>
@@ -812,45 +780,13 @@
 						</Tooltip.Root>
 					{/if}
 					{#if getEffectiveRating() !== null || item.isDir}
-						<DropdownMenu.Root>
-							<DropdownMenu.Trigger onclick={(e) => e.stopPropagation()}>
-								<span class="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1 py-0.5 text-[10px] text-amber-600 dark:text-amber-400 cursor-pointer hover:bg-amber-500/20 transition-colors">
-									<Star class="h-2.5 w-2.5 {getEffectiveRating() !== null ? 'fill-current' : ''}" />
-									{#if getEffectiveRating() !== null}
-										<span class="font-medium">{getEffectiveRating()?.toFixed(1)}</span>
-									{/if}
-								</span>
-							</DropdownMenu.Trigger>
-							<DropdownMenu.Content class="min-w-0 p-2" onclick={(e) => e.stopPropagation()}>
-								<div class="flex items-center gap-2">
-									<input
-										type="number"
-										min="0"
-										max="10"
-										step="0.1"
-										class="h-6 w-14 rounded border bg-background px-1.5 text-[10px] text-center"
-										value={folderManualRating ?? ''}
-										onchange={(e) => {
-											const val = parseFloat((e.target as HTMLInputElement).value);
-											handleSetRating(isNaN(val) || val <= 0 ? null : Math.min(10, val));
-										}}
-										placeholder="评分"
-									/>
-									<button
-										type="button"
-										class="h-6 px-1.5 rounded text-[9px] hover:bg-accent transition-colors text-muted-foreground"
-										onclick={() => handleSetRating(null)}
-									>
-										清除
-									</button>
-								</div>
-								{#if folderAverageRating !== null && folderAverageRating > 0}
-									<p class="text-[9px] text-muted-foreground mt-1 text-center">
-										平均: {folderAverageRating.toFixed(2)}
-									</p>
-								{/if}
-							</DropdownMenu.Content>
-						</DropdownMenu.Root>
+						<FolderRatingBadge
+							effectiveRating={getEffectiveRating()}
+							manualRating={folderManualRating}
+							averageRating={folderAverageRating}
+							size="sm"
+							onSetRating={handleSetRating}
+						/>
 					{/if}
 					{#if onOpenAsBook}
 						<Tooltip.Root>

@@ -46,6 +46,12 @@ class ThumbnailManager {
     thumbnailSize: 256,
   };
 
+  // 初始化状态
+  private initState: 'pending' | 'initializing' | 'ready' | 'failed' = 'pending';
+  private initPromise: Promise<void> | null = null;
+  private initRetryCount = 0;
+  private readonly MAX_INIT_RETRY = 3;
+
   // 任务队列（按优先级排序）
   private taskQueue: ThumbnailTask[] = [];
   private processingTasks = new Set<string>();
@@ -100,24 +106,81 @@ class ThumbnailManager {
   }
 
   /**
-   * 初始化缩略图管理器
+   * 初始化缩略图管理器（带重试机制）
    */
-  private async init() {
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const thumbnailPath = await this.getThumbnailPath();
-      const dbPath = `${thumbnailPath}/thumbnails.db`;
-      console.log(`📁 缩略图数据库路径: ${dbPath}`);
-      await invoke('init_thumbnail_manager', {
-        thumbnailPath,
-        rootPath: '',
-        size: this.config.thumbnailSize,
-      });
-      console.log('✅ 缩略图管理器初始化成功');
-      await emmMetadataStore.initialize();
-    } catch (error) {
-      console.error('❌ 缩略图管理器初始化失败:', error);
+  private async init(): Promise<void> {
+    // 防止重复初始化
+    if (this.initState === 'initializing' && this.initPromise) {
+      return this.initPromise;
     }
+    if (this.initState === 'ready') {
+      return;
+    }
+
+    this.initState = 'initializing';
+    this.initPromise = this.doInit();
+    return this.initPromise;
+  }
+
+  /**
+   * 执行实际初始化
+   */
+  private async doInit(): Promise<void> {
+    while (this.initRetryCount < this.MAX_INIT_RETRY) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const thumbnailPath = await this.getThumbnailPath();
+        const dbPath = `${thumbnailPath}/thumbnails.db`;
+        console.log(`📁 缩略图数据库路径: ${dbPath} (尝试 ${this.initRetryCount + 1}/${this.MAX_INIT_RETRY})`);
+        
+        await invoke('init_thumbnail_manager', {
+          thumbnailPath,
+          rootPath: '',
+          size: this.config.thumbnailSize,
+        });
+        
+        console.log('✅ 缩略图管理器初始化成功');
+        this.initState = 'ready';
+        
+        // EMM 初始化单独处理，失败不影响缩略图功能
+        try {
+          await emmMetadataStore.initialize();
+          console.log('✅ EMM 元数据初始化成功');
+        } catch (emmError) {
+          console.warn('⚠️ EMM 元数据初始化失败（不影响缩略图功能）:', emmError);
+        }
+        
+        return;
+      } catch (error) {
+        this.initRetryCount++;
+        console.error(`❌ 缩略图管理器初始化失败 (${this.initRetryCount}/${this.MAX_INIT_RETRY}):`, error);
+        
+        if (this.initRetryCount < this.MAX_INIT_RETRY) {
+          // 等待一段时间后重试
+          await new Promise(resolve => setTimeout(resolve, 1000 * this.initRetryCount));
+        }
+      }
+    }
+    
+    this.initState = 'failed';
+    console.error('❌ 缩略图管理器初始化失败，已达到最大重试次数');
+  }
+
+  /**
+   * 确保初始化完成
+   */
+  async ensureInitialized(): Promise<boolean> {
+    if (this.initState === 'ready') {
+      return true;
+    }
+    if (this.initState === 'failed') {
+      // 重置重试计数，允许再次尝试
+      this.initRetryCount = 0;
+      this.initState = 'pending';
+    }
+    await this.init();
+    // init() 会修改 initState，但 TypeScript 不知道，使用类型断言
+    return (this.initState as string) === 'ready';
   }
 
   /**
@@ -745,14 +808,21 @@ class ThumbnailManager {
   ): Promise<string | null> {
     const pathKey = this.buildPathKey(path, innerPath);
 
-    // 0. 检查是否已标记为失败（参考 NeeView 的 IsThumbnailValid）
+    // 0. 确保初始化完成
+    const isReady = await this.ensureInitialized();
+    if (!isReady) {
+      console.warn('⚠️ 缩略图管理器未初始化，无法加载缩略图:', pathKey);
+      return null;
+    }
+
+    // 1. 检查是否已标记为失败（参考 NeeView 的 IsThumbnailValid）
     // 如果已失败且超过重试次数，直接返回 null，不再尝试加载
     if (this.failedThumbnails.has(pathKey) && !this.canRetryFailedThumbnail(path, innerPath)) {
       // 已标记为失败且超过重试次数，不再尝试
       return null;
     }
 
-    // 1. 检查内存缓存
+    // 2. 检查内存缓存
     const cached = this.cache.get(pathKey);
     if (cached) {
       return cached.dataUrl;

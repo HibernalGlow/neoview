@@ -29,7 +29,8 @@ import {
 	Calendar,
 	HardDrive,
 	FileType,
-	Shuffle
+	Shuffle,
+	Star
 } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import * as Tooltip from '$lib/components/ui/tooltip';
@@ -78,7 +79,8 @@ const sortFields: { value: FolderSortField; label: string; icon: typeof ALargeSm
 	{ value: 'date', label: '日期', icon: Calendar },
 	{ value: 'size', label: '大小', icon: HardDrive },
 	{ value: 'type', label: '类型', icon: FileType },
-	{ value: 'random', label: '随机', icon: Shuffle }
+	{ value: 'random', label: '随机', icon: Shuffle },
+	{ value: 'rating', label: '评分', icon: Star }
 ];
 
 function getCurrentSortIcon() {

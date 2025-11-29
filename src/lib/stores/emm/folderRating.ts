@@ -129,7 +129,7 @@ export const folderRatingStore = {
 
 			console.debug(`[FolderRating] 处理 ${entries.length} 个条目 (之前: ${currentCount})`);
 
-			// 按文件夹分组计算平均评分
+			// 第一轮：按直接文件夹分组计算平均评分
 			const folderStats = new Map<string, { sum: number; count: number }>();
 
 			for (const entry of entries) {
@@ -144,7 +144,7 @@ export const folderRatingStore = {
 				}
 			}
 
-			// 构建新的评分缓存
+			// 构建初始评分缓存（有直接文件评分的文件夹）
 			const now = Date.now();
 			const newRatings: Record<string, FolderRatingEntry> = {};
 
@@ -154,6 +154,50 @@ export const folderRatingStore = {
 						path,
 						averageRating: stats.sum / stats.count,
 						count: stats.count,
+						lastUpdated: now
+					};
+				}
+			}
+
+			// 第二轮：为没有直接文件评分的父文件夹计算子文件夹平均评分
+			// 收集所有需要计算的父文件夹
+			const allPaths = new Set<string>();
+			for (const path of folderStats.keys()) {
+				let current = path;
+				while (current) {
+					allPaths.add(current);
+					const parent = getParentPath(current);
+					if (!parent) break;
+					current = parent;
+				}
+			}
+
+			// 按路径深度排序（深的先处理）
+			const sortedPaths = Array.from(allPaths).sort((a, b) => {
+				const depthA = a.split('/').length;
+				const depthB = b.split('/').length;
+				return depthB - depthA; // 深度大的在前
+			});
+
+			// 从深到浅计算：如果父文件夹没有直接评分，使用子文件夹评分
+			for (const path of sortedPaths) {
+				if (newRatings[path]) continue; // 已有直接评分
+
+				// 查找直接子文件夹的评分
+				const childRatings: number[] = [];
+				for (const [childPath, entry] of Object.entries(newRatings)) {
+					const childParent = getParentPath(childPath);
+					if (childParent === path) {
+						childRatings.push(entry.averageRating);
+					}
+				}
+
+				if (childRatings.length > 0) {
+					const avgRating = childRatings.reduce((a, b) => a + b, 0) / childRatings.length;
+					newRatings[path] = {
+						path,
+						averageRating: avgRating,
+						count: childRatings.length, // 子文件夹数量
 						lastUpdated: now
 					};
 				}
@@ -177,7 +221,7 @@ export const folderRatingStore = {
 				return newCache;
 			});
 
-			console.debug(`[FolderRating] 计算完成，${folderStats.size} 个文件夹有评分`);
+			console.debug(`[FolderRating] 计算完成，${Object.keys(newRatings).length} 个文件夹有评分`);
 		} catch (error) {
 			console.error('[FolderRating] 计算文件夹评分失败:', error);
 		}

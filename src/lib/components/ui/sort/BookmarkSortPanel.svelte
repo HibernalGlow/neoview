@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowUpDown, ArrowUp, ArrowDown, Type, Calendar, Star, Hash } from '@lucide/svelte';
+  import { ArrowUpDown, ArrowUp, ArrowDown, Type, Calendar, Star, Hash, Shuffle, FolderOpen } from '@lucide/svelte';
 
   interface BookmarkEntry {
     id: string;
@@ -19,7 +19,7 @@
   } = $props();
 
   // 排序选项
-  type SortField = 'name' | 'timestamp' | 'path' | 'starred';
+  type SortField = 'name' | 'timestamp' | 'path' | 'starred' | 'type' | 'random';
   type SortOrder = 'asc' | 'desc';
 
   let sortField: SortField = $state('timestamp');
@@ -29,15 +29,29 @@
   // 排序配置
   const sortOptions = [
     { field: 'timestamp' as SortField, label: '添加时间', icon: Calendar },
-    { field: 'path' as SortField, label: '路径', icon: Type },
     { field: 'name' as SortField, label: '名称', icon: Type },
-    { field: 'starred' as SortField, label: '星标', icon: Star }
+    { field: 'path' as SortField, label: '路径', icon: FolderOpen },
+    { field: 'type' as SortField, label: '类型', icon: Type },
+    { field: 'starred' as SortField, label: '星标', icon: Star },
+    { field: 'random' as SortField, label: '随机', icon: Shuffle }
   ];
 
   /**
    * 执行排序
    */
   function performSort() {
+    // 随机排序特殊处理
+    if (sortField === 'random') {
+      const shuffled = [...bookmarks];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      onSort(shuffled);
+      showSortMenu = false;
+      return;
+    }
+
     const sorted = [...bookmarks].sort((a, b) => {
       let comparison = 0;
 
@@ -51,12 +65,18 @@
         case 'timestamp':
           comparison = a.timestamp - b.timestamp;
           break;
+        case 'type': {
+          // 按文件扩展名排序
+          const extA = a.name.split('.').pop()?.toLowerCase() || '';
+          const extB = b.name.split('.').pop()?.toLowerCase() || '';
+          comparison = extA.localeCompare(extB);
+          break;
+        }
         case 'starred':
           // 星标的书签排在前面
           if (a.starred !== b.starred) {
             comparison = a.starred ? -1 : 1;
           } else {
-            // 如果星标状态相同，按名称排序
             comparison = a.name.localeCompare(b.name);
           }
           break;

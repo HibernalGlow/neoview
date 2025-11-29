@@ -4,7 +4,7 @@
  * 
  * 【优化】
  * 1. 文件系统图片：使用 convertFileSrc (asset://) 直接访问，绕过 IPC
- * 2. 压缩包图片：解压到临时文件后使用 asset:// 协议访问
+ * 2. 压缩包图片：批量预解压到临时目录，后续直接用 asset:// 访问
  */
 
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
@@ -14,6 +14,52 @@ import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 export interface ReadResult {
 	blob: Blob;
 	traceId: string;
+}
+
+// 预解压目录缓存：archivePath -> extractedDir
+const extractedDirCache = new Map<string, string>();
+// 正在解压中的 Promise 缓存
+const extractingPromises = new Map<string, Promise<string>>();
+
+/**
+ * 【新增】预解压压缩包到临时目录
+ * 在切换到压缩包书籍时调用
+ */
+export async function preExtractArchive(archivePath: string): Promise<string | null> {
+	// 已有缓存
+	if (extractedDirCache.has(archivePath)) {
+		return extractedDirCache.get(archivePath)!;
+	}
+	
+	// 正在解压中
+	if (extractingPromises.has(archivePath)) {
+		return extractingPromises.get(archivePath)!;
+	}
+	
+	// 开始批量解压
+	const promise = invoke<string>('batch_extract_archive', { archivePath })
+		.then(dir => {
+			extractedDirCache.set(archivePath, dir);
+			extractingPromises.delete(archivePath);
+			console.log('📦 预解压完成:', archivePath, '->', dir);
+			return dir;
+		})
+		.catch(err => {
+			extractingPromises.delete(archivePath);
+			console.warn('⚠️ 预解压失败:', archivePath, err);
+			return null;
+		});
+	
+	extractingPromises.set(archivePath, promise as Promise<string>);
+	return promise;
+}
+
+/**
+ * 清除预解压缓存（切换书籍时调用）
+ */
+export function clearExtractCache(): void {
+	extractedDirCache.clear();
+	// 不清除正在解压的 Promise，让它们完成
 }
 
 /**
@@ -38,32 +84,33 @@ export async function readPageBlob(pageIndex: number): Promise<ReadResult> {
 	let blob: Blob;
 
 	if (currentBook.type === 'archive') {
-		// 【关键优化】压缩包：解压到临时文件，然后用 asset:// 访问
-		try {
-			const tempPath = await invoke<string>('extract_image_to_temp', {
-				archivePath: currentBook.path,
-				filePath: pageInfo.path,
-				traceId,
-				pageIndex
-			});
-			
-			logImageTrace(traceId, 'extracted to temp', { tempPath });
-			
-			const assetUrl = convertFileSrc(tempPath);
-			const response = await fetch(assetUrl);
-			if (!response.ok) {
-				throw new Error(`Asset fetch failed: ${response.status}`);
+		// 【关键优化】压缩包：使用预解压目录
+		const extractedDir = extractedDirCache.get(currentBook.path);
+		
+		if (extractedDir) {
+			// 使用预解压的文件（文件名格式：00000.ext, 00001.ext, ...）
+			try {
+				// 获取文件扩展名
+				const ext = pageInfo.path.split('.').pop() || 'jpg';
+				const tempPath = `${extractedDir}/${String(pageIndex).padStart(5, '0')}.${ext}`;
+				
+				logImageTrace(traceId, 'using pre-extracted file', { tempPath });
+				
+				const assetUrl = convertFileSrc(tempPath);
+				const response = await fetch(assetUrl);
+				if (!response.ok) {
+					throw new Error(`Asset fetch failed: ${response.status}`);
+				}
+				blob = await response.blob();
+			} catch (error) {
+				// 预解压文件访问失败，回退到单文件解压
+				logImageTrace(traceId, 'pre-extracted file failed, fallback', { error });
+				blob = await extractSingleImage(currentBook.path, pageInfo.path, traceId, pageIndex);
 			}
-			blob = await response.blob();
-		} catch (error) {
-			// 回退到旧方式
-			logImageTrace(traceId, 'extract failed, fallback to IPC', { error });
-			const { loadImageFromArchiveAsBlob } = await import('$lib/api/filesystem');
-			const result = await loadImageFromArchiveAsBlob(currentBook.path, pageInfo.path, {
-				traceId,
-				pageIndex
-			});
-			blob = result.blob;
+		} else {
+			// 没有预解压目录，使用单文件解压（同时触发后台预解压）
+			preExtractArchive(currentBook.path); // 异步触发预解压
+			blob = await extractSingleImage(currentBook.path, pageInfo.path, traceId, pageIndex);
 		}
 	} else {
 		// 【关键优化】文件系统：使用 asset:// 协议直接获取，绕过 IPC 序列化
@@ -92,6 +139,38 @@ export async function readPageBlob(pageIndex: number): Promise<ReadResult> {
 	logImageTrace(traceId, 'readPageBlob blob ready', { size: blob.size });
 
 	return { blob, traceId };
+}
+
+/**
+ * 单文件解压（回退方案）
+ */
+async function extractSingleImage(archivePath: string, filePath: string, traceId: string, pageIndex: number): Promise<Blob> {
+	try {
+		const tempPath = await invoke<string>('extract_image_to_temp', {
+			archivePath,
+			filePath,
+			traceId,
+			pageIndex
+		});
+		
+		logImageTrace(traceId, 'extracted to temp', { tempPath });
+		
+		const assetUrl = convertFileSrc(tempPath);
+		const response = await fetch(assetUrl);
+		if (!response.ok) {
+			throw new Error(`Asset fetch failed: ${response.status}`);
+		}
+		return await response.blob();
+	} catch (error) {
+		// 最终回退到 IPC
+		logImageTrace(traceId, 'extract failed, fallback to IPC', { error });
+		const { loadImageFromArchiveAsBlob } = await import('$lib/api/filesystem');
+		const result = await loadImageFromArchiveAsBlob(archivePath, filePath, {
+			traceId,
+			pageIndex
+		});
+		return result.blob;
+	}
 }
 
 /**

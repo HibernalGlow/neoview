@@ -15,6 +15,7 @@ import { UpscaleHandler, getUpscaleHandler } from './upscaleHandler';
 import { getAutoUpscaleEnabled, enqueuePreloadBatchJobs, type PreloadBatchJobInput } from './preloadRuntime';
 import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
 import { evaluateConditions, collectPageMetadata } from '$lib/utils/upscale/conditions';
+import { preExtractArchive, clearExtractCache } from './imageReader';
 
 interface ImageDimensions {
 	width: number;
@@ -395,6 +396,17 @@ export class ImageLoader {
 		this.pendingPreloadTasks.clear();
 		this.resetPreUpscaleProgress();
 		this.core.clearCache();
+		clearExtractCache(); // 清理预解压缓存
+		
+		// 【优化】如果新书是压缩包，立即触发预解压
+		const currentBook = bookStore.currentBook;
+		if (currentBook?.type === 'archive') {
+			console.log('📦 触发压缩包预解压:', currentBook.path);
+			preExtractArchive(currentBook.path).catch(err => {
+				console.warn('预解压失败:', err);
+			});
+		}
+		
 		console.log('📦 书籍缓存已清理');
 	}
 

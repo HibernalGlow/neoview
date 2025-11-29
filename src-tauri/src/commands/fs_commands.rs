@@ -517,6 +517,76 @@ pub async fn get_images_from_archive(
     archive_manager.get_images_from_zip(&path)
 }
 
+/// 【优化】批量预解压压缩包中的图片到临时目录
+/// 返回临时目录路径，前端可以直接用 convertFileSrc 访问
+#[tauri::command]
+pub async fn batch_extract_archive(
+    archive_path: String,
+    state: State<'_, FsState>,
+) -> Result<String, String> {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let archive_path_buf = PathBuf::from(&archive_path);
+    
+    // 计算压缩包的 hash 作为临时目录名
+    let mut hasher = DefaultHasher::new();
+    archive_path_buf.hash(&mut hasher);
+    let hash = hasher.finish();
+    
+    let temp_dir = std::env::temp_dir()
+        .join("neoview_cache")
+        .join(format!("{:x}", hash));
+    
+    // 如果目录已存在且有内容，直接返回
+    if temp_dir.exists() {
+        let count = std::fs::read_dir(&temp_dir)
+            .map(|d| d.count())
+            .unwrap_or(0);
+        if count > 0 {
+            info!("📦 使用已解压的缓存目录: {:?} ({} files)", temp_dir, count);
+            return Ok(temp_dir.to_string_lossy().to_string());
+        }
+    }
+    
+    info!("📦 开始批量解压: {:?} -> {:?}", archive_path_buf, temp_dir);
+    
+    let archive_manager = Arc::clone(&state.archive_manager);
+    
+    let result = spawn_blocking(move || {
+        let manager = archive_manager
+            .lock()
+            .map_err(|e| format!("获取锁失败: {}", e))?;
+        
+        // 获取所有图片
+        let images = manager.get_images_from_zip(&archive_path_buf)?;
+        
+        // 创建临时目录
+        std::fs::create_dir_all(&temp_dir).map_err(|e| format!("创建临时目录失败: {}", e))?;
+        
+        // 解压所有图片
+        for (index, inner_path) in images.iter().enumerate() {
+            let bytes = manager.load_image_from_zip_binary(&archive_path_buf, inner_path)?;
+            
+            // 使用索引作为文件名，保持顺序
+            let ext = Path::new(inner_path)
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("jpg");
+            let temp_file = temp_dir.join(format!("{:05}.{}", index, ext));
+            
+            std::fs::write(&temp_file, &bytes).map_err(|e| format!("写入临时文件失败: {}", e))?;
+        }
+        
+        info!("✅ 批量解压完成: {} files", images.len());
+        Ok(temp_dir.to_string_lossy().to_string())
+    })
+    .await
+    .map_err(|e| format!("batch_extract_archive join error: {}", e))?;
+    
+    result
+}
+
 /// 检查是否为支持的压缩包
 #[tauri::command]
 pub async fn is_supported_archive(path: String) -> Result<bool, String> {

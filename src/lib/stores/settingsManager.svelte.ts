@@ -57,6 +57,7 @@ export interface ExtendedSettingsData {
         customThemes?: unknown;
     };
     performanceSettings?: TauriPerformanceSettings;
+    folderRatings?: unknown; // EMM 文件夹平均评分缓存
 }
 
 export interface FullExportPayload {
@@ -389,6 +390,16 @@ class SettingsManager {
                         };
                     }
                 }
+
+                // 导出文件夹评分缓存
+                const rawFolderRatings = window.localStorage.getItem('neoview-emm-folder-ratings');
+                if (rawFolderRatings) {
+                    try {
+                        extended.folderRatings = JSON.parse(rawFolderRatings);
+                    } catch {
+                        extended.folderRatings = rawFolderRatings;
+                    }
+                }
             }
 
             payload.extended = extended;
@@ -439,6 +450,7 @@ class SettingsManager {
                 upscaleSettings?: boolean;
                 customThemes?: boolean;
                 performanceSettings?: boolean;
+                folderRatings?: boolean;
             };
             strategy: 'merge' | 'overwrite';
         }
@@ -625,6 +637,19 @@ class SettingsManager {
                 }
             } catch (error) {
                 console.error('导入自定义主题失败:', error);
+            }
+        }
+
+        // 文件夹评分缓存
+        if (modules.folderRatings && extended.folderRatings && typeof window !== 'undefined' && window.localStorage) {
+            try {
+                window.localStorage.setItem('neoview-emm-folder-ratings', JSON.stringify(extended.folderRatings));
+                // 同步到 store
+                import('./emm/folderRating').then(({ folderRatingStore }) => {
+                    folderRatingStore.importCache(extended.folderRatings as any);
+                });
+            } catch (error) {
+                console.error('导入文件夹评分缓存失败:', error);
             }
         }
 

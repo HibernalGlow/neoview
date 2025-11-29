@@ -240,6 +240,7 @@ pub fn run() {
             commands::emm_metadata_commands::find_emm_setting_file,
             commands::emm_metadata_commands::load_emm_translation_dict,
             commands::emm_metadata_commands::find_emm_translation_file,
+            commands::emm_metadata_commands::get_emm_all_ratings,
             // Index commands
             commands::fs_commands::initialize_file_index,
             commands::fs_commands::build_file_index,

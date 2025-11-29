@@ -116,6 +116,21 @@
 		return unsubscribe;
 	});
 
+	// 文件夹平均评分
+	let folderAverageRating = $state<number | null>(null);
+
+	// 加载文件夹平均评分（仅针对文件夹）
+	$effect(() => {
+		if (enableEMM && item.isDir && item.path) {
+			import('$lib/stores/emm/folderRating').then(({ folderRatingStore }) => {
+				const entry = folderRatingStore.getFolderRating(item.path);
+				folderAverageRating = entry?.averageRating ?? null;
+			});
+		} else {
+			folderAverageRating = null;
+		}
+	});
+
 	// 加载 EMM 元数据（仅针对压缩包，且路径变化时加载）
 	$effect(() => {
 		if (
@@ -447,6 +462,19 @@
 								</Tooltip.Content>
 							</Tooltip.Root>
 						{/if}
+						{#if folderAverageRating !== null}
+							<Tooltip.Root>
+								<Tooltip.Trigger>
+									<span class="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1.5 py-0.5 text-amber-600 dark:text-amber-400">
+										<Star class="h-3 w-3 fill-current" />
+										<span class="font-medium">{folderAverageRating.toFixed(1)}</span>
+									</span>
+								</Tooltip.Trigger>
+								<Tooltip.Content>
+									<p>平均评分: {folderAverageRating.toFixed(2)}</p>
+								</Tooltip.Content>
+							</Tooltip.Root>
+						{/if}
 						<!-- 预览图标 -->
 						<Tooltip.Root>
 							<Tooltip.Trigger>
@@ -733,6 +761,19 @@
 							</Tooltip.Trigger>
 							<Tooltip.Content>
 								<p>视频数量</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
+					{/if}
+					{#if folderAverageRating !== null}
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<span class="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1 py-0.5 text-[10px] text-amber-600 dark:text-amber-400">
+									<Star class="h-2.5 w-2.5 fill-current" />
+									<span class="font-medium">{folderAverageRating.toFixed(1)}</span>
+								</span>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>平均评分: {folderAverageRating.toFixed(2)}</p>
 							</Tooltip.Content>
 						</Tooltip.Root>
 					{/if}

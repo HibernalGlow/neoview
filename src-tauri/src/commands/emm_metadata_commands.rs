@@ -582,6 +582,46 @@ pub async fn load_emm_translation_dict(
     Ok(result)
 }
 
+/// 获取所有条目的评分和路径（用于计算文件夹平均评分）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RatingEntry {
+    pub filepath: String,
+    pub rating: Option<f64>,
+}
+
+#[tauri::command]
+pub async fn get_emm_all_ratings(db_path: String) -> Result<Vec<RatingEntry>, String> {
+    let path = PathBuf::from(&db_path);
+    if !path.exists() {
+        return Ok(vec![]);
+    }
+
+    let conn = Connection::open(&path).map_err(|e| format!("打开数据库失败: {}", e))?;
+
+    let mut stmt = conn
+        .prepare("SELECT filepath, rating FROM Mangas WHERE filepath IS NOT NULL")
+        .map_err(|e| format!("准备查询失败: {}", e))?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(RatingEntry {
+                filepath: row.get(0)?,
+                rating: row.get(1).ok(),
+            })
+        })
+        .map_err(|e| format!("查询失败: {}", e))?;
+
+    let mut result = Vec::new();
+    for row in rows {
+        if let Ok(entry) = row {
+            result.push(entry);
+        }
+    }
+
+    println!("[EMM] 获取到 {} 个评分条目", result.len());
+    Ok(result)
+}
+
 /// 查找 EMM 翻译字典文件路径
 #[tauri::command]
 pub async fn find_emm_translation_file() -> Result<Option<String>, String> {

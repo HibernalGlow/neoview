@@ -4,6 +4,34 @@
 
 import type { EMMMetadata, EMMCollectTag, EMMTranslationDict } from '$lib/api/emm';
 
+/**
+ * 文件夹平均评分缓存条目
+ */
+export interface FolderRatingEntry {
+	// 文件夹路径
+	path: string;
+	// 平均评分
+	averageRating: number;
+	// 评分数量（用于增量更新）
+	count: number;
+	// 最后更新时间戳
+	lastUpdated: number;
+}
+
+/**
+ * 文件夹评分缓存数据（用于持久化）
+ */
+export interface FolderRatingCache {
+	// 版本号
+	version: number;
+	// 数据库路径 -> 条目数量（用于检测增量更新）
+	databaseEntryCount: Record<string, number>;
+	// 文件夹路径 -> 评分条目
+	ratings: Record<string, FolderRatingEntry>;
+	// 最后更新时间戳
+	lastUpdated: number;
+}
+
 export interface EMMMetadataState {
 	// hash -> metadata
 	metadataCache: Map<string, EMMMetadata>;

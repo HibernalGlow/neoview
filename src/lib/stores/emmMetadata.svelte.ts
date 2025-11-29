@@ -153,10 +153,32 @@ export const emmMetadataStore = {
 
 			console.debug('[EMMStore] initialize: 初始化完成');
 			isInitialized = true;
+
+			// 计算文件夹平均评分（异步，不阻塞初始化）
+			this.calculateFolderRatings();
 		} catch (err) {
 			console.error('[EMMStore] initialize: 初始化 EMM 元数据失败:', err);
 		} finally {
 			isInitializing = false;
+		}
+	},
+
+	/**
+	 * 计算所有数据库的文件夹平均评分
+	 */
+	async calculateFolderRatings() {
+		const { folderRatingStore } = await import('./emm/folderRating');
+		folderRatingStore.initialize();
+
+		let currentState: EMMMetadataState;
+		subscribe(s => { currentState = s; })();
+
+		for (const dbPath of currentState!.databasePaths) {
+			try {
+				await folderRatingStore.calculateFolderRatings(dbPath);
+			} catch (e) {
+				console.error('[EMMStore] 计算文件夹评分失败:', dbPath, e);
+			}
 		}
 	},
 

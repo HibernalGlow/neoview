@@ -105,7 +105,7 @@ function sortItems(items: FsItem[], field: string, order: string): FsItem[] {
 	// rating 排序特殊处理
 	// 规则：文件夹在前，无 rating 默认 4 分，用户自定义 rating 优先
 	if (field === 'rating') {
-		const DEFAULT_RATING = 4;
+		const DEFAULT_RATING = 4.6;
 		const sorted = [...items].sort((a, b) => {
 			// 文件夹优先
 			if (a.isDir !== b.isDir) {

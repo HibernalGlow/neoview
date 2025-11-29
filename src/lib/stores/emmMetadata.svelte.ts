@@ -7,116 +7,10 @@ import { writable, derived } from 'svelte/store';
 import * as EMMAPI from '$lib/api/emm';
 import type { EMMMetadata, EMMCollectTag } from '$lib/api/emm';
 
-interface EMMMetadataState {
-	// hash -> metadata
-	metadataCache: Map<string, EMMMetadata>;
-	// filePath -> metadata (用于路径查询缓存)
-	pathCache: Map<string, EMMMetadata | null>;
-	// 收藏标签列表
-	collectTags: EMMCollectTag[];
-	// 主数据库路径列表（自动检测 + 手动配置）
-	databasePaths: string[];
-	// 翻译数据库路径（自动检测 + 手动配置）
-	translationDbPath?: string;
-	// 设置文件路径（自动检测 + 手动配置）
-	settingPath?: string;
-	// 手动配置的主数据库路径
-	manualDatabasePaths: string[];
-	// 手动配置的翻译数据库路径
-	manualTranslationDbPath?: string;
-	// 手动配置的设置文件路径
-	// 手动配置的设置文件路径
-	manualSettingPath?: string;
-	// 全局开关：是否启用 EMM 数据读取
-	enableEMM: boolean;
-	// 文件列表标签显示模式
-	fileListTagDisplayMode: 'all' | 'collect' | 'none';
-	// 翻译字典文件路径
-	translationDictPath?: string;
-	// 翻译字典数据
-	translationDict?: EMMAPI.EMMTranslationDict;
-	// 手动配置的翻译字典路径
-	manualTranslationDictPath?: string;
-}
-
-const STORAGE_KEY_DB_PATHS = 'neoview-emm-database-paths';
-const STORAGE_KEY_TRANSLATION_DB_PATH = 'neoview-emm-translation-db-path';
-const STORAGE_KEY_SETTING_PATH = 'neoview-emm-setting-path';
-const STORAGE_KEY_TRANSLATION_DICT_PATH = 'neoview-emm-translation-dict-path';
-const STORAGE_KEY_ENABLE_EMM = 'neoview-emm-enable';
-const STORAGE_KEY_FILE_LIST_TAG_MODE = 'neoview-emm-file-list-tag-mode';
-
-// 从 localStorage 加载手动配置的路径
-function loadSettings(): {
-	databasePaths: string[];
-	translationDbPath?: string;
-	settingPath?: string;
-	translationDictPath?: string;
-	enableEMM: boolean;
-	fileListTagDisplayMode: 'all' | 'collect' | 'none';
-} {
-	try {
-		const dbPathsStr = localStorage.getItem(STORAGE_KEY_DB_PATHS);
-		const translationDbPathStr = localStorage.getItem(STORAGE_KEY_TRANSLATION_DB_PATH);
-		const settingPathStr = localStorage.getItem(STORAGE_KEY_SETTING_PATH);
-		const translationDictPathStr = localStorage.getItem(STORAGE_KEY_TRANSLATION_DICT_PATH);
-		const enableEMMStr = localStorage.getItem(STORAGE_KEY_ENABLE_EMM);
-		const fileListTagModeStr = localStorage.getItem(STORAGE_KEY_FILE_LIST_TAG_MODE);
-
-		return {
-			databasePaths: dbPathsStr ? JSON.parse(dbPathsStr) : [],
-			translationDbPath: translationDbPathStr || undefined,
-			settingPath: settingPathStr || undefined,
-			translationDictPath: translationDictPathStr || undefined,
-			enableEMM: enableEMMStr !== 'false', // 默认为 true
-			fileListTagDisplayMode: (fileListTagModeStr as 'all' | 'collect' | 'none') || 'collect' // 默认为 collect
-		};
-	} catch (e) {
-		console.error('加载 EMM 配置失败:', e);
-		return {
-			databasePaths: [],
-			enableEMM: true,
-			fileListTagDisplayMode: 'collect'
-		};
-	}
-}
-
-// 保存配置到 localStorage
-function saveSettings(
-	databasePaths: string[],
-	translationDbPath?: string,
-	settingPath?: string,
-	translationDictPath?: string,
-	enableEMM?: boolean,
-	fileListTagDisplayMode?: 'all' | 'collect' | 'none'
-) {
-	try {
-		localStorage.setItem(STORAGE_KEY_DB_PATHS, JSON.stringify(databasePaths));
-		if (translationDbPath) {
-			localStorage.setItem(STORAGE_KEY_TRANSLATION_DB_PATH, translationDbPath);
-		} else {
-			localStorage.removeItem(STORAGE_KEY_TRANSLATION_DB_PATH);
-		}
-		if (settingPath) {
-			localStorage.setItem(STORAGE_KEY_SETTING_PATH, settingPath);
-		} else {
-			localStorage.removeItem(STORAGE_KEY_SETTING_PATH);
-		}
-		if (translationDictPath) {
-			localStorage.setItem(STORAGE_KEY_TRANSLATION_DICT_PATH, translationDictPath);
-		} else {
-			localStorage.removeItem(STORAGE_KEY_TRANSLATION_DICT_PATH);
-		}
-		if (enableEMM !== undefined) {
-			localStorage.setItem(STORAGE_KEY_ENABLE_EMM, String(enableEMM));
-		}
-		if (fileListTagDisplayMode) {
-			localStorage.setItem(STORAGE_KEY_FILE_LIST_TAG_MODE, fileListTagDisplayMode);
-		}
-	} catch (e) {
-		console.error('保存 EMM 配置失败:', e);
-	}
-}
+// 导入模块化组件
+import type { EMMMetadataState } from './emm/types';
+import { loadSettings, saveSettings } from './emm/storage';
+import { isCollectTag } from './emm/helpers';
 
 const initialSettings = loadSettings();
 
@@ -136,16 +30,6 @@ const { subscribe, set, update } = writable<EMMMetadataState>({
 	enableEMM: initialSettings.enableEMM,
 	fileListTagDisplayMode: initialSettings.fileListTagDisplayMode
 });
-
-// 检查标签是否为收藏标签
-function isCollectTag(tag: string, collectTags: EMMCollectTag[]): EMMCollectTag | null {
-	for (const ct of collectTags) {
-		if (ct.tag === tag || ct.display === tag) {
-			return ct;
-		}
-	}
-	return null;
-}
 
 // 初始化状态标志
 let isInitializing = false;
@@ -650,115 +534,7 @@ export const collectTagMap = derived(emmMetadataStore, ($state) => {
 });
 
 
-// 导出辅助函数
-export function isCollectTagHelper(tag: string, collectTags: EMMCollectTag[]): EMMCollectTag | null {
-	const normalize = (value?: string | null) => value ? value.trim().toLowerCase() : '';
-	const inputNormalized = normalize(tag);
-	const hasCategory = tag.includes(':');
-	const [inputCategoryRaw, inputTagRaw] = hasCategory ? tag.split(':', 2) : ['', tag];
-	const inputCategoryNormalized = normalize(inputCategoryRaw);
-	const inputTagOnlyNormalized = normalize(inputTagRaw);
-
-	// console.debug('[EMM] isCollectTagHelper: Checking tag', { tag, hasCategory, inputCategoryNormalized, inputTagOnlyNormalized });
-
-	for (const ct of collectTags) {
-		const idNormalized = normalize(ct.id);
-		const displayNormalized = normalize(ct.display);
-		const tagNormalized = normalize(ct.tag);
-		const letterNormalized = normalize(ct.letter);
-
-		// Parse category from display if possible (e.g. "female:stirrup legwear")
-		const displayHasCategory = ct.display?.includes(':');
-		const [displayCategoryRaw, displayTagRaw] = displayHasCategory ? ct.display.split(':', 2) : ['', ct.display];
-		const displayCategoryNormalized = normalize(displayCategoryRaw);
-		const displayTagNormalized = normalize(displayTagRaw);
-
-		// 1. Exact Match (ID or Display)
-		if (idNormalized && idNormalized === inputNormalized) return ct;
-		if (displayNormalized && displayNormalized === inputNormalized) return ct;
-
-		// 2. Tag Name Match (most common case)
-		// If the input is just "tag", match against ct.tag
-		if (!hasCategory && tagNormalized === inputNormalized) return ct;
-
-		// 3. Category:Tag Match
-		if (hasCategory) {
-			// Match against Display (category:tag)
-			if (displayHasCategory && displayCategoryNormalized === inputCategoryNormalized && displayTagNormalized === inputTagOnlyNormalized) return ct;
-
-			// Match against Letter:Tag (e.g. "f:stirrup legwear")
-			if (letterNormalized && letterNormalized === inputCategoryNormalized && tagNormalized === inputTagOnlyNormalized) return ct;
-
-			// Match against Tag only (ignoring category if tag name is unique enough or user wants loose matching)
-			// Note: This might cause false positives if same tag exists in multiple categories, but usually desired for "favorites"
-			if (tagNormalized === inputTagOnlyNormalized) return ct;
-		}
-	}
-
-	return null;
-}
-
-// 命名空间缩写映射
-const NAMESPACE_ABBREVIATIONS: Record<string, string> = {
-	'language': 'l',
-	'parody': 'p',
-	'character': 'c',
-	'group': 'g',
-	'artist': 'a',
-	'male': 'm',
-	'female': 'f',
-	'mixed': 'x',
-	'reclass': 'r',
-	'cosplayer': 'cos',
-	'other': 'o'
-};
-
-// 反向映射：缩写 -> 全称
-const ABBREVIATION_TO_NAMESPACE: Record<string, string> = Object.entries(NAMESPACE_ABBREVIATIONS).reduce((acc, [k, v]) => {
-	acc[v] = k;
-	return acc;
-}, {} as Record<string, string>);
-
-export const emmTranslationStore = {
-	/**
-	 * 获取命名空间缩写
-	 */
-	getShortNamespace(namespace: string): string {
-		const lower = namespace.toLowerCase();
-		return NAMESPACE_ABBREVIATIONS[lower] || namespace;
-	},
-
-	/**
-	 * 获取命名空间全称
-	 */
-	getFullNamespace(short: string): string {
-		const lower = short.toLowerCase();
-		return ABBREVIATION_TO_NAMESPACE[lower] || short;
-	},
-
-	/**
-	 * 翻译标签
-	 * @param tag 标签名 (e.g. "full color")
-	 * @param namespace 命名空间 (e.g. "language" or "l")
-	 * @param dict 翻译字典
-	 */
-	translateTag(tag: string, namespace: string | undefined, dict: EMMAPI.EMMTranslationDict | undefined): string {
-		if (!dict || !namespace) return tag;
-
-		// 尝试获取全称命名空间
-		const fullNamespace = this.getFullNamespace(namespace);
-
-		// 查找该命名空间的翻译
-		const nsDict = dict[fullNamespace];
-		if (!nsDict) return tag;
-
-		// 查找标签翻译
-		const record = nsDict[tag];
-		if (record && record.name) {
-			return record.name;
-		}
-
-		return tag;
-	}
-};
+// 从模块重新导出
+export { isCollectTagHelper } from './emm/helpers';
+export { emmTranslationStore } from './emm/translation';
 

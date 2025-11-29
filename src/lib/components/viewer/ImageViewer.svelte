@@ -21,13 +21,11 @@
 	import { computeAutoBackgroundColor } from '$lib/utils/autoBackground';
 	import ComparisonViewer from './ComparisonViewer.svelte';
 	import ImageViewerDisplay from './flow/ImageViewerDisplay.svelte';
-	import { NeoViewer2 } from '$lib/viewer';
 	import { StackView } from '$lib/stackview';
-	import { useNeoViewer, useStackViewer } from '$lib/stores';
+	import { useStackViewer } from '$lib/stores';
 	import ImageViewerProgressBar from './flow/ImageViewerProgressBar.svelte';
 	import ImageInfoOverlay from './ImageInfoOverlay.svelte';
 	import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
-	import { bookStore2 } from '$lib/stores/bookStore2';
 	import { appState, type StateSelector, type AppStateSnapshot } from '$lib/core/state/appState';
 	import {
 		scheduleComparisonPreview,
@@ -1426,17 +1424,6 @@
 
 	async function handleNextPage() {
 		try {
-			// NeoViewer 模式：使用 bookStore2 的虚拟页面翻页
-			if ($useNeoViewer) {
-				bookStore2.nextPage();
-				// 同步到旧系统
-				const virtualPage = bookStore2.getVirtualPage($bookStore2.currentIndex);
-				if (virtualPage) {
-					await bookStore.navigateToPage(virtualPage.physicalPage.index);
-				}
-				return;
-			}
-			
 			const currentIndex = bookStore.currentPageIndex;
 
 			// 1. 处理当前已激活的拆分状态导航
@@ -1504,17 +1491,6 @@
 
 	async function handlePreviousPage() {
 		try {
-			// NeoViewer 模式：使用 bookStore2 的虚拟页面翻页
-			if ($useNeoViewer) {
-				bookStore2.prevPage();
-				// 同步到旧系统
-				const virtualPage = bookStore2.getVirtualPage($bookStore2.currentIndex);
-				if (virtualPage) {
-					await bookStore.navigateToPage(virtualPage.physicalPage.index);
-				}
-				return;
-			}
-			
 			const currentIndex = bookStore.currentPageIndex;
 
 			// 1. 处理当前已激活的拆分状态导航
@@ -1886,21 +1862,6 @@
 					layout={$viewerState.viewMode as 'single' | 'double' | 'panorama'}
 					direction={settings.book.readingDirection === 'right-to-left' ? 'rtl' : 'ltr'}
 				/>
-			{:else if $useNeoViewer}
-				<!-- NeoViewer2（实验性） -->
-				<NeoViewer2
-					{imageData}
-					{imageData2}
-					upscaledImageData={derivedUpscaledUrl || bookStore.upscaledImageData}
-					viewMode={$viewerState.viewMode as 'single' | 'double' | 'panorama'}
-					orientation={$viewerState.orientation}
-					panX={pan.x}
-					panY={pan.y}
-					treatHorizontalAsDoublePage={treatHorizontalAsDoublePage &&
-						isCurrentPageHorizontal &&
-						$viewerState.viewMode === 'double'}
-					bind:panoramaPages={panoramaPagesData}
-				/>
 			{:else}
 				<!-- 传统 ImageViewerDisplay -->
 				<ImageViewerDisplay
@@ -1935,8 +1896,8 @@
 
 	<ImageViewerProgressBar
 		showProgressBar={showProgressBar && Boolean(bookStore.currentBook)}
-		totalPages={$useNeoViewer ? $bookStore2.virtualPageCount : (bookStore.currentBook?.pages.length ?? 0)}
-		currentPageIndex={$useNeoViewer ? $bookStore2.currentIndex : bookStore.currentPageIndex}
+		totalPages={bookStore.currentBook?.pages.length ?? 0}
+		currentPageIndex={bookStore.currentPageIndex}
 		{preUpscaleProgress}
 		{totalPreUpscalePages}
 	/>

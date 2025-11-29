@@ -6,11 +6,12 @@
 import { writable, derived, get } from 'svelte/store';
 import type { FsItem } from '$lib/types';
 import { browseDirectory } from '$lib/api/filesystem';
+import { folderRatingStore } from '$lib/stores/emm/folderRating';
 
 // ============ Types ============
 
 export type FolderViewStyle = 'list' | 'content' | 'banner' | 'thumbnail';
-export type FolderSortField = 'name' | 'date' | 'size' | 'type' | 'random';
+export type FolderSortField = 'name' | 'date' | 'size' | 'type' | 'random' | 'rating';
 export type FolderSortOrder = 'asc' | 'desc';
 export type DeleteStrategy = 'trash' | 'permanent';
 
@@ -334,6 +335,30 @@ function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrd
 			[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
 		}
 		return shuffled;
+	}
+
+	// rating 排序特殊处理：需要获取评分数据
+	if (field === 'rating') {
+		const sorted = [...items].sort((a, b) => {
+			// 文件夹优先
+			if (a.isDir !== b.isDir) {
+				return a.isDir ? -1 : 1;
+			}
+
+			const ratingA = folderRatingStore.getEffectiveRating(a.path);
+			const ratingB = folderRatingStore.getEffectiveRating(b.path);
+
+			// 没有评分的排在最后
+			if (ratingA === null && ratingB === null) {
+				return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+			}
+			if (ratingA === null) return 1;
+			if (ratingB === null) return -1;
+
+			const comparison = ratingA - ratingB;
+			return order === 'asc' ? comparison : -comparison;
+		});
+		return sorted;
 	}
 
 	const sorted = [...items].sort((a, b) => {

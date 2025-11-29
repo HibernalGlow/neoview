@@ -160,15 +160,22 @@ export const folderRatingStore = {
 			}
 
 			// 第二轮：为没有直接文件评分的父文件夹计算子文件夹平均评分
-			// 收集所有需要计算的父文件夹
+			// 收集所有需要计算的父文件夹（最多向上3层）
+			const MAX_PARENT_LEVELS = 3;
 			const allPaths = new Set<string>();
 			for (const path of folderStats.keys()) {
 				let current = path;
-				while (current) {
+				let level = 0;
+				while (current && level < MAX_PARENT_LEVELS) {
 					allPaths.add(current);
 					const parent = getParentPath(current);
 					if (!parent) break;
 					current = parent;
+					level++;
+				}
+				// 添加最后一个父文件夹
+				if (current) {
+					allPaths.add(current);
 				}
 			}
 
@@ -179,28 +186,37 @@ export const folderRatingStore = {
 				return depthB - depthA; // 深度大的在前
 			});
 
-			// 从深到浅计算：如果父文件夹没有直接评分，使用子文件夹评分
-			for (const path of sortedPaths) {
-				if (newRatings[path]) continue; // 已有直接评分
+			// 多轮从深到浅计算：确保父文件夹可以聚合子文件夹评分
+			// 最多进行 MAX_PARENT_LEVELS 轮迭代
+			for (let round = 0; round < MAX_PARENT_LEVELS; round++) {
+				let hasNewRatings = false;
 
-				// 查找直接子文件夹的评分
-				const childRatings: number[] = [];
-				for (const [childPath, entry] of Object.entries(newRatings)) {
-					const childParent = getParentPath(childPath);
-					if (childParent === path) {
-						childRatings.push(entry.averageRating);
+				for (const path of sortedPaths) {
+					if (newRatings[path]) continue; // 已有评分
+
+					// 查找直接子文件夹的评分
+					const childRatings: number[] = [];
+					for (const [childPath, entry] of Object.entries(newRatings)) {
+						const childParent = getParentPath(childPath);
+						if (childParent === path) {
+							childRatings.push(entry.averageRating);
+						}
+					}
+
+					if (childRatings.length > 0) {
+						const avgRating = childRatings.reduce((a, b) => a + b, 0) / childRatings.length;
+						newRatings[path] = {
+							path,
+							averageRating: avgRating,
+							count: childRatings.length, // 子文件夹数量
+							lastUpdated: now
+						};
+						hasNewRatings = true;
 					}
 				}
 
-				if (childRatings.length > 0) {
-					const avgRating = childRatings.reduce((a, b) => a + b, 0) / childRatings.length;
-					newRatings[path] = {
-						path,
-						averageRating: avgRating,
-						count: childRatings.length, // 子文件夹数量
-						lastUpdated: now
-					};
-				}
+				// 如果这一轮没有新评分产生，提前退出
+				if (!hasNewRatings) break;
 			}
 
 			// 更新缓存
@@ -259,6 +275,108 @@ export const folderRatingStore = {
 		} else {
 			console.warn('[FolderRating] 导入数据版本不匹配或无效');
 		}
+	},
+
+	/**
+	 * 按路径补充评分：根据现有子文件夹评分计算父文件夹评分
+	 * @param rootPath 根路径
+	 * @param maxLevels 最多向上计算的层数
+	 */
+	calculateRatingsForPath(rootPath: string, maxLevels = 3): void {
+		const normalized = normalizePath(rootPath);
+		const currentCache = get({ subscribe });
+		const now = Date.now();
+
+		// 获取该路径下所有已有评分的子文件夹
+		const childRatings: Record<string, FolderRatingEntry> = {};
+		for (const [path, entry] of Object.entries(currentCache.ratings)) {
+			if (path.startsWith(normalized + '/') || path === normalized) {
+				childRatings[path] = entry;
+			}
+		}
+
+		if (Object.keys(childRatings).length === 0) {
+			console.debug('[FolderRating] 该路径下没有已有评分的文件夹:', rootPath);
+			return;
+		}
+
+		console.debug(`[FolderRating] 开始补充 ${rootPath} 路径下的评分，已有 ${Object.keys(childRatings).length} 个文件夹有评分`);
+
+		// 收集所有需要计算的父文件夹路径
+		const allPaths = new Set<string>();
+		for (const path of Object.keys(childRatings)) {
+			let current = path;
+			let level = 0;
+			while (current && current.startsWith(normalized) && level <= maxLevels) {
+				allPaths.add(current);
+				const parent = getParentPath(current);
+				if (!parent || !parent.startsWith(normalized.split('/')[0])) break;
+				current = parent;
+				level++;
+			}
+		}
+
+		// 添加根路径本身
+		allPaths.add(normalized);
+
+		// 按路径深度排序（深的先处理）
+		const sortedPaths = Array.from(allPaths).sort((a, b) => {
+			const depthA = a.split('/').length;
+			const depthB = b.split('/').length;
+			return depthB - depthA;
+		});
+
+		const newRatings: Record<string, FolderRatingEntry> = { ...childRatings };
+
+		// 多轮迭代计算
+		for (let round = 0; round < maxLevels; round++) {
+			let hasNewRatings = false;
+
+			for (const path of sortedPaths) {
+				if (newRatings[path]) continue;
+
+				// 查找直接子文件夹的评分
+				const childScores: number[] = [];
+				for (const [childPath, entry] of Object.entries(newRatings)) {
+					const childParent = getParentPath(childPath);
+					if (childParent === path) {
+						childScores.push(entry.averageRating);
+					}
+				}
+
+				if (childScores.length > 0) {
+					const avgRating = childScores.reduce((a, b) => a + b, 0) / childScores.length;
+					newRatings[path] = {
+						path,
+						averageRating: avgRating,
+						count: childScores.length,
+						lastUpdated: now
+					};
+					hasNewRatings = true;
+				}
+			}
+
+			if (!hasNewRatings) break;
+		}
+
+		// 计算新增了多少评分
+		const newCount = Object.keys(newRatings).length - Object.keys(childRatings).length;
+
+		// 更新缓存
+		update(cache => {
+			const newCache = {
+				...cache,
+				ratings: {
+					...cache.ratings,
+					...newRatings
+				},
+				lastUpdated: now
+			};
+			saveToStorage(newCache);
+			return newCache;
+		});
+
+		console.debug(`[FolderRating] 补充完成，新增 ${newCount} 个文件夹评分`);
 	}
 };
 

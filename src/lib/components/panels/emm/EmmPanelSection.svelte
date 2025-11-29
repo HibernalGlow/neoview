@@ -46,6 +46,7 @@
 	// 文件夹评分管理状态
 	let folderRatingStats = $state<{ count: number; lastUpdated: string | null }>({ count: 0, lastUpdated: null });
 	let isUpdatingRatings = $state(false);
+	let folderRatingPath = $state('');
 
 	// 订阅文件夹评分缓存
 	$effect(() => {
@@ -87,6 +88,13 @@
 	function handleClearFolderRatings() {
 		if (confirm('确定要清除所有文件夹评分缓存吗？')) {
 			folderRatingStore.clearCache();
+		}
+	}
+
+	// 按路径补充评分
+	function handleCalculateForPath() {
+		if (folderRatingPath.trim()) {
+			folderRatingStore.calculateRatingsForPath(folderRatingPath.trim());
 		}
 	}
 
@@ -1508,6 +1516,31 @@
 					</Tooltip.Trigger>
 					<Tooltip.Content>
 						<p>清除所有评分缓存</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+			</div>
+			<!-- 按路径补充评分 -->
+			<div class="flex gap-1.5 items-center">
+				<Input.Root
+					type="text"
+					bind:value={folderRatingPath}
+					placeholder="输入路径补充评分..."
+					class="h-7 text-[10px] flex-1"
+				/>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button.Root
+							variant="outline"
+							size="sm"
+							class="h-7 px-2 gap-1 text-[10px]"
+							onclick={handleCalculateForPath}
+							disabled={!folderRatingPath || isUpdatingRatings}
+						>
+							补充
+						</Button.Root>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>根据子文件夹评分补充该路径的评分</p>
 					</Tooltip.Content>
 				</Tooltip.Root>
 			</div>

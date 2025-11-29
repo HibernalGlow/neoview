@@ -95,6 +95,10 @@
 					cmp = extA.localeCompare(extB);
 					break;
 				}
+				case 'rating':
+					// TODO: 需要从 EMM 元数据或文件夹评分获取 rating
+					cmp = 0;
+					break;
 			}
 			return sortOrder === 'asc' ? cmp : -cmp;
 		});

@@ -23,7 +23,7 @@ import { Button } from '$lib/components/ui/button';
 import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 
 // 排序字段类型
-export type SortField = 'name' | 'timestamp' | 'path' | 'starred' | 'type' | 'random';
+export type SortField = 'name' | 'timestamp' | 'path' | 'starred' | 'type' | 'random' | 'rating';
 export type SortOrder = 'asc' | 'desc';
 export type ViewMode = 'list' | 'grid';
 
@@ -87,6 +87,7 @@ const sortOptions: { field: SortField; label: string; icon: typeof Calendar }[] 
 	{ field: 'name', label: '名称', icon: Type },
 	{ field: 'path', label: '路径', icon: FolderOpen },
 	{ field: 'type', label: '类型', icon: Type },
+	{ field: 'rating', label: '评分', icon: Star },
 	{ field: 'starred', label: '星标', icon: Star },
 	{ field: 'random', label: '随机', icon: Shuffle }
 ];

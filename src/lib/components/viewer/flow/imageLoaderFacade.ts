@@ -59,10 +59,17 @@ export class ImageLoader {
 	constructor(options: ImageLoaderOptions) {
 		this.options = options;
 		
-		// 初始化核心加载器
+		// 初始化核心加载器（传递尺寸回调）
 		this.core = getImageLoaderCore({
 			maxConcurrentLoads: options.performanceMaxThreads,
-			maxCacheSizeMB: settingsManager.getSettings().performance.cacheMemorySize || 500
+			maxCacheSizeMB: settingsManager.getSettings().performance.cacheMemorySize || 500,
+			// 【优化】异步获取尺寸后回调，不阻塞图片显示
+			onDimensionsReady: (pageIndex, dimensions) => {
+				// 只处理当前页的尺寸
+				if (pageIndex === bookStore.currentPageIndex && dimensions) {
+					this.options.onImageMetadataReady?.(dimensions, undefined);
+				}
+			}
 		});
 		
 		// 初始化超分处理器
@@ -155,8 +162,8 @@ export class ImageLoader {
 			const objectUrl = result.url;
 
 			// 立即显示图片（不等待双页和超分）
+			// 尺寸由 onDimensionsReady 回调异步通知，不在这里调用
 			this.options.onImageLoaded?.(objectUrl);
-			this.options.onImageMetadataReady?.(result.dimensions, undefined);
 
 			// 【异步处理】双页模式加载（不阻塞主图显示）
 			if (this.options.viewMode === 'double' && bookStore.canNextPage) {

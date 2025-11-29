@@ -15,6 +15,7 @@ export interface ImageLoaderCoreOptions {
 	maxConcurrentLoads?: number;
 	maxCacheSizeMB?: number;
 	onImageReady?: (pageIndex: number, url: string, blob: Blob) => void;
+	onDimensionsReady?: (pageIndex: number, dimensions: { width: number; height: number } | null) => void;
 	onError?: (pageIndex: number, error: Error) => void;
 }
 
@@ -80,6 +81,7 @@ export class ImageLoaderCore {
 
 	/**
 	 * 执行实际加载
+	 * 【优化】先返回图片，异步获取尺寸，不阻塞显示
 	 */
 	private async executeLoad(pageIndex: number, priority: number): Promise<LoadResult> {
 		return new Promise((resolve, reject) => {
@@ -87,12 +89,16 @@ export class ImageLoaderCore {
 				// 再次检查缓存（可能在排队时被加载）
 				if (this.blobCache.has(pageIndex)) {
 					const item = this.blobCache.get(pageIndex)!;
-					const dimensions = await getImageDimensions(item.blob);
+					// 先返回，异步获取尺寸
 					resolve({
 						url: item.url,
 						blob: item.blob,
-						dimensions,
+						dimensions: null, // 先返回 null，异步获取
 						fromCache: true
+					});
+					// 异步获取尺寸并回调
+					getImageDimensions(item.blob).then(dimensions => {
+						this.options.onDimensionsReady?.(pageIndex, dimensions);
 					});
 					return;
 				}
@@ -105,17 +111,20 @@ export class ImageLoaderCore {
 					const url = this.blobCache.set(pageIndex, blob);
 					logImageTrace(traceId, 'blob cached', { pageIndex, size: blob.size, priority });
 
-					// 获取尺寸
-					const dimensions = await getImageDimensions(blob);
-
-					// 通知回调
+					// 通知回调（立即显示）
 					this.options.onImageReady?.(pageIndex, url, blob);
 
+					// 先返回，异步获取尺寸
 					resolve({
 						url,
 						blob,
-						dimensions,
+						dimensions: null, // 先返回 null，异步获取
 						fromCache: false
+					});
+
+					// 异步获取尺寸并回调（不阻塞）
+					getImageDimensions(blob).then(dimensions => {
+						this.options.onDimensionsReady?.(pageIndex, dimensions);
 					});
 				} catch (error) {
 					const err = error instanceof Error ? error : new Error(String(error));
@@ -128,19 +137,23 @@ export class ImageLoaderCore {
 
 	/**
 	 * 快速加载当前页（最高优先级，带渐进式加载）
+	 * 【优化】先返回图片，异步获取尺寸
 	 */
 	async loadCurrentPage(): Promise<LoadResult> {
 		const pageIndex = bookStore.currentPageIndex;
 		
-		// 如果缓存中有，立即返回
+		// 如果缓存中有，立即返回（不等待尺寸）
 		if (this.blobCache.has(pageIndex)) {
 			const item = this.blobCache.get(pageIndex)!;
 			console.log(`⚡ 快速显示缓存: 页码 ${pageIndex + 1}`);
-			const dimensions = await getImageDimensions(item.blob);
+			// 异步获取尺寸
+			getImageDimensions(item.blob).then(dimensions => {
+				this.options.onDimensionsReady?.(pageIndex, dimensions);
+			});
 			return {
 				url: item.url,
 				blob: item.blob,
-				dimensions,
+				dimensions: null, // 不阻塞，异步获取
 				fromCache: true
 			};
 		}

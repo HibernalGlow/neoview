@@ -22,6 +22,7 @@
 	import SearchBar from '$lib/components/ui/SearchBar.svelte';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 	import FileItemCard from './file/components/FileItemCard.svelte';
+	import FolderContextMenu from './folderPanel/components/FolderContextMenu.svelte';
 	import type { FsItem } from '$lib/types';
 	import { FileSystemAPI } from '$lib/api';
 	import { bookStore } from '$lib/stores/book.svelte';
@@ -42,11 +43,13 @@
 	let viewMode = $state<'list' | 'grid'>(loadPanelViewMode('bookmark', 'list') as 'list' | 'grid');
 	let thumbnails = $state<Map<string, string>>(new Map());
 	const thumbnailJobs = new Map<string, string>();
-	let contextMenu = $state<{ x: number; y: number; bookmark: any | null }>({
+	let contextMenu = $state<{ x: number; y: number; item: FsItem | null; visible: boolean }>({
 		x: 0,
 		y: 0,
-		bookmark: null
+		item: null,
+		visible: false
 	});
+	let contextMenuBookmark = $state<any>(null);
 	let syncFileTreeOnBookmarkSelect = $state(historySettingsStore.syncFileTreeOnBookmarkSelect);
 	let showSearchBar = $state(false);
 
@@ -146,52 +149,19 @@
 	function showContextMenu(e: MouseEvent, bookmark: any) {
 		e.preventDefault();
 		e.stopPropagation();
-
-		console.log('[BookmarkPanel] showContextMenu input', {
-			clientX: e.clientX,
-			clientY: e.clientY,
-			targetTag: (e.target as HTMLElement | null)?.tagName,
-			path: bookmark.path
-		});
-
-		let menuX = e.clientX;
-		let menuY = e.clientY;
-
-		if (menuX === 0 && menuY === 0 && e.target instanceof HTMLElement) {
-			const rect = e.target.getBoundingClientRect();
-			menuX = rect.left + rect.width / 2;
-			menuY = rect.top + rect.height / 2;
-		}
-
-		const viewportWidth = window.innerWidth;
-		const viewportHeight = window.innerHeight;
-
-		const menuWidth = 180;
-		if (e.clientX + menuWidth > viewportWidth) {
-			menuX = viewportWidth - menuWidth - 10;
-		}
-		if (menuX < 10) {
-			menuX = 10;
-		}
-
-		const maxMenuHeight = viewportHeight * 0.7;
-		if (menuY + maxMenuHeight > viewportHeight) {
-			menuY = viewportHeight - maxMenuHeight - 10;
-		}
-
-		console.log('[BookmarkPanel] showContextMenu computed', {
-			menuX,
-			menuY,
-			viewportWidth,
-			viewportHeight
-		});
-
-		contextMenu = { x: menuX, y: menuY, bookmark };
+		contextMenuBookmark = bookmark;
+		contextMenu = {
+			x: e.clientX,
+			y: e.clientY,
+			item: bookmarkToFsItem(bookmark),
+			visible: true
+		};
 	}
 
 	// 隐藏右键菜单
 	function hideContextMenu() {
-		contextMenu = { x: 0, y: 0, bookmark: null };
+		contextMenu = { ...contextMenu, visible: false, item: null };
+		contextMenuBookmark = null;
 	}
 
 	// 在资源管理器中打开
@@ -412,40 +382,16 @@
 	</div>
 
 		<!-- 右键菜单 -->
-		{#if contextMenu.bookmark}
-			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<div
-				class="context-menu fixed z-50 max-h-(--bits-context-menu-content-available-height) origin-(--bits-context-menu-content-transform-origin) min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover text-popover-foreground p-1 shadow-md"
-				style={`left: ${contextMenu.x}px; top: ${contextMenu.y}px;`}
-				role="menu"
-				tabindex="-1"
-				onmousedown={(e: MouseEvent) => e.stopPropagation()}
-			>
-				<button
-					type="button"
-					class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-					onclick={() => openBookmark(contextMenu.bookmark!)}
-				>
-					<FolderOpen class="mr-2 h-4 w-4" />
-					<span>打开</span>
-				</button>
-				<hr class="bg-border -mx-1 my-1 h-px border-0" />
-				<button
-					type="button"
-					class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-					onclick={() => openInExplorer(contextMenu.bookmark!)}
-				>
-					<ExternalLink class="mr-2 h-4 w-4" />
-					<span>在资源管理器中打开</span>
-				</button>
-				<button
-					type="button"
-					class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-					onclick={() => openWithExternalApp(contextMenu.bookmark!)}
-				>
-					<Trash2 class="mr-2 h-4 w-4" />
-					<span>删除</span>
-				</button>
-			</div>
-		{/if}
-	</div>
+	<FolderContextMenu
+		item={contextMenu.item}
+		x={contextMenu.x}
+		y={contextMenu.y}
+		visible={contextMenu.visible}
+		onClose={hideContextMenu}
+		onOpenAsBook={(item) => contextMenuBookmark && openBookmark(contextMenuBookmark)}
+		onCopyPath={(item) => contextMenuBookmark && copyPath(contextMenuBookmark)}
+		onOpenInExplorer={(item) => contextMenuBookmark && openInExplorer(contextMenuBookmark)}
+		onOpenWithSystem={(item) => contextMenuBookmark && openWithExternalApp(contextMenuBookmark)}
+		onDelete={(item) => contextMenuBookmark && removeBookmark(contextMenuBookmark.id)}
+	/>
+</div>

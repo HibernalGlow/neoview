@@ -23,6 +23,7 @@
 	import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 	import SearchBar from '$lib/components/ui/SearchBar.svelte';
 	import FileItemCard from './file/components/FileItemCard.svelte';
+	import FolderContextMenu from './folderPanel/components/FolderContextMenu.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 	import { thumbnailManager } from '$lib/utils/thumbnailManager';
@@ -42,11 +43,13 @@
 	let viewMode = $state<'list' | 'grid'>(loadPanelViewMode('history', 'list') as 'list' | 'grid');
 	let thumbnails = $state<Map<string, string>>(new Map());
 	const thumbnailJobs = new Map<string, string>();
-	let contextMenu = $state<{ x: number; y: number; entry: HistoryEntry | null }>({
+	let contextMenu = $state<{ x: number; y: number; item: FsItem | null; visible: boolean }>({
 		x: 0,
 		y: 0,
-		entry: null
+		item: null,
+		visible: false
 	});
+	let contextMenuEntry = $state<HistoryEntry | null>(null);
 	let searchQuery = $state('');
 	let filteredHistory = $derived(
 		searchQuery.trim()
@@ -145,12 +148,21 @@
 		savePanelViewMode('history', next);
 	}
 
+	// 判断是否为压缩包
+	function isArchivePath(path: string): boolean {
+		const ext = path.toLowerCase();
+		return ext.endsWith('.zip') || ext.endsWith('.cbz') || ext.endsWith('.rar') || ext.endsWith('.cbr') || ext.endsWith('.7z') || ext.endsWith('.cb7');
+	}
+
 	// 将历史记录转换为 FsItem
 	function historyToFsItem(entry: HistoryEntry): FsItem {
+		// 历史记录可能是文件夹或压缩包，通过路径判断
+		const isArchive = isArchivePath(entry.path);
+		const isDir = !isArchive; // 非压缩包的历史记录通常是文件夹
 		return {
 			path: entry.path,
 			name: entry.name,
-			isDir: false,
+			isDir: isDir,
 			isImage: false,
 			size: 0,
 			modified: entry.timestamp
@@ -161,52 +173,19 @@
 	function showContextMenu(e: MouseEvent, entry: HistoryEntry) {
 		e.preventDefault();
 		e.stopPropagation();
-
-		console.log('[HistoryPanel] showContextMenu input', {
-			clientX: e.clientX,
-			clientY: e.clientY,
-			targetTag: (e.target as HTMLElement | null)?.tagName,
-			path: entry.path
-		});
-
-		let menuX = e.clientX;
-		let menuY = e.clientY;
-
-		if (menuX === 0 && menuY === 0 && e.target instanceof HTMLElement) {
-			const rect = e.target.getBoundingClientRect();
-			menuX = rect.left + rect.width / 2;
-			menuY = rect.top + rect.height / 2;
-		}
-
-		const viewportWidth = window.innerWidth;
-		const viewportHeight = window.innerHeight;
-
-		const menuWidth = 180;
-		if (e.clientX + menuWidth > viewportWidth) {
-			menuX = viewportWidth - menuWidth - 10;
-		}
-		if (menuX < 10) {
-			menuX = 10;
-		}
-
-		const maxMenuHeight = viewportHeight * 0.7;
-		if (menuY + maxMenuHeight > viewportHeight) {
-			menuY = viewportHeight - maxMenuHeight - 10;
-		}
-
-		console.log('[HistoryPanel] showContextMenu computed', {
-			menuX,
-			menuY,
-			viewportWidth,
-			viewportHeight
-		});
-
-		contextMenu = { x: menuX, y: menuY, entry };
+		contextMenuEntry = entry;
+		contextMenu = {
+			x: e.clientX,
+			y: e.clientY,
+			item: historyToFsItem(entry),
+			visible: true
+		};
 	}
 
 	// 隐藏右键菜单
 	function hideContextMenu() {
-		contextMenu = { x: 0, y: 0, entry: null };
+		contextMenu = { ...contextMenu, visible: false, item: null };
+		contextMenuEntry = null;
 	}
 
 	// 添加到书签
@@ -410,66 +389,17 @@
 	</div>
 
 	<!-- 右键菜单 -->
-	{#if contextMenu.entry}
-		<div
-			class="context-menu fixed z-50 max-h-(--bits-context-menu-content-available-height) origin-(--bits-context-menu-content-transform-origin) min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover text-popover-foreground p-1 shadow-md"
-			style={`left: ${contextMenu.x}px; top: ${contextMenu.y}px;`}
-			role="menu"
-			tabindex="-1"
-			onmousedown={(e: MouseEvent) => e.stopPropagation()}
-		>
-			<button
-				type="button"
-				class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-				onclick={() => openHistory(contextMenu.entry!)}
-			>
-				<FolderOpen class="mr-2 h-4 w-4" />
-				<span>打开</span>
-			</button>
-			<hr class="bg-border -mx-1 my-1 h-px border-0" />
-			<button
-				type="button"
-				class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-				onclick={() => addToBookmark(contextMenu.entry!)}
-			>
-				<Bookmark class="mr-2 h-4 w-4" />
-				<span>添加到书签</span>
-			</button>
-			<hr class="bg-border -mx-1 my-1 h-px border-0" />
-			<button
-				type="button"
-				class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-				onclick={() => openInExplorer(contextMenu.entry!)}
-			>
-				<ExternalLink class="mr-2 h-4 w-4" />
-				<span>在资源管理器中打开</span>
-			</button>
-			<button
-				type="button"
-				class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-				onclick={() => openWithExternalApp(contextMenu.entry!)}
-			>
-				<ExternalLink class="mr-2 h-4 w-4" />
-				<span>在外部应用中打开</span>
-			</button>
-			<hr class="bg-border -mx-1 my-1 h-px border-0" />
-			<button
-				type="button"
-				class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-				onclick={() => copyPath(contextMenu.entry!)}
-			>
-				<Copy class="mr-2 h-4 w-4" />
-				<span>复制路径</span>
-			</button>
-			<hr class="bg-border -mx-1 my-1 h-px border-0" />
-			<button
-				type="button"
-				class="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10 dark:hover:bg-destructive/20"
-				onclick={() => removeHistory(contextMenu.entry!.id)}
-			>
-				<Trash2 class="mr-2 h-4 w-4" />
-				<span>删除</span>
-			</button>
-		</div>
-	{/if}
+	<FolderContextMenu
+		item={contextMenu.item}
+		x={contextMenu.x}
+		y={contextMenu.y}
+		visible={contextMenu.visible}
+		onClose={hideContextMenu}
+		onOpenAsBook={(item) => contextMenuEntry && openHistory(contextMenuEntry)}
+		onAddBookmark={(item) => contextMenuEntry && addToBookmark(contextMenuEntry)}
+		onCopyPath={(item) => contextMenuEntry && copyPath(contextMenuEntry)}
+		onOpenInExplorer={(item) => contextMenuEntry && openInExplorer(contextMenuEntry)}
+		onOpenWithSystem={(item) => contextMenuEntry && openWithExternalApp(contextMenuEntry)}
+		onDelete={(item) => contextMenuEntry && removeHistory(contextMenuEntry.id)}
+	/>
 </div>

@@ -211,19 +211,22 @@ class BookStore {
       this.state.currentBook = book;
       this.syncAppStateBookSlice();
       this.state.viewerOpen = true;
+      
+      // 【优化】异步执行非阻塞操作，不等待
       if (targetPage > 0 && book.totalPages > 0) {
-        try {
-          await bookApi.navigateToPage(targetPage);
-        } catch (navErr) {
+        bookApi.navigateToPage(targetPage).catch(navErr => {
           console.error('❌ Error navigating to initial page after open:', navErr);
-        }
+        });
       }
-      await this.syncInfoPanelBookInfo();
+      
+      // 【优化】异步同步信息面板，不阻塞
+      this.syncInfoPanelBookInfo().catch(() => {});
       this.syncFileBrowserSelection(path);
 
-      // 添加到历史记录（使用实际起始页）
-      const { historyStore } = await import('$lib/stores/history.svelte');
-      historyStore.add(path, book.name, targetPage, book.totalPages);
+      // 【优化】异步添加历史记录，不阻塞
+      import('$lib/stores/history.svelte').then(({ historyStore }) => {
+        historyStore.add(path, book.name, targetPage, book.totalPages);
+      }).catch(() => {});
 
       this.showBookSwitchToastIfEnabled();
 

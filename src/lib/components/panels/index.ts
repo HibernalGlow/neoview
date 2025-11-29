@@ -4,7 +4,7 @@
  */
 
 // 左侧默认面板
-export { default as FolderPanel } from './folderPanel/FolderPanel.svelte';
+export { default as FileBrowser } from './FileBrowser.svelte';
 export { default as HistoryPanel } from './HistoryPanel.svelte';
 export { default as BookmarkPanel } from './BookmarkPanel.svelte';
 export { default as BookPageListPanel } from './BookPageListPanel.svelte';
@@ -19,7 +19,7 @@ export { default as DataInsightsPanel } from './DataInsightsPanel.svelte';
 export { default as SidebarManagementPanel } from './SidebarManagementPanel.svelte';
 
 // 面板组件映射 - 使用 any 类型避免复杂的类型问题
-import FolderPanel from './folderPanel/FolderPanel.svelte';
+import FileBrowser from './FileBrowser.svelte';
 import HistoryPanel from './HistoryPanel.svelte';
 import BookmarkPanel from './BookmarkPanel.svelte';
 import BookPageListPanel from './BookPageListPanel.svelte';
@@ -37,23 +37,23 @@ import type { PanelId } from '$lib/stores/sidebarConfig.svelte';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const PANEL_COMPONENTS: Record<PanelId, any> = {
 	// 左侧默认面板
-	folder: FolderPanel,
+	folder: FileBrowser,
 	history: HistoryPanel,
 	bookmark: BookmarkPanel,
 	thumbnail: BookPageListPanel,
-	playlist: FolderPanel, // 占位，后续实现
+	playlist: FileBrowser, // 占位，后续实现
 	// 右侧默认面板
 	info: InfoPanel,
 	properties: ImagePropertiesPanel,
 	upscale: UpscalePanel,
 	insights: DataInsightsPanel,
 	// 其他
-	settings: FolderPanel // 占位，后续实现
+	settings: FileBrowser // 占位，后续实现
 };
 
 /**
  * 获取面板组件
  */
-export function getPanelComponent(panelId: PanelId): typeof FolderPanel | undefined {
+export function getPanelComponent(panelId: PanelId): typeof FileBrowser | undefined {
 	return PANEL_COMPONENTS[panelId];
 }

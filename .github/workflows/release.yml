@@ -41,12 +41,12 @@ jobs:
           PYO3_PYTHON: python
         run: |
           yarn install --frozen-lockfile
-          yarn tauri build
+          yarn tauri build --debug
 
       - name: verify installer
         shell: powershell
         run: |
-          $setup = Get-ChildItem ".\src-tauri\target\release\bundle" -Recurse -Filter "*setup*.exe" | Select-Object -First 1
+          $setup = Get-ChildItem ".\src-tauri\target\debug\bundle" -Recurse -Filter "*setup*.exe" | Select-Object -First 1
 
           if ($null -ne $setup) {
             Write-Host "Installer found at $($setup.FullName)"

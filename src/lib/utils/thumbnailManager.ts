@@ -518,7 +518,7 @@ class ThumbnailManager {
    */
   private async loadFromDb(path: string, innerPath?: string, isFolder?: boolean): Promise<string | null> {
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
+      // 【优化】使用顶层导入的 invoke，避免每次调用都动态导入
       const pathKey = this.buildPathKey(path, innerPath);
 
       if (this.dbMissCache.has(pathKey)) {

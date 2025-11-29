@@ -206,16 +206,23 @@ function getCurrentViewIcon() {
 	<!-- 分隔 -->
 	<div class="bg-border mx-1 h-5 w-px"></div>
 
-	<!-- 排序下拉 -->
+	<!-- 排序下拉（使用 icon + 箭头节省空间） -->
 	<DropdownMenu.Root>
 		<DropdownMenu.Trigger>
-			<Button variant="ghost" size="sm" class="h-7 gap-1 px-2">
-				<ArrowUpDown class="h-3.5 w-3.5" />
-				<span class="text-xs">{sortFields.find((f) => f.value === $sortConfig.field)?.label}</span>
-				<span class="text-muted-foreground text-xs">
-					{$sortConfig.order === 'asc' ? '↑' : '↓'}
-				</span>
-			</Button>
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					<Button variant="ghost" size="icon" class="h-7 w-7">
+						{#if $sortConfig.order === 'asc'}
+							<ArrowUp class="h-4 w-4" />
+						{:else}
+							<ArrowDown class="h-4 w-4" />
+						{/if}
+					</Button>
+				</Tooltip.Trigger>
+				<Tooltip.Content>
+					<p>排序: {sortFields.find((f) => f.value === $sortConfig.field)?.label} {$sortConfig.order === 'asc' ? '升序' : '降序'}</p>
+				</Tooltip.Content>
+			</Tooltip.Root>
 		</DropdownMenu.Trigger>
 		<DropdownMenu.Content align="start">
 			{#each sortFields as field}
@@ -241,9 +248,6 @@ function getCurrentViewIcon() {
 
 	<!-- 弹性空间 -->
 	<div class="flex-1"></div>
-
-	<!-- 文件数量 -->
-	<span class="text-muted-foreground mr-2 text-xs">{$itemCount}</span>
 
 	<!-- 功能按钮组 -->
 	<div class="flex items-center gap-0.5">
@@ -381,6 +385,10 @@ function getCurrentViewIcon() {
 				</Button>
 			</DropdownMenu.Trigger>
 			<DropdownMenu.Content align="end">
+				<DropdownMenu.Item disabled class="text-muted-foreground">
+					文件数量: {$itemCount}
+				</DropdownMenu.Item>
+				<DropdownMenu.Separator />
 				<DropdownMenu.Item onclick={() => folderPanelActions.toggleRecursiveMode()}>
 					递归显示子文件夹
 				</DropdownMenu.Item>

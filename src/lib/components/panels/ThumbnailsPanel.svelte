@@ -8,7 +8,8 @@
 	import * as Progress from '$lib/components/ui/progress';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 
-	import { Image as ImageIcon, Grid3x3, Grid2x2, LayoutGrid, Loader2, AlertCircle, TestTube, CheckCircle, XCircle, Database, FolderOpen, Zap, Activity } from '@lucide/svelte';
+	import { Image as ImageIcon, Grid3x3, Grid2x2, LayoutGrid, Loader2, AlertCircle, TestTube, CheckCircle, XCircle, Database, FolderOpen, Zap, Activity, Flame, X } from '@lucide/svelte';
+	import { folderThumbnailLoader, type WarmupProgress } from '$lib/utils/thumbnail';
 	import { invoke } from '@tauri-apps/api/core';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { onMount } from 'svelte';
@@ -57,6 +58,13 @@
 	let unindexedFiles = $state<string[]>([]);
 	let unindexedFolders = $state<string[]>([]);
 	let unindexedArchives = $state<string[]>([]);
+
+	// 预热状态
+	let showWarmupPanel = $state(false);
+	let warmupPath = $state('');
+	let warmupDepth = $state(3);
+	let isWarming = $state(false);
+	let warmupProgress = $state<WarmupProgress | null>(null);
 
 	const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'avif', 'jxl', 'tiff', 'tif'];
 
@@ -417,6 +425,48 @@
 		}
 	}
 
+	// 预热功能
+	async function selectWarmupFolder() {
+		try {
+			const selected = await open({
+				directory: true,
+				multiple: false,
+				title: '选择要预热缩略图的文件夹'
+			});
+			if (selected) {
+				warmupPath = selected;
+			}
+		} catch (error) {
+			console.error('选择文件夹失败:', error);
+		}
+	}
+
+	async function startWarmup() {
+		if (!warmupPath || isWarming) return;
+		
+		isWarming = true;
+		warmupProgress = null;
+		
+		try {
+			const result = await folderThumbnailLoader.warmupRecursive(
+				warmupPath,
+				(progress) => {
+					warmupProgress = { ...progress };
+				},
+				warmupDepth
+			);
+			console.log('预热完成:', result);
+		} catch (error) {
+			console.error('预热失败:', error);
+		} finally {
+			isWarming = false;
+		}
+	}
+
+	function cancelWarmup() {
+		folderThumbnailLoader.cancelWarmup();
+	}
+
 	// 初始化缩略图管理器并监听任务队列
 	onMount(() => {
 		(async () => {
@@ -535,8 +585,103 @@
 						<p>测试</p>
 					</Tooltip.Content>
 				</Tooltip.Root>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant={showWarmupPanel ? 'default' : 'outline'}
+							size="sm"
+							class="h-7 px-2 text-xs"
+							onclick={() => showWarmupPanel = !showWarmupPanel}
+						>
+							<Flame class="h-3 w-3 mr-1" />
+							预热
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>递归预热文件夹缩略图</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
 			</div>
 		</div>
+
+		<!-- 预热面板 -->
+		{#if showWarmupPanel}
+			<div class="border rounded-md p-2 bg-muted/30 space-y-2">
+				<div class="flex items-center gap-2">
+					<Button
+						variant="outline"
+						size="sm"
+						class="h-6 px-2 text-[10px]"
+						onclick={selectWarmupFolder}
+						disabled={isWarming}
+					>
+						<FolderOpen class="h-3 w-3 mr-1" />
+						选择
+					</Button>
+					<input
+						type="text"
+						class="flex-1 h-6 px-2 text-[10px] bg-background border rounded"
+						placeholder="预热路径..."
+						bind:value={warmupPath}
+						disabled={isWarming}
+					/>
+					<select
+						class="h-6 px-1 text-[10px] bg-background border rounded"
+						bind:value={warmupDepth}
+						disabled={isWarming}
+					>
+						<option value={1}>1层</option>
+						<option value={2}>2层</option>
+						<option value={3}>3层</option>
+						<option value={5}>5层</option>
+					</select>
+				</div>
+				<div class="flex items-center gap-2">
+					{#if isWarming}
+						<Button
+							variant="destructive"
+							size="sm"
+							class="h-6 px-2 text-[10px]"
+							onclick={cancelWarmup}
+						>
+							<X class="h-3 w-3 mr-1" />
+							取消
+						</Button>
+					{:else}
+						<Button
+							variant="default"
+							size="sm"
+							class="h-6 px-2 text-[10px]"
+							onclick={startWarmup}
+							disabled={!warmupPath}
+						>
+							<Flame class="h-3 w-3 mr-1" />
+							开始预热
+						</Button>
+					{/if}
+					<Button
+						variant="ghost"
+						size="sm"
+						class="h-6 px-2 text-[10px]"
+						onclick={() => showWarmupPanel = false}
+					>
+						关闭
+					</Button>
+				</div>
+				{#if warmupProgress}
+					<div class="space-y-1">
+						<div class="flex items-center justify-between text-[10px] text-muted-foreground">
+							<span class="truncate max-w-[200px]">{warmupProgress.current}</span>
+							<span>{warmupProgress.completed}/{warmupProgress.total} (失败 {warmupProgress.failed})</span>
+						</div>
+						<Progress.Root
+							value={warmupProgress.total ? (warmupProgress.completed / warmupProgress.total) * 100 : 0}
+							class="h-2"
+						/>
+					</div>
+				{/if}
+			</div>
+		{/if}
 
 		<div class="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
 			<div class="flex items-center gap-1">

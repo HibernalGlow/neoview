@@ -1070,6 +1070,12 @@
 		preloadManager.initialize();
 		setSharedPreloadManager(preloadManager);
 
+		// 🔥 立即加载第一页，不等待 effect 触发，确保第一页优先加载
+		if (bookStore.currentPage && !isVideoPage(bookStore.currentPage)) {
+			console.log('🚀 立即加载第一页:', bookStore.currentPageIndex);
+			preloadManager.loadCurrentImage();
+		}
+
 		return () => {
 			window.removeEventListener('resize', handleResize);
 			if (applyZoomModeListener) {

@@ -1,10 +1,12 @@
 /**
  * 图片读取模块
  * 负责从文件系统或压缩包读取图片数据
+ * 
+ * 【优化】直接返回 Blob，避免 URL -> fetch -> Blob 的重复转换
  */
 
-import { loadImage } from '$lib/api/fs';
-import { loadImageFromArchive } from '$lib/api/filesystem';
+import { loadImageAsBlob } from '$lib/api/fs';
+import { loadImageFromArchiveAsBlob } from '$lib/api/filesystem';
 import { bookStore } from '$lib/stores/book.svelte';
 import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 
@@ -15,6 +17,7 @@ export interface ReadResult {
 
 /**
  * 读取页面图片为 Blob
+ * 【优化】直接从后端获取 Blob，无需二次转换
  */
 export async function readPageBlob(pageIndex: number): Promise<ReadResult> {
 	const currentBook = bookStore.currentBook;
@@ -31,30 +34,26 @@ export async function readPageBlob(pageIndex: number): Promise<ReadResult> {
 		bookType: currentBook.type
 	});
 
-	let base64Data: string;
+	let result: { blob: Blob; traceId: string };
 
 	if (currentBook.type === 'archive') {
-		base64Data = await loadImageFromArchive(currentBook.path, pageInfo.path, {
+		// 压缩包：直接获取 Blob
+		result = await loadImageFromArchiveAsBlob(currentBook.path, pageInfo.path, {
 			traceId,
 			pageIndex
 		});
 	} else {
-		base64Data = await loadImage(pageInfo.path, {
+		// 文件系统：直接获取 Blob
+		result = await loadImageAsBlob(pageInfo.path, {
 			traceId,
 			pageIndex,
 			bookPath: currentBook.path
 		});
 	}
 
-	logImageTrace(traceId, 'readPageBlob fetch blob url');
+	logImageTrace(traceId, 'readPageBlob blob ready', { size: result.blob.size });
 
-	// 将 base64 转换为 Blob
-	const response = await fetch(base64Data);
-	const blob = await response.blob();
-
-	logImageTrace(traceId, 'readPageBlob blob decoded', { size: blob.size });
-
-	return { blob, traceId };
+	return result;
 }
 
 /**

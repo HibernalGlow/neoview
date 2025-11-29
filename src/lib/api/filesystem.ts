@@ -187,11 +187,26 @@ export interface LoadImageFromArchiveOptions {
   pageIndex?: number;
 }
 
+/**
+ * 加载压缩包图片为 Object URL（旧接口，兼容用）
+ */
 export async function loadImageFromArchive(
   archivePath: string,
   filePath: string,
   options: LoadImageFromArchiveOptions = {}
 ): Promise<string> {
+  const { blob } = await loadImageFromArchiveAsBlob(archivePath, filePath, options);
+  return URL.createObjectURL(blob);
+}
+
+/**
+ * 加载压缩包图片为 Blob（推荐，避免重复转换）
+ */
+export async function loadImageFromArchiveAsBlob(
+  archivePath: string,
+  filePath: string,
+  options: LoadImageFromArchiveOptions = {}
+): Promise<{ blob: Blob; traceId: string }> {
   const traceId = options.traceId ?? createImageTraceId('archive', options.pageIndex);
   logImageTrace(traceId, 'invoke load_image_from_archive', {
     archivePath,
@@ -208,12 +223,11 @@ export async function loadImageFromArchive(
 
   logImageTrace(traceId, 'archive image bytes ready', { bytes: binaryData.length });
 
+  // 直接创建 Blob，不创建 URL
   const blob = new Blob([new Uint8Array(binaryData)]);
-  const url = URL.createObjectURL(blob);
+  logImageTrace(traceId, 'blob created', { size: blob.size });
 
-  logImageTrace(traceId, 'blob url created', { size: blob.size });
-
-  return url;
+  return { blob, traceId };
 }
 
 /**

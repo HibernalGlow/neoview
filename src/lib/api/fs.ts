@@ -13,7 +13,18 @@ export interface LoadImageOptions {
 	bookPath?: string;
 }
 
+/**
+ * 加载图片为 Object URL（旧接口，兼容用）
+ */
 export async function loadImage(path: string, options: LoadImageOptions = {}): Promise<string> {
+	const { blob } = await loadImageAsBlob(path, options);
+	return URL.createObjectURL(blob);
+}
+
+/**
+ * 加载图片为 Blob（推荐，避免重复转换）
+ */
+export async function loadImageAsBlob(path: string, options: LoadImageOptions = {}): Promise<{ blob: Blob; traceId: string }> {
 	const traceId = options.traceId ?? createImageTraceId('fs', options.pageIndex);
 	logImageTrace(traceId, 'invoke load_image', { path, pageIndex: options.pageIndex, bookPath: options.bookPath });
 
@@ -26,12 +37,11 @@ export async function loadImage(path: string, options: LoadImageOptions = {}): P
 
 	logImageTrace(traceId, 'load_image resolved', { bytes: binaryData.length });
 
+	// 直接创建 Blob，不创建 URL
 	const blob = new Blob([new Uint8Array(binaryData)]);
-	const url = URL.createObjectURL(blob);
+	logImageTrace(traceId, 'blob created', { size: blob.size });
 
-	logImageTrace(traceId, 'blob url created', { size: blob.size });
-
-	return url;
+	return { blob, traceId };
 }
 
 export async function getImageDimensions(path: string): Promise<[number, number]> {

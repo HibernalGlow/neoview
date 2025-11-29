@@ -557,24 +557,19 @@ export class ImageLoader {
 		const currentBook = bookStore.currentBook;
 		if (!currentBook) return;
 
+		// 🔥 异步取消上一页超分任务，不阻塞当前页加载
 		if (
 			this.lastAutoUpscalePageIndex !== null &&
 			this.lastAutoUpscalePageIndex !== currentPageIndex
 		) {
-			try {
-				await invoke('cancel_upscale_jobs_for_page', {
-					bookPath: currentBook.path ?? undefined,
-					pageIndex: this.lastAutoUpscalePageIndex
-				});
-				console.log(
-					'已请求取消上一页的超分任务:',
-					this.lastAutoUpscalePageIndex + 1
-				);
-			} catch (error) {
+			const pageToCancel = this.lastAutoUpscalePageIndex;
+			this.lastAutoUpscalePageIndex = null;
+			invoke('cancel_upscale_jobs_for_page', {
+				bookPath: currentBook.path ?? undefined,
+				pageIndex: pageToCancel
+			}).catch(error => {
 				console.warn('取消上一页超分任务失败:', error);
-			} finally {
-				this.lastAutoUpscalePageIndex = null;
-			}
+			});
 		}
 
 		this.loading = true;

@@ -322,14 +322,31 @@
 			`Loading thumbnails from ${start} to ${end} (total: ${end - start + 1}, desired: ${desired})`
 		);
 
-		// 并行请求所有缩略图
-		const promises: Promise<void>[] = [];
+		// 🔥 优化：先加载当前页缩略图，再加载其他页
+		const currentIndex = bookStore.currentPageIndex;
+		
+		// 1. 优先加载当前页
+		if (currentIndex >= start && currentIndex <= end && !(currentIndex in thumbnails)) {
+			await loadThumbnail(currentIndex);
+		}
+		
+		// 2. 延迟 100ms 后再加载其他缩略图，避免阻塞当前页图片加载
+		await new Promise(resolve => setTimeout(resolve, 100));
+		
+		// 3. 按距离当前页的远近排序加载其他缩略图
+		const otherIndices: number[] = [];
 		for (let i = start; i <= end; i++) {
-			if (!(i in thumbnails)) {
-				promises.push(loadThumbnail(i));
+			if (i !== currentIndex && !(i in thumbnails)) {
+				otherIndices.push(i);
 			}
 		}
-		await Promise.all(promises);
+		// 按距离当前页的距离排序
+		otherIndices.sort((a, b) => Math.abs(a - currentIndex) - Math.abs(b - currentIndex));
+		
+		// 4. 串行加载其他缩略图，避免并发过多阻塞主图片加载
+		for (const i of otherIndices) {
+			await loadThumbnail(i);
+		}
 	}
 
 	// 在前端从 base64 生成缩略图

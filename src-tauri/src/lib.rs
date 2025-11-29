@@ -335,6 +335,7 @@ pub fn run() {
             commands::batch_load_thumbnails_from_db,
             commands::preload_thumbnail_index,
             commands::scan_folder_thumbnails,
+            commands::save_folder_thumbnail,
             commands::get_video_duration,
             commands::is_video_file,
             commands::load_video,

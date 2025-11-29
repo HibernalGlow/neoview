@@ -16,6 +16,7 @@ import { IncrementalBatchLoader } from './incrementalBatchLoader';
 import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
 import { normalizeThumbnailDirectoryPath } from '$lib/config/paths';
+import { folderThumbnailLoader } from './thumbnail/FolderThumbnailLoader';
 
 export interface ThumbnailConfig {
   maxConcurrentLocal: number;
@@ -212,6 +213,9 @@ class ThumbnailManager {
     const oldPath = this.currentDirectory;
     this.currentDirectory = path;
 
+    // 同步更新文件夹缩略图加载器的目录（自动取消旧任务）
+    folderThumbnailLoader.setCurrentDirectory(path);
+
     // 如果切换了目录，取消旧目录的任务，但不删除缓存
     if (oldPath !== path && oldPath) {
       this.cancelAllTasksExceptDirectory(path);
@@ -238,6 +242,22 @@ class ThumbnailManager {
       setTimeout(() => {
         this.doWarmupDirectory(items, currentPath);
       }, 100);
+    }
+    
+    // 【新增】文件夹缩略图异步加载（带并发控制）
+    const folders = items.filter(item => item.isDir);
+    if (folders.length > 0) {
+      folderThumbnailLoader.setOnThumbnailReady((folderPath, url) => {
+        // 通知回调
+        if (this.onThumbnailReady) {
+          this.onThumbnailReady(folderPath, url);
+        }
+      });
+      
+      // 异步加载，不阻塞
+      folderThumbnailLoader.loadFolderThumbnails(folders, currentPath).catch(err => {
+        console.debug('文件夹缩略图加载错误:', err);
+      });
     }
   }
 

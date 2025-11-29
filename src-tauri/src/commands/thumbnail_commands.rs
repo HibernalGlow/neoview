@@ -940,3 +940,44 @@ fn is_archive_path(path: &str) -> bool {
         })
         .unwrap_or(false)
 }
+
+/// 保存文件夹缩略图（前端主动调用）
+#[tauri::command]
+pub async fn save_folder_thumbnail(
+    app: tauri::AppHandle,
+    folder_path: String,
+    thumbnail_data: Vec<u8>,
+) -> Result<String, String> {
+    let state = app.state::<ThumbnailState>();
+    
+    // 注册到 BlobRegistry
+    let blob_key = state.blob_registry.get_or_register(
+        &thumbnail_data,
+        &folder_path,
+        "folder",
+    );
+    
+    // 保存到数据库
+    state.db.save_thumbnail_with_category(
+        &folder_path,
+        0,  // size 不使用
+        0,  // ghash 不使用
+        "folder",
+        &thumbnail_data,
+    ).map_err(|e| format!("保存文件夹缩略图失败: {}", e))?;
+    
+    // 写入缓存索引
+    let cache_index = app.state::<CacheIndexState>();
+    if let Err(err) = cache_index.index.write(&CacheIndexRecord {
+        path: &folder_path,
+        category: "folder",
+        hash: None,
+        size: Some(thumbnail_data.len() as i64),
+        source: Some("save_folder_thumbnail"),
+        blob_key: Some(&blob_key),
+    }) {
+        eprintln!("⚠️ 写入文件夹缩略图缓存索引失败: {}", err);
+    }
+    
+    Ok(blob_key)
+}

@@ -953,23 +953,24 @@ pub async fn save_folder_thumbnail(
     // 注册到 BlobRegistry
     let blob_key = state.blob_registry.get_or_register(
         &thumbnail_data,
-        &folder_path,
-        "folder",
+        "image/webp",
+        Duration::from_secs(3600), // 1小时 TTL
+        Some(folder_path.clone()),
     );
     
-    // 保存到数据库
+    // 保存到数据库（参数顺序：key, size, ghash, data, category）
     state.db.save_thumbnail_with_category(
         &folder_path,
         0,  // size 不使用
         0,  // ghash 不使用
-        "folder",
         &thumbnail_data,
+        Some("folder"),
     ).map_err(|e| format!("保存文件夹缩略图失败: {}", e))?;
     
     // 写入缓存索引
     let cache_index = app.state::<CacheIndexState>();
-    if let Err(err) = cache_index.index.write(&CacheIndexRecord {
-        path: &folder_path,
+    if let Err(err) = cache_index.db.upsert_thumbnail_entry(ThumbnailCacheUpsert {
+        path_key: &folder_path,
         category: "folder",
         hash: None,
         size: Some(thumbnail_data.len() as i64),

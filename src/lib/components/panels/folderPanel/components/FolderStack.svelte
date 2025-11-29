@@ -173,13 +173,17 @@ async function createLayer(path: string): Promise<FolderLayer> {
 	return layer;
 }
 
-// 加载缩略图 - 参考老面板的完整实现
+// 加载缩略图 - 【优化】只预加载前30项，其余由 VirtualizedFileList 可见范围加载
 async function loadThumbnailsForLayer(items: FsItem[], path: string) {
 	// 设置当前目录（用于优先级判断）
 	thumbnailManager.setCurrentDirectory(path);
 
+	// 【优化】只预加载前30项，避免大量并发请求
+	const PRELOAD_COUNT = 30;
+	const preloadItems = items.slice(0, PRELOAD_COUNT);
+
 	// 过滤出需要缩略图的项目
-	const itemsNeedingThumbnails = items.filter((item) => {
+	const itemsNeedingThumbnails = preloadItems.filter((item) => {
 		const name = item.name.toLowerCase();
 		const isDir = item.isDir;
 
@@ -196,17 +200,20 @@ async function loadThumbnailsForLayer(items: FsItem[], path: string) {
 		return isDir || imageExts.includes(ext) || archiveExts.includes(ext) || videoExts.includes(ext);
 	});
 
-	// 预加载数据库索引
+	// 预加载数据库索引（只预加载前30项）
 	const paths = itemsNeedingThumbnails.map((item) => item.path);
 	thumbnailManager.preloadDbIndex(paths).catch((err) => {
 		console.debug('预加载数据库索引失败:', err);
 	});
 
-	// 为所有项目加载缩略图
-	itemsNeedingThumbnails.forEach((item) => {
+	// 【优化】使用 normal 优先级而非 immediate，减少并发压力
+	itemsNeedingThumbnails.forEach((item, index) => {
+		// 前10项使用 high 优先级，其余使用 normal
+		const priority = index < 10 ? 'high' : 'normal';
+		
 		if (item.isDir) {
 			// 文件夹
-			thumbnailManager.getThumbnail(item.path, undefined, false, 'immediate');
+			thumbnailManager.getThumbnail(item.path, undefined, false, priority);
 		} else {
 			// 文件：检查是否为压缩包
 			const nameLower = item.name.toLowerCase();
@@ -218,7 +225,7 @@ async function loadThumbnailsForLayer(items: FsItem[], path: string) {
 				nameLower.endsWith('.7z') ||
 				nameLower.endsWith('.cb7');
 
-			thumbnailManager.getThumbnail(item.path, undefined, isArchive, 'immediate');
+			thumbnailManager.getThumbnail(item.path, undefined, isArchive, priority);
 		}
 	});
 }

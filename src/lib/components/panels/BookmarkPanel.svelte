@@ -18,11 +18,11 @@
 		Search
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
-	import BookmarkSortPanel from '$lib/components/ui/sort/BookmarkSortPanel.svelte';
 	import SearchBar from '$lib/components/ui/SearchBar.svelte';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 	import FileItemCard from './file/components/FileItemCard.svelte';
 	import FolderContextMenu from './folderPanel/components/FolderContextMenu.svelte';
+	import PanelToolbar, { type SortField, type SortOrder, type ViewMode } from './shared/PanelToolbar.svelte';
 	import type { FsItem } from '$lib/types';
 	import { FileSystemAPI } from '$lib/api';
 	import { bookStore } from '$lib/stores/book.svelte';
@@ -52,6 +52,59 @@
 	let contextMenuBookmark = $state<any>(null);
 	let syncFileTreeOnBookmarkSelect = $state(historySettingsStore.syncFileTreeOnBookmarkSelect);
 	let showSearchBar = $state(false);
+	let sortField = $state<SortField>('timestamp');
+	let sortOrder = $state<SortOrder>('desc');
+
+	// 排序后的书签
+	let sortedBookmarks = $derived(() => {
+		const filtered = filteredBookmarks;
+		if (sortField === 'random') {
+			const shuffled = [...filtered];
+			for (let i = shuffled.length - 1; i > 0; i--) {
+				const j = Math.floor(Math.random() * (i + 1));
+				[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+			}
+			return shuffled;
+		}
+		return [...filtered].sort((a, b) => {
+			let cmp = 0;
+			switch (sortField) {
+				case 'name':
+					cmp = a.name.localeCompare(b.name, undefined, { numeric: true });
+					break;
+				case 'path':
+					cmp = a.path.localeCompare(b.path, undefined, { numeric: true });
+					break;
+				case 'timestamp':
+					cmp = (a.createdAt || 0) - (b.createdAt || 0);
+					break;
+				case 'type': {
+					const extA = a.name.split('.').pop()?.toLowerCase() || '';
+					const extB = b.name.split('.').pop()?.toLowerCase() || '';
+					cmp = extA.localeCompare(extB);
+					break;
+				}
+				case 'starred':
+					if (a.starred !== b.starred) {
+						cmp = a.starred ? -1 : 1;
+					} else {
+						cmp = a.name.localeCompare(b.name);
+					}
+					break;
+			}
+			return sortOrder === 'asc' ? cmp : -cmp;
+		});
+	});
+
+	function handleSortChange(field: SortField, order: SortOrder) {
+		sortField = field;
+		sortOrder = order;
+	}
+
+	function handleViewModeChange(mode: ViewMode) {
+		viewMode = mode;
+		savePanelViewMode('bookmark', mode);
+	}
 
 	$effect(() => {
 		historySettingsStore.setSyncFileTreeOnBookmarkSelect(syncFileTreeOnBookmarkSelect);
@@ -138,13 +191,6 @@
 		};
 	}
 
-	// 切换视图模式
-	function toggleViewMode() {
-		const next = viewMode === 'list' ? 'grid' : 'list';
-		viewMode = next;
-		savePanelViewMode('bookmark', next);
-	}
-
 	// 显示右键菜单
 	function showContextMenu(e: MouseEvent, bookmark: any) {
 		e.preventDefault();
@@ -190,33 +236,6 @@
 		hideContextMenu();
 	}
 
-	/**
-	 * 处理书签排序
-	 */
-	function handleBookmarkSort(sortedBookmarks: any[]) {
-		// 更新 bookmarkStore 中的顺序
-		const allBookmarks = bookmarkStore.getAll();
-		const newOrder = sortedBookmarks
-			.map((sorted) => allBookmarks.find((b) => b.id === sorted.id))
-			.filter((b): b is NonNullable<typeof b> => b !== undefined);
-
-		// 清空并重新添加以保持新顺序
-		bookmarkStore.clear();
-		newOrder.forEach((bookmark) => {
-			if (bookmark) {
-				bookmarkStore.add({
-					name: bookmark.name,
-					path: bookmark.path,
-					isDir: bookmark.type === 'folder',
-					isImage: false,
-					size: 0,
-					modified: 0
-				} as FsItem);
-			}
-		});
-		// 状态会通过 store 订阅自动更新
-	}
-
 	// 订阅书签变化（避免无限循环）
 	$effect(() => {
 		// 只在 store 更新时更新状态，不在 effect 中直接调用 loadBookmarks
@@ -259,22 +278,15 @@
 							aria-label="选中书签时同步文件树"
 						/>
 					</div>
-					<Button variant="ghost" size="sm" onclick={toggleViewMode} title="切换视图">
-						{#if viewMode === 'list'}
-							<Grid3x3 class="h-4 w-4" />
-						{:else}
-							<List class="h-4 w-4" />
-						{/if}
-					</Button>
-					<Button
-						variant={showSearchBar ? 'default' : 'ghost'}
-						size="sm"
-						onclick={() => (showSearchBar = !showSearchBar)}
-						title={showSearchBar ? '隐藏搜索栏' : '显示搜索栏'}
-					>
-						<Search class="h-4 w-4" />
-					</Button>
-					<BookmarkSortPanel {bookmarks} onSort={handleBookmarkSort} />
+					<PanelToolbar
+						{viewMode}
+						{showSearchBar}
+						{sortField}
+						{sortOrder}
+						onViewModeChange={handleViewModeChange}
+						onSearchToggle={() => (showSearchBar = !showSearchBar)}
+						onSortChange={handleSortChange}
+					/>
 				</div>
 			</div>
 			{#if showSearchBar}
@@ -294,7 +306,7 @@
 	<div class="min-h-0 flex-1 overflow-hidden">
 		<!-- 书签列表 -->
 		<div class="flex-1 overflow-auto">
-			{#if filteredBookmarks.length === 0 || !filteredBookmarks}
+			{#if sortedBookmarks().length === 0}
 				<div class="text-muted-foreground flex flex-col items-center justify-center py-12">
 					<div class="relative mb-4">
 						<Bookmark class="h-16 w-16 opacity-30" />
@@ -316,7 +328,7 @@
 			{:else if viewMode === 'list'}
 				<!-- 列表视图 -->
 				<div class="space-y-2 p-2">
-					{#each filteredBookmarks as bookmark (bookmark?.id || bookmark.path)}
+					{#each sortedBookmarks() as bookmark (bookmark?.id || bookmark.path)}
 						{#if bookmark}
 							<div class="group relative">
 								<FileItemCard
@@ -348,7 +360,7 @@
 				<!-- 网格视图 -->
 				<div class="p-2">
 					<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
-						{#each filteredBookmarks as bookmark (bookmark?.id || bookmark.path)}
+						{#each sortedBookmarks() as bookmark (bookmark?.id || bookmark.path)}
 							{#if bookmark}
 								<div class="group relative">
 									<FileItemCard

@@ -35,7 +35,7 @@
   
   // 外部 stores
   import { bookStore } from '$lib/stores/book.svelte';
-  import { zoomLevel, rotationAngle, zoomIn, zoomOut, resetZoom, setZoomLevel } from '$lib/stores';
+  import { zoomIn, zoomOut, resetZoom, setZoomLevel } from '$lib/stores';
   import { settingsManager } from '$lib/settings/settingsManager';
   
   // ============================================================================
@@ -51,6 +51,12 @@
     upscaledImageData?: string | null;
     /** 视图模式 */
     viewMode?: LayoutMode;
+    /** 缩放级别 */
+    zoomLevel?: number;
+    /** 旋转角度 */
+    rotationAngle?: number;
+    /** 滚动方向 */
+    orientation?: 'horizontal' | 'vertical';
     /** 全景模式页面 */
     panoramaPages?: Array<{ index: number; data: string | null; position: 'left' | 'center' | 'right' }>;
     /** 外部平移 X */
@@ -82,6 +88,9 @@
     imageData2 = null,
     upscaledImageData = null,
     viewMode = 'single',
+    zoomLevel = 1,
+    rotationAngle = 0,
+    orientation = 'horizontal',
     panoramaPages = $bindable([]),
     panX = 0,
     panY = 0,
@@ -103,10 +112,6 @@
   let containerRef: HTMLDivElement | null = $state(null);
   let localPan = $state<Point>({ x: 0, y: 0 });
   
-  // 从 stores 获取状态
-  let scale = $derived($zoomLevel);
-  let uiRotation = $derived($rotationAngle);
-  
   // 设置
   let settings = $state(settingsManager.getSettings());
   let readingDirection = $derived<ReadingDirection>(
@@ -118,12 +123,12 @@
     settings = newSettings;
   });
   
-  // 计算变换
+  // 计算变换 - 使用 props
   let transform = $derived<Transform>({
-    scale,
+    scale: zoomLevel,
     offsetX: panX + localPan.x,
     offsetY: panY + localPan.y,
-    rotation: (uiRotation % 360) as 0 | 90 | 180 | 270,
+    rotation: (rotationAngle % 360) as 0 | 90 | 180 | 270,
   });
   
   // 构建当前帧
@@ -227,7 +232,7 @@
   }
   
   function handleDoubleTap(point: Point) {
-    if ($zoomLevel > 1.5) {
+    if (zoomLevel > 1.5) {
       resetView();
     } else {
       setZoomLevel(2);

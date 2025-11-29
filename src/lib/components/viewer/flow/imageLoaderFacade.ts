@@ -10,7 +10,7 @@ import { settingsManager, performanceSettings } from '$lib/settings/settingsMana
 import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 import { logImageTrace, createImageTraceId } from '$lib/utils/imageTrace';
 
-import { ImageLoaderCore, getImageLoaderCore, LoadPriority } from './imageLoaderCore';
+import { ImageLoaderCore, getImageLoaderCore, switchToNextInstance, LoadPriority } from './imageLoaderCore';
 import { UpscaleHandler, getUpscaleHandler } from './upscaleHandler';
 import { getAutoUpscaleEnabled, enqueuePreloadBatchJobs, type PreloadBatchJobInput } from './preloadRuntime';
 import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
@@ -398,22 +398,18 @@ export class ImageLoader {
 	 * 【关键】必须同步清理缓存，否则会显示旧书籍的图片
 	 */
 	resetForBookChange(options: { preservePreloadCache?: boolean } = {}): void {
-		// 【关键】先清空队列，停止所有进行中的加载任务
-		// 避免旧书籍的加载结果写入新书籍的缓存
-		this.core.clearQueue();
+		// 【架构优化】切换到新的加载器实例，旧实例异步清理
+		this.core = switchToNextInstance();
 		
-		// 同步清理，确保不会显示旧书籍的图片
+		// 同步清理超分缓存
 		if (!options.preservePreloadCache) {
 			this.upscaleHandler.clearMemoryCache();
 		}
 		this.pendingPreloadTasks.clear();
 		this.resetPreUpscaleProgress();
-		
-		// 完全重置核心加载器（清空缓存和待处理任务）
-		this.core.reset();
 		clearExtractCache(); // 清理预解压缓存
 		
-		console.log('📦 书籍切换：缓存和队列已清理');
+		console.log('📦 书籍切换：已切换到新加载器实例');
 	}
 
 	/**

@@ -40,7 +40,8 @@ export class ImageLoaderCore {
 
 	constructor(options: ImageLoaderCoreOptions = {}) {
 		this.options = options;
-		this.blobCache = getBlobCache({
+		// 【关键】每个实例创建独立的 BlobCache，避免切书时数据污染
+		this.blobCache = new BlobCache({
 			maxSizeBytes: (options.maxCacheSizeMB ?? 500) * 1024 * 1024
 		});
 		this.loadQueue = getLoadQueue(options.maxConcurrentLoads ?? 4);
@@ -403,20 +404,64 @@ export class ImageLoaderCore {
 	}
 }
 
-// 单例实例
-let instance: ImageLoaderCore | null = null;
+// 【架构优化】实例池轮换，避免竞争
+const POOL_SIZE = 2;
+let instancePool: ImageLoaderCore[] = [];
+let currentIndex = 0;
+let savedOptions: ImageLoaderCoreOptions | undefined;
 
+/**
+ * 获取当前活跃的 ImageLoaderCore 实例
+ */
 export function getImageLoaderCore(options?: ImageLoaderCoreOptions): ImageLoaderCore {
-	if (!instance) {
-		instance = new ImageLoaderCore(options);
+	if (options) {
+		savedOptions = options;
 	}
-	return instance;
+	
+	// 初始化实例池
+	if (instancePool.length === 0) {
+		for (let i = 0; i < POOL_SIZE; i++) {
+			instancePool.push(new ImageLoaderCore(savedOptions));
+		}
+	}
+	
+	return instancePool[currentIndex];
 }
 
+/**
+ * 切换到下一个实例（切书时调用）
+ * 旧实例异步清理，新实例立即可用
+ */
+export function switchToNextInstance(): ImageLoaderCore {
+	const oldInstance = instancePool[currentIndex];
+	
+	// 标记旧实例失效
+	oldInstance.invalidate();
+	
+	// 切换到下一个实例
+	currentIndex = (currentIndex + 1) % POOL_SIZE;
+	const newInstance = instancePool[currentIndex];
+	
+	// 确保新实例是干净的
+	newInstance.reset();
+	
+	// 异步清理旧实例（不阻塞）
+	setTimeout(() => {
+		oldInstance.clearCache();
+		console.log('📦 旧实例缓存已清理');
+	}, 100);
+	
+	console.log(`📦 切换到实例 ${currentIndex}`);
+	return newInstance;
+}
+
+/**
+ * 重置当前实例
+ */
 export function resetImageLoaderCore(): void {
-	if (instance) {
-		instance.reset();
-		instance = null;
+	const current = instancePool[currentIndex];
+	if (current) {
+		current.reset();
 	}
 }
 

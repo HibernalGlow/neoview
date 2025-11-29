@@ -1574,9 +1574,7 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 		role="region"
 		aria-label="图像显示区域"
 	>
-		{#if loadingVisible}
-			<div class="text-white">Loading...</div>
-		{:else if error}
+		{#if error}
 			<div class="text-red-500">Error: {error}</div>
 		{:else if isCurrentPageVideo}
 			{#if videoUrl}

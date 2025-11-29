@@ -24,6 +24,7 @@ import { collectPageMetadata, evaluateConditions } from '$lib/utils/upscale/cond
 import { loadUpscalePanelSettings } from '$lib/components/panels/UpscalePanel';
 import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
+import { getLoadQueue, LoadPriority, type LoadQueueManager } from './loadQueue';
 function getPanelModelSettings() {
 	const settings = loadUpscalePanelSettings();
 	return {
@@ -92,8 +93,12 @@ export class ImageLoader {
 	private pendingCacheTrimJobId: string | null = null;
 	private unsubscribeTaskWatcher: (() => void) | null = null;
 
+	// 加载队列（并发控制）
+	private loadQueue: LoadQueueManager;
+
 	constructor(options: ImageLoaderOptions) {
 		this.options = options;
+		this.loadQueue = getLoadQueue(options.performanceMaxThreads || 4);
 
 		if (typeof window !== 'undefined') {
 			this.upscaleCompleteListener = ((event: CustomEvent) => {
@@ -188,50 +193,65 @@ export class ImageLoader {
 	private pendingLoads = new Map<number, Promise<void>>();
 
 	/**
-	 * 确保页面资源已加载
+	 * 确保页面资源已加载（带优先级，使用队列控制并发）
+	 * @param pageIndex 页面索引
+	 * @param priority 优先级（100=当前页, 80=相邻页, 50=预加载, 20=缩略图）
 	 */
-	private async ensureResources(pageIndex: number): Promise<void> {
+	private async ensureResourcesWithPriority(pageIndex: number, priority: number): Promise<void> {
 		const traceId = this.pageTraceMap.get(pageIndex);
 
-		// 1. 确保 Blob 缓存
+		// 1. 检查缓存
 		if (this.blobCache.has(pageIndex)) {
 			logImageTrace(traceId ?? this.ensureTraceId(pageIndex, 'cache'), 'blob cache hit', { pageIndex });
 			this.updateAccessTime(pageIndex);
 			return;
 		}
 
-		// 检查是否有正在进行的加载
+		// 2. 检查是否有正在进行的加载
 		if (this.pendingLoads.has(pageIndex)) {
 			logImageTrace(traceId ?? this.ensureTraceId(pageIndex, 'cache-wait'), 'pending load wait', { pageIndex });
+			// 提升优先级（如果当前优先级更高）
+			this.loadQueue.boostPriority(pageIndex, priority);
 			await this.pendingLoads.get(pageIndex);
 			this.updateAccessTime(pageIndex);
 			return;
 		}
 
-		// 创建新的加载任务
-		const loadPromise = (async () => {
-			try {
-				const blob = await this.readPageBlob(pageIndex);
-				const url = URL.createObjectURL(blob);
-				this.blobCache.set(pageIndex, {
-					blob,
-					url,
-					lastAccessed: Date.now()
-				});
-				logImageTrace(this.ensureTraceId(pageIndex, 'loader'), 'blob cached', {
-					pageIndex,
-					size: blob.size
-				});
-			} finally {
-				this.pendingLoads.delete(pageIndex);
+		// 3. 通过队列加载（控制并发）
+		const loadPromise = this.loadQueue.enqueue(pageIndex, priority, async () => {
+			// 再次检查缓存（可能在排队期间被加载）
+			if (this.blobCache.has(pageIndex)) {
+				return;
 			}
-		})();
+			const blob = await this.readPageBlob(pageIndex);
+			const url = URL.createObjectURL(blob);
+			this.blobCache.set(pageIndex, {
+				blob,
+				url,
+				lastAccessed: Date.now()
+			});
+			logImageTrace(this.ensureTraceId(pageIndex, 'loader'), 'blob cached', {
+				pageIndex,
+				size: blob.size,
+				priority
+			});
+		});
 
 		this.pendingLoads.set(pageIndex, loadPromise);
-		await loadPromise;
 
-		// 更新访问时间
-		this.updateAccessTime(pageIndex);
+		try {
+			await loadPromise;
+			this.updateAccessTime(pageIndex);
+		} finally {
+			this.pendingLoads.delete(pageIndex);
+		}
+	}
+
+	/**
+	 * 确保页面资源已加载（默认优先级）
+	 */
+	private async ensureResources(pageIndex: number): Promise<void> {
+		return this.ensureResourcesWithPriority(pageIndex, LoadPriority.NORMAL);
 	}
 
 	/**
@@ -312,10 +332,10 @@ export class ImageLoader {
 	}
 
 	/**
-	 * 获取缩略图 DataURL
+	 * 获取缩略图 DataURL（使用低优先级，避免阻塞主图加载）
 	 */
 	async getThumbnail(pageIndex: number): Promise<string> {
-		await this.ensureResources(pageIndex);
+		await this.ensureResourcesWithPriority(pageIndex, LoadPriority.LOW);
 
 		if (!this.thumbnailCache.has(pageIndex)) {
 			const { blob } = this.blobCache.get(pageIndex)!;
@@ -469,9 +489,6 @@ export class ImageLoader {
 	/**
 	 * 限制缩略图缓存
 	 */
-	/**
-	 * 限制缩略图缓存
-	 */
 	private enforceThumbnailCacheLimit(): void {
 		const limit = 50; // 最多缓存 50 个缩略图
 		const entries = Array.from(this.thumbnailCache.entries());
@@ -580,8 +597,8 @@ export class ImageLoader {
 		}, 1000);
 
 		try {
-			// 确保当前页资源已加载
-			await this.ensureResources(currentPageIndex);
+			// 确保当前页资源已加载（使用最高优先级）
+			await this.ensureResourcesWithPriority(currentPageIndex, LoadPriority.CRITICAL);
 			const currentTraceId = this.ensureTraceId(currentPageIndex, 'display');
 			logImageTrace(currentTraceId, 'loadCurrentImage resources ready', {
 				pageIndex: currentPageIndex
@@ -594,13 +611,13 @@ export class ImageLoader {
 				urlLength: objectUrl.length
 			});
 
-			// 双页模式：加载下一页
+			// 双页模式：加载下一页（使用高优先级）
 			let objectUrl2: string | undefined;
 
 			if (this.options.viewMode === 'double' && bookStore.canNextPage) {
 				const nextPageIndex = currentPageIndex + 1;
 				if (nextPageIndex < currentBook.pages.length) {
-					await this.ensureResources(nextPageIndex);
+					await this.ensureResourcesWithPriority(nextPageIndex, LoadPriority.HIGH);
 					objectUrl2 = await this.getObjectUrl(nextPageIndex);
 				}
 			}

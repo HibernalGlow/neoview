@@ -492,17 +492,27 @@
 									</span>
 								</DropdownMenu.Trigger>
 								<DropdownMenu.Content class="min-w-0 p-2" onclick={(e) => e.stopPropagation()}>
-									<div class="flex items-center gap-1">
-										{#each [1, 2, 3, 4, 5] as value}
-											<button
-												type="button"
-												class="h-6 w-6 flex items-center justify-center rounded text-[14px] hover:bg-accent transition-colors {folderManualRating !== null && folderManualRating >= value ? 'text-amber-400' : 'text-muted-foreground'}"
-												onclick={() => handleSetRating(folderManualRating === value ? null : value)}
-												title={folderManualRating === value ? '清除评分' : `评分 ${value} 星`}
-											>
-												{folderManualRating !== null && folderManualRating >= value ? '★' : '☆'}
-											</button>
-										{/each}
+									<div class="flex items-center gap-2">
+										<input
+											type="number"
+											min="0"
+											max="10"
+											step="0.1"
+											class="h-7 w-16 rounded border bg-background px-2 text-xs text-center"
+											value={folderManualRating ?? ''}
+											onchange={(e) => {
+												const val = parseFloat((e.target as HTMLInputElement).value);
+												handleSetRating(isNaN(val) || val <= 0 ? null : Math.min(10, val));
+											}}
+											placeholder="评分"
+										/>
+										<button
+											type="button"
+											class="h-7 px-2 rounded text-[10px] hover:bg-accent transition-colors text-muted-foreground"
+											onclick={() => handleSetRating(null)}
+										>
+											清除
+										</button>
 									</div>
 									{#if folderAverageRating !== null && folderAverageRating > 0}
 										<p class="text-[10px] text-muted-foreground mt-1.5 text-center">
@@ -812,17 +822,27 @@
 								</span>
 							</DropdownMenu.Trigger>
 							<DropdownMenu.Content class="min-w-0 p-2" onclick={(e) => e.stopPropagation()}>
-								<div class="flex items-center gap-1">
-									{#each [1, 2, 3, 4, 5] as value}
-										<button
-											type="button"
-											class="h-5 w-5 flex items-center justify-center rounded text-[12px] hover:bg-accent transition-colors {folderManualRating !== null && folderManualRating >= value ? 'text-amber-400' : 'text-muted-foreground'}"
-											onclick={() => handleSetRating(folderManualRating === value ? null : value)}
-											title={folderManualRating === value ? '清除评分' : `评分 ${value} 星`}
-										>
-											{folderManualRating !== null && folderManualRating >= value ? '★' : '☆'}
-										</button>
-									{/each}
+								<div class="flex items-center gap-2">
+									<input
+										type="number"
+										min="0"
+										max="10"
+										step="0.1"
+										class="h-6 w-14 rounded border bg-background px-1.5 text-[10px] text-center"
+										value={folderManualRating ?? ''}
+										onchange={(e) => {
+											const val = parseFloat((e.target as HTMLInputElement).value);
+											handleSetRating(isNaN(val) || val <= 0 ? null : Math.min(10, val));
+										}}
+										placeholder="评分"
+									/>
+									<button
+										type="button"
+										class="h-6 px-1.5 rounded text-[9px] hover:bg-accent transition-colors text-muted-foreground"
+										onclick={() => handleSetRating(null)}
+									>
+										清除
+									</button>
 								</div>
 								{#if folderAverageRating !== null && folderAverageRating > 0}
 									<p class="text-[9px] text-muted-foreground mt-1 text-center">

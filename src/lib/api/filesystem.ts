@@ -203,6 +203,28 @@ export async function loadImageFromArchive(
  * 加载压缩包图片为 Blob（推荐，避免重复转换）
  * 【优化】使用 Response 类型直接传输二进制数据，避免 JSON 序列化开销
  */
+/**
+ * 根据文件扩展名获取 MIME type
+ */
+function getMimeTypeFromPath(filePath: string): string {
+  const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
+  const mimeTypes: Record<string, string> = {
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'avif': 'image/avif',
+    'bmp': 'image/bmp',
+    'ico': 'image/x-icon',
+    'tiff': 'image/tiff',
+    'tif': 'image/tiff',
+    'svg': 'image/svg+xml',
+    'jxl': 'image/png', // JXL 在后端已转换为 PNG
+  };
+  return mimeTypes[ext] || 'image/jpeg'; // 默认 JPEG
+}
+
 export async function loadImageFromArchiveAsBlob(
   archivePath: string,
   filePath: string,
@@ -215,25 +237,60 @@ export async function loadImageFromArchiveAsBlob(
     pageIndex: options.pageIndex
   });
 
+  // 获取正确的 MIME type
+  const mimeType = getMimeTypeFromPath(filePath);
+
   try {
     // 【优化】使用二进制传输命令，返回 ArrayBuffer
-    const arrayBuffer = await invoke<ArrayBuffer>('load_image_from_archive_binary', {
+    const result = await invoke<ArrayBuffer>('load_image_from_archive_binary', {
       archivePath,
       filePath,
       traceId,
       pageIndex: options.pageIndex
     });
 
+    // 【关键修复】Tauri 2.x 在 Release 模式下可能返回错误类型
+    // 需要确保我们有一个有效的 ArrayBuffer
+    let arrayBuffer: ArrayBuffer;
+    
+    if (result instanceof ArrayBuffer) {
+      arrayBuffer = result;
+    } else if (ArrayBuffer.isView(result)) {
+      // 如果是 TypedArray，获取其 buffer 并创建新的 ArrayBuffer
+      const view = result as Uint8Array;
+      arrayBuffer = view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength) as ArrayBuffer;
+    } else if (Array.isArray(result)) {
+      // 如果是普通数组（JSON 回退），转换为 Uint8Array
+      arrayBuffer = new Uint8Array(result as number[]).buffer;
+    } else if (typeof result === 'object' && result !== null) {
+      // 可能是类数组对象
+      const values = Object.values(result) as number[];
+      arrayBuffer = new Uint8Array(values).buffer;
+    } else {
+      throw new Error(`Unexpected response type: ${typeof result}`);
+    }
+
     logImageTrace(traceId, 'archive image binary ready', { bytes: arrayBuffer.byteLength });
 
-    // 直接创建 Blob
-    const blob = new Blob([arrayBuffer]);
-    logImageTrace(traceId, 'blob created', { size: blob.size });
+    // 验证数据有效性（检查图片魔数）
+    const header = new Uint8Array(arrayBuffer.slice(0, 12));
+    const isValidImage = validateImageHeader(header);
+    
+    if (!isValidImage && arrayBuffer.byteLength > 0) {
+      logImageTrace(traceId, 'binary data invalid, fallback to JSON', { 
+        headerBytes: Array.from(header.slice(0, 8))
+      });
+      throw new Error('Invalid image header, fallback to JSON mode');
+    }
+
+    // 创建 Blob 时指定正确的 MIME type
+    const blob = new Blob([arrayBuffer], { type: mimeType });
+    logImageTrace(traceId, 'blob created', { size: blob.size, mimeType });
 
     return { blob, traceId };
   } catch (error) {
-    // 回退到旧命令
-    logImageTrace(traceId, 'binary command failed, fallback', { error });
+    // 回退到旧命令（JSON 数组方式，更稳定但效率较低）
+    logImageTrace(traceId, 'binary command failed, fallback to JSON', { error: String(error) });
     
     const binaryData = await invoke<number[]>('load_image_from_archive', {
       archivePath,
@@ -242,9 +299,43 @@ export async function loadImageFromArchiveAsBlob(
       pageIndex: options.pageIndex
     });
 
-    const blob = new Blob([new Uint8Array(binaryData)]);
+    const blob = new Blob([new Uint8Array(binaryData)], { type: mimeType });
+    logImageTrace(traceId, 'blob created via JSON fallback', { size: blob.size, mimeType });
     return { blob, traceId };
   }
+}
+
+/**
+ * 验证图片头部魔数
+ */
+function validateImageHeader(header: Uint8Array): boolean {
+  if (header.length < 4) return false;
+  
+  // JPEG: FF D8 FF
+  if (header[0] === 0xFF && header[1] === 0xD8 && header[2] === 0xFF) return true;
+  
+  // PNG: 89 50 4E 47
+  if (header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47) return true;
+  
+  // GIF: 47 49 46 38
+  if (header[0] === 0x47 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x38) return true;
+  
+  // WebP: 52 49 46 46 ... 57 45 42 50 (RIFF...WEBP)
+  if (header[0] === 0x52 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x46 &&
+      header.length >= 12 && header[8] === 0x57 && header[9] === 0x45 && header[10] === 0x42 && header[11] === 0x50) {
+    return true;
+  }
+  
+  // AVIF: 通常以 ftyp 开头（偏移 4-7 字节为 "ftyp"）
+  if (header.length >= 8 && header[4] === 0x66 && header[5] === 0x74 && header[6] === 0x79 && header[7] === 0x70) {
+    return true;
+  }
+  
+  // BMP: 42 4D
+  if (header[0] === 0x42 && header[1] === 0x4D) return true;
+  
+  // 如果都不匹配但有数据，也可能是有效的（某些格式）
+  return header.some(b => b !== 0);
 }
 
 /**

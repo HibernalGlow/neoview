@@ -18,6 +18,16 @@ export interface FolderThumbnailConfig {
   batchDelay: number;
   /** 单任务超时(ms) */
   taskTimeout: number;
+  /** 可见范围外的预加载数量 */
+  preloadAhead: number;
+}
+
+/** 预热进度回调 */
+export interface WarmupProgress {
+  total: number;
+  completed: number;
+  failed: number;
+  current: string;
 }
 
 interface FolderTask {
@@ -33,6 +43,7 @@ const DEFAULT_CONFIG: FolderThumbnailConfig = {
   batchSize: 20,         // 每批处理 20 个
   batchDelay: 50,        // 批次间隔 50ms
   taskTimeout: 10000,    // 单任务 10 秒超时
+  preloadAhead: 10,      // 可见范围外预加载 10 个
 };
 
 export class FolderThumbnailLoader {
@@ -48,6 +59,10 @@ export class FolderThumbnailLoader {
   
   // 回调
   private onThumbnailReady?: (folderPath: string, url: string) => void;
+  
+  // 预热状态
+  private warmupAborted = false;
+  private warmupProgress?: WarmupProgress;
 
   constructor(config: Partial<FolderThumbnailConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -395,7 +410,168 @@ export class FolderThumbnailLoader {
       activeCount: this.activeCount,
       cacheSize: this.cache.size,
       currentDirectory: this.currentDirectory,
+      warmupProgress: this.warmupProgress,
     };
+  }
+
+  /**
+   * 【可见范围优化】只加载可见区域 + 预加载附近
+   * @param folders 所有文件夹
+   * @param visibleStart 可见起始索引
+   * @param visibleEnd 可见结束索引
+   * @param currentPath 当前目录路径
+   */
+  async loadVisibleFolders(
+    folders: FsItem[], 
+    visibleStart: number, 
+    visibleEnd: number,
+    currentPath: string
+  ): Promise<void> {
+    this.setCurrentDirectory(currentPath);
+    
+    const preload = this.config.preloadAhead;
+    const start = Math.max(0, visibleStart - preload);
+    const end = Math.min(folders.length, visibleEnd + preload);
+    
+    // 只处理可见范围 + 预加载区域
+    const visibleFolders = folders.slice(start, end).filter(f => f.isDir);
+    
+    // 优先级：越靠近可见区域优先级越高
+    const needProcess = visibleFolders.filter(f => 
+      !this.cache.has(f.path) && !this.processing.has(f.path)
+    );
+    
+    if (needProcess.length === 0) return;
+    
+    console.log(`📂 可见范围加载 [${start}-${end}]：${needProcess.length} 个文件夹`);
+    
+    // 按距离可见中心排序（中心优先）
+    const center = (visibleStart + visibleEnd) / 2;
+    const sorted = [...needProcess].sort((a, b) => {
+      const idxA = folders.indexOf(a);
+      const idxB = folders.indexOf(b);
+      return Math.abs(idxA - center) - Math.abs(idxB - center);
+    });
+    
+    for (let i = 0; i < sorted.length; i++) {
+      const folder = sorted[i];
+      this.enqueue(folder.path, i);
+    }
+  }
+
+  /**
+   * 【递归预热】预热指定路径下的所有文件夹和文件缩略图
+   * @param rootPath 根路径
+   * @param onProgress 进度回调
+   * @param maxDepth 最大递归深度
+   */
+  async warmupRecursive(
+    rootPath: string,
+    onProgress?: (progress: WarmupProgress) => void,
+    maxDepth = 3
+  ): Promise<WarmupProgress> {
+    this.warmupAborted = false;
+    this.warmupProgress = {
+      total: 0,
+      completed: 0,
+      failed: 0,
+      current: rootPath,
+    };
+    
+    // 收集所有需要预热的路径
+    const allPaths: { path: string; isDir: boolean; depth: number }[] = [];
+    await this.collectPaths(rootPath, allPaths, 0, maxDepth);
+    
+    this.warmupProgress.total = allPaths.length;
+    onProgress?.(this.warmupProgress);
+    
+    console.log(`🔥 开始递归预热：${rootPath}（共 ${allPaths.length} 项，深度 ${maxDepth}）`);
+    
+    // 分批处理
+    for (let i = 0; i < allPaths.length; i += this.config.batchSize) {
+      if (this.warmupAborted) {
+        console.log('🛑 预热已取消');
+        break;
+      }
+      
+      const batch = allPaths.slice(i, i + this.config.batchSize);
+      
+      // 并行处理当前批次
+      await Promise.allSettled(batch.map(async item => {
+        if (this.warmupAborted) return;
+        
+        this.warmupProgress!.current = item.path;
+        onProgress?.(this.warmupProgress!);
+        
+        try {
+          if (item.isDir) {
+            await this.generateFolderThumbnail(item.path);
+          } else {
+            // 普通文件交给 thumbnailManager
+            // 这里只处理文件夹
+          }
+          this.warmupProgress!.completed++;
+        } catch {
+          this.warmupProgress!.failed++;
+        }
+        
+        onProgress?.(this.warmupProgress!);
+      }));
+      
+      // 批次间隔
+      if (i + this.config.batchSize < allPaths.length && !this.warmupAborted) {
+        await this.delay(this.config.batchDelay);
+      }
+    }
+    
+    console.log(`✅ 预热完成：${this.warmupProgress.completed}/${this.warmupProgress.total}（失败 ${this.warmupProgress.failed}）`);
+    
+    const result = { ...this.warmupProgress };
+    this.warmupProgress = undefined;
+    return result;
+  }
+
+  /**
+   * 递归收集路径
+   */
+  private async collectPaths(
+    path: string, 
+    result: { path: string; isDir: boolean; depth: number }[],
+    depth: number,
+    maxDepth: number
+  ): Promise<void> {
+    if (this.warmupAborted || depth > maxDepth) return;
+    
+    try {
+      const items = await FileSystemAPI.browseDirectory(path);
+      
+      for (const item of items) {
+        if (this.warmupAborted) return;
+        
+        if (item.isDir) {
+          result.push({ path: item.path, isDir: true, depth });
+          // 递归子目录
+          await this.collectPaths(item.path, result, depth + 1, maxDepth);
+        }
+      }
+    } catch (error) {
+      console.debug(`收集路径失败: ${path}`, error);
+    }
+  }
+
+  /**
+   * 取消预热
+   */
+  cancelWarmup() {
+    this.warmupAborted = true;
+    console.log('🛑 预热取消请求已发送');
+  }
+
+  /**
+   * 是否正在预热
+   */
+  isWarming(): boolean {
+    return this.warmupProgress !== undefined && !this.warmupAborted;
   }
 }
 

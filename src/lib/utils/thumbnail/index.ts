@@ -3,4 +3,4 @@
  */
 
 export { FolderThumbnailLoader, folderThumbnailLoader } from './FolderThumbnailLoader';
-export type { FolderThumbnailConfig } from './FolderThumbnailLoader';
+export type { FolderThumbnailConfig, WarmupProgress } from './FolderThumbnailLoader';

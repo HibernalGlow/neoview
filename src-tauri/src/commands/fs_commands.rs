@@ -371,7 +371,62 @@ pub async fn delete_archive_entry(
     archive_manager.delete_entry_from_zip(&path, &inner_path)
 }
 
-/// 从压缩包加载图片
+/// 【优化】从压缩包加载图片 - 使用 Response 直接传输二进制
+/// 避免 Vec<u8> -> JSON Array 的序列化开销
+#[tauri::command]
+pub async fn load_image_from_archive_binary(
+    archive_path: String,
+    file_path: String,
+    trace_id: Option<String>,
+    page_index: Option<i32>,
+    state: State<'_, FsState>,
+) -> Result<tauri::ipc::Response, String> {
+    let trace_id = trace_id.unwrap_or_else(|| {
+        let millis = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or_default();
+        format!("rust-archive-bin-{}-{}", page_index.unwrap_or(-1), millis)
+    });
+
+    info!(
+        "📥 [ImagePipeline:{}] load_image_from_archive_binary request archive={} inner={} page_index={:?}",
+        trace_id, archive_path, file_path, page_index
+    );
+
+    let archive_manager = Arc::clone(&state.archive_manager);
+    let archive_path_buf = PathBuf::from(&archive_path);
+    let inner_path = file_path.clone();
+    let result = spawn_blocking(move || {
+        let manager = archive_manager
+            .lock()
+            .map_err(|e| format!("获取锁失败: {}", e))?;
+        manager.load_image_from_zip_binary(&archive_path_buf, &inner_path)
+    })
+    .await
+    .map_err(|e| format!("load_image_from_archive_binary join error: {}", e))?;
+
+    match &result {
+        Ok(bytes) => {
+            info!(
+                "📤 [ImagePipeline:{}] load_image_from_archive_binary success bytes={}",
+                trace_id,
+                bytes.len()
+            );
+            // 使用 Response 直接传输二进制数据，避免 JSON 序列化
+            Ok(tauri::ipc::Response::new(bytes.clone()))
+        },
+        Err(err) => {
+            warn!(
+                "⚠️ [ImagePipeline:{}] load_image_from_archive_binary failed: {}",
+                trace_id, err
+            );
+            Err(err.clone())
+        }
+    }
+}
+
+/// 从压缩包加载图片 (兼容旧版)
 #[tauri::command]
 pub async fn load_image_from_archive(
     archive_path: String,

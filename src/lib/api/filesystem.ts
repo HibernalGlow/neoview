@@ -201,6 +201,7 @@ export async function loadImageFromArchive(
 
 /**
  * 加载压缩包图片为 Blob（推荐，避免重复转换）
+ * 【优化】使用 Response 类型直接传输二进制数据，避免 JSON 序列化开销
  */
 export async function loadImageFromArchiveAsBlob(
   archivePath: string,
@@ -208,26 +209,42 @@ export async function loadImageFromArchiveAsBlob(
   options: LoadImageFromArchiveOptions = {}
 ): Promise<{ blob: Blob; traceId: string }> {
   const traceId = options.traceId ?? createImageTraceId('archive', options.pageIndex);
-  logImageTrace(traceId, 'invoke load_image_from_archive', {
+  logImageTrace(traceId, 'invoke load_image_from_archive_binary', {
     archivePath,
     innerPath: filePath,
     pageIndex: options.pageIndex
   });
 
-  const binaryData = await invoke<number[]>('load_image_from_archive', {
-    archivePath,
-    filePath,
-    traceId,
-    pageIndex: options.pageIndex
-  });
+  try {
+    // 【优化】使用二进制传输命令，返回 ArrayBuffer
+    const arrayBuffer = await invoke<ArrayBuffer>('load_image_from_archive_binary', {
+      archivePath,
+      filePath,
+      traceId,
+      pageIndex: options.pageIndex
+    });
 
-  logImageTrace(traceId, 'archive image bytes ready', { bytes: binaryData.length });
+    logImageTrace(traceId, 'archive image binary ready', { bytes: arrayBuffer.byteLength });
 
-  // 直接创建 Blob，不创建 URL
-  const blob = new Blob([new Uint8Array(binaryData)]);
-  logImageTrace(traceId, 'blob created', { size: blob.size });
+    // 直接创建 Blob
+    const blob = new Blob([arrayBuffer]);
+    logImageTrace(traceId, 'blob created', { size: blob.size });
 
-  return { blob, traceId };
+    return { blob, traceId };
+  } catch (error) {
+    // 回退到旧命令
+    logImageTrace(traceId, 'binary command failed, fallback', { error });
+    
+    const binaryData = await invoke<number[]>('load_image_from_archive', {
+      archivePath,
+      filePath,
+      traceId,
+      pageIndex: options.pageIndex
+    });
+
+    const blob = new Blob([new Uint8Array(binaryData)]);
+    return { blob, traceId };
+  }
 }
 
 /**

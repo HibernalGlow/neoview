@@ -982,3 +982,66 @@ pub async fn save_folder_thumbnail(
     
     Ok(blob_key)
 }
+
+/// 保存失败记录
+#[tauri::command]
+pub async fn save_failed_thumbnail(
+    app: tauri::AppHandle,
+    path: String,
+    reason: String,
+    retry_count: i32,
+    error_message: Option<String>,
+) -> Result<(), String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.save_failed_thumbnail(
+        &path,
+        &reason,
+        retry_count,
+        error_message.as_deref(),
+    ).map_err(|e| format!("保存失败记录失败: {}", e))
+}
+
+/// 查询失败记录
+#[tauri::command]
+pub async fn get_failed_thumbnail(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<Option<(String, i32, String)>, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.get_failed_thumbnail(&path)
+        .map_err(|e| format!("查询失败记录失败: {}", e))
+}
+
+/// 删除失败记录
+#[tauri::command]
+pub async fn remove_failed_thumbnail(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<(), String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.remove_failed_thumbnail(&path)
+        .map_err(|e| format!("删除失败记录失败: {}", e))
+}
+
+/// 批量检查失败记录
+#[tauri::command]
+pub async fn batch_check_failed_thumbnails(
+    app: tauri::AppHandle,
+    paths: Vec<String>,
+) -> Result<HashMap<String, (String, i32)>, String> {
+    let state = app.state::<ThumbnailState>();
+    let keys: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
+    state.db.batch_check_failed(&keys)
+        .map_err(|e| format!("批量检查失败记录失败: {}", e))
+}
+
+/// 清理过期失败记录
+#[tauri::command]
+pub async fn cleanup_old_failures(
+    app: tauri::AppHandle,
+    days: i64,
+) -> Result<usize, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.cleanup_old_failures(days)
+        .map_err(|e| format!("清理失败记录失败: {}", e))
+}

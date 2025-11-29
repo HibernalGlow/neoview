@@ -4,6 +4,7 @@
 
 use chrono::{Duration, Local};
 use rusqlite::{params, Connection, Result as SqliteResult};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -117,6 +118,22 @@ impl ThumbnailDb {
         )?;
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_thumbs_date ON thumbs(date)",
+            [],
+        )?;
+
+        // 创建失败记录表
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS failed_thumbnails (
+                key TEXT NOT NULL PRIMARY KEY,
+                reason TEXT NOT NULL,
+                retry_count INTEGER DEFAULT 0,
+                last_attempt TEXT,
+                error_message TEXT
+            )",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_failed_reason ON failed_thumbnails(reason)",
             [],
         )?;
 
@@ -452,6 +469,111 @@ impl ThumbnailDb {
         } else {
             Ok(0)
         }
+    }
+
+    /// 保存失败记录
+    pub fn save_failed_thumbnail(
+        &self,
+        key: &str,
+        reason: &str,
+        retry_count: i32,
+        error_message: Option<&str>,
+    ) -> SqliteResult<()> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let timestamp = Self::current_timestamp_string();
+        conn.execute(
+            "INSERT OR REPLACE INTO failed_thumbnails (key, reason, retry_count, last_attempt, error_message)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![key, reason, retry_count, timestamp, error_message],
+        )?;
+
+        Ok(())
+    }
+
+    /// 查询失败记录
+    pub fn get_failed_thumbnail(&self, key: &str) -> SqliteResult<Option<(String, i32, String)>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT reason, retry_count, last_attempt FROM failed_thumbnails WHERE key = ?1"
+        )?;
+
+        let result = stmt.query_row(params![key], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i32>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        });
+
+        match result {
+            Ok(data) => Ok(Some(data)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// 删除失败记录（当缩略图成功生成后）
+    pub fn remove_failed_thumbnail(&self, key: &str) -> SqliteResult<()> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        conn.execute("DELETE FROM failed_thumbnails WHERE key = ?1", params![key])?;
+        Ok(())
+    }
+
+    /// 批量检查失败记录
+    pub fn batch_check_failed(&self, keys: &[&str]) -> SqliteResult<HashMap<String, (String, i32)>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut results = HashMap::new();
+        if keys.is_empty() {
+            return Ok(results);
+        }
+
+        let placeholders: String = keys.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let query = format!(
+            "SELECT key, reason, retry_count FROM failed_thumbnails WHERE key IN ({})",
+            placeholders
+        );
+
+        let mut stmt = conn.prepare(&query)?;
+        let params: Vec<&dyn rusqlite::ToSql> = keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
+        let mut rows = stmt.query(params.as_slice())?;
+
+        while let Some(row) = rows.next()? {
+            let key: String = row.get(0)?;
+            let reason: String = row.get(1)?;
+            let retry_count: i32 = row.get(2)?;
+            results.insert(key, (reason, retry_count));
+        }
+
+        Ok(results)
+    }
+
+    /// 清理过期的失败记录（例如超过7天的）
+    pub fn cleanup_old_failures(&self, days: i64) -> SqliteResult<usize> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let cutoff_time = Local::now() - Duration::days(days);
+        let cutoff = cutoff_time.format("%Y-%m-%d %H:%M:%S").to_string();
+
+        let count = conn.execute(
+            "DELETE FROM failed_thumbnails WHERE last_attempt < ?1",
+            params![cutoff],
+        )?;
+
+        Ok(count)
     }
 }
 

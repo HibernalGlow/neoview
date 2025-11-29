@@ -17,6 +17,16 @@ import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
 import { normalizeThumbnailDirectoryPath } from '$lib/config/paths';
 import { folderThumbnailLoader } from './thumbnail/FolderThumbnailLoader';
+import { 
+  invokeWithTimeout, 
+  isTimeoutError, 
+  DEFAULT_IPC_TIMEOUT 
+} from './thumbnail/ipcTimeout';
+import {
+  getPlaceholderForPath,
+  inferFailureReason,
+  shouldRetry
+} from './thumbnail/placeholders';
 
 export interface ThumbnailConfig {
   maxConcurrentLocal: number;
@@ -396,16 +406,28 @@ class ThumbnailManager {
 
   /**
    * 标记缩略图为失败状态（参考 NeeView 的 ThumbnailType.Empty）
+   * 支持失败原因分类和持久化
    */
-  private markThumbnailFailed(path: string, innerPath?: string): void {
+  private markThumbnailFailed(path: string, innerPath?: string, error?: unknown): void {
     const pathKey = this.buildPathKey(path, innerPath);
+    const reason = inferFailureReason(error);
+    
     this.failedThumbnails.add(pathKey);
     
     // 更新重试计数
     const currentCount = this.failedRetryCount.get(pathKey) || 0;
-    this.failedRetryCount.set(pathKey, currentCount + 1);
+    const newCount = currentCount + 1;
+    this.failedRetryCount.set(pathKey, newCount);
     
-    console.debug(`📛 缩略图标记为失败: ${pathKey} (重试次数: ${currentCount + 1})`);
+    console.debug(`📛 缩略图标记为失败: ${pathKey} (原因: ${reason}, 重试次数: ${newCount})`);
+    
+    // 持久化到数据库（异步，不阻塞）
+    invoke('save_failed_thumbnail', {
+      path: pathKey,
+      reason,
+      retryCount: newCount,
+      errorMessage: error ? String(error) : null,
+    }).catch(e => console.debug('保存失败记录失败:', e));
   }
 
   /**
@@ -414,7 +436,15 @@ class ThumbnailManager {
   private canRetryFailedThumbnail(path: string, innerPath?: string): boolean {
     const pathKey = this.buildPathKey(path, innerPath);
     const retryCount = this.failedRetryCount.get(pathKey) || 0;
-    return retryCount < this.MAX_RETRY_COUNT;
+    // 根据失败原因决定是否重试
+    return shouldRetry('unknown', retryCount, this.MAX_RETRY_COUNT);
+  }
+  
+  /**
+   * 获取失败缩略图的占位图
+   */
+  getFailedPlaceholder(path: string): string {
+    return getPlaceholderForPath(path);
   }
 
   /**
@@ -659,12 +689,12 @@ class ThumbnailManager {
   /**
    * 从数据库加载缩略图（返回 blob URL）
    * 简化：只使用 key + category，减少计算
+   * 支持 IPC 超时处理
    */
   private async loadFromDb(path: string, innerPath?: string, isFolder?: boolean): Promise<string | null> {
+    const pathKey = this.buildPathKey(path, innerPath);
+    
     try {
-      // 【优化】使用顶层导入的 invoke，避免每次调用都动态导入
-      const pathKey = this.buildPathKey(path, innerPath);
-
       if (this.dbMissCache.has(pathKey)) {
         return null;
       }
@@ -672,33 +702,26 @@ class ThumbnailManager {
       // 确定类别
       const category = isFolder ? 'folder' : 'file';
 
-      // 默认只使用 key + category 查询（减少计算，不需要 size 和 ghash）
-      // 传递 0 作为 size 和 ghash（后端不使用这些值）
-      // 如果是文件夹且没有记录，后端会自动查找路径下最早的文件记录并绑定
-      const blobKey = await invoke<string | null>('load_thumbnail_from_db', {
+      // 使用超时包装的 IPC 调用
+      const blobKey = await invokeWithTimeout<string | null>('load_thumbnail_from_db', {
         path: pathKey,
-        size: 0, // 不再使用，减少计算
-        ghash: 0, // 不再使用，减少计算
+        size: 0,
+        ghash: 0,
         category,
-      });
+      }, DEFAULT_IPC_TIMEOUT);
 
       if (blobKey) {
-        console.log(`📦 从数据库找到缩略图: ${pathKey} (category=${category}, blob key: ${blobKey})`);
-        // 获取 blob 数据并创建 Blob URL
-        const blobData = await invoke<number[] | null>('get_thumbnail_blob_data', {
+        // 获取 blob 数据（也使用超时）
+        const blobData = await invokeWithTimeout<number[] | null>('get_thumbnail_blob_data', {
           blobKey,
-        });
+        }, DEFAULT_IPC_TIMEOUT);
 
         if (blobData && blobData.length > 0) {
-          // 转换为 Uint8Array
           const uint8Array = new Uint8Array(blobData);
           const blob = new Blob([uint8Array], { type: 'image/webp' });
           const blobUrl = URL.createObjectURL(blob);
-
-          // 估算大小
           const estimatedSize = blobData.length;
 
-          // 更新两个缓存
           this.cache.set(pathKey, {
             pathKey,
             dataUrl: blobUrl,
@@ -706,19 +729,20 @@ class ThumbnailManager {
           });
           this.lruCache.set(pathKey, blobUrl, estimatedSize);
 
-          console.log(`✅ 成功从数据库加载缩略图: ${pathKey} (${blobData.length} bytes)`);
           return blobUrl;
-        } else {
-          console.warn(`⚠️ 从数据库获取的 blob 数据为空: ${pathKey}`);
         }
       } else {
-        console.debug(`📭 数据库中没有缩略图: ${pathKey} (category=${category})`);
         this.dbMissCache.add(pathKey);
       }
     } catch (error) {
-      console.debug('从数据库加载缩略图失败:', path, error);
-      const pathKey = this.buildPathKey(path, innerPath);
-      this.dbMissCache.add(pathKey);
+      // 超时错误特殊处理：不加入 miss cache，允许后续重试
+      if (isTimeoutError(error)) {
+        console.warn(`⏱️ 从数据库加载缩略图超时: ${pathKey}`);
+        // 不加入 dbMissCache，允许后续重试
+      } else {
+        console.debug('从数据库加载缩略图失败:', path, error);
+        this.dbMissCache.add(pathKey);
+      }
     }
 
     return null;
@@ -802,15 +826,15 @@ class ThumbnailManager {
       }
       
       // blobKey 为空或 blobData 为空，标记为失败
-      this.markThumbnailFailed(path, innerPath);
+      this.markThumbnailFailed(path, innerPath, new Error('Empty blob data'));
     } catch (error) {
       // 权限错误静默处理，其他错误才打印
       const errorMsg = String(error);
       if (!errorMsg.includes('权限被拒绝') && !errorMsg.includes('Permission denied')) {
         console.error('生成缩略图失败:', path, error);
       }
-      // 标记为失败，避免重复尝试
-      this.markThumbnailFailed(path, innerPath);
+      // 标记为失败（传递错误信息用于分类）
+      this.markThumbnailFailed(path, innerPath, error);
     }
 
     return null;

@@ -270,23 +270,21 @@ export class ImageLoader {
 
 			if (shouldSkip) continue;
 
-			// 获取 blob
-			const blob = this.core.getCachedBlob(i);
-			if (!blob) continue;
+			// 确保 blob 已缓存
+			if (!this.core.hasCache(i)) continue;
 
 			jobs.push({
-				blob,
-				hash: imageHash,
 				pageIndex: i,
+				imageHash,
 				conditionId
 			});
 
 			this.pendingPreloadTasks.add(imageHash);
 		}
 
-		if (jobs.length > 0) {
+		if (jobs.length > 0 && currentBook.path) {
 			this.totalPreUpscalePages = jobs.length;
-			await enqueuePreloadBatchJobs(jobs);
+			await enqueuePreloadBatchJobs(currentBook.path, jobs);
 		}
 	}
 
@@ -386,15 +384,23 @@ export class ImageLoader {
 	}
 
 	/**
-	 * 书籍切换时重置
+	 * 书籍切换时重置（异步执行，不阻塞切换）
 	 */
 	resetForBookChange(options: { preservePreloadCache?: boolean } = {}): void {
-		if (!options.preservePreloadCache) {
-			this.upscaleHandler.clearMemoryCache();
-		}
-		this.pendingPreloadTasks.clear();
-		this.resetPreUpscaleProgress();
-		this.core.clearCache();
+		// 【优化】使用 queueMicrotask 异步清理，避免阻塞 UI
+		queueMicrotask(() => {
+			if (!options.preservePreloadCache) {
+				this.upscaleHandler.clearMemoryCache();
+			}
+			this.pendingPreloadTasks.clear();
+			this.resetPreUpscaleProgress();
+			
+			// 【优化】延迟清理 blob 缓存，让新书籍的加载先开始
+			setTimeout(() => {
+				this.core.clearCache();
+				console.log('📦 旧书籍缓存清理完成');
+			}, 100);
+		});
 	}
 
 	/**

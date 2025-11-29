@@ -10,7 +10,7 @@ import { browseDirectory } from '$lib/api/filesystem';
 // ============ Types ============
 
 export type FolderViewStyle = 'list' | 'content' | 'banner' | 'thumbnail';
-export type FolderSortField = 'name' | 'date' | 'size' | 'type';
+export type FolderSortField = 'name' | 'date' | 'size' | 'type' | 'random';
 export type FolderSortOrder = 'asc' | 'desc';
 export type DeleteStrategy = 'trash' | 'permanent';
 
@@ -325,6 +325,17 @@ export const itemCount = derived(state, ($state) => $state.items.length);
 // ============ Helper Functions ============
 
 function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrder): FsItem[] {
+	// 随机排序特殊处理
+	if (field === 'random') {
+		const shuffled = [...items];
+		// Fisher-Yates 洗牌算法
+		for (let i = shuffled.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+		}
+		return shuffled;
+	}
+
 	const sorted = [...items].sort((a, b) => {
 		// 文件夹优先
 		if (a.isDir !== b.isDir) {

@@ -23,7 +23,13 @@ import {
 	Search,
 	CornerDownRight,
 	ClipboardPaste,
-	ListTree
+	ListTree,
+	// 排序图标
+	ALargeSmall,
+	Calendar,
+	HardDrive,
+	FileType,
+	Shuffle
 } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import * as Tooltip from '$lib/components/ui/tooltip';
@@ -67,12 +73,18 @@ const viewStyles: { value: FolderViewStyle; icon: typeof List; label: string }[]
 	{ value: 'thumbnail', icon: Grid3x3, label: '缩略图' }
 ];
 
-const sortFields: { value: FolderSortField; label: string }[] = [
-	{ value: 'name', label: '名称' },
-	{ value: 'date', label: '日期' },
-	{ value: 'size', label: '大小' },
-	{ value: 'type', label: '类型' }
+const sortFields: { value: FolderSortField; label: string; icon: typeof ALargeSmall }[] = [
+	{ value: 'name', label: '名称', icon: ALargeSmall },
+	{ value: 'date', label: '日期', icon: Calendar },
+	{ value: 'size', label: '大小', icon: HardDrive },
+	{ value: 'type', label: '类型', icon: FileType },
+	{ value: 'random', label: '随机', icon: Shuffle }
 ];
+
+function getCurrentSortIcon() {
+	const current = sortFields.find((f) => f.value === $sortConfig.field);
+	return current?.icon ?? ALargeSmall;
+}
 
 function handleGoBack() {
 	onGoBack?.();
@@ -206,21 +218,25 @@ function getCurrentViewIcon() {
 	<!-- 分隔 -->
 	<div class="bg-border mx-1 h-5 w-px"></div>
 
-	<!-- 排序下拉（使用 icon + 箭头节省空间） -->
+	<!-- 排序下拉（使用排序字段图标 + 升降序箭头） -->
 	<DropdownMenu.Root>
 		<DropdownMenu.Trigger>
 			<Tooltip.Root>
 				<Tooltip.Trigger>
-					<Button variant="ghost" size="icon" class="h-7 w-7">
-						{#if $sortConfig.order === 'asc'}
-							<ArrowUp class="h-4 w-4" />
-						{:else}
-							<ArrowDown class="h-4 w-4" />
+					<Button variant="ghost" size="sm" class="h-7 gap-0.5 px-1.5">
+						{@const SortIcon = getCurrentSortIcon()}
+						<SortIcon class="h-3.5 w-3.5" />
+						{#if $sortConfig.field !== 'random'}
+							{#if $sortConfig.order === 'asc'}
+								<ArrowUp class="h-3 w-3" />
+							{:else}
+								<ArrowDown class="h-3 w-3" />
+							{/if}
 						{/if}
 					</Button>
 				</Tooltip.Trigger>
 				<Tooltip.Content>
-					<p>排序: {sortFields.find((f) => f.value === $sortConfig.field)?.label} {$sortConfig.order === 'asc' ? '升序' : '降序'}</p>
+					<p>排序: {sortFields.find((f) => f.value === $sortConfig.field)?.label} {$sortConfig.field !== 'random' ? ($sortConfig.order === 'asc' ? '升序' : '降序') : ''}</p>
 				</Tooltip.Content>
 			</Tooltip.Root>
 		</DropdownMenu.Trigger>

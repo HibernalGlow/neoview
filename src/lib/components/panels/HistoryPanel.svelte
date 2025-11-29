@@ -24,6 +24,7 @@
 	import SearchBar from '$lib/components/ui/SearchBar.svelte';
 	import FileItemCard from './file/components/FileItemCard.svelte';
 	import FolderContextMenu from './folderPanel/components/FolderContextMenu.svelte';
+	import PanelToolbar, { type SortField, type SortOrder, type ViewMode } from './shared/PanelToolbar.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 	import { thumbnailManager } from '$lib/utils/thumbnailManager';
@@ -62,6 +63,52 @@
 	);
 	let syncFileTreeOnHistorySelect = $state(historySettingsStore.syncFileTreeOnHistorySelect);
 	let showSearchBar = $state(false);
+	let sortField = $state<SortField>('timestamp');
+	let sortOrder = $state<SortOrder>('desc');
+
+	// 排序后的历史记录
+	let sortedHistory = $derived(() => {
+		const filtered = filteredHistory;
+		if (sortField === 'random') {
+			const shuffled = [...filtered];
+			for (let i = shuffled.length - 1; i > 0; i--) {
+				const j = Math.floor(Math.random() * (i + 1));
+				[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+			}
+			return shuffled;
+		}
+		return [...filtered].sort((a, b) => {
+			let cmp = 0;
+			switch (sortField) {
+				case 'name':
+					cmp = a.name.localeCompare(b.name, undefined, { numeric: true });
+					break;
+				case 'path':
+					cmp = a.path.localeCompare(b.path, undefined, { numeric: true });
+					break;
+				case 'timestamp':
+					cmp = a.timestamp - b.timestamp;
+					break;
+				case 'type': {
+					const extA = a.name.split('.').pop()?.toLowerCase() || '';
+					const extB = b.name.split('.').pop()?.toLowerCase() || '';
+					cmp = extA.localeCompare(extB);
+					break;
+				}
+			}
+			return sortOrder === 'asc' ? cmp : -cmp;
+		});
+	});
+
+	function handleSortChange(field: SortField, order: SortOrder) {
+		sortField = field;
+		sortOrder = order;
+	}
+
+	function handleViewModeChange(mode: ViewMode) {
+		viewMode = mode;
+		savePanelViewMode('history', mode);
+	}
 
 	$effect(() => {
 		historySettingsStore.setSyncFileTreeOnHistorySelect(syncFileTreeOnHistorySelect);
@@ -139,13 +186,6 @@
 			historyStore.clear();
 			// 状态会通过 store 订阅自动更新
 		}
-	}
-
-	// 切换视图模式
-	function toggleViewMode() {
-		const next = viewMode === 'list' ? 'grid' : 'list';
-		viewMode = next;
-		savePanelViewMode('history', next);
 	}
 
 	// 判断是否为压缩包
@@ -260,24 +300,16 @@
 					/>
 					<span>同步文件树</span>
 				</div>
-				<div class="flex items-center gap-2">
-					<Button variant="ghost" size="sm" onclick={toggleViewMode} title="切换视图">
-						{#if viewMode === 'list'}
-							<Grid3x3 class="h-4 w-4" />
-						{:else}
-							<List class="h-4 w-4" />
-						{/if}
-					</Button>
-					<Button
-						variant={showSearchBar ? 'default' : 'ghost'}
-						size="sm"
-						onclick={() => (showSearchBar = !showSearchBar)}
-						title={showSearchBar ? '隐藏搜索栏' : '显示搜索栏'}
-					>
-						<Search class="h-4 w-4" />
-					</Button>
-					<Button variant="ghost" size="sm" onclick={clearHistory}>清除全部</Button>
-				</div>
+				<PanelToolbar
+					{viewMode}
+					{showSearchBar}
+					{sortField}
+					{sortOrder}
+					onViewModeChange={handleViewModeChange}
+					onSearchToggle={() => (showSearchBar = !showSearchBar)}
+					onSortChange={handleSortChange}
+				/>
+				<Button variant="ghost" size="sm" onclick={clearHistory}>清除全部</Button>
 			</div>
 		</div>
 
@@ -298,14 +330,14 @@
 	<div class="min-h-0 flex-1 overflow-hidden">
 		<!-- 历史列表 -->
 		<div class="flex-1 overflow-auto">
-			{#if filteredHistory.length === 0 && searchQuery.trim()}
+			{#if sortedHistory().length === 0 && searchQuery.trim()}
 				<div class="text-muted-foreground flex flex-col items-center justify-center py-12">
 					<div class="space-y-2 text-center">
 						<p class="text-lg font-medium">未找到匹配的历史记录</p>
 						<p class="text-sm opacity-70">搜索词: "{searchQuery}"</p>
 					</div>
 				</div>
-			{:else if filteredHistory.length === 0}
+			{:else if sortedHistory().length === 0}
 				<div class="text-muted-foreground flex flex-col items-center justify-center py-12">
 					<div class="relative mb-4">
 						<Clock class="h-16 w-16 opacity-30" />
@@ -321,7 +353,7 @@
 			{:else if viewMode === 'list'}
 				<!-- 列表视图 -->
 				<div class="space-y-2 p-2">
-					{#each filteredHistory as entry (entry.id)}
+					{#each sortedHistory() as entry (entry.id)}
 						<div class="group relative">
 							<FileItemCard
 								item={historyToFsItem(entry)}
@@ -354,7 +386,7 @@
 				<!-- 网格视图 -->
 				<div class="p-2">
 					<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
-						{#each filteredHistory as entry (entry.id)}
+						{#each sortedHistory() as entry (entry.id)}
 							<div class="group relative">
 								<FileItemCard
 									item={historyToFsItem(entry)}

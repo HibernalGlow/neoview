@@ -428,6 +428,11 @@
 				calculateVisibleRange();
 			});
 
+			// 【新增】预热目录缩略图（异步，不阻塞 UI）
+			if (items.length > 0) {
+				thumbnailManager.warmupDirectory(items, currentPath);
+			}
+
 			lastPath = currentPath;
 		}
 	});

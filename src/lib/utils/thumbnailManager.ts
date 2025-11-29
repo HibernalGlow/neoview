@@ -161,6 +161,67 @@ class ThumbnailManager {
   }
 
   /**
+   * 【新增】预热目录缩略图（在目录加载后调用）
+   * 异步预热，不阻塞 UI
+   */
+  warmupDirectory(items: FsItem[], currentPath: string): void {
+    // 使用 requestIdleCallback 在空闲时预热，不阻塞 UI
+    if (typeof requestIdleCallback !== 'undefined') {
+      requestIdleCallback(() => {
+        this.doWarmupDirectory(items, currentPath);
+      }, { timeout: 2000 });
+    } else {
+      // 降级方案
+      setTimeout(() => {
+        this.doWarmupDirectory(items, currentPath);
+      }, 100);
+    }
+  }
+
+  /**
+   * 执行目录预热
+   */
+  private async doWarmupDirectory(items: FsItem[], currentPath: string): Promise<void> {
+    console.log(`🔥 开始预热目录缩略图: ${currentPath} (${items.length} 项)`);
+
+    // 1. 过滤出需要缩略图的项目（图片、压缩包）
+    const needThumbnailItems = items.filter((item) => {
+      if (item.isDir) return false; // 文件夹单独处理
+      if (item.isImage) return true;
+      const name = item.name?.toLowerCase() || '';
+      return name.endsWith('.zip') || name.endsWith('.cbz') ||
+             name.endsWith('.rar') || name.endsWith('.cbr');
+    });
+
+    if (needThumbnailItems.length === 0) {
+      console.log('📭 无需预热的项目');
+      return;
+    }
+
+    // 2. 分批预热，避免一次性加载太多
+    const batchSize = 50;
+    const paths = needThumbnailItems.map(item => item.path);
+
+    for (let i = 0; i < paths.length; i += batchSize) {
+      const batch = paths.slice(i, i + batchSize);
+      
+      // 异步批量从数据库加载
+      try {
+        await this.batchLoadFromDb(batch);
+      } catch (err) {
+        console.debug('预热批量加载失败:', err);
+      }
+
+      // 给 UI 线程喘息机会
+      if (i + batchSize < paths.length) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    }
+
+    console.log(`✅ 目录预热完成: ${paths.length} 项`);
+  }
+
+  /**
    * 清理指定目录的失败标记
    */
   private clearFailedMarksForDirectory(directory: string): void {

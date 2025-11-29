@@ -7,6 +7,7 @@ import { writable, derived, get } from 'svelte/store';
 import type { FsItem } from '$lib/types';
 import { browseDirectory } from '$lib/api/filesystem';
 import { folderRatingStore } from '$lib/stores/emm/folderRating';
+import { getDefaultRating } from '$lib/stores/emm/storage';
 
 // ============ Types ============
 
@@ -338,18 +339,18 @@ function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrd
 	}
 
 	// rating 排序特殊处理：需要获取评分数据
-	// 规则：文件夹在前，无 rating 默认 4 分，用户自定义 rating 优先
+	// 规则：文件夹在前，无 rating 使用默认评分，用户自定义 rating 优先
 	if (field === 'rating') {
-		const DEFAULT_RATING = 4;
+		const defaultRating = getDefaultRating();
 		const sorted = [...items].sort((a, b) => {
 			// 文件夹优先
 			if (a.isDir !== b.isDir) {
 				return a.isDir ? -1 : 1;
 			}
 
-			// 获取有效评分（用户自定义优先，否则使用平均评分，无评分默认 4 分）
-			const ratingA = folderRatingStore.getEffectiveRating(a.path) ?? DEFAULT_RATING;
-			const ratingB = folderRatingStore.getEffectiveRating(b.path) ?? DEFAULT_RATING;
+			// 获取有效评分（用户自定义优先，否则使用平均评分，无评分使用默认值）
+			const ratingA = folderRatingStore.getEffectiveRating(a.path) ?? defaultRating;
+			const ratingB = folderRatingStore.getEffectiveRating(b.path) ?? defaultRating;
 
 			// 评分相同则按名称排序
 			if (ratingA === ratingB) {

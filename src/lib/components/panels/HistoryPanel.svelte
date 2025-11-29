@@ -38,6 +38,7 @@
 	import { setActivePanelTab } from '$lib/stores';
 	import { openFileSystemItem } from '$lib/utils/navigationUtils';
 	import { folderRatingStore } from '$lib/stores/emm/folderRating';
+	import { getDefaultRating } from '$lib/stores/emm/storage';
 	import { loadPanelViewMode, savePanelViewMode } from '$lib/utils/panelViewMode';
 	import { isVideoFile } from '$lib/utils/videoUtils';
 
@@ -97,10 +98,10 @@
 					break;
 				}
 				case 'rating': {
-					// 规则：无 rating 默认 4 分，用户自定义 rating 优先
-					const DEFAULT_RATING = 4;
-					const ratingA = folderRatingStore.getEffectiveRating(a.path) ?? DEFAULT_RATING;
-					const ratingB = folderRatingStore.getEffectiveRating(b.path) ?? DEFAULT_RATING;
+					// 规则：无 rating 使用默认评分，用户自定义 rating 优先
+					const defaultRating = getDefaultRating();
+					const ratingA = folderRatingStore.getEffectiveRating(a.path) ?? defaultRating;
+					const ratingB = folderRatingStore.getEffectiveRating(b.path) ?? defaultRating;
 					cmp = ratingA - ratingB;
 					break;
 				}

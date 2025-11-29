@@ -25,6 +25,7 @@ import {
 import { Loader2, FolderOpen, AlertCircle } from '@lucide/svelte';
 import { directoryTreeCache } from '../utils/directoryTreeCache';
 import { folderRatingStore } from '$lib/stores/emm/folderRating';
+import { getDefaultRating } from '$lib/stores/emm/storage';
 
 interface NavigationCommand {
 	type: 'init' | 'push' | 'pop' | 'goto' | 'history';
@@ -103,18 +104,18 @@ function sortItems(items: FsItem[], field: string, order: string): FsItem[] {
 	}
 
 	// rating 排序特殊处理
-	// 规则：文件夹在前，无 rating 默认 4 分，用户自定义 rating 优先
+	// 规则：文件夹在前，无 rating 使用默认评分，用户自定义 rating 优先
 	if (field === 'rating') {
-		const DEFAULT_RATING = 4.6;
+		const defaultRating = getDefaultRating();
 		const sorted = [...items].sort((a, b) => {
 			// 文件夹优先
 			if (a.isDir !== b.isDir) {
 				return a.isDir ? -1 : 1;
 			}
 
-			// 获取有效评分（用户自定义优先，否则使用平均评分，无评分默认 4 分）
-			const ratingA = folderRatingStore.getEffectiveRating(a.path) ?? DEFAULT_RATING;
-			const ratingB = folderRatingStore.getEffectiveRating(b.path) ?? DEFAULT_RATING;
+			// 获取有效评分（用户自定义优先，否则使用平均评分，无评分使用默认值）
+			const ratingA = folderRatingStore.getEffectiveRating(a.path) ?? defaultRating;
+			const ratingB = folderRatingStore.getEffectiveRating(b.path) ?? defaultRating;
 
 			// 评分相同则按名称排序
 			if (ratingA === ratingB) {

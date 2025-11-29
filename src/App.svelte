@@ -8,7 +8,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { open } from '@tauri-apps/plugin-dialog';
-	import { bookStore, zoomIn, zoomOut, toggleSidebar, toggleRightSidebar, toggleFullscreen, rotateClockwise, toggleViewMode, sidebarOpen, rightSidebarOpen, pageLeft, pageRight, topToolbarPinned, bottomThumbnailBarPinned, toggleReadingDirection, toggleSinglePanoramaView, toggleTemporaryFitZoom } from '$lib/stores';
+	import { bookStore, zoomIn, zoomOut, toggleLeftSidebar, toggleRightSidebar, toggleFullscreen, rotateClockwise, toggleViewMode, leftSidebarOpen, rightSidebarOpen, pageLeft, pageRight, topToolbarPinned, bottomThumbnailBarPinned, toggleReadingDirection, toggleSinglePanoramaView, toggleTemporaryFitZoom } from '$lib/stores';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { FolderOpen } from '@lucide/svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
@@ -326,9 +326,9 @@ async function dispatchAction(action: string) {
 			console.log('执行全屏操作');
 			toggleFullscreen();
 			break;
-		case 'toggleSidebar':
-			console.log('执行切换侧边栏操作');
-			toggleSidebar();
+		case 'toggleLeftSidebar':
+			console.log('执行切换左侧边栏操作');
+			toggleLeftSidebar();
 			break;
 		case 'toggleRightSidebar':
 			console.log('执行切换右侧边栏操作');
@@ -422,6 +422,9 @@ async function dispatchAction(action: string) {
 			}
 			break;
 		}
+		case 'toggleLayoutMode':
+			console.log('布局模式切换已禁用');
+			break;
 		default:
 			console.warn('未实现的快捷操作：', action);
 		}
@@ -455,9 +458,9 @@ function handleGlobalMouseClick(e: MouseEvent) {
 	const isInBottomBar = target.closest('[data-bottom-bar]') !== null;
 	
 	// 如果任一边栏打开，或点击在上下栏区域内，则不处理区域点击
-	if ($sidebarOpen || $rightSidebarOpen || isInTopToolbar || isInBottomBar) {
+	if ($leftSidebarOpen || $rightSidebarOpen || isInTopToolbar || isInBottomBar) {
 		console.log('边栏已打开或点击在上下栏区域内，禁用全局区域点击响应', { 
-			sidebarOpen: $sidebarOpen, 
+			leftSidebarOpen: $leftSidebarOpen, 
 			rightSidebarOpen: $rightSidebarOpen, 
 			isInTopToolbar, 
 			isInBottomBar,
@@ -504,9 +507,9 @@ function handleGlobalMouseDown(e: MouseEvent) {
 	const isInBottomBar = target.closest('[data-bottom-bar]') !== null;
 	
 	// 如果任一边栏打开，或点击在上下栏区域内，则不处理区域点击
-	if ($sidebarOpen || $rightSidebarOpen || isInTopToolbar || isInBottomBar) {
+	if ($leftSidebarOpen || $rightSidebarOpen || isInTopToolbar || isInBottomBar) {
 		console.log('边栏已打开或点击在上下栏区域内，禁用全局区域按下响应', { 
-			sidebarOpen: $sidebarOpen, 
+			leftSidebarOpen: $leftSidebarOpen, 
 			rightSidebarOpen: $rightSidebarOpen, 
 			isInTopToolbar, 
 			isInBottomBar,
@@ -548,13 +551,12 @@ function handleGlobalMouseDown(e: MouseEvent) {
 
 <Tooltip.Provider>
 	<Toast />
+	
+	<!-- 仅使用传统布局模式，禁用 Flow 画布以提升性能 -->
 	<MainLayout>
-		<div class="h-full w-full flex items-center justify-center">
-			<!-- 欢迎界面 (当没有打开书籍时显示)
-				实际的 ImageViewer 由 MainLayout 在 bookStore.viewerOpen 为 true 时挂载
-			-->
+		<div class="flex h-full w-full items-center justify-center">
 			<div class="text-center">
-				<h1 class="text-4xl font-bold mb-4">NeoView</h1>
+				<h1 class="mb-4 text-4xl font-bold">NeoView</h1>
 				<p class="text-muted-foreground mb-8">Modern Image & Comic Viewer</p>
 				<Button onclick={handleOpenFolder} disabled={loading} size="lg">
 					<FolderOpen class="mr-2 h-5 w-5" />

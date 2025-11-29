@@ -19,13 +19,21 @@
 		rotationAngle,
 		setViewMode,
 		toggleViewModeLock,
-		toggleSidebar,
+		toggleLeftSidebar,
 		toggleReadingDirection,
 		toggleOrientation,
 		topToolbarPinned,
 		topToolbarHeight,
 		toggleZoomModeLock,
-		requestZoomMode
+		requestZoomMode,
+		layoutMode,
+		toggleLayoutMode,
+		layoutSwitchMode,
+		toggleLayoutSwitchMode,
+		useNeoViewer,
+		toggleNeoViewer,
+		useStackViewer,
+		toggleStackViewer
 	} from '$lib/stores';
 	import { readable } from 'svelte/store';
 	import { onMount } from 'svelte';
@@ -64,7 +72,8 @@
 		Scan,
 		StretchHorizontal,
 		StretchVertical,
-		Expand
+		Expand,
+		LayoutGrid
 	} from '@lucide/svelte';
 
 	import {
@@ -72,6 +81,7 @@
 		loadRuntimeThemeFromStorage,
 		type RuntimeThemeMode
 	} from '$lib/utils/runtimeTheme';
+	import { showToast } from '$lib/utils/toast';
 
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import type { ZoomMode } from '$lib/settings/settingsManager';
@@ -601,7 +611,7 @@ async function handleSortModeChange(mode: PageSortMode) {
 				variant="ghost"
 				size="icon"
 				class="h-6 w-6"
-				onclick={toggleSidebar}
+				onclick={toggleLeftSidebar}
 				style="pointer-events: auto;"
 			>
 				<Menu class="h-4 w-4" />
@@ -755,6 +765,93 @@ async function handleSortModeChange(mode: PageSortMode) {
 			</Tooltip.Trigger>
 			<Tooltip.Content>
 				<p>设置</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
+		<!-- 布局模式切换按钮 -->
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={$layoutMode === 'flow' ? 'default' : 'ghost'}
+					size="icon"
+					class="h-6 w-6"
+					style="pointer-events: auto;"
+					onclick={toggleLayoutMode}
+					oncontextmenu={(e) => {
+						e.preventDefault();
+						toggleLayoutSwitchMode();
+						// 显示 toast 通知
+						const newMode = $layoutSwitchMode === 'seamless' ? 'cold' : 'seamless';
+						showToast({
+							title: '布局切换模式',
+							description: newMode === 'seamless' 
+								? '已切换到无缝模式 (保持状态，占用更多内存)' 
+								: '已切换到冷切换模式 (节省性能，状态可能丢失)',
+							variant: 'info',
+							duration: 2000
+						});
+					}}
+				>
+					<LayoutGrid class="h-4 w-4" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>{$layoutMode === 'flow' ? '切换到传统布局' : '切换到 Flow 画布布局'}</p>
+				<p class="text-muted-foreground text-xs">
+					右键切换: {$layoutSwitchMode === 'seamless' ? '无缝模式 (保持状态)' : '冷切换 (节省性能)'}
+				</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
+		<!-- NeoViewer 开关 -->
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={$useNeoViewer ? 'default' : 'ghost'}
+					size="icon"
+					class="h-6 w-6"
+					style="pointer-events: auto;"
+					onclick={() => {
+						toggleNeoViewer();
+						showToast({
+							title: 'NeoViewer',
+							description: $useNeoViewer ? '已切换到传统查看器' : '已切换到 NeoViewer（实验性）',
+							variant: 'info',
+							duration: 2000
+						});
+					}}
+				>
+					<span class="text-xs font-bold">N</span>
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>{$useNeoViewer ? 'NeoViewer 已启用（点击切换到传统）' : '点击启用 NeoViewer（实验性）'}</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
+		<!-- StackViewer 开关 -->
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={$useStackViewer ? 'default' : 'ghost'}
+					size="icon"
+					class="h-6 w-6"
+					style="pointer-events: auto;"
+					onclick={() => {
+						toggleStackViewer();
+						showToast({
+							title: 'StackViewer',
+							description: $useStackViewer ? '已切换到默认查看器' : '已切换到 StackViewer（层叠式）',
+							variant: 'info',
+							duration: 2000
+						});
+					}}
+				>
+					<span class="text-xs font-bold">S</span>
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>{$useStackViewer ? 'StackViewer 已启用（点击切换到默认）' : '点击启用 StackViewer（层叠式）'}</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 
@@ -998,7 +1095,7 @@ async function handleSortModeChange(mode: PageSortMode) {
 					</Tooltip.Root>
 
 					<DropdownMenu.Content
-						class="z-60 w-40"
+						class="z-60 w-48"
 						onmouseenter={handleMouseEnter}
 						onmouseleave={handleMouseLeave}
 					>

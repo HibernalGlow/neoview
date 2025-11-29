@@ -32,9 +32,9 @@ function saveToStorage<T>(key: string, value: T) {
 	}
 }
 
-// 侧边栏状态 - 默认隐藏
-export const sidebarOpen = writable<boolean>(loadFromStorage('sidebarOpen', false));
-export const sidebarWidth = writable<number>(loadFromStorage('sidebarWidth', 250));
+// 左侧边栏状态 - 默认隐藏
+export const leftSidebarOpen = writable<boolean>(loadFromStorage('leftSidebarOpen', false));
+export const leftSidebarWidth = writable<number>(loadFromStorage('leftSidebarWidth', 250));
 
 // 右侧边栏状态
 export const rightSidebarOpen = writable<boolean>(loadFromStorage('rightSidebarOpen', false));
@@ -61,6 +61,30 @@ export const zoomLevel = writable<number>(loadFromStorage('zoomLevel', 1.0));
 
 // 旋转角度 (0, 90, 180, 270)
 export const rotationAngle = writable<number>(loadFromStorage('rotationAngle', 0));
+
+// NeoViewer 开关（新版查看器）- 默认禁用（实验性功能）
+export const useNeoViewer = writable<boolean>(loadFromStorage('useNeoViewer', false));
+
+// 切换 NeoViewer
+export function toggleNeoViewer() {
+	useNeoViewer.update(v => {
+		const newValue = !v;
+		saveToStorage('useNeoViewer', newValue);
+		return newValue;
+	});
+}
+
+// StackViewer 开关（层叠式查看器）- 默认关闭
+export const useStackViewer = writable<boolean>(loadFromStorage('useStackViewer', false));
+
+// 切换 StackViewer
+export function toggleStackViewer() {
+	useStackViewer.update(v => {
+		const newValue = !v;
+		saveToStorage('useStackViewer', newValue);
+		return newValue;
+	});
+}
 
 // 视图模式（仅描述单页/双页/全景）
 export type ViewMode = 'single' | 'double' | 'panorama';
@@ -92,16 +116,25 @@ export const orientation = writable<ViewOrientation>(
 // 边栏钉住状态（钉住时不自动隐藏）
 export const topToolbarPinned = writable<boolean>(loadFromStorage('topToolbarPinned', false));
 export const bottomThumbnailBarPinned = writable<boolean>(loadFromStorage('bottomThumbnailBarPinned', false));
-export const sidebarPinned = writable<boolean>(loadFromStorage('sidebarPinned', false));
+export const leftSidebarPinned = writable<boolean>(loadFromStorage('leftSidebarPinned', false));
 export const rightSidebarPinned = writable<boolean>(loadFromStorage('rightSidebarPinned', false));
 
 // 边栏高度（用于上下边栏）
 export const topToolbarHeight = writable<number>(loadFromStorage('topToolbarHeight', 60));
 export const bottomThumbnailBarHeight = writable<number>(loadFromStorage('bottomThumbnailBarHeight', 120));
 
+// 布局模式：传统布局 vs Flow 画布布局
+export type LayoutMode = 'classic' | 'flow';
+export const layoutMode = writable<LayoutMode>(loadFromStorage('layoutMode', 'classic'));
+
+// 布局切换模式：无缝切换（保持两个布局加载）vs 冷切换（销毁非活动布局节省性能）
+// 默认使用冷切换以避免性能问题
+export type LayoutSwitchMode = 'seamless' | 'cold';
+export const layoutSwitchMode = writable<LayoutSwitchMode>(loadFromStorage('layoutSwitchMode', 'cold'));
+
 // 订阅并保存变化
-sidebarOpen.subscribe((value) => saveToStorage('sidebarOpen', value));
-sidebarWidth.subscribe((value) => saveToStorage('sidebarWidth', value));
+leftSidebarOpen.subscribe((value) => saveToStorage('leftSidebarOpen', value));
+leftSidebarWidth.subscribe((value) => saveToStorage('leftSidebarWidth', value));
 rightSidebarOpen.subscribe((value) => saveToStorage('rightSidebarOpen', value));
 rightSidebarWidth.subscribe((value) => saveToStorage('rightSidebarWidth', value));
 activeRightPanel.subscribe((value) => saveToStorage('activeRightPanel', value));
@@ -111,10 +144,12 @@ themeMode.subscribe((value) => saveToStorage('themeMode', value));
 rotationAngle.subscribe((value) => saveToStorage('rotationAngle', value));
 topToolbarPinned.subscribe((value) => saveToStorage('topToolbarPinned', value));
 bottomThumbnailBarPinned.subscribe((value) => saveToStorage('bottomThumbnailBarPinned', value));
-sidebarPinned.subscribe((value) => saveToStorage('sidebarPinned', value));
+leftSidebarPinned.subscribe((value) => saveToStorage('leftSidebarPinned', value));
 rightSidebarPinned.subscribe((value) => saveToStorage('rightSidebarPinned', value));
 topToolbarHeight.subscribe((value) => saveToStorage('topToolbarHeight', value));
 bottomThumbnailBarHeight.subscribe((value) => saveToStorage('bottomThumbnailBarHeight', value));
+layoutMode.subscribe((value) => saveToStorage('layoutMode', value));
+layoutSwitchMode.subscribe((value) => saveToStorage('layoutSwitchMode', value));
 
 const updateViewerSlice = (partial: Partial<AppStateSnapshot['viewer']>) => {
 	const snapshot = appState.getSnapshot();
@@ -132,6 +167,8 @@ function applyZoomModeWithTracking(mode?: ZoomMode) {
 	updateViewerSlice({ currentZoomMode: targetMode });
 	dispatchApplyZoomMode(mode);
 }
+
+let lastZoomModeBeforeTemporaryFit: ZoomMode | null = null;
 
 zoomLevel.subscribe((value) => {
 	saveToStorage('zoomLevel', value);
@@ -167,10 +204,10 @@ isLoading.subscribe((value) => {
 });
 
 /**
- * 切换侧边栏
+ * 切换左侧边栏
  */
-export function toggleSidebar() {
-	sidebarOpen.update((open) => !open);
+export function toggleLeftSidebar() {
+	leftSidebarOpen.update((open) => !open);
 }
 
 /**
@@ -300,7 +337,6 @@ export function toggleViewModeLock(mode: ViewMode) {
  * 当 lockedViewMode 有值时，不执行任何切换（尊重视图锁定状态）
  */
 let lastViewModeBeforeSingleToggle: ViewMode | null = null;
-let lastZoomModeBeforeTemporaryFit: ZoomMode | null = null;
 export function toggleSinglePanoramaView() {
 	const snapshot = appState.getSnapshot();
 	const locked = snapshot.viewer.lockedViewMode as ViewMode | null;
@@ -409,4 +445,32 @@ export async function pageRight() {
 	} catch (err) {
 		console.error('Failed to turn page right:', err);
 	}
+}
+
+/**
+ * 切换布局模式（传统 vs Flow 画布）
+ */
+export function toggleLayoutMode() {
+	layoutMode.update((mode) => (mode === 'classic' ? 'flow' : 'classic'));
+}
+
+/**
+ * 设置布局模式
+ */
+export function setLayoutMode(mode: LayoutMode) {
+	layoutMode.set(mode);
+}
+
+/**
+ * 切换布局切换模式（无缝 vs 冷切换）
+ */
+export function toggleLayoutSwitchMode() {
+	layoutSwitchMode.update((mode) => (mode === 'seamless' ? 'cold' : 'seamless'));
+}
+
+/**
+ * 设置布局切换模式
+ */
+export function setLayoutSwitchMode(mode: LayoutSwitchMode) {
+	layoutSwitchMode.set(mode);
 }

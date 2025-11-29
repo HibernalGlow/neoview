@@ -10,26 +10,23 @@ export * from './keyboard.svelte';
 export * from './fileBrowser.svelte';
 export * from './infoPanel.svelte';
 export * from './insightsPanel.svelte';
-// panels.svelte 导出的 PanelType 与 ui.svelte 冲突，需要单独导入
+
+// 新版侧边栏配置 - sidebarConfig.svelte.ts (完全替代旧的 panels.svelte)
 export {
-	panels,
-	sidebars,
+	sidebarConfigStore,
+	sidebarLeftPanels,
+	sidebarRightPanels,
+	sidebarAllPanels,
+	sidebarHiddenPanels,
 	activePanel,
-	draggingPanel,
-	panelsByLocation,
-	leftPanels,
-	rightPanels,
-	bottomPanels,
-	togglePanelSidebar,
-	setPanelSidebarSize,
-	togglePanelVisibility,
-	movePanelToLocation,
-	reorderPanels,
 	setActivePanelTab,
-	startDraggingPanel,
-	stopDraggingPanel,
-	resetPanelLayout
-} from './panels.svelte';
-export type { PanelConfig, SidebarConfig, PanelLocation } from './panels.svelte';
-// 重命名 panels.svelte 的 PanelType 避免冲突
-export type { PanelType as PanelTabType } from './panels.svelte';
+	type PanelId,
+	type PanelPosition,
+	type PanelConfig,
+	type SidebarConfigState
+} from './sidebarConfig.svelte';
+
+// 兼容性别名
+export { sidebarLeftPanels as leftPanels } from './sidebarConfig.svelte';
+export { sidebarRightPanels as rightPanels } from './sidebarConfig.svelte';
+export type { PanelId as PanelTabType } from './sidebarConfig.svelte';

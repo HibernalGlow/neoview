@@ -24,6 +24,7 @@ import {
 } from '../stores/folderPanelStore.svelte';
 import { Loader2, FolderOpen, AlertCircle } from '@lucide/svelte';
 import { directoryTreeCache } from '../utils/directoryTreeCache';
+import { folderRatingStore } from '$lib/stores/emm/folderRating';
 
 interface NavigationCommand {
 	type: 'init' | 'push' | 'pop' | 'goto' | 'history';
@@ -91,6 +92,41 @@ onMount(() => {
 
 // 排序函数
 function sortItems(items: FsItem[], field: string, order: string): FsItem[] {
+	// 随机排序特殊处理
+	if (field === 'random') {
+		const shuffled = [...items];
+		for (let i = shuffled.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+		}
+		return shuffled;
+	}
+
+	// rating 排序特殊处理
+	// 规则：文件夹在前，无 rating 默认 4 分，用户自定义 rating 优先
+	if (field === 'rating') {
+		const DEFAULT_RATING = 4;
+		const sorted = [...items].sort((a, b) => {
+			// 文件夹优先
+			if (a.isDir !== b.isDir) {
+				return a.isDir ? -1 : 1;
+			}
+
+			// 获取有效评分（用户自定义优先，否则使用平均评分，无评分默认 4 分）
+			const ratingA = folderRatingStore.getEffectiveRating(a.path) ?? DEFAULT_RATING;
+			const ratingB = folderRatingStore.getEffectiveRating(b.path) ?? DEFAULT_RATING;
+
+			// 评分相同则按名称排序
+			if (ratingA === ratingB) {
+				return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+			}
+
+			const comparison = ratingA - ratingB;
+			return order === 'asc' ? comparison : -comparison;
+		});
+		return sorted;
+	}
+
 	const sorted = [...items].sort((a, b) => {
 		// 文件夹始终在前
 		if (a.isDir !== b.isDir) {
@@ -108,11 +144,12 @@ function sortItems(items: FsItem[], field: string, order: string): FsItem[] {
 			case 'size':
 				comparison = (a.size || 0) - (b.size || 0);
 				break;
-			case 'type':
+			case 'type': {
 				const extA = a.name.split('.').pop()?.toLowerCase() || '';
 				const extB = b.name.split('.').pop()?.toLowerCase() || '';
 				comparison = extA.localeCompare(extB);
 				break;
+			}
 		}
 
 		return order === 'desc' ? -comparison : comparison;

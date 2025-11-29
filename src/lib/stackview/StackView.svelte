@@ -13,6 +13,8 @@
   } from './layers';
   import { getBaseTransform } from './utils/transform';
   import { isLandscape, getInitialSplitHalf, getNextSplitHalf, getPrevSplitHalf, type SplitState } from './utils/viewMode';
+  import { createZoomModeManager, type ViewportSize } from './utils/zoomModeHandler';
+  import type { ZoomMode } from '$lib/settings/settingsManager';
   import type { Frame, FrameLayout, FrameImage } from './types/frame';
   import { emptyFrame } from './types/frame';
   import { getImageStore } from './stores/imageStore.svelte';
@@ -59,9 +61,12 @@
   // ============================================================================
   
   const imageStore = getImageStore();
+  const zoomModeManager = createZoomModeManager();
   
   let localPan = $state({ x: 0, y: 0 });
   let splitState = $state<SplitState | null>(null);
+  let containerRef: HTMLDivElement | null = $state(null);
+  let viewportSize = $state<ViewportSize>({ width: 0, height: 0 });
   
   // 从 stores 获取状态
   let scale = $derived($zoomLevel);
@@ -239,8 +244,44 @@
     }
   });
   
+  // 更新视口尺寸
+  function updateViewportSize() {
+    if (containerRef) {
+      const rect = containerRef.getBoundingClientRect();
+      if (rect.width !== viewportSize.width || rect.height !== viewportSize.height) {
+        viewportSize = { width: rect.width, height: rect.height };
+      }
+    }
+  }
+  
+  // 应用缩放模式
+  $effect(() => {
+    const dims = imageStore.state.dimensions;
+    const defaultZoomMode = (settings.view.defaultZoomMode as ZoomMode) ?? 'fit';
+    if (dims && viewportSize.width > 0 && viewportSize.height > 0) {
+      zoomModeManager.apply(defaultZoomMode, dims, viewportSize);
+    }
+  });
+  
+  // 监听窗口大小变化
+  $effect(() => {
+    if (!containerRef) return;
+    
+    updateViewportSize();
+    
+    const resizeObserver = new ResizeObserver(() => {
+      updateViewportSize();
+    });
+    resizeObserver.observe(containerRef);
+    
+    return () => {
+      resizeObserver.disconnect();
+    };
+  });
+  
   onDestroy(() => {
     imageStore.reset();
+    zoomModeManager.reset();
   });
   
   let isRTL = $derived(settings.book.readingDirection === 'right-to-left');
@@ -248,7 +289,7 @@
   export { resetView };
 </script>
 
-<div class="stack-view">
+<div class="stack-view" bind:this={containerRef}>
   <BackgroundLayer color={backgroundColor} />
   
   <CurrentFrameLayer 

@@ -68,10 +68,6 @@
   let layout = $derived($viewMode as FrameLayout);
   let orientation = $derived($orientationStore as 'horizontal' | 'vertical');
   
-  // 调试日志
-  $effect(() => {
-    console.log('[StackView] State:', { layout, orientation });
-  });
   
   // 设置
   let settings = $state(settingsManager.getSettings());

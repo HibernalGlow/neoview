@@ -52,9 +52,7 @@
       classes.push('frame-single');
     }
     
-    const result = classes.join(' ');
-    console.log('[CurrentFrameLayer] layoutClass:', result, { layout, orientation, direction });
-    return result;
+    return classes.join(' ');
   });
 </script>
 
@@ -115,23 +113,29 @@
   
   /* 双页模式不受 orientation 影响，始终左右排列 */
   
-  /* 全景 - 水平排列 */
+  /* 全景 - 水平滚动 */
   .frame-panorama {
     flex-direction: row;
-    gap: 4px;
+    gap: 8px;
     overflow-x: auto;
     overflow-y: hidden;
+    flex-wrap: nowrap;
+    padding: 4px;
+    justify-content: flex-start;
+    align-items: center;
   }
   
   .frame-panorama.frame-rtl {
     flex-direction: row-reverse;
   }
   
-  /* 全景 - 垂直排列 */
+  /* 全景 - 垂直滚动 */
   .frame-panorama.frame-vertical {
     flex-direction: column;
     overflow-x: hidden;
     overflow-y: auto;
+    justify-content: flex-start;
+    align-items: center;
   }
   
   .frame-panorama.frame-vertical.frame-rtl {

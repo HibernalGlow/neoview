@@ -360,6 +360,7 @@ pub fn run() {
             commands::batch_save_emm_with_rating,
             commands::migrate_thumbnail_db,
             commands::get_keys_without_emm_json,
+            commands::load_thumbnail_with_emm_json,
             commands::get_video_duration,
             commands::is_video_file,
             commands::load_video,

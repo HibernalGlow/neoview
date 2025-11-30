@@ -298,6 +298,29 @@ impl ThumbnailDb {
         }
     }
 
+    /// 加载缩略图和 emm_json（一次查询同时返回两者）
+    pub fn load_thumbnail_with_emm_json(
+        &self,
+        key: &str,
+        category: &str,
+    ) -> SqliteResult<Option<(Vec<u8>, Option<String>)>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT value, emm_json FROM thumbs WHERE key = ?1 AND category = ?2 LIMIT 1"
+        )?;
+
+        let result: Option<(Vec<u8>, Option<String>)> = stmt
+            .query_row(params![key, category], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .ok();
+
+        Ok(result)
+    }
+
     /// 查找路径下最早的缩略图记录（用于文件夹绑定）
     /// 查找所有以 folder_path/ 或 folder_path\ 开头的 key，返回最早的记录
     pub fn find_earliest_thumbnail_in_path(

@@ -547,6 +547,39 @@ pub async fn load_thumbnail_from_db(
     }
 }
 
+/// 加载缩略图并返回 emm_json（一次查询同时返回两者）
+#[tauri::command]
+pub async fn load_thumbnail_with_emm_json(
+    app: tauri::AppHandle,
+    path: String,
+    category: Option<String>,
+) -> Result<Option<(String, Option<String>)>, String> {
+    let state = app.state::<ThumbnailState>();
+
+    let cat = category.unwrap_or_else(|| {
+        if !path.contains("::") && !path.contains(".") {
+            "folder".to_string()
+        } else {
+            "file".to_string()
+        }
+    });
+
+    match state.db.load_thumbnail_with_emm_json(&path, &cat) {
+        Ok(Some((data, emm_json))) => {
+            // 注册到 BlobRegistry，返回 blob key 和 emm_json
+            let blob_key = state.blob_registry.get_or_register(
+                &data,
+                "image/webp",
+                Duration::from_secs(3600),
+                Some(path.clone()),
+            );
+            Ok(Some((blob_key, emm_json)))
+        }
+        Ok(None) => Ok(None),
+        Err(e) => Err(format!("加载缩略图失败: {}", e)),
+    }
+}
+
 /// 获取 blob 数据（用于创建前端 Blob URL）
 #[tauri::command]
 pub async fn get_thumbnail_blob_data(

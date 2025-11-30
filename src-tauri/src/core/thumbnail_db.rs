@@ -967,6 +967,97 @@ impl ThumbnailDb {
 
         Ok(count)
     }
+
+    // ==================== 数据库维护方法 ====================
+
+    /// 规范化所有路径键（统一格式）
+    /// 返回：(处理条目数, 修复条目数)
+    pub fn normalize_all_keys(&self) -> SqliteResult<(usize, usize)> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        // 获取所有 key
+        let mut stmt = conn.prepare("SELECT key FROM thumbs")?;
+        let keys: Vec<String> = stmt
+            .query_map([], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        let total = keys.len();
+        let mut fixed = 0;
+
+        for old_key in keys {
+            // 规范化：统一反斜杠，确保盘符后有斜杠
+            let mut new_key = old_key.replace("/", "\\");
+            // 处理 D:folder -> D:\folder
+            if new_key.len() >= 2 && new_key.chars().nth(1) == Some(':') {
+                if new_key.len() == 2 || new_key.chars().nth(2) != Some('\\') {
+                    new_key = format!("{}\\{}", &new_key[0..2], &new_key[2..]);
+                }
+            }
+
+            if new_key != old_key {
+                // 检查新 key 是否已存在
+                let exists: bool = conn
+                    .query_row(
+                        "SELECT 1 FROM thumbs WHERE key = ?1",
+                        params![&new_key],
+                        |_| Ok(true),
+                    )
+                    .unwrap_or(false);
+
+                if exists {
+                    // 新 key 已存在，删除旧的
+                    conn.execute("DELETE FROM thumbs WHERE key = ?1", params![&old_key])?;
+                } else {
+                    // 更新为新 key
+                    conn.execute(
+                        "UPDATE thumbs SET key = ?1 WHERE key = ?2",
+                        params![&new_key, &old_key],
+                    )?;
+                }
+                fixed += 1;
+            }
+        }
+
+        Ok((total, fixed))
+    }
+
+    /// 清理无效条目（没有缩略图数据的条目）
+    pub fn cleanup_invalid_entries(&self) -> SqliteResult<usize> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let deleted = conn.execute(
+            "DELETE FROM thumbs WHERE value IS NULL OR length(value) = 0",
+            [],
+        )?;
+
+        Ok(deleted)
+    }
+
+    /// 获取数据库统计信息
+    pub fn get_maintenance_stats(&self) -> SqliteResult<(usize, usize, usize)> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let total: usize = conn.query_row("SELECT COUNT(*) FROM thumbs", [], |row| row.get(0))?;
+        let with_emm: usize = conn.query_row(
+            "SELECT COUNT(*) FROM thumbs WHERE emm_json IS NOT NULL AND emm_json != ''",
+            [],
+            |row| row.get(0),
+        )?;
+        let invalid: usize = conn.query_row(
+            "SELECT COUNT(*) FROM thumbs WHERE value IS NULL OR length(value) = 0",
+            [],
+            |row| row.get(0),
+        )?;
+
+        Ok((total, with_emm, invalid))
+    }
 }
 
 impl Clone for ThumbnailDb {

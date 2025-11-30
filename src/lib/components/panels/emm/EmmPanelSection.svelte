@@ -18,6 +18,7 @@
 	import type { EMMCollectTag } from '$lib/api/emm';
 	import { bookSettingsStore, type PerBookSettings } from '$lib/stores/bookSettings.svelte';
 	import EmmSyncCard from './EmmSyncCard.svelte';
+	import ThumbnailDbMaintenanceCard from './ThumbnailDbMaintenanceCard.svelte';
 
 	let bookInfo = $state<ViewerBookInfo | null>(null);
 	let collectTags = $state<EMMCollectTag[]>([]);
@@ -769,6 +770,9 @@
 		{#if showEMMConfig}
 			<!-- EMM 数据同步卡片 -->
 			<EmmSyncCard />
+
+			<!-- 缩略图数据库维护卡片 -->
+			<ThumbnailDbMaintenanceCard />
 		{/if}
 	</div>
 

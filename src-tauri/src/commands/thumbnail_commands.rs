@@ -1272,3 +1272,33 @@ pub async fn get_keys_without_emm_json(
     state.db.get_keys_without_emm_json()
         .map_err(|e| format!("获取空 emm_json 键失败: {}", e))
 }
+
+/// 规范化所有路径键
+#[tauri::command]
+pub async fn normalize_thumbnail_keys(
+    app: tauri::AppHandle,
+) -> Result<(usize, usize), String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.normalize_all_keys()
+        .map_err(|e| format!("规范化路径键失败: {}", e))
+}
+
+/// 清理无效缩略图条目
+#[tauri::command]
+pub async fn cleanup_invalid_thumbnails(
+    app: tauri::AppHandle,
+) -> Result<usize, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.cleanup_invalid_entries()
+        .map_err(|e| format!("清理无效条目失败: {}", e))
+}
+
+/// 获取缩略图数据库维护统计
+#[tauri::command]
+pub async fn get_thumbnail_maintenance_stats(
+    app: tauri::AppHandle,
+) -> Result<(usize, usize, usize), String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.get_maintenance_stats()
+        .map_err(|e| format!("获取统计信息失败: {}", e))
+}

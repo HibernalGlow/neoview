@@ -67,8 +67,17 @@ function saveToStorage(cache: FolderRatingCache): void {
 }
 
 // 规范化路径（用于一致的键名）
+// 统一使用正斜杠小写格式
 function normalizePath(path: string): string {
-	return path.replace(/\\/g, '/').toLowerCase();
+	if (!path) return path;
+	let normalized = path.replace(/\\/g, '/').toLowerCase();
+	// 确保盘符后有斜杠（处理 d:folder -> d:/folder）
+	normalized = normalized.replace(/^([a-z]):(?!\/)/, '$1:/');
+	// 去除末尾斜杠
+	if (normalized.length > 3 && normalized.endsWith('/')) {
+		normalized = normalized.slice(0, -1);
+	}
+	return normalized;
 }
 
 // 获取父目录路径

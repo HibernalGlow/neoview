@@ -96,6 +96,7 @@ impl ThumbnailDb {
         )?;
 
         // 创建缩略图表（包含所有字段，新数据库直接创建完整表）
+        // rating_data: JSON 格式存储评分信息 { value: number, source: 'emm'|'manual'|'calculated', timestamp: number }
         conn.execute(
             "CREATE TABLE IF NOT EXISTS thumbs (
                 key TEXT NOT NULL PRIMARY KEY,
@@ -105,9 +106,7 @@ impl ThumbnailDb {
                 category TEXT DEFAULT 'file',
                 value BLOB,
                 emm_json TEXT,
-                rating REAL,
-                manual_rating REAL,
-                folder_avg_rating REAL
+                rating_data TEXT
             )",
             [],
         )?;
@@ -122,14 +121,6 @@ impl ThumbnailDb {
         )?;
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_thumbs_date ON thumbs(date)",
-            [],
-        )?;
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_thumbs_rating ON thumbs(rating)",
-            [],
-        )?;
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_thumbs_folder_rating ON thumbs(folder_avg_rating)",
             [],
         )?;
 
@@ -167,15 +158,11 @@ impl ThumbnailDb {
             messages.push("添加 emm_json 列");
         }
 
-        // 检查并添加 rating 相关列
-        let has_rating: bool = conn.prepare("SELECT rating FROM thumbs LIMIT 1").is_ok();
-        if !has_rating {
-            conn.execute("ALTER TABLE thumbs ADD COLUMN rating REAL", [])?;
-            conn.execute("ALTER TABLE thumbs ADD COLUMN manual_rating REAL", [])?;
-            conn.execute("ALTER TABLE thumbs ADD COLUMN folder_avg_rating REAL", [])?;
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_thumbs_rating ON thumbs(rating)", [])?;
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_thumbs_folder_rating ON thumbs(folder_avg_rating)", [])?;
-            messages.push("添加 rating/manual_rating/folder_avg_rating 列和索引");
+        // 检查并添加 rating_data 列（新的单一 JSON 字段）
+        let has_rating_data: bool = conn.prepare("SELECT rating_data FROM thumbs LIMIT 1").is_ok();
+        if !has_rating_data {
+            conn.execute("ALTER TABLE thumbs ADD COLUMN rating_data TEXT", [])?;
+            messages.push("添加 rating_data 列");
         }
 
         if messages.is_empty() {
@@ -790,91 +777,37 @@ impl ThumbnailDb {
         Ok(keys)
     }
 
-    // ==================== Rating 快速读写方法 ====================
+    // ==================== Rating 读写方法（使用 rating_data JSON）====================
 
-    /// 更新单个记录的 rating（同时更新独立字段和 emm_json）
-    pub fn update_rating(&self, key: &str, rating: Option<f64>, manual_rating: Option<f64>) -> SqliteResult<()> {
+    /// 更新单个记录的 rating_data（JSON 格式）
+    /// rating_data 格式: { value: number, source: 'emm'|'manual'|'calculated', timestamp: number }
+    pub fn update_rating_data(&self, key: &str, rating_data: Option<&str>) -> SqliteResult<()> {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
 
         conn.execute(
-            "UPDATE thumbs SET rating = ?2, manual_rating = ?3 WHERE key = ?1",
-            params![key, rating, manual_rating],
+            "UPDATE thumbs SET rating_data = ?2 WHERE key = ?1",
+            params![key, rating_data],
         )?;
 
         Ok(())
     }
 
-    /// 更新文件夹平均评分
-    pub fn update_folder_avg_rating(&self, key: &str, avg_rating: Option<f64>) -> SqliteResult<()> {
+    /// 获取单个记录的 rating_data
+    pub fn get_rating_data(&self, key: &str) -> SqliteResult<Option<String>> {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
 
-        conn.execute(
-            "UPDATE thumbs SET folder_avg_rating = ?2 WHERE key = ?1",
-            params![key, avg_rating],
-        )?;
+        let mut stmt = conn.prepare("SELECT rating_data FROM thumbs WHERE key = ?1")?;
+        let result: Option<String> = stmt.query_row(params![key], |row| row.get(0)).ok();
 
-        Ok(())
+        Ok(result)
     }
 
-    /// 批量更新 rating
-    pub fn batch_update_ratings(&self, entries: &[(String, Option<f64>, Option<f64>)]) -> SqliteResult<usize> {
-        self.open()?;
-        let conn_guard = self.connection.lock().unwrap();
-        let conn = conn_guard.as_ref().unwrap();
-
-        let mut count = 0;
-        for (key, rating, manual_rating) in entries {
-            let affected = conn.execute(
-                "UPDATE thumbs SET rating = ?2, manual_rating = ?3 WHERE key = ?1",
-                params![key, rating, manual_rating],
-            )?;
-            count += affected;
-        }
-
-        Ok(count)
-    }
-
-    /// 批量更新文件夹平均评分
-    pub fn batch_update_folder_ratings(&self, entries: &[(String, Option<f64>)]) -> SqliteResult<usize> {
-        self.open()?;
-        let conn_guard = self.connection.lock().unwrap();
-        let conn = conn_guard.as_ref().unwrap();
-
-        let mut count = 0;
-        for (key, avg_rating) in entries {
-            let affected = conn.execute(
-                "UPDATE thumbs SET folder_avg_rating = ?2 WHERE key = ?1",
-                params![key, avg_rating],
-            )?;
-            count += affected;
-        }
-
-        Ok(count)
-    }
-
-    /// 获取单个记录的 rating 信息
-    pub fn get_rating(&self, key: &str) -> SqliteResult<(Option<f64>, Option<f64>, Option<f64>)> {
-        self.open()?;
-        let conn_guard = self.connection.lock().unwrap();
-        let conn = conn_guard.as_ref().unwrap();
-
-        let mut stmt = conn.prepare(
-            "SELECT rating, manual_rating, folder_avg_rating FROM thumbs WHERE key = ?1"
-        )?;
-
-        let result = stmt.query_row(params![key], |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
-        }).ok();
-
-        Ok(result.unwrap_or((None, None, None)))
-    }
-
-    /// 批量获取 rating（用于排序）
-    pub fn batch_get_ratings(&self, keys: &[String]) -> SqliteResult<HashMap<String, (Option<f64>, Option<f64>, Option<f64>)>> {
+    /// 批量获取 rating_data（用于排序）
+    pub fn batch_get_rating_data(&self, keys: &[String]) -> SqliteResult<HashMap<String, Option<String>>> {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
@@ -886,7 +819,7 @@ impl ThumbnailDb {
 
         let placeholders: String = keys.iter().map(|_| "?").collect::<Vec<_>>().join(",");
         let query = format!(
-            "SELECT key, rating, manual_rating, folder_avg_rating FROM thumbs WHERE key IN ({})",
+            "SELECT key, rating_data FROM thumbs WHERE key IN ({})",
             placeholders
         );
 
@@ -896,29 +829,27 @@ impl ThumbnailDb {
 
         while let Some(row) = rows.next()? {
             let key: String = row.get(0)?;
-            let rating: Option<f64> = row.get(1)?;
-            let manual_rating: Option<f64> = row.get(2)?;
-            let folder_avg_rating: Option<f64> = row.get(3)?;
-            results.insert(key, (rating, manual_rating, folder_avg_rating));
+            let rating_data: Option<String> = row.get(1)?;
+            results.insert(key, rating_data);
         }
 
         Ok(results)
     }
 
-    /// 获取指定目录下所有文件的 rating（用于计算文件夹平均评分）
-    pub fn get_ratings_by_prefix(&self, prefix: &str) -> SqliteResult<Vec<(String, Option<f64>, Option<f64>)>> {
+    /// 获取指定目录下所有条目的 rating_data（用于计算文件夹平均评分）
+    pub fn get_rating_data_by_prefix(&self, prefix: &str) -> SqliteResult<Vec<(String, Option<String>)>> {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
 
         let pattern = format!("{}%", prefix);
         let mut stmt = conn.prepare(
-            "SELECT key, rating, manual_rating FROM thumbs WHERE key LIKE ?1 AND (rating IS NOT NULL OR manual_rating IS NOT NULL)"
+            "SELECT key, rating_data FROM thumbs WHERE key LIKE ?1 AND rating_data IS NOT NULL"
         )?;
 
-        let results: Vec<(String, Option<f64>, Option<f64>)> = stmt
+        let results: Vec<(String, Option<String>)> = stmt
             .query_map(params![pattern], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+                Ok((row.get(0)?, row.get(1)?))
             })?
             .filter_map(|r| r.ok())
             .collect();
@@ -926,41 +857,39 @@ impl ThumbnailDb {
         Ok(results)
     }
 
-    /// 同时保存 emm_json 和独立 rating 字段（用于同步时一次性写入）
-    pub fn save_emm_with_rating(
+    /// 同时保存 emm_json 和 rating_data（用于同步时一次性写入）
+    pub fn save_emm_with_rating_data(
         &self,
         key: &str,
         emm_json: &str,
-        rating: Option<f64>,
-        manual_rating: Option<f64>,
-        folder_avg_rating: Option<f64>,
+        rating_data: Option<&str>,
     ) -> SqliteResult<()> {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
 
         conn.execute(
-            "UPDATE thumbs SET emm_json = ?2, rating = ?3, manual_rating = ?4, folder_avg_rating = ?5 WHERE key = ?1",
-            params![key, emm_json, rating, manual_rating, folder_avg_rating],
+            "UPDATE thumbs SET emm_json = ?2, rating_data = ?3 WHERE key = ?1",
+            params![key, emm_json, rating_data],
         )?;
 
         Ok(())
     }
 
-    /// 批量保存 emm_json 和 rating（优化版，一次性写入所有字段）
-    pub fn batch_save_emm_with_rating(
+    /// 批量保存 emm_json 和 rating_data
+    pub fn batch_save_emm_with_rating_data(
         &self,
-        entries: &[(String, String, Option<f64>, Option<f64>, Option<f64>)],
+        entries: &[(String, String, Option<String>)],
     ) -> SqliteResult<usize> {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
 
         let mut count = 0;
-        for (key, emm_json, rating, manual_rating, folder_avg_rating) in entries {
+        for (key, emm_json, rating_data) in entries {
             let affected = conn.execute(
-                "UPDATE thumbs SET emm_json = ?2, rating = ?3, manual_rating = ?4, folder_avg_rating = ?5 WHERE key = ?1",
-                params![key, emm_json, rating, manual_rating, folder_avg_rating],
+                "UPDATE thumbs SET emm_json = ?2, rating_data = ?3 WHERE key = ?1",
+                params![key, emm_json, rating_data.as_deref()],
             )?;
             count += affected;
         }

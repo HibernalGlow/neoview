@@ -1160,97 +1160,63 @@ pub async fn upsert_with_emm_json(
         .map_err(|e| format!("插入/更新记录失败: {}", e))
 }
 
-// ==================== Rating 快速读写命令 ====================
+// ==================== Rating 读写命令（使用 rating_data JSON）====================
 
-/// 更新单个记录的 rating
+/// 更新单个记录的 rating_data（JSON 格式）
+/// rating_data 格式: { value: number, source: 'emm'|'manual'|'calculated', timestamp: number }
 #[tauri::command]
-pub async fn update_rating(
+pub async fn update_rating_data(
     app: tauri::AppHandle,
     path: String,
-    rating: Option<f64>,
-    manual_rating: Option<f64>,
+    rating_data: Option<String>,
 ) -> Result<(), String> {
     let state = app.state::<ThumbnailState>();
-    state.db.update_rating(&path, rating, manual_rating)
-        .map_err(|e| format!("更新 rating 失败: {}", e))
+    state.db.update_rating_data(&path, rating_data.as_deref())
+        .map_err(|e| format!("更新 rating_data 失败: {}", e))
 }
 
-/// 更新文件夹平均评分
+/// 获取单个记录的 rating_data
 #[tauri::command]
-pub async fn update_folder_avg_rating(
+pub async fn get_rating_data(
     app: tauri::AppHandle,
     path: String,
-    avg_rating: Option<f64>,
-) -> Result<(), String> {
+) -> Result<Option<String>, String> {
     let state = app.state::<ThumbnailState>();
-    state.db.update_folder_avg_rating(&path, avg_rating)
-        .map_err(|e| format!("更新文件夹评分失败: {}", e))
+    state.db.get_rating_data(&path)
+        .map_err(|e| format!("获取 rating_data 失败: {}", e))
 }
 
-/// 批量更新 rating
+/// 批量获取 rating_data（用于排序）
 #[tauri::command]
-pub async fn batch_update_ratings(
-    app: tauri::AppHandle,
-    entries: Vec<(String, Option<f64>, Option<f64>)>,
-) -> Result<usize, String> {
-    let state = app.state::<ThumbnailState>();
-    state.db.batch_update_ratings(&entries)
-        .map_err(|e| format!("批量更新 rating 失败: {}", e))
-}
-
-/// 批量更新文件夹平均评分
-#[tauri::command]
-pub async fn batch_update_folder_ratings(
-    app: tauri::AppHandle,
-    entries: Vec<(String, Option<f64>)>,
-) -> Result<usize, String> {
-    let state = app.state::<ThumbnailState>();
-    state.db.batch_update_folder_ratings(&entries)
-        .map_err(|e| format!("批量更新文件夹评分失败: {}", e))
-}
-
-/// 获取单个记录的 rating
-#[tauri::command]
-pub async fn get_rating(
-    app: tauri::AppHandle,
-    path: String,
-) -> Result<(Option<f64>, Option<f64>, Option<f64>), String> {
-    let state = app.state::<ThumbnailState>();
-    state.db.get_rating(&path)
-        .map_err(|e| format!("获取 rating 失败: {}", e))
-}
-
-/// 批量获取 rating（用于排序）
-#[tauri::command]
-pub async fn batch_get_ratings(
+pub async fn batch_get_rating_data(
     app: tauri::AppHandle,
     paths: Vec<String>,
-) -> Result<HashMap<String, (Option<f64>, Option<f64>, Option<f64>)>, String> {
+) -> Result<HashMap<String, Option<String>>, String> {
     let state = app.state::<ThumbnailState>();
-    state.db.batch_get_ratings(&paths)
-        .map_err(|e| format!("批量获取 rating 失败: {}", e))
+    state.db.batch_get_rating_data(&paths)
+        .map_err(|e| format!("批量获取 rating_data 失败: {}", e))
 }
 
-/// 获取目录下所有文件的 rating（用于计算文件夹平均评分）
+/// 获取目录下所有文件的 rating_data（用于计算文件夹平均评分）
 #[tauri::command]
-pub async fn get_ratings_by_prefix(
+pub async fn get_rating_data_by_prefix(
     app: tauri::AppHandle,
     prefix: String,
-) -> Result<Vec<(String, Option<f64>, Option<f64>)>, String> {
+) -> Result<Vec<(String, Option<String>)>, String> {
     let state = app.state::<ThumbnailState>();
-    state.db.get_ratings_by_prefix(&prefix)
-        .map_err(|e| format!("获取目录 rating 失败: {}", e))
+    state.db.get_rating_data_by_prefix(&prefix)
+        .map_err(|e| format!("获取目录 rating_data 失败: {}", e))
 }
 
-/// 批量保存 emm_json 和 rating（优化版）
+/// 批量保存 emm_json 和 rating_data
 #[tauri::command]
-pub async fn batch_save_emm_with_rating(
+pub async fn batch_save_emm_with_rating_data(
     app: tauri::AppHandle,
-    entries: Vec<(String, String, Option<f64>, Option<f64>, Option<f64>)>,
+    entries: Vec<(String, String, Option<String>)>,
 ) -> Result<usize, String> {
     let state = app.state::<ThumbnailState>();
-    state.db.batch_save_emm_with_rating(&entries)
-        .map_err(|e| format!("批量保存 emm 和 rating 失败: {}", e))
+    state.db.batch_save_emm_with_rating_data(&entries)
+        .map_err(|e| format!("批量保存 emm 和 rating_data 失败: {}", e))
 }
 
 /// 手动触发数据库迁移（为旧数据库添加 EMM 相关字段）

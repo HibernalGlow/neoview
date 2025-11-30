@@ -4,8 +4,10 @@
  */
 
 import { writable, derived } from 'svelte/store';
+import { invoke } from '@tauri-apps/api/core';
 import * as EMMAPI from '$lib/api/emm';
 import type { EMMMetadata, EMMCollectTag } from '$lib/api/emm';
+import type { EMMCacheEntry } from '$lib/services/emmSyncService';
 
 // 导入模块化组件
 import type { EMMMetadataState } from './emm/types';
@@ -428,6 +430,7 @@ export const emmMetadataStore = {
 
 	/**
 	 * 加载元数据（通过文件路径）
+	 * 优先从嵌入的 emm_json 获取，失败后回退到外部数据库
 	 */
 	async loadMetadataByPath(filePath: string): Promise<EMMMetadata | null> {
 		// 规范化路径用于缓存键
@@ -444,9 +447,49 @@ export const emmMetadataStore = {
 			return cached ?? null;
 		}
 
-		const translationDbPath = currentState!.translationDbPath;
+		// 1. 优先从嵌入的 emm_json 获取
+		try {
+			const emmJsonStr = await invoke<string | null>('get_emm_json', { key: filePath });
+			if (emmJsonStr) {
+				const cacheEntry = JSON.parse(emmJsonStr) as EMMCacheEntry;
+				// 将 tags 数组转换为 Record<string, string[]> 格式
+				const tagsRecord: Record<string, string[]> = {};
+				if (Array.isArray(cacheEntry.tags)) {
+					for (const tag of cacheEntry.tags) {
+						if (!tagsRecord[tag.namespace]) {
+							tagsRecord[tag.namespace] = [];
+						}
+						tagsRecord[tag.namespace].push(tag.tag);
+					}
+				}
+				// 从 cacheEntry 构造 EMMMetadata
+				const metadata: EMMMetadata = {
+					hash: cacheEntry.hash ?? '',
+					translated_title: cacheEntry.translated_title,
+					tags: tagsRecord,
+					title: cacheEntry.title,
+					title_jpn: cacheEntry.title_jpn,
+					rating: cacheEntry.rating,
+					page_count: cacheEntry.page_count,
+					category: cacheEntry.category,
+					url: cacheEntry.url,
+					filepath: cacheEntry.filepath
+				};
+				update(s => {
+					const newCache = new Map(s.metadataCache);
+					newCache.set(metadata.hash, metadata);
+					const newPathCache = new Map(s.pathCache);
+					newPathCache.set(normalizedPath, metadata);
+					return { ...s, metadataCache: newCache, pathCache: newPathCache };
+				});
+				return metadata;
+			}
+		} catch {
+			// 嵌入数据不可用，继续尝试外部数据库
+		}
 
-		// 从所有主数据库尝试加载（过滤掉 translations.db）
+		// 2. 回退到外部数据库
+		const translationDbPath = currentState!.translationDbPath;
 		const mainDatabases = currentState!.databasePaths.filter(db =>
 			!db.toLowerCase().includes('translations.db')
 		);
@@ -502,6 +545,49 @@ export const emmMetadataStore = {
 			result = isCollectTag(tag, state.collectTags);
 		})();
 		return result;
+	},
+
+	/**
+	 * 存储从缩略图数据库获取的 emm_json 缓存
+	 */
+	storeEmmJsonCache(filePath: string, emmJsonStr: string) {
+		const normalizedPath = filePath.replace(/\\/g, '/');
+		try {
+			const cacheEntry = JSON.parse(emmJsonStr) as EMMCacheEntry;
+			// 将 tags 数组转换为 Record<string, string[]> 格式
+			const tagsRecord: Record<string, string[]> = {};
+			if (Array.isArray(cacheEntry.tags)) {
+				for (const tag of cacheEntry.tags) {
+					if (!tagsRecord[tag.namespace]) {
+						tagsRecord[tag.namespace] = [];
+					}
+					tagsRecord[tag.namespace].push(tag.tag);
+				}
+			}
+			// 构造 EMMMetadata
+			const metadata: EMMMetadata = {
+				hash: cacheEntry.hash ?? '',
+				translated_title: cacheEntry.translated_title,
+				tags: tagsRecord,
+				title: cacheEntry.title,
+				title_jpn: cacheEntry.title_jpn,
+				rating: cacheEntry.rating,
+				page_count: cacheEntry.page_count,
+				category: cacheEntry.category,
+				url: cacheEntry.url,
+				filepath: cacheEntry.filepath
+			};
+			// 存入缓存
+			update(s => {
+				const newCache = new Map(s.metadataCache);
+				newCache.set(metadata.hash, metadata);
+				const newPathCache = new Map(s.pathCache);
+				newPathCache.set(normalizedPath, metadata);
+				return { ...s, metadataCache: newCache, pathCache: newPathCache };
+			});
+		} catch {
+			// 解析失败，忽略
+		}
 	},
 
 	/**

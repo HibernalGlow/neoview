@@ -688,7 +688,7 @@ class ThumbnailManager {
 
   /**
    * 从数据库加载缩略图（返回 blob URL）
-   * 简化：只使用 key + category，减少计算
+   * 同时获取 emm_json 并存储到 emmMetadataStore
    * 支持 IPC 超时处理
    */
   private async loadFromDb(path: string, innerPath?: string, isFolder?: boolean): Promise<string | null> {
@@ -702,15 +702,20 @@ class ThumbnailManager {
       // 确定类别
       const category = isFolder ? 'folder' : 'file';
 
-      // 使用超时包装的 IPC 调用
-      const blobKey = await invokeWithTimeout<string | null>('load_thumbnail_from_db', {
+      // 使用新命令同时获取缩略图和 emm_json
+      const result = await invokeWithTimeout<[string, string | null] | null>('load_thumbnail_with_emm_json', {
         path: pathKey,
-        size: 0,
-        ghash: 0,
         category,
       }, DEFAULT_IPC_TIMEOUT);
 
-      if (blobKey) {
+      if (result) {
+        const [blobKey, emmJson] = result;
+
+        // 存储 emm_json 到 emmMetadataStore（如果存在）
+        if (emmJson) {
+          emmMetadataStore.storeEmmJsonCache(path, emmJson);
+        }
+
         // 获取 blob 数据（也使用超时）
         const blobData = await invokeWithTimeout<number[] | null>('get_thumbnail_blob_data', {
           blobKey,

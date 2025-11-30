@@ -8,7 +8,6 @@ import type { FsItem } from '$lib/types';
 import { browseDirectory } from '$lib/api/filesystem';
 import { folderRatingStore } from '$lib/stores/emm/folderRating';
 import { getDefaultRating } from '$lib/stores/emm/storage';
-import { ratingCache } from '$lib/services/ratingCache';
 
 // ============ Types ============
 
@@ -49,6 +48,8 @@ export interface FolderPanelState {
 	sortField: FolderSortField;
 	// 排序顺序
 	sortOrder: FolderSortOrder;
+	// 评分版本号（用于触发重新排序）
+	ratingVersion: number;
 	// 多选模式
 	multiSelectMode: boolean;
 	// 删除模式
@@ -135,6 +136,7 @@ const initialState: FolderPanelState = {
 	viewStyle: savedState.viewStyle ?? 'list',
 	sortField: savedState.sortField ?? 'name',
 	sortOrder: savedState.sortOrder ?? 'asc',
+	ratingVersion: 0,
 	multiSelectMode: false,
 	deleteMode: false,
 	recursiveMode: savedState.recursiveMode ?? false,
@@ -339,8 +341,8 @@ function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrd
 		return shuffled;
 	}
 
-	// rating 排序特殊处理：需要获取评分数据
-	// 规则：文件夹在前，无 rating 使用默认评分，用户自定义 rating 优先
+	// rating 排序：使用 folderRatingStore.getEffectiveRating 获取评分
+	// 规则：文件夹在前，无 rating 使用默认评分，手动评分优先
 	if (field === 'rating') {
 		const defaultRating = getDefaultRating();
 		const sorted = [...items].sort((a, b) => {
@@ -349,7 +351,7 @@ function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrd
 				return a.isDir ? -1 : 1;
 			}
 
-			// 获取有效评分（用户自定义优先，否则使用平均评分，无评分使用默认值）
+			// 从 folderRatingStore 获取有效评分
 			const ratingA = folderRatingStore.getEffectiveRating(a.path) ?? defaultRating;
 			const ratingB = folderRatingStore.getEffectiveRating(b.path) ?? defaultRating;
 
@@ -535,27 +537,6 @@ export const folderPanelActions = {
 			setCachedDirectory(currentState.currentPath, items);
 		}
 		state.update((s) => ({ ...s, items, loading: false, error: null }));
-
-		// 异步预加载评分数据（如果当前是评分排序）
-		if (currentState.sortField === 'rating') {
-			this.preloadRatings(items);
-		}
-	},
-
-	/**
-	 * 预加载评分数据到缓存，然后触发重新排序
-	 */
-	async preloadRatings(items: FsItem[]) {
-		const paths = items.map((item) => item.path);
-		if (paths.length > 0) {
-			try {
-				await ratingCache.batchGetRatings(paths);
-				// 触发重新排序（通过更新 state 让 derived store 重新计算）
-				state.update((s) => ({ ...s }));
-			} catch (e) {
-				console.error('[FolderPanel] 预加载评分失败:', e);
-			}
-		}
 	},
 
 	/**
@@ -728,18 +709,12 @@ export const folderPanelActions = {
 	 * 设置排序
 	 */
 	setSort(field: FolderSortField, order?: FolderSortOrder) {
-		const currentState = get(state);
 		state.update((s) => {
 			const newOrder = order ?? (s.sortField === field && s.sortOrder === 'asc' ? 'desc' : 'asc');
 			const newState = { ...s, sortField: field, sortOrder: newOrder };
 			saveState(newState);
 			return newState;
 		});
-
-		// 如果切换到评分排序，预加载评分数据
-		if (field === 'rating') {
-			this.preloadRatings(currentState.items);
-		}
 	},
 
 	/**

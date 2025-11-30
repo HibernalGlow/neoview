@@ -19,6 +19,8 @@ export interface FsItem {
     translatedTitle?: string;
     tags?: Record<string, string[]>;
   };
+  // 评分数据（可选，用于排序）
+  rating?: number;
 }
 
 /**

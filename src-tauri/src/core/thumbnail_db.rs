@@ -912,7 +912,10 @@ impl ThumbnailDb {
     }
 
     /// 批量获取 rating_data（用于排序）
+    /// 如果 rating_data 为空，会尝试从 emm_json 中提取 rating
     pub fn batch_get_rating_data(&self, keys: &[String]) -> SqliteResult<HashMap<String, Option<String>>> {
+        use serde_json::Value;
+        
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
@@ -922,9 +925,12 @@ impl ThumbnailDb {
             return Ok(results);
         }
 
+        println!("[ThumbnailDB] batch_get_rating_data: 查询 {} 个路径", keys.len());
+
         let placeholders: String = keys.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        // 同时获取 rating_data 和 emm_json 作为 fallback
         let query = format!(
-            "SELECT key, rating_data FROM thumbs WHERE key IN ({})",
+            "SELECT key, rating_data, emm_json FROM thumbs WHERE key IN ({})",
             placeholders
         );
 
@@ -932,12 +938,61 @@ impl ThumbnailDb {
         let params: Vec<&dyn rusqlite::ToSql> = keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
         let mut rows = stmt.query(params.as_slice())?;
 
+        let mut count_with_rating = 0;
+        let mut count_with_emm = 0;
+        let mut first_emm_sample: Option<String> = None;
+        let now = chrono::Local::now().timestamp_millis();
+        
         while let Some(row) = rows.next()? {
             let key: String = row.get(0)?;
             let rating_data: Option<String> = row.get(1)?;
-            results.insert(key, rating_data);
+            let emm_json: Option<String> = row.get(2)?;
+            
+            if emm_json.is_some() {
+                count_with_emm += 1;
+                if first_emm_sample.is_none() {
+                    first_emm_sample = emm_json.clone();
+                }
+            }
+            
+            // 优先使用 rating_data，如果为空则从 emm_json 中提取
+            let effective_rating = if rating_data.is_some() {
+                rating_data
+            } else if let Some(ref json_str) = emm_json {
+                // 尝试从 emm_json 中提取 rating
+                if let Ok(json) = serde_json::from_str::<Value>(json_str) {
+                    if let Some(rating) = json.get("rating").and_then(|r| r.as_f64()) {
+                        if rating > 0.0 {
+                            Some(serde_json::json!({
+                                "value": rating,
+                                "source": "emm",
+                                "timestamp": now
+                            }).to_string())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            
+            if effective_rating.is_some() {
+                count_with_rating += 1;
+            }
+            results.insert(key, effective_rating);
+        }
+        
+        println!("[ThumbnailDB] emm_json 数量: {}", count_with_emm);
+        if let Some(sample) = first_emm_sample {
+            println!("[ThumbnailDB] emm_json 示例 (前200字符): {}", &sample[..sample.len().min(200)]);
         }
 
+        println!("[ThumbnailDB] 查询结果: 找到 {} 条记录, 其中 {} 条有评分", results.len(), count_with_rating);
         Ok(results)
     }
 
@@ -981,7 +1036,7 @@ impl ThumbnailDb {
         Ok(())
     }
 
-    /// 批量保存 emm_json 和 rating_data
+    /// 批量保存 emm_json 和 rating_data（使用 UPSERT 确保新记录也能创建）
     pub fn batch_save_emm_with_rating_data(
         &self,
         entries: &[(String, String, Option<String>)],
@@ -992,13 +1047,16 @@ impl ThumbnailDb {
 
         let mut count = 0;
         for (key, emm_json, rating_data) in entries {
+            // 使用 UPSERT：如果 key 存在则更新，否则插入新记录
             let affected = conn.execute(
-                "UPDATE thumbs SET emm_json = ?2, rating_data = ?3 WHERE key = ?1",
+                "INSERT INTO thumbs (key, emm_json, rating_data, category) VALUES (?1, ?2, ?3, 'file')
+                 ON CONFLICT(key) DO UPDATE SET emm_json = ?2, rating_data = ?3",
                 params![key, emm_json, rating_data.as_deref()],
             )?;
             count += affected;
         }
 
+        println!("[ThumbnailDB] batch_save_emm_with_rating_data: 保存 {} 条记录", count);
         Ok(count)
     }
 

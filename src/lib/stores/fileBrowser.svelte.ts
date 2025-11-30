@@ -8,8 +8,10 @@ import { toAssetUrl } from '$lib/utils/assetProxy';
 import type { FsItem } from '$lib/types';
 import { FileSystemAPI } from '$lib/api';
 import { isVideoFile } from '$lib/utils/videoUtils';
+import { ratingCache, getSortableRating } from '$lib/services/ratingCache';
+import { getDefaultRating } from '$lib/stores/emm/storage';
 
-export type SortField = 'name' | 'modified' | 'size' | 'type' | 'path' | 'random';
+export type SortField = 'name' | 'modified' | 'size' | 'type' | 'path' | 'random' | 'rating';
 export type SortOrder = 'asc' | 'desc';
 export type DeleteStrategy = 'trash' | 'permanent';
 
@@ -162,6 +164,16 @@ export function sortItems(items: FsItem[], field: SortField, order: SortOrder): 
           comparison = a.name.localeCompare(b.name);
         }
         break;
+      case 'rating': {
+        // 评分排序：从 ratingCache 获取评分
+        const defRating = getDefaultRating();
+        const rInfoA = ratingCache.getRatingSync(a.path);
+        const rInfoB = ratingCache.getRatingSync(b.path);
+        const rA = getSortableRating(rInfoA ?? {}, defRating);
+        const rB = getSortableRating(rInfoB ?? {}, defRating);
+        comparison = rA - rB;
+        break;
+      }
     }
 
     return order === 'asc' ? comparison : -comparison;

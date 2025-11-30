@@ -330,6 +330,8 @@ export const itemCount = derived(state, ($state) => $state.items.length);
 // ============ Helper Functions ============
 
 function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrder): FsItem[] {
+	console.log('[FolderPanel] sortItems 调用, field:', field, 'order:', order, 'items:', items.length);
+	
 	// 随机排序特殊处理
 	if (field === 'random') {
 		const shuffled = [...items];
@@ -345,6 +347,8 @@ function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrd
 	// 注意：排序函数是同步的，使用已缓存的评分数据
 	if (field === 'rating') {
 		const defaultRating = getDefaultRating();
+		console.log('[FolderPanel] rating 排序, defaultRating:', defaultRating, 'items:', items.length);
+		
 		const sorted = [...items].sort((a, b) => {
 			// 文件夹优先
 			if (a.isDir !== b.isDir) {
@@ -356,6 +360,11 @@ function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrd
 			const infoB = ratingCache.getRatingSync(b.path);
 			const ratingA = getSortableRating(infoA ?? {}, defaultRating);
 			const ratingB = getSortableRating(infoB ?? {}, defaultRating);
+
+			// 调试日志（只打印前几个）
+			if (items.indexOf(a) < 3) {
+				console.debug('[FolderPanel] 排序项:', a.name, 'path:', a.path, 'infoA:', infoA, 'ratingA:', ratingA);
+			}
 
 			// 评分相同则按名称排序
 			if (ratingA === ratingB) {
@@ -549,14 +558,23 @@ export const folderPanelActions = {
 	 */
 	async preloadRatings(items: FsItem[]) {
 		const paths = items.map((item) => item.path);
+		console.debug('[FolderPanel] 预加载评分, paths:', paths.length, paths.slice(0, 3));
 		if (paths.length > 0) {
 			try {
-				await ratingCache.batchGetRatings(paths);
+				const ratings = await ratingCache.batchGetRatings(paths);
+				console.debug('[FolderPanel] 预加载评分完成, ratings:', ratings.size);
+				// 打印前几个评分
+				let count = 0;
+				for (const [path, info] of ratings) {
+					if (count++ < 3) {
+						console.debug('[FolderPanel] 加载的评分:', path, info);
+					}
+				}
 				// 触发重新排序（通过更新 state）
 				ratingsLoaded = true;
 				state.update((s) => ({ ...s }));
 			} catch (e) {
-				console.debug('[FolderPanel] 预加载评分失败:', e);
+				console.error('[FolderPanel] 预加载评分失败:', e);
 			}
 		}
 	},

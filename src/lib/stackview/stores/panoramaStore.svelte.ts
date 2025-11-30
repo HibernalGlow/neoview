@@ -89,35 +89,53 @@ export function createPanoramaStore() {
       return;
     }
     
-    state.loading = true;
     state.centerIndex = centerIndex;
     
-    // 预加载所有需要的页面到共享池
-    const pageIndices: number[] = [];
-    for (let unitIdx = startUnit; unitIdx <= endUnit; unitIdx++) {
-      const startPageIndex = unitIdx * step;
-      pageIndices.push(startPageIndex);
-      if (pageMode === 'double' && startPageIndex + 1 < totalPages) {
-        pageIndices.push(startPageIndex + 1);
-      }
-    }
+    // 先用已缓存的构建单元（即时显示）
+    const cachedUnits: PanoramaUnit[] = [];
+    const missingPages: number[] = [];
     
-    // 并行预加载到共享池
-    await imagePool.preload(pageIndices);
-    
-    // 从共享池构建单元
-    const newUnits: PanoramaUnit[] = [];
     for (let unitIdx = startUnit; unitIdx <= endUnit; unitIdx++) {
       const startPageIndex = unitIdx * step;
       const unit = buildUnit(startPageIndex, pageMode, totalPages);
-      if (unit) {
-        newUnits.push(unit);
+      if (unit && unit.images.length > 0) {
+        cachedUnits.push(unit);
+      } else {
+        // 记录缺失的页面
+        missingPages.push(startPageIndex);
+        if (pageMode === 'double' && startPageIndex + 1 < totalPages) {
+          missingPages.push(startPageIndex + 1);
+        }
       }
     }
     
+    // 即时显示已缓存的
+    if (cachedUnits.length > 0) {
+      state.units = cachedUnits;
+    }
+    
+    // 如果有缺失，异步加载
+    if (missingPages.length > 0) {
+      state.loading = true;
+      await imagePool.preload(missingPages);
+      
+      // 重新构建所有单元
+      const newUnits: PanoramaUnit[] = [];
+      for (let unitIdx = startUnit; unitIdx <= endUnit; unitIdx++) {
+        const startPageIndex = unitIdx * step;
+        const unit = buildUnit(startPageIndex, pageMode, totalPages);
+        if (unit) {
+          newUnits.push(unit);
+        }
+      }
+      state.units = newUnits;
+      state.loading = false;
+    }
+    
     lastBuildParams = { start: startUnit, end: endUnit, pageMode };
-    state.units = newUnits;
-    state.loading = false;
+    
+    // 后台预加载更多
+    imagePool.preloadRange(centerIndex, 5);
   }
   
   /**

@@ -1603,11 +1603,14 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 				<div class="text-white">加载视频中...</div>
 			{/if}
 		{:else}
-			<!-- StackView 独立模式：自己从 bookStore 获取数据 -->
+			<!-- StackView：接收 ImageViewer 加载的图片数据 -->
 			<StackView
 				backgroundColor="rgba(0, 128, 0, 0.3)"
 				showPageInfo={true}
 				showProgress={true}
+				imageUrl={imageData}
+				imageUrl2={imageData2}
+				imageDimensions={currentImageDimensions}
 			/>
 		{/if}
 	</div>

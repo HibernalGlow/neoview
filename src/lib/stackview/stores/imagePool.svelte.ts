@@ -1,13 +1,12 @@
 /**
- * ImagePool - 统一图片缓存池
+ * ImagePool - 直接使用 PreloadManager 的 ImageLoader
  * 
- * 所有模式（单页、双页、全景）共享同一个图片池
- * 避免模式切换时重复加载
+ * 简化版：完全依赖 ImageLoader，不维护独立缓存
  */
 
-import { SvelteMap } from 'svelte/reactivity';
 import { bookStore } from '$lib/stores/book.svelte';
-import { readPageBlob } from '../utils/imageReader';
+import { subscribeSharedPreloadManager } from '$lib/components/viewer/flow/sharedPreloadManager';
+import type { PreloadManager } from '$lib/components/viewer/flow/preloadManager.svelte';
 
 // ============================================================================
 // 类型定义
@@ -15,252 +14,152 @@ import { readPageBlob } from '../utils/imageReader';
 
 export interface PooledImage {
   url: string;
-  blob: Blob;
+  blob?: Blob;
   pageIndex: number;
   width?: number;
   height?: number;
-  loadedAt: number;
 }
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 // ============================================================================
 // ImagePool 类
 // ============================================================================
 
 class ImagePool {
-  /** 图片缓存 */
-  private cache = new SvelteMap<string, PooledImage>();
-  
-  /** 当前书本路径 */
+  private preloadManager: PreloadManager | null = null;
   private currentBookPath: string | null = null;
   
-  /** 最大缓存数量 */
-  private maxSize = 20;
-  
-  /** 正在加载的页面 */
-  private loadingPages = new Set<string>();
-  
-  // ============================================================================
-  // 缓存键生成
-  // ============================================================================
-  
-  private getKey(bookPath: string, pageIndex: number): string {
-    return `${bookPath}:${pageIndex}`;
+  constructor() {
+    subscribeSharedPreloadManager((manager) => {
+      this.preloadManager = manager;
+    });
   }
   
-  // ============================================================================
-  // 书本管理
-  // ============================================================================
-  
   /**
-   * 设置当前书本（切换书本时调用）
+   * 设置当前书本
    */
   setCurrentBook(bookPath: string) {
-    if (this.currentBookPath !== bookPath) {
-      // 书本切换，清除旧缓存
-      this.clear();
-      this.currentBookPath = bookPath;
-    }
+    this.currentBookPath = bookPath;
   }
   
-  // ============================================================================
-  // 图片获取
-  // ============================================================================
+  /**
+   * 获取 ImageLoader 的 core（验证有效性）
+   */
+  private getCore() {
+    if (!this.preloadManager) return null;
+    const imageLoader = (this.preloadManager as any).imageLoader;
+    const core = imageLoader?.core;
+    // 检查 core 是否有效（未被 invalidate）
+    if (core && typeof core.isValid === 'function' && !core.isValid()) {
+      console.log('[ImagePool] Core is invalidated, returning null');
+      return null;
+    }
+    return core ?? null;
+  }
   
   /**
-   * 获取图片（从缓存或加载）
+   * 异步获取图片
    */
   async get(pageIndex: number): Promise<PooledImage | null> {
     const book = bookStore.currentBook;
-    if (!book) return null;
-    
-    const key = this.getKey(book.path, pageIndex);
-    
-    // 检查缓存
-    const cached = this.cache.get(key);
-    if (cached) {
-      return cached;
+    if (!book || pageIndex < 0 || pageIndex >= book.pages.length) {
+      return null;
     }
     
-    // 避免重复加载
-    if (this.loadingPages.has(key)) {
-      // 等待加载完成
-      return this.waitForLoad(key);
+    // 尝试获取 core，如果不可用则等待
+    let core = this.getCore();
+    if (!core) {
+      // 等待 core 可用（最多 2 秒）
+      for (let i = 0; i < 20 && !core; i++) {
+        await new Promise(r => setTimeout(r, 100));
+        core = this.getCore();
+      }
+      if (!core) {
+        console.warn('[ImagePool] Core not available after waiting');
+        return null;
+      }
     }
     
-    // 加载新图片
-    return this.load(pageIndex);
+    try {
+      const result = await core.loadPage(pageIndex);
+      if (result?.url) {
+        return {
+          url: result.url,
+          blob: result.blob,
+          pageIndex,
+          width: result.dimensions?.width,
+          height: result.dimensions?.height,
+        };
+      }
+    } catch {
+      // 忽略错误
+    }
+    
+    return null;
   }
   
   /**
-   * 同步获取（仅从缓存，不触发加载）
+   * 同步获取（从缓存）
+   * 注意：不使用缓存，因为可能是旧书本的数据
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getSync(pageIndex: number): PooledImage | null {
-    const book = bookStore.currentBook;
-    if (!book) return null;
-    
-    const key = this.getKey(book.path, pageIndex);
-    return this.cache.get(key) ?? null;
+    // 暂时禁用缓存获取，强制从 loader 加载
+    // 避免显示旧书本的图片
+    return null;
   }
   
   /**
    * 检查是否已缓存
    */
   has(pageIndex: number): boolean {
-    const book = bookStore.currentBook;
-    if (!book) return false;
-    
-    const key = this.getKey(book.path, pageIndex);
-    return this.cache.has(key);
-  }
-  
-  // ============================================================================
-  // 图片加载
-  // ============================================================================
-  
-  /**
-   * 加载单张图片
-   */
-  async load(pageIndex: number): Promise<PooledImage | null> {
-    const book = bookStore.currentBook;
-    if (!book) return null;
-    
-    const key = this.getKey(book.path, pageIndex);
-    
-    // 标记为正在加载
-    this.loadingPages.add(key);
-    
-    try {
-      const { blob } = await readPageBlob(pageIndex);
-      const url = URL.createObjectURL(blob);
-      
-      // 获取图片尺寸
-      const dimensions = await this.getImageDimensions(url);
-      
-      const image: PooledImage = {
-        url,
-        blob,
-        pageIndex,
-        width: dimensions?.width,
-        height: dimensions?.height,
-        loadedAt: Date.now(),
-      };
-      
-      // 存入缓存
-      this.cache.set(key, image);
-      this.trimCache();
-      
-      return image;
-    } catch {
-      return null;
-    } finally {
-      this.loadingPages.delete(key);
-    }
+    const core = this.getCore();
+    return !!core?.getCachedUrl?.(pageIndex);
   }
   
   /**
-   * 获取图片尺寸
-   */
-  private getImageDimensions(url: string): Promise<{ width: number; height: number } | null> {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-      img.onerror = () => resolve(null);
-      img.src = url;
-    });
-  }
-  
-  /**
-   * 预加载多张图片
+   * 预加载（委托给 core）
    */
   async preload(pageIndices: number[]): Promise<void> {
-    const promises = pageIndices
-      .filter(idx => !this.has(idx))
-      .map(idx => this.load(idx));
+    const core = this.getCore();
+    if (!core) return;
     
-    await Promise.all(promises);
+    const toLoad = pageIndices.filter(idx => !this.has(idx));
+    await Promise.all(toLoad.slice(0, 4).map(idx => core.loadPage(idx).catch(() => null)));
   }
   
   /**
    * 预加载范围
    */
-  async preloadRange(centerIndex: number, range: number = 2): Promise<void> {
+  preloadRange(centerIndex: number, range = 5): void {
     const book = bookStore.currentBook;
     if (!book) return;
     
-    const totalPages = book.pages.length;
+    const total = book.pages.length;
     const indices: number[] = [];
     
-    // 中心页
-    indices.push(centerIndex);
-    
-    // 前后页
-    for (let i = 1; i <= range; i++) {
-      if (centerIndex - i >= 0) indices.push(centerIndex - i);
-      if (centerIndex + i < totalPages) indices.push(centerIndex + i);
+    for (let i = 0; i <= range; i++) {
+      if (centerIndex + i < total) indices.push(centerIndex + i);
+      if (i > 0 && centerIndex - i >= 0) indices.push(centerIndex - i);
     }
     
-    await this.preload(indices);
-  }
-  
-  // ============================================================================
-  // 等待加载
-  // ============================================================================
-  
-  private async waitForLoad(key: string, timeout: number = 5000): Promise<PooledImage | null> {
-    const startTime = Date.now();
-    
-    while (this.loadingPages.has(key)) {
-      if (Date.now() - startTime > timeout) {
-        return null;
-      }
-      await new Promise(resolve => setTimeout(resolve, 50));
-    }
-    
-    return this.cache.get(key) ?? null;
-  }
-  
-  // ============================================================================
-  // 缓存管理
-  // ============================================================================
-  
-  /**
-   * 修剪缓存（LRU）
-   */
-  private trimCache() {
-    if (this.cache.size <= this.maxSize) return;
-    
-    // 按加载时间排序，删除最旧的
-    const entries = Array.from(this.cache.entries())
-      .sort((a, b) => a[1].loadedAt - b[1].loadedAt);
-    
-    const toRemove = entries.slice(0, this.cache.size - this.maxSize);
-    
-    for (const [key, image] of toRemove) {
-      URL.revokeObjectURL(image.url);
-      this.cache.delete(key);
-    }
+    this.preload(indices);
   }
   
   /**
-   * 清除所有缓存
+   * 清除（无操作，缓存由 core 管理）
    */
   clear() {
-    for (const image of this.cache.values()) {
-      URL.revokeObjectURL(image.url);
-    }
-    this.cache.clear();
-    this.loadingPages.clear();
+    // ImageLoaderCore 管理自己的缓存
   }
   
   /**
-   * 获取缓存状态
+   * 获取状态
    */
   getStats() {
-    return {
-      size: this.cache.size,
-      maxSize: this.maxSize,
-      loading: this.loadingPages.size,
-    };
+    const core = this.getCore();
+    return core?.getCacheStats?.() ?? { size: 0 };
   }
 }
 

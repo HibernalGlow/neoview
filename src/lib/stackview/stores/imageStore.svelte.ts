@@ -1,10 +1,9 @@
 /**
  * StackView 图片状态管理
- * 使用共享 ImagePool 管理图片缓存
+ * 接收从 ImageViewer 传入的图片数据
  */
 
 import { bookStore } from '$lib/stores/book.svelte';
-import { imagePool } from './imagePool.svelte';
 
 // ============================================================================
 // 类型定义
@@ -26,7 +25,7 @@ export interface ImageState {
 }
 
 // ============================================================================
-// 创建图片 Store（使用共享 ImagePool）
+// 创建图片 Store
 // ============================================================================
 
 export function createImageStore() {
@@ -39,69 +38,42 @@ export function createImageStore() {
     error: null,
   });
   
-  let lastLoadedIndex = -1;
+  let currentBookPath: string | null = null;
   
   /**
-   * 加载当前页面
+   * 设置图片数据（从 ImageViewer 传入）
    */
-  async function loadCurrentPage(pageMode: 'single' | 'double' = 'single', force = false) {
-    const currentIndex = bookStore.currentPageIndex;
+  function setImageData(
+    url: string | null,
+    url2: string | null,
+    dims: { width: number; height: number } | null,
+    pageMode: 'single' | 'double' = 'single'
+  ) {
     const book = bookStore.currentBook;
-    const page = bookStore.currentPage;
     
-    if (!book || !page) {
-      state.currentUrl = null;
+    // 检测书本变化
+    if (book && currentBookPath !== book.path) {
+      currentBookPath = book.path;
+    }
+    
+    state.currentUrl = url;
+    state.dimensions = dims;
+    state.loading = !url;
+    
+    if (pageMode === 'double') {
+      state.secondUrl = url2;
+    } else {
       state.secondUrl = null;
-      state.dimensions = null;
-      return;
     }
-    
-    // 设置书本路径（切换时自动清理旧缓存）
-    imagePool.setCurrentBook(book.path);
-    
-    // 避免重复加载（除非强制）
-    if (!force && currentIndex === lastLoadedIndex && state.currentUrl) {
-      return;
-    }
-    
-    state.loading = true;
-    state.error = null;
-    lastLoadedIndex = currentIndex;
-    
-    try {
-      // 从共享池获取当前页
-      const image = await imagePool.get(currentIndex);
-      if (image) {
-        state.currentUrl = image.url;
-        state.dimensions = image.width && image.height 
-          ? { width: image.width, height: image.height } 
-          : null;
-      } else {
-        state.currentUrl = null;
-        state.dimensions = null;
-      }
-      
-      // 双页模式：加载第二张
-      if (pageMode === 'double') {
-        const secondIndex = currentIndex + 1;
-        if (secondIndex < book.pages.length) {
-          const secondImage = await imagePool.get(secondIndex);
-          state.secondUrl = secondImage?.url ?? null;
-        } else {
-          state.secondUrl = null;
-        }
-      } else {
-        state.secondUrl = null;
-      }
-      
-      // 后台预加载前后页（不阻塞）
-      imagePool.preloadRange(currentIndex, 2);
-      
-    } catch (err) {
-      state.error = String(err);
-    } finally {
-      state.loading = false;
-    }
+  }
+  
+  /**
+   * 加载当前页面（兼容旧 API，现在是空操作）
+   */
+  function loadCurrentPage(pageMode: 'single' | 'double' = 'single', force = false) {
+    // 图片加载由 ImageViewer 通过 setImageData 驱动
+    void pageMode;
+    void force;
   }
   
   /**
@@ -112,7 +84,7 @@ export function createImageStore() {
   }
   
   /**
-   * 重置状态（不清理共享池）
+   * 重置状态
    */
   function reset() {
     state.currentUrl = null;
@@ -121,11 +93,12 @@ export function createImageStore() {
     state.dimensions = null;
     state.loading = false;
     state.error = null;
-    lastLoadedIndex = -1;
+    currentBookPath = null;
   }
   
   return {
     get state() { return state; },
+    setImageData,
     loadCurrentPage,
     setUpscaledUrl,
     reset,

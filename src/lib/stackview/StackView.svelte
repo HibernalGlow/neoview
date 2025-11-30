@@ -46,11 +46,18 @@
     showPageInfo = true,
     showProgress = true,
     showLoading = true,
+    // 从 ImageViewer 传入的图片数据
+    imageUrl = null as string | null,
+    imageUrl2 = null as string | null,
+    imageDimensions = null as { width: number; height: number } | null,
   }: {
     backgroundColor?: string;
     showPageInfo?: boolean;
     showProgress?: boolean;
     showLoading?: boolean;
+    imageUrl?: string | null;
+    imageUrl2?: string | null;
+    imageDimensions?: { width: number; height: number } | null;
   } = $props();
   
   // ============================================================================
@@ -95,6 +102,11 @@
   let pageMode = $derived(bookContext?.pageMode ?? 'single');
   let isPanorama = $derived(bookContext?.panoramaEnabled ?? false);
   let orientation = $derived(bookContext?.orientation ?? 'horizontal');
+  
+  // 当 props 更新时，同步到 imageStore
+  $effect(() => {
+    imageStore.setImageData(imageUrl, imageUrl2, imageDimensions, pageMode);
+  });
   
   // 设置
   let settings = $state(settingsManager.getSettings());

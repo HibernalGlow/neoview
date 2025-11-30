@@ -124,13 +124,12 @@
     inset: 0;
     display: flex;
     flex-direction: row;
-    gap: 16px;
-    padding: 8px;
+    gap: 0;
+    padding: 0;
     overflow-x: auto;
     overflow-y: hidden;
     scroll-behavior: smooth;
     scroll-snap-type: x mandatory;
-    /* 确保变换后居中 */
     align-items: center;
     justify-content: flex-start;
     transform-origin: center center;
@@ -155,7 +154,7 @@
     flex-shrink: 0;
     display: flex;
     flex-direction: row;
-    gap: 4px;
+    gap: 0;
     align-items: center;
     justify-content: center;
     scroll-snap-align: center;
@@ -202,7 +201,7 @@
   
   /* 双页模式：每张图最多占50%宽度 */
   .panorama-frame-layer.double-mode .panorama-image {
-    max-width: calc(50% - 2px);
+    max-width: 50%;
   }
   
   .panorama-frame-layer.empty {

@@ -89,7 +89,7 @@ export function revokeUrl(url: string | null) {
 
 export function createImageStore() {
   // 状态
-  let state = $state<ImageState>({
+  const state = $state<ImageState>({
     currentUrl: null,
     secondUrl: null,
     upscaledUrl: null,
@@ -238,16 +238,15 @@ export function createImageStore() {
     revokeUrl(state.prevUrl);
     revokeUrl(state.nextUrl);
     
-    state = {
-      currentUrl: null,
-      secondUrl: null,
-      upscaledUrl: null,
-      prevUrl: null,
-      nextUrl: null,
-      dimensions: null,
-      loading: false,
-      error: null,
-    };
+    // 直接修改属性而不是重新赋值，保持响应性
+    state.currentUrl = null;
+    state.secondUrl = null;
+    state.upscaledUrl = null;
+    state.prevUrl = null;
+    state.nextUrl = null;
+    state.dimensions = null;
+    state.loading = false;
+    state.error = null;
     
     // 清除缓存和最后加载索引
     cache.forEach((entry) => revokeUrl(entry.url));

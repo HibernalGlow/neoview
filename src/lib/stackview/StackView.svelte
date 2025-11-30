@@ -12,7 +12,17 @@
     GestureLayer,
   } from './layers';
   import { getBaseTransform } from './utils/transform';
-  import { isLandscape, getInitialSplitHalf, getNextSplitHalf, getPrevSplitHalf, type SplitState } from './utils/viewMode';
+  import { 
+    isLandscape, 
+    getInitialSplitHalf, 
+    getNextSplitHalf, 
+    getPrevSplitHalf,
+    buildFrameImages,
+    getPageStep,
+    type SplitState,
+    type FrameBuildConfig,
+    type PageData,
+  } from './utils/viewMode';
   import { createZoomModeManager, type ViewportSize } from './utils/zoomModeHandler';
   import type { ZoomMode } from '$lib/settings/settingsManager';
   import type { Frame, FrameLayout, FrameImage } from './types/frame';
@@ -20,25 +30,19 @@
   import { getImageStore } from './stores/imageStore.svelte';
   
   // 导入外部 stores
-  import { zoomLevel, rotationAngle, resetZoom as storeResetZoom } from '$lib/stores';
+  import { zoomLevel, rotationAngle, resetZoom as storeResetZoom, viewMode, lockedViewMode } from '$lib/stores';
   import { bookStore } from '$lib/stores/book.svelte';
   import { settingsManager } from '$lib/settings/settingsManager';
-  import { readable } from 'svelte/store';
-  import { appState, type StateSelector } from '$lib/core/state/appState';
+  import { appState } from '$lib/core/state/appState';
   
   // ============================================================================
-  // 创建 viewerState store
+  // 获取 viewer 状态
   // ============================================================================
   
-  function createAppStateStore<T>(selector: StateSelector<T>) {
-    const initial = selector(appState.getSnapshot());
-    return readable(initial, (set) => {
-      const unsubscribe = appState.subscribe(selector, (value) => set(value));
-      return unsubscribe;
-    });
+  // 使用 appState 获取 orientation（没有独立 store）
+  function getOrientation(): 'horizontal' | 'vertical' {
+    return appState.getSnapshot().viewer.orientation;
   }
-  
-  const viewerState = createAppStateStore((state) => state.viewer);
   
   // ============================================================================
   // Props
@@ -71,7 +75,19 @@
   // 从 stores 获取状态
   let scale = $derived($zoomLevel);
   let rotation = $derived($rotationAngle);
-  let layout = $derived($viewerState.viewMode as FrameLayout);
+  let layout = $derived($viewMode as FrameLayout);
+  let orientation = $state<'horizontal' | 'vertical'>('horizontal');
+  
+  // 监听 appState 变化更新 orientation
+  $effect(() => {
+    orientation = getOrientation();
+    // 订阅 appState 变化
+    const unsubscribe = appState.subscribe(
+      (state) => state.viewer.orientation,
+      (value) => { orientation = value; }
+    );
+    return unsubscribe;
+  });
   
   // 设置
   let settings = $state(settingsManager.getSettings());
@@ -101,6 +117,19 @@
   );
   
   // ============================================================================
+  // 帧配置
+  // ============================================================================
+  
+  let frameConfig = $derived.by((): FrameBuildConfig => ({
+    layout: layout as 'single' | 'double' | 'panorama',
+    orientation: orientation,
+    direction: direction,
+    divideLandscape: divideLandscape,
+    treatHorizontalAsDoublePage: treatHorizontalAsDoublePage,
+    autoRotate: false, // TODO: 从设置读取
+  }));
+  
+  // ============================================================================
   // 帧数据
   // ============================================================================
   
@@ -109,34 +138,22 @@
     
     if (!currentUrl) return emptyFrame;
     
-    const images: FrameImage[] = [];
-    
-    // 主图
-    let mainImage: FrameImage = {
+    // 构建当前页数据
+    const currentPage: PageData = {
       url: currentUrl,
-      physicalIndex: bookStore.currentPageIndex,
-      virtualIndex: bookStore.currentPageIndex,
+      pageIndex: bookStore.currentPageIndex,
       width: dimensions?.width,
       height: dimensions?.height,
     };
     
-    // 处理分割
-    if (isInSplitMode && splitState) {
-      mainImage.splitHalf = splitState.half;
-    }
+    // 构建下一页数据（双页模式需要）
+    const nextPage: PageData | null = secondUrl ? {
+      url: secondUrl,
+      pageIndex: bookStore.currentPageIndex + 1,
+    } : null;
     
-    images.push(mainImage);
-    
-    // 双页模式
-    if (layout === 'double' && secondUrl) {
-      if (!(treatHorizontalAsDoublePage && isCurrentLandscape)) {
-        images.push({
-          url: secondUrl,
-          physicalIndex: bookStore.currentPageIndex + 1,
-          virtualIndex: bookStore.currentPageIndex + 1,
-        });
-      }
-    }
+    // 使用 buildFrameImages 构建图片列表
+    const images = buildFrameImages(currentPage, nextPage, frameConfig, splitState);
     
     return { id: `frame-${bookStore.currentPageIndex}`, images, layout };
   });
@@ -180,8 +197,20 @@
     
     splitState = null;
     
-    if (layout === 'double') {
-      const step = treatHorizontalAsDoublePage && isCurrentLandscape ? 1 : 2;
+    // 计算翻页步进
+    const { currentUrl, secondUrl, dimensions } = imageStore.state;
+    if (currentUrl) {
+      const currentPage: PageData = {
+        url: currentUrl,
+        pageIndex: bookStore.currentPageIndex,
+        width: dimensions?.width,
+        height: dimensions?.height,
+      };
+      const nextPage: PageData | null = secondUrl ? {
+        url: secondUrl,
+        pageIndex: bookStore.currentPageIndex + 1,
+      } : null;
+      const step = getPageStep(currentPage, nextPage, frameConfig);
       bookStore.navigateToPage(Math.max(0, bookStore.currentPageIndex - step));
     } else {
       bookStore.prevPage();
@@ -205,8 +234,20 @@
     
     splitState = null;
     
-    if (layout === 'double') {
-      const step = treatHorizontalAsDoublePage && isCurrentLandscape ? 1 : 2;
+    // 计算翻页步进
+    const { currentUrl, secondUrl, dimensions } = imageStore.state;
+    if (currentUrl) {
+      const currentPage: PageData = {
+        url: currentUrl,
+        pageIndex: bookStore.currentPageIndex,
+        width: dimensions?.width,
+        height: dimensions?.height,
+      };
+      const nextPage: PageData | null = secondUrl ? {
+        url: secondUrl,
+        pageIndex: bookStore.currentPageIndex + 1,
+      } : null;
+      const step = getPageStep(currentPage, nextPage, frameConfig);
       bookStore.navigateToPage(Math.min(bookStore.totalPages - 1, bookStore.currentPageIndex + step));
     } else {
       bookStore.nextPage();
@@ -312,6 +353,7 @@
     frame={currentFrameData} 
     layout={layout}
     direction={direction}
+    orientation={orientation}
     transform={baseTransform}
   />
   

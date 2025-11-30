@@ -4,6 +4,7 @@
  */
 
 import { ImageLoaderCore } from '$lib/components/viewer/flow/imageLoaderCore';
+import { getImageDimensions } from '$lib/components/viewer/flow/imageReader';
 import { bookStore } from '$lib/stores/book.svelte';
 
 // ============================================================================
@@ -50,10 +51,17 @@ export class StackImageLoader {
     }
 
     const result = await this.core.loadPage(pageIndex, priority);
+    
+    // ImageLoaderCore 返回的 dimensions 是 null，需要手动获取
+    let dimensions = result.dimensions;
+    if (!dimensions && result.blob) {
+      dimensions = await getImageDimensions(result.blob);
+    }
+    
     return {
       url: result.url,
       blob: result.blob,
-      dimensions: result.dimensions,
+      dimensions,
       fromCache: result.fromCache,
     };
   }

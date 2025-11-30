@@ -10,6 +10,7 @@
     CurrentFrameLayer,
     InfoLayer,
     GestureLayer,
+    HoverLayer,
   } from './layers';
   import PanoramaFrameLayer from './layers/PanoramaFrameLayer.svelte';
   import { getBaseTransform } from './utils/transform';
@@ -279,9 +280,29 @@
     }
   }
   
-  function handlePan(delta: { x: number; y: number }) {
-    localPan = { x: localPan.x + delta.x, y: localPan.y + delta.y };
+  // 悬停滚动处理（NeeView 风格）
+  function handleHoverScroll(pos: { x: number; y: number }, _duration: number) {
+    // pos 是目标位置，直接设置 localPan
+    console.log('[StackView] handleHoverScroll:', pos);
+    localPan = { x: pos.x, y: pos.y };
   }
+  
+  // 悬停滚动状态
+  let hoverScrollEnabled = $derived(settings.image?.hoverScrollEnabled ?? false);
+  
+  $effect(() => {
+    console.log('[StackView] hoverScrollEnabled:', hoverScrollEnabled, 'scaledContentSize:', scaledContentSize, 'viewportSize:', viewportSize);
+  });
+  
+  // 缩放后的内容尺寸（用于悬停滚动计算）
+  let scaledContentSize = $derived.by(() => {
+    const dims = imageStore.state.dimensions;
+    if (!dims) return { width: 0, height: 0 };
+    return {
+      width: dims.width * scale,
+      height: dims.height * scale,
+    };
+  });
   
   // ============================================================================
   // Effects
@@ -439,12 +460,23 @@
   
   <GestureLayer 
     isVideoMode={isVideoMode}
+    enablePan={false}
     onTapLeft={isRTL ? handleNextPage : handlePrevPage}
     onTapRight={isRTL ? handlePrevPage : handleNextPage}
-    onPan={handlePan}
     onNextPage={handleNextPage}
     onPrevPage={handlePrevPage}
     onResetZoom={resetView}
+  />
+  
+  <!-- 悬停滚动层（NeeView 风格） -->
+  <HoverLayer
+    enabled={hoverScrollEnabled}
+    duration={0.5}
+    sidebarMargin={50}
+    deadZoneRatio={0.2}
+    {viewportSize}
+    contentSize={scaledContentSize}
+    onScroll={handleHoverScroll}
   />
 </div>
 

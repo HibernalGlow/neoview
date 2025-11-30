@@ -1,37 +1,22 @@
 /**
  * StackView 图片状态管理
- * 复刻 ImageViewer 的核心加载逻辑
+ * 使用共享 ImagePool 管理图片缓存
  */
 
 import { bookStore } from '$lib/stores/book.svelte';
-import { SvelteMap } from 'svelte/reactivity';
-import { readPageBlob } from '../utils/imageReader';
-import type { Page } from '$lib/types';
+import { imagePool } from './imagePool.svelte';
 
 // ============================================================================
 // 类型定义
 // ============================================================================
-
-export interface PanoramaImage {
-  url: string;
-  pageIndex: number;
-  width?: number;
-  height?: number;
-}
 
 export interface ImageState {
   /** 当前图片 URL */
   currentUrl: string | null;
   /** 第二张图片 URL（双页模式） */
   secondUrl: string | null;
-  /** 全景模式图片列表 */
-  panoramaImages: PanoramaImage[];
   /** 超分图片 URL */
   upscaledUrl: string | null;
-  /** 前一页图片 URL（预加载） */
-  prevUrl: string | null;
-  /** 后一页图片 URL（预加载） */
-  nextUrl: string | null;
   /** 当前图片尺寸 */
   dimensions: { width: number; height: number } | null;
   /** 是否正在加载 */
@@ -40,108 +25,24 @@ export interface ImageState {
   error: string | null;
 }
 
-export interface ImageCache {
-  url: string;
-  blob?: Blob;
-  pageIndex: number;
-}
-
 // ============================================================================
-// 图片加载函数
-// ============================================================================
-
-/**
- * 从页面索引加载图片（复用 imageReader）
- */
-export async function loadImageByIndex(pageIndex: number): Promise<{ url: string; blob: Blob } | null> {
-  try {
-    const { blob } = await readPageBlob(pageIndex);
-    const url = URL.createObjectURL(blob);
-    return { url, blob };
-  } catch (err) {
-    console.error('[ImageStore] Load error:', err);
-    return null;
-  }
-}
-
-/**
- * 获取图片尺寸
- */
-export function getImageDimensions(url: string): Promise<{ width: number; height: number } | null> {
-  return new Promise((resolve) => {
-    if (!url) {
-      resolve(null);
-      return;
-    }
-    
-    const img = new Image();
-    img.onload = () => {
-      resolve({ width: img.naturalWidth, height: img.naturalHeight });
-    };
-    img.onerror = () => resolve(null);
-    img.src = url;
-  });
-}
-
-/**
- * 释放 Blob URL
- */
-export function revokeUrl(url: string | null) {
-  if (url?.startsWith('blob:')) {
-    URL.revokeObjectURL(url);
-  }
-}
-
-// ============================================================================
-// 创建图片 Store
+// 创建图片 Store（使用共享 ImagePool）
 // ============================================================================
 
 export function createImageStore() {
-  // 状态
   const state = $state<ImageState>({
     currentUrl: null,
     secondUrl: null,
-    panoramaImages: [],
     upscaledUrl: null,
-    prevUrl: null,
-    nextUrl: null,
     dimensions: null,
     loading: false,
     error: null,
   });
   
-  // 缓存
-  const cache = new SvelteMap<number, ImageCache>();
   let lastLoadedIndex = -1;
   
   /**
-   * 加载第二页（双页模式）
-   */
-  async function loadSecondPage(currentIndex: number, book: { pages: Page[] }) {
-    const nextPage = book.pages[currentIndex + 1];
-    if (!nextPage) {
-      state.secondUrl = null;
-      return;
-    }
-    
-    const cached = cache.get(currentIndex + 1);
-    if (cached) {
-      state.secondUrl = cached.url;
-    } else {
-      const result = await loadImageByIndex(currentIndex + 1);
-      if (result) {
-        state.secondUrl = result.url;
-        cache.set(currentIndex + 1, { url: result.url, blob: result.blob, pageIndex: currentIndex + 1 });
-      } else {
-        state.secondUrl = null;
-      }
-    }
-  }
-  
-  /**
    * 加载当前页面
-   * @param pageMode 页面模式（单页/双页）
-   * @param force 是否强制重新加载（用于模式切换）
    */
   async function loadCurrentPage(pageMode: 'single' | 'double' = 'single', force = false) {
     const currentIndex = bookStore.currentPageIndex;
@@ -151,10 +52,12 @@ export function createImageStore() {
     if (!book || !page) {
       state.currentUrl = null;
       state.secondUrl = null;
-      state.panoramaImages = [];
       state.dimensions = null;
       return;
     }
+    
+    // 设置书本路径（切换时自动清理旧缓存）
+    imagePool.setCurrentBook(book.path);
     
     // 避免重复加载（除非强制）
     if (!force && currentIndex === lastLoadedIndex && state.currentUrl) {
@@ -166,74 +69,38 @@ export function createImageStore() {
     lastLoadedIndex = currentIndex;
     
     try {
-      // 检查缓存
-      const cached = cache.get(currentIndex);
-      if (cached) {
-        state.currentUrl = cached.url;
+      // 从共享池获取当前页
+      const image = await imagePool.get(currentIndex);
+      if (image) {
+        state.currentUrl = image.url;
+        state.dimensions = image.width && image.height 
+          ? { width: image.width, height: image.height } 
+          : null;
       } else {
-        // 加载当前页
-        const result = await loadImageByIndex(currentIndex);
-        if (result) {
-          state.currentUrl = result.url;
-          cache.set(currentIndex, { url: result.url, blob: result.blob, pageIndex: currentIndex });
-        } else {
-          state.currentUrl = null;
-        }
+        state.currentUrl = null;
+        state.dimensions = null;
       }
       
-      // 获取尺寸
-      if (state.currentUrl) {
-        state.dimensions = await getImageDimensions(state.currentUrl);
-      }
-      
-      // 根据页面模式加载额外图片（全景模式由 panoramaStore 处理）
+      // 双页模式：加载第二张
       if (pageMode === 'double') {
-        // 双页模式：加载第二张
-        await loadSecondPage(currentIndex, book);
+        const secondIndex = currentIndex + 1;
+        if (secondIndex < book.pages.length) {
+          const secondImage = await imagePool.get(secondIndex);
+          state.secondUrl = secondImage?.url ?? null;
+        } else {
+          state.secondUrl = null;
+        }
       } else {
-        // 单页模式
         state.secondUrl = null;
       }
-      state.panoramaImages = []; // 普通模式不使用全景图片
       
-      // 预加载前后页
-      await preloadAdjacentPages(currentIndex, book.pages);
+      // 后台预加载前后页（不阻塞）
+      imagePool.preloadRange(currentIndex, 2);
       
     } catch (err) {
       state.error = String(err);
-      console.error('[ImageStore] Load error:', err);
     } finally {
       state.loading = false;
-    }
-  }
-  
-  /**
-   * 预加载前后页
-   */
-  async function preloadAdjacentPages(currentIndex: number, pages: Page[]) {
-    const prevIndex = currentIndex - 1;
-    const nextIndex = currentIndex + 1;
-    
-    // 预加载前一页
-    if (prevIndex >= 0 && !cache.has(prevIndex)) {
-      const result = await loadImageByIndex(prevIndex);
-      if (result) {
-        cache.set(prevIndex, { url: result.url, blob: result.blob, pageIndex: prevIndex });
-        state.prevUrl = result.url;
-      }
-    } else if (cache.has(prevIndex)) {
-      state.prevUrl = cache.get(prevIndex)!.url;
-    }
-    
-    // 预加载后一页
-    if (nextIndex < pages.length && !cache.has(nextIndex)) {
-      const result = await loadImageByIndex(nextIndex);
-      if (result) {
-        cache.set(nextIndex, { url: result.url, blob: result.blob, pageIndex: nextIndex });
-        state.nextUrl = result.url;
-      }
-    } else if (cache.has(nextIndex)) {
-      state.nextUrl = cache.get(nextIndex)!.url;
     }
   }
   
@@ -245,37 +112,15 @@ export function createImageStore() {
   }
   
   /**
-   * 清理缓存
-   */
-  function clearCache() {
-    cache.forEach((entry) => revokeUrl(entry.url));
-    cache.clear();
-    lastLoadedIndex = -1;
-  }
-  
-  /**
-   * 重置状态
+   * 重置状态（不清理共享池）
    */
   function reset() {
-    revokeUrl(state.currentUrl);
-    revokeUrl(state.secondUrl);
-    revokeUrl(state.prevUrl);
-    revokeUrl(state.nextUrl);
-    
-    // 直接修改属性而不是重新赋值，保持响应性
     state.currentUrl = null;
     state.secondUrl = null;
-    state.panoramaImages = [];
     state.upscaledUrl = null;
-    state.prevUrl = null;
-    state.nextUrl = null;
     state.dimensions = null;
     state.loading = false;
     state.error = null;
-    
-    // 清除缓存和最后加载索引
-    cache.forEach((entry) => revokeUrl(entry.url));
-    cache.clear();
     lastLoadedIndex = -1;
   }
   
@@ -283,7 +128,6 @@ export function createImageStore() {
     get state() { return state; },
     loadCurrentPage,
     setUpscaledUrl,
-    clearCache,
     reset,
   };
 }

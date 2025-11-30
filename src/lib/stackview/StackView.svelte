@@ -296,7 +296,7 @@
       // 获取或创建书本上下文
       const ctx = bookContextManager.setCurrent(currentPath, book?.pages?.length ?? 0);
       
-      // 如果是新书本，重置缓存
+      // 如果是新书本，重置状态（imagePool 会自动处理缓存）
       if (bookContext?.path !== currentPath) {
         imageStore.reset();
         panoramaStore.reset();

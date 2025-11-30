@@ -74,7 +74,7 @@ export function createPanoramaStore() {
     units: [],
     centerIndex: 0,
     loading: false,
-    preloadRange: 3, // 每侧预加载3个单元
+    preloadRange: 2, // 每侧预加载2个单元（减少以提升性能）
   });
   
   // 图片缓存
@@ -91,6 +91,9 @@ export function createPanoramaStore() {
     }
   }
   
+  // 追踪上次加载的范围，避免重复加载
+  let lastLoadedRange = { start: -1, end: -1, pageMode: '' as string };
+  
   /**
    * 加载全景视图
    * @param centerIndex 中心页面索引
@@ -102,9 +105,6 @@ export function createPanoramaStore() {
     const book = bookStore.currentBook;
     if (!book) return;
     
-    state.loading = true;
-    state.centerIndex = centerIndex;
-    
     const totalPages = book.pages.length;
     const step = pageMode === 'double' ? 2 : 1;
     const range = state.preloadRange;
@@ -113,22 +113,47 @@ export function createPanoramaStore() {
     const startUnit = Math.max(0, Math.floor(centerIndex / step) - range);
     const endUnit = Math.min(Math.ceil(totalPages / step) - 1, Math.floor(centerIndex / step) + range);
     
-    const newUnits: PanoramaUnit[] = [];
+    // 检查是否需要重新加载（范围变化或模式变化）
+    if (lastLoadedRange.start === startUnit && 
+        lastLoadedRange.end === endUnit && 
+        lastLoadedRange.pageMode === pageMode) {
+      // 范围相同，只更新中心索引
+      state.centerIndex = centerIndex;
+      return;
+    }
     
-    // 并行加载所有单元
+    state.loading = true;
+    state.centerIndex = centerIndex;
+    
+    // 记录已有的单元（可复用）
+    const existingUnits = new Map(state.units.map(u => [u.startIndex, u]));
+    const newUnits: PanoramaUnit[] = [];
     const unitPromises: Promise<PanoramaUnit | null>[] = [];
     
     for (let unitIdx = startUnit; unitIdx <= endUnit; unitIdx++) {
       const startPageIndex = unitIdx * step;
-      unitPromises.push(loadUnit(startPageIndex, pageMode, totalPages));
-    }
-    
-    const results = await Promise.all(unitPromises);
-    for (const unit of results) {
-      if (unit) {
-        newUnits.push(unit);
+      
+      // 如果已存在且模式相同，复用
+      const existing = existingUnits.get(startPageIndex);
+      if (existing && lastLoadedRange.pageMode === pageMode) {
+        newUnits.push(existing);
+      } else {
+        unitPromises.push(loadUnit(startPageIndex, pageMode, totalPages));
       }
     }
+    
+    // 只加载新的单元
+    if (unitPromises.length > 0) {
+      const results = await Promise.all(unitPromises);
+      for (const unit of results) {
+        if (unit) {
+          newUnits.push(unit);
+        }
+      }
+    }
+    
+    // 更新范围记录
+    lastLoadedRange = { start: startUnit, end: endUnit, pageMode };
     
     // 按索引排序
     newUnits.sort((a, b) => a.startIndex - b.startIndex);

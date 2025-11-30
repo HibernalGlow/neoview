@@ -25,18 +25,18 @@
   } = $props();
   
   let containerRef: HTMLDivElement | null = $state(null);
-  let lastScrolledIndex = $state(-1);
+  let scrollTimeout: ReturnType<typeof setTimeout> | null = null;
   
-  // 当前页索引变化时滚动到对应单元
+  // 当前页索引变化时滚动到对应单元（使用防抖）
   $effect(() => {
-    // 只依赖 currentPageIndex，避免其他依赖触发
     const idx = currentPageIndex;
     
-    // 避免重复滚动
-    if (idx === lastScrolledIndex) return;
+    // 清除之前的滚动计划
+    if (scrollTimeout) {
+      clearTimeout(scrollTimeout);
+    }
     
-    // 使用 setTimeout 避免在渲染期间修改 DOM
-    setTimeout(() => {
+    scrollTimeout = setTimeout(() => {
       if (!containerRef || units.length === 0) return;
       
       const step = pageMode === 'double' ? 2 : 1;
@@ -46,14 +46,14 @@
       const targetUnit = units.findIndex(u => Math.floor(u.startIndex / step) === targetUnitIndex);
       
       if (targetUnit >= 0 && targetUnit < unitElements.length) {
+        // 使用 instant 而不是 smooth 提升性能
         unitElements[targetUnit].scrollIntoView({
-          behavior: 'smooth',
+          behavior: 'instant',
           block: orientation === 'vertical' ? 'center' : 'nearest',
           inline: orientation === 'horizontal' ? 'center' : 'nearest',
         });
-        lastScrolledIndex = idx;
       }
-    }, 50);
+    }, 100);
   });
   
   // 计算图片尺寸：全景模式下根据 scale 调整

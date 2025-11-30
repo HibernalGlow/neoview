@@ -17,6 +17,7 @@
 	import { emmMetadataStore, collectTagMap, emmTranslationStore } from '$lib/stores/emmMetadata.svelte';
 	import type { EMMCollectTag } from '$lib/api/emm';
 	import { bookSettingsStore, type PerBookSettings } from '$lib/stores/bookSettings.svelte';
+	import EmmSyncCard from './EmmSyncCard.svelte';
 
 	let bookInfo = $state<ViewerBookInfo | null>(null);
 	let collectTags = $state<EMMCollectTag[]>([]);
@@ -1138,6 +1139,11 @@
 							<span>保存配置</span>
 						</Button.Root>
 					</div>
+
+					<Separator.Root class="my-3" />
+
+					<!-- EMM 数据同步卡片 -->
+					<EmmSyncCard />
 				</div>
 			{/if}
 		</div>

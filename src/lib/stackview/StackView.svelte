@@ -221,6 +221,22 @@
   // Effects
   // ============================================================================
   
+  // 记录当前书籍路径，用于检测书籍切换
+  let lastBookPath = $state<string | null>(null);
+  
+  // 书籍变化时重置缓存
+  $effect(() => {
+    const currentPath = bookStore.currentBook?.path ?? null;
+    if (currentPath !== lastBookPath) {
+      // 书籍切换，重置缓存
+      imageStore.reset();
+      zoomModeManager.reset();
+      localPan = { x: 0, y: 0 };
+      splitState = null;
+      lastBookPath = currentPath;
+    }
+  });
+  
   // 页面变化时加载图片
   $effect(() => {
     const pageIndex = bookStore.currentPageIndex;

@@ -167,7 +167,7 @@ impl ThumbnailDb {
         Ok(())
     }
 
-    /// 手动迁移：根据版本号判断并更新数据库结构（由用户在设置中手动触发）
+    /// 手动迁移：检查并添加必需的列（由用户在设置中手动触发）
     /// 当前目标版本：2.2
     pub fn migrate_add_emm_columns(&self) -> SqliteResult<String> {
         self.open()?;
@@ -180,38 +180,101 @@ impl ThumbnailDb {
         let current_version = Self::get_db_version(conn).unwrap_or_else(|| "1.0".to_string());
         let target_version = Self::DB_VERSION;
 
-        if current_version == target_version {
-            return Ok(format!("数据库已是最新版本 (v{})", target_version));
+        println!("📦 检查数据库结构: 当前版本 v{}, 目标版本 v{}", current_version, target_version);
+
+        // 始终检查 emm_json 列是否存在
+        let has_emm_json: bool = conn.prepare("SELECT emm_json FROM thumbs LIMIT 1").is_ok();
+        if !has_emm_json {
+            conn.execute("ALTER TABLE thumbs ADD COLUMN emm_json TEXT", [])?;
+            messages.push("添加 emm_json 列");
+            println!("✅ 添加 emm_json 列");
         }
 
-        println!("📦 开始迁移数据库: v{} -> v{}", current_version, target_version);
-
-        // 迁移 2.0 -> 2.1：添加 emm_json 列
-        if current_version < "2.1".to_string() {
-            let has_emm_json: bool = conn.prepare("SELECT emm_json FROM thumbs LIMIT 1").is_ok();
-            if !has_emm_json {
-                conn.execute("ALTER TABLE thumbs ADD COLUMN emm_json TEXT", [])?;
-                messages.push("v2.1: 添加 emm_json 列");
-            }
+        // 始终检查 rating_data 列是否存在
+        let has_rating_data: bool = conn.prepare("SELECT rating_data FROM thumbs LIMIT 1").is_ok();
+        if !has_rating_data {
+            conn.execute("ALTER TABLE thumbs ADD COLUMN rating_data TEXT", [])?;
+            messages.push("添加 rating_data 列");
+            println!("✅ 添加 rating_data 列");
         }
 
-        // 迁移 2.1 -> 2.2：添加 rating_data 列（取代 rating/manual_rating/folder_avg_rating）
-        if current_version < "2.2".to_string() {
-            let has_rating_data: bool = conn.prepare("SELECT rating_data FROM thumbs LIMIT 1").is_ok();
-            if !has_rating_data {
-                conn.execute("ALTER TABLE thumbs ADD COLUMN rating_data TEXT", [])?;
-                messages.push("v2.2: 添加 rating_data 列");
-            }
+        // 从 emm_json 中提取 rating 并填充到 rating_data（每次迁移都执行）
+        let migrated = Self::migrate_rating_from_emm_json(conn)?;
+        if migrated > 0 {
+            messages.push("从 emm_json 迁移评分数据");
         }
 
         // 更新版本号
         Self::set_db_version(conn, target_version)?;
 
+        // 获取列信息
+        let columns = Self::get_table_columns(conn, "thumbs")?;
+        let has_emm = columns.contains(&"emm_json".to_string());
+        let has_rating = columns.contains(&"rating_data".to_string());
+
         if messages.is_empty() {
-            Ok(format!("数据库已是最新版本 (v{})", target_version))
+            Ok(format!(
+                "数据库已是最新版本 (v{})\n列状态: emm_json={}, rating_data={}",
+                target_version, has_emm, has_rating
+            ))
         } else {
-            Ok(format!("迁移完成 (v{}): {}", target_version, messages.join(", ")))
+            Ok(format!(
+                "迁移完成 (v{}): {}\n列状态: emm_json={}, rating_data={}",
+                target_version,
+                messages.join(", "),
+                has_emm,
+                has_rating
+            ))
         }
+    }
+
+    /// 获取表的列名列表
+    fn get_table_columns(conn: &Connection, table_name: &str) -> SqliteResult<Vec<String>> {
+        let mut stmt = conn.prepare(&format!("PRAGMA table_info({})", table_name))?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(columns)
+    }
+
+    /// 从 emm_json 字段中提取 rating 并保存到 rating_data
+    fn migrate_rating_from_emm_json(conn: &Connection) -> SqliteResult<usize> {
+        use serde_json::Value;
+
+        let mut stmt = conn.prepare(
+            "SELECT key, emm_json FROM thumbs WHERE emm_json IS NOT NULL AND rating_data IS NULL"
+        )?;
+
+        let rows: Vec<(String, String)> = stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        let mut count = 0;
+        let now = chrono::Local::now().timestamp_millis();
+
+        for (key, emm_json) in rows {
+            if let Ok(json) = serde_json::from_str::<Value>(&emm_json) {
+                if let Some(rating) = json.get("rating").and_then(|r| r.as_f64()) {
+                    if rating > 0.0 {
+                        let rating_data = serde_json::json!({
+                            "value": rating,
+                            "source": "emm",
+                            "timestamp": now
+                        });
+                        conn.execute(
+                            "UPDATE thumbs SET rating_data = ?1 WHERE key = ?2",
+                            params![rating_data.to_string(), key],
+                        )?;
+                        count += 1;
+                    }
+                }
+            }
+        }
+
+        println!("📊 从 emm_json 迁移了 {} 条评分数据", count);
+        Ok(count)
     }
 
     /// 获取当前时间戳（秒）

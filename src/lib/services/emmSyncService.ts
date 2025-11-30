@@ -29,10 +29,8 @@ export interface EMMCacheEntry {
 		collectDisplay?: string;
 	}>;
 
-	// 评分
+	// 评分（从 EMM 数据库同步）
 	rating?: number;
-	manual_rating?: number;
-	folder_avg_rating?: number;
 
 	// 其他元数据
 	page_count?: number;
@@ -360,12 +358,22 @@ export async function syncEMMToThumbnailDb(): Promise<{ success: boolean; count:
 		// 4. 并行批量处理（优化版）
 		const BATCH_SIZE = 50;
 		const CONCURRENCY = 8; // 并行数
-		// entries: [key, emmJson, rating, manualRating, folderAvgRating]
-		const entries: [string, string, number | null, number | null, number | null][] = [];
+		// entries: [key, emmJson, ratingData]
+		const entries: [string, string, string | null][] = [];
 		let processed = 0;
 
+		// 构建 rating_data JSON
+		const buildRatingData = (rating: number | null): string | null => {
+			if (rating === null || rating === undefined) return null;
+			return JSON.stringify({
+				value: rating,
+				source: 'emm',
+				timestamp: Date.now()
+			});
+		};
+
 		// 处理单个路径的函数
-		const processPath = async (pathKey: string): Promise<[string, string, number | null, number | null, number | null] | null> => {
+		const processPath = async (pathKey: string): Promise<[string, string, string | null] | null> => {
 			for (const dbPath of mainDbPaths) {
 				try {
 					const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, pathKey, translationDbPath);
@@ -374,9 +382,7 @@ export async function syncEMMToThumbnailDb(): Promise<{ success: boolean; count:
 						return [
 							pathKey,
 							JSON.stringify(cacheEntry),
-							metadata.rating ?? null,
-							cacheEntry.manual_rating ?? null,
-							cacheEntry.folder_avg_rating ?? null
+							buildRatingData(metadata.rating ?? null)
 						];
 					}
 				} catch {
@@ -418,8 +424,8 @@ export async function syncEMMToThumbnailDb(): Promise<{ success: boolean; count:
 		}));
 
 		if (entries.length > 0) {
-			// 使用优化版保存（同时保存 emm_json 和独立 rating 字段）
-			await invoke<number>('batch_save_emm_with_rating', { entries });
+			// 保存 emm_json 和 rating_data
+			await invoke<number>('batch_save_emm_with_rating_data', { entries });
 		}
 
 		// 6. 完成
@@ -501,10 +507,20 @@ export async function syncEMMIncremental(): Promise<{ success: boolean; count: n
 		// 并行批量处理
 		const BATCH_SIZE = 50;
 		const CONCURRENCY = 8;
-		const entries: [string, string, number | null, number | null, number | null][] = [];
+		const entries: [string, string, string | null][] = [];
 		let processed = 0;
 
-		const processPath = async (pathKey: string): Promise<[string, string, number | null, number | null, number | null] | null> => {
+		// 构建 rating_data JSON
+		const buildRatingData = (rating: number | null): string | null => {
+			if (rating === null || rating === undefined) return null;
+			return JSON.stringify({
+				value: rating,
+				source: 'emm',
+				timestamp: Date.now()
+			});
+		};
+
+		const processPath = async (pathKey: string): Promise<[string, string, string | null] | null> => {
 			for (const dbPath of mainDbPaths) {
 				try {
 					const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, pathKey, translationDbPath);
@@ -513,9 +529,7 @@ export async function syncEMMIncremental(): Promise<{ success: boolean; count: n
 						return [
 							pathKey,
 							JSON.stringify(cacheEntry),
-							metadata.rating ?? null,
-							cacheEntry.manual_rating ?? null,
-							cacheEntry.folder_avg_rating ?? null
+							buildRatingData(metadata.rating ?? null)
 						];
 					}
 				} catch {
@@ -555,7 +569,7 @@ export async function syncEMMIncremental(): Promise<{ success: boolean; count: n
 		}));
 
 		if (entries.length > 0) {
-			await invoke<number>('batch_save_emm_with_rating', { entries });
+			await invoke<number>('batch_save_emm_with_rating_data', { entries });
 		}
 
 		emmSyncStore.update(s => ({

@@ -333,8 +333,8 @@
 		{isArchive}
 		{isReadCompleted}
 		{emmMetadata}
-		{folderAverageRating}
-		{folderManualRating}
+		folderAverageRating={itemRating}
+		folderManualRating={null}
 		{displayTags}
 		{getEffectiveRating}
 		{showPreview}
@@ -369,8 +369,8 @@
 		{isArchive}
 		{isReadCompleted}
 		{emmMetadata}
-		{folderAverageRating}
-		{folderManualRating}
+		folderAverageRating={itemRating}
+		folderManualRating={null}
 		{displayTags}
 		{getEffectiveRating}
 		{onClick}

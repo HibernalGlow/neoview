@@ -6,8 +6,11 @@
 import { writable, derived, get } from 'svelte/store';
 import type { FsItem } from '$lib/types';
 import { browseDirectory } from '$lib/api/filesystem';
-import { folderRatingStore } from '$lib/stores/emm/folderRating';
+import { ratingCache, getSortableRating } from '$lib/services/ratingCache';
 import { getDefaultRating } from '$lib/stores/emm/storage';
+
+// 评分预加载状态
+let ratingsLoaded = false;
 
 // ============ Types ============
 
@@ -338,8 +341,8 @@ function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrd
 		return shuffled;
 	}
 
-	// rating 排序特殊处理：需要获取评分数据
-	// 规则：文件夹在前，无 rating 使用默认评分，用户自定义 rating 优先
+	// rating 排序特殊处理：使用 ratingCache 中的缓存数据
+	// 注意：排序函数是同步的，使用已缓存的评分数据
 	if (field === 'rating') {
 		const defaultRating = getDefaultRating();
 		const sorted = [...items].sort((a, b) => {
@@ -348,9 +351,11 @@ function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrd
 				return a.isDir ? -1 : 1;
 			}
 
-			// 获取有效评分（用户自定义优先，否则使用平均评分，无评分使用默认值）
-			const ratingA = folderRatingStore.getEffectiveRating(a.path) ?? defaultRating;
-			const ratingB = folderRatingStore.getEffectiveRating(b.path) ?? defaultRating;
+			// 从 ratingCache 同步获取评分
+			const infoA = ratingCache.getRatingSync(a.path);
+			const infoB = ratingCache.getRatingSync(b.path);
+			const ratingA = getSortableRating(infoA ?? {}, defaultRating);
+			const ratingB = getSortableRating(infoB ?? {}, defaultRating);
 
 			// 评分相同则按名称排序
 			if (ratingA === ratingB) {
@@ -525,7 +530,7 @@ export const folderPanelActions = {
 	},
 
 	/**
-	 * 设置文件列表并缓存
+	 * 设置文件列表并缓存，同时预加载评分数据
 	 */
 	setItems(items: FsItem[]) {
 		const currentState = get(state);
@@ -534,6 +539,26 @@ export const folderPanelActions = {
 			setCachedDirectory(currentState.currentPath, items);
 		}
 		state.update((s) => ({ ...s, items, loading: false, error: null }));
+
+		// 异步预加载评分数据
+		this.preloadRatings(items);
+	},
+
+	/**
+	 * 预加载评分数据到缓存
+	 */
+	async preloadRatings(items: FsItem[]) {
+		const paths = items.map((item) => item.path);
+		if (paths.length > 0) {
+			try {
+				await ratingCache.batchGetRatings(paths);
+				// 触发重新排序（通过更新 state）
+				ratingsLoaded = true;
+				state.update((s) => ({ ...s }));
+			} catch (e) {
+				console.debug('[FolderPanel] 预加载评分失败:', e);
+			}
+		}
 	},
 
 	/**

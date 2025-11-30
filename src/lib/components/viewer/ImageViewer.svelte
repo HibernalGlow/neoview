@@ -11,7 +11,6 @@
 		rotationAngle,
 		toggleFullscreen,
 		setZoomLevel,
-		useStackViewer,
 		zoomLevel
 	} from '$lib/stores';
 	import { generateKeyCombo } from '$lib/stores/keyboard.svelte';
@@ -1249,10 +1248,8 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 
 	// 处理鼠标滚轮事件
 	function handleWheel(e: WheelEvent) {
-		// StackViewer 模式下由 GestureLayer 处理
-		if ($useStackViewer) {
-			return;
-		}
+		// StackView 由 GestureLayer 处理，不在这里处理
+		return;
 		
 		// 不在输入框时响应
 		const target = e.target as HTMLElement;
@@ -1531,10 +1528,8 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
-		// StackViewer 模式下由 GestureLayer 处理
-		if ($useStackViewer) {
-			return;
-		}
+		// StackView 由 GestureLayer 处理，不在这里处理
+		return;
 		
 		// 仅在此处理对比模式下的 ESC，其余按键交给 App.svelte 的全局处理
 		if ($viewerState.comparisonVisible && e.key === 'Escape') {
@@ -1607,23 +1602,12 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 			{:else}
 				<div class="text-white">加载视频中...</div>
 			{/if}
-		{:else if $useStackViewer}
+		{:else}
 			<!-- StackView 独立模式：自己从 bookStore 获取数据 -->
 			<StackView
 				backgroundColor="rgba(0, 128, 0, 0.3)"
 				showPageInfo={true}
 				showProgress={true}
-			/>
-		{:else}
-			<ImageViewerDisplay
-				{imageData}
-				{imageData2}
-				upscaledImageData={derivedUpscaledUrl || bookStore.upscaledImageData}
-				viewMode={$viewerState.viewMode as 'single' | 'double' | 'panorama'}
-				zoomLevel={$viewerState.zoom}
-				rotationAngle={$rotationAngle}
-				orientation={$viewerState.orientation}
-				bind:panoramaPages={panoramaPagesData}
 			/>
 		{/if}
 	</div>

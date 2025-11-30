@@ -33,12 +33,7 @@
   
   // 导入外部 stores
   import { zoomLevel, rotationAngle, resetZoom as storeResetZoom, viewMode as legacyViewMode, orientation as legacyOrientation } from '$lib/stores';
-  import { 
-    viewState, 
-    getPageMode, 
-    isPanoramaEnabled as getPanoramaEnabled, 
-    getOrientation 
-  } from '$lib/stores/viewState.svelte';
+  import { bookContextManager, type BookContext } from '$lib/stores/bookContext.svelte';
   import { bookStore } from '$lib/stores/book.svelte';
   import { settingsManager } from '$lib/settings/settingsManager';
   
@@ -75,26 +70,31 @@
   let scale = $derived($zoomLevel);
   let rotation = $derived($rotationAngle);
   
-  // 同步旧版 viewMode 到新版 viewState（桥接）
+  // 当前书本上下文
+  let bookContext = $state<BookContext | null>(null);
+  
+  // 同步旧版 viewMode 到 BookContext（桥接）
   $effect(() => {
+    const ctx = bookContext;
+    if (!ctx) return;
+    
     const mode = $legacyViewMode as 'single' | 'double' | 'panorama';
     const orient = $legacyOrientation as 'horizontal' | 'vertical';
     
-    // 根据旧模式设置新状态
+    // 根据旧模式设置 BookContext
     if (mode === 'panorama') {
-      viewState.setPanoramaEnabled(true);
+      ctx.setPanoramaEnabled(true);
     } else {
-      viewState.setPanoramaEnabled(false);
-      viewState.setPageMode(mode);
+      ctx.setPanoramaEnabled(false);
+      ctx.setPageMode(mode);
     }
-    viewState.setOrientation(orient);
+    ctx.setOrientation(orient);
   });
   
-  // 从 viewState 获取视图状态（方案 B）
-  // 使用 getter 函数确保响应式更新
-  let pageMode = $derived(getPageMode());
-  let isPanorama = $derived(getPanoramaEnabled());
-  let orientation = $derived(getOrientation());
+  // 从 BookContext 获取视图状态
+  let pageMode = $derived(bookContext?.pageMode ?? 'single');
+  let isPanorama = $derived(bookContext?.panoramaEnabled ?? false);
+  let orientation = $derived(bookContext?.orientation ?? 'horizontal');
   
   // 设置
   let settings = $state(settingsManager.getSettings());
@@ -102,12 +102,12 @@
   
   // 切换页面模式（单页/双页）
   function togglePageMode() {
-    viewState.togglePageMode();
+    bookContext?.togglePageMode();
   }
   
   // 切换全景模式
   function togglePanorama() {
-    viewState.togglePanorama();
+    bookContext?.togglePanorama();
   }
   
   // 从设置获取配置
@@ -287,20 +287,28 @@
   // Effects
   // ============================================================================
   
-  // 记录当前书籍路径，用于检测书籍切换
-  let lastBookPath = $state<string | null>(null);
-  
-  // 书籍变化时重置缓存
+  // 书籍变化时初始化 BookContext
   $effect(() => {
-    const currentPath = bookStore.currentBook?.path ?? null;
-    if (currentPath !== lastBookPath) {
-      // 书籍切换，重置所有缓存
-      imageStore.reset();
-      panoramaStore.reset();
-      zoomModeManager.reset();
-      localPan = { x: 0, y: 0 };
-      splitState = null;
-      lastBookPath = currentPath;
+    const book = bookStore.currentBook;
+    const currentPath = book?.path ?? null;
+    
+    if (currentPath) {
+      // 获取或创建书本上下文
+      const ctx = bookContextManager.setCurrent(currentPath, book?.pages?.length ?? 0);
+      
+      // 如果是新书本，重置缓存
+      if (bookContext?.path !== currentPath) {
+        imageStore.reset();
+        panoramaStore.reset();
+        zoomModeManager.reset();
+        localPan = { x: 0, y: 0 };
+        splitState = null;
+      }
+      
+      bookContext = ctx;
+    } else {
+      bookContextManager.clearCurrent();
+      bookContext = null;
     }
   });
   
@@ -382,7 +390,7 @@
   
   let isRTL = $derived(settings.book.readingDirection === 'right-to-left');
   
-  export { resetView, togglePageMode, togglePanorama, pageMode, isPanorama, viewState };
+  export { resetView, togglePageMode, togglePanorama, pageMode, isPanorama, bookContext };
 </script>
 
 <div class="stack-view" bind:this={containerRef}>

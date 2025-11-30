@@ -6,7 +6,7 @@
 import { bookStore } from '$lib/stores/book.svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import { readPageBlob } from '../utils/imageReader';
-import type { PageMode } from '$lib/stores/viewState.svelte';
+import type { PageMode } from '$lib/stores/bookContext.svelte';
 
 // ============================================================================
 // 类型定义

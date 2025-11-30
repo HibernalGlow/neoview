@@ -34,14 +34,13 @@
     const classes: string[] = [];
     
     if (layout === 'double') {
+      // 双页模式：始终左右排列，不受 orientation 影响
       classes.push('frame-double');
-      if (orientation === 'vertical') {
-        classes.push('frame-vertical');
-      }
       if (direction === 'rtl') {
         classes.push('frame-rtl');
       }
     } else if (layout === 'panorama') {
+      // 全景模式：orientation 控制滚动方向
       classes.push('frame-panorama');
       if (orientation === 'vertical') {
         classes.push('frame-vertical');
@@ -53,7 +52,9 @@
       classes.push('frame-single');
     }
     
-    return classes.join(' ');
+    const result = classes.join(' ');
+    console.log('[CurrentFrameLayer] layoutClass:', result, { layout, orientation, direction });
+    return result;
   });
 </script>
 
@@ -102,7 +103,7 @@
     justify-content: center;
   }
   
-  /* 双页 - 水平排列 */
+  /* 双页 - 始终水平排列（左右两页） */
   .frame-double {
     flex-direction: row;
     gap: 4px;
@@ -112,14 +113,7 @@
     flex-direction: row-reverse;
   }
   
-  /* 双页 - 垂直排列 */
-  .frame-double.frame-vertical {
-    flex-direction: column;
-  }
-  
-  .frame-double.frame-vertical.frame-rtl {
-    flex-direction: column-reverse;
-  }
+  /* 双页模式不受 orientation 影响，始终左右排列 */
   
   /* 全景 - 水平排列 */
   .frame-panorama {
@@ -156,15 +150,10 @@
     -webkit-user-drag: none;
   }
   
-  /* 双页水平 - 每张图占50%宽度 */
+  /* 双页 - 每张图占50%宽度（始终左右排列） */
   .frame-double .frame-image {
-    max-width: 50%;
-  }
-  
-  /* 双页垂直 - 每张图占50%高度 */
-  .frame-double.frame-vertical .frame-image {
-    max-width: 100%;
-    max-height: 50%;
+    max-width: calc(50% - 2px);
+    max-height: 100%;
   }
   
   /* 全景水平 - 图片高度100% */

@@ -4,7 +4,7 @@
   使用 imageStore 管理图片加载，复用现有手势和缩放
 -->
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy } from 'svelte';
   import {
     BackgroundLayer,
     CurrentFrameLayer,
@@ -30,19 +30,9 @@
   import { getImageStore } from './stores/imageStore.svelte';
   
   // 导入外部 stores
-  import { zoomLevel, rotationAngle, resetZoom as storeResetZoom, viewMode, lockedViewMode } from '$lib/stores';
+  import { zoomLevel, rotationAngle, resetZoom as storeResetZoom, viewMode, orientation as orientationStore } from '$lib/stores';
   import { bookStore } from '$lib/stores/book.svelte';
   import { settingsManager } from '$lib/settings/settingsManager';
-  import { appState } from '$lib/core/state/appState';
-  
-  // ============================================================================
-  // 获取 viewer 状态
-  // ============================================================================
-  
-  // 使用 appState 获取 orientation（没有独立 store）
-  function getOrientation(): 'horizontal' | 'vertical' {
-    return appState.getSnapshot().viewer.orientation;
-  }
   
   // ============================================================================
   // Props
@@ -76,28 +66,11 @@
   let scale = $derived($zoomLevel);
   let rotation = $derived($rotationAngle);
   let layout = $derived($viewMode as FrameLayout);
+  let orientation = $derived($orientationStore as 'horizontal' | 'vertical');
   
-  // orientation 需要从 appState 获取，因为没有独立 store
-  let orientationState = $state<'horizontal' | 'vertical'>(
-    appState.getSnapshot().viewer.orientation
-  );
-  
-  // 使用 derived 让其他代码可以响应变化
-  let orientation = $derived(orientationState);
-  
-  // 订阅 appState 中 orientation 的变化
-  let orientationUnsubscribe: (() => void) | null = null;
-  onMount(() => {
-    orientationUnsubscribe = appState.subscribe(
-      (state) => state.viewer.orientation,
-      (value) => {
-        console.log('[StackView] Orientation changed:', value);
-        orientationState = value;
-      }
-    );
-  });
-  onDestroy(() => {
-    orientationUnsubscribe?.();
+  // 调试日志
+  $effect(() => {
+    console.log('[StackView] State:', { layout, orientation });
   });
   
   // 设置
@@ -145,18 +118,30 @@
   // ============================================================================
   
   let currentFrameData = $derived.by((): Frame => {
-    const { currentUrl, secondUrl, dimensions, panoramaImages } = imageStore.state;
+    const { currentUrl, secondUrl, dimensions, panoramaImages, loading } = imageStore.state;
     
     console.log('[StackView] Frame derived:', { 
       hasCurrentUrl: !!currentUrl, 
       hasSecondUrl: !!secondUrl, 
       panoramaCount: panoramaImages.length,
-      layout
+      layout,
+      loading
     });
     
     // 全景模式：使用 panoramaImages
     if (layout === 'panorama') {
-      if (panoramaImages.length === 0) return emptyFrame;
+      // 如果还在加载或没有图片，返回空帧
+      if (panoramaImages.length === 0) {
+        // 如果有 currentUrl，先显示单图
+        if (currentUrl) {
+          return { 
+            id: `fallback-${bookStore.currentPageIndex}`, 
+            images: [{ url: currentUrl, physicalIndex: bookStore.currentPageIndex, virtualIndex: bookStore.currentPageIndex }], 
+            layout: 'single' 
+          };
+        }
+        return emptyFrame;
+      }
       
       const images: FrameImage[] = panoramaImages.map((img) => ({
         url: img.url,
@@ -189,7 +174,7 @@
     // 使用 buildFrameImages 构建图片列表
     const images = buildFrameImages(currentPage, nextPage, frameConfig, splitState);
     
-    console.log('[StackView] Built images:', images.length);
+    console.log('[StackView] Built images:', images.length, 'layout:', layout);
     
     return { id: `frame-${bookStore.currentPageIndex}`, images, layout };
   });

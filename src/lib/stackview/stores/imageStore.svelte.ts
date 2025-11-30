@@ -171,6 +171,7 @@ export function createImageStore() {
       
       // 双页模式：加载第二张
       if (viewMode === 'double') {
+        console.log('[ImageStore] Double mode: clearing panorama, loading second page');
         state.panoramaImages = []; // 清空全景
         const nextPage = book.pages[currentIndex + 1];
         if (nextPage) {

@@ -143,7 +143,32 @@ impl ThumbnailDb {
         Ok(())
     }
 
-    /// 手动迁移：为旧数据库添加 EMM 相关字段（由用户在设置中手动触发）
+    /// 数据库版本常量
+    const DB_VERSION: &'static str = "2.2";
+
+    /// 获取当前数据库版本
+    fn get_db_version(conn: &Connection) -> Option<String> {
+        // 创建 metadata 表（如果不存在）
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT)",
+            [],
+        ).ok()?;
+
+        let mut stmt = conn.prepare("SELECT value FROM metadata WHERE key = 'version'").ok()?;
+        stmt.query_row([], |row| row.get(0)).ok()
+    }
+
+    /// 设置数据库版本
+    fn set_db_version(conn: &Connection, version: &str) -> SqliteResult<()> {
+        conn.execute(
+            "INSERT OR REPLACE INTO metadata (key, value) VALUES ('version', ?1)",
+            params![version],
+        )?;
+        Ok(())
+    }
+
+    /// 手动迁移：根据版本号判断并更新数据库结构（由用户在设置中手动触发）
+    /// 当前目标版本：2.2
     pub fn migrate_add_emm_columns(&self) -> SqliteResult<String> {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
@@ -151,24 +176,41 @@ impl ThumbnailDb {
 
         let mut messages = Vec::new();
 
-        // 检查并添加 emm_json 列
-        let has_emm_json: bool = conn.prepare("SELECT emm_json FROM thumbs LIMIT 1").is_ok();
-        if !has_emm_json {
-            conn.execute("ALTER TABLE thumbs ADD COLUMN emm_json TEXT", [])?;
-            messages.push("添加 emm_json 列");
+        // 获取当前版本
+        let current_version = Self::get_db_version(conn).unwrap_or_else(|| "1.0".to_string());
+        let target_version = Self::DB_VERSION;
+
+        if current_version == target_version {
+            return Ok(format!("数据库已是最新版本 (v{})", target_version));
         }
 
-        // 检查并添加 rating_data 列（新的单一 JSON 字段）
-        let has_rating_data: bool = conn.prepare("SELECT rating_data FROM thumbs LIMIT 1").is_ok();
-        if !has_rating_data {
-            conn.execute("ALTER TABLE thumbs ADD COLUMN rating_data TEXT", [])?;
-            messages.push("添加 rating_data 列");
+        println!("📦 开始迁移数据库: v{} -> v{}", current_version, target_version);
+
+        // 迁移 2.0 -> 2.1：添加 emm_json 列
+        if current_version < "2.1".to_string() {
+            let has_emm_json: bool = conn.prepare("SELECT emm_json FROM thumbs LIMIT 1").is_ok();
+            if !has_emm_json {
+                conn.execute("ALTER TABLE thumbs ADD COLUMN emm_json TEXT", [])?;
+                messages.push("v2.1: 添加 emm_json 列");
+            }
         }
+
+        // 迁移 2.1 -> 2.2：添加 rating_data 列（取代 rating/manual_rating/folder_avg_rating）
+        if current_version < "2.2".to_string() {
+            let has_rating_data: bool = conn.prepare("SELECT rating_data FROM thumbs LIMIT 1").is_ok();
+            if !has_rating_data {
+                conn.execute("ALTER TABLE thumbs ADD COLUMN rating_data TEXT", [])?;
+                messages.push("v2.2: 添加 rating_data 列");
+            }
+        }
+
+        // 更新版本号
+        Self::set_db_version(conn, target_version)?;
 
         if messages.is_empty() {
-            Ok("数据库已是最新版本，无需迁移".to_string())
+            Ok(format!("数据库已是最新版本 (v{})", target_version))
         } else {
-            Ok(format!("迁移完成: {}", messages.join(", ")))
+            Ok(format!("迁移完成 (v{}): {}", target_version, messages.join(", ")))
         }
     }
 

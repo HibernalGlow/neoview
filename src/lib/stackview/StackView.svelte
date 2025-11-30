@@ -294,8 +294,9 @@
   $effect(() => {
     const currentPath = bookStore.currentBook?.path ?? null;
     if (currentPath !== lastBookPath) {
-      // 书籍切换，重置缓存
+      // 书籍切换，重置所有缓存
       imageStore.reset();
+      panoramaStore.reset();
       zoomModeManager.reset();
       localPan = { x: 0, y: 0 };
       splitState = null;

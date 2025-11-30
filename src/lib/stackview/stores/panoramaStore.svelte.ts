@@ -243,6 +243,9 @@ export function createPanoramaStore() {
     imageCache.forEach((entry) => revokeUrl(entry.url));
     imageCache.clear();
     
+    // 重置加载范围记录
+    lastLoadedRange = { start: -1, end: -1, pageMode: '' };
+    
     state.units = [];
     state.centerIndex = 0;
     state.loading = false;

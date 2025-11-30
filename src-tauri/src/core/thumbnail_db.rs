@@ -137,14 +137,19 @@ impl ThumbnailDb {
             [],
         )?;
 
-        // 迁移：添加 emm_json 字段（存储 EMM 元数据缓存）
-        // SQLite 不支持 IF NOT EXISTS 用于 ALTER TABLE，所以需要检查列是否存在
-        let has_emm_json: bool = conn
-            .prepare("SELECT emm_json FROM thumbs LIMIT 1")
+
+
+        // 迁移：添加独立 rating 字段（用于快速排序，不需要解析 JSON）
+        let has_rating: bool = conn
+            .prepare("SELECT rating FROM thumbs LIMIT 1")
             .is_ok();
-        if !has_emm_json {
-            conn.execute("ALTER TABLE thumbs ADD COLUMN emm_json TEXT", [])?;
-            println!("📦 已添加 emm_json 列到 thumbs 表");
+        if !has_rating {
+            conn.execute("ALTER TABLE thumbs ADD COLUMN rating REAL", [])?;
+            conn.execute("ALTER TABLE thumbs ADD COLUMN manual_rating REAL", [])?;
+            conn.execute("ALTER TABLE thumbs ADD COLUMN folder_avg_rating REAL", [])?;
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_thumbs_rating ON thumbs(rating)", [])?;
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_thumbs_folder_rating ON thumbs(folder_avg_rating)", [])?;
+            println!("📦 已添加 rating 相关列到 thumbs 表");
         }
 
         Ok(())
@@ -715,6 +720,184 @@ impl ThumbnailDb {
             .collect();
 
         Ok(keys)
+    }
+
+    // ==================== Rating 快速读写方法 ====================
+
+    /// 更新单个记录的 rating（同时更新独立字段和 emm_json）
+    pub fn update_rating(&self, key: &str, rating: Option<f64>, manual_rating: Option<f64>) -> SqliteResult<()> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        conn.execute(
+            "UPDATE thumbs SET rating = ?2, manual_rating = ?3 WHERE key = ?1",
+            params![key, rating, manual_rating],
+        )?;
+
+        Ok(())
+    }
+
+    /// 更新文件夹平均评分
+    pub fn update_folder_avg_rating(&self, key: &str, avg_rating: Option<f64>) -> SqliteResult<()> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        conn.execute(
+            "UPDATE thumbs SET folder_avg_rating = ?2 WHERE key = ?1",
+            params![key, avg_rating],
+        )?;
+
+        Ok(())
+    }
+
+    /// 批量更新 rating
+    pub fn batch_update_ratings(&self, entries: &[(String, Option<f64>, Option<f64>)]) -> SqliteResult<usize> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut count = 0;
+        for (key, rating, manual_rating) in entries {
+            let affected = conn.execute(
+                "UPDATE thumbs SET rating = ?2, manual_rating = ?3 WHERE key = ?1",
+                params![key, rating, manual_rating],
+            )?;
+            count += affected;
+        }
+
+        Ok(count)
+    }
+
+    /// 批量更新文件夹平均评分
+    pub fn batch_update_folder_ratings(&self, entries: &[(String, Option<f64>)]) -> SqliteResult<usize> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut count = 0;
+        for (key, avg_rating) in entries {
+            let affected = conn.execute(
+                "UPDATE thumbs SET folder_avg_rating = ?2 WHERE key = ?1",
+                params![key, avg_rating],
+            )?;
+            count += affected;
+        }
+
+        Ok(count)
+    }
+
+    /// 获取单个记录的 rating 信息
+    pub fn get_rating(&self, key: &str) -> SqliteResult<(Option<f64>, Option<f64>, Option<f64>)> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT rating, manual_rating, folder_avg_rating FROM thumbs WHERE key = ?1"
+        )?;
+
+        let result = stmt.query_row(params![key], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        }).ok();
+
+        Ok(result.unwrap_or((None, None, None)))
+    }
+
+    /// 批量获取 rating（用于排序）
+    pub fn batch_get_ratings(&self, keys: &[String]) -> SqliteResult<HashMap<String, (Option<f64>, Option<f64>, Option<f64>)>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut results = HashMap::new();
+        if keys.is_empty() {
+            return Ok(results);
+        }
+
+        let placeholders: String = keys.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let query = format!(
+            "SELECT key, rating, manual_rating, folder_avg_rating FROM thumbs WHERE key IN ({})",
+            placeholders
+        );
+
+        let mut stmt = conn.prepare(&query)?;
+        let params: Vec<&dyn rusqlite::ToSql> = keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
+        let mut rows = stmt.query(params.as_slice())?;
+
+        while let Some(row) = rows.next()? {
+            let key: String = row.get(0)?;
+            let rating: Option<f64> = row.get(1)?;
+            let manual_rating: Option<f64> = row.get(2)?;
+            let folder_avg_rating: Option<f64> = row.get(3)?;
+            results.insert(key, (rating, manual_rating, folder_avg_rating));
+        }
+
+        Ok(results)
+    }
+
+    /// 获取指定目录下所有文件的 rating（用于计算文件夹平均评分）
+    pub fn get_ratings_by_prefix(&self, prefix: &str) -> SqliteResult<Vec<(String, Option<f64>, Option<f64>)>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let pattern = format!("{}%", prefix);
+        let mut stmt = conn.prepare(
+            "SELECT key, rating, manual_rating FROM thumbs WHERE key LIKE ?1 AND (rating IS NOT NULL OR manual_rating IS NOT NULL)"
+        )?;
+
+        let results: Vec<(String, Option<f64>, Option<f64>)> = stmt
+            .query_map(params![pattern], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(results)
+    }
+
+    /// 同时保存 emm_json 和独立 rating 字段（用于同步时一次性写入）
+    pub fn save_emm_with_rating(
+        &self,
+        key: &str,
+        emm_json: &str,
+        rating: Option<f64>,
+        manual_rating: Option<f64>,
+        folder_avg_rating: Option<f64>,
+    ) -> SqliteResult<()> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        conn.execute(
+            "UPDATE thumbs SET emm_json = ?2, rating = ?3, manual_rating = ?4, folder_avg_rating = ?5 WHERE key = ?1",
+            params![key, emm_json, rating, manual_rating, folder_avg_rating],
+        )?;
+
+        Ok(())
+    }
+
+    /// 批量保存 emm_json 和 rating（优化版，一次性写入所有字段）
+    pub fn batch_save_emm_with_rating(
+        &self,
+        entries: &[(String, String, Option<f64>, Option<f64>, Option<f64>)],
+    ) -> SqliteResult<usize> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut count = 0;
+        for (key, emm_json, rating, manual_rating, folder_avg_rating) in entries {
+            let affected = conn.execute(
+                "UPDATE thumbs SET emm_json = ?2, rating = ?3, manual_rating = ?4, folder_avg_rating = ?5 WHERE key = ?1",
+                params![key, emm_json, rating, manual_rating, folder_avg_rating],
+            )?;
+            count += affected;
+        }
+
+        Ok(count)
     }
 }
 

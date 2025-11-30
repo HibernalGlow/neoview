@@ -1126,3 +1126,96 @@ pub async fn upsert_with_emm_json(
     state.db.upsert_with_emm_json(&path, &category, emm_json.as_deref())
         .map_err(|e| format!("插入/更新记录失败: {}", e))
 }
+
+// ==================== Rating 快速读写命令 ====================
+
+/// 更新单个记录的 rating
+#[tauri::command]
+pub async fn update_rating(
+    app: tauri::AppHandle,
+    path: String,
+    rating: Option<f64>,
+    manual_rating: Option<f64>,
+) -> Result<(), String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.update_rating(&path, rating, manual_rating)
+        .map_err(|e| format!("更新 rating 失败: {}", e))
+}
+
+/// 更新文件夹平均评分
+#[tauri::command]
+pub async fn update_folder_avg_rating(
+    app: tauri::AppHandle,
+    path: String,
+    avg_rating: Option<f64>,
+) -> Result<(), String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.update_folder_avg_rating(&path, avg_rating)
+        .map_err(|e| format!("更新文件夹评分失败: {}", e))
+}
+
+/// 批量更新 rating
+#[tauri::command]
+pub async fn batch_update_ratings(
+    app: tauri::AppHandle,
+    entries: Vec<(String, Option<f64>, Option<f64>)>,
+) -> Result<usize, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.batch_update_ratings(&entries)
+        .map_err(|e| format!("批量更新 rating 失败: {}", e))
+}
+
+/// 批量更新文件夹平均评分
+#[tauri::command]
+pub async fn batch_update_folder_ratings(
+    app: tauri::AppHandle,
+    entries: Vec<(String, Option<f64>)>,
+) -> Result<usize, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.batch_update_folder_ratings(&entries)
+        .map_err(|e| format!("批量更新文件夹评分失败: {}", e))
+}
+
+/// 获取单个记录的 rating
+#[tauri::command]
+pub async fn get_rating(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<(Option<f64>, Option<f64>, Option<f64>), String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.get_rating(&path)
+        .map_err(|e| format!("获取 rating 失败: {}", e))
+}
+
+/// 批量获取 rating（用于排序）
+#[tauri::command]
+pub async fn batch_get_ratings(
+    app: tauri::AppHandle,
+    paths: Vec<String>,
+) -> Result<HashMap<String, (Option<f64>, Option<f64>, Option<f64>)>, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.batch_get_ratings(&paths)
+        .map_err(|e| format!("批量获取 rating 失败: {}", e))
+}
+
+/// 获取目录下所有文件的 rating（用于计算文件夹平均评分）
+#[tauri::command]
+pub async fn get_ratings_by_prefix(
+    app: tauri::AppHandle,
+    prefix: String,
+) -> Result<Vec<(String, Option<f64>, Option<f64>)>, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.get_ratings_by_prefix(&prefix)
+        .map_err(|e| format!("获取目录 rating 失败: {}", e))
+}
+
+/// 批量保存 emm_json 和 rating（优化版）
+#[tauri::command]
+pub async fn batch_save_emm_with_rating(
+    app: tauri::AppHandle,
+    entries: Vec<(String, String, Option<f64>, Option<f64>, Option<f64>)>,
+) -> Result<usize, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.batch_save_emm_with_rating(&entries)
+        .map_err(|e| format!("批量保存 emm 和 rating 失败: {}", e))
+}

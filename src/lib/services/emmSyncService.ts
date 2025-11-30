@@ -272,7 +272,39 @@ function convertToEMMCacheEntry(
 	};
 }
 
-/** 执行完整同步（手动触发） */
+/** 并行处理辅助函数 */
+async function processInParallel<T, R>(
+	items: T[],
+	processor: (item: T) => Promise<R | null>,
+	concurrency: number
+): Promise<R[]> {
+	const results: R[] = [];
+	let index = 0;
+
+	async function worker() {
+		while (index < items.length) {
+			const currentIndex = index++;
+			const item = items[currentIndex];
+			try {
+				const result = await processor(item);
+				if (result !== null) {
+					results.push(result);
+				}
+			} catch {
+				// 忽略单个错误
+			}
+		}
+	}
+
+	const workers = Array(Math.min(concurrency, items.length))
+		.fill(null)
+		.map(() => worker());
+
+	await Promise.all(workers);
+	return results;
+}
+
+/** 执行完整同步（手动触发，优化版：并行 + rating 字段） */
 export async function syncEMMToThumbnailDb(): Promise<{ success: boolean; count: number; error?: string }> {
 	const state = get(emmSyncStore);
 
@@ -325,10 +357,36 @@ export async function syncEMMToThumbnailDb(): Promise<{ success: boolean; count:
 		const mainDbPaths = emmMetadataStore.getDatabasePaths();
 		const translationDbPath = emmMetadataStore.getTranslationDbPath();
 
-		// 4. 批量处理
-		const BATCH_SIZE = 100;
-		const entries: [string, string][] = [];
+		// 4. 并行批量处理（优化版）
+		const BATCH_SIZE = 50;
+		const CONCURRENCY = 8; // 并行数
+		// entries: [key, emmJson, rating, manualRating, folderAvgRating]
+		const entries: [string, string, number | null, number | null, number | null][] = [];
+		let processed = 0;
 
+		// 处理单个路径的函数
+		const processPath = async (pathKey: string): Promise<[string, string, number | null, number | null, number | null] | null> => {
+			for (const dbPath of mainDbPaths) {
+				try {
+					const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, pathKey, translationDbPath);
+					if (metadata) {
+						const cacheEntry = convertToEMMCacheEntry(metadata, collectTags, translationDict, dbPath);
+						return [
+							pathKey,
+							JSON.stringify(cacheEntry),
+							metadata.rating ?? null,
+							cacheEntry.manual_rating ?? null,
+							cacheEntry.folder_avg_rating ?? null
+						];
+					}
+				} catch {
+					// 继续尝试下一个数据库
+				}
+			}
+			return null;
+		};
+
+		// 分批并行处理
 		for (let i = 0; i < thumbnailKeys.length; i += BATCH_SIZE) {
 			const batch = thumbnailKeys.slice(i, i + BATCH_SIZE);
 
@@ -337,28 +395,15 @@ export async function syncEMMToThumbnailDb(): Promise<{ success: boolean; count:
 				syncProgress: {
 					...s.syncProgress,
 					phase: 'processing',
-					current: i,
-					message: `处理中... ${i}/${total}`
+					current: processed,
+					message: `并行处理中... ${processed}/${total}`
 				}
 			}));
 
-			// 为每个路径加载 EMM 数据
-			for (const pathKey of batch) {
-				try {
-					// 尝试从每个数据库加载
-					for (const dbPath of mainDbPaths) {
-						const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, pathKey, translationDbPath);
-						if (metadata) {
-							const cacheEntry = convertToEMMCacheEntry(metadata, collectTags, translationDict, dbPath);
-							entries.push([pathKey, JSON.stringify(cacheEntry)]);
-							break;
-						}
-					}
-				} catch (e) {
-					// 忽略单条记录的错误
-					console.debug(`[EMMSync] 加载 ${pathKey} 失败:`, e);
-				}
-			}
+			// 并行处理批次
+			const batchResults = await processInParallel(batch, processPath, CONCURRENCY);
+			entries.push(...batchResults);
+			processed += batch.length;
 		}
 
 		// 5. 批量保存
@@ -373,7 +418,8 @@ export async function syncEMMToThumbnailDb(): Promise<{ success: boolean; count:
 		}));
 
 		if (entries.length > 0) {
-			await invoke<number>('batch_save_emm_json', { entries });
+			// 使用优化版保存（同时保存 emm_json 和独立 rating 字段）
+			await invoke<number>('batch_save_emm_with_rating', { entries });
 		}
 
 		// 6. 完成

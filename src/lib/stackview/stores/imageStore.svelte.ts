@@ -1,9 +1,10 @@
 /**
  * StackView 图片状态管理
- * 接收从 ImageViewer 传入的图片数据
+ * 使用独立的 imagePool 加载图片
  */
 
 import { bookStore } from '$lib/stores/book.svelte';
+import { imagePool } from './imagePool.svelte';
 
 // ============================================================================
 // 类型定义
@@ -38,42 +39,100 @@ export function createImageStore() {
     error: null,
   });
   
+  let lastLoadedIndex = -1;
   let currentBookPath: string | null = null;
   
   /**
-   * 设置图片数据（从 ImageViewer 传入）
+   * 加载当前页面
    */
-  function setImageData(
-    url: string | null,
-    url2: string | null,
-    dims: { width: number; height: number } | null,
-    pageMode: 'single' | 'double' = 'single'
-  ) {
+  async function loadCurrentPage(pageMode: 'single' | 'double' = 'single', force = false) {
+    const currentIndex = bookStore.currentPageIndex;
     const book = bookStore.currentBook;
+    const page = bookStore.currentPage;
     
-    // 检测书本变化
-    if (book && currentBookPath !== book.path) {
-      currentBookPath = book.path;
+    if (!book || !page) {
+      state.currentUrl = null;
+      state.secondUrl = null;
+      state.dimensions = null;
+      state.loading = false;
+      return;
     }
     
-    state.currentUrl = url;
-    state.dimensions = dims;
-    state.loading = !url;
+    // 检测书本变化
+    const bookChanged = currentBookPath !== book.path;
+    if (bookChanged) {
+      currentBookPath = book.path;
+      state.currentUrl = null;
+      state.secondUrl = null;
+      state.dimensions = null;
+      lastLoadedIndex = -1;
+      imagePool.setCurrentBook(book.path);
+    }
     
+    // 避免重复加载
+    if (!force && !bookChanged && currentIndex === lastLoadedIndex && state.currentUrl) {
+      return;
+    }
+    
+    lastLoadedIndex = currentIndex;
+    
+    // 优先使用缓存
+    const cached = imagePool.getSync(currentIndex);
+    if (cached) {
+      state.currentUrl = cached.url;
+      state.dimensions = cached.width && cached.height 
+        ? { width: cached.width, height: cached.height } 
+        : null;
+      state.loading = false;
+    } else {
+      state.loading = true;
+    }
+    
+    // 双页模式：获取第二张
     if (pageMode === 'double') {
-      state.secondUrl = url2;
+      const secondIndex = currentIndex + 1;
+      if (secondIndex < book.pages.length) {
+        const secondCached = imagePool.getSync(secondIndex);
+        state.secondUrl = secondCached?.url ?? null;
+      } else {
+        state.secondUrl = null;
+      }
     } else {
       state.secondUrl = null;
     }
-  }
-  
-  /**
-   * 加载当前页面（兼容旧 API，现在是空操作）
-   */
-  function loadCurrentPage(pageMode: 'single' | 'double' = 'single', force = false) {
-    // 图片加载由 ImageViewer 通过 setImageData 驱动
-    void pageMode;
-    void force;
+    
+    // 异步加载
+    if (!cached) {
+      try {
+        const image = await imagePool.get(currentIndex);
+        if (image && lastLoadedIndex === currentIndex) {
+          state.currentUrl = image.url;
+          state.dimensions = image.width && image.height 
+            ? { width: image.width, height: image.height } 
+            : null;
+        }
+        
+        // 双页异步加载
+        if (pageMode === 'double' && lastLoadedIndex === currentIndex) {
+          const secondIndex = currentIndex + 1;
+          if (secondIndex < book.pages.length) {
+            const secondImage = await imagePool.get(secondIndex);
+            if (lastLoadedIndex === currentIndex) {
+              state.secondUrl = secondImage?.url ?? null;
+            }
+          }
+        }
+      } catch (err) {
+        state.error = String(err);
+      } finally {
+        if (lastLoadedIndex === currentIndex) {
+          state.loading = false;
+        }
+      }
+    }
+    
+    // 后台预加载
+    imagePool.preloadRange(currentIndex, 4);
   }
   
   /**
@@ -93,12 +152,13 @@ export function createImageStore() {
     state.dimensions = null;
     state.loading = false;
     state.error = null;
+    lastLoadedIndex = -1;
     currentBookPath = null;
+    imagePool.clear();
   }
   
   return {
     get state() { return state; },
-    setImageData,
     loadCurrentPage,
     setUpscaledUrl,
     reset,

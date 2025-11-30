@@ -1604,13 +1604,11 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 			{/if}
 		{:else}
 			<!-- StackView：接收 ImageViewer 加载的图片数据 -->
+			<!-- StackView 独立模式：使用自己的加载器 -->
 			<StackView
 				backgroundColor="rgba(0, 128, 0, 0.3)"
 				showPageInfo={true}
 				showProgress={true}
-				imageUrl={imageData}
-				imageUrl2={imageData2}
-				imageDimensions={currentImageDimensions}
 			/>
 		{/if}
 	</div>

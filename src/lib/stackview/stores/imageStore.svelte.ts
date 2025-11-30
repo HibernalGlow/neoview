@@ -124,7 +124,6 @@ export function createImageStore() {
     const book = bookStore.currentBook;
     const page = bookStore.currentPage;
     
-    console.log('[ImageStore] loadCurrentPage called:', { viewMode, currentIndex, lastLoadedIndex, lastViewMode, hasCurrentUrl: !!state.currentUrl });
     
     if (!book || !page) {
       state.currentUrl = null;
@@ -140,7 +139,6 @@ export function createImageStore() {
     
     // 避免重复加载（但视图模式改变时强制加载）
     if (!viewModeChanged && currentIndex === lastLoadedIndex && state.currentUrl) {
-      console.log('[ImageStore] Skipping - already loaded');
       return;
     }
     
@@ -171,7 +169,6 @@ export function createImageStore() {
       
       // 双页模式：加载第二张
       if (viewMode === 'double') {
-        console.log('[ImageStore] Double mode: clearing panorama, loading second page');
         state.panoramaImages = []; // 清空全景
         const nextPage = book.pages[currentIndex + 1];
         if (nextPage) {
@@ -214,7 +211,6 @@ export function createImageStore() {
         }
         
         state.panoramaImages = panoramaImages;
-        console.log('[ImageStore] Panorama loaded:', panoramaImages.length, 'images');
       } else {
         state.secondUrl = null;
         state.panoramaImages = [];

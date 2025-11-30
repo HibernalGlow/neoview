@@ -116,13 +116,6 @@
   let currentFrameData = $derived.by((): Frame => {
     const { currentUrl, secondUrl, dimensions, panoramaImages, loading } = imageStore.state;
     
-    console.log('[StackView] Frame derived:', { 
-      hasCurrentUrl: !!currentUrl, 
-      hasSecondUrl: !!secondUrl, 
-      panoramaCount: panoramaImages.length,
-      layout,
-      loading
-    });
     
     // 全景模式：使用 panoramaImages
     if (layout === 'panorama') {
@@ -147,7 +140,6 @@
         height: img.height,
       }));
       
-      console.log('[StackView] Panorama images:', images.length);
       return { id: `panorama-${bookStore.currentPageIndex}`, images, layout };
     }
     
@@ -170,7 +162,6 @@
     // 使用 buildFrameImages 构建图片列表
     const images = buildFrameImages(currentPage, nextPage, frameConfig, splitState);
     
-    console.log('[StackView] Built images:', images.length, 'layout:', layout);
     
     return { id: `frame-${bookStore.currentPageIndex}`, images, layout };
   });
@@ -301,8 +292,6 @@
     const book = bookStore.currentBook;
     const page = bookStore.currentPage;
     
-    console.log('[StackView] Page effect:', { pageIndex, hasBook: !!book, hasPage: !!page, layout });
-    
     if (splitState && splitState.pageIndex !== pageIndex) {
       splitState = null;
     }
@@ -315,8 +304,6 @@
   // 布局变化时重新加载
   $effect(() => {
     const currentLayout = layout;
-    console.log('[StackView] Layout effect:', { currentLayout, hasBook: !!bookStore.currentBook });
-    
     if (bookStore.currentBook && currentLayout) {
       imageStore.loadCurrentPage(currentLayout);
     }

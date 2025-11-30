@@ -249,7 +249,10 @@ export function createImageStore() {
       error: null,
     };
     
-    clearCache();
+    // 清除缓存和最后加载索引
+    cache.forEach((entry) => revokeUrl(entry.url));
+    cache.clear();
+    lastLoadedIndex = -1;
   }
   
   return {

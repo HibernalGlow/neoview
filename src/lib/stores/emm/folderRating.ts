@@ -9,7 +9,7 @@
 import { writable, get, derived } from 'svelte/store';
 import type { FolderRatingCache, FolderRatingEntry } from './types';
 import { invoke } from '@tauri-apps/api/core';
-import { ratingCache } from '$lib/services/ratingCache';
+import { ratingStore } from './ratingStore';
 
 const STORAGE_KEY = 'neoview-emm-folder-ratings';
 const CACHE_VERSION = 1;
@@ -325,16 +325,16 @@ export const folderRatingStore = {
 	},
 
 	/**
-	 * 获取文件夹的有效评分（优先从 ratingCache 获取）
+	 * 获取有效评分（优先从 ratingStore 缓存获取，即 Card 已加载的评分）
 	 */
 	getEffectiveRating(folderPath: string): number | null {
-		// 首先尝试从 ratingCache 获取（新数据源：thumbnail_db.rating_data）
-		const info = ratingCache.getRatingSync(folderPath);
-		if (info && info.effectiveRating !== undefined) {
-			return info.effectiveRating;
+		// 首先尝试从 ratingStore 缓存获取（Card 加载评分时会写入此缓存）
+		const ratingData = ratingStore.getRatingSync(folderPath);
+		if (ratingData?.value !== undefined) {
+			return ratingData.value;
 		}
 
-		// 回退到旧的本地缓存
+		// 回退到旧的本地缓存（EMM 计算的平均评分）
 		const entry = this.getFolderRating(folderPath);
 		if (!entry) return null;
 		return entry.manualRating ?? (entry.averageRating > 0 ? entry.averageRating : null);

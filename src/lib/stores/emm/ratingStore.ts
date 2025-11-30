@@ -247,6 +247,16 @@ export const ratingStore = {
 	},
 
 	/**
+	 * 同步获取评分（仅从内存缓存，不访问数据库）
+	 * 用于排序时直接读取 Card 已加载的评分
+	 */
+	getRatingSync(path: string): RatingData | null {
+		const normalizedPath = normalizePath(path);
+		const cache = get(ratingCache);
+		return cache.get(normalizedPath) ?? null;
+	},
+
+	/**
 	 * 清除缓存
 	 */
 	clearCache(): void {

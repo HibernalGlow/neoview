@@ -86,7 +86,7 @@ impl ThumbnailDb {
         Ok(())
     }
 
-    /// 初始化数据库表结构
+    /// 初始化数据库表结构（仅创建基础表，迁移由手动触发）
     fn initialize_db(conn: &Connection) -> SqliteResult<()> {
         // 设置 PRAGMA（使用 execute_batch 避免返回值问题）
         conn.execute_batch(
@@ -95,7 +95,7 @@ impl ThumbnailDb {
              PRAGMA synchronous = NORMAL;",
         )?;
 
-        // 创建缩略图表
+        // 创建缩略图表（包含所有字段，新数据库直接创建完整表）
         conn.execute(
             "CREATE TABLE IF NOT EXISTS thumbs (
                 key TEXT NOT NULL PRIMARY KEY,
@@ -103,7 +103,11 @@ impl ThumbnailDb {
                 date TEXT,
                 ghash INTEGER,
                 category TEXT DEFAULT 'file',
-                value BLOB
+                value BLOB,
+                emm_json TEXT,
+                rating REAL,
+                manual_rating REAL,
+                folder_avg_rating REAL
             )",
             [],
         )?;
@@ -118,6 +122,14 @@ impl ThumbnailDb {
         )?;
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_thumbs_date ON thumbs(date)",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_thumbs_rating ON thumbs(rating)",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_thumbs_folder_rating ON thumbs(folder_avg_rating)",
             [],
         )?;
 
@@ -137,22 +149,40 @@ impl ThumbnailDb {
             [],
         )?;
 
+        Ok(())
+    }
 
+    /// 手动迁移：为旧数据库添加 EMM 相关字段（由用户在设置中手动触发）
+    pub fn migrate_add_emm_columns(&self) -> SqliteResult<String> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
 
-        // 迁移：添加独立 rating 字段（用于快速排序，不需要解析 JSON）
-        let has_rating: bool = conn
-            .prepare("SELECT rating FROM thumbs LIMIT 1")
-            .is_ok();
+        let mut messages = Vec::new();
+
+        // 检查并添加 emm_json 列
+        let has_emm_json: bool = conn.prepare("SELECT emm_json FROM thumbs LIMIT 1").is_ok();
+        if !has_emm_json {
+            conn.execute("ALTER TABLE thumbs ADD COLUMN emm_json TEXT", [])?;
+            messages.push("添加 emm_json 列");
+        }
+
+        // 检查并添加 rating 相关列
+        let has_rating: bool = conn.prepare("SELECT rating FROM thumbs LIMIT 1").is_ok();
         if !has_rating {
             conn.execute("ALTER TABLE thumbs ADD COLUMN rating REAL", [])?;
             conn.execute("ALTER TABLE thumbs ADD COLUMN manual_rating REAL", [])?;
             conn.execute("ALTER TABLE thumbs ADD COLUMN folder_avg_rating REAL", [])?;
             conn.execute("CREATE INDEX IF NOT EXISTS idx_thumbs_rating ON thumbs(rating)", [])?;
             conn.execute("CREATE INDEX IF NOT EXISTS idx_thumbs_folder_rating ON thumbs(folder_avg_rating)", [])?;
-            println!("📦 已添加 rating 相关列到 thumbs 表");
+            messages.push("添加 rating/manual_rating/folder_avg_rating 列和索引");
         }
 
-        Ok(())
+        if messages.is_empty() {
+            Ok("数据库已是最新版本，无需迁移".to_string())
+        } else {
+            Ok(format!("迁移完成: {}", messages.join(", ")))
+        }
     }
 
     /// 获取当前时间戳（秒）

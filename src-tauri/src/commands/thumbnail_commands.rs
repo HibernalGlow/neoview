@@ -1219,3 +1219,13 @@ pub async fn batch_save_emm_with_rating(
     state.db.batch_save_emm_with_rating(&entries)
         .map_err(|e| format!("批量保存 emm 和 rating 失败: {}", e))
 }
+
+/// 手动触发数据库迁移（为旧数据库添加 EMM 相关字段）
+#[tauri::command]
+pub async fn migrate_thumbnail_db(
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.migrate_add_emm_columns()
+        .map_err(|e| format!("迁移失败: {}", e))
+}

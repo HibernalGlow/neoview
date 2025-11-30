@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { Database, RefreshCcw, Check, X, AlertCircle, FolderSync } from '@lucide/svelte';
+	import { invoke } from '@tauri-apps/api/core';
+	import { Database, RefreshCcw, Check, X, AlertCircle, FolderSync, Wrench } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Progress } from '$lib/components/ui/progress';
 	import {
@@ -16,6 +17,8 @@
 	let syncProgress = $state({ total: 0, current: 0, phase: 'idle' as string, message: '' });
 	let lastSyncTime = $state<string | null>(null);
 	let error = $state<string | null>(null);
+	let migrateMessage = $state<string | null>(null);
+	let isMigrating = $state(false);
 
 	// 订阅 store
 	$effect(() => {
@@ -35,6 +38,19 @@
 			await validateEMMConfig();
 		} catch (e) {
 			console.error('验证失败:', e);
+		}
+	}
+
+	async function handleMigrate() {
+		isMigrating = true;
+		migrateMessage = null;
+		try {
+			const result = await invoke<string>('migrate_thumbnail_db');
+			migrateMessage = result;
+		} catch (e) {
+			migrateMessage = `迁移失败: ${e}`;
+		} finally {
+			isMigrating = false;
 		}
 	}
 
@@ -151,30 +167,46 @@
 		</div>
 	{/if}
 
+	<!-- 迁移消息 -->
+	{#if migrateMessage}
+		<div class="text-xs text-muted-foreground bg-muted/50 rounded p-2">
+			{migrateMessage}
+		</div>
+	{/if}
+
 	<!-- 上次同步时间 -->
 	<div class="flex items-center justify-between text-xs text-muted-foreground">
 		<span>上次同步: {formatSyncTime(lastSyncTime)}</span>
 	</div>
 
-	<!-- 同步按钮 -->
-	<Button
-		class="w-full gap-2"
-		onclick={handleSync}
-		disabled={!canSync}
-	>
-		<Database class="h-4 w-4" />
-		{#if isSyncing}
-			同步中...
-		{:else if !validation}
-			请先验证配置
-		{:else if !isAllConfigValid(validation)}
-			配置不完整
-		{:else}
-			同步 EMM 数据到缩略图库
-		{/if}
-	</Button>
+	<!-- 操作按钮 -->
+	<div class="flex gap-2">
+		<Button
+			variant="outline"
+			size="sm"
+			class="flex-1 gap-1"
+			onclick={handleMigrate}
+			disabled={isMigrating}
+		>
+			<Wrench class="h-3.5 w-3.5" />
+			{isMigrating ? '迁移中...' : '迁移数据库'}
+		</Button>
+		<Button
+			class="flex-1 gap-1"
+			onclick={handleSync}
+			disabled={!canSync}
+		>
+			<Database class="h-3.5 w-3.5" />
+			{#if isSyncing}
+				同步中...
+			{:else}
+				同步数据
+			{/if}
+		</Button>
+	</div>
 
 	<p class="text-[10px] text-muted-foreground">
-		将 EMM 元数据（翻译标题、标签、评分等）嵌入缩略图数据库，读取缩略图时自动获取。
+		<strong>迁移</strong>：为旧数据库添加 EMM 字段（首次使用需执行）<br/>
+		<strong>同步</strong>：将 EMM 元数据嵌入缩略图库
 	</p>
 </div>

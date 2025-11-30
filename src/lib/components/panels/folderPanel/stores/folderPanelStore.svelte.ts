@@ -8,6 +8,7 @@ import type { FsItem } from '$lib/types';
 import { browseDirectory } from '$lib/api/filesystem';
 import { folderRatingStore } from '$lib/stores/emm/folderRating';
 import { getDefaultRating } from '$lib/stores/emm/storage';
+import { ratingCache } from '$lib/services/ratingCache';
 
 // ============ Types ============
 
@@ -327,8 +328,6 @@ export const itemCount = derived(state, ($state) => $state.items.length);
 // ============ Helper Functions ============
 
 function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrder): FsItem[] {
-	console.log('[FolderPanel] sortItems 调用, field:', field, 'order:', order, 'items:', items.length);
-	
 	// 随机排序特殊处理
 	if (field === 'random') {
 		const shuffled = [...items];
@@ -344,8 +343,6 @@ function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrd
 	// 规则：文件夹在前，无 rating 使用默认评分，用户自定义 rating 优先
 	if (field === 'rating') {
 		const defaultRating = getDefaultRating();
-		console.log('[FolderPanel] rating 排序, defaultRating:', defaultRating, 'items:', items.length);
-		
 		const sorted = [...items].sort((a, b) => {
 			// 文件夹优先
 			if (a.isDir !== b.isDir) {
@@ -529,7 +526,7 @@ export const folderPanelActions = {
 	},
 
 	/**
-	 * 设置文件列表并缓存
+	 * 设置文件列表并缓存，同时预加载评分数据
 	 */
 	setItems(items: FsItem[]) {
 		const currentState = get(state);
@@ -538,6 +535,27 @@ export const folderPanelActions = {
 			setCachedDirectory(currentState.currentPath, items);
 		}
 		state.update((s) => ({ ...s, items, loading: false, error: null }));
+
+		// 异步预加载评分数据（如果当前是评分排序）
+		if (currentState.sortField === 'rating') {
+			this.preloadRatings(items);
+		}
+	},
+
+	/**
+	 * 预加载评分数据到缓存，然后触发重新排序
+	 */
+	async preloadRatings(items: FsItem[]) {
+		const paths = items.map((item) => item.path);
+		if (paths.length > 0) {
+			try {
+				await ratingCache.batchGetRatings(paths);
+				// 触发重新排序（通过更新 state 让 derived store 重新计算）
+				state.update((s) => ({ ...s }));
+			} catch (e) {
+				console.error('[FolderPanel] 预加载评分失败:', e);
+			}
+		}
 	},
 
 	/**
@@ -710,12 +728,18 @@ export const folderPanelActions = {
 	 * 设置排序
 	 */
 	setSort(field: FolderSortField, order?: FolderSortOrder) {
+		const currentState = get(state);
 		state.update((s) => {
 			const newOrder = order ?? (s.sortField === field && s.sortOrder === 'asc' ? 'desc' : 'asc');
 			const newState = { ...s, sortField: field, sortOrder: newOrder };
 			saveState(newState);
 			return newState;
 		});
+
+		// 如果切换到评分排序，预加载评分数据
+		if (field === 'rating') {
+			this.preloadRatings(currentState.items);
+		}
 	},
 
 	/**

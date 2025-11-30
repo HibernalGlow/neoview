@@ -190,11 +190,11 @@ pub async fn load_directory_snapshot(
 
     // SQLite 缓存
     if let Some(persisted_items) = cache_index.db.load_directory_snapshot(&path, mtime)? {
-        println!(
-            "📁 DirectorySnapshot 命中 SQLite 缓存: {} (entries={})",
-            path,
-            persisted_items.len()
-        );
+        // println!(
+        //     "📁 DirectorySnapshot 命中 SQLite 缓存: {} (entries={})",
+        //     path,
+        //     persisted_items.len()
+        // );
         {
             let mut cache = cache_state
                 .cache

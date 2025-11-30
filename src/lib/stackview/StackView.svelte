@@ -11,6 +11,7 @@
     InfoLayer,
     GestureLayer,
   } from './layers';
+  import PanoramaFrameLayer from './layers/PanoramaFrameLayer.svelte';
   import { getBaseTransform } from './utils/transform';
   import { 
     isLandscape, 
@@ -28,9 +29,11 @@
   import type { Frame, FrameLayout, FrameImage } from './types/frame';
   import { emptyFrame } from './types/frame';
   import { getImageStore } from './stores/imageStore.svelte';
+  import { getPanoramaStore } from './stores/panoramaStore.svelte';
   
   // 导入外部 stores
-  import { zoomLevel, rotationAngle, resetZoom as storeResetZoom, viewMode, orientation as orientationStore } from '$lib/stores';
+  import { zoomLevel, rotationAngle, resetZoom as storeResetZoom, viewMode as legacyViewMode, orientation as legacyOrientation } from '$lib/stores';
+  import { viewState } from '$lib/stores/viewState.svelte';
   import { bookStore } from '$lib/stores/book.svelte';
   import { settingsManager } from '$lib/settings/settingsManager';
   
@@ -55,6 +58,7 @@
   // ============================================================================
   
   const imageStore = getImageStore();
+  const panoramaStore = getPanoramaStore();
   const zoomModeManager = createZoomModeManager();
   
   let localPan = $state({ x: 0, y: 0 });
@@ -65,13 +69,40 @@
   // 从 stores 获取状态
   let scale = $derived($zoomLevel);
   let rotation = $derived($rotationAngle);
-  let layout = $derived($viewMode as FrameLayout);
-  let orientation = $derived($orientationStore as 'horizontal' | 'vertical');
   
+  // 同步旧版 viewMode 到新版 viewState（桥接）
+  $effect(() => {
+    const mode = $legacyViewMode as 'single' | 'double' | 'panorama';
+    const orient = $legacyOrientation as 'horizontal' | 'vertical';
+    
+    // 根据旧模式设置新状态
+    if (mode === 'panorama') {
+      viewState.setPanoramaEnabled(true);
+    } else {
+      viewState.setPanoramaEnabled(false);
+      viewState.setPageMode(mode);
+    }
+    viewState.setOrientation(orient);
+  });
+  
+  // 从 viewState 获取视图状态（方案 B）
+  let pageMode = $derived(viewState.pageMode);
+  let isPanorama = $derived(viewState.panoramaEnabled);
+  let orientation = $derived(viewState.orientation);
   
   // 设置
   let settings = $state(settingsManager.getSettings());
   settingsManager.addListener((s) => { settings = s; });
+  
+  // 切换页面模式（单页/双页）
+  function togglePageMode() {
+    viewState.togglePageMode();
+  }
+  
+  // 切换全景模式
+  function togglePanorama() {
+    viewState.togglePanorama();
+  }
   
   // 从设置获取配置
   let direction = $derived<'ltr' | 'rtl'>(settings.book.readingDirection === 'right-to-left' ? 'rtl' : 'ltr');
@@ -93,20 +124,23 @@
   
   // 是否处于分割模式
   let isInSplitMode = $derived(
-    divideLandscape && isCurrentLandscape && layout === 'single' && !isVideoMode
+    divideLandscape && isCurrentLandscape && pageMode === 'single' && !isPanorama && !isVideoMode
   );
   
   // ============================================================================
-  // 帧配置
+  // 帧配置（使用方案 B 的 pageMode）
   // ============================================================================
   
+  // 计算帧布局：根据 pageMode 和 isPanorama
+  let frameLayout = $derived<FrameLayout>(isPanorama ? 'panorama' : pageMode);
+  
   let frameConfig = $derived.by((): FrameBuildConfig => ({
-    layout: layout as 'single' | 'double' | 'panorama',
+    layout: pageMode, // 使用 pageMode 而不是 layout
     orientation: orientation,
     direction: direction,
     divideLandscape: divideLandscape,
     treatHorizontalAsDoublePage: treatHorizontalAsDoublePage,
-    autoRotate: false, // TODO: 从设置读取
+    autoRotate: false,
   }));
   
   // ============================================================================
@@ -114,33 +148,11 @@
   // ============================================================================
   
   let currentFrameData = $derived.by((): Frame => {
-    const { currentUrl, secondUrl, dimensions, panoramaImages, loading } = imageStore.state;
+    const { currentUrl, secondUrl, dimensions } = imageStore.state;
     
-    
-    // 全景模式：使用 panoramaImages
-    if (layout === 'panorama') {
-      // 如果还在加载或没有图片，返回空帧
-      if (panoramaImages.length === 0) {
-        // 如果有 currentUrl，先显示单图
-        if (currentUrl) {
-          return { 
-            id: `fallback-${bookStore.currentPageIndex}`, 
-            images: [{ url: currentUrl, physicalIndex: bookStore.currentPageIndex, virtualIndex: bookStore.currentPageIndex }], 
-            layout: 'single' 
-          };
-        }
-        return emptyFrame;
-      }
-      
-      const images: FrameImage[] = panoramaImages.map((img) => ({
-        url: img.url,
-        physicalIndex: img.pageIndex,
-        virtualIndex: img.pageIndex,
-        width: img.width,
-        height: img.height,
-      }));
-      
-      return { id: `panorama-${bookStore.currentPageIndex}`, images, layout };
+    // 全景模式时不使用此组件，由 PanoramaFrameLayer 处理
+    if (isPanorama) {
+      return emptyFrame;
     }
     
     if (!currentUrl) return emptyFrame;
@@ -162,8 +174,7 @@
     // 使用 buildFrameImages 构建图片列表
     const images = buildFrameImages(currentPage, nextPage, frameConfig, splitState);
     
-    
-    return { id: `frame-${bookStore.currentPageIndex}`, images, layout };
+    return { id: `frame-${bookStore.currentPageIndex}`, images, layout: pageMode };
   });
   
   let upscaledFrameData = $derived.by((): Frame => {
@@ -286,26 +297,38 @@
     }
   });
   
-  // 页面变化时加载图片
+  // 追踪上一次的状态，用于检测变化
+  let lastPageMode = $state<'single' | 'double' | null>(null);
+  let lastPanorama = $state<boolean>(false);
+  
+  // 页面或模式变化时加载图片
   $effect(() => {
     const pageIndex = bookStore.currentPageIndex;
     const book = bookStore.currentBook;
     const page = bookStore.currentPage;
+    const currentPageMode = pageMode;
+    const currentPanorama = isPanorama;
     
     if (splitState && splitState.pageIndex !== pageIndex) {
       splitState = null;
     }
     
     if (book && page) {
-      imageStore.loadCurrentPage(layout);
-    }
-  });
-  
-  // 布局变化时重新加载
-  $effect(() => {
-    const currentLayout = layout;
-    if (bookStore.currentBook && currentLayout) {
-      imageStore.loadCurrentPage(currentLayout);
+      // 检测模式是否变化
+      const modeChanged = currentPageMode !== lastPageMode || currentPanorama !== lastPanorama;
+      lastPageMode = currentPageMode;
+      lastPanorama = currentPanorama;
+      
+      // 根据模式加载
+      if (currentPanorama) {
+        // 全景模式：使用全景 store
+        panoramaStore.setEnabled(true);
+        panoramaStore.loadPanorama(pageIndex, currentPageMode);
+      } else {
+        // 普通模式：使用图片 store
+        panoramaStore.setEnabled(false);
+        imageStore.loadCurrentPage(currentPageMode, modeChanged);
+      }
     }
   });
   
@@ -346,38 +369,51 @@
   
   onDestroy(() => {
     imageStore.reset();
+    panoramaStore.reset();
     zoomModeManager.reset();
   });
   
   let isRTL = $derived(settings.book.readingDirection === 'right-to-left');
   
-  export { resetView };
+  export { resetView, togglePageMode, togglePanorama, pageMode, isPanorama, viewState };
 </script>
 
 <div class="stack-view" bind:this={containerRef}>
   <BackgroundLayer color={backgroundColor} />
   
-  <CurrentFrameLayer 
-    frame={currentFrameData} 
-    layout={layout}
-    direction={direction}
-    orientation={orientation}
-    transform={baseTransform}
-  />
-  
-  {#if upscaledFrameData.images.length > 0}
-    <CurrentFrameLayer 
-      frame={upscaledFrameData} 
-      layout="single"
+  {#if isPanorama}
+    <!-- 全景模式：显示滚动视图 -->
+    <PanoramaFrameLayer 
+      units={panoramaStore.state.units}
+      pageMode={pageMode}
+      orientation={orientation}
       direction={direction}
       transform={baseTransform}
     />
+  {:else}
+    <!-- 普通模式：显示当前帧 -->
+    <CurrentFrameLayer 
+      frame={currentFrameData} 
+      layout={pageMode}
+      direction={direction}
+      orientation={orientation}
+      transform={baseTransform}
+    />
+    
+    {#if upscaledFrameData.images.length > 0}
+      <CurrentFrameLayer 
+        frame={upscaledFrameData} 
+        layout="single"
+        direction={direction}
+        transform={baseTransform}
+      />
+    {/if}
   {/if}
   
   <InfoLayer 
     currentIndex={bookStore.currentPageIndex}
     totalPages={bookStore.totalPages}
-    isLoading={imageStore.state.loading}
+    isLoading={isPanorama ? panoramaStore.state.loading : imageStore.state.loading}
     isDivided={isInSplitMode}
     splitHalf={splitState?.half ?? null}
     showPageInfo={showPageInfo}

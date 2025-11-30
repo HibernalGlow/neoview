@@ -114,16 +114,39 @@ export function createImageStore() {
   const cache = new SvelteMap<number, ImageCache>();
   let lastLoadedIndex = -1;
   
-  let lastViewMode: 'single' | 'double' | 'panorama' = 'single';
+  /**
+   * 加载第二页（双页模式）
+   */
+  async function loadSecondPage(currentIndex: number, book: { pages: Page[] }) {
+    const nextPage = book.pages[currentIndex + 1];
+    if (!nextPage) {
+      state.secondUrl = null;
+      return;
+    }
+    
+    const cached = cache.get(currentIndex + 1);
+    if (cached) {
+      state.secondUrl = cached.url;
+    } else {
+      const result = await loadImageByIndex(currentIndex + 1);
+      if (result) {
+        state.secondUrl = result.url;
+        cache.set(currentIndex + 1, { url: result.url, blob: result.blob, pageIndex: currentIndex + 1 });
+      } else {
+        state.secondUrl = null;
+      }
+    }
+  }
   
   /**
    * 加载当前页面
+   * @param pageMode 页面模式（单页/双页）
+   * @param force 是否强制重新加载（用于模式切换）
    */
-  async function loadCurrentPage(viewMode: 'single' | 'double' | 'panorama' = 'single') {
+  async function loadCurrentPage(pageMode: 'single' | 'double' = 'single', force = false) {
     const currentIndex = bookStore.currentPageIndex;
     const book = bookStore.currentBook;
     const page = bookStore.currentPage;
-    
     
     if (!book || !page) {
       state.currentUrl = null;
@@ -133,12 +156,8 @@ export function createImageStore() {
       return;
     }
     
-    // 视图模式改变时强制重新加载
-    const viewModeChanged = viewMode !== lastViewMode;
-    lastViewMode = viewMode;
-    
-    // 避免重复加载（但视图模式改变时强制加载）
-    if (!viewModeChanged && currentIndex === lastLoadedIndex && state.currentUrl) {
+    // 避免重复加载（除非强制）
+    if (!force && currentIndex === lastLoadedIndex && state.currentUrl) {
       return;
     }
     
@@ -167,54 +186,15 @@ export function createImageStore() {
         state.dimensions = await getImageDimensions(state.currentUrl);
       }
       
-      // 双页模式：加载第二张
-      if (viewMode === 'double') {
-        state.panoramaImages = []; // 清空全景
-        const nextPage = book.pages[currentIndex + 1];
-        if (nextPage) {
-          const cachedNext = cache.get(currentIndex + 1);
-          if (cachedNext) {
-            state.secondUrl = cachedNext.url;
-          } else {
-            const result2 = await loadImageByIndex(currentIndex + 1);
-            if (result2) {
-              state.secondUrl = result2.url;
-              cache.set(currentIndex + 1, { url: result2.url, blob: result2.blob, pageIndex: currentIndex + 1 });
-            } else {
-              state.secondUrl = null;
-            }
-          }
-        } else {
-          state.secondUrl = null;
-        }
-      } else if (viewMode === 'panorama') {
-        // 全景模式：加载当前页周围的多张图片
-        state.secondUrl = null;
-        const panoramaCount = 5; // 显示5张图
-        const half = Math.floor(panoramaCount / 2);
-        const startIndex = Math.max(0, currentIndex - half);
-        const endIndex = Math.min(book.pages.length - 1, currentIndex + half);
-        
-        const panoramaImages: PanoramaImage[] = [];
-        
-        for (let i = startIndex; i <= endIndex; i++) {
-          const cached = cache.get(i);
-          if (cached) {
-            panoramaImages.push({ url: cached.url, pageIndex: i });
-          } else {
-            const result = await loadImageByIndex(i);
-            if (result) {
-              cache.set(i, { url: result.url, blob: result.blob, pageIndex: i });
-              panoramaImages.push({ url: result.url, pageIndex: i });
-            }
-          }
-        }
-        
-        state.panoramaImages = panoramaImages;
+      // 根据页面模式加载额外图片（全景模式由 panoramaStore 处理）
+      if (pageMode === 'double') {
+        // 双页模式：加载第二张
+        await loadSecondPage(currentIndex, book);
       } else {
+        // 单页模式
         state.secondUrl = null;
-        state.panoramaImages = [];
       }
+      state.panoramaImages = []; // 普通模式不使用全景图片
       
       // 预加载前后页
       await preloadAdjacentPages(currentIndex, book.pages);

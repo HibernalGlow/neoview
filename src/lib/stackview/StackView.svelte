@@ -4,7 +4,7 @@
   使用 imageStore 管理图片加载，复用现有手势和缩放
 -->
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import {
     BackgroundLayer,
     CurrentFrameLayer,
@@ -76,17 +76,28 @@
   let scale = $derived($zoomLevel);
   let rotation = $derived($rotationAngle);
   let layout = $derived($viewMode as FrameLayout);
-  let orientation = $state<'horizontal' | 'vertical'>('horizontal');
   
-  // 监听 appState 变化更新 orientation
-  $effect(() => {
-    orientation = getOrientation();
-    // 订阅 appState 变化
-    const unsubscribe = appState.subscribe(
+  // orientation 需要从 appState 获取，因为没有独立 store
+  let orientationState = $state<'horizontal' | 'vertical'>(
+    appState.getSnapshot().viewer.orientation
+  );
+  
+  // 使用 derived 让其他代码可以响应变化
+  let orientation = $derived(orientationState);
+  
+  // 订阅 appState 中 orientation 的变化
+  let orientationUnsubscribe: (() => void) | null = null;
+  onMount(() => {
+    orientationUnsubscribe = appState.subscribe(
       (state) => state.viewer.orientation,
-      (value) => { orientation = value; }
+      (value) => {
+        console.log('[StackView] Orientation changed:', value);
+        orientationState = value;
+      }
     );
-    return unsubscribe;
+  });
+  onDestroy(() => {
+    orientationUnsubscribe?.();
   });
   
   // 设置
@@ -134,7 +145,30 @@
   // ============================================================================
   
   let currentFrameData = $derived.by((): Frame => {
-    const { currentUrl, secondUrl, dimensions } = imageStore.state;
+    const { currentUrl, secondUrl, dimensions, panoramaImages } = imageStore.state;
+    
+    console.log('[StackView] Frame derived:', { 
+      hasCurrentUrl: !!currentUrl, 
+      hasSecondUrl: !!secondUrl, 
+      panoramaCount: panoramaImages.length,
+      layout
+    });
+    
+    // 全景模式：使用 panoramaImages
+    if (layout === 'panorama') {
+      if (panoramaImages.length === 0) return emptyFrame;
+      
+      const images: FrameImage[] = panoramaImages.map((img) => ({
+        url: img.url,
+        physicalIndex: img.pageIndex,
+        virtualIndex: img.pageIndex,
+        width: img.width,
+        height: img.height,
+      }));
+      
+      console.log('[StackView] Panorama images:', images.length);
+      return { id: `panorama-${bookStore.currentPageIndex}`, images, layout };
+    }
     
     if (!currentUrl) return emptyFrame;
     
@@ -154,6 +188,8 @@
     
     // 使用 buildFrameImages 构建图片列表
     const images = buildFrameImages(currentPage, nextPage, frameConfig, splitState);
+    
+    console.log('[StackView] Built images:', images.length);
     
     return { id: `frame-${bookStore.currentPageIndex}`, images, layout };
   });
@@ -284,6 +320,8 @@
     const book = bookStore.currentBook;
     const page = bookStore.currentPage;
     
+    console.log('[StackView] Page effect:', { pageIndex, hasBook: !!book, hasPage: !!page, layout });
+    
     if (splitState && splitState.pageIndex !== pageIndex) {
       splitState = null;
     }
@@ -296,6 +334,8 @@
   // 布局变化时重新加载
   $effect(() => {
     const currentLayout = layout;
+    console.log('[StackView] Layout effect:', { currentLayout, hasBook: !!bookStore.currentBook });
+    
     if (bookStore.currentBook && currentLayout) {
       imageStore.loadCurrentPage(currentLayout);
     }

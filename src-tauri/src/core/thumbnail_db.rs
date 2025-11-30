@@ -736,6 +736,21 @@ impl ThumbnailDb {
         Ok(keys)
     }
 
+    /// 获取 emm_json 为空的缩略图键列表（用于增量更新）
+    pub fn get_keys_without_emm_json(&self) -> SqliteResult<Vec<String>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut stmt = conn.prepare("SELECT key FROM thumbs WHERE emm_json IS NULL OR emm_json = ''")?;
+        let keys: Vec<String> = stmt
+            .query_map([], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(keys)
+    }
+
     /// 获取指定目录下的所有缩略图键（用于增量 EMM 同步）
     pub fn get_thumbnail_keys_by_prefix(&self, prefix: &str) -> SqliteResult<Vec<String>> {
         self.open()?;

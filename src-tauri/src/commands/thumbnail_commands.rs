@@ -1229,3 +1229,13 @@ pub async fn migrate_thumbnail_db(
     state.db.migrate_add_emm_columns()
         .map_err(|e| format!("迁移失败: {}", e))
 }
+
+/// 获取 emm_json 为空的缩略图键列表（用于增量更新）
+#[tauri::command]
+pub async fn get_keys_without_emm_json(
+    app: tauri::AppHandle,
+) -> Result<Vec<String>, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.get_keys_without_emm_json()
+        .map_err(|e| format!("获取空 emm_json 键失败: {}", e))
+}

@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
-	import { Database, RefreshCcw, Check, X, AlertCircle, FolderSync, Wrench } from '@lucide/svelte';
+	import { Database, RefreshCcw, Check, X, AlertCircle, FolderSync, Wrench, Plus } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Progress } from '$lib/components/ui/progress';
 	import {
 		emmSyncStore,
 		validateEMMConfig,
 		syncEMMToThumbnailDb,
+		syncEMMIncremental,
 		isAllConfigValid,
 		type EMMConfigValidation
 	} from '$lib/services/emmSyncService';
@@ -58,6 +59,13 @@
 		const result = await syncEMMToThumbnailDb();
 		if (!result.success) {
 			console.error('同步失败:', result.error);
+		}
+	}
+
+	async function handleIncrementalSync() {
+		const result = await syncEMMIncremental();
+		if (!result.success) {
+			console.error('增量同步失败:', result.error);
 		}
 	}
 
@@ -180,33 +188,40 @@
 	</div>
 
 	<!-- 操作按钮 -->
-	<div class="flex gap-2">
+	<div class="flex flex-wrap gap-2">
 		<Button
 			variant="outline"
 			size="sm"
-			class="flex-1 gap-1"
+			class="gap-1"
 			onclick={handleMigrate}
-			disabled={isMigrating}
+			disabled={isMigrating || isSyncing}
 		>
 			<Wrench class="h-3.5 w-3.5" />
-			{isMigrating ? '迁移中...' : '迁移数据库'}
+			{isMigrating ? '迁移中...' : '迁移'}
 		</Button>
 		<Button
-			class="flex-1 gap-1"
+			variant="outline"
+			size="sm"
+			class="gap-1"
+			onclick={handleIncrementalSync}
+			disabled={!canSync}
+		>
+			<Plus class="h-3.5 w-3.5" />
+			{isSyncing ? '同步中...' : '增量'}
+		</Button>
+		<Button
+			size="sm"
+			class="gap-1"
 			onclick={handleSync}
 			disabled={!canSync}
 		>
 			<Database class="h-3.5 w-3.5" />
-			{#if isSyncing}
-				同步中...
-			{:else}
-				同步数据
-			{/if}
+			{isSyncing ? '同步中...' : '全量'}
 		</Button>
 	</div>
 
 	<p class="text-[10px] text-muted-foreground">
-		<strong>迁移</strong>：为旧数据库添加 EMM 字段（首次使用需执行）<br/>
-		<strong>同步</strong>：将 EMM 元数据嵌入缩略图库
+		<strong>迁移</strong>：为旧数据库添加字段<br/>
+		<strong>增量</strong>：只更新空白条目 · <strong>全量</strong>：重新同步所有
 	</p>
 </div>

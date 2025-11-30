@@ -451,6 +451,137 @@ export async function syncEMMToThumbnailDb(): Promise<{ success: boolean; count:
 	}
 }
 
+/** 增量同步（只更新 emm_json 为空的条目） */
+export async function syncEMMIncremental(): Promise<{ success: boolean; count: number; error?: string }> {
+	const state = get(emmSyncStore);
+
+	if (state.isSyncing) {
+		return { success: false, count: 0, error: '同步正在进行中' };
+	}
+
+	emmSyncStore.update(s => ({
+		...s,
+		isSyncing: true,
+		error: null,
+		syncProgress: { total: 0, current: 0, phase: 'loading', message: '获取未同步条目...' }
+	}));
+
+	try {
+		// 验证配置
+		const validation = await validateEMMConfig();
+		if (!isAllConfigValid(validation)) {
+			throw new Error('配置验证失败，请确保四个文件都已正确配置');
+		}
+
+		// 获取 emm_json 为空的键
+		const thumbnailKeys = await invoke<string[]>('get_keys_without_emm_json');
+		const total = thumbnailKeys.length;
+
+		emmSyncStore.update(s => ({
+			...s,
+			syncProgress: { total, current: 0, phase: 'loading', message: `找到 ${total} 个未同步条目` }
+		}));
+
+		if (total === 0) {
+			emmSyncStore.update(s => ({
+				...s,
+				isSyncing: false,
+				syncProgress: { total: 0, current: 0, phase: 'done', message: '所有条目已同步' }
+			}));
+			return { success: true, count: 0 };
+		}
+
+		// 加载配置
+		const { emmMetadataStore } = await import('$lib/stores/emmMetadata.svelte');
+		const collectTags = emmMetadataStore.getCollectTags();
+		const translationDict = emmMetadataStore.getTranslationDict();
+		const mainDbPaths = emmMetadataStore.getDatabasePaths();
+		const translationDbPath = emmMetadataStore.getTranslationDbPath();
+
+		// 并行批量处理
+		const BATCH_SIZE = 50;
+		const CONCURRENCY = 8;
+		const entries: [string, string, number | null, number | null, number | null][] = [];
+		let processed = 0;
+
+		const processPath = async (pathKey: string): Promise<[string, string, number | null, number | null, number | null] | null> => {
+			for (const dbPath of mainDbPaths) {
+				try {
+					const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, pathKey, translationDbPath);
+					if (metadata) {
+						const cacheEntry = convertToEMMCacheEntry(metadata, collectTags, translationDict, dbPath);
+						return [
+							pathKey,
+							JSON.stringify(cacheEntry),
+							metadata.rating ?? null,
+							cacheEntry.manual_rating ?? null,
+							cacheEntry.folder_avg_rating ?? null
+						];
+					}
+				} catch {
+					// 继续尝试下一个数据库
+				}
+			}
+			return null;
+		};
+
+		for (let i = 0; i < thumbnailKeys.length; i += BATCH_SIZE) {
+			const batch = thumbnailKeys.slice(i, i + BATCH_SIZE);
+
+			emmSyncStore.update(s => ({
+				...s,
+				syncProgress: {
+					...s.syncProgress,
+					phase: 'processing',
+					current: processed,
+					message: `增量同步中... ${processed}/${total}`
+				}
+			}));
+
+			const batchResults = await processInParallel(batch, processPath, CONCURRENCY);
+			entries.push(...batchResults);
+			processed += batch.length;
+		}
+
+		// 保存
+		emmSyncStore.update(s => ({
+			...s,
+			syncProgress: {
+				...s.syncProgress,
+				phase: 'saving',
+				current: total,
+				message: `保存 ${entries.length} 条记录...`
+			}
+		}));
+
+		if (entries.length > 0) {
+			await invoke<number>('batch_save_emm_with_rating', { entries });
+		}
+
+		emmSyncStore.update(s => ({
+			...s,
+			isSyncing: false,
+			syncProgress: {
+				total,
+				current: total,
+				phase: 'done',
+				message: `增量同步完成：${entries.length} 条记录`
+			}
+		}));
+
+		return { success: true, count: entries.length };
+	} catch (error) {
+		const errorMsg = error instanceof Error ? error.message : String(error);
+		emmSyncStore.update(s => ({
+			...s,
+			isSyncing: false,
+			error: errorMsg,
+			syncProgress: { ...s.syncProgress, phase: 'error', message: errorMsg }
+		}));
+		return { success: false, count: 0, error: errorMsg };
+	}
+}
+
 /** 增量同步（指定目录） */
 export async function syncEMMForDirectory(
 	dirPath: string

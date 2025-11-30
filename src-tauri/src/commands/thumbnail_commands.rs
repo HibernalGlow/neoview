@@ -1268,3 +1268,14 @@ pub async fn get_thumbnail_maintenance_stats(
     state.db.get_maintenance_stats()
         .map_err(|e| format!("获取统计信息失败: {}", e))
 }
+
+/// 计算文件夹的平均评分并保存到 rating_data
+/// 不会覆盖手动评分（source: 'manual'）
+#[tauri::command]
+pub async fn calculate_folder_ratings(
+    app: tauri::AppHandle,
+) -> Result<usize, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.calculate_folder_ratings()
+        .map_err(|e| format!("计算文件夹评分失败: {}", e))
+}

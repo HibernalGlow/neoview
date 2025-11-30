@@ -361,6 +361,7 @@ pub fn run() {
             commands::normalize_thumbnail_keys,
             commands::cleanup_invalid_thumbnails,
             commands::get_thumbnail_maintenance_stats,
+            commands::calculate_folder_ratings,
             commands::get_video_duration,
             commands::is_video_file,
             commands::load_video,

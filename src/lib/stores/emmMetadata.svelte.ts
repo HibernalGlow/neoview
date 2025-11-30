@@ -167,21 +167,17 @@ export const emmMetadataStore = {
 	},
 
 	/**
-	 * 计算所有数据库的文件夹平均评分
+	 * 计算所有文件夹的平均评分（使用 Rust 后端）
 	 */
-	async calculateFolderRatings() {
-		const { folderRatingStore } = await import('./emm/folderRating');
-		folderRatingStore.initialize();
-
-		let currentState: EMMMetadataState;
-		subscribe(s => { currentState = s; })();
-
-		for (const dbPath of currentState!.databasePaths) {
-			try {
-				await folderRatingStore.calculateFolderRatings(dbPath);
-			} catch (e) {
-				console.error('[EMMStore] 计算文件夹评分失败:', dbPath, e);
-			}
+	async calculateFolderRatings(): Promise<number> {
+		try {
+			const { invoke } = await import('@tauri-apps/api/core');
+			const count = await invoke<number>('calculate_folder_ratings');
+			console.debug('[EMMStore] 计算文件夹评分完成:', count, '个文件夹');
+			return count;
+		} catch (e) {
+			console.error('[EMMStore] 计算文件夹评分失败:', e);
+			return 0;
 		}
 	},
 

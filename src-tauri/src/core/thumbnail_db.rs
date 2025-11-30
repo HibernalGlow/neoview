@@ -1092,6 +1092,104 @@ impl ThumbnailDb {
 
         Ok((total, with_emm, invalid))
     }
+
+    /// 计算文件夹的平均评分并保存到 rating_data
+    /// 不会覆盖手动评分（source: 'manual'）
+    pub fn calculate_folder_ratings(&self) -> SqliteResult<usize> {
+        use serde_json::Value;
+        use std::collections::HashMap;
+
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        // 1. 获取所有有 rating_data 的文件条目
+        let mut stmt = conn.prepare(
+            "SELECT key, rating_data FROM thumbs WHERE rating_data IS NOT NULL"
+        )?;
+
+        let rows: Vec<(String, String)> = stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        // 2. 按父目录分组计算平均评分
+        let mut folder_ratings: HashMap<String, Vec<f64>> = HashMap::new();
+
+        for (key, rating_json) in &rows {
+            if let Ok(rating_data) = serde_json::from_str::<Value>(rating_json) {
+                if let Some(value) = rating_data.get("value").and_then(|v| v.as_f64()) {
+                    if value > 0.0 {
+                        // 获取父目录
+                        if let Some(parent) = Self::get_parent_path(key) {
+                            folder_ratings.entry(parent).or_default().push(value);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. 计算每个文件夹的平均评分并保存
+        let now = chrono::Local::now().timestamp_millis();
+        let mut count = 0;
+
+        for (folder_key, ratings) in folder_ratings {
+            if ratings.is_empty() {
+                continue;
+            }
+
+            // 检查该文件夹是否已有手动评分
+            let existing: Option<String> = conn
+                .query_row(
+                    "SELECT rating_data FROM thumbs WHERE key = ?1",
+                    params![&folder_key],
+                    |row| row.get(0),
+                )
+                .ok();
+
+            let should_update = match existing {
+                None => true, // 不存在，可以创建
+                Some(ref json) => {
+                    // 检查是否是手动评分
+                    if let Ok(data) = serde_json::from_str::<Value>(json) {
+                        data.get("source").and_then(|s| s.as_str()) != Some("manual")
+                    } else {
+                        true
+                    }
+                }
+            };
+
+            if should_update {
+                let avg = ratings.iter().sum::<f64>() / ratings.len() as f64;
+                let rating_data = serde_json::json!({
+                    "value": avg,
+                    "source": "calculated",
+                    "timestamp": now,
+                    "childCount": ratings.len()
+                });
+
+                // 使用 UPSERT 更新或创建
+                conn.execute(
+                    "INSERT INTO thumbs (key, rating_data, category) VALUES (?1, ?2, 'folder')
+                     ON CONFLICT(key) DO UPDATE SET rating_data = ?2",
+                    params![&folder_key, rating_data.to_string()],
+                )?;
+                count += 1;
+            }
+        }
+
+        println!("📊 计算并保存了 {} 个文件夹的平均评分", count);
+        Ok(count)
+    }
+
+    /// 获取父目录路径
+    fn get_parent_path(path: &str) -> Option<String> {
+        let last_sep = path.rfind('\\')?;
+        if last_sep <= 2 {
+            return None; // 根目录
+        }
+        Some(path[..last_sep].to_string())
+    }
 }
 
 impl Clone for ThumbnailDb {

@@ -48,6 +48,8 @@ export interface FolderPanelState {
 	sortField: FolderSortField;
 	// 排序顺序
 	sortOrder: FolderSortOrder;
+	// 评分版本号（用于触发重新排序）
+	ratingVersion: number;
 	// 多选模式
 	multiSelectMode: boolean;
 	// 删除模式
@@ -134,6 +136,7 @@ const initialState: FolderPanelState = {
 	viewStyle: savedState.viewStyle ?? 'list',
 	sortField: savedState.sortField ?? 'name',
 	sortOrder: savedState.sortOrder ?? 'asc',
+	ratingVersion: 0,
 	multiSelectMode: false,
 	deleteMode: false,
 	recursiveMode: savedState.recursiveMode ?? false,
@@ -338,8 +341,8 @@ function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrd
 		return shuffled;
 	}
 
-	// rating 排序特殊处理：需要获取评分数据
-	// 规则：文件夹在前，无 rating 使用默认评分，用户自定义 rating 优先
+	// rating 排序：使用 folderRatingStore.getEffectiveRating 获取评分
+	// 规则：文件夹在前，无 rating 使用默认评分，手动评分优先
 	if (field === 'rating') {
 		const defaultRating = getDefaultRating();
 		const sorted = [...items].sort((a, b) => {
@@ -348,7 +351,7 @@ function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrd
 				return a.isDir ? -1 : 1;
 			}
 
-			// 获取有效评分（用户自定义优先，否则使用平均评分，无评分使用默认值）
+			// 从 folderRatingStore 获取有效评分
 			const ratingA = folderRatingStore.getEffectiveRating(a.path) ?? defaultRating;
 			const ratingB = folderRatingStore.getEffectiveRating(b.path) ?? defaultRating;
 
@@ -525,7 +528,7 @@ export const folderPanelActions = {
 	},
 
 	/**
-	 * 设置文件列表并缓存
+	 * 设置文件列表并缓存，同时预加载评分数据
 	 */
 	setItems(items: FsItem[]) {
 		const currentState = get(state);

@@ -17,6 +17,8 @@
 	import { emmMetadataStore, collectTagMap, emmTranslationStore } from '$lib/stores/emmMetadata.svelte';
 	import type { EMMCollectTag } from '$lib/api/emm';
 	import { bookSettingsStore, type PerBookSettings } from '$lib/stores/bookSettings.svelte';
+	import EmmSyncCard from './EmmSyncCard.svelte';
+	import ThumbnailDbMaintenanceCard from './ThumbnailDbMaintenanceCard.svelte';
 
 	let bookInfo = $state<ViewerBookInfo | null>(null);
 	let collectTags = $state<EMMCollectTag[]>([]);
@@ -740,8 +742,42 @@
 	});
 </script>
 
-{#if bookInfo}
-	<div class="flex flex-col gap-3">
+<div class="flex flex-col gap-3">
+	<!-- EMM 配置卡片（始终显示） -->
+	<div class="rounded-lg border bg-muted/10 p-3 space-y-3">
+		<div class="flex items-center justify-between">
+			<div class="flex items-center gap-2 font-semibold text-sm">
+				<Settings class="h-4 w-4" />
+				<span>EMM 元数据配置</span>
+			</div>
+			<div class="flex items-center gap-2">
+				<Button.Root
+					variant="ghost"
+					size="icon"
+					class="h-5 w-5"
+					onclick={() => (showEMMConfig = !showEMMConfig)}
+					title={showEMMConfig ? '收起' : '展开'}
+				>
+					{#if showEMMConfig}
+						<ChevronUp class="h-3 w-3" />
+					{:else}
+						<ChevronDown class="h-3 w-3" />
+					{/if}
+				</Button.Root>
+			</div>
+		</div>
+
+		{#if showEMMConfig}
+			<!-- EMM 数据同步卡片 -->
+			<EmmSyncCard />
+
+			<!-- 缩略图数据库维护卡片 -->
+			<ThumbnailDbMaintenanceCard />
+		{/if}
+	</div>
+
+	{#if bookInfo}
+		<div class="flex flex-col gap-3">
 		{#if allTags().length > 0}
 			<div class="rounded-lg border bg-muted/10 p-3 space-y-3" style={`order: ${getEmmCardOrder('tags')}`}>
 				<div class="flex items-center justify-between gap-2">
@@ -1138,6 +1174,11 @@
 							<span>保存配置</span>
 						</Button.Root>
 					</div>
+
+					<Separator.Root class="my-3" />
+
+					<!-- EMM 数据同步卡片 -->
+					<EmmSyncCard />
 				</div>
 			{/if}
 		</div>
@@ -1546,4 +1587,5 @@
 			</div>
 		</div>
 	{/if}
+</div>
 </div>

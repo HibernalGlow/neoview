@@ -5,7 +5,21 @@
 import type { EMMMetadata, EMMCollectTag, EMMTranslationDict } from '$lib/api/emm';
 
 /**
- * 文件夹平均评分缓存条目
+ * 评分数据（存储在缩略图数据库的 rating_data JSON 字段）
+ */
+export interface RatingData {
+	// 评分值 (1-5)
+	value: number;
+	// 评分来源: 'emm' = 从 EMM 数据库同步, 'manual' = 用户手动设置, 'calculated' = 计算得出（如文件夹平均分）
+	source: 'emm' | 'manual' | 'calculated';
+	// 时间戳
+	timestamp: number;
+	// 可选：子条目数量（用于 calculated 类型）
+	childCount?: number;
+}
+
+/**
+ * 文件夹平均评分缓存条目（兼容旧版，逐步迁移到 RatingData）
  */
 export interface FolderRatingEntry {
 	// 文件夹路径

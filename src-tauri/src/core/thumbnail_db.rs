@@ -4,6 +4,7 @@
 
 use chrono::{Duration, Local};
 use rusqlite::{params, Connection, Result as SqliteResult};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -85,7 +86,7 @@ impl ThumbnailDb {
         Ok(())
     }
 
-    /// 初始化数据库表结构
+    /// 初始化数据库表结构（仅创建基础表，迁移由手动触发）
     fn initialize_db(conn: &Connection) -> SqliteResult<()> {
         // 设置 PRAGMA（使用 execute_batch 避免返回值问题）
         conn.execute_batch(
@@ -94,7 +95,8 @@ impl ThumbnailDb {
              PRAGMA synchronous = NORMAL;",
         )?;
 
-        // 创建缩略图表
+        // 创建缩略图表（包含所有字段，新数据库直接创建完整表）
+        // rating_data: JSON 格式存储评分信息 { value: number, source: 'emm'|'manual'|'calculated', timestamp: number }
         conn.execute(
             "CREATE TABLE IF NOT EXISTS thumbs (
                 key TEXT NOT NULL PRIMARY KEY,
@@ -102,7 +104,9 @@ impl ThumbnailDb {
                 date TEXT,
                 ghash INTEGER,
                 category TEXT DEFAULT 'file',
-                value BLOB
+                value BLOB,
+                emm_json TEXT,
+                rating_data TEXT
             )",
             [],
         )?;
@@ -120,7 +124,157 @@ impl ThumbnailDb {
             [],
         )?;
 
+        // 创建失败记录表
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS failed_thumbnails (
+                key TEXT NOT NULL PRIMARY KEY,
+                reason TEXT NOT NULL,
+                retry_count INTEGER DEFAULT 0,
+                last_attempt TEXT,
+                error_message TEXT
+            )",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_failed_reason ON failed_thumbnails(reason)",
+            [],
+        )?;
+
         Ok(())
+    }
+
+    /// 数据库版本常量
+    const DB_VERSION: &'static str = "2.2";
+
+    /// 获取当前数据库版本
+    fn get_db_version(conn: &Connection) -> Option<String> {
+        // 创建 metadata 表（如果不存在）
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT)",
+            [],
+        ).ok()?;
+
+        let mut stmt = conn.prepare("SELECT value FROM metadata WHERE key = 'version'").ok()?;
+        stmt.query_row([], |row| row.get(0)).ok()
+    }
+
+    /// 设置数据库版本
+    fn set_db_version(conn: &Connection, version: &str) -> SqliteResult<()> {
+        conn.execute(
+            "INSERT OR REPLACE INTO metadata (key, value) VALUES ('version', ?1)",
+            params![version],
+        )?;
+        Ok(())
+    }
+
+    /// 手动迁移：检查并添加必需的列（由用户在设置中手动触发）
+    /// 当前目标版本：2.2
+    pub fn migrate_add_emm_columns(&self) -> SqliteResult<String> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut messages = Vec::new();
+
+        // 获取当前版本
+        let current_version = Self::get_db_version(conn).unwrap_or_else(|| "1.0".to_string());
+        let target_version = Self::DB_VERSION;
+
+        println!("📦 检查数据库结构: 当前版本 v{}, 目标版本 v{}", current_version, target_version);
+
+        // 始终检查 emm_json 列是否存在
+        let has_emm_json: bool = conn.prepare("SELECT emm_json FROM thumbs LIMIT 1").is_ok();
+        if !has_emm_json {
+            conn.execute("ALTER TABLE thumbs ADD COLUMN emm_json TEXT", [])?;
+            messages.push("添加 emm_json 列");
+            println!("✅ 添加 emm_json 列");
+        }
+
+        // 始终检查 rating_data 列是否存在
+        let has_rating_data: bool = conn.prepare("SELECT rating_data FROM thumbs LIMIT 1").is_ok();
+        if !has_rating_data {
+            conn.execute("ALTER TABLE thumbs ADD COLUMN rating_data TEXT", [])?;
+            messages.push("添加 rating_data 列");
+            println!("✅ 添加 rating_data 列");
+        }
+
+        // 从 emm_json 中提取 rating 并填充到 rating_data（每次迁移都执行）
+        let migrated = Self::migrate_rating_from_emm_json(conn)?;
+        if migrated > 0 {
+            messages.push("从 emm_json 迁移评分数据");
+        }
+
+        // 更新版本号
+        Self::set_db_version(conn, target_version)?;
+
+        // 获取列信息
+        let columns = Self::get_table_columns(conn, "thumbs")?;
+        let has_emm = columns.contains(&"emm_json".to_string());
+        let has_rating = columns.contains(&"rating_data".to_string());
+
+        if messages.is_empty() {
+            Ok(format!(
+                "数据库已是最新版本 (v{})\n列状态: emm_json={}, rating_data={}",
+                target_version, has_emm, has_rating
+            ))
+        } else {
+            Ok(format!(
+                "迁移完成 (v{}): {}\n列状态: emm_json={}, rating_data={}",
+                target_version,
+                messages.join(", "),
+                has_emm,
+                has_rating
+            ))
+        }
+    }
+
+    /// 获取表的列名列表
+    fn get_table_columns(conn: &Connection, table_name: &str) -> SqliteResult<Vec<String>> {
+        let mut stmt = conn.prepare(&format!("PRAGMA table_info({})", table_name))?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(columns)
+    }
+
+    /// 从 emm_json 字段中提取 rating 并保存到 rating_data
+    fn migrate_rating_from_emm_json(conn: &Connection) -> SqliteResult<usize> {
+        use serde_json::Value;
+
+        let mut stmt = conn.prepare(
+            "SELECT key, emm_json FROM thumbs WHERE emm_json IS NOT NULL AND rating_data IS NULL"
+        )?;
+
+        let rows: Vec<(String, String)> = stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        let mut count = 0;
+        let now = chrono::Local::now().timestamp_millis();
+
+        for (key, emm_json) in rows {
+            if let Ok(json) = serde_json::from_str::<Value>(&emm_json) {
+                if let Some(rating) = json.get("rating").and_then(|r| r.as_f64()) {
+                    if rating > 0.0 {
+                        let rating_data = serde_json::json!({
+                            "value": rating,
+                            "source": "emm",
+                            "timestamp": now
+                        });
+                        conn.execute(
+                            "UPDATE thumbs SET rating_data = ?1 WHERE key = ?2",
+                            params![rating_data.to_string(), key],
+                        )?;
+                        count += 1;
+                    }
+                }
+            }
+        }
+
+        println!("📊 从 emm_json 迁移了 {} 条评分数据", count);
+        Ok(count)
     }
 
     /// 获取当前时间戳（秒）
@@ -234,6 +388,29 @@ impl ThumbnailDb {
             }
             Ok(None)
         }
+    }
+
+    /// 加载缩略图和 emm_json（一次查询同时返回两者）
+    pub fn load_thumbnail_with_emm_json(
+        &self,
+        key: &str,
+        category: &str,
+    ) -> SqliteResult<Option<(Vec<u8>, Option<String>)>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT value, emm_json FROM thumbs WHERE key = ?1 AND category = ?2 LIMIT 1"
+        )?;
+
+        let result: Option<(Vec<u8>, Option<String>)> = stmt
+            .query_row(params![key, category], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .ok();
+
+        Ok(result)
     }
 
     /// 查找路径下最早的缩略图记录（用于文件夹绑定）
@@ -452,6 +629,624 @@ impl ThumbnailDb {
         } else {
             Ok(0)
         }
+    }
+
+    /// 保存失败记录
+    pub fn save_failed_thumbnail(
+        &self,
+        key: &str,
+        reason: &str,
+        retry_count: i32,
+        error_message: Option<&str>,
+    ) -> SqliteResult<()> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let timestamp = Self::current_timestamp_string();
+        conn.execute(
+            "INSERT OR REPLACE INTO failed_thumbnails (key, reason, retry_count, last_attempt, error_message)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![key, reason, retry_count, timestamp, error_message],
+        )?;
+
+        Ok(())
+    }
+
+    /// 查询失败记录
+    pub fn get_failed_thumbnail(&self, key: &str) -> SqliteResult<Option<(String, i32, String)>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT reason, retry_count, last_attempt FROM failed_thumbnails WHERE key = ?1"
+        )?;
+
+        let result = stmt.query_row(params![key], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i32>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        });
+
+        match result {
+            Ok(data) => Ok(Some(data)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// 删除失败记录（当缩略图成功生成后）
+    pub fn remove_failed_thumbnail(&self, key: &str) -> SqliteResult<()> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        conn.execute("DELETE FROM failed_thumbnails WHERE key = ?1", params![key])?;
+        Ok(())
+    }
+
+    /// 批量检查失败记录
+    pub fn batch_check_failed(&self, keys: &[&str]) -> SqliteResult<HashMap<String, (String, i32)>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut results = HashMap::new();
+        if keys.is_empty() {
+            return Ok(results);
+        }
+
+        let placeholders: String = keys.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let query = format!(
+            "SELECT key, reason, retry_count FROM failed_thumbnails WHERE key IN ({})",
+            placeholders
+        );
+
+        let mut stmt = conn.prepare(&query)?;
+        let params: Vec<&dyn rusqlite::ToSql> = keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
+        let mut rows = stmt.query(params.as_slice())?;
+
+        while let Some(row) = rows.next()? {
+            let key: String = row.get(0)?;
+            let reason: String = row.get(1)?;
+            let retry_count: i32 = row.get(2)?;
+            results.insert(key, (reason, retry_count));
+        }
+
+        Ok(results)
+    }
+
+    /// 清理过期的失败记录（例如超过7天的）
+    pub fn cleanup_old_failures(&self, days: i64) -> SqliteResult<usize> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let cutoff_time = Local::now() - Duration::days(days);
+        let cutoff = cutoff_time.format("%Y-%m-%d %H:%M:%S").to_string();
+
+        let count = conn.execute(
+            "DELETE FROM failed_thumbnails WHERE last_attempt < ?1",
+            params![cutoff],
+        )?;
+
+        Ok(count)
+    }
+
+    // ==================== EMM JSON 缓存方法 ====================
+
+    /// 保存 EMM JSON 缓存（单条记录）
+    pub fn save_emm_json(&self, key: &str, emm_json: &str) -> SqliteResult<()> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        conn.execute(
+            "UPDATE thumbs SET emm_json = ?2 WHERE key = ?1",
+            params![key, emm_json],
+        )?;
+
+        Ok(())
+    }
+
+    /// 批量保存 EMM JSON 缓存
+    pub fn batch_save_emm_json(&self, entries: &[(String, String)]) -> SqliteResult<usize> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut count = 0;
+        for (key, emm_json) in entries {
+            let affected = conn.execute(
+                "UPDATE thumbs SET emm_json = ?2 WHERE key = ?1",
+                params![key, emm_json],
+            )?;
+            count += affected;
+        }
+
+        Ok(count)
+    }
+
+    /// 获取 EMM JSON 缓存
+    pub fn get_emm_json(&self, key: &str) -> SqliteResult<Option<String>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut stmt = conn.prepare("SELECT emm_json FROM thumbs WHERE key = ?1")?;
+        let result: Option<Option<String>> = stmt
+            .query_row(params![key], |row| row.get(0))
+            .ok();
+
+        Ok(result.flatten())
+    }
+
+    /// 批量获取 EMM JSON 缓存
+    pub fn batch_get_emm_json(&self, keys: &[String]) -> SqliteResult<HashMap<String, String>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut results = HashMap::new();
+        if keys.is_empty() {
+            return Ok(results);
+        }
+
+        let placeholders: String = keys.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let query = format!(
+            "SELECT key, emm_json FROM thumbs WHERE key IN ({}) AND emm_json IS NOT NULL",
+            placeholders
+        );
+
+        let mut stmt = conn.prepare(&query)?;
+        let params: Vec<&dyn rusqlite::ToSql> = keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
+        let mut rows = stmt.query(params.as_slice())?;
+
+        while let Some(row) = rows.next()? {
+            let key: String = row.get(0)?;
+            let emm_json: String = row.get(1)?;
+            results.insert(key, emm_json);
+        }
+
+        Ok(results)
+    }
+
+    /// 插入或更新缩略图记录（包含 emm_json）
+    pub fn upsert_with_emm_json(
+        &self,
+        key: &str,
+        category: &str,
+        emm_json: Option<&str>,
+    ) -> SqliteResult<()> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let date = Self::current_timestamp_string();
+
+        conn.execute(
+            "INSERT INTO thumbs (key, category, date, emm_json) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(key) DO UPDATE SET emm_json = ?4, date = ?3",
+            params![key, category, date, emm_json],
+        )?;
+
+        Ok(())
+    }
+
+    /// 获取所有有缩略图的路径键列表（用于 EMM 同步）
+    pub fn get_all_thumbnail_keys(&self) -> SqliteResult<Vec<String>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut stmt = conn.prepare("SELECT key FROM thumbs")?;
+        let keys: Vec<String> = stmt
+            .query_map([], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(keys)
+    }
+
+    /// 获取 emm_json 为空的缩略图键列表（用于增量更新）
+    pub fn get_keys_without_emm_json(&self) -> SqliteResult<Vec<String>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut stmt = conn.prepare("SELECT key FROM thumbs WHERE emm_json IS NULL OR emm_json = ''")?;
+        let keys: Vec<String> = stmt
+            .query_map([], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(keys)
+    }
+
+    /// 获取指定目录下的所有缩略图键（用于增量 EMM 同步）
+    pub fn get_thumbnail_keys_by_prefix(&self, prefix: &str) -> SqliteResult<Vec<String>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let pattern = format!("{}%", prefix);
+        let mut stmt = conn.prepare("SELECT key FROM thumbs WHERE key LIKE ?1")?;
+        let keys: Vec<String> = stmt
+            .query_map(params![pattern], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(keys)
+    }
+
+    // ==================== Rating 读写方法（使用 rating_data JSON）====================
+
+    /// 更新单个记录的 rating_data（JSON 格式）
+    /// rating_data 格式: { value: number, source: 'emm'|'manual'|'calculated', timestamp: number }
+    pub fn update_rating_data(&self, key: &str, rating_data: Option<&str>) -> SqliteResult<()> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        conn.execute(
+            "UPDATE thumbs SET rating_data = ?2 WHERE key = ?1",
+            params![key, rating_data],
+        )?;
+
+        Ok(())
+    }
+
+    /// 获取单个记录的 rating_data
+    pub fn get_rating_data(&self, key: &str) -> SqliteResult<Option<String>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut stmt = conn.prepare("SELECT rating_data FROM thumbs WHERE key = ?1")?;
+        let result: Option<String> = stmt.query_row(params![key], |row| row.get(0)).ok();
+
+        Ok(result)
+    }
+
+    /// 批量获取 rating_data（用于排序）
+    /// 如果 rating_data 为空，会尝试从 emm_json 中提取 rating
+    pub fn batch_get_rating_data(&self, keys: &[String]) -> SqliteResult<HashMap<String, Option<String>>> {
+        use serde_json::Value;
+        
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut results = HashMap::new();
+        if keys.is_empty() {
+            return Ok(results);
+        }
+
+        println!("[ThumbnailDB] batch_get_rating_data: 查询 {} 个路径", keys.len());
+
+        let placeholders: String = keys.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        // 同时获取 rating_data 和 emm_json 作为 fallback
+        let query = format!(
+            "SELECT key, rating_data, emm_json FROM thumbs WHERE key IN ({})",
+            placeholders
+        );
+
+        let mut stmt = conn.prepare(&query)?;
+        let params: Vec<&dyn rusqlite::ToSql> = keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
+        let mut rows = stmt.query(params.as_slice())?;
+
+        let mut count_with_rating = 0;
+        let mut count_with_emm = 0;
+        let mut first_emm_sample: Option<String> = None;
+        let now = chrono::Local::now().timestamp_millis();
+        
+        while let Some(row) = rows.next()? {
+            let key: String = row.get(0)?;
+            let rating_data: Option<String> = row.get(1)?;
+            let emm_json: Option<String> = row.get(2)?;
+            
+            if emm_json.is_some() {
+                count_with_emm += 1;
+                if first_emm_sample.is_none() {
+                    first_emm_sample = emm_json.clone();
+                }
+            }
+            
+            // 优先使用 rating_data，如果为空则从 emm_json 中提取
+            let effective_rating = if rating_data.is_some() {
+                rating_data
+            } else if let Some(ref json_str) = emm_json {
+                // 尝试从 emm_json 中提取 rating
+                if let Ok(json) = serde_json::from_str::<Value>(json_str) {
+                    if let Some(rating) = json.get("rating").and_then(|r| r.as_f64()) {
+                        if rating > 0.0 {
+                            Some(serde_json::json!({
+                                "value": rating,
+                                "source": "emm",
+                                "timestamp": now
+                            }).to_string())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            
+            if effective_rating.is_some() {
+                count_with_rating += 1;
+            }
+            results.insert(key, effective_rating);
+        }
+        
+        println!("[ThumbnailDB] emm_json 数量: {}", count_with_emm);
+        if let Some(sample) = first_emm_sample {
+            println!("[ThumbnailDB] emm_json 示例 (前200字符): {}", &sample[..sample.len().min(200)]);
+        }
+
+        println!("[ThumbnailDB] 查询结果: 找到 {} 条记录, 其中 {} 条有评分", results.len(), count_with_rating);
+        Ok(results)
+    }
+
+    /// 获取指定目录下所有条目的 rating_data（用于计算文件夹平均评分）
+    pub fn get_rating_data_by_prefix(&self, prefix: &str) -> SqliteResult<Vec<(String, Option<String>)>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let pattern = format!("{}%", prefix);
+        let mut stmt = conn.prepare(
+            "SELECT key, rating_data FROM thumbs WHERE key LIKE ?1 AND rating_data IS NOT NULL"
+        )?;
+
+        let results: Vec<(String, Option<String>)> = stmt
+            .query_map(params![pattern], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(results)
+    }
+
+    /// 同时保存 emm_json 和 rating_data（用于同步时一次性写入）
+    pub fn save_emm_with_rating_data(
+        &self,
+        key: &str,
+        emm_json: &str,
+        rating_data: Option<&str>,
+    ) -> SqliteResult<()> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        conn.execute(
+            "UPDATE thumbs SET emm_json = ?2, rating_data = ?3 WHERE key = ?1",
+            params![key, emm_json, rating_data],
+        )?;
+
+        Ok(())
+    }
+
+    /// 批量保存 emm_json 和 rating_data（使用 UPSERT 确保新记录也能创建）
+    pub fn batch_save_emm_with_rating_data(
+        &self,
+        entries: &[(String, String, Option<String>)],
+    ) -> SqliteResult<usize> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut count = 0;
+        for (key, emm_json, rating_data) in entries {
+            // 使用 UPSERT：如果 key 存在则更新，否则插入新记录
+            let affected = conn.execute(
+                "INSERT INTO thumbs (key, emm_json, rating_data, category) VALUES (?1, ?2, ?3, 'file')
+                 ON CONFLICT(key) DO UPDATE SET emm_json = ?2, rating_data = ?3",
+                params![key, emm_json, rating_data.as_deref()],
+            )?;
+            count += affected;
+        }
+
+        println!("[ThumbnailDB] batch_save_emm_with_rating_data: 保存 {} 条记录", count);
+        Ok(count)
+    }
+
+    // ==================== 数据库维护方法 ====================
+
+    /// 规范化所有路径键（统一格式）
+    /// 返回：(处理条目数, 修复条目数)
+    pub fn normalize_all_keys(&self) -> SqliteResult<(usize, usize)> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        // 获取所有 key
+        let mut stmt = conn.prepare("SELECT key FROM thumbs")?;
+        let keys: Vec<String> = stmt
+            .query_map([], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        let total = keys.len();
+        let mut fixed = 0;
+
+        for old_key in keys {
+            // 规范化：统一反斜杠，确保盘符后有斜杠
+            let mut new_key = old_key.replace("/", "\\");
+            // 处理 D:folder -> D:\folder
+            if new_key.len() >= 2 && new_key.chars().nth(1) == Some(':') {
+                if new_key.len() == 2 || new_key.chars().nth(2) != Some('\\') {
+                    new_key = format!("{}\\{}", &new_key[0..2], &new_key[2..]);
+                }
+            }
+
+            if new_key != old_key {
+                // 检查新 key 是否已存在
+                let exists: bool = conn
+                    .query_row(
+                        "SELECT 1 FROM thumbs WHERE key = ?1",
+                        params![&new_key],
+                        |_| Ok(true),
+                    )
+                    .unwrap_or(false);
+
+                if exists {
+                    // 新 key 已存在，删除旧的
+                    conn.execute("DELETE FROM thumbs WHERE key = ?1", params![&old_key])?;
+                } else {
+                    // 更新为新 key
+                    conn.execute(
+                        "UPDATE thumbs SET key = ?1 WHERE key = ?2",
+                        params![&new_key, &old_key],
+                    )?;
+                }
+                fixed += 1;
+            }
+        }
+
+        Ok((total, fixed))
+    }
+
+    /// 清理无效条目（没有缩略图数据的条目）
+    pub fn cleanup_invalid_entries(&self) -> SqliteResult<usize> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let deleted = conn.execute(
+            "DELETE FROM thumbs WHERE value IS NULL OR length(value) = 0",
+            [],
+        )?;
+
+        Ok(deleted)
+    }
+
+    /// 获取数据库统计信息
+    pub fn get_maintenance_stats(&self) -> SqliteResult<(usize, usize, usize)> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let total: usize = conn.query_row("SELECT COUNT(*) FROM thumbs", [], |row| row.get(0))?;
+        let with_emm: usize = conn.query_row(
+            "SELECT COUNT(*) FROM thumbs WHERE emm_json IS NOT NULL AND emm_json != ''",
+            [],
+            |row| row.get(0),
+        )?;
+        let invalid: usize = conn.query_row(
+            "SELECT COUNT(*) FROM thumbs WHERE value IS NULL OR length(value) = 0",
+            [],
+            |row| row.get(0),
+        )?;
+
+        Ok((total, with_emm, invalid))
+    }
+
+    /// 计算文件夹的平均评分并保存到 rating_data
+    /// 不会覆盖手动评分（source: 'manual'）
+    pub fn calculate_folder_ratings(&self) -> SqliteResult<usize> {
+        use serde_json::Value;
+        use std::collections::HashMap;
+
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        // 1. 获取所有有 rating_data 的文件条目
+        let mut stmt = conn.prepare(
+            "SELECT key, rating_data FROM thumbs WHERE rating_data IS NOT NULL"
+        )?;
+
+        let rows: Vec<(String, String)> = stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        // 2. 按父目录分组计算平均评分
+        let mut folder_ratings: HashMap<String, Vec<f64>> = HashMap::new();
+
+        for (key, rating_json) in &rows {
+            if let Ok(rating_data) = serde_json::from_str::<Value>(rating_json) {
+                if let Some(value) = rating_data.get("value").and_then(|v| v.as_f64()) {
+                    if value > 0.0 {
+                        // 获取父目录
+                        if let Some(parent) = Self::get_parent_path(key) {
+                            folder_ratings.entry(parent).or_default().push(value);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. 计算每个文件夹的平均评分并保存
+        let now = chrono::Local::now().timestamp_millis();
+        let mut count = 0;
+
+        for (folder_key, ratings) in folder_ratings {
+            if ratings.is_empty() {
+                continue;
+            }
+
+            // 检查该文件夹是否已有手动评分
+            let existing: Option<String> = conn
+                .query_row(
+                    "SELECT rating_data FROM thumbs WHERE key = ?1",
+                    params![&folder_key],
+                    |row| row.get(0),
+                )
+                .ok();
+
+            let should_update = match existing {
+                None => true, // 不存在，可以创建
+                Some(ref json) => {
+                    // 检查是否是手动评分
+                    if let Ok(data) = serde_json::from_str::<Value>(json) {
+                        data.get("source").and_then(|s| s.as_str()) != Some("manual")
+                    } else {
+                        true
+                    }
+                }
+            };
+
+            if should_update {
+                let avg = ratings.iter().sum::<f64>() / ratings.len() as f64;
+                let rating_data = serde_json::json!({
+                    "value": avg,
+                    "source": "calculated",
+                    "timestamp": now,
+                    "childCount": ratings.len()
+                });
+
+                // 使用 UPSERT 更新或创建
+                conn.execute(
+                    "INSERT INTO thumbs (key, rating_data, category) VALUES (?1, ?2, 'folder')
+                     ON CONFLICT(key) DO UPDATE SET rating_data = ?2",
+                    params![&folder_key, rating_data.to_string()],
+                )?;
+                count += 1;
+            }
+        }
+
+        println!("📊 计算并保存了 {} 个文件夹的平均评分", count);
+        Ok(count)
+    }
+
+    /// 获取父目录路径
+    fn get_parent_path(path: &str) -> Option<String> {
+        let last_sep = path.rfind('\\')?;
+        if last_sep <= 2 {
+            return None; // 根目录
+        }
+        Some(path[..last_sep].to_string())
     }
 }
 

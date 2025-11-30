@@ -4,13 +4,16 @@
  */
 
 import { writable, derived } from 'svelte/store';
+import { invoke } from '@tauri-apps/api/core';
 import * as EMMAPI from '$lib/api/emm';
 import type { EMMMetadata, EMMCollectTag } from '$lib/api/emm';
+import type { EMMCacheEntry } from '$lib/services/emmSyncService';
 
 // 导入模块化组件
 import type { EMMMetadataState } from './emm/types';
 import { loadSettings, saveSettings } from './emm/storage';
 import { isCollectTag } from './emm/helpers';
+import { normalizePathKey } from '$lib/utils/pathHash';
 
 const initialSettings = loadSettings();
 
@@ -164,21 +167,17 @@ export const emmMetadataStore = {
 	},
 
 	/**
-	 * 计算所有数据库的文件夹平均评分
+	 * 计算所有文件夹的平均评分（使用 Rust 后端）
 	 */
-	async calculateFolderRatings() {
-		const { folderRatingStore } = await import('./emm/folderRating');
-		folderRatingStore.initialize();
-
-		let currentState: EMMMetadataState;
-		subscribe(s => { currentState = s; })();
-
-		for (const dbPath of currentState!.databasePaths) {
-			try {
-				await folderRatingStore.calculateFolderRatings(dbPath);
-			} catch (e) {
-				console.error('[EMMStore] 计算文件夹评分失败:', dbPath, e);
-			}
+	async calculateFolderRatings(): Promise<number> {
+		try {
+			const { invoke } = await import('@tauri-apps/api/core');
+			const count = await invoke<number>('calculate_folder_ratings');
+			console.debug('[EMMStore] 计算文件夹评分完成:', count, '个文件夹');
+			return count;
+		} catch (e) {
+			console.error('[EMMStore] 计算文件夹评分失败:', e);
+			return 0;
 		}
 	},
 
@@ -428,10 +427,11 @@ export const emmMetadataStore = {
 
 	/**
 	 * 加载元数据（通过文件路径）
+	 * 优先从嵌入的 emm_json 获取，失败后回退到外部数据库
 	 */
 	async loadMetadataByPath(filePath: string): Promise<EMMMetadata | null> {
-		// 规范化路径用于缓存键
-		const normalizedPath = filePath.replace(/\\/g, '/');
+		// 规范化路径用于缓存键和查询
+		const normalizedPath = normalizePathKey(filePath);
 
 		let currentState: EMMMetadataState;
 		subscribe(state => {
@@ -444,9 +444,59 @@ export const emmMetadataStore = {
 			return cached ?? null;
 		}
 
-		const translationDbPath = currentState!.translationDbPath;
+		// 1. 优先从嵌入的 emm_json 获取
+		try {
+			console.log('[EMMStore] 尝试从嵌入的 emm_json 获取:', normalizedPath);
+			const emmJsonStr = await invoke<string | null>('get_emm_json', { path: normalizedPath });
+			console.log('[EMMStore] get_emm_json 返回:', emmJsonStr ? `有数据(${emmJsonStr.length}字符)` : 'null');
+			if (emmJsonStr) {
+				const cacheEntry = JSON.parse(emmJsonStr) as EMMCacheEntry;
+				console.log('[EMMStore] 解析 emm_json:', {
+					hash: cacheEntry.hash,
+					translated_title: cacheEntry.translated_title,
+					rating: cacheEntry.rating,
+					tags: cacheEntry.tags?.length ?? 0
+				});
+				// 将 tags 数组转换为 Record<string, string[]> 格式
+				const tagsRecord: Record<string, string[]> = {};
+				if (Array.isArray(cacheEntry.tags)) {
+					for (const tag of cacheEntry.tags) {
+						if (!tagsRecord[tag.namespace]) {
+							tagsRecord[tag.namespace] = [];
+						}
+						tagsRecord[tag.namespace].push(tag.tag);
+					}
+				}
+				// 从 cacheEntry 构造 EMMMetadata
+				const metadata: EMMMetadata = {
+					hash: cacheEntry.hash ?? '',
+					translated_title: cacheEntry.translated_title,
+					tags: tagsRecord,
+					title: cacheEntry.title,
+					title_jpn: cacheEntry.title_jpn,
+					rating: cacheEntry.rating,
+					page_count: cacheEntry.page_count,
+					category: cacheEntry.category,
+					url: cacheEntry.url,
+					filepath: cacheEntry.filepath
+				};
+				update(s => {
+					const newCache = new Map(s.metadataCache);
+					newCache.set(metadata.hash, metadata);
+					const newPathCache = new Map(s.pathCache);
+					newPathCache.set(normalizedPath, metadata);
+					return { ...s, metadataCache: newCache, pathCache: newPathCache };
+				});
+				console.log('[EMMStore] 从 emm_json 加载成功:', metadata.translated_title);
+				return metadata;
+			}
+		} catch (e) {
+			// 嵌入数据不可用，继续尝试外部数据库
+			console.log('[EMMStore] 从 emm_json 加载失败:', e);
+		}
 
-		// 从所有主数据库尝试加载（过滤掉 translations.db）
+		// 2. 回退到外部数据库
+		const translationDbPath = currentState!.translationDbPath;
 		const mainDatabases = currentState!.databasePaths.filter(db =>
 			!db.toLowerCase().includes('translations.db')
 		);
@@ -502,6 +552,49 @@ export const emmMetadataStore = {
 			result = isCollectTag(tag, state.collectTags);
 		})();
 		return result;
+	},
+
+	/**
+	 * 存储从缩略图数据库获取的 emm_json 缓存
+	 */
+	storeEmmJsonCache(filePath: string, emmJsonStr: string) {
+		const normalizedPath = filePath.replace(/\\/g, '/');
+		try {
+			const cacheEntry = JSON.parse(emmJsonStr) as EMMCacheEntry;
+			// 将 tags 数组转换为 Record<string, string[]> 格式
+			const tagsRecord: Record<string, string[]> = {};
+			if (Array.isArray(cacheEntry.tags)) {
+				for (const tag of cacheEntry.tags) {
+					if (!tagsRecord[tag.namespace]) {
+						tagsRecord[tag.namespace] = [];
+					}
+					tagsRecord[tag.namespace].push(tag.tag);
+				}
+			}
+			// 构造 EMMMetadata
+			const metadata: EMMMetadata = {
+				hash: cacheEntry.hash ?? '',
+				translated_title: cacheEntry.translated_title,
+				tags: tagsRecord,
+				title: cacheEntry.title,
+				title_jpn: cacheEntry.title_jpn,
+				rating: cacheEntry.rating,
+				page_count: cacheEntry.page_count,
+				category: cacheEntry.category,
+				url: cacheEntry.url,
+				filepath: cacheEntry.filepath
+			};
+			// 存入缓存
+			update(s => {
+				const newCache = new Map(s.metadataCache);
+				newCache.set(metadata.hash, metadata);
+				const newPathCache = new Map(s.pathCache);
+				newPathCache.set(normalizedPath, metadata);
+				return { ...s, metadataCache: newCache, pathCache: newPathCache };
+			});
+		} catch {
+			// 解析失败，忽略
+		}
 	},
 
 	/**

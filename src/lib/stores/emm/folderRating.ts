@@ -9,6 +9,7 @@
 import { writable, get, derived } from 'svelte/store';
 import type { FolderRatingCache, FolderRatingEntry } from './types';
 import { invoke } from '@tauri-apps/api/core';
+import { ratingStore } from './ratingStore';
 
 const STORAGE_KEY = 'neoview-emm-folder-ratings';
 const CACHE_VERSION = 1;
@@ -67,8 +68,17 @@ function saveToStorage(cache: FolderRatingCache): void {
 }
 
 // 规范化路径（用于一致的键名）
+// 统一使用正斜杠小写格式
 function normalizePath(path: string): string {
-	return path.replace(/\\/g, '/').toLowerCase();
+	if (!path) return path;
+	let normalized = path.replace(/\\/g, '/').toLowerCase();
+	// 确保盘符后有斜杠（处理 d:folder -> d:/folder）
+	normalized = normalized.replace(/^([a-z]):(?!\/)/, '$1:/');
+	// 去除末尾斜杠
+	if (normalized.length > 3 && normalized.endsWith('/')) {
+		normalized = normalized.slice(0, -1);
+	}
+	return normalized;
 }
 
 // 获取父目录路径
@@ -315,9 +325,16 @@ export const folderRatingStore = {
 	},
 
 	/**
-	 * 获取文件夹的有效评分（优先返回手动评分）
+	 * 获取有效评分（优先从 ratingStore 缓存获取，即 Card 已加载的评分）
 	 */
 	getEffectiveRating(folderPath: string): number | null {
+		// 首先尝试从 ratingStore 缓存获取（Card 加载评分时会写入此缓存）
+		const ratingData = ratingStore.getRatingSync(folderPath);
+		if (ratingData?.value !== undefined) {
+			return ratingData.value;
+		}
+
+		// 回退到旧的本地缓存（EMM 计算的平均评分）
 		const entry = this.getFolderRating(folderPath);
 		if (!entry) return null;
 		return entry.manualRating ?? (entry.averageRating > 0 ? entry.averageRating : null);

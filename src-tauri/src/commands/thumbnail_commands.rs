@@ -547,6 +547,39 @@ pub async fn load_thumbnail_from_db(
     }
 }
 
+/// 加载缩略图并返回 emm_json（一次查询同时返回两者）
+#[tauri::command]
+pub async fn load_thumbnail_with_emm_json(
+    app: tauri::AppHandle,
+    path: String,
+    category: Option<String>,
+) -> Result<Option<(String, Option<String>)>, String> {
+    let state = app.state::<ThumbnailState>();
+
+    let cat = category.unwrap_or_else(|| {
+        if !path.contains("::") && !path.contains(".") {
+            "folder".to_string()
+        } else {
+            "file".to_string()
+        }
+    });
+
+    match state.db.load_thumbnail_with_emm_json(&path, &cat) {
+        Ok(Some((data, emm_json))) => {
+            // 注册到 BlobRegistry，返回 blob key 和 emm_json
+            let blob_key = state.blob_registry.get_or_register(
+                &data,
+                "image/webp",
+                Duration::from_secs(3600),
+                Some(path.clone()),
+            );
+            Ok(Some((blob_key, emm_json)))
+        }
+        Ok(None) => Ok(None),
+        Err(e) => Err(format!("加载缩略图失败: {}", e)),
+    }
+}
+
 /// 获取 blob 数据（用于创建前端 Blob URL）
 #[tauri::command]
 pub async fn get_thumbnail_blob_data(
@@ -939,4 +972,310 @@ fn is_archive_path(path: &str) -> bool {
             )
         })
         .unwrap_or(false)
+}
+
+/// 保存文件夹缩略图（前端主动调用）
+#[tauri::command]
+pub async fn save_folder_thumbnail(
+    app: tauri::AppHandle,
+    folder_path: String,
+    thumbnail_data: Vec<u8>,
+) -> Result<String, String> {
+    let state = app.state::<ThumbnailState>();
+    
+    // 注册到 BlobRegistry
+    let blob_key = state.blob_registry.get_or_register(
+        &thumbnail_data,
+        "image/webp",
+        Duration::from_secs(3600), // 1小时 TTL
+        Some(folder_path.clone()),
+    );
+    
+    // 保存到数据库（参数顺序：key, size, ghash, data, category）
+    state.db.save_thumbnail_with_category(
+        &folder_path,
+        0,  // size 不使用
+        0,  // ghash 不使用
+        &thumbnail_data,
+        Some("folder"),
+    ).map_err(|e| format!("保存文件夹缩略图失败: {}", e))?;
+    
+    // 写入缓存索引
+    let cache_index = app.state::<CacheIndexState>();
+    if let Err(err) = cache_index.db.upsert_thumbnail_entry(ThumbnailCacheUpsert {
+        path_key: &folder_path,
+        category: "folder",
+        hash: None,
+        size: Some(thumbnail_data.len() as i64),
+        source: Some("save_folder_thumbnail"),
+        blob_key: Some(&blob_key),
+    }) {
+        eprintln!("⚠️ 写入文件夹缩略图缓存索引失败: {}", err);
+    }
+    
+    Ok(blob_key)
+}
+
+/// 保存失败记录
+#[tauri::command]
+pub async fn save_failed_thumbnail(
+    app: tauri::AppHandle,
+    path: String,
+    reason: String,
+    retry_count: i32,
+    error_message: Option<String>,
+) -> Result<(), String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.save_failed_thumbnail(
+        &path,
+        &reason,
+        retry_count,
+        error_message.as_deref(),
+    ).map_err(|e| format!("保存失败记录失败: {}", e))
+}
+
+/// 查询失败记录
+#[tauri::command]
+pub async fn get_failed_thumbnail(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<Option<(String, i32, String)>, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.get_failed_thumbnail(&path)
+        .map_err(|e| format!("查询失败记录失败: {}", e))
+}
+
+/// 删除失败记录
+#[tauri::command]
+pub async fn remove_failed_thumbnail(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<(), String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.remove_failed_thumbnail(&path)
+        .map_err(|e| format!("删除失败记录失败: {}", e))
+}
+
+/// 批量检查失败记录
+#[tauri::command]
+pub async fn batch_check_failed_thumbnails(
+    app: tauri::AppHandle,
+    paths: Vec<String>,
+) -> Result<HashMap<String, (String, i32)>, String> {
+    let state = app.state::<ThumbnailState>();
+    let keys: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
+    state.db.batch_check_failed(&keys)
+        .map_err(|e| format!("批量检查失败记录失败: {}", e))
+}
+
+/// 清理过期失败记录
+#[tauri::command]
+pub async fn cleanup_old_failures(
+    app: tauri::AppHandle,
+    days: i64,
+) -> Result<usize, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.cleanup_old_failures(days)
+        .map_err(|e| format!("清理失败记录失败: {}", e))
+}
+
+// ==================== EMM JSON 缓存命令 ====================
+
+/// 保存单个 EMM JSON 缓存
+#[tauri::command]
+pub async fn save_emm_json(
+    app: tauri::AppHandle,
+    path: String,
+    emm_json: String,
+) -> Result<(), String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.save_emm_json(&path, &emm_json)
+        .map_err(|e| format!("保存 EMM JSON 失败: {}", e))
+}
+
+/// 批量保存 EMM JSON 缓存
+#[tauri::command]
+pub async fn batch_save_emm_json(
+    app: tauri::AppHandle,
+    entries: Vec<(String, String)>,
+) -> Result<usize, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.batch_save_emm_json(&entries)
+        .map_err(|e| format!("批量保存 EMM JSON 失败: {}", e))
+}
+
+/// 获取单个 EMM JSON 缓存
+#[tauri::command]
+pub async fn get_emm_json(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<Option<String>, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.get_emm_json(&path)
+        .map_err(|e| format!("获取 EMM JSON 失败: {}", e))
+}
+
+/// 批量获取 EMM JSON 缓存
+#[tauri::command]
+pub async fn batch_get_emm_json(
+    app: tauri::AppHandle,
+    paths: Vec<String>,
+) -> Result<HashMap<String, String>, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.batch_get_emm_json(&paths)
+        .map_err(|e| format!("批量获取 EMM JSON 失败: {}", e))
+}
+
+/// 获取所有缩略图键（用于 EMM 同步）
+#[tauri::command]
+pub async fn get_all_thumbnail_keys(
+    app: tauri::AppHandle,
+) -> Result<Vec<String>, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.get_all_thumbnail_keys()
+        .map_err(|e| format!("获取缩略图键列表失败: {}", e))
+}
+
+/// 获取指定目录下的缩略图键（用于增量 EMM 同步）
+#[tauri::command]
+pub async fn get_thumbnail_keys_by_prefix(
+    app: tauri::AppHandle,
+    prefix: String,
+) -> Result<Vec<String>, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.get_thumbnail_keys_by_prefix(&prefix)
+        .map_err(|e| format!("获取目录缩略图键失败: {}", e))
+}
+
+/// 插入或更新带 EMM JSON 的记录
+#[tauri::command]
+pub async fn upsert_with_emm_json(
+    app: tauri::AppHandle,
+    path: String,
+    category: String,
+    emm_json: Option<String>,
+) -> Result<(), String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.upsert_with_emm_json(&path, &category, emm_json.as_deref())
+        .map_err(|e| format!("插入/更新记录失败: {}", e))
+}
+
+// ==================== Rating 读写命令（使用 rating_data JSON）====================
+
+/// 更新单个记录的 rating_data（JSON 格式）
+/// rating_data 格式: { value: number, source: 'emm'|'manual'|'calculated', timestamp: number }
+#[tauri::command]
+pub async fn update_rating_data(
+    app: tauri::AppHandle,
+    path: String,
+    rating_data: Option<String>,
+) -> Result<(), String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.update_rating_data(&path, rating_data.as_deref())
+        .map_err(|e| format!("更新 rating_data 失败: {}", e))
+}
+
+/// 获取单个记录的 rating_data
+#[tauri::command]
+pub async fn get_rating_data(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<Option<String>, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.get_rating_data(&path)
+        .map_err(|e| format!("获取 rating_data 失败: {}", e))
+}
+
+/// 批量获取 rating_data（用于排序）
+#[tauri::command]
+pub async fn batch_get_rating_data(
+    app: tauri::AppHandle,
+    paths: Vec<String>,
+) -> Result<HashMap<String, Option<String>>, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.batch_get_rating_data(&paths)
+        .map_err(|e| format!("批量获取 rating_data 失败: {}", e))
+}
+
+/// 获取目录下所有文件的 rating_data（用于计算文件夹平均评分）
+#[tauri::command]
+pub async fn get_rating_data_by_prefix(
+    app: tauri::AppHandle,
+    prefix: String,
+) -> Result<Vec<(String, Option<String>)>, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.get_rating_data_by_prefix(&prefix)
+        .map_err(|e| format!("获取目录 rating_data 失败: {}", e))
+}
+
+/// 批量保存 emm_json 和 rating_data
+#[tauri::command]
+pub async fn batch_save_emm_with_rating_data(
+    app: tauri::AppHandle,
+    entries: Vec<(String, String, Option<String>)>,
+) -> Result<usize, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.batch_save_emm_with_rating_data(&entries)
+        .map_err(|e| format!("批量保存 emm 和 rating_data 失败: {}", e))
+}
+
+/// 手动触发数据库迁移（为旧数据库添加 EMM 相关字段）
+#[tauri::command]
+pub async fn migrate_thumbnail_db(
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.migrate_add_emm_columns()
+        .map_err(|e| format!("迁移失败: {}", e))
+}
+
+/// 获取 emm_json 为空的缩略图键列表（用于增量更新）
+#[tauri::command]
+pub async fn get_keys_without_emm_json(
+    app: tauri::AppHandle,
+) -> Result<Vec<String>, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.get_keys_without_emm_json()
+        .map_err(|e| format!("获取空 emm_json 键失败: {}", e))
+}
+
+/// 规范化所有路径键
+#[tauri::command]
+pub async fn normalize_thumbnail_keys(
+    app: tauri::AppHandle,
+) -> Result<(usize, usize), String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.normalize_all_keys()
+        .map_err(|e| format!("规范化路径键失败: {}", e))
+}
+
+/// 清理无效缩略图条目
+#[tauri::command]
+pub async fn cleanup_invalid_thumbnails(
+    app: tauri::AppHandle,
+) -> Result<usize, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.cleanup_invalid_entries()
+        .map_err(|e| format!("清理无效条目失败: {}", e))
+}
+
+/// 获取缩略图数据库维护统计
+#[tauri::command]
+pub async fn get_thumbnail_maintenance_stats(
+    app: tauri::AppHandle,
+) -> Result<(usize, usize, usize), String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.get_maintenance_stats()
+        .map_err(|e| format!("获取统计信息失败: {}", e))
+}
+
+/// 计算文件夹的平均评分并保存到 rating_data
+/// 不会覆盖手动评分（source: 'manual'）
+#[tauri::command]
+pub async fn calculate_folder_ratings(
+    app: tauri::AppHandle,
+) -> Result<usize, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.calculate_folder_ratings()
+        .map_err(|e| format!("计算文件夹评分失败: {}", e))
 }

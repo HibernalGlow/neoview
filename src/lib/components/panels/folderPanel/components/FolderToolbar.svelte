@@ -24,6 +24,7 @@ import {
 	CornerDownRight,
 	ClipboardPaste,
 	ListTree,
+	Flame,
 	// 排序图标
 	ALargeSmall,
 	Calendar,
@@ -32,6 +33,9 @@ import {
 	Shuffle,
 	Star
 } from '@lucide/svelte';
+import { folderThumbnailLoader, type WarmupProgress } from '$lib/utils/thumbnail';
+import { currentPath as currentPathStore } from '../stores/folderPanelStore.svelte';
+import * as Progress from '$lib/components/ui/progress';
 import { Button } from '$lib/components/ui/button';
 import * as Tooltip from '$lib/components/ui/tooltip';
 import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -131,6 +135,36 @@ function handleToggleDeleteStrategy(e: MouseEvent) {
 function getCurrentViewIcon() {
 	const current = viewStyles.find((v) => v.value === $viewStyle);
 	return current?.icon ?? List;
+}
+
+// 预热状态
+let isWarming = $state(false);
+let warmupProgress = $state<WarmupProgress | null>(null);
+
+async function startWarmup() {
+	const path = $currentPathStore;
+	if (!path || isWarming) return;
+	
+	isWarming = true;
+	warmupProgress = null;
+	
+	try {
+		await folderThumbnailLoader.warmupRecursive(
+			path,
+			(progress) => {
+				warmupProgress = { ...progress };
+			},
+			3 // 默认3层深度
+		);
+	} catch (error) {
+		console.error('预热失败:', error);
+	} finally {
+		isWarming = false;
+	}
+}
+
+function cancelWarmup() {
+	folderThumbnailLoader.cancelWarmup();
 }
 </script>
 
@@ -407,6 +441,10 @@ function getCurrentViewIcon() {
 					文件数量: {$itemCount}
 				</DropdownMenu.Item>
 				<DropdownMenu.Separator />
+				<DropdownMenu.Item onclick={isWarming ? cancelWarmup : startWarmup}>
+					<Flame class="mr-2 h-4 w-4 {isWarming ? 'text-orange-500' : ''}" />
+					{isWarming ? '取消预热' : '预热当前目录'}
+				</DropdownMenu.Item>
 				<DropdownMenu.Item onclick={() => folderPanelActions.toggleRecursiveMode()}>
 					递归显示子文件夹
 				</DropdownMenu.Item>
@@ -418,3 +456,17 @@ function getCurrentViewIcon() {
 		</DropdownMenu.Root>
 	</div>
 </div>
+
+<!-- 预热进度条 -->
+{#if warmupProgress}
+	<div class="border-b px-2 py-1 bg-muted/30">
+		<div class="flex items-center justify-between text-[10px] text-muted-foreground">
+			<span class="truncate max-w-[200px]">🔥 {warmupProgress.current}</span>
+			<span>{warmupProgress.completed}/{warmupProgress.total}</span>
+		</div>
+		<Progress.Root
+			value={warmupProgress.total ? (warmupProgress.completed / warmupProgress.total) * 100 : 0}
+			class="h-1.5 mt-1"
+		/>
+	</div>
+{/if}

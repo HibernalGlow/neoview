@@ -850,22 +850,21 @@ impl ThumbnailGenerator {
                     let is_avif = lower_name.ends_with(".avif");
                     let is_jxl = lower_name.ends_with(".jxl");
                     
-                    let decode_result = if is_avif || is_jxl {
-                        // AVIF/JXL 格式：使用对应解码器验证
-                        if is_jxl {
+                    // AVIF 格式跳过同步验证，让后台 FFmpeg 处理
+                    // JXL 格式使用 jxl-oxide 验证
+                    // 其他格式使用 image 库验证
+                    if !is_avif {
+                        let decode_result = if is_jxl {
                             Self::decode_jxl_image(&image_data).map(|_| ())
                         } else {
                             Self::decode_image_safe(&image_data).map(|_| ())
+                        };
+                        
+                        if let Err(e) = decode_result {
+                            eprintln!("⚠️ 图片解码失败，尝试下一张: {} - {}", name, e);
+                            last_error = Some(format!("解码失败: {}", e));
+                            continue;
                         }
-                    } else {
-                        // 其他格式：使用 image 库验证
-                        Self::decode_image_safe(&image_data).map(|_| ())
-                    };
-                    
-                    if let Err(e) = decode_result {
-                        eprintln!("⚠️ 图片解码失败，尝试下一张: {} - {}", name, e);
-                        last_error = Some(format!("解码失败: {}", e));
-                        continue;
                     }
                     
                     found_image = true;

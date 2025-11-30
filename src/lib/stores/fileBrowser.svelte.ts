@@ -8,8 +8,10 @@ import { toAssetUrl } from '$lib/utils/assetProxy';
 import type { FsItem } from '$lib/types';
 import { FileSystemAPI } from '$lib/api';
 import { isVideoFile } from '$lib/utils/videoUtils';
+import { ratingCache, getSortableRating } from '$lib/services/ratingCache';
+import { getDefaultRating } from '$lib/stores/emm/storage';
 
-export type SortField = 'name' | 'modified' | 'size' | 'type' | 'path' | 'random';
+export type SortField = 'name' | 'modified' | 'size' | 'type' | 'path' | 'random' | 'rating';
 export type SortOrder = 'asc' | 'desc';
 export type DeleteStrategy = 'trash' | 'permanent';
 
@@ -162,6 +164,16 @@ export function sortItems(items: FsItem[], field: SortField, order: SortOrder): 
           comparison = a.name.localeCompare(b.name);
         }
         break;
+      case 'rating': {
+        // 评分排序：从 ratingCache 获取评分
+        const defRating = getDefaultRating();
+        const rInfoA = ratingCache.getRatingSync(a.path);
+        const rInfoB = ratingCache.getRatingSync(b.path);
+        const rA = getSortableRating(rInfoA ?? {}, defRating);
+        const rB = getSortableRating(rInfoB ?? {}, defRating);
+        comparison = rA - rB;
+        break;
+      }
     }
 
     return order === 'asc' ? comparison : -comparison;
@@ -340,23 +352,18 @@ function createFileBrowserStore() {
     },
     addThumbnail: (path: string, thumbnail: string) =>
       update(state => {
-        let normalized: string;
-        try {
-          normalized = (toAssetUrl(thumbnail) || thumbnail) as string;
-        } catch (e) {
-          console.debug('addThumbnail: toAssetUrl failed, storing raw thumbnail', e);
-          normalized = thumbnail;
-        }
+        // blob URL 和 data URL 直接使用，不需要转换
+        const normalized = thumbnail.startsWith('blob:') || thumbnail.startsWith('data:')
+          ? thumbnail
+          : (toAssetUrl(thumbnail) || thumbnail) as string;
 
         const current = state.thumbnails.get(path);
         if (current === normalized) {
-          // 缩略图未变化，避免触发无意义的 store 更新/日志
           return state;
         }
 
         const newThumbnails = new Map(state.thumbnails);
         newThumbnails.set(path, normalized);
-        console.log('fileBrowserStore.addThumbnail:', { key: path, raw: thumbnail, converted: normalized });
         return { ...state, thumbnails: newThumbnails };
       }),
     setThumbnails: (thumbnails: Map<string, string>) =>

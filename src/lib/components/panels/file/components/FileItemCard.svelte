@@ -102,36 +102,43 @@
 		return unsubscribe;
 	});
 
-	// 文件夹平均评分
-	let folderAverageRating = $state<number | null>(null);
-	let folderManualRating = $state<number | null>(null);
-	let folderRatingStoreRef: typeof import('$lib/stores/emm/folderRating').folderRatingStore | null = null;
+	// 评分（文件夹和文件都使用统一的 ratingStore）
+	let itemRating = $state<number | null>(null);
+	let ratingStoreRef: typeof import('$lib/stores/emm/ratingStore').ratingStore | null = null;
 
-	// 加载文件夹平均评分（仅针对文件夹）
+	// 加载评分（文件夹或文件）
 	$effect(() => {
-		if (enableEMM && item.isDir && item.path) {
-			import('$lib/stores/emm/folderRating').then(({ folderRatingStore }) => {
-				folderRatingStoreRef = folderRatingStore;
-				const entry = folderRatingStore.getFolderRating(item.path);
-				folderAverageRating = entry?.averageRating ?? null;
-				folderManualRating = entry?.manualRating ?? null;
+		if (enableEMM && item.path) {
+			import('$lib/stores/emm/ratingStore').then(({ ratingStore }) => {
+				ratingStoreRef = ratingStore;
+				ratingStore.getRating(item.path).then((rating) => {
+					itemRating = rating?.value ?? null;
+				});
 			});
 		} else {
-			folderAverageRating = null;
-			folderManualRating = null;
+			itemRating = null;
 		}
 	});
 
-	// 获取有效评分（手动评分优先）
+	// 获取有效评分
 	function getEffectiveRating(): number | null {
-		return folderManualRating ?? (folderAverageRating && folderAverageRating > 0 ? folderAverageRating : null);
+		// 文件夹：使用 itemRating（从缩略图数据库获取）
+		// 文件（压缩包）：优先使用 emmMetadata 中的 rating，否则使用 itemRating
+		if (item.isDir) {
+			return itemRating;
+		}
+		return emmMetadata?.rating ?? itemRating;
 	}
 
 	// 设置手动评分
-	function handleSetRating(rating: number | null) {
-		if (folderRatingStoreRef && item.path) {
-			folderRatingStoreRef.setManualRating(item.path, rating);
-			folderManualRating = rating;
+	async function handleSetRating(rating: number | null) {
+		if (ratingStoreRef && item.path) {
+			if (rating === null) {
+				await ratingStoreRef.clearRating(item.path);
+			} else {
+				await ratingStoreRef.setRating(item.path, rating);
+			}
+			itemRating = rating;
 		}
 	}
 
@@ -326,8 +333,8 @@
 		{isArchive}
 		{isReadCompleted}
 		{emmMetadata}
-		{folderAverageRating}
-		{folderManualRating}
+		folderAverageRating={itemRating}
+		folderManualRating={null}
 		{displayTags}
 		{getEffectiveRating}
 		{showPreview}
@@ -362,8 +369,8 @@
 		{isArchive}
 		{isReadCompleted}
 		{emmMetadata}
-		{folderAverageRating}
-		{folderManualRating}
+		folderAverageRating={itemRating}
+		folderManualRating={null}
 		{displayTags}
 		{getEffectiveRating}
 		{onClick}

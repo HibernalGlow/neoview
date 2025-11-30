@@ -13,6 +13,7 @@ import type { EMMCacheEntry } from '$lib/services/emmSyncService';
 import type { EMMMetadataState } from './emm/types';
 import { loadSettings, saveSettings } from './emm/storage';
 import { isCollectTag } from './emm/helpers';
+import { normalizePathKey } from '$lib/utils/pathHash';
 
 const initialSettings = loadSettings();
 
@@ -433,8 +434,8 @@ export const emmMetadataStore = {
 	 * 优先从嵌入的 emm_json 获取，失败后回退到外部数据库
 	 */
 	async loadMetadataByPath(filePath: string): Promise<EMMMetadata | null> {
-		// 规范化路径用于缓存键
-		const normalizedPath = filePath.replace(/\\/g, '/');
+		// 规范化路径用于缓存键和查询
+		const normalizedPath = normalizePathKey(filePath);
 
 		let currentState: EMMMetadataState;
 		subscribe(state => {
@@ -449,9 +450,17 @@ export const emmMetadataStore = {
 
 		// 1. 优先从嵌入的 emm_json 获取
 		try {
-			const emmJsonStr = await invoke<string | null>('get_emm_json', { key: filePath });
+			console.log('[EMMStore] 尝试从嵌入的 emm_json 获取:', normalizedPath);
+			const emmJsonStr = await invoke<string | null>('get_emm_json', { path: normalizedPath });
+			console.log('[EMMStore] get_emm_json 返回:', emmJsonStr ? `有数据(${emmJsonStr.length}字符)` : 'null');
 			if (emmJsonStr) {
 				const cacheEntry = JSON.parse(emmJsonStr) as EMMCacheEntry;
+				console.log('[EMMStore] 解析 emm_json:', {
+					hash: cacheEntry.hash,
+					translated_title: cacheEntry.translated_title,
+					rating: cacheEntry.rating,
+					tags: cacheEntry.tags?.length ?? 0
+				});
 				// 将 tags 数组转换为 Record<string, string[]> 格式
 				const tagsRecord: Record<string, string[]> = {};
 				if (Array.isArray(cacheEntry.tags)) {
@@ -482,10 +491,12 @@ export const emmMetadataStore = {
 					newPathCache.set(normalizedPath, metadata);
 					return { ...s, metadataCache: newCache, pathCache: newPathCache };
 				});
+				console.log('[EMMStore] 从 emm_json 加载成功:', metadata.translated_title);
 				return metadata;
 			}
-		} catch {
+		} catch (e) {
 			// 嵌入数据不可用，继续尝试外部数据库
+			console.log('[EMMStore] 从 emm_json 加载失败:', e);
 		}
 
 		// 2. 回退到外部数据库

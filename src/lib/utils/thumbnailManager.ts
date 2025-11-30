@@ -5,7 +5,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { buildImagePathKey, type ImagePathContext, getStableImageHash } from './pathHash';
+import { buildImagePathKey, type ImagePathContext, getStableImageHash, normalizePathKey } from './pathHash';
 import type { FsItem } from '$lib/types';
 import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 import { scanFolderThumbnails } from '$lib/api/backgroundTasks';
@@ -388,12 +388,14 @@ class ThumbnailManager {
 
   /**
    * 构建路径键（用于缓存和数据库）
+   * 使用 normalizePathKey 统一路径格式
    */
   private buildPathKey(path: string, innerPath?: string): string {
+    const normalizedPath = normalizePathKey(path);
     if (innerPath) {
-      return `${path}::${innerPath}`;
+      return `${normalizedPath}::${innerPath}`;
     }
-    return path;
+    return normalizedPath;
   }
 
   /**

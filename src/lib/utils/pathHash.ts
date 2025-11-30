@@ -4,7 +4,31 @@
  * 用于所有图片相关模块的ID生成
  */
 
-import { invoke } from '@tauri-apps/api/core';
+// invoke 暂时不使用，保留以备将来使用
+// import { invoke } from '@tauri-apps/api/core';
+
+/**
+ * 规范化路径（用于统一路径格式作为 key）
+ * - 统一使用反斜杠（Windows 格式）
+ * - 确保盘符后有反斜杠（如 D:\ 而不是 D:）
+ * - 去除末尾斜杠
+ */
+export function normalizePathKey(path: string): string {
+  if (!path) return path;
+  
+  // 统一使用反斜杠
+  let normalized = path.replace(/\//g, '\\');
+  
+  // 确保盘符后有斜杠（处理 D:folder 变成 D:\folder）
+  normalized = normalized.replace(/^([a-zA-Z]):(?!\\)/, '$1:\\');
+  
+  // 去除末尾斜杠（除非是根目录如 D:\）
+  if (normalized.length > 3 && normalized.endsWith('\\')) {
+    normalized = normalized.slice(0, -1);
+  }
+  
+  return normalized;
+}
 
 // 用于前端所有地方的统一输入
 export interface ImagePathContext {

@@ -11,16 +11,61 @@
     pageMode = 'single',
     orientation = 'horizontal',
     direction = 'ltr',
-    transform = 'none',
+    currentPageIndex = 0,
+    scale = 1,
     onScroll,
   }: {
     units: PanoramaUnit[];
     pageMode?: 'single' | 'double';
     orientation?: 'horizontal' | 'vertical';
     direction?: 'ltr' | 'rtl';
-    transform?: string;
+    currentPageIndex?: number;
+    scale?: number;
     onScroll?: (e: Event) => void;
   } = $props();
+  
+  let containerRef: HTMLDivElement | null = $state(null);
+  let lastScrolledIndex = $state(-1);
+  
+  // 当前页索引变化时滚动到对应单元
+  $effect(() => {
+    // 只依赖 currentPageIndex，避免其他依赖触发
+    const idx = currentPageIndex;
+    
+    // 避免重复滚动
+    if (idx === lastScrolledIndex) return;
+    
+    // 使用 setTimeout 避免在渲染期间修改 DOM
+    setTimeout(() => {
+      if (!containerRef || units.length === 0) return;
+      
+      const step = pageMode === 'double' ? 2 : 1;
+      const targetUnitIndex = Math.floor(idx / step);
+      
+      const unitElements = containerRef.querySelectorAll('.panorama-unit');
+      const targetUnit = units.findIndex(u => Math.floor(u.startIndex / step) === targetUnitIndex);
+      
+      if (targetUnit >= 0 && targetUnit < unitElements.length) {
+        unitElements[targetUnit].scrollIntoView({
+          behavior: 'smooth',
+          block: orientation === 'vertical' ? 'center' : 'nearest',
+          inline: orientation === 'horizontal' ? 'center' : 'nearest',
+        });
+        lastScrolledIndex = idx;
+      }
+    }, 50);
+  });
+  
+  // 计算图片尺寸：全景模式下根据 scale 调整
+  let imageStyle = $derived.by(() => {
+    if (orientation === 'vertical') {
+      const height = scale < 1 ? `${scale * 100}%` : 'auto';
+      return `width: 100%; height: ${height};`;
+    } else {
+      const width = scale < 1 ? `${scale * 100}%` : 'auto';
+      return `height: 100%; width: ${width};`;
+    }
+  });
   
   let containerClass = $derived.by(() => {
     const classes = ['panorama-frame-layer'];
@@ -43,10 +88,10 @@
 
 {#if units.length > 0}
   <div 
+    bind:this={containerRef}
     class={containerClass}
     data-layer="PanoramaFrameLayer"
     style:z-index={LayerZIndex.CURRENT_FRAME}
-    style:transform={transform}
     onscroll={onScroll}
   >
     {#each units as unit (unit.id)}
@@ -56,6 +101,7 @@
             src={img.url}
             alt="Page {img.pageIndex + 1}"
             class="panorama-image"
+            style={imageStyle}
             draggable="false"
           />
         {/each}
@@ -84,6 +130,10 @@
     overflow-y: hidden;
     scroll-behavior: smooth;
     scroll-snap-type: x mandatory;
+    /* 确保变换后居中 */
+    align-items: center;
+    justify-content: flex-start;
+    transform-origin: center center;
   }
   
   .panorama-frame-layer.vertical {

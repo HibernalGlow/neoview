@@ -33,7 +33,12 @@
   
   // 导入外部 stores
   import { zoomLevel, rotationAngle, resetZoom as storeResetZoom, viewMode as legacyViewMode, orientation as legacyOrientation } from '$lib/stores';
-  import { viewState } from '$lib/stores/viewState.svelte';
+  import { 
+    viewState, 
+    getPageMode, 
+    isPanoramaEnabled as getPanoramaEnabled, 
+    getOrientation 
+  } from '$lib/stores/viewState.svelte';
   import { bookStore } from '$lib/stores/book.svelte';
   import { settingsManager } from '$lib/settings/settingsManager';
   
@@ -86,9 +91,10 @@
   });
   
   // 从 viewState 获取视图状态（方案 B）
-  let pageMode = $derived(viewState.pageMode);
-  let isPanorama = $derived(viewState.panoramaEnabled);
-  let orientation = $derived(viewState.orientation);
+  // 使用 getter 函数确保响应式更新
+  let pageMode = $derived(getPageMode());
+  let isPanorama = $derived(getPanoramaEnabled());
+  let orientation = $derived(getOrientation());
   
   // 设置
   let settings = $state(settingsManager.getSettings());
@@ -388,7 +394,8 @@
       pageMode={pageMode}
       orientation={orientation}
       direction={direction}
-      transform={baseTransform}
+      currentPageIndex={bookStore.currentPageIndex}
+      scale={scale}
     />
   {:else}
     <!-- 普通模式：显示当前帧 -->

@@ -45,9 +45,9 @@
   let lastMousePos = { x: 0, y: 0 };
   let isHovering = $state(false);
   
-  // 当前位置（0-100）
-  let currentX = 50;
-  let currentY = 50;
+  // 当前位置（0-100）- 使用 $state 确保响应式
+  let currentX = $state(50);
+  let currentY = $state(50);
   
   // 是否已经进入过死区（翻页后需要先进入死区才能开始滚动）
   let hasEnteredDeadZone = $state(true);
@@ -70,7 +70,6 @@
     const hasOverflowX = scaledWidth > viewportSize.width;
     const hasOverflowY = scaledHeight > viewportSize.height;
     
-    // 输出完整的 0-100 范围，让 CurrentFrameLayer 做最终映射
     return {
       minX: hasOverflowX ? 0 : 50,
       maxX: hasOverflowX ? 100 : 50,
@@ -173,7 +172,7 @@
   export function reset() {
     currentX = 50;
     currentY = 50;
-    hasEnteredDeadZone = false; // 需要先进入死区才能开始滚动
+    hasEnteredDeadZone = true; // 允许翻页后直接滚动
   }
   
   // 使用 window 事件监听

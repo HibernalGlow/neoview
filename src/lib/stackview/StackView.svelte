@@ -4,7 +4,7 @@
   使用 imageStore 管理图片加载，复用现有手势和缩放
 -->
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import {
     BackgroundLayer,
     CurrentFrameLayer,
@@ -254,6 +254,13 @@
     
     if (!currentUrl) return emptyFrame;
     
+    console.log('[StackView] imageStore.state', {
+      currentIndex: bookStore.currentPageIndex,
+      dimensions,
+      secondDimensions,
+      hasSecondUrl: !!secondUrl,
+    });
+    
     // 构建当前页数据
     const currentPage: PageData = {
       url: currentUrl,
@@ -419,6 +426,25 @@
   // 追踪上一次的状态，用于检测变化
   let lastPageMode = $state<'single' | 'double' | null>(null);
   let lastPanorama = $state<boolean>(false);
+  let lastPageIndex = $state<number>(-1);
+  
+  // 页面切换时重置悬停滚动位置
+  $effect(() => {
+    const pageIndex = bookStore.currentPageIndex;
+    const prevIndex = untrack(() => lastPageIndex);
+    
+    // 页面变化时重置悬停滚动
+    if (pageIndex !== prevIndex) {
+      untrack(() => {
+        lastPageIndex = pageIndex;
+        // 重置位置到居中
+        viewPositionX = 50;
+        viewPositionY = 50;
+        // 重置 HoverLayer 的内部状态
+        hoverLayerRef?.reset();
+      });
+    }
+  });
   
   // 页面或模式变化时加载图片
   $effect(() => {

@@ -32,7 +32,7 @@
 		cancelComparisonPreviewTask
 	} from '$lib/core/tasks/comparisonTaskService';
 	import { scheduleUpscaleCacheCleanup } from '$lib/core/cache/cacheMaintenance';
-	import VideoPlayer from './VideoPlayer.svelte';
+	import VideoContainer from './VideoContainer.svelte';
 import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoomMode';
 
 	// 新模块导入
@@ -228,26 +228,9 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 	let error = $state<string | null>(null);
 	let loadingTimeout: ReturnType<typeof window.setTimeout> | null = null; // 延迟显示loading的定时器
 
-	// 视频相关状态
+	// 视频相关状态 - 大部分逻辑已移至 VideoContainer 和 videoStore
 	let isCurrentPageVideo = $state(false);
-	let videoUrl = $state<string | null>(null);
-	let currentVideoRequestId = 0;
-	let videoPlayerRef: any = null;
-	let videoUrlRevokeNeeded = false;
-	let videoStartTime = $state(0);
-	let lastVideoHistoryUpdateAt = 0;
-
-	type VideoLoopMode = 'none' | 'list' | 'single';
-	type VideoPlayerSettings = {
-		volume: number;
-		muted: boolean;
-		playbackRate: number;
-		loopMode: VideoLoopMode;
-	};
-
-	// 使用 videoStore 管理视频状态（已移除本地状态，改用全局 store）
-	// videoStore.settings 包含: volume, muted, playbackRate, loopMode
-	// videoStore.seekMode 控制快进模式
+	let videoPlayerRef: any = null; // VideoContainer 组件引用
 
 	function handleViewerAction(action: string) {
 		const isVideo = isCurrentPageVideo;
@@ -333,26 +316,7 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 		});
 	}
 
-	const VIDEO_MIME_TYPES: Record<string, string> = {
-		mp4: 'video/mp4',
-		webm: 'video/webm',
-		ogg: 'video/ogg',
-		mov: 'video/quicktime',
-		avi: 'video/x-msvideo',
-		mkv: 'video/x-matroska',
-		m4v: 'video/x-m4v',
-		flv: 'video/x-flv',
-		nov: 'video/mp4',
-		wmv: 'video/x-ms-wmv'
-	};
-
-	function getVideoMimeType(name?: string): string | undefined {
-		if (!name) return undefined;
-		const ext = name.split('.').pop()?.toLowerCase();
-		if (!ext) return undefined;
-		return VIDEO_MIME_TYPES[ext];
-	}
-
+	// 视频相关工具函数
 	function isVideoPage(page: Page): boolean {
 		return Boolean(page && (isVideoFile(page.name) || isVideoFile(page.path)));
 	}
@@ -386,80 +350,6 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 			await bookStore.navigateToPage(nextVideoIndex);
 		} catch (err) {
 			console.error('Failed to navigate to next video page:', err);
-		}
-	}
-
-	function clearVideoPlaybackState() {
-		if (videoUrlRevokeNeeded && videoUrl) {
-			URL.revokeObjectURL(videoUrl);
-		}
-		videoUrl = null;
-		videoUrlRevokeNeeded = false;
-	}
-
-	function setVideoUrl(url: string, revokeNeeded: boolean) {
-		if (videoUrlRevokeNeeded && videoUrl) {
-			URL.revokeObjectURL(videoUrl);
-		}
-		videoUrl = url;
-		videoUrlRevokeNeeded = revokeNeeded;
-	}
-
-	function handleVideoProgress(currentTimeSec: number, durationSec: number, ended: boolean) {
-		const page = bookStore.currentPage;
-		if (!page) return;
-		if (!durationSec || !isFinite(durationSec) || durationSec <= 0) return;
-
-		const now = Date.now();
-		// 节流：未结束时最多每 5 秒写一次历史
-		if (!ended && now - lastVideoHistoryUpdateAt < 5000) {
-			return;
-		}
-		lastVideoHistoryUpdateAt = now;
-
-		const safeDuration = durationSec;
-		const clampedTime = Math.max(0, Math.min(currentTimeSec, safeDuration));
-		const completed =
-			ended || clampedTime >= safeDuration - Math.min(5, safeDuration * 0.05);
-
-		// 映射到进度条字段（沿用 currentPage/totalPages）
-		const scale = 1000;
-		const ratio = clampedTime / safeDuration;
-		let progressPage = Math.floor(ratio * scale);
-		const progressTotal = scale;
-		if (completed) {
-			progressPage = progressTotal;
-		}
-
-		try {
-			historyStore.updateVideoProgress(
-				page.path,
-				clampedTime,
-				safeDuration,
-				completed,
-				progressPage,
-				progressTotal
-			);
-		} catch (err) {
-			console.error('Failed to update video progress history:', err);
-		}
-	}
-
-	function prepareVideoStartTimeForPage(page: Page) {
-		try {
-			const entry = historyStore.findByPath(page.path);
-			if (entry && typeof entry.videoPosition === 'number') {
-				if (entry.videoCompleted) {
-					videoStartTime = 0;
-				} else {
-					videoStartTime = entry.videoPosition ?? 0;
-				}
-			} else {
-				videoStartTime = 0;
-			}
-		} catch (err) {
-			console.debug('Failed to read video history for start time:', err);
-			videoStartTime = 0;
 		}
 	}
 
@@ -1565,28 +1455,12 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 		{#if error}
 			<div class="text-red-500">Error: {error}</div>
 		{:else if isCurrentPageVideo}
-			{#if videoUrl}
-				<VideoPlayer
-					bind:this={videoPlayerRef}
-					src={videoUrl}
-					initialTime={videoStartTime}
-					onProgress={handleVideoProgress}
-					onEnded={handleVideoListLoopEnded}
-					initialVolume={videoStore.settings.volume}
-					initialMuted={videoStore.settings.muted}
-					initialPlaybackRate={videoStore.settings.playbackRate}
-					initialLoopMode={videoStore.settings.loopMode}
-					onSettingsChange={(settings) => {
-						videoStore.updateSettings(settings);
-					}}
-					seekMode={videoStore.seekMode}
-					onSeekModeChange={(enabled) => {
-						videoStore.setSeekMode(enabled);
-					}}
-				/>
-			{:else}
-				<div class="text-white">加载视频中...</div>
-			{/if}
+			<VideoContainer
+				bind:this={videoPlayerRef}
+				page={bookStore.currentPage}
+				onEnded={handleVideoListLoopEnded}
+				onError={(err) => { error = String(err); }}
+			/>
 		{:else}
 			<!-- StackView：接收 ImageViewer 加载的图片数据 -->
 			<!-- StackView 独立模式：使用自己的加载器 -->

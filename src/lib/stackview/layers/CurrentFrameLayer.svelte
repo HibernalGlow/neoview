@@ -21,8 +21,13 @@
     orientation = 'horizontal',
     scale = 1,
     rotation = 0,
-    // 当前平移位置（由外部 HoverLayer 控制）
-    panPosition = { x: 0, y: 0 },
+    // 视口位置百分比（0-100）
+    // 50 = 居中，0 = 显示左/上边缘，100 = 显示右/下边缘
+    viewPositionX = 50,
+    viewPositionY = 50,
+    // 视口和图片尺寸（用于计算边界）
+    viewportSize = { width: 0, height: 0 },
+    imageSize = { width: 0, height: 0 },
     onImageLoad,
   }: {
     frame: Frame;
@@ -31,25 +36,55 @@
     orientation?: 'horizontal' | 'vertical';
     scale?: number;
     rotation?: number;
-    panPosition?: { x: number; y: number };
+    viewPositionX?: number;
+    viewPositionY?: number;
+    viewportSize?: { width: number; height: number };
+    imageSize?: { width: number; height: number };
     onImageLoad?: (e: Event, index: number) => void;
   } = $props();
   
-  // 计算 transform 字符串
-  // 顺序：translate -> scale -> rotate
-  // CSS transform 从右到左应用，所以写成 scale rotate translate 实际上是先 translate
+  // 计算 transform（包含 scale、rotation 和 translate）
   let transformStyle = $derived.by(() => {
     const parts: string[] = [];
-    // translate 要在 scale 之前应用（所以放最后）
-    // 这样 pan 值不会被 scale 放大
+    
+    // 计算平移（基于 viewPositionX/Y 和尺寸差）
+    if (viewportSize.width > 0 && imageSize.width > 0) {
+      // 计算图片 fit 后的尺寸
+      const fitRatio = Math.min(
+        viewportSize.width / imageSize.width,
+        viewportSize.height / imageSize.height
+      );
+      const fitWidth = imageSize.width * fitRatio;
+      const fitHeight = imageSize.height * fitRatio;
+      
+      // 缩放后的尺寸（scale 是用户手动缩放）
+      const scaledWidth = fitWidth * scale;
+      const scaledHeight = fitHeight * scale;
+      
+      // 超出部分（单侧）- 只有超出视口时才需要平移
+      const overflowX = Math.max(0, (scaledWidth - viewportSize.width) / 2);
+      const overflowY = Math.max(0, (scaledHeight - viewportSize.height) / 2);
+      
+      // 只有有溢出时才计算平移
+      if (overflowX > 0 || overflowY > 0) {
+        // 百分比转换为像素平移
+        // viewPositionX=0 -> translateX = +overflowX（显示左边缘）
+        // viewPositionX=50 -> translateX = 0（居中）
+        // viewPositionX=100 -> translateX = -overflowX（显示右边缘）
+        const translateX = overflowX * (1 - viewPositionX / 50);
+        const translateY = overflowY * (1 - viewPositionY / 50);
+        
+        // translate 在 scale 之后应用（CSS 从右到左），所以要除以 scale
+        if (translateX !== 0 || translateY !== 0) {
+          const adjustedScale = scale || 1;
+          parts.push(`translate(${translateX / adjustedScale}px, ${translateY / adjustedScale}px)`);
+        }
+      }
+    }
+    
     if (scale !== 1) parts.push(`scale(${scale})`);
     if (rotation !== 0) parts.push(`rotate(${rotation}deg)`);
-    if (panPosition.x !== 0 || panPosition.y !== 0) {
-      // 除以 scale 来抵消 scale 的放大效果
-      const adjustedX = panPosition.x / scale;
-      const adjustedY = panPosition.y / scale;
-      parts.push(`translate(${adjustedX}px, ${adjustedY}px)`);
-    }
+    
     return parts.length > 0 ? parts.join(' ') : 'none';
   });
   

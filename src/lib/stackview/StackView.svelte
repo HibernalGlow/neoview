@@ -61,10 +61,14 @@
   const panoramaStore = getPanoramaStore();
   const zoomModeManager = createZoomModeManager();
   
-  let panPosition = $state({ x: 0, y: 0 });
   let splitState = $state<SplitState | null>(null);
   let containerRef: HTMLDivElement | null = $state(null);
   let viewportSize = $state<ViewportSize>({ width: 0, height: 0 });
+  
+  // 视口位置百分比（0-100），用于悬停滚动
+  // 50 = 居中，0 = 显示左/上边缘，100 = 显示右/下边缘
+  let viewPositionX = $state(50);
+  let viewPositionY = $state(50);
   
   // ============================================================================
   // 真实缩放逻辑（完全独立管理）
@@ -276,12 +280,12 @@
   function resetView() {
     manualScale = 1.0;
     rotation = 0;
-    panPosition = { x: 0, y: 0 };
+    viewPositionX = 50; viewPositionY = 50;
     splitState = null;
   }
   
   function handlePrevPage() {
-    panPosition = { x: 0, y: 0 };
+    viewPositionX = 50; viewPositionY = 50;
     
     if (isInSplitMode && splitState) {
       const prevHalf = getPrevSplitHalf(splitState.half, direction);
@@ -314,7 +318,7 @@
   }
   
   function handleNextPage() {
-    panPosition = { x: 0, y: 0 };
+    viewPositionX = 50; viewPositionY = 50;
     
     if (isInSplitMode) {
       if (!splitState) {
@@ -353,12 +357,6 @@
   // 悬停滚动状态
   let hoverScrollEnabled = $derived(settings.image?.hoverScrollEnabled ?? false);
   
-  // 悬停滚动处理（来自 HoverLayer）
-  // displaySize 已经是缩放后的尺寸，直接传给 HoverLayer
-  function handleHoverScroll(pos: { x: number; y: number }, _duration: number) {
-    panPosition = pos;
-  }
-  
   // 缩放控制
   function zoomIn() {
     manualScale = Math.min(manualScale * 1.25, 10);
@@ -386,7 +384,7 @@
         imageStore.reset();
         panoramaStore.reset();
         zoomModeManager.reset();
-        panPosition = { x: 0, y: 0 };
+        viewPositionX = 50; viewPositionY = 50;
         splitState = null;
       }
       
@@ -500,7 +498,10 @@
       orientation={orientation}
       scale={manualScale}
       {rotation}
-      {panPosition}
+      {viewPositionX}
+      {viewPositionY}
+      {viewportSize}
+      imageSize={imageStore.state.dimensions ?? { width: 0, height: 0 }}
     />
     
     {#if upscaledFrameData.images.length > 0}
@@ -510,7 +511,10 @@
         direction={direction}
         scale={manualScale}
         {rotation}
-        {panPosition}
+        {viewPositionX}
+        {viewPositionY}
+        {viewportSize}
+        imageSize={imageStore.state.dimensions ?? { width: 0, height: 0 }}
       />
     {/if}
   {/if}
@@ -536,14 +540,12 @@
     onResetZoom={resetView}
   />
   
-  <!-- 悬停平移层 -->
+  <!-- 悬停滚动层 -->
   <HoverLayer
     enabled={hoverScrollEnabled && !isPanorama}
     sidebarMargin={50}
     deadZoneRatio={0.2}
-    {viewportSize}
-    contentSize={displaySize}
-    onScroll={handleHoverScroll}
+    onPositionChange={(x, y) => { viewPositionX = x; viewPositionY = y; }}
   />
 </div>
 

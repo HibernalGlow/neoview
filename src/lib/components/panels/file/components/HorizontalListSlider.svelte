@@ -37,9 +37,10 @@
 	let sliderRef = $state<HTMLDivElement | null>(null);
 	let inputValue = $state('');
 	let showInput = $state(false);
+	let dragProgress = $state(0); // 拖动时的临时进度
 
-	// 滑块位置（百分比）
-	const thumbPosition = $derived(progress * 100);
+	// 滑块位置（百分比）- 拖动时用临时进度，否则用实际进度
+	const thumbPosition = $derived((isDragging ? dragProgress : progress) * 100);
 
 	function handleTrackClick(e: MouseEvent) {
 		if (!sliderRef || isDragging) return;
@@ -56,15 +57,16 @@
 		e.preventDefault();
 		e.stopPropagation();
 		isDragging = true;
+		dragProgress = progress; // 初始化拖动进度
 
 		const handleMouseMove = (moveEvent: MouseEvent) => {
 			if (!sliderRef) return;
 			const rect = sliderRef.getBoundingClientRect();
 			const x = moveEvent.clientX - rect.left;
 			const newProgress = Math.max(0, Math.min(1, x / rect.width));
+			dragProgress = newProgress;
+			// 实时滚动列表
 			onScrollToProgress?.(newProgress);
-			const newIndex = Math.round(newProgress * (totalItems - 1));
-			onJumpToIndex?.(newIndex);
 		};
 
 		const handleMouseUp = () => {

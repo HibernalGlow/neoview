@@ -68,6 +68,9 @@
 	let showHoverAreasOverlay = $state(false); // 显示边栏悬停触发区域覆盖层
 	const showDebugInfo = false; // 底栏调试信息开关
 
+	// 缩略图列表滚动进度（用于 HorizontalListSlider）
+	let thumbnailScrollProgress = $state(0);
+
 	// 共享预加载管理器引用
 	let preloadManager: PreloadManager | null = null;
 	let unsubscribeSharedManager: (() => void) | null = null;
@@ -471,6 +474,10 @@
 		const container = e.target as HTMLElement;
 		const thumbnailElements = container.querySelectorAll('button');
 
+		// 更新滚动进度（用于 HorizontalListSlider）
+		const maxScroll = container.scrollWidth - container.clientWidth;
+		thumbnailScrollProgress = maxScroll > 0 ? container.scrollLeft / maxScroll : 0;
+
 		// 加载所有可见的缩略图，包括缓冲区
 		thumbnailElements.forEach((el, i) => {
 			const rect = el.getBoundingClientRect();
@@ -831,8 +838,14 @@
 					<HorizontalListSlider
 						totalItems={bookStore.currentBook.pages.length}
 						currentIndex={bookStore.currentPageIndex}
-						progress={bookStore.currentBook.pages.length > 1 ? bookStore.currentPageIndex / (bookStore.currentBook.pages.length - 1) : 0}
-						onJumpToIndex={(index) => bookStore.goToPage(index)}
+						progress={thumbnailScrollProgress}
+						onScrollToProgress={(progress) => {
+							if (thumbnailScrollContainer) {
+								const maxScroll = thumbnailScrollContainer.scrollWidth - thumbnailScrollContainer.clientWidth;
+								thumbnailScrollContainer.scrollLeft = progress * maxScroll;
+							}
+						}}
+						showIndexInput={false}
 					/>
 				</div>
 			{/if}

@@ -232,7 +232,10 @@
   let isVideoMode = $derived.by(() => {
     const page = bookStore.currentPage;
     if (!page) return false;
-    return isVideoFile(page.name) || isVideoFile(page.path);
+    // 优先检查 name，然后检查 innerPath（压缩包内文件），最后检查 path
+    const filename = page.name || page.innerPath || '';
+    if (!filename) return false;
+    return isVideoFile(filename);
   });
   
   // 视频容器引用

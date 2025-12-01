@@ -126,7 +126,7 @@
 		}
 	}
 
-	// 处理视频进度更新
+	// 处理视频进度更新 - 记录真实的时间和百分比
 	function handleVideoProgress(currentTimeSec: number, durationSec: number, ended: boolean) {
 		if (!page) return;
 		if (!durationSec || !isFinite(durationSec) || durationSec <= 0) return;
@@ -142,23 +142,18 @@
 		const clampedTime = Math.max(0, Math.min(currentTimeSec, safeDuration));
 		const completed = ended || clampedTime >= safeDuration - Math.min(5, safeDuration * 0.05);
 
-		// 映射到进度条字段
-		const scale = 1000;
-		const ratio = clampedTime / safeDuration;
-		let progressPage = Math.floor(ratio * scale);
-		const progressTotal = scale;
-		if (completed) {
-			progressPage = progressTotal;
-		}
+		// 计算真实的进度百分比（0-100）
+		const progressPercent = Math.round((clampedTime / safeDuration) * 100);
+		const finalPercent = completed ? 100 : progressPercent;
 
 		try {
 			historyStore.updateVideoProgress(
 				page.path,
-				clampedTime,
-				safeDuration,
-				completed,
-				progressPage,
-				progressTotal
+				clampedTime,       // 真实的当前时间（秒）
+				safeDuration,      // 真实的总时长（秒）
+				completed,         // 是否已完成
+				finalPercent,      // 进度百分比（0-100）
+				100                // 总数为100（百分比）
 			);
 		} catch (err) {
 			console.error('Failed to update video progress history:', err);

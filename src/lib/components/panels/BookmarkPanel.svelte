@@ -21,6 +21,7 @@
 	import SearchBar from '$lib/components/ui/SearchBar.svelte';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 	import FileItemCard from './file/components/FileItemCard.svelte';
+	import ListSlider from './file/components/ListSlider.svelte';
 	import FolderContextMenu from './folderPanel/components/FolderContextMenu.svelte';
 	import PanelToolbar, { type SortField, type SortOrder, type ViewMode } from './shared/PanelToolbar.svelte';
 	import type { FsItem } from '$lib/types';
@@ -56,6 +57,13 @@
 	let showSearchBar = $state(false);
 	let sortField = $state<SortField>('timestamp');
 	let sortOrder = $state<SortOrder>('desc');
+
+	// 滚动状态（用于 ListSlider）
+	let listContainer = $state<HTMLDivElement | null>(null);
+	let scrollTop = $state(0);
+	let containerHeight = $state(0);
+	let contentHeight = $state(0);
+	let itemHeight = 64; // 估算项高度
 
 	// 排序后的书签
 	let sortedBookmarks = $derived(() => {
@@ -314,9 +322,18 @@
 		</div>
 	</div>
 
-	<div class="min-h-0 flex-1 overflow-hidden">
+	<div class="min-h-0 flex-1 overflow-hidden flex">
 		<!-- 书签列表 -->
-		<div class="flex-1 overflow-auto">
+		<div 
+			class="flex-1 overflow-auto"
+			bind:this={listContainer}
+			onscroll={(e) => {
+				const target = e.currentTarget;
+				scrollTop = target.scrollTop;
+				containerHeight = target.clientHeight;
+				contentHeight = target.scrollHeight;
+			}}
+		>
 			{#if sortedBookmarks().length === 0}
 				<div class="text-muted-foreground flex flex-col items-center justify-center py-12">
 					<div class="relative mb-4">
@@ -402,6 +419,25 @@
 				</div>
 			{/if}
 		</div>
+
+		<!-- ListSlider -->
+		{#if sortedBookmarks().length > 0}
+			<div class="py-1 pr-0.5">
+				<ListSlider
+					totalItems={sortedBookmarks().length}
+					currentIndex={0}
+					visibleStart={Math.floor(scrollTop / itemHeight)}
+					visibleEnd={Math.min(sortedBookmarks().length - 1, Math.floor((scrollTop + containerHeight) / itemHeight))}
+					scrollProgress={contentHeight > containerHeight ? scrollTop / (contentHeight - containerHeight) : 0}
+					showIndexInput={false}
+					onScrollToProgress={(progress) => {
+						if (listContainer && contentHeight > containerHeight) {
+							listContainer.scrollTop = progress * (contentHeight - containerHeight);
+						}
+					}}
+				/>
+			</div>
+		{/if}
 	</div>
 
 		<!-- 右键菜单 -->

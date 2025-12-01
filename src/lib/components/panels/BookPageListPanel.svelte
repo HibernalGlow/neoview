@@ -5,6 +5,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Image as ImageIcon, FileText, Search, Grid3x3, Grid2x2, LayoutGrid } from '@lucide/svelte';
+	import ListSlider from '$lib/components/panels/file/components/ListSlider.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { thumbnailCacheStore, type ThumbnailEntry } from '$lib/stores/thumbnailCache.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
@@ -32,6 +33,12 @@
 	let searchQuery = $state('');
 	let viewMode = $state<PageViewMode>('standard');
 	let imageColumns = $state<number>(3);
+
+	// 滚动状态（用于 ListSlider）
+	let scrollTop = $state(0);
+	let containerHeight = $state(0);
+	let contentHeight = $state(0);
+	let itemHeight = 80; // 估算项高度
 
 	const filteredItems = $derived(
 		searchQuery.trim()
@@ -321,7 +328,17 @@
 		</div>
 	</div>
 
-	<div class="flex-1 overflow-y-auto" bind:this={listContainer}>
+	<div class="flex-1 flex overflow-hidden">
+	<div 
+		class="flex-1 overflow-y-auto" 
+		bind:this={listContainer}
+		onscroll={(e) => {
+			const target = e.currentTarget;
+			scrollTop = target.scrollTop;
+			containerHeight = target.clientHeight;
+			contentHeight = target.scrollHeight;
+		}}
+	>
 		{#if !$bookState.currentBookPath}
 			<div class="p-4 text-center text-sm text-muted-foreground">
 				打开一本书后，这里会显示页面列表
@@ -444,6 +461,30 @@
 			</div>
 		{/if}
 	</div>
+
+	<!-- ListSlider -->
+	{#if filteredItems.length > 0}
+		<div class="py-1 pr-0.5">
+			<ListSlider
+				totalItems={filteredItems.length}
+				currentIndex={bookStore.currentPageIndex}
+				visibleStart={Math.floor(scrollTop / itemHeight)}
+				visibleEnd={Math.min(filteredItems.length - 1, Math.floor((scrollTop + containerHeight) / itemHeight))}
+				scrollProgress={contentHeight > containerHeight ? scrollTop / (contentHeight - containerHeight) : 0}
+				onJumpToIndex={(index) => {
+					if (index >= 0 && index < filteredItems.length) {
+						goToPage(filteredItems[index].index);
+					}
+				}}
+				onScrollToProgress={(progress) => {
+					if (listContainer && contentHeight > containerHeight) {
+						listContainer.scrollTop = progress * (contentHeight - containerHeight);
+					}
+				}}
+			/>
+		</div>
+	{/if}
+</div>
 
 	<div class="p-2 border-t text-[10px] text-muted-foreground text-center">
 		{#if bookStore.totalPages > 0}

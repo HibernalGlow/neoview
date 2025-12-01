@@ -14,10 +14,13 @@
     color = 'var(--background)',
     mode = 'solid',
     imageSrc = '',
+    preloadedColor = null,
   }: {
     color?: string;
     mode?: 'solid' | 'auto';
     imageSrc?: string;
+    /** 预加载时已计算好的背景色 */
+    preloadedColor?: string | null;
   } = $props();
   
   // 自适应背景色状态
@@ -32,6 +35,13 @@
       return;
     }
     
+    // 优先使用预加载的背景色
+    if (preloadedColor) {
+      autoColor = preloadedColor;
+      lastImageSrc = imageSrc;
+      return;
+    }
+    
     // 避免重复计算
     if (imageSrc === lastImageSrc && autoColor) {
       return;
@@ -39,6 +49,7 @@
     
     lastImageSrc = imageSrc;
     
+    // 没有预加载背景色时才异步计算
     void (async () => {
       const computed = await computeAutoBackgroundColor(imageSrc);
       // 确保在计算完成时图片源没有变化

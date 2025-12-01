@@ -21,6 +21,8 @@ export interface ImageState {
   dimensions: { width: number; height: number } | null;
   /** 第二张图片尺寸（双页模式） */
   secondDimensions: { width: number; height: number } | null;
+  /** 预加载的背景色 */
+  backgroundColor: string | null;
   /** 是否正在加载 */
   loading: boolean;
   /** 错误信息 */
@@ -38,6 +40,7 @@ export function createImageStore() {
     upscaledUrl: null,
     dimensions: null,
     secondDimensions: null,
+    backgroundColor: null,
     loading: false,
     error: null,
   });
@@ -58,6 +61,7 @@ export function createImageStore() {
       state.secondUrl = null;
       state.dimensions = null;
       state.secondDimensions = null;
+      state.backgroundColor = null;
       state.loading = false;
       return;
     }
@@ -70,6 +74,7 @@ export function createImageStore() {
       state.secondUrl = null;
       state.dimensions = null;
       state.secondDimensions = null;
+      state.backgroundColor = null;
       lastLoadedIndex = -1;
       imagePool.setCurrentBook(book.path);
     }
@@ -88,6 +93,8 @@ export function createImageStore() {
       state.dimensions = cached.width && cached.height 
         ? { width: cached.width, height: cached.height } 
         : null;
+      // 获取预加载的背景色
+      state.backgroundColor = imagePool.getBackgroundColor(currentIndex) ?? null;
       state.loading = false;
     } else {
       state.loading = true;
@@ -120,6 +127,8 @@ export function createImageStore() {
           state.dimensions = image.width && image.height 
             ? { width: image.width, height: image.height } 
             : null;
+          // 获取背景色（可能已在加载时计算好）
+          state.backgroundColor = imagePool.getBackgroundColor(currentIndex) ?? null;
         }
         
         // 双页异步加载
@@ -164,6 +173,7 @@ export function createImageStore() {
     state.upscaledUrl = null;
     state.dimensions = null;
     state.secondDimensions = null;
+    state.backgroundColor = null;
     state.loading = false;
     state.error = null;
     lastLoadedIndex = -1;

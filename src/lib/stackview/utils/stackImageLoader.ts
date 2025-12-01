@@ -6,6 +6,7 @@
 import { ImageLoaderCore } from '$lib/components/viewer/flow/imageLoaderCore';
 import { getImageDimensions } from '$lib/components/viewer/flow/imageReader';
 import { bookStore } from '$lib/stores/book.svelte';
+import { computeAutoBackgroundColor } from '$lib/utils/autoBackground';
 
 // ============================================================================
 // 类型定义
@@ -27,6 +28,8 @@ export class StackImageLoader {
   private currentBookPath: string | null = null;
   // 尺寸缓存
   private dimensionsCache = new Map<number, { width: number; height: number }>();
+  // 背景色缓存
+  private backgroundColorCache = new Map<number, string>();
 
   constructor() {
     // 创建独立的 ImageLoaderCore 实例
@@ -40,6 +43,7 @@ export class StackImageLoader {
     if (this.currentBookPath !== bookPath) {
       this.core.reset();
       this.dimensionsCache.clear();
+      this.backgroundColorCache.clear();
       this.currentBookPath = bookPath;
     }
   }
@@ -68,6 +72,11 @@ export class StackImageLoader {
       this.dimensionsCache.set(pageIndex, dimensions);
     }
     
+    // 后台计算背景色（不阻塞返回）
+    if (result.url && !this.backgroundColorCache.has(pageIndex)) {
+      void this.computeAndCacheBackgroundColor(pageIndex, result.url);
+    }
+    
     return {
       url: result.url,
       blob: result.blob,
@@ -91,6 +100,27 @@ export class StackImageLoader {
     return this.dimensionsCache.get(pageIndex);
   }
 
+  /**
+   * 获取缓存的背景色
+   */
+  getCachedBackgroundColor(pageIndex: number): string | undefined {
+    return this.backgroundColorCache.get(pageIndex);
+  }
+
+  /**
+   * 计算并缓存背景色
+   */
+  private async computeAndCacheBackgroundColor(pageIndex: number, url: string): Promise<void> {
+    try {
+      const color = await computeAutoBackgroundColor(url);
+      if (color) {
+        this.backgroundColorCache.set(pageIndex, color);
+      }
+    } catch (e) {
+      console.warn('计算背景色失败:', pageIndex, e);
+    }
+  }
+
   hasCache(pageIndex: number): boolean {
     return this.core.hasCache(pageIndex);
   }
@@ -112,6 +142,7 @@ export class StackImageLoader {
   clear(): void {
     this.core.clearCache();
     this.dimensionsCache.clear();
+    this.backgroundColorCache.clear();
   }
 }
 

@@ -554,6 +554,7 @@
     color={settings.view.backgroundColor || backgroundColor}
     mode={settings.view.backgroundMode ?? 'solid'}
     imageSrc={imageStore.state.currentUrl ?? ''}
+    preloadedColor={imageStore.state.backgroundColor}
   />
   
   {#if isVideoMode && bookStore.currentPage}

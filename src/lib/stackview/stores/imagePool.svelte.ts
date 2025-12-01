@@ -75,6 +75,13 @@ class ImagePool {
   }
   
   /**
+   * 获取缓存的背景色
+   */
+  getBackgroundColor(pageIndex: number): string | undefined {
+    return stackImageLoader.getCachedBackgroundColor(pageIndex);
+  }
+  
+  /**
    * 预加载
    */
   async preload(pageIndices: number[]): Promise<void> {

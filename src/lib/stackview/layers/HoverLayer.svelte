@@ -63,12 +63,7 @@
    * 3. 只对超出视口的图片生效
    */
   function calculateScrollPosition(clientX: number, clientY: number): { x: number; y: number } | null {
-    if (!layerRef) {
-      console.log('[HoverLayer] no layerRef');
-      return null;
-    }
-    
-    console.log('[HoverLayer] calc: viewport=', viewportSize, 'content=', contentSize);
+    if (!layerRef) return null;
     
     const rect = layerRef.getBoundingClientRect();
     
@@ -103,11 +98,7 @@
       return null;
     }
     
-    // 限制到 -0.5 到 0.5（NeeView 的 Clamp）
-    rateX = Math.max(-0.5, Math.min(0.5, rateX));
-    rateY = Math.max(-0.5, Math.min(0.5, rateY));
-    
-    // 计算超出部分
+    // 计算超出部分（图片尺寸 - 视口尺寸）
     const overflowX = Math.max(contentSize.width - viewportSize.width, 0);
     const overflowY = Math.max(contentSize.height - viewportSize.height, 0);
     
@@ -116,9 +107,18 @@
       return null;
     }
     
-    // 计算目标位置
-    const x = overflowX * rateX;
-    const y = overflowY * rateY;
+    // 限制到 -0.5 到 0.5（NeeView 原版，不会超出图片边缘）
+    // 这样最大平移是 overflow/2，正好到图片边缘
+    rateX = Math.max(-0.5, Math.min(0.5, rateX));
+    rateY = Math.max(-0.5, Math.min(0.5, rateY));
+    
+    // 计算目标位置（严格限制在边界内）
+    // 最大平移 = overflow / 2（因为图片居中，两边各有一半）
+    const maxPanX = overflowX / 2;
+    const maxPanY = overflowY / 2;
+    
+    const x = Math.max(-maxPanX, Math.min(maxPanX, overflowX * rateX));
+    const y = Math.max(-maxPanY, Math.min(maxPanY, overflowY * rateY));
     
     return { x, y };
   }
@@ -126,13 +126,11 @@
   // 动画循环
   function startLoop() {
     if (animationFrameId) return;
-    console.log('[HoverLayer] startLoop, enabled:', enabled);
     
     function loop() {
       if (isHovering && enabled) {
         const pos = calculateScrollPosition(lastMousePos.x, lastMousePos.y);
         if (pos) {
-          console.log('[HoverLayer] scroll to:', pos);
           onScroll?.(pos, duration);
         }
       }
@@ -158,7 +156,6 @@
         e.clientY >= rect.top && e.clientY <= rect.bottom) {
       lastMousePos = { x: e.clientX, y: e.clientY };
       if (!isHovering) {
-        console.log('[HoverLayer] mouse entered, rect:', rect);
         isHovering = true;
       }
     } else {

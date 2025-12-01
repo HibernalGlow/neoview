@@ -13,7 +13,6 @@
     HoverLayer,
   } from './layers';
   import PanoramaFrameLayer from './layers/PanoramaFrameLayer.svelte';
-  import { getBaseTransform } from './utils/transform';
   import { 
     isLandscape, 
     getInitialSplitHalf, 
@@ -33,7 +32,7 @@
   import { getPanoramaStore } from './stores/panoramaStore.svelte';
   
   // 导入外部 stores
-  import { zoomLevel, rotationAngle, resetZoom as storeResetZoom, viewMode as legacyViewMode, orientation as legacyOrientation } from '$lib/stores';
+  import { viewMode as legacyViewMode, orientation as legacyOrientation, zoomLevel, rotationAngle, setZoomLevel } from '$lib/stores';
   import { bookContextManager, type BookContext } from '$lib/stores/bookContext.svelte';
   import { bookStore } from '$lib/stores/book.svelte';
   import { settingsManager } from '$lib/settings/settingsManager';
@@ -62,14 +61,90 @@
   const panoramaStore = getPanoramaStore();
   const zoomModeManager = createZoomModeManager();
   
-  let localPan = $state({ x: 0, y: 0 });
+  let panPosition = $state({ x: 0, y: 0 });
   let splitState = $state<SplitState | null>(null);
   let containerRef: HTMLDivElement | null = $state(null);
   let viewportSize = $state<ViewportSize>({ width: 0, height: 0 });
   
-  // 从 stores 获取状态
-  let scale = $derived($zoomLevel);
-  let rotation = $derived($rotationAngle);
+  // ============================================================================
+  // 真实缩放逻辑（完全独立管理）
+  // ============================================================================
+  
+  // 当前缩放模式
+  let currentZoomMode = $state<ZoomMode>(settingsManager.getSettings().view.defaultZoomMode ?? 'fit');
+  
+  // 用户手动缩放倍数（基于 zoomMode 的额外缩放，1.0 = 无额外缩放）
+  let manualScale = $state(1.0);
+  
+  // 旋转角度
+  let rotation = $state(0);
+  
+  // 根据 zoomMode 计算的基础缩放
+  let modeScale = $derived.by(() => {
+    const dims = imageStore.state.dimensions;
+    if (!dims?.width || !dims?.height || !viewportSize.width || !viewportSize.height) {
+      return 1;
+    }
+    
+    const iw = dims.width;
+    const ih = dims.height;
+    const vw = viewportSize.width;
+    const vh = viewportSize.height;
+    
+    const ratioW = vw / iw;
+    const ratioH = vh / ih;
+    
+    switch (currentZoomMode) {
+      case 'original':
+        return 1; // 原始大小
+      case 'fit':
+        return Math.min(ratioW, ratioH); // 适应窗口
+      case 'fill':
+        return Math.max(ratioW, ratioH); // 填充窗口
+      case 'fitWidth':
+        return ratioW; // 适应宽度
+      case 'fitHeight':
+        return ratioH; // 适应高度
+      default:
+        return Math.min(ratioW, ratioH);
+    }
+  });
+  
+  // 最终缩放 = modeScale * manualScale
+  let effectiveScale = $derived(modeScale * manualScale);
+  
+  // 缩放后的实际显示尺寸
+  let displaySize = $derived.by(() => {
+    const dims = imageStore.state.dimensions;
+    if (!dims?.width || !dims?.height) {
+      return { width: 0, height: 0 };
+    }
+    return {
+      width: dims.width * effectiveScale,
+      height: dims.height * effectiveScale,
+    };
+  });
+  
+  // 同步缩放到老 viewer 的 store（用于顶栏显示）
+  $effect(() => {
+    // effectiveScale 变化时，更新 zoomLevel store
+    // 这里用 manualScale 作为 zoomLevel，因为顶栏控制的是手动缩放
+    setZoomLevel(manualScale);
+  });
+  
+  // 监听老 viewer store 的缩放变化（顶栏按钮触发）
+  $effect(() => {
+    const storeZoom = $zoomLevel;
+    // 只有当 store 值与 manualScale 不同时才更新，避免循环
+    if (Math.abs(storeZoom - manualScale) > 0.001) {
+      manualScale = storeZoom;
+    }
+  });
+  
+  // 监听老 viewer store 的旋转变化
+  $effect(() => {
+    rotation = $rotationAngle;
+  });
   
   // 当前书本上下文
   let bookContext = $state<BookContext | null>(null);
@@ -195,23 +270,18 @@
   });
   
   // ============================================================================
-  // 变换
-  // ============================================================================
-  
-  let baseTransform = $derived(getBaseTransform(scale, rotation, localPan.x, localPan.y));
-  
-  // ============================================================================
   // 方法
   // ============================================================================
   
   function resetView() {
-    storeResetZoom();
-    localPan = { x: 0, y: 0 };
+    manualScale = 1.0;
+    rotation = 0;
+    panPosition = { x: 0, y: 0 };
     splitState = null;
   }
   
   function handlePrevPage() {
-    localPan = { x: 0, y: 0 };
+    panPosition = { x: 0, y: 0 };
     
     if (isInSplitMode && splitState) {
       const prevHalf = getPrevSplitHalf(splitState.half, direction);
@@ -244,7 +314,7 @@
   }
   
   function handleNextPage() {
-    localPan = { x: 0, y: 0 };
+    panPosition = { x: 0, y: 0 };
     
     if (isInSplitMode) {
       if (!splitState) {
@@ -280,29 +350,23 @@
     }
   }
   
-  // 悬停滚动处理（NeeView 风格）
-  function handleHoverScroll(pos: { x: number; y: number }, _duration: number) {
-    // pos 是目标位置，直接设置 localPan
-    console.log('[StackView] handleHoverScroll:', pos);
-    localPan = { x: pos.x, y: pos.y };
-  }
-  
   // 悬停滚动状态
   let hoverScrollEnabled = $derived(settings.image?.hoverScrollEnabled ?? false);
   
-  $effect(() => {
-    console.log('[StackView] hoverScrollEnabled:', hoverScrollEnabled, 'scaledContentSize:', scaledContentSize, 'viewportSize:', viewportSize);
-  });
+  // 悬停滚动处理（来自 HoverLayer）
+  // displaySize 已经是缩放后的尺寸，直接传给 HoverLayer
+  function handleHoverScroll(pos: { x: number; y: number }, _duration: number) {
+    panPosition = pos;
+  }
   
-  // 缩放后的内容尺寸（用于悬停滚动计算）
-  let scaledContentSize = $derived.by(() => {
-    const dims = imageStore.state.dimensions;
-    if (!dims) return { width: 0, height: 0 };
-    return {
-      width: dims.width * scale,
-      height: dims.height * scale,
-    };
-  });
+  // 缩放控制
+  function zoomIn() {
+    manualScale = Math.min(manualScale * 1.25, 10);
+  }
+  
+  function zoomOut() {
+    manualScale = Math.max(manualScale / 1.25, 0.1);
+  }
   
   // ============================================================================
   // Effects
@@ -322,7 +386,7 @@
         imageStore.reset();
         panoramaStore.reset();
         zoomModeManager.reset();
-        localPan = { x: 0, y: 0 };
+        panPosition = { x: 0, y: 0 };
         splitState = null;
       }
       
@@ -425,7 +489,7 @@
       orientation={orientation}
       direction={direction}
       currentPageIndex={bookStore.currentPageIndex}
-      scale={scale}
+      scale={manualScale}
     />
   {:else}
     <!-- 普通模式：显示当前帧 -->
@@ -434,7 +498,9 @@
       layout={pageMode}
       direction={direction}
       orientation={orientation}
-      transform={baseTransform}
+      scale={manualScale}
+      {rotation}
+      {panPosition}
     />
     
     {#if upscaledFrameData.images.length > 0}
@@ -442,7 +508,9 @@
         frame={upscaledFrameData} 
         layout="single"
         direction={direction}
-        transform={baseTransform}
+        scale={manualScale}
+        {rotation}
+        {panPosition}
       />
     {/if}
   {/if}
@@ -468,14 +536,13 @@
     onResetZoom={resetView}
   />
   
-  <!-- 悬停滚动层（NeeView 风格） -->
+  <!-- 悬停平移层 -->
   <HoverLayer
-    enabled={hoverScrollEnabled}
-    duration={0.5}
+    enabled={hoverScrollEnabled && !isPanorama}
     sidebarMargin={50}
     deadZoneRatio={0.2}
     {viewportSize}
-    contentSize={scaledContentSize}
+    contentSize={displaySize}
     onScroll={handleHoverScroll}
   />
 </div>

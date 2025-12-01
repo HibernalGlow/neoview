@@ -19,16 +19,39 @@
     layout = 'single',
     direction = 'ltr',
     orientation = 'horizontal',
-    transform = 'none',
+    scale = 1,
+    rotation = 0,
+    // 当前平移位置（由外部 HoverLayer 控制）
+    panPosition = { x: 0, y: 0 },
     onImageLoad,
   }: {
     frame: Frame;
     layout?: 'single' | 'double' | 'panorama';
     direction?: 'ltr' | 'rtl';
     orientation?: 'horizontal' | 'vertical';
-    transform?: string;
+    scale?: number;
+    rotation?: number;
+    panPosition?: { x: number; y: number };
     onImageLoad?: (e: Event, index: number) => void;
   } = $props();
+  
+  // 计算 transform 字符串
+  // 顺序：translate -> scale -> rotate
+  // CSS transform 从右到左应用，所以写成 scale rotate translate 实际上是先 translate
+  let transformStyle = $derived.by(() => {
+    const parts: string[] = [];
+    // translate 要在 scale 之前应用（所以放最后）
+    // 这样 pan 值不会被 scale 放大
+    if (scale !== 1) parts.push(`scale(${scale})`);
+    if (rotation !== 0) parts.push(`rotate(${rotation}deg)`);
+    if (panPosition.x !== 0 || panPosition.y !== 0) {
+      // 除以 scale 来抵消 scale 的放大效果
+      const adjustedX = panPosition.x / scale;
+      const adjustedY = panPosition.y / scale;
+      parts.push(`translate(${adjustedX}px, ${adjustedY}px)`);
+    }
+    return parts.length > 0 ? parts.join(' ') : 'none';
+  });
   
   let layoutClass = $derived.by(() => {
     const classes: string[] = [];
@@ -62,7 +85,7 @@
     data-layer="CurrentFrameLayer"
     data-layer-id="current"
     style:z-index={LayerZIndex.CURRENT_FRAME}
-    style:transform={transform}
+    style:transform={transformStyle}
   >
     {#each frame.images as img, i (i)}
       <img
@@ -95,6 +118,7 @@
     align-items: center;
     justify-content: center;
     transition: opacity 0.15s ease;
+    overflow: hidden;
   }
   
   .frame-single {

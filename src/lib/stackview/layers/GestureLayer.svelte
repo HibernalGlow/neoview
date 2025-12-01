@@ -113,6 +113,36 @@
   // 滚轮处理
   // ============================================================================
   
+  /**
+   * 检查元素是否在交互区域内（工具栏、下拉框、弹出框等）
+   * 这些区域的键盘/滚轮事件不应被手势层拦截
+   */
+  function isInInteractiveZone(element: HTMLElement | null): boolean {
+    if (!element) return false;
+    
+    // 检查元素或其祖先是否匹配交互区域选择器
+    const interactiveSelectors = [
+      '[data-top-toolbar]',           // 顶部工具栏
+      '[data-slot="dropdown-menu-content"]', // 下拉菜单内容
+      '[data-slot="dropdown-menu-trigger"]', // 下拉菜单触发器
+      '[data-radix-popper-content-wrapper]', // Radix弹出框
+      '[role="menu"]',                // 菜单
+      '[role="dialog"]',              // 对话框
+      '[role="listbox"]',             // 列表框
+      '.sidebar',                     // 侧边栏
+      '[data-sidebar]',               // 侧边栏
+      '[data-panel]',                 // 面板
+    ];
+    
+    for (const selector of interactiveSelectors) {
+      if (element.closest(selector)) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+  
   function executeAction(action: string, source: string) {
     const settings = settingsManager.getSettings();
     const readingDirection = settings.book.readingDirection;
@@ -165,7 +195,14 @@
     if (!enableWheel) return;
     
     const target = e.target as HTMLElement;
+    
+    // 排除输入框
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+      return;
+    }
+    
+    // 排除交互区域（工具栏、下拉框等），让它们可以正常滚动
+    if (isInInteractiveZone(target)) {
       return;
     }
     
@@ -187,7 +224,14 @@
     if (!enableKeyboard) return;
     
     const target = e.target as HTMLElement;
+    
+    // 排除输入框
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+      return;
+    }
+    
+    // 排除交互区域（工具栏、下拉框等）
+    if (isInInteractiveZone(target)) {
       return;
     }
     

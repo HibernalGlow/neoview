@@ -4,7 +4,6 @@
   原理：计算鼠标距离中心的相对偏移，输出增量式的位置变化
   - 鼠标在死区内：不更新位置
   - 鼠标离开死区：根据距离中心的偏移计算速度，持续更新位置
-  - 翻页后：位置重置为 50%，等待 0.2 秒后重新激活滚动
 -->
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
@@ -48,10 +47,6 @@
   // 当前位置（0-100）- 使用 $state 确保响应式
   let currentX = $state(50);
   let currentY = $state(50);
-  
-  // 是否已激活（翻页后等待 0.2s 后激活）
-  let isActivated = $state(true);
-  let activationTimer: ReturnType<typeof setTimeout> | null = null;
   
   /**
    * 计算位置边界
@@ -112,11 +107,6 @@
       return null; // 死区内不滚动
     }
     
-    // 如果还没激活（翻页后等待中），不滚动
-    if (!isActivated) {
-      return null;
-    }
-    
     // 计算速度（-1 到 1）
     // 有效区域是从死区边缘到视口边缘
     const effectiveWidth = (rect.width / 2) - deadZoneSizeX;
@@ -172,18 +162,6 @@
   export function reset() {
     currentX = 50;
     currentY = 50;
-    
-    // 清除之前的激活定时器
-    if (activationTimer) {
-      clearTimeout(activationTimer);
-    }
-    
-    // 暂时禁用，0.2 秒后重新激活
-    isActivated = false;
-    activationTimer = setTimeout(() => {
-      isActivated = true;
-      activationTimer = null;
-    }, 200);
   }
   
   // 使用 window 事件监听
@@ -213,11 +191,6 @@
   onDestroy(() => {
     window.removeEventListener('mousemove', onWindowMouseMove);
     stopLoop();
-    // 清理激活定时器
-    if (activationTimer) {
-      clearTimeout(activationTimer);
-      activationTimer = null;
-    }
   });
   
   $effect(() => {

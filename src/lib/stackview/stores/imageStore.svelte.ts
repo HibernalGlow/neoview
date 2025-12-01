@@ -19,6 +19,8 @@ export interface ImageState {
   upscaledUrl: string | null;
   /** 当前图片尺寸 */
   dimensions: { width: number; height: number } | null;
+  /** 第二张图片尺寸（双页模式） */
+  secondDimensions: { width: number; height: number } | null;
   /** 是否正在加载 */
   loading: boolean;
   /** 错误信息 */
@@ -35,6 +37,7 @@ export function createImageStore() {
     secondUrl: null,
     upscaledUrl: null,
     dimensions: null,
+    secondDimensions: null,
     loading: false,
     error: null,
   });
@@ -54,6 +57,7 @@ export function createImageStore() {
       state.currentUrl = null;
       state.secondUrl = null;
       state.dimensions = null;
+      state.secondDimensions = null;
       state.loading = false;
       return;
     }
@@ -65,6 +69,7 @@ export function createImageStore() {
       state.currentUrl = null;
       state.secondUrl = null;
       state.dimensions = null;
+      state.secondDimensions = null;
       lastLoadedIndex = -1;
       imagePool.setCurrentBook(book.path);
     }
@@ -94,11 +99,16 @@ export function createImageStore() {
       if (secondIndex < book.pages.length) {
         const secondCached = imagePool.getSync(secondIndex);
         state.secondUrl = secondCached?.url ?? null;
+        state.secondDimensions = secondCached?.width && secondCached?.height 
+          ? { width: secondCached.width, height: secondCached.height } 
+          : null;
       } else {
         state.secondUrl = null;
+        state.secondDimensions = null;
       }
     } else {
       state.secondUrl = null;
+      state.secondDimensions = null;
     }
     
     // 异步加载
@@ -119,6 +129,9 @@ export function createImageStore() {
             const secondImage = await imagePool.get(secondIndex);
             if (lastLoadedIndex === currentIndex) {
               state.secondUrl = secondImage?.url ?? null;
+              state.secondDimensions = secondImage?.width && secondImage?.height 
+                ? { width: secondImage.width, height: secondImage.height } 
+                : null;
             }
           }
         }
@@ -150,6 +163,7 @@ export function createImageStore() {
     state.secondUrl = null;
     state.upscaledUrl = null;
     state.dimensions = null;
+    state.secondDimensions = null;
     state.loading = false;
     state.error = null;
     lastLoadedIndex = -1;

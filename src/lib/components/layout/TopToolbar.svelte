@@ -71,8 +71,7 @@
 		Expand,
 		LayoutGrid,
 		SplitSquareHorizontal,
-		Rows2,
-		RotateCcw
+		Rows2
 	} from '@lucide/svelte';
 
 	import {
@@ -158,15 +157,6 @@ let currentSortModeLabel = $derived(
 		});
 	}
 	
-	// 切换自动旋转模式
-	function cycleAutoRotateMode() {
-		const modes: ('none' | 'left' | 'right' | 'forcedLeft' | 'forcedRight')[] = ['none', 'left', 'right', 'forcedLeft', 'forcedRight'];
-		const currentIndex = modes.indexOf(autoRotateMode as any);
-		const nextIndex = (currentIndex + 1) % modes.length;
-		settingsManager.updateNestedSettings('view', {
-			autoRotate: { mode: modes[nextIndex] }
-		});
-	}
 	
 	function getAutoRotateLabel(mode: string): string {
 		switch (mode) {

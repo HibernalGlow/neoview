@@ -245,7 +245,7 @@
   // ============================================================================
   
   let currentFrameData = $derived.by((): Frame => {
-    const { currentUrl, secondUrl, dimensions } = imageStore.state;
+    const { currentUrl, secondUrl, dimensions, secondDimensions } = imageStore.state;
     
     // 全景模式时不使用此组件，由 PanoramaFrameLayer 处理
     if (isPanorama) {
@@ -266,6 +266,8 @@
     const nextPage: PageData | null = secondUrl ? {
       url: secondUrl,
       pageIndex: bookStore.currentPageIndex + 1,
+      width: secondDimensions?.width,
+      height: secondDimensions?.height,
     } : null;
     
     // 使用 buildFrameImages 构建图片列表
@@ -311,7 +313,7 @@
     splitState = null;
     
     // 计算翻页步进
-    const { currentUrl, secondUrl, dimensions } = imageStore.state;
+    const { currentUrl, secondUrl, dimensions, secondDimensions } = imageStore.state;
     if (currentUrl) {
       const currentPage: PageData = {
         url: currentUrl,
@@ -322,6 +324,8 @@
       const nextPage: PageData | null = secondUrl ? {
         url: secondUrl,
         pageIndex: bookStore.currentPageIndex + 1,
+        width: secondDimensions?.width,
+        height: secondDimensions?.height,
       } : null;
       const step = getPageStep(currentPage, nextPage, frameConfig);
       bookStore.navigateToPage(Math.max(0, bookStore.currentPageIndex - step));
@@ -350,7 +354,7 @@
     splitState = null;
     
     // 计算翻页步进
-    const { currentUrl, secondUrl, dimensions } = imageStore.state;
+    const { currentUrl, secondUrl, dimensions, secondDimensions: sd } = imageStore.state;
     if (currentUrl) {
       const currentPage: PageData = {
         url: currentUrl,
@@ -361,6 +365,8 @@
       const nextPage: PageData | null = secondUrl ? {
         url: secondUrl,
         pageIndex: bookStore.currentPageIndex + 1,
+        width: sd?.width,
+        height: sd?.height,
       } : null;
       const step = getPageStep(currentPage, nextPage, frameConfig);
       bookStore.navigateToPage(Math.min(bookStore.totalPages - 1, bookStore.currentPageIndex + step));

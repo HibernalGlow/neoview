@@ -13,6 +13,7 @@
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { Button } from '$lib/components/ui/button';
 	import * as Progress from '$lib/components/ui/progress';
+	import { Slider } from '$lib/components/ui/slider';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import {
 		Image as ImageIcon,
@@ -823,13 +824,21 @@
 				</div>
 			</div>
 			{#if showBottomProgressBar && bookStore.currentBook}
-				<!-- 底部进度条（跟随缩略图栏） -->
+				<!-- 底部进度滑块（可交互） -->
 				<div
-					class={`pointer-events-none absolute bottom-0 left-0 right-0 z-[60] h-1 ${readingDirection === 'right-to-left' ? 'rtl-progress-wrapper' : ''}`}
+					class={`absolute bottom-0 left-0 right-0 z-60 h-4 px-2 flex items-center ${readingDirection === 'right-to-left' ? 'rtl-progress-wrapper' : ''}`}
 				>
-					<Progress.Root
-						value={((bookStore.currentPageIndex + 1) / bookStore.currentBook.pages.length) * 100}
-						class="h-full"
+					<Slider
+						min={0}
+						max={bookStore.currentBook.pages.length - 1}
+						step={1}
+						value={[bookStore.currentPageIndex]}
+						onValueChange={(values) => {
+							if (values && values.length > 0) {
+								bookStore.goToPage(values[0]);
+							}
+						}}
+						class="w-full cursor-pointer [&_[data-slot=slider-track]]:h-1 [&_[data-slot=slider-thumb]]:size-3"
 					/>
 				</div>
 			{/if}

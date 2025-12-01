@@ -598,13 +598,13 @@ onMount(() => {
 </script>
 
 <div class="flex h-full flex-col overflow-hidden">
-	<!-- 页签栏 -->
-	<FolderTabBar {homePath} />
-	
 	<!-- 面包屑导航 -->
 	<div class="border-b">
 		<BreadcrumbBar onNavigate={handleNavigate} />
 	</div>
+
+	<!-- 页签栏 -->
+	<FolderTabBar {homePath} />
 
 	<!-- 工具栏 -->
 	<FolderToolbar 

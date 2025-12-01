@@ -54,6 +54,7 @@ export interface ExtendedSettingsData {
     };
     searchHistory?: Record<string, unknown>;
     upscalePanelSettings?: unknown;
+    insightsCardsSettings?: unknown;
     themeStorage?: {
         customThemes?: unknown;
     };
@@ -380,6 +381,11 @@ class SettingsManager {
                 extended.upscalePanelSettings = upscaleSettings;
             }
 
+            const insightsCardsSettings = this.readJsonFromLocalStorage('neoview-insights-cards');
+            if (insightsCardsSettings) {
+                extended.insightsCardsSettings = insightsCardsSettings;
+            }
+
             if (typeof window !== 'undefined' && window.localStorage) {
                 const rawCustomThemes = window.localStorage.getItem('custom-themes');
                 if (rawCustomThemes) {
@@ -553,6 +559,15 @@ class SettingsManager {
                 }
             } catch (error) {
                 console.error('导入面板布局失败:', error);
+            }
+        }
+
+        // 洞察面板卡片设置
+        if (modules.panelsLayout && extended.insightsCardsSettings && typeof window !== 'undefined' && window.localStorage) {
+            try {
+                window.localStorage.setItem('neoview-insights-cards', JSON.stringify(extended.insightsCardsSettings));
+            } catch (error) {
+                console.error('导入洞察面板设置失败:', error);
             }
         }
 

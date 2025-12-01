@@ -152,14 +152,8 @@ async function dispatchAction(action: string) {
 
 	if (isVideoPage) {
 		switch (action) {
-			case 'nextPage':
-			case 'pageRight':
-				action = 'videoSeekForward';
-				break;
-			case 'prevPage':
-			case 'pageLeft':
-				action = 'videoSeekBackward';
-				break;
+			// 不再自动将翻页操作映射为视频快进/快退
+			// 用户应使用专用的视频控制快捷键来控制视频播放
 			case 'videoPlayPause': {
 				console.log('执行视频 播放/暂停');
 				const dispatchViewerAction = (viewerAction: string) => {

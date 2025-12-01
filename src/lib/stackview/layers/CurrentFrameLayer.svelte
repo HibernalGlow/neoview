@@ -134,7 +134,7 @@
   /* 双页 - 始终水平排列（左右两页） */
   .frame-double {
     flex-direction: row;
-    gap: 4px;
+    gap: 0;
   }
   
   .frame-double.frame-rtl {

@@ -523,7 +523,11 @@
 </script>
 
 <div class="stack-view" bind:this={containerRef}>
-  <BackgroundLayer color={backgroundColor} />
+  <BackgroundLayer 
+    color={settings.view.backgroundColor || backgroundColor}
+    mode={settings.view.backgroundMode ?? 'solid'}
+    imageSrc={imageStore.state.currentUrl ?? ''}
+  />
   
   {#if isPanorama}
     <!-- 全景模式：显示滚动视图 -->

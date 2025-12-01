@@ -13,7 +13,7 @@
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { Button } from '$lib/components/ui/button';
 	import * as Progress from '$lib/components/ui/progress';
-	import { Slider } from '$lib/components/ui/slider';
+	import HorizontalListSlider from '$lib/components/panels/file/components/HorizontalListSlider.svelte';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import {
 		Image as ImageIcon,
@@ -826,19 +826,13 @@
 			{#if showBottomProgressBar && bookStore.currentBook}
 				<!-- 底部进度滑块（可交互） -->
 				<div
-					class={`absolute bottom-0 left-0 right-0 z-60 h-4 px-2 flex items-center ${readingDirection === 'right-to-left' ? 'rtl-progress-wrapper' : ''}`}
+					class={`absolute bottom-0 left-0 right-0 z-60 bg-background/80 backdrop-blur-sm ${readingDirection === 'right-to-left' ? 'rtl-progress-wrapper' : ''}`}
 				>
-					<Slider
-						min={0}
-						max={bookStore.currentBook.pages.length - 1}
-						step={1}
-						value={[bookStore.currentPageIndex]}
-						onValueChange={(values) => {
-							if (values && values.length > 0) {
-								bookStore.goToPage(values[0]);
-							}
-						}}
-						class="w-full cursor-pointer [&_[data-slot=slider-track]]:h-1 [&_[data-slot=slider-thumb]]:size-3"
+					<HorizontalListSlider
+						totalItems={bookStore.currentBook.pages.length}
+						currentIndex={bookStore.currentPageIndex}
+						progress={bookStore.currentBook.pages.length > 1 ? bookStore.currentPageIndex / (bookStore.currentBook.pages.length - 1) : 0}
+						onJumpToIndex={(index) => bookStore.goToPage(index)}
 					/>
 				</div>
 			{/if}

@@ -20,6 +20,15 @@ export interface FolderHistoryEntry {
 	sortOrder: FolderSortOrder;
 }
 
+// 层叠栈中的单个层
+export interface FolderStackLayer {
+	id: string;
+	path: string;
+	items: FsItem[];
+	selectedIndex: number;
+	scrollTop: number;
+}
+
 export interface FolderTabState {
 	id: string;
 	// 显示名称
@@ -83,6 +92,9 @@ export interface FolderTabState {
 	historyIndex: number;
 	// Home 路径
 	homePath: string;
+	// 层叠栈状态
+	stackLayers: FolderStackLayer[];
+	stackActiveIndex: number;
 }
 
 // ============ Initial State ============
@@ -136,7 +148,9 @@ function createDefaultTabState(id: string, homePath: string = ''): FolderTabStat
 		folderTreeSize: 200,
 		historyStack: [],
 		historyIndex: -1,
-		homePath
+		homePath,
+		stackLayers: [],
+		stackActiveIndex: 0
 	};
 }
 
@@ -263,6 +277,10 @@ export const tabCanGoUp = derived(activeTab, ($tab) => {
 	return normalized.split('/').filter(Boolean).length > 1;
 });
 export const tabItemCount = derived(activeTab, ($tab) => $tab?.items?.length || 0);
+
+// 层叠栈状态
+export const tabStackLayers = derived(activeTab, ($tab) => $tab?.stackLayers || []);
+export const tabStackActiveIndex = derived(activeTab, ($tab) => $tab?.stackActiveIndex || 0);
 
 // ============ Actions ============
 
@@ -505,6 +523,24 @@ export const folderTabActions = {
 	 */
 	setHomePath(path: string) {
 		updateActiveTab((tab) => ({ ...tab, homePath: path }));
+	},
+
+	/**
+	 * 更新滚动位置（用于历史记录恢复）
+	 */
+	updateScrollPosition(scrollTop: number) {
+		// 更新当前历史条目的滚动位置
+		updateActiveTab((tab) => {
+			if (tab.historyIndex >= 0 && tab.historyIndex < tab.historyStack.length) {
+				const newStack = [...tab.historyStack];
+				newStack[tab.historyIndex] = {
+					...newStack[tab.historyIndex],
+					scrollTop
+				};
+				return { ...tab, historyStack: newStack };
+			}
+			return tab;
+		});
 	},
 
 	// ============ View & Sort ============
@@ -783,6 +819,38 @@ export const folderTabActions = {
 			previous: tab.historyStack.slice(0, tab.historyIndex).reverse(),
 			next: tab.historyStack.slice(tab.historyIndex + 1)
 		};
+	},
+
+	// ============ Stack Layers ============
+
+	/**
+	 * 设置层叠栈
+	 */
+	setStackLayers(layers: FolderStackLayer[], activeIndex: number) {
+		updateActiveTab((tab) => ({
+			...tab,
+			stackLayers: layers,
+			stackActiveIndex: activeIndex
+		}));
+	},
+
+	/**
+	 * 获取层叠栈
+	 */
+	getStackLayers(): { layers: FolderStackLayer[]; activeIndex: number } {
+		const tab = this.getActiveTab();
+		if (!tab) return { layers: [], activeIndex: 0 };
+		return { layers: tab.stackLayers, activeIndex: tab.stackActiveIndex };
+	},
+
+	/**
+	 * 更新层叠栈活动索引
+	 */
+	setStackActiveIndex(index: number) {
+		updateActiveTab((tab) => ({
+			...tab,
+			stackActiveIndex: index
+		}));
 	}
 };
 

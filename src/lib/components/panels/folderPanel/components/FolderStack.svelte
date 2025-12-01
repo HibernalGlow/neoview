@@ -21,7 +21,6 @@ import {
 	tabSortConfig,
 	tabSearchKeyword,
 	tabPenetrateMode,
-	activeTabId,
 	tabCurrentPath
 } from '../stores/folderTabStore.svelte';
 
@@ -38,7 +37,7 @@ import { directoryTreeCache } from '../utils/directoryTreeCache';
 import { folderRatingStore } from '$lib/stores/emm/folderRating';
 import { getDefaultRating } from '$lib/stores/emm/storage';
 
-interface NavigationCommand {
+export interface NavigationCommand {
 	type: 'init' | 'push' | 'pop' | 'goto' | 'history';
 	path?: string;
 	index?: number;
@@ -444,8 +443,24 @@ $effect(() => {
 			if (cmd.index !== undefined) goToLayer(cmd.index);
 			break;
 		case 'history':
-			// 历史导航：只更新视图，不添加新历史记录
-			if (cmd.path) initRootWithoutHistory(cmd.path);
+			// 历史导航：优先在现有层中查找，找到则切换，否则重建
+			if (cmd.path) {
+				// 检查是否能在现有层中找到目标路径
+				const targetIndex = layers.findIndex(l => l.path === cmd.path);
+				if (targetIndex !== -1 && targetIndex !== activeIndex) {
+					// 找到了，直接切换到该层
+					isAnimating = true;
+					activeIndex = targetIndex;
+					const layer = layers[targetIndex];
+					folderTabActions.setPath(layer.path, false);
+					folderTabActions.setItems(layer.items);
+					setTimeout(() => { isAnimating = false; }, 300);
+				} else if (targetIndex === -1) {
+					// 没找到，需要重建
+					initRootWithoutHistory(cmd.path);
+				}
+				// 如果 targetIndex === activeIndex，说明已经在目标层，不做任何操作
+			}
 			break;
 	}
 	
@@ -453,24 +468,14 @@ $effect(() => {
 	navigationCommand.set(null);
 });
 
-// 记录上一个活动页签 ID
-let lastActiveTabId = $state<string | null>(null);
-
-// 监听页签切换
+// 每个页签有独立的 FolderStack 实例（通过 {#key} 实现）
+// 初始化时从 tabCurrentPath 加载
 $effect(() => {
-	const currentTabId = $activeTabId;
 	const currentPath = $tabCurrentPath;
-	
-	// 如果是首次渲染或页签切换
-	if (lastActiveTabId !== null && lastActiveTabId !== currentTabId) {
-		console.log('[FolderStack] Tab switched from', lastActiveTabId, 'to', currentTabId, 'path:', currentPath);
-		// 页签切换时，重新初始化到新页签的路径
-		if (currentPath) {
-			initRootWithoutHistory(currentPath);
-		}
+	if (currentPath && layers.length === 0) {
+		// 首次加载时初始化
+		initRootWithoutHistory(currentPath);
 	}
-	
-	lastActiveTabId = currentTabId;
 });
 
 // 尝试穿透文件夹（只有一个子文件时才穿透）

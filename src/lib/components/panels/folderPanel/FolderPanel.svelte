@@ -48,6 +48,7 @@ import {
 	tabIsSearching,
 	tabSearchSettings,
 	tabItems,
+	activeTabId,
 	type FolderTabState
 } from './stores/folderTabStore.svelte';
 
@@ -65,6 +66,17 @@ const inlineTreeMode = tabInlineTreeMode;
 const searchResults = tabSearchResults;
 const isSearching = tabIsSearching;
 const searchSettings = tabSearchSettings;
+
+// 当前活动页签 ID（用于 key）
+import { get } from 'svelte/store';
+let currentActiveTabId = $state(get(activeTabId));
+
+$effect(() => {
+	const unsubscribe = activeTabId.subscribe((v) => {
+		currentActiveTabId = v;
+	});
+	return unsubscribe;
+});
 
 // sortedItems 需要从 tabItems 派生
 import { derived } from 'svelte/store';
@@ -129,7 +141,7 @@ const sortedItems = derived(activeTab, ($tab) => {
 });
 
 // 导航命令 store（用于父子组件通信）
-const navigationCommand = writable<{ type: 'init' | 'push' | 'pop' | 'goto'; path?: string; index?: number } | null>(null);
+const navigationCommand = writable<{ type: 'init' | 'push' | 'pop' | 'goto' | 'history'; path?: string; index?: number } | null>(null);
 
 // 右键菜单状态
 let contextMenu = $state<{ x: number; y: number; item: FsItem | null; visible: boolean }>({
@@ -666,29 +678,32 @@ onMount(() => {
 					? 'top: 6px;'
 					: 'left: 6px;'}
 		>
-			{#if $searchKeyword || $isSearching || $searchResults.length > 0}
-				<!-- 搜索结果模式 -->
-				<SearchResultList
-					onItemClick={handleItemOpen}
-					onItemDoubleClick={handleItemOpen}
-					onItemContextMenu={handleContextMenu}
-				/>
-			{:else if $inlineTreeMode}
-				<!-- 主视图树模式 -->
-				<InlineTreeList
-					onItemClick={handleItemOpen}
-					onItemDoubleClick={handleItemOpen}
-					onItemContextMenu={handleContextMenu}
-				/>
-			{:else}
-				<!-- 层叠式文件列表 -->
-				<FolderStack
-					{navigationCommand}
-					onItemOpen={handleItemOpen}
-					onItemContextMenu={handleContextMenu}
-					onOpenFolderAsBook={handleOpenFolderAsBook}
-				/>
-			{/if}
+			<!-- 使用 key 为每个页签创建独立实例 -->
+			{#key currentActiveTabId}
+				{#if $searchKeyword || $isSearching || $searchResults.length > 0}
+					<!-- 搜索结果模式 -->
+					<SearchResultList
+						onItemClick={handleItemOpen}
+						onItemDoubleClick={handleItemOpen}
+						onItemContextMenu={handleContextMenu}
+					/>
+				{:else if $inlineTreeMode}
+					<!-- 主视图树模式 -->
+					<InlineTreeList
+						onItemClick={handleItemOpen}
+						onItemDoubleClick={handleItemOpen}
+						onItemContextMenu={handleContextMenu}
+					/>
+				{:else}
+					<!-- 层叠式文件列表 -->
+					<FolderStack
+						{navigationCommand}
+						onItemOpen={handleItemOpen}
+						onItemContextMenu={handleContextMenu}
+						onOpenFolderAsBook={handleOpenFolderAsBook}
+					/>
+				{/if}
+			{/key}
 		</div>
 	</div>
 </div>

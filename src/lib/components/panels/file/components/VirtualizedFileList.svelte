@@ -16,8 +16,6 @@
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 	import { isVideoFile } from '$lib/utils/videoUtils';
 
-	// 记录每个路径的滚动位置，用于返回上级或再次进入时恢复列表位置
-	const scrollPositions = new Map<string, number>();
 
 	function toRelativeKey(path: string): string {
 		return path.replace(/\\/g, '/');
@@ -241,14 +239,6 @@
 		thumbnailManager.updateScroll(newScrollTop, newScrollLeft, startIndex, items.length);
 
 		scrollTop = newScrollTop;
-		// 按路径记录当前滚动位置，用于下次返回时精确恢复
-		if (currentPath) {
-			scrollPositions.set(currentPath, newScrollTop);
-			// console.debug('[VirtualizedFileList] save scroll', {
-			// 	path: currentPath,
-			// 	scrollTop: newScrollTop
-			// });
-		}
 
 		// 节流处理
 		if (scrollTimer) {
@@ -413,38 +403,16 @@
 		calculateVisibleRange();
 	});
 
-	// 监听路径变化，按路径恢复滚动位置
+	// 监听路径变化，预热目录缩略图
 	$effect(() => {
-		if (!container) return;
-
-		// 没有有效路径时重置状态
-		if (!currentPath) {
-			lastPath = '';
-			return;
+		if (!currentPath || currentPath === lastPath) return;
+		
+		// 预热目录缩略图（异步，不阻塞 UI）
+		if (items.length > 0) {
+			thumbnailManager.warmupDirectory(items, currentPath);
 		}
-
-		if (currentPath !== lastPath) {
-			const savedTop = scrollPositions.get(currentPath) ?? 0;
-			console.debug('[VirtualizedFileList] restore scroll', {
-				path: currentPath,
-				savedTop
-			});
-
-			// 等 DOM 和高度更新后再恢复滚动位置，保证虚拟列表计算正确
-			requestAnimationFrame(() => {
-				if (!container) return;
-				container.scrollTo({ top: savedTop, behavior: 'auto' });
-				scrollTop = savedTop;
-				calculateVisibleRange();
-			});
-
-			// 【新增】预热目录缩略图（异步，不阻塞 UI）
-			if (items.length > 0) {
-				thumbnailManager.warmupDirectory(items, currentPath);
-			}
-
-			lastPath = currentPath;
-		}
+		
+		lastPath = currentPath;
 	});
 
 	let lastScrollToken = -1;

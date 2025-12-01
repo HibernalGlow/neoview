@@ -87,9 +87,21 @@ async function handleItemOpen(item: FsItem) {
 			console.log('[FolderPanel] Opening archive as book:', item.path);
 			await bookStore.openBook(item.path);
 		} else if (isVideoPath(item.path)) {
-			// 视频：作为书籍打开
+			// 视频：打开所在目录作为书籍，并跳转到该视频（与图片相同的逻辑）
 			console.log('[FolderPanel] Opening video:', item.path);
-			await bookStore.openBook(item.path);
+			// 获取父目录路径
+			const lastSep = Math.max(item.path.lastIndexOf('/'), item.path.lastIndexOf('\\'));
+			const parentPath = lastSep > 0 ? item.path.substring(0, lastSep) : item.path;
+			await bookStore.openDirectoryAsBook(parentPath);
+			// 跳转到指定视频
+			await bookStore.navigateToImage(item.path);
+			// 添加到历史记录
+			try {
+				const { historyStore } = await import('$lib/stores/history.svelte');
+				historyStore.add(item.path, item.name, 0, 1);
+			} catch (historyError) {
+				console.debug('Failed to add video history entry:', historyError);
+			}
 		} else if (item.isImage || isImagePath(item.path)) {
 			// 图片：打开所在目录作为书籍，并跳转到该图片
 			console.log('[FolderPanel] Opening image:', item.path);

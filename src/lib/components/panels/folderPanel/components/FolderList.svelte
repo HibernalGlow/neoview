@@ -20,6 +20,8 @@ import {
 } from '../stores/folderPanelStore.svelte';
 import { Loader2, FolderOpen, AlertCircle } from '@lucide/svelte';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
+import { bookStore } from '$lib/stores/book.svelte';
+import { isVideoFile } from '$lib/utils/videoUtils';
 
 interface Props {
 	onItemOpen?: (item: FsItem) => void;
@@ -75,6 +77,40 @@ function handleItemSelect(payload: { item: FsItem; index: number; multiSelect: b
 		if (payload.item.isDir) {
 			onItemOpen?.(payload.item);
 		}
+		// 视频文件单击：打开所在文件夹作为book，然后定位到该视频
+		else if (isVideoFile(payload.item.name)) {
+			handleVideoClick(payload.item);
+		}
+	}
+}
+
+// 处理视频文件单击：打开父文件夹作为book并定位到视频页面
+async function handleVideoClick(item: FsItem) {
+	try {
+		// 获取父文件夹路径
+		const lastSlash = Math.max(item.path.lastIndexOf('/'), item.path.lastIndexOf('\\'));
+		const parentPath = lastSlash > 0 ? item.path.substring(0, lastSlash) : '';
+		if (!parentPath) return;
+		
+		console.log('🎬 Opening video:', item.path);
+		console.log('📁 Parent directory:', parentPath);
+		
+		// 打开父文件夹作为book
+		await bookStore.openDirectoryAsBook(parentPath);
+		// 跳转到指定视频
+		await bookStore.navigateToImage(item.path);
+		
+		// 添加到历史记录
+		try {
+			const { historyStore } = await import('$lib/stores/history.svelte');
+			historyStore.add(item.path, item.name, 0, 1);
+		} catch (historyError) {
+			console.error('Failed to add video history entry:', historyError);
+		}
+		
+		console.log('✅ Video opened');
+	} catch (err) {
+		console.error('❌ Error opening video:', err);
 	}
 }
 

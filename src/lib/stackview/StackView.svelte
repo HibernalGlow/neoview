@@ -75,8 +75,12 @@
   let infoPanelImageSize = $state({ width: 0, height: 0 });
   $effect(() => {
     const unsubscribe = infoPanelStore.subscribe((state) => {
-      if (state.imageInfo?.width && state.imageInfo?.height) {
-        infoPanelImageSize = { width: state.imageInfo.width, height: state.imageInfo.height };
+      const w = state.imageInfo?.width ?? 0;
+      const h = state.imageInfo?.height ?? 0;
+      // 始终更新，即使是 0（切换书时重置）
+      if (infoPanelImageSize.width !== w || infoPanelImageSize.height !== h) {
+        infoPanelImageSize = { width: w, height: h };
+        console.log('[StackView] infoPanelImageSize updated:', infoPanelImageSize);
       }
     });
     return unsubscribe;

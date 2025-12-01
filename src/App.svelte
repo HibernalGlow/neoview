@@ -268,6 +268,18 @@ async function dispatchAction(action: string) {
 				dispatchViewerAction('videoSpeedDown');
 				break;
 			}
+			case 'videoSpeedToggle': {
+				console.log('执行视频 倍速切换');
+				const dispatchViewerAction = (viewerAction: string) => {
+					if (typeof window !== 'undefined') {
+						window.dispatchEvent(
+							new CustomEvent('neoview-viewer-action', { detail: { action: viewerAction } })
+						);
+					}
+				};
+				dispatchViewerAction('videoSpeedToggle');
+				break;
+			}
 		}
 	}
 

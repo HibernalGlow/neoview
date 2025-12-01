@@ -306,6 +306,13 @@ const defaultBindings: ActionBinding[] = [
 		description: '降低当前视频的播放速度',
 		bindings: []
 	},
+	{
+		action: 'videoSpeedToggle',
+		name: '视频倍速切换',
+		category: '视频',
+		description: '在当前倍速和1倍速之间切换',
+		bindings: []
+	},
 
 	// === 超分操作 ===
 	{

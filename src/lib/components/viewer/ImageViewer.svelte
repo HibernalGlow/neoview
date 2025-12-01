@@ -68,6 +68,7 @@ import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoo
 	let lastAppliedZoomContext: { mode: ZoomMode; dimsKey: string; viewportKey: string } | null = null;
 	let dimensionMeasureId = 0;
 let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) | null = null;
+let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | null = null;
 
 	function calculateZoomScale(mode: ZoomMode, dims: ImageDimensions, viewport: { width: number; height: number }) {
 		const iw = Math.max(dims.width || 0, 1);
@@ -250,6 +251,9 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 		loopMode: 'list'
 	});
 
+	// 用于倍速切换的上一个倍速值
+	let previousPlaybackRate = $state(1);
+
 	function adjustVideoVolume(direction: 1 | -1) {
 		if (!isCurrentPageVideo) return;
 		const step = 0.1;
@@ -272,6 +276,26 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 			...videoPlayerSettings,
 			playbackRate: next
 		};
+	}
+
+	function toggleVideoSpeed() {
+		if (!isCurrentPageVideo) return;
+		const current = videoPlayerSettings.playbackRate;
+		if (current === 1) {
+			// 当前是1倍速，切换到上一个倍速（如果上一个也是1，则不变）
+			const target = previousPlaybackRate !== 1 ? previousPlaybackRate : 1;
+			videoPlayerSettings = {
+				...videoPlayerSettings,
+				playbackRate: target
+			};
+		} else {
+			// 当前不是1倍速，保存当前倍速并切换到1倍速
+			previousPlaybackRate = current;
+			videoPlayerSettings = {
+				...videoPlayerSettings,
+				playbackRate: 1
+			};
+		}
 	}
 
 	function handleViewerAction(action: string) {
@@ -337,6 +361,10 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 			}
 			case 'videoSpeedDown': {
 				adjustVideoSpeed(-1);
+				break;
+			}
+			case 'videoSpeedToggle': {
+				toggleVideoSpeed();
 				break;
 			}
 		}
@@ -696,6 +724,10 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 		applyZoomModeListener = (event) => handleApplyZoomModeEvent(event);
 		window.addEventListener(applyZoomModeEventName, applyZoomModeListener as EventListener);
 
+		// 监听视频操作事件（从 App.svelte 分发）
+		viewerActionListener = (event) => handleViewerAction(event.detail.action);
+		window.addEventListener('neoview-viewer-action', viewerActionListener as EventListener);
+
 		const panelSettings = loadUpscalePanelSettings();
 		const initialPreloadPages =
 			(panelSettings as { preloadPages?: number }).preloadPages ?? performanceSettings.preLoadSize;
@@ -983,6 +1015,13 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 					applyZoomModeListener as unknown as EventListener
 				);
 				applyZoomModeListener = null;
+			}
+			if (viewerActionListener) {
+				window.removeEventListener(
+					'neoview-viewer-action',
+					viewerActionListener as unknown as EventListener
+				);
+				viewerActionListener = null;
 			}
 		};
 	});

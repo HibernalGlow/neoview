@@ -78,14 +78,17 @@
     }
     
     // 计算安全范围
-    const rangeX = scaledWidth > 0 ? (overflowX / scaledWidth) * 100 : 0;
-    const rangeY = scaledHeight > 0 ? (overflowY / scaledHeight) * 100 : 0;
+    // 当有溢出时，允许 transform-origin 在 0-100% 范围内移动
+    // 但要确保图片边缘不进入视口内部
+    // 安全范围 = 50 ± (50 * overflowRatio)，其中 overflowRatio = overflow / (scaledSize / 2)
+    const maxOffsetX = overflowX > 0 ? Math.min(50, (overflowX / (scaledWidth / 2)) * 50) : 0;
+    const maxOffsetY = overflowY > 0 ? Math.min(50, (overflowY / (scaledHeight / 2)) * 50) : 0;
     
     return {
-      minX: 50 - rangeX,
-      maxX: 50 + rangeX,
-      minY: 50 - rangeY,
-      maxY: 50 + rangeY,
+      minX: 50 - maxOffsetX,
+      maxX: 50 + maxOffsetX,
+      minY: 50 - maxOffsetY,
+      maxY: 50 + maxOffsetY,
     };
   }
   

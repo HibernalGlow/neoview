@@ -770,14 +770,37 @@ pub async fn open_with_system(path: String) -> Result<(), String> {
 /// 在文件管理器中显示文件
 #[tauri::command]
 pub async fn show_in_file_manager(path: String) -> Result<(), String> {
-    let path = PathBuf::from(path);
+    log::info!("show_in_file_manager called with path: {}", path);
+    
+    let path = PathBuf::from(&path);
+    
+    // 检查路径是否存在
+    if !path.exists() {
+        log::warn!("Path does not exist: {}", path.display());
+        return Err(format!("Path does not exist: {}", path.display()));
+    }
 
     #[cfg(target_os = "windows")]
     {
+        // canonicalize 会添加 \\?\ 前缀，explorer 不支持，需要移除
+        let canonical_path = path.canonicalize()
+            .map_err(|e| format!("Failed to canonicalize path: {}", e))?;
+        let path_str = canonical_path.to_string_lossy();
+        
+        // 移除 Windows 扩展路径前缀 \\?\
+        let clean_path = if path_str.starts_with(r"\\?\") {
+            &path_str[4..]
+        } else {
+            &path_str
+        };
+        
+        log::info!("Clean path for explorer: {}", clean_path);
+        
+        // GitButler 方式: /select, 和路径作为两个独立参数
         std::process::Command::new("explorer")
             .arg("/select,")
-            .arg(path.to_string_lossy().as_ref())
-            .spawn()
+            .arg(clean_path)
+            .status()
             .map_err(|e| format!("Failed to show in file manager: {}", e))?;
     }
 

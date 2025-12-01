@@ -24,18 +24,22 @@ class VideoStore {
 	});
 
 	// 快进模式：开启后翻页键作为快进/快退
-	seekMode = $state(false);
+	private _seekMode = $state(false);
 
 	// 上一个倍速（用于倍速切换）
 	private previousPlaybackRate = $state(1);
 
-	// 暴露到全局以便 App.svelte 读取
-	constructor() {
-		$effect(() => {
-			if (typeof window !== 'undefined') {
-				(window as unknown as { __neoview_video_seek_mode?: boolean }).__neoview_video_seek_mode = this.seekMode;
-			}
-		});
+	// seekMode getter/setter（同步到 window 全局，供 App.svelte 读取）
+	get seekMode() {
+		return this._seekMode;
+	}
+
+	set seekMode(value: boolean) {
+		this._seekMode = value;
+		// 同步到 window 全局
+		if (typeof window !== 'undefined') {
+			(window as unknown as { __neoview_video_seek_mode?: boolean }).__neoview_video_seek_mode = value;
+		}
 	}
 
 	/**

@@ -36,6 +36,8 @@
   import { bookContextManager, type BookContext } from '$lib/stores/bookContext.svelte';
   import { bookStore } from '$lib/stores/book.svelte';
   import { settingsManager } from '$lib/settings/settingsManager';
+  import VideoContainer from '$lib/components/viewer/VideoContainer.svelte';
+  import { isVideoFile } from '$lib/utils/videoUtils';
   
   // ============================================================================
   // Props
@@ -230,9 +232,11 @@
   let isVideoMode = $derived.by(() => {
     const page = bookStore.currentPage;
     if (!page) return false;
-    const ext = (page.innerPath || page.path || '').split('.').pop()?.toLowerCase();
-    return ['mp4', 'm4v', 'mov', 'nov', 'webm', 'mkv', 'avi'].includes(ext || '');
+    return isVideoFile(page.name) || isVideoFile(page.path);
   });
+  
+  // 视频容器引用
+  let videoContainerRef: any = null;
   
   // 是否处于分割模式
   let isInSplitMode = $derived(
@@ -529,7 +533,15 @@
     imageSrc={imageStore.state.currentUrl ?? ''}
   />
   
-  {#if isPanorama}
+  {#if isVideoMode}
+    <!-- 视频模式：显示视频播放器 -->
+    <VideoContainer
+      bind:this={videoContainerRef}
+      page={bookStore.currentPage}
+      onEnded={handleNextPage}
+      onError={(err) => console.error('Video error:', err)}
+    />
+  {:else if isPanorama}
     <!-- 全景模式：显示滚动视图 -->
     <PanoramaFrameLayer 
       units={panoramaStore.state.units}

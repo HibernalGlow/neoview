@@ -43,9 +43,56 @@
     onImageLoad?: (e: Event, index: number) => void;
   } = $props();
   
-  // 计算 transform-origin（基于 viewPositionX/Y）
-  // 悬停滚动通过改变缩放原点来实现平移效果
-  let transformOrigin = $derived(`${viewPositionX}% ${viewPositionY}%`);
+  /**
+   * 计算安全的 transform-origin 值
+   * 确保图片边缘始终贴近或超出视口边缘
+   * 
+   * viewPositionX/Y 范围是 0-100（来自 HoverLayer）
+   * 需要映射到 transform-origin 的安全范围
+   */
+  let safeOrigin = $derived.by(() => {
+    if (!viewportSize.width || !viewportSize.height || !imageSize.width || !imageSize.height || scale <= 0) {
+      return { x: 50, y: 50 };
+    }
+    
+    // 缩放后的图片尺寸
+    const scaledWidth = imageSize.width * scale;
+    const scaledHeight = imageSize.height * scale;
+    
+    // 计算溢出量（单侧）
+    const overflowX = (scaledWidth - viewportSize.width) / 2;
+    const overflowY = (scaledHeight - viewportSize.height) / 2;
+    
+    // 如果没有溢出，位置固定在 50%
+    let safeX = 50, safeY = 50;
+    
+    if (overflowX > 0) {
+      // 图片比视口宽
+      // transform-origin 安全范围
+      const rangeX = (overflowX / scaledWidth) * 100;
+      const minX = 50 - rangeX;
+      const maxX = 50 + rangeX;
+      
+      // 将 viewPositionX (0-100) 映射到 (minX-maxX)
+      // viewPositionX=0 -> minX, viewPositionX=50 -> 50, viewPositionX=100 -> maxX
+      safeX = minX + (viewPositionX / 100) * (maxX - minX);
+    }
+    
+    if (overflowY > 0) {
+      // 图片比视口高
+      const rangeY = (overflowY / scaledHeight) * 100;
+      const minY = 50 - rangeY;
+      const maxY = 50 + rangeY;
+      
+      // 将 viewPositionY (0-100) 映射到 (minY-maxY)
+      safeY = minY + (viewPositionY / 100) * (maxY - minY);
+    }
+    
+    return { x: safeX, y: safeY };
+  });
+  
+  // 计算 transform-origin
+  let transformOrigin = $derived(`${safeOrigin.x}% ${safeOrigin.y}%`);
   
   // 计算 transform（只包含 scale 和 rotation）
   let transformStyle = $derived.by(() => {

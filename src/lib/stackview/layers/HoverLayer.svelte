@@ -1,12 +1,10 @@
 <!--
   HoverLayer - 悬停滚动层
   
-  原理：输出 0-100% 的位置值，用于 CSS object-position
-  百分比天然限制边界，绝对不会超出图片范围
-  
-  - 0% = 显示左/上边缘
-  - 50% = 居中
-  - 100% = 显示右/下边缘
+  原理：计算鼠标距离中心的相对偏移，输出增量式的位置变化
+  - 鼠标在死区内：不更新位置
+  - 鼠标离开死区：根据距离中心的偏移计算速度，持续更新位置
+  - 翻页后：位置重置为 50%，鼠标需要先回到死区再移出才能重新滚动
 -->
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
@@ -15,18 +13,30 @@
     // 启用悬停滚动
     enabled = false,
     
+    // 滚动速度（每帧最大移动百分比）
+    speed = 2,
+    
     // 侧边栏排除区域（像素）
     sidebarMargin = 50,
     
     // 中心死区占短边比例（0-1）
     deadZoneRatio = 0.2,
     
+    // 视口和图片尺寸（用于计算边界）
+    viewportSize = { width: 0, height: 0 },
+    imageSize = { width: 0, height: 0 },
+    scale = 1,
+    
     // 回调：位置百分比变化（0-100）
     onPositionChange,
   }: {
     enabled?: boolean;
+    speed?: number;
     sidebarMargin?: number;
     deadZoneRatio?: number;
+    viewportSize?: { width: number; height: number };
+    imageSize?: { width: number; height: number };
+    scale?: number;
     onPositionChange?: (x: number, y: number) => void;
   } = $props();
   
@@ -35,15 +45,55 @@
   let lastMousePos = { x: 0, y: 0 };
   let isHovering = $state(false);
   
-  /**
-   * 计算位置百分比（0-100）
-   * 鼠标在左边 -> 0%（显示左边缘）
-   * 鼠标在中间 -> 50%（居中）
-   * 鼠标在右边 -> 100%（显示右边缘）
-   */
-  let lastLoggedPos = { x: -1, y: -1 };
+  // 当前位置（0-100）
+  let currentX = 50;
+  let currentY = 50;
   
-  function calculatePosition(clientX: number, clientY: number): { x: number; y: number } | null {
+  // 是否已经进入过死区（翻页后需要先进入死区才能开始滚动）
+  let hasEnteredDeadZone = $state(true);
+  
+  /**
+   * 计算位置边界（确保图片边缘不进入视口内）
+   * 返回 { minX, maxX, minY, maxY }，单位是百分比（0-100）
+   */
+  function calculateBounds(): { minX: number; maxX: number; minY: number; maxY: number } {
+    if (!viewportSize.width || !viewportSize.height || !imageSize.width || !imageSize.height) {
+      return { minX: 0, maxX: 100, minY: 0, maxY: 100 };
+    }
+    
+    // 缩放后的图片尺寸
+    const scaledWidth = imageSize.width * scale;
+    const scaledHeight = imageSize.height * scale;
+    
+    // 计算溢出量（单侧）
+    const overflowX = Math.max(0, (scaledWidth - viewportSize.width) / 2);
+    const overflowY = Math.max(0, (scaledHeight - viewportSize.height) / 2);
+    
+    // 如果没有溢出，位置固定在 50%
+    if (overflowX <= 0 && overflowY <= 0) {
+      return { minX: 50, maxX: 50, minY: 50, maxY: 50 };
+    }
+    
+    // 计算边界百分比
+    // 当 viewPosition = 0% 时，图片左边缘在视口左边缘
+    // 当 viewPosition = 100% 时，图片右边缘在视口右边缘
+    // 边界 = 50 ± (overflow / scaledSize * 100)
+    const rangeX = overflowX > 0 ? (overflowX / scaledWidth) * 100 : 0;
+    const rangeY = overflowY > 0 ? (overflowY / scaledHeight) * 100 : 0;
+    
+    return {
+      minX: 50 - rangeX,
+      maxX: 50 + rangeX,
+      minY: 50 - rangeY,
+      maxY: 50 + rangeY,
+    };
+  }
+  
+  /**
+   * 计算滚动速度（-1 到 1）
+   * 返回 null 表示在死区内
+   */
+  function calculateVelocity(clientX: number, clientY: number): { vx: number; vy: number } | null {
     if (!layerRef) return null;
     
     const rect = layerRef.getBoundingClientRect();
@@ -56,31 +106,47 @@
       return null;
     }
     
-    // 计算相对于中心的位置
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
     const relX = localX - centerX;
     const relY = localY - centerY;
     
-    // 应用死区（只在中心小区域内不响应）
+    // 死区大小
     const deadZoneSizeX = rect.width * deadZoneRatio / 2;
     const deadZoneSizeY = rect.height * deadZoneRatio / 2;
     
-    if (Math.abs(relX) < deadZoneSizeX && Math.abs(relY) < deadZoneSizeY) {
+    // 检查是否在死区内
+    const inDeadZone = Math.abs(relX) < deadZoneSizeX && Math.abs(relY) < deadZoneSizeY;
+    
+    if (inDeadZone) {
+      hasEnteredDeadZone = true;
+      return null; // 死区内不滚动
+    }
+    
+    // 如果还没进入过死区，不滚动
+    if (!hasEnteredDeadZone) {
       return null;
     }
     
-    // 转换为 0-100 百分比
-    const x = Math.max(0, Math.min(100, (localX / rect.width) * 100));
-    const y = Math.max(0, Math.min(100, (localY / rect.height) * 100));
+    // 计算速度（-1 到 1）
+    // 有效区域是从死区边缘到视口边缘
+    const effectiveWidth = (rect.width / 2) - deadZoneSizeX;
+    const effectiveHeight = (rect.height / 2) - deadZoneSizeY;
     
-    // 只在位置变化较大时输出日志
-    if (Math.abs(x - lastLoggedPos.x) > 5 || Math.abs(y - lastLoggedPos.y) > 5) {
-      console.log('[HoverLayer] position:', x.toFixed(0), y.toFixed(0));
-      lastLoggedPos = { x, y };
+    let vx = 0;
+    let vy = 0;
+    
+    if (Math.abs(relX) >= deadZoneSizeX) {
+      const distFromDeadZone = Math.abs(relX) - deadZoneSizeX;
+      vx = (distFromDeadZone / effectiveWidth) * Math.sign(relX);
     }
     
-    return { x, y };
+    if (Math.abs(relY) >= deadZoneSizeY) {
+      const distFromDeadZone = Math.abs(relY) - deadZoneSizeY;
+      vy = (distFromDeadZone / effectiveHeight) * Math.sign(relY);
+    }
+    
+    return { vx: Math.max(-1, Math.min(1, vx)), vy: Math.max(-1, Math.min(1, vy)) };
   }
   
   // 动画循环
@@ -89,9 +155,15 @@
     
     function loop() {
       if (isHovering && enabled) {
-        const pos = calculatePosition(lastMousePos.x, lastMousePos.y);
-        if (pos) {
-          onPositionChange?.(pos.x, pos.y);
+        const vel = calculateVelocity(lastMousePos.x, lastMousePos.y);
+        if (vel) {
+          // 获取边界
+          const bounds = calculateBounds();
+          
+          // 根据速度更新位置，并限制在边界内
+          currentX = Math.max(bounds.minX, Math.min(bounds.maxX, currentX + vel.vx * speed));
+          currentY = Math.max(bounds.minY, Math.min(bounds.maxY, currentY + vel.vy * speed));
+          onPositionChange?.(currentX, currentY);
         }
       }
       animationFrameId = requestAnimationFrame(loop);
@@ -105,6 +177,13 @@
       cancelAnimationFrame(animationFrameId);
       animationFrameId = null;
     }
+  }
+  
+  // 重置位置（翻页时调用）
+  export function reset() {
+    currentX = 50;
+    currentY = 50;
+    hasEnteredDeadZone = false; // 需要先进入死区才能开始滚动
   }
   
   // 使用 window 事件监听

@@ -70,12 +70,27 @@
   let viewPositionX = $state(50);
   let viewPositionY = $state(50);
   
+  // HoverLayer 组件引用
+  let hoverLayerRef: { reset: () => void } | null = $state(null);
+  
+  // 设置（提前声明）
+  let settings = $state(settingsManager.getSettings());
+  settingsManager.addListener((s) => { settings = s; });
+  
   // ============================================================================
   // 真实缩放逻辑（完全独立管理）
   // ============================================================================
   
-  // 当前缩放模式
-  let currentZoomMode = $state<ZoomMode>(settingsManager.getSettings().view.defaultZoomMode ?? 'fit');
+  // 当前缩放模式（响应 settings 变化）
+  let currentZoomMode = $state<ZoomMode>(settings.view?.defaultZoomMode ?? 'fit');
+  
+  // 监听 settings 中的缩放模式变化
+  $effect(() => {
+    const newMode = settings.view?.defaultZoomMode ?? 'fit';
+    if (newMode !== currentZoomMode) {
+      currentZoomMode = newMode;
+    }
+  });
   
   // 用户手动缩放倍数（基于 zoomMode 的额外缩放，1.0 = 无额外缩放）
   let manualScale = $state(1.0);
@@ -175,10 +190,6 @@
   let pageMode = $derived(bookContext?.pageMode ?? 'single');
   let isPanorama = $derived(bookContext?.panoramaEnabled ?? false);
   let orientation = $derived(bookContext?.orientation ?? 'horizontal');
-  
-  // 设置
-  let settings = $state(settingsManager.getSettings());
-  settingsManager.addListener((s) => { settings = s; });
   
   // 切换页面模式（单页/双页）
   function togglePageMode() {
@@ -285,7 +296,9 @@
   }
   
   function handlePrevPage() {
+    // 重置悬停滚动位置
     viewPositionX = 50; viewPositionY = 50;
+    hoverLayerRef?.reset();
     
     if (isInSplitMode && splitState) {
       const prevHalf = getPrevSplitHalf(splitState.half, direction);
@@ -318,7 +331,9 @@
   }
   
   function handleNextPage() {
+    // 重置悬停滚动位置
     viewPositionX = 50; viewPositionY = 50;
+    hoverLayerRef?.reset();
     
     if (isInSplitMode) {
       if (!splitState) {
@@ -542,9 +557,13 @@
   
   <!-- 悬停滚动层 -->
   <HoverLayer
+    bind:this={hoverLayerRef}
     enabled={hoverScrollEnabled && !isPanorama}
     sidebarMargin={50}
     deadZoneRatio={0.2}
+    {viewportSize}
+    imageSize={imageStore.state.dimensions ?? { width: 0, height: 0 }}
+    scale={effectiveScale}
     onPositionChange={(x, y) => { viewPositionX = x; viewPositionY = y; }}
   />
 </div>

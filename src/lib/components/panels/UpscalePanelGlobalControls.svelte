@@ -23,7 +23,7 @@
 	}
 </script>
 
-<div class="section">
+<div class="space-y-2">
 	<div class="setting-row">
 		<div class="flex items-center gap-2">
 			<Switch 

@@ -21,12 +21,7 @@
 	}
 </script>
 
-<div class="section">
-	<div class="section-title">
-		<HardDrive class="w-4 h-4" />
-		<span>缓存管理</span>
-	</div>
-
+<div class="space-y-2">
 	<div class="info-grid">
 		<div class="info-item">
 			<span class="info-label">文件数：</span>
@@ -45,22 +40,6 @@
 </div>
 
 <style>
-	.section {
-		background: hsl(var(--card));
-		border: 1px solid hsl(var(--border));
-		border-radius: 0.5rem;
-		padding: 1rem;
-	}
-
-	.section-title {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-weight: 600;
-		margin-bottom: 0.75rem;
-		color: hsl(var(--foreground));
-	}
-
 	.info-grid {
 		display: grid;
 		grid-template-columns: 1fr 1fr;

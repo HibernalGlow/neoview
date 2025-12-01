@@ -56,12 +56,7 @@
 	});
 </script>
 
-<div class="section">
-	<div class="section-title">
-		<Zap class="w-4 h-4" />
-		<span>当前图片</span>
-	</div>
-
+<div class="space-y-2">
 	<div class="info-grid">
 		<div class="info-item">
 			<span class="info-label">分辨率：</span>

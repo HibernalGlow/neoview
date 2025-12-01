@@ -16,10 +16,10 @@
 	} = $props();
 </script>
 
-{#if showOriginal}
-	{#if originalImageUrl}
-		<div class="section">
-			<div class="section-title">
+<div class="space-y-3">
+	{#if showOriginal}
+		<div class="preview-section">
+			<div class="flex items-center gap-2 text-sm font-medium mb-2">
 				<ImageIcon class="w-4 h-4" />
 				<span>原图预览</span>
 				{#if isProcessing && !upscaledImageUrl && showUpscaled}
@@ -29,64 +29,38 @@
 					</span>
 				{/if}
 			</div>
-			<div class="preview-container">
-				<img src={originalImageUrl} alt="原图" class="preview-image" />
-			</div>
-		</div>
-	{:else}
-		<div class="section empty">
-			<div class="section-title">
-				<ImageIcon class="w-4 h-4" />
-				<span>原图预览</span>
-			</div>
-			<div class="empty-state">
-				<p>暂无原图数据，等待页面加载...</p>
-			</div>
+			{#if originalImageUrl}
+				<div class="preview-container">
+					<img src={originalImageUrl} alt="原图" class="preview-image" />
+				</div>
+			{:else}
+				<div class="empty-state">
+					<p>暂无原图数据，等待页面加载...</p>
+				</div>
+			{/if}
 		</div>
 	{/if}
-{/if}
 
-{#if showUpscaled}
-	{#if upscaledImageUrl}
-		<div class="section">
-			<div class="section-title">
-				<CheckCircle class="w-4 h-4 text-green-500" />
+	{#if showUpscaled}
+		<div class="preview-section">
+			<div class="flex items-center gap-2 text-sm font-medium mb-2">
+				<CheckCircle class="w-4 h-4 {upscaledImageUrl ? 'text-green-500' : ''}" />
 				<span>超分结果</span>
 			</div>
-			<div class="preview-container">
-				<img src={upscaledImageUrl} alt="超分结果" class="preview-image" />
-			</div>
-		</div>
-	{:else}
-		<div class="section empty">
-			<div class="section-title">
-				<CheckCircle class="w-4 h-4" />
-				<span>超分结果</span>
-			</div>
-			<div class="empty-state">
-				<p>尚未生成超分结果。</p>
-			</div>
+			{#if upscaledImageUrl}
+				<div class="preview-container">
+					<img src={upscaledImageUrl} alt="超分结果" class="preview-image" />
+				</div>
+			{:else}
+				<div class="empty-state">
+					<p>尚未生成超分结果。</p>
+				</div>
+			{/if}
 		</div>
 	{/if}
-{/if}
+</div>
 
 <style>
-	.section {
-		background: hsl(var(--card));
-		border: 1px solid hsl(var(--border));
-		border-radius: 0.5rem;
-		padding: 1rem;
-	}
-
-	.section-title {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-weight: 600;
-		margin-bottom: 0.75rem;
-		color: hsl(var(--foreground));
-	}
-
 	.preview-container {
 		border: 1px solid hsl(var(--border));
 		border-radius: 0.5rem;
@@ -114,13 +88,10 @@
 		color: hsl(var(--primary));
 	}
 
-	.empty {
-		text-align: center;
-		color: hsl(var(--muted-foreground));
-	}
-
 	.empty-state {
 		padding: 1rem;
 		font-size: 0.85rem;
+		text-align: center;
+		color: hsl(var(--muted-foreground));
 	}
 </style>

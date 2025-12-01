@@ -25,12 +25,7 @@
 	}
 </script>
 
-<div class="section">
-	<div class="section-title">
-		<Settings class="w-4 h-4" />
-		<span>修改参数</span>
-	</div>
-
+<div class="space-y-2">
 	<div class="setting-row">
 		<Label>放大倍数：</Label>
 		<div class="flex items-center gap-2">

@@ -53,39 +53,29 @@
   let hasEnteredDeadZone = $state(true);
   
   /**
-   * 计算位置边界（确保图片边缘不进入视口内）
-   * 返回 { minX, maxX, minY, maxY }，单位是百分比（0-100）
+   * 计算位置边界
+   * 输出 0-100 范围，由 CurrentFrameLayer 负责映射到 transform-origin 安全范围
+   * 只检查是否有溢出来决定能否滚动
    */
   function calculateBounds(): { minX: number; maxX: number; minY: number; maxY: number } {
     if (!viewportSize.width || !viewportSize.height || !imageSize.width || !imageSize.height) {
-      return { minX: 0, maxX: 100, minY: 0, maxY: 100 };
+      return { minX: 50, maxX: 50, minY: 50, maxY: 50 };
     }
     
     // 缩放后的图片尺寸
     const scaledWidth = imageSize.width * scale;
     const scaledHeight = imageSize.height * scale;
     
-    // 计算溢出量（单侧）
-    const overflowX = Math.max(0, (scaledWidth - viewportSize.width) / 2);
-    const overflowY = Math.max(0, (scaledHeight - viewportSize.height) / 2);
+    // 检查是否有溢出（只有溢出时才允许滚动）
+    const hasOverflowX = scaledWidth > viewportSize.width;
+    const hasOverflowY = scaledHeight > viewportSize.height;
     
-    // 如果没有溢出，位置固定在 50%
-    if (overflowX <= 0 && overflowY <= 0) {
-      return { minX: 50, maxX: 50, minY: 50, maxY: 50 };
-    }
-    
-    // 计算边界百分比
-    // 当 viewPosition = 0% 时，图片左边缘在视口左边缘
-    // 当 viewPosition = 100% 时，图片右边缘在视口右边缘
-    // 边界 = 50 ± (overflow / scaledSize * 100)
-    const rangeX = overflowX > 0 ? (overflowX / scaledWidth) * 100 : 0;
-    const rangeY = overflowY > 0 ? (overflowY / scaledHeight) * 100 : 0;
-    
+    // 输出完整的 0-100 范围，让 CurrentFrameLayer 做最终映射
     return {
-      minX: 50 - rangeX,
-      maxX: 50 + rangeX,
-      minY: 50 - rangeY,
-      maxY: 50 + rangeY,
+      minX: hasOverflowX ? 0 : 50,
+      maxX: hasOverflowX ? 100 : 50,
+      minY: hasOverflowY ? 0 : 50,
+      maxY: hasOverflowY ? 100 : 50,
     };
   }
   

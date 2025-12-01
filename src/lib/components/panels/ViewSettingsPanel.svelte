@@ -120,69 +120,6 @@
 			</div>
 		</div>
 
-		<!-- 横向页面设置 -->
-		<div class="space-y-2">
-			<h4 class="text-sm font-semibold">横向页面</h4>
-			<div class="space-y-2">
-				<div class="flex items-center justify-between gap-2">
-					<Label class="text-sm">分割横向页面</Label>
-					<Switch
-						checked={currentSettings.view.pageLayout.splitHorizontalPages}
-						onCheckedChange={(checked) =>
-							settingsManager.updateNestedSettings('view', {
-								pageLayout: {
-									...currentSettings.view.pageLayout,
-									splitHorizontalPages: checked
-								}
-							})}
-					/>
-				</div>
-				<p class="text-muted-foreground text-xs">
-					将单张横向图片拆成左右两页，翻页时按阅读方向依次显示。
-				</p>
-				<div class="flex items-center justify-between gap-2">
-					<Label class="text-sm">横向页面视为双页</Label>
-					<Switch
-						checked={currentSettings.view.pageLayout.treatHorizontalAsDoublePage}
-						onCheckedChange={(checked) =>
-							settingsManager.updateNestedSettings('view', {
-								pageLayout: {
-									...currentSettings.view.pageLayout,
-									treatHorizontalAsDoublePage: checked
-								}
-							})}
-					/>
-				</div>
-				<p class="text-muted-foreground text-xs">
-					在双页模式下，让横向图片独占整幅跨页，避免与下一页拼接。
-				</p>
-			</div>
-		</div>
-
-		<!-- 自动旋转 -->
-		<div class="space-y-2">
-			<h4 class="text-sm font-semibold">自动旋转</h4>
-			<NativeSelect
-				class="w-full max-w-xs"
-				bind:value={currentSettings.view.autoRotate.mode}
-				onchange={() =>
-					settingsManager.updateNestedSettings('view', {
-						autoRotate: {
-							mode: currentSettings.view.autoRotate.mode
-						}
-					})}
-			>
-				<NativeSelectOption value="none">关闭</NativeSelectOption>
-				<NativeSelectOption value="left">纵向页面左旋</NativeSelectOption>
-				<NativeSelectOption value="right">纵向页面右旋</NativeSelectOption>
-				<NativeSelectOption value="forcedLeft">始终左旋 90°</NativeSelectOption>
-				<NativeSelectOption value="forcedRight">始终右旋 90°</NativeSelectOption>
-			</NativeSelect>
-			<p class="text-muted-foreground text-xs">
-				基于图片宽高比自动旋转。强制模式会忽略图片方向始终旋转。
-			</p>
-		</div>
-
 		<!-- 阅读设置 -->
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">阅读设置</h4>

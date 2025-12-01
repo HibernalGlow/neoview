@@ -373,14 +373,9 @@ export function buildFrameImages(
     const isNextLandscape = hasNextSize && isLandscape(nextSize);
     
     // 开启"横向视为双页"时的自动双页逻辑：
-    // 只有当前图和下一图都是竖向时才组成双页
-    if (config.treatHorizontalAsDoublePage) {
-      // 下一张是横向图：当前页单独显示
-      if (isNextLandscape) {
-        return [mainImage];
-      }
-      // 尺寸未知时，默认组成双页（等待尺寸加载后会重新计算）
-      // 只有确认当前图或下一图是横向时才单独显示
+    // 下一张是横向图时，当前页单独显示
+    if (config.treatHorizontalAsDoublePage && isNextLandscape) {
+      return [mainImage];
     }
     
     // 构建第二张图

@@ -4,13 +4,12 @@
   使用 imageStore 管理图片加载，复用现有手势和缩放
 -->
 <script lang="ts">
-  import { onDestroy, untrack } from 'svelte';
+  import { onDestroy } from 'svelte';
   import {
     BackgroundLayer,
     CurrentFrameLayer,
     InfoLayer,
     GestureLayer,
-    HoverLayer,
   } from './layers';
   import PanoramaFrameLayer from './layers/PanoramaFrameLayer.svelte';
   import { 
@@ -69,9 +68,6 @@
   // 50 = 居中，0 = 显示左/上边缘，100 = 显示右/下边缘
   let viewPositionX = $state(50);
   let viewPositionY = $state(50);
-  
-  // HoverLayer 组件引用
-  let hoverLayerRef: { reset: () => void } | null = $state(null);
   
   // 设置（提前声明）
   let settings = $state(settingsManager.getSettings());
@@ -254,13 +250,6 @@
     
     if (!currentUrl) return emptyFrame;
     
-    console.log('[StackView] imageStore.state', {
-      currentIndex: bookStore.currentPageIndex,
-      dimensions,
-      secondDimensions,
-      hasSecondUrl: !!secondUrl,
-    });
-    
     // 构建当前页数据
     const currentPage: PageData = {
       url: currentUrl,
@@ -305,9 +294,6 @@
   }
   
   function handlePrevPage() {
-    // 重置悬停滚动位置
-    viewPositionX = 50; viewPositionY = 50;
-    hoverLayerRef?.reset();
     
     if (isInSplitMode && splitState) {
       const prevHalf = getPrevSplitHalf(splitState.half, direction);
@@ -342,9 +328,6 @@
   }
   
   function handleNextPage() {
-    // 重置悬停滚动位置
-    viewPositionX = 50; viewPositionY = 50;
-    hoverLayerRef?.reset();
     
     if (isInSplitMode) {
       if (!splitState) {
@@ -381,9 +364,6 @@
       bookStore.nextPage();
     }
   }
-  
-  // 悬停滚动状态
-  let hoverScrollEnabled = $derived(settings.image?.hoverScrollEnabled ?? false);
   
   // 缩放控制
   function zoomIn() {
@@ -426,25 +406,6 @@
   // 追踪上一次的状态，用于检测变化
   let lastPageMode = $state<'single' | 'double' | null>(null);
   let lastPanorama = $state<boolean>(false);
-  let lastPageIndex = $state<number>(-1);
-  
-  // 页面切换时重置悬停滚动位置
-  $effect(() => {
-    const pageIndex = bookStore.currentPageIndex;
-    const prevIndex = untrack(() => lastPageIndex);
-    
-    // 页面变化时重置悬停滚动
-    if (pageIndex !== prevIndex) {
-      untrack(() => {
-        lastPageIndex = pageIndex;
-        // 重置位置到居中
-        viewPositionX = 50;
-        viewPositionY = 50;
-        // 重置 HoverLayer 的内部状态
-        hoverLayerRef?.reset();
-      });
-    }
-  });
   
   // 页面或模式变化时加载图片
   $effect(() => {
@@ -585,18 +546,6 @@
     onNextPage={handleNextPage}
     onPrevPage={handlePrevPage}
     onResetZoom={resetView}
-  />
-  
-  <!-- 悬停滚动层 -->
-  <HoverLayer
-    bind:this={hoverLayerRef}
-    enabled={hoverScrollEnabled && !isPanorama}
-    sidebarMargin={50}
-    deadZoneRatio={0.2}
-    {viewportSize}
-    imageSize={imageStore.state.dimensions ?? { width: 0, height: 0 }}
-    scale={effectiveScale}
-    onPositionChange={(x, y) => { viewPositionX = x; viewPositionY = y; }}
   />
 </div>
 

@@ -54,8 +54,10 @@
    * 只检查是否有溢出来决定能否滚动
    */
   function calculateBounds(): { minX: number; maxX: number; minY: number; maxY: number } {
+    // 尺寸未知时，返回全范围，让悬停滚动可以继续工作
+    // 等图片加载完成后会自动应用正确的边界
     if (!viewportSize.width || !viewportSize.height || !imageSize.width || !imageSize.height) {
-      return { minX: 50, maxX: 50, minY: 50, maxY: 50 };
+      return { minX: 0, maxX: 100, minY: 0, maxY: 100 };
     }
     
     // 缩放后的图片尺寸
@@ -158,10 +160,20 @@
     }
   }
   
-  // 重置位置（翻页时调用）
+  // 软性重置位置（翻页时调用，保持在有效范围内）
   export function reset() {
+    // 不强制重置到 50，而是限制在当前边界内
+    const bounds = calculateBounds();
+    currentX = Math.max(bounds.minX, Math.min(bounds.maxX, 50));
+    currentY = Math.max(bounds.minY, Math.min(bounds.maxY, 50));
+    onPositionChange?.(currentX, currentY);
+  }
+  
+  // 强制重置到居中（切换书本时调用）
+  export function forceReset() {
     currentX = 50;
     currentY = 50;
+    onPositionChange?.(currentX, currentY);
   }
   
   // 使用 window 事件监听

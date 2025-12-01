@@ -162,6 +162,8 @@ let currentSortModeLabel = $derived(
 		switch (mode) {
 			case 'left': return '纵向左旋';
 			case 'right': return '纵向右旋';
+			case 'horizontalLeft': return '横屏左旋';
+			case 'horizontalRight': return '横屏右旋';
 			case 'forcedLeft': return '始终左旋';
 			case 'forcedRight': return '始终右旋';
 			default: return '关闭';
@@ -931,6 +933,8 @@ async function handleSortModeChange(mode: PageSortMode) {
 							</Tooltip.Content>
 						</Tooltip.Root>
 						<DropdownMenu.Content
+							side="right"
+							align="start"
 							class="z-60 w-60"
 							onmouseenter={handleMouseEnter}
 							onmouseleave={handleMouseLeave}
@@ -1067,6 +1071,8 @@ async function handleSortModeChange(mode: PageSortMode) {
 					</Tooltip.Root>
 
 					<DropdownMenu.Content
+						side="right"
+						align="start"
 						class="z-60 w-56"
 						onmouseenter={handleMouseEnter}
 						onmouseleave={handleMouseLeave}
@@ -1261,6 +1267,8 @@ async function handleSortModeChange(mode: PageSortMode) {
 					</Tooltip.Root>
 					
 					<DropdownMenu.Content
+						side="right"
+						align="start"
 						class="z-60 w-48"
 						onmouseenter={handleMouseEnter}
 						onmouseleave={handleMouseLeave}
@@ -1306,6 +1314,34 @@ async function handleSortModeChange(mode: PageSortMode) {
 								<span class="text-xs">纵向右旋</span>
 							</div>
 						</DropdownMenu.Item>
+						
+						<DropdownMenu.Separator />
+						<DropdownMenu.Label>横屏图片自动旋转</DropdownMenu.Label>
+						
+						<DropdownMenu.Item onclick={() => settingsManager.updateNestedSettings('view', { autoRotate: { mode: 'horizontalLeft' } })}>
+							<div class="flex items-center gap-2">
+								<div class="flex h-4 w-4 items-center justify-center">
+									{#if autoRotateMode === 'horizontalLeft'}
+										<Check class="h-3 w-3" />
+									{/if}
+								</div>
+								<span class="text-xs">横屏左旋 90°</span>
+							</div>
+						</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={() => settingsManager.updateNestedSettings('view', { autoRotate: { mode: 'horizontalRight' } })}>
+							<div class="flex items-center gap-2">
+								<div class="flex h-4 w-4 items-center justify-center">
+									{#if autoRotateMode === 'horizontalRight'}
+										<Check class="h-3 w-3" />
+									{/if}
+								</div>
+								<span class="text-xs">横屏右旋 90°</span>
+							</div>
+						</DropdownMenu.Item>
+						
+						<DropdownMenu.Separator />
+						<DropdownMenu.Label>强制旋转</DropdownMenu.Label>
+						
 						<DropdownMenu.Item onclick={() => settingsManager.updateNestedSettings('view', { autoRotate: { mode: 'forcedLeft' } })}>
 							<div class="flex items-center gap-2">
 								<div class="flex h-4 w-4 items-center justify-center">

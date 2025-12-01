@@ -173,13 +173,21 @@
 					})}
 			>
 				<NativeSelectOption value="none">关闭</NativeSelectOption>
-				<NativeSelectOption value="left">纵向页面左旋</NativeSelectOption>
-				<NativeSelectOption value="right">纵向页面右旋</NativeSelectOption>
-				<NativeSelectOption value="forcedLeft">始终左旋 90°</NativeSelectOption>
-				<NativeSelectOption value="forcedRight">始终右旋 90°</NativeSelectOption>
+				<optgroup label="纵向图片">
+					<NativeSelectOption value="left">纵向页面左旋</NativeSelectOption>
+					<NativeSelectOption value="right">纵向页面右旋</NativeSelectOption>
+				</optgroup>
+				<optgroup label="横屏图片">
+					<NativeSelectOption value="horizontalLeft">横屏页面左旋 90°</NativeSelectOption>
+					<NativeSelectOption value="horizontalRight">横屏页面右旋 90°</NativeSelectOption>
+				</optgroup>
+				<optgroup label="强制旋转">
+					<NativeSelectOption value="forcedLeft">始终左旋 90°</NativeSelectOption>
+					<NativeSelectOption value="forcedRight">始终右旋 90°</NativeSelectOption>
+				</optgroup>
 			</NativeSelect>
 			<p class="text-muted-foreground text-xs">
-				基于图片宽高比自动旋转。强制模式会忽略图片方向始终旋转。
+				基于图片宽高比自动旋转。横屏模式对宽高比≥1.2的图片生效，强制模式会忽略图片方向始终旋转。
 			</p>
 		</div>
 

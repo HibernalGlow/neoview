@@ -13,10 +13,9 @@
     direction = 'ltr',
     currentPageIndex = 0,
     scale = 1,
-    // 悬停滚动位置
-    viewPositionX = 50,
-    viewPositionY = 50,
     onScroll,
+    // 暴露滚动容器引用
+    onContainerReady,
   }: {
     units: PanoramaUnit[];
     pageMode?: 'single' | 'double';
@@ -24,10 +23,14 @@
     direction?: 'ltr' | 'rtl';
     currentPageIndex?: number;
     scale?: number;
-    viewPositionX?: number;
-    viewPositionY?: number;
     onScroll?: (e: Event) => void;
+    onContainerReady?: (el: HTMLElement | null) => void;
   } = $props();
+  
+  // 容器就绪时通知父组件
+  $effect(() => {
+    onContainerReady?.(containerRef);
+  });
   
   let containerRef: HTMLDivElement | null = $state(null);
   let scrollTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -72,9 +75,6 @@
     }
   });
   
-  // 计算 transform-origin 用于悬停滚动
-  let transformOrigin = $derived(`${viewPositionX}% ${viewPositionY}%`);
-  
   let containerClass = $derived.by(() => {
     const classes = ['panorama-frame-layer'];
     
@@ -100,22 +100,23 @@
     class={containerClass}
     data-layer="PanoramaFrameLayer"
     style:z-index={LayerZIndex.CURRENT_FRAME}
-    style:transform-origin={transformOrigin}
-    style:transform={scale !== 1 ? `scale(${scale})` : 'none'}
   >
-    {#each units as unit (unit.id)}
-      <div class="panorama-unit" data-unit-id={unit.id}>
-        {#each unit.images as img, i (img.pageIndex)}
-          <img
-            src={img.url}
-            alt="Page {img.pageIndex + 1}"
-            class="panorama-image"
-            style={imageStyle}
-            draggable="false"
-          />
-        {/each}
-      </div>
-    {/each}
+    <!-- 内层容器用于缩放 -->
+    <div class="panorama-content" style:transform={scale !== 1 ? `scale(${scale})` : 'none'}>
+      {#each units as unit (unit.id)}
+        <div class="panorama-unit" data-unit-id={unit.id}>
+          {#each unit.images as img, i (img.pageIndex)}
+            <img
+              src={img.url}
+              alt="Page {img.pageIndex + 1}"
+              class="panorama-image"
+              style={imageStyle}
+              draggable="false"
+            />
+          {/each}
+        </div>
+      {/each}
+    </div>
   </div>
 {:else}
   <div 
@@ -131,17 +132,29 @@
   .panorama-frame-layer {
     position: absolute;
     inset: 0;
+    overflow: auto;
+    /* 隐藏滚动条 */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .panorama-frame-layer::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .panorama-content {
     display: flex;
     flex-direction: row;
     gap: 0;
     padding: 0;
-    overflow: hidden;
+    min-width: 100%;
+    min-height: 100%;
+    width: fit-content;
+    height: fit-content;
     align-items: center;
     justify-content: flex-start;
-    /* GPU 加速 */
     will-change: transform;
-    transform: translateZ(0);
-    backface-visibility: hidden;
+    transform-origin: center center;
   }
   
   .panorama-frame-layer.vertical {

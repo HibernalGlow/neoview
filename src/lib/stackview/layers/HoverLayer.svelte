@@ -1,14 +1,10 @@
 <!--
-  HoverLayer - 悬停滚动层（事件驱动版）
+  HoverLayer - 悬停滚动控制器（原生滚动方案）
   
-  原理：根据图片溢出量计算安全的 transform-origin 范围
-  - 当图片 <= 视口：位置固定在 50%（居中）
-  - 当图片 > 视口：位置范围限制在安全区间，确保边缘不露出
-  
-  优化：
-  - 纯事件驱动，无持续 RAF 循环
-  - 边界计算使用 $derived 缓存
-  - 单次 RAF 批量更新，避免重复触发
+  原理：控制外部滚动容器的 scrollLeft/scrollTop
+  - 利用浏览器原生滚动优化（compositor thread + tile rendering）
+  - 对超高分辨率图片友好，只渲染可见区域
+  - 事件驱动，无持续轮询
 -->
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
@@ -17,86 +13,48 @@
     enabled = false,
     sidebarMargin = 50,
     deadZoneRatio = 0.2,
-    viewportSize = { width: 0, height: 0 },
-    imageSize = { width: 0, height: 0 },
-    scale = 1,
-    onPositionChange,
+    // 滚动容器引用
+    scrollContainer = null as HTMLElement | null,
   }: {
     enabled?: boolean;
     sidebarMargin?: number;
     deadZoneRatio?: number;
-    viewportSize?: { width: number; height: number };
-    imageSize?: { width: number; height: number };
-    scale?: number;
-    onPositionChange?: (x: number, y: number) => void;
+    scrollContainer?: HTMLElement | null;
   } = $props();
   
   let layerRef: HTMLDivElement | null = $state(null);
-  
-  // 单次 RAF 调度器
-  let pendingUpdate: { x: number; y: number } | null = null;
   let rafId: number | null = null;
+  let pendingScroll: { x: number; y: number } | null = null;
   
-  // 缓存边界计算（仅在依赖变化时重算）
-  let bounds = $derived.by(() => {
-    if (!viewportSize.width || !viewportSize.height || !imageSize.width || !imageSize.height) {
-      return { minX: 0, maxX: 100, minY: 0, maxY: 100 };
-    }
-    
-    const imgAspect = imageSize.width / imageSize.height;
-    const vpAspect = viewportSize.width / viewportSize.height;
-    
-    let displayWidth: number;
-    let displayHeight: number;
-    
-    if (imgAspect > vpAspect) {
-      displayWidth = viewportSize.width;
-      displayHeight = viewportSize.width / imgAspect;
-    } else {
-      displayHeight = viewportSize.height;
-      displayWidth = viewportSize.height * imgAspect;
-    }
-    
-    const scaledWidth = displayWidth * scale;
-    const scaledHeight = displayHeight * scale;
-    
-    const THRESHOLD = 1;
-    const overflowX = Math.max(0, (scaledWidth - viewportSize.width) / 2);
-    const overflowY = Math.max(0, (scaledHeight - viewportSize.height) / 2);
-    const hasOverflowX = overflowX > THRESHOLD;
-    const hasOverflowY = overflowY > THRESHOLD;
-    
-    if (!hasOverflowX && !hasOverflowY) {
-      return { minX: 50, maxX: 50, minY: 50, maxY: 50 };
-    }
-    
-    return {
-      minX: hasOverflowX ? 0 : 50,
-      maxX: hasOverflowX ? 100 : 50,
-      minY: hasOverflowY ? 0 : 50,
-      maxY: hasOverflowY ? 100 : 50,
-    };
-  });
-  
-  // 调度单次 RAF 更新
-  function scheduleUpdate(x: number, y: number) {
-    pendingUpdate = { x, y };
+  // 调度滚动更新
+  function scheduleScroll(ratioX: number, ratioY: number) {
+    pendingScroll = { x: ratioX, y: ratioY };
     if (rafId === null) {
-      rafId = requestAnimationFrame(flushUpdate);
+      rafId = requestAnimationFrame(flushScroll);
     }
   }
   
-  function flushUpdate() {
+  function flushScroll() {
     rafId = null;
-    if (pendingUpdate) {
-      onPositionChange?.(pendingUpdate.x, pendingUpdate.y);
-      pendingUpdate = null;
+    if (!pendingScroll || !scrollContainer) return;
+    
+    const { scrollWidth, scrollHeight, clientWidth, clientHeight } = scrollContainer;
+    const maxScrollX = scrollWidth - clientWidth;
+    const maxScrollY = scrollHeight - clientHeight;
+    
+    if (maxScrollX > 0 || maxScrollY > 0) {
+      scrollContainer.scrollTo({
+        left: pendingScroll.x * maxScrollX,
+        top: pendingScroll.y * maxScrollY,
+        // behavior: 'auto' 比 'smooth' 更适合跟随鼠标
+      });
     }
+    
+    pendingScroll = null;
   }
   
-  // 直接在 mousemove 中计算并调度更新
   function onMouseMove(e: MouseEvent) {
-    if (!enabled || !layerRef) return;
+    if (!enabled || !layerRef || !scrollContainer) return;
     
     const rect = layerRef.getBoundingClientRect();
     const localX = e.clientX - rect.left;
@@ -124,13 +82,11 @@
       return;
     }
     
-    // 映射到安全范围
-    const normalizedX = localX / rect.width;
-    const normalizedY = localY / rect.height;
-    const x = bounds.minX + normalizedX * (bounds.maxX - bounds.minX);
-    const y = bounds.minY + normalizedY * (bounds.maxY - bounds.minY);
+    // 计算滚动比例 (0-1)
+    const ratioX = localX / rect.width;
+    const ratioY = localY / rect.height;
     
-    scheduleUpdate(x, y);
+    scheduleScroll(ratioX, ratioY);
   }
   
   onMount(() => {
@@ -145,7 +101,7 @@
   });
 </script>
 
-<!-- 隐藏的参考元素，用于获取边界 -->
+<!-- 隐藏的参考元素，用于获取视口边界 -->
 <div 
   class="hover-layer-ref"
   bind:this={layerRef}

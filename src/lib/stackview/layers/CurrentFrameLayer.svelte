@@ -1,13 +1,15 @@
 <!--
-  CurrentFrameLayer - 当前帧层
+  CurrentFrameLayer - 当前帧层（原生滚动方案）
   z-index: 40
   
   支持布局:
   - single: 单页
   - double: 双页（水平排列）
-  - double-vertical: 双页（垂直排列）
-  - panorama: 全景（水平排列）
-  - panorama-vertical: 全景（垂直排列）
+  - panorama: 全景
+  
+  特性:
+  - 使用原生滚动容器，支持超高分辨率图片
+  - 利用浏览器 tile rendering 优化
 -->
 <script lang="ts">
   import { LayerZIndex } from '../types/layer';
@@ -21,13 +23,9 @@
     orientation = 'horizontal',
     scale = 1,
     rotation = 0,
-    // 视口位置百分比（0-100）
-    viewPositionX = 50,
-    viewPositionY = 50,
-    // 视口和图片尺寸（用于计算边界）
-    viewportSize = { width: 0, height: 0 },
-    imageSize = { width: 0, height: 0 },
     onImageLoad,
+    // 暴露滚动容器引用
+    onContainerReady,
   }: {
     frame: Frame;
     layout?: 'single' | 'double' | 'panorama';
@@ -35,16 +33,16 @@
     orientation?: 'horizontal' | 'vertical';
     scale?: number;
     rotation?: number;
-    viewPositionX?: number;
-    viewPositionY?: number;
-    viewportSize?: { width: number; height: number };
-    imageSize?: { width: number; height: number };
     onImageLoad?: (e: Event, index: number) => void;
+    onContainerReady?: (el: HTMLElement | null) => void;
   } = $props();
   
-  // 计算 transform-origin（基于 viewPositionX/Y）
-  // 悬停滚动通过改变缩放原点来实现平移效果
-  let transformOrigin = $derived(`${viewPositionX}% ${viewPositionY}%`);
+  let containerRef: HTMLDivElement | null = $state(null);
+  
+  // 容器就绪时通知父组件
+  $effect(() => {
+    onContainerReady?.(containerRef);
+  });
   
   // 计算 transform（只包含 scale 和 rotation）
   let transformStyle = $derived.by(() => {
@@ -86,20 +84,22 @@
     data-layer="CurrentFrameLayer"
     data-layer-id="current"
     style:z-index={LayerZIndex.CURRENT_FRAME}
-    style:transform={transformStyle}
-    style:transform-origin={transformOrigin}
+    bind:this={containerRef}
   >
-    {#each frame.images as img, i (i)}
-      <img
-        src={img.url}
-        alt="Current {i}"
-        class="frame-image"
-        style:transform={getImageTransform(img)}
-        style:clip-path={getClipPath(img.splitHalf)}
-        onload={(e) => onImageLoad?.(e, i)}
-        draggable="false"
-      />
-    {/each}
+    <!-- 内层容器匨用于缩放/旋转 -->
+    <div class="frame-content" style:transform={transformStyle}>
+      {#each frame.images as img, i (i)}
+        <img
+          src={img.url}
+          alt="Current {i}"
+          class="frame-image"
+          style:transform={getImageTransform(img)}
+          style:clip-path={getClipPath(img.splitHalf)}
+          onload={(e) => onImageLoad?.(e, i)}
+          draggable="false"
+        />
+      {/each}
+    </div>
   </div>
 {:else}
   <div 
@@ -116,15 +116,28 @@
   .current-frame-layer {
     position: absolute;
     inset: 0;
+    overflow: auto;
+    /* 隐藏滚动条，但保留滚动功能 */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .current-frame-layer::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .frame-content {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: opacity 0.15s ease;
-    overflow: hidden;
+    min-width: 100%;
+    min-height: 100%;
+    /* 内容居中，超出时可滚动 */
+    width: fit-content;
+    height: fit-content;
     /* GPU 加速 */
     will-change: transform;
-    transform: translateZ(0);
-    backface-visibility: hidden;
+    transform-origin: center center;
   }
   
   .frame-single {

@@ -65,27 +65,8 @@
   let containerRef: HTMLDivElement | null = $state(null);
   let viewportSize = $state<ViewportSize>({ width: 0, height: 0 });
   
-  // 视口位置百分比（0-100），用于悬停滚动
-  // 50 = 居中，0 = 显示左/上边缘，100 = 显示右/下边缘
-  let viewPositionX = $state(50);
-  let viewPositionY = $state(50);
-  
-  // 图片尺寸：从多个来源获取，确保第一张图也有尺寸
-  let hoverImageSize = $derived.by(() => {
-    // 优先从 imageStore 获取（异步加载后的准确尺寸）
-    const dims = imageStore.state.dimensions;
-    if (dims?.width && dims?.height) {
-      return { width: dims.width, height: dims.height };
-    }
-    
-    // 备用：从 bookStore.currentPage 获取
-    const page = bookStore.currentPage;
-    if (page?.width && page?.height) {
-      return { width: page.width, height: page.height };
-    }
-    
-    return { width: 0, height: 0 };
-  });
+  // 滚动容器引用（用于悬停滚动）
+  let scrollContainer = $state<HTMLElement | null>(null);
   
   // ============================================================================
   // 真实缩放逻辑（完全独立管理）
@@ -297,12 +278,13 @@
   function resetView() {
     manualScale = 1.0;
     rotation = 0;
-    viewPositionX = 50; viewPositionY = 50;
+    // 重置滚动位置
+    scrollContainer?.scrollTo({ left: 0, top: 0 });
     splitState = null;
   }
   
   function handlePrevPage() {
-    viewPositionX = 50; viewPositionY = 50;
+    scrollContainer?.scrollTo({ left: 0, top: 0 });
     
     if (isInSplitMode && splitState) {
       const prevHalf = getPrevSplitHalf(splitState.half, direction);
@@ -335,7 +317,7 @@
   }
   
   function handleNextPage() {
-    viewPositionX = 50; viewPositionY = 50;
+    scrollContainer?.scrollTo({ left: 0, top: 0 });
     
     if (isInSplitMode) {
       if (!splitState) {
@@ -401,7 +383,7 @@
         imageStore.reset();
         panoramaStore.reset();
         zoomModeManager.reset();
-        viewPositionX = 50; viewPositionY = 50;
+        scrollContainer?.scrollTo({ left: 0, top: 0 });
         splitState = null;
       }
       
@@ -505,8 +487,7 @@
       direction={direction}
       currentPageIndex={bookStore.currentPageIndex}
       scale={manualScale}
-      {viewPositionX}
-      {viewPositionY}
+      onContainerReady={(el) => { scrollContainer = el; }}
     />
   {:else}
     <!-- 普通模式：显示当前帧 -->
@@ -517,10 +498,7 @@
       orientation={orientation}
       scale={manualScale}
       {rotation}
-      {viewPositionX}
-      {viewPositionY}
-      {viewportSize}
-      imageSize={imageStore.state.dimensions ?? { width: 0, height: 0 }}
+      onContainerReady={(el) => { scrollContainer = el; }}
     />
     
     {#if upscaledFrameData.images.length > 0}
@@ -530,10 +508,6 @@
         direction={direction}
         scale={manualScale}
         {rotation}
-        {viewPositionX}
-        {viewPositionY}
-        {viewportSize}
-        imageSize={imageStore.state.dimensions ?? { width: 0, height: 0 }}
       />
     {/if}
   {/if}
@@ -564,10 +538,7 @@
     enabled={hoverScrollEnabled}
     sidebarMargin={50}
     deadZoneRatio={0.2}
-    {viewportSize}
-    imageSize={hoverImageSize}
-    scale={effectiveScale}
-    onPositionChange={(x: number, y: number) => { viewPositionX = x; viewPositionY = y; }}
+    {scrollContainer}
   />
 </div>
 

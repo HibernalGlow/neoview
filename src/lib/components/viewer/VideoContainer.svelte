@@ -59,10 +59,10 @@
 
 		try {
 			// 尝试获取历史进度
-			const historyEntry = await historyStore.getByPath(videoPage.path);
-			if (historyEntry?.videoCurrentTime && historyEntry.videoCurrentTime > 0) {
+			const historyEntry = historyStore.findByPath(videoPage.path);
+			if (historyEntry?.videoPosition && historyEntry.videoPosition > 0) {
 				const duration = historyEntry.videoDuration || 0;
-				const progress = historyEntry.videoCurrentTime;
+				const progress = historyEntry.videoPosition;
 				// 如果已完成，从头开始
 				if (historyEntry.videoCompleted || (duration > 0 && progress >= duration - 5)) {
 					videoStartTime = 0;

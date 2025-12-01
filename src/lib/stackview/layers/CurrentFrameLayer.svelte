@@ -43,48 +43,15 @@
     onImageLoad?: (e: Event, index: number) => void;
   } = $props();
   
-  // 计算 transform（包含 scale、rotation 和 translate）
+  // 计算 transform-origin（基于 viewPositionX/Y）
+  // 悬停滚动通过改变缩放原点来实现平移效果
+  let transformOrigin = $derived(`${viewPositionX}% ${viewPositionY}%`);
+  
+  // 计算 transform（只包含 scale 和 rotation）
   let transformStyle = $derived.by(() => {
     const parts: string[] = [];
-    
-    // 计算平移（基于 viewPositionX/Y 和尺寸差）
-    if (viewportSize.width > 0 && imageSize.width > 0) {
-      // 计算图片 fit 后的尺寸
-      const fitRatio = Math.min(
-        viewportSize.width / imageSize.width,
-        viewportSize.height / imageSize.height
-      );
-      const fitWidth = imageSize.width * fitRatio;
-      const fitHeight = imageSize.height * fitRatio;
-      
-      // 缩放后的尺寸（scale 是用户手动缩放）
-      const scaledWidth = fitWidth * scale;
-      const scaledHeight = fitHeight * scale;
-      
-      // 超出部分（单侧）- 只有超出视口时才需要平移
-      const overflowX = Math.max(0, (scaledWidth - viewportSize.width) / 2);
-      const overflowY = Math.max(0, (scaledHeight - viewportSize.height) / 2);
-      
-      // 只有有溢出时才计算平移
-      if (overflowX > 0 || overflowY > 0) {
-        // 百分比转换为像素平移
-        // viewPositionX=0 -> translateX = +overflowX（显示左边缘）
-        // viewPositionX=50 -> translateX = 0（居中）
-        // viewPositionX=100 -> translateX = -overflowX（显示右边缘）
-        const translateX = overflowX * (1 - viewPositionX / 50);
-        const translateY = overflowY * (1 - viewPositionY / 50);
-        
-        // translate 在 scale 之后应用（CSS 从右到左），所以要除以 scale
-        if (translateX !== 0 || translateY !== 0) {
-          const adjustedScale = scale || 1;
-          parts.push(`translate(${translateX / adjustedScale}px, ${translateY / adjustedScale}px)`);
-        }
-      }
-    }
-    
     if (scale !== 1) parts.push(`scale(${scale})`);
     if (rotation !== 0) parts.push(`rotate(${rotation}deg)`);
-    
     return parts.length > 0 ? parts.join(' ') : 'none';
   });
   
@@ -121,6 +88,7 @@
     data-layer-id="current"
     style:z-index={LayerZIndex.CURRENT_FRAME}
     style:transform={transformStyle}
+    style:transform-origin={transformOrigin}
   >
     {#each frame.images as img, i (i)}
       <img

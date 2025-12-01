@@ -36,7 +36,6 @@
   import { bookContextManager, type BookContext } from '$lib/stores/bookContext.svelte';
   import { bookStore } from '$lib/stores/book.svelte';
   import { settingsManager } from '$lib/settings/settingsManager';
-  import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
   
   // ============================================================================
   // Props
@@ -71,15 +70,21 @@
   let viewPositionX = $state(50);
   let viewPositionY = $state(50);
   
-  // 从 infoPanelStore 获取图片尺寸（比 imageStore 更可靠）
-  let infoPanelImageSize = $state({ width: 0, height: 0 });
-  $effect(() => {
-    const unsubscribe = infoPanelStore.subscribe((state) => {
-      if (state.imageInfo?.width && state.imageInfo?.height) {
-        infoPanelImageSize = { width: state.imageInfo.width, height: state.imageInfo.height };
-      }
-    });
-    return unsubscribe;
+  // 图片尺寸：从多个来源获取，确保第一张图也有尺寸
+  let hoverImageSize = $derived.by(() => {
+    // 优先从 imageStore 获取（异步加载后的准确尺寸）
+    const dims = imageStore.state.dimensions;
+    if (dims?.width && dims?.height) {
+      return { width: dims.width, height: dims.height };
+    }
+    
+    // 备用：从 bookStore.currentPage 获取
+    const page = bookStore.currentPage;
+    if (page?.width && page?.height) {
+      return { width: page.width, height: page.height };
+    }
+    
+    return { width: 0, height: 0 };
   });
   
   // ============================================================================
@@ -500,6 +505,8 @@
       direction={direction}
       currentPageIndex={bookStore.currentPageIndex}
       scale={manualScale}
+      {viewPositionX}
+      {viewPositionY}
     />
   {:else}
     <!-- 普通模式：显示当前帧 -->
@@ -554,11 +561,11 @@
   
   <!-- 悬停滚动层 -->
   <HoverLayer
-    enabled={hoverScrollEnabled && !isPanorama}
+    enabled={hoverScrollEnabled}
     sidebarMargin={50}
     deadZoneRatio={0.2}
     {viewportSize}
-    imageSize={infoPanelImageSize}
+    imageSize={hoverImageSize}
     scale={effectiveScale}
     onPositionChange={(x: number, y: number) => { viewPositionX = x; viewPositionY = y; }}
   />

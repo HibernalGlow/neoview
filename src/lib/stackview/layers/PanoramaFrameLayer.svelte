@@ -13,6 +13,9 @@
     direction = 'ltr',
     currentPageIndex = 0,
     scale = 1,
+    // 悬停滚动位置
+    viewPositionX = 50,
+    viewPositionY = 50,
     onScroll,
   }: {
     units: PanoramaUnit[];
@@ -21,6 +24,8 @@
     direction?: 'ltr' | 'rtl';
     currentPageIndex?: number;
     scale?: number;
+    viewPositionX?: number;
+    viewPositionY?: number;
     onScroll?: (e: Event) => void;
   } = $props();
   
@@ -67,6 +72,9 @@
     }
   });
   
+  // 计算 transform-origin 用于悬停滚动
+  let transformOrigin = $derived(`${viewPositionX}% ${viewPositionY}%`);
+  
   let containerClass = $derived.by(() => {
     const classes = ['panorama-frame-layer'];
     
@@ -92,7 +100,8 @@
     class={containerClass}
     data-layer="PanoramaFrameLayer"
     style:z-index={LayerZIndex.CURRENT_FRAME}
-    onscroll={onScroll}
+    style:transform-origin={transformOrigin}
+    style:transform={scale !== 1 ? `scale(${scale})` : 'none'}
   >
     {#each units as unit (unit.id)}
       <div class="panorama-unit" data-unit-id={unit.id}>
@@ -126,20 +135,13 @@
     flex-direction: row;
     gap: 0;
     padding: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scroll-behavior: smooth;
-    scroll-snap-type: x mandatory;
+    overflow: hidden;
     align-items: center;
     justify-content: flex-start;
-    transform-origin: center center;
   }
   
   .panorama-frame-layer.vertical {
     flex-direction: column;
-    overflow-x: hidden;
-    overflow-y: auto;
-    scroll-snap-type: y mandatory;
   }
   
   .panorama-frame-layer.rtl {

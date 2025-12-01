@@ -20,7 +20,8 @@
 		PinOff,
 		GripHorizontal,
 		Minus,
-		Target
+		Target,
+		Hash
 	} from '@lucide/svelte';
 	import { subscribeSharedPreloadManager } from '$lib/components/viewer/flow/sharedPreloadManager';
 	import type { PreloadManager } from '$lib/components/viewer/flow/preloadManager.svelte';
@@ -60,6 +61,7 @@
 	let resizeStartY = 0;
 	let resizeStartHeight = 0;
 	let showBottomProgressBar = $state(true);
+	let showPageNumbers = $state(true); // 显示页码标签
 	let hoverCount = $state(0); // 追踪悬停区域的计数
 	let showAreaOverlay = $state(false); // 显示区域覆盖层
 	let showHoverAreasOverlay = $state(false); // 显示边栏悬停触发区域覆盖层
@@ -674,6 +676,22 @@
 				<Tooltip.Root>
 					<Tooltip.Trigger>
 						<Button
+							variant={showPageNumbers ? 'default' : 'ghost'}
+							size="sm"
+							class="h-6"
+							onclick={() => showPageNumbers = !showPageNumbers}
+						>
+							<Hash class="mr-1 h-3 w-3" />
+							<span class="text-xs">页码</span>
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>显示/隐藏缩略图页码标签</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
 							variant={showAreaOverlay ? 'default' : 'ghost'}
 							size="sm"
 							class="h-6"
@@ -771,11 +789,13 @@
 									{/if}
 
 									<!-- 页码标签 -->
-									<div
-										class="absolute bottom-0 left-0 right-0 bg-black/70 py-0.5 text-center font-mono text-[10px] text-white"
-									>
-										{originalIndex + 1}
-									</div>
+									{#if showPageNumbers}
+										<div
+											class="absolute bottom-0 left-0 right-0 bg-primary/80 py-0.5 text-center font-mono text-[10px] text-primary-foreground backdrop-blur-sm"
+										>
+											{originalIndex + 1}
+										</div>
+									{/if}
 
 									<!-- 状态角标 -->
 									{#if status === 'done'}

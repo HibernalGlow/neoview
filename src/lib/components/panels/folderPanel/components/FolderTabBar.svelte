@@ -1,11 +1,12 @@
 <script lang="ts">
 /**
  * FolderTabBar - 文件面板页签栏
- * 支持多页签管理，每个页签独立状态
+ * 使用 shadcn Tabs 组件实现多页签管理
  */
-import { X, Plus, Copy, MoreHorizontal } from '@lucide/svelte';
+import { X, Plus, Copy } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
-import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+import * as Tabs from '$lib/components/ui/tabs';
+import * as ContextMenu from '$lib/components/ui/context-menu';
 import * as Tooltip from '$lib/components/ui/tooltip';
 import {
 	allTabs,
@@ -23,12 +24,8 @@ function handleCreateTab() {
 	folderTabActions.createTab(homePath);
 }
 
-function handleSwitchTab(tabId: string) {
-	folderTabActions.switchTab(tabId);
-}
-
-function handleCloseTab(tabId: string, e: MouseEvent) {
-	e.stopPropagation();
+function handleCloseTab(tabId: string, e?: MouseEvent) {
+	e?.stopPropagation();
 	folderTabActions.closeTab(tabId);
 }
 
@@ -44,74 +41,53 @@ function handleMiddleClick(tabId: string, e: MouseEvent) {
 	}
 }
 
-// 右键菜单状态
-let contextMenu = $state<{ visible: boolean; x: number; y: number; tabId: string }>({
-	visible: false,
-	x: 0,
-	y: 0,
-	tabId: ''
-});
-
-function handleContextMenu(tabId: string, e: MouseEvent) {
-	e.preventDefault();
-	contextMenu = {
-		visible: true,
-		x: e.clientX,
-		y: e.clientY,
-		tabId
-	};
+// Tab 值变化时切换
+function handleTabChange(value: string) {
+	folderTabActions.switchTab(value);
 }
 </script>
 
-<div class="flex items-center gap-0.5 overflow-x-auto border-b bg-muted/30 px-1 py-0.5">
-	{#each $allTabs as tab (tab.id)}
-		<div class="group relative flex items-center">
-			<button
-				class="flex min-w-[100px] max-w-[180px] items-center gap-1.5 rounded-t px-2 py-1 text-xs transition-colors {$activeTabId === tab.id
-					? 'bg-background text-foreground shadow-sm'
-					: 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'}"
-				onclick={() => handleSwitchTab(tab.id)}
-				onauxclick={(e) => handleMiddleClick(tab.id, e)}
-				oncontextmenu={(e) => handleContextMenu(tab.id, e)}
-				title={tab.currentPath || tab.title}
-			>
-				<span class="flex-1 truncate text-left">{tab.title}</span>
-			</button>
-			
-			{#if $allTabs.length > 1}
-				<button
-					class="flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity hover:bg-destructive/20 group-hover:opacity-100"
-					onclick={(e) => handleCloseTab(tab.id, e)}
-					title="关闭页签"
-				>
-					<X class="h-3 w-3" />
-				</button>
-			{/if}
-		</div>
-	{/each}
-	
-	<!-- 右键菜单 -->
-	{#if contextMenu.visible}
-		<DropdownMenu.Root open={contextMenu.visible} onOpenChange={(open) => { if (!open) contextMenu.visible = false; }}>
-			<DropdownMenu.Trigger class="fixed" style="left: {contextMenu.x}px; top: {contextMenu.y}px; width: 1px; height: 1px;" />
-			<DropdownMenu.Content align="start">
-				<DropdownMenu.Item onclick={() => handleDuplicateTab(contextMenu.tabId)}>
-					<Copy class="mr-2 h-4 w-4" />
-					复制页签
-				</DropdownMenu.Item>
-				{#if $allTabs.length > 1}
-					<DropdownMenu.Separator />
-					<DropdownMenu.Item 
-						onclick={() => { folderTabActions.closeTab(contextMenu.tabId); contextMenu.visible = false; }}
-						class="text-destructive"
-					>
-						<X class="mr-2 h-4 w-4" />
-						关闭页签
-					</DropdownMenu.Item>
-				{/if}
-			</DropdownMenu.Content>
-		</DropdownMenu.Root>
-	{/if}
+<div class="flex items-center border-b bg-muted/30">
+	<Tabs.Root value={$activeTabId} onValueChange={handleTabChange} class="flex-1 overflow-hidden">
+		<Tabs.List class="h-8 w-full justify-start gap-0 rounded-none bg-transparent p-0">
+			{#each $allTabs as tab (tab.id)}
+				<ContextMenu.Root>
+					<ContextMenu.Trigger class="flex items-center">
+						<Tabs.Trigger
+							value={tab.id}
+							class="group relative h-8 min-w-[100px] max-w-[180px] gap-1 rounded-none border-b-2 border-transparent px-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-background"
+							onauxclick={(e) => handleMiddleClick(tab.id, e)}
+							title={tab.currentPath || tab.title}
+						>
+							<span class="flex-1 truncate text-left">{tab.title}</span>
+							{#if $allTabs.length > 1}
+								<button
+									class="ml-1 flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity hover:bg-destructive/20 group-hover:opacity-100"
+									onclick={(e) => handleCloseTab(tab.id, e)}
+									title="关闭页签"
+								>
+									<X class="h-3 w-3" />
+								</button>
+							{/if}
+						</Tabs.Trigger>
+					</ContextMenu.Trigger>
+					<ContextMenu.Content>
+						<ContextMenu.Item onclick={() => handleDuplicateTab(tab.id)}>
+							<Copy class="mr-2 h-4 w-4" />
+							复制页签
+						</ContextMenu.Item>
+						{#if $allTabs.length > 1}
+							<ContextMenu.Separator />
+							<ContextMenu.Item onclick={() => handleCloseTab(tab.id)} class="text-destructive">
+								<X class="mr-2 h-4 w-4" />
+								关闭页签
+							</ContextMenu.Item>
+						{/if}
+					</ContextMenu.Content>
+				</ContextMenu.Root>
+			{/each}
+		</Tabs.List>
+	</Tabs.Root>
 
 	<!-- 新建页签按钮 -->
 	<Tooltip.Root>
@@ -119,7 +95,7 @@ function handleContextMenu(tabId: string, e: MouseEvent) {
 			<Button
 				variant="ghost"
 				size="icon"
-				class="h-6 w-6 shrink-0"
+				class="h-6 w-6 shrink-0 mr-1"
 				onclick={handleCreateTab}
 			>
 				<Plus class="h-3.5 w-3.5" />

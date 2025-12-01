@@ -556,14 +556,16 @@
     imageSrc={imageStore.state.currentUrl ?? ''}
   />
   
-  {#if isVideoMode}
+  {#if isVideoMode && bookStore.currentPage}
     <!-- 视频模式：显示视频播放器 -->
-    <VideoContainer
-      bind:this={videoContainerRef}
-      page={bookStore.currentPage}
-      onEnded={handleNextPage}
-      onError={(err) => console.error('Video error:', err)}
-    />
+    {#key bookStore.currentPage.path}
+      <VideoContainer
+        bind:this={videoContainerRef}
+        page={bookStore.currentPage}
+        onEnded={handleNextPage}
+        onError={(err) => console.error('Video error:', err)}
+      />
+    {/key}
   {:else if isPanorama}
     <!-- 全景模式：显示滚动视图 -->
     <PanoramaFrameLayer 

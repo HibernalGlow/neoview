@@ -149,7 +149,9 @@
 
 	// 监听 page 变化，加载视频
 	$effect(() => {
-		if (page && isVideoFile(page.name)) {
+		// 使用与 StackView 一致的检测逻辑：优先 name，然后 innerPath
+		const filename = page?.name || page?.innerPath || '';
+		if (page && filename && isVideoFile(filename)) {
 			loadVideo(page);
 		} else {
 			clearVideoUrl();

@@ -40,10 +40,13 @@
   let lastMousePos = { x: 0, y: 0 };
   let isHovering = $state(false);
   
-  // 性能优化：缓存边界检测结果
+  // 性能优化：缓存结果
   let lastOverlayCheck = 0;
   let lastOverlayResult = true;
+  let cachedRect: DOMRect | null = null;
+  let lastRectUpdate = 0;
   const OVERLAY_CHECK_INTERVAL = 100; // ms
+  const RECT_CACHE_INTERVAL = 50; // ms
   
   /**
    * 计算安全的 transform-origin 范围
@@ -156,10 +159,22 @@
     }
   }
   
+  // 获取缓存的 rect（减少 reflow）
+  function getCachedRect(): DOMRect | null {
+    if (!layerRef) return null;
+    const now = performance.now();
+    if (!cachedRect || now - lastRectUpdate > RECT_CACHE_INTERVAL) {
+      cachedRect = layerRef.getBoundingClientRect();
+      lastRectUpdate = now;
+    }
+    return cachedRect;
+  }
+  
   // 使用 window 事件监听（节流优化）
   function onWindowMouseMove(e: MouseEvent) {
     if (!layerRef || !enabled) return;
-    const rect = layerRef.getBoundingClientRect();
+    const rect = getCachedRect();
+    if (!rect) return;
     
     // 检查鼠标是否在 StackView 区域内
     const inBounds = e.clientX >= rect.left && e.clientX <= rect.right &&
@@ -189,7 +204,8 @@
   }
   
   onMount(() => {
-    window.addEventListener('mousemove', onWindowMouseMove);
+    // passive: true 提升滚动性能
+    window.addEventListener('mousemove', onWindowMouseMove, { passive: true });
     if (enabled) {
       startLoop();
     }

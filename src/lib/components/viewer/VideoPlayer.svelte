@@ -11,7 +11,9 @@
 		Gauge,
 		Repeat,
 		Repeat1,
-		FastForward
+		FastForward,
+		Pin,
+		PinOff
 	} from '@lucide/svelte';
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
 
@@ -68,6 +70,7 @@
 	let duration = $state(0);
 	let volume = $state(initialVolume);
 	let showControls = $state(true);
+	let controlsPinned = $state(false); // 固定控件不隐藏
 	let playbackRate = $state(initialPlaybackRate);
 	let loopMode: LoopMode = $state(initialLoopMode);
 	let hideControlsTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -288,8 +291,10 @@
 		if (hideControlsTimeout) {
 			clearTimeout(hideControlsTimeout);
 		}
+		// 固定模式下不自动隐藏
+		if (controlsPinned) return;
 		hideControlsTimeout = setTimeout(() => {
-			if (isPlaying) {
+			if (isPlaying && !controlsPinned) {
 				showControls = false;
 			}
 		}, 3000);
@@ -323,7 +328,7 @@
 <div
 	class="video-player-container relative flex h-full w-full items-center justify-center bg-black"
 	onmousemove={handleMouseMove}
-	onmouseleave={() => isPlaying && (showControls = false)}
+	onmouseleave={() => isPlaying && !controlsPinned && (showControls = false)}
 	role="region"
 	aria-label="视频播放器"
 >
@@ -352,6 +357,14 @@
 			class:opacity-100={showControls}
 			onclick={(event) => event.stopPropagation()}
 			onmousedown={(event) => event.stopPropagation()}
+			onmouseenter={() => {
+				// 鼠标进入控件区域时清除隐藏定时器，保持控件显示
+				if (hideControlsTimeout) {
+					clearTimeout(hideControlsTimeout);
+					hideControlsTimeout = null;
+				}
+				showControls = true;
+			}}
 			role="group"
 			aria-label="视频控制栏"
 		>
@@ -493,6 +506,23 @@
 					title={seekMode ? '快进模式已开启' : '开启快进模式'}
 				>
 					<FastForward class="h-5 w-5 text-primary {seekMode ? '' : 'opacity-40'}" />
+				</button>
+
+				<!-- 固定控件 -->
+				<button
+					class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {controlsPinned ? 'bg-white/30' : ''}"
+					onclick={(event) => {
+						event.stopPropagation();
+						controlsPinned = !controlsPinned;
+					}}
+					aria-label={controlsPinned ? '取消固定控件' : '固定控件'}
+					title={controlsPinned ? '控件已固定' : '固定控件'}
+				>
+					{#if controlsPinned}
+						<Pin class="h-5 w-5 text-primary" />
+					{:else}
+						<PinOff class="h-5 w-5 text-primary opacity-40" />
+					{/if}
 				</button>
 
 				<!-- 全屏 -->

@@ -457,6 +457,20 @@ async function dispatchAction(action: string) {
 		case 'toggleLayoutMode':
 			console.log('布局模式切换已禁用');
 			break;
+		// 视频相关操作（已在 isVideoPage 块内处理）
+		case 'videoPlayPause':
+		case 'videoSeekForward':
+		case 'videoSeekBackward':
+		case 'videoToggleMute':
+		case 'videoToggleLoopMode':
+		case 'videoVolumeUp':
+		case 'videoVolumeDown':
+		case 'videoSpeedUp':
+		case 'videoSpeedDown':
+		case 'videoSpeedToggle':
+		case 'videoSeekModeToggle':
+			// 已在 isVideoPage 块内处理，这里只是防止 default 警告
+			break;
 		default:
 			console.warn('未实现的快捷操作：', action);
 		}

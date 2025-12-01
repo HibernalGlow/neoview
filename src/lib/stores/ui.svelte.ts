@@ -108,6 +108,9 @@ export const layoutMode = writable<LayoutMode>(loadFromStorage('layoutMode', 'cl
 export type LayoutSwitchMode = 'seamless' | 'cold';
 export const layoutSwitchMode = writable<LayoutSwitchMode>(loadFromStorage('layoutSwitchMode', 'cold'));
 
+// Viewer 页码信息显示
+export const viewerPageInfoVisible = writable<boolean>(loadFromStorage('viewerPageInfoVisible', true));
+
 // 订阅并保存变化
 leftSidebarOpen.subscribe((value) => saveToStorage('leftSidebarOpen', value));
 leftSidebarWidth.subscribe((value) => saveToStorage('leftSidebarWidth', value));
@@ -122,6 +125,7 @@ topToolbarPinned.subscribe((value) => saveToStorage('topToolbarPinned', value));
 bottomThumbnailBarPinned.subscribe((value) => saveToStorage('bottomThumbnailBarPinned', value));
 leftSidebarPinned.subscribe((value) => saveToStorage('leftSidebarPinned', value));
 rightSidebarPinned.subscribe((value) => saveToStorage('rightSidebarPinned', value));
+viewerPageInfoVisible.subscribe((value) => saveToStorage('viewerPageInfoVisible', value));
 topToolbarHeight.subscribe((value) => saveToStorage('topToolbarHeight', value));
 bottomThumbnailBarHeight.subscribe((value) => saveToStorage('bottomThumbnailBarHeight', value));
 layoutMode.subscribe((value) => saveToStorage('layoutMode', value));

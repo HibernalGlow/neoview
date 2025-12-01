@@ -9,7 +9,7 @@
 	import { thumbnailCacheStore, type ThumbnailEntry } from '$lib/stores/thumbnailCache.svelte';
 	import { loadImage } from '$lib/api/fs';
 	import { loadImageFromArchive, generateVideoThumbnail } from '$lib/api/filesystem';
-	import { bottomThumbnailBarPinned, bottomThumbnailBarHeight } from '$lib/stores';
+	import { bottomThumbnailBarPinned, bottomThumbnailBarHeight, viewerPageInfoVisible } from '$lib/stores';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { Button } from '$lib/components/ui/button';
 	import * as Progress from '$lib/components/ui/progress';
@@ -61,7 +61,7 @@
 	let resizeStartY = 0;
 	let resizeStartHeight = 0;
 	let showBottomProgressBar = $state(true);
-	let showPageNumbers = $state(true); // 显示页码标签
+	let showPageNumbers = $state(true); // 显示底栏页码标签
 	let hoverCount = $state(0); // 追踪悬停区域的计数
 	let showAreaOverlay = $state(false); // 显示区域覆盖层
 	let showHoverAreasOverlay = $state(false); // 显示边栏悬停触发区域覆盖层
@@ -676,17 +676,17 @@
 				<Tooltip.Root>
 					<Tooltip.Trigger>
 						<Button
-							variant={showPageNumbers ? 'default' : 'ghost'}
+							variant={$viewerPageInfoVisible ? 'default' : 'ghost'}
 							size="sm"
 							class="h-6"
-							onclick={() => showPageNumbers = !showPageNumbers}
+							onclick={() => viewerPageInfoVisible.update(v => !v)}
 						>
 							<Hash class="mr-1 h-3 w-3" />
 							<span class="text-xs">页码</span>
 						</Button>
 					</Tooltip.Trigger>
 					<Tooltip.Content>
-						<p>显示/隐藏缩略图页码标签</p>
+						<p>显示/隐藏 Viewer 右下角页码信息</p>
 					</Tooltip.Content>
 				</Tooltip.Root>
 				<Tooltip.Root>
@@ -791,7 +791,7 @@
 									<!-- 页码标签 -->
 									{#if showPageNumbers}
 										<div
-											class="absolute bottom-0 left-0 right-0 bg-primary/80 py-0.5 text-center font-mono text-[10px] text-primary-foreground backdrop-blur-sm"
+											class="absolute bottom-0 left-0 right-0 bg-primary/90 py-0.5 text-center font-mono text-[10px] font-medium text-primary-foreground"
 										>
 											{originalIndex + 1}
 										</div>

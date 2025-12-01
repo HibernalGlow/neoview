@@ -79,20 +79,23 @@
     position: absolute;
     bottom: 8px;
     right: 8px;
-    padding: 2px 8px;
-    background: rgba(0, 0, 0, 0.5);
-    border-radius: 4px;
-    color: white;
+    padding: 4px 10px;
+    background: hsl(var(--primary) / 0.85);
+    backdrop-filter: blur(4px);
+    border-radius: 6px;
+    color: hsl(var(--primary-foreground));
     font-size: 12px;
+    font-weight: 500;
     display: flex;
     gap: 4px;
     align-items: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   }
   
   .badge {
-    background: rgba(255, 255, 255, 0.2);
-    padding: 0 4px;
-    border-radius: 2px;
+    background: hsl(var(--primary-foreground) / 0.2);
+    padding: 1px 6px;
+    border-radius: 4px;
     font-size: 10px;
   }
   

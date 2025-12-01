@@ -33,7 +33,7 @@
   import { createCursorAutoHide, type CursorAutoHideController } from '$lib/utils/cursorAutoHide';
   
   // 导入外部 stores
-  import { viewMode as legacyViewMode, orientation as legacyOrientation, zoomLevel, rotationAngle, setZoomLevel } from '$lib/stores';
+  import { viewMode as legacyViewMode, orientation as legacyOrientation, zoomLevel, rotationAngle, setZoomLevel, viewerPageInfoVisible } from '$lib/stores';
   import { bookContextManager, type BookContext } from '$lib/stores/bookContext.svelte';
   import { bookStore } from '$lib/stores/book.svelte';
   import { settingsManager } from '$lib/settings/settingsManager';
@@ -615,7 +615,7 @@
     isLoading={isPanorama ? panoramaStore.state.loading : imageStore.state.loading}
     isDivided={isInSplitMode}
     splitHalf={splitState?.half ?? null}
-    showPageInfo={showPageInfo}
+    showPageInfo={$viewerPageInfoVisible && showPageInfo}
     showProgress={showProgress}
     showLoading={showLoading}
   />

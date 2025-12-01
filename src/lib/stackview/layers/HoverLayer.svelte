@@ -153,8 +153,16 @@
   function onWindowMouseMove(e: MouseEvent) {
     if (!layerRef || !enabled) return;
     const rect = layerRef.getBoundingClientRect();
-    if (e.clientX >= rect.left && e.clientX <= rect.right &&
-        e.clientY >= rect.top && e.clientY <= rect.bottom) {
+    
+    // 检查鼠标是否在 StackView 区域内
+    const inBounds = e.clientX >= rect.left && e.clientX <= rect.right &&
+                     e.clientY >= rect.top && e.clientY <= rect.bottom;
+    
+    // 检查鼠标下方的元素是否属于 StackView（而不是侧栏等覆盖层）
+    const elementUnderMouse = document.elementFromPoint(e.clientX, e.clientY);
+    const isOverStackView = elementUnderMouse?.closest('.stack-view') !== null;
+    
+    if (inBounds && isOverStackView) {
       lastMousePos = { x: e.clientX, y: e.clientY };
       if (!isHovering) {
         isHovering = true;

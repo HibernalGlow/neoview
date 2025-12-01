@@ -64,6 +64,12 @@
   function handlePointerDown(e: PointerEvent) {
     if (!enablePan) return;
     
+    // 排除交互区域（工具栏、下拉框等）
+    const target = e.target as HTMLElement;
+    if (isInInteractiveZone(target)) {
+      return;
+    }
+    
     isPanning = true;
     lastPoint = { x: e.clientX, y: e.clientY };
     onPanStart?.({ x: e.clientX, y: e.clientY });
@@ -96,6 +102,12 @@
     
     // 如果有拖拽，不触发点击
     if (isPanning) return;
+    
+    // 排除交互区域（工具栏、下拉框等）
+    const target = e.target as HTMLElement;
+    if (isInInteractiveZone(target)) {
+      return;
+    }
     
     const rect = layerRef.getBoundingClientRect();
     const relX = (e.clientX - rect.left) / rect.width;

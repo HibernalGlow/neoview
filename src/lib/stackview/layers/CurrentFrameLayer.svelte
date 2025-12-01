@@ -21,16 +21,22 @@
     layout = 'single',
     direction = 'ltr',
     orientation = 'horizontal',
+    // 视口尺寸
+    viewportSize = { width: 0, height: 0 },
+    // 图片原始尺寸
+    imageSize = { width: 0, height: 0 },
+    // 缩放比例（基于 fit 后的额外缩放）
     scale = 1,
     rotation = 0,
     onImageLoad,
-    // 暴露滚动容器引用
     onContainerReady,
   }: {
     frame: Frame;
     layout?: 'single' | 'double' | 'panorama';
     direction?: 'ltr' | 'rtl';
     orientation?: 'horizontal' | 'vertical';
+    viewportSize?: { width: number; height: number };
+    imageSize?: { width: number; height: number };
     scale?: number;
     rotation?: number;
     onImageLoad?: (e: Event, index: number) => void;
@@ -44,13 +50,43 @@
     onContainerReady?.(containerRef);
   });
   
-  // 计算 transform（只包含 scale 和 rotation）
-  let transformStyle = $derived.by(() => {
-    const parts: string[] = [];
-    if (scale !== 1) parts.push(`scale(${scale})`);
-    if (rotation !== 0) parts.push(`rotate(${rotation}deg)`);
-    return parts.length > 0 ? parts.join(' ') : 'none';
+  // 计算图片显示尺寸（像素）
+  let displaySize = $derived.by(() => {
+    if (!viewportSize.width || !viewportSize.height || !imageSize.width || !imageSize.height) {
+      return null;
+    }
+    
+    const vw = viewportSize.width;
+    const vh = viewportSize.height;
+    const iw = imageSize.width;
+    const ih = imageSize.height;
+    
+    // 计算 fit 后的基础尺寸
+    const ratioW = vw / iw;
+    const ratioH = vh / ih;
+    const fitRatio = Math.min(ratioW, ratioH);
+    
+    // 应用 scale
+    const finalRatio = fitRatio * scale;
+    
+    return {
+      width: Math.round(iw * finalRatio),
+      height: Math.round(ih * finalRatio),
+    };
   });
+  
+  // 图片尺寸样式
+  let imageSizeStyle = $derived.by(() => {
+    if (!displaySize) {
+      // 没有尺寸信息时使用默认限制
+      return 'max-width: 100%; max-height: 100%;';
+    }
+    // 设置实际像素尺寸
+    return `width: ${displaySize.width}px; height: ${displaySize.height}px; max-width: none; max-height: none;`;
+  });
+  
+  // 旋转样式
+  let rotationStyle = $derived(rotation !== 0 ? `transform: rotate(${rotation}deg)` : '');
   
   let layoutClass = $derived.by(() => {
     const classes: string[] = [];
@@ -86,14 +122,14 @@
     style:z-index={LayerZIndex.CURRENT_FRAME}
     bind:this={containerRef}
   >
-    <!-- 内层容器匨用于缩放/旋转 -->
-    <div class="frame-content" style:transform={transformStyle}>
+    <!-- 内层容器 -->
+    <div class="frame-content" style={rotationStyle}>
       {#each frame.images as img, i (i)}
         <img
           src={img.url}
           alt="Current {i}"
           class="frame-image"
-          style:transform={getImageTransform(img)}
+          style="{imageSizeStyle} {getImageTransform(img) ? `transform: ${getImageTransform(img)};` : ''}"
           style:clip-path={getClipPath(img.splitHalf)}
           onload={(e) => onImageLoad?.(e, i)}
           draggable="false"
@@ -127,16 +163,14 @@
   }
   
   .frame-content {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
+    /* 内容尺寸由图片决定 */
     min-width: 100%;
     min-height: 100%;
-    /* 内容居中，超出时可滚动 */
     width: fit-content;
     height: fit-content;
-    /* GPU 加速 */
-    will-change: transform;
     transform-origin: center center;
   }
   
@@ -190,11 +224,11 @@
   }
   
   .frame-image {
-    max-width: 100%;
-    max-height: 100%;
+    /* 默认尺寸由 imageStyleScale 控制 */
     object-fit: contain;
     user-select: none;
     -webkit-user-drag: none;
+    flex-shrink: 0;
   }
   
   /* 双页 - 每张图占50%宽度（始终左右排列） */

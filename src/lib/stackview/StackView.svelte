@@ -496,6 +496,8 @@
       layout={pageMode}
       direction={direction}
       orientation={orientation}
+      {viewportSize}
+      imageSize={imageStore.state.dimensions ?? { width: 0, height: 0 }}
       scale={manualScale}
       {rotation}
       onContainerReady={(el) => { scrollContainer = el; }}
@@ -506,6 +508,8 @@
         frame={upscaledFrameData} 
         layout="single"
         direction={direction}
+        {viewportSize}
+        imageSize={imageStore.state.dimensions ?? { width: 0, height: 0 }}
         scale={manualScale}
         {rotation}
       />

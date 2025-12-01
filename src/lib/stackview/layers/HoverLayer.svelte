@@ -1,12 +1,9 @@
 <!--
   HoverLayer - 悬停滚动层
   
-  原理：输出 0-100% 的位置值，用于 CSS object-position
-  百分比天然限制边界，绝对不会超出图片范围
-  
-  - 0% = 显示左/上边缘
-  - 50% = 居中
-  - 100% = 显示右/下边缘
+  原理：根据图片溢出量计算安全的 transform-origin 范围
+  - 当图片 <= 视口：位置固定在 50%（居中）
+  - 当图片 > 视口：位置范围限制在安全区间，确保边缘不露出
 -->
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
@@ -21,12 +18,20 @@
     // 中心死区占短边比例（0-1）
     deadZoneRatio = 0.2,
     
+    // 视口和图片尺寸（用于计算边界）
+    viewportSize = { width: 0, height: 0 },
+    imageSize = { width: 0, height: 0 },
+    scale = 1,
+    
     // 回调：位置百分比变化（0-100）
     onPositionChange,
   }: {
     enabled?: boolean;
     sidebarMargin?: number;
     deadZoneRatio?: number;
+    viewportSize?: { width: number; height: number };
+    imageSize?: { width: number; height: number };
+    scale?: number;
     onPositionChange?: (x: number, y: number) => void;
   } = $props();
   
@@ -36,33 +41,74 @@
   let isHovering = $state(false);
   
   /**
-   * 计算位置百分比（0-100）
-   * 鼠标在左边 -> 0%（显示左边缘）
-   * 鼠标在中间 -> 50%（居中）
-   * 鼠标在右边 -> 100%（显示右边缘）
+   * 计算安全的 transform-origin 范围
    */
-  let lastLoggedPos = { x: -1, y: -1 };
+  function calculateBounds(): { minX: number; maxX: number; minY: number; maxY: number } {
+    // 尺寸无效时返回全范围，让悬停滚动仍可用
+    if (!viewportSize.width || !viewportSize.height || !imageSize.width || !imageSize.height) {
+      return { minX: 0, maxX: 100, minY: 0, maxY: 100 };
+    }
+    
+    // 计算图片在 CSS 中的实际显示尺寸（受 max-width/max-height: 100% 约束）
+    const imgAspect = imageSize.width / imageSize.height;
+    const vpAspect = viewportSize.width / viewportSize.height;
+    
+    let displayWidth: number;
+    let displayHeight: number;
+    
+    if (imgAspect > vpAspect) {
+      displayWidth = viewportSize.width;
+      displayHeight = viewportSize.width / imgAspect;
+    } else {
+      displayHeight = viewportSize.height;
+      displayWidth = viewportSize.height * imgAspect;
+    }
+    
+    // 应用缩放
+    const scaledWidth = displayWidth * scale;
+    const scaledHeight = displayHeight * scale;
+    
+    // 计算溢出量（单侧）
+    const overflowX = Math.max(0, (scaledWidth - viewportSize.width) / 2);
+    const overflowY = Math.max(0, (scaledHeight - viewportSize.height) / 2);
+    
+    // 如果没有溢出，固定在 50%
+    if (overflowX <= 0 && overflowY <= 0) {
+      return { minX: 50, maxX: 50, minY: 50, maxY: 50 };
+    }
+    
+    // 计算安全范围
+    const rangeX = scaledWidth > 0 ? (overflowX / scaledWidth) * 100 : 0;
+    const rangeY = scaledHeight > 0 ? (overflowY / scaledHeight) * 100 : 0;
+    
+    return {
+      minX: 50 - rangeX,
+      maxX: 50 + rangeX,
+      minY: 50 - rangeY,
+      maxY: 50 + rangeY,
+    };
+  }
   
+  /**
+   * 计算位置百分比，映射到安全范围
+   */
   function calculatePosition(clientX: number, clientY: number): { x: number; y: number } | null {
     if (!layerRef) return null;
     
     const rect = layerRef.getBoundingClientRect();
-    
-    // 排除侧边栏区域
     const localX = clientX - rect.left;
     const localY = clientY - rect.top;
     
+    // 排除侧边栏区域
     if (localX < sidebarMargin || localX > rect.width - sidebarMargin) {
       return null;
     }
     
-    // 计算相对于中心的位置
+    // 应用死区
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
     const relX = localX - centerX;
     const relY = localY - centerY;
-    
-    // 应用死区（只在中心小区域内不响应）
     const deadZoneSizeX = rect.width * deadZoneRatio / 2;
     const deadZoneSizeY = rect.height * deadZoneRatio / 2;
     
@@ -70,15 +116,13 @@
       return null;
     }
     
-    // 转换为 0-100 百分比
-    const x = Math.max(0, Math.min(100, (localX / rect.width) * 100));
-    const y = Math.max(0, Math.min(100, (localY / rect.height) * 100));
+    // 获取安全边界并映射
+    const bounds = calculateBounds();
+    const normalizedX = localX / rect.width;
+    const normalizedY = localY / rect.height;
     
-    // 只在位置变化较大时输出日志
-    if (Math.abs(x - lastLoggedPos.x) > 5 || Math.abs(y - lastLoggedPos.y) > 5) {
-      console.log('[HoverLayer] position:', x.toFixed(0), y.toFixed(0));
-      lastLoggedPos = { x, y };
-    }
+    const x = bounds.minX + normalizedX * (bounds.maxX - bounds.minX);
+    const y = bounds.minY + normalizedY * (bounds.maxY - bounds.minY);
     
     return { x, y };
   }

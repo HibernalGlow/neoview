@@ -36,6 +36,7 @@
   import { bookContextManager, type BookContext } from '$lib/stores/bookContext.svelte';
   import { bookStore } from '$lib/stores/book.svelte';
   import { settingsManager } from '$lib/settings/settingsManager';
+  import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
   
   // ============================================================================
   // Props
@@ -69,6 +70,17 @@
   // 50 = 居中，0 = 显示左/上边缘，100 = 显示右/下边缘
   let viewPositionX = $state(50);
   let viewPositionY = $state(50);
+  
+  // 从 infoPanelStore 获取图片尺寸（比 imageStore 更可靠）
+  let infoPanelImageSize = $state({ width: 0, height: 0 });
+  $effect(() => {
+    const unsubscribe = infoPanelStore.subscribe((state) => {
+      if (state.imageInfo?.width && state.imageInfo?.height) {
+        infoPanelImageSize = { width: state.imageInfo.width, height: state.imageInfo.height };
+      }
+    });
+    return unsubscribe;
+  });
   
   // ============================================================================
   // 真实缩放逻辑（完全独立管理）
@@ -545,7 +557,10 @@
     enabled={hoverScrollEnabled && !isPanorama}
     sidebarMargin={50}
     deadZoneRatio={0.2}
-    onPositionChange={(x, y) => { viewPositionX = x; viewPositionY = y; }}
+    {viewportSize}
+    imageSize={infoPanelImageSize}
+    scale={effectiveScale}
+    onPositionChange={(x: number, y: number) => { viewPositionX = x; viewPositionY = y; }}
   />
 </div>
 

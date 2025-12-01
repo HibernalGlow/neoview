@@ -274,14 +274,10 @@
     inset: 0;
     pointer-events: auto;
     touch-action: none;
-    cursor: grab;
+    cursor: inherit; /* 继承父级 cursor，支持自动隐藏 */
     /* 阻止图片拖拽 */
     -webkit-user-drag: none;
     user-select: none;
-  }
-  
-  .gesture-layer:active {
-    cursor: grabbing;
   }
   
   /* 视频模式：主区域不捕获事件 */
@@ -293,10 +289,10 @@
   .edge-zone {
     position: absolute;
     top: 0;
-    bottom: 100px; /* 留出底部空间给视频控件 */
+    bottom: 0;
     width: 20%;
     pointer-events: auto;
-    cursor: pointer;
+    cursor: inherit;
     background: transparent;
     border: none;
     padding: 0;

@@ -30,6 +30,7 @@
   import { emptyFrame } from './types/frame';
   import { getImageStore } from './stores/imageStore.svelte';
   import { getPanoramaStore } from './stores/panoramaStore.svelte';
+  import { createCursorAutoHide, type CursorAutoHideController } from '$lib/utils/cursorAutoHide';
   
   // 导入外部 stores
   import { viewMode as legacyViewMode, orientation as legacyOrientation, zoomLevel, rotationAngle, setZoomLevel } from '$lib/stores';
@@ -66,6 +67,7 @@
   let splitState = $state<SplitState | null>(null);
   let containerRef: HTMLDivElement | null = $state(null);
   let viewportSize = $state<ViewportSize>({ width: 0, height: 0 });
+  let cursorAutoHide: CursorAutoHideController | null = null;
   
   // 视口位置百分比（0-100），用于悬停滚动
   // 50 = 居中，0 = 显示左/上边缘，100 = 显示右/下边缘
@@ -518,10 +520,28 @@
     };
   });
   
+  // 初始化鼠标自动隐藏
+  $effect(() => {
+    if (!containerRef) return;
+    
+    // 创建鼠标自动隐藏控制器
+    cursorAutoHide = createCursorAutoHide({
+      target: containerRef,
+      hideDelay: 3000,
+      enabled: true
+    });
+    
+    return () => {
+      cursorAutoHide?.destroy();
+      cursorAutoHide = null;
+    };
+  });
+  
   onDestroy(() => {
     imageStore.reset();
     panoramaStore.reset();
     zoomModeManager.reset();
+    cursorAutoHide?.destroy();
   });
   
   let isRTL = $derived(settings.book.readingDirection === 'right-to-left');

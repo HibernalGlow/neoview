@@ -4,7 +4,7 @@
   负责：视频URL管理、历史进度追踪、VideoPlayer 渲染
 -->
 <script lang="ts">
-	import { onDestroy } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import VideoPlayer from './VideoPlayer.svelte';
 	import { videoStore } from '$lib/stores/video.svelte';
 	import { historyStore } from '$lib/stores/history.svelte';
@@ -12,6 +12,9 @@
 	import { isVideoFile, getVideoMimeType } from '$lib/utils/videoUtils';
 	import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 	import type { Page } from '$lib/types';
+
+	// 视频操作事件监听器
+	let viewerActionListener: ((event: CustomEvent) => void) | null = null;
 
 	// Props
 	const {
@@ -153,9 +156,60 @@
 		}
 	});
 
-	// 组件销毁时清理
+	// 处理视频操作事件
+	function handleViewerAction(action: string) {
+		switch (action) {
+			case 'videoPlayPause':
+				playPause();
+				break;
+			case 'videoSeekForward':
+				seekForward();
+				break;
+			case 'videoSeekBackward':
+				seekBackward();
+				break;
+			case 'videoToggleMute':
+				videoStore.toggleMute();
+				break;
+			case 'videoToggleLoopMode':
+				videoStore.cycleLoopMode();
+				break;
+			case 'videoVolumeUp':
+				videoStore.adjustVolume(1);
+				break;
+			case 'videoVolumeDown':
+				videoStore.adjustVolume(-1);
+				break;
+			case 'videoSpeedUp':
+				videoStore.adjustSpeed(1);
+				break;
+			case 'videoSpeedDown':
+				videoStore.adjustSpeed(-1);
+				break;
+			case 'videoSpeedToggle':
+				videoStore.toggleSpeed();
+				break;
+			case 'videoSeekModeToggle':
+				videoStore.toggleSeekMode();
+				break;
+		}
+	}
+
+	// 挂载时添加事件监听
+	onMount(() => {
+		viewerActionListener = (event: CustomEvent) => handleViewerAction(event.detail.action);
+		window.addEventListener('neoview-viewer-action', viewerActionListener as EventListener);
+	});
+
+	// 卸载时清理
 	onDestroy(() => {
+		// 清理视频URL
 		clearVideoUrl();
+		// 移除事件监听
+		if (viewerActionListener) {
+			window.removeEventListener('neoview-viewer-action', viewerActionListener as EventListener);
+			viewerActionListener = null;
+		}
 	});
 
 	// 暴露控制方法

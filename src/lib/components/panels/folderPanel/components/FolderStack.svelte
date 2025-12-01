@@ -20,7 +20,9 @@ import {
 	tabDeleteMode,
 	tabSortConfig,
 	tabSearchKeyword,
-	tabPenetrateMode
+	tabPenetrateMode,
+	activeTabId,
+	tabCurrentPath
 } from '../stores/folderTabStore.svelte';
 
 // 别名映射
@@ -449,6 +451,26 @@ $effect(() => {
 	
 	// 清除命令
 	navigationCommand.set(null);
+});
+
+// 记录上一个活动页签 ID
+let lastActiveTabId = $state<string | null>(null);
+
+// 监听页签切换
+$effect(() => {
+	const currentTabId = $activeTabId;
+	const currentPath = $tabCurrentPath;
+	
+	// 如果是首次渲染或页签切换
+	if (lastActiveTabId !== null && lastActiveTabId !== currentTabId) {
+		console.log('[FolderStack] Tab switched from', lastActiveTabId, 'to', currentTabId, 'path:', currentPath);
+		// 页签切换时，重新初始化到新页签的路径
+		if (currentPath) {
+			initRootWithoutHistory(currentPath);
+		}
+	}
+	
+	lastActiveTabId = currentTabId;
 });
 
 // 尝试穿透文件夹（只有一个子文件时才穿透）

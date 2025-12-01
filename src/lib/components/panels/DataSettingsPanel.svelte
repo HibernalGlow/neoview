@@ -42,6 +42,9 @@
 		| 'historySettings'
 		| 'searchHistory'
 		| 'upscaleSettings'
+		| 'insightsCards'
+		| 'folderPanelSettings'
+		| 'folderRatings'
 		| 'customThemes'
 		| 'performanceSettings';
 
@@ -145,6 +148,33 @@
 			description: '超分模型、并发、条件规则等',
 			defaultExport: true,
 			defaultImport: true
+		},
+		{
+			id: 'insightsCards',
+			name: '洞察面板卡片',
+			panel: '洞察面板',
+			storage: 'localStorage: neoview-insights-cards',
+			description: '洞察面板卡片顺序与折叠状态',
+			defaultExport: true,
+			defaultImport: true
+		},
+		{
+			id: 'folderPanelSettings',
+			name: '文件夹面板设置',
+			panel: '文件夹面板',
+			storage: 'localStorage: neoview-homepage-path, neoview-folder-panel',
+			description: '主页路径、视图样式、快速文件夹目标等',
+			defaultExport: true,
+			defaultImport: true
+		},
+		{
+			id: 'folderRatings',
+			name: 'EMM文件夹评分缓存',
+			panel: 'EMM / 文件夹面板',
+			storage: 'localStorage: neoview-emm-folder-ratings',
+			description: '文件夹平均评分缓存（可重建）',
+			defaultExport: false,
+			defaultImport: false
 		},
 		{
 			id: 'customThemes',

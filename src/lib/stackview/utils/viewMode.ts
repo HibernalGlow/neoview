@@ -352,13 +352,15 @@ export function buildFrameImages(
   
   // 双页模式
   if (config.layout === 'double') {
-    // 横向图独占（只有尺寸已知时才判断）
     const hasCurrentSize = currentSize.width > 0 && currentSize.height > 0;
-    if (config.treatHorizontalAsDoublePage && hasCurrentSize && isLandscape(currentSize)) {
+    const isCurrentLandscape = hasCurrentSize && isLandscape(currentSize);
+    
+    // 开启"横向视为双页"时，横向图独占显示
+    if (config.treatHorizontalAsDoublePage && isCurrentLandscape) {
       return [mainImage];
     }
     
-    // 没有下一页
+    // 没有下一页：单页显示
     if (!nextPage) {
       return [mainImage];
     }
@@ -367,11 +369,18 @@ export function buildFrameImages(
       width: nextPage.width || 0,
       height: nextPage.height || 0,
     };
-    
-    // 下一张是横向图，当前页单独显示（只有尺寸已知时才判断）
     const hasNextSize = nextSize.width > 0 && nextSize.height > 0;
-    if (config.treatHorizontalAsDoublePage && hasNextSize && isLandscape(nextSize)) {
-      return [mainImage];
+    const isNextLandscape = hasNextSize && isLandscape(nextSize);
+    
+    // 开启"横向视为双页"时的自动双页逻辑：
+    // 只有当前图和下一图都是竖向时才组成双页
+    if (config.treatHorizontalAsDoublePage) {
+      // 下一张是横向图：当前页单独显示
+      if (isNextLandscape) {
+        return [mainImage];
+      }
+      // 尺寸未知时，默认组成双页（等待尺寸加载后会重新计算）
+      // 只有确认当前图或下一图是横向时才单独显示
     }
     
     // 构建第二张图
@@ -410,10 +419,11 @@ export function getPageStep(
     width: currentPage.width || 0,
     height: currentPage.height || 0,
   };
-  
-  // 横向图独占（只有尺寸已知时才判断）
   const hasCurrentSize = currentSize.width > 0 && currentSize.height > 0;
-  if (config.treatHorizontalAsDoublePage && hasCurrentSize && isLandscape(currentSize)) {
+  const isCurrentLandscape = hasCurrentSize && isLandscape(currentSize);
+  
+  // 开启"横向视为双页"时，横向图独占
+  if (config.treatHorizontalAsDoublePage && isCurrentLandscape) {
     return 1;
   }
   
@@ -425,11 +435,16 @@ export function getPageStep(
     width: nextPage.width || 0,
     height: nextPage.height || 0,
   };
-  
-  // 下一张是横向图（只有尺寸已知时才判断）
   const hasNextSize = nextSize.width > 0 && nextSize.height > 0;
-  if (config.treatHorizontalAsDoublePage && hasNextSize && isLandscape(nextSize)) {
-    return 1;
+  const isNextLandscape = hasNextSize && isLandscape(nextSize);
+  
+  // 开启"横向视为双页"时的自动双页逻辑
+  if (config.treatHorizontalAsDoublePage) {
+    // 下一张是横向图：步进1
+    if (isNextLandscape) {
+      return 1;
+    }
+    // 尺寸未知时，默认步进2（等待尺寸加载后会重新计算）
   }
   
   return 2;

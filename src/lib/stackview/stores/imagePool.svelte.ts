@@ -54,8 +54,15 @@ class ImagePool {
   getSync(pageIndex: number): PooledImage | null {
     const url = stackImageLoader.getCachedUrl(pageIndex);
     const blob = stackImageLoader.getCachedBlob(pageIndex);
+    const dimensions = stackImageLoader.getCachedDimensions(pageIndex);
     if (url) {
-      return { url, blob, pageIndex };
+      return { 
+        url, 
+        blob, 
+        pageIndex,
+        width: dimensions?.width,
+        height: dimensions?.height,
+      };
     }
     return null;
   }

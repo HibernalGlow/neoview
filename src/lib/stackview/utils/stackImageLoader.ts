@@ -25,6 +25,8 @@ export interface LoadResult {
 export class StackImageLoader {
   private core: ImageLoaderCore;
   private currentBookPath: string | null = null;
+  // 尺寸缓存
+  private dimensionsCache = new Map<number, { width: number; height: number }>();
 
   constructor() {
     // 创建独立的 ImageLoaderCore 实例
@@ -37,6 +39,7 @@ export class StackImageLoader {
   setCurrentBook(bookPath: string): void {
     if (this.currentBookPath !== bookPath) {
       this.core.reset();
+      this.dimensionsCache.clear();
       this.currentBookPath = bookPath;
     }
   }
@@ -52,10 +55,17 @@ export class StackImageLoader {
 
     const result = await this.core.loadPage(pageIndex, priority);
     
-    // ImageLoaderCore 返回的 dimensions 是 null，需要手动获取
-    let dimensions = result.dimensions;
+    // 优先使用缓存的尺寸
+    let dimensions = this.dimensionsCache.get(pageIndex) ?? result.dimensions;
+    
+    // 如果没有尺寸，从 Blob 获取
     if (!dimensions && result.blob) {
       dimensions = await getImageDimensions(result.blob);
+    }
+    
+    // 缓存尺寸
+    if (dimensions) {
+      this.dimensionsCache.set(pageIndex, dimensions);
     }
     
     return {
@@ -75,6 +85,10 @@ export class StackImageLoader {
 
   getCachedBlob(pageIndex: number): Blob | undefined {
     return this.core.getCachedBlob(pageIndex);
+  }
+
+  getCachedDimensions(pageIndex: number): { width: number; height: number } | undefined {
+    return this.dimensionsCache.get(pageIndex);
   }
 
   hasCache(pageIndex: number): boolean {
@@ -97,6 +111,7 @@ export class StackImageLoader {
    */
   clear(): void {
     this.core.clearCache();
+    this.dimensionsCache.clear();
   }
 }
 

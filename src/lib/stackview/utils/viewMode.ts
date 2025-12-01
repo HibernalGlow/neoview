@@ -352,12 +352,15 @@ export function buildFrameImages(
   
   // 双页模式
   if (config.layout === 'double') {
-    // 横向图独占
-    if (config.treatHorizontalAsDoublePage && isLandscape(currentSize)) {
+    const hasCurrentSize = currentSize.width > 0 && currentSize.height > 0;
+    const isCurrentLandscape = hasCurrentSize && isLandscape(currentSize);
+    
+    // 开启"横向视为双页"时，横向图独占显示
+    if (config.treatHorizontalAsDoublePage && isCurrentLandscape) {
       return [mainImage];
     }
     
-    // 没有下一页
+    // 没有下一页：单页显示
     if (!nextPage) {
       return [mainImage];
     }
@@ -366,9 +369,12 @@ export function buildFrameImages(
       width: nextPage.width || 0,
       height: nextPage.height || 0,
     };
+    const hasNextSize = nextSize.width > 0 && nextSize.height > 0;
+    const isNextLandscape = hasNextSize && isLandscape(nextSize);
     
-    // 下一张是横向图，当前页单独显示
-    if (config.treatHorizontalAsDoublePage && isLandscape(nextSize)) {
+    // 开启"横向视为双页"时的自动双页逻辑：
+    // 下一张是横向图时，当前页单独显示
+    if (config.treatHorizontalAsDoublePage && isNextLandscape) {
       return [mainImage];
     }
     
@@ -408,9 +414,11 @@ export function getPageStep(
     width: currentPage.width || 0,
     height: currentPage.height || 0,
   };
+  const hasCurrentSize = currentSize.width > 0 && currentSize.height > 0;
+  const isCurrentLandscape = hasCurrentSize && isLandscape(currentSize);
   
-  // 横向图独占
-  if (config.treatHorizontalAsDoublePage && isLandscape(currentSize)) {
+  // 开启"横向视为双页"时，横向图独占
+  if (config.treatHorizontalAsDoublePage && isCurrentLandscape) {
     return 1;
   }
   
@@ -422,10 +430,16 @@ export function getPageStep(
     width: nextPage.width || 0,
     height: nextPage.height || 0,
   };
+  const hasNextSize = nextSize.width > 0 && nextSize.height > 0;
+  const isNextLandscape = hasNextSize && isLandscape(nextSize);
   
-  // 下一张是横向图
-  if (config.treatHorizontalAsDoublePage && isLandscape(nextSize)) {
-    return 1;
+  // 开启"横向视为双页"时的自动双页逻辑
+  if (config.treatHorizontalAsDoublePage) {
+    // 下一张是横向图：步进1
+    if (isNextLandscape) {
+      return 1;
+    }
+    // 尺寸未知时，默认步进2（等待尺寸加载后会重新计算）
   }
   
   return 2;

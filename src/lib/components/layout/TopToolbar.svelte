@@ -69,7 +69,9 @@
 		StretchHorizontal,
 		StretchVertical,
 		Expand,
-		LayoutGrid
+		LayoutGrid,
+		SplitSquareHorizontal,
+		Rows2
 	} from '@lucide/svelte';
 
 	import {
@@ -124,11 +126,47 @@ let currentSortModeLabel = $derived(
 	let autoHideTiming = $derived(settings.panels?.autoHideTiming ?? { showDelaySec: 0, hideDelaySec: 0 });
 	let defaultZoomMode: ZoomMode = $derived(settings.view.defaultZoomMode);
 	let currentZoomDisplayMode: ZoomMode = $derived($viewerState.lockedZoomMode ?? $viewerState.currentZoomMode ?? defaultZoomMode);
+	
+	// 页面布局和自动旋转设置
+	let splitHorizontalPages = $derived(settings.view.pageLayout?.splitHorizontalPages ?? false);
+	let treatHorizontalAsDoublePage = $derived(settings.view.pageLayout?.treatHorizontalAsDoublePage ?? false);
+	let autoRotateMode = $derived(settings.view.autoRotate?.mode ?? 'none');
 
 	// 监听设置变化
 	settingsManager.addListener((newSettings) => {
 		settings = newSettings;
 	});
+	
+	// 切换自动分割横向页
+	function toggleSplitHorizontalPages() {
+		settingsManager.updateNestedSettings('view', {
+			pageLayout: {
+				...settings.view.pageLayout,
+				splitHorizontalPages: !splitHorizontalPages
+			}
+		});
+	}
+	
+	// 切换横向页视为双页
+	function toggleTreatHorizontalAsDoublePage() {
+		settingsManager.updateNestedSettings('view', {
+			pageLayout: {
+				...settings.view.pageLayout,
+				treatHorizontalAsDoublePage: !treatHorizontalAsDoublePage
+			}
+		});
+	}
+	
+	
+	function getAutoRotateLabel(mode: string): string {
+		switch (mode) {
+			case 'left': return '纵向左旋';
+			case 'right': return '纵向右旋';
+			case 'forcedLeft': return '始终左旋';
+			case 'forcedRight': return '始终右旋';
+			default: return '关闭';
+		}
+	}
 
 	function getZoomModeLabel(mode: ZoomMode): string {
 		if (mode === 'fit') return '适应窗口';
@@ -587,7 +625,7 @@ async function handleSortModeChange(mode: PageSortMode) {
 
 <div
 	data-top-toolbar="true"
-	class="absolute left-0 right-0 top-0 z-[58] transition-transform duration-300 {isVisible
+	class="absolute left-0 right-0 top-0 z-58 transition-transform duration-300 {isVisible
 		? 'translate-y-0'
 		: '-translate-y-full'}"
 	onmouseenter={handleMouseEnter}
@@ -833,55 +871,46 @@ async function handleSortModeChange(mode: PageSortMode) {
 		</div>
 	</div>
 
-	<!-- 工具栏（图片操作） -->
+	<!-- 工具栏（图片操作） - 响应式布局：宽度不够时面包屑在上，工具栏在下 -->
 	<div
 		class="bg-sidebar/95 border-b shadow-lg backdrop-blur-sm"
-		style="height: {$topToolbarHeight}px;"
+		style="min-height: {$topToolbarHeight}px;"
 	>
-		<div class="flex h-full items-center justify-between gap-2 overflow-y-auto px-2 py-1">
-			<!-- 左侧：关闭按钮 + 面包屑导航 -->
-			<div class="flex min-w-0 flex-1 items-center gap-2">
-				<Button variant="ghost" size="icon" class="h-8 w-8 flex-shrink-0" onclick={handleClose}>
+		<div class="mx-auto w-full max-w-[1280px] flex flex-col gap-1 px-2 py-1">
+			<!-- 第一行：关闭按钮 + 面包屑导航 + 页码信息（窄屏时独占一行） -->
+			<div class="flex min-w-0 items-center gap-2 justify-start md:justify-center">
+				<Button variant="ghost" size="icon" class="h-8 w-8 shrink-0" onclick={handleClose}>
 					<X class="h-4 w-4" />
 				</Button>
 
 				{#if bookStore.currentBook}
-					<div class="min-w-0 flex-1">
+					<div class="min-w-0 flex-1 md:flex-none md:max-w-[60%]">
 						<PathBar
 							currentPath={bookStore.currentBook.path}
 							isArchive={bookStore.currentBook.type === 'archive'}
 						/>
 					</div>
 				{/if}
+
+				<!-- 页码信息（窄屏时在面包屑旁边） -->
+				{#if bookStore.currentBook}
+					<div class="text-muted-foreground flex shrink-0 items-center gap-2 whitespace-nowrap text-sm">
+						{#if bookStore.currentBook.type === 'archive'}
+							<FileArchive class="h-3 w-3" />
+						{:else}
+							<Folder class="h-3 w-3" />
+						{/if}
+						<span class="font-mono text-xs">
+							{bookStore.currentPageIndex + 1} / {bookStore.totalPages}
+						</span>
+					</div>
+				{/if}
 			</div>
 
-			<!-- 中间：页码信息和进度 -->
+			<!-- 第二行：排序下拉框 + 工具栏按钮（自动换行） -->
 			{#if bookStore.currentBook}
-				<div class="text-muted-foreground flex items-center gap-3 whitespace-nowrap text-sm">
-					{#if bookStore.currentBook.type === 'archive'}
-						<FileArchive class="h-3 w-3" />
-					{:else}
-						<Folder class="h-3 w-3" />
-					{/if}
-					<span class="font-mono text-xs">
-						{bookStore.currentPageIndex + 1} / {bookStore.totalPages}
-					</span>
-					<!-- progress removed: not needed in top toolbar -->
-				</div>
-			{/if}
-
-			<!-- 中间：页码信息、排序 -->
-			{#if bookStore.currentBook}
-				<div class="text-muted-foreground flex items-center gap-3 whitespace-nowrap text-sm">
-					{#if bookStore.currentBook.type === 'archive'}
-						<FileArchive class="h-3 w-3" />
-					{:else}
-						<Folder class="h-3 w-3" />
-					{/if}
-					<span class="font-mono text-xs">
-						{bookStore.currentPageIndex + 1} / {bookStore.totalPages}
-					</span>
-				</div>
+			<div class="flex flex-wrap items-center gap-1 justify-start md:justify-center">
+				<!-- 排序下拉框 -->
 				<div class="flex items-center gap-1">
 					<DropdownMenu.Root>
 						<Tooltip.Root>
@@ -929,10 +958,9 @@ async function handleSortModeChange(mode: PageSortMode) {
 						</DropdownMenu.Content>
 					</DropdownMenu.Root>
 				</div>
-			{/if}
 
-			<!-- 右侧：图片操作按钮 -->
-			<div class="flex flex-shrink-0 items-center gap-1">
+				<!-- 分隔线 -->
+				<Separator.Root orientation="vertical" class="mx-1 h-6" />
 				<!-- 导航按钮 -->
 				<Tooltip.Root>
 					<Tooltip.Trigger>
@@ -1039,13 +1067,14 @@ async function handleSortModeChange(mode: PageSortMode) {
 					</Tooltip.Root>
 
 					<DropdownMenu.Content
-						class="z-60 w-48"
+						class="z-60 w-56"
 						onmouseenter={handleMouseEnter}
 						onmouseleave={handleMouseLeave}
 					>
 						<DropdownMenu.Label>缩放模式</DropdownMenu.Label>
 						<DropdownMenu.Separator />
 						{#each zoomModeOptions as { mode, label }}
+							{@const ZoomIcon = getZoomModeIcon(mode)}
 							<DropdownMenu.Item onclick={() => handleZoomModeChange(mode)}>
 								<div class="flex items-center gap-2">
 									<div class="flex h-4 w-4 items-center justify-center">
@@ -1053,7 +1082,7 @@ async function handleSortModeChange(mode: PageSortMode) {
 											<Check class="h-3 w-3" />
 										{/if}
 									</div>
-									<svelte:component this={getZoomModeIcon(mode)} class="h-3.5 w-3.5 text-muted-foreground" />
+									<ZoomIcon class="h-3.5 w-3.5 text-muted-foreground" />
 									<span class="text-xs">
 										{label}
 										{$viewerState.lockedZoomMode === mode ? '（锁定）' : ''}
@@ -1061,6 +1090,36 @@ async function handleSortModeChange(mode: PageSortMode) {
 								</div>
 							</DropdownMenu.Item>
 						{/each}
+						
+						<DropdownMenu.Separator />
+						<DropdownMenu.Label>页面布局</DropdownMenu.Label>
+						
+						<!-- 自动分割横向页 -->
+						<DropdownMenu.Item onclick={toggleSplitHorizontalPages}>
+							<div class="flex items-center gap-2">
+								<div class="flex h-4 w-4 items-center justify-center">
+									{#if splitHorizontalPages}
+										<Check class="h-3 w-3" />
+									{/if}
+								</div>
+								<SplitSquareHorizontal class="h-3.5 w-3.5 text-muted-foreground" />
+								<span class="text-xs">自动分割横向页</span>
+							</div>
+						</DropdownMenu.Item>
+						
+						<!-- 横向页视为双页 -->
+						<DropdownMenu.Item onclick={toggleTreatHorizontalAsDoublePage}>
+							<div class="flex items-center gap-2">
+								<div class="flex h-4 w-4 items-center justify-center">
+									{#if treatHorizontalAsDoublePage}
+										<Check class="h-3 w-3" />
+									{/if}
+								</div>
+								<Rows2 class="h-3.5 w-3.5 text-muted-foreground" />
+								<span class="text-xs">横向页视为双页</span>
+							</div>
+						</DropdownMenu.Item>
+						
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
 
@@ -1181,17 +1240,94 @@ async function handleSortModeChange(mode: PageSortMode) {
 				<!-- 分隔线 -->
 				<Separator.Root orientation="vertical" class="mx-1 h-6" />
 
-				<!-- 旋转按钮 -->
-				<Tooltip.Root>
-					<Tooltip.Trigger>
-						<Button variant="ghost" size="icon" class="h-8 w-8" onclick={rotateClockwise}>
-							<RotateCw class="h-4 w-4" />
-						</Button>
-					</Tooltip.Trigger>
-					<Tooltip.Content>
-						<p>旋转 90°</p>
-					</Tooltip.Content>
-				</Tooltip.Root>
+				<!-- 旋转下拉菜单 -->
+				<DropdownMenu.Root>
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							<DropdownMenu.Trigger>
+								<Button
+									variant={autoRotateMode !== 'none' ? 'default' : 'ghost'}
+									size="icon"
+									class="h-8 w-8"
+									style="pointer-events: auto;"
+								>
+									<RotateCw class="h-4 w-4" />
+								</Button>
+							</DropdownMenu.Trigger>
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							<p>旋转{autoRotateMode !== 'none' ? `（自动：${getAutoRotateLabel(autoRotateMode)}）` : ''}</p>
+						</Tooltip.Content>
+					</Tooltip.Root>
+					
+					<DropdownMenu.Content
+						class="z-60 w-48"
+						onmouseenter={handleMouseEnter}
+						onmouseleave={handleMouseLeave}
+					>
+						<DropdownMenu.Label>手动旋转</DropdownMenu.Label>
+						<DropdownMenu.Item onclick={rotateClockwise}>
+							<div class="flex items-center gap-2">
+								<RotateCw class="h-3.5 w-3.5 text-muted-foreground" />
+								<span class="text-xs">顺时针旋转 90°</span>
+							</div>
+						</DropdownMenu.Item>
+						
+						<DropdownMenu.Separator />
+						<DropdownMenu.Label>自动旋转</DropdownMenu.Label>
+						
+						<DropdownMenu.Item onclick={() => settingsManager.updateNestedSettings('view', { autoRotate: { mode: 'none' } })}>
+							<div class="flex items-center gap-2">
+								<div class="flex h-4 w-4 items-center justify-center">
+									{#if autoRotateMode === 'none'}
+										<Check class="h-3 w-3" />
+									{/if}
+								</div>
+								<span class="text-xs">关闭</span>
+							</div>
+						</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={() => settingsManager.updateNestedSettings('view', { autoRotate: { mode: 'left' } })}>
+							<div class="flex items-center gap-2">
+								<div class="flex h-4 w-4 items-center justify-center">
+									{#if autoRotateMode === 'left'}
+										<Check class="h-3 w-3" />
+									{/if}
+								</div>
+								<span class="text-xs">纵向左旋</span>
+							</div>
+						</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={() => settingsManager.updateNestedSettings('view', { autoRotate: { mode: 'right' } })}>
+							<div class="flex items-center gap-2">
+								<div class="flex h-4 w-4 items-center justify-center">
+									{#if autoRotateMode === 'right'}
+										<Check class="h-3 w-3" />
+									{/if}
+								</div>
+								<span class="text-xs">纵向右旋</span>
+							</div>
+						</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={() => settingsManager.updateNestedSettings('view', { autoRotate: { mode: 'forcedLeft' } })}>
+							<div class="flex items-center gap-2">
+								<div class="flex h-4 w-4 items-center justify-center">
+									{#if autoRotateMode === 'forcedLeft'}
+										<Check class="h-3 w-3" />
+									{/if}
+								</div>
+								<span class="text-xs">始终左旋 90°</span>
+							</div>
+						</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={() => settingsManager.updateNestedSettings('view', { autoRotate: { mode: 'forcedRight' } })}>
+							<div class="flex items-center gap-2">
+								<div class="flex h-4 w-4 items-center justify-center">
+									{#if autoRotateMode === 'forcedRight'}
+										<Check class="h-3 w-3" />
+									{/if}
+								</div>
+								<span class="text-xs">始终右旋 90°</span>
+							</div>
+						</DropdownMenu.Item>
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
 
 				<Tooltip.Root>
 					<Tooltip.Trigger>
@@ -1209,6 +1345,7 @@ async function handleSortModeChange(mode: PageSortMode) {
 					</Tooltip.Content>
 				</Tooltip.Root>
 			</div>
+			{/if}
 		</div>
 
 		<!-- 拖拽手柄 -->
@@ -1226,7 +1363,7 @@ async function handleSortModeChange(mode: PageSortMode) {
 
 <!-- 触发区域（独立于工具栏，始终存在） -->
 <div
-	class="fixed left-0 right-0 top-0 z-[57]"
+	class="fixed left-0 right-0 top-0 z-57"
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}
 	role="presentation"

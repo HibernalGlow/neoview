@@ -357,6 +357,14 @@
 			class:opacity-100={showControls}
 			onclick={(event) => event.stopPropagation()}
 			onmousedown={(event) => event.stopPropagation()}
+			onmousemove={() => {
+				// 控件区域内移动时也保持显示并刷新定时器
+				showControls = true;
+				if (hideControlsTimeout) {
+					clearTimeout(hideControlsTimeout);
+					hideControlsTimeout = null;
+				}
+			}}
 			onmouseenter={() => {
 				// 鼠标进入控件区域时清除隐藏定时器，保持控件显示
 				if (hideControlsTimeout) {
@@ -364,6 +372,14 @@
 					hideControlsTimeout = null;
 				}
 				showControls = true;
+			}}
+			onmouseleave={() => {
+				// 鼠标离开控件区域时，如果正在播放且未固定，启动隐藏定时器
+				if (isPlaying && !controlsPinned) {
+					hideControlsTimeout = setTimeout(() => {
+						showControls = false;
+					}, 2000);
+				}
 			}}
 			role="group"
 			aria-label="视频控制栏"

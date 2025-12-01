@@ -293,7 +293,7 @@
   .edge-zone {
     position: absolute;
     top: 0;
-    bottom: 0;
+    bottom: 100px; /* 留出底部空间给视频控件 */
     width: 20%;
     pointer-events: auto;
     cursor: pointer;

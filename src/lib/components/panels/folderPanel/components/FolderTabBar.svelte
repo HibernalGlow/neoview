@@ -47,67 +47,66 @@ function handleTabChange(value: string) {
 }
 </script>
 
-<div class="flex items-center gap-1 px-1 py-0.5 bg-muted/20">
-	<!-- 页签列表 -->
-	<div class="flex flex-1 items-center gap-0.5 overflow-x-auto">
-		{#each $allTabs as tab (tab.id)}
-			<ContextMenu.Root>
-				<ContextMenu.Trigger>
-					<button
-						class="group flex h-6 min-w-[80px] max-w-[160px] items-center gap-1 rounded px-2 text-xs transition-colors
-							{tab.id === $activeTabId 
-								? 'bg-background text-foreground shadow-sm' 
-								: 'text-muted-foreground hover:bg-background/50 hover:text-foreground'}"
-						onclick={() => handleTabChange(tab.id)}
-						onauxclick={(e) => handleMiddleClick(tab.id, e)}
-						title={tab.currentPath || tab.title}
-					>
-						<span class="flex-1 truncate text-left">{tab.title}</span>
-						{#if $allTabs.length > 1}
-							<span
-								class="flex h-3.5 w-3.5 items-center justify-center rounded-sm opacity-0 transition-opacity hover:bg-destructive/20 group-hover:opacity-60 hover:!opacity-100"
-								onclick={(e) => handleCloseTab(tab.id, e)}
-								onkeydown={(e) => e.key === 'Enter' && handleCloseTab(tab.id)}
-								role="button"
-								tabindex="0"
-								title="关闭页签"
-							>
-								<X class="h-2.5 w-2.5" />
-							</span>
-						{/if}
-					</button>
-				</ContextMenu.Trigger>
-				<ContextMenu.Content>
-					<ContextMenu.Item onclick={() => handleDuplicateTab(tab.id)}>
-						<Copy class="mr-2 h-3.5 w-3.5" />
-						复制页签
-					</ContextMenu.Item>
-					{#if $allTabs.length > 1}
-						<ContextMenu.Separator />
-						<ContextMenu.Item onclick={() => handleCloseTab(tab.id)} class="text-destructive">
-							<X class="mr-2 h-3.5 w-3.5" />
-							关闭页签
+<Tabs.Root value={$activeTabId} onValueChange={handleTabChange} class="w-full">
+	<div class="flex items-start gap-1 px-1 py-1 bg-muted/30">
+		<!-- 页签列表（自动换行） -->
+		<Tabs.List class="flex flex-wrap gap-1 h-auto bg-transparent p-0">
+			{#each $allTabs as tab (tab.id)}
+				<ContextMenu.Root>
+					<ContextMenu.Trigger>
+						<Tabs.Trigger
+							value={tab.id}
+							class="group h-7 min-w-[80px] max-w-[160px] gap-1 rounded-md px-2.5 text-xs data-[state=active]:shadow-sm"
+							onauxclick={(e) => handleMiddleClick(tab.id, e)}
+							title={tab.currentPath || tab.title}
+						>
+							<span class="flex-1 truncate text-left">{tab.title}</span>
+							{#if $allTabs.length > 1}
+								<span
+									class="flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity hover:bg-destructive/20 group-hover:opacity-60 group-hover:hover:opacity-100"
+									onclick={(e) => handleCloseTab(tab.id, e)}
+									onkeydown={(e) => e.key === 'Enter' && handleCloseTab(tab.id)}
+									role="button"
+									tabindex="0"
+									title="关闭页签"
+								>
+									<X class="h-3 w-3" />
+								</span>
+							{/if}
+						</Tabs.Trigger>
+					</ContextMenu.Trigger>
+					<ContextMenu.Content>
+						<ContextMenu.Item onclick={() => handleDuplicateTab(tab.id)}>
+							<Copy class="mr-2 h-4 w-4" />
+							复制页签
 						</ContextMenu.Item>
-					{/if}
-				</ContextMenu.Content>
-			</ContextMenu.Root>
-		{/each}
-	</div>
+						{#if $allTabs.length > 1}
+							<ContextMenu.Separator />
+							<ContextMenu.Item onclick={() => handleCloseTab(tab.id)} class="text-destructive">
+								<X class="mr-2 h-4 w-4" />
+								关闭页签
+							</ContextMenu.Item>
+						{/if}
+					</ContextMenu.Content>
+				</ContextMenu.Root>
+			{/each}
+		</Tabs.List>
 
-	<!-- 新建页签按钮 -->
-	<Tooltip.Root>
-		<Tooltip.Trigger>
-			<Button
-				variant="ghost"
-				size="icon"
-				class="h-5 w-5 shrink-0"
-				onclick={handleCreateTab}
-			>
-				<Plus class="h-3 w-3" />
-			</Button>
-		</Tooltip.Trigger>
-		<Tooltip.Content>
-			<p>新建页签</p>
-		</Tooltip.Content>
-	</Tooltip.Root>
-</div>
+		<!-- 新建页签按钮 -->
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant="ghost"
+					size="icon"
+					class="h-7 w-7 shrink-0"
+					onclick={handleCreateTab}
+				>
+					<Plus class="h-4 w-4" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>新建页签</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+	</div>
+</Tabs.Root>

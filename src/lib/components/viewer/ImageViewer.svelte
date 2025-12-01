@@ -46,6 +46,7 @@ import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoo
 	import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 	import { isVideoFile } from '$lib/utils/videoUtils';
 	import { historyStore } from '$lib/stores/history.svelte';
+	import { videoStore } from '$lib/stores/video.svelte';
 
 	// 进度条状态
 	let showProgressBar = $state(true);
@@ -231,10 +232,10 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 	let isCurrentPageVideo = $state(false);
 	let videoUrl = $state<string | null>(null);
 	let currentVideoRequestId = 0;
+	let videoPlayerRef: any = null;
 	let videoUrlRevokeNeeded = false;
 	let videoStartTime = $state(0);
 	let lastVideoHistoryUpdateAt = 0;
-	let videoPlayerRef: any = null;
 
 	type VideoLoopMode = 'none' | 'list' | 'single';
 	type VideoPlayerSettings = {
@@ -244,69 +245,9 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 		loopMode: VideoLoopMode;
 	};
 
-	let videoPlayerSettings = $state<VideoPlayerSettings>({
-		volume: 1,
-		muted: false,
-		playbackRate: 1,
-		loopMode: 'list'
-	});
-
-	// 用于倍速切换的上一个倍速值
-	let previousPlaybackRate = $state(1);
-
-
-	let videoSeekMode = $state(false);
-	
-	// 暴露到全局以便 App.svelte 读取
-	$effect(() => {
-		if (typeof window !== 'undefined') {
-			(window as unknown as { __neoview_video_seek_mode?: boolean }).__neoview_video_seek_mode = videoSeekMode;
-		}
-	});
-
-	function adjustVideoVolume(direction: 1 | -1) {
-		if (!isCurrentPageVideo) return;
-		const step = 0.1;
-		const next = Math.min(1, Math.max(0, videoPlayerSettings.volume + direction * step));
-		videoPlayerSettings = {
-			...videoPlayerSettings,
-			volume: next,
-			muted: next === 0
-		};
-	}
-
-	function adjustVideoSpeed(direction: 1 | -1) {
-		if (!isCurrentPageVideo) return;
-		const s = settingsManager.getSettings();
-		const min = s.image.videoMinPlaybackRate;
-		const max = s.image.videoMaxPlaybackRate;
-		const step = s.image.videoPlaybackRateStep;
-		const next = Math.min(max, Math.max(min, videoPlayerSettings.playbackRate + direction * step));
-		videoPlayerSettings = {
-			...videoPlayerSettings,
-			playbackRate: next
-		};
-	}
-
-	function toggleVideoSpeed() {
-		if (!isCurrentPageVideo) return;
-		const current = videoPlayerSettings.playbackRate;
-		if (current === 1) {
-			// 当前是1倍速，切换到上一个倍速（如果上一个也是1，则不变）
-			const target = previousPlaybackRate !== 1 ? previousPlaybackRate : 1;
-			videoPlayerSettings = {
-				...videoPlayerSettings,
-				playbackRate: target
-			};
-		} else {
-			// 当前不是1倍速，保存当前倍速并切换到1倍速
-			previousPlaybackRate = current;
-			videoPlayerSettings = {
-				...videoPlayerSettings,
-				playbackRate: 1
-			};
-		}
-	}
+	// 使用 videoStore 管理视频状态（已移除本地状态，改用全局 store）
+	// videoStore.settings 包含: volume, muted, playbackRate, loopMode
+	// videoStore.seekMode 控制快进模式
 
 	function handleViewerAction(action: string) {
 		const isVideo = isCurrentPageVideo;
@@ -335,51 +276,35 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 				break;
 			}
 			case 'videoToggleMute': {
-				// 通过设置状态驱动 VideoPlayer，同步到 UI
-				videoPlayerSettings = {
-					...videoPlayerSettings,
-					muted: !videoPlayerSettings.muted
-				};
+				videoStore.toggleMute();
 				break;
 			}
 			case 'videoToggleLoopMode': {
-				let next: VideoLoopMode;
-				if (videoPlayerSettings.loopMode === 'list') {
-					next = 'single';
-				} else if (videoPlayerSettings.loopMode === 'single') {
-					next = 'none';
-				} else {
-					next = 'list';
-				}
-				videoPlayerSettings = {
-					...videoPlayerSettings,
-					loopMode: next
-				};
+				videoStore.cycleLoopMode();
 				break;
 			}
 			case 'videoVolumeUp': {
-				adjustVideoVolume(1);
+				videoStore.adjustVolume(1);
 				break;
 			}
 			case 'videoVolumeDown': {
-				adjustVideoVolume(-1);
+				videoStore.adjustVolume(-1);
 				break;
 			}
 			case 'videoSpeedUp': {
-				adjustVideoSpeed(1);
+				videoStore.adjustSpeed(1);
 				break;
 			}
 			case 'videoSpeedDown': {
-				adjustVideoSpeed(-1);
+				videoStore.adjustSpeed(-1);
 				break;
 			}
 			case 'videoSpeedToggle': {
-				toggleVideoSpeed();
+				videoStore.toggleSpeed();
 				break;
 			}
 			case 'videoSeekModeToggle': {
-				videoSeekMode = !videoSeekMode;
-				console.log('视频快进模式:', videoSeekMode ? '开启' : '关闭');
+				videoStore.toggleSeekMode();
 				break;
 			}
 		}
@@ -1647,16 +1572,16 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 					initialTime={videoStartTime}
 					onProgress={handleVideoProgress}
 					onEnded={handleVideoListLoopEnded}
-					initialVolume={videoPlayerSettings.volume}
-					initialMuted={videoPlayerSettings.muted}
-					initialPlaybackRate={videoPlayerSettings.playbackRate}
-					initialLoopMode={videoPlayerSettings.loopMode}
+					initialVolume={videoStore.settings.volume}
+					initialMuted={videoStore.settings.muted}
+					initialPlaybackRate={videoStore.settings.playbackRate}
+					initialLoopMode={videoStore.settings.loopMode}
 					onSettingsChange={(settings) => {
-						videoPlayerSettings = settings;
+						videoStore.updateSettings(settings);
 					}}
-					seekMode={videoSeekMode}
+					seekMode={videoStore.seekMode}
 					onSeekModeChange={(enabled) => {
-						videoSeekMode = enabled;
+						videoStore.setSeekMode(enabled);
 					}}
 				/>
 			{:else}

@@ -14,6 +14,7 @@
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
 	import { isVideoFile } from '$lib/utils/videoUtils';
+	import { videoStore } from '$lib/stores/video.svelte';
 	import { updateUpscaleSettings } from '$lib/utils/upscale/settings';
 	import { deleteArchiveEntry } from '$lib/api/archive';
 	// TODO: 缩略图功能已移除，待重新实现
@@ -68,7 +69,7 @@ async function handleDeleteCurrentArchivePage() {
 	// 初始化缩略图管理器
 	onMount(async () => {
 		try {
-			console.log('🔧 初始化缩略图管理器...');
+			// console.log('🔧 初始化缩略图管理器...');
 			
 			// TODO: 缩略图功能已移除，待重新实现
 			// 使用统一的缩略图路径
@@ -83,7 +84,7 @@ async function handleDeleteCurrentArchivePage() {
 			
 			// await init_thumbnail_manager(thumbnailPath, rootPath, 256);
 			// console.log('✅ 缩略图管理器初始化成功');
-			console.warn('缩略图管理器初始化已跳过，功能已移除，待重新实现');
+			console.log('缩略图管理器初始化已跳过，功能已移除，待重新实现');
 		} catch (error) {
 			console.error('❌ 初始化失败:', error);
 		}
@@ -151,11 +152,8 @@ async function dispatchAction(action: string) {
 	);
 
 	if (isVideoPage) {
-		// 检查是否启用了视频快进模式
-		const videoSeekMode = (window as unknown as { __neoview_video_seek_mode?: boolean }).__neoview_video_seek_mode ?? false;
-		
 		// 如果启用了快进模式，将翻页操作映射为快进/快退
-		if (videoSeekMode) {
+		if (videoStore.seekMode) {
 			switch (action) {
 				case 'nextPage':
 				case 'pageRight':

@@ -75,13 +75,18 @@
   
   // 图片尺寸：从多个来源获取，确保第一张图也有尺寸
   let hoverImageSize = $derived.by(() => {
-    // 优先从 imageStore 获取（异步加载后的准确尺寸）
+    // 优先从 loadedImageSize 获取（onload后的准确尺寸）
+    if (loadedImageSize?.width && loadedImageSize?.height) {
+      return { width: loadedImageSize.width, height: loadedImageSize.height };
+    }
+    
+    // 其次从 imageStore 获取
     const dims = imageStore.state.dimensions;
     if (dims?.width && dims?.height) {
       return { width: dims.width, height: dims.height };
     }
     
-    // 备用：从 bookStore.currentPage 获取
+    // 最后从 bookStore.currentPage 获取
     const page = bookStore.currentPage;
     if (page?.width && page?.height) {
       return { width: page.width, height: page.height };
@@ -426,6 +431,7 @@
         zoomModeManager.reset();
         viewPositionX = 50; viewPositionY = 50;
         splitState = null;
+        loadedImageSize = null; // 重置尺寸，等待新书第一页加载
       }
       
       bookContext = ctx;

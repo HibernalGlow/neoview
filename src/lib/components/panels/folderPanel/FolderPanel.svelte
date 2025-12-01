@@ -669,7 +669,7 @@ onMount(() => {
 
 		<!-- 文件列表（层叠式）- 始终渲染，根据文件树状态调整位置 -->
 		<div
-			class="absolute inset-0 overflow-hidden"
+			class="file-list-container absolute inset-0 overflow-hidden"
 			style={$folderTreeConfig.visible
 				? $folderTreeConfig.layout === 'top'
 					? `top: ${$folderTreeConfig.size + 6}px;`
@@ -728,3 +728,11 @@ onMount(() => {
 	onOpenInExplorer={handleOpenInExplorer}
 	onOpenWithSystem={handleOpenWithSystem}
 />
+
+<style>
+	/* CSS Containment 优化 - 隔离重绘范围 */
+	.file-list-container {
+		contain: strict;
+		content-visibility: auto;
+	}
+</style>

@@ -650,6 +650,8 @@
 	.virtual-list-container {
 		height: 100%;
 		overflow-y: auto;
+		/* CSS Containment 优化 */
+		contain: layout style paint;
 	}
 
 	/* 自定义滚动条样式 */

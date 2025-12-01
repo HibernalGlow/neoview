@@ -611,10 +611,14 @@ function handleOpenFolderAsBook(layerIndex: number, item: FsItem) {
 <style>
 	.folder-stack {
 		perspective: 1000px;
+		/* CSS Containment 优化 */
+		contain: layout style;
 	}
 	
 	.folder-layer {
 		will-change: transform;
 		backface-visibility: hidden;
+		/* CSS Containment 优化 - 每层独立隔离 */
+		contain: layout style paint;
 	}
 </style>

@@ -10,7 +10,8 @@
 		SkipForward,
 		Gauge,
 		Repeat,
-		Repeat1
+		Repeat1,
+		FastForward
 	} from '@lucide/svelte';
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
 
@@ -33,7 +34,9 @@
 		initialPlaybackRate = 1,
 		initialLoopMode = 'list' as LoopMode,
 		initialMuted = false,
-		onSettingsChange = () => {}
+		onSettingsChange = () => {},
+		seekMode = false,
+		onSeekModeChange = () => {}
 	}: {
 		src?: string;
 		videoBlob?: Blob | null;
@@ -46,6 +49,8 @@
 		initialLoopMode?: LoopMode;
 		initialMuted?: boolean;
 		onSettingsChange?: (settings: PlayerSettings) => void;
+		seekMode?: boolean;
+		onSeekModeChange?: (enabled: boolean) => void;
 	} = $props();
 
 	let settings = $state<NeoViewSettings>(settingsManager.getSettings());
@@ -476,6 +481,19 @@
 						{playbackRate.toFixed(2)}x
 					</div>
 				</div>
+
+				<!-- 快进模式 -->
+				<button
+					class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {seekMode ? 'bg-white/30' : ''}"
+					onclick={(event) => {
+						event.stopPropagation();
+						onSeekModeChange(!seekMode);
+					}}
+					aria-label={seekMode ? '关闭快进模式' : '开启快进模式（翻页键变为快进/快退）'}
+					title={seekMode ? '快进模式已开启' : '开启快进模式'}
+				>
+					<FastForward class="h-5 w-5 text-primary {seekMode ? '' : 'opacity-40'}" />
+				</button>
 
 				<!-- 全屏 -->
 				<button

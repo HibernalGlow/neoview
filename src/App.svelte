@@ -151,9 +151,24 @@ async function dispatchAction(action: string) {
 	);
 
 	if (isVideoPage) {
+		// 检查是否启用了视频快进模式
+		const videoSeekMode = (window as unknown as { __neoview_video_seek_mode?: boolean }).__neoview_video_seek_mode ?? false;
+		
+		// 如果启用了快进模式，将翻页操作映射为快进/快退
+		if (videoSeekMode) {
+			switch (action) {
+				case 'nextPage':
+				case 'pageRight':
+				case 'pageLeft':  // 统一方向，右键快进
+					action = 'videoSeekForward';
+					break;
+				case 'prevPage':
+					action = 'videoSeekBackward';
+					break;
+			}
+		}
+		
 		switch (action) {
-			// 不再自动将翻页操作映射为视频快进/快退
-			// 用户应使用专用的视频控制快捷键来控制视频播放
 			case 'videoPlayPause': {
 				console.log('执行视频 播放/暂停');
 				const dispatchViewerAction = (viewerAction: string) => {
@@ -272,6 +287,18 @@ async function dispatchAction(action: string) {
 					}
 				};
 				dispatchViewerAction('videoSpeedToggle');
+				break;
+			}
+			case 'videoSeekModeToggle': {
+				console.log('执行视频 快进模式切换');
+				const dispatchViewerAction = (viewerAction: string) => {
+					if (typeof window !== 'undefined') {
+						window.dispatchEvent(
+							new CustomEvent('neoview-viewer-action', { detail: { action: viewerAction } })
+						);
+					}
+				};
+				dispatchViewerAction('videoSeekModeToggle');
 				break;
 			}
 		}

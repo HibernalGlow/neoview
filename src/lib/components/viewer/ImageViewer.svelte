@@ -254,6 +254,16 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 	// 用于倍速切换的上一个倍速值
 	let previousPlaybackRate = $state(1);
 
+
+	let videoSeekMode = $state(false);
+	
+	// 暴露到全局以便 App.svelte 读取
+	$effect(() => {
+		if (typeof window !== 'undefined') {
+			(window as unknown as { __neoview_video_seek_mode?: boolean }).__neoview_video_seek_mode = videoSeekMode;
+		}
+	});
+
 	function adjustVideoVolume(direction: 1 | -1) {
 		if (!isCurrentPageVideo) return;
 		const step = 0.1;
@@ -365,6 +375,11 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 			}
 			case 'videoSpeedToggle': {
 				toggleVideoSpeed();
+				break;
+			}
+			case 'videoSeekModeToggle': {
+				videoSeekMode = !videoSeekMode;
+				console.log('视频快进模式:', videoSeekMode ? '开启' : '关闭');
 				break;
 			}
 		}
@@ -1627,6 +1642,7 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 		{:else if isCurrentPageVideo}
 			{#if videoUrl}
 				<VideoPlayer
+					bind:this={videoPlayerRef}
 					src={videoUrl}
 					initialTime={videoStartTime}
 					onProgress={handleVideoProgress}
@@ -1637,6 +1653,10 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 					initialLoopMode={videoPlayerSettings.loopMode}
 					onSettingsChange={(settings) => {
 						videoPlayerSettings = settings;
+					}}
+					seekMode={videoSeekMode}
+					onSeekModeChange={(enabled) => {
+						videoSeekMode = enabled;
 					}}
 				/>
 			{:else}

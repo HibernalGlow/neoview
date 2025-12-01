@@ -313,6 +313,13 @@ const defaultBindings: ActionBinding[] = [
 		description: '在当前倍速和1倍速之间切换',
 		bindings: []
 	},
+	{
+		action: 'videoSeekModeToggle',
+		name: '视频快进模式切换',
+		category: '视频',
+		description: '开启后翻页键将作为视频快进/快退使用',
+		bindings: []
+	},
 
 	// === 超分操作 ===
 	{

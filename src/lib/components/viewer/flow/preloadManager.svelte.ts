@@ -5,6 +5,7 @@
 
 import { performanceSettings } from '$lib/settings/settingsManager';
 import { bookStore } from '$lib/stores/book.svelte';
+import { thumbnailCacheStore } from '$lib/stores/thumbnailCache.svelte';
 import { invoke } from '@tauri-apps/api/core';
 import { ImageLoader, type ImageLoaderOptions } from './imageLoaderFacade';
 import { createEventListeners, type EventListenersOptions } from './eventListeners';
@@ -231,6 +232,10 @@ export class PreloadManager {
 	}
 
 	private emitThumbnailReady(pageIndex: number, dataURL: string, source?: string) {
+		// 写入全局缩略图缓存
+		this.writeThumbnailToGlobalCache(pageIndex, dataURL);
+		
+		// 通知监听器（向后兼容）
 		for (const listener of this.thumbnailListeners) {
 			try {
 				listener(pageIndex, dataURL, source);
@@ -238,6 +243,24 @@ export class PreloadManager {
 				console.error('Thumbnail listener failed:', error);
 			}
 		}
+	}
+
+	/**
+	 * 将缩略图写入全局缓存
+	 */
+	private writeThumbnailToGlobalCache(pageIndex: number, dataURL: string): void {
+		if (!dataURL) return;
+		
+		// 解析图片尺寸
+		const img = new Image();
+		img.onload = () => {
+			thumbnailCacheStore.setThumbnail(pageIndex, dataURL, img.width, img.height);
+		};
+		img.onerror = () => {
+			// 即使解析失败，也写入缓存（使用默认尺寸）
+			thumbnailCacheStore.setThumbnail(pageIndex, dataURL, 100, 100);
+		};
+		img.src = dataURL;
 	}
 
 	/**
@@ -257,6 +280,9 @@ export class PreloadManager {
 					invoke('cancel_upscale_jobs_for_book', { bookPath: lastBookPath }).catch((error) => {
 						console.warn('取消上一书籍超分任务失败:', error);
 					});
+					
+					// 重置全局缩略图缓存
+					thumbnailCacheStore.setBook(currentBookPath);
 					
 					// 重置预超分进度
 					this.resetPreUpscaleProgress();

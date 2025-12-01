@@ -6,6 +6,7 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { readable } from 'svelte/store';
 	import { bookStore } from '$lib/stores/book.svelte';
+	import { thumbnailCacheStore, type ThumbnailEntry } from '$lib/stores/thumbnailCache.svelte';
 	import { loadImage } from '$lib/api/fs';
 	import { loadImageFromArchive, generateVideoThumbnail } from '$lib/api/filesystem';
 	import { bottomThumbnailBarPinned, bottomThumbnailBarHeight } from '$lib/stores';
@@ -51,7 +52,9 @@
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
 	let showTimeout: number | undefined;
-	let thumbnails = $state<Record<number, { url: string; width: number; height: number }>>({});
+	// 全局缩略图缓存快照
+	let thumbnailSnapshot = $state<Map<number, ThumbnailEntry>>(new Map());
+	let unsubscribeThumbnailCache: (() => void) | null = null;
 	let thumbnailScrollContainer = $state<HTMLDivElement | null>(null);
 	let isResizing = $state(false);
 	let resizeStartY = 0;
@@ -65,7 +68,11 @@
 	// 共享预加载管理器引用
 	let preloadManager: PreloadManager | null = null;
 	let unsubscribeSharedManager: (() => void) | null = null;
-	let unsubscribeThumbnailListener: (() => void) | null = null;
+
+	// 从全局缓存获取缩略图
+	function getThumbnailFromCache(pageIndex: number): ThumbnailEntry | null {
+		return thumbnailSnapshot.get(pageIndex) ?? null;
+	}
 
 	// 响应钉住状态
 	$effect(() => {
@@ -325,7 +332,7 @@
 		// 并行请求所有缩略图
 		const promises: Promise<void>[] = [];
 		for (let i = start; i <= end; i++) {
-			if (!(i in thumbnails)) {
+			if (!thumbnailCacheStore.hasThumbnail(i)) {
 				promises.push(loadThumbnail(i));
 			}
 		}
@@ -409,7 +416,7 @@
 				// 调用后端视频缩略图接口，返回 data:image/... URL
 				const videoThumbDataUrl = await generateVideoThumbnail(page.path);
 				const thumb = await generateThumbnailFromBase64(videoThumbDataUrl);
-				thumbnails = { ...thumbnails, [pageIndex]: thumb };
+				thumbnailCacheStore.setThumbnail(pageIndex, thumb.url, thumb.width, thumb.height);
 				if (pathKey) {
 					noThumbnailPaths.delete(pathKey);
 				}
@@ -444,7 +451,7 @@
 				}
 
 				const thumbnail = await generateThumbnailFromBase64(fullImageData);
-				thumbnails = { ...thumbnails, [pageIndex]: thumbnail };
+				thumbnailCacheStore.setThumbnail(pageIndex, thumbnail.url, thumbnail.width, thumbnail.height);
 				noThumbnailPaths.delete(pathKey!);
 			} catch (fallbackErr) {
 				console.error(`Fallback also failed for page ${pageIndex}:`, fallbackErr);
@@ -469,7 +476,7 @@
 			// 扩大可见范围，提前加载即将进入视野的缩略图
 			const buffer = 200; // 200px 缓冲区
 			if (rect.left >= containerRect.left - buffer && rect.right <= containerRect.right + buffer) {
-				if (!(i in thumbnails)) {
+				if (!thumbnailCacheStore.hasThumbnail(i)) {
 					void loadThumbnail(i);
 				}
 			}
@@ -495,7 +502,7 @@
 	function getThumbnailStyle(pageIndex: number): string {
 		const containerHeight = Math.max(40, $bottomThumbnailBarHeight - 40);
 		const minWidth = 32;
-		const thumb = thumbnails[pageIndex];
+		const thumb = getThumbnailFromCache(pageIndex);
 		if (!thumb) {
 			const placeholderWidth = Math.max(containerHeight * 0.6, minWidth);
 			return `height:${containerHeight}px;min-width:${placeholderWidth}px;`;
@@ -506,48 +513,26 @@
 		return `height:${containerHeight}px;width:${width}px;min-width:${width}px;`;
 	}
 
-	function handleSharedThumbnailReady(pageIndex: number, dataURL: string) {
-		const img = new Image();
-		img.onload = () => {
-			const maxHeight = $bottomThumbnailBarHeight - 40;
-			let width = img.width;
-			let height = img.height;
-			if (height > maxHeight) {
-				width = (width * maxHeight) / height;
-				height = maxHeight;
-			}
-			thumbnails = { ...thumbnails, [pageIndex]: { url: dataURL, width, height } };
-		};
-		img.src = dataURL;
-	}
-
 	onMount(() => {
+		// 订阅全局缩略图缓存
+		unsubscribeThumbnailCache = thumbnailCacheStore.subscribe(() => {
+			thumbnailSnapshot = thumbnailCacheStore.getAllThumbnails();
+		});
+		thumbnailSnapshot = thumbnailCacheStore.getAllThumbnails();
+		
 		unsubscribeSharedManager = subscribeSharedPreloadManager((manager) => {
-			if (unsubscribeThumbnailListener) {
-				unsubscribeThumbnailListener();
-				unsubscribeThumbnailListener = null;
-			}
 			preloadManager = manager;
 			if (preloadManager) {
 				lastThumbnailRange = null;
-				unsubscribeThumbnailListener = preloadManager.addThumbnailListener(
-					(pageIndex, dataURL, source) => {
-						// 接受任何来源的缩略图，避免重复加载
-						// 如果底栏尚未有该缩略图，则使用其他来源的数据
-						if (!(pageIndex in thumbnails)) {
-							handleSharedThumbnailReady(pageIndex, dataURL);
-						}
-					}
-				);
 				scheduleLoadVisibleThumbnails();
 			}
 		});
 	});
 
 	onDestroy(() => {
-		if (unsubscribeThumbnailListener) {
-			unsubscribeThumbnailListener();
-			unsubscribeThumbnailListener = null;
+		if (unsubscribeThumbnailCache) {
+			unsubscribeThumbnailCache();
+			unsubscribeThumbnailCache = null;
 		}
 		if (unsubscribeSharedManager) {
 			unsubscribeSharedManager();
@@ -579,11 +564,10 @@
 		}
 	}
 
-	// 清空缩略图缓存当书籍变化时
+	// 书籍变化时重置本地状态（全局缓存由 PreloadManager 管理）
 	$effect(() => {
 		const currentBook = bookStore.currentBook;
 		if (currentBook) {
-			thumbnails = {};
 			lastThumbnailRange = null;
 			// 【关键】清空加载状态，防止旧任务继续执行
 			loadingIndices.clear();
@@ -591,10 +575,10 @@
 		}
 	});
 
-	// 当高度变化时重新生成缩略图
+	// 当高度变化时重新加载可见缩略图
 	$effect(() => {
 		const currentBook = bookStore.currentBook;
-		if (currentBook && Object.keys(thumbnails).length > 0) {
+		if (currentBook && thumbnailSnapshot.size > 0) {
 			// 重新加载当前可见的缩略图以适应新高度
 			scheduleLoadVisibleThumbnails();
 		}
@@ -761,9 +745,9 @@
 									onclick={() => bookStore.navigateToPage(originalIndex)}
 									data-page-index={originalIndex}
 								>
-									{#if originalIndex in thumbnails}
+									{#if getThumbnailFromCache(originalIndex)}
 										<img
-											src={thumbnails[originalIndex].url}
+											src={getThumbnailFromCache(originalIndex)?.url}
 											alt="Page {originalIndex + 1}"
 											class="h-full w-full object-contain"
 											style="object-position: center;"

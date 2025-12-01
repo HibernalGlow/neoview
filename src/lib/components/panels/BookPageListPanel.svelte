@@ -6,6 +6,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import { Image as ImageIcon, FileText, Search, Grid3x3, Grid2x2, LayoutGrid } from '@lucide/svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
+	import { thumbnailCacheStore, type ThumbnailEntry } from '$lib/stores/thumbnailCache.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
 	import type { Page } from '$lib/types';
 	import type { PreloadManager } from '$lib/components/viewer/flow/preloadManager.svelte';
@@ -19,12 +20,15 @@
 		index: number;
 		name: string;
 		path: string;
-		thumbUrl: string | null;
-		loading: boolean;
-		error: boolean;
 	}
 
 	let items = $state<PageListItem[]>([]);
+	
+	// 全局缩略图缓存快照
+	let thumbnailSnapshot = $state<Map<number, ThumbnailEntry>>(new Map());
+	
+	// 订阅全局缩略图缓存变化
+	let unsubscribeThumbnailCache: (() => void) | null = null;
 	let searchQuery = $state('');
 	let viewMode = $state<PageViewMode>('standard');
 	let imageColumns = $state<number>(3);
@@ -45,7 +49,6 @@
 
 	let preloadManager: PreloadManager | null = null;
 	let unsubscribeShared: (() => void) | null = null;
-	let unsubscribeThumbs: (() => void) | null = null;
 	let listContainer = $state<HTMLDivElement | null>(null);
 	let lastBookPath = $state<string | null>(null);
 	const requestedVideoThumbnails = new Set<string>();
@@ -57,28 +60,33 @@
 
 	const bookState = createAppStateStore((state) => state.book);
 
-	function setItemState(index: number, patch: Partial<PageListItem>) {
-		if (index < 0 || index >= items.length) return;
-		const current = items[index];
-		items[index] = { ...current, ...patch };
-		items = [...items];
+	// 从全局缓存获取缩略图
+	function getThumbnail(pageIndex: number): ThumbnailEntry | null {
+		return thumbnailSnapshot.get(pageIndex) ?? null;
 	}
-
-	function handleThumbnailReady(pageIndex: number, dataURL: string, source?: string) {
-		if (!dataURL) return;
-		if (pageIndex < 0 || pageIndex >= items.length) return;
-		setItemState(pageIndex, {
-			thumbUrl: dataURL,
-			loading: false,
-			error: false
-		});
+	
+	// 检查是否正在加载
+	function isLoading(pageIndex: number): boolean {
+		return thumbnailCacheStore.isLoading(pageIndex);
+	}
+	
+	// 检查是否加载失败
+	function hasFailed(pageIndex: number): boolean {
+		return thumbnailCacheStore.hasFailed(pageIndex);
 	}
 
 	async function requestThumbnailForPageIndex(pageIndex: number) {
+		// 已有缓存则跳过
+		if (thumbnailCacheStore.hasThumbnail(pageIndex)) return;
+		// 正在加载则跳过
+		if (thumbnailCacheStore.isLoading(pageIndex)) return;
+		// 已失败则跳过（避免重复请求）
+		if (thumbnailCacheStore.hasFailed(pageIndex)) return;
+		
 		const currentBook = bookStore.currentBook;
 		const page = currentBook?.pages?.[pageIndex];
 		if (!currentBook || !page) {
-			setItemState(pageIndex, { loading: false, error: true });
+			thumbnailCacheStore.setFailed(pageIndex);
 			return;
 		}
 
@@ -89,17 +97,15 @@
 		if (isVideoPage) {
 			// 与底部缩略图栏保持一致：当前仅对本地书籍生成视频缩略图
 			if (currentBook.type === 'archive') {
-				setItemState(pageIndex, { loading: false, error: false, thumbUrl: null });
 				return;
 			}
 
 			const videoKey = `${currentBook.path}::${page.path}`;
 			if (requestedVideoThumbnails.has(videoKey)) {
-				// 已经尝试过该视频（成功或失败），避免重复请求
-				setItemState(pageIndex, { loading: false });
 				return;
 			}
 			requestedVideoThumbnails.add(videoKey);
+			thumbnailCacheStore.setLoading(pageIndex);
 
 			const MAX_ATTEMPTS = 3;
 			const RETRY_DELAY_MS = 500;
@@ -108,11 +114,8 @@
 				try {
 					const url = await thumbnailManager.getThumbnail(page.path, undefined, false, 'immediate');
 					if (url) {
-						setItemState(pageIndex, {
-							thumbUrl: url,
-							loading: false,
-							error: false
-						});
+						// 视频缩略图也写入全局缓存
+						thumbnailCacheStore.setThumbnail(pageIndex, url, 100, 100);
 						return;
 					}
 				} catch (error) {
@@ -120,7 +123,7 @@
 				}
 
 				if (attempt >= MAX_ATTEMPTS) {
-					setItemState(pageIndex, { loading: false, error: true });
+					thumbnailCacheStore.setFailed(pageIndex);
 					return;
 				}
 
@@ -134,15 +137,16 @@
 		}
 
 		if (!preloadManager) {
-			setItemState(pageIndex, { loading: false, error: true });
+			thumbnailCacheStore.setFailed(pageIndex);
 			return;
 		}
 
+		thumbnailCacheStore.setLoading(pageIndex);
 		try {
 			await preloadManager.requestThumbnail(pageIndex, 'page-list');
 		} catch (error) {
 			console.debug('请求缩略图失败:', pageIndex, error);
-			setItemState(pageIndex, { loading: false, error: true });
+			thumbnailCacheStore.setFailed(pageIndex);
 		}
 	}
 
@@ -155,9 +159,6 @@
 		const end = Math.min(total - 1, center + radius);
 
 		for (let i = start; i <= end; i++) {
-			const item = items[i];
-			if (!item || item.thumbUrl || item.loading || item.error) continue;
-			setItemState(i, { loading: true, error: false });
 			void requestThumbnailForPageIndex(i);
 		}
 	}
@@ -182,16 +183,15 @@
 	}
 
 	onMount(() => {
+		// 订阅全局缩略图缓存
+		unsubscribeThumbnailCache = thumbnailCacheStore.subscribe(() => {
+			thumbnailSnapshot = thumbnailCacheStore.getAllThumbnails();
+		});
+		thumbnailSnapshot = thumbnailCacheStore.getAllThumbnails();
+		
 		unsubscribeShared = subscribeSharedPreloadManager((manager) => {
-			if (unsubscribeThumbs) {
-				unsubscribeThumbs();
-				unsubscribeThumbs = null;
-			}
 			preloadManager = manager;
 			if (preloadManager) {
-				unsubscribeThumbs = preloadManager.addThumbnailListener((pageIndex, dataURL, source) => {
-					handleThumbnailReady(pageIndex, dataURL, source);
-				});
 				void requestThumbnailsAroundCurrent();
 			}
 		});
@@ -202,9 +202,9 @@
 			unsubscribeShared();
 			unsubscribeShared = null;
 		}
-		if (unsubscribeThumbs) {
-			unsubscribeThumbs();
-			unsubscribeThumbs = null;
+		if (unsubscribeThumbnailCache) {
+			unsubscribeThumbnailCache();
+			unsubscribeThumbnailCache = null;
 		}
 	});
 
@@ -224,10 +224,7 @@
 		items = pages.map((page, index) => ({
 			index,
 			name: page.name ?? `Page ${index + 1}`,
-			path: page.path,
-			thumbUrl: null,
-			loading: false,
-			error: false
+			path: page.path
 		}));
 		void requestThumbnailsAroundCurrent();
 		setTimeout(scrollToCurrent, 50);
@@ -375,15 +372,15 @@
 								<div
 									class="w-16 h-20 rounded bg-muted flex items-center justify-center overflow-hidden relative flex-shrink-0"
 								>
-									{#if item.thumbUrl}
+									{#if getThumbnail(item.index)}
 										<img
-											src={item.thumbUrl}
+											src={getThumbnail(item.index)?.url}
 											alt={item.name}
 											class="absolute inset-0 w-full h-full object-contain"
 										/>
-									{:else if item.loading}
+									{:else if isLoading(item.index)}
 										<div class="w-4 h-4 border-2 border-muted-foreground/40 border-t-foreground rounded-full animate-spin"></div>
-									{:else if item.error}
+									{:else if hasFailed(item.index)}
 										<span class="text-[10px] text-destructive">ERR</span>
 									{:else}
 										<ImageIcon class="h-5 w-5 text-muted-foreground" />
@@ -413,15 +410,15 @@
 								<div
 									class="bg-muted rounded overflow-hidden relative w-full aspect-[3/4] flex items-center justify-center"
 								>
-									{#if item.thumbUrl}
+									{#if getThumbnail(item.index)}
 										<img
-											src={item.thumbUrl}
+											src={getThumbnail(item.index)?.url}
 											alt={item.name}
 											class="absolute inset-0 w-full h-full object-contain"
 										/>
-									{:else if item.loading}
+									{:else if isLoading(item.index)}
 										<div class="w-6 h-6 border-2 border-muted-foreground/40 border-t-foreground rounded-full animate-spin"></div>
-									{:else if item.error}
+									{:else if hasFailed(item.index)}
 										<span class="text-[10px] text-destructive">ERR</span>
 									{:else}
 										<ImageIcon class="h-8 w-8 text-muted-foreground" />

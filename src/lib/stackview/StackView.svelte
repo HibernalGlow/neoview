@@ -70,6 +70,9 @@
   let viewPositionX = $state(50);
   let viewPositionY = $state(50);
   
+  // 通过 onImageLoad 获取的图片尺寸（用于自动旋转等功能）
+  let loadedImageSize = $state<{ width: number; height: number } | null>(null);
+  
   // 图片尺寸：从多个来源获取，确保第一张图也有尺寸
   let hoverImageSize = $derived.by(() => {
     // 优先从 imageStore 获取（异步加载后的准确尺寸）
@@ -211,6 +214,7 @@
   let direction = $derived<'ltr' | 'rtl'>(settings.book.readingDirection === 'right-to-left' ? 'rtl' : 'ltr');
   let divideLandscape = $derived(settings.view.pageLayout?.splitHorizontalPages ?? false);
   let treatHorizontalAsDoublePage = $derived(settings.view.pageLayout?.treatHorizontalAsDoublePage ?? false);
+  let autoRotateMode = $derived(settings.view.autoRotate?.mode ?? 'none');
   
   // 判断当前图是否横向
   let isCurrentLandscape = $derived(
@@ -243,7 +247,7 @@
     direction: direction,
     divideLandscape: divideLandscape,
     treatHorizontalAsDoublePage: treatHorizontalAsDoublePage,
-    autoRotate: false,
+    autoRotate: autoRotateMode,
   }));
   
   // ============================================================================
@@ -260,12 +264,17 @@
     
     if (!currentUrl) return emptyFrame;
     
+    // 获取尺寸：优先从 loadedImageSize（onload后获取），然后 imageStore，最后 bookStore.currentPage
+    const page = bookStore.currentPage;
+    const width = loadedImageSize?.width ?? dimensions?.width ?? page?.width ?? 0;
+    const height = loadedImageSize?.height ?? dimensions?.height ?? page?.height ?? 0;
+    
     // 构建当前页数据
     const currentPage: PageData = {
       url: currentUrl,
       pageIndex: bookStore.currentPageIndex,
-      width: dimensions?.width,
-      height: dimensions?.height,
+      width,
+      height,
     };
     
     // 构建下一页数据（双页模式需要）
@@ -301,8 +310,23 @@
     splitState = null;
   }
   
+  // 图片加载完成回调 - 更新尺寸并触发自动旋转重计算
+  function handleImageLoad(e: Event, _index: number) {
+    const img = e.target as HTMLImageElement;
+    if (img && img.naturalWidth && img.naturalHeight) {
+      const newWidth = img.naturalWidth;
+      const newHeight = img.naturalHeight;
+      
+      // 只有尺寸真正变化时才更新，避免无限循环
+      if (loadedImageSize?.width !== newWidth || loadedImageSize?.height !== newHeight) {
+        loadedImageSize = { width: newWidth, height: newHeight };
+      }
+    }
+  }
+  
   function handlePrevPage() {
     viewPositionX = 50; viewPositionY = 50;
+    loadedImageSize = null; // 重置尺寸，等待新图片加载
     
     if (isInSplitMode && splitState) {
       const prevHalf = getPrevSplitHalf(splitState.half, direction);
@@ -336,6 +360,7 @@
   
   function handleNextPage() {
     viewPositionX = 50; viewPositionY = 50;
+    loadedImageSize = null; // 重置尺寸，等待新图片加载
     
     if (isInSplitMode) {
       if (!splitState) {
@@ -521,6 +546,7 @@
       {viewPositionY}
       {viewportSize}
       imageSize={imageStore.state.dimensions ?? { width: 0, height: 0 }}
+      onImageLoad={handleImageLoad}
     />
     
     {#if upscaledFrameData.images.length > 0}

@@ -14,7 +14,7 @@ export type TailOverflowBehavior =
 
 export type BookSettingSelectMode = 'default' | 'continue' | 'restoreOrDefault' | 'restoreOrContinue';
 
-export type AutoRotateMode = 'none' | 'left' | 'right' | 'forcedLeft' | 'forcedRight';
+export type AutoRotateMode = 'none' | 'left' | 'right' | 'horizontalLeft' | 'horizontalRight' | 'forcedLeft' | 'forcedRight';
 
 export interface NeoViewSettings {
   system: {

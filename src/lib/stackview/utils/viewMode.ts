@@ -18,6 +18,8 @@
  */
 
 import type { FrameImage, FrameLayout } from '../types/frame';
+import type { AutoRotateMode } from '$lib/settings/settingsManager';
+import { computeAutoRotateAngle } from '$lib/utils/pageLayout';
 
 /** 页面模式 */
 export type PageMode = 'single' | 'double' | 'panorama';
@@ -46,8 +48,8 @@ export interface ViewModeConfig {
   divideLandscape: boolean;
   /** 是否将横向图视为双页（仅 double 模式） */
   treatHorizontalAsDoublePage: boolean;
-  /** 是否启用自动旋转（仅 single 模式） */
-  autoRotate: boolean;
+  /** 自动旋转模式 */
+  autoRotate: AutoRotateMode;
 }
 
 /** 分割状态 */
@@ -250,9 +252,12 @@ export function processImageForDisplay(
     return applySplitToImage(image, getInitialSplitHalf(config.direction));
   }
 
-  // 如果开启自动旋转且当前图是横向（仅单页模式）
-  if (config.autoRotate && isLandscape(size) && config.layout === 'single') {
-    return applyAutoRotate(image, size);
+  // 如果开启自动旋转（仅单页模式）
+  if (config.autoRotate !== 'none' && config.layout === 'single') {
+    const rotationAngle = computeAutoRotateAngle(config.autoRotate, size);
+    if (rotationAngle !== null) {
+      return { ...image, rotation: rotationAngle };
+    }
   }
 
   return image;
@@ -292,7 +297,7 @@ export interface FrameBuildConfig {
   direction: Direction;
   divideLandscape: boolean;
   treatHorizontalAsDoublePage: boolean;
-  autoRotate: boolean;
+  autoRotate: AutoRotateMode;
 }
 
 export interface PageData {
@@ -343,8 +348,11 @@ export function buildFrameImages(
     }
     
     // 处理自动旋转
-    if (config.autoRotate && isLandscape(currentSize)) {
-      mainImage.rotation = 90;
+    if (config.autoRotate !== 'none') {
+      const rotationAngle = computeAutoRotateAngle(config.autoRotate, currentSize);
+      if (rotationAngle !== null) {
+        mainImage.rotation = rotationAngle;
+      }
     }
     
     return [mainImage];

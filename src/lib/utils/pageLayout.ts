@@ -41,6 +41,10 @@ export function computeAutoRotateAngle(
 			return isPortrait ? normalizeAngle(-90) : null;
 		case 'right':
 			return isPortrait ? normalizeAngle(90) : null;
+		case 'horizontalLeft':
+			return isHorizontal ? normalizeAngle(-90) : null;
+		case 'horizontalRight':
+			return isHorizontal ? normalizeAngle(90) : null;
 		case 'forcedLeft':
 			return normalizeAngle(-90);
 		case 'forcedRight':

@@ -9,7 +9,7 @@
 	import { videoStore } from '$lib/stores/video.svelte';
 	import { historyStore } from '$lib/stores/history.svelte';
 	import { bookStore } from '$lib/stores';
-	import { isVideoFile } from '$lib/utils/videoUtils';
+	import { isVideoFile, getVideoMimeType } from '$lib/utils/videoUtils';
 	import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 	import type { Page } from '$lib/types';
 
@@ -33,27 +33,6 @@
 	let videoStartTime = $state(0);
 	let lastVideoHistoryUpdateAt = 0;
 	let currentVideoRequestId = 0;
-
-	// MIME 类型映射
-	const VIDEO_MIME_TYPES: Record<string, string> = {
-		mp4: 'video/mp4',
-		webm: 'video/webm',
-		ogg: 'video/ogg',
-		mov: 'video/quicktime',
-		avi: 'video/x-msvideo',
-		mkv: 'video/x-matroska',
-		m4v: 'video/x-m4v',
-		flv: 'video/x-flv',
-		nov: 'video/mp4',
-		wmv: 'video/x-ms-wmv'
-	};
-
-	function getVideoMimeType(name?: string): string | undefined {
-		if (!name) return undefined;
-		const ext = name.split('.').pop()?.toLowerCase();
-		if (!ext) return undefined;
-		return VIDEO_MIME_TYPES[ext];
-	}
 
 	// 清理视频URL
 	function clearVideoUrl() {

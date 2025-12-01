@@ -63,3 +63,46 @@ export function isVideoMimeType(mimeType: string): boolean {
 export function isVideoBlob(blob: Blob): boolean {
     return isVideoMimeType(blob.type);
 }
+
+/**
+ * 视频 MIME 类型映射
+ */
+export const VIDEO_MIME_TYPES: Record<string, string> = {
+    mp4: 'video/mp4',
+    webm: 'video/webm',
+    ogg: 'video/ogg',
+    mov: 'video/quicktime',
+    avi: 'video/x-msvideo',
+    mkv: 'video/x-matroska',
+    m4v: 'video/x-m4v',
+    flv: 'video/x-flv',
+    nov: 'video/mp4',
+    wmv: 'video/x-ms-wmv',
+    '3gp': 'video/3gpp',
+    '3g2': 'video/3gpp2',
+    ogv: 'video/ogg'
+};
+
+/**
+ * 根据文件名获取视频 MIME 类型
+ */
+export function getVideoMimeType(filename?: string): string | undefined {
+    if (!filename) return undefined;
+    const ext = filename.split('.').pop()?.toLowerCase();
+    if (!ext) return undefined;
+    return VIDEO_MIME_TYPES[ext];
+}
+
+/**
+ * 格式化时间显示（秒 -> mm:ss 或 hh:mm:ss）
+ */
+export function formatVideoTime(seconds: number): string {
+    if (!isFinite(seconds) || seconds < 0) return '0:00';
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    if (hrs > 0) {
+        return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+}

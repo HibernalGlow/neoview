@@ -22,7 +22,6 @@
     scale = 1,
     rotation = 0,
     // 视口位置百分比（0-100）
-    // 50 = 居中，0 = 显示左/上边缘，100 = 显示右/下边缘
     viewPositionX = 50,
     viewPositionY = 50,
     // 视口和图片尺寸（用于计算边界）
@@ -122,6 +121,10 @@
     justify-content: center;
     transition: opacity 0.15s ease;
     overflow: hidden;
+    /* GPU 加速 */
+    will-change: transform;
+    transform: translateZ(0);
+    backface-visibility: hidden;
   }
   
   .frame-single {

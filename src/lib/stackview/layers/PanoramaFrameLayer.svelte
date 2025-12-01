@@ -138,6 +138,10 @@
     overflow: hidden;
     align-items: center;
     justify-content: flex-start;
+    /* GPU 加速 */
+    will-change: transform;
+    transform: translateZ(0);
+    backface-visibility: hidden;
   }
   
   .panorama-frame-layer.vertical {

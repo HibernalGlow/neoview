@@ -1,29 +1,25 @@
 <!--
-  HoverLayer - 悬停滚动层
+  HoverLayer - 悬停滚动层（事件驱动版）
   
   原理：根据图片溢出量计算安全的 transform-origin 范围
   - 当图片 <= 视口：位置固定在 50%（居中）
   - 当图片 > 视口：位置范围限制在安全区间，确保边缘不露出
+  
+  优化：
+  - 纯事件驱动，无持续 RAF 循环
+  - 边界计算使用 $derived 缓存
+  - 单次 RAF 批量更新，避免重复触发
 -->
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   
   let {
-    // 启用悬停滚动
     enabled = false,
-    
-    // 侧边栏排除区域（像素）
     sidebarMargin = 50,
-    
-    // 中心死区占短边比例（0-1）
     deadZoneRatio = 0.2,
-    
-    // 视口和图片尺寸（用于计算边界）
     viewportSize = { width: 0, height: 0 },
     imageSize = { width: 0, height: 0 },
     scale = 1,
-    
-    // 回调：位置百分比变化（0-100）
     onPositionChange,
   }: {
     enabled?: boolean;
@@ -36,20 +32,17 @@
   } = $props();
   
   let layerRef: HTMLDivElement | null = $state(null);
-  let animationFrameId: number | null = null;
-  let lastMousePos = { x: 0, y: 0 };
-  let isHovering = $state(false);
   
-  /**
-   * 计算安全的 transform-origin 范围
-   */
-  function calculateBounds(): { minX: number; maxX: number; minY: number; maxY: number } {
-    // 尺寸无效时返回全范围，让悬停滚动仍可用
+  // 单次 RAF 调度器
+  let pendingUpdate: { x: number; y: number } | null = null;
+  let rafId: number | null = null;
+  
+  // 缓存边界计算（仅在依赖变化时重算）
+  let bounds = $derived.by(() => {
     if (!viewportSize.width || !viewportSize.height || !imageSize.width || !imageSize.height) {
       return { minX: 0, maxX: 100, minY: 0, maxY: 100 };
     }
     
-    // 计算图片在 CSS 中的实际显示尺寸（受 max-width/max-height: 100% 约束）
     const imgAspect = imageSize.width / imageSize.height;
     const vpAspect = viewportSize.width / viewportSize.height;
     
@@ -64,45 +57,62 @@
       displayWidth = viewportSize.height * imgAspect;
     }
     
-    // 应用缩放
     const scaledWidth = displayWidth * scale;
     const scaledHeight = displayHeight * scale;
     
-    // 计算溢出量（单侧）
+    const THRESHOLD = 1;
     const overflowX = Math.max(0, (scaledWidth - viewportSize.width) / 2);
     const overflowY = Math.max(0, (scaledHeight - viewportSize.height) / 2);
+    const hasOverflowX = overflowX > THRESHOLD;
+    const hasOverflowY = overflowY > THRESHOLD;
     
-    // 如果没有溢出，固定在 50%
-    if (overflowX <= 0 && overflowY <= 0) {
+    if (!hasOverflowX && !hasOverflowY) {
       return { minX: 50, maxX: 50, minY: 50, maxY: 50 };
     }
     
-    // 当有溢出时，直接使用 0-100 全范围
-    // transform-origin 会自动限制图片不超出容器（因为 overflow: hidden）
     return {
-      minX: overflowX > 0 ? 0 : 50,
-      maxX: overflowX > 0 ? 100 : 50,
-      minY: overflowY > 0 ? 0 : 50,
-      maxY: overflowY > 0 ? 100 : 50,
+      minX: hasOverflowX ? 0 : 50,
+      maxX: hasOverflowX ? 100 : 50,
+      minY: hasOverflowY ? 0 : 50,
+      maxY: hasOverflowY ? 100 : 50,
     };
+  });
+  
+  // 调度单次 RAF 更新
+  function scheduleUpdate(x: number, y: number) {
+    pendingUpdate = { x, y };
+    if (rafId === null) {
+      rafId = requestAnimationFrame(flushUpdate);
+    }
   }
   
-  /**
-   * 计算位置百分比，映射到安全范围
-   */
-  function calculatePosition(clientX: number, clientY: number): { x: number; y: number } | null {
-    if (!layerRef) return null;
+  function flushUpdate() {
+    rafId = null;
+    if (pendingUpdate) {
+      onPositionChange?.(pendingUpdate.x, pendingUpdate.y);
+      pendingUpdate = null;
+    }
+  }
+  
+  // 直接在 mousemove 中计算并调度更新
+  function onMouseMove(e: MouseEvent) {
+    if (!enabled || !layerRef) return;
     
     const rect = layerRef.getBoundingClientRect();
-    const localX = clientX - rect.left;
-    const localY = clientY - rect.top;
+    const localX = e.clientX - rect.left;
+    const localY = e.clientY - rect.top;
     
-    // 排除侧边栏区域
-    if (localX < sidebarMargin || localX > rect.width - sidebarMargin) {
-      return null;
+    // 边界检测
+    if (localX < 0 || localX > rect.width || localY < 0 || localY > rect.height) {
+      return;
     }
     
-    // 应用死区
+    // 侧边栏排除
+    if (localX < sidebarMargin || localX > rect.width - sidebarMargin) {
+      return;
+    }
+    
+    // 死区检测
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
     const relX = localX - centerX;
@@ -111,86 +121,26 @@
     const deadZoneSizeY = rect.height * deadZoneRatio / 2;
     
     if (Math.abs(relX) < deadZoneSizeX && Math.abs(relY) < deadZoneSizeY) {
-      return null;
+      return;
     }
     
-    // 获取安全边界并映射
-    const bounds = calculateBounds();
+    // 映射到安全范围
     const normalizedX = localX / rect.width;
     const normalizedY = localY / rect.height;
-    
     const x = bounds.minX + normalizedX * (bounds.maxX - bounds.minX);
     const y = bounds.minY + normalizedY * (bounds.maxY - bounds.minY);
     
-    return { x, y };
-  }
-  
-  // 动画循环
-  function startLoop() {
-    if (animationFrameId) return;
-    
-    function loop() {
-      if (isHovering && enabled) {
-        const pos = calculatePosition(lastMousePos.x, lastMousePos.y);
-        if (pos) {
-          onPositionChange?.(pos.x, pos.y);
-        }
-      }
-      animationFrameId = requestAnimationFrame(loop);
-    }
-    
-    animationFrameId = requestAnimationFrame(loop);
-  }
-  
-  function stopLoop() {
-    if (animationFrameId) {
-      cancelAnimationFrame(animationFrameId);
-      animationFrameId = null;
-    }
-  }
-  
-  // 使用 window 事件监听
-  function onWindowMouseMove(e: MouseEvent) {
-    if (!layerRef || !enabled) return;
-    const rect = layerRef.getBoundingClientRect();
-    
-    // 检查鼠标是否在 StackView 区域内
-    const inBounds = e.clientX >= rect.left && e.clientX <= rect.right &&
-                     e.clientY >= rect.top && e.clientY <= rect.bottom;
-    
-    // 检查鼠标下方的元素是否属于 StackView（而不是侧栏等覆盖层）
-    const elementUnderMouse = document.elementFromPoint(e.clientX, e.clientY);
-    const isOverStackView = elementUnderMouse?.closest('.stack-view') !== null;
-    
-    if (inBounds && isOverStackView) {
-      lastMousePos = { x: e.clientX, y: e.clientY };
-      if (!isHovering) {
-        isHovering = true;
-      }
-    } else {
-      if (isHovering) {
-        isHovering = false;
-      }
-    }
+    scheduleUpdate(x, y);
   }
   
   onMount(() => {
-    window.addEventListener('mousemove', onWindowMouseMove);
-    if (enabled) {
-      startLoop();
-    }
+    window.addEventListener('mousemove', onMouseMove, { passive: true });
   });
   
   onDestroy(() => {
-    window.removeEventListener('mousemove', onWindowMouseMove);
-    stopLoop();
-  });
-  
-  $effect(() => {
-    if (enabled) {
-      startLoop();
-    } else {
-      stopLoop();
+    window.removeEventListener('mousemove', onMouseMove);
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
     }
   });
 </script>

@@ -287,12 +287,18 @@
 	}
 
 	function handleMouseMove() {
+		// 如果控件已显示且定时器已设置，不重置定时器（避免持续移动时控件不隐藏）
+		if (showControls && hideControlsTimeout) {
+			return;
+		}
+		
 		showControls = true;
+		// 固定模式下不自动隐藏
+		if (controlsPinned) return;
+		
 		if (hideControlsTimeout) {
 			clearTimeout(hideControlsTimeout);
 		}
-		// 固定模式下不自动隐藏
-		if (controlsPinned) return;
 		hideControlsTimeout = setTimeout(() => {
 			if (isPlaying && !controlsPinned) {
 				showControls = false;

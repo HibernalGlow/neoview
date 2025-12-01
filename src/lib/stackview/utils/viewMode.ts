@@ -352,8 +352,9 @@ export function buildFrameImages(
   
   // 双页模式
   if (config.layout === 'double') {
-    // 横向图独占
-    if (config.treatHorizontalAsDoublePage && isLandscape(currentSize)) {
+    // 横向图独占（只有尺寸已知时才判断）
+    const hasCurrentSize = currentSize.width > 0 && currentSize.height > 0;
+    if (config.treatHorizontalAsDoublePage && hasCurrentSize && isLandscape(currentSize)) {
       return [mainImage];
     }
     
@@ -367,8 +368,9 @@ export function buildFrameImages(
       height: nextPage.height || 0,
     };
     
-    // 下一张是横向图，当前页单独显示
-    if (config.treatHorizontalAsDoublePage && isLandscape(nextSize)) {
+    // 下一张是横向图，当前页单独显示（只有尺寸已知时才判断）
+    const hasNextSize = nextSize.width > 0 && nextSize.height > 0;
+    if (config.treatHorizontalAsDoublePage && hasNextSize && isLandscape(nextSize)) {
       return [mainImage];
     }
     
@@ -409,8 +411,9 @@ export function getPageStep(
     height: currentPage.height || 0,
   };
   
-  // 横向图独占
-  if (config.treatHorizontalAsDoublePage && isLandscape(currentSize)) {
+  // 横向图独占（只有尺寸已知时才判断）
+  const hasCurrentSize = currentSize.width > 0 && currentSize.height > 0;
+  if (config.treatHorizontalAsDoublePage && hasCurrentSize && isLandscape(currentSize)) {
     return 1;
   }
   
@@ -423,8 +426,9 @@ export function getPageStep(
     height: nextPage.height || 0,
   };
   
-  // 下一张是横向图
-  if (config.treatHorizontalAsDoublePage && isLandscape(nextSize)) {
+  // 下一张是横向图（只有尺寸已知时才判断）
+  const hasNextSize = nextSize.width > 0 && nextSize.height > 0;
+  if (config.treatHorizontalAsDoublePage && hasNextSize && isLandscape(nextSize)) {
     return 1;
   }
   

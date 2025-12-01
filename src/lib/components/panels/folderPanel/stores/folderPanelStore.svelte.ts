@@ -419,7 +419,7 @@ function getParentPath(path: string): string | null {
 
 // 书籍候选判断函数
 const archiveExtensions = ['.zip', '.cbz', '.rar', '.cbr', '.7z', '.cb7', '.tar', '.tar.gz', '.tgz'];
-const videoExtensions = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg'];
+const videoExtensions = ['.mp4', '.mkv', '.avi', '.mov', 'nov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg'];
 
 function isArchiveFile(path: string): boolean {
 	const lower = path.toLowerCase();

@@ -150,8 +150,8 @@
 
 	const archiveExt = ['zip', 'rar', '7z', 'cbz', 'cbr', 'tar'];
 	const docExt = ['pdf', 'epub'];
-	const videoExt = ['mp4', 'mkv', 'webm'];
-	const imageExt = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif'];
+	const videoExt = ['mp4', 'mkv', 'nov', 'webm'];
+	const imageExt = ['jpg', 'jpeg', 'jxl', 'png', 'gif', 'webp', 'avif'];
 
 	function detectSourceType(path?: string) {
 		if (!path) return '其他';

@@ -167,7 +167,7 @@
 
 			// 检查是否是文件扩展名
 			const isFile =
-				/\.(zip|cbz|rar|cbr|7z|pdf|mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg|jpg|jpeg|png|gif|webp|avif|jxl|bmp|tiff)$/i.test(
+				/\.(zip|cbz|rar|cbr|7z|pdf|mp4|mkv|avi|mov|nov|flv|webm|wmv|m4v|mpg|mpeg|jpg|jpeg|png|gif|webp|avif|jxl|bmp|tiff)$/i.test(
 					path
 				);
 

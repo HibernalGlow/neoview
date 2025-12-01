@@ -374,6 +374,7 @@ let applyZoomModeListener: ((event: CustomEvent<ApplyZoomModeDetail>) => void) |
 		mkv: 'video/x-matroska',
 		m4v: 'video/x-m4v',
 		flv: 'video/x-flv',
+		nov: 'video/mp4',
 		wmv: 'video/x-ms-wmv'
 	};
 

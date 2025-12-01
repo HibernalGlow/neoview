@@ -231,7 +231,7 @@
     const page = bookStore.currentPage;
     if (!page) return false;
     const ext = (page.innerPath || page.path || '').split('.').pop()?.toLowerCase();
-    return ['mp4', 'webm', 'mkv', 'avi', 'mov'].includes(ext || '');
+    return ['mp4', 'm4v', 'mov', 'nov', 'webm', 'mkv', 'avi'].includes(ext || '');
   });
   
   // 是否处于分割模式

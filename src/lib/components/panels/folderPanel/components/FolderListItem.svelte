@@ -38,7 +38,7 @@ function getFileIcon(item: FsItem) {
 	}
 
 	// 视频
-	if (['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm'].includes(ext)) {
+	if (['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'nov'].includes(ext)) {
 		return Film;
 	}
 
@@ -64,7 +64,7 @@ function getFileIcon(item: FsItem) {
 function isMediaFile(item: FsItem): boolean {
 	if (item.isDir) return false;
 	const ext = item.name.split('.').pop()?.toLowerCase() || '';
-	return ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mp3', 'wav', 'flac'].includes(ext);
+	return ['mp4', 'mkv', 'avi', 'mov', 'nov', 'wmv', 'flv', 'webm', 'mp3', 'wav', 'flac'].includes(ext);
 }
 
 // 格式化文件大小

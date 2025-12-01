@@ -684,7 +684,7 @@ class ThumbnailManager {
   private inferCategory(pathKey: string): string {
     const isFolder =
       !pathKey.includes('::') &&
-      !pathKey.match(/\.(jpg|jpeg|png|gif|bmp|webp|avif|jxl|tiff|tif|zip|cbz|rar|cbr|mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/i);
+      !pathKey.match(/\.(jpg|jpeg|png|gif|bmp|webp|avif|jxl|tiff|tif|zip|cbz|rar|cbr|mp4|mkv|avi|mov|nov|flv|webm|wmv|m4v|mpg|mpeg)$/i);
     return isFolder ? 'folder' : 'file';
   }
 
@@ -766,7 +766,7 @@ class ThumbnailManager {
 
       // 检测是否为视频文件
       const pathLower = path.toLowerCase();
-      const isVideo = /\.(mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/.test(pathLower);
+      const isVideo = /\.(mp4|mkv|avi|mov|nov|flv|webm|wmv|m4v|mpg|mpeg)$/.test(pathLower);
 
       let blobKey: string | null = null;
 
@@ -877,7 +877,7 @@ class ThumbnailManager {
     // 2. 尝试从数据库加载（不依赖索引缓存，直接尝试）
     // 这样可以立即显示已缓存的缩略图，不需要等待索引预加载
     // 判断是否为文件夹：没有 innerPath 且不是压缩包，且路径没有扩展名
-    const isFolder = !innerPath && !isArchive && !path.match(/\.(jpg|jpeg|png|gif|bmp|webp|avif|jxl|tiff|tif|zip|cbz|rar|cbr|mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/i);
+    const isFolder = !innerPath && !isArchive && !path.match(/\.(jpg|jpeg|png|gif|bmp|webp|avif|jxl|tiff|tif|zip|cbz|rar|cbr|mp4|nov|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/i);
 
     try {
       const dbBlobUrl = await this.loadFromDb(path, innerPath, isFolder);
@@ -1087,7 +1087,7 @@ class ThumbnailManager {
         const pathLower = task.path.toLowerCase();
         const hasImageExt = /\.(jpg|jpeg|png|gif|bmp|webp|avif|jxl|tiff|tif)$/.test(pathLower);
         const hasArchiveExt = /\.(zip|cbz|rar|cbr)$/.test(pathLower);
-        const hasVideoExt = /\.(mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/.test(pathLower);
+        const hasVideoExt = /\.(mp4|nov|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/.test(pathLower);
 
         // 如果没有图片、压缩包或视频扩展名，可能是文件夹，不主动生成
         if (!hasImageExt && !hasArchiveExt && !hasVideoExt) {
@@ -1289,7 +1289,7 @@ class ThumbnailManager {
       const pathKey = this.buildPathKey(path);
 
       // 判断类别
-      const isFolder = !pathKey.includes("::") && !pathKey.match(/\.(jpg|jpeg|png|gif|bmp|webp|avif|jxl|tiff|tif|zip|cbz|rar|cbr|mp4|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/i);
+      const isFolder = !pathKey.includes("::") && !pathKey.match(/\.(jpg|jpeg|png|gif|bmp|webp|avif|jxl|tiff|tif|zip|cbz|rar|cbr|mp4|nov|mkv|avi|mov|flv|webm|wmv|m4v|mpg|mpeg)$/i);
       const category = isFolder ? 'folder' : 'file';
 
       // 检查数据库（只使用 key + category）

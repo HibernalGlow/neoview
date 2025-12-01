@@ -202,6 +202,7 @@ const defaultSettings: NeoViewSettings = {
       'mp4',
       'm4v',
       'mov',
+      'nov',
       'webm',
       'ogg',
       'ogv',

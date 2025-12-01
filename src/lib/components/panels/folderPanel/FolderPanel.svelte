@@ -58,7 +58,7 @@ let contextMenu = $state<{ x: number; y: number; item: FsItem | null; visible: b
 // 判断是否为视频文件
 function isVideoPath(path: string): boolean {
 	const ext = path.split('.').pop()?.toLowerCase() || '';
-	return ['mp4', 'mkv', 'avi', 'mov', 'flv', 'webm', 'wmv', 'm4v', 'mpg', 'mpeg'].includes(ext);
+	return ['mp4', 'mkv', 'avi', 'mov', 'nov', 'flv', 'webm', 'wmv', 'm4v', 'mpg', 'mpeg'].includes(ext);
 }
 
 // 判断是否为图片文件

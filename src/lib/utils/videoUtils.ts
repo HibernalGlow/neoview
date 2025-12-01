@@ -6,6 +6,7 @@ import { settingsManager } from '$lib/settings/settingsManager';
 
 const DEFAULT_VIDEO_EXTENSIONS = [
     '.mp4',
+    '.nov',
     '.m4v',
     '.mov',
     '.webm',

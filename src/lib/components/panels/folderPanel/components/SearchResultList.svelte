@@ -43,7 +43,7 @@ $effect(() => {
 		// 支持的压缩包扩展名
 		const archiveExts = ['.zip', '.rar', '.7z', '.cbz', '.cbr', '.cb7'];
 		// 支持的视频扩展名
-		const videoExts = ['.mp4', '.mkv', '.avi', '.mov', '.flv', '.webm', '.wmv', '.m4v', '.mpg', '.mpeg'];
+		const videoExts = ['.mp4', '.mkv', '.avi', '.mov', 'nov', '.flv', '.webm', '.wmv', '.m4v', '.mpg', '.mpeg'];
 
 		const ext = name.substring(name.lastIndexOf('.'));
 

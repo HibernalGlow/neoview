@@ -111,7 +111,7 @@ export function createDefaultAppState(): AppStateSnapshot {
 				videoMinPlaybackRate: 0.25,
 				videoMaxPlaybackRate: 16,
 				videoPlaybackRateStep: 0.25,
-				videoFormats: ['mp4', 'm4v', 'mov', 'webm', 'ogg', 'ogv', '3gp', '3g2', 'mkv', 'avi', 'flv', 'wmv']
+				videoFormats: ['mp4', 'm4v', 'mov', 'nov', 'webm', 'ogg', 'ogv', '3gp', '3g2', 'mkv', 'avi', 'flv', 'wmv']
 			},
 			view: {
 				defaultZoomMode: 'fit',

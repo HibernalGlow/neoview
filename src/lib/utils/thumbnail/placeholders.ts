@@ -90,7 +90,7 @@ export function getPlaceholderForPath(path: string): string {
 	}
 	
 	// 视频
-	if (['mp4', 'mkv', 'avi', 'mov', 'flv', 'webm', 'wmv', 'm4v', 'mpg', 'mpeg'].includes(ext)) {
+	if (['mp4', 'mkv', 'avi', 'mov', 'nov', 'flv', 'webm', 'wmv', 'm4v', 'mpg', 'mpeg'].includes(ext)) {
 		return getPlaceholder('video');
 	}
 	

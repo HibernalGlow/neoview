@@ -326,7 +326,6 @@
   
   function handlePrevPage() {
     viewPositionX = 50; viewPositionY = 50;
-    loadedImageSize = null; // 重置尺寸，等待新图片加载
     
     if (isInSplitMode && splitState) {
       const prevHalf = getPrevSplitHalf(splitState.half, direction);
@@ -360,7 +359,6 @@
   
   function handleNextPage() {
     viewPositionX = 50; viewPositionY = 50;
-    loadedImageSize = null; // 重置尺寸，等待新图片加载
     
     if (isInSplitMode) {
       if (!splitState) {

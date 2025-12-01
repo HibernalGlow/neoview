@@ -55,6 +55,11 @@ export interface ExtendedSettingsData {
     searchHistory?: Record<string, unknown>;
     upscalePanelSettings?: unknown;
     insightsCardsSettings?: unknown;
+    folderPanelSettings?: {
+        homePath?: string;
+        panelState?: unknown;
+        quickFolderTargets?: unknown;
+    };
     themeStorage?: {
         customThemes?: unknown;
     };
@@ -386,6 +391,20 @@ class SettingsManager {
                 extended.insightsCardsSettings = insightsCardsSettings;
             }
 
+            // 文件夹面板设置
+            if (typeof window !== 'undefined' && window.localStorage) {
+                const homePath = window.localStorage.getItem('neoview-homepage-path');
+                const panelState = this.readJsonFromLocalStorage('neoview-folder-panel');
+                const quickFolderTargets = this.readJsonFromLocalStorage('neoview-quick-folder-targets');
+                if (homePath || panelState || quickFolderTargets) {
+                    extended.folderPanelSettings = {
+                        homePath: homePath || undefined,
+                        panelState: panelState || undefined,
+                        quickFolderTargets: quickFolderTargets || undefined
+                    };
+                }
+            }
+
             if (typeof window !== 'undefined' && window.localStorage) {
                 const rawCustomThemes = window.localStorage.getItem('custom-themes');
                 if (rawCustomThemes) {
@@ -568,6 +587,23 @@ class SettingsManager {
                 window.localStorage.setItem('neoview-insights-cards', JSON.stringify(extended.insightsCardsSettings));
             } catch (error) {
                 console.error('导入洞察面板设置失败:', error);
+            }
+        }
+
+        // 文件夹面板设置
+        if (modules.fileBrowserSort && extended.folderPanelSettings && typeof window !== 'undefined' && window.localStorage) {
+            try {
+                if (extended.folderPanelSettings.homePath) {
+                    window.localStorage.setItem('neoview-homepage-path', extended.folderPanelSettings.homePath);
+                }
+                if (extended.folderPanelSettings.panelState) {
+                    window.localStorage.setItem('neoview-folder-panel', JSON.stringify(extended.folderPanelSettings.panelState));
+                }
+                if (extended.folderPanelSettings.quickFolderTargets) {
+                    window.localStorage.setItem('neoview-quick-folder-targets', JSON.stringify(extended.folderPanelSettings.quickFolderTargets));
+                }
+            } catch (error) {
+                console.error('导入文件夹面板设置失败:', error);
             }
         }
 

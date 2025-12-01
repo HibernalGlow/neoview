@@ -40,6 +40,11 @@
   let lastMousePos = { x: 0, y: 0 };
   let isHovering = $state(false);
   
+  // 性能优化：缓存边界检测结果
+  let lastOverlayCheck = 0;
+  let lastOverlayResult = true;
+  const OVERLAY_CHECK_INTERVAL = 100; // ms
+  
   /**
    * 计算安全的 transform-origin 范围
    */
@@ -68,22 +73,24 @@
     const scaledWidth = displayWidth * scale;
     const scaledHeight = displayHeight * scale;
     
-    // 计算溢出量（单侧）
+    // 计算溢出量（单侧），添加 1px 阈值避免浮点误差
+    const THRESHOLD = 1;
     const overflowX = Math.max(0, (scaledWidth - viewportSize.width) / 2);
     const overflowY = Math.max(0, (scaledHeight - viewportSize.height) / 2);
+    const hasOverflowX = overflowX > THRESHOLD;
+    const hasOverflowY = overflowY > THRESHOLD;
     
     // 如果没有溢出，固定在 50%
-    if (overflowX <= 0 && overflowY <= 0) {
+    if (!hasOverflowX && !hasOverflowY) {
       return { minX: 50, maxX: 50, minY: 50, maxY: 50 };
     }
     
-    // 当有溢出时，直接使用 0-100 全范围
-    // transform-origin 会自动限制图片不超出容器（因为 overflow: hidden）
+    // 当有溢出时，使用 0-100 全范围
     return {
-      minX: overflowX > 0 ? 0 : 50,
-      maxX: overflowX > 0 ? 100 : 50,
-      minY: overflowY > 0 ? 0 : 50,
-      maxY: overflowY > 0 ? 100 : 50,
+      minX: hasOverflowX ? 0 : 50,
+      maxX: hasOverflowX ? 100 : 50,
+      minY: hasOverflowY ? 0 : 50,
+      maxY: hasOverflowY ? 100 : 50,
     };
   }
   
@@ -149,7 +156,7 @@
     }
   }
   
-  // 使用 window 事件监听
+  // 使用 window 事件监听（节流优化）
   function onWindowMouseMove(e: MouseEvent) {
     if (!layerRef || !enabled) return;
     const rect = layerRef.getBoundingClientRect();
@@ -158,19 +165,26 @@
     const inBounds = e.clientX >= rect.left && e.clientX <= rect.right &&
                      e.clientY >= rect.top && e.clientY <= rect.bottom;
     
-    // 检查鼠标下方的元素是否属于 StackView（而不是侧栏等覆盖层）
-    const elementUnderMouse = document.elementFromPoint(e.clientX, e.clientY);
-    const isOverStackView = elementUnderMouse?.closest('.stack-view') !== null;
+    if (inBounds) {
+      // 节流检测覆盖元素（每 100ms 检测一次）
+      const now = performance.now();
+      if (now - lastOverlayCheck > OVERLAY_CHECK_INTERVAL) {
+        lastOverlayCheck = now;
+        const elementUnderMouse = document.elementFromPoint(e.clientX, e.clientY);
+        lastOverlayResult = elementUnderMouse?.closest('.stack-view') !== null;
+      }
+      
+      if (lastOverlayResult) {
+        lastMousePos = { x: e.clientX, y: e.clientY };
+        if (!isHovering) {
+          isHovering = true;
+        }
+        return;
+      }
+    }
     
-    if (inBounds && isOverStackView) {
-      lastMousePos = { x: e.clientX, y: e.clientY };
-      if (!isHovering) {
-        isHovering = true;
-      }
-    } else {
-      if (isHovering) {
-        isHovering = false;
-      }
+    if (isHovering) {
+      isHovering = false;
     }
   }
   

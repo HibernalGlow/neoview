@@ -122,6 +122,10 @@
     justify-content: center;
     transition: opacity 0.15s ease;
     overflow: hidden;
+    /* GPU 加速 */
+    will-change: transform;
+    transform: translateZ(0);
+    backface-visibility: hidden;
   }
   
   .frame-single {

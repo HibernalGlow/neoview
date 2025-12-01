@@ -11,6 +11,7 @@
     InfoLayer,
     GestureLayer,
   } from './layers';
+  import HoverLayer2 from './layers/HoverLayer2.svelte';
   import PanoramaFrameLayer from './layers/PanoramaFrameLayer.svelte';
   import { 
     isLandscape, 
@@ -68,6 +69,9 @@
   // 50 = 居中，0 = 显示左/上边缘，100 = 显示右/下边缘
   let viewPositionX = $state(50);
   let viewPositionY = $state(50);
+  
+  // HoverLayer 组件引用
+  let hoverLayerRef: { reset: () => void } | null = $state(null);
   
   // 设置（提前声明）
   let settings = $state(settingsManager.getSettings());
@@ -365,6 +369,9 @@
     }
   }
   
+  // 悬停滚动状态
+  let hoverScrollEnabled = $derived(settings.image?.hoverScrollEnabled ?? false);
+  
   // 缩放控制
   function zoomIn() {
     manualScale = Math.min(manualScale * 1.25, 10);
@@ -546,6 +553,18 @@
     onNextPage={handleNextPage}
     onPrevPage={handlePrevPage}
     onResetZoom={resetView}
+  />
+  
+  <!-- 悬停滚动层（新方案） -->
+  <HoverLayer2
+    bind:this={hoverLayerRef}
+    enabled={hoverScrollEnabled && !isPanorama}
+    sidebarMargin={50}
+    deadZoneRatio={0.2}
+    {viewportSize}
+    imageSize={imageStore.state.dimensions ?? { width: 0, height: 0 }}
+    scale={effectiveScale}
+    onPositionChange={(x: number, y: number) => { viewPositionX = x; viewPositionY = y; }}
   />
 </div>
 

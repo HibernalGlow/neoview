@@ -142,7 +142,7 @@ async function dispatchAction(action: string) {
 	console.log('执行操作:', action);
 	
 	// 添加调试信息
-	keyBindingsStore.debugBindings();
+	// keyBindingsStore.debugBindings();
 	
 	// 如果当前是视频页，对部分导航动作做视频模式优先的重解释
 	const currentPage = bookStore.currentPage;

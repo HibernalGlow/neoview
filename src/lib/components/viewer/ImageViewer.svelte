@@ -1494,10 +1494,10 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 			// 全屏切换
 			toggle_fullscreen: toggleFullscreen,
 			// 视频相关操作（对当前视频页生效）
-			videoVolumeUp: () => adjustVideoVolume(1),
-			videoVolumeDown: () => adjustVideoVolume(-1),
-			videoSpeedUp: () => adjustVideoSpeed(1),
-			videoSpeedDown: () => adjustVideoSpeed(-1)
+			videoVolumeUp: () => videoStore.adjustVolume(1),
+			videoVolumeDown: () => videoStore.adjustVolume(-1),
+			videoSpeedUp: () => videoStore.adjustSpeed(1),
+			videoSpeedDown: () => videoStore.adjustSpeed(-1)
 			// 更多命令/动作可以在这里添加
 		};
 

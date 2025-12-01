@@ -153,14 +153,15 @@ async function dispatchAction(action: string) {
 
 	if (isVideoPage) {
 		// 如果启用了快进模式，将翻页操作映射为快进/快退
+		// 统一方向：右/下一页 = 快进，左/上一页 = 快退（不受阅读方向影响）
 		if (videoStore.seekMode) {
 			switch (action) {
 				case 'nextPage':
 				case 'pageRight':
-				case 'pageLeft':  // 统一方向，右键快进
 					action = 'videoSeekForward';
 					break;
 				case 'prevPage':
+				case 'pageLeft':
 					action = 'videoSeekBackward';
 					break;
 			}

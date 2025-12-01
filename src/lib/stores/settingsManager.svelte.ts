@@ -44,6 +44,7 @@ export interface ExtendedSettingsData {
         panels?: unknown;
         sidebars?: unknown;
         sidebarManagement?: unknown;
+        sidebarConfig?: unknown;
     };
     bookmarks?: unknown;
     history?: unknown;
@@ -282,11 +283,13 @@ class SettingsManager {
         panels?: unknown;
         sidebars?: unknown;
         sidebarManagement?: unknown;
+        sidebarConfig?: unknown;
     } {
         const panels = this.readJsonFromLocalStorage('neoview-panels');
         const sidebars = this.readJsonFromLocalStorage('neoview-sidebars');
         const sidebarManagement = this.readJsonFromLocalStorage('neoview-sidebar-management');
-        return { panels, sidebars, sidebarManagement };
+        const sidebarConfig = this.readJsonFromLocalStorage('neoview-sidebar-config');
+        return { panels, sidebars, sidebarManagement, sidebarConfig };
     }
 
     private readSearchHistoryFromLocalStorage(): Record<string, unknown> {
@@ -544,6 +547,9 @@ class SettingsManager {
                 }
                 if (extended.panelsLayout.sidebarManagement) {
                     window.localStorage.setItem('neoview-sidebar-management', JSON.stringify(extended.panelsLayout.sidebarManagement));
+                }
+                if (extended.panelsLayout.sidebarConfig) {
+                    window.localStorage.setItem('neoview-sidebar-config', JSON.stringify(extended.panelsLayout.sidebarConfig));
                 }
             } catch (error) {
                 console.error('导入面板布局失败:', error);

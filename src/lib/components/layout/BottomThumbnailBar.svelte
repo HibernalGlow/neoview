@@ -532,10 +532,11 @@
 				lastThumbnailRange = null;
 				unsubscribeThumbnailListener = preloadManager.addThumbnailListener(
 					(pageIndex, dataURL, source) => {
-						if (source !== 'bottom-bar') {
-							return;
+						// 接受任何来源的缩略图，避免重复加载
+						// 如果底栏尚未有该缩略图，则使用其他来源的数据
+						if (!(pageIndex in thumbnails)) {
+							handleSharedThumbnailReady(pageIndex, dataURL);
 						}
-						handleSharedThumbnailReady(pageIndex, dataURL);
 					}
 				);
 				scheduleLoadVisibleThumbnails();

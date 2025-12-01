@@ -7,17 +7,76 @@ import { tick } from 'svelte';
 import type { FsItem } from '$lib/types';
 import VirtualizedFileList from '$lib/components/panels/file/components/VirtualizedFileList.svelte';
 import {
-	sortedItems,
-	currentPath,
-	viewStyle,
-	loading,
-	error,
-	searchKeyword,
-	folderPanelActions,
-	selectedItems,
-	multiSelectMode,
-	deleteMode
-} from '../stores/folderPanelStore.svelte';
+	folderTabActions,
+	tabViewStyle,
+	tabLoading,
+	tabError,
+	tabSearchKeyword,
+	tabSelectedItems,
+	tabMultiSelectMode,
+	tabDeleteMode,
+	tabCurrentPath,
+	tabItems,
+	tabSortConfig
+} from '../stores/folderTabStore.svelte';
+import { derived } from 'svelte/store';
+import type { FolderSortField, FolderSortOrder } from '../stores/folderPanelStore.svelte';
+import { folderRatingStore } from '$lib/stores/emm/folderRating';
+import { getDefaultRating } from '$lib/stores/emm/storage';
+
+// 别名映射
+const currentPath = tabCurrentPath;
+const viewStyle = tabViewStyle;
+const loading = tabLoading;
+const error = tabError;
+const searchKeyword = tabSearchKeyword;
+const selectedItems = tabSelectedItems;
+const multiSelectMode = tabMultiSelectMode;
+const deleteMode = tabDeleteMode;
+
+// sortedItems 需要从 tabItems 派生
+function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrder): FsItem[] {
+	if (field === 'random') {
+		const shuffled = [...items];
+		for (let i = shuffled.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+		}
+		return shuffled;
+	}
+	if (field === 'rating') {
+		const defaultRating = getDefaultRating();
+		return [...items].sort((a, b) => {
+			if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+			const ratingA = folderRatingStore.getEffectiveRating(a.path) ?? defaultRating;
+			const ratingB = folderRatingStore.getEffectiveRating(b.path) ?? defaultRating;
+			if (ratingA === ratingB) {
+				return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+			}
+			return order === 'asc' ? ratingA - ratingB : ratingB - ratingA;
+		});
+	}
+	return [...items].sort((a, b) => {
+		if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+		let comparison = 0;
+		switch (field) {
+			case 'name': comparison = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }); break;
+			case 'date': comparison = (a.modified || 0) - (b.modified || 0); break;
+			case 'size': comparison = (a.size || 0) - (b.size || 0); break;
+			case 'type': {
+				const extA = a.name.split('.').pop()?.toLowerCase() || '';
+				const extB = b.name.split('.').pop()?.toLowerCase() || '';
+				comparison = extA.localeCompare(extB);
+				break;
+			}
+		}
+		return order === 'asc' ? comparison : -comparison;
+	});
+}
+
+const sortedItems = derived([tabItems, tabSortConfig], ([$items, $config]) => {
+	return sortItems($items, $config.field, $config.order);
+});
 import { Loader2, FolderOpen, AlertCircle } from '@lucide/svelte';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 import { bookStore } from '$lib/stores/book.svelte';
@@ -56,7 +115,7 @@ let viewMode = $derived(($viewStyle === 'thumbnail' ? 'thumbnails' : 'list') as 
 function handleSelectionChange(payload: { selectedItems: Set<string> }) {
 	// 同步到 folderPanelStore
 	payload.selectedItems.forEach(path => {
-		folderPanelActions.selectItem(path, true);
+		folderTabActions.selectItem(path, true);
 	});
 }
 
@@ -64,15 +123,15 @@ function handleSelectionChange(payload: { selectedItems: Set<string> }) {
 function handleSelectedIndexChange(payload: { index: number }) {
 	selectedIndex = payload.index;
 	// 更新滚动位置
-	folderPanelActions.updateScrollPosition(payload.index * 96); // 估算滚动位置
+	folderTabActions.updateScrollPosition(payload.index * 96); // 估算滚动位置
 }
 
 // 处理项选中
 function handleItemSelect(payload: { item: FsItem; index: number; multiSelect: boolean }) {
 	if (payload.multiSelect) {
-		folderPanelActions.selectItem(payload.item.path, true);
+		folderTabActions.selectItem(payload.item.path, true);
 	} else {
-		folderPanelActions.selectItem(payload.item.path);
+		folderTabActions.selectItem(payload.item.path);
 		// 文件夹单击直接进入
 		if (payload.item.isDir) {
 			onItemOpen?.(payload.item);
@@ -132,7 +191,7 @@ $effect(() => {
 				const index = items.findIndex(item => item.path === pendingRestore?.selectedItemPath);
 				if (index >= 0) {
 					selectedIndex = index;
-					folderPanelActions.selectItem(pendingRestore.selectedItemPath);
+					folderTabActions.selectItem(pendingRestore.selectedItemPath);
 				}
 			}
 			onRestoreComplete?.();

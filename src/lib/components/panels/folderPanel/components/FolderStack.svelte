@@ -13,15 +13,24 @@ import { thumbnailManager } from '$lib/utils/thumbnailManager';
 import VirtualizedFileList from '$lib/components/panels/file/components/VirtualizedFileList.svelte';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 import {
-	viewStyle,
-	folderPanelActions,
-	selectedItems,
-	multiSelectMode,
-	deleteMode,
-	sortConfig,
-	searchKeyword,
-	penetrateMode
-} from '../stores/folderPanelStore.svelte';
+	folderTabActions,
+	tabViewStyle,
+	tabSelectedItems,
+	tabMultiSelectMode,
+	tabDeleteMode,
+	tabSortConfig,
+	tabSearchKeyword,
+	tabPenetrateMode
+} from '../stores/folderTabStore.svelte';
+
+// 别名映射
+const viewStyle = tabViewStyle;
+const selectedItems = tabSelectedItems;
+const multiSelectMode = tabMultiSelectMode;
+const deleteMode = tabDeleteMode;
+const sortConfig = tabSortConfig;
+const searchKeyword = tabSearchKeyword;
+const penetrateMode = tabPenetrateMode;
 import { Loader2, FolderOpen, AlertCircle } from '@lucide/svelte';
 import { directoryTreeCache } from '../utils/directoryTreeCache';
 import { folderRatingStore } from '$lib/stores/emm/folderRating';
@@ -180,9 +189,9 @@ async function initRoot(path: string) {
 	const layer = await createLayer(path);
 	layers = [layer];
 	activeIndex = 0;
-	folderPanelActions.setPath(path);
+	folderTabActions.setPath(path);
 	// 同步 items 到 store（用于工具栏显示计数）
-	folderPanelActions.setItems(layer.items);
+	folderTabActions.setItems(layer.items);
 }
 
 // 初始化根层（不添加历史记录，用于历史导航）
@@ -191,9 +200,9 @@ async function initRootWithoutHistory(path: string) {
 	layers = [layer];
 	activeIndex = 0;
 	// 使用 setPath 的第二个参数禁止添加历史记录
-	folderPanelActions.setPath(path, false);
+	folderTabActions.setPath(path, false);
 	// 同步 items 到 store（用于工具栏显示计数）
-	folderPanelActions.setItems(layer.items);
+	folderTabActions.setItems(layer.items);
 }
 
 // 创建新层
@@ -320,11 +329,11 @@ async function pushLayer(path: string) {
 	}
 	
 	// 更新 store 中的路径
-	folderPanelActions.setPath(path);
+	folderTabActions.setPath(path);
 	// 同步 items 到 store（用于工具栏显示计数）
 	const activeLayer = layers[activeIndex];
 	if (activeLayer) {
-		folderPanelActions.setItems(activeLayer.items);
+		folderTabActions.setItems(activeLayer.items);
 	}
 	
 	setTimeout(() => {
@@ -356,9 +365,9 @@ async function popLayer(): Promise<boolean> {
 		
 		const prevLayer = layers[activeIndex];
 		if (prevLayer) {
-			folderPanelActions.setPath(prevLayer.path);
+			folderTabActions.setPath(prevLayer.path);
 			// 同步 items 到 store（用于工具栏显示计数）
-			folderPanelActions.setItems(prevLayer.items);
+			folderTabActions.setItems(prevLayer.items);
 		}
 		
 		setTimeout(() => {
@@ -382,7 +391,7 @@ async function popLayer(): Promise<boolean> {
 			// 但我们要切换到新插入的层
 			activeIndex = 0;
 			
-			folderPanelActions.setPath(parentPath);
+			folderTabActions.setPath(parentPath);
 			
 			setTimeout(() => {
 				isAnimating = false;
@@ -404,9 +413,9 @@ function goToLayer(index: number) {
 	
 	const layer = layers[index];
 	if (layer) {
-		folderPanelActions.setPath(layer.path);
+		folderTabActions.setPath(layer.path);
 		// 同步 items 到 store（用于工具栏显示计数）
-		folderPanelActions.setItems(layer.items);
+		folderTabActions.setItems(layer.items);
 	}
 	
 	setTimeout(() => {
@@ -466,9 +475,9 @@ async function handleItemSelect(layerIndex: number, payload: { item: FsItem; ind
 	
 	if (payload.multiSelect) {
 		// 多选模式：只切换选中状态
-		folderPanelActions.selectItem(payload.item.path, true);
+		folderTabActions.selectItem(payload.item.path, true);
 	} else {
-		folderPanelActions.selectItem(payload.item.path);
+		folderTabActions.selectItem(payload.item.path);
 		
 		if (payload.item.isDir) {
 			// 文件夹：检查穿透模式

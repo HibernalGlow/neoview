@@ -4,7 +4,12 @@
  * 在文件列表中显示可展开的树结构，复用 FileItemCard 保持原有样式
  */
 import type { FsItem } from '$lib/types';
-import { folderPanelActions, expandedFolders, currentPath, viewStyle } from '../stores/folderPanelStore.svelte';
+import { folderTabActions, tabExpandedFolders, tabCurrentPath, tabViewStyle } from '../stores/folderTabStore.svelte';
+
+// 别名映射
+const expandedFolders = tabExpandedFolders;
+const currentPath = tabCurrentPath;
+const viewStyle = tabViewStyle;
 import { directoryTreeCache } from '../utils/directoryTreeCache';
 import { ChevronRight, ChevronDown, Loader2 } from '@lucide/svelte';
 import FileItemCard from '$lib/components/panels/file/components/FileItemCard.svelte';
@@ -187,11 +192,11 @@ async function toggleExpand(item: TreeItem) {
 	if (!item.isDir) return;
 	
 	if (item.isExpanded) {
-		folderPanelActions.collapseFolder(item.path);
+		folderTabActions.collapseFolder(item.path);
 	} else {
 		// 先加载子内容
 		await loadChildren(item.path);
-		folderPanelActions.expandFolder(item.path);
+		folderTabActions.expandFolder(item.path);
 	}
 }
 

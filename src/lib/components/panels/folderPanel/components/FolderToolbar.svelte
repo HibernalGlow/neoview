@@ -34,29 +34,44 @@ import {
 	Star
 } from '@lucide/svelte';
 import { folderThumbnailLoader, type WarmupProgress } from '$lib/utils/thumbnail';
-import { currentPath as currentPathStore } from '../stores/folderPanelStore.svelte';
 import * as Progress from '$lib/components/ui/progress';
 import { Button } from '$lib/components/ui/button';
 import * as Tooltip from '$lib/components/ui/tooltip';
 import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 import {
-	folderPanelActions,
-	canGoBack,
-	canGoForward,
-	canGoUp,
-	viewStyle,
-	multiSelectMode,
-	deleteMode,
-	sortConfig,
-	itemCount,
-	showSearchBar,
-	showMigrationBar,
-	penetrateMode,
-	deleteStrategy,
-	inlineTreeMode,
-	type FolderViewStyle,
-	type FolderSortField
-} from '../stores/folderPanelStore.svelte';
+	folderTabActions,
+	tabCanGoBack,
+	tabCanGoForward,
+	tabCanGoUp,
+	tabViewStyle,
+	tabMultiSelectMode,
+	tabDeleteMode,
+	tabSortConfig,
+	tabItemCount,
+	tabShowSearchBar,
+	tabShowMigrationBar,
+	tabPenetrateMode,
+	tabDeleteStrategy,
+	tabInlineTreeMode,
+	tabCurrentPath
+} from '../stores/folderTabStore.svelte';
+import type { FolderViewStyle, FolderSortField } from '../stores/folderPanelStore.svelte';
+
+// 别名映射，保持与原有代码的兼容性
+const currentPathStore = tabCurrentPath;
+const canGoBack = tabCanGoBack;
+const canGoForward = tabCanGoForward;
+const canGoUp = tabCanGoUp;
+const viewStyle = tabViewStyle;
+const multiSelectMode = tabMultiSelectMode;
+const deleteMode = tabDeleteMode;
+const sortConfig = tabSortConfig;
+const itemCount = tabItemCount;
+const showSearchBar = tabShowSearchBar;
+const showMigrationBar = tabShowMigrationBar;
+const penetrateMode = tabPenetrateMode;
+const deleteStrategy = tabDeleteStrategy;
+const inlineTreeMode = tabInlineTreeMode;
 
 interface Props {
 	onRefresh?: () => void;
@@ -115,16 +130,16 @@ function handleSetHome(e: MouseEvent) {
 }
 
 function handleSetViewStyle(style: FolderViewStyle) {
-	folderPanelActions.setViewStyle(style);
+	folderTabActions.setViewStyle(style);
 }
 
 function handleSetSort(field: FolderSortField) {
-	folderPanelActions.setSort(field);
+	folderTabActions.setSort(field);
 }
 
 function handleToggleSortOrder() {
 	const newOrder = $sortConfig.order === 'asc' ? 'desc' : 'asc';
-	folderPanelActions.setSort($sortConfig.field, newOrder);
+	folderTabActions.setSort($sortConfig.field, newOrder);
 }
 
 function handleToggleDeleteStrategy(e: MouseEvent) {
@@ -309,7 +324,7 @@ function cancelWarmup() {
 					variant={$multiSelectMode ? 'default' : 'ghost'}
 					size="icon"
 					class="h-7 w-7"
-					onclick={() => folderPanelActions.toggleMultiSelectMode()}
+					onclick={() => folderTabActions.toggleMultiSelectMode()}
 				>
 					<CheckSquare class="h-4 w-4" />
 				</Button>
@@ -325,7 +340,7 @@ function cancelWarmup() {
 					variant={$deleteMode ? 'default' : 'ghost'}
 					size="icon"
 					class="h-7 w-7"
-					onclick={() => folderPanelActions.toggleDeleteMode()}
+					onclick={() => folderTabActions.toggleDeleteMode()}
 					oncontextmenu={handleToggleDeleteStrategy}
 				>
 					<Trash2 class={$deleteStrategy === 'permanent' ? 'h-4 w-4 text-destructive' : 'h-4 w-4'} />
@@ -365,7 +380,7 @@ function cancelWarmup() {
 					variant={$showSearchBar ? 'default' : 'ghost'}
 					size="icon"
 					class="h-7 w-7"
-					onclick={() => folderPanelActions.toggleShowSearchBar()}
+					onclick={() => folderTabActions.toggleShowSearchBar()}
 				>
 					<Search class="h-4 w-4" />
 				</Button>
@@ -381,7 +396,7 @@ function cancelWarmup() {
 					variant={$showMigrationBar ? 'default' : 'ghost'}
 					size="icon"
 					class="h-7 w-7"
-					onclick={() => folderPanelActions.toggleShowMigrationBar()}
+					onclick={() => folderTabActions.toggleShowMigrationBar()}
 				>
 					<ClipboardPaste class="h-4 w-4" />
 				</Button>
@@ -397,7 +412,7 @@ function cancelWarmup() {
 					variant={$penetrateMode ? 'default' : 'ghost'}
 					size="icon"
 					class="h-7 w-7"
-					onclick={() => folderPanelActions.togglePenetrateMode()}
+					onclick={() => folderTabActions.togglePenetrateMode()}
 				>
 					<CornerDownRight class="h-4 w-4" />
 				</Button>
@@ -445,11 +460,11 @@ function cancelWarmup() {
 					<Flame class="mr-2 h-4 w-4 {isWarming ? 'text-orange-500' : ''}" />
 					{isWarming ? '取消预热' : '预热当前目录'}
 				</DropdownMenu.Item>
-				<DropdownMenu.Item onclick={() => folderPanelActions.toggleRecursiveMode()}>
+				<DropdownMenu.Item onclick={() => folderTabActions.toggleRecursiveMode()}>
 					递归显示子文件夹
 				</DropdownMenu.Item>
 				<DropdownMenu.Separator />
-				<DropdownMenu.Item onclick={() => folderPanelActions.clearHistory()}>
+				<DropdownMenu.Item onclick={() => folderTabActions.clearHistory()}>
 					清除历史记录
 				</DropdownMenu.Item>
 			</DropdownMenu.Content>

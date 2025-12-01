@@ -7,7 +7,10 @@ import { onMount } from 'svelte';
 import { ChevronRight, ChevronDown, Folder, HardDrive, Loader2 } from '@lucide/svelte';
 import { FileSystemAPI } from '$lib/api';
 import type { FsItem } from '$lib/types';
-import { currentPath, folderPanelActions } from '../stores/folderPanelStore.svelte';
+import { tabCurrentPath, folderTabActions } from '../stores/folderTabStore.svelte';
+
+// 别名映射
+const currentPath = tabCurrentPath;
 
 interface Props {
 	onNavigate?: (path: string) => void;
@@ -102,7 +105,7 @@ async function toggleNode(node: TreeNode) {
 
 // 选择节点
 function selectNode(node: TreeNode) {
-	folderPanelActions.setPath(node.path);
+	folderTabActions.setPath(node.path);
 	onNavigate?.(node.path);
 }
 

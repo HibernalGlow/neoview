@@ -8,13 +8,19 @@ import { Checkbox } from '$lib/components/ui/checkbox';
 import { Button } from '$lib/components/ui/button';
 import type { FsItem } from '$lib/types';
 import {
-	viewStyle,
-	multiSelectMode,
-	deleteMode,
-	selectedItems,
-	folderPanelActions,
-	type FolderViewStyle
-} from '../stores/folderPanelStore.svelte';
+	folderTabActions,
+	tabViewStyle,
+	tabMultiSelectMode,
+	tabDeleteMode,
+	tabSelectedItems
+} from '../stores/folderTabStore.svelte';
+import type { FolderViewStyle } from '../stores/folderPanelStore.svelte';
+
+// 别名映射
+const viewStyle = tabViewStyle;
+const multiSelectMode = tabMultiSelectMode;
+const deleteMode = tabDeleteMode;
+const selectedItems = tabSelectedItems;
 
 interface Props {
 	item: FsItem;
@@ -88,9 +94,9 @@ let FileIcon = $derived(getFileIcon(item));
 
 function handleClick(e: MouseEvent) {
 	if ($multiSelectMode) {
-		folderPanelActions.selectItem(item.path, true);
+		folderTabActions.selectItem(item.path, true);
 	} else {
-		folderPanelActions.selectItem(item.path);
+		folderTabActions.selectItem(item.path);
 	}
 }
 
@@ -104,7 +110,7 @@ function handleContextMenu(e: MouseEvent) {
 }
 
 function handleCheckboxChange(checked: boolean) {
-	folderPanelActions.selectItem(item.path, true);
+	folderTabActions.selectItem(item.path, true);
 }
 
 function handleDelete(e: MouseEvent) {

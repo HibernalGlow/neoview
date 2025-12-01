@@ -8,7 +8,10 @@ import { ChevronRight, Folder, HardDrive, MoreHorizontal, Edit2 } from '@lucide/
 import { Button } from '$lib/components/ui/button';
 import { Input } from '$lib/components/ui/input';
 import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-import { currentPath, folderPanelActions } from '../stores/folderPanelStore.svelte';
+import { tabCurrentPath, folderTabActions } from '../stores/folderTabStore.svelte';
+
+// 使用页签 store 的 currentPath
+const currentPath = tabCurrentPath;
 
 interface Props {
 	onNavigate?: (path: string) => void;
@@ -47,7 +50,7 @@ function confirmEditing() {
 				normalizedPath += '/';
 			}
 		}
-		folderPanelActions.setPath(normalizedPath);
+		folderTabActions.setPath(normalizedPath);
 		onNavigate?.(normalizedPath);
 	}
 	isEditing = false;
@@ -157,7 +160,7 @@ let visibleItems = $derived(() => {
 });
 
 function handleNavigate(path: string) {
-	folderPanelActions.setPath(path);
+	folderTabActions.setPath(path);
 	onNavigate?.(path);
 }
 </script>

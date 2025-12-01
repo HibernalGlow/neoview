@@ -18,6 +18,7 @@ import MigrationBar from './components/MigrationBar.svelte';
 import InlineTreeList from './components/InlineTreeList.svelte';
 import SearchResultList from './components/SearchResultList.svelte';
 import SearchBar from '$lib/components/ui/SearchBar.svelte';
+import FolderTabBar from './components/FolderTabBar.svelte';
 import { directoryTreeCache } from './utils/directoryTreeCache';
 import { bookStore } from '$lib/stores/book.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
@@ -26,23 +27,106 @@ import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
 import { createKeyboardHandler } from './utils/keyboardHandler';
 
 import {
-	currentPath,
+	currentPath as legacyCurrentPath,
 	folderPanelActions,
-	folderTreeConfig,
-	searchKeyword,
-	showSearchBar,
-	showMigrationBar,
-	selectedItems,
-	deleteMode,
-	deleteStrategy,
-	multiSelectMode,
-	sortedItems,
-	externalNavigationRequest,
-	inlineTreeMode,
-	searchResults,
-	isSearching,
-	searchSettings
+	externalNavigationRequest
 } from './stores/folderPanelStore.svelte';
+
+import {
+	folderTabActions,
+	tabCurrentPath,
+	tabFolderTreeConfig,
+	tabSearchKeyword,
+	tabShowSearchBar,
+	tabShowMigrationBar,
+	tabSelectedItems,
+	tabDeleteMode,
+	tabDeleteStrategy,
+	tabMultiSelectMode,
+	tabInlineTreeMode,
+	tabSearchResults,
+	tabIsSearching,
+	tabSearchSettings,
+	tabItems,
+	type FolderTabState
+} from './stores/folderTabStore.svelte';
+
+// 使用页签 store 作为主要状态源
+const currentPath = tabCurrentPath;
+const folderTreeConfig = tabFolderTreeConfig;
+const searchKeyword = tabSearchKeyword;
+const showSearchBar = tabShowSearchBar;
+const showMigrationBar = tabShowMigrationBar;
+const selectedItems = tabSelectedItems;
+const deleteMode = tabDeleteMode;
+const deleteStrategy = tabDeleteStrategy;
+const multiSelectMode = tabMultiSelectMode;
+const inlineTreeMode = tabInlineTreeMode;
+const searchResults = tabSearchResults;
+const isSearching = tabIsSearching;
+const searchSettings = tabSearchSettings;
+
+// sortedItems 需要从 tabItems 派生
+import { derived } from 'svelte/store';
+import type { FolderSortField, FolderSortOrder } from './stores/folderPanelStore.svelte';
+import { folderRatingStore } from '$lib/stores/emm/folderRating';
+import { getDefaultRating } from '$lib/stores/emm/storage';
+import { activeTab } from './stores/folderTabStore.svelte';
+
+function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrder): FsItem[] {
+	if (field === 'random') {
+		const shuffled = [...items];
+		for (let i = shuffled.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+		}
+		return shuffled;
+	}
+
+	if (field === 'rating') {
+		const defaultRating = getDefaultRating();
+		const sorted = [...items].sort((a, b) => {
+			if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+			const ratingA = folderRatingStore.getEffectiveRating(a.path) ?? defaultRating;
+			const ratingB = folderRatingStore.getEffectiveRating(b.path) ?? defaultRating;
+			if (ratingA === ratingB) {
+				return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+			}
+			const comparison = ratingA - ratingB;
+			return order === 'asc' ? comparison : -comparison;
+		});
+		return sorted;
+	}
+
+	const sorted = [...items].sort((a, b) => {
+		if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+		let comparison = 0;
+		switch (field) {
+			case 'name':
+				comparison = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+				break;
+			case 'date':
+				comparison = (a.modified || 0) - (b.modified || 0);
+				break;
+			case 'size':
+				comparison = (a.size || 0) - (b.size || 0);
+				break;
+			case 'type': {
+				const extA = a.name.split('.').pop()?.toLowerCase() || '';
+				const extB = b.name.split('.').pop()?.toLowerCase() || '';
+				comparison = extA.localeCompare(extB);
+				break;
+			}
+		}
+		return order === 'asc' ? comparison : -comparison;
+	});
+	return sorted;
+}
+
+const sortedItems = derived(activeTab, ($tab) => {
+	if (!$tab) return [];
+	return sortItems($tab.items, $tab.sortField, $tab.sortOrder);
+});
 
 // 导航命令 store（用于父子组件通信）
 const navigationCommand = writable<{ type: 'init' | 'push' | 'pop' | 'goto'; path?: string; index?: number } | null>(null);
@@ -184,7 +268,7 @@ function handleNavigate(path: string) {
 
 // 处理后退（使用历史导航，不添加新历史记录）
 function handleGoBack() {
-	const result = folderPanelActions.goBack();
+	const result = folderTabActions.goBack();
 	if (result) {
 		// 使用 history 类型，这样 FolderStack 不会再次添加历史
 		navigationCommand.set({ type: 'history', path: result.path });
@@ -193,7 +277,7 @@ function handleGoBack() {
 
 // 处理前进（使用历史导航，不添加新历史记录）
 function handleGoForward() {
-	const result = folderPanelActions.goForward();
+	const result = folderTabActions.goForward();
 	if (result) {
 		// 使用 history 类型，这样 FolderStack 不会再次添加历史
 		navigationCommand.set({ type: 'history', path: result.path });
@@ -202,7 +286,7 @@ function handleGoForward() {
 
 // 处理回到 Home
 function handleGoHome() {
-	const home = folderPanelActions.goHome();
+	const home = folderTabActions.goHome();
 	if (home) {
 		navigationCommand.set({ type: 'init', path: home });
 	}
@@ -212,7 +296,7 @@ function handleGoHome() {
 function handleSetHome() {
 	const path = $currentPath;
 	if (path) {
-		folderPanelActions.setHomePath(path);
+		folderTabActions.setHomePath(path);
 		// 持久化到 localStorage
 		localStorage.setItem('neoview-homepage-path', path);
 		showSuccessToast('设置成功', `已将 ${path} 设置为主页`);
@@ -221,46 +305,47 @@ function handleSetHome() {
 
 // 处理搜索（使用后端搜索）
 async function handleSearch(keyword: string) {
-	folderPanelActions.setSearchKeyword(keyword);
+	folderTabActions.setSearchKeyword(keyword);
 	
 	if (!keyword.trim()) {
-		folderPanelActions.clearSearch();
+		folderTabActions.clearSearch();
 		return;
 	}
 	
-	folderPanelActions.setIsSearching(true);
+	folderTabActions.setIsSearching(true);
 	
 	try {
 		const path = $currentPath;
 		if (!path) return;
 		
 		// 调用后端搜索 API
-		const settings = folderPanelActions.getState().searchSettings;
+		const tab = folderTabActions.getActiveTab();
+		const settings = tab?.searchSettings || { includeSubfolders: true, searchInPath: false };
 		const results = await FileSystemAPI.searchFiles(path, keyword, {
 			includeSubfolders: settings.includeSubfolders,
 			maxResults: 1000,
 			searchInPath: settings.searchInPath
 		});
 		
-		folderPanelActions.setSearchResults(results);
+		folderTabActions.setSearchResults(results);
 		console.log(`[FolderPanel] 搜索完成，找到 ${results.length} 个结果`);
 	} catch (err) {
 		console.error('[FolderPanel] 搜索失败:', err);
 		showErrorToast('搜索失败', String(err));
-		folderPanelActions.setSearchResults([]);
+		folderTabActions.setSearchResults([]);
 	} finally {
-		folderPanelActions.setIsSearching(false);
+		folderTabActions.setIsSearching(false);
 	}
 }
 
 // 处理文件夹树切换
 function handleToggleFolderTree() {
-	folderPanelActions.toggleFolderTree();
+	folderTabActions.toggleFolderTree();
 }
 
 // 处理搜索设置变更
 function handleSearchSettingsChange(settings: { includeSubfolders?: boolean; showHistoryOnFocus?: boolean; searchInPath?: boolean }) {
-	folderPanelActions.setSearchSettings(settings);
+	folderTabActions.setSearchSettings(settings);
 }
 
 // 迁移栏管理器显示状态
@@ -318,7 +403,7 @@ async function handleBatchDelete() {
 			}
 		}
 		showSuccessToast(`${actionText}成功`, `已${actionText} ${paths.length} 个文件`);
-		folderPanelActions.deselectAll();
+		folderTabActions.deselectAll();
 		handleRefresh();
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
@@ -427,7 +512,7 @@ async function handleOpenWithSystem(item: FsItem) {
 
 // 切换删除策略
 function handleToggleDeleteStrategy() {
-	folderPanelActions.toggleDeleteStrategy();
+	folderTabActions.toggleDeleteStrategy();
 	const strategy = $deleteStrategy;
 	const text = strategy === 'trash' ? '移动到回收站' : '永久删除';
 	showSuccessToast('删除策略已切换', text);
@@ -435,7 +520,7 @@ function handleToggleDeleteStrategy() {
 
 // 切换主视图树模式
 function handleToggleInlineTree() {
-	folderPanelActions.toggleInlineTreeMode();
+	folderTabActions.toggleInlineTreeMode();
 	const mode = $inlineTreeMode;
 	showSuccessToast('主视图树', mode ? '已开启' : '已关闭');
 }
@@ -451,9 +536,9 @@ const handleKeydown = createKeyboardHandler(() => ({
 	onGoBack: handleGoBack,
 	onRefresh: handleRefresh,
 	onBatchDelete: handleBatchDelete,
-	onSelectAll: () => folderPanelActions.selectAll(),
-	onDeselectAll: () => folderPanelActions.deselectAll(),
-	onToggleSearchBar: () => folderPanelActions.toggleShowSearchBar()
+	onSelectAll: () => folderTabActions.selectAll(),
+	onDeselectAll: () => folderTabActions.deselectAll(),
+	onToggleSearchBar: () => folderTabActions.toggleShowSearchBar()
 }));
 
 // 监听外部导航请求（来自历史面板、书签面板等）
@@ -467,6 +552,9 @@ $effect(() => {
 	}
 });
 
+// Home 路径（用于新建页签）
+let homePath = $state('');
+
 // 初始化
 onMount(() => {
 	// 异步初始化
@@ -476,7 +564,8 @@ onMount(() => {
 			const savedHomePath = localStorage.getItem('neoview-homepage-path');
 			const defaultHome = await homeDir();
 			const home = savedHomePath || defaultHome;
-			folderPanelActions.setHomePath(home);
+			homePath = home;
+			folderTabActions.setHomePath(home);
 
 			// 初始化层叠导航
 			const initialPath = $currentPath || home;
@@ -497,6 +586,9 @@ onMount(() => {
 </script>
 
 <div class="flex h-full flex-col overflow-hidden">
+	<!-- 页签栏 -->
+	<FolderTabBar {homePath} />
+	
 	<!-- 面包屑导航 -->
 	<div class="border-b">
 		<BreadcrumbBar onNavigate={handleNavigate} />

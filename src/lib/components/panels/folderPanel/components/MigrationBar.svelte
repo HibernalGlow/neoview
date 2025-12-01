@@ -8,7 +8,10 @@ import { Folder, Trash2, Settings } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import { FileSystemAPI } from '$lib/api';
 import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
-import { selectedItems, folderPanelActions } from '../stores/folderPanelStore.svelte';
+import { tabSelectedItems, folderTabActions } from '../stores/folderTabStore.svelte';
+
+// 别名映射
+const selectedItems = tabSelectedItems;
 
 interface Props {
 	showManager?: boolean;
@@ -138,7 +141,7 @@ async function quickApplyToFolder(target: QuickFolderTarget) {
 
 		// 如果是移动，清除选中并刷新
 		if (quickFolderMode === 'move') {
-			folderPanelActions.deselectAll();
+			folderTabActions.deselectAll();
 		}
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);

@@ -4,6 +4,7 @@
 	import type { HTMLAttributes } from "svelte/elements";
 	import { SIDEBAR_WIDTH_MOBILE } from "./constants.js";
 	import { useSidebar } from "./context.svelte.js";
+	import { settingsManager } from "$lib/settings/settingsManager";
 
 	let {
 		ref = $bindable(null),
@@ -20,6 +21,15 @@
 	} = $props();
 
 	const sidebar = useSidebar();
+	
+	let sidebarOpacity = $state(settingsManager.getSettings().panels.sidebarOpacity);
+	
+	$effect(() => {
+		const unsubscribe = settingsManager.addListener((s) => {
+			sidebarOpacity = s.panels.sidebarOpacity;
+		});
+		return unsubscribe;
+	});
 </script>
 
 {#if collapsible === "none"}
@@ -95,7 +105,8 @@
 			<div
 				data-sidebar="sidebar"
 				data-slot="sidebar-inner"
-				class="bg-sidebar/85 backdrop-blur-md group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm"
+				class="backdrop-blur-md group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm"
+				style="background-color: hsl(var(--sidebar) / {sidebarOpacity / 100});"
 			>
 				{@render children?.()}
 			</div>

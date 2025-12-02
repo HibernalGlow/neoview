@@ -125,6 +125,8 @@ export interface NeoViewSettings {
     rightSidebarVisible: boolean;
     bottomPanelVisible: boolean;
     autoHideToolbar: boolean;
+    /** 侧边栏/面板透明度 0-100 */
+    sidebarOpacity: number;
     hoverAreas: {
       topTriggerHeight: number;
       bottomTriggerHeight: number;
@@ -279,6 +281,7 @@ const defaultSettings: NeoViewSettings = {
     rightSidebarVisible: false,
     bottomPanelVisible: false,
     autoHideToolbar: true,
+    sidebarOpacity: 85,
     hoverAreas: {
       topTriggerHeight: 32,
       bottomTriggerHeight: 32,

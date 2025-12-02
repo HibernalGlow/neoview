@@ -1,16 +1,24 @@
 <script lang="ts">
-	import { Palette, Sun, Moon, Monitor, Check } from '@lucide/svelte';
+	import { Palette, Sun, Moon, Monitor, Check, Layers } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import { Input } from '$lib/components/ui/input';
+	import { Slider } from '$lib/components/ui/slider';
 	import { onMount } from 'svelte';
 	import { fetchThemeFromURL } from '$lib/utils/themeManager';
+	import { settingsManager } from '$lib/settings/settingsManager';
 
 	type ThemeMode = 'light' | 'dark' | 'system';
 
 	let currentMode = $state<ThemeMode>('system');
 	let systemPrefersDark = $state(false);
 	let themeUrl = $state('');
+	let sidebarOpacity = $state(settingsManager.getSettings().panels.sidebarOpacity);
+
+	function updateSidebarOpacity(value: number) {
+		sidebarOpacity = value;
+		settingsManager.updateNestedSettings('panels', { sidebarOpacity: value });
+	}
 	let themeJson = $state('');
 	let customThemeName = $state('');
 	const placeholderText = '{"name":"My Theme","cssVars":{"theme":{},"light":{},"dark":{}}}';
@@ -387,6 +395,29 @@
 				当前系统偏好: {systemPrefersDark ? '深色' : '浅色'}
 			</p>
 		{/if}
+	</div>
+
+	<!-- 侧边栏透明度 -->
+	<div class="space-y-3">
+		<Label class="text-sm font-semibold flex items-center gap-2">
+			<Layers class="h-4 w-4" />
+			侧边栏透明度
+		</Label>
+		<div class="flex items-center gap-4">
+			<Slider
+				type="single"
+				value={sidebarOpacity}
+				min={50}
+				max={100}
+				step={5}
+				class="flex-1"
+				onValueChange={updateSidebarOpacity}
+			/>
+			<span class="text-sm text-muted-foreground w-12 text-right">{sidebarOpacity}%</span>
+		</div>
+		<p class="text-muted-foreground text-xs">
+			调整侧边栏和面板的背景透明度，数值越低越透明
+		</p>
 	</div>
 
 	<!-- 预设主题 -->

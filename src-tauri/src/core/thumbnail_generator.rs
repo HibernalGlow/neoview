@@ -201,6 +201,27 @@ impl ThumbnailGenerator {
         Ok(output)
     }
 
+    /// 使用 WIC 内置缩放生成 WebP 缩略图（高性能版本）
+    /// 避免全尺寸解码，直接在 WIC 层面缩放
+    #[cfg(target_os = "windows")]
+    fn generate_webp_with_wic_fast(image_data: &[u8], config: &ThumbnailGeneratorConfig) -> Result<Vec<u8>, String> {
+        use crate::core::wic_decoder::{decode_and_scale_with_wic, wic_result_to_dynamic_image};
+        
+        // 使用 WIC 内置缩放器直接输出小尺寸图像
+        let result = decode_and_scale_with_wic(image_data, config.max_width, config.max_height)?;
+        let img = wic_result_to_dynamic_image(result)?;
+        
+        let mut output = Vec::new();
+        img.write_to(&mut Cursor::new(&mut output), ImageFormat::WebP)
+            .map_err(|e| format!("WebP 编码失败: {}", e))?;
+        Ok(output)
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn generate_webp_with_wic_fast(_image_data: &[u8], _config: &ThumbnailGeneratorConfig) -> Result<Vec<u8>, String> {
+        Err("WIC 仅在 Windows 上可用".to_string())
+    }
+
     /// 检查是否为视频文件
     fn is_video_file(path: &Path) -> bool {
         video_exts::is_video_path(path)
@@ -283,25 +304,25 @@ impl ThumbnailGenerator {
             .extension()
             .and_then(|e| e.to_str())
             .map(|e| e.to_lowercase());
-        let is_avif = ext.as_deref() == Some("avif");
         let is_jxl = ext.as_deref() == Some("jxl");
 
         // 同步生成 webp 缩略图
-        let webp_data = if is_avif {
-            // 使用 WIC 解码 AVIF（Windows 硬件加速）
-            Self::decode_avif_image(&image_data)
-                .ok()
-                .and_then(|img| Self::generate_webp_thumbnail_fallback(&img, &self.config).ok())
-        } else if is_jxl {
-            // JXL 使用 jxl_oxide 解码后转 webp
+        // 优先使用 WIC 内置缩放（高性能），失败时回退到传统方法
+        let webp_data = if is_jxl {
+            // JXL 使用 jxl_oxide 解码后转 webp（WIC 可能不支持 JXL）
             Self::decode_jxl_image(&image_data)
                 .ok()
                 .and_then(|img| Self::generate_webp_thumbnail_fallback(&img, &self.config).ok())
         } else {
-            // 其他格式：使用 image 库
-            Self::decode_image_safe(&image_data)
+            // 所有其他格式：优先使用 WIC 内置缩放
+            Self::generate_webp_with_wic_fast(&image_data, &self.config)
                 .ok()
-                .and_then(|img| Self::generate_webp_thumbnail_fallback(&img, &self.config).ok())
+                .or_else(|| {
+                    // WIC 失败，回退到传统方法
+                    Self::decode_image_safe(&image_data)
+                        .ok()
+                        .and_then(|img| Self::generate_webp_thumbnail_fallback(&img, &self.config).ok())
+                })
         };
 
         match webp_data {
@@ -778,28 +799,28 @@ impl ThumbnailGenerator {
                     }
 
                     let lower_name = name.to_lowercase();
-                    let is_avif = lower_name.ends_with(".avif");
                     let is_jxl = lower_name.ends_with(".jxl");
 
                     // 同步生成 webp 缩略图
-                    let webp_data = if is_avif {
-                        // 使用 WIC 解码 AVIF（Windows 硬件加速）
-                        Self::decode_avif_image(&image_data)
-                            .ok()
-                            .and_then(|img| {
-                                Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
-                            })
-                    } else if is_jxl {
+                    // 优先使用 WIC 内置缩放（高性能），失败时回退到传统方法
+                    let webp_data = if is_jxl {
+                        // JXL 使用 jxl_oxide 解码（WIC 可能不支持）
                         Self::decode_jxl_image(&image_data)
                             .ok()
                             .and_then(|img| {
                                 Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
                             })
                     } else {
-                        Self::decode_image_safe(&image_data)
+                        // 所有其他格式：优先使用 WIC 内置缩放
+                        Self::generate_webp_with_wic_fast(&image_data, &self.config)
                             .ok()
-                            .and_then(|img| {
-                                Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
+                            .or_else(|| {
+                                // WIC 失败，回退到传统方法
+                                Self::decode_image_safe(&image_data)
+                                    .ok()
+                                    .and_then(|img| {
+                                        Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
+                                    })
                             })
                     };
 
@@ -884,28 +905,28 @@ impl ThumbnailGenerator {
                         .map_err(|e| format!("读取 RAR 条目失败: {:?}", e))?;
                     
                     let lower_name = name.to_lowercase();
-                    let is_avif = lower_name.ends_with(".avif");
                     let is_jxl = lower_name.ends_with(".jxl");
                     
                     // 同步生成 webp 缩略图
-                    let webp_data = if is_avif {
-                        // 使用 WIC 解码 AVIF（Windows 硬件加速）
-                        Self::decode_avif_image(&image_data)
-                            .ok()
-                            .and_then(|img| {
-                                Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
-                            })
-                    } else if is_jxl {
+                    // 优先使用 WIC 内置缩放（高性能），失败时回退到传统方法
+                    let webp_data = if is_jxl {
+                        // JXL 使用 jxl_oxide 解码（WIC 可能不支持）
                         Self::decode_jxl_image(&image_data)
                             .ok()
                             .and_then(|img| {
                                 Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
                             })
                     } else {
-                        Self::decode_image_safe(&image_data)
+                        // 所有其他格式：优先使用 WIC 内置缩放
+                        Self::generate_webp_with_wic_fast(&image_data, &self.config)
                             .ok()
-                            .and_then(|img| {
-                                Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
+                            .or_else(|| {
+                                // WIC 失败，回退到传统方法
+                                Self::decode_image_safe(&image_data)
+                                    .ok()
+                                    .and_then(|img| {
+                                        Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
+                                    })
                             })
                     };
                     
@@ -1003,28 +1024,28 @@ impl ThumbnailGenerator {
         
         if let Some((name, image_data)) = found_image_data {
             let lower_name = name.to_lowercase();
-            let is_avif = lower_name.ends_with(".avif");
             let is_jxl = lower_name.ends_with(".jxl");
             
             // 同步生成 webp 缩略图
-            let webp_data = if is_avif {
-                // 使用 WIC 解码 AVIF（Windows 硬件加速）
-                Self::decode_avif_image(&image_data)
-                    .ok()
-                    .and_then(|img| {
-                        Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
-                    })
-            } else if is_jxl {
+            // 优先使用 WIC 内置缩放（高性能），失败时回退到传统方法
+            let webp_data = if is_jxl {
+                // JXL 使用 jxl_oxide 解码（WIC 可能不支持）
                 Self::decode_jxl_image(&image_data)
                     .ok()
                     .and_then(|img| {
                         Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
                     })
             } else {
-                Self::decode_image_safe(&image_data)
+                // 所有其他格式：优先使用 WIC 内置缩放
+                Self::generate_webp_with_wic_fast(&image_data, &self.config)
                     .ok()
-                    .and_then(|img| {
-                        Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
+                    .or_else(|| {
+                        // WIC 失败，回退到传统方法
+                        Self::decode_image_safe(&image_data)
+                            .ok()
+                            .and_then(|img| {
+                                Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
+                            })
                     })
             };
             

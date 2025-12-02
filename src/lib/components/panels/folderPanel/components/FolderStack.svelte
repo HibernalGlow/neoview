@@ -428,6 +428,29 @@ function goToLayer(index: number) {
 	}, 300);
 }
 
+// 处理删除项目（先从层叠栈移除，再调用外部删除处理）
+function handleDeleteItem(layerIndex: number, item: FsItem) {
+	// 立即从层叠栈中移除（乐观更新）
+	layers = layers.map((layer, idx) => {
+		if (idx === layerIndex) {
+			return {
+				...layer,
+				items: layer.items.filter((i) => i.path !== item.path)
+			};
+		}
+		return layer;
+	});
+	
+	// 同步到 store
+	const currentLayer = layers[layerIndex];
+	if (currentLayer) {
+		folderTabActions.setItems(currentLayer.items);
+	}
+	
+	// 调用外部删除处理
+	onItemDelete?.(item);
+}
+
 // 监听导航命令（只有当前活动页签才响应）
 $effect(() => {
 	const cmd = $navigationCommand;
@@ -608,7 +631,7 @@ function handleOpenFolderAsBook(layerIndex: number, item: FsItem) {
 						onSelectedIndexChange={(payload) => handleSelectedIndexChange(index, payload)}
 						on:itemContextMenu={(e) => handleItemContextMenu(index, e.detail)}
 						on:openFolderAsBook={(e) => handleOpenFolderAsBook(index, e.detail.item)}
-						on:deleteItem={(e) => onItemDelete?.(e.detail.item)}
+						on:deleteItem={(e) => handleDeleteItem(index, e.detail.item)}
 					/>
 				{/if}
 			{/if}

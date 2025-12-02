@@ -24,7 +24,7 @@ import SearchBar from '$lib/components/ui/SearchBar.svelte';
 import FolderTabBar from './components/FolderTabBar.svelte';
 import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
 import FavoriteTagPanel from './components/FavoriteTagPanel.svelte';
-import { favoriteTagStore, createTagValue, mixedGenderStore, parseSearchTags, hasTagSearch, removeTagsFromSearch, letter2cat, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
+import { favoriteTagStore, createTagValue, mixedGenderStore, parseSearchTags, hasTagSearch, removeTagsFromSearch, letter2cat, cat2letter, categoryColors, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
 import { invoke } from '@tauri-apps/api/core';
 import { directoryTreeCache } from './utils/directoryTreeCache';
 import { bookStore } from '$lib/stores/book.svelte';
@@ -511,17 +511,45 @@ let showRandomTagBar = $state(false);
 let randomTags = $state<FavoriteTag[]>([]);
 
 
-// 刷新随机标签
-function refreshRandomTags() {
-	const allTags = favoriteTagStore.tags;
-	if (allTags.length === 0) {
-		randomTags = [];
-		return;
+// 刷新随机标签（从数据库获取普通标签 + 收藏标签）
+async function refreshRandomTags() {
+	try {
+		// 从后端获取随机标签
+		const dbTags: [string, string][] = await invoke('get_random_emm_tags', { count: 10 });
+		
+		// 转换为 FavoriteTag 格式
+		const normalTags: FavoriteTag[] = dbTags.map(([cat, tag]) => {
+			const letter = cat2letter[cat] || cat[0];
+			return {
+				id: `${cat}:${tag}`,
+				cat,
+				tag,
+				letter,
+				display: `${letter}:${tag}`,
+				value: createTagValue(cat, tag),
+				color: categoryColors[cat] || '#666'
+			};
+		});
+		
+		// 合并收藏标签（随机选几个）
+		const collectTags = favoriteTagStore.tags;
+		const shuffledCollect = [...collectTags].sort(() => Math.random() - 0.5).slice(0, 3);
+		
+		// 合并并去重
+		const allTags = [...shuffledCollect, ...normalTags];
+		const seen = new Set<string>();
+		randomTags = allTags.filter(t => {
+			if (seen.has(t.id)) return false;
+			seen.add(t.id);
+			return true;
+		}).slice(0, 8);
+	} catch (err) {
+		console.warn('[FolderPanel] 获取随机标签失败:', err);
+		// 回退到只使用收藏标签
+		const allTags = favoriteTagStore.tags;
+		const count = Math.min(5, allTags.length);
+		randomTags = [...allTags].sort(() => Math.random() - 0.5).slice(0, count);
 	}
-	// 随机选择 5-8 个标签
-	const count = Math.min(Math.floor(Math.random() * 4) + 5, allTags.length);
-	const shuffled = [...allTags].sort(() => Math.random() - 0.5);
-	randomTags = shuffled.slice(0, count);
 }
 
 // 切换随机标签栏

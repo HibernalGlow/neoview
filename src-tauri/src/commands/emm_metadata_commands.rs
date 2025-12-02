@@ -645,3 +645,12 @@ pub async fn find_emm_translation_file() -> Result<Option<String>, String> {
 
     Ok(None)
 }
+
+/// 从缩略图数据库获取随机标签
+#[tauri::command]
+pub async fn get_random_emm_tags(
+    count: usize,
+    state: tauri::State<'_, super::thumbnail_commands::ThumbnailState>,
+) -> Result<Vec<(String, String)>, String> {
+    state.db.get_random_tags(count).map_err(|e| e.to_string())
+}

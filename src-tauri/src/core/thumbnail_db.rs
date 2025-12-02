@@ -1526,6 +1526,59 @@ impl ThumbnailDb {
 
         Ok(0)
     }
+
+    /// 获取随机标签（从数据库中的 EMM 元数据）
+    pub fn get_random_tags(&self, count: usize) -> SqliteResult<Vec<(String, String)>> {
+        use rand::seq::SliceRandom;
+        use serde_json::Value;
+
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().ok_or_else(|| {
+            rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some("Database not open".to_string()),
+            )
+        })?;
+
+        // 随机获取一些有 EMM 数据的记录
+        let mut stmt = conn.prepare(
+            "SELECT emm_json FROM thumbnails WHERE emm_json IS NOT NULL ORDER BY RANDOM() LIMIT 50"
+        )?;
+
+        let rows: Vec<String> = stmt
+            .query_map([], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        // 收集所有标签
+        let mut all_tags: Vec<(String, String)> = Vec::new();
+        
+        for emm_json in rows {
+            if let Ok(json) = serde_json::from_str::<Value>(&emm_json) {
+                if let Some(tags_array) = json.get("tags").and_then(|t| t.as_array()) {
+                    for tag_obj in tags_array {
+                        if let (Some(ns), Some(tag)) = (
+                            tag_obj.get("namespace").and_then(|n| n.as_str()),
+                            tag_obj.get("tag").and_then(|t| t.as_str()),
+                        ) {
+                            let pair = (ns.to_string(), tag.to_string());
+                            if !all_tags.contains(&pair) {
+                                all_tags.push(pair);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 随机打乱并取指定数量
+        let mut rng = rand::thread_rng();
+        all_tags.shuffle(&mut rng);
+        all_tags.truncate(count);
+
+        Ok(all_tags)
+    }
 }
 
 impl Clone for ThumbnailDb {

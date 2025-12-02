@@ -45,18 +45,19 @@
 	<span
 		role="button"
 		tabindex="0"
-		class="tag-chip inline-flex items-center gap-0.5 rounded border transition-all hover:-translate-y-0.5 cursor-pointer {sizeClass} {isMixedVariant ? 'border-dashed opacity-70' : ''} {isCollect ? 'font-semibold' : ''}"
+		class="tag-chip inline-flex items-center gap-0.5 rounded border transition-all hover:-translate-y-0.5 cursor-pointer {sizeClass} {isMixedVariant ? 'border-dashed' : ''} {isCollect && !isMixedVariant ? 'font-semibold' : ''}"
 		style="
 			border-color: {tagColor};
-			background: color-mix(in srgb, {tagColor} {isMixedVariant ? '6%' : isCollect ? '15%' : '8%'}, transparent);
-			color: {isCollect ? tagColor : 'inherit'};
+			background: color-mix(in srgb, {tagColor} {isMixedVariant ? '8%' : isCollect ? '15%' : '10%'}, transparent);
+			color: {isCollect || isMixedVariant ? tagColor : 'inherit'};
+			opacity: {isMixedVariant ? '0.65' : '1'};
 		"
 		onclick={onClick}
 		onkeydown={(e) => e.key === 'Enter' && onClick?.()}
 		oncontextmenu={onContextMenu}
 		title={isMixedVariant ? `混合匹配 - ${tag}` : tag}
 	>
-		<span class="w-1.5 h-1.5 rounded-full shrink-0" style="background: {tagColor}"></span>
+		<span class="w-1.5 h-1.5 rounded-full shrink-0" style="background: {tagColor}; opacity: {isMixedVariant ? '0.6' : '1'};"></span>
 		<span>{display}</span>
 		{#if showRemove && onRemove}
 			<button
@@ -71,15 +72,16 @@
 	</span>
 {:else}
 	<span
-		class="tag-chip inline-flex items-center gap-0.5 rounded border {sizeClass} {isMixedVariant ? 'border-dashed opacity-70' : ''} {isCollect ? 'font-semibold' : ''}"
+		class="tag-chip inline-flex items-center gap-0.5 rounded border {sizeClass} {isMixedVariant ? 'border-dashed' : ''} {isCollect && !isMixedVariant ? 'font-semibold' : ''}"
 		style="
 			border-color: {tagColor};
-			background: color-mix(in srgb, {tagColor} {isMixedVariant ? '6%' : isCollect ? '15%' : '8%'}, transparent);
-			color: {isCollect ? tagColor : 'inherit'};
+			background: color-mix(in srgb, {tagColor} {isMixedVariant ? '8%' : isCollect ? '15%' : '10%'}, transparent);
+			color: {isCollect || isMixedVariant ? tagColor : 'inherit'};
+			opacity: {isMixedVariant ? '0.65' : '1'};
 		"
 		title={isMixedVariant ? `混合匹配 - ${tag}` : tag}
 	>
-		<span class="w-1.5 h-1.5 rounded-full shrink-0" style="background: {tagColor}"></span>
+		<span class="w-1.5 h-1.5 rounded-full shrink-0" style="background: {tagColor}; opacity: {isMixedVariant ? '0.6' : '1'};"></span>
 		<span>{display}</span>
 	</span>
 {/if}

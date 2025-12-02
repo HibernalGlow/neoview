@@ -311,7 +311,7 @@
 </script>
 
 <div class="flex h-full flex-col">
-	<header class="flex items-center justify-between border-b px-4 py-3">
+	<header class="flex items-center justify-between px-4 py-3">
 		<div class="flex items-center gap-2">
 			<BarChart3 class="h-5 w-5" />
 			<div>
@@ -323,6 +323,8 @@
 			<RefreshCw class="h-3.5 w-3.5" /> 重置布局
 		</Button>
 	</header>
+	<!-- 渐变过渡 -->
+	<div class="h-4 bg-linear-to-b from-transparent to-background"></div>
 
 	<div class="flex-1 overflow-y-auto px-3 py-4 bg-background">
 		<div class="space-y-3">

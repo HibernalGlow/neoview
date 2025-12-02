@@ -51,7 +51,7 @@
 
 <div class="h-full flex flex-col">
 	<!-- 头部 -->
-	<div class="p-3 border-b">
+	<div class="p-3">
 		<h3 class="text-sm font-semibold mb-2 flex items-center gap-2">
 			<FileText class="h-4 w-4" />
 			页面列表 ({filteredPages.length}/{pages.length})
@@ -68,6 +68,8 @@
 			/>
 		</div>
 	</div>
+	<!-- 渐变过渡 -->
+	<div class="h-4 bg-linear-to-b from-transparent to-background"></div>
 
 	<!-- 页面列表 -->
 	<div class="flex-1 overflow-y-auto bg-background">

@@ -383,8 +383,15 @@ async function handleSearch(keyword: string) {
 			maxResults: 1000
 		});
 		
-		console.log(`[FolderPanel] 搜索完成，找到 ${results.length} 个结果`, results.slice(0, 5));
-		folderTabActions.setSearchResults(results);
+		// 为搜索结果附加 rating 数据
+		const defaultRating = getDefaultRating();
+		const resultsWithRating = results.map(item => ({
+			...item,
+			rating: folderRatingStore.getEffectiveRating(item.path) ?? defaultRating
+		}));
+		
+		console.log(`[FolderPanel] 搜索完成，找到 ${resultsWithRating.length} 个结果`, resultsWithRating.slice(0, 5));
+		folderTabActions.setSearchResults(resultsWithRating);
 	} catch (err) {
 		console.error('[FolderPanel] 搜索失败:', err);
 		showErrorToast('搜索失败', String(err));

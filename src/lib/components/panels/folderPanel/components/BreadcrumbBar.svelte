@@ -92,16 +92,17 @@ function parsePath(path: string): BreadcrumbItem[] {
 
 	// Windows 盘符处理
 	if (path.includes(':')) {
-		const drive = parts[0];
+		const drive = parts[0]; // e.g., "E:"
+		const drivePath = drive + '/'; // e.g., "E:/"
 		items.push({
 			name: drive,
-			path: drive,
+			path: drivePath,
 			isRoot: true
 		});
 
-		let currentPath = drive;
+		let currentPath = drivePath;
 		for (let i = 1; i < parts.length; i++) {
-			currentPath += '/' + parts[i];
+			currentPath = currentPath.endsWith('/') ? currentPath + parts[i] : currentPath + '/' + parts[i];
 			items.push({
 				name: parts[i],
 				path: currentPath,

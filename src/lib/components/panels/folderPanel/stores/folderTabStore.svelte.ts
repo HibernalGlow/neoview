@@ -410,14 +410,25 @@ export const folderTabActions = {
 	 * 设置当前路径
 	 */
 	setPath(path: string, addToHistory = true) {
+		// 规范化路径：统一使用正斜杠，确保 Windows 盘符格式正确
+		let normalizedPath = path.replace(/\\/g, '/');
+		// 确保 Windows 盘符后有斜杠 (E: -> E:/)
+		if (/^[a-zA-Z]:$/.test(normalizedPath)) {
+			normalizedPath += '/';
+		}
+		// 确保 Windows 盘符格式正确 (E:abc -> E:/abc)
+		if (/^[a-zA-Z]:[^/]/.test(normalizedPath)) {
+			normalizedPath = normalizedPath.slice(0, 2) + '/' + normalizedPath.slice(2);
+		}
+		
 		updateActiveTab((tab) => {
-			const newTab = { ...tab, currentPath: path, loading: true, error: null };
-			newTab.title = getDisplayName(path);
+			const newTab = { ...tab, currentPath: normalizedPath, loading: true, error: null };
+			newTab.title = getDisplayName(normalizedPath);
 
-			if (addToHistory && path) {
+			if (addToHistory && normalizedPath) {
 				const entry: FolderHistoryEntry = {
-					path,
-					displayName: getDisplayName(path),
+					path: normalizedPath,
+					displayName: getDisplayName(normalizedPath),
 					timestamp: Date.now(),
 					scrollTop: 0,
 					selectedItemPath: null,

@@ -353,7 +353,8 @@ pub async fn list_archive_contents(
         .map_err(|e| format!("获取锁失败: {}", e))?;
 
     let path = PathBuf::from(archive_path);
-    archive_manager.list_zip_contents(&path)
+    // 使用 list_contents 自动检测格式（支持 ZIP/RAR/7z）
+    archive_manager.list_contents(&path)
 }
 
 /// 删除压缩包中的指定条目
@@ -402,7 +403,7 @@ pub async fn load_image_from_archive_binary(
         let manager = archive_manager
             .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
-        manager.load_image_from_zip_binary(&archive_path_buf, &inner_path)
+        manager.load_image_from_archive_binary(&archive_path_buf, &inner_path)
     })
     .await
     .map_err(|e| format!("load_image_from_archive_binary join error: {}", e))?;
@@ -456,7 +457,7 @@ pub async fn load_image_from_archive(
         let manager = archive_manager
             .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
-        manager.load_image_from_zip_binary(&archive_path_buf, &inner_path)
+        manager.load_image_from_archive_binary(&archive_path_buf, &inner_path)
     })
     .await
     .map_err(|e| format!("load_image_from_archive join error: {}", e))?;
@@ -508,8 +509,8 @@ pub async fn extract_image_to_temp(
             .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         
-        // 读取图片数据
-        let bytes = manager.load_image_from_zip_binary(&archive_path_buf, &inner_path)?;
+        // 读取图片数据（支持 ZIP/RAR/7z）
+        let bytes = manager.load_image_from_archive_binary(&archive_path_buf, &inner_path)?;
         
         // 获取文件扩展名
         let ext = Path::new(&inner_path)
@@ -570,7 +571,8 @@ pub async fn get_images_from_archive(
         .map_err(|e| format!("获取锁失败: {}", e))?;
 
     let path = PathBuf::from(archive_path);
-    archive_manager.get_images_from_zip(&path)
+    // 使用 get_images_from_archive 支持 ZIP/RAR/7z
+    archive_manager.get_images_from_archive(&path)
 }
 
 /// 【优化】批量预解压压缩包中的图片到临时目录
@@ -614,15 +616,15 @@ pub async fn batch_extract_archive(
             .lock()
             .map_err(|e| format!("获取锁失败: {}", e))?;
         
-        // 获取所有图片
-        let images = manager.get_images_from_zip(&archive_path_buf)?;
+        // 获取所有图片（支持 ZIP/RAR/7z）
+        let images = manager.get_images_from_archive(&archive_path_buf)?;
         
         // 创建临时目录
         std::fs::create_dir_all(&temp_dir).map_err(|e| format!("创建临时目录失败: {}", e))?;
         
         // 解压所有图片
         for (index, inner_path) in images.iter().enumerate() {
-            let bytes = manager.load_image_from_zip_binary(&archive_path_buf, inner_path)?;
+            let bytes = manager.load_image_from_archive_binary(&archive_path_buf, inner_path)?;
             
             // 使用索引作为文件名，保持顺序
             let ext = Path::new(inner_path)
@@ -676,7 +678,8 @@ pub async fn batch_scan_archives(
 
                 for path in paths {
                     let archive_path_str = path.to_string_lossy().to_string();
-                    match manager.list_zip_contents(&path) {
+                    // 使用 list_contents 自动检测格式（支持 ZIP/RAR/7z）
+                    match manager.list_contents(&path) {
                         Ok(entries) => {
                             results.push(ArchiveScanResult {
                                 archive_path: archive_path_str,

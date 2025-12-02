@@ -134,7 +134,7 @@ pub async fn enqueue_preload_batch(
                 let manager = archive_manager
                     .as_ref()
                     .ok_or_else(|| "ArchiveManager 未初始化".to_string())?;
-                manager.load_image_from_zip_binary(&archive_path, &page.path)?
+                manager.load_image_from_archive_binary(&archive_path, &page.path)?
             }
             _ => image_loader.load_image_as_binary(&page.path)?,
         };

@@ -631,8 +631,8 @@ impl ArchiveManager {
         Ok(())
     }
 
-    /// 从 ZIP 压缩包中加载图片（返回二进制数据）
-    pub fn load_image_from_zip_binary(
+    /// 从压缩包中加载图片（返回二进制数据，支持 ZIP/RAR/7z）
+    pub fn load_image_from_archive_binary(
         &self,
         archive_path: &Path,
         file_path: &str,
@@ -651,7 +651,8 @@ impl ArchiveManager {
             return Ok(cached);
         }
 
-        let data = self.extract_file_from_zip(archive_path, file_path)?;
+        // 使用 extract_file 自动检测格式
+        let data = self.extract_file(archive_path, file_path)?;
 
         // 对于 JXL 格式，需要先解码再重新编码为通用格式
         if let Some(ext) = Path::new(file_path).extension() {
@@ -822,9 +823,9 @@ impl ArchiveManager {
         }
     }
 
-    /// 获取 ZIP 压缩包中的所有图片路径
-    pub fn get_images_from_zip(&self, archive_path: &Path) -> Result<Vec<String>, String> {
-        let entries = self.list_zip_contents(archive_path)?;
+    /// 获取压缩包中的所有图片路径（支持 ZIP/RAR/7z）
+    pub fn get_images_from_archive(&self, archive_path: &Path) -> Result<Vec<String>, String> {
+        let entries = self.list_contents(archive_path)?;
 
         let images: Vec<String> = entries
             .into_iter()
@@ -1310,15 +1311,15 @@ impl ArchiveManager {
         }
     }
 
-    /// 预加载压缩包中的所有图片
+    /// 预加载压缩包中的所有图片（支持 ZIP/RAR/7z）
     pub fn preload_all_images(&self, archive_path: &Path) -> Result<usize, String> {
-        let entries = self.list_zip_contents(archive_path)?;
+        let entries = self.list_contents(archive_path)?;
         let image_entries: Vec<_> = entries.iter().filter(|e| e.is_image).collect();
 
         let mut loaded_count = 0;
         for entry in image_entries {
             if self
-                .load_image_from_zip_binary(archive_path, &entry.path)
+                .load_image_from_archive_binary(archive_path, &entry.path)
                 .is_ok()
             {
                 loaded_count += 1;

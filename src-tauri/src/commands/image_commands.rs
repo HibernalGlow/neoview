@@ -42,7 +42,7 @@ pub async fn load_image(
                 drop(book_manager_lock); // 释放锁
                 let archive_manager = ArchiveManager::new();
                 let archive_result =
-                    archive_manager.load_image_from_zip_binary(Path::new(&book_path), &path);
+                    archive_manager.load_image_from_archive_binary(Path::new(&book_path), &path);
                 if let Ok(ref bytes) = archive_result {
                     info!(
                         "📤 [ImagePipeline:{}] load_image archive branch success bytes={} book_path={}",

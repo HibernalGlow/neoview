@@ -248,7 +248,8 @@ impl BookManager {
         use crate::core::archive::ArchiveManager;
 
         let archive_manager = ArchiveManager::new();
-        let items = archive_manager.list_zip_contents(path)?;
+        // 使用 list_contents 自动检测格式（支持 ZIP/RAR/7z）
+        let items = archive_manager.list_contents(path)?;
 
         // 过滤出图片/视频文件并按名称排序
         let mut page_items: Vec<_> = items

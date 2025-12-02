@@ -138,8 +138,7 @@ function handleKeyDown(e: KeyboardEvent) {
 {#if $viewStyle === 'list'}
 	<!-- 列表视图 -->
 	<div
-		class="hover:bg-accent/50 flex min-h-[32px] cursor-pointer items-center gap-2 px-2 py-1 transition-colors"
-		class:bg-accent={isSelected}
+		class="group mx-1 my-0.5 flex min-h-[36px] cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-all duration-150 hover:bg-muted/60 {isSelected ? 'bg-accent ring-1 ring-primary/30 shadow-sm' : ''}"
 		onclick={handleClick}
 		ondblclick={handleDoubleClick}
 		oncontextmenu={handleContextMenu}
@@ -149,32 +148,32 @@ function handleKeyDown(e: KeyboardEvent) {
 	>
 		<!-- 选中标记 -->
 		<div
-			class="bg-primary h-full w-1 rounded-full transition-opacity"
-			class:opacity-0={!isSelected}
-			class:opacity-100={isSelected}
+			class="bg-primary h-5 w-1 rounded-full transition-all duration-200 {isSelected ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}"
 		></div>
 
 		<!-- 多选复选框 -->
 		{#if $multiSelectMode}
-			<Checkbox checked={isSelected} onCheckedChange={handleCheckboxChange} />
+			<Checkbox checked={isSelected} onCheckedChange={handleCheckboxChange} class="shrink-0" />
 		{/if}
 
 		<!-- 删除按钮 -->
 		{#if $deleteMode}
-			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={handleDelete}>
+			<Button variant="ghost" size="icon" class="h-6 w-6 shrink-0 hover:bg-destructive/10" onclick={handleDelete}>
 				<Trash2 class="h-4 w-4 text-destructive" />
 			</Button>
 		{/if}
 
 		<!-- 文件图标 -->
-		<FileIcon class="text-muted-foreground h-4 w-4 shrink-0" />
+		<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-muted/50">
+			<FileIcon class="h-4 w-4 text-muted-foreground" />
+		</div>
 
 		<!-- 文件名 -->
-		<span class="flex-1 truncate text-sm">{item.name}</span>
+		<span class="flex-1 truncate text-sm font-medium">{item.name}</span>
 
 		<!-- 媒体播放按钮 -->
 		{#if isMediaFile(item)}
-			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={handleOpenExternal}>
+			<Button variant="ghost" size="icon" class="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100" onclick={handleOpenExternal}>
 				<Play class="h-3.5 w-3.5" />
 			</Button>
 		{/if}
@@ -182,8 +181,7 @@ function handleKeyDown(e: KeyboardEvent) {
 {:else if $viewStyle === 'content'}
 	<!-- 内容视图 -->
 	<div
-		class="hover:bg-accent/50 flex cursor-pointer items-center gap-3 border-b px-2 py-2 transition-colors"
-		class:bg-accent={isSelected}
+		class="group mx-1 my-1 flex cursor-pointer items-center gap-3 rounded-lg border bg-card p-2 transition-all duration-150 hover:bg-muted/50 hover:border-border {isSelected ? 'border-primary/40 bg-accent shadow-sm' : 'border-transparent'}"
 		onclick={handleClick}
 		ondblclick={handleDoubleClick}
 		oncontextmenu={handleContextMenu}
@@ -193,49 +191,48 @@ function handleKeyDown(e: KeyboardEvent) {
 	>
 		<!-- 选中标记 -->
 		<div
-			class="bg-primary h-full w-1 rounded-full transition-opacity"
-			class:opacity-0={!isSelected}
-			class:opacity-100={isSelected}
+			class="bg-primary h-10 w-1 rounded-full transition-all duration-200 {isSelected ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}"
 		></div>
 
 		{#if $multiSelectMode}
-			<Checkbox checked={isSelected} onCheckedChange={handleCheckboxChange} />
+			<Checkbox checked={isSelected} onCheckedChange={handleCheckboxChange} class="shrink-0" />
 		{/if}
 
 		{#if $deleteMode}
-			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={handleDelete}>
+			<Button variant="ghost" size="icon" class="h-6 w-6 shrink-0 hover:bg-destructive/10" onclick={handleDelete}>
 				<Trash2 class="h-4 w-4 text-destructive" />
 			</Button>
 		{/if}
 
 		<!-- 缩略图 -->
-		<div class="bg-muted flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded">
+		<div class="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted shadow-inner">
 			{#if thumbnail}
 				<img src={thumbnail} alt={item.name} class="h-full w-full object-cover" />
 			{:else}
-				<FileIcon class="text-muted-foreground h-6 w-6" />
+				<FileIcon class="h-7 w-7 text-muted-foreground" />
 			{/if}
 		</div>
 
 		<!-- 信息 -->
 		<div class="min-w-0 flex-1">
-			<div class="text-muted-foreground text-xs">
-				{formatDate(item.modified)} · {formatSize(item.size)}
+			<div class="truncate text-sm font-medium leading-tight">{item.name}</div>
+			<div class="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+				<span>{formatDate(item.modified)}</span>
+				<span class="h-1 w-1 rounded-full bg-muted-foreground/40"></span>
+				<span>{formatSize(item.size)}</span>
 			</div>
-			<div class="truncate text-sm font-medium">{item.name}</div>
 		</div>
 
 		{#if isMediaFile(item)}
-			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={handleOpenExternal}>
-				<Play class="h-3.5 w-3.5" />
+			<Button variant="ghost" size="icon" class="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100" onclick={handleOpenExternal}>
+				<Play class="h-4 w-4" />
 			</Button>
 		{/if}
 	</div>
 {:else if $viewStyle === 'banner'}
 	<!-- 横幅视图 -->
 	<div
-		class="hover:bg-accent/50 flex cursor-pointer flex-col border-b transition-colors"
-		class:bg-accent={isSelected}
+		class="group mx-1 my-1 flex cursor-pointer flex-col overflow-hidden rounded-lg border transition-all duration-150 hover:shadow-md {isSelected ? 'border-primary/40 ring-2 ring-primary/20 shadow-sm' : 'border-border hover:border-border'}"
 		onclick={handleClick}
 		ondblclick={handleDoubleClick}
 		oncontextmenu={handleContextMenu}
@@ -245,18 +242,16 @@ function handleKeyDown(e: KeyboardEvent) {
 	>
 		<!-- 选中标记 -->
 		<div
-			class="bg-primary h-1 w-full transition-opacity"
-			class:opacity-0={!isSelected}
-			class:opacity-100={isSelected}
+			class="bg-primary h-1 w-full transition-all duration-200 {isSelected ? 'opacity-100' : 'opacity-0'}"
 		></div>
 
 		<!-- 横幅图片 -->
-		<div class="bg-muted relative aspect-[3/1] w-full overflow-hidden">
+		<div class="relative aspect-[3/1] w-full overflow-hidden bg-muted">
 			{#if thumbnail}
-				<img src={thumbnail} alt={item.name} class="h-full w-full object-cover" />
+				<img src={thumbnail} alt={item.name} class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
 			{:else}
-				<div class="flex h-full w-full items-center justify-center">
-					<FileIcon class="text-muted-foreground h-12 w-12" />
+				<div class="flex h-full w-full items-center justify-center bg-linear-to-br from-muted to-muted/50">
+					<FileIcon class="h-12 w-12 text-muted-foreground" />
 				</div>
 			{/if}
 
@@ -264,10 +259,12 @@ function handleKeyDown(e: KeyboardEvent) {
 			{#if $multiSelectMode || $deleteMode}
 				<div class="absolute left-2 top-2 flex gap-1">
 					{#if $multiSelectMode}
-						<Checkbox checked={isSelected} onCheckedChange={handleCheckboxChange} />
+						<div class="rounded bg-background/90 p-0.5 backdrop-blur-sm">
+							<Checkbox checked={isSelected} onCheckedChange={handleCheckboxChange} />
+						</div>
 					{/if}
 					{#if $deleteMode}
-						<Button variant="ghost" size="icon" class="h-6 w-6 bg-background/80" onclick={handleDelete}>
+						<Button variant="ghost" size="icon" class="h-7 w-7 bg-background/90 backdrop-blur-sm hover:bg-destructive/20" onclick={handleDelete}>
 							<Trash2 class="h-4 w-4 text-destructive" />
 						</Button>
 					{/if}
@@ -276,11 +273,13 @@ function handleKeyDown(e: KeyboardEvent) {
 		</div>
 
 		<!-- 文件名 -->
-		<div class="flex items-center gap-2 px-2 py-1.5">
-			<FileIcon class="text-muted-foreground h-4 w-4 shrink-0" />
-			<span class="flex-1 truncate text-sm">{item.name}</span>
+		<div class="flex items-center gap-2 bg-card px-3 py-2">
+			<div class="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-muted/50">
+				<FileIcon class="h-3.5 w-3.5 text-muted-foreground" />
+			</div>
+			<span class="flex-1 truncate text-sm font-medium">{item.name}</span>
 			{#if isMediaFile(item)}
-				<Button variant="ghost" size="icon" class="h-6 w-6" onclick={handleOpenExternal}>
+				<Button variant="ghost" size="icon" class="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100" onclick={handleOpenExternal}>
 					<Play class="h-3.5 w-3.5" />
 				</Button>
 			{/if}
@@ -289,8 +288,7 @@ function handleKeyDown(e: KeyboardEvent) {
 {:else if $viewStyle === 'thumbnail'}
 	<!-- 缩略图视图 -->
 	<div
-		class="hover:bg-accent/50 flex cursor-pointer flex-col items-center p-2 transition-colors"
-		class:bg-accent={isSelected}
+		class="group flex cursor-pointer flex-col items-center rounded-lg p-1.5 transition-all duration-150 hover:bg-muted/50 {isSelected ? 'bg-accent ring-2 ring-primary/20' : ''}"
 		onclick={handleClick}
 		ondblclick={handleDoubleClick}
 		oncontextmenu={handleContextMenu}
@@ -299,21 +297,23 @@ function handleKeyDown(e: KeyboardEvent) {
 		tabindex="0"
 	>
 		<!-- 缩略图容器 -->
-		<div class="bg-muted relative aspect-square w-full overflow-hidden rounded">
+		<div class="relative aspect-square w-full overflow-hidden rounded-md border border-border/50 bg-muted shadow-inner transition-transform duration-200 group-hover:scale-[1.02]">
 			{#if thumbnail}
 				<img src={thumbnail} alt={item.name} class="h-full w-full object-cover" />
 			{:else}
-				<div class="flex h-full w-full items-center justify-center">
-					<FileIcon class="text-muted-foreground h-10 w-10" />
+				<div class="flex h-full w-full items-center justify-center bg-linear-to-br from-muted to-muted/50">
+					<FileIcon class="h-10 w-10 text-muted-foreground" />
 				</div>
 			{/if}
 
 			<!-- 覆盖层控件 -->
-			<div class="absolute inset-0 flex items-start justify-between p-1">
+			<div class="absolute inset-0 flex items-start justify-between p-1.5 opacity-0 transition-opacity group-hover:opacity-100">
 				{#if $multiSelectMode}
-					<Checkbox checked={isSelected} onCheckedChange={handleCheckboxChange} />
+					<div class="rounded bg-background/90 p-0.5 backdrop-blur-sm">
+						<Checkbox checked={isSelected} onCheckedChange={handleCheckboxChange} />
+					</div>
 				{:else if $deleteMode}
-					<Button variant="ghost" size="icon" class="h-6 w-6 bg-background/80" onclick={handleDelete}>
+					<Button variant="ghost" size="icon" class="h-7 w-7 bg-background/90 backdrop-blur-sm hover:bg-destructive/20" onclick={handleDelete}>
 						<Trash2 class="h-4 w-4 text-destructive" />
 					</Button>
 				{:else}
@@ -321,23 +321,21 @@ function handleKeyDown(e: KeyboardEvent) {
 				{/if}
 
 				{#if isMediaFile(item)}
-					<Button variant="ghost" size="icon" class="h-6 w-6 bg-background/80" onclick={handleOpenExternal}>
-						<Play class="h-3.5 w-3.5" />
+					<Button variant="ghost" size="icon" class="h-7 w-7 bg-background/90 backdrop-blur-sm" onclick={handleOpenExternal}>
+						<Play class="h-4 w-4" />
 					</Button>
 				{/if}
 			</div>
+			
+			<!-- 选中标记 - 底部条 -->
+			<div
+				class="bg-primary absolute bottom-0 left-0 right-0 h-1 transition-all duration-200 {isSelected ? 'opacity-100' : 'opacity-0'}"
+			></div>
 		</div>
 
-		<!-- 选中标记 -->
-		<div
-			class="bg-primary mt-1 h-1 w-full rounded-full transition-opacity"
-			class:opacity-0={!isSelected}
-			class:opacity-100={isSelected}
-		></div>
-
 		<!-- 文件名 -->
-		<div class="mt-1 w-full text-center">
-			<span class="line-clamp-2 text-xs">{item.name}</span>
+		<div class="mt-1.5 w-full px-0.5 text-center">
+			<span class="line-clamp-2 text-xs font-medium leading-tight">{item.name}</span>
 		</div>
 	</div>
 {/if}

@@ -1,20 +1,60 @@
 <script lang="ts">
 /**
  * SearchResultList - 搜索结果列表组件
- * 显示后端搜索返回的文件列表
+ * 显示后端搜索返回的文件列表，支持排序
  */
 import type { FsItem } from '$lib/types';
-import { tabSearchResults, tabIsSearching, tabSearchKeyword, tabViewStyle } from '../stores/folderTabStore.svelte';
-import { Loader2, Search, FolderOpen } from '@lucide/svelte';
+import { tabSearchResults, tabIsSearching, tabSearchKeyword, tabViewStyle, tabSortConfig } from '../stores/folderTabStore.svelte';
+import { Loader2, Search, FolderOpen, ArrowUpDown } from '@lucide/svelte';
 import FileItemCard from '$lib/components/panels/file/components/FileItemCard.svelte';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 import { thumbnailManager } from '$lib/utils/thumbnailManager';
+import { Button } from '$lib/components/ui/button';
+import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 
 // 使用页签 store
 const searchResults = tabSearchResults;
 const isSearching = tabIsSearching;
 const searchKeyword = tabSearchKeyword;
 const viewStyle = tabViewStyle;
+const sortConfig = tabSortConfig;
+
+// 排序后的结果
+let sortedResults = $derived.by(() => {
+	const results = [...$searchResults];
+	const { field, order } = $sortConfig;
+	
+	results.sort((a, b) => {
+		// 文件夹优先
+		if (a.isDir !== b.isDir) {
+			return a.isDir ? -1 : 1;
+		}
+		
+		let cmp = 0;
+		switch (field) {
+			case 'name':
+				cmp = a.name.localeCompare(b.name, 'zh-CN', { numeric: true });
+				break;
+			case 'size':
+				cmp = (a.size || 0) - (b.size || 0);
+				break;
+			case 'date':
+				cmp = (a.modified || 0) - (b.modified || 0);
+				break;
+			case 'type':
+				const extA = a.name.includes('.') ? a.name.split('.').pop() || '' : '';
+				const extB = b.name.includes('.') ? b.name.split('.').pop() || '' : '';
+				cmp = extA.localeCompare(extB);
+				break;
+			default:
+				cmp = a.name.localeCompare(b.name, 'zh-CN', { numeric: true });
+		}
+		
+		return order === 'asc' ? cmp : -cmp;
+	});
+	
+	return results;
+});
 
 interface Props {
 	onItemClick?: (item: FsItem) => void | Promise<void>;
@@ -97,21 +137,31 @@ $effect(() => {
 			<p class="text-muted-foreground">未找到匹配的文件</p>
 			<p class="text-muted-foreground/70 text-sm mt-1">搜索词: "{$searchKeyword}"</p>
 		</div>
-	{:else if $searchResults.length > 0}
+	{:else if sortedResults.length > 0}
 		<div class="p-2">
 			<div class="text-muted-foreground text-xs mb-2 px-2">
-				找到 {$searchResults.length} 个结果
+				找到 {sortedResults.length} 个结果
 			</div>
-			{#each $searchResults as item (item.path)}
-				<FileItemCard
-					{item}
-					thumbnail={thumbnails.get(item.path.replace(/\\/g, '/'))}
-					viewMode={viewMode}
-					onClick={() => onItemClick?.(item)}
-					onDoubleClick={() => onItemDoubleClick?.(item)}
-					onContextMenu={(e) => onItemContextMenu?.(e, item)}
-				/>
-			{/each}
+			<div class={viewMode === 'grid' ? 'grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-2' : 'flex flex-col gap-1'}>
+				{#each sortedResults as item (item.path)}
+					<div class="search-result-item">
+						<FileItemCard
+							{item}
+							thumbnail={thumbnails.get(item.path.replace(/\\/g, '/'))}
+							viewMode={viewMode}
+							onClick={() => onItemClick?.(item)}
+							onDoubleClick={() => onItemDoubleClick?.(item)}
+							onContextMenu={(e) => onItemContextMenu?.(e, item)}
+						/>
+						<!-- 搜索结果显示完整路径 -->
+						<div class="px-1 pb-1">
+							<p class="text-[10px] text-muted-foreground/70 truncate" title={item.path}>
+								{item.path}
+							</p>
+						</div>
+					</div>
+				{/each}
+			</div>
 		</div>
 	{:else}
 		<div class="flex flex-col items-center justify-center py-12 text-center">

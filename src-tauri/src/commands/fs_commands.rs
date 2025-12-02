@@ -329,10 +329,11 @@ pub async fn rename_path(
 /// 移动到回收站
 #[tauri::command]
 pub async fn move_to_trash(path: String, state: State<'_, FsState>) -> Result<(), String> {
+    // 使用 unwrap_or_else 恢复被污染的锁
     let fs_manager = state
         .fs_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     let path = PathBuf::from(path);
     fs_manager.move_to_trash(&path)

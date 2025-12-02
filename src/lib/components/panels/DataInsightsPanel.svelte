@@ -310,7 +310,7 @@
 	}
 </script>
 
-<div class="flex h-full flex-col bg-background">
+<div class="flex h-full flex-col">
 	<header class="flex items-center justify-between border-b px-4 py-3">
 		<div class="flex items-center gap-2">
 			<BarChart3 class="h-5 w-5" />
@@ -324,7 +324,7 @@
 		</Button>
 	</header>
 
-	<div class="flex-1 overflow-y-auto px-3 py-4">
+	<div class="flex-1 overflow-y-auto px-3 py-4 bg-background">
 		<div class="space-y-3">
 				{#each cardOrder as cardId (cardId)}
 					{@const meta = CARD_META[cardId]}

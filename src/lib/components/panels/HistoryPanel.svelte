@@ -301,7 +301,7 @@
 
 <div class="flex h-full flex-col">
 	<div
-		class="border-border bg-background/95 supports-backdrop-filter:bg-background/70 sticky top-0 z-20 flex flex-col border-b backdrop-blur"
+		class="border-border sticky top-0 z-20 flex flex-col border-b"
 	>
 		<!-- 标题栏 -->
 		<div class="flex items-center justify-between border-b p-4">

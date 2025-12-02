@@ -454,6 +454,16 @@ export const folderTabActions = {
 	},
 
 	/**
+	 * 从列表中移除单个项目（乐观更新）
+	 */
+	removeItem(path: string) {
+		updateActiveTab((tab) => ({
+			...tab,
+			items: tab.items.filter((item) => item.path !== path)
+		}));
+	},
+
+	/**
 	 * 设置加载状态
 	 */
 	setLoading(loading: boolean) {

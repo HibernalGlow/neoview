@@ -378,12 +378,19 @@ function handleToggleMigrationManager() {
 // 剪贴板状态
 let clipboardItem = $state<{ paths: string[]; operation: 'copy' | 'cut' } | null>(null);
 
-// 处理删除
+// 处理删除（删除模式下不需要确认，直接删除并立即从列表移除）
 async function handleDelete(item: FsItem) {
 	const strategy = $deleteStrategy;
 	const actionText = strategy === 'trash' ? '删除' : '永久删除';
-	const confirmMessage = `确定要${actionText} "${item.name}" 吗？`;
-	if (!confirm(confirmMessage)) return;
+	
+	// 删除模式下不弹确认框，其他情况需要确认
+	if (!$deleteMode) {
+		const confirmMessage = `确定要${actionText} "${item.name}" 吗？`;
+		if (!confirm(confirmMessage)) return;
+	}
+
+	// 立即从列表中移除（乐观更新）
+	folderTabActions.removeItem(item.path);
 
 	try {
 		if (strategy === 'trash') {
@@ -392,11 +399,11 @@ async function handleDelete(item: FsItem) {
 			await FileSystemAPI.deletePath(item.path);
 		}
 		showSuccessToast(`${actionText}成功`, item.name);
-		// 刷新当前目录
-		handleRefresh();
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		showErrorToast(`${actionText}失败`, message);
+		// 删除失败时刷新恢复列表
+		handleRefresh();
 	}
 }
 
@@ -714,6 +721,7 @@ onMount(() => {
 							initialPath={tab.currentPath || tab.homePath}
 							{navigationCommand}
 							onItemOpen={handleItemOpen}
+							onItemDelete={handleDelete}
 							onItemContextMenu={handleContextMenu}
 							onOpenFolderAsBook={handleOpenFolderAsBook}
 						/>

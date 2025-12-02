@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::Arc;
 use threadpool::ThreadPool;
+use unrar;
 
 /// 反向查找父文件夹的最大层级（可配置）
 const MAX_PARENT_LEVELS: usize = 2;
@@ -685,16 +686,24 @@ impl ThumbnailGenerator {
             return Ok(cached);
         }
 
-        // 检查文件扩展名，目前只支持 ZIP 格式
+        // 检查文件扩展名，支持 ZIP/CBZ 和 RAR/CBR
         let path_lower = archive_path.to_lowercase();
-        if !path_lower.ends_with(".zip") && !path_lower.ends_with(".cbz") {
+        let is_zip = path_lower.ends_with(".zip") || path_lower.ends_with(".cbz");
+        let is_rar = path_lower.ends_with(".rar") || path_lower.ends_with(".cbr");
+        
+        if !is_zip && !is_rar {
             return Err(format!(
-                "暂不支持此压缩包格式: {} (目前仅支持 ZIP/CBZ)",
+                "暂不支持此压缩包格式: {} (支持 ZIP/CBZ/RAR/CBR)",
                 archive_path
             ));
         }
+        
+        // 根据格式选择不同的处理方式
+        if is_rar {
+            return self.generate_rar_archive_thumbnail(archive_path, &path_key, archive_size, ghash);
+        }
 
-        // 使用 zip crate 直接读取压缩包，找到第一张图片
+        // ZIP 格式处理
         use std::fs::File;
         use zip::ZipArchive;
 
@@ -824,6 +833,140 @@ impl ThumbnailGenerator {
             Err(format!("压缩包缩略图生成失败: {}", err))
         } else {
             Err("压缩包中没有找到图片文件".to_string())
+        }
+    }
+    
+    /// 从 RAR 压缩包生成缩略图
+    fn generate_rar_archive_thumbnail(
+        &self,
+        archive_path: &str,
+        path_key: &str,
+        archive_size: i64,
+        ghash: i32,
+    ) -> Result<Vec<u8>, String> {
+        // 支持的图片扩展名
+        let image_exts = [
+            "jpg", "jpeg", "png", "gif", "bmp", "webp", "avif", "jxl", "tiff", "tif",
+        ];
+        
+        // 打开 RAR 压缩包
+        let mut archive = unrar::Archive::new(archive_path)
+            .open_for_processing()
+            .map_err(|e| format!("打开 RAR 压缩包失败: {:?}", e))?;
+        
+        let mut last_error: Option<String> = None;
+        
+        // 遍历条目，找到第一个图片文件
+        while let Some(header) = archive.read_header()
+            .map_err(|e| format!("读取 RAR 头失败: {:?}", e))? 
+        {
+            let entry = header.entry();
+            let name = entry.filename.to_string_lossy().to_string();
+            
+            // 跳过目录
+            if entry.is_directory() {
+                archive = header.skip()
+                    .map_err(|e| format!("跳过 RAR 条目失败: {:?}", e))?;
+                continue;
+            }
+            
+            // 检查是否为图片文件
+            if let Some(ext) = Path::new(&name)
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.to_lowercase())
+            {
+                if image_exts.contains(&ext.as_str()) {
+                    // 读取文件内容
+                    let (image_data, next_archive) = header.read()
+                        .map_err(|e| format!("读取 RAR 条目失败: {:?}", e))?;
+                    
+                    let lower_name = name.to_lowercase();
+                    let is_avif = lower_name.ends_with(".avif");
+                    let is_jxl = lower_name.ends_with(".jxl");
+                    
+                    // 同步生成 webp 缩略图
+                    let webp_data = if is_avif {
+                        // AVIF: 写入临时文件后用 FFmpeg 处理
+                        let temp_dir = std::env::temp_dir();
+                        let temp_input = temp_dir.join(format!(
+                            "thumb_rar_avif_{}_{}.avif",
+                            std::process::id(),
+                            std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap()
+                                .as_nanos()
+                        ));
+                        
+                        let result = if std::fs::write(&temp_input, &image_data).is_ok() {
+                            let r = Self::generate_webp_with_ffmpeg(
+                                &temp_input,
+                                &self.config,
+                                path_key,
+                            );
+                            let _ = std::fs::remove_file(&temp_input);
+                            r
+                        } else {
+                            None
+                        };
+                        
+                        result.or_else(|| {
+                            Self::decode_image_safe(&image_data)
+                                .ok()
+                                .and_then(|img| {
+                                    Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
+                                })
+                        })
+                    } else if is_jxl {
+                        Self::decode_jxl_image(&image_data)
+                            .ok()
+                            .and_then(|img| {
+                                Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
+                            })
+                    } else {
+                        Self::decode_image_safe(&image_data)
+                            .ok()
+                            .and_then(|img| {
+                                Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
+                            })
+                    };
+                    
+                    if let Some(data) = webp_data {
+                        // 保存到数据库
+                        if let Err(e) = self.db.save_thumbnail(path_key, archive_size, ghash, &data) {
+                            eprintln!("❌ 保存 RAR 缩略图到数据库失败: {} - {}", path_key, e);
+                        } else {
+                            // 后台更新父文件夹缩略图
+                            let db_clone = Arc::clone(&self.db);
+                            let path_key_clone = path_key.to_string();
+                            let data_clone = data.clone();
+                            std::thread::spawn(move || {
+                                Self::update_parent_folders_thumbnail(
+                                    &db_clone,
+                                    &path_key_clone,
+                                    &data_clone,
+                                    MAX_PARENT_LEVELS,
+                                );
+                            });
+                        }
+                        return Ok(data);
+                    } else {
+                        last_error = Some(format!("生成缩略图失败: {}", name));
+                        archive = next_archive;
+                        continue;
+                    }
+                }
+            }
+            
+            // 跳过非图片文件
+            archive = header.skip()
+                .map_err(|e| format!("跳过 RAR 条目失败: {:?}", e))?;
+        }
+        
+        if let Some(err) = last_error {
+            Err(format!("RAR 压缩包缩略图生成失败: {}", err))
+        } else {
+            Err("RAR 压缩包中没有找到图片文件".to_string())
         }
     }
 

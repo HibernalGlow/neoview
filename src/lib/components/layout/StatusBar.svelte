@@ -36,7 +36,7 @@
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}
 >
-	<div class="h-6 bg-secondary/95 backdrop-blur-sm flex items-center justify-between px-3 text-xs border-t">
+	<div class="h-6 bg-secondary/85 backdrop-blur-md flex items-center justify-between px-3 text-xs border-t">
 		<!-- 左侧：书籍信息 -->
 		<div class="flex items-center gap-4">
 			{#if bookStore.currentBook}

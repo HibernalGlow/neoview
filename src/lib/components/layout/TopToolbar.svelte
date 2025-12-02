@@ -639,7 +639,7 @@ async function handleSortModeChange(mode: PageSortMode) {
 	<!-- 标题栏（窗口控制） -->
 	<div
 		data-tauri-drag-region
-		class="bg-sidebar/95 flex h-8 select-none items-center justify-between border-b px-2 backdrop-blur-sm"
+		class="bg-sidebar/85 flex h-8 select-none items-center justify-between border-b px-2 backdrop-blur-md"
 	>
 		<!-- 左侧：菜单和应用名 -->
 		<div class="flex items-center gap-1">
@@ -875,7 +875,7 @@ async function handleSortModeChange(mode: PageSortMode) {
 
 	<!-- 工具栏（图片操作） - 响应式布局：宽度不够时面包屑在上，工具栏在下 -->
 	<div
-		class="bg-sidebar/95 border-b shadow-lg backdrop-blur-sm"
+		class="bg-sidebar/85 border-b shadow-lg backdrop-blur-md"
 		style="min-height: {$topToolbarHeight}px;"
 	>
 		<div class="mx-auto w-full max-w-[1280px] flex flex-col gap-1 px-2 py-1">

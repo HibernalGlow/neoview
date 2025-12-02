@@ -635,7 +635,7 @@
 		aria-label="底部缩略图栏"
 	>
 		<div
-			class="bg-sidebar/95 relative border-t shadow-lg backdrop-blur-sm"
+			class="bg-sidebar/85 relative border-t shadow-lg backdrop-blur-md"
 			style="height: {$bottomThumbnailBarHeight}px;"
 		>
 			<!-- 拖拽手柄 -->

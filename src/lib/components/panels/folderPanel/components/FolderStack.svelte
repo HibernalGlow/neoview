@@ -38,6 +38,8 @@ import { Loader2, FolderOpen, AlertCircle } from '@lucide/svelte';
 import { directoryTreeCache } from '../utils/directoryTreeCache';
 import { folderRatingStore } from '$lib/stores/emm/folderRating';
 import { getDefaultRating } from '$lib/stores/emm/storage';
+import { invoke } from '@tauri-apps/api/core';
+import { favoriteTagStore, mixedGenderStore } from '$lib/stores/emm/favoriteTagStore.svelte';
 
 export interface NavigationCommand {
 	type: 'init' | 'push' | 'pop' | 'goto' | 'history';
@@ -142,6 +144,28 @@ function sortItems(items: FsItem[], field: string, order: string): FsItem[] {
 		return sorted;
 	}
 
+	// collectTagCount 排序特殊处理
+	if (field === 'collectTagCount') {
+		const sorted = [...items].sort((a, b) => {
+			// 文件夹优先
+			if (a.isDir !== b.isDir) {
+				return a.isDir ? -1 : 1;
+			}
+
+			const countA = a.collectTagCount ?? 0;
+			const countB = b.collectTagCount ?? 0;
+
+			// 计数相同则按名称排序
+			if (countA === countB) {
+				return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+			}
+
+			const comparison = countA - countB;
+			return order === 'asc' ? comparison : -comparison;
+		});
+		return sorted;
+	}
+
 	const sorted = [...items].sort((a, b) => {
 		// 文件夹始终在前
 		if (a.isDir !== b.isDir) {
@@ -229,12 +253,51 @@ async function createLayer(path: string): Promise<FolderLayer> {
 		
 		// 异步加载缩略图
 		loadThumbnailsForLayer(items, path);
+		
+		// 异步加载收藏标签匹配数（用于排序）
+		loadCollectTagCountsForLayer(layer);
 	} catch (err) {
 		layer.error = err instanceof Error ? err.message : String(err);
 		layer.loading = false;
 	}
 
 	return layer;
+}
+
+// 加载收藏标签匹配数（异步，不阻塞 UI）
+async function loadCollectTagCountsForLayer(layer: FolderLayer) {
+	const favTags = favoriteTagStore.tags;
+	if (favTags.length === 0) return;
+	
+	// 只获取文件夹的 collectTagCount
+	const folderItems = layer.items.filter(item => item.isDir);
+	if (folderItems.length === 0) return;
+	
+	try {
+		const collectTags: [string, string][] = favTags.map(t => [t.cat, t.tag]);
+		const enableMixed = mixedGenderStore.enabled;
+		const keys = folderItems.map(item => item.path);
+		
+		const countResults = await invoke<[string, number][]>('batch_count_matching_collect_tags', {
+			keys,
+			collectTags,
+			enableMixedGender: enableMixed
+		});
+		
+		// 创建路径到计数的映射
+		const countMap = new Map<string, number>();
+		for (const [path, count] of countResults) {
+			countMap.set(path.toLowerCase(), count);
+		}
+		
+		// 更新 layer.items 中的 collectTagCount
+		layer.items = layer.items.map(item => ({
+			...item,
+			collectTagCount: countMap.get(item.path.toLowerCase()) ?? 0
+		}));
+	} catch (e) {
+		console.warn('[FolderStack] 加载收藏标签数失败:', e);
+	}
 }
 
 // 加载缩略图 - 【优化】只预加载前30项，其余由 VirtualizedFileList 可见范围加载

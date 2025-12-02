@@ -20,6 +20,7 @@
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import FolderRatingBadge from './FolderRatingBadge.svelte';
 	import type { EMMTranslationDict } from '$lib/api/emm';
+	import { hoverPreviewEnabled, hoverPreviewDelayMs } from '$lib/stores/hoverPreviewSettings.svelte';
 
 	interface Props {
 		item: FsItem;
@@ -177,7 +178,7 @@
 	{/if}
 
 	<!-- 缩略图或图标（带悬停预览） -->
-	<Tooltip.Root openDelay={400} closeDelay={100}>
+	<Tooltip.Root delayDuration={$hoverPreviewDelayMs}>
 		<Tooltip.Trigger>
 			<div class="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded">
 				{#if thumbnail}
@@ -217,8 +218,8 @@
 				{/if}
 			</div>
 		</Tooltip.Trigger>
-		<!-- 悬停预览大图 -->
-		{#if thumbnail}
+		<!-- 悬停预览大图（仅在启用时显示） -->
+		{#if thumbnail && $hoverPreviewEnabled}
 			<Tooltip.Content side="right" class="p-0 border-0 bg-transparent shadow-xl">
 				<img
 					src={thumbnail}

@@ -25,6 +25,7 @@ import {
 	ClipboardPaste,
 	ListTree,
 	Flame,
+	Eye,
 	// 排序图标
 	ALargeSmall,
 	Calendar,
@@ -33,6 +34,7 @@ import {
 	Shuffle,
 	Star
 } from '@lucide/svelte';
+import { hoverPreviewSettings, hoverPreviewEnabled, hoverPreviewDelayMs } from '$lib/stores/hoverPreviewSettings.svelte';
 import { folderThumbnailLoader, type WarmupProgress } from '$lib/utils/thumbnail';
 import * as Progress from '$lib/components/ui/progress';
 import { Button } from '$lib/components/ui/button';
@@ -463,6 +465,38 @@ function cancelWarmup() {
 				<DropdownMenu.Item onclick={() => folderTabActions.toggleRecursiveMode()}>
 					递归显示子文件夹
 				</DropdownMenu.Item>
+				<DropdownMenu.Separator />
+				<!-- 悬停预览设置 -->
+				<DropdownMenu.Sub>
+					<DropdownMenu.SubTrigger>
+						<Eye class="mr-2 h-4 w-4" />
+						悬停预览
+					</DropdownMenu.SubTrigger>
+					<DropdownMenu.SubContent>
+						<DropdownMenu.CheckboxItem
+							checked={$hoverPreviewEnabled}
+							onCheckedChange={() => hoverPreviewSettings.toggle()}
+						>
+							启用悬停预览
+						</DropdownMenu.CheckboxItem>
+						<DropdownMenu.Separator />
+						<DropdownMenu.Label class="text-xs text-muted-foreground">延迟时间</DropdownMenu.Label>
+						<DropdownMenu.RadioGroup value={String($hoverPreviewDelayMs)}>
+							<DropdownMenu.RadioItem value="200" onclick={() => hoverPreviewSettings.setDelayMs(200)}>
+								200ms (快)
+							</DropdownMenu.RadioItem>
+							<DropdownMenu.RadioItem value="500" onclick={() => hoverPreviewSettings.setDelayMs(500)}>
+								500ms (默认)
+							</DropdownMenu.RadioItem>
+							<DropdownMenu.RadioItem value="800" onclick={() => hoverPreviewSettings.setDelayMs(800)}>
+								800ms (慢)
+							</DropdownMenu.RadioItem>
+							<DropdownMenu.RadioItem value="1200" onclick={() => hoverPreviewSettings.setDelayMs(1200)}>
+								1200ms (很慢)
+							</DropdownMenu.RadioItem>
+						</DropdownMenu.RadioGroup>
+					</DropdownMenu.SubContent>
+				</DropdownMenu.Sub>
 				<DropdownMenu.Separator />
 				<DropdownMenu.Item onclick={() => folderTabActions.clearHistory()}>
 					清除历史记录

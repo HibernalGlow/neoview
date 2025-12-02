@@ -412,7 +412,6 @@ async function executeBatchDelete(paths: string[]) {
 	let successCount = 0;
 	for (const path of paths) {
 		try {
-			folderTabActions.removeItem(path);
 			if (strategy === 'trash') {
 				await FileSystemAPI.moveToTrash(path);
 			} else {
@@ -425,11 +424,13 @@ async function executeBatchDelete(paths: string[]) {
 	}
 	
 	folderTabActions.deselectAll();
+	// 删除后刷新列表以同步 FolderStack 状态
+	handleRefresh();
+	
 	if (successCount === paths.length) {
 		showSuccessToast(`${actionText}成功`, `已${actionText} ${successCount} 个文件`);
 	} else {
 		showErrorToast(`部分${actionText}失败`, `成功 ${successCount}/${paths.length}`);
-		handleRefresh();
 	}
 }
 

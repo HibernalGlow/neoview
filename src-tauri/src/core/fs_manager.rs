@@ -400,7 +400,11 @@ impl FsManager {
 
     /// 移动到回收站
     pub fn move_to_trash(&self, path: &Path) -> Result<(), String> {
-        self.validate_path(path)?;
+        // 对于删除操作，只检查路径是否存在，不需要完整的 canonicalize 验证
+        // 因为删除的目标文件可能包含特殊字符或即将被删除
+        if !path.exists() {
+            return Err(format!("文件不存在: {}", path.display()));
+        }
 
         trash::delete(path).map_err(|e| format!("移动到回收站失败: {}", e))
     }

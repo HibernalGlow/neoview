@@ -629,6 +629,7 @@ function handleOpenFolderAsBook(layerIndex: number, item: FsItem) {
 						onItemSelect={(payload) => handleItemSelect(index, payload)}
 						onItemDoubleClick={(payload) => handleItemDoubleClick(index, payload)}
 						onSelectedIndexChange={(payload) => handleSelectedIndexChange(index, payload)}
+						onSelectionChange={(payload) => folderTabActions.setSelectedItems(payload.selectedItems)}
 						on:itemContextMenu={(e) => handleItemContextMenu(index, e.detail)}
 						on:openFolderAsBook={(e) => handleOpenFolderAsBook(index, e.detail.item)}
 						on:deleteItem={(e) => handleDeleteItem(index, e.detail.item)}

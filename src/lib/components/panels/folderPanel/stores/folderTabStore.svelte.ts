@@ -799,6 +799,28 @@ export const folderTabActions = {
 	},
 
 	/**
+	 * 直接设置选中项
+	 */
+	setSelectedItems(items: Set<string>) {
+		updateActiveTab((tab) => ({ ...tab, selectedItems: new SvelteSet(items) }));
+	},
+
+	/**
+	 * 反选
+	 */
+	invertSelection() {
+		updateActiveTab((tab) => {
+			const newSelected = new SvelteSet<string>();
+			for (const item of tab.items) {
+				if (!tab.selectedItems.has(item.path)) {
+					newSelected.add(item.path);
+				}
+			}
+			return { ...tab, selectedItems: newSelected };
+		});
+	},
+
+	/**
 	 * 设置焦点项
 	 */
 	setFocusedItem(item: FsItem | null) {

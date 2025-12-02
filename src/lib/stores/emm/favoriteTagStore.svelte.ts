@@ -271,23 +271,29 @@ export const favoriteTagStore = {
 				let translatedCat = cat;
 				
 				if (translationDict) {
-					// 翻译标签名
+					// 翻译标签名 - 在对应的类别命名空间中查找
 					const tagTranslation = emmTranslationStore.translateTag(ct.tag, cat, translationDict);
+					console.log(`[FavoriteTagStore] 翻译标签 ${ct.tag} (ns: ${cat}):`, tagTranslation);
 					if (tagTranslation && tagTranslation !== ct.tag) {
 						translatedTag = tagTranslation;
 					}
 					
-					// 翻译类别名（查找 rows 命名空间）
-					const catTranslation = emmTranslationStore.translateTag(cat, 'rows', translationDict);
-					if (catTranslation && catTranslation !== cat) {
-						translatedCat = catTranslation;
+					// 翻译类别名 - 在 rows 命名空间中查找
+					// rows 命名空间包含类别的翻译
+					const rowsDict = translationDict['rows'];
+					if (rowsDict && rowsDict[cat]) {
+						const catRecord = rowsDict[cat];
+						if (catRecord && catRecord.name) {
+							translatedCat = catRecord.name;
+						}
 					}
+					console.log(`[FavoriteTagStore] 翻译类别 ${cat}:`, translatedCat, 'rows 内容:', rowsDict ? Object.keys(rowsDict).slice(0, 5) : 'null');
 				}
 				
 				// 构建翻译后的显示文本
 				const display = `${translatedCat}:${translatedTag}`;
 				
-				console.log(`[FavoriteTagStore] 标签翻译: ${ct.tag} -> ${translatedTag}, ${cat} -> ${translatedCat}`);
+				console.log(`[FavoriteTagStore] 最终显示: ${display}`);
 				
 				return {
 					id: ct.id || `${cat}:${ct.tag}`,

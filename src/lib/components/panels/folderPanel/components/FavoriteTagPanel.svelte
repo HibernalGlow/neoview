@@ -5,9 +5,18 @@
  * 参考 exhentai-manga-manager 的 SearchAgilePanel
  */
 import { X, Lock, Unlock, Star, RefreshCw } from '@lucide/svelte';
-import { favoriteTagStore, categoryColors, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
+import { favoriteTagStore, categoryColors, cat2letter, createTagValue, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
 
 let isReloading = $state(false);
+
+// 性别类别列表
+const genderCategories = ['female', 'male', 'mixed'];
+
+// 扩展标签类型（支持混合变体标记）
+interface ExtendedFavoriteTag extends FavoriteTag {
+	isMixedVariant?: boolean; // 是否是混合变体
+	originalCat?: string; // 原始类别
+}
 
 async function handleReloadFromEMM() {
 	isReloading = true;
@@ -43,10 +52,72 @@ let isResizing = $state(false);
 let startY = $state(0);
 let startHeight = $state(0);
 
-// 分组后的标签
-const groupedTags = $derived(favoriteTagStore.groupedTags);
+// 分组后的标签（支持混合性别变体）
+const groupedTags = $derived.by((): Array<{ name: string; tags: ExtendedFavoriteTag[] }> => {
+	const baseTags = favoriteTagStore.tags;
+	
+	if (!enableMixed) {
+		// 不开启混合时，将 FavoriteTag 转换为 ExtendedFavoriteTag
+		const baseGroups = favoriteTagStore.groupedTags;
+		return baseGroups.map(group => ({
+			name: group.name,
+			tags: group.tags.map(tag => ({ ...tag } as ExtendedFavoriteTag))
+		}));
+	}
+	
+	// 开启混合时，为性别标签生成变体
+	const extendedTags: ExtendedFavoriteTag[] = [];
+	const addedIds = new Set<string>();
+	
+	for (const tag of baseTags) {
+		// 添加原始标签
+		if (!addedIds.has(tag.id)) {
+			extendedTags.push({ ...tag });
+			addedIds.add(tag.id);
+		}
+		
+		// 如果是性别类别标签，生成其他性别的变体
+		if (genderCategories.includes(tag.cat)) {
+			for (const otherCat of genderCategories) {
+				if (otherCat === tag.cat) continue;
+				
+				const variantId = `${otherCat}:${tag.tag}`;
+				if (addedIds.has(variantId)) continue;
+				
+				const letter = cat2letter[otherCat] || otherCat.charAt(0);
+				const variantTag: ExtendedFavoriteTag = {
+					id: variantId,
+					cat: otherCat,
+					tag: tag.tag,
+					letter,
+					display: `${otherCat}:${tag.display.split(':')[1] || tag.tag}`,
+					value: createTagValue(otherCat, tag.tag),
+					color: categoryColors[otherCat] || '#409EFF',
+					isMixedVariant: true,
+					originalCat: tag.cat
+				};
+				
+				extendedTags.push(variantTag);
+				addedIds.add(variantId);
+			}
+		}
+	}
+	
+	// 分组
+	const groups: Record<string, ExtendedFavoriteTag[]> = {};
+	for (const tag of extendedTags) {
+		if (!groups[tag.cat]) {
+			groups[tag.cat] = [];
+		}
+		groups[tag.cat].push(tag);
+	}
+	
+	return Object.entries(groups)
+		.map(([name, tags]) => ({ name, tags }))
+		.sort((a, b) => a.name.localeCompare(b.name));
+});
 
-function handleTagClick(tag: FavoriteTag, event: MouseEvent) {
+function handleTagClick(tag: ExtendedFavoriteTag, event: MouseEvent) {
 	event.preventDefault();
 	event.stopPropagation();
 	onAppendTag(tag, '');
@@ -165,20 +236,22 @@ function stopResize() {
 						</div>
 						<!-- 标签列表 -->
 						<div class="flex flex-wrap gap-1.5 pl-1">
-							{#each category.tags as tag}
+							{#each category.tags as tag (tag.id)}
+								{@const isVariant = 'isMixedVariant' in tag && tag.isMixedVariant}
+								{@const origCat = 'originalCat' in tag ? tag.originalCat : ''}
 								<button
-									class="favorite-tag-chip inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded border transition-all hover:-translate-y-0.5"
+									class="favorite-tag-chip inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded border transition-all hover:-translate-y-0.5 {isVariant ? 'border-dashed opacity-70' : ''}"
 									style="
 										--tag-color: {tag.color};
 										border-color: {tag.color};
-										background: color-mix(in srgb, {tag.color} 12%, transparent);
+										background: color-mix(in srgb, {tag.color} {isVariant ? '6%' : '12%'}, transparent);
 									"
 									onclick={(e) => handleTagClick(tag, e)}
 									oncontextmenu={(e) => handleTagContextMenu(tag, e)}
-									title="左键添加，右键排除"
+									title={isVariant ? `混合变体 (来自 ${origCat}) - 左键添加，右键排除` : '左键添加，右键排除'}
 								>
 									<span 
-										class="w-2 h-2 rounded-full shrink-0"
+										class="w-2 h-2 shrink-0 {isVariant ? 'rounded-sm' : 'rounded-full'}"
 										style="background-color: {tag.color}"
 									></span>
 									<span class="font-medium truncate max-w-[100px]">

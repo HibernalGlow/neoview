@@ -17,7 +17,8 @@ import {
 	Star,
 	Pencil,
 	Play,
-	FolderOpen
+	FolderOpen,
+	PanelRight
 } from '@lucide/svelte';
 
 interface Props {
@@ -28,6 +29,7 @@ interface Props {
 	onClose: () => void;
 	onOpenAsBook?: (item: FsItem) => void;
 	onBrowse?: (item: FsItem) => void;
+	onOpenInNewTab?: (item: FsItem) => void;
 	onCopy?: (item: FsItem) => void;
 	onCut?: (item: FsItem) => void;
 	onPaste?: () => void;
@@ -48,6 +50,7 @@ let {
 	onClose,
 	onOpenAsBook,
 	onBrowse,
+	onOpenInNewTab,
 	onCopy,
 	onCut,
 	onPaste,
@@ -82,6 +85,11 @@ function handleOpenAsBook() {
 
 function handleBrowse() {
 	if (item) onBrowse?.(item);
+	onClose();
+}
+
+function handleOpenInNewTab() {
+	if (item) onOpenInNewTab?.(item);
 	onClose();
 }
 
@@ -159,6 +167,13 @@ function handleOpenWithSystem() {
 				</button>
 				<button
 					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
+					onclick={handleOpenInNewTab}
+				>
+					<PanelRight class="h-4 w-4" />
+					<span>在新标签页打开</span>
+				</button>
+				<button
+					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
 					onclick={handleOpenAsBook}
 				>
 					<BookOpen class="h-4 w-4" />
@@ -172,6 +187,13 @@ function handleOpenWithSystem() {
 				>
 					<BookOpen class="h-4 w-4" />
 					<span>打开</span>
+				</button>
+				<button
+					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
+					onclick={handleOpenInNewTab}
+				>
+					<PanelRight class="h-4 w-4" />
+					<span>在新标签页打开</span>
 				</button>
 				<button
 					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"

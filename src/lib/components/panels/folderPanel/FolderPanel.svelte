@@ -228,24 +228,27 @@ async function handleItemOpen(item: FsItem) {
 	}
 }
 
-// 处理搜索结果点击 - 在新标签页打开
+// 处理搜索结果点击 - 直接打开（不跳转）
 async function handleSearchResultClick(item: FsItem) {
 	console.log('[FolderPanel] handleSearchResultClick:', item.path, 'isDir:', item.isDir);
+	// 直接打开文件或文件夹
+	await handleItemOpen(item);
+}
+
+// 在新标签页打开 - 用于右键菜单
+async function handleOpenInNewTab(item: FsItem) {
+	console.log('[FolderPanel] handleOpenInNewTab:', item.path, 'isDir:', item.isDir);
 	
 	if (item.isDir) {
 		// 文件夹：在新标签页打开
 		const newTabId = folderTabActions.createTab(item.path);
 		folderTabActions.switchTab(newTabId);
-		// 清除搜索状态
-		folderTabActions.setSearchKeyword('');
 	} else {
 		// 文件：在新标签页打开父目录
 		const lastSep = Math.max(item.path.lastIndexOf('/'), item.path.lastIndexOf('\\'));
 		const parentPath = lastSep > 0 ? item.path.substring(0, lastSep) : item.path;
 		const newTabId = folderTabActions.createTab(parentPath);
 		folderTabActions.switchTab(newTabId);
-		// 清除搜索状态
-		folderTabActions.setSearchKeyword('');
 		// 打开文件
 		await handleItemOpen(item);
 	}
@@ -865,6 +868,7 @@ onMount(() => {
 	onClose={closeContextMenu}
 	onOpenAsBook={handleItemOpen}
 	onBrowse={(item) => navigationCommand.set({ type: 'push', path: item.path })}
+	onOpenInNewTab={handleOpenInNewTab}
 	onCopy={handleCopy}
 	onCut={handleCut}
 	onPaste={handlePaste}

@@ -8,7 +8,8 @@ import { onMount } from 'svelte';
 import type { FsItem } from '$lib/types';
 import { homeDir } from '@tauri-apps/api/path';
 import { writable } from 'svelte/store';
-import { Star } from '@lucide/svelte';
+import { Star, Tags, RefreshCw } from '@lucide/svelte';
+import TagChip from '$lib/components/ui/TagChip.svelte';
 
 import FolderToolbar from './components/FolderToolbar.svelte';
 import BreadcrumbBar from './components/BreadcrumbBar.svelte';
@@ -505,6 +506,38 @@ function handleSearchSettingsChange(settings: { includeSubfolders?: boolean; sho
 // 收藏标签面板状态
 let showFavoriteTagPanel = $state(false);
 
+// 随机标签栏状态
+let showRandomTagBar = $state(false);
+let randomTags = $state<FavoriteTag[]>([]);
+
+
+// 刷新随机标签
+function refreshRandomTags() {
+	const allTags = favoriteTagStore.tags;
+	if (allTags.length === 0) {
+		randomTags = [];
+		return;
+	}
+	// 随机选择 5-8 个标签
+	const count = Math.min(Math.floor(Math.random() * 4) + 5, allTags.length);
+	const shuffled = [...allTags].sort(() => Math.random() - 0.5);
+	randomTags = shuffled.slice(0, count);
+}
+
+// 切换随机标签栏
+function handleToggleRandomTagBar() {
+	showRandomTagBar = !showRandomTagBar;
+	if (showRandomTagBar && randomTags.length === 0) {
+		refreshRandomTags();
+	}
+}
+
+// 点击随机标签触发搜索
+function handleRandomTagClick(tag: FavoriteTag) {
+	const tagValue = tag.value;
+	handleSearch(tagValue);
+}
+
 // 切换收藏标签面板
 function handleToggleFavoriteTagPanel() {
 	showFavoriteTagPanel = !showFavoriteTagPanel;
@@ -870,6 +903,8 @@ onMount(() => {
 		onSetHome={handleSetHome}
 		onToggleDeleteStrategy={handleToggleDeleteStrategy}
 		onToggleInlineTree={handleToggleInlineTree}
+		showRandomTagBar={showRandomTagBar}
+		onToggleRandomTagBar={handleToggleRandomTagBar}
 	/>
 
 	<!-- 搜索栏（可切换显示） -->
@@ -900,6 +935,7 @@ onMount(() => {
 					<Star class="h-4 w-4 {showFavoriteTagPanel ? 'fill-primary' : ''}" />
 				</button>
 			</div>
+			
 			<!-- 收藏标签面板 -->
 			<FavoriteTagPanel
 				visible={showFavoriteTagPanel}
@@ -917,6 +953,32 @@ onMount(() => {
 			showManager={showMigrationManager}
 			onToggleManager={handleToggleMigrationManager}
 		/>
+	{/if}
+
+	<!-- 随机标签推荐栏（可切换显示） -->
+	{#if showRandomTagBar}
+		<div class="flex items-center gap-1.5 px-2 py-1.5 bg-muted/30 border-b border-border">
+			<span class="text-xs text-muted-foreground shrink-0">推荐:</span>
+			<div class="flex-1 flex flex-wrap items-center gap-1">
+				{#each randomTags as tag (tag.id)}
+					<TagChip
+						tag={tag.id}
+						category={tag.cat}
+						display={tag.display}
+						color={tag.color}
+						isCollect={true}
+						onClick={() => handleRandomTagClick(tag)}
+					/>
+				{/each}
+			</div>
+			<button
+				class="p-1 rounded hover:bg-accent text-muted-foreground"
+				onclick={refreshRandomTags}
+				title="刷新推荐"
+			>
+				<RefreshCw class="h-3.5 w-3.5" />
+			</button>
+		</div>
 	{/if}
 
 	<!-- 勾选操作栏（勾选模式下显示） -->

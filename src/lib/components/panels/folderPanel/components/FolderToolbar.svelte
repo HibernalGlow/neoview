@@ -26,6 +26,7 @@ import {
 	ListTree,
 	Flame,
 	Eye,
+	Tags,
 	// 排序图标
 	ALargeSmall,
 	Calendar,
@@ -86,9 +87,11 @@ interface Props {
 	onSetHome?: () => void;
 	onToggleDeleteStrategy?: () => void;
 	onToggleInlineTree?: () => void;
+	showRandomTagBar?: boolean;
+	onToggleRandomTagBar?: () => void;
 }
 
-let { onRefresh, onToggleFolderTree, onGoBack, onGoForward, onGoHome, onSetHome, onToggleDeleteStrategy, onToggleInlineTree }: Props = $props();
+let { onRefresh, onToggleFolderTree, onGoBack, onGoForward, onGoHome, onSetHome, onToggleDeleteStrategy, onToggleInlineTree, showRandomTagBar = false, onToggleRandomTagBar }: Props = $props();
 
 const viewStyles: { value: FolderViewStyle; icon: typeof List; label: string }[] = [
 	{ value: 'list', icon: List, label: '列表' },
@@ -409,6 +412,22 @@ function cancelWarmup() {
 			</Tooltip.Trigger>
 			<Tooltip.Content>
 				<p>{$showMigrationBar ? '隐藏迁移栏' : '显示迁移栏'}</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={showRandomTagBar ? 'default' : 'ghost'}
+					size="icon"
+					class="h-7 w-7"
+					onclick={() => onToggleRandomTagBar?.()}
+				>
+					<Tags class="h-4 w-4" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>{showRandomTagBar ? '隐藏标签推荐' : '显示标签推荐'}</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 

@@ -44,7 +44,7 @@ import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoo
 	import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 	import type { BookInfo, Page } from '$lib/types';
 	import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
-	import { isVideoFile } from '$lib/utils/videoUtils';
+	import { isVideoFile, getVideoMimeType } from '$lib/utils/videoUtils';
 	import { historyStore } from '$lib/stores/history.svelte';
 	import { videoStore } from '$lib/stores/video.svelte';
 
@@ -231,6 +231,20 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 	// 视频相关状态 - 大部分逻辑已移至 VideoContainer 和 videoStore
 	let isCurrentPageVideo = $state(false);
 	let videoPlayerRef: any = null; // VideoContainer 组件引用
+	let videoUrl = $state<string | null>(null);
+	let videoUrlRevokeNeeded = $state(false);
+	let currentVideoRequestId = 0;
+	let videoStartTime = $state(0);
+
+	// 清除视频播放状态
+	function clearVideoPlaybackState() {
+		if (videoUrlRevokeNeeded && videoUrl) {
+			URL.revokeObjectURL(videoUrl);
+		}
+		videoUrl = null;
+		videoUrlRevokeNeeded = false;
+		videoStartTime = 0;
+	}
 
 	function handleViewerAction(action: string) {
 		const isVideo = isCurrentPageVideo;

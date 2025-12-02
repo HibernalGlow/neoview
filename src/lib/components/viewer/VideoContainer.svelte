@@ -87,9 +87,9 @@
 			} else if (videoPage.innerPath && bookStore.currentBook?.type === 'archive') {
 				// 从压缩包加载
 				const archivePath = bookStore.currentBook.path;
-				const videoData: number[] = await invoke('load_archive_entry', {
+				const videoData: number[] = await invoke('load_video_from_archive', {
 					archivePath,
-					entryPath: videoPage.innerPath
+					filePath: videoPage.innerPath
 				});
 				if (requestId !== currentVideoRequestId) return;
 				const mimeType = getVideoMimeType(videoPage.name) || 'video/mp4';

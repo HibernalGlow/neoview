@@ -110,7 +110,7 @@ pub async fn load_video(
     Ok(buffer)
 }
 
-/// 从压缩包加载视频文件
+/// 从压缩包加载视频文件（支持 ZIP/RAR/7z）
 #[command]
 pub async fn load_video_from_archive(
     archive_path: String,
@@ -118,50 +118,33 @@ pub async fn load_video_from_archive(
     trace_id: Option<String>,
     _page_index: Option<usize>,
 ) -> Result<Vec<u8>, String> {
+    use crate::core::archive::ArchiveManager;
+    use std::path::PathBuf;
+
     if let Some(ref id) = trace_id {
         println!(
-            "[{}] 开始从压缩包加载视频:  {} -> {}",
+            "[{}] 开始从压缩包加载视频: {} -> {}",
             id, archive_path, file_path
         );
     }
 
-    use std::fs::File;
-    use std::io::Read;
-    use zip::ZipArchive;
-
-    let archive_file = File::open(&archive_path).map_err(|e| format!("无法打开压缩包: {}", e))?;
-
-    let mut archive =
-        ZipArchive::new(archive_file).map_err(|e| format!("无法读取压缩包: {}", e))?;
-
-    // 查找文件(处理路径分隔符)
-    let normalized_path = file_path.replace('\\', "/");
-    let candidate_name = if archive.file_names().any(|name| name == normalized_path) {
-        normalized_path.clone()
-    } else {
-        file_path.clone()
-    };
-
-    let mut file = archive
-        .by_name(&candidate_name)
-        .map_err(|e| format!("在压缩包中找不到文件 {}: {}", candidate_name, e))?;
+    let archive_path_buf = PathBuf::from(&archive_path);
+    let manager = ArchiveManager::new();
+    
+    // 使用 extract_file 支持 ZIP/RAR/7z
+    let buffer = manager.extract_file(&archive_path_buf, &file_path)?;
 
     // 检查文件大小
-    let size = file.size();
+    let size = buffer.len();
     if size > 500 * 1024 * 1024 {
-        // 限制视频大小为500MB
         return Err(format!(
             "视频文件过大: {} MB (最大 500MB)",
             size / 1024 / 1024
         ));
     }
 
-    let mut buffer = Vec::with_capacity(size as usize);
-    file.read_to_end(&mut buffer)
-        .map_err(|e| format!("读取视频文件失败: {}", e))?;
-
     if let Some(ref id) = trace_id {
-        println!("[{}] 视频加载成功: {} bytes", id, buffer.len());
+        println!("[{}] 视频加载成功: {} bytes", id, size);
     }
 
     Ok(buffer)

@@ -46,7 +46,7 @@
 <Dialog.Root bind:open>
 	<Dialog.Content 
 		class="h-[600px] max-w-4xl" 
-		style="background-color: hsl(var(--background) / {sidebarOpacity / 100}); backdrop-filter: blur({sidebarBlur}px);"
+		style="background-color: color-mix(in oklch, var(--background) {sidebarOpacity}%, transparent); backdrop-filter: blur({sidebarBlur}px);"
 	>
 		<Dialog.Header>
 			<Dialog.Title>设置</Dialog.Title>

@@ -108,7 +108,7 @@
 				data-sidebar="sidebar"
 				data-slot="sidebar-inner"
 				class="group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm"
-				style="background-color: hsl(var(--sidebar) / {sidebarOpacity / 100}); backdrop-filter: blur({sidebarBlur}px);"
+				style="background-color: color-mix(in oklch, var(--sidebar) {sidebarOpacity}%, transparent); backdrop-filter: blur({sidebarBlur}px);"
 			>
 				{@render children?.()}
 			</div>

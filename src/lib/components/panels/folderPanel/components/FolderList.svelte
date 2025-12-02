@@ -95,11 +95,10 @@ interface Props {
 
 let { onItemOpen, onItemDelete, onItemContextMenu, getThumbnail, pendingRestore, onRestoreComplete }: Props = $props();
 
-// 过滤后的项
+// 显示项（不过滤 - 搜索在 SearchResultList 中处理）
 let filteredItems = $derived(() => {
-	const keyword = $searchKeyword.toLowerCase().trim();
-	if (!keyword) return $sortedItems;
-	return $sortedItems.filter((item) => item.name.toLowerCase().includes(keyword));
+	// 不再根据 searchKeyword 过滤，搜索结果在独立的 SearchResultList 中显示
+	return $sortedItems;
 });
 
 // 选中项索引
@@ -215,9 +214,7 @@ $effect(() => {
 	<!-- 空状态 -->
 	<div class="flex h-full flex-col items-center justify-center gap-2 p-4">
 		<FolderOpen class="text-muted-foreground h-12 w-12" />
-		<p class="text-muted-foreground text-sm">
-			{$searchKeyword ? '没有匹配的文件' : '文件夹为空'}
-		</p>
+		<p class="text-muted-foreground text-sm">文件夹为空</p>
 	</div>
 {:else}
 	<!-- 使用现有的虚拟化列表组件 -->

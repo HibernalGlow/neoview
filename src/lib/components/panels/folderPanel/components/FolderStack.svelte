@@ -179,12 +179,11 @@ function filterItems(items: FsItem[], keyword: string): FsItem[] {
 	return items.filter(item => item.name.toLowerCase().includes(lowerKeyword));
 }
 
-// 获取层的显示项（应用排序和过滤）
+// 获取层的显示项（应用排序，不过滤 - 搜索在 SearchResultList 中处理）
 function getDisplayItems(layer: FolderLayer): FsItem[] {
 	const config = $sortConfig;
-	const keyword = $searchKeyword;
 	let result = layer.items;
-	result = filterItems(result, keyword);
+	// 不再根据 searchKeyword 过滤，搜索结果在独立的 SearchResultList 中显示
 	result = sortItems(result, config.field, config.order);
 	return result;
 }
@@ -613,9 +612,7 @@ function handleOpenFolderAsBook(layerIndex: number, item: FsItem) {
 					<!-- 空状态（过滤后无结果） -->
 					<div class="flex h-full flex-col items-center justify-center gap-2 p-4">
 						<FolderOpen class="text-muted-foreground h-12 w-12" />
-						<p class="text-muted-foreground text-sm">
-							{$searchKeyword ? '没有匹配的文件' : '文件夹为空'}
-						</p>
+						<p class="text-muted-foreground text-sm">文件夹为空</p>
 					</div>
 				{:else}
 					<!-- 虚拟化列表 -->

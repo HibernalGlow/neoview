@@ -4,8 +4,22 @@
  * 显示用户收藏的 EMM 标签，支持点击添加到搜索
  * 参考 exhentai-manga-manager 的 SearchAgilePanel
  */
-import { X, Lock, Unlock, Star } from '@lucide/svelte';
+import { X, Lock, Unlock, Star, RefreshCw } from '@lucide/svelte';
 import { favoriteTagStore, categoryColors, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
+
+let isReloading = $state(false);
+
+async function handleReloadFromEMM() {
+	isReloading = true;
+	try {
+		const result = await favoriteTagStore.reloadFromEMM();
+		console.log('[FavoriteTagPanel] 重新加载 EMM 收藏标签:', result ? '成功' : '失败');
+	} catch (err) {
+		console.error('[FavoriteTagPanel] 重新加载失败:', err);
+	} finally {
+		isReloading = false;
+	}
+}
 
 interface Props {
 	visible: boolean;
@@ -98,6 +112,15 @@ function stopResize() {
 					/>
 					<span>混合性别</span>
 				</label>
+				<!-- 刷新按钮 -->
+				<button
+					class="p-1 rounded hover:bg-accent {isReloading ? 'animate-spin' : ''}"
+					onclick={handleReloadFromEMM}
+					title="从 EMM 重新加载收藏标签"
+					disabled={isReloading}
+				>
+					<RefreshCw class="h-3.5 w-3.5" />
+				</button>
 				<!-- 固定按钮 -->
 				<button
 					class="p-1 rounded hover:bg-accent"

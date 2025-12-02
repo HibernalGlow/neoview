@@ -4,7 +4,8 @@
  * 支持从 EMM 设置文件导入收藏标签
  */
 
-import { loadEMMCollectTags, findEMMSettingFile, type EMMCollectTag } from '$lib/api/emm';
+import { loadEMMCollectTags, findEMMSettingFile, loadEMMTranslationDict, findEMMTranslationFile, type EMMCollectTag, type EMMTranslationDict } from '$lib/api/emm';
+import { emmTranslationStore } from './translation';
 
 const STORAGE_KEY = 'neoview-emm-favorite-tags';
 const EMM_LOADED_KEY = 'neoview-emm-tags-loaded';
@@ -243,15 +244,57 @@ export const favoriteTagStore = {
 				return false;
 			}
 
+			console.log('[FavoriteTagStore] 加载到收藏标签:', collectTags.length, '个');
+			console.log('[FavoriteTagStore] 收藏标签样本:', collectTags.slice(0, 3));
+
+			// 尝试加载翻译字典
+			let translationDict: EMMTranslationDict | undefined;
+			try {
+				const translationPath = await findEMMTranslationFile();
+				console.log('[FavoriteTagStore] 翻译文件路径:', translationPath);
+				if (translationPath) {
+					translationDict = await loadEMMTranslationDict(translationPath);
+					console.log('[FavoriteTagStore] 已加载翻译字典, 命名空间:', Object.keys(translationDict || {}));
+				} else {
+					console.log('[FavoriteTagStore] 未找到翻译文件');
+				}
+			} catch (e) {
+				console.warn('[FavoriteTagStore] 加载翻译字典失败:', e);
+			}
+
 			// 转换为 FavoriteTag 格式
 			const tags: FavoriteTag[] = collectTags.map((ct: EMMCollectTag) => {
 				const cat = letter2cat[ct.letter] || ct.letter;
+				
+				// 翻译标签名和类别名
+				let translatedTag = ct.tag;
+				let translatedCat = cat;
+				
+				if (translationDict) {
+					// 翻译标签名
+					const tagTranslation = emmTranslationStore.translateTag(ct.tag, cat, translationDict);
+					if (tagTranslation && tagTranslation !== ct.tag) {
+						translatedTag = tagTranslation;
+					}
+					
+					// 翻译类别名（查找 rows 命名空间）
+					const catTranslation = emmTranslationStore.translateTag(cat, 'rows', translationDict);
+					if (catTranslation && catTranslation !== cat) {
+						translatedCat = catTranslation;
+					}
+				}
+				
+				// 构建翻译后的显示文本
+				const display = `${translatedCat}:${translatedTag}`;
+				
+				console.log(`[FavoriteTagStore] 标签翻译: ${ct.tag} -> ${translatedTag}, ${cat} -> ${translatedCat}`);
+				
 				return {
 					id: ct.id || `${cat}:${ct.tag}`,
 					cat,
 					tag: ct.tag,
 					letter: ct.letter,
-					display: ct.display || `${cat}:${ct.tag}`,
+					display,
 					value: createTagValue(cat, ct.tag),
 					color: ct.color || categoryColors[cat] || '#409EFF'
 				};

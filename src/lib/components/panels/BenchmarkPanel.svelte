@@ -147,8 +147,8 @@
 			multiple: false,
 			filters: [
 				{
-					name: '图像',
-					extensions: ['jpg', 'jpeg', 'png', 'webp', 'avif', 'jxl', 'gif', 'bmp', 'tiff']
+					name: '压缩包/图像',
+					extensions: ['zip', 'cbz', 'rar', '7z', 'cb7', 'cbr', 'jpg', 'jpeg', 'png', 'webp', 'avif', 'jxl', 'gif', 'bmp']
 				}
 			]
 		});
@@ -166,7 +166,7 @@
 
 		try {
 			const results = await invoke<DetailedBenchmarkResult[]>('run_detailed_benchmark', {
-				imagePath: selectedDetailedFile
+				archivePath: selectedDetailedFile
 			});
 			detailedResults = results;
 		} catch (err) {
@@ -473,12 +473,12 @@
 				{#if showCards.detailed}
 					<div class="space-y-2">
 						<p class="text-[10px] text-muted-foreground">
-							比较 WIC 内置缩放 vs 全尺寸解码+image缩放
+							比较 WIC 内置缩放 vs 全尺寸解码，显示提取/解码/缩放/编码各步骤耗时
 						</p>
 						<div class="flex gap-2">
 							<Button onclick={selectDetailedFile} variant="outline" size="sm" class="flex-1 text-xs">
 								<FolderOpen class="h-3 w-3 mr-1" />
-								{selectedDetailedFile ? '已选择' : '选择图像'}
+								{selectedDetailedFile ? '已选择' : '选择压缩包/图像'}
 							</Button>
 							<Button
 								onclick={runDetailedBenchmark}

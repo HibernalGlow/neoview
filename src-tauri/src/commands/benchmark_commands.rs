@@ -425,22 +425,60 @@ pub struct DetailedBenchmarkResult {
 }
 
 /// 详细分步对比测试（比较 WIC 内置缩放 vs 传统方法）
+/// 支持压缩包：从压缩包中提取第一张图片进行测试
 #[command]
-pub async fn run_detailed_benchmark(image_path: String) -> Result<Vec<DetailedBenchmarkResult>, String> {
+pub async fn run_detailed_benchmark(archive_path: String) -> Result<Vec<DetailedBenchmarkResult>, String> {
     use std::fs;
+    use std::io::Read;
+    use zip::ZipArchive;
     use image::{GenericImageView, ImageFormat};
     use std::io::Cursor;
     
-    let path = PathBuf::from(&image_path);
-    let ext = path.extension()
+    let path = PathBuf::from(&archive_path);
+    let is_archive = path.extension()
         .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_lowercase();
+        .map(|e| ["zip", "cbz", "rar", "7z", "cb7", "cbr"].contains(&e.to_lowercase().as_str()))
+        .unwrap_or(false);
     
-    // 读取图像数据
-    let start_read = Instant::now();
-    let image_data = fs::read(&path).map_err(|e| format!("读取文件失败: {}", e))?;
-    let read_ms = start_read.elapsed().as_secs_f64() * 1000.0;
+    let (image_data, ext, extract_ms, image_name) = if is_archive {
+        // 从压缩包提取第一张图片
+        let start_extract = Instant::now();
+        let file = fs::File::open(&path).map_err(|e| format!("打开压缩包失败: {}", e))?;
+        let mut archive = ZipArchive::new(file).map_err(|e| format!("解析压缩包失败: {}", e))?;
+        
+        let image_exts = ["jpg", "jpeg", "png", "webp", "avif", "jxl", "gif", "bmp"];
+        let mut first_image: Option<(String, Vec<u8>)> = None;
+        
+        for i in 0..archive.len() {
+            if let Ok(mut entry) = archive.by_index(i) {
+                let name = entry.name().to_lowercase();
+                if image_exts.iter().any(|ext| name.ends_with(ext)) {
+                    let mut data = Vec::new();
+                    if entry.read_to_end(&mut data).is_ok() {
+                        first_image = Some((entry.name().to_string(), data));
+                        break;
+                    }
+                }
+            }
+        }
+        
+        let (name, data) = first_image.ok_or("压缩包中没有找到图片")?;
+        let extract_ms = start_extract.elapsed().as_secs_f64() * 1000.0;
+        let ext = name.split('.').last().unwrap_or("").to_lowercase();
+        (data, ext, extract_ms, name)
+    } else {
+        // 直接读取图像文件
+        let start_read = Instant::now();
+        let data = fs::read(&path).map_err(|e| format!("读取文件失败: {}", e))?;
+        let read_ms = start_read.elapsed().as_secs_f64() * 1000.0;
+        let ext = path.extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        (data, ext, read_ms, name)
+    };
+    
     let input_size = image_data.len();
     
     let mut results = Vec::new();
@@ -487,7 +525,7 @@ pub async fn run_detailed_benchmark(image_path: String) -> Result<Vec<DetailedBe
                 results.push(DetailedBenchmarkResult {
                     method: "WIC全尺寸+image缩放".to_string(),
                     format: ext.clone(),
-                    extract_ms: read_ms,
+                    extract_ms,
                     decode_ms: decode_ms + convert_ms,
                     scale_ms,
                     encode_ms,
@@ -535,7 +573,7 @@ pub async fn run_detailed_benchmark(image_path: String) -> Result<Vec<DetailedBe
                 results.push(DetailedBenchmarkResult {
                     method: "WIC内置缩放(推荐)".to_string(),
                     format: ext.clone(),
-                    extract_ms: read_ms,
+                    extract_ms,
                     decode_ms: decode_scale_ms,
                     scale_ms: 0.0, // 缩放已包含在解码中
                     encode_ms: encode_ms + convert_ms,

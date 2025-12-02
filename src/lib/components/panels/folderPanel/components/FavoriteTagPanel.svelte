@@ -5,7 +5,7 @@
  * 参考 exhentai-manga-manager 的 SearchAgilePanel
  */
 import { X, Lock, Unlock, Star, RefreshCw } from '@lucide/svelte';
-import { favoriteTagStore, categoryColors, cat2letter, createTagValue, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
+import { favoriteTagStore, categoryColors, cat2letter, createTagValue, mixedGenderStore, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
 
 let isReloading = $state(false);
 
@@ -55,9 +55,10 @@ let startHeight = $state(0);
 // 分组后的标签（支持混合性别变体）
 const groupedTags = $derived.by((): Array<{ name: string; tags: ExtendedFavoriteTag[] }> => {
 	const baseTags = favoriteTagStore.tags;
-	console.log(`[FavoriteTagPanel] 混合模式: ${enableMixed}, 基础标签数: ${baseTags.length}`);
+	const isMixedEnabled = mixedGenderStore.enabled;
+	console.log(`[FavoriteTagPanel] 混合模式: ${isMixedEnabled}, 基础标签数: ${baseTags.length}`);
 	
-	if (!enableMixed) {
+	if (!isMixedEnabled) {
 		// 不开启混合时，将 FavoriteTag 转换为 ExtendedFavoriteTag
 		const baseGroups = favoriteTagStore.groupedTags;
 		return baseGroups.map(group => ({
@@ -139,7 +140,8 @@ function togglePin() {
 }
 
 function toggleMixed() {
-	onUpdateEnableMixed?.(!enableMixed);
+	mixedGenderStore.toggle();
+	onUpdateEnableMixed?.(mixedGenderStore.enabled);
 }
 
 function startResize(event: MouseEvent) {
@@ -181,7 +183,7 @@ function stopResize() {
 				<label class="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
 					<input
 						type="checkbox"
-						checked={enableMixed}
+						checked={mixedGenderStore.enabled}
 						onchange={toggleMixed}
 						class="h-3.5 w-3.5 rounded accent-primary"
 					/>

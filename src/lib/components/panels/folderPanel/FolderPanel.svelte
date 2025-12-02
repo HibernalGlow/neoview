@@ -22,7 +22,7 @@ import SearchBar from '$lib/components/ui/SearchBar.svelte';
 import FolderTabBar from './components/FolderTabBar.svelte';
 import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
 import FavoriteTagPanel from './components/FavoriteTagPanel.svelte';
-import { favoriteTagStore, createTagValue, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
+import { favoriteTagStore, createTagValue, mixedGenderStore, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
 import { directoryTreeCache } from './utils/directoryTreeCache';
 import { bookStore } from '$lib/stores/book.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
@@ -420,7 +420,6 @@ function handleSearchSettingsChange(settings: { includeSubfolders?: boolean; sho
 
 // 收藏标签面板状态
 let showFavoriteTagPanel = $state(false);
-let enableMixedGenderSearch = $state(false);
 
 // 切换收藏标签面板
 function handleToggleFavoriteTagPanel() {
@@ -821,10 +820,10 @@ onMount(() => {
 			<!-- 收藏标签面板 -->
 			<FavoriteTagPanel
 				visible={showFavoriteTagPanel}
-				enableMixed={enableMixedGenderSearch}
+				enableMixed={mixedGenderStore.enabled}
 				onClose={handleCloseFavoriteTagPanel}
 				onAppendTag={handleAppendTag}
-				onUpdateEnableMixed={(v: boolean) => { enableMixedGenderSearch = v; }}
+				onUpdateEnableMixed={(v: boolean) => { mixedGenderStore.enabled = v; }}
 			/>
 		</div>
 	{/if}

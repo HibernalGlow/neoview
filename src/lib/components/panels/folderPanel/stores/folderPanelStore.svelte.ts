@@ -12,7 +12,7 @@ import { getDefaultRating } from '$lib/stores/emm/storage';
 // ============ Types ============
 
 export type FolderViewStyle = 'list' | 'content' | 'banner' | 'thumbnail';
-export type FolderSortField = 'name' | 'date' | 'size' | 'type' | 'random' | 'rating' | 'path';
+export type FolderSortField = 'name' | 'date' | 'size' | 'type' | 'random' | 'rating' | 'path' | 'collectTagCount';
 export type FolderSortOrder = 'asc' | 'desc';
 export type DeleteStrategy = 'trash' | 'permanent';
 

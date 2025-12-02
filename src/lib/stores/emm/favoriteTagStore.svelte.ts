@@ -9,6 +9,23 @@ import { emmTranslationStore } from './translation';
 
 const STORAGE_KEY = 'neoview-emm-favorite-tags';
 const EMM_LOADED_KEY = 'neoview-emm-tags-loaded';
+const MIXED_GENDER_KEY = 'neoview-emm-mixed-gender';
+
+// 混合性别搜索模式（响应式共享状态）
+let mixedGenderEnabled = $state(localStorage.getItem(MIXED_GENDER_KEY) === 'true');
+
+export const mixedGenderStore = {
+	get enabled() {
+		return mixedGenderEnabled;
+	},
+	set enabled(value: boolean) {
+		mixedGenderEnabled = value;
+		localStorage.setItem(MIXED_GENDER_KEY, String(value));
+	},
+	toggle() {
+		this.enabled = !this.enabled;
+	}
+};
 
 // 类别到字母的映射
 export const cat2letter: Record<string, string> = {

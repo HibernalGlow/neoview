@@ -32,7 +32,8 @@ import {
 	HardDrive,
 	FileType,
 	Shuffle,
-	Star
+	Star,
+	Heart
 } from '@lucide/svelte';
 import { hoverPreviewSettings, hoverPreviewEnabled, hoverPreviewDelayMs } from '$lib/stores/hoverPreviewSettings.svelte';
 import { getDefaultRating, saveDefaultRating } from '$lib/stores/emm/storage';
@@ -103,7 +104,8 @@ const sortFields: { value: FolderSortField; label: string; icon: typeof ALargeSm
 	{ value: 'size', label: '大小', icon: HardDrive },
 	{ value: 'type', label: '类型', icon: FileType },
 	{ value: 'random', label: '随机', icon: Shuffle },
-	{ value: 'rating', label: '评分', icon: Star }
+	{ value: 'rating', label: '评分', icon: Star },
+	{ value: 'collectTagCount', label: '收藏标签', icon: Heart }
 ];
 
 function getCurrentSortIcon() {

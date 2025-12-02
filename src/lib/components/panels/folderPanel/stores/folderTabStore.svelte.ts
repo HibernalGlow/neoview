@@ -499,6 +499,48 @@ export const folderTabActions = {
 	},
 
 	/**
+	 * 在历史记录中查找指定路径（只在当前位置之前的历史中查找）
+	 * 返回找到的索引，如果没找到返回 -1
+	 */
+	findPathInHistory(targetPath: string): number {
+		const tab = this.getActiveTab();
+		if (!tab || tab.historyIndex <= 0) return -1;
+		
+		// 规范化路径以便比较 - 统一使用小写和正斜杠
+		const normalizePath = (p: string) => p.replace(/\\/g, '/').toLowerCase();
+		const normalizedTarget = normalizePath(targetPath);
+		
+		// 从当前位置向前搜索（找最近的匹配）
+		for (let i = tab.historyIndex - 1; i >= 0; i--) {
+			const entry = tab.historyStack[i];
+			if (entry && normalizePath(entry.path) === normalizedTarget) {
+				return i;
+			}
+		}
+		return -1;
+	},
+
+	/**
+	 * 导航到历史中的指定索引
+	 */
+	goToHistoryIndex(index: number): { path: string } | null {
+		const tab = this.getActiveTab();
+		if (!tab || index < 0 || index >= tab.historyStack.length) return null;
+		
+		const entry = tab.historyStack[index];
+		if (!entry) return null;
+
+		updateActiveTab((t) => ({
+			...t,
+			currentPath: entry.path,
+			historyIndex: index,
+			title: getDisplayName(entry.path)
+		}));
+
+		return { path: entry.path };
+	},
+
+	/**
 	 * 后退
 	 */
 	goBack(): { path: string } | null {

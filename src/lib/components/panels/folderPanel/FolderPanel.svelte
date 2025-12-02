@@ -355,27 +355,40 @@ function handleGoForward() {
 	}
 }
 
-// 处理返回上级（先检查后退历史是否是父路径，有则用历史导航，没有则直接导航）
+// 处理返回上级（在所有历史中搜索父路径，找到则用历史导航，没有则直接导航）
 function handleGoUp() {
 	const currentPath = $tabCurrentPath;
 	if (!currentPath) return;
 	
-	const normalized = currentPath.replace(/\\/g, '/');
-	const parts = normalized.split('/').filter(Boolean);
+	// 使用 Windows 风格的反斜杠作为分隔符（如果原路径包含反斜杠）
+	const isWindowsPath = currentPath.includes('\\');
+	const separator = isWindowsPath ? '\\' : '/';
+	const normalized = currentPath.replace(/[\/\\]/g, separator);
+	const parts = normalized.split(separator).filter(Boolean);
+	
 	if (parts.length <= 1) return; // 已经是根目录
 	
 	parts.pop();
-	// 保持 Windows 盘符格式
-	const parentPath = currentPath.includes(':') ? parts.join('/') : '/' + parts.join('/');
-	
-	// 检查后退一步是否就是父路径
-	const backResult = folderTabActions.peekBack();
-	if (backResult && backResult.path === parentPath) {
-		// 后退一步就是父路径，使用历史导航
-		folderTabActions.goBack();
-		navigationCommand.set({ type: 'history', path: parentPath });
+	// 构建父路径，保持原始路径格式
+	let parentPath: string;
+	if (currentPath.includes(':')) {
+		// Windows 路径
+		parentPath = parts.join(separator);
 	} else {
-		// 没有历史或历史不是父路径，直接导航
+		// Unix 路径
+		parentPath = separator + parts.join(separator);
+	}
+	
+	// 在历史记录中搜索父路径
+	const historyIndex = folderTabActions.findPathInHistory(parentPath);
+	if (historyIndex >= 0) {
+		// 在历史中找到父路径，导航到该历史位置
+		const result = folderTabActions.goToHistoryIndex(historyIndex);
+		if (result) {
+			navigationCommand.set({ type: 'history', path: result.path });
+		}
+	} else {
+		// 历史中没有父路径，直接导航
 		navigationCommand.set({ type: 'init', path: parentPath });
 	}
 }

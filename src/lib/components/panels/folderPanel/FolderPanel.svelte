@@ -15,6 +15,7 @@ import FolderStack from './components/FolderStack.svelte';
 import FolderTree from './components/FolderTree.svelte';
 import FolderContextMenu from './components/FolderContextMenu.svelte';
 import MigrationBar from './components/MigrationBar.svelte';
+import SelectionBar from './components/SelectionBar.svelte';
 import InlineTreeList from './components/InlineTreeList.svelte';
 import SearchResultList from './components/SearchResultList.svelte';
 import SearchBar from '$lib/components/ui/SearchBar.svelte';
@@ -378,11 +379,50 @@ function handleToggleMigrationManager() {
 // 剪贴板状态
 let clipboardItem = $state<{ paths: string[]; operation: 'copy' | 'cut' } | null>(null);
 
-// 处理删除（删除模式下不需要确认，直接删除并立即从列表移除）
+// 处理删除（勾选模式下批量删除，删除模式下不需要确认）
 async function handleDelete(item: FsItem) {
 	const strategy = $deleteStrategy;
 	const actionText = strategy === 'trash' ? '删除' : '永久删除';
+	const selected = $selectedItems;
 	
+	// 勾选模式下且有选中项时，批量删除选中项
+	if ($multiSelectMode && selected.size > 0) {
+		// 确保当前项也在选中列表中
+		if (!selected.has(item.path)) {
+			selected.add(item.path);
+		}
+		
+		const paths = Array.from(selected);
+		const confirmMessage = `确定要${actionText}选中的 ${paths.length} 个项目吗？`;
+		if (!confirm(confirmMessage)) return;
+		
+		// 批量删除
+		let successCount = 0;
+		for (const path of paths) {
+			try {
+				folderTabActions.removeItem(path);
+				if (strategy === 'trash') {
+					await FileSystemAPI.moveToTrash(path);
+				} else {
+					await FileSystemAPI.deletePath(path);
+				}
+				successCount++;
+			} catch (err) {
+				console.error('删除失败:', path, err);
+			}
+		}
+		
+		folderTabActions.deselectAll();
+		if (successCount === paths.length) {
+			showSuccessToast(`${actionText}成功`, `已${actionText} ${successCount} 个文件`);
+		} else {
+			showErrorToast(`部分${actionText}失败`, `成功 ${successCount}/${paths.length}`);
+			handleRefresh();
+		}
+		return;
+	}
+	
+	// 单个删除
 	// 删除模式下不弹确认框，其他情况需要确认
 	if (!$deleteMode) {
 		const confirmMessage = `确定要${actionText} "${item.name}" 吗？`;
@@ -654,6 +694,11 @@ onMount(() => {
 			showManager={showMigrationManager}
 			onToggleManager={handleToggleMigrationManager}
 		/>
+	{/if}
+
+	<!-- 勾选操作栏（勾选模式下显示） -->
+	{#if $multiSelectMode}
+		<SelectionBar onDelete={handleBatchDelete} />
 	{/if}
 
 	<!-- 主内容区 - 使用层叠式布局 -->

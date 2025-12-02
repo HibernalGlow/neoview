@@ -355,28 +355,15 @@
 			</div>
 		{/if}
 
-		<!-- 翻译标题和评分 -->
-		{#if emmMetadata && (emmMetadata.translatedTitle || emmMetadata.rating !== undefined)}
-			<div class="mt-1 flex flex-wrap items-center gap-2">
-				{#if emmMetadata.translatedTitle && emmMetadata.translatedTitle !== item.name}
-					<span
-						class="border-primary/20 bg-primary/10 text-primary wrap-break-word rounded border px-1.5 py-0.5 text-xs"
-						title={emmMetadata.translatedTitle}
-					>
-						{emmMetadata.translatedTitle}
-					</span>
-				{/if}
-				{#if emmMetadata.rating !== undefined && emmMetadata.rating > 0}
-					<Tooltip.Root>
-						<Tooltip.Trigger>
-							<span class="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-600 dark:text-amber-400">
-								<Star class="h-3 w-3 fill-current" />
-								<span class="font-medium">{emmMetadata.rating.toFixed(1)}</span>
-							</span>
-						</Tooltip.Trigger>
-						<Tooltip.Content><p>评分: {emmMetadata.rating.toFixed(2)}</p></Tooltip.Content>
-					</Tooltip.Root>
-				{/if}
+		<!-- 翻译标题 -->
+		{#if emmMetadata && emmMetadata.translatedTitle && emmMetadata.translatedTitle !== item.name}
+			<div class="mt-1">
+				<span
+					class="border-primary/20 bg-primary/10 text-primary wrap-break-word rounded border px-1.5 py-0.5 text-xs"
+					title={emmMetadata.translatedTitle}
+				>
+					{emmMetadata.translatedTitle}
+				</span>
 			</div>
 		{/if}
 
@@ -396,6 +383,18 @@
 				{#if !currentPage && !timestamp}
 					<span>{formatSize(item.size || 0, item.isDir || false)}</span>
 				{/if}
+			{/if}
+			<!-- 评分放在大小和时间后面 -->
+			{#if emmMetadata?.rating !== undefined && emmMetadata.rating > 0}
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<span class="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-600 dark:text-amber-400">
+							<Star class="h-3 w-3 fill-current" />
+							<span class="font-medium">{emmMetadata.rating.toFixed(1)}</span>
+						</span>
+					</Tooltip.Trigger>
+					<Tooltip.Content><p>评分: {emmMetadata.rating.toFixed(2)}</p></Tooltip.Content>
+				</Tooltip.Root>
 			{/if}
 		</div>
 

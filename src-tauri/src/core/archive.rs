@@ -17,6 +17,7 @@ use zip::{ZipArchive, ZipWriter};
 pub enum ArchiveFormat {
     Zip,
     Rar,
+    SevenZ,
     Unknown,
 }
 
@@ -27,6 +28,7 @@ impl ArchiveFormat {
             match ext.to_string_lossy().to_lowercase().as_str() {
                 "zip" | "cbz" => ArchiveFormat::Zip,
                 "rar" | "cbr" => ArchiveFormat::Rar,
+                "7z" | "cb7" => ArchiveFormat::SevenZ,
                 _ => ArchiveFormat::Unknown,
             }
         } else {
@@ -36,7 +38,7 @@ impl ArchiveFormat {
     
     /// 检查格式是否受支持
     pub fn is_supported(&self) -> bool {
-        matches!(self, ArchiveFormat::Zip | ArchiveFormat::Rar)
+        matches!(self, ArchiveFormat::Zip | ArchiveFormat::Rar | ArchiveFormat::SevenZ)
     }
 }
 
@@ -198,6 +200,7 @@ impl ArchiveManager {
         match format {
             ArchiveFormat::Zip => self.list_zip_contents(archive_path),
             ArchiveFormat::Rar => self.list_rar_contents(archive_path),
+            ArchiveFormat::SevenZ => self.list_7z_contents(archive_path),
             ArchiveFormat::Unknown => Err(format!(
                 "不支持的压缩包格式: {}",
                 archive_path.display()
@@ -309,6 +312,64 @@ impl ArchiveManager {
         
         Ok(entries)
     }
+    
+    /// 读取 7z 压缩包内容列表
+    pub fn list_7z_contents(&self, archive_path: &Path) -> Result<Vec<ArchiveEntry>, String> {
+        println!(
+            "📦 ArchiveManager::list_7z_contents start: {}",
+            archive_path.display()
+        );
+        
+        let mut archive = sevenz_rust::SevenZReader::open(archive_path, "".into())
+            .map_err(|e| format!("打开 7z 压缩包失败: {}", e))?;
+        
+        let mut entries = Vec::new();
+        
+        for (index, entry) in archive.archive().files.iter().enumerate() {
+            let name = entry.name().to_string();
+            let is_dir = entry.is_directory();
+            let size = entry.size();
+            let is_image = !is_dir && self.is_image_file(&name);
+            
+            // 7z 的修改时间处理 (FileTime 内部是 u64，转换为 Unix 时间戳)
+            let file_time = entry.last_modified_date();
+            // Windows FILETIME 是从 1601-01-01 开始的 100 纳秒计数
+            // Unix 时间戳是从 1970-01-01 开始的秒数
+            // 差值约为 116444736000000000 (100 纳秒单位)
+            let modified = {
+                let ft_value: u64 = file_time.into();
+                if ft_value > 116444736000000000 {
+                    Some(((ft_value - 116444736000000000) / 10_000_000) as i64)
+                } else {
+                    None
+                }
+            };
+            
+            entries.push(ArchiveEntry {
+                name: name.clone(),
+                path: name,
+                size,
+                is_dir,
+                is_image,
+                entry_index: index,
+                modified,
+            });
+        }
+        
+        println!(
+            "📦 ArchiveManager::list_7z_contents end: {} entries",
+            entries.len()
+        );
+        
+        // 排序：目录优先，然后按名称
+        entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+        });
+        
+        Ok(entries)
+    }
 
     /// 从 ZIP 压缩包中提取文件内容（优化版本，使用缓存的压缩包实例）
     pub fn extract_file_from_zip(
@@ -356,6 +417,7 @@ impl ArchiveManager {
         match format {
             ArchiveFormat::Zip => self.extract_file_from_zip(archive_path, file_path),
             ArchiveFormat::Rar => self.extract_file_from_rar(archive_path, file_path),
+            ArchiveFormat::SevenZ => self.extract_file_from_7z(archive_path, file_path),
             ArchiveFormat::Unknown => Err(format!(
                 "不支持的压缩包格式: {}",
                 archive_path.display()
@@ -424,6 +486,62 @@ impl ArchiveManager {
                 Ok(data)
             }
             None => Err(format!("在 RAR 压缩包中找不到文件: {}", file_path)),
+        }
+    }
+    
+    /// 从 7z 压缩包中提取文件内容
+    pub fn extract_file_from_7z(
+        &self,
+        archive_path: &Path,
+        file_path: &str,
+    ) -> Result<Vec<u8>, String> {
+        info!(
+            "📦 extract_file_from_7z start: archive={} inner={}",
+            archive_path.display(),
+            file_path
+        );
+        
+        let start = Instant::now();
+        
+        // 规范化路径
+        let normalized_path = file_path.replace('\\', "/");
+        
+        let mut archive = sevenz_rust::SevenZReader::open(archive_path, "".into())
+            .map_err(|e| format!("打开 7z 压缩包失败: {}", e))?;
+        
+        // 查找目标文件
+        let target_entry = archive.archive().files.iter()
+            .enumerate()
+            .find(|(_, entry)| {
+                let entry_path = entry.name().replace('\\', "/");
+                entry_path == normalized_path || entry.name() == file_path
+            });
+        
+        if let Some((_index, _)) = target_entry {
+            let mut data = Vec::new();
+            archive.for_each_entries(|entry, reader| {
+                if entry.name().replace('\\', "/") == normalized_path || entry.name() == file_path {
+                    reader.read_to_end(&mut data)?;
+                }
+                Ok(true)
+            }).map_err(|e| format!("遍历 7z 条目失败: {}", e))?;
+            
+            let elapsed = start.elapsed();
+            info!(
+                "📦 extract_file_from_7z end: read_bytes={} elapsed_ms={} archive={} inner={}",
+                data.len(),
+                elapsed.as_millis(),
+                archive_path.display(),
+                file_path
+            );
+            
+            if data.is_empty() {
+                Err(format!("在 7z 压缩包中找不到文件或文件为空: {}", file_path))
+            } else {
+                Ok(data)
+            }
+        } else {
+            Err(format!("在 7z 压缩包中找不到文件: {}", file_path))
         }
     }
 

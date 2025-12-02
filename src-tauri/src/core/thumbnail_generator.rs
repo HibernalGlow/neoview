@@ -11,6 +11,7 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use threadpool::ThreadPool;
 use unrar;
+use sevenz_rust;
 
 /// 反向查找父文件夹的最大层级（可配置）
 const MAX_PARENT_LEVELS: usize = 2;
@@ -686,14 +687,15 @@ impl ThumbnailGenerator {
             return Ok(cached);
         }
 
-        // 检查文件扩展名，支持 ZIP/CBZ 和 RAR/CBR
+        // 检查文件扩展名，支持 ZIP/CBZ、RAR/CBR 和 7Z/CB7
         let path_lower = archive_path.to_lowercase();
         let is_zip = path_lower.ends_with(".zip") || path_lower.ends_with(".cbz");
         let is_rar = path_lower.ends_with(".rar") || path_lower.ends_with(".cbr");
+        let is_7z = path_lower.ends_with(".7z") || path_lower.ends_with(".cb7");
         
-        if !is_zip && !is_rar {
+        if !is_zip && !is_rar && !is_7z {
             return Err(format!(
-                "暂不支持此压缩包格式: {} (支持 ZIP/CBZ/RAR/CBR)",
+                "暂不支持此压缩包格式: {} (支持 ZIP/CBZ/RAR/CBR/7Z/CB7)",
                 archive_path
             ));
         }
@@ -701,6 +703,10 @@ impl ThumbnailGenerator {
         // 根据格式选择不同的处理方式
         if is_rar {
             return self.generate_rar_archive_thumbnail(archive_path, &path_key, archive_size, ghash);
+        }
+        
+        if is_7z {
+            return self.generate_7z_archive_thumbnail(archive_path, &path_key, archive_size, ghash);
         }
 
         // ZIP 格式处理
@@ -967,6 +973,141 @@ impl ThumbnailGenerator {
             Err(format!("RAR 压缩包缩略图生成失败: {}", err))
         } else {
             Err("RAR 压缩包中没有找到图片文件".to_string())
+        }
+    }
+    
+    /// 从 7z 压缩包生成缩略图
+    fn generate_7z_archive_thumbnail(
+        &self,
+        archive_path: &str,
+        path_key: &str,
+        archive_size: i64,
+        ghash: i32,
+    ) -> Result<Vec<u8>, String> {
+        // 支持的图片扩展名
+        let image_exts = [
+            "jpg", "jpeg", "png", "gif", "bmp", "webp", "avif", "jxl", "tiff", "tif",
+        ];
+        
+        // 打开 7z 压缩包
+        let mut archive = sevenz_rust::SevenZReader::open(archive_path, "".into())
+            .map_err(|e| format!("打开 7z 压缩包失败: {}", e))?;
+        
+        let mut last_error: Option<String> = None;
+        let mut found_image_data: Option<(String, Vec<u8>)> = None;
+        
+        // 首先找到第一个图片文件的名称
+        let first_image_name = archive.archive().files.iter()
+            .filter(|entry| !entry.is_directory())
+            .find_map(|entry| {
+                let name = entry.name();
+                if let Some(ext) = Path::new(name)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.to_lowercase())
+                {
+                    if image_exts.contains(&ext.as_str()) {
+                        return Some(name.to_string());
+                    }
+                }
+                None
+            });
+        
+        if let Some(target_name) = first_image_name {
+            // 遍历并读取目标图片
+            archive.for_each_entries(|entry, reader| {
+                if entry.name() == target_name {
+                    let mut data = Vec::new();
+                    if let Err(e) = reader.read_to_end(&mut data) {
+                        last_error = Some(format!("读取 7z 条目失败: {}", e));
+                    } else {
+                        found_image_data = Some((target_name.clone(), data));
+                    }
+                    return Ok(false); // 停止遍历
+                }
+                Ok(true)
+            }).map_err(|e| format!("遍历 7z 条目失败: {}", e))?;
+        }
+        
+        if let Some((name, image_data)) = found_image_data {
+            let lower_name = name.to_lowercase();
+            let is_avif = lower_name.ends_with(".avif");
+            let is_jxl = lower_name.ends_with(".jxl");
+            
+            // 同步生成 webp 缩略图
+            let webp_data = if is_avif {
+                // AVIF: 写入临时文件后用 FFmpeg 处理
+                let temp_dir = std::env::temp_dir();
+                let temp_input = temp_dir.join(format!(
+                    "thumb_7z_avif_{}_{}.avif",
+                    std::process::id(),
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_nanos()
+                ));
+                
+                let result = if std::fs::write(&temp_input, &image_data).is_ok() {
+                    let r = Self::generate_webp_with_ffmpeg(
+                        &temp_input,
+                        &self.config,
+                        path_key,
+                    );
+                    let _ = std::fs::remove_file(&temp_input);
+                    r
+                } else {
+                    None
+                };
+                
+                result.or_else(|| {
+                    Self::decode_image_safe(&image_data)
+                        .ok()
+                        .and_then(|img| {
+                            Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
+                        })
+                })
+            } else if is_jxl {
+                Self::decode_jxl_image(&image_data)
+                    .ok()
+                    .and_then(|img| {
+                        Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
+                    })
+            } else {
+                Self::decode_image_safe(&image_data)
+                    .ok()
+                    .and_then(|img| {
+                        Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
+                    })
+            };
+            
+            if let Some(data) = webp_data {
+                // 保存到数据库
+                if let Err(e) = self.db.save_thumbnail(path_key, archive_size, ghash, &data) {
+                    eprintln!("❌ 保存 7z 缩略图到数据库失败: {} - {}", path_key, e);
+                } else {
+                    // 后台更新父文件夹缩略图
+                    let db_clone = Arc::clone(&self.db);
+                    let path_key_clone = path_key.to_string();
+                    let data_clone = data.clone();
+                    std::thread::spawn(move || {
+                        Self::update_parent_folders_thumbnail(
+                            &db_clone,
+                            &path_key_clone,
+                            &data_clone,
+                            MAX_PARENT_LEVELS,
+                        );
+                    });
+                }
+                return Ok(data);
+            } else {
+                last_error = Some(format!("生成缩略图失败: {}", name));
+            }
+        }
+        
+        if let Some(err) = last_error {
+            Err(format!("7z 压缩包缩略图生成失败: {}", err))
+        } else {
+            Err("7z 压缩包中没有找到图片文件".to_string())
         }
     }
 

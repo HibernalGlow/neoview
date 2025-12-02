@@ -329,6 +329,20 @@ function handleGoBack() {
 	if (result) {
 		// 使用 history 类型，这样 FolderStack 不会再次添加历史
 		navigationCommand.set({ type: 'history', path: result.path });
+	} else {
+		// 没有历史记录时，尝试导航到父目录
+		const currentPath = $tabCurrentPath;
+		if (currentPath) {
+			const normalized = currentPath.replace(/\\/g, '/');
+			const parts = normalized.split('/').filter(Boolean);
+			if (parts.length > 1) {
+				parts.pop();
+				// 保持 Windows 盘符格式
+				const parentPath = currentPath.includes(':') ? parts.join('/') : '/' + parts.join('/');
+				// 使用 init 重新初始化为父目录
+				navigationCommand.set({ type: 'init', path: parentPath });
+			}
+		}
 	}
 }
 
@@ -338,6 +352,31 @@ function handleGoForward() {
 	if (result) {
 		// 使用 history 类型，这样 FolderStack 不会再次添加历史
 		navigationCommand.set({ type: 'history', path: result.path });
+	}
+}
+
+// 处理返回上级（先检查后退历史是否是父路径，有则用历史导航，没有则直接导航）
+function handleGoUp() {
+	const currentPath = $tabCurrentPath;
+	if (!currentPath) return;
+	
+	const normalized = currentPath.replace(/\\/g, '/');
+	const parts = normalized.split('/').filter(Boolean);
+	if (parts.length <= 1) return; // 已经是根目录
+	
+	parts.pop();
+	// 保持 Windows 盘符格式
+	const parentPath = currentPath.includes(':') ? parts.join('/') : '/' + parts.join('/');
+	
+	// 检查后退一步是否就是父路径
+	const backResult = folderTabActions.peekBack();
+	if (backResult && backResult.path === parentPath) {
+		// 后退一步就是父路径，使用历史导航
+		folderTabActions.goBack();
+		navigationCommand.set({ type: 'history', path: parentPath });
+	} else {
+		// 没有历史或历史不是父路径，直接导航
+		navigationCommand.set({ type: 'init', path: parentPath });
 	}
 }
 
@@ -961,6 +1000,7 @@ onMount(() => {
 		onToggleFolderTree={handleToggleFolderTree}
 		onGoBack={handleGoBack}
 		onGoForward={handleGoForward}
+		onGoUp={handleGoUp}
 		onGoHome={handleGoHome}
 		onSetHome={handleSetHome}
 		onToggleDeleteStrategy={handleToggleDeleteStrategy}

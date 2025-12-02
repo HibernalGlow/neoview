@@ -83,6 +83,7 @@ interface Props {
 	onToggleFolderTree?: () => void;
 	onGoBack?: () => void;
 	onGoForward?: () => void;
+	onGoUp?: () => void;
 	onGoHome?: () => void;
 	onSetHome?: () => void;
 	onToggleDeleteStrategy?: () => void;
@@ -91,7 +92,7 @@ interface Props {
 	onToggleRandomTagBar?: () => void;
 }
 
-let { onRefresh, onToggleFolderTree, onGoBack, onGoForward, onGoHome, onSetHome, onToggleDeleteStrategy, onToggleInlineTree, showRandomTagBar = false, onToggleRandomTagBar }: Props = $props();
+let { onRefresh, onToggleFolderTree, onGoBack, onGoForward, onGoUp, onGoHome, onSetHome, onToggleDeleteStrategy, onToggleInlineTree, showRandomTagBar = false, onToggleRandomTagBar }: Props = $props();
 
 const viewStyles: { value: FolderViewStyle; icon: typeof List; label: string }[] = [
 	{ value: 'list', icon: List, label: '列表' },
@@ -125,8 +126,8 @@ function handleGoForward() {
 }
 
 function handleGoUp() {
-	// 在层叠模式下，返回上级等同于后退
-	onGoBack?.();
+	// 直接导航到父目录
+	onGoUp?.();
 }
 
 function handleGoHome() {
@@ -218,7 +219,7 @@ function cancelWarmup() {
 					variant="ghost"
 					size="icon"
 					class="h-7 w-7"
-					disabled={!$canGoBack}
+					disabled={!$canGoBack && !$canGoUp}
 					onclick={handleGoBack}
 				>
 					<ChevronLeft class="h-4 w-4" />

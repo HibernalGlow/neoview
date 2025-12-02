@@ -489,6 +489,16 @@ export const folderTabActions = {
 	},
 
 	/**
+	 * 查看后退一步的历史（不修改状态）
+	 */
+	peekBack(): { path: string } | null {
+		const tab = this.getActiveTab();
+		if (!tab || tab.historyIndex <= 0) return null;
+		const entry = tab.historyStack[tab.historyIndex - 1];
+		return entry ? { path: entry.path } : null;
+	},
+
+	/**
 	 * 后退
 	 */
 	goBack(): { path: string } | null {

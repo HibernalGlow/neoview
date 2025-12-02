@@ -1543,7 +1543,7 @@ impl ThumbnailDb {
 
         // 随机获取一些有 EMM 数据的记录
         let mut stmt = conn.prepare(
-            "SELECT emm_json FROM thumbnails WHERE emm_json IS NOT NULL ORDER BY RANDOM() LIMIT 50"
+            "SELECT emm_json FROM thumbs WHERE emm_json IS NOT NULL ORDER BY RANDOM() LIMIT 50"
         )?;
 
         let rows: Vec<String> = stmt

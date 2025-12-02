@@ -110,8 +110,8 @@
 	role="button"
 	tabindex="0"
 >
-	<!-- 缩略图区域 -->
-	<div class="bg-secondary relative aspect-3/4 w-full overflow-hidden">
+	<!-- 缩略图区域 - 自动扩展填充可用空间 -->
+	<div class="bg-secondary relative w-full flex-1 min-h-20 overflow-hidden">
 		{#if thumbnail}
 			<img
 				src={thumbnail}

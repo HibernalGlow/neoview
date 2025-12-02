@@ -73,7 +73,7 @@
 		isCheckMode?: boolean;
 		isDeleteMode?: boolean;
 		selectedItems?: Set<string>;
-		viewMode?: 'list' | 'thumbnails';
+		viewMode?: 'list' | 'content' | 'banner' | 'thumbnail';
 		scrollToSelectedToken?: number;
 		onSelectionChange?: (payload: { selectedItems: Set<string> }) => void;
 		onSelectedIndexChange?: (payload: { index: number }) => void;
@@ -398,8 +398,8 @@
 
 	// 监听视图模式变化，调整项目高度
 	$effect(() => {
-		// 列表视图：96px，网格视图：240px（包含缩略图和信息）
-		itemHeight = viewMode === 'list' ? 96 : 240;
+		// 列表/内容视图：96px，缩略图/横幅视图：180px（使用 4:3 比例）
+		itemHeight = (viewMode === 'list' || viewMode === 'content') ? 96 : 180;
 		calculateVisibleRange();
 	});
 
@@ -603,7 +603,7 @@
 						<FileItemCard
 							{item}
 							thumbnail={thumbnails.get(getThumbnailKey(item))}
-							viewMode="grid"
+							viewMode="thumbnail"
 							isSelected={rowSelected}
 							isChecked={isChecked}
 							{isCheckMode}

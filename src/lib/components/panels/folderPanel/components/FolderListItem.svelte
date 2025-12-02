@@ -181,7 +181,7 @@ function handleKeyDown(e: KeyboardEvent) {
 {:else if $viewStyle === 'content'}
 	<!-- 内容视图 -->
 	<div
-		class="group mx-1 my-1 flex cursor-pointer items-center gap-3 rounded-lg border bg-card p-2 transition-all duration-150 hover:bg-muted/50 hover:border-border {isSelected ? 'border-primary/40 bg-accent shadow-sm' : 'border-transparent'}"
+		class="group mx-1 my-1 flex cursor-pointer items-center gap-3 rounded-lg border border-border/50 bg-card p-2 transition-all duration-150 hover:bg-muted/50 hover:border-border {isSelected ? 'border-primary/40 bg-accent shadow-sm' : ''}"
 		onclick={handleClick}
 		ondblclick={handleDoubleClick}
 		oncontextmenu={handleContextMenu}
@@ -232,7 +232,7 @@ function handleKeyDown(e: KeyboardEvent) {
 {:else if $viewStyle === 'banner'}
 	<!-- 横幅视图 -->
 	<div
-		class="group mx-1 my-1 flex cursor-pointer flex-col overflow-hidden rounded-lg border transition-all duration-150 hover:shadow-md {isSelected ? 'border-primary/40 ring-2 ring-primary/20 shadow-sm' : 'border-border hover:border-border'}"
+		class="group mx-1 my-1 flex cursor-pointer flex-col overflow-hidden rounded-lg border border-border/50 bg-card transition-all duration-150 hover:shadow-md hover:border-border {isSelected ? 'border-primary/40 ring-2 ring-primary/20 shadow-sm' : ''}"
 		onclick={handleClick}
 		ondblclick={handleDoubleClick}
 		oncontextmenu={handleContextMenu}

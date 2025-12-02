@@ -47,8 +47,8 @@ let loadingFolders = $state(new Set<string>());
 // 缩略图
 let thumbnails = $derived(fileBrowserStore.getState().thumbnails);
 
-// 视图模式
-let viewMode = $derived(($viewStyle === 'thumbnail' ? 'grid' : 'list') as 'list' | 'grid');
+// 视图模式 - 支持 list/content/banner/thumbnail 四种模式
+let viewMode = $derived($viewStyle as 'list' | 'content' | 'banner' | 'thumbnail');
 
 // 加载根目录内容
 async function loadRootItems(path: string) {

@@ -121,8 +121,8 @@ let {
 // 缩略图
 let thumbnails = $derived(fileBrowserStore.getState().thumbnails);
 
-// 视图模式
-let viewMode = $derived(($viewStyle === 'thumbnail' ? 'grid' : 'list') as 'list' | 'grid');
+// 视图模式 - 支持 list/content/banner/thumbnail 四种模式
+let viewMode = $derived($viewStyle as 'list' | 'content' | 'banner' | 'thumbnail');
 
 // 加载缩略图 - 参考 FolderStack 的优化实现
 $effect(() => {
@@ -198,7 +198,7 @@ $effect(() => {
 				<div class="text-muted-foreground text-xs mb-2 px-2">
 					找到 {sortedResults.length} 个结果
 				</div>
-				<div class={viewMode === 'grid' ? 'grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-2' : 'flex flex-col gap-1'}>
+				<div class={viewMode === 'thumbnail' ? 'grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-2' : 'flex flex-col gap-1'}>
 					{#each sortedResults as item (item.path)}
 						<div class="search-result-item">
 							<FileItemCard

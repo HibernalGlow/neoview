@@ -107,8 +107,8 @@ let selectedIndex = $state(-1);
 // 缩略图 Map（从 fileBrowserStore 获取）
 let thumbnails = $derived(fileBrowserStore.getState().thumbnails);
 
-// 视图模式映射
-let viewMode = $derived(($viewStyle === 'thumbnail' ? 'thumbnails' : 'list') as 'list' | 'thumbnails');
+// 视图模式映射 - 支持 list/content/banner/thumbnail 四种模式
+let viewMode = $derived($viewStyle as 'list' | 'content' | 'banner' | 'thumbnail');
 
 // 处理选中变化
 function handleSelectionChange(payload: { selectedItems: Set<string> }) {

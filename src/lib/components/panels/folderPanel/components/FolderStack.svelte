@@ -90,8 +90,8 @@ $effect(() => {
 	return unsubscribe;
 });
 
-// 视图模式映射
-let viewMode = $derived(($viewStyle === 'thumbnail' ? 'thumbnails' : 'list') as 'list' | 'thumbnails');
+// 视图模式映射 - 支持 list/content/banner/thumbnail 四种模式
+let viewMode = $derived($viewStyle as 'list' | 'content' | 'banner' | 'thumbnail');
 
 // 将路径转换为相对 key（用于缩略图存储）- 与老面板保持一致
 function toRelativeKey(path: string): string {

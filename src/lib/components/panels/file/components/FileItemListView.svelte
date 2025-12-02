@@ -120,7 +120,7 @@
 </script>
 
 <div
-	class="border-border group relative flex cursor-pointer items-center gap-3 rounded-md border p-2 transition-colors {isSelected
+	class="border-border group relative flex min-h-16 cursor-pointer items-center gap-3 rounded-md border p-2 transition-colors {isSelected
 		? 'bg-accent text-accent-foreground border-accent'
 		: 'hover:bg-accent/40'}"
 	onclick={(e) => {
@@ -181,7 +181,7 @@
 	<!-- 缩略图或图标（带悬停预览） -->
 	<Tooltip.Root delayDuration={$hoverPreviewDelayMs}>
 		<Tooltip.Trigger>
-			<div class="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded">
+			<div class="relative flex w-12 self-stretch shrink-0 items-center justify-center overflow-hidden rounded">
 				{#if thumbnail}
 					<img
 						src={thumbnail}

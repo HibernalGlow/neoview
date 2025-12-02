@@ -20,7 +20,7 @@
 	let {
 		item,
 		thumbnail = undefined,
-		viewMode = 'list' as 'list' | 'grid',
+		viewMode = 'list' as 'list' | 'content' | 'banner' | 'thumbnail',
 		isSelected = false,
 		isCheckMode = false,
 		isDeleteMode = false,
@@ -40,7 +40,7 @@
 	}: {
 		item: FsItem;
 		thumbnail?: string;
-		viewMode?: 'list' | 'grid';
+		viewMode?: 'list' | 'content' | 'banner' | 'thumbnail';
 		isSelected?: boolean;
 		isChecked?: boolean;
 		isCheckMode?: boolean;
@@ -344,7 +344,8 @@
 	);
 </script>
 
-{#if viewMode === 'list'}
+{#if viewMode === 'list' || viewMode === 'content'}
+	<!-- 列表视图和内容视图使用 FileItemListView -->
 	<FileItemListView
 		{item}
 		{thumbnail}
@@ -353,7 +354,7 @@
 		{isCheckMode}
 		{isDeleteMode}
 		{showReadMark}
-		{showSizeAndModified}
+		showSizeAndModified={viewMode === 'content' || showSizeAndModified}
 		{currentPage}
 		{totalPages}
 		{timestamp}
@@ -384,6 +385,7 @@
 		}}
 	/>
 {:else}
+	<!-- 横幅视图和缩略图视图使用 FileItemGridView -->
 	<FileItemGridView
 		{item}
 		{thumbnail}

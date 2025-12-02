@@ -20,6 +20,7 @@ import InlineTreeList from './components/InlineTreeList.svelte';
 import SearchResultList from './components/SearchResultList.svelte';
 import SearchBar from '$lib/components/ui/SearchBar.svelte';
 import FolderTabBar from './components/FolderTabBar.svelte';
+import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
 import { directoryTreeCache } from './utils/directoryTreeCache';
 import { bookStore } from '$lib/stores/book.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
@@ -379,56 +380,64 @@ function handleToggleMigrationManager() {
 // 剪贴板状态
 let clipboardItem = $state<{ paths: string[]; operation: 'copy' | 'cut' } | null>(null);
 
-// 处理删除（勾选模式下批量删除，删除模式下不需要确认）
-async function handleDelete(item: FsItem) {
+// 确认对话框状态
+let confirmDialogOpen = $state(false);
+let confirmDialogTitle = $state('');
+let confirmDialogDescription = $state('');
+let confirmDialogConfirmText = $state('确定');
+let confirmDialogVariant = $state<'default' | 'destructive' | 'warning'>('default');
+let confirmDialogOnConfirm = $state<() => void>(() => {});
+
+// 显示确认对话框
+function openConfirmDialog(config: {
+	title: string;
+	description: string;
+	confirmText?: string;
+	variant?: 'default' | 'destructive' | 'warning';
+	onConfirm: () => void;
+}) {
+	confirmDialogTitle = config.title;
+	confirmDialogDescription = config.description;
+	confirmDialogConfirmText = config.confirmText || '确定';
+	confirmDialogVariant = config.variant || 'default';
+	confirmDialogOnConfirm = config.onConfirm;
+	confirmDialogOpen = true;
+}
+
+// 执行批量删除
+async function executeBatchDelete(paths: string[]) {
 	const strategy = $deleteStrategy;
 	const actionText = strategy === 'trash' ? '删除' : '永久删除';
-	const selected = $selectedItems;
 	
-	// 勾选模式下且有选中项时，批量删除选中项
-	if ($multiSelectMode && selected.size > 0) {
-		// 确保当前项也在选中列表中
-		if (!selected.has(item.path)) {
-			selected.add(item.path);
-		}
-		
-		const paths = Array.from(selected);
-		const confirmMessage = `确定要${actionText}选中的 ${paths.length} 个项目吗？`;
-		if (!confirm(confirmMessage)) return;
-		
-		// 批量删除
-		let successCount = 0;
-		for (const path of paths) {
-			try {
-				folderTabActions.removeItem(path);
-				if (strategy === 'trash') {
-					await FileSystemAPI.moveToTrash(path);
-				} else {
-					await FileSystemAPI.deletePath(path);
-				}
-				successCount++;
-			} catch (err) {
-				console.error('删除失败:', path, err);
+	let successCount = 0;
+	for (const path of paths) {
+		try {
+			folderTabActions.removeItem(path);
+			if (strategy === 'trash') {
+				await FileSystemAPI.moveToTrash(path);
+			} else {
+				await FileSystemAPI.deletePath(path);
 			}
+			successCount++;
+		} catch (err) {
+			console.error('删除失败:', path, err);
 		}
-		
-		folderTabActions.deselectAll();
-		if (successCount === paths.length) {
-			showSuccessToast(`${actionText}成功`, `已${actionText} ${successCount} 个文件`);
-		} else {
-			showErrorToast(`部分${actionText}失败`, `成功 ${successCount}/${paths.length}`);
-			handleRefresh();
-		}
-		return;
 	}
 	
-	// 单个删除
-	// 删除模式下不弹确认框，其他情况需要确认
-	if (!$deleteMode) {
-		const confirmMessage = `确定要${actionText} "${item.name}" 吗？`;
-		if (!confirm(confirmMessage)) return;
+	folderTabActions.deselectAll();
+	if (successCount === paths.length) {
+		showSuccessToast(`${actionText}成功`, `已${actionText} ${successCount} 个文件`);
+	} else {
+		showErrorToast(`部分${actionText}失败`, `成功 ${successCount}/${paths.length}`);
+		handleRefresh();
 	}
+}
 
+// 执行单个删除
+async function executeSingleDelete(item: FsItem) {
+	const strategy = $deleteStrategy;
+	const actionText = strategy === 'trash' ? '删除' : '永久删除';
+	
 	// 立即从列表中移除（乐观更新）
 	folderTabActions.removeItem(item.path);
 
@@ -442,13 +451,51 @@ async function handleDelete(item: FsItem) {
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		showErrorToast(`${actionText}失败`, message);
-		// 删除失败时刷新恢复列表
 		handleRefresh();
 	}
 }
 
-// 处理批量删除（删除模式下）
-async function handleBatchDelete() {
+// 处理删除（勾选模式下批量删除，删除模式下不需要确认）
+function handleDelete(item: FsItem) {
+	const strategy = $deleteStrategy;
+	const actionText = strategy === 'trash' ? '删除' : '永久删除';
+	const selected = $selectedItems;
+	
+	// 勾选模式下且有选中项时，批量删除选中项
+	if ($multiSelectMode && selected.size > 0) {
+		// 确保当前项也在选中列表中
+		if (!selected.has(item.path)) {
+			selected.add(item.path);
+		}
+		
+		const paths = Array.from(selected);
+		openConfirmDialog({
+			title: `${actionText}确认`,
+			description: `确定要${actionText}选中的 ${paths.length} 个项目吗？`,
+			confirmText: actionText,
+			variant: 'destructive',
+			onConfirm: () => executeBatchDelete(paths)
+		});
+		return;
+	}
+	
+	// 单个删除
+	// 删除模式下不弹确认框，其他情况需要确认
+	if ($deleteMode) {
+		executeSingleDelete(item);
+	} else {
+		openConfirmDialog({
+			title: `${actionText}确认`,
+			description: `确定要${actionText} "${item.name}" 吗？`,
+			confirmText: actionText,
+			variant: 'destructive',
+			onConfirm: () => executeSingleDelete(item)
+		});
+	}
+}
+
+// 处理批量删除（从操作栏调用）
+function handleBatchDelete() {
 	const selected = $selectedItems;
 	if (selected.size === 0) {
 		showErrorToast('没有选中的文件', '请先选择要删除的文件');
@@ -458,24 +505,14 @@ async function handleBatchDelete() {
 	const strategy = $deleteStrategy;
 	const actionText = strategy === 'trash' ? '删除' : '永久删除';
 	const paths = Array.from(selected);
-	const confirmMessage = `确定要${actionText}选中的 ${paths.length} 个项目吗？`;
-	if (!confirm(confirmMessage)) return;
-
-	try {
-		for (const path of paths) {
-			if (strategy === 'trash') {
-				await FileSystemAPI.moveToTrash(path);
-			} else {
-				await FileSystemAPI.deletePath(path);
-			}
-		}
-		showSuccessToast(`${actionText}成功`, `已${actionText} ${paths.length} 个文件`);
-		folderTabActions.deselectAll();
-		handleRefresh();
-	} catch (err) {
-		const message = err instanceof Error ? err.message : String(err);
-		showErrorToast(`${actionText}失败`, message);
-	}
+	
+	openConfirmDialog({
+		title: `${actionText}确认`,
+		description: `确定要${actionText}选中的 ${paths.length} 个项目吗？`,
+		confirmText: actionText,
+		variant: 'destructive',
+		onConfirm: () => executeBatchDelete(paths)
+	});
 }
 
 // 处理剪切
@@ -796,6 +833,16 @@ onMount(() => {
 	onCopyName={handleCopyName}
 	onOpenInExplorer={handleOpenInExplorer}
 	onOpenWithSystem={handleOpenWithSystem}
+/>
+
+<!-- 确认对话框 -->
+<ConfirmDialog
+	bind:open={confirmDialogOpen}
+	title={confirmDialogTitle}
+	description={confirmDialogDescription}
+	confirmText={confirmDialogConfirmText}
+	variant={confirmDialogVariant}
+	onConfirm={confirmDialogOnConfirm}
 />
 
 <style>

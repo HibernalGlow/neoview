@@ -25,6 +25,8 @@ import FolderTabBar from './components/FolderTabBar.svelte';
 import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
 import FavoriteTagPanel from './components/FavoriteTagPanel.svelte';
 import { favoriteTagStore, createTagValue, mixedGenderStore, parseSearchTags, hasTagSearch, removeTagsFromSearch, letter2cat, cat2letter, categoryColors, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
+import { findEMMTranslationFile, loadEMMTranslationDict, type EMMTranslationDict } from '$lib/api/emm';
+import { emmTranslationStore } from '$lib/stores/emm/translation';
 import { invoke } from '@tauri-apps/api/core';
 import { directoryTreeCache } from './utils/directoryTreeCache';
 import { bookStore } from '$lib/stores/book.svelte';
@@ -508,47 +510,77 @@ let showFavoriteTagPanel = $state(false);
 
 // 随机标签栏状态
 let showRandomTagBar = $state(false);
-let randomTags = $state<FavoriteTag[]>([]);
 
+// 扩展标签类型，标记是否是收藏标签
+interface RandomTag extends FavoriteTag {
+	isCollect: boolean;
+}
+let randomTags = $state<RandomTag[]>([]);
+
+// 翻译字典缓存
+let translationDict = $state<EMMTranslationDict | undefined>(undefined);
+
+// 加载翻译字典
+async function loadTranslationDict() {
+	if (translationDict) return translationDict;
+	try {
+		const filePath = await findEMMTranslationFile();
+		if (filePath) {
+			translationDict = await loadEMMTranslationDict(filePath);
+		}
+	} catch (err) {
+		console.warn('[FolderPanel] 加载翻译字典失败:', err);
+	}
+	return translationDict;
+}
 
 // 刷新随机标签（从数据库获取普通标签 + 收藏标签）
 async function refreshRandomTags() {
 	try {
+		// 加载翻译字典
+		const dict = await loadTranslationDict();
+		
 		// 从后端获取随机标签
 		const dbTags: [string, string][] = await invoke('get_random_emm_tags', { count: 10 });
 		
-		// 转换为 FavoriteTag 格式
-		const normalTags: FavoriteTag[] = dbTags.map(([cat, tag]) => {
-			const letter = cat2letter[cat] || cat[0];
-			return {
-				id: `${cat}:${tag}`,
-				cat,
-				tag,
-				letter,
-				display: `${letter}:${tag}`,
-				value: createTagValue(cat, tag),
-				color: categoryColors[cat] || '#666'
-			};
-		});
+		// 收藏标签 ID 集合
+		const collectTagIds = new Set(favoriteTagStore.tags.map(t => t.id));
 		
-		// 合并收藏标签（随机选几个）
-		const collectTags = favoriteTagStore.tags;
-		const shuffledCollect = [...collectTags].sort(() => Math.random() - 0.5).slice(0, 3);
+		// 转换为 RandomTag 格式（翻译普通标签）
+		const normalTags: RandomTag[] = dbTags
+			.filter(([cat, tag]) => !collectTagIds.has(`${cat}:${tag}`)) // 排除已收藏的
+			.map(([cat, tag]) => {
+				const letter = cat2letter[cat] || cat[0];
+				const translated = emmTranslationStore.translateTag(tag, cat, dict);
+				return {
+					id: `${cat}:${tag}`,
+					cat,
+					tag,
+					letter,
+					display: `${letter}:${translated}`,
+					value: createTagValue(cat, tag),
+					color: categoryColors[cat] || '#888',
+					isCollect: false
+				};
+			});
 		
-		// 合并并去重
-		const allTags = [...shuffledCollect, ...normalTags];
-		const seen = new Set<string>();
-		randomTags = allTags.filter(t => {
-			if (seen.has(t.id)) return false;
-			seen.add(t.id);
-			return true;
-		}).slice(0, 8);
+		// 收藏标签（随机选几个）
+		const collectTags: RandomTag[] = favoriteTagStore.tags
+			.sort(() => Math.random() - 0.5)
+			.slice(0, 3)
+			.map(t => ({ ...t, isCollect: true }));
+		
+		// 合并：收藏标签在前
+		randomTags = [...collectTags, ...normalTags].slice(0, 8);
 	} catch (err) {
 		console.warn('[FolderPanel] 获取随机标签失败:', err);
 		// 回退到只使用收藏标签
 		const allTags = favoriteTagStore.tags;
 		const count = Math.min(5, allTags.length);
-		randomTags = [...allTags].sort(() => Math.random() - 0.5).slice(0, count);
+		randomTags = [...allTags]
+			.sort(() => Math.random() - 0.5)
+			.slice(0, count)
+			.map(t => ({ ...t, isCollect: true }));
 	}
 }
 
@@ -993,8 +1025,8 @@ onMount(() => {
 						tag={tag.id}
 						category={tag.cat}
 						display={tag.display}
-						color={tag.color}
-						isCollect={true}
+						color={tag.isCollect ? tag.color : undefined}
+						isCollect={tag.isCollect}
 						onClick={() => handleRandomTagClick(tag)}
 					/>
 				{/each}

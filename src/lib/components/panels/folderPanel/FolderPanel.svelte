@@ -240,15 +240,17 @@ async function handleOpenInNewTab(item: FsItem) {
 	console.log('[FolderPanel] handleOpenInNewTab:', item.path, 'isDir:', item.isDir);
 	
 	if (item.isDir) {
-		// 文件夹：在新标签页打开
-		const newTabId = folderTabActions.createTab(item.path);
-		folderTabActions.switchTab(newTabId);
+		// 文件夹：创建新标签页并导航到该路径
+		folderTabActions.createTab(item.path);
+		// 触发加载
+		navigationCommand.set({ type: 'push', path: item.path });
 	} else {
 		// 文件：在新标签页打开父目录
 		const lastSep = Math.max(item.path.lastIndexOf('/'), item.path.lastIndexOf('\\'));
 		const parentPath = lastSep > 0 ? item.path.substring(0, lastSep) : item.path;
-		const newTabId = folderTabActions.createTab(parentPath);
-		folderTabActions.switchTab(newTabId);
+		folderTabActions.createTab(parentPath);
+		// 触发加载
+		navigationCommand.set({ type: 'push', path: parentPath });
 		// 打开文件
 		await handleItemOpen(item);
 	}

@@ -97,6 +97,7 @@ const viewStyles: { value: FolderViewStyle; icon: typeof List; label: string }[]
 
 const sortFields: { value: FolderSortField; label: string; icon: typeof ALargeSmall }[] = [
 	{ value: 'name', label: '名称', icon: ALargeSmall },
+	{ value: 'path', label: '路径', icon: FolderTree },
 	{ value: 'date', label: '日期', icon: Calendar },
 	{ value: 'size', label: '大小', icon: HardDrive },
 	{ value: 'type', label: '类型', icon: FileType },

@@ -46,6 +46,15 @@ let sortedResults = $derived.by(() => {
 				const extB = b.name.includes('.') ? b.name.split('.').pop() || '' : '';
 				cmp = extA.localeCompare(extB);
 				break;
+			case 'rating':
+				cmp = (a.rating || 0) - (b.rating || 0);
+				break;
+			case 'path':
+				cmp = a.path.localeCompare(b.path, 'zh-CN', { numeric: true });
+				break;
+			case 'random':
+				cmp = Math.random() - 0.5;
+				break;
 			default:
 				cmp = a.name.localeCompare(b.name, 'zh-CN', { numeric: true });
 		}

@@ -35,6 +35,7 @@ import {
 	Star
 } from '@lucide/svelte';
 import { hoverPreviewSettings, hoverPreviewEnabled, hoverPreviewDelayMs } from '$lib/stores/hoverPreviewSettings.svelte';
+import { getDefaultRating, saveDefaultRating } from '$lib/stores/emm/storage';
 import { folderThumbnailLoader, type WarmupProgress } from '$lib/utils/thumbnail';
 import * as Progress from '$lib/components/ui/progress';
 import { Button } from '$lib/components/ui/button';
@@ -496,6 +497,44 @@ function cancelWarmup() {
 								1200ms (很慢)
 							</DropdownMenu.RadioItem>
 						</DropdownMenu.RadioGroup>
+					</DropdownMenu.SubContent>
+				</DropdownMenu.Sub>
+				<!-- 默认评分设置 -->
+				<DropdownMenu.Sub>
+					<DropdownMenu.SubTrigger>
+						<Star class="mr-2 h-4 w-4" />
+						默认评分 ({getDefaultRating().toFixed(1)})
+					</DropdownMenu.SubTrigger>
+					<DropdownMenu.SubContent>
+						<DropdownMenu.Label class="text-xs text-muted-foreground">无评分项目的默认值</DropdownMenu.Label>
+						<div class="px-2 py-1">
+							<input
+								type="number"
+								min="0"
+								max="5"
+								step="0.1"
+								value={getDefaultRating()}
+								onchange={(e) => {
+									const value = parseFloat((e.target as HTMLInputElement).value);
+									if (!isNaN(value) && value >= 0 && value <= 5) {
+										saveDefaultRating(value);
+									}
+								}}
+								class="w-full h-7 px-2 text-sm rounded border bg-background"
+							/>
+						</div>
+						<DropdownMenu.Separator />
+						<DropdownMenu.Label class="text-xs text-muted-foreground">快捷选择</DropdownMenu.Label>
+						<div class="flex gap-1 px-2 py-1">
+							{#each [3.0, 3.5, 4.0, 4.2, 4.5, 5.0] as rating}
+								<button
+									class="px-2 py-0.5 text-xs rounded hover:bg-accent {getDefaultRating() === rating ? 'bg-primary text-primary-foreground' : ''}"
+									onclick={() => saveDefaultRating(rating)}
+								>
+									{rating}
+								</button>
+							{/each}
+						</div>
 					</DropdownMenu.SubContent>
 				</DropdownMenu.Sub>
 				<DropdownMenu.Separator />

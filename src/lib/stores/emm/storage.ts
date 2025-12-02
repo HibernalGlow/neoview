@@ -14,7 +14,7 @@ export const STORAGE_KEYS = {
 } as const;
 
 /** 默认评分值（用于无评分时的排序） */
-export const DEFAULT_RATING_VALUE = 4.6;
+export const DEFAULT_RATING_VALUE = 4.2;
 
 export interface EMMStorageSettings {
 	databasePaths: string[];

@@ -1064,26 +1064,14 @@ onMount(() => {
 			</div>
 		{/if}
 
-		<!-- 分隔条（始终显示，可拖拽展开/调整文件树） -->
-		<div
-			class="bg-border hover:bg-primary absolute z-10 transition-colors"
-			class:cursor-ns-resize={$folderTreeConfig.layout === 'top'}
-			class:cursor-ew-resize={$folderTreeConfig.layout === 'left'}
-			style={$folderTreeConfig.layout === 'top'
-				? `top: ${$folderTreeConfig.visible ? $folderTreeConfig.size : 0}px; left: 0; right: 0; height: 6px;`
-				: `top: 0; left: ${$folderTreeConfig.visible ? $folderTreeConfig.size : 0}px; bottom: 0; width: 6px;`}
-		></div>
-
 		<!-- 文件列表（层叠式）- 每个页签独立实例，切换时显示/隐藏 -->
 		<div
 			class="file-list-container absolute inset-0 overflow-hidden"
 			style={$folderTreeConfig.visible
 				? $folderTreeConfig.layout === 'top'
-					? `top: ${$folderTreeConfig.size + 6}px;`
-					: `left: ${$folderTreeConfig.size + 6}px;`
-				: $folderTreeConfig.layout === 'top'
-					? 'top: 6px;'
-					: 'left: 6px;'}
+					? `top: ${$folderTreeConfig.size}px;`
+					: `left: ${$folderTreeConfig.size}px;`
+				: ''}
 		>
 			<!-- 每个页签独立的 FolderStack 实例 -->
 			{#each currentAllTabs as tab (tab.id)}

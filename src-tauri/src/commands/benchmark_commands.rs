@@ -406,6 +406,154 @@ pub struct ArchiveScanResult {
     pub folder_path: String,
 }
 
+/// 详细分步计时结果
+#[derive(Serialize, Clone)]
+pub struct DetailedBenchmarkResult {
+    pub method: String,
+    pub format: String,
+    pub extract_ms: f64,      // 解压用时
+    pub decode_ms: f64,       // 解码用时
+    pub scale_ms: f64,        // 缩放用时
+    pub encode_ms: f64,       // 编码用时
+    pub total_ms: f64,        // 总用时
+    pub success: bool,
+    pub error: Option<String>,
+    pub input_size: usize,    // 输入大小
+    pub output_size: Option<usize>,  // 输出大小
+    pub original_dims: Option<(u32, u32)>,  // 原始尺寸
+    pub output_dims: Option<(u32, u32)>,    // 输出尺寸
+}
+
+/// 详细分步对比测试（比较 WIC 内置缩放 vs 传统方法）
+#[command]
+pub async fn run_detailed_benchmark(image_path: String) -> Result<Vec<DetailedBenchmarkResult>, String> {
+    use std::fs;
+    use image::{GenericImageView, ImageFormat};
+    use std::io::Cursor;
+    
+    let path = PathBuf::from(&image_path);
+    let ext = path.extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    
+    // 读取图像数据
+    let start_read = Instant::now();
+    let image_data = fs::read(&path).map_err(|e| format!("读取文件失败: {}", e))?;
+    let read_ms = start_read.elapsed().as_secs_f64() * 1000.0;
+    let input_size = image_data.len();
+    
+    let mut results = Vec::new();
+    
+    // 方法 1: WIC 全尺寸解码 + image crate 缩放
+    #[cfg(target_os = "windows")]
+    {
+        use crate::core::wic_decoder::{decode_image_from_memory_with_wic, wic_result_to_dynamic_image};
+        
+        let start_total = Instant::now();
+        
+        // 解码
+        let start_decode = Instant::now();
+        let decode_result = decode_image_from_memory_with_wic(&image_data);
+        let decode_ms = start_decode.elapsed().as_secs_f64() * 1000.0;
+        
+        if let Ok(wic_result) = decode_result {
+            let orig_dims = (wic_result.width, wic_result.height);
+            
+            // 转换为 DynamicImage
+            let start_convert = Instant::now();
+            let img = wic_result_to_dynamic_image(wic_result);
+            let convert_ms = start_convert.elapsed().as_secs_f64() * 1000.0;
+            
+            if let Ok(img) = img {
+                // 缩放
+                let start_scale = Instant::now();
+                let (w, h) = img.dimensions();
+                let max_size = 200u32;
+                let scale = (max_size as f32 / w as f32).min(max_size as f32 / h as f32).min(1.0);
+                let new_w = (w as f32 * scale) as u32;
+                let new_h = (h as f32 * scale) as u32;
+                let thumbnail = img.thumbnail(new_w, new_h);
+                let scale_ms = start_scale.elapsed().as_secs_f64() * 1000.0;
+                
+                // 编码
+                let start_encode = Instant::now();
+                let mut output = Vec::new();
+                let encode_result = thumbnail.write_to(&mut Cursor::new(&mut output), ImageFormat::WebP);
+                let encode_ms = start_encode.elapsed().as_secs_f64() * 1000.0;
+                
+                let total_ms = start_total.elapsed().as_secs_f64() * 1000.0;
+                
+                results.push(DetailedBenchmarkResult {
+                    method: "WIC全尺寸+image缩放".to_string(),
+                    format: ext.clone(),
+                    extract_ms: read_ms,
+                    decode_ms: decode_ms + convert_ms,
+                    scale_ms,
+                    encode_ms,
+                    total_ms,
+                    success: encode_result.is_ok(),
+                    error: encode_result.err().map(|e| e.to_string()),
+                    input_size,
+                    output_size: Some(output.len()),
+                    original_dims: Some(orig_dims),
+                    output_dims: Some((new_w, new_h)),
+                });
+            }
+        }
+    }
+    
+    // 方法 2: WIC 内置缩放（推荐）
+    #[cfg(target_os = "windows")]
+    {
+        use crate::core::wic_decoder::{decode_and_scale_with_wic, wic_result_to_dynamic_image};
+        
+        let start_total = Instant::now();
+        
+        // 解码+缩放（一步完成）
+        let start_decode_scale = Instant::now();
+        let result = decode_and_scale_with_wic(&image_data, 200, 200);
+        let decode_scale_ms = start_decode_scale.elapsed().as_secs_f64() * 1000.0;
+        
+        if let Ok(wic_result) = result {
+            let output_dims = (wic_result.width, wic_result.height);
+            
+            // 转换
+            let start_convert = Instant::now();
+            let img = wic_result_to_dynamic_image(wic_result);
+            let convert_ms = start_convert.elapsed().as_secs_f64() * 1000.0;
+            
+            if let Ok(img) = img {
+                // 编码
+                let start_encode = Instant::now();
+                let mut output = Vec::new();
+                let encode_result = img.write_to(&mut Cursor::new(&mut output), ImageFormat::WebP);
+                let encode_ms = start_encode.elapsed().as_secs_f64() * 1000.0;
+                
+                let total_ms = start_total.elapsed().as_secs_f64() * 1000.0;
+                
+                results.push(DetailedBenchmarkResult {
+                    method: "WIC内置缩放(推荐)".to_string(),
+                    format: ext.clone(),
+                    extract_ms: read_ms,
+                    decode_ms: decode_scale_ms,
+                    scale_ms: 0.0, // 缩放已包含在解码中
+                    encode_ms: encode_ms + convert_ms,
+                    total_ms,
+                    success: encode_result.is_ok(),
+                    error: encode_result.err().map(|e| e.to_string()),
+                    input_size,
+                    output_size: Some(output.len()),
+                    original_dims: None, // WIC 内置缩放不返回原始尺寸
+                    output_dims: Some(output_dims),
+                });
+            }
+        }
+    }
+    
+    Ok(results)
+}
+
 /// 文件夹批量压缩包基准测试
 #[command]
 pub async fn run_archive_folder_benchmark(folder_path: String, tier: u32) -> Result<Vec<BenchmarkReport>, String> {

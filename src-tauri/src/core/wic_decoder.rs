@@ -8,9 +8,10 @@ use windows::{
         Foundation::GENERIC_READ,
         Graphics::Imaging::{
             CLSID_WICImagingFactory, IWICBitmapDecoder, IWICBitmapFrameDecode,
-            IWICBitmapSource, IWICFormatConverter, IWICImagingFactory,
+            IWICBitmapSource, IWICFormatConverter, IWICImagingFactory, IWICBitmapScaler,
             WICDecodeMetadataCacheOnDemand, WICBitmapDitherTypeNone,
             WICBitmapPaletteTypeCustom, GUID_WICPixelFormat32bppBGRA,
+            WICBitmapInterpolationModeFant,
         },
         System::Com::{CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED},
     },
@@ -201,6 +202,121 @@ pub fn decode_image_from_memory_with_wic(data: &[u8]) -> Result<WicDecodeResult,
             pixels,
         })
     }
+}
+
+/// 使用 WIC 从内存解码图像并缩放到指定大小（高性能版本）
+/// 使用 WIC 内置缩放器，避免解码到全分辨率再缩放
+#[cfg(target_os = "windows")]
+pub fn decode_and_scale_with_wic(data: &[u8], max_width: u32, max_height: u32) -> Result<WicDecodeResult, String> {
+    use windows::Win32::Graphics::Imaging::IWICStream;
+    use windows::Win32::System::Com::IStream;
+    use windows::core::Interface;
+
+    unsafe {
+        // 初始化 COM
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+
+        // 创建 WIC 工厂
+        let factory: IWICImagingFactory = CoCreateInstance(
+            &CLSID_WICImagingFactory,
+            None,
+            CLSCTX_INPROC_SERVER,
+        )
+        .map_err(|e| format!("创建 WIC 工厂失败: {:?}", e))?;
+
+        // 创建 WIC 流
+        let stream: IWICStream = factory
+            .CreateStream()
+            .map_err(|e| format!("创建流失败: {:?}", e))?;
+
+        // 从内存初始化流
+        stream
+            .InitializeFromMemory(data)
+            .map_err(|e| format!("初始化流失败: {:?}", e))?;
+
+        // 转换为 IStream
+        let istream: IStream = stream.cast()
+            .map_err(|e| format!("转换流失败: {:?}", e))?;
+
+        // 创建解码器
+        let decoder: IWICBitmapDecoder = factory
+            .CreateDecoderFromStream(
+                &istream,
+                std::ptr::null(),
+                WICDecodeMetadataCacheOnDemand,
+            )
+            .map_err(|e| format!("创建解码器失败: {:?}", e))?;
+
+        // 获取第一帧
+        let frame: IWICBitmapFrameDecode = decoder
+            .GetFrame(0)
+            .map_err(|e| format!("获取帧失败: {:?}", e))?;
+
+        // 获取原始尺寸
+        let mut orig_width = 0u32;
+        let mut orig_height = 0u32;
+        frame
+            .GetSize(&mut orig_width, &mut orig_height)
+            .map_err(|e| format!("获取尺寸失败: {:?}", e))?;
+
+        // 计算缩放后的尺寸（保持宽高比）
+        let scale = (max_width as f32 / orig_width as f32)
+            .min(max_height as f32 / orig_height as f32)
+            .min(1.0);
+        let new_width = ((orig_width as f32 * scale) as u32).max(1);
+        let new_height = ((orig_height as f32 * scale) as u32).max(1);
+
+        // 创建缩放器
+        let scaler: IWICBitmapScaler = factory
+            .CreateBitmapScaler()
+            .map_err(|e| format!("创建缩放器失败: {:?}", e))?;
+
+        // 初始化缩放器（使用 Fant 插值，快速且质量较好）
+        scaler
+            .Initialize(&frame, new_width, new_height, WICBitmapInterpolationModeFant)
+            .map_err(|e| format!("初始化缩放器失败: {:?}", e))?;
+
+        // 创建格式转换器（转为 BGRA）
+        let converter: IWICFormatConverter = factory
+            .CreateFormatConverter()
+            .map_err(|e| format!("创建格式转换器失败: {:?}", e))?;
+
+        converter
+            .Initialize(
+                &scaler,
+                &GUID_WICPixelFormat32bppBGRA,
+                WICBitmapDitherTypeNone,
+                None,
+                0.0,
+                WICBitmapPaletteTypeCustom,
+            )
+            .map_err(|e| format!("初始化格式转换器失败: {:?}", e))?;
+
+        // 分配像素缓冲区
+        let stride = new_width * 4;
+        let buffer_size = (stride * new_height) as usize;
+        let mut pixels = vec![0u8; buffer_size];
+
+        // 复制像素数据
+        converter
+            .CopyPixels(
+                std::ptr::null(),
+                stride,
+                &mut pixels,
+            )
+            .map_err(|e| format!("复制像素失败: {:?}", e))?;
+
+        Ok(WicDecodeResult {
+            width: new_width,
+            height: new_height,
+            pixels,
+        })
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn decode_and_scale_with_wic(_data: &[u8], _max_width: u32, _max_height: u32) -> Result<WicDecodeResult, String> {
+    Err("WIC 仅在 Windows 上可用".to_string())
 }
 
 /// 将 BGRA 像素转换为 DynamicImage

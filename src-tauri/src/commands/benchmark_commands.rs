@@ -250,7 +250,7 @@ fn generate_thumbnail_with_image_crate(image_data: &[u8]) -> Result<Vec<u8>, Str
     Ok(output)
 }
 
-/// 使用 WIC 解码 + 缩放 + WebP 编码
+/// 使用 WIC 解码 + 缩放 + WebP 编码（旧方法，先全尺寸解码再缩放）
 #[cfg(target_os = "windows")]
 fn generate_thumbnail_with_wic(image_data: &[u8]) -> Result<Vec<u8>, String> {
     use crate::core::wic_decoder::{decode_image_from_memory_with_wic, wic_result_to_dynamic_image};
@@ -269,6 +269,24 @@ fn generate_thumbnail_with_wic(image_data: &[u8]) -> Result<Vec<u8>, String> {
     
     let mut output = Vec::new();
     thumbnail.write_to(&mut Cursor::new(&mut output), ImageFormat::WebP)
+        .map_err(|e| format!("WebP 编码失败: {}", e))?;
+    Ok(output)
+}
+
+/// 使用 WIC 内置缩放 + WebP 编码（新方法，快速）
+/// 避免解码到全分辨率，直接在 WIC 层面缩放
+#[cfg(target_os = "windows")]
+fn generate_thumbnail_with_wic_fast(image_data: &[u8]) -> Result<Vec<u8>, String> {
+    use crate::core::wic_decoder::{decode_and_scale_with_wic, wic_result_to_dynamic_image};
+    use image::ImageFormat;
+    use std::io::Cursor;
+    
+    // 使用 WIC 内置缩放器直接输出小尺寸图像
+    let result = decode_and_scale_with_wic(image_data, 200, 200)?;
+    let img = wic_result_to_dynamic_image(result)?;
+    
+    let mut output = Vec::new();
+    img.write_to(&mut Cursor::new(&mut output), ImageFormat::WebP)
         .map_err(|e| format!("WebP 编码失败: {}", e))?;
     Ok(output)
 }
@@ -510,7 +528,7 @@ pub async fn run_archive_thumbnail_benchmark(archive_path: String) -> Result<Ben
         });
     }
     
-    // 3. 完整流程：解压+WIC解码+缩放+WebP编码
+    // 3. 完整流程：解压+WIC解码+缩放+WebP编码（旧方法）
     #[cfg(target_os = "windows")]
     {
         let start = Instant::now();
@@ -519,7 +537,26 @@ pub async fn run_archive_thumbnail_benchmark(archive_path: String) -> Result<Ben
         let output_size = result.as_ref().ok().map(|v| v.len());
         
         results.push(BenchmarkResult {
-            method: "archive→WIC→webp (完整流程)".to_string(),
+            method: "archive→WIC→webp (旧)".to_string(),
+            format: ext.clone(),
+            duration_ms: duration,
+            success: result.is_ok(),
+            error: result.as_ref().err().cloned(),
+            image_size: None,
+            output_size,
+        });
+    }
+    
+    // 4. 优化流程：WIC内置缩放+WebP编码（新方法，更快）
+    #[cfg(target_os = "windows")]
+    {
+        let start = Instant::now();
+        let result = generate_thumbnail_with_wic_fast(&image_data);
+        let duration = start.elapsed().as_secs_f64() * 1000.0;
+        let output_size = result.as_ref().ok().map(|v| v.len());
+        
+        results.push(BenchmarkResult {
+            method: "archive→WIC快速→webp".to_string(),
             format: ext.clone(),
             duration_ms: duration,
             success: result.is_ok(),

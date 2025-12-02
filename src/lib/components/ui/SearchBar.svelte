@@ -329,12 +329,12 @@
 			
 			<!-- 搜索按钮 -->
 			<button
-				class="px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 text-sm font-medium shrink-0"
+				class="p-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 shrink-0"
 				onclick={handleSearchClick}
 				disabled={disabled || !searchQuery.trim()}
 				title="搜索"
 			>
-				搜索
+				<Search class="h-4 w-4" />
 			</button>
 		</div>
 		

@@ -8,6 +8,7 @@ import { onMount } from 'svelte';
 import type { FsItem } from '$lib/types';
 import { homeDir } from '@tauri-apps/api/path';
 import { writable } from 'svelte/store';
+import { Star } from '@lucide/svelte';
 
 import FolderToolbar from './components/FolderToolbar.svelte';
 import BreadcrumbBar from './components/BreadcrumbBar.svelte';
@@ -892,11 +893,11 @@ onMount(() => {
 				</div>
 				<!-- 收藏标签快选按钮 -->
 				<button
-					class="shrink-0 px-2 py-1.5 text-xs rounded border hover:bg-accent {showFavoriteTagPanel ? 'bg-primary/10 border-primary text-primary' : 'border-border'}"
+					class="shrink-0 p-1.5 rounded border hover:bg-accent {showFavoriteTagPanel ? 'bg-primary/10 border-primary text-primary' : 'border-border'}"
 					onclick={handleToggleFavoriteTagPanel}
 					title="收藏标签快选"
 				>
-					★ 标签
+					<Star class="h-4 w-4 {showFavoriteTagPanel ? 'fill-primary' : ''}" />
 				</button>
 			</div>
 			<!-- 收藏标签面板 -->

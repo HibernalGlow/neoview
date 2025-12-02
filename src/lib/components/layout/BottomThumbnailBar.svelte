@@ -41,6 +41,8 @@
 	let readingDirection = $derived(settings.book.readingDirection);
 	let hoverAreas = $derived(settings.panels?.hoverAreas);
 	let autoHideTiming = $derived(settings.panels?.autoHideTiming ?? { showDelaySec: 0, hideDelaySec: 0 });
+	let bottomBarOpacity = $derived(settings.panels?.bottomBarOpacity ?? 85);
+	let bottomBarBlur = $derived(settings.panels?.bottomBarBlur ?? 12);
 	let lastReadingDirection = $state<'left-to-right' | 'right-to-left' | null>(null);
 
 	// 监听设置变化
@@ -635,8 +637,8 @@
 		aria-label="底部缩略图栏"
 	>
 		<div
-			class="bg-sidebar/85 relative border-t shadow-lg backdrop-blur-md"
-			style="height: {$bottomThumbnailBarHeight}px;"
+			class="relative border-t shadow-lg"
+			style="height: {$bottomThumbnailBarHeight}px; background-color: hsl(var(--sidebar) / {bottomBarOpacity / 100}); backdrop-filter: blur({bottomBarBlur}px);"
 		>
 			<!-- 拖拽手柄 -->
 

@@ -14,8 +14,20 @@
 	import GestureSettingsPanel from './GestureSettingsPanel.svelte';
 	import ThemePanel from '$lib/components/panels/ThemePanel.svelte';
 	import SidebarPanelManager from '$lib/components/settings/SidebarPanelManager.svelte';
+	import { settingsManager } from '$lib/settings/settingsManager';
 
 	let { open = $bindable(false) } = $props();
+	
+	let sidebarOpacity = $state(settingsManager.getSettings().panels.sidebarOpacity);
+	let sidebarBlur = $state(settingsManager.getSettings().panels.sidebarBlur ?? 12);
+	
+	$effect(() => {
+		const unsubscribe = settingsManager.addListener((s) => {
+			sidebarOpacity = s.panels.sidebarOpacity;
+			sidebarBlur = s.panels.sidebarBlur ?? 12;
+		});
+		return unsubscribe;
+	});
 
 	const tabs = [
 		{ value: 'general', label: '通用', icon: Settings },
@@ -32,14 +44,17 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="h-[600px] max-w-4xl">
+	<Dialog.Content 
+		class="h-[600px] max-w-4xl" 
+		style="background-color: hsl(var(--background) / {sidebarOpacity / 100}); backdrop-filter: blur({sidebarBlur}px);"
+	>
 		<Dialog.Header>
 			<Dialog.Title>设置</Dialog.Title>
 			<Dialog.Description>配置 NeoView 的各项设置</Dialog.Description>
 		</Dialog.Header>
 
 		<Tabs.Root bind:value={activeTab} class="flex h-full">
-			<Tabs.List class="h-full w-48 flex-col border-r bg-transparent pr-4">
+			<Tabs.List class="h-full w-48 flex-col border-r pr-4" style="background-color: transparent;">
 				{#each tabs as tab}
 					{@const IconComponent = tab.icon}
 					<Tabs.Trigger value={tab.value} class="w-full justify-start gap-3">

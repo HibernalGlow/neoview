@@ -131,6 +131,10 @@ let currentSortModeLabel = $derived(
 	let splitHorizontalPages = $derived(settings.view.pageLayout?.splitHorizontalPages ?? false);
 	let treatHorizontalAsDoublePage = $derived(settings.view.pageLayout?.treatHorizontalAsDoublePage ?? false);
 	let autoRotateMode = $derived(settings.view.autoRotate?.mode ?? 'none');
+	
+	// 顶部工具栏透明度和模糊
+	let topToolbarOpacity = $derived(settings.panels?.topToolbarOpacity ?? 85);
+	let topToolbarBlur = $derived(settings.panels?.topToolbarBlur ?? 12);
 
 	// 监听设置变化
 	settingsManager.addListener((newSettings) => {
@@ -639,7 +643,8 @@ async function handleSortModeChange(mode: PageSortMode) {
 	<!-- 标题栏（窗口控制） -->
 	<div
 		data-tauri-drag-region
-		class="bg-sidebar/85 flex h-8 select-none items-center justify-between border-b px-2 backdrop-blur-md"
+		class="flex h-8 select-none items-center justify-between border-b px-2"
+		style="background-color: hsl(var(--sidebar) / {topToolbarOpacity / 100}); backdrop-filter: blur({topToolbarBlur}px);"
 	>
 		<!-- 左侧：菜单和应用名 -->
 		<div class="flex items-center gap-1">
@@ -875,8 +880,8 @@ async function handleSortModeChange(mode: PageSortMode) {
 
 	<!-- 工具栏（图片操作） - 响应式布局：宽度不够时面包屑在上，工具栏在下 -->
 	<div
-		class="bg-sidebar/85 border-b shadow-lg backdrop-blur-md"
-		style="min-height: {$topToolbarHeight}px;"
+		class="border-b shadow-lg"
+		style="min-height: {$topToolbarHeight}px; background-color: hsl(var(--sidebar) / {topToolbarOpacity / 100}); backdrop-filter: blur({topToolbarBlur}px);"
 	>
 		<div class="mx-auto w-full max-w-[1280px] flex flex-col gap-1 px-2 py-1">
 			<!-- 第一行：关闭按钮 + 面包屑导航 + 页码信息（窄屏时独占一行） -->

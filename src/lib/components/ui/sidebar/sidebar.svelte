@@ -23,10 +23,12 @@
 	const sidebar = useSidebar();
 	
 	let sidebarOpacity = $state(settingsManager.getSettings().panels.sidebarOpacity);
+	let sidebarBlur = $state(settingsManager.getSettings().panels.sidebarBlur ?? 12);
 	
 	$effect(() => {
 		const unsubscribe = settingsManager.addListener((s) => {
 			sidebarOpacity = s.panels.sidebarOpacity;
+			sidebarBlur = s.panels.sidebarBlur ?? 12;
 		});
 		return unsubscribe;
 	});
@@ -105,8 +107,8 @@
 			<div
 				data-sidebar="sidebar"
 				data-slot="sidebar-inner"
-				class="backdrop-blur-md group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm"
-				style="background-color: hsl(var(--sidebar) / {sidebarOpacity / 100});"
+				class="group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm"
+				style="background-color: hsl(var(--sidebar) / {sidebarOpacity / 100}); backdrop-filter: blur({sidebarBlur}px);"
 			>
 				{@render children?.()}
 			</div>

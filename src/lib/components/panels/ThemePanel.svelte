@@ -16,6 +16,9 @@
 	let sidebarOpacity = $state(settingsManager.getSettings().panels.sidebarOpacity);
 	let topToolbarOpacity = $state(settingsManager.getSettings().panels.topToolbarOpacity);
 	let bottomBarOpacity = $state(settingsManager.getSettings().panels.bottomBarOpacity);
+	let sidebarBlur = $state(settingsManager.getSettings().panels.sidebarBlur ?? 12);
+	let topToolbarBlur = $state(settingsManager.getSettings().panels.topToolbarBlur ?? 12);
+	let bottomBarBlur = $state(settingsManager.getSettings().panels.bottomBarBlur ?? 12);
 
 	function updateSidebarOpacity(value: number) {
 		sidebarOpacity = value;
@@ -30,6 +33,21 @@
 	function updateBottomBarOpacity(value: number) {
 		bottomBarOpacity = value;
 		settingsManager.updateNestedSettings('panels', { bottomBarOpacity: value });
+	}
+	
+	function updateSidebarBlur(value: number) {
+		sidebarBlur = value;
+		settingsManager.updateNestedSettings('panels', { sidebarBlur: value });
+	}
+	
+	function updateTopToolbarBlur(value: number) {
+		topToolbarBlur = value;
+		settingsManager.updateNestedSettings('panels', { topToolbarBlur: value });
+	}
+	
+	function updateBottomBarBlur(value: number) {
+		bottomBarBlur = value;
+		settingsManager.updateNestedSettings('panels', { bottomBarBlur: value });
 	}
 	let themeJson = $state('');
 	let customThemeName = $state('');
@@ -463,6 +481,59 @@
 				onValueChange={updateBottomBarOpacity}
 			/>
 			<span class="text-sm text-muted-foreground w-12 text-right">{bottomBarOpacity}%</span>
+		</div>
+	</div>
+
+	<!-- 模糊程度设置 -->
+	<div class="space-y-4 pt-2 border-t">
+		<h4 class="text-sm font-semibold">模糊程度</h4>
+		
+		<div class="space-y-3">
+			<Label class="text-sm">侧边栏模糊</Label>
+			<div class="flex items-center gap-4">
+				<Slider
+					type="single"
+					value={sidebarBlur}
+					min={0}
+					max={20}
+					step={2}
+					class="flex-1"
+					onValueChange={updateSidebarBlur}
+				/>
+				<span class="text-sm text-muted-foreground w-12 text-right">{sidebarBlur}px</span>
+			</div>
+		</div>
+
+		<div class="space-y-3">
+			<Label class="text-sm">顶部工具栏模糊</Label>
+			<div class="flex items-center gap-4">
+				<Slider
+					type="single"
+					value={topToolbarBlur}
+					min={0}
+					max={20}
+					step={2}
+					class="flex-1"
+					onValueChange={updateTopToolbarBlur}
+				/>
+				<span class="text-sm text-muted-foreground w-12 text-right">{topToolbarBlur}px</span>
+			</div>
+		</div>
+
+		<div class="space-y-3">
+			<Label class="text-sm">底部缩略图栏模糊</Label>
+			<div class="flex items-center gap-4">
+				<Slider
+					type="single"
+					value={bottomBarBlur}
+					min={0}
+					max={20}
+					step={2}
+					class="flex-1"
+					onValueChange={updateBottomBarBlur}
+				/>
+				<span class="text-sm text-muted-foreground w-12 text-right">{bottomBarBlur}px</span>
+			</div>
 		</div>
 	</div>
 

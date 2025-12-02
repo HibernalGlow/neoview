@@ -947,11 +947,13 @@ onMount(() => {
 <div class="flex h-full flex-col overflow-hidden">
 	<!-- 面包屑导航 -->
 	<div class="border-b">
-		<BreadcrumbBar onNavigate={handleNavigate} />
+		<BreadcrumbBar onNavigate={handleNavigate} {homePath} />
 	</div>
 
-	<!-- 页签栏 -->
-	<FolderTabBar {homePath} />
+	<!-- 页签栏（仅在有多个页签时显示） -->
+	{#if currentAllTabs.length > 1}
+		<FolderTabBar {homePath} />
+	{/if}
 
 	<!-- 工具栏 -->
 	<FolderToolbar 

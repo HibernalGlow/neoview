@@ -4,10 +4,11 @@
  * 参考 NeeView 的 BreadcrumbBar 设计
  * 支持点击导航和直接输入路径
  */
-import { ChevronRight, Folder, HardDrive, MoreHorizontal, Edit2 } from '@lucide/svelte';
+import { ChevronRight, Folder, HardDrive, MoreHorizontal, Edit2, Plus } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import { Input } from '$lib/components/ui/input';
 import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+import * as Tooltip from '$lib/components/ui/tooltip';
 import { tabCurrentPath, folderTabActions } from '../stores/folderTabStore.svelte';
 
 // 使用页签 store 的 currentPath
@@ -15,9 +16,14 @@ const currentPath = tabCurrentPath;
 
 interface Props {
 	onNavigate?: (path: string) => void;
+	homePath?: string;
 }
 
-let { onNavigate }: Props = $props();
+let { onNavigate, homePath = '' }: Props = $props();
+
+function handleCreateTab() {
+	folderTabActions.createTab(homePath);
+}
 
 // 编辑模式状态
 let isEditing = $state(false);
@@ -241,15 +247,35 @@ function handleNavigate(path: string) {
 			</Button>
 		{/each}
 
-		<!-- 编辑按钮 -->
+		<!-- 右侧按钮组 -->
 		<div class="flex-1"></div>
-		<Button
-			variant="ghost"
-			size="icon"
-			class="h-6 w-6 shrink-0"
-			onclick={startEditing}
-		>
-			<Edit2 class="h-3 w-3" />
-		</Button>
+		<div class="flex items-center gap-0.5">
+			<!-- 编辑按钮 -->
+			<Button
+				variant="ghost"
+				size="icon"
+				class="h-6 w-6 shrink-0"
+				onclick={startEditing}
+				title="编辑路径"
+			>
+				<Edit2 class="h-3 w-3" />
+			</Button>
+			<!-- 新建页签按钮 -->
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					<Button
+						variant="ghost"
+						size="icon"
+						class="h-6 w-6 shrink-0"
+						onclick={handleCreateTab}
+					>
+						<Plus class="h-3 w-3" />
+					</Button>
+				</Tooltip.Trigger>
+				<Tooltip.Content>
+					<p>新建页签</p>
+				</Tooltip.Content>
+			</Tooltip.Root>
+		</div>
 	{/if}
 </div>

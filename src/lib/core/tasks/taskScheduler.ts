@@ -65,8 +65,11 @@ export class TaskScheduler {
 	private running = 0;
 	private readonly bucketOrder: TaskBucket[] = ['current', 'forward', 'backward', 'background'];
 
-	constructor(concurrency = 2) {
-		this.concurrency = concurrency;
+	constructor(concurrency?: number) {
+		// 默认并发度：根据 CPU 核心数动态调整，最少 8，最多 32
+		// 参考 NeeView 的 JobClient 多线程设计
+		const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4;
+		this.concurrency = concurrency ?? Math.min(32, Math.max(8, cores * 2));
 	}
 
 	setConcurrency(limit: number): void {

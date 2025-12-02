@@ -454,27 +454,53 @@
 		}
 	}
 
+	// 滚动处理防抖
+	let scrollDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+	
 	function handleScroll(e: Event) {
 		const container = e.target as HTMLElement;
-		const thumbnailElements = container.querySelectorAll('button');
 
 		// 更新滚动进度（用于 HorizontalListSlider）
 		const maxScroll = container.scrollWidth - container.clientWidth;
 		thumbnailScrollProgress = maxScroll > 0 ? container.scrollLeft / maxScroll : 0;
 
-		// 加载所有可见的缩略图，包括缓冲区
-		thumbnailElements.forEach((el, i) => {
-			const rect = el.getBoundingClientRect();
-			const containerRect = container.getBoundingClientRect();
-
-			// 扩大可见范围，提前加载即将进入视野的缩略图
-			const buffer = 200; // 200px 缓冲区
-			if (rect.left >= containerRect.left - buffer && rect.right <= containerRect.right + buffer) {
-				if (!thumbnailCacheStore.hasThumbnail(i)) {
-					void loadThumbnail(i);
-				}
+		// 防抖处理滚动加载，避免滚动时大量重复请求
+		if (scrollDebounceTimer) {
+			clearTimeout(scrollDebounceTimer);
+		}
+		scrollDebounceTimer = setTimeout(() => {
+			loadVisibleThumbnailsOnScroll(container);
+		}, 100); // 100ms 防抖
+	}
+	
+	// 滚动时高效加载可见缩略图
+	function loadVisibleThumbnailsOnScroll(container: HTMLElement) {
+		const currentBook = bookStore.currentBook;
+		if (!currentBook || !preloadManager) return;
+		
+		const containerRect = container.getBoundingClientRect();
+		const buffer = 300; // 300px 缓冲区
+		const thumbnailWidth = 80; // 估算缩略图宽度
+		
+		// 根据滚动位置计算可见范围（避免遍历所有 DOM）
+		const scrollLeft = container.scrollLeft;
+		const visibleWidth = containerRect.width + buffer * 2;
+		const startIdx = Math.max(0, Math.floor((scrollLeft - buffer) / thumbnailWidth));
+		const endIdx = Math.min(
+			currentBook.pages.length - 1,
+			Math.ceil((scrollLeft + visibleWidth) / thumbnailWidth)
+		);
+		
+		// 限制单次加载数量，避免阻塞
+		const maxLoad = 10;
+		let loadCount = 0;
+		
+		for (let i = startIdx; i <= endIdx && loadCount < maxLoad; i++) {
+			if (!thumbnailCacheStore.hasThumbnail(i) && !loadingIndices.has(i)) {
+				void loadThumbnail(i);
+				loadCount++;
 			}
-		});
+		}
 	}
 
 	function scrollCurrentThumbnailIntoCenter() {
@@ -535,6 +561,10 @@
 		if (loadThumbnailsDebounce) {
 			clearTimeout(loadThumbnailsDebounce);
 			loadThumbnailsDebounce = null;
+		}
+		if (scrollDebounceTimer) {
+			clearTimeout(scrollDebounceTimer);
+			scrollDebounceTimer = null;
 		}
 	});
 

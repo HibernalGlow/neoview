@@ -416,11 +416,12 @@ export const defaultPageFrameConfig: PageFrameConfig = {
 };
 
 export const defaultPreloadConfig: PreloadConfig = {
-  preloadAhead: 3,
-  preloadBehind: 1,
-  maxConcurrentImages: 4,
-  maxConcurrentThumbnails: 8,
-  maxConcurrentUpscale: 1,
+  preloadAhead: 5,
+  preloadBehind: 2,
+  maxConcurrentImages: 6,
+  // 缩略图并发数大幅提高，参考 NeeView 的多线程设计
+  maxConcurrentThumbnails: Math.min(32, Math.max(16, (typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4) * 4)),
+  maxConcurrentUpscale: 2,
   autoUpscale: false,
   upscaleModel: 'realesrgan-x4plus-anime',
 };

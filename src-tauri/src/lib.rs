@@ -145,7 +145,13 @@ pub fn run() {
                 db: Arc::new(cache_index_db),
             });
 
-            let background_scheduler = BackgroundTaskScheduler::new(4, 64);
+            // 根据 CPU 核心数动态调整并发度，最少 8，最多 32
+            // 参考 NeeView 的 JobClient 多线程设计
+            let num_cores = std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4);
+            let scheduler_concurrency = (num_cores * 2).clamp(8, 32);
+            let background_scheduler = BackgroundTaskScheduler::new(scheduler_concurrency, 128);
             app.manage(BackgroundSchedulerState {
                 scheduler: Arc::new(background_scheduler),
             });

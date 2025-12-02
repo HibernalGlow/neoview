@@ -71,7 +71,8 @@ class ThumbnailManager {
   private dbMissCache = new Set<string>(); // 记录数据库未命中的路径 key
   private failedThumbnails = new Set<string>(); // 记录生成失败的缩略图路径（参考 NeeView 的 ThumbnailType.Empty）
   private failedRetryCount = new Map<string, number>(); // 失败重试计数
-  private readonly MAX_RETRY_COUNT = 2; // 最大重试次数
+  // 参考 NeeView：快速标记失败，只重试 1 次，避免队列积压
+  private readonly MAX_RETRY_COUNT = 1;
 
   // LRU 缓存（智能缓存淘汰）
   private lruCache: LRUCache<string>;
@@ -88,12 +89,14 @@ class ThumbnailManager {
   // 回调函数
   private onThumbnailReady?: (path: string, dataUrl: string) => void;
 
-  // 任务上限管理（参考 NeeView，拉满速度，提高两倍性能）
-  private readonly MAX_QUEUE_SIZE = 20000; // 最大队列大小（增加到20000，提高2倍）
-  private readonly MAX_PROCESSING = 400; // 最大并发处理数（增加到400，拉满CPU，提高2倍）
+  // 任务上限管理
+  // 参考 NeeView：控制队列大小，避免无效任务占满队列
+  private readonly MAX_QUEUE_SIZE = 2000; // 减小队列大小，避免积压
+  // 并发处理数根据 CPU 核心数动态调整
+  private readonly MAX_PROCESSING = Math.min(64, Math.max(16, (navigator.hardwareConcurrency || 4) * 4));
 
   // 批量加载配置
-  private readonly BATCH_LOAD_SIZE = 50; // 一次批量查询的数量
+  private readonly BATCH_LOAD_SIZE = 100; // 增大批量查询数量，减少 IPC 往返
 
   // 缓存配置（默认 100MB 内存缓存）
   private readonly MAX_CACHE_SIZE = 100 * 1024 * 1024; // 100MB

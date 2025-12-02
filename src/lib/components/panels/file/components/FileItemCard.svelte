@@ -11,6 +11,7 @@
 		collectTagMap,
 		emmTranslationStore
 	} from '$lib/stores/emmMetadata.svelte';
+	import { mixedGenderStore, categoryColors } from '$lib/stores/emm/favoriteTagStore.svelte';
 	import type { EMMTranslationDict } from '$lib/api/emm';
 	import { getFileMetadata } from '$lib/api';
 	import FileItemListView from './FileItemListView.svelte';
@@ -186,27 +187,51 @@
 		}
 	});
 
-	// 获取显示的标签（前3个，高亮收藏的）
+	// 性别类别（用于混合匹配）
+	const genderCategories = ['female', 'male', 'mixed'];
+
+	// 获取显示的标签（高亮收藏的，支持混合匹配）
 	const displayTags = $derived(() => {
 		if (!emmMetadata?.tags || fileListTagDisplayMode === 'none') return [];
 
 		const map = $collectTagMap; // Use the shared map
 		const normalize = (s: string) => s.trim().toLowerCase();
+		const isMixedEnabled = mixedGenderStore.enabled;
 
-		const allTags: Array<{ tag: string; isCollect: boolean; color?: string; display?: string }> =
-			[];
+		const allTags: Array<{ tag: string; isCollect: boolean; color?: string; display: string; isMixedVariant?: boolean }> = [];
+		const addedTagKeys = new Set<string>();
 
 		for (const [category, tags] of Object.entries(emmMetadata.tags)) {
 			for (const tag of tags) {
-				// 尝试多种组合查找
 				const fullTagKey = normalize(`${category}:${tag}`);
-				let collectTag = map.get(fullTagKey);
+				
+				// 避免重复添加
+				if (addedTagKeys.has(fullTagKey)) continue;
+				addedTagKeys.add(fullTagKey);
 
+				// 尝试多种组合查找
+				let collectTag = map.get(fullTagKey);
 				if (!collectTag) {
 					collectTag = map.get(normalize(tag));
 				}
 
-				const isCollect = !!collectTag;
+				// 混合匹配：如果是性别类别，检查其他性别类别的收藏
+				let matchedByMixed = false;
+				let mixedCollectTag = collectTag;
+				if (!collectTag && isMixedEnabled && genderCategories.includes(category)) {
+					for (const altCat of genderCategories) {
+						if (altCat === category) continue;
+						const altKey = normalize(`${altCat}:${tag}`);
+						const altCollect = map.get(altKey);
+						if (altCollect) {
+							mixedCollectTag = altCollect;
+							matchedByMixed = true;
+							break;
+						}
+					}
+				}
+
+				const isCollect = !!collectTag || matchedByMixed;
 
 				// 根据显示模式过滤
 				if (fileListTagDisplayMode === 'collect' && !isCollect) {
@@ -218,11 +243,15 @@
 				const shortCategory = emmTranslationStore.getShortNamespace(category);
 				const displayStr = `${shortCategory}:${translatedTag}`;
 
+				// 使用类别颜色或收藏颜色
+				const tagColor = collectTag?.color || (matchedByMixed ? mixedCollectTag?.color : categoryColors[category]);
+
 				allTags.push({
 					tag: `${category}:${tag}`,
 					isCollect,
-					color: collectTag?.color,
-					display: displayStr // 使用翻译后的显示
+					color: tagColor,
+					display: displayStr,
+					isMixedVariant: matchedByMixed
 				});
 			}
 		}
@@ -232,7 +261,6 @@
 		const normalTagsList = allTags.filter((t) => !t.isCollect);
 
 		// 如果有收藏标签，优先展示收藏标签；否则展示普通标签
-		// 不限制数量，显示完整
 		return [...collectTagsList, ...normalTagsList];
 	});
 

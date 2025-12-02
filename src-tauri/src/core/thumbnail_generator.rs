@@ -12,7 +12,6 @@ use std::sync::Arc;
 use threadpool::ThreadPool;
 use unrar;
 use sevenz_rust;
-use avif_decode;
 
 /// 反向查找父文件夹的最大层级（可配置）
 const MAX_PARENT_LEVELS: usize = 2;
@@ -154,18 +153,6 @@ impl ThumbnailGenerator {
         Ok(img)
     }
 
-    /// 解码 AVIF 图像（使用 avif-decode，替代 FFmpeg）
-    fn decode_avif_image(image_data: &[u8]) -> Result<DynamicImage, String> {
-        let decoder = avif_decode::Decoder::new(image_data)
-            .map_err(|e| format!("Failed to create AVIF decoder: {:?}", e))?;
-        
-        let image = decoder.to_image()
-            .map_err(|e| format!("Failed to decode AVIF: {:?}", e))?;
-        
-        // avif_decode 返回 image::DynamicImage
-        Ok(image)
-    }
-
     /// 从图像生成 webp 缩略图
     fn generate_webp_thumbnail(&self, img: DynamicImage) -> Result<Vec<u8>, String> {
         let (width, height) = img.dimensions();
@@ -277,10 +264,14 @@ impl ThumbnailGenerator {
 
         // 同步生成 webp 缩略图
         let webp_data = if is_avif {
-            // 使用 avif-decode 解码 AVIF（替代 FFmpeg，更稳定）
-            Self::decode_avif_image(&image_data)
-                .ok()
-                .and_then(|img| Self::generate_webp_thumbnail_fallback(&img, &self.config).ok())
+            // 先尝试使用 FFmpeg 生成 webp，失败时再回退到 avif-native
+            Self::generate_webp_with_ffmpeg(&file_path_buf, &self.config, &path_key).or_else(
+                || {
+                    Self::decode_image_safe(&image_data)
+                        .ok()
+                        .and_then(|img| Self::generate_webp_thumbnail_fallback(&img, &self.config).ok())
+                },
+            )
         } else if is_jxl {
             // JXL 使用 jxl_oxide 解码后转 webp
             Self::decode_jxl_image(&image_data)
@@ -772,12 +763,36 @@ impl ThumbnailGenerator {
 
                     // 同步生成 webp 缩略图
                     let webp_data = if is_avif {
-                        // 使用 avif-decode 解码 AVIF（替代 FFmpeg）
-                        Self::decode_avif_image(&image_data)
-                            .ok()
-                            .and_then(|img| {
-                                Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
-                            })
+                        // AVIF: 写入临时文件后用 FFmpeg 处理
+                        let temp_dir = std::env::temp_dir();
+                        let temp_input = temp_dir.join(format!(
+                            "thumb_archive_avif_{}_{}.avif",
+                            std::process::id(),
+                            std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap()
+                                .as_nanos()
+                        ));
+
+                        let result = if std::fs::write(&temp_input, &image_data).is_ok() {
+                            let r = Self::generate_webp_with_ffmpeg(
+                                &temp_input,
+                                &self.config,
+                                &path_key,
+                            );
+                            let _ = std::fs::remove_file(&temp_input);
+                            r
+                        } else {
+                            None
+                        };
+
+                        result.or_else(|| {
+                            Self::decode_image_safe(&image_data)
+                                .ok()
+                                .and_then(|img| {
+                                    Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
+                                })
+                        })
                     } else if is_jxl {
                         Self::decode_jxl_image(&image_data)
                             .ok()
@@ -878,12 +893,36 @@ impl ThumbnailGenerator {
                     
                     // 同步生成 webp 缩略图
                     let webp_data = if is_avif {
-                        // 使用 avif-decode 解码 AVIF（替代 FFmpeg）
-                        Self::decode_avif_image(&image_data)
-                            .ok()
-                            .and_then(|img| {
-                                Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
-                            })
+                        // AVIF: 写入临时文件后用 FFmpeg 处理
+                        let temp_dir = std::env::temp_dir();
+                        let temp_input = temp_dir.join(format!(
+                            "thumb_rar_avif_{}_{}.avif",
+                            std::process::id(),
+                            std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap()
+                                .as_nanos()
+                        ));
+                        
+                        let result = if std::fs::write(&temp_input, &image_data).is_ok() {
+                            let r = Self::generate_webp_with_ffmpeg(
+                                &temp_input,
+                                &self.config,
+                                path_key,
+                            );
+                            let _ = std::fs::remove_file(&temp_input);
+                            r
+                        } else {
+                            None
+                        };
+                        
+                        result.or_else(|| {
+                            Self::decode_image_safe(&image_data)
+                                .ok()
+                                .and_then(|img| {
+                                    Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
+                                })
+                        })
                     } else if is_jxl {
                         Self::decode_jxl_image(&image_data)
                             .ok()
@@ -997,12 +1036,36 @@ impl ThumbnailGenerator {
             
             // 同步生成 webp 缩略图
             let webp_data = if is_avif {
-                // 使用 avif-decode 解码 AVIF（替代 FFmpeg）
-                Self::decode_avif_image(&image_data)
-                    .ok()
-                    .and_then(|img| {
-                        Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
-                    })
+                // AVIF: 写入临时文件后用 FFmpeg 处理
+                let temp_dir = std::env::temp_dir();
+                let temp_input = temp_dir.join(format!(
+                    "thumb_7z_avif_{}_{}.avif",
+                    std::process::id(),
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_nanos()
+                ));
+                
+                let result = if std::fs::write(&temp_input, &image_data).is_ok() {
+                    let r = Self::generate_webp_with_ffmpeg(
+                        &temp_input,
+                        &self.config,
+                        path_key,
+                    );
+                    let _ = std::fs::remove_file(&temp_input);
+                    r
+                } else {
+                    None
+                };
+                
+                result.or_else(|| {
+                    Self::decode_image_safe(&image_data)
+                        .ok()
+                        .and_then(|img| {
+                            Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
+                        })
+                })
             } else if is_jxl {
                 Self::decode_jxl_image(&image_data)
                     .ok()

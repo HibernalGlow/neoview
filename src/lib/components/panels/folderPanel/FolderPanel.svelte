@@ -22,7 +22,8 @@ import SearchBar from '$lib/components/ui/SearchBar.svelte';
 import FolderTabBar from './components/FolderTabBar.svelte';
 import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
 import FavoriteTagPanel from './components/FavoriteTagPanel.svelte';
-import { favoriteTagStore, createTagValue, mixedGenderStore, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
+import { favoriteTagStore, createTagValue, mixedGenderStore, parseSearchTags, hasTagSearch, removeTagsFromSearch, letter2cat, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
+import { invoke } from '@tauri-apps/api/core';
 import { directoryTreeCache } from './utils/directoryTreeCache';
 import { bookStore } from '$lib/stores/book.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
@@ -385,10 +386,57 @@ async function handleSearch(keyword: string) {
 		const settings = tab?.searchSettings || { includeSubfolders: true, searchInPath: false };
 		console.log('[FolderPanel] Search settings:', settings);
 		
-		const results = await FileSystemAPI.searchFiles(searchPath, keyword, {
-			includeSubfolders: settings.includeSubfolders,
-			maxResults: 1000
-		});
+		// 解析标签搜索
+		const searchTags = parseSearchTags(keyword);
+		const hasTagFilter = searchTags.length > 0;
+		const plainKeyword = hasTagFilter ? removeTagsFromSearch(keyword) : keyword;
+		
+		console.log('[FolderPanel] 标签搜索:', { hasTagFilter, tagCount: searchTags.length, plainKeyword });
+		
+		let results: FsItem[] = [];
+		
+		// 如果有标签搜索，使用后端命令
+		if (hasTagFilter) {
+			const enableMixed = mixedGenderStore.enabled;
+			// 转换搜索标签格式: { cat, tag, prefix } -> [namespace, tag, prefix]
+			const backendTags: [string, string, string][] = searchTags.map(t => [t.cat, t.tag, t.prefix]);
+			
+			console.log('[FolderPanel] 调用后端标签搜索:', { backendTags, enableMixed, searchPath });
+			
+			// 调用后端搜索
+			const matchedPaths = await invoke<string[]>('search_by_tags', {
+				searchTags: backendTags,
+				enableMixedGender: enableMixed,
+				basePath: searchPath
+			});
+			
+			console.log(`[FolderPanel] 后端标签搜索返回 ${matchedPaths.length} 个结果`);
+			
+			// 获取文件信息
+			for (const path of matchedPaths) {
+				try {
+					const item = await FileSystemAPI.getFileMetadata(path);
+					results.push(item);
+				} catch (e) {
+					console.debug('[FolderPanel] 获取文件信息失败:', path, e);
+				}
+			}
+			
+			// 如果还有普通搜索词，进一步过滤
+			if (plainKeyword) {
+				const lowerKeyword = plainKeyword.toLowerCase();
+				results = results.filter(item => 
+					item.name.toLowerCase().includes(lowerKeyword) ||
+					item.path.toLowerCase().includes(lowerKeyword)
+				);
+			}
+		} else {
+			// 普通文件搜索
+			results = await FileSystemAPI.searchFiles(searchPath, keyword, {
+				includeSubfolders: settings.includeSubfolders,
+				maxResults: 1000
+			});
+		}
 		
 		// 为搜索结果附加 rating 数据
 		const defaultRating = getDefaultRating();

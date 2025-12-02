@@ -1279,3 +1279,35 @@ pub async fn calculate_folder_ratings(
     state.db.calculate_folder_ratings()
         .map_err(|e| format!("计算文件夹评分失败: {}", e))
 }
+
+/// 搜索符合标签条件的书籍
+/// search_tags: Vec<(namespace, tag, prefix)>，prefix 为 "" 表示必须包含，"-" 表示排除
+/// enable_mixed_gender: 是否启用混合性别匹配
+/// base_path: 可选的基础路径过滤
+#[tauri::command]
+pub async fn search_by_tags(
+    app: tauri::AppHandle,
+    search_tags: Vec<(String, String, String)>,
+    enable_mixed_gender: bool,
+    base_path: Option<String>,
+) -> Result<Vec<String>, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.search_by_tags(
+        search_tags,
+        enable_mixed_gender,
+        base_path.as_deref(),
+    ).map_err(|e| format!("标签搜索失败: {}", e))
+}
+
+/// 统计书籍匹配的收藏标签数量
+#[tauri::command]
+pub async fn count_matching_collect_tags(
+    app: tauri::AppHandle,
+    key: String,
+    collect_tags: Vec<(String, String)>,
+    enable_mixed_gender: bool,
+) -> Result<usize, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.count_matching_collect_tags(&key, &collect_tags, enable_mixed_gender)
+        .map_err(|e| format!("统计收藏标签失败: {}", e))
+}

@@ -362,6 +362,8 @@ pub fn run() {
             commands::cleanup_invalid_thumbnails,
             commands::get_thumbnail_maintenance_stats,
             commands::calculate_folder_ratings,
+            commands::search_by_tags,
+            commands::count_matching_collect_tags,
             commands::get_video_duration,
             commands::is_video_file,
             commands::load_video,

@@ -1248,6 +1248,192 @@ impl ThumbnailDb {
         }
         Some(path[..last_sep].to_string())
     }
+
+    /// 搜索符合标签条件的记录
+    /// search_tags: Vec<(namespace, tag, prefix)>，prefix 为 "" 表示必须包含，"-" 表示排除
+    /// enable_mixed_gender: 是否启用混合性别匹配
+    /// 返回匹配的 key 列表
+    pub fn search_by_tags(
+        &self,
+        search_tags: Vec<(String, String, String)>,
+        enable_mixed_gender: bool,
+        base_path: Option<&str>,
+    ) -> SqliteResult<Vec<String>> {
+        use serde_json::Value;
+
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        // 构建 SQL 查询 - 移除 category 限制，因为可能是压缩包
+        let mut sql = String::from(
+            "SELECT key, emm_json FROM thumbs WHERE emm_json IS NOT NULL"
+        );
+        
+        // 如果有基础路径，添加路径前缀过滤（规范化路径分隔符）
+        if let Some(path) = base_path {
+            // 规范化路径：统一使用小写并替换分隔符
+            let normalized_path = path.to_lowercase().replace("/", "\\");
+            sql.push_str(&format!(" AND LOWER(key) LIKE '{}%'", normalized_path.replace("'", "''")));
+            println!("🔍 标签搜索: 基础路径过滤 = {}", normalized_path);
+        }
+
+        println!("🔍 标签搜索 SQL: {}", sql);
+        let mut stmt = conn.prepare(&sql)?;
+        let rows: Vec<(String, String)> = stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        println!("🔍 标签搜索: 查询到 {} 条记录", rows.len());
+        if rows.len() > 0 && rows.len() <= 5 {
+            for (key, _) in &rows {
+                println!("  - {}", key);
+            }
+        }
+
+        // 性别类别列表（用于混合匹配）
+        let gender_categories = ["female", "male", "mixed"];
+
+        let mut results = Vec::new();
+
+        for (key, emm_json) in rows {
+            if let Ok(json) = serde_json::from_str::<Value>(&emm_json) {
+                if let Some(tags_array) = json.get("tags").and_then(|t| t.as_array()) {
+                    // 构建标签映射：namespace -> Vec<tag>
+                    let mut book_tags: HashMap<String, Vec<String>> = HashMap::new();
+                    for tag_obj in tags_array {
+                        if let (Some(ns), Some(tag)) = (
+                            tag_obj.get("namespace").and_then(|n| n.as_str()),
+                            tag_obj.get("tag").and_then(|t| t.as_str()),
+                        ) {
+                            book_tags.entry(ns.to_string()).or_default().push(tag.to_string());
+                        }
+                    }
+
+                    // 检查是否匹配所有搜索标签
+                    let mut all_match = true;
+                    for (ns, tag, prefix) in &search_tags {
+                        let is_exclude = prefix == "-";
+                        let mut matched = false;
+
+                        // 在目标类别中查找
+                        if let Some(ns_tags) = book_tags.get(ns) {
+                            if ns_tags.contains(tag) {
+                                matched = true;
+                            }
+                        }
+
+                        // 混合性别匹配
+                        if !matched && enable_mixed_gender && gender_categories.contains(&ns.as_str()) {
+                            for alt_ns in &gender_categories {
+                                if *alt_ns == ns.as_str() {
+                                    continue;
+                                }
+                                if let Some(alt_tags) = book_tags.get(*alt_ns) {
+                                    if alt_tags.contains(tag) {
+                                        matched = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        // 处理匹配结果
+                        if is_exclude {
+                            if matched {
+                                all_match = false;
+                                break;
+                            }
+                        } else {
+                            if !matched {
+                                all_match = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if all_match {
+                        results.push(key);
+                    }
+                }
+            }
+        }
+
+        println!("🔍 标签搜索完成: 找到 {} 个匹配", results.len());
+        Ok(results)
+    }
+
+    /// 统计书籍匹配的收藏标签数量
+    pub fn count_matching_collect_tags(
+        &self,
+        key: &str,
+        collect_tags: &[(String, String)], // (namespace, tag)
+        enable_mixed_gender: bool,
+    ) -> SqliteResult<usize> {
+        use serde_json::Value;
+
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let emm_json: Option<String> = conn
+            .query_row(
+                "SELECT emm_json FROM thumbs WHERE key = ?1",
+                params![key],
+                |row| row.get(0),
+            )
+            .ok();
+
+        let gender_categories = ["female", "male", "mixed"];
+
+        if let Some(json_str) = emm_json {
+            if let Ok(json) = serde_json::from_str::<Value>(&json_str) {
+                if let Some(tags_array) = json.get("tags").and_then(|t| t.as_array()) {
+                    // 构建标签映射
+                    let mut book_tags: HashMap<String, Vec<String>> = HashMap::new();
+                    for tag_obj in tags_array {
+                        if let (Some(ns), Some(tag)) = (
+                            tag_obj.get("namespace").and_then(|n| n.as_str()),
+                            tag_obj.get("tag").and_then(|t| t.as_str()),
+                        ) {
+                            book_tags.entry(ns.to_string()).or_default().push(tag.to_string());
+                        }
+                    }
+
+                    let mut count = 0;
+                    for (ns, tag) in collect_tags {
+                        // 直接匹配
+                        if let Some(ns_tags) = book_tags.get(ns) {
+                            if ns_tags.contains(tag) {
+                                count += 1;
+                                continue;
+                            }
+                        }
+
+                        // 混合性别匹配
+                        if enable_mixed_gender && gender_categories.contains(&ns.as_str()) {
+                            for alt_ns in &gender_categories {
+                                if *alt_ns == ns.as_str() {
+                                    continue;
+                                }
+                                if let Some(alt_tags) = book_tags.get(*alt_ns) {
+                                    if alt_tags.contains(tag) {
+                                        count += 1;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    return Ok(count);
+                }
+            }
+        }
+
+        Ok(0)
+    }
 }
 
 impl Clone for ThumbnailDb {

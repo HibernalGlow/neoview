@@ -142,6 +142,111 @@ export function parseSearchTags(searchString: string): Array<{ cat: string; tag:
 	return tags;
 }
 
+// 性别类别列表（用于混合匹配）
+const genderCategories = ['female', 'male', 'mixed'];
+
+/**
+ * 检查书籍标签是否匹配搜索条件
+ * @param bookTags 书籍的标签对象 { category: tags[] }
+ * @param searchTags 解析后的搜索标签
+ * @param enableMixedGender 是否启用混合性别匹配
+ * @returns 是否匹配
+ */
+export function matchBookTags(
+	bookTags: Record<string, string[]>,
+	searchTags: Array<{ cat: string; tag: string; letter: string; prefix: string }>,
+	enableMixedGender: boolean = false
+): boolean {
+	if (searchTags.length === 0) return true;
+
+	for (const searchTag of searchTags) {
+		const isExclude = searchTag.prefix === '-';
+		const isOptional = searchTag.prefix === '~';
+		
+		let matched = false;
+		
+		// 在目标类别中查找标签
+		const categoryTags = bookTags[searchTag.cat] || [];
+		if (categoryTags.includes(searchTag.tag)) {
+			matched = true;
+		}
+		
+		// 混合性别匹配：如果是性别类别，也在其他性别类别中查找
+		if (!matched && enableMixedGender && genderCategories.includes(searchTag.cat)) {
+			for (const altCat of genderCategories) {
+				if (altCat === searchTag.cat) continue;
+				const altTags = bookTags[altCat] || [];
+				if (altTags.includes(searchTag.tag)) {
+					matched = true;
+					break;
+				}
+			}
+		}
+		
+		// 处理匹配结果
+		if (isExclude) {
+			// 排除标签：如果匹配了，返回 false
+			if (matched) return false;
+		} else if (!isOptional) {
+			// 必须标签：如果没匹配，返回 false
+			if (!matched) return false;
+		}
+		// 可选标签（~）：不影响结果
+	}
+	
+	return true;
+}
+
+/**
+ * 统计书籍匹配的收藏标签数量
+ * @param bookTags 书籍的标签对象
+ * @param enableMixedGender 是否启用混合性别匹配
+ * @returns 匹配的收藏标签数量
+ */
+export function countMatchingFavoriteTags(
+	bookTags: Record<string, string[]>,
+	enableMixedGender: boolean = false
+): number {
+	let count = 0;
+	
+	for (const fav of favoriteTags) {
+		const categoryTags = bookTags[fav.cat] || [];
+		
+		if (categoryTags.includes(fav.tag)) {
+			count++;
+			continue;
+		}
+		
+		// 混合性别匹配
+		if (enableMixedGender && genderCategories.includes(fav.cat)) {
+			for (const altCat of genderCategories) {
+				if (altCat === fav.cat) continue;
+				const altTags = bookTags[altCat] || [];
+				if (altTags.includes(fav.tag)) {
+					count++;
+					break;
+				}
+			}
+		}
+	}
+	
+	return count;
+}
+
+/**
+ * 检查搜索字符串是否包含标签搜索
+ */
+export function hasTagSearch(searchString: string): boolean {
+	return /[a-z]+:"[^"]+"\$/.test(searchString);
+}
+
+/**
+ * 从搜索字符串中移除标签部分，返回普通搜索词
+ */
+export function removeTagsFromSearch(searchString: string): string {
+	return searchString.replace(/(~|-)?[a-z]+:"[^"]+"\$/g, '').trim();
+}
+
 /**
  * 收藏标签 Store
  */

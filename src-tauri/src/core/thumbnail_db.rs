@@ -1364,6 +1364,98 @@ impl ThumbnailDb {
         Ok(results)
     }
 
+    /// 批量统计书籍匹配的收藏标签数量
+    pub fn batch_count_matching_collect_tags(
+        &self,
+        keys: &[String],
+        collect_tags: &[(String, String)], // (namespace, tag)
+        enable_mixed_gender: bool,
+    ) -> SqliteResult<Vec<(String, usize)>> {
+        use serde_json::Value;
+
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let gender_categories = ["female", "male", "mixed"];
+        let mut results = Vec::new();
+
+        for key in keys {
+            let emm_json: Option<String> = conn
+                .query_row(
+                    "SELECT emm_json FROM thumbs WHERE LOWER(key) = LOWER(?1)",
+                    params![key],
+                    |row| row.get(0),
+                )
+                .ok();
+
+            let count = if let Some(json_str) = emm_json {
+                Self::count_tags_in_json(&json_str, collect_tags, enable_mixed_gender, &gender_categories)
+            } else {
+                0
+            };
+
+            results.push((key.clone(), count));
+        }
+
+        Ok(results)
+    }
+
+    /// 从 JSON 中统计匹配的标签数
+    fn count_tags_in_json(
+        json_str: &str,
+        collect_tags: &[(String, String)],
+        enable_mixed_gender: bool,
+        gender_categories: &[&str],
+    ) -> usize {
+        use serde_json::Value;
+
+        if let Ok(json) = serde_json::from_str::<Value>(json_str) {
+            if let Some(tags_array) = json.get("tags").and_then(|t| t.as_array()) {
+                // 构建标签映射
+                let mut book_tags: HashMap<String, Vec<String>> = HashMap::new();
+                for tag_obj in tags_array {
+                    if let (Some(ns), Some(tag)) = (
+                        tag_obj.get("namespace").and_then(|n| n.as_str()),
+                        tag_obj.get("tag").and_then(|t| t.as_str()),
+                    ) {
+                        book_tags.entry(ns.to_string()).or_default().push(tag.to_string());
+                    }
+                }
+
+                let mut count = 0;
+                for (ns, tag) in collect_tags {
+                    // 直接匹配
+                    if let Some(ns_tags) = book_tags.get(ns) {
+                        if ns_tags.contains(tag) {
+                            count += 1;
+                            continue;
+                        }
+                    }
+
+                    // 混合性别匹配
+                    if enable_mixed_gender && gender_categories.contains(&ns.as_str()) {
+                        for alt_ns in gender_categories {
+                            if *alt_ns == ns.as_str() {
+                                continue;
+                            }
+                            if let Some(alt_tags) = book_tags.get(*alt_ns) {
+                                if alt_tags.contains(tag) {
+                                    count += 1;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return count;
+            }
+        }
+
+        0
+    }
+
     /// 统计书籍匹配的收藏标签数量
     pub fn count_matching_collect_tags(
         &self,

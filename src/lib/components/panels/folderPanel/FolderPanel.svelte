@@ -440,10 +440,42 @@ async function handleSearch(keyword: string) {
 		
 		// 为搜索结果附加 rating 数据
 		const defaultRating = getDefaultRating();
-		const resultsWithRating = results.map(item => ({
+		let resultsWithRating = results.map(item => ({
 			...item,
 			rating: folderRatingStore.getEffectiveRating(item.path) ?? defaultRating
 		}));
+		
+		// 批量获取收藏标签匹配数（如果有收藏标签）
+		const favTags = favoriteTagStore.tags;
+		if (favTags.length > 0 && resultsWithRating.length > 0) {
+			try {
+				const collectTags: [string, string][] = favTags.map(t => [t.cat, t.tag]);
+				const enableMixed = mixedGenderStore.enabled;
+				const keys = resultsWithRating.map(item => item.path);
+				
+				const countResults = await invoke<[string, number][]>('batch_count_matching_collect_tags', {
+					keys,
+					collectTags,
+					enableMixedGender: enableMixed
+				});
+				
+				// 创建路径到计数的映射
+				const countMap = new Map<string, number>();
+				for (const [path, count] of countResults) {
+					countMap.set(path.toLowerCase(), count);
+				}
+				
+				// 附加 collectTagCount
+				resultsWithRating = resultsWithRating.map(item => ({
+					...item,
+					collectTagCount: countMap.get(item.path.toLowerCase()) ?? 0
+				}));
+				
+				console.log(`[FolderPanel] 已附加收藏标签数，最大值: ${Math.max(...resultsWithRating.map(r => r.collectTagCount || 0))}`);
+			} catch (e) {
+				console.warn('[FolderPanel] 获取收藏标签数失败:', e);
+			}
+		}
 		
 		console.log(`[FolderPanel] 搜索完成，找到 ${resultsWithRating.length} 个结果`, resultsWithRating.slice(0, 5));
 		folderTabActions.setSearchResults(resultsWithRating);

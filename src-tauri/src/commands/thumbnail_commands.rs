@@ -1311,3 +1311,16 @@ pub async fn count_matching_collect_tags(
     state.db.count_matching_collect_tags(&key, &collect_tags, enable_mixed_gender)
         .map_err(|e| format!("统计收藏标签失败: {}", e))
 }
+
+/// 批量统计书籍匹配的收藏标签数量
+#[tauri::command]
+pub async fn batch_count_matching_collect_tags(
+    app: tauri::AppHandle,
+    keys: Vec<String>,
+    collect_tags: Vec<(String, String)>,
+    enable_mixed_gender: bool,
+) -> Result<Vec<(String, usize)>, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.batch_count_matching_collect_tags(&keys, &collect_tags, enable_mixed_gender)
+        .map_err(|e| format!("批量统计收藏标签失败: {}", e))
+}

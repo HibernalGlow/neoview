@@ -93,6 +93,9 @@ let sortedResults = $derived.by(() => {
 			case 'random':
 				cmp = Math.random() - 0.5;
 				break;
+			case 'collectTagCount':
+				cmp = (a.collectTagCount || 0) - (b.collectTagCount || 0);
+				break;
 			default:
 				cmp = a.name.localeCompare(b.name, 'zh-CN', { numeric: true });
 		}

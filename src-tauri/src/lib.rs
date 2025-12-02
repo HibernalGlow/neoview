@@ -364,6 +364,7 @@ pub fn run() {
             commands::calculate_folder_ratings,
             commands::search_by_tags,
             commands::count_matching_collect_tags,
+            commands::batch_count_matching_collect_tags,
             commands::get_video_duration,
             commands::is_video_file,
             commands::load_video,

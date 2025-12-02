@@ -21,6 +21,8 @@ export interface FsItem {
   };
   // 评分数据（可选，用于排序）
   rating?: number;
+  // 收藏标签匹配数（可选，用于排序）
+  collectTagCount?: number;
 }
 
 /**

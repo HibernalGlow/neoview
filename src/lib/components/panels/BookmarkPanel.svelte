@@ -274,7 +274,7 @@
 	});
 </script>
 
-<div class="bg-background flex h-full flex-col">
+<div class="flex h-full flex-col">
 	<div
 		class="border-border bg-background/95 supports-backdrop-filter:bg-background/70 sticky top-0 z-20 flex flex-col border-b backdrop-blur"
 	>
@@ -322,7 +322,7 @@
 		</div>
 	</div>
 
-	<div class="min-h-0 flex-1 overflow-hidden flex">
+	<div class="min-h-0 flex-1 overflow-hidden flex bg-background">
 		<!-- 书签列表 -->
 		<div 
 			class="flex-1 overflow-auto"

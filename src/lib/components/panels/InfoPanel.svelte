@@ -401,7 +401,7 @@
 </script>
 
 <div 
-	class="h-full flex flex-col bg-background"
+	class="h-full flex flex-col"
 	oncontextmenu={showContextMenu}
 	role="region"
 	aria-label="信息面板"
@@ -414,7 +414,7 @@
 			</div>
 		</div>
 
-		<div class="flex-1 overflow-auto">
+		<div class="flex-1 overflow-auto bg-background">
 			<div class="p-4 flex flex-col space-y-3">
 				<!-- 书籍信息 -->
 				{#if bookInfo}

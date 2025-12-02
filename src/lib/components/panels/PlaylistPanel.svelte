@@ -113,7 +113,7 @@
 	}
 </script>
 
-<div class="h-full flex flex-col bg-background">
+<div class="h-full flex flex-col">
 	<!-- 头部 -->
 	<div class="p-3 border-b">
 		<div class="flex items-center justify-between mb-2">
@@ -166,7 +166,7 @@
 
 	<!-- 播放列表内容 -->
 	{#if currentPlaylist}
-		<div class="flex-1 flex flex-col overflow-hidden">
+		<div class="flex-1 flex flex-col overflow-hidden bg-background">
 			<!-- 工具栏 -->
 			<div class="p-2 border-b flex items-center justify-between">
 				<span class="text-xs text-muted-foreground">{currentPlaylist.items.length} 项</span>

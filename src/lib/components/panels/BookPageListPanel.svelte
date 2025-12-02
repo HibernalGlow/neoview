@@ -245,7 +245,7 @@
 	});
 </script>
 
-<div class="h-full flex flex-col bg-background">
+<div class="h-full flex flex-col">
 	<div class="p-3 border-b space-y-2">
 		<div class="flex items-center justify-between">
 			<h3 class="text-sm font-semibold flex items-center gap-2">
@@ -328,7 +328,7 @@
 		</div>
 	</div>
 
-	<div class="flex-1 flex overflow-hidden">
+	<div class="flex-1 flex overflow-hidden bg-background">
 	<div 
 		class="flex-1 overflow-y-auto" 
 		bind:this={listContainer}

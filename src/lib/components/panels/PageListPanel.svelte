@@ -10,28 +10,7 @@
 	interface PageInfo {
 		index: number;
 		name: string;
-		width: number;E:
-        1Hub
-        EH
-        waittouplooad
-        [冬扇草堂 (冬扇)]
-        3. 单行本
-        选择文件夹
-        ←
-        
-        [2013] もう堕ちるしかない [4K掃圖組].zip
-        126.7 MB · 2025/9/26 02:47:32
-        
-        [2017] もう堕ちるしかない 新装版 [日原版].zip
-        113.2 MB · 2025/9/26 02:47:33
-        
-        [2017] 快楽人形イデオロギー [4K掃圖組].zip
-        205.8 MB · 2025/9/26 02:47:30
-        
-        
-        D:
-        Comics
-        Volume 1
+		width: number;
 		height: number;
 		size: string;
 	}
@@ -70,7 +49,7 @@
 	}
 </script>
 
-<div class="h-full flex flex-col bg-background">
+<div class="h-full flex flex-col">
 	<!-- 头部 -->
 	<div class="p-3 border-b">
 		<h3 class="text-sm font-semibold mb-2 flex items-center gap-2">
@@ -91,7 +70,7 @@
 	</div>
 
 	<!-- 页面列表 -->
-	<div class="flex-1 overflow-y-auto">
+	<div class="flex-1 overflow-y-auto bg-background">
 		{#if filteredPages.length === 0}
 			<div class="p-4 text-center text-sm text-muted-foreground">未找到匹配的页面</div>
 		{:else}

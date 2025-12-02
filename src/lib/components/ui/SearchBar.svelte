@@ -5,6 +5,7 @@
 	 */
 	import { Search, ChevronDown, MoreVertical, X } from '@lucide/svelte';
 	import * as Input from '$lib/components/ui/input';
+	import { parseSearchTags, removeTagsFromSearch, categoryColors } from '$lib/stores/emm/favoriteTagStore.svelte';
 
 	export interface SearchHistoryItem {
 		query: string;
@@ -20,6 +21,7 @@
 	let {
 		placeholder = '搜索...',
 		disabled = false,
+		value = $bindable(''),
 		onSearch,
 		onSearchChange,
 		searchHistory = $bindable([]),
@@ -34,6 +36,7 @@
 	}: {
 		placeholder?: string;
 		disabled?: boolean;
+		value?: string;
 		onSearch?: (query: string) => void | Promise<void>;
 		onSearchChange?: (query: string) => void;
 		searchHistory?: SearchHistoryItem[];
@@ -47,8 +50,30 @@
 		storageKey?: string;
 	} = $props();
 
-	let searchQuery = $state('');
+	// 使用外部传入的 value 作为搜索值
+	let searchQuery = $derived(value);
 	let searchTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	// 解析搜索框中的标签
+	const parsedTags = $derived(parseSearchTags(searchQuery));
+	const plainText = $derived(removeTagsFromSearch(searchQuery));
+
+	// 移除指定标签
+	function removeTag(tagToRemove: { cat: string; tag: string; prefix: string }) {
+		// 尝试多种格式
+		const patterns = [
+			new RegExp(`\\s*${tagToRemove.prefix}[a-z]+:"${tagToRemove.tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\$`, 'g'),
+		];
+		let newQuery = searchQuery;
+		for (const pattern of patterns) {
+			newQuery = newQuery.replace(pattern, '');
+		}
+		newQuery = newQuery.trim();
+		value = newQuery;
+		if (onSearchChange) {
+			onSearchChange(newQuery);
+		}
+	}
 
 	// 加载搜索历史
 	function loadSearchHistory() {
@@ -112,7 +137,7 @@
 
 	// 选择搜索历史
 	function selectSearchHistory(item: SearchHistoryItem) {
-		searchQuery = item.query;
+		value = item.query;
 		showHistory = false;
 		if (onHistorySelect) {
 			onHistorySelect(item);
@@ -133,10 +158,10 @@
 	// 处理搜索输入 - 只更新值，不自动触发搜索
 	function handleSearchInput(e: Event) {
 		const target = e.target as HTMLInputElement;
-		searchQuery = target.value;
+		value = target.value;
 		
 		if (onSearchChange) {
-			onSearchChange(searchQuery);
+			onSearchChange(value);
 		}
 	}
 
@@ -213,26 +238,56 @@
 	<div class="relative flex-1">
 		<!-- 搜索输入框 -->
 		<div class="flex gap-1">
-			<div class="relative flex-1">
-				<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-				<Input.Root
-					placeholder={placeholder}
-					bind:value={searchQuery}
-					oninput={handleSearchInput}
+			<div class="relative flex-1 flex items-center gap-1 flex-wrap min-h-[36px] border rounded-md bg-background border-border px-2 py-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+				<Search class="h-4 w-4 text-muted-foreground shrink-0" />
+				
+				<!-- 标签 Chips -->
+				{#each parsedTags as tag}
+					{@const color = categoryColors[tag.cat] || '#666'}
+					<span
+						class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] border shrink-0 {tag.prefix === '-' ? 'line-through opacity-60' : ''}"
+						style="border-color: {color}; background: color-mix(in srgb, {color} 15%, transparent);"
+					>
+						<span class="w-1.5 h-1.5 rounded-full shrink-0" style="background: {color}"></span>
+						<span class="font-medium">{tag.tag}</span>
+						<button
+							type="button"
+							class="ml-0.5 hover:bg-accent rounded p-0.5"
+							onclick={() => removeTag(tag)}
+							title="移除标签"
+						>
+							<X class="h-3 w-3" />
+						</button>
+					</span>
+				{/each}
+				
+				<!-- 输入框 -->
+				<input
+					type="text"
+					placeholder={parsedTags.length > 0 ? '' : placeholder}
+					value={plainText}
+					oninput={(e) => {
+						const target = e.target as HTMLInputElement;
+						// 保留标签部分，更新普通文本部分
+						const tagParts = parsedTags.map(t => `${t.prefix}${t.letter}:"${t.tag}"$`).join(' ');
+						const newValue = tagParts ? `${tagParts} ${target.value}`.trim() : target.value;
+						value = newValue;
+						if (onSearchChange) onSearchChange(newValue);
+					}}
 					onkeydown={handleKeyDown}
 					onfocus={handleSearchFocus}
-					class="pl-10 pr-20 bg-background border-border"
+					class="flex-1 min-w-[100px] bg-transparent outline-none text-sm"
 					{disabled}
 				/>
 				
 				<!-- 清空按钮 -->
 				{#if searchQuery}
 					<button
-						class="absolute right-14 top-1/2 transform -translate-y-1/2 p-1 hover:bg-accent rounded"
+						class="p-1 hover:bg-accent rounded shrink-0"
 						onclick={() => {
-							searchQuery = '';
-							if (onSearch) {
-								onSearch('');
+							value = '';
+							if (onSearchChange) {
+								onSearchChange('');
 							}
 						}}
 						title="清空搜索"
@@ -244,7 +299,7 @@
 				<!-- 搜索历史按钮 -->
 				{#if storageKey}
 					<button
-						class="absolute right-7 top-1/2 transform -translate-y-1/2 p-1 hover:bg-accent rounded disabled:opacity-50"
+						class="p-1 hover:bg-accent rounded disabled:opacity-50 shrink-0"
 						onclick={() => {
 							showHistory = !showHistory;
 							showSettings = false;
@@ -259,7 +314,7 @@
 				<!-- 搜索设置按钮 -->
 				{#if searchSettings && onSettingsChange}
 					<button
-						class="absolute right-1 top-1/2 transform -translate-y-1/2 p-1 hover:bg-accent rounded"
+						class="p-1 hover:bg-accent rounded shrink-0"
 						onclick={(e) => {
 							e.stopPropagation();
 							showSettings = !showSettings;

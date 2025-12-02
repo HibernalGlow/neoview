@@ -373,11 +373,14 @@ async function handleSearch(keyword: string) {
 		return;
 	}
 	
+	// 先清空当前标签的搜索状态，保持其正常浏览状态
+	folderTabActions.clearSearch();
+	
 	// 创建新标签页用于显示搜索结果
 	const searchTabId = folderTabActions.createTab(searchPath);
-	folderTabActions.switchTab(searchTabId);
+	console.log('[FolderPanel] 创建搜索标签页:', searchTabId);
 	
-	// 在新标签页中设置搜索状态
+	// 在新标签页中设置搜索状态（createTab 已经激活了新标签）
 	folderTabActions.setSearchKeyword(keyword);
 	folderTabActions.setIsSearching(true);
 	
@@ -511,18 +514,15 @@ function handleCloseFavoriteTagPanel() {
 	showFavoriteTagPanel = false;
 }
 
-// 处理标签点击 - 添加到搜索框
+// 处理标签点击 - 添加到搜索框（不触发搜索）
 function handleAppendTag(tag: FavoriteTag, modifier: string = '') {
 	const tagValue = modifier + tag.value;
 	// 获取当前搜索关键词，添加标签
 	const currentKeyword = $searchKeyword || '';
 	const newKeyword = currentKeyword ? `${currentKeyword} ${tagValue}` : tagValue;
 	
-	// 更新搜索关键词
+	// 只更新搜索关键词，不触发搜索
 	folderTabActions.setSearchKeyword(newKeyword);
-	
-	// 触发搜索
-	handleSearch(newKeyword);
 }
 
 // 迁移栏管理器显示状态
@@ -878,7 +878,9 @@ onMount(() => {
 				<div class="flex-1">
 					<SearchBar
 						placeholder="搜索文件... (支持标签搜索 f:&quot;tag&quot;$)"
+						value={$searchKeyword}
 						onSearch={handleSearch}
+						onSearchChange={(query) => folderTabActions.setSearchKeyword(query)}
 						storageKey="neoview-folder-search-history"
 						searchSettings={{
 							includeSubfolders: $searchSettings.includeSubfolders,
@@ -965,7 +967,7 @@ onMount(() => {
 					class:hidden={tab.id !== currentActiveTabId}
 					class:pointer-events-none={tab.id !== currentActiveTabId}
 				>
-					{#if $searchKeyword || $isSearching || $searchResults.length > 0}
+					{#if $isSearching || $searchResults.length > 0}
 						<!-- 搜索结果模式 - 点击在新标签页打开 -->
 						<SearchResultList
 							onItemClick={handleSearchResultClick}

@@ -192,7 +192,7 @@ function cancelWarmup() {
 }
 </script>
 
-<div class="flex flex-wrap items-center gap-1 border-b px-2 py-1.5">
+<div class="flex flex-wrap items-center gap-1 px-2 py-1.5">
 	<!-- 导航按钮组 -->
 	<div class="flex items-center gap-0.5">
 		<Tooltip.Root>

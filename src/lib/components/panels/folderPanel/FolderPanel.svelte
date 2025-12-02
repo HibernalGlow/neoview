@@ -1048,6 +1048,9 @@ onMount(() => {
 		<SelectionBar onDelete={handleBatchDelete} />
 	{/if}
 
+	<!-- 渐变过渡 -->
+	<div class="h-4 bg-linear-to-b from-transparent to-background"></div>
+
 	<!-- 主内容区 - 使用层叠式布局 -->
 	<div class="relative flex-1 overflow-hidden">
 		<!-- 文件夹树层（绝对定位，在文件列表上方） -->

@@ -1352,7 +1352,7 @@ let lastBookPath: string | null = null;
 </script>
 
 
-<div class="upscale-panel">
+<div class="upscale-panel bg-background">
 	<!-- 标题栏 -->
 	<div class="panel-header">
 		<div class="flex items-center gap-2">

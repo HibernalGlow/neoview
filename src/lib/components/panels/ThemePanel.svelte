@@ -14,10 +14,22 @@
 	let systemPrefersDark = $state(false);
 	let themeUrl = $state('');
 	let sidebarOpacity = $state(settingsManager.getSettings().panels.sidebarOpacity);
+	let topToolbarOpacity = $state(settingsManager.getSettings().panels.topToolbarOpacity);
+	let bottomBarOpacity = $state(settingsManager.getSettings().panels.bottomBarOpacity);
 
 	function updateSidebarOpacity(value: number) {
 		sidebarOpacity = value;
 		settingsManager.updateNestedSettings('panels', { sidebarOpacity: value });
+	}
+	
+	function updateTopToolbarOpacity(value: number) {
+		topToolbarOpacity = value;
+		settingsManager.updateNestedSettings('panels', { topToolbarOpacity: value });
+	}
+	
+	function updateBottomBarOpacity(value: number) {
+		bottomBarOpacity = value;
+		settingsManager.updateNestedSettings('panels', { bottomBarOpacity: value });
 	}
 	let themeJson = $state('');
 	let customThemeName = $state('');
@@ -418,6 +430,40 @@
 		<p class="text-muted-foreground text-xs">
 			调整侧边栏和面板的背景透明度，数值越低越透明
 		</p>
+	</div>
+
+	<!-- 顶部工具栏透明度 -->
+	<div class="space-y-3">
+		<Label class="text-sm font-semibold">顶部工具栏透明度</Label>
+		<div class="flex items-center gap-4">
+			<Slider
+				type="single"
+				value={topToolbarOpacity}
+				min={50}
+				max={100}
+				step={5}
+				class="flex-1"
+				onValueChange={updateTopToolbarOpacity}
+			/>
+			<span class="text-sm text-muted-foreground w-12 text-right">{topToolbarOpacity}%</span>
+		</div>
+	</div>
+
+	<!-- 底部缩略图栏透明度 -->
+	<div class="space-y-3">
+		<Label class="text-sm font-semibold">底部缩略图栏透明度</Label>
+		<div class="flex items-center gap-4">
+			<Slider
+				type="single"
+				value={bottomBarOpacity}
+				min={50}
+				max={100}
+				step={5}
+				class="flex-1"
+				onValueChange={updateBottomBarOpacity}
+			/>
+			<span class="text-sm text-muted-foreground w-12 text-right">{bottomBarOpacity}%</span>
+		</div>
 	</div>
 
 	<!-- 预设主题 -->

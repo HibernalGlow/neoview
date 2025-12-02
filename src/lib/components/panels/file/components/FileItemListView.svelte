@@ -19,6 +19,7 @@
 	import type { FsItem } from '$lib/types';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import FolderRatingBadge from './FolderRatingBadge.svelte';
+	import TagChip from '$lib/components/ui/TagChip.svelte';
 	import type { EMMTranslationDict } from '$lib/api/emm';
 	import { hoverPreviewEnabled, hoverPreviewDelayMs } from '$lib/stores/hoverPreviewSettings.svelte';
 
@@ -41,7 +42,7 @@
 		emmMetadata: { translatedTitle?: string; tags?: Record<string, string[]>; rating?: number } | null;
 		folderAverageRating: number | null;
 		folderManualRating: number | null;
-		displayTags: () => { tag: string; display: string; isCollect: boolean; color?: string }[];
+		displayTags: () => { tag: string; display: string; isCollect: boolean; color?: string; isMixedVariant?: boolean }[];
 		getEffectiveRating: () => number | null;
 		// 预览相关
 		showPreview: boolean;
@@ -401,17 +402,14 @@
 		{#if displayTags().length > 0}
 			<div class="mt-1 flex flex-wrap items-center gap-1">
 				{#each displayTags() as tagInfo}
-					<span
-						class="inline-flex items-center rounded border px-1.5 py-0.5 text-xs {tagInfo.isCollect
-							? 'font-semibold'
-							: 'bg-muted border-border/60 text-muted-foreground'}"
-						style={tagInfo.isCollect
-							? `background-color: ${tagInfo.color || '#409EFF'}20; border-color: ${tagInfo.color || '#409EFF'}40; color: ${tagInfo.color || '#409EFF'};`
-							: ''}
-						title={tagInfo.tag}
-					>
-						{tagInfo.display}
-					</span>
+					<TagChip
+						tag={tagInfo.tag}
+						display={tagInfo.display}
+						color={tagInfo.color}
+						isCollect={tagInfo.isCollect}
+						isMixedVariant={tagInfo.isMixedVariant}
+						size="md"
+					/>
 				{/each}
 			</div>
 		{/if}

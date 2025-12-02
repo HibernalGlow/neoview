@@ -1354,7 +1354,7 @@ let lastBookPath: string | null = null;
 
 <div class="h-full flex flex-col">
 	<!-- 标题栏 -->
-	<div class="flex items-center justify-between p-4 border-b">
+	<div class="flex items-center justify-between p-4">
 		<div class="flex items-center gap-2">
 			<Sparkles class="w-5 h-5 text-primary" />
 			<h3 class="text-lg font-semibold">PyO3 超分面板</h3>
@@ -1366,6 +1366,8 @@ let lastBookPath: string | null = null;
 		</div>
 		{/if}
 	</div>
+	<!-- 渐变过渡 -->
+	<div class="h-4 bg-linear-to-b from-transparent to-background"></div>
 	
 	<!-- 内容区域 -->
 	<div class="upscale-panel bg-background">

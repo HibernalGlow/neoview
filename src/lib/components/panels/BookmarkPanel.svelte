@@ -276,10 +276,10 @@
 
 <div class="flex h-full flex-col">
 	<div
-		class="border-border sticky top-0 z-20 flex flex-col border-b"
+		class="border-border sticky top-0 z-20 flex flex-col"
 	>
 		<!-- 标题栏 -->
-		<div class="border-b p-4">
+		<div class="p-4">
 			<div class="mb-3 flex items-center justify-between">
 				<div class="flex items-center gap-2">
 					<Bookmark class="h-5 w-5" />
@@ -320,6 +320,8 @@
 				</div>
 			{/if}
 		</div>
+		<!-- 渐变过渡 -->
+		<div class="h-4 bg-linear-to-b from-transparent to-background"></div>
 	</div>
 
 	<div class="min-h-0 flex-1 overflow-hidden flex bg-background">

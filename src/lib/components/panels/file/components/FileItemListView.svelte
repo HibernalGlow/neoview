@@ -176,44 +176,58 @@
 		</button>
 	{/if}
 
-	<!-- 缩略图或图标 -->
-	<div class="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded">
-		{#if thumbnail}
-			<img
-				src={thumbnail}
-				alt={item.name}
-				class="h-full w-full object-cover transition-transform group-hover:scale-105"
-			/>
-		{:else if item.isDir}
-			<Folder class="text-primary group-hover:text-primary h-8 w-8 transition-colors" />
-		{:else if isArchive}
-			<FileArchive class="text-primary group-hover:text-primary h-8 w-8 transition-colors" />
-		{:else if item.isImage}
-			<Image class="text-primary group-hover:text-primary h-8 w-8 transition-colors" />
-		{:else}
-			<File class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500" />
-		{/if}
+	<!-- 缩略图或图标（带悬停预览） -->
+	<Tooltip.Root openDelay={400} closeDelay={100}>
+		<Tooltip.Trigger>
+			<div class="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded">
+				{#if thumbnail}
+					<img
+						src={thumbnail}
+						alt={item.name}
+						class="h-full w-full object-cover transition-transform group-hover:scale-105"
+					/>
+				{:else if item.isDir}
+					<Folder class="text-primary group-hover:text-primary h-8 w-8 transition-colors" />
+				{:else if isArchive}
+					<FileArchive class="text-primary group-hover:text-primary h-8 w-8 transition-colors" />
+				{:else if item.isImage}
+					<Image class="text-primary group-hover:text-primary h-8 w-8 transition-colors" />
+				{:else}
+					<File class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500" />
+				{/if}
 
-		<!-- 阅读标记 -->
-		{#if showReadMark}
-			{#if isReadCompleted}
-				<div class="bg-primary absolute right-0 top-0 rounded-full p-0.5">
-					<Check class="h-3 w-3 text-white" />
-				</div>
-			{:else}
-				<div class="border-primary bg-background/80 absolute right-0 top-0 rounded-full border border-dashed p-0.5">
-					<Check class="text-primary h-3 w-3" />
-				</div>
-			{/if}
-		{/if}
+				<!-- 阅读标记 -->
+				{#if showReadMark}
+					{#if isReadCompleted}
+						<div class="bg-primary absolute right-0 top-0 rounded-full p-0.5">
+							<Check class="h-3 w-3 text-white" />
+						</div>
+					{:else}
+						<div class="border-primary bg-background/80 absolute right-0 top-0 rounded-full border border-dashed p-0.5">
+							<Check class="text-primary h-3 w-3" />
+						</div>
+					{/if}
+				{/if}
 
-		<!-- 收藏标记 -->
-		{#if isBookmarked}
-			<div class="bg-primary absolute bottom-0 right-0 rounded-full p-0.5">
-				<Star class="h-3 w-3 fill-white text-white" />
+				<!-- 收藏标记 -->
+				{#if isBookmarked}
+					<div class="bg-primary absolute bottom-0 right-0 rounded-full p-0.5">
+						<Star class="h-3 w-3 fill-white text-white" />
+					</div>
+				{/if}
 			</div>
+		</Tooltip.Trigger>
+		<!-- 悬停预览大图 -->
+		{#if thumbnail}
+			<Tooltip.Content side="right" class="p-0 border-0 bg-transparent shadow-xl">
+				<img
+					src={thumbnail}
+					alt={item.name}
+					class="max-w-[300px] max-h-[400px] rounded-lg object-contain bg-background border shadow-lg"
+				/>
+			</Tooltip.Content>
 		{/if}
-	</div>
+	</Tooltip.Root>
 
 	<!-- 信息 -->
 	<div class="min-w-0 flex-1">

@@ -1352,20 +1352,23 @@ let lastBookPath: string | null = null;
 </script>
 
 
-<div class="upscale-panel bg-background">
+<div class="h-full flex flex-col">
 	<!-- 标题栏 -->
-	<div class="panel-header">
+	<div class="flex items-center justify-between p-4 border-b">
 		<div class="flex items-center gap-2">
 			<Sparkles class="w-5 h-5 text-primary" />
 			<h3 class="text-lg font-semibold">PyO3 超分面板</h3>
 		</div>
 		{#if !pyo3UpscaleManager.isAvailable()}
-			<div class="flex items-center gap-1 text-red-500 text-sm">
-				<AlertCircle class="w-4 h-4" />
-				<span>sr_vulkan 不可用</span>
-			</div>
+		<div class="flex items-center gap-1 text-red-500 text-sm">
+			<AlertCircle class="w-4 h-4" />
+			<span>sr_vulkan 不可用</span>
+		</div>
 		{/if}
 	</div>
+	
+	<!-- 内容区域 -->
+	<div class="upscale-panel bg-background">
 
 	<!-- 全局开关 -->
 	<div
@@ -1761,6 +1764,7 @@ let lastBookPath: string | null = null;
 			{/if}
 		</div>
 	{/if}
+	</div>
 </div>
 
 <style>
@@ -1769,15 +1773,8 @@ let lastBookPath: string | null = null;
 		flex-direction: column;
 		gap: 1rem;
 		padding: 1rem;
-		height: 100%;
+		flex: 1;
 		overflow-y: auto;
 	}
 
-	.panel-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding-bottom: 0.75rem;
-		border-bottom: 1px solid hsl(var(--border));
-	}
 </style>

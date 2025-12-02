@@ -41,14 +41,15 @@ function cancelEditing() {
 
 function confirmEditing() {
 	if (editValue.trim()) {
-		// 规范化路径
-		let normalizedPath = editValue.trim().replace(/\\/g, '/');
+		// 规范化路径：Windows 使用反斜杠
+		let normalizedPath = editValue.trim().replace(/\//g, '\\');
 		// 确保 Windows 盘符格式正确
-		if (/^[a-zA-Z]:/.test(normalizedPath) && !normalizedPath.endsWith('/')) {
-			// 如果只是盘符，添加斜杠
-			if (normalizedPath.length === 2) {
-				normalizedPath += '/';
-			}
+		if (/^[a-zA-Z]:$/.test(normalizedPath)) {
+			normalizedPath += '\\';
+		}
+		// 确保 Windows 盘符后有反斜杠
+		if (/^[a-zA-Z]:[^\\]/.test(normalizedPath)) {
+			normalizedPath = normalizedPath.slice(0, 2) + '\\' + normalizedPath.slice(2);
 		}
 		folderTabActions.setPath(normalizedPath);
 		onNavigate?.(normalizedPath);
@@ -85,15 +86,16 @@ interface BreadcrumbItem {
 function parsePath(path: string): BreadcrumbItem[] {
 	if (!path) return [];
 
-	const normalized = path.replace(/\\/g, '/');
-	const parts = normalized.split('/').filter(Boolean);
+	// 统一使用反斜杠处理
+	const normalized = path.replace(/\//g, '\\');
+	const parts = normalized.split('\\').filter(Boolean);
 
 	const items: BreadcrumbItem[] = [];
 
 	// Windows 盘符处理
 	if (path.includes(':')) {
 		const drive = parts[0]; // e.g., "E:"
-		const drivePath = drive + '/'; // e.g., "E:/"
+		const drivePath = drive + '\\'; // e.g., "E:\"
 		items.push({
 			name: drive,
 			path: drivePath,
@@ -102,12 +104,14 @@ function parsePath(path: string): BreadcrumbItem[] {
 
 		let currentPath = drivePath;
 		for (let i = 1; i < parts.length; i++) {
-			currentPath = currentPath.endsWith('/') ? currentPath + parts[i] : currentPath + '/' + parts[i];
+			currentPath = currentPath + parts[i];
 			items.push({
 				name: parts[i],
 				path: currentPath,
 				isRoot: false
 			});
+			// 添加分隔符供下一次迭代使用
+			currentPath += '\\';
 		}
 	} else {
 		// Unix 路径

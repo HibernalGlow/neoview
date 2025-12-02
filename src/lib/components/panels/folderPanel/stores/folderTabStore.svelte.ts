@@ -410,15 +410,15 @@ export const folderTabActions = {
 	 * 设置当前路径
 	 */
 	setPath(path: string, addToHistory = true) {
-		// 规范化路径：统一使用正斜杠，确保 Windows 盘符格式正确
-		let normalizedPath = path.replace(/\\/g, '/');
-		// 确保 Windows 盘符后有斜杠 (E: -> E:/)
+		// 规范化路径：Windows 使用反斜杠
+		let normalizedPath = path.replace(/\//g, '\\');
+		// 确保 Windows 盘符后有反斜杠 (E: -> E:\)
 		if (/^[a-zA-Z]:$/.test(normalizedPath)) {
-			normalizedPath += '/';
+			normalizedPath += '\\';
 		}
-		// 确保 Windows 盘符格式正确 (E:abc -> E:/abc)
-		if (/^[a-zA-Z]:[^/]/.test(normalizedPath)) {
-			normalizedPath = normalizedPath.slice(0, 2) + '/' + normalizedPath.slice(2);
+		// 确保 Windows 盘符格式正确 (E:abc -> E:\abc)
+		if (/^[a-zA-Z]:[^\\]/.test(normalizedPath)) {
+			normalizedPath = normalizedPath.slice(0, 2) + '\\' + normalizedPath.slice(2);
 		}
 		
 		updateActiveTab((tab) => {

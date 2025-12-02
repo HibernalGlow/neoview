@@ -353,3 +353,203 @@ pub async fn run_batch_benchmark(file_paths: Vec<String>) -> Result<Vec<Benchmar
     
     Ok(reports)
 }
+
+/// 扫描文件夹中的压缩包数量（递归）
+#[command]
+pub async fn scan_archive_folder(folder_path: String) -> Result<ArchiveScanResult, String> {
+    use std::fs;
+    use walkdir::WalkDir;
+    
+    let path = PathBuf::from(&folder_path);
+    let mut archives: Vec<PathBuf> = Vec::new();
+    
+    // 递归查找所有压缩包
+    for entry in WalkDir::new(&path).into_iter().filter_map(|e| e.ok()) {
+        let file_path = entry.path();
+        if file_path.is_file() {
+            if let Some(ext) = file_path.extension().and_then(|e| e.to_str()) {
+                let ext_lower = ext.to_lowercase();
+                if ["zip", "cbz", "rar", "7z", "cb7", "cbr"].contains(&ext_lower.as_str()) {
+                    archives.push(file_path.to_path_buf());
+                }
+            }
+        }
+    }
+    
+    Ok(ArchiveScanResult {
+        total_count: archives.len(),
+        folder_path,
+    })
+}
+
+#[derive(Serialize, Clone)]
+pub struct ArchiveScanResult {
+    pub total_count: usize,
+    pub folder_path: String,
+}
+
+/// 文件夹批量压缩包基准测试
+#[command]
+pub async fn run_archive_folder_benchmark(folder_path: String, tier: u32) -> Result<Vec<BenchmarkReport>, String> {
+    use std::fs;
+    use rand::seq::SliceRandom;
+    use walkdir::WalkDir;
+    
+    let path = PathBuf::from(&folder_path);
+    
+    // 递归收集所有压缩包文件
+    let mut archives: Vec<PathBuf> = Vec::new();
+    for entry in WalkDir::new(&path).into_iter().filter_map(|e| e.ok()) {
+        let file_path = entry.path();
+        if file_path.is_file() {
+            if let Some(ext) = file_path.extension().and_then(|e| e.to_str()) {
+                let ext_lower = ext.to_lowercase();
+                if ["zip", "cbz", "rar", "7z", "cb7", "cbr"].contains(&ext_lower.as_str()) {
+                    archives.push(file_path.to_path_buf());
+                }
+            }
+        }
+    }
+    
+    if archives.is_empty() {
+        return Err("文件夹中没有找到压缩包".to_string());
+    }
+    
+    // 随机抽取指定数量的压缩包
+    let selected: Vec<PathBuf> = {
+        let mut rng = rand::thread_rng();
+        archives.shuffle(&mut rng);
+        let count = (tier as usize).min(archives.len());
+        archives[..count].to_vec()
+    };
+    
+    // 对每个压缩包进行测试
+    let mut reports = Vec::new();
+    for archive in selected {
+        match run_archive_thumbnail_benchmark(archive.to_string_lossy().to_string()).await {
+            Ok(report) => reports.push(report),
+            Err(e) => eprintln!("测试 {:?} 失败: {}", archive, e),
+        }
+    }
+    
+    Ok(reports)
+}
+
+/// 压缩包缩略图提取基准测试
+#[command]
+pub async fn run_archive_thumbnail_benchmark(archive_path: String) -> Result<BenchmarkReport, String> {
+    use std::fs;
+    use std::io::Read;
+    use zip::ZipArchive;
+    
+    let path = PathBuf::from(&archive_path);
+    let file_size = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+    let mut results = Vec::new();
+    
+    // 打开压缩包
+    let file = fs::File::open(&path).map_err(|e| format!("打开压缩包失败: {}", e))?;
+    let mut archive = ZipArchive::new(file).map_err(|e| format!("解析压缩包失败: {}", e))?;
+    
+    // 找到第一个图片文件
+    let image_exts = ["jpg", "jpeg", "png", "webp", "avif", "jxl", "gif", "bmp"];
+    let mut first_image: Option<(String, Vec<u8>)> = None;
+    
+    for i in 0..archive.len() {
+        if let Ok(mut entry) = archive.by_index(i) {
+            let name = entry.name().to_lowercase();
+            if image_exts.iter().any(|ext| name.ends_with(ext)) {
+                let mut data = Vec::new();
+                if entry.read_to_end(&mut data).is_ok() {
+                    first_image = Some((entry.name().to_string(), data));
+                    break;
+                }
+            }
+        }
+    }
+    
+    let (image_name, image_data) = first_image.ok_or("压缩包中没有找到图片")?;
+    let ext = image_name.split('.').last().unwrap_or("").to_lowercase();
+    
+    // 1. 测试解压+解码 (image crate)
+    {
+        use image::GenericImageView;
+        let start = Instant::now();
+        let result = image::load_from_memory(&image_data);
+        let duration = start.elapsed().as_secs_f64() * 1000.0;
+        
+        results.push(BenchmarkResult {
+            method: "archive→image crate".to_string(),
+            format: ext.clone(),
+            duration_ms: duration,
+            success: result.is_ok(),
+            error: result.as_ref().err().map(|e| e.to_string()),
+            image_size: result.ok().map(|img| img.dimensions()),
+            output_size: None,
+        });
+    }
+    
+    // 2. 测试解压+WIC解码
+    #[cfg(target_os = "windows")]
+    {
+        use crate::core::wic_decoder::{decode_image_from_memory_with_wic, wic_result_to_dynamic_image};
+        use image::GenericImageView;
+        
+        let start = Instant::now();
+        let result = decode_image_from_memory_with_wic(&image_data)
+            .and_then(|r| wic_result_to_dynamic_image(r));
+        let duration = start.elapsed().as_secs_f64() * 1000.0;
+        
+        results.push(BenchmarkResult {
+            method: "archive→WIC".to_string(),
+            format: ext.clone(),
+            duration_ms: duration,
+            success: result.is_ok(),
+            error: result.as_ref().err().cloned(),
+            image_size: result.ok().map(|img| img.dimensions()),
+            output_size: None,
+        });
+    }
+    
+    // 3. 完整流程：解压+WIC解码+缩放+WebP编码
+    #[cfg(target_os = "windows")]
+    {
+        let start = Instant::now();
+        let result = generate_thumbnail_with_wic(&image_data);
+        let duration = start.elapsed().as_secs_f64() * 1000.0;
+        let output_size = result.as_ref().ok().map(|v| v.len());
+        
+        results.push(BenchmarkResult {
+            method: "archive→WIC→webp (完整流程)".to_string(),
+            format: ext.clone(),
+            duration_ms: duration,
+            success: result.is_ok(),
+            error: result.as_ref().err().cloned(),
+            image_size: None,
+            output_size,
+        });
+    }
+    
+    // 4. 完整流程：解压+image解码+缩放+WebP编码
+    {
+        let start = Instant::now();
+        let result = generate_thumbnail_with_image_crate(&image_data);
+        let duration = start.elapsed().as_secs_f64() * 1000.0;
+        let output_size = result.as_ref().ok().map(|v| v.len());
+        
+        results.push(BenchmarkResult {
+            method: "archive→image→webp (完整流程)".to_string(),
+            format: ext.clone(),
+            duration_ms: duration,
+            success: result.is_ok(),
+            error: result.as_ref().err().cloned(),
+            image_size: None,
+            output_size,
+        });
+    }
+    
+    Ok(BenchmarkReport {
+        file_path: format!("{}::{}", archive_path, image_name),
+        file_size,
+        results,
+    })
+}

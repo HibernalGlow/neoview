@@ -383,6 +383,9 @@ pub fn run() {
             // Benchmark commands
             commands::benchmark_commands::run_image_benchmark,
             commands::benchmark_commands::run_batch_benchmark,
+            commands::benchmark_commands::scan_archive_folder,
+            commands::benchmark_commands::run_archive_folder_benchmark,
+            commands::benchmark_commands::run_archive_thumbnail_benchmark,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

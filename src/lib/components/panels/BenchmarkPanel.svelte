@@ -26,19 +26,29 @@
 		results: BenchmarkResult[];
 	}
 
-	type CardId = 'files' | 'results' | 'summary';
+	type CardId = 'files' | 'archives' | 'results' | 'summary';
 
 	// ==================== 状态管理 ====================
-	let cardOrder = $state<CardId[]>(['files', 'results', 'summary']);
+	let cardOrder = $state<CardId[]>(['files', 'archives', 'results', 'summary']);
 	let showCards = $state<Record<CardId, boolean>>({
 		files: true,
+		archives: true,
 		results: true,
 		summary: true
 	});
 
+	interface ArchiveScanResult {
+		total_count: number;
+		folder_path: string;
+	}
+
 	let reports = $state<BenchmarkReport[]>([]);
 	let isRunning = $state(false);
+	let isScanning = $state(false);
 	let selectedFiles = $state<string[]>([]);
+	let selectedArchiveFolder = $state<string>('');
+	let archiveScanResult = $state<ArchiveScanResult | null>(null);
+	let archiveTier = $state<20 | 50 | 100 | 300>(20);
 	let copied = $state(false);
 
 	// ==================== 卡片操作 ====================
@@ -78,8 +88,38 @@
 		}
 	}
 
+	async function selectArchiveFolder() {
+		const folder = await open({
+			directory: true,
+			multiple: false
+		});
+
+		if (folder && typeof folder === 'string') {
+			selectedArchiveFolder = folder;
+			archiveScanResult = null;
+			// 自动扫描
+			isScanning = true;
+			try {
+				const result = await invoke<ArchiveScanResult>('scan_archive_folder', {
+					folderPath: folder
+				});
+				archiveScanResult = result;
+			} catch (err) {
+				console.error('扫描失败:', err);
+			} finally {
+				isScanning = false;
+			}
+		}
+	}
+
 	function clearFiles() {
 		selectedFiles = [];
+		reports = [];
+	}
+
+	function clearArchives() {
+		selectedArchiveFolder = '';
+		archiveScanResult = null;
 		reports = [];
 	}
 
@@ -97,6 +137,25 @@
 			reports = results;
 		} catch (err) {
 			console.error('基准测试失败:', err);
+		} finally {
+			isRunning = false;
+		}
+	}
+
+	async function runArchiveBenchmark() {
+		if (!selectedArchiveFolder) return;
+
+		isRunning = true;
+		reports = [];
+
+		try {
+			const results = await invoke<BenchmarkReport[]>('run_archive_folder_benchmark', {
+				folderPath: selectedArchiveFolder,
+				tier: archiveTier
+			});
+			reports = results;
+		} catch (err) {
+			console.error('压缩包基准测试失败:', err);
 		} finally {
 			isRunning = false;
 		}
@@ -290,7 +349,7 @@
 						<div class="flex gap-2">
 							<Button onclick={selectFiles} variant="outline" size="sm" class="flex-1 text-xs">
 								<FolderOpen class="h-3 w-3 mr-1" />
-								选择文件 ({selectedFiles.length})
+								选择图像 ({selectedFiles.length})
 							</Button>
 							<Button
 								onclick={runBenchmark}
@@ -313,6 +372,104 @@
 								{#each selectedFiles as file}
 									<div class="truncate">{file.split(/[/\\]/).pop()}</div>
 								{/each}
+							</div>
+						{/if}
+					</div>
+				{/if}
+			</div>
+
+			<!-- 压缩包批量测试卡片 -->
+			<div
+				class="rounded-lg border bg-muted/10 p-3 space-y-3"
+				style={`order: ${getCardOrder('archives')}`}
+			>
+				<div class="flex items-center justify-between">
+					<div class="font-semibold text-sm">压缩包测试</div>
+					<div class="flex items-center gap-1 text-[10px]">
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+							onclick={() => (showCards.archives = !showCards.archives)}
+							title={showCards.archives ? '收起' : '展开'}
+						>
+							{#if showCards.archives}
+								<ChevronUp class="h-3 w-3" />
+							{:else}
+								<ChevronDown class="h-3 w-3" />
+							{/if}
+						</button>
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40"
+							onclick={() => moveCard('archives', 'up')}
+							disabled={!canMoveCard('archives', 'up')}
+						>
+							<ArrowUp class="h-3 w-3" />
+						</button>
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40"
+							onclick={() => moveCard('archives', 'down')}
+							disabled={!canMoveCard('archives', 'down')}
+						>
+							<ArrowDown class="h-3 w-3" />
+						</button>
+					</div>
+				</div>
+
+				{#if showCards.archives}
+					<div class="space-y-2">
+						<div class="flex gap-2">
+							<Button onclick={selectArchiveFolder} variant="outline" size="sm" class="flex-1 text-xs" disabled={isScanning}>
+								<FolderOpen class="h-3 w-3 mr-1" />
+								{isScanning ? '扫描中...' : selectedArchiveFolder ? '重选文件夹' : '选择文件夹'}
+							</Button>
+							<Button
+								onclick={runArchiveBenchmark}
+								disabled={isRunning || !archiveScanResult || archiveScanResult.total_count === 0}
+								size="sm"
+								class="flex-1 text-xs"
+							>
+								<Play class="h-3 w-3 mr-1" />
+								{isRunning ? '测试中...' : '开始测试'}
+							</Button>
+							{#if selectedArchiveFolder}
+								<Button onclick={clearArchives} variant="ghost" size="sm" class="text-xs">
+									<Trash2 class="h-3 w-3" />
+								</Button>
+							{/if}
+						</div>
+
+						<!-- 扫描结果显示 -->
+						{#if archiveScanResult}
+							<div class="text-[10px] p-2 bg-muted/50 rounded space-y-1">
+								<div class="flex justify-between">
+									<span class="text-muted-foreground">找到压缩包:</span>
+									<span class="font-medium text-primary">{archiveScanResult.total_count} 个</span>
+								</div>
+								<div class="truncate text-muted-foreground" title={archiveScanResult.folder_path}>
+									📁 {archiveScanResult.folder_path}
+								</div>
+							</div>
+						{/if}
+
+						<!-- 档位选择 -->
+						{#if archiveScanResult && archiveScanResult.total_count > 0}
+							<div class="flex gap-1 text-[10px] items-center">
+								<span class="text-muted-foreground mr-1">抽样数:</span>
+								{#each [20, 50, 100, 300] as tier}
+									<button
+										type="button"
+										class="px-2 py-0.5 rounded {archiveTier === tier ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'}"
+										onclick={() => archiveTier = tier as 20 | 50 | 100 | 300}
+										disabled={tier > archiveScanResult.total_count}
+									>
+										{Math.min(tier, archiveScanResult.total_count)}
+									</button>
+								{/each}
+							</div>
+							<div class="text-[10px] text-muted-foreground">
+								将随机抽取 {Math.min(archiveTier, archiveScanResult.total_count)} 个压缩包测试
 							</div>
 						{/if}
 					</div>

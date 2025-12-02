@@ -25,7 +25,7 @@
 {#if collapsible === "none"}
 	<div
 		class={cn(
-			"bg-sidebar/90 text-sidebar-foreground w-(--sidebar-width) flex h-full flex-col backdrop-blur-md",
+			"bg-transparent text-sidebar-foreground w-(--sidebar-width) flex h-full flex-col",
 			className
 		)}
 		bind:this={ref}

@@ -532,13 +532,12 @@ async function handleItemSelect(layerIndex: number, payload: { item: FsItem; ind
 	layers[layerIndex].selectedIndex = payload.index;
 	
 	if (payload.multiSelect) {
-		// 多选模式：只切换选中状态
+		// 多选模式：只切换选中状态，不导航
 		folderTabActions.selectItem(payload.item.path, true);
 	} else {
-		folderTabActions.selectItem(payload.item.path);
-		
 		if (payload.item.isDir) {
-			// 文件夹：检查穿透模式
+			// 文件夹：进入目录，不加入选中列表
+			// 检查穿透模式
 			if ($penetrateMode) {
 				const penetrated = await tryPenetrateFolder(payload.item.path);
 				if (penetrated) {
@@ -547,10 +546,13 @@ async function handleItemSelect(layerIndex: number, payload: { item: FsItem; ind
 					return;
 				}
 			}
+			// 进入目录前清除选中状态
+			folderTabActions.deselectAll();
 			// 正常进入目录
 			pushLayer(payload.item.path);
 		} else {
-			// 文件：直接打开
+			// 文件：加入选中列表并打开
+			folderTabActions.selectItem(payload.item.path);
 			onItemOpen?.(payload.item);
 		}
 	}

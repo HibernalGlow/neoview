@@ -751,6 +751,11 @@ onMount(() => {
 			// 初始化层叠导航
 			const initialPath = $currentPath || home;
 			navigationCommand.set({ type: 'init', path: initialPath });
+
+			// 自动加载 EMM 收藏标签（如果尚未加载）
+			if (!favoriteTagStore.isEMMLoaded()) {
+				await favoriteTagStore.loadFromEMM();
+			}
 		} catch (err) {
 			console.error('[FolderPanel] Failed to initialize:', err);
 		}

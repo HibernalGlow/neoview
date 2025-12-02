@@ -1,9 +1,13 @@
 /**
  * 收藏标签存储
  * 管理用户收藏的 EMM 标签，用于快速搜索
+ * 支持从 EMM 设置文件导入收藏标签
  */
 
+import { loadEMMCollectTags, findEMMSettingFile, type EMMCollectTag } from '$lib/api/emm';
+
 const STORAGE_KEY = 'neoview-emm-favorite-tags';
+const EMM_LOADED_KEY = 'neoview-emm-tags-loaded';
 
 // 类别到字母的映射
 export const cat2letter: Record<string, string> = {
@@ -220,6 +224,68 @@ export const favoriteTagStore = {
 	// 导出收藏标签
 	export(): FavoriteTag[] {
 		return [...favoriteTags];
+	},
+
+	// 从 EMM 设置文件加载收藏标签
+	async loadFromEMM(): Promise<boolean> {
+		try {
+			// 查找 EMM 设置文件
+			const settingPath = await findEMMSettingFile();
+			if (!settingPath) {
+				console.log('[FavoriteTagStore] EMM 设置文件未找到');
+				return false;
+			}
+
+			// 加载收藏标签
+			const collectTags = await loadEMMCollectTags(settingPath);
+			if (!collectTags || collectTags.length === 0) {
+				console.log('[FavoriteTagStore] EMM 收藏标签为空');
+				return false;
+			}
+
+			// 转换为 FavoriteTag 格式
+			const tags: FavoriteTag[] = collectTags.map((ct: EMMCollectTag) => {
+				const cat = letter2cat[ct.letter] || ct.letter;
+				return {
+					id: ct.id || `${cat}:${ct.tag}`,
+					cat,
+					tag: ct.tag,
+					letter: ct.letter,
+					display: ct.display || `${cat}:${ct.tag}`,
+					value: createTagValue(cat, ct.tag),
+					color: ct.color || categoryColors[cat] || '#409EFF'
+				};
+			});
+
+			// 合并到现有收藏（避免重复）
+			const existingIds = new Set(favoriteTags.map(t => t.id));
+			const newTags = tags.filter(t => !existingIds.has(t.id));
+			
+			if (newTags.length > 0) {
+				favoriteTags = [...favoriteTags, ...newTags];
+				saveTags(favoriteTags);
+				console.log(`[FavoriteTagStore] 从 EMM 导入 ${newTags.length} 个收藏标签`);
+			}
+
+			// 标记已加载
+			localStorage.setItem(EMM_LOADED_KEY, 'true');
+			return true;
+		} catch (err) {
+			console.error('[FavoriteTagStore] 从 EMM 加载收藏标签失败:', err);
+			return false;
+		}
+	},
+
+	// 检查是否已从 EMM 加载
+	isEMMLoaded(): boolean {
+		return localStorage.getItem(EMM_LOADED_KEY) === 'true';
+	},
+
+	// 强制重新从 EMM 加载
+	async reloadFromEMM(): Promise<boolean> {
+		localStorage.removeItem(EMM_LOADED_KEY);
+		this.clear();
+		return await this.loadFromEMM();
 	}
 };
 

@@ -17,6 +17,7 @@ pub mod upscale_commands;
 pub mod upscale_scheduler_commands;
 pub mod upscale_settings_commands;
 pub mod video_commands;
+pub mod benchmark_commands;
 
 pub use book_commands::*;
 pub use comparison_commands::*;

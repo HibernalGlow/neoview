@@ -6,7 +6,7 @@
  */
 
 import { writable, derived, get } from 'svelte/store';
-import { Folder, History, Bookmark, Info, FileText, File, Sparkles, BarChart3, Settings, ListMusic } from '@lucide/svelte';
+import { Folder, History, Bookmark, Info, FileText, File, Sparkles, BarChart3, Settings, ListMusic, Timer } from '@lucide/svelte';
 
 // 面板位置
 export type PanelPosition = 'left' | 'right' | 'bottom' | 'floating';
@@ -117,6 +117,17 @@ export const PANEL_DEFINITIONS = {
 		defaultVisible: false,
 		defaultOrder: 99,
 		canMove: false,
+		canHide: true
+	},
+	// 开发/测试面板
+	benchmark: {
+		title: '基准测试',
+		icon: Timer,
+		emoji: '⏱️',
+		defaultPosition: 'right' as PanelPosition,
+		defaultVisible: false,
+		defaultOrder: 10,
+		canMove: true,
 		canHide: true
 	}
 } as const;

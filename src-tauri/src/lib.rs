@@ -380,6 +380,9 @@ pub fn run() {
             commands::get_explorer_context_menu_enabled,
             commands::set_explorer_context_menu_enabled,
             commands::generate_explorer_context_menu_reg,
+            // Benchmark commands
+            commands::benchmark_commands::run_image_benchmark,
+            commands::benchmark_commands::run_batch_benchmark,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

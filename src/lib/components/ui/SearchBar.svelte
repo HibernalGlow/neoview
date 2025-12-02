@@ -130,7 +130,7 @@
 		}
 	}
 
-	// 处理搜索输入
+	// 处理搜索输入 - 只更新值，不自动触发搜索
 	function handleSearchInput(e: Event) {
 		const target = e.target as HTMLInputElement;
 		searchQuery = target.value;
@@ -138,19 +138,20 @@
 		if (onSearchChange) {
 			onSearchChange(searchQuery);
 		}
+	}
 
-		// 实时搜索（防抖）
+	// 处理搜索按钮点击
+	function handleSearchClick() {
 		if (searchQuery.trim()) {
-			if (searchTimeout) {
-				clearTimeout(searchTimeout);
-			}
-			searchTimeout = setTimeout(() => {
-				handleSearch(searchQuery);
-			}, 300);
-		} else {
-			if (onSearch) {
-				onSearch('');
-			}
+			handleSearch(searchQuery);
+		}
+	}
+
+	// 处理回车键（可选，按回车也触发搜索）
+	function handleKeyDown(e: KeyboardEvent) {
+		if (e.key === 'Enter' && !e.isComposing) {
+			e.preventDefault();
+			handleSearchClick();
 		}
 	}
 
@@ -211,62 +212,75 @@
 <div class="search-bar-container flex items-center gap-2 border-b border-border px-2 py-2 bg-background/50">
 	<div class="relative flex-1">
 		<!-- 搜索输入框 -->
-		<div class="relative">
-			<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-			<Input.Root
-				placeholder={placeholder}
-				bind:value={searchQuery}
-				oninput={handleSearchInput}
-				onfocus={handleSearchFocus}
-				class="pl-10 pr-24 bg-background border-border"
-				{disabled}
-			/>
+		<div class="flex gap-1">
+			<div class="relative flex-1">
+				<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+				<Input.Root
+					placeholder={placeholder}
+					bind:value={searchQuery}
+					oninput={handleSearchInput}
+					onkeydown={handleKeyDown}
+					onfocus={handleSearchFocus}
+					class="pl-10 pr-20 bg-background border-border"
+					{disabled}
+				/>
+				
+				<!-- 清空按钮 -->
+				{#if searchQuery}
+					<button
+						class="absolute right-14 top-1/2 transform -translate-y-1/2 p-1 hover:bg-accent rounded"
+						onclick={() => {
+							searchQuery = '';
+							if (onSearch) {
+								onSearch('');
+							}
+						}}
+						title="清空搜索"
+					>
+						<X class="h-4 w-4 text-muted-foreground" />
+					</button>
+				{/if}
+				
+				<!-- 搜索历史按钮 -->
+				{#if storageKey}
+					<button
+						class="absolute right-7 top-1/2 transform -translate-y-1/2 p-1 hover:bg-accent rounded disabled:opacity-50"
+						onclick={() => {
+							showHistory = !showHistory;
+							showSettings = false;
+						}}
+						disabled={searchHistory.length === 0}
+						title="搜索历史"
+					>
+						<ChevronDown class="h-4 w-4 text-muted-foreground" />
+					</button>
+				{/if}
+				
+				<!-- 搜索设置按钮 -->
+				{#if searchSettings && onSettingsChange}
+					<button
+						class="absolute right-1 top-1/2 transform -translate-y-1/2 p-1 hover:bg-accent rounded"
+						onclick={(e) => {
+							e.stopPropagation();
+							showSettings = !showSettings;
+							showHistory = false;
+						}}
+						title="搜索设置"
+					>
+						<MoreVertical class="h-4 w-4 text-muted-foreground" />
+					</button>
+				{/if}
+			</div>
 			
-			<!-- 清空按钮 -->
-			{#if searchQuery}
-				<button
-					class="absolute right-16 top-1/2 transform -translate-y-1/2 p-1 hover:bg-accent rounded"
-					onclick={() => {
-						searchQuery = '';
-						if (onSearch) {
-							onSearch('');
-						}
-					}}
-					title="清空搜索"
-				>
-					<X class="h-4 w-4 text-muted-foreground" />
-				</button>
-			{/if}
-			
-			<!-- 搜索历史按钮 -->
-			{#if storageKey}
-				<button
-					class="absolute right-8 top-1/2 transform -translate-y-1/2 p-1 hover:bg-accent rounded disabled:opacity-50"
-					onclick={() => {
-						showHistory = !showHistory;
-						showSettings = false;
-					}}
-					disabled={searchHistory.length === 0}
-					title="搜索历史"
-				>
-					<ChevronDown class="h-4 w-4 text-muted-foreground" />
-				</button>
-			{/if}
-			
-			<!-- 搜索设置按钮 -->
-			{#if searchSettings && onSettingsChange}
-				<button
-					class="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 hover:bg-accent rounded"
-					onclick={(e) => {
-						e.stopPropagation();
-						showSettings = !showSettings;
-						showHistory = false;
-					}}
-					title="搜索设置"
-				>
-					<MoreVertical class="h-4 w-4 text-muted-foreground" />
-				</button>
-			{/if}
+			<!-- 搜索按钮 -->
+			<button
+				class="px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 text-sm font-medium shrink-0"
+				onclick={handleSearchClick}
+				disabled={disabled || !searchQuery.trim()}
+				title="搜索"
+			>
+				搜索
+			</button>
 		</div>
 		
 		<!-- 搜索历史下拉 -->

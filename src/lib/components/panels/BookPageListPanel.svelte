@@ -246,7 +246,7 @@
 </script>
 
 <div class="h-full flex flex-col">
-	<div class="p-3 border-b space-y-2">
+	<div class="p-3 space-y-2">
 		<div class="flex items-center justify-between">
 			<h3 class="text-sm font-semibold flex items-center gap-2">
 				<FileText class="h-4 w-4" />
@@ -327,6 +327,8 @@
 				/>
 		</div>
 	</div>
+	<!-- 渐变过渡 -->
+	<div class="h-4 bg-linear-to-b from-transparent to-background"></div>
 
 	<div class="flex-1 flex overflow-hidden bg-background">
 	<div 

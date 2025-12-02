@@ -55,6 +55,7 @@ let startHeight = $state(0);
 // 分组后的标签（支持混合性别变体）
 const groupedTags = $derived.by((): Array<{ name: string; tags: ExtendedFavoriteTag[] }> => {
 	const baseTags = favoriteTagStore.tags;
+	console.log(`[FavoriteTagPanel] 混合模式: ${enableMixed}, 基础标签数: ${baseTags.length}`);
 	
 	if (!enableMixed) {
 		// 不开启混合时，将 FavoriteTag 转换为 ExtendedFavoriteTag
@@ -92,16 +93,19 @@ const groupedTags = $derived.by((): Array<{ name: string; tags: ExtendedFavorite
 					letter,
 					display: `${otherCat}:${tag.display.split(':')[1] || tag.tag}`,
 					value: createTagValue(otherCat, tag.tag),
-					color: categoryColors[otherCat] || '#409EFF',
+					color: tag.color, // 保持原始标签的颜色
 					isMixedVariant: true,
 					originalCat: tag.cat
 				};
 				
 				extendedTags.push(variantTag);
 				addedIds.add(variantId);
+				console.log(`[FavoriteTagPanel] 生成变体: ${variantId}, color: ${variantTag.color}, from: ${tag.cat}`);
 			}
 		}
 	}
+	
+	console.log(`[FavoriteTagPanel] 总标签数: ${extendedTags.length}, 变体数: ${extendedTags.filter(t => t.isMixedVariant).length}`);
 	
 	// 分组
 	const groups: Record<string, ExtendedFavoriteTag[]> = {};
@@ -239,6 +243,7 @@ function stopResize() {
 							{#each category.tags as tag (tag.id)}
 								{@const isVariant = 'isMixedVariant' in tag && tag.isMixedVariant}
 								{@const origCat = 'originalCat' in tag ? tag.originalCat : ''}
+								{@const _ = isVariant && console.log(`[FavoriteTagPanel] 变体标签: ${tag.id}, color: ${tag.color}, origCat: ${origCat}`)}
 								<button
 									class="favorite-tag-chip inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded border transition-all hover:-translate-y-0.5 {isVariant ? 'border-dashed opacity-70' : ''}"
 									style="

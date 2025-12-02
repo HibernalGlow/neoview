@@ -115,7 +115,7 @@ function getDisplayName(path: string): string {
 function createDefaultTabState(id: string, homePath: string = ''): FolderTabState {
 	return {
 		id,
-		title: '新标签页',
+		title: 'New',
 		currentPath: homePath,
 		items: [],
 		selectedItems: new SvelteSet(),

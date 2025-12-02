@@ -348,10 +348,9 @@ function handleSetHome() {
 	}
 }
 
-// 处理搜索（使用后端搜索）
+// 处理搜索（使用后端搜索）- 在新标签页展示搜索结果
 async function handleSearch(keyword: string) {
 	console.log('[FolderPanel] handleSearch called with keyword:', keyword);
-	folderTabActions.setSearchKeyword(keyword);
 	
 	if (!keyword.trim()) {
 		console.log('[FolderPanel] Empty keyword, clearing search');
@@ -359,22 +358,27 @@ async function handleSearch(keyword: string) {
 		return;
 	}
 	
+	const searchPath = $currentPath;
+	console.log('[FolderPanel] Searching in path:', searchPath);
+	if (!searchPath) {
+		console.warn('[FolderPanel] No current path, cannot search');
+		return;
+	}
+	
+	// 创建新标签页用于显示搜索结果
+	const searchTabId = folderTabActions.createTab(searchPath);
+	folderTabActions.switchTab(searchTabId);
+	
+	// 在新标签页中设置搜索状态
+	folderTabActions.setSearchKeyword(keyword);
 	folderTabActions.setIsSearching(true);
 	
 	try {
-		const path = $currentPath;
-		console.log('[FolderPanel] Searching in path:', path);
-		if (!path) {
-			console.warn('[FolderPanel] No current path, cannot search');
-			return;
-		}
-		
-		// 调用后端搜索 API
 		const tab = folderTabActions.getActiveTab();
 		const settings = tab?.searchSettings || { includeSubfolders: true, searchInPath: false };
 		console.log('[FolderPanel] Search settings:', settings);
 		
-		const results = await FileSystemAPI.searchFiles(path, keyword, {
+		const results = await FileSystemAPI.searchFiles(searchPath, keyword, {
 			includeSubfolders: settings.includeSubfolders,
 			maxResults: 1000
 		});

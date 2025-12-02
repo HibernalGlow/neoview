@@ -4,11 +4,17 @@
  * 显示后端搜索返回的文件列表
  */
 import type { FsItem } from '$lib/types';
-import { searchResults, isSearching, searchKeyword, viewStyle } from '../stores/folderPanelStore.svelte';
+import { tabSearchResults, tabIsSearching, tabSearchKeyword, tabViewStyle } from '../stores/folderTabStore.svelte';
 import { Loader2, Search, FolderOpen } from '@lucide/svelte';
 import FileItemCard from '$lib/components/panels/file/components/FileItemCard.svelte';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 import { thumbnailManager } from '$lib/utils/thumbnailManager';
+
+// 使用页签 store
+const searchResults = tabSearchResults;
+const isSearching = tabIsSearching;
+const searchKeyword = tabSearchKeyword;
+const viewStyle = tabViewStyle;
 
 interface Props {
 	onItemClick?: (item: FsItem) => void | Promise<void>;

@@ -228,6 +228,29 @@ async function handleItemOpen(item: FsItem) {
 	}
 }
 
+// 处理搜索结果点击 - 在新标签页打开
+async function handleSearchResultClick(item: FsItem) {
+	console.log('[FolderPanel] handleSearchResultClick:', item.path, 'isDir:', item.isDir);
+	
+	if (item.isDir) {
+		// 文件夹：在新标签页打开
+		const newTabId = folderTabActions.createTab(item.path);
+		folderTabActions.switchTab(newTabId);
+		// 清除搜索状态
+		folderTabActions.setSearchKeyword('');
+	} else {
+		// 文件：在新标签页打开父目录
+		const lastSep = Math.max(item.path.lastIndexOf('/'), item.path.lastIndexOf('\\'));
+		const parentPath = lastSep > 0 ? item.path.substring(0, lastSep) : item.path;
+		const newTabId = folderTabActions.createTab(parentPath);
+		folderTabActions.switchTab(newTabId);
+		// 清除搜索状态
+		folderTabActions.setSearchKeyword('');
+		// 打开文件
+		await handleItemOpen(item);
+	}
+}
+
 // 处理右键菜单
 function handleContextMenu(event: MouseEvent, item: FsItem) {
 	event.preventDefault();
@@ -327,9 +350,11 @@ function handleSetHome() {
 
 // 处理搜索（使用后端搜索）
 async function handleSearch(keyword: string) {
+	console.log('[FolderPanel] handleSearch called with keyword:', keyword);
 	folderTabActions.setSearchKeyword(keyword);
 	
 	if (!keyword.trim()) {
+		console.log('[FolderPanel] Empty keyword, clearing search');
 		folderTabActions.clearSearch();
 		return;
 	}
@@ -338,19 +363,24 @@ async function handleSearch(keyword: string) {
 	
 	try {
 		const path = $currentPath;
-		if (!path) return;
+		console.log('[FolderPanel] Searching in path:', path);
+		if (!path) {
+			console.warn('[FolderPanel] No current path, cannot search');
+			return;
+		}
 		
 		// 调用后端搜索 API
 		const tab = folderTabActions.getActiveTab();
 		const settings = tab?.searchSettings || { includeSubfolders: true, searchInPath: false };
+		console.log('[FolderPanel] Search settings:', settings);
+		
 		const results = await FileSystemAPI.searchFiles(path, keyword, {
 			includeSubfolders: settings.includeSubfolders,
-			maxResults: 1000,
-			searchInPath: settings.searchInPath
+			maxResults: 1000
 		});
 		
+		console.log(`[FolderPanel] 搜索完成，找到 ${results.length} 个结果`, results.slice(0, 5));
 		folderTabActions.setSearchResults(results);
-		console.log(`[FolderPanel] 搜索完成，找到 ${results.length} 个结果`);
 	} catch (err) {
 		console.error('[FolderPanel] 搜索失败:', err);
 		showErrorToast('搜索失败', String(err));
@@ -784,10 +814,10 @@ onMount(() => {
 					class:pointer-events-none={tab.id !== currentActiveTabId}
 				>
 					{#if $searchKeyword || $isSearching || $searchResults.length > 0}
-						<!-- 搜索结果模式 -->
+						<!-- 搜索结果模式 - 点击在新标签页打开 -->
 						<SearchResultList
-							onItemClick={handleItemOpen}
-							onItemDoubleClick={handleItemOpen}
+							onItemClick={handleSearchResultClick}
+							onItemDoubleClick={handleSearchResultClick}
 							onItemContextMenu={handleContextMenu}
 						/>
 					{:else if $inlineTreeMode}

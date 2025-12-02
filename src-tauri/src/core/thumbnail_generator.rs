@@ -190,7 +190,7 @@ impl ThumbnailGenerator {
         Self::generate_webp_with_ffmpeg(video_path, config, path_key)
     }
 
-    /// 生成单个文件的缩略图（第一次返回原图/blob，后台生成 webp 并保存）
+    /// 生成单个文件的缩略图（同步生成 webp 后返回，避免传输原图）
     pub fn generate_file_thumbnail(&self, file_path: &str) -> Result<Vec<u8>, String> {
         // 获取文件大小
         let metadata =
@@ -212,50 +212,30 @@ impl ThumbnailGenerator {
 
         // 检查是否为视频文件
         if Self::is_video_file(&file_path_buf) {
-            // 视频文件：直接生成缩略图（不返回原视频数据）
-            let db_clone = Arc::clone(&self.db);
-            let path_key_clone = path_key.clone();
-            let file_size_clone = file_size;
-            let ghash_clone = ghash;
-            let config_clone = self.config.clone();
-
-            std::thread::spawn(move || {
-                let webp_data =
-                    Self::generate_video_thumbnail(&file_path_buf, &config_clone, &path_key_clone);
-
-                if let Some(webp_data) = webp_data {
-                    // 保存到数据库
-                    match db_clone.save_thumbnail(
-                        &path_key_clone,
-                        file_size_clone,
-                        ghash_clone,
-                        &webp_data,
-                    ) {
-                        Ok(_) => {
-                            if cfg!(debug_assertions) {
-                                println!(
-                                    "✅ 视频缩略图已保存到数据库: {} ({} bytes)",
-                                    path_key_clone,
-                                    webp_data.len()
-                                );
-                            }
-
-                            // 反向查找：检查父文件夹是否需要缩略图
-                            Self::update_parent_folders_thumbnail(
-                                &db_clone,
-                                &path_key_clone,
-                                &webp_data,
-                                MAX_PARENT_LEVELS,
-                            );
-                        }
-                        Err(e) => {
-                            eprintln!("❌ 保存视频缩略图到数据库失败: {} - {}", path_key_clone, e);
-                        }
-                    }
+            // 视频文件：同步生成缩略图
+            if let Some(webp_data) =
+                Self::generate_video_thumbnail(&file_path_buf, &self.config, &path_key)
+            {
+                // 保存到数据库
+                if let Err(e) = self.db.save_thumbnail(&path_key, file_size, ghash, &webp_data) {
+                    eprintln!("❌ 保存视频缩略图到数据库失败: {} - {}", path_key, e);
+                } else {
+                    // 后台更新父文件夹缩略图
+                    let db_clone = Arc::clone(&self.db);
+                    let path_key_clone = path_key.clone();
+                    let webp_data_clone = webp_data.clone();
+                    std::thread::spawn(move || {
+                        Self::update_parent_folders_thumbnail(
+                            &db_clone,
+                            &path_key_clone,
+                            &webp_data_clone,
+                            MAX_PARENT_LEVELS,
+                        );
+                    });
                 }
-            });
-
-            // 视频文件返回空数据（前端会显示占位符）
+                return Ok(webp_data);
+            }
+            // 视频缩略图生成失败，返回空数据（前端会显示占位符）
             return Ok(Vec::new());
         }
 
@@ -264,7 +244,6 @@ impl ThumbnailGenerator {
             Ok(data) => data,
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::PermissionDenied {
-                    // 权限错误：记录到日志但不打印到控制台（避免日志污染）
                     eprintln!("⚠️ 权限错误 (静默处理): {}", file_path);
                     return Err("权限被拒绝".to_string());
                 } else {
@@ -273,128 +252,59 @@ impl ThumbnailGenerator {
             }
         };
 
-        // 第一次：直接返回原图 blob（立即显示，不压缩）
-        // 后台异步生成 webp 缩略图并保存到数据库
-        let db_clone = Arc::clone(&self.db);
-        let path_key_clone = path_key.clone();
-        let file_size_clone = file_size;
-        let ghash_clone = ghash;
-        let image_data_clone = image_data.clone();
-        let config_clone = self.config.clone();
-
         // 检测文件类型
-        let file_path_buf = PathBuf::from(&path_key_clone);
-        let is_avif = file_path_buf
+        let ext = file_path_buf
             .extension()
             .and_then(|e| e.to_str())
-            .map(|e| e.to_lowercase() == "avif")
-            .unwrap_or(false);
-        let is_jxl = file_path_buf
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e.to_lowercase() == "jxl")
-            .unwrap_or(false);
+            .map(|e| e.to_lowercase());
+        let is_avif = ext.as_deref() == Some("avif");
+        let is_jxl = ext.as_deref() == Some("jxl");
 
-        std::thread::spawn(move || {
-            let ffmpeg_input_path = PathBuf::from(&path_key_clone);
+        // 同步生成 webp 缩略图
+        let webp_data = if is_avif {
+            // 先尝试使用 FFmpeg 生成 webp，失败时再回退到 avif-native
+            Self::generate_webp_with_ffmpeg(&file_path_buf, &self.config, &path_key).or_else(
+                || {
+                    Self::decode_image_safe(&image_data)
+                        .ok()
+                        .and_then(|img| Self::generate_webp_thumbnail_fallback(&img, &self.config).ok())
+                },
+            )
+        } else if is_jxl {
+            // JXL 使用 jxl_oxide 解码后转 webp
+            Self::decode_jxl_image(&image_data)
+                .ok()
+                .and_then(|img| Self::generate_webp_thumbnail_fallback(&img, &self.config).ok())
+        } else {
+            // 其他格式：使用 image 库
+            Self::decode_image_safe(&image_data)
+                .ok()
+                .and_then(|img| Self::generate_webp_thumbnail_fallback(&img, &self.config).ok())
+        };
 
-            let webp_data = if is_avif {
-                // 先尝试使用 FFmpeg 生成 webp，失败时再回退到 avif-native
-                let ffmpeg_result = Self::generate_webp_with_ffmpeg(
-                    &ffmpeg_input_path,
-                    &config_clone,
-                    &path_key_clone,
-                );
-
-                if ffmpeg_result.is_some() {
-                    ffmpeg_result
-                } else {
-                    // FFmpeg 失败后，回退到 avif-native 解码 + image crate 生成 webp
-                    match Self::decode_image_safe(&image_data_clone) {
-                        Ok(img) => {
-                            match Self::generate_webp_thumbnail_fallback(&img, &config_clone) {
-                                Ok(data) => Some(data),
-                                Err(e) => {
-                                    eprintln!(
-                                        "❌ avif-native 回退生成 webp 失败: {} - {}",
-                                        path_key_clone, e
-                                    );
-                                    None
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("❌ avif-native 回退解码失败: {} - {}", path_key_clone, e);
-                            None
-                        }
-                    }
-                }
-            } else if is_jxl {
-                // JXL 使用 jxl_oxide 解码后转 webp
-                match Self::decode_jxl_image(&image_data_clone) {
-                    Ok(img) => match Self::generate_webp_thumbnail_fallback(&img, &config_clone) {
-                        Ok(data) => Some(data),
-                        Err(e) => {
-                            eprintln!("❌ 生成 JXL webp 缩略图失败: {} - {}", path_key_clone, e);
-                            None
-                        }
-                    },
-                    Err(e) => {
-                        eprintln!("❌ 解码 JXL 图像失败: {} - {}", path_key_clone, e);
-                        None
-                    }
-                }
-            } else {
-                // 其他格式：使用 image 库（性能更好）
-                match Self::decode_image_safe(&image_data_clone) {
-                    Ok(img) => match Self::generate_webp_thumbnail_fallback(&img, &config_clone) {
-                        Ok(data) => Some(data),
-                        Err(e) => {
-                            eprintln!("❌ 生成 webp 缩略图失败: {} - {}", path_key_clone, e);
-                            None
-                        }
-                    },
-                    Err(e) => {
-                        eprintln!("❌ 解码图像失败: {} - {}", path_key_clone, e);
-                        None
-                    }
-                }
-            };
-
-            if let Some(webp_data) = webp_data {
+        match webp_data {
+            Some(data) => {
                 // 保存到数据库
-                match db_clone.save_thumbnail(
-                    &path_key_clone,
-                    file_size_clone,
-                    ghash_clone,
-                    &webp_data,
-                ) {
-                    Ok(_) => {
-                        if cfg!(debug_assertions) {
-                            println!(
-                                "✅ 文件缩略图已保存到数据库: {} ({} bytes)",
-                                path_key_clone,
-                                webp_data.len()
-                            );
-                        }
-
-                        // 反向查找：检查父文件夹是否需要缩略图
+                if let Err(e) = self.db.save_thumbnail(&path_key, file_size, ghash, &data) {
+                    eprintln!("❌ 保存文件缩略图到数据库失败: {} - {}", path_key, e);
+                } else {
+                    // 后台更新父文件夹缩略图
+                    let db_clone = Arc::clone(&self.db);
+                    let path_key_clone = path_key.clone();
+                    let data_clone = data.clone();
+                    std::thread::spawn(move || {
                         Self::update_parent_folders_thumbnail(
                             &db_clone,
                             &path_key_clone,
-                            &webp_data,
+                            &data_clone,
                             MAX_PARENT_LEVELS,
                         );
-                    }
-                    Err(e) => {
-                        eprintln!("❌ 保存文件缩略图到数据库失败: {} - {}", path_key_clone, e);
-                    }
+                    });
                 }
+                Ok(data)
             }
-        });
-
-        // 立即返回原图 blob（用于显示）
-        Ok(image_data)
+            None => Err(format!("无法生成缩略图: {}", file_path)),
+        }
     }
 
     /// 使用 ffmpeg-sidecar 生成 webp 缩略图（优先方案，用于 AVIF 和视频）
@@ -758,10 +668,8 @@ impl ThumbnailGenerator {
         Ok(output)
     }
 
-    /// 从压缩包生成缩略图（流式处理，找到第一张图就停止）
+    /// 从压缩包生成缩略图（同步生成 webp 后返回，避免传输原图）
     pub fn generate_archive_thumbnail(&self, archive_path: &str) -> Result<Vec<u8>, String> {
-        println!("📦 开始生成压缩包缩略图: {}", archive_path);
-
         // 获取压缩包大小
         let metadata =
             std::fs::metadata(archive_path).map_err(|e| format!("获取压缩包元数据失败: {}", e))?;
@@ -773,12 +681,9 @@ impl ThumbnailGenerator {
 
         // 检查数据库缓存
         if let Ok(Some(cached)) = self.db.load_thumbnail(&path_key, archive_size, ghash) {
-            println!("✅ 从数据库加载压缩包缩略图: {}", archive_path);
             let _ = self.db.update_access_time(&path_key);
             return Ok(cached);
         }
-
-        println!("🔄 生成新的压缩包缩略图: {}", archive_path);
 
         // 检查文件扩展名，目前只支持 ZIP 格式
         let path_lower = archive_path.to_lowercase();
@@ -797,7 +702,6 @@ impl ThumbnailGenerator {
             Ok(f) => f,
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::PermissionDenied {
-                    // 权限错误：记录到日志但不打印到控制台
                     eprintln!("⚠️ 权限错误 (静默处理): {}", archive_path);
                     return Err("权限被拒绝".to_string());
                 } else {
@@ -807,22 +711,19 @@ impl ThumbnailGenerator {
         };
         let mut archive = ZipArchive::new(file).map_err(|e| format!("读取压缩包失败: {}", e))?;
 
-        println!("📂 压缩包包含 {} 个文件", archive.len());
-
         // 支持的图片扩展名
         let image_exts = [
             "jpg", "jpeg", "png", "gif", "bmp", "webp", "avif", "jxl", "tiff", "tif",
         ];
 
         // 遍历压缩包条目，找到第一个可解码的图片文件
-        let mut found_image = false;
         let mut last_error: Option<String> = None;
-        
+
         for i in 0..archive.len() {
             let mut file = match archive.by_index(i) {
                 Ok(f) => f,
                 Err(e) => {
-                    eprintln!("⚠️ 读取压缩包条目 {} 失败: {}", i, e);
+                    last_error = Some(format!("读取条目失败: {}", e));
                     continue;
                 }
             };
@@ -834,204 +735,94 @@ impl ThumbnailGenerator {
                 .map(|e| e.to_lowercase())
             {
                 if image_exts.contains(&ext.as_str()) {
-                    println!("🖼️ 尝试图片文件: {} (索引: {})", name, i);
                     // 读取文件内容
                     let mut image_data = Vec::new();
                     if let Err(e) = file.read_to_end(&mut image_data) {
-                        eprintln!("⚠️ 读取压缩包文件失败，尝试下一张: {} - {}", name, e);
                         last_error = Some(format!("读取文件失败: {}", e));
                         continue;
                     }
 
-                    println!("📊 图片文件大小: {} bytes", image_data.len());
-                    
-                    // 验证图片是否可解码（快速检查）
                     let lower_name = name.to_lowercase();
                     let is_avif = lower_name.ends_with(".avif");
                     let is_jxl = lower_name.ends_with(".jxl");
-                    
-                    // AVIF 格式跳过同步验证，让后台 FFmpeg 处理
-                    // JXL 格式使用 jxl-oxide 验证
-                    // 其他格式使用 image 库验证
-                    if !is_avif {
-                        let decode_result = if is_jxl {
-                            Self::decode_jxl_image(&image_data).map(|_| ())
+
+                    // 同步生成 webp 缩略图
+                    let webp_data = if is_avif {
+                        // AVIF: 写入临时文件后用 FFmpeg 处理
+                        let temp_dir = std::env::temp_dir();
+                        let temp_input = temp_dir.join(format!(
+                            "thumb_archive_avif_{}_{}.avif",
+                            std::process::id(),
+                            std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap()
+                                .as_nanos()
+                        ));
+
+                        let result = if std::fs::write(&temp_input, &image_data).is_ok() {
+                            let r = Self::generate_webp_with_ffmpeg(
+                                &temp_input,
+                                &self.config,
+                                &path_key,
+                            );
+                            let _ = std::fs::remove_file(&temp_input);
+                            r
                         } else {
-                            Self::decode_image_safe(&image_data).map(|_| ())
+                            None
                         };
-                        
-                        if let Err(e) = decode_result {
-                            eprintln!("⚠️ 图片解码失败，尝试下一张: {} - {}", name, e);
-                            last_error = Some(format!("解码失败: {}", e));
-                            continue;
+
+                        result.or_else(|| {
+                            Self::decode_image_safe(&image_data)
+                                .ok()
+                                .and_then(|img| {
+                                    Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
+                                })
+                        })
+                    } else if is_jxl {
+                        Self::decode_jxl_image(&image_data)
+                            .ok()
+                            .and_then(|img| {
+                                Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
+                            })
+                    } else {
+                        Self::decode_image_safe(&image_data)
+                            .ok()
+                            .and_then(|img| {
+                                Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
+                            })
+                    };
+
+                    if let Some(data) = webp_data {
+                        // 保存到数据库
+                        if let Err(e) = self.db.save_thumbnail(&path_key, archive_size, ghash, &data)
+                        {
+                            eprintln!("❌ 保存压缩包缩略图到数据库失败: {} - {}", path_key, e);
+                        } else {
+                            // 后台更新父文件夹缩略图
+                            let db_clone = Arc::clone(&self.db);
+                            let path_key_clone = path_key.clone();
+                            let data_clone = data.clone();
+                            std::thread::spawn(move || {
+                                Self::update_parent_folders_thumbnail(
+                                    &db_clone,
+                                    &path_key_clone,
+                                    &data_clone,
+                                    MAX_PARENT_LEVELS,
+                                );
+                            });
                         }
+                        return Ok(data);
+                    } else {
+                        last_error = Some(format!("生成缩略图失败: {}", name));
+                        continue;
                     }
-                    
-                    found_image = true;
-
-                    // 第一次：直接返回原图 blob（立即显示，不压缩）
-                    // 后台异步生成 webp 缩略图并保存到数据库
-                    let db_clone = Arc::clone(&self.db);
-                    let path_key_clone = path_key.clone();
-                    let archive_size_clone = archive_size;
-                    let ghash_clone = ghash;
-                    let image_data_clone = image_data.clone();
-                    let config_clone = self.config.clone();
-                    let image_name_clone = name.clone(); // 克隆文件名用于后台线程
-
-                    // 检测是否为 AVIF 格式
-                    let lower_name = image_name_clone.to_lowercase();
-                    let is_avif = lower_name.ends_with(".avif");
-                    let is_jxl = lower_name.ends_with(".jxl");
-
-                    std::thread::spawn(move || {
-                        let webp_data = if is_avif {
-                            // 先尝试使用 FFmpeg 生成 webp，失败时再回退到 avif-native
-                            let temp_dir = std::env::temp_dir();
-                            let temp_input = temp_dir.join(format!(
-                                "thumb_archive_avif_input_{}_{}.avif",
-                                std::process::id(),
-                                std::time::SystemTime::now()
-                                    .duration_since(std::time::UNIX_EPOCH)
-                                    .unwrap()
-                                    .as_nanos()
-                            ));
-
-                            let ffmpeg_result =
-                                if let Err(e) = std::fs::write(&temp_input, &image_data_clone) {
-                                    eprintln!("❌ 写入临时文件失败: {} - {}", path_key_clone, e);
-                                    None
-                                } else {
-                                    let result = Self::generate_webp_with_ffmpeg(
-                                        &temp_input,
-                                        &config_clone,
-                                        &path_key_clone,
-                                    );
-                                    let _ = std::fs::remove_file(&temp_input);
-                                    result
-                                };
-
-                            if ffmpeg_result.is_some() {
-                                ffmpeg_result
-                            } else {
-                                match Self::decode_image_safe(&image_data_clone) {
-                                    Ok(img) => {
-                                        match Self::generate_webp_thumbnail_fallback(
-                                            &img,
-                                            &config_clone,
-                                        ) {
-                                            Ok(data) => Some(data),
-                                            Err(e) => {
-                                                eprintln!(
-                                                    "❌ avif-native 回退生成 webp 失败: {} - {}",
-                                                    path_key_clone, e
-                                                );
-                                                None
-                                            }
-                                        }
-                                    }
-                                    Err(e) => {
-                                        eprintln!(
-                                            "❌ avif-native 回退解码失败: {} - {}",
-                                            path_key_clone, e
-                                        );
-                                        None
-                                    }
-                                }
-                            }
-                        } else if is_jxl {
-                            match Self::decode_jxl_image(&image_data_clone) {
-                                Ok(img) => {
-                                    match Self::generate_webp_thumbnail_fallback(
-                                        &img,
-                                        &config_clone,
-                                    ) {
-                                        Ok(data) => Some(data),
-                                        Err(e) => {
-                                            eprintln!(
-                                                "❌ 生成 JXL webp 缩略图失败: {} - {}",
-                                                path_key_clone, e
-                                            );
-                                            None
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    eprintln!("❌ 解码 JXL 图像失败: {} - {}", path_key_clone, e);
-                                    None
-                                }
-                            }
-                        } else {
-                            // 其他格式：使用 image 库
-                            match Self::decode_image_safe(&image_data_clone) {
-                                Ok(img) => {
-                                    match Self::generate_webp_thumbnail_fallback(
-                                        &img,
-                                        &config_clone,
-                                    ) {
-                                        Ok(data) => Some(data),
-                                        Err(e) => {
-                                            eprintln!(
-                                                "❌ 生成 webp 缩略图失败: {} - {}",
-                                                path_key_clone, e
-                                            );
-                                            None
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    eprintln!("❌ 解码图像失败: {} - {}", path_key_clone, e);
-                                    None
-                                }
-                            }
-                        };
-
-                        if let Some(webp_data) = webp_data {
-                            // 保存到数据库
-                            match db_clone.save_thumbnail(
-                                &path_key_clone,
-                                archive_size_clone,
-                                ghash_clone,
-                                &webp_data,
-                            ) {
-                                Ok(_) => {
-                                    if cfg!(debug_assertions) {
-                                        println!(
-                                            "✅ 压缩包缩略图已保存到数据库: {} ({} bytes)",
-                                            path_key_clone,
-                                            webp_data.len()
-                                        );
-                                    }
-
-                                    // 反向查找：检查父文件夹是否需要缩略图
-                                    Self::update_parent_folders_thumbnail(
-                                        &db_clone,
-                                        &path_key_clone,
-                                        &webp_data,
-                                        MAX_PARENT_LEVELS,
-                                    );
-                                }
-                                Err(e) => {
-                                    eprintln!(
-                                        "❌ 保存压缩包缩略图到数据库失败: {} - {}",
-                                        path_key_clone, e
-                                    );
-                                }
-                            }
-                        }
-                    });
-
-                    // 立即返回原图 blob（用于显示）
-                    return Ok(image_data);
                 }
             }
         }
 
         if let Some(err) = last_error {
-            println!("⚠️ 压缩包中所有图片都解码失败: {} - {}", archive_path, err);
-            Err(format!("所有图片解码失败: {}", err))
+            Err(format!("压缩包缩略图生成失败: {}", err))
         } else {
-            println!("⚠️ 压缩包中没有找到图片文件: {}", archive_path);
             Err("压缩包中没有找到图片文件".to_string())
         }
     }

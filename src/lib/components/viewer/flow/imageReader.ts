@@ -102,8 +102,21 @@ export async function getImageDimensions(blob: Blob): Promise<{ width: number; h
 
 /**
  * 创建缩略图 DataURL
+ * 如果 blob 已经是小图片（< 100KB），直接转换为 data URL，无需 canvas 重绘
+ * 后端已返回正确尺寸的 webp 缩略图
  */
 export async function createThumbnailDataURL(blob: Blob, height: number = 120): Promise<string> {
+	// 小于 100KB 的图片直接转换为 data URL（后端返回的 webp 缩略图通常很小）
+	if (blob.size < 100 * 1024) {
+		return new Promise<string>((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = () => resolve(reader.result as string);
+			reader.onerror = () => reject(new Error('Failed to read blob'));
+			reader.readAsDataURL(blob);
+		});
+	}
+
+	// 大图片才需要 canvas 缩放
 	const imageUrl = URL.createObjectURL(blob);
 	const canvas = document.createElement('canvas');
 	const ctx = canvas.getContext('2d')!;

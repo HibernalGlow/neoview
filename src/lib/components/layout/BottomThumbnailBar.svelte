@@ -347,43 +347,24 @@
 		await Promise.all(promises);
 	}
 
-	// 在前端从 base64 生成缩略图
-	function generateThumbnailFromBase64(
-		base64Data: string,
-		maxHeight: number = $bottomThumbnailBarHeight - 40
+	/**
+	 * 从 data URL 获取图片尺寸（不再重新压缩，后端已返回正确尺寸的 webp）
+	 */
+	function getThumbnailDimensions(
+		dataUrl: string
 	): Promise<{ url: string; width: number; height: number }> {
 		return new Promise((resolve, reject) => {
 			const img = new Image();
 			img.onload = () => {
-				const canvas = document.createElement('canvas');
-				const ctx = canvas.getContext('2d');
-				if (!ctx) {
-					reject(new Error('Cannot get canvas context'));
-					return;
-				}
-
-				// 根据容器高度自适应调整缩略图大小
-				let width = img.width;
-				let height = img.height;
-				if (height > maxHeight) {
-					width = (width * maxHeight) / height;
-					height = maxHeight;
-				}
-
-				canvas.width = width;
-				canvas.height = height;
-				ctx.drawImage(img, 0, 0, width, height);
-
-				// 直接使用 JPEG 格式
-				const thumbnailData = canvas.toDataURL('image/jpeg', 0.85);
+				// 直接使用原始数据，不再 canvas 重绘
 				resolve({
-					url: thumbnailData,
-					width: width,
-					height: height
+					url: dataUrl,
+					width: img.naturalWidth,
+					height: img.naturalHeight
 				});
 			};
 			img.onerror = () => reject(new Error('Failed to load image'));
-			img.src = base64Data;
+			img.src = dataUrl;
 		});
 	}
 
@@ -421,9 +402,9 @@
 
 			loadingIndices.add(pageIndex);
 			try {
-				// 调用后端视频缩略图接口，返回 data:image/... URL
+				// 调用后端视频缩略图接口，返回 data:image/... URL（后端已返回正确尺寸的 webp）
 				const videoThumbDataUrl = await generateVideoThumbnail(page.path);
-				const thumb = await generateThumbnailFromBase64(videoThumbDataUrl);
+				const thumb = await getThumbnailDimensions(videoThumbDataUrl);
 				thumbnailCacheStore.setThumbnail(pageIndex, thumb.url, thumb.width, thumb.height);
 				if (pathKey) {
 					noThumbnailPaths.delete(pathKey);
@@ -450,15 +431,16 @@
 			if (!currentBook || !page) return;
 
 			try {
-				let fullImageData: string;
+				let imageDataUrl: string;
 
 				if (currentBook.type === 'archive') {
-					fullImageData = await loadImageFromArchive(currentBook.path, page.path);
+					imageDataUrl = await loadImageFromArchive(currentBook.path, page.path);
 				} else {
-					fullImageData = await loadImage(page.path);
+					imageDataUrl = await loadImage(page.path);
 				}
 
-				const thumbnail = await generateThumbnailFromBase64(fullImageData);
+				// 后端已返回正确尺寸的 webp 缩略图，直接获取尺寸即可
+				const thumbnail = await getThumbnailDimensions(imageDataUrl);
 				thumbnailCacheStore.setThumbnail(pageIndex, thumbnail.url, thumbnail.width, thumbnail.height);
 				noThumbnailPaths.delete(pathKey!);
 			} catch (fallbackErr) {

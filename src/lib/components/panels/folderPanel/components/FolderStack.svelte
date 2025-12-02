@@ -12,6 +12,7 @@ import * as FileSystemAPI from '$lib/api/filesystem';
 import { thumbnailManager } from '$lib/utils/thumbnailManager';
 import VirtualizedFileList from '$lib/components/panels/file/components/VirtualizedFileList.svelte';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
+import { get } from 'svelte/store';
 import {
 	folderTabActions,
 	tabViewStyle,
@@ -21,7 +22,8 @@ import {
 	tabSortConfig,
 	tabSearchKeyword,
 	tabPenetrateMode,
-	tabCurrentPath
+	tabCurrentPath,
+	activeTabId
 } from '../stores/folderTabStore.svelte';
 
 // 别名映射
@@ -44,6 +46,8 @@ export interface NavigationCommand {
 }
 
 interface Props {
+	tabId: string;
+	initialPath: string;
 	navigationCommand: Writable<NavigationCommand | null>;
 	onItemOpen?: (item: FsItem) => void;
 	onItemDelete?: (item: FsItem) => void;
@@ -51,7 +55,7 @@ interface Props {
 	onOpenFolderAsBook?: (item: FsItem) => void;
 }
 
-let { navigationCommand, onItemOpen, onItemDelete, onItemContextMenu, onOpenFolderAsBook }: Props = $props();
+let { tabId, initialPath, navigationCommand, onItemOpen, onItemDelete, onItemContextMenu, onOpenFolderAsBook }: Props = $props();
 
 // 层叠数据结构
 interface FolderLayer {
@@ -424,10 +428,14 @@ function goToLayer(index: number) {
 	}, 300);
 }
 
-// 监听导航命令
+// 监听导航命令（只有当前活动页签才响应）
 $effect(() => {
 	const cmd = $navigationCommand;
 	if (!cmd) return;
+	
+	// 只有活动页签才响应导航命令
+	const currentActiveTabId = get(activeTabId);
+	if (tabId !== currentActiveTabId) return;
 	
 	switch (cmd.type) {
 		case 'init':
@@ -468,13 +476,13 @@ $effect(() => {
 	navigationCommand.set(null);
 });
 
-// 每个页签有独立的 FolderStack 实例（通过 {#key} 实现）
-// 初始化时从 tabCurrentPath 加载
+// 每个页签有独立的 FolderStack 实例
+// 初始化时从 initialPath 加载（只执行一次）
+let initialized = false;
 $effect(() => {
-	const currentPath = $tabCurrentPath;
-	if (currentPath && layers.length === 0) {
-		// 首次加载时初始化
-		initRootWithoutHistory(currentPath);
+	if (!initialized && initialPath && layers.length === 0) {
+		initialized = true;
+		initRootWithoutHistory(initialPath);
 	}
 });
 

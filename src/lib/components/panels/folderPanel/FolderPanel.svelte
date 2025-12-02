@@ -49,6 +49,7 @@ import {
 	tabSearchSettings,
 	tabItems,
 	activeTabId,
+	allTabs,
 	type FolderTabState
 } from './stores/folderTabStore.svelte';
 
@@ -67,15 +68,22 @@ const searchResults = tabSearchResults;
 const isSearching = tabIsSearching;
 const searchSettings = tabSearchSettings;
 
-// 当前活动页签 ID（用于 key）
+// 当前活动页签 ID 和所有页签列表（用于渲染）
 import { get } from 'svelte/store';
 let currentActiveTabId = $state(get(activeTabId));
+let currentAllTabs = $state(get(allTabs));
 
 $effect(() => {
-	const unsubscribe = activeTabId.subscribe((v) => {
+	const unsubActiveTab = activeTabId.subscribe((v) => {
 		currentActiveTabId = v;
 	});
-	return unsubscribe;
+	const unsubAllTabs = allTabs.subscribe((v) => {
+		currentAllTabs = v;
+	});
+	return () => {
+		unsubActiveTab();
+		unsubAllTabs();
+	};
 });
 
 // sortedItems 需要从 tabItems 派生
@@ -667,7 +675,7 @@ onMount(() => {
 				: `top: 0; left: ${$folderTreeConfig.visible ? $folderTreeConfig.size : 0}px; bottom: 0; width: 6px;`}
 		></div>
 
-		<!-- 文件列表（层叠式）- 始终渲染，根据文件树状态调整位置 -->
+		<!-- 文件列表（层叠式）- 每个页签独立实例，切换时显示/隐藏 -->
 		<div
 			class="file-list-container absolute inset-0 overflow-hidden"
 			style={$folderTreeConfig.visible
@@ -678,32 +686,40 @@ onMount(() => {
 					? 'top: 6px;'
 					: 'left: 6px;'}
 		>
-			<!-- 使用 key 为每个页签创建独立实例 -->
-			{#key currentActiveTabId}
-				{#if $searchKeyword || $isSearching || $searchResults.length > 0}
-					<!-- 搜索结果模式 -->
-					<SearchResultList
-						onItemClick={handleItemOpen}
-						onItemDoubleClick={handleItemOpen}
-						onItemContextMenu={handleContextMenu}
-					/>
-				{:else if $inlineTreeMode}
-					<!-- 主视图树模式 -->
-					<InlineTreeList
-						onItemClick={handleItemOpen}
-						onItemDoubleClick={handleItemOpen}
-						onItemContextMenu={handleContextMenu}
-					/>
-				{:else}
-					<!-- 层叠式文件列表 -->
-					<FolderStack
-						{navigationCommand}
-						onItemOpen={handleItemOpen}
-						onItemContextMenu={handleContextMenu}
-						onOpenFolderAsBook={handleOpenFolderAsBook}
-					/>
-				{/if}
-			{/key}
+			<!-- 每个页签独立的 FolderStack 实例 -->
+			{#each currentAllTabs as tab (tab.id)}
+				<div 
+					class="absolute inset-0"
+					class:hidden={tab.id !== currentActiveTabId}
+					class:pointer-events-none={tab.id !== currentActiveTabId}
+				>
+					{#if $searchKeyword || $isSearching || $searchResults.length > 0}
+						<!-- 搜索结果模式 -->
+						<SearchResultList
+							onItemClick={handleItemOpen}
+							onItemDoubleClick={handleItemOpen}
+							onItemContextMenu={handleContextMenu}
+						/>
+					{:else if $inlineTreeMode}
+						<!-- 主视图树模式 -->
+						<InlineTreeList
+							onItemClick={handleItemOpen}
+							onItemDoubleClick={handleItemOpen}
+							onItemContextMenu={handleContextMenu}
+						/>
+					{:else}
+						<!-- 层叠式文件列表 -->
+						<FolderStack
+							tabId={tab.id}
+							initialPath={tab.currentPath || tab.homePath}
+							{navigationCommand}
+							onItemOpen={handleItemOpen}
+							onItemContextMenu={handleContextMenu}
+							onOpenFolderAsBook={handleOpenFolderAsBook}
+						/>
+					{/if}
+				</div>
+			{/each}
 		</div>
 	</div>
 </div>

@@ -21,6 +21,8 @@ import SearchResultList from './components/SearchResultList.svelte';
 import SearchBar from '$lib/components/ui/SearchBar.svelte';
 import FolderTabBar from './components/FolderTabBar.svelte';
 import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
+import FavoriteTagPanel from './components/FavoriteTagPanel.svelte';
+import { favoriteTagStore, createTagValue, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
 import { directoryTreeCache } from './utils/directoryTreeCache';
 import { bookStore } from '$lib/stores/book.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
@@ -416,6 +418,34 @@ function handleSearchSettingsChange(settings: { includeSubfolders?: boolean; sho
 	folderTabActions.setSearchSettings(settings);
 }
 
+// 收藏标签面板状态
+let showFavoriteTagPanel = $state(false);
+let enableMixedGenderSearch = $state(false);
+
+// 切换收藏标签面板
+function handleToggleFavoriteTagPanel() {
+	showFavoriteTagPanel = !showFavoriteTagPanel;
+}
+
+// 关闭收藏标签面板
+function handleCloseFavoriteTagPanel() {
+	showFavoriteTagPanel = false;
+}
+
+// 处理标签点击 - 添加到搜索框
+function handleAppendTag(tag: FavoriteTag, modifier: string = '') {
+	const tagValue = modifier + tag.value;
+	// 获取当前搜索关键词，添加标签
+	const currentKeyword = $searchKeyword || '';
+	const newKeyword = currentKeyword ? `${currentKeyword} ${tagValue}` : tagValue;
+	
+	// 更新搜索关键词
+	folderTabActions.setSearchKeyword(newKeyword);
+	
+	// 触发搜索
+	handleSearch(newKeyword);
+}
+
 // 迁移栏管理器显示状态
 let showMigrationManager = $state(false);
 
@@ -759,17 +789,39 @@ onMount(() => {
 
 	<!-- 搜索栏（可切换显示） -->
 	{#if $showSearchBar}
-		<SearchBar
-			placeholder="搜索文件..."
-			onSearch={handleSearch}
-			storageKey="neoview-folder-search-history"
-			searchSettings={{
-				includeSubfolders: $searchSettings.includeSubfolders,
-				showHistoryOnFocus: $searchSettings.showHistoryOnFocus,
-				searchInPath: $searchSettings.searchInPath
-			}}
-			onSettingsChange={handleSearchSettingsChange}
-		/>
+		<div class="relative">
+			<div class="flex items-center gap-1">
+				<div class="flex-1">
+					<SearchBar
+						placeholder="搜索文件... (支持标签搜索 f:&quot;tag&quot;$)"
+						onSearch={handleSearch}
+						storageKey="neoview-folder-search-history"
+						searchSettings={{
+							includeSubfolders: $searchSettings.includeSubfolders,
+							showHistoryOnFocus: $searchSettings.showHistoryOnFocus,
+							searchInPath: $searchSettings.searchInPath
+						}}
+						onSettingsChange={handleSearchSettingsChange}
+					/>
+				</div>
+				<!-- 收藏标签快选按钮 -->
+				<button
+					class="shrink-0 px-2 py-1.5 text-xs rounded border hover:bg-accent {showFavoriteTagPanel ? 'bg-primary/10 border-primary text-primary' : 'border-border'}"
+					onclick={handleToggleFavoriteTagPanel}
+					title="收藏标签快选"
+				>
+					★ 标签
+				</button>
+			</div>
+			<!-- 收藏标签面板 -->
+			<FavoriteTagPanel
+				visible={showFavoriteTagPanel}
+				enableMixed={enableMixedGenderSearch}
+				onClose={handleCloseFavoriteTagPanel}
+				onAppendTag={handleAppendTag}
+				onUpdateEnableMixed={(v: boolean) => { enableMixedGenderSearch = v; }}
+			/>
+		</div>
 	{/if}
 
 	<!-- 迁移栏（可切换显示） -->

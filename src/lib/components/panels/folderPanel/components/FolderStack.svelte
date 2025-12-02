@@ -408,17 +408,19 @@ async function pushLayer(path: string) {
 	}, 300);
 }
 
-// 获取父目录路径
+// 获取父目录路径 - 统一使用 Windows 反斜杠格式
 function getParentPath(path: string): string | null {
-	const normalized = path.replace(/\\/g, '/');
-	const parts = normalized.split('/').filter(Boolean);
+	const normalized = path.replace(/\//g, '\\');
+	const parts = normalized.split('\\').filter(Boolean);
 	if (parts.length <= 1) return null; // 已经是根目录
 	parts.pop();
-	// 保持 Windows 盘符格式
-	if (path.includes(':')) {
-		return parts.join('/');
+	// Windows 盘符格式
+	let parentPath = parts.join('\\');
+	// 确保盘符后有反斜杠
+	if (/^[a-zA-Z]:$/.test(parentPath)) {
+		parentPath += '\\';
 	}
-	return '/' + parts.join('/');
+	return parentPath;
 }
 
 // 弹出当前层（返回上级）

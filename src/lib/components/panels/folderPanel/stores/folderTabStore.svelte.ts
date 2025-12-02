@@ -501,22 +501,31 @@ export const folderTabActions = {
 	/**
 	 * 在历史记录中查找指定路径（只在当前位置之前的历史中查找）
 	 * 返回找到的索引，如果没找到返回 -1
+	 * 优先精确匹配，不行再规范化匹配
 	 */
 	findPathInHistory(targetPath: string): number {
 		const tab = this.getActiveTab();
 		if (!tab || tab.historyIndex <= 0) return -1;
 		
-		// 规范化路径以便比较 - 统一使用小写和正斜杠
+		// 第一轮：精确匹配（区分大小写和路径分隔符）
+		for (let i = tab.historyIndex - 1; i >= 0; i--) {
+			const entry = tab.historyStack[i];
+			if (entry && entry.path === targetPath) {
+				return i;
+			}
+		}
+		
+		// 第二轮：规范化匹配（忽略大小写和路径分隔符差异）
 		const normalizePath = (p: string) => p.replace(/\\/g, '/').toLowerCase();
 		const normalizedTarget = normalizePath(targetPath);
 		
-		// 从当前位置向前搜索（找最近的匹配）
 		for (let i = tab.historyIndex - 1; i >= 0; i--) {
 			const entry = tab.historyStack[i];
 			if (entry && normalizePath(entry.path) === normalizedTarget) {
 				return i;
 			}
 		}
+		
 		return -1;
 	},
 

@@ -333,12 +333,17 @@ function handleGoBack() {
 		// 没有历史记录时，尝试导航到父目录
 		const currentPath = $tabCurrentPath;
 		if (currentPath) {
-			const normalized = currentPath.replace(/\\/g, '/');
-			const parts = normalized.split('/').filter(Boolean);
+			// 统一使用 Windows 风格反斜杠
+			const normalized = currentPath.replace(/\//g, '\\');
+			const parts = normalized.split('\\').filter(Boolean);
 			if (parts.length > 1) {
 				parts.pop();
-				// 保持 Windows 盘符格式
-				const parentPath = currentPath.includes(':') ? parts.join('/') : '/' + parts.join('/');
+				// 构建父路径 - Windows 格式
+				let parentPath = parts.join('\\');
+				// 确保盘符后有反斜杠
+				if (/^[a-zA-Z]:$/.test(parentPath)) {
+					parentPath += '\\';
+				}
 				// 使用 init 重新初始化为父目录
 				navigationCommand.set({ type: 'init', path: parentPath });
 			}
@@ -360,23 +365,18 @@ function handleGoUp() {
 	const currentPath = $tabCurrentPath;
 	if (!currentPath) return;
 	
-	// 使用 Windows 风格的反斜杠作为分隔符（如果原路径包含反斜杠）
-	const isWindowsPath = currentPath.includes('\\');
-	const separator = isWindowsPath ? '\\' : '/';
-	const normalized = currentPath.replace(/[\/\\]/g, separator);
-	const parts = normalized.split(separator).filter(Boolean);
+	// 统一使用 Windows 风格反斜杠（与 setPath 保持一致）
+	const normalized = currentPath.replace(/\//g, '\\');
+	const parts = normalized.split('\\').filter(Boolean);
 	
 	if (parts.length <= 1) return; // 已经是根目录
 	
 	parts.pop();
-	// 构建父路径，保持原始路径格式
-	let parentPath: string;
-	if (currentPath.includes(':')) {
-		// Windows 路径
-		parentPath = parts.join(separator);
-	} else {
-		// Unix 路径
-		parentPath = separator + parts.join(separator);
+	// 构建父路径 - Windows 格式
+	let parentPath = parts.join('\\');
+	// 确保盘符后有反斜杠 (D: -> D:\)
+	if (/^[a-zA-Z]:$/.test(parentPath)) {
+		parentPath += '\\';
 	}
 	
 	// 在历史记录中搜索父路径

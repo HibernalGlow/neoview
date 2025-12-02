@@ -406,15 +406,18 @@ function getDisplayName(path: string): string {
 
 function getParentPath(path: string): string | null {
 	if (!path) return null;
-	const normalized = path.replace(/\\/g, '/');
-	const parts = normalized.split('/').filter(Boolean);
+	// 统一使用 Windows 反斜杠格式
+	const normalized = path.replace(/\//g, '\\');
+	const parts = normalized.split('\\').filter(Boolean);
 	if (parts.length <= 1) return null;
 	parts.pop();
-	// 保持原始路径格式（Windows 盘符）
-	if (path.includes(':')) {
-		return parts.join('/');
+	// Windows 盘符格式
+	let parentPath = parts.join('\\');
+	// 确保盘符后有反斜杠
+	if (/^[a-zA-Z]:$/.test(parentPath)) {
+		parentPath += '\\';
 	}
-	return '/' + parts.join('/');
+	return parentPath;
 }
 
 // 书籍候选判断函数

@@ -27,11 +27,10 @@
 	import PanelToolbar, { type SortField, type SortOrder, type ViewMode } from './shared/PanelToolbar.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
-	import { thumbnailManager } from '$lib/utils/thumbnailManager';
+	import { requestVisibleThumbnails, useThumbnails } from '$lib/utils/thumbnailManager';
 	import type { FsItem } from '$lib/types';
 	import { readable } from 'svelte/store';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
-	import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import { FileSystemAPI } from '$lib/api';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
@@ -44,8 +43,10 @@
 
 	let history = $state<HistoryEntry[]>([]);
 	let viewMode = $state<'list' | 'grid'>(loadPanelViewMode('history', 'list') as 'list' | 'grid');
-	let thumbnails = $state<Map<string, string>>(new Map());
-	const thumbnailJobs = new Map<string, string>();
+	
+	// V3 缩略图系统
+	const thumbStore = useThumbnails();
+	let thumbnails = $derived(thumbStore.thumbnails);
 	let contextMenu = $state<{ x: number; y: number; item: FsItem | null; visible: boolean }>({
 		x: 0,
 		y: 0,
@@ -134,36 +135,11 @@
 	const bookState = createAppStateStore((state) => state.book);
 	const viewerState = createAppStateStore((state) => state.viewer);
 
-	// 加载缩略图（异步，不阻塞）
+	// V3: 请求缩略图（由后端异步生成，通过响应式状态更新）
 	function loadThumbnails(entries: HistoryEntry[]) {
-		for (const entry of entries) {
-			if (thumbnailJobs.has(entry.path)) {
-				continue;
-			}
-			const snapshot = taskScheduler.enqueue({
-				type: 'history-thumbnail-load',
-				priority: 'low',
-				bucket: 'background',
-				source: 'history-panel',
-				executor: async () => {
-					try {
-						const thumbnail = await thumbnailManager.getThumbnail(
-							entry.path,
-							undefined,
-							false,
-							'normal'
-						);
-						if (thumbnail) {
-							thumbnails = new Map(thumbnails).set(entry.path, thumbnail);
-						}
-					} catch (err) {
-						console.debug('加载缩略图失败:', entry.path, err);
-					} finally {
-						thumbnailJobs.delete(entry.path);
-					}
-				}
-			});
-			thumbnailJobs.set(entry.path, snapshot.id);
+		const paths = entries.map(e => e.path);
+		if (paths.length > 0) {
+			requestVisibleThumbnails(paths, 'history');
 		}
 	}
 

@@ -26,10 +26,9 @@
 	import type { FsItem } from '$lib/types';
 	import { FileSystemAPI } from '$lib/api';
 	import { bookStore } from '$lib/stores/book.svelte';
-	import { thumbnailManager } from '$lib/utils/thumbnailManager';
+	import { requestVisibleThumbnails, useThumbnails } from '$lib/utils/thumbnailManager';
 	import { readable } from 'svelte/store';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
-	import { taskScheduler } from '$lib/core/tasks/taskScheduler';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import * as Switch from '$lib/components/ui/switch';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
@@ -43,8 +42,10 @@
 	let bookmarks: any[] = $state([]);
 	let searchQuery = $state('');
 	let viewMode = $state<'list' | 'grid'>(loadPanelViewMode('bookmark', 'list') as 'list' | 'grid');
-	let thumbnails = $state<Map<string, string>>(new Map());
-	const thumbnailJobs = new Map<string, string>();
+	
+	// V3 缩略图系统
+	const thumbStore = useThumbnails();
+	let thumbnails = $derived(thumbStore.thumbnails);
 	let contextMenu = $state<{ x: number; y: number; item: FsItem | null; visible: boolean }>({
 		x: 0,
 		y: 0,
@@ -138,41 +139,11 @@
 		)
 	);
 
-	// 加载缩略图（异步，不阻塞）
+	// V3: 请求缩略图（由后端异步生成，通过响应式状态更新）
 	function loadThumbnails(bookmarkList: any[]) {
-		for (const bookmark of bookmarkList) {
-			if (thumbnailJobs.has(bookmark.path)) {
-				continue;
-			}
-			const snapshot = taskScheduler.enqueue({
-				type: 'bookmark-thumbnail-load',
-				bucket: 'background',
-				priority: 'low',
-				source: 'bookmark-panel',
-				executor: async () => {
-					try {
-						const isArchive =
-							bookmark.name.endsWith('.zip') ||
-							bookmark.name.endsWith('.cbz') ||
-							bookmark.name.endsWith('.rar') ||
-							bookmark.name.endsWith('.cbr');
-						const thumbnail = await thumbnailManager.getThumbnail(
-							bookmark.path,
-							undefined,
-							isArchive,
-							'normal'
-						);
-						if (thumbnail) {
-							thumbnails = new Map(thumbnails).set(bookmark.path, thumbnail);
-						}
-					} catch (err) {
-						console.debug('加载缩略图失败:', bookmark.path, err);
-					} finally {
-						thumbnailJobs.delete(bookmark.path);
-					}
-				}
-			});
-			thumbnailJobs.set(bookmark.path, snapshot.id);
+		const paths = bookmarkList.map(b => b.path);
+		if (paths.length > 0) {
+			requestVisibleThumbnails(paths, 'bookmarks');
 		}
 	}
 

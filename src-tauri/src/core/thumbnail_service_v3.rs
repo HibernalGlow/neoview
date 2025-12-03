@@ -7,6 +7,7 @@
 //! 3. LRU 内存缓存 + SQLite 数据库缓存
 //! 4. 8 线程工作池并行生成
 
+use crate::core::shell_thumbnail::get_shell_thumbnail;
 use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::thumbnail_generator::ThumbnailGenerator;
 use lru::LruCache;
@@ -741,10 +742,35 @@ impl ThumbnailServiceV3 {
     
     /// 生成文件缩略图（静态方法，用于工作线程）
     /// 返回 (blob, path_key, size, ghash) 用于延迟保存
+    /// 优先使用 Windows Shell 缓存的缩略图
     fn generate_file_thumbnail_static(
         generator: &Arc<Mutex<ThumbnailGenerator>>,
         path: &str,
     ) -> Result<(Vec<u8>, String, i64, i32), String> {
+        let path_obj = Path::new(path);
+        
+        // 1. 优先尝试获取 Windows Shell 缓存的缩略图（非常快）
+        #[cfg(target_os = "windows")]
+        {
+            if let Ok(blob) = get_shell_thumbnail(path_obj, 256) {
+                if !blob.is_empty() {
+                    // 使用路径和大小作为 key
+                    let size = std::fs::metadata(path).map(|m| m.len() as i64).unwrap_or(0);
+                    let ghash = {
+                        use std::collections::hash_map::DefaultHasher;
+                        use std::hash::{Hash, Hasher};
+                        let mut hasher = DefaultHasher::new();
+                        path.hash(&mut hasher);
+                        size.hash(&mut hasher);
+                        hasher.finish() as i32
+                    };
+                    log_debug!("🚀 使用 Windows Shell 缓存缩略图: {}", path);
+                    return Ok((blob, path.to_string(), size, ghash));
+                }
+            }
+        }
+        
+        // 2. 回退到自定义生成
         let gen = generator.lock().map_err(|e| format!("获取生成器锁失败: {}", e))?;
         gen.generate_file_thumbnail_blob_only(path)
     }

@@ -224,26 +224,27 @@ impl ThumbnailGenerator {
     }
 
     /// 从图像数据生成 WebP 缩略图（统一接口）
-    /// 优先使用 WIC 内置缩放，失败时回退到传统方法
+    /// 优先使用 WIC 内置缩放（Windows 24H2 支持 JXL），失败时回退到传统方法
     fn generate_webp_from_image_data(image_data: &[u8], ext: &str, config: &ThumbnailGeneratorConfig) -> Option<Vec<u8>> {
         let is_jxl = ext == "jxl";
         
-        if is_jxl {
-            // JXL 使用 jxl_oxide 解码（WIC 可能不支持）
-            Self::decode_jxl_image(image_data)
-                .ok()
-                .and_then(|img| Self::generate_webp_thumbnail_fallback(&img, config).ok())
-        } else {
-            // 其他格式：优先使用 WIC 内置缩放
-            Self::generate_webp_with_wic_fast(image_data, config)
-                .ok()
-                .or_else(|| {
-                    // WIC 失败，回退到传统方法
+        // 所有格式优先使用 WIC 内置缩放（包括 JXL，Windows 24H2 已支持）
+        Self::generate_webp_with_wic_fast(image_data, config)
+            .ok()
+            .or_else(|| {
+                // WIC 失败，根据格式选择回退方法
+                if is_jxl {
+                    // JXL 回退到 jxl_oxide
+                    Self::decode_jxl_image(image_data)
+                        .ok()
+                        .and_then(|img| Self::generate_webp_thumbnail_fallback(&img, config).ok())
+                } else {
+                    // 其他格式回退到 image crate
                     Self::decode_image_safe(image_data)
                         .ok()
                         .and_then(|img| Self::generate_webp_thumbnail_fallback(&img, config).ok())
-                })
-        }
+                }
+            })
     }
 
     /// 使用 archive_manager 从压缩包生成缩略图（统一版本）
@@ -359,31 +360,15 @@ impl ThumbnailGenerator {
             }
         };
 
-        // 检测文件类型
+        // 检测文件扩展名
         let ext = file_path_buf
             .extension()
             .and_then(|e| e.to_str())
-            .map(|e| e.to_lowercase());
-        let is_jxl = ext.as_deref() == Some("jxl");
+            .map(|e| e.to_lowercase())
+            .unwrap_or_default();
 
-        // 同步生成 webp 缩略图
-        // 优先使用 WIC 内置缩放（高性能），失败时回退到传统方法
-        let webp_data = if is_jxl {
-            // JXL 使用 jxl_oxide 解码后转 webp（WIC 可能不支持 JXL）
-            Self::decode_jxl_image(&image_data)
-                .ok()
-                .and_then(|img| Self::generate_webp_thumbnail_fallback(&img, &self.config).ok())
-        } else {
-            // 所有其他格式：优先使用 WIC 内置缩放
-            Self::generate_webp_with_wic_fast(&image_data, &self.config)
-                .ok()
-                .or_else(|| {
-                    // WIC 失败，回退到传统方法
-                    Self::decode_image_safe(&image_data)
-                        .ok()
-                        .and_then(|img| Self::generate_webp_thumbnail_fallback(&img, &self.config).ok())
-                })
-        };
+        // 同步生成 webp 缩略图（使用统一接口）
+        let webp_data = Self::generate_webp_from_image_data(&image_data, &ext, &self.config);
 
         match webp_data {
             Some(data) => {

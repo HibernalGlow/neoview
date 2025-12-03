@@ -4,6 +4,7 @@
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import type { FsItem } from '$lib/types';
 	import { thumbnailManager } from '$lib/utils/thumbnailManager';
+	import { visibleThumbnailLoader } from '$lib/utils/thumbnail/VisibleThumbnailLoader';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 	import { get } from 'svelte/store';
 	import { debounce, scheduleIdleTask, getAdaptivePerformanceConfig } from '$lib/utils/performance';
@@ -56,6 +57,10 @@
 	
 	// 滚动进度（用于 ListSlider）
 	let scrollProgress = $state(0);
+
+	// 滚动方向检测
+	let lastScrollTop = 0;
+	let lastScrollTime = 0;
 
 	// --- Performance ---
 	const perfConfig = getAdaptivePerformanceConfig();
@@ -118,56 +123,46 @@
 		}
 	});
 
-	// Thumbnail loading for visible items - 优化版
+	// Thumbnail loading for visible items - V2 优化版
+	// 参考 NeeView 的 ThumbnailListView.LoadThumbnails
+	// 核心优化：中央优先、方向感知、即时取消
 	const handleVisibleRangeChange = debounce(() => {
 		if (!currentPath || items.length === 0 || virtualItems.length === 0) return;
 
-		const startIndex = virtualItems[0].index;
-		const endIndex = virtualItems[virtualItems.length - 1].index;
-		const visibleItems = items.slice(startIndex, endIndex + 1);
+		// 计算可见范围（按项目索引，考虑多列）
+		const startRowIndex = virtualItems[0].index;
+		const endRowIndex = virtualItems[virtualItems.length - 1].index;
+		const startIndex = startRowIndex * columns;
+		const endIndex = Math.min((endRowIndex + 1) * columns - 1, items.length - 1);
 
-		// 过滤需要缩略图的项目
-		const thumbnailItems = visibleItems.filter(
-			(item) =>
-				item.isDir ||
-				item.isImage ||
-				isVideoFile(item.path) ||
-				item.name.endsWith('.zip') ||
-				item.name.endsWith('.cbz') ||
-				item.name.endsWith('.rar') ||
-				item.name.endsWith('.cbr') ||
-				item.name.endsWith('.7z') ||
-				item.name.endsWith('.cb7')
-		);
-
-		// 过滤已有缓存的项目
-		const needThumbnails = thumbnailItems.filter(
-			(item) => !thumbnails.has(toRelativeKey(item.path))
-		);
-
-		if (needThumbnails.length === 0) return;
-
-		const paths = needThumbnails.map((item) => item.path);
+		// 检测滚动方向
+		const currentScrollTop = container?.scrollTop ?? 0;
+		const currentTime = Date.now();
+		const deltaTime = currentTime - lastScrollTime;
+		let scrollDirection = 0;
 		
-		// 设置当前目录优先级
-		thumbnailManager.setCurrentDirectory(currentPath);
+		if (deltaTime > 0 && deltaTime < 500) {
+			scrollDirection = currentScrollTop > lastScrollTop ? 1 : 
+			                  currentScrollTop < lastScrollTop ? -1 : 0;
+		}
+		lastScrollTop = currentScrollTop;
+		lastScrollTime = currentTime;
 
-		// 直接异步处理，无延迟
-		(async () => {
-			try {
-				// 1. 先从数据库批量加载已缓存的
-				const loaded = await thumbnailManager.batchLoadFromDb(paths);
-				
-				// 2. 找出未命中的，直接并行生成（无延迟）
-				const notLoaded = paths.filter(p => !loaded.has(p));
-				if (notLoaded.length > 0) {
-					thumbnailManager.batchGenerate(notLoaded);
-				}
-			} catch (err) {
-				console.debug('批量加载缩略图失败:', err);
-			}
-		})();
-	}, 50); // 50ms debounce，更快响应
+		// 设置缓存检查回调（使用 thumbnails Map）
+		visibleThumbnailLoader.setHasCacheCallback((path: string) => {
+			return thumbnails.has(toRelativeKey(path));
+		});
+
+		// 使用新的可见项目加载器
+		// 自动实现：中央优先排序、方向感知、离开可见区域任务取消
+		visibleThumbnailLoader.handleVisibleRangeChange(
+			items,
+			startIndex,
+			endIndex,
+			scrollDirection,
+			currentPath
+		);
+	}, 150); // 150ms debounce，过滤快速滚动（从 50ms 增加到 150ms）
 
 	$effect(() => {
 		handleVisibleRangeChange();

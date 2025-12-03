@@ -1505,6 +1505,76 @@ class ThumbnailManager {
   }
 
   /**
+   * 取消指定路径集合的待处理任务
+   * 参考 NeeView 的 JobClient.CancelOrder
+   * 用于取消离开可见区域的任务
+   */
+  cancelPendingTasks(pathsToCancel: Set<string>): void {
+    if (pathsToCancel.size === 0) return;
+    
+    const before = this.taskQueue.length;
+    this.taskQueue = this.taskQueue.filter(task => {
+      const key = this.buildPathKey(task.path, task.innerPath);
+      // 保留 immediate 优先级的任务，只取消 normal 和 high 优先级
+      if (task.priority === 'immediate') return true;
+      return !pathsToCancel.has(task.path) && !pathsToCancel.has(key);
+    });
+    
+    const canceled = before - this.taskQueue.length;
+    if (canceled > 0 && import.meta.env.DEV) {
+      console.debug(`🚫 取消 ${canceled} 个离开可见区域的任务`);
+    }
+  }
+
+  /**
+   * 请求可见区域的缩略图（带优先级排序）
+   * 参考 NeeView 的 ThumbnailList.RequestThumbnail
+   * 
+   * 特点：
+   * 1. 路径已按中央优先排序
+   * 2. 过滤已缓存和已失败的
+   * 3. 异步加载，不阻塞 UI
+   */
+  requestVisibleThumbnails(paths: string[], currentPath: string): void {
+    if (paths.length === 0) return;
+    
+    // 设置当前目录（会取消非当前目录的任务）
+    if (this.currentDirectory !== currentPath) {
+      this.setCurrentDirectory(currentPath);
+    }
+    
+    // 过滤已缓存和已失败的
+    const toLoad = paths.filter(p => {
+      const key = this.buildPathKey(p);
+      // 跳过已缓存的
+      if (this.getCachedThumbnail(p)) return false;
+      // 跳过已标记为失败且不可重试的
+      if (this.failedThumbnails.has(key) && !this.canRetryFailedThumbnail(p)) {
+        return false;
+      }
+      return true;
+    });
+    
+    if (toLoad.length === 0) return;
+    
+    if (import.meta.env.DEV) {
+      console.debug(`👁️ 请求可见区域缩略图: ${toLoad.length} 个 (已过滤 ${paths.length - toLoad.length} 个已缓存/失败)`);
+    }
+    
+    // 异步批量加载（保持顺序 - 中央优先）
+    this.batchLoadFromDb(toLoad).then(loaded => {
+      // 找出未命中数据库的，需要生成
+      const notLoaded = toLoad.filter(p => !loaded.has(p));
+      if (notLoaded.length > 0) {
+        // 生成缩略图（保持顺序）
+        this.batchGenerate(notLoaded);
+      }
+    }).catch(err => {
+      console.debug('可见区域缩略图加载失败:', err);
+    });
+  }
+
+  /**
    * 清空缓存（包括失败标记）
    */
   clearCache() {

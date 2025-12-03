@@ -934,6 +934,75 @@ pub async fn test_load_modes(file_path: String) -> Result<Vec<LoadModeTestResult
     Ok(results)
 }
 
+/// Bitmap 加载结果（用于前端 Canvas 渲染）
+#[derive(Debug, Clone, Serialize)]
+pub struct BitmapLoadResult {
+    pub data: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+    pub decode_ms: f64,
+}
+
+/// 加载图片为 Bitmap（用于前端渲染测试）
+#[command]
+pub async fn load_image_as_bitmap(file_path: String) -> Result<BitmapLoadResult, String> {
+    use std::fs;
+    use crate::core::image_loader_mode::{load_image_unified, ImageLoadMode, ImageLoadResult};
+    
+    let path = PathBuf::from(&file_path);
+    let format = path.extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    
+    let data = fs::read(&path).map_err(|e| format!("读取文件失败: {}", e))?;
+    
+    let start = Instant::now();
+    let result = load_image_unified(data, &format, ImageLoadMode::Bitmap)?;
+    let decode_ms = start.elapsed().as_secs_f64() * 1000.0;
+    
+    match result {
+        ImageLoadResult::Bitmap { data, width, height } => {
+            Ok(BitmapLoadResult {
+                data,
+                width,
+                height,
+                decode_ms,
+            })
+        }
+        _ => Err("意外的返回类型".to_string()),
+    }
+}
+
+/// 加载图片为 Bitmap（带缩放）
+#[command]
+pub async fn load_image_as_bitmap_scaled(
+    file_path: String,
+    max_width: u32,
+    max_height: u32,
+) -> Result<BitmapLoadResult, String> {
+    use std::fs;
+    use crate::core::image_loader_mode::{load_image_bitmap_scaled, ImageLoadResult};
+    
+    let data = fs::read(&file_path).map_err(|e| format!("读取文件失败: {}", e))?;
+    
+    let start = Instant::now();
+    let result = load_image_bitmap_scaled(&data, max_width, max_height)?;
+    let decode_ms = start.elapsed().as_secs_f64() * 1000.0;
+    
+    match result {
+        ImageLoadResult::Bitmap { data, width, height } => {
+            Ok(BitmapLoadResult {
+                data,
+                width,
+                height,
+                decode_ms,
+            })
+        }
+        _ => Err("意外的返回类型".to_string()),
+    }
+}
+
 /// 真实场景测试结果
 #[derive(Debug, Clone, Serialize)]
 pub struct RealWorldTestResult {

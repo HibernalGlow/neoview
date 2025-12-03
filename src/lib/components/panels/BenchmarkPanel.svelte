@@ -230,10 +230,109 @@
 		loadModeResults = [];
 
 		try {
-			const results = await invoke<LoadModeTestResult[]>('test_load_modes', {
+			// 后端测试（解码时间）
+			const backendResults = await invoke<LoadModeTestResult[]>('test_load_modes', {
 				filePath: selectedLoadModeFile
 			});
-			loadModeResults = results;
+
+			// 前端真实渲染测试
+			const frontendResults: LoadModeTestResult[] = [];
+
+			// 测试 Raw 模式：传输原始字节 → Blob → img 加载
+			try {
+				const startTotal = performance.now();
+				const rawData = await invoke<number[]>('load_image', { path: selectedLoadModeFile });
+				const transferTime = performance.now() - startTotal;
+
+				const startRender = performance.now();
+				const blob = new Blob([new Uint8Array(rawData)]);
+				const url = URL.createObjectURL(blob);
+				
+				const imgSize = await new Promise<{w: number, h: number}>((resolve, reject) => {
+					const img = new Image();
+					img.onload = () => {
+						const size = {w: img.naturalWidth, h: img.naturalHeight};
+						URL.revokeObjectURL(url);
+						resolve(size);
+					};
+					img.onerror = () => reject(new Error('图片加载失败'));
+					img.src = url;
+				});
+				const totalTime = performance.now() - startTotal;
+
+				frontendResults.push({
+					mode: 'Raw→Blob→img (完整)',
+					format: selectedLoadModeFile.split('.').pop() || '',
+					input_size: rawData.length,
+					output_size: rawData.length,
+					decode_ms: totalTime,
+					width: imgSize.w,
+					height: imgSize.h,
+					success: true,
+					error: null
+				});
+			} catch (e) {
+				frontendResults.push({
+					mode: 'Raw→Blob→img (完整)',
+					format: selectedLoadModeFile.split('.').pop() || '',
+					input_size: 0,
+					output_size: 0,
+					decode_ms: 0,
+					width: null,
+					height: null,
+					success: false,
+					error: String(e)
+				});
+			}
+
+			// 测试 Bitmap 模式：传输像素 → Canvas 渲染
+			try {
+				interface BitmapResult { data: number[]; width: number; height: number; decode_ms: number; }
+				const startTotal = performance.now();
+				const bitmapResult = await invoke<BitmapResult>('load_image_as_bitmap', { filePath: selectedLoadModeFile });
+				const transferTime = performance.now() - startTotal;
+
+				// Canvas 渲染
+				const startRender = performance.now();
+				const canvas = document.createElement('canvas');
+				canvas.width = bitmapResult.width;
+				canvas.height = bitmapResult.height;
+				const ctx = canvas.getContext('2d')!;
+				const imageData = new ImageData(
+					new Uint8ClampedArray(bitmapResult.data),
+					bitmapResult.width,
+					bitmapResult.height
+				);
+				ctx.putImageData(imageData, 0, 0);
+				const renderTime = performance.now() - startRender;
+				const totalTime = performance.now() - startTotal;
+
+				frontendResults.push({
+					mode: 'Bitmap→Canvas (完整)',
+					format: selectedLoadModeFile.split('.').pop() || '',
+					input_size: bitmapResult.data.length,
+					output_size: bitmapResult.data.length,
+					decode_ms: totalTime,
+					width: bitmapResult.width,
+					height: bitmapResult.height,
+					success: true,
+					error: null
+				});
+			} catch (e) {
+				frontendResults.push({
+					mode: 'Bitmap→Canvas (完整)',
+					format: selectedLoadModeFile.split('.').pop() || '',
+					input_size: 0,
+					output_size: 0,
+					decode_ms: 0,
+					width: null,
+					height: null,
+					success: false,
+					error: String(e)
+				});
+			}
+
+			loadModeResults = [...backendResults, ...frontendResults];
 		} catch (err) {
 			console.error('加载模式测试失败:', err);
 		} finally {

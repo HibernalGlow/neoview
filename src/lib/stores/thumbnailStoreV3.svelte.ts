@@ -235,6 +235,109 @@ export async function clearCache(
   }
 }
 
+// ============== 数据库维护 API ==============
+
+/**
+ * 数据库维护统计
+ */
+export interface MaintenanceStats {
+  totalEntries: number;
+  folderEntries: number;
+  dbSizeBytes: number;
+  dbSizeMb: number;
+}
+
+/**
+ * 获取数据库维护统计
+ */
+export async function getDbStats(): Promise<MaintenanceStats | null> {
+  if (!initialized) return null;
+
+  try {
+    const stats = await invoke<{
+      total_entries: number;
+      folder_entries: number;
+      db_size_bytes: number;
+      db_size_mb: number;
+    }>('get_thumbnail_db_stats_v3');
+    
+    return {
+      totalEntries: stats.total_entries,
+      folderEntries: stats.folder_entries,
+      dbSizeBytes: stats.db_size_bytes,
+      dbSizeMb: stats.db_size_mb,
+    };
+  } catch (error) {
+    console.error('❌ getDbStats failed:', error);
+    return null;
+  }
+}
+
+/**
+ * 清理无效路径（文件不存在的缩略图）
+ */
+export async function cleanupInvalidPaths(): Promise<number> {
+  if (!initialized) return 0;
+
+  try {
+    return await invoke<number>('cleanup_invalid_paths_v3');
+  } catch (error) {
+    console.error('❌ cleanupInvalidPaths failed:', error);
+    return 0;
+  }
+}
+
+/**
+ * 清理过期条目
+ * @param days 过期天数
+ * @param excludeFolders 是否排除文件夹（保留文件夹缩略图）
+ */
+export async function cleanupExpiredEntries(
+  days: number,
+  excludeFolders: boolean = true
+): Promise<number> {
+  if (!initialized) return 0;
+
+  try {
+    return await invoke<number>('cleanup_expired_entries_v3', {
+      days,
+      excludeFolders,
+    });
+  } catch (error) {
+    console.error('❌ cleanupExpiredEntries failed:', error);
+    return 0;
+  }
+}
+
+/**
+ * 清理指定路径前缀下的缩略图
+ */
+export async function cleanupByPathPrefix(pathPrefix: string): Promise<number> {
+  if (!initialized) return 0;
+
+  try {
+    return await invoke<number>('cleanup_by_path_prefix_v3', { pathPrefix });
+  } catch (error) {
+    console.error('❌ cleanupByPathPrefix failed:', error);
+    return 0;
+  }
+}
+
+/**
+ * 执行数据库压缩（VACUUM）
+ */
+export async function vacuumDb(): Promise<boolean> {
+  if (!initialized) return false;
+
+  try {
+    await invoke('vacuum_thumbnail_db_v3');
+    return true;
+  } catch (error) {
+    console.error('❌ vacuumDb failed:', error);
+    return false;
+  }
+}
+
 /**
  * 预加载目录
  */

@@ -662,9 +662,10 @@ impl ThumbnailServiceV3 {
     pub fn clear_cache(&self, scope: &str) {
         match scope {
             "memory" => {
-                let mut cache = self.memory_cache.write().unwrap();
-                cache.clear();
-                self.memory_cache_bytes.store(0, Ordering::SeqCst);
+                if let Ok(mut cache) = self.memory_cache.write() {
+                    cache.clear();
+                    self.memory_cache_bytes.store(0, Ordering::SeqCst);
+                }
                 log_info!("🧹 内存缓存已清除");
             }
             "database" => {
@@ -674,12 +675,35 @@ impl ThumbnailServiceV3 {
             }
             "all" | _ => {
                 // 清除内存缓存
-                {
-                    let mut cache = self.memory_cache.write().unwrap();
+                if let Ok(mut cache) = self.memory_cache.write() {
                     cache.clear();
                     self.memory_cache_bytes.store(0, Ordering::SeqCst);
                 }
                 log_info!("🧹 内存缓存已清除");
+            }
+        }
+    }
+    
+    /// 检查内存压力并自动清理（当超过阈值时清理一半缓存）
+    pub fn check_memory_pressure(&self, max_bytes: usize) {
+        let current_bytes = self.memory_cache_bytes.load(Ordering::SeqCst);
+        
+        if current_bytes > max_bytes {
+            log_debug!("⚠️ 内存压力检测: {} bytes > {} bytes，清理一半缓存", current_bytes, max_bytes);
+            
+            if let Ok(mut cache) = self.memory_cache.write() {
+                let target_size = cache.len() / 2;
+                while cache.len() > target_size {
+                    if cache.pop_lru().is_none() {
+                        break;
+                    }
+                }
+                
+                // 重新计算内存使用
+                let new_bytes: usize = cache.iter().map(|(_, v)| v.len()).sum();
+                self.memory_cache_bytes.store(new_bytes, Ordering::SeqCst);
+                
+                log_debug!("✅ 清理后缓存大小: {} 条, {} bytes", cache.len(), new_bytes);
             }
         }
     }
@@ -717,19 +741,28 @@ impl ThumbnailServiceV3 {
             return Ok(blob);
         }
         
-        // 3. 递归查找第一张图片/压缩包
+        // 3. 递归查找第一张图片/压缩包/视频
         if let Some(first) = Self::find_first_image_recursive(folder_path, max_depth)? {
-            // 判断是压缩包还是图片
-            let is_archive = first.ends_with(".zip") || first.ends_with(".cbz") 
-                || first.ends_with(".rar") || first.ends_with(".cbr")
-                || first.ends_with(".7z") || first.ends_with(".cb7");
+            // 判断文件类型
+            let first_lower = first.to_lowercase();
+            let is_archive = first_lower.ends_with(".zip") || first_lower.ends_with(".cbz") 
+                || first_lower.ends_with(".rar") || first_lower.ends_with(".cbr")
+                || first_lower.ends_with(".7z") || first_lower.ends_with(".cb7");
+            let is_video = first_lower.ends_with(".mp4") || first_lower.ends_with(".mkv")
+                || first_lower.ends_with(".avi") || first_lower.ends_with(".mov")
+                || first_lower.ends_with(".webm") || first_lower.ends_with(".wmv")
+                || first_lower.ends_with(".flv") || first_lower.ends_with(".m4v");
             
             let gen = generator.lock().map_err(|e| format!("获取生成器锁失败: {}", e))?;
             
             let blob = if is_archive {
                 // 压缩包需要提取第一张图
                 gen.generate_archive_thumbnail(&first)?
+            } else if is_video {
+                // 视频文件使用视频缩略图生成（调用 generate_file_thumbnail 会自动处理视频）
+                gen.generate_file_thumbnail(&first)?
             } else {
+                // 图片文件
                 gen.generate_file_thumbnail(&first)?
             };
             
@@ -783,7 +816,7 @@ impl ThumbnailServiceV3 {
         Ok(None)
     }
     
-    /// 递归查找第一张图片/压缩包
+    /// 递归查找第一张图片/压缩包/视频
     fn find_first_image_recursive(folder: &str, depth: u32) -> Result<Option<String>, String> {
         if depth == 0 {
             return Ok(None);
@@ -791,6 +824,7 @@ impl ThumbnailServiceV3 {
         
         let image_exts = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "avif", "jxl"];
         let archive_exts = ["zip", "cbz", "rar", "cbr", "7z", "cb7"];
+        let video_exts = ["mp4", "mkv", "avi", "mov", "webm", "wmv", "flv", "m4v"];
         
         // 优雅处理权限错误
         let entries = match std::fs::read_dir(folder) {
@@ -811,7 +845,10 @@ impl ThumbnailServiceV3 {
             if path.is_file() {
                 if let Some(ext) = path.extension() {
                     let ext = ext.to_string_lossy().to_lowercase();
-                    if image_exts.contains(&ext.as_str()) || archive_exts.contains(&ext.as_str()) {
+                    // 支持图片、压缩包和视频
+                    if image_exts.contains(&ext.as_str()) 
+                        || archive_exts.contains(&ext.as_str()) 
+                        || video_exts.contains(&ext.as_str()) {
                         return Ok(Some(path.to_string_lossy().to_string()));
                     }
                 }

@@ -5,7 +5,7 @@
  */
 import { tick } from 'svelte';
 import type { FsItem } from '$lib/types';
-import VirtualizedFileList from '$lib/components/panels/file/components/VirtualizedFileList.svelte';
+import VirtualizedFileList from '$lib/components/panels/file/components/VirtualizedFileListV2.svelte';
 import {
 	folderTabActions,
 	tabViewStyle,

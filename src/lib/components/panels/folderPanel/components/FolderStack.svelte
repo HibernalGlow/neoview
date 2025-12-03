@@ -10,7 +10,7 @@ import type { FsItem } from '$lib/types';
 import type { Writable } from 'svelte/store';
 import * as FileSystemAPI from '$lib/api/filesystem';
 import { thumbnailManager } from '$lib/utils/thumbnailManager';
-import VirtualizedFileList from '$lib/components/panels/file/components/VirtualizedFileList.svelte';
+import VirtualizedFileList from '$lib/components/panels/file/components/VirtualizedFileListV2.svelte';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 import { get } from 'svelte/store';
 import {

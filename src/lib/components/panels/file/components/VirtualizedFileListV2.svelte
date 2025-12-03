@@ -59,6 +59,7 @@
 	const itemHeight = $derived(viewMode === 'list' ? 96 : 240);
 	const columns = $derived(viewMode === 'list' ? 1 : viewportWidth >= 640 ? 3 : 2);
 
+	// TanStack Virtual
 	const virtualizer = createVirtualizer({
 		get count() {
 			return items.length;
@@ -71,7 +72,39 @@
 		}
 	});
 
+	// 获取虚拟项目列表（使用 $ 访问 store 值）
 	const virtualItems = $derived($virtualizer.getVirtualItems());
+
+	// 调试日志
+	$effect(() => {
+		console.log('[V2] virtualizer state:', {
+			itemsCount: items.length,
+			virtualItemsCount: virtualItems.length,
+			container: !!container,
+			containerHeight: container?.clientHeight,
+			containerScrollHeight: container?.scrollHeight,
+			totalSize: $virtualizer.getTotalSize(),
+			columns,
+			itemHeight
+		});
+	});
+
+	// Svelte 5 兼容性修复：手动触发 virtualizer 更新
+	// 参考: https://github.com/TanStack/virtual/issues/866
+	let mounted = $state(false);
+	
+	$effect(() => {
+		if (container) {
+			mounted = true;
+		}
+	});
+	
+	$effect(() => {
+		if (mounted && container) {
+			// 强制触发更新
+			$virtualizer._willUpdate();
+		}
+	});
 
 	// --- Effects ---
 
@@ -84,13 +117,13 @@
 		if (scrollToSelectedToken > lastScrollToken) {
 			lastScrollToken = scrollToSelectedToken;
 			if (selectedIndex >= 0) {
-				get(virtualizer).scrollToIndex(selectedIndex, { align: 'center', behavior: 'smooth' });
+				$virtualizer.scrollToIndex(selectedIndex, { align: 'center', behavior: 'smooth' });
 			}
 		}
 	});
 
 	// Thumbnail loading for visible items - 优化版
-	const handleVisibleRangeChange = debounce(async () => {
+	const handleVisibleRangeChange = debounce(() => {
 		if (!currentPath || items.length === 0 || virtualItems.length === 0) return;
 
 		const startIndex = virtualItems[0].index;
@@ -123,19 +156,21 @@
 		// 设置当前目录优先级
 		thumbnailManager.setCurrentDirectory(currentPath);
 
-		try {
-			// 1. 先尝试从数据库批量加载（已缓存的）
-			const loaded = await thumbnailManager.batchLoadFromDb(paths);
-			
-			// 2. 找出数据库未命中的，直接并行生成（无延迟）
-			const notLoaded = paths.filter(p => !loaded.has(p));
-			if (notLoaded.length > 0) {
-				// 批量并行生成，不逐个 enqueue
-				thumbnailManager.batchGenerate(notLoaded);
+		// 直接异步处理，无延迟
+		(async () => {
+			try {
+				// 1. 先从数据库批量加载已缓存的
+				const loaded = await thumbnailManager.batchLoadFromDb(paths);
+				
+				// 2. 找出未命中的，直接并行生成（无延迟）
+				const notLoaded = paths.filter(p => !loaded.has(p));
+				if (notLoaded.length > 0) {
+					thumbnailManager.batchGenerate(notLoaded);
+				}
+			} catch (err) {
+				console.debug('批量加载缩略图失败:', err);
 			}
-		} catch (err) {
-			console.debug('批量加载缩略图失败:', err);
-		}
+		})();
 	}, 50); // 50ms debounce，更快响应
 
 	$effect(() => {
@@ -205,7 +240,7 @@
 			if (next !== selectedIndex) {
 				onSelectedIndexChange({ index: next });
 				dispatch('selectedIndexChange', { index: next });
-				get(virtualizer).scrollToIndex(next, { align: 'auto', behavior: 'smooth' });
+				$virtualizer.scrollToIndex(next, { align: 'auto', behavior: 'smooth' });
 			}
 		};
 
@@ -226,7 +261,7 @@
 				e.preventDefault();
 				if (selectedIndex !== 0) {
 					onSelectedIndexChange({ index: 0 });
-					get(virtualizer).scrollToIndex(0, { align: 'start', behavior: 'smooth' });
+					$virtualizer.scrollToIndex(0, { align: 'start', behavior: 'smooth' });
 				}
 				break;
 			case 'End':
@@ -234,7 +269,7 @@
 				const last = items.length - 1;
 				if (selectedIndex !== last) {
 					onSelectedIndexChange({ index: last });
-					get(virtualizer).scrollToIndex(last, { align: 'end', behavior: 'smooth' });
+					$virtualizer.scrollToIndex(last, { align: 'end', behavior: 'smooth' });
 				}
 				break;
 			default:
@@ -288,7 +323,7 @@
 				<FileItemCard
 					{item}
 					thumbnail={thumbnails.get(toRelativeKey(item.path))}
-					viewMode={viewMode === 'thumbnails' ? 'grid' : viewMode}
+					viewMode={viewMode === 'thumbnails' || viewMode === 'grid' ? 'thumbnail' : viewMode}
 					{isSelected}
 					{isChecked}
 					{isCheckMode}

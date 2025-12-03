@@ -8,7 +8,7 @@ use windows::{
         Foundation::GENERIC_READ,
         Graphics::Imaging::{
             CLSID_WICImagingFactory, IWICBitmapDecoder, IWICBitmapFrameDecode,
-            IWICBitmapSource, IWICFormatConverter, IWICImagingFactory, IWICBitmapScaler,
+            IWICFormatConverter, IWICImagingFactory, IWICBitmapScaler,
             WICDecodeMetadataCacheOnDemand, WICBitmapDitherTypeNone,
             WICBitmapPaletteTypeCustom, GUID_WICPixelFormat32bppBGRA,
             WICBitmapInterpolationModeFant,

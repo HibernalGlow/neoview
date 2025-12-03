@@ -28,7 +28,7 @@ pub struct BenchmarkReport {
 #[command]
 pub async fn run_image_benchmark(file_path: String) -> Result<BenchmarkReport, String> {
     use std::fs;
-    use image::{DynamicImage, GenericImageView};
+    use image::GenericImageView;
     
     let path = PathBuf::from(&file_path);
     let file_size = fs::metadata(&path)
@@ -440,7 +440,7 @@ pub async fn run_detailed_benchmark(archive_path: String) -> Result<Vec<Detailed
         .map(|e| ["zip", "cbz", "rar", "7z", "cb7", "cbr"].contains(&e.to_lowercase().as_str()))
         .unwrap_or(false);
     
-    let (image_data, ext, extract_ms, image_name) = if is_archive {
+    let (image_data, ext, extract_ms, _image_name) = if is_archive {
         // 从压缩包提取第一张图片
         let start_extract = Instant::now();
         let file = fs::File::open(&path).map_err(|e| format!("打开压缩包失败: {}", e))?;
@@ -595,7 +595,6 @@ pub async fn run_detailed_benchmark(archive_path: String) -> Result<Vec<Detailed
 /// 文件夹批量压缩包基准测试
 #[command]
 pub async fn run_archive_folder_benchmark(folder_path: String, tier: u32) -> Result<Vec<BenchmarkReport>, String> {
-    use std::fs;
     use rand::seq::SliceRandom;
     use walkdir::WalkDir;
     

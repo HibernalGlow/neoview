@@ -1,5 +1,7 @@
 //! 7z 格式处理器
 
+// std::io::Read 用于 for_each_entries 回调中的 reader.read_to_end()
+#[allow(unused_imports)]
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use sevenz_rust::SevenZReader;

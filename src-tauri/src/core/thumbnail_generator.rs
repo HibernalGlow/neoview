@@ -6,7 +6,7 @@ use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::video_exts;
 use image::{DynamicImage, GenericImageView, ImageFormat};
 use std::collections::HashMap;
-use std::io::{Cursor, Read};
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::Arc;

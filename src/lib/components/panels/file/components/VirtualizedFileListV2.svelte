@@ -162,9 +162,12 @@
 			scrollDirection,
 			currentPath
 		);
-	}, 150); // 150ms debounce，过滤快速滚动（从 50ms 增加到 150ms）
+	}, 100); // 100ms debounce，平衡响应速度和过滤效果
 
+	// 当 virtualItems 变化时触发缩略图加载
 	$effect(() => {
+		// 显式依赖 virtualItems，确保滚动时重新触发
+		const _ = virtualItems.length;
 		handleVisibleRangeChange();
 	});
 
@@ -196,6 +199,9 @@
 		// 更新滚动进度
 		const maxScroll = container.scrollHeight - container.clientHeight;
 		scrollProgress = maxScroll > 0 ? scrollTop / maxScroll : 0;
+		
+		// 滚动时也触发缩略图加载（debounce 会合并多次调用）
+		handleVisibleRangeChange();
 	}
 
 	function handleItemClick(item: FsItem, index: number) {

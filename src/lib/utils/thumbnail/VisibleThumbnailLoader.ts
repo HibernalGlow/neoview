@@ -188,6 +188,8 @@ export class VisibleThumbnailLoader {
   /**
    * 取消离开可见区域的任务
    * 参考 NeeView 的 JobClient.CancelOrder
+   * 
+   * 注意：只取消距离可见区域较远的任务，避免过于激进
    */
   private cancelOutOfViewTasks(
     items: FsItem[],
@@ -196,20 +198,23 @@ export class VisibleThumbnailLoader {
   ): void {
     const { start: oldStart, end: oldEnd } = this.lastVisibleRange;
     
-    // 如果是首次或范围未变化，不需要取消
+    // 如果是首次，不需要取消
     if (oldStart === 0 && oldEnd === 0) return;
+    
+    // 如果范围未变化，不需要取消
     if (oldStart === visibleStart && oldEnd === visibleEnd) return;
     
-    // 找出离开可见区域的索引对应的路径
+    // 计算扩展范围（加大边距，避免过于激进的取消）
+    const cancelMargin = this.MARGIN * 2; // 取消边距是预加载边距的两倍
+    const extendedStart = visibleStart - cancelMargin;
+    const extendedEnd = visibleEnd + cancelMargin;
+    
+    // 找出离开扩展可见区域的索引对应的路径
     const pathsToCancel = new Set<string>();
     
     for (let i = oldStart; i <= oldEnd; i++) {
-      // 检查是否在扩展范围内（考虑边距）
-      const extendedStart = visibleStart - this.MARGIN;
-      const extendedEnd = visibleEnd + this.MARGIN;
-      
       if (i < extendedStart || i > extendedEnd) {
-        // 这个索引已离开可见区域
+        // 这个索引已远离可见区域
         if (i >= 0 && i < items.length) {
           pathsToCancel.add(items[i].path);
         }
@@ -227,6 +232,10 @@ export class VisibleThumbnailLoader {
    */
   private requestThumbnails(paths: string[]): void {
     if (paths.length === 0) return;
+    
+    if (import.meta.env.DEV) {
+      console.debug(`📂 VisibleThumbnailLoader: 请求 ${paths.length} 个缩略图`);
+    }
     
     // 使用 thumbnailManager 的可见项目加载方法
     thumbnailManager.requestVisibleThumbnails(paths, this.currentPath);

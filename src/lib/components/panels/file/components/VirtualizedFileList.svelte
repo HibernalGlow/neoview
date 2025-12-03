@@ -189,42 +189,35 @@
 		});
 
 		if (needThumbnails.length > 0) {
-			// console.log(`👁️ 虚拟滚动范围更新: ${startIndex}-${endIndex}, 需要缩略图: ${needThumbnails.length}`);
-
-			// 按虚拟列表顺序处理：视野上方的先加载，下方的后加载
-			const itemsWithOrder = needThumbnails.map((item, index) => {
+			// 按虚拟列表顺序处理：视野上方的先加载
+			const itemsWithOrder = needThumbnails.map((item) => {
 				const itemIndex = items.findIndex((i) => i.path === item.path);
-				const distanceFromTop = itemIndex - startIndex; // 距离视野顶部的距离
-				return { item, distanceFromTop, itemIndex };
+				const distanceFromTop = itemIndex - startIndex;
+				return { item, distanceFromTop };
 			});
 
-			// 按距离顶部距离排序（距离越近，优先级越高）
+			// 按距离顶部距离排序
 			itemsWithOrder.sort((a, b) => a.distanceFromTop - b.distanceFromTop);
-
-			// 使用增量批量加载：支持流式加载，边查询边显示
 			const paths = itemsWithOrder.map(({ item }) => item.path);
 
-			scheduleIdleTask(async () => {
+			// 设置当前目录优先级
+			thumbnailManager.setCurrentDirectory(currentPath);
+
+			// 直接异步处理，无延迟
+			(async () => {
 				try {
-					// 使用增量批量加载（自动支持流式加载）
-					await thumbnailManager.batchLoadFromDb(paths);
+					// 1. 先从数据库批量加载已缓存的
+					const loaded = await thumbnailManager.batchLoadFromDb(paths);
+					
+					// 2. 找出未命中的，直接并行生成（无延迟）
+					const notLoaded = paths.filter(p => !loaded.has(p));
+					if (notLoaded.length > 0) {
+						thumbnailManager.batchGenerate(notLoaded);
+					}
 				} catch (err) {
 					console.debug('批量加载缩略图失败:', err);
 				}
-
-				// 等待一小段时间让批量加载完成，然后检查哪些还需要生成
-				setTimeout(() => {
-					itemsWithOrder.forEach(({ item }, index) => {
-						const key = getThumbnailKey(item);
-						// 如果还没有缓存，按顺序加入生成队列
-						if (!thumbnails.has(key)) {
-							setTimeout(() => {
-								enqueueVisible(currentPath, [item], { priority: 'immediate' });
-							}, index * 10); // 每个项目延迟 10ms，确保顺序
-						}
-					});
-				}, 100); // 等待 100ms 让批量加载完成
-			});
+			})();
 		}
 	}, 50); // 50ms 防抖延迟
 

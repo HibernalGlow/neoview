@@ -615,6 +615,50 @@ class ThumbnailManager {
   }
 
   /**
+   * 批量并行生成缩略图（无延迟，直接并行）
+   * 用于可见区域的缩略图生成
+   */
+  batchGenerate(paths: string[]): void {
+    if (paths.length === 0) return;
+
+    // 过滤已在处理中或已失败的
+    const toGenerate = paths.filter(path => {
+      const pathKey = this.buildPathKey(path);
+      return !this.processingTasks.has(pathKey) && !this.failedThumbnails.has(pathKey);
+    });
+
+    if (toGenerate.length === 0) return;
+
+    // 并行生成，不使用队列延迟
+    toGenerate.forEach(path => {
+      const pathKey = this.buildPathKey(path);
+      const isArchive = /\.(zip|cbz|rar|cbr|7z|cb7)$/i.test(path);
+
+      // 标记处理中
+      this.processingTasks.add(pathKey);
+
+      // 异步生成
+      this.generateThumbnail(path, undefined, isArchive)
+        .then(dataUrl => {
+          if (dataUrl && this.onThumbnailReady) {
+            this.onThumbnailReady(path, dataUrl);
+          }
+        })
+        .catch(err => {
+          console.debug('生成缩略图失败:', path, err);
+          this.failedThumbnails.add(pathKey);
+        })
+        .finally(() => {
+          this.processingTasks.delete(pathKey);
+        });
+    });
+
+    if (import.meta.env.DEV) {
+      console.log(`🚀 批量并行生成 ${toGenerate.length} 个缩略图`);
+    }
+  }
+
+  /**
    * 增量批量加载（流式加载，边查询边显示）
    */
   private async incrementalBatchLoadFromDb(paths: string[]): Promise<Map<string, string>> {

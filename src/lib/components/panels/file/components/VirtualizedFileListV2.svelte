@@ -35,7 +35,7 @@
 		isCheckMode?: boolean;
 		isDeleteMode?: boolean;
 		selectedItems?: Set<string>;
-		viewMode?: 'list' | 'thumbnails' | 'grid';
+		viewMode?: 'list' | 'thumbnails' | 'grid' | 'content' | 'banner' | 'thumbnail';
 		onSelectionChange?: (payload: { selectedItems: Set<string> }) => void;
 		onSelectedIndexChange?: (payload: { index: number }) => void;
 		onItemSelect?: (payload: { item: FsItem; index: number; multiSelect: boolean }) => void;
@@ -49,6 +49,9 @@
 	let viewportWidth = $state(800);
 	let resizeObserver: ResizeObserver | null = null;
 
+	// 滚动位置缓存
+	const scrollPositions = new Map<string, number>();
+
 	// --- Performance ---
 	const perfConfig = getAdaptivePerformanceConfig();
 
@@ -60,7 +63,7 @@
 		get count() {
 			return items.length;
 		},
-		getScrollElement: () => container,
+		getScrollElement: () => container ?? null,
 		estimateSize: () => itemHeight,
 		overscan: 5,
 		get lanes() {
@@ -86,14 +89,15 @@
 		}
 	});
 
-	// Thumbnail loading for visible items
-	const handleVisibleRangeChange = debounce(() => {
+	// Thumbnail loading for visible items - 优化版
+	const handleVisibleRangeChange = debounce(async () => {
 		if (!currentPath || items.length === 0 || virtualItems.length === 0) return;
 
 		const startIndex = virtualItems[0].index;
 		const endIndex = virtualItems[virtualItems.length - 1].index;
 		const visibleItems = items.slice(startIndex, endIndex + 1);
 
+		// 过滤需要缩略图的项目
 		const thumbnailItems = visibleItems.filter(
 			(item) =>
 				item.isDir ||
@@ -102,24 +106,37 @@
 				item.name.endsWith('.zip') ||
 				item.name.endsWith('.cbz') ||
 				item.name.endsWith('.rar') ||
-				item.name.endsWith('.cbr')
+				item.name.endsWith('.cbr') ||
+				item.name.endsWith('.7z') ||
+				item.name.endsWith('.cb7')
 		);
 
+		// 过滤已有缓存的项目
 		const needThumbnails = thumbnailItems.filter(
 			(item) => !thumbnails.has(toRelativeKey(item.path))
 		);
 
-		if (needThumbnails.length > 0) {
-			const paths = needThumbnails.map((item) => item.path);
-			scheduleIdleTask(async () => {
-				try {
-					await thumbnailManager.batchLoadFromDb(paths);
-				} catch (err) {
-					console.debug('批量加载缩略图失败:', err);
-				}
-			});
+		if (needThumbnails.length === 0) return;
+
+		const paths = needThumbnails.map((item) => item.path);
+		
+		// 设置当前目录优先级
+		thumbnailManager.setCurrentDirectory(currentPath);
+
+		try {
+			// 1. 先尝试从数据库批量加载（已缓存的）
+			const loaded = await thumbnailManager.batchLoadFromDb(paths);
+			
+			// 2. 找出数据库未命中的，直接并行生成（无延迟）
+			const notLoaded = paths.filter(p => !loaded.has(p));
+			if (notLoaded.length > 0) {
+				// 批量并行生成，不逐个 enqueue
+				thumbnailManager.batchGenerate(notLoaded);
+			}
+		} catch (err) {
+			console.debug('批量加载缩略图失败:', err);
 		}
-	}, 100);
+	}, 50); // 50ms debounce，更快响应
 
 	$effect(() => {
 		handleVisibleRangeChange();

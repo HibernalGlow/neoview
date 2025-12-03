@@ -1,16 +1,21 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
-	import { Database, Trash2, FolderX, Clock, Archive, RefreshCcw, BarChart3, Loader2 } from '@lucide/svelte';
+	import { Database, Trash2, FolderX, Clock, Archive, RefreshCcw, Loader2 } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
-	import * as thumbnailStore from '$lib/stores/thumbnailStoreV3.svelte';
-	import type { MaintenanceStats } from '$lib/stores/thumbnailStoreV3.svelte';
+
+	// 统计类型
+	interface MaintenanceStats {
+		totalEntries: number;
+		folderEntries: number;
+		dbSizeBytes: number;
+		dbSizeMb: number;
+	}
 
 	// 状态
 	let stats = $state<MaintenanceStats | null>(null);
-	let legacyStats = $state<{ total: number; withEmm: number; invalid: number } | null>(null);
 	let isLoading = $state(false);
 	let message = $state<string | null>(null);
 	
@@ -21,31 +26,28 @@
 	// 路径清理参数
 	let pathPrefix = $state('');
 
-	// 加载 V3 统计
-	async function loadV3Stats() {
-		try {
-			stats = await thumbnailStore.getDbStats();
-		} catch (e) {
-			console.error('获取 V3 统计失败:', e);
-		}
-	}
-	
-	// 加载旧版统计（可选，失败时忽略）
-	async function loadLegacyStats() {
-		try {
-			const [total, withEmm, invalid] = await invoke<[number, number, number]>('get_thumbnail_maintenance_stats');
-			legacyStats = { total, withEmm, invalid };
-		} catch {
-			// 旧版 API 可能不可用，忽略错误
-			legacyStats = null;
-		}
-	}
-	
+	// 直接使用 invoke 加载 V3 统计
 	async function loadStats() {
 		isLoading = true;
 		message = null;
-		await Promise.all([loadV3Stats(), loadLegacyStats()]);
-		isLoading = false;
+		try {
+			const result = await invoke<{
+				total_entries: number;
+				folder_entries: number;
+				db_size_bytes: number;
+				db_size_mb: number;
+			}>('get_thumbnail_db_stats_v3');
+			stats = {
+				totalEntries: result.total_entries,
+				folderEntries: result.folder_entries,
+				dbSizeBytes: result.db_size_bytes,
+				dbSizeMb: result.db_size_mb,
+			};
+		} catch {
+			stats = null;
+		} finally {
+			isLoading = false;
+		}
 	}
 
 	// 清理无效路径（V3）
@@ -53,7 +55,7 @@
 		isLoading = true;
 		message = null;
 		try {
-			const count = await thumbnailStore.cleanupInvalidPaths();
+			const count = await invoke<number>('cleanup_invalid_paths_v3');
 			message = `✅ 已清理 ${count} 条无效路径记录`;
 			await loadStats();
 		} catch (e) {
@@ -68,7 +70,7 @@
 		isLoading = true;
 		message = null;
 		try {
-			const count = await thumbnailStore.cleanupExpiredEntries(expireDays, excludeFolders);
+			const count = await invoke<number>('cleanup_expired_entries_v3', { days: expireDays, excludeFolders });
 			message = `✅ 已清理 ${count} 条过期记录（>${expireDays}天）`;
 			await loadStats();
 		} catch (e) {
@@ -87,7 +89,7 @@
 		isLoading = true;
 		message = null;
 		try {
-			const count = await thumbnailStore.cleanupByPathPrefix(pathPrefix);
+			const count = await invoke<number>('cleanup_by_path_prefix_v3', { pathPrefix });
 			message = `✅ 已清理 ${count} 条路径匹配记录`;
 			await loadStats();
 		} catch (e) {
@@ -102,8 +104,8 @@
 		isLoading = true;
 		message = null;
 		try {
-			const success = await thumbnailStore.vacuumDb();
-			message = success ? '✅ 数据库压缩完成' : '❌ 压缩失败';
+			await invoke('vacuum_thumbnail_db_v3');
+			message = '✅ 数据库压缩完成';
 			await loadStats();
 		} catch (e) {
 			message = `❌ 压缩失败: ${e}`;

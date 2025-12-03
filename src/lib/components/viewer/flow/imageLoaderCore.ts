@@ -7,7 +7,7 @@
 import { bookStore } from '$lib/stores/book.svelte';
 import { logImageTrace } from '$lib/utils/imageTrace';
 import { BlobCache, getBlobCache } from './blobCache';
-import { LoadQueueManager, LoadPriority } from './loadQueue';
+import { LoadQueueManager, LoadPriority, QueueClearedError, TaskCancelledError } from './loadQueue';
 import { readPageBlob, getImageDimensions, createThumbnailDataURL } from './imageReader';
 import { calculatePreloadPlan, trackPageDirection, planToQueue, type PreloadConfig } from './preloadStrategy';
 
@@ -96,7 +96,12 @@ export class ImageLoaderCore {
 			const result = await loadPromise;
 			return result;
 		} catch (error) {
-			// 【关键】失败时清除 pending 状态，允许重试
+			// 【优化】区分正常取消和真正的错误
+			if (error instanceof QueueClearedError || error instanceof TaskCancelledError) {
+				// 正常取消（切书、清理队列等），静默处理
+				throw error;
+			}
+			// 【关键】真正的错误才打印警告
 			console.warn(`加载页面 ${pageIndex} 失败:`, error);
 			throw error;
 		} finally {

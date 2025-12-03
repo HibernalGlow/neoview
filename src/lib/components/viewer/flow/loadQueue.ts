@@ -12,6 +12,22 @@ interface LoadTask {
 	executor: () => Promise<void>;
 }
 
+/** 队列清空错误（用于区分正常取消和真正错误） */
+export class QueueClearedError extends Error {
+	constructor(message = 'Queue cleared') {
+		super(message);
+		this.name = 'QueueClearedError';
+	}
+}
+
+/** 任务取消错误 */
+export class TaskCancelledError extends Error {
+	constructor(pageIndex: number) {
+		super(`Task cancelled for page ${pageIndex}`);
+		this.name = 'TaskCancelledError';
+	}
+}
+
 /** 优先级常量 */
 export const LoadPriority = {
 	CRITICAL: 100,   // 当前页
@@ -79,16 +95,17 @@ export class LoadQueueManager {
 		if (index !== -1) {
 			const task = this.queue[index];
 			this.queue.splice(index, 1);
-			task.reject(new Error('Task cancelled'));
+			task.reject(new TaskCancelledError(pageIndex));
 		}
 	}
 
 	/**
-	 * 清空队列
+	 * 清空队列（使用专门的错误类型，便于上层识别）
 	 */
 	clear(): void {
+		const clearedError = new QueueClearedError();
 		for (const task of this.queue) {
-			task.reject(new Error('Queue cleared'));
+			task.reject(clearedError);
 		}
 		this.queue = [];
 	}

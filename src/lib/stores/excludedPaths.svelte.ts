@@ -5,6 +5,18 @@
 
 import { SvelteSet } from 'svelte/reactivity';
 
+// 默认排除路径（系统目录、开发目录等）
+const DEFAULT_EXCLUDED_PATHS = [
+  'E:\\WindowsApps',
+  'D:\\Dev',
+  'D:\\WindowsApps',
+  'C:\\Windows',
+  'C:\\Program Files',
+  'C:\\Program Files (x86)',
+  'C:\\ProgramData',
+  'C:\\$Recycle.Bin',
+];
+
 // 排除路径列表
 const excludedPaths = new SvelteSet<string>();
 
@@ -15,6 +27,10 @@ function loadExcludedPaths(): void {
     if (saved) {
       const paths = JSON.parse(saved) as string[];
       paths.forEach(p => excludedPaths.add(p));
+    } else {
+      // 首次使用，添加默认排除路径
+      DEFAULT_EXCLUDED_PATHS.forEach(p => excludedPaths.add(p));
+      saveExcludedPaths();
     }
   } catch (e) {
     console.error('加载排除路径失败:', e);

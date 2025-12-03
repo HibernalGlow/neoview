@@ -13,6 +13,13 @@
   import { zoomIn, zoomOut, resetZoom, toggleFullscreen } from '$lib/stores';
   import { showToast } from '$lib/utils/toast';
   
+  // 简单的操作 toast（调试用，可以禁用）
+  const DEBUG_ACTIONS = false;
+  function showActionToast(message: string) {
+    if (!DEBUG_ACTIONS) return;
+    console.log(`🎯 GestureLayer: ${message}`);
+  }
+  
   // 调试模式
   let {
     // 是否为视频模式（视频模式下只处理边缘区域）

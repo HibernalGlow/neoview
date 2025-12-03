@@ -85,11 +85,19 @@ export class StackImageLoader {
       void this.computeAndCacheBackgroundColor(pageIndex, result.url);
     }
     
-    // 后台创建 ImageBitmap（GPU 加速渲染）
-    const bitmap = this.bitmapCache.get(pageIndex);
+    // 创建 ImageBitmap（GPU 加速渲染）- 同步等待
+    let bitmap = this.bitmapCache.get(pageIndex);
     if (!bitmap && result.blob) {
-      // 异步创建 ImageBitmap，不阻塞返回
-      this.createAndCacheBitmap(pageIndex, result.blob);
+      try {
+        bitmap = await createImageBitmap(result.blob, {
+          colorSpaceConversion: 'default',
+          premultiplyAlpha: 'premultiply',
+        });
+        this.bitmapCache.set(pageIndex, bitmap);
+        console.log(`🖼️ ImageBitmap 创建: 页 ${pageIndex + 1} (${bitmap.width}x${bitmap.height})`);
+      } catch (e) {
+        console.warn(`创建 ImageBitmap 失败: 页 ${pageIndex + 1}`, e);
+      }
     }
     
     return {
@@ -101,26 +109,6 @@ export class StackImageLoader {
     };
   }
   
-  /**
-   * 异步创建并缓存 ImageBitmap
-   */
-  private async createAndCacheBitmap(pageIndex: number, blob: Blob): Promise<void> {
-    if (this.bitmapCache.has(pageIndex)) return;
-    
-    try {
-      const bitmap = await createImageBitmap(blob, {
-        // 允许颜色空间转换，优化渲染
-        colorSpaceConversion: 'default',
-        // 预乘 alpha，优化合成
-        premultiplyAlpha: 'premultiply',
-      });
-      this.bitmapCache.set(pageIndex, bitmap);
-      console.log(`🖼️ ImageBitmap 创建: 页 ${pageIndex + 1}`);
-    } catch (e) {
-      console.warn(`创建 ImageBitmap 失败: 页 ${pageIndex + 1}`, e);
-    }
-  }
-
   /**
    * 同步获取缓存
    */

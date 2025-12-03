@@ -26,10 +26,11 @@
   let canvasRef: HTMLCanvasElement | null = $state(null);
   let useBitmap = $derived(bitmap !== null);
   
-  // 当 bitmap 变化时重绘 canvas
+  // 当 canvas ref 或 bitmap 变化时重绘
   $effect(() => {
     if (canvasRef && bitmap) {
-      drawBitmap();
+      // 使用 requestAnimationFrame 确保在下一帧绘制，避免闪烁
+      requestAnimationFrame(() => drawBitmap());
     }
   });
   
@@ -42,12 +43,12 @@
     });
     if (!ctx) return;
     
-    // 设置 canvas 尺寸为图片原始尺寸
-    canvasRef.width = bitmap.width;
-    canvasRef.height = bitmap.height;
-    
     // 绘制 bitmap（GPU 加速）
+    // 注意：width/height 已经在模板中设置，这里不需要再设置
     ctx.drawImage(bitmap, 0, 0);
+    
+    // 触发 onload 回调
+    onload?.(new Event('load'));
   }
   
   // img fallback 的 onload 处理
@@ -56,12 +57,14 @@
   }
 </script>
 
-{#if useBitmap}
+{#if useBitmap && bitmap}
   <!-- Canvas 渲染模式（GPU 加速） -->
   <canvas
     bind:this={canvasRef}
     class="bitmap-canvas {className}"
-    style="max-width: 100%; max-height: 100%; object-fit: contain;"
+    width={bitmap.width}
+    height={bitmap.height}
+    style="max-width: 100%; max-height: 100%; width: auto; height: auto; aspect-ratio: {bitmap.width}/{bitmap.height};"
   ></canvas>
 {:else if url}
   <!-- Fallback: img 标签 -->

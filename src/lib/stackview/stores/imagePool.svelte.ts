@@ -58,7 +58,10 @@ class ImagePool {
     const blob = stackImageLoader.getCachedBlob(pageIndex);
     const bitmap = stackImageLoader.getCachedBitmap(pageIndex);
     const dimensions = stackImageLoader.getCachedDimensions(pageIndex);
-    if (url) {
+    
+    // 只有当 url 和 bitmap 都存在时才返回缓存
+    // 如果没有 bitmap，返回 null 让调用方重新加载以创建 bitmap
+    if (url && bitmap) {
       return { 
         url, 
         blob,

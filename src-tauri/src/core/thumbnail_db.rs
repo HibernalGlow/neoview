@@ -1579,6 +1579,21 @@ impl ThumbnailDb {
 
         Ok(all_tags)
     }
+
+    /// 获取所有失败记录的键列表（用于 V3 索引）
+    pub fn get_all_failed_keys(&self) -> SqliteResult<Vec<String>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut stmt = conn.prepare("SELECT key FROM failed_thumbnails")?;
+        let keys: Vec<String> = stmt
+            .query_map([], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(keys)
+    }
 }
 
 impl Clone for ThumbnailDb {

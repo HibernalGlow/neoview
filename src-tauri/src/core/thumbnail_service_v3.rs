@@ -120,6 +120,13 @@ pub struct ThumbnailServiceV3 {
     
     /// 工作线程句柄
     workers: Arc<Mutex<Vec<JoinHandle<()>>>>,
+    
+    /// 数据库索引 (已有缩略图的路径集合)
+    /// 启动时加载，用于快速判断是否需要生成
+    db_index: Arc<RwLock<std::collections::HashSet<String>>>,
+    
+    /// 失败记录索引 (避免重复尝试生成失败的缩略图)
+    failed_index: Arc<RwLock<std::collections::HashSet<String>>>,
 }
 
 impl ThumbnailServiceV3 {
@@ -130,6 +137,10 @@ impl ThumbnailServiceV3 {
         config: ThumbnailServiceConfig,
     ) -> Self {
         let cache_size = NonZeroUsize::new(config.memory_cache_size).unwrap_or(NonZeroUsize::new(1024).unwrap());
+        
+        // 从数据库加载索引
+        let (db_index, failed_index) = Self::load_indices_from_db(&db);
+        log_info!("📊 数据库索引加载完成: {} 个缩略图, {} 个失败记录", db_index.len(), failed_index.len());
         
         Self {
             config,
@@ -142,7 +153,31 @@ impl ThumbnailServiceV3 {
             running: Arc::new(AtomicBool::new(false)),
             active_workers: Arc::new(AtomicUsize::new(0)),
             workers: Arc::new(Mutex::new(Vec::new())),
+            db_index: Arc::new(RwLock::new(db_index)),
+            failed_index: Arc::new(RwLock::new(failed_index)),
         }
+    }
+    
+    /// 从数据库加载索引
+    fn load_indices_from_db(db: &Arc<ThumbnailDb>) -> (std::collections::HashSet<String>, std::collections::HashSet<String>) {
+        let mut db_index = std::collections::HashSet::new();
+        let mut failed_index = std::collections::HashSet::new();
+        
+        // 加载成功的缩略图路径
+        if let Ok(paths) = db.get_all_thumbnail_keys() {
+            for path in paths {
+                db_index.insert(path);
+            }
+        }
+        
+        // 加载失败记录
+        if let Ok(paths) = db.get_all_failed_keys() {
+            for path in paths {
+                failed_index.insert(path);
+            }
+        }
+        
+        (db_index, failed_index)
     }
     
     /// 启动工作线程
@@ -164,6 +199,8 @@ impl ThumbnailServiceV3 {
             let db = Arc::clone(&self.db);
             let generator = Arc::clone(&self.generator);
             let folder_depth = self.config.folder_search_depth;
+            let db_index = Arc::clone(&self.db_index);
+            let failed_index = Arc::clone(&self.failed_index);
             
             let handle = thread::spawn(move || {
                 log_debug!("🔧 Worker {} started", i);
@@ -207,6 +244,12 @@ impl ThumbnailServiceV3 {
                                     memory_cache_bytes.fetch_add(blob_size, Ordering::SeqCst);
                                 }
                                 
+                                // 更新数据库索引
+                                {
+                                    let mut index = db_index.write().unwrap();
+                                    index.insert(task.path.clone());
+                                }
+                                
                                 // 发送到前端（不阻塞）
                                 let _ = app.emit("thumbnail-ready", ThumbnailReadyPayload {
                                     path: task.path.clone(),
@@ -215,6 +258,11 @@ impl ThumbnailServiceV3 {
                             }
                             Err(e) => {
                                 log_debug!("⚠️ 生成缩略图失败: {} - {}", task.path, e);
+                                // 更新失败索引（避免重复尝试）
+                                {
+                                    let mut index = failed_index.write().unwrap();
+                                    index.insert(task.path.clone());
+                                }
                             }
                         }
                         
@@ -279,23 +327,31 @@ impl ThumbnailServiceV3 {
                 continue;
             }
             
-            // 2. 异步检查数据库缓存（不阻塞）
-            let db = Arc::clone(&self.db);
-            let app = app.clone();
-            let path = path.clone();
-            let memory_cache: Arc<RwLock<LruCache<String, Vec<u8>>>> = Arc::clone(&self.memory_cache);
-            let memory_cache_bytes: Arc<AtomicUsize> = Arc::clone(&self.memory_cache_bytes);
-            let task_queue = Arc::clone(&self.task_queue);
-            let current_dir = current_dir.clone();
+            // 2. 检查失败索引（O(1) 查找，避免重复尝试失败的缩略图）
+            {
+                let failed_index = self.failed_index.read().unwrap();
+                if failed_index.contains(path) {
+                    continue; // 跳过已知失败的路径
+                }
+            }
             
-            // 使用 tokio spawn 不阻塞主线程
-            tokio::spawn(async move {
-                // 尝试从数据库加载
-                // 自动判断类别
-                let category = if std::path::Path::new(&path).is_dir() { "folder" } else { "file" };
-                match db.load_thumbnail_by_key_and_category(&path, category) {
-                    Ok(Some(blob)) => {
-                        // 命中数据库缓存
+            // 3. 检查数据库索引（O(1) 查找）
+            let in_db_index = {
+                let db_index = self.db_index.read().unwrap();
+                db_index.contains(path)
+            };
+            
+            if in_db_index {
+                // 在索引中，异步从数据库加载
+                let db = Arc::clone(&self.db);
+                let app = app.clone();
+                let path = path.clone();
+                let memory_cache: Arc<RwLock<LruCache<String, Vec<u8>>>> = Arc::clone(&self.memory_cache);
+                let memory_cache_bytes: Arc<AtomicUsize> = Arc::clone(&self.memory_cache_bytes);
+                
+                tokio::spawn(async move {
+                    let category = if std::path::Path::new(&path).is_dir() { "folder" } else { "file" };
+                    if let Ok(Some(blob)) = db.load_thumbnail_by_key_and_category(&path, category) {
                         // 更新内存缓存
                         {
                             let mut cache = memory_cache.write().unwrap();
@@ -310,31 +366,18 @@ impl ThumbnailServiceV3 {
                             blob,
                         });
                     }
-                    Ok(None) => {
-                        // 未命中，入队生成任务
-                        let is_folder = Path::new(&path).is_dir();
-                        let mut queue = task_queue.lock().unwrap();
-                        queue.push_back(GenerateTask {
-                            path,
-                            directory: current_dir,
-                            is_folder,
-                            priority,
-                        });
-                    }
-                    Err(e) => {
-                        log_debug!("⚠️ 数据库加载失败: {} - {}", path, e);
-                        // 入队生成任务
-                        let is_folder = Path::new(&path).is_dir();
-                        let mut queue = task_queue.lock().unwrap();
-                        queue.push_back(GenerateTask {
-                            path,
-                            directory: current_dir,
-                            is_folder,
-                            priority,
-                        });
-                    }
-                }
-            });
+                });
+            } else {
+                // 不在索引中，入队生成任务
+                let is_folder = Path::new(path).is_dir();
+                let mut queue = self.task_queue.lock().unwrap();
+                queue.push_back(GenerateTask {
+                    path: path.clone(),
+                    directory: current_dir.clone(),
+                    is_folder,
+                    priority,
+                });
+            }
         }
     }
     

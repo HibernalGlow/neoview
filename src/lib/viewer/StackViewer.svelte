@@ -558,6 +558,14 @@
     object-fit: contain;
     user-select: none;
     -webkit-user-drag: none;
+    /* GPU 加速 - 关键优化 */
+    will-change: transform;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    /* 防止缩放时模糊闪烁 */
+    image-rendering: auto;
+    /* 内容可见性优化 */
+    content-visibility: auto;
   }
   
   /* 隐藏层（保持在 DOM 中但不可见） */

@@ -1594,6 +1594,127 @@ impl ThumbnailDb {
 
         Ok(keys)
     }
+    
+    // ============== 数据库维护功能 ==============
+    
+    /// 清理不存在路径的缩略图记录
+    /// 返回删除的记录数
+    pub fn cleanup_invalid_paths(&self) -> SqliteResult<usize> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+        
+        // 获取所有记录的 key
+        let mut stmt = conn.prepare("SELECT key FROM thumbs")?;
+        let keys: Vec<String> = stmt
+            .query_map([], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+        
+        // 检查每个路径是否存在
+        let mut invalid_keys = Vec::new();
+        for key in keys {
+            // 处理压缩包内路径（格式: archive_path::inner_path）
+            let actual_path = if key.contains("::") {
+                key.split("::").next().unwrap_or(&key)
+            } else {
+                &key
+            };
+            
+            if !std::path::Path::new(actual_path).exists() {
+                invalid_keys.push(key);
+            }
+        }
+        
+        // 批量删除无效记录
+        let count = invalid_keys.len();
+        for key in &invalid_keys {
+            conn.execute("DELETE FROM thumbs WHERE key = ?1", params![key])?;
+        }
+        
+        // 同时清理 failed_thumbnails 表
+        for key in &invalid_keys {
+            let _ = conn.execute("DELETE FROM failed_thumbnails WHERE key = ?1", params![key]);
+        }
+        
+        Ok(count)
+    }
+    
+    /// 清理过期条目（按天数）
+    /// exclude_folders: 是否排除文件夹类型的记录
+    /// 返回删除的记录数
+    pub fn cleanup_expired_entries(&self, days: i64, exclude_folders: bool) -> SqliteResult<usize> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+        
+        let cutoff_date = chrono::Utc::now() - chrono::Duration::days(days);
+        let cutoff_str = cutoff_date.format("%Y-%m-%d %H:%M:%S").to_string();
+        
+        let count = if exclude_folders {
+            conn.execute(
+                "DELETE FROM thumbs WHERE date < ?1 AND category != 'folder'",
+                params![cutoff_str],
+            )?
+        } else {
+            conn.execute(
+                "DELETE FROM thumbs WHERE date < ?1",
+                params![cutoff_str],
+            )?
+        };
+        
+        Ok(count)
+    }
+    
+    /// 清理指定路径前缀下的所有缩略图
+    /// 返回删除的记录数
+    pub fn cleanup_by_path_prefix(&self, path_prefix: &str) -> SqliteResult<usize> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+        
+        let pattern = format!("{}%", path_prefix);
+        let count = conn.execute(
+            "DELETE FROM thumbs WHERE key LIKE ?1",
+            params![pattern],
+        )?;
+        
+        // 同时清理 failed_thumbnails 表
+        let _ = conn.execute(
+            "DELETE FROM failed_thumbnails WHERE key LIKE ?1",
+            params![pattern],
+        );
+        
+        Ok(count)
+    }
+    
+    /// 获取数据库详细统计信息（包含文件夹数量和数据库大小）
+    pub fn get_detailed_stats(&self) -> SqliteResult<(usize, usize, i64)> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+        
+        // 总记录数
+        let total: usize = conn.query_row(
+            "SELECT COUNT(*) FROM thumbs",
+            [],
+            |row| row.get(0),
+        )?;
+        
+        // 文件夹记录数
+        let folders: usize = conn.query_row(
+            "SELECT COUNT(*) FROM thumbs WHERE category = 'folder'",
+            [],
+            |row| row.get(0),
+        )?;
+        
+        // 数据库文件大小（字节）
+        let db_size = std::fs::metadata(&self.db_path)
+            .map(|m| m.len() as i64)
+            .unwrap_or(0);
+        
+        Ok((total, folders, db_size))
+    }
 }
 
 impl Clone for ThumbnailDb {

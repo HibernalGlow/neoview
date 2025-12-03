@@ -212,3 +212,86 @@ pub async fn get_thumbnail_cache_stats_v3(
         })
     }
 }
+
+// ============== 数据库维护命令 ==============
+
+/// 数据库维护统计
+#[derive(Clone, serde::Serialize)]
+pub struct MaintenanceStats {
+    pub total_entries: usize,
+    pub folder_entries: usize,
+    pub db_size_bytes: i64,
+    pub db_size_mb: f64,
+}
+
+/// 获取数据库维护统计
+#[tauri::command]
+pub async fn get_thumbnail_db_stats_v3(
+    app: AppHandle,
+) -> Result<MaintenanceStats, String> {
+    if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
+        let (total, folders, size) = state.service.get_db_stats()?;
+        
+        Ok(MaintenanceStats {
+            total_entries: total,
+            folder_entries: folders,
+            db_size_bytes: size,
+            db_size_mb: size as f64 / 1024.0 / 1024.0,
+        })
+    } else {
+        Err("缩略图服务未初始化".to_string())
+    }
+}
+
+/// 清理无效路径（文件不存在）
+#[tauri::command]
+pub async fn cleanup_invalid_paths_v3(
+    app: AppHandle,
+) -> Result<usize, String> {
+    if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
+        state.service.cleanup_invalid_paths()
+    } else {
+        Err("缩略图服务未初始化".to_string())
+    }
+}
+
+/// 清理过期条目
+/// days: 过期天数
+/// exclude_folders: 是否排除文件夹（保留文件夹缩略图）
+#[tauri::command]
+pub async fn cleanup_expired_entries_v3(
+    app: AppHandle,
+    days: i64,
+    exclude_folders: bool,
+) -> Result<usize, String> {
+    if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
+        state.service.cleanup_expired_entries(days, exclude_folders)
+    } else {
+        Err("缩略图服务未初始化".to_string())
+    }
+}
+
+/// 清理指定路径前缀下的缩略图
+#[tauri::command]
+pub async fn cleanup_by_path_prefix_v3(
+    app: AppHandle,
+    path_prefix: String,
+) -> Result<usize, String> {
+    if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
+        state.service.cleanup_by_path_prefix(&path_prefix)
+    } else {
+        Err("缩略图服务未初始化".to_string())
+    }
+}
+
+/// 执行数据库压缩（VACUUM）
+#[tauri::command]
+pub async fn vacuum_thumbnail_db_v3(
+    app: AppHandle,
+) -> Result<(), String> {
+    if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
+        state.service.vacuum_db()
+    } else {
+        Err("缩略图服务未初始化".to_string())
+    }
+}

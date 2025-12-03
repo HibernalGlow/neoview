@@ -715,6 +715,38 @@ impl ThumbnailServiceV3 {
         }
     }
     
+    // ============== 数据库维护方法 ==============
+    
+    /// 获取数据库详细统计
+    pub fn get_db_stats(&self) -> Result<(usize, usize, i64), String> {
+        self.db.get_detailed_stats()
+            .map_err(|e| format!("获取统计失败: {}", e))
+    }
+    
+    /// 清理无效路径
+    pub fn cleanup_invalid_paths(&self) -> Result<usize, String> {
+        self.db.cleanup_invalid_paths()
+            .map_err(|e| format!("清理失败: {}", e))
+    }
+    
+    /// 清理过期条目
+    pub fn cleanup_expired_entries(&self, days: i64, exclude_folders: bool) -> Result<usize, String> {
+        self.db.cleanup_expired_entries(days, exclude_folders)
+            .map_err(|e| format!("清理失败: {}", e))
+    }
+    
+    /// 清理指定路径前缀
+    pub fn cleanup_by_path_prefix(&self, path_prefix: &str) -> Result<usize, String> {
+        self.db.cleanup_by_path_prefix(path_prefix)
+            .map_err(|e| format!("清理失败: {}", e))
+    }
+    
+    /// 执行数据库压缩
+    pub fn vacuum_db(&self) -> Result<(), String> {
+        self.db.vacuum()
+            .map_err(|e| format!("压缩失败: {}", e))
+    }
+    
     /// 检查内存压力并自动清理（当超过阈值时清理一半缓存）
     pub fn check_memory_pressure(&self, max_bytes: usize) {
         let current_bytes = self.memory_cache_bytes.load(Ordering::SeqCst);

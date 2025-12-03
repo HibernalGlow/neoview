@@ -361,6 +361,12 @@ pub fn run() {
             commands::preload_directory_thumbnails_v3,
             commands::clear_thumbnail_cache_v3,
             commands::get_thumbnail_cache_stats_v3,
+            // 缩略图数据库维护命令
+            commands::get_thumbnail_db_stats_v3,
+            commands::cleanup_invalid_paths_v3,
+            commands::cleanup_expired_entries_v3,
+            commands::cleanup_by_path_prefix_v3,
+            commands::vacuum_thumbnail_db_v3,
             // EMM JSON 缓存命令
             commands::save_emm_json,
             commands::batch_save_emm_json,

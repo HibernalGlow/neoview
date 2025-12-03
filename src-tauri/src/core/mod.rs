@@ -3,9 +3,6 @@
 
 pub mod archive;
 pub mod archive_manager;
-pub mod archive_page_cache;
-pub mod archive_prefetcher;
-pub mod archive_service;
 pub mod background_scheduler;
 pub mod image_loader_mode;
 pub mod blob_registry;
@@ -21,7 +18,6 @@ pub mod image_loader;
 pub mod path_utils;
 pub mod pyo3_upscaler;
 pub mod python_upscale_wrapper;
-pub mod solid_archive_extractor;
 pub mod sr_vulkan_manager;
 pub mod thumbnail_db;
 pub mod thumbnail_generator;
@@ -38,6 +34,5 @@ pub use image_loader::ImageLoader;
 // ImageCache 仅供内部使用
 pub use archive::ArchiveManager;
 pub use fs_manager::FsManager;
-pub use archive_service::ArchiveService;
 // FileIndexer 暂时未使用，注释掉以避免警告
 // pub use file_indexer::FileIndexer;

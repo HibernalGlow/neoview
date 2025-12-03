@@ -1,7 +1,6 @@
 //! NeoView - Commands Module
 //! 导出所有 Tauri 命令
 
-pub mod archive_service_commands;
 pub mod book_commands;
 pub mod comparison_commands;
 pub mod default;
@@ -21,7 +20,6 @@ pub mod upscale_settings_commands;
 pub mod video_commands;
 pub mod benchmark_commands;
 
-pub use archive_service_commands::*;
 pub use book_commands::*;
 pub use comparison_commands::*;
 pub use default::*;

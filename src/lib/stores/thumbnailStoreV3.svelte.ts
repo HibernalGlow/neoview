@@ -226,6 +226,44 @@ export async function preloadDirectory(
 }
 
 /**
+ * 请求可见区域缩略图（带预取）
+ * @param visiblePaths 当前可见的路径
+ * @param allPaths 完整路径列表（用于预取）
+ * @param currentDir 当前目录
+ * @param prefetchCount 预取数量（可见区域前后各取多少）
+ */
+export async function requestVisibleThumbnailsWithPrefetch(
+  visiblePaths: string[],
+  allPaths: string[],
+  currentDir: string,
+  prefetchCount: number = 20
+): Promise<void> {
+  if (!initialized || visiblePaths.length === 0) return;
+
+  // 找到可见区域在完整列表中的位置
+  const firstVisibleIndex = allPaths.indexOf(visiblePaths[0]);
+  const lastVisibleIndex = allPaths.indexOf(visiblePaths[visiblePaths.length - 1]);
+
+  if (firstVisibleIndex === -1 || lastVisibleIndex === -1) {
+    // 找不到位置，只请求可见的
+    return requestVisibleThumbnails(visiblePaths, currentDir);
+  }
+
+  // 计算预取范围
+  const prefetchStart = Math.max(0, firstVisibleIndex - prefetchCount);
+  const prefetchEnd = Math.min(allPaths.length, lastVisibleIndex + prefetchCount + 1);
+
+  // 合并可见路径和预取路径（可见优先）
+  const prefetchPaths = allPaths.slice(prefetchStart, prefetchEnd);
+  const pathsToRequest = [
+    ...visiblePaths,
+    ...prefetchPaths.filter((p) => !visiblePaths.includes(p)),
+  ];
+
+  return requestVisibleThumbnails(pathsToRequest, currentDir);
+}
+
+/**
  * 清理（组件卸载时调用）
  */
 export function cleanup(): void {

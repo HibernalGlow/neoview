@@ -11,6 +11,7 @@
 	import ListSlider from './ListSlider.svelte';
 	import { historyStore } from '$lib/stores/history.svelte';
 	import { isVideoFile } from '$lib/utils/videoUtils';
+	import { updateVisibility } from '$lib/stores/visibilityMonitor.svelte';
 
 	// Props
 	const {
@@ -319,6 +320,26 @@
 	// 计算可见范围（用于 ListSlider）
 	const visibleStart = $derived(virtualItems.length > 0 ? virtualItems[0].index * columns : 0);
 	const visibleEnd = $derived(virtualItems.length > 0 ? Math.min((virtualItems[virtualItems.length - 1].index + 1) * columns - 1, items.length - 1) : 0);
+
+	// 可见范围监控（用于 BenchmarkPanel 调试）- 使用 untrack 避免循环
+	$effect(() => {
+		// 读取依赖
+		const info = {
+			currentPath,
+			totalItems: items.length,
+			visibleStart,
+			visibleEnd,
+			visibleCount: visibleEnd - visibleStart + 1,
+			selectedIndex,
+			columns,
+			rowCount,
+			visibleRowStart: virtualItems.length > 0 ? virtualItems[0].index : 0,
+			visibleRowEnd: virtualItems.length > 0 ? virtualItems[virtualItems.length - 1].index : 0,
+			scrollProgress
+		};
+		// 异步更新避免循环
+		queueMicrotask(() => updateVisibility(info));
+	});
 </script>
 
 <div class="flex h-full w-full">

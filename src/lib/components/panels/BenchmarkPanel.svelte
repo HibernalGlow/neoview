@@ -7,7 +7,8 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { Button } from '$lib/components/ui/button';
-	import { Timer, ChevronUp, ChevronDown, ArrowUp, ArrowDown, FolderOpen, Copy, Check, Play, Trash2 } from '@lucide/svelte';
+	import { Timer, ChevronUp, ChevronDown, ArrowUp, ArrowDown, FolderOpen, Copy, Check, Play, Trash2, Eye } from '@lucide/svelte';
+	import { visibilityMonitor, setMonitorEnabled } from '$lib/stores/visibilityMonitor.svelte';
 
 	// ==================== 类型定义 ====================
 	interface BenchmarkResult {
@@ -26,7 +27,7 @@
 		results: BenchmarkResult[];
 	}
 
-	type CardId = 'files' | 'detailed' | 'loadmode' | 'archives' | 'realworld' | 'results' | 'summary';
+	type CardId = 'visibility' | 'files' | 'detailed' | 'loadmode' | 'archives' | 'realworld' | 'results' | 'summary';
 
 	interface LoadModeTestResult {
 		mode: string;
@@ -68,8 +69,9 @@
 	}
 
 	// ==================== 状态管理 ====================
-	let cardOrder = $state<CardId[]>(['files', 'detailed', 'loadmode', 'archives', 'realworld', 'results', 'summary']);
+	let cardOrder = $state<CardId[]>(['visibility', 'files', 'detailed', 'loadmode', 'archives', 'realworld', 'results', 'summary']);
 	let showCards = $state<Record<CardId, boolean>>({
+		visibility: true,
 		files: true,
 		detailed: true,
 		loadmode: true,
@@ -553,6 +555,132 @@
 	<!-- 可滚动内容区 -->
 	<div class="flex-1 overflow-y-auto px-3 py-2 bg-background">
 		<div class="flex flex-col gap-3">
+			<!-- 可见范围监控卡片 -->
+			<div
+				class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
+				style={`order: ${getCardOrder('visibility')}`}
+			>
+				<div class="flex items-center justify-between">
+					<div class="flex items-center gap-2">
+						<Eye class="h-4 w-4 text-blue-500" />
+						<div class="font-semibold text-sm">可见范围监控</div>
+					</div>
+					<div class="flex items-center gap-1 text-[10px]">
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+							onclick={() => (showCards.visibility = !showCards.visibility)}
+							title={showCards.visibility ? '收起' : '展开'}
+						>
+							{#if showCards.visibility}
+								<ChevronUp class="h-3 w-3" />
+							{:else}
+								<ChevronDown class="h-3 w-3" />
+							{/if}
+						</button>
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40"
+							onclick={() => moveCard('visibility', 'up')}
+							disabled={!canMoveCard('visibility', 'up')}
+						>
+							<ArrowUp class="h-3 w-3" />
+						</button>
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40"
+							onclick={() => moveCard('visibility', 'down')}
+							disabled={!canMoveCard('visibility', 'down')}
+						>
+							<ArrowDown class="h-3 w-3" />
+						</button>
+					</div>
+				</div>
+
+				{#if showCards.visibility}
+					<div class="space-y-2">
+						<!-- 开关按钮 -->
+						<div class="flex items-center justify-between">
+							<p class="text-[10px] text-muted-foreground">
+								实时监控 VirtualizedFileListV2 的可见条目范围
+							</p>
+							<Button 
+								variant={visibilityMonitor.enabled ? "default" : "outline"} 
+								size="sm" 
+								class="h-6 text-[10px] px-2"
+								onclick={() => setMonitorEnabled(!visibilityMonitor.enabled)}
+							>
+								{visibilityMonitor.enabled ? '关闭监控' : '开启监控'}
+							</Button>
+						</div>
+						
+						{#if !visibilityMonitor.enabled}
+							<div class="text-[10px] text-muted-foreground text-center py-4 border rounded bg-muted/20">
+								⏸️ 监控已关闭，点击上方按钮开启
+							</div>
+						{:else if visibilityMonitor.info.totalItems > 0}
+							<div class="border rounded p-2 space-y-2 text-[10px]">
+								<!-- 当前路径 -->
+								<div class="text-muted-foreground truncate" title={visibilityMonitor.info.currentPath}>
+									📁 {visibilityMonitor.info.currentPath.split(/[/\\]/).pop() || '根目录'}
+								</div>
+								
+								<!-- 基本信息网格 -->
+								<div class="grid grid-cols-2 gap-x-4 gap-y-1">
+									<div>总条目: <span class="font-mono text-blue-500">{visibilityMonitor.info.totalItems}</span></div>
+									<div>选中: <span class="font-mono text-green-500">{visibilityMonitor.info.selectedIndex >= 0 ? visibilityMonitor.info.selectedIndex : '-'}</span></div>
+									<div>列数: <span class="font-mono">{visibilityMonitor.info.columns}</span></div>
+									<div>行数: <span class="font-mono">{visibilityMonitor.info.rowCount}</span></div>
+								</div>
+								
+								<!-- 可见范围 -->
+								<div class="border-t pt-2 mt-2">
+									<div class="font-medium mb-1">可见范围</div>
+									<div class="grid grid-cols-2 gap-x-4 gap-y-1">
+										<div>条目: <span class="font-mono text-purple-500">{visibilityMonitor.info.visibleStart}</span> - <span class="font-mono text-purple-500">{visibilityMonitor.info.visibleEnd}</span></div>
+										<div>数量: <span class="font-mono text-orange-500">{visibilityMonitor.info.visibleCount}</span></div>
+										<div>行: <span class="font-mono text-cyan-500">{visibilityMonitor.info.visibleRowStart}</span> - <span class="font-mono text-cyan-500">{visibilityMonitor.info.visibleRowEnd}</span></div>
+										<div>进度: <span class="font-mono text-pink-500">{(visibilityMonitor.info.scrollProgress * 100).toFixed(1)}%</span></div>
+									</div>
+								</div>
+
+								<!-- 进度条可视化 -->
+								<div class="border-t pt-2 mt-2">
+									<div class="font-medium mb-1">滚动位置</div>
+									<div class="relative h-4 bg-muted rounded overflow-hidden">
+										<!-- 可见区域指示器 -->
+										<div 
+											class="absolute h-full bg-blue-500/50 transition-all duration-100"
+											style="left: {(visibilityMonitor.info.visibleStart / Math.max(visibilityMonitor.info.totalItems, 1)) * 100}%; width: {Math.max((visibilityMonitor.info.visibleCount / Math.max(visibilityMonitor.info.totalItems, 1)) * 100, 2)}%"
+										></div>
+										<!-- 选中位置指示器 -->
+										{#if visibilityMonitor.info.selectedIndex >= 0}
+											<div 
+												class="absolute h-full w-0.5 bg-green-500 transition-all duration-100"
+												style="left: {(visibilityMonitor.info.selectedIndex / Math.max(visibilityMonitor.info.totalItems, 1)) * 100}%"
+											></div>
+										{/if}
+									</div>
+									<div class="flex justify-between text-[8px] text-muted-foreground mt-0.5">
+										<span>0</span>
+										<span>{visibilityMonitor.info.totalItems - 1}</span>
+									</div>
+								</div>
+								
+								<!-- 更新频率 -->
+								<div class="text-[9px] text-muted-foreground text-right">
+									更新频率: {visibilityMonitor.updateFrequency.toFixed(1)} 次/秒
+								</div>
+							</div>
+						{:else}
+							<div class="text-[10px] text-muted-foreground text-center py-4 border rounded">
+								📭 暂无数据，请在文件夹面板中浏览文件
+							</div>
+						{/if}
+					</div>
+				{/if}
+			</div>
+
 			<!-- 文件选择卡片 -->
 			<div
 				class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"

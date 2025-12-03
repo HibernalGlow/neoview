@@ -16,6 +16,9 @@ export type BookSettingSelectMode = 'default' | 'continue' | 'restoreOrDefault' 
 
 export type AutoRotateMode = 'none' | 'left' | 'right' | 'horizontalLeft' | 'horizontalRight' | 'forcedLeft' | 'forcedRight';
 
+/** 渲染器模式：standard = 标准单图替换，stack = 层叠预加载 */
+export type RendererMode = 'standard' | 'stack';
+
 export interface NeoViewSettings {
   system: {
     language: string;
@@ -105,6 +108,11 @@ export interface NeoViewSettings {
       bookDescriptionTemplate?: string;
       pageTitleTemplate?: string;
       pageDescriptionTemplate?: string;
+    };
+    /** 渲染器设置 */
+    renderer?: {
+      /** 渲染模式：standard = 标准，stack = 层叠预加载（更流畅） */
+      mode: RendererMode;
     };
   };
   book: {
@@ -271,6 +279,9 @@ const defaultSettings: NeoViewSettings = {
       bookDescriptionTemplate: '路径：{{book.path}}',
       pageTitleTemplate: '第 {{page.indexDisplay}} / {{book.totalPages}} 页',
       pageDescriptionTemplate: '{{page.dimensionsFormatted}}  {{page.sizeFormatted}}'
+    },
+    renderer: {
+      mode: 'stack' // 默认使用层叠模式，更流畅
     }
   },
   book: {

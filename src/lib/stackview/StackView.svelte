@@ -12,6 +12,7 @@
     GestureLayer,
     HoverLayer,
   } from './layers';
+  import StackViewer from '$lib/viewer/StackViewer.svelte';
   import PanoramaFrameLayer from './layers/PanoramaFrameLayer.svelte';
   import { 
     isLandscape, 
@@ -239,6 +240,12 @@
     if (!filename) return false;
     return isVideoFile(filename);
   });
+  
+  // 渲染器模式
+  let useStackRenderer = $derived((settings.view.renderer?.mode ?? 'stack') === 'stack');
+  
+  // StackViewer 组件引用
+  let stackViewerRef: StackViewer | null = null;
   
   // 视频容器引用
   let videoContainerRef: any = null;
@@ -579,8 +586,21 @@
       {viewPositionX}
       {viewPositionY}
     />
+  {:else if useStackRenderer}
+    <!-- 层叠渲染模式：使用 StackViewer（更流畅） -->
+    <StackViewer
+      bind:this={stackViewerRef}
+      showUpscale={true}
+      transitionDuration={150}
+      scale={manualScale}
+      {rotation}
+      {viewPositionX}
+      {viewPositionY}
+      {viewportSize}
+      onImageLoad={handleImageLoad}
+    />
   {:else}
-    <!-- 普通模式：显示当前帧 -->
+    <!-- 标准模式：显示当前帧 -->
     <CurrentFrameLayer 
       frame={currentFrameData} 
       layout={pageMode}

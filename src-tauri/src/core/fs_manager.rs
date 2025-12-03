@@ -103,20 +103,22 @@ impl FsManager {
         let entries = fs::read_dir(path).map_err(|e| format!("读取目录失败: {}", e))?;
 
         let mut items = Vec::new();
+        let mut skipped_count = 0u32;
 
         for entry in entries {
             // 优雅处理单个条目的错误（如权限问题）
             let entry = match entry {
                 Ok(e) => e,
                 Err(e) => {
-                    log::debug!("跳过无法读取的条目: {}", e);
+                    log::warn!("⚠️ 跳过无法读取的条目: {} (目录: {:?})", e, path);
+                    skipped_count += 1;
                     continue;
                 }
             };
-            let path = entry.path();
+            let entry_path = entry.path();
 
             // 跳过隐藏文件（以 . 开头）
-            if let Some(name) = path.file_name() {
+            if let Some(name) = entry_path.file_name() {
                 if name.to_string_lossy().starts_with('.') {
                     continue;
                 }
@@ -126,7 +128,8 @@ impl FsManager {
             let metadata = match entry.metadata() {
                 Ok(m) => m,
                 Err(e) => {
-                    log::debug!("跳过无法获取元数据的条目 {:?}: {}", path, e);
+                    log::warn!("⚠️ 跳过无法获取元数据的条目 {:?}: {}", entry_path, e);
+                    skipped_count += 1;
                     continue;
                 }
             };
@@ -143,7 +146,7 @@ impl FsManager {
                 let mut videos = 0u32;
                 let mut total = 0u64;
 
-                if let Ok(sub_entries) = fs::read_dir(&path) {
+                if let Ok(sub_entries) = fs::read_dir(&entry_path) {
                     for sub_entry in sub_entries.flatten() {
                         // 跳过隐藏文件
                         if let Some(sub_name) = sub_entry.file_name().to_str() {
@@ -193,11 +196,11 @@ impl FsManager {
                 .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
                 .map(|d| d.as_secs());
 
-            let is_image = !is_dir && Self::is_image_file(&path);
+            let is_image = !is_dir && Self::is_image_file(&entry_path);
 
             items.push(FsItem {
                 name,
-                path: path.to_string_lossy().to_string(),
+                path: entry_path.to_string_lossy().to_string(),
                 is_dir,
                 size,
                 modified,
@@ -216,6 +219,11 @@ impl FsManager {
             (false, true) => std::cmp::Ordering::Greater,
             _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
         });
+
+        // 如果有跳过的条目，记录日志
+        if skipped_count > 0 {
+            log::warn!("📁 目录 {:?} 扫描完成: {} 个条目, {} 个跳过(权限问题)", path, items.len(), skipped_count);
+        }
 
         Ok(items)
     }

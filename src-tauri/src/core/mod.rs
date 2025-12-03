@@ -4,6 +4,7 @@
 pub mod archive;
 pub mod archive_manager;
 pub mod background_scheduler;
+pub mod image_loader_mode;
 pub mod blob_registry;
 pub mod book_manager;
 pub mod cache_index_db;

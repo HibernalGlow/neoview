@@ -393,6 +393,7 @@ pub fn run() {
             commands::benchmark_commands::run_archive_folder_benchmark,
             commands::benchmark_commands::run_archive_thumbnail_benchmark,
             commands::benchmark_commands::run_realworld_benchmark,
+            commands::benchmark_commands::test_load_modes,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

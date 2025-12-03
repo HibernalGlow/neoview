@@ -26,7 +26,19 @@
 		results: BenchmarkResult[];
 	}
 
-	type CardId = 'files' | 'detailed' | 'archives' | 'realworld' | 'results' | 'summary';
+	type CardId = 'files' | 'detailed' | 'loadmode' | 'archives' | 'realworld' | 'results' | 'summary';
+
+	interface LoadModeTestResult {
+		mode: string;
+		format: string;
+		input_size: number;
+		output_size: number;
+		decode_ms: number;
+		width: number | null;
+		height: number | null;
+		success: boolean;
+		error: string | null;
+	}
 
 	interface RealWorldTestResult {
 		viewport_size: number;
@@ -56,10 +68,11 @@
 	}
 
 	// ==================== 状态管理 ====================
-	let cardOrder = $state<CardId[]>(['files', 'detailed', 'archives', 'realworld', 'results', 'summary']);
+	let cardOrder = $state<CardId[]>(['files', 'detailed', 'loadmode', 'archives', 'realworld', 'results', 'summary']);
 	let showCards = $state<Record<CardId, boolean>>({
 		files: true,
 		detailed: true,
+		loadmode: true,
 		archives: true,
 		realworld: true,
 		results: true,
@@ -73,7 +86,9 @@
 
 	let reports = $state<BenchmarkReport[]>([]);
 	let detailedResults = $state<DetailedBenchmarkResult[]>([]);
+	let loadModeResults = $state<LoadModeTestResult[]>([]);
 	let realWorldResult = $state<RealWorldTestResult | null>(null);
+	let selectedLoadModeFile = $state<string>('');
 	let isRunning = $state(false);
 	let isScanning = $state(false);
 	let selectedFiles = $state<string[]>([]);
@@ -186,6 +201,41 @@
 			detailedResults = results;
 		} catch (err) {
 			console.error('详细测试失败:', err);
+		} finally {
+			isRunning = false;
+		}
+	}
+
+	// ==================== 加载模式测试 ====================
+	async function selectLoadModeFile() {
+		const file = await open({
+			multiple: false,
+			filters: [
+				{
+					name: '图像',
+					extensions: ['jpg', 'jpeg', 'png', 'webp', 'avif', 'jxl', 'gif', 'bmp']
+				}
+			]
+		});
+
+		if (file && typeof file === 'string') {
+			selectedLoadModeFile = file;
+		}
+	}
+
+	async function runLoadModeTest() {
+		if (!selectedLoadModeFile) return;
+
+		isRunning = true;
+		loadModeResults = [];
+
+		try {
+			const results = await invoke<LoadModeTestResult[]>('test_load_modes', {
+				filePath: selectedLoadModeFile
+			});
+			loadModeResults = results;
+		} catch (err) {
+			console.error('加载模式测试失败:', err);
 		} finally {
 			isRunning = false;
 		}
@@ -580,6 +630,105 @@
 											<div class="text-muted-foreground">
 												输出: {formatFileSize(result.output_size)}
 											</div>
+										{/if}
+									</div>
+								{/each}
+							</div>
+						{/if}
+					</div>
+				{/if}
+			</div>
+
+			<!-- 加载模式对比卡片 -->
+			<div
+				class="rounded-lg border bg-muted/10 p-3 space-y-3"
+				style={`order: ${getCardOrder('loadmode')}`}
+			>
+				<div class="flex items-center justify-between">
+					<div class="font-semibold text-sm">Raw vs Bitmap</div>
+					<div class="flex items-center gap-1 text-[10px]">
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+							onclick={() => (showCards.loadmode = !showCards.loadmode)}
+							title={showCards.loadmode ? '收起' : '展开'}
+						>
+							{#if showCards.loadmode}
+								<ChevronUp class="h-3 w-3" />
+							{:else}
+								<ChevronDown class="h-3 w-3" />
+							{/if}
+						</button>
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40"
+							onclick={() => moveCard('loadmode', 'up')}
+							disabled={!canMoveCard('loadmode', 'up')}
+						>
+							<ArrowUp class="h-3 w-3" />
+						</button>
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40"
+							onclick={() => moveCard('loadmode', 'down')}
+							disabled={!canMoveCard('loadmode', 'down')}
+						>
+							<ArrowDown class="h-3 w-3" />
+						</button>
+					</div>
+				</div>
+
+				{#if showCards.loadmode}
+					<div class="space-y-2">
+						<p class="text-[10px] text-muted-foreground">
+							对比原始字节传输 vs WIC解码后传输像素
+						</p>
+						<div class="flex gap-2">
+							<Button onclick={selectLoadModeFile} variant="outline" size="sm" class="flex-1 text-xs">
+								<FolderOpen class="h-3 w-3 mr-1" />
+								{selectedLoadModeFile ? '已选择' : '选择图像'}
+							</Button>
+							<Button
+								onclick={runLoadModeTest}
+								disabled={isRunning || !selectedLoadModeFile}
+								size="sm"
+								class="flex-1 text-xs"
+							>
+								<Play class="h-3 w-3 mr-1" />
+								{isRunning ? '测试中...' : '对比测试'}
+							</Button>
+						</div>
+						{#if selectedLoadModeFile}
+							<div class="text-[10px] text-muted-foreground truncate" title={selectedLoadModeFile}>
+								📄 {selectedLoadModeFile.split(/[/\\]/).pop()}
+							</div>
+						{/if}
+						{#if loadModeResults.length > 0}
+							<div class="space-y-1">
+								{#each loadModeResults as result}
+									<div class="border rounded p-2 text-[10px] {result.success ? '' : 'border-red-500/50'}">
+										<div class="flex justify-between font-medium">
+											<span class:text-blue-500={result.mode === 'Raw'}
+												  class:text-green-500={result.mode === 'Bitmap'}
+												  class:text-purple-500={result.mode.includes('1920')}>
+												{result.mode}
+											</span>
+											<span class="font-mono {result.success ? 'text-green-600' : 'text-red-500'}">
+												{result.success ? `${result.decode_ms.toFixed(1)}ms` : '失败'}
+											</span>
+										</div>
+										{#if result.success}
+											<div class="flex justify-between text-muted-foreground mt-1">
+												<span>输入: {formatFileSize(result.input_size)}</span>
+												<span>输出: {formatFileSize(result.output_size)}</span>
+											</div>
+											{#if result.width && result.height}
+												<div class="text-muted-foreground">
+													尺寸: {result.width}×{result.height}
+												</div>
+											{/if}
+										{:else if result.error}
+											<div class="text-red-500 text-[9px]">{result.error}</div>
 										{/if}
 									</div>
 								{/each}

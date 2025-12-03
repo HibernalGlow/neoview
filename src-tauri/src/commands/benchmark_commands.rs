@@ -776,6 +776,164 @@ pub async fn run_archive_thumbnail_benchmark(archive_path: String) -> Result<Ben
     })
 }
 
+/// 图片加载模式测试结果
+#[derive(Debug, Clone, Serialize)]
+pub struct LoadModeTestResult {
+    pub mode: String,
+    pub format: String,
+    pub input_size: usize,
+    pub output_size: usize,
+    pub decode_ms: f64,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+/// 测试图片加载模式对比
+#[command]
+pub async fn test_load_modes(file_path: String) -> Result<Vec<LoadModeTestResult>, String> {
+    use std::fs;
+    use crate::core::image_loader_mode::{ImageLoadMode, ImageLoadResult, load_image_unified};
+    
+    let path = PathBuf::from(&file_path);
+    let format = path.extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    
+    let data = fs::read(&path).map_err(|e| format!("读取文件失败: {}", e))?;
+    let input_size = data.len();
+    
+    let mut results = Vec::new();
+    
+    // 测试 Raw 模式
+    {
+        let start = Instant::now();
+        let result = load_image_unified(data.clone(), &format, ImageLoadMode::Raw);
+        let decode_ms = start.elapsed().as_secs_f64() * 1000.0;
+        
+        match result {
+            Ok(ImageLoadResult::Raw { data: out_data, .. }) => {
+                results.push(LoadModeTestResult {
+                    mode: "Raw".to_string(),
+                    format: format.clone(),
+                    input_size,
+                    output_size: out_data.len(),
+                    decode_ms,
+                    width: None,
+                    height: None,
+                    success: true,
+                    error: None,
+                });
+            }
+            Ok(ImageLoadResult::Bitmap { .. }) => {
+                results.push(LoadModeTestResult {
+                    mode: "Raw".to_string(),
+                    format: format.clone(),
+                    input_size,
+                    output_size: 0,
+                    decode_ms,
+                    width: None,
+                    height: None,
+                    success: false,
+                    error: Some("意外返回 Bitmap".to_string()),
+                });
+            }
+            Err(e) => {
+                results.push(LoadModeTestResult {
+                    mode: "Raw".to_string(),
+                    format: format.clone(),
+                    input_size,
+                    output_size: 0,
+                    decode_ms,
+                    width: None,
+                    height: None,
+                    success: false,
+                    error: Some(e),
+                });
+            }
+        }
+    }
+    
+    // 测试 Bitmap 模式
+    {
+        let start = Instant::now();
+        let result = load_image_unified(data.clone(), &format, ImageLoadMode::Bitmap);
+        let decode_ms = start.elapsed().as_secs_f64() * 1000.0;
+        
+        match result {
+            Ok(ImageLoadResult::Bitmap { data: out_data, width, height }) => {
+                results.push(LoadModeTestResult {
+                    mode: "Bitmap".to_string(),
+                    format: format.clone(),
+                    input_size,
+                    output_size: out_data.len(),
+                    decode_ms,
+                    width: Some(width),
+                    height: Some(height),
+                    success: true,
+                    error: None,
+                });
+            }
+            Ok(ImageLoadResult::Raw { .. }) => {
+                results.push(LoadModeTestResult {
+                    mode: "Bitmap".to_string(),
+                    format: format.clone(),
+                    input_size,
+                    output_size: 0,
+                    decode_ms,
+                    width: None,
+                    height: None,
+                    success: false,
+                    error: Some("意外返回 Raw".to_string()),
+                });
+            }
+            Err(e) => {
+                results.push(LoadModeTestResult {
+                    mode: "Bitmap".to_string(),
+                    format: format.clone(),
+                    input_size,
+                    output_size: 0,
+                    decode_ms,
+                    width: None,
+                    height: None,
+                    success: false,
+                    error: Some(e),
+                });
+            }
+        }
+    }
+    
+    // 测试 Bitmap 缩放模式 (模拟屏幕尺寸)
+    {
+        use crate::core::image_loader_mode::load_image_bitmap_scaled;
+        
+        let start = Instant::now();
+        let result = load_image_bitmap_scaled(&data, 1920, 1080);
+        let decode_ms = start.elapsed().as_secs_f64() * 1000.0;
+        
+        match result {
+            Ok(ImageLoadResult::Bitmap { data: out_data, width, height }) => {
+                results.push(LoadModeTestResult {
+                    mode: "Bitmap (1920×1080)".to_string(),
+                    format: format.clone(),
+                    input_size,
+                    output_size: out_data.len(),
+                    decode_ms,
+                    width: Some(width),
+                    height: Some(height),
+                    success: true,
+                    error: None,
+                });
+            }
+            _ => {}
+        }
+    }
+    
+    Ok(results)
+}
+
 /// 真实场景测试结果
 #[derive(Debug, Clone, Serialize)]
 pub struct RealWorldTestResult {

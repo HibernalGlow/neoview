@@ -25,6 +25,7 @@
     updateSlotState, 
     recordNavigation 
   } from '$lib/stores/stackMonitor.svelte';
+  import BitmapCanvas from './BitmapCanvas.svelte';
   
   // ============================================================================
   // Props
@@ -468,12 +469,13 @@
       style:transform-origin={transformOrigin}
       data-page-index={currentSlot.pageIndex}
     >
-      <img 
-        src={currentSlot.url} 
+      <BitmapCanvas
+        bitmap={currentSlot.bitmap}
+        url={currentSlot.url}
         alt="Current page"
-        class="frame-image"
-        draggable="false"
-        onload={(e) => onImageLoad?.(e, 0)}
+        className="frame-image"
+        draggable={false}
+        onload={(e: Event) => onImageLoad?.(e, 0)}
       />
     </div>
   {:else if currentSlot.loading}

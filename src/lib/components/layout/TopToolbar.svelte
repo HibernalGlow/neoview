@@ -71,7 +71,8 @@
 		Expand,
 		LayoutGrid,
 		SplitSquareHorizontal,
-		Rows2
+		Rows2,
+		Layers
 	} from '@lucide/svelte';
 
 	import {
@@ -131,6 +132,25 @@ let currentSortModeLabel = $derived(
 	let splitHorizontalPages = $derived(settings.view.pageLayout?.splitHorizontalPages ?? false);
 	let treatHorizontalAsDoublePage = $derived(settings.view.pageLayout?.treatHorizontalAsDoublePage ?? false);
 	let autoRotateMode = $derived(settings.view.autoRotate?.mode ?? 'none');
+	
+	// 渲染器模式
+	let rendererMode = $derived(settings.view.renderer?.mode ?? 'stack');
+	
+	// 切换渲染器模式
+	function toggleRendererMode() {
+		const newMode = rendererMode === 'stack' ? 'standard' : 'stack';
+		settingsManager.updateNestedSettings('view', {
+			renderer: { mode: newMode }
+		});
+		showToast({
+			title: '渲染模式',
+			description: newMode === 'stack' 
+				? '✓ 层叠模式 (预加载前后页，翻页更流畅)' 
+				: '○ 标准模式 (单图替换，兼容性更好)',
+			variant: 'info',
+			duration: 2500
+		});
+	}
 	
 	// 顶部工具栏透明度和模糊
 	let topToolbarOpacity = $derived(settings.panels?.topToolbarOpacity ?? 85);
@@ -840,6 +860,27 @@ async function handleSortModeChange(mode: PageSortMode) {
 				<p>{$layoutMode === 'flow' ? '切换到传统布局' : '切换到 Flow 画布布局'}</p>
 				<p class="text-muted-foreground text-xs">
 					右键切换: {$layoutSwitchMode === 'seamless' ? '无缝模式 (保持状态)' : '冷切换 (节省性能)'}
+				</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
+		<!-- 渲染模式切换按钮 -->
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={rendererMode === 'stack' ? 'default' : 'ghost'}
+					size="icon"
+					class="h-6 w-6"
+					style="pointer-events: auto;"
+					onclick={toggleRendererMode}
+				>
+					<Layers class="h-4 w-4" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>{rendererMode === 'stack' ? '层叠模式 (点击切换到标准)' : '标准模式 (点击切换到层叠)'}</p>
+				<p class="text-muted-foreground text-xs">
+					{rendererMode === 'stack' ? '预加载前后页，翻页更流畅' : '单图替换，兼容性更好'}
 				</p>
 			</Tooltip.Content>
 		</Tooltip.Root>

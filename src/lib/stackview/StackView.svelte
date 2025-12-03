@@ -244,6 +244,17 @@
   // 渲染器模式
   let useStackRenderer = $derived((settings.view.renderer?.mode ?? 'stack') === 'stack');
   
+  // 调试：输出渲染条件
+  $effect(() => {
+    console.log(`🔍 StackView 渲染条件:`, {
+      isVideoMode,
+      isPanorama,
+      useStackRenderer,
+      rendererMode: settings.view.renderer?.mode ?? 'stack',
+      willUseStackViewer: !isVideoMode && !isPanorama && useStackRenderer,
+    });
+  });
+  
   // StackViewer 组件引用
   let stackViewerRef: StackViewer | null = null;
   

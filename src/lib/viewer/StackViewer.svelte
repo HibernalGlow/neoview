@@ -99,6 +99,9 @@
    * 同步当前状态到监控 store
    */
   function syncMonitorState() {
+    // 总是打印日志以便调试
+    console.log(`📊 StackViewer syncMonitorState: enabled=${stackMonitor.enabled}, page=${displayedPageIndex + 1}/${bookStore.totalPages}`);
+    
     if (!stackMonitor.enabled) return;
     
     updateStackState({
@@ -229,6 +232,9 @@
       current: current.pageIndex,
       next: next.pageIndex,
     });
+    
+    // 更新监控状态
+    syncMonitorState();
   }
   
   /**

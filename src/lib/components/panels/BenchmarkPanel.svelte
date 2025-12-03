@@ -11,6 +11,12 @@
 	import { visibilityMonitor, setMonitorEnabled } from '$lib/stores/visibilityMonitor.svelte';
 	import { stackMonitor, setStackMonitorEnabled, resetStackStats } from '$lib/stores/stackMonitor.svelte';
 	import { Layers } from '@lucide/svelte';
+	import { settingsManager } from '$lib/settings/settingsManager';
+	
+	// 获取渲染器模式设置
+	let settings = $state(settingsManager.getSettings());
+	let rendererMode = $derived(settings.view.renderer?.mode ?? 'stack');
+	settingsManager.addListener((s) => { settings = s; });
 
 	// ==================== 类型定义 ====================
 	interface BenchmarkResult {
@@ -693,6 +699,10 @@
 					<div class="flex items-center gap-2">
 						<Layers class="h-4 w-4 text-purple-500" />
 						<div class="font-semibold text-sm">StackViewer 监控</div>
+						<!-- 渲染模式指示器 -->
+						<span class="text-[9px] px-1.5 py-0.5 rounded {rendererMode === 'stack' ? 'bg-green-500/20 text-green-500' : 'bg-muted text-muted-foreground'}">
+							{rendererMode === 'stack' ? '✓ Stack' : '○ Standard'}
+						</span>
 					</div>
 					<div class="flex items-center gap-1 text-[10px]">
 						<button

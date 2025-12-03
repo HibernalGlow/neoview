@@ -168,8 +168,8 @@ export async function pathExists(path: string): Promise<boolean> {
  * @param path 目录路径
  * @param excludedPaths 排除的路径列表（可选）
  */
-export async function readDirectory(path: string, excludedPaths?: string[]): Promise<any[]> {
-  return await invoke<any[]>('read_directory', { path, excludedPaths });
+export async function readDirectory(path: string, excludedPaths?: string[]): Promise<FsItem[]> {
+  return await invoke<FsItem[]>('read_directory', { path, excludedPaths });
 }
 
 // ===== 压缩包相关 API =====

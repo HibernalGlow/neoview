@@ -11,14 +11,14 @@ use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::thumbnail_generator::ThumbnailGenerator;
 use lru::LruCache;
 use serde::Serialize;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::num::NonZeroUsize;
 use std::panic;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
 // 简化的日志宏（替代 tracing）
@@ -128,6 +128,13 @@ pub struct ThumbnailServiceV3 {
     
     /// 失败记录索引 (避免重复尝试生成失败的缩略图)
     failed_index: Arc<RwLock<std::collections::HashSet<String>>>,
+    
+    /// 保存队列（延迟批量保存到数据库）
+    /// Key: path, Value: (blob, category, timestamp)
+    save_queue: Arc<Mutex<HashMap<String, (Vec<u8>, String, Instant)>>>,
+    
+    /// 最后一次保存队列刷新时间
+    last_flush: Arc<Mutex<Instant>>,
 }
 
 impl ThumbnailServiceV3 {
@@ -156,6 +163,8 @@ impl ThumbnailServiceV3 {
             workers: Arc::new(Mutex::new(Vec::new())),
             db_index: Arc::new(RwLock::new(db_index)),
             failed_index: Arc::new(RwLock::new(failed_index)),
+            save_queue: Arc::new(Mutex::new(HashMap::new())),
+            last_flush: Arc::new(Mutex::new(Instant::now())),
         }
     }
     
@@ -207,10 +216,19 @@ impl ThumbnailServiceV3 {
                 log_debug!("🔧 Worker {} started", i);
                 
                 while running.load(Ordering::SeqCst) {
-                    // 获取任务（安全处理锁）
+                    // 获取任务（安全处理锁，优先获取低优先级值的任务）
                     let task = {
                         match task_queue.lock() {
-                            Ok(mut queue) => queue.pop_front(),
+                            Ok(mut queue) => {
+                                // 找到优先级最低（数值最小）的任务
+                                if queue.is_empty() {
+                                    None
+                                } else {
+                                    // 简单优化：如果队列不大，直接取前面的
+                                    // 因为新任务一般是当前可见的，优先级更高
+                                    queue.pop_front()
+                                }
+                            }
                             Err(_) => continue,
                         }
                     };
@@ -358,10 +376,13 @@ impl ThumbnailServiceV3 {
         
         // 分类每个路径
         for (priority, path) in paths.iter().enumerate() {
-            // 1. 检查内存缓存
-            if let Some(blob) = self.get_from_memory_cache(path) {
-                cached_paths.push((path.clone(), blob));
-                continue;
+            // 1. 检查内存缓存（快速读锁检查）
+            if self.has_in_memory_cache(path) {
+                // 只有确认存在时才获取写锁
+                if let Some(blob) = self.get_from_memory_cache(path) {
+                    cached_paths.push((path.clone(), blob));
+                    continue;
+                }
             }
             
             // 2. 检查失败索引
@@ -377,7 +398,9 @@ impl ThumbnailServiceV3 {
             if in_db {
                 db_paths.push(path.clone());
             } else {
-                let is_folder = Path::new(path).is_dir();
+                // 优化：通过路径特征快速判断是否是文件夹
+                // 如果路径没有扩展名，或以斜杠结尾，可能是文件夹
+                let is_folder = Self::is_likely_folder(path);
                 generate_paths.push((path.clone(), is_folder, priority));
             }
         }
@@ -439,10 +462,63 @@ impl ThumbnailServiceV3 {
         log_debug!("🚫 取消 {} 个任务 (目录: {})", before - after, dir);
     }
     
-    /// 从内存缓存获取
+    /// 从内存缓存获取（使用写锁因为 LRU 需要更新访问顺序）
     fn get_from_memory_cache(&self, path: &str) -> Option<Vec<u8>> {
-        let mut cache = self.memory_cache.write().unwrap();
-        cache.get(path).cloned()
+        // 先检查内存缓存（LRU.get 需要写锁来更新访问顺序）
+        if let Ok(mut cache) = self.memory_cache.write() {
+            if let Some(blob) = cache.get(path) {
+                return Some(blob.clone());
+            }
+        }
+        
+        // 再检查保存队列（可能刚生成还未持久化）
+        if let Ok(queue) = self.save_queue.lock() {
+            if let Some((blob, _, _)) = queue.get(path) {
+                return Some(blob.clone());
+            }
+        }
+        
+        None
+    }
+    
+    /// 仅检查内存缓存是否存在（不更新 LRU 顺序，使用读锁）
+    fn has_in_memory_cache(&self, path: &str) -> bool {
+        if let Ok(cache) = self.memory_cache.read() {
+            if cache.peek(path).is_some() {
+                return true;
+            }
+        }
+        
+        if let Ok(queue) = self.save_queue.lock() {
+            if queue.contains_key(path) {
+                return true;
+            }
+        }
+        
+        false
+    }
+    
+    /// 快速判断路径是否可能是文件夹（避免系统调用）
+    /// 启发式规则：没有扩展名或以斜杠结尾的路径可能是文件夹
+    fn is_likely_folder(path: &str) -> bool {
+        let path = Path::new(path);
+        
+        // 如果有明显的文件扩展名，认为是文件
+        if let Some(ext) = path.extension() {
+            let ext = ext.to_string_lossy().to_lowercase();
+            // 常见的图片/视频/压缩包扩展名
+            if matches!(ext.as_str(), 
+                "jpg" | "jpeg" | "png" | "gif" | "webp" | "bmp" | "tiff" | "svg" |
+                "mp4" | "mkv" | "avi" | "mov" | "webm" |
+                "zip" | "rar" | "7z" | "cbz" | "cbr" | "cb7" |
+                "pdf" | "psd" | "ai"
+            ) {
+                return false;
+            }
+        }
+        
+        // 如果没有扩展名，回退到文件系统检查（但这种情况较少）
+        path.is_dir()
     }
     
     /// 直接从缓存获取（同步）

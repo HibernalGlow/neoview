@@ -171,6 +171,7 @@ impl ArchivePrefetcher {
 
         // 过滤已缓存的页面
         let archive_path_str = archive_path.to_string_lossy().to_string();
+        let prefetch_count = pages_to_prefetch.len();
         let pages_to_fetch: Vec<_> = pages_to_prefetch
             .into_iter()
             .filter(|(_, inner_path)| {
@@ -185,9 +186,10 @@ impl ArchivePrefetcher {
         }
 
         // 更新统计
+        let cache_hits = prefetch_count - pages_to_fetch.len();
         if let Ok(mut stats) = self.stats.write() {
             stats.total_requests += 1;
-            stats.cache_hits += pages_to_prefetch.len() - pages_to_fetch.len();
+            stats.cache_hits += cache_hits;
         }
 
         // 创建任务
@@ -291,7 +293,6 @@ impl ArchivePrefetcher {
         let cache = Arc::clone(&self.cache);
         let extractor = Arc::clone(&self.extractor);
         let stats = Arc::new(Mutex::new((0usize, 0usize, Duration::ZERO))); // (count, bytes, time)
-        let pending_pages = self.pending_pages.clone();
 
         let archive_path = task.archive_path.clone();
         let pages = task.pages.clone();
@@ -346,11 +347,6 @@ impl ArchivePrefetcher {
                     Err(e) => {
                         warn!("预取失败: page={} error={}", idx, e);
                     }
-                }
-
-                // 从 pending 中移除
-                if let Ok(mut pending) = pending_pages.write() {
-                    pending.remove(&inner_path);
                 }
             }
 

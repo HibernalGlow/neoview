@@ -20,8 +20,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import SearchBar from '$lib/components/ui/SearchBar.svelte';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
-	import FileItemCard from './file/components/FileItemCard.svelte';
-	import ListSlider from './file/components/ListSlider.svelte';
+	import VirtualizedFileListV2 from './file/components/VirtualizedFileListV2.svelte';
 	import FolderContextMenu from './folderPanel/components/FolderContextMenu.svelte';
 	import PanelToolbar, { type SortField, type SortOrder, type ViewMode } from './shared/PanelToolbar.svelte';
 	import type { FsItem } from '$lib/types';
@@ -57,13 +56,8 @@
 	let showSearchBar = $state(false);
 	let sortField = $state<SortField>('timestamp');
 	let sortOrder = $state<SortOrder>('desc');
-
-	// 滚动状态（用于 ListSlider）
-	let listContainer = $state<HTMLDivElement | null>(null);
-	let scrollTop = $state(0);
-	let containerHeight = $state(0);
-	let contentHeight = $state(0);
-	let itemHeight = 64; // 估算项高度
+	let selectedIndex = $state(-1);
+	let scrollToSelectedToken = $state(0);
 
 	// 排序后的书签
 	let sortedBookmarks = $derived(() => {
@@ -209,6 +203,12 @@
 		};
 	}
 
+	// 转换为 FsItem 数组（用于虚拟列表）
+	let bookmarkItems = $derived(sortedBookmarks().map(bookmarkToFsItem));
+
+	// 书签路径到书签对象的映射
+	let bookmarkMap = $derived(new Map(sortedBookmarks().map(b => [b.path, b])));
+
 	// 显示右键菜单
 	function showContextMenu(e: MouseEvent, bookmark: any) {
 		e.preventDefault();
@@ -324,121 +324,54 @@
 		<div class="h-4 bg-linear-to-b from-transparent to-background"></div>
 	</div>
 
-	<div class="min-h-0 flex-1 overflow-hidden flex bg-background">
-		<!-- 书签列表 -->
-		<div 
-			class="flex-1 overflow-auto"
-			bind:this={listContainer}
-			onscroll={(e) => {
-				const target = e.currentTarget;
-				scrollTop = target.scrollTop;
-				containerHeight = target.clientHeight;
-				contentHeight = target.scrollHeight;
-			}}
-		>
-			{#if sortedBookmarks().length === 0}
-				<div class="text-muted-foreground flex flex-col items-center justify-center py-12">
-					<div class="relative mb-4">
-						<Bookmark class="h-16 w-16 opacity-30" />
-						{#if !searchQuery}
-							<div class="absolute -right-1 -top-1">
-								<Star class="h-4 w-4 animate-pulse fill-primary text-primary" />
-							</div>
-						{/if}
-					</div>
-					<div class="space-y-2 text-center">
-						<p class="text-lg font-medium">
-							{searchQuery ? '未找到匹配的书签' : '暂无书签'}
-						</p>
-						<p class="text-sm opacity-70">
-							{searchQuery ? `尝试其他关键词：${searchQuery}` : '标记重要页面，方便快速访问'}
-						</p>
-					</div>
+	<div class="min-h-0 flex-1 overflow-hidden bg-background">
+		{#if sortedBookmarks().length === 0}
+			<div class="text-muted-foreground flex flex-col items-center justify-center py-12 h-full">
+				<div class="relative mb-4">
+					<Bookmark class="h-16 w-16 opacity-30" />
+					{#if !searchQuery}
+						<div class="absolute -right-1 -top-1">
+							<Star class="h-4 w-4 animate-pulse fill-primary text-primary" />
+						</div>
+					{/if}
 				</div>
-			{:else if viewMode === 'list'}
-				<!-- 列表视图 -->
-				<div class="space-y-2 p-2">
-					{#each sortedBookmarks() as bookmark (bookmark?.id || bookmark.path)}
-						{#if bookmark}
-							<div class="group relative">
-								<FileItemCard
-									item={bookmarkToFsItem(bookmark)}
-									thumbnail={thumbnails.get(bookmark.path)}
-									viewMode="list"
-									showReadMark={false}
-									showBookmarkMark={true}
-									onClick={() => openBookmark(bookmark)}
-									onDoubleClick={() => openBookmark(bookmark)}
-									onContextMenu={(e) => showContextMenu(e, bookmark)}
-								/>
-								<Button
-									variant="ghost"
-									size="icon"
-									class="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100"
-									onclick={(e) => {
-										e.stopPropagation();
-										removeBookmark(bookmark.id);
-									}}
-								>
-									<X class="h-4 w-4" />
-								</Button>
-							</div>
-						{/if}
-					{/each}
+				<div class="space-y-2 text-center">
+					<p class="text-lg font-medium">
+						{searchQuery ? '未找到匹配的书签' : '暂无书签'}
+					</p>
+					<p class="text-sm opacity-70">
+						{searchQuery ? `尝试其他关键词：${searchQuery}` : '标记重要页面，方便快速访问'}
+					</p>
 				</div>
-			{:else}
-				<!-- 网格视图 -->
-				<div class="p-2">
-					<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
-						{#each sortedBookmarks() as bookmark (bookmark?.id || bookmark.path)}
-							{#if bookmark}
-								<div class="group relative">
-									<FileItemCard
-										item={bookmarkToFsItem(bookmark)}
-										thumbnail={thumbnails.get(bookmark.path)}
-										viewMode="grid"
-										showReadMark={false}
-										showBookmarkMark={true}
-										onClick={() => openBookmark(bookmark)}
-										onDoubleClick={() => openBookmark(bookmark)}
-										onContextMenu={(e) => showContextMenu(e, bookmark)}
-									/>
-									<Button
-										variant="ghost"
-										size="icon"
-										class="bg-background/80 absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100"
-										onclick={(e) => {
-											e.stopPropagation();
-											removeBookmark(bookmark.id);
-										}}
-									>
-										<X class="h-4 w-4" />
-									</Button>
-								</div>
-							{/if}
-						{/each}
-					</div>
-				</div>
-			{/if}
-		</div>
-
-		<!-- ListSlider -->
-		{#if sortedBookmarks().length > 0}
-			<div class="py-1 pr-0.5">
-				<ListSlider
-					totalItems={sortedBookmarks().length}
-					currentIndex={0}
-					visibleStart={Math.floor(scrollTop / itemHeight)}
-					visibleEnd={Math.min(sortedBookmarks().length - 1, Math.floor((scrollTop + containerHeight) / itemHeight))}
-					scrollProgress={contentHeight > containerHeight ? scrollTop / (contentHeight - containerHeight) : 0}
-					showIndexInput={false}
-					onScrollToProgress={(progress) => {
-						if (listContainer && contentHeight > containerHeight) {
-							listContainer.scrollTop = progress * (contentHeight - containerHeight);
-						}
-					}}
-				/>
 			</div>
+		{:else}
+			<VirtualizedFileListV2
+				items={bookmarkItems}
+				currentPath="bookmarks"
+				{thumbnails}
+				{selectedIndex}
+				{scrollToSelectedToken}
+				viewMode={viewMode === 'grid' ? 'grid' : 'list'}
+				onSelectedIndexChange={({ index }) => {
+					selectedIndex = index;
+				}}
+				onItemSelect={({ item, index }) => {
+					selectedIndex = index;
+					const bookmark = bookmarkMap.get(item.path);
+					if (bookmark) openBookmark(bookmark);
+				}}
+				onItemDoubleClick={({ item }) => {
+					const bookmark = bookmarkMap.get(item.path);
+					if (bookmark) openBookmark(bookmark);
+				}}
+				on:contextmenu={(e) => {
+					const item = e.detail?.item;
+					if (item) {
+						const bookmark = bookmarkMap.get(item.path);
+						if (bookmark) showContextMenu(e.detail.event, bookmark);
+					}
+				}}
+			/>
 		{/if}
 	</div>
 

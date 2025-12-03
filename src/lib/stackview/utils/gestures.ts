@@ -6,20 +6,6 @@
 import { zoomIn, zoomOut, resetZoom, setZoomLevel } from '$lib/stores';
 import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
-import { showToast } from '$lib/utils/toast';
-
-// 调试模式：显示操作 toast
-let debugMode = true;
-
-function showActionToast(action: string) {
-  if (debugMode) {
-    showToast({ title: `[StackView] ${action}`, variant: 'info', duration: 800 });
-  }
-}
-
-export function setGestureDebugMode(enabled: boolean) {
-  debugMode = enabled;
-}
 
 // ============================================================================
 // 类型定义

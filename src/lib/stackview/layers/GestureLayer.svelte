@@ -14,13 +14,6 @@
   import { showToast } from '$lib/utils/toast';
   
   // 调试模式
-  let debugMode = true;
-  function showActionToast(action: string) {
-    if (debugMode) {
-      showToast({ title: `[StackView] ${action}`, variant: 'info', duration: 800 });
-    }
-  }
-  
   let {
     // 是否为视频模式（视频模式下只处理边缘区域）
     isVideoMode = false,

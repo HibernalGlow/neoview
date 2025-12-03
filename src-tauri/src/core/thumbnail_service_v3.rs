@@ -511,10 +511,18 @@ impl ThumbnailServiceV3 {
             });
         }
         
-        // 3. 入队生成任务（批量加锁一次）
+        // 3. 入队生成任务（批量加锁一次，带去重）
         if !generate_paths.is_empty() {
             if let Ok(mut queue) = self.task_queue.lock() {
+                // 收集已有路径用于去重
+                let existing: std::collections::HashSet<_> = queue.iter().map(|t| t.path.clone()).collect();
+                
                 for (path, is_folder, priority) in generate_paths {
+                    // 去重：跳过已在队列中的路径
+                    if existing.contains(&path) {
+                        continue;
+                    }
+                    
                     queue.push_back(GenerateTask {
                         path,
                         directory: current_dir.clone(),

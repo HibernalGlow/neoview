@@ -1,6 +1,7 @@
 //! Thumbnail Generator Module
 //! 缩略图生成器模块 - 支持多线程、压缩包流式处理、webp 格式
 
+use crate::core::archive_manager;
 use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::video_exts;
 use image::{DynamicImage, GenericImageView, ImageFormat};
@@ -220,6 +221,65 @@ impl ThumbnailGenerator {
     #[cfg(not(target_os = "windows"))]
     fn generate_webp_with_wic_fast(_image_data: &[u8], _config: &ThumbnailGeneratorConfig) -> Result<Vec<u8>, String> {
         Err("WIC 仅在 Windows 上可用".to_string())
+    }
+
+    /// 从图像数据生成 WebP 缩略图（统一接口）
+    /// 优先使用 WIC 内置缩放，失败时回退到传统方法
+    fn generate_webp_from_image_data(image_data: &[u8], ext: &str, config: &ThumbnailGeneratorConfig) -> Option<Vec<u8>> {
+        let is_jxl = ext == "jxl";
+        
+        if is_jxl {
+            // JXL 使用 jxl_oxide 解码（WIC 可能不支持）
+            Self::decode_jxl_image(image_data)
+                .ok()
+                .and_then(|img| Self::generate_webp_thumbnail_fallback(&img, config).ok())
+        } else {
+            // 其他格式：优先使用 WIC 内置缩放
+            Self::generate_webp_with_wic_fast(image_data, config)
+                .ok()
+                .or_else(|| {
+                    // WIC 失败，回退到传统方法
+                    Self::decode_image_safe(image_data)
+                        .ok()
+                        .and_then(|img| Self::generate_webp_thumbnail_fallback(&img, config).ok())
+                })
+        }
+    }
+
+    /// 使用 archive_manager 从压缩包生成缩略图（统一版本）
+    fn generate_archive_thumbnail_unified(&self, archive_path: &str, path_key: &str, archive_size: i64, ghash: i32) -> Result<Vec<u8>, String> {
+        let path = Path::new(archive_path);
+        let mut handler = archive_manager::open_archive(path)?;
+        
+        // 获取第一张图片
+        if let Some((entry, image_data)) = handler.read_first_image()? {
+            let ext = entry.extension().unwrap_or_default();
+            
+            if let Some(webp_data) = Self::generate_webp_from_image_data(&image_data, &ext, &self.config) {
+                // 保存到数据库
+                if let Err(e) = self.db.save_thumbnail(path_key, archive_size, ghash, &webp_data) {
+                    eprintln!("❌ 保存压缩包缩略图到数据库失败: {} - {}", path_key, e);
+                } else {
+                    // 后台更新父文件夹缩略图
+                    let db_clone = Arc::clone(&self.db);
+                    let path_key_clone = path_key.to_string();
+                    let data_clone = webp_data.clone();
+                    std::thread::spawn(move || {
+                        Self::update_parent_folders_thumbnail(
+                            &db_clone,
+                            &path_key_clone,
+                            &data_clone,
+                            MAX_PARENT_LEVELS,
+                        );
+                    });
+                }
+                return Ok(webp_data);
+            } else {
+                return Err(format!("生成缩略图失败: {}", entry.name));
+            }
+        }
+        
+        Err("压缩包中没有找到图片文件".to_string())
     }
 
     /// 检查是否为视频文件
@@ -712,6 +772,7 @@ impl ThumbnailGenerator {
     }
 
     /// 从压缩包生成缩略图（同步生成 webp 后返回，避免传输原图）
+    /// 使用统一的 archive_manager 处理所有压缩格式
     pub fn generate_archive_thumbnail(&self, archive_path: &str) -> Result<Vec<u8>, String> {
         // 获取压缩包大小
         let metadata =
@@ -728,135 +789,8 @@ impl ThumbnailGenerator {
             return Ok(cached);
         }
 
-        // 检查文件扩展名，支持 ZIP/CBZ、RAR/CBR 和 7Z/CB7
-        let path_lower = archive_path.to_lowercase();
-        let is_zip = path_lower.ends_with(".zip") || path_lower.ends_with(".cbz");
-        let is_rar = path_lower.ends_with(".rar") || path_lower.ends_with(".cbr");
-        let is_7z = path_lower.ends_with(".7z") || path_lower.ends_with(".cb7");
-        
-        if !is_zip && !is_rar && !is_7z {
-            return Err(format!(
-                "暂不支持此压缩包格式: {} (支持 ZIP/CBZ/RAR/CBR/7Z/CB7)",
-                archive_path
-            ));
-        }
-        
-        // 根据格式选择不同的处理方式
-        if is_rar {
-            return self.generate_rar_archive_thumbnail(archive_path, &path_key, archive_size, ghash);
-        }
-        
-        if is_7z {
-            return self.generate_7z_archive_thumbnail(archive_path, &path_key, archive_size, ghash);
-        }
-
-        // ZIP 格式处理
-        use std::fs::File;
-        use zip::ZipArchive;
-
-        let file = match File::open(archive_path) {
-            Ok(f) => f,
-            Err(e) => {
-                if e.kind() == std::io::ErrorKind::PermissionDenied {
-                    eprintln!("⚠️ 权限错误 (静默处理): {}", archive_path);
-                    return Err("权限被拒绝".to_string());
-                } else {
-                    return Err(format!("打开压缩包失败: {}", e));
-                }
-            }
-        };
-        let mut archive = ZipArchive::new(file).map_err(|e| format!("读取压缩包失败: {}", e))?;
-
-        // 支持的图片扩展名
-        let image_exts = [
-            "jpg", "jpeg", "png", "gif", "bmp", "webp", "avif", "jxl", "tiff", "tif",
-        ];
-
-        // 遍历压缩包条目，找到第一个可解码的图片文件
-        let mut last_error: Option<String> = None;
-
-        for i in 0..archive.len() {
-            let mut file = match archive.by_index(i) {
-                Ok(f) => f,
-                Err(e) => {
-                    last_error = Some(format!("读取条目失败: {}", e));
-                    continue;
-                }
-            };
-
-            let name = file.name().to_string();
-            if let Some(ext) = Path::new(&name)
-                .extension()
-                .and_then(|e| e.to_str())
-                .map(|e| e.to_lowercase())
-            {
-                if image_exts.contains(&ext.as_str()) {
-                    // 读取文件内容
-                    let mut image_data = Vec::new();
-                    if let Err(e) = file.read_to_end(&mut image_data) {
-                        last_error = Some(format!("读取文件失败: {}", e));
-                        continue;
-                    }
-
-                    let lower_name = name.to_lowercase();
-                    let is_jxl = lower_name.ends_with(".jxl");
-
-                    // 同步生成 webp 缩略图
-                    // 优先使用 WIC 内置缩放（高性能），失败时回退到传统方法
-                    let webp_data = if is_jxl {
-                        // JXL 使用 jxl_oxide 解码（WIC 可能不支持）
-                        Self::decode_jxl_image(&image_data)
-                            .ok()
-                            .and_then(|img| {
-                                Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
-                            })
-                    } else {
-                        // 所有其他格式：优先使用 WIC 内置缩放
-                        Self::generate_webp_with_wic_fast(&image_data, &self.config)
-                            .ok()
-                            .or_else(|| {
-                                // WIC 失败，回退到传统方法
-                                Self::decode_image_safe(&image_data)
-                                    .ok()
-                                    .and_then(|img| {
-                                        Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
-                                    })
-                            })
-                    };
-
-                    if let Some(data) = webp_data {
-                        // 保存到数据库
-                        if let Err(e) = self.db.save_thumbnail(&path_key, archive_size, ghash, &data)
-                        {
-                            eprintln!("❌ 保存压缩包缩略图到数据库失败: {} - {}", path_key, e);
-                        } else {
-                            // 后台更新父文件夹缩略图
-                            let db_clone = Arc::clone(&self.db);
-                            let path_key_clone = path_key.clone();
-                            let data_clone = data.clone();
-                            std::thread::spawn(move || {
-                                Self::update_parent_folders_thumbnail(
-                                    &db_clone,
-                                    &path_key_clone,
-                                    &data_clone,
-                                    MAX_PARENT_LEVELS,
-                                );
-                            });
-                        }
-                        return Ok(data);
-                    } else {
-                        last_error = Some(format!("生成缩略图失败: {}", name));
-                        continue;
-                    }
-                }
-            }
-        }
-
-        if let Some(err) = last_error {
-            Err(format!("压缩包缩略图生成失败: {}", err))
-        } else {
-            Err("压缩包中没有找到图片文件".to_string())
-        }
+        // 使用统一的 archive_manager 处理
+        self.generate_archive_thumbnail_unified(archive_path, &path_key, archive_size, ghash)
     }
     
     /// 从 RAR 压缩包生成缩略图

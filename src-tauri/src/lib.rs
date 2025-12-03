@@ -13,12 +13,14 @@ mod commands;
 mod core;
 mod models;
 
+use commands::archive_service_commands::ArchiveServiceState;
 use commands::fs_commands::{CacheIndexState, DirectoryCacheState, FsState};
 use commands::generic_upscale_commands::GenericUpscalerState;
 use commands::pyo3_upscale_commands::PyO3UpscalerState;
 use commands::task_queue_commands::BackgroundSchedulerState;
 use commands::upscale_commands::UpscaleManagerState;
 use commands::upscale_settings_commands::UpscaleSettingsState;
+use core::archive_service::create_shared_service;
 use core::background_scheduler::BackgroundTaskScheduler;
 use core::cache_index_db::CacheIndexDb;
 use core::upscale_scheduler::{UpscaleScheduler, UpscaleSchedulerState};
@@ -125,6 +127,7 @@ pub fn run() {
             // 初始化文件系统管理器和压缩包管理器
             let fs_manager = FsManager::new();
             let archive_manager = ArchiveManager::new();
+            let archive_manager_arc = Arc::new(Mutex::new(archive_manager));
 
             let app_data_root = app
                 .path()
@@ -133,7 +136,13 @@ pub fn run() {
 
             app.manage(FsState {
                 fs_manager: Arc::new(Mutex::new(fs_manager)),
-                archive_manager: Arc::new(Mutex::new(archive_manager)),
+                archive_manager: Arc::clone(&archive_manager_arc),
+            });
+
+            // 初始化优化的压缩包服务（带缓存和预取）
+            let archive_service = create_shared_service(Arc::clone(&archive_manager_arc));
+            app.manage(ArchiveServiceState {
+                service: archive_service,
             });
 
             let directory_cache =
@@ -410,6 +419,19 @@ pub fn run() {
             commands::benchmark_commands::test_load_modes,
             commands::benchmark_commands::load_image_as_bitmap,
             commands::benchmark_commands::load_image_as_bitmap_scaled,
+            // Archive Service commands (优化的压缩包加载)
+            commands::archive_service_open,
+            commands::archive_service_close,
+            commands::archive_service_load_image,
+            commands::archive_service_preload_range,
+            commands::archive_service_get_status,
+            commands::archive_service_update_config,
+            commands::archive_service_get_config,
+            commands::archive_service_clear_cache,
+            commands::archive_service_notify_page_change,
+            commands::archive_service_cancel_prefetch,
+            commands::archive_service_is_cached,
+            commands::archive_service_check_cache_batch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

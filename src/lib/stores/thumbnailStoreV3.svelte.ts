@@ -31,6 +31,13 @@ const pendingPaths: string[] = [];
 const throttleState = { dir: '', timer: null as ReturnType<typeof setTimeout> | null };
 const THROTTLE_MS = 50; // 50ms 节流
 
+// 动态预加载相关（根据停留时间指数扩展）
+const prefetchState = {
+  lastDir: '',
+  stayStartTime: 0,
+  currentPrefetchCount: 20, // 初始预取数量
+};
+
 // 缩略图就绪事件 payload
 interface ThumbnailReadyPayload {
   path: string;
@@ -245,19 +252,55 @@ export async function preloadDirectory(
 }
 
 /**
- * 请求可见区域缩略图（带预取）
+ * 计算动态预取数量（根据停留时间指数增长）
+ * 停留时间越长，预取范围越大
+ */
+function calculateDynamicPrefetchCount(currentDir: string): number {
+  const now = Date.now();
+  const MIN_PREFETCH = 20;
+  const MAX_PREFETCH = 200;
+  const GROWTH_INTERVAL = 2000; // 每 2 秒增长一次
+
+  // 如果目录变化，重置
+  if (prefetchState.lastDir !== currentDir) {
+    prefetchState.lastDir = currentDir;
+    prefetchState.stayStartTime = now;
+    prefetchState.currentPrefetchCount = MIN_PREFETCH;
+    return MIN_PREFETCH;
+  }
+
+  // 计算停留时间
+  const stayDuration = now - prefetchState.stayStartTime;
+  const growthSteps = Math.floor(stayDuration / GROWTH_INTERVAL);
+
+  // 指数增长：每个步骤增加 50%
+  if (growthSteps > 0) {
+    const newCount = Math.min(
+      MAX_PREFETCH,
+      Math.floor(MIN_PREFETCH * Math.pow(1.5, growthSteps))
+    );
+    prefetchState.currentPrefetchCount = newCount;
+  }
+
+  return prefetchState.currentPrefetchCount;
+}
+
+/**
+ * 请求可见区域缩略图（带动态预取）
+ * 根据用户在当前目录的停留时间自动扩展预取范围
  * @param visiblePaths 当前可见的路径
  * @param allPaths 完整路径列表（用于预取）
  * @param currentDir 当前目录
- * @param prefetchCount 预取数量（可见区域前后各取多少）
  */
 export async function requestVisibleThumbnailsWithPrefetch(
   visiblePaths: string[],
   allPaths: string[],
-  currentDir: string,
-  prefetchCount: number = 20
+  currentDir: string
 ): Promise<void> {
   if (!initialized || visiblePaths.length === 0) return;
+
+  // 动态计算预取数量
+  const prefetchCount = calculateDynamicPrefetchCount(currentDir);
 
   // 找到可见区域在完整列表中的位置
   const firstVisibleIndex = allPaths.indexOf(visiblePaths[0]);
@@ -280,6 +323,17 @@ export async function requestVisibleThumbnailsWithPrefetch(
   ];
 
   return requestVisibleThumbnails(pathsToRequest, currentDir);
+}
+
+/**
+ * 获取当前预取状态（用于调试）
+ */
+export function getPrefetchStats() {
+  return {
+    currentDir: prefetchState.lastDir,
+    stayDuration: Date.now() - prefetchState.stayStartTime,
+    prefetchCount: prefetchState.currentPrefetchCount,
+  };
 }
 
 /**

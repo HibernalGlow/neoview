@@ -38,8 +38,11 @@ export class VisibleThumbnailLoader {
   private readonly MARGIN = 2; // 预加载边距（上下各2个项目）
   private readonly SCROLL_VELOCITY_THRESHOLD = 5; // 快速滚动阈值（像素/ms）
   
-  // 缓存检查回调（由外部注入）
+  // 缓存检查回调（由外部注入，用于优化）
   private hasCacheCallback?: (path: string) => boolean;
+  
+  // 是否启用本地缓存过滤（设为 false 则交给 thumbnailManager 处理）
+  private useLocalCacheFilter = false;
   
   /**
    * 设置缓存检查回调
@@ -63,8 +66,15 @@ export class VisibleThumbnailLoader {
   
   /**
    * 检查是否已有缓存
+   * 注意：为避免双重过滤问题，默认不进行本地缓存检查
+   * thumbnailManager.requestVisibleThumbnails 会进行统一的缓存检查
    */
   private hasCache(path: string): boolean {
+    // 如果禁用本地缓存过滤，始终返回 false（交给 thumbnailManager 处理）
+    if (!this.useLocalCacheFilter) {
+      return false;
+    }
+    
     if (this.hasCacheCallback) {
       return this.hasCacheCallback(path);
     }

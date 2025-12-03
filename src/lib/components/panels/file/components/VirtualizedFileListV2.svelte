@@ -148,12 +148,8 @@
 		lastScrollTop = currentScrollTop;
 		lastScrollTime = currentTime;
 
-		// 设置缓存检查回调（使用 thumbnails Map）
-		visibleThumbnailLoader.setHasCacheCallback((path: string) => {
-			return thumbnails.has(toRelativeKey(path));
-		});
-
 		// 使用新的可见项目加载器
+		// 注意：缓存检查由 thumbnailManager 统一处理，避免双重过滤问题
 		// 自动实现：中央优先排序、方向感知、离开可见区域任务取消
 		visibleThumbnailLoader.handleVisibleRangeChange(
 			items,

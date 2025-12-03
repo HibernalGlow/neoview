@@ -58,17 +58,19 @@
 	// --- TanStack Virtual ---
 	const itemHeight = $derived(viewMode === 'list' ? 96 : 240);
 	const columns = $derived(viewMode === 'list' ? 1 : viewportWidth >= 640 ? 3 : 2);
+	const rowCount = $derived(Math.ceil(items.length / columns));
 
-	// TanStack Virtual
+	// TanStack Virtual - 按行虚拟化（支持动态高度）
 	const virtualizer = createVirtualizer({
 		get count() {
-			return items.length;
+			return rowCount;
 		},
 		getScrollElement: () => container ?? null,
 		estimateSize: () => itemHeight,
-		overscan: 5,
-		get lanes() {
-			return columns;
+		overscan: 3,
+		// 启用动态测量
+		measureElement: (element) => {
+			return element.getBoundingClientRect().height;
 		}
 	});
 
@@ -282,6 +284,22 @@
 		return path.replace(/\\/g, '/');
 	}
 
+	// 动态测量行高度的 action
+	function measureRow(node: HTMLElement) {
+		const index = parseInt(node.dataset.index || '0', 10);
+		// 使用 ResizeObserver 监测高度变化
+		const observer = new ResizeObserver(() => {
+			$virtualizer.measureElement(node);
+		});
+		observer.observe(node);
+		
+		return {
+			destroy() {
+				observer.disconnect();
+			}
+		};
+	}
+
 	
 
 	export function isIndexVisible(index: number): boolean {
@@ -304,42 +322,51 @@
 	onkeydown={handleKeydown}
 >
 	<div style="height: {$virtualizer.getTotalSize()}px; position: relative; width: 100%;">
-		{#each virtualItems as virtualItem (items[virtualItem.index].path)}
-			{@const item = items[virtualItem.index]}
-			{@const isSelected = selectedIndex === virtualItem.index}
-			{@const isChecked = selectedItems.has(item.path)}
-			{@const historyEntry = historyStore.findByPath(item.path)}
+		{#each virtualItems as virtualRow (virtualRow.index)}
+			<!-- 每行渲染多列 -->
 			<div
+				data-index={virtualRow.index}
+				use:measureRow
 				style="
-          position: absolute;
-          top: 0;
-          left: 0;
-          width: {100 / columns}%;
-          height: {itemHeight}px;
-          transform: translate({virtualItem.lane * 100}%, {virtualItem.start}px);
-          padding: 4px; /* Add some padding for grid gap */
-        "
+					position: absolute;
+					top: 0;
+					left: 0;
+					width: 100%;
+					transform: translateY({virtualRow.start}px);
+					display: flex;
+				"
 			>
-				<FileItemCard
-					{item}
-					thumbnail={thumbnails.get(toRelativeKey(item.path))}
-					viewMode={viewMode === 'thumbnails' || viewMode === 'grid' ? 'thumbnail' : viewMode}
-					{isSelected}
-					{isChecked}
-					{isCheckMode}
-					{isDeleteMode}
-					showReadMark={!!historyEntry}
-					showBookmarkMark={true}
-					showSizeAndModified={true}
-					currentPage={historyEntry?.currentPage}
-					totalPages={historyEntry?.totalPages}
-					timestamp={item.modified ? item.modified * 1000 : undefined}
-					onClick={() => handleItemClick(item, virtualItem.index)}
-					onDoubleClick={() => handleItemDoubleClick(item, virtualItem.index)}
-					onContextMenu={(e) => handleItemContextMenu(e, item)}
-					onToggleSelection={() => toggleItemSelection(item.path)}
-					onDelete={() => dispatch('deleteItem', { item })}
-				/>
+				{#each Array(columns) as _, colIndex}
+					{@const itemIndex = virtualRow.index * columns + colIndex}
+					{#if itemIndex < items.length}
+						{@const item = items[itemIndex]}
+						{@const isSelected = selectedIndex === itemIndex}
+						{@const isChecked = selectedItems.has(item.path)}
+						{@const historyEntry = historyStore.findByPath(item.path)}
+						<div style="flex: 1; padding: 4px; box-sizing: border-box;">
+							<FileItemCard
+								{item}
+								thumbnail={thumbnails.get(toRelativeKey(item.path))}
+								viewMode={viewMode === 'thumbnails' || viewMode === 'grid' ? 'thumbnail' : viewMode}
+								{isSelected}
+								{isChecked}
+								{isCheckMode}
+								{isDeleteMode}
+								showReadMark={!!historyEntry}
+								showBookmarkMark={true}
+								showSizeAndModified={true}
+								currentPage={historyEntry?.currentPage}
+								totalPages={historyEntry?.totalPages}
+								timestamp={item.modified ? item.modified * 1000 : undefined}
+								onClick={() => handleItemClick(item, itemIndex)}
+								onDoubleClick={() => handleItemDoubleClick(item, itemIndex)}
+								onContextMenu={(e) => handleItemContextMenu(e, item)}
+								onToggleSelection={() => toggleItemSelection(item.path)}
+								onDelete={() => dispatch('deleteItem', { item })}
+							/>
+						</div>
+					{/if}
+				{/each}
 			</div>
 		{/each}
 	</div>

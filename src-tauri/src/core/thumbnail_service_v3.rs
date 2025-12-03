@@ -13,6 +13,7 @@ use lru::LruCache;
 use serde::Serialize;
 use std::collections::VecDeque;
 use std::num::NonZeroUsize;
+use std::panic;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
@@ -206,36 +207,54 @@ impl ThumbnailServiceV3 {
                 log_debug!("🔧 Worker {} started", i);
                 
                 while running.load(Ordering::SeqCst) {
-                    // 获取任务
+                    // 获取任务（安全处理锁）
                     let task = {
-                        let mut queue = task_queue.lock().unwrap();
-                        queue.pop_front()
+                        match task_queue.lock() {
+                            Ok(mut queue) => queue.pop_front(),
+                            Err(_) => continue,
+                        }
                     };
                     
                     if let Some(task) = task {
-                        // 检查是否应该取消（目录已切换）
-                        let current = current_dir.read().unwrap().clone();
-                        if !task.directory.is_empty() && task.directory != current {
-                            log_debug!("⏭️ 跳过非当前目录任务: {}", task.path);
-                            continue;
-                        }
+                        // 使用 catch_unwind 捕获任务处理中的 panic
+                        let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+                            // 检查是否应该取消（目录已切换）
+                            let current = current_dir.read().ok().map(|g| g.clone()).unwrap_or_default();
+                            if !task.directory.is_empty() && task.directory != current {
+                                log_debug!("⏭️ 跳过非当前目录任务: {}", task.path);
+                                return None;
+                            }
+                            Some(task.clone())
+                        }));
+                        
+                        let task = match result {
+                            Ok(Some(t)) => t,
+                            Ok(None) => continue,
+                            Err(_) => {
+                                log_debug!("⚠️ Worker {} 捕获到 panic", i);
+                                continue;
+                            }
+                        };
                         
                         active_workers.fetch_add(1, Ordering::SeqCst);
                         
-                        // 生成缩略图
-                        let result = if task.is_folder {
-                            Self::generate_folder_thumbnail_static(
-                                &generator,
-                                &db,
-                                &task.path,
-                                folder_depth,
-                            )
-                        } else {
-                            Self::generate_file_thumbnail_static(&generator, &task.path)
-                        };
+                        // 使用 catch_unwind 包装整个生成过程
+                        let gen_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+                            // 生成缩略图
+                            if task.is_folder {
+                                Self::generate_folder_thumbnail_static(
+                                    &generator,
+                                    &db,
+                                    &task.path,
+                                    folder_depth,
+                                )
+                            } else {
+                                Self::generate_file_thumbnail_static(&generator, &task.path)
+                            }
+                        }));
                         
-                        match result {
-                            Ok(blob) => {
+                        match gen_result {
+                            Ok(Ok(blob)) => {
                                 // 更新内存缓存（安全处理锁）
                                 if let Ok(mut cache) = memory_cache.write() {
                                     let blob_size = blob.len();
@@ -254,9 +273,16 @@ impl ThumbnailServiceV3 {
                                     blob,
                                 });
                             }
-                            Err(e) => {
+                            Ok(Err(e)) => {
                                 log_debug!("⚠️ 生成缩略图失败: {} - {}", task.path, e);
                                 // 更新失败索引（安全处理锁）
+                                if let Ok(mut index) = failed_index.write() {
+                                    index.insert(task.path.clone());
+                                }
+                            }
+                            Err(_) => {
+                                log_debug!("⚠️ 生成缩略图时 panic: {}", task.path);
+                                // 更新失败索引
                                 if let Ok(mut index) = failed_index.write() {
                                     index.insert(task.path.clone());
                                 }

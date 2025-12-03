@@ -93,10 +93,17 @@ pub async fn init_thumbnail_service_v3(
 #[tauri::command]
 pub async fn request_visible_thumbnails_v3(
     app: AppHandle,
-    state: State<'_, ThumbnailServiceV3State>,
     paths: Vec<String>,
     current_dir: String,
 ) -> Result<(), String> {
+    // 安全获取 State（使用 try_state 避免 panic）
+    let state = match app.try_state::<ThumbnailServiceV3State>() {
+        Some(s) => s,
+        None => {
+            log_info!("⚠️ ThumbnailServiceV3 未初始化，跳过请求");
+            return Ok(());
+        }
+    };
     // 不阻塞，直接返回
     state.service.request_visible_thumbnails(&app, paths, current_dir);
     Ok(())
@@ -105,10 +112,12 @@ pub async fn request_visible_thumbnails_v3(
 /// 取消指定目录的请求
 #[tauri::command]
 pub async fn cancel_thumbnail_requests_v3(
-    state: State<'_, ThumbnailServiceV3State>,
+    app: AppHandle,
     dir: String,
 ) -> Result<(), String> {
-    state.service.cancel_requests(&dir);
+    if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
+        state.service.cancel_requests(&dir);
+    }
     Ok(())
 }
 
@@ -122,18 +131,21 @@ pub struct CachedThumbnailResult {
 /// 直接从缓存获取（同步）
 #[tauri::command]
 pub async fn get_cached_thumbnails_v3(
-    state: State<'_, ThumbnailServiceV3State>,
+    app: AppHandle,
     paths: Vec<String>,
 ) -> Result<Vec<CachedThumbnailResult>, String> {
-    let results = state.service.get_cached_thumbnails(paths);
-    Ok(results.into_iter().map(|(path, blob)| CachedThumbnailResult { path, blob }).collect())
+    if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
+        let results = state.service.get_cached_thumbnails(paths);
+        Ok(results.into_iter().map(|(path, blob)| CachedThumbnailResult { path, blob }).collect())
+    } else {
+        Ok(vec![])
+    }
 }
 
 /// 预加载目录（后台预热）
 #[tauri::command]
 pub async fn preload_directory_thumbnails_v3(
     app: AppHandle,
-    state: State<'_, ThumbnailServiceV3State>,
     dir: String,
     depth: Option<u32>,
 ) -> Result<(), String> {
@@ -163,7 +175,9 @@ pub async fn preload_directory_thumbnails_v3(
     collect_paths(&dir, 0, max_depth, &mut paths);
     
     // 请求预加载
-    state.service.request_visible_thumbnails(&app, paths, dir);
+    if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
+        state.service.request_visible_thumbnails(&app, paths, dir);
+    }
     
     Ok(())
 }
@@ -171,17 +185,30 @@ pub async fn preload_directory_thumbnails_v3(
 /// 清除缓存
 #[tauri::command]
 pub async fn clear_thumbnail_cache_v3(
-    state: State<'_, ThumbnailServiceV3State>,
+    app: AppHandle,
     scope: String,
 ) -> Result<(), String> {
-    state.service.clear_cache(&scope);
+    if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
+        state.service.clear_cache(&scope);
+    }
     Ok(())
 }
 
 /// 获取缓存统计
 #[tauri::command]
 pub async fn get_thumbnail_cache_stats_v3(
-    state: State<'_, ThumbnailServiceV3State>,
+    app: AppHandle,
 ) -> Result<CacheStats, String> {
-    Ok(state.service.get_cache_stats())
+    if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
+        Ok(state.service.get_cache_stats())
+    } else {
+        Ok(CacheStats {
+            memory_count: 0,
+            memory_bytes: 0,
+            database_count: 0,
+            database_bytes: 0,
+            queue_length: 0,
+            active_workers: 0,
+        })
+    }
 }

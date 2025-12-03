@@ -65,6 +65,21 @@
 		}
 	}
 
+	// 清理无效 Blob（旧版 API）
+	async function handleCleanupInvalidBlob() {
+		isLoading = true;
+		message = null;
+		try {
+			const count = await invoke<number>('cleanup_invalid_thumbnails');
+			message = `✅ 已清理 ${count} 条空白 Blob 记录`;
+			await loadStats();
+		} catch (e) {
+			message = `❌ 清理失败: ${e}`;
+		} finally {
+			isLoading = false;
+		}
+	}
+
 	// 清理过期条目（V3）
 	async function handleCleanupExpired() {
 		isLoading = true;
@@ -124,21 +139,6 @@
 			await loadStats();
 		} catch (e) {
 			message = `❌ 规范化失败: ${e}`;
-		} finally {
-			isLoading = false;
-		}
-	}
-	
-	// 旧版清理无效
-	async function handleLegacyCleanup() {
-		isLoading = true;
-		message = null;
-		try {
-			const deleted = await invoke<number>('cleanup_invalid_thumbnails');
-			message = `✅ 清理完成：删除 ${deleted} 条无效记录`;
-			await loadStats();
-		} catch (e) {
-			message = `❌ 清理失败: ${e}`;
 		} finally {
 			isLoading = false;
 		}
@@ -203,19 +203,31 @@
 		</div>
 	{/if}
 
-	<!-- 清理无效路径 -->
+	<!-- 清理无效记录 -->
 	<div class="space-y-2">
-		<Label class="text-xs font-medium">清理无效路径</Label>
-		<Button
-			variant="outline"
-			size="sm"
-			class="w-full gap-1 text-xs"
-			disabled={isLoading}
-			onclick={handleCleanupInvalidPaths}
-		>
-			<FolderX class="h-3 w-3" />
-			删除不存在的文件记录
-		</Button>
+		<Label class="text-xs font-medium">清理无效记录</Label>
+		<div class="flex flex-wrap gap-2">
+			<Button
+				variant="outline"
+				size="sm"
+				class="gap-1 text-xs flex-1"
+				disabled={isLoading}
+				onclick={handleCleanupInvalidPaths}
+			>
+				<FolderX class="h-3 w-3" />
+				无效路径
+			</Button>
+			<Button
+				variant="outline"
+				size="sm"
+				class="gap-1 text-xs flex-1"
+				disabled={isLoading}
+				onclick={handleCleanupInvalidBlob}
+			>
+				<Trash2 class="h-3 w-3" />
+				空白Blob
+			</Button>
+		</div>
 	</div>
 
 	<!-- 清理过期条目 -->
@@ -296,8 +308,11 @@
 	</div>
 
 	<p class="text-[10px] text-muted-foreground">
-		<strong>清理无效</strong>：删除文件已不存在的缩略图<br/>
+		<strong>无效路径</strong>：删除文件已不存在的缩略图记录<br/>
+		<strong>空白Blob</strong>：删除没有缩略图数据的空条目<br/>
 		<strong>清理过期</strong>：删除超过指定天数的旧记录<br/>
-		<strong>压缩</strong>：回收已删除记录占用的空间
+		<strong>按路径清理</strong>：删除指定目录下的所有缩略图<br/>
+		<strong>压缩</strong>：执行 VACUUM 回收已删除记录占用的空间<br/>
+		<strong>规范路径</strong>：统一数据库中的路径格式
 	</p>
 </div>

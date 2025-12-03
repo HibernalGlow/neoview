@@ -25,6 +25,7 @@ interface LoadItem {
   index: number;
   distanceToCenter: number;
   directionBonus: number;
+  isFolder: boolean; // 文件夹需要单独处理
 }
 
 export class VisibleThumbnailLoader {
@@ -140,9 +141,20 @@ export class VisibleThumbnailLoader {
       return a.directionBonus - b.directionBonus;
     });
     
-    // 5. 批量请求缩略图
-    const paths = itemsToLoad.map(i => i.item.path);
-    this.requestThumbnails(paths);
+    // 5. 分离文件夹和普通文件，分别处理
+    const folderItems = itemsToLoad.filter(i => i.isFolder);
+    const fileItems = itemsToLoad.filter(i => !i.isFolder);
+    
+    // 5.1 普通文件缩略图
+    if (fileItems.length > 0) {
+      const filePaths = fileItems.map(i => i.item.path);
+      this.requestThumbnails(filePaths);
+    }
+    
+    // 5.2 文件夹缩略图（使用专门的加载逻辑）
+    if (folderItems.length > 0) {
+      this.requestFolderThumbnails(folderItems.map(i => i.item));
+    }
     
     // 6. 更新状态
     this.updateState(visibleStart, visibleEnd, scrollDirection);
@@ -188,7 +200,8 @@ export class VisibleThumbnailLoader {
         item,
         index: i,
         distanceToCenter,
-        directionBonus
+        directionBonus,
+        isFolder: item.isDir
       });
     }
     
@@ -238,17 +251,38 @@ export class VisibleThumbnailLoader {
   }
   
   /**
-   * 请求缩略图加载
+   * 请求普通文件缩略图加载
    */
   private requestThumbnails(paths: string[]): void {
     if (paths.length === 0) return;
     
     if (import.meta.env.DEV) {
-      console.debug(`📂 VisibleThumbnailLoader: 请求 ${paths.length} 个缩略图`);
+      console.debug(`📂 VisibleThumbnailLoader: 请求 ${paths.length} 个文件缩略图`);
     }
     
     // 使用 thumbnailManager 的可见项目加载方法
     thumbnailManager.requestVisibleThumbnails(paths, this.currentPath);
+  }
+  
+  /**
+   * 请求文件夹缩略图加载
+   * 文件夹缩略图使用专门的 FolderThumbnailLoader
+   */
+  private requestFolderThumbnails(folders: FsItem[]): void {
+    if (folders.length === 0) return;
+    
+    if (import.meta.env.DEV) {
+      console.debug(`📁 VisibleThumbnailLoader: 请求 ${folders.length} 个文件夹缩略图`);
+    }
+    
+    // 文件夹缩略图策略：
+    // 1. 先从数据库加载（已缓存的）
+    // 2. 未缓存的由 Rust 后端异步扫描生成
+    // 这里只调用 thumbnailManager.getThumbnail，会自动走文件夹缩略图路径
+    for (const folder of folders) {
+      // 只从数据库加载，不主动生成（避免性能问题）
+      thumbnailManager.getThumbnail(folder.path, undefined, false, 'normal');
+    }
   }
   
   /**

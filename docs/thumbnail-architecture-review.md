@@ -369,15 +369,60 @@ const blobKey = await invokeWithTimeout<string | null>(
 ```
 
 #### 3.1.2 文件夹缩略图独立处理 ✅ 已实现
+
+##### NeeView 文件夹缩略图策略分析
+
+NeeView 的文件夹缩略图使用 **反向查找策略**：
+
+1. **不主动扫描文件夹内容**：避免性能问题
+2. **缓存优先**：先从数据库加载已缓存的文件夹缩略图
+3. **反向更新**：当子文件/压缩包生成缩略图时，自动更新父文件夹的缩略图
+4. **后台扫描**：Rust 后端异步扫描文件夹，找到第一个可用图片/压缩包后生成
+
+##### 为什么不能主动扫描文件夹？
+
+1. **性能问题**：文件夹可能有成千上万个子文件
+2. **深度问题**：文件夹可能有很深的嵌套结构
+3. **阻塞 UI**：同步扫描会阻塞主线程
+
+##### 文件夹缩略图加载流程
+
+```
+1. 用户滚动到文件夹项目
+   ↓
+2. VisibleThumbnailLoader 识别为文件夹（isDir=true）
+   ↓
+3. 调用 thumbnailManager.getThumbnail(folderPath, ..., isFolder=true)
+   ↓
+4. 先从数据库加载（loadFromDb）
+   ↓
+5. 如果数据库没有，返回 null（不主动生成）
+   ↓
+6. 后台任务（warmupDirectory）会触发 FolderThumbnailLoader
+   ↓
+7. Rust 后端扫描文件夹，找到第一个图片/压缩包
+   ↓
+8. 生成缩略图并保存到数据库
+   ↓
+9. 通过 onThumbnailReady 回调更新 UI
+```
+
+##### 当前实现
+
 ```typescript
-// 已实现于 FolderThumbnailLoader.ts
-// 文件夹缩略图有独立的并发控制和加载策略
-class FolderThumbnailLoader {
-  private readonly MAX_CONCURRENT = 3;
-  
-  async loadFolderThumbnails(folders: FsItem[], currentPath: string) {
-    // 并发控制，避免阻塞主线程
-    // 使用 Rust 后端的反向查找策略
+// VisibleThumbnailLoader.ts - 分离文件夹和普通文件
+const folderItems = itemsToLoad.filter(i => i.isFolder);
+const fileItems = itemsToLoad.filter(i => !i.isFolder);
+
+// 普通文件：走 requestVisibleThumbnails
+if (fileItems.length > 0) {
+  thumbnailManager.requestVisibleThumbnails(filePaths, currentPath);
+}
+
+// 文件夹：只从数据库加载，不主动生成
+if (folderItems.length > 0) {
+  for (const folder of folders) {
+    thumbnailManager.getThumbnail(folder.path, undefined, false, 'normal');
   }
 }
 ```

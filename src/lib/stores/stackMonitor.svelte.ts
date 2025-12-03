@@ -12,6 +12,8 @@ export interface SlotInfo {
   pageIndex: number | null;
   url: string | null;
   loaded: boolean;
+  /** 是否使用 ImageBitmap（GPU 加速） */
+  hasBitmap: boolean;
   dimensions: { width: number; height: number } | null;
 }
 
@@ -53,6 +55,7 @@ function createEmptySlot(position: 'prev' | 'current' | 'next'): SlotInfo {
     pageIndex: null,
     url: null,
     loaded: false,
+    hasBitmap: false,
     dimensions: null,
   };
 }

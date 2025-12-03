@@ -116,6 +116,7 @@
       pageIndex: prevSlot.pageIndex,
       url: prevSlot.url,
       loaded: !prevSlot.loading && prevSlot.url !== null,
+      hasBitmap: prevSlot.bitmap !== null,
       dimensions: prevSlot.dimensions,
     });
     
@@ -124,6 +125,7 @@
       pageIndex: currentSlot.pageIndex,
       url: currentSlot.url,
       loaded: !currentSlot.loading && currentSlot.url !== null,
+      hasBitmap: currentSlot.bitmap !== null,
       dimensions: currentSlot.dimensions,
     });
     
@@ -132,6 +134,7 @@
       pageIndex: nextSlot.pageIndex,
       url: nextSlot.url,
       loaded: !nextSlot.loading && nextSlot.url !== null,
+      hasBitmap: nextSlot.bitmap !== null,
       dimensions: nextSlot.dimensions,
     });
   }

@@ -788,7 +788,9 @@
 												{stackMonitor.info.slots.prev.pageIndex !== null ? stackMonitor.info.slots.prev.pageIndex + 1 : '-'}
 											</div>
 											<div class="text-[8px] {stackMonitor.info.slots.prev.loaded ? 'text-green-500' : 'text-muted-foreground'}">
-												{stackMonitor.info.slots.prev.loaded ? '✓ 已加载' : '○ 空'}
+												{stackMonitor.info.slots.prev.loaded 
+													? (stackMonitor.info.slots.prev.hasBitmap ? '🎨 Bitmap' : '🖼️ Img') 
+													: '○ 空'}
 											</div>
 										</div>
 										<!-- Current -->
@@ -798,7 +800,9 @@
 												{stackMonitor.info.slots.current.pageIndex !== null ? stackMonitor.info.slots.current.pageIndex + 1 : '-'}
 											</div>
 											<div class="text-[8px] {stackMonitor.info.slots.current.loaded ? 'text-green-500' : 'text-orange-500'}">
-												{stackMonitor.info.slots.current.loaded ? '✓ 已加载' : '⏳ 加载中'}
+												{stackMonitor.info.slots.current.loaded 
+													? (stackMonitor.info.slots.current.hasBitmap ? '🎨 Bitmap' : '🖼️ Img') 
+													: '⏳ 加载中'}
 											</div>
 										</div>
 										<!-- Next -->
@@ -808,7 +812,9 @@
 												{stackMonitor.info.slots.next.pageIndex !== null ? stackMonitor.info.slots.next.pageIndex + 1 : '-'}
 											</div>
 											<div class="text-[8px] {stackMonitor.info.slots.next.loaded ? 'text-green-500' : 'text-muted-foreground'}">
-												{stackMonitor.info.slots.next.loaded ? '✓ 已加载' : '○ 空'}
+												{stackMonitor.info.slots.next.loaded 
+													? (stackMonitor.info.slots.next.hasBitmap ? '🎨 Bitmap' : '🖼️ Img') 
+													: '○ 空'}
 											</div>
 										</div>
 									</div>

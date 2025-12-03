@@ -8,8 +8,6 @@
 	interface Props {
 		/** 卡片标题 */
 		title: string;
-		/** 标题图标（通过 snippet 传入） */
-		icon?: import('svelte').Snippet;
 		/** 是否展开 */
 		expanded?: boolean;
 		/** 排序顺序 */
@@ -22,10 +20,6 @@
 		showSortButtons?: boolean;
 		/** 是否显示折叠按钮 */
 		showCollapseButton?: boolean;
-		/** 右侧额外内容（如开关）*/
-		headerExtra?: import('svelte').Snippet;
-		/** 主内容 */
-		children: import('svelte').Snippet;
 		/** 折叠切换回调 */
 		onToggle?: () => void;
 		/** 上移回调 */
@@ -36,43 +30,32 @@
 
 	let {
 		title,
-		icon,
 		expanded = true,
 		order = 0,
 		canMoveUp = false,
 		canMoveDown = false,
 		showSortButtons = true,
 		showCollapseButton = true,
-		headerExtra,
-		children,
 		onToggle,
 		onMoveUp,
 		onMoveDown
 	}: Props = $props();
-
-	let isHovered = $state(false);
 </script>
 
 <div
-	class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all {isHovered ? 'border-primary/60' : ''}"
+	class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
 	style={order !== undefined ? `order: ${order}` : ''}
-	onmouseenter={() => (isHovered = true)}
-	onmouseleave={() => (isHovered = false)}
 	role="region"
 	aria-label={title}
 >
 	<!-- 头部 -->
 	<div class="flex items-center justify-between">
 		<div class="flex items-center gap-2 font-semibold text-sm">
-			{#if icon}
-				{@render icon()}
-			{/if}
+			<slot name="icon" />
 			<span>{title}</span>
 		</div>
 		<div class="flex items-center gap-2">
-			{#if headerExtra}
-				{@render headerExtra()}
-			{/if}
+			<slot name="headerExtra" />
 			<div class="flex items-center gap-1 text-[10px]">
 				{#if showCollapseButton}
 					<button
@@ -114,6 +97,6 @@
 
 	<!-- 内容区域 -->
 	{#if expanded}
-		{@render children()}
+		<slot />
 	{/if}
 </div>

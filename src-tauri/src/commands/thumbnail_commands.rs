@@ -99,9 +99,12 @@ pub async fn generate_file_thumbnail_new(
         return Err("路径是文件夹，请使用文件夹缩略图逻辑".to_string());
     }
 
-    let state = app.state::<ThumbnailState>();
-    let cache_index = app.state::<CacheIndexState>();
-    let scheduler = app.state::<BackgroundSchedulerState>();
+    let state = app.try_state::<ThumbnailState>()
+        .ok_or_else(|| "缩略图服务未初始化，请先调用 init_thumbnail_manager".to_string())?;
+    let cache_index = app.try_state::<CacheIndexState>()
+        .ok_or_else(|| "缓存索引服务未初始化".to_string())?;
+    let scheduler = app.try_state::<BackgroundSchedulerState>()
+        .ok_or_else(|| "后台调度器未初始化".to_string())?;
     let generator = Arc::clone(&state.generator);
     let job_source = format!("file:{}", file_path);
     let path_for_job = file_path.clone();
@@ -153,9 +156,12 @@ pub async fn generate_archive_thumbnail_new(
     archive_path: String,
 ) -> Result<String, String> {
     println!("🚀 generate_archive_thumbnail_new 被调用: {}", archive_path);
-    let state = app.state::<ThumbnailState>();
-    let cache_index = app.state::<CacheIndexState>();
-    let scheduler = app.state::<BackgroundSchedulerState>();
+    let state = app.try_state::<ThumbnailState>()
+        .ok_or_else(|| "缩略图服务未初始化，请先调用 init_thumbnail_manager".to_string())?;
+    let cache_index = app.try_state::<CacheIndexState>()
+        .ok_or_else(|| "缓存索引服务未初始化".to_string())?;
+    let scheduler = app.try_state::<BackgroundSchedulerState>()
+        .ok_or_else(|| "后台调度器未初始化".to_string())?;
     let generator = Arc::clone(&state.generator);
     println!("📸 开始生成压缩包缩略图: {}", archive_path);
     let path_for_job = archive_path.clone();
@@ -215,9 +221,12 @@ pub async fn generate_video_thumbnail_new(
     use image::ImageFormat;
     use std::path::Path;
 
-    let state = app.state::<ThumbnailState>();
-    let cache_index = app.state::<CacheIndexState>();
-    let scheduler = app.state::<BackgroundSchedulerState>();
+    let state = app.try_state::<ThumbnailState>()
+        .ok_or_else(|| "缩略图服务未初始化，请先调用 init_thumbnail_manager".to_string())?;
+    let cache_index = app.try_state::<CacheIndexState>()
+        .ok_or_else(|| "缓存索引服务未初始化".to_string())?;
+    let scheduler = app.try_state::<BackgroundSchedulerState>()
+        .ok_or_else(|| "后台调度器未初始化".to_string())?;
     let job_source = format!("video:{}", video_path);
     let time = time_seconds.unwrap_or(10.0);
 
@@ -329,9 +338,12 @@ pub async fn batch_preload_thumbnails(
     paths: Vec<String>,
     is_archive: bool,
 ) -> Result<Vec<(String, String)>, String> {
-    let state = app.state::<ThumbnailState>();
-    let cache_index = app.state::<CacheIndexState>();
-    let scheduler = app.state::<BackgroundSchedulerState>();
+    let state = app.try_state::<ThumbnailState>()
+        .ok_or_else(|| "缩略图服务未初始化，请先调用 init_thumbnail_manager".to_string())?;
+    let cache_index = app.try_state::<CacheIndexState>()
+        .ok_or_else(|| "缓存索引服务未初始化".to_string())?;
+    let scheduler = app.try_state::<BackgroundSchedulerState>()
+        .ok_or_else(|| "后台调度器未初始化".to_string())?;
     let generator = Arc::clone(&state.generator);
     let batch_paths = paths.clone();
 

@@ -14,6 +14,8 @@
 use crate::core::thumbnail_service_v3::{CacheStats, ThumbnailServiceV3, ThumbnailServiceConfig};
 use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::thumbnail_generator::{ThumbnailGenerator, ThumbnailGeneratorConfig};
+use crate::core::blob_registry::BlobRegistry;
+use super::thumbnail_commands::ThumbnailState;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
@@ -77,7 +79,7 @@ pub async fn init_thumbnail_service_v3(
     };
     
     // 创建服务
-    let service = Arc::new(ThumbnailServiceV3::new(db, generator, service_config));
+    let service = Arc::new(ThumbnailServiceV3::new(Arc::clone(&db), Arc::clone(&generator), service_config));
     
     // 启动工作线程
     service.start(app.clone());
@@ -85,7 +87,17 @@ pub async fn init_thumbnail_service_v3(
     // 保存到应用状态
     app.manage(ThumbnailServiceV3State { service });
     
-    log_info!("✅ ThumbnailServiceV3 初始化完成");
+    // 同时初始化 ThumbnailState（供 rating 命令使用）
+    // 创建 BlobRegistry（用于管理 blob URL）
+    let blob_registry = Arc::new(BlobRegistry::new(1000)); // 最多缓存 1000 个缩略图
+    
+    app.manage(ThumbnailState {
+        db,
+        generator,
+        blob_registry,
+    });
+    
+    log_info!("✅ ThumbnailServiceV3 + ThumbnailState 初始化完成");
     Ok(())
 }
 

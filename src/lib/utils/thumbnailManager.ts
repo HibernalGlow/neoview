@@ -615,7 +615,7 @@ class ThumbnailManager {
   }
 
   /**
-   * 批量并行生成缩略图（无延迟，直接并行）
+   * 批量并行生成缩略图（无延迟，限制并发）
    * 用于可见区域的缩略图生成
    */
   batchGenerate(paths: string[]): void {
@@ -629,32 +629,46 @@ class ThumbnailManager {
 
     if (toGenerate.length === 0) return;
 
-    // 并行生成，不使用队列延迟
-    toGenerate.forEach(path => {
-      const pathKey = this.buildPathKey(path);
-      const isArchive = /\.(zip|cbz|rar|cbr|7z|cb7)$/i.test(path);
+    // 限制并发数量，避免阻塞 UI
+    const MAX_CONCURRENT = 4;
+    let currentIndex = 0;
+    let activeCount = 0;
 
-      // 标记处理中
-      this.processingTasks.add(pathKey);
+    const processNext = () => {
+      while (activeCount < MAX_CONCURRENT && currentIndex < toGenerate.length) {
+        const path = toGenerate[currentIndex++];
+        const pathKey = this.buildPathKey(path);
+        const isArchive = /\.(zip|cbz|rar|cbr|7z|cb7)$/i.test(path);
 
-      // 异步生成
-      this.generateThumbnail(path, undefined, isArchive)
-        .then(dataUrl => {
-          if (dataUrl && this.onThumbnailReady) {
-            this.onThumbnailReady(path, dataUrl);
-          }
-        })
-        .catch(err => {
-          console.debug('生成缩略图失败:', path, err);
-          this.failedThumbnails.add(pathKey);
-        })
-        .finally(() => {
-          this.processingTasks.delete(pathKey);
-        });
-    });
+        // 标记处理中
+        this.processingTasks.add(pathKey);
+        activeCount++;
+
+        // 异步生成（使用 requestIdleCallback 或 setTimeout 让出主线程）
+        setTimeout(() => {
+          this.generateThumbnail(path, undefined, isArchive)
+            .then(dataUrl => {
+              if (dataUrl && this.onThumbnailReady) {
+                this.onThumbnailReady(path, dataUrl);
+              }
+            })
+            .catch(err => {
+              console.debug('生成缩略图失败:', path, err);
+              this.failedThumbnails.add(pathKey);
+            })
+            .finally(() => {
+              this.processingTasks.delete(pathKey);
+              activeCount--;
+              processNext(); // 处理下一个
+            });
+        }, 0);
+      }
+    };
+
+    processNext();
 
     if (import.meta.env.DEV) {
-      console.log(`🚀 批量并行生成 ${toGenerate.length} 个缩略图`);
+      console.log(`🚀 批量生成 ${toGenerate.length} 个缩略图（并发限制: ${MAX_CONCURRENT}）`);
     }
   }
 

@@ -8,6 +8,7 @@
 	import { get } from 'svelte/store';
 	import { debounce, scheduleIdleTask, getAdaptivePerformanceConfig } from '$lib/utils/performance';
 	import FileItemCard from './FileItemCard.svelte';
+	import ListSlider from './ListSlider.svelte';
 	import { historyStore } from '$lib/stores/history.svelte';
 	import { isVideoFile } from '$lib/utils/videoUtils';
 
@@ -51,6 +52,9 @@
 
 	// 滚动位置缓存
 	const scrollPositions = new Map<string, number>();
+	
+	// 滚动进度（用于 ListSlider）
+	let scrollProgress = $state(0);
 
 	// --- Performance ---
 	const perfConfig = getAdaptivePerformanceConfig();
@@ -59,6 +63,9 @@
 	const itemHeight = $derived(viewMode === 'list' ? 96 : 240);
 	const columns = $derived(viewMode === 'list' ? 1 : viewportWidth >= 640 ? 3 : 2);
 	const rowCount = $derived(Math.ceil(items.length / columns));
+
+	// 是否显示侧边滑块（至少5个项目时显示）
+	const showSlider = $derived(items.length > 5);
 
 	// TanStack Virtual - 按行虚拟化（支持动态高度）
 	const virtualizer = createVirtualizer({
@@ -76,20 +83,6 @@
 
 	// 获取虚拟项目列表（使用 $ 访问 store 值）
 	const virtualItems = $derived($virtualizer.getVirtualItems());
-
-	// 调试日志
-	$effect(() => {
-		console.log('[V2] virtualizer state:', {
-			itemsCount: items.length,
-			virtualItemsCount: virtualItems.length,
-			container: !!container,
-			containerHeight: container?.clientHeight,
-			containerScrollHeight: container?.scrollHeight,
-			totalSize: $virtualizer.getTotalSize(),
-			columns,
-			itemHeight
-		});
-	});
 
 	// Svelte 5 兼容性修复：手动触发 virtualizer 更新
 	// 参考: https://github.com/TanStack/virtual/issues/866
@@ -204,6 +197,9 @@
 		if (currentPath) {
 			scrollPositions.set(currentPath, scrollTop);
 		}
+		// 更新滚动进度
+		const maxScroll = container.scrollHeight - container.clientHeight;
+		scrollProgress = maxScroll > 0 ? scrollTop / maxScroll : 0;
 	}
 
 	function handleItemClick(item: FsItem, index: number) {
@@ -310,17 +306,32 @@
 		if (firstVisible === undefined || lastVisible === undefined) return false;
 		return index >= firstVisible && index <= lastVisible;
 	}
+
+	// ListSlider 滑动跳转
+	function handleSliderChange(index: number) {
+		if (index < 0 || index >= items.length) return;
+		onSelectedIndexChange({ index });
+		dispatch('selectedIndexChange', { index });
+		const rowIndex = Math.floor(index / columns);
+		$virtualizer.scrollToIndex(rowIndex, { align: 'start', behavior: 'auto' });
+	}
+
+	// 计算可见范围（用于 ListSlider）
+	const visibleStart = $derived(virtualItems.length > 0 ? virtualItems[0].index * columns : 0);
+	const visibleEnd = $derived(virtualItems.length > 0 ? Math.min((virtualItems[virtualItems.length - 1].index + 1) * columns - 1, items.length - 1) : 0);
 </script>
 
-<div
-	bind:this={container}
-	class="virtual-list-container flex-1 overflow-y-auto focus:outline-none"
-	tabindex="0"
-	role="listbox"
-	aria-label="文件列表"
-	
-	onkeydown={handleKeydown}
->
+<div class="flex h-full w-full">
+	<!-- 主列表区域 -->
+	<div
+		bind:this={container}
+		class="virtual-list-container flex-1 overflow-y-auto focus:outline-none"
+		tabindex="0"
+		role="listbox"
+		aria-label="文件列表"
+		onscroll={handleScroll}
+		onkeydown={handleKeydown}
+	>
 	<div style="height: {$virtualizer.getTotalSize()}px; position: relative; width: 100%;">
 		{#each virtualItems as virtualRow (virtualRow.index)}
 			<!-- 每行渲染多列 -->
@@ -367,9 +378,30 @@
 						</div>
 					{/if}
 				{/each}
-			</div>
+				</div>
 		{/each}
 	</div>
+	</div>
+
+	<!-- 侧边进度条滑块 -->
+	{#if showSlider}
+		<div class="h-full">
+			<ListSlider
+				totalItems={items.length}
+				currentIndex={selectedIndex >= 0 ? selectedIndex : 0}
+				{visibleStart}
+				{visibleEnd}
+				{scrollProgress}
+				onJumpToIndex={handleSliderChange}
+				onScrollToProgress={(progress) => {
+					if (container) {
+						const maxScroll = container.scrollHeight - container.clientHeight;
+						container.scrollTop = progress * maxScroll;
+					}
+				}}
+			/>
+		</div>
+	{/if}
 </div>
 
 <style>

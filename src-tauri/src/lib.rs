@@ -353,6 +353,14 @@ pub fn run() {
             commands::remove_failed_thumbnail,
             commands::batch_check_failed_thumbnails,
             commands::cleanup_old_failures,
+            // Thumbnail V3 commands (复刻 NeeView 架构)
+            commands::init_thumbnail_service_v3,
+            commands::request_visible_thumbnails_v3,
+            commands::cancel_thumbnail_requests_v3,
+            commands::get_cached_thumbnails_v3,
+            commands::preload_directory_thumbnails_v3,
+            commands::clear_thumbnail_cache_v3,
+            commands::get_thumbnail_cache_stats_v3,
             // EMM JSON 缓存命令
             commands::save_emm_json,
             commands::batch_save_emm_json,

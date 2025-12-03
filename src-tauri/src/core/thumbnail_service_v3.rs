@@ -1,0 +1,557 @@
+//! Thumbnail Service V3
+//! 缩略图服务 V3 - 复刻 NeeView 架构
+//! 
+//! 核心特点：
+//! 1. 后端为主，前端只需通知可见区域 + 接收 blob
+//! 2. 不阻塞前端文件夹浏览
+//! 3. LRU 内存缓存 + SQLite 数据库缓存
+//! 4. 8 线程工作池并行生成
+
+use crate::core::thumbnail_db::ThumbnailDb;
+use crate::core::thumbnail_generator::ThumbnailGenerator;
+use lru::LruCache;
+use serde::Serialize;
+use std::collections::VecDeque;
+use std::num::NonZeroUsize;
+use std::path::Path;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, RwLock};
+use std::thread::{self, JoinHandle};
+use std::time::Duration;
+use tauri::{AppHandle, Emitter};
+
+// 简化的日志宏（替代 tracing）
+macro_rules! log_info {
+    ($($arg:tt)*) => {
+        println!("[INFO] {}", format!($($arg)*));
+    };
+}
+
+macro_rules! log_debug {
+    ($($arg:tt)*) => {
+        if cfg!(debug_assertions) {
+            println!("[DEBUG] {}", format!($($arg)*));
+        }
+    };
+}
+
+/// 配置参数
+#[derive(Clone)]
+pub struct ThumbnailServiceConfig {
+    /// 文件夹搜索深度
+    pub folder_search_depth: u32,
+    /// LRU 内存缓存大小
+    pub memory_cache_size: usize,
+    /// 后台工作线程数
+    pub worker_threads: usize,
+    /// 缩略图尺寸
+    pub thumbnail_size: u32,
+    /// 数据库延迟保存时间 (毫秒)
+    pub db_save_delay_ms: u64,
+}
+
+impl Default for ThumbnailServiceConfig {
+    fn default() -> Self {
+        Self {
+            folder_search_depth: 2,
+            memory_cache_size: 1024,
+            worker_threads: 8,
+            thumbnail_size: 256,
+            db_save_delay_ms: 2000,
+        }
+    }
+}
+
+/// 生成任务
+#[derive(Clone)]
+struct GenerateTask {
+    path: String,
+    directory: String,
+    is_folder: bool,
+    priority: usize,
+}
+
+/// 缩略图就绪事件 payload
+#[derive(Clone, Serialize)]
+pub struct ThumbnailReadyPayload {
+    pub path: String,
+    pub blob: Vec<u8>,
+}
+
+/// 缓存统计
+#[derive(Clone, Serialize)]
+pub struct CacheStats {
+    pub memory_count: usize,
+    pub memory_bytes: usize,
+    pub database_count: i64,
+    pub database_bytes: i64,
+    pub queue_length: usize,
+    pub active_workers: usize,
+}
+
+/// 缩略图服务 V3
+pub struct ThumbnailServiceV3 {
+    /// 配置
+    config: ThumbnailServiceConfig,
+    
+    /// 内存缓存 (LRU)
+    memory_cache: Arc<RwLock<LruCache<String, Vec<u8>>>>,
+    
+    /// 内存缓存大小（字节）
+    memory_cache_bytes: Arc<AtomicUsize>,
+    
+    /// 数据库
+    db: Arc<ThumbnailDb>,
+    
+    /// 缩略图生成器
+    generator: Arc<Mutex<ThumbnailGenerator>>,
+    
+    /// 生成任务队列
+    task_queue: Arc<Mutex<VecDeque<GenerateTask>>>,
+    
+    /// 当前目录
+    current_dir: Arc<RwLock<String>>,
+    
+    /// 是否正在运行
+    running: Arc<AtomicBool>,
+    
+    /// 活跃工作线程数
+    active_workers: Arc<AtomicUsize>,
+    
+    /// 工作线程句柄
+    workers: Arc<Mutex<Vec<JoinHandle<()>>>>,
+}
+
+impl ThumbnailServiceV3 {
+    /// 创建新的缩略图服务
+    pub fn new(
+        db: Arc<ThumbnailDb>,
+        generator: Arc<Mutex<ThumbnailGenerator>>,
+        config: ThumbnailServiceConfig,
+    ) -> Self {
+        let cache_size = NonZeroUsize::new(config.memory_cache_size).unwrap_or(NonZeroUsize::new(1024).unwrap());
+        
+        Self {
+            config,
+            memory_cache: Arc::new(RwLock::new(LruCache::new(cache_size))),
+            memory_cache_bytes: Arc::new(AtomicUsize::new(0)),
+            db,
+            generator,
+            task_queue: Arc::new(Mutex::new(VecDeque::new())),
+            current_dir: Arc::new(RwLock::new(String::new())),
+            running: Arc::new(AtomicBool::new(false)),
+            active_workers: Arc::new(AtomicUsize::new(0)),
+            workers: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+    
+    /// 启动工作线程
+    pub fn start(&self, app: AppHandle) {
+        if self.running.swap(true, Ordering::SeqCst) {
+            return; // 已经在运行
+        }
+        
+        let mut workers = self.workers.lock().unwrap();
+        
+        for i in 0..self.config.worker_threads {
+            let app = app.clone();
+            let task_queue = Arc::clone(&self.task_queue);
+            let current_dir = Arc::clone(&self.current_dir);
+            let running = Arc::clone(&self.running);
+            let active_workers = Arc::clone(&self.active_workers);
+            let memory_cache: Arc<RwLock<LruCache<String, Vec<u8>>>> = Arc::clone(&self.memory_cache);
+            let memory_cache_bytes: Arc<AtomicUsize> = Arc::clone(&self.memory_cache_bytes);
+            let db = Arc::clone(&self.db);
+            let generator = Arc::clone(&self.generator);
+            let folder_depth = self.config.folder_search_depth;
+            
+            let handle = thread::spawn(move || {
+                log_debug!("🔧 Worker {} started", i);
+                
+                while running.load(Ordering::SeqCst) {
+                    // 获取任务
+                    let task = {
+                        let mut queue = task_queue.lock().unwrap();
+                        queue.pop_front()
+                    };
+                    
+                    if let Some(task) = task {
+                        // 检查是否应该取消（目录已切换）
+                        let current = current_dir.read().unwrap().clone();
+                        if !task.directory.is_empty() && task.directory != current {
+                            log_debug!("⏭️ 跳过非当前目录任务: {}", task.path);
+                            continue;
+                        }
+                        
+                        active_workers.fetch_add(1, Ordering::SeqCst);
+                        
+                        // 生成缩略图
+                        let result = if task.is_folder {
+                            Self::generate_folder_thumbnail_static(
+                                &generator,
+                                &db,
+                                &task.path,
+                                folder_depth,
+                            )
+                        } else {
+                            Self::generate_file_thumbnail_static(&generator, &task.path)
+                        };
+                        
+                        match result {
+                            Ok(blob) => {
+                                // 更新内存缓存
+                                {
+                                    let mut cache = memory_cache.write().unwrap();
+                                    let blob_size = blob.len();
+                                    cache.put(task.path.clone(), blob.clone());
+                                    memory_cache_bytes.fetch_add(blob_size, Ordering::SeqCst);
+                                }
+                                
+                                // 发送到前端（不阻塞）
+                                let _ = app.emit("thumbnail-ready", ThumbnailReadyPayload {
+                                    path: task.path.clone(),
+                                    blob,
+                                });
+                            }
+                            Err(e) => {
+                                log_debug!("⚠️ 生成缩略图失败: {} - {}", task.path, e);
+                            }
+                        }
+                        
+                        active_workers.fetch_sub(1, Ordering::SeqCst);
+                    } else {
+                        // 队列为空，短暂休眠
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                }
+                
+                log_debug!("🔧 Worker {} stopped", i);
+            });
+            
+            workers.push(handle);
+        }
+        
+        log_info!("✅ ThumbnailServiceV3 started with {} workers", self.config.worker_threads);
+    }
+    
+    /// 停止工作线程
+    pub fn stop(&self) {
+        self.running.store(false, Ordering::SeqCst);
+        
+        // 等待工作线程结束
+        let mut workers = self.workers.lock().unwrap();
+        for handle in workers.drain(..) {
+            let _ = handle.join();
+        }
+        
+        log_info!("🛑 ThumbnailServiceV3 stopped");
+    }
+    
+    /// 请求可见区域缩略图（核心方法，不阻塞）
+    pub fn request_visible_thumbnails(
+        &self,
+        app: &AppHandle,
+        paths: Vec<String>,
+        current_dir: String,
+    ) {
+        // 更新当前目录
+        {
+            let mut dir = self.current_dir.write().unwrap();
+            if *dir != current_dir {
+                // 目录切换，清空队列
+                let mut queue = self.task_queue.lock().unwrap();
+                let old_len = queue.len();
+                queue.clear();
+                log_debug!("📂 目录切换: {} -> {} (清空 {} 个任务)", *dir, current_dir, old_len);
+                *dir = current_dir.clone();
+            }
+        }
+        
+        // 处理每个路径
+        for (priority, path) in paths.iter().enumerate() {
+            // 1. 检查内存缓存
+            if let Some(blob) = self.get_from_memory_cache(path) {
+                // 直接发送到前端
+                let _ = app.emit("thumbnail-ready", ThumbnailReadyPayload {
+                    path: path.clone(),
+                    blob,
+                });
+                continue;
+            }
+            
+            // 2. 异步检查数据库缓存（不阻塞）
+            let db = Arc::clone(&self.db);
+            let app = app.clone();
+            let path = path.clone();
+            let memory_cache: Arc<RwLock<LruCache<String, Vec<u8>>>> = Arc::clone(&self.memory_cache);
+            let memory_cache_bytes: Arc<AtomicUsize> = Arc::clone(&self.memory_cache_bytes);
+            let task_queue = Arc::clone(&self.task_queue);
+            let current_dir = current_dir.clone();
+            
+            // 使用 tokio spawn 不阻塞主线程
+            tokio::spawn(async move {
+                // 尝试从数据库加载
+                // 自动判断类别
+                let category = if std::path::Path::new(&path).is_dir() { "folder" } else { "file" };
+                match db.load_thumbnail_by_key_and_category(&path, category) {
+                    Ok(Some(blob)) => {
+                        // 命中数据库缓存
+                        // 更新内存缓存
+                        {
+                            let mut cache = memory_cache.write().unwrap();
+                            let blob_size = blob.len();
+                            cache.put(path.clone(), blob.clone());
+                            memory_cache_bytes.fetch_add(blob_size, Ordering::SeqCst);
+                        }
+                        
+                        // 发送到前端
+                        let _ = app.emit("thumbnail-ready", ThumbnailReadyPayload {
+                            path: path.clone(),
+                            blob,
+                        });
+                    }
+                    Ok(None) => {
+                        // 未命中，入队生成任务
+                        let is_folder = Path::new(&path).is_dir();
+                        let mut queue = task_queue.lock().unwrap();
+                        queue.push_back(GenerateTask {
+                            path,
+                            directory: current_dir,
+                            is_folder,
+                            priority,
+                        });
+                    }
+                    Err(e) => {
+                        log_debug!("⚠️ 数据库加载失败: {} - {}", path, e);
+                        // 入队生成任务
+                        let is_folder = Path::new(&path).is_dir();
+                        let mut queue = task_queue.lock().unwrap();
+                        queue.push_back(GenerateTask {
+                            path,
+                            directory: current_dir,
+                            is_folder,
+                            priority,
+                        });
+                    }
+                }
+            });
+        }
+    }
+    
+    /// 取消指定目录的请求
+    pub fn cancel_requests(&self, dir: &str) {
+        let mut queue = self.task_queue.lock().unwrap();
+        let before = queue.len();
+        queue.retain(|task| task.directory != dir);
+        let after = queue.len();
+        log_debug!("🚫 取消 {} 个任务 (目录: {})", before - after, dir);
+    }
+    
+    /// 从内存缓存获取
+    fn get_from_memory_cache(&self, path: &str) -> Option<Vec<u8>> {
+        let mut cache = self.memory_cache.write().unwrap();
+        cache.get(path).cloned()
+    }
+    
+    /// 直接从缓存获取（同步）
+    pub fn get_cached_thumbnails(&self, paths: Vec<String>) -> Vec<(String, Option<Vec<u8>>)> {
+        let mut results = Vec::with_capacity(paths.len());
+        
+        for path in paths {
+            // 先检查内存缓存
+            let blob = self.get_from_memory_cache(&path);
+            if blob.is_some() {
+                results.push((path, blob));
+                continue;
+            }
+            
+            // 再检查数据库缓存
+            let category = if std::path::Path::new(&path).is_dir() { "folder" } else { "file" };
+            match self.db.load_thumbnail_by_key_and_category(&path, category) {
+                Ok(Some(blob)) => {
+                    // 更新内存缓存
+                    {
+                        let mut cache = self.memory_cache.write().unwrap();
+                        let blob_size = blob.len();
+                        cache.put(path.clone(), blob.clone());
+                        self.memory_cache_bytes.fetch_add(blob_size, Ordering::SeqCst);
+                    }
+                    results.push((path, Some(blob)));
+                }
+                _ => {
+                    results.push((path, None));
+                }
+            }
+        }
+        
+        results
+    }
+    
+    /// 获取缓存统计
+    pub fn get_cache_stats(&self) -> CacheStats {
+        let memory_count = self.memory_cache.read().unwrap().len();
+        let memory_bytes = self.memory_cache_bytes.load(Ordering::SeqCst);
+        let queue_length = self.task_queue.lock().unwrap().len();
+        let active_workers = self.active_workers.load(Ordering::SeqCst);
+        
+        // 从数据库获取统计
+        let (database_count, database_bytes) = self.db.get_maintenance_stats()
+            .map(|(total, _, _)| (total as i64, 0i64)) // 简化，只返回条目数
+            .unwrap_or((0, 0));
+        
+        CacheStats {
+            memory_count,
+            memory_bytes,
+            database_count,
+            database_bytes,
+            queue_length,
+            active_workers,
+        }
+    }
+    
+    /// 清除缓存
+    pub fn clear_cache(&self, scope: &str) {
+        match scope {
+            "memory" => {
+                let mut cache = self.memory_cache.write().unwrap();
+                cache.clear();
+                self.memory_cache_bytes.store(0, Ordering::SeqCst);
+                log_info!("🧹 内存缓存已清除");
+            }
+            "database" => {
+                // 数据库清除：删除所有记录
+                // TODO: 添加 ThumbnailDb::clear_all() 方法
+                log_info!("🧹 数据库缓存清除待实现（需要手动删除数据库文件）");
+            }
+            "all" | _ => {
+                // 清除内存缓存
+                {
+                    let mut cache = self.memory_cache.write().unwrap();
+                    cache.clear();
+                    self.memory_cache_bytes.store(0, Ordering::SeqCst);
+                }
+                log_info!("🧹 内存缓存已清除");
+            }
+        }
+    }
+    
+    /// 生成文件缩略图（静态方法，用于工作线程）
+    fn generate_file_thumbnail_static(
+        generator: &Arc<Mutex<ThumbnailGenerator>>,
+        path: &str,
+    ) -> Result<Vec<u8>, String> {
+        let gen = generator.lock().map_err(|e| format!("获取生成器锁失败: {}", e))?;
+        gen.generate_file_thumbnail(path)
+    }
+    
+    /// 生成文件夹缩略图（复刻 NeeView 策略）
+    fn generate_folder_thumbnail_static(
+        generator: &Arc<Mutex<ThumbnailGenerator>>,
+        db: &Arc<ThumbnailDb>,
+        folder_path: &str,
+        max_depth: u32,
+    ) -> Result<Vec<u8>, String> {
+        // 1. 先尝试从数据库加载（可能已有缓存）
+        if let Ok(Some(blob)) = db.load_thumbnail_by_key_and_category(folder_path, "folder") {
+            return Ok(blob);
+        }
+        
+        // 2. 查找封面图片
+        if let Some(cover) = Self::find_cover_image(folder_path)? {
+            let gen = generator.lock().map_err(|e| format!("获取生成器锁失败: {}", e))?;
+            let blob = gen.generate_file_thumbnail(&cover)?;
+            
+            // 保存到数据库
+            let _ = db.save_thumbnail_with_category(folder_path, 0, 0, &blob, Some("folder"));
+            
+            return Ok(blob);
+        }
+        
+        // 3. 递归查找第一张图片/压缩包
+        if let Some(first) = Self::find_first_image_recursive(folder_path, max_depth)? {
+            let gen = generator.lock().map_err(|e| format!("获取生成器锁失败: {}", e))?;
+            let blob = gen.generate_file_thumbnail(&first)?;
+            
+            // 保存到数据库
+            let _ = db.save_thumbnail_with_category(folder_path, 0, 0, &blob, Some("folder"));
+            
+            return Ok(blob);
+        }
+        
+        // 4. 返回错误（没有找到可用的图片）
+        Err("文件夹中没有找到图片".to_string())
+    }
+    
+    /// 查找封面图片（cover.*, folder.*, thumb.*）
+    fn find_cover_image(folder: &str) -> Result<Option<String>, String> {
+        let patterns = ["cover", "folder", "thumb"];
+        let image_exts = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "avif", "jxl"];
+        
+        let entries = std::fs::read_dir(folder)
+            .map_err(|e| format!("读取目录失败: {}", e))?;
+        
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            
+            for pattern in &patterns {
+                if name.starts_with(pattern) {
+                    // 检查是否是图片
+                    if let Some(ext) = Path::new(&name).extension() {
+                        let ext = ext.to_string_lossy().to_lowercase();
+                        if image_exts.contains(&ext.as_str()) {
+                            return Ok(Some(entry.path().to_string_lossy().to_string()));
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(None)
+    }
+    
+    /// 递归查找第一张图片/压缩包
+    fn find_first_image_recursive(folder: &str, depth: u32) -> Result<Option<String>, String> {
+        if depth == 0 {
+            return Ok(None);
+        }
+        
+        let image_exts = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "avif", "jxl"];
+        let archive_exts = ["zip", "cbz", "rar", "cbr", "7z", "cb7"];
+        
+        let entries = std::fs::read_dir(folder)
+            .map_err(|e| format!("读取目录失败: {}", e))?;
+        
+        // 收集所有条目并排序
+        let mut sorted_entries: Vec<_> = entries.flatten().collect();
+        sorted_entries.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+        
+        for entry in sorted_entries {
+            let path = entry.path();
+            
+            if path.is_file() {
+                if let Some(ext) = path.extension() {
+                    let ext = ext.to_string_lossy().to_lowercase();
+                    if image_exts.contains(&ext.as_str()) || archive_exts.contains(&ext.as_str()) {
+                        return Ok(Some(path.to_string_lossy().to_string()));
+                    }
+                }
+            } else if path.is_dir() {
+                // 递归子目录
+                if let Ok(Some(found)) = Self::find_first_image_recursive(
+                    &path.to_string_lossy(),
+                    depth - 1,
+                ) {
+                    return Ok(Some(found));
+                }
+            }
+        }
+        
+        Ok(None)
+    }
+}
+
+impl Drop for ThumbnailServiceV3 {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}

@@ -615,6 +615,38 @@ class ThumbnailManager {
   }
 
   /**
+   * 预加载文件夹的所有缩略图记录到内存
+   * 在进入新文件夹时调用，一次性查询数据库
+   */
+  async preloadFolder(folderPath: string, allPaths: string[]): Promise<void> {
+    if (allPaths.length === 0) return;
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const response = await invoke<Array<[string, string]>>('batch_load_thumbnails_from_db', {
+        paths: allPaths,
+      });
+
+      // 将结果存入内存缓存
+      for (const [path, dataUrl] of response) {
+        const normalizedKey = normalizePathKey(path);
+        // 存入 LRU 缓存
+        this.lruCache.set(normalizedKey, dataUrl);
+        // 触发回调更新 UI
+        if (this.onThumbnailReady) {
+          this.onThumbnailReady(path, dataUrl);
+        }
+      }
+
+      if (import.meta.env.DEV) {
+        console.log(`📂 预加载文件夹缩略图: ${response.length}/${allPaths.length} 已缓存`);
+      }
+    } catch (error) {
+      console.debug('预加载文件夹缩略图失败:', error);
+    }
+  }
+
+  /**
    * 批量并行生成缩略图（无延迟，限制并发）
    * 用于可见区域的缩略图生成
    */

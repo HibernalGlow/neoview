@@ -236,17 +236,15 @@ impl ThumbnailServiceV3 {
                         
                         match result {
                             Ok(blob) => {
-                                // 更新内存缓存
-                                {
-                                    let mut cache = memory_cache.write().unwrap();
+                                // 更新内存缓存（安全处理锁）
+                                if let Ok(mut cache) = memory_cache.write() {
                                     let blob_size = blob.len();
                                     cache.put(task.path.clone(), blob.clone());
                                     memory_cache_bytes.fetch_add(blob_size, Ordering::SeqCst);
                                 }
                                 
-                                // 更新数据库索引
-                                {
-                                    let mut index = db_index.write().unwrap();
+                                // 更新数据库索引（安全处理锁）
+                                if let Ok(mut index) = db_index.write() {
                                     index.insert(task.path.clone());
                                 }
                                 
@@ -258,9 +256,8 @@ impl ThumbnailServiceV3 {
                             }
                             Err(e) => {
                                 log_debug!("⚠️ 生成缩略图失败: {} - {}", task.path, e);
-                                // 更新失败索引（避免重复尝试）
-                                {
-                                    let mut index = failed_index.write().unwrap();
+                                // 更新失败索引（安全处理锁）
+                                if let Ok(mut index) = failed_index.write() {
                                     index.insert(task.path.clone());
                                 }
                             }
@@ -352,9 +349,8 @@ impl ThumbnailServiceV3 {
                 tokio::spawn(async move {
                     let category = if std::path::Path::new(&path).is_dir() { "folder" } else { "file" };
                     if let Ok(Some(blob)) = db.load_thumbnail_by_key_and_category(&path, category) {
-                        // 更新内存缓存
-                        {
-                            let mut cache = memory_cache.write().unwrap();
+                        // 更新内存缓存（安全处理锁）
+                        if let Ok(mut cache) = memory_cache.write() {
                             let blob_size = blob.len();
                             cache.put(path.clone(), blob.clone());
                             memory_cache_bytes.fetch_add(blob_size, Ordering::SeqCst);

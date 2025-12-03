@@ -1374,7 +1374,7 @@ let lastBookPath: string | null = null;
 
 	<!-- 全局开关 -->
 	<div
-		class="rounded-lg border bg-muted/10 p-3 space-y-3"
+		class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
 		style={`order: ${getUpscaleCardOrder('global')}`}
 	>
 		<div class="flex items-center justify-between">
@@ -1430,7 +1430,7 @@ let lastBookPath: string | null = null;
 
 	<!-- 修改参数 -->
 	<div
-		class="rounded-lg border bg-muted/10 p-3 space-y-3"
+		class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
 		style={`order: ${getUpscaleCardOrder('model')}`}
 	>
 		<div class="flex items-center justify-between">
@@ -1488,7 +1488,7 @@ let lastBookPath: string | null = null;
 
 	<!-- 当前图片信息 -->
 	<div
-		class="rounded-lg border bg-muted/10 p-3 space-y-3"
+		class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
 		style={`order: ${getUpscaleCardOrder('current')}`}
 	>
 		<div class="flex items-center justify-between">
@@ -1550,7 +1550,7 @@ let lastBookPath: string | null = null;
 
 	<!-- 条件管理 -->
 	<div
-		class="rounded-lg border bg-muted/10 p-3 space-y-3"
+		class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
 		style={`order: ${getUpscaleCardOrder('conditions')}`}
 	>
 		<div class="flex items-center justify-between">
@@ -1609,7 +1609,7 @@ let lastBookPath: string | null = null;
 
 	<!-- 缓存管理 -->
 	<div
-		class="rounded-lg border bg-muted/10 p-3 space-y-3"
+		class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
 		style={`order: ${getUpscaleCardOrder('cache')}`}
 	>
 		<div class="flex items-center justify-between">
@@ -1659,7 +1659,7 @@ let lastBookPath: string | null = null;
 
 	<!-- 预览控制 -->
 	<div
-		class="rounded-lg border bg-muted/10 p-3 space-y-3"
+		class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
 		style={`order: ${getUpscaleCardOrder('previewControls')}`}
 	>
 		<div class="flex items-center justify-between">
@@ -1716,7 +1716,7 @@ let lastBookPath: string | null = null;
 	<!-- 预览区域 -->
 	{#if showOriginalPreview || showUpscaledPreview}
 		<div
-			class="rounded-lg border bg-muted/10 p-3 space-y-3"
+			class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
 			style={`order: ${getUpscaleCardOrder('preview')}`}
 		>
 			<div class="flex items-center justify-between">

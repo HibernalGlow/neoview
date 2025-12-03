@@ -420,7 +420,7 @@
 			<div class="p-4 flex flex-col space-y-3">
 				<!-- 书籍信息 -->
 				{#if bookInfo}
-					<div class="rounded-lg border bg-muted/10 p-3 space-y-3" style={`order: ${getInfoCardOrder('bookInfo')}`}>
+					<div class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60" style={`order: ${getInfoCardOrder('bookInfo')}`}>
 						<div class="flex items-center justify-between">
 							<div class="flex items-center gap-2 font-semibold text-sm">
 								<FileText class="h-4 w-4" />
@@ -516,7 +516,7 @@
 
 					<!-- 切换提示设置 -->
 					<div
-						class="rounded-lg border bg-muted/10 p-3 space-y-3"
+						class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
 						style={`order: ${getInfoCardOrder('switchToast')}`}
 					>
 						<div class="flex items-center justify-between">
@@ -728,7 +728,7 @@
 					</div>
 
 					<!-- 信息悬浮窗 -->
-					<div class="rounded-lg border bg-muted/10 p-3 space-y-3" style={`order: ${getInfoCardOrder('infoOverlay')}`}>
+					<div class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60" style={`order: ${getInfoCardOrder('infoOverlay')}`}>
 						<div class="flex items-center justify-between">
 							<div class="flex items-center gap-2 font-semibold text-sm">
 								<Info class="h-4 w-4" />
@@ -858,7 +858,7 @@
 				{/if}
 				{#if imageInfo}
 					<!-- 图像信息 -->
-					<div class="rounded-lg border bg-muted/10 p-3 space-y-3" style={`order: ${getInfoCardOrder('imageInfo')}`}>
+					<div class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60" style={`order: ${getInfoCardOrder('imageInfo')}`}>
 						<div class="flex items-center justify-between">
 							<div class="flex items-center gap-2 font-semibold text-sm">
 								<ImageIcon class="h-4 w-4" />
@@ -929,7 +929,7 @@
 					</div>
 
 					<!-- 存储信息 -->
-					<div class="rounded-lg border bg-muted/10 p-3 space-y-3 flex flex-col" style={`order: ${getInfoCardOrder('storage')}`}>
+					<div class="rounded-lg border bg-muted/10 p-3 space-y-3 flex flex-col transition-all hover:border-primary/60" style={`order: ${getInfoCardOrder('storage')}`}>
 						<div class="flex items-center justify-between">
 							<div class="flex items-center gap-2 font-semibold text-sm">
 								<HardDrive class="h-4 w-4" />
@@ -986,7 +986,7 @@
 					</div>
 
 					<!-- 时间信息 -->
-					<div class="rounded-lg border bg-muted/10 p-3 space-y-3 flex flex-col" style={`order: ${getInfoCardOrder('time')}`}>
+					<div class="rounded-lg border bg-muted/10 p-3 space-y-3 flex flex-col transition-all hover:border-primary/60" style={`order: ${getInfoCardOrder('time')}`}>
 						<div class="flex items-center justify-between">
 							<div class="flex items-center gap-2 font-semibold text-sm">
 								<Calendar class="h-4 w-4" />

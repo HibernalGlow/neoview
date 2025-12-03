@@ -331,7 +331,7 @@
 				{#each cardOrder as cardId (cardId)}
 					{@const meta = CARD_META[cardId]}
 					{@const isCollapsed = collapsed[cardId]}
-					<Card.Root class="group relative rounded-lg border bg-muted/10 transition-all">
+					<Card.Root class="group relative rounded-lg border bg-muted/10 transition-all hover:border-primary/60">
 						<Card.Header class="flex flex-row items-center justify-between space-y-0 px-3 py-2">
 						<div class="flex items-center gap-3">
 							<div class="flex items-center gap-1">

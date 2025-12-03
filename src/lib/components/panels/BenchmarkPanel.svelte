@@ -555,7 +555,7 @@
 		<div class="flex flex-col gap-3">
 			<!-- 文件选择卡片 -->
 			<div
-				class="rounded-lg border bg-muted/10 p-3 space-y-3"
+				class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
 				style={`order: ${getCardOrder('files')}`}
 			>
 				<div class="flex items-center justify-between">
@@ -628,7 +628,7 @@
 
 			<!-- 详细对比测试卡片 -->
 			<div
-				class="rounded-lg border bg-muted/10 p-3 space-y-3"
+				class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
 				style={`order: ${getCardOrder('detailed')}`}
 			>
 				<div class="flex items-center justify-between">
@@ -740,7 +740,7 @@
 
 			<!-- 加载模式对比卡片 -->
 			<div
-				class="rounded-lg border bg-muted/10 p-3 space-y-3"
+				class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
 				style={`order: ${getCardOrder('loadmode')}`}
 			>
 				<div class="flex items-center justify-between">
@@ -839,7 +839,7 @@
 
 			<!-- 压缩包批量测试卡片 -->
 			<div
-				class="rounded-lg border bg-muted/10 p-3 space-y-3"
+				class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
 				style={`order: ${getCardOrder('archives')}`}
 			>
 				<div class="flex items-center justify-between">
@@ -937,7 +937,7 @@
 
 			<!-- 真实场景测试卡片 -->
 			<div
-				class="rounded-lg border bg-muted/10 p-3 space-y-3"
+				class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
 				style={`order: ${getCardOrder('realworld')}`}
 			>
 				<div class="flex items-center justify-between">
@@ -1033,7 +1033,7 @@
 
 			<!-- 测试结果卡片 -->
 			<div
-				class="rounded-lg border bg-muted/10 p-3 space-y-3"
+				class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
 				style={`order: ${getCardOrder('results')}`}
 			>
 				<div class="flex items-center justify-between">
@@ -1110,7 +1110,7 @@
 
 			<!-- 性能统计卡片 -->
 			<div
-				class="rounded-lg border bg-muted/10 p-3 space-y-3"
+				class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
 				style={`order: ${getCardOrder('summary')}`}
 			>
 				<div class="flex items-center justify-between">

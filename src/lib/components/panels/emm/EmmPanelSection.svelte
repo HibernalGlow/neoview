@@ -830,7 +830,7 @@ interface ExtendedFavoriteTag extends FavoriteTag {
 
 <div class="flex flex-col gap-3">
 	<!-- EMM 配置卡片（始终显示） -->
-	<div class="rounded-lg border bg-muted/10 p-3 space-y-3">
+	<div class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60">
 		<div class="flex items-center justify-between">
 			<div class="flex items-center gap-2 font-semibold text-sm">
 				<Settings class="h-4 w-4" />
@@ -865,7 +865,7 @@ interface ExtendedFavoriteTag extends FavoriteTag {
 	{#if bookInfo}
 		<div class="flex flex-col gap-3">
 		{#if allTags().length > 0}
-			<div class="rounded-lg border bg-muted/10 p-3 space-y-3" style={`order: ${getEmmCardOrder('tags')}`}>
+			<div class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60" style={`order: ${getEmmCardOrder('tags')}`}>
 				<div class="flex items-center justify-between gap-2">
 					<div class="flex items-center gap-2 font-semibold text-sm">
 						<Tag class="h-4 w-4" />
@@ -1021,7 +1021,7 @@ interface ExtendedFavoriteTag extends FavoriteTag {
 			</div>
 		{/if}
 
-		<div class="rounded-lg border bg-muted/10 p-3 space-y-3" style={`order: ${getEmmCardOrder('config')}`}>
+		<div class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60" style={`order: ${getEmmCardOrder('config')}`}>
 			<div class="flex items-center justify-between">
 				<div class="flex items-center gap-2 font-semibold text-sm">
 					<Settings class="h-4 w-4" />
@@ -1270,7 +1270,7 @@ interface ExtendedFavoriteTag extends FavoriteTag {
 		</div>
 
 		{#if emmRawEntries().length > 0}
-			<div class="rounded-lg border bg-muted/10 p-3 space-y-2" style={`order: ${getEmmCardOrder('raw')}`}>
+			<div class="rounded-lg border bg-muted/10 p-3 space-y-2 transition-all hover:border-primary/60" style={`order: ${getEmmCardOrder('raw')}`}>
 				<div class="flex items-center justify-between">
 					<div class="flex items-center gap-2 font-semibold text-sm">
 						<Settings class="h-4 w-4" />
@@ -1424,7 +1424,7 @@ interface ExtendedFavoriteTag extends FavoriteTag {
 			</div>
 		{/if}
 
-		<div class="rounded-lg border bg-muted/10 p-3 space-y-3" style={`order: ${getEmmCardOrder('bookSettings')}`}>
+		<div class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60" style={`order: ${getEmmCardOrder('bookSettings')}`}>
 			<div class="flex items-center justify-between">
 				<div class="flex items-center gap-2 font-semibold text-sm">
 					<Tag class="h-4 w-4" />

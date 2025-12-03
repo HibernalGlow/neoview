@@ -93,7 +93,7 @@
 	const canSync = $derived(validation && isAllConfigValid(validation) && !isSyncing);
 </script>
 
-<div class="rounded-lg border bg-muted/10 p-3 space-y-3">
+<div class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60">
 	<div class="flex items-center justify-between">
 		<div class="flex items-center gap-2 font-semibold text-sm">
 			<FolderSync class="h-4 w-4" />

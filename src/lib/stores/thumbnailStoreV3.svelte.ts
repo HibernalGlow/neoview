@@ -24,6 +24,7 @@ let initialized = $state(false);
 
 // 事件监听器
 let unlistenThumbnailReady: UnlistenFn | null = null;
+let unlistenThumbnailBatchReady: UnlistenFn | null = null;
 
 // 节流相关
 const pendingPaths: string[] = [];
@@ -34,6 +35,11 @@ const THROTTLE_MS = 50; // 50ms 节流
 interface ThumbnailReadyPayload {
   path: string;
   blob: number[]; // Vec<u8> 转为 number[]
+}
+
+// 批量缩略图就绪事件 payload
+interface ThumbnailBatchReadyPayload {
+  items: ThumbnailReadyPayload[];
 }
 
 // 缓存统计
@@ -62,23 +68,36 @@ export async function initThumbnailServiceV3(
       size,
     });
 
-    // 监听缩略图就绪事件
+    // 处理单个缩略图的公共函数
+    const processThumbnail = (path: string, blob: number[]) => {
+      // 转换为 Blob URL
+      const blobUrl = URL.createObjectURL(
+        new Blob([new Uint8Array(blob)], { type: 'image/webp' })
+      );
+
+      // 存储到本地缓存
+      thumbnails.set(path, blobUrl);
+
+      // 同步到 fileBrowserStore（供 FileItemCard 使用）
+      const key = toRelativeKey(path);
+      fileBrowserStore.addThumbnail(key, blobUrl);
+    };
+
+    // 监听批量缩略图就绪事件（优化：一次处理多个）
+    unlistenThumbnailBatchReady = await listen<ThumbnailBatchReadyPayload>(
+      'thumbnail-batch-ready',
+      (event) => {
+        for (const item of event.payload.items) {
+          processThumbnail(item.path, item.blob);
+        }
+      }
+    );
+
+    // 监听缩略图就绪事件（兼容单个）
     unlistenThumbnailReady = await listen<ThumbnailReadyPayload>(
       'thumbnail-ready',
       (event) => {
-        const { path, blob } = event.payload;
-
-        // 转换为 Blob URL
-        const blobUrl = URL.createObjectURL(
-          new Blob([new Uint8Array(blob)], { type: 'image/webp' })
-        );
-
-        // 存储到本地缓存
-        thumbnails.set(path, blobUrl);
-
-        // 同步到 fileBrowserStore（供 FileItemCard 使用）
-        const key = toRelativeKey(path);
-        fileBrowserStore.addThumbnail(key, blobUrl);
+        processThumbnail(event.payload.path, event.payload.blob);
       }
     );
 
@@ -271,6 +290,10 @@ export function cleanup(): void {
   if (unlistenThumbnailReady) {
     unlistenThumbnailReady();
     unlistenThumbnailReady = null;
+  }
+  if (unlistenThumbnailBatchReady) {
+    unlistenThumbnailBatchReady();
+    unlistenThumbnailBatchReady = null;
   }
 
   // 清除所有 blob URL

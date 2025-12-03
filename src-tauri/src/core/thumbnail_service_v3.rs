@@ -79,6 +79,12 @@ pub struct ThumbnailReadyPayload {
     pub blob: Vec<u8>,
 }
 
+/// 批量缩略图就绪事件 payload（优化：减少 IPC 调用）
+#[derive(Clone, Serialize)]
+pub struct ThumbnailBatchReadyPayload {
+    pub items: Vec<ThumbnailReadyPayload>,
+}
+
 /// 缓存统计
 #[derive(Clone, Serialize)]
 pub struct CacheStats {
@@ -493,6 +499,9 @@ impl ThumbnailServiceV3 {
             tokio::spawn(async move {
                 // 批量加载
                 if let Ok(loaded) = db.batch_load_thumbnails(&db_paths) {
+                    // 收集批量事件
+                    let mut batch_items = Vec::with_capacity(loaded.len());
+                    
                     for (path, blob) in loaded {
                         // 更新内存缓存
                         if let Ok(mut cache) = memory_cache.write() {
@@ -501,11 +510,23 @@ impl ThumbnailServiceV3 {
                             memory_cache_bytes.fetch_add(blob_size, Ordering::SeqCst);
                         }
                         
-                        // 发送到前端
-                        let _ = app.emit("thumbnail-ready", ThumbnailReadyPayload {
-                            path: path.clone(),
+                        batch_items.push(ThumbnailReadyPayload {
+                            path,
                             blob,
                         });
+                    }
+                    
+                    // 批量发送（减少 IPC 调用次数）
+                    if !batch_items.is_empty() {
+                        // 发送批量事件
+                        let _ = app.emit("thumbnail-batch-ready", ThumbnailBatchReadyPayload {
+                            items: batch_items.clone(),
+                        });
+                        
+                        // 同时发送单独事件以保持兼容性
+                        for item in batch_items {
+                            let _ = app.emit("thumbnail-ready", item);
+                        }
                     }
                 }
             });
@@ -582,24 +603,34 @@ impl ThumbnailServiceV3 {
     /// 快速判断路径是否可能是文件夹（避免系统调用）
     /// 启发式规则：没有扩展名或以斜杠结尾的路径可能是文件夹
     fn is_likely_folder(path: &str) -> bool {
-        let path = Path::new(path);
+        // 如果以斜杠结尾，肯定是文件夹
+        if path.ends_with('/') || path.ends_with('\\') {
+            return true;
+        }
+        
+        let path_obj = Path::new(path);
         
         // 如果有明显的文件扩展名，认为是文件
-        if let Some(ext) = path.extension() {
+        if let Some(ext) = path_obj.extension() {
             let ext = ext.to_string_lossy().to_lowercase();
-            // 常见的图片/视频/压缩包扩展名
+            // 常见的图片/视频/压缩包扩展名（完整列表）
             if matches!(ext.as_str(), 
-                "jpg" | "jpeg" | "png" | "gif" | "webp" | "bmp" | "tiff" | "svg" |
-                "mp4" | "mkv" | "avi" | "mov" | "webm" |
-                "zip" | "rar" | "7z" | "cbz" | "cbr" | "cb7" |
-                "pdf" | "psd" | "ai"
+                // 图片
+                "jpg" | "jpeg" | "png" | "gif" | "webp" | "bmp" | "tiff" | "svg" | 
+                "avif" | "jxl" | "heic" | "heif" | "ico" | "raw" | "cr2" | "nef" |
+                // 视频
+                "mp4" | "mkv" | "avi" | "mov" | "webm" | "wmv" | "flv" | "m4v" |
+                // 压缩包
+                "zip" | "rar" | "7z" | "cbz" | "cbr" | "cb7" | "tar" | "gz" |
+                // 其他
+                "pdf" | "psd" | "ai" | "txt" | "json" | "xml"
             ) {
                 return false;
             }
         }
         
-        // 如果没有扩展名，回退到文件系统检查（但这种情况较少）
-        path.is_dir()
+        // 如果没有扩展名或扩展名不在列表中，回退到文件系统检查
+        path_obj.is_dir()
     }
     
     /// 直接从缓存获取（同步）

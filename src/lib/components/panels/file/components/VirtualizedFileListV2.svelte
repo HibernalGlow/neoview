@@ -376,7 +376,7 @@
 						<div style="flex: 1; padding: 4px; box-sizing: border-box;">
 							<FileItemCard
 								{item}
-								thumbnail={thumbnails.get(toRelativeKey(item.path))}
+								thumbnail={getThumbnailUrl(item.path) ?? thumbnails.get(toRelativeKey(item.path))}
 								viewMode={viewMode === 'thumbnails' || viewMode === 'grid' ? 'thumbnail' : viewMode}
 								{isSelected}
 								{isChecked}

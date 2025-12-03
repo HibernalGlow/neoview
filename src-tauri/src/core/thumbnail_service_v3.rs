@@ -469,8 +469,19 @@ impl ThumbnailServiceV3 {
         
         // 3. 递归查找第一张图片/压缩包
         if let Some(first) = Self::find_first_image_recursive(folder_path, max_depth)? {
+            // 判断是压缩包还是图片
+            let is_archive = first.ends_with(".zip") || first.ends_with(".cbz") 
+                || first.ends_with(".rar") || first.ends_with(".cbr")
+                || first.ends_with(".7z") || first.ends_with(".cb7");
+            
             let gen = generator.lock().map_err(|e| format!("获取生成器锁失败: {}", e))?;
-            let blob = gen.generate_file_thumbnail(&first)?;
+            
+            let blob = if is_archive {
+                // 压缩包需要提取第一张图
+                gen.generate_archive_thumbnail(&first)?
+            } else {
+                gen.generate_file_thumbnail(&first)?
+            };
             
             // 保存到数据库
             let _ = db.save_thumbnail_with_category(folder_path, 0, 0, &blob, Some("folder"));
@@ -478,7 +489,14 @@ impl ThumbnailServiceV3 {
             return Ok(blob);
         }
         
-        // 4. 返回错误（没有找到可用的图片）
+        // 4. 没有找到图片，记录失败并返回错误
+        // 这样下次不会重复尝试
+        let _ = db.save_failed_thumbnail(
+            folder_path,
+            "no_image",
+            0,
+            Some("文件夹中没有找到图片")
+        );
         Err("文件夹中没有找到图片".to_string())
     }
     

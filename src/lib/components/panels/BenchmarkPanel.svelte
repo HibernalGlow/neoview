@@ -9,6 +9,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Timer, ChevronUp, ChevronDown, ArrowUp, ArrowDown, FolderOpen, Copy, Check, Play, Trash2, Eye } from '@lucide/svelte';
 	import { visibilityMonitor, setMonitorEnabled } from '$lib/stores/visibilityMonitor.svelte';
+	import { stackMonitor, setStackMonitorEnabled, resetStackStats } from '$lib/stores/stackMonitor.svelte';
+	import { Layers } from '@lucide/svelte';
 
 	// ==================== 类型定义 ====================
 	interface BenchmarkResult {
@@ -27,7 +29,7 @@
 		results: BenchmarkResult[];
 	}
 
-	type CardId = 'visibility' | 'files' | 'detailed' | 'loadmode' | 'archives' | 'realworld' | 'results' | 'summary';
+	type CardId = 'visibility' | 'stackviewer' | 'files' | 'detailed' | 'loadmode' | 'archives' | 'realworld' | 'results' | 'summary';
 
 	interface LoadModeTestResult {
 		mode: string;
@@ -69,9 +71,10 @@
 	}
 
 	// ==================== 状态管理 ====================
-	let cardOrder = $state<CardId[]>(['visibility', 'files', 'detailed', 'loadmode', 'archives', 'realworld', 'results', 'summary']);
+	let cardOrder = $state<CardId[]>(['visibility', 'stackviewer', 'files', 'detailed', 'loadmode', 'archives', 'realworld', 'results', 'summary']);
 	let showCards = $state<Record<CardId, boolean>>({
 		visibility: true,
+		stackviewer: true,
 		files: true,
 		detailed: true,
 		loadmode: true,
@@ -675,6 +678,165 @@
 						{:else}
 							<div class="text-[10px] text-muted-foreground text-center py-4 border rounded">
 								📭 暂无数据，请在文件夹面板中浏览文件
+							</div>
+						{/if}
+					</div>
+				{/if}
+			</div>
+
+			<!-- StackViewer 监控卡片 -->
+			<div
+				class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
+				style={`order: ${getCardOrder('stackviewer')}`}
+			>
+				<div class="flex items-center justify-between">
+					<div class="flex items-center gap-2">
+						<Layers class="h-4 w-4 text-purple-500" />
+						<div class="font-semibold text-sm">StackViewer 监控</div>
+					</div>
+					<div class="flex items-center gap-1 text-[10px]">
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+							onclick={() => (showCards.stackviewer = !showCards.stackviewer)}
+							title={showCards.stackviewer ? '收起' : '展开'}
+						>
+							{#if showCards.stackviewer}
+								<ChevronUp class="h-3 w-3" />
+							{:else}
+								<ChevronDown class="h-3 w-3" />
+							{/if}
+						</button>
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40"
+							onclick={() => moveCard('stackviewer', 'up')}
+							disabled={!canMoveCard('stackviewer', 'up')}
+						>
+							<ArrowUp class="h-3 w-3" />
+						</button>
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40"
+							onclick={() => moveCard('stackviewer', 'down')}
+							disabled={!canMoveCard('stackviewer', 'down')}
+						>
+							<ArrowDown class="h-3 w-3" />
+						</button>
+					</div>
+				</div>
+
+				{#if showCards.stackviewer}
+					<div class="space-y-2">
+						<!-- 开关按钮 -->
+						<div class="flex items-center justify-between">
+							<p class="text-[10px] text-muted-foreground">
+								监控三层帧栈状态和翻页预加载命中率
+							</p>
+							<div class="flex gap-1">
+								<Button 
+									variant={stackMonitor.enabled ? "default" : "outline"} 
+									size="sm" 
+									class="h-6 text-[10px] px-2"
+									onclick={() => setStackMonitorEnabled(!stackMonitor.enabled)}
+								>
+									{stackMonitor.enabled ? '关闭' : '开启'}
+								</Button>
+								{#if stackMonitor.enabled}
+									<Button 
+										variant="ghost" 
+										size="sm" 
+										class="h-6 text-[10px] px-2"
+										onclick={() => resetStackStats()}
+									>
+										重置
+									</Button>
+								{/if}
+							</div>
+						</div>
+						
+						{#if !stackMonitor.enabled}
+							<div class="text-[10px] text-muted-foreground text-center py-4 border rounded bg-muted/20">
+								⏸️ 监控已关闭，点击上方按钮开启
+							</div>
+						{:else}
+							<div class="border rounded p-2 space-y-2 text-[10px]">
+								<!-- 基本信息 -->
+								<div class="grid grid-cols-2 gap-x-4 gap-y-1">
+									<div>当前页: <span class="font-mono text-blue-500">{stackMonitor.info.currentPageIndex + 1}</span></div>
+									<div>总页数: <span class="font-mono text-green-500">{stackMonitor.info.totalPages}</span></div>
+								</div>
+								
+								<!-- 三层帧栈状态 -->
+								<div class="border-t pt-2 mt-2">
+									<div class="font-medium mb-1">帧栈状态</div>
+									<div class="flex gap-2 justify-between">
+										<!-- Prev -->
+										<div class="flex-1 border rounded p-1.5 {stackMonitor.info.slots.prev.loaded ? 'bg-green-500/10 border-green-500/30' : 'bg-muted/20'}">
+											<div class="font-medium text-[9px] text-muted-foreground">PREV</div>
+											<div class="font-mono text-purple-500">
+												{stackMonitor.info.slots.prev.pageIndex !== null ? stackMonitor.info.slots.prev.pageIndex + 1 : '-'}
+											</div>
+											<div class="text-[8px] {stackMonitor.info.slots.prev.loaded ? 'text-green-500' : 'text-muted-foreground'}">
+												{stackMonitor.info.slots.prev.loaded ? '✓ 已加载' : '○ 空'}
+											</div>
+										</div>
+										<!-- Current -->
+										<div class="flex-1 border-2 border-primary rounded p-1.5 bg-primary/10">
+											<div class="font-medium text-[9px] text-primary">CURRENT</div>
+											<div class="font-mono text-lg text-primary">
+												{stackMonitor.info.slots.current.pageIndex !== null ? stackMonitor.info.slots.current.pageIndex + 1 : '-'}
+											</div>
+											<div class="text-[8px] {stackMonitor.info.slots.current.loaded ? 'text-green-500' : 'text-orange-500'}">
+												{stackMonitor.info.slots.current.loaded ? '✓ 已加载' : '⏳ 加载中'}
+											</div>
+										</div>
+										<!-- Next -->
+										<div class="flex-1 border rounded p-1.5 {stackMonitor.info.slots.next.loaded ? 'bg-green-500/10 border-green-500/30' : 'bg-muted/20'}">
+											<div class="font-medium text-[9px] text-muted-foreground">NEXT</div>
+											<div class="font-mono text-purple-500">
+												{stackMonitor.info.slots.next.pageIndex !== null ? stackMonitor.info.slots.next.pageIndex + 1 : '-'}
+											</div>
+											<div class="text-[8px] {stackMonitor.info.slots.next.loaded ? 'text-green-500' : 'text-muted-foreground'}">
+												{stackMonitor.info.slots.next.loaded ? '✓ 已加载' : '○ 空'}
+											</div>
+										</div>
+									</div>
+								</div>
+								
+								<!-- 预加载统计 -->
+								<div class="border-t pt-2 mt-2">
+									<div class="font-medium mb-1">预加载命中率</div>
+									<div class="grid grid-cols-3 gap-x-2 gap-y-1">
+										<div>翻页: <span class="font-mono text-blue-500">{stackMonitor.info.totalNavigations}</span></div>
+										<div>命中: <span class="font-mono text-green-500">{stackMonitor.info.preloadHits}</span></div>
+										<div>命中率: <span class="font-mono text-orange-500">{stackMonitor.info.preloadHitRate.toFixed(1)}%</span></div>
+									</div>
+									<!-- 命中率进度条 -->
+									<div class="mt-1.5 h-1.5 bg-muted rounded-full overflow-hidden">
+										<div 
+											class="h-full bg-gradient-to-r from-green-500 to-emerald-400 transition-all duration-300"
+											style="width: {stackMonitor.info.preloadHitRate}%"
+										></div>
+									</div>
+								</div>
+								
+								<!-- 最近翻页记录 -->
+								{#if stackMonitor.info.navigationHistory.length > 0}
+									<div class="border-t pt-2 mt-2">
+										<div class="font-medium mb-1">最近翻页</div>
+										<div class="space-y-0.5 max-h-16 overflow-y-auto">
+											{#each stackMonitor.info.navigationHistory.slice(0, 5) as nav}
+												<div class="flex items-center gap-1 text-[9px]">
+													<span class="text-muted-foreground">
+														{nav.direction === 'forward' ? '➡️' : nav.direction === 'backward' ? '⬅️' : '🎯'}
+													</span>
+													<span class="font-mono">{nav.fromPage + 1} → {nav.toPage + 1}</span>
+												</div>
+											{/each}
+										</div>
+									</div>
+								{/if}
 							</div>
 						{/if}
 					</div>

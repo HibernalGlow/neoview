@@ -19,6 +19,12 @@
     createEmptySlot,
     SlotZIndex,
   } from './types/frameSlot';
+  import { 
+    stackMonitor, 
+    updateStackState, 
+    updateSlotState, 
+    recordNavigation 
+  } from '$lib/stores/stackMonitor.svelte';
   
   // ============================================================================
   // Props
@@ -84,6 +90,47 @@
     if (rotation !== 0) parts.push(`rotate(${rotation}deg)`);
     return parts.length > 0 ? parts.join(' ') : 'none';
   });
+  
+  // ============================================================================
+  // 监控同步
+  // ============================================================================
+  
+  /**
+   * 同步当前状态到监控 store
+   */
+  function syncMonitorState() {
+    if (!stackMonitor.enabled) return;
+    
+    updateStackState({
+      enabled: true,
+      currentPageIndex: displayedPageIndex,
+      totalPages: bookStore.totalPages,
+    });
+    
+    updateSlotState('prev', {
+      position: 'prev',
+      pageIndex: prevSlot.pageIndex,
+      url: prevSlot.url,
+      loaded: !prevSlot.loading && prevSlot.url !== null,
+      dimensions: prevSlot.dimensions,
+    });
+    
+    updateSlotState('current', {
+      position: 'current',
+      pageIndex: currentSlot.pageIndex,
+      url: currentSlot.url,
+      loaded: !currentSlot.loading && currentSlot.url !== null,
+      dimensions: currentSlot.dimensions,
+    });
+    
+    updateSlotState('next', {
+      position: 'next',
+      pageIndex: nextSlot.pageIndex,
+      url: nextSlot.url,
+      loaded: !nextSlot.loading && nextSlot.url !== null,
+      dimensions: nextSlot.dimensions,
+    });
+  }
   
   // ============================================================================
   // 核心方法
@@ -225,6 +272,13 @@
     }, transitionDuration);
     
     console.log(`➡️ StackViewer: 向前翻页到 ${newCurrentIndex + 1}`);
+    
+    // 更新监控状态
+    if (stackMonitor.enabled) {
+      const wasPreloaded = nextSlot.url !== null;
+      recordNavigation('forward', displayedPageIndex - 1, newCurrentIndex, wasPreloaded);
+      syncMonitorState();
+    }
   }
   
   /**
@@ -268,6 +322,13 @@
     }, transitionDuration);
     
     console.log(`⬅️ StackViewer: 向后翻页到 ${newCurrentIndex + 1}`);
+    
+    // 更新监控状态
+    if (stackMonitor.enabled) {
+      const wasPreloaded = prevSlot.url !== null;
+      recordNavigation('backward', displayedPageIndex + 1, newCurrentIndex, wasPreloaded);
+      syncMonitorState();
+    }
   }
   
   /**

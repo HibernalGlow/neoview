@@ -650,13 +650,14 @@ impl Default for ThumbnailConfig {
 | 8 线程工作池 | `ThumbnailServiceV3::start()` | ✅ |
 | 文件夹缩略图生成 | `generate_folder_thumbnail_static()` | ✅ |
 
-### Phase 2: 前端简化 🚧 进行中
+### Phase 2: 前端简化 ✅ 完成
 
 | 任务 | 文件 | 状态 |
 |------|------|------|
 | 创建 thumbnailStoreV3 | `src/lib/stores/thumbnailStoreV3.svelte.ts` | ✅ |
-| 简化 VirtualizedFileListV2 | `VirtualizedFileListV2.svelte` | ⏳ 待开始 |
-| 集成测试 | - | ⏳ 待开始 |
+| 兼容层 thumbnailManager | `src/lib/utils/thumbnailManager.ts` | ✅ |
+| 集成 VirtualizedFileListV2 | `VirtualizedFileListV2.svelte` | ✅ |
+| 连接 fileBrowserStore | 事件推送同步 | ✅ |
 
 ### 新增文件
 

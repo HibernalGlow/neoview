@@ -9,9 +9,15 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { fileBrowserStore } from './fileBrowser.svelte';
 
 // 缩略图缓存 (path -> blob URL)
 const thumbnails = $state<Map<string, string>>(new Map());
+
+// 路径转换：统一使用正斜杠作为 key
+function toRelativeKey(path: string): string {
+  return path.replace(/\\/g, '/');
+}
 
 // 是否已初始化
 let initialized = $state(false);
@@ -62,8 +68,12 @@ export async function initThumbnailServiceV3(
           new Blob([new Uint8Array(blob)], { type: 'image/webp' })
         );
 
-        // 存储到缓存
+        // 存储到本地缓存
         thumbnails.set(path, blobUrl);
+
+        // 同步到 fileBrowserStore（供 FileItemCard 使用）
+        const key = toRelativeKey(path);
+        fileBrowserStore.addThumbnail(key, blobUrl);
       }
     );
 

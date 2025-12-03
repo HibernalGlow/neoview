@@ -810,7 +810,8 @@ pub async fn run_realworld_benchmark(
     let image_exts = ["jpg", "jpeg", "png", "webp", "avif", "jxl", "gif", "bmp"];
     let archive_exts = ["zip", "cbz", "rar", "7z", "cb7", "cbr"];
     
-    for entry in WalkDir::new(&path).max_depth(1).into_iter().filter_map(|e| e.ok()) {
+    // 递归收集所有文件
+    for entry in WalkDir::new(&path).into_iter().filter_map(|e| e.ok()) {
         let file_path = entry.path();
         if file_path.is_file() {
             if let Some(ext) = file_path.extension().and_then(|e| e.to_str()) {

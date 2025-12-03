@@ -25,6 +25,11 @@ let initialized = $state(false);
 // 事件监听器
 let unlistenThumbnailReady: UnlistenFn | null = null;
 
+// 节流相关
+const pendingPaths: string[] = [];
+const throttleState = { dir: '', timer: null as ReturnType<typeof setTimeout> | null };
+const THROTTLE_MS = 50; // 50ms 节流
+
 // 缩略图就绪事件 payload
 interface ThumbnailReadyPayload {
   path: string;
@@ -86,7 +91,7 @@ export async function initThumbnailServiceV3(
 }
 
 /**
- * 请求可见区域缩略图（核心方法）
+ * 请求可见区域缩略图（核心方法，带节流）
  * @param paths 可见区域的路径列表（已按优先级排序）
  * @param currentDir 当前目录
  */
@@ -104,14 +109,40 @@ export async function requestVisibleThumbnails(
 
   if (uncachedPaths.length === 0) return;
 
-  try {
-    await invoke('request_visible_thumbnails_v3', {
-      paths: uncachedPaths,
-      currentDir,
-    });
-  } catch (error) {
-    console.error('❌ requestVisibleThumbnails failed:', error);
+  // 如果目录变化，清空待处理列表
+  if (throttleState.dir !== currentDir) {
+    pendingPaths.length = 0;
+    throttleState.dir = currentDir;
   }
+
+  // 合并到待处理列表（去重）
+  for (const p of uncachedPaths) {
+    if (!pendingPaths.includes(p)) {
+      pendingPaths.push(p);
+    }
+  }
+
+  // 节流：清除之前的定时器，设置新的
+  if (throttleState.timer) {
+    clearTimeout(throttleState.timer);
+  }
+
+  throttleState.timer = setTimeout(async () => {
+    if (pendingPaths.length === 0) return;
+
+    // 复制并清空待处理列表
+    const pathsToRequest = [...pendingPaths];
+    pendingPaths.length = 0;
+
+    try {
+      await invoke('request_visible_thumbnails_v3', {
+        paths: pathsToRequest,
+        currentDir: throttleState.dir,
+      });
+    } catch (error) {
+      console.error('❌ requestVisibleThumbnails failed:', error);
+    }
+  }, THROTTLE_MS);
 }
 
 /**

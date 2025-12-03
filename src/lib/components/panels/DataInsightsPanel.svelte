@@ -18,6 +18,7 @@
 	import type { EMMCollectTag } from '$lib/api/emm';
 	import ReadingHeatmapChart, { type HeatmapCell } from './insights/ReadingHeatmapChart.svelte';
 	import ReadingStreakChart, { type StreakPoint } from './insights/ReadingStreakChart.svelte';
+	import ThumbnailDbCard from './insights/ThumbnailDbCard.svelte';
 
 	const CARD_META: Record<InsightsCardId, { title: string; description: string }> = {
 		'daily-trend': {
@@ -493,6 +494,8 @@
 					</Card.Content>
 				</Card.Root>
 			{/each}
+			<!-- 缩略图数据库维护卡片 -->
+			<ThumbnailDbCard />
 		</div>
 	</div>
 </div>

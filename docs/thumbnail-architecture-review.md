@@ -370,14 +370,34 @@ const blobKey = await invokeWithTimeout<string | null>(
 
 #### 3.1.2 文件夹缩略图独立处理 ✅ 已实现
 
-##### NeeView 文件夹缩略图策略分析
+##### NeeView 文件夹缩略图策略分析（源码：ArchivePageUtility.cs）
 
-NeeView 的文件夹缩略图使用 **反向查找策略**：
+NeeView 的文件夹/书籍缩略图策略：
 
-1. **不主动扫描文件夹内容**：避免性能问题
-2. **缓存优先**：先从数据库加载已缓存的文件夹缩略图
-3. **反向更新**：当子文件/压缩包生成缩略图时，自动更新父文件夹的缩略图
-4. **后台扫描**：Rust 后端异步扫描文件夹，找到第一个可用图片/压缩包后生成
+1. **深度限制**：使用 `BookThumbnailDepth` 配置（默认为 2）控制搜索子文件夹的最大深度
+2. **异步查找**：调用 `ArchiveEntryUtility.CreateFirstImageArchiveEntryAsync(entry, depth, decrypt, token)` 异步查找第一个图片
+3. **条件检查**：只对目录或书籍类型执行搜索（`Directory.Exists || entry.IsBook()`）
+4. **MediaArchive 跳过**：如果是 MediaArchive 类型（如视频文件夹），直接返回不搜索
+
+```csharp
+// NeeView 源码：ArchivePageUtility.cs 第 31-46 行
+private static async ValueTask<ArchiveEntry> SelectAlternativeEntry(ArchiveEntry entry, bool decrypt, CancellationToken token)
+{
+    if (System.IO.Directory.Exists(entry.SystemPath) || entry.IsBook())
+    {
+        if (ArchiveManager.Current.GetSupportedType(entry.SystemPath) == ArchiveType.MediaArchive)
+        {
+            return entry;  // MediaArchive 跳过搜索
+        }
+        
+        var depth = Config.Current.Book.BookThumbnailDepth;  // 默认深度 2
+        return await ArchiveEntryUtility.CreateFirstImageArchiveEntryAsync(entry, depth, decrypt, token) ?? entry;
+    }
+    return entry;
+}
+```
+
+##### neoview 的对应实现
 
 ##### 为什么不能主动扫描文件夹？
 

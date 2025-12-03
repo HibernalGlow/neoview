@@ -5,8 +5,11 @@
 
 import { invoke } from '@tauri-apps/api/core';
 
-// 缩短超时时间，快速失败以便处理其他任务（参考 NeeView 的快速标记策略）
-export const DEFAULT_IPC_TIMEOUT = 3000; // 3秒默认超时
+// 超时时间配置
+// 普通查询：5秒
+// 文件夹扫描：10秒（需要更长时间）
+export const DEFAULT_IPC_TIMEOUT = 5000; // 5秒默认超时
+export const FOLDER_SCAN_TIMEOUT = 10000; // 10秒文件夹扫描超时
 
 export class IpcTimeoutError extends Error {
 	constructor(command: string, timeout: number) {

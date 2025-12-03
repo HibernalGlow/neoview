@@ -39,11 +39,11 @@ interface FolderTask {
 }
 
 const DEFAULT_CONFIG: FolderThumbnailConfig = {
-  maxConcurrent: 5,      // 最多同时处理 5 个文件夹
-  batchSize: 20,         // 每批处理 20 个
-  batchDelay: 50,        // 批次间隔 50ms
-  taskTimeout: 10000,    // 单任务 10 秒超时
-  preloadAhead: 10,      // 可见范围外预加载 10 个
+  maxConcurrent: 3,      // 减少并发数，避免 IPC 拥堵
+  batchSize: 10,         // 减小批次，更快响应
+  batchDelay: 100,       // 批次间隔 100ms，让 UI 喘息
+  taskTimeout: 15000,    // 单任务 15 秒超时（文件夹扫描需要更长时间）
+  preloadAhead: 5,       // 可见范围外预加载 5 个
 };
 
 export class FolderThumbnailLoader {

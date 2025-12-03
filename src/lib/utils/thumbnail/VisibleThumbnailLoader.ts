@@ -13,6 +13,7 @@
 
 import type { FsItem } from '$lib/types';
 import { thumbnailManager } from '../thumbnailManager';
+import { folderThumbnailLoader } from './FolderThumbnailLoader';
 import { isVideoFile } from '../videoUtils';
 
 interface VisibleRange {
@@ -266,23 +267,24 @@ export class VisibleThumbnailLoader {
   
   /**
    * 请求文件夹缩略图加载
-   * 文件夹缩略图使用专门的 FolderThumbnailLoader
+   * 使用 FolderThumbnailLoader，复刻 NeeView 的策略：
+   * 1. 先从数据库加载（已缓存的）
+   * 2. 未缓存的扫描文件夹内容，查找第一个图片/压缩包
+   * 3. 深度限制（默认 2 层）
    */
   private requestFolderThumbnails(folders: FsItem[]): void {
     if (folders.length === 0) return;
     
     if (import.meta.env.DEV) {
-      console.debug(`📁 VisibleThumbnailLoader: 请求 ${folders.length} 个文件夹缩略图`);
+      console.debug(`📁 VisibleThumbnailLoader: 请求 ${folders.length} 个文件夹缩略图（NeeView 策略）`);
     }
     
-    // 文件夹缩略图策略：
-    // 1. 先从数据库加载（已缓存的）
-    // 2. 未缓存的由 Rust 后端异步扫描生成
-    // 这里只调用 thumbnailManager.getThumbnail，会自动走文件夹缩略图路径
-    for (const folder of folders) {
-      // 只从数据库加载，不主动生成（避免性能问题）
-      thumbnailManager.getThumbnail(folder.path, undefined, false, 'normal');
-    }
+    // 使用 FolderThumbnailLoader 处理
+    // 它会：
+    // 1. 并发控制，避免阻塞 UI
+    // 2. 按优先级处理（中央优先排序已在 buildLoadList 完成）
+    // 3. 扫描文件夹查找 cover.*/folder.*/thumb.* 或第一个图片/压缩包
+    folderThumbnailLoader.loadFolderThumbnails(folders, this.currentPath);
   }
   
   /**

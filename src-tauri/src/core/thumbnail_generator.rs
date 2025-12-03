@@ -298,6 +298,65 @@ impl ThumbnailGenerator {
         Self::generate_webp_with_ffmpeg(video_path, config, path_key)
     }
 
+    /// 仅生成缩略图 blob，不保存到数据库（用于 V3 延迟保存）
+    pub fn generate_file_thumbnail_blob_only(&self, file_path: &str) -> Result<(Vec<u8>, String, i64, i32), String> {
+        // 获取文件大小
+        let metadata =
+            std::fs::metadata(file_path).map_err(|e| format!("获取文件元数据失败: {}", e))?;
+        let file_size = metadata.len() as i64;
+
+        // 构建路径键
+        let path_key = self.build_path_key(file_path, None);
+        let ghash = Self::generate_hash(&path_key, file_size);
+
+        // 检查数据库缓存（如果有 webp 缓存，直接返回）
+        if let Ok(Some(cached)) = self.db.load_thumbnail(&path_key, file_size, ghash) {
+            // 更新访问时间
+            let _ = self.db.update_access_time(&path_key);
+            return Ok((cached, path_key, file_size, ghash));
+        }
+
+        let file_path_buf = PathBuf::from(file_path);
+
+        // 检查是否为视频文件
+        if Self::is_video_file(&file_path_buf) {
+            // 视频文件：同步生成缩略图
+            if let Some(webp_data) =
+                Self::generate_video_thumbnail(&file_path_buf, &self.config, &path_key)
+            {
+                return Ok((webp_data, path_key, file_size, ghash));
+            }
+            return Ok((Vec::new(), path_key, file_size, ghash));
+        }
+
+        // 从文件加载图像
+        let image_data = match std::fs::read(file_path) {
+            Ok(data) => data,
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::PermissionDenied {
+                    return Err("权限被拒绝".to_string());
+                } else {
+                    return Err(format!("读取文件失败: {}", e));
+                }
+            }
+        };
+
+        // 检测文件扩展名
+        let ext = file_path_buf
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_lowercase())
+            .unwrap_or_default();
+
+        // 同步生成 webp 缩略图
+        let webp_data = Self::generate_webp_from_image_data(&image_data, &ext, &self.config);
+
+        match webp_data {
+            Some(data) => Ok((data, path_key, file_size, ghash)),
+            None => Err(format!("无法生成缩略图: {}", file_path)),
+        }
+    }
+
     /// 生成单个文件的缩略图（同步生成 webp 后返回，避免传输原图）
     pub fn generate_file_thumbnail(&self, file_path: &str) -> Result<Vec<u8>, String> {
         // 获取文件大小

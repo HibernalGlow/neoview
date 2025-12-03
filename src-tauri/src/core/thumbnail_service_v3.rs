@@ -130,8 +130,8 @@ pub struct ThumbnailServiceV3 {
     failed_index: Arc<RwLock<std::collections::HashSet<String>>>,
     
     /// 保存队列（延迟批量保存到数据库）
-    /// Key: path, Value: (blob, category, timestamp)
-    save_queue: Arc<Mutex<HashMap<String, (Vec<u8>, String, Instant)>>>,
+    /// Key: path_key, Value: (blob, size, ghash, timestamp)
+    save_queue: Arc<Mutex<HashMap<String, (Vec<u8>, i64, i32, Instant)>>>,
     
     /// 最后一次保存队列刷新时间
     last_flush: Arc<Mutex<Instant>>,
@@ -211,6 +211,7 @@ impl ThumbnailServiceV3 {
             let folder_depth = self.config.folder_search_depth;
             let db_index = Arc::clone(&self.db_index);
             let failed_index = Arc::clone(&self.failed_index);
+            let save_queue = Arc::clone(&self.save_queue);
             
             let handle = thread::spawn(move || {
                 log_debug!("🔧 Worker {} started", i);
@@ -260,19 +261,24 @@ impl ThumbnailServiceV3 {
                         let gen_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
                             // 生成缩略图
                             if task.is_folder {
+                                // 文件夹：直接返回 blob（已在内部保存）
                                 Self::generate_folder_thumbnail_static(
                                     &generator,
                                     &db,
                                     &task.path,
                                     folder_depth,
-                                )
+                                ).map(|blob| (blob, None))
                             } else {
+                                // 文件：返回 blob 和保存信息（用于延迟保存）
                                 Self::generate_file_thumbnail_static(&generator, &task.path)
+                                    .map(|(blob, path_key, size, ghash)| {
+                                        (blob, Some((path_key, size, ghash)))
+                                    })
                             }
                         }));
                         
                         match gen_result {
-                            Ok(Ok(blob)) => {
+                            Ok(Ok((blob, save_info))) => {
                                 // 更新内存缓存（安全处理锁）
                                 if let Ok(mut cache) = memory_cache.write() {
                                     let blob_size = blob.len();
@@ -283,6 +289,13 @@ impl ThumbnailServiceV3 {
                                 // 更新数据库索引（安全处理锁）
                                 if let Ok(mut index) = db_index.write() {
                                     index.insert(task.path.clone());
+                                }
+                                
+                                // 如果有保存信息，放入保存队列（延迟保存）
+                                if let Some((path_key, size, ghash)) = save_info {
+                                    if let Ok(mut queue) = save_queue.lock() {
+                                        queue.insert(path_key, (blob.clone(), size, ghash, Instant::now()));
+                                    }
                                 }
                                 
                                 // 发送到前端（不阻塞）
@@ -320,7 +333,67 @@ impl ThumbnailServiceV3 {
             workers.push(handle);
         }
         
-        log_info!("✅ ThumbnailServiceV3 started with {} workers", self.config.worker_threads);
+        // 启动保存队列刷新线程
+        {
+            let running = Arc::clone(&self.running);
+            let save_queue = Arc::clone(&self.save_queue);
+            let db = Arc::clone(&self.db);
+            let flush_interval_ms = self.config.db_save_delay_ms;
+            
+            let flush_handle = thread::spawn(move || {
+                log_debug!("🔧 SaveQueue flush thread started");
+                
+                while running.load(Ordering::SeqCst) {
+                    thread::sleep(Duration::from_millis(flush_interval_ms));
+                    
+                    // 获取并清空保存队列
+                    let items_to_save: Vec<(String, Vec<u8>, i64, i32)> = {
+                        match save_queue.lock() {
+                            Ok(mut queue) => {
+                                let items: Vec<_> = queue.drain()
+                                    .map(|(k, (blob, size, ghash, _))| (k, blob, size, ghash))
+                                    .collect();
+                                items
+                            }
+                            Err(_) => continue,
+                        }
+                    };
+                    
+                    if items_to_save.is_empty() {
+                        continue;
+                    }
+                    
+                    log_debug!("💾 批量保存 {} 个缩略图到数据库", items_to_save.len());
+                    
+                    // 批量保存到数据库
+                    for (path_key, blob, size, ghash) in items_to_save {
+                        if let Err(e) = db.save_thumbnail(&path_key, size, ghash, &blob) {
+                            log_debug!("⚠️ 保存缩略图失败: {} - {}", path_key, e);
+                        }
+                    }
+                }
+                
+                // 退出前刷新剩余的保存队列
+                if let Ok(mut queue) = save_queue.lock() {
+                    let remaining: Vec<_> = queue.drain()
+                        .map(|(k, (blob, size, ghash, _))| (k, blob, size, ghash))
+                        .collect();
+                    
+                    if !remaining.is_empty() {
+                        log_debug!("💾 退出前保存 {} 个缩略图", remaining.len());
+                        for (path_key, blob, size, ghash) in remaining {
+                            let _ = db.save_thumbnail(&path_key, size, ghash, &blob);
+                        }
+                    }
+                }
+                
+                log_debug!("🔧 SaveQueue flush thread stopped");
+            });
+            
+            workers.push(flush_handle);
+        }
+        
+        log_info!("✅ ThumbnailServiceV3 started with {} workers + 1 flush thread", self.config.worker_threads);
     }
     
     /// 停止工作线程
@@ -473,7 +546,7 @@ impl ThumbnailServiceV3 {
         
         // 再检查保存队列（可能刚生成还未持久化）
         if let Ok(queue) = self.save_queue.lock() {
-            if let Some((blob, _, _)) = queue.get(path) {
+            if let Some((blob, _, _, _)) = queue.get(path) {
                 return Some(blob.clone());
             }
         }
@@ -604,12 +677,13 @@ impl ThumbnailServiceV3 {
     }
     
     /// 生成文件缩略图（静态方法，用于工作线程）
+    /// 返回 (blob, path_key, size, ghash) 用于延迟保存
     fn generate_file_thumbnail_static(
         generator: &Arc<Mutex<ThumbnailGenerator>>,
         path: &str,
-    ) -> Result<Vec<u8>, String> {
+    ) -> Result<(Vec<u8>, String, i64, i32), String> {
         let gen = generator.lock().map_err(|e| format!("获取生成器锁失败: {}", e))?;
-        gen.generate_file_thumbnail(path)
+        gen.generate_file_thumbnail_blob_only(path)
     }
     
     /// 生成文件夹缩略图（复刻 NeeView 策略）

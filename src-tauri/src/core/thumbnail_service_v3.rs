@@ -319,6 +319,7 @@ impl ThumbnailServiceV3 {
     }
     
     /// 请求可见区域缩略图（核心方法，不阻塞）
+    /// 优化：批量处理，减少锁竞争和数据库访问
     pub fn request_visible_thumbnails(
         &self,
         app: &AppHandle,
@@ -327,55 +328,77 @@ impl ThumbnailServiceV3 {
     ) {
         // 更新当前目录
         {
-            let mut dir = self.current_dir.write().unwrap();
-            if *dir != current_dir {
-                // 目录切换，清空队列
-                let mut queue = self.task_queue.lock().unwrap();
-                let old_len = queue.len();
-                queue.clear();
-                log_debug!("📂 目录切换: {} -> {} (清空 {} 个任务)", *dir, current_dir, old_len);
-                *dir = current_dir.clone();
+            if let Ok(mut dir) = self.current_dir.write() {
+                if *dir != current_dir {
+                    // 目录切换，清空队列
+                    if let Ok(mut queue) = self.task_queue.lock() {
+                        let old_len = queue.len();
+                        queue.clear();
+                        log_debug!("📂 目录切换: {} -> {} (清空 {} 个任务)", *dir, current_dir, old_len);
+                    }
+                    *dir = current_dir.clone();
+                }
             }
         }
         
-        // 处理每个路径
+        // 批量分类路径
+        let mut cached_paths: Vec<(String, Vec<u8>)> = Vec::new();
+        let mut db_paths: Vec<String> = Vec::new();
+        let mut generate_paths: Vec<(String, bool, usize)> = Vec::new(); // (path, is_folder, priority)
+        
+        // 读取索引（只锁一次）
+        let (db_index_snapshot, failed_index_snapshot) = {
+            let db_index = self.db_index.read().ok();
+            let failed_index = self.failed_index.read().ok();
+            (
+                db_index.map(|g| g.clone()),
+                failed_index.map(|g| g.clone()),
+            )
+        };
+        
+        // 分类每个路径
         for (priority, path) in paths.iter().enumerate() {
             // 1. 检查内存缓存
             if let Some(blob) = self.get_from_memory_cache(path) {
-                // 直接发送到前端
-                let _ = app.emit("thumbnail-ready", ThumbnailReadyPayload {
-                    path: path.clone(),
-                    blob,
-                });
+                cached_paths.push((path.clone(), blob));
                 continue;
             }
             
-            // 2. 检查失败索引（O(1) 查找，避免重复尝试失败的缩略图）
-            {
-                let failed_index = self.failed_index.read().unwrap();
-                if failed_index.contains(path) {
-                    continue; // 跳过已知失败的路径
+            // 2. 检查失败索引
+            if let Some(ref failed) = failed_index_snapshot {
+                if failed.contains(path) {
+                    continue;
                 }
             }
             
-            // 3. 检查数据库索引（O(1) 查找）
-            let in_db_index = {
-                let db_index = self.db_index.read().unwrap();
-                db_index.contains(path)
-            };
+            // 3. 检查数据库索引
+            let in_db = db_index_snapshot.as_ref().map(|idx| idx.contains(path)).unwrap_or(false);
             
-            if in_db_index {
-                // 在索引中，异步从数据库加载
-                let db = Arc::clone(&self.db);
-                let app = app.clone();
-                let path = path.clone();
-                let memory_cache: Arc<RwLock<LruCache<String, Vec<u8>>>> = Arc::clone(&self.memory_cache);
-                let memory_cache_bytes: Arc<AtomicUsize> = Arc::clone(&self.memory_cache_bytes);
-                
-                tokio::spawn(async move {
-                    let category = if std::path::Path::new(&path).is_dir() { "folder" } else { "file" };
-                    if let Ok(Some(blob)) = db.load_thumbnail_by_key_and_category(&path, category) {
-                        // 更新内存缓存（安全处理锁）
+            if in_db {
+                db_paths.push(path.clone());
+            } else {
+                let is_folder = Path::new(path).is_dir();
+                generate_paths.push((path.clone(), is_folder, priority));
+            }
+        }
+        
+        // 1. 立即发送内存缓存命中的
+        for (path, blob) in cached_paths {
+            let _ = app.emit("thumbnail-ready", ThumbnailReadyPayload { path, blob });
+        }
+        
+        // 2. 批量从数据库加载（一次 tokio::spawn）
+        if !db_paths.is_empty() {
+            let db = Arc::clone(&self.db);
+            let app = app.clone();
+            let memory_cache = Arc::clone(&self.memory_cache);
+            let memory_cache_bytes = Arc::clone(&self.memory_cache_bytes);
+            
+            tokio::spawn(async move {
+                // 批量加载
+                if let Ok(loaded) = db.batch_load_thumbnails(&db_paths) {
+                    for (path, blob) in loaded {
+                        // 更新内存缓存
                         if let Ok(mut cache) = memory_cache.write() {
                             let blob_size = blob.len();
                             cache.put(path.clone(), blob.clone());
@@ -388,17 +411,21 @@ impl ThumbnailServiceV3 {
                             blob,
                         });
                     }
-                });
-            } else {
-                // 不在索引中，入队生成任务
-                let is_folder = Path::new(path).is_dir();
-                let mut queue = self.task_queue.lock().unwrap();
-                queue.push_back(GenerateTask {
-                    path: path.clone(),
-                    directory: current_dir.clone(),
-                    is_folder,
-                    priority,
-                });
+                }
+            });
+        }
+        
+        // 3. 入队生成任务（批量加锁一次）
+        if !generate_paths.is_empty() {
+            if let Ok(mut queue) = self.task_queue.lock() {
+                for (path, is_folder, priority) in generate_paths {
+                    queue.push_back(GenerateTask {
+                        path,
+                        directory: current_dir.clone(),
+                        is_folder,
+                        priority,
+                    });
+                }
             }
         }
     }

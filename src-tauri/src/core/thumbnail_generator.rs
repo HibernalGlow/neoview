@@ -70,7 +70,7 @@ impl ThumbnailGenerator {
     }
 
     /// 生成缩略图的哈希值（用于验证）
-    fn generate_hash(path: &str, size: i64) -> i32 {
+    pub(crate) fn generate_hash(path: &str, size: i64) -> i32 {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
 
@@ -81,7 +81,7 @@ impl ThumbnailGenerator {
     }
 
     /// 生成文件路径的键（用于数据库）
-    fn build_path_key(&self, path: &str, inner_path: Option<&str>) -> String {
+    pub(crate) fn build_path_key(&self, path: &str, inner_path: Option<&str>) -> String {
         Self::build_path_key_static(path, inner_path)
     }
 

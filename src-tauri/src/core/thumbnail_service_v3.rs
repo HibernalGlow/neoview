@@ -63,12 +63,27 @@ impl Default for ThumbnailServiceConfig {
     }
 }
 
+/// 文件类型枚举
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ThumbnailFileType {
+    /// 普通文件夹
+    Folder,
+    /// 压缩包 (zip, cbz, rar, cbr, 7z, cb7)
+    Archive,
+    /// 视频文件 (mp4, mkv, avi, etc)
+    Video,
+    /// 图片文件 (jpg, png, webp, etc)
+    Image,
+    /// 其他/未知文件
+    Other,
+}
+
 /// 生成任务
 #[derive(Clone)]
 struct GenerateTask {
     path: String,
     directory: String,
-    is_folder: bool,
+    file_type: ThumbnailFileType,
     priority: usize,
 }
 
@@ -265,21 +280,38 @@ impl ThumbnailServiceV3 {
                         
                         // 使用 catch_unwind 包装整个生成过程
                         let gen_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-                            // 生成缩略图
-                            if task.is_folder {
-                                // 文件夹：直接返回 blob（已在内部保存）
-                                Self::generate_folder_thumbnail_static(
-                                    &generator,
-                                    &db,
-                                    &task.path,
-                                    folder_depth,
-                                ).map(|blob| (blob, None))
-                            } else {
-                                // 文件：返回 blob 和保存信息（用于延迟保存）
-                                Self::generate_file_thumbnail_static(&generator, &task.path)
-                                    .map(|(blob, path_key, size, ghash)| {
-                                        (blob, Some((path_key, size, ghash)))
-                                    })
+                            // 根据文件类型生成缩略图
+                            match task.file_type {
+                                ThumbnailFileType::Folder => {
+                                    // 文件夹：直接返回 blob（已在内部保存）
+                                    Self::generate_folder_thumbnail_static(
+                                        &generator,
+                                        &db,
+                                        &task.path,
+                                        folder_depth,
+                                    ).map(|blob| (blob, None))
+                                }
+                                ThumbnailFileType::Archive => {
+                                    // 压缩包：使用压缩包缩略图生成
+                                    Self::generate_archive_thumbnail_static(&generator, &task.path)
+                                        .map(|(blob, path_key, size, ghash)| {
+                                            (blob, Some((path_key, size, ghash)))
+                                        })
+                                }
+                                ThumbnailFileType::Video => {
+                                    // 视频：使用视频缩略图生成
+                                    Self::generate_video_thumbnail_static(&generator, &task.path)
+                                        .map(|(blob, path_key, size, ghash)| {
+                                            (blob, Some((path_key, size, ghash)))
+                                        })
+                                }
+                                ThumbnailFileType::Image | ThumbnailFileType::Other => {
+                                    // 图片/其他：使用通用文件缩略图生成
+                                    Self::generate_file_thumbnail_static(&generator, &task.path)
+                                        .map(|(blob, path_key, size, ghash)| {
+                                            (blob, Some((path_key, size, ghash)))
+                                        })
+                                }
                             }
                         }));
                         
@@ -441,7 +473,7 @@ impl ThumbnailServiceV3 {
         // 批量分类路径
         let mut cached_paths: Vec<(String, Vec<u8>)> = Vec::new();
         let mut db_paths: Vec<String> = Vec::new();
-        let mut generate_paths: Vec<(String, bool, usize)> = Vec::new(); // (path, is_folder, priority)
+        let mut generate_paths: Vec<(String, ThumbnailFileType, usize)> = Vec::new(); // (path, file_type, priority)
         
         // 读取索引（只锁一次）
         let (db_index_snapshot, failed_index_snapshot) = {
@@ -477,10 +509,9 @@ impl ThumbnailServiceV3 {
             if in_db {
                 db_paths.push(path.clone());
             } else {
-                // 优化：通过路径特征快速判断是否是文件夹
-                // 如果路径没有扩展名，或以斜杠结尾，可能是文件夹
-                let is_folder = Self::is_likely_folder(path);
-                generate_paths.push((path.clone(), is_folder, priority));
+                // 优化：通过路径特征快速判断文件类型
+                let file_type = Self::detect_file_type(path);
+                generate_paths.push((path.clone(), file_type, priority));
             }
         }
         
@@ -538,7 +569,7 @@ impl ThumbnailServiceV3 {
                 // 收集已有路径用于去重
                 let existing: std::collections::HashSet<_> = queue.iter().map(|t| t.path.clone()).collect();
                 
-                for (path, is_folder, priority) in generate_paths {
+                for (path, file_type, priority) in generate_paths {
                     // 去重：跳过已在队列中的路径
                     if existing.contains(&path) {
                         continue;
@@ -547,7 +578,7 @@ impl ThumbnailServiceV3 {
                     queue.push_back(GenerateTask {
                         path,
                         directory: current_dir.clone(),
-                        is_folder,
+                        file_type,
                         priority,
                     });
                 }
@@ -631,6 +662,56 @@ impl ThumbnailServiceV3 {
         
         // 如果没有扩展名或扩展名不在列表中，回退到文件系统检查
         path_obj.is_dir()
+    }
+    
+    /// 检测文件类型
+    fn detect_file_type(path: &str) -> ThumbnailFileType {
+        // 如果以斜杠结尾，肯定是文件夹
+        if path.ends_with('/') || path.ends_with('\\') {
+            return ThumbnailFileType::Folder;
+        }
+        
+        let path_lower = path.to_lowercase();
+        
+        // 检测压缩包
+        if path_lower.ends_with(".zip") || path_lower.ends_with(".cbz") ||
+           path_lower.ends_with(".rar") || path_lower.ends_with(".cbr") ||
+           path_lower.ends_with(".7z") || path_lower.ends_with(".cb7") {
+            return ThumbnailFileType::Archive;
+        }
+        
+        // 检测视频
+        if path_lower.ends_with(".mp4") || path_lower.ends_with(".mkv") ||
+           path_lower.ends_with(".avi") || path_lower.ends_with(".mov") ||
+           path_lower.ends_with(".webm") || path_lower.ends_with(".wmv") ||
+           path_lower.ends_with(".flv") || path_lower.ends_with(".m4v") ||
+           path_lower.ends_with(".ts") || path_lower.ends_with(".m2ts") {
+            return ThumbnailFileType::Video;
+        }
+        
+        // 检测图片
+        if path_lower.ends_with(".jpg") || path_lower.ends_with(".jpeg") ||
+           path_lower.ends_with(".png") || path_lower.ends_with(".gif") ||
+           path_lower.ends_with(".webp") || path_lower.ends_with(".bmp") ||
+           path_lower.ends_with(".avif") || path_lower.ends_with(".jxl") ||
+           path_lower.ends_with(".heic") || path_lower.ends_with(".heif") ||
+           path_lower.ends_with(".tiff") || path_lower.ends_with(".tif") ||
+           path_lower.ends_with(".svg") || path_lower.ends_with(".ico") {
+            return ThumbnailFileType::Image;
+        }
+        
+        // 检查是否是文件夹
+        let path_obj = Path::new(path);
+        if path_obj.extension().is_none() || path_obj.is_dir() {
+            return ThumbnailFileType::Folder;
+        }
+        
+        ThumbnailFileType::Other
+    }
+    
+    /// 判断是否为压缩包文件（保留旧函数以兼容）
+    fn is_archive_file(path: &str) -> bool {
+        matches!(Self::detect_file_type(path), ThumbnailFileType::Archive)
     }
     
     /// 直接从缓存获取（同步）
@@ -777,6 +858,41 @@ impl ThumbnailServiceV3 {
         generator: &Arc<Mutex<ThumbnailGenerator>>,
         path: &str,
     ) -> Result<(Vec<u8>, String, i64, i32), String> {
+        let gen = generator.lock().map_err(|e| format!("获取生成器锁失败: {}", e))?;
+        gen.generate_file_thumbnail_blob_only(path)
+    }
+    
+    /// 生成压缩包缩略图（静态方法，用于工作线程）
+    /// 返回 (blob, path_key, size, ghash) 用于延迟保存
+    fn generate_archive_thumbnail_static(
+        generator: &Arc<Mutex<ThumbnailGenerator>>,
+        path: &str,
+    ) -> Result<(Vec<u8>, String, i64, i32), String> {
+        let gen = generator.lock().map_err(|e| format!("获取生成器锁失败: {}", e))?;
+        
+        // 获取压缩包大小
+        let metadata = std::fs::metadata(path)
+            .map_err(|e| format!("获取压缩包元数据失败: {}", e))?;
+        let archive_size = metadata.len() as i64;
+        
+        // 构建路径键
+        let path_key = gen.build_path_key(path, None);
+        let ghash = ThumbnailGenerator::generate_hash(&path_key, archive_size);
+        
+        // 生成缩略图
+        let blob = gen.generate_archive_thumbnail(path)?;
+        
+        Ok((blob, path_key, archive_size, ghash))
+    }
+    
+    /// 生成视频缩略图（静态方法，用于工作线程）
+    /// 返回 (blob, path_key, size, ghash) 用于延迟保存
+    fn generate_video_thumbnail_static(
+        generator: &Arc<Mutex<ThumbnailGenerator>>,
+        path: &str,
+    ) -> Result<(Vec<u8>, String, i64, i32), String> {
+        // 视频缩略图直接使用 generate_file_thumbnail_blob_only
+        // 因为它内部会检测视频文件并调用 ffmpeg
         let gen = generator.lock().map_err(|e| format!("获取生成器锁失败: {}", e))?;
         gen.generate_file_thumbnail_blob_only(path)
     }

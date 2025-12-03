@@ -548,8 +548,14 @@ impl ThumbnailServiceV3 {
         let patterns = ["cover", "folder", "thumb"];
         let image_exts = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "avif", "jxl"];
         
-        let entries = std::fs::read_dir(folder)
-            .map_err(|e| format!("读取目录失败: {}", e))?;
+        // 优雅处理权限错误
+        let entries = match std::fs::read_dir(folder) {
+            Ok(e) => e,
+            Err(e) => {
+                log_debug!("⚠️ 无法读取目录 (可能权限不足): {} - {}", folder, e);
+                return Ok(None); // 返回空结果而不是错误
+            }
+        };
         
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().to_lowercase();
@@ -579,8 +585,14 @@ impl ThumbnailServiceV3 {
         let image_exts = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "avif", "jxl"];
         let archive_exts = ["zip", "cbz", "rar", "cbr", "7z", "cb7"];
         
-        let entries = std::fs::read_dir(folder)
-            .map_err(|e| format!("读取目录失败: {}", e))?;
+        // 优雅处理权限错误
+        let entries = match std::fs::read_dir(folder) {
+            Ok(e) => e,
+            Err(e) => {
+                log_debug!("⚠️ 无法读取目录 (可能权限不足): {} - {}", folder, e);
+                return Ok(None); // 返回空结果而不是错误
+            }
+        };
         
         // 收集所有条目并排序
         let mut sorted_entries: Vec<_> = entries.flatten().collect();

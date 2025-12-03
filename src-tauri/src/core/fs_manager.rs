@@ -105,7 +105,14 @@ impl FsManager {
         let mut items = Vec::new();
 
         for entry in entries {
-            let entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
+            // 优雅处理单个条目的错误（如权限问题）
+            let entry = match entry {
+                Ok(e) => e,
+                Err(e) => {
+                    log::debug!("跳过无法读取的条目: {}", e);
+                    continue;
+                }
+            };
             let path = entry.path();
 
             // 跳过隐藏文件（以 . 开头）
@@ -115,9 +122,14 @@ impl FsManager {
                 }
             }
 
-            let metadata = entry
-                .metadata()
-                .map_err(|e| format!("获取元数据失败: {}", e))?;
+            // 优雅处理元数据获取失败（如权限问题）
+            let metadata = match entry.metadata() {
+                Ok(m) => m,
+                Err(e) => {
+                    log::debug!("跳过无法获取元数据的条目 {:?}: {}", path, e);
+                    continue;
+                }
+            };
 
             let name = entry.file_name().to_string_lossy().to_string();
             let is_dir = metadata.is_dir();

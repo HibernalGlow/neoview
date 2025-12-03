@@ -44,8 +44,12 @@ pub struct FileInfo {
 }
 
 #[tauri::command]
-pub async fn read_directory(path: String) -> Result<Vec<FileInfo>, String> {
+pub async fn read_directory(
+    path: String,
+    excluded_paths: Option<Vec<String>>,
+) -> Result<Vec<FileInfo>, String> {
     let path = Path::new(&path);
+    let excluded = excluded_paths.unwrap_or_default();
 
     if !path.exists() {
         return Err(format!("Path does not exist: {}", path.display()));
@@ -60,27 +64,55 @@ pub async fn read_directory(path: String) -> Result<Vec<FileInfo>, String> {
     let read_dir = fs::read_dir(path).map_err(|e| format!("Failed to read directory: {}", e))?;
 
     for entry in read_dir {
-        if let Ok(entry) = entry {
-            let path = entry.path();
-            let metadata = entry.metadata().ok();
-
-            let file_info = FileInfo {
-                name: path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("Unknown")
-                    .to_string(),
-                path: path.to_string_lossy().to_string(),
-                is_directory: path.is_dir(),
-                size: metadata.as_ref().map(|m| m.len()),
-                modified: metadata
-                    .and_then(|m| m.modified().ok())
-                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                    .map(|d| d.as_secs().to_string()),
-            };
-
-            entries.push(file_info);
+        // 优雅处理权限错误
+        let entry = match entry {
+            Ok(e) => e,
+            Err(e) => {
+                log::debug!("跳过无法读取的条目: {}", e);
+                continue;
+            }
+        };
+        
+        let entry_path = entry.path();
+        let path_str = entry_path.to_string_lossy().to_string();
+        
+        // 检查是否在排除列表中（规范化路径进行比较）
+        let normalized_path = path_str.replace('/', "\\");
+        let is_excluded = excluded.iter().any(|ex| {
+            let normalized_ex = ex.replace('/', "\\");
+            normalized_path == normalized_ex 
+                || normalized_path.starts_with(&format!("{}\\", normalized_ex))
+        });
+        
+        if is_excluded {
+            continue;
         }
+        
+        // 优雅处理元数据获取失败
+        let metadata = match entry.metadata() {
+            Ok(m) => Some(m),
+            Err(e) => {
+                log::debug!("跳过无法获取元数据的条目 {:?}: {}", entry_path, e);
+                continue;
+            }
+        };
+
+        let file_info = FileInfo {
+            name: entry_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("Unknown")
+                .to_string(),
+            path: path_str,
+            is_directory: entry_path.is_dir(),
+            size: metadata.as_ref().map(|m| m.len()),
+            modified: metadata
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs().to_string()),
+        };
+
+        entries.push(file_info);
     }
 
     // 按名称排序，目录在前

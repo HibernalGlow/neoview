@@ -15,6 +15,7 @@ import { computeAutoBackgroundColor } from '$lib/utils/autoBackground';
 export interface LoadResult {
   url: string;
   blob: Blob;
+  bitmap?: ImageBitmap;
   dimensions: { width: number; height: number } | null;
   fromCache: boolean;
 }
@@ -30,6 +31,8 @@ export class StackImageLoader {
   private dimensionsCache = new Map<number, { width: number; height: number }>();
   // 背景色缓存
   private backgroundColorCache = new Map<number, string>();
+  // ImageBitmap 缓存 - 用于 GPU 加速渲染
+  private bitmapCache = new Map<number, ImageBitmap>();
 
   constructor() {
     // 创建独立的 ImageLoaderCore 实例
@@ -44,6 +47,11 @@ export class StackImageLoader {
       this.core.reset();
       this.dimensionsCache.clear();
       this.backgroundColorCache.clear();
+      // 关闭所有 ImageBitmap 并清除缓存
+      for (const bitmap of this.bitmapCache.values()) {
+        bitmap.close();
+      }
+      this.bitmapCache.clear();
       this.currentBookPath = bookPath;
     }
   }
@@ -77,12 +85,40 @@ export class StackImageLoader {
       void this.computeAndCacheBackgroundColor(pageIndex, result.url);
     }
     
+    // 后台创建 ImageBitmap（GPU 加速渲染）
+    const bitmap = this.bitmapCache.get(pageIndex);
+    if (!bitmap && result.blob) {
+      // 异步创建 ImageBitmap，不阻塞返回
+      this.createAndCacheBitmap(pageIndex, result.blob);
+    }
+    
     return {
       url: result.url,
       blob: result.blob,
+      bitmap,
       dimensions,
       fromCache: result.fromCache,
     };
+  }
+  
+  /**
+   * 异步创建并缓存 ImageBitmap
+   */
+  private async createAndCacheBitmap(pageIndex: number, blob: Blob): Promise<void> {
+    if (this.bitmapCache.has(pageIndex)) return;
+    
+    try {
+      const bitmap = await createImageBitmap(blob, {
+        // 允许颜色空间转换，优化渲染
+        colorSpaceConversion: 'default',
+        // 预乘 alpha，优化合成
+        premultiplyAlpha: 'premultiply',
+      });
+      this.bitmapCache.set(pageIndex, bitmap);
+      console.log(`🖼️ ImageBitmap 创建: 页 ${pageIndex + 1}`);
+    } catch (e) {
+      console.warn(`创建 ImageBitmap 失败: 页 ${pageIndex + 1}`, e);
+    }
   }
 
   /**
@@ -98,6 +134,13 @@ export class StackImageLoader {
 
   getCachedDimensions(pageIndex: number): { width: number; height: number } | undefined {
     return this.dimensionsCache.get(pageIndex);
+  }
+  
+  /**
+   * 获取缓存的 ImageBitmap
+   */
+  getCachedBitmap(pageIndex: number): ImageBitmap | undefined {
+    return this.bitmapCache.get(pageIndex);
   }
 
   /**

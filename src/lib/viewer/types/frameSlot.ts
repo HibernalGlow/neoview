@@ -15,6 +15,8 @@ export interface FrameSlot {
   pageIndex: number;
   /** 图片 URL */
   url: string | null;
+  /** GPU 预解码的 ImageBitmap（用于 Canvas 渲染） */
+  bitmap: ImageBitmap | null;
   /** 图片尺寸 */
   dimensions: { width: number; height: number } | null;
   /** 是否正在加载 */
@@ -29,6 +31,7 @@ export function createEmptySlot(position: SlotPosition): FrameSlot {
     position,
     pageIndex: -1,
     url: null,
+    bitmap: null,
     dimensions: null,
     loading: false,
     backgroundColor: null,

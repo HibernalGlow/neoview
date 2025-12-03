@@ -13,6 +13,7 @@ import { stackImageLoader } from '../utils/stackImageLoader';
 export interface PooledImage {
   url: string;
   blob?: Blob;
+  bitmap?: ImageBitmap;
   pageIndex: number;
   width?: number;
   height?: number;
@@ -39,6 +40,7 @@ class ImagePool {
       return {
         url: result.url,
         blob: result.blob,
+        bitmap: result.bitmap,
         pageIndex,
         width: result.dimensions?.width,
         height: result.dimensions?.height,
@@ -54,11 +56,13 @@ class ImagePool {
   getSync(pageIndex: number): PooledImage | null {
     const url = stackImageLoader.getCachedUrl(pageIndex);
     const blob = stackImageLoader.getCachedBlob(pageIndex);
+    const bitmap = stackImageLoader.getCachedBitmap(pageIndex);
     const dimensions = stackImageLoader.getCachedDimensions(pageIndex);
     if (url) {
       return { 
         url, 
-        blob, 
+        blob,
+        bitmap,
         pageIndex,
         width: dimensions?.width,
         height: dimensions?.height,

@@ -154,6 +154,7 @@
         position: slot.position,
         pageIndex,
         url: cached.url,
+        bitmap: cached.bitmap ?? null,
         dimensions: cached.width && cached.height 
           ? { width: cached.width, height: cached.height } 
           : null,
@@ -177,6 +178,7 @@
           position: slot.position,
           pageIndex,
           url: image.url,
+          bitmap: image.bitmap ?? null,
           dimensions: image.width && image.height 
             ? { width: image.width, height: image.height } 
             : null,

@@ -638,20 +638,30 @@ impl Default for ThumbnailConfig {
 
 ---
 
-## 六、下一步
+## 六、实现进度
 
-设计已确认，准备开始实现：
+### Phase 1: Rust 后端实现 ✅ 完成
 
-### Phase 1: Rust 后端实现
-1. 创建 `ThumbnailConfig`
-2. 创建 `ThumbnailService` + LRU 缓存
-3. 实现 6 个 IPC 命令
-4. 实现 8 线程工作池
-5. 实现文件夹缩略图生成
+| 任务 | 文件 | 状态 |
+|------|------|------|
+| ThumbnailServiceConfig | `src-tauri/src/core/thumbnail_service_v3.rs` | ✅ |
+| ThumbnailServiceV3 + LRU 缓存 | `src-tauri/src/core/thumbnail_service_v3.rs` | ✅ |
+| 7 个 IPC 命令 | `src-tauri/src/commands/thumbnail_v3_commands.rs` | ✅ |
+| 8 线程工作池 | `ThumbnailServiceV3::start()` | ✅ |
+| 文件夹缩略图生成 | `generate_folder_thumbnail_static()` | ✅ |
 
-### Phase 2: 前端简化
-1. 创建 `thumbnailStore.svelte.ts`
-2. 简化 `VirtualizedFileListV2.svelte`
-3. 删除旧的前端缩略图逻辑
+### Phase 2: 前端简化 🚧 进行中
 
-确认后我开始实现 Phase 1.
+| 任务 | 文件 | 状态 |
+|------|------|------|
+| 创建 thumbnailStoreV3 | `src/lib/stores/thumbnailStoreV3.svelte.ts` | ✅ |
+| 简化 VirtualizedFileListV2 | `VirtualizedFileListV2.svelte` | ⏳ 待开始 |
+| 集成测试 | - | ⏳ 待开始 |
+
+### 新增文件
+
+```
+src-tauri/src/core/thumbnail_service_v3.rs     # 核心服务
+src-tauri/src/commands/thumbnail_v3_commands.rs # IPC 命令
+src/lib/stores/thumbnailStoreV3.svelte.ts       # 前端 store
+```

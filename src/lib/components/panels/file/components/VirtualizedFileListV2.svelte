@@ -3,8 +3,10 @@
 	import { createVirtualizer } from '@tanstack/svelte-virtual';
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import type { FsItem } from '$lib/types';
+	// V3 缩略图系统（复刻 NeeView 架构）
+	import { requestVisibleThumbnails, hasThumbnail, getThumbnailUrl } from '$lib/stores/thumbnailStoreV3.svelte';
+	// 保留旧的 thumbnailManager 用于兼容
 	import { thumbnailManager } from '$lib/utils/thumbnailManager';
-	import { visibleThumbnailLoader } from '$lib/utils/thumbnail/VisibleThumbnailLoader';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 	import { get } from 'svelte/store';
 	import { debounce, scheduleIdleTask, getAdaptivePerformanceConfig } from '$lib/utils/performance';
@@ -123,9 +125,8 @@
 		}
 	});
 
-	// Thumbnail loading for visible items - V2 优化版
-	// 参考 NeeView 的 ThumbnailListView.LoadThumbnails
-	// 核心优化：中央优先、方向感知、即时取消
+	// Thumbnail loading for visible items - V3 版本
+	// 复刻 NeeView 架构：后端为主，前端只通知可见区域
 	const handleVisibleRangeChange = debounce(() => {
 		if (!currentPath || items.length === 0 || virtualItems.length === 0) return;
 
@@ -135,30 +136,30 @@
 		const startIndex = startRowIndex * columns;
 		const endIndex = Math.min((endRowIndex + 1) * columns - 1, items.length - 1);
 
-		// 检测滚动方向
-		const currentScrollTop = container?.scrollTop ?? 0;
-		const currentTime = Date.now();
-		const deltaTime = currentTime - lastScrollTime;
-		let scrollDirection = 0;
+		// 收集可见区域的路径（中央优先排序）
+		const center = Math.floor((startIndex + endIndex) / 2);
+		const visiblePaths: { path: string; dist: number }[] = [];
 		
-		if (deltaTime > 0 && deltaTime < 500) {
-			scrollDirection = currentScrollTop > lastScrollTop ? 1 : 
-			                  currentScrollTop < lastScrollTop ? -1 : 0;
+		for (let i = startIndex; i <= endIndex; i++) {
+			const item = items[i];
+			if (!item) continue;
+			// 只处理需要缩略图的项目
+			if (item.isDir || item.isImage || isVideoFile(item.path) || 
+				item.name.endsWith('.zip') || item.name.endsWith('.cbz') ||
+				item.name.endsWith('.rar') || item.name.endsWith('.cbr')) {
+				visiblePaths.push({ path: item.path, dist: Math.abs(i - center) });
+			}
 		}
-		lastScrollTop = currentScrollTop;
-		lastScrollTime = currentTime;
-
-		// 使用新的可见项目加载器
-		// 注意：缓存检查由 thumbnailManager 统一处理，避免双重过滤问题
-		// 自动实现：中央优先排序、方向感知、离开可见区域任务取消
-		visibleThumbnailLoader.handleVisibleRangeChange(
-			items,
-			startIndex,
-			endIndex,
-			scrollDirection,
+		
+		// 按距离中心排序
+		visiblePaths.sort((a, b) => a.dist - b.dist);
+		
+		// V3: 调用后端，后端处理一切
+		requestVisibleThumbnails(
+			visiblePaths.map(p => p.path),
 			currentPath
 		);
-	}, 100); // 100ms debounce，平衡响应速度和过滤效果
+	}, 100); // 100ms debounce
 
 	// 当 virtualItems 变化时触发缩略图加载
 	$effect(() => {

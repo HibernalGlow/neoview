@@ -17,8 +17,8 @@
 	import { videoStore } from '$lib/stores/video.svelte';
 	import { updateUpscaleSettings } from '$lib/utils/upscale/settings';
 	import { deleteArchiveEntry } from '$lib/api/archive';
-	// TODO: 缩略图功能已移除，待重新实现
-	// import { init_thumbnail_manager } from '$lib/api';
+	// V3 缩略图系统（复刻 NeeView 架构）
+	import { initThumbnailServiceV3, cleanup as cleanupThumbnailService } from '$lib/stores/thumbnailStoreV3.svelte';
 	import Toast from '$lib/components/ui/toast.svelte';
 	import { onMount } from 'svelte';
 
@@ -82,9 +82,10 @@ async function handleDeleteCurrentArchivePage() {
 			// console.log('📂 根目录路径:', rootPath);
 			// console.log('⚠️ 使用系统根目录，支持任意路径的缩略图生成');
 			
-			// await init_thumbnail_manager(thumbnailPath, rootPath, 256);
-			// console.log('✅ 缩略图管理器初始化成功');
-			console.log('缩略图管理器初始化已跳过，功能已移除，待重新实现');
+			// V3 缩略图系统初始化
+			const thumbnailPath = 'D:\\temp\\neoview';
+			await initThumbnailServiceV3(thumbnailPath, 256);
+			console.log('✅ ThumbnailServiceV3 初始化成功');
 		} catch (error) {
 			console.error('❌ 初始化失败:', error);
 		}

@@ -7,7 +7,7 @@
 
 import {
   initThumbnailServiceV3,
-  requestVisibleThumbnails,
+  requestVisibleThumbnails as requestVisibleThumbnailsV3,
   cancelThumbnailRequests,
   getThumbnailUrl,
   hasThumbnail,
@@ -17,6 +17,16 @@ import {
   cleanup,
   useThumbnails,
 } from '$lib/stores/thumbnailStoreV3.svelte';
+import { isPathExcluded } from '$lib/stores/excludedPaths.svelte';
+
+// 带排除路径过滤的请求
+function requestVisibleThumbnails(paths: string[], currentPath: string): void {
+  // 过滤掉排除路径
+  const filteredPaths = paths.filter(p => !isPathExcluded(p));
+  if (filteredPaths.length > 0) {
+    requestVisibleThumbnailsV3(filteredPaths, currentPath);
+  }
+}
 
 // 重新导出 V3 API
 export {

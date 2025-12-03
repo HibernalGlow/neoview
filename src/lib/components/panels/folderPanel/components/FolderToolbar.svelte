@@ -39,6 +39,7 @@ import {
 import { hoverPreviewSettings, hoverPreviewEnabled, hoverPreviewDelayMs } from '$lib/stores/hoverPreviewSettings.svelte';
 import { getDefaultRating, saveDefaultRating } from '$lib/stores/emm/storage';
 import { folderThumbnailLoader, type WarmupProgress } from '$lib/utils/thumbnail';
+import { addExcludedPath, isPathExcluded, removeExcludedPath, getExcludedPaths } from '$lib/stores/excludedPaths.svelte';
 import * as Progress from '$lib/components/ui/progress';
 import { Button } from '$lib/components/ui/button';
 import * as Tooltip from '$lib/components/ui/tooltip';
@@ -557,6 +558,37 @@ function cancelWarmup() {
 								</button>
 							{/each}
 						</div>
+					</DropdownMenu.SubContent>
+				</DropdownMenu.Sub>
+				<DropdownMenu.Separator />
+				<!-- 排除路径设置 -->
+				<DropdownMenu.Sub>
+					<DropdownMenu.SubTrigger>
+						<Trash2 class="mr-2 h-4 w-4" />
+						排除路径
+					</DropdownMenu.SubTrigger>
+					<DropdownMenu.SubContent>
+						{#if $currentPathStore && !isPathExcluded($currentPathStore)}
+							<DropdownMenu.Item onclick={() => $currentPathStore && addExcludedPath($currentPathStore)}>
+								排除当前目录
+							</DropdownMenu.Item>
+						{:else if $currentPathStore}
+							<DropdownMenu.Item onclick={() => $currentPathStore && removeExcludedPath($currentPathStore)}>
+								取消排除当前目录
+							</DropdownMenu.Item>
+						{/if}
+						<DropdownMenu.Separator />
+						<DropdownMenu.Label class="text-xs text-muted-foreground">已排除目录</DropdownMenu.Label>
+						{#each getExcludedPaths() as path}
+							<DropdownMenu.Item onclick={() => removeExcludedPath(path)}>
+								<span class="truncate max-w-[200px]">{path}</span>
+								<span class="ml-auto text-xs text-muted-foreground">✕</span>
+							</DropdownMenu.Item>
+						{:else}
+							<DropdownMenu.Item disabled class="text-muted-foreground">
+								暂无排除目录
+							</DropdownMenu.Item>
+						{/each}
 					</DropdownMenu.SubContent>
 				</DropdownMenu.Sub>
 				<DropdownMenu.Separator />

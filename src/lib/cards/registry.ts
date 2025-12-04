@@ -223,6 +223,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'upscale',
 		canHide: true,
 	},
+	'upscaleConditions': {
+		id: 'upscaleConditions',
+		title: '条件超分',
+		icon: Activity,
+		defaultPanel: 'upscale',
+		canHide: true,
+	},
 	
 	// ==================== Insights 面板卡片 ====================
 	'dailyTrend': {

@@ -244,16 +244,8 @@
   // 渲染器模式
   let useStackRenderer = $derived((settings.view.renderer?.mode ?? 'stack') === 'stack');
   
-  // 调试：输出渲染条件
-  $effect(() => {
-    console.log(`🔍 StackView 渲染条件:`, {
-      isVideoMode,
-      isPanorama,
-      useStackRenderer,
-      rendererMode: settings.view.renderer?.mode ?? 'stack',
-      willUseStackViewer: !isVideoMode && !isPanorama && useStackRenderer,
-    });
-  });
+  // ViewerJS 增强模式
+  let useViewerJS = $derived(settings.view.renderer?.useViewerJS ?? false);
   
   // StackViewer 组件引用
   let stackViewerRef: StackViewer | null = null;
@@ -608,7 +600,10 @@
       {viewPositionX}
       {viewPositionY}
       {viewportSize}
+      {useViewerJS}
+      zoomOnWheel={false}
       onImageLoad={handleImageLoad}
+      onZoomChange={(ratio) => { manualScale = ratio; }}
     />
   {:else}
     <!-- 标准模式：显示当前帧 -->

@@ -7,7 +7,7 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { Button } from '$lib/components/ui/button';
-	import { Timer, ChevronUp, ChevronDown, ArrowUp, ArrowDown, FolderOpen, Copy, Check, Play, Trash2, Eye } from '@lucide/svelte';
+	import { Timer, ChevronUp, ChevronDown, ArrowUp, ArrowDown, FolderOpen, Copy, Check, Play, Trash2, Eye, ImageIcon, ZoomIn, Move } from '@lucide/svelte';
 	import { visibilityMonitor, setMonitorEnabled } from '$lib/stores/visibilityMonitor.svelte';
 	import { stackMonitor, setStackMonitorEnabled, resetStackStats } from '$lib/stores/stackMonitor.svelte';
 	import { Layers } from '@lucide/svelte';
@@ -35,7 +35,7 @@
 		results: BenchmarkResult[];
 	}
 
-	type CardId = 'visibility' | 'stackviewer' | 'files' | 'detailed' | 'loadmode' | 'archives' | 'realworld' | 'results' | 'summary';
+	type CardId = 'visibility' | 'viewerjs' | 'stackviewer' | 'files' | 'detailed' | 'loadmode' | 'archives' | 'realworld' | 'results' | 'summary';
 
 	interface LoadModeTestResult {
 		mode: string;
@@ -77,9 +77,10 @@
 	}
 
 	// ==================== 状态管理 ====================
-	let cardOrder = $state<CardId[]>(['visibility', 'stackviewer', 'files', 'detailed', 'loadmode', 'archives', 'realworld', 'results', 'summary']);
+	let cardOrder = $state<CardId[]>(['visibility', 'viewerjs', 'stackviewer', 'files', 'detailed', 'loadmode', 'archives', 'realworld', 'results', 'summary']);
 	let showCards = $state<Record<CardId, boolean>>({
 		visibility: true,
+		viewerjs: true,
 		stackviewer: true,
 		files: true,
 		detailed: true,
@@ -89,6 +90,22 @@
 		results: true,
 		summary: true
 	});
+	
+	// ViewerJS 状态
+	let viewerJSEnabled = $derived(settings.view.renderer?.useViewerJS ?? false);
+	
+	function toggleViewerJS() {
+		const currentSettings = settingsManager.getSettings();
+		settingsManager.updateSettings({
+			view: {
+				...currentSettings.view,
+				renderer: {
+					mode: currentSettings.view.renderer?.mode ?? 'stack',
+					useViewerJS: !viewerJSEnabled
+				}
+			}
+		});
+	}
 
 	interface ArchiveScanResult {
 		total_count: number;
@@ -686,6 +703,99 @@
 								📭 暂无数据，请在文件夹面板中浏览文件
 							</div>
 						{/if}
+					</div>
+				{/if}
+			</div>
+
+			<!-- ViewerJS 增强卡片 -->
+			<div
+				class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
+				style={`order: ${getCardOrder('viewerjs')}`}
+			>
+				<div class="flex items-center justify-between">
+					<div class="flex items-center gap-2">
+						<ImageIcon class="h-4 w-4 text-purple-500" />
+						<div class="font-semibold text-sm">ViewerJS 增强</div>
+					</div>
+					<div class="flex items-center gap-1 text-[10px]">
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+							onclick={() => (showCards.viewerjs = !showCards.viewerjs)}
+							title={showCards.viewerjs ? '收起' : '展开'}
+						>
+							{#if showCards.viewerjs}
+								<ChevronUp class="h-3 w-3" />
+							{:else}
+								<ChevronDown class="h-3 w-3" />
+							{/if}
+						</button>
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40"
+							onclick={() => moveCard('viewerjs', 'up')}
+							disabled={!canMoveCard('viewerjs', 'up')}
+						>
+							<ArrowUp class="h-3 w-3" />
+						</button>
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40"
+							onclick={() => moveCard('viewerjs', 'down')}
+							disabled={!canMoveCard('viewerjs', 'down')}
+						>
+							<ArrowDown class="h-3 w-3" />
+						</button>
+					</div>
+				</div>
+
+				{#if showCards.viewerjs}
+					<div class="space-y-2">
+						<p class="text-[10px] text-muted-foreground">
+							使用 ViewerJS 库提供专业的图片缩放和拖拽功能
+						</p>
+						
+						<div class="flex items-center justify-between">
+							<div class="flex items-center gap-2 text-[10px]">
+								<span class={viewerJSEnabled ? 'text-green-500' : 'text-muted-foreground'}>
+									{viewerJSEnabled ? '✅ 已启用' : '⏸️ 已禁用'}
+								</span>
+							</div>
+							<Button 
+								variant={viewerJSEnabled ? "default" : "outline"} 
+								size="sm" 
+								class="h-6 text-[10px] px-2"
+								onclick={toggleViewerJS}
+							>
+								{viewerJSEnabled ? '关闭' : '开启'}
+							</Button>
+						</div>
+						
+						<div class="border rounded p-2 space-y-1.5 text-[10px]">
+							<div class="font-medium text-muted-foreground">功能特性:</div>
+							<div class="grid grid-cols-2 gap-x-4 gap-y-1">
+								<div class="flex items-center gap-1">
+									<ZoomIn class="h-3 w-3 text-blue-500" />
+									<span>双指缩放</span>
+								</div>
+								<div class="flex items-center gap-1">
+									<Move class="h-3 w-3 text-green-500" />
+									<span>拖拽平移</span>
+								</div>
+								<div class="flex items-center gap-1">
+									<span class="text-purple-500">🖱️</span>
+									<span>双击切换</span>
+								</div>
+								<div class="flex items-center gap-1">
+									<span class="text-orange-500">📱</span>
+									<span>触控优化</span>
+								</div>
+							</div>
+						</div>
+						
+						<div class="text-[10px] text-muted-foreground">
+							渲染模式: <span class="font-mono text-cyan-500">{rendererMode}</span>
+						</div>
 					</div>
 				{/if}
 			</div>

@@ -996,7 +996,7 @@ onMount(() => {
 });
 </script>
 
-<div class="flex h-full flex-col overflow-hidden">
+<div class="flex h-full flex-col overflow-hidden rounded-lg border bg-muted/10">
 	<!-- 面包屑导航 -->
 	<div class="border-b">
 		<BreadcrumbBar onNavigate={handleNavigate} {homePath} />
@@ -1101,15 +1101,16 @@ onMount(() => {
 		<SelectionBar onDelete={handleBatchDelete} />
 	{/if}
 
-	<!-- 渐变过渡 -->
+	<!-- 渐变过渡（已禁用）
 	<div class="h-4 bg-linear-to-b from-transparent to-background"></div>
+	-->
 
 	<!-- 主内容区 - 使用层叠式布局 -->
 	<div class="relative flex-1 overflow-hidden">
 		<!-- 文件夹树层（绝对定位，在文件列表上方） -->
 		{#if $folderTreeConfig.visible}
 			<div
-				class="border-muted absolute z-10 overflow-auto bg-background"
+				class="border-muted absolute z-10 overflow-auto bg-muted/10"
 				class:border-b={$folderTreeConfig.layout === 'top'}
 				class:border-r={$folderTreeConfig.layout === 'left'}
 				style={$folderTreeConfig.layout === 'top'
@@ -1122,7 +1123,7 @@ onMount(() => {
 
 		<!-- 文件列表（层叠式）- 每个页签独立实例，切换时显示/隐藏 -->
 		<div
-			class="file-list-container absolute inset-0 overflow-hidden"
+			class="file-list-container absolute inset-0 overflow-hidden bg-muted/10"
 			style={$folderTreeConfig.visible
 				? $folderTreeConfig.layout === 'top'
 					? `top: ${$folderTreeConfig.size}px;`

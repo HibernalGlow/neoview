@@ -656,7 +656,7 @@ function handleOpenFolderAsBook(layerIndex: number, item: FsItem) {
 <div class="folder-stack relative h-full w-full overflow-hidden">
 	{#each layers as layer, index (layer.id)}
 		<div
-			class="folder-layer absolute inset-0 bg-background transition-transform duration-300 ease-out"
+			class="folder-layer absolute inset-0 bg-muted/10 transition-transform duration-300 ease-out"
 			class:pointer-events-none={index !== activeIndex}
 			style="transform: translateX({(index - activeIndex) * 100}%); z-index: {index};"
 		>

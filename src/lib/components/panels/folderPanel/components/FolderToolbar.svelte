@@ -40,6 +40,7 @@ import { hoverPreviewSettings, hoverPreviewEnabled, hoverPreviewDelayMs } from '
 import { getDefaultRating, saveDefaultRating } from '$lib/stores/emm/storage';
 import { folderThumbnailLoader, type WarmupProgress } from '$lib/utils/thumbnail';
 import { addExcludedPath, isPathExcluded, removeExcludedPath, getExcludedPaths } from '$lib/stores/excludedPaths.svelte';
+import { directoryTreeCache } from '../utils/directoryTreeCache';
 import * as Progress from '$lib/components/ui/progress';
 import { Button } from '$lib/components/ui/button';
 import * as Tooltip from '$lib/components/ui/tooltip';
@@ -156,6 +157,15 @@ function handleToggleSortOrder() {
 function handleToggleDeleteStrategy(e: MouseEvent) {
 	e.preventDefault();
 	onToggleDeleteStrategy?.();
+}
+
+function handleClearTreeCache() {
+	const stats = directoryTreeCache.getStats();
+	console.log(`[FolderToolbar] 清除内存树缓存，当前缓存条目: ${stats.size}, 加载中: ${stats.loading}`);
+	directoryTreeCache.clear();
+	console.log('[FolderToolbar] 内存树缓存已清除');
+	// 刷新当前目录
+	onRefresh?.();
 }
 
 function getCurrentViewIcon() {
@@ -489,6 +499,10 @@ function cancelWarmup() {
 				</DropdownMenu.Item>
 				<DropdownMenu.Item onclick={() => folderTabActions.toggleRecursiveMode()}>
 					递归显示子文件夹
+				</DropdownMenu.Item>
+				<DropdownMenu.Item onclick={handleClearTreeCache}>
+					<RefreshCw class="mr-2 h-4 w-4" />
+					刷新内存树
 				</DropdownMenu.Item>
 				<DropdownMenu.Separator />
 				<!-- 悬停预览设置 -->

@@ -150,47 +150,77 @@ async function requestThumbnail(pageIndex: number) {
 				{items.length === 0 ? '未加载书籍' : '未找到匹配的页面'}
 			</p>
 		{:else if viewMode === 'list'}
+			<!-- 纯文本列表 -->
 			<div class="space-y-0.5">
 				{#each filteredItems as item (item.index)}
 					<button
-						class="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors flex items-center gap-2 {currentPageIndex === item.index ? 'bg-primary/10 text-primary' : ''}"
+						class="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors flex items-center gap-2 {currentPageIndex === item.index ? 'bg-primary/10' : ''}"
 						onclick={() => goToPage(item.index)}
 					>
-						<span class="w-6 text-muted-foreground text-right">{item.index + 1}</span>
+						<span class="text-xs font-mono font-semibold text-primary">#{item.index + 1}</span>
 						<span class="truncate flex-1">{item.name}</span>
+						{#if currentPageIndex === item.index}
+							<span class="px-1 py-0.5 text-[10px] font-semibold bg-primary text-primary-foreground rounded shrink-0">当前</span>
+						{/if}
 					</button>
 				{/each}
 			</div>
 		{:else if viewMode === 'grid'}
-			<div class="grid grid-cols-4 gap-1">
+			<!-- 带缩略图的列表 -->
+			<div class="space-y-1">
 				{#each filteredItems as item (item.index)}
+					{@const thumb = getThumbnail(item.index)}
 					<button
-						class="aspect-square rounded border text-xs flex items-center justify-center hover:bg-muted transition-colors {currentPageIndex === item.index ? 'border-primary bg-primary/10' : ''}"
+						class="w-full text-left p-1.5 rounded hover:bg-muted transition-colors flex items-center gap-2 {currentPageIndex === item.index ? 'bg-primary/10' : ''}"
 						onclick={() => goToPage(item.index)}
+						onmouseenter={() => requestThumbnail(item.index)}
 					>
-						{item.index + 1}
+						<div class="w-12 h-16 rounded bg-muted flex items-center justify-center overflow-hidden relative shrink-0">
+							{#if thumb?.url}
+								<img src={thumb.url} alt="" class="absolute inset-0 w-full h-full object-contain" />
+							{:else if thumbnailCacheStore.isLoading(item.index)}
+								<div class="w-3 h-3 border-2 border-muted-foreground/40 border-t-foreground rounded-full animate-spin"></div>
+							{:else}
+								<ImageIcon class="h-4 w-4 text-muted-foreground" />
+							{/if}
+						</div>
+						<div class="flex-1 min-w-0">
+							<div class="flex items-center gap-1">
+								<span class="text-xs font-mono font-semibold text-primary">#{item.index + 1}</span>
+								{#if currentPageIndex === item.index}
+									<span class="px-1 py-0.5 text-[10px] font-semibold bg-primary text-primary-foreground rounded">当前</span>
+								{/if}
+							</div>
+							<div class="text-xs truncate">{item.name}</div>
+						</div>
 					</button>
 				{/each}
 			</div>
 		{:else}
+			<!-- 图片网格 -->
 			<div class="grid grid-cols-3 gap-1">
 				{#each filteredItems as item (item.index)}
 					{@const thumb = getThumbnail(item.index)}
 					<button
-						class="aspect-3/4 rounded border overflow-hidden relative hover:ring-2 ring-primary transition-all {currentPageIndex === item.index ? 'ring-2 ring-primary' : ''}"
+						class="flex flex-col gap-1 p-1 rounded hover:bg-muted transition-colors {currentPageIndex === item.index ? 'ring-2 ring-primary' : ''}"
 						onclick={() => goToPage(item.index)}
 						onmouseenter={() => requestThumbnail(item.index)}
 					>
-						{#if thumb?.url}
-							<img src={thumb.url} alt="" class="w-full h-full object-cover" />
-						{:else}
-							<div class="w-full h-full bg-muted flex items-center justify-center text-xs text-muted-foreground">
-								{item.index + 1}
-							</div>
-						{/if}
-						<span class="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-1 truncate">
-							{item.index + 1}
-						</span>
+						<div class="bg-muted rounded overflow-hidden relative w-full aspect-3/4 flex items-center justify-center">
+							{#if thumb?.url}
+								<img src={thumb.url} alt="" class="absolute inset-0 w-full h-full object-contain" />
+							{:else if thumbnailCacheStore.isLoading(item.index)}
+								<div class="w-4 h-4 border-2 border-muted-foreground/40 border-t-foreground rounded-full animate-spin"></div>
+							{:else}
+								<ImageIcon class="h-6 w-6 text-muted-foreground" />
+							{/if}
+						</div>
+						<div class="flex items-center gap-1">
+							<span class="text-[10px] font-mono font-semibold text-primary">#{item.index + 1}</span>
+							{#if currentPageIndex === item.index}
+								<span class="px-1 text-[8px] font-semibold bg-primary text-primary-foreground rounded">当前</span>
+							{/if}
+						</div>
 					</button>
 				{/each}
 			</div>

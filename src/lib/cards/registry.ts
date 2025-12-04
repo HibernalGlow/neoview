@@ -311,49 +311,14 @@ export const cardRegistry: Record<string, CardDefinition> = {
 	},
 
 	// ==================== Folder 面板卡片 ====================
-	'folderBreadcrumb': {
-		id: 'folderBreadcrumb',
-		title: '导航',
+	'folderMain': {
+		id: 'folderMain',
+		title: '文件夹',
 		icon: FolderOpen,
 		defaultPanel: 'folder',
 		canHide: false,
-		hideHeader: true, // 无头部
-		compact: true,
-	},
-	'folderTabBar': {
-		id: 'folderTabBar',
-		title: '标签',
-		icon: Layers,
-		defaultPanel: 'folder',
-		canHide: true,
-		hideHeader: true,
-		compact: true,
-	},
-	'folderToolbar': {
-		id: 'folderToolbar',
-		title: '工具',
-		icon: Activity,
-		defaultPanel: 'folder',
-		canHide: true,
-		hideHeader: true,
-		compact: true,
-	},
-	'folderTree': {
-		id: 'folderTree',
-		title: '文件树',
-		icon: FolderOpen,
-		defaultPanel: 'folder',
-		canHide: true,
 		fullHeight: true,
-		orientation: 'horizontal', // 可水平展开
-	},
-	'folderList': {
-		id: 'folderList',
-		title: '文件列表',
-		icon: FileText,
-		defaultPanel: 'folder',
-		canHide: false,
-		fullHeight: true,
+		hideHeader: true, // 隐藏卡片头部，面板本身有完整 UI
 	},
 };
 

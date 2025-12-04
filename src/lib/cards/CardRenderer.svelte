@@ -57,11 +57,7 @@ const lazyComponentMap: Record<string, () => Promise<{ default: any }>> = {
 	sourceBreakdown: () => import('./insights/SourceBreakdownCard.svelte'),
 	emmTagsHot: () => import('./insights/EmmTagsHotCard.svelte'),
 	// Folder
-	folderBreadcrumb: () => import('./folder/BreadcrumbCard.svelte'),
-	folderTabBar: () => import('./folder/TabBarCard.svelte'),
-	folderToolbar: () => import('./folder/ToolbarCard.svelte'),
-	folderTree: () => import('./folder/FileTreeCard.svelte'),
-	folderList: () => import('./folder/FileListCard.svelte'),
+	folderMain: () => import('./folder/FolderMainCard.svelte'),
 };
 
 // 组件缓存（避免重复加载）

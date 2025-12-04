@@ -112,7 +112,7 @@ function resetHeight(e: MouseEvent) {
 }
 </script>
 
-<div class="collapsible-card rounded-lg border bg-muted/10 transition-all hover:border-primary/60 {fullHeight ? 'flex flex-col flex-1 min-h-0' : ''} {orientation === 'horizontal' ? 'flex flex-row' : ''} {className}">
+<div class="collapsible-card {hideHeader ? '' : 'rounded-lg border bg-muted/10 hover:border-primary/60'} transition-all {fullHeight ? 'flex flex-col flex-1 min-h-0' : ''} {orientation === 'horizontal' ? 'flex flex-row' : ''} {className}">
 	<!-- 标题栏（可隐藏） -->
 	{#if !hideHeader}
 		<div class="flex items-center justify-between {compact ? 'px-2 py-1' : 'px-3 py-2'} {orientation === 'horizontal' ? 'flex-col border-r py-2 px-1' : ''}">
@@ -196,7 +196,7 @@ function resetHeight(e: MouseEvent) {
 	{#if isExpanded || hideHeader}
 		<div 
 			bind:this={contentRef}
-			class="{compact ? 'px-2 pb-2' : 'px-3 pb-3'} overflow-auto {fullHeight ? 'flex-1 min-h-0 flex flex-col' : ''} {orientation === 'horizontal' ? 'flex-1' : ''}" 
+			class="{hideHeader ? '' : (compact ? 'px-2 pb-2' : 'px-3 pb-3')} overflow-auto {fullHeight ? 'flex-1 min-h-0 flex flex-col' : ''} {orientation === 'horizontal' ? 'flex-1' : ''}" 
 			style={height ? `height: ${height}px` : (fullHeight ? '' : '')}
 			transition:slide={{ duration: 200, axis: orientation === 'horizontal' ? 'x' : 'y' }}
 		>

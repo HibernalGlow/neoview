@@ -186,6 +186,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'properties',
 		canHide: true,
 	},
+	'emmRawData': {
+		id: 'emmRawData',
+		title: 'EMM 数据库记录',
+		icon: FileText,
+		defaultPanel: 'properties',
+		canHide: true,
+	},
 	
 	// ==================== Upscale 面板卡片 ====================
 	'model': {

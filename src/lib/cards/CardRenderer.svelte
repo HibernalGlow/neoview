@@ -32,6 +32,7 @@ import FolderRatingsCard from './properties/FolderRatingsCard.svelte';
 import FavoriteTagsCard from './properties/FavoriteTagsCard.svelte';
 import EmmSyncCard from './properties/EmmSyncCard.svelte';
 import ThumbnailMaintenanceCard from './properties/ThumbnailMaintenanceCard.svelte';
+import EmmRawDataCard from './properties/EmmRawDataCard.svelte';
 
 import ModelCard from './upscale/ModelCard.svelte';
 import SettingsCard from './upscale/SettingsCard.svelte';
@@ -73,6 +74,7 @@ const componentMap: Record<string, any> = {
 	favoriteTags: FavoriteTagsCard,
 	emmSync: EmmSyncCard,
 	thumbnailMaintenance: ThumbnailMaintenanceCard,
+	emmRawData: EmmRawDataCard,
 	// Upscale
 	model: ModelCard,
 	settings: SettingsCard,

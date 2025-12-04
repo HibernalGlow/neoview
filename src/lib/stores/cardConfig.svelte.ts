@@ -62,7 +62,7 @@ function getCardPanelIds(): PanelId[] {
 	return getCardSupportingPanels();
 }
 
-const CURRENT_CONFIG_VERSION = 3; // 增加版本号来强制重置（修复 order 保存问题）
+const CURRENT_CONFIG_VERSION = 4; // 增加版本号来强制重置（添加 emmRawData 卡片）
 const STORAGE_KEY = `neoview_card_configs_v${CURRENT_CONFIG_VERSION}`;
 
 // 创建响应式状态

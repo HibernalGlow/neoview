@@ -2,16 +2,24 @@
  * 图片读取模块
  * 负责从文件系统或压缩包读取图片数据
  * 
- * 【纯内存方案】
- * 1. 文件系统图片：使用 asset:// 协议（浏览器自动缓存）
- * 2. 压缩包图片：使用二进制 IPC（无 JSON 序列化开销）
- * 3. 所有数据加载后存入 BlobCache，后续直接从内存读取
- * 4. 【优化】并行预加载 ±5 页到后端缓存
+ * 【双模式支持】
+ * 1. IPC 模式：二进制 IPC + Blob（内存缓存）
+ * 2. Tempfile 模式：解压到临时文件 + asset:// 协议
+ * 
+ * 【优化】
+ * - 并行预加载 ±5 页到后端缓存
+ * - Web Worker 解码避免阻塞主线程
  */
 
 import { convertFileSrc } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core';
 import { bookStore } from '$lib/stores/book.svelte';
+import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
+
+// Tempfile 模式缓存（URL -> blob）
+const tempfileCache = new Map<string, { url: string; blob: Blob }>();
+const TEMPFILE_CACHE_LIMIT = 100;
 
 export interface ReadResult {
 	blob: Blob;
@@ -23,6 +31,7 @@ let lastPreloadedPage = -1;
 const PRELOAD_RANGE = 5; // ±5 页
 
 // 预解压相关（可选优化，保留接口兼容）
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function preExtractArchive(_archivePath: string): Promise<string | null> {
 	// 简化：不再预解压到文件，直接使用内存方案
 	return null;
@@ -99,13 +108,50 @@ export async function readPageBlob(pageIndex: number): Promise<ReadResult> {
 	let blob: Blob;
 
 	if (currentBook.type === 'archive') {
-		// 压缩包：使用二进制 IPC（最快的首次加载）
-		const { loadImageFromArchiveAsBlob } = await import('$lib/api/filesystem');
-		const result = await loadImageFromArchiveAsBlob(currentBook.path, pageInfo.path, {
-			traceId,
-			pageIndex
-		});
-		blob = result.blob;
+		const cacheKey = `${currentBook.path}::${pageInfo.path}`;
+		
+		// 检查 Tempfile 缓存
+		const cached = tempfileCache.get(cacheKey);
+		if (cached) {
+			logImageTrace(traceId, 'tempfile cache hit', { cacheKey });
+			blob = cached.blob;
+		} else if (loadModeStore.isTempfileMode) {
+			// Tempfile 模式：解压到临时文件 + asset:// 协议
+			logImageTrace(traceId, 'using tempfile mode');
+			
+			const tempPath = await invoke<string>('extract_image_to_temp', {
+				archivePath: currentBook.path,
+				filePath: pageInfo.path,
+				traceId,
+				pageIndex
+			});
+			
+			const assetUrl = convertFileSrc(tempPath);
+			logImageTrace(traceId, 'tempfile asset url', { assetUrl });
+			
+			const response = await fetch(assetUrl);
+			if (!response.ok) {
+				throw new Error(`Tempfile fetch failed: ${response.status}`);
+			}
+			blob = await response.blob();
+			
+			// 存入缓存
+			if (tempfileCache.size >= TEMPFILE_CACHE_LIMIT) {
+				// 简单 LRU：删除最早的
+				const firstKey = tempfileCache.keys().next().value;
+				if (firstKey) tempfileCache.delete(firstKey);
+			}
+			tempfileCache.set(cacheKey, { url: assetUrl, blob });
+		} else {
+			// IPC 模式：使用二进制 IPC（最快的首次加载）
+			logImageTrace(traceId, 'using ipc mode');
+			const { loadImageFromArchiveAsBlob } = await import('$lib/api/filesystem');
+			const result = await loadImageFromArchiveAsBlob(currentBook.path, pageInfo.path, {
+				traceId,
+				pageIndex
+			});
+			blob = result.blob;
+		}
 	} else {
 		// 文件系统：使用 asset:// 协议
 		const assetUrl = convertFileSrc(pageInfo.path);

@@ -195,37 +195,33 @@ export const cardRegistry: Record<string, CardDefinition> = {
 	},
 	
 	// ==================== Upscale 面板卡片 ====================
-	'model': {
-		id: 'model',
+	'upscaleControl': {
+		id: 'upscaleControl',
+		title: '超分控制',
+		icon: Activity,
+		defaultPanel: 'upscale',
+		canHide: false,
+	},
+	'upscaleModel': {
+		id: 'upscaleModel',
 		title: '模型选择',
 		icon: Cpu,
 		defaultPanel: 'upscale',
 		canHide: false,
-		
 	},
-	'settings': {
-		id: 'settings',
-		title: '参数设置',
+	'upscaleStatus': {
+		id: 'upscaleStatus',
+		title: '处理状态',
 		icon: Activity,
 		defaultPanel: 'upscale',
 		canHide: true,
-		
 	},
-	'preview': {
-		id: 'preview',
-		title: '预览',
-		icon: Image,
-		defaultPanel: 'upscale',
-		canHide: true,
-		
-	},
-	'history': {
-		id: 'history',
-		title: '历史记录',
+	'upscaleCache': {
+		id: 'upscaleCache',
+		title: '缓存管理',
 		icon: History,
 		defaultPanel: 'upscale',
 		canHide: true,
-		
 	},
 	
 	// ==================== Insights 面板卡片 ====================

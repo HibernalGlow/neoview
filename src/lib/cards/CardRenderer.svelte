@@ -34,10 +34,10 @@ import EmmSyncCard from './properties/EmmSyncCard.svelte';
 import ThumbnailMaintenanceCard from './properties/ThumbnailMaintenanceCard.svelte';
 import EmmRawDataCard from './properties/EmmRawDataCard.svelte';
 
-import ModelCard from './upscale/ModelCard.svelte';
-import SettingsCard from './upscale/SettingsCard.svelte';
-import PreviewCard from './upscale/PreviewCard.svelte';
-import HistoryCard from './upscale/HistoryCard.svelte';
+import UpscaleControlCard from './upscale/UpscaleControlCard.svelte';
+import UpscaleModelCard from './upscale/UpscaleModelCard.svelte';
+import UpscaleStatusCard from './upscale/UpscaleStatusCard.svelte';
+import UpscaleCacheCard from './upscale/UpscaleCacheCard.svelte';
 
 import DailyTrendCard from './insights/DailyTrendCard.svelte';
 import ReadingStreakCard from './insights/ReadingStreakCard.svelte';
@@ -76,10 +76,10 @@ const componentMap: Record<string, any> = {
 	thumbnailMaintenance: ThumbnailMaintenanceCard,
 	emmRawData: EmmRawDataCard,
 	// Upscale
-	model: ModelCard,
-	settings: SettingsCard,
-	preview: PreviewCard,
-	history: HistoryCard,
+	upscaleControl: UpscaleControlCard,
+	upscaleModel: UpscaleModelCard,
+	upscaleStatus: UpscaleStatusCard,
+	upscaleCache: UpscaleCacheCard,
 	// Insights
 	dailyTrend: DailyTrendCard,
 	readingStreak: ReadingStreakCard,

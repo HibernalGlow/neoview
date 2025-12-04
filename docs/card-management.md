@@ -206,7 +206,7 @@ src/lib/
   - properties: 3 个卡片
   - upscale: 4 个卡片
   - insights: 3 个卡片
-- [ ] 创建 `CardRenderer.svelte` 动态渲染器
+- [x] 创建 `CardRenderer.svelte` 静态导入渲染器（性能优化）
 - [ ] 重构面板为纯容器
 - [ ] 从现有面板提取实际卡片内容
 - [ ] 验证设置页面和面板的同步

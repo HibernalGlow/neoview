@@ -1,0 +1,104 @@
+<script lang="ts">
+/**
+ * CardRenderer - 根据卡片 ID 渲染对应组件
+ * 使用静态导入 + 组件映射，避免动态 import 的性能开销
+ */
+import { cardConfigStore, type PanelId } from '$lib/stores/cardConfig.svelte';
+import { cardRegistry } from './registry';
+import { CollapsibleCard } from '$lib/components/cards';
+
+// 静态导入所有卡片组件（打包时 tree-shaking 会优化）
+import VisibilityCard from './benchmark/VisibilityCard.svelte';
+import LatencyCard from './benchmark/LatencyCard.svelte';
+import RendererCard from './benchmark/RendererCard.svelte';
+import FilesCard from './benchmark/FilesCard.svelte';
+import DetailedCard from './benchmark/DetailedCard.svelte';
+import LoadModeCard from './benchmark/LoadModeCard.svelte';
+import ArchivesCard from './benchmark/ArchivesCard.svelte';
+import RealWorldCard from './benchmark/RealWorldCard.svelte';
+import ResultsCard from './benchmark/ResultsCard.svelte';
+import SummaryCard from './benchmark/SummaryCard.svelte';
+
+import FileInfoCard from './info/FileInfoCard.svelte';
+import ImageInfoCard from './info/ImageInfoCard.svelte';
+
+import BasicCard from './properties/BasicCard.svelte';
+import ExifCard from './properties/ExifCard.svelte';
+import HistogramCard from './properties/HistogramCard.svelte';
+
+import ModelCard from './upscale/ModelCard.svelte';
+import SettingsCard from './upscale/SettingsCard.svelte';
+import PreviewCard from './upscale/PreviewCard.svelte';
+import HistoryCard from './upscale/HistoryCard.svelte';
+
+import AnalysisCard from './insights/AnalysisCard.svelte';
+import TagsCard from './insights/TagsCard.svelte';
+import SimilarCard from './insights/SimilarCard.svelte';
+
+// 组件映射表（O(1) 查找，使用 any 避免 Svelte 5 类型问题）
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const componentMap: Record<string, any> = {
+	// Benchmark
+	visibility: VisibilityCard,
+	latency: LatencyCard,
+	renderer: RendererCard,
+	files: FilesCard,
+	detailed: DetailedCard,
+	loadmode: LoadModeCard,
+	archives: ArchivesCard,
+	realworld: RealWorldCard,
+	results: ResultsCard,
+	summary: SummaryCard,
+	// Info
+	file: FileInfoCard,
+	image: ImageInfoCard,
+	// Properties
+	basic: BasicCard,
+	exif: ExifCard,
+	histogram: HistogramCard,
+	// Upscale
+	model: ModelCard,
+	settings: SettingsCard,
+	preview: PreviewCard,
+	history: HistoryCard,
+	// Insights
+	analysis: AnalysisCard,
+	tags: TagsCard,
+	similar: SimilarCard
+};
+
+interface Props {
+	cardId: string;
+	panelId: PanelId;
+}
+
+let { cardId, panelId }: Props = $props();
+
+// 从 registry 获取卡片元数据
+const cardDef = $derived(cardRegistry[cardId]);
+const CardComponent = $derived(componentMap[cardId]);
+
+// 从 config 获取展开状态
+const cardConfig = $derived.by(() => {
+	const cards = cardConfigStore.getPanelCards(panelId);
+	return cards.find(c => c.id === cardId);
+});
+
+const isExpanded = $derived(cardConfig?.expanded ?? true);
+const isVisible = $derived(cardConfig?.visible ?? true);
+
+function toggleExpanded() {
+	cardConfigStore.setCardExpanded(panelId, cardId, !isExpanded);
+}
+</script>
+
+{#if isVisible && CardComponent}
+	<CollapsibleCard
+		id={cardId}
+		{panelId}
+		title={cardDef?.title || cardId}
+		icon={cardDef?.icon}
+	>
+		<CardComponent />
+	</CollapsibleCard>
+{/if}

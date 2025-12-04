@@ -39,6 +39,12 @@
 		{ name: 'PingFang SC', value: '"PingFang SC"' },
 		{ name: 'Noto Sans SC', value: '"Noto Sans SC"' },
 		{ name: 'Source Han Sans SC', value: '"Source Han Sans SC"' },
+		// 霞鹜文楷系列
+		{ name: '霞鹜文楷', value: '"LXGW WenKai"' },
+		{ name: '霞鹜文楷 Screen', value: '"LXGW WenKai Screen"' },
+		{ name: '霞鹜文楷 GB', value: '"LXGW WenKai GB"' },
+		{ name: '霞鹜文楷 TC', value: '"LXGW WenKai TC"' },
+		// 西文字体
 		{ name: 'Inter', value: 'Inter' },
 		{ name: 'Roboto', value: 'Roboto' },
 		{ name: 'SF Pro', value: '"SF Pro Display"' },
@@ -48,6 +54,10 @@
 	];
 
 	const presetMonoFonts = [
+		// 霞鹜文楷等宽
+		{ name: '霞鹜文楷 Mono', value: '"LXGW WenKai Mono"' },
+		{ name: '霞鹜文楷 Mono Light', value: '"LXGW WenKai Mono Light"' },
+		// 编程字体
 		{ name: 'JetBrains Mono', value: '"JetBrains Mono"' },
 		{ name: 'Fira Code', value: '"Fira Code"' },
 		{ name: 'Source Code Pro', value: '"Source Code Pro"' },
@@ -594,6 +604,7 @@
 			</Label>
 			<button
 				onclick={() => toggleFontEnabled(!fontSettings.enabled)}
+				aria-label={fontSettings.enabled ? '禁用自定义字体' : '启用自定义字体'}
 				class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors {fontSettings.enabled ? 'bg-primary' : 'bg-muted'}"
 			>
 				<span

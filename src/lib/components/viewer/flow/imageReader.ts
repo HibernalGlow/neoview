@@ -80,12 +80,18 @@ async function triggerParallelPreload(currentPage: number): Promise<void> {
 	}
 }
 
+export interface ReadPageOptions {
+	/** 是否更新延迟追踪显示（仅当前页需要） */
+	updateLatencyTrace?: boolean;
+}
+
 /**
  * 读取页面图片为 Blob
  * 【纯内存方案】优先使用最快的方式获取数据到内存
- * 【追踪】记录链路延迟到 infoPanelStore
+ * 【追踪】记录链路延迟到 infoPanelStore（仅当前页）
  */
-export async function readPageBlob(pageIndex: number): Promise<ReadResult> {
+export async function readPageBlob(pageIndex: number, options: ReadPageOptions = {}): Promise<ReadResult> {
+	const { updateLatencyTrace = true } = options;
 	const startTime = performance.now();
 	const currentBook = bookStore.currentBook;
 	
@@ -179,17 +185,19 @@ export async function readPageBlob(pageIndex: number): Promise<ReadResult> {
 	const totalMs = performance.now() - startTime;
 	logImageTrace(traceId, 'readPageBlob blob ready', { size: blob.size, loadMs, totalMs });
 
-	// 更新链路延迟追踪
-	const latencyTrace: LatencyTrace = {
-		dataSource: loadModeStore.isTempfileMode ? 'tempfile' : 'blob',
-		renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
-		loadMs,
-		totalMs,
-		cacheHit,
-		dataSize: blob.size,
-		traceId
-	};
-	infoPanelStore.setLatencyTrace(latencyTrace);
+	// 更新链路延迟追踪（仅当前页，避免预加载干扰显示）
+	if (updateLatencyTrace) {
+		const latencyTrace: LatencyTrace = {
+			dataSource: loadModeStore.isTempfileMode ? 'tempfile' : 'blob',
+			renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
+			loadMs,
+			totalMs,
+			cacheHit,
+			dataSize: blob.size,
+			traceId
+		};
+		infoPanelStore.setLatencyTrace(latencyTrace);
+	}
 
 	// 【优化】触发并行预加载（异步，不阻塞当前加载）
 	triggerParallelPreload(pageIndex);

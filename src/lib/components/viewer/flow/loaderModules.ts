@@ -26,7 +26,8 @@ export {
 	readPageBlob,
 	getImageDimensions,
 	createThumbnailDataURL,
-	type ReadResult
+	type ReadResult,
+	type ReadPageOptions
 } from './imageReader';
 
 // 核心加载器

@@ -185,10 +185,10 @@ const gridCols = $derived(Math.min(allPanelIds.length + 1, 3));
 			onpointerleave={() => handleAreaPointerLeave('waitingArea')}
 		>
 			<h4 class="mb-3 text-center text-sm font-medium">等待区（隐藏）</h4>
-			<div class="min-h-[200px] space-y-2">
+			<div class="min-h-[100px] flex flex-wrap gap-2">
 				{#each hiddenCards as card (card.id)}
 					<div
-						class="bg-card rounded-md border p-3 transition-colors hover:bg-accent/50 {isPointerDragging && draggedCard?.card.id === card.id ? 'opacity-50' : ''}"
+						class="bg-card rounded-md border p-2 transition-colors hover:bg-accent/50 shrink-0 {isPointerDragging && draggedCard?.card.id === card.id ? 'opacity-50' : ''}"
 					>
 						<div class="flex items-center gap-2">
 							<div
@@ -218,10 +218,10 @@ const gridCols = $derived(Math.min(allPanelIds.length + 1, 3));
 				onpointerleave={() => handleAreaPointerLeave(panelId)}
 			>
 				<h4 class="mb-3 text-center text-sm font-medium">{getPanelTitle(panelId)}</h4>
-				<div class="min-h-[200px] space-y-2">
+				<div class="min-h-[100px] flex flex-wrap gap-2">
 					{#each cards as card, index (card.id)}
 						<div
-							class="bg-card rounded-md border p-3 transition-colors hover:bg-accent/50 {isPointerDragging && draggedCard?.card.id === card.id ? 'opacity-50' : ''}"
+							class="bg-card rounded-md border p-2 transition-colors hover:bg-accent/50 shrink-0 {isPointerDragging && draggedCard?.card.id === card.id ? 'opacity-50' : ''}"
 						>
 							<div class="flex items-center gap-2">
 								<div

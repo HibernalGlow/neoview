@@ -126,6 +126,15 @@
 			cardConfigStore.setCardExpanded('benchmark', cardId, !card.expanded);
 		}
 	}
+	
+	// showCards 兼容层（从 cardConfig 派生）
+	const showCards = $derived.by(() => {
+		const result: Record<CardId, boolean> = {} as Record<CardId, boolean>;
+		for (const card of benchmarkCards) {
+			result[card.id as CardId] = card.expanded;
+		}
+		return result;
+	});
 
 	interface ArchiveScanResult {
 		total_count: number;
@@ -1178,7 +1187,7 @@
 						<button
 							type="button"
 							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-							onclick={() => (showCards.latency = !showCards.latency)}
+							onclick={() => toggleCardExpanded('latency')}
 							title={showCards.latency ? '收起' : '展开'}
 						>
 							{#if showCards.latency}
@@ -1353,7 +1362,7 @@
 						<button
 							type="button"
 							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-							onclick={() => (showCards.renderer = !showCards.renderer)}
+							onclick={() => toggleCardExpanded('renderer')}
 							title={showCards.renderer ? '收起' : '展开'}
 						>
 							{#if showCards.renderer}
@@ -1546,7 +1555,7 @@
 						<button
 							type="button"
 							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-							onclick={() => (showCards.files = !showCards.files)}
+							onclick={() => toggleCardExpanded('files')}
 							title={showCards.files ? '收起' : '展开'}
 						>
 							{#if showCards.files}
@@ -1619,7 +1628,7 @@
 						<button
 							type="button"
 							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-							onclick={() => (showCards.detailed = !showCards.detailed)}
+							onclick={() => toggleCardExpanded('detailed')}
 							title={showCards.detailed ? '收起' : '展开'}
 						>
 							{#if showCards.detailed}
@@ -1731,7 +1740,7 @@
 						<button
 							type="button"
 							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-							onclick={() => (showCards.loadmode = !showCards.loadmode)}
+							onclick={() => toggleCardExpanded('loadmode')}
 							title={showCards.loadmode ? '收起' : '展开'}
 						>
 							{#if showCards.loadmode}
@@ -1830,7 +1839,7 @@
 						<button
 							type="button"
 							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-							onclick={() => (showCards.archives = !showCards.archives)}
+							onclick={() => toggleCardExpanded('archives')}
 							title={showCards.archives ? '收起' : '展开'}
 						>
 							{#if showCards.archives}
@@ -1928,7 +1937,7 @@
 						<button
 							type="button"
 							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-							onclick={() => (showCards.realworld = !showCards.realworld)}
+							onclick={() => toggleCardExpanded('realworld')}
 							title={showCards.realworld ? '收起' : '展开'}
 						>
 							{#if showCards.realworld}
@@ -2024,7 +2033,7 @@
 						<button
 							type="button"
 							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-							onclick={() => (showCards.results = !showCards.results)}
+							onclick={() => toggleCardExpanded('results')}
 							title={showCards.results ? '收起' : '展开'}
 						>
 							{#if showCards.results}
@@ -2101,7 +2110,7 @@
 						<button
 							type="button"
 							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-							onclick={() => (showCards.summary = !showCards.summary)}
+							onclick={() => toggleCardExpanded('summary')}
 							title={showCards.summary ? '收起' : '展开'}
 						>
 							{#if showCards.summary}

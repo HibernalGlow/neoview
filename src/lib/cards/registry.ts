@@ -14,7 +14,6 @@ export interface CardDefinition {
 	defaultPanel: PanelId;
 	canHide: boolean;
 	// 懒加载组件
-	component: () => Promise<{ default: Component }>;
 }
 
 // 所有卡片注册表
@@ -26,7 +25,6 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Eye,
 		defaultPanel: 'benchmark',
 		canHide: true,
-		component: () => import('./benchmark/VisibilityCard.svelte')
 	},
 	'latency': {
 		id: 'latency',
@@ -34,7 +32,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Timer,
 		defaultPanel: 'benchmark',
 		canHide: true,
-		component: () => import('./benchmark/LatencyCard.svelte')
+		
 	},
 	'renderer': {
 		id: 'renderer',
@@ -42,7 +40,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Layers,
 		defaultPanel: 'benchmark',
 		canHide: true,
-		component: () => import('./benchmark/RendererCard.svelte')
+		
 	},
 	'files': {
 		id: 'files',
@@ -50,7 +48,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: FolderOpen,
 		defaultPanel: 'benchmark',
 		canHide: true,
-		component: () => import('./benchmark/FilesCard.svelte')
+		
 	},
 	'detailed': {
 		id: 'detailed',
@@ -58,7 +56,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: FileText,
 		defaultPanel: 'benchmark',
 		canHide: true,
-		component: () => import('./benchmark/DetailedCard.svelte')
+		
 	},
 	'loadmode': {
 		id: 'loadmode',
@@ -66,7 +64,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Cpu,
 		defaultPanel: 'benchmark',
 		canHide: true,
-		component: () => import('./benchmark/LoadModeCard.svelte')
+		
 	},
 	'archives': {
 		id: 'archives',
@@ -74,7 +72,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Archive,
 		defaultPanel: 'benchmark',
 		canHide: true,
-		component: () => import('./benchmark/ArchivesCard.svelte')
+		
 	},
 	'realworld': {
 		id: 'realworld',
@@ -82,7 +80,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Globe,
 		defaultPanel: 'benchmark',
 		canHide: true,
-		component: () => import('./benchmark/RealWorldCard.svelte')
+		
 	},
 	'results': {
 		id: 'results',
@@ -90,7 +88,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: ListChecks,
 		defaultPanel: 'benchmark',
 		canHide: true,
-		component: () => import('./benchmark/ResultsCard.svelte')
+		
 	},
 	'summary': {
 		id: 'summary',
@@ -98,25 +96,51 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: BarChart3,
 		defaultPanel: 'benchmark',
 		canHide: true,
-		component: () => import('./benchmark/SummaryCard.svelte')
+		
 	},
 	
 	// ==================== Info 面板卡片 ====================
-	'file': {
-		id: 'file',
-		title: '文件信息',
+	'bookInfo': {
+		id: 'bookInfo',
+		title: '书籍信息',
 		icon: FileText,
 		defaultPanel: 'info',
 		canHide: false,
-		component: () => import('./info/FileInfoCard.svelte')
 	},
-	'image': {
-		id: 'image',
-		title: '图片信息',
+	'infoOverlay': {
+		id: 'infoOverlay',
+		title: '信息悬浮窗',
+		icon: Eye,
+		defaultPanel: 'info',
+		canHide: true,
+	},
+	'switchToast': {
+		id: 'switchToast',
+		title: '切换提示',
+		icon: Activity,
+		defaultPanel: 'info',
+		canHide: true,
+	},
+	'imageInfo': {
+		id: 'imageInfo',
+		title: '图像信息',
 		icon: Image,
 		defaultPanel: 'info',
 		canHide: true,
-		component: () => import('./info/ImageInfoCard.svelte')
+	},
+	'storage': {
+		id: 'storage',
+		title: '存储信息',
+		icon: Archive,
+		defaultPanel: 'info',
+		canHide: true,
+	},
+	'time': {
+		id: 'time',
+		title: '时间信息',
+		icon: Timer,
+		defaultPanel: 'info',
+		canHide: true,
 	},
 	
 	// ==================== Properties 面板卡片 ====================
@@ -126,7 +150,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: FileText,
 		defaultPanel: 'properties',
 		canHide: false,
-		component: () => import('./properties/BasicCard.svelte')
+		
 	},
 	'exif': {
 		id: 'exif',
@@ -134,7 +158,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Activity,
 		defaultPanel: 'properties',
 		canHide: true,
-		component: () => import('./properties/ExifCard.svelte')
+		
 	},
 	'histogram': {
 		id: 'histogram',
@@ -142,7 +166,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Gauge,
 		defaultPanel: 'properties',
 		canHide: true,
-		component: () => import('./properties/HistogramCard.svelte')
+		
 	},
 	
 	// ==================== Upscale 面板卡片 ====================
@@ -152,7 +176,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Cpu,
 		defaultPanel: 'upscale',
 		canHide: false,
-		component: () => import('./upscale/ModelCard.svelte')
+		
 	},
 	'settings': {
 		id: 'settings',
@@ -160,7 +184,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Activity,
 		defaultPanel: 'upscale',
 		canHide: true,
-		component: () => import('./upscale/SettingsCard.svelte')
+		
 	},
 	'preview': {
 		id: 'preview',
@@ -168,7 +192,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Image,
 		defaultPanel: 'upscale',
 		canHide: true,
-		component: () => import('./upscale/PreviewCard.svelte')
+		
 	},
 	'history': {
 		id: 'history',
@@ -176,7 +200,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: History,
 		defaultPanel: 'upscale',
 		canHide: true,
-		component: () => import('./upscale/HistoryCard.svelte')
+		
 	},
 	
 	// ==================== Insights 面板卡片 ====================
@@ -186,7 +210,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Activity,
 		defaultPanel: 'insights',
 		canHide: false,
-		component: () => import('./insights/AnalysisCard.svelte')
+		
 	},
 	'tags': {
 		id: 'tags',
@@ -194,7 +218,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Tags,
 		defaultPanel: 'insights',
 		canHide: true,
-		component: () => import('./insights/TagsCard.svelte')
+		
 	},
 	'similar': {
 		id: 'similar',
@@ -202,7 +226,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Search,
 		defaultPanel: 'insights',
 		canHide: true,
-		component: () => import('./insights/SimilarCard.svelte')
+		
 	}
 };
 

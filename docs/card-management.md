@@ -207,6 +207,8 @@ src/lib/
   - upscale: 4 个卡片
   - insights: 3 个卡片
 - [x] 创建 `CardRenderer.svelte` 静态导入渲染器（性能优化）
+  - **CardRenderer**: 唯一组件映射点，静态导入所有卡片
+  - **Registry**: 只存元数据（title, icon, canHide 等），无 component 字段
 - [ ] 重构面板为纯容器
 - [ ] 从现有面板提取实际卡片内容
 - [ ] 验证设置页面和面板的同步

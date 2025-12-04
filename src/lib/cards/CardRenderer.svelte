@@ -19,8 +19,12 @@ import RealWorldCard from './benchmark/RealWorldCard.svelte';
 import ResultsCard from './benchmark/ResultsCard.svelte';
 import SummaryCard from './benchmark/SummaryCard.svelte';
 
-import FileInfoCard from './info/FileInfoCard.svelte';
+import BookInfoCard from './info/BookInfoCard.svelte';
+import InfoOverlayCard from './info/InfoOverlayCard.svelte';
+import SwitchToastCard from './info/SwitchToastCard.svelte';
 import ImageInfoCard from './info/ImageInfoCard.svelte';
+import StorageCard from './info/StorageCard.svelte';
+import TimeCard from './info/TimeCard.svelte';
 
 import BasicCard from './properties/BasicCard.svelte';
 import ExifCard from './properties/ExifCard.svelte';
@@ -50,8 +54,12 @@ const componentMap: Record<string, any> = {
 	results: ResultsCard,
 	summary: SummaryCard,
 	// Info
-	file: FileInfoCard,
-	image: ImageInfoCard,
+	bookInfo: BookInfoCard,
+	infoOverlay: InfoOverlayCard,
+	switchToast: SwitchToastCard,
+	imageInfo: ImageInfoCard,
+	storage: StorageCard,
+	time: TimeCard,
 	// Properties
 	basic: BasicCard,
 	exif: ExifCard,

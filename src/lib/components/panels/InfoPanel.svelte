@@ -25,6 +25,7 @@
 	import * as Switch from '$lib/components/ui/switch';
 	import { Slider } from '$lib/components/ui/slider';
 	import { onMount } from 'svelte';
+	import { cardConfigStore } from '$lib/stores/cardConfig.svelte';
 
 	let imageInfo = $state<ViewerImageInfo | null>(null);
 	let bookInfo = $state<ViewerBookInfo | null>(null);
@@ -36,17 +37,29 @@
 	let infoOverlayWidth = $state<number | undefined>(undefined);
 	let infoOverlayHeight = $state<number | undefined>(undefined);
 
-	let showBookInfoCard = $state(true);
-	let showInfoOverlayCard = $state(true);
-	let showSwitchToastCard = $state(true);
-	let showImageInfoCard = $state(true);
-	let showStorageInfoCard = $state(true);
-	let showTimeInfoCard = $state(true);
-
+	// 从 cardConfigStore 获取卡片配置
 	type InfoCardId = 'bookInfo' | 'infoOverlay' | 'switchToast' | 'imageInfo' | 'storage' | 'time';
-	const INFO_CARD_ORDER_STORAGE_KEY = 'neoview-info-panel-card-order';
-
-	let infoCardOrder = $state<InfoCardId[]>(['bookInfo', 'infoOverlay', 'switchToast', 'imageInfo', 'storage', 'time']);
+	const infoCards = $derived(cardConfigStore.getPanelCards('info'));
+	
+	// showCards 兼容层（从 cardConfig 派生）
+	const showCards = $derived.by(() => {
+		const result: Record<InfoCardId, boolean> = {} as Record<InfoCardId, boolean>;
+		for (const card of infoCards) {
+			result[card.id as InfoCardId] = card.expanded;
+		}
+		return result;
+	});
+	
+	// 兼容旧变量名
+	const showBookInfoCard = $derived(showCards.bookInfo ?? true);
+	const showInfoOverlayCard = $derived(showCards.infoOverlay ?? true);
+	const showSwitchToastCard = $derived(showCards.switchToast ?? true);
+	const showImageInfoCard = $derived(showCards.imageInfo ?? true);
+	const showStorageInfoCard = $derived(showCards.storage ?? true);
+	const showTimeInfoCard = $derived(showCards.time ?? true);
+	
+	// 卡片顺序从 cardConfigStore 获取
+	const infoCardOrder = $derived(infoCards.map(c => c.id as InfoCardId));
 
 	$effect(() => {
 		const unsubscribe = infoPanelStore.subscribe((state) => {
@@ -340,64 +353,21 @@
 	}
 
 	function moveInfoCard(id: InfoCardId, dir: 'up' | 'down') {
-		const visible = getVisibleInfoCards();
-		const idx = visible.indexOf(id);
-		if (idx === -1) return;
-		const targetIdx = dir === 'up' ? idx - 1 : idx + 1;
-		if (targetIdx < 0 || targetIdx >= visible.length) return;
-		const otherId = visible[targetIdx];
-		const next = [...infoCardOrder];
-		const a = next.indexOf(id);
-		const b = next.indexOf(otherId);
-		if (a === -1 || b === -1) return;
-		[next[a], next[b]] = [next[b], next[a]];
-		infoCardOrder = next;
+		const card = infoCards.find(c => c.id === id);
+		if (!card) return;
+		const newOrder = dir === 'up' ? card.order - 1 : card.order + 1;
+		if (newOrder >= 0 && newOrder < infoCards.length) {
+			cardConfigStore.moveCard('info', id, newOrder);
+		}
 	}
-
-	onMount(() => {
-		if (typeof localStorage === 'undefined') return;
-		try {
-			const raw = localStorage.getItem(INFO_CARD_ORDER_STORAGE_KEY);
-			if (raw) {
-				const parsed = JSON.parse(raw) as unknown;
-				if (Array.isArray(parsed)) {
-					const valid: InfoCardId[] = [];
-					for (const id of parsed) {
-						if (
-							(id === 'bookInfo' ||
-									id === 'infoOverlay' ||
-									id === 'switchToast' ||
-									id === 'imageInfo' ||
-									id === 'storage' ||
-									id === 'time') &&
-							!valid.includes(id)
-						) {
-							valid.push(id);
-						}
-					}
-					const defaults: InfoCardId[] = ['bookInfo', 'infoOverlay', 'switchToast', 'imageInfo', 'storage', 'time'];
-					for (const id of defaults) {
-						if (!valid.includes(id)) valid.push(id);
-					}
-					if (valid.length) {
-						infoCardOrder = valid;
-					}
-				}
-			}
-		} catch (err) {
-			console.error('[InfoPanel] 读取卡片顺序失败:', err);
+	
+	// 切换卡片展开状态
+	function toggleCardExpanded(cardId: InfoCardId) {
+		const card = infoCards.find(c => c.id === cardId);
+		if (card) {
+			cardConfigStore.setCardExpanded('info', cardId, !card.expanded);
 		}
-	});
-
-	$effect(() => {
-		const order = infoCardOrder;
-		if (typeof localStorage === 'undefined') return;
-		try {
-			localStorage.setItem(INFO_CARD_ORDER_STORAGE_KEY, JSON.stringify(order));
-		} catch (err) {
-			console.error('[InfoPanel] 保存卡片顺序失败:', err);
-		}
-	});
+	}
 </script>
 
 <div 
@@ -430,7 +400,7 @@
 								<button
 									type="button"
 									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-									onclick={() => (showBookInfoCard = !showBookInfoCard)}
+									onclick={() => toggleCardExpanded('bookInfo')}
 									title={showBookInfoCard ? '收起' : '展开'}
 								>
 									{#if showBookInfoCard}
@@ -528,7 +498,7 @@
 								<button
 									type="button"
 									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-									onclick={() => (showSwitchToastCard = !showSwitchToastCard)}
+									onclick={() => toggleCardExpanded('switchToast')}
 									title={showSwitchToastCard ? '收起' : '展开'}
 								>
 									{#if showSwitchToastCard}
@@ -744,7 +714,7 @@
 									<button
 										type="button"
 										class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-										onclick={() => (showInfoOverlayCard = !showInfoOverlayCard)}
+										onclick={() => toggleCardExpanded('infoOverlay')}
 										title={showInfoOverlayCard ? '收起' : '展开'}
 									>
 										{#if showInfoOverlayCard}
@@ -868,7 +838,7 @@
 								<button
 									type="button"
 									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-									onclick={() => (showImageInfoCard = !showImageInfoCard)}
+									onclick={() => toggleCardExpanded('imageInfo')}
 									title={showImageInfoCard ? '收起' : '展开'}
 								>
 									{#if showImageInfoCard}
@@ -939,7 +909,7 @@
 								<button
 									type="button"
 									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-									onclick={() => (showStorageInfoCard = !showStorageInfoCard)}
+									onclick={() => toggleCardExpanded('storage')}
 									title={showStorageInfoCard ? '收起' : '展开'}
 								>
 									{#if showStorageInfoCard}
@@ -996,7 +966,7 @@
 								<button
 									type="button"
 									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-									onclick={() => (showTimeInfoCard = !showTimeInfoCard)}
+									onclick={() => toggleCardExpanded('time')}
 									title={showTimeInfoCard ? '收起' : '展开'}
 								>
 									{#if showTimeInfoCard}

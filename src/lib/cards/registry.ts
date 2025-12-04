@@ -87,6 +87,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		canHide: true,
 		
 	},
+	'imageSource': {
+		id: 'imageSource',
+		title: '图像源对比',
+		icon: Activity,
+		defaultPanel: 'benchmark',
+		canHide: true,
+	},
 	'results': {
 		id: 'results',
 		title: '测试结果',

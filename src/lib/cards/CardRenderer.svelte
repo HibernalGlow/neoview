@@ -20,6 +20,7 @@ const lazyComponentMap: Record<string, () => Promise<{ default: any }>> = {
 	loadmode: () => import('./benchmark/LoadModeCard.svelte'),
 	archives: () => import('./benchmark/ArchivesCard.svelte'),
 	realworld: () => import('./benchmark/RealWorldCard.svelte'),
+	imageSource: () => import('./benchmark/ImageSourceCard.svelte'),
 	results: () => import('./benchmark/ResultsCard.svelte'),
 	summary: () => import('./benchmark/SummaryCard.svelte'),
 	// Info

@@ -51,10 +51,13 @@ $effect(() => {
 	}
 });
 
+// 强制更新触发器
+let updateTrigger = $state(0);
+
 onMount(() => {
-	// 订阅缩略图缓存
-	unsubscribeThumbnailCache = thumbnailCacheStore.subscribe((cache) => {
-		thumbnailSnapshot = new Map(cache);
+	// 订阅缩略图缓存变化
+	unsubscribeThumbnailCache = thumbnailCacheStore.subscribe(() => {
+		updateTrigger++;
 	});
 });
 
@@ -63,7 +66,9 @@ onDestroy(() => {
 });
 
 function getThumbnail(pageIndex: number): ThumbnailEntry | null {
-	return thumbnailSnapshot.get(pageIndex) ?? null;
+	// 依赖 updateTrigger 触发响应式更新
+	void updateTrigger;
+	return thumbnailCacheStore.getThumbnail(pageIndex);
 }
 
 function goToPage(index: number) {
@@ -80,9 +85,10 @@ async function requestThumbnail(pageIndex: number) {
 	
 	thumbnailCacheStore.setLoading(pageIndex);
 	try {
-		const thumb = await thumbnailManager.getThumbnail(book.path, page.path || page.url || '', pageIndex);
-		if (thumb) {
-			thumbnailCacheStore.setThumbnail(pageIndex, thumb);
+		const pagePath = page.path || page.url || '';
+		const url = await thumbnailManager.getThumbnail(pagePath);
+		if (url) {
+			thumbnailCacheStore.setThumbnail(pageIndex, url, 0, 0);
 		} else {
 			thumbnailCacheStore.setFailed(pageIndex);
 		}
@@ -175,8 +181,8 @@ async function requestThumbnail(pageIndex: number) {
 						onclick={() => goToPage(item.index)}
 						onmouseenter={() => requestThumbnail(item.index)}
 					>
-						{#if thumb?.objectUrl}
-							<img src={thumb.objectUrl} alt="" class="w-full h-full object-cover" />
+						{#if thumb?.url}
+							<img src={thumb.url} alt="" class="w-full h-full object-cover" />
 						{:else}
 							<div class="w-full h-full bg-muted flex items-center justify-center text-xs text-muted-foreground">
 								{item.index + 1}

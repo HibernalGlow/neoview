@@ -2,8 +2,11 @@ import './app.css';
 import { mount } from 'svelte';
 import Settings from './lib/Settings.svelte';
 import { initializeRuntimeThemeListeners } from '$lib/utils/runtimeTheme';
+import { initFontManager } from '$lib/utils/fontManager';
 
 initializeRuntimeThemeListeners();
+// 初始化字体管理器（设置窗口也需要应用自定义字体）
+initFontManager();
 
 if (typeof document !== 'undefined') {
 	document.addEventListener(

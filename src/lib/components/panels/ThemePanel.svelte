@@ -7,6 +7,7 @@
 	import { onMount } from 'svelte';
 	import { fetchThemeFromURL } from '$lib/utils/themeManager';
 	import { settingsManager } from '$lib/settings/settingsManager';
+	import { applyFontSettings as applyGlobalFontSettings } from '$lib/utils/fontManager';
 
 	type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -176,38 +177,8 @@
 	}
 
 	function applyFontSettings() {
-		const root = document.documentElement;
-		
-		if (!fontSettings.enabled) {
-			// 移除自定义字体，恢复主题默认
-			root.style.removeProperty('--font-sans');
-			root.style.removeProperty('--font-mono');
-			root.style.removeProperty('font-family');
-			return;
-		}
-
-		// 生成 font-family 字符串
-		const mainFonts = fontSettings.fontFamilies.length > 0
-			? fontSettings.fontFamilies.join(', ') + ', sans-serif'
-			: null;
-		
-		const uiFonts = fontSettings.uiFontFamilies.length > 0
-			? fontSettings.uiFontFamilies.join(', ') + ', sans-serif'
-			: mainFonts;
-		
-		const monoFonts = fontSettings.monoFontFamilies.length > 0
-			? fontSettings.monoFontFamilies.join(', ') + ', monospace'
-			: null;
-
-		// 应用到 CSS 变量
-		if (mainFonts || uiFonts) {
-			root.style.setProperty('--font-sans', uiFonts || mainFonts || '');
-			root.style.setProperty('font-family', mainFonts || uiFonts || '');
-		}
-		
-		if (monoFonts) {
-			root.style.setProperty('--font-mono', monoFonts);
-		}
+		// 使用全局字体管理器应用字体设置
+		applyGlobalFontSettings(fontSettings);
 	}
 
 	function buildFontFamilyString(fonts: string[]): string {

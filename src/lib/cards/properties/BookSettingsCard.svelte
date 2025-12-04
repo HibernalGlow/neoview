@@ -18,9 +18,19 @@ $effect(() => {
 	return unsubscribe;
 });
 
+// 默认设置
+const defaultSettings: PerBookSettings = {
+	favorite: false,
+	rating: 0,
+	readingDirection: 'left-to-right',
+	doublePageView: false,
+	horizontalBook: false
+};
+
 $effect(() => {
 	if (bookInfo?.path) {
-		bookSettings = bookSettingsStore.get(bookInfo.path) || null;
+		// 获取已保存的设置，如果没有则使用默认设置
+		bookSettings = bookSettingsStore.get(bookInfo.path) ?? defaultSettings;
 	} else {
 		bookSettings = null;
 	}

@@ -13,7 +13,6 @@
 	import MouseSettingsPanel from './MouseSettingsPanel.svelte';
 	import GestureSettingsPanel from './GestureSettingsPanel.svelte';
 	import ThemePanel from '$lib/components/panels/ThemePanel.svelte';
-	import SidebarPanelManager from '$lib/components/settings/SidebarPanelManager.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
 
 	let { open = $bindable(false) } = $props();
@@ -75,10 +74,6 @@
 
 				<Tabs.Content value="appearance">
 					<ThemePanel />
-				</Tabs.Content>
-
-				<Tabs.Content value="panels">
-					<SidebarPanelManager />
 				</Tabs.Content>
 
 				<Tabs.Content value="viewer">

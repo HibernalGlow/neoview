@@ -1,211 +1,270 @@
 <script lang="ts">
 /**
  * CardPanelManager - 卡片面板管理器
- * 类似边栏管理：每个面板作为一个区域，卡片可以在面板内排序和跨面板移动
+ * 完全复制 SidebarManagementPanel 的三区域拖拽布局
+ * 区域：等待区（隐藏）+ 各面板区（信息、属性、超分、洞察、基准测试）
  */
 import { cardConfigStore, type PanelId, type CardConfig, getCardSupportingPanels, getPanelTitle } from '$lib/stores/cardConfig.svelte';
-import { Button } from '$lib/components/ui/button';
-import { GripVertical, Eye, EyeOff, ChevronDown, ChevronRight, RotateCcw, LayoutGrid, ArrowLeft, ArrowRight } from '@lucide/svelte';
 
-// 获取所有支持卡片的面板
-const allPanels = getCardSupportingPanels();
+// 获取所有支持卡片的面板 ID
+const allPanelIds = getCardSupportingPanels();
 
-// 拖拽状态
-let draggedCard: { id: string; panelId: PanelId } | null = $state(null);
-let dragOverPanel: PanelId | null = $state(null);
-
-// 所有面板的卡片
-const allCards = $derived.by(() => {
-	const result: { panelId: PanelId; title: string; cards: CardConfig[] }[] = [];
-	for (const panelId of allPanels) {
-		result.push({
-			panelId,
-			title: getPanelTitle(panelId),
-			cards: cardConfigStore.getPanelCards(panelId)
-		});
+// 各面板的卡片列表
+const panelCards = $derived.by(() => {
+	const result: Record<PanelId, CardConfig[]> = {} as Record<PanelId, CardConfig[]>;
+	for (const panelId of allPanelIds) {
+		result[panelId] = cardConfigStore.getPanelCards(panelId).filter(c => c.visible);
 	}
 	return result;
 });
 
-function handleDragStart(e: DragEvent, cardId: string, panelId: PanelId) {
-	draggedCard = { id: cardId, panelId };
-	if (e.dataTransfer) {
-		e.dataTransfer.effectAllowed = 'move';
-		e.dataTransfer.setData('text/plain', `${panelId}:${cardId}`);
+// 隐藏的卡片（等待区）
+const hiddenCards = $derived.by(() => {
+	const result: CardConfig[] = [];
+	for (const panelId of allPanelIds) {
+		const cards = cardConfigStore.getPanelCards(panelId).filter(c => !c.visible);
+		result.push(...cards);
+	}
+	return result;
+});
+
+// 拖拽状态
+type AreaId = 'waitingArea' | PanelId;
+let draggedCard = $state<{ card: CardConfig; source: AreaId } | null>(null);
+let dragOverArea = $state<AreaId | null>(null);
+let isPointerDragging = $state(false);
+let dragPreview = $state<{ x: number; y: number } | null>(null);
+
+// 拖拽处理函数
+function handlePointerDown(event: PointerEvent, card: CardConfig, source: AreaId) {
+	event.preventDefault();
+	draggedCard = { card, source };
+	isPointerDragging = true;
+	dragPreview = { x: event.clientX + 12, y: event.clientY + 12 };
+}
+
+function handleAreaPointerEnter(targetArea: AreaId) {
+	if (!isPointerDragging) return;
+	dragOverArea = targetArea;
+}
+
+function handleAreaPointerLeave(targetArea: AreaId) {
+	if (!isPointerDragging) return;
+	if (dragOverArea === targetArea) {
+		dragOverArea = null;
 	}
 }
 
-function handleDragOverPanel(e: DragEvent, panelId: PanelId) {
-	e.preventDefault();
-	if (draggedCard && draggedCard.panelId !== panelId) {
-		dragOverPanel = panelId;
+function finalizeDrop() {
+	if (!isPointerDragging || !draggedCard || !dragOverArea) {
+		draggedCard = null;
+		isPointerDragging = false;
+		dragOverArea = null;
+		dragPreview = null;
+		return;
 	}
-}
 
-function handleDragLeavePanel() {
-	dragOverPanel = null;
-}
+	const { card, source } = draggedCard;
+	const targetArea = dragOverArea;
 
-function handleDropOnPanel(e: DragEvent, targetPanelId: PanelId) {
-	e.preventDefault();
-	if (!draggedCard) return;
-	
-	// 跨面板移动（简化实现：暂时只支持同面板内排序）
-	// TODO: 实现跨面板移动
-	
+	// 如果目标区域和源区域相同，不做任何操作
+	if (source === targetArea) {
+		draggedCard = null;
+		isPointerDragging = false;
+		dragOverArea = null;
+		dragPreview = null;
+		return;
+	}
+
+	// 移动到等待区（隐藏）
+	if (targetArea === 'waitingArea') {
+		if (card.canHide) {
+			cardConfigStore.setCardVisible(card.panelId, card.id, false);
+		}
+	} else {
+		// 移动到某个面板
+		cardConfigStore.setCardVisible(card.panelId, card.id, true);
+		// TODO: 如果需要跨面板移动卡片，这里添加逻辑
+	}
+
 	draggedCard = null;
-	dragOverPanel = null;
+	isPointerDragging = false;
+	dragOverArea = null;
+	dragPreview = null;
 }
 
-function handleDragEnd() {
-	draggedCard = null;
-	dragOverPanel = null;
-}
+// 保存提示消息
+let saveMessage = $state<string | null>(null);
 
-function toggleVisibility(panelId: PanelId, cardId: string, currentVisible: boolean) {
-	cardConfigStore.setCardVisible(panelId, cardId, !currentVisible);
-}
-
-function toggleExpanded(panelId: PanelId, cardId: string, currentExpanded: boolean) {
-	cardConfigStore.setCardExpanded(panelId, cardId, !currentExpanded);
-}
-
-function moveCardUp(panelId: PanelId, card: CardConfig) {
-	if (card.order > 0) {
-		cardConfigStore.moveCard(panelId, card.id, card.order - 1);
+// 重置布局
+function resetLayout() {
+	if (confirm('确定要重置所有卡片布局吗？')) {
+		cardConfigStore.resetAll();
+		saveMessage = '✓ 布局已重置';
+		setTimeout(() => {
+			saveMessage = null;
+		}, 2000);
 	}
 }
 
-function moveCardDown(panelId: PanelId, card: CardConfig, maxOrder: number) {
-	if (card.order < maxOrder) {
-		cardConfigStore.moveCard(panelId, card.id, card.order + 1);
-	}
+// 移动卡片顺序
+function moveCardUp(card: CardConfig, cards: CardConfig[]) {
+	const currentIndex = cards.findIndex(c => c.id === card.id);
+	if (currentIndex <= 0) return;
+	cardConfigStore.moveCard(card.panelId, card.id, card.order - 1);
 }
 
-function resetAll() {
-	cardConfigStore.resetAll();
+function moveCardDown(card: CardConfig, cards: CardConfig[]) {
+	const currentIndex = cards.findIndex(c => c.id === card.id);
+	if (currentIndex < 0 || currentIndex >= cards.length - 1) return;
+	cardConfigStore.moveCard(card.panelId, card.id, card.order + 1);
 }
+
+$effect(() => {
+	function handleWindowPointerUp() {
+		if (!isPointerDragging) return;
+		finalizeDrop();
+	}
+	window.addEventListener('pointerup', handleWindowPointerUp);
+	return () => {
+		window.removeEventListener('pointerup', handleWindowPointerUp);
+	};
+});
+
+$effect(() => {
+	if (!isPointerDragging) return;
+	function handleWindowPointerMove(e: PointerEvent) {
+		dragPreview = { x: e.clientX + 12, y: e.clientY + 12 };
+	}
+	window.addEventListener('pointermove', handleWindowPointerMove);
+	return () => {
+		window.removeEventListener('pointermove', handleWindowPointerMove);
+	};
+});
+
+// 动态计算列数（最多3列）
+const gridCols = $derived(Math.min(allPanelIds.length + 1, 3));
 </script>
 
-<div class="card-panel-manager space-y-4">
-	<div class="flex items-center justify-between">
-		<h3 class="text-lg font-semibold flex items-center gap-2">
-			<LayoutGrid class="h-5 w-5" />
-			卡片管理
-		</h3>
-		<Button variant="outline" size="sm" onclick={resetAll}>
-			<RotateCcw class="mr-2 h-4 w-4" />
-			重置全部
-		</Button>
+<div class="space-y-6 p-6">
+	<div class="space-y-2">
+		<h3 class="text-lg font-semibold">卡片管理</h3>
+		<p class="text-muted-foreground text-sm">拖拽卡片到不同面板区域来自定义布局</p>
 	</div>
-	
-	<p class="text-sm text-muted-foreground">
-		每个面板区域显示其包含的卡片，可调整顺序和显示状态。
-	</p>
-	
-	<!-- 面板区域列表 -->
-	<div class="space-y-4">
-		{#each allCards as panel (panel.panelId)}
-			<div 
-				class="rounded-lg border {dragOverPanel === panel.panelId ? 'border-primary bg-accent/50' : ''}"
-				ondragover={(e) => handleDragOverPanel(e, panel.panelId)}
-				ondragleave={handleDragLeavePanel}
-				ondrop={(e) => handleDropOnPanel(e, panel.panelId)}
+
+	<!-- 操作按钮 -->
+	<div class="flex items-center gap-2">
+		<button
+			type="button"
+			class="bg-secondary hover:bg-secondary/80 rounded-md px-3 py-1.5 text-sm transition-colors"
+			onclick={resetLayout}
+		>
+			重置布局
+		</button>
+		{#if saveMessage}
+			<span class="text-sm text-green-600">{saveMessage}</span>
+		{/if}
+	</div>
+
+	<!-- 多栏布局：等待区 + 各面板区（动态列数，最多3列） -->
+	<div class="grid min-h-[300px] gap-4" style="grid-template-columns: repeat({gridCols}, minmax(0, 1fr))">
+		<!-- 等待区 -->
+		<div
+			class="rounded-lg border-2 border-dashed p-4 {dragOverArea === 'waitingArea' ? 'border-primary bg-primary/5' : 'border-muted-foreground/30'}"
+			onpointerenter={() => handleAreaPointerEnter('waitingArea')}
+			onpointerleave={() => handleAreaPointerLeave('waitingArea')}
+		>
+			<h4 class="mb-3 text-center text-sm font-medium">等待区（隐藏）</h4>
+			<div class="min-h-[200px] space-y-2">
+				{#each hiddenCards as card (card.id)}
+					<div
+						class="bg-card rounded-md border p-3 transition-colors hover:bg-accent/50 {isPointerDragging && draggedCard?.card.id === card.id ? 'opacity-50' : ''}"
+					>
+						<div class="flex items-center gap-2">
+							<div
+								class="cursor-grab rounded p-1 hover:bg-accent/50 active:cursor-grabbing"
+								onpointerdown={(e) => handlePointerDown(e, card, 'waitingArea')}
+							>
+								<svg class="text-muted-foreground h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+									<path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+								</svg>
+							</div>
+							<span class="text-sm font-medium">{card.title}</span>
+						</div>
+					</div>
+				{/each}
+				{#if hiddenCards.length === 0}
+					<div class="text-muted-foreground py-8 text-center text-sm">拖拽卡片到这里隐藏</div>
+				{/if}
+			</div>
+		</div>
+
+		<!-- 各面板区 -->
+		{#each allPanelIds as panelId (panelId)}
+			{@const cards = panelCards[panelId] || []}
+			<div
+				class="rounded-lg border-2 border-dashed p-4 {dragOverArea === panelId ? 'border-primary bg-primary/5' : 'border-muted-foreground/30'}"
+				onpointerenter={() => handleAreaPointerEnter(panelId)}
+				onpointerleave={() => handleAreaPointerLeave(panelId)}
 			>
-				<!-- 面板标题 -->
-				<div class="px-3 py-2 border-b bg-muted/50 rounded-t-lg">
-					<span class="font-semibold text-sm">{panel.title}</span>
-					<span class="text-xs text-muted-foreground ml-2">({panel.cards.length} 张卡片)</span>
-				</div>
-				
-				<!-- 卡片列表 -->
-				<div class="p-2 space-y-1">
-					{#each panel.cards as card (card.id)}
+				<h4 class="mb-3 text-center text-sm font-medium">{getPanelTitle(panelId)}</h4>
+				<div class="min-h-[200px] space-y-2">
+					{#each cards as card, index (card.id)}
 						<div
-							class="flex items-center gap-2 rounded border p-2 transition-colors bg-card {!card.visible ? 'opacity-60' : ''}"
-							draggable="true"
-							ondragstart={(e) => handleDragStart(e, card.id, panel.panelId)}
-							ondragend={handleDragEnd}
-							role="listitem"
+							class="bg-card rounded-md border p-3 transition-colors hover:bg-accent/50 {isPointerDragging && draggedCard?.card.id === card.id ? 'opacity-50' : ''}"
 						>
-							<!-- 拖拽手柄 -->
-							<GripVertical class="h-4 w-4 cursor-grab text-muted-foreground" />
-							
-							<!-- 标题 -->
-							<span class="flex-1 text-sm">{card.title}</span>
-							
-							<!-- 上下移动 -->
-							<Button
-								variant="ghost"
-								size="icon"
-								class="h-6 w-6"
-								onclick={() => moveCardUp(panel.panelId, card)}
-								disabled={card.order === 0}
-								title="上移"
-							>
-								<ChevronDown class="h-3 w-3 rotate-180" />
-							</Button>
-							<Button
-								variant="ghost"
-								size="icon"
-								class="h-6 w-6"
-								onclick={() => moveCardDown(panel.panelId, card, panel.cards.length - 1)}
-								disabled={card.order === panel.cards.length - 1}
-								title="下移"
-							>
-								<ChevronDown class="h-3 w-3" />
-							</Button>
-							
-							<!-- 展开/收起 -->
-							<Button
-								variant={card.expanded ? 'default' : 'ghost'}
-								size="icon"
-								class="h-6 w-6"
-								onclick={() => toggleExpanded(panel.panelId, card.id, card.expanded)}
-								title={card.expanded ? '收起' : '展开'}
-							>
-								{#if card.expanded}
-									<ChevronRight class="h-3 w-3 rotate-90" />
-								{:else}
-									<ChevronRight class="h-3 w-3" />
-								{/if}
-							</Button>
-							
-							<!-- 显示/隐藏 -->
-							{#if card.canHide}
-								<Button
-									variant="ghost"
-									size="icon"
-									class="h-6 w-6"
-									onclick={() => toggleVisibility(panel.panelId, card.id, card.visible)}
-									title={card.visible ? '隐藏' : '显示'}
+							<div class="flex items-center gap-2">
+								<div
+									class="cursor-grab rounded p-1 hover:bg-accent/50 active:cursor-grabbing"
+									onpointerdown={(e) => handlePointerDown(e, card, panelId)}
 								>
-									{#if card.visible}
-										<Eye class="h-3 w-3" />
-									{:else}
-										<EyeOff class="h-3 w-3 text-muted-foreground" />
-									{/if}
-								</Button>
-							{:else}
-								<div class="h-6 w-6 flex items-center justify-center">
-									<Eye class="h-3 w-3 text-muted-foreground/50" />
+									<svg class="text-muted-foreground h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+										<path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+									</svg>
 								</div>
-							{/if}
+								<span class="flex-1 text-sm font-medium">{card.title}</span>
+								<!-- 上下箭头 -->
+								<div class="flex flex-col gap-0.5">
+									<button
+										type="button"
+										class="rounded p-0.5 hover:bg-accent/50 disabled:opacity-30"
+										disabled={index === 0}
+										onclick={() => moveCardUp(card, cards)}
+										title="上移"
+									>
+										<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+										</svg>
+									</button>
+									<button
+										type="button"
+										class="rounded p-0.5 hover:bg-accent/50 disabled:opacity-30"
+										disabled={index === cards.length - 1}
+										onclick={() => moveCardDown(card, cards)}
+										title="下移"
+									>
+										<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+										</svg>
+									</button>
+								</div>
+							</div>
 						</div>
 					{/each}
-					
-					{#if panel.cards.length === 0}
-						<div class="text-center py-4 text-sm text-muted-foreground">
-							暂无卡片
-						</div>
+					{#if cards.length === 0}
+						<div class="text-muted-foreground py-8 text-center text-sm">拖拽卡片到这里</div>
 					{/if}
 				</div>
 			</div>
 		{/each}
 	</div>
-	
-	<div class="text-xs text-muted-foreground space-y-1">
-		<p>💡 使用上下箭头调整卡片顺序</p>
-		<p>📌 设置会自动保存到本地</p>
-	</div>
+
+	<!-- 拖拽预览 -->
+	{#if isPointerDragging && dragPreview && draggedCard}
+		<div class="pointer-events-none fixed z-50" style="left: {dragPreview.x}px; top: {dragPreview.y}px;">
+			<div class="bg-card flex items-center gap-2 rounded-md border px-3 py-2 opacity-90 shadow-lg">
+				<span class="text-sm font-medium">{draggedCard.card.title}</span>
+			</div>
+		</div>
+	{/if}
 </div>

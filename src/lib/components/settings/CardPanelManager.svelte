@@ -156,6 +156,16 @@ const gridCols = $derived(Math.min(allPanelIds.length + 1, 3));
 	<div class="flex items-center gap-2">
 		<button
 			type="button"
+			class="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-1.5 text-sm transition-colors"
+			onclick={() => {
+				saveMessage = '✓ 已保存';
+				setTimeout(() => saveMessage = null, 2000);
+			}}
+		>
+			保存
+		</button>
+		<button
+			type="button"
 			class="bg-secondary hover:bg-secondary/80 rounded-md px-3 py-1.5 text-sm transition-colors"
 			onclick={resetLayout}
 		>

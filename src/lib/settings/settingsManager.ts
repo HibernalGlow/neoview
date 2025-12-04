@@ -113,8 +113,6 @@ export interface NeoViewSettings {
     renderer?: {
       /** 渲染模式：standard = 标准，stack = 层叠预加载（更流畅） */
       mode: RendererMode;
-      /** 是否使用 ViewerJS 增强模式（提供更好的缩放和手势支持） */
-      useViewerJS?: boolean;
     };
   };
   book: {
@@ -283,8 +281,7 @@ const defaultSettings: NeoViewSettings = {
       pageDescriptionTemplate: '{{page.dimensionsFormatted}}  {{page.sizeFormatted}}'
     },
     renderer: {
-      mode: 'stack', // 默认使用层叠模式，更流畅
-      useViewerJS: true // ViewerJS 增强模式（更好的缩放和手势）
+      mode: 'stack' // 默认使用层叠模式，更流畅
     }
   },
   book: {

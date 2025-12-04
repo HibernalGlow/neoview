@@ -19,7 +19,6 @@
     createEmptySlot,
     SlotZIndex,
   } from './types/frameSlot';
-  import { ViewerJSWrapper } from './viewerjs';
   
   // ============================================================================
   // Props
@@ -33,11 +32,8 @@
     viewPositionX = 50,
     viewPositionY = 50,
     viewportSize = { width: 0, height: 0 },
-    useViewerJS = false,
-    zoomOnWheel = false,
     onPageChange,
     onImageLoad,
-    onZoomChange,
   }: {
     showUpscale?: boolean;
     transitionDuration?: number;
@@ -46,11 +42,8 @@
     viewPositionX?: number;
     viewPositionY?: number;
     viewportSize?: { width: number; height: number };
-    useViewerJS?: boolean;
-    zoomOnWheel?: boolean;
     onPageChange?: (pageIndex: number) => void;
     onImageLoad?: (e: Event, index: number) => void;
-    onZoomChange?: (ratio: number) => void;
   } = $props();
   
   // ============================================================================
@@ -77,14 +70,6 @@
   
   // 阅读方向
   let isRTL = $derived(settings.book.readingDirection === 'right-to-left');
-  
-  // ViewerJS 引用
-  let viewerJSRef = $state<ViewerJSWrapper | null>(null);
-  
-  // ViewerJS 缩放回调
-  function handleViewerJSZoom(ratio: number) {
-    onZoomChange?.(ratio);
-  }
   
   // 当前书本路径（用于检测书本切换）
   let currentBookPath = $state<string | null>(null);
@@ -386,98 +371,83 @@
 </script>
 
 <div class="stack-viewer">
-  <!-- 预加载层（隐藏，保持在 DOM 中供预加载） -->
+  <!-- 前页层（隐藏，预加载用） -->
   {#if prevSlot.url}
     <div 
-      class="frame-layer preload-layer"
+      class="frame-layer prev-layer"
       style:z-index={SlotZIndex.PREV}
+      style:opacity={0}
       data-page-index={prevSlot.pageIndex}
     >
-      <img src={prevSlot.url} alt="Preload prev" draggable="false" />
+      <img 
+        src={prevSlot.url} 
+        alt="Previous page"
+        class="frame-image"
+        draggable="false"
+      />
     </div>
   {/if}
+  
+  <!-- 当前页层 -->
+  {#if currentSlot.url}
+    <div 
+      class="frame-layer current-layer"
+      style:z-index={SlotZIndex.CURRENT}
+      style:opacity={1}
+      style:transition={`opacity ${transitionDuration}ms ease`}
+      style:transform={transformStyle}
+      style:transform-origin={transformOrigin}
+      data-page-index={currentSlot.pageIndex}
+    >
+      <img 
+        src={currentSlot.url} 
+        alt="Current page"
+        class="frame-image"
+        draggable="false"
+        onload={(e) => onImageLoad?.(e, 0)}
+      />
+    </div>
+  {:else if currentSlot.loading}
+    <div 
+      class="frame-layer loading-layer"
+      style:z-index={SlotZIndex.CURRENT}
+    >
+      <div class="loading-spinner"></div>
+    </div>
+  {:else}
+    <div 
+      class="frame-layer empty-layer"
+      style:z-index={SlotZIndex.CURRENT}
+    >
+      <span class="text-muted-foreground">暂无图片</span>
+    </div>
+  {/if}
+  
+  <!-- 后页层（隐藏，预加载用） -->
   {#if nextSlot.url}
     <div 
-      class="frame-layer preload-layer"
+      class="frame-layer next-layer"
       style:z-index={SlotZIndex.NEXT}
+      style:opacity={0}
       data-page-index={nextSlot.pageIndex}
     >
-      <img src={nextSlot.url} alt="Preload next" draggable="false" />
+      <img 
+        src={nextSlot.url} 
+        alt="Next page"
+        class="frame-image"
+        draggable="false"
+      />
     </div>
   {/if}
   
-  <!-- 主显示层：ViewerJS 模式或原生模式 -->
-  {#if useViewerJS}
-    <!-- ViewerJS 增强模式 -->
-    {#if currentSlot.url}
-      <div 
-        class="frame-layer viewerjs-layer"
-        style:z-index={SlotZIndex.CURRENT}
-        data-page-index={currentSlot.pageIndex}
-      >
-        <ViewerJSWrapper
-          bind:this={viewerJSRef}
-          imageUrl={currentSlot.url}
-          {scale}
-          {rotation}
-          {zoomOnWheel}
-          zoomOnTouch={true}
-          movable={true}
-          transition={false}
-          initialCoverage={0.98}
-          minZoomRatio={0.1}
-          maxZoomRatio={10}
-          onZoom={handleViewerJSZoom}
-        />
-      </div>
-    {:else if currentSlot.loading}
-      <div class="frame-layer loading-layer" style:z-index={SlotZIndex.CURRENT}>
-        <div class="loading-spinner"></div>
-      </div>
-    {:else}
-      <div class="frame-layer empty-layer" style:z-index={SlotZIndex.CURRENT}>
-        <span class="text-muted-foreground">暂无图片</span>
-      </div>
-    {/if}
-  {:else}
-    <!-- 原生渲染模式 -->
-    {#if currentSlot.url}
-      <div 
-        class="frame-layer current-layer"
-        style:z-index={SlotZIndex.CURRENT}
-        style:opacity={1}
-        style:transition={`opacity ${transitionDuration}ms ease`}
-        style:transform={transformStyle}
-        style:transform-origin={transformOrigin}
-        data-page-index={currentSlot.pageIndex}
-      >
-        <img 
-          src={currentSlot.url} 
-          alt="Current page"
-          class="frame-image"
-          draggable="false"
-          onload={(e) => onImageLoad?.(e, 0)}
-        />
-      </div>
-    {:else if currentSlot.loading}
-      <div class="frame-layer loading-layer" style:z-index={SlotZIndex.CURRENT}>
-        <div class="loading-spinner"></div>
-      </div>
-    {:else}
-      <div class="frame-layer empty-layer" style:z-index={SlotZIndex.CURRENT}>
-        <span class="text-muted-foreground">暂无图片</span>
-      </div>
-    {/if}
-  {/if}
-  
-  <!-- 超分层（始终使用原生渲染以保持清晰度） -->
+  <!-- 超分层 -->
   {#if showUpscale && upscaleUrl}
     <div 
       class="frame-layer upscale-layer"
       style:z-index={SlotZIndex.UPSCALE}
       style:opacity={1}
       style:transition={`opacity ${transitionDuration}ms ease`}
-      style:transform={useViewerJS ? 'none' : transformStyle}
+      style:transform={transformStyle}
       style:transform-origin={transformOrigin}
     >
       <img 
@@ -523,20 +493,15 @@
     -webkit-user-drag: none;
   }
   
-  /* 预加载层（保持在 DOM 中但不可见） */
-  .preload-layer {
+  /* 隐藏层（保持在 DOM 中但不可见） */
+  .prev-layer,
+  .next-layer {
     visibility: hidden;
-    pointer-events: none;
   }
   
   .current-layer,
-  .upscale-layer,
-  .viewerjs-layer {
+  .upscale-layer {
     visibility: visible;
-  }
-  
-  .viewerjs-layer {
-    pointer-events: auto;
   }
   
   .loading-layer {

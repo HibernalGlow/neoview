@@ -38,9 +38,12 @@ import SettingsCard from './upscale/SettingsCard.svelte';
 import PreviewCard from './upscale/PreviewCard.svelte';
 import HistoryCard from './upscale/HistoryCard.svelte';
 
-import AnalysisCard from './insights/AnalysisCard.svelte';
-import TagsCard from './insights/TagsCard.svelte';
-import SimilarCard from './insights/SimilarCard.svelte';
+import DailyTrendCard from './insights/DailyTrendCard.svelte';
+import ReadingStreakCard from './insights/ReadingStreakCard.svelte';
+import ReadingHeatmapCard from './insights/ReadingHeatmapCard.svelte';
+import BookmarkOverviewCard from './insights/BookmarkOverviewCard.svelte';
+import SourceBreakdownCard from './insights/SourceBreakdownCard.svelte';
+import EmmTagsHotCard from './insights/EmmTagsHotCard.svelte';
 
 // 组件映射表（O(1) 查找，使用 any 避免 Svelte 5 类型问题）
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -76,9 +79,12 @@ const componentMap: Record<string, any> = {
 	preview: PreviewCard,
 	history: HistoryCard,
 	// Insights
-	analysis: AnalysisCard,
-	tags: TagsCard,
-	similar: SimilarCard
+	dailyTrend: DailyTrendCard,
+	readingStreak: ReadingStreakCard,
+	readingHeatmap: ReadingHeatmapCard,
+	bookmarkOverview: BookmarkOverviewCard,
+	sourceBreakdown: SourceBreakdownCard,
+	emmTagsHot: EmmTagsHotCard
 };
 
 interface Props {

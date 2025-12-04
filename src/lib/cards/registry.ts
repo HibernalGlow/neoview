@@ -222,29 +222,47 @@ export const cardRegistry: Record<string, CardDefinition> = {
 	},
 	
 	// ==================== Insights 面板卡片 ====================
-	'analysis': {
-		id: 'analysis',
-		title: '分析',
+	'dailyTrend': {
+		id: 'dailyTrend',
+		title: '最近 7 日阅读趋势',
 		icon: Activity,
 		defaultPanel: 'insights',
 		canHide: false,
-		
 	},
-	'tags': {
-		id: 'tags',
-		title: '标签',
+	'readingStreak': {
+		id: 'readingStreak',
+		title: '连续阅读 Streak',
+		icon: Activity,
+		defaultPanel: 'insights',
+		canHide: true,
+	},
+	'readingHeatmap': {
+		id: 'readingHeatmap',
+		title: '阅读时段热力图',
+		icon: Activity,
+		defaultPanel: 'insights',
+		canHide: true,
+	},
+	'bookmarkOverview': {
+		id: 'bookmarkOverview',
+		title: '书签概览',
 		icon: Tags,
 		defaultPanel: 'insights',
 		canHide: true,
-		
 	},
-	'similar': {
-		id: 'similar',
-		title: '相似图片',
+	'sourceBreakdown': {
+		id: 'sourceBreakdown',
+		title: '来源拆分',
 		icon: Search,
 		defaultPanel: 'insights',
 		canHide: true,
-		
+	},
+	'emmTagsHot': {
+		id: 'emmTagsHot',
+		title: 'EMM 标签热度',
+		icon: Tags,
+		defaultPanel: 'insights',
+		canHide: true,
 	}
 };
 

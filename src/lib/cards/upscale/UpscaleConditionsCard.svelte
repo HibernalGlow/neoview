@@ -74,7 +74,7 @@ function handleConditionsChange(event: CustomEvent) {
 
 	<!-- 条件编辑器 -->
 	{#if expanded}
-		<div class="border rounded-md p-2 mt-2">
+		<div class="pt-2 border-t mt-2">
 			<UpscalePanelConditionTabs
 				bind:conditions={conditionsList.value}
 				bind:conditionalUpscaleEnabled={conditionalUpscaleEnabled.value}

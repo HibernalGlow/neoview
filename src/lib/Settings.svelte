@@ -19,7 +19,8 @@
 		BookOpen,
 		Layout,
 		PanelLeft,
-		Bell
+		Bell,
+		LayoutGrid
 	} from '@lucide/svelte';
 
 	// 导入所有设置面板组件
@@ -34,6 +35,7 @@
 	import PerformanceSettingsPanel from '$lib/components/panels/PerformanceSettingsPanel.svelte';
 	import DataSettingsPanel from '$lib/components/panels/DataSettingsPanel.svelte';
 	import NotificationSettingsPanel from '$lib/components/panels/NotificationSettingsPanel.svelte';
+	import CardPanelManager from '$lib/components/settings/CardPanelManager.svelte';
 
 	const appWindow = getCurrentWebviewWindow();
 
@@ -48,6 +50,7 @@
 		{ value: 'theme', label: '外观', icon: Layout },
 		{ value: 'performance', label: '性能', icon: Zap },
 		{ value: 'panels', label: '边栏管理', icon: PanelLeft },
+		{ value: 'cards', label: '卡片管理', icon: LayoutGrid },
 		{ value: 'bindings', label: '操作绑定', icon: Keyboard },
 		{ value: 'data', label: '数据', icon: Monitor }
 	];
@@ -135,6 +138,10 @@
 				<UnifiedBindingPanel />
 			{:else if activeTab === 'panels'}
 				<SidebarManagementPanel />
+			{:else if activeTab === 'cards'}
+				<div class="p-6">
+					<CardPanelManager />
+				</div>
 			{:else if activeTab === 'theme'}
 				<ThemePanel />
 			{:else if activeTab === 'archive'}

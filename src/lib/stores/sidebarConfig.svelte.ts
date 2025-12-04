@@ -25,7 +25,8 @@ export const PANEL_DEFINITIONS = {
 		defaultVisible: true,
 		defaultOrder: 0,
 		canMove: true,
-		canHide: false
+		canHide: false,
+		supportsCards: false
 	},
 	history: {
 		title: '历史记录',
@@ -35,7 +36,8 @@ export const PANEL_DEFINITIONS = {
 		defaultVisible: true,
 		defaultOrder: 1,
 		canMove: true,
-		canHide: true
+		canHide: true,
+		supportsCards: false
 	},
 	bookmark: {
 		title: '书签',
@@ -45,7 +47,8 @@ export const PANEL_DEFINITIONS = {
 		defaultVisible: true,
 		defaultOrder: 2,
 		canMove: true,
-		canHide: true
+		canHide: true,
+		supportsCards: false
 	},
 	pageList: {
 		title: '页面列表',
@@ -55,7 +58,8 @@ export const PANEL_DEFINITIONS = {
 		defaultVisible: true,
 		defaultOrder: 3,
 		canMove: true,
-		canHide: true
+		canHide: true,
+		supportsCards: false
 	},
 	playlist: {
 		title: '播放列表',
@@ -65,7 +69,8 @@ export const PANEL_DEFINITIONS = {
 		defaultVisible: false,
 		defaultOrder: 4,
 		canMove: true,
-		canHide: true
+		canHide: true,
+		supportsCards: false
 	},
 	// 右侧边栏面板
 	info: {
@@ -76,7 +81,8 @@ export const PANEL_DEFINITIONS = {
 		defaultVisible: true,
 		defaultOrder: 0,
 		canMove: true,
-		canHide: true
+		canHide: true,
+		supportsCards: true
 	},
 	properties: {
 		title: '属性',
@@ -86,7 +92,8 @@ export const PANEL_DEFINITIONS = {
 		defaultVisible: true,
 		defaultOrder: 1,
 		canMove: true,
-		canHide: true
+		canHide: true,
+		supportsCards: true
 	},
 	upscale: {
 		title: '超分',
@@ -96,7 +103,8 @@ export const PANEL_DEFINITIONS = {
 		defaultVisible: true,
 		defaultOrder: 2,
 		canMove: true,
-		canHide: true
+		canHide: true,
+		supportsCards: true
 	},
 	insights: {
 		title: '洞察',
@@ -106,7 +114,8 @@ export const PANEL_DEFINITIONS = {
 		defaultVisible: true,
 		defaultOrder: 3,
 		canMove: true,
-		canHide: true
+		canHide: true,
+		supportsCards: true
 	},
 	// 设置面板（特殊）
 	settings: {
@@ -117,7 +126,8 @@ export const PANEL_DEFINITIONS = {
 		defaultVisible: false,
 		defaultOrder: 99,
 		canMove: false,
-		canHide: true
+		canHide: true,
+		supportsCards: false
 	},
 	// 开发/测试面板
 	benchmark: {
@@ -128,7 +138,8 @@ export const PANEL_DEFINITIONS = {
 		defaultVisible: false,
 		defaultOrder: 10,
 		canMove: true,
-		canHide: true
+		canHide: true,
+		supportsCards: true
 	}
 } as const;
 
@@ -156,6 +167,16 @@ export function getPanelIcon(id: PanelId) {
 // 获取面板标题
 export function getPanelTitle(id: PanelId): string {
 	return PANEL_DEFINITIONS[id]?.title || id;
+}
+
+// 获取支持卡片的面板 ID 列表
+export function getCardSupportingPanels(): PanelId[] {
+	return ALL_PANEL_IDS.filter(id => PANEL_DEFINITIONS[id].supportsCards);
+}
+
+// 检查面板是否支持卡片
+export function panelSupportsCards(id: PanelId): boolean {
+	return PANEL_DEFINITIONS[id]?.supportsCards ?? false;
 }
 
 // 面板配置（运行时状态）

@@ -6,10 +6,28 @@
 
 import { bookStore } from '$lib/stores/book.svelte';
 import { logImageTrace } from '$lib/utils/imageTrace';
+import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte';
+import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 import { BlobCache, getBlobCache } from './blobCache';
 import { LoadQueueManager, LoadPriority, QueueClearedError, TaskCancelledError } from './loadQueue';
 import { readPageBlob, getImageDimensions, createThumbnailDataURL } from './imageReader';
 import { calculatePreloadPlan, trackPageDirection, planToQueue, type PreloadConfig } from './preloadStrategy';
+
+/**
+ * 更新缓存命中时的延迟追踪
+ */
+function updateCacheHitLatencyTrace(blob: Blob, pageIndex: number): void {
+	const latencyTrace: LatencyTrace = {
+		dataSource: loadModeStore.isTempfileMode ? 'tempfile' : 'blob',
+		renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
+		loadMs: 0,
+		totalMs: 0,
+		cacheHit: true,
+		dataSize: blob.size,
+		traceId: `cache-hit-${pageIndex}`
+	};
+	infoPanelStore.setLatencyTrace(latencyTrace);
+}
 
 export interface ImageLoaderCoreOptions {
 	maxConcurrentLoads?: number;
@@ -199,6 +217,8 @@ export class ImageLoaderCore {
 		if (this.blobCache.has(pageIndex)) {
 			const item = this.blobCache.get(pageIndex)!;
 			console.log(`⚡ 快速显示缓存: 页码 ${pageIndex + 1}`);
+			// 更新延迟追踪（缓存命中）
+			updateCacheHitLatencyTrace(item.blob, pageIndex);
 			// 异步获取尺寸
 			getImageDimensions(item.blob).then(dimensions => {
 				this.options.onDimensionsReady?.(pageIndex, dimensions);

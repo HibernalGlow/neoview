@@ -5,6 +5,24 @@
 
 import { bookStore } from '$lib/stores/book.svelte';
 import { imagePool } from './imagePool.svelte';
+import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte';
+import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
+
+/**
+ * 更新缓存命中时的延迟追踪
+ */
+function updateCacheHitLatencyTrace(blob: Blob | undefined, pageIndex: number): void {
+  const latencyTrace: LatencyTrace = {
+    dataSource: loadModeStore.isTempfileMode ? 'tempfile' : 'blob',
+    renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
+    loadMs: 0,
+    totalMs: 0,
+    cacheHit: true,
+    dataSize: blob?.size ?? 0,
+    traceId: `stackview-cache-${pageIndex}`
+  };
+  infoPanelStore.setLatencyTrace(latencyTrace);
+}
 
 // ============================================================================
 // 类型定义
@@ -96,6 +114,8 @@ export function createImageStore() {
       // 获取预加载的背景色
       state.backgroundColor = imagePool.getBackgroundColor(currentIndex) ?? null;
       state.loading = false;
+      // 更新延迟追踪（缓存命中）
+      updateCacheHitLatencyTrace(cached.blob, currentIndex);
     } else {
       state.loading = true;
     }

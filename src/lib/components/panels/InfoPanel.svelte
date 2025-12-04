@@ -91,8 +91,8 @@
 	role="region"
 	aria-label="信息面板"
 >
-	<!-- 标题栏 - 毛玻璃效果 -->
-	<div class="sticky top-0 z-10 px-4 py-3 backdrop-blur-md bg-background/80 border-b border-border/30">
+	<!-- 标题栏 -->
+	<div class="px-4 py-3">
 		<div class="flex items-center gap-2">
 			<Info class="h-5 w-5" />
 			<h3 class="font-semibold">详细信息</h3>

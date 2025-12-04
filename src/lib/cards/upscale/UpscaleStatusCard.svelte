@@ -14,7 +14,11 @@ import {
 	currentImageResolution,
 	currentImageSize,
 	formatFileSize,
-	updateCurrentImage
+	updateCurrentImage,
+	selectedModel,
+	scale,
+	tileSize,
+	noiseLevel
 } from '$lib/stores/upscale/upscalePanelStore.svelte';
 import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
 import { bookStore } from '$lib/stores/book.svelte';
@@ -50,13 +54,17 @@ async function handleManualUpscale() {
 		status.value = '正在读取图片...';
 		progress.value = 10;
 		
+		// 设置模型参数（同步）
+		pyo3UpscaleManager.setTileSize(tileSize.value);
+		pyo3UpscaleManager.setNoiseLevel(noiseLevel.value);
+		
 		// 读取图片数据
 		const response = await fetch(currentImagePath.value);
 		const blob = await response.blob();
 		const arrayBuffer = await blob.arrayBuffer();
 		const imageData = new Uint8Array(arrayBuffer);
 		
-		status.value = '正在超分...';
+		status.value = `正在超分 (${selectedModel.value})...`;
 		progress.value = 30;
 		
 		// 调用 PyO3 超分

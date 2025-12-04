@@ -113,9 +113,14 @@ const cardConfig = $derived.by(() => {
 
 const isExpanded = $derived(cardConfig?.expanded ?? true);
 const isVisible = $derived(cardConfig?.visible ?? true);
+const cardHeight = $derived(cardConfig?.height);
 
 function toggleExpanded() {
 	cardConfigStore.setCardExpanded(panelId, cardId, !isExpanded);
+}
+
+function handleHeightChange(newHeight: number | undefined) {
+	cardConfigStore.setCardHeight(panelId, cardId, newHeight);
 }
 </script>
 
@@ -125,6 +130,8 @@ function toggleExpanded() {
 		{panelId}
 		title={cardDef?.title || cardId}
 		icon={cardDef?.icon}
+		height={cardHeight}
+		onHeightChange={handleHeightChange}
 	>
 		<CardComponent />
 	</CollapsibleCard>

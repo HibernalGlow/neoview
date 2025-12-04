@@ -22,6 +22,7 @@ export interface CardConfig {
 	visible: boolean;
 	expanded: boolean;
 	canHide: boolean;
+	height?: number; // 自定义高度（像素），undefined 表示自动高度
 }
 
 // 面板配置
@@ -238,12 +239,32 @@ function createCardConfigStore() {
 		saveConfigs(configs);
 	}
 
+	// 设置卡片高度
+	function setCardHeight(panelId: PanelId, cardId: string, height: number | undefined) {
+		const panelCards = configs[panelId];
+		if (!panelCards) return;
+		
+		const newCards = panelCards.map(c => 
+			c.id === cardId ? { ...c, height } : c
+		);
+		
+		configs = { ...configs, [panelId]: newCards };
+		saveConfigs(configs);
+	}
+
+	// 获取卡片配置
+	function getCardConfig(panelId: PanelId, cardId: string): CardConfig | undefined {
+		return configs[panelId]?.find(c => c.id === cardId);
+	}
+
 	return {
 		get configs() { return configs; },
 		getPanelCards,
 		getAllPanels,
+		getCardConfig,
 		setCardVisible,
 		setCardExpanded,
+		setCardHeight,
 		moveCard,
 		moveCardToPanel,
 		resetPanel,

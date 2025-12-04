@@ -15,6 +15,8 @@ interface Props {
 	defaultExpanded?: boolean;
 	showDragHandle?: boolean;
 	showMoveButtons?: boolean;
+	height?: number; // 自定义高度
+	onHeightChange?: (height: number | undefined) => void;
 	class?: string;
 	children?: import('svelte').Snippet;
 }
@@ -27,9 +29,17 @@ let {
 	defaultExpanded = true,
 	showDragHandle = false,
 	showMoveButtons = true,
+	height,
+	onHeightChange,
 	class: className = '',
 	children
 }: Props = $props();
+
+// 拖拽调整高度相关
+let isResizing = $state(false);
+let startY = $state(0);
+let startHeight = $state(0);
+let contentRef = $state<HTMLDivElement | null>(null);
 
 // 从 cardConfig 读取展开状态
 const cardConfig = $derived.by(() => {
@@ -56,6 +66,36 @@ function moveUp(e: MouseEvent) {
 function moveDown(e: MouseEvent) {
 	e.stopPropagation();
 	if (canMoveDown) cardConfigStore.moveCard(panelId, id, cardOrder + 1);
+}
+
+// 拖拽调整高度
+function startResize(e: MouseEvent) {
+	if (!contentRef) return;
+	e.preventDefault();
+	isResizing = true;
+	startY = e.clientY;
+	startHeight = height ?? contentRef.offsetHeight;
+	
+	document.addEventListener('mousemove', onResize);
+	document.addEventListener('mouseup', stopResize);
+}
+
+function onResize(e: MouseEvent) {
+	if (!isResizing) return;
+	const deltaY = e.clientY - startY;
+	const newHeight = Math.max(50, startHeight + deltaY); // 最小 50px
+	onHeightChange?.(newHeight);
+}
+
+function stopResize() {
+	isResizing = false;
+	document.removeEventListener('mousemove', onResize);
+	document.removeEventListener('mouseup', stopResize);
+}
+
+function resetHeight(e: MouseEvent) {
+	e.stopPropagation();
+	onHeightChange?.(undefined);
 }
 </script>
 
@@ -120,8 +160,35 @@ function moveDown(e: MouseEvent) {
 	
 	<!-- 内容区 -->
 	{#if isExpanded}
-		<div class="px-3 pb-3" transition:slide={{ duration: 200 }}>
+		<div 
+			bind:this={contentRef}
+			class="px-3 pb-3 overflow-auto relative" 
+			style={height ? `height: ${height}px` : ''}
+			transition:slide={{ duration: 200 }}
+		>
 			{@render children?.()}
 		</div>
+		
+		<!-- 拖拽调整高度手柄 -->
+		{#if onHeightChange}
+			<div 
+				class="h-1.5 cursor-ns-resize bg-transparent hover:bg-primary/20 flex items-center justify-center group"
+				onmousedown={startResize}
+				role="separator"
+				aria-orientation="horizontal"
+			>
+				<div class="w-8 h-0.5 rounded-full bg-muted-foreground/30 group-hover:bg-primary/50"></div>
+			</div>
+			{#if height}
+				<button 
+					type="button"
+					class="absolute bottom-0 right-1 text-[8px] text-muted-foreground hover:text-foreground px-1"
+					onclick={resetHeight}
+					title="重置高度"
+				>
+					重置
+				</button>
+			{/if}
+		{/if}
 	{/if}
 </div>

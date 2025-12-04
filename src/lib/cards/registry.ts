@@ -13,7 +13,7 @@ export interface CardDefinition {
 	icon: typeof Eye;
 	defaultPanel: PanelId;
 	canHide: boolean;
-	// 懒加载组件
+	fullHeight?: boolean; // 是否占满剩余高度（用于虚拟列表等）
 }
 
 // 所有卡片注册表
@@ -238,6 +238,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Activity,
 		defaultPanel: 'history',
 		canHide: false,
+		fullHeight: true,
 	},
 
 	// ==================== Bookmark 面板卡片 ====================
@@ -247,6 +248,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Activity,
 		defaultPanel: 'bookmark',
 		canHide: false,
+		fullHeight: true,
 	},
 
 	// ==================== PageList 面板卡片 ====================
@@ -256,6 +258,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: FileText,
 		defaultPanel: 'pageList',
 		canHide: false,
+		fullHeight: true,
 	},
 	
 	// ==================== Insights 面板卡片 ====================

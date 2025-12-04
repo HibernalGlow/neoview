@@ -17,6 +17,7 @@ interface Props {
 	showMoveButtons?: boolean;
 	height?: number; // 自定义高度
 	onHeightChange?: (height: number | undefined) => void;
+	fullHeight?: boolean; // 是否占满剩余高度（用于虚拟列表等）
 	class?: string;
 	children?: import('svelte').Snippet;
 }
@@ -31,6 +32,7 @@ let {
 	showMoveButtons = true,
 	height,
 	onHeightChange,
+	fullHeight = false,
 	class: className = '',
 	children
 }: Props = $props();
@@ -99,7 +101,7 @@ function resetHeight(e: MouseEvent) {
 }
 </script>
 
-<div class="collapsible-card rounded-lg border bg-muted/10 transition-all hover:border-primary/60 {className}">
+<div class="collapsible-card rounded-lg border bg-muted/10 transition-all hover:border-primary/60 {fullHeight ? 'flex flex-col flex-1 min-h-0' : ''} {className}">
 	<!-- 标题栏 -->
 	<div class="flex items-center justify-between px-3 py-2">
 		<button
@@ -173,8 +175,8 @@ function resetHeight(e: MouseEvent) {
 	{#if isExpanded}
 		<div 
 			bind:this={contentRef}
-			class="px-3 pb-3 overflow-auto" 
-			style={height ? `height: ${height}px` : ''}
+			class="px-3 pb-3 overflow-auto {fullHeight ? 'flex-1 min-h-0 flex flex-col' : ''}" 
+			style={height ? `height: ${height}px` : (fullHeight ? '' : 'min-height: 200px')}
 			transition:slide={{ duration: 200 }}
 		>
 			{@render children?.()}

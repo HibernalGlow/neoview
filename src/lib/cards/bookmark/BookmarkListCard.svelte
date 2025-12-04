@@ -162,7 +162,7 @@ $effect(() => {
 });
 </script>
 
-<div class="flex h-full flex-col">
+<div class="flex flex-col" style="height: 100%; min-height: 300px;">
 	<!-- 工具栏 -->
 	<div class="flex items-center justify-between py-1 gap-2 flex-wrap">
 		<div class="flex items-center gap-2 text-xs text-muted-foreground">

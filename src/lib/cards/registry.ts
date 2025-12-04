@@ -231,6 +231,24 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		canHide: true,
 	},
 
+	// ==================== History 面板卡片 ====================
+	'historyList': {
+		id: 'historyList',
+		title: '历史记录',
+		icon: Activity,
+		defaultPanel: 'history',
+		canHide: false,
+	},
+
+	// ==================== Bookmark 面板卡片 ====================
+	'bookmarkList': {
+		id: 'bookmarkList',
+		title: '书签列表',
+		icon: Activity,
+		defaultPanel: 'bookmark',
+		canHide: false,
+	},
+
 	// ==================== PageList 面板卡片 ====================
 	'pageListMain': {
 		id: 'pageListMain',

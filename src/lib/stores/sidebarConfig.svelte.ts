@@ -37,7 +37,7 @@ export const PANEL_DEFINITIONS = {
 		defaultOrder: 1,
 		canMove: true,
 		canHide: true,
-		supportsCards: false
+		supportsCards: true
 	},
 	bookmark: {
 		title: '书签',
@@ -48,7 +48,7 @@ export const PANEL_DEFINITIONS = {
 		defaultOrder: 2,
 		canMove: true,
 		canHide: true,
-		supportsCards: false
+		supportsCards: true
 	},
 	pageList: {
 		title: '页面列表',

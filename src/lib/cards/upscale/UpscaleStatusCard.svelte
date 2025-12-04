@@ -13,9 +13,23 @@ import {
 	currentImagePath,
 	currentImageResolution,
 	currentImageSize,
-	formatFileSize
+	formatFileSize,
+	updateCurrentImage
 } from '$lib/stores/upscale/upscalePanelStore.svelte';
 import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
+import { bookStore } from '$lib/stores/book.svelte';
+
+// 监听当前页面变化
+$effect(() => {
+	const page = bookStore.currentPage;
+	if (page) {
+		const path = (page as { path?: string; url?: string }).path || (page as { path?: string; url?: string }).url || '';
+		if (path && path !== currentImagePath.value) {
+			updateCurrentImage(path);
+			console.log('📷 超分状态卡片同步图片:', path);
+		}
+	}
+});
 
 function getProgressColor(prog: number): string {
 	if (prog < 30) return 'bg-yellow-500';

@@ -203,6 +203,21 @@ export function setError(msg: string) {
 	isProcessing.value = false;
 }
 
+// ==================== 当前图片管理 ====================
+
+export function updateCurrentImage(path: string, resolution?: string, size?: string) {
+	currentImagePath.value = path;
+	if (resolution) currentImageResolution.value = resolution;
+	if (size) currentImageSize.value = size;
+}
+
+export function clearCurrentImage() {
+	currentImagePath.value = '';
+	currentImageResolution.value = '';
+	currentImageSize.value = '';
+	currentImageHash.value = null;
+}
+
 // ==================== 初始化 ====================
 
 export async function initializeUpscale() {

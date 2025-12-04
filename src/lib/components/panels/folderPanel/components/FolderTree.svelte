@@ -36,11 +36,11 @@ let loadingRoots = $state(true);
 async function loadRoots() {
 	loadingRoots = true;
 	try {
-		// 使用常见盘符作为根目录
-		const commonDrives = ['C:', 'D:', 'E:', 'F:', 'G:'];
+		// 使用常见盘符作为根目录（需要加反斜杠确保是绝对路径）
+		const commonDrives = ['C:\\', 'D:\\', 'E:\\', 'F:\\', 'G:\\'];
 		roots = commonDrives.map((drive) => ({
 			path: drive,
-			name: drive,
+			name: drive.replace('\\', ''),
 			isRoot: true,
 			expanded: false,
 			loading: false,
@@ -48,9 +48,9 @@ async function loadRoots() {
 		}));
 	} catch (err) {
 		console.error('[FolderTree] Failed to load drives:', err);
-		roots = ['C:', 'D:', 'E:'].map((drive) => ({
+		roots = ['C:\\', 'D:\\', 'E:\\'].map((drive) => ({
 			path: drive,
-			name: drive,
+			name: drive.replace('\\', ''),
 			isRoot: true,
 			expanded: false,
 			loading: false,

@@ -52,11 +52,13 @@ function buildReadingHeatmapData() {
 const heatmap = $derived(buildReadingHeatmapData());
 </script>
 
-<div class="space-y-3">
+<div class="space-y-3 overflow-hidden">
 	{#if heatmap.topSlot && heatmap.topSlot.count > 0}
 		<p class="text-xs text-muted-foreground">
 			高峰时段: <span class="font-medium text-foreground">{heatmap.topSlot.weekdayLabel} {heatmap.topSlot.hourLabel}</span>
 		</p>
 	{/if}
-	<ReadingHeatmapChart cells={heatmap.cells} maxCount={heatmap.maxCount} />
+	<div class="overflow-hidden">
+		<ReadingHeatmapChart cells={heatmap.cells} maxCount={heatmap.maxCount} />
+	</div>
 </div>

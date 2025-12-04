@@ -15,6 +15,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { invoke } from '@tauri-apps/api/core';
 import { bookStore } from '$lib/stores/book.svelte';
 import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
+import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte';
 import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 
 // Tempfile 模式缓存（URL -> blob）
@@ -82,8 +83,10 @@ async function triggerParallelPreload(currentPage: number): Promise<void> {
 /**
  * 读取页面图片为 Blob
  * 【纯内存方案】优先使用最快的方式获取数据到内存
+ * 【追踪】记录链路延迟到 infoPanelStore
  */
 export async function readPageBlob(pageIndex: number): Promise<ReadResult> {
+	const startTime = performance.now();
 	const currentBook = bookStore.currentBook;
 	
 	// 【关键】详细验证，防止切书后加载不存在的页面
@@ -106,6 +109,8 @@ export async function readPageBlob(pageIndex: number): Promise<ReadResult> {
 	});
 
 	let blob: Blob;
+	let cacheHit = false;
+	let loadMs = 0;
 
 	if (currentBook.type === 'archive') {
 		const cacheKey = `${currentBook.path}::${pageInfo.path}`;
@@ -115,9 +120,11 @@ export async function readPageBlob(pageIndex: number): Promise<ReadResult> {
 		if (cached) {
 			logImageTrace(traceId, 'tempfile cache hit', { cacheKey });
 			blob = cached.blob;
+			cacheHit = true;
 		} else if (loadModeStore.isTempfileMode) {
 			// Tempfile 模式：解压到临时文件 + asset:// 协议
 			logImageTrace(traceId, 'using tempfile mode');
+			const loadStart = performance.now();
 			
 			const tempPath = await invoke<string>('extract_image_to_temp', {
 				archivePath: currentBook.path,
@@ -134,6 +141,7 @@ export async function readPageBlob(pageIndex: number): Promise<ReadResult> {
 				throw new Error(`Tempfile fetch failed: ${response.status}`);
 			}
 			blob = await response.blob();
+			loadMs = performance.now() - loadStart;
 			
 			// 存入缓存
 			if (tempfileCache.size >= TEMPFILE_CACHE_LIMIT) {
@@ -145,26 +153,43 @@ export async function readPageBlob(pageIndex: number): Promise<ReadResult> {
 		} else {
 			// IPC 模式：使用二进制 IPC（最快的首次加载）
 			logImageTrace(traceId, 'using ipc mode');
+			const loadStart = performance.now();
 			const { loadImageFromArchiveAsBlob } = await import('$lib/api/filesystem');
 			const result = await loadImageFromArchiveAsBlob(currentBook.path, pageInfo.path, {
 				traceId,
 				pageIndex
 			});
 			blob = result.blob;
+			loadMs = performance.now() - loadStart;
 		}
 	} else {
 		// 文件系统：使用 asset:// 协议
 		const assetUrl = convertFileSrc(pageInfo.path);
 		logImageTrace(traceId, 'using asset protocol', { assetUrl });
+		const loadStart = performance.now();
 		
 		const response = await fetch(assetUrl);
 		if (!response.ok) {
 			throw new Error(`Asset fetch failed: ${response.status}`);
 		}
 		blob = await response.blob();
+		loadMs = performance.now() - loadStart;
 	}
 
-	logImageTrace(traceId, 'readPageBlob blob ready', { size: blob.size });
+	const totalMs = performance.now() - startTime;
+	logImageTrace(traceId, 'readPageBlob blob ready', { size: blob.size, loadMs, totalMs });
+
+	// 更新链路延迟追踪
+	const latencyTrace: LatencyTrace = {
+		dataSource: loadModeStore.isTempfileMode ? 'tempfile' : 'blob',
+		renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
+		loadMs,
+		totalMs,
+		cacheHit,
+		dataSize: blob.size,
+		traceId
+	};
+	infoPanelStore.setLatencyTrace(latencyTrace);
 
 	// 【优化】触发并行预加载（异步，不阻塞当前加载）
 	triggerParallelPreload(pageIndex);

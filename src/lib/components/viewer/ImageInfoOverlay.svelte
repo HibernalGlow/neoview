@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { infoPanelStore, type ViewerImageInfo } from '$lib/stores/infoPanel.svelte';
+  import { infoPanelStore, type ViewerImageInfo, type LatencyTrace } from '$lib/stores/infoPanel.svelte';
   import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
 
   let imageInfo = $state<ViewerImageInfo | null>(null);
+  let latencyTrace = $state<LatencyTrace | null>(null);
   let enabled = $state(false);
   let opacity = $state(0.85);
   let showBorder = $state(false);
@@ -19,6 +20,7 @@
 
   const unsubscribeInfo = infoPanelStore.subscribe((state) => {
     imageInfo = state.imageInfo;
+    latencyTrace = state.latencyTrace;
   });
 
   function syncFromSettings() {
@@ -137,6 +139,35 @@
               <span>修改: {formatDate(imageInfo.modifiedAt)}</span>
             {/if}
           </div>
+          <!-- 链路延迟追踪 -->
+          {#if latencyTrace}
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-mono">
+              <span class={latencyTrace.cacheHit ? 'text-green-500' : 'text-yellow-500'}>
+                {latencyTrace.dataSource === 'blob' ? '⚡' : '💾'}
+                {latencyTrace.dataSource}
+              </span>
+              <span class="text-muted-foreground">
+                {latencyTrace.renderMode === 'img' ? '🖼️img' : '🎨canvas'}
+              </span>
+              {#if latencyTrace.loadMs != null}
+                <span class="text-blue-400">加载:{latencyTrace.loadMs.toFixed(0)}ms</span>
+              {/if}
+              {#if latencyTrace.decodeMs != null}
+                <span class="text-purple-400">解码:{latencyTrace.decodeMs.toFixed(0)}ms</span>
+              {/if}
+              {#if latencyTrace.totalMs != null}
+                <span class={latencyTrace.totalMs < 100 ? 'text-green-400' : latencyTrace.totalMs < 300 ? 'text-yellow-400' : 'text-red-400'}>
+                  总计:{latencyTrace.totalMs.toFixed(0)}ms
+                </span>
+              {/if}
+              {#if latencyTrace.cacheHit}
+                <span class="text-green-400">✓缓存</span>
+              {/if}
+              {#if latencyTrace.dataSize}
+                <span class="text-muted-foreground">{(latencyTrace.dataSize / 1024).toFixed(0)}KB</span>
+              {/if}
+            </div>
+          {/if}
         </div>
       </div>
     </div>

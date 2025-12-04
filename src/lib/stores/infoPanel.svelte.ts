@@ -33,14 +33,40 @@ export interface ViewerImageInfo {
 	modifiedAt?: string;
 }
 
+/** 链路延迟追踪信息 */
+export interface LatencyTrace {
+	/** 数据源模式 */
+	dataSource: 'blob' | 'tempfile';
+	/** 渲染模式 */
+	renderMode: 'img' | 'canvas';
+	/** IPC/提取耗时 (ms) */
+	loadMs?: number;
+	/** Blob 创建耗时 (ms) */
+	blobMs?: number;
+	/** 图片解码耗时 (ms) */
+	decodeMs?: number;
+	/** 渲染耗时 (ms) */
+	renderMs?: number;
+	/** 总耗时 (ms) */
+	totalMs?: number;
+	/** 是否缓存命中 */
+	cacheHit?: boolean;
+	/** 数据大小 (bytes) */
+	dataSize?: number;
+	/** 追踪 ID */
+	traceId?: string;
+}
+
 interface InfoPanelState {
 	bookInfo: ViewerBookInfo | null;
 	imageInfo: ViewerImageInfo | null;
+	latencyTrace: LatencyTrace | null;
 }
 
 const { subscribe, set, update } = writable<InfoPanelState>({
 	bookInfo: null,
-	imageInfo: null
+	imageInfo: null,
+	latencyTrace: null
 });
 
 export const infoPanelStore = {
@@ -51,14 +77,20 @@ export const infoPanelStore = {
 	setImageInfo(info: ViewerImageInfo | null) {
 		update((state) => ({ ...state, imageInfo: info }));
 	},
+	setLatencyTrace(trace: LatencyTrace | null) {
+		update((state) => ({ ...state, latencyTrace: trace }));
+	},
 	resetBookInfo() {
 		update((state) => ({ ...state, bookInfo: null }));
 	},
 	resetImageInfo() {
 		update((state) => ({ ...state, imageInfo: null }));
 	},
+	resetLatencyTrace() {
+		update((state) => ({ ...state, latencyTrace: null }));
+	},
 	resetAll() {
-		set({ bookInfo: null, imageInfo: null });
+		set({ bookInfo: null, imageInfo: null, latencyTrace: null });
 	}
 };
 

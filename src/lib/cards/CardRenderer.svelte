@@ -1,104 +1,87 @@
 <script lang="ts">
 /**
  * CardRenderer - 根据卡片 ID 渲染对应组件
- * 使用静态导入 + 组件映射，避免动态 import 的性能开销
+ * 支持懒加载、Context API、类型安全
  */
+import { setContext } from 'svelte';
 import { cardConfigStore, type PanelId } from '$lib/stores/cardConfig.svelte';
 import { cardRegistry } from './registry';
 import { CollapsibleCard } from '$lib/components/cards';
 
-// 静态导入所有卡片组件（打包时 tree-shaking 会优化）
-import VisibilityCard from './benchmark/VisibilityCard.svelte';
-import LatencyCard from './benchmark/LatencyCard.svelte';
-import RendererCard from './benchmark/RendererCard.svelte';
-import FilesCard from './benchmark/FilesCard.svelte';
-import DetailedCard from './benchmark/DetailedCard.svelte';
-import LoadModeCard from './benchmark/LoadModeCard.svelte';
-import ArchivesCard from './benchmark/ArchivesCard.svelte';
-import RealWorldCard from './benchmark/RealWorldCard.svelte';
-import ResultsCard from './benchmark/ResultsCard.svelte';
-import SummaryCard from './benchmark/SummaryCard.svelte';
-
-import BookInfoCard from './info/BookInfoCard.svelte';
-import InfoOverlayCard from './info/InfoOverlayCard.svelte';
-import SwitchToastCard from './info/SwitchToastCard.svelte';
-import ImageInfoCard from './info/ImageInfoCard.svelte';
-import StorageCard from './info/StorageCard.svelte';
-import TimeCard from './info/TimeCard.svelte';
-
-import EmmTagsCard from './properties/EmmTagsCard.svelte';
-import BookSettingsCard from './properties/BookSettingsCard.svelte';
-import FolderRatingsCard from './properties/FolderRatingsCard.svelte';
-import FavoriteTagsCard from './properties/FavoriteTagsCard.svelte';
-import EmmSyncCard from './properties/EmmSyncCard.svelte';
-import ThumbnailMaintenanceCard from './properties/ThumbnailMaintenanceCard.svelte';
-import EmmRawDataCard from './properties/EmmRawDataCard.svelte';
-
-import UpscaleControlCard from './upscale/UpscaleControlCard.svelte';
-import UpscaleModelCard from './upscale/UpscaleModelCard.svelte';
-import UpscaleStatusCard from './upscale/UpscaleStatusCard.svelte';
-import UpscaleCacheCard from './upscale/UpscaleCacheCard.svelte';
-import UpscaleConditionsCard from './upscale/UpscaleConditionsCard.svelte';
-
-import HistoryListCard from './history/HistoryListCard.svelte';
-import BookmarkListCard from './bookmark/BookmarkListCard.svelte';
-import PageListCard from './pageList/PageListCard.svelte';
-import DailyTrendCard from './insights/DailyTrendCard.svelte';
-import ReadingStreakCard from './insights/ReadingStreakCard.svelte';
-import ReadingHeatmapCard from './insights/ReadingHeatmapCard.svelte';
-import BookmarkOverviewCard from './insights/BookmarkOverviewCard.svelte';
-import SourceBreakdownCard from './insights/SourceBreakdownCard.svelte';
-import EmmTagsHotCard from './insights/EmmTagsHotCard.svelte';
-
-// 组件映射表（O(1) 查找，使用 any 避免 Svelte 5 类型问题）
+// 懒加载组件映射（按需加载，提升首屏性能）
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const componentMap: Record<string, any> = {
+const lazyComponentMap: Record<string, () => Promise<{ default: any }>> = {
 	// Benchmark
-	visibility: VisibilityCard,
-	latency: LatencyCard,
-	renderer: RendererCard,
-	files: FilesCard,
-	detailed: DetailedCard,
-	loadmode: LoadModeCard,
-	archives: ArchivesCard,
-	realworld: RealWorldCard,
-	results: ResultsCard,
-	summary: SummaryCard,
+	visibility: () => import('./benchmark/VisibilityCard.svelte'),
+	latency: () => import('./benchmark/LatencyCard.svelte'),
+	renderer: () => import('./benchmark/RendererCard.svelte'),
+	files: () => import('./benchmark/FilesCard.svelte'),
+	detailed: () => import('./benchmark/DetailedCard.svelte'),
+	loadmode: () => import('./benchmark/LoadModeCard.svelte'),
+	archives: () => import('./benchmark/ArchivesCard.svelte'),
+	realworld: () => import('./benchmark/RealWorldCard.svelte'),
+	results: () => import('./benchmark/ResultsCard.svelte'),
+	summary: () => import('./benchmark/SummaryCard.svelte'),
 	// Info
-	bookInfo: BookInfoCard,
-	infoOverlay: InfoOverlayCard,
-	switchToast: SwitchToastCard,
-	imageInfo: ImageInfoCard,
-	storage: StorageCard,
-	time: TimeCard,
+	bookInfo: () => import('./info/BookInfoCard.svelte'),
+	infoOverlay: () => import('./info/InfoOverlayCard.svelte'),
+	switchToast: () => import('./info/SwitchToastCard.svelte'),
+	imageInfo: () => import('./info/ImageInfoCard.svelte'),
+	storage: () => import('./info/StorageCard.svelte'),
+	time: () => import('./info/TimeCard.svelte'),
 	// Properties
-	emmTags: EmmTagsCard,
-	bookSettings: BookSettingsCard,
-	folderRatings: FolderRatingsCard,
-	favoriteTags: FavoriteTagsCard,
-	emmSync: EmmSyncCard,
-	thumbnailMaintenance: ThumbnailMaintenanceCard,
-	emmRawData: EmmRawDataCard,
+	emmTags: () => import('./properties/EmmTagsCard.svelte'),
+	bookSettings: () => import('./properties/BookSettingsCard.svelte'),
+	folderRatings: () => import('./properties/FolderRatingsCard.svelte'),
+	favoriteTags: () => import('./properties/FavoriteTagsCard.svelte'),
+	emmSync: () => import('./properties/EmmSyncCard.svelte'),
+	thumbnailMaintenance: () => import('./properties/ThumbnailMaintenanceCard.svelte'),
+	emmRawData: () => import('./properties/EmmRawDataCard.svelte'),
 	// Upscale
-	upscaleControl: UpscaleControlCard,
-	upscaleModel: UpscaleModelCard,
-	upscaleStatus: UpscaleStatusCard,
-	upscaleCache: UpscaleCacheCard,
-	upscaleConditions: UpscaleConditionsCard,
+	upscaleControl: () => import('./upscale/UpscaleControlCard.svelte'),
+	upscaleModel: () => import('./upscale/UpscaleModelCard.svelte'),
+	upscaleStatus: () => import('./upscale/UpscaleStatusCard.svelte'),
+	upscaleCache: () => import('./upscale/UpscaleCacheCard.svelte'),
+	upscaleConditions: () => import('./upscale/UpscaleConditionsCard.svelte'),
 	// History
-	historyList: HistoryListCard,
+	historyList: () => import('./history/HistoryListCard.svelte'),
 	// Bookmark
-	bookmarkList: BookmarkListCard,
+	bookmarkList: () => import('./bookmark/BookmarkListCard.svelte'),
 	// PageList
-	pageListMain: PageListCard,
+	pageListMain: () => import('./pageList/PageListCard.svelte'),
 	// Insights
-	dailyTrend: DailyTrendCard,
-	readingStreak: ReadingStreakCard,
-	readingHeatmap: ReadingHeatmapCard,
-	bookmarkOverview: BookmarkOverviewCard,
-	sourceBreakdown: SourceBreakdownCard,
-	emmTagsHot: EmmTagsHotCard
+	dailyTrend: () => import('./insights/DailyTrendCard.svelte'),
+	readingStreak: () => import('./insights/ReadingStreakCard.svelte'),
+	readingHeatmap: () => import('./insights/ReadingHeatmapCard.svelte'),
+	bookmarkOverview: () => import('./insights/BookmarkOverviewCard.svelte'),
+	sourceBreakdown: () => import('./insights/SourceBreakdownCard.svelte'),
+	emmTagsHot: () => import('./insights/EmmTagsHotCard.svelte'),
+	// Folder
+	folderBreadcrumb: () => import('./folder/BreadcrumbCard.svelte'),
+	folderTabBar: () => import('./folder/TabBarCard.svelte'),
+	folderToolbar: () => import('./folder/ToolbarCard.svelte'),
+	folderTree: () => import('./folder/FileTreeCard.svelte'),
+	folderList: () => import('./folder/FileListCard.svelte'),
 };
+
+// 组件缓存（避免重复加载）
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const componentCache = new Map<string, any>();
+
+// 加载组件
+async function loadComponent(id: string) {
+	if (componentCache.has(id)) return componentCache.get(id);
+	const loader = lazyComponentMap[id];
+	if (!loader) return null;
+	try {
+		const module = await loader();
+		componentCache.set(id, module.default);
+		return module.default;
+	} catch (err) {
+		console.error(`加载卡片组件失败: ${id}`, err);
+		return null;
+	}
+}
 
 interface Props {
 	cardId: string;
@@ -107,11 +90,27 @@ interface Props {
 
 let { cardId, panelId }: Props = $props();
 
+// 设置 Context（子组件可通过 getContext 获取）
+setContext('cardId', cardId);
+setContext('panelId', panelId);
+
+// 懒加载组件状态
+let CardComponent = $state<any>(null);
+let isLoading = $state(true);
+
+// 加载组件
+$effect(() => {
+	isLoading = true;
+	loadComponent(cardId).then(comp => {
+		CardComponent = comp;
+		isLoading = false;
+	});
+});
+
 // 从 registry 获取卡片元数据
 const cardDef = $derived(cardRegistry[cardId]);
-const CardComponent = $derived(componentMap[cardId]);
 
-// 从 config 获取展开状态
+// 从 config 获取状态
 const cardConfig = $derived.by(() => {
 	const cards = cardConfigStore.getPanelCards(panelId);
 	return cards.find(c => c.id === cardId);
@@ -120,18 +119,21 @@ const cardConfig = $derived.by(() => {
 const isExpanded = $derived(cardConfig?.expanded ?? true);
 const isVisible = $derived(cardConfig?.visible ?? true);
 const cardHeight = $derived(cardConfig?.height);
-const isFullHeight = $derived(cardDef?.fullHeight ?? false);
 
-function toggleExpanded() {
-	cardConfigStore.setCardExpanded(panelId, cardId, !isExpanded);
-}
+// 布局选项（从 registry 读取）
+const isFullHeight = $derived(cardDef?.fullHeight ?? false);
+const hideIcon = $derived(cardDef?.hideIcon ?? false);
+const hideTitle = $derived(cardDef?.hideTitle ?? false);
+const hideHeader = $derived(cardDef?.hideHeader ?? false);
+const compact = $derived(cardDef?.compact ?? false);
+const orientation = $derived(cardDef?.orientation ?? 'vertical');
 
 function handleHeightChange(newHeight: number | undefined) {
 	cardConfigStore.setCardHeight(panelId, cardId, newHeight);
 }
 </script>
 
-{#if isVisible && CardComponent}
+{#if isVisible}
 	<CollapsibleCard
 		id={cardId}
 		{panelId}
@@ -140,7 +142,20 @@ function handleHeightChange(newHeight: number | undefined) {
 		height={cardHeight}
 		onHeightChange={handleHeightChange}
 		fullHeight={isFullHeight}
+		{hideIcon}
+		{hideTitle}
+		{hideHeader}
+		{compact}
+		{orientation}
 	>
-		<CardComponent />
+		{#if isLoading}
+			<div class="flex items-center justify-center py-4 text-muted-foreground text-xs">
+				加载中...
+			</div>
+		{:else if CardComponent}
+			<CardComponent />
+		{:else}
+			<div class="text-destructive text-xs py-2">卡片加载失败: {cardId}</div>
+		{/if}
 	</CollapsibleCard>
 {/if}

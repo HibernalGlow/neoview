@@ -2,7 +2,6 @@
  * 卡片注册表
  * 统一定义所有卡片的元数据，支持动态发现和跨面板移动
  */
-import type { Component } from 'svelte';
 import type { PanelId } from '$lib/stores/sidebarConfig.svelte';
 import { Eye, Timer, Layers, FolderOpen, FileText, Image, Cpu, History, Tags, Search, Activity, Gauge, Archive, Globe, ListChecks, BarChart3 } from '@lucide/svelte';
 
@@ -13,7 +12,13 @@ export interface CardDefinition {
 	icon: typeof Eye;
 	defaultPanel: PanelId;
 	canHide: boolean;
+	// 布局选项
 	fullHeight?: boolean; // 是否占满剩余高度（用于虚拟列表等）
+	hideIcon?: boolean; // 隐藏图标
+	hideTitle?: boolean; // 隐藏标题
+	hideHeader?: boolean; // 完全隐藏头部
+	compact?: boolean; // 紧凑模式
+	orientation?: 'vertical' | 'horizontal'; // 展开方向
 }
 
 // 所有卡片注册表
@@ -303,7 +308,53 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Tags,
 		defaultPanel: 'insights',
 		canHide: true,
-	}
+	},
+
+	// ==================== Folder 面板卡片 ====================
+	'folderBreadcrumb': {
+		id: 'folderBreadcrumb',
+		title: '导航',
+		icon: FolderOpen,
+		defaultPanel: 'folder',
+		canHide: false,
+		hideHeader: true, // 无头部
+		compact: true,
+	},
+	'folderTabBar': {
+		id: 'folderTabBar',
+		title: '标签',
+		icon: Layers,
+		defaultPanel: 'folder',
+		canHide: true,
+		hideHeader: true,
+		compact: true,
+	},
+	'folderToolbar': {
+		id: 'folderToolbar',
+		title: '工具',
+		icon: Activity,
+		defaultPanel: 'folder',
+		canHide: true,
+		hideHeader: true,
+		compact: true,
+	},
+	'folderTree': {
+		id: 'folderTree',
+		title: '文件树',
+		icon: FolderOpen,
+		defaultPanel: 'folder',
+		canHide: true,
+		fullHeight: true,
+		orientation: 'horizontal', // 可水平展开
+	},
+	'folderList': {
+		id: 'folderList',
+		title: '文件列表',
+		icon: FileText,
+		defaultPanel: 'folder',
+		canHide: false,
+		fullHeight: true,
+	},
 };
 
 // 获取面板的默认卡片列表

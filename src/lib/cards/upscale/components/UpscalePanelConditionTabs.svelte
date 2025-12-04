@@ -30,7 +30,7 @@
 		DialogTitle
 	} from '$lib/components/ui/dialog';
 	import { Trash2, Plus, ArrowUp, ArrowDown, Copy, Upload, Download, RotateCcw } from '@lucide/svelte';
-	import type { UpscaleCondition, ConditionExpression } from './UpscalePanel';
+	import type { UpscaleCondition, ConditionExpression } from '$lib/components/panels/UpscalePanel';
 	import type { ConditionPresetKey } from '$lib/utils/upscale/conditions';
 	import {
 		createBlankCondition,

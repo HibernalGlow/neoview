@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
-	import UpscalePanelModelSettings from './UpscalePanelModelSettings.svelte';
+	import UpscalePanelModelSettings from '$lib/components/panels/UpscalePanelModelSettings.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import { Switch } from '$lib/components/ui/switch';
-import type { UpscaleCondition } from './UpscalePanel';
+import type { UpscaleCondition } from '$lib/components/panels/UpscalePanel';
 
 export interface UpscaleConditionActionEditorProps {
 	condition: UpscaleCondition;

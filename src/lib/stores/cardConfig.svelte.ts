@@ -201,32 +201,31 @@ function createCardConfigStore() {
 		saveConfigs(configs);
 	}
 
-	// 移动卡片到另一个面板
-	function moveCardToPanel(cardId: string, fromPanelId: PanelId, toPanelId: PanelId) {
-		if (fromPanelId === toPanelId) return;
+	// 移动卡片到另一个面板（解耦设计：只需更新 panelId）
+	function moveCardToPanel(cardId: string, toPanelId: PanelId) {
+		// 找到卡片当前所在面板
+		let fromPanelId: PanelId | null = null;
+		let card: CardConfig | null = null;
 		
-		const fromCards = configs[fromPanelId];
+		for (const [panelId, cards] of Object.entries(configs)) {
+			const found = cards?.find(c => c.id === cardId);
+			if (found) {
+				fromPanelId = panelId as PanelId;
+				card = found;
+				break;
+			}
+		}
+		
+		if (!fromPanelId || !card || fromPanelId === toPanelId) return;
+		
+		const fromCards = configs[fromPanelId] || [];
 		const toCards = configs[toPanelId] || [];
-		if (!fromCards) return;
 		
-		const cardIdx = fromCards.findIndex(c => c.id === cardId);
-		if (cardIdx === -1) return;
-		
-		const card = fromCards[cardIdx];
-		
-		// 从源面板移除
-		const newFromCards = fromCards.filter(c => c.id !== cardId);
-		// 重新计算源面板顺序
-		newFromCards.forEach((c, i) => c.order = i);
-		
-		// 添加到目标面板末尾
-		const newCard = { ...card, panelId: toPanelId, order: toCards.length };
-		const newToCards = [...toCards, newCard];
-		
+		// 更新配置
 		configs = {
 			...configs,
-			[fromPanelId]: newFromCards,
-			[toPanelId]: newToCards
+			[fromPanelId]: fromCards.filter(c => c.id !== cardId).map((c, i) => ({ ...c, order: i })),
+			[toPanelId]: [...toCards, { ...card, panelId: toPanelId, order: toCards.length }]
 		};
 		saveConfigs(configs);
 	}

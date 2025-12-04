@@ -199,10 +199,16 @@ src/lib/
 - [x] 创建 `CollapsibleCard.svelte` 通用组件
 - [x] 创建 `cards/registry.ts` 卡片注册表
 - [x] 更新 `cardConfig` 使用 registry 动态生成默认配置
-- [x] 添加 `moveCardToPanel()` 跨面板移动功能
-- [ ] 创建各面板的卡片组件（placeholder）
+- [x] 添加 `moveCardToPanel(cardId, toPanelId)` 跨面板移动（解耦设计，只需 ID）
+- [x] 创建各面板的卡片占位组件
+  - benchmark: 10 个卡片
+  - info: 2 个卡片
+  - properties: 3 个卡片
+  - upscale: 4 个卡片
+  - insights: 3 个卡片
 - [ ] 创建 `CardRenderer.svelte` 动态渲染器
 - [ ] 重构面板为纯容器
+- [ ] 从现有面板提取实际卡片内容
 - [ ] 验证设置页面和面板的同步
 
 ## CollapsibleCard 使用示例

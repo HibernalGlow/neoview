@@ -73,17 +73,21 @@ function createCardConfigStore() {
 			const stored = localStorage.getItem(STORAGE_KEY);
 			if (stored) {
 				const parsed = JSON.parse(stored) as Partial<Record<PanelId, CardConfig[]>>;
-				// 合并新增的卡片
+				// 合并新增的卡片，过滤掉不存在的卡片
 				const result: Partial<Record<PanelId, CardConfig[]>> = {};
 				for (const panelId of cardPanels) {
 					const storedCards = parsed[panelId] || [];
-					const storedIds = storedCards.map(c => c.id);
+					// 过滤掉不存在于 cardRegistry 中的卡片
+					const validStoredCards = storedCards.filter(c => cardRegistry[c.id]);
+					const validIds = validStoredCards.map(c => c.id);
 					const defaultCards = defaultCardConfigs[panelId] || [];
-					// 保留已存储的卡片配置，添加新卡片到末尾
+					// 保留已存储的有效卡片配置，添加新卡片到末尾
 					const newCards = defaultCards
-						.filter(c => !storedIds.includes(c.id))
-						.map((c, i) => ({ ...c, panelId, order: storedCards.length + i }));
-					result[panelId] = [...storedCards, ...newCards];
+						.filter(c => !validIds.includes(c.id))
+						.map((c, i) => ({ ...c, panelId, order: validStoredCards.length + i }));
+					// 重新分配 order 确保连续
+					const allCards = [...validStoredCards, ...newCards];
+					result[panelId] = allCards.map((c, i) => ({ ...c, order: i }));
 				}
 				return result;
 			}

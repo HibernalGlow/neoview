@@ -3,10 +3,12 @@
    * PageFrameViewer - 基于新架构的页面帧查看器
    * 
    * 展示如何使用 bookStore2 和新的页面系统
+   * 支持 img/canvas 两种渲染模式
    */
   
   import { onMount, onDestroy } from 'svelte';
   import { bookStore2, currentPageInfo, viewTransformCSS, canNavigate } from '../../stores/bookStore2';
+  import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
   import type { VirtualPage } from '../../core/types';
   
   // Props
@@ -15,8 +17,14 @@
   // 本地状态
   let containerElement: HTMLDivElement;
   let imageElement: HTMLImageElement;
+  let canvasElement: HTMLCanvasElement;
   let currentImageUrl: string | null = null;
   let isImageLoading = false;
+  let imageWidth = 0;
+  let imageHeight = 0;
+  
+  // 响应式获取渲染模式
+  $: isCanvasMode = loadModeStore.isCanvasMode;
   
   // 响应式订阅
   $: state = $bookStore2;
@@ -77,19 +85,47 @@
         }
         currentImageUrl = URL.createObjectURL(blob);
         
-        // 更新内容尺寸
-        if (imageElement) {
-          imageElement.onload = () => {
-            bookStore2.setContentSize(imageElement.naturalWidth, imageElement.naturalHeight);
-            bookStore2.fitToContainer();
-          };
-        }
+        // 使用新 Image 对象获取尺寸
+        const img = new Image();
+        img.onload = () => {
+          imageWidth = img.naturalWidth;
+          imageHeight = img.naturalHeight;
+          bookStore2.setContentSize(imageWidth, imageHeight);
+          bookStore2.fitToContainer();
+          
+          // 如果是 canvas 模式，渲染到 canvas
+          if (isCanvasMode && canvasElement) {
+            renderToCanvas(img);
+          }
+        };
+        img.src = currentImageUrl;
       }
     } catch (error) {
       console.error('Failed to load image:', error);
     } finally {
       isImageLoading = false;
     }
+  }
+  
+  // 渲染到 canvas
+  function renderToCanvas(img: HTMLImageElement) {
+    const canvas = canvasElement;
+    if (!canvas) return;
+    
+    canvasElement.width = img.naturalWidth;
+    canvasElement.height = img.naturalHeight;
+    
+    const ctx = canvasElement.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(img, 0, 0);
+    }
+  }
+  
+  // 当渲染模式切换时，重新渲染
+  $: if (isCanvasMode && currentImageUrl && canvasElement && imageWidth > 0) {
+    const img = new Image();
+    img.onload = () => renderToCanvas(img);
+    img.src = currentImageUrl;
   }
   
   // 键盘导航
@@ -220,14 +256,26 @@
   {#if state.isOpen}
     <div class="content-wrapper" style={transformCSS}>
       {#if currentImageUrl}
-        <img
-          bind:this={imageElement}
-          src={currentImageUrl}
-          alt="Page {state.currentIndex + 1}"
-          class="page-image"
-          class:loading={isImageLoading}
-          draggable="false"
-        />
+        {#if isCanvasMode}
+          <canvas
+            bind:this={canvasElement}
+            width={imageWidth}
+            height={imageHeight}
+            class="page-image"
+            class:loading={isImageLoading}
+            role="img"
+            aria-label="Page {state.currentIndex + 1}"
+          ></canvas>
+        {:else}
+          <img
+            bind:this={imageElement}
+            src={currentImageUrl}
+            alt="Page {state.currentIndex + 1}"
+            class="page-image"
+            class:loading={isImageLoading}
+            draggable="false"
+          />
+        {/if}
       {:else if isImageLoading}
         <div class="loading-indicator">
           <span>Loading...</span>

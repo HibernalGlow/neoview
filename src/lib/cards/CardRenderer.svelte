@@ -96,8 +96,10 @@ let isLoading = $state(true);
 
 // 加载组件
 $effect(() => {
+	console.log('[CardRenderer] 加载卡片:', cardId);
 	isLoading = true;
 	loadComponent(cardId).then(comp => {
+		console.log('[CardRenderer] 卡片加载完成:', cardId, !!comp);
 		CardComponent = comp;
 		isLoading = false;
 	});

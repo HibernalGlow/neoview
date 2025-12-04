@@ -244,6 +244,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'history',
 		canHide: false,
 		fullHeight: true,
+		hideHeader: true,
 	},
 
 	// ==================== Bookmark 面板卡片 ====================
@@ -254,6 +255,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'bookmark',
 		canHide: false,
 		fullHeight: true,
+		hideHeader: true,
 	},
 
 	// ==================== PageList 面板卡片 ====================
@@ -264,6 +266,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'pageList',
 		canHide: false,
 		fullHeight: true,
+		hideHeader: true,
 	},
 	
 	// ==================== Insights 面板卡片 ====================

@@ -7,6 +7,10 @@ import CardRenderer from '$lib/cards/CardRenderer.svelte';
 import { cardConfigStore } from '$lib/stores/cardConfig.svelte';
 
 const panelCards = $derived(cardConfigStore.getPanelCards('folder'));
+
+$effect(() => {
+	console.log('[FolderPanel] 卡片列表:', panelCards);
+});
 </script>
 
 <div class="h-full flex flex-col overflow-hidden">

@@ -26,7 +26,7 @@ export const PANEL_DEFINITIONS = {
 		defaultOrder: 0,
 		canMove: true,
 		canHide: false,
-		supportsCards: false
+		supportsCards: true
 	},
 	history: {
 		title: '历史记录',

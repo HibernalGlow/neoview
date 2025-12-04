@@ -3,7 +3,9 @@
 
 pub mod archive;
 pub mod archive_manager;
+// pub mod archive_prefetcher; // TODO: 需要 archive_page_cache 模块
 pub mod background_scheduler;
+pub mod data_source;
 pub mod image_loader_mode;
 pub mod blob_registry;
 pub mod book_manager;

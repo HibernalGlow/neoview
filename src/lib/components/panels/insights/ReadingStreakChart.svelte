@@ -14,11 +14,9 @@
 
 	const paddingX = 26;
 	const paddingY = 18;
-	const baseHeight = 140;
-	const gapX = 24;
-
-	const viewWidth = $derived(() => paddingX * 2 + Math.max(points.length - 1, 1) * gapX);
-	const viewHeight = baseHeight;
+	const viewHeight = 140;
+	// 固定宽度，让 SVG 自动缩放到容器宽度
+	const viewWidth = 360;
 
 	function getX(index: number) {
 		if (points.length <= 1) return paddingX;
@@ -32,26 +30,27 @@
 		return viewHeight - paddingY - (value / maxValue) * usableHeight;
 	}
 
-	const pathData = $derived(() => {
+	const pathData = $derived.by(() => {
 		if (!points.length) return '';
 		return points
-			.map((point, index) => `${index === 0 ? 'M' : 'L'} ${getX(index)} ${getY(point.value)}`)
+			.map((point: StreakPoint, index: number) => `${index === 0 ? 'M' : 'L'} ${getX(index)} ${getY(point.value)}`)
 			.join(' ');
 	});
 
-	const areaPath = $derived(() => {
+	const areaPath = $derived.by(() => {
 		if (!points.length || !pathData) return '';
 		const baselineY = viewHeight - paddingY;
 		return `${pathData} L ${getX(points.length - 1)} ${baselineY} L ${getX(0)} ${baselineY} Z`;
 	});
 
-	const lastPoint = $derived(() => (points.length ? points[points.length - 1] : null));
-	const peakPoint = $derived(() =>
-		points.reduce<StreakPoint | null>((best, point) => {
+	const lastPoint = $derived(points.length ? points[points.length - 1] : null);
+	const peakPoint = $derived.by(() => {
+		if (!points.length) return null;
+		return points.reduce((best: StreakPoint | null, point: StreakPoint) => {
 			if (!best || point.value >= best.value) return point;
 			return best;
-		}, null)
-	);
+		}, null as StreakPoint | null);
+	});
 </script>
 
 {#if !points.length}

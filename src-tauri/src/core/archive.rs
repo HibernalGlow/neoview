@@ -42,7 +42,7 @@ impl ArchiveFormat {
     }
 }
 
-const IMAGE_CACHE_LIMIT: usize = 256;
+const IMAGE_CACHE_LIMIT: usize = 1024;
 
 #[derive(Clone)]
 struct CachedImageEntry {

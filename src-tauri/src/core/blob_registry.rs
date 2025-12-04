@@ -226,6 +226,6 @@ pub struct BlobStats {
 
 impl Default for BlobRegistry {
     fn default() -> Self {
-        Self::new(1024) // 默认最多 1024 个 blob
+        Self::new(2048) // 默认最多 2048 个 blob（优化：增大缓存）
     }
 }

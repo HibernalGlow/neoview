@@ -233,6 +233,7 @@ pub fn run() {
             commands::get_images_from_archive,
             commands::is_supported_archive,
             commands::batch_scan_archives,
+            commands::preload_archive_pages,
             commands::delete_archive_entry,
             // Comparison commands
             commands::prepare_comparison_preview,

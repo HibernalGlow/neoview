@@ -392,6 +392,36 @@ export function clearArchiveListCache(): void {
   archiveListCache.clear();
 }
 
+/**
+ * 【优化】并行预加载压缩包页面到后端缓存
+ * 使用 rayon 并行解压，加速首次翻页
+ */
+export interface PreloadResult {
+  total: number;
+  success: number;
+  failed: number;
+  totalBytes: number;
+  errors: string[] | null;
+}
+
+export async function preloadArchivePages(
+  archivePath: string,
+  pagePaths: string[]
+): Promise<PreloadResult> {
+  console.log(`⚡ 并行预加载: ${pagePaths.length} 页 from ${archivePath}`);
+  try {
+    const result = await invoke<PreloadResult>('preload_archive_pages', {
+      archivePath,
+      pagePaths
+    });
+    console.log(`✅ 预加载完成: ${result.success}/${result.total}, ${(result.totalBytes / 1024).toFixed(0)}KB`);
+    return result;
+  } catch (error) {
+    console.error('❌ 预加载失败:', error);
+    throw error;
+  }
+}
+
 
 /**
  * 检查是否为支持的压缩包

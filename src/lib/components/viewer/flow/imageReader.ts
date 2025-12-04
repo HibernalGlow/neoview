@@ -6,6 +6,7 @@
  * 1. 文件系统图片：使用 asset:// 协议（浏览器自动缓存）
  * 2. 压缩包图片：使用二进制 IPC（无 JSON 序列化开销）
  * 3. 所有数据加载后存入 BlobCache，后续直接从内存读取
+ * 4. 【优化】并行预加载 ±5 页到后端缓存
  */
 
 import { convertFileSrc } from '@tauri-apps/api/core';
@@ -17,6 +18,10 @@ export interface ReadResult {
 	traceId: string;
 }
 
+// 预加载状态跟踪
+let lastPreloadedPage = -1;
+const PRELOAD_RANGE = 5; // ±5 页
+
 // 预解压相关（可选优化，保留接口兼容）
 export async function preExtractArchive(_archivePath: string): Promise<string | null> {
 	// 简化：不再预解压到文件，直接使用内存方案
@@ -24,7 +29,45 @@ export async function preExtractArchive(_archivePath: string): Promise<string | 
 }
 
 export function clearExtractCache(): void {
-	// 无需清理
+	// 重置预加载状态
+	lastPreloadedPage = -1;
+}
+
+/**
+ * 【优化】触发并行预加载邻近页面
+ * 异步执行，不阻塞当前加载
+ */
+async function triggerParallelPreload(currentPage: number): Promise<void> {
+	const currentBook = bookStore.currentBook;
+	if (!currentBook || currentBook.type !== 'archive') return;
+	
+	// 避免频繁触发
+	if (Math.abs(currentPage - lastPreloadedPage) < 3) return;
+	lastPreloadedPage = currentPage;
+	
+	// 计算需要预加载的页面范围
+	const totalPages = currentBook.pages.length;
+	const startPage = Math.max(0, currentPage - PRELOAD_RANGE);
+	const endPage = Math.min(totalPages - 1, currentPage + PRELOAD_RANGE);
+	
+	const pagePaths: string[] = [];
+	for (let i = startPage; i <= endPage; i++) {
+		if (i !== currentPage && currentBook.pages[i]) {
+			pagePaths.push(currentBook.pages[i].path);
+		}
+	}
+	
+	if (pagePaths.length === 0) return;
+	
+	// 异步预加载，不等待结果
+	try {
+		const { preloadArchivePages } = await import('$lib/api/filesystem');
+		preloadArchivePages(currentBook.path, pagePaths).catch(err => {
+			console.warn('预加载失败:', err);
+		});
+	} catch (err) {
+		console.warn('导入预加载模块失败:', err);
+	}
 }
 
 /**
@@ -76,6 +119,9 @@ export async function readPageBlob(pageIndex: number): Promise<ReadResult> {
 	}
 
 	logImageTrace(traceId, 'readPageBlob blob ready', { size: blob.size });
+
+	// 【优化】触发并行预加载（异步，不阻塞当前加载）
+	triggerParallelPreload(pageIndex);
 
 	return { blob, traceId };
 }

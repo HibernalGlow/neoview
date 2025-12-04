@@ -745,6 +745,86 @@ pub struct ArchiveScanResult {
     pub error: Option<String>,
 }
 
+/// 【优化】并行预加载多个页面到缓存
+/// 使用 rayon 并行解压，提升预加载速度
+#[tauri::command]
+pub async fn preload_archive_pages(
+    archive_path: String,
+    page_paths: Vec<String>,
+    state: State<'_, FsState>,
+) -> Result<PreloadResult, String> {
+    use rayon::prelude::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    
+    let archive_manager = Arc::clone(&state.archive_manager);
+    let archive_path_buf = PathBuf::from(&archive_path);
+    let page_count = page_paths.len();
+    
+    info!(
+        "📦 [Preload] 开始并行预加载 {} 个页面: {}",
+        page_count,
+        archive_path
+    );
+    
+    let start_time = std::time::Instant::now();
+    
+    let result = spawn_blocking(move || {
+        let manager = archive_manager
+            .lock()
+            .map_err(|e| format!("获取锁失败: {}", e))?;
+        
+        let success_count = AtomicUsize::new(0);
+        let total_bytes = AtomicUsize::new(0);
+        
+        // 使用 rayon 并行解压
+        let errors: Vec<String> = page_paths
+            .par_iter()
+            .filter_map(|page_path| {
+                match manager.load_image_from_archive_binary(&archive_path_buf, page_path) {
+                    Ok(bytes) => {
+                        success_count.fetch_add(1, Ordering::Relaxed);
+                        total_bytes.fetch_add(bytes.len(), Ordering::Relaxed);
+                        None
+                    }
+                    Err(e) => Some(format!("{}: {}", page_path, e)),
+                }
+            })
+            .collect();
+        
+        Ok(PreloadResult {
+            total: page_count,
+            success: success_count.load(Ordering::Relaxed),
+            failed: errors.len(),
+            total_bytes: total_bytes.load(Ordering::Relaxed),
+            errors: if errors.is_empty() { None } else { Some(errors) },
+        })
+    })
+    .await
+    .map_err(|e| format!("preload_archive_pages join error: {}", e))?;
+    
+    let elapsed = start_time.elapsed();
+    
+    match &result {
+        Ok(r) => info!(
+            "✅ [Preload] 完成: {}/{} 成功, {} bytes, {:.1}ms",
+            r.success, r.total, r.total_bytes, elapsed.as_secs_f64() * 1000.0
+        ),
+        Err(e) => warn!("⚠️ [Preload] 失败: {}", e),
+    }
+    
+    result
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreloadResult {
+    pub total: usize,
+    pub success: usize,
+    pub failed: usize,
+    pub total_bytes: usize,
+    pub errors: Option<Vec<String>>,
+}
+
 // ===== 文件操作命令 =====
 
 /// 复制文件或文件夹

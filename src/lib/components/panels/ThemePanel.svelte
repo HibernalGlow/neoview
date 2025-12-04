@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Palette, Sun, Moon, Monitor, Check, Layers } from '@lucide/svelte';
+	import { Palette, Sun, Moon, Monitor, Check, Layers, Type, Plus, X, GripVertical } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import { Input } from '$lib/components/ui/input';
@@ -19,6 +19,44 @@
 	let sidebarBlur = $state(settingsManager.getSettings().panels.sidebarBlur ?? 12);
 	let topToolbarBlur = $state(settingsManager.getSettings().panels.topToolbarBlur ?? 12);
 	let bottomBarBlur = $state(settingsManager.getSettings().panels.bottomBarBlur ?? 12);
+
+	// 字体设置
+	let fontSettings = $state(settingsManager.getSettings().theme.customFont ?? {
+		enabled: false,
+		fontFamilies: [],
+		uiFontFamilies: [],
+		monoFontFamilies: []
+	});
+	let newMainFont = $state('');
+	let newUIFont = $state('');
+	let newMonoFont = $state('');
+
+	// 预设字体列表
+	const presetFonts = [
+		{ name: 'System UI', value: 'system-ui' },
+		{ name: 'Microsoft YaHei', value: '"Microsoft YaHei"' },
+		{ name: '微软雅黑', value: '"Microsoft YaHei"' },
+		{ name: 'PingFang SC', value: '"PingFang SC"' },
+		{ name: 'Noto Sans SC', value: '"Noto Sans SC"' },
+		{ name: 'Source Han Sans SC', value: '"Source Han Sans SC"' },
+		{ name: 'Inter', value: 'Inter' },
+		{ name: 'Roboto', value: 'Roboto' },
+		{ name: 'SF Pro', value: '"SF Pro Display"' },
+		{ name: 'Segoe UI', value: '"Segoe UI"' },
+		{ name: 'Arial', value: 'Arial' },
+		{ name: 'Helvetica Neue', value: '"Helvetica Neue"' },
+	];
+
+	const presetMonoFonts = [
+		{ name: 'JetBrains Mono', value: '"JetBrains Mono"' },
+		{ name: 'Fira Code', value: '"Fira Code"' },
+		{ name: 'Source Code Pro', value: '"Source Code Pro"' },
+		{ name: 'Cascadia Code', value: '"Cascadia Code"' },
+		{ name: 'Consolas', value: 'Consolas' },
+		{ name: 'Monaco', value: 'Monaco' },
+		{ name: 'Menlo', value: 'Menlo' },
+		{ name: 'monospace', value: 'monospace' },
+	];
 
 	function updateSidebarOpacity(value: number) {
 		sidebarOpacity = value;
@@ -49,6 +87,123 @@
 		bottomBarBlur = value;
 		settingsManager.updateNestedSettings('panels', { bottomBarBlur: value });
 	}
+
+	// 字体设置函数
+	function toggleFontEnabled(enabled: boolean) {
+		fontSettings.enabled = enabled;
+		saveFontSettings();
+		applyFontSettings();
+	}
+
+	function addFont(type: 'main' | 'ui' | 'mono', fontValue: string) {
+		const trimmed = fontValue.trim();
+		if (!trimmed) return;
+		
+		switch (type) {
+			case 'main':
+				if (!fontSettings.fontFamilies.includes(trimmed)) {
+					fontSettings.fontFamilies = [...fontSettings.fontFamilies, trimmed];
+				}
+				newMainFont = '';
+				break;
+			case 'ui':
+				if (!fontSettings.uiFontFamilies.includes(trimmed)) {
+					fontSettings.uiFontFamilies = [...fontSettings.uiFontFamilies, trimmed];
+				}
+				newUIFont = '';
+				break;
+			case 'mono':
+				if (!fontSettings.monoFontFamilies.includes(trimmed)) {
+					fontSettings.monoFontFamilies = [...fontSettings.monoFontFamilies, trimmed];
+				}
+				newMonoFont = '';
+				break;
+		}
+		saveFontSettings();
+		applyFontSettings();
+	}
+
+	function removeFont(type: 'main' | 'ui' | 'mono', index: number) {
+		switch (type) {
+			case 'main':
+				fontSettings.fontFamilies = fontSettings.fontFamilies.filter((_, i) => i !== index);
+				break;
+			case 'ui':
+				fontSettings.uiFontFamilies = fontSettings.uiFontFamilies.filter((_, i) => i !== index);
+				break;
+			case 'mono':
+				fontSettings.monoFontFamilies = fontSettings.monoFontFamilies.filter((_, i) => i !== index);
+				break;
+		}
+		saveFontSettings();
+		applyFontSettings();
+	}
+
+	function moveFont(type: 'main' | 'ui' | 'mono', fromIndex: number, toIndex: number) {
+		let arr: string[];
+		switch (type) {
+			case 'main': arr = [...fontSettings.fontFamilies]; break;
+			case 'ui': arr = [...fontSettings.uiFontFamilies]; break;
+			case 'mono': arr = [...fontSettings.monoFontFamilies]; break;
+		}
+		
+		const [item] = arr.splice(fromIndex, 1);
+		arr.splice(toIndex, 0, item);
+		
+		switch (type) {
+			case 'main': fontSettings.fontFamilies = arr; break;
+			case 'ui': fontSettings.uiFontFamilies = arr; break;
+			case 'mono': fontSettings.monoFontFamilies = arr; break;
+		}
+		saveFontSettings();
+		applyFontSettings();
+	}
+
+	function saveFontSettings() {
+		settingsManager.updateNestedSettings('theme', {
+			customFont: { ...fontSettings }
+		});
+	}
+
+	function applyFontSettings() {
+		const root = document.documentElement;
+		
+		if (!fontSettings.enabled) {
+			// 移除自定义字体，恢复主题默认
+			root.style.removeProperty('--font-sans');
+			root.style.removeProperty('--font-mono');
+			root.style.removeProperty('font-family');
+			return;
+		}
+
+		// 生成 font-family 字符串
+		const mainFonts = fontSettings.fontFamilies.length > 0
+			? fontSettings.fontFamilies.join(', ') + ', sans-serif'
+			: null;
+		
+		const uiFonts = fontSettings.uiFontFamilies.length > 0
+			? fontSettings.uiFontFamilies.join(', ') + ', sans-serif'
+			: mainFonts;
+		
+		const monoFonts = fontSettings.monoFontFamilies.length > 0
+			? fontSettings.monoFontFamilies.join(', ') + ', monospace'
+			: null;
+
+		// 应用到 CSS 变量
+		if (mainFonts || uiFonts) {
+			root.style.setProperty('--font-sans', uiFonts || mainFonts || '');
+			root.style.setProperty('font-family', mainFonts || uiFonts || '');
+		}
+		
+		if (monoFonts) {
+			root.style.setProperty('--font-mono', monoFonts);
+		}
+	}
+
+	function buildFontFamilyString(fonts: string[]): string {
+		return fonts.join(', ') || '未设置';
+	}
+
 	let themeJson = $state('');
 	let customThemeName = $state('');
 	const placeholderText = '{"name":"My Theme","cssVars":{"theme":{},"light":{},"dark":{}}}';
@@ -350,6 +505,9 @@
 		// 应用主题
 		applyTheme(currentMode, selectedTheme);
 
+		// 应用字体设置
+		applyFontSettings();
+
 		// 监听系统主题变化
 		const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 		const handleChange = (e: MediaQueryListEvent) => {
@@ -424,6 +582,181 @@
 			<p class="text-muted-foreground text-xs">
 				当前系统偏好: {systemPrefersDark ? '深色' : '浅色'}
 			</p>
+		{/if}
+	</div>
+
+	<!-- 字体设置 -->
+	<div class="space-y-4 pt-2 border-t">
+		<div class="flex items-center justify-between">
+			<Label class="text-sm font-semibold flex items-center gap-2">
+				<Type class="h-4 w-4" />
+				自定义字体
+			</Label>
+			<button
+				onclick={() => toggleFontEnabled(!fontSettings.enabled)}
+				class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors {fontSettings.enabled ? 'bg-primary' : 'bg-muted'}"
+			>
+				<span
+					class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {fontSettings.enabled ? 'translate-x-4' : 'translate-x-0.5'}"
+				></span>
+			</button>
+		</div>
+		<p class="text-muted-foreground text-xs">
+			启用后将覆盖主题默认字体，支持多字体组合（fallback）
+		</p>
+
+		{#if fontSettings.enabled}
+			<!-- 主字体 -->
+			<div class="space-y-2">
+				<Label class="text-sm">主字体（正文内容）</Label>
+				<div class="flex flex-wrap gap-2">
+					{#each fontSettings.fontFamilies as font, index}
+						<div class="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs">
+							{#if index > 0}
+								<button
+									onclick={() => moveFont('main', index, index - 1)}
+									class="hover:text-primary cursor-move"
+									title="上移"
+								>
+									<GripVertical class="h-3 w-3" />
+								</button>
+							{/if}
+							<span style="font-family: {font}">{font.replace(/"/g, '')}</span>
+							<button
+								onclick={() => removeFont('main', index)}
+								class="hover:text-destructive ml-1"
+							>
+								<X class="h-3 w-3" />
+							</button>
+						</div>
+					{/each}
+				</div>
+				<div class="flex gap-2">
+					<select
+						class="flex-1 rounded-md border bg-background px-3 py-1.5 text-sm"
+						bind:value={newMainFont}
+					>
+						<option value="">选择预设字体...</option>
+						{#each presetFonts as preset}
+							<option value={preset.value}>{preset.name}</option>
+						{/each}
+					</select>
+					<Button size="sm" onclick={() => addFont('main', newMainFont)}>
+						<Plus class="h-4 w-4" />
+					</Button>
+				</div>
+				<div class="flex gap-2">
+					<Input
+						placeholder="或输入自定义字体名..."
+						bind:value={newMainFont}
+						onkeydown={(e) => e.key === 'Enter' && addFont('main', newMainFont)}
+					/>
+				</div>
+			</div>
+
+			<!-- UI 字体 -->
+			<div class="space-y-2">
+				<Label class="text-sm">UI 字体（按钮、标签）</Label>
+				<p class="text-muted-foreground text-xs">留空则跟随主字体</p>
+				<div class="flex flex-wrap gap-2">
+					{#each fontSettings.uiFontFamilies as font, index}
+						<div class="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs">
+							{#if index > 0}
+								<button
+									onclick={() => moveFont('ui', index, index - 1)}
+									class="hover:text-primary cursor-move"
+									title="上移"
+								>
+									<GripVertical class="h-3 w-3" />
+								</button>
+							{/if}
+							<span style="font-family: {font}">{font.replace(/"/g, '')}</span>
+							<button
+								onclick={() => removeFont('ui', index)}
+								class="hover:text-destructive ml-1"
+							>
+								<X class="h-3 w-3" />
+							</button>
+						</div>
+					{/each}
+				</div>
+				<div class="flex gap-2">
+					<select
+						class="flex-1 rounded-md border bg-background px-3 py-1.5 text-sm"
+						bind:value={newUIFont}
+					>
+						<option value="">选择预设字体...</option>
+						{#each presetFonts as preset}
+							<option value={preset.value}>{preset.name}</option>
+						{/each}
+					</select>
+					<Button size="sm" onclick={() => addFont('ui', newUIFont)}>
+						<Plus class="h-4 w-4" />
+					</Button>
+				</div>
+			</div>
+
+			<!-- 等宽字体 -->
+			<div class="space-y-2">
+				<Label class="text-sm">等宽字体（代码、数字）</Label>
+				<div class="flex flex-wrap gap-2">
+					{#each fontSettings.monoFontFamilies as font, index}
+						<div class="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-mono">
+							{#if index > 0}
+								<button
+									onclick={() => moveFont('mono', index, index - 1)}
+									class="hover:text-primary cursor-move"
+									title="上移"
+								>
+									<GripVertical class="h-3 w-3" />
+								</button>
+							{/if}
+							<span style="font-family: {font}">{font.replace(/"/g, '')}</span>
+							<button
+								onclick={() => removeFont('mono', index)}
+								class="hover:text-destructive ml-1"
+							>
+								<X class="h-3 w-3" />
+							</button>
+						</div>
+					{/each}
+				</div>
+				<div class="flex gap-2">
+					<select
+						class="flex-1 rounded-md border bg-background px-3 py-1.5 text-sm"
+						bind:value={newMonoFont}
+					>
+						<option value="">选择预设字体...</option>
+						{#each presetMonoFonts as preset}
+							<option value={preset.value}>{preset.name}</option>
+						{/each}
+					</select>
+					<Button size="sm" onclick={() => addFont('mono', newMonoFont)}>
+						<Plus class="h-4 w-4" />
+					</Button>
+				</div>
+			</div>
+
+			<!-- 字体预览 -->
+			<div class="space-y-2 rounded-md border p-3">
+				<Label class="text-sm font-semibold">字体预览</Label>
+				<div class="space-y-2 text-sm">
+					<p style="font-family: {buildFontFamilyString(fontSettings.fontFamilies)}, sans-serif">
+						主字体: 中文测试 English ABC 123
+					</p>
+					<p style="font-family: {buildFontFamilyString(fontSettings.uiFontFamilies.length ? fontSettings.uiFontFamilies : fontSettings.fontFamilies)}, sans-serif">
+						UI 字体: 按钮 标签 Button Label
+					</p>
+					<p class="font-mono" style="font-family: {buildFontFamilyString(fontSettings.monoFontFamilies)}, monospace">
+						等宽字体: 0O1lIi &#123;&#125;[]() =&gt; ==
+					</p>
+				</div>
+				<div class="text-muted-foreground text-xs space-y-1 pt-2 border-t">
+					<p><strong>主字体:</strong> {buildFontFamilyString(fontSettings.fontFamilies)}</p>
+					<p><strong>UI 字体:</strong> {buildFontFamilyString(fontSettings.uiFontFamilies)}</p>
+					<p><strong>等宽字体:</strong> {buildFontFamilyString(fontSettings.monoFontFamilies)}</p>
+				</div>
+			</div>
 		{/if}
 	</div>
 

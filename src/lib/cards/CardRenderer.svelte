@@ -26,9 +26,12 @@ import ImageInfoCard from './info/ImageInfoCard.svelte';
 import StorageCard from './info/StorageCard.svelte';
 import TimeCard from './info/TimeCard.svelte';
 
-import BasicCard from './properties/BasicCard.svelte';
-import ExifCard from './properties/ExifCard.svelte';
-import HistogramCard from './properties/HistogramCard.svelte';
+import EmmTagsCard from './properties/EmmTagsCard.svelte';
+import BookSettingsCard from './properties/BookSettingsCard.svelte';
+import FolderRatingsCard from './properties/FolderRatingsCard.svelte';
+import FavoriteTagsCard from './properties/FavoriteTagsCard.svelte';
+import EmmSyncCard from './properties/EmmSyncCard.svelte';
+import ThumbnailMaintenanceCard from './properties/ThumbnailMaintenanceCard.svelte';
 
 import ModelCard from './upscale/ModelCard.svelte';
 import SettingsCard from './upscale/SettingsCard.svelte';
@@ -61,9 +64,12 @@ const componentMap: Record<string, any> = {
 	storage: StorageCard,
 	time: TimeCard,
 	// Properties
-	basic: BasicCard,
-	exif: ExifCard,
-	histogram: HistogramCard,
+	emmTags: EmmTagsCard,
+	bookSettings: BookSettingsCard,
+	folderRatings: FolderRatingsCard,
+	favoriteTags: FavoriteTagsCard,
+	emmSync: EmmSyncCard,
+	thumbnailMaintenance: ThumbnailMaintenanceCard,
 	// Upscale
 	model: ModelCard,
 	settings: SettingsCard,

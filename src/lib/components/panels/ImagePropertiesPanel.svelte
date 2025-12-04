@@ -1,17 +1,51 @@
 <script lang="ts">
-	import EmmPanelSection from '$lib/components/panels/emm/EmmPanelSection.svelte';
+/**
+ * NeoView - Image Properties Panel Component
+ * 属性面板 - 纯容器，使用 CardRenderer 渲染卡片
+ */
+import { Tags } from '@lucide/svelte';
+import { cardConfigStore } from '$lib/stores/cardConfig.svelte';
+import CardRenderer from '$lib/cards/CardRenderer.svelte';
+
+// 从 cardConfigStore 获取可见卡片（已排序）
+const visibleCards = $derived(cardConfigStore.getPanelCards('properties').filter(c => c.visible));
 </script>
 
-<div class="h-full flex flex-col overflow-y-auto">
-	<div class="p-3 sticky top-0 z-10">
-		<h3 class="text-sm font-semibold">
-			标签 / EMM
-		</h3>
+<div 
+	class="h-full flex flex-col"
+	role="region"
+	aria-label="属性面板"
+>
+	<!-- 标题栏 -->
+	<div class="p-4">
+		<div class="flex items-center gap-2">
+			<Tags class="h-5 w-5" />
+			<h3 class="font-semibold">标签 / EMM</h3>
+		</div>
 	</div>
 	<!-- 渐变过渡 -->
 	<div class="h-4 bg-linear-to-b from-transparent to-background"></div>
 
-	<div class="p-3 space-y-4 bg-background">
-		<EmmPanelSection />
+	<div class="flex-1 overflow-auto bg-background">
+		<div class="px-4 pb-4 flex flex-col space-y-3">
+			{#if visibleCards.length > 0}
+				{#each visibleCards as card (card.id)}
+					<div style="order: {card.order}">
+						<CardRenderer cardId={card.id} panelId="properties" />
+					</div>
+				{/each}
+			{:else}
+				<!-- 空状态 -->
+				<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
+					<div class="relative mb-4">
+						<Tags class="h-16 w-16 opacity-20" />
+					</div>
+					<div class="text-center space-y-2">
+						<p class="text-lg font-medium">暂无卡片</p>
+						<p class="text-sm opacity-70">在设置中启用卡片</p>
+					</div>
+				</div>
+			{/if}
+		</div>
 	</div>
 </div>

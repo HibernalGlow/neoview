@@ -144,29 +144,47 @@ export const cardRegistry: Record<string, CardDefinition> = {
 	},
 	
 	// ==================== Properties 面板卡片 ====================
-	'basic': {
-		id: 'basic',
-		title: '基本信息',
-		icon: FileText,
+	'emmTags': {
+		id: 'emmTags',
+		title: 'EMM 标签',
+		icon: Tags,
 		defaultPanel: 'properties',
 		canHide: false,
-		
 	},
-	'exif': {
-		id: 'exif',
-		title: 'EXIF 数据',
+	'bookSettings': {
+		id: 'bookSettings',
+		title: '本书设置',
+		icon: FileText,
+		defaultPanel: 'properties',
+		canHide: true,
+	},
+	'folderRatings': {
+		id: 'folderRatings',
+		title: '文件夹平均评分',
 		icon: Activity,
 		defaultPanel: 'properties',
 		canHide: true,
-		
 	},
-	'histogram': {
-		id: 'histogram',
-		title: '直方图',
+	'favoriteTags': {
+		id: 'favoriteTags',
+		title: '收藏标签快选',
+		icon: Search,
+		defaultPanel: 'properties',
+		canHide: true,
+	},
+	'emmSync': {
+		id: 'emmSync',
+		title: 'EMM 同步',
 		icon: Gauge,
 		defaultPanel: 'properties',
 		canHide: true,
-		
+	},
+	'thumbnailMaintenance': {
+		id: 'thumbnailMaintenance',
+		title: '缩略图维护',
+		icon: Image,
+		defaultPanel: 'properties',
+		canHide: true,
 	},
 	
 	// ==================== Upscale 面板卡片 ====================

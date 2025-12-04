@@ -2,7 +2,88 @@
 
 ## 概述
 
-卡片管理系统允许用户自定义各面板中卡片的顺序、显示/隐藏状态。设计参考了边栏管理面板的三区域拖拽布局。
+卡片管理系统允许用户自定义各面板中卡片的顺序、显示/隐藏状态。
+
+## 架构设计（V2）
+
+### 核心思想
+- **卡片是独立模块**：每个卡片是自包含的组件，有自己的 ID、标题、图标
+- **配置与组件分离**：cardConfig 只存储位置信息，不存储卡片实现
+- **面板是纯容器**：面板不关心具体卡片，只根据配置渲染
+- **卡片注册表**：统一注册所有卡片，支持动态发现
+
+### 文件结构
+
+```
+src/lib/
+├── stores/
+│   └── cardConfig.svelte.ts      # 配置存储（位置、顺序、显隐、展开）
+├── cards/
+│   ├── registry.ts               # 卡片注册表（静态定义所有卡片）
+│   ├── CardContainer.svelte      # 通用卡片容器（折叠、拖拽）
+│   ├── CardRenderer.svelte       # 根据 ID 渲染对应卡片
+│   ├── benchmark/                # 按功能分组
+│   │   ├── VisibilityCard.svelte
+│   │   ├── LatencyCard.svelte
+│   │   └── RendererCard.svelte
+│   ├── info/
+│   │   ├── FileInfoCard.svelte
+│   │   └── ImageInfoCard.svelte
+│   └── ...
+└── panels/
+    ├── BenchmarkPanel.svelte     # 容器：从配置读取卡片，渲染 CardRenderer
+    └── InfoPanel.svelte
+```
+
+### 数据流
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  CardRegistry   │────▶│   cardConfig    │────▶│     Panel       │
+│  (卡片定义)      │     │  (位置配置)      │     │   (容器)        │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+        │                       │                       │
+        ▼                       ▼                       ▼
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ id, title, icon │     │ panelId, order  │     │ CardRenderer    │
+│ component, ...  │     │ visible, expand │     │ ┌─────────────┐ │
+└─────────────────┘     └─────────────────┘     │ │CardContainer│ │
+                                                │ │  ┌───────┐  │ │
+                                                │ │  │ Card  │  │ │
+                                                │ │  └───────┘  │ │
+                                                │ └─────────────┘ │
+                                                └─────────────────┘
+```
+
+### 跨面板移动
+
+配置中每个卡片有 `panelId` 字段，移动只需：
+```typescript
+cardConfigStore.moveCardToPanel(cardId, newPanelId);
+```
+
+### 卡片注册表示例
+
+```typescript
+// cards/registry.ts
+export const cardRegistry = {
+  'visibility': {
+    id: 'visibility',
+    title: '可见性监控',
+    icon: Eye,
+    defaultPanel: 'benchmark',
+    component: () => import('./benchmark/VisibilityCard.svelte')
+  },
+  'latency': {
+    id: 'latency', 
+    title: '延迟分析',
+    icon: Timer,
+    defaultPanel: 'benchmark',
+    component: () => import('./benchmark/LatencyCard.svelte')
+  },
+  // ...
+};
+```
 
 ## 已完成
 
@@ -113,9 +194,32 @@ src/lib/
 │       └── ...
 ```
 
-## 下一步
+## 当前进度
 
-1. 创建 `CollapsibleCard.svelte` 通用组件
-2. 从 `BenchmarkPanel` 开始，将内容拆分为卡片
-3. 在面板中集成 cardConfig，按配置渲染卡片
-4. 验证设置页面和面板的同步
+- [x] 创建 `CollapsibleCard.svelte` 通用组件
+- [x] 创建 `cards/registry.ts` 卡片注册表
+- [x] 更新 `cardConfig` 使用 registry 动态生成默认配置
+- [x] 添加 `moveCardToPanel()` 跨面板移动功能
+- [ ] 创建各面板的卡片组件（placeholder）
+- [ ] 创建 `CardRenderer.svelte` 动态渲染器
+- [ ] 重构面板为纯容器
+- [ ] 验证设置页面和面板的同步
+
+## CollapsibleCard 使用示例
+
+```svelte
+<script>
+import { CollapsibleCard } from '$lib/components/cards';
+import { Timer } from '@lucide/svelte';
+</script>
+
+<CollapsibleCard
+  id="latency"
+  panelId="benchmark"
+  title="延迟分析"
+  icon={Timer}
+>
+  <!-- 卡片内容 -->
+  <p>延迟分析内容...</p>
+</CollapsibleCard>
+```

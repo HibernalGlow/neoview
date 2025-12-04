@@ -2,9 +2,11 @@
  * 卡片配置存储
  * 管理各面板内卡片的顺序、展开状态和可见性
  * 从 sidebarConfig 读取支持卡片的面板
+ * 从 cardRegistry 读取卡片定义
  */
 import type { Component } from 'svelte';
 import { getCardSupportingPanels, getPanelTitle, type PanelId } from './sidebarConfig.svelte';
+import { cardRegistry, getDefaultCardsForPanel } from '$lib/cards/registry';
 
 // 重新导出类型和函数
 export type { PanelId };
@@ -29,42 +31,31 @@ export interface PanelCardConfig {
 	cards: CardConfig[];
 }
 
-// 默认卡片配置（按面板 ID 索引）
-// 新面板只需在 sidebarConfig 中添加 supportsCards: true，然后在这里添加默认卡片
-const defaultCardConfigs: Partial<Record<PanelId, Omit<CardConfig, 'panelId'>[]>> = {
-	info: [
-		{ id: 'file', title: '文件信息', order: 0, visible: true, expanded: true, canHide: false },
-		{ id: 'image', title: '图片信息', order: 1, visible: true, expanded: true, canHide: true }
-	],
-	properties: [
-		{ id: 'basic', title: '基本信息', order: 0, visible: true, expanded: true, canHide: false },
-		{ id: 'exif', title: 'EXIF 数据', order: 1, visible: true, expanded: true, canHide: true },
-		{ id: 'histogram', title: '直方图', order: 2, visible: true, expanded: true, canHide: true }
-	],
-	upscale: [
-		{ id: 'model', title: '模型选择', order: 0, visible: true, expanded: true, canHide: false },
-		{ id: 'settings', title: '参数设置', order: 1, visible: true, expanded: true, canHide: true },
-		{ id: 'preview', title: '预览', order: 2, visible: true, expanded: true, canHide: true },
-		{ id: 'history', title: '历史记录', order: 3, visible: true, expanded: true, canHide: true }
-	],
-	insights: [
-		{ id: 'analysis', title: '分析', order: 0, visible: true, expanded: true, canHide: false },
-		{ id: 'tags', title: '标签', order: 1, visible: true, expanded: true, canHide: true },
-		{ id: 'similar', title: '相似图片', order: 2, visible: true, expanded: true, canHide: true }
-	],
-	benchmark: [
-		{ id: 'visibility', title: '可见性监控', order: 0, visible: true, expanded: true, canHide: true },
-		{ id: 'latency', title: '延迟分析', order: 1, visible: true, expanded: true, canHide: true },
-		{ id: 'renderer', title: '渲染模式测试', order: 2, visible: true, expanded: true, canHide: true },
-		{ id: 'files', title: '文件选择', order: 3, visible: true, expanded: true, canHide: true },
-		{ id: 'detailed', title: '详细结果', order: 4, visible: true, expanded: true, canHide: true },
-		{ id: 'loadmode', title: '加载模式', order: 5, visible: true, expanded: true, canHide: true },
-		{ id: 'archives', title: '压缩包扫描', order: 6, visible: true, expanded: true, canHide: true },
-		{ id: 'realworld', title: '实际场景', order: 7, visible: true, expanded: true, canHide: true },
-		{ id: 'results', title: '测试结果', order: 8, visible: true, expanded: true, canHide: true },
-		{ id: 'summary', title: '总结', order: 9, visible: true, expanded: true, canHide: true }
-	]
-};
+// 从 registry 生成默认卡片配置
+function generateDefaultConfigs(): Partial<Record<PanelId, Omit<CardConfig, 'panelId'>[]>> {
+	const result: Partial<Record<PanelId, Omit<CardConfig, 'panelId'>[]>> = {};
+	const cardPanels = getCardSupportingPanels();
+	
+	for (const panelId of cardPanels) {
+		const cardIds = getDefaultCardsForPanel(panelId);
+		result[panelId] = cardIds.map((cardId, index) => {
+			const def = cardRegistry[cardId];
+			return {
+				id: cardId,
+				title: def?.title || cardId,
+				order: index,
+				visible: true,
+				expanded: true,
+				canHide: def?.canHide ?? true
+			};
+		});
+	}
+	
+	return result;
+}
+
+// 默认卡片配置（从 registry 动态生成）
+const defaultCardConfigs = generateDefaultConfigs();
 
 // 从 sidebarConfig 动态获取支持卡片的面板
 function getCardPanelIds(): PanelId[] {
@@ -210,6 +201,36 @@ function createCardConfigStore() {
 		saveConfigs(configs);
 	}
 
+	// 移动卡片到另一个面板
+	function moveCardToPanel(cardId: string, fromPanelId: PanelId, toPanelId: PanelId) {
+		if (fromPanelId === toPanelId) return;
+		
+		const fromCards = configs[fromPanelId];
+		const toCards = configs[toPanelId] || [];
+		if (!fromCards) return;
+		
+		const cardIdx = fromCards.findIndex(c => c.id === cardId);
+		if (cardIdx === -1) return;
+		
+		const card = fromCards[cardIdx];
+		
+		// 从源面板移除
+		const newFromCards = fromCards.filter(c => c.id !== cardId);
+		// 重新计算源面板顺序
+		newFromCards.forEach((c, i) => c.order = i);
+		
+		// 添加到目标面板末尾
+		const newCard = { ...card, panelId: toPanelId, order: toCards.length };
+		const newToCards = [...toCards, newCard];
+		
+		configs = {
+			...configs,
+			[fromPanelId]: newFromCards,
+			[toPanelId]: newToCards
+		};
+		saveConfigs(configs);
+	}
+
 	return {
 		get configs() { return configs; },
 		getPanelCards,
@@ -217,6 +238,7 @@ function createCardConfigStore() {
 		setCardVisible,
 		setCardExpanded,
 		moveCard,
+		moveCardToPanel,
 		resetPanel,
 		resetAll
 	};

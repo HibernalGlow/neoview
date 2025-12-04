@@ -13,6 +13,7 @@
 	import Viewer from 'viewerjs';
 	import 'viewerjs/dist/viewer.css';
 	import { visibilityMonitor, setMonitorEnabled } from '$lib/stores/visibilityMonitor.svelte';
+	import { cardConfigStore } from '$lib/stores/cardConfig.svelte';
 
 	// ==================== 类型定义 ====================
 	interface BenchmarkResult {
@@ -103,19 +104,28 @@
 	}
 
 	// ==================== 状态管理 ====================
-	let cardOrder = $state<CardId[]>(['visibility', 'latency', 'renderer', 'files', 'detailed', 'loadmode', 'archives', 'realworld', 'results', 'summary']);
-	let showCards = $state<Record<CardId, boolean>>({
-		visibility: true,
-		latency: true,
-		renderer: true,
-		files: true,
-		detailed: true,
-		loadmode: true,
-		archives: true,
-		realworld: true,
-		results: true,
-		summary: true
-	});
+	// 从 cardConfigStore 读取卡片配置
+	const benchmarkCards = $derived(cardConfigStore.getPanelCards('benchmark'));
+	
+	// 获取卡片可见状态
+	function isCardVisible(cardId: CardId): boolean {
+		const card = benchmarkCards.find(c => c.id === cardId);
+		return card?.visible ?? true;
+	}
+	
+	// 获取卡片展开状态
+	function isCardExpanded(cardId: CardId): boolean {
+		const card = benchmarkCards.find(c => c.id === cardId);
+		return card?.expanded ?? true;
+	}
+	
+	// 切换卡片展开状态
+	function toggleCardExpanded(cardId: CardId) {
+		const card = benchmarkCards.find(c => c.id === cardId);
+		if (card) {
+			cardConfigStore.setCardExpanded('benchmark', cardId, !card.expanded);
+		}
+	}
 
 	interface ArchiveScanResult {
 		total_count: number;
@@ -577,22 +587,22 @@
 
 	// ==================== 卡片操作 ====================
 	function getCardOrder(cardId: CardId): number {
-		return cardOrder.indexOf(cardId);
+		const card = benchmarkCards.find(c => c.id === cardId);
+		return card?.order ?? 0;
 	}
 
 	function canMoveCard(cardId: CardId, direction: 'up' | 'down'): boolean {
-		const idx = cardOrder.indexOf(cardId);
-		if (direction === 'up') return idx > 0;
-		return idx < cardOrder.length - 1;
+		const card = benchmarkCards.find(c => c.id === cardId);
+		if (!card) return false;
+		if (direction === 'up') return card.order > 0;
+		return card.order < benchmarkCards.length - 1;
 	}
 
 	function moveCard(cardId: CardId, direction: 'up' | 'down') {
-		const idx = cardOrder.indexOf(cardId);
-		if (direction === 'up' && idx > 0) {
-			[cardOrder[idx - 1], cardOrder[idx]] = [cardOrder[idx], cardOrder[idx - 1]];
-		} else if (direction === 'down' && idx < cardOrder.length - 1) {
-			[cardOrder[idx], cardOrder[idx + 1]] = [cardOrder[idx + 1], cardOrder[idx]];
-		}
+		const card = benchmarkCards.find(c => c.id === cardId);
+		if (!card) return;
+		const newOrder = direction === 'up' ? card.order - 1 : card.order + 1;
+		cardConfigStore.moveCard('benchmark', cardId, newOrder);
 	}
 
 	// ==================== 文件操作 ====================
@@ -1042,7 +1052,7 @@
 						<button
 							type="button"
 							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-							onclick={() => (showCards.visibility = !showCards.visibility)}
+							onclick={() => toggleCardExpanded('visibility')}
 							title={showCards.visibility ? '收起' : '展开'}
 						>
 							{#if showCards.visibility}

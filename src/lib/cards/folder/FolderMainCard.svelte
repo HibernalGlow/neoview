@@ -168,6 +168,38 @@ let contextMenu = $state<{ x: number; y: number; item: FsItem | null; visible: b
 	visible: false
 });
 
+// 文件树拖拽调整大小
+let isResizingTree = $state(false);
+let resizeStartPos = $state(0);
+let resizeStartSize = $state(0);
+
+function startTreeResize(e: MouseEvent) {
+	e.preventDefault();
+	isResizingTree = true;
+	const layout = get(folderTreeConfig).layout;
+	resizeStartPos = layout === 'left' ? e.clientX : e.clientY;
+	resizeStartSize = get(folderTreeConfig).size;
+	
+	document.addEventListener('mousemove', onTreeResize);
+	document.addEventListener('mouseup', stopTreeResize);
+}
+
+function onTreeResize(e: MouseEvent) {
+	if (!isResizingTree) return;
+	const layout = get(folderTreeConfig).layout;
+	const delta = layout === 'left' 
+		? e.clientX - resizeStartPos 
+		: e.clientY - resizeStartPos;
+	const newSize = Math.max(100, Math.min(500, resizeStartSize + delta));
+	folderTabActions.setFolderTreeSize(newSize);
+}
+
+function stopTreeResize() {
+	isResizingTree = false;
+	document.removeEventListener('mousemove', onTreeResize);
+	document.removeEventListener('mouseup', stopTreeResize);
+}
+
 // 判断是否为视频文件
 function isVideoPath(path: string): boolean {
 	const ext = path.split('.').pop()?.toLowerCase() || '';
@@ -1119,6 +1151,17 @@ onMount(() => {
 			>
 				<FolderTree onNavigate={handleNavigate} />
 			</div>
+			<!-- 拖拽调整手柄 -->
+			<div
+				class="absolute z-20 transition-colors hover:bg-primary/20 {$folderTreeConfig.layout === 'left' ? 'cursor-ew-resize w-2 -ml-1 top-0 bottom-0' : 'cursor-ns-resize h-2 -mt-1 left-0 right-0'}"
+				style={$folderTreeConfig.layout === 'left'
+					? `left: ${$folderTreeConfig.size}px;`
+					: `top: ${$folderTreeConfig.size}px;`}
+				onmousedown={startTreeResize}
+				role="separator"
+				tabindex="0"
+				title="拖拽调整大小"
+			></div>
 		{/if}
 
 		<!-- 文件列表（层叠式）- 每个页签独立实例，切换时显示/隐藏 -->

@@ -102,7 +102,7 @@
 	<div class="h-4 bg-linear-to-b from-transparent to-background"></div>
 
 	<div class="flex-1 overflow-auto bg-background">
-		<div class="p-4 flex flex-col space-y-3">
+		<div class="px-4 pb-4 flex flex-col space-y-3">
 			{#if visibleCards.length > 0}
 				{#each visibleCards as card (card.id)}
 					<div style="order: {card.order}">

@@ -59,7 +59,7 @@ export const PANEL_DEFINITIONS = {
 		defaultOrder: 3,
 		canMove: true,
 		canHide: true,
-		supportsCards: false
+		supportsCards: true
 	},
 	playlist: {
 		title: '播放列表',

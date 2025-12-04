@@ -230,6 +230,15 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'upscale',
 		canHide: true,
 	},
+
+	// ==================== PageList 面板卡片 ====================
+	'pageListMain': {
+		id: 'pageListMain',
+		title: '页面列表',
+		icon: FileText,
+		defaultPanel: 'pageList',
+		canHide: false,
+	},
 	
 	// ==================== Insights 面板卡片 ====================
 	'dailyTrend': {

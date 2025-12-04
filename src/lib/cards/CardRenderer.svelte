@@ -40,6 +40,7 @@ import UpscaleStatusCard from './upscale/UpscaleStatusCard.svelte';
 import UpscaleCacheCard from './upscale/UpscaleCacheCard.svelte';
 import UpscaleConditionsCard from './upscale/UpscaleConditionsCard.svelte';
 
+import PageListCard from './pageList/PageListCard.svelte';
 import DailyTrendCard from './insights/DailyTrendCard.svelte';
 import ReadingStreakCard from './insights/ReadingStreakCard.svelte';
 import ReadingHeatmapCard from './insights/ReadingHeatmapCard.svelte';
@@ -82,6 +83,8 @@ const componentMap: Record<string, any> = {
 	upscaleStatus: UpscaleStatusCard,
 	upscaleCache: UpscaleCacheCard,
 	upscaleConditions: UpscaleConditionsCard,
+	// PageList
+	pageListMain: PageListCard,
 	// Insights
 	dailyTrend: DailyTrendCard,
 	readingStreak: ReadingStreakCard,

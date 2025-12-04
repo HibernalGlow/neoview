@@ -9,6 +9,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Timer, ChevronUp, ChevronDown, ArrowUp, ArrowDown, FolderOpen, Copy, Check, Play, Trash2, Eye, Layers, ImageIcon } from '@lucide/svelte';
 	import { settingsManager, type RendererMode } from '$lib/settings/settingsManager';
+	import Viewer from 'viewerjs';
+	import 'viewerjs/dist/viewer.css';
 	import { visibilityMonitor, setMonitorEnabled } from '$lib/stores/visibilityMonitor.svelte';
 
 	// ==================== 类型定义 ====================
@@ -121,7 +123,12 @@
 	let rendererTestResults = $state<RendererTestResult[]>([]);
 	let isRendererTesting = $state(false);
 	let rendererTestCount = $state<number>(10); // 测试图片数量
-	let currentRendererMode = $derived(settingsManager.getSettings().view.renderer?.mode ?? 'stack');
+	
+	// 设置状态
+	let settings = $state(settingsManager.getSettings());
+	settingsManager.addListener((s) => { settings = s; });
+	let currentRendererMode = $derived(settings.view.renderer?.mode ?? 'stack');
+	let viewerJSEnabled = $derived(settings.view.renderer?.useViewerJS ?? false);
 	
 	// ==================== 渲染模式测试 ====================
 	async function selectRendererArchive() {
@@ -146,16 +153,17 @@
 		isRendererTesting = true;
 		rendererTestResults = [];
 		
-		const modes: RendererMode[] = ['standard', 'stack'];
+		// 测试模式：原生渲染 和 ViewerJS 渲染
+		const testModes = ['native', 'viewerjs'];
 		
 		try {
-			// 获取压缩包中的图片列表（返回路径字符串数组）
+			// 获取压缩包中的图片列表
 			const imageList = await invoke<string[]>('get_images_from_archive', {
 				archivePath: selectedRendererArchive
 			});
 			
 			if (imageList.length === 0) {
-				for (const mode of modes) {
+				for (const mode of testModes) {
 					rendererTestResults = [...rendererTestResults, {
 						mode,
 						totalImages: 0,
@@ -175,12 +183,17 @@
 			// 截取测试数量
 			const testImages = imageList.slice(0, rendererTestCount);
 			
-			for (const mode of modes) {
+			// 创建隐藏的测试容器
+			const testContainer = document.createElement('div');
+			testContainer.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;height:600px;overflow:hidden;';
+			document.body.appendChild(testContainer);
+			
+			for (const mode of testModes) {
 				try {
 					const loadTimes: number[] = [];
 					const switchTimes: number[] = [];
 					
-					// 测试每张图片的加载时间
+					// 测试每张图片的加载和渲染时间
 					for (let i = 0; i < testImages.length; i++) {
 						const startLoad = performance.now();
 						
@@ -194,19 +207,62 @@
 						const blob = new Blob([new Uint8Array(imageData)]);
 						const url = URL.createObjectURL(blob);
 						
-						// 测试图片加载
-						await new Promise<void>((resolve, reject) => {
-							const img = new Image();
-							img.onload = () => {
-								URL.revokeObjectURL(url);
-								resolve();
-							};
-							img.onerror = () => {
-								URL.revokeObjectURL(url);
-								reject(new Error('图片加载失败'));
-							};
-							img.src = url;
-						});
+						if (mode === 'viewerjs') {
+							// ViewerJS 渲染测试
+							await new Promise<void>((resolve, reject) => {
+								testContainer.innerHTML = '';
+								const img = document.createElement('img');
+								img.style.display = 'none';
+								img.src = url;
+								testContainer.appendChild(img);
+								
+								img.onload = () => {
+									try {
+										const viewer = new Viewer(img, {
+											inline: true,
+											navbar: false,
+											toolbar: false,
+											title: false,
+											button: false,
+											backdrop: false,
+											transition: false,
+											container: testContainer,
+											ready: () => {
+												viewer.destroy();
+												URL.revokeObjectURL(url);
+												resolve();
+											}
+										});
+										viewer.show();
+									} catch (e) {
+										URL.revokeObjectURL(url);
+										reject(e);
+									}
+								};
+								img.onerror = () => {
+									URL.revokeObjectURL(url);
+									reject(new Error('图片加载失败'));
+								};
+							});
+						} else {
+							// 原生 img 渲染测试
+							await new Promise<void>((resolve, reject) => {
+								testContainer.innerHTML = '';
+								const img = document.createElement('img');
+								img.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;';
+								testContainer.appendChild(img);
+								
+								img.onload = () => {
+									URL.revokeObjectURL(url);
+									resolve();
+								};
+								img.onerror = () => {
+									URL.revokeObjectURL(url);
+									reject(new Error('图片加载失败'));
+								};
+								img.src = url;
+							});
+						}
 						
 						const loadTime = performance.now() - startLoad;
 						loadTimes.push(loadTime);
@@ -249,9 +305,12 @@
 					}];
 				}
 			}
+			
+			// 清理测试容器
+			testContainer.remove();
 		} catch (err) {
 			// 获取图片列表失败
-			for (const mode of modes) {
+			for (const mode of testModes) {
 				rendererTestResults = [...rendererTestResults, {
 					mode,
 					totalImages: 0,
@@ -277,6 +336,19 @@
 				renderer: {
 					...currentSettings.view.renderer,
 					mode
+				}
+			}
+		});
+	}
+	
+	function toggleViewerJS() {
+		const currentSettings = settingsManager.getSettings();
+		settingsManager.updateSettings({
+			view: {
+				...currentSettings.view,
+				renderer: {
+					mode: currentSettings.view.renderer?.mode ?? 'stack',
+					useViewerJS: !viewerJSEnabled
 				}
 			}
 		});
@@ -907,30 +979,38 @@
 					<div class="space-y-3">
 						<!-- 说明 -->
 						<p class="text-[10px] text-muted-foreground">
-							测试 Standard 和 Stack 渲染模式的图片加载和切换性能
+							对比原生 IMG 渲染 vs ViewerJS 渲染的加载性能
 						</p>
 						
-						<!-- 当前模式 -->
-						<div class="flex items-center justify-between">
-							<div class="text-[10px]">
-								当前模式: <span class="font-mono text-cyan-500">{currentRendererMode}</span>
-							</div>
-							<div class="flex gap-1">
+						<!-- 应用设置 -->
+						<div class="border rounded p-2 space-y-2">
+							<div class="text-[10px] text-muted-foreground">应用渲染设置:</div>
+							<div class="flex items-center justify-between">
+								<div class="flex gap-1">
+									<Button 
+										variant={currentRendererMode === 'standard' ? 'default' : 'outline'}
+										size="sm"
+										class="h-6 text-[10px] px-2"
+										onclick={() => setRendererMode('standard')}
+									>
+										Standard
+									</Button>
+									<Button 
+										variant={currentRendererMode === 'stack' ? 'default' : 'outline'}
+										size="sm"
+										class="h-6 text-[10px] px-2"
+										onclick={() => setRendererMode('stack')}
+									>
+										Stack
+									</Button>
+								</div>
 								<Button 
-									variant={currentRendererMode === 'standard' ? 'default' : 'outline'}
+									variant={viewerJSEnabled ? 'default' : 'outline'}
 									size="sm"
 									class="h-6 text-[10px] px-2"
-									onclick={() => setRendererMode('standard')}
+									onclick={toggleViewerJS}
 								>
-									Standard
-								</Button>
-								<Button 
-									variant={currentRendererMode === 'stack' ? 'default' : 'outline'}
-									size="sm"
-									class="h-6 text-[10px] px-2"
-									onclick={() => setRendererMode('stack')}
-								>
-									Stack
+									{viewerJSEnabled ? '✓ ViewerJS' : 'ViewerJS'}
 								</Button>
 							</div>
 						</div>
@@ -979,8 +1059,8 @@
 								{#each rendererTestResults as result}
 									<div class="border rounded p-2 space-y-1 text-[10px]">
 										<div class="flex items-center justify-between">
-											<span class="font-medium {result.mode === 'stack' ? 'text-green-500' : 'text-blue-500'}">
-												{result.mode.toUpperCase()}
+											<span class="font-medium {result.mode === 'viewerjs' ? 'text-purple-500' : 'text-blue-500'}">
+												{result.mode === 'native' ? '原生 IMG' : 'ViewerJS'}
 											</span>
 											{#if result.success}
 												<span class="text-green-500">✅</span>
@@ -1020,21 +1100,25 @@
 								
 								<!-- 对比结论 -->
 								{#if rendererTestResults.length >= 2 && rendererTestResults.every(r => r.success)}
-									{@const standard = rendererTestResults.find(r => r.mode === 'standard')}
-									{@const stack = rendererTestResults.find(r => r.mode === 'stack')}
-									{#if standard && stack}
-										{@const faster = standard.avgLoadTime < stack.avgLoadTime ? 'standard' : 'stack'}
-										{@const diff = Math.abs(standard.avgLoadTime - stack.avgLoadTime)}
-										{@const percent = ((diff / Math.max(standard.avgLoadTime, stack.avgLoadTime)) * 100).toFixed(1)}
+									{@const native = rendererTestResults.find(r => r.mode === 'native')}
+									{@const viewerjs = rendererTestResults.find(r => r.mode === 'viewerjs')}
+									{#if native && viewerjs}
+										{@const faster = native.avgLoadTime < viewerjs.avgLoadTime ? 'native' : 'viewerjs'}
+										{@const diff = Math.abs(native.avgLoadTime - viewerjs.avgLoadTime)}
+										{@const percent = ((diff / Math.max(native.avgLoadTime, viewerjs.avgLoadTime)) * 100).toFixed(1)}
 										<div class="border-t pt-2 mt-2 text-[10px]">
 											<div class="font-medium text-muted-foreground">结论:</div>
 											<div class="mt-1">
-												<span class="{faster === 'stack' ? 'text-green-500' : 'text-blue-500'} font-medium">
-													{faster.toUpperCase()}
+												<span class="{faster === 'viewerjs' ? 'text-purple-500' : 'text-blue-500'} font-medium">
+													{faster === 'native' ? '原生 IMG' : 'ViewerJS'}
 												</span>
-												模式更快，领先 
+												更快，领先 
 												<span class="font-mono text-orange-500">{diff.toFixed(1)}ms</span>
 												({percent}%)
+											</div>
+											<div class="mt-1 text-muted-foreground">
+												ViewerJS 开销: <span class="font-mono text-orange-500">+{(viewerjs.avgLoadTime - native.avgLoadTime).toFixed(1)}ms</span>
+												({((viewerjs.avgLoadTime / native.avgLoadTime - 1) * 100).toFixed(1)}%)
 											</div>
 										</div>
 									{/if}

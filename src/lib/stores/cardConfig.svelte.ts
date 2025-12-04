@@ -62,7 +62,8 @@ function getCardPanelIds(): PanelId[] {
 	return getCardSupportingPanels();
 }
 
-const STORAGE_KEY = 'neoview_card_configs';
+const CURRENT_CONFIG_VERSION = 3; // 增加版本号来强制重置（修复 order 保存问题）
+const STORAGE_KEY = `neoview_card_configs_v${CURRENT_CONFIG_VERSION}`;
 
 // 创建响应式状态
 function createCardConfigStore() {
@@ -81,13 +82,16 @@ function createCardConfigStore() {
 					const validStoredCards = storedCards.filter(c => cardRegistry[c.id]);
 					const validIds = validStoredCards.map(c => c.id);
 					const defaultCards = defaultCardConfigs[panelId] || [];
-					// 保留已存储的有效卡片配置，添加新卡片到末尾
+					// 计算已存储卡片的最大 order
+					const maxOrder = validStoredCards.length > 0 
+						? Math.max(...validStoredCards.map(c => c.order)) 
+						: -1;
+					// 保留已存储的有效卡片配置（保留其 order），添加新卡片到末尾
 					const newCards = defaultCards
 						.filter(c => !validIds.includes(c.id))
-						.map((c, i) => ({ ...c, panelId, order: validStoredCards.length + i }));
-					// 重新分配 order 确保连续
-					const allCards = [...validStoredCards, ...newCards];
-					result[panelId] = allCards.map((c, i) => ({ ...c, order: i }));
+						.map((c, i) => ({ ...c, panelId, order: maxOrder + 1 + i }));
+					// 合并但不重新分配 order，保留用户的排序
+					result[panelId] = [...validStoredCards, ...newCards];
 				}
 				return result;
 			}

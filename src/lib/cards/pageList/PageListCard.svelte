@@ -72,7 +72,7 @@ function getThumbnail(pageIndex: number): ThumbnailEntry | null {
 }
 
 function goToPage(index: number) {
-	bookStore.setCurrentPage(index);
+	bookStore.goToPage(index);
 }
 
 async function requestThumbnail(pageIndex: number) {

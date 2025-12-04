@@ -47,21 +47,32 @@ async function handleManualUpscale() {
 	
 	try {
 		isProcessing.value = true;
+		status.value = '正在读取图片...';
+		progress.value = 10;
+		
+		// 读取图片数据
+		const response = await fetch(currentImagePath.value);
+		const blob = await response.blob();
+		const arrayBuffer = await blob.arrayBuffer();
+		const imageData = new Uint8Array(arrayBuffer);
+		
 		status.value = '正在超分...';
-		progress.value = 0;
+		progress.value = 30;
 		
 		// 调用 PyO3 超分
-		const result = await pyo3UpscaleManager.upscaleCurrentImage(currentImagePath.value);
+		const result = await pyo3UpscaleManager.upscaleImageMemory(imageData);
 		
-		if (result) {
+		if (result && result.length > 0) {
 			status.value = '超分完成';
 			progress.value = 100;
+			console.log('✅ 超分完成，输出大小:', result.length);
 		} else {
 			status.value = '超分失败';
 		}
 	} catch (err) {
 		status.value = '超分失败';
 		errorMessage.value = err instanceof Error ? err.message : String(err);
+		console.error('❌ 手动超分失败:', err);
 	} finally {
 		isProcessing.value = false;
 	}

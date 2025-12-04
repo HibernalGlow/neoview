@@ -19,7 +19,11 @@
         "resizable": true,
         "fullscreen": false,
         "decorations": false,
-        "devtools": true
+        "devtools": true,
+        "incognito": false,
+        "zoomHotkeysEnabled": true,
+        "backgroundThrottling": "disabled",
+        "useHttpsScheme": true
       }
     ],
     "security": {

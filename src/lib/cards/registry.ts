@@ -94,6 +94,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'benchmark',
 		canHide: true,
 	},
+	'protocolTest': {
+		id: 'protocolTest',
+		title: '协议测试',
+		icon: Globe,
+		defaultPanel: 'benchmark',
+		canHide: true,
+	},
 	'results': {
 		id: 'results',
 		title: '测试结果',

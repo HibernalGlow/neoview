@@ -21,6 +21,7 @@ const lazyComponentMap: Record<string, () => Promise<{ default: any }>> = {
 	archives: () => import('./benchmark/ArchivesCard.svelte'),
 	realworld: () => import('./benchmark/RealWorldCard.svelte'),
 	imageSource: () => import('./benchmark/ImageSourceCard.svelte'),
+	protocolTest: () => import('./benchmark/ProtocolTestCard.svelte'),
 	results: () => import('./benchmark/ResultsCard.svelte'),
 	summary: () => import('./benchmark/SummaryCard.svelte'),
 	// Info

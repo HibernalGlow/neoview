@@ -94,15 +94,12 @@ function updateInfoOverlay(partial: {
 			</span>
 		</div>
 		<Slider
+			type="single"
 			min={120}
 			max={1600}
 			step={20}
-			type="single"
-			value={[infoOverlayWidth ?? 480]}
-			onValueChange={(vals) => {
-				const v = vals[0];
-				if (typeof v === 'number') updateInfoOverlay({ width: v });
-			}}
+			value={infoOverlayWidth ?? 480}
+			onValueChange={(v: number) => updateInfoOverlay({ width: v })}
 			class="w-full"
 		/>
 	</div>
@@ -114,15 +111,12 @@ function updateInfoOverlay(partial: {
 			</span>
 		</div>
 		<Slider
+			type="single"
 			min={32}
 			max={600}
 			step={8}
-			type="single"
-			value={[infoOverlayHeight ?? 56]}
-			onValueChange={(vals) => {
-				const v = vals[0];
-				if (typeof v === 'number') updateInfoOverlay({ height: v });
-			}}
+			value={infoOverlayHeight ?? 56}
+			onValueChange={(v: number) => updateInfoOverlay({ height: v })}
 			class="w-full"
 		/>
 	</div>

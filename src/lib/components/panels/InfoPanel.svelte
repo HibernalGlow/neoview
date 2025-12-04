@@ -1,65 +1,21 @@
 <script lang="ts">
 	/**
 	 * NeoView - Info Panel Component
-	 * 信息面板 - 显示当前图像/书籍详细信息
+	 * 信息面板 - 纯容器，使用 CardRenderer 渲染卡片
 	 */
-	import {
-		Info,
-		Image as ImageIcon,
-		FileText,
-		Calendar,
-		HardDrive,
-		ExternalLink,
-		Copy,
-		ChevronUp,
-		ChevronDown,
-		ArrowUp,
-		ArrowDown,
-		Bell
-	} from '@lucide/svelte';
-	import * as Separator from '$lib/components/ui/separator';
-	import * as Table from '$lib/components/ui/table';
+	import { Info, ExternalLink, Copy } from '@lucide/svelte';
 	import { infoPanelStore, type ViewerBookInfo, type ViewerImageInfo } from '$lib/stores/infoPanel.svelte';
-	import { settingsManager } from '$lib/settings/settingsManager';
 	import { FileSystemAPI } from '$lib/api';
-	import * as Switch from '$lib/components/ui/switch';
-	import { Slider } from '$lib/components/ui/slider';
-	import { onMount } from 'svelte';
 	import { cardConfigStore } from '$lib/stores/cardConfig.svelte';
+	import CardRenderer from '$lib/cards/CardRenderer.svelte';
 
 	let imageInfo = $state<ViewerImageInfo | null>(null);
 	let bookInfo = $state<ViewerBookInfo | null>(null);
 	let contextMenu = $state<{ x: number; y: number; open: boolean }>({ x: 0, y: 0, open: false });
 
-	let infoOverlayEnabled = $state(false);
-	let infoOverlayOpacity = $state(0.85);
-	let infoOverlayShowBorder = $state(false);
-	let infoOverlayWidth = $state<number | undefined>(undefined);
-	let infoOverlayHeight = $state<number | undefined>(undefined);
-
-	// 从 cardConfigStore 获取卡片配置
-	type InfoCardId = 'bookInfo' | 'infoOverlay' | 'switchToast' | 'imageInfo' | 'storage' | 'time';
-	const infoCards = $derived(cardConfigStore.getPanelCards('info'));
-	
-	// showCards 兼容层（从 cardConfig 派生）
-	const showCards = $derived.by(() => {
-		const result: Record<InfoCardId, boolean> = {} as Record<InfoCardId, boolean>;
-		for (const card of infoCards) {
-			result[card.id as InfoCardId] = card.expanded;
-		}
-		return result;
-	});
-	
-	// 兼容旧变量名
-	const showBookInfoCard = $derived(showCards.bookInfo ?? true);
-	const showInfoOverlayCard = $derived(showCards.infoOverlay ?? true);
-	const showSwitchToastCard = $derived(showCards.switchToast ?? true);
-	const showImageInfoCard = $derived(showCards.imageInfo ?? true);
-	const showStorageInfoCard = $derived(showCards.storage ?? true);
-	const showTimeInfoCard = $derived(showCards.time ?? true);
-	
-	// 卡片顺序从 cardConfigStore 获取
-	const infoCardOrder = $derived(infoCards.map(c => c.id as InfoCardId));
+	// 从 cardConfigStore 获取可见卡片（已排序）
+	// 所有卡片都显示，每个卡片内部处理空数据状态
+	const visibleCards = $derived(cardConfigStore.getPanelCards('info').filter(c => c.visible));
 
 	$effect(() => {
 		const unsubscribe = infoPanelStore.subscribe((state) => {
@@ -68,189 +24,6 @@
 		});
 		return unsubscribe;
 	});
-
-	$effect(() => {
-		const s = settingsManager.getSettings();
-		const overlay = s.view?.infoOverlay;
-		infoOverlayEnabled = overlay?.enabled ?? false;
-		infoOverlayOpacity = overlay?.opacity ?? 0.85;
-		infoOverlayShowBorder = overlay?.showBorder ?? false;
-		infoOverlayWidth = overlay?.width;
-		infoOverlayHeight = overlay?.height;
-	});
-
-	let switchToastEnableBook = $state(false);
-	let switchToastEnablePage = $state(false);
-	let switchToastShowBookPath = $state(true);
-	let switchToastShowBookPageProgress = $state(true);
-	let switchToastShowBookType = $state(false);
-	let switchToastShowPageIndex = $state(true);
-	let switchToastShowPageSize = $state(false);
-	let switchToastShowPageDimensions = $state(true);
-	let switchToastBookTitleTemplate = $state('');
-	let switchToastBookDescriptionTemplate = $state('');
-	let switchToastPageTitleTemplate = $state('');
-	let switchToastPageDescriptionTemplate = $state('');
-
-	
-
-	function loadSwitchToastFromSettings() {
-		const s = settingsManager.getSettings();
-		const base = s.view?.switchToast ?? {
-			enableBook: s.view?.showBookSwitchToast ?? false,
-			enablePage: false,
-			showBookPath: true,
-			showBookPageProgress: true,
-			showBookType: false,
-			showPageIndex: true,
-			showPageSize: false,
-			showPageDimensions: true,
-			bookTitleTemplate: '已切换到 {{book.displayName}}（第 {{book.currentPageDisplay}} / {{book.totalPages}} 页）',
-			bookDescriptionTemplate: '路径：{{book.path}}',
-			pageTitleTemplate: '第 {{page.indexDisplay}} / {{book.totalPages}} 页',
-			pageDescriptionTemplate: '{{page.dimensionsFormatted}}  {{page.sizeFormatted}}'
-		};
-		switchToastEnableBook = base.enableBook;
-		switchToastEnablePage = base.enablePage;
-		switchToastBookTitleTemplate = base.bookTitleTemplate ?? '';
-		switchToastBookDescriptionTemplate = base.bookDescriptionTemplate ?? '';
-		switchToastPageTitleTemplate = base.pageTitleTemplate ?? '';
-		switchToastPageDescriptionTemplate = base.pageDescriptionTemplate ?? '';
-	}
-
-	$effect(() => {
-		loadSwitchToastFromSettings();
-	});
-
-	function updateSwitchToast(partial: {
-		enableBook?: boolean;
-		enablePage?: boolean;
-		showBookPath?: boolean;
-		showBookPageProgress?: boolean;
-		showBookType?: boolean;
-		showPageIndex?: boolean;
-		showPageSize?: boolean;
-		showPageDimensions?: boolean;
-		bookTitleTemplate?: string;
-		bookDescriptionTemplate?: string;
-		pageTitleTemplate?: string;
-		pageDescriptionTemplate?: string;
-	}) {
-		const current = settingsManager.getSettings();
-		const prev = current.view?.switchToast ?? {
-			enableBook: current.view?.showBookSwitchToast ?? false,
-			enablePage: false,
-			showBookPath: true,
-			showBookPageProgress: true,
-			showBookType: false,
-			showPageIndex: true,
-			showPageSize: false,
-			showPageDimensions: true
-		};
-		const next = { ...prev, ...partial };
-		switchToastEnableBook = next.enableBook;
-		switchToastEnablePage = next.enablePage;
-		switchToastShowBookPath = next.showBookPath;
-		switchToastShowBookPageProgress = next.showBookPageProgress;
-		switchToastShowBookType = next.showBookType;
-		switchToastShowPageIndex = next.showPageIndex;
-		switchToastShowPageSize = next.showPageSize;
-		switchToastShowPageDimensions = next.showPageDimensions;
-		switchToastBookTitleTemplate = next.bookTitleTemplate ?? '';
-		switchToastBookDescriptionTemplate = next.bookDescriptionTemplate ?? '';
-		switchToastPageTitleTemplate = next.pageTitleTemplate ?? '';
-		switchToastPageDescriptionTemplate = next.pageDescriptionTemplate ?? '';
-		settingsManager.updateNestedSettings('view', {
-			switchToast: next,
-			showBookSwitchToast: next.enableBook
-		});
-	}
-
-	function updateInfoOverlay(partial: {
-		enabled?: boolean;
-		opacity?: number;
-		showBorder?: boolean;
-		width?: number;
-		height?: number;
-	}) {
-		const current = settingsManager.getSettings();
-		const prev = current.view?.infoOverlay ?? { enabled: false, opacity: 0.85, showBorder: false };
-		const next = { ...prev };
-
-		if (partial.enabled !== undefined) {
-			next.enabled = partial.enabled;
-		}
-		if (partial.opacity !== undefined) {
-			const raw = partial.opacity;
-			const base = Number.isFinite(raw) ? (raw as number) : prev.opacity ?? 0.85;
-			const clamped = Math.min(1, Math.max(0, base));
-			next.opacity = clamped;
-		}
-		if (partial.showBorder !== undefined) {
-			next.showBorder = partial.showBorder;
-		}
-		if (partial.width !== undefined) {
-			const raw = partial.width;
-			if (!Number.isFinite(raw) || raw <= 0) {
-				delete (next as any).width;
-			} else {
-				const clamped = Math.max(120, Math.min(1600, raw));
-				(next as any).width = clamped;
-			}
-		}
-		if (partial.height !== undefined) {
-			const raw = partial.height;
-			if (!Number.isFinite(raw) || raw <= 0) {
-				delete (next as any).height;
-			} else {
-				const clamped = Math.max(32, Math.min(600, raw));
-				(next as any).height = clamped;
-			}
-		}
-
-		infoOverlayEnabled = next.enabled;
-		infoOverlayOpacity = next.opacity;
-		infoOverlayShowBorder = next.showBorder;
-		infoOverlayWidth = (next as any).width;
-		infoOverlayHeight = (next as any).height;
-
-		settingsManager.updateNestedSettings('view', {
-			infoOverlay: next
-		});
-	}
-
-	function formatFileSize(bytes?: number): string {
-		if (bytes === undefined) return '—';
-		if (bytes < 1024) return `${bytes} B`;
-		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
-		if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-		return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-	}
-
-	function formatDate(date?: string): string {
-		if (!date) return '—';
-		const parsed = new Date(date);
-		if (Number.isNaN(parsed.getTime())) {
-			return date;
-		}
-		return parsed.toLocaleString('zh-CN');
-	}
-
-	function formatBookType(type?: string): string {
-		if (!type) return '未知';
-		switch (type.toLowerCase()) {
-			case 'folder':
-				return '文件夹';
-			case 'archive':
-				return '压缩包';
-			case 'pdf':
-				return 'PDF';
-			case 'media':
-				return '媒体';
-			default:
-				return type;
-		}
-	}
 
 	// 复制路径
 	function copyPath() {
@@ -279,13 +52,6 @@
 	function showContextMenu(e: MouseEvent) {
 		e.preventDefault();
 		e.stopPropagation();
-		console.log('[InfoPanel] showContextMenu input', {
-			clientX: e.clientX,
-			clientY: e.clientY,
-			targetTag: (e.target as HTMLElement | null)?.tagName,
-			bookPath: bookInfo?.path,
-			imagePath: imageInfo?.path
-		});
 		
 		let menuX = e.clientX;
 		let menuY = e.clientY;
@@ -298,26 +64,17 @@
 		
 		const viewportWidth = window.innerWidth;
 		const viewportHeight = window.innerHeight;
-		
 		const menuWidth = 180;
+		
 		if (e.clientX + menuWidth > viewportWidth) {
 			menuX = viewportWidth - menuWidth - 10;
 		}
-		if (menuX < 10) {
-			menuX = 10;
-		}
+		if (menuX < 10) menuX = 10;
 		
 		const maxMenuHeight = viewportHeight * 0.7;
 		if (menuY + maxMenuHeight > viewportHeight) {
 			menuY = viewportHeight - maxMenuHeight - 10;
 		}
-		
-		console.log('[InfoPanel] showContextMenu computed', {
-			menuX,
-			menuY,
-			viewportWidth,
-			viewportHeight
-		});
 		
 		contextMenu = { x: menuX, y: menuY, open: true };
 	}
@@ -325,48 +82,6 @@
 	// 隐藏右键菜单
 	function hideContextMenu() {
 		contextMenu = { x: 0, y: 0, open: false };
-	}
-
-	function getInfoCardOrder(id: InfoCardId): number {
-		const idx = infoCardOrder.indexOf(id);
-		return idx === -1 ? 0 : idx;
-	}
-
-	function getVisibleInfoCards(): InfoCardId[] {
-		const present: InfoCardId[] = [];
-		if (bookInfo) {
-			present.push('bookInfo', 'infoOverlay');
-		}
-		if (imageInfo) {
-			present.push('imageInfo', 'storage', 'time');
-		}
-		present.push('switchToast');
-		return infoCardOrder.filter((id) => present.includes(id));
-	}
-
-	function canMoveInfoCard(id: InfoCardId, dir: 'up' | 'down'): boolean {
-		const visible = getVisibleInfoCards();
-		const idx = visible.indexOf(id);
-		if (idx === -1) return false;
-		if (dir === 'up') return idx > 0;
-		return idx < visible.length - 1;
-	}
-
-	function moveInfoCard(id: InfoCardId, dir: 'up' | 'down') {
-		const card = infoCards.find(c => c.id === id);
-		if (!card) return;
-		const newOrder = dir === 'up' ? card.order - 1 : card.order + 1;
-		if (newOrder >= 0 && newOrder < infoCards.length) {
-			cardConfigStore.moveCard('info', id, newOrder);
-		}
-	}
-	
-	// 切换卡片展开状态
-	function toggleCardExpanded(cardId: InfoCardId) {
-		const card = infoCards.find(c => c.id === cardId);
-		if (card) {
-			cardConfigStore.setCardExpanded('info', cardId, !card.expanded);
-		}
 	}
 </script>
 
@@ -376,659 +91,42 @@
 	role="region"
 	aria-label="信息面板"
 >
-		<!-- 标题栏 -->
-		<div class="p-4">
-			<div class="flex items-center gap-2">
-				<Info class="h-5 w-5" />
-				<h3 class="font-semibold">详细信息</h3>
-			</div>
+	<!-- 标题栏 -->
+	<div class="p-4">
+		<div class="flex items-center gap-2">
+			<Info class="h-5 w-5" />
+			<h3 class="font-semibold">详细信息</h3>
 		</div>
-		<!-- 渐变过渡 -->
-		<div class="h-4 bg-linear-to-b from-transparent to-background"></div>
+	</div>
+	<!-- 渐变过渡 -->
+	<div class="h-4 bg-linear-to-b from-transparent to-background"></div>
 
-		<div class="flex-1 overflow-auto bg-background">
-			<div class="p-4 flex flex-col space-y-3">
-				<!-- 书籍信息 -->
-				{#if bookInfo}
-					<div class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60" style={`order: ${getInfoCardOrder('bookInfo')}`}>
-						<div class="flex items-center justify-between">
-							<div class="flex items-center gap-2 font-semibold text-sm">
-								<FileText class="h-4 w-4" />
-								<span>书籍信息</span>
-							</div>
-							<div class="flex items-center gap-1 text-[10px]">
-								<button
-									type="button"
-									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-									onclick={() => toggleCardExpanded('bookInfo')}
-									title={showBookInfoCard ? '收起' : '展开'}
-								>
-									{#if showBookInfoCard}
-										<ChevronUp class="h-3 w-3" />
-									{:else}
-										<ChevronDown class="h-3 w-3" />
-									{/if}
-								</button>
-								<button
-									type="button"
-									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
-									onclick={() => moveInfoCard('bookInfo', 'up')}
-									disabled={!canMoveInfoCard('bookInfo', 'up')}
-									title="上移"
-								>
-									<ArrowUp class="h-3 w-3" />
-								</button>
-								<button
-									type="button"
-									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
-									onclick={() => moveInfoCard('bookInfo', 'down')}
-									disabled={!canMoveInfoCard('bookInfo', 'down')}
-									title="下移"
-								>
-									<ArrowDown class="h-3 w-3" />
-								</button>
-							</div>
-						</div>
-
-						{#if showBookInfoCard}
-							<div class="space-y-2 text-sm">
-								<div class="flex justify-between">
-									<span class="text-muted-foreground">名称:</span>
-									<span
-										class={bookInfo.emmMetadata?.translatedTitle && bookInfo.emmMetadata.translatedTitle !== bookInfo.name
-											? 'break-words max-w-[200px] rounded border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-xs text-primary text-right'
-											: 'font-medium break-words max-w-[200px]'}
-										title={bookInfo.emmMetadata?.translatedTitle || bookInfo.name}
-									>
-										{bookInfo.emmMetadata?.translatedTitle || bookInfo.name}
-									</span>
-								</div>
-								{#if bookInfo.emmMetadata?.translatedTitle && bookInfo.emmMetadata.translatedTitle !== bookInfo.name}
-									<div class="flex justify-between">
-										<span class="text-muted-foreground">原名:</span>
-										<span class="font-mono text-xs break-words max-w-[200px]" title={bookInfo.name}>
-											{bookInfo.name}
-										</span>
-									</div>
-								{/if}
-								<div class="flex justify-between">
-									<span class="text-muted-foreground">路径:</span>
-									<span class="font-mono text-xs break-words max-w-[200px]" title={bookInfo.path}>
-										{bookInfo.path}
-									</span>
-								</div>
-								<div class="flex justify-between">
-									<span class="text-muted-foreground">类型:</span>
-									<span>{formatBookType(bookInfo.type)}</span>
-								</div>
-								<div class="flex justify-between">
-									<span class="text-muted-foreground">页码:</span>
-									<span>
-										{bookInfo.currentPage} / {bookInfo.totalPages}
-									</span>
-								</div>
-								<div class="flex justify-between">
-									<span class="text-muted-foreground">进度:</span>
-									<span>
-										{#if bookInfo.totalPages > 0}
-											{(
-												(Math.min(bookInfo.currentPage, bookInfo.totalPages) / bookInfo.totalPages) *
-												100
-											).toFixed(1)}%
-										{:else}
-											—
-										{/if}
-									</span>
-								</div>
-							</div>
-						{/if}
+	<div class="flex-1 overflow-auto bg-background">
+		<div class="p-4 flex flex-col space-y-3">
+			{#if visibleCards.length > 0}
+				{#each visibleCards as card (card.id)}
+					<div style="order: {card.order}">
+						<CardRenderer cardId={card.id} panelId="info" />
 					</div>
-
-					<!-- 切换提示设置 -->
-					<div
-						class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
-						style={`order: ${getInfoCardOrder('switchToast')}`}
-					>
-						<div class="flex items-center justify-between">
-							<div class="flex items-center gap-2 font-semibold text-sm">
-								<Bell class="h-4 w-4" />
-								<span>切换提示</span>
-							</div>
-							<div class="flex items-center gap-1 text-[10px]">
-								<button
-									type="button"
-									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-									onclick={() => toggleCardExpanded('switchToast')}
-									title={showSwitchToastCard ? '收起' : '展开'}
-								>
-									{#if showSwitchToastCard}
-										<ChevronUp class="h-3 w-3" />
-									{:else}
-										<ChevronDown class="h-3 w-3" />
-									{/if}
-								</button>
-								<button
-									type="button"
-									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
-									onclick={() => moveInfoCard('switchToast', 'up')}
-									disabled={!canMoveInfoCard('switchToast', 'up')}
-									title="上移"
-								>
-									<ArrowUp class="h-3 w-3" />
-								</button>
-								<button
-									type="button"
-									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
-									onclick={() => moveInfoCard('switchToast', 'down')}
-									disabled={!canMoveInfoCard('switchToast', 'down')}
-									title="下移"
-								>
-									<ArrowDown class="h-3 w-3" />
-								</button>
-							</div>
-						</div>
-
-						{#if showSwitchToastCard}
-							<div class="space-y-3 text-xs text-muted-foreground">
-								<!-- 总开关 -->
-								<div class="space-y-1">
-									<div class="flex items-center justify-between gap-2">
-										<span>切换书籍时显示提示</span>
-										<Switch.Root
-											checked={switchToastEnableBook}
-											onCheckedChange={(v) => updateSwitchToast({ enableBook: v })}
-											class="scale-75"
-										/>
-									</div>
-								</div>
-								<Separator.Root class="my-1" />
-								<div class="space-y-1">
-									<div class="flex items-center justify-between gap-2">
-										<span>切换页面时显示提示</span>
-										<Switch.Root
-											checked={switchToastEnablePage}
-											onCheckedChange={(v) => updateSwitchToast({ enablePage: v })}
-											class="scale-75"
-										/>
-									</div>
-								</div>
-								<Separator.Root class="my-1" />
-
-								<!-- 书籍模板 + 变量表 -->
-								<div class="space-y-2">
-									<div class="text-[11px] font-semibold text-foreground">书籍提示模板</div>
-									<textarea
-										class="w-full min-h-10 rounded-md border bg-background px-2 py-1 text-[11px] font-mono"
-										value={switchToastBookTitleTemplate}
-										oninput={(e) => {
-											const v = (e.currentTarget as HTMLTextAreaElement).value;
-											switchToastBookTitleTemplate = v;
-											updateSwitchToast({ bookTitleTemplate: v });
-										}}
-										placeholder={'例如：已切换到 {{book.emmTranslatedTitle}}（第 {{book.currentPageDisplay}} / {{book.totalPages}} 页）'}
-									/>
-									<textarea
-										class="w-full min-h-13 rounded-md border bg-background px-2 py-1 text-[11px] font-mono"
-										value={switchToastBookDescriptionTemplate}
-										oninput={(e) => {
-											const v = (e.currentTarget as HTMLTextAreaElement).value;
-											switchToastBookDescriptionTemplate = v;
-											updateSwitchToast({ bookDescriptionTemplate: v });
-										}}
-										placeholder={'例如：路径：{{book.path}}，评分：{{book.emmRating}}'}
-									/>
-
-									<div class="mt-1 rounded-md border bg-background/60 overflow-hidden">
-										<Table.Root class="w-full text-[11px]">
-											<Table.Header>
-												<Table.Row>
-													<Table.Head class="px-2 py-1 w-28">变量</Table.Head>
-													<Table.Head class="px-2 py-1">说明 / 示例</Table.Head>
-												</Table.Row>
-											</Table.Header>
-											<Table.Body>
-												<Table.Row>
-													<Table.Cell class="px-2 py-1 font-mono whitespace-nowrap">
-														{'{{book.displayName}}'}
-													</Table.Cell>
-													<Table.Cell class="px-2 py-1">书籍显示名（优先使用 EMM 翻译标题）</Table.Cell>
-												</Table.Row>
-												<Table.Row>
-													<Table.Cell class="px-2 py-1 font-mono whitespace-nowrap">
-														{'{{book.currentPageDisplay}}'}
-													</Table.Cell>
-													<Table.Cell class="px-2 py-1">当前页码（从 1 开始）</Table.Cell>
-												</Table.Row>
-												<Table.Row>
-													<Table.Cell class="px-2 py-1 font-mono whitespace-nowrap">
-														{'{{book.totalPages}}'}
-													</Table.Cell>
-													<Table.Cell class="px-2 py-1">书籍总页数</Table.Cell>
-												</Table.Row>
-												<Table.Row>
-													<Table.Cell class="px-2 py-1 font-mono whitespace-nowrap">
-														{'{{book.path}}'}
-													</Table.Cell>
-													<Table.Cell class="px-2 py-1">书籍路径</Table.Cell>
-												</Table.Row>
-												<Table.Row>
-													<Table.Cell class="px-2 py-1 font-mono whitespace-nowrap">
-														{'{{book.emmTranslatedTitle}}'}
-													</Table.Cell>
-													<Table.Cell class="px-2 py-1">EMM 翻译标题（如有）</Table.Cell>
-												</Table.Row>
-												<Table.Row>
-													<Table.Cell class="px-2 py-1 font-mono whitespace-nowrap">
-														{'{{book.emmRating}}'}
-													</Table.Cell>
-													<Table.Cell class="px-2 py-1">EMM 评分（0–5，可能为空）</Table.Cell>
-												</Table.Row>
-											</Table.Body>
-										</Table.Root>
-									</div>
-								</div>
-
-								<!-- 页面模板 + 变量表 -->
-								<div class="space-y-2">
-									<div class="text-[11px] font-semibold text-foreground">页面提示模板</div>
-									<textarea
-										class="w-full min-h-10 rounded-md border bg-background px-2 py-1 text-[11px] font-mono"
-										value={switchToastPageTitleTemplate}
-										oninput={(e) => {
-											const v = (e.currentTarget as HTMLTextAreaElement).value;
-											switchToastPageTitleTemplate = v;
-											updateSwitchToast({ pageTitleTemplate: v });
-										}}
-										placeholder={'例如：第 {{page.indexDisplay}} / {{book.totalPages}} 页'}
-									/>
-									<textarea
-										class="w-full min-h-13 rounded-md border bg-background px-2 py-1 text-[11px] font-mono"
-										value={switchToastPageDescriptionTemplate}
-										oninput={(e) => {
-											const v = (e.currentTarget as HTMLTextAreaElement).value;
-											switchToastPageDescriptionTemplate = v;
-											updateSwitchToast({ pageDescriptionTemplate: v });
-										}}
-										placeholder={'例如：分辨率 {{page.dimensionsFormatted}}，大小 {{page.sizeFormatted}}'}
-									/>
-
-									<div class="mt-1 rounded-md border bg-background/60 overflow-hidden">
-										<Table.Root class="w-full text-[11px]">
-											<Table.Header>
-												<Table.Row>
-													<Table.Head class="px-2 py-1 w-28">变量</Table.Head>
-													<Table.Head class="px-2 py-1">说明 / 示例</Table.Head>
-												</Table.Row>
-											</Table.Header>
-											<Table.Body>
-												<Table.Row>
-													<Table.Cell class="px-2 py-1 font-mono whitespace-nowrap">
-														{'{{page.indexDisplay}}'}
-													</Table.Cell>
-													<Table.Cell class="px-2 py-1">当前页码（从 1 开始）</Table.Cell>
-												</Table.Row>
-												<Table.Row>
-													<Table.Cell class="px-2 py-1 font-mono whitespace-nowrap">
-														{'{{page.dimensionsFormatted}}'}
-													</Table.Cell>
-													<Table.Cell class="px-2 py-1">分辨率，例如 1920 × 1080</Table.Cell>
-												</Table.Row>
-												<Table.Row>
-													<Table.Cell class="px-2 py-1 font-mono whitespace-nowrap">
-														{'{{page.sizeFormatted}}'}
-													</Table.Cell>
-													<Table.Cell class="px-2 py-1">文件大小，例如 3.45 MB</Table.Cell>
-												</Table.Row>
-												<Table.Row>
-													<Table.Cell class="px-2 py-1 font-mono whitespace-nowrap">
-														{'{{page.name}}'}
-													</Table.Cell>
-													<Table.Cell class="px-2 py-1">页面文件名</Table.Cell>
-												</Table.Row>
-											</Table.Body>
-										</Table.Root>
-									</div>
-
-									<p class="mt-1 text-[10px] text-muted-foreground">
-										页面模板同样可以使用上面的 <span class="font-mono">{'{{book.*}}'}</span> 变量。
-									</p>
-								</div>
-							</div>
-						{/if}
+				{/each}
+			{:else}
+				<!-- 空状态 -->
+				<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
+					<div class="relative mb-4">
+						<Info class="h-16 w-16 opacity-20" />
 					</div>
-
-					<!-- 信息悬浮窗 -->
-					<div class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60" style={`order: ${getInfoCardOrder('infoOverlay')}`}>
-						<div class="flex items-center justify-between">
-							<div class="flex items-center gap-2 font-semibold text-sm">
-								<Info class="h-4 w-4" />
-								<span>信息悬浮窗</span>
-							</div>
-							<div class="flex items-center gap-2">
-								<Switch.Root
-									checked={infoOverlayEnabled}
-									onCheckedChange={(v) => updateInfoOverlay({ enabled: v })}
-									class="scale-75"
-								/>
-								<div class="flex items-center gap-1 text-[10px]">
-									<button
-										type="button"
-										class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-										onclick={() => toggleCardExpanded('infoOverlay')}
-										title={showInfoOverlayCard ? '收起' : '展开'}
-									>
-										{#if showInfoOverlayCard}
-											<ChevronUp class="h-3 w-3" />
-										{:else}
-											<ChevronDown class="h-3 w-3" />
-										{/if}
-									</button>
-									<button
-										type="button"
-										class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
-										onclick={() => moveInfoCard('infoOverlay', 'up')}
-										disabled={!canMoveInfoCard('infoOverlay', 'up')}
-										title="上移"
-									>
-										<ArrowUp class="h-3 w-3" />
-									</button>
-									<button
-										type="button"
-										class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
-										onclick={() => moveInfoCard('infoOverlay', 'down')}
-										disabled={!canMoveInfoCard('infoOverlay', 'down')}
-										title="下移"
-									>
-										<ArrowDown class="h-3 w-3" />
-									</button>
-								</div>
-							</div>
-						</div>
-						{#if showInfoOverlayCard}
-							<div class="space-y-2 text-xs text-muted-foreground">
-								<div class="flex items-center justify-between gap-2">
-									<span>透明度</span>
-									<div class="flex items-center gap-2">
-										<input
-											type="number"
-											min="0"
-											max="100"
-											step="5"
-											class="h-7 w-20 px-2 text-xs border-input bg-background selection:bg-primary dark:bg-input/30 selection:text-primary-foreground ring-offset-background placeholder:text-muted-foreground shadow-xs rounded-md border outline-none transition-[color,box-shadow] disabled:cursor-not-allowed disabled:opacity-50"
-											value={Math.round(infoOverlayOpacity * 100).toString()}
-											oninput={(e) => {
-												const target = e.currentTarget as HTMLInputElement;
-												const v = parseFloat(target.value);
-												if (!Number.isNaN(v)) {
-													updateInfoOverlay({ opacity: v / 100 });
-												}
-											}}
-										/>
-										<span class="text-[11px]">{Math.round(infoOverlayOpacity * 100)}%</span>
-									</div>
-								</div>
-								<div class="space-y-1">
-									<div class="flex items-center justify-between gap-2">
-										<span>宽度</span>
-										<span class="text-[11px] text-muted-foreground">
-											{infoOverlayWidth != null ? `${infoOverlayWidth} px` : '自动'}
-										</span>
-									</div>
-									<Slider
-										min={120}
-										max={1600}
-										step={20}
-										type="single"
-										value={[infoOverlayWidth ?? 480]}
-										onValueChange={(vals) => {
-											const v = vals[0];
-											if (typeof v === 'number') {
-												updateInfoOverlay({ width: v });
-											}
-										}}
-										class="w-full"
-									/>
-								</div>
-								<div class="space-y-1">
-									<div class="flex items-center justify-between gap-2">
-										<span>高度</span>
-										<span class="text-[11px] text-muted-foreground">
-											{infoOverlayHeight != null ? `${infoOverlayHeight} px` : '自动'}
-										</span>
-									</div>
-									<Slider
-										min={32}
-										max={600}
-										step={8}
-										type="single"
-										value={[infoOverlayHeight ?? 56]}
-										onValueChange={(vals) => {
-											const v = vals[0];
-											if (typeof v === 'number') {
-												updateInfoOverlay({ height: v });
-											}
-										}}
-										class="w-full"
-									/>
-								</div>
-								<div class="flex items-center justify-between gap-2">
-									<span>显示边框</span>
-									<div class="flex items-center gap-2">
-										<Switch.Root
-											checked={infoOverlayShowBorder}
-											onCheckedChange={(v) => updateInfoOverlay({ showBorder: v })}
-											class="scale-75"
-										/>
-									</div>
-								</div>
-								<p>调节悬浮信息窗的背景透明度（0% - 100%，0% 为仅文字无底色）。</p>
-							</div>
-						{/if}
-					</div>
-				{/if}
-				{#if imageInfo}
-					<!-- 图像信息 -->
-					<div class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60" style={`order: ${getInfoCardOrder('imageInfo')}`}>
-						<div class="flex items-center justify-between">
-							<div class="flex items-center gap-2 font-semibold text-sm">
-								<ImageIcon class="h-4 w-4" />
-								<span>图像信息</span>
-							</div>
-							<div class="flex items-center gap-1 text-[10px]">
-								<button
-									type="button"
-									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-									onclick={() => toggleCardExpanded('imageInfo')}
-									title={showImageInfoCard ? '收起' : '展开'}
-								>
-									{#if showImageInfoCard}
-										<ChevronUp class="h-3 w-3" />
-									{:else}
-										<ChevronDown class="h-3 w-3" />
-									{/if}
-								</button>
-								<button
-									type="button"
-									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
-									onclick={() => moveInfoCard('imageInfo', 'up')}
-									disabled={!canMoveInfoCard('imageInfo', 'up')}
-									title="上移"
-								>
-									<ArrowUp class="h-3 w-3" />
-								</button>
-								<button
-									type="button"
-									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
-									onclick={() => moveInfoCard('imageInfo', 'down')}
-									disabled={!canMoveInfoCard('imageInfo', 'down')}
-									title="下移"
-								>
-									<ArrowDown class="h-3 w-3" />
-								</button>
-							</div>
-						</div>
-
-						{#if showImageInfoCard}
-							<div class="space-y-2 text-sm">
-								<div class="flex justify-between">
-									<span class="text-muted-foreground">文件名:</span>
-									<span class="font-mono text-xs" title={imageInfo.name}>
-										{imageInfo.name}
-									</span>
-								</div>
-								<div class="flex justify-between">
-									<span class="text-muted-foreground">格式:</span>
-									<span>{imageInfo.format ?? '—'}</span>
-								</div>
-								<div class="flex justify-between">
-									<span class="text-muted-foreground">尺寸:</span>
-									<span>
-										{#if imageInfo.width && imageInfo.height}
-											{imageInfo.width} × {imageInfo.height}
-										{:else}
-											—
-										{/if}
-									</span>
-								</div>
-								<div class="flex justify-between">
-									<span class="text-muted-foreground">色深:</span>
-									<span>{imageInfo.colorDepth ?? '—'}</span>
-								</div>
-							</div>
-						{/if}
-					</div>
-
-					<!-- 存储信息 -->
-					<div class="rounded-lg border bg-muted/10 p-3 space-y-3 flex flex-col transition-all hover:border-primary/60" style={`order: ${getInfoCardOrder('storage')}`}>
-						<div class="flex items-center justify-between">
-							<div class="flex items-center gap-2 font-semibold text-sm">
-								<HardDrive class="h-4 w-4" />
-								<span>存储信息</span>
-							</div>
-							<div class="flex items-center gap-1 text-[10px]">
-								<button
-									type="button"
-									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-									onclick={() => toggleCardExpanded('storage')}
-									title={showStorageInfoCard ? '收起' : '展开'}
-								>
-									{#if showStorageInfoCard}
-										<ChevronUp class="h-3 w-3" />
-									{:else}
-										<ChevronDown class="h-3 w-3" />
-									{/if}
-								</button>
-								<button
-									type="button"
-									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
-									onclick={() => moveInfoCard('storage', 'up')}
-									disabled={!canMoveInfoCard('storage', 'up')}
-									title="上移"
-								>
-									<ArrowUp class="h-3 w-3" />
-								</button>
-								<button
-									type="button"
-									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
-									onclick={() => moveInfoCard('storage', 'down')}
-									disabled={!canMoveInfoCard('storage', 'down')}
-									title="下移"
-								>
-									<ArrowDown class="h-3 w-3" />
-								</button>
-							</div>
-						</div>
-
-						{#if showStorageInfoCard}
-							<div class="space-y-2 text-sm">
-								<div class="flex justify-between">
-									<span class="text-muted-foreground">路径:</span>
-									<span class="font-mono text-xs break-words max-w-[200px]" title={imageInfo.path}>
-										{imageInfo.path ?? '—'}
-									</span>
-								</div>
-								<div class="flex justify-between">
-									<span class="text-muted-foreground">大小:</span>
-									<span>{formatFileSize(imageInfo.fileSize)}</span>
-								</div>
-							</div>
-						{/if}
-					</div>
-
-					<!-- 时间信息 -->
-					<div class="rounded-lg border bg-muted/10 p-3 space-y-3 flex flex-col transition-all hover:border-primary/60" style={`order: ${getInfoCardOrder('time')}`}>
-						<div class="flex items-center justify-between">
-							<div class="flex items-center gap-2 font-semibold text-sm">
-								<Calendar class="h-4 w-4" />
-								<span>时间信息</span>
-							</div>
-							<div class="flex items-center gap-1 text-[10px]">
-								<button
-									type="button"
-									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-									onclick={() => toggleCardExpanded('time')}
-									title={showTimeInfoCard ? '收起' : '展开'}
-								>
-									{#if showTimeInfoCard}
-										<ChevronUp class="h-3 w-3" />
-									{:else}
-										<ChevronDown class="h-3 w-3" />
-									{/if}
-								</button>
-								<button
-									type="button"
-									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
-									onclick={() => moveInfoCard('time', 'up')}
-									disabled={!canMoveInfoCard('time', 'up')}
-									title="上移"
-								>
-									<ArrowUp class="h-3 w-3" />
-								</button>
-								<button
-									type="button"
-									class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
-									onclick={() => moveInfoCard('time', 'down')}
-									disabled={!canMoveInfoCard('time', 'down')}
-									title="下移"
-								>
-									<ArrowDown class="h-3 w-3" />
-								</button>
-							</div>
-						</div>
-
-						{#if showTimeInfoCard}
-							<div class="space-y-2 text-sm">
-								<div class="flex justify-between">
-									<span class="text-muted-foreground">创建时间:</span>
-									<span class="text-xs">{formatDate(imageInfo.createdAt)}</span>
-								</div>
-								<div class="flex justify-between">
-									<span class="text-muted-foreground">修改时间:</span>
-									<span class="text-xs">{formatDate(imageInfo.modifiedAt)}</span>
-								</div>
-							</div>
-						{/if}
-					</div>
-				{:else}
-					<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
-						<div class="relative mb-4">
-							<Info class="h-16 w-16 opacity-30" />
-							<div class="absolute inset-0 flex items-center justify-center">
-								<div class="h-2 w-2 bg-muted-foreground rounded-full animate-pulse"></div>
-							</div>
-						</div>
-						<div class="text-center space-y-2">
-							<p class="text-lg font-medium">暂无图像信息</p>
-							<p class="text-sm opacity-70">打开图像文件后查看详细信息</p>
-							<div class="mt-4 p-3 bg-muted/50 rounded-lg text-xs space-y-1">
-								<p class="font-medium text-foreground">支持格式：</p>
-								<p>• 图像：JPG, PNG, GIF, WebP, AVIF</p>
-								<p>• 文档：PDF, CBZ, CBR</p>
-								<p>• 视频：MP4, WebM (缩略图)</p>
-							</div>
+					<div class="text-center space-y-2">
+						<p class="text-lg font-medium">暂无信息</p>
+						<p class="text-sm opacity-70">打开图像文件后查看详细信息</p>
+						<div class="mt-4 p-3 bg-muted/50 rounded-lg text-xs space-y-1">
+							<p class="font-medium text-foreground">支持格式：</p>
+							<p>• 图像：JPG, PNG, GIF, WebP, AVIF</p>
+							<p>• 文档：PDF, CBZ, CBR</p>
+							<p>• 视频：MP4, WebM (缩略图)</p>
 						</div>
 					</div>
-				{/if}
+				</div>
+			{/if}
 		</div>
 	</div>
 
@@ -1036,8 +134,8 @@
 	{#if contextMenu.open}
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="context-menu fixed z-50 max-h-(--bits-context-menu-content-available-height) origin-(--bits-context-menu-content-transform-origin) min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover text-popover-foreground p-1 shadow-md"
-			style={`left: ${contextMenu.x}px; top: ${contextMenu.y}px;`}
+			class="context-menu fixed z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground p-1 shadow-md"
+			style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
 			role="menu"
 			tabindex="-1"
 			onmousedown={(e: MouseEvent) => e.stopPropagation()}

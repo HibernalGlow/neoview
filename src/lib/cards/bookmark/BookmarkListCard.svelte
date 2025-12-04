@@ -1,119 +1,244 @@
 <script lang="ts">
 /**
- * 书签列表卡片
- * 简化版书签列表
+ * 书签卡片 - 完整功能版
+ * 使用 VirtualizedFileListV2，支持列表和网格视图
  */
-import { onMount } from 'svelte';
-import { Bookmark, Trash2, Search, Star } from '@lucide/svelte';
+import { Bookmark, Star, Trash2 } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
-import { Input } from '$lib/components/ui/input';
+import SearchBar from '$lib/components/ui/SearchBar.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
+import VirtualizedFileListV2 from '$lib/components/panels/file/components/VirtualizedFileListV2.svelte';
+import FolderContextMenu from '$lib/components/panels/folderPanel/components/FolderContextMenu.svelte';
+import PanelToolbar, { type SortField, type SortOrder, type ViewMode } from '$lib/components/panels/shared/PanelToolbar.svelte';
+import type { FsItem } from '$lib/types';
+import { FileSystemAPI } from '$lib/api';
+import { requestVisibleThumbnails, useThumbnails } from '$lib/utils/thumbnailManager';
+import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 import { openFileSystemItem } from '$lib/utils/navigationUtils';
+import { loadPanelViewMode, savePanelViewMode } from '$lib/utils/panelViewMode';
+import { folderRatingStore } from '$lib/stores/emm/folderRating';
+import { getDefaultRating } from '$lib/stores/emm/storage';
+import { Checkbox } from '$lib/components/ui/checkbox';
 
-interface BookmarkEntry {
-	id: string;
-	path: string;
-	name: string;
-	type: 'file' | 'folder';
-	createdAt: Date;
-}
-
-let bookmarks = $state<BookmarkEntry[]>([]);
+let bookmarks: any[] = $state([]);
 let searchQuery = $state('');
+let viewMode = $state<'list' | 'grid'>(loadPanelViewMode('bookmark', 'list') as 'list' | 'grid');
 
-const filteredBookmarks = $derived(
-	searchQuery.trim()
-		? bookmarks.filter(
-				(entry) =>
-					entry.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					entry.path.toLowerCase().includes(searchQuery.toLowerCase())
-			)
-		: bookmarks
+const thumbStore = useThumbnails();
+let thumbnails = $derived(thumbStore.thumbnails);
+let contextMenu = $state<{ x: number; y: number; item: FsItem | null; visible: boolean }>({
+	x: 0, y: 0, item: null, visible: false
+});
+let contextMenuBookmark = $state<any>(null);
+let syncFileTreeOnBookmarkSelect = $state(historySettingsStore.syncFileTreeOnBookmarkSelect);
+let showSearchBar = $state(false);
+let sortField = $state<SortField>('timestamp');
+let sortOrder = $state<SortOrder>('desc');
+let selectedIndex = $state(-1);
+let scrollToSelectedToken = $state(0);
+
+let filteredBookmarks = $derived(
+	bookmarks.filter((b) =>
+		b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+		b.path.toLowerCase().includes(searchQuery.toLowerCase())
+	)
 );
 
-onMount(() => {
-	const unsubscribe = bookmarkStore.subscribe((entries: BookmarkEntry[]) => {
-		bookmarks = entries;
+let sortedBookmarks = $derived(() => {
+	const filtered = filteredBookmarks;
+	if (sortField === 'random') {
+		const shuffled = [...filtered];
+		for (let i = shuffled.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+		}
+		return shuffled;
+	}
+	return [...filtered].sort((a, b) => {
+		let cmp = 0;
+		switch (sortField) {
+			case 'name': cmp = a.name.localeCompare(b.name, undefined, { numeric: true }); break;
+			case 'path': cmp = a.path.localeCompare(b.path, undefined, { numeric: true }); break;
+			case 'timestamp': cmp = (a.createdAt || 0) - (b.createdAt || 0); break;
+			case 'type': {
+				const extA = a.name.split('.').pop()?.toLowerCase() || '';
+				const extB = b.name.split('.').pop()?.toLowerCase() || '';
+				cmp = extA.localeCompare(extB);
+				break;
+			}
+			case 'starred':
+				if (a.starred !== b.starred) cmp = a.starred ? -1 : 1;
+				else cmp = a.name.localeCompare(b.name);
+				break;
+			case 'rating': {
+				const defaultRating = getDefaultRating();
+				const ratingA = folderRatingStore.getEffectiveRating(a.path) ?? defaultRating;
+				const ratingB = folderRatingStore.getEffectiveRating(b.path) ?? defaultRating;
+				cmp = ratingA - ratingB;
+				break;
+			}
+		}
+		return sortOrder === 'asc' ? cmp : -cmp;
+	});
+});
+
+function handleSortChange(field: SortField, order: SortOrder) {
+	sortField = field;
+	sortOrder = order;
+}
+
+function handleViewModeChange(mode: ViewMode) {
+	viewMode = mode;
+	savePanelViewMode('bookmark', mode);
+}
+
+$effect(() => {
+	historySettingsStore.setSyncFileTreeOnBookmarkSelect(syncFileTreeOnBookmarkSelect);
+});
+
+function loadThumbnails(bookmarkList: any[]) {
+	const paths = bookmarkList.map(b => b.path);
+	if (paths.length > 0) requestVisibleThumbnails(paths, 'bookmarks');
+}
+
+function removeBookmark(id: string) { bookmarkStore.remove(id); }
+
+async function openBookmark(bookmark: any) {
+	const isDir = bookmark.type === 'folder';
+	await openFileSystemItem(bookmark.path, isDir, { syncFileTree: syncFileTreeOnBookmarkSelect, folderSyncMode: 'select' });
+}
+
+function bookmarkToFsItem(bookmark: any): FsItem {
+	return {
+		path: bookmark.path,
+		name: bookmark.name,
+		isDir: bookmark.type === 'folder',
+		isImage: false,
+		size: 0,
+		modified: bookmark.createdAt ? new Date(bookmark.createdAt).getTime() : 0
+	};
+}
+
+let bookmarkItems = $derived(sortedBookmarks().map(bookmarkToFsItem));
+let bookmarkMap = $derived(new Map(sortedBookmarks().map(b => [b.path, b])));
+
+function showContextMenu(e: MouseEvent, bookmark: any) {
+	e.preventDefault();
+	e.stopPropagation();
+	contextMenuBookmark = bookmark;
+	contextMenu = { x: e.clientX, y: e.clientY, item: bookmarkToFsItem(bookmark), visible: true };
+}
+
+function hideContextMenu() {
+	contextMenu = { ...contextMenu, visible: false, item: null };
+	contextMenuBookmark = null;
+}
+
+async function openInExplorer(bookmark: any) {
+	try { await FileSystemAPI.showInFileManager(bookmark.path); } catch (err) { console.error('在资源管理器中打开失败:', err); }
+	hideContextMenu();
+}
+
+async function openWithExternalApp(bookmark: any) {
+	try { await FileSystemAPI.openWithSystem(bookmark.path); } catch (err) { console.error('在外部应用中打开失败:', err); }
+	hideContextMenu();
+}
+
+function copyPath(bookmark: any) {
+	navigator.clipboard.writeText(bookmark.path);
+	hideContextMenu();
+}
+
+$effect(() => {
+	const unsubscribe = bookmarkStore.subscribe((newBookmarks) => {
+		bookmarks = newBookmarks;
+		if (newBookmarks.length > 0) {
+			try { loadThumbnails(newBookmarks); } catch (err) { console.debug('调度书签缩略图失败:', err); }
+		} else {
+			thumbnails = new Map();
+		}
 	});
 	return unsubscribe;
 });
-
-async function openEntry(entry: BookmarkEntry) {
-	await openFileSystemItem(entry.path, entry.type === 'folder');
-}
-
-function removeEntry(entry: BookmarkEntry, e: MouseEvent) {
-	e.stopPropagation();
-	bookmarkStore.remove(entry.id);
-}
-
-function clearBookmarks() {
-	if (confirm('确定要清空所有书签吗？')) {
-		bookmarkStore.clear();
-	}
-}
-
-function formatTime(date: Date): string {
-	return new Date(date).toLocaleDateString();
-}
 </script>
 
-<div class="flex flex-col h-full space-y-2">
-	<!-- 搜索和操作 -->
-	<div class="flex items-center gap-2">
-		<div class="relative flex-1">
-			<Search class="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-			<Input
-				type="text"
+<div class="flex h-full flex-col">
+	<!-- 工具栏 -->
+	<div class="flex items-center justify-between py-1 gap-2 flex-wrap">
+		<div class="flex items-center gap-2 text-xs text-muted-foreground">
+			<span>({filteredBookmarks.length})</span>
+			<Checkbox bind:checked={syncFileTreeOnBookmarkSelect} aria-label="同步文件树" />
+			<span>同步</span>
+		</div>
+		<PanelToolbar
+			{viewMode}
+			{showSearchBar}
+			{sortField}
+			{sortOrder}
+			showGroupOption={true}
+			onViewModeChange={handleViewModeChange}
+			onSearchToggle={() => (showSearchBar = !showSearchBar)}
+			onSortChange={handleSortChange}
+		/>
+	</div>
+
+	<!-- 搜索栏 -->
+	{#if showSearchBar}
+		<div class="py-1">
+			<SearchBar
 				placeholder="搜索书签..."
-				bind:value={searchQuery}
-				class="pl-7 h-7 text-xs"
+				onSearchChange={(query: string) => { searchQuery = query; }}
+				storageKey="neoview-bookmark-search-history"
 			/>
 		</div>
-		<Button variant="ghost" size="sm" class="h-7 w-7 p-0" onclick={clearBookmarks} title="清空书签">
-			<Trash2 class="h-3 w-3" />
-		</Button>
-	</div>
+	{/if}
 
-	<!-- 统计 -->
-	<div class="text-[10px] text-muted-foreground">
-		共 {bookmarks.length} 个 {searchQuery ? `(显示 ${filteredBookmarks.length})` : ''}
-	</div>
-
-	<!-- 列表 -->
-	<div class="flex-1 min-h-0 overflow-y-auto space-y-0.5">
-		{#if filteredBookmarks.length === 0}
-			<p class="text-center text-xs text-muted-foreground py-4">
-				{bookmarks.length === 0 ? '暂无书签' : '未找到匹配的书签'}
-			</p>
+	<!-- 列表区 -->
+	<div class="min-h-0 flex-1 overflow-hidden">
+		{#if sortedBookmarks().length === 0}
+			<div class="text-muted-foreground flex flex-col items-center justify-center py-8 h-full text-xs">
+				<Bookmark class="h-8 w-8 opacity-30 mb-2" />
+				<p>{searchQuery ? '未找到匹配的书签' : '暂无书签'}</p>
+			</div>
 		{:else}
-			{#each filteredBookmarks.slice(0, 50) as entry (entry.path)}
-				<div
-					class="px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors flex items-center gap-2 group cursor-pointer"
-					onclick={() => openEntry(entry)}
-					onkeydown={(e) => e.key === 'Enter' && openEntry(entry)}
-					role="button"
-					tabindex="0"
-				>
-					<Star class="h-3 w-3 text-yellow-500 shrink-0" />
-					<div class="flex-1 min-w-0">
-						<div class="truncate font-medium">{entry.name}</div>
-						<div class="text-[10px] text-muted-foreground">{formatTime(entry.createdAt)}</div>
-					</div>
-					<button
-						class="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 hover:bg-destructive/20 rounded flex items-center justify-center"
-						onclick={(e) => removeEntry(entry, e)}
-						title="删除"
-					>
-						<Trash2 class="h-3 w-3 text-destructive" />
-					</button>
-				</div>
-			{/each}
-			{#if filteredBookmarks.length > 50}
-				<p class="text-center text-[10px] text-muted-foreground py-2">
-					显示前 50 个，共 {filteredBookmarks.length} 个
-				</p>
-			{/if}
+			<VirtualizedFileListV2
+				items={bookmarkItems}
+				currentPath="bookmarks"
+				{thumbnails}
+				{selectedIndex}
+				{scrollToSelectedToken}
+				viewMode={viewMode === 'grid' ? 'grid' : 'list'}
+				onSelectedIndexChange={({ index }) => { selectedIndex = index; }}
+				onItemSelect={({ item, index }) => {
+					selectedIndex = index;
+					const bookmark = bookmarkMap.get(item.path);
+					if (bookmark) openBookmark(bookmark);
+				}}
+				onItemDoubleClick={({ item }) => {
+					const bookmark = bookmarkMap.get(item.path);
+					if (bookmark) openBookmark(bookmark);
+				}}
+				on:contextmenu={(e) => {
+					const item = e.detail?.item;
+					if (item) {
+						const bookmark = bookmarkMap.get(item.path);
+						if (bookmark) showContextMenu(e.detail.event, bookmark);
+					}
+				}}
+			/>
 		{/if}
 	</div>
+
+	<FolderContextMenu
+		item={contextMenu.item}
+		x={contextMenu.x}
+		y={contextMenu.y}
+		visible={contextMenu.visible}
+		onClose={hideContextMenu}
+		onOpenAsBook={(item) => contextMenuBookmark && openBookmark(contextMenuBookmark)}
+		onCopyPath={(item) => contextMenuBookmark && copyPath(contextMenuBookmark)}
+		onOpenInExplorer={(item) => contextMenuBookmark && openInExplorer(contextMenuBookmark)}
+		onOpenWithSystem={(item) => contextMenuBookmark && openWithExternalApp(contextMenuBookmark)}
+		onDelete={(item) => contextMenuBookmark && removeBookmark(contextMenuBookmark.id)}
+	/>
 </div>

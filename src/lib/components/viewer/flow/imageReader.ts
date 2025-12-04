@@ -128,8 +128,20 @@ export async function readPageBlob(pageIndex: number): Promise<ReadResult> {
 
 /**
  * 获取图片尺寸
+ * 【优化】优先使用 Web Worker 解码，避免阻塞主线程
  */
 export async function getImageDimensions(blob: Blob): Promise<{ width: number; height: number } | null> {
+	// 优先尝试 Worker 解码
+	try {
+		const { decodeImageInWorker } = await import('$lib/workers/imageDecoderManager');
+		const result = await decodeImageInWorker(blob);
+		result.bitmap.close(); // 释放 ImageBitmap
+		return { width: result.width, height: result.height };
+	} catch {
+		// Worker 失败，回退到主线程
+	}
+
+	// 回退：使用 Image 元素
 	return new Promise((resolve) => {
 		const url = URL.createObjectURL(blob);
 		const img = new Image();
@@ -144,6 +156,25 @@ export async function getImageDimensions(blob: Blob): Promise<{ width: number; h
 		};
 		img.src = url;
 	});
+}
+
+/**
+ * 【优化】预解码图片到 ImageBitmap
+ * 在 Worker 中解码，返回 ImageBitmap 可直接用于 Canvas
+ */
+export async function preDecodeImage(blob: Blob): Promise<ImageBitmap | null> {
+	try {
+		const { decodeImageInWorker } = await import('$lib/workers/imageDecoderManager');
+		const result = await decodeImageInWorker(blob);
+		return result.bitmap;
+	} catch {
+		// Worker 失败，尝试主线程
+		try {
+			return await createImageBitmap(blob);
+		} catch {
+			return null;
+		}
+	}
 }
 
 /**

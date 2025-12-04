@@ -7,7 +7,8 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { Button } from '$lib/components/ui/button';
-	import { Timer, ChevronUp, ChevronDown, ArrowUp, ArrowDown, FolderOpen, Copy, Check, Play, Trash2, Eye } from '@lucide/svelte';
+	import { Timer, ChevronUp, ChevronDown, ArrowUp, ArrowDown, FolderOpen, Copy, Check, Play, Trash2, Eye, Layers, ImageIcon } from '@lucide/svelte';
+	import { settingsManager, type RendererMode } from '$lib/settings/settingsManager';
 	import { visibilityMonitor, setMonitorEnabled } from '$lib/stores/visibilityMonitor.svelte';
 
 	// ==================== 类型定义 ====================
@@ -27,7 +28,19 @@
 		results: BenchmarkResult[];
 	}
 
-	type CardId = 'visibility' | 'files' | 'detailed' | 'loadmode' | 'archives' | 'realworld' | 'results' | 'summary';
+	type CardId = 'visibility' | 'renderer' | 'files' | 'detailed' | 'loadmode' | 'archives' | 'realworld' | 'results' | 'summary';
+
+	interface RendererTestResult {
+		mode: string;
+		totalImages: number;
+		loadTimes: number[];
+		avgLoadTime: number;
+		switchTimes: number[];
+		avgSwitchTime: number;
+		fps: number;
+		success: boolean;
+		error: string | null;
+	}
 
 	interface LoadModeTestResult {
 		mode: string;
@@ -69,9 +82,10 @@
 	}
 
 	// ==================== 状态管理 ====================
-	let cardOrder = $state<CardId[]>(['visibility', 'files', 'detailed', 'loadmode', 'archives', 'realworld', 'results', 'summary']);
+	let cardOrder = $state<CardId[]>(['visibility', 'renderer', 'files', 'detailed', 'loadmode', 'archives', 'realworld', 'results', 'summary']);
 	let showCards = $state<Record<CardId, boolean>>({
 		visibility: true,
+		renderer: true,
 		files: true,
 		detailed: true,
 		loadmode: true,
@@ -101,6 +115,172 @@
 	let archiveTier = $state<20 | 50 | 100 | 300>(20);
 	let viewportSize = $state<number>(20); // 模拟可见区域大小
 	let copied = $state(false);
+	
+	// 渲染模式测试状态
+	let selectedRendererArchive = $state<string>('');
+	let rendererTestResults = $state<RendererTestResult[]>([]);
+	let isRendererTesting = $state(false);
+	let rendererTestCount = $state<number>(10); // 测试图片数量
+	let currentRendererMode = $derived(settingsManager.getSettings().view.renderer?.mode ?? 'stack');
+	
+	// ==================== 渲染模式测试 ====================
+	async function selectRendererArchive() {
+		const file = await open({
+			multiple: false,
+			filters: [
+				{
+					name: '压缩包',
+					extensions: ['zip', 'cbz', 'rar', '7z', 'cb7', 'cbr']
+				}
+			]
+		});
+
+		if (file && typeof file === 'string') {
+			selectedRendererArchive = file;
+		}
+	}
+	
+	async function runRendererTest() {
+		if (!selectedRendererArchive) return;
+		
+		isRendererTesting = true;
+		rendererTestResults = [];
+		
+		const modes: RendererMode[] = ['standard', 'stack'];
+		
+		try {
+			// 获取压缩包中的图片列表（返回路径字符串数组）
+			const imageList = await invoke<string[]>('get_images_from_archive', {
+				archivePath: selectedRendererArchive
+			});
+			
+			if (imageList.length === 0) {
+				for (const mode of modes) {
+					rendererTestResults = [...rendererTestResults, {
+						mode,
+						totalImages: 0,
+						loadTimes: [],
+						avgLoadTime: 0,
+						switchTimes: [],
+						avgSwitchTime: 0,
+						fps: 0,
+						success: false,
+						error: '压缩包中没有图片'
+					}];
+				}
+				isRendererTesting = false;
+				return;
+			}
+			
+			// 截取测试数量
+			const testImages = imageList.slice(0, rendererTestCount);
+			
+			for (const mode of modes) {
+				try {
+					const loadTimes: number[] = [];
+					const switchTimes: number[] = [];
+					
+					// 测试每张图片的加载时间
+					for (let i = 0; i < testImages.length; i++) {
+						const startLoad = performance.now();
+						
+						// 从压缩包提取图片数据
+						const imageData = await invoke<number[]>('load_image_from_archive', {
+							archivePath: selectedRendererArchive,
+							filePath: testImages[i]
+						});
+						
+						// 创建 Blob 和 ObjectURL
+						const blob = new Blob([new Uint8Array(imageData)]);
+						const url = URL.createObjectURL(blob);
+						
+						// 测试图片加载
+						await new Promise<void>((resolve, reject) => {
+							const img = new Image();
+							img.onload = () => {
+								URL.revokeObjectURL(url);
+								resolve();
+							};
+							img.onerror = () => {
+								URL.revokeObjectURL(url);
+								reject(new Error('图片加载失败'));
+							};
+							img.src = url;
+						});
+						
+						const loadTime = performance.now() - startLoad;
+						loadTimes.push(loadTime);
+						
+						// 切换时间（从第二张开始记录）
+						if (i > 0) {
+							switchTimes.push(loadTime);
+						}
+					}
+					
+					const avgLoadTime = loadTimes.reduce((a, b) => a + b, 0) / loadTimes.length;
+					const avgSwitchTime = switchTimes.length > 0 
+						? switchTimes.reduce((a, b) => a + b, 0) / switchTimes.length 
+						: 0;
+					const fps = 1000 / avgLoadTime;
+					
+					rendererTestResults = [...rendererTestResults, {
+						mode,
+						totalImages: loadTimes.length,
+						loadTimes,
+						avgLoadTime,
+						switchTimes,
+						avgSwitchTime,
+						fps,
+						success: true,
+						error: null
+					}];
+					
+				} catch (err) {
+					rendererTestResults = [...rendererTestResults, {
+						mode,
+						totalImages: 0,
+						loadTimes: [],
+						avgLoadTime: 0,
+						switchTimes: [],
+						avgSwitchTime: 0,
+						fps: 0,
+						success: false,
+						error: String(err)
+					}];
+				}
+			}
+		} catch (err) {
+			// 获取图片列表失败
+			for (const mode of modes) {
+				rendererTestResults = [...rendererTestResults, {
+					mode,
+					totalImages: 0,
+					loadTimes: [],
+					avgLoadTime: 0,
+					switchTimes: [],
+					avgSwitchTime: 0,
+					fps: 0,
+					success: false,
+					error: `获取图片列表失败: ${err}`
+				}];
+			}
+		}
+		
+		isRendererTesting = false;
+	}
+	
+	function setRendererMode(mode: RendererMode) {
+		const currentSettings = settingsManager.getSettings();
+		settingsManager.updateSettings({
+			view: {
+				...currentSettings.view,
+				renderer: {
+					...currentSettings.view.renderer,
+					mode
+				}
+			}
+		});
+	}
 
 	// ==================== 卡片操作 ====================
 	function getCardOrder(cardId: CardId): number {
@@ -675,6 +855,190 @@
 						{:else}
 							<div class="text-[10px] text-muted-foreground text-center py-4 border rounded">
 								📭 暂无数据，请在文件夹面板中浏览文件
+							</div>
+						{/if}
+					</div>
+				{/if}
+			</div>
+
+			<!-- 渲染模式测试卡片 -->
+			<div
+				class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
+				style={`order: ${getCardOrder('renderer')}`}
+			>
+				<div class="flex items-center justify-between">
+					<div class="flex items-center gap-2">
+						<Layers class="h-4 w-4 text-purple-500" />
+						<div class="font-semibold text-sm">渲染模式测试</div>
+					</div>
+					<div class="flex items-center gap-1 text-[10px]">
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+							onclick={() => (showCards.renderer = !showCards.renderer)}
+							title={showCards.renderer ? '收起' : '展开'}
+						>
+							{#if showCards.renderer}
+								<ChevronUp class="h-3 w-3" />
+							{:else}
+								<ChevronDown class="h-3 w-3" />
+							{/if}
+						</button>
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40"
+							onclick={() => moveCard('renderer', 'up')}
+							disabled={!canMoveCard('renderer', 'up')}
+						>
+							<ArrowUp class="h-3 w-3" />
+						</button>
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40"
+							onclick={() => moveCard('renderer', 'down')}
+							disabled={!canMoveCard('renderer', 'down')}
+						>
+							<ArrowDown class="h-3 w-3" />
+						</button>
+					</div>
+				</div>
+
+				{#if showCards.renderer}
+					<div class="space-y-3">
+						<!-- 说明 -->
+						<p class="text-[10px] text-muted-foreground">
+							测试 Standard 和 Stack 渲染模式的图片加载和切换性能
+						</p>
+						
+						<!-- 当前模式 -->
+						<div class="flex items-center justify-between">
+							<div class="text-[10px]">
+								当前模式: <span class="font-mono text-cyan-500">{currentRendererMode}</span>
+							</div>
+							<div class="flex gap-1">
+								<Button 
+									variant={currentRendererMode === 'standard' ? 'default' : 'outline'}
+									size="sm"
+									class="h-6 text-[10px] px-2"
+									onclick={() => setRendererMode('standard')}
+								>
+									Standard
+								</Button>
+								<Button 
+									variant={currentRendererMode === 'stack' ? 'default' : 'outline'}
+									size="sm"
+									class="h-6 text-[10px] px-2"
+									onclick={() => setRendererMode('stack')}
+								>
+									Stack
+								</Button>
+							</div>
+						</div>
+						
+						<!-- 选择压缩包 -->
+						<div class="flex gap-2">
+							<Button onclick={selectRendererArchive} variant="outline" size="sm" class="flex-1 text-xs">
+								<FolderOpen class="h-3 w-3 mr-1" />
+								{selectedRendererArchive ? '已选择' : '选择压缩包'}
+							</Button>
+							<Button
+								onclick={runRendererTest}
+								disabled={isRendererTesting || !selectedRendererArchive}
+								size="sm"
+								class="flex-1 text-xs"
+							>
+								<Play class="h-3 w-3 mr-1" />
+								{isRendererTesting ? '测试中...' : '开始测试'}
+							</Button>
+						</div>
+						
+						{#if selectedRendererArchive}
+							<div class="text-[10px] text-muted-foreground truncate">
+								{selectedRendererArchive.split(/[/\\]/).pop()}
+							</div>
+						{/if}
+						
+						<!-- 测试数量选择 -->
+						<div class="flex items-center gap-2 text-[10px]">
+							<span class="text-muted-foreground">测试图片数:</span>
+							<select 
+								class="h-6 px-2 rounded border bg-background text-[10px]"
+								bind:value={rendererTestCount}
+							>
+								<option value={5}>5张</option>
+								<option value={10}>10张</option>
+								<option value={20}>20张</option>
+								<option value={50}>50张</option>
+							</select>
+						</div>
+						
+						<!-- 测试结果 -->
+						{#if rendererTestResults.length > 0}
+							<div class="space-y-2">
+								<div class="font-medium text-[10px] text-muted-foreground">测试结果:</div>
+								{#each rendererTestResults as result}
+									<div class="border rounded p-2 space-y-1 text-[10px]">
+										<div class="flex items-center justify-between">
+											<span class="font-medium {result.mode === 'stack' ? 'text-green-500' : 'text-blue-500'}">
+												{result.mode.toUpperCase()}
+											</span>
+											{#if result.success}
+												<span class="text-green-500">✅</span>
+											{:else}
+												<span class="text-red-500">❌</span>
+											{/if}
+										</div>
+										
+										{#if result.success}
+											<div class="grid grid-cols-2 gap-x-4 gap-y-1">
+												<div>图片数: <span class="font-mono text-purple-500">{result.totalImages}</span></div>
+												<div>FPS: <span class="font-mono text-orange-500">{result.fps.toFixed(1)}</span></div>
+												<div>平均加载: <span class="font-mono text-cyan-500">{result.avgLoadTime.toFixed(1)}ms</span></div>
+												<div>平均切换: <span class="font-mono text-pink-500">{result.avgSwitchTime.toFixed(1)}ms</span></div>
+											</div>
+											
+											<!-- 加载时间分布 -->
+											<div class="mt-1">
+												<div class="text-[9px] text-muted-foreground mb-1">加载时间分布:</div>
+												<div class="flex gap-0.5 h-4">
+													{#each result.loadTimes as time, i}
+														{@const maxTime = Math.max(...result.loadTimes)}
+														{@const height = (time / maxTime) * 100}
+														<div 
+															class="flex-1 bg-blue-500/50 rounded-t"
+															style="height: {height}%"
+															title="{i+1}: {time.toFixed(1)}ms"
+														></div>
+													{/each}
+												</div>
+											</div>
+										{:else}
+											<div class="text-red-400">{result.error}</div>
+										{/if}
+									</div>
+								{/each}
+								
+								<!-- 对比结论 -->
+								{#if rendererTestResults.length >= 2 && rendererTestResults.every(r => r.success)}
+									{@const standard = rendererTestResults.find(r => r.mode === 'standard')}
+									{@const stack = rendererTestResults.find(r => r.mode === 'stack')}
+									{#if standard && stack}
+										{@const faster = standard.avgLoadTime < stack.avgLoadTime ? 'standard' : 'stack'}
+										{@const diff = Math.abs(standard.avgLoadTime - stack.avgLoadTime)}
+										{@const percent = ((diff / Math.max(standard.avgLoadTime, stack.avgLoadTime)) * 100).toFixed(1)}
+										<div class="border-t pt-2 mt-2 text-[10px]">
+											<div class="font-medium text-muted-foreground">结论:</div>
+											<div class="mt-1">
+												<span class="{faster === 'stack' ? 'text-green-500' : 'text-blue-500'} font-medium">
+													{faster.toUpperCase()}
+												</span>
+												模式更快，领先 
+												<span class="font-mono text-orange-500">{diff.toFixed(1)}ms</span>
+												({percent}%)
+											</div>
+										</div>
+									{/if}
+								{/if}
 							</div>
 						{/if}
 					</div>

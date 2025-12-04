@@ -98,7 +98,7 @@ async function requestThumbnail(pageIndex: number) {
 }
 </script>
 
-<div class="space-y-2">
+<div class="flex flex-col h-full space-y-2">
 	<!-- 搜索和视图切换 -->
 	<div class="flex items-center gap-2">
 		<div class="relative flex-1">
@@ -144,7 +144,7 @@ async function requestThumbnail(pageIndex: number) {
 	</div>
 
 	<!-- 页面列表 -->
-	<div class="max-h-[400px] overflow-y-auto">
+	<div class="flex-1 min-h-0 overflow-y-auto">
 		{#if filteredItems.length === 0}
 			<p class="text-center text-xs text-muted-foreground py-4">
 				{items.length === 0 ? '未加载书籍' : '未找到匹配的页面'}

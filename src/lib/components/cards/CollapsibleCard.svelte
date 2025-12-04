@@ -4,7 +4,7 @@
  * 从 cardConfig 读取展开状态，支持拖拽手柄和移动按钮
  */
 import { cardConfigStore, type PanelId } from '$lib/stores/cardConfig.svelte';
-import { ChevronDown, ChevronRight, ChevronUp, GripVertical, ArrowUp, ArrowDown } from '@lucide/svelte';
+import { ChevronDown, ChevronRight, ChevronUp, GripVertical, ArrowUp, ArrowDown, RotateCcw } from '@lucide/svelte';
 import { slide } from 'svelte/transition';
 
 interface Props {
@@ -119,6 +119,17 @@ function resetHeight(e: MouseEvent) {
 		</button>
 		
 		<div class="flex items-center gap-1 text-[10px]">
+			<!-- 恢复默认高度按钮（仅在有自定义高度时显示） -->
+			{#if height && onHeightChange}
+				<button
+					type="button"
+					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-primary"
+					onclick={resetHeight}
+					title="恢复默认高度"
+				>
+					<RotateCcw class="h-3 w-3" />
+				</button>
+			{/if}
 			<!-- 展开/收起按钮 -->
 			<button
 				type="button"
@@ -162,7 +173,7 @@ function resetHeight(e: MouseEvent) {
 	{#if isExpanded}
 		<div 
 			bind:this={contentRef}
-			class="px-3 pb-3 overflow-auto relative" 
+			class="px-3 pb-3 overflow-auto" 
 			style={height ? `height: ${height}px` : ''}
 			transition:slide={{ duration: 200 }}
 		>
@@ -172,23 +183,15 @@ function resetHeight(e: MouseEvent) {
 		<!-- 拖拽调整高度手柄 -->
 		{#if onHeightChange}
 			<div 
-				class="h-1.5 cursor-ns-resize bg-transparent hover:bg-primary/20 flex items-center justify-center group"
+				class="h-2 cursor-ns-resize hover:bg-primary/20 flex items-center justify-center group"
 				onmousedown={startResize}
+				ondblclick={resetHeight}
 				role="separator"
 				aria-orientation="horizontal"
+				title="拖拽调整高度，双击重置"
 			>
 				<div class="w-8 h-0.5 rounded-full bg-muted-foreground/30 group-hover:bg-primary/50"></div>
 			</div>
-			{#if height}
-				<button 
-					type="button"
-					class="absolute bottom-0 right-1 text-[8px] text-muted-foreground hover:text-foreground px-1"
-					onclick={resetHeight}
-					title="重置高度"
-				>
-					重置
-				</button>
-			{/if}
 		{/if}
 	{/if}
 </div>

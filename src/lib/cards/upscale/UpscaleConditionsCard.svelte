@@ -5,7 +5,7 @@
  */
 import { ChevronDown, ChevronUp, Settings2 } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
-import UpscalePanelConditionTabs from './components/UpscalePanelConditionTabs.svelte';
+import UpscalePanelConditionTabs from './UpscalePanelConditionTabs.svelte';
 import {
 	conditionalUpscaleEnabled,
 	conditionsList,

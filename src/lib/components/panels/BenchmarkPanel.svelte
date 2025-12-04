@@ -5,6 +5,7 @@
 	 * 参考 UpscalePanel 的可折叠卡片结构
 	 */
 	import { invoke } from '@tauri-apps/api/core';
+	import { convertFileSrc } from '@tauri-apps/api/core';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Timer, ChevronUp, ChevronDown, ArrowUp, ArrowDown, FolderOpen, Copy, Check, Play, Trash2, Eye, Layers, ImageIcon } from '@lucide/svelte';
@@ -30,7 +31,7 @@
 		results: BenchmarkResult[];
 	}
 
-	type CardId = 'visibility' | 'renderer' | 'files' | 'detailed' | 'loadmode' | 'archives' | 'realworld' | 'results' | 'summary';
+	type CardId = 'visibility' | 'latency' | 'renderer' | 'files' | 'detailed' | 'loadmode' | 'archives' | 'realworld' | 'results' | 'summary';
 
 	interface RendererTestResult {
 		mode: string;
@@ -40,6 +41,24 @@
 		switchTimes: number[];
 		avgSwitchTime: number;
 		fps: number;
+		success: boolean;
+		error: string | null;
+	}
+	
+	/** 详细延迟分析结果 */
+	interface DetailedLatencyResult {
+		imagePath: string;
+		imageSize: number; // bytes
+		dimensions: { width: number; height: number } | null;
+		loadMethod: 'ipc' | 'tempfile'; // 加载方式
+		// 分步延迟 (ms)
+		extractTime: number;      // 后端提取 / 临时文件提取
+		ipcTransferTime: number;  // IPC 传输 (tempfile 模式为 0)
+		blobCreateTime: number;   // Blob 创建 (tempfile 模式为 0)
+		urlCreateTime: number;    // ObjectURL/convertFileSrc 创建
+		decodeTime: number;       // 浏览器解码
+		renderTime: number;       // DOM 渲染
+		totalTime: number;        // 总时间
 		success: boolean;
 		error: string | null;
 	}
@@ -84,9 +103,10 @@
 	}
 
 	// ==================== 状态管理 ====================
-	let cardOrder = $state<CardId[]>(['visibility', 'renderer', 'files', 'detailed', 'loadmode', 'archives', 'realworld', 'results', 'summary']);
+	let cardOrder = $state<CardId[]>(['visibility', 'latency', 'renderer', 'files', 'detailed', 'loadmode', 'archives', 'realworld', 'results', 'summary']);
 	let showCards = $state<Record<CardId, boolean>>({
 		visibility: true,
+		latency: true,
 		renderer: true,
 		files: true,
 		detailed: true,
@@ -123,6 +143,12 @@
 	let rendererTestResults = $state<RendererTestResult[]>([]);
 	let isRendererTesting = $state(false);
 	let rendererTestCount = $state<number>(10); // 测试图片数量
+	
+	// 详细延迟分析状态
+	let selectedLatencyArchive = $state<string>('');
+	let latencyResults = $state<DetailedLatencyResult[]>([]);
+	let isLatencyTesting = $state(false);
+	let latencyTestCount = $state<number>(5);
 	
 	// 设置状态
 	let settings = $state(settingsManager.getSettings());
@@ -352,6 +378,201 @@
 				}
 			}
 		});
+	}
+	
+	// ==================== 详细延迟分析 ====================
+	async function selectLatencyArchive() {
+		const file = await open({
+			multiple: false,
+			filters: [{ name: '压缩包', extensions: ['zip', 'cbz', 'rar', '7z', 'cb7', 'cbr'] }]
+		});
+		if (file && typeof file === 'string') {
+			selectedLatencyArchive = file;
+		}
+	}
+	
+	async function runLatencyTest() {
+		if (!selectedLatencyArchive) return;
+		
+		isLatencyTesting = true;
+		latencyResults = [];
+		
+		const loadMethods: Array<'ipc' | 'tempfile'> = ['ipc', 'tempfile'];
+		
+		try {
+			// 获取图片列表
+			const imageList = await invoke<string[]>('get_images_from_archive', {
+				archivePath: selectedLatencyArchive
+			});
+			
+			if (imageList.length === 0) {
+				isLatencyTesting = false;
+				return;
+			}
+			
+			const testImages = imageList.slice(0, latencyTestCount);
+			
+			// 创建隐藏测试容器
+			const testContainer = document.createElement('div');
+			testContainer.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;height:600px;';
+			document.body.appendChild(testContainer);
+			
+			// 对每种加载方式测试
+			for (const loadMethod of loadMethods) {
+				for (const imagePath of testImages) {
+					const result: DetailedLatencyResult = {
+						imagePath,
+						imageSize: 0,
+						dimensions: null,
+						loadMethod,
+						extractTime: 0,
+						ipcTransferTime: 0,
+						blobCreateTime: 0,
+						urlCreateTime: 0,
+						decodeTime: 0,
+						renderTime: 0,
+						totalTime: 0,
+						success: false,
+						error: null
+					};
+					
+					const totalStart = performance.now();
+					
+					try {
+						let url: string;
+						
+						if (loadMethod === 'ipc') {
+							// IPC 方式：通过 invoke 传输数据
+							const extractStart = performance.now();
+							const imageData = await invoke<number[]>('load_image_from_archive', {
+								archivePath: selectedLatencyArchive,
+								filePath: imagePath
+							});
+							const extractEnd = performance.now();
+							result.extractTime = extractEnd - extractStart;
+							result.imageSize = imageData.length;
+							
+							// Blob 创建
+							const blobStart = performance.now();
+							const uint8Array = new Uint8Array(imageData);
+							const blob = new Blob([uint8Array]);
+							const blobEnd = performance.now();
+							result.blobCreateTime = blobEnd - blobStart;
+							
+							// ObjectURL 创建
+							const urlStart = performance.now();
+							url = URL.createObjectURL(blob);
+							const urlEnd = performance.now();
+							result.urlCreateTime = urlEnd - urlStart;
+						} else {
+							// TempFile 方式：解压到临时文件，用 convertFileSrc 访问
+							const extractStart = performance.now();
+							const tempPath = await invoke<string>('extract_image_to_temp', {
+								archivePath: selectedLatencyArchive,
+								filePath: imagePath
+							});
+							const extractEnd = performance.now();
+							result.extractTime = extractEnd - extractStart;
+							
+							// convertFileSrc（几乎无开销）
+							const urlStart = performance.now();
+							url = convertFileSrc(tempPath);
+							const urlEnd = performance.now();
+							result.urlCreateTime = urlEnd - urlStart;
+						}
+						
+						// 浏览器解码 + DOM 渲染
+						await new Promise<void>((resolve, reject) => {
+							testContainer.innerHTML = '';
+							const img = document.createElement('img');
+							
+							const decodeStart = performance.now();
+							
+							img.onload = () => {
+								const decodeEnd = performance.now();
+								result.decodeTime = decodeEnd - decodeStart;
+								result.dimensions = { width: img.naturalWidth, height: img.naturalHeight };
+								
+								// 获取文件大小（tempfile 模式）
+								if (loadMethod === 'tempfile' && result.imageSize === 0) {
+									// 近似用解码后的数据估算
+									result.imageSize = img.naturalWidth * img.naturalHeight * 0.1; // 粗略估计
+								}
+								
+								// 触发渲染
+								const renderStart = performance.now();
+								testContainer.appendChild(img);
+								void testContainer.offsetHeight;
+								const renderEnd = performance.now();
+								result.renderTime = renderEnd - renderStart;
+								
+								if (loadMethod === 'ipc') {
+									URL.revokeObjectURL(url);
+								}
+								resolve();
+							};
+							
+							img.onerror = () => {
+								if (loadMethod === 'ipc') {
+									URL.revokeObjectURL(url);
+								}
+								reject(new Error('图片加载失败'));
+							};
+							
+							img.src = url;
+						});
+						
+						result.totalTime = performance.now() - totalStart;
+						result.success = true;
+						
+					} catch (err) {
+						result.totalTime = performance.now() - totalStart;
+						result.error = String(err);
+					}
+					
+					latencyResults = [...latencyResults, result];
+				}
+			}
+			
+			testContainer.remove();
+		} catch (err) {
+			console.error('延迟测试失败:', err);
+		}
+		
+		isLatencyTesting = false;
+	}
+	
+	// 计算延迟统计（分方法统计）
+	function getLatencyStats() {
+		if (latencyResults.length === 0) return null;
+		
+		const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+		
+		const ipcResults = latencyResults.filter(r => r.success && r.loadMethod === 'ipc');
+		const tempResults = latencyResults.filter(r => r.success && r.loadMethod === 'tempfile');
+		
+		if (ipcResults.length === 0 && tempResults.length === 0) return null;
+		
+		const calcStats = (results: DetailedLatencyResult[]) => ({
+			count: results.length,
+			avgExtract: avg(results.map(r => r.extractTime)),
+			avgBlob: avg(results.map(r => r.blobCreateTime)),
+			avgUrl: avg(results.map(r => r.urlCreateTime)),
+			avgDecode: avg(results.map(r => r.decodeTime)),
+			avgRender: avg(results.map(r => r.renderTime)),
+			avgTotal: avg(results.map(r => r.totalTime)),
+			avgSize: avg(results.map(r => r.imageSize))
+		});
+		
+		const ipc = ipcResults.length > 0 ? calcStats(ipcResults) : null;
+		const temp = tempResults.length > 0 ? calcStats(tempResults) : null;
+		
+		// 计算加速比
+		const speedup = (ipc && temp && ipc.avgTotal > 0) 
+			? (ipc.avgTotal / temp.avgTotal).toFixed(1) 
+			: null;
+		
+		return { ipc, temp, speedup };
 	}
 
 	// ==================== 卡片操作 ====================
@@ -927,6 +1148,181 @@
 						{:else}
 							<div class="text-[10px] text-muted-foreground text-center py-4 border rounded">
 								📭 暂无数据，请在文件夹面板中浏览文件
+							</div>
+						{/if}
+					</div>
+				{/if}
+			</div>
+
+			<!-- 延迟分析卡片 -->
+			<div
+				class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
+				style={`order: ${getCardOrder('latency')}`}
+			>
+				<div class="flex items-center justify-between">
+					<div class="flex items-center gap-2">
+						<Timer class="h-4 w-4 text-red-500" />
+						<div class="font-semibold text-sm">延迟分析</div>
+					</div>
+					<div class="flex items-center gap-1 text-[10px]">
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+							onclick={() => (showCards.latency = !showCards.latency)}
+							title={showCards.latency ? '收起' : '展开'}
+						>
+							{#if showCards.latency}
+								<ChevronUp class="h-3 w-3" />
+							{:else}
+								<ChevronDown class="h-3 w-3" />
+							{/if}
+						</button>
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40"
+							onclick={() => moveCard('latency', 'up')}
+							disabled={!canMoveCard('latency', 'up')}
+						>
+							<ArrowUp class="h-3 w-3" />
+						</button>
+						<button
+							type="button"
+							class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40"
+							onclick={() => moveCard('latency', 'down')}
+							disabled={!canMoveCard('latency', 'down')}
+						>
+							<ArrowDown class="h-3 w-3" />
+						</button>
+					</div>
+				</div>
+
+				{#if showCards.latency}
+					<div class="space-y-3">
+						<p class="text-[10px] text-muted-foreground">
+							分析图片加载全流程延迟，定位性能瓶颈（目标: &lt;16ms）
+						</p>
+						
+						<!-- 选择压缩包 -->
+						<div class="flex gap-2">
+							<Button onclick={selectLatencyArchive} variant="outline" size="sm" class="flex-1 text-xs">
+								<FolderOpen class="h-3 w-3 mr-1" />
+								{selectedLatencyArchive ? '已选择' : '选择压缩包'}
+							</Button>
+							<Button
+								onclick={runLatencyTest}
+								disabled={isLatencyTesting || !selectedLatencyArchive}
+								size="sm"
+								class="flex-1 text-xs"
+							>
+								<Play class="h-3 w-3 mr-1" />
+								{isLatencyTesting ? '测试中...' : '分析延迟'}
+							</Button>
+						</div>
+						
+						{#if selectedLatencyArchive}
+							<div class="text-[10px] text-muted-foreground truncate">
+								{selectedLatencyArchive.split(/[/\\]/).pop()}
+							</div>
+						{/if}
+						
+						<!-- 测试数量 -->
+						<div class="flex items-center gap-2 text-[10px]">
+							<span class="text-muted-foreground">测试图片数:</span>
+							<select class="h-6 px-2 rounded border bg-background text-[10px]" bind:value={latencyTestCount}>
+								<option value={3}>3张</option>
+								<option value={5}>5张</option>
+								<option value={10}>10张</option>
+							</select>
+						</div>
+						
+						<!-- 统计结果 -->
+						{#if latencyResults.length > 0}
+						{@const stats = getLatencyStats()}
+						{#if stats}
+							<!-- 对比总结 -->
+							{#if stats.ipc && stats.temp}
+								<div class="border-2 border-green-500/50 rounded p-2 bg-green-500/5">
+									<div class="flex items-center justify-between text-[10px]">
+										<span class="font-medium">🚀 TempFile 加速比:</span>
+										<span class="font-mono text-green-500 font-bold text-sm">{stats.speedup}x</span>
+									</div>
+									<div class="text-[9px] text-muted-foreground mt-1">
+										IPC: {stats.ipc.avgTotal.toFixed(0)}ms → TempFile: {stats.temp.avgTotal.toFixed(0)}ms
+									</div>
+								</div>
+							{/if}
+							
+							<!-- IPC 方式统计 -->
+							{#if stats.ipc}
+								<div class="border rounded p-2 space-y-2 border-red-500/30">
+									<div class="flex items-center justify-between text-[10px]">
+										<span class="font-medium text-red-500">📦 IPC 传输</span>
+										<span class="font-mono {stats.ipc.avgTotal <= 16 ? 'text-green-500' : 'text-red-500'}">
+											{stats.ipc.avgTotal.toFixed(0)}ms
+											{#if stats.ipc.avgTotal > 16}
+												❌ {(stats.ipc.avgTotal / 16).toFixed(1)}x
+											{/if}
+										</span>
+									</div>
+									<div class="grid grid-cols-3 gap-1 text-[9px]">
+										<div>提取+IPC: <span class="font-mono text-red-500">{stats.ipc.avgExtract.toFixed(0)}ms</span></div>
+										<div>Blob: <span class="font-mono">{stats.ipc.avgBlob.toFixed(1)}ms</span></div>
+										<div>解码: <span class="font-mono">{stats.ipc.avgDecode.toFixed(0)}ms</span></div>
+									</div>
+								</div>
+							{/if}
+							
+							<!-- TempFile 方式统计 -->
+							{#if stats.temp}
+								<div class="border rounded p-2 space-y-2 border-green-500/30">
+									<div class="flex items-center justify-between text-[10px]">
+										<span class="font-medium text-green-500">📁 TempFile + convertFileSrc</span>
+										<span class="font-mono {stats.temp.avgTotal <= 16 ? 'text-green-500' : stats.temp.avgTotal <= 33 ? 'text-yellow-500' : 'text-red-500'}">
+											{stats.temp.avgTotal.toFixed(0)}ms
+											{#if stats.temp.avgTotal <= 16}
+												✅ 达标
+											{:else if stats.temp.avgTotal <= 33}
+												⚠️ 30fps
+											{:else}
+												❌ {(stats.temp.avgTotal / 16).toFixed(1)}x
+											{/if}
+										</span>
+									</div>
+									<div class="grid grid-cols-3 gap-1 text-[9px]">
+										<div>提取: <span class="font-mono text-orange-500">{stats.temp.avgExtract.toFixed(0)}ms</span></div>
+										<div>URL: <span class="font-mono">{stats.temp.avgUrl.toFixed(2)}ms</span></div>
+										<div>解码: <span class="font-mono text-blue-500">{stats.temp.avgDecode.toFixed(0)}ms</span></div>
+									</div>
+								</div>
+							{/if}
+						{/if}
+						{/if}
+						
+						<!-- 详细结果列表 -->
+						{#if latencyResults.length > 0}
+							<div class="space-y-1">
+								<div class="text-[9px] text-muted-foreground">详细结果:</div>
+								<div class="max-h-32 overflow-auto space-y-1">
+									{#each latencyResults as result, i}
+										<div class="border rounded p-1.5 text-[9px] {result.success ? '' : 'border-red-500/50'}">
+											<div class="flex justify-between">
+												<span class="truncate max-w-[120px]" title={result.imagePath}>
+													{i + 1}. {result.imagePath.split(/[/\\]/).pop()}
+												</span>
+												<span class="font-mono {result.totalTime <= 16 ? 'text-green-500' : 'text-red-500'}">
+													{result.totalTime.toFixed(0)}ms
+												</span>
+											</div>
+											{#if result.success && result.dimensions}
+												<div class="text-muted-foreground">
+													{result.dimensions.width}×{result.dimensions.height} · {(result.imageSize / 1024).toFixed(0)}KB
+												</div>
+											{:else if result.error}
+												<div class="text-red-400 truncate">{result.error}</div>
+											{/if}
+										</div>
+									{/each}
+								</div>
 							</div>
 						{/if}
 					</div>

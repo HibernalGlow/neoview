@@ -36,6 +36,7 @@ export type PageContentType =
 	| 'video'     // 视频
 	| 'animated'  // 动图 (GIF/APNG/WebP动画)
 	| 'archive'   // 嵌套压缩包
+	| 'ebook'     // 电子书 (PDF/EPUB/XPS，用 MuPDF 渲染)
 	| 'unknown';  // 未知类型
 
 /** 页面信息 */

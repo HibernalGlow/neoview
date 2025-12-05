@@ -16,25 +16,70 @@ pub enum PageContentType {
     Animated,
     /// 嵌套压缩包
     Archive,
-    /// 未知类型
+    /// 电子书 (PDF/EPUB/XPS 等，用 MuPDF 渲染)
+    Ebook,
+    /// 未知类型（不支持的文件）
     Unknown,
 }
 
 impl PageContentType {
     /// 从文件扩展名推断内容类型
+    /// 
+    /// 参考 NeeView 支持的格式
     pub fn from_extension(ext: &str) -> Self {
         let ext = ext.to_lowercase();
         match ext.as_str() {
-            // 视频
-            "mp4" | "mkv" | "webm" | "avi" | "mov" | "wmv" | "flv" => Self::Video,
+            // 视频 (NeeView: MediaArchiveConfig)
+            "mp4" | "mkv" | "webm" | "avi" | "mov" | "wmv" | "asf" | "flv" | "m4v" | "ts" => Self::Video,
+            
             // 动图
-            "gif" => Self::Animated, // GIF 可能是动图
-            // 压缩包
-            "zip" | "rar" | "7z" | "cbz" | "cbr" => Self::Archive,
-            // 普通图片
-            "jpg" | "jpeg" | "png" | "webp" | "avif" | "jxl" | "bmp" | "tiff" => Self::Image,
+            "gif" => Self::Animated,
+            
+            // 压缩包 (NeeView: ZipArchiveConfig + SevenZipArchiveConfig)
+            "zip" | "rar" | "7z" | "cbz" | "cbr" | "cb7" | "lzh" | "tar" | "gz" | "bz2" | "xz" => Self::Archive,
+            
+            // 电子书 (MuPDF 支持的格式)
+            "pdf" | "epub" | "xps" | "fb2" | "mobi" => Self::Ebook,
+            
+            // 普通图片 (NeeView: PictureFileExtensionTools + WIC)
+            "jpg" | "jpeg" | "jpe" | "jfif" | "exif" |  // JPEG
+            "png" | "apng" |                              // PNG
+            "bmp" | "dib" | "rle" |                       // BMP
+            "tiff" | "tif" |                              // TIFF
+            "ico" | "icon" |                              // ICO
+            "webp" |                                      // WebP
+            "avif" |                                      // AVIF
+            "jxl" |                                       // JPEG XL
+            "svg" |                                       // SVG
+            "wdp" | "jxr" |                               // JPEG XR
+            "dds" |                                       // DirectDraw Surface
+            "heic" | "heif" |                             // HEIF
+            "psd" |                                       // Photoshop
+            "raw" | "cr2" | "nef" | "arw" | "dng"         // RAW
+            => Self::Image,
+            
             _ => Self::Unknown,
         }
+    }
+
+    /// 是否是浏览器可以直接显示的类型
+    pub fn is_browser_displayable(&self) -> bool {
+        matches!(self, Self::Image | Self::Video | Self::Animated)
+    }
+
+    /// 是否需要提取到临时文件
+    pub fn needs_temp_file(&self) -> bool {
+        matches!(self, Self::Video)
+    }
+    
+    /// 是否是嵌套压缩包（需要递归展开）
+    pub fn is_nested_archive(&self) -> bool {
+        matches!(self, Self::Archive)
+    }
+
+    /// 是否是电子书（用 MuPDF 渲染）
+    pub fn is_ebook(&self) -> bool {
+        matches!(self, Self::Ebook)
     }
 
     /// 从文件路径推断内容类型

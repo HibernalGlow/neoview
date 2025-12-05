@@ -342,6 +342,23 @@ impl PageContentManager {
         book_type: BookType,
         page_info: &PageInfo,
     ) -> Result<(Vec<u8>, String), String> {
+        // 检查是否是不支持的文件类型
+        match page_info.content_type {
+            PageContentType::Unknown => {
+                return Err(format!(
+                    "不支持的文件类型: {}",
+                    page_info.inner_path
+                ));
+            }
+            PageContentType::Archive => {
+                return Err(format!(
+                    "嵌套压缩包暂不支持: {}",
+                    page_info.inner_path
+                ));
+            }
+            _ => {}
+        }
+
         match book_type {
             BookType::Archive => {
                 let manager = self
@@ -527,6 +544,9 @@ impl PageContentManager {
             "avif" => "image/avif",
             "jxl" => "image/jxl",
             "bmp" => "image/bmp",
+            "svg" => "image/svg+xml",
+            "ico" => "image/x-icon",
+            "tiff" | "tif" => "image/tiff",
             _ => "application/octet-stream",
         }
         .to_string()
@@ -544,16 +564,19 @@ impl PageContentManager {
         self.current_book = None;
     }
 
-    /// 获取视频文件路径（自动提取到临时文件）
+    /// 获取需要临时文件的页面路径（视频/PDF）
     /// 
-    /// 对于压缩包内的视频，需要先提取到临时文件才能播放
-    pub async fn get_video_path(&self, index: usize) -> Result<String, String> {
+    /// 对于压缩包内的视频和 PDF，需要先提取到临时文件才能播放/显示
+    pub async fn get_file_path(&self, index: usize) -> Result<String, String> {
         let book = self.current_book.as_ref().ok_or("没有打开的书籍")?;
         let page = book.get_page(index).ok_or("页面不存在")?;
 
-        // 检查是否是视频
-        if page.content_type != PageContentType::Video {
-            return Err("不是视频文件".to_string());
+        // 检查是否需要临时文件
+        if !page.content_type.needs_temp_file() {
+            return Err(format!(
+                "此文件类型不需要临时文件: {:?}",
+                page.content_type
+            ));
         }
 
         let book_path = &book.path;
@@ -569,7 +592,7 @@ impl PageContentManager {
             return Ok(page.inner_path.clone());
         }
 
-        // 对于压缩包内的视频，检查缓存或提取
+        // 对于压缩包内的文件，检查缓存或提取
         if let Some(temp_path) = self.temp_manager.get_cached(book_path, &page.inner_path) {
             return Ok(temp_path.to_string_lossy().to_string());
         }
@@ -586,12 +609,27 @@ impl PageContentManager {
             .get_or_create(book_path, &page.inner_path, &data)?;
 
         log::info!(
-            "🎬 PageManager: 提取视频到临时文件 {} -> {}",
+            "📁 PageManager: 提取到临时文件 {} -> {}",
             page.inner_path,
             temp_path.display()
         );
-
+        
         Ok(temp_path.to_string_lossy().to_string())
+    }
+
+    /// 获取视频文件路径（自动提取到临时文件）
+    /// 
+    /// 兼容旧接口，内部调用 get_file_path
+    pub async fn get_video_path(&self, index: usize) -> Result<String, String> {
+        let book = self.current_book.as_ref().ok_or("没有打开的书籍")?;
+        let page = book.get_page(index).ok_or("页面不存在")?;
+
+        // 检查是否是视频
+        if page.content_type != PageContentType::Video {
+            return Err("不是视频文件".to_string());
+        }
+
+        self.get_file_path(index).await
     }
 
     /// 获取临时文件统计

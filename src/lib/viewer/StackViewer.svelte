@@ -79,9 +79,6 @@
   // 阅读方向
   let isRTL = $derived(settings.book.readingDirection === 'right-to-left');
   
-  // 翻页步进（双页模式跳 2 页）
-  let pageStep = $derived(pageMode === 'double' ? 2 : 1);
-  
   // 当前书本路径（用于检测书本切换）
   let currentBookPath = $state<string | null>(null);
   
@@ -265,10 +262,10 @@
     
     console.log(`📚 StackViewer: 初始化槽位，中心页 ${centerIndex + 1}，模式 ${pageMode}`);
     
-    // 计算前后槽位的页面索引（双页模式下间隔 2 页）
-    const step = pageStep;
-    const prevIndex = centerIndex - step;
-    const nextIndex = centerIndex + step;
+    // 预加载槽位使用固定步进 1（前后各一页），不依赖 pageMode
+    // 实际内容是否显示双页由 loadSlot 内部根据 pageMode 处理
+    const prevIndex = centerIndex - 1;
+    const nextIndex = centerIndex + 1;
     
     // 并行加载三个槽位
     const [prev, current, next] = await Promise.all([
@@ -293,126 +290,13 @@
   }
   
   /**
-   * 向前翻页（next → current）
-   */
-  async function navigateForward() {
-    if (isTransitioning) return;
-    
-    // 双页模式下跳 2 页
-    const newCurrentIndex = displayedPageIndex + pageStep;
-    if (newCurrentIndex >= bookStore.totalPages) return;
-    
-    // 在双页模式下，槽位轮转不适用，直接重新加载
-    isTransitioning = true;
-    
-    // 加载新的当前槽位
-    currentSlot = await loadSlot(createEmptySlot('current'), newCurrentIndex);
-    displayedPageIndex = newCurrentIndex;
-    
-    // 清除超分层（新页面需要重新超分）
-    upscaleUrl = null;
-    
-    // 通知外部
-    onPageChange?.(newCurrentIndex);
-    
-    // 等待 DOM 更新
-    await tick();
-    
-    // 异步加载前后槽位
-    const prevIndex = newCurrentIndex - pageStep;
-    const nextIndex = newCurrentIndex + pageStep;
-    
-    if (prevIndex >= 0) {
-      prevSlot = await loadSlot(createEmptySlot('prev'), prevIndex);
-    } else {
-      prevSlot = createEmptySlot('prev');
-    }
-    
-    if (nextIndex < bookStore.totalPages) {
-      nextSlot = await loadSlot(createEmptySlot('next'), nextIndex);
-    } else {
-      nextSlot = createEmptySlot('next');
-    }
-    
-    // 触发远程预加载
-    imagePool.preloadRange(newCurrentIndex, 5);
-    
-    setTimeout(() => {
-      isTransitioning = false;
-    }, transitionDuration);
-    
-    console.log(`➡️ StackViewer: 向前翻页到 ${newCurrentIndex + 1}`);
-  }
-  
-  /**
-   * 向后翻页（prev → current）
-   */
-  async function navigateBackward() {
-    if (isTransitioning) return;
-    
-    // 双页模式下跳 2 页
-    const newCurrentIndex = displayedPageIndex - pageStep;
-    if (newCurrentIndex < 0) return;
-    
-    isTransitioning = true;
-    
-    // 加载新的当前槽位
-    currentSlot = await loadSlot(createEmptySlot('current'), newCurrentIndex);
-    displayedPageIndex = newCurrentIndex;
-    
-    // 清除超分层
-    upscaleUrl = null;
-    
-    // 通知外部
-    onPageChange?.(newCurrentIndex);
-    
-    // 等待 DOM 更新
-    await tick();
-    
-    // 异步加载前后槽位
-    const prevIndex = newCurrentIndex - pageStep;
-    const nextIndex = newCurrentIndex + pageStep;
-    
-    if (prevIndex >= 0) {
-      prevSlot = await loadSlot(createEmptySlot('prev'), prevIndex);
-    } else {
-      prevSlot = createEmptySlot('prev');
-    }
-    
-    if (nextIndex < bookStore.totalPages) {
-      nextSlot = await loadSlot(createEmptySlot('next'), nextIndex);
-    } else {
-      nextSlot = createEmptySlot('next');
-    }
-    
-    // 触发远程预加载
-    imagePool.preloadRange(newCurrentIndex, 5);
-    
-    setTimeout(() => {
-      isTransitioning = false;
-    }, transitionDuration);
-    
-    console.log(`⬅️ StackViewer: 向后翻页到 ${newCurrentIndex + 1}`);
-  }
-  
-  /**
-   * 跳转到指定页面（优先使用槽位轮转，否则重新初始化）
+   * 跳转到指定页面（直接重新初始化槽位）
+   * 不再自己计算翻页步进，完全由外部（StackView）控制
    */
   async function navigateToPage(pageIndex: number) {
     if (pageIndex === displayedPageIndex) return;
     if (pageIndex < 0 || pageIndex >= bookStore.totalPages) return;
     
-    // 优先使用单步轮转（即使槽位未加载，navigateForward/Backward 会自动加载）
-    if (pageIndex === displayedPageIndex + 1) {
-      await navigateForward();
-      return;
-    }
-    if (pageIndex === displayedPageIndex - 1) {
-      await navigateBackward();
-      return;
-    }
-    
-    // 跳转多页：完全重新初始化
     console.log(`🔄 StackViewer: 跳转到 page ${pageIndex + 1}，重新初始化槽位`);
     isTransitioning = true;
     await initializeSlots(pageIndex);
@@ -505,8 +389,6 @@
   });
   
   export {
-    navigateForward,
-    navigateBackward,
     navigateToPage,
     setUpscaleUrl,
     displayedPageIndex,

@@ -20,7 +20,6 @@
     getNextSplitHalf, 
     getPrevSplitHalf,
     buildFrameImages,
-    getPageStep,
     type SplitState,
     type FrameBuildConfig,
     type PageData,
@@ -360,9 +359,13 @@
     }
   }
   
+  // 计算翻页步进：双页模式翻 2 页，单页模式翻 1 页
+  let pageStep = $derived(pageMode === 'double' ? 2 : 1);
+  
   function handlePrevPage() {
     viewPositionX = 50; viewPositionY = 50;
     
+    // 处理横向分割模式
     if (isInSplitMode && splitState) {
       const prevHalf = getPrevSplitHalf(splitState.half, direction);
       if (prevHalf !== 'prev') {
@@ -370,32 +373,17 @@
         return;
       }
     }
-    
     splitState = null;
     
-    // 计算翻页步进
-    const { currentUrl, secondUrl, dimensions } = imageStore.state;
-    if (currentUrl) {
-      const currentPage: PageData = {
-        url: currentUrl,
-        pageIndex: bookStore.currentPageIndex,
-        width: dimensions?.width,
-        height: dimensions?.height,
-      };
-      const nextPage: PageData | null = secondUrl ? {
-        url: secondUrl,
-        pageIndex: bookStore.currentPageIndex + 1,
-      } : null;
-      const step = getPageStep(currentPage, nextPage, frameConfig);
-      bookStore.navigateToPage(Math.max(0, bookStore.currentPageIndex - step));
-    } else {
-      bookStore.prevPage();
-    }
+    // 直接使用 pageStep 翻页
+    const targetIndex = Math.max(0, bookStore.currentPageIndex - pageStep);
+    bookStore.navigateToPage(targetIndex);
   }
   
   function handleNextPage() {
     viewPositionX = 50; viewPositionY = 50;
     
+    // 处理横向分割模式
     if (isInSplitMode) {
       if (!splitState) {
         splitState = { pageIndex: bookStore.currentPageIndex, half: getInitialSplitHalf(direction) };
@@ -407,27 +395,11 @@
         return;
       }
     }
-    
     splitState = null;
     
-    // 计算翻页步进
-    const { currentUrl, secondUrl, dimensions } = imageStore.state;
-    if (currentUrl) {
-      const currentPage: PageData = {
-        url: currentUrl,
-        pageIndex: bookStore.currentPageIndex,
-        width: dimensions?.width,
-        height: dimensions?.height,
-      };
-      const nextPage: PageData | null = secondUrl ? {
-        url: secondUrl,
-        pageIndex: bookStore.currentPageIndex + 1,
-      } : null;
-      const step = getPageStep(currentPage, nextPage, frameConfig);
-      bookStore.navigateToPage(Math.min(bookStore.totalPages - 1, bookStore.currentPageIndex + step));
-    } else {
-      bookStore.nextPage();
-    }
+    // 直接使用 pageStep 翻页
+    const targetIndex = Math.min(bookStore.totalPages - 1, bookStore.currentPageIndex + pageStep);
+    bookStore.navigateToPage(targetIndex);
   }
   
   // 悬停滚动状态

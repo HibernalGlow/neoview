@@ -13,6 +13,7 @@
   import { bookStore } from '$lib/stores/book.svelte';
   import { settingsManager } from '$lib/settings/settingsManager';
   import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
+  import { pipelineLatencyStore } from '$lib/stores/pipelineLatency.svelte';
   import {
     type FrameSlot,
     type SlotPosition,
@@ -97,11 +98,33 @@
       return createEmptySlot(slot.position);
     }
     
+    const startTime = performance.now();
+    
     // 先尝试同步获取缓存
     const cached = imagePool.getSync(pageIndex);
     if (cached) {
       // 预解码图片（确保翻页时不卡顿）
+      const decodeStart = performance.now();
       await preDecodeImage(cached.url);
+      const decodeMs = performance.now() - decodeStart;
+      
+      // 记录槽位加载（缓存命中）
+      pipelineLatencyStore.record({
+        timestamp: Date.now(),
+        pageIndex,
+        traceId: `slot-${slot.position}-${pageIndex}`,
+        bookSyncMs: 0,
+        backendLoadMs: 0,
+        ipcTransferMs: 0,
+        blobCreateMs: decodeMs,  // 用于记录解码时间
+        totalMs: performance.now() - startTime,
+        dataSize: cached.blob?.size ?? 0,
+        cacheHit: true,
+        isCurrentPage: slot.position === 'current',
+        source: 'cache',
+        slot: slot.position,
+      });
+      
       return {
         position: slot.position,
         pageIndex,
@@ -116,10 +139,33 @@
     
     // 异步加载
     try {
+      const loadStart = performance.now();
       const image = await imagePool.get(pageIndex);
+      const loadMs = performance.now() - loadStart;
+      
       if (image) {
         // 预解码图片
+        const decodeStart = performance.now();
         await preDecodeImage(image.url);
+        const decodeMs = performance.now() - decodeStart;
+        
+        // 记录槽位加载
+        pipelineLatencyStore.record({
+          timestamp: Date.now(),
+          pageIndex,
+          traceId: `slot-${slot.position}-${pageIndex}`,
+          bookSyncMs: 0,
+          backendLoadMs: loadMs,
+          ipcTransferMs: loadMs,
+          blobCreateMs: decodeMs,
+          totalMs: performance.now() - startTime,
+          dataSize: image.blob?.size ?? 0,
+          cacheHit: false,
+          isCurrentPage: slot.position === 'current',
+          source: slot.position === 'current' ? 'current' : 'preload',
+          slot: slot.position,
+        });
+        
         return {
           position: slot.position,
           pageIndex,

@@ -107,6 +107,13 @@ function formatMs(ms: number): string {
 							<span title="总耗时">{formatMs(record.totalMs)}</span>
 						</span>
 						<span class="text-muted-foreground text-[10px]">{formatSize(record.dataSize)}</span>
+						<!-- 槽位标识 -->
+						{#if record.slot}
+							<span class="text-[10px] px-1 rounded {record.slot === 'current' ? 'bg-green-500/20 text-green-500' : record.slot === 'next' ? 'bg-blue-500/20 text-blue-500' : 'bg-orange-500/20 text-orange-500'}">
+								{record.slot === 'current' ? '当' : record.slot === 'next' ? '后' : '前'}
+							</span>
+						{/if}
+						<!-- 状态标识 -->
 						{#if record.cacheHit}
 							<span class="text-green-500 text-[10px] font-medium">缓存</span>
 						{:else if record.source === 'preload'}

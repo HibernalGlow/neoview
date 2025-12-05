@@ -60,7 +60,8 @@ import {
 	tabPenetrateMode,
 	tabDeleteStrategy,
 	tabInlineTreeMode,
-	tabCurrentPath
+	tabCurrentPath,
+	tabThumbnailWidthPercent
 } from '../stores/folderTabStore.svelte';
 import type { FolderViewStyle, FolderSortField } from '../stores/folderPanelStore.svelte';
 
@@ -79,6 +80,7 @@ const showMigrationBar = tabShowMigrationBar;
 const penetrateMode = tabPenetrateMode;
 const deleteStrategy = tabDeleteStrategy;
 const inlineTreeMode = tabInlineTreeMode;
+const thumbnailWidthPercent = tabThumbnailWidthPercent;
 
 interface Props {
 	onRefresh?: () => void;
@@ -575,6 +577,49 @@ function cancelWarmup() {
 					</DropdownMenu.SubContent>
 				</DropdownMenu.Sub>
 				<DropdownMenu.Separator />
+				<!-- 缩略图宽度设置 -->
+				<DropdownMenu.Sub>
+					<DropdownMenu.SubTrigger>
+						<Grid3x3 class="mr-2 h-4 w-4" />
+						缩略图大小 ({Math.round(48 + ($thumbnailWidthPercent - 10) * 3)}px)
+					</DropdownMenu.SubTrigger>
+					<DropdownMenu.SubContent>
+						<DropdownMenu.Label class="text-xs text-muted-foreground">
+							调整缩略图大小
+						</DropdownMenu.Label>
+						<div class="px-2 py-1">
+							<input
+								type="range"
+								min="10"
+								max="50"
+								step="1"
+								value={$thumbnailWidthPercent}
+								oninput={(e) => {
+									const value = parseInt((e.target as HTMLInputElement).value);
+									folderTabActions.setThumbnailWidthPercent(value);
+								}}
+								class="w-full h-2 rounded-lg appearance-none cursor-pointer bg-muted"
+							/>
+							<div class="flex justify-between text-xs text-muted-foreground mt-1">
+								<span>小</span>
+								<span class="font-medium text-foreground">{Math.round(48 + ($thumbnailWidthPercent - 10) * 3)}px</span>
+								<span>大</span>
+							</div>
+						</div>
+						<DropdownMenu.Separator />
+						<DropdownMenu.Label class="text-xs text-muted-foreground">快捷选择</DropdownMenu.Label>
+						<div class="flex gap-1 px-2 py-1">
+							{#each [10, 15, 20, 25, 33, 50] as percent}
+								<button
+									class="px-2 py-0.5 text-xs rounded hover:bg-accent {$thumbnailWidthPercent === percent ? 'bg-primary text-primary-foreground' : ''}"
+									onclick={() => folderTabActions.setThumbnailWidthPercent(percent)}
+								>
+									{Math.round(48 + (percent - 10) * 3)}px
+								</button>
+							{/each}
+						</div>
+					</DropdownMenu.SubContent>
+				</DropdownMenu.Sub>
 				<!-- 排除路径设置 -->
 				<DropdownMenu.Sub>
 					<DropdownMenu.SubTrigger>

@@ -95,6 +95,8 @@ export interface FolderTabState {
 	// 层叠栈状态
 	stackLayers: FolderStackLayer[];
 	stackActiveIndex: number;
+	// 缩略图宽度百分比 (10-50%)
+	thumbnailWidthPercent: number;
 }
 
 // ============ Initial State ============
@@ -150,7 +152,8 @@ function createDefaultTabState(id: string, homePath: string = ''): FolderTabStat
 		historyIndex: -1,
 		homePath,
 		stackLayers: [],
-		stackActiveIndex: 0
+		stackActiveIndex: 0,
+		thumbnailWidthPercent: 20
 	};
 }
 
@@ -281,6 +284,9 @@ export const tabItemCount = derived(activeTab, ($tab) => $tab?.items?.length || 
 // 层叠栈状态
 export const tabStackLayers = derived(activeTab, ($tab) => $tab?.stackLayers || []);
 export const tabStackActiveIndex = derived(activeTab, ($tab) => $tab?.stackActiveIndex || 0);
+
+// 缩略图宽度百分比
+export const tabThumbnailWidthPercent = derived(activeTab, ($tab) => $tab?.thumbnailWidthPercent || 20);
 
 // ============ Actions ============
 
@@ -954,6 +960,18 @@ export const folderTabActions = {
 		updateActiveTab((tab) => ({
 			...tab,
 			stackActiveIndex: index
+		}));
+	},
+
+	/**
+	 * 设置缩略图宽度百分比
+	 */
+	setThumbnailWidthPercent(percent: number) {
+		// 限制在 10-50% 范围内
+		const clampedPercent = Math.max(10, Math.min(50, percent));
+		updateActiveTab((tab) => ({
+			...tab,
+			thumbnailWidthPercent: clampedPercent
 		}));
 	}
 };

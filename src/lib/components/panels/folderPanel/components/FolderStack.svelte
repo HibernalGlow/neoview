@@ -23,7 +23,8 @@ import {
 	tabSearchKeyword,
 	tabPenetrateMode,
 	tabCurrentPath,
-	activeTabId
+	activeTabId,
+	tabThumbnailWidthPercent
 } from '../stores/folderTabStore.svelte';
 
 // 别名映射
@@ -34,6 +35,7 @@ const deleteMode = tabDeleteMode;
 const sortConfig = tabSortConfig;
 const searchKeyword = tabSearchKeyword;
 const penetrateMode = tabPenetrateMode;
+const thumbnailWidthPercent = tabThumbnailWidthPercent;
 import { Loader2, FolderOpen, AlertCircle } from '@lucide/svelte';
 import { directoryTreeCache } from '../utils/directoryTreeCache';
 import { folderRatingStore } from '$lib/stores/emm/folderRating';
@@ -690,6 +692,7 @@ function handleOpenFolderAsBook(layerIndex: number, item: FsItem) {
 						isDeleteMode={$deleteMode}
 						selectedItems={$selectedItems}
 						{viewMode}
+						thumbnailWidthPercent={$thumbnailWidthPercent}
 						onItemSelect={(payload) => handleItemSelect(index, payload)}
 						onItemDoubleClick={(payload) => handleItemDoubleClick(index, payload)}
 						onSelectedIndexChange={(payload) => handleSelectedIndexChange(index, payload)}

@@ -31,6 +31,7 @@
 		currentPage = undefined,
 		totalPages = undefined,
 		timestamp = undefined,
+		thumbnailSize = 48,
 		onClick = undefined,
 		onDoubleClick = undefined,
 		onContextMenu = undefined,
@@ -51,6 +52,7 @@
 		currentPage?: number;
 		totalPages?: number;
 		timestamp?: number;
+		thumbnailSize?: number;
 		onClick?: () => void;
 		onDoubleClick?: () => void;
 		onContextMenu?: (e: MouseEvent) => void;
@@ -358,6 +360,7 @@
 		{currentPage}
 		{totalPages}
 		{timestamp}
+		{thumbnailSize}
 		{isBookmarked}
 		{isArchive}
 		{isReadCompleted}

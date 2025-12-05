@@ -27,6 +27,7 @@
 		isDeleteMode = false,
 		selectedItems = new Set<string>(),
 		viewMode = 'list',
+		thumbnailWidthPercent = 20,
 		onSelectionChange = (payload: { selectedItems: Set<string> }) => {},
 		onSelectedIndexChange = (payload: { index: number }) => {},
 		onItemSelect = (payload: { item: FsItem; index: number; multiSelect: boolean }) => {},
@@ -41,6 +42,7 @@
 		isDeleteMode?: boolean;
 		selectedItems?: Set<string>;
 		viewMode?: 'list' | 'thumbnails' | 'grid' | 'content' | 'banner' | 'thumbnail';
+		thumbnailWidthPercent?: number;
 		onSelectionChange?: (payload: { selectedItems: Set<string> }) => void;
 		onSelectedIndexChange?: (payload: { index: number }) => void;
 		onItemSelect?: (payload: { item: FsItem; index: number; multiSelect: boolean }) => void;
@@ -69,8 +71,22 @@
 
 	// --- TanStack Virtual ---
 	const itemHeight = $derived(viewMode === 'list' ? 96 : 240);
-	const columns = $derived(viewMode === 'list' ? 1 : viewportWidth >= 640 ? 3 : 2);
+	// 列数根据缩略图宽度百分比动态计算
+	// 注意：thumbnailWidthPercent 表示每个缩略图占 card 宽度的百分比
+	// 例如 20% = 5 列，50% = 2 列
+	const columns = $derived.by(() => {
+		if (viewMode === 'list') return 1;
+		const cols = Math.max(1, Math.floor(100 / thumbnailWidthPercent));
+		return cols;
+	});
 	const rowCount = $derived(Math.ceil(items.length / columns));
+	
+	// 缩略图尺寸（像素）- 根据百分比计算
+	// 10% -> 48px, 20% -> 80px, 33% -> 120px, 50% -> 160px
+	const thumbnailSize = $derived.by(() => {
+		// 基础尺寸 48px 对应 10%，每增加 1% 增加约 3px
+		return Math.round(48 + (thumbnailWidthPercent - 10) * 3);
+	});
 
 	// 是否显示侧边滑块（至少5个项目时显示）
 	const showSlider = $derived(items.length > 5);
@@ -105,6 +121,17 @@
 	$effect(() => {
 		if (mounted && container) {
 			// 强制触发更新
+			$virtualizer._willUpdate();
+		}
+	});
+
+	// 当列数变化时强制刷新 virtualizer
+	$effect(() => {
+		// 显式依赖 columns 和 thumbnailWidthPercent
+		const _ = columns;
+		const __ = thumbnailWidthPercent;
+		if (mounted && container) {
+			// 强制触发重新测量
 			$virtualizer._willUpdate();
 		}
 	});
@@ -388,6 +415,7 @@
 								currentPage={historyEntry?.currentPage}
 								totalPages={historyEntry?.totalPages}
 								timestamp={item.modified ? item.modified * 1000 : undefined}
+								{thumbnailSize}
 								onClick={() => handleItemClick(item, itemIndex)}
 								onDoubleClick={() => handleItemDoubleClick(item, itemIndex)}
 								onContextMenu={(e) => handleItemContextMenu(e, item)}

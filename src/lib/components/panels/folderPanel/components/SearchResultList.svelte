@@ -4,7 +4,7 @@
  * 显示后端搜索返回的文件列表，支持排序和 ListSlider
  */
 import type { FsItem } from '$lib/types';
-import { tabSearchResults, tabIsSearching, tabSearchKeyword, tabViewStyle, tabSortConfig } from '../stores/folderTabStore.svelte';
+import { tabSearchResults, tabIsSearching, tabSearchKeyword, tabViewStyle, tabSortConfig, tabThumbnailWidthPercent } from '../stores/folderTabStore.svelte';
 import { Loader2, Search, FolderOpen, ArrowUpDown } from '@lucide/svelte';
 import FileItemCard from '$lib/components/panels/file/components/FileItemCard.svelte';
 import ListSlider from '$lib/components/panels/file/components/ListSlider.svelte';
@@ -19,6 +19,7 @@ const isSearching = tabIsSearching;
 const searchKeyword = tabSearchKeyword;
 const viewStyle = tabViewStyle;
 const sortConfig = tabSortConfig;
+const thumbnailWidthPercent = tabThumbnailWidthPercent;
 
 // 滚动状态
 let scrollContainer = $state<HTMLDivElement | null>(null);
@@ -198,7 +199,10 @@ $effect(() => {
 				<div class="text-muted-foreground text-xs mb-2 px-2">
 					找到 {sortedResults.length} 个结果
 				</div>
-				<div class={viewMode === 'thumbnail' ? 'grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-2' : 'flex flex-col gap-1'}>
+				<div 
+					class={viewMode === 'thumbnail' ? 'grid gap-2' : 'flex flex-col gap-1'}
+					style={viewMode === 'thumbnail' ? `grid-template-columns: repeat(auto-fill, minmax(${$thumbnailWidthPercent}%, 1fr))` : ''}
+				>
 					{#each sortedResults as item (item.path)}
 						<div class="search-result-item">
 							<FileItemCard

@@ -35,6 +35,7 @@
 		currentPage?: number;
 		totalPages?: number;
 		timestamp?: number;
+		thumbnailSize?: number;
 		// 计算状态
 		isBookmarked: boolean;
 		isArchive: boolean;
@@ -72,6 +73,7 @@
 		currentPage,
 		totalPages,
 		timestamp,
+		thumbnailSize = 48,
 		isBookmarked,
 		isArchive,
 		isReadCompleted,
@@ -181,7 +183,10 @@
 	<!-- 缩略图或图标（带悬停预览） -->
 	<Tooltip.Root delayDuration={$hoverPreviewDelayMs}>
 		<Tooltip.Trigger>
-			<div class="relative flex w-12 self-stretch shrink-0 items-center justify-center overflow-hidden rounded">
+			<div 
+				class="relative flex self-stretch shrink-0 items-center justify-center overflow-hidden rounded"
+				style="width: {thumbnailSize}px; min-width: {thumbnailSize}px;"
+			>
 				{#if thumbnail}
 					<img
 						src={thumbnail}

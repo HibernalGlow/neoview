@@ -31,6 +31,9 @@ export interface ReadResult {
 let lastPreloadedPage = -1;
 const PRELOAD_RANGE = 5; // ±5 页
 
+// PageManager 书籍同步状态（避免重复检查）
+let lastSyncedBookPath: string | null = null;
+
 // 预解压相关（可选优化，保留接口兼容）
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function preExtractArchive(_archivePath: string): Promise<string | null> {
@@ -41,6 +44,8 @@ export async function preExtractArchive(_archivePath: string): Promise<string | 
 export function clearExtractCache(): void {
 	// 重置预加载状态
 	lastPreloadedPage = -1;
+	// 重置 PageManager 同步状态
+	lastSyncedBookPath = null;
 }
 
 /**
@@ -283,17 +288,17 @@ export async function readPageBlobV2(
 	try {
 		const pm = await import('$lib/api/pageManager');
 		
-		// 检查 PageManager 是否已打开书籍，如果没有则先打开
+		// 检查 PageManager 是否已打开书籍（使用缓存避免重复 IPC）
 		const currentBook = bookStore.currentBook;
-		if (currentBook) {
-			const pmBookInfo = await pm.getBookInfo();
-			if (!pmBookInfo || pmBookInfo.path !== currentBook.path) {
-				// PageManager 还未打开或打开了不同的书籍，需要同步
-				logImageTrace(traceId, 'syncing PageManager book', { path: currentBook.path });
-				await pm.openBook(currentBook.path);
-			}
-		} else {
+		if (!currentBook) {
 			throw new Error('没有打开的书籍');
+		}
+		
+		// 只有书籍路径变化时才同步
+		if (lastSyncedBookPath !== currentBook.path) {
+			logImageTrace(traceId, 'syncing PageManager book', { path: currentBook.path });
+			await pm.openBook(currentBook.path);
+			lastSyncedBookPath = currentBook.path;
 		}
 		
 		const loadStart = performance.now();

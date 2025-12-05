@@ -171,12 +171,12 @@ impl SrVulkanManager {
 
         // 如果调用者传入的尺寸为 0，使用预处理时解码得到的尺寸
         let final_width = if width <= 0 {
-            preprocess_result.width.map(|w| w as i32).unwrap_or(0)
+            preprocess_result.width as i32
         } else {
             width
         };
         let final_height = if height <= 0 {
-            preprocess_result.height.map(|h| h as i32).unwrap_or(0)
+            preprocess_result.height as i32
         } else {
             height
         };
@@ -363,14 +363,14 @@ impl SrVulkanManager {
 }
 
 /// 预处理结果：包含转码后的数据和解码得到的尺寸
-struct PreprocessResult {
-    data: Vec<u8>,
-    width: Option<u32>,
-    height: Option<u32>,
+pub struct PreprocessResult {
+    pub data: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
 }
 
 /// 预处理图片：使用 WIC 解码 AVIF/JXL 等格式，转换为 JPEG 传给 PyO3
-fn preprocess_image_for_sr(image_data: &[u8]) -> Result<PreprocessResult, String> {
+pub fn preprocess_image_for_sr(image_data: &[u8]) -> Result<PreprocessResult, String> {
     // 检测是否需要转码的格式
     if is_jxl_image(image_data) || is_avif_image(image_data) {
         let format_name = if is_jxl_image(image_data) { "JXL" } else { "AVIF" };
@@ -378,12 +378,23 @@ fn preprocess_image_for_sr(image_data: &[u8]) -> Result<PreprocessResult, String
         transcode_with_wic_and_size(image_data)
     } else {
         // 其他格式直接透传（PNG/JPEG/WebP 等 sr_vulkan 原生支持的）
+        // 尝试获取图片尺寸
+        let (width, height) = get_image_dimensions(image_data).unwrap_or((0, 0));
         Ok(PreprocessResult {
             data: image_data.to_vec(),
-            width: None,
-            height: None,
+            width,
+            height,
         })
     }
+}
+
+/// 从图片数据获取尺寸（使用 image crate）
+fn get_image_dimensions(data: &[u8]) -> Option<(u32, u32)> {
+    use image::ImageReader;
+    use std::io::Cursor;
+    let reader = ImageReader::new(Cursor::new(data)).with_guessed_format().ok()?;
+    let (w, h) = reader.into_dimensions().ok()?;
+    Some((w, h))
 }
 
 fn is_jxl_image(data: &[u8]) -> bool {
@@ -450,8 +461,8 @@ fn transcode_with_wic_and_size(image_data: &[u8]) -> Result<PreprocessResult, St
     
     Ok(PreprocessResult {
         data: output,
-        width: Some(width),
-        height: Some(height),
+        width,
+        height,
     })
 }
 

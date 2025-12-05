@@ -1647,3 +1647,113 @@ fn encode_rgba_to_format(rgba: &[u8], width: u32, height: u32, format: &str) -> 
     
     Ok(output)
 }
+
+// ============================================================================
+// 超分基准测试
+// ============================================================================
+
+/// 超分测试结果
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct UpscaleBenchmarkResult {
+    pub success: bool,
+    pub cache_path: Option<String>,
+    pub original_size: Option<(u32, u32)>,
+    pub upscaled_size: Option<(u32, u32)>,
+    pub total_ms: f64,
+    pub decode_ms: f64,
+    pub upscale_ms: f64,
+    pub encode_ms: f64,
+    pub model_name: String,
+    pub error: Option<String>,
+}
+
+/// 运行超分流程基准测试
+#[command]
+pub async fn run_upscale_benchmark(
+    file_path: String,
+    pyo3_state: tauri::State<'_, crate::commands::pyo3_upscale_commands::PyO3UpscalerState>,
+) -> Result<UpscaleBenchmarkResult, String> {
+    use std::fs;
+    use std::time::Instant;
+    use std::path::PathBuf;
+    
+    let total_start = Instant::now();
+    
+    // 1. 读取文件
+    let path = PathBuf::from(&file_path);
+    let image_data = fs::read(&path).map_err(|e| format!("读取文件失败: {}", e))?;
+    
+    // 2. 获取 PyO3 管理器
+    let manager_guard = pyo3_state.manager.lock()
+        .map_err(|e| format!("获取锁失败: {}", e))?;
+    let manager = manager_guard.as_ref()
+        .ok_or("PyO3Upscaler 未初始化，请先在超分面板启用超分")?;
+    
+    // 3. 解码阶段（使用 WIC 预处理）
+    let decode_start = Instant::now();
+    let (processed_data, width, height) = {
+        #[cfg(target_os = "windows")]
+        {
+            use crate::core::sr_vulkan_manager::preprocess_image_for_sr;
+            let result = preprocess_image_for_sr(&image_data)
+                .map_err(|e| format!("预处理失败: {}", e))?;
+            (result.data, result.width, result.height)
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            (image_data.clone(), 0u32, 0u32)
+        }
+    };
+    let decode_ms = decode_start.elapsed().as_secs_f64() * 1000.0;
+    
+    // 4. 超分阶段
+    let upscale_start = Instant::now();
+    // 使用默认模型配置
+    let model = crate::core::pyo3_upscaler::UpscaleModel::default();
+    let model_name = model.model_name.clone();
+    let upscale_result = manager.upscale_image_memory(
+        &processed_data,
+        &model,
+        60.0, // timeout
+        width as i32,
+        height as i32,
+        None,
+    ).map_err(|e| format!("超分失败: {}", e))?;
+    let upscale_ms = upscale_start.elapsed().as_secs_f64() * 1000.0;
+    
+    // 5. 保存阶段（PyO3 返回的已经是 WebP）
+    let encode_start = Instant::now();
+    let cache_dir = manager.get_cache_dir();
+    let hash = format!("{:x}", md5::compute(file_path.as_bytes()));
+    let cache_filename = format!("{}_sr[{}]_benchmark.webp", hash, model_name);
+    let cache_path = cache_dir.join(&cache_filename);
+    
+    // 确保目录存在
+    if let Some(parent) = cache_path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    
+    fs::write(&cache_path, &upscale_result)
+        .map_err(|e| format!("保存失败: {}", e))?;
+    let encode_ms = encode_start.elapsed().as_secs_f64() * 1000.0;
+    
+    let total_ms = total_start.elapsed().as_secs_f64() * 1000.0;
+    
+    // 计算超分后尺寸（假设 2x）
+    let scale = 2u32;
+    let upscaled_width = width * scale;
+    let upscaled_height = height * scale;
+    
+    Ok(UpscaleBenchmarkResult {
+        success: true,
+        cache_path: Some(cache_path.to_string_lossy().to_string()),
+        original_size: Some((width, height)),
+        upscaled_size: Some((upscaled_width, upscaled_height)),
+        total_ms,
+        decode_ms,
+        upscale_ms,
+        encode_ms,
+        model_name,
+        error: None,
+    })
+}

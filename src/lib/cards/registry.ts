@@ -117,6 +117,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		canHide: true,
 		
 	},
+	'pipelineLatency': {
+		id: 'pipelineLatency',
+		title: '实时延迟监控',
+		icon: Activity,
+		defaultPanel: 'benchmark',
+		canHide: true,
+	},
 	
 	// ==================== Info 面板卡片 ====================
 	'bookInfo': {

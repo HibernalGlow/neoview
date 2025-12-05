@@ -16,6 +16,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { bookStore } from '$lib/stores/book.svelte';
 import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte';
+import { pipelineLatencyStore } from '$lib/stores/pipelineLatency.svelte';
 import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 
 // Tempfile 模式缓存（URL -> blob）
@@ -294,13 +295,17 @@ export async function readPageBlobV2(
 			throw new Error('没有打开的书籍');
 		}
 		
-		// 只有书籍路径变化时才同步
+		// 书籍同步计时
+		let bookSyncMs = 0;
 		if (lastSyncedBookPath !== currentBook.path) {
+			const syncStart = performance.now();
 			logImageTrace(traceId, 'syncing PageManager book', { path: currentBook.path });
 			await pm.openBook(currentBook.path);
 			lastSyncedBookPath = currentBook.path;
+			bookSyncMs = performance.now() - syncStart;
 		}
 		
+		// 后端加载计时
 		const loadStart = performance.now();
 		
 		// 当前页使用 gotoPage（触发预加载），预加载页使用 getPage（不触发）
@@ -308,21 +313,37 @@ export async function readPageBlobV2(
 			? await pm.gotoPage(pageIndex)
 			: await pm.getPage(pageIndex);
 		
-		const loadMs = performance.now() - loadStart;
+		const backendLoadMs = performance.now() - loadStart;
 		const totalMs = performance.now() - startTime;
 		
 		logImageTrace(traceId, 'readPageBlobV2 complete', { 
 			size: blob.size, 
-			loadMs, 
+			bookSyncMs,
+			backendLoadMs,
 			totalMs 
 		});
 		
-		// 更新延迟追踪
+		// 记录到 pipelineLatencyStore
+		pipelineLatencyStore.record({
+			timestamp: Date.now(),
+			pageIndex,
+			traceId,
+			bookSyncMs,
+			backendLoadMs,
+			ipcTransferMs: 0, // 包含在 backendLoadMs 中
+			blobCreateMs: 0,
+			totalMs,
+			dataSize: blob.size,
+			cacheHit: false, // TODO: 从后端返回
+			isCurrentPage
+		});
+		
+		// 更新延迟追踪（兼容旧系统）
 		if (updateLatencyTrace) {
 			const latencyTrace: LatencyTrace = {
 				dataSource: 'blob',
 				renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
-				loadMs,
+				loadMs: backendLoadMs,
 				totalMs,
 				cacheHit: false,
 				dataSize: blob.size,

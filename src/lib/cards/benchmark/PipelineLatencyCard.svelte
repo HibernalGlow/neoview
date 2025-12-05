@@ -75,6 +75,12 @@ function formatMs(ms: number): string {
 				{isMonitoring ? '翻页后显示延迟数据' : '点击"开始监控"后翻页'}
 			</div>
 		{:else}
+			<!-- 表头 -->
+			<div class="flex items-center gap-2 text-[10px] text-muted-foreground px-2 py-1 border-b mb-1">
+				<span class="w-6">页</span>
+				<span class="flex-1">IPC + Blob = 总</span>
+				<span>大小</span>
+			</div>
 			<div class="space-y-1">
 				{#each records.toReversed() as record (record.timestamp)}
 					<div class="flex items-center gap-2 text-xs bg-muted/30 rounded px-2 py-1">

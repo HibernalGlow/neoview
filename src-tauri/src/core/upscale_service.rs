@@ -527,6 +527,26 @@ impl UpscaleService {
     
     /// 同步条件配置（从前端接收完整的条件列表）
     pub fn sync_conditions(&self, enabled: bool, conditions: Vec<crate::commands::upscale_service_commands::FrontendCondition>) {
+        log_info!("📋 收到条件配置同步请求: enabled={}, 条件数={}", enabled, conditions.len());
+        
+        // 打印每个条件的详细信息
+        for (i, cond) in conditions.iter().enumerate() {
+            log_info!(
+                "  [{}] {} (优先级:{}, 启用:{}, 跳过:{}) 尺寸范围: {}x{} ~ {}x{} 模型: {} {}x",
+                i,
+                cond.name,
+                cond.priority,
+                cond.enabled,
+                cond.skip,
+                cond.min_width,
+                cond.min_height,
+                if cond.max_width > 0 { cond.max_width.to_string() } else { "∞".to_string() },
+                if cond.max_height > 0 { cond.max_height.to_string() } else { "∞".to_string() },
+                cond.model_name,
+                cond.scale
+            );
+        }
+        
         // 更新启用状态
         if let Ok(mut s) = self.condition_settings.write() {
             s.enabled = enabled;

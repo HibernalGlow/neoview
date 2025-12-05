@@ -158,7 +158,29 @@ async function handleSync() {
 			conditionalUpscaleEnabled,
 			conditionsList: conditions,
 		});
-		console.log('✅ 条件设置已同步到后端');
+		
+		// 同时保存到 config.json
+		const { getStartupConfig, saveStartupConfig } = await import('$lib/config/startupConfig');
+		const config = await getStartupConfig();
+		config.upscaleConditionsEnabled = conditionalUpscaleEnabled;
+		config.upscaleConditions = conditions.map(c => ({
+			id: c.id,
+			name: c.name,
+			enabled: c.enabled,
+			priority: c.priority,
+			minWidth: c.match.minWidth ?? 0,
+			minHeight: c.match.minHeight ?? 0,
+			maxWidth: c.match.maxWidth ?? 0,
+			maxHeight: c.match.maxHeight ?? 0,
+			modelName: c.action.model,
+			scale: c.action.scale,
+			tileSize: c.action.tileSize,
+			noiseLevel: c.action.noiseLevel,
+			skip: c.action.skip,
+		}));
+		await saveStartupConfig(config);
+		
+		console.log('✅ 条件设置已同步到后端和 config.json');
 	} catch (err) {
 		console.error('❌ 同步条件设置失败:', err);
 	}

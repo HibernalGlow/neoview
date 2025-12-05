@@ -246,6 +246,9 @@ class UpscaleStore {
   ) {
     if (!this.state.enabled) return;
 
+    // 从 upscalePanelStore 获取当前模型设置
+    const { selectedModel, scale, tileSize, noiseLevel } = await import('$lib/stores/upscale/upscalePanelStore.svelte');
+
     try {
       await invoke('upscale_service_request', {
         bookPath,
@@ -253,6 +256,10 @@ class UpscaleStore {
         imagePath,
         imageHash,
         priority,
+        modelName: selectedModel.value,
+        scale: scale.value,
+        tileSize: tileSize.value,
+        noiseLevel: noiseLevel.value,
       });
 
       // 更新状态

@@ -940,9 +940,25 @@ impl UpscaleService {
             raw_data
         };
 
+        // 解析模型 ID（如果是 0，则从模型名称解析）
+        let model = if task.model.model_id == 0 && !task.model.model_name.is_empty() {
+            let model_id = manager.get_model_id(&task.model.model_name)
+                .unwrap_or_else(|e| {
+                    log_debug!("⚠️ 解析模型 ID 失败 ({}), 使用默认值 8", e);
+                    8 // 默认 MODEL_WAIFU2X_CUNET_UP2X
+                });
+            log_debug!("📋 模型 ID 解析: {} -> {}", task.model.model_name, model_id);
+            UpscaleModel {
+                model_id,
+                ..task.model.clone()
+            }
+        } else {
+            task.model.clone()
+        };
+
         let result_bytes = manager.upscale_image_memory(
             &image_data,
-            &task.model,
+            &model,
             timeout,
             width as i32,
             height as i32,

@@ -111,8 +111,12 @@ impl BookManager {
             }
         }
 
-        // 按文件名排序
-        entries.sort_by(|a, b| a.1.file_name().cmp(&b.1.file_name()));
+        // 按文件名自然排序
+        entries.sort_by(|a, b| {
+            let a_name = a.1.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            let b_name = b.1.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            Self::natural_cmp(&a_name.to_lowercase(), &b_name.to_lowercase())
+        });
 
         // 创建页面列表
         for (index, (entry_index, path, size, modified)) in entries.into_iter().enumerate() {
@@ -186,7 +190,8 @@ impl BookManager {
             })
             .collect();
 
-        page_items.sort_by(|a, b| a.name.cmp(&b.name));
+        // 使用自然排序
+        page_items.sort_by(|a, b| Self::natural_cmp(&a.name.to_lowercase(), &b.name.to_lowercase()));
 
         // 创建页面列表
         for (index, item) in page_items.iter().enumerate() {
@@ -432,10 +437,59 @@ impl BookManager {
         Self::cmp_entry_asc(b, a)
     }
 
+    /// 自然排序比较（数字感知）
+    /// 例如: 001, 002, 010, 011 而不是 001, 010, 011, 002
     fn cmp_insensitive(a: &str, b: &str) -> Ordering {
-        let al = a.to_lowercase();
-        let bl = b.to_lowercase();
-        al.cmp(&bl).then_with(|| a.cmp(b))
+        Self::natural_cmp(&a.to_lowercase(), &b.to_lowercase())
+            .then_with(|| a.cmp(b))
+    }
+    
+    /// 自然排序核心逻辑
+    fn natural_cmp(a: &str, b: &str) -> Ordering {
+        let mut a_chars = a.chars().peekable();
+        let mut b_chars = b.chars().peekable();
+        
+        loop {
+            match (a_chars.peek(), b_chars.peek()) {
+                (None, None) => return Ordering::Equal,
+                (None, Some(_)) => return Ordering::Less,
+                (Some(_), None) => return Ordering::Greater,
+                (Some(&ac), Some(&bc)) => {
+                    // 如果两边都是数字，提取完整数字进行比较
+                    if ac.is_ascii_digit() && bc.is_ascii_digit() {
+                        let a_num = Self::extract_number(&mut a_chars);
+                        let b_num = Self::extract_number(&mut b_chars);
+                        
+                        match a_num.cmp(&b_num) {
+                            Ordering::Equal => continue,
+                            other => return other,
+                        }
+                    } else {
+                        // 普通字符比较
+                        a_chars.next();
+                        b_chars.next();
+                        match ac.cmp(&bc) {
+                            Ordering::Equal => continue,
+                            other => return other,
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    /// 从字符迭代器中提取连续的数字
+    fn extract_number<I: Iterator<Item = char>>(chars: &mut std::iter::Peekable<I>) -> u64 {
+        let mut num: u64 = 0;
+        while let Some(&c) = chars.peek() {
+            if c.is_ascii_digit() {
+                num = num.saturating_mul(10).saturating_add(c.to_digit(10).unwrap() as u64);
+                chars.next();
+            } else {
+                break;
+            }
+        }
+        num
     }
 
     fn system_time_to_unix(time: SystemTime) -> Option<i64> {

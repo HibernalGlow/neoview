@@ -169,14 +169,12 @@ function loadTabsState(): FolderTabsState | null {
 		const saved = localStorage.getItem(TAB_STORAGE_KEY);
 		if (saved) {
 			const parsed = JSON.parse(saved);
-			// 重建 Set 类型和确保新字段有默认值
+			// 重建 Set 类型
 			if (parsed.tabs) {
 				parsed.tabs = parsed.tabs.map((tab: FolderTabState) => ({
 					...tab,
 					selectedItems: new SvelteSet(tab.selectedItems || []),
-					expandedFolders: new SvelteSet(tab.expandedFolders || []),
-					// 确保新增字段有默认值（兼容旧数据）
-					thumbnailWidthPercent: tab.thumbnailWidthPercent ?? 20
+					expandedFolders: new SvelteSet(tab.expandedFolders || [])
 				}));
 			}
 			return parsed;

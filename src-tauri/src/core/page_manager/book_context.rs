@@ -100,6 +100,8 @@ pub struct BookContext {
 impl BookContext {
     /// 从压缩包创建
     pub fn from_archive(path: &str, page_paths: Vec<String>) -> Self {
+        let mut nested_archives: Vec<String> = Vec::new();
+        
         let pages: Vec<PageInfo> = page_paths
             .into_iter()
             .enumerate()
@@ -110,15 +112,31 @@ impl BookContext {
                     .unwrap_or(&inner_path)
                     .to_string();
 
+                let content_type = PageContentType::from_path(&inner_path);
+                
+                // 检测嵌套压缩包
+                if content_type == PageContentType::Archive {
+                    nested_archives.push(inner_path.clone());
+                }
+
                 PageInfo {
                     index,
-                    content_type: PageContentType::from_path(&inner_path),
+                    content_type,
                     inner_path,
                     name,
                     size: None,
                 }
             })
             .collect();
+
+        // 记录嵌套压缩包日志
+        if !nested_archives.is_empty() {
+            log::warn!(
+                "📦 BookContext: 检测到 {} 个嵌套压缩包（暂不支持展开）: {:?}",
+                nested_archives.len(),
+                nested_archives
+            );
+        }
 
         let total_pages = pages.len();
 

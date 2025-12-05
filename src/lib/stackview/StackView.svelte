@@ -487,6 +487,8 @@
     const currentPageMode = pageMode;
     const currentPanorama = isPanorama;
     
+    console.log(`🔁 StackView effect: pageIndex=${pageIndex}, pageMode=${currentPageMode}, isPanorama=${currentPanorama}, lastPageMode=${lastPageMode}`);
+    
     if (splitState && splitState.pageIndex !== pageIndex) {
       splitState = null;
     }
@@ -494,12 +496,14 @@
     if (book && page) {
       // 检测模式是否变化
       const modeChanged = currentPageMode !== lastPageMode || currentPanorama !== lastPanorama;
+      console.log(`🔁 StackView: modeChanged=${modeChanged}, currentPageMode=${currentPageMode}, lastPageMode=${lastPageMode}`);
       lastPageMode = currentPageMode;
       lastPanorama = currentPanorama;
       
       // 根据模式加载
       if (currentPanorama) {
         // 全景模式：使用全景 store
+        console.log(`🔁 StackView: 全景模式加载 pageIndex=${pageIndex}, pageMode=${currentPageMode}`);
         panoramaStore.setEnabled(true);
         panoramaStore.loadPanorama(pageIndex, currentPageMode);
       } else {

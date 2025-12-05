@@ -846,6 +846,36 @@ impl UpscaleService {
     // 静态方法（工作线程使用）- V2：使用 WIC + 文件缓存
     // ========================================================================
 
+    /// 读取图片数据（支持普通文件和压缩包内文件）
+    fn load_image_data(image_path: &str) -> Result<Vec<u8>, String> {
+        // 检查是否是压缩包内路径（格式: xxx.zip inner=xxx）
+        if let Some(inner_idx) = image_path.find(" inner=") {
+            let archive_path = &image_path[..inner_idx];
+            let inner_path = &image_path[inner_idx + 7..];
+            
+            log_debug!("📦 从压缩包读取: {} -> {}", archive_path, inner_path);
+            
+            // 使用 zip crate 读取
+            let file = fs::File::open(archive_path)
+                .map_err(|e| format!("打开压缩包失败: {}", e))?;
+            let mut archive = zip::ZipArchive::new(file)
+                .map_err(|e| format!("解析压缩包失败: {}", e))?;
+            
+            let mut entry = archive.by_name(inner_path)
+                .map_err(|e| format!("在压缩包中找不到文件 {}: {}", inner_path, e))?;
+            
+            let mut data = Vec::new();
+            std::io::Read::read_to_end(&mut entry, &mut data)
+                .map_err(|e| format!("读取压缩包内文件失败: {}", e))?;
+            
+            Ok(data)
+        } else {
+            // 普通文件
+            fs::read(image_path)
+                .map_err(|e| format!("读取文件失败: {}", e))
+        }
+    }
+
     /// 处理单个任务（V2：WIC 处理 + 文件缓存）
     fn process_task_v2(
         py_state: &Arc<PyO3UpscalerState>,
@@ -856,17 +886,23 @@ impl UpscaleService {
         timeout: f64,
     ) -> Result<UpscaleReadyPayload, String> {
         log_debug!(
-            "🔄 处理超分任务 (V2): {} page {}",
+            "🔄 处理超分任务 (V2): {} page {} path={}",
             task.book_path,
-            task.page_index
+            task.page_index,
+            task.image_path
         );
 
-        // 1. 使用 WIC 读取图片（支持 AVIF/JXL）
-        let decode_result = decode_image_with_wic(Path::new(&task.image_path))
+        // 1. 读取图片数据（支持普通文件和压缩包内文件）
+        let raw_image_data = Self::load_image_data(&task.image_path)?;
+        log_debug!("📥 读取图片数据: {} bytes", raw_image_data.len());
+
+        // 2. 使用 WIC 解码（从内存）
+        let decode_result = decode_image_from_memory_with_wic(&raw_image_data)
             .map_err(|e| format!("WIC 解码失败: {}", e))?;
         
         let width = decode_result.width;
         let height = decode_result.height;
+        log_debug!("📐 WIC 解码完成: {}x{}", width, height);
 
         // 2. 检查条件
         if let Ok(settings) = condition_settings.read() {
@@ -905,10 +941,6 @@ impl UpscaleService {
                 .ok_or_else(|| "PyO3 超分器未初始化".to_string())?
         };
 
-        // 读取原始文件数据
-        let raw_data = fs::read(&task.image_path)
-            .map_err(|e| format!("读取图片文件失败: {}", e))?;
-        
         // 预处理：对于 AVIF/JXL 格式，使用 WIC 解码后转码为 JPEG
         let ext = Path::new(&task.image_path)
             .extension()
@@ -934,10 +966,10 @@ impl UpscaleService {
                     .write_image(&rgb_pixels, width, height, image::ExtendedColorType::Rgb8)
                     .map_err(|e| format!("JPEG 编码失败: {}", e))?;
             }
-            log_debug!("✅ WIC 转码完成: {} bytes -> {} bytes", raw_data.len(), output.len());
+            log_debug!("✅ WIC 转码完成: {} bytes -> {} bytes", raw_image_data.len(), output.len());
             output
         } else {
-            raw_data
+            raw_image_data
         };
 
         // 解析模型 ID（如果是 0，则从模型名称解析）

@@ -107,5 +107,5 @@ impl StartupConfig {
 
 /// 获取默认的配置文件路径
 pub fn get_config_path(app_data_dir: &Path) -> PathBuf {
-    app_data_dir.join("startup_config.json")
+    app_data_dir.join("config.json")
 }

@@ -20,7 +20,7 @@ let isExpanded = $state(false);
 onMount(async () => {
 	try {
 		const dataDir = await appDataDir();
-		configPath = `${dataDir}startup_config.json`;
+		configPath = `${dataDir}config.json`;
 		await refresh();
 	} catch (err) {
 		console.error('获取应用数据目录失败:', err);

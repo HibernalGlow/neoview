@@ -120,11 +120,12 @@ export function createImageStore() {
       state.loading = true;
     }
     
-    // 双页模式：获取第二张
+    // 双页模式：获取第二张（同步尝试）
+    let secondCached: ReturnType<typeof imagePool.getSync> = null;
     if (pageMode === 'double') {
       const secondIndex = currentIndex + 1;
       if (secondIndex < book.pages.length) {
-        const secondCached = imagePool.getSync(secondIndex);
+        secondCached = imagePool.getSync(secondIndex);
         state.secondUrl = secondCached?.url ?? null;
         state.secondDimensions = secondCached?.width && secondCached?.height 
           ? { width: secondCached.width, height: secondCached.height } 
@@ -138,7 +139,7 @@ export function createImageStore() {
       state.secondDimensions = null;
     }
     
-    // 异步加载
+    // 异步加载当前图片
     if (!cached) {
       try {
         const image = await imagePool.get(currentIndex);
@@ -150,25 +151,29 @@ export function createImageStore() {
           // 获取背景色（可能已在加载时计算好）
           state.backgroundColor = imagePool.getBackgroundColor(currentIndex) ?? null;
         }
-        
-        // 双页异步加载
-        if (pageMode === 'double' && lastLoadedIndex === currentIndex) {
-          const secondIndex = currentIndex + 1;
-          if (secondIndex < book.pages.length) {
-            const secondImage = await imagePool.get(secondIndex);
-            if (lastLoadedIndex === currentIndex) {
-              state.secondUrl = secondImage?.url ?? null;
-              state.secondDimensions = secondImage?.width && secondImage?.height 
-                ? { width: secondImage.width, height: secondImage.height } 
-                : null;
-            }
-          }
-        }
       } catch (err) {
         state.error = String(err);
       } finally {
         if (lastLoadedIndex === currentIndex) {
           state.loading = false;
+        }
+      }
+    }
+    
+    // 双页模式：异步加载第二张（独立于当前图片是否缓存）
+    if (pageMode === 'double' && !secondCached && lastLoadedIndex === currentIndex) {
+      const secondIndex = currentIndex + 1;
+      if (secondIndex < book.pages.length) {
+        try {
+          const secondImage = await imagePool.get(secondIndex);
+          if (lastLoadedIndex === currentIndex) {
+            state.secondUrl = secondImage?.url ?? null;
+            state.secondDimensions = secondImage?.width && secondImage?.height 
+              ? { width: secondImage.width, height: secondImage.height } 
+              : null;
+          }
+        } catch (err) {
+          console.warn('Failed to load second page:', err);
         }
       }
     }

@@ -258,8 +258,10 @@
     return isVideoFile(filename);
   });
   
-  // 渲染器模式
-  let useStackRenderer = $derived((settings.view.renderer?.mode ?? 'stack') === 'stack');
+  // 渲染器模式（双页模式下强制使用 CurrentFrameLayer，因为 StackViewer 不支持双页）
+  let useStackRenderer = $derived(
+    (settings.view.renderer?.mode ?? 'stack') === 'stack' && pageMode === 'single'
+  );
   
   // StackViewer 组件引用
   let stackViewerRef: StackViewer | null = null;

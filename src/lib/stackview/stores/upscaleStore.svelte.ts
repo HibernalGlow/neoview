@@ -433,11 +433,8 @@ class UpscaleStore {
     if (!this.state.enabled) return;
 
     try {
-      // 从旧系统获取模型配置
-      const { resolveModelSettings } = await import('$lib/components/viewer/flow/preloadRuntime');
-      const modelSettings = resolveModelSettings();
-      
       // 后端期望 request 对象，字段使用 camelCase
+      // 不传递模型配置，由后端根据条件匹配决定
       await invoke('upscale_service_request_preload_range', {
         request: {
           bookPath,
@@ -448,11 +445,11 @@ class UpscaleStore {
             imagePath: info.imagePath,
             hash: info.hash,
           })),
-          // 传递模型配置
-          modelName: modelSettings?.modelName ?? null,
-          scale: modelSettings?.scale ?? null,
-          tileSize: modelSettings?.tileSize ?? null,
-          noiseLevel: modelSettings?.noiseLevel ?? null,
+          // 模型配置由后端条件匹配决定，不传默认值
+          modelName: null,
+          scale: null,
+          tileSize: null,
+          noiseLevel: null,
         },
       });
     } catch (err) {

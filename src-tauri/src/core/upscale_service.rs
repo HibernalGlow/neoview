@@ -399,10 +399,11 @@ impl UpscaleService {
                             }
                         }
 
-                        // 处理任务（使用 WIC + 文件缓存）
+                        // 处理任务（使用 WIC + 文件缓存 + 条件匹配）
                         let result = Self::process_task_v2(
                             &py_state,
                             &condition_settings,
+                            &conditions_list,
                             &cache_dir,
                             &cache_map,
                             &task,
@@ -958,10 +959,11 @@ impl UpscaleService {
         }
     }
 
-    /// 处理单个任务（V2：WIC 处理 + 文件缓存）
+    /// 处理单个任务（V2：WIC 处理 + 文件缓存 + 条件匹配）
     fn process_task_v2(
         py_state: &Arc<PyO3UpscalerState>,
         condition_settings: &Arc<RwLock<ConditionalUpscaleSettings>>,
+        conditions_list: &Arc<RwLock<Vec<crate::commands::upscale_service_commands::FrontendCondition>>>,
         cache_dir: &Path,
         cache_map: &Arc<RwLock<HashMap<(String, usize), CacheEntry>>>,
         task: &UpscaleTask,
@@ -986,31 +988,94 @@ impl UpscaleService {
         let height = decode_result.height;
         log_debug!("📐 WIC 解码完成: {}x{}", width, height);
 
-        // 2. 检查条件
-        if let Ok(settings) = condition_settings.read() {
-            if settings.enabled && !settings.check_image(width, height) {
-                log_debug!(
-                    "⏭️ 不满足条件 page {} ({}x{})",
-                    task.page_index,
-                    width,
-                    height
-                );
+        // 2. 条件匹配决定模型
+        // 如果任务模型为空（model_name 为空），则使用条件匹配
+        let matched_model = if task.model.model_name.is_empty() {
+            // 从条件列表中匹配
+            let conditions_enabled = if let Ok(s) = condition_settings.read() {
+                s.enabled
+            } else {
+                true // 默认启用条件超分
+            };
+            
+            if conditions_enabled {
+                if let Ok(list) = conditions_list.read() {
+                    let mut result_model: Option<UpscaleModel> = None;
+                    
+                    // 遍历条件（已按优先级排序）
+                    for cond in list.iter() {
+                        if !cond.enabled {
+                            continue;
+                        }
+                        
+                        // 检查尺寸条件
+                        let match_width = cond.min_width == 0 || width >= cond.min_width;
+                        let match_height = cond.min_height == 0 || height >= cond.min_height;
+                        let match_max_width = cond.max_width == 0 || width <= cond.max_width;
+                        let match_max_height = cond.max_height == 0 || height <= cond.max_height;
+                        
+                        if match_width && match_height && match_max_width && match_max_height {
+                            if cond.skip {
+                                log_debug!("⏭️ 条件 '{}' 匹配，跳过超分 ({}x{})", cond.name, width, height);
+                                return Ok(UpscaleReadyPayload {
+                                    book_path: task.book_path.clone(),
+                                    page_index: task.page_index,
+                                    image_hash: task.image_hash.clone(),
+                                    status: UpscaleStatus::Skipped,
+                                    cache_path: None,
+                                    error: Some(format!("条件 '{}' 要求跳过", cond.name)),
+                                    original_size: Some((width, height)),
+                                    upscaled_size: None,
+                                    is_preload: task.score.priority != TaskPriority::Current,
+                                });
+                            }
+                            
+                            log_debug!(
+                                "✅ 条件 '{}' 匹配 ({}x{}) -> 模型: {}, 缩放: {}x",
+                                cond.name, width, height, cond.model_name, cond.scale
+                            );
+                            
+                            result_model = Some(UpscaleModel {
+                                model_id: 0, // 稍后从 model_name 解析
+                                model_name: cond.model_name.clone(),
+                                scale: cond.scale,
+                                tile_size: cond.tile_size,
+                                noise_level: cond.noise_level,
+                            });
+                            break;
+                        }
+                    }
+                    
+                    result_model
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            // 使用任务指定的模型
+            Some(task.model.clone())
+        };
+        
+        // 如果没有匹配到模型，跳过超分
+        let final_model = match matched_model {
+            Some(m) => m,
+            None => {
+                log_debug!("⚠️ 无条件匹配 ({}x{}), 跳过超分", width, height);
                 return Ok(UpscaleReadyPayload {
                     book_path: task.book_path.clone(),
                     page_index: task.page_index,
                     image_hash: task.image_hash.clone(),
                     status: UpscaleStatus::Skipped,
                     cache_path: None,
-                    error: Some(format!(
-                        "不满足条件: {}x{} 不在设定范围内",
-                        width, height
-                    )),
+                    error: Some(format!("无条件匹配 ({}x{})", width, height)),
                     original_size: Some((width, height)),
                     upscaled_size: None,
                     is_preload: task.score.priority != TaskPriority::Current,
                 });
             }
-        }
+        };
 
         // 3. 执行超分
         let manager = {
@@ -1055,19 +1120,19 @@ impl UpscaleService {
         };
 
         // 解析模型 ID（如果是 0，则从模型名称解析）
-        let model = if task.model.model_id == 0 && !task.model.model_name.is_empty() {
-            let model_id = manager.get_model_id(&task.model.model_name)
+        let model = if final_model.model_id == 0 && !final_model.model_name.is_empty() {
+            let model_id = manager.get_model_id(&final_model.model_name)
                 .unwrap_or_else(|e| {
                     log_debug!("⚠️ 解析模型 ID 失败 ({}), 使用默认值 8", e);
                     8 // 默认 MODEL_WAIFU2X_CUNET_UP2X
                 });
-            log_debug!("📋 模型 ID 解析: {} -> {}", task.model.model_name, model_id);
+            log_debug!("📋 模型 ID 解析: {} -> {}", final_model.model_name, model_id);
             UpscaleModel {
                 model_id,
-                ..task.model.clone()
+                ..final_model.clone()
             }
         } else {
-            task.model.clone()
+            final_model.clone()
         };
 
         let result_bytes = manager.upscale_image_memory(
@@ -1080,7 +1145,7 @@ impl UpscaleService {
         )?;
 
         // 4. 计算超分后尺寸
-        let scale = task.model.scale as u32;
+        let scale = final_model.scale as u32;
         let upscaled_width = width * scale;
         let upscaled_height = height * scale;
 
@@ -1088,8 +1153,8 @@ impl UpscaleService {
         let filename = format!(
             "{}_sr[{}_{scale}x].webp",
             task.image_hash,
-            task.model.model_name,
-            scale = task.model.scale
+            final_model.model_name,
+            scale = final_model.scale
         );
         let cache_path = cache_dir.join(&filename);
         

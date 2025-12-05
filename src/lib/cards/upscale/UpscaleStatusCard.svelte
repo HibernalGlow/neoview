@@ -27,6 +27,56 @@ let showPreview = $state(false);
 // 是否显示放大对比面板
 let showZoomCompare = $state(false);
 
+// 浮窗尺寸和位置
+let floatWindow = $state({
+	width: 400,
+	height: 450,
+	x: 0, // 由 CSS right 控制，这里不用
+	y: 0,
+});
+
+// 拖拽调整大小逻辑
+let resizing = $state<string | null>(null);
+let startPos = { x: 0, y: 0, width: 0, height: 0 };
+
+function startResize(e: MouseEvent, direction: string) {
+	e.preventDefault();
+	resizing = direction;
+	startPos = {
+		x: e.clientX,
+		y: e.clientY,
+		width: floatWindow.width,
+		height: floatWindow.height,
+	};
+	window.addEventListener('mousemove', onResize);
+	window.addEventListener('mouseup', stopResize);
+}
+
+function onResize(e: MouseEvent) {
+	if (!resizing) return;
+	
+	const dx = e.clientX - startPos.x;
+	const dy = e.clientY - startPos.y;
+	
+	let newWidth = startPos.width;
+	let newHeight = startPos.height;
+	
+	// 根据方向调整
+	if (resizing.includes('e')) newWidth = Math.max(200, startPos.width + dx);
+	if (resizing.includes('w')) newWidth = Math.max(200, startPos.width - dx);
+	if (resizing.includes('s')) newHeight = Math.max(200, startPos.height + dy);
+	if (resizing.includes('n')) newHeight = Math.max(200, startPos.height - dy);
+	
+	floatWindow.width = newWidth;
+	floatWindow.height = newHeight;
+}
+
+function stopResize() {
+	resizing = null;
+	window.removeEventListener('mousemove', onResize);
+	window.removeEventListener('mouseup', stopResize);
+}
+
 // 超分版本（触发响应式更新）
 let upscaleVersion = $derived(imagePool.version);
 
@@ -238,9 +288,21 @@ let upscaledDimensions = $derived.by(() => {
 <!-- 可调整大小的浮窗对比 -->
 {#if showZoomCompare && hasUpscaled && originalUrl && upscaledUrl}
 	<div 
-		class="fixed z-50 bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-2xl overflow-hidden resize"
-		style="right: 16px; top: 50%; transform: translateY(-50%); width: 320px; height: 400px; min-width: 200px; min-height: 200px;"
+		class="fixed z-50 bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-2xl overflow-hidden"
+		style="right: 16px; top: 50%; transform: translateY(-50%); width: {floatWindow.width}px; height: {floatWindow.height}px;"
 	>
+		<!-- 调整大小手柄 -->
+		<!-- 四边 -->
+		<div class="absolute top-0 left-2 right-2 h-1 cursor-n-resize hover:bg-primary/30" onmousedown={(e) => startResize(e, 'n')}></div>
+		<div class="absolute bottom-0 left-2 right-2 h-1 cursor-s-resize hover:bg-primary/30" onmousedown={(e) => startResize(e, 's')}></div>
+		<div class="absolute left-0 top-2 bottom-2 w-1 cursor-w-resize hover:bg-primary/30" onmousedown={(e) => startResize(e, 'w')}></div>
+		<div class="absolute right-0 top-2 bottom-2 w-1 cursor-e-resize hover:bg-primary/30" onmousedown={(e) => startResize(e, 'e')}></div>
+		<!-- 四角 -->
+		<div class="absolute top-0 left-0 w-3 h-3 cursor-nw-resize hover:bg-primary/30" onmousedown={(e) => startResize(e, 'nw')}></div>
+		<div class="absolute top-0 right-0 w-3 h-3 cursor-ne-resize hover:bg-primary/30" onmousedown={(e) => startResize(e, 'ne')}></div>
+		<div class="absolute bottom-0 left-0 w-3 h-3 cursor-sw-resize hover:bg-primary/30" onmousedown={(e) => startResize(e, 'sw')}></div>
+		<div class="absolute bottom-0 right-0 w-3 h-3 cursor-se-resize hover:bg-primary/30" onmousedown={(e) => startResize(e, 'se')}></div>
+
 		<!-- 标题栏 -->
 		<div class="flex items-center justify-between px-3 py-2 border-b border-border/50 bg-muted/30">
 			<span class="text-xs font-medium flex items-center gap-1.5">
@@ -281,7 +343,7 @@ let upscaledDimensions = $derived.by(() => {
 						? `${originalDimensions.width}×${originalDimensions.height}` 
 						: ''}
 			</span>
-			<span class="text-muted-foreground">点击切换 | 拖拽边角调整大小</span>
+			<span class="text-muted-foreground">点击切换 | 拖拽边缘调整</span>
 		</div>
 	</div>
 {/if}

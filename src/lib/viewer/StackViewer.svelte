@@ -14,9 +14,9 @@
   import { settingsManager } from '$lib/settings/settingsManager';
   import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
   import { pipelineLatencyStore } from '$lib/stores/pipelineLatency.svelte';
+  import CanvasFrame from './components/CanvasFrame.svelte';
   import {
     type FrameSlot,
-    type SlotPosition,
     createEmptySlot,
     SlotZIndex,
   } from './types/frameSlot';
@@ -33,6 +33,7 @@
     viewPositionX = 50,
     viewPositionY = 50,
     viewportSize = { width: 0, height: 0 },
+    useCanvas = false,  // 使用 Canvas 预渲染模式
     onPageChange,
     onImageLoad,
   }: {
@@ -43,6 +44,7 @@
     viewPositionX?: number;
     viewPositionY?: number;
     viewportSize?: { width: number; height: number };
+    useCanvas?: boolean;
     onPageChange?: (pageIndex: number) => void;
     onImageLoad?: (e: Event, index: number) => void;
   } = $props();
@@ -86,6 +88,19 @@
     return parts.length > 0 ? parts.join(' ') : 'none';
   });
   
+  /**
+   * 预计算图片的 CSS 缩放比例
+   * 基于当前视口尺寸，计算适应模式下的缩放值
+   */
+  function computeScale(imgWidth: number, imgHeight: number): number {
+    if (!viewportSize.width || !viewportSize.height) return 1;
+    
+    // 计算适应视口的缩放（contain 模式）
+    const scaleX = viewportSize.width / imgWidth;
+    const scaleY = viewportSize.height / imgHeight;
+    return Math.min(scaleX, scaleY);
+  }
+  
   // ============================================================================
   // 核心方法
   // ============================================================================
@@ -125,15 +140,19 @@
         slot: slot.position,
       });
       
+      const dims = cached.width && cached.height 
+        ? { width: cached.width, height: cached.height } 
+        : null;
+      
       return {
         position: slot.position,
         pageIndex,
         url: cached.url,
-        dimensions: cached.width && cached.height 
-          ? { width: cached.width, height: cached.height } 
-          : null,
+        blob: cached.blob ?? null,
+        dimensions: dims,
         loading: false,
         backgroundColor: imagePool.getBackgroundColor(pageIndex) ?? null,
+        precomputedScale: dims ? computeScale(dims.width, dims.height) : null,
       };
     }
     
@@ -166,15 +185,19 @@
           slot: slot.position,
         });
         
+        const dims = image.width && image.height 
+          ? { width: image.width, height: image.height } 
+          : null;
+          
         return {
           position: slot.position,
           pageIndex,
           url: image.url,
-          dimensions: image.width && image.height 
-            ? { width: image.width, height: image.height } 
-            : null,
+          blob: image.blob ?? null,
+          dimensions: dims,
           loading: false,
           backgroundColor: imagePool.getBackgroundColor(pageIndex) ?? null,
+          precomputedScale: dims ? computeScale(dims.width, dims.height) : null,
         };
       }
     } catch (err) {
@@ -441,40 +464,67 @@
 <div class="stack-viewer">
   <!-- 前页层（隐藏，预加载用） -->
   {#if prevSlot.url}
-    <div 
-      class="frame-layer prev-layer"
-      style:z-index={SlotZIndex.PREV}
-      style:opacity={0}
-      data-page-index={prevSlot.pageIndex}
-    >
-      <img 
-        src={prevSlot.url} 
-        alt="Previous page"
-        class="frame-image"
-        draggable="false"
+    {#if useCanvas}
+      <CanvasFrame
+        imageUrl={prevSlot.url}
+        imageBlob={prevSlot.blob}
+        targetWidth={viewportSize.width}
+        targetHeight={viewportSize.height}
+        opacity={0}
+        zIndex={SlotZIndex.PREV}
       />
-    </div>
+    {:else}
+      <div 
+        class="frame-layer prev-layer"
+        style:z-index={SlotZIndex.PREV}
+        style:opacity={0}
+        data-page-index={prevSlot.pageIndex}
+      >
+        <img 
+          src={prevSlot.url} 
+          alt="Previous page"
+          class="frame-image"
+          draggable="false"
+        />
+      </div>
+    {/if}
   {/if}
   
   <!-- 当前页层 -->
   {#if currentSlot.url}
-    <div 
-      class="frame-layer current-layer"
-      style:z-index={SlotZIndex.CURRENT}
-      style:opacity={1}
-      style:transition={`opacity ${transitionDuration}ms ease`}
-      style:transform={transformStyle}
-      style:transform-origin={transformOrigin}
-      data-page-index={currentSlot.pageIndex}
-    >
-      <img 
-        src={currentSlot.url} 
-        alt="Current page"
-        class="frame-image"
-        draggable="false"
-        onload={(e) => onImageLoad?.(e, 0)}
+    {#if useCanvas}
+      <!-- Canvas 预渲染模式 -->
+      <CanvasFrame
+        imageUrl={currentSlot.url}
+        imageBlob={currentSlot.blob}
+        targetWidth={viewportSize.width}
+        targetHeight={viewportSize.height}
+        {scale}
+        {rotation}
+        {transformOrigin}
+        opacity={1}
+        zIndex={SlotZIndex.CURRENT}
       />
-    </div>
+    {:else}
+      <!-- 传统 img 模式 -->
+      <div 
+        class="frame-layer current-layer"
+        style:z-index={SlotZIndex.CURRENT}
+        style:opacity={1}
+        style:transition={`opacity ${transitionDuration}ms ease`}
+        style:transform={transformStyle}
+        style:transform-origin={transformOrigin}
+        data-page-index={currentSlot.pageIndex}
+      >
+        <img 
+          src={currentSlot.url} 
+          alt="Current page"
+          class="frame-image"
+          draggable="false"
+          onload={(e) => onImageLoad?.(e, 0)}
+        />
+      </div>
+    {/if}
   {:else if currentSlot.loading}
     <div 
       class="frame-layer loading-layer"
@@ -493,19 +543,30 @@
   
   <!-- 后页层（隐藏，预加载用） -->
   {#if nextSlot.url}
-    <div 
-      class="frame-layer next-layer"
-      style:z-index={SlotZIndex.NEXT}
-      style:opacity={0}
-      data-page-index={nextSlot.pageIndex}
-    >
-      <img 
-        src={nextSlot.url} 
-        alt="Next page"
-        class="frame-image"
-        draggable="false"
+    {#if useCanvas}
+      <CanvasFrame
+        imageUrl={nextSlot.url}
+        imageBlob={nextSlot.blob}
+        targetWidth={viewportSize.width}
+        targetHeight={viewportSize.height}
+        opacity={0}
+        zIndex={SlotZIndex.NEXT}
       />
-    </div>
+    {:else}
+      <div 
+        class="frame-layer next-layer"
+        style:z-index={SlotZIndex.NEXT}
+        style:opacity={0}
+        data-page-index={nextSlot.pageIndex}
+      >
+        <img 
+          src={nextSlot.url} 
+          alt="Next page"
+          class="frame-image"
+          draggable="false"
+        />
+      </div>
+    {/if}
   {/if}
   
   <!-- 超分层 -->

@@ -15,12 +15,16 @@ export interface FrameSlot {
   pageIndex: number;
   /** 图片 URL */
   url: string | null;
+  /** 图片 Blob（用于 Canvas 预渲染） */
+  blob: Blob | null;
   /** 图片尺寸 */
   dimensions: { width: number; height: number } | null;
   /** 是否正在加载 */
   loading: boolean;
   /** 预加载的背景色 */
   backgroundColor: string | null;
+  /** 预计算的缩放比例（基于当前视口和缩放模式） */
+  precomputedScale: number | null;
 }
 
 /** 创建空帧槽 */
@@ -29,9 +33,11 @@ export function createEmptySlot(position: SlotPosition): FrameSlot {
     position,
     pageIndex: -1,
     url: null,
+    blob: null,
     dimensions: null,
     loading: false,
     backgroundColor: null,
+    precomputedScale: null,
   };
 }
 

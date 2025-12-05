@@ -639,6 +639,7 @@
       {viewPositionX}
       {viewPositionY}
       {viewportSize}
+      useCanvas={false}
       onImageLoad={handleImageLoad}
     />
   {:else}

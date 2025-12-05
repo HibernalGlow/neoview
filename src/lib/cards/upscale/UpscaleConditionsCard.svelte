@@ -83,7 +83,7 @@ function handleConditionsChange(event: CustomEvent) {
 				gpuOptions={GPU_OPTIONS}
 				tileSizeOptions={TILE_SIZE_OPTIONS}
 				noiseLevelOptions={NOISE_LEVEL_OPTIONS}
-				on:change={handleConditionsChange}
+				on:conditionsChanged={handleConditionsChange}
 			/>
 		</div>
 	{/if}

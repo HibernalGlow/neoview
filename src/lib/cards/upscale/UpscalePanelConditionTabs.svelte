@@ -176,7 +176,7 @@ async function handleSync() {
 			scale: c.action.scale,
 			tileSize: c.action.tileSize,
 			noiseLevel: c.action.noiseLevel,
-			skip: c.action.skip,
+			skip: c.action.skip ?? false,
 		}));
 		await saveStartupConfig(config);
 		

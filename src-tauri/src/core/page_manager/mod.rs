@@ -460,12 +460,20 @@ impl PageContentManager {
                                 let mime = Self::detect_mime_type(&page_info.inner_path);
                                 (data, mime)
                             }
-                            BookType::Directory => {
+                            BookType::Directory | BookType::SingleImage => {
                                 let data = std::fs::read(&page_info.inner_path)
                                     .map_err(|e| crate::core::job_engine::JobError::new(format!("读取失败: {}", e)))?;
 
                                 let mime = Self::detect_mime_type(&page_info.inner_path);
                                 (data, mime)
+                            }
+                            BookType::SingleVideo => {
+                                // 视频文件不预加载到内存，跳过
+                                return Err(crate::core::job_engine::JobError::new("视频不预加载"));
+                            }
+                            BookType::Playlist => {
+                                // 播放列表暂不支持
+                                return Err(crate::core::job_engine::JobError::new("播放列表不支持"));
                             }
                         };
 

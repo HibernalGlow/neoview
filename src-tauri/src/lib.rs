@@ -32,99 +32,19 @@ use std::sync::Mutex;
 use std::time::Duration;
 use tauri::Manager;
 
-fn configure_embedded_python(app: &tauri::AppHandle) {
-    if std::env::var_os("PYTHONHOME").is_some() {
-        return;
-    }
-
-    #[cfg(debug_assertions)]
-    {
-        if let Ok(current_dir) = std::env::current_dir() {
-            let candidate = current_dir.join("src-tauri").join("python");
-            if candidate.join("python311.dll").exists() {
-                std::env::set_var("PYTHONHOME", &candidate);
-                return;
-            }
-        }
-    }
-
-    if let Ok(resource_dir) = app.path().resource_dir() {
-        let candidate = resource_dir.join("python");
-        if candidate.join("python311.dll").exists() {
-            std::env::set_var("PYTHONHOME", &candidate);
-        }
-    }
-}
-
 #[allow(clippy::missing_panics_doc)]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // 设置 panic hook，避免崩溃导致软件闪退
-    // 使用更彻底的 panic 处理，防止 dav1d 等库的 panic 导致进程退出
-    std::panic::set_hook(Box::new(|panic_info| {
-        // 检查是否是图像解码相关的 panic（dav1d/avif-native）
-        let is_image_panic = if let Some(location) = panic_info.location() {
-            let file = location.file();
-            file.contains("dav1d")
-                || file.contains("avif")
-                || file.contains("avif-native")
-                || file.contains("image")
-                || file.contains("decoder")
-        } else {
-            // 如果没有位置信息，检查 panic 消息
-            let msg = format!("{:?}", panic_info);
-            msg.contains("dav1d")
-                || msg.contains("avif")
-                || msg.contains("image")
-                || msg.contains("decoder")
-        };
-
-        if is_image_panic {
-            // 图像解码相关的 panic，静默处理，不终止进程
-            eprintln!("⚠️ 图像解码 panic (已捕获，不影响运行)");
-            if let Some(location) = panic_info.location() {
-                eprintln!("   位置: {}:{}", location.file(), location.line());
-            }
-            // 不调用 std::process::abort()，让程序继续运行
-            return;
-        }
-
-        // 其他 panic 记录详细信息，但不终止进程
-        eprintln!("⚠️ Panic caught: {:?}", panic_info);
-        if let Some(location) = panic_info.location() {
-            eprintln!(
-                "   Location: {}:{}:{}",
-                location.file(),
-                location.line(),
-                location.column()
-            );
-        }
-        // 注意：这里不调用 abort，让程序继续运行
-    }));
-
-    // 设置日志级别，屏蔽 avif-native/mp4parse 的 TRACE 日志
-    std::env::set_var("RUST_LOG", "info,mp4parse=info,avif_native=info");
 
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Info)
-                .filter(|metadata| {
-                    // 过滤掉 mp4parse 和 avif_native 的 TRACE 和 DEBUG 日志
-                    if metadata.target().starts_with("mp4parse")
-                        || metadata.target().starts_with("avif_native")
-                    {
-                        metadata.level() <= log::Level::Info
-                    } else {
-                        true
-                    }
-                })
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_cli::init())
         .setup(|app| {
-            configure_embedded_python(&app.handle());
             // 初始化文件系统管理器和压缩包管理器
             let fs_manager = FsManager::new();
             let archive_manager = ArchiveManager::new();

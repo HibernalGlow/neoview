@@ -3139,6 +3139,7 @@ dependencies = [
  "thiserror 2.0.12",
  "threadpool",
  "tokio",
+ "tokio-util",
  "trash",
  "unrar",
  "url",
@@ -5743,6 +5744,8 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
+ "futures-util",
+ "hashbrown 0.15.4",
  "pin-project-lite",
  "tokio",
 ]

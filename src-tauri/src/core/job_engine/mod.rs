@@ -205,7 +205,8 @@ impl JobEngine {
         }
 
         // 等待所有 Worker 完成
-        for handle in self.worker_handles {
+        let handles = std::mem::take(&mut self.worker_handles);
+        for handle in handles {
             let _ = handle.await;
         }
 

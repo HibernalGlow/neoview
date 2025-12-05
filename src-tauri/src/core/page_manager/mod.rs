@@ -331,17 +331,19 @@ impl PageContentManager {
             .iter()
             .filter_map(|&idx| {
                 let page_info = book.get_page(idx)?.clone();
-                let book_path = book_path.clone();
+                let book_path_for_job = book_path.clone();
+                let book_path_for_closure = book_path.clone();
                 let archive_manager = Arc::clone(&self.archive_manager);
                 let memory_pool = Arc::clone(&self.memory_pool);
                 let current_index = book.current_index;
                 let read_direction = book.read_direction;
 
                 Some(Job::page_load(
-                    &book_path,
+                    &book_path_for_job,
                     idx,
                     JobPriority::Preload,
                     move |token| async move {
+                        let book_path = book_path_for_closure;
                         if token.is_cancelled() {
                             return Err(crate::core::job_engine::JobError::cancelled());
                         }

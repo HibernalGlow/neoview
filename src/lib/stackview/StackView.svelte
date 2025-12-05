@@ -199,6 +199,10 @@
   // 当前书本上下文
   let bookContext = $state<BookContext | null>(null);
   
+  // 追踪上一次非全景时的 pageMode（用于全景模式保持双页状态）
+  let lastNonPanoramaPageMode = $state<'single' | 'double'>('single');
+  let wasInPanorama = $state(false);
+  
   // 同步旧版 viewMode 到 BookContext（桥接）
   $effect(() => {
     const ctx = bookContext;
@@ -210,9 +214,18 @@
     // 根据旧模式设置 BookContext
     if (mode === 'panorama') {
       ctx.setPanoramaEnabled(true);
+      // 进入全景模式时，使用之前的 pageMode 或从设置获取
+      if (!wasInPanorama) {
+        // 第一次进入全景，使用之前保存的 pageMode
+        ctx.setPageMode(lastNonPanoramaPageMode);
+        wasInPanorama = true;
+      }
+      // 已在全景模式中，保持当前 pageMode 不变
     } else {
       ctx.setPanoramaEnabled(false);
       ctx.setPageMode(mode);
+      lastNonPanoramaPageMode = mode;
+      wasInPanorama = false;
     }
     ctx.setOrientation(orient);
   });

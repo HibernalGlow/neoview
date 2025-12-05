@@ -443,13 +443,26 @@ export function toggleReadingDirectionLock(direction: ReadingDirection) {
 }
 
 /**
+ * 计算翻页步进：双页模式（包括全景+双页）翻 2 页，否则翻 1 页
+ */
+function getPageStep(): number {
+	const snapshot = appState.getSnapshot();
+	const viewMode = snapshot.viewer.viewMode;
+	// 全景模式下检查设置中是否启用双页
+	if (viewMode === 'panorama') {
+		const settings = settingsManager.getSettings();
+		return settings.book.doublePageView ? 2 : 1;
+	}
+	return viewMode === 'double' ? 2 : 1;
+}
+
+/**
  * 向左翻页（方向性翻页，不受阅读方向影响）
  */
 export async function pageLeft() {
 	try {
-		const snapshot = appState.getSnapshot();
 		const currentIndex = bookStore.currentPageIndex;
-		const step = snapshot.viewer.viewMode === 'double' ? 2 : 1;
+		const step = getPageStep();
 		const targetIndex = Math.max(currentIndex - step, 0);
 		await bookStore.navigateToPage(targetIndex);
 	} catch (err) {
@@ -462,9 +475,8 @@ export async function pageLeft() {
  */
 export async function pageRight() {
 	try {
-		const snapshot = appState.getSnapshot();
 		const currentIndex = bookStore.currentPageIndex;
-		const step = snapshot.viewer.viewMode === 'double' ? 2 : 1;
+		const step = getPageStep();
 		const targetIndex = Math.min(currentIndex + step, bookStore.totalPages - 1);
 		await bookStore.navigateToPage(targetIndex);
 	} catch (err) {

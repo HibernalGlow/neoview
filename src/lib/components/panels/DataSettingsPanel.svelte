@@ -29,6 +29,7 @@
 	} from '@tanstack/table-core';
 	import { settingsManager, type FullExportPayload } from '$lib/stores/settingsManager.svelte';
 	import { getPerformanceSettings } from '$lib/api/performance';
+	import StartupConfigPanel from './StartupConfigPanel.svelte';
 
 	type ModuleId =
 		| 'nativeSettings'
@@ -740,4 +741,7 @@
 	{#if lastMessage}
 		<p class="mt-2 text-xs text-muted-foreground">{lastMessage}</p>
 	{/if}
+
+	<!-- 启动配置 -->
+	<StartupConfigPanel />
 </div>

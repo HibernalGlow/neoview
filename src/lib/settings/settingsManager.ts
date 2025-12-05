@@ -129,17 +129,6 @@ export interface NeoViewSettings {
     theme: 'system' | 'light' | 'dark';
     fontSize: 'small' | 'medium' | 'large';
     uiScale: number;
-    /** 自定义字体设置 */
-    customFont: {
-      /** 是否启用自定义字体覆盖主题字体 */
-      enabled: boolean;
-      /** 主字体列表（按优先级排序） */
-      fontFamilies: string[];
-      /** UI 字体（按钮、标签等） */
-      uiFontFamilies: string[];
-      /** 代码/等宽字体 */
-      monoFontFamilies: string[];
-    };
   };
   panels: {
     leftSidebarVisible: boolean;
@@ -309,13 +298,7 @@ const defaultSettings: NeoViewSettings = {
   theme: {
     theme: 'system',
     fontSize: 'medium',
-    uiScale: 1.0,
-    customFont: {
-      enabled: false,
-      fontFamilies: [],
-      uiFontFamilies: [],
-      monoFontFamilies: []
-    }
+    uiScale: 1.0
   },
   panels: {
     leftSidebarVisible: true,

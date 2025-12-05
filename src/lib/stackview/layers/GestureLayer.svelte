@@ -13,6 +13,11 @@
   import { zoomIn, zoomOut, resetZoom, toggleFullscreen } from '$lib/stores';
   import { showToast } from '$lib/utils/toast';
   
+  // 操作提示（短暂显示）
+  function showActionToast(message: string) {
+    showToast({ title: message, variant: 'info' });
+  }
+  
   // 调试模式
   let {
     // 是否为视频模式（视频模式下只处理边缘区域）

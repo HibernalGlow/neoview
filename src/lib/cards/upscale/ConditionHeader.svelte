@@ -12,7 +12,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '$lib/components/ui/dropdown-menu';
-import { Plus, Upload, Download, RotateCcw } from '@lucide/svelte';
+import { Plus, Upload, Download, RotateCcw, RefreshCw } from '@lucide/svelte';
 import type { ConditionPresetKey } from '$lib/utils/upscale/conditions';
 import { CONDITION_PRESET_OPTIONS } from '$lib/utils/upscale/conditions';
 
@@ -22,6 +22,7 @@ const dispatch = createEventDispatcher<{
 	export: void;
 	import: void;
 	restore: void;
+	sync: void;
 }>();
 
 const presetOptions = CONDITION_PRESET_OPTIONS;
@@ -69,6 +70,10 @@ const presetOptions = CONDITION_PRESET_OPTIONS;
 		<Button variant="ghost" size="sm" class="h-7 text-xs" onclick={() => dispatch('restore')}>
 			<RotateCcw class="w-3 h-3 mr-1" />
 			重置
+		</Button>
+		<Button variant="default" size="sm" class="h-7 text-xs" onclick={() => dispatch('sync')}>
+			<RefreshCw class="w-3 h-3 mr-1" />
+			同步
 		</Button>
 	</div>
 </div>

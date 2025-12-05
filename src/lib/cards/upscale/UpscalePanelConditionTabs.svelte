@@ -18,6 +18,7 @@ import { createBlankCondition, createPresetCondition, getDefaultConditionPresets
 import ConditionHeader from './ConditionHeader.svelte';
 import ConditionMatchEditor from './ConditionMatchEditor.svelte';
 import ConditionActionEditor from './ConditionActionEditor.svelte';
+import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
 
 interface Props {
 	conditions: UpscaleCondition[];
@@ -149,6 +150,19 @@ function handleRestore() {
 	activeTab = presets[0]?.id ?? '';
 	persistConditions(presets);
 }
+
+async function handleSync() {
+	try {
+		// 同步当前条件到后端
+		await upscaleStore.syncConditionSettings({
+			conditionalUpscaleEnabled,
+			conditionsList: conditions,
+		});
+		console.log('✅ 条件设置已同步到后端');
+	} catch (err) {
+		console.error('❌ 同步条件设置失败:', err);
+	}
+}
 </script>
 
 <div class="w-full space-y-3">
@@ -159,6 +173,7 @@ function handleRestore() {
 			on:export={handleExport}
 			on:import={handleImport}
 			on:restore={handleRestore}
+			on:sync={handleSync}
 		/>
 
 		{#if conditions.length > 0}

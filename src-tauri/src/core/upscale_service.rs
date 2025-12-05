@@ -45,14 +45,14 @@ macro_rules! log_debug {
 // ============================================================================
 
 /// 服务配置
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct UpscaleServiceConfig {
     /// 工作线程数
     pub worker_threads: usize,
-    /// 内存缓存大小（槽位数）
-    pub memory_cache_size: usize,
-    /// 预加载范围（前后各 N 页）
+    /// 预超分范围（当前页前后各 N 页）
     pub preload_range: usize,
+    /// 前方页权重（阅读方向优先）
+    pub forward_priority_weight: f32,
     /// 默认超时（秒）
     pub default_timeout: f64,
 }
@@ -61,8 +61,8 @@ impl Default for UpscaleServiceConfig {
     fn default() -> Self {
         Self {
             worker_threads: 2,
-            memory_cache_size: 32,
-            preload_range: 3,
+            preload_range: 5, // 前后各5页
+            forward_priority_weight: 0.7, // 前方页优先
             default_timeout: 120.0,
         }
     }
@@ -134,15 +134,26 @@ pub struct UpscaleServiceStats {
 // 任务定义
 // ============================================================================
 
-/// 任务优先级
+/// 任务优先级（数值越小优先级越高）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TaskPriority {
     /// 当前页面（最高优先级）
     Current = 0,
-    /// 预加载页面
-    Preload = 1,
+    /// 后方页（即将翻到的，高优先级）
+    Forward = 1,
+    /// 前方页（已翻过的，低优先级，通常不预加载）
+    Backward = 2,
     /// 后台任务
-    Background = 2,
+    Background = 3,
+}
+
+/// 任务优先级分数（用于排序，越小越优先）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TaskScore {
+    /// 基础优先级
+    pub priority: TaskPriority,
+    /// 距离当前页的偏移（绝对值）
+    pub distance: usize,
 }
 
 /// 超分任务
@@ -160,14 +171,38 @@ pub struct UpscaleTask {
     pub archive_path: Option<String>,
     /// 图片哈希
     pub image_hash: String,
-    /// 优先级
-    pub priority: TaskPriority,
+    /// 优先级分数（用于排序）
+    pub score: TaskScore,
     /// 模型配置
     pub model: UpscaleModel,
     /// 是否允许缓存
     pub allow_cache: bool,
     /// 提交时间
     pub submitted_at: Instant,
+}
+
+impl UpscaleTask {
+    /// 计算任务分数（基于当前页）
+    pub fn calculate_score(page_index: usize, current_page: usize) -> TaskScore {
+        if page_index == current_page {
+            TaskScore {
+                priority: TaskPriority::Current,
+                distance: 0,
+            }
+        } else if page_index > current_page {
+            // 后方页（即将翻到）
+            TaskScore {
+                priority: TaskPriority::Forward,
+                distance: page_index - current_page,
+            }
+        } else {
+            // 前方页（已翻过）
+            TaskScore {
+                priority: TaskPriority::Backward,
+                distance: current_page - page_index,
+            }
+        }
+    }
 }
 
 /// 缓存条目（只记录路径，不存储数据）
@@ -324,18 +359,18 @@ impl UpscaleService {
                         continue;
                     }
 
-                    // 获取任务
+                    // 获取任务（按分数排序，分数越小优先级越高）
                     let task = {
                         let mut queue = match task_queue.lock() {
                             Ok(q) => q,
                             Err(_) => continue,
                         };
 
-                        // 优先取高优先级任务
+                        // 优先取分数最小的任务（当前页 > 后方近页 > 后方远页）
                         queue
                             .iter()
                             .enumerate()
-                            .min_by_key(|(_, t)| t.priority)
+                            .min_by_key(|(_, t)| &t.score)
                             .map(|(idx, _)| idx)
                             .and_then(|idx| queue.remove(idx))
                     };
@@ -415,7 +450,7 @@ impl UpscaleService {
                                     error: Some(e),
                                     original_size: None,
                                     upscaled_size: None,
-                                    is_preload: task.priority != TaskPriority::Current,
+                                    is_preload: task.score.priority != TaskPriority::Current,
                                 };
                                 let _ = app.emit("upscale-ready", payload);
                             }
@@ -516,9 +551,47 @@ impl UpscaleService {
         }
     }
 
-    /// 设置当前页面
+    /// 设置当前页面（触发预超分池更新）
     pub fn set_current_page(&self, page_index: usize) {
-        self.current_page.store(page_index, Ordering::SeqCst);
+        let old_page = self.current_page.swap(page_index, Ordering::SeqCst);
+        
+        // 如果页面变化较大（跳页），重新规划队列
+        if (page_index as i64 - old_page as i64).abs() > 1 {
+            self.replan_queue_for_jump(old_page, page_index);
+        }
+    }
+    
+    /// 跳页时重新规划队列
+    /// - 清除不在预超分范围内的待处理任务
+    /// - 重新计算所有任务的优先级分数
+    /// - 按新优先级排序（当前页 > 后方页 > 前方页）
+    fn replan_queue_for_jump(&self, _old_page: usize, new_page: usize) {
+        let range = self.config.preload_range;
+        // 只保留后方页（即将翻到的）+ 当前页，前方页不保留
+        let valid_end = new_page + range;
+        
+        if let Ok(mut queue) = self.task_queue.lock() {
+            let before = queue.len();
+            
+            // 只保留当前页和后方页的任务（前方页任务取消）
+            queue.retain(|task| {
+                task.page_index >= new_page && task.page_index <= valid_end
+            });
+            
+            let removed = before - queue.len();
+            if removed > 0 {
+                log_debug!("🔄 跳页清理: 移除 {} 个已翻过/超出范围的任务", removed);
+            }
+            
+            // 重新计算分数并排序
+            let mut tasks: Vec<_> = queue.drain(..).collect();
+            for task in &mut tasks {
+                task.score = UpscaleTask::calculate_score(task.page_index, new_page);
+            }
+            // 按分数排序（TaskScore 实现了 Ord）
+            tasks.sort_by(|a, b| a.score.cmp(&b.score));
+            queue.extend(tasks);
+        }
     }
 
     /// 请求超分（核心方法）
@@ -543,7 +616,7 @@ impl UpscaleService {
                     error: None,
                     original_size: None, // 可以从缓存读取，但暂时省略
                     upscaled_size: None,
-                    is_preload: task.priority != TaskPriority::Current,
+                    is_preload: task.score.priority != TaskPriority::Current,
                 };
                 let _ = app.emit("upscale-ready", payload);
             }
@@ -585,7 +658,12 @@ impl UpscaleService {
         Ok(())
     }
 
-    /// 请求预加载范围
+    /// 请求预超分范围（只加载后方页 + 当前页，前方页不加载）
+    /// 
+    /// 设计原则：
+    /// 1. 当前页优先级最高
+    /// 2. 后方页（即将翻到的）次优先，按距离排序
+    /// 3. 前方页（已翻过的）不预加载（已超分的缓存会保留）
     pub fn request_preload_range(
         &self,
         book_path: &str,
@@ -599,19 +677,23 @@ impl UpscaleService {
         }
 
         let range = self.config.preload_range;
-        let start = center_index.saturating_sub(range);
+        // 只加载当前页 + 后方页，不加载前方页
         let end = (center_index + range + 1).min(total_pages);
 
+        // 收集需要加载的任务，按优先级排序
+        let mut tasks_to_add: Vec<UpscaleTask> = Vec::new();
+
         for (page_index, image_path, hash) in image_paths.iter() {
-            if *page_index < start || *page_index >= end {
+            // 跳过前方页（已翻过的）
+            if *page_index < center_index {
+                continue;
+            }
+            // 跳过超出范围的
+            if *page_index >= end {
                 continue;
             }
 
-            let priority = if *page_index == center_index {
-                TaskPriority::Current
-            } else {
-                TaskPriority::Preload
-            };
+            let score = UpscaleTask::calculate_score(*page_index, center_index);
 
             let task = UpscaleTask {
                 book_path: book_path.to_string(),
@@ -620,14 +702,28 @@ impl UpscaleService {
                 is_archive: false, // TODO: 检测
                 archive_path: None,
                 image_hash: hash.clone(),
-                priority,
+                score,
                 model: model.clone(),
                 allow_cache: true,
                 submitted_at: Instant::now(),
             };
 
+            tasks_to_add.push(task);
+        }
+
+        // 按分数排序（当前页 > 后方近页 > 后方远页）
+        tasks_to_add.sort_by(|a, b| a.score.cmp(&b.score));
+
+        // 依次添加到队列
+        for task in tasks_to_add {
             let _ = self.request_upscale(task);
         }
+
+        log_debug!(
+            "📋 预超分请求: 当前页 {} + 后方 {} 页",
+            center_index,
+            range.min(total_pages.saturating_sub(center_index + 1))
+        );
     }
 
     /// 取消指定页面的任务
@@ -793,7 +889,7 @@ impl UpscaleService {
                     )),
                     original_size: Some((width, height)),
                     upscaled_size: None,
-                    is_preload: task.priority != TaskPriority::Current,
+                    is_preload: task.score.priority != TaskPriority::Current,
                 });
             }
         }
@@ -878,7 +974,7 @@ impl UpscaleService {
             error: None,
             original_size: Some((width, height)),
             upscaled_size: Some((upscaled_width, upscaled_height)),
-            is_preload: task.priority != TaskPriority::Current,
+            is_preload: task.score.priority != TaskPriority::Current,
         })
     }
 }

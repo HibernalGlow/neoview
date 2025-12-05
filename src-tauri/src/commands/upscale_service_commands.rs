@@ -160,10 +160,22 @@ pub async fn upscale_service_request(
     let guard = state.service.lock().await;
     let service = guard.as_ref().ok_or("UpscaleService 未初始化")?;
 
-    let priority = match request.priority.as_str() {
-        "current" => TaskPriority::Current,
-        "preload" => TaskPriority::Preload,
-        _ => TaskPriority::Background,
+    // 根据请求类型计算分数
+    use crate::core::upscale_service::{TaskScore, UpscaleTask as Task};
+    
+    let score = match request.priority.as_str() {
+        "current" => TaskScore {
+            priority: TaskPriority::Current,
+            distance: 0,
+        },
+        "forward" => TaskScore {
+            priority: TaskPriority::Forward,
+            distance: 1,
+        },
+        _ => TaskScore {
+            priority: TaskPriority::Background,
+            distance: 0,
+        },
     };
 
     let model = UpscaleModel {
@@ -181,7 +193,7 @@ pub async fn upscale_service_request(
         is_archive: false,
         archive_path: None,
         image_hash: request.image_hash,
-        priority,
+        score,
         model,
         allow_cache: true,
         submitted_at: std::time::Instant::now(),

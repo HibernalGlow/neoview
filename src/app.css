@@ -6,9 +6,6 @@
 
 :root {
 	--radius: 0.625rem;
-	/* 自定义字体变量（由 JavaScript 或内联脚本设置） */
-	--font-custom-sans: inherit;
-	--font-custom-mono: inherit;
 	--background: oklch(1 0 0);
 	--foreground: oklch(0.145 0 0);
 	--card: oklch(1 0 0);
@@ -39,7 +36,6 @@
 
 .dark {
 	--background: oklch(0.145 0 0);
-	--foreground: oklch(0.985 0 0);
 	--card: oklch(0.205 0 0);
 	--card-foreground: oklch(0.985 0 0);
 	--popover: oklch(0.205 0 0);
@@ -109,18 +105,7 @@
 		@apply border-border outline-ring/50;
 	}
 	body {
-		@apply bg-background text-foreground;
-	}
-	
-	/* 自定义字体应用（当 data-custom-font="enabled" 时生效） */
-	html[data-custom-font="enabled"] {
-		font-family: var(--font-custom-sans, inherit);
-	}
-	
-	html[data-custom-font="enabled"] code,
-	html[data-custom-font="enabled"] pre,
-	html[data-custom-font="enabled"] .font-mono {
-		font-family: var(--font-custom-mono, monospace);
+		@apply bg-background;
 	}
 	
 	/* 隐藏所有滚动条 */
@@ -165,30 +150,24 @@
 	
 	/* Breadcrumb 样式修复 */
 	[data-slot="breadcrumb-link"] {
-		color: var(--foreground) !important;
 		transition: color 0.2s ease;
 	}
 	
 	[data-slot="breadcrumb-link"]:hover {
-		color: var(--primary) !important;
 	}
 	
 	/* 确保 PathBar 中的链接样式正确 */
 	.flex.cursor-text [data-slot="breadcrumb-link"] {
-		color: var(--foreground) !important;
 	}
 	
 	.flex.cursor-text [data-slot="breadcrumb-link"]:hover {
-		color: var(--foreground) !important;
 	}
 	
 	/* PathBar 当前页 breadcrumb 文本和编辑输入框文本显式指定前景色 */
 	.flex.cursor-text [data-slot="breadcrumb-page"] {
-		color: var(--foreground) !important;
 	}
 	
 	.flex.cursor-text [data-slot="breadcrumb-edit"] {
-		color: var(--foreground) !important;
 	}
 	
 	/* ContextMenu 内的链接样式 */

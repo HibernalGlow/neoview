@@ -7,6 +7,7 @@ use crate::core::upscale_service::{
     TaskPriority, UpscaleService, UpscaleServiceConfig, UpscaleServiceStats, UpscaleTask,
 };
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;

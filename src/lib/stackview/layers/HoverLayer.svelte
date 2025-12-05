@@ -39,34 +39,25 @@
   
   // 缓存边界计算（仅在依赖变化时重算）
   let bounds = $derived.by(() => {
-    console.log(`🖼️ [HoverScroll] bounds 计算: viewport=${viewportSize.width}x${viewportSize.height}, imageSize=${imageSize.width}x${imageSize.height}, scale=${scale}`);
     if (!viewportSize.width || !viewportSize.height || !imageSize.width || !imageSize.height) {
       console.log(`🖼️ [HoverScroll] bounds 无效，返回默认值`);
       return { minX: 0, maxX: 100, minY: 0, maxY: 100 };
     }
     
-    const imgAspect = imageSize.width / imageSize.height;
-    const vpAspect = viewportSize.width / viewportSize.height;
+    // 【修复】直接计算缩放后的实际显示尺寸
+    // scale 已经是 effectiveScale（modeScale * manualScale），直接应用到原始尺寸
+    const scaledWidth = imageSize.width * scale;
+    const scaledHeight = imageSize.height * scale;
     
-    let displayWidth: number;
-    let displayHeight: number;
-    
-    if (imgAspect > vpAspect) {
-      displayWidth = viewportSize.width;
-      displayHeight = viewportSize.width / imgAspect;
-    } else {
-      displayHeight = viewportSize.height;
-      displayWidth = viewportSize.height * imgAspect;
-    }
-    
-    const scaledWidth = displayWidth * scale;
-    const scaledHeight = displayHeight * scale;
+    console.log(`🖼️ [HoverScroll] bounds 计算: viewport=${viewportSize.width}x${viewportSize.height}, scaled=${scaledWidth.toFixed(0)}x${scaledHeight.toFixed(0)}, scale=${scale.toFixed(3)}`);
     
     const THRESHOLD = 1;
     const overflowX = Math.max(0, (scaledWidth - viewportSize.width) / 2);
     const overflowY = Math.max(0, (scaledHeight - viewportSize.height) / 2);
     const hasOverflowX = overflowX > THRESHOLD;
     const hasOverflowY = overflowY > THRESHOLD;
+    
+    console.log(`🖼️ [HoverScroll] overflow: X=${overflowX.toFixed(0)} (${hasOverflowX}), Y=${overflowY.toFixed(0)} (${hasOverflowY})`);
     
     if (!hasOverflowX && !hasOverflowY) {
       return { minX: 50, maxX: 50, minY: 50, maxY: 50 };

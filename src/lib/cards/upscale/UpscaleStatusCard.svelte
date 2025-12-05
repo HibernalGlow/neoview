@@ -1,158 +1,219 @@
 <script lang="ts">
 /**
  * 超分状态信息卡片
+ * 实时显示当前图片的超分状态
  */
-import { Loader2 } from '@lucide/svelte';
+import { Loader2, Check, X, SkipForward, ImageOff } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
-import {
-	isProcessing,
-	progress,
-	status,
-	processingTime,
-	errorMessage,
-	currentImagePath,
-	currentImageResolution,
-	currentImageSize,
-	formatFileSize,
-	updateCurrentImage,
-	selectedModel,
-	scale,
-	tileSize,
-	noiseLevel
-} from '$lib/stores/upscale/upscalePanelStore.svelte';
-import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
-import { bookStore } from '$lib/stores/book.svelte';
+import { upscaleStore, type UpscaleStatus } from '$lib/stackview/stores/upscaleStore.svelte';
+import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
+import { selectedModel, scale } from '$lib/stores/upscale/upscalePanelStore.svelte';
 
-// 监听当前页面变化
-$effect(() => {
-	const page = bookStore.currentPage;
-	if (page) {
-		const path = (page as { path?: string; url?: string }).path || (page as { path?: string; url?: string }).url || '';
-		if (path && path !== currentImagePath.value) {
-			updateCurrentImage(path);
-			console.log('📷 超分状态卡片同步图片:', path);
-		}
-	}
+// 当前页面索引
+let currentPageIndex = $derived(upscaleStore.currentPageIndex);
+
+// 当前页面状态
+let pageStatus = $derived(upscaleStore.getPageStatus(currentPageIndex));
+
+// 是否有超分图
+let hasUpscaled = $derived(upscaleStore.isPageUpscaled(currentPageIndex));
+
+// 是否使用超分图（对比模式）
+let useUpscaled = $state(true);
+
+// 是否显示预览图
+let showPreview = $state(false);
+
+// 超分版本（触发响应式更新）
+let upscaleVersion = $derived(imagePool.version);
+
+// 原图 URL
+let originalUrl = $derived.by(() => {
+	const img = imagePool.getSync(currentPageIndex);
+	return img?.url ?? null;
 });
 
-function getProgressColor(prog: number): string {
-	if (prog < 30) return 'bg-yellow-500';
-	if (prog < 70) return 'bg-blue-500';
-	return 'bg-green-500';
+// 超分图 URL
+let upscaledUrl = $derived(imagePool.getUpscaledUrl(currentPageIndex));
+
+// 当前显示的 URL
+let displayUrl = $derived(useUpscaled && upscaledUrl ? upscaledUrl : originalUrl);
+
+// 当前图片尺寸（从 imagePool 获取）
+let originalDimensions = $derived.by(() => {
+	const img = imagePool.getSync(currentPageIndex);
+	return img ? { width: img.width || 0, height: img.height || 0 } : null;
+});
+
+// 状态显示信息
+interface StatusInfo {
+	label: string;
+	color: string;
+	icon: typeof Check;
+	description: string;
 }
 
-function getFileName(path: string): string {
-	if (!path) return '';
-	return path.split(/[/\\]/).pop() || path;
-}
-
-async function handleManualUpscale() {
-	if (!currentImagePath.value || isProcessing.value) return;
-	
-	try {
-		isProcessing.value = true;
-		status.value = '正在读取图片...';
-		progress.value = 10;
-		
-		// 设置模型参数（同步）
-		pyo3UpscaleManager.setTileSize(tileSize.value);
-		pyo3UpscaleManager.setNoiseLevel(noiseLevel.value);
-		
-		// 读取图片数据
-		const response = await fetch(currentImagePath.value);
-		const blob = await response.blob();
-		const arrayBuffer = await blob.arrayBuffer();
-		const imageData = new Uint8Array(arrayBuffer);
-		
-		status.value = `正在超分 (${selectedModel.value})...`;
-		progress.value = 30;
-		
-		// 调用 PyO3 超分
-		const result = await pyo3UpscaleManager.upscaleImageMemory(imageData);
-		
-		if (result && result.length > 0) {
-			status.value = '超分完成';
-			progress.value = 100;
-			console.log('✅ 超分完成，输出大小:', result.length);
-		} else {
-			status.value = '超分失败';
-		}
-	} catch (err) {
-		status.value = '超分失败';
-		errorMessage.value = err instanceof Error ? err.message : String(err);
-		console.error('❌ 手动超分失败:', err);
-	} finally {
-		isProcessing.value = false;
+function getStatusInfo(status: UpscaleStatus | null): StatusInfo {
+	switch (status) {
+		case 'pending':
+			return { label: '等待中', color: 'text-muted-foreground', icon: Loader2, description: '排队等待超分' };
+		case 'processing':
+			return { label: '超分中', color: 'text-blue-500', icon: Loader2, description: '正在进行超分处理' };
+		case 'completed':
+			return { label: '已完成', color: 'text-green-500', icon: Check, description: '超分完成' };
+		case 'skipped':
+			return { label: '已跳过', color: 'text-yellow-500', icon: SkipForward, description: '不符合条件，已跳过' };
+		case 'failed':
+			return { label: '失败', color: 'text-red-500', icon: X, description: '超分处理失败' };
+		case 'cancelled':
+			return { label: '已取消', color: 'text-muted-foreground', icon: X, description: '任务已取消' };
+		default:
+			return { label: '未超分', color: 'text-muted-foreground', icon: ImageOff, description: '尚未进行超分' };
 	}
 }
+
+let statusInfo = $derived(getStatusInfo(pageStatus));
+
+// 计算超分后尺寸（假设按 scale 放大）
+let upscaledDimensions = $derived.by(() => {
+	if (!originalDimensions || !hasUpscaled) return null;
+	const s = scale.value || 2;
+	return {
+		width: originalDimensions.width * s,
+		height: originalDimensions.height * s,
+	};
+});
 </script>
 
 <div class="space-y-3 text-xs">
-	<!-- 当前图片信息 -->
-	{#if currentImagePath.value}
-		<div class="space-y-1">
-			<p class="text-muted-foreground truncate" title={currentImagePath.value}>
-				{getFileName(currentImagePath.value)}
-			</p>
-			<div class="flex gap-2 text-[10px] text-muted-foreground">
-				{#if currentImageResolution.value}
-					<span>{currentImageResolution.value}</span>
-				{/if}
-				{#if currentImageSize.value}
-					<span>{currentImageSize.value}</span>
-				{/if}
-			</div>
-		</div>
-	{:else}
-		<p class="text-muted-foreground text-center py-2">未选择图片</p>
-	{/if}
-
-	<!-- 处理状态 -->
-	<div class="space-y-2">
-		<div class="flex items-center justify-between">
-			<span class="text-muted-foreground">状态</span>
-			<span class="flex items-center gap-1">
-				{#if isProcessing.value}
-					<Loader2 class="h-3 w-3 animate-spin" />
-				{/if}
-				{status.value}
-			</span>
-		</div>
-
-		{#if isProcessing.value}
-			<div class="w-full bg-muted rounded-full h-1.5 overflow-hidden">
-				<div
-					class="h-full transition-all duration-300 {getProgressColor(progress.value)}"
-					style="width: {progress.value}%"
-				></div>
-			</div>
-			<p class="text-[10px] text-muted-foreground text-center">{progress.value}%</p>
-		{/if}
-
-		{#if errorMessage.value}
-			<p class="text-[10px] text-destructive">{errorMessage.value}</p>
-		{/if}
-
-		{#if processingTime.value > 0}
-			<p class="text-[10px] text-muted-foreground">
-				处理时间: {(processingTime.value / 1000).toFixed(1)}s
-			</p>
-		{/if}
+	<!-- 页面信息 -->
+	<div class="flex items-center justify-between">
+		<span class="text-muted-foreground">当前页面</span>
+		<span class="font-mono">{currentPageIndex + 1}</span>
 	</div>
 
-	<!-- 手动超分按钮 -->
-	<Button
-		variant="outline"
-		size="sm"
-		class="w-full h-7 text-xs"
-		disabled={!currentImagePath.value || isProcessing.value}
-		onclick={handleManualUpscale}
-	>
-		{#if isProcessing.value}
-			<Loader2 class="h-3 w-3 mr-1 animate-spin" />
-			处理中...
-		{:else}
-			手动超分当前图片
-		{/if}
-	</Button>
+	<!-- 超分状态 -->
+	<div class="p-2 rounded-lg bg-muted/50 space-y-2">
+		<div class="flex items-center justify-between">
+			<span class="text-muted-foreground">状态</span>
+			<span class="flex items-center gap-1.5 {statusInfo.color}">
+				{#if pageStatus === 'processing'}
+					<Loader2 class="h-3.5 w-3.5 animate-spin" />
+				{:else}
+					{@const Icon = statusInfo.icon}
+					<Icon class="h-3.5 w-3.5" />
+				{/if}
+				<span class="font-medium">{statusInfo.label}</span>
+			</span>
+		</div>
+		<p class="text-[10px] text-muted-foreground">{statusInfo.description}</p>
+	</div>
+
+	<!-- 模型信息 -->
+	{#if upscaleStore.enabled}
+		<div class="flex items-center justify-between">
+			<span class="text-muted-foreground">模型</span>
+			<span class="font-mono text-[10px] truncate max-w-[120px]" title={selectedModel.value}>
+				{selectedModel.value}
+			</span>
+		</div>
+		<div class="flex items-center justify-between">
+			<span class="text-muted-foreground">放大倍率</span>
+			<span class="font-mono">{scale.value}x</span>
+		</div>
+	{/if}
+
+	<!-- 尺寸信息 -->
+	{#if originalDimensions && originalDimensions.width > 0}
+		<div class="space-y-1">
+			<div class="flex items-center justify-between">
+				<span class="text-muted-foreground">原图尺寸</span>
+				<span class="font-mono">{originalDimensions.width}×{originalDimensions.height}</span>
+			</div>
+			{#if hasUpscaled && upscaledDimensions}
+				<div class="flex items-center justify-between text-green-500">
+					<span>超分尺寸</span>
+					<span class="font-mono">{upscaledDimensions.width}×{upscaledDimensions.height}</span>
+				</div>
+			{/if}
+		</div>
+	{/if}
+
+	<!-- 预览开关 -->
+	<div class="flex items-center justify-between">
+		<span class="text-muted-foreground">显示预览</span>
+		<button
+			class="relative w-8 h-4 rounded-full transition-colors {showPreview ? 'bg-primary' : 'bg-muted'}"
+			onclick={() => showPreview = !showPreview}
+			aria-label="切换预览显示"
+		>
+			<span class="absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform {showPreview ? 'translate-x-4' : ''}"></span>
+		</button>
+	</div>
+
+	<!-- 预览图和对比切换 -->
+	{#if showPreview && displayUrl}
+		<div class="space-y-2">
+			<!-- 点击切换原图/超分图 -->
+			<button
+				class="w-full rounded-lg overflow-hidden border border-border/50 hover:border-primary/50 transition-colors"
+				onclick={() => { if (hasUpscaled) useUpscaled = !useUpscaled; }}
+				disabled={!hasUpscaled}
+				aria-label="切换原图/超分图对比"
+			>
+				<img
+					src={displayUrl}
+					alt={useUpscaled && hasUpscaled ? '超分图' : '原图'}
+					class="w-full h-auto max-h-[200px] object-contain bg-muted/30"
+				/>
+			</button>
+			<!-- 当前显示状态 -->
+			<div class="flex items-center justify-center gap-2 text-[10px]">
+				{#if hasUpscaled}
+					<span class="{useUpscaled ? 'text-green-500 font-medium' : 'text-muted-foreground'}">
+						{useUpscaled ? '🔍 超分图' : '📷 原图'}
+					</span>
+					<span class="text-muted-foreground">（点击图片切换）</span>
+				{:else}
+					<span class="text-muted-foreground">📷 原图</span>
+				{/if}
+			</div>
+		</div>
+	{:else if showPreview && !displayUrl}
+		<div class="p-4 text-center text-muted-foreground bg-muted/30 rounded-lg">
+			暂无图片
+		</div>
+	{/if}
+
+	<!-- 处理状态提示 -->
+	{#if pageStatus === 'processing'}
+		<div class="flex items-center justify-center gap-2 py-2 text-blue-500">
+			<Loader2 class="h-4 w-4 animate-spin" />
+			<span>正在超分处理...</span>
+		</div>
+	{:else if !upscaleStore.enabled}
+		<p class="text-center text-muted-foreground py-2">
+			超分功能未启用
+		</p>
+	{/if}
+
+	<!-- 服务统计 -->
+	{#if upscaleStore.enabled}
+		<div class="pt-2 border-t border-border/50 space-y-1 text-[10px] text-muted-foreground">
+			<div class="flex justify-between">
+				<span>队列</span>
+				<span>{upscaleStore.stats.pendingTasks} 等待 / {upscaleStore.stats.processingTasks} 处理中</span>
+			</div>
+			<div class="flex justify-between">
+				<span>统计</span>
+				<span class="space-x-2">
+					<span class="text-green-500">{upscaleStore.stats.completedCount} 完成</span>
+					<span class="text-yellow-500">{upscaleStore.stats.skippedCount} 跳过</span>
+					{#if upscaleStore.stats.failedCount > 0}
+						<span class="text-red-500">{upscaleStore.stats.failedCount} 失败</span>
+					{/if}
+				</span>
+			</div>
+		</div>
+	{/if}
 </div>

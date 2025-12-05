@@ -24,6 +24,9 @@ let useUpscaled = $state(true);
 // 是否显示预览图
 let showPreview = $state(false);
 
+// 是否显示放大对比面板
+let showZoomCompare = $state(false);
+
 // 超分版本（触发响应式更新）
 let upscaleVersion = $derived(imagePool.version);
 
@@ -185,6 +188,20 @@ let upscaledDimensions = $derived.by(() => {
 		</div>
 	{/if}
 
+	<!-- 放大对比开关（仅在有超分图时显示） -->
+	{#if hasUpscaled}
+		<div class="flex items-center justify-between">
+			<span class="text-muted-foreground">放大对比</span>
+			<button
+				class="relative w-8 h-4 rounded-full transition-colors {showZoomCompare ? 'bg-primary' : 'bg-muted'}"
+				onclick={() => showZoomCompare = !showZoomCompare}
+				aria-label="切换放大对比面板"
+			>
+				<span class="absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform {showZoomCompare ? 'translate-x-4' : ''}"></span>
+			</button>
+		</div>
+	{/if}
+
 	<!-- 处理状态提示 -->
 	{#if pageStatus === 'processing'}
 		<div class="flex items-center justify-center gap-2 py-2 text-blue-500">
@@ -217,3 +234,54 @@ let upscaledDimensions = $derived.by(() => {
 		</div>
 	{/if}
 </div>
+
+<!-- 可调整大小的浮窗对比 -->
+{#if showZoomCompare && hasUpscaled && originalUrl && upscaledUrl}
+	<div 
+		class="fixed z-50 bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-2xl overflow-hidden resize"
+		style="right: 16px; top: 50%; transform: translateY(-50%); width: 320px; height: 400px; min-width: 200px; min-height: 200px;"
+	>
+		<!-- 标题栏 -->
+		<div class="flex items-center justify-between px-3 py-2 border-b border-border/50 bg-muted/30">
+			<span class="text-xs font-medium flex items-center gap-1.5">
+				{#if useUpscaled}
+					<span class="text-green-500">🔍 超分图</span>
+				{:else}
+					<span>📷 原图</span>
+				{/if}
+			</span>
+			<button
+				class="w-5 h-5 flex items-center justify-center rounded hover:bg-muted"
+				onclick={() => showZoomCompare = false}
+				aria-label="关闭对比浮窗"
+			>
+				<X class="h-3.5 w-3.5" />
+			</button>
+		</div>
+		
+		<!-- 可点击切换的图片 -->
+		<button 
+			class="w-full h-[calc(100%-60px)] flex items-center justify-center bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors"
+			onclick={() => useUpscaled = !useUpscaled}
+			aria-label="点击切换原图/超分图"
+		>
+			<img
+				src={useUpscaled ? upscaledUrl : originalUrl}
+				alt={useUpscaled ? '超分图' : '原图'}
+				class="max-w-full max-h-full object-contain"
+			/>
+		</button>
+		
+		<!-- 底部信息 -->
+		<div class="absolute bottom-0 left-0 right-0 px-3 py-1.5 bg-background/80 border-t border-border/50 text-[10px] flex justify-between items-center">
+			<span class="text-muted-foreground">
+				{useUpscaled && upscaledDimensions 
+					? `${upscaledDimensions.width}×${upscaledDimensions.height}` 
+					: originalDimensions 
+						? `${originalDimensions.width}×${originalDimensions.height}` 
+						: ''}
+			</span>
+			<span class="text-muted-foreground">点击切换 | 拖拽边角调整大小</span>
+		</div>
+	</div>
+{/if}

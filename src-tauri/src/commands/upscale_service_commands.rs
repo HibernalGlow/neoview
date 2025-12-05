@@ -104,6 +104,7 @@ pub async fn upscale_service_init(
     app: AppHandle,
     state: State<'_, UpscaleServiceState>,
     pyo3_state: State<'_, PyO3UpscalerState>,
+    cache_dir: Option<String>,
 ) -> Result<(), String> {
     let mut guard = state.service.lock().await;
 
@@ -111,12 +112,17 @@ pub async fn upscale_service_init(
         return Ok(());
     }
 
-    // 获取缓存目录
-    let cache_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("获取应用数据目录失败: {}", e))?
-        .join("upscale_cache");
+    // 获取缓存目录：优先使用传入的目录（与老系统保持一致）
+    let cache_dir = if let Some(dir) = cache_dir {
+        PathBuf::from(dir).join("pyo3-upscale")
+    } else {
+        app.path()
+            .app_data_dir()
+            .map_err(|e| format!("获取应用数据目录失败: {}", e))?
+            .join("upscale_cache")
+    };
+    
+    log::info!("📁 超分缓存目录: {}", cache_dir.display());
 
     let config = UpscaleServiceConfig::default();
     let py_state = Arc::new(pyo3_state.inner().clone());

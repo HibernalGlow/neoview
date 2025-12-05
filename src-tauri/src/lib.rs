@@ -19,6 +19,7 @@ use commands::page_commands::PageManagerState;
 use commands::pyo3_upscale_commands::PyO3UpscalerState;
 use commands::task_queue_commands::BackgroundSchedulerState;
 use commands::upscale_commands::UpscaleManagerState;
+use commands::upscale_service_commands::UpscaleServiceState;
 use commands::upscale_settings_commands::UpscaleSettingsState;
 use core::job_engine::{JobEngine, JobEngineConfig};
 use core::page_manager::PageContentManager;

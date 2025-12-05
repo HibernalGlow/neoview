@@ -1,67 +1,114 @@
 <!--
-  UpscaleLayer - 超分层
+  UpscaleLayer - 超分状态指示器
+  
+  V2 架构变更：
+  - 超分图现在通过 imagePool 显示，不再需要独立显示层
+  - 此组件仅作为状态指示器，显示超分处理进度
+  - 原有图片系统（缩放/旋转）完全复用
+  
   z-index: 50
 -->
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { LayerZIndex } from '../types/layer';
-  import type { Frame } from '../types/frame';
-  import { getImageTransform, getClipPath } from '../utils/transform';
+  import { getUpscaleStore } from '../stores/upscaleStore.svelte';
+  import { imagePool } from '../stores/imagePool.svelte';
+  
+  // ============================================================================
+  // Props
+  // ============================================================================
   
   let {
-    frame,
-    layout = 'single',
-    direction = 'ltr',
-    transform = 'none',
-    visible = true,
+    pageIndex = 0,
+    enabled = false,
+    showIndicator = true,
   }: {
-    frame: Frame;
-    layout?: 'single' | 'double' | 'panorama';
-    direction?: 'ltr' | 'rtl';
-    transform?: string;
-    visible?: boolean;
+    /** 当前页面索引 */
+    pageIndex?: number;
+    /** 是否启用超分 */
+    enabled?: boolean;
+    /** 是否显示加载指示器 */
+    showIndicator?: boolean;
   } = $props();
   
-  let layoutClass = $derived.by(() => {
-    if (layout === 'double') {
-      return direction === 'rtl' ? 'frame-double frame-rtl' : 'frame-double';
-    }
-    if (layout === 'panorama') {
-      return direction === 'rtl' ? 'frame-panorama frame-rtl' : 'frame-panorama';
-    }
-    return 'frame-single';
+  // ============================================================================
+  // Store
+  // ============================================================================
+  
+  const upscaleStore = getUpscaleStore();
+  
+  // ============================================================================
+  // Derived
+  // ============================================================================
+  
+  /** 当前页面的超分状态 */
+  let status = $derived.by(() => {
+    return upscaleStore.getPageStatus(pageIndex);
+  });
+  
+  /** 是否正在加载 */
+  let isLoading = $derived(
+    enabled && (status === 'pending' || status === 'processing' || status === 'checking')
+  );
+  
+  /** 是否已完成超分 */
+  let isUpscaled = $derived(enabled && imagePool.hasUpscaled(pageIndex));
+  
+  // ============================================================================
+  // Lifecycle
+  // ============================================================================
+  
+  onMount(async () => {
+    // 确保 store 已初始化
+    await upscaleStore.init();
   });
 </script>
 
-{#if visible && frame.images.length > 0}
+<!-- 
+  注意：超分图现在通过 imagePool.getDisplayUrl() 显示
+  此组件不再渲染图片，只显示状态指示器
+-->
+
+<!-- 加载指示器 -->
+{#if showIndicator && isLoading}
   <div 
-    class="upscale-layer {layoutClass}"
-    data-layer="UpscaleLayer"
-    data-layer-id="upscale"
-    style:z-index={LayerZIndex.UPSCALE}
-    style:transform={transform}
+    class="upscale-loading-indicator"
+    style:z-index={LayerZIndex.UPSCALE + 1}
+    data-page-index={pageIndex}
+    data-status={status}
   >
-    {#each frame.images as img, i (i)}
-      <img
-        src={img.url}
-        alt="Upscaled {i}"
-        class="frame-image"
-        style:transform={getImageTransform(img)}
-        style:clip-path={getClipPath(img.splitHalf)}
-        draggable="false"
-      />
-    {/each}
+    <div class="loading-spinner"></div>
+    <span class="loading-text">超分处理中...</span>
+  </div>
+{/if}
+
+<!-- 完成指示器（可选，短暂显示后隐藏） -->
+{#if showIndicator && isUpscaled && status === 'completed'}
+  <div 
+    class="upscale-complete-indicator"
+    style:z-index={LayerZIndex.UPSCALE + 1}
+  >
+    <span class="complete-icon">✓</span>
+    <span class="complete-text">已超分</span>
   </div>
 {/if}
 
 <style>
-  .upscale-layer {
+  /* 加载指示器 */
+  .upscale-loading-indicator {
     position: absolute;
-    inset: 0;
+    bottom: 16px;
+    right: 16px;
     display: flex;
     align-items: center;
-    justify-content: center;
-    /* 渐入动画 */
-    animation: fadeIn 0.3s ease;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 8px;
+    color: white;
+    font-size: 12px;
+    pointer-events: none;
+    animation: fadeIn 0.2s ease;
   }
   
   @keyframes fadeIn {
@@ -69,37 +116,50 @@
     to { opacity: 1; }
   }
   
-  .frame-single {
-    justify-content: center;
+  @keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
   }
   
-  .frame-double {
-    flex-direction: row;
-    gap: 4px;
+  .loading-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
   }
   
-  .frame-double.frame-rtl {
-    flex-direction: row-reverse;
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
   
-  .frame-panorama {
-    flex-direction: row;
-    gap: 4px;
+  .loading-text {
+    white-space: nowrap;
   }
   
-  .frame-panorama.frame-rtl {
-    flex-direction: row-reverse;
+  /* 完成指示器 */
+  .upscale-complete-indicator {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: rgba(34, 139, 34, 0.8);
+    border-radius: 6px;
+    color: white;
+    font-size: 11px;
+    pointer-events: none;
+    animation: fadeIn 0.2s ease, fadeOut 0.3s ease 2s forwards;
   }
   
-  .frame-image {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-    user-select: none;
-    -webkit-user-drag: none;
+  .complete-icon {
+    font-size: 14px;
   }
   
-  .frame-double .frame-image {
-    max-width: 50%;
+  .complete-text {
+    white-space: nowrap;
   }
 </style>

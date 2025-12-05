@@ -30,6 +30,10 @@ export class StackImageLoader {
   private dimensionsCache = new Map<number, { width: number; height: number }>();
   // 背景色缓存
   private backgroundColorCache = new Map<number, string>();
+  // 超分图 URL 缓存：pageIndex -> upscaledUrl
+  private upscaledUrlCache = new Map<number, string>();
+  // 是否使用超分图
+  private useUpscaledMap = new Map<number, boolean>();
 
   constructor() {
     // 创建独立的 ImageLoaderCore 实例
@@ -44,8 +48,70 @@ export class StackImageLoader {
       this.core.reset();
       this.dimensionsCache.clear();
       this.backgroundColorCache.clear();
+      this.upscaledUrlCache.clear();
+      this.useUpscaledMap.clear();
       this.currentBookPath = bookPath;
     }
+  }
+
+  // ========================================================================
+  // 超分图管理（复用原有图片系统）
+  // ========================================================================
+
+  /**
+   * 设置超分图 URL
+   * 超分完成后调用，将超分图 URL 存入缓存
+   */
+  setUpscaledUrl(pageIndex: number, url: string): void {
+    this.upscaledUrlCache.set(pageIndex, url);
+    this.useUpscaledMap.set(pageIndex, true);
+  }
+
+  /**
+   * 获取显示 URL（优先返回超分图）
+   */
+  getDisplayUrl(pageIndex: number): string | undefined {
+    if (this.useUpscaledMap.get(pageIndex) && this.upscaledUrlCache.has(pageIndex)) {
+      return this.upscaledUrlCache.get(pageIndex);
+    }
+    return this.core.getCachedUrl(pageIndex);
+  }
+
+  /**
+   * 检查是否有超分图
+   */
+  hasUpscaled(pageIndex: number): boolean {
+    return this.upscaledUrlCache.has(pageIndex) && (this.useUpscaledMap.get(pageIndex) ?? false);
+  }
+
+  /**
+   * 获取超分图 URL
+   */
+  getUpscaledUrl(pageIndex: number): string | undefined {
+    return this.upscaledUrlCache.get(pageIndex);
+  }
+
+  /**
+   * 清除指定页面的超分图
+   */
+  clearUpscaled(pageIndex: number): void {
+    this.upscaledUrlCache.delete(pageIndex);
+    this.useUpscaledMap.delete(pageIndex);
+  }
+
+  /**
+   * 清除所有超分图
+   */
+  clearAllUpscaled(): void {
+    this.upscaledUrlCache.clear();
+    this.useUpscaledMap.clear();
+  }
+
+  /**
+   * 设置是否使用超分图
+   */
+  setUseUpscaled(pageIndex: number, use: boolean): void {
+    this.useUpscaledMap.set(pageIndex, use);
   }
 
   /**

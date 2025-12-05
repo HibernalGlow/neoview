@@ -16,6 +16,7 @@ pub mod thumbnail_commands;
 pub mod thumbnail_v3_commands;
 pub mod upscale_commands;
 pub mod upscale_scheduler_commands;
+pub mod upscale_service_commands;
 pub mod upscale_settings_commands;
 pub mod video_commands;
 pub mod benchmark_commands;

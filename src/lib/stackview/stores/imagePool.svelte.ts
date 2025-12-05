@@ -104,6 +104,59 @@ class ImagePool {
   clear() {
     stackImageLoader.clear();
   }
+
+  // ========================================================================
+  // 超分图管理（复用原有图片系统）
+  // ========================================================================
+
+  /**
+   * 设置超分图 URL（超分完成后调用）
+   */
+  setUpscaled(pageIndex: number, url: string): void {
+    stackImageLoader.setUpscaledUrl(pageIndex, url);
+  }
+
+  /**
+   * 获取显示 URL（优先返回超分图）
+   */
+  getDisplayUrl(pageIndex: number): string | null {
+    return stackImageLoader.getDisplayUrl(pageIndex) ?? null;
+  }
+
+  /**
+   * 检查是否有超分图
+   */
+  hasUpscaled(pageIndex: number): boolean {
+    return stackImageLoader.hasUpscaled(pageIndex);
+  }
+
+  /**
+   * 获取超分图 URL
+   */
+  getUpscaledUrl(pageIndex: number): string | null {
+    return stackImageLoader.getUpscaledUrl(pageIndex) ?? null;
+  }
+
+  /**
+   * 清除指定页面的超分图
+   */
+  clearUpscaled(pageIndex: number): void {
+    stackImageLoader.clearUpscaled(pageIndex);
+  }
+
+  /**
+   * 清除所有超分图
+   */
+  clearAllUpscaled(): void {
+    stackImageLoader.clearAllUpscaled();
+  }
+
+  /**
+   * 设置是否使用超分图
+   */
+  setUseUpscaled(pageIndex: number, use: boolean): void {
+    stackImageLoader.setUseUpscaled(pageIndex, use);
+  }
 }
 
 // ============================================================================

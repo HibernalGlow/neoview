@@ -110,6 +110,9 @@ pub fn run() {
             // 初始化设置管理器
             app.manage(UpscaleSettingsState::default());
 
+            // 初始化超分服务状态（V2）
+            app.manage(UpscaleServiceState::default());
+
             // 初始化 JobEngine 和 PageContentManager (NeeView 架构)
             let job_engine = Arc::new(JobEngine::new(JobEngineConfig {
                 worker_count: num_cores.clamp(2, 8),
@@ -273,6 +276,20 @@ pub fn run() {
             commands::update_comparison_settings,
             commands::toggle_comparison_mode,
             commands::set_comparison_mode,
+            // Upscale Service commands (V2)
+            commands::upscale_service_commands::upscale_service_init,
+            commands::upscale_service_commands::upscale_service_set_enabled,
+            commands::upscale_service_commands::upscale_service_is_enabled,
+            commands::upscale_service_commands::upscale_service_set_current_book,
+            commands::upscale_service_commands::upscale_service_set_current_page,
+            commands::upscale_service_commands::upscale_service_request,
+            commands::upscale_service_commands::upscale_service_request_preload_range,
+            commands::upscale_service_commands::upscale_service_cancel_page,
+            commands::upscale_service_commands::upscale_service_cancel_book,
+            commands::upscale_service_commands::upscale_service_clear_cache,
+            commands::upscale_service_commands::upscale_service_get_stats,
+            commands::upscale_service_commands::upscale_service_update_conditions,
+            commands::upscale_service_commands::upscale_service_stop,
             // Image Data commands
             commands::calculate_path_hash,
             commands::check_upscale_cache,

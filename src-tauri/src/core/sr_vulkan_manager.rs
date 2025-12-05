@@ -386,7 +386,7 @@ fn is_avif_image(data: &[u8]) -> bool {
     marker == b"ftypavif" || marker == b"ftypavis" || marker == b"ftypheic" || marker == b"ftypheix"
 }
 
-/// 使用 WIC 解码图片，然后编码为 PNG
+/// 使用 WIC 解码图片，然后编码为 JPEG（Q85）
 fn transcode_with_wic(image_data: &[u8]) -> Result<Vec<u8>, String> {
     use crate::core::wic_decoder::decode_image_from_memory_with_wic;
     
@@ -403,28 +403,25 @@ fn transcode_with_wic(image_data: &[u8]) -> Result<Vec<u8>, String> {
         width, height, bgra_pixels.len()
     );
     
-    // BGRA -> RGBA
-    let mut rgba_pixels = bgra_pixels;
-    for chunk in rgba_pixels.chunks_exact_mut(4) {
-        chunk.swap(0, 2); // B <-> R
-    }
+    // BGRA -> RGB（JPEG 不支持 alpha 通道）
+    let rgb_pixels: Vec<u8> = bgra_pixels
+        .chunks_exact(4)
+        .flat_map(|c| [c[2], c[1], c[0]]) // BGRA -> RGB
+        .collect();
     
-    // 使用 image crate 编码为 PNG（无损）
-    let img: image::RgbaImage = image::RgbaImage::from_raw(width, height, rgba_pixels)
-        .ok_or("创建 RGBA 图像失败")?;
-    
+    // 使用 image crate 编码为 JPEG（Q85，速度快且保持质量）
     let mut output = Vec::new();
     {
-        use image::codecs::png::PngEncoder;
+        use image::codecs::jpeg::JpegEncoder;
         use image::ImageEncoder;
-        let encoder = PngEncoder::new(&mut output);
+        let encoder = JpegEncoder::new_with_quality(&mut output, 85);
         encoder
-            .write_image(&img, width, height, image::ExtendedColorType::Rgba8)
-            .map_err(|e| format!("PNG 编码失败: {}", e))?;
+            .write_image(&rgb_pixels, width, height, image::ExtendedColorType::Rgb8)
+            .map_err(|e| format!("JPEG 编码失败: {}", e))?;
     }
     
     println!(
-        "[SrVulkanManager] Transcoded to PNG: {} bytes",
+        "[SrVulkanManager] Transcoded to JPEG: {} bytes",
         output.len()
     );
     

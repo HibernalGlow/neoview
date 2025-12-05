@@ -142,6 +142,14 @@ class UpscaleStore {
   async init() {
     if (this.initialized) return;
 
+    // 初始化后端服务
+    try {
+      await invoke('upscale_service_init');
+      console.log('✅ 后端 UpscaleService 初始化完成');
+    } catch (err) {
+      console.error('❌ 后端 UpscaleService 初始化失败:', err);
+    }
+
     // 监听超分结果事件
     this.unlistenReady = await listen<UpscaleReadyPayload>('upscale-ready', (event) => {
       this.handleUpscaleReady(event.payload);

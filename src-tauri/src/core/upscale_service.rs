@@ -905,10 +905,40 @@ impl UpscaleService {
                 .ok_or_else(|| "PyO3 超分器未初始化".to_string())?
         };
 
-        // 将 BGRA 像素数据转换为 PyO3 超分器可接受的格式
-        // PyO3 超分器期望的是原始文件数据，所以我们需要读取原始文件
-        let image_data = fs::read(&task.image_path)
+        // 读取原始文件数据
+        let raw_data = fs::read(&task.image_path)
             .map_err(|e| format!("读取图片文件失败: {}", e))?;
+        
+        // 预处理：对于 AVIF/JXL 格式，使用 WIC 解码后转码为 JPEG
+        let ext = Path::new(&task.image_path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_lowercase())
+            .unwrap_or_default();
+        let needs_transcode = matches!(ext.as_str(), "avif" | "jxl" | "heic" | "heif");
+        
+        let image_data = if needs_transcode {
+            log_debug!("🔄 检测到 AVIF/JXL 格式，使用 WIC 转码");
+            // 直接使用已解码的 WIC 结果进行 JPEG 编码
+            let rgb_pixels: Vec<u8> = decode_result.pixels
+                .chunks_exact(4)
+                .flat_map(|c| [c[2], c[1], c[0]]) // BGRA -> RGB
+                .collect();
+            
+            let mut output = Vec::new();
+            {
+                use image::codecs::jpeg::JpegEncoder;
+                use image::ImageEncoder;
+                let encoder = JpegEncoder::new_with_quality(&mut output, 85);
+                encoder
+                    .write_image(&rgb_pixels, width, height, image::ExtendedColorType::Rgb8)
+                    .map_err(|e| format!("JPEG 编码失败: {}", e))?;
+            }
+            log_debug!("✅ WIC 转码完成: {} bytes -> {} bytes", raw_data.len(), output.len());
+            output
+        } else {
+            raw_data
+        };
 
         let result_bytes = manager.upscale_image_memory(
             &image_data,
@@ -978,3 +1008,4 @@ impl UpscaleService {
         })
     }
 }
+

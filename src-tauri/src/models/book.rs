@@ -10,6 +10,7 @@ pub enum BookType {
     Folder,
     Pdf,
     Media,
+    Epub,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

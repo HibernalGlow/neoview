@@ -1,25 +1,25 @@
 //! NeoView - 电子书处理模块
 //!
-//! 支持 PDF、EPUB、XPS 等电子书格式
-//! 
-//! TODO: 集成 MuPDF 或使用前端 pdf.js
-//! 当前为 stub 实现，返回不支持错误
+//! 支持格式：
+//! - EPUB: 使用 epub crate 解析，提取内部图片
+//! - PDF: 前端使用 pdf.js 渲染（后端只提取文件路径）
 
+use epub::doc::EpubDoc;
 use std::path::Path;
 
 /// 电子书管理器
 pub struct EbookManager;
 
-/// 电子书页面信息
+/// 电子书资源信息
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct EbookPageInfo {
-    /// 页码 (0-indexed)
-    pub index: usize,
-    /// 页面宽度
-    pub width: f32,
-    /// 页面高度
-    pub height: f32,
+pub struct EbookResource {
+    /// 资源路径
+    pub path: String,
+    /// MIME 类型
+    pub mime_type: String,
+    /// 是否是图片
+    pub is_image: bool,
 }
 
 /// 电子书信息
@@ -28,56 +28,118 @@ pub struct EbookPageInfo {
 pub struct EbookInfo {
     /// 文件路径
     pub path: String,
-    /// 总页数
-    pub page_count: usize,
+    /// 格式类型
+    pub format: String,
     /// 标题
     pub title: Option<String>,
     /// 作者
     pub author: Option<String>,
-    /// 页面列表
-    pub pages: Vec<EbookPageInfo>,
+    /// 图片资源列表
+    pub images: Vec<EbookResource>,
+    /// 总图片数
+    pub image_count: usize,
 }
 
 /// 支持的电子书扩展名
-pub const EBOOK_EXTENSIONS: &[&str] = &["pdf", "epub", "xps", "fb2", "mobi"];
+pub const EPUB_EXTENSIONS: &[&str] = &["epub"];
+pub const PDF_EXTENSIONS: &[&str] = &["pdf"];
 
 impl EbookManager {
-    /// 检查是否是支持的电子书格式
-    pub fn is_supported(path: &str) -> bool {
+    /// 检查是否是 EPUB 格式
+    pub fn is_epub(path: &str) -> bool {
         let ext = Path::new(path)
             .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("")
             .to_lowercase();
-
-        EBOOK_EXTENSIONS.contains(&ext.as_str())
+        EPUB_EXTENSIONS.contains(&ext.as_str())
     }
 
-    /// 打开电子书并获取信息
-    /// 
-    /// TODO: 需要集成 MuPDF 或其他 PDF 库
-    pub fn open(_path: &str) -> Result<EbookInfo, String> {
-        Err("电子书支持尚未实现，请使用外部阅读器打开".to_string())
+    /// 检查是否是 PDF 格式
+    pub fn is_pdf(path: &str) -> bool {
+        let ext = Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        PDF_EXTENSIONS.contains(&ext.as_str())
     }
 
-    /// 渲染指定页面为 PNG 图片数据
-    /// 
-    /// TODO: 需要集成 MuPDF 或其他 PDF 库
-    pub fn render_page(_path: &str, _page_index: usize, _scale: f32) -> Result<Vec<u8>, String> {
-        Err("电子书渲染尚未实现".to_string())
+    /// 打开 EPUB 并获取信息
+    pub fn open_epub(path: &str) -> Result<EbookInfo, String> {
+        let doc = EpubDoc::new(path)
+            .map_err(|e| format!("打开 EPUB 失败: {}", e))?;
+
+        let title = doc.mdata("title");
+        let author = doc.mdata("creator");
+
+        // 收集所有图片资源
+        let mut images = Vec::new();
+        for (id, (resource_path, mime)) in doc.resources.iter() {
+            if mime.starts_with("image/") {
+                images.push(EbookResource {
+                    path: resource_path.to_string_lossy().to_string(),
+                    mime_type: mime.clone(),
+                    is_image: true,
+                });
+            }
+            let _ = id; // 避免 unused 警告
+        }
+
+        // 按路径排序
+        images.sort_by(|a, b| a.path.cmp(&b.path));
+        let image_count = images.len();
+
+        log::info!(
+            "📚 EbookManager: 打开 EPUB {} - {} 张图片",
+            path,
+            image_count
+        );
+
+        Ok(EbookInfo {
+            path: path.to_string(),
+            format: "epub".to_string(),
+            title,
+            author,
+            images,
+            image_count,
+        })
     }
 
-    /// 渲染页面到指定尺寸
-    pub fn render_page_fit(
-        path: &str,
-        page_index: usize,
-        max_width: u32,
-        max_height: u32,
-    ) -> Result<Vec<u8>, String> {
-        // 计算默认缩放比例
-        let scale = (max_width.min(max_height) as f32 / 800.0).min(4.0);
-        Self::render_page(path, page_index, scale)
+    /// 从 EPUB 获取图片数据
+    pub fn get_epub_image(path: &str, resource_path: &str) -> Result<(Vec<u8>, String), String> {
+        let mut doc = EpubDoc::new(path)
+            .map_err(|e| format!("打开 EPUB 失败: {}", e))?;
+
+        // 查找资源的 MIME 类型
+        let mime = doc.resources
+            .iter()
+            .find(|(_, (p, _))| p.to_string_lossy() == resource_path)
+            .map(|(_, (_, m))| m.clone())
+            .unwrap_or_else(|| "application/octet-stream".to_string());
+
+        // 获取资源数据
+        let data = doc.get_resource_by_path(resource_path)
+            .ok_or_else(|| format!("找不到资源: {}", resource_path))?;
+
+        Ok((data, mime))
     }
+
+    /// 列出 EPUB 中的所有图片路径
+    pub fn list_epub_images(path: &str) -> Result<Vec<String>, String> {
+        let doc = EpubDoc::new(path)
+            .map_err(|e| format!("打开 EPUB 失败: {}", e))?;
+
+        let mut images: Vec<String> = doc.resources
+            .iter()
+            .filter(|(_, (_, mime))| mime.starts_with("image/"))
+            .map(|(_, (p, _))| p.to_string_lossy().to_string())
+            .collect();
+
+        images.sort();
+        Ok(images)
+    }
+
 }
 
 #[cfg(test)]
@@ -85,10 +147,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_is_supported() {
-        assert!(EbookManager::is_supported("test.pdf"));
-        assert!(EbookManager::is_supported("test.epub"));
-        assert!(EbookManager::is_supported("test.PDF"));
-        assert!(!EbookManager::is_supported("test.jpg"));
+    fn test_is_epub() {
+        assert!(EbookManager::is_epub("test.epub"));
+        assert!(EbookManager::is_epub("test.EPUB"));
+        assert!(!EbookManager::is_epub("test.pdf"));
+    }
+
+    #[test]
+    fn test_is_pdf() {
+        assert!(EbookManager::is_pdf("test.pdf"));
+        assert!(EbookManager::is_pdf("test.PDF"));
+        assert!(!EbookManager::is_pdf("test.epub"));
     }
 }

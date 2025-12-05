@@ -20,7 +20,8 @@ export type BookType =
 	| 'directory'    // 文件夹
 	| 'singleimage'  // 单个图片文件
 	| 'singlevideo'  // 单个视频文件
-	| 'playlist';    // 播放列表
+	| 'playlist'     // 播放列表
+	| 'epub';        // EPUB 电子书
 
 /** 书籍信息 */
 export interface BookInfo {

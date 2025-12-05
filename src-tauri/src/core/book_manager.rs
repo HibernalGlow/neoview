@@ -131,6 +131,10 @@ impl BookManager {
             BookType::Archive => {
                 self.load_archive_pages(&path_buf, &mut book)?;
             }
+            BookType::Epub => {
+                // EPUB 电子书：提取内部图片
+                self.load_epub_pages(&path_buf, &mut book)?;
+            }
             BookType::Pdf => {
                 // TODO: 实现 PDF 支持
                 return Err("PDF support not yet implemented".to_string());
@@ -156,6 +160,7 @@ impl BookManager {
             let lower = ext.to_lowercase();
             match lower.as_str() {
                 "zip" | "rar" | "7z" | "cbz" | "cbr" => Ok(BookType::Archive),
+                "epub" => Ok(BookType::Epub),
                 "pdf" => Ok(BookType::Pdf),
                 // 常见视频扩展名，作为 Media 类型处理
                 _ if video_exts::is_video_extension(&lower) => Ok(BookType::Media),
@@ -281,6 +286,36 @@ impl BookManager {
             book.pages.push(page);
         }
 
+        book.total_pages = book.pages.len();
+        Ok(())
+    }
+
+    /// 加载 EPUB 电子书中的图片页面
+    fn load_epub_pages(&self, path: &Path, book: &mut BookInfo) -> Result<(), String> {
+        use crate::core::ebook::EbookManager;
+        
+        let path_str = path.to_string_lossy();
+        let image_paths = EbookManager::list_epub_images(&path_str)?;
+        
+        log::info!("📚 BookManager: 从 EPUB 加载 {} 张图片", image_paths.len());
+        
+        for (index, inner_path) in image_paths.into_iter().enumerate() {
+            let name = Path::new(&inner_path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(&inner_path)
+                .to_string();
+            
+            let stable_hash = calculate_path_hash(&format!("{}:{}", path_str, inner_path));
+            
+            // EPUB 内的图片，path 存储 EPUB 路径，inner_path 存储内部路径
+            let page = Page::new(index, path_str.to_string(), name.clone(), 0)
+                .with_stable_hash(stable_hash)
+                .with_inner_path(Some(inner_path))
+                .with_entry_index(Some(index as i32));
+            book.pages.push(page);
+        }
+        
         book.total_pages = book.pages.len();
         Ok(())
     }

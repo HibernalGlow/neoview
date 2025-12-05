@@ -122,6 +122,8 @@ pub enum BookType {
     SingleVideo,
     /// 播放列表
     Playlist,
+    /// EPUB 电子书
+    Epub,
 }
 
 /// 书籍上下文
@@ -188,6 +190,46 @@ impl BookContext {
         Self {
             path: path.to_string(),
             book_type: BookType::Archive,
+            pages,
+            total_pages,
+            current_index: 0,
+            read_direction: 1,
+        }
+    }
+
+    /// 从 EPUB 电子书创建
+    pub fn from_epub(path: &str, image_paths: Vec<String>) -> Self {
+        let pages: Vec<PageInfo> = image_paths
+            .into_iter()
+            .enumerate()
+            .map(|(index, inner_path)| {
+                let name = Path::new(&inner_path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or(&inner_path)
+                    .to_string();
+
+                PageInfo {
+                    index,
+                    content_type: PageContentType::Image, // EPUB 内的图片
+                    inner_path,
+                    name,
+                    size: None,
+                }
+            })
+            .collect();
+
+        let total_pages = pages.len();
+
+        log::info!(
+            "📚 BookContext: 创建 EPUB 书籍 {} - {} 页",
+            path,
+            total_pages
+        );
+
+        Self {
+            path: path.to_string(),
+            book_type: BookType::Epub,
             pages,
             total_pages,
             current_index: 0,

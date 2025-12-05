@@ -133,6 +133,15 @@ impl PageContentManager {
             // 文件夹
             let images = self.scan_directory(path)?;
             BookContext::from_directory(path, images)
+        } else if Self::is_epub_file(path) {
+            // EPUB 电子书（必须在 archive 之前检查）
+            log::info!("📚 PageManager: 检测到 EPUB 文件，开始扫描...");
+            let images = Self::scan_epub(path).map_err(|e| {
+                log::error!("📚 PageManager: EPUB 扫描失败: {}", e);
+                e
+            })?;
+            log::info!("📚 PageManager: EPUB 扫描完成，找到 {} 张图片", images.len());
+            BookContext::from_epub(path, images)
         } else if Self::is_archive_file(path) {
             // 压缩包
             let images = self.scan_archive(path)?;
@@ -187,6 +196,22 @@ impl PageContentManager {
             .unwrap_or("")
             .to_lowercase();
         matches!(ext.as_str(), "mp4" | "mkv" | "webm" | "avi" | "mov" | "wmv")
+    }
+
+    /// 检查是否为 EPUB 文件
+    fn is_epub_file(path: &str) -> bool {
+        let ext = Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        ext == "epub"
+    }
+
+    /// 扫描 EPUB 中的图片
+    fn scan_epub(path: &str) -> Result<Vec<String>, String> {
+        use crate::core::ebook::EbookManager;
+        EbookManager::list_epub_images(path)
     }
 
     /// 扫描压缩包
@@ -388,6 +413,12 @@ impl PageContentManager {
                 let mime_type = Self::detect_video_mime(&page_info.inner_path);
                 Ok((data, mime_type))
             }
+            BookType::Epub => {
+                // EPUB 电子书 - 从 EPUB 中提取图片
+                use crate::core::ebook::EbookManager;
+                let (data, mime_type) = EbookManager::get_epub_image(book_path, &page_info.inner_path)?;
+                Ok((data, mime_type))
+            }
             BookType::Playlist => {
                 // 播放列表暂不支持
                 Err("播放列表暂不支持".to_string())
@@ -493,6 +524,13 @@ impl PageContentManager {
                             BookType::SingleVideo => {
                                 // 视频文件不预加载到内存，跳过
                                 return Err(crate::core::job_engine::JobError::new("视频不预加载"));
+                            }
+                            BookType::Epub => {
+                                // EPUB 图片
+                                use crate::core::ebook::EbookManager;
+                                let (data, mime) = EbookManager::get_epub_image(&book_path, &page_info.inner_path)
+                                    .map_err(|e| crate::core::job_engine::JobError::new(e))?;
+                                (data, mime)
                             }
                             BookType::Playlist => {
                                 // 播放列表暂不支持

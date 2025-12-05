@@ -272,12 +272,8 @@ impl PageContentManager {
 2. [ ] 超过阈值自动回退到 tempfile
 3. [ ] 更新 `PageLoadResult` 返回 `load_mode`
 
-### Phase 3: 动图支持 (1天)
-1. [ ] 实现 `AnimatedLoader`
-2. [ ] GIF 检测和帧提取
-3. [ ] 前端动图渲染
 
-### Phase 4: 嵌套压缩包 (2天)
+### Phase 3: 嵌套压缩包 (2天)
 1. [ ] 实现 `ArchiveLoader`
 2. [ ] 递归展开压缩包
 3. [ ] 虚拟路径管理

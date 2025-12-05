@@ -9,9 +9,11 @@
 //! 4. 自动预加载邻近页面
 
 mod book_context;
+mod file_proxy;
 mod memory_pool;
 
-pub use book_context::{BookContext, BookInfo, BookType, PageInfo};
+pub use book_context::{BookContext, BookInfo, BookType, PageContentType, PageInfo};
+pub use file_proxy::{FileProxy, TempFileManager, TempFileStats};
 pub use memory_pool::{CachedPage, MemoryPool, MemoryPoolStats, PageKey};
 
 use crate::core::archive::ArchiveManager;
@@ -24,8 +26,6 @@ use tokio::sync::Mutex;
 const PRELOAD_RANGE: usize = 5;
 /// 默认缓存大小 (MB)
 const DEFAULT_CACHE_SIZE_MB: usize = 512;
-/// 大文件阈值 (字节) - 超过此大小的文件使用 tempfile 模式
-const LARGE_FILE_THRESHOLD: usize = 800 * 1024 * 1024; // 50MB
 
 /// 页面管理器统计
 #[derive(Debug, Clone, serde::Serialize)]
@@ -79,6 +79,8 @@ pub struct PageContentManager {
     memory_pool: Arc<Mutex<MemoryPool>>,
     /// 压缩包管理器
     archive_manager: Arc<std::sync::Mutex<ArchiveManager>>,
+    /// 临时文件管理器
+    temp_manager: Arc<TempFileManager>,
     /// 当前书籍上下文
     current_book: Option<BookContext>,
 }
@@ -89,10 +91,12 @@ impl PageContentManager {
         job_engine: Arc<JobEngine>,
         archive_manager: Arc<std::sync::Mutex<ArchiveManager>>,
     ) -> Self {
+        let temp_dir = std::env::temp_dir().join("neoview_pages");
         Self {
             job_engine,
             memory_pool: Arc::new(Mutex::new(MemoryPool::new(DEFAULT_CACHE_SIZE_MB))),
             archive_manager,
+            temp_manager: Arc::new(TempFileManager::new(temp_dir)),
             current_book: None,
         }
     }
@@ -103,10 +107,12 @@ impl PageContentManager {
         archive_manager: Arc<std::sync::Mutex<ArchiveManager>>,
         cache_size_mb: usize,
     ) -> Self {
+        let temp_dir = std::env::temp_dir().join("neoview_pages");
         Self {
             job_engine,
             memory_pool: Arc::new(Mutex::new(MemoryPool::new(cache_size_mb))),
             archive_manager,
+            temp_manager: Arc::new(TempFileManager::new(temp_dir)),
             current_book: None,
         }
     }
@@ -532,8 +538,75 @@ impl PageContentManager {
             log::info!("📖 PageManager: 关闭书籍 {}", book.path);
             self.job_engine.cancel_book(&book.path).await;
             self.memory_pool.lock().await.clear_book(&book.path);
+            // 清理临时文件
+            self.temp_manager.cleanup_book(&book.path);
         }
         self.current_book = None;
+    }
+
+    /// 获取视频文件路径（自动提取到临时文件）
+    /// 
+    /// 对于压缩包内的视频，需要先提取到临时文件才能播放
+    pub async fn get_video_path(&self, index: usize) -> Result<String, String> {
+        let book = self.current_book.as_ref().ok_or("没有打开的书籍")?;
+        let page = book.get_page(index).ok_or("页面不存在")?;
+
+        // 检查是否是视频
+        if page.content_type != PageContentType::Video {
+            return Err("不是视频文件".to_string());
+        }
+
+        let book_path = &book.path;
+        let book_type = book.book_type;
+
+        // 对于单个视频文件，直接返回路径
+        if book_type == BookType::SingleVideo {
+            return Ok(page.inner_path.clone());
+        }
+
+        // 对于文件夹，直接返回路径
+        if book_type == BookType::Directory {
+            return Ok(page.inner_path.clone());
+        }
+
+        // 对于压缩包内的视频，检查缓存或提取
+        if let Some(temp_path) = self.temp_manager.get_cached(book_path, &page.inner_path) {
+            return Ok(temp_path.to_string_lossy().to_string());
+        }
+
+        // 从压缩包提取
+        let data = {
+            let manager = self.archive_manager.lock()
+                .map_err(|e| format!("获取压缩包管理器锁失败: {}", e))?;
+            manager.load_image_from_archive_binary(Path::new(book_path), &page.inner_path)?
+        };
+
+        // 保存到临时文件
+        let temp_path = self.temp_manager
+            .get_or_create(book_path, &page.inner_path, &data)?;
+
+        log::info!(
+            "🎬 PageManager: 提取视频到临时文件 {} -> {}",
+            page.inner_path,
+            temp_path.display()
+        );
+
+        Ok(temp_path.to_string_lossy().to_string())
+    }
+
+    /// 获取临时文件统计
+    pub fn temp_stats(&self) -> TempFileStats {
+        self.temp_manager.stats()
+    }
+
+    /// 获取大文件阈值（MB）
+    pub fn get_large_file_threshold_mb(&self) -> usize {
+        self.temp_manager.get_large_file_threshold() / 1024 / 1024
+    }
+
+    /// 设置大文件阈值（MB）
+    pub fn set_large_file_threshold_mb(&self, threshold_mb: usize) {
+        self.temp_manager.set_large_file_threshold(threshold_mb * 1024 * 1024);
     }
 
     /// 获取统计信息

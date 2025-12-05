@@ -131,6 +131,54 @@ pub async fn pm_clear_cache(state: State<'_, PageManagerState>) -> Result<(), St
     Ok(())
 }
 
+// ===== 视频命令 =====
+
+/// 获取视频文件路径
+/// 
+/// 对于压缩包内的视频，自动提取到临时文件并返回路径
+/// 前端可以使用 convertFileSrc() 转换为可用的 URL
+#[tauri::command]
+pub async fn pm_get_video_path(
+    index: usize,
+    state: State<'_, PageManagerState>,
+) -> Result<String, String> {
+    log::info!("🎬 [PageCommand] get_video_path: {}", index);
+    let manager = state.manager.lock().await;
+    manager.get_video_path(index).await
+}
+
+/// 获取临时文件统计
+#[tauri::command]
+pub async fn pm_get_temp_stats(
+    state: State<'_, PageManagerState>,
+) -> Result<crate::core::page_manager::TempFileStats, String> {
+    let manager = state.manager.lock().await;
+    Ok(manager.temp_stats())
+}
+
+/// 获取大文件阈值（MB）
+#[tauri::command]
+pub async fn pm_get_large_file_threshold(
+    state: State<'_, PageManagerState>,
+) -> Result<usize, String> {
+    let manager = state.manager.lock().await;
+    Ok(manager.get_large_file_threshold_mb())
+}
+
+/// 设置大文件阈值（MB）
+/// 
+/// 超过此阈值的文件会自动使用临时文件而非内存缓存
+#[tauri::command]
+pub async fn pm_set_large_file_threshold(
+    threshold_mb: usize,
+    state: State<'_, PageManagerState>,
+) -> Result<(), String> {
+    log::info!("⚙️ [PageCommand] set_large_file_threshold: {} MB", threshold_mb);
+    let manager = state.manager.lock().await;
+    manager.set_large_file_threshold_mb(threshold_mb);
+    Ok(())
+}
+
 // ===== 辅助函数 =====
 
 /// 收集所有页面命令
@@ -145,5 +193,9 @@ pub fn get_page_commands() -> Vec<&'static str> {
         "pm_get_stats",
         "pm_get_memory_stats",
         "pm_clear_cache",
+        "pm_get_video_path",
+        "pm_get_temp_stats",
+        "pm_get_large_file_threshold",
+        "pm_set_large_file_threshold",
     ]
 }

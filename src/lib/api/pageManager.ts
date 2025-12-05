@@ -158,6 +158,51 @@ export async function clearCache(): Promise<void> {
 	return invoke('pm_clear_cache');
 }
 
+// ===== 视频相关 =====
+
+/** 临时文件统计 */
+export interface TempFileStats {
+	fileCount: number;
+	totalSize: number;
+	tempDir: string;
+}
+
+/**
+ * 获取视频文件路径
+ * 
+ * 对于压缩包内的视频，后端会自动提取到临时文件
+ * 返回的路径可以用 convertFileSrc() 转换为可用的 URL
+ */
+export async function getVideoPath(index: number): Promise<string> {
+	console.log('🎬 [PageManager] getVideoPath:', index);
+	return invoke<string>('pm_get_video_path', { index });
+}
+
+/**
+ * 获取临时文件统计
+ */
+export async function getTempStats(): Promise<TempFileStats> {
+	return invoke<TempFileStats>('pm_get_temp_stats');
+}
+
+/**
+ * 获取大文件阈值（MB）
+ */
+export async function getLargeFileThreshold(): Promise<number> {
+	return invoke<number>('pm_get_large_file_threshold');
+}
+
+/**
+ * 设置大文件阈值（MB）
+ * 
+ * 超过此阈值的文件会自动使用临时文件而非内存缓存
+ * 默认值: 800 MB
+ */
+export async function setLargeFileThreshold(thresholdMb: number): Promise<void> {
+	console.log('⚙️ [PageManager] setLargeFileThreshold:', thresholdMb, 'MB');
+	return invoke('pm_set_large_file_threshold', { thresholdMb });
+}
+
 // ===== 工具函数 =====
 
 /**

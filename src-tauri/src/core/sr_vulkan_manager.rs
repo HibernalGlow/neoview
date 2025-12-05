@@ -350,23 +350,32 @@ impl SrVulkanManager {
     }
 }
 
+/// 预处理图片：使用 WIC 解码 AVIF/JXL 等格式，转换为 PNG 传给 PyO3
 fn preprocess_image_for_sr(image_data: &[u8]) -> Result<Vec<u8>, String> {
-    if is_jxl_image(image_data) {
-        println!("[SrVulkanManager] Detected JXL image, transcoding to JPEG(Q80) before sr_vulkan");
-        transcode_jxl_to_jpeg_q80(image_data)
-    } else if is_avif_image(image_data) {
-        println!(
-            "[SrVulkanManager] Detected AVIF image, transcoding to JPEG(Q80) before sr_vulkan"
-        );
-        transcode_avif_to_jpeg_q80(image_data)
+    // 检测是否需要转码的格式
+    if is_jxl_image(image_data) || is_avif_image(image_data) {
+        let format_name = if is_jxl_image(image_data) { "JXL" } else { "AVIF" };
+        println!("[SrVulkanManager] Detected {} image, using WIC to transcode to PNG", format_name);
+        transcode_with_wic(image_data)
     } else {
-        // 其他格式直接透传
+        // 其他格式直接透传（PNG/JPEG/WebP 等 sr_vulkan 原生支持的）
         Ok(image_data.to_vec())
     }
 }
 
 fn is_jxl_image(data: &[u8]) -> bool {
-    data.len() >= 12 && &data[0..8] == b"\x00\x00\x00\x0cjxl "
+    // JPEG XL 签名：裸码流 0xFF0A 或 容器格式 0x0000000C6A584C20
+    if data.len() >= 2 && data[0] == 0xFF && data[1] == 0x0A {
+        return true;
+    }
+    if data.len() >= 12 {
+        let sig = &data[0..12];
+        // Container format signature
+        if sig[0..4] == [0x00, 0x00, 0x00, 0x0C] && &sig[4..8] == b"JXL " {
+            return true;
+        }
+    }
+    false
 }
 
 fn is_avif_image(data: &[u8]) -> bool {
@@ -374,145 +383,52 @@ fn is_avif_image(data: &[u8]) -> bool {
         return false;
     }
     let marker = &data[4..12];
-    marker == b"ftypavif" || marker == b"ftypavis"
+    marker == b"ftypavif" || marker == b"ftypavis" || marker == b"ftypheic" || marker == b"ftypheix"
 }
 
-fn transcode_jxl_to_jpeg_q80(data: &[u8]) -> Result<Vec<u8>, String> {
-    let img = decode_jxl_to_dynamic_image(data)?;
-    encode_dynamic_to_jpeg_q80(&img)
-}
-
-fn transcode_avif_to_jpeg_q80(data: &[u8]) -> Result<Vec<u8>, String> {
-    if let Some(jpeg) = transcode_avif_with_ffmpeg(data) {
-        return Ok(jpeg);
+/// 使用 WIC 解码图片，然后编码为 PNG
+fn transcode_with_wic(image_data: &[u8]) -> Result<Vec<u8>, String> {
+    use crate::core::wic_decoder::decode_image_from_memory_with_wic;
+    
+    // 使用 WIC 解码（支持 AVIF/JXL，需要安装对应编解码器）
+    let decode_result = decode_image_from_memory_with_wic(image_data)
+        .map_err(|e| format!("WIC 解码失败: {}", e))?;
+    
+    let width = decode_result.width;
+    let height = decode_result.height;
+    let bgra_pixels = decode_result.pixels;
+    
+    println!(
+        "[SrVulkanManager] WIC decoded: {}x{}, {} bytes",
+        width, height, bgra_pixels.len()
+    );
+    
+    // BGRA -> RGBA
+    let mut rgba_pixels = bgra_pixels;
+    for chunk in rgba_pixels.chunks_exact_mut(4) {
+        chunk.swap(0, 2); // B <-> R
     }
-
-    // 回退到 image crate 解码 AVIF
-    println!("[SrVulkanManager] FFmpeg AVIF 转码失败，回退到 image crate");
-    let img = image::load_from_memory_with_format(data, image::ImageFormat::Avif)
-        .map_err(|e| format!("解码 AVIF 失败: {}", e))?;
-    encode_dynamic_to_jpeg_q80(&img)
-}
-
-fn transcode_avif_with_ffmpeg(data: &[u8]) -> Option<Vec<u8>> {
-    let temp_dir = std::env::temp_dir();
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .ok()?;
-    let input_path = temp_dir.join(format!(
-        "sr_avif_input_{}_{}.avif",
-        std::process::id(),
-        ts.as_nanos()
-    ));
-    let output_path = temp_dir.join(format!(
-        "sr_avif_output_{}_{}.jpg",
-        std::process::id(),
-        ts.as_nanos()
-    ));
-
-    if let Err(e) = fs::write(&input_path, data) {
-        eprintln!("[SrVulkanManager] 写入临时 AVIF 文件失败: {}", e);
-        return None;
+    
+    // 使用 image crate 编码为 PNG（无损）
+    let img: image::RgbaImage = image::RgbaImage::from_raw(width, height, rgba_pixels)
+        .ok_or("创建 RGBA 图像失败")?;
+    
+    let mut output = Vec::new();
+    {
+        use image::codecs::png::PngEncoder;
+        use image::ImageEncoder;
+        let encoder = PngEncoder::new(&mut output);
+        encoder
+            .write_image(&img, width, height, image::ExtendedColorType::Rgba8)
+            .map_err(|e| format!("PNG 编码失败: {}", e))?;
     }
-
-    let mut cmd = FfmpegCommand::new();
-    cmd.input(input_path.to_string_lossy().as_ref());
-
-    // 单帧图像，输出 JPEG，使用适中的质量（约等于 Q80）
-    cmd.args(&["-y", "-f", "image2", "-frames:v", "1", "-qscale:v", "4"]);
-    cmd.output(output_path.to_string_lossy().as_ref());
-
-    let result = match cmd.spawn() {
-        Ok(mut child) => match child.wait() {
-            Ok(status) if status.success() => fs::read(&output_path).map_err(|e| {
-                eprintln!(
-                    "[SrVulkanManager] 读取 FFmpeg AVIF 输出失败: {} - {}",
-                    output_path.display(),
-                    e
-                );
-                e
-            }),
-            Ok(_) => {
-                eprintln!("[SrVulkanManager] FFmpeg AVIF 转码退出状态非 0");
-                Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "ffmpeg avif transcode failed",
-                ))
-            }
-            Err(e) => {
-                eprintln!("[SrVulkanManager] 等待 FFmpeg AVIF 转码失败: {}", e);
-                Err(e)
-            }
-        },
-        Err(e) => {
-            eprintln!("[SrVulkanManager] 启动 FFmpeg AVIF 转码失败: {}", e);
-            Err(e)
-        }
-    };
-
-    let _ = fs::remove_file(&input_path);
-    let _ = fs::remove_file(&output_path);
-
-    result.ok()
-}
-
-fn decode_jxl_to_dynamic_image(data: &[u8]) -> Result<image::DynamicImage, String> {
-    let mut reader = Cursor::new(data);
-    let jxl_image = JxlImage::builder()
-        .read(&mut reader)
-        .map_err(|e| format!("解码 JXL 失败: {}", e))?;
-
-    let render = jxl_image
-        .render_frame(0)
-        .map_err(|e| format!("渲染 JXL 帧失败: {}", e))?;
-
-    let fb = render.image_all_channels();
-    let width = fb.width() as u32;
-    let height = fb.height() as u32;
-    let channels = fb.channels();
-    let float_buf = fb.buf();
-
-    if channels == 1 {
-        let gray_data: Vec<u8> = float_buf
-            .iter()
-            .map(|&v| (v.clamp(0.0, 1.0) * 255.0) as u8)
-            .collect();
-
-        let gray_img = image::GrayImage::from_raw(width, height, gray_data)
-            .ok_or_else(|| "Failed to create gray image from JXL data".to_string())?;
-        return Ok(image::DynamicImage::ImageLuma8(gray_img));
-    }
-
-    if channels == 3 {
-        let rgb_data: Vec<u8> = float_buf
-            .iter()
-            .map(|&v| (v.clamp(0.0, 1.0) * 255.0) as u8)
-            .collect();
-
-        let rgb_img = image::RgbImage::from_raw(width, height, rgb_data)
-            .ok_or_else(|| "Failed to create RGB image from JXL data".to_string())?;
-        return Ok(image::DynamicImage::ImageRgb8(rgb_img));
-    }
-
-    if channels >= 4 {
-        let rgba_data: Vec<u8> = float_buf
-            .chunks(channels)
-            .flat_map(|chunk| {
-                vec![
-                    (chunk[0].clamp(0.0, 1.0) * 255.0) as u8,
-                    (chunk[1].clamp(0.0, 1.0) * 255.0) as u8,
-                    (chunk[2].clamp(0.0, 1.0) * 255.0) as u8,
-                    (chunk.get(3).copied().unwrap_or(1.0).clamp(0.0, 1.0) * 255.0) as u8,
-                ]
-            })
-            .collect();
-
-        let rgba_img = image::RgbaImage::from_raw(width, height, rgba_data)
-            .ok_or_else(|| "Failed to create RGBA image from JXL data".to_string())?;
-        return Ok(image::DynamicImage::ImageRgba8(rgba_img));
-    }
-
-    Err(format!("Unsupported JXL channel count: {}", channels))
+    
+    println!(
+        "[SrVulkanManager] Transcoded to PNG: {} bytes",
+        output.len()
+    );
+    
+    Ok(output)
 }
 
 fn encode_dynamic_to_jpeg_q80(img: &image::DynamicImage) -> Result<Vec<u8>, String> {

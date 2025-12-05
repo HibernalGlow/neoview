@@ -124,6 +124,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'benchmark',
 		canHide: true,
 	},
+	'transcodeBenchmark': {
+		id: 'transcodeBenchmark',
+		title: '超分预处理转码',
+		icon: Gauge,
+		defaultPanel: 'benchmark',
+		canHide: true,
+	},
 	
 	// ==================== Info 面板卡片 ====================
 	'bookInfo': {

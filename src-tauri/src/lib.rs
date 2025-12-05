@@ -361,6 +361,7 @@ pub fn run() {
             commands::benchmark_commands::load_image_wic_lz4,
             commands::benchmark_commands::load_image_wic_lz4_cached,
             commands::benchmark_commands::clear_wic_lz4_cache,
+            commands::benchmark_commands::run_transcode_benchmark,
             // Page Manager commands (NeeView 架构)
             commands::page_commands::pm_open_book,
             commands::page_commands::pm_close_book,

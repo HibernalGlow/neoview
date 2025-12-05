@@ -83,8 +83,10 @@ function formatMs(ms: number): string {
 			</div>
 			<div class="space-y-1">
 				{#each records.toReversed() as record (record.timestamp)}
-					<div class="flex items-center gap-2 text-xs bg-muted/30 rounded px-2 py-1">
-						<span class="text-muted-foreground w-6">P{record.pageIndex}</span>
+					<div class="flex items-center gap-2 text-xs rounded px-2 py-1 {record.isCurrentPage ? 'bg-primary/20' : 'bg-muted/30'}">
+						<span class="w-6 {record.isCurrentPage ? 'text-primary font-medium' : 'text-muted-foreground'}">
+							P{record.pageIndex}
+						</span>
 						<span class="font-mono flex-1 text-[11px]">
 							<!-- IPC 时间 -->
 							<span class:text-green-500={record.ipcTransferMs < 50} 
@@ -105,6 +107,9 @@ function formatMs(ms: number): string {
 							<span title="总耗时">{formatMs(record.totalMs)}</span>
 						</span>
 						<span class="text-muted-foreground text-[10px]">{formatSize(record.dataSize)}</span>
+						{#if record.cacheHit}
+							<span class="text-green-500 text-[10px] font-medium">HIT</span>
+						{/if}
 					</div>
 				{/each}
 			</div>

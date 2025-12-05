@@ -11,6 +11,7 @@ import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 import { BlobCache, getBlobCache } from './blobCache';
 import { LoadQueueManager, LoadPriority, QueueClearedError, TaskCancelledError } from './loadQueue';
 import { readPageBlobV2, getImageDimensions, createThumbnailDataURL } from './imageReader';
+import { pipelineLatencyStore } from '$lib/stores/pipelineLatency.svelte';
 import { calculatePreloadPlan, trackPageDirection, planToQueue, type PreloadConfig } from './preloadStrategy';
 
 /**
@@ -143,6 +144,25 @@ export class ImageLoaderCore {
 				// 再次检查缓存（可能在排队时被加载）
 				if (this.blobCache.has(pageIndex)) {
 					const item = this.blobCache.get(pageIndex)!;
+					const isCurrentPage = priority === LoadPriority.CRITICAL;
+					
+					// 记录前端缓存命中到监控
+					if (isCurrentPage) {
+						pipelineLatencyStore.record({
+							timestamp: Date.now(),
+							pageIndex,
+							traceId: `cache-${pageIndex}`,
+							bookSyncMs: 0,
+							backendLoadMs: 0,
+							ipcTransferMs: 0,
+							blobCreateMs: 0,
+							totalMs: 0,
+							dataSize: item.blob.size,
+							cacheHit: true,  // 前端缓存命中
+							isCurrentPage: true
+						});
+					}
+					
 					// 先返回，异步获取尺寸
 					resolve({
 						url: item.url,

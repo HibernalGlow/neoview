@@ -27,6 +27,7 @@ import {
 	Flame,
 	Eye,
 	Tags,
+	RotateCcw,
 	// 排序图标
 	ALargeSmall,
 	Calendar,
@@ -618,6 +619,11 @@ function cancelWarmup() {
 								</button>
 							{/each}
 						</div>
+						<DropdownMenu.Separator />
+						<DropdownMenu.Item onclick={() => folderTabActions.setThumbnailWidthPercent(20)}>
+							<RotateCcw class="mr-2 h-4 w-4" />
+							恢复默认 (78px)
+						</DropdownMenu.Item>
 					</DropdownMenu.SubContent>
 				</DropdownMenu.Sub>
 				<!-- 排除路径设置 -->

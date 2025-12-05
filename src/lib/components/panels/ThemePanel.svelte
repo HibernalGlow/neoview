@@ -50,6 +50,65 @@
 		bottomBarBlur = value;
 		settingsManager.updateNestedSettings('panels', { bottomBarBlur: value });
 	}
+	
+	// 字体设置
+	import { applyFontSettings, broadcastFontSettings, type FontSettings } from '$lib/utils/fontManager';
+	import { Type, Plus, X } from '@lucide/svelte';
+	import Switch from '$lib/components/ui/switch/switch.svelte';
+	
+	let fontSettings = $state<FontSettings>({
+		enabled: false,
+		fontFamilies: [],
+		uiFontFamilies: [],
+		monoFontFamilies: []
+	});
+	let newMainFont = $state('');
+	let newMonoFont = $state('');
+	
+	function loadFontSettings() {
+		const settings = settingsManager.getSettings().theme.customFont;
+		fontSettings = { ...settings };
+	}
+	
+	function saveFontSettings() {
+		settingsManager.updateNestedSettings('theme', {
+			customFont: { ...fontSettings }
+		});
+		applyFontSettings(fontSettings);
+		broadcastFontSettings(fontSettings);
+	}
+	
+	function toggleFontEnabled(enabled: boolean) {
+		fontSettings.enabled = enabled;
+		saveFontSettings();
+	}
+	
+	function addMainFont() {
+		if (newMainFont.trim() && !fontSettings.fontFamilies.includes(newMainFont.trim())) {
+			fontSettings.fontFamilies = [...fontSettings.fontFamilies, newMainFont.trim()];
+			newMainFont = '';
+			saveFontSettings();
+		}
+	}
+	
+	function removeMainFont(font: string) {
+		fontSettings.fontFamilies = fontSettings.fontFamilies.filter(f => f !== font);
+		saveFontSettings();
+	}
+	
+	function addMonoFont() {
+		if (newMonoFont.trim() && !fontSettings.monoFontFamilies.includes(newMonoFont.trim())) {
+			fontSettings.monoFontFamilies = [...fontSettings.monoFontFamilies, newMonoFont.trim()];
+			newMonoFont = '';
+			saveFontSettings();
+		}
+	}
+	
+	function removeMonoFont(font: string) {
+		fontSettings.monoFontFamilies = fontSettings.monoFontFamilies.filter(f => f !== font);
+		saveFontSettings();
+	}
+	
 	let themeJson = $state('');
 	let customThemeName = $state('');
 	const placeholderText = '{"name":"My Theme","cssVars":{"theme":{},"light":{},"dark":{}}}';
@@ -318,6 +377,7 @@
 	// 监听系统主题变化
 	onMount(() => {
 		checkSystemTheme();
+		loadFontSettings();
 
 		try {
 			const rawCustom = localStorage.getItem('custom-themes');
@@ -537,6 +597,75 @@
 				<span class="text-sm text-muted-foreground w-12 text-right">{bottomBarBlur}px</span>
 			</div>
 		</div>
+	</div>
+
+	<!-- 自定义字体 -->
+	<div class="space-y-3">
+		<div class="flex items-center justify-between">
+			<Label class="text-sm font-semibold flex items-center gap-2">
+				<Type class="h-4 w-4" />
+				自定义字体
+			</Label>
+			<Switch checked={fontSettings.enabled} onCheckedChange={toggleFontEnabled} />
+		</div>
+		
+		{#if fontSettings.enabled}
+			<!-- 主字体 -->
+			<div class="space-y-2">
+				<Label class="text-xs text-muted-foreground">主字体（按优先级排序）</Label>
+				<div class="flex gap-2">
+					<Input 
+						bind:value={newMainFont} 
+						placeholder="输入字体名称，如 Microsoft YaHei"
+						class="flex-1"
+						onkeydown={(e: KeyboardEvent) => e.key === 'Enter' && addMainFont()}
+					/>
+					<Button size="sm" variant="outline" onclick={addMainFont}>
+						<Plus class="h-4 w-4" />
+					</Button>
+				</div>
+				{#if fontSettings.fontFamilies.length > 0}
+					<div class="flex flex-wrap gap-2">
+						{#each fontSettings.fontFamilies as font}
+							<span class="inline-flex items-center gap-1 rounded-md bg-secondary px-2 py-1 text-xs">
+								{font}
+								<button onclick={() => removeMainFont(font)} class="hover:text-destructive">
+									<X class="h-3 w-3" />
+								</button>
+							</span>
+						{/each}
+					</div>
+				{/if}
+			</div>
+			
+			<!-- 等宽字体 -->
+			<div class="space-y-2">
+				<Label class="text-xs text-muted-foreground">等宽字体（代码等）</Label>
+				<div class="flex gap-2">
+					<Input 
+						bind:value={newMonoFont} 
+						placeholder="输入字体名称，如 Cascadia Code"
+						class="flex-1"
+						onkeydown={(e: KeyboardEvent) => e.key === 'Enter' && addMonoFont()}
+					/>
+					<Button size="sm" variant="outline" onclick={addMonoFont}>
+						<Plus class="h-4 w-4" />
+					</Button>
+				</div>
+				{#if fontSettings.monoFontFamilies.length > 0}
+					<div class="flex flex-wrap gap-2">
+						{#each fontSettings.monoFontFamilies as font}
+							<span class="inline-flex items-center gap-1 rounded-md bg-secondary px-2 py-1 text-xs font-mono">
+								{font}
+								<button onclick={() => removeMonoFont(font)} class="hover:text-destructive">
+									<X class="h-3 w-3" />
+								</button>
+							</span>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		{/if}
 	</div>
 
 	<!-- 预设主题 -->

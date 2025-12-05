@@ -2,8 +2,10 @@ import './app.css';
 import { mount } from 'svelte';
 import Settings from './lib/Settings.svelte';
 import { initializeRuntimeThemeListeners } from '$lib/utils/runtimeTheme';
+import { initFontManager } from '$lib/utils/fontManager';
 
 initializeRuntimeThemeListeners();
+initFontManager();
 
 if (typeof document !== 'undefined') {
 	document.addEventListener(

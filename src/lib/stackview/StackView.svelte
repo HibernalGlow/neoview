@@ -211,25 +211,31 @@
     const mode = $legacyViewMode as 'single' | 'double' | 'panorama';
     const orient = $legacyOrientation as 'horizontal' | 'vertical';
     
-    console.log(`🔄 StackView: viewMode=${mode}, wasInPanorama=${wasInPanorama}, lastNonPanoramaPageMode=${lastNonPanoramaPageMode}`);
+    console.log(`🔄 StackView: viewMode=${mode}, wasInPanorama=${wasInPanorama}, lastNonPanoramaPageMode=${lastNonPanoramaPageMode}, currentPageMode=${ctx.pageMode}`);
     
     // 根据旧模式设置 BookContext
     if (mode === 'panorama') {
       ctx.setPanoramaEnabled(true);
-      // 进入全景模式时，使用之前的 pageMode 或从设置获取
+      // 进入全景模式时，使用之前的 pageMode
       if (!wasInPanorama) {
-        // 第一次进入全景，使用之前保存的 pageMode
-        console.log(`🔄 StackView: 进入全景，设置 pageMode=${lastNonPanoramaPageMode}`);
-        ctx.setPageMode(lastNonPanoramaPageMode);
+        console.log(`🔄 StackView: 进入全景，保持 pageMode=${ctx.pageMode}`);
         wasInPanorama = true;
       }
-      // 已在全景模式中，保持当前 pageMode 不变
+      // 全景模式中保持当前 pageMode 不变
     } else {
-      ctx.setPanoramaEnabled(false);
-      ctx.setPageMode(mode);
-      lastNonPanoramaPageMode = mode;
-      wasInPanorama = false;
-      console.log(`🔄 StackView: 非全景模式，设置 pageMode=${mode}`);
+      // 从全景退出时，保持之前的 pageMode
+      if (wasInPanorama) {
+        console.log(`🔄 StackView: 退出全景，保持 pageMode=${ctx.pageMode}`);
+        ctx.setPanoramaEnabled(false);
+        wasInPanorama = false;
+        // 不设置 pageMode，保持全景期间的状态
+      } else {
+        // 普通模式切换（不是从全景退出）
+        ctx.setPanoramaEnabled(false);
+        ctx.setPageMode(mode);
+        lastNonPanoramaPageMode = mode;
+        console.log(`🔄 StackView: 非全景模式，设置 pageMode=${mode}`);
+      }
     }
     ctx.setOrientation(orient);
   });

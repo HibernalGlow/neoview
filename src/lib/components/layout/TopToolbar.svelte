@@ -1162,8 +1162,15 @@ async function handleSortModeChange(mode: PageSortMode) {
 									variant={$viewerState.viewMode === 'panorama' ? 'default' : 'ghost'}
 									size="icon"
 									class={`h-8 w-8 rounded-full ${$viewerState.lockedViewMode === 'panorama' ? 'ring-primary bg-primary/20 text-primary ring-2' : ''}`}
-									onclick={() =>
-										setViewMode($viewerState.viewMode === 'panorama' ? 'single' : 'panorama')}
+									onclick={() => {
+										if ($viewerState.viewMode === 'panorama') {
+											// 退出全景时恢复之前的 pageMode
+											const pageMode = bookContextManager.current?.pageMode ?? 'single';
+											setViewMode(pageMode);
+										} else {
+											setViewMode('panorama');
+										}
+									}}
 									oncontextmenu={(event) => {
 										event.preventDefault();
 										toggleViewModeLock('panorama');

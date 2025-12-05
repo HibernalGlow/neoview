@@ -1221,8 +1221,18 @@ async function handleSortModeChange(mode: PageSortMode) {
 											? 'ring-primary bg-primary/20 text-primary ring-2'
 											: ''
 									}`}
-									onclick={() =>
-										setViewMode(isDoublePage ? 'single' : 'double')}
+									onclick={() => {
+										const newPageMode = isDoublePage ? 'single' : 'double';
+										// 在全景模式下，只改变 pageMode 不退出全景
+										if ($viewerState.viewMode === 'panorama') {
+											const ctx = bookContextManager.current;
+											if (ctx) {
+												ctx.setPageMode(newPageMode as 'single' | 'double');
+											}
+										} else {
+											setViewMode(newPageMode);
+										}
+									}}
 									oncontextmenu={(event) => {
 										event.preventDefault();
 										const mode = isDoublePage ? 'double' : 'single';

@@ -381,11 +381,19 @@ void ensureSchedulerListener();
 
 /**
  * 触发自动超分
+ * @deprecated 旧系统已弃用，超分逻辑已迁移到 upscaleStore + UpscaleService
  */
 export async function triggerAutoUpscale(
 	imageDataWithHash: ImageDataWithHash,
 	isPreload = false
 ): Promise<void> {
+	// 旧系统已弃用，直接返回
+	// 超分逻辑已迁移到 StackView -> upscaleStore.triggerCurrentPageUpscale()
+	// 超分结果通过 imagePool.setUpscaled() + FrameImage 显示
+	console.log('[DEPRECATED] triggerAutoUpscale 已弃用，跳过');
+	return;
+
+	// eslint-disable-next-line no-unreachable
 	try {
 		// 验证图片数据
 		if (!imageDataWithHash || !imageDataWithHash.blob) {

@@ -155,6 +155,19 @@ class UpscaleStore {
       this.handleUpscaleReady(event.payload);
     });
 
+    // 同步旧系统的开关设置
+    try {
+      const { loadUpscalePanelSettings } = await import('$lib/components/panels/UpscalePanel');
+      const panelSettings = loadUpscalePanelSettings();
+      if (typeof panelSettings.autoUpscaleEnabled === 'boolean') {
+        this.state.enabled = panelSettings.autoUpscaleEnabled;
+        await invoke('upscale_service_set_enabled', { enabled: panelSettings.autoUpscaleEnabled });
+        console.log('✅ 同步旧系统超分开关:', panelSettings.autoUpscaleEnabled);
+      }
+    } catch (err) {
+      console.warn('⚠️ 同步旧系统超分开关失败:', err);
+    }
+
     this.initialized = true;
     console.log('✅ UpscaleStore V2 initialized');
   }

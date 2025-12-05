@@ -12,6 +12,7 @@ import { fileBrowserStore } from './fileBrowser.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
 import { showToast } from '$lib/utils/toast';
 import type { EMMMetadata } from '$lib/api/emm';
+import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 
 const PAGE_WINDOW_PADDING = 8;
 const JUMP_HISTORY_LIMIT = 20;
@@ -304,9 +305,19 @@ class BookStore {
 
   /**
    * 设置超分图片数据
+   * 同时写入 imagePool 以支持 Layer 系统
    */
   setUpscaledImage(data: string | null) {
     this.state.upscaledImageData = data;
+    
+    // 同步到 imagePool，让 FrameImage 组件也能获取超分图
+    const pageIndex = this.currentPageIndex;
+    if (data) {
+      imagePool.setUpscaled(pageIndex, data);
+      console.log(`✅ 超分图已同步到 imagePool: page ${pageIndex}`);
+    } else {
+      imagePool.clearUpscaled(pageIndex);
+    }
   }
 
   /**

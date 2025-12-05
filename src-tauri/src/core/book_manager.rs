@@ -308,8 +308,9 @@ impl BookManager {
             
             let stable_hash = calculate_path_hash(&format!("{}:{}", path_str, inner_path));
             
-            // EPUB 内的图片，path 存储 EPUB 路径，inner_path 存储内部路径
-            let page = Page::new(index, path_str.to_string(), name.clone(), 0)
+            // EPUB 内的图片，使用 epub_path:inner_path 作为唯一 path
+            let unique_path = format!("{}:{}", path_str, inner_path);
+            let page = Page::new(index, unique_path, name.clone(), 0)
                 .with_stable_hash(stable_hash)
                 .with_inner_path(Some(inner_path))
                 .with_entry_index(index);

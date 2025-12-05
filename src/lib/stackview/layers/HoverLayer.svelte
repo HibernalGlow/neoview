@@ -31,6 +31,22 @@
   
   let layerRef: HTMLDivElement | null = $state(null);
   
+  // 缓存 rect，避免频繁调用 getBoundingClientRect
+  let cachedRect: DOMRect | null = null;
+  let rectCacheTime = 0;
+  const RECT_CACHE_DURATION = 100; // 100ms 缓存
+  
+  function getCachedRect(): DOMRect | null {
+    const now = performance.now();
+    if (!cachedRect || now - rectCacheTime > RECT_CACHE_DURATION) {
+      if (layerRef) {
+        cachedRect = layerRef.getBoundingClientRect();
+        rectCacheTime = now;
+      }
+    }
+    return cachedRect;
+  }
+  
   // 单次 RAF 调度器
   let pendingUpdate: { x: number; y: number } | null = null;
   let rafId: number | null = null;
@@ -39,19 +55,12 @@
   // 横屏图(宽>高)溢出后只能左右滚动，竖屏图(高>宽)溢出后只能上下滚动
   let bounds = $derived.by(() => {
     if (!viewportSize.width || !viewportSize.height || !displaySize.width || !displaySize.height) {
-      console.log(`🖼️ [HoverScroll] bounds 无效，返回默认值`);
       return { minX: 0, maxX: 100, minY: 0, maxY: 100 };
     }
     
     const imgAspect = displaySize.width / displaySize.height;
     const vpAspect = viewportSize.width / viewportSize.height;
-    
-    // 简单规则：
-    // 如果图片宽高比 > 视口宽高比 => 图片更宽，只允许水平滚动
-    // 如果图片宽高比 < 视口宽高比 => 图片更高，只允许垂直滚动
     const isWider = imgAspect > vpAspect;
-    
-    console.log(`🖼️ [HoverScroll] bounds: displaySize=${displaySize.width.toFixed(0)}x${displaySize.height.toFixed(0)}, viewport=${viewportSize.width}x${viewportSize.height}, imgAspect=${imgAspect.toFixed(2)}, vpAspect=${vpAspect.toFixed(2)}, isWider=${isWider}`);
     
     if (isWider) {
       // 横屏图：只能左右滚动
@@ -78,20 +87,13 @@
     }
   }
   
-  // 调试计数器
-  let debugCounter = 0;
-  
   // 直接在 mousemove 中计算并调度更新
   function onMouseMove(e: MouseEvent) {
-    // 每100次打印一次状态
-    debugCounter++;
-    if (debugCounter % 100 === 1) {
-      console.log(`🖼️ [HoverScroll] onMouseMove: enabled=${enabled}, layerRef=${!!layerRef}, bounds=`, bounds);
-    }
-    
     if (!enabled || !layerRef) return;
     
-    const rect = layerRef.getBoundingClientRect();
+    const rect = getCachedRect();
+    if (!rect) return;
+    
     const localX = e.clientX - rect.left;
     const localY = e.clientY - rect.top;
     
@@ -122,11 +124,6 @@
     const normalizedY = localY / rect.height;
     const x = bounds.minX + normalizedX * (bounds.maxX - bounds.minX);
     const y = bounds.minY + normalizedY * (bounds.maxY - bounds.minY);
-    
-    // 调试：打印计算结果
-    if (debugCounter % 100 === 1) {
-      console.log(`🖼️ [HoverScroll] 计算位置: x=${x.toFixed(1)}, y=${y.toFixed(1)}, bounds=`, bounds);
-    }
     
     scheduleUpdate(x, y);
   }

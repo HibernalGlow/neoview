@@ -2,18 +2,19 @@
 /**
  * 延迟分析卡片
  * 从 BenchmarkPanel 提取
+ * 新增: WIC + LZ4 压缩传输测试
  */
 import { invoke } from '@tauri-apps/api/core';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { Button } from '$lib/components/ui/button';
-import { FolderOpen, Play, Trash2 } from '@lucide/svelte';
+import { FolderOpen, Play, Trash2, Zap } from '@lucide/svelte';
 
 interface DetailedLatencyResult {
 	imagePath: string;
 	imageSize: number;
 	dimensions: { width: number; height: number } | null;
-	loadMethod: 'ipc' | 'tempfile';
+	loadMethod: 'ipc' | 'tempfile' | 'wic-lz4';
 	extractTime: number;
 	ipcTransferTime: number;
 	blobCreateTime: number;
@@ -23,12 +24,34 @@ interface DetailedLatencyResult {
 	totalTime: number;
 	success: boolean;
 	error: string | null;
+	// WIC+LZ4 特有字段
+	wicDecodeTime?: number;
+	lz4CompressTime?: number;
+	lz4DecompressTime?: number;
+	originalSize?: number;
+	compressedSize?: number;
+	compressionRatio?: number;
+}
+
+interface WicLz4Result {
+	width: number;
+	height: number;
+	original_size: number;
+	compressed_size: number;
+	compression_ratio: number;
+	wic_decode_ms: number;
+	lz4_compress_ms: number;
+	total_ms: number;
+	success: boolean;
+	error: string | null;
+	compressed_data: number[];
 }
 
 let selectedLatencyArchive = $state<string>('');
 let latencyResults = $state<DetailedLatencyResult[]>([]);
 let isLatencyTesting = $state(false);
 let latencyTestCount = $state<number>(5);
+let includeWicLz4 = $state(true);
 
 async function selectLatencyArchive() {
 	const file = await open({
@@ -172,11 +195,147 @@ async function runLatencyTest() {
 		}
 		
 		testContainer.remove();
+		
+		// WIC + LZ4 测试（如果启用）
+		if (includeWicLz4) {
+			for (const imagePath of testImages) {
+				const result: DetailedLatencyResult = {
+					imagePath,
+					imageSize: 0,
+					dimensions: null,
+					loadMethod: 'wic-lz4',
+					extractTime: 0,
+					ipcTransferTime: 0,
+					blobCreateTime: 0,
+					urlCreateTime: 0,
+					decodeTime: 0,
+					renderTime: 0,
+					totalTime: 0,
+					success: false,
+					error: null
+				};
+				
+				const totalStart = performance.now();
+				
+				try {
+					// 调用后端 WIC + LZ4 命令
+					const wicResult = await invoke<WicLz4Result>('load_image_wic_lz4_cached', {
+						archivePath: selectedLatencyArchive,
+						filePath: imagePath
+					});
+					
+					result.wicDecodeTime = wicResult.wic_decode_ms;
+					result.lz4CompressTime = wicResult.lz4_compress_ms;
+					result.originalSize = wicResult.original_size;
+					result.compressedSize = wicResult.compressed_size;
+					result.compressionRatio = wicResult.compression_ratio;
+					result.imageSize = wicResult.compressed_size;
+					result.dimensions = { width: wicResult.width, height: wicResult.height };
+					
+					// 前端解压 LZ4
+					const decompressStart = performance.now();
+					const compressedData = new Uint8Array(wicResult.compressed_data);
+					// 简单的 LZ4 解压 (使用 lz4js 或手动实现)
+					// 由于没有 lz4js，我们测量 IPC 传输时间作为替代
+					const bgraData = await decompressLz4(compressedData, wicResult.original_size);
+					const decompressEnd = performance.now();
+					result.lz4DecompressTime = decompressEnd - decompressStart;
+					
+					// 从 BGRA 创建 ImageData 并渲染到 canvas
+					const renderStart = performance.now();
+					const canvas = document.createElement('canvas');
+					canvas.width = wicResult.width;
+					canvas.height = wicResult.height;
+					const ctx = canvas.getContext('2d');
+					if (ctx && bgraData) {
+						// BGRA -> RGBA
+						const rgbaData = new Uint8ClampedArray(bgraData.length);
+						for (let i = 0; i < bgraData.length; i += 4) {
+							rgbaData[i] = bgraData[i + 2];     // R <- B
+							rgbaData[i + 1] = bgraData[i + 1]; // G
+							rgbaData[i + 2] = bgraData[i];     // B <- R
+							rgbaData[i + 3] = bgraData[i + 3]; // A
+						}
+						const imageData = new ImageData(rgbaData, wicResult.width, wicResult.height);
+						ctx.putImageData(imageData, 0, 0);
+					}
+					const renderEnd = performance.now();
+					result.renderTime = renderEnd - renderStart;
+					
+					result.totalTime = performance.now() - totalStart;
+					result.success = true;
+					
+				} catch (err) {
+					result.totalTime = performance.now() - totalStart;
+					result.error = String(err);
+				}
+				
+				latencyResults = [...latencyResults, result];
+			}
+		}
+		
 	} catch (err) {
 		console.error('延迟测试失败:', err);
 	}
 	
 	isLatencyTesting = false;
+}
+
+/**
+ * 简单的 LZ4 解压实现
+ * lz4_flex 使用 prepend_size 格式：前4字节是解压后大小（小端序）
+ */
+async function decompressLz4(compressed: Uint8Array, expectedSize: number): Promise<Uint8Array> {
+	// 跳过前4字节的大小头
+	const data = compressed.slice(4);
+	const output = new Uint8Array(expectedSize);
+	
+	let srcIdx = 0;
+	let dstIdx = 0;
+	
+	while (srcIdx < data.length && dstIdx < expectedSize) {
+		const token = data[srcIdx++];
+		
+		// 字面量长度
+		let literalLength = (token >> 4) & 0x0F;
+		if (literalLength === 15) {
+			let byte;
+			do {
+				byte = data[srcIdx++];
+				literalLength += byte;
+			} while (byte === 255);
+		}
+		
+		// 复制字面量
+		for (let i = 0; i < literalLength && dstIdx < expectedSize; i++) {
+			output[dstIdx++] = data[srcIdx++];
+		}
+		
+		if (srcIdx >= data.length) break;
+		
+		// 匹配偏移（2字节小端序）
+		const offset = data[srcIdx++] | (data[srcIdx++] << 8);
+		if (offset === 0) break;
+		
+		// 匹配长度
+		let matchLength = (token & 0x0F) + 4;
+		if ((token & 0x0F) === 15) {
+			let byte;
+			do {
+				byte = data[srcIdx++];
+				matchLength += byte;
+			} while (byte === 255);
+		}
+		
+		// 复制匹配数据
+		const matchStart = dstIdx - offset;
+		for (let i = 0; i < matchLength && dstIdx < expectedSize; i++) {
+			output[dstIdx] = output[matchStart + i];
+			dstIdx++;
+		}
+	}
+	
+	return output;
 }
 
 function clearLatencyArchive() {
@@ -191,8 +350,9 @@ function getLatencyStats() {
 	
 	const ipcResults = latencyResults.filter(r => r.success && r.loadMethod === 'ipc');
 	const tempResults = latencyResults.filter(r => r.success && r.loadMethod === 'tempfile');
+	const wicLz4Results = latencyResults.filter(r => r.success && r.loadMethod === 'wic-lz4');
 	
-	if (ipcResults.length === 0 && tempResults.length === 0) return null;
+	if (ipcResults.length === 0 && tempResults.length === 0 && wicLz4Results.length === 0) return null;
 	
 	const calcStats = (results: DetailedLatencyResult[]) => ({
 		count: results.length,
@@ -205,14 +365,27 @@ function getLatencyStats() {
 		avgSize: avg(results.map(r => r.imageSize))
 	});
 	
+	const calcWicLz4Stats = (results: DetailedLatencyResult[]) => ({
+		count: results.length,
+		avgWicDecode: avg(results.map(r => r.wicDecodeTime ?? 0)),
+		avgLz4Compress: avg(results.map(r => r.lz4CompressTime ?? 0)),
+		avgLz4Decompress: avg(results.map(r => r.lz4DecompressTime ?? 0)),
+		avgRender: avg(results.map(r => r.renderTime)),
+		avgTotal: avg(results.map(r => r.totalTime)),
+		avgOriginalSize: avg(results.map(r => r.originalSize ?? 0)),
+		avgCompressedSize: avg(results.map(r => r.compressedSize ?? 0)),
+		avgCompressionRatio: avg(results.map(r => r.compressionRatio ?? 1))
+	});
+	
 	const ipc = ipcResults.length > 0 ? calcStats(ipcResults) : null;
 	const temp = tempResults.length > 0 ? calcStats(tempResults) : null;
+	const wicLz4 = wicLz4Results.length > 0 ? calcWicLz4Stats(wicLz4Results) : null;
 	
 	const speedup = (ipc && temp && ipc.avgTotal > 0) 
 		? (ipc.avgTotal / temp.avgTotal).toFixed(1) 
 		: null;
 	
-	return { ipc, temp, speedup };
+	return { ipc, temp, wicLz4, speedup };
 }
 
 function formatFileSize(bytes: number): string {
@@ -257,9 +430,9 @@ const latencyStats = $derived(getLatencyStats());
 		</div>
 	{/if}
 	
-	<!-- 测试数量 -->
-	<div class="flex items-center gap-2 text-[10px]">
-		<span class="text-muted-foreground">测试图片数:</span>
+	<!-- 测试设置 -->
+	<div class="flex items-center gap-2 text-[10px] flex-wrap">
+		<span class="text-muted-foreground">测试数:</span>
 		<div class="flex gap-1">
 			{#each [3, 5, 10, 20] as count}
 				<button
@@ -271,6 +444,11 @@ const latencyStats = $derived(getLatencyStats());
 				</button>
 			{/each}
 		</div>
+		<label class="flex items-center gap-1 ml-2 cursor-pointer">
+			<input type="checkbox" bind:checked={includeWicLz4} class="w-3 h-3" />
+			<Zap class="h-3 w-3 text-yellow-500" />
+			<span>WIC+LZ4</span>
+		</label>
 	</div>
 	
 	<!-- 结果展示 -->
@@ -301,6 +479,27 @@ const latencyStats = $derived(getLatencyStats());
 						<div>解码: <span class="font-mono text-foreground">{latencyStats.temp.avgDecode.toFixed(1)}ms</span></div>
 						<div>渲染: <span class="font-mono text-foreground">{latencyStats.temp.avgRender.toFixed(2)}ms</span></div>
 						<div class="col-span-2">总计: <span class="font-mono text-primary font-medium">{latencyStats.temp.avgTotal.toFixed(1)}ms</span></div>
+					</div>
+				</div>
+			{/if}
+			
+			{#if latencyStats.wicLz4}
+				<div class="space-y-1 border-t pt-2">
+					<div class="font-medium text-yellow-500 flex items-center gap-1">
+						<Zap class="h-3 w-3" />
+						WIC + LZ4 模式
+					</div>
+					<div class="grid grid-cols-2 gap-x-4 gap-y-0.5 text-muted-foreground">
+						<div>WIC解码: <span class="font-mono text-foreground">{latencyStats.wicLz4.avgWicDecode.toFixed(1)}ms</span></div>
+						<div>LZ4压缩: <span class="font-mono text-foreground">{latencyStats.wicLz4.avgLz4Compress.toFixed(1)}ms</span></div>
+						<div>LZ4解压: <span class="font-mono text-foreground">{latencyStats.wicLz4.avgLz4Decompress.toFixed(1)}ms</span></div>
+						<div>渲染: <span class="font-mono text-foreground">{latencyStats.wicLz4.avgRender.toFixed(1)}ms</span></div>
+						<div>压缩率: <span class="font-mono text-foreground">{(latencyStats.wicLz4.avgCompressionRatio * 100).toFixed(0)}%</span></div>
+						<div>总计: <span class="font-mono text-primary font-medium">{latencyStats.wicLz4.avgTotal.toFixed(1)}ms</span></div>
+					</div>
+					<div class="text-muted-foreground">
+						原始: {formatFileSize(latencyStats.wicLz4.avgOriginalSize)} → 
+						压缩: {formatFileSize(latencyStats.wicLz4.avgCompressedSize)}
 					</div>
 				</div>
 			{/if}

@@ -411,6 +411,9 @@ pub fn run() {
             commands::benchmark_commands::test_load_modes,
             commands::benchmark_commands::load_image_as_bitmap,
             commands::benchmark_commands::load_image_as_bitmap_scaled,
+            commands::benchmark_commands::load_image_wic_lz4,
+            commands::benchmark_commands::load_image_wic_lz4_cached,
+            commands::benchmark_commands::clear_wic_lz4_cache,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

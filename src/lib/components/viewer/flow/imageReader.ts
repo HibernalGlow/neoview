@@ -265,6 +265,51 @@ export async function preDecodeImage(blob: Blob): Promise<ImageBitmap | null> {
 }
 
 /**
+ * 【新系统】使用 PageManager 读取页面
+ * 后端自动处理缓存和预加载，减少 IPC 调用
+ */
+export async function readPageBlobV2(pageIndex: number, options: ReadPageOptions = {}): Promise<ReadResult> {
+	const { updateLatencyTrace = true } = options;
+	const startTime = performance.now();
+	const traceId = createImageTraceId('pm', pageIndex);
+	
+	logImageTrace(traceId, 'readPageBlobV2 start', { pageIndex });
+	
+	try {
+		const { gotoPage } = await import('$lib/api/pageManager');
+		const loadStart = performance.now();
+		const blob = await gotoPage(pageIndex);
+		const loadMs = performance.now() - loadStart;
+		const totalMs = performance.now() - startTime;
+		
+		logImageTrace(traceId, 'readPageBlobV2 complete', { 
+			size: blob.size, 
+			loadMs, 
+			totalMs 
+		});
+		
+		// 更新延迟追踪（使用 'blob' 作为数据源类型）
+		if (updateLatencyTrace) {
+			const latencyTrace: LatencyTrace = {
+				dataSource: 'blob',
+				renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
+				loadMs,
+				totalMs,
+				cacheHit: false,
+				dataSize: blob.size,
+				traceId
+			};
+			infoPanelStore.setLatencyTrace(latencyTrace);
+		}
+		
+		return { blob, traceId };
+	} catch (error) {
+		logImageTrace(traceId, 'readPageBlobV2 error', { error: String(error) });
+		throw error;
+	}
+}
+
+/**
  * 创建缩略图 DataURL
  * 如果 blob 已经是小图片（< 100KB），直接转换为 data URL，无需 canvas 重绘
  * 后端已返回正确尺寸的 webp 缩略图

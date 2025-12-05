@@ -10,99 +10,17 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct BookManager {
     current_book: Option<BookInfo>,
-    /// 预加载的页面缓存
-    preload_cache: Arc<Mutex<HashMap<usize, Vec<u8>>>>,
-    /// 预加载数量
-    preload_size: usize,
+    // 注意：预加载功能已移至 PageManager，此处不再维护预加载缓存
 }
 
 impl BookManager {
     pub fn new() -> Self {
         Self {
             current_book: None,
-            preload_cache: Arc::new(Mutex::new(HashMap::new())),
-            preload_size: 3,
-        }
-    }
-
-    /// 设置预加载数量
-    pub fn set_preload_size(&mut self, size: usize) {
-        self.preload_size = size;
-    }
-
-    /// 预加载页面
-    pub fn preload_pages(&self, image_loader: &super::ImageLoader) {
-        // 限制预加载数量，避免过度占用资源
-        if self.preload_size > 20 {
-            println!(
-                "Warning: Preload size {} is too large, limiting to 20",
-                self.preload_size
-            );
-            return;
-        }
-
-        if let Some(book) = &self.current_book {
-            let current_page = book.current_page;
-            let total_pages = book.total_pages;
-
-            // 计算需要预加载的页面范围
-            let preload_count = std::cmp::min(self.preload_size, 20);
-            let start = current_page.saturating_sub(1);
-            let end = (current_page + preload_count).min(total_pages - 1);
-
-            // 清理旧的预加载缓存
-            if let Ok(mut cache) = self.preload_cache.lock() {
-                cache.retain(|&page_idx, _| {
-                    // 只保留当前页和前后1页
-                    page_idx >= current_page.saturating_sub(1) && page_idx <= current_page + 1
-                });
-            }
-
-            // 预加载新页面（限制并发数）
-            for page_idx in start..=end {
-                if page_idx == current_page {
-                    continue; // 跳过当前页
-                }
-
-                if let Some(page) = book.pages.get(page_idx) {
-                    let path = page.path.clone();
-                    let cache_clone = Arc::clone(&self.preload_cache);
-
-                    // 检查是否已经在缓存中
-                    if let Ok(cache) = self.preload_cache.lock() {
-                        if cache.contains_key(&page_idx) {
-                            continue;
-                        }
-                    }
-
-                    // 获取线程池引用
-                    let thread_pool = Arc::clone(&image_loader.thread_pool);
-                    let image_loader_ref = image_loader.clone();
-
-                    // 异步加载，避免阻塞
-                    thread_pool.execute(move || {
-                        if let Ok(image_data) = image_loader_ref.load_image_as_binary(&path) {
-                            if let Ok(mut cache) = cache_clone.lock() {
-                                cache.insert(page_idx, image_data);
-                            }
-                        }
-                    });
-                }
-            }
-        }
-    }
-
-    /// 获取预加载的页面
-    pub fn get_preloaded_page(&self, page_index: usize) -> Option<Vec<u8>> {
-        if let Ok(cache) = self.preload_cache.lock() {
-            cache.get(&page_index).cloned()
-        } else {
-            None
         }
     }
 

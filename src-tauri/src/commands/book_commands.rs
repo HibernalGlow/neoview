@@ -38,10 +38,9 @@ pub async fn navigate_to_page(
     image_state: State<'_, Mutex<ImageLoader>>,
 ) -> Result<(), String> {
     let mut manager = book_state.lock().map_err(|e| e.to_string())?;
-    let image_loader = image_state.lock().map_err(|e| e.to_string())?;
+    let _image_loader = image_state.lock().map_err(|e| e.to_string())?;
     manager.navigate_to_page(page_index)?;
-    // 触发预加载
-    manager.preload_pages(&*image_loader);
+    // 预加载已由 PageManager 处理
     Ok(())
 }
 
@@ -51,10 +50,9 @@ pub async fn next_page(
     image_state: State<'_, Mutex<ImageLoader>>,
 ) -> Result<usize, String> {
     let mut manager = book_state.lock().map_err(|e| e.to_string())?;
-    let image_loader = image_state.lock().map_err(|e| e.to_string())?;
+    let _image_loader = image_state.lock().map_err(|e| e.to_string())?;
     let page = manager.next_page()?;
-    // 触发预加载
-    manager.preload_pages(&*image_loader);
+    // 预加载已由 PageManager 处理
     Ok(page)
 }
 
@@ -64,10 +62,9 @@ pub async fn previous_page(
     image_state: State<'_, Mutex<ImageLoader>>,
 ) -> Result<usize, String> {
     let mut manager = book_state.lock().map_err(|e| e.to_string())?;
-    let image_loader = image_state.lock().map_err(|e| e.to_string())?;
+    let _image_loader = image_state.lock().map_err(|e| e.to_string())?;
     let page = manager.previous_page()?;
-    // 触发预加载
-    manager.preload_pages(&*image_loader);
+    // 预加载已由 PageManager 处理
     Ok(page)
 }
 

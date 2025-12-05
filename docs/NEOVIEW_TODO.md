@@ -6,28 +6,31 @@
 
 | 功能 | NeeView | NeoView | 状态 |
 |------|---------|---------|------|
-| JobEngine 任务调度 | JobEngine + JobScheduler + JobWorker | job_engine 模块 | ✅ 基本实现 |
-| 优先级队列 | JobPriority | JobPriority 枚举 | ✅ |
-| 内存池 | MemoryPool + BookMemoryService | MemoryPool | ✅ 距离驱逐 |
-| 书籍上下文 | Book + BookSource | BookContext | ✅ |
-| 页面信息 | Page + PageInfo | PageInfo | ✅ |
+| JobEngine 任务调度 | JobEngine + JobScheduler + JobWorker | job_engine 模块 | 基本实现 |
+| 优先级队列 | JobPriority | JobPriority 枚举 | |
+| 内存池 | MemoryPool + BookMemoryService | MemoryPool | 距离驱逐 |
+| 书籍上下文 | Book + BookSource | BookContext | |
+| 页面信息 | Page + PageInfo | PageInfo | |
+| **FileProxy 临时文件** | `GetFileProxyAsync()` | TempFileManager | 已实现 |
+| **大文件阈值** | 内存管理 | 可配置 800MB 默认 | 已实现 |
+| **视频提取** | MediaPageContent | pm_get_video_path | 已实现 |
+| **嵌套压缩包检测** | 递归展开 | 日志提示（暂不展开）| 已实现 |
 
-### 未实现 ❌
+### 未实现 
 
 | 功能 | NeeView 实现 | 差距 | 优先级 |
 |------|-------------|------|--------|
-| **PageContent 多态** | BitmapPageContent, MediaPageContent, AnimatedPageContent, PdfPageContent, ArchivePageContent, SvgPageContent | 只有单一加载路径 | 🔴 高 |
-| **FileProxy 临时文件** | `GetFileProxyAsync()` 自动判断是否需要提取到临时文件 | 没有自动回退机制 | 🔴 高 |
-| **PreExtractMemory** | 预提取内存管理，大文件直接用临时文件 | 没有大小阈值判断 | 🔴 高 |
-| **嵌套压缩包** | ArchivePageContent 支持递归打开 | 不支持 | 🟡 中 |
-| **PDF 支持** | PdfPageContent | 不支持 | 🟢 低 |
-| **SVG 支持** | SvgPageContent | 不支持 | 🟢 低 |
-| **MediaInfo** | 使用 MediaInfoLib 获取视频尺寸和元数据 | 没有 | 🟡 中 |
+| **嵌套压缩包展开** | ArchivePageContent 递归打开 | 只有检测日志 | 中 |
+| **动图支持** | AnimatedPageContent (GIF/APNG/WebP) | 浏览器自动处理 | 低 |
+| **PDF 支持** | PdfPageContent | 不支持 | 低 |
+| **SVG 支持** | SvgPageContent | 不支持 | 低 |
+| **MediaInfo** | 使用 MediaInfoLib 获取视频尺寸和元数据 | 没有 | 低 |
 
 ---
 
 ## 需要补全的核心功能
 
+### 1. PageContent 多态设计 
 ### 1. PageContent 多态设计 🔴
 
 NeeView 使用工厂模式创建不同类型的 PageContent：

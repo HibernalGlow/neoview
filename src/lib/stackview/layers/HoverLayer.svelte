@@ -18,16 +18,14 @@
     sidebarMargin = 50,
     deadZoneRatio = 0.2,
     viewportSize = { width: 0, height: 0 },
-    imageSize = { width: 0, height: 0 },
-    scale = 1,
+    displaySize = { width: 0, height: 0 },  // 图片实际显示尺寸（已应用缩放）
     onPositionChange,
   }: {
     enabled?: boolean;
     sidebarMargin?: number;
     deadZoneRatio?: number;
     viewportSize?: { width: number; height: number };
-    imageSize?: { width: number; height: number };
-    scale?: number;
+    displaySize?: { width: number; height: number };
     onPositionChange?: (x: number, y: number) => void;
   } = $props();
   
@@ -39,21 +37,16 @@
   
   // 缓存边界计算（仅在依赖变化时重算）
   let bounds = $derived.by(() => {
-    if (!viewportSize.width || !viewportSize.height || !imageSize.width || !imageSize.height) {
+    if (!viewportSize.width || !viewportSize.height || !displaySize.width || !displaySize.height) {
       console.log(`🖼️ [HoverScroll] bounds 无效，返回默认值`);
       return { minX: 0, maxX: 100, minY: 0, maxY: 100 };
     }
     
-    // 【修复】直接计算缩放后的实际显示尺寸
-    // scale 已经是 effectiveScale（modeScale * manualScale），直接应用到原始尺寸
-    const scaledWidth = imageSize.width * scale;
-    const scaledHeight = imageSize.height * scale;
-    
-    console.log(`🖼️ [HoverScroll] bounds 计算: viewport=${viewportSize.width}x${viewportSize.height}, scaled=${scaledWidth.toFixed(0)}x${scaledHeight.toFixed(0)}, scale=${scale.toFixed(3)}`);
+    console.log(`🖼️ [HoverScroll] bounds 计算: viewport=${viewportSize.width}x${viewportSize.height}, displaySize=${displaySize.width.toFixed(0)}x${displaySize.height.toFixed(0)}`);
     
     const THRESHOLD = 1;
-    const overflowX = Math.max(0, (scaledWidth - viewportSize.width) / 2);
-    const overflowY = Math.max(0, (scaledHeight - viewportSize.height) / 2);
+    const overflowX = Math.max(0, (displaySize.width - viewportSize.width) / 2);
+    const overflowY = Math.max(0, (displaySize.height - viewportSize.height) / 2);
     const hasOverflowX = overflowX > THRESHOLD;
     const hasOverflowY = overflowY > THRESHOLD;
     

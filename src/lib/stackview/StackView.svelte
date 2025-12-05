@@ -693,8 +693,7 @@
     sidebarMargin={50}
     deadZoneRatio={0.2}
     {viewportSize}
-    imageSize={hoverImageSize}
-    scale={effectiveScale}
+    {displaySize}
     onPositionChange={(x: number, y: number) => { viewPositionX = x; viewPositionY = y; }}
   />
 </div>

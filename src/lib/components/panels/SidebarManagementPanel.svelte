@@ -10,8 +10,7 @@
 		sidebarRightPanels,
 		sidebarHiddenPanels,
 		type PanelId,
-		type PanelConfig,
-		type SidebarConfigState
+		type PanelConfig
 	} from '$lib/stores/sidebarConfig.svelte';
 	import { onMount } from 'svelte';
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
@@ -99,34 +98,21 @@
 	// 保存提示消息
 	let saveMessage = $state<string | null>(null);
 
-	// 应用布局（通知主窗口刷新）
+	// 应用布局（通知主窗口重新加载）
 	async function applyLayout() {
-		// 获取当前配置状态
-		const state = sidebarConfigStore.getState();
-		// 通过 Tauri 事件广播到所有窗口
 		try {
-			await emit('sidebar-config-changed', {
-				panels: state.panels.map(p => ({
-					id: p.id,
-					visible: p.visible,
-					order: p.order,
-					position: p.position
-				})),
-				leftSidebarWidth: state.leftSidebarWidth,
-				rightSidebarWidth: state.rightSidebarWidth,
-				leftSidebarPinned: state.leftSidebarPinned,
-				rightSidebarPinned: state.rightSidebarPinned,
-				leftSidebarOpen: state.leftSidebarOpen,
-				rightSidebarOpen: state.rightSidebarOpen
-			});
+			// 发送事件让主窗口重新加载
+			await emit('reload-main-window');
 			saveMessage = '✓ 布局已应用';
 			setTimeout(() => {
 				saveMessage = null;
 			}, 2000);
 		} catch (err) {
-			console.error('广播侧边栏配置失败:', err);
-			// 回退：刷新当前页面
-			window.location.reload();
+			console.error('应用布局失败:', err);
+			saveMessage = '❌ 应用失败';
+			setTimeout(() => {
+				saveMessage = null;
+			}, 2000);
 		}
 	}
 

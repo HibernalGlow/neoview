@@ -456,25 +456,24 @@ function createSidebarConfigStore() {
 
 export const sidebarConfigStore = createSidebarConfigStore();
 
-// 初始化跨窗口同步监听器
-let sidebarConfigUnlisten: UnlistenFn | null = null;
+// 初始化主窗口重载监听器
+let reloadUnlisten: UnlistenFn | null = null;
 
 export function initSidebarConfigListener() {
 	if (typeof window === 'undefined') return;
 	
-	listen<Partial<SidebarConfigState>>('sidebar-config-changed', (event) => {
-		if (event.payload) {
-			console.log('📐 收到侧边栏配置更新');
-			sidebarConfigStore.applyRemoteConfig(event.payload);
-		}
+	// 监听重载事件
+	listen('reload-main-window', () => {
+		console.log('📐 收到重载请求，刷新页面...');
+		window.location.reload();
 	}).then(fn => {
-		sidebarConfigUnlisten = fn;
+		reloadUnlisten = fn;
 	});
 	
 	// 页面卸载时清理
 	window.addEventListener('beforeunload', () => {
-		if (sidebarConfigUnlisten) {
-			sidebarConfigUnlisten();
+		if (reloadUnlisten) {
+			reloadUnlisten();
 		}
 	});
 }

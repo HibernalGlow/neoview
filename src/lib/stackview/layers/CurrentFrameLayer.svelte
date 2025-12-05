@@ -13,6 +13,7 @@
   import { LayerZIndex } from '../types/layer';
   import type { Frame } from '../types/frame';
   import { getImageTransform, getClipPath } from '../utils/transform';
+  import { imagePool } from '../stores/imagePool.svelte';
   
   let {
     frame,
@@ -54,6 +55,16 @@
     return parts.length > 0 ? parts.join(' ') : 'none';
   });
   
+  // 计算显示 URL 列表（响应式，超分完成时自动更新）
+  let displayUrls = $derived.by(() => {
+    // 依赖版本号以建立响应式关系
+    const _ = imagePool.version;
+    return frame.images.map(img => {
+      const upscaledUrl = imagePool.getDisplayUrl(img.physicalIndex);
+      return upscaledUrl ?? img.url;
+    });
+  });
+  
   let layoutClass = $derived.by(() => {
     const classes: string[] = [];
     
@@ -91,7 +102,7 @@
   >
     {#each frame.images as img, i (i)}
       <img
-        src={img.url}
+        src={displayUrls[i]}
         alt="Current {i}"
         class="frame-image"
         style:transform={getImageTransform(img)}

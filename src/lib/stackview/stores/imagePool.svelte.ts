@@ -6,6 +6,9 @@
 
 import { stackImageLoader } from '../utils/stackImageLoader';
 
+// 响应式版本号，用于触发超分图更新后的重新渲染
+let upscaleVersion = $state(0);
+
 // ============================================================================
 // 类型定义
 // ============================================================================
@@ -114,6 +117,15 @@ class ImagePool {
    */
   setUpscaled(pageIndex: number, url: string): void {
     stackImageLoader.setUpscaledUrl(pageIndex, url);
+    // 增加版本号触发重新渲染
+    upscaleVersion++;
+  }
+  
+  /**
+   * 获取超分版本号（用于响应式依赖）
+   */
+  get version(): number {
+    return upscaleVersion;
   }
 
   /**

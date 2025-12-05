@@ -11,7 +11,7 @@
 	// Progress component removed — not used in this toolbar
 
 	import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
-	import { Zap, HardDrive, Image, PaintbrushVertical } from '@lucide/svelte';
+	import { Zap, HardDrive, Image, PaintbrushVertical, Layers, Square } from '@lucide/svelte';
 
 	import { bookStore } from '$lib/stores/book.svelte';
 	import {
@@ -151,6 +151,9 @@ let currentSortModeLabel = $derived(
 	// 顶部工具栏透明度和模糊
 	let topToolbarOpacity = $derived(settings.panels?.topToolbarOpacity ?? 85);
 	let topToolbarBlur = $derived(settings.panels?.topToolbarBlur ?? 12);
+	
+	// 渲染器模式
+	let rendererMode = $derived(settings.view.renderer?.mode ?? 'stack');
 
 	// 监听设置变化
 	settingsManager.addListener((newSettings) => {
@@ -229,6 +232,25 @@ async function handleSortModeChange(mode: PageSortMode) {
 	function toggleHoverScroll() {
 		const next = !(settings.image.hoverScrollEnabled ?? true);
 		settingsManager.updateNestedSettings('image', { hoverScrollEnabled: next });
+	}
+	
+	// 切换渲染器模式
+	function toggleRendererMode() {
+		const newMode = rendererMode === 'stack' ? 'standard' : 'stack';
+		settingsManager.updateNestedSettings('view', {
+			renderer: {
+				...settings.view.renderer,
+				mode: newMode
+			}
+		});
+		showToast({
+			title: '渲染模式',
+			description: newMode === 'stack' 
+				? '已切换到 StackViewer（槽位系统）' 
+				: '已切换到 Layer 系统（标准模式）',
+			variant: 'info',
+			duration: 2000
+		});
 	}
 
 	type QuickThemeConfig = {
@@ -857,6 +879,29 @@ async function handleSortModeChange(mode: PageSortMode) {
 				<p class="text-muted-foreground text-xs">
 					右键切换: {$layoutSwitchMode === 'seamless' ? '无缝模式 (保持状态)' : '冷切换 (节省性能)'}
 				</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+		
+		<!-- 渲染器模式切换按钮 -->
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={rendererMode === 'stack' ? 'default' : 'ghost'}
+					size="icon"
+					class="h-6 w-6"
+					style="pointer-events: auto;"
+					onclick={toggleRendererMode}
+				>
+					{#if rendererMode === 'stack'}
+						<Layers class="h-4 w-4" />
+					{:else}
+						<Square class="h-4 w-4" />
+					{/if}
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>{rendererMode === 'stack' ? 'StackViewer（槽位）' : 'Layer 系统（标准）'}</p>
+				<p class="text-muted-foreground text-xs">点击切换渲染模式</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 

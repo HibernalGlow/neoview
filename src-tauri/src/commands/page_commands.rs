@@ -131,6 +131,15 @@ pub async fn pm_clear_cache(state: State<'_, PageManagerState>) -> Result<(), St
     Ok(())
 }
 
+/// 触发预加载（非阻塞）
+#[tauri::command]
+pub async fn pm_trigger_preload(state: State<'_, PageManagerState>) -> Result<(), String> {
+    log::debug!("⚡ [PageCommand] trigger_preload");
+    let manager = state.manager.lock().await;
+    manager.trigger_preload().await;
+    Ok(())
+}
+
 // ===== 视频命令 =====
 
 /// 获取视频文件路径

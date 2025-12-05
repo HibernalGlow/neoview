@@ -293,8 +293,9 @@ impl PageContentManager {
             pool.insert(key, data.clone(), mime_type.clone(), index, read_direction);
         }
 
-        // 提交预加载任务
-        self.submit_preload_jobs().await;
+        // 先返回数据，预加载任务会在后续异步执行
+        // 注意：不在这里调用 submit_preload_jobs，避免阻塞当前请求
+        // 预加载任务由前端在适当时机触发，或使用定时器
 
         Ok((
             data,
@@ -444,6 +445,11 @@ impl PageContentManager {
             _ => "video/mp4",
         }
         .to_string()
+    }
+
+    /// 触发预加载（公开方法，由前端调用）
+    pub async fn trigger_preload(&self) {
+        self.submit_preload_jobs().await;
     }
 
     /// 提交预加载任务

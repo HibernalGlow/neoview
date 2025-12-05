@@ -370,6 +370,7 @@ pub fn run() {
             commands::page_commands::pm_get_stats,
             commands::page_commands::pm_get_memory_stats,
             commands::page_commands::pm_clear_cache,
+            commands::page_commands::pm_trigger_preload,
             commands::page_commands::pm_get_video_path,
             commands::page_commands::pm_get_temp_stats,
             commands::page_commands::pm_get_large_file_threshold,

@@ -344,6 +344,11 @@ export async function readPageBlobV2(
 			isCurrentPage
 		});
 		
+		// 异步触发后端预加载（不阻塞当前请求）
+		if (isCurrentPage) {
+			invoke('pm_trigger_preload').catch(() => {});
+		}
+		
 		// 更新延迟追踪（兼容旧系统）
 		if (updateLatencyTrace) {
 			const latencyTrace: LatencyTrace = {

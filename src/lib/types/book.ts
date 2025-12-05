@@ -3,7 +3,7 @@
  * 书籍相关的 TypeScript 类型定义
  */
 
-export type BookType = 'archive' | 'folder' | 'pdf' | 'media';
+export type BookType = 'archive' | 'folder' | 'pdf' | 'media' | 'epub';
 
 export type PageSortMode =
   | 'fileName'

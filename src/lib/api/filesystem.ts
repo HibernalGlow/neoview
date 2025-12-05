@@ -190,6 +190,35 @@ export interface LoadImageFromArchiveOptions {
 }
 
 /**
+ * 通用图片加载（支持 EPUB 等特殊类型）
+ */
+export async function loadImage(
+  path: string,
+  options: LoadImageFromArchiveOptions = {}
+): Promise<ArrayBuffer> {
+  const traceId = options.traceId ?? createImageTraceId('ipc', options.pageIndex);
+  logImageTrace(traceId, 'invoke load_image', { path, pageIndex: options.pageIndex });
+
+  const result = await invoke<ArrayBuffer>('load_image', {
+    path,
+    traceId,
+    pageIndex: options.pageIndex
+  });
+
+  // 处理返回类型
+  if (result instanceof ArrayBuffer) {
+    return result;
+  } else if (ArrayBuffer.isView(result)) {
+    const view = result as Uint8Array;
+    return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength) as ArrayBuffer;
+  } else if (Array.isArray(result)) {
+    return new Uint8Array(result).buffer;
+  } else {
+    throw new Error(`Unexpected result type: ${typeof result}`);
+  }
+}
+
+/**
  * 加载压缩包图片为 Object URL（旧接口，兼容用）
  */
 export async function loadImageFromArchive(

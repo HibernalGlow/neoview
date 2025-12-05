@@ -168,6 +168,14 @@ export async function readPageBlob(pageIndex: number, options: ReadPageOptions =
 			blob = result.blob;
 			loadMs = performance.now() - loadStart;
 		}
+	} else if (currentBook.type === 'epub') {
+		// EPUB：使用 IPC 加载（内部图片不能直接用 asset://）
+		logImageTrace(traceId, 'using ipc mode for epub');
+		const loadStart = performance.now();
+		const { loadImage } = await import('$lib/api/filesystem');
+		const data = await loadImage(pageInfo.path, { traceId, pageIndex });
+		blob = new Blob([data]);
+		loadMs = performance.now() - loadStart;
 	} else {
 		// 文件系统：使用 asset:// 协议
 		const assetUrl = convertFileSrc(pageInfo.path);

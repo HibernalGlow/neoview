@@ -58,6 +58,48 @@ pub async fn load_image(
                 }
                 return archive_result;
             }
+            BookType::Epub => {
+                // EPUB 电子书：解析 path 格式 "epub_path:inner_path"
+                let book_path = book.path.clone();
+                drop(book_manager_lock);
+                
+                // 从 path 中提取 inner_path (格式: epub_path:inner_path)
+                let inner_path = if let Some(colon_pos) = path.find(':') {
+                    // 跳过 Windows 盘符 (如 E:)
+                    if colon_pos == 1 {
+                        // 寻找第二个冒号
+                        if let Some(second_colon) = path[2..].find(':') {
+                            &path[second_colon + 3..]
+                        } else {
+                            return Err(format!("Invalid EPUB path format: {}", path));
+                        }
+                    } else {
+                        &path[colon_pos + 1..]
+                    }
+                } else {
+                    return Err(format!("Invalid EPUB path format: {}", path));
+                };
+                
+                use crate::core::ebook::EbookManager;
+                let epub_result = EbookManager::get_epub_image(&book_path, inner_path);
+                
+                if let Ok((ref bytes, ref mime)) = epub_result {
+                    info!(
+                        "📤 [ImagePipeline:{}] load_image epub branch success bytes={} mime={}",
+                        trace_id,
+                        bytes.len(),
+                        mime
+                    );
+                    return Ok(bytes.clone());
+                } else if let Err(ref err) = epub_result {
+                    warn!(
+                        "⚠️ [ImagePipeline:{}] load_image epub branch failed: {}",
+                        trace_id, err
+                    );
+                    return Err(err.clone());
+                }
+                return epub_result.map(|(data, _)| data);
+            }
             _ => {
                 // 其他类型使用常规加载
                 drop(book_manager_lock); // 释放锁

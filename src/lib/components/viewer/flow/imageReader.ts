@@ -282,6 +282,20 @@ export async function readPageBlobV2(
 	
 	try {
 		const pm = await import('$lib/api/pageManager');
+		
+		// 检查 PageManager 是否已打开书籍，如果没有则先打开
+		const currentBook = bookStore.currentBook;
+		if (currentBook) {
+			const pmBookInfo = await pm.getBookInfo();
+			if (!pmBookInfo || pmBookInfo.path !== currentBook.path) {
+				// PageManager 还未打开或打开了不同的书籍，需要同步
+				logImageTrace(traceId, 'syncing PageManager book', { path: currentBook.path });
+				await pm.openBook(currentBook.path);
+			}
+		} else {
+			throw new Error('没有打开的书籍');
+		}
+		
 		const loadStart = performance.now();
 		
 		// 当前页使用 gotoPage（触发预加载），预加载页使用 getPage（不触发）

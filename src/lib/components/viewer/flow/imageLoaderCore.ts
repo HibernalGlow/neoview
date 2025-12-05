@@ -10,8 +10,7 @@ import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte'
 import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 import { BlobCache, getBlobCache } from './blobCache';
 import { LoadQueueManager, LoadPriority, QueueClearedError, TaskCancelledError } from './loadQueue';
-import { readPageBlob, readPageBlobV2, getImageDimensions, createThumbnailDataURL } from './imageReader';
-import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
+import { readPageBlobV2, getImageDimensions, createThumbnailDataURL } from './imageReader';
 import { calculatePreloadPlan, trackPageDirection, planToQueue, type PreloadConfig } from './preloadStrategy';
 
 /**
@@ -163,10 +162,11 @@ export class ImageLoaderCore {
 				}
 
 				try {
-					// 读取图片（仅当前页更新延迟追踪，避免预加载干扰）
+					// 读取图片（使用 PageManager，后端自动缓存和预加载）
 					const isCurrentPage = priority === LoadPriority.CRITICAL;
-					const { blob, traceId } = await readPageBlob(pageIndex, { 
-						updateLatencyTrace: isCurrentPage 
+					const { blob, traceId } = await readPageBlobV2(pageIndex, { 
+						updateLatencyTrace: isCurrentPage,
+						isCurrentPage  // 当前页触发后端预加载
 					});
 					
 					// 【架构优化】再次检查（读取可能耗时较长）

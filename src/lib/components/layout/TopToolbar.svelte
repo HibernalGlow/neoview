@@ -434,6 +434,7 @@ async function handleSortModeChange(mode: PageSortMode) {
 		blur={topToolbarBlur}
 		onMouseEnter={handleMouseEnter}
 		onMouseLeave={handleMouseLeave}
+		onPinContextMenu={handlePinContextMenu}
 	/>
 
 	<!-- 工具栏（图片操作） - 响应式布局：宽度不够时面包屏在上，工具栏在下 -->

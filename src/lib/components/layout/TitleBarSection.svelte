@@ -11,7 +11,6 @@
 	import { 
 		toggleLeftSidebar,
 		topToolbarPinned,
-		bottomThumbnailBarPinned,
 		layoutMode,
 		toggleLayoutMode,
 		layoutSwitchMode,
@@ -49,8 +48,9 @@
 		blur?: number;
 		onMouseEnter?: () => void;
 		onMouseLeave?: () => void;
+		onPinContextMenu?: (e: MouseEvent) => void;
 	}
-	let { opacity = 85, blur = 12, onMouseEnter, onMouseLeave }: Props = $props();
+	let { opacity = 85, blur = 12, onMouseEnter, onMouseLeave, onPinContextMenu }: Props = $props();
 
 	const appWindow = getCurrentWebviewWindow();
 
@@ -209,7 +209,12 @@
 
 	function handlePinContextMenu(e: MouseEvent) {
 		e.preventDefault();
-		bottomThumbnailBarPinned.update((v) => !v);
+		if (onPinContextMenu) {
+			onPinContextMenu(e);
+		} else {
+			// 默认行为：取消钉住顶栏
+			topToolbarPinned.set(false);
+		}
 	}
 
 	function openSettings() {

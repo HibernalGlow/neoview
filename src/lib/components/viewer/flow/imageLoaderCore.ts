@@ -10,7 +10,8 @@ import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte'
 import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 import { BlobCache, getBlobCache } from './blobCache';
 import { LoadQueueManager, LoadPriority, QueueClearedError, TaskCancelledError } from './loadQueue';
-import { readPageBlob, getImageDimensions, createThumbnailDataURL } from './imageReader';
+import { readPageBlob, readPageBlobV2, getImageDimensions, createThumbnailDataURL } from './imageReader';
+import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 import { calculatePreloadPlan, trackPageDirection, planToQueue, type PreloadConfig } from './preloadStrategy';
 
 /**

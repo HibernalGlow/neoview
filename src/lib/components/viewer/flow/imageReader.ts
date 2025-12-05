@@ -267,18 +267,28 @@ export async function preDecodeImage(blob: Blob): Promise<ImageBitmap | null> {
 /**
  * 【新系统】使用 PageManager 读取页面
  * 后端自动处理缓存和预加载，减少 IPC 调用
+ * 
+ * @param isCurrentPage 是否是当前页（true=gotoPage触发预加载，false=getPage不触发）
  */
-export async function readPageBlobV2(pageIndex: number, options: ReadPageOptions = {}): Promise<ReadResult> {
-	const { updateLatencyTrace = true } = options;
+export async function readPageBlobV2(
+	pageIndex: number, 
+	options: ReadPageOptions & { isCurrentPage?: boolean } = {}
+): Promise<ReadResult> {
+	const { updateLatencyTrace = true, isCurrentPage = true } = options;
 	const startTime = performance.now();
 	const traceId = createImageTraceId('pm', pageIndex);
 	
-	logImageTrace(traceId, 'readPageBlobV2 start', { pageIndex });
+	logImageTrace(traceId, 'readPageBlobV2 start', { pageIndex, isCurrentPage });
 	
 	try {
-		const { gotoPage } = await import('$lib/api/pageManager');
+		const pm = await import('$lib/api/pageManager');
 		const loadStart = performance.now();
-		const blob = await gotoPage(pageIndex);
+		
+		// 当前页使用 gotoPage（触发预加载），预加载页使用 getPage（不触发）
+		const blob = isCurrentPage 
+			? await pm.gotoPage(pageIndex)
+			: await pm.getPage(pageIndex);
+		
 		const loadMs = performance.now() - loadStart;
 		const totalMs = performance.now() - startTime;
 		
@@ -288,7 +298,7 @@ export async function readPageBlobV2(pageIndex: number, options: ReadPageOptions
 			totalMs 
 		});
 		
-		// 更新延迟追踪（使用 'blob' 作为数据源类型）
+		// 更新延迟追踪
 		if (updateLatencyTrace) {
 			const latencyTrace: LatencyTrace = {
 				dataSource: 'blob',

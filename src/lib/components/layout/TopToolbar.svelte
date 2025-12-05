@@ -4,8 +4,8 @@
 	 * 顶部工具栏 - 自动隐藏，包含标题栏、面包屑和图片操作按钮
 	 */
 	import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-	import { openSettingsOverlay } from '$lib/stores/settingsOverlay.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import TitleBarSection from './TitleBarSection.svelte';
 	import * as Separator from '$lib/components/ui/separator';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -621,10 +621,6 @@ async function handleSortModeChange(mode: PageSortMode) {
 		bookStore.closeBook();
 	}
 
-	function openSettings() {
-		openSettingsOverlay();
-	}
-
 	async function minimizeWindow() {
 		await appWindow.minimize();
 	}
@@ -659,266 +655,13 @@ async function handleSortModeChange(mode: PageSortMode) {
 	aria-label="顶部工具栏"
 	tabindex="-1"
 >
-	<!-- 标题栏（窗口控制） -->
-	<div
-		data-tauri-drag-region
-		class="flex h-8 select-none items-center justify-between border-b px-2"
-		style="background-color: color-mix(in oklch, var(--sidebar) {topToolbarOpacity}%, transparent); color: var(--sidebar-foreground); backdrop-filter: blur({topToolbarBlur}px);"
-	>
-		<!-- 左侧：菜单和应用名 -->
-		<div class="flex items-center gap-1">
-			<Button
-				variant="ghost"
-				size="icon"
-				class="h-6 w-6"
-				onclick={toggleLeftSidebar}
-				style="pointer-events: auto;"
-			>
-				<Menu class="h-4 w-4" />
-			</Button>
-			<span class="ml-2 text-sm font-semibold">NeoView</span>
-		</div>
-
-		<!-- 中间：功能按钮 -->
-		<div class="flex items-center gap-1">
-			<!-- 钉住按钮 -->
-			<Tooltip.Root>
-				<Tooltip.Trigger>
-					<Button
-						variant={$topToolbarPinned ? 'default' : 'ghost'}
-						size="icon"
-						class="h-6 w-6"
-						style="pointer-events: auto;"
-						onclick={togglePin}
-						oncontextmenu={handlePinContextMenu}
-					>
-						{#if $topToolbarPinned}
-							<Pin class="h-4 w-4" />
-						{:else}
-							<PinOff class="h-4 w-4" />
-						{/if}
-					</Button>
-				</Tooltip.Trigger>
-				<Tooltip.Content>
-					<p>
-						{$topToolbarPinned
-							? '松开工具栏（自动隐藏）'
-							: '钉住工具栏（始终显示）'}
-					</p>
-				</Tooltip.Content>
-			</Tooltip.Root>
-
-			<!-- 主题模式切换：在浅色 / 深色 / 跟随系统之间循环 -->
-			<Tooltip.Root>
-				<Tooltip.Trigger>
-					<Button
-						variant="ghost"
-						size="icon"
-						class="h-6 w-6"
-						style="pointer-events: auto;"
-						onclick={cycleThemeMode}
-					>
-						{#if themeMode === 'light'}
-							<Sun class="h-4 w-4" />
-						{:else if themeMode === 'dark'}
-							<Moon class="h-4 w-4" />
-						{:else}
-							<Monitor class="h-4 w-4" />
-						{/if}
-					</Button>
-				</Tooltip.Trigger>
-				<Tooltip.Content>
-					<p>
-						主题模式：
-						{themeMode === 'light' ? '浅色' : themeMode === 'dark' ? '深色' : '跟随系统'}
-					</p>
-				</Tooltip.Content>
-			</Tooltip.Root>
-
-			<!-- 快速主题切换：预设 + 自定义主题列表 -->
-			<DropdownMenu.Root>
-				<Tooltip.Root>
-					<Tooltip.Trigger>
-						<DropdownMenu.Trigger>
-							<Button
-								variant="ghost"
-								size="icon"
-								class="h-6 w-6"
-								style="pointer-events: auto;"
-							>
-								<Palette class="h-4 w-4" />
-							</Button>
-						</DropdownMenu.Trigger>
-					</Tooltip.Trigger>
-					<Tooltip.Content>
-						<p>{themeName ? `当前主题：${themeName}` : '切换主题'}</p>
-					</Tooltip.Content>
-				</Tooltip.Root>
-				<DropdownMenu.Content
-					class="z-60 w-52"
-					onmouseenter={handleMouseEnter}
-					onmouseleave={handleMouseLeave}
-				>
-					{#if quickThemes.length}
-						<DropdownMenu.Label>主题</DropdownMenu.Label>
-						<DropdownMenu.Separator />
-						{#each quickThemes as theme}
-							<DropdownMenu.Item
-								onclick={() => {
-									applyQuickTheme(theme);
-									handleMouseLeave();
-								}}
-								class={themeName === theme.name ? 'bg-accent' : ''}
-							>
-								<div class="flex items-center gap-2">
-									<div class="flex h-4 w-4 items-center justify-center">
-										{#if themeName === theme.name}
-											<Check class="h-3 w-3" />
-										{/if}
-									</div>
-									<div class="flex flex-col gap-0.5">
-										<span class="text-xs font-medium leading-tight">{theme.name}</span>
-										{#if theme.description}
-											<span class="text-muted-foreground line-clamp-1 text-[10px] leading-tight">
-												{theme.description}
-											</span>
-										{/if}
-									</div>
-								</div>
-							</DropdownMenu.Item>
-						<DropdownMenu.Item onclick={() => handleZoomModeChange('fill')}>
-							<div class="flex items-center gap-2">
-								<div class="flex h-4 w-4 items-center justify-center">
-									{#if defaultZoomMode === 'fill'}
-										<Check class="h-3 w-3" />
-									{/if}
-								</div>
-								<span class="text-xs">铺满整个窗口</span>
-							</div>
-						</DropdownMenu.Item>
-						{/each}
-						<DropdownMenu.Separator />
-					{/if}
-					<DropdownMenu.Item
-						onclick={() => {
-							openSettings();
-							handleMouseLeave();
-						}}
-					>
-						<Settings class="mr-2 h-4 w-4" />
-						<span class="text-xs">打开主题设置…</span>
-					</DropdownMenu.Item>
-				</DropdownMenu.Content>
-			</DropdownMenu.Root>
-
-		<Tooltip.Root>
-			<Tooltip.Trigger>
-				<Button
-					variant="ghost"
-					size="icon"
-					class="h-6 w-6"
-					style="pointer-events: auto;"
-					onclick={openSettings}
-				>
-					<Settings class="h-4 w-4" />
-				</Button>
-			</Tooltip.Trigger>
-			<Tooltip.Content>
-				<p>设置</p>
-			</Tooltip.Content>
-		</Tooltip.Root>
-
-		<!-- 布局模式切换按钮 -->
-		<Tooltip.Root>
-			<Tooltip.Trigger>
-				<Button
-					variant={$layoutMode === 'flow' ? 'default' : 'ghost'}
-					size="icon"
-					class="h-6 w-6"
-					style="pointer-events: auto;"
-					onclick={toggleLayoutMode}
-					oncontextmenu={(e) => {
-						e.preventDefault();
-						toggleLayoutSwitchMode();
-						// 显示 toast 通知
-						const newMode = $layoutSwitchMode === 'seamless' ? 'cold' : 'seamless';
-						showToast({
-							title: '布局切换模式',
-							description: newMode === 'seamless' 
-								? '已切换到无缝模式 (保持状态，占用更多内存)' 
-								: '已切换到冷切换模式 (节省性能，状态可能丢失)',
-							variant: 'info',
-							duration: 2000
-						});
-					}}
-				>
-					<LayoutGrid class="h-4 w-4" />
-				</Button>
-			</Tooltip.Trigger>
-			<Tooltip.Content>
-				<p>{$layoutMode === 'flow' ? '切换到传统布局' : '切换到 Flow 画布布局'}</p>
-				<p class="text-muted-foreground text-xs">
-					右键切换: {$layoutSwitchMode === 'seamless' ? '无缝模式 (保持状态)' : '冷切换 (节省性能)'}
-				</p>
-			</Tooltip.Content>
-		</Tooltip.Root>
-		
-		<!-- 渲染器模式切换按钮 -->
-		<Tooltip.Root>
-			<Tooltip.Trigger>
-				<Button
-					variant={rendererMode === 'stack' ? 'default' : 'ghost'}
-					size="icon"
-					class="h-6 w-6"
-					style="pointer-events: auto;"
-					onclick={toggleRendererMode}
-				>
-					{#if rendererMode === 'stack'}
-						<Layers class="h-4 w-4" />
-					{:else}
-						<Square class="h-4 w-4" />
-					{/if}
-				</Button>
-			</Tooltip.Trigger>
-			<Tooltip.Content>
-				<p>{rendererMode === 'stack' ? 'StackViewer（槽位）' : 'Layer 系统（标准）'}</p>
-				<p class="text-muted-foreground text-xs">点击切换渲染模式</p>
-			</Tooltip.Content>
-		</Tooltip.Root>
-
-		</div>
-
-		<!-- 右侧：窗口控制按钮 -->
-		<div class="flex items-center gap-1">
-			<Button
-				variant="ghost"
-				size="icon"
-				class="h-6 w-6"
-				style="pointer-events: auto;"
-				onclick={minimizeWindow}
-			>
-				<Minimize class="h-3 w-3" />
-			</Button>
-			<Button
-				variant="ghost"
-				size="icon"
-				class="h-6 w-6"
-				style="pointer-events: auto;"
-				onclick={maximizeWindow}
-			>
-				<Maximize class="h-3 w-3" />
-			</Button>
-			<Button
-				variant="ghost"
-				size="icon"
-				class="hover:bg-destructive h-6 w-6"
-				style="pointer-events: auto;"
-				onclick={closeWindow}
-			>
-				<X class="h-4 w-4" />
-			</Button>
-		</div>
-	</div>
+	<!-- 标题栏 -->
+	<TitleBarSection 
+		opacity={topToolbarOpacity} 
+		blur={topToolbarBlur}
+		onMouseEnter={handleMouseEnter}
+		onMouseLeave={handleMouseLeave}
+	/>
 
 	<!-- 工具栏（图片操作） - 响应式布局：宽度不够时面包屏在上，工具栏在下 -->
 	<div

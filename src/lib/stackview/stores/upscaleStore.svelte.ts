@@ -187,12 +187,65 @@ class UpscaleStore {
         // 禁用时清除所有超分图，回退到原图
         this.clearAll();
         this.state.loading = false;
+      } else {
+        // 启用时触发当前页和预加载范围的超分
+        console.log('🔄 超分已启用，开始检查当前页和预加载范围...');
+        await this.triggerCurrentPageUpscale();
       }
 
       console.log(`🔄 超分${enabled ? '已启用' : '已禁用'}`);
     } catch (err) {
       console.error('设置超分状态失败:', err);
     }
+  }
+
+  /** 触发当前页和预加载范围的超分（启用时或页面变化时调用） */
+  async triggerCurrentPageUpscale() {
+    if (!this.state.enabled || !this.state.currentBookPath) {
+      console.log('⏭️ 跳过超分触发: enabled=', this.state.enabled, 'bookPath=', this.state.currentBookPath);
+      return;
+    }
+
+    // 动态导入避免循环依赖
+    const { bookStore } = await import('$lib/stores/book.svelte');
+    
+    const book = bookStore.currentBook;
+    const pageIndex = this.state.currentPageIndex;
+    
+    if (!book || !book.pages || pageIndex >= book.pages.length) {
+      console.log('⏭️ 跳过超分触发: 无有效书籍或页面');
+      return;
+    }
+
+    // 获取当前页信息
+    const currentPage = book.pages[pageIndex];
+    if (!currentPage) return;
+
+    // 构建图片信息列表（当前页 + 预加载范围）
+    const preloadRange = 5;
+    const imageInfos: Array<{ pageIndex: number; imagePath: string; hash: string }> = [];
+
+    for (let i = Math.max(0, pageIndex - preloadRange); i <= Math.min(book.pages.length - 1, pageIndex + preloadRange); i++) {
+      const page = book.pages[i];
+      if (page) {
+        imageInfos.push({
+          pageIndex: i,
+          imagePath: page.path,
+          // 使用书籍路径+页面路径作为 hash
+          hash: `${book.path}_${page.path}`,
+        });
+      }
+    }
+
+    console.log(`📸 触发超分: 当前页 ${pageIndex}, 预加载范围 ${imageInfos.length} 页`);
+
+    // 请求预加载范围的超分
+    await this.requestPreloadRange(
+      this.state.currentBookPath,
+      pageIndex,
+      book.pages.length,
+      imageInfos,
+    );
   }
 
   /** 切换启用状态 */

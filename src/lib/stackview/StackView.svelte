@@ -39,6 +39,7 @@
   import { settingsManager } from '$lib/settings/settingsManager';
   import VideoContainer from '$lib/components/viewer/VideoContainer.svelte';
   import { isVideoFile } from '$lib/utils/videoUtils';
+  import { upscaleStore } from './stores/upscaleStore.svelte';
   
   // ============================================================================
   // Props
@@ -466,6 +467,9 @@
         viewPositionX = 50; viewPositionY = 50;
         splitState = null;
         loadedImageSize = null; // 重置尺寸，等待新书第一页加载
+        
+        // 通知 upscaleStore 书籍切换
+        upscaleStore.setCurrentBook(currentPath);
       }
       
       bookContext = ctx;
@@ -499,6 +503,10 @@
       console.log(`🔁 StackView: modeChanged=${modeChanged}, currentPageMode=${currentPageMode}, lastPageMode=${lastPageMode}`);
       lastPageMode = currentPageMode;
       lastPanorama = currentPanorama;
+      
+      // 通知 upscaleStore 页面切换，触发超分
+      upscaleStore.setCurrentPage(pageIndex);
+      upscaleStore.triggerCurrentPageUpscale();
       
       // 根据模式加载
       if (currentPanorama) {

@@ -26,7 +26,6 @@ const lazyComponentMap: Record<string, () => Promise<{ default: any }>> = {
 	summary: () => import('./benchmark/SummaryCard.svelte'),
 	pipelineLatency: () => import('./benchmark/PipelineLatencyCard.svelte'),
 	transcodeBenchmark: () => import('./benchmark/TranscodeBenchmarkCard.svelte'),
-	upscaleBenchmark: () => import('./benchmark/UpscaleBenchmarkCard.svelte'),
 	// Info
 	bookInfo: () => import('./info/BookInfoCard.svelte'),
 	infoOverlay: () => import('./info/InfoOverlayCard.svelte'),

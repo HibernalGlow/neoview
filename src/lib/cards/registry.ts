@@ -131,13 +131,6 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'benchmark',
 		canHide: true,
 	},
-	'upscaleBenchmark': {
-		id: 'upscaleBenchmark',
-		title: '超分流程测试',
-		icon: Image,
-		defaultPanel: 'benchmark',
-		canHide: true,
-	},
 	
 	// ==================== Info 面板卡片 ====================
 	'bookInfo': {

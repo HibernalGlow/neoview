@@ -97,11 +97,6 @@ impl PyO3Upscaler {
         })
     }
 
-    /// 获取缓存目录
-    pub fn get_cache_dir(&self) -> PathBuf {
-        self.cache_dir.clone()
-    }
-
     /// 检查 Python 模块是否可用
     pub fn check_availability(&self) -> Result<bool, String> {
         let module_guard = self

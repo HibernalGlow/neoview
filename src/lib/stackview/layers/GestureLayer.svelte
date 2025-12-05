@@ -13,8 +13,16 @@
   import { zoomIn, zoomOut, resetZoom, toggleFullscreen } from '$lib/stores';
   import { showToast } from '$lib/utils/toast';
   
-  // 操作提示（短暂显示）
+  // 读取设置
+  let settings = $state(settingsManager.getSettings());
+  settingsManager.addListener((s) => { settings = s; });
+  const enableActionToast = $derived(
+    (settings.view?.switchToast as { enableAction?: boolean })?.enableAction ?? false
+  );
+  
+  // 操作提示（短暂显示，根据设置决定是否显示）
   function showActionToast(message: string) {
+    if (!enableActionToast) return;
     showToast({ title: message, variant: 'info' });
   }
   

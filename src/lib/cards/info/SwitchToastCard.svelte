@@ -10,6 +10,7 @@ import { settingsManager } from '$lib/settings/settingsManager';
 
 let switchToastEnableBook = $state(false);
 let switchToastEnablePage = $state(false);
+let switchToastEnableAction = $state(false);  // 按键操作提示
 let switchToastBookTitleTemplate = $state('');
 let switchToastBookDescriptionTemplate = $state('');
 let switchToastPageTitleTemplate = $state('');
@@ -20,6 +21,7 @@ function loadSwitchToastFromSettings() {
 	const base = s.view?.switchToast ?? {
 		enableBook: s.view?.showBookSwitchToast ?? false,
 		enablePage: false,
+		enableAction: false,
 		bookTitleTemplate: '已切换到 {{book.displayName}}（第 {{book.currentPageDisplay}} / {{book.totalPages}} 页）',
 		bookDescriptionTemplate: '路径：{{book.path}}',
 		pageTitleTemplate: '第 {{page.indexDisplay}} / {{book.totalPages}} 页',
@@ -27,6 +29,7 @@ function loadSwitchToastFromSettings() {
 	};
 	switchToastEnableBook = base.enableBook;
 	switchToastEnablePage = base.enablePage;
+	switchToastEnableAction = (base as { enableAction?: boolean }).enableAction ?? false;
 	switchToastBookTitleTemplate = base.bookTitleTemplate ?? '';
 	switchToastBookDescriptionTemplate = base.bookDescriptionTemplate ?? '';
 	switchToastPageTitleTemplate = base.pageTitleTemplate ?? '';
@@ -40,6 +43,7 @@ $effect(() => {
 function updateSwitchToast(partial: {
 	enableBook?: boolean;
 	enablePage?: boolean;
+	enableAction?: boolean;
 	bookTitleTemplate?: string;
 	bookDescriptionTemplate?: string;
 	pageTitleTemplate?: string;
@@ -48,17 +52,19 @@ function updateSwitchToast(partial: {
 	const current = settingsManager.getSettings();
 	const prev = current.view?.switchToast ?? {
 		enableBook: current.view?.showBookSwitchToast ?? false,
-		enablePage: false
+		enablePage: false,
+		enableAction: false
 	};
 	const next = { ...prev, ...partial };
 	switchToastEnableBook = next.enableBook ?? false;
 	switchToastEnablePage = next.enablePage ?? false;
+	switchToastEnableAction = (next as { enableAction?: boolean }).enableAction ?? false;
 	switchToastBookTitleTemplate = next.bookTitleTemplate ?? '';
 	switchToastBookDescriptionTemplate = next.bookDescriptionTemplate ?? '';
 	switchToastPageTitleTemplate = next.pageTitleTemplate ?? '';
 	switchToastPageDescriptionTemplate = next.pageDescriptionTemplate ?? '';
 	settingsManager.updateNestedSettings('view', {
-		switchToast: next,
+		switchToast: next as typeof current.view.switchToast,
 		showBookSwitchToast: next.enableBook
 	});
 }
@@ -84,6 +90,20 @@ function updateSwitchToast(partial: {
 				onCheckedChange={(v) => updateSwitchToast({ enablePage: v })}
 				class="scale-75"
 			/>
+		</div>
+	</div>
+	<Separator.Root class="my-1" />
+	<div class="space-y-1">
+		<div class="flex items-center justify-between gap-2">
+			<span>按键操作时显示提示</span>
+			<Switch.Root
+				checked={switchToastEnableAction}
+				onCheckedChange={(v) => updateSwitchToast({ enableAction: v })}
+				class="scale-75"
+			/>
+		</div>
+		<div class="text-[10px] text-muted-foreground/60">
+			如"键盘: 下一页"、"滚轮: 放大"等
 		</div>
 	</div>
 	<Separator.Root class="my-1" />

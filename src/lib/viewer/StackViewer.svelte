@@ -21,6 +21,10 @@
     createEmptySlot,
     SlotZIndex,
   } from './types/frameSlot';
+  // Layer 组件
+  import { CurrentFrameLayer, PrevFrameLayer, NextFrameLayer } from '$lib/stackview/layers';
+  import type { Frame, FrameLayout } from '$lib/stackview/types/frame';
+  import { emptyFrame } from '$lib/stackview/types/frame';
   
   // ============================================================================
   // Props
@@ -108,6 +112,40 @@
     const scaleY = viewportSize.height / imgHeight;
     return Math.min(scaleX, scaleY);
   }
+  
+  // ============================================================================
+  // 槽位转 Frame（用于 Layer 组件渲染）
+  // ============================================================================
+  
+  /** 将槽位转换为 Frame 格式 */
+  function slotToFrame(slot: FrameSlot, layout: FrameLayout): Frame {
+    if (slot.images.length === 0) return emptyFrame;
+    return {
+      id: `slot-${slot.position}-${slot.pageIndex}`,
+      images: slot.images.map(img => ({
+        url: img.url,
+        physicalIndex: img.pageIndex,
+        virtualIndex: img.pageIndex,
+        width: img.dimensions?.width,
+        height: img.dimensions?.height,
+      })),
+      layout,
+    };
+  }
+  
+  // 计算当前布局
+  let frameLayout = $derived<FrameLayout>(pageMode === 'double' ? 'double' : 'single');
+  
+  // 将槽位转换为 Frame（响应式）
+  let prevFrame = $derived(slotToFrame(prevSlot, frameLayout));
+  let currentFrame = $derived(slotToFrame(currentSlot, frameLayout));
+  let nextFrame = $derived(slotToFrame(nextSlot, frameLayout));
+  
+  // 当前图片尺寸（用于 CurrentFrameLayer）
+  let currentImageSize = $derived.by(() => {
+    const img = currentSlot.images[0];
+    return img?.dimensions ?? { width: 0, height: 0 };
+  });
   
   // ============================================================================
   // 核心方法
@@ -398,72 +436,48 @@
 
 <div class="stack-viewer">
   <!-- 前页层（隐藏，预加载用） -->
-  {#if prevSlot.images.length > 0}
-    {#if useCanvas}
-      <CanvasFrame
-        imageUrl={prevSlot.images[0].url}
-        imageBlob={prevSlot.images[0].blob}
-        targetWidth={viewportSize.width}
-        targetHeight={viewportSize.height}
-        opacity={0}
-        zIndex={SlotZIndex.PREV}
-      />
-    {:else}
-      <div 
-        class="frame-layer prev-layer {layoutClass}"
-        style:z-index={SlotZIndex.PREV}
-        style:opacity={0}
-        data-page-index={prevSlot.pageIndex}
-      >
-        {#each prevSlot.images as img, i (img.pageIndex)}
-          <img 
-            src={img.url} 
-            alt="Previous page {i}"
-            class="frame-image"
-            draggable="false"
-          />
-        {/each}
-      </div>
-    {/if}
+  {#if useCanvas && prevSlot.images.length > 0}
+    <CanvasFrame
+      imageUrl={prevSlot.images[0].url}
+      imageBlob={prevSlot.images[0].blob}
+      targetWidth={viewportSize.width}
+      targetHeight={viewportSize.height}
+      opacity={0}
+      zIndex={SlotZIndex.PREV}
+    />
+  {:else}
+    <PrevFrameLayer 
+      frame={prevFrame} 
+      layout={frameLayout}
+    />
   {/if}
   
-  <!-- 当前页层 -->
-  {#if currentSlot.images.length > 0}
-    {#if useCanvas}
-      <!-- Canvas 预渲染模式（暂不支持双页） -->
-      <CanvasFrame
-        imageUrl={currentSlot.images[0].url}
-        imageBlob={currentSlot.images[0].blob}
-        targetWidth={viewportSize.width}
-        targetHeight={viewportSize.height}
-        {scale}
-        {rotation}
-        {transformOrigin}
-        opacity={1}
-        zIndex={SlotZIndex.CURRENT}
-      />
-    {:else}
-      <!-- 传统 img 模式（支持双页） -->
-      <div 
-        class="frame-layer current-layer {layoutClass}"
-        style:z-index={SlotZIndex.CURRENT}
-        style:opacity={1}
-        style:transition={`opacity ${transitionDuration}ms ease`}
-        style:transform={transformStyle}
-        style:transform-origin={transformOrigin}
-        data-page-index={currentSlot.pageIndex}
-      >
-        {#each currentSlot.images as img, i (img.pageIndex)}
-          <img 
-            src={img.url} 
-            alt="Current page {i}"
-            class="frame-image"
-            draggable="false"
-            onload={(e) => onImageLoad?.(e, i)}
-          />
-        {/each}
-      </div>
-    {/if}
+  <!-- 当前页层（使用 Layer 组件，支持超分图替换） -->
+  {#if useCanvas && currentSlot.images.length > 0}
+    <CanvasFrame
+      imageUrl={currentSlot.images[0].url}
+      imageBlob={currentSlot.images[0].blob}
+      targetWidth={viewportSize.width}
+      targetHeight={viewportSize.height}
+      {scale}
+      {rotation}
+      {transformOrigin}
+      opacity={1}
+      zIndex={SlotZIndex.CURRENT}
+    />
+  {:else if currentSlot.images.length > 0}
+    <CurrentFrameLayer 
+      frame={currentFrame}
+      layout={frameLayout}
+      direction={isRTL ? 'rtl' : 'ltr'}
+      {scale}
+      {rotation}
+      {viewPositionX}
+      {viewPositionY}
+      {viewportSize}
+      imageSize={currentImageSize}
+      {onImageLoad}
+    />
   {:else if currentSlot.loading}
     <div 
       class="frame-layer loading-layer"
@@ -481,52 +495,20 @@
   {/if}
   
   <!-- 后页层（隐藏，预加载用） -->
-  {#if nextSlot.images.length > 0}
-    {#if useCanvas}
-      <CanvasFrame
-        imageUrl={nextSlot.images[0].url}
-        imageBlob={nextSlot.images[0].blob}
-        targetWidth={viewportSize.width}
-        targetHeight={viewportSize.height}
-        opacity={0}
-        zIndex={SlotZIndex.NEXT}
-      />
-    {:else}
-      <div 
-        class="frame-layer next-layer {layoutClass}"
-        style:z-index={SlotZIndex.NEXT}
-        style:opacity={0}
-        data-page-index={nextSlot.pageIndex}
-      >
-        {#each nextSlot.images as img, i (img.pageIndex)}
-          <img 
-            src={img.url} 
-            alt="Next page {i}"
-            class="frame-image"
-            draggable="false"
-          />
-        {/each}
-      </div>
-    {/if}
-  {/if}
-  
-  <!-- 超分层 -->
-  {#if showUpscale && upscaleUrl}
-    <div 
-      class="frame-layer upscale-layer"
-      style:z-index={SlotZIndex.UPSCALE}
-      style:opacity={1}
-      style:transition={`opacity ${transitionDuration}ms ease`}
-      style:transform={transformStyle}
-      style:transform-origin={transformOrigin}
-    >
-      <img 
-        src={upscaleUrl} 
-        alt="Upscaled"
-        class="frame-image"
-        draggable="false"
-      />
-    </div>
+  {#if useCanvas && nextSlot.images.length > 0}
+    <CanvasFrame
+      imageUrl={nextSlot.images[0].url}
+      imageBlob={nextSlot.images[0].blob}
+      targetWidth={viewportSize.width}
+      targetHeight={viewportSize.height}
+      opacity={0}
+      zIndex={SlotZIndex.NEXT}
+    />
+  {:else}
+    <NextFrameLayer 
+      frame={nextFrame} 
+      layout={frameLayout}
+    />
   {/if}
 </div>
 

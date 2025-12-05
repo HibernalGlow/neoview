@@ -258,10 +258,8 @@
     return isVideoFile(filename);
   });
   
-  // 渲染器模式（双页模式下强制使用 CurrentFrameLayer，因为 StackViewer 不支持双页）
-  let useStackRenderer = $derived(
-    (settings.view.renderer?.mode ?? 'stack') === 'stack' && pageMode === 'single'
-  );
+  // 渲染器模式
+  let useStackRenderer = $derived((settings.view.renderer?.mode ?? 'stack') === 'stack');
   
   // StackViewer 组件引用
   let stackViewerRef: StackViewer | null = null;
@@ -610,7 +608,7 @@
       {viewPositionY}
     />
   {:else if useStackRenderer}
-    <!-- 层叠渲染模式：使用 StackViewer（更流畅） -->
+    <!-- 层叠渲染模式：使用 StackViewer（支持双页） -->
     <StackViewer
       bind:this={stackViewerRef}
       showUpscale={true}
@@ -621,6 +619,8 @@
       {viewPositionY}
       {viewportSize}
       useCanvas={false}
+      pageMode={pageMode}
+      direction={direction}
       onImageLoad={handleImageLoad}
     />
   {:else}

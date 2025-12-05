@@ -7,21 +7,29 @@
 /** 帧槽位置 */
 export type SlotPosition = 'prev' | 'current' | 'next';
 
-/** 帧槽数据 */
-export interface FrameSlot {
-  /** 槽位置 */
-  position: SlotPosition;
-  /** 页面索引（-1 表示空槽） */
-  pageIndex: number;
+/** 单页图片数据 */
+export interface SlotImage {
   /** 图片 URL */
-  url: string | null;
+  url: string;
   /** 图片 Blob（用于 Canvas 预渲染） */
   blob: Blob | null;
   /** 图片尺寸 */
   dimensions: { width: number; height: number } | null;
+  /** 页面索引 */
+  pageIndex: number;
+}
+
+/** 帧槽数据 */
+export interface FrameSlot {
+  /** 槽位置 */
+  position: SlotPosition;
+  /** 起始页面索引（-1 表示空槽） */
+  pageIndex: number;
+  /** 图片列表（单页模式 1 张，双页模式 1-2 张） */
+  images: SlotImage[];
   /** 是否正在加载 */
   loading: boolean;
-  /** 预加载的背景色 */
+  /** 预加载的背景色（第一张图） */
   backgroundColor: string | null;
   /** 预计算的缩放比例（基于当前视口和缩放模式） */
   precomputedScale: number | null;
@@ -32,9 +40,7 @@ export function createEmptySlot(position: SlotPosition): FrameSlot {
   return {
     position,
     pageIndex: -1,
-    url: null,
-    blob: null,
-    dimensions: null,
+    images: [],
     loading: false,
     backgroundColor: null,
     precomputedScale: null,

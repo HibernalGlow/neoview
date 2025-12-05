@@ -17,6 +17,7 @@
   import CanvasFrame from './components/CanvasFrame.svelte';
   import {
     type FrameSlot,
+    type SlotImage,
     createEmptySlot,
     SlotZIndex,
   } from './types/frameSlot';
@@ -34,6 +35,8 @@
     viewPositionY = 50,
     viewportSize = { width: 0, height: 0 },
     useCanvas = false,  // 使用 Canvas 预渲染模式
+    pageMode = 'single',  // 页面模式：单页/双页
+    direction = 'ltr',    // 阅读方向
     onPageChange,
     onImageLoad,
   }: {
@@ -45,6 +48,8 @@
     viewPositionY?: number;
     viewportSize?: { width: number; height: number };
     useCanvas?: boolean;
+    pageMode?: 'single' | 'double';
+    direction?: 'ltr' | 'rtl';
     onPageChange?: (pageIndex: number) => void;
     onImageLoad?: (e: Event, index: number) => void;
   } = $props();
@@ -74,8 +79,14 @@
   // 阅读方向
   let isRTL = $derived(settings.book.readingDirection === 'right-to-left');
   
+  // 翻页步进（双页模式跳 2 页）
+  let pageStep = $derived(pageMode === 'double' ? 2 : 1);
+  
   // 当前书本路径（用于检测书本切换）
   let currentBookPath = $state<string | null>(null);
+  
+  // 上一次的页面模式（用于检测模式变化）
+  let lastPageMode = $state<'single' | 'double'>('single');
   
   // 计算 transform-origin（基于 viewPositionX/Y）
   let transformOrigin = $derived(`${viewPositionX}% ${viewPositionY}%`);
@@ -106,7 +117,50 @@
   // ============================================================================
   
   /**
-   * 加载单个槽位的图片（包含预解码）
+   * 加载单张图片（内部辅助函数）
+   */
+  async function loadSingleImage(pageIndex: number): Promise<SlotImage | null> {
+    if (pageIndex < 0 || pageIndex >= bookStore.totalPages) {
+      return null;
+    }
+    
+    // 先尝试同步获取缓存
+    const cached = imagePool.getSync(pageIndex);
+    if (cached) {
+      await preDecodeImage(cached.url);
+      return {
+        url: cached.url,
+        blob: cached.blob ?? null,
+        dimensions: cached.width && cached.height 
+          ? { width: cached.width, height: cached.height } 
+          : null,
+        pageIndex,
+      };
+    }
+    
+    // 异步加载
+    try {
+      const image = await imagePool.get(pageIndex);
+      if (image) {
+        await preDecodeImage(image.url);
+        return {
+          url: image.url,
+          blob: image.blob ?? null,
+          dimensions: image.width && image.height 
+            ? { width: image.width, height: image.height } 
+            : null,
+          pageIndex,
+        };
+      }
+    } catch (err) {
+      console.warn(`StackViewer: 加载页面 ${pageIndex} 失败:`, err);
+    }
+    
+    return null;
+  }
+  
+  /**
+   * 加载单个槽位的图片（支持双页模式）
    */
   async function loadSlot(slot: FrameSlot, pageIndex: number): Promise<FrameSlot> {
     if (pageIndex < 0 || pageIndex >= bookStore.totalPages) {
@@ -114,97 +168,66 @@
     }
     
     const startTime = performance.now();
+    const images: SlotImage[] = [];
     
-    // 先尝试同步获取缓存
-    const cached = imagePool.getSync(pageIndex);
-    if (cached) {
-      // 预解码图片（确保翻页时不卡顿）
-      const decodeStart = performance.now();
-      await preDecodeImage(cached.url);
-      const decodeMs = performance.now() - decodeStart;
-      
-      // 记录槽位加载（缓存命中）
-      pipelineLatencyStore.record({
-        timestamp: Date.now(),
-        pageIndex,
-        traceId: `slot-${slot.position}-${pageIndex}`,
-        bookSyncMs: 0,
-        backendLoadMs: 0,
-        ipcTransferMs: 0,
-        blobCreateMs: decodeMs,  // 用于记录解码时间
-        totalMs: performance.now() - startTime,
-        dataSize: cached.blob?.size ?? 0,
-        cacheHit: true,
-        isCurrentPage: slot.position === 'current',
-        source: 'cache',
-        slot: slot.position,
-      });
-      
-      const dims = cached.width && cached.height 
-        ? { width: cached.width, height: cached.height } 
-        : null;
-      
-      return {
-        position: slot.position,
-        pageIndex,
-        url: cached.url,
-        blob: cached.blob ?? null,
-        dimensions: dims,
-        loading: false,
-        backgroundColor: imagePool.getBackgroundColor(pageIndex) ?? null,
-        precomputedScale: dims ? computeScale(dims.width, dims.height) : null,
-      };
+    // 加载第一张图片
+    const firstImage = await loadSingleImage(pageIndex);
+    if (firstImage) {
+      images.push(firstImage);
     }
     
-    // 异步加载
-    try {
-      const loadStart = performance.now();
-      const image = await imagePool.get(pageIndex);
-      const loadMs = performance.now() - loadStart;
-      
-      if (image) {
-        // 预解码图片
-        const decodeStart = performance.now();
-        await preDecodeImage(image.url);
-        const decodeMs = performance.now() - decodeStart;
-        
-        // 记录槽位加载
-        pipelineLatencyStore.record({
-          timestamp: Date.now(),
-          pageIndex,
-          traceId: `slot-${slot.position}-${pageIndex}`,
-          bookSyncMs: 0,
-          backendLoadMs: loadMs,
-          ipcTransferMs: loadMs,
-          blobCreateMs: decodeMs,
-          totalMs: performance.now() - startTime,
-          dataSize: image.blob?.size ?? 0,
-          cacheHit: false,
-          isCurrentPage: slot.position === 'current',
-          source: slot.position === 'current' ? 'current' : 'preload',
-          slot: slot.position,
-        });
-        
-        const dims = image.width && image.height 
-          ? { width: image.width, height: image.height } 
-          : null;
-          
-        return {
-          position: slot.position,
-          pageIndex,
-          url: image.url,
-          blob: image.blob ?? null,
-          dimensions: dims,
-          loading: false,
-          backgroundColor: imagePool.getBackgroundColor(pageIndex) ?? null,
-          precomputedScale: dims ? computeScale(dims.width, dims.height) : null,
-        };
+    // 双页模式：加载第二张图片
+    if (pageMode === 'double' && firstImage) {
+      const secondIndex = pageIndex + 1;
+      if (secondIndex < bookStore.totalPages) {
+        const secondImage = await loadSingleImage(secondIndex);
+        if (secondImage) {
+          images.push(secondImage);
+        }
       }
-    } catch (err) {
-      console.warn(`StackViewer: 加载页面 ${pageIndex} 失败:`, err);
     }
     
-    return createEmptySlot(slot.position);
+    if (images.length === 0) {
+      return createEmptySlot(slot.position);
+    }
+    
+    // 记录槽位加载
+    const totalMs = performance.now() - startTime;
+    pipelineLatencyStore.record({
+      timestamp: Date.now(),
+      pageIndex,
+      traceId: `slot-${slot.position}-${pageIndex}`,
+      bookSyncMs: 0,
+      backendLoadMs: totalMs,
+      ipcTransferMs: 0,
+      blobCreateMs: 0,
+      totalMs,
+      dataSize: images.reduce((sum, img) => sum + (img.blob?.size ?? 0), 0),
+      cacheHit: false,
+      isCurrentPage: slot.position === 'current',
+      source: slot.position === 'current' ? 'current' : 'preload',
+      slot: slot.position,
+    });
+    
+    // 计算整体尺寸（双页模式为两图宽度之和）
+    const firstDims = images[0].dimensions;
+    let totalWidth = firstDims?.width ?? 0;
+    let maxHeight = firstDims?.height ?? 0;
+    if (images.length > 1 && images[1].dimensions) {
+      totalWidth += images[1].dimensions.width;
+      maxHeight = Math.max(maxHeight, images[1].dimensions.height);
+    }
+    
+    return {
+      position: slot.position,
+      pageIndex,
+      images,
+      loading: false,
+      backgroundColor: imagePool.getBackgroundColor(pageIndex) ?? null,
+      precomputedScale: totalWidth > 0 && maxHeight > 0 
+        ? computeScale(totalWidth, maxHeight) 
+        : null,
+    };
   }
   
   /**
@@ -240,13 +263,18 @@
       imagePool.setCurrentBook(book.path);
     }
     
-    console.log(`📚 StackViewer: 初始化槽位，中心页 ${centerIndex + 1}`);
+    console.log(`📚 StackViewer: 初始化槽位，中心页 ${centerIndex + 1}，模式 ${pageMode}`);
+    
+    // 计算前后槽位的页面索引（双页模式下间隔 2 页）
+    const step = pageStep;
+    const prevIndex = centerIndex - step;
+    const nextIndex = centerIndex + step;
     
     // 并行加载三个槽位
     const [prev, current, next] = await Promise.all([
-      loadSlot(createEmptySlot('prev'), centerIndex - 1),
+      prevIndex >= 0 ? loadSlot(createEmptySlot('prev'), prevIndex) : Promise.resolve(createEmptySlot('prev')),
       loadSlot(createEmptySlot('current'), centerIndex),
-      loadSlot(createEmptySlot('next'), centerIndex + 1),
+      nextIndex < book.pages.length ? loadSlot(createEmptySlot('next'), nextIndex) : Promise.resolve(createEmptySlot('next')),
     ]);
     
     prevSlot = prev;
@@ -270,21 +298,15 @@
   async function navigateForward() {
     if (isTransitioning) return;
     
-    const newCurrentIndex = displayedPageIndex + 1;
+    // 双页模式下跳 2 页
+    const newCurrentIndex = displayedPageIndex + pageStep;
     if (newCurrentIndex >= bookStore.totalPages) return;
     
-    // 如果 nextSlot 还没加载好，先加载
-    if (!nextSlot.url || nextSlot.pageIndex !== newCurrentIndex) {
-      console.log(`⏳ StackViewer: nextSlot 未就绪，先加载 page ${newCurrentIndex + 1}`);
-      nextSlot = await loadSlot(createEmptySlot('next'), newCurrentIndex);
-    }
-    
+    // 在双页模式下，槽位轮转不适用，直接重新加载
     isTransitioning = true;
     
-    // 槽位轮转：prev ← current ← next
-    prevSlot = { ...currentSlot, position: 'prev' };
-    currentSlot = { ...nextSlot, position: 'current' };
-    nextSlot = createEmptySlot('next');
+    // 加载新的当前槽位
+    currentSlot = await loadSlot(createEmptySlot('current'), newCurrentIndex);
     displayedPageIndex = newCurrentIndex;
     
     // 清除超分层（新页面需要重新超分）
@@ -296,10 +318,20 @@
     // 等待 DOM 更新
     await tick();
     
-    // 异步加载新的 next 槽
-    const newNextIndex = newCurrentIndex + 1;
-    if (newNextIndex < bookStore.totalPages) {
-      nextSlot = await loadSlot(createEmptySlot('next'), newNextIndex);
+    // 异步加载前后槽位
+    const prevIndex = newCurrentIndex - pageStep;
+    const nextIndex = newCurrentIndex + pageStep;
+    
+    if (prevIndex >= 0) {
+      prevSlot = await loadSlot(createEmptySlot('prev'), prevIndex);
+    } else {
+      prevSlot = createEmptySlot('prev');
+    }
+    
+    if (nextIndex < bookStore.totalPages) {
+      nextSlot = await loadSlot(createEmptySlot('next'), nextIndex);
+    } else {
+      nextSlot = createEmptySlot('next');
     }
     
     // 触发远程预加载
@@ -318,21 +350,14 @@
   async function navigateBackward() {
     if (isTransitioning) return;
     
-    const newCurrentIndex = displayedPageIndex - 1;
+    // 双页模式下跳 2 页
+    const newCurrentIndex = displayedPageIndex - pageStep;
     if (newCurrentIndex < 0) return;
-    
-    // 如果 prevSlot 还没加载好，先加载
-    if (!prevSlot.url || prevSlot.pageIndex !== newCurrentIndex) {
-      console.log(`⏳ StackViewer: prevSlot 未就绪，先加载 page ${newCurrentIndex + 1}`);
-      prevSlot = await loadSlot(createEmptySlot('prev'), newCurrentIndex);
-    }
     
     isTransitioning = true;
     
-    // 槽位轮转：prev → current → next
-    nextSlot = { ...currentSlot, position: 'next' };
-    currentSlot = { ...prevSlot, position: 'current' };
-    prevSlot = createEmptySlot('prev');
+    // 加载新的当前槽位
+    currentSlot = await loadSlot(createEmptySlot('current'), newCurrentIndex);
     displayedPageIndex = newCurrentIndex;
     
     // 清除超分层
@@ -344,10 +369,20 @@
     // 等待 DOM 更新
     await tick();
     
-    // 异步加载新的 prev 槽
-    const newPrevIndex = newCurrentIndex - 1;
-    if (newPrevIndex >= 0) {
-      prevSlot = await loadSlot(createEmptySlot('prev'), newPrevIndex);
+    // 异步加载前后槽位
+    const prevIndex = newCurrentIndex - pageStep;
+    const nextIndex = newCurrentIndex + pageStep;
+    
+    if (prevIndex >= 0) {
+      prevSlot = await loadSlot(createEmptySlot('prev'), prevIndex);
+    } else {
+      prevSlot = createEmptySlot('prev');
+    }
+    
+    if (nextIndex < bookStore.totalPages) {
+      nextSlot = await loadSlot(createEmptySlot('next'), nextIndex);
+    } else {
+      nextSlot = createEmptySlot('next');
     }
     
     // 触发远程预加载
@@ -436,6 +471,16 @@
     }
   });
   
+  // 监听 pageMode 变化，重新初始化槽位
+  $effect(() => {
+    const currentMode = pageMode;
+    if (currentMode !== lastPageMode && displayedPageIndex >= 0) {
+      lastPageMode = currentMode;
+      console.log(`🔄 StackViewer: 页面模式变化为 ${currentMode}，重新初始化槽位`);
+      void initializeSlots(displayedPageIndex);
+    }
+  });
+  
   // 清理
   onDestroy(() => {
     prevSlot = createEmptySlot('prev');
@@ -449,7 +494,15 @@
   // ============================================================================
   
   // 当前图片尺寸（用于外部计算悬停滚动等）
-  let currentDimensions = $derived(currentSlot.dimensions);
+  let currentDimensions = $derived(currentSlot.images[0]?.dimensions ?? null);
+  
+  // 布局类名
+  let layoutClass = $derived.by(() => {
+    if (pageMode === 'double') {
+      return direction === 'rtl' ? 'frame-double frame-rtl' : 'frame-double';
+    }
+    return 'frame-single';
+  });
   
   export {
     navigateForward,
@@ -463,11 +516,11 @@
 
 <div class="stack-viewer">
   <!-- 前页层（隐藏，预加载用） -->
-  {#if prevSlot.url}
+  {#if prevSlot.images.length > 0}
     {#if useCanvas}
       <CanvasFrame
-        imageUrl={prevSlot.url}
-        imageBlob={prevSlot.blob}
+        imageUrl={prevSlot.images[0].url}
+        imageBlob={prevSlot.images[0].blob}
         targetWidth={viewportSize.width}
         targetHeight={viewportSize.height}
         opacity={0}
@@ -475,28 +528,30 @@
       />
     {:else}
       <div 
-        class="frame-layer prev-layer"
+        class="frame-layer prev-layer {layoutClass}"
         style:z-index={SlotZIndex.PREV}
         style:opacity={0}
         data-page-index={prevSlot.pageIndex}
       >
-        <img 
-          src={prevSlot.url} 
-          alt="Previous page"
-          class="frame-image"
-          draggable="false"
-        />
+        {#each prevSlot.images as img, i (img.pageIndex)}
+          <img 
+            src={img.url} 
+            alt="Previous page {i}"
+            class="frame-image"
+            draggable="false"
+          />
+        {/each}
       </div>
     {/if}
   {/if}
   
   <!-- 当前页层 -->
-  {#if currentSlot.url}
+  {#if currentSlot.images.length > 0}
     {#if useCanvas}
-      <!-- Canvas 预渲染模式 -->
+      <!-- Canvas 预渲染模式（暂不支持双页） -->
       <CanvasFrame
-        imageUrl={currentSlot.url}
-        imageBlob={currentSlot.blob}
+        imageUrl={currentSlot.images[0].url}
+        imageBlob={currentSlot.images[0].blob}
         targetWidth={viewportSize.width}
         targetHeight={viewportSize.height}
         {scale}
@@ -506,9 +561,9 @@
         zIndex={SlotZIndex.CURRENT}
       />
     {:else}
-      <!-- 传统 img 模式 -->
+      <!-- 传统 img 模式（支持双页） -->
       <div 
-        class="frame-layer current-layer"
+        class="frame-layer current-layer {layoutClass}"
         style:z-index={SlotZIndex.CURRENT}
         style:opacity={1}
         style:transition={`opacity ${transitionDuration}ms ease`}
@@ -516,13 +571,15 @@
         style:transform-origin={transformOrigin}
         data-page-index={currentSlot.pageIndex}
       >
-        <img 
-          src={currentSlot.url} 
-          alt="Current page"
-          class="frame-image"
-          draggable="false"
-          onload={(e) => onImageLoad?.(e, 0)}
-        />
+        {#each currentSlot.images as img, i (img.pageIndex)}
+          <img 
+            src={img.url} 
+            alt="Current page {i}"
+            class="frame-image"
+            draggable="false"
+            onload={(e) => onImageLoad?.(e, i)}
+          />
+        {/each}
       </div>
     {/if}
   {:else if currentSlot.loading}
@@ -542,11 +599,11 @@
   {/if}
   
   <!-- 后页层（隐藏，预加载用） -->
-  {#if nextSlot.url}
+  {#if nextSlot.images.length > 0}
     {#if useCanvas}
       <CanvasFrame
-        imageUrl={nextSlot.url}
-        imageBlob={nextSlot.blob}
+        imageUrl={nextSlot.images[0].url}
+        imageBlob={nextSlot.images[0].blob}
         targetWidth={viewportSize.width}
         targetHeight={viewportSize.height}
         opacity={0}
@@ -554,17 +611,19 @@
       />
     {:else}
       <div 
-        class="frame-layer next-layer"
+        class="frame-layer next-layer {layoutClass}"
         style:z-index={SlotZIndex.NEXT}
         style:opacity={0}
         data-page-index={nextSlot.pageIndex}
       >
-        <img 
-          src={nextSlot.url} 
-          alt="Next page"
-          class="frame-image"
-          draggable="false"
-        />
+        {#each nextSlot.images as img, i (img.pageIndex)}
+          <img 
+            src={img.url} 
+            alt="Next page {i}"
+            class="frame-image"
+            draggable="false"
+          />
+        {/each}
       </div>
     {/if}
   {/if}
@@ -660,5 +719,26 @@
   
   .empty-layer {
     color: var(--muted-foreground, #888);
+  }
+  
+  /* 单页模式 */
+  .frame-single {
+    justify-content: center;
+  }
+  
+  /* 双页模式 - 水平排列 */
+  .frame-double {
+    flex-direction: row;
+    gap: 0;
+  }
+  
+  .frame-double.frame-rtl {
+    flex-direction: row-reverse;
+  }
+  
+  /* 双页模式下每张图占50%宽度 */
+  .frame-double .frame-image {
+    max-width: calc(50% - 2px);
+    max-height: 100%;
   }
 </style>

@@ -1176,6 +1176,7 @@ impl UpscaleService {
             final_model.model_name
         );
         let cache_path = cache_dir.join(&filename);
+        log_debug!("💾 缓存路径: {} (缓存目录: {})", cache_path.display(), cache_dir.display());
         
         // 确保缓存目录存在
         if let Some(parent) = cache_path.parent() {

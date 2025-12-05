@@ -105,7 +105,6 @@ pub async fn upscale_service_init(
     app: AppHandle,
     state: State<'_, UpscaleServiceState>,
     pyo3_state: State<'_, PyO3UpscalerState>,
-    cache_dir: Option<String>,
 ) -> Result<(), String> {
     let mut guard = state.service.lock().await;
 
@@ -121,17 +120,17 @@ pub async fn upscale_service_init(
 
     // 加载启动配置
     let config_path = crate::core::startup_config::get_config_path(&app_data_dir);
+    log::info!("📋 加载启动配置: {}", config_path.display());
     let startup_config = crate::core::startup_config::StartupConfig::load(&config_path);
 
-    // 获取缓存目录：优先级：传入参数 > 启动配置 > 默认目录
-    let cache_dir = if let Some(dir) = cache_dir {
-        // 前端传入的目录
-        PathBuf::from(dir).join("pyo3-upscale")
-    } else if let Some(dir) = startup_config.get_upscale_cache_dir() {
+    // 获取缓存目录：从 config.json 读取，否则使用默认目录
+    let cache_dir = if let Some(dir) = startup_config.get_upscale_cache_dir() {
         // 启动配置中的目录
+        log::info!("📁 使用 config.json 中的缓存目录");
         dir
     } else {
         // 默认目录
+        log::info!("📁 使用默认缓存目录");
         app_data_dir.join("upscale_cache")
     };
     

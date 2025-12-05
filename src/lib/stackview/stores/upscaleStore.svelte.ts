@@ -146,18 +146,10 @@ class UpscaleStore {
   async init() {
     if (this.initialized) return;
 
-    // 初始化后端服务（传递缓存目录，与老系统保持一致）
+    // 初始化后端服务（后端从 config.json 读取缓存目录）
     try {
-      // 获取缓存目录（从全局设置中获取 thumbnailDirectory）
-      const { settingsManager } = await import('$lib/settings/settingsManager');
-      const { normalizeThumbnailDirectoryPath } = await import('$lib/config/paths');
-      const globalSettings = settingsManager.getSettings();
-      console.log('📋 全局设置 thumbnailDirectory:', globalSettings.system?.thumbnailDirectory);
-      const cacheDir = normalizeThumbnailDirectoryPath(globalSettings.system?.thumbnailDirectory);
-      console.log('📁 规范化后的缓存目录:', cacheDir);
-      
-      await invoke('upscale_service_init', { cacheDir });
-      console.log('✅ 后端 UpscaleService 初始化完成, 缓存目录:', cacheDir);
+      await invoke('upscale_service_init');
+      console.log('✅ 后端 UpscaleService 初始化完成');
     } catch (err) {
       console.error('❌ 后端 UpscaleService 初始化失败:', err);
     }

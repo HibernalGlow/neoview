@@ -322,13 +322,72 @@ impl UpscaleService {
         self.cache_dir.join(filename)
     }
 
-    /// 检查缓存是否存在
+    /// 检查缓存是否存在且有效（使用 WIC 验证）
     fn check_cache(&self, book_path: &str, image_path: &str, model: &UpscaleModel) -> Option<PathBuf> {
         let path = self.get_cache_path(book_path, image_path, model);
-        if path.exists() {
-            Some(path)
-        } else {
-            None
+        if !path.exists() {
+            return None;
+        }
+        
+        // 验证缓存文件是否有效
+        match self.validate_cache_file(&path) {
+            Ok(true) => {
+                log_info!("✅ 缓存有效: {}", path.display());
+                Some(path)
+            }
+            Ok(false) => {
+                log_info!("⚠️ 缓存文件损坏，将删除: {}", path.display());
+                let _ = std::fs::remove_file(&path);
+                None
+            }
+            Err(e) => {
+                log_info!("⚠️ 缓存验证失败: {} - {}", path.display(), e);
+                None
+            }
+        }
+    }
+    
+    /// 验证缓存文件是否有效（使用 WIC 解码测试）
+    #[cfg(target_os = "windows")]
+    fn validate_cache_file(&self, path: &PathBuf) -> Result<bool, String> {
+        use crate::core::wic_decoder::decode_image_from_memory_with_wic;
+        
+        // 读取文件
+        let data = std::fs::read(path)
+            .map_err(|e| format!("读取缓存文件失败: {}", e))?;
+        
+        if data.is_empty() {
+            return Ok(false);
+        }
+        
+        // 尝试用 WIC 解码验证
+        match decode_image_from_memory_with_wic(&data) {
+            Ok(result) => {
+                // 检查解码结果是否合理
+                if result.width > 0 && result.height > 0 && !result.pixels.is_empty() {
+                    log_debug!("📏 缓存验证成功: {}x{}", result.width, result.height);
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            Err(_) => Ok(false),
+        }
+    }
+    
+    /// 验证缓存文件是否有效（非 Windows 平台使用 image crate）
+    #[cfg(not(target_os = "windows"))]
+    fn validate_cache_file(&self, path: &PathBuf) -> Result<bool, String> {
+        use image::ImageReader;
+        
+        match ImageReader::open(path) {
+            Ok(reader) => {
+                match reader.decode() {
+                    Ok(img) => Ok(img.width() > 0 && img.height() > 0),
+                    Err(_) => Ok(false),
+                }
+            }
+            Err(_) => Ok(false),
         }
     }
 

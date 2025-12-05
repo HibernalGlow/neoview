@@ -189,10 +189,15 @@
    */
   async function navigateForward() {
     if (isTransitioning) return;
-    if (!nextSlot.url) return; // 没有下一页
     
-    const newCurrentIndex = nextSlot.pageIndex;
+    const newCurrentIndex = displayedPageIndex + 1;
     if (newCurrentIndex >= bookStore.totalPages) return;
+    
+    // 如果 nextSlot 还没加载好，先加载
+    if (!nextSlot.url || nextSlot.pageIndex !== newCurrentIndex) {
+      console.log(`⏳ StackViewer: nextSlot 未就绪，先加载 page ${newCurrentIndex + 1}`);
+      nextSlot = await loadSlot(createEmptySlot('next'), newCurrentIndex);
+    }
     
     isTransitioning = true;
     
@@ -232,10 +237,15 @@
    */
   async function navigateBackward() {
     if (isTransitioning) return;
-    if (!prevSlot.url) return; // 没有上一页
     
-    const newCurrentIndex = prevSlot.pageIndex;
+    const newCurrentIndex = displayedPageIndex - 1;
     if (newCurrentIndex < 0) return;
+    
+    // 如果 prevSlot 还没加载好，先加载
+    if (!prevSlot.url || prevSlot.pageIndex !== newCurrentIndex) {
+      console.log(`⏳ StackViewer: prevSlot 未就绪，先加载 page ${newCurrentIndex + 1}`);
+      prevSlot = await loadSlot(createEmptySlot('prev'), newCurrentIndex);
+    }
     
     isTransitioning = true;
     
@@ -271,23 +281,24 @@
   }
   
   /**
-   * 跳转到指定页面（完全重新初始化槽位）
+   * 跳转到指定页面（优先使用槽位轮转，否则重新初始化）
    */
   async function navigateToPage(pageIndex: number) {
     if (pageIndex === displayedPageIndex) return;
     if (pageIndex < 0 || pageIndex >= bookStore.totalPages) return;
     
-    // 检查是否可以通过单步轮转到达
-    if (pageIndex === displayedPageIndex + 1 && nextSlot.url) {
+    // 优先使用单步轮转（即使槽位未加载，navigateForward/Backward 会自动加载）
+    if (pageIndex === displayedPageIndex + 1) {
       await navigateForward();
       return;
     }
-    if (pageIndex === displayedPageIndex - 1 && prevSlot.url) {
+    if (pageIndex === displayedPageIndex - 1) {
       await navigateBackward();
       return;
     }
     
-    // 需要完全重新初始化
+    // 跳转多页：完全重新初始化
+    console.log(`🔄 StackViewer: 跳转到 page ${pageIndex + 1}，重新初始化槽位`);
     isTransitioning = true;
     await initializeSlots(pageIndex);
     onPageChange?.(pageIndex);
@@ -325,13 +336,13 @@
     
     // 书本切换：完全重新初始化
     if (book.path !== currentBookPath) {
-      initializeSlots(pageIndex);
+      void initializeSlots(pageIndex);
       return;
     }
     
-    // 同一本书内页面切换
+    // 同一本书内页面切换（使用槽位轮转，无需等待）
     if (pageIndex !== displayedPageIndex) {
-      navigateToPage(pageIndex);
+      void navigateToPage(pageIndex);
     }
   });
   

@@ -31,7 +31,8 @@ function loadFontSettingsFromStorage(): FontSettings | null {
 }
 
 /**
- * 应用字体设置到 document
+ * 应用字体设置到 document（使用 CSS 方案）
+ * 通过设置 data-custom-font 属性和 CSS 变量实现，不直接覆盖 font-family
  */
 export function applyFontSettings(fontSettings?: FontSettings): void {
   if (typeof document === 'undefined') return;
@@ -46,49 +47,45 @@ export function applyFontSettings(fontSettings?: FontSettings): void {
     }
   }
   
-  if (!settings) {
-    console.log('🔤 没有找到字体设置，跳过应用');
-    return;
-  }
-  
   const root = document.documentElement;
   
-  if (!settings.enabled) {
+  if (!settings || !settings.enabled) {
     // 移除自定义字体，恢复主题默认
-    root.style.removeProperty('--font-sans');
-    root.style.removeProperty('--font-mono');
-    root.style.removeProperty('font-family');
+    root.removeAttribute('data-custom-font');
+    root.style.removeProperty('--font-custom-sans');
+    root.style.removeProperty('--font-custom-mono');
     console.log('🔤 自定义字体已禁用，恢复主题默认');
     return;
   }
+
+  // 启用自定义字体
+  root.setAttribute('data-custom-font', 'enabled');
 
   // 生成 font-family 字符串
   const mainFonts = settings.fontFamilies.length > 0
     ? settings.fontFamilies.join(', ') + ', sans-serif'
     : null;
   
-  const uiFonts = settings.uiFontFamilies.length > 0
-    ? settings.uiFontFamilies.join(', ') + ', sans-serif'
-    : mainFonts;
-  
   const monoFonts = settings.monoFontFamilies.length > 0
     ? settings.monoFontFamilies.join(', ') + ', monospace'
     : null;
 
-  // 应用到 CSS 变量
-  if (mainFonts || uiFonts) {
-    root.style.setProperty('--font-sans', uiFonts || mainFonts || '');
-    root.style.setProperty('font-family', mainFonts || uiFonts || '');
+  // 应用到 CSS 变量（由 CSS 规则通过 data-custom-font 属性选择器应用）
+  if (mainFonts) {
+    root.style.setProperty('--font-custom-sans', mainFonts);
+  } else {
+    root.style.removeProperty('--font-custom-sans');
   }
   
   if (monoFonts) {
-    root.style.setProperty('--font-mono', monoFonts);
+    root.style.setProperty('--font-custom-mono', monoFonts);
+  } else {
+    root.style.removeProperty('--font-custom-mono');
   }
   
-  console.log('🔤 字体设置已应用:', {
+  console.log('🔤 字体设置已应用 (CSS方案):', {
     enabled: settings.enabled,
     mainFonts,
-    uiFonts,
     monoFonts
   });
 }

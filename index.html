@@ -1,10 +1,64 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 	<head>
 		<meta charset="UTF-8" />
 		<link rel="icon" type="image/svg+xml" href="/vite.svg" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Vite + Svelte + TS</title>
+		<title>NeoView</title>
+		<!-- 早期主题和字体设置脚本：在 CSS 加载前应用，避免闪烁 -->
+		<script>
+			(function() {
+				var root = document.documentElement;
+				
+				// 1. 应用主题
+				try {
+					var themeRaw = localStorage.getItem('runtime-theme');
+					if (themeRaw) {
+						var themeData = JSON.parse(themeRaw);
+						var mode = themeData.mode;
+						var isDark = mode === 'dark' || 
+							(mode === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+						
+						if (isDark) {
+							root.classList.add('dark');
+						}
+						
+						var colors = isDark ? themeData.themes.dark : themeData.themes.light;
+						if (colors) {
+							for (var key in colors) {
+								if (colors.hasOwnProperty(key) && typeof colors[key] === 'string') {
+									root.style.setProperty('--' + key, colors[key]);
+								}
+							}
+						}
+					}
+				} catch (e) {
+					console.warn('早期主题设置失败:', e);
+				}
+				
+				// 2. 应用字体
+				try {
+					var settingsRaw = localStorage.getItem('neoview-settings');
+					if (settingsRaw) {
+						var settings = JSON.parse(settingsRaw);
+						var font = settings && settings.theme && settings.theme.customFont;
+						if (font && font.enabled) {
+							root.setAttribute('data-custom-font', 'enabled');
+							
+							if (font.fontFamilies && font.fontFamilies.length > 0) {
+								root.style.setProperty('--font-custom-sans', font.fontFamilies.join(', ') + ', sans-serif');
+							}
+							
+							if (font.monoFontFamilies && font.monoFontFamilies.length > 0) {
+								root.style.setProperty('--font-custom-mono', font.monoFontFamilies.join(', ') + ', monospace');
+							}
+						}
+					}
+				} catch (e) {
+					console.warn('早期字体设置失败:', e);
+				}
+			})();
+		</script>
 	</head>
 	<body>
 		<div id="app"></div>

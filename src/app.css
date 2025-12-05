@@ -6,6 +6,9 @@
 
 :root {
 	--radius: 0.625rem;
+	/* 自定义字体变量（由 JavaScript 或内联脚本设置） */
+	--font-custom-sans: inherit;
+	--font-custom-mono: inherit;
 	--background: oklch(1 0 0);
 	--foreground: oklch(0.145 0 0);
 	--card: oklch(1 0 0);
@@ -107,6 +110,17 @@
 	}
 	body {
 		@apply bg-background text-foreground;
+	}
+	
+	/* 自定义字体应用（当 data-custom-font="enabled" 时生效） */
+	html[data-custom-font="enabled"] {
+		font-family: var(--font-custom-sans, inherit);
+	}
+	
+	html[data-custom-font="enabled"] code,
+	html[data-custom-font="enabled"] pre,
+	html[data-custom-font="enabled"] .font-mono {
+		font-family: var(--font-custom-mono, monospace);
 	}
 	
 	/* 隐藏所有滚动条 */

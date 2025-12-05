@@ -620,6 +620,12 @@
     object-fit: contain;
     user-select: none;
     -webkit-user-drag: none;
+    /* 强制完整解码，避免渐进式渲染导致的跳帧 */
+    image-rendering: -webkit-optimize-contrast;
+    content-visibility: visible;
+    /* 图片本身也启用 GPU 加速 */
+    will-change: transform;
+    transform: translateZ(0);
   }
   
   /* 隐藏层（保持在 DOM 中但不可见） */

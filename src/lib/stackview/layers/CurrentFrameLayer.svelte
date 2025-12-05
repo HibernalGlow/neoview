@@ -11,7 +11,7 @@
   import { LayerZIndex } from '../types/layer';
   import type { Frame } from '../types/frame';
   import { getImageTransform, getClipPath } from '../utils/transform';
-  import { imagePool } from '../stores/imagePool.svelte';
+  import FrameImage from '../components/FrameImage.svelte';
   import '../styles/frameLayer.css';
   
   let {
@@ -54,16 +54,6 @@
     return parts.length > 0 ? parts.join(' ') : 'none';
   });
   
-  // 计算显示 URL 列表（响应式，超分完成时自动更新）
-  let displayUrls = $derived.by(() => {
-    // 依赖版本号以建立响应式关系
-    const _ = imagePool.version;
-    return frame.images.map(img => {
-      const upscaledUrl = imagePool.getDisplayUrl(img.physicalIndex);
-      return upscaledUrl ?? img.url;
-    });
-  });
-  
   let layoutClass = $derived.by(() => {
     const classes: string[] = [];
     
@@ -100,14 +90,13 @@
     style:transform-origin={transformOrigin}
   >
     {#each frame.images as img, i (i)}
-      <img
-        src={displayUrls[i]}
+      <FrameImage
+        pageIndex={img.physicalIndex}
+        url={img.url}
         alt="Current {i}"
-        class="frame-image"
-        style:transform={getImageTransform(img)}
-        style:clip-path={getClipPath(img.splitHalf)}
+        transform={getImageTransform(img)}
+        clipPath={getClipPath(img.splitHalf)}
         onload={(e) => onImageLoad?.(e, i)}
-        draggable="false"
       />
     {/each}
   </div>

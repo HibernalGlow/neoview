@@ -7,6 +7,7 @@
   import { LayerZIndex } from '../types/layer';
   import type { Frame } from '../types/frame';
   import { getImageTransform, getClipPath } from '../utils/transform';
+  import FrameImage from '../components/FrameImage.svelte';
   import '../styles/frameLayer.css';
   
   let {
@@ -32,13 +33,12 @@
     style:z-index={LayerZIndex.PREV_FRAME}
   >
     {#each frame.images as img, i (i)}
-      <img
-        src={img.url}
+      <FrameImage
+        pageIndex={img.physicalIndex}
+        url={img.url}
         alt="Previous {i}"
-        class="frame-image"
-        style:transform={getImageTransform(img)}
-        style:clip-path={getClipPath(img.splitHalf)}
-        draggable="false"
+        transform={getImageTransform(img)}
+        clipPath={getClipPath(img.splitHalf)}
       />
     {/each}
   </div>

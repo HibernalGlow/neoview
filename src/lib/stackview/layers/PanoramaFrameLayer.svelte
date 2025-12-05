@@ -1,10 +1,13 @@
 <!--
   PanoramaFrameLayer - 全景帧层
   显示多个帧单元，支持滚动
+  支持超分图无缝替换
 -->
 <script lang="ts">
   import { LayerZIndex } from '../types/layer';
   import type { PanoramaUnit } from '../stores/panoramaStore.svelte';
+  import FrameImage from '../components/FrameImage.svelte';
+  import '../styles/frameLayer.css';
   
   let {
     units = [],
@@ -106,12 +109,12 @@
     {#each units as unit (unit.id)}
       <div class="panorama-unit" data-unit-id={unit.id}>
         {#each unit.images as img, i (img.pageIndex)}
-          <img
-            src={img.url}
+          <FrameImage
+            pageIndex={img.pageIndex}
+            url={img.url}
             alt="Page {img.pageIndex + 1}"
             class="panorama-image"
             style={imageStyle}
-            draggable="false"
           />
         {/each}
       </div>

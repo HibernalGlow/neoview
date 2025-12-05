@@ -7,6 +7,7 @@
 	import { onMount } from 'svelte';
 	import { fetchThemeFromURL } from '$lib/utils/themeManager';
 	import { settingsManager } from '$lib/settings/settingsManager';
+	import { emit } from '@tauri-apps/api/event';
 
 	type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -164,16 +165,17 @@
 		}
 
 		try {
+			const runtimeThemePayload = {
+				mode,
+				themeName: theme.name,
+				themes: theme.colors
+			};
 			localStorage.setItem('theme-mode', mode);
 			localStorage.setItem('theme-name', theme.name);
-			localStorage.setItem(
-				'runtime-theme',
-				JSON.stringify({
-					mode,
-					themeName: theme.name,
-					themes: theme.colors
-				})
-			);
+			localStorage.setItem('runtime-theme', JSON.stringify(runtimeThemePayload));
+			
+			// 通过 Tauri 事件广播主题变更到所有窗口
+			emit('theme-changed', runtimeThemePayload).catch(() => {});
 		} catch {}
 	}
 

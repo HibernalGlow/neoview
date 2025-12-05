@@ -36,6 +36,7 @@
 		layoutSwitchMode,
 		toggleLayoutSwitchMode
 	} from '$lib/stores';
+	import { bookContextManager } from '$lib/stores/bookContext.svelte';
 	import { readable } from 'svelte/store';
 	import { onMount } from 'svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
@@ -127,6 +128,16 @@ let currentSortModeLabel = $derived(
 	let settings = $state(settingsManager.getSettings());
 	let hoverScrollEnabled = $derived(settings.image.hoverScrollEnabled ?? true);
 	let readingDirection = $derived(settings.book.readingDirection);
+	
+	// 实际的双页模式状态（包括全景模式下的情况）
+	let isDoublePage = $derived.by(() => {
+		const viewMode = $viewerState.viewMode;
+		if (viewMode === 'panorama') {
+			// 全景模式下从 bookContextManager 获取实际 pageMode
+			return bookContextManager.current?.pageMode === 'double';
+		}
+		return viewMode === 'double';
+	});
 	let hoverAreas = $derived(settings.panels?.hoverAreas);
 	let autoHideTiming = $derived(settings.panels?.autoHideTiming ?? { showDelaySec: 0, hideDelaySec: 0 });
 	let defaultZoomMode: ZoomMode = $derived(settings.view.defaultZoomMode);
@@ -1195,7 +1206,7 @@ async function handleSortModeChange(mode: PageSortMode) {
 						<Tooltip.Root>
 							<Tooltip.Trigger>
 								<Button
-									variant={$viewerState.viewMode === 'double' ? 'default' : 'ghost'}
+									variant={isDoublePage ? 'default' : 'ghost'}
 									size="icon"
 									class={`h-8 w-8 rounded-full ${
 										$viewerState.lockedViewMode === 'double' ||
@@ -1204,14 +1215,14 @@ async function handleSortModeChange(mode: PageSortMode) {
 											: ''
 									}`}
 									onclick={() =>
-										setViewMode($viewerState.viewMode === 'double' ? 'single' : 'double')}
+										setViewMode(isDoublePage ? 'single' : 'double')}
 									oncontextmenu={(event) => {
 										event.preventDefault();
-										const mode = $viewerState.viewMode === 'double' ? 'double' : 'single';
+										const mode = isDoublePage ? 'double' : 'single';
 										toggleViewModeLock(mode);
 									}}
 								>
-									{#if $viewerState.viewMode === 'double'}
+									{#if isDoublePage}
 										<Columns2 class="h-4 w-4" />
 									{:else}
 										<RectangleVertical class="h-4 w-4" />
@@ -1220,7 +1231,7 @@ async function handleSortModeChange(mode: PageSortMode) {
 							</Tooltip.Trigger>
 							<Tooltip.Content>
 								<p>
-									{$viewerState.viewMode === 'double'
+									{isDoublePage
 										? $viewerState.lockedViewMode === 'double'
 											? '双页模式（已锁定）'
 											: '双页模式（点击切换为单页）'

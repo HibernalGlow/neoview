@@ -5,8 +5,18 @@
 	 */
 	import { settingsOverlayOpen, closeSettingsOverlay } from '$lib/stores/settingsOverlay.svelte';
 	import SettingsContent from '$lib/components/SettingsContent.svelte';
+	import { settingsManager } from '$lib/settings/settingsManager';
 	import { X } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
+
+	// 共用顶栏的模糊和透明度设置
+	let settings = $state(settingsManager.getSettings());
+	let topToolbarOpacity = $derived(settings.panels?.topToolbarOpacity ?? 85);
+	let topToolbarBlur = $derived(settings.panels?.topToolbarBlur ?? 12);
+	
+	settingsManager.addListener((newSettings) => {
+		settings = newSettings;
+	});
 
 	function handleBackdropClick(e: MouseEvent) {
 		if (e.target === e.currentTarget) {
@@ -32,10 +42,16 @@
 		role="dialog"
 		aria-modal="true"
 	>
-		<!-- 设置窗口（居中 80%） -->
-		<div class="relative flex h-[80vh] w-[80vw] max-w-5xl flex-col overflow-hidden rounded-xl border bg-background text-foreground shadow-2xl">
-			<!-- 标题栏 -->
-			<div class="flex h-10 shrink-0 items-center justify-between border-b bg-muted/50 px-4">
+		<!-- 设置窗口（居中 80%，半透明背景以显示模糊效果） -->
+		<div 
+			class="relative flex h-[80vh] w-[80vw] max-w-5xl flex-col overflow-hidden rounded-xl border text-foreground shadow-2xl"
+			style="background-color: color-mix(in oklch, var(--background) {topToolbarOpacity}%, transparent); backdrop-filter: blur({topToolbarBlur}px);"
+		>
+			<!-- 标题栏（与顶栏风格一致） -->
+			<div 
+				class="flex h-10 shrink-0 items-center justify-between border-b px-4"
+				style="background-color: color-mix(in oklch, var(--sidebar) {topToolbarOpacity}%, transparent); color: var(--sidebar-foreground);"
+			>
 				<span class="text-sm font-medium">设置</span>
 				<Button
 					variant="ghost"

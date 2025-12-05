@@ -650,7 +650,7 @@
 	>
 		<div
 			class="relative border-t shadow-lg"
-			style="height: {$bottomThumbnailBarHeight}px; background-color: color-mix(in oklch, var(--sidebar) {bottomBarOpacity}%, transparent); backdrop-filter: blur({bottomBarBlur}px);"
+			style="height: {$bottomThumbnailBarHeight}px; background-color: color-mix(in oklch, var(--sidebar) {bottomBarOpacity}%, transparent); color: var(--sidebar-foreground); backdrop-filter: blur({bottomBarBlur}px);"
 		>
 			<!-- 拖拽手柄 -->
 

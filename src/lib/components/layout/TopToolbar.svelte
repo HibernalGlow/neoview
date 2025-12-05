@@ -663,7 +663,7 @@ async function handleSortModeChange(mode: PageSortMode) {
 	<div
 		data-tauri-drag-region
 		class="flex h-8 select-none items-center justify-between border-b px-2"
-		style="background-color: color-mix(in oklch, var(--sidebar) {topToolbarOpacity}%, transparent); backdrop-filter: blur({topToolbarBlur}px);"
+		style="background-color: color-mix(in oklch, var(--sidebar) {topToolbarOpacity}%, transparent); color: var(--sidebar-foreground); backdrop-filter: blur({topToolbarBlur}px);"
 	>
 		<!-- 左侧：菜单和应用名 -->
 		<div class="flex items-center gap-1">
@@ -920,10 +920,10 @@ async function handleSortModeChange(mode: PageSortMode) {
 		</div>
 	</div>
 
-	<!-- 工具栏（图片操作） - 响应式布局：宽度不够时面包屑在上，工具栏在下 -->
+	<!-- 工具栏（图片操作） - 响应式布局：宽度不够时面包屏在上，工具栏在下 -->
 	<div
 		class="border-b shadow-lg"
-		style="min-height: {$topToolbarHeight}px; background-color: color-mix(in oklch, var(--sidebar) {topToolbarOpacity}%, transparent); backdrop-filter: blur({topToolbarBlur}px);"
+		style="min-height: {$topToolbarHeight}px; background-color: color-mix(in oklch, var(--sidebar) {topToolbarOpacity}%, transparent); color: var(--sidebar-foreground); backdrop-filter: blur({topToolbarBlur}px);"
 	>
 		<div class="mx-auto w-full max-w-[1280px] flex flex-col gap-1 px-2 py-1">
 			<!-- 第一行：关闭按钮 + 面包屑导航 + 页码信息（窄屏时独占一行） -->

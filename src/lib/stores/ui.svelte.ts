@@ -79,9 +79,14 @@ const initialLockedViewMode = (() => {
 
 const initialLockedZoomMode = loadFromStorage<ZoomMode | null>('lockedZoomMode', null) as ZoomMode | null;
 
+// 阅读方向锁定
+export type ReadingDirection = 'left-to-right' | 'right-to-left';
+const initialLockedReadingDirection = loadFromStorage<ReadingDirection | null>('lockedReadingDirection', null) as ReadingDirection | null;
+
 export const viewMode = writable<ViewMode>(initialViewMode);
 export const lockedViewMode = writable<ViewMode | null>(initialLockedViewMode);
 export const lockedZoomMode = writable<ZoomMode | null>(initialLockedZoomMode);
+export const lockedReadingDirection = writable<ReadingDirection | null>(initialLockedReadingDirection);
 
 // 视图方向（横向/纵向），主要影响全景模式的填充方向
 export type ViewOrientation = 'horizontal' | 'vertical';
@@ -171,6 +176,22 @@ lockedZoomMode.subscribe((value) => {
 	if (value) {
 		applyZoomModeWithTracking(value);
 		lastZoomModeBeforeTemporaryFit = null;
+	}
+});
+
+lockedReadingDirection.subscribe((value) => {
+	saveToStorage('lockedReadingDirection', value);
+	// 当锁定时，立即应用锁定的阅读方向
+	if (value) {
+		const settings = settingsManager.getSettings();
+		if (settings.book.readingDirection !== value) {
+			settingsManager.updateSettings({
+				book: {
+					...settings.book,
+					readingDirection: value
+				}
+			});
+		}
 	}
 });
 
@@ -385,9 +406,26 @@ export function toggleTemporaryFitZoom() {
 
 /**
  * 切换阅读方向
+ * 如果锁定了某个方向，切换时会在锁定方向和另一个方向之间切换
  */
 export function toggleReadingDirection() {
 	const settings = settingsManager.getSettings();
+	let locked: ReadingDirection | null = null;
+	lockedReadingDirection.subscribe(v => locked = v)();
+	
+	if (locked) {
+		// 如果当前是锁定方向，切换到另一个；否则切换回锁定方向
+		const alt: ReadingDirection = locked === 'left-to-right' ? 'right-to-left' : 'left-to-right';
+		const newDirection = settings.book.readingDirection === locked ? alt : locked;
+		settingsManager.updateSettings({
+			book: {
+				...settings.book,
+				readingDirection: newDirection
+			}
+		});
+		return;
+	}
+	
 	const newDirection = settings.book.readingDirection === 'left-to-right' ? 'right-to-left' : 'left-to-right';
 	settingsManager.updateSettings({
 		book: {
@@ -395,6 +433,13 @@ export function toggleReadingDirection() {
 			readingDirection: newDirection
 		}
 	});
+}
+
+/**
+ * 切换阅读方向锁定
+ */
+export function toggleReadingDirectionLock(direction: ReadingDirection) {
+	lockedReadingDirection.update((current) => (current === direction ? null : direction));
 }
 
 /**

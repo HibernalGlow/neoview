@@ -24,6 +24,8 @@
 		toggleViewModeLock,
 		toggleLeftSidebar,
 		toggleReadingDirection,
+		toggleReadingDirectionLock,
+		lockedReadingDirection,
 		toggleOrientation,
 		topToolbarPinned,
 		topToolbarHeight,
@@ -1234,7 +1236,16 @@ async function handleSortModeChange(mode: PageSortMode) {
 				<!-- 阅读方向切换按钮 -->
 				<Tooltip.Root>
 					<Tooltip.Trigger>
-						<Button variant="ghost" size="icon" class="h-8 w-8" onclick={toggleReadingDirection}>
+						<Button 
+							variant="ghost" 
+							size="icon" 
+							class={`h-8 w-8 ${$lockedReadingDirection ? 'ring-2 ring-primary bg-primary/20 text-primary rounded-full' : ''}`}
+							onclick={toggleReadingDirection}
+							oncontextmenu={(event) => {
+								event.preventDefault();
+								toggleReadingDirectionLock(readingDirection);
+							}}
+						>
 							{#if readingDirection === 'left-to-right'}
 								<ArrowRight class="h-4 w-4" />
 							{:else}
@@ -1245,8 +1256,12 @@ async function handleSortModeChange(mode: PageSortMode) {
 					<Tooltip.Content>
 						<p>
 							{readingDirection === 'left-to-right'
-								? '左开模式 (点击切换到右开)'
-								: '右开模式 (点击切换到左开)'}
+								? $lockedReadingDirection === 'left-to-right'
+									? '左开模式（已锁定，右键解锁）'
+									: '左开模式（点击切换，右键锁定）'
+								: $lockedReadingDirection === 'right-to-left'
+									? '右开模式（已锁定，右键解锁）'
+									: '右开模式（点击切换，右键锁定）'}
 						</p>
 					</Tooltip.Content>
 				</Tooltip.Root>

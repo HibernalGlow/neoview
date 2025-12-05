@@ -39,7 +39,9 @@
   
   // 缓存边界计算（仅在依赖变化时重算）
   let bounds = $derived.by(() => {
+    console.log(`🖼️ [HoverScroll] bounds 计算: viewport=${viewportSize.width}x${viewportSize.height}, imageSize=${imageSize.width}x${imageSize.height}, scale=${scale}`);
     if (!viewportSize.width || !viewportSize.height || !imageSize.width || !imageSize.height) {
+      console.log(`🖼️ [HoverScroll] bounds 无效，返回默认值`);
       return { minX: 0, maxX: 100, minY: 0, maxY: 100 };
     }
     
@@ -94,8 +96,17 @@
     }
   }
   
+  // 调试计数器
+  let debugCounter = 0;
+  
   // 直接在 mousemove 中计算并调度更新
   function onMouseMove(e: MouseEvent) {
+    // 每100次打印一次状态
+    debugCounter++;
+    if (debugCounter % 100 === 1) {
+      console.log(`🖼️ [HoverScroll] onMouseMove: enabled=${enabled}, layerRef=${!!layerRef}, bounds=`, bounds);
+    }
+    
     if (!enabled || !layerRef) return;
     
     const rect = layerRef.getBoundingClientRect();
@@ -129,6 +140,11 @@
     const normalizedY = localY / rect.height;
     const x = bounds.minX + normalizedX * (bounds.maxX - bounds.minX);
     const y = bounds.minY + normalizedY * (bounds.maxY - bounds.minY);
+    
+    // 调试：打印计算结果
+    if (debugCounter % 100 === 1) {
+      console.log(`🖼️ [HoverScroll] 计算位置: x=${x.toFixed(1)}, y=${y.toFixed(1)}, bounds=`, bounds);
+    }
     
     scheduleUpdate(x, y);
   }

@@ -270,6 +270,9 @@ pub struct UpscaleService {
 
     /// 条件设置缓存
     condition_settings: Arc<RwLock<ConditionalUpscaleSettings>>,
+    
+    /// 条件列表（从前端同步）
+    conditions_list: Arc<RwLock<Vec<crate::commands::upscale_service_commands::FrontendCondition>>>,
 
     /// App Handle
     app_handle: Option<AppHandle>,
@@ -301,6 +304,7 @@ impl UpscaleService {
             failed_count: Arc::new(AtomicUsize::new(0)),
             workers: Arc::new(Mutex::new(Vec::new())),
             condition_settings: Arc::new(RwLock::new(ConditionalUpscaleSettings::default())),
+            conditions_list: Arc::new(RwLock::new(Vec::new())),
             app_handle: None,
         }
     }
@@ -347,6 +351,7 @@ impl UpscaleService {
             let failed_count = Arc::clone(&self.failed_count);
             let py_state = Arc::clone(&self.py_state);
             let condition_settings = Arc::clone(&self.condition_settings);
+            let conditions_list = Arc::clone(&self.conditions_list);
             let config = self.config.clone();
 
             let handle = thread::spawn(move || {
@@ -517,6 +522,83 @@ impl UpscaleService {
         if let Ok(mut s) = self.condition_settings.write() {
             *s = settings;
         }
+    }
+    
+    /// 同步条件配置（从前端接收完整的条件列表）
+    pub fn sync_conditions(&self, enabled: bool, conditions: Vec<crate::commands::upscale_service_commands::FrontendCondition>) {
+        // 更新启用状态
+        if let Ok(mut s) = self.condition_settings.write() {
+            s.enabled = enabled;
+        }
+        
+        // 存储条件列表（按优先级排序）
+        let mut sorted_conditions = conditions;
+        sorted_conditions.sort_by(|a, b| b.priority.cmp(&a.priority)); // 高优先级在前
+        
+        if let Ok(mut list) = self.conditions_list.write() {
+            *list = sorted_conditions;
+        }
+        
+        log_info!(
+            "✅ 条件配置已同步: enabled={}, 条件数={}",
+            enabled,
+            if let Ok(list) = self.conditions_list.read() { list.len() } else { 0 }
+        );
+    }
+    
+    /// 根据图片尺寸匹配条件，返回模型配置
+    pub fn match_condition(&self, width: u32, height: u32) -> Option<UpscaleModel> {
+        let conditions_enabled = if let Ok(s) = self.condition_settings.read() {
+            s.enabled
+        } else {
+            false
+        };
+        
+        if !conditions_enabled {
+            return None;
+        }
+        
+        let conditions = if let Ok(list) = self.conditions_list.read() {
+            list.clone()
+        } else {
+            return None;
+        };
+        
+        // 遍历条件（已按优先级排序）
+        for cond in conditions.iter() {
+            if !cond.enabled {
+                continue;
+            }
+            
+            // 检查尺寸条件
+            let match_width = cond.min_width == 0 || width >= cond.min_width;
+            let match_height = cond.min_height == 0 || height >= cond.min_height;
+            let match_max_width = cond.max_width == 0 || width <= cond.max_width;
+            let match_max_height = cond.max_height == 0 || height <= cond.max_height;
+            
+            if match_width && match_height && match_max_width && match_max_height {
+                if cond.skip {
+                    log_debug!("⏭️ 条件 '{}' 匹配，跳过超分 ({}x{})", cond.name, width, height);
+                    return None; // 返回 None 表示跳过
+                }
+                
+                log_debug!(
+                    "✅ 条件 '{}' 匹配 ({}x{}) -> 模型: {}, 缩放: {}x",
+                    cond.name, width, height, cond.model_name, cond.scale
+                );
+                
+                return Some(UpscaleModel {
+                    model_id: 0, // 稍后通过 model_name 解析
+                    model_name: cond.model_name.clone(),
+                    scale: cond.scale,
+                    tile_size: cond.tile_size,
+                    noise_level: cond.noise_level,
+                });
+            }
+        }
+        
+        log_debug!("⚠️ 无条件匹配 ({}x{}), 跳过超分", width, height);
+        None // 无条件匹配时跳过
     }
 
     /// 设置当前书籍

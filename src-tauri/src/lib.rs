@@ -284,6 +284,7 @@ pub fn run() {
             commands::upscale_service_commands::upscale_service_set_current_page,
             commands::upscale_service_commands::upscale_service_request,
             commands::upscale_service_commands::upscale_service_request_preload_range,
+            commands::upscale_service_commands::upscale_service_sync_conditions,
             commands::upscale_service_commands::upscale_service_cancel_page,
             commands::upscale_service_commands::upscale_service_cancel_book,
             commands::upscale_service_commands::upscale_service_clear_cache,

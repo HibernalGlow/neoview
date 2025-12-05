@@ -172,21 +172,83 @@ class UpscaleStore {
     
     this.unlistenReady = globalUnlistenReady;
 
-    // 同步旧系统的开关设置
+    // 同步旧系统的设置（开关 + 条件）
     try {
       const { loadUpscalePanelSettings } = await import('$lib/components/panels/UpscalePanel');
       const panelSettings = loadUpscalePanelSettings();
+      
+      // 1. 同步超分开关
       if (typeof panelSettings.autoUpscaleEnabled === 'boolean') {
         this.state.enabled = panelSettings.autoUpscaleEnabled;
         await invoke('upscale_service_set_enabled', { enabled: panelSettings.autoUpscaleEnabled });
-        console.log('✅ 同步旧系统超分开关:', panelSettings.autoUpscaleEnabled);
+        console.log('✅ 同步超分开关:', panelSettings.autoUpscaleEnabled);
       }
+      
+      // 2. 同步条件超分设置（包括条件列表）
+      // 条件列表会被序列化传给后端，后端根据条件判断使用哪个模型
+      await this.syncConditionSettings(panelSettings);
+      
     } catch (err) {
-      console.warn('⚠️ 同步旧系统超分开关失败:', err);
+      console.warn('⚠️ 同步旧系统设置失败:', err);
     }
 
     this.initialized = true;
     console.log('✅ UpscaleStore V2 initialized');
+  }
+  
+  /** 同步条件设置到后端（初始化时调用一次，条件变动时再调用） */
+  async syncConditionSettings(panelSettings?: {
+    conditionalUpscaleEnabled?: boolean;
+    conditionsList?: Array<{
+      id: string;
+      name: string;
+      enabled: boolean;
+      priority: number;
+      match: {
+        minWidth?: number;
+        minHeight?: number;
+        maxWidth?: number;
+        maxHeight?: number;
+      };
+      action: {
+        model: string;
+        scale: number;
+        tileSize: number;
+        noiseLevel: number;
+        skip?: boolean;
+      };
+    }>;
+  }) {
+    try {
+      // 如果没传 panelSettings，重新读取
+      if (!panelSettings) {
+        const { loadUpscalePanelSettings } = await import('$lib/components/panels/UpscalePanel');
+        panelSettings = loadUpscalePanelSettings();
+      }
+      
+      // 传递给后端
+      await invoke('upscale_service_sync_conditions', {
+        enabled: panelSettings.conditionalUpscaleEnabled ?? true, // 默认启用条件超分
+        conditions: (panelSettings.conditionsList ?? []).map(c => ({
+          id: c.id,
+          name: c.name,
+          enabled: c.enabled,
+          priority: c.priority,
+          minWidth: c.match.minWidth ?? 0,
+          minHeight: c.match.minHeight ?? 0,
+          maxWidth: c.match.maxWidth ?? 0,
+          maxHeight: c.match.maxHeight ?? 0,
+          modelName: c.action.model,
+          scale: c.action.scale,
+          tileSize: c.action.tileSize,
+          noiseLevel: c.action.noiseLevel,
+          skip: c.action.skip ?? false,
+        })),
+      });
+      console.log('✅ 同步条件设置完成, 条件数:', panelSettings.conditionsList?.length ?? 0);
+    } catch (err) {
+      console.warn('⚠️ 同步条件设置失败:', err);
+    }
   }
 
   /** 销毁（清理事件监听） */

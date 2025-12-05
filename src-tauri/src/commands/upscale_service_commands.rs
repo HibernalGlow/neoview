@@ -75,6 +75,25 @@ pub struct ImageInfo {
     pub hash: String,
 }
 
+/// 前端传递的条件配置
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendCondition {
+    pub id: String,
+    pub name: String,
+    pub enabled: bool,
+    pub priority: i32,
+    pub min_width: u32,
+    pub min_height: u32,
+    pub max_width: u32,
+    pub max_height: u32,
+    pub model_name: String,
+    pub scale: i32,
+    pub tile_size: i32,
+    pub noise_level: i32,
+    pub skip: bool,
+}
+
 // ============================================================================
 // Commands
 // ============================================================================
@@ -240,6 +259,22 @@ pub async fn upscale_service_request_preload_range(
         &model,
     );
 
+    Ok(())
+}
+
+/// 同步条件设置（前端初始化或条件变动时调用）
+#[tauri::command]
+pub async fn upscale_service_sync_conditions(
+    state: State<'_, UpscaleServiceState>,
+    enabled: bool,
+    conditions: Vec<FrontendCondition>,
+) -> Result<(), String> {
+    let guard = state.service.lock().await;
+    let service = guard.as_ref().ok_or("UpscaleService 未初始化")?;
+    
+    // 转换为内部格式并存储
+    service.sync_conditions(enabled, conditions);
+    
     Ok(())
 }
 

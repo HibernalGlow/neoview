@@ -3,7 +3,8 @@
 	 * NeoView - Title Bar Component
 	 * 标题栏组件
 	 */
-	import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewWindow';
+	import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+	import { openSettingsOverlay } from '$lib/stores/settingsOverlay.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { Menu, Minimize, Maximize, X, Settings, PanelRightOpen } from '@lucide/svelte';
@@ -11,36 +12,8 @@
 
 	const appWindow = getCurrentWebviewWindow();
 
-	async function openSettings() {
-		try {
-			// 检查设置窗口是否已存在
-			const existingWindow = await WebviewWindow.getByLabel('settings');
-			if (existingWindow) {
-				await existingWindow.setFocus();
-				return;
-			}
-		} catch (e) {
-			// 窗口不存在，继续创建
-		}
-
-		try {
-			// 创建新的设置窗口
-			const settingsWindow = new WebviewWindow('settings', {
-				url: '/settings.html',
-				title: '设置',
-				width: 900,
-				height: 700,
-				center: true,
-				resizable: true,
-				decorations: false
-			});
-
-			console.log('Settings window created');
-		} catch (error) {
-			console.error('Failed to create settings window:', error);
-			// 如果创建窗口失败，暂时使用 alert 提示
-			alert('设置窗口功能即将推出！当前可在主界面使用快捷键和手势功能。');
-		}
+	function openSettings() {
+		openSettingsOverlay();
 	}
 
 	async function minimizeWindow() {

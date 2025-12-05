@@ -20,6 +20,7 @@
 	// V3 缩略图系统（复刻 NeeView 架构）
 	import { initThumbnailServiceV3, cleanup as cleanupThumbnailService } from '$lib/stores/thumbnailStoreV3.svelte';
 	import Toast from '$lib/components/ui/toast.svelte';
+	import SettingsOverlay from '$lib/components/SettingsOverlay.svelte';
 	import { onMount } from 'svelte';
 
 	let loading = $state(false);
@@ -598,6 +599,7 @@ function handleGlobalMouseDown(e: MouseEvent) {
 
 <Tooltip.Provider>
 	<Toast />
+	<SettingsOverlay />
 	
 	<!-- 仅使用传统布局模式，禁用 Flow 画布以提升性能 -->
 	<MainLayout>

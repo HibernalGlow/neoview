@@ -3,7 +3,8 @@
 	 * Top Toolbar Component
 	 * 顶部工具栏 - 自动隐藏，包含标题栏、面包屑和图片操作按钮
 	 */
-	import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewWindow';
+	import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+	import { openSettingsOverlay } from '$lib/stores/settingsOverlay.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Separator from '$lib/components/ui/separator';
 	import * as Tooltip from '$lib/components/ui/tooltip';
@@ -620,28 +621,8 @@ async function handleSortModeChange(mode: PageSortMode) {
 		bookStore.closeBook();
 	}
 
-	async function openSettings() {
-		try {
-			const existingWindow = await WebviewWindow.getByLabel('settings');
-			if (existingWindow) {
-				await existingWindow.setFocus();
-				return;
-			}
-		} catch (e) {}
-
-		try {
-			const settingsWindow = new WebviewWindow('settings', {
-				url: '/settings.html',
-				title: '设置',
-				width: 900,
-				height: 700,
-				center: true,
-				resizable: true,
-				decorations: false
-			});
-		} catch (error) {
-			console.error('Failed to create settings window:', error);
-		}
+	function openSettings() {
+		openSettingsOverlay();
 	}
 
 	async function minimizeWindow() {

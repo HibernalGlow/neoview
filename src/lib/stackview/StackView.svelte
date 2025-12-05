@@ -174,16 +174,44 @@
   // 最终缩放 = modeScale * manualScale
   let effectiveScale = $derived(modeScale * manualScale);
   
-  // 缩放后的实际显示尺寸
+  // 缩放后的实际显示尺寸（保持宽高比适配到视口）
   let displaySize = $derived.by(() => {
     const dims = imageStore.state.dimensions;
-    if (!dims?.width || !dims?.height) {
+    if (!dims?.width || !dims?.height || !viewportSize.width || !viewportSize.height) {
       return { width: 0, height: 0 };
     }
-    return {
-      width: dims.width * effectiveScale,
-      height: dims.height * effectiveScale,
+    
+    const imgAspect = dims.width / dims.height;
+    const vpAspect = viewportSize.width / viewportSize.height;
+    
+    let baseWidth: number;
+    let baseHeight: number;
+    
+    // 根据宽高比计算基础显示尺寸（适配到视口）
+    if (imgAspect > vpAspect) {
+      // 图片更宽，以宽度适配
+      baseWidth = viewportSize.width;
+      baseHeight = viewportSize.width / imgAspect;
+    } else {
+      // 图片更高，以高度适配
+      baseHeight = viewportSize.height;
+      baseWidth = viewportSize.height * imgAspect;
+    }
+    
+    // 应用缩放（modeScale 决定 fit/fill，manualScale 是用户额外缩放）
+    // effectiveScale = modeScale * manualScale
+    // 但 baseWidth/Height 已经是 fit 后的尺寸，需要根据 modeScale 调整
+    const fitScale = Math.min(viewportSize.width / dims.width, viewportSize.height / dims.height);
+    const scaleFactor = effectiveScale / fitScale; // 相对于 fit 的缩放
+    
+    const result = {
+      width: baseWidth * scaleFactor,
+      height: baseHeight * scaleFactor,
     };
+    
+    console.log(`🖼️ [HoverScroll] displaySize: base=${baseWidth.toFixed(0)}x${baseHeight.toFixed(0)}, scaleFactor=${scaleFactor.toFixed(2)}, result=${result.width.toFixed(0)}x${result.height.toFixed(0)}`);
+    
+    return result;
   });
   
   // 同步缩放到老 viewer 的 store（用于顶栏显示）

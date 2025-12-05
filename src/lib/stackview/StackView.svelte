@@ -80,27 +80,17 @@
   
   // 图片尺寸：从多个来源获取，确保第一张图也有尺寸
   let hoverImageSize = $derived.by(() => {
-    // 优先从 loadedImageSize 获取（onload后的准确尺寸）
     if (loadedImageSize?.width && loadedImageSize?.height) {
-      console.log(`🖼️ [HoverScroll] hoverImageSize 从 loadedImageSize: ${loadedImageSize.width}x${loadedImageSize.height}`);
       return { width: loadedImageSize.width, height: loadedImageSize.height };
     }
-    
-    // 其次从 imageStore 获取
     const dims = imageStore.state.dimensions;
     if (dims?.width && dims?.height) {
-      console.log(`🖼️ [HoverScroll] hoverImageSize 从 imageStore: ${dims.width}x${dims.height}`);
       return { width: dims.width, height: dims.height };
     }
-    
-    // 最后从 bookStore.currentPage 获取
     const page = bookStore.currentPage;
     if (page?.width && page?.height) {
-      console.log(`🖼️ [HoverScroll] hoverImageSize 从 bookStore: ${page.width}x${page.height}`);
       return { width: page.width, height: page.height };
     }
-    
-    console.log(`🖼️ [HoverScroll] hoverImageSize 无有效来源，返回 0x0`);
     return { width: 0, height: 0 };
   });
   
@@ -119,7 +109,6 @@
         const newWidth = img.naturalWidth;
         const newHeight = img.naturalHeight;
         if (loadedImageSize?.width !== newWidth || loadedImageSize?.height !== newHeight) {
-          console.log(`🖼️ [HoverScroll] effect.pre 主动获取尺寸: ${newWidth}x${newHeight}`);
           loadedImageSize = { width: newWidth, height: newHeight };
         }
       }
@@ -181,15 +170,10 @@
       return { width: 0, height: 0 };
     }
     
-    // 直接用原始尺寸 * effectiveScale
-    const result = {
+    return {
       width: dims.width * effectiveScale,
       height: dims.height * effectiveScale,
     };
-    
-    console.log(`🖼️ [HoverScroll] displaySize: dims=${dims.width}x${dims.height}, scale=${effectiveScale.toFixed(3)}, result=${result.width.toFixed(0)}x${result.height.toFixed(0)}`);
-    
-    return result;
   });
   
   // 同步缩放到老 viewer 的 store（用于顶栏显示）
@@ -367,14 +351,10 @@
   // 图片加载完成回调 - 更新尺寸并触发自动旋转重计算
   function handleImageLoad(e: Event, _index: number) {
     const img = e.target as HTMLImageElement;
-    console.log(`🖼️ [HoverScroll] handleImageLoad 触发, index=${_index}, naturalSize=${img?.naturalWidth}x${img?.naturalHeight}`);
     if (img && img.naturalWidth && img.naturalHeight) {
       const newWidth = img.naturalWidth;
       const newHeight = img.naturalHeight;
-      
-      // 只有尺寸真正变化时才更新，避免无限循环
       if (loadedImageSize?.width !== newWidth || loadedImageSize?.height !== newHeight) {
-        console.log(`🖼️ [HoverScroll] 更新 loadedImageSize: ${loadedImageSize?.width}x${loadedImageSize?.height} -> ${newWidth}x${newHeight}`);
         loadedImageSize = { width: newWidth, height: newHeight };
       }
     }
@@ -542,9 +522,8 @@
     const dims = imageStore.state.dimensions;
     const defaultZoomMode = (settings.view.defaultZoomMode as ZoomMode) ?? 'fit';
     
-    // 【修复】同步设置中的 zoomMode 到本地状态
+    // 同步设置中的 zoomMode 到本地状态
     if (currentZoomMode !== defaultZoomMode) {
-      console.log(`🖼️ [HoverScroll] 同步 zoomMode: ${currentZoomMode} -> ${defaultZoomMode}`);
       currentZoomMode = defaultZoomMode;
     }
     

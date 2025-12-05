@@ -1,12 +1,14 @@
 /**
  * Sidebar Configuration Store
  * 侧边栏配置存储 - 管理面板的显示、顺序和位置
+ * 支持跨窗口同步（通过 Tauri 事件）
  * 
  * 添加新面板只需在 PANEL_DEFINITIONS 中添加一条记录即可
  */
 
 import { writable, derived, get } from 'svelte/store';
 import { Folder, History, Bookmark, Info, FileText, File, Sparkles, BarChart3, Settings, ListMusic, Timer } from '@lucide/svelte';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 // 面板位置
 export type PanelPosition = 'left' | 'right' | 'bottom' | 'floating';
@@ -404,11 +406,78 @@ function createSidebarConfigStore() {
 		// 获取当前状态
 		getState() {
 			return get({ subscribe });
+		},
+		
+		// 从远程配置应用（跨窗口同步用）
+		applyRemoteConfig(remoteConfig: Partial<SidebarConfigState>) {
+			update(state => {
+				const newState = { ...state };
+				
+				if (remoteConfig.panels) {
+					// 合并面板配置
+					newState.panels = state.panels.map(panel => {
+						const remotePanel = remoteConfig.panels?.find(p => p.id === panel.id);
+						if (remotePanel) {
+							return {
+								...panel,
+								visible: remotePanel.visible ?? panel.visible,
+								order: remotePanel.order ?? panel.order,
+								position: remotePanel.position ?? panel.position
+							};
+						}
+						return panel;
+					});
+				}
+				
+				if (remoteConfig.leftSidebarWidth !== undefined) {
+					newState.leftSidebarWidth = remoteConfig.leftSidebarWidth;
+				}
+				if (remoteConfig.rightSidebarWidth !== undefined) {
+					newState.rightSidebarWidth = remoteConfig.rightSidebarWidth;
+				}
+				if (remoteConfig.leftSidebarPinned !== undefined) {
+					newState.leftSidebarPinned = remoteConfig.leftSidebarPinned;
+				}
+				if (remoteConfig.rightSidebarPinned !== undefined) {
+					newState.rightSidebarPinned = remoteConfig.rightSidebarPinned;
+				}
+				if (remoteConfig.leftSidebarOpen !== undefined) {
+					newState.leftSidebarOpen = remoteConfig.leftSidebarOpen;
+				}
+				if (remoteConfig.rightSidebarOpen !== undefined) {
+					newState.rightSidebarOpen = remoteConfig.rightSidebarOpen;
+				}
+				
+				return newState;
+			});
 		}
 	};
 }
 
 export const sidebarConfigStore = createSidebarConfigStore();
+
+// 初始化跨窗口同步监听器
+let sidebarConfigUnlisten: UnlistenFn | null = null;
+
+export function initSidebarConfigListener() {
+	if (typeof window === 'undefined') return;
+	
+	listen<Partial<SidebarConfigState>>('sidebar-config-changed', (event) => {
+		if (event.payload) {
+			console.log('📐 收到侧边栏配置更新');
+			sidebarConfigStore.applyRemoteConfig(event.payload);
+		}
+	}).then(fn => {
+		sidebarConfigUnlisten = fn;
+	});
+	
+	// 页面卸载时清理
+	window.addEventListener('beforeunload', () => {
+		if (sidebarConfigUnlisten) {
+			sidebarConfigUnlisten();
+		}
+	});
+}
 
 // 当前激活的面板
 export const activePanel = writable<PanelId | null>('folder');

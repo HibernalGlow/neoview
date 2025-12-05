@@ -10,10 +10,12 @@
 		sidebarRightPanels,
 		sidebarHiddenPanels,
 		type PanelId,
-		type PanelConfig
+		type PanelConfig,
+		type SidebarConfigState
 	} from '$lib/stores/sidebarConfig.svelte';
 	import { onMount } from 'svelte';
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
+	import { emit } from '@tauri-apps/api/event';
 
 	let settings = $state<NeoViewSettings>(settingsManager.getSettings());
 	let hoverAreas = $derived(settings.panels.hoverAreas);
@@ -97,11 +99,35 @@
 	// 保存提示消息
 	let saveMessage = $state<string | null>(null);
 
-	// 应用布局（强制刷新整个应用）
-	function applyLayout() {
-		// store 已经自动保存到 localStorage
-		// 强制刷新整个页面
-		window.top?.location.reload() || window.location.reload();
+	// 应用布局（通知主窗口刷新）
+	async function applyLayout() {
+		// 获取当前配置状态
+		const state = sidebarConfigStore.getState();
+		// 通过 Tauri 事件广播到所有窗口
+		try {
+			await emit('sidebar-config-changed', {
+				panels: state.panels.map(p => ({
+					id: p.id,
+					visible: p.visible,
+					order: p.order,
+					position: p.position
+				})),
+				leftSidebarWidth: state.leftSidebarWidth,
+				rightSidebarWidth: state.rightSidebarWidth,
+				leftSidebarPinned: state.leftSidebarPinned,
+				rightSidebarPinned: state.rightSidebarPinned,
+				leftSidebarOpen: state.leftSidebarOpen,
+				rightSidebarOpen: state.rightSidebarOpen
+			});
+			saveMessage = '✓ 布局已应用';
+			setTimeout(() => {
+				saveMessage = null;
+			}, 2000);
+		} catch (err) {
+			console.error('广播侧边栏配置失败:', err);
+			// 回退：刷新当前页面
+			window.location.reload();
+		}
 	}
 
 	// 重置布局

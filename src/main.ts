@@ -4,6 +4,7 @@ import App from './App.svelte';
 import { initializeCoreServices } from '$lib/core/bootstrap';
 import { initializeRuntimeThemeListeners } from '$lib/utils/runtimeTheme';
 import { initFontManager } from '$lib/utils/fontManager';
+import { initSidebarConfigListener } from '$lib/stores/sidebarConfig.svelte';
 import { getMatches } from '@tauri-apps/plugin-cli';
 import { openFileSystemItem } from '$lib/utils/navigationUtils';
 import { getFileMetadata } from '$lib/api/filesystem';
@@ -11,6 +12,7 @@ import { getFileMetadata } from '$lib/api/filesystem';
 initializeCoreServices();
 initializeRuntimeThemeListeners();
 initFontManager();
+initSidebarConfigListener();
 
 if (typeof document !== 'undefined') {
 	document.addEventListener(

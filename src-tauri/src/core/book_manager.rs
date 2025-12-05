@@ -4,6 +4,7 @@
 use crate::core::path_utils::{build_path_key, calculate_path_hash};
 use crate::core::video_exts;
 use crate::models::{BookInfo, BookType, Page, PageSortMode};
+use natural_sort_rs::natural_cmp;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use std::cmp::Ordering;
@@ -115,7 +116,7 @@ impl BookManager {
         entries.sort_by(|a, b| {
             let a_name = a.1.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
             let b_name = b.1.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-            Self::natural_cmp(&a_name.to_lowercase(), &b_name.to_lowercase())
+            natural_cmp::<str, _>(&a_name, &b_name)
         });
 
         // 创建页面列表
@@ -191,7 +192,7 @@ impl BookManager {
             .collect();
 
         // 使用自然排序
-        page_items.sort_by(|a, b| Self::natural_cmp(&a.name.to_lowercase(), &b.name.to_lowercase()));
+        page_items.sort_by(|a, b| natural_cmp::<str, _>(&a.name, &b.name));
 
         // 创建页面列表
         for (index, item) in page_items.iter().enumerate() {
@@ -438,58 +439,9 @@ impl BookManager {
     }
 
     /// 自然排序比较（数字感知）
-    /// 例如: 001, 002, 010, 011 而不是 001, 010, 011, 002
+    /// 使用 natural-sort-rs 库
     fn cmp_insensitive(a: &str, b: &str) -> Ordering {
-        Self::natural_cmp(&a.to_lowercase(), &b.to_lowercase())
-            .then_with(|| a.cmp(b))
-    }
-    
-    /// 自然排序核心逻辑
-    fn natural_cmp(a: &str, b: &str) -> Ordering {
-        let mut a_chars = a.chars().peekable();
-        let mut b_chars = b.chars().peekable();
-        
-        loop {
-            match (a_chars.peek(), b_chars.peek()) {
-                (None, None) => return Ordering::Equal,
-                (None, Some(_)) => return Ordering::Less,
-                (Some(_), None) => return Ordering::Greater,
-                (Some(&ac), Some(&bc)) => {
-                    // 如果两边都是数字，提取完整数字进行比较
-                    if ac.is_ascii_digit() && bc.is_ascii_digit() {
-                        let a_num = Self::extract_number(&mut a_chars);
-                        let b_num = Self::extract_number(&mut b_chars);
-                        
-                        match a_num.cmp(&b_num) {
-                            Ordering::Equal => continue,
-                            other => return other,
-                        }
-                    } else {
-                        // 普通字符比较
-                        a_chars.next();
-                        b_chars.next();
-                        match ac.cmp(&bc) {
-                            Ordering::Equal => continue,
-                            other => return other,
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    /// 从字符迭代器中提取连续的数字
-    fn extract_number<I: Iterator<Item = char>>(chars: &mut std::iter::Peekable<I>) -> u64 {
-        let mut num: u64 = 0;
-        while let Some(&c) = chars.peek() {
-            if c.is_ascii_digit() {
-                num = num.saturating_mul(10).saturating_add(c.to_digit(10).unwrap() as u64);
-                chars.next();
-            } else {
-                break;
-            }
-        }
-        num
+        natural_cmp::<str, _>(a, b)
     }
 
     fn system_time_to_unix(time: SystemTime) -> Option<i64> {

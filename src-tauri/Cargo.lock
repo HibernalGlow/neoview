@@ -3088,6 +3088,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "natural-sort-rs"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a82894acea12c9929f17bc395fc17ed1d23b4caec2812a275711ad6d3adcf757"
+
+[[package]]
 name = "ndk"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3133,6 +3139,7 @@ dependencies = [
  "lru",
  "lz4_flex",
  "md5",
+ "natural-sort-rs",
  "num_cpus",
  "once_cell",
  "pyo3",

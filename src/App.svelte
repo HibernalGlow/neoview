@@ -21,7 +21,6 @@
 	import { initThumbnailServiceV3, cleanup as cleanupThumbnailService } from '$lib/stores/thumbnailStoreV3.svelte';
 	import Toast from '$lib/components/ui/toast.svelte';
 	import { onMount } from 'svelte';
-	import { initFontManager } from '$lib/utils/fontManager';
 
 	let loading = $state(false);
 
@@ -69,8 +68,7 @@ async function handleDeleteCurrentArchivePage() {
 	// TODO: 缩略图功能已移除，待重新实现
 	// 初始化缩略图管理器
 	onMount(() => {
-		// 初始化字体管理器（全局字体设置）
-		const cleanupFontManager = initFontManager();
+		// 字体管理器已在 main.ts 顶层初始化，无需在此重复初始化
 		
 		// 异步初始化缩略图
 		(async () => {
@@ -83,10 +81,6 @@ async function handleDeleteCurrentArchivePage() {
 				console.error('❌ 初始化失败:', error);
 			}
 		})();
-		
-		return () => {
-			cleanupFontManager();
-		};
 	});
 
 	async function handleOpenFolder() {

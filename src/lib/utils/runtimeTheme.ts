@@ -1,5 +1,8 @@
 // Runtime theme utilities for NeoView main and settings windows
 // 运行时主题工具：从 localStorage 读取主题并应用到当前 WebView
+// 同时处理字体设置的跨窗口同步
+
+import { applyFontSettings } from './fontManager';
 
 export type RuntimeThemeMode = 'light' | 'dark' | 'system';
 
@@ -42,7 +45,25 @@ export function loadRuntimeThemeFromStorage(): RuntimeThemePayload | null {
 }
 
 /**
+ * 从 localStorage 读取字体设置
+ */
+function loadFontSettingsFromStorage() {
+  if (typeof window === 'undefined') return null;
+  
+  try {
+    const raw = window.localStorage.getItem('neoview-settings');
+    if (!raw) return null;
+    
+    const parsed = JSON.parse(raw);
+    return parsed?.theme?.customFont ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 根据存储的主题配置应用到当前 document.documentElement
+ * 同时应用字体设置
  */
 export function applyRuntimeThemeFromStorage() {
   if (typeof document === 'undefined' || typeof window === 'undefined') return;
@@ -73,6 +94,12 @@ export function applyRuntimeThemeFromStorage() {
     if (typeof value === 'string') {
       root.style.setProperty(`--${key}`, value);
     }
+  }
+  
+  // 同时应用字体设置
+  const fontSettings = loadFontSettingsFromStorage();
+  if (fontSettings) {
+    applyFontSettings(fontSettings);
   }
 }
 
@@ -107,6 +134,19 @@ export function initializeRuntimeThemeListeners() {
       e.key === 'theme-name'
     ) {
       applyRuntimeThemeFromStorage();
+    }
+    
+    // 监听 neoview-settings 变化以同步字体设置
+    if (e.key === 'neoview-settings' && e.newValue) {
+      try {
+        const parsed = JSON.parse(e.newValue);
+        const fontSettings = parsed?.theme?.customFont;
+        if (fontSettings) {
+          applyFontSettings(fontSettings);
+        }
+      } catch {
+        // 解析失败，忽略
+      }
     }
   };
 

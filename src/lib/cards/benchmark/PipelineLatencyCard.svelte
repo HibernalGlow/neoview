@@ -78,20 +78,27 @@ function formatMs(ms: number): string {
 			<div class="space-y-1">
 				{#each records.toReversed() as record (record.timestamp)}
 					<div class="flex items-center gap-2 text-xs bg-muted/30 rounded px-2 py-1">
-						<span class="text-muted-foreground w-8">P{record.pageIndex}</span>
-						<span class="font-mono flex-1">
-							<span class:text-green-500={record.backendLoadMs < 50} 
-								  class:text-yellow-500={record.backendLoadMs >= 50 && record.backendLoadMs < 200}
-								  class:text-red-500={record.backendLoadMs >= 200}>
-								{formatMs(record.backendLoadMs)}
+						<span class="text-muted-foreground w-6">P{record.pageIndex}</span>
+						<span class="font-mono flex-1 text-[11px]">
+							<!-- IPC 时间 -->
+							<span class:text-green-500={record.ipcTransferMs < 50} 
+								  class:text-yellow-500={record.ipcTransferMs >= 50 && record.ipcTransferMs < 200}
+								  class:text-red-500={record.ipcTransferMs >= 200}
+								  title="IPC传输">
+								{formatMs(record.ipcTransferMs)}
 							</span>
-							<span class="text-muted-foreground mx-1">/</span>
-							<span>{formatMs(record.totalMs)}</span>
+							<span class="text-muted-foreground mx-0.5">+</span>
+							<!-- Blob 创建时间 -->
+							<span class:text-green-500={record.blobCreateMs < 5} 
+								  class:text-yellow-500={record.blobCreateMs >= 5}
+								  title="Blob创建">
+								{formatMs(record.blobCreateMs)}
+							</span>
+							<span class="text-muted-foreground mx-0.5">=</span>
+							<!-- 总时间 -->
+							<span title="总耗时">{formatMs(record.totalMs)}</span>
 						</span>
-						<span class="text-muted-foreground">{formatSize(record.dataSize)}</span>
-						{#if record.cacheHit}
-							<span class="text-green-500 text-[10px]">HIT</span>
-						{/if}
+						<span class="text-muted-foreground text-[10px]">{formatSize(record.dataSize)}</span>
 					</div>
 				{/each}
 			</div>

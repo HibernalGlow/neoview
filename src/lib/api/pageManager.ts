@@ -132,6 +132,20 @@ export async function getPage(index: number): Promise<Blob> {
 }
 
 /**
+ * 跳转到指定页面（返回原始 ArrayBuffer，用于延迟追踪）
+ */
+export async function gotoPageRaw(index: number): Promise<ArrayBuffer> {
+	return invoke<ArrayBuffer>('pm_goto_page', { index });
+}
+
+/**
+ * 获取页面数据（返回原始 ArrayBuffer，用于延迟追踪）
+ */
+export async function getPageRaw(index: number): Promise<ArrayBuffer> {
+	return invoke<ArrayBuffer>('pm_get_page', { index });
+}
+
+/**
  * 获取页面信息（元数据）
  */
 export async function getPageInfo(index: number): Promise<PageInfo> {

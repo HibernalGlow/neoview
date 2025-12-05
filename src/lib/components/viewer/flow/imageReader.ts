@@ -305,21 +305,28 @@ export async function readPageBlobV2(
 			bookSyncMs = performance.now() - syncStart;
 		}
 		
-		// 后端加载计时
-		const loadStart = performance.now();
+		// IPC 调用计时（后端处理 + 网络传输）
+		const ipcStart = performance.now();
 		
-		// 当前页使用 gotoPage（触发预加载），预加载页使用 getPage（不触发）
-		const blob = isCurrentPage 
-			? await pm.gotoPage(pageIndex)
-			: await pm.getPage(pageIndex);
+		// 使用 Raw 版本获取 ArrayBuffer，分离 Blob 创建时间
+		const buffer = isCurrentPage 
+			? await pm.gotoPageRaw(pageIndex)
+			: await pm.getPageRaw(pageIndex);
 		
-		const backendLoadMs = performance.now() - loadStart;
+		const ipcMs = performance.now() - ipcStart;
+		
+		// Blob 创建计时
+		const blobStart = performance.now();
+		const blob = new Blob([buffer]);
+		const blobCreateMs = performance.now() - blobStart;
+		
 		const totalMs = performance.now() - startTime;
 		
 		logImageTrace(traceId, 'readPageBlobV2 complete', { 
 			size: blob.size, 
 			bookSyncMs,
-			backendLoadMs,
+			ipcMs,
+			blobCreateMs,
 			totalMs 
 		});
 		
@@ -329,12 +336,12 @@ export async function readPageBlobV2(
 			pageIndex,
 			traceId,
 			bookSyncMs,
-			backendLoadMs,
-			ipcTransferMs: 0, // 包含在 backendLoadMs 中
-			blobCreateMs: 0,
+			backendLoadMs: ipcMs,
+			ipcTransferMs: ipcMs,
+			blobCreateMs,
 			totalMs,
 			dataSize: blob.size,
-			cacheHit: false, // TODO: 从后端返回
+			cacheHit: false,
 			isCurrentPage
 		});
 		
@@ -343,7 +350,7 @@ export async function readPageBlobV2(
 			const latencyTrace: LatencyTrace = {
 				dataSource: 'blob',
 				renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
-				loadMs: backendLoadMs,
+				loadMs: ipcMs,
 				totalMs,
 				cacheHit: false,
 				dataSize: blob.size,

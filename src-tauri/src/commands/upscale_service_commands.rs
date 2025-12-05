@@ -241,14 +241,14 @@ pub async fn upscale_service_request_preload_range(
         .map(|info| (info.page_index, info.image_path, info.hash))
         .collect();
 
-    // 使用请求中的模型配置，或默认值
-    let default_model = UpscaleModel::default();
+    // 使用请求中的模型配置
+    // 如果 model_name 为空，后续 process_task_v2 会通过条件匹配决定模型
     let model = UpscaleModel {
-        model_id: 0, // 稍后通过 model_name 解析
-        model_name: request.model_name.unwrap_or(default_model.model_name),
-        scale: request.scale.unwrap_or(default_model.scale),
-        tile_size: request.tile_size.unwrap_or(default_model.tile_size),
-        noise_level: request.noise_level.unwrap_or(default_model.noise_level),
+        model_id: 0,
+        model_name: request.model_name.unwrap_or_default(), // 空字符串表示由条件匹配决定
+        scale: request.scale.unwrap_or(2),
+        tile_size: request.tile_size.unwrap_or(0),
+        noise_level: request.noise_level.unwrap_or(0),
     };
 
     service.request_preload_range(

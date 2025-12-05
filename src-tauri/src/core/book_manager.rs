@@ -312,7 +312,7 @@ impl BookManager {
             let page = Page::new(index, path_str.to_string(), name.clone(), 0)
                 .with_stable_hash(stable_hash)
                 .with_inner_path(Some(inner_path))
-                .with_entry_index(Some(index as i32));
+                .with_entry_index(index);
             book.pages.push(page);
         }
         

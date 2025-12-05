@@ -4,13 +4,14 @@
   使用 imageStore 管理图片加载，复用现有手势和缩放
 -->
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import {
     BackgroundLayer,
     CurrentFrameLayer,
     InfoLayer,
     GestureLayer,
     HoverLayer,
+    UpscaleLayer,
   } from './layers';
   import StackViewer from '$lib/viewer/StackViewer.svelte';
   import PanoramaFrameLayer from './layers/PanoramaFrameLayer.svelte';
@@ -580,11 +581,17 @@
     };
   });
   
+  onMount(async () => {
+    // 初始化超分服务
+    await upscaleStore.init();
+  });
+  
   onDestroy(() => {
     imageStore.reset();
     panoramaStore.reset();
     zoomModeManager.reset();
     cursorAutoHide?.destroy();
+    upscaleStore.destroy();
   });
   
   let isRTL = $derived(settings.book.readingDirection === 'right-to-left');
@@ -678,6 +685,13 @@
     showPageInfo={$viewerPageInfoVisible && showPageInfo}
     showProgress={showProgress}
     showLoading={showLoading}
+  />
+  
+  <!-- 超分状态指示器 -->
+  <UpscaleLayer 
+    pageIndex={bookStore.currentPageIndex}
+    enabled={upscaleStore.enabled}
+    showIndicator={true}
   />
   
   <GestureLayer 

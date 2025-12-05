@@ -18,6 +18,7 @@ import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte';
 import { pipelineLatencyStore } from '$lib/stores/pipelineLatency.svelte';
 import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
+import * as pm from '$lib/api/pageManager';
 
 // Tempfile 模式缓存（URL -> blob）
 const tempfileCache = new Map<string, { url: string; blob: Blob }>();
@@ -287,8 +288,6 @@ export async function readPageBlobV2(
 	logImageTrace(traceId, 'readPageBlobV2 start', { pageIndex, isCurrentPage });
 	
 	try {
-		const pm = await import('$lib/api/pageManager');
-		
 		// 检查 PageManager 是否已打开书籍（使用缓存避免重复 IPC）
 		const currentBook = bookStore.currentBook;
 		if (!currentBook) {

@@ -1,11 +1,13 @@
 <!--
-  PrevFrameLayer - 前帧层（预加载）
+  PrevFrameLayer - 前帧层（预加载，隐藏）
   z-index: 20
+  用于预解码，翻页时秒切
 -->
 <script lang="ts">
   import { LayerZIndex } from '../types/layer';
-  import type { Frame, FrameImage } from '../types/frame';
+  import type { Frame } from '../types/frame';
   import { getImageTransform, getClipPath } from '../utils/transform';
+  import '../styles/frameLayer.css';
   
   let {
     frame,
@@ -24,7 +26,7 @@
 
 {#if frame.images.length > 0}
   <div 
-    class="prev-frame-layer {layoutClass}"
+    class="frame-layer prev-frame-layer {layoutClass}"
     data-layer="PrevFrameLayer"
     data-layer-id="prev"
     style:z-index={LayerZIndex.PREV_FRAME}
@@ -43,39 +45,9 @@
 {/if}
 
 <style>
+  /* 前帧层特有样式（基础样式来自 frameLayer.css） */
   .prev-frame-layer {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     opacity: 0;
     pointer-events: none;
-  }
-  
-  .frame-single {
-    justify-content: center;
-  }
-  
-  .frame-double {
-    flex-direction: row;
-    gap: 4px;
-  }
-  
-  .frame-panorama {
-    flex-direction: row;
-    gap: 4px;
-  }
-  
-  .frame-image {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-    user-select: none;
-    -webkit-user-drag: none;
-  }
-  
-  .frame-double .frame-image {
-    max-width: 50%;
   }
 </style>

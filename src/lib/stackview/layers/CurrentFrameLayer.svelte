@@ -2,18 +2,17 @@
   CurrentFrameLayer - 当前帧层
   z-index: 40
   
-  支持布局:
-  - single: 单页
-  - double: 双页（水平排列）
-  - double-vertical: 双页（垂直排列）
-  - panorama: 全景（水平排列）
-  - panorama-vertical: 全景（垂直排列）
+  整合 StackViewer 优化：
+  - 支持超分图无缝替换
+  - GPU 加速
+  - 支持单页/双页/全景布局
 -->
 <script lang="ts">
   import { LayerZIndex } from '../types/layer';
   import type { Frame } from '../types/frame';
   import { getImageTransform, getClipPath } from '../utils/transform';
   import { imagePool } from '../stores/imagePool.svelte';
+  import '../styles/frameLayer.css';
   
   let {
     frame,
@@ -93,7 +92,7 @@
 
 {#if frame.images.length > 0}
   <div 
-    class="current-frame-layer {layoutClass}"
+    class="frame-layer current-frame-layer {layoutClass}"
     data-layer="CurrentFrameLayer"
     data-layer-id="current"
     style:z-index={LayerZIndex.CURRENT_FRAME}
@@ -114,7 +113,7 @@
   </div>
 {:else}
   <div 
-    class="current-frame-layer frame-empty"
+    class="frame-layer current-frame-layer frame-empty"
     data-layer="CurrentFrameLayer"
     data-layer-id="current"
     style:z-index={LayerZIndex.CURRENT_FRAME}
@@ -124,93 +123,9 @@
 {/if}
 
 <style>
+  /* 当前帧层特有样式（基础样式来自 frameLayer.css） */
   .current-frame-layer {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    opacity: 1;
     transition: opacity 0.15s ease;
-    overflow: hidden;
-    /* GPU 加速 */
-    will-change: transform;
-    transform: translateZ(0);
-    backface-visibility: hidden;
-  }
-  
-  .frame-single {
-    justify-content: center;
-  }
-  
-  /* 双页 - 始终水平排列（左右两页） */
-  .frame-double {
-    flex-direction: row;
-    gap: 0;
-  }
-  
-  .frame-double.frame-rtl {
-    flex-direction: row-reverse;
-  }
-  
-  /* 双页模式不受 orientation 影响，始终左右排列 */
-  
-  /* 全景 - 水平滚动 */
-  .frame-panorama {
-    flex-direction: row;
-    gap: 8px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    flex-wrap: nowrap;
-    padding: 4px;
-    justify-content: flex-start;
-    align-items: center;
-  }
-  
-  .frame-panorama.frame-rtl {
-    flex-direction: row-reverse;
-  }
-  
-  /* 全景 - 垂直滚动 */
-  .frame-panorama.frame-vertical {
-    flex-direction: column;
-    overflow-x: hidden;
-    overflow-y: auto;
-    justify-content: flex-start;
-    align-items: center;
-  }
-  
-  .frame-panorama.frame-vertical.frame-rtl {
-    flex-direction: column-reverse;
-  }
-  
-  .frame-empty {
-    color: var(--muted-foreground);
-  }
-  
-  .frame-image {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-    user-select: none;
-    -webkit-user-drag: none;
-  }
-  
-  /* 双页 - 每张图占50%宽度（始终左右排列） */
-  .frame-double .frame-image {
-    max-width: calc(50% - 2px);
-    max-height: 100%;
-  }
-  
-  /* 全景水平 - 图片高度100% */
-  .frame-panorama .frame-image {
-    max-width: none;
-    height: 100%;
-  }
-  
-  /* 全景垂直 - 图片宽度100% */
-  .frame-panorama.frame-vertical .frame-image {
-    max-width: 100%;
-    max-height: none;
-    width: 100%;
   }
 </style>

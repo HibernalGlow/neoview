@@ -291,6 +291,10 @@ pub fn run() {
             commands::upscale_service_commands::upscale_service_get_stats,
             commands::upscale_service_commands::upscale_service_update_conditions,
             commands::upscale_service_commands::upscale_service_stop,
+            // Startup Config commands
+            commands::startup_config_commands::get_startup_config,
+            commands::startup_config_commands::save_startup_config,
+            commands::startup_config_commands::update_startup_config_field,
             // Image Data commands
             commands::calculate_path_hash,
             commands::check_upscale_cache,

@@ -113,14 +113,26 @@ pub async fn upscale_service_init(
         return Ok(());
     }
 
-    // 获取缓存目录：优先使用传入的目录（与老系统保持一致）
+    // 获取应用数据目录
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("获取应用数据目录失败: {}", e))?;
+
+    // 加载启动配置
+    let config_path = crate::core::startup_config::get_config_path(&app_data_dir);
+    let startup_config = crate::core::startup_config::StartupConfig::load(&config_path);
+
+    // 获取缓存目录：优先级：传入参数 > 启动配置 > 默认目录
     let cache_dir = if let Some(dir) = cache_dir {
+        // 前端传入的目录
         PathBuf::from(dir).join("pyo3-upscale")
+    } else if let Some(dir) = startup_config.get_upscale_cache_dir() {
+        // 启动配置中的目录
+        dir
     } else {
-        app.path()
-            .app_data_dir()
-            .map_err(|e| format!("获取应用数据目录失败: {}", e))?
-            .join("upscale_cache")
+        // 默认目录
+        app_data_dir.join("upscale_cache")
     };
     
     log::info!("📁 超分缓存目录: {}", cache_dir.display());

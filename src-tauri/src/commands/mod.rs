@@ -11,6 +11,7 @@ pub mod generic_upscale_commands;
 pub mod image_commands;
 pub mod image_data_commands;
 pub mod pyo3_upscale_commands;
+pub mod startup_config_commands;
 pub mod task_queue_commands;
 pub mod thumbnail_commands;
 pub mod thumbnail_v3_commands;

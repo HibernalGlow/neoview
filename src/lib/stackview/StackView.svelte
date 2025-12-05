@@ -211,12 +211,15 @@
     const mode = $legacyViewMode as 'single' | 'double' | 'panorama';
     const orient = $legacyOrientation as 'horizontal' | 'vertical';
     
+    console.log(`🔄 StackView: viewMode=${mode}, wasInPanorama=${wasInPanorama}, lastNonPanoramaPageMode=${lastNonPanoramaPageMode}`);
+    
     // 根据旧模式设置 BookContext
     if (mode === 'panorama') {
       ctx.setPanoramaEnabled(true);
       // 进入全景模式时，使用之前的 pageMode 或从设置获取
       if (!wasInPanorama) {
         // 第一次进入全景，使用之前保存的 pageMode
+        console.log(`🔄 StackView: 进入全景，设置 pageMode=${lastNonPanoramaPageMode}`);
         ctx.setPageMode(lastNonPanoramaPageMode);
         wasInPanorama = true;
       }
@@ -226,12 +229,17 @@
       ctx.setPageMode(mode);
       lastNonPanoramaPageMode = mode;
       wasInPanorama = false;
+      console.log(`🔄 StackView: 非全景模式，设置 pageMode=${mode}`);
     }
     ctx.setOrientation(orient);
   });
   
   // 从 BookContext 获取视图状态
-  let pageMode = $derived(bookContext?.pageMode ?? 'single');
+  let pageMode = $derived.by(() => {
+    const mode = bookContext?.pageMode ?? 'single';
+    console.log(`📖 StackView: 派生 pageMode=${mode}, isPanorama=${bookContext?.panoramaEnabled}`);
+    return mode;
+  });
   let isPanorama = $derived(bookContext?.panoramaEnabled ?? false);
   let orientation = $derived(bookContext?.orientation ?? 'horizontal');
   
@@ -376,6 +384,7 @@
   let pageStep = $derived(pageMode === 'double' ? 2 : 1);
   
   function handlePrevPage() {
+    console.log(`⬅️ handlePrevPage: pageMode=${pageMode}, pageStep=${pageStep}, currentIndex=${bookStore.currentPageIndex}`);
     viewPositionX = 50; viewPositionY = 50;
     
     // 处理横向分割模式
@@ -390,10 +399,12 @@
     
     // 直接使用 pageStep 翻页
     const targetIndex = Math.max(0, bookStore.currentPageIndex - pageStep);
+    console.log(`⬅️ handlePrevPage: targetIndex=${targetIndex}`);
     bookStore.navigateToPage(targetIndex);
   }
   
   function handleNextPage() {
+    console.log(`➡️ handleNextPage: pageMode=${pageMode}, pageStep=${pageStep}, currentIndex=${bookStore.currentPageIndex}`);
     viewPositionX = 50; viewPositionY = 50;
     
     // 处理横向分割模式
@@ -412,6 +423,7 @@
     
     // 直接使用 pageStep 翻页
     const targetIndex = Math.min(bookStore.totalPages - 1, bookStore.currentPageIndex + pageStep);
+    console.log(`➡️ handleNextPage: targetIndex=${targetIndex}`);
     bookStore.navigateToPage(targetIndex);
   }
   

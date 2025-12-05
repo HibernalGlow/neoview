@@ -6,6 +6,7 @@
 import { writable } from 'svelte/store';
 import { appState, type AppStateSnapshot } from '$lib/core/state/appState';
 import { bookStore } from './book.svelte';
+import { bookContextManager } from './bookContext.svelte';
 import { settingsManager, type ZoomMode } from '$lib/settings/settingsManager';
 import { windowManager } from '$lib/core/windows/windowManager';
 import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
@@ -448,10 +449,10 @@ export function toggleReadingDirectionLock(direction: ReadingDirection) {
 function getPageStep(): number {
 	const snapshot = appState.getSnapshot();
 	const viewMode = snapshot.viewer.viewMode;
-	// 全景模式下检查设置中是否启用双页
+	// 全景模式下从 bookContextManager 获取实际的 pageMode
 	if (viewMode === 'panorama') {
-		const settings = settingsManager.getSettings();
-		return settings.book.doublePageView ? 2 : 1;
+		const ctx = bookContextManager.current;
+		return ctx?.pageMode === 'double' ? 2 : 1;
 	}
 	return viewMode === 'double' ? 2 : 1;
 }

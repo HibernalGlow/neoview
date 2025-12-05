@@ -97,18 +97,8 @@ pub async fn pm_get_page_info(
 ) -> Result<crate::core::page_manager::PageInfo, String> {
     let manager = state.manager.lock().await;
 
-    let book = manager
-        .current_book_info()
-        .ok_or("没有打开的书籍")?;
-
-    // 需要从 PageContentManager 获取页面信息
-    // 这里简化处理，返回基本信息
-    Ok(crate::core::page_manager::PageInfo {
-        index,
-        inner_path: format!("page_{}", index),
-        name: format!("Page {}", index + 1),
-        size: None,
-    })
+    // 从 PageContentManager 获取页面信息
+    manager.get_page_info(index).ok_or_else(|| format!("页面 {} 不存在", index))
 }
 
 // ===== 状态查询命令 =====

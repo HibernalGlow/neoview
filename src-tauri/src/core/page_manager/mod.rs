@@ -105,16 +105,24 @@ impl PageContentManager {
             self.memory_pool.lock().await.clear_book(&old_book.path);
         }
 
-        // 判断书籍类型
+        // 判断书籍类型并创建 BookContext
         let path_obj = Path::new(path);
         let book = if path_obj.is_dir() {
             // 文件夹
             let images = self.scan_directory(path)?;
             BookContext::from_directory(path, images)
-        } else {
+        } else if Self::is_archive_file(path) {
             // 压缩包
             let images = self.scan_archive(path)?;
             BookContext::from_archive(path, images)
+        } else if Self::is_image_file(path) {
+            // 单个图片文件
+            BookContext::from_single_image(path)
+        } else if Self::is_video_file(path) {
+            // 单个视频文件
+            BookContext::from_single_video(path)
+        } else {
+            return Err(format!("不支持的文件类型: {}", path));
         };
 
         log::info!(
@@ -127,6 +135,36 @@ impl PageContentManager {
         self.current_book = Some(book);
 
         Ok(info)
+    }
+
+    /// 检查是否为压缩包文件
+    fn is_archive_file(path: &str) -> bool {
+        let ext = Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        matches!(ext.as_str(), "zip" | "rar" | "7z" | "cbz" | "cbr")
+    }
+
+    /// 检查是否为图片文件
+    fn is_image_file(path: &str) -> bool {
+        let ext = Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "gif" | "webp" | "avif" | "jxl" | "bmp")
+    }
+
+    /// 检查是否为视频文件
+    fn is_video_file(path: &str) -> bool {
+        let ext = Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        matches!(ext.as_str(), "mp4" | "mkv" | "webm" | "avi" | "mov" | "wmv")
     }
 
     /// 扫描压缩包
@@ -287,14 +325,47 @@ impl PageContentManager {
                 let mime_type = Self::detect_mime_type(&page_info.inner_path);
                 Ok((data, mime_type))
             }
-            BookType::Directory => {
+            BookType::Directory | BookType::SingleImage => {
+                // 文件夹内的图片或单个图片文件
                 let data = std::fs::read(&page_info.inner_path)
                     .map_err(|e| format!("读取文件失败: {}", e))?;
 
                 let mime_type = Self::detect_mime_type(&page_info.inner_path);
                 Ok((data, mime_type))
             }
+            BookType::SingleVideo => {
+                // 单个视频文件 - 返回文件数据（前端需要特殊处理）
+                let data = std::fs::read(&page_info.inner_path)
+                    .map_err(|e| format!("读取视频失败: {}", e))?;
+
+                let mime_type = Self::detect_video_mime(&page_info.inner_path);
+                Ok((data, mime_type))
+            }
+            BookType::Playlist => {
+                // 播放列表暂不支持
+                Err("播放列表暂不支持".to_string())
+            }
         }
+    }
+
+    /// 检测视频 MIME 类型
+    fn detect_video_mime(path: &str) -> String {
+        let ext = Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+
+        match ext.as_str() {
+            "mp4" => "video/mp4",
+            "webm" => "video/webm",
+            "mkv" => "video/x-matroska",
+            "avi" => "video/x-msvideo",
+            "mov" => "video/quicktime",
+            "wmv" => "video/x-ms-wmv",
+            _ => "video/mp4",
+        }
+        .to_string()
     }
 
     /// 提交预加载任务
@@ -462,6 +533,13 @@ impl PageContentManager {
     /// 获取当前书籍信息
     pub fn current_book_info(&self) -> Option<BookInfo> {
         self.current_book.as_ref().map(BookInfo::from)
+    }
+
+    /// 获取页面信息
+    pub fn get_page_info(&self, index: usize) -> Option<PageInfo> {
+        self.current_book
+            .as_ref()
+            .and_then(|book| book.get_page(index).cloned())
     }
 
     /// 清除所有缓存

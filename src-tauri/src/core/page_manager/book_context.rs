@@ -4,6 +4,49 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+/// 页面内容类型（参考 NeeView PageContent）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PageContentType {
+    /// 普通图片
+    Image,
+    /// 视频
+    Video,
+    /// 动图 (GIF/APNG/WebP动画)
+    Animated,
+    /// 嵌套压缩包
+    Archive,
+    /// 未知类型
+    Unknown,
+}
+
+impl PageContentType {
+    /// 从文件扩展名推断内容类型
+    pub fn from_extension(ext: &str) -> Self {
+        let ext = ext.to_lowercase();
+        match ext.as_str() {
+            // 视频
+            "mp4" | "mkv" | "webm" | "avi" | "mov" | "wmv" | "flv" => Self::Video,
+            // 动图
+            "gif" => Self::Animated, // GIF 可能是动图
+            // 压缩包
+            "zip" | "rar" | "7z" | "cbz" | "cbr" => Self::Archive,
+            // 普通图片
+            "jpg" | "jpeg" | "png" | "webp" | "avif" | "jxl" | "bmp" | "tiff" => Self::Image,
+            _ => Self::Unknown,
+        }
+    }
+
+    /// 从文件路径推断内容类型
+    pub fn from_path(path: &str) -> Self {
+        Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(Self::from_extension)
+            .unwrap_or(Self::Unknown)
+    }
+}
+
 /// 页面信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,9 +59,11 @@ pub struct PageInfo {
     pub name: String,
     /// 文件大小（如果已知）
     pub size: Option<u64>,
+    /// 内容类型
+    pub content_type: PageContentType,
 }
 
-/// 书籍类型
+/// 书籍类型（参考 NeeView）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum BookType {
@@ -26,6 +71,12 @@ pub enum BookType {
     Archive,
     /// 文件夹
     Directory,
+    /// 单个图片文件
+    SingleImage,
+    /// 单个视频文件
+    SingleVideo,
+    /// 播放列表
+    Playlist,
 }
 
 /// 书籍上下文
@@ -61,6 +112,7 @@ impl BookContext {
 
                 PageInfo {
                     index,
+                    content_type: PageContentType::from_path(&inner_path),
                     inner_path,
                     name,
                     size: None,
@@ -94,6 +146,7 @@ impl BookContext {
 
                 PageInfo {
                     index,
+                    content_type: PageContentType::from_path(&full_path),
                     inner_path: full_path,
                     name,
                     size: None,
@@ -108,6 +161,58 @@ impl BookContext {
             book_type: BookType::Directory,
             pages,
             total_pages,
+            current_index: 0,
+            read_direction: 1,
+        }
+    }
+
+    /// 从单个图片文件创建（只有一页）
+    pub fn from_single_image(path: &str) -> Self {
+        let name = Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(path)
+            .to_string();
+
+        let page = PageInfo {
+            index: 0,
+            content_type: PageContentType::Image,
+            inner_path: path.to_string(),
+            name,
+            size: None,
+        };
+
+        Self {
+            path: path.to_string(),
+            book_type: BookType::SingleImage,
+            pages: vec![page],
+            total_pages: 1,
+            current_index: 0,
+            read_direction: 1,
+        }
+    }
+
+    /// 从单个视频文件创建（只有一页）
+    pub fn from_single_video(path: &str) -> Self {
+        let name = Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(path)
+            .to_string();
+
+        let page = PageInfo {
+            index: 0,
+            content_type: PageContentType::Video,
+            inner_path: path.to_string(),
+            name,
+            size: None,
+        };
+
+        Self {
+            path: path.to_string(),
+            book_type: BookType::SingleVideo,
+            pages: vec![page],
+            total_pages: 1,
             current_index: 0,
             read_direction: 1,
         }

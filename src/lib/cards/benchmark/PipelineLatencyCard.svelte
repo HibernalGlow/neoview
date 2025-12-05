@@ -108,7 +108,9 @@ function formatMs(ms: number): string {
 						</span>
 						<span class="text-muted-foreground text-[10px]">{formatSize(record.dataSize)}</span>
 						{#if record.cacheHit}
-							<span class="text-green-500 text-[10px] font-medium">HIT</span>
+							<span class="text-green-500 text-[10px] font-medium">缓存</span>
+						{:else if record.source === 'preload'}
+							<span class="text-blue-500 text-[10px]">预</span>
 						{/if}
 					</div>
 				{/each}

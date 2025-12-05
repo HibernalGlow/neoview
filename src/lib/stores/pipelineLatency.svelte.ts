@@ -18,8 +18,9 @@ export interface PipelineLatencyRecord {
 	
 	// 元数据
 	dataSize: number;
-	cacheHit: boolean;
-	isCurrentPage: boolean;
+	cacheHit: boolean;       // 前端缓存命中
+	isCurrentPage: boolean;  // 是否当前页（vs 预加载）
+	source?: string;         // 调用来源：'current' | 'preload' | 'second' | 'cache'
 }
 
 // 创建响应式 store

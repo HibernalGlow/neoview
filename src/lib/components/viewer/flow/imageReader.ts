@@ -341,7 +341,8 @@ export async function readPageBlobV2(
 			totalMs,
 			dataSize: blob.size,
 			cacheHit: false,
-			isCurrentPage
+			isCurrentPage,
+			source: isCurrentPage ? 'current' : 'preload'
 		});
 		
 		// 异步触发后端预加载（不阻塞当前请求）

@@ -159,7 +159,8 @@ export class ImageLoaderCore {
 							totalMs: 0,
 							dataSize: item.blob.size,
 							cacheHit: true,  // 前端缓存命中
-							isCurrentPage: true
+							isCurrentPage: true,
+							source: 'cache'
 						});
 					}
 					

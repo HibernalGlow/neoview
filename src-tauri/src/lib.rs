@@ -15,10 +15,13 @@ mod models;
 
 use commands::fs_commands::{CacheIndexState, DirectoryCacheState, FsState};
 use commands::generic_upscale_commands::GenericUpscalerState;
+use commands::page_commands::PageManagerState;
 use commands::pyo3_upscale_commands::PyO3UpscalerState;
 use commands::task_queue_commands::BackgroundSchedulerState;
 use commands::upscale_commands::UpscaleManagerState;
 use commands::upscale_settings_commands::UpscaleSettingsState;
+use core::job_engine::{JobEngine, JobEngineConfig};
+use core::page_manager::PageContentManager;
 use core::background_scheduler::BackgroundTaskScheduler;
 use core::cache_index_db::CacheIndexDb;
 use core::upscale_scheduler::{UpscaleScheduler, UpscaleSchedulerState};
@@ -185,6 +188,29 @@ pub fn run() {
 
             // 初始化设置管理器
             app.manage(UpscaleSettingsState::default());
+
+            // 初始化 JobEngine 和 PageContentManager (NeeView 架构)
+            let job_engine = Arc::new(JobEngine::new(JobEngineConfig {
+                worker_count: num_cores.clamp(2, 8),
+                primary_count: 2,
+            }));
+
+            // 获取 archive_manager 的引用用于 PageContentManager
+            let archive_manager_for_pm = {
+                let fs_state = app.state::<FsState>();
+                Arc::clone(&fs_state.archive_manager)
+            };
+
+            let page_manager = PageContentManager::new(
+                Arc::clone(&job_engine),
+                archive_manager_for_pm,
+            );
+
+            app.manage(PageManagerState {
+                manager: Arc::new(tokio::sync::Mutex::new(page_manager)),
+            });
+
+            log::info!("🚀 NeoView 初始化完成 (JobEngine workers: {})", num_cores.clamp(2, 8));
 
             Ok(())
         })
@@ -414,6 +440,16 @@ pub fn run() {
             commands::benchmark_commands::load_image_wic_lz4,
             commands::benchmark_commands::load_image_wic_lz4_cached,
             commands::benchmark_commands::clear_wic_lz4_cache,
+            // Page Manager commands (NeeView 架构)
+            commands::page_commands::pm_open_book,
+            commands::page_commands::pm_close_book,
+            commands::page_commands::pm_get_book_info,
+            commands::page_commands::pm_goto_page,
+            commands::page_commands::pm_get_page,
+            commands::page_commands::pm_get_page_info,
+            commands::page_commands::pm_get_stats,
+            commands::page_commands::pm_get_memory_stats,
+            commands::page_commands::pm_clear_cache,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

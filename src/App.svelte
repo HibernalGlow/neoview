@@ -67,20 +67,28 @@ async function handleDeleteCurrentArchivePage() {
 
 	// TODO: 缩略图功能已移除，待重新实现
 	// 初始化缩略图管理器
-	onMount(() => {
-		// 字体管理器已在 main.ts 顶层初始化，无需在此重复初始化
-		
-		// 异步初始化缩略图
-		(async () => {
-			try {
-				// V3 缩略图系统初始化
-				const thumbnailPath = 'D:\\temp\\neoview';
-				await initThumbnailServiceV3(thumbnailPath, 256);
-				console.log('✅ ThumbnailServiceV3 初始化成功');
-			} catch (error) {
-				console.error('❌ 初始化失败:', error);
-			}
-		})();
+	onMount(async () => {
+		try {
+			// console.log('🔧 初始化缩略图管理器...');
+			
+			// TODO: 缩略图功能已移除，待重新实现
+			// 使用统一的缩略图路径
+			// const thumbnailPath = 'D:\\temp\\neoview';
+			
+			// 设置根目录为系统根目录，这样可以处理任何路径
+			// const rootPath = 'C:\\';
+			
+			// console.log('📁 缩略图路径:', thumbnailPath);
+			// console.log('📂 根目录路径:', rootPath);
+			// console.log('⚠️ 使用系统根目录，支持任意路径的缩略图生成');
+			
+			// V3 缩略图系统初始化
+			const thumbnailPath = 'D:\\temp\\neoview';
+			await initThumbnailServiceV3(thumbnailPath, 256);
+			console.log('✅ ThumbnailServiceV3 初始化成功');
+		} catch (error) {
+			console.error('❌ 初始化失败:', error);
+		}
 	});
 
 	async function handleOpenFolder() {

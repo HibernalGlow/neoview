@@ -7,7 +7,6 @@
 	import { onMount } from 'svelte';
 	import { fetchThemeFromURL } from '$lib/utils/themeManager';
 	import { settingsManager } from '$lib/settings/settingsManager';
-	import { applyFontSettings as applyGlobalFontSettings } from '$lib/utils/fontManager';
 
 	type ThemeMode = 'light' | 'dark' | 'system';
 

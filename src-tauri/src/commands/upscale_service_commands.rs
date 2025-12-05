@@ -140,6 +140,33 @@ pub async fn upscale_service_init(
     let config = UpscaleServiceConfig::default();
     let py_state = Arc::new(pyo3_state.inner().clone());
     let mut service = UpscaleService::new(py_state, config, cache_dir);
+    
+    // 从启动配置加载超分条件
+    if !startup_config.upscale_conditions.is_empty() {
+        let conditions: Vec<FrontendCondition> = startup_config
+            .upscale_conditions
+            .into_iter()
+            .map(|c| FrontendCondition {
+                id: c.id,
+                name: c.name,
+                enabled: c.enabled,
+                priority: c.priority,
+                min_width: c.min_width,
+                min_height: c.min_height,
+                max_width: c.max_width,
+                max_height: c.max_height,
+                model_name: c.model_name,
+                scale: c.scale,
+                tile_size: c.tile_size,
+                noise_level: c.noise_level,
+                skip: c.skip,
+            })
+            .collect();
+        
+        service.sync_conditions(startup_config.upscale_conditions_enabled, conditions);
+        log::info!("📋 从启动配置加载超分条件");
+    }
+    
     service.start(app);
 
     *guard = Some(service);

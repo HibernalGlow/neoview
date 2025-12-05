@@ -5,6 +5,25 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// 超分条件配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpscaleConditionConfig {
+    pub id: String,
+    pub name: String,
+    pub enabled: bool,
+    pub priority: i32,
+    pub min_width: u32,
+    pub min_height: u32,
+    pub max_width: u32,
+    pub max_height: u32,
+    pub model_name: String,
+    pub scale: i32,
+    pub tile_size: i32,
+    pub noise_level: i32,
+    pub skip: bool,
+}
+
 /// 启动配置
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -18,6 +37,12 @@ pub struct StartupConfig {
     /// Python 模块路径
     #[serde(default)]
     pub python_module_path: Option<String>,
+    /// 超分条件启用状态
+    #[serde(default)]
+    pub upscale_conditions_enabled: bool,
+    /// 超分条件列表
+    #[serde(default)]
+    pub upscale_conditions: Vec<UpscaleConditionConfig>,
 }
 
 impl StartupConfig {

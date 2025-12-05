@@ -2,7 +2,9 @@ use super::blob_registry::BlobRegistry;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use image::GenericImageView;
 use log::info;
+use natural_sort_rs::natural_cmp;
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::fs::{self, File};
 use std::io::{self, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
@@ -247,11 +249,11 @@ impl ArchiveManager {
             entries.len()
         );
 
-        // 排序：目录优先，然后按名称
+        // 排序：目录优先，然后按自然排序
         entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+            (true, false) => Ordering::Less,
+            (false, true) => Ordering::Greater,
+            _ => natural_cmp::<str, _>(&a.name, &b.name),
         });
 
         Ok(entries)
@@ -303,11 +305,11 @@ impl ArchiveManager {
             entries.len()
         );
         
-        // 排序：目录优先，然后按名称
+        // 排序：目录优先，然后按自然排序
         entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+            (true, false) => Ordering::Less,
+            (false, true) => Ordering::Greater,
+            _ => natural_cmp::<str, _>(&a.name, &b.name),
         });
         
         Ok(entries)
@@ -361,11 +363,11 @@ impl ArchiveManager {
             entries.len()
         );
         
-        // 排序：目录优先，然后按名称
+        // 排序：目录优先，然后按自然排序
         entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+            (true, false) => Ordering::Less,
+            (false, true) => Ordering::Greater,
+            _ => natural_cmp::<str, _>(&a.name, &b.name),
         });
         
         Ok(entries)

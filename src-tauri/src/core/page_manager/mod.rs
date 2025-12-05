@@ -24,6 +24,8 @@ use tokio::sync::Mutex;
 const PRELOAD_RANGE: usize = 5;
 /// 默认缓存大小 (MB)
 const DEFAULT_CACHE_SIZE_MB: usize = 512;
+/// 大文件阈值 (字节) - 超过此大小的文件使用 tempfile 模式
+const LARGE_FILE_THRESHOLD: usize = 800 * 1024 * 1024; // 50MB
 
 /// 页面管理器统计
 #[derive(Debug, Clone, serde::Serialize)]
@@ -41,6 +43,16 @@ pub struct PageManagerStats {
     pub cached_pages: Vec<usize>,
 }
 
+/// 加载模式
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LoadMode {
+    /// 内存模式 - 数据在内存中
+    Memory,
+    /// 临时文件模式 - 数据在临时文件中
+    Tempfile,
+}
+
 /// 页面加载结果
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,6 +65,10 @@ pub struct PageLoadResult {
     pub mime_type: String,
     /// 是否缓存命中
     pub cache_hit: bool,
+    /// 加载模式
+    pub load_mode: LoadMode,
+    /// 临时文件路径（仅 Tempfile 模式）
+    pub temp_path: Option<String>,
 }
 
 /// 页面内容管理器
@@ -228,6 +244,8 @@ impl PageContentManager {
                         size: cached.size,
                         mime_type: cached.mime_type.clone(),
                         cache_hit: true,
+                        load_mode: LoadMode::Memory,
+                        temp_path: None,
                     },
                 ));
             }
@@ -254,6 +272,8 @@ impl PageContentManager {
                 size,
                 mime_type,
                 cache_hit: false,
+                load_mode: LoadMode::Memory,
+                temp_path: None,
             },
         ))
     }
@@ -279,6 +299,8 @@ impl PageContentManager {
                         size: cached.size,
                         mime_type: cached.mime_type.clone(),
                         cache_hit: true,
+                        load_mode: LoadMode::Memory,
+                        temp_path: None,
                     },
                 ));
             }
@@ -301,6 +323,8 @@ impl PageContentManager {
                 size,
                 mime_type,
                 cache_hit: false,
+                load_mode: LoadMode::Memory,
+                temp_path: None,
             },
         ))
     }

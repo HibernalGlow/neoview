@@ -34,9 +34,14 @@
   // 获取显示 URL（优先超分图，响应式）
   let displayUrl = $derived.by(() => {
     // 依赖版本号以建立响应式关系
-    const _ = imagePool.version;
+    const version = imagePool.version;
     const upscaledUrl = imagePool.getDisplayUrl(pageIndex);
-    return upscaledUrl ?? url;
+    const result = upscaledUrl ?? url;
+    // 调试日志：仅当有超分图时打印
+    if (upscaledUrl) {
+      console.log(`🖼️ FrameImage[${pageIndex}] 使用超分图 (v${version}): ${upscaledUrl.slice(0, 60)}...`);
+    }
+    return result;
   });
 </script>
 

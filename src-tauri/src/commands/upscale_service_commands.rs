@@ -60,6 +60,11 @@ pub struct PreloadRangeRequest {
     pub center_index: usize,
     pub total_pages: usize,
     pub image_infos: Vec<ImageInfo>,
+    /// 模型配置（可选，为空时使用默认）
+    pub model_name: Option<String>,
+    pub scale: Option<i32>,
+    pub tile_size: Option<i32>,
+    pub noise_level: Option<i32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -217,7 +222,15 @@ pub async fn upscale_service_request_preload_range(
         .map(|info| (info.page_index, info.image_path, info.hash))
         .collect();
 
-    let model = UpscaleModel::default();
+    // 使用请求中的模型配置，或默认值
+    let default_model = UpscaleModel::default();
+    let model = UpscaleModel {
+        model_id: 0, // 稍后通过 model_name 解析
+        model_name: request.model_name.unwrap_or(default_model.model_name),
+        scale: request.scale.unwrap_or(default_model.scale),
+        tile_size: request.tile_size.unwrap_or(default_model.tile_size),
+        noise_level: request.noise_level.unwrap_or(default_model.noise_level),
+    };
 
     service.request_preload_range(
         &request.book_path,

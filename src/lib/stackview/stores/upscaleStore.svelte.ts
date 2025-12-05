@@ -15,6 +15,10 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { SvelteMap } from 'svelte/reactivity';
 import { imagePool } from './imagePool.svelte';
 
+// 全局标记防止 HMR 导致多次监听
+let globalListenerInitialized = false;
+let globalUnlistenReady: UnlistenFn | null = null;
+
 // ============================================================================
 // 类型定义
 // ============================================================================
@@ -150,10 +154,23 @@ class UpscaleStore {
       console.error('❌ 后端 UpscaleService 初始化失败:', err);
     }
 
-    // 监听超分结果事件
-    this.unlistenReady = await listen<UpscaleReadyPayload>('upscale-ready', (event) => {
-      this.handleUpscaleReady(event.payload);
-    });
+    // 监听超分结果事件（使用全局标记防止 HMR 重复监听）
+    if (!globalListenerInitialized) {
+      // 清理可能存在的旧监听器
+      if (globalUnlistenReady) {
+        globalUnlistenReady();
+        globalUnlistenReady = null;
+      }
+      
+      globalUnlistenReady = await listen<UpscaleReadyPayload>('upscale-ready', (event) => {
+        // 使用单例的 handleUpscaleReady
+        upscaleStore.handleUpscaleReadyPublic(event.payload);
+      });
+      globalListenerInitialized = true;
+      console.log('✅ 全局超分事件监听器已注册');
+    }
+    
+    this.unlistenReady = globalUnlistenReady;
 
     // 同步旧系统的开关设置
     try {
@@ -237,15 +254,24 @@ class UpscaleStore {
     // 构建图片信息列表（当前页 + 预加载范围）
     const preloadRange = 5;
     const imageInfos: Array<{ pageIndex: number; imagePath: string; hash: string }> = [];
+    
+    // 判断是否是压缩包（zip/cbz/rar 等）
+    const bookPath = book.path ?? '';
+    const isArchive = /\.(zip|cbz|rar|cbr|7z)$/i.test(bookPath);
 
     for (let i = Math.max(0, pageIndex - preloadRange); i <= Math.min(book.pages.length - 1, pageIndex + preloadRange); i++) {
       const page = book.pages[i];
       if (page) {
+        // 构造 imagePath：压缩包格式 "xxx.zip inner=内部路径"，普通文件直接用完整路径
+        const imagePath = isArchive 
+          ? `${bookPath} inner=${page.path}`
+          : page.path; // 如果是文件夹模式，page.path 应该是完整路径
+        
         imageInfos.push({
           pageIndex: i,
-          imagePath: page.path,
+          imagePath,
           // 使用书籍路径+页面路径作为 hash
-          hash: `${book.path}_${page.path}`,
+          hash: `${bookPath}_${page.path}`,
         });
       }
     }
@@ -345,6 +371,10 @@ class UpscaleStore {
     if (!this.state.enabled) return;
 
     try {
+      // 从旧系统获取模型配置
+      const { resolveModelSettings } = await import('$lib/components/viewer/flow/preloadRuntime');
+      const modelSettings = resolveModelSettings();
+      
       // 后端期望 request 对象，字段使用 camelCase
       await invoke('upscale_service_request_preload_range', {
         request: {
@@ -356,6 +386,11 @@ class UpscaleStore {
             imagePath: info.imagePath,
             hash: info.hash,
           })),
+          // 传递模型配置
+          modelName: modelSettings?.modelName ?? null,
+          scale: modelSettings?.scale ?? null,
+          tileSize: modelSettings?.tileSize ?? null,
+          noiseLevel: modelSettings?.noiseLevel ?? null,
         },
       });
     } catch (err) {
@@ -422,12 +457,22 @@ class UpscaleStore {
     }
   }
 
-  // === 私有方法 ===
+  // === 事件处理 ===
 
   /** 处理超分结果事件（V2：将超分图放入 imagePool） */
-  private handleUpscaleReady(payload: UpscaleReadyPayload) {
+  handleUpscaleReadyPublic(payload: UpscaleReadyPayload) {
+    console.log(`📦 收到超分事件:`, {
+      bookPath: payload.bookPath?.slice(-30),
+      currentBookPath: this.state.currentBookPath?.slice(-30),
+      pageIndex: payload.pageIndex,
+      status: payload.status,
+      cachePath: payload.cachePath?.slice(-50),
+      error: payload.error,
+    });
+
     // 检查是否是当前书籍
     if (payload.bookPath !== this.state.currentBookPath) {
+      console.log(`⚠️ 书籍路径不匹配，忽略事件`);
       return;
     }
 
@@ -441,7 +486,9 @@ class UpscaleStore {
       // 使用 convertFileSrc 将本地路径转为 URL
       const url = convertFileSrc(cachePath);
       imagePool.setUpscaled(pageIndex, url);
-      console.log(`✅ 超分图已加入 imagePool: page ${pageIndex} -> ${url.slice(0, 50)}...`);
+      console.log(`✅ 超分图已加入 imagePool: page ${pageIndex} -> ${url}`);
+    } else {
+      console.log(`⏭️ 未加入 imagePool: status=${status}, cachePath=${cachePath ? 'yes' : 'no'}`);
     }
 
     // 更新 loading 状态

@@ -345,11 +345,18 @@ class UpscaleStore {
     if (!this.state.enabled) return;
 
     try {
+      // 后端期望 request 对象，字段使用 camelCase
       await invoke('upscale_service_request_preload_range', {
-        bookPath,
-        centerIndex,
-        totalPages,
-        imageInfos,
+        request: {
+          bookPath,
+          centerIndex,
+          totalPages,
+          imageInfos: imageInfos.map(info => ({
+            pageIndex: info.pageIndex,
+            imagePath: info.imagePath,
+            hash: info.hash,
+          })),
+        },
       });
     } catch (err) {
       console.error('请求预加载范围失败:', err);

@@ -166,17 +166,29 @@ impl SrVulkanManager {
         height: i32,
         job_key: Option<&str>,
     ) -> Result<Vec<u8>, String> {
-        // Rust 端预处理：将 JXL/AVIF 转码为 JPEG(Q80)，其它格式直接透传
-        let processed_data = preprocess_image_for_sr(image_data)?;
+        // Rust 端预处理：将 JXL/AVIF 转码为 JPEG(Q85)，其它格式直接透传
+        let preprocess_result = preprocess_image_for_sr(image_data)?;
+
+        // 如果调用者传入的尺寸为 0，使用预处理时解码得到的尺寸
+        let final_width = if width <= 0 {
+            preprocess_result.width.map(|w| w as i32).unwrap_or(0)
+        } else {
+            width
+        };
+        let final_height = if height <= 0 {
+            preprocess_result.height.map(|h| h as i32).unwrap_or(0)
+        } else {
+            height
+        };
 
         let (task_id, receiver) = self.add_task(
-            &processed_data,
+            &preprocess_result.data,
             model,
             scale,
             tile_size,
             noise_level,
-            width,
-            height,
+            final_width,
+            final_height,
             job_key,
         )?;
 
@@ -350,16 +362,27 @@ impl SrVulkanManager {
     }
 }
 
-/// 预处理图片：使用 WIC 解码 AVIF/JXL 等格式，转换为 PNG 传给 PyO3
-fn preprocess_image_for_sr(image_data: &[u8]) -> Result<Vec<u8>, String> {
+/// 预处理结果：包含转码后的数据和解码得到的尺寸
+struct PreprocessResult {
+    data: Vec<u8>,
+    width: Option<u32>,
+    height: Option<u32>,
+}
+
+/// 预处理图片：使用 WIC 解码 AVIF/JXL 等格式，转换为 JPEG 传给 PyO3
+fn preprocess_image_for_sr(image_data: &[u8]) -> Result<PreprocessResult, String> {
     // 检测是否需要转码的格式
     if is_jxl_image(image_data) || is_avif_image(image_data) {
         let format_name = if is_jxl_image(image_data) { "JXL" } else { "AVIF" };
-        println!("[SrVulkanManager] Detected {} image, using WIC to transcode to PNG", format_name);
-        transcode_with_wic(image_data)
+        println!("[SrVulkanManager] Detected {} image, using WIC to transcode to JPEG", format_name);
+        transcode_with_wic_and_size(image_data)
     } else {
         // 其他格式直接透传（PNG/JPEG/WebP 等 sr_vulkan 原生支持的）
-        Ok(image_data.to_vec())
+        Ok(PreprocessResult {
+            data: image_data.to_vec(),
+            width: None,
+            height: None,
+        })
     }
 }
 
@@ -386,8 +409,8 @@ fn is_avif_image(data: &[u8]) -> bool {
     marker == b"ftypavif" || marker == b"ftypavis" || marker == b"ftypheic" || marker == b"ftypheix"
 }
 
-/// 使用 WIC 解码图片，然后编码为 JPEG（Q85）
-fn transcode_with_wic(image_data: &[u8]) -> Result<Vec<u8>, String> {
+/// 使用 WIC 解码图片，然后编码为 JPEG（Q85），同时返回尺寸
+fn transcode_with_wic_and_size(image_data: &[u8]) -> Result<PreprocessResult, String> {
     use crate::core::wic_decoder::decode_image_from_memory_with_wic;
     
     // 使用 WIC 解码（支持 AVIF/JXL，需要安装对应编解码器）
@@ -425,7 +448,11 @@ fn transcode_with_wic(image_data: &[u8]) -> Result<Vec<u8>, String> {
         output.len()
     );
     
-    Ok(output)
+    Ok(PreprocessResult {
+        data: output,
+        width: Some(width),
+        height: Some(height),
+    })
 }
 
 fn encode_dynamic_to_jpeg_q80(img: &image::DynamicImage) -> Result<Vec<u8>, String> {

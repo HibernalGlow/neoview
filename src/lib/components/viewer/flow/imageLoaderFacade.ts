@@ -46,6 +46,7 @@ export class ImageLoader {
 	private loading = false;
 	private loadingVisible = false;
 	private loadingTimeout: number | null = null;
+	private lastLoadedPageIndex = -1; // 记录最后一次 loadCurrentPage 的页码
 	
 	// 预加载相关
 	private totalPreUpscalePages = 0;
@@ -65,8 +66,10 @@ export class ImageLoader {
 			maxCacheSizeMB: settingsManager.getSettings().performance.cacheMemorySize || 500,
 			// 【优化】异步获取尺寸后回调，不阻塞图片显示
 			onDimensionsReady: (pageIndex, dimensions) => {
-				// 只处理当前页的尺寸
-				if (pageIndex === bookStore.currentPageIndex && dimensions) {
+				// 【修复】只要当前请求页是 loadCurrentPage 发起的，就更新尺寸
+				// 不再比较 pageIndex === currentPageIndex，因为异步完成时 currentPageIndex 可能已变化
+				// 改为记录最后一次 loadCurrentPage 的页码
+				if (pageIndex === this.lastLoadedPageIndex && dimensions) {
 					this.options.onImageMetadataReady?.(dimensions, undefined);
 				}
 			}
@@ -133,6 +136,9 @@ export class ImageLoader {
 		const currentPageIndex = bookStore.currentPageIndex;
 		const currentBook = bookStore.currentBook;
 		if (!currentBook) return;
+
+		// 【修复】记录当前加载的页码，用于尺寸回调
+		this.lastLoadedPageIndex = currentPageIndex;
 
 		// 异步取消上一页的超分任务（不阻塞）
 		this.upscaleHandler.cancelPreviousUpscale(currentPageIndex).catch(() => {});

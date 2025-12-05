@@ -1,9 +1,8 @@
 // Runtime theme utilities for NeoView main and settings windows
-// 运行时主题工具：从文件/localStorage 读取主题并应用到当前 WebView
+// 运行时主题工具：从 localStorage 读取主题并应用到当前 WebView
 // 支持 Tauri 事件广播实现跨窗口同步
 
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { initThemeConfigFromFile } from '$lib/config/themeConfig';
 
 export type RuntimeThemeMode = 'light' | 'dark' | 'system';
 
@@ -121,15 +120,8 @@ export function applyRuntimeThemeFromPayload(payload: RuntimeThemePayload) {
 export function initializeRuntimeThemeListeners() {
   if (typeof window === 'undefined') return;
 
-  // 首先从文件加载配置到 localStorage，然后应用
-  initThemeConfigFromFile()
-    .then(() => {
-      applyRuntimeThemeFromStorage();
-    })
-    .catch(() => {
-      // 文件加载失败，直接从 localStorage 应用
-      applyRuntimeThemeFromStorage();
-    });
+  // 初始应用一次
+  applyRuntimeThemeFromStorage();
 
   // 跟随系统暗色模式变化
   if (typeof window.matchMedia === 'function') {

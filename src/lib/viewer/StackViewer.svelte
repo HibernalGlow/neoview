@@ -90,7 +90,7 @@
   // ============================================================================
   
   /**
-   * 加载单个槽位的图片
+   * 加载单个槽位的图片（包含预解码）
    */
   async function loadSlot(slot: FrameSlot, pageIndex: number): Promise<FrameSlot> {
     if (pageIndex < 0 || pageIndex >= bookStore.totalPages) {
@@ -100,6 +100,8 @@
     // 先尝试同步获取缓存
     const cached = imagePool.getSync(pageIndex);
     if (cached) {
+      // 预解码图片（确保翻页时不卡顿）
+      await preDecodeImage(cached.url);
       return {
         position: slot.position,
         pageIndex,
@@ -112,17 +114,12 @@
       };
     }
     
-    // 标记为加载中
-    const loadingSlot: FrameSlot = {
-      ...slot,
-      pageIndex,
-      loading: true,
-    };
-    
     // 异步加载
     try {
       const image = await imagePool.get(pageIndex);
       if (image) {
+        // 预解码图片
+        await preDecodeImage(image.url);
         return {
           position: slot.position,
           pageIndex,
@@ -139,6 +136,20 @@
     }
     
     return createEmptySlot(slot.position);
+  }
+  
+  /**
+   * 预解码图片（使用 Image.decode() API）
+   */
+  async function preDecodeImage(url: string): Promise<void> {
+    try {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      console.log(`✅ 预解码完成: ${url.slice(0, 50)}...`);
+    } catch (err) {
+      console.warn('预解码失败:', err);
+    }
   }
   
   /**

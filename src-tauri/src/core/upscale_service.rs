@@ -309,15 +309,22 @@ impl UpscaleService {
         }
     }
 
+    /// 生成缓存键（与 file_proxy.rs 一致）
+    fn cache_key(book_path: &str, image_path: &str) -> String {
+        format!("{}:{}", book_path, image_path)
+    }
+
     /// 生成缓存文件路径
-    fn get_cache_path(&self, image_hash: &str, model: &UpscaleModel) -> PathBuf {
-        let filename = format!("{}_sr[{}_{scale}x].webp", image_hash, model.model_name, scale = model.scale);
+    fn get_cache_path(&self, book_path: &str, image_path: &str, model: &UpscaleModel) -> PathBuf {
+        let key = Self::cache_key(book_path, image_path);
+        let hash = format!("{:x}", md5::compute(key.as_bytes()));
+        let filename = format!("{}_sr[{}].webp", hash, model.model_name);
         self.cache_dir.join(filename)
     }
 
     /// 检查缓存是否存在
-    fn check_cache(&self, image_hash: &str, model: &UpscaleModel) -> Option<PathBuf> {
-        let path = self.get_cache_path(image_hash, model);
+    fn check_cache(&self, book_path: &str, image_path: &str, model: &UpscaleModel) -> Option<PathBuf> {
+        let path = self.get_cache_path(book_path, image_path, model);
         if path.exists() {
             Some(path)
         } else {
@@ -706,7 +713,7 @@ impl UpscaleService {
         let key = (task.book_path.clone(), task.page_index);
 
         // 检查文件缓存是否存在
-        if let Some(cache_path) = self.check_cache(&task.image_hash, &task.model) {
+        if let Some(cache_path) = self.check_cache(&task.book_path, &task.image_path, &task.model) {
             log_debug!("📦 文件缓存命中 page {}", task.page_index);
             // 直接发送缓存路径
             if let Some(ref app) = self.app_handle {
@@ -1169,14 +1176,12 @@ impl UpscaleService {
         let upscaled_width = width * scale;
         let upscaled_height = height * scale;
 
-        // 5. 保存到本地缓存文件（与老系统格式一致：hash_sr[model].webp）
-        let filename = format!(
-            "{}_sr[{}].webp",
-            task.image_hash,
-            final_model.model_name
-        );
+        // 5. 保存到本地缓存文件（使用与 check_cache 相同的路径生成）
+        let cache_key = Self::cache_key(&task.book_path, &task.image_path);
+        let hash = format!("{:x}", md5::compute(cache_key.as_bytes()));
+        let filename = format!("{}_sr[{}].webp", hash, final_model.model_name);
         let cache_path = cache_dir.join(&filename);
-        log_debug!("💾 缓存路径: {} (缓存目录: {})", cache_path.display(), cache_dir.display());
+        log_debug!("💾 缓存路径: {} (key: {})", cache_path.display(), cache_key);
         
         // 确保缓存目录存在
         if let Some(parent) = cache_path.parent() {

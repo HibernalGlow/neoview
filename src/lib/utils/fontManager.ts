@@ -1,11 +1,12 @@
 /**
  * Font Manager - 全局字体管理器
  * 负责在应用启动时和设置变化时应用自定义字体
- * 使用 Tauri 事件实现跨窗口同步
+ * 使用 Tauri 事件实现跨窗口同步，配置持久化到文件
  */
 
 import { listen, emit, type UnlistenFn } from '@tauri-apps/api/event';
 import { settingsManager } from '$lib/settings/settingsManager';
+import { loadThemeConfig } from '$lib/config/themeConfig';
 
 export interface FontSettings {
   enabled: boolean;
@@ -110,8 +111,19 @@ export function initFontManager(): () => void {
     return () => {};
   }
   
-  // 首次应用字体设置
-  applyFontSettings();
+  // 首先从文件加载配置，然后应用
+  loadThemeConfig()
+    .then(config => {
+      if (config.fontSettings) {
+        applyFontSettings(config.fontSettings);
+      } else {
+        applyFontSettings();
+      }
+    })
+    .catch(() => {
+      // 文件加载失败，从 settingsManager 应用
+      applyFontSettings();
+    });
   
   // 监听 settingsManager 变化（同窗口内部变化）
   const handleSettingsChange = () => {

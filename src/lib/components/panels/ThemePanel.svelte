@@ -8,6 +8,7 @@
 	import { fetchThemeFromURL } from '$lib/utils/themeManager';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { emit } from '@tauri-apps/api/event';
+	import { saveRuntimeTheme, saveFontSettings as saveFileFontSettings } from '$lib/config/themeConfig';
 
 	type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -76,6 +77,10 @@
 		});
 		applyFontSettings(fontSettings);
 		broadcastFontSettings(fontSettings);
+		// 保存到文件
+		saveFileFontSettings(fontSettings).catch(err => {
+			console.error('保存字体配置失败:', err);
+		});
 	}
 	
 	function toggleFontEnabled(enabled: boolean) {
@@ -223,19 +228,15 @@
 			}
 		}
 
-		try {
-			const runtimeThemePayload = {
-				mode,
-				themeName: theme.name,
-				themes: theme.colors
-			};
-			localStorage.setItem('theme-mode', mode);
-			localStorage.setItem('theme-name', theme.name);
-			localStorage.setItem('runtime-theme', JSON.stringify(runtimeThemePayload));
-			
-			// 通过 Tauri 事件广播主题变更到所有窗口
-			emit('theme-changed', runtimeThemePayload).catch(() => {});
-		} catch {}
+		// 保存到文件并广播
+		const runtimeThemePayload = {
+			mode,
+			themeName: theme.name,
+			themes: theme.colors
+		};
+		saveRuntimeTheme(runtimeThemePayload).catch(err => {
+			console.error('保存主题配置失败:', err);
+		});
 	}
 
 	// 切换主题模式

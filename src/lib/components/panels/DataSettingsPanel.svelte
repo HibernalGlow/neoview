@@ -29,9 +29,6 @@
 	} from '@tanstack/table-core';
 	import { settingsManager, type FullExportPayload } from '$lib/stores/settingsManager.svelte';
 	import { getPerformanceSettings } from '$lib/api/performance';
-	import { getStartupConfig, saveStartupConfig, type StartupConfig } from '$lib/config/startupConfig';
-	import { appDataDir } from '@tauri-apps/api/path';
-	import { onMount } from 'svelte';
 
 	type ModuleId =
 		| 'nativeSettings'
@@ -210,77 +207,6 @@
 	let lastMessage = $state('');
 	let importFile: File | null = $state(null);
 	let fileInputEl: HTMLInputElement | null = $state(null);
-
-	// 启动配置相关状态
-	let startupConfigPath = $state('');
-	let startupConfigJson = $state('{}');
-	let startupConfigImportEl: HTMLInputElement | null = $state(null);
-
-	// 初始化启动配置路径
-	onMount(async () => {
-		try {
-			const dataDir = await appDataDir();
-			startupConfigPath = `${dataDir}startup_config.json`;
-			await refreshStartupConfig();
-		} catch (err) {
-			console.error('获取应用数据目录失败:', err);
-		}
-	});
-
-	async function refreshStartupConfig() {
-		try {
-			const config = await getStartupConfig();
-			startupConfigJson = JSON.stringify(config, null, 2);
-		} catch (err) {
-			console.error('刷新启动配置失败:', err);
-		}
-	}
-
-	async function saveStartupConfigFromJson() {
-		try {
-			const config = JSON.parse(startupConfigJson) as StartupConfig;
-			await saveStartupConfig(config);
-			lastMessage = '启动配置已保存';
-		} catch (err) {
-			console.error('保存启动配置失败:', err);
-			lastMessage = '保存失败: ' + (err instanceof Error ? err.message : String(err));
-		}
-	}
-
-	async function exportStartupConfig() {
-		try {
-			const config = await getStartupConfig();
-			const json = JSON.stringify(config, null, 2);
-			const blob = new Blob([json], { type: 'application/json' });
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = `neoview-startup-config-${Date.now()}.json`;
-			document.body.appendChild(a);
-			a.click();
-			document.body.removeChild(a);
-			URL.revokeObjectURL(url);
-			lastMessage = '启动配置已导出';
-		} catch (err) {
-			console.error('导出启动配置失败:', err);
-			lastMessage = '导出失败';
-		}
-	}
-
-	async function handleStartupConfigImport(e: Event) {
-		const file = (e.currentTarget as HTMLInputElement).files?.[0];
-		if (!file) return;
-		try {
-			const text = await file.text();
-			const config = JSON.parse(text) as StartupConfig;
-			await saveStartupConfig(config);
-			await refreshStartupConfig();
-			lastMessage = '启动配置已导入';
-		} catch (err) {
-			console.error('导入启动配置失败:', err);
-			lastMessage = '导入失败: ' + (err instanceof Error ? err.message : String(err));
-		}
-	}
 
 	// DataTable state
 	let pagination = $state<PaginationState>({ pageIndex: 0, pageSize: 10 });
@@ -814,61 +740,4 @@
 	{#if lastMessage}
 		<p class="mt-2 text-xs text-muted-foreground">{lastMessage}</p>
 	{/if}
-
-	<!-- 启动配置区域 -->
-	<div class="mt-6 border-t pt-4 space-y-4">
-		<div class="flex items-center gap-2">
-			<Database class="h-4 w-4 text-muted-foreground" />
-			<Label class="text-sm font-semibold">启动配置</Label>
-		</div>
-		<p class="text-xs text-muted-foreground">
-			启动配置文件用于存储缓存目录、超分条件等启动时需要的设置。
-		</p>
-		<div class="space-y-2">
-			<div class="flex items-center gap-2 text-xs">
-				<span class="text-muted-foreground">配置文件路径:</span>
-				<code class="bg-muted px-1 py-0.5 rounded text-[10px]">{startupConfigPath}</code>
-				<Button variant="ghost" size="sm" class="h-6 px-2" onclick={refreshStartupConfig}>
-					<RefreshCcw class="h-3 w-3" />
-				</Button>
-			</div>
-			<details class="group">
-				<summary class="cursor-pointer text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-					<ChevronDownIcon class="h-3 w-3 group-open:rotate-180 transition-transform" />
-					查看/编辑 JSON
-				</summary>
-				<div class="mt-2 space-y-2">
-					<textarea
-						class="w-full h-48 text-[10px] font-mono bg-muted rounded p-2 resize-y"
-						bind:value={startupConfigJson}
-					></textarea>
-					<div class="flex gap-2">
-						<Button variant="outline" size="sm" class="text-xs" onclick={saveStartupConfigFromJson}>
-							保存
-						</Button>
-						<Button variant="ghost" size="sm" class="text-xs" onclick={refreshStartupConfig}>
-							刷新
-						</Button>
-					</div>
-				</div>
-			</details>
-		</div>
-		<div class="flex gap-2">
-			<Button variant="outline" size="sm" class="gap-1" onclick={exportStartupConfig}>
-				<Download class="h-3 w-3" />
-				导出启动配置
-			</Button>
-			<Button variant="outline" size="sm" class="gap-1" onclick={() => startupConfigImportEl?.click()}>
-				<Upload class="h-3 w-3" />
-				导入启动配置
-			</Button>
-			<input
-				bind:this={startupConfigImportEl}
-				type="file"
-				class="hidden"
-				accept="application/json"
-				onchange={handleStartupConfigImport}
-			/>
-		</div>
-	</div>
 </div>

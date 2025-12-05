@@ -35,33 +35,31 @@
   let pendingUpdate: { x: number; y: number } | null = null;
   let rafId: number | null = null;
   
-  // 缓存边界计算（仅在依赖变化时重算）
+  // 缓存边界计算（简化版：只看宽高比）
+  // 横屏图(宽>高)溢出后只能左右滚动，竖屏图(高>宽)溢出后只能上下滚动
   let bounds = $derived.by(() => {
     if (!viewportSize.width || !viewportSize.height || !displaySize.width || !displaySize.height) {
       console.log(`🖼️ [HoverScroll] bounds 无效，返回默认值`);
       return { minX: 0, maxX: 100, minY: 0, maxY: 100 };
     }
     
-    console.log(`🖼️ [HoverScroll] bounds 计算: viewport=${viewportSize.width}x${viewportSize.height}, displaySize=${displaySize.width.toFixed(0)}x${displaySize.height.toFixed(0)}`);
+    const imgAspect = displaySize.width / displaySize.height;
+    const vpAspect = viewportSize.width / viewportSize.height;
     
-    const THRESHOLD = 1;
-    const overflowX = Math.max(0, (displaySize.width - viewportSize.width) / 2);
-    const overflowY = Math.max(0, (displaySize.height - viewportSize.height) / 2);
-    const hasOverflowX = overflowX > THRESHOLD;
-    const hasOverflowY = overflowY > THRESHOLD;
+    // 简单规则：
+    // 如果图片宽高比 > 视口宽高比 => 图片更宽，只允许水平滚动
+    // 如果图片宽高比 < 视口宽高比 => 图片更高，只允许垂直滚动
+    const isWider = imgAspect > vpAspect;
     
-    console.log(`🖼️ [HoverScroll] overflow: X=${overflowX.toFixed(0)} (${hasOverflowX}), Y=${overflowY.toFixed(0)} (${hasOverflowY})`);
+    console.log(`🖼️ [HoverScroll] bounds: displaySize=${displaySize.width.toFixed(0)}x${displaySize.height.toFixed(0)}, viewport=${viewportSize.width}x${viewportSize.height}, imgAspect=${imgAspect.toFixed(2)}, vpAspect=${vpAspect.toFixed(2)}, isWider=${isWider}`);
     
-    if (!hasOverflowX && !hasOverflowY) {
-      return { minX: 50, maxX: 50, minY: 50, maxY: 50 };
+    if (isWider) {
+      // 横屏图：只能左右滚动
+      return { minX: 0, maxX: 100, minY: 50, maxY: 50 };
+    } else {
+      // 竖屏图：只能上下滚动
+      return { minX: 50, maxX: 50, minY: 0, maxY: 100 };
     }
-    
-    return {
-      minX: hasOverflowX ? 0 : 50,
-      maxX: hasOverflowX ? 100 : 50,
-      minY: hasOverflowY ? 0 : 50,
-      maxY: hasOverflowY ? 100 : 50,
-    };
   });
   
   // 调度单次 RAF 更新

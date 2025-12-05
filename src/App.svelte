@@ -21,6 +21,7 @@
 	import { initThumbnailServiceV3, cleanup as cleanupThumbnailService } from '$lib/stores/thumbnailStoreV3.svelte';
 	import Toast from '$lib/components/ui/toast.svelte';
 	import SettingsOverlay from '$lib/components/SettingsOverlay.svelte';
+	import { settingsOverlayOpen } from '$lib/stores/settingsOverlay.svelte';
 	import { onMount } from 'svelte';
 
 	let loading = $state(false);
@@ -479,6 +480,8 @@ async function dispatchAction(action: string) {
 	}
 
 function handleGlobalKeydown(e: KeyboardEvent) {
+	// 设置覆盖层打开时不响应全局快捷键
+	if ($settingsOverlayOpen) return;
 	// 不在输入框时响应
 	if (isTypingInInput(e)) return;
 
@@ -497,6 +500,8 @@ function handleGlobalKeydown(e: KeyboardEvent) {
 
 // 处理鼠标点击事件
 function handleGlobalMouseClick(e: MouseEvent) {
+	// 设置覆盖层打开时不响应
+	if ($settingsOverlayOpen) return;
 	// 不在输入框时响应
 	if (isTypingInInput(e)) return;
 
@@ -546,6 +551,8 @@ function handleGlobalMouseClick(e: MouseEvent) {
 
 // 处理鼠标按下事件
 function handleGlobalMouseDown(e: MouseEvent) {
+	// 设置覆盖层打开时不响应
+	if ($settingsOverlayOpen) return;
 	// 不在输入框时响应
 	if (isTypingInInput(e)) return;
 

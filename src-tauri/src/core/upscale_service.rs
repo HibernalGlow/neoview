@@ -1169,12 +1169,11 @@ impl UpscaleService {
         let upscaled_width = width * scale;
         let upscaled_height = height * scale;
 
-        // 5. 保存到本地缓存文件
+        // 5. 保存到本地缓存文件（与老系统格式一致：hash_sr[model].webp）
         let filename = format!(
-            "{}_sr[{}_{scale}x].webp",
+            "{}_sr[{}].webp",
             task.image_hash,
-            final_model.model_name,
-            scale = final_model.scale
+            final_model.model_name
         );
         let cache_path = cache_dir.join(&filename);
         

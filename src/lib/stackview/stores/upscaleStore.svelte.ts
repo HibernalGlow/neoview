@@ -152,7 +152,9 @@ class UpscaleStore {
       const { settingsManager } = await import('$lib/settings/settingsManager');
       const { normalizeThumbnailDirectoryPath } = await import('$lib/config/paths');
       const globalSettings = settingsManager.getSettings();
+      console.log('📋 全局设置 thumbnailDirectory:', globalSettings.system?.thumbnailDirectory);
       const cacheDir = normalizeThumbnailDirectoryPath(globalSettings.system?.thumbnailDirectory);
+      console.log('📁 规范化后的缓存目录:', cacheDir);
       
       await invoke('upscale_service_init', { cacheDir });
       console.log('✅ 后端 UpscaleService 初始化完成, 缓存目录:', cacheDir);

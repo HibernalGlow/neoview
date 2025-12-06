@@ -308,7 +308,8 @@ pub async fn batch_load_directory_snapshots(
 
     let fs_manager = Arc::clone(&state.fs_manager);
     let cache_index_db = Arc::clone(&cache_index.db);
-    let scheduler_inner = scheduler.scheduler.clone();
+    // scheduler 参数保留用于未来扩展
+    let _ = &scheduler;
 
     // 收集需要从文件系统加载的路径（缓存 miss）
     let mut results: Vec<BatchDirectorySnapshotResult> = Vec::with_capacity(paths.len());

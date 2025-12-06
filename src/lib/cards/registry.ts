@@ -131,6 +131,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'benchmark',
 		canHide: true,
 	},
+	'thumbnailLatency': {
+		id: 'thumbnailLatency',
+		title: '目录加载延迟',
+		icon: Timer,
+		defaultPanel: 'benchmark',
+		canHide: true,
+	},
 	
 	// ==================== Info 面板卡片 ====================
 	'bookInfo': {

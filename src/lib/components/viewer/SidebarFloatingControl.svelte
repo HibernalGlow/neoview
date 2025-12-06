@@ -22,7 +22,7 @@ import {
 	type SidebarLockState
 } from '$lib/stores/ui.svelte';
 import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
-import { PanelTop, PanelBottom, PanelLeft, PanelRight, Lock, LockOpen, GripVertical, EyeOff } from '@lucide/svelte';
+import { PanelTop, PanelBottom, PanelLeft, PanelRight, Lock, LockOpen, GripVertical, EyeOff, RotateCcw } from '@lucide/svelte';
 
 // 控制器状态
 let enabled = $state(false);
@@ -106,6 +106,11 @@ function savePosition() {
 	settingsManager.updateNestedSettings('view', {
 		sidebarControl: { ...prev, position }
 	});
+}
+
+function resetPosition() {
+	position = { x: 100, y: 100 };
+	savePosition();
 }
 
 function handleDragStart(event: MouseEvent) {
@@ -331,6 +336,19 @@ function getStateText(lockState: SidebarLockState, isOpen: boolean): string {
 				{#if rightLock !== null}
 					<Lock class="absolute -top-0.5 -right-0.5 h-2.5 w-2.5" />
 				{/if}
+			</button>
+
+			<!-- 分隔线 -->
+			<div class="w-px h-4 bg-border/60 mx-0.5"></div>
+
+			<!-- 重置位置 -->
+			<button
+				type="button"
+				class="p-1.5 rounded transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
+				onclick={resetPosition}
+				title="重置控制器位置"
+			>
+				<RotateCcw class="h-4 w-4" />
 			</button>
 		</div>
 	</div>

@@ -301,6 +301,10 @@ const defaultSettings: NeoViewSettings = {
     renderer: {
       mode: 'stack', // 默认使用层叠模式，更流畅
       useViewerJS: false // ViewerJS 增强模式默认关闭
+    },
+    sidebarControl: {
+      enabled: true, // 默认启用边栏浮动控制器
+      position: { x: 100, y: 100 }
     }
   },
   book: {

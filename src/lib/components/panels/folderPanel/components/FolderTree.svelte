@@ -24,9 +24,10 @@
 
 	interface Props {
 		onNavigate?: (path: string) => void;
+		onContextMenu?: (event: MouseEvent, item: FsItem) => void;
 	}
 
-	let { onNavigate }: Props = $props();
+	let { onNavigate, onContextMenu }: Props = $props();
 
 	interface TreeNode {
 		path: string;
@@ -143,6 +144,21 @@
 		onNavigate?.(node.path);
 	}
 
+	// 右键菜单
+	function handleContextMenu(node: TreeNode, e: MouseEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		// 转换为 FsItem 格式
+		const item: FsItem = {
+			path: node.path,
+			name: node.name,
+			isDir: true,
+			isImage: false,
+			size: 0
+		};
+		onContextMenu?.(e, item);
+	}
+
 	// 检查节点是否在当前路径上
 	function isInCurrentPath(nodePath: string): boolean {
 		const current = $currentPath.replace(/\\/g, '/').toLowerCase();
@@ -227,6 +243,7 @@
 				isInCurrentPath(node.path) && 'font-medium'
 			)}
 			onclick={(e) => selectNode(node, e)}
+			oncontextmenu={(e) => handleContextMenu(node, e)}
 			onkeydown={(e) => e.key === 'Enter' && selectNode(node)}
 			role="button"
 			tabindex="0"

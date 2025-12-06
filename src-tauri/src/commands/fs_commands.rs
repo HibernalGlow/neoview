@@ -286,6 +286,175 @@ pub async fn load_directory_snapshot(
     })
 }
 
+/// 批量并发加载多个目录快照
+/// 使用 tokio::spawn 并发执行，避免串行阻塞
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchDirectorySnapshotResult {
+    pub path: String,
+    pub snapshot: Option<DirectorySnapshotResponse>,
+    pub error: Option<String>,
+}
+
+#[tauri::command]
+pub async fn batch_load_directory_snapshots(
+    paths: Vec<String>,
+    state: State<'_, FsState>,
+    cache_state: State<'_, DirectoryCacheState>,
+    cache_index: State<'_, CacheIndexState>,
+    scheduler: State<'_, BackgroundSchedulerState>,
+) -> Result<Vec<BatchDirectorySnapshotResult>, String> {
+    use futures::future::join_all;
+
+    let fs_manager = Arc::clone(&state.fs_manager);
+    let cache_index_db = Arc::clone(&cache_index.db);
+    let scheduler_inner = scheduler.scheduler.clone();
+
+    // 收集需要从文件系统加载的路径（缓存 miss）
+    let mut results: Vec<BatchDirectorySnapshotResult> = Vec::with_capacity(paths.len());
+    let mut pending_loads: Vec<(usize, String, PathBuf, Option<u64>)> = Vec::new();
+
+    for (idx, path) in paths.iter().enumerate() {
+        let path_buf = PathBuf::from(path);
+        let mtime = directory_mtime(&path_buf);
+
+        // 1. 检查内存缓存
+        {
+            let mut cache = cache_state
+                .cache
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            if let Some(entry) = cache.get(path, mtime) {
+                results.push(BatchDirectorySnapshotResult {
+                    path: path.clone(),
+                    snapshot: Some(DirectorySnapshotResponse {
+                        items: entry.items,
+                        mtime: entry.mtime,
+                        cached: true,
+                    }),
+                    error: None,
+                });
+                continue;
+            }
+        }
+
+        // 2. 检查 SQLite 缓存
+        match cache_index_db.load_directory_snapshot(path, mtime) {
+            Ok(Some(persisted_items)) => {
+                // 回填内存缓存
+                {
+                    let mut cache = cache_state
+                        .cache
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
+                    cache.insert(path.clone(), persisted_items.clone(), mtime);
+                }
+                results.push(BatchDirectorySnapshotResult {
+                    path: path.clone(),
+                    snapshot: Some(DirectorySnapshotResponse {
+                        items: persisted_items,
+                        mtime,
+                        cached: true,
+                    }),
+                    error: None,
+                });
+                continue;
+            }
+            Ok(None) => {
+                // 需要从文件系统加载
+                pending_loads.push((idx, path.clone(), path_buf, mtime));
+                // 占位
+                results.push(BatchDirectorySnapshotResult {
+                    path: path.clone(),
+                    snapshot: None,
+                    error: None,
+                });
+            }
+            Err(e) => {
+                results.push(BatchDirectorySnapshotResult {
+                    path: path.clone(),
+                    snapshot: None,
+                    error: Some(e),
+                });
+            }
+        }
+    }
+
+    if pending_loads.is_empty() {
+        return Ok(results);
+    }
+
+    println!(
+        "📁 BatchDirectorySnapshot: {} miss, {} 命中缓存 -> 并发加载",
+        pending_loads.len(),
+        paths.len() - pending_loads.len()
+    );
+
+    // 3. 并发加载所有 miss 的目录
+    let futures: Vec<_> = pending_loads
+        .into_iter()
+        .map(|(idx, path, path_buf, mtime)| {
+            let fs_manager = Arc::clone(&fs_manager);
+            let cache_index_db = Arc::clone(&cache_index_db);
+            let cache_state_inner = cache_state.inner().clone();
+
+            async move {
+                // 使用 spawn_blocking 避免阻塞 tokio 线程
+                let load_result = tauri::async_runtime::spawn_blocking(move || {
+                    let fs = fs_manager.lock().unwrap_or_else(|e| e.into_inner());
+                    fs.read_directory(&path_buf)
+                })
+                .await;
+
+                let result = match load_result {
+                    Ok(Ok(items)) => {
+                        // 回填缓存
+                        {
+                            let mut cache = cache_state_inner
+                                .cache
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner());
+                            cache.insert(path.clone(), items.clone(), mtime);
+                        }
+                        let _ = cache_index_db.save_directory_snapshot(&path, mtime, &items);
+
+                        BatchDirectorySnapshotResult {
+                            path,
+                            snapshot: Some(DirectorySnapshotResponse {
+                                items,
+                                mtime,
+                                cached: false,
+                            }),
+                            error: None,
+                        }
+                    }
+                    Ok(Err(e)) => BatchDirectorySnapshotResult {
+                        path,
+                        snapshot: None,
+                        error: Some(e),
+                    },
+                    Err(e) => BatchDirectorySnapshotResult {
+                        path,
+                        snapshot: None,
+                        error: Some(format!("spawn_blocking error: {}", e)),
+                    },
+                };
+                (idx, result)
+            }
+        })
+        .collect();
+
+    // 并发执行所有加载任务
+    let loaded: Vec<(usize, BatchDirectorySnapshotResult)> = join_all(futures).await;
+
+    // 合并结果
+    for (idx, result) in loaded {
+        results[idx] = result;
+    }
+
+    Ok(results)
+}
+
 /// 获取目录中的所有图片
 #[tauri::command]
 pub async fn get_images_in_directory(

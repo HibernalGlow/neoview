@@ -39,6 +39,32 @@ export async function loadDirectorySnapshot(path: string): Promise<DirectorySnap
 }
 
 /**
+ * 批量并发加载多个目录快照
+ * 使用 Rust 端并发执行，避免串行阻塞
+ */
+export interface BatchDirectorySnapshotResult {
+  path: string;
+  snapshot: DirectorySnapshot | null;
+  error: string | null;
+}
+
+export async function batchLoadDirectorySnapshots(
+  paths: string[]
+): Promise<BatchDirectorySnapshotResult[]> {
+  if (paths.length === 0) return [];
+  if (paths.length === 1) {
+    // 单个路径直接用单个命令
+    try {
+      const snapshot = await loadDirectorySnapshot(paths[0]);
+      return [{ path: paths[0], snapshot, error: null }];
+    } catch (e) {
+      return [{ path: paths[0], snapshot: null, error: String(e) }];
+    }
+  }
+  return await invoke<BatchDirectorySnapshotResult[]>('batch_load_directory_snapshots', { paths });
+}
+
+/**
  * 分页浏览目录内容
  */
 export async function browseDirectoryPage(

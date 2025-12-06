@@ -1214,7 +1214,7 @@
 					? `top: 0; left: 0; right: 0; height: ${$folderTreeConfig.size}px;`
 					: `top: 0; left: 0; bottom: 0; width: ${$folderTreeConfig.size}px;`}
 			>
-				<FolderTree onNavigate={handleNavigate} />
+				<FolderTree onNavigate={handleNavigate} onContextMenu={handleContextMenu} />
 			</div>
 			<!-- 拖拽调整手柄 -->
 			<div

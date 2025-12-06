@@ -11,3 +11,8 @@ export { default as InfoLayer } from './InfoLayer.svelte';
 export { default as GestureLayer } from './GestureLayer.svelte';
 export { default as HoverLayer } from './HoverLayer.svelte';
 export { default as LayerTreeView } from './LayerTreeView.svelte';
+
+// 新增：从 ImageViewer 解耦的浮窗层
+export { default as ImageInfoLayer } from './ImageInfoLayer.svelte';
+export { default as ProgressBarLayer } from './ProgressBarLayer.svelte';
+export { default as SidebarControlLayer } from './SidebarControlLayer.svelte';

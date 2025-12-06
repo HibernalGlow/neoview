@@ -12,6 +12,9 @@
     GestureLayer,
     HoverLayer,
     UpscaleLayer,
+    ImageInfoLayer,
+    ProgressBarLayer,
+    SidebarControlLayer,
   } from './layers';
   import StackViewer from '$lib/viewer/StackViewer.svelte';
   import PanoramaFrameLayer from './layers/PanoramaFrameLayer.svelte';
@@ -713,6 +716,15 @@
     {displaySize}
     onPositionChange={(x: number, y: number) => { viewPositionX = x; viewPositionY = y; }}
   />
+  
+  <!-- 图片信息浮窗 -->
+  <ImageInfoLayer />
+  
+  <!-- 进度条 -->
+  <ProgressBarLayer showProgressBar={showProgress} />
+  
+  <!-- 边栏控制浮窗 -->
+  <SidebarControlLayer />
   
 </div>
 

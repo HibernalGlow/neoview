@@ -20,17 +20,10 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { readable } from 'svelte/store';
 	import { computeAutoBackgroundColor } from '$lib/utils/autoBackground';
-	import ComparisonViewer from './ComparisonViewer.svelte';
 	import ImageViewerDisplay from './flow/ImageViewerDisplay.svelte';
 	import { StackView } from '$lib/stackview';
-	import ImageViewerProgressBar from './flow/ImageViewerProgressBar.svelte';
-	import ImageInfoOverlay from './ImageInfoOverlay.svelte';
 	import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
 	import { appState, type StateSelector, type AppStateSnapshot } from '$lib/core/state/appState';
-	import {
-		scheduleComparisonPreview,
-		cancelComparisonPreviewTask
-	} from '$lib/core/tasks/comparisonTaskService';
 	import { scheduleUpscaleCacheCleanup } from '$lib/core/cache/cacheMaintenance';
 	import VideoContainer from './VideoContainer.svelte';
 import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoomMode';
@@ -202,8 +195,6 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 		applyCurrentZoomMode(event.detail?.mode);
 	}
 
-	let originalImageDataForComparison = $state<string>('');
-	let upscaledImageDataForComparison = $state<string>('');
 	let derivedUpscaledUrl = $state<string | null>(null);
 	let lastUpscaledBlob: Blob | null = null;
 	let lastUpscaledObjectUrl: string | null = null;
@@ -700,7 +691,6 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 					}
 					if (upscaledImageData) {
 						imageData = upscaledImageData;
-						upscaledImageDataForComparison = upscaledImageData;
 					}
 
 					// 更新当前页面状态为已完成
@@ -790,29 +780,6 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 				preUpscaleProgress = 0;
 				totalPreUpscalePages = 0;
 			},
-			onComparisonModeChanged: async (detail) => {
-				const { enabled, mode = 'slider' } = detail;
-				const upscaledSource = derivedUpscaledUrl || bookStore.upscaledImageData;
-				if (enabled && upscaledSource) {
-					try {
-						const preview = await scheduleComparisonPreview(
-							async () => (preloadManager ? await preloadManager.getCurrentPageBlob() : null),
-							bookStore.currentPageIndex
-						);
-						updateViewerState({ comparisonVisible: true, comparisonMode: mode });
-						originalImageDataForComparison = preview;
-						upscaledImageDataForComparison = upscaledSource;
-					} catch (error) {
-						console.error('对比模式：生成原图预览失败:', error);
-						updateViewerState({ comparisonVisible: false });
-						originalImageDataForComparison = '';
-						upscaledImageDataForComparison = '';
-					}
-				} else {
-					cancelComparisonPreviewTask('comparison disabled');
-					updateViewerState({ comparisonVisible: false });
-				}
-			},
 			onCacheHit: (detail) => {
 				const { imageHash, url, blob, preview } = detail;
 				const currentHash = bookStore.getCurrentPageHash();
@@ -880,7 +847,6 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 			preloadManager.cleanup();
 			setSharedPreloadManager(null);
 		}
-		cancelComparisonPreviewTask('viewer destroyed');
 		if ((window as { preloadManager?: typeof preloadManager }).preloadManager === preloadManager) {
 			delete (window as { preloadManager?: typeof preloadManager }).preloadManager;
 		}
@@ -1069,7 +1035,6 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 				if (lastRequestedPageIndex === currentPageIndex || lastRequestedPageIndex === -1) {
 					bookStore.setUpscaledImage(newUrl);
 					imageData = newUrl;
-					upscaledImageDataForComparison = newUrl;
 				}
 			} catch (error) {
 				console.warn('创建超分 object URL 失败:', error);
@@ -1082,7 +1047,6 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 				lastUpscaledBlob = null;
 				derivedUpscaledUrl = null;
 				bookStore.setUpscaledImage(null);
-				upscaledImageDataForComparison = '';
 			}
 		}
 	});
@@ -1414,31 +1378,7 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 	function handleKeydown(e: KeyboardEvent) {
 		// StackView 由 GestureLayer 处理，不在这里处理
 		return;
-		
-		// 仅在此处理对比模式下的 ESC，其余按键交给 App.svelte 的全局处理
-		if ($viewerState.comparisonVisible && e.key === 'Escape') {
-			updateViewerState({ comparisonVisible: false });
-			return;
-		}
-
-		// 生成按键组合
-		const keyCombo = generateKeyCombo(e);
-
-		// 1）优先使用统一 keybindings 动作系统（支持 pageLeft/pageRight/nextPage/prevPage 等）
-		const action = keyBindingsStore.findActionByKeyCombo(keyCombo);
-		if (action) {
-			e.preventDefault();
-			executeCommand(action);
-			return;
-		}
 	}
-
-	// 关闭对比模式
-	function closeComparison() {
-		updateViewerState({ comparisonVisible: false });
-	}
-
-	// ...
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -1484,22 +1424,4 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 			/>
 		{/if}
 	</div>
-
-	<ImageInfoOverlay />
-
-	<!-- 对比模式查看器 -->
-	<ComparisonViewer
-		originalImageData={originalImageDataForComparison}
-		upscaledImageData={derivedUpscaledUrl || upscaledImageDataForComparison}
-		isVisible={$viewerState.comparisonVisible}
-		onClose={closeComparison}
-	/>
-
-	<ImageViewerProgressBar
-		showProgressBar={showProgressBar && Boolean(bookStore.currentBook)}
-		totalPages={bookStore.currentBook?.pages.length ?? 0}
-		currentPageIndex={bookStore.currentPageIndex}
-		{preUpscaleProgress}
-		{totalPreUpscalePages}
-	/>
 </div>

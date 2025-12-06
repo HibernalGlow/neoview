@@ -25,7 +25,6 @@
 	import AreaOverlay from '../ui/AreaOverlay.svelte';
 	import HoverAreasOverlay from '../ui/HoverAreasOverlay.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
-	import SidebarFloatingControl from '../viewer/SidebarFloatingControl.svelte';
 
 	let { children } = $props();
 	let settings = $state(settingsManager.getSettings());
@@ -178,7 +177,4 @@
 		rightSidebarOpen={$rightSidebarOpen}
 	/>
 	<HoverAreasOverlay bind:show={showHoverAreasOverlay} />
-
-	<!-- 边栏浮动控制器 -->
-	<SidebarFloatingControl />
 </div>

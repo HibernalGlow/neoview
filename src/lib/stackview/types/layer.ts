@@ -14,9 +14,11 @@ export const LayerZIndex = {
   NEXT_FRAME: 30,
   CURRENT_FRAME: 40,
   UPSCALE: 50,
-  COMPARISON: 60,
+  PROGRESS_BAR: 60,
   INFO: 70,
+  IMAGE_INFO: 75,
   CONTROL: 80,
+  SIDEBAR_CONTROL: 85,
   GESTURE: 90,
 } as const;
 
@@ -30,9 +32,11 @@ export type LayerId =
   | 'nextFrame'
   | 'currentFrame'
   | 'upscale'
-  | 'comparison'
+  | 'progressBar'
   | 'info'
+  | 'imageInfo'
   | 'control'
+  | 'sidebarControl'
   | 'gesture'
   | string; // 允许自定义层
 

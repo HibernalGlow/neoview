@@ -19,7 +19,9 @@ import { bookStore } from '$lib/stores/book.svelte';
 
 const THUMBNAIL_HEIGHT = 120;
 const PRELOAD_RANGE = 20;  // 前后各预加载 20 页
-const BATCH_SIZE = 5;      // 每批次加载数量
+const BATCH_SIZE = 2;      // 每批次加载数量（减小以降低卡顿）
+const BATCH_DELAY_MS = 100; // 每批次之间的延迟（毫秒）
+const INITIAL_DELAY_MS = 500; // 切书后的初始延迟（让主页面先加载）
 
 // ============================================================================
 // 状态
@@ -152,12 +154,23 @@ async function loadThumbnail(pageIndex: number): Promise<void> {
 	}
 }
 
+// 当前加载版本号（用于取消过期请求）
+let loadVersion = 0;
+
 /**
  * 加载缩略图（中央优先策略）
+ * 
+ * 特点：
+ * - 完全异步，不阻塞主线程
+ * - 支持取消过期请求（翻页时自动取消旧请求）
+ * - 每批次之间让出控制权
  */
 async function loadThumbnails(centerIndex: number): Promise<void> {
 	const currentBook = bookStore.currentBook;
 	if (!currentBook) return;
+
+	// 增加版本号，取消旧的加载任务
+	const thisVersion = ++loadVersion;
 
 	const totalPages = currentBook.totalPages;
 	
@@ -173,13 +186,35 @@ async function loadThumbnails(centerIndex: number): Promise<void> {
 		return;
 	}
 
-	console.log(`🖼️ ThumbnailService: Loading ${toLoad.length} thumbnails (center: ${centerIndex})`);
+	console.log(`🖼️ ThumbnailService: Loading ${toLoad.length} thumbnails (center: ${centerIndex}, v${thisVersion})`);
 
-	// 分批加载
+	// 分批加载，每批之间延迟以避免卡顿
 	for (let i = 0; i < toLoad.length; i += BATCH_SIZE) {
+		// 检查是否被取消
+		if (loadVersion !== thisVersion) {
+			console.log(`🖼️ ThumbnailService: Cancelled (v${thisVersion} -> v${loadVersion})`);
+			return;
+		}
+		
 		const batch = toLoad.slice(i, i + BATCH_SIZE);
+		
+		// 加载当前批次
 		await Promise.all(batch.map(loadThumbnail));
+		
+		// 批次之间延迟，让出控制权给主页面加载
+		if (i + BATCH_SIZE < toLoad.length) {
+			await new Promise<void>((resolve) => {
+				setTimeout(resolve, BATCH_DELAY_MS);
+			});
+		}
 	}
+}
+
+/**
+ * 取消当前加载任务
+ */
+function cancelLoading(): void {
+	loadVersion++;
 }
 
 // ============================================================================
@@ -194,6 +229,9 @@ function handleBookChange(bookPath: string): void {
 	
 	console.log(`🖼️ ThumbnailService: Book changed to ${bookPath}`);
 	currentBookPath = bookPath;
+	
+	// 取消旧的加载任务
+	cancelLoading();
 	loadingIndices.clear();
 	
 	// 设置 imagePool 当前书籍
@@ -202,9 +240,11 @@ function handleBookChange(bookPath: string): void {
 	// 设置 thumbnailCacheStore 当前书籍（清空旧缓存）
 	thumbnailCacheStore.setBook(bookPath);
 	
-	// 触发加载当前页附近的缩略图
-	const centerIndex = bookStore.currentPageIndex;
-	void loadThumbnails(centerIndex);
+	// 延迟加载缩略图，让主页面先加载
+	setTimeout(() => {
+		const centerIndex = bookStore.currentPageIndex;
+		void loadThumbnails(centerIndex);
+	}, INITIAL_DELAY_MS);
 }
 
 /**
@@ -248,6 +288,7 @@ export const thumbnailService = {
 	loadThumbnail,
 	handleBookChange,
 	handlePageChange,
+	cancelLoading,
 	
 	/** 获取加载状态 */
 	isLoading: (pageIndex: number) => loadingIndices.has(pageIndex),

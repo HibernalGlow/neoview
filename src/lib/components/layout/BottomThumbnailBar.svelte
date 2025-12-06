@@ -22,6 +22,7 @@
 	import HorizontalListSlider from '$lib/components/panels/file/components/HorizontalListSlider.svelte';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, Target, Hash } from '@lucide/svelte';
+	import { thumbnailService } from '$lib/services/thumbnailService';
 	import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
 	import { isVideoFile } from '$lib/utils/videoUtils';
@@ -331,61 +332,14 @@
 	const PRELOAD_RANGE = 5; // 前后各预加载 20 页
 
 	/**
-	 * 生成中央优先加载顺序
-	 * 从中心页开始，交替向前后方向扩展
+	 * 触发缩略图加载（使用 thumbnailService）
 	 */
-	function generateCentralPriorityOrder(center: number, totalPages: number, range: number): number[] {
-		const indices: number[] = [];
-		
-		// 先加载中心页
-		if (center >= 0 && center < totalPages) {
-			indices.push(center);
-		}
-		
-		// 交替向前后方向扩展
-		for (let offset = 1; offset <= range; offset++) {
-			// 向后
-			if (center + offset < totalPages) {
-				indices.push(center + offset);
-			}
-			// 向前
-			if (center - offset >= 0) {
-				indices.push(center - offset);
-			}
-		}
-		
-		return indices;
-	}
-
-	async function loadVisibleThumbnails() {
+	function loadVisibleThumbnails() {
 		const currentBook = bookStore.currentBook;
 		if (!currentBook) return;
 
-		const totalPages = currentBook.pages.length;
 		const centerIndex = bookStore.currentPageIndex;
-
-		// 使用中央优先策略生成加载顺序
-		const loadOrder = generateCentralPriorityOrder(centerIndex, totalPages, PRELOAD_RANGE);
-		
-		// 过滤已缓存和正在加载的
-		const toLoad = loadOrder.filter(
-			(i) => !thumbnailCacheStore.hasThumbnail(i) && !loadingIndices.has(i)
-		);
-
-		if (toLoad.length === 0) {
-			return;
-		}
-
-		console.log(
-			`🖼️ Loading ${toLoad.length} thumbnails (center: ${centerIndex}, range: ${PRELOAD_RANGE})`
-		);
-
-		// 按中央优先顺序逐个加载（避免同时请求太多）
-		const batchSize = 5;
-		for (let i = 0; i < toLoad.length; i += batchSize) {
-			const batch = toLoad.slice(i, i + batchSize);
-			await Promise.all(batch.map(loadThumbnail));
-		}
+		thumbnailService.loadThumbnails(centerIndex);
 	}
 
 	/**

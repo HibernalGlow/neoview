@@ -116,6 +116,11 @@ export interface NeoViewSettings {
       /** 是否使用 ViewerJS 增强模式 */
       useViewerJS?: boolean;
     };
+    /** 边栏浮动控制器设置 */
+    sidebarControl?: {
+      enabled: boolean;
+      position: { x: number; y: number };
+    };
   };
   book: {
     autoPageTurnInterval: number;

@@ -95,11 +95,20 @@ export const orientation = writable<ViewOrientation>(
 	loadFromStorage('orientation', 'horizontal')
 );
 
-// 边栏钉住状态（钉住时不自动隐藏）
+// 边栏锁定状态类型：null = 自动模式，true = 锁定展开，false = 锁定隐藏
+export type SidebarLockState = boolean | null;
+
+// 边栏钉住状态（钉住时不自动隐藏）- 保持兼容性
 export const topToolbarPinned = writable<boolean>(loadFromStorage('topToolbarPinned', false));
 export const bottomThumbnailBarPinned = writable<boolean>(loadFromStorage('bottomThumbnailBarPinned', false));
 export const leftSidebarPinned = writable<boolean>(loadFromStorage('leftSidebarPinned', false));
 export const rightSidebarPinned = writable<boolean>(loadFromStorage('rightSidebarPinned', false));
+
+// 边栏锁定状态（三态：null = 自动，true = 锁定展开，false = 锁定隐藏）
+export const topToolbarLockState = writable<SidebarLockState>(loadFromStorage('topToolbarLockState', null));
+export const bottomBarLockState = writable<SidebarLockState>(loadFromStorage('bottomBarLockState', null));
+export const leftSidebarLockState = writable<SidebarLockState>(loadFromStorage('leftSidebarLockState', null));
+export const rightSidebarLockState = writable<SidebarLockState>(loadFromStorage('rightSidebarLockState', null));
 
 // 边栏高度（用于上下边栏）
 export const topToolbarHeight = writable<number>(loadFromStorage('topToolbarHeight', 60));
@@ -136,6 +145,10 @@ topToolbarHeight.subscribe((value) => saveToStorage('topToolbarHeight', value));
 bottomThumbnailBarHeight.subscribe((value) => saveToStorage('bottomThumbnailBarHeight', value));
 layoutMode.subscribe((value) => saveToStorage('layoutMode', value));
 layoutSwitchMode.subscribe((value) => saveToStorage('layoutSwitchMode', value));
+topToolbarLockState.subscribe((value) => saveToStorage('topToolbarLockState', value));
+bottomBarLockState.subscribe((value) => saveToStorage('bottomBarLockState', value));
+leftSidebarLockState.subscribe((value) => saveToStorage('leftSidebarLockState', value));
+rightSidebarLockState.subscribe((value) => saveToStorage('rightSidebarLockState', value));
 
 const updateViewerSlice = (partial: Partial<AppStateSnapshot['viewer']>) => {
 	const snapshot = appState.getSnapshot();

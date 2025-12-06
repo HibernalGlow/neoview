@@ -33,6 +33,7 @@ const lazyComponentMap: Record<string, () => Promise<{ default: any }>> = {
 	imageInfo: () => import('./info/ImageInfoCard.svelte'),
 	storage: () => import('./info/StorageCard.svelte'),
 	time: () => import('./info/TimeCard.svelte'),
+	sidebarControl: () => import('./info/SidebarControlCard.svelte'),
 	// Properties
 	emmTags: () => import('./properties/EmmTagsCard.svelte'),
 	bookSettings: () => import('./properties/BookSettingsCard.svelte'),

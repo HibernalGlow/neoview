@@ -25,6 +25,7 @@
 	import { StackView } from '$lib/stackview';
 	import ImageViewerProgressBar from './flow/ImageViewerProgressBar.svelte';
 	import ImageInfoOverlay from './ImageInfoOverlay.svelte';
+	import SidebarFloatingControl from './SidebarFloatingControl.svelte';
 	import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
 	import { appState, type StateSelector, type AppStateSnapshot } from '$lib/core/state/appState';
 	import {
@@ -1486,6 +1487,7 @@ let viewerActionListener: ((event: CustomEvent<{ action: string }>) => void) | n
 	</div>
 
 	<ImageInfoOverlay />
+	<SidebarFloatingControl />
 
 	<!-- 对比模式查看器 -->
 	<ComparisonViewer

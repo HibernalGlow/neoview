@@ -175,6 +175,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'info',
 		canHide: true,
 	},
+	'sidebarControl': {
+		id: 'sidebarControl',
+		title: '边栏控制',
+		icon: Layers,
+		defaultPanel: 'info',
+		canHide: true,
+	},
 	
 	// ==================== Properties 面板卡片 ====================
 	'emmTags': {

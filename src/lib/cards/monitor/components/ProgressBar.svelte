@@ -73,15 +73,18 @@
 	}
 
 	.usage-bar.low {
-		background: hsl(var(--chart-1));
+		background: hsl(var(--primary));
+		opacity: 0.6;
 	}
 
 	.usage-bar.medium {
-		background: hsl(var(--chart-3));
+		background: hsl(var(--primary));
+		opacity: 0.8;
 	}
 
 	.usage-bar.high {
-		background: hsl(var(--chart-4));
+		background: hsl(var(--primary));
+		opacity: 1;
 	}
 
 	.usage-bar.critical {

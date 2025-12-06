@@ -38,14 +38,14 @@
 	}
 </script>
 
-<div class="bg-card/50 rounded-lg border p-3">
+<div class="bg-card text-card-foreground rounded-lg border p-3">
 	<!-- 头部 -->
 	<div class="mb-3 flex items-center justify-between">
 		<div class="flex items-center gap-2">
-			<MemoryStick class="h-4 w-4 text-purple-500" />
+			<MemoryStick class="text-primary h-4 w-4" />
 			<span class="text-sm font-semibold">内存</span>
 		</div>
-		<span class="font-mono text-sm font-bold text-purple-500">
+		<span class="text-primary font-mono text-sm font-bold">
 			{formatPercentage(memoryPercentage)}
 		</span>
 	</div>

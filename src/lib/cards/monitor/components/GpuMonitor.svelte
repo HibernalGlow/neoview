@@ -6,9 +6,9 @@
 	import { Cpu } from '@lucide/svelte';
 </script>
 
-<div class="bg-card/50 rounded-lg border p-3">
+<div class="bg-card text-card-foreground rounded-lg border p-3">
 	<div class="mb-3 flex items-center gap-2">
-		<Cpu class="h-4 w-4 text-cyan-500" />
+		<Cpu class="text-primary h-4 w-4" />
 		<span class="text-sm font-semibold">GPU</span>
 	</div>
 

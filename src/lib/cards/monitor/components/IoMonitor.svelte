@@ -49,22 +49,22 @@
 
 <div class="space-y-3">
 	<!-- 网络 IO -->
-	<div class="bg-card/50 rounded-lg border p-3">
+	<div class="bg-card text-card-foreground rounded-lg border p-3">
 		<div class="mb-3 flex items-center gap-2">
-			<Network class="h-4 w-4 text-green-500" />
+			<Network class="text-primary h-4 w-4" />
 			<span class="text-sm font-semibold">网络</span>
 		</div>
 
 		<div class="grid grid-cols-2 gap-3 text-xs">
-			<div class="bg-muted/30 rounded p-2">
+			<div class="bg-muted/50 rounded p-2">
 				<div class="text-muted-foreground mb-1">下载速度</div>
-				<div class="font-mono font-semibold text-green-500">
+				<div class="text-primary font-mono font-semibold">
 					↓ {formatBytes(networkRx)}
 				</div>
 			</div>
-			<div class="bg-muted/30 rounded p-2">
+			<div class="bg-muted/50 rounded p-2">
 				<div class="text-muted-foreground mb-1">上传速度</div>
-				<div class="font-mono font-semibold text-blue-500">
+				<div class="text-primary font-mono font-semibold">
 					↑ {formatBytes(networkTx)}
 				</div>
 			</div>
@@ -72,13 +72,13 @@
 	</div>
 
 	<!-- 磁盘 IO -->
-	<div class="bg-card/50 rounded-lg border p-3">
+	<div class="bg-card text-card-foreground rounded-lg border p-3">
 		<div class="mb-3 flex items-center justify-between">
 			<div class="flex items-center gap-2">
-				<HardDrive class="h-4 w-4 text-orange-500" />
+				<HardDrive class="text-primary h-4 w-4" />
 				<span class="text-sm font-semibold">磁盘</span>
 			</div>
-			<span class="font-mono text-sm font-bold text-orange-500">
+			<span class="text-primary font-mono text-sm font-bold">
 				{Math.round(diskPercentage)}%
 			</span>
 		</div>
@@ -86,7 +86,7 @@
 		<!-- 磁盘使用进度条 -->
 		<div class="mb-3">
 			<div class="bg-muted h-2 overflow-hidden rounded-full">
-				<div class="h-full bg-orange-500 transition-all" style:width={`${diskPercentage}%`}></div>
+				<div class="bg-primary h-full transition-all" style:width={`${diskPercentage}%`}></div>
 			</div>
 		</div>
 

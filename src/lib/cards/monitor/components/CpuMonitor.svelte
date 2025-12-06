@@ -21,14 +21,14 @@
 	}
 </script>
 
-<div class="bg-card/50 rounded-lg border p-3">
+<div class="bg-card text-card-foreground rounded-lg border p-3">
 	<!-- 头部 -->
 	<div class="mb-3 flex items-center justify-between">
 		<div class="flex items-center gap-2">
-			<Cpu class="h-4 w-4 text-blue-500" />
+			<Cpu class="text-primary h-4 w-4" />
 			<span class="text-sm font-semibold">CPU</span>
 		</div>
-		<span class="font-mono text-sm font-bold text-blue-500">
+		<span class="text-primary font-mono text-sm font-bold">
 			{formatPercentage(averageUsage)}
 		</span>
 	</div>
@@ -40,7 +40,3 @@
 		{/each}
 	</div>
 </div>
-
-<style>
-	/* 任何额外的样式 */
-</style>

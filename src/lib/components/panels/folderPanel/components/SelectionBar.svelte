@@ -12,7 +12,7 @@ import {
 	folderTabActions,
 	activeTabId
 } from '../stores/folderTabStore.svelte';
-import { getChainSelectMode, toggleChainSelectMode } from '../stores/chainSelectStore.svelte';
+import { chainSelectModeByTab, toggleChainSelectMode } from '../stores/chainSelectStore.svelte';
 
 // 别名映射
 const selectedItems = tabSelectedItems;
@@ -32,8 +32,8 @@ const selectedCount = $derived($selectedItems.size);
 const totalCount = $derived($items.length);
 const allSelected = $derived(selectedCount > 0 && selectedCount === totalCount);
 
-// 链选模式状态 - 使用函数获取当前页签的链选状态
-const isChainSelectMode = $derived(getChainSelectMode($activeTabId));
+// 链选模式状态 - 响应式订阅 store
+const isChainSelectMode = $derived($chainSelectModeByTab[$activeTabId] || false);
 
 function handleSelectAll() {
 	folderTabActions.selectAll();
@@ -121,7 +121,10 @@ function handleClose() {
 					variant={isChainSelectMode ? 'default' : 'ghost'}
 					size="sm"
 					class="h-7 px-2"
-					onclick={() => toggleChainSelectMode($activeTabId)}
+					onclick={(e) => {
+					console.log('[SelectionBar] 链选按钮被点击', e);
+					toggleChainSelectMode($activeTabId);
+				}}
 				>
 					<Link class="h-4 w-4 mr-1" />
 					链选

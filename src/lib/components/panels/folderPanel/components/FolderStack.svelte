@@ -594,6 +594,7 @@ async function tryPenetrateFolder(folderPath: string): Promise<FsItem | null> {
 
 // 处理项选中（单击）- 参考老面板的实现
 async function handleItemSelect(layerIndex: number, payload: { item: FsItem; index: number; multiSelect: boolean; shiftKey?: boolean }) {
+	console.log('[FolderStack] handleItemSelect 被调用 - layerIndex:', layerIndex, 'activeIndex:', activeIndex, 'item:', payload.item.name);
 	if (layerIndex !== activeIndex) return;
 	
 	// 更新层的选中索引

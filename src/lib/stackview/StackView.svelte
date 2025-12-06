@@ -41,8 +41,7 @@
   import VideoContainer from '$lib/components/viewer/VideoContainer.svelte';
   import { isVideoFile } from '$lib/utils/videoUtils';
   import { upscaleStore } from './stores/upscaleStore.svelte';
-  import SidebarFloatingControl from '$lib/components/viewer/SidebarFloatingControl.svelte';
-  
+    
   // ============================================================================
   // Props
   // ============================================================================
@@ -716,9 +715,6 @@
   />
   
 </div>
-
-<!-- 边栏浮动控制器（放在 stack-view 外面以避免 isolation 影响 z-index） -->
-<SidebarFloatingControl />
 
 <style>
   .stack-view {

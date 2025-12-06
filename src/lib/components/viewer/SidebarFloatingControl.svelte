@@ -70,7 +70,7 @@ const unsubRightOpen = rightSidebarOpen.subscribe(v => rightOpen = v);
 function syncFromSettings() {
 	const s = settingsManager.getSettings();
 	const ctrl = s.view?.sidebarControl;
-	enabled = ctrl?.enabled ?? false;
+	enabled = ctrl?.enabled ?? true;
 	position = ctrl?.position ?? { x: 100, y: 100 };
 }
 
@@ -78,7 +78,7 @@ syncFromSettings();
 
 const settingsListener = (s: NeoViewSettings) => {
 	const ctrl = s.view?.sidebarControl;
-	enabled = ctrl?.enabled ?? false;
+	enabled = ctrl?.enabled ?? true;
 	position = ctrl?.position ?? { x: 100, y: 100 };
 };
 

@@ -42,32 +42,29 @@
 	let roots = $state<TreeNode[]>([]);
 	let loadingRoots = $state(true);
 
-	// 根据深度生成颜色
+	// 根据深度生成颜色（使用主题色，深度越深颜色越深）
 	function getDepthColor(depth: number): string {
-		const colors = [
-			'text-blue-500', // 根目录 - 蓝色
-			'text-emerald-500', // 深度1 - 翠绿
-			'text-amber-500', // 深度2 - 琥珀
-			'text-purple-500', // 深度3 - 紫色
-			'text-rose-500', // 深度4 - 玫瑰
-			'text-cyan-500', // 深度5 - 青色
-			'text-orange-500' // 深度6 - 橙色
+		// 使用主题色，通过不同的透明度/亮度表示层级
+		const opacities = [
+			'text-primary/60', // 根目录 - 较浅
+			'text-primary/70', // 深度1
+			'text-primary/80', // 深度2
+			'text-primary/90', // 深度3
+			'text-primary' // 深度4+ - 最深
 		];
-		return colors[depth % colors.length];
+		return opacities[Math.min(depth, opacities.length - 1)];
 	}
 
-	// 获取层级线颜色
+	// 获取层级线颜色（使用主题色边框）
 	function getLineColor(depth: number): string {
-		const colors = [
-			'border-blue-400/40',
-			'border-emerald-400/40',
-			'border-amber-400/40',
-			'border-purple-400/40',
-			'border-rose-400/40',
-			'border-cyan-400/40',
-			'border-orange-400/40'
+		const opacities = [
+			'border-primary/20', // 浅
+			'border-primary/30',
+			'border-primary/40',
+			'border-primary/50',
+			'border-primary/60' // 深
 		];
-		return colors[depth % colors.length];
+		return opacities[Math.min(depth, opacities.length - 1)];
 	}
 
 	// 加载根目录（Windows 盘符）

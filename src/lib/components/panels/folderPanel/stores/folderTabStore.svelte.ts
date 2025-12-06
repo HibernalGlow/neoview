@@ -41,6 +41,8 @@ export interface FolderTabState {
 	selectedItems: SvelteSet<string>;
 	// 当前焦点项
 	focusedItem: FsItem | null;
+	// 最后选中的索引（用于 shift 范围选择）
+	lastSelectedIndex: number;
 	// 加载状态
 	loading: boolean;
 	// 错误信息
@@ -122,6 +124,7 @@ function createDefaultTabState(id: string, homePath: string = ''): FolderTabStat
 		items: [],
 		selectedItems: new SvelteSet(),
 		focusedItem: null,
+		lastSelectedIndex: -1,
 		loading: false,
 		error: null,
 		viewStyle: 'list',
@@ -830,8 +833,11 @@ export const folderTabActions = {
 
 	/**
 	 * 选择项
+	 * @param path 要选择的项目路径
+	 * @param toggle 是否切换选中状态（勾选模式）
+	 * @param index 项目在列表中的索引（用于记录 lastSelectedIndex）
 	 */
-	selectItem(path: string, toggle = false) {
+	selectItem(path: string, toggle = false, index?: number) {
 		updateActiveTab((tab) => {
 			const newSelected = new SvelteSet(tab.selectedItems);
 			if (toggle) {
@@ -844,8 +850,49 @@ export const folderTabActions = {
 				newSelected.clear();
 				newSelected.add(path);
 			}
+			// 更新 lastSelectedIndex
+			const newLastIndex = index !== undefined ? index : tab.lastSelectedIndex;
+			return { ...tab, selectedItems: newSelected, lastSelectedIndex: newLastIndex };
+		});
+	},
+
+	/**
+	 * 范围选择（shift + 点击）
+	 * 从 lastSelectedIndex 到当前 index 之间的所有项目都会被选中
+	 * @param endIndex 范围结束索引
+	 * @param items 当前显示的项目列表（用于获取路径）
+	 */
+	selectRange(endIndex: number, items: FsItem[]) {
+		updateActiveTab((tab) => {
+			const startIndex = tab.lastSelectedIndex >= 0 ? tab.lastSelectedIndex : 0;
+			const minIndex = Math.min(startIndex, endIndex);
+			const maxIndex = Math.max(startIndex, endIndex);
+			
+			// 保留已选中的项目，添加范围内的项目
+			const newSelected = new SvelteSet(tab.selectedItems);
+			for (let i = minIndex; i <= maxIndex; i++) {
+				if (i >= 0 && i < items.length) {
+					newSelected.add(items[i].path);
+				}
+			}
+			
 			return { ...tab, selectedItems: newSelected };
 		});
+	},
+
+	/**
+	 * 获取最后选中的索引
+	 */
+	getLastSelectedIndex(): number {
+		const tab = this.getActiveTab();
+		return tab?.lastSelectedIndex ?? -1;
+	},
+
+	/**
+	 * 设置最后选中的索引
+	 */
+	setLastSelectedIndex(index: number) {
+		updateActiveTab((tab) => ({ ...tab, lastSelectedIndex: index }));
 	},
 
 	/**

@@ -591,15 +591,22 @@ async function tryPenetrateFolder(folderPath: string): Promise<FsItem | null> {
 }
 
 // 处理项选中（单击）- 参考老面板的实现
-async function handleItemSelect(layerIndex: number, payload: { item: FsItem; index: number; multiSelect: boolean }) {
+async function handleItemSelect(layerIndex: number, payload: { item: FsItem; index: number; multiSelect: boolean; shiftKey?: boolean }) {
 	if (layerIndex !== activeIndex) return;
 	
 	// 更新层的选中索引
 	layers[layerIndex].selectedIndex = payload.index;
 	
-	if (payload.multiSelect) {
-		// 多选模式：只切换选中状态，不导航
-		folderTabActions.selectItem(payload.item.path, true);
+	// 获取当前层的显示项目列表（用于范围选择）
+	const displayItems = getDisplayItems(layers[layerIndex]);
+	
+	// 检查是否需要范围选择（勾选模式 + Shift 键）
+	if (($multiSelectMode || payload.multiSelect) && payload.shiftKey) {
+		// Shift + 点击：范围选择
+		folderTabActions.selectRange(payload.index, displayItems);
+	} else if (payload.multiSelect || $multiSelectMode) {
+		// 多选模式：切换选中状态并更新锚点，不导航
+		folderTabActions.selectItem(payload.item.path, true, payload.index);
 	} else {
 		if (payload.item.isDir) {
 			// 文件夹：进入目录，不加入选中列表

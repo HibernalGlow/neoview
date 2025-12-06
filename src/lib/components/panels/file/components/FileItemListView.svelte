@@ -36,6 +36,9 @@
 		totalPages?: number;
 		timestamp?: number;
 		thumbnailSize?: number;
+		// 文件夹总大小（异步加载）
+		folderTotalSize?: number | null;
+		folderSizeLoading?: boolean;
 		// 计算状态
 		isBookmarked: boolean;
 		isArchive: boolean;
@@ -74,6 +77,8 @@
 		totalPages,
 		timestamp,
 		thumbnailSize = 48,
+		folderTotalSize = null,
+		folderSizeLoading = false,
 		isBookmarked,
 		isArchive,
 		isReadCompleted,
@@ -111,13 +116,28 @@
 		return new Date(ts).toLocaleDateString();
 	}
 
-	// 格式化文件大小
-	function formatSize(bytes: number, isDir: boolean): string {
-		if (isDir) return bytes === 0 ? '空文件夹' : `${bytes} 项`;
+	// 格式化文件大小（字节）
+	function formatBytes(bytes: number): string {
 		if (bytes < 1024) return bytes + ' B';
 		if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
 		if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 		return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+	}
+
+	// 格式化文件大小（兼容文件夹项目数）
+	function formatSize(bytes: number, isDir: boolean): string {
+		if (isDir) return bytes === 0 ? '空文件夹' : `${bytes} 项`;
+		return formatBytes(bytes);
+	}
+
+	// 获取文件夹显示大小（优先显示总字节大小，否则显示项目数）
+	function getFolderSizeDisplay(): string {
+		if (folderSizeLoading) return '计算中...';
+		if (folderTotalSize !== null && folderTotalSize !== undefined) {
+			return formatBytes(folderTotalSize);
+		}
+		// 回退到项目数
+		return item.size === 0 ? '空文件夹' : `${item.size} 项`;
 	}
 </script>
 
@@ -374,7 +394,7 @@
 
 		<div class="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-sm">
 			{#if showSizeAndModified}
-				<span>{formatSize(item.size || 0, item.isDir || false)}</span>
+				<span>{item.isDir ? getFolderSizeDisplay() : formatSize(item.size || 0, false)}</span>
 				{#if timestamp}
 					<span>· {formatTime(timestamp)}</span>
 				{/if}
@@ -386,7 +406,7 @@
 					<span>{formatTime(timestamp)}</span>
 				{/if}
 				{#if !currentPage && !timestamp}
-					<span>{formatSize(item.size || 0, item.isDir || false)}</span>
+					<span>{item.isDir ? getFolderSizeDisplay() : formatSize(item.size || 0, false)}</span>
 				{/if}
 			{/if}
 			<!-- 评分放在大小和时间后面 -->

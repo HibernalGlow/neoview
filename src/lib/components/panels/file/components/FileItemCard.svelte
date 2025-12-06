@@ -361,6 +361,8 @@
 		{totalPages}
 		{timestamp}
 		{thumbnailSize}
+		{folderTotalSize}
+		{folderSizeLoading}
 		{isBookmarked}
 		{isArchive}
 		{isReadCompleted}
@@ -398,6 +400,8 @@
 		{currentPage}
 		{totalPages}
 		{timestamp}
+		{folderTotalSize}
+		{folderSizeLoading}
 		{isBookmarked}
 		{isArchive}
 		{isReadCompleted}

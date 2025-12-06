@@ -37,6 +37,7 @@ const searchKeyword = tabSearchKeyword;
 const penetrateMode = tabPenetrateMode;
 const thumbnailWidthPercent = tabThumbnailWidthPercent;
 import { Loader2, FolderOpen, AlertCircle } from '@lucide/svelte';
+import { chainSelectMode, getChainAnchor, setChainAnchor, setActiveTabId as setChainActiveTabId } from '../stores/chainSelectStore.svelte';
 import { directoryTreeCache } from '../utils/directoryTreeCache';
 import { folderRatingStore } from '$lib/stores/emm/folderRating';
 import { getDefaultRating } from '$lib/stores/emm/storage';
@@ -575,6 +576,15 @@ $effect(() => {
 	}
 });
 
+// 同步当前页签 ID 到 chainSelectStore
+$effect(() => {
+	const currentActiveTabId = get(activeTabId);
+	if (tabId === currentActiveTabId) {
+		setChainActiveTabId(tabId);
+		console.log('[FolderStack] 同步 chainSelectStore activeTabId:', tabId);
+	}
+});
+
 // 尝试穿透文件夹（只有一个子文件时才穿透）
 async function tryPenetrateFolder(folderPath: string): Promise<FsItem | null> {
 	try {
@@ -599,6 +609,40 @@ async function handleItemSelect(layerIndex: number, payload: { item: FsItem; ind
 	
 	// 获取当前层的显示项目列表（用于范围选择）
 	const displayItems = getDisplayItems(layers[layerIndex]);
+	
+	// 检查链选模式
+	console.log('[FolderStack] handleItemSelect - chainSelectMode:', $chainSelectMode, 'multiSelectMode:', $multiSelectMode, 'payload.multiSelect:', payload.multiSelect);
+	if ($chainSelectMode && ($multiSelectMode || payload.multiSelect)) {
+		const anchor = getChainAnchor();
+		console.log('[FolderStack] 链选模式激活 - anchor:', anchor, 'currentIndex:', payload.index);
+		if (anchor === -1) {
+			// 还没有锚点，设置当前点击位置为锚点并选中该项
+			console.log('[FolderStack] 设置锚点为:', payload.index);
+			setChainAnchor(payload.index);
+			folderTabActions.selectItem(payload.item.path, true, payload.index);
+		} else {
+			// 有锚点，选中从锚点到当前位置的所有项目
+			const startIndex = Math.min(anchor, payload.index);
+			const endIndex = Math.max(anchor, payload.index);
+			console.log('[FolderStack] 链选范围:', startIndex, '->', endIndex, 'displayItems.length:', displayItems.length);
+			
+			// 批量收集需要选中的路径，避免逐个调用导致性能问题
+			const currentSelected = get(tabSelectedItems);
+			const newSelected = new Set(currentSelected);
+			for (let i = startIndex; i <= endIndex; i++) {
+				if (i >= 0 && i < displayItems.length) {
+					newSelected.add(displayItems[i].path);
+				}
+			}
+			// 一次性设置所有选中项
+			folderTabActions.setSelectedItems(newSelected);
+			console.log('[FolderStack] 批量选中完成，共选中:', newSelected.size, '项');
+			
+			// 更新锚点为当前位置，方便继续链选
+			setChainAnchor(payload.index);
+		}
+		return;
+	}
 	
 	// 检查是否需要范围选择（勾选模式 + Shift 键）
 	if (($multiSelectMode || payload.multiSelect) && payload.shiftKey) {

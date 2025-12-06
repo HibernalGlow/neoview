@@ -8,6 +8,9 @@ import { writable, derived } from 'svelte/store';
 // 链选模式状态（按页签ID存储）
 const chainSelectModeByTab = writable<Record<string, boolean>>({});
 
+// 链选锚点索引（按页签ID存储）- 记录上一次选中的索引
+const chainAnchorByTab = writable<Record<string, number>>({});
+
 // 当前活动页签ID（从外部获取）
 let currentActiveTabId = '';
 
@@ -29,10 +32,21 @@ export const chainSelectMode = derived(chainSelectModeByTab, ($modes) => {
  * 切换链选模式
  */
 export function toggleChainSelectMode() {
-	chainSelectModeByTab.update((modes) => ({
-		...modes,
-		[currentActiveTabId]: !modes[currentActiveTabId]
-	}));
+	chainSelectModeByTab.update((modes) => {
+		const newEnabled = !modes[currentActiveTabId];
+		// 关闭链选模式时清除锚点
+		if (!newEnabled) {
+			chainAnchorByTab.update((anchors) => {
+				const newAnchors = { ...anchors };
+				delete newAnchors[currentActiveTabId];
+				return newAnchors;
+			});
+		}
+		return {
+			...modes,
+			[currentActiveTabId]: newEnabled
+		};
+	});
 }
 
 /**
@@ -54,4 +68,44 @@ export function setChainSelectMode(tabId: string, enabled: boolean) {
 		...modes,
 		[tabId]: enabled
 	}));
+	// 关闭时清除锚点
+	if (!enabled) {
+		chainAnchorByTab.update((anchors) => {
+			const newAnchors = { ...anchors };
+			delete newAnchors[tabId];
+			return newAnchors;
+		});
+	}
+}
+
+/**
+ * 获取当前页签的链选锚点索引
+ */
+export function getChainAnchor(): number {
+	let result = -1;
+	chainAnchorByTab.subscribe((anchors) => {
+		result = anchors[currentActiveTabId] ?? -1;
+	})();
+	return result;
+}
+
+/**
+ * 设置当前页签的链选锚点索引
+ */
+export function setChainAnchor(index: number) {
+	chainAnchorByTab.update((anchors) => ({
+		...anchors,
+		[currentActiveTabId]: index
+	}));
+}
+
+/**
+ * 清除当前页签的链选锚点
+ */
+export function clearChainAnchor() {
+	chainAnchorByTab.update((anchors) => {
+		const newAnchors = { ...anchors };
+		delete newAnchors[currentActiveTabId];
+		return newAnchors;
+	});
 }

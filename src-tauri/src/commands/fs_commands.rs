@@ -163,10 +163,11 @@ pub async fn browse_directory(
     path: String,
     state: State<'_, FsState>,
 ) -> Result<Vec<crate::core::fs_manager::FsItem>, String> {
+    // 使用 unwrap_or_else 恢复被污染的锁
     let fs_manager = state
         .fs_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     let path = PathBuf::from(path);
     fs_manager.read_directory(&path)
@@ -202,10 +203,11 @@ pub async fn load_directory_snapshot(
 
     // 内存缓存
     {
+        // 使用 unwrap_or_else 恢复被污染的锁
         let mut cache = cache_state
             .cache
             .lock()
-            .map_err(|e| format!("获取目录缓存锁失败: {}", e))?;
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(entry) = cache.get(&path, mtime) {
             println!(
                 "📁 DirectorySnapshot 命中内存缓存: {} (entries={})",
@@ -228,10 +230,11 @@ pub async fn load_directory_snapshot(
         //     persisted_items.len()
         // );
         {
+            // 使用 unwrap_or_else 恢复被污染的锁
             let mut cache = cache_state
                 .cache
                 .lock()
-                .map_err(|e| format!("获取目录缓存锁失败: {}", e))?;
+                .unwrap_or_else(|e| e.into_inner());
             cache.insert(path.clone(), persisted_items.clone(), mtime);
         }
         return Ok(DirectorySnapshotResponse {
@@ -255,19 +258,21 @@ pub async fn load_directory_snapshot(
             "filebrowser-directory-load",
             job_path,
             move || -> Result<Vec<FsItem>, String> {
+                // 使用 unwrap_or_else 恢复被污染的锁
                 let fs_manager = fs_manager
                     .lock()
-                    .map_err(|e| format!("获取锁失败: {}", e))?;
+                    .unwrap_or_else(|e| e.into_inner());
                 fs_manager.read_directory(&path_for_job)
             },
         )
         .await?;
 
     {
+        // 使用 unwrap_or_else 恢复被污染的锁
         let mut cache = cache_state
             .cache
             .lock()
-            .map_err(|e| format!("获取目录缓存锁失败: {}", e))?;
+            .unwrap_or_else(|e| e.into_inner());
         cache.insert(path.clone(), items.clone(), mtime);
     }
     cache_index
@@ -288,10 +293,11 @@ pub async fn get_images_in_directory(
     recursive: bool,
     state: State<'_, FsState>,
 ) -> Result<Vec<String>, String> {
+    // 使用 unwrap_or_else 恢复被污染的锁
     let fs_manager = state
         .fs_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     let path = PathBuf::from(path);
     let images = fs_manager.get_images_in_directory(&path, recursive)?;
@@ -308,10 +314,11 @@ pub async fn get_file_metadata(
     path: String,
     state: State<'_, FsState>,
 ) -> Result<crate::core::fs_manager::FsItem, String> {
+    // 使用 unwrap_or_else 恢复被污染的锁
     let fs_manager = state
         .fs_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     let path = PathBuf::from(path);
     fs_manager.get_file_metadata(&path)
@@ -320,10 +327,11 @@ pub async fn get_file_metadata(
 /// 创建目录
 #[tauri::command]
 pub async fn create_directory(path: String, state: State<'_, FsState>) -> Result<(), String> {
+    // 使用 unwrap_or_else 恢复被污染的锁
     let fs_manager = state
         .fs_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     let path = PathBuf::from(path);
     fs_manager.create_directory(&path)
@@ -332,10 +340,11 @@ pub async fn create_directory(path: String, state: State<'_, FsState>) -> Result
 /// 删除文件或目录
 #[tauri::command]
 pub async fn delete_path(path: String, state: State<'_, FsState>) -> Result<(), String> {
+    // 使用 unwrap_or_else 恢复被污染的锁
     let fs_manager = state
         .fs_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     let path = PathBuf::from(path);
     fs_manager.delete(&path)
@@ -348,10 +357,11 @@ pub async fn rename_path(
     to: String,
     state: State<'_, FsState>,
 ) -> Result<(), String> {
+    // 使用 unwrap_or_else 恢复被污染的锁
     let fs_manager = state
         .fs_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     let from_path = PathBuf::from(from);
     let to_path = PathBuf::from(to);
@@ -379,10 +389,11 @@ pub async fn list_archive_contents(
     archive_path: String,
     state: State<'_, FsState>,
 ) -> Result<Vec<crate::core::archive::ArchiveEntry>, String> {
+    // 使用 unwrap_or_else 恢复被污染的锁
     let archive_manager = state
         .archive_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     let path = PathBuf::from(archive_path);
     // 使用 list_contents 自动检测格式（支持 ZIP/RAR/7z）
@@ -396,10 +407,11 @@ pub async fn delete_archive_entry(
     inner_path: String,
     state: State<'_, FsState>,
 ) -> Result<(), String> {
+    // 使用 unwrap_or_else 恢复被污染的锁
     let archive_manager = state
         .archive_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     let path = PathBuf::from(&archive_path);
     archive_manager.delete_entry_from_zip(&path, &inner_path)
@@ -432,9 +444,10 @@ pub async fn load_image_from_archive_binary(
     let archive_path_buf = PathBuf::from(&archive_path);
     let inner_path = file_path.clone();
     let result = spawn_blocking(move || {
+        // 使用 unwrap_or_else 恢复被污染的锁
         let manager = archive_manager
             .lock()
-            .map_err(|e| format!("获取锁失败: {}", e))?;
+            .unwrap_or_else(|e| e.into_inner());
         manager.load_image_from_archive_binary(&archive_path_buf, &inner_path)
     })
     .await
@@ -486,9 +499,10 @@ pub async fn load_image_from_archive(
     let archive_path_buf = PathBuf::from(&archive_path);
     let inner_path = file_path.clone();
     let result = spawn_blocking(move || {
+        // 使用 unwrap_or_else 恢复被污染的锁
         let manager = archive_manager
             .lock()
-            .map_err(|e| format!("获取锁失败: {}", e))?;
+            .unwrap_or_else(|e| e.into_inner());
         manager.load_image_from_archive_binary(&archive_path_buf, &inner_path)
     })
     .await
@@ -537,9 +551,10 @@ pub async fn extract_image_to_temp(
     let inner_path = file_path.clone();
     
     let result = spawn_blocking(move || {
+        // 使用 unwrap_or_else 恢复被污染的锁
         let manager = archive_manager
             .lock()
-            .map_err(|e| format!("获取锁失败: {}", e))?;
+            .unwrap_or_else(|e| e.into_inner());
         
         // 读取图片数据（支持 ZIP/RAR/7z）
         let bytes = manager.load_image_from_archive_binary(&archive_path_buf, &inner_path)?;
@@ -597,10 +612,11 @@ pub async fn get_images_from_archive(
     archive_path: String,
     state: State<'_, FsState>,
 ) -> Result<Vec<String>, String> {
+    // 使用 unwrap_or_else 恢复被污染的锁
     let archive_manager = state
         .archive_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     let path = PathBuf::from(archive_path);
     // 使用 get_images_from_archive 支持 ZIP/RAR/7z
@@ -644,9 +660,10 @@ pub async fn batch_extract_archive(
     let archive_manager = Arc::clone(&state.archive_manager);
     
     let result = spawn_blocking(move || {
+        // 使用 unwrap_or_else 恢复被污染的锁
         let manager = archive_manager
             .lock()
-            .map_err(|e| format!("获取锁失败: {}", e))?;
+            .unwrap_or_else(|e| e.into_inner());
         
         // 获取所有图片（支持 ZIP/RAR/7z）
         let images = manager.get_images_from_archive(&archive_path_buf)?;
@@ -704,9 +721,10 @@ pub async fn batch_scan_archives(
             "filebrowser",
             move || -> Result<Vec<ArchiveScanResult>, String> {
                 let mut results = Vec::with_capacity(paths.len());
+                // 使用 unwrap_or_else 恢复被污染的锁
                 let manager = archive_manager
                     .lock()
-                    .map_err(|e| format!("获取压缩包管理器锁失败: {}", e))?;
+                    .unwrap_or_else(|e| e.into_inner());
 
                 for path in paths {
                     let archive_path_str = path.to_string_lossy().to_string();
@@ -769,9 +787,10 @@ pub async fn preload_archive_pages(
     let start_time = std::time::Instant::now();
     
     let result = spawn_blocking(move || {
+        // 使用 unwrap_or_else 恢复被污染的锁
         let manager = archive_manager
             .lock()
-            .map_err(|e| format!("获取锁失败: {}", e))?;
+            .unwrap_or_else(|e| e.into_inner());
         
         let success_count = AtomicUsize::new(0);
         let total_bytes = AtomicUsize::new(0);
@@ -830,10 +849,11 @@ pub struct PreloadResult {
 /// 复制文件或文件夹
 #[tauri::command]
 pub async fn copy_path(from: String, to: String, state: State<'_, FsState>) -> Result<(), String> {
+    // 使用 unwrap_or_else 恢复被污染的锁
     let fs_manager = state
         .fs_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     let from_path = PathBuf::from(from);
     let to_path = PathBuf::from(to);
@@ -843,10 +863,11 @@ pub async fn copy_path(from: String, to: String, state: State<'_, FsState>) -> R
 /// 移动文件或文件夹
 #[tauri::command]
 pub async fn move_path(from: String, to: String, state: State<'_, FsState>) -> Result<(), String> {
+    // 使用 unwrap_or_else 恢复被污染的锁
     let fs_manager = state
         .fs_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     let from_path = PathBuf::from(from);
     let to_path = PathBuf::from(to);
@@ -955,10 +976,11 @@ pub async fn search_files(
 ) -> Result<Vec<crate::core::fs_manager::FsItem>, String> {
     let search_options = options.unwrap_or_default();
 
+    // 使用 unwrap_or_else 恢复被污染的锁
     let fs_manager = state
         .fs_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     let path_buf = PathBuf::from(path);
 
@@ -997,10 +1019,11 @@ pub struct SearchOptions {
 /// 初始化文件索引
 #[tauri::command]
 pub async fn initialize_file_index(state: State<'_, FsState>) -> Result<(), String> {
+    // 使用 unwrap_or_else 恢复被污染的锁
     let fs_manager = state
         .fs_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     fs_manager.initialize_indexer()
 }
@@ -1012,10 +1035,11 @@ pub async fn build_file_index(
     recursive: bool,
     state: State<'_, FsState>,
 ) -> Result<(), String> {
+    // 使用 unwrap_or_else 恢复被污染的锁
     let fs_manager = state
         .fs_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     let path = PathBuf::from(path);
     fs_manager.build_index(&path, recursive)
@@ -1026,10 +1050,11 @@ pub async fn build_file_index(
 pub async fn get_index_stats(
     state: State<'_, FsState>,
 ) -> Result<crate::core::file_indexer::IndexStats, String> {
+    // 使用 unwrap_or_else 恢复被污染的锁
     let fs_manager = state
         .fs_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     fs_manager.get_index_stats()
 }
@@ -1037,10 +1062,11 @@ pub async fn get_index_stats(
 /// 清除文件索引
 #[tauri::command]
 pub async fn clear_file_index(state: State<'_, FsState>) -> Result<(), String> {
+    // 使用 unwrap_or_else 恢复被污染的锁
     let fs_manager = state
         .fs_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     fs_manager.clear_index()
 }
@@ -1053,10 +1079,11 @@ pub async fn search_in_index(
     options: Option<IndexSearchOptions>,
     state: State<'_, FsState>,
 ) -> Result<Vec<crate::core::fs_manager::FsItem>, String> {
+    // 使用 unwrap_or_else 恢复被污染的锁
     let fs_manager = state
         .fs_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     let max_results = max_results.unwrap_or(100);
     let search_options = options.map(|o| crate::core::file_indexer::SearchOptions {
@@ -1079,10 +1106,11 @@ pub async fn get_indexed_paths(
     recursive: Option<bool>,
     state: State<'_, FsState>,
 ) -> Result<Vec<String>, String> {
+    // 使用 unwrap_or_else 恢复被污染的锁
     let fs_manager = state
         .fs_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     let recursive = recursive.unwrap_or(false);
 
@@ -1092,10 +1120,11 @@ pub async fn get_indexed_paths(
 /// 检查路径是否已被索引
 #[tauri::command]
 pub async fn is_path_indexed(path: String, state: State<'_, FsState>) -> Result<bool, String> {
+    // 使用 unwrap_or_else 恢复被污染的锁
     let fs_manager = state
         .fs_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     fs_manager.is_path_indexed(&path)
 }
@@ -1105,10 +1134,11 @@ pub async fn is_path_indexed(path: String, state: State<'_, FsState>) -> Result<
 pub async fn get_index_progress(
     state: State<'_, FsState>,
 ) -> Result<crate::core::file_indexer::IndexProgress, String> {
+    // 使用 unwrap_or_else 恢复被污染的锁
     let fs_manager = state
         .fs_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     fs_manager.get_index_progress()
 }
@@ -1134,10 +1164,11 @@ pub async fn get_unindexed_files(
 ) -> Result<UnindexedFilesResult, String> {
     println!("🔍 开始扫描未索引文件: {}", root_path);
 
+    // 使用 unwrap_or_else 恢复被污染的锁
     let fs_manager = state
         .fs_manager
         .lock()
-        .map_err(|e| format!("获取锁失败: {}", e))?;
+        .unwrap_or_else(|e| e.into_inner());
 
     let root_path = PathBuf::from(root_path);
 

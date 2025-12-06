@@ -249,10 +249,10 @@
   }
 
   function getButtonClass(lockState: SidebarLockState, isOpen?: boolean): string {
-    if (lockState === true) return 'btn-locked-open';
-    if (lockState === false) return 'btn-locked-hidden';
-    if (isOpen) return 'btn-open';
-    return 'btn-closed';
+    if (lockState === true) return 'bg-primary text-primary-foreground';
+    if (lockState === false) return 'bg-destructive/80 text-destructive-foreground';
+    if (isOpen) return 'bg-secondary text-secondary-foreground';
+    return 'bg-muted/60 text-muted-foreground hover:bg-muted';
   }
 
   function getStateText(lockState: SidebarLockState, isOpen: boolean): string {
@@ -265,7 +265,7 @@
 {#if enabled}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    class="sidebar-control-layer"
+    class="pointer-events-auto absolute"
     data-layer="SidebarControlLayer"
     data-layer-id="sidebar-control"
     style:z-index={LayerZIndex.SIDEBAR_CONTROL}
@@ -274,180 +274,85 @@
     onclick={(e) => e.stopPropagation()}
     onmousedown={(e) => e.stopPropagation()}
   >
-    <div class="control-panel">
+    <div class="border-border/60 bg-background/80 flex items-center gap-0.5 rounded-lg border p-1 shadow-lg backdrop-blur-sm">
       <!-- 拖拽手柄 -->
       <button
         type="button"
-        class="drag-handle"
+        class="text-muted-foreground hover:text-foreground cursor-move p-1 transition-colors"
         onmousedown={handleDragStart}
         aria-label="拖动控制器"
       >
-        <GripVertical size={16} />
+        <GripVertical class="h-4 w-4" />
       </button>
 
       <!-- 上边栏 -->
       <button
         type="button"
-        class="control-btn {getButtonClass(topLock, topOpen)}"
+        class="relative rounded p-1.5 transition-colors {getButtonClass(topLock, topOpen)}"
         onclick={handleTopClick}
         oncontextmenu={handleTopContextMenu}
         title={getStateText(topLock, topOpen) + '，单击切换，右键锁定'}
       >
-        <PanelTop size={16} />
+        <PanelTop class="h-4 w-4" />
         {#if topLock !== null}
-          <Lock size={10} class="lock-badge" />
+          <Lock class="absolute -right-0.5 -top-0.5 h-2.5 w-2.5" />
         {/if}
       </button>
 
       <!-- 下边栏 -->
       <button
         type="button"
-        class="control-btn {getButtonClass(bottomLock, bottomOpen)}"
+        class="relative rounded p-1.5 transition-colors {getButtonClass(bottomLock, bottomOpen)}"
         onclick={handleBottomClick}
         oncontextmenu={handleBottomContextMenu}
         title={getStateText(bottomLock, bottomOpen) + '，单击切换，右键锁定'}
       >
-        <PanelBottom size={16} />
+        <PanelBottom class="h-4 w-4" />
         {#if bottomLock !== null}
-          <Lock size={10} class="lock-badge" />
+          <Lock class="absolute -right-0.5 -top-0.5 h-2.5 w-2.5" />
         {/if}
       </button>
 
       <!-- 左边栏 -->
       <button
         type="button"
-        class="control-btn {getButtonClass(leftLock, leftOpen)}"
+        class="relative rounded p-1.5 transition-colors {getButtonClass(leftLock, leftOpen)}"
         onclick={handleLeftClick}
         oncontextmenu={handleLeftContextMenu}
         title={getStateText(leftLock, leftOpen) + '，单击切换，右键锁定'}
       >
-        <PanelLeft size={16} />
+        <PanelLeft class="h-4 w-4" />
         {#if leftLock !== null}
-          <Lock size={10} class="lock-badge" />
+          <Lock class="absolute -right-0.5 -top-0.5 h-2.5 w-2.5" />
         {/if}
       </button>
 
       <!-- 右边栏 -->
       <button
         type="button"
-        class="control-btn {getButtonClass(rightLock, rightOpen)}"
+        class="relative rounded p-1.5 transition-colors {getButtonClass(rightLock, rightOpen)}"
         onclick={handleRightClick}
         oncontextmenu={handleRightContextMenu}
         title={getStateText(rightLock, rightOpen) + '，单击切换，右键锁定'}
       >
-        <PanelRight size={16} />
+        <PanelRight class="h-4 w-4" />
         {#if rightLock !== null}
-          <Lock size={10} class="lock-badge" />
+          <Lock class="absolute -right-0.5 -top-0.5 h-2.5 w-2.5" />
         {/if}
       </button>
 
       <!-- 分隔线 -->
-      <div class="divider"></div>
+      <div class="bg-border/60 mx-0.5 h-4 w-px"></div>
 
       <!-- 重置位置 -->
       <button
         type="button"
-        class="reset-btn"
+        class="text-muted-foreground hover:text-foreground hover:bg-muted rounded p-1.5 transition-colors"
         onclick={resetPosition}
         title="重置控制器位置"
       >
-        <RotateCcw size={16} />
+        <RotateCcw class="h-4 w-4" />
       </button>
     </div>
   </div>
 {/if}
-
-<style>
-  .sidebar-control-layer {
-    position: absolute;
-    pointer-events: auto;
-  }
-
-  .control-panel {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    padding: 4px;
-    border-radius: 8px;
-    border: 1px solid hsl(var(--border) / 0.6);
-    background: hsl(var(--background) / 0.8);
-    backdrop-filter: blur(4px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  }
-
-  .drag-handle {
-    padding: 4px;
-    cursor: move;
-    color: hsl(var(--muted-foreground));
-    transition: color 0.2s;
-    background: none;
-    border: none;
-  }
-
-  .drag-handle:hover {
-    color: hsl(var(--foreground));
-  }
-
-  .control-btn {
-    position: relative;
-    padding: 6px;
-    border-radius: 4px;
-    border: none;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .btn-locked-open {
-    background: hsl(var(--primary));
-    color: hsl(var(--primary-foreground));
-  }
-
-  .btn-locked-hidden {
-    background: hsl(var(--destructive) / 0.8);
-    color: hsl(var(--destructive-foreground));
-  }
-
-  .btn-open {
-    background: hsl(var(--secondary));
-    color: hsl(var(--secondary-foreground));
-  }
-
-  .btn-closed {
-    background: hsl(var(--muted) / 0.6);
-    color: hsl(var(--muted-foreground));
-  }
-
-  .btn-closed:hover {
-    background: hsl(var(--muted));
-  }
-
-  .lock-badge, :global(.lock-badge) {
-    position: absolute;
-    top: -2px;
-    right: -2px;
-    width: 10px;
-    height: 10px;
-  }
-
-  .divider {
-    width: 1px;
-    height: 16px;
-    margin: 0 2px;
-    background: hsl(var(--border) / 0.6);
-  }
-
-  .reset-btn {
-    padding: 6px;
-    border-radius: 4px;
-    border: none;
-    cursor: pointer;
-    background: transparent;
-    color: hsl(var(--muted-foreground));
-    transition: all 0.2s;
-  }
-
-  .reset-btn:hover {
-    background: hsl(var(--muted));
-    color: hsl(var(--foreground));
-  }
-</style>

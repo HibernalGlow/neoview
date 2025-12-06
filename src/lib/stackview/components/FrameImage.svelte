@@ -35,11 +35,14 @@
   let displayUrl = $derived.by(() => {
     // 依赖版本号以建立响应式关系
     const version = imagePool.version;
-    const upscaledUrl = imagePool.getDisplayUrl(pageIndex);
-    const result = upscaledUrl ?? url;
-    // 调试日志：仅当有超分图时打印
-    if (upscaledUrl) {
-      console.log(`🖼️ FrameImage[${pageIndex}] 使用超分图 (v${version}): ${upscaledUrl.slice(0, 60)}...`);
+    // 使用 hasUpscaled 正确判断是否有超分图
+    const hasUpscaled = imagePool.hasUpscaled(pageIndex);
+    const result = hasUpscaled 
+      ? imagePool.getUpscaledUrl(pageIndex) ?? url 
+      : url;
+    // 调试日志：仅当确实有超分图时打印
+    if (hasUpscaled) {
+      console.log(`🖼️ FrameImage[${pageIndex}] 使用超分图 (v${version}): ${result.slice(0, 60)}...`);
     }
     return result;
   });

@@ -7,7 +7,7 @@
 	import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 	import { Button } from '$lib/components/ui/button';
 	import { X, Minimize, Maximize } from '@lucide/svelte';
-	import ImageViewer from '$lib/components/viewer/ImageViewer.svelte';
+	import { StackView } from '$lib/stackview';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { 
 		zoomLevel, 
@@ -244,6 +244,6 @@
 
 	<!-- 内容区域 -->
 	<div class="flex-1 overflow-hidden">
-		<ImageViewer />
+		<StackView showPageInfo={true} showProgress={true} />
 	</div>
 </div>

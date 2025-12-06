@@ -4,7 +4,6 @@
 	 * 主应用程序组件
 	 */
 	import MainLayout from '$lib/components/layout/MainLayout.svelte';
-	import ImageViewer from '$lib/components/viewer/ImageViewer.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { open } from '@tauri-apps/plugin-dialog';

@@ -21,7 +21,7 @@
 	import RightSidebar from './RightSidebar.svelte';
 	import TopToolbar from './TopToolbar.svelte';
 	import BottomThumbnailBar from './BottomThumbnailBar.svelte';
-	import ImageViewer from '../viewer/ImageViewer.svelte';
+	import { StackView } from '$lib/stackview';
 	import AreaOverlay from '../ui/AreaOverlay.svelte';
 	import HoverAreasOverlay from '../ui/HoverAreasOverlay.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
@@ -133,7 +133,7 @@
 	<div class="absolute inset-0 overflow-hidden">
 		{#if bookStore.viewerOpen}
 			<!-- 图片查看器 -->
-			<ImageViewer />
+			<StackView showPageInfo={true} showProgress={true} />
 		{:else}
 			<!-- 默认内容 -->
 			{@render children?.()}

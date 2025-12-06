@@ -150,7 +150,7 @@
 </script>
 
 <div
-	class="relative flex h-full"
+	class="relative flex h-full min-h-screen"
 	data-hover-wrapper="true"
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}

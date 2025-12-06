@@ -754,8 +754,7 @@
 	<GestureLayer
 		{isVideoMode}
 		enablePan={false}
-		onTapLeft={isRTL ? handleNextPage : handlePrevPage}
-		onTapRight={isRTL ? handlePrevPage : handleNextPage}
+		enableTap={false}
 		onNextPage={handleNextPage}
 		onPrevPage={handlePrevPage}
 		onResetZoom={resetView}

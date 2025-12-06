@@ -257,7 +257,7 @@
 										stroke-linecap="round"
 										stroke-linejoin="round"
 										stroke-width="2"
-										d="M15 19l-7-7 7-7"
+										d="M5 15l7-7 7 7"
 									></path>
 								</svg>
 							</button>
@@ -281,7 +281,7 @@
 										stroke-linecap="round"
 										stroke-linejoin="round"
 										stroke-width="2"
-										d="M9 5l7 7-7 7"
+										d="M19 9l-7 7-7-7"
 									></path>
 								</svg>
 							</button>
@@ -299,7 +299,7 @@
 	{#if isPointerDragging && dragPreview && draggedCard}
 		<div
 			class="pointer-events-none fixed z-50"
-			style="left: {dragPreview.x}px; top: {dragPreview.y}px;"
+			style="left: {dragPreview.x}px; top: {dragPreview.y}px; transform: translate(-50%, -50%);"
 		>
 			<div
 				class="bg-accent inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium shadow-lg"

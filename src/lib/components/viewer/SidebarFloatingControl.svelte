@@ -131,15 +131,19 @@ function handleDragStart(event: MouseEvent) {
 	window.addEventListener('mouseup', handleMouseUp);
 }
 
-// 单击：切换 pinned 状态（显示/隐藏）
+// 单击：切换显示/隐藏（直接控制锁定状态）
 function handleTopClick(e: MouseEvent) {
 	e.preventDefault();
 	e.stopPropagation();
-	// 如果锁定隐藏，先解锁
-	if (topLock === false) {
-		topToolbarLockState.set(null);
+	// 如果当前是锁定显示或 pinned，切换到锁定隐藏
+	if (topLock === true || topPinned) {
+		topToolbarLockState.set(false);
+		topToolbarPinned.set(false);
+	} else {
+		// 否则切换到锁定显示
+		topToolbarLockState.set(true);
+		topToolbarPinned.set(true);
 	}
-	topToolbarPinned.update(v => !v);
 }
 
 // 右键：循环锁定状态（自动 → 锁定显示 → 锁定隐藏 → 自动）
@@ -163,10 +167,15 @@ function handleTopContextMenu(e: MouseEvent) {
 function handleBottomClick(e: MouseEvent) {
 	e.preventDefault();
 	e.stopPropagation();
-	if (bottomLock === false) {
-		bottomBarLockState.set(null);
+	// 如果当前是锁定显示或 pinned，切换到锁定隐藏
+	if (bottomLock === true || bottomPinned) {
+		bottomBarLockState.set(false);
+		bottomThumbnailBarPinned.set(false);
+	} else {
+		// 否则切换到锁定显示
+		bottomBarLockState.set(true);
+		bottomThumbnailBarPinned.set(true);
 	}
-	bottomThumbnailBarPinned.update(v => !v);
 }
 
 function handleBottomContextMenu(e: MouseEvent) {
@@ -251,7 +260,7 @@ function getStateText(lockState: SidebarLockState, isOpen: boolean): string {
 
 {#if enabled}
 	<div
-		class="fixed z-50 pointer-events-auto"
+		class="fixed z-[100] pointer-events-auto"
 		style:left="{position.x}px"
 		style:top="{position.y}px"
 	>

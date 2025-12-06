@@ -130,6 +130,9 @@
 		const rect = layerRef.getBoundingClientRect();
 		const relX = (e.clientX - rect.left) / rect.width;
 
+		// 阻止事件冒泡，避免 App.svelte 重复处理翻页
+		e.stopPropagation();
+
 		if (relX < tapZones.left) {
 			onTapLeft?.();
 		} else if (relX > tapZones.right) {

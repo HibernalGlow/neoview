@@ -540,6 +540,9 @@
 								class="z-60 w-60"
 								onmouseenter={handleMouseEnter}
 								onmouseleave={handleMouseLeave}
+								onclick={(e) => e.stopPropagation()}
+								onpointerdown={(e) => e.stopPropagation()}
+								onpointerup={(e) => e.stopPropagation()}
 							>
 								<DropdownMenu.Label>页面排序</DropdownMenu.Label>
 								<DropdownMenu.Separator />

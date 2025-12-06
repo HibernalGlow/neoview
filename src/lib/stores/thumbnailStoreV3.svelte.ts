@@ -149,11 +149,13 @@ export async function requestVisibleThumbnails(
   }
 
   // 节流：清除之前的定时器，设置新的
+  // 但如果是第一次请求（无定时器），立即发送
   if (throttleState.timer) {
     clearTimeout(throttleState.timer);
   }
 
-  throttleState.timer = setTimeout(async () => {
+  // 定义发送请求的函数
+  const sendRequest = async () => {
     if (pendingPaths.length === 0) return;
 
     // 复制并清空待处理列表
@@ -168,7 +170,18 @@ export async function requestVisibleThumbnails(
     } catch (error) {
       console.error('❌ requestVisibleThumbnails failed:', error);
     }
-  }, THROTTLE_MS);
+  };
+
+  // 如果是目录变化或首次请求，立即发送
+  if (!throttleState.timer || throttleState.dir !== currentDir) {
+    throttleState.timer = setTimeout(() => {
+      throttleState.timer = null;
+    }, THROTTLE_MS);
+    sendRequest();
+  } else {
+    // 否则节流
+    throttleState.timer = setTimeout(sendRequest, THROTTLE_MS);
+  }
 }
 
 /**

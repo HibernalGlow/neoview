@@ -4,7 +4,11 @@
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import type { FsItem } from '$lib/types';
 	// V3 缩略图系统（复刻 NeeView 架构）
-	import { requestVisibleThumbnails, hasThumbnail, getThumbnailUrl } from '$lib/stores/thumbnailStoreV3.svelte';
+	import {
+		requestVisibleThumbnails,
+		hasThumbnail,
+		getThumbnailUrl
+	} from '$lib/stores/thumbnailStoreV3.svelte';
 	// 保留旧的 thumbnailManager 用于兼容
 	import { thumbnailManager } from '$lib/utils/thumbnailManager';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
@@ -58,7 +62,7 @@
 
 	// 滚动位置缓存
 	const scrollPositions = new Map<string, number>();
-	
+
 	// 滚动进度（用于 ListSlider）
 	let scrollProgress = $state(0);
 
@@ -80,7 +84,7 @@
 		return cols;
 	});
 	const rowCount = $derived(Math.ceil(items.length / columns));
-	
+
 	// 缩略图尺寸（像素）- 根据百分比计算
 	// 10% -> 48px, 20% -> 80px, 33% -> 120px, 50% -> 160px
 	const thumbnailSize = $derived.by(() => {
@@ -111,13 +115,13 @@
 	// Svelte 5 兼容性修复：手动触发 virtualizer 更新
 	// 参考: https://github.com/TanStack/virtual/issues/866
 	let mounted = $state(false);
-	
+
 	$effect(() => {
 		if (container) {
 			mounted = true;
 		}
 	});
-	
+
 	$effect(() => {
 		if (mounted && container) {
 			// 强制触发更新
@@ -137,8 +141,6 @@
 	});
 
 	// --- Effects ---
-
-	
 
 	// Scroll to selected item
 	let lastScrollToken = -1;
@@ -166,27 +168,33 @@
 		// 收集可见区域的路径（中央优先排序）
 		const center = Math.floor((startIndex + endIndex) / 2);
 		const visiblePaths: { path: string; dist: number }[] = [];
-		
+
 		for (let i = startIndex; i <= endIndex; i++) {
 			const item = items[i];
 			if (!item) continue;
 			// 只处理需要缩略图的项目
-			if (item.isDir || item.isImage || isVideoFile(item.path) || 
-				item.name.endsWith('.zip') || item.name.endsWith('.cbz') ||
-				item.name.endsWith('.rar') || item.name.endsWith('.cbr')) {
+			if (
+				item.isDir ||
+				item.isImage ||
+				isVideoFile(item.path) ||
+				item.name.endsWith('.zip') ||
+				item.name.endsWith('.cbz') ||
+				item.name.endsWith('.rar') ||
+				item.name.endsWith('.cbr')
+			) {
 				visiblePaths.push({ path: item.path, dist: Math.abs(i - center) });
 			}
 		}
-		
+
 		// 按距离中心排序
 		visiblePaths.sort((a, b) => a.dist - b.dist);
-		
+
 		// V3: 调用后端，后端处理一切
 		requestVisibleThumbnails(
-			visiblePaths.map(p => p.path),
+			visiblePaths.map((p) => p.path),
 			currentPath
 		);
-	}, 100); // 100ms debounce
+	}, 16); // 16ms debounce (一帧，极速响应)
 
 	// 当 virtualItems 变化时触发缩略图加载
 	$effect(() => {
@@ -223,7 +231,7 @@
 		// 更新滚动进度
 		const maxScroll = container.scrollHeight - container.clientHeight;
 		scrollProgress = maxScroll > 0 ? scrollTop / maxScroll : 0;
-		
+
 		// 滚动时也触发缩略图加载（debounce 会合并多次调用）
 		handleVisibleRangeChange();
 	}
@@ -314,15 +322,13 @@
 			$virtualizer.measureElement(node);
 		});
 		observer.observe(node);
-		
+
 		return {
 			destroy() {
 				observer.disconnect();
 			}
 		};
 	}
-
-	
 
 	export function isIndexVisible(index: number): boolean {
 		if (!container || index < 0 || index >= items.length) return false;
@@ -344,7 +350,11 @@
 
 	// 计算可见范围（用于 ListSlider）
 	const visibleStart = $derived(virtualItems.length > 0 ? virtualItems[0].index * columns : 0);
-	const visibleEnd = $derived(virtualItems.length > 0 ? Math.min((virtualItems[virtualItems.length - 1].index + 1) * columns - 1, items.length - 1) : 0);
+	const visibleEnd = $derived(
+		virtualItems.length > 0
+			? Math.min((virtualItems[virtualItems.length - 1].index + 1) * columns - 1, items.length - 1)
+			: 0
+	);
 
 	// 可见范围监控（用于 BenchmarkPanel 调试）- 使用 untrack 避免循环
 	$effect(() => {
@@ -378,13 +388,13 @@
 		onscroll={handleScroll}
 		onkeydown={handleKeydown}
 	>
-	<div style="height: {$virtualizer.getTotalSize()}px; position: relative; width: 100%;">
-		{#each virtualItems as virtualRow (virtualRow.index)}
-			<!-- 每行渲染多列 -->
-			<div
-				data-index={virtualRow.index}
-				use:measureRow
-				style="
+		<div style="height: {$virtualizer.getTotalSize()}px; position: relative; width: 100%;">
+			{#each virtualItems as virtualRow (virtualRow.index)}
+				<!-- 每行渲染多列 -->
+				<div
+					data-index={virtualRow.index}
+					use:measureRow
+					style="
 					position: absolute;
 					top: 0;
 					left: 0;
@@ -392,42 +402,44 @@
 					transform: translateY({virtualRow.start}px);
 					display: flex;
 				"
-			>
-				{#each Array(columns) as _, colIndex}
-					{@const itemIndex = virtualRow.index * columns + colIndex}
-					{#if itemIndex < items.length}
-						{@const item = items[itemIndex]}
-						{@const isSelected = selectedIndex === itemIndex}
-						{@const isChecked = selectedItems.has(item.path)}
-						{@const historyEntry = historyStore.findByPath(item.path)}
-						<div style="flex: 1; padding: 4px; box-sizing: border-box;">
-							<FileItemCard
-								{item}
-								thumbnail={getThumbnailUrl(item.path) ?? thumbnails.get(toRelativeKey(item.path))}
-								viewMode={viewMode === 'thumbnails' || viewMode === 'grid' ? 'thumbnail' : viewMode}
-								{isSelected}
-								{isChecked}
-								{isCheckMode}
-								{isDeleteMode}
-								showReadMark={!!historyEntry}
-								showBookmarkMark={true}
-								showSizeAndModified={true}
-								currentPage={historyEntry?.currentPage}
-								totalPages={historyEntry?.totalPages}
-								timestamp={item.modified ? item.modified * 1000 : undefined}
-								{thumbnailSize}
-								onClick={() => handleItemClick(item, itemIndex)}
-								onDoubleClick={() => handleItemDoubleClick(item, itemIndex)}
-								onContextMenu={(e) => handleItemContextMenu(e, item)}
-								onToggleSelection={() => toggleItemSelection(item.path)}
-								onDelete={() => dispatch('deleteItem', { item })}
-							/>
-						</div>
-					{/if}
-				{/each}
+				>
+					{#each Array(columns) as _, colIndex}
+						{@const itemIndex = virtualRow.index * columns + colIndex}
+						{#if itemIndex < items.length}
+							{@const item = items[itemIndex]}
+							{@const isSelected = selectedIndex === itemIndex}
+							{@const isChecked = selectedItems.has(item.path)}
+							{@const historyEntry = historyStore.findByPath(item.path)}
+							<div style="flex: 1; padding: 4px; box-sizing: border-box;">
+								<FileItemCard
+									{item}
+									thumbnail={getThumbnailUrl(item.path) ?? thumbnails.get(toRelativeKey(item.path))}
+									viewMode={viewMode === 'thumbnails' || viewMode === 'grid'
+										? 'thumbnail'
+										: viewMode}
+									{isSelected}
+									{isChecked}
+									{isCheckMode}
+									{isDeleteMode}
+									showReadMark={!!historyEntry}
+									showBookmarkMark={true}
+									showSizeAndModified={true}
+									currentPage={historyEntry?.currentPage}
+									totalPages={historyEntry?.totalPages}
+									timestamp={item.modified ? item.modified * 1000 : undefined}
+									{thumbnailSize}
+									onClick={() => handleItemClick(item, itemIndex)}
+									onDoubleClick={() => handleItemDoubleClick(item, itemIndex)}
+									onContextMenu={(e) => handleItemContextMenu(e, item)}
+									onToggleSelection={() => toggleItemSelection(item.path)}
+									onDelete={() => dispatch('deleteItem', { item })}
+								/>
+							</div>
+						{/if}
+					{/each}
 				</div>
-		{/each}
-	</div>
+			{/each}
+		</div>
 	</div>
 
 	<!-- 侧边进度条滑块 -->

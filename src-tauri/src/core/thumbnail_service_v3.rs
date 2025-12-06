@@ -534,39 +534,10 @@ impl ThumbnailServiceV3 {
                 // 已在数据库中，直接从 DB 加载（最快路径）
                 db_paths.push(path.clone());
             } else {
-                // 优化：通过路径特征快速判断文件类型
+                // 优化：通过路径特征快速判断文件类型（纯字符串分析，无阻塞）
                 let file_type = Self::detect_file_type(path);
-                
-                // 【核心优化】对于未缓存的文件夹，立即尝试绑定已有子文件缩略图
-                // 这样可以在同步请求中就返回结果，无需等待队列处理
-                if matches!(file_type, ThumbnailFileType::Folder) {
-                    if let Ok(Some((child_key, blob))) = self.db.find_earliest_thumbnail_in_path(path) {
-                        log_debug!("🔗 即时绑定子文件缩略图: {} -> {}", path, child_key);
-                        
-                        // 保存到数据库
-                        let _ = self.db.save_thumbnail_with_category(path, 0, 0, &blob, Some("folder"));
-                        
-                        // 更新索引
-                        if let Ok(mut folder_idx) = self.folder_db_index.write() {
-                            folder_idx.insert(path.clone());
-                        }
-                        if let Ok(mut idx) = self.db_index.write() {
-                            idx.insert(path.clone());
-                        }
-                        
-                        // 更新内存缓存
-                        if let Ok(mut cache) = self.memory_cache.write() {
-                            let blob_size = blob.len();
-                            cache.put(path.clone(), blob.clone());
-                            self.memory_cache_bytes.fetch_add(blob_size, Ordering::SeqCst);
-                        }
-                        
-                        // 立即发送
-                        cached_paths.push((path.clone(), blob));
-                        continue; // 跳过加入生成队列
-                    }
-                }
-                
+                // 所有未缓存的路径都加入生成队列，由 worker 异步处理
+                // worker 中会执行 find_earliest_thumbnail_in_path 和文件系统扫描
                 generate_paths.push((path.clone(), file_type, priority));
             }
         }
@@ -709,8 +680,9 @@ impl ThumbnailServiceV3 {
             }
         }
         
-        // 如果没有扩展名或扩展名不在列表中，回退到文件系统检查
-        path_obj.is_dir()
+        // 如果没有扩展名或扩展名不在列表中，认为是文件夹
+        // 不调用 path_obj.is_dir() 以避免阻塞文件系统调用
+        true
     }
     
     /// 检测文件类型
@@ -749,9 +721,10 @@ impl ThumbnailServiceV3 {
             return ThumbnailFileType::Image;
         }
         
-        // 检查是否是文件夹
+        // 检查是否是文件夹（纯字符串分析，不调用文件系统）
+        // 如果没有扩展名，默认认为是文件夹
         let path_obj = Path::new(path);
-        if path_obj.extension().is_none() || path_obj.is_dir() {
+        if path_obj.extension().is_none() {
             return ThumbnailFileType::Folder;
         }
         

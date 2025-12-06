@@ -847,12 +847,13 @@
 			{#if showBottomProgressBar && bookStore.currentBook}
 				<!-- 底部进度滑块（可交互） -->
 				<div
-					class={`absolute bottom-0 left-0 right-0 z-60 bg-background/80 backdrop-blur-sm ${readingDirection === 'right-to-left' ? 'rtl-progress-wrapper' : ''}`}
+					class="absolute bottom-0 left-0 right-0 z-60 bg-background/80 backdrop-blur-sm"
 				>
 					<HorizontalListSlider
 						totalItems={bookStore.currentBook.pages.length}
 						currentIndex={bookStore.currentPageIndex}
 						progress={thumbnailScrollProgress}
+						{readingDirection}
 						onScrollToProgress={(progress) => {
 							if (thumbnailScrollContainer) {
 								const maxScroll = thumbnailScrollContainer.scrollWidth - thumbnailScrollContainer.clientWidth;
@@ -867,9 +868,3 @@
 	</div>
 {/if}
 
-<style>
-	.rtl-progress-wrapper {
-		transform: scaleX(-1);
-		transform-origin: center;
-	}
-</style>

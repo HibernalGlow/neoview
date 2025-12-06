@@ -8,6 +8,7 @@
 	 * - 支持鼠标滚轮
 	 */
 	import { ChevronsLeft, ChevronsRight } from '@lucide/svelte';
+	import type { ReadingDirection } from '$lib/settings/settingsManager';
 
 	interface Props {
 		/** 总项目数 */
@@ -18,6 +19,8 @@
 		progress: number;
 		/** 是否显示索引输入框 */
 		showIndexInput?: boolean;
+		/** 阅读方向 */
+		readingDirection?: ReadingDirection;
 		/** 跳转到指定索引回调 */
 		onJumpToIndex?: (index: number) => void;
 		/** 滚动到指定百分比回调 */
@@ -29,9 +32,13 @@
 		currentIndex,
 		progress,
 		showIndexInput = true,
+		readingDirection = 'left-to-right',
 		onJumpToIndex,
 		onScrollToProgress
 	}: Props = $props();
+
+	// 是否为右开模式
+	const isRtl = $derived(readingDirection === 'right-to-left');
 
 	let isDragging = $state(false);
 	let sliderRef = $state<HTMLDivElement | null>(null);
@@ -46,7 +53,11 @@
 		if (!sliderRef || isDragging) return;
 		const rect = sliderRef.getBoundingClientRect();
 		const x = e.clientX - rect.left;
-		const newProgress = Math.max(0, Math.min(1, x / rect.width));
+		let newProgress = Math.max(0, Math.min(1, x / rect.width));
+		// 右开模式：反转进度
+		if (isRtl) {
+			newProgress = 1 - newProgress;
+		}
 		onScrollToProgress?.(newProgress);
 		// 同时跳转到对应索引
 		const newIndex = Math.round(newProgress * (totalItems - 1));
@@ -63,7 +74,11 @@
 			if (!sliderRef) return;
 			const rect = sliderRef.getBoundingClientRect();
 			const x = moveEvent.clientX - rect.left;
-			const newProgress = Math.max(0, Math.min(1, x / rect.width));
+			let newProgress = Math.max(0, Math.min(1, x / rect.width));
+			// 右开模式：反转进度
+			if (isRtl) {
+				newProgress = 1 - newProgress;
+			}
 			dragProgress = newProgress;
 			// 实时滚动列表
 			onScrollToProgress?.(newProgress);
@@ -103,13 +118,14 @@
 
 	function handleWheel(e: WheelEvent) {
 		e.preventDefault();
-		const delta = e.deltaY > 0 ? 1 : -1;
+		// 右开模式：反转滚轮方向
+		const delta = isRtl ? (e.deltaY > 0 ? -1 : 1) : (e.deltaY > 0 ? 1 : -1);
 		const newIndex = Math.max(0, Math.min(totalItems - 1, currentIndex + delta));
 		onJumpToIndex?.(newIndex);
 	}
 </script>
 
-<div class="horizontal-slider-container group/slider flex items-center w-full h-4 gap-2 px-2 transition-all duration-200">
+<div class="horizontal-slider-container group/slider flex items-center w-full h-4 gap-2 px-2 transition-all duration-200 {isRtl ? 'flex-row-reverse' : ''}">
 	<!-- 回首按钮 -->
 	<button
 		class="w-0 overflow-hidden group-hover/slider:w-auto p-0 group-hover/slider:p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-all shrink-0"
@@ -158,7 +174,7 @@
 	>
 		<!-- 已滚动区域 -->
 		<div
-			class="absolute top-0 bottom-0 left-0 rounded-l-full bg-primary/30"
+			class="absolute top-0 bottom-0 bg-primary/30 {isRtl ? 'right-0 rounded-r-full' : 'left-0 rounded-l-full'}"
 			style="width: {thumbPosition}%"
 		></div>
 
@@ -166,7 +182,7 @@
 		<div
 			class="slider-thumb absolute top-0 bottom-0 w-3 rounded-full transition-colors
 				{isDragging ? 'bg-primary' : 'bg-primary/60 hover:bg-primary'}"
-			style="left: {thumbPosition}%; transform: translateX(-50%);"
+			style="{isRtl ? 'right' : 'left'}: {thumbPosition}%; transform: translateX({isRtl ? '50%' : '-50%'});"
 			onmousedown={handleThumbMouseDown}
 			role="presentation"
 		></div>

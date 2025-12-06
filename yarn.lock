@@ -2448,6 +2448,15 @@ runed@^0.35.1:
     esm-env "^1.0.0"
     lz-string "^1.5.0"
 
+runed@^0.36.0:
+  version "0.36.0"
+  resolved "https://registry.npmmirror.com/runed/-/runed-0.36.0.tgz#26917149c9a9a6ce792af0fea09949f6f589cf2c"
+  integrity sha512-CK84KPwAausPQEyWF9t6miCuNW5isAKPMswDsz7jhdueiZZ9du/UrgWc/aggLts8QuppT8KucryrHDFBAqk9Ww==
+  dependencies:
+    dequal "^2.0.3"
+    esm-env "^1.0.0"
+    lz-string "^1.5.0"
+
 rw@1:
   version "1.3.3"
   resolved "https://registry.npmmirror.com/rw/-/rw-1.3.3.tgz#3f862dfa91ab766b14885ef4d01124bfda074fb4"
@@ -2649,10 +2658,10 @@ tailwind-merge@^3.2.0, tailwind-merge@^3.4.0:
   resolved "https://registry.npmmirror.com/tailwind-merge/-/tailwind-merge-3.4.0.tgz#5a264e131a096879965f1175d11f8c36e6b64eca"
   integrity sha512-uSaO4gnW+b3Y2aWoWfFpX62vn2sR3skfhbjsEnaBI81WD1wBLlHZe5sWf0AqjksNdYTbGBEd0UasQMT3SNV15g==
 
-tailwind-variants@^3.1.1:
-  version "3.1.1"
-  resolved "https://registry.npmmirror.com/tailwind-variants/-/tailwind-variants-3.1.1.tgz#40a87a7f24a3c372faecedd23a9c40e40bb2033d"
-  integrity sha512-ftLXe3krnqkMHsuBTEmaVUXYovXtPyTK7ckEfDRXS8PBZx0bAUas+A0jYxuKA5b8qg++wvQ3d2MQ7l/xeZxbZQ==
+tailwind-variants@^3.2.2:
+  version "3.2.2"
+  resolved "https://registry.npmmirror.com/tailwind-variants/-/tailwind-variants-3.2.2.tgz#3ac8ccc735cae8b6f416330070f5f7437a77a0f3"
+  integrity sha512-Mi4kHeMTLvKlM98XPnK+7HoBPmf4gygdFmqQPaDivc3DpYS6aIY6KiG/PgThrGvii5YZJqRsPz0aPyhoFzmZgg==
 
 tailwindcss@4.1.17, tailwindcss@^4.1.7:
   version "4.1.17"

@@ -654,7 +654,9 @@
 			// 【关键】清空加载状态，防止旧任务继续执行
 			loadingIndices.clear();
 			noThumbnailPaths.clear();
-			// 设置 imagePool 当前书籍（确保缓存同步）
+			// 清空上一本书的缩略图缓存
+			thumbnailCacheStore.setBook(currentBook.path);
+			// 设置 imagePool 当前书籍
 			imagePool.setCurrentBook(currentBook.path);
 			// 触发重新加载缩略图
 			scheduleLoadVisibleThumbnails();

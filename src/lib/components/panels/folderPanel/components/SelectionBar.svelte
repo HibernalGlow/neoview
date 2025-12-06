@@ -3,7 +3,7 @@
  * SelectionBar - 勾选操作栏
  * 在勾选模式下显示，提供全选、反选、取消等操作
  */
-import { CheckSquare, Square, SquareX, Trash2, Copy, Scissors, X } from '@lucide/svelte';
+import { CheckSquare, Square, SquareX, Trash2, Copy, Scissors, X, Link } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import * as Tooltip from '$lib/components/ui/tooltip';
 import { 
@@ -11,6 +11,7 @@ import {
 	tabItems,
 	folderTabActions 
 } from '../stores/folderTabStore.svelte';
+import { chainSelectMode, toggleChainSelectMode } from '../stores/chainSelectStore.svelte';
 
 // 别名映射
 const selectedItems = tabSelectedItems;
@@ -107,6 +108,25 @@ function handleClose() {
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content><p>取消全部选择</p></Tooltip.Content>
+		</Tooltip.Root>
+		
+		<!-- 链接选中 -->
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={$chainSelectMode ? 'default' : 'ghost'}
+					size="sm"
+					class="h-7 px-2"
+					onclick={() => toggleChainSelectMode()}
+				>
+					<Link class="h-4 w-4 mr-1" />
+					链选
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>链接选中模式</p>
+				<p class="text-muted-foreground text-xs">开启后，点击项目会选中从上一个选中项到当前项的所有项目</p>
+			</Tooltip.Content>
 		</Tooltip.Root>
 		
 		<div class="w-px h-5 bg-border mx-1" />

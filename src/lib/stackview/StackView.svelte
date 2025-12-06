@@ -764,8 +764,8 @@
 	<!-- 悬停滚动层 -->
 	<HoverLayer
 		enabled={hoverScrollEnabled}
-		sidebarMargin={50}
-		deadZoneRatio={0.2}
+		sidebarMargin={20}
+		deadZoneRatio={0.15}
 		{viewportSize}
 		{displaySize}
 		onPositionChange={(x: number, y: number) => {

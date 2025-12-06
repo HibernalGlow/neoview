@@ -33,7 +33,6 @@ export type { PanelId as PanelTabType } from './sidebarConfig.svelte';
 
 // NeoView 新架构 - 后端主导加载系统
 export { pageStore, type PageState } from './pageStore.svelte';
-export { loadingSystemStore, type LoadingSystem } from './loadingSystemStore.svelte';
 
-// 加载模式（兼容旧系统）
+// 加载模式
 export { loadModeStore, type LoadModeConfig, type DataSource, type RenderMode } from './loadModeStore.svelte';

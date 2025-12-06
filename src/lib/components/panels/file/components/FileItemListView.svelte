@@ -349,7 +349,8 @@
 									onOpenInNewTab?.();
 								}}
 								oncontextmenu={(e) => {
-									// 右键穿透到父元素
+									// 右键穿透：触发父元素的右键菜单，但阻止事件继续冒泡避免重复触发
+									e.stopPropagation();
 									onContextMenu?.(e);
 								}}
 							>

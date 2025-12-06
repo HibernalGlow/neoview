@@ -651,18 +651,18 @@ async function handleItemSelect(layerIndex: number, payload: { item: FsItem; ind
 	} else {
 		if (payload.item.isDir) {
 			// 文件夹：进入目录，不加入选中列表
-			// 检查新标签模式
-			if ($openInNewTabMode) {
-				// 新标签模式：在新标签页打开文件夹
-				onOpenInNewTab?.(payload.item);
-				return;
-			}
 			// 检查穿透模式
 			if ($penetrateMode) {
 				const penetrated = await tryPenetrateFolder(payload.item.path);
 				if (penetrated) {
 					// 穿透成功，打开子文件
 					onItemOpen?.(penetrated);
+					return;
+				}
+				// 穿透失败，检查是否在新标签页打开
+				if ($openInNewTabMode) {
+					// 穿透失败时在新标签页打开文件夹
+					onOpenInNewTab?.(payload.item);
 					return;
 				}
 			}

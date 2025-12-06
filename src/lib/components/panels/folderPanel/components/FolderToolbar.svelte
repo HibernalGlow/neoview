@@ -370,7 +370,7 @@ function cancelWarmup() {
 					onclick={() => folderTabActions.toggleDeleteMode()}
 					oncontextmenu={handleToggleDeleteStrategy}
 				>
-					<Trash2 class={$deleteStrategy === 'permanent' ? 'h-4 w-4 text-destructive' : 'h-4 w-4'} />
+					<Trash2 class={$deleteStrategy === 'permanent' ? 'h-4 w-4 text-accent-foreground' : 'h-4 w-4'} />
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
@@ -456,28 +456,22 @@ function cancelWarmup() {
 					size="icon"
 					class="h-7 w-7"
 					onclick={() => folderTabActions.togglePenetrateMode()}
+					oncontextmenu={(e: MouseEvent) => {
+						e.preventDefault();
+						// 只有穿透模式开启时，右键才能切换新标签打开功能
+						if ($penetrateMode) {
+							folderTabActions.toggleOpenInNewTabMode();
+						}
+					}}
 				>
-					<CornerDownRight class="h-4 w-4" />
+					<CornerDownRight class={$openInNewTabMode ? 'h-4 w-4 text-accent-foreground' : 'h-4 w-4'} />
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
 				<p>{$penetrateMode ? '穿透模式：当文件夹只有一个子文件时直接打开' : '穿透模式'}</p>
-			</Tooltip.Content>
-		</Tooltip.Root>
-
-		<Tooltip.Root>
-			<Tooltip.Trigger>
-				<Button
-					variant={$openInNewTabMode ? 'default' : 'ghost'}
-					size="icon"
-					class="h-7 w-7"
-					onclick={() => folderTabActions.toggleOpenInNewTabMode()}
-				>
-					<PanelRight class="h-4 w-4" />
-				</Button>
-			</Tooltip.Trigger>
-			<Tooltip.Content>
-				<p>{$openInNewTabMode ? '新标签模式：点击文件夹在新标签页打开' : '新标签模式'}</p>
+				{#if $penetrateMode}
+					<p class="text-muted-foreground text-xs">右键切换穿透失败时新标签打开 {$openInNewTabMode ? '(已开启)' : ''}</p>
+				{/if}
 			</Tooltip.Content>
 		</Tooltip.Root>
 

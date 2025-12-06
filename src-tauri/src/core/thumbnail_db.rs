@@ -851,6 +851,21 @@ impl ThumbnailDb {
         Ok(keys)
     }
 
+    /// 获取所有文件夹类别的缩略图键（用于快速索引）
+    pub fn get_folder_keys(&self) -> SqliteResult<Vec<String>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut stmt = conn.prepare("SELECT key FROM thumbs WHERE category = 'folder'")?;
+        let keys: Vec<String> = stmt
+            .query_map([], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(keys)
+    }
+
     /// 获取 emm_json 为空的缩略图键列表（用于增量更新）
     pub fn get_keys_without_emm_json(&self) -> SqliteResult<Vec<String>> {
         self.open()?;

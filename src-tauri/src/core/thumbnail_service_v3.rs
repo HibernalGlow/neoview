@@ -147,6 +147,10 @@ pub struct ThumbnailServiceV3 {
     /// 启动时加载，用于快速判断是否需要生成
     db_index: Arc<RwLock<std::collections::HashSet<String>>>,
     
+    /// 文件夹数据库索引 (已有缩略图的文件夹路径集合)
+    /// 启动时单独加载，用于文件夹快速路径判断
+    folder_db_index: Arc<RwLock<std::collections::HashSet<String>>>,
+    
     /// 失败记录索引 (避免重复尝试生成失败的缩略图)
     failed_index: Arc<RwLock<std::collections::HashSet<String>>>,
     
@@ -168,8 +172,8 @@ impl ThumbnailServiceV3 {
         let cache_size = NonZeroUsize::new(config.memory_cache_size).unwrap_or(NonZeroUsize::new(1024).unwrap());
         
         // 从数据库加载索引
-        let (db_index, failed_index) = Self::load_indices_from_db(&db);
-        log_info!("📊 数据库索引加载完成: {} 个缩略图, {} 个失败记录", db_index.len(), failed_index.len());
+        let (db_index, folder_db_index, failed_index) = Self::load_indices_from_db(&db);
+        log_info!("📊 数据库索引加载完成: {} 个缩略图, {} 个文件夹, {} 个失败记录", db_index.len(), folder_db_index.len(), failed_index.len());
         
         Self {
             config,
@@ -183,6 +187,7 @@ impl ThumbnailServiceV3 {
             active_workers: Arc::new(AtomicUsize::new(0)),
             workers: Arc::new(Mutex::new(Vec::new())),
             db_index: Arc::new(RwLock::new(db_index)),
+            folder_db_index: Arc::new(RwLock::new(folder_db_index)),
             failed_index: Arc::new(RwLock::new(failed_index)),
             save_queue: Arc::new(Mutex::new(HashMap::new())),
             last_flush: Arc::new(Mutex::new(Instant::now())),
@@ -190,14 +195,22 @@ impl ThumbnailServiceV3 {
     }
     
     /// 从数据库加载索引
-    fn load_indices_from_db(db: &Arc<ThumbnailDb>) -> (std::collections::HashSet<String>, std::collections::HashSet<String>) {
+    fn load_indices_from_db(db: &Arc<ThumbnailDb>) -> (std::collections::HashSet<String>, std::collections::HashSet<String>, std::collections::HashSet<String>) {
         let mut db_index = std::collections::HashSet::new();
+        let mut folder_db_index = std::collections::HashSet::new();
         let mut failed_index = std::collections::HashSet::new();
         
         // 加载成功的缩略图路径
         if let Ok(paths) = db.get_all_thumbnail_keys() {
             for path in paths {
                 db_index.insert(path);
+            }
+        }
+        
+        // 加载文件夹缩略图路径（单独加载，加速文件夹判断）
+        if let Ok(paths) = db.get_folder_keys() {
+            for path in paths {
+                folder_db_index.insert(path);
             }
         }
         
@@ -208,7 +221,7 @@ impl ThumbnailServiceV3 {
             }
         }
         
-        (db_index, failed_index)
+        (db_index, folder_db_index, failed_index)
     }
     
     /// 启动工作线程
@@ -231,6 +244,7 @@ impl ThumbnailServiceV3 {
             let generator = Arc::clone(&self.generator);
             let folder_depth = self.config.folder_search_depth;
             let db_index = Arc::clone(&self.db_index);
+            let folder_db_index = Arc::clone(&self.folder_db_index);
             let failed_index = Arc::clone(&self.failed_index);
             let save_queue = Arc::clone(&self.save_queue);
             
@@ -327,6 +341,13 @@ impl ThumbnailServiceV3 {
                                 // 更新数据库索引（安全处理锁）
                                 if let Ok(mut index) = db_index.write() {
                                     index.insert(task.path.clone());
+                                }
+                                
+                                // 如果是文件夹，更新文件夹索引（用于快速路径判断）
+                                if matches!(task.file_type, ThumbnailFileType::Folder) {
+                                    if let Ok(mut index) = folder_db_index.write() {
+                                        index.insert(task.path.clone());
+                                    }
                                 }
                                 
                                 // 如果有保存信息，放入保存队列（延迟保存）
@@ -476,11 +497,13 @@ impl ThumbnailServiceV3 {
         let mut generate_paths: Vec<(String, ThumbnailFileType, usize)> = Vec::new(); // (path, file_type, priority)
         
         // 读取索引（只锁一次）
-        let (db_index_snapshot, failed_index_snapshot) = {
+        let (db_index_snapshot, folder_db_index_snapshot, failed_index_snapshot) = {
             let db_index = self.db_index.read().ok();
+            let folder_db_index = self.folder_db_index.read().ok();
             let failed_index = self.failed_index.read().ok();
             (
                 db_index.map(|g| g.clone()),
+                folder_db_index.map(|g| g.clone()),
                 failed_index.map(|g| g.clone()),
             )
         };
@@ -503,10 +526,12 @@ impl ThumbnailServiceV3 {
                 }
             }
             
-            // 3. 检查数据库索引
+            // 3. 检查数据库索引（文件和文件夹）
             let in_db = db_index_snapshot.as_ref().map(|idx| idx.contains(path)).unwrap_or(false);
+            let in_folder_db = folder_db_index_snapshot.as_ref().map(|idx| idx.contains(path)).unwrap_or(false);
             
-            if in_db {
+            if in_db || in_folder_db {
+                // 已在数据库中，直接从 DB 加载（最快路径）
                 db_paths.push(path.clone());
             } else {
                 // 优化：通过路径特征快速判断文件类型
@@ -898,6 +923,7 @@ impl ThumbnailServiceV3 {
     }
     
     /// 生成文件夹缩略图（复刻 NeeView 策略）
+    /// 优化：优先使用已缓存的子文件缩略图绑定，避免文件系统扫描
     fn generate_folder_thumbnail_static(
         generator: &Arc<Mutex<ThumbnailGenerator>>,
         db: &Arc<ThumbnailDb>,
@@ -909,7 +935,16 @@ impl ThumbnailServiceV3 {
             return Ok(blob);
         }
         
-        // 2. 查找封面图片
+        // 2. 【核心优化】尝试绑定已有子文件的缩略图（无需文件系统扫描）
+        // 如果文件夹内有任何已缓存的文件缩略图，直接复用其 blob
+        if let Ok(Some((child_key, blob))) = db.find_earliest_thumbnail_in_path(folder_path) {
+            log_debug!("🔗 绑定已有子文件缩略图到文件夹: {} -> {}", folder_path, child_key);
+            // 保存到数据库（作为文件夹类别）
+            let _ = db.save_thumbnail_with_category(folder_path, 0, 0, &blob, Some("folder"));
+            return Ok(blob);
+        }
+        
+        // 3. 查找封面图片（cover.*, folder.*, thumb.*）
         if let Some(cover) = Self::find_cover_image(folder_path)? {
             let gen = generator.lock().map_err(|e| format!("获取生成器锁失败: {}", e))?;
             let blob = gen.generate_file_thumbnail(&cover)?;
@@ -920,7 +955,7 @@ impl ThumbnailServiceV3 {
             return Ok(blob);
         }
         
-        // 3. 递归查找第一张图片/压缩包/视频
+        // 4. 递归查找第一张图片/压缩包/视频
         if let Some(first) = Self::find_first_image_recursive(folder_path, max_depth)? {
             // 判断文件类型
             let first_lower = first.to_lowercase();
@@ -951,7 +986,7 @@ impl ThumbnailServiceV3 {
             return Ok(blob);
         }
         
-        // 4. 没有找到图片，记录失败并返回错误
+        // 5. 没有找到图片，记录失败并返回错误
         // 这样下次不会重复尝试
         let _ = db.save_failed_thumbnail(
             folder_path,

@@ -13,10 +13,13 @@ import {
 	backgroundConcurrency,
 	saveSettings
 } from '$lib/stores/upscale/upscalePanelStore.svelte';
+import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
 
 function handleAutoUpscaleChange(checked: boolean) {
 	autoUpscaleEnabled.value = checked;
 	saveSettings();
+	// 同步到后端
+	upscaleStore.setEnabled(checked);
 }
 
 function handlePreUpscaleChange(checked: boolean) {
@@ -24,9 +27,11 @@ function handlePreUpscaleChange(checked: boolean) {
 	saveSettings();
 }
 
-function handleConditionalChange(checked: boolean) {
+async function handleConditionalChange(checked: boolean) {
 	conditionalUpscaleEnabled.value = checked;
 	saveSettings();
+	// 同步条件设置到后端
+	await upscaleStore.syncConditionSettings();
 }
 
 function handlePreviewChange(checked: boolean) {

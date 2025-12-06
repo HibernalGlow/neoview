@@ -149,14 +149,24 @@ function updateMetadata(key: string, expr: ConditionExpression) {
 		</div>
 	</div>
 
-	<!-- 排除预超分 -->
-	<label class="flex items-center gap-2 text-xs">
-		<Switch
-			checked={condition.match.excludeFromPreload || false}
-			onclick={() => updateMatch({ excludeFromPreload: !condition.match.excludeFromPreload })}
-		/>
-		<span>排除预超分队列</span>
-	</label>
+	<!-- 路径匹配选项 -->
+	<div class="flex flex-wrap gap-4">
+		<label class="flex items-center gap-2 text-xs">
+			<Switch
+				checked={condition.match.matchInnerPath || false}
+				onclick={() => updateMatch({ matchInnerPath: !condition.match.matchInnerPath })}
+			/>
+			<span>匹配内部路径</span>
+			<span class="text-[10px] text-muted-foreground">(默认只匹配book路径)</span>
+		</label>
+		<label class="flex items-center gap-2 text-xs">
+			<Switch
+				checked={condition.match.excludeFromPreload || false}
+				onclick={() => updateMatch({ excludeFromPreload: !condition.match.excludeFromPreload })}
+			/>
+			<span>排除预超分队列</span>
+		</label>
+	</div>
 
 	<!-- 自定义元数据 -->
 	<div class="space-y-2">

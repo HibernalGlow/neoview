@@ -12,6 +12,7 @@ use crate::commands::pyo3_upscale_commands::PyO3UpscalerState;
 use crate::core::pyo3_upscaler::{PyO3Upscaler, UpscaleModel};
 use crate::core::upscale_settings::ConditionalUpscaleSettings;
 use crate::core::wic_decoder::{decode_image_with_wic, decode_image_from_memory_with_wic, WicDecoder};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
@@ -598,7 +599,7 @@ impl UpscaleService {
         // 打印每个条件的详细信息
         for (i, cond) in conditions.iter().enumerate() {
             log_info!(
-                "  [{}] {} (优先级:{}, 启用:{}, 跳过:{}) 尺寸范围: {}x{} ~ {}x{} 模型: {} {}x",
+                "  [{}] {} (优先级:{}, 启用:{}, 跳过:{}) 尺寸范围: {}x{} ~ {}x{} 模型: {} {}x 路径正则: book={:?} image={:?} matchInner={}",
                 i,
                 cond.name,
                 cond.priority,
@@ -609,7 +610,10 @@ impl UpscaleService {
                 if cond.max_width > 0 { cond.max_width.to_string() } else { "∞".to_string() },
                 if cond.max_height > 0 { cond.max_height.to_string() } else { "∞".to_string() },
                 cond.model_name,
-                cond.scale
+                cond.scale,
+                cond.regex_book_path,
+                cond.regex_image_path,
+                cond.match_inner_path
             );
         }
         
@@ -1100,7 +1104,82 @@ impl UpscaleService {
                         let match_max_width = cond.max_width == 0 || width <= cond.max_width;
                         let match_max_height = cond.max_height == 0 || height <= cond.max_height;
                         
-                        if match_width && match_height && match_max_width && match_max_height {
+                        // 检查路径正则条件
+                        // 提取 book_path（压缩包路径或文件夹路径）
+                        let book_path_for_match = if let Some(inner_idx) = task.image_path.find(" inner=") {
+                            &task.image_path[..inner_idx]
+                        } else {
+                            // 对于文件夹模式，使用 task.book_path
+                            &task.book_path
+                        };
+                        
+                        // 提取 inner_path（压缩包内路径）
+                        let inner_path = if let Some(inner_idx) = task.image_path.find(" inner=") {
+                            Some(&task.image_path[inner_idx + 7..])
+                        } else {
+                            None
+                        };
+                        
+                        // 路径正则匹配（统一使用正斜杠）
+                        let normalized_book_path = book_path_for_match.replace('\\', "/");
+                        let normalized_inner_path = inner_path.map(|p| p.replace('\\', "/"));
+                        
+                        // 书籍路径正则匹配
+                        let match_book_path = if let Some(ref regex_str) = cond.regex_book_path {
+                            if regex_str.is_empty() {
+                                true
+                            } else {
+                                match Regex::new(regex_str) {
+                                    Ok(re) => {
+                                        let matched = re.is_match(&normalized_book_path);
+                                        log_debug!(
+                                            "📁 书籍路径正则匹配: pattern='{}' path='{}' matched={}",
+                                            regex_str, normalized_book_path, matched
+                                        );
+                                        matched
+                                    }
+                                    Err(e) => {
+                                        log_debug!("⚠️ 无效的书籍路径正则: {} - {}", regex_str, e);
+                                        true // 正则无效时不阻止匹配
+                                    }
+                                }
+                            }
+                        } else {
+                            true
+                        };
+                        
+                        // 图片路径正则匹配（根据 match_inner_path 决定匹配哪个路径）
+                        let match_image_path = if let Some(ref regex_str) = cond.regex_image_path {
+                            if regex_str.is_empty() {
+                                true
+                            } else {
+                                // 如果 match_inner_path 为 true，匹配内部路径；否则匹配完整 image_path
+                                let path_to_match = if cond.match_inner_path {
+                                    normalized_inner_path.as_deref().unwrap_or("")
+                                } else {
+                                    &task.image_path.replace('\\', "/")
+                                };
+                                
+                                match Regex::new(regex_str) {
+                                    Ok(re) => {
+                                        let matched = re.is_match(path_to_match);
+                                        log_debug!(
+                                            "🖼️ 图片路径正则匹配: pattern='{}' path='{}' matchInner={} matched={}",
+                                            regex_str, path_to_match, cond.match_inner_path, matched
+                                        );
+                                        matched
+                                    }
+                                    Err(e) => {
+                                        log_debug!("⚠️ 无效的图片路径正则: {} - {}", regex_str, e);
+                                        true // 正则无效时不阻止匹配
+                                    }
+                                }
+                            }
+                        } else {
+                            true
+                        };
+                        
+                        if match_width && match_height && match_max_width && match_max_height && match_book_path && match_image_path {
                             if cond.skip {
                                 log_debug!("⏭️ 条件 '{}' 匹配，跳过超分 ({}x{})", cond.name, width, height);
                                 return Ok(UpscaleReadyPayload {

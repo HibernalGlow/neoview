@@ -17,6 +17,15 @@ pub struct UpscaleConditionConfig {
     pub min_height: u32,
     pub max_width: u32,
     pub max_height: u32,
+    /// 书籍路径正则表达式
+    #[serde(default)]
+    pub regex_book_path: Option<String>,
+    /// 图片路径正则表达式
+    #[serde(default)]
+    pub regex_image_path: Option<String>,
+    /// 是否匹配内部路径，默认false只匹配book路径
+    #[serde(default)]
+    pub match_inner_path: bool,
     pub model_name: String,
     pub scale: i32,
     pub tile_size: i32,

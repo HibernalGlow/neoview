@@ -3145,6 +3145,7 @@ dependencies = [
  "pyo3",
  "rand 0.8.5",
  "rayon",
+ "regex",
  "rusqlite",
  "rust_search",
  "serde",

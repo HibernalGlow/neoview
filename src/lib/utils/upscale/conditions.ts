@@ -39,21 +39,21 @@ function ensureMatchDefaults(match?: UpscaleCondition['match']): UpscaleConditio
 		modifiedBetween: safeMatch.modifiedBetween,
 		regexBookPath: safeMatch.regexBookPath,
 		regexImagePath: safeMatch.regexImagePath,
+		matchInnerPath: safeMatch.matchInnerPath ?? false, // 默认只匹配book路径
 		excludeFromPreload: safeMatch.excludeFromPreload ?? false,
 		metadata: safeMatch.metadata ? { ...safeMatch.metadata } : undefined
 	};
 }
 
-function ensureActionDefaults(action?: UpscaleCondition['action']): UpscaleCondition['action'] {
-	const safeAction = action ?? {};
+function ensureActionDefaults(action?: Partial<UpscaleCondition['action']>): UpscaleCondition['action'] {
 	return {
-		model: safeAction.model ?? 'MODEL_WAIFU2X_CUNET_UP2X',
-		scale: safeAction.scale ?? 2,
-		tileSize: safeAction.tileSize ?? 400,
-		noiseLevel: safeAction.noiseLevel ?? -1,
-		gpuId: safeAction.gpuId ?? 0,
-		useCache: safeAction.useCache ?? true,
-		skip: safeAction.skip ?? false
+		model: action?.model ?? 'MODEL_WAIFU2X_CUNET_UP2X',
+		scale: action?.scale ?? 2,
+		tileSize: action?.tileSize ?? 400,
+		noiseLevel: action?.noiseLevel ?? -1,
+		gpuId: action?.gpuId ?? 0,
+		useCache: action?.useCache ?? true,
+		skip: action?.skip ?? false
 	};
 }
 

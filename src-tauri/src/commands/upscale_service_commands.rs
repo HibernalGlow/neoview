@@ -88,6 +88,15 @@ pub struct FrontendCondition {
     pub min_height: u32,
     pub max_width: u32,
     pub max_height: u32,
+    /// 书籍路径正则表达式
+    #[serde(default)]
+    pub regex_book_path: Option<String>,
+    /// 图片路径正则表达式
+    #[serde(default)]
+    pub regex_image_path: Option<String>,
+    /// 是否匹配内部路径，默认false只匹配book路径
+    #[serde(default)]
+    pub match_inner_path: bool,
     pub model_name: String,
     pub scale: i32,
     pub tile_size: i32,
@@ -154,6 +163,9 @@ pub async fn upscale_service_init(
                 min_height: c.min_height,
                 max_width: c.max_width,
                 max_height: c.max_height,
+                regex_book_path: c.regex_book_path,
+                regex_image_path: c.regex_image_path,
+                match_inner_path: c.match_inner_path,
                 model_name: c.model_name,
                 scale: c.scale,
                 tile_size: c.tile_size,

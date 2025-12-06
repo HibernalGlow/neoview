@@ -16,12 +16,15 @@ import {
 	TILE_SIZE_OPTIONS,
 	NOISE_LEVEL_OPTIONS
 } from '$lib/stores/upscale/upscalePanelStore.svelte';
+import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
 
 let expanded = $state(false);
 
-function handleConditionsChange(event: CustomEvent) {
+async function handleConditionsChange(event: CustomEvent) {
 	// 条件列表已通过 bindable 更新
 	saveSettings();
+	// 同步条件设置到后端
+	await upscaleStore.syncConditionSettings();
 }
 </script>
 

@@ -26,6 +26,7 @@ export interface UpscaleCondition {
 		modifiedBetween?: [number, number];
 		regexBookPath?: string;    // 正则表达式字符串
 		regexImagePath?: string;
+		matchInnerPath?: boolean;  // 是否匹配内部路径，默认false只匹配book路径
 		excludeFromPreload?: boolean; // 筛出预超分队列
 		metadata?: Record<string, ConditionExpression>; // 自定义键
 	};

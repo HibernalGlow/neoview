@@ -209,6 +209,9 @@ class UpscaleStore {
         minHeight?: number;
         maxWidth?: number;
         maxHeight?: number;
+        regexBookPath?: string;
+        regexImagePath?: string;
+        matchInnerPath?: boolean; // 是否匹配内部路径，默认false只匹配book路径
       };
       action: {
         model: string;
@@ -228,7 +231,7 @@ class UpscaleStore {
       
       // 传递给后端
       await invoke('upscale_service_sync_conditions', {
-        enabled: panelSettings.conditionalUpscaleEnabled ?? true, // 默认启用条件超分
+        enabled: panelSettings.conditionalUpscaleEnabled ?? false, // 默认禁用条件超分，让全局开关生效
         conditions: (panelSettings.conditionsList ?? []).map(c => ({
           id: c.id,
           name: c.name,
@@ -238,6 +241,9 @@ class UpscaleStore {
           minHeight: c.match.minHeight ?? 0,
           maxWidth: c.match.maxWidth ?? 0,
           maxHeight: c.match.maxHeight ?? 0,
+          regexBookPath: c.match.regexBookPath ?? null,
+          regexImagePath: c.match.regexImagePath ?? null,
+          matchInnerPath: c.match.matchInnerPath ?? false, // 默认只匹配book路径
           modelName: c.action.model,
           scale: c.action.scale,
           tileSize: c.action.tileSize,

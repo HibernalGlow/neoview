@@ -35,6 +35,9 @@ export function calculateZoomScale(
   let targetScale: number;
   switch (mode) {
     case 'fit':
+    case 'fitLeftAlign':
+    case 'fitRightAlign':
+      // 这三种模式使用相同的缩放计算，区别在于对齐方式
       targetScale = baseScale;
       break;
     case 'fill':

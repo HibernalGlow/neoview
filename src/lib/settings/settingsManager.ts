@@ -3,7 +3,7 @@
  * 提供：获取/更新/重置/导入/导出/订阅 功能，持久化到 localStorage
  */
 
-export type ZoomMode = 'fit' | 'fill' | 'fitWidth' | 'fitHeight' | 'original';
+export type ZoomMode = 'fit' | 'fill' | 'fitWidth' | 'fitHeight' | 'original' | 'fitLeftAlign' | 'fitRightAlign';
 export type ReadingDirection = 'left-to-right' | 'right-to-left';
 export type TailOverflowBehavior =
   | 'doNothing'
@@ -471,14 +471,14 @@ export class SettingsManager {
       updates,
       before: this.settings[category]
     });
-    
+
     this.settings[category] = { ...this.settings[category], ...updates } as NeoViewSettings[K];
-    
+
     console.log('✅ updateNestedSettings 完成:', {
       category,
       after: this.settings[category]
     });
-    
+
     this.saveSettings();
     this.notifyListeners();
   }
@@ -505,10 +505,10 @@ export class SettingsManager {
       }
       // Basic validation: must have system and view
       if (!cfg || !cfg.system || !cfg.view) throw new Error('配置格式不完整');
-      
+
       this.settings = mergeWithDefaults(cfg);
       this.normalizeSettings();
-      
+
       this.saveSettings();
       this.notifyListeners();
       return true;
@@ -624,7 +624,7 @@ export const settingsManager = SettingsManager.getInstance();
 export class PerformanceSettings {
   private manager: SettingsManager;
   private wrappedCallbacks = new Map<(preLoadSize: number, maxThreads: number) => void, (s: NeoViewSettings) => void>();
-  
+
   constructor(manager: SettingsManager) {
     this.manager = manager;
   }
@@ -649,7 +649,7 @@ export class PerformanceSettings {
     const wrappedCallback = (settings: NeoViewSettings) => {
       callback(settings.performance.preLoadSize, settings.performance.maxThreads);
     };
-    
+
     // 保存包装后的回调引用
     this.wrappedCallbacks.set(callback, wrappedCallback);
     this.manager.addListener(wrappedCallback);

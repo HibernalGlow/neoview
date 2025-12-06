@@ -34,7 +34,7 @@ export interface TaskCursorState {
 	updatedAt: number;
 }
 
-export type ZoomMode = 'fit' | 'fill' | 'fitWidth' | 'fitHeight' | 'original';
+export type ZoomMode = 'fit' | 'fill' | 'fitWidth' | 'fitHeight' | 'original' | 'fitLeftAlign' | 'fitRightAlign';
 
 export interface ViewerSlice {
 	viewMode: 'single' | 'double' | 'panorama';

@@ -34,6 +34,16 @@
   justify-content: center;
 }
 
+/* 单页布局 - 居左对齐（侧边栏在右侧时使用） */
+.frame-single.frame-align-left {
+  justify-content: flex-start;
+}
+
+/* 单页布局 - 居右对齐（侧边栏在左侧时使用） */
+.frame-single.frame-align-right {
+  justify-content: flex-end;
+}
+
 /* 双页布局 */
 .frame-double {
   flex-direction: row;
@@ -111,5 +121,7 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }

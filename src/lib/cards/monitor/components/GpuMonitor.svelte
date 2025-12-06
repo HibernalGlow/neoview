@@ -1,0 +1,20 @@
+<script lang="ts">
+	/**
+	 * GPU 监控组件
+	 * TODO: 需要后端支持 GPU 监控
+	 */
+	import { Cpu } from '@lucide/svelte';
+</script>
+
+<div class="bg-card/50 rounded-lg border p-3">
+	<div class="mb-3 flex items-center gap-2">
+		<Cpu class="h-4 w-4 text-cyan-500" />
+		<span class="text-sm font-semibold">GPU</span>
+	</div>
+
+	<div class="text-muted-foreground py-4 text-center text-xs">
+		GPU 监控功能开发中...
+		<br />
+		需要后端支持
+	</div>
+</div>

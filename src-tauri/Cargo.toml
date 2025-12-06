@@ -61,6 +61,7 @@ once_cell = "1.19"
 epub = "2.1"  # EPUB 解析（纯 Rust）
 natural-sort-rs = "0.1"  # 自然排序
 regex = "1.10"  # 正则表达式支持
+sysinfo = "0.32"  # 系统监控
 # PDF: 前端使用 pdf.js 渲染
 
 [target.'cfg(target_os = "windows")'.dependencies]

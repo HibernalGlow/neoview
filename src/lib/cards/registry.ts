@@ -37,7 +37,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Timer,
 		defaultPanel: 'benchmark',
 		canHide: true,
-		
+
 	},
 	'renderer': {
 		id: 'renderer',
@@ -45,7 +45,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Layers,
 		defaultPanel: 'benchmark',
 		canHide: true,
-		
+
 	},
 	'files': {
 		id: 'files',
@@ -53,7 +53,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: FolderOpen,
 		defaultPanel: 'benchmark',
 		canHide: true,
-		
+
 	},
 	'detailed': {
 		id: 'detailed',
@@ -61,7 +61,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: FileText,
 		defaultPanel: 'benchmark',
 		canHide: true,
-		
+
 	},
 	'loadmode': {
 		id: 'loadmode',
@@ -69,7 +69,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Cpu,
 		defaultPanel: 'benchmark',
 		canHide: true,
-		
+
 	},
 	'archives': {
 		id: 'archives',
@@ -77,7 +77,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Archive,
 		defaultPanel: 'benchmark',
 		canHide: true,
-		
+
 	},
 	'realworld': {
 		id: 'realworld',
@@ -85,7 +85,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Globe,
 		defaultPanel: 'benchmark',
 		canHide: true,
-		
+
 	},
 	'imageSource': {
 		id: 'imageSource',
@@ -107,7 +107,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: ListChecks,
 		defaultPanel: 'benchmark',
 		canHide: true,
-		
+
 	},
 	'summary': {
 		id: 'summary',
@@ -115,7 +115,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: BarChart3,
 		defaultPanel: 'benchmark',
 		canHide: true,
-		
+
 	},
 	'pipelineLatency': {
 		id: 'pipelineLatency',
@@ -138,7 +138,14 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'benchmark',
 		canHide: true,
 	},
-	
+	'systemMonitor': {
+		id: 'systemMonitor',
+		title: '系统资源监控',
+		icon: Activity,
+		defaultPanel: 'insights',
+		canHide: true,
+	},
+
 	// ==================== Info 面板卡片 ====================
 	'bookInfo': {
 		id: 'bookInfo',
@@ -189,7 +196,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'info',
 		canHide: true,
 	},
-	
+
 	// ==================== Properties 面板卡片 ====================
 	'emmTags': {
 		id: 'emmTags',
@@ -240,7 +247,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'properties',
 		canHide: true,
 	},
-	
+
 	// ==================== Upscale 面板卡片 ====================
 	'upscaleControl': {
 		id: 'upscaleControl',
@@ -310,7 +317,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		fullHeight: true,
 		hideHeader: true,
 	},
-	
+
 	// ==================== Insights 面板卡片 ====================
 	'dailyTrend': {
 		id: 'dailyTrend',

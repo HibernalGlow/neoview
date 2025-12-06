@@ -218,7 +218,7 @@
 
 					<Sidebar.Content>
 						<Sidebar.Group>
-							<Sidebar.GroupContent class="px-1.5 md:px-0">
+							<Sidebar.GroupContent class="px-0">
 								<Sidebar.Menu>
 									{#each leftPanels as panel (panel.id)}
 										{@const Icon = panel.icon}
@@ -229,7 +229,7 @@
 												}}
 												onclick={() => handleTabChange(panel.id)}
 												isActive={$activePanel === panel.id}
-												class="px-2.5 md:px-2"
+												class="px-2"
 											>
 												{#snippet tooltipContent()}
 													{panel.title}

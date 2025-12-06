@@ -47,17 +47,17 @@
 	let dragProgress = $state(0); // 拖动时的临时进度
 
 	// 滑块位置（百分比）- 拖动时用临时进度，否则用实际进度
-	const thumbPosition = $derived((isDragging ? dragProgress : progress) * 100);
+	// 位置始终基于进度计算，右开模式通过 CSS 定位属性处理
+	const rawProgress = $derived(isDragging ? dragProgress : progress);
+	const thumbPosition = $derived(rawProgress * 100);
 
 	function handleTrackClick(e: MouseEvent) {
 		if (!sliderRef || isDragging) return;
 		const rect = sliderRef.getBoundingClientRect();
 		const x = e.clientX - rect.left;
-		let newProgress = Math.max(0, Math.min(1, x / rect.width));
-		// 右开模式：反转进度
-		if (isRtl) {
-			newProgress = 1 - newProgress;
-		}
+		const clickPosition = Math.max(0, Math.min(1, x / rect.width));
+		// 右开模式：点击位置需要反转为进度（点击右边=进度0，点击左边=进度1）
+		const newProgress = isRtl ? (1 - clickPosition) : clickPosition;
 		onScrollToProgress?.(newProgress);
 		// 同时跳转到对应索引
 		const newIndex = Math.round(newProgress * (totalItems - 1));
@@ -74,11 +74,9 @@
 			if (!sliderRef) return;
 			const rect = sliderRef.getBoundingClientRect();
 			const x = moveEvent.clientX - rect.left;
-			let newProgress = Math.max(0, Math.min(1, x / rect.width));
-			// 右开模式：反转进度
-			if (isRtl) {
-				newProgress = 1 - newProgress;
-			}
+			const dragPosition = Math.max(0, Math.min(1, x / rect.width));
+			// 右开模式：拖动位置需要反转为进度
+			const newProgress = isRtl ? (1 - dragPosition) : dragPosition;
 			dragProgress = newProgress;
 			// 实时滚动列表
 			onScrollToProgress?.(newProgress);

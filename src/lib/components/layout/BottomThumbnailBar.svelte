@@ -462,7 +462,9 @@
 
 		// 更新滚动进度（用于 HorizontalListSlider）
 		const maxScroll = container.scrollWidth - container.clientWidth;
-		thumbnailScrollProgress = maxScroll > 0 ? container.scrollLeft / maxScroll : 0;
+		const rawProgress = maxScroll > 0 ? container.scrollLeft / maxScroll : 0;
+		// 右开模式下反转进度（因为缩略图列表已经反转，滚动到最右边=第1页=进度0）
+		thumbnailScrollProgress = readingDirection === 'right-to-left' ? (1 - rawProgress) : rawProgress;
 
 		// 防抖处理滚动加载，避免滚动时大量重复请求
 		if (scrollDebounceTimer) {
@@ -857,7 +859,9 @@
 						onScrollToProgress={(progress) => {
 							if (thumbnailScrollContainer) {
 								const maxScroll = thumbnailScrollContainer.scrollWidth - thumbnailScrollContainer.clientWidth;
-								thumbnailScrollContainer.scrollLeft = progress * maxScroll;
+								// 右开模式下反转进度
+								const scrollProgress = readingDirection === 'right-to-left' ? (1 - progress) : progress;
+								thumbnailScrollContainer.scrollLeft = scrollProgress * maxScroll;
 							}
 						}}
 						showIndexInput={false}

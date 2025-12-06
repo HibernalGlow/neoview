@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
 	 * FolderTree - 文件夹树组件
-	 * 使用 shadcn tree-view 组件重构
+	 * 使用 shadcn tree-view 组件重构，带层级线和彩色图标
 	 */
 	import { onMount } from 'svelte';
 	import {
@@ -41,6 +41,34 @@
 	// 树状态
 	let roots = $state<TreeNode[]>([]);
 	let loadingRoots = $state(true);
+
+	// 根据深度生成颜色
+	function getDepthColor(depth: number): string {
+		const colors = [
+			'text-blue-500', // 根目录 - 蓝色
+			'text-emerald-500', // 深度1 - 翠绿
+			'text-amber-500', // 深度2 - 琥珀
+			'text-purple-500', // 深度3 - 紫色
+			'text-rose-500', // 深度4 - 玫瑰
+			'text-cyan-500', // 深度5 - 青色
+			'text-orange-500' // 深度6 - 橙色
+		];
+		return colors[depth % colors.length];
+	}
+
+	// 获取层级线颜色
+	function getLineColor(depth: number): string {
+		const colors = [
+			'border-blue-400/40',
+			'border-emerald-400/40',
+			'border-amber-400/40',
+			'border-purple-400/40',
+			'border-rose-400/40',
+			'border-cyan-400/40',
+			'border-orange-400/40'
+		];
+		return colors[depth % colors.length];
+	}
 
 	// 加载根目录（Windows 盘符）
 	async function loadRoots() {
@@ -100,21 +128,12 @@
 		roots = [...roots];
 	}
 
-	// 切换展开/折叠（手动触发时使用）
+	// 切换展开/折叠
 	async function toggleNode(node: TreeNode, e?: MouseEvent) {
 		e?.stopPropagation();
 		node.expanded = !node.expanded;
 
 		if (node.expanded && node.children.length === 0 && !node.error) {
-			await loadChildren(node);
-		}
-		roots = [...roots];
-	}
-
-	// 处理展开状态变化（用于 Collapsible 组件的 bind:open）
-	async function handleExpandChange(node: TreeNode, expanded: boolean) {
-		node.expanded = expanded;
-		if (expanded && node.children.length === 0 && !node.error) {
 			await loadChildren(node);
 		}
 		roots = [...roots];
@@ -202,14 +221,14 @@
 </TreeView.Root>
 
 {#snippet treeNode(node: TreeNode, depth: number)}
-	<Collapsible.Root bind:open={node.expanded}>
+	<div class="tree-node">
+		<!-- 节点行 -->
 		<div
 			class={cn(
 				'hover:bg-accent/50 flex cursor-pointer items-center gap-1 rounded px-1 py-0.5 transition-colors',
 				isCurrentPath(node.path) && 'bg-accent',
 				isInCurrentPath(node.path) && 'font-medium'
 			)}
-			style="padding-left: {depth * 12 + 4}px;"
 			onclick={(e) => selectNode(node, e)}
 			onkeydown={(e) => e.key === 'Enter' && selectNode(node)}
 			role="button"
@@ -222,44 +241,52 @@
 				onclick={(e) => toggleNode(node, e)}
 			>
 				{#if node.loading}
-					<Loader2 class="h-3 w-3 animate-spin" />
+					<Loader2 class="text-muted-foreground h-3 w-3 animate-spin" />
 				{:else if node.expanded}
-					<ChevronDown class="h-3 w-3" />
+					<ChevronDown class="text-muted-foreground h-3 w-3" />
 				{:else}
-					<ChevronRight class="h-3 w-3" />
+					<ChevronRight class="text-muted-foreground h-3 w-3" />
 				{/if}
 			</button>
 
-			<!-- 图标 -->
+			<!-- 图标（彩色） -->
 			{#if node.isRoot}
-				<HardDrive class="text-muted-foreground h-4 w-4 shrink-0" />
+				<HardDrive class="h-4 w-4 shrink-0 {getDepthColor(depth)}" />
 			{:else if node.expanded}
-				<FolderOpen class="text-muted-foreground h-4 w-4 shrink-0" />
+				<FolderOpen class="h-4 w-4 shrink-0 {getDepthColor(depth)}" />
 			{:else}
-				<Folder class="text-muted-foreground h-4 w-4 shrink-0" />
+				<Folder class="h-4 w-4 shrink-0 {getDepthColor(depth)}" />
 			{/if}
 
 			<!-- 名称 -->
 			<span class="truncate">{node.name}</span>
 		</div>
 
-		<Collapsible.Content>
+		<!-- 子节点容器（带层级线） -->
+		{#if node.expanded}
 			<!-- 错误提示 -->
 			{#if node.error}
-				<div
-					class="text-destructive truncate px-2 py-1 text-xs"
-					style="padding-left: {(depth + 1) * 12 + 4}px;"
-				>
-					{node.error}
+				<div class="ml-4 border-l {getLineColor(depth)} pl-4">
+					<div class="text-destructive truncate py-1 text-xs">
+						{node.error}
+					</div>
 				</div>
 			{/if}
 
 			<!-- 子节点 -->
 			{#if node.children.length > 0}
-				{#each node.children as child (child.path)}
-					{@render treeNode(child, depth + 1)}
-				{/each}
+				<div class="ml-4 border-l-2 {getLineColor(depth)} pl-2">
+					{#each node.children as child (child.path)}
+						{@render treeNode(child, depth + 1)}
+					{/each}
+				</div>
 			{/if}
-		</Collapsible.Content>
-	</Collapsible.Root>
+		{/if}
+	</div>
 {/snippet}
+
+<style>
+	.tree-node {
+		position: relative;
+	}
+</style>

@@ -150,10 +150,9 @@ export function computeDoublePageImages(
   }
 
   // 两张图组成双页
-  if (config.direction === 'rtl') {
-    return [nextImage, currentImage]; // RTL: 下一张在左，当前在右
-  }
-  return [currentImage, nextImage]; // LTR: 当前在左，下一张在右
+  // 注意：我们始终按逻辑顺序返回 [Current, Next]。
+  // RTL 模式下的视觉反转由 CSS (.frame-rtl -> flex-direction: row-reverse) 处理。
+  return [currentImage, nextImage];
 }
 
 /**
@@ -206,8 +205,8 @@ export function applySplitToImage(
     ...image,
     splitHalf,
     // 虚拟页索引需要调整
-    virtualIndex: splitHalf === 'left' 
-      ? image.physicalIndex * 2 
+    virtualIndex: splitHalf === 'left'
+      ? image.physicalIndex * 2
       : image.physicalIndex * 2 + 1,
   };
 }
@@ -274,7 +273,7 @@ export function computePanoramaRange(
   const half = Math.floor(visibleCount / 2);
   let start = Math.max(0, currentIndex - half);
   let end = Math.min(totalPages - 1, currentIndex + half);
-  
+
   // 调整确保显示 visibleCount 张（如果有的话）
   if (end - start + 1 < visibleCount) {
     if (start === 0) {
@@ -283,7 +282,7 @@ export function computePanoramaRange(
       start = Math.max(0, end - visibleCount + 1);
     }
   }
-  
+
   return { start, end };
 }
 
@@ -325,7 +324,7 @@ export function buildFrameImages(
     width: currentPage.width || 0,
     height: currentPage.height || 0,
   };
-  
+
   // 构建主图
   const mainImage: FrameImage = {
     url: currentPage.url,
@@ -334,7 +333,7 @@ export function buildFrameImages(
     width: currentPage.width,
     height: currentPage.height,
   };
-  
+
   // 单页模式
   if (config.layout === 'single') {
     // 处理分割
@@ -346,7 +345,7 @@ export function buildFrameImages(
       }
       return [mainImage];
     }
-    
+
     // 处理自动旋转
     if (config.autoRotate !== 'none') {
       const rotationAngle = computeAutoRotateAngle(config.autoRotate, currentSize);
@@ -354,38 +353,38 @@ export function buildFrameImages(
         mainImage.rotation = rotationAngle;
       }
     }
-    
+
     return [mainImage];
   }
-  
+
   // 双页模式
   if (config.layout === 'double') {
     const hasCurrentSize = currentSize.width > 0 && currentSize.height > 0;
     const isCurrentLandscape = hasCurrentSize && isLandscape(currentSize);
-    
+
     // 开启"横向视为双页"时，横向图独占显示
     if (config.treatHorizontalAsDoublePage && isCurrentLandscape) {
       return [mainImage];
     }
-    
+
     // 没有下一页：单页显示
     if (!nextPage) {
       return [mainImage];
     }
-    
+
     const nextSize: ImageSize = {
       width: nextPage.width || 0,
       height: nextPage.height || 0,
     };
     const hasNextSize = nextSize.width > 0 && nextSize.height > 0;
     const isNextLandscape = hasNextSize && isLandscape(nextSize);
-    
+
     // 开启"横向视为双页"时的自动双页逻辑：
     // 下一张是横向图时，当前页单独显示
     if (config.treatHorizontalAsDoublePage && isNextLandscape) {
       return [mainImage];
     }
-    
+
     // 构建第二张图
     const secondImage: FrameImage = {
       url: nextPage.url,
@@ -394,14 +393,13 @@ export function buildFrameImages(
       width: nextPage.width,
       height: nextPage.height,
     };
-    
+
     // 根据方向排列
-    if (config.direction === 'rtl') {
-      return [secondImage, mainImage]; // RTL: 下一张在前
-    }
-    return [mainImage, secondImage]; // LTR: 当前在前
+    // 注意：我们始终按逻辑顺序返回 [Current, Next]。
+    // RTL 模式下的视觉反转由 CSS (.frame-rtl -> flex-direction: row-reverse) 处理。
+    return [mainImage, secondImage];
   }
-  
+
   // 全景模式：只返回当前图，全景的多图加载由调用方处理
   return [mainImage];
 }
@@ -417,30 +415,30 @@ export function getPageStep(
   if (config.layout !== 'double') {
     return 1;
   }
-  
+
   const currentSize: ImageSize = {
     width: currentPage.width || 0,
     height: currentPage.height || 0,
   };
   const hasCurrentSize = currentSize.width > 0 && currentSize.height > 0;
   const isCurrentLandscape = hasCurrentSize && isLandscape(currentSize);
-  
+
   // 开启"横向视为双页"时，横向图独占
   if (config.treatHorizontalAsDoublePage && isCurrentLandscape) {
     return 1;
   }
-  
+
   if (!nextPage) {
     return 1;
   }
-  
+
   const nextSize: ImageSize = {
     width: nextPage.width || 0,
     height: nextPage.height || 0,
   };
   const hasNextSize = nextSize.width > 0 && nextSize.height > 0;
   const isNextLandscape = hasNextSize && isLandscape(nextSize);
-  
+
   // 开启"横向视为双页"时的自动双页逻辑
   if (config.treatHorizontalAsDoublePage) {
     // 下一张是横向图：步进1
@@ -449,6 +447,6 @@ export function getPageStep(
     }
     // 尺寸未知时，默认步进2（等待尺寸加载后会重新计算）
   }
-  
+
   return 2;
 }

@@ -2,8 +2,8 @@
 /**
  * 边栏浮动控制器
  * 可拖动的控制器，用于快速控制上下左右边栏的显示/隐藏
- * 单击：切换展开/隐藏
- * 右键：锁定当前状态（锁定展开或锁定隐藏）
+ * 单击：切换显示/隐藏
+ * 右键：循环切换锁定状态（自动 → 锁定显示 → 锁定隐藏 → 自动）
  */
 import { onDestroy } from 'svelte';
 import {
@@ -11,12 +11,16 @@ import {
 	bottomBarLockState,
 	leftSidebarLockState,
 	rightSidebarLockState,
+	topToolbarPinned,
+	bottomThumbnailBarPinned,
+	leftSidebarPinned,
+	rightSidebarPinned,
 	leftSidebarOpen,
 	rightSidebarOpen,
 	type SidebarLockState
 } from '$lib/stores/ui.svelte';
 import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
-import { PanelTop, PanelBottom, PanelLeft, PanelRight, Lock, LockOpen, GripVertical } from '@lucide/svelte';
+import { PanelTop, PanelBottom, PanelLeft, PanelRight, Lock, LockOpen, GripVertical, EyeOff } from '@lucide/svelte';
 
 // 控制器状态
 let enabled = $state(false);
@@ -34,24 +38,26 @@ let topLock = $state<SidebarLockState>(null);
 let bottomLock = $state<SidebarLockState>(null);
 let leftLock = $state<SidebarLockState>(null);
 let rightLock = $state<SidebarLockState>(null);
+
+// 边栏 pinned 状态（用于锁定显示）
+let topPinned = $state(false);
+let bottomPinned = $state(false);
+let leftPinned = $state(false);
+let rightPinned = $state(false);
+
+// 边栏 open 状态
 let leftOpen = $state(false);
 let rightOpen = $state(false);
 
-// 临时显示状态（用于单击切换）
-let topVisible = $state(false);
-let bottomVisible = $state(false);
-
 // 订阅 stores
-const unsubTopLock = topToolbarLockState.subscribe(v => {
-	topLock = v;
-	if (v !== null) topVisible = v;
-});
-const unsubBottomLock = bottomBarLockState.subscribe(v => {
-	bottomLock = v;
-	if (v !== null) bottomVisible = v;
-});
+const unsubTopLock = topToolbarLockState.subscribe(v => topLock = v);
+const unsubBottomLock = bottomBarLockState.subscribe(v => bottomLock = v);
 const unsubLeftLock = leftSidebarLockState.subscribe(v => leftLock = v);
 const unsubRightLock = rightSidebarLockState.subscribe(v => rightLock = v);
+const unsubTopPinned = topToolbarPinned.subscribe(v => topPinned = v);
+const unsubBottomPinned = bottomThumbnailBarPinned.subscribe(v => bottomPinned = v);
+const unsubLeftPinned = leftSidebarPinned.subscribe(v => leftPinned = v);
+const unsubRightPinned = rightSidebarPinned.subscribe(v => rightPinned = v);
 const unsubLeftOpen = leftSidebarOpen.subscribe(v => leftOpen = v);
 const unsubRightOpen = rightSidebarOpen.subscribe(v => rightOpen = v);
 
@@ -77,6 +83,10 @@ onDestroy(() => {
 	unsubBottomLock();
 	unsubLeftLock();
 	unsubRightLock();
+	unsubTopPinned();
+	unsubBottomPinned();
+	unsubLeftPinned();
+	unsubRightPinned();
 	unsubLeftOpen();
 	unsubRightOpen();
 	settingsManager.removeListener(settingsListener);
@@ -121,58 +131,62 @@ function handleDragStart(event: MouseEvent) {
 	window.addEventListener('mouseup', handleMouseUp);
 }
 
-// 单击：切换显示/隐藏（如果已锁定则解锁并切换）
+// 单击：切换 pinned 状态（显示/隐藏）
 function handleTopClick(e: MouseEvent) {
 	e.preventDefault();
 	e.stopPropagation();
-	if (topLock !== null) {
-		// 已锁定，解锁并切换
+	// 如果锁定隐藏，先解锁
+	if (topLock === false) {
 		topToolbarLockState.set(null);
-		topVisible = !topVisible;
-	} else {
-		// 未锁定，切换临时状态
-		topVisible = !topVisible;
 	}
+	topToolbarPinned.update(v => !v);
 }
 
-// 右键：锁定当前状态
+// 右键：循环锁定状态（自动 → 锁定显示 → 锁定隐藏 → 自动）
 function handleTopContextMenu(e: MouseEvent) {
 	e.preventDefault();
 	e.stopPropagation();
-	if (topLock !== null) {
-		// 已锁定，解锁
-		topToolbarLockState.set(null);
+	if (topLock === null) {
+		// 自动 → 锁定显示
+		topToolbarLockState.set(true);
+		topToolbarPinned.set(true);
+	} else if (topLock === true) {
+		// 锁定显示 → 锁定隐藏
+		topToolbarLockState.set(false);
+		topToolbarPinned.set(false);
 	} else {
-		// 未锁定，锁定当前状态
-		topToolbarLockState.set(topVisible);
+		// 锁定隐藏 → 自动
+		topToolbarLockState.set(null);
 	}
 }
 
 function handleBottomClick(e: MouseEvent) {
 	e.preventDefault();
 	e.stopPropagation();
-	if (bottomLock !== null) {
+	if (bottomLock === false) {
 		bottomBarLockState.set(null);
-		bottomVisible = !bottomVisible;
-	} else {
-		bottomVisible = !bottomVisible;
 	}
+	bottomThumbnailBarPinned.update(v => !v);
 }
 
 function handleBottomContextMenu(e: MouseEvent) {
 	e.preventDefault();
 	e.stopPropagation();
-	if (bottomLock !== null) {
-		bottomBarLockState.set(null);
+	if (bottomLock === null) {
+		bottomBarLockState.set(true);
+		bottomThumbnailBarPinned.set(true);
+	} else if (bottomLock === true) {
+		bottomBarLockState.set(false);
+		bottomThumbnailBarPinned.set(false);
 	} else {
-		bottomBarLockState.set(bottomVisible);
+		bottomBarLockState.set(null);
 	}
 }
 
 function handleLeftClick(e: MouseEvent) {
 	e.preventDefault();
 	e.stopPropagation();
-	if (leftLock !== null) {
+	if (leftLock === false) {
 		leftSidebarLockState.set(null);
 	}
 	leftSidebarOpen.update(v => !v);
@@ -181,17 +195,23 @@ function handleLeftClick(e: MouseEvent) {
 function handleLeftContextMenu(e: MouseEvent) {
 	e.preventDefault();
 	e.stopPropagation();
-	if (leftLock !== null) {
-		leftSidebarLockState.set(null);
+	if (leftLock === null) {
+		leftSidebarLockState.set(true);
+		leftSidebarPinned.set(true);
+		leftSidebarOpen.set(true);
+	} else if (leftLock === true) {
+		leftSidebarLockState.set(false);
+		leftSidebarPinned.set(false);
+		leftSidebarOpen.set(false);
 	} else {
-		leftSidebarLockState.set(leftOpen);
+		leftSidebarLockState.set(null);
 	}
 }
 
 function handleRightClick(e: MouseEvent) {
 	e.preventDefault();
 	e.stopPropagation();
-	if (rightLock !== null) {
+	if (rightLock === false) {
 		rightSidebarLockState.set(null);
 	}
 	rightSidebarOpen.update(v => !v);
@@ -200,10 +220,16 @@ function handleRightClick(e: MouseEvent) {
 function handleRightContextMenu(e: MouseEvent) {
 	e.preventDefault();
 	e.stopPropagation();
-	if (rightLock !== null) {
-		rightSidebarLockState.set(null);
+	if (rightLock === null) {
+		rightSidebarLockState.set(true);
+		rightSidebarPinned.set(true);
+		rightSidebarOpen.set(true);
+	} else if (rightLock === true) {
+		rightSidebarLockState.set(false);
+		rightSidebarPinned.set(false);
+		rightSidebarOpen.set(false);
 	} else {
-		rightSidebarLockState.set(rightOpen);
+		rightSidebarLockState.set(null);
 	}
 }
 
@@ -245,10 +271,10 @@ function getStateText(lockState: SidebarLockState, isOpen: boolean): string {
 			<!-- 上边栏 -->
 			<button
 				type="button"
-				class="p-1.5 rounded transition-colors relative {getButtonClass(topLock, topVisible)}"
+				class="p-1.5 rounded transition-colors relative {getButtonClass(topLock, topPinned)}"
 				onclick={handleTopClick}
 				oncontextmenu={handleTopContextMenu}
-				title={getStateText(topLock, topVisible) + '，单击切换，右键锁定'}
+				title={getStateText(topLock, topPinned) + '，单击切换，右键锁定'}
 			>
 				<PanelTop class="h-4 w-4" />
 				{#if topLock !== null}
@@ -259,10 +285,10 @@ function getStateText(lockState: SidebarLockState, isOpen: boolean): string {
 			<!-- 下边栏 -->
 			<button
 				type="button"
-				class="p-1.5 rounded transition-colors relative {getButtonClass(bottomLock, bottomVisible)}"
+				class="p-1.5 rounded transition-colors relative {getButtonClass(bottomLock, bottomPinned)}"
 				onclick={handleBottomClick}
 				oncontextmenu={handleBottomContextMenu}
-				title={getStateText(bottomLock, bottomVisible) + '，单击切换，右键锁定'}
+				title={getStateText(bottomLock, bottomPinned) + '，单击切换，右键锁定'}
 			>
 				<PanelBottom class="h-4 w-4" />
 				{#if bottomLock !== null}

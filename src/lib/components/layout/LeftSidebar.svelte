@@ -14,6 +14,7 @@
 		setActivePanelTab,
 		leftSidebarWidth,
 		leftSidebarPinned,
+		leftSidebarLockState,
 		leftSidebarOpen,
 		sidebarLeftPanels,
 		type PanelId,
@@ -104,7 +105,9 @@
 
 	// 悬停显示/隐藏逻辑 - 使用 HoverWrapper 管理
 	function handleVisibilityChange(visible: boolean) {
-		if (!$leftSidebarPinned) {
+		// 锁定隐藏时，不响应悬停
+		if ($leftSidebarLockState === false) return;
+		if (!$leftSidebarPinned && $leftSidebarLockState !== true) {
 			localSidebarOpen = visible;
 			leftSidebarOpen.set(visible);
 		}
@@ -129,9 +132,16 @@
 		}
 	});
 
-	// 响应钉住状态
+	// 响应钉住状态和锁定状态
 	$effect(() => {
-		if ($leftSidebarPinned) {
+		// 锁定隐藏时，强制关闭
+		if ($leftSidebarLockState === false) {
+			localSidebarOpen = false;
+			leftSidebarOpen.set(false);
+			return;
+		}
+		// 锁定显示或钉住时，强制打开
+		if ($leftSidebarPinned || $leftSidebarLockState === true) {
 			localSidebarOpen = true;
 			leftSidebarOpen.set(true);
 		}

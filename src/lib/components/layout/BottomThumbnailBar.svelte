@@ -9,7 +9,7 @@
 	import { thumbnailCacheStore, type ThumbnailEntry } from '$lib/stores/thumbnailCache.svelte';
 	import { loadImage } from '$lib/api/fs';
 	import { loadImageFromArchive, generateVideoThumbnail } from '$lib/api/filesystem';
-	import { bottomThumbnailBarPinned, bottomThumbnailBarHeight, viewerPageInfoVisible } from '$lib/stores';
+	import { bottomThumbnailBarPinned, bottomBarLockState, bottomThumbnailBarHeight, viewerPageInfoVisible } from '$lib/stores';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { Button } from '$lib/components/ui/button';
 	import * as Progress from '$lib/components/ui/progress';
@@ -82,9 +82,17 @@
 		return thumbnailSnapshot.get(pageIndex) ?? null;
 	}
 
-	// 响应钉住状态
+	// 响应钉住状态和锁定状态
 	$effect(() => {
-		if ($bottomThumbnailBarPinned) {
+		// 锁定隐藏时，强制隐藏
+		if ($bottomBarLockState === false) {
+			isVisible = false;
+			if (hideTimeout) clearTimeout(hideTimeout);
+			if (showTimeout) clearTimeout(showTimeout);
+			return;
+		}
+		// 锁定显示或钉住时，强制显示
+		if ($bottomThumbnailBarPinned || $bottomBarLockState === true) {
 			isVisible = true;
 			if (hideTimeout) clearTimeout(hideTimeout);
 		}
@@ -123,7 +131,9 @@
 
 	function handleMouseEnter() {
 		hoverCount++;
-		if ($bottomThumbnailBarPinned) {
+		// 锁定隐藏时，不响应悬停
+		if ($bottomBarLockState === false) return;
+		if ($bottomThumbnailBarPinned || $bottomBarLockState === true) {
 			showThumbnails();
 			return;
 		}

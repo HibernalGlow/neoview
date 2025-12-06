@@ -29,6 +29,7 @@
 		lockedReadingDirection,
 		toggleOrientation,
 		topToolbarPinned,
+		topToolbarLockState,
 		topToolbarHeight,
 		toggleZoomModeLock,
 		requestZoomMode,
@@ -256,9 +257,17 @@ async function handleSortModeChange(mode: PageSortMode) {
 	let resizeStartHeight = 0;
 	let hoverCount = $state(0); // 追踪悬停区域的计数
 
-	// 响应钉住状态
+	// 响应钉住状态和锁定状态
 	$effect(() => {
-		if ($topToolbarPinned) {
+		// 锁定隐藏时，强制隐藏
+		if ($topToolbarLockState === false) {
+			isVisible = false;
+			if (hideTimeout) clearTimeout(hideTimeout);
+			if (showTimeout) clearTimeout(showTimeout);
+			return;
+		}
+		// 锁定显示或钉住时，强制显示
+		if ($topToolbarPinned || $topToolbarLockState === true) {
 			isVisible = true;
 			if (hideTimeout) clearTimeout(hideTimeout);
 			if (showTimeout) clearTimeout(showTimeout);
@@ -277,7 +286,9 @@ async function handleSortModeChange(mode: PageSortMode) {
 	function handleMouseEnter() {
 		hoverCount++;
 		console.log('TopToolbar handleMouseEnter, hoverCount:', hoverCount);
-		if ($topToolbarPinned) {
+		// 锁定隐藏时，不响应悬停
+		if ($topToolbarLockState === false) return;
+		if ($topToolbarPinned || $topToolbarLockState === true) {
 			showToolbar();
 			return;
 		}

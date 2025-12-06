@@ -9,21 +9,19 @@
 	import { thumbnailCacheStore, type ThumbnailEntry } from '$lib/stores/thumbnailCache.svelte';
 	import { loadImage } from '$lib/api/fs';
 	import { loadImageFromArchive, generateVideoThumbnail } from '$lib/api/filesystem';
-	import { bottomThumbnailBarPinned, bottomBarLockState, bottomBarOpen, bottomThumbnailBarHeight, viewerPageInfoVisible } from '$lib/stores';
+	import {
+		bottomThumbnailBarPinned,
+		bottomBarLockState,
+		bottomBarOpen,
+		bottomThumbnailBarHeight,
+		viewerPageInfoVisible
+	} from '$lib/stores';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { Button } from '$lib/components/ui/button';
-	import * as Progress from '$lib/components/ui/progress';
+
 	import HorizontalListSlider from '$lib/components/panels/file/components/HorizontalListSlider.svelte';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import {
-		Image as ImageIcon,
-		Pin,
-		PinOff,
-		GripHorizontal,
-		Minus,
-		Target,
-		Hash
-	} from '@lucide/svelte';
+	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, Target, Hash } from '@lucide/svelte';
 	import { subscribeSharedPreloadManager } from '$lib/components/viewer/flow/sharedPreloadManager';
 	import type { PreloadManager } from '$lib/components/viewer/flow/preloadManager.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
@@ -40,7 +38,9 @@
 	let settings = $state(settingsManager.getSettings());
 	let readingDirection = $derived(settings.book.readingDirection);
 	let hoverAreas = $derived(settings.panels?.hoverAreas);
-	let autoHideTiming = $derived(settings.panels?.autoHideTiming ?? { showDelaySec: 0, hideDelaySec: 0 });
+	let autoHideTiming = $derived(
+		settings.panels?.autoHideTiming ?? { showDelaySec: 0, hideDelaySec: 0 }
+	);
 	let bottomBarOpacity = $derived(settings.panels?.bottomBarOpacity ?? 85);
 	let bottomBarBlur = $derived(settings.panels?.bottomBarBlur ?? 12);
 	let lastReadingDirection = $state<'left-to-right' | 'right-to-left' | null>(null);
@@ -63,7 +63,7 @@
 	let isResizing = $state(false);
 	let resizeStartY = 0;
 	let resizeStartHeight = 0;
-	let showBottomProgressBar = $state(true);
+
 	let showPageNumbers = $state(true); // 显示底栏页码标签
 	let hoverCount = $state(0); // 追踪悬停区域的计数
 	let showAreaOverlay = $state(false); // 显示区域覆盖层
@@ -189,10 +189,6 @@
 		if (showTimeout) clearTimeout(showTimeout);
 		hoverCount = 0;
 		isVisible = false;
-	}
-
-	function toggleProgressBar() {
-		showBottomProgressBar = !showBottomProgressBar;
 	}
 
 	function toggleAreaOverlay() {
@@ -408,9 +404,7 @@
 
 		// 视频页面：使用视频缩略图 API，而不是图片管线
 		const isVideoPage =
-			!!currentBook &&
-			!!page &&
-			(isVideoFile(page.name || '') || isVideoFile(page.path || ''));
+			!!currentBook && !!page && (isVideoFile(page.name || '') || isVideoFile(page.path || ''));
 
 		if (isVideoPage) {
 			// 压缩包中的视频暂时不生成独立缩略图，使用占位符避免复杂度/性能问题
@@ -462,7 +456,12 @@
 
 				// 后端已返回正确尺寸的 webp 缩略图，直接获取尺寸即可
 				const thumbnail = await getThumbnailDimensions(imageDataUrl);
-				thumbnailCacheStore.setThumbnail(pageIndex, thumbnail.url, thumbnail.width, thumbnail.height);
+				thumbnailCacheStore.setThumbnail(
+					pageIndex,
+					thumbnail.url,
+					thumbnail.width,
+					thumbnail.height
+				);
 				noThumbnailPaths.delete(pathKey!);
 			} catch (fallbackErr) {
 				console.error(`Fallback also failed for page ${pageIndex}:`, fallbackErr);
@@ -477,7 +476,7 @@
 
 	// 滚动处理防抖
 	let scrollDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-	
+
 	function handleScroll(e: Event) {
 		const container = e.target as HTMLElement;
 
@@ -485,7 +484,7 @@
 		const maxScroll = container.scrollWidth - container.clientWidth;
 		const rawProgress = maxScroll > 0 ? container.scrollLeft / maxScroll : 0;
 		// 右开模式下反转进度（因为缩略图列表已经反转，滚动到最右边=第1页=进度0）
-		thumbnailScrollProgress = readingDirection === 'right-to-left' ? (1 - rawProgress) : rawProgress;
+		thumbnailScrollProgress = readingDirection === 'right-to-left' ? 1 - rawProgress : rawProgress;
 
 		// 防抖处理滚动加载，避免滚动时大量重复请求
 		if (scrollDebounceTimer) {
@@ -495,16 +494,16 @@
 			loadVisibleThumbnailsOnScroll(container);
 		}, 100); // 100ms 防抖
 	}
-	
+
 	// 滚动时高效加载可见缩略图
 	function loadVisibleThumbnailsOnScroll(container: HTMLElement) {
 		const currentBook = bookStore.currentBook;
 		if (!currentBook || !preloadManager) return;
-		
+
 		const containerRect = container.getBoundingClientRect();
 		const buffer = 300; // 300px 缓冲区
 		const thumbnailWidth = 80; // 估算缩略图宽度
-		
+
 		// 根据滚动位置计算可见范围（避免遍历所有 DOM）
 		const scrollLeft = container.scrollLeft;
 		const visibleWidth = containerRect.width + buffer * 2;
@@ -513,11 +512,11 @@
 			currentBook.pages.length - 1,
 			Math.ceil((scrollLeft + visibleWidth) / thumbnailWidth)
 		);
-		
+
 		// 限制单次加载数量，避免阻塞
 		const maxLoad = 10;
 		let loadCount = 0;
-		
+
 		for (let i = startIdx; i <= endIdx && loadCount < maxLoad; i++) {
 			if (!thumbnailCacheStore.hasThumbnail(i) && !loadingIndices.has(i)) {
 				void loadThumbnail(i);
@@ -562,7 +561,7 @@
 			thumbnailSnapshot = thumbnailCacheStore.getAllThumbnails();
 		});
 		thumbnailSnapshot = thumbnailCacheStore.getAllThumbnails();
-		
+
 		unsubscribeSharedManager = subscribeSharedPreloadManager((manager) => {
 			preloadManager = manager;
 			if (preloadManager) {
@@ -687,7 +686,7 @@
 			</button>
 
 			<!-- 控制按钮 -->
-			<div class="flex justify-center gap-2 px-2 pt-3 pb-1">
+			<div class="flex justify-center gap-2 px-2 pb-1 pt-3">
 				<Button
 					variant={$bottomThumbnailBarPinned ? 'default' : 'ghost'}
 					size="sm"
@@ -702,29 +701,14 @@
 					{/if}
 					<span class="text-xs">{$bottomThumbnailBarPinned ? '已钉住' : '钉住'}</span>
 				</Button>
-				<Tooltip.Root>
-					<Tooltip.Trigger>
-						<Button
-							variant={showBottomProgressBar ? 'default' : 'ghost'}
-							size="sm"
-							class="h-6"
-							onclick={toggleProgressBar}
-						>
-							<Minus class="mr-1 h-3 w-3" />
-							<span class="text-xs">进度条</span>
-						</Button>
-					</Tooltip.Trigger>
-					<Tooltip.Content>
-						<p>显示阅读进度条</p>
-					</Tooltip.Content>
-				</Tooltip.Root>
+
 				<Tooltip.Root>
 					<Tooltip.Trigger>
 						<Button
 							variant={$viewerPageInfoVisible ? 'default' : 'ghost'}
 							size="sm"
 							class="h-6"
-							onclick={() => viewerPageInfoVisible.update(v => !v)}
+							onclick={() => viewerPageInfoVisible.update((v) => !v)}
 						>
 							<Hash class="mr-1 h-3 w-3" />
 							<span class="text-xs">页码</span>
@@ -836,7 +820,7 @@
 									<!-- 页码标签 -->
 									{#if showPageNumbers}
 										<div
-											class="absolute bottom-0 left-0 right-0 bg-primary/90 py-0.5 text-center font-mono text-[10px] font-medium text-primary-foreground"
+											class="bg-primary/90 text-primary-foreground absolute bottom-0 left-0 right-0 py-0.5 text-center font-mono text-[10px] font-medium"
 										>
 											{originalIndex + 1}
 										</div>
@@ -867,29 +851,25 @@
 					{/each}
 				</div>
 			</div>
-			{#if showBottomProgressBar && bookStore.currentBook}
-				<!-- 底部进度滑块（可交互） -->
-				<div
-					class="absolute bottom-0 left-0 right-0 z-60 bg-background/80 backdrop-blur-sm"
-				>
-					<HorizontalListSlider
-						totalItems={bookStore.currentBook.pages.length}
-						currentIndex={bookStore.currentPageIndex}
-						progress={thumbnailScrollProgress}
-						{readingDirection}
-						onScrollToProgress={(progress) => {
-							if (thumbnailScrollContainer) {
-								const maxScroll = thumbnailScrollContainer.scrollWidth - thumbnailScrollContainer.clientWidth;
-								// 右开模式下反转进度
-								const scrollProgress = readingDirection === 'right-to-left' ? (1 - progress) : progress;
-								thumbnailScrollContainer.scrollLeft = scrollProgress * maxScroll;
-							}
-						}}
-						showIndexInput={false}
-					/>
-				</div>
-			{/if}
+			<!-- 底部进度滑块（可交互） -->
+			<div class="z-60 bg-background/80 absolute bottom-0 left-0 right-0 backdrop-blur-sm">
+				<HorizontalListSlider
+					totalItems={bookStore.currentBook.pages.length}
+					currentIndex={bookStore.currentPageIndex}
+					progress={thumbnailScrollProgress}
+					{readingDirection}
+					onScrollToProgress={(progress) => {
+						if (thumbnailScrollContainer) {
+							const maxScroll =
+								thumbnailScrollContainer.scrollWidth - thumbnailScrollContainer.clientWidth;
+							// 右开模式下反转进度
+							const scrollProgress = readingDirection === 'right-to-left' ? 1 - progress : progress;
+							thumbnailScrollContainer.scrollLeft = scrollProgress * maxScroll;
+						}
+					}}
+					showIndexInput={false}
+				/>
+			</div>
 		</div>
 	</div>
 {/if}
-

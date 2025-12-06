@@ -686,7 +686,6 @@
     isDivided={isInSplitMode}
     splitHalf={splitState?.half ?? null}
     showPageInfo={$viewerPageInfoVisible && showPageInfo}
-    showProgress={showProgress}
     showLoading={showLoading}
   />
   

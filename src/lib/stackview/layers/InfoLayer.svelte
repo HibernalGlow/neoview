@@ -12,7 +12,6 @@
     isDivided = false,
     splitHalf = null,
     showPageInfo = true,
-    showProgress = true,
     showLoading = true,
   }: {
     currentIndex?: number;
@@ -21,7 +20,6 @@
     isDivided?: boolean;
     splitHalf?: 'left' | 'right' | null;
     showPageInfo?: boolean;
-    showProgress?: boolean;
     showLoading?: boolean;
   } = $props();
   
@@ -34,8 +32,7 @@
     return `${currentIndex + 1} / ${totalPages}`;
   });
   
-  let progress = $derived(totalPages > 0 ? ((currentIndex + 1) / totalPages) * 100 : 0);
-</script>
+  </script>
 
 <div 
   class="info-layer"
@@ -60,12 +57,6 @@
     </div>
   {/if}
   
-  <!-- 进度条 -->
-  {#if showProgress && totalPages > 0}
-    <div class="progress-bar">
-      <div class="progress-fill" style:width="{progress}%"></div>
-    </div>
-  {/if}
 </div>
 
 <style>
@@ -119,18 +110,4 @@
     to { transform: rotate(360deg); }
   }
   
-  .progress-bar {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.2);
-  }
-  
-  .progress-fill {
-    height: 100%;
-    background: var(--primary, #3b82f6);
-    transition: width 0.3s ease;
-  }
 </style>

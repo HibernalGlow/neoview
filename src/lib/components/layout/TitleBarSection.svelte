@@ -8,14 +8,7 @@
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { openSettingsOverlay } from '$lib/stores/settingsOverlay.svelte';
-	import { 
-		toggleLeftSidebar,
-		topToolbarPinned,
-		layoutMode,
-		toggleLayoutMode,
-		layoutSwitchMode,
-		toggleLayoutSwitchMode
-	} from '$lib/stores';
+	import { toggleLeftSidebar, topToolbarPinned } from '$lib/stores';
 	import { showToast } from '$lib/utils/toast';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import {
@@ -33,7 +26,6 @@
 		Monitor,
 		Palette,
 		Settings,
-		LayoutGrid,
 		Layers,
 		Square,
 		Minimize,
@@ -72,9 +64,8 @@
 		});
 		showToast({
 			title: '渲染模式',
-			description: newMode === 'stack' 
-				? '已切换到 StackViewer（槽位系统）' 
-				: '已切换到 Layer 系统（标准）',
+			description:
+				newMode === 'stack' ? '已切换到 StackViewer（槽位系统）' : '已切换到 Layer 系统（标准）',
 			variant: 'info',
 			duration: 2000
 		});
@@ -327,7 +318,9 @@
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
-				<p>主题模式：{themeMode === 'light' ? '浅色' : themeMode === 'dark' ? '深色' : '跟随系统'}</p>
+				<p>
+					主题模式：{themeMode === 'light' ? '浅色' : themeMode === 'dark' ? '深色' : '跟随系统'}
+				</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 
@@ -395,46 +388,18 @@
 		<!-- 设置按钮 -->
 		<Tooltip.Root>
 			<Tooltip.Trigger>
-				<Button variant="ghost" size="icon" class="h-6 w-6" style="pointer-events: auto;" onclick={openSettings}>
+				<Button
+					variant="ghost"
+					size="icon"
+					class="h-6 w-6"
+					style="pointer-events: auto;"
+					onclick={openSettings}
+				>
 					<Settings class="h-4 w-4" />
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
 				<p>设置</p>
-			</Tooltip.Content>
-		</Tooltip.Root>
-
-		<!-- 布局模式切换 -->
-		<Tooltip.Root>
-			<Tooltip.Trigger>
-				<Button
-					variant={$layoutMode === 'flow' ? 'default' : 'ghost'}
-					size="icon"
-					class="h-6 w-6"
-					style="pointer-events: auto;"
-					onclick={toggleLayoutMode}
-					oncontextmenu={(e) => {
-						e.preventDefault();
-						toggleLayoutSwitchMode();
-						const newMode = $layoutSwitchMode === 'seamless' ? 'cold' : 'seamless';
-						showToast({
-							title: '布局切换模式',
-							description: newMode === 'seamless' 
-								? '已切换到无缝模式 (保持状态，占用更多内存)' 
-								: '已切换到冷切换模式 (节省性能，状态可能丢失)',
-							variant: 'info',
-							duration: 2000
-						});
-					}}
-				>
-					<LayoutGrid class="h-4 w-4" />
-				</Button>
-			</Tooltip.Trigger>
-			<Tooltip.Content>
-				<p>{$layoutMode === 'flow' ? '切换到传统布局' : '切换到 Flow 画布布局'}</p>
-				<p class="text-muted-foreground text-xs">
-					右键切换: {$layoutSwitchMode === 'seamless' ? '无缝模式' : '冷切换'}
-				</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 
@@ -464,13 +429,31 @@
 
 	<!-- 右侧：窗口控制按钮 -->
 	<div class="flex items-center gap-1">
-		<Button variant="ghost" size="icon" class="h-6 w-6" style="pointer-events: auto;" onclick={minimizeWindow}>
+		<Button
+			variant="ghost"
+			size="icon"
+			class="h-6 w-6"
+			style="pointer-events: auto;"
+			onclick={minimizeWindow}
+		>
 			<Minimize class="h-3 w-3" />
 		</Button>
-		<Button variant="ghost" size="icon" class="h-6 w-6" style="pointer-events: auto;" onclick={maximizeWindow}>
+		<Button
+			variant="ghost"
+			size="icon"
+			class="h-6 w-6"
+			style="pointer-events: auto;"
+			onclick={maximizeWindow}
+		>
 			<Maximize class="h-3 w-3" />
 		</Button>
-		<Button variant="ghost" size="icon" class="hover:bg-destructive h-6 w-6" style="pointer-events: auto;" onclick={closeWindow}>
+		<Button
+			variant="ghost"
+			size="icon"
+			class="hover:bg-destructive h-6 w-6"
+			style="pointer-events: auto;"
+			onclick={closeWindow}
+		>
 			<X class="h-4 w-4" />
 		</Button>
 	</div>

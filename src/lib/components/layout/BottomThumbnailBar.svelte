@@ -328,35 +328,64 @@
 		return '';
 	}
 
+	const PRELOAD_RANGE = 5; // 前后各预加载 20 页
+
+	/**
+	 * 生成中央优先加载顺序
+	 * 从中心页开始，交替向前后方向扩展
+	 */
+	function generateCentralPriorityOrder(center: number, totalPages: number, range: number): number[] {
+		const indices: number[] = [];
+		
+		// 先加载中心页
+		if (center >= 0 && center < totalPages) {
+			indices.push(center);
+		}
+		
+		// 交替向前后方向扩展
+		for (let offset = 1; offset <= range; offset++) {
+			// 向后
+			if (center + offset < totalPages) {
+				indices.push(center + offset);
+			}
+			// 向前
+			if (center - offset >= 0) {
+				indices.push(center - offset);
+			}
+		}
+		
+		return indices;
+	}
+
 	async function loadVisibleThumbnails() {
 		const currentBook = bookStore.currentBook;
 		if (!currentBook) return;
 
 		const totalPages = currentBook.pages.length;
-		const { start, end } = getWindowRange(totalPages);
-		const desired = getMinVisibleThumbnails();
+		const centerIndex = bookStore.currentPageIndex;
 
-		if (
-			lastThumbnailRange &&
-			lastThumbnailRange.start === start &&
-			lastThumbnailRange.end === end
-		) {
-			return;
-		}
-		lastThumbnailRange = { start, end };
-
-		console.log(
-			`Loading thumbnails from ${start} to ${end} (total: ${end - start + 1}, desired: ${desired})`
+		// 使用中央优先策略生成加载顺序
+		const loadOrder = generateCentralPriorityOrder(centerIndex, totalPages, PRELOAD_RANGE);
+		
+		// 过滤已缓存和正在加载的
+		const toLoad = loadOrder.filter(
+			(i) => !thumbnailCacheStore.hasThumbnail(i) && !loadingIndices.has(i)
 		);
 
-		// 并行请求所有缩略图
-		const promises: Promise<void>[] = [];
-		for (let i = start; i <= end; i++) {
-			if (!thumbnailCacheStore.hasThumbnail(i)) {
-				promises.push(loadThumbnail(i));
-			}
+		if (toLoad.length === 0) {
+			return;
 		}
-		await Promise.all(promises);
+
+		console.log(
+			`🖼️ Loading ${toLoad.length} thumbnails (center: ${centerIndex}, range: ${PRELOAD_RANGE})`
+		);
+
+		// 按中央优先顺序逐个加载（避免同时请求太多）
+		const batchSize = 5;
+		for (let i = 0; i < toLoad.length; i += batchSize) {
+			const batch = toLoad.slice(i, i + batchSize);
+			await Promise.all(batch.map(loadThumbnail));
+		}
 	}
 
 	/**
@@ -661,14 +690,20 @@
 		}
 	}
 
-	// 书籍变化时重置本地状态（全局缓存由 PreloadManager 管理）
+	// 书籍变化时重置本地状态并触发重新加载
+	let lastBookPath: string | null = null;
 	$effect(() => {
 		const currentBook = bookStore.currentBook;
-		if (currentBook) {
+		if (currentBook && currentBook.path !== lastBookPath) {
+			lastBookPath = currentBook.path;
 			lastThumbnailRange = null;
 			// 【关键】清空加载状态，防止旧任务继续执行
 			loadingIndices.clear();
 			noThumbnailPaths.clear();
+			// 设置 imagePool 当前书籍（确保缓存同步）
+			imagePool.setCurrentBook(currentBook.path);
+			// 触发重新加载缩略图
+			scheduleLoadVisibleThumbnails();
 		}
 	});
 

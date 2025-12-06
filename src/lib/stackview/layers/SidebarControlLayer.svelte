@@ -27,8 +27,7 @@
     PanelLeft,
     PanelRight,
     Lock,
-    GripVertical,
-    RotateCcw
+    GripVertical
   } from '@lucide/svelte';
   import { LayerZIndex } from '../types/layer';
 
@@ -114,11 +113,6 @@
     settingsManager.updateNestedSettings('view', {
       sidebarControl: { ...prev, position }
     });
-  }
-
-  function resetPosition() {
-    position = { x: 100, y: 100 };
-    savePosition();
   }
 
   function handleDragStart(event: MouseEvent) {
@@ -339,19 +333,6 @@
         {#if rightLock !== null}
           <Lock class="absolute -right-0.5 -top-0.5 h-2.5 w-2.5" />
         {/if}
-      </button>
-
-      <!-- 分隔线 -->
-      <div class="bg-border/60 mx-0.5 h-4 w-px"></div>
-
-      <!-- 重置位置 -->
-      <button
-        type="button"
-        class="text-muted-foreground hover:text-foreground hover:bg-muted rounded p-1.5 transition-colors"
-        onclick={resetPosition}
-        title="重置控制器位置"
-      >
-        <RotateCcw class="h-4 w-4" />
       </button>
     </div>
   </div>

@@ -537,14 +537,14 @@
 
 		// 如果任一边栏打开，或点击在上下栏区域内，则不处理区域点击
 		if ($leftSidebarOpen || $rightSidebarOpen || isInTopToolbar || isInBottomBar) {
-			console.log('边栏已打开或点击在上下栏区域内，禁用全局区域点击响应', {
-				leftSidebarOpen: $leftSidebarOpen,
-				rightSidebarOpen: $rightSidebarOpen,
-				isInTopToolbar,
-				isInBottomBar,
-				targetElement: target.tagName,
-				targetClass: target.className
-			});
+			// console.log('边栏已打开或点击在上下栏区域内，禁用全局区域点击响应', {
+			// 	leftSidebarOpen: $leftSidebarOpen,
+			// 	rightSidebarOpen: $rightSidebarOpen,
+			// 	isInTopToolbar,
+			// 	isInBottomBar,
+			// 	targetElement: target.tagName,
+			// 	targetClass: target.className
+			// });
 			return;
 		}
 

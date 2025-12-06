@@ -79,7 +79,9 @@
 		Expand,
 		LayoutGrid,
 		SplitSquareHorizontal,
-		Rows2
+		Rows2,
+		AlignLeft,
+		AlignRight
 	} from '@lucide/svelte';
 
 	import { showToast } from '$lib/utils/toast';
@@ -114,7 +116,9 @@
 		{ mode: 'fill', label: '铺满整个窗口' },
 		{ mode: 'fitWidth', label: '适应宽度' },
 		{ mode: 'fitHeight', label: '适应高度' },
-		{ mode: 'original', label: '原始大小' }
+		{ mode: 'original', label: '原始大小' },
+		{ mode: 'fitLeftAlign', label: '居左适应窗口' },
+		{ mode: 'fitRightAlign', label: '居右适应窗口' }
 	];
 	let currentSortModeLabel = $derived(
 		sortModeOptions.find((o) => o.value === (bookStore.currentBook?.sortMode ?? 'fileName'))
@@ -207,6 +211,8 @@
 		if (mode === 'fill') return '铺满整个窗口';
 		if (mode === 'fitWidth') return '适应宽度';
 		if (mode === 'fitHeight') return '适应高度';
+		if (mode === 'fitLeftAlign') return '居左适应窗口';
+		if (mode === 'fitRightAlign') return '居右适应窗口';
 		return '原始大小';
 	}
 
@@ -215,7 +221,9 @@
 		fill: Expand,
 		fitWidth: StretchHorizontal,
 		fitHeight: StretchVertical,
-		original: Frame
+		original: Frame,
+		fitLeftAlign: AlignLeft,
+		fitRightAlign: AlignRight
 	} as const satisfies Record<ZoomMode, typeof Maximize>;
 
 	function getZoomModeIcon(mode: ZoomMode) {
@@ -475,7 +483,7 @@
 
 	<!-- 工具栏（图片操作） - 响应式布局：宽度不够时面包屏在上，工具栏在下 -->
 	<div
-		class="border-b shadow-lg"
+		class="border-b {isVisible ? 'shadow-lg' : ''}"
 		style="min-height: {$topToolbarHeight}px; background-color: color-mix(in oklch, var(--sidebar) {topToolbarOpacity}%, transparent); color: var(--sidebar-foreground); backdrop-filter: blur({topToolbarBlur}px);"
 	>
 		<div class="mx-auto flex w-full max-w-[1280px] flex-col gap-1 px-2 py-1">

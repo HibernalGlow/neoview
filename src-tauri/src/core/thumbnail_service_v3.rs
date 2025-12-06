@@ -536,6 +536,37 @@ impl ThumbnailServiceV3 {
             } else {
                 // 优化：通过路径特征快速判断文件类型
                 let file_type = Self::detect_file_type(path);
+                
+                // 【核心优化】对于未缓存的文件夹，立即尝试绑定已有子文件缩略图
+                // 这样可以在同步请求中就返回结果，无需等待队列处理
+                if matches!(file_type, ThumbnailFileType::Folder) {
+                    if let Ok(Some((child_key, blob))) = self.db.find_earliest_thumbnail_in_path(path) {
+                        log_debug!("🔗 即时绑定子文件缩略图: {} -> {}", path, child_key);
+                        
+                        // 保存到数据库
+                        let _ = self.db.save_thumbnail_with_category(path, 0, 0, &blob, Some("folder"));
+                        
+                        // 更新索引
+                        if let Ok(mut folder_idx) = self.folder_db_index.write() {
+                            folder_idx.insert(path.clone());
+                        }
+                        if let Ok(mut idx) = self.db_index.write() {
+                            idx.insert(path.clone());
+                        }
+                        
+                        // 更新内存缓存
+                        if let Ok(mut cache) = self.memory_cache.write() {
+                            let blob_size = blob.len();
+                            cache.put(path.clone(), blob.clone());
+                            self.memory_cache_bytes.fetch_add(blob_size, Ordering::SeqCst);
+                        }
+                        
+                        // 立即发送
+                        cached_paths.push((path.clone(), blob));
+                        continue; // 跳过加入生成队列
+                    }
+                }
+                
                 generate_paths.push((path.clone(), file_type, priority));
             }
         }
@@ -553,12 +584,17 @@ impl ThumbnailServiceV3 {
             let memory_cache_bytes = Arc::clone(&self.memory_cache_bytes);
             
             tokio::spawn(async move {
-                // 批量加载
-                if let Ok(loaded) = db.batch_load_thumbnails(&db_paths) {
-                    // 收集批量事件
-                    let mut batch_items = Vec::with_capacity(loaded.len());
+                // 流式加载：每加载一个立即发送，不等待批量完成
+                // 这样前端可以尽快显示已缓存的缩略图
+                for path in db_paths.iter() {
+                    // 从数据库加载单个
+                    let category = if std::path::Path::new(path).is_dir() || !path.contains('.') {
+                        "folder"
+                    } else {
+                        "file"
+                    };
                     
-                    for (path, blob) in loaded {
+                    if let Ok(Some(blob)) = db.load_thumbnail_by_key_and_category(path, category) {
                         // 更新内存缓存
                         if let Ok(mut cache) = memory_cache.write() {
                             let blob_size = blob.len();
@@ -566,23 +602,11 @@ impl ThumbnailServiceV3 {
                             memory_cache_bytes.fetch_add(blob_size, Ordering::SeqCst);
                         }
                         
-                        batch_items.push(ThumbnailReadyPayload {
-                            path,
+                        // 立即发送（流式，不等待）
+                        let _ = app.emit("thumbnail-ready", ThumbnailReadyPayload {
+                            path: path.clone(),
                             blob,
                         });
-                    }
-                    
-                    // 批量发送（减少 IPC 调用次数）
-                    if !batch_items.is_empty() {
-                        // 发送批量事件
-                        let _ = app.emit("thumbnail-batch-ready", ThumbnailBatchReadyPayload {
-                            items: batch_items.clone(),
-                        });
-                        
-                        // 同时发送单独事件以保持兼容性
-                        for item in batch_items {
-                            let _ = app.emit("thumbnail-ready", item);
-                        }
                     }
                 }
             });

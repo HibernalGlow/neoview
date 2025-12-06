@@ -29,7 +29,7 @@ let unlistenThumbnailBatchReady: UnlistenFn | null = null;
 // 节流相关
 const pendingPaths: string[] = [];
 const throttleState = { dir: '', timer: null as ReturnType<typeof setTimeout> | null };
-const THROTTLE_MS = 50; // 50ms 节流
+const THROTTLE_MS = 10; // 10ms 节流（快速响应）
 
 // 动态预加载相关（根据停留时间指数扩展）
 const prefetchState = {
@@ -260,7 +260,7 @@ export async function getDbStats(): Promise<MaintenanceStats | null> {
       db_size_bytes: number;
       db_size_mb: number;
     }>('get_thumbnail_db_stats_v3');
-    
+
     return {
       totalEntries: stats.total_entries,
       folderEntries: stats.folder_entries,

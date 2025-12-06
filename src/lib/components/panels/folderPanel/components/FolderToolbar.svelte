@@ -28,6 +28,7 @@ import {
 	Eye,
 	Tags,
 	RotateCcw,
+	PanelRight,
 	// 排序图标
 	ALargeSmall,
 	Calendar,
@@ -59,6 +60,7 @@ import {
 	tabShowSearchBar,
 	tabShowMigrationBar,
 	tabPenetrateMode,
+	tabOpenInNewTabMode,
 	tabDeleteStrategy,
 	tabInlineTreeMode,
 	tabCurrentPath,
@@ -79,6 +81,7 @@ const itemCount = tabItemCount;
 const showSearchBar = tabShowSearchBar;
 const showMigrationBar = tabShowMigrationBar;
 const penetrateMode = tabPenetrateMode;
+const openInNewTabMode = tabOpenInNewTabMode;
 const deleteStrategy = tabDeleteStrategy;
 const inlineTreeMode = tabInlineTreeMode;
 const thumbnailWidthPercent = tabThumbnailWidthPercent;
@@ -459,6 +462,22 @@ function cancelWarmup() {
 			</Tooltip.Trigger>
 			<Tooltip.Content>
 				<p>{$penetrateMode ? '穿透模式：当文件夹只有一个子文件时直接打开' : '穿透模式'}</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={$openInNewTabMode ? 'default' : 'ghost'}
+					size="icon"
+					class="h-7 w-7"
+					onclick={() => folderTabActions.toggleOpenInNewTabMode()}
+				>
+					<PanelRight class="h-4 w-4" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>{$openInNewTabMode ? '新标签模式：点击文件夹在新标签页打开' : '新标签模式'}</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 

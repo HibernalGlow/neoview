@@ -1272,6 +1272,7 @@
 							onItemDelete={handleDelete}
 							onItemContextMenu={handleContextMenu}
 							onOpenFolderAsBook={handleOpenFolderAsBook}
+							onOpenInNewTab={handleOpenInNewTab}
 						/>
 					{/if}
 				</div>

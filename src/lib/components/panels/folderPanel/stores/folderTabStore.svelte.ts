@@ -73,6 +73,8 @@ export interface FolderTabState {
 	showMigrationBar: boolean;
 	// 穿透模式
 	penetrateMode: boolean;
+	// 点击文件夹在新标签页打开模式
+	openInNewTabMode: boolean;
 	// 删除策略
 	deleteStrategy: DeleteStrategy;
 	// 搜索设置
@@ -140,6 +142,7 @@ function createDefaultTabState(id: string, homePath: string = ''): FolderTabStat
 		showSearchBar: false,
 		showMigrationBar: false,
 		penetrateMode: false,
+		openInNewTabMode: false,
 		deleteStrategy: 'trash',
 		searchSettings: {
 			includeSubfolders: true,
@@ -257,6 +260,7 @@ export const tabIsSearching = derived(activeTab, ($tab) => $tab?.isSearching || 
 export const tabShowSearchBar = derived(activeTab, ($tab) => $tab?.showSearchBar || false);
 export const tabShowMigrationBar = derived(activeTab, ($tab) => $tab?.showMigrationBar || false);
 export const tabPenetrateMode = derived(activeTab, ($tab) => $tab?.penetrateMode || false);
+export const tabOpenInNewTabMode = derived(activeTab, ($tab) => $tab?.openInNewTabMode || false);
 export const tabDeleteStrategy = derived(activeTab, ($tab) => $tab?.deleteStrategy || 'trash');
 export const tabSearchSettings = derived(activeTab, ($tab) => $tab?.searchSettings || {
 	includeSubfolders: true,
@@ -681,6 +685,13 @@ export const folderTabActions = {
 	 */
 	togglePenetrateMode() {
 		updateActiveTab((tab) => ({ ...tab, penetrateMode: !tab.penetrateMode }));
+	},
+
+	/**
+	 * 切换点击文件夹在新标签页打开模式
+	 */
+	toggleOpenInNewTabMode() {
+		updateActiveTab((tab) => ({ ...tab, openInNewTabMode: !tab.openInNewTabMode }));
 	},
 
 	/**

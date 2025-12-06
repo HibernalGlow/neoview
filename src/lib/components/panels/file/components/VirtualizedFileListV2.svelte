@@ -433,6 +433,8 @@
 									onContextMenu={(e) => handleItemContextMenu(e, item)}
 									onToggleSelection={() => toggleItemSelection(item.path)}
 									onDelete={() => dispatch('deleteItem', { item })}
+									onOpenAsBook={() => dispatch('openFolderAsBook', { item })}
+									onOpenInNewTab={() => dispatch('openInNewTab', { item })}
 								/>
 							</div>
 						{/if}

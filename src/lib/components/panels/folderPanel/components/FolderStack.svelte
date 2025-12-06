@@ -22,6 +22,7 @@ import {
 	tabSortConfig,
 	tabSearchKeyword,
 	tabPenetrateMode,
+	tabOpenInNewTabMode,
 	tabCurrentPath,
 	activeTabId,
 	tabThumbnailWidthPercent
@@ -35,6 +36,7 @@ const deleteMode = tabDeleteMode;
 const sortConfig = tabSortConfig;
 const searchKeyword = tabSearchKeyword;
 const penetrateMode = tabPenetrateMode;
+const openInNewTabMode = tabOpenInNewTabMode;
 const thumbnailWidthPercent = tabThumbnailWidthPercent;
 import { Loader2, FolderOpen, AlertCircle } from '@lucide/svelte';
 import { getChainSelectMode, getChainAnchor, setChainAnchor } from '../stores/chainSelectStore.svelte';
@@ -58,9 +60,10 @@ interface Props {
 	onItemDelete?: (item: FsItem) => void;
 	onItemContextMenu?: (event: MouseEvent, item: FsItem) => void;
 	onOpenFolderAsBook?: (item: FsItem) => void;
+	onOpenInNewTab?: (item: FsItem) => void;
 }
 
-let { tabId, initialPath, navigationCommand, onItemOpen, onItemDelete, onItemContextMenu, onOpenFolderAsBook }: Props = $props();
+let { tabId, initialPath, navigationCommand, onItemOpen, onItemDelete, onItemContextMenu, onOpenFolderAsBook, onOpenInNewTab }: Props = $props();
 
 // 层叠数据结构
 interface FolderLayer {
@@ -648,6 +651,12 @@ async function handleItemSelect(layerIndex: number, payload: { item: FsItem; ind
 	} else {
 		if (payload.item.isDir) {
 			// 文件夹：进入目录，不加入选中列表
+			// 检查新标签模式
+			if ($openInNewTabMode) {
+				// 新标签模式：在新标签页打开文件夹
+				onOpenInNewTab?.(payload.item);
+				return;
+			}
 			// 检查穿透模式
 			if ($penetrateMode) {
 				const penetrated = await tryPenetrateFolder(payload.item.path);
@@ -744,6 +753,11 @@ function handleOpenFolderAsBook(layerIndex: number, item: FsItem) {
 						onSelectionChange={(payload) => folderTabActions.setSelectedItems(payload.selectedItems)}
 						on:itemContextMenu={(e) => handleItemContextMenu(index, e.detail)}
 						on:openFolderAsBook={(e) => handleOpenFolderAsBook(index, e.detail.item)}
+						on:openInNewTab={(e) => {
+							if (index === activeIndex && e.detail.item.isDir) {
+								onOpenInNewTab?.(e.detail.item);
+							}
+						}}
 						on:deleteItem={(e) => handleDeleteItem(index, e.detail.item)}
 					/>
 				{/if}

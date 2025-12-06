@@ -37,7 +37,8 @@
 		onContextMenu = undefined,
 		onToggleSelection = undefined,
 		onDelete = undefined,
-		onOpenAsBook = undefined
+		onOpenAsBook = undefined,
+		onOpenInNewTab = undefined
 	}: {
 		item: FsItem;
 		thumbnail?: string;
@@ -59,6 +60,7 @@
 		onToggleSelection?: () => void;
 		onDelete?: () => void;
 		onOpenAsBook?: () => void;
+		onOpenInNewTab?: () => void;
 	} = $props();
 
 	// 检查是否为收藏（使用 $derived 避免在每次渲染时调用）
@@ -380,6 +382,7 @@
 		{onToggleSelection}
 		{onDelete}
 		{onOpenAsBook}
+		{onOpenInNewTab}
 		onSetRating={handleSetRating}
 		onPreviewEnter={() => {
 			showPreview = true;

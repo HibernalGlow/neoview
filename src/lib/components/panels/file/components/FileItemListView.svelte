@@ -14,6 +14,7 @@
 		Video,
 		Eye,
 		BookOpen,
+		PanelRight,
 		X
 	} from '@lucide/svelte';
 	import type { FsItem } from '$lib/types';
@@ -59,6 +60,7 @@
 		onToggleSelection?: () => void;
 		onDelete?: () => void;
 		onOpenAsBook?: () => void;
+		onOpenInNewTab?: () => void;
 		onSetRating: (rating: number | null) => void;
 		onPreviewEnter: () => void;
 		onPreviewLeave: () => void;
@@ -96,6 +98,7 @@
 		onToggleSelection,
 		onDelete,
 		onOpenAsBook,
+		onOpenInNewTab,
 		onSetRating,
 		onPreviewEnter,
 		onPreviewLeave
@@ -335,6 +338,25 @@
 							</button>
 						</Tooltip.Trigger>
 						<Tooltip.Content><p>作为书籍打开此文件夹</p></Tooltip.Content>
+					</Tooltip.Root>
+					<!-- 在新标签页打开 -->
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							<button
+								class="hover:bg-accent inline-flex items-center justify-center rounded-md p-1 transition-colors"
+								onclick={(e) => {
+									e.stopPropagation();
+									onOpenInNewTab?.();
+								}}
+								oncontextmenu={(e) => {
+									// 右键穿透到父元素
+									onContextMenu?.(e);
+								}}
+							>
+								<PanelRight class="text-muted-foreground h-3.5 w-3.5" />
+							</button>
+						</Tooltip.Trigger>
+						<Tooltip.Content><p>在新标签页打开</p></Tooltip.Content>
 					</Tooltip.Root>
 				</div>
 			{/if}

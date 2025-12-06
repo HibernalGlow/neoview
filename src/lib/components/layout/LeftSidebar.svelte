@@ -248,7 +248,7 @@
 				<!-- 二级菜单 - 内容面板 -->
 				<Sidebar.Root
 					collapsible="none"
-					class="hidden flex-1 md:flex"
+					class="flex flex-1"
 					style="width: calc(var(--sidebar-width) - var(--sidebar-width-icon) - 1px);"
 				>
 					<Sidebar.Content>

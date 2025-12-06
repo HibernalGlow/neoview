@@ -152,7 +152,7 @@
 		<!-- 只在图标栏区域（约48px宽）响应悬停 -->
 		<div
 			class="pointer-events-auto absolute bottom-0 left-0 top-0"
-			style={`width: ${hoverAreas?.leftTriggerWidth ?? 12}px;`}
+			style={`width: ${hoverAreas?.leftTriggerWidth ?? 32}px;`}
 		>
 			<LeftSidebar onResize={handleSidebarResize} />
 		</div>
@@ -163,7 +163,7 @@
 		<!-- 只在图标栏区域（约48px宽）响应悬停 -->
 		<div
 			class="pointer-events-auto absolute bottom-0 right-0 top-0"
-			style={`width: ${hoverAreas?.rightTriggerWidth ?? 12}px;`}
+			style={`width: ${hoverAreas?.rightTriggerWidth ?? 32}px;`}
 		>
 			<RightSidebar onResize={handleRightSidebarResize} />
 		</div>

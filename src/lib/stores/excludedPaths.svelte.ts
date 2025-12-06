@@ -14,7 +14,18 @@ const DEFAULT_EXCLUDED_PATHS = [
   'C:\\Program Files',
   'C:\\Program Files (x86)',
   'C:\\ProgramData',
-  'C:\\$Recycle.Bin',
+  // 回收站在每个盘符都有，使用大写（Windows 实际路径）
+  'C:\\$RECYCLE.BIN',
+  'D:\\$RECYCLE.BIN',
+  'E:\\$RECYCLE.BIN',
+  'F:\\$RECYCLE.BIN',
+  'G:\\$RECYCLE.BIN',
+  // System Volume Information
+  'C:\\System Volume Information',
+  'D:\\System Volume Information',
+  'E:\\System Volume Information',
+  'F:\\System Volume Information',
+  'G:\\System Volume Information',
 ];
 
 // 排除路径列表
@@ -72,13 +83,16 @@ export function removeExcludedPath(path: string): void {
 
 /**
  * 检查路径是否被排除
+ * Windows 路径大小写不敏感
  */
 export function isPathExcluded(path: string): boolean {
-  // 精确匹配或前缀匹配（排除整个目录）
-  if (excludedPaths.has(path)) return true;
+  // 规范化为小写进行比较（Windows 路径不区分大小写）
+  const normalizedPath = path.toLowerCase().replace(/\//g, '\\');
   
   for (const excluded of excludedPaths) {
-    if (path.startsWith(excluded + '\\') || path.startsWith(excluded + '/')) {
+    const normalizedExcluded = excluded.toLowerCase().replace(/\//g, '\\');
+    if (normalizedPath === normalizedExcluded || 
+        normalizedPath.startsWith(normalizedExcluded + '\\')) {
       return true;
     }
   }

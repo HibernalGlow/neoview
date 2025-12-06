@@ -7,6 +7,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { FsItem } from '$lib/types';
 import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
+import { isPathExcluded } from '$lib/stores/excludedPaths.svelte';
 
 export interface DirectorySnapshot {
   items: FsItem[];
@@ -35,7 +36,10 @@ export async function browseDirectory(path: string): Promise<FsItem[]> {
 }
 
 export async function loadDirectorySnapshot(path: string): Promise<DirectorySnapshot> {
-  return await invoke<DirectorySnapshot>('load_directory_snapshot', { path });
+  const snapshot = await invoke<DirectorySnapshot>('load_directory_snapshot', { path });
+  // 过滤排除路径
+  snapshot.items = snapshot.items.filter(item => !isPathExcluded(item.path));
+  return snapshot;
 }
 
 /**
@@ -61,7 +65,14 @@ export async function batchLoadDirectorySnapshots(
       return [{ path: paths[0], snapshot: null, error: String(e) }];
     }
   }
-  return await invoke<BatchDirectorySnapshotResult[]>('batch_load_directory_snapshots', { paths });
+  const results = await invoke<BatchDirectorySnapshotResult[]>('batch_load_directory_snapshots', { paths });
+  // 过滤排除路径
+  for (const result of results) {
+    if (result.snapshot) {
+      result.snapshot.items = result.snapshot.items.filter(item => !isPathExcluded(item.path));
+    }
+  }
+  return results;
 }
 
 /**

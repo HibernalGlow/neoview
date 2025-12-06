@@ -1,38 +1,46 @@
 <script lang="ts">
 /**
  * 缩略图加载延迟测试卡片
- * 测试从前端发起请求到收到结果的全链路延迟
+ * 测试文件夹缩略图和图片缩略图的生成延迟
  */
 import { invoke } from '@tauri-apps/api/core';
-import { Activity, Play, RefreshCw, Folder } from '@lucide/svelte';
+import { Activity, Play, RefreshCw, Folder, Image } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
-import { batchLoadDirectorySnapshots } from '$lib/api/filesystem';
+
+type TestMode = 'folder' | 'file';
 
 interface LatencyRecord {
   id: number;
-  path: string;
+  name: string;
   type: 'single' | 'batch';
   cached: boolean;
-  backendMs: number;
   totalMs: number;
-  itemCount: number;
   error?: string;
+}
+
+interface ScanResult {
+  path: string;
+  blobKey: string | null;
+  fromCache: boolean;
+  error: string | null;
 }
 
 let records = $state<LatencyRecord[]>([]);
 let isRunning = $state(false);
-let testPaths = $state<string[]>([]);
+let testMode = $state<TestMode>('folder');
+let testFolders = $state<string[]>([]);
+let testImages = $state<string[]>([]);
 let recordId = $state(0);
 
-// 统计数据
+const IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.bmp'];
+
 let stats = $derived(() => {
-  if (records.length === 0) return { avgTotal: 0, avgBackend: 0, cacheHitRate: 0, count: 0 };
+  if (records.length === 0) return { avgTotal: 0, cacheHitRate: 0, count: 0 };
   const successRecords = records.filter(r => !r.error);
   const cachedCount = successRecords.filter(r => r.cached).length;
   return {
     avgTotal: successRecords.reduce((sum, r) => sum + r.totalMs, 0) / successRecords.length || 0,
-    avgBackend: successRecords.reduce((sum, r) => sum + r.backendMs, 0) / successRecords.length || 0,
-    cacheHitRate: (cachedCount / successRecords.length) * 100 || 0,
+    cacheHitRate: successRecords.length > 0 ? (cachedCount / successRecords.length) * 100 : 0,
     count: records.length,
   };
 });
@@ -42,21 +50,25 @@ async function selectTestDirectory() {
     const { open } = await import('@tauri-apps/plugin-dialog');
     const selected = await open({ directory: true, multiple: false });
     if (selected) {
-      // 获取目录下的子目录（后端返回 camelCase: isDir）
-      const snapshot = await invoke<{ items: Array<{ path: string; isDir: boolean }> }>(
+      const snapshot = await invoke<{ items: Array<{ path: string; name: string; isDir: boolean }> }>(
         'load_directory_snapshot',
         { path: selected }
       );
-      console.log('📁 目录内容:', snapshot.items.slice(0, 5));
-      testPaths = snapshot.items
-        .filter(item => item.isDir === true)
-        .slice(0, 20)
-        .map(item => item.path);
-      console.log(`📁 选择了 ${testPaths.length} 个子目录用于测试`);
       
-      // 如果没有子目录，提示用户
-      if (testPaths.length === 0) {
-        console.warn('⚠️ 所选目录没有子目录，请选择包含子目录的文件夹');
+      if (testMode === 'folder') {
+        testFolders = snapshot.items
+          .filter(item => item.isDir === true)
+          .slice(0, 100)
+          .map(item => item.path);
+        testImages = [];
+        console.log(`📁 选择了 ${testFolders.length} 个子文件夹`);
+      } else {
+        testImages = snapshot.items
+          .filter(item => !item.isDir && IMAGE_EXTS.some(ext => item.name.toLowerCase().endsWith(ext)))
+          .slice(0, 50)
+          .map(item => item.path);
+        testFolders = [];
+        console.log(`🖼️ 选择了 ${testImages.length} 张图片`);
       }
     }
   } catch (e) {
@@ -64,80 +76,106 @@ async function selectTestDirectory() {
   }
 }
 
-async function runSingleTest() {
-  if (testPaths.length === 0) {
-    console.warn('请先选择测试目录');
-    return;
-  }
-  
+// 串行测试文件夹缩略图
+async function runFolderTest() {
+  if (testFolders.length === 0) return;
   isRunning = true;
   
-  for (const path of testPaths) {
+  for (const folderPath of testFolders) {
     const startTime = performance.now();
+    const name = folderPath.split('\\').pop() || folderPath;
+    
     try {
-      const result = await invoke<{ items: Array<unknown>; mtime?: number; cached: boolean }>(
-        'load_directory_snapshot',
-        { path }
-      );
+      const results = await invoke<ScanResult[]>('scan_folder_thumbnails', { folders: [folderPath] });
       const totalMs = performance.now() - startTime;
+      const result = results[0];
       
       records = [{
         id: ++recordId,
-        path: path.split('\\').pop() || path,
+        name: name.length > 20 ? name.slice(0, 17) + '...' : name,
         type: 'single',
-        cached: result.cached,
-        backendMs: totalMs, // 单次调用无法区分后端时间
+        cached: result?.fromCache ?? false,
         totalMs,
-        itemCount: result.items.length,
+        error: result?.error ?? undefined,
       }, ...records.slice(0, 99)];
     } catch (e) {
-      const totalMs = performance.now() - startTime;
       records = [{
         id: ++recordId,
-        path: path.split('\\').pop() || path,
+        name: name.length > 20 ? name.slice(0, 17) + '...' : name,
         type: 'single',
         cached: false,
-        backendMs: 0,
-        totalMs,
-        itemCount: 0,
-        error: String(e),
+        totalMs: performance.now() - startTime,
+        error: String(e).slice(0, 50),
       }, ...records.slice(0, 99)];
     }
   }
   
   isRunning = false;
+  console.log(`� 文件夹缩略图测试完成: ${testFolders.length} 个`);
 }
 
-async function runBatchTest() {
-  if (testPaths.length === 0) {
-    console.warn('请先选择测试目录');
-    return;
-  }
-  
+// 批量测试文件夹缩略图
+async function runBatchFolderTest() {
+  if (testFolders.length === 0) return;
   isRunning = true;
-  const startTime = performance.now();
   
+  const startTime = performance.now();
   try {
-    const results = await batchLoadDirectorySnapshots(testPaths);
+    const results = await invoke<ScanResult[]>('scan_folder_thumbnails', { folders: testFolders });
     const totalMs = performance.now() - startTime;
     const avgMs = totalMs / results.length;
     
     for (const result of results) {
+      const name = result.path.split('\\').pop() || result.path;
       records = [{
         id: ++recordId,
-        path: result.path.split('\\').pop() || result.path,
+        name: name.length > 20 ? name.slice(0, 17) + '...' : name,
         type: 'batch',
-        cached: result.snapshot?.cached ?? false,
-        backendMs: avgMs,
+        cached: result.fromCache,
         totalMs: avgMs,
-        itemCount: result.snapshot?.items.length ?? 0,
         error: result.error ?? undefined,
       }, ...records.slice(0, 99)];
     }
     
-    console.log(`⚡ 批量加载完成: ${results.length} 目录, 总耗时 ${totalMs.toFixed(0)}ms, 平均 ${avgMs.toFixed(1)}ms`);
+    const cachedCount = results.filter(r => r.fromCache).length;
+    console.log(`⚡ 批量完成: ${results.length} 个, 总耗时 ${totalMs.toFixed(0)}ms, 平均 ${avgMs.toFixed(1)}ms, 缓存命中 ${cachedCount}`);
   } catch (e) {
-    console.error('批量加载失败:', e);
+    console.error('批量测试失败:', e);
+  }
+  
+  isRunning = false;
+}
+
+// 串行测试图片缩略图
+async function runFileTest() {
+  if (testImages.length === 0) return;
+  isRunning = true;
+  
+  for (const imagePath of testImages) {
+    const startTime = performance.now();
+    const name = imagePath.split('\\').pop() || imagePath;
+    
+    try {
+      await invoke<string>('generate_file_thumbnail_new', { filePath: imagePath });
+      const totalMs = performance.now() - startTime;
+      
+      records = [{
+        id: ++recordId,
+        name: name.length > 20 ? name.slice(0, 17) + '...' : name,
+        type: 'single',
+        cached: totalMs < 10,
+        totalMs,
+      }, ...records.slice(0, 99)];
+    } catch (e) {
+      records = [{
+        id: ++recordId,
+        name: name.length > 20 ? name.slice(0, 17) + '...' : name,
+        type: 'single',
+        cached: false,
+        totalMs: performance.now() - startTime,
+        error: String(e).slice(0, 50),
+      }, ...records.slice(0, 99)];
+    }
   }
   
   isRunning = false;
@@ -156,30 +194,58 @@ function formatMs(ms: number): string {
 </script>
 
 <div class="space-y-3">
+  <!-- 模式切换 -->
+  <div class="flex gap-1 text-xs">
+    <button
+      class="px-2 py-1 rounded {testMode === 'folder' ? 'bg-primary text-primary-foreground' : 'bg-muted'}"
+      onclick={() => { testMode = 'folder'; testFolders = []; testImages = []; }}
+    >
+      <Folder class="w-3 h-3 inline mr-1" />文件夹
+    </button>
+    <button
+      class="px-2 py-1 rounded {testMode === 'file' ? 'bg-primary text-primary-foreground' : 'bg-muted'}"
+      onclick={() => { testMode = 'file'; testFolders = []; testImages = []; }}
+    >
+      <Image class="w-3 h-3 inline mr-1" />图片
+    </button>
+  </div>
+
   <!-- 控制按钮 -->
   <div class="flex flex-wrap gap-2">
     <Button variant="outline" size="sm" onclick={selectTestDirectory}>
       <Folder class="w-4 h-4 mr-1" />
       选择目录
     </Button>
-    <Button 
-      variant="default" 
-      size="sm"
-      onclick={runSingleTest}
-      disabled={isRunning || testPaths.length === 0}
-    >
-      <Play class="w-4 h-4 mr-1" />
-      串行测试
-    </Button>
-    <Button 
-      variant="default" 
-      size="sm"
-      onclick={runBatchTest}
-      disabled={isRunning || testPaths.length === 0}
-    >
-      <Activity class="w-4 h-4 mr-1" />
-      并发测试
-    </Button>
+    {#if testMode === 'folder'}
+      <Button 
+        variant="default" 
+        size="sm"
+        onclick={runFolderTest}
+        disabled={isRunning || testFolders.length === 0}
+      >
+        <Play class="w-4 h-4 mr-1" />
+        串行测试
+      </Button>
+      <Button 
+        variant="default" 
+        size="sm"
+        onclick={runBatchFolderTest}
+        disabled={isRunning || testFolders.length === 0}
+      >
+        <Activity class="w-4 h-4 mr-1" />
+        批量测试
+      </Button>
+    {:else}
+      <Button 
+        variant="default" 
+        size="sm"
+        onclick={runFileTest}
+        disabled={isRunning || testImages.length === 0}
+      >
+        <Play class="w-4 h-4 mr-1" />
+        串行测试
+      </Button>
+    {/if}
     <Button variant="ghost" size="sm" onclick={clearRecords}>
       <RefreshCw class="w-4 h-4 mr-1" />
       清空
@@ -187,19 +253,31 @@ function formatMs(ms: number): string {
   </div>
   
   <!-- 测试路径提示 -->
-  {#if testPaths.length > 0}
-    <div class="text-xs text-muted-foreground">
-      已选择 {testPaths.length} 个子目录
-    </div>
+  {#if testMode === 'folder'}
+    {#if testFolders.length > 0}
+      <div class="text-xs text-muted-foreground">
+        已选择 {testFolders.length} 个子文件夹
+      </div>
+    {:else}
+      <div class="text-xs text-muted-foreground">
+        点击"选择目录"选择包含子文件夹的目录
+      </div>
+    {/if}
   {:else}
-    <div class="text-xs text-muted-foreground">
-      点击"选择目录"选择包含子目录的文件夹
-    </div>
+    {#if testImages.length > 0}
+      <div class="text-xs text-muted-foreground">
+        已选择 {testImages.length} 张图片
+      </div>
+    {:else}
+      <div class="text-xs text-muted-foreground">
+        点击"选择目录"选择包含图片的文件夹
+      </div>
+    {/if}
   {/if}
   
   <!-- 统计摘要 -->
   {#if stats().count > 0}
-    <div class="grid grid-cols-4 gap-2 text-sm">
+    <div class="grid grid-cols-3 gap-2 text-sm">
       <div class="bg-muted/50 rounded p-2 text-center">
         <div class="text-muted-foreground text-xs">平均耗时</div>
         <div class="font-mono font-bold">{formatMs(stats().avgTotal)}</div>
@@ -212,10 +290,6 @@ function formatMs(ms: number): string {
         <div class="text-muted-foreground text-xs">采样数</div>
         <div class="font-mono font-bold">{stats().count}</div>
       </div>
-      <div class="bg-muted/50 rounded p-2 text-center">
-        <div class="text-muted-foreground text-xs">状态</div>
-        <div class="font-mono font-bold text-xs">{isRunning ? '运行中' : '空闲'}</div>
-      </div>
     </div>
   {/if}
   
@@ -223,25 +297,23 @@ function formatMs(ms: number): string {
   <div class="max-h-64 overflow-auto">
     {#if records.length === 0}
       <div class="text-center text-muted-foreground py-4">
-        选择目录后点击测试按钮
+        {isRunning ? '测试中...' : '选择目录后点击测试按钮'}
       </div>
     {:else}
-      <!-- 表头 -->
       <div class="flex items-center gap-2 text-[10px] text-muted-foreground px-2 py-1 border-b mb-1">
-        <span class="w-24 truncate">目录</span>
+        <span class="w-28 truncate">名称</span>
         <span class="w-12">类型</span>
         <span class="w-16">耗时</span>
-        <span class="w-12">项数</span>
         <span class="flex-1">状态</span>
       </div>
       <div class="space-y-0.5">
         {#each records as record (record.id)}
           <div class="flex items-center gap-2 text-xs rounded px-2 py-1 {record.error ? 'bg-red-500/10' : record.cached ? 'bg-green-500/10' : 'bg-muted/30'}">
-            <span class="w-24 truncate text-muted-foreground" title={record.path}>
-              {record.path}
+            <span class="w-28 truncate text-muted-foreground" title={record.name}>
+              {record.name}
             </span>
             <span class="w-12 {record.type === 'batch' ? 'text-blue-500' : 'text-orange-500'}">
-              {record.type === 'batch' ? '并发' : '串行'}
+              {record.type === 'batch' ? '批量' : '串行'}
             </span>
             <span class="w-16 font-mono"
               class:text-green-500={record.totalMs < 50}
@@ -250,14 +322,13 @@ function formatMs(ms: number): string {
             >
               {formatMs(record.totalMs)}
             </span>
-            <span class="w-12 text-muted-foreground">{record.itemCount}</span>
             <span class="flex-1">
               {#if record.error}
-                <span class="text-red-500 text-[10px]">错误</span>
+                <span class="text-red-500 text-[10px]" title={record.error}>错误</span>
               {:else if record.cached}
                 <span class="text-green-500 text-[10px]">缓存</span>
               {:else}
-                <span class="text-blue-500 text-[10px]">加载</span>
+                <span class="text-blue-500 text-[10px]">生成</span>
               {/if}
             </span>
           </div>

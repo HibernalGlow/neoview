@@ -37,7 +37,7 @@ const searchKeyword = tabSearchKeyword;
 const penetrateMode = tabPenetrateMode;
 const thumbnailWidthPercent = tabThumbnailWidthPercent;
 import { Loader2, FolderOpen, AlertCircle } from '@lucide/svelte';
-import { chainSelectMode, getChainAnchor, setChainAnchor, setActiveTabId as setChainActiveTabId } from '../stores/chainSelectStore.svelte';
+import { getChainSelectMode, getChainAnchor, setChainAnchor } from '../stores/chainSelectStore.svelte';
 import { directoryTreeCache } from '../utils/directoryTreeCache';
 import { folderRatingStore } from '$lib/stores/emm/folderRating';
 import { getDefaultRating } from '$lib/stores/emm/storage';
@@ -576,14 +576,6 @@ $effect(() => {
 	}
 });
 
-// 同步当前页签 ID 到 chainSelectStore
-$effect(() => {
-	const currentActiveTabId = get(activeTabId);
-	if (tabId === currentActiveTabId) {
-		setChainActiveTabId(tabId);
-		console.log('[FolderStack] 同步 chainSelectStore activeTabId:', tabId);
-	}
-});
 
 // 尝试穿透文件夹（只有一个子文件时才穿透）
 async function tryPenetrateFolder(folderPath: string): Promise<FsItem | null> {
@@ -610,15 +602,16 @@ async function handleItemSelect(layerIndex: number, payload: { item: FsItem; ind
 	// 获取当前层的显示项目列表（用于范围选择）
 	const displayItems = getDisplayItems(layers[layerIndex]);
 	
-	// 检查链选模式
-	console.log('[FolderStack] handleItemSelect - chainSelectMode:', $chainSelectMode, 'multiSelectMode:', $multiSelectMode, 'payload.multiSelect:', payload.multiSelect);
-	if ($chainSelectMode && ($multiSelectMode || payload.multiSelect)) {
-		const anchor = getChainAnchor();
+	// 检查链选模式 - 直接使用函数获取当前页签的链选状态
+	const isChainSelectMode = getChainSelectMode(tabId);
+	console.log('[FolderStack] handleItemSelect - chainSelectMode:', isChainSelectMode, 'multiSelectMode:', $multiSelectMode, 'payload.multiSelect:', payload.multiSelect, 'tabId:', tabId);
+	if (isChainSelectMode && ($multiSelectMode || payload.multiSelect)) {
+		const anchor = getChainAnchor(tabId);
 		console.log('[FolderStack] 链选模式激活 - anchor:', anchor, 'currentIndex:', payload.index);
 		if (anchor === -1) {
 			// 还没有锚点，设置当前点击位置为锚点并选中该项
 			console.log('[FolderStack] 设置锚点为:', payload.index);
-			setChainAnchor(payload.index);
+			setChainAnchor(tabId, payload.index);
 			folderTabActions.selectItem(payload.item.path, true, payload.index);
 		} else {
 			// 有锚点，选中从锚点到当前位置的所有项目
@@ -639,7 +632,7 @@ async function handleItemSelect(layerIndex: number, payload: { item: FsItem; ind
 			console.log('[FolderStack] 批量选中完成，共选中:', newSelected.size, '项');
 			
 			// 更新锚点为当前位置，方便继续链选
-			setChainAnchor(payload.index);
+			setChainAnchor(tabId, payload.index);
 		}
 		return;
 	}

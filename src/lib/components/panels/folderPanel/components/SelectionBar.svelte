@@ -9,9 +9,10 @@ import * as Tooltip from '$lib/components/ui/tooltip';
 import { 
 	tabSelectedItems, 
 	tabItems,
-	folderTabActions 
+	folderTabActions,
+	activeTabId
 } from '../stores/folderTabStore.svelte';
-import { chainSelectMode, toggleChainSelectMode } from '../stores/chainSelectStore.svelte';
+import { getChainSelectMode, toggleChainSelectMode } from '../stores/chainSelectStore.svelte';
 
 // 别名映射
 const selectedItems = tabSelectedItems;
@@ -30,6 +31,9 @@ let { onDelete, onCopy, onCut, onClose }: Props = $props();
 const selectedCount = $derived($selectedItems.size);
 const totalCount = $derived($items.length);
 const allSelected = $derived(selectedCount > 0 && selectedCount === totalCount);
+
+// 链选模式状态 - 使用函数获取当前页签的链选状态
+const isChainSelectMode = $derived(getChainSelectMode($activeTabId));
 
 function handleSelectAll() {
 	folderTabActions.selectAll();
@@ -114,10 +118,10 @@ function handleClose() {
 		<Tooltip.Root>
 			<Tooltip.Trigger>
 				<Button
-					variant={$chainSelectMode ? 'default' : 'ghost'}
+					variant={isChainSelectMode ? 'default' : 'ghost'}
 					size="sm"
 					class="h-7 px-2"
-					onclick={() => toggleChainSelectMode()}
+					onclick={() => toggleChainSelectMode($activeTabId)}
 				>
 					<Link class="h-4 w-4 mr-1" />
 					链选

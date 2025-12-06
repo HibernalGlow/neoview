@@ -3,7 +3,7 @@
  * 独立模块，用于管理链式选择功能
  */
 
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 
 // 链选模式状态（按页签ID存储）
 const chainSelectModeByTab = writable<Record<string, boolean>>({});
@@ -29,22 +29,22 @@ export const chainSelectMode = derived(chainSelectModeByTab, ($modes) => {
 });
 
 /**
- * 切换链选模式
+ * 切换指定页签的链选模式
  */
-export function toggleChainSelectMode() {
+export function toggleChainSelectMode(tabId: string) {
 	chainSelectModeByTab.update((modes) => {
-		const newEnabled = !modes[currentActiveTabId];
+		const newEnabled = !modes[tabId];
 		// 关闭链选模式时清除锚点
 		if (!newEnabled) {
 			chainAnchorByTab.update((anchors) => {
 				const newAnchors = { ...anchors };
-				delete newAnchors[currentActiveTabId];
+				delete newAnchors[tabId];
 				return newAnchors;
 			});
 		}
 		return {
 			...modes,
-			[currentActiveTabId]: newEnabled
+			[tabId]: newEnabled
 		};
 	});
 }
@@ -53,11 +53,8 @@ export function toggleChainSelectMode() {
  * 获取指定页签的链选模式
  */
 export function getChainSelectMode(tabId: string): boolean {
-	let result = false;
-	chainSelectModeByTab.subscribe((modes) => {
-		result = modes[tabId] || false;
-	})();
-	return result;
+	const modes = get(chainSelectModeByTab);
+	return modes[tabId] || false;
 }
 
 /**
@@ -79,33 +76,30 @@ export function setChainSelectMode(tabId: string, enabled: boolean) {
 }
 
 /**
- * 获取当前页签的链选锚点索引
+ * 获取指定页签的链选锚点索引
  */
-export function getChainAnchor(): number {
-	let result = -1;
-	chainAnchorByTab.subscribe((anchors) => {
-		result = anchors[currentActiveTabId] ?? -1;
-	})();
-	return result;
+export function getChainAnchor(tabId: string): number {
+	const anchors = get(chainAnchorByTab);
+	return anchors[tabId] ?? -1;
 }
 
 /**
- * 设置当前页签的链选锚点索引
+ * 设置指定页签的链选锚点索引
  */
-export function setChainAnchor(index: number) {
+export function setChainAnchor(tabId: string, index: number) {
 	chainAnchorByTab.update((anchors) => ({
 		...anchors,
-		[currentActiveTabId]: index
+		[tabId]: index
 	}));
 }
 
 /**
- * 清除当前页签的链选锚点
+ * 清除指定页签的链选锚点
  */
-export function clearChainAnchor() {
+export function clearChainAnchor(tabId: string) {
 	chainAnchorByTab.update((anchors) => {
 		const newAnchors = { ...anchors };
-		delete newAnchors[currentActiveTabId];
+		delete newAnchors[tabId];
 		return newAnchors;
 	});
 }

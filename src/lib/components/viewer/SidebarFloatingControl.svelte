@@ -15,6 +15,8 @@ import {
 	bottomThumbnailBarPinned,
 	leftSidebarPinned,
 	rightSidebarPinned,
+	topToolbarOpen,
+	bottomBarOpen,
 	leftSidebarOpen,
 	rightSidebarOpen,
 	type SidebarLockState
@@ -46,6 +48,8 @@ let leftPinned = $state(false);
 let rightPinned = $state(false);
 
 // 边栏 open 状态
+let topOpen = $state(false);
+let bottomOpen = $state(false);
 let leftOpen = $state(false);
 let rightOpen = $state(false);
 
@@ -58,6 +62,8 @@ const unsubTopPinned = topToolbarPinned.subscribe(v => topPinned = v);
 const unsubBottomPinned = bottomThumbnailBarPinned.subscribe(v => bottomPinned = v);
 const unsubLeftPinned = leftSidebarPinned.subscribe(v => leftPinned = v);
 const unsubRightPinned = rightSidebarPinned.subscribe(v => rightPinned = v);
+const unsubTopOpen = topToolbarOpen.subscribe(v => topOpen = v);
+const unsubBottomOpen = bottomBarOpen.subscribe(v => bottomOpen = v);
 const unsubLeftOpen = leftSidebarOpen.subscribe(v => leftOpen = v);
 const unsubRightOpen = rightSidebarOpen.subscribe(v => rightOpen = v);
 
@@ -87,6 +93,8 @@ onDestroy(() => {
 	unsubBottomPinned();
 	unsubLeftPinned();
 	unsubRightPinned();
+	unsubTopOpen();
+	unsubBottomOpen();
 	unsubLeftOpen();
 	unsubRightOpen();
 	settingsManager.removeListener(settingsListener);
@@ -131,19 +139,15 @@ function handleDragStart(event: MouseEvent) {
 	window.addEventListener('mouseup', handleMouseUp);
 }
 
-// 单击：切换显示/隐藏（直接控制锁定状态）
+// 单击：切换显示/隐藏（使用 open 状态）
 function handleTopClick(e: MouseEvent) {
 	e.preventDefault();
 	e.stopPropagation();
-	// 如果当前是锁定显示或 pinned，切换到锁定隐藏
-	if (topLock === true || topPinned) {
-		topToolbarLockState.set(false);
-		topToolbarPinned.set(false);
-	} else {
-		// 否则切换到锁定显示
-		topToolbarLockState.set(true);
-		topToolbarPinned.set(true);
+	// 如果锁定隐藏，先解锁
+	if (topLock === false) {
+		topToolbarLockState.set(null);
 	}
+	topToolbarOpen.update(v => !v);
 }
 
 // 右键：循环锁定状态（自动 → 锁定显示 → 锁定隐藏 → 自动）
@@ -167,15 +171,11 @@ function handleTopContextMenu(e: MouseEvent) {
 function handleBottomClick(e: MouseEvent) {
 	e.preventDefault();
 	e.stopPropagation();
-	// 如果当前是锁定显示或 pinned，切换到锁定隐藏
-	if (bottomLock === true || bottomPinned) {
-		bottomBarLockState.set(false);
-		bottomThumbnailBarPinned.set(false);
-	} else {
-		// 否则切换到锁定显示
-		bottomBarLockState.set(true);
-		bottomThumbnailBarPinned.set(true);
+	// 如果锁定隐藏，先解锁
+	if (bottomLock === false) {
+		bottomBarLockState.set(null);
 	}
+	bottomBarOpen.update(v => !v);
 }
 
 function handleBottomContextMenu(e: MouseEvent) {
@@ -280,10 +280,10 @@ function getStateText(lockState: SidebarLockState, isOpen: boolean): string {
 			<!-- 上边栏 -->
 			<button
 				type="button"
-				class="p-1.5 rounded transition-colors relative {getButtonClass(topLock, topPinned)}"
+				class="p-1.5 rounded transition-colors relative {getButtonClass(topLock, topOpen)}"
 				onclick={handleTopClick}
 				oncontextmenu={handleTopContextMenu}
-				title={getStateText(topLock, topPinned) + '，单击切换，右键锁定'}
+				title={getStateText(topLock, topOpen) + '，单击切换，右键锁定'}
 			>
 				<PanelTop class="h-4 w-4" />
 				{#if topLock !== null}
@@ -294,10 +294,10 @@ function getStateText(lockState: SidebarLockState, isOpen: boolean): string {
 			<!-- 下边栏 -->
 			<button
 				type="button"
-				class="p-1.5 rounded transition-colors relative {getButtonClass(bottomLock, bottomPinned)}"
+				class="p-1.5 rounded transition-colors relative {getButtonClass(bottomLock, bottomOpen)}"
 				onclick={handleBottomClick}
 				oncontextmenu={handleBottomContextMenu}
-				title={getStateText(bottomLock, bottomPinned) + '，单击切换，右键锁定'}
+				title={getStateText(bottomLock, bottomOpen) + '，单击切换，右键锁定'}
 			>
 				<PanelBottom class="h-4 w-4" />
 				{#if bottomLock !== null}

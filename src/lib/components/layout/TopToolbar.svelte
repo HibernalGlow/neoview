@@ -30,6 +30,7 @@
 		toggleOrientation,
 		topToolbarPinned,
 		topToolbarLockState,
+		topToolbarOpen,
 		topToolbarHeight,
 		toggleZoomModeLock,
 		requestZoomMode,
@@ -257,7 +258,7 @@ async function handleSortModeChange(mode: PageSortMode) {
 	let resizeStartHeight = 0;
 	let hoverCount = $state(0); // 追踪悬停区域的计数
 
-	// 响应钉住状态和锁定状态
+	// 响应钉住状态、锁定状态和 open 状态
 	$effect(() => {
 		// 锁定隐藏时，强制隐藏
 		if ($topToolbarLockState === false) {
@@ -269,6 +270,17 @@ async function handleSortModeChange(mode: PageSortMode) {
 		// 锁定显示或钉住时，强制显示
 		if ($topToolbarPinned || $topToolbarLockState === true) {
 			isVisible = true;
+			if (hideTimeout) clearTimeout(hideTimeout);
+			if (showTimeout) clearTimeout(showTimeout);
+			return;
+		}
+		// 响应 open 状态
+		if ($topToolbarOpen) {
+			isVisible = true;
+			if (hideTimeout) clearTimeout(hideTimeout);
+			if (showTimeout) clearTimeout(showTimeout);
+		} else {
+			isVisible = false;
 			if (hideTimeout) clearTimeout(hideTimeout);
 			if (showTimeout) clearTimeout(showTimeout);
 		}

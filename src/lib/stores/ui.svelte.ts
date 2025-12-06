@@ -110,6 +110,10 @@ export const bottomBarLockState = writable<SidebarLockState>(loadFromStorage('bo
 export const leftSidebarLockState = writable<SidebarLockState>(loadFromStorage('leftSidebarLockState', null));
 export const rightSidebarLockState = writable<SidebarLockState>(loadFromStorage('rightSidebarLockState', null));
 
+// 上下边栏打开状态（与左右边栏的 open 状态类似）
+export const topToolbarOpen = writable<boolean>(loadFromStorage('topToolbarOpen', false));
+export const bottomBarOpen = writable<boolean>(loadFromStorage('bottomBarOpen', false));
+
 // 边栏高度（用于上下边栏）
 export const topToolbarHeight = writable<number>(loadFromStorage('topToolbarHeight', 60));
 export const bottomThumbnailBarHeight = writable<number>(loadFromStorage('bottomThumbnailBarHeight', 120));
@@ -149,6 +153,8 @@ topToolbarLockState.subscribe((value) => saveToStorage('topToolbarLockState', va
 bottomBarLockState.subscribe((value) => saveToStorage('bottomBarLockState', value));
 leftSidebarLockState.subscribe((value) => saveToStorage('leftSidebarLockState', value));
 rightSidebarLockState.subscribe((value) => saveToStorage('rightSidebarLockState', value));
+topToolbarOpen.subscribe((value) => saveToStorage('topToolbarOpen', value));
+bottomBarOpen.subscribe((value) => saveToStorage('bottomBarOpen', value));
 
 const updateViewerSlice = (partial: Partial<AppStateSnapshot['viewer']>) => {
 	const snapshot = appState.getSnapshot();

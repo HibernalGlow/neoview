@@ -9,7 +9,7 @@
 	import { thumbnailCacheStore, type ThumbnailEntry } from '$lib/stores/thumbnailCache.svelte';
 	import { loadImage } from '$lib/api/fs';
 	import { loadImageFromArchive, generateVideoThumbnail } from '$lib/api/filesystem';
-	import { bottomThumbnailBarPinned, bottomBarLockState, bottomThumbnailBarHeight, viewerPageInfoVisible } from '$lib/stores';
+	import { bottomThumbnailBarPinned, bottomBarLockState, bottomBarOpen, bottomThumbnailBarHeight, viewerPageInfoVisible } from '$lib/stores';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { Button } from '$lib/components/ui/button';
 	import * as Progress from '$lib/components/ui/progress';
@@ -82,7 +82,7 @@
 		return thumbnailSnapshot.get(pageIndex) ?? null;
 	}
 
-	// 响应钉住状态和锁定状态
+	// 响应钉住状态、锁定状态和 open 状态
 	$effect(() => {
 		// 锁定隐藏时，强制隐藏
 		if ($bottomBarLockState === false) {
@@ -95,6 +95,17 @@
 		if ($bottomThumbnailBarPinned || $bottomBarLockState === true) {
 			isVisible = true;
 			if (hideTimeout) clearTimeout(hideTimeout);
+			return;
+		}
+		// 响应 open 状态
+		if ($bottomBarOpen) {
+			isVisible = true;
+			if (hideTimeout) clearTimeout(hideTimeout);
+			scheduleLoadVisibleThumbnails(true);
+		} else {
+			isVisible = false;
+			if (hideTimeout) clearTimeout(hideTimeout);
+			if (showTimeout) clearTimeout(showTimeout);
 		}
 	});
 

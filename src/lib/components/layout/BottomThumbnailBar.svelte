@@ -22,8 +22,7 @@
 	import HorizontalListSlider from '$lib/components/panels/file/components/HorizontalListSlider.svelte';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, Target, Hash } from '@lucide/svelte';
-	import { subscribeSharedPreloadManager } from '$lib/components/viewer/flow/sharedPreloadManager';
-	import type { PreloadManager } from '$lib/components/viewer/flow/preloadManager.svelte';
+	import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
 	import { isVideoFile } from '$lib/utils/videoUtils';
 
@@ -72,10 +71,6 @@
 
 	// 缩略图列表滚动进度（用于 HorizontalListSlider）
 	let thumbnailScrollProgress = $state(0);
-
-	// 共享预加载管理器引用
-	let preloadManager: PreloadManager | null = null;
-	let unsubscribeSharedManager: (() => void) | null = null;
 
 	// 从全局缓存获取缩略图
 	function getThumbnailFromCache(pageIndex: number): ThumbnailEntry | null {
@@ -335,7 +330,7 @@
 
 	async function loadVisibleThumbnails() {
 		const currentBook = bookStore.currentBook;
-		if (!currentBook || !preloadManager) return;
+		if (!currentBook) return;
 
 		const totalPages = currentBook.pages.length;
 		const { start, end } = getWindowRange(totalPages);
@@ -386,9 +381,55 @@
 	}
 
 	let loadingIndices = new Set<number>();
+	const THUMBNAIL_HEIGHT = 120;
+
+	/**
+	 * 从 Blob 创建缩略图 Data URL（canvas 缩放）
+	 */
+	async function createThumbnailFromBlob(
+		blob: Blob
+	): Promise<{ url: string; width: number; height: number }> {
+		return new Promise((resolve, reject) => {
+			const objectUrl = URL.createObjectURL(blob);
+			const img = new Image();
+
+			img.onload = () => {
+				URL.revokeObjectURL(objectUrl);
+
+				// 计算缩放尺寸
+				const scale = THUMBNAIL_HEIGHT / img.naturalHeight;
+				const thumbWidth = Math.round(img.naturalWidth * scale);
+				const thumbHeight = THUMBNAIL_HEIGHT;
+
+				// 使用 canvas 缩放
+				const canvas = document.createElement('canvas');
+				canvas.width = thumbWidth;
+				canvas.height = thumbHeight;
+
+				const ctx = canvas.getContext('2d');
+				if (!ctx) {
+					reject(new Error('Failed to get canvas context'));
+					return;
+				}
+
+				ctx.drawImage(img, 0, 0, thumbWidth, thumbHeight);
+
+				// 转换为 data URL（使用 webp 格式以获得更好的压缩）
+				const dataUrl = canvas.toDataURL('image/webp', 0.8);
+				resolve({ url: dataUrl, width: thumbWidth, height: thumbHeight });
+			};
+
+			img.onerror = () => {
+				URL.revokeObjectURL(objectUrl);
+				reject(new Error('Failed to load image'));
+			};
+
+			img.src = objectUrl;
+		});
+	}
 
 	async function loadThumbnail(pageIndex: number) {
-		if (!preloadManager || loadingIndices.has(pageIndex)) return;
+		if (loadingIndices.has(pageIndex)) return;
 
 		const currentBook = bookStore.currentBook;
 		// 【关键】验证页面索引有效性，防止切书后加载不存在的页面
@@ -402,12 +443,12 @@
 			return;
 		}
 
-		// 视频页面：使用视频缩略图 API，而不是图片管线
+		// 视频页面：使用视频缩略图 API
 		const isVideoPage =
 			!!currentBook && !!page && (isVideoFile(page.name || '') || isVideoFile(page.path || ''));
 
 		if (isVideoPage) {
-			// 压缩包中的视频暂时不生成独立缩略图，使用占位符避免复杂度/性能问题
+			// 压缩包中的视频暂时不生成独立缩略图
 			if (currentBook.type === 'archive') {
 				if (pathKey) {
 					noThumbnailPaths.add(pathKey);
@@ -417,7 +458,6 @@
 
 			loadingIndices.add(pageIndex);
 			try {
-				// 调用后端视频缩略图接口，返回 data:image/... URL（后端已返回正确尺寸的 webp）
 				const videoThumbDataUrl = await generateVideoThumbnail(page.path);
 				const thumb = await getThumbnailDimensions(videoThumbDataUrl);
 				thumbnailCacheStore.setThumbnail(pageIndex, thumb.url, thumb.width, thumb.height);
@@ -437,12 +477,33 @@
 
 		loadingIndices.add(pageIndex);
 		try {
-			await preloadManager.requestThumbnail(pageIndex, 'bottom-bar');
-			if (pathKey) {
-				noThumbnailPaths.delete(pathKey);
+			// 优先从 imagePool 缓存获取 Blob
+			const cached = imagePool.getSync(pageIndex);
+			if (cached?.blob) {
+				// 缓存命中：直接用 canvas 缩放生成缩略图
+				const thumb = await createThumbnailFromBlob(cached.blob);
+				thumbnailCacheStore.setThumbnail(pageIndex, thumb.url, thumb.width, thumb.height);
+				if (pathKey) {
+					noThumbnailPaths.delete(pathKey);
+				}
+				return;
 			}
+
+			// 缓存未命中：异步加载
+			const pooled = await imagePool.get(pageIndex);
+			if (pooled?.blob) {
+				const thumb = await createThumbnailFromBlob(pooled.blob);
+				thumbnailCacheStore.setThumbnail(pageIndex, thumb.url, thumb.width, thumb.height);
+				if (pathKey) {
+					noThumbnailPaths.delete(pathKey);
+				}
+				return;
+			}
+
+			// imagePool 加载失败，使用 fallback
+			throw new Error('imagePool load failed');
 		} catch (err) {
-			console.error(`Failed to load thumbnail for page ${pageIndex}:`, err);
+			console.debug(`imagePool load failed for page ${pageIndex}, using fallback`);
 			if (!currentBook || !page) return;
 
 			try {
@@ -454,7 +515,6 @@
 					imageDataUrl = await loadImage(page.path);
 				}
 
-				// 后端已返回正确尺寸的 webp 缩略图，直接获取尺寸即可
 				const thumbnail = await getThumbnailDimensions(imageDataUrl);
 				thumbnailCacheStore.setThumbnail(
 					pageIndex,
@@ -498,7 +558,7 @@
 	// 滚动时高效加载可见缩略图
 	function loadVisibleThumbnailsOnScroll(container: HTMLElement) {
 		const currentBook = bookStore.currentBook;
-		if (!currentBook || !preloadManager) return;
+		if (!currentBook) return;
 
 		const containerRect = container.getBoundingClientRect();
 		const buffer = 300; // 300px 缓冲区
@@ -562,23 +622,14 @@
 		});
 		thumbnailSnapshot = thumbnailCacheStore.getAllThumbnails();
 
-		unsubscribeSharedManager = subscribeSharedPreloadManager((manager) => {
-			preloadManager = manager;
-			if (preloadManager) {
-				lastThumbnailRange = null;
-				scheduleLoadVisibleThumbnails();
-			}
-		});
+		// 初始化时触发缩略图加载
+		scheduleLoadVisibleThumbnails();
 	});
 
 	onDestroy(() => {
 		if (unsubscribeThumbnailCache) {
 			unsubscribeThumbnailCache();
 			unsubscribeThumbnailCache = null;
-		}
-		if (unsubscribeSharedManager) {
-			unsubscribeSharedManager();
-			unsubscribeSharedManager = null;
 		}
 		if (loadThumbnailsDebounce) {
 			clearTimeout(loadThumbnailsDebounce);
@@ -852,7 +903,7 @@
 				</div>
 			</div>
 			<!-- 底部进度滑块（可交互） -->
-			<div class="z-60 bg-background/80 absolute bottom-0 left-0 right-0 backdrop-blur-sm">
+			<div class="z-60 absolute bottom-0 left-0 right-0">
 				<HorizontalListSlider
 					totalItems={bookStore.currentBook.pages.length}
 					currentIndex={bookStore.currentPageIndex}

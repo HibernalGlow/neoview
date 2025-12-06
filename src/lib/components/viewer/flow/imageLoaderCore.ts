@@ -258,7 +258,8 @@ export class ImageLoaderCore {
 	}
 
 	/**
-	 * 获取缩略图（低优先级）
+	 * 获取缩略图
+	 * 优先从 Blob 缓存生成（不经过队列），如果缓存中没有才加载
 	 */
 	async getThumbnail(pageIndex: number): Promise<string> {
 		// 检查缩略图缓存
@@ -266,11 +267,26 @@ export class ImageLoaderCore {
 			return this.thumbnailCache.get(pageIndex)!;
 		}
 
-		// 先加载图片（低优先级）
-		const result = await this.loadPage(pageIndex, LoadPriority.LOW);
+		let blob: Blob;
 		
-		// 创建缩略图
-		const dataURL = await createThumbnailDataURL(result.blob);
+		// 【优化】如果 Blob 已在缓存中，直接使用，不经过队列
+		if (this.blobCache.has(pageIndex)) {
+			const cached = this.blobCache.get(pageIndex);
+			if (cached) {
+				blob = cached.blob;
+			} else {
+				// 缓存异常，走正常加载流程
+				const result = await this.loadPage(pageIndex, LoadPriority.LOW);
+				blob = result.blob;
+			}
+		} else {
+			// 缓存中没有，需要加载（低优先级）
+			const result = await this.loadPage(pageIndex, LoadPriority.LOW);
+			blob = result.blob;
+		}
+		
+		// 创建缩略图（前端 canvas 缩放）
+		const dataURL = await createThumbnailDataURL(blob);
 		this.thumbnailCache.set(pageIndex, dataURL);
 
 		// 限制缩略图缓存大小

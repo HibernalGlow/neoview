@@ -263,13 +263,16 @@
 </script>
 
 {#if enabled}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="sidebar-control-layer"
     data-layer="SidebarControlLayer"
     data-layer-id="sidebar-control"
-    style:z-index={LayerZIndex.CONTROL + 5}
+    style:z-index={LayerZIndex.SIDEBAR_CONTROL}
     style:left="{position.x}px"
     style:top="{position.y}px"
+    onclick={(e) => e.stopPropagation()}
+    onmousedown={(e) => e.stopPropagation()}
   >
     <div class="control-panel">
       <!-- 拖拽手柄 -->
@@ -279,7 +282,7 @@
         onmousedown={handleDragStart}
         aria-label="拖动控制器"
       >
-        <GripVertical class="icon" />
+        <GripVertical size={16} />
       </button>
 
       <!-- 上边栏 -->
@@ -290,9 +293,9 @@
         oncontextmenu={handleTopContextMenu}
         title={getStateText(topLock, topOpen) + '，单击切换，右键锁定'}
       >
-        <PanelTop class="icon" />
+        <PanelTop size={16} />
         {#if topLock !== null}
-          <Lock class="lock-icon" />
+          <Lock size={10} class="lock-badge" />
         {/if}
       </button>
 
@@ -304,9 +307,9 @@
         oncontextmenu={handleBottomContextMenu}
         title={getStateText(bottomLock, bottomOpen) + '，单击切换，右键锁定'}
       >
-        <PanelBottom class="icon" />
+        <PanelBottom size={16} />
         {#if bottomLock !== null}
-          <Lock class="lock-icon" />
+          <Lock size={10} class="lock-badge" />
         {/if}
       </button>
 
@@ -318,9 +321,9 @@
         oncontextmenu={handleLeftContextMenu}
         title={getStateText(leftLock, leftOpen) + '，单击切换，右键锁定'}
       >
-        <PanelLeft class="icon" />
+        <PanelLeft size={16} />
         {#if leftLock !== null}
-          <Lock class="lock-icon" />
+          <Lock size={10} class="lock-badge" />
         {/if}
       </button>
 
@@ -332,9 +335,9 @@
         oncontextmenu={handleRightContextMenu}
         title={getStateText(rightLock, rightOpen) + '，单击切换，右键锁定'}
       >
-        <PanelRight class="icon" />
+        <PanelRight size={16} />
         {#if rightLock !== null}
-          <Lock class="lock-icon" />
+          <Lock size={10} class="lock-badge" />
         {/if}
       </button>
 
@@ -348,7 +351,7 @@
         onclick={resetPosition}
         title="重置控制器位置"
       >
-        <RotateCcw class="icon" />
+        <RotateCcw size={16} />
       </button>
     </div>
   </div>
@@ -418,12 +421,7 @@
     background: hsl(var(--muted));
   }
 
-  .icon {
-    width: 16px;
-    height: 16px;
-  }
-
-  .lock-icon {
+  .lock-badge, :global(.lock-badge) {
     position: absolute;
     top: -2px;
     right: -2px;

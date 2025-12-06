@@ -421,10 +421,10 @@
     d3-time-format "^4.1.0"
     lodash-es "^4.17.21"
 
-"@lucide/svelte@^0.544.0":
-  version "0.544.0"
-  resolved "https://registry.npmmirror.com/@lucide/svelte/-/svelte-0.544.0.tgz#567aff4744be52c642dc978a4594c90fba816099"
-  integrity sha512-9f9O6uxng2pLB01sxNySHduJN3HTl5p0HDu4H26VR51vhZfiMzyOMe9Mhof3XAk4l813eTtl+/DYRvGyoRR+yw==
+"@lucide/svelte@^0.554.0":
+  version "0.554.0"
+  resolved "https://registry.npmmirror.com/@lucide/svelte/-/svelte-0.554.0.tgz#a27aa2fd957cc3806a3526ce2896b0b27e4d847f"
+  integrity sha512-CM6wLEH8uk3WBpC42t8R0hF7SlQrsYEL6qGuXdB99xKZwKglpWmX5XgYu7FIYOCBYOyC1rm4dNhIe6uF9pOXqw==
 
 "@napi-rs/wasm-runtime@^1.0.7":
   version "1.0.7"
@@ -1139,10 +1139,10 @@ balanced-match@^1.0.0:
   resolved "https://registry.npmmirror.com/balanced-match/-/balanced-match-1.0.2.tgz#e83e3a7e3f300b34cb9d87f615fa0cbf357690ee"
   integrity sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==
 
-bits-ui@^2.14.2:
-  version "2.14.2"
-  resolved "https://registry.npmmirror.com/bits-ui/-/bits-ui-2.14.2.tgz#8daf46afdbfef0934377164b984073458f71aac6"
-  integrity sha512-YqpAJj/nRTZjf7IlgUC3QlepVZ7YFiAQWpZaYUOAZFW5Py+g5DYkhEDTdNFI5SReo7l1rct/nRpMK4pfL9Xffw==
+bits-ui@^2.14.4:
+  version "2.14.4"
+  resolved "https://registry.npmmirror.com/bits-ui/-/bits-ui-2.14.4.tgz#4137da42fb5eed1df18477b1c4c0469470e1956c"
+  integrity sha512-W6kenhnbd/YVvur+DKkaVJ6GldE53eLewur5AhUCqslYQ0vjZr8eWlOfwZnMiPB+PF5HMVqf61vXBvmyrAmPWg==
   dependencies:
     "@floating-ui/core" "^1.7.1"
     "@floating-ui/dom" "^1.7.1"
@@ -2644,15 +2644,10 @@ tabbable@^6.2.0:
   resolved "https://registry.npmmirror.com/tabbable/-/tabbable-6.3.0.tgz#2e0e6163935387cdeacd44e9334616ca0115a8d3"
   integrity sha512-EIHvdY5bPLuWForiR/AN2Bxngzpuwn1is4asboytXtpTgsArc+WmSJKVLlhdh71u7jFcryDqB2A8lQvj78MkyQ==
 
-tailwind-merge@^3.2.0:
+tailwind-merge@^3.2.0, tailwind-merge@^3.4.0:
   version "3.4.0"
   resolved "https://registry.npmmirror.com/tailwind-merge/-/tailwind-merge-3.4.0.tgz#5a264e131a096879965f1175d11f8c36e6b64eca"
   integrity sha512-uSaO4gnW+b3Y2aWoWfFpX62vn2sR3skfhbjsEnaBI81WD1wBLlHZe5sWf0AqjksNdYTbGBEd0UasQMT3SNV15g==
-
-tailwind-merge@^3.3.0:
-  version "3.3.1"
-  resolved "https://registry.npmmirror.com/tailwind-merge/-/tailwind-merge-3.3.1.tgz#a7e7db7c714f6020319e626ecfb7e7dac8393a4b"
-  integrity sha512-gBXpgUm/3rp1lMZZrM/w7D8GKqshif0zAymAhbCyIt8KMe+0v9DQ7cdYLR4FHH/cKpdTXb+A/tKKU3eolfsI+g==
 
 tailwind-variants@^3.1.1:
   version "3.1.1"

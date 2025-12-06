@@ -46,7 +46,7 @@
 		event.preventDefault();
 		draggedCard = { card, source };
 		isPointerDragging = true;
-		dragPreview = { x: event.clientX + 12, y: event.clientY + 12 };
+		dragPreview = { x: event.clientX, y: event.clientY };
 	}
 
 	function handleAreaPointerEnter(targetArea: AreaId) {
@@ -140,7 +140,7 @@
 	$effect(() => {
 		if (!isPointerDragging) return;
 		function handleWindowPointerMove(e: PointerEvent) {
-			dragPreview = { x: e.clientX + 12, y: e.clientY + 12 };
+			dragPreview = { x: e.clientX, y: e.clientY };
 		}
 		window.addEventListener('pointermove', handleWindowPointerMove);
 		return () => {
@@ -239,22 +239,52 @@
 				<div class="flex min-h-[60px] flex-wrap content-start gap-1.5">
 					{#each cards as card, index (card.id)}
 						<div
-							class="bg-muted/50 hover:bg-accent hover:border-accent group inline-flex cursor-grab select-none items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-all active:cursor-grabbing {isPointerDragging &&
+							class="bg-muted/50 hover:bg-accent hover:border-accent group inline-flex select-none items-center gap-1 rounded-full border px-1 py-0.5 text-xs font-medium transition-all {isPointerDragging &&
 							draggedCard?.card.id === card.id
 								? 'scale-95 opacity-50'
 								: ''}"
-							onpointerdown={(e) => handlePointerDown(e, card, panelId)}
 						>
-							<svg
-								class="text-muted-foreground h-3 w-3 opacity-50 group-hover:opacity-100"
-								fill="currentColor"
-								viewBox="0 0 20 20"
+							<!-- 上移按钮 -->
+							<button
+								type="button"
+								class="hover:bg-background/50 rounded p-0.5 disabled:opacity-30"
+								disabled={index === 0}
+								onclick={() => moveCardUp(card, cards)}
+								title="上移"
 							>
-								<path
-									d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"
-								></path>
-							</svg>
-							<span>{card.title}</span>
+								<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M15 19l-7-7 7-7"
+									></path>
+								</svg>
+							</button>
+							<!-- 拖拽手柄 -->
+							<div
+								class="cursor-grab px-1 active:cursor-grabbing"
+								onpointerdown={(e) => handlePointerDown(e, card, panelId)}
+							>
+								<span>{card.title}</span>
+							</div>
+							<!-- 下移按钮 -->
+							<button
+								type="button"
+								class="hover:bg-background/50 rounded p-0.5 disabled:opacity-30"
+								disabled={index === cards.length - 1}
+								onclick={() => moveCardDown(card, cards)}
+								title="下移"
+							>
+								<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M9 5l7 7-7 7"
+									></path>
+								</svg>
+							</button>
 						</div>
 					{/each}
 					{#if cards.length === 0}

@@ -18,8 +18,8 @@ export const LayerZIndex = {
   INFO: 70,
   IMAGE_INFO: 75,
   CONTROL: 80,
-  SIDEBAR_CONTROL: 85,
   GESTURE: 90,
+  SIDEBAR_CONTROL: 100, // 边栏控制器在手势层之上
 } as const;
 
 /**

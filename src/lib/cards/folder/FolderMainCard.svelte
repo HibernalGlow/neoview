@@ -106,10 +106,18 @@
 	let currentActiveTabId = $state(get(activeTabId));
 	let currentAllTabs = $state(get(allTabs));
 	
-	// 记录是否为虚拟路径实例的页签 ID（用于隔离）
-	let virtualInstanceTabId = $state<string | null>(null);
+	// 虚拟路径实例的本地页签状态（完全独立，不与全局共享）
+	let localTabState = $state<{
+		id: string;
+		title: string;
+		currentPath: string;
+		homePath: string;
+	} | null>(null);
 
 	$effect(() => {
+		// 虚拟路径实例不订阅全局状态
+		if (propInitialPath && isVirtualPath(propInitialPath)) return;
+		
 		const unsubActiveTab = activeTabId.subscribe((v) => {
 			currentActiveTabId = v;
 		});
@@ -124,14 +132,14 @@
 	
 	// 获取当前实例应该显示的页签列表
 	let displayTabs = $derived(
-		virtualInstanceTabId 
-			? currentAllTabs.filter(t => t.id === virtualInstanceTabId)
+		localTabState 
+			? [localTabState]
 			: currentAllTabs
 	);
 	
 	// 获取当前实例应该激活的页签 ID
 	let displayActiveTabId = $derived(
-		virtualInstanceTabId || currentActiveTabId
+		localTabState?.id || currentActiveTabId
 	);
 
 	// sortedItems 需要从 tabItems 派生
@@ -1123,14 +1131,18 @@
 			try {
 				// 检查是否有传入的初始路径（用于书签/历史虚拟路径）
 				if (propInitialPath && isVirtualPath(propInitialPath)) {
-					// 虚拟路径实例：创建独立的页签
+					// 虚拟路径实例：创建本地独立页签（不与全局共享）
 					isVirtualInstance = true;
-					ownTabId = folderTabActions.createTab(propInitialPath);
-					virtualInstanceTabId = ownTabId; // 设置隔离的页签 ID
+					const localId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+					ownTabId = localId;
+					localTabState = {
+						id: localId,
+						title: propInitialPath.includes('bookmark') ? '书签' : '历史',
+						currentPath: propInitialPath,
+						homePath: propInitialPath
+					};
 					homePath = propInitialPath;
-					folderTabActions.setHomePath(propInitialPath);
-					// 稍等页签创建完成后再导航
-					await new Promise(r => setTimeout(r, 50));
+					// 直接导航，不使用全局 store
 					navigationCommand.set({ type: 'init', path: propInitialPath });
 				} else if (propInitialPath) {
 					// 普通路径作为初始路径
@@ -1165,14 +1177,11 @@
 		}
 
 		return () => {
-			// 清理
+			// 清理键盘事件监听（仅非虚拟实例）
 			if (!propInitialPath || !isVirtualPath(propInitialPath)) {
 				document.removeEventListener('keydown', handleKeydown);
 			}
-			// 如果是虚拟实例，关闭独立页签
-			if (isVirtualInstance && ownTabId) {
-				folderTabActions.closeTab(ownTabId);
-			}
+			// 虚拟实例使用本地状态，无需清理全局页签
 		};
 	});
 </script>

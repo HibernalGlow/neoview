@@ -154,6 +154,7 @@
 	}
 
 	let resizeObserver: ResizeObserver | null = null;
+	let mutationObserver: MutationObserver | null = null;
 
 	onMount(() => {
 		window.addEventListener('mousemove', onMouseMove, { passive: true });
@@ -168,6 +169,22 @@
 				updateTargetElements();
 			});
 			resizeObserver.observe(layerRef);
+			
+			// 【性能优化】使用 MutationObserver 监听 DOM 变化（带防抖）
+			// 当书籍切换时，frame-layer 元素会被替换
+			let mutationTimeout: ReturnType<typeof setTimeout> | null = null;
+			mutationObserver = new MutationObserver(() => {
+				// 防抖：100ms 内只触发一次
+				if (mutationTimeout) clearTimeout(mutationTimeout);
+				mutationTimeout = setTimeout(() => {
+					updateTargetElements();
+				}, 100);
+			});
+			mutationObserver.observe(layerRef.parentElement || document.body, {
+				childList: true,
+				subtree: false // 只监听直接子元素变化
+			});
+			
 			// 初始更新
 			updateRect();
 			updateTargetElements();
@@ -181,6 +198,10 @@
 
 		if (resizeObserver) {
 			resizeObserver.disconnect();
+		}
+		
+		if (mutationObserver) {
+			mutationObserver.disconnect();
 		}
 
 		if (rafId !== null) {

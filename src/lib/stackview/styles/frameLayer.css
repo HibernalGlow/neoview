@@ -11,10 +11,14 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  /* GPU 加速 */
+  /* GPU 加速 + CSS 变量优化 */
   will-change: transform, opacity;
   transform: translateZ(0);
+  /* 【性能优化】使用 CSS 变量控制 transform-origin，减少 DOM 操作 */
+  transform-origin: var(--view-x, 50%) var(--view-y, 50%);
   backface-visibility: hidden;
+  /* 减少重绘范围 */
+  contain: layout style paint;
 }
 
 /* 帧图片 */

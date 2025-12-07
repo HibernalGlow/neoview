@@ -84,8 +84,8 @@
 	// 上一次的页面模式（用于检测模式变化）
 	let lastPageMode = $state<'single' | 'double'>('single');
 
-	// 计算 transform-origin（基于 viewPositionX/Y）
-	let transformOrigin = $derived(`${viewPositionX}% ${viewPositionY}%`);
+	// 【性能优化】transform-origin 通过 CSS 变量 (--view-x, --view-y) 传递
+	// 不再使用 $derived，减少不必要的计算
 
 	// 计算 transform（只包含 scale 和 rotation）
 	let transformStyle = $derived.by(() => {
@@ -435,7 +435,7 @@
 				targetHeight={viewportSize.height}
 				{scale}
 				{rotation}
-				{transformOrigin}
+				transformOrigin="{viewPositionX}% {viewPositionY}%"
 				opacity={1}
 				zIndex={SlotZIndex.CURRENT}
 			/>
@@ -447,7 +447,8 @@
 				style:opacity={1}
 				style:transition={`opacity ${transitionDuration}ms ease`}
 				style:transform={transformStyle}
-				style:transform-origin={transformOrigin}
+				style:--view-x="{viewPositionX}%"
+				style:--view-y="{viewPositionY}%"
 				data-page-index={currentSlot.pageIndex}
 			>
 				{#each currentSlot.images as img, i (img.pageIndex)}
@@ -500,7 +501,8 @@
 			style:opacity={1}
 			style:transition={`opacity ${transitionDuration}ms ease`}
 			style:transform={transformStyle}
-			style:transform-origin={transformOrigin}
+			style:--view-x="{viewPositionX}%"
+			style:--view-y="{viewPositionY}%"
 		>
 			<img src={upscaleUrl} alt="Upscaled" class="frame-image" draggable="false" />
 		</div>
@@ -525,11 +527,14 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		/* GPU 加速 */
-		will-change: opacity, transform;
+		/* GPU 加速 + CSS 变量方式减少 DOM 操作 */
+		will-change: transform, opacity;
 		transform: translateZ(0);
+		transform-origin: var(--view-x, 50%) var(--view-y, 50%);
 		backface-visibility: hidden;
 		pointer-events: none;
+		/* 减少重绘 */
+		contain: layout style paint;
 	}
 
 	.frame-image {

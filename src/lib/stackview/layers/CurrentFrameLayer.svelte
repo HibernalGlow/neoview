@@ -45,9 +45,8 @@
 		onImageLoad?: (e: Event, index: number) => void;
 	} = $props();
 
-	// 计算 transform-origin（基于 viewPositionX/Y）
-	// 悬停滚动通过改变缩放原点来实现平移效果
-	let transformOrigin = $derived(`${viewPositionX}% ${viewPositionY}%`);
+	// 【性能优化】使用 CSS 变量传递位置，避免高频 DOM 属性更新
+	// transform-origin 通过 CSS var() 在样式中引用
 
 	// 计算 transform（只包含 scale 和 rotation）
 	let transformStyle = $derived.by(() => {
@@ -96,7 +95,8 @@
 		data-layer-id="current"
 		style:z-index={LayerZIndex.CURRENT_FRAME}
 		style:transform={transformStyle}
-		style:transform-origin={transformOrigin}
+		style:--view-x="{viewPositionX}%"
+		style:--view-y="{viewPositionY}%"
 	>
 		{#each frame.images as img, i (i)}
 			<FrameImage

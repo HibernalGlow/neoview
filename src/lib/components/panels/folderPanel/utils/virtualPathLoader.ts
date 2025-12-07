@@ -8,6 +8,7 @@ import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { historyStore, type HistoryEntry } from '$lib/stores/history.svelte';
 import { get } from 'svelte/store';
 import { getVirtualPathType, type VirtualPathType } from '../stores/folderTabStore.svelte';
+import { isVideoFile } from '$lib/utils/videoUtils';
 
 // 书签条目类型（与 bookmarkStore 中的 Bookmark 类型一致）
 interface BookmarkEntry {
@@ -38,19 +39,23 @@ function bookmarkToFsItem(bookmark: BookmarkEntry): FsItem {
  */
 function isArchivePath(path: string): boolean {
 	const ext = path.toLowerCase();
-	return ext.endsWith('.zip') || ext.endsWith('.cbz') || ext.endsWith('.rar') || 
-		   ext.endsWith('.cbr') || ext.endsWith('.7z') || ext.endsWith('.cb7');
+	return ext.endsWith('.zip') || ext.endsWith('.cbz') || ext.endsWith('.rar') ||
+		ext.endsWith('.cbr') || ext.endsWith('.7z') || ext.endsWith('.cb7');
 }
 
 /**
  * 将历史条目转换为 FsItem
+ * 正确识别压缩包和视频文件，将它们标记为文件而非目录
  */
 function historyToFsItem(entry: HistoryEntry): FsItem {
 	const isArchive = isArchivePath(entry.path);
+	const isVideo = isVideoFile(entry.path);
+	// 压缩包和视频文件是文件（isDir = false），其他是目录
+	const isDirectory = !isArchive && !isVideo;
 	return {
 		path: entry.path,
 		name: entry.name,
-		isDir: !isArchive,
+		isDir: isDirectory,
 		isImage: false,
 		size: 0,
 		modified: entry.timestamp
@@ -62,7 +67,7 @@ function historyToFsItem(entry: HistoryEntry): FsItem {
  */
 export function loadVirtualPathData(path: string): FsItem[] {
 	const type = getVirtualPathType(path);
-	
+
 	switch (type) {
 		case 'bookmark': {
 			const bookmarks = get(bookmarkStore) as BookmarkEntry[];
@@ -85,7 +90,7 @@ export function subscribeVirtualPathData(
 	callback: (items: FsItem[]) => void
 ): () => void {
 	const type = getVirtualPathType(path);
-	
+
 	switch (type) {
 		case 'bookmark': {
 			return bookmarkStore.subscribe((bookmarks: BookmarkEntry[]) => {
@@ -98,7 +103,7 @@ export function subscribeVirtualPathData(
 			});
 		}
 		default:
-			return () => {};
+			return () => { };
 	}
 }
 
@@ -107,7 +112,7 @@ export function subscribeVirtualPathData(
  */
 export function removeVirtualPathItem(path: string, itemPath: string): boolean {
 	const type = getVirtualPathType(path);
-	
+
 	switch (type) {
 		case 'bookmark': {
 			const bookmarks = get(bookmarkStore) as BookmarkEntry[];
@@ -137,7 +142,7 @@ export function removeVirtualPathItem(path: string, itemPath: string): boolean {
  */
 export function clearVirtualPathData(path: string): boolean {
 	const type = getVirtualPathType(path);
-	
+
 	switch (type) {
 		case 'history': {
 			historyStore.clear();

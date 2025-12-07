@@ -1,10 +1,22 @@
 <script lang="ts">
-	import { Palette, Sun, Moon, Monitor, Check, Layers } from '@lucide/svelte';
+	import {
+		Palette,
+		Sun,
+		Moon,
+		Monitor,
+		Check,
+		Layers,
+		Copy,
+		Trash2,
+		ChevronDown,
+		ChevronRight
+	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import { Input } from '$lib/components/ui/input';
 	import { Slider } from '$lib/components/ui/slider';
 	import { onMount } from 'svelte';
+	import { slide } from 'svelte/transition';
 	import { fetchThemeFromURL } from '$lib/utils/themeManager';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { emit } from '@tauri-apps/api/event';
@@ -200,6 +212,37 @@
 
 	let selectedTheme = $state<ThemeConfig>(presetThemes[0]);
 	let customThemes = $state<ThemeConfig[]>([]);
+
+	let isPresetsOpen = $state(false);
+	let isCustomThemesOpen = $state(false);
+
+	function duplicateTheme(theme: ThemeConfig, e: Event) {
+		e.stopPropagation();
+		let newName = theme.name + ' (Copy)';
+		let counter = 1;
+		while (
+			customThemes.some((t) => t.name === newName) ||
+			presetThemes.some((t) => t.name === newName)
+		) {
+			newName = theme.name + ` (Copy ${counter})`;
+			counter++;
+		}
+		const newTheme: ThemeConfig = {
+			...theme,
+			name: newName,
+			description: `基于 ${theme.name} 的副本`
+		};
+		addCustomTheme(newTheme);
+	}
+
+	function deleteCustomTheme(theme: ThemeConfig, e: Event) {
+		e.stopPropagation();
+		if (selectedTheme.name === theme.name) {
+			selectPresetTheme(presetThemes[0]);
+		}
+		customThemes = customThemes.filter((t) => t.name !== theme.name);
+		persistCustomThemes();
+	}
 
 	// 检测系统主题偏好
 	function checkSystemTheme() {
@@ -708,54 +751,45 @@
 
 	<!-- 预设主题 -->
 	<div class="space-y-3">
-		<Label class="text-sm font-semibold">配色方案</Label>
-		<div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-			{#each presetThemes as theme}
-				<button
-					onclick={() => selectPresetTheme(theme)}
-					class="hover:bg-accent flex flex-col items-start gap-2 rounded-lg border p-4 text-left transition-colors {selectedTheme.name ===
-					theme.name
-						? 'border-primary bg-primary/5'
-						: ''}"
-				>
-					<div class="flex w-full items-center justify-between">
-						<h4 class="font-medium">{theme.name}</h4>
-						{#if selectedTheme.name === theme.name}
-							<Check class="text-primary h-4 w-4" />
-						{/if}
-					</div>
-					<p class="text-muted-foreground text-sm">{theme.description}</p>
+		<button
+			class="flex w-full items-center justify-between text-sm font-semibold"
+			onclick={() => (isPresetsOpen = !isPresetsOpen)}
+		>
+			<span class="flex items-center gap-2">
+				{#if isPresetsOpen}
+					<ChevronDown class="h-4 w-4" />
+				{:else}
+					<ChevronRight class="h-4 w-4" />
+				{/if}
+				配色方案
+			</span>
+			<span class="text-muted-foreground text-xs">{presetThemes.length} 个</span>
+		</button>
 
-					<!-- 颜色预览 -->
-					<div class="mt-2 flex gap-2">
-						<div
-							class="h-6 w-6 rounded-full border"
-							style="background: {theme.colors.light.primary}"
-							title="浅色主色"
-						></div>
-						<div
-							class="h-6 w-6 rounded-full border"
-							style="background: {theme.colors.dark.primary}"
-							title="深色主色"
-						></div>
-					</div>
-				</button>
-			{/each}
-		</div>
-	</div>
-
-	{#if customThemes.length}
-		<div class="space-y-3">
-			<Label class="text-sm font-semibold">自定义主题</Label>
-			<div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-				{#each customThemes as theme}
+		{#if isPresetsOpen}
+			<div class="grid grid-cols-1 gap-3 md:grid-cols-2" transition:slide>
+				{#each presetThemes as theme}
 					<button
 						onclick={() => selectPresetTheme(theme)}
-						class="hover:bg-accent flex flex-col items-start gap-2 rounded-lg border p-4 text-left transition-colors {selectedTheme.name ===
+						class="hover:bg-accent group relative flex flex-col items-start gap-2 rounded-lg border p-4 text-left transition-colors {selectedTheme.name ===
 						theme.name
 							? 'border-primary bg-primary/5'
 							: ''}"
 					>
+						<div
+							class="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+						>
+							<Button
+								variant="ghost"
+								size="icon"
+								class="h-6 w-6"
+								onclick={(e) => duplicateTheme(theme, e)}
+								title="复制主题"
+							>
+								<Copy class="h-3 w-3" />
+							</Button>
+						</div>
+
 						<div class="flex w-full items-center justify-between">
 							<h4 class="font-medium">{theme.name}</h4>
 							{#if selectedTheme.name === theme.name}
@@ -764,6 +798,7 @@
 						</div>
 						<p class="text-muted-foreground text-sm">{theme.description}</p>
 
+						<!-- 颜色预览 -->
 						<div class="mt-2 flex gap-2">
 							<div
 								class="h-6 w-6 rounded-full border"
@@ -779,6 +814,83 @@
 					</button>
 				{/each}
 			</div>
+		{/if}
+	</div>
+
+	{#if customThemes.length}
+		<div class="space-y-3">
+			<button
+				class="flex w-full items-center justify-between text-sm font-semibold"
+				onclick={() => (isCustomThemesOpen = !isCustomThemesOpen)}
+			>
+				<span class="flex items-center gap-2">
+					{#if isCustomThemesOpen}
+						<ChevronDown class="h-4 w-4" />
+					{:else}
+						<ChevronRight class="h-4 w-4" />
+					{/if}
+					自定义主题
+				</span>
+				<span class="text-muted-foreground text-xs">{customThemes.length} 个</span>
+			</button>
+
+			{#if isCustomThemesOpen}
+				<div class="grid grid-cols-1 gap-3 md:grid-cols-2" transition:slide>
+					{#each customThemes as theme}
+						<button
+							onclick={() => selectPresetTheme(theme)}
+							class="hover:bg-accent group relative flex flex-col items-start gap-2 rounded-lg border p-4 text-left transition-colors {selectedTheme.name ===
+							theme.name
+								? 'border-primary bg-primary/5'
+								: ''}"
+						>
+							<div
+								class="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+							>
+								<Button
+									variant="ghost"
+									size="icon"
+									class="h-6 w-6"
+									onclick={(e) => duplicateTheme(theme, e)}
+									title="复制主题"
+								>
+									<Copy class="h-3 w-3" />
+								</Button>
+								<Button
+									variant="ghost"
+									size="icon"
+									class="text-destructive h-6 w-6 hover:text-red-600"
+									onclick={(e) => deleteCustomTheme(theme, e)}
+									title="删除主题"
+								>
+									<Trash2 class="h-3 w-3" />
+								</Button>
+							</div>
+
+							<div class="flex w-full items-center justify-between">
+								<h4 class="font-medium">{theme.name}</h4>
+								{#if selectedTheme.name === theme.name}
+									<Check class="text-primary h-4 w-4" />
+								{/if}
+							</div>
+							<p class="text-muted-foreground text-sm">{theme.description}</p>
+
+							<div class="mt-2 flex gap-2">
+								<div
+									class="h-6 w-6 rounded-full border"
+									style="background: {theme.colors.light.primary}"
+									title="浅色主色"
+								></div>
+								<div
+									class="h-6 w-6 rounded-full border"
+									style="background: {theme.colors.dark.primary}"
+									title="深色主色"
+								></div>
+							</div>
+						</button>
+					{/each}
+				</div>
+			{/if}
 		</div>
 	{/if}
 

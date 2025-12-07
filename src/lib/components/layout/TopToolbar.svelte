@@ -11,9 +11,6 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	// Progress component removed — not used in this toolbar
 
-	import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
-	import { Zap, HardDrive, Image, PaintbrushVertical, Layers, Square } from '@lucide/svelte';
-
 	import { bookStore } from '$lib/stores/book.svelte';
 	import {
 		zoomIn,
@@ -887,56 +884,6 @@
 							</p>
 						</Tooltip.Content>
 					</Tooltip.Root>
-
-					<!-- 分隔线 -->
-					<Separator.Root orientation="vertical" class="mx-1 h-6" />
-
-					<!-- 加载模式切换 -->
-					<div class="flex items-center">
-						<div class="bg-muted/60 inline-flex items-center rounded-full p-0.5 shadow-inner">
-							<!-- 数据源切换: Blob / Tempfile -->
-							<Tooltip.Root>
-								<Tooltip.Trigger>
-									<Button
-										variant={loadModeStore.isBlobMode ? 'default' : 'ghost'}
-										size="icon"
-										class="h-8 w-8 rounded-full"
-										onclick={() => loadModeStore.toggleDataSource()}
-									>
-										{#if loadModeStore.isBlobMode}
-											<Zap class="h-4 w-4" />
-										{:else}
-											<HardDrive class="h-4 w-4" />
-										{/if}
-									</Button>
-								</Tooltip.Trigger>
-								<Tooltip.Content>
-									<p>数据源: {loadModeStore.isBlobMode ? 'Blob (IPC)' : 'Tempfile'}</p>
-								</Tooltip.Content>
-							</Tooltip.Root>
-
-							<!-- 渲染模式切换: img / canvas -->
-							<Tooltip.Root>
-								<Tooltip.Trigger>
-									<Button
-										variant={loadModeStore.isImgMode ? 'default' : 'ghost'}
-										size="icon"
-										class="h-8 w-8 rounded-full"
-										onclick={() => loadModeStore.toggleRenderMode()}
-									>
-										{#if loadModeStore.isImgMode}
-											<Image class="h-4 w-4" />
-										{:else}
-											<PaintbrushVertical class="h-4 w-4" />
-										{/if}
-									</Button>
-								</Tooltip.Trigger>
-								<Tooltip.Content>
-									<p>渲染: {loadModeStore.isImgMode ? 'img 元素' : 'canvas'}</p>
-								</Tooltip.Content>
-							</Tooltip.Root>
-						</div>
-					</div>
 
 					<!-- 分隔线 -->
 					<Separator.Root orientation="vertical" class="mx-1 h-6" />

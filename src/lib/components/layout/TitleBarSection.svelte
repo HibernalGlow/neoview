@@ -31,8 +31,13 @@
 		Minimize,
 		Maximize,
 		X,
-		Check
+		Check,
+		Zap,
+		HardDrive,
+		Image,
+		PaintbrushVertical
 	} from '@lucide/svelte';
+	import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 
 	// Props
 	interface Props {
@@ -403,28 +408,82 @@
 			</Tooltip.Content>
 		</Tooltip.Root>
 
-		<!-- 渲染器模式切换 -->
-		<Tooltip.Root>
-			<Tooltip.Trigger>
-				<Button
-					variant={rendererMode === 'stack' ? 'default' : 'ghost'}
-					size="icon"
-					class="h-6 w-6"
-					style="pointer-events: auto;"
-					onclick={toggleRendererMode}
-				>
-					{#if rendererMode === 'stack'}
-						<Layers class="h-4 w-4" />
-					{:else}
-						<Square class="h-4 w-4" />
-					{/if}
-				</Button>
-			</Tooltip.Trigger>
-			<Tooltip.Content>
-				<p>{rendererMode === 'stack' ? 'StackViewer（槽位）' : 'Layer 系统（标准）'}</p>
-				<p class="text-muted-foreground text-xs">点击切换渲染模式</p>
-			</Tooltip.Content>
-		</Tooltip.Root>
+		<!-- 渲染器模式切换（弹出菜单） -->
+		<DropdownMenu.Root>
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					<DropdownMenu.Trigger>
+						<Button
+							variant={rendererMode === 'stack' ? 'default' : 'ghost'}
+							size="icon"
+							class="h-6 w-6"
+							style="pointer-events: auto;"
+						>
+							{#if rendererMode === 'stack'}
+								<Layers class="h-4 w-4" />
+							{:else}
+								<Square class="h-4 w-4" />
+							{/if}
+						</Button>
+					</DropdownMenu.Trigger>
+				</Tooltip.Trigger>
+				<Tooltip.Content>
+					<p>渲染设置</p>
+				</Tooltip.Content>
+			</Tooltip.Root>
+
+			<DropdownMenu.Content side="bottom" align="end" class="w-56">
+				<DropdownMenu.Label>渲染器模式</DropdownMenu.Label>
+				<DropdownMenu.Item onclick={toggleRendererMode}>
+					<div class="flex w-full items-center justify-between">
+						<div class="flex items-center gap-2">
+							{#if rendererMode === 'stack'}
+								<Layers class="h-4 w-4" />
+								<span>StackViewer（槽位）</span>
+							{:else}
+								<Square class="h-4 w-4" />
+								<span>Layer 系统（标准）</span>
+							{/if}
+						</div>
+						<span class="text-muted-foreground text-xs">点击切换</span>
+					</div>
+				</DropdownMenu.Item>
+
+				<DropdownMenu.Separator />
+				<DropdownMenu.Label>数据源</DropdownMenu.Label>
+				<DropdownMenu.Item onclick={() => loadModeStore.toggleDataSource()}>
+					<div class="flex w-full items-center justify-between">
+						<div class="flex items-center gap-2">
+							{#if loadModeStore.isBlobMode}
+								<Zap class="h-4 w-4" />
+								<span>Blob (IPC)</span>
+							{:else}
+								<HardDrive class="h-4 w-4" />
+								<span>Tempfile</span>
+							{/if}
+						</div>
+						<span class="text-muted-foreground text-xs">点击切换</span>
+					</div>
+				</DropdownMenu.Item>
+
+				<DropdownMenu.Separator />
+				<DropdownMenu.Label>渲染方式</DropdownMenu.Label>
+				<DropdownMenu.Item onclick={() => loadModeStore.toggleRenderMode()}>
+					<div class="flex w-full items-center justify-between">
+						<div class="flex items-center gap-2">
+							{#if loadModeStore.isImgMode}
+								<Image class="h-4 w-4" />
+								<span>img 元素</span>
+							{:else}
+								<PaintbrushVertical class="h-4 w-4" />
+								<span>canvas</span>
+							{/if}
+						</div>
+						<span class="text-muted-foreground text-xs">点击切换</span>
+					</div>
+				</DropdownMenu.Item>
+			</DropdownMenu.Content>
+		</DropdownMenu.Root>
 	</div>
 
 	<!-- 右侧：窗口控制按钮 -->

@@ -12,6 +12,7 @@
 mod commands;
 mod core;
 mod models;
+mod tray;
 
 use commands::fs_commands::{CacheIndexState, DirectoryCacheState, FsState};
 use commands::generic_upscale_commands::GenericUpscalerState;
@@ -135,6 +136,10 @@ pub fn run() {
             });
 
             log::info!("🚀 NeoView 初始化完成 (JobEngine workers: {})", num_cores.clamp(2, 8));
+
+            // 初始化系统托盘
+            tray::init_tray(app.handle())?;
+            log::info!("📌 系统托盘初始化完成");
 
             Ok(())
         })

@@ -1077,7 +1077,7 @@ pub async fn run_realworld_benchmark(
     
     // 开始计时
     let start = Instant::now();
-    let mut cached_count = 0;
+    let cached_count = 0;
     let mut generated_count = 0;
     let mut failed_count = 0;
     

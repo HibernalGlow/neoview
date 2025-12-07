@@ -322,7 +322,7 @@ impl ArchiveManager {
             archive_path.display()
         );
         
-        let mut archive = sevenz_rust::SevenZReader::open(archive_path, "".into())
+        let archive = sevenz_rust::SevenZReader::open(archive_path, "".into())
             .map_err(|e| format!("打开 7z 压缩包失败: {}", e))?;
         
         let mut entries = Vec::new();

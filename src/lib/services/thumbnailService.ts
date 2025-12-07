@@ -42,38 +42,38 @@ async function createThumbnailFromBlob(blob: Blob): Promise<{ url: string; width
 	return new Promise((resolve, reject) => {
 		const objectUrl = URL.createObjectURL(blob);
 		const img = new Image();
-		
+
 		img.onload = () => {
 			URL.revokeObjectURL(objectUrl);
-			
+
 			// 计算缩放尺寸
 			const scale = THUMBNAIL_HEIGHT / img.naturalHeight;
 			const thumbWidth = Math.round(img.naturalWidth * scale);
 			const thumbHeight = THUMBNAIL_HEIGHT;
-			
+
 			// 使用 canvas 缩放
 			const canvas = document.createElement('canvas');
 			canvas.width = thumbWidth;
 			canvas.height = thumbHeight;
-			
+
 			const ctx = canvas.getContext('2d');
 			if (!ctx) {
 				reject(new Error('Failed to get canvas context'));
 				return;
 			}
-			
+
 			ctx.drawImage(img, 0, 0, thumbWidth, thumbHeight);
-			
+
 			// 转换为 data URL（使用 webp 格式）
 			const dataUrl = canvas.toDataURL('image/webp', 0.8);
 			resolve({ url: dataUrl, width: thumbWidth, height: thumbHeight });
 		};
-		
+
 		img.onerror = () => {
 			URL.revokeObjectURL(objectUrl);
 			reject(new Error('Failed to load image'));
 		};
-		
+
 		img.src = objectUrl;
 	});
 }
@@ -88,12 +88,12 @@ async function createThumbnailFromBlob(blob: Blob): Promise<{ url: string; width
  */
 function generateCentralPriorityOrder(center: number, totalPages: number, range: number): number[] {
 	const indices: number[] = [];
-	
+
 	// 先加载中心页
 	if (center >= 0 && center < totalPages) {
 		indices.push(center);
 	}
-	
+
 	// 交替向前后方向扩展
 	for (let offset = 1; offset <= range; offset++) {
 		// 向后
@@ -105,7 +105,7 @@ function generateCentralPriorityOrder(center: number, totalPages: number, range:
 			indices.push(center - offset);
 		}
 	}
-	
+
 	return indices;
 }
 
@@ -123,11 +123,11 @@ async function loadThumbnail(pageIndex: number): Promise<void> {
 	}
 
 	loadingIndices.add(pageIndex);
-	
+
 	try {
 		// 优先从 imagePool 缓存获取 Blob
 		let blob: Blob | undefined;
-		
+
 		const cached = imagePool.getSync(pageIndex);
 		if (cached?.blob) {
 			blob = cached.blob;
@@ -136,15 +136,22 @@ async function loadThumbnail(pageIndex: number): Promise<void> {
 			const pooled = await imagePool.get(pageIndex);
 			blob = pooled?.blob;
 		}
-		
+
 		if (!blob) {
 			console.debug(`No blob for page ${pageIndex}`);
 			return;
 		}
-		
+
+		// 检查blob类型，跳过视频文件
+		if (blob.type.startsWith('video/')) {
+			console.debug(`Skipping thumbnail for video page ${pageIndex} (${blob.type})`);
+			// TODO: 未来可以实现从视频提取第一帧作为缩略图
+			return;
+		}
+
 		// 生成缩略图
 		const thumb = await createThumbnailFromBlob(blob);
-		
+
 		// 写入缓存
 		thumbnailCacheStore.setThumbnail(pageIndex, thumb.url, thumb.width, thumb.height);
 	} catch (error) {
@@ -173,10 +180,10 @@ async function loadThumbnails(centerIndex: number): Promise<void> {
 	const thisVersion = ++loadVersion;
 
 	const totalPages = currentBook.totalPages;
-	
+
 	// 使用中央优先策略生成加载顺序
 	const loadOrder = generateCentralPriorityOrder(centerIndex, totalPages, PRELOAD_RANGE);
-	
+
 	// 过滤已缓存和正在加载的
 	const toLoad = loadOrder.filter(
 		(i) => !thumbnailCacheStore.hasThumbnail(i) && !loadingIndices.has(i)
@@ -195,12 +202,12 @@ async function loadThumbnails(centerIndex: number): Promise<void> {
 			console.log(`🖼️ ThumbnailService: Cancelled (v${thisVersion} -> v${loadVersion})`);
 			return;
 		}
-		
+
 		const batch = toLoad.slice(i, i + BATCH_SIZE);
-		
+
 		// 加载当前批次
 		await Promise.all(batch.map(loadThumbnail));
-		
+
 		// 批次之间延迟，让出控制权给主页面加载
 		if (i + BATCH_SIZE < toLoad.length) {
 			await new Promise<void>((resolve) => {
@@ -226,20 +233,20 @@ function cancelLoading(): void {
  */
 function handleBookChange(bookPath: string): void {
 	if (currentBookPath === bookPath) return;
-	
+
 	console.log(`🖼️ ThumbnailService: Book changed to ${bookPath}`);
 	currentBookPath = bookPath;
-	
+
 	// 取消旧的加载任务
 	cancelLoading();
 	loadingIndices.clear();
-	
+
 	// 设置 imagePool 当前书籍
 	imagePool.setCurrentBook(bookPath);
-	
+
 	// 设置 thumbnailCacheStore 当前书籍（清空旧缓存）
 	thumbnailCacheStore.setBook(bookPath);
-	
+
 	// 延迟加载缩略图，让主页面先加载
 	setTimeout(() => {
 		const centerIndex = bookStore.currentPageIndex;
@@ -260,9 +267,9 @@ function handlePageChange(pageIndex: number): void {
  */
 export function initThumbnailService(): void {
 	if (isInitialized) return;
-	
+
 	console.log('🖼️ ThumbnailService: Initializing...');
-	
+
 	// 监听书籍和页面变化（使用 $effect 在组件中调用）
 	isInitialized = true;
 }
@@ -289,10 +296,10 @@ export const thumbnailService = {
 	handleBookChange,
 	handlePageChange,
 	cancelLoading,
-	
+
 	/** 获取加载状态 */
 	isLoading: (pageIndex: number) => loadingIndices.has(pageIndex),
-	
+
 	/** 获取统计信息 */
 	getStats: () => ({
 		loadingCount: loadingIndices.size,

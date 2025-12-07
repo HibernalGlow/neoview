@@ -73,6 +73,10 @@ export interface PageLoadResult {
 	size: number;
 	mimeType: string;
 	cacheHit: boolean;
+	/** 图片宽度（如果是图片） */
+	width?: number;
+	/** 图片高度（如果是图片） */
+	height?: number;
 }
 
 // ===== API 函数 =====

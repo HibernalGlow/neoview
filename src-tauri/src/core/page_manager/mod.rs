@@ -52,6 +52,17 @@ const PRELOAD_RANGE: usize = 5;
 /// 默认缓存大小 (MB)
 const DEFAULT_CACHE_SIZE_MB: usize = 512;
 
+/// 从图片数据读取尺寸（使用 image crate）
+fn get_image_dimensions(data: &[u8]) -> Option<(u32, u32)> {
+    use image::ImageReader;
+    use std::io::Cursor;
+    
+    ImageReader::new(Cursor::new(data))
+        .with_guessed_format()
+        .ok()
+        .and_then(|reader| reader.into_dimensions().ok())
+}
+
 /// 页面管理器统计
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -94,6 +105,10 @@ pub struct PageLoadResult {
     pub load_mode: LoadMode,
     /// 临时文件路径（仅 Tempfile 模式）
     pub temp_path: Option<String>,
+    /// 图片宽度（如果是图片）
+    pub width: Option<u32>,
+    /// 图片高度（如果是图片）
+    pub height: Option<u32>,
 }
 
 /// 页面内容管理器
@@ -294,6 +309,8 @@ impl PageContentManager {
             let mut pool = self.memory_pool.lock().await;
             if let Some(cached) = pool.get(&key) {
                 log::debug!("🎯 PageManager: 缓存命中 page {}", index);
+                // 从缓存数据读取尺寸
+                let dims = get_image_dimensions(&cached.data);
                 return Ok((
                     cached.data.clone(),
                     PageLoadResult {
@@ -303,6 +320,8 @@ impl PageContentManager {
                         cache_hit: true,
                         load_mode: LoadMode::Memory,
                         temp_path: None,
+                        width: dims.map(|(w, _)| w),
+                        height: dims.map(|(_, h)| h),
                     },
                 ));
             }
@@ -323,6 +342,9 @@ impl PageContentManager {
         // 注意：不在这里调用 submit_preload_jobs，避免阻塞当前请求
         // 预加载任务由前端在适当时机触发，或使用定时器
 
+        // 读取图片尺寸
+        let dims = get_image_dimensions(&data);
+
         Ok((
             data,
             PageLoadResult {
@@ -332,6 +354,8 @@ impl PageContentManager {
                 cache_hit: false,
                 load_mode: LoadMode::Memory,
                 temp_path: None,
+                width: dims.map(|(w, _)| w),
+                height: dims.map(|(_, h)| h),
             },
         ))
     }
@@ -350,6 +374,8 @@ impl PageContentManager {
         {
             let mut pool = self.memory_pool.lock().await;
             if let Some(cached) = pool.get(&key) {
+                // 从缓存数据读取尺寸
+                let dims = get_image_dimensions(&cached.data);
                 return Ok((
                     cached.data.clone(),
                     PageLoadResult {
@@ -359,6 +385,8 @@ impl PageContentManager {
                         cache_hit: true,
                         load_mode: LoadMode::Memory,
                         temp_path: None,
+                        width: dims.map(|(w, _)| w),
+                        height: dims.map(|(_, h)| h),
                     },
                 ));
             }
@@ -374,6 +402,9 @@ impl PageContentManager {
             pool.insert(key, data.clone(), mime_type.clone(), index, read_direction);
         }
 
+        // 读取图片尺寸
+        let dims = get_image_dimensions(&data);
+
         Ok((
             data,
             PageLoadResult {
@@ -383,6 +414,8 @@ impl PageContentManager {
                 cache_hit: false,
                 load_mode: LoadMode::Memory,
                 temp_path: None,
+                width: dims.map(|(w, _)| w),
+                height: dims.map(|(_, h)| h),
             },
         ))
     }

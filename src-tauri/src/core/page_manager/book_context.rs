@@ -106,6 +106,10 @@ pub struct PageInfo {
     pub size: Option<u64>,
     /// 内容类型
     pub content_type: PageContentType,
+    /// 图片宽度（使用 WIC 预读取）
+    pub width: Option<u32>,
+    /// 图片高度（使用 WIC 预读取）
+    pub height: Option<u32>,
 }
 
 /// 书籍类型（参考 NeeView）
@@ -172,6 +176,8 @@ impl BookContext {
                     inner_path,
                     name,
                     size: None,
+                    width: None,
+                    height: None,
                 }
             })
             .collect();
@@ -215,6 +221,8 @@ impl BookContext {
                     inner_path,
                     name,
                     size: None,
+                    width: None,
+                    height: None,
                 }
             })
             .collect();
@@ -255,6 +263,8 @@ impl BookContext {
                     inner_path: full_path,
                     name,
                     size: None,
+                    width: None,
+                    height: None,
                 }
             })
             .collect();
@@ -285,6 +295,8 @@ impl BookContext {
             inner_path: path.to_string(),
             name,
             size: None,
+            width: None,
+            height: None,
         };
 
         Self {
@@ -311,6 +323,8 @@ impl BookContext {
             inner_path: path.to_string(),
             name,
             size: None,
+            width: None,
+            height: None,
         };
 
         Self {

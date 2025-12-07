@@ -3,7 +3,7 @@
  * UI 状态管理 Store
  */
 
-import { writable } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 import { appState, type AppStateSnapshot } from '$lib/core/state/appState';
 import { bookStore } from './book.svelte';
 import { bookContextManager } from './bookContext.svelte';
@@ -129,6 +129,36 @@ export const layoutSwitchMode = writable<LayoutSwitchMode>(loadFromStorage('layo
 
 // Viewer 页码信息显示
 export const viewerPageInfoVisible = writable<boolean>(loadFromStorage('viewerPageInfoVisible', true));
+
+// 子页索引（用于单页模式下的横页分割：0=前半部分, 1=后半部分）
+export const subPageIndex = writable<number>(0);
+
+/**
+ * 检查指定页面是否应该启用分割模式
+ */
+function shouldSplitPage(index: number): boolean {
+	const settings = settingsManager.getSettings();
+	const splitEnabled = settings.view.pageLayout.splitHorizontalPages;
+	if (!splitEnabled) return false;
+
+	const mode = get(viewMode);
+	// 仅在单页模式下启用分割
+	if (mode !== 'single') return false;
+
+	if (!bookStore.hasBook) return false;
+	const book = bookStore.currentBook;
+	if (!book || !book.pages) return false;
+
+	if (index < 0 || index >= book.pages.length) return false;
+
+	const page = book.pages[index];
+	if (!page) return false;
+
+	// 检查是否为横图 (宽 > 高)
+	const w = page.width || 0;
+	const h = page.height || 0;
+	return w > 0 && h > 0 && w > h;
+}
 
 // 订阅并保存变化
 leftSidebarOpen.subscribe((value) => saveToStorage('leftSidebarOpen', value));
@@ -432,7 +462,7 @@ export function toggleReadingDirection() {
 	const settings = settingsManager.getSettings();
 	let locked: ReadingDirection | null = null;
 	lockedReadingDirection.subscribe(v => locked = v)();
-	
+
 	if (locked) {
 		// 如果当前是锁定方向，切换到另一个；否则切换回锁定方向
 		const alt: ReadingDirection = locked === 'left-to-right' ? 'right-to-left' : 'left-to-right';
@@ -445,7 +475,7 @@ export function toggleReadingDirection() {
 		});
 		return;
 	}
-	
+
 	const newDirection = settings.book.readingDirection === 'left-to-right' ? 'right-to-left' : 'left-to-right';
 	settingsManager.updateSettings({
 		book: {
@@ -479,12 +509,38 @@ function getPageStep(): number {
 /**
  * 向左翻页（方向性翻页，不受阅读方向影响）
  */
+/**
+ * 向左翻页（方向性翻页，不受阅读方向影响）
+ * 对应：向前翻页 / 上一页 (Decrement Index)
+ */
 export async function pageLeft() {
 	try {
 		const currentIndex = bookStore.currentPageIndex;
+		const currentSub = get(subPageIndex);
+
+		// 如果当前页面支持分割，且处于后半部分(1)，则翻到前半部分(0)
+		if (shouldSplitPage(currentIndex)) {
+			if (currentSub === 1) {
+				subPageIndex.set(0);
+				return;
+			}
+		}
+
 		const step = getPageStep();
 		const targetIndex = Math.max(currentIndex - step, 0);
+
+		// 如果目标只能是当前页（已经是第一页），则不做任何操作
+		if (targetIndex === currentIndex) return;
+
 		await bookStore.navigateToPage(targetIndex);
+
+		// 翻到上一页时，如果上一页是分割页，则应该定位到后半部分(1)
+		// 这样符合“从后往前”翻阅的逻辑
+		if (shouldSplitPage(targetIndex)) {
+			subPageIndex.set(1);
+		} else {
+			subPageIndex.set(0);
+		}
 	} catch (err) {
 		console.error('Failed to turn page left:', err);
 	}
@@ -492,15 +548,49 @@ export async function pageLeft() {
 
 /**
  * 向右翻页（方向性翻页，不受阅读方向影响）
+ * 对应：向后翻页 / 下一页 (Increment Index)
  */
 export async function pageRight() {
 	try {
 		const currentIndex = bookStore.currentPageIndex;
+		const currentSub = get(subPageIndex);
+
+		// 如果当前页面支持分割
+		if (shouldSplitPage(currentIndex)) {
+			// 如果处于前半部分(0)，则翻到后半部分(1)
+			if (currentSub === 0) {
+				subPageIndex.set(1);
+				return;
+			}
+			// 如果处于后半部分(1)，则继续翻到下一页
+		}
+
 		const step = getPageStep();
-		const targetIndex = Math.min(currentIndex + step, bookStore.totalPages - 1);
+		const maxIndex = Math.max(0, bookStore.totalPages - 1);
+		const targetIndex = Math.min(currentIndex + step, maxIndex);
+
+		// 如果目标只能是当前页（已经是最后一页），则不做任何操作
+		if (targetIndex === currentIndex) return;
+
 		await bookStore.navigateToPage(targetIndex);
+
+		// 翻到下一页，总是从前半部分(0)开始
+		subPageIndex.set(0);
 	} catch (err) {
 		console.error('Failed to turn page right:', err);
+	}
+}
+
+/**
+ * 直接跳转到指定页面（用于滑块、缩略图点击等）
+ * 会重置 subPageIndex 为 0，从该页的第一部分开始
+ */
+export async function jumpToPage(index: number) {
+	try {
+		subPageIndex.set(0);
+		await bookStore.navigateToPage(index);
+	} catch (err) {
+		console.error('Failed to jump to page:', err);
 	}
 }
 

@@ -14,7 +14,8 @@
 		bottomBarLockState,
 		bottomBarOpen,
 		bottomThumbnailBarHeight,
-		viewerPageInfoVisible
+		viewerPageInfoVisible,
+		jumpToPage
 	} from '$lib/stores';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { Button } from '$lib/components/ui/button';
@@ -903,7 +904,7 @@
 										{status === 'failed' ? 'ring-destructive ring-2' : ''}
 										hover:border-primary/50"
 									style={getThumbnailStyle(originalIndex)}
-									onclick={() => bookStore.navigateToPage(originalIndex)}
+									onclick={() => jumpToPage(originalIndex)}
 									data-page-index={originalIndex}
 								>
 									{#if getThumbnailFromCache(originalIndex)}

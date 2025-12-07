@@ -34,7 +34,9 @@
 		layoutMode,
 		toggleLayoutMode,
 		layoutSwitchMode,
-		toggleLayoutSwitchMode
+		toggleLayoutSwitchMode,
+		pageLeft,
+		pageRight
 	} from '$lib/stores';
 	import { bookContextManager } from '$lib/stores/bookContext.svelte';
 	import { readable } from 'svelte/store';
@@ -403,32 +405,12 @@
 
 	async function handlePreviousPage() {
 		if (!bookStore.canPreviousPage) return;
-		try {
-			if ($viewerState.viewMode === 'double') {
-				const currentIndex = bookStore.currentPageIndex;
-				const targetIndex = Math.max(currentIndex - 2, 0);
-				await bookStore.navigateToPage(targetIndex);
-			} else {
-				await bookStore.previousPage();
-			}
-		} catch (err) {
-			console.error('Failed to navigate to previous page:', err);
-		}
+		await pageLeft();
 	}
 
 	async function handleNextPage() {
 		if (!bookStore.canNextPage) return;
-		try {
-			if ($viewerState.viewMode === 'double') {
-				const currentIndex = bookStore.currentPageIndex;
-				const targetIndex = Math.min(currentIndex + 2, bookStore.totalPages - 1);
-				await bookStore.navigateToPage(targetIndex);
-			} else {
-				await bookStore.nextPage();
-			}
-		} catch (err) {
-			console.error('Failed to navigate to next page:', err);
-		}
+		await pageRight();
 	}
 
 	function handleClose() {
@@ -460,7 +442,7 @@
 
 <div
 	data-top-toolbar="true"
-	class="z-58 absolute left-0 right-0 top-0 transition-transform duration-300 {isVisible
+	class="absolute top-0 right-0 left-0 z-58 transition-transform duration-300 {isVisible
 		? 'translate-y-0'
 		: '-translate-y-full'}"
 	onmouseenter={handleMouseEnter}
@@ -502,7 +484,7 @@
 				<!-- 页码信息（窄屏时在面包屑旁边） -->
 				{#if bookStore.currentBook}
 					<div
-						class="text-muted-foreground flex shrink-0 items-center gap-2 whitespace-nowrap text-sm"
+						class="text-muted-foreground flex shrink-0 items-center gap-2 text-sm whitespace-nowrap"
 					>
 						{#if bookStore.currentBook.type === 'archive'}
 							<FileArchive class="h-3 w-3" />
@@ -1077,7 +1059,7 @@
 
 <!-- 触发区域（独立于工具栏，始终存在） -->
 <div
-	class="z-57 fixed left-0 right-0 top-0"
+	class="fixed top-0 right-0 left-0 z-57"
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}
 	role="presentation"

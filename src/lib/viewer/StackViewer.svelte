@@ -17,6 +17,8 @@
 	import { pipelineLatencyStore } from '$lib/stores/pipelineLatency.svelte';
 	import CanvasFrame from './components/CanvasFrame.svelte';
 	import { type FrameSlot, type SlotImage, createEmptySlot, SlotZIndex } from './types/frameSlot';
+	import { subPageIndex } from '$lib/stores/ui.svelte';
+	import { getClipPath, getSplitTransform } from '$lib/stackview/utils/transform';
 
 	// ============================================================================
 	// Props
@@ -84,11 +86,50 @@
 	// 【性能优化】transform-origin 通过 CSS 变量由 HoverLayer 直接操作 DOM
 	// 不再在模板中设置，避免 Svelte 渲染覆盖
 
-	// 计算 transform（只包含 scale 和 rotation）
+	// 当前图片（用于计算分割状态）
+	let currentImage = $derived(currentSlot.images[0]);
+
+	// 计算分割状态
+	let isSplit = $derived.by(() => {
+		if (pageMode !== 'single') return false;
+		if (!settings.view.pageLayout.splitHorizontalPages) return false;
+		if (!currentImage?.dimensions) return false;
+		return currentImage.dimensions.width > currentImage.dimensions.height;
+	});
+
+	// 当前显示的分割部分
+	// ui.svelte.ts 中 subPageIndex 0 是 First Part, 1 是 Second Part.
+	let splitHalf = $derived(isSplit ? ($subPageIndex === 1 ? 'second' : 'first') : null);
+
+	// 视觉上的分割部分 (Left / Right)
+	let visualSplitHalf: 'left' | 'right' | null = $derived.by(() => {
+		if (!isSplit) return null;
+		const sub = $subPageIndex;
+		// 如果是 RTL: First Part(0) 是右边, Second Part(1) 是左边
+		if (isRTL) {
+			return sub === 0 ? 'right' : 'left';
+		} else {
+			// LTR: First Part(0) 是左边, Second Part(1) 是右边
+			return sub === 0 ? 'left' : 'right';
+		}
+	});
+
+	// 计算 Transform 和 ClipPath
+	// getSplitTransform/getClipPath 接受 'left' | 'right'
+	type SplitHalf = 'left' | 'right' | null;
+	let clipStyle = $derived(getClipPath(visualSplitHalf as SplitHalf));
+
+	// 计算 transform（包含 scale、rotation 和 split）
 	let transformStyle = $derived.by(() => {
 		const parts: string[] = [];
+		// Split shift - 注意顺序，先 scale 再 translate 可能更符合直觉？或者反过来
+		// getSplitTransform 返回 translate(25%) 等。百分比是相对于元素自身的。
+		const splitTr = getSplitTransform(visualSplitHalf as SplitHalf);
+
 		if (scale !== 1) parts.push(`scale(${scale})`);
+		if (splitTr) parts.push(splitTr);
 		if (rotation !== 0) parts.push(`rotate(${rotation}deg)`);
+
 		return parts.length > 0 ? parts.join(' ') : 'none';
 	});
 
@@ -336,6 +377,7 @@
 		}
 
 		// 同一本书内页面切换（使用槽位轮转，无需等待）
+		// 注意：不在这里重置 subPageIndex，因为 pageLeft/pageRight 已经正确设置了它
 		if (pageIndex !== displayedPageIndex) {
 			void navigateToPage(pageIndex);
 		}
@@ -374,7 +416,16 @@
 	// ============================================================================
 
 	// 当前图片尺寸（用于外部计算悬停滚动等）
-	let currentDimensions = $derived(currentSlot.images[0]?.dimensions ?? null);
+	// 如果由于分割导致显示区域变只有一半，我们应该通知外部缩小了宽度，
+	// 这样外部的 Fit Width 计算会自动增大 Scale。
+	let currentDimensions = $derived.by(() => {
+		const raw = currentImage?.dimensions ?? null;
+		if (!raw) return null;
+		if (visualSplitHalf) {
+			return { width: raw.width / 2, height: raw.height };
+		}
+		return raw;
+	});
 
 	// 布局类名
 	let layoutClass = $derived.by(() => {
@@ -424,7 +475,7 @@
 	<!-- 当前页层 -->
 	{#if currentSlot.images.length > 0}
 		{#if useCanvas}
-			<!-- Canvas 预渲染模式（暂不支持双页） -->
+			<!-- Canvas 预渲染模式（暂不支持双页/分割） -->
 			<CanvasFrame
 				imageUrl={currentSlot.images[0].url}
 				imageBlob={currentSlot.images[0].blob}
@@ -450,6 +501,7 @@
 						src={img.url}
 						alt="Current page {i}"
 						class="frame-image"
+						style:clip-path={clipStyle}
 						draggable="false"
 						onload={(e) => onImageLoad?.(e, i)}
 					/>

@@ -142,7 +142,8 @@
 		position: relative;
 		max-width: 28rem;
 		border-radius: 0.75rem;
-		background: hsl(var(--card));
+		background: hsl(var(--card) / 0.6);
+		backdrop-filter: blur(12px);
 		border: 1px solid hsl(var(--border) / 0.5);
 		box-shadow:
 			0 4px 6px -1px rgb(0 0 0 / 0.05),

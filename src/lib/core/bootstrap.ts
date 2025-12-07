@@ -1,5 +1,6 @@
 import { appState } from './state/appState';
 import { settingsManager } from '$lib/settings/settingsManager';
+import { initializeCacheSystem, teardownCacheSystem } from './cache';
 import './tasks/taskSchedulerBridge';
 
 let initialized = false;
@@ -10,6 +11,11 @@ export function initializeCoreServices(): void {
 		return;
 	}
 	initialized = true;
+
+	// 初始化缓存系统（异步，不阻塞）
+	initializeCacheSystem().catch((e) => {
+		console.warn('[Bootstrap] 缓存系统初始化失败:', e);
+	});
 
 	// Seed state with current settings snapshot
 	appState.update({
@@ -28,6 +34,7 @@ export function teardownCoreServices(): void {
 	if (!initialized) return;
 	removeSettingsListener?.();
 	removeSettingsListener = null;
+	teardownCacheSystem();
 	initialized = false;
 }
 

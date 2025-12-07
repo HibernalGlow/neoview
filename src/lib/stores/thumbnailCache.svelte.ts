@@ -1,7 +1,11 @@
 /**
  * Thumbnail Cache Store
  * 全局缩略图缓存 - 统一管理所有组件的缩略图数据
+ * 
+ * 集成持久化支持：缩略图会自动保存到 IndexedDB，下次打开应用可以快速恢复
  */
+
+import { thumbnailPersistence } from '$lib/core/cache';
 
 interface ThumbnailEntry {
 	url: string;
@@ -93,10 +97,36 @@ class ThumbnailCacheStore {
 	}
 
 	/**
-	 * 获取缩略图
+	 * 获取缩略图（同步，仅内存）
 	 */
 	getThumbnail(pageIndex: number): ThumbnailEntry | null {
 		return this.state.thumbnails.get(pageIndex) ?? null;
+	}
+
+	/**
+	 * 获取缩略图（异步，会尝试从持久化存储恢复）
+	 */
+	async getThumbnailAsync(pageIndex: number): Promise<ThumbnailEntry | null> {
+		// 1. 先检查内存
+		const cached = this.state.thumbnails.get(pageIndex);
+		if (cached) return cached;
+
+		// 2. 尝试从持久化存储恢复
+		if (!this.state.bookPath) return null;
+		
+		const url = await thumbnailPersistence.getThumbnailUrl(this.state.bookPath, pageIndex);
+		if (!url) return null;
+
+		// 创建条目（宽高使用默认值，实际显示时会自适应）
+		const entry: ThumbnailEntry = {
+			url,
+			width: 0,
+			height: 0,
+			timestamp: Date.now()
+		};
+		
+		this.state.thumbnails.set(pageIndex, entry);
+		return entry;
 	}
 
 	/**
@@ -119,6 +149,19 @@ class ThumbnailCacheStore {
 		this.state.thumbnails.set(pageIndex, entry);
 		this.state.loadingIndices.delete(pageIndex);
 		this.state.failedIndices.delete(pageIndex);
+		
+		// 异步持久化（不阻塞 UI）
+		if (this.state.bookPath) {
+			thumbnailPersistence.saveThumbnail(
+				this.state.bookPath,
+				pageIndex,
+				url,
+				width,
+				height
+			).catch(() => {
+				// 持久化失败不影响正常使用
+			});
+		}
 		
 		// 通知单个缩略图就绪
 		this.notifyThumbnail(pageIndex, entry);
@@ -210,6 +253,45 @@ class ThumbnailCacheStore {
 			failedIndices: new Set()
 		};
 		this.notify();
+	}
+
+	/**
+	 * 从持久化存储预热缩略图（批量恢复）
+	 * @param pageIndices 需要预热的页面索引
+	 * @returns 成功恢复的数量
+	 */
+	async warmupFromPersistence(pageIndices: number[]): Promise<number> {
+		if (!this.state.bookPath) return 0;
+
+		const loaded = await thumbnailPersistence.warmupBook(this.state.bookPath, pageIndices);
+		
+		if (loaded > 0) {
+			// 批量从持久化恢复到内存
+			for (const pageIndex of pageIndices) {
+				if (this.state.thumbnails.has(pageIndex)) continue;
+				
+				const url = thumbnailPersistence.getThumbnailUrlSync(this.state.bookPath!, pageIndex);
+				if (url) {
+					this.state.thumbnails.set(pageIndex, {
+						url,
+						width: 0,
+						height: 0,
+						timestamp: Date.now()
+					});
+				}
+			}
+			this.notify();
+		}
+
+		return loaded;
+	}
+
+	/**
+	 * 检查持久化存储中是否有缩略图
+	 */
+	hasPersistedThumbnail(pageIndex: number): boolean {
+		if (!this.state.bookPath) return false;
+		return thumbnailPersistence.hasThumbnail(this.state.bookPath, pageIndex);
 	}
 }
 

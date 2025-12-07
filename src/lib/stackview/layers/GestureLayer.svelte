@@ -72,13 +72,15 @@
 	function handlePointerDown(e: PointerEvent) {
 		if (!enablePan) return;
 
-		// 忽略来自下拉菜单、弹出层等 UI 组件的事件
+		// 忽略来自下拉菜单、弹出层、视频控件等 UI 组件的事件
 		const target = e.target as HTMLElement;
 		if (
 			target.closest('[data-slot="dropdown-menu-content"]') ||
 			target.closest('[data-slot="popover-content"]') ||
 			target.closest('[role="menu"]') ||
-			target.closest('[data-radix-popper-content-wrapper]')
+			target.closest('[data-radix-popper-content-wrapper]') ||
+			target.closest('.video-controls') ||
+			target.closest('.video-player-container')
 		) {
 			return;
 		}
@@ -116,13 +118,15 @@
 		// 如果有拖拽，不触发点击
 		if (isPanning) return;
 
-		// 忽略来自下拉菜单、弹出层等 UI 组件的事件
+		// 忽略来自下拉菜单、弹出层、视频控件等 UI 组件的事件
 		const target = e.target as HTMLElement;
 		if (
 			target.closest('[data-slot="dropdown-menu-content"]') ||
 			target.closest('[data-slot="popover-content"]') ||
 			target.closest('[role="menu"]') ||
-			target.closest('[data-radix-popper-content-wrapper]')
+			target.closest('[data-radix-popper-content-wrapper]') ||
+			target.closest('.video-controls') ||
+			target.closest('.video-player-container')
 		) {
 			return;
 		}
@@ -264,7 +268,7 @@
 	data-layer-id="gesture"
 	style:z-index={LayerZIndex.GESTURE}
 >
-	<!-- 内层区域捕获事件，但不覆盖边栏 -->
+	<!-- 内层区域捕获事件，但视频模式下不捕获鼠标事件，只处理键盘和滚轮 -->
 	<div
 		class="gesture-layer"
 		class:video-mode={isVideoMode}
@@ -278,7 +282,7 @@
 	></div>
 
 	{#if isVideoMode}
-		<!-- 视频模式：左右边缘区域 -->
+		<!-- 视频模式：左右边缘区域用于翻页 -->
 		<button type="button" class="edge-zone left" onclick={() => onTapLeft?.()} aria-label="上一页"
 		></button>
 		<button type="button" class="edge-zone right" onclick={() => onTapRight?.()} aria-label="下一页"

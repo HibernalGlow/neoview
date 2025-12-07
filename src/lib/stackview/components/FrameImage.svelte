@@ -66,7 +66,10 @@
     object-fit: contain;
     user-select: none;
     -webkit-user-drag: none;
-    /* GPU 加速 */
+    /* 【性能优化】GPU 加速 */
+    will-change: transform;
+    transform: translateZ(0);
+    backface-visibility: hidden;
     image-rendering: -webkit-optimize-contrast;
     content-visibility: visible;
   }

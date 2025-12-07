@@ -81,10 +81,8 @@
 	let viewportSize = $state<ViewportSize>({ width: 0, height: 0 });
 	let cursorAutoHide: CursorAutoHideController | null = null;
 
-	// 视口位置百分比（0-100），用于悬停滚动
-	// 50 = 居中，0 = 显示左/上边缘，100 = 显示右/下边缘
-	let viewPositionX = $state(50);
-	let viewPositionY = $state(50);
+	// 【性能优化】viewPosition 通过 CSS 变量由 HoverLayer 直接操作 DOM
+	// 不再使用 Svelte 响应式状态，避免高频更新触发重渲染
 
 	// 通过 onImageLoad 获取的图片尺寸（用于自动旋转等功能）
 	let loadedImageSize = $state<{ width: number; height: number } | null>(null);
@@ -407,11 +405,19 @@
 	// 方法
 	// ============================================================================
 
+	// 【性能优化】直接操作 DOM 重置位置，绕过 Svelte 响应式
+	function resetHoverPosition() {
+		const elements = document.querySelectorAll('.frame-layer, .panorama-frame-layer');
+		for (const el of elements) {
+			(el as HTMLElement).style.setProperty('--view-x', '50%');
+			(el as HTMLElement).style.setProperty('--view-y', '50%');
+		}
+	}
+
 	function resetView() {
 		manualScale = 1.0;
 		rotation = 0;
-		viewPositionX = 50;
-		viewPositionY = 50;
+		resetHoverPosition();
 		splitState = null;
 	}
 
@@ -434,8 +440,7 @@
 		console.log(
 			`⬅️ handlePrevPage: pageMode=${pageMode}, pageStep=${pageStep}, currentIndex=${bookStore.currentPageIndex}`
 		);
-		viewPositionX = 50;
-		viewPositionY = 50;
+		resetHoverPosition();
 
 		// 处理横向分割模式
 		if (isInSplitMode && splitState) {
@@ -457,8 +462,7 @@
 		console.log(
 			`➡️ handleNextPage: pageMode=${pageMode}, pageStep=${pageStep}, currentIndex=${bookStore.currentPageIndex}`
 		);
-		viewPositionX = 50;
-		viewPositionY = 50;
+		resetHoverPosition();
 
 		// 处理横向分割模式
 		if (isInSplitMode) {
@@ -513,8 +517,7 @@
 				imageStore.reset();
 				panoramaStore.reset();
 				zoomModeManager.reset();
-				viewPositionX = 50;
-				viewPositionY = 50;
+				resetHoverPosition();
 				splitState = null;
 				loadedImageSize = null; // 重置尺寸，等待新书第一页加载
 
@@ -674,6 +677,7 @@
 		{/key}
 	{:else if isPanorama}
 		<!-- 全景模式：显示滚动视图 -->
+		<!-- 【性能优化】viewPosition 通过 CSS 变量由 HoverLayer 直接操作 -->
 		<PanoramaFrameLayer
 			units={panoramaStore.state.units}
 			{pageMode}
@@ -681,19 +685,16 @@
 			{direction}
 			currentPageIndex={bookStore.currentPageIndex}
 			scale={manualScale}
-			{viewPositionX}
-			{viewPositionY}
 		/>
 	{:else if useStackRenderer}
 		<!-- 层叠渲染模式：使用 StackViewer（支持双页） -->
+		<!-- 【性能优化】viewPosition 通过 CSS 变量由 HoverLayer 直接操作 -->
 		<StackViewer
 			bind:this={stackViewerRef}
 			showUpscale={true}
 			transitionDuration={150}
 			scale={manualScale}
 			{rotation}
-			{viewPositionX}
-			{viewPositionY}
 			{viewportSize}
 			useCanvas={false}
 			{pageMode}
@@ -703,6 +704,7 @@
 		/>
 	{:else}
 		<!-- 标准模式：显示当前帧 -->
+		<!-- 【性能优化】viewPosition 通过 CSS 变量由 HoverLayer 直接操作 -->
 		<CurrentFrameLayer
 			frame={currentFrameData}
 			layout={pageMode}
@@ -710,8 +712,6 @@
 			{orientation}
 			scale={manualScale}
 			{rotation}
-			{viewPositionX}
-			{viewPositionY}
 			{viewportSize}
 			imageSize={imageStore.state.dimensions ?? { width: 0, height: 0 }}
 			{alignMode}
@@ -725,8 +725,6 @@
 				{direction}
 				scale={manualScale}
 				{rotation}
-				{viewPositionX}
-				{viewPositionY}
 				{viewportSize}
 				imageSize={imageStore.state.dimensions ?? { width: 0, height: 0 }}
 				{alignMode}
@@ -761,16 +759,14 @@
 	/>
 
 	<!-- 悬停滚动层 -->
+	<!-- 【性能优化】HoverLayer 直接操作 DOM CSS 变量，不通过 Svelte 响应式 -->
 	<HoverLayer
 		enabled={hoverScrollEnabled}
 		sidebarMargin={20}
 		deadZoneRatio={0.15}
 		{viewportSize}
 		{displaySize}
-		onPositionChange={(x: number, y: number) => {
-			viewPositionX = x;
-			viewPositionY = y;
-		}}
+		targetSelector=".frame-layer, .panorama-frame-layer"
 	/>
 
 	<!-- 图片信息浮窗 -->

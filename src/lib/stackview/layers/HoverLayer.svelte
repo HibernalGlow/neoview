@@ -5,11 +5,9 @@
   - 当图片 <= 视口：位置固定在 50%（居中）
   - 当图片 > 视口：位置范围限制在安全区间，确保边缘不露出
   
-  优化：
+  【性能优化】
   - 纯事件驱动，无持续 RAF 循环
-  - 边界计算使用 $derived 缓存
-  - 单次 RAF 批量更新，避免重复触发
-  - 【性能优化】彻底移除 mousemove 中的 getBoundingClientRect 调用
+  - 直接操作 DOM CSS 变量，绕过 Svelte 响应式系统
   - 使用 ResizeObserver 和 scroll 事件更新缓存
 -->
 <script lang="ts">
@@ -21,6 +19,7 @@
 		deadZoneRatio = 0.2,
 		viewportSize = { width: 0, height: 0 },
 		displaySize = { width: 0, height: 0 }, // 图片实际显示尺寸（已应用缩放）
+		targetSelector = '.frame-layer', // 【性能优化】直接操作目标元素
 		onPositionChange
 	}: {
 		enabled?: boolean;
@@ -28,6 +27,7 @@
 		deadZoneRatio?: number;
 		viewportSize?: { width: number; height: number };
 		displaySize?: { width: number; height: number };
+		targetSelector?: string;
 		onPositionChange?: (x: number, y: number) => void;
 	} = $props();
 
@@ -67,8 +67,21 @@
 		}
 	});
 
+	// 【性能优化】直接操作 DOM CSS 变量，绕过 Svelte 响应式
+	let targetElements: Element[] = [];
+	let lastX = 50;
+	let lastY = 50;
+
+	function updateTargetElements() {
+		targetElements = Array.from(document.querySelectorAll(targetSelector));
+	}
+
 	// 调度单次 RAF 更新
 	function scheduleUpdate(x: number, y: number) {
+		// 【性能优化】快速检查位置变化是否显著
+		if (Math.abs(x - lastX) < 0.5 && Math.abs(y - lastY) < 0.5) {
+			return;
+		}
 		pendingUpdate = { x, y };
 		if (rafId === null) {
 			rafId = requestAnimationFrame(flushUpdate);
@@ -78,7 +91,18 @@
 	function flushUpdate() {
 		rafId = null;
 		if (pendingUpdate) {
-			onPositionChange?.(pendingUpdate.x, pendingUpdate.y);
+			const { x, y } = pendingUpdate;
+			lastX = x;
+			lastY = y;
+			
+			// 【性能优化】直接操作 DOM，绕过 Svelte 响应式
+			for (const el of targetElements) {
+				(el as HTMLElement).style.setProperty('--view-x', `${x}%`);
+				(el as HTMLElement).style.setProperty('--view-y', `${y}%`);
+			}
+			
+			// 仍然调用回调（用于其他逻辑，如翻页重置）
+			onPositionChange?.(x, y);
 			pendingUpdate = null;
 		}
 	}
@@ -141,10 +165,12 @@
 		if (layerRef) {
 			resizeObserver = new ResizeObserver(() => {
 				updateRect();
+				updateTargetElements();
 			});
 			resizeObserver.observe(layerRef);
 			// 初始更新
 			updateRect();
+			updateTargetElements();
 		}
 	});
 

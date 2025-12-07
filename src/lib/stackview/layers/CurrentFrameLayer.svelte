@@ -207,7 +207,9 @@
 		/* 隐藏滚动条 */
 		scrollbar-width: none; /* Firefox */
 		-ms-overflow-style: none; /* IE/Edge */
-		/* 不使用 flex 居中，改用 scroll-frame-content 的 margin: auto */
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		/* GPU 加速 */
 		will-change: scroll-position;
 		-webkit-overflow-scrolling: touch;
@@ -222,8 +224,11 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		/* 使用 margin: auto 实现居中，同时允许滚动到边缘 */
-		margin: auto;
+		/* 确保内容区域有足够的尺寸 */
+		width: max-content;
+		height: max-content;
+		min-width: 100%;
+		min-height: 100%;
 		/* GPU 加速 */
 		will-change: transform;
 		transform: translateZ(0);

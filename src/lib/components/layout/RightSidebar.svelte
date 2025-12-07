@@ -28,14 +28,16 @@
 	let isVisible = $state($rightSidebarOpen);
 	let localRightSidebarOpen = $state($rightSidebarOpen);
 	let settings = $state(settingsManager.getSettings());
-	let autoHideTiming = $derived(settings.panels?.autoHideTiming ?? { showDelaySec: 0, hideDelaySec: 0 });
+	let autoHideTiming = $derived(
+		settings.panels?.autoHideTiming ?? { showDelaySec: 0, hideDelaySec: 0 }
+	);
 
 	// 从配置获取右侧面板列表
 	let rightPanels = $derived($sidebarRightPanels);
-	
+
 	// 当前激活的面板 ID
 	let activePanelId = $state<PanelId>('info');
-	
+
 	// 使用共用的面板组件映射
 	const panelComponents = PANEL_COMPONENTS;
 
@@ -105,7 +107,7 @@
 
 	// 响应 activeRightPanel 变化
 	$effect(() => {
-		if ($activeRightPanel && rightPanels.some(p => p.id === $activeRightPanel)) {
+		if ($activeRightPanel && rightPanels.some((p) => p.id === $activeRightPanel)) {
 			activePanelId = $activeRightPanel as PanelId;
 		}
 	});
@@ -175,10 +177,10 @@
 				<!-- 一级菜单 - 图标模式 -->
 				<Sidebar.Root
 					collapsible="none"
-					class="!w-[calc(var(--sidebar-width-icon)_+_1px)] border-l"
+					class="!w-[calc(var(--sidebar-width-icon)_+_1px)]"
 					style="width: calc(var(--sidebar-width-icon) + 1px);"
 				>
-					<Sidebar.Header class="flex flex-col gap-2 border-b px-1.5 py-2">
+					<Sidebar.Header class="flex flex-col gap-2 px-1.5 py-2">
 						<div class="flex flex-col gap-1">
 							<Button
 								variant={$rightSidebarPinned ? 'default' : 'ghost'}
@@ -251,7 +253,7 @@
 				<!-- 拖拽手柄 -->
 				<button
 					type="button"
-					class="hover:bg-accent text-muted-foreground absolute left-0 top-1/2 z-[60] -translate-y-1/2 cursor-ew-resize rounded-r-md p-1 transition-colors"
+					class="hover:bg-accent text-muted-foreground absolute top-1/2 left-0 z-[60] -translate-y-1/2 cursor-ew-resize rounded-r-md p-1 transition-colors"
 					onmousedown={handleMouseDown}
 					aria-label="调整右侧边栏宽度"
 				>

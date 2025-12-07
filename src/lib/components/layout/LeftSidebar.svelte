@@ -3,11 +3,7 @@
 	 * NeoView - Sidebar Component (shadcn-svelte 二级菜单重构 + 动态面板配置)
 	 * 左侧边栏组件 - 使用 sidebarConfig 动态管理面板显示、顺序和位置
 	 */
-	import {
-		Pin,
-		PinOff,
-		GripVertical
-	} from '@lucide/svelte';
+	import { Pin, PinOff, GripVertical } from '@lucide/svelte';
 	import { readable } from 'svelte/store';
 	import {
 		activePanel,
@@ -35,14 +31,16 @@
 	let isVisible = $state($leftSidebarOpen);
 	let localSidebarOpen = $state($leftSidebarOpen);
 	let settings = $state(settingsManager.getSettings());
-	let autoHideTiming = $derived(settings.panels?.autoHideTiming ?? { showDelaySec: 0, hideDelaySec: 0 });
+	let autoHideTiming = $derived(
+		settings.panels?.autoHideTiming ?? { showDelaySec: 0, hideDelaySec: 0 }
+	);
 
 	// 从配置获取左侧面板列表
 	let leftPanels = $derived($sidebarLeftPanels);
-	
+
 	// 当前激活的面板 ID
 	let activePanelId = $state<PanelId>('folder');
-	
+
 	// 使用共用的面板组件映射
 	const panelComponents = PANEL_COMPONENTS;
 
@@ -195,10 +193,10 @@
 				<!-- 一级菜单 - 图标模式 -->
 				<Sidebar.Root
 					collapsible="none"
-					class="!w-[calc(var(--sidebar-width-icon)_+_1px)] border-r"
+					class="!w-[calc(var(--sidebar-width-icon)_+_1px)]"
 					style="width: calc(var(--sidebar-width-icon) + 1px);"
 				>
-					<Sidebar.Header class="flex flex-col gap-2 border-b px-1.5 py-2">
+					<Sidebar.Header class="flex flex-col gap-2 px-1.5 py-2">
 						<div class="flex flex-col gap-1">
 							<Button
 								variant={$leftSidebarPinned ? 'default' : 'ghost'}
@@ -270,7 +268,7 @@
 				<!-- 拖拽手柄 -->
 				<button
 					type="button"
-					class="hover:bg-accent text-muted-foreground absolute right-0 top-1/2 z-50 -translate-y-1/2 cursor-ew-resize rounded-l-md p-1 transition-colors"
+					class="hover:bg-accent text-muted-foreground absolute top-1/2 right-0 z-50 -translate-y-1/2 cursor-ew-resize rounded-l-md p-1 transition-colors"
 					onmousedown={handleMouseDown}
 					aria-label="调整侧边栏宽度"
 				>

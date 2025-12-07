@@ -62,24 +62,20 @@
     }, 100);
   });
   
-  // 计算图片尺寸：全景模式
-  // 水平全景：高度固定为视口高度，宽度自适应（与非全景 fitHeight 一致）
-  // 纵向全景：宽度固定为视口宽度，高度自适应（与非全景 fitWidth 一致）
+  // 计算图片尺寸：全景模式保持与非全景相同的缩放
+  // 使用 max-width + max-height 实现 contain 效果，与非全景 fit 模式一致
+  // 双页模式时宽度减半
   let imageStyle = $derived.by(() => {
     const vp = viewportSize;
     if (!vp.width || !vp.height) {
-      return orientation === 'vertical'
-        ? 'width: 100%; height: auto;'
-        : 'height: 100%; width: auto;';
+      return 'max-width: 100%; max-height: 100%;';
     }
     
-    if (orientation === 'vertical') {
-      // 纵向全景：宽度固定，高度自适应
-      return `width: ${vp.width}px; height: auto;`;
-    } else {
-      // 水平全景：高度固定，宽度自适应
-      return `height: ${vp.height}px; width: auto;`;
-    }
+    // 双页模式：每张图片最多占宽度的一半
+    const effectiveWidth = pageMode === 'double' ? (vp.width - 4) / 2 : vp.width;
+    
+    // 使用 max-width + max-height 实现 contain 效果
+    return `max-width: ${effectiveWidth}px; max-height: ${vp.height}px;`;
   });
   
   // 【性能优化】原生滚动方案，不再使用 transform-origin
@@ -162,6 +158,9 @@
     padding: 0;
     align-items: center;
     justify-content: center; /* 居中显示 */
+    /* 确保内容区域至少和容器一样大，使居中生效 */
+    min-width: 100%;
+    min-height: 100%;
     /* GPU 加速 */
     will-change: transform;
     transform: translateZ(0);

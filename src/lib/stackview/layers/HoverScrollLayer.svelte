@@ -2,9 +2,8 @@
   HoverScrollLayer - 原生滚动悬停层
   
   原理：使用浏览器原生滚动 API，性能最佳
-  - 鼠标位置映射到 scrollLeft/scrollTop
+  - 鼠标偏离中心的距离 * 倍率 = 滚动速度
   - 利用浏览器硬件加速滚动
-  - 无需 transform-origin，无需 CSS 变量
 -->
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
@@ -12,12 +11,12 @@
   let {
     enabled = false,
     sidebarMargin = 50,
-    deadZoneRatio = 0.2,
+    scrollSpeed = 2.0, // 滚动倍率
     targetSelector = '.scroll-frame-container',
   }: {
     enabled?: boolean;
     sidebarMargin?: number;
-    deadZoneRatio?: number;
+    scrollSpeed?: number;
     targetSelector?: string;
   } = $props();
   
@@ -46,7 +45,7 @@
     }
   }
   
-  // 核心滚动逻辑
+  // 核心滚动逻辑 - 倍率滚动
   function scrollStep() {
     rafId = null;
     
@@ -77,43 +76,27 @@
       return;
     }
     
-    // 死区检测
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-    const relX = localX - centerX;
-    const relY = localY - centerY;
-    const deadZoneSizeX = (rect.width * deadZoneRatio) / 2;
-    const deadZoneSizeY = (rect.height * deadZoneRatio) / 2;
-    
-    // 在死区内不滚动
-    if (Math.abs(relX) < deadZoneSizeX && Math.abs(relY) < deadZoneSizeY) {
-      return;
-    }
-    
-    // 计算目标滚动位置（直接映射鼠标位置到滚动范围）
-    // 考虑侧边栏和死区
+    // 计算鼠标相对于中心的偏移（-0.5 到 0.5）
     const effectiveWidth = rect.width - 2 * sidebarMargin;
     const effectiveX = localX - sidebarMargin;
-    const normalizedX = Math.max(0, Math.min(1, effectiveX / effectiveWidth));
+    const normalizedX = (effectiveX / effectiveWidth) - 0.5; // -0.5 到 0.5
+    const normalizedY = (localY / rect.height) - 0.5; // -0.5 到 0.5
     
-    const effectiveHeight = rect.height;
-    const normalizedY = Math.max(0, Math.min(1, localY / effectiveHeight));
+    // 滚动速度 = 偏移 * 倍率 * 基础速度
+    const baseSpeed = 15; // 基础速度（像素/帧）
+    const scrollDeltaX = normalizedX * scrollSpeed * baseSpeed;
+    const scrollDeltaY = normalizedY * scrollSpeed * baseSpeed;
     
-    // 应用死区平滑过渡
-    let targetScrollX = normalizedX * maxScrollLeft;
-    let targetScrollY = normalizedY * maxScrollTop;
-    
-    // 只滚动有内容的方向
+    // 应用滚动
     if (maxScrollLeft > 0) {
-      // 使用 lerp 平滑过渡
-      const currentX = targetContainer.scrollLeft;
-      const newX = currentX + (targetScrollX - currentX) * 0.1;
+      const newX = Math.max(0, Math.min(maxScrollLeft, 
+        targetContainer.scrollLeft + scrollDeltaX));
       targetContainer.scrollLeft = newX;
     }
     
     if (maxScrollTop > 0) {
-      const currentY = targetContainer.scrollTop;
-      const newY = currentY + (targetScrollY - currentY) * 0.1;
+      const newY = Math.max(0, Math.min(maxScrollTop, 
+        targetContainer.scrollTop + scrollDeltaY));
       targetContainer.scrollTop = newY;
     }
     

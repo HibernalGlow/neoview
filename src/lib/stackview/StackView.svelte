@@ -769,7 +769,7 @@
 	<HoverScrollLayer
 		enabled={hoverScrollEnabled}
 		sidebarMargin={20}
-		deadZoneRatio={0.15}
+		scrollSpeed={settings.image.hoverScrollSpeed ?? 2.0}
 		targetSelector=".scroll-frame-container"
 	/>
 

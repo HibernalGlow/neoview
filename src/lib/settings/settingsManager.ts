@@ -50,6 +50,7 @@ export interface NeoViewSettings {
     autoPlayAnimatedImages: boolean;
     longImageScrollMode: 'page' | 'continuous';
     hoverScrollEnabled: boolean;
+    hoverScrollSpeed: number; // 悬停滚动倍率 (0.5-5.0)
     videoMinPlaybackRate: number;
     videoMaxPlaybackRate: number;
     videoPlaybackRateStep: number;
@@ -249,6 +250,7 @@ const defaultSettings: NeoViewSettings = {
     autoPlayAnimatedImages: true,
     longImageScrollMode: 'continuous',
     hoverScrollEnabled: false,
+    hoverScrollSpeed: 2.0, // 默认 2 倍速
     videoMinPlaybackRate: 0.25,
     videoMaxPlaybackRate: 16,
     videoPlaybackRateStep: 0.25,

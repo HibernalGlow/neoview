@@ -213,10 +213,6 @@
 		/* 隐藏滚动条 */
 		scrollbar-width: none; /* Firefox */
 		-ms-overflow-style: none; /* IE/Edge */
-		/* 居中 */
-		display: flex;
-		align-items: center;
-		justify-content: center;
 		/* GPU 加速 */
 		will-change: scroll-position;
 		-webkit-overflow-scrolling: touch;
@@ -228,9 +224,12 @@
 	}
 
 	.scroll-frame-content {
-		display: flex;
+		display: inline-flex;
 		align-items: center;
 		justify-content: center;
+		/* 居中：当内容小于容器时居中，大于容器时可滚动到边缘 */
+		min-width: 100%;
+		min-height: 100%;
 		/* GPU 加速 */
 		will-change: transform;
 		transform: translateZ(0);

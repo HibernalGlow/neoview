@@ -1089,9 +1089,9 @@
 	});
 </script>
 
-<div class="bg-muted/10 flex h-full flex-col overflow-hidden rounded-lg border">
+<div class="bg-muted/10 flex h-full flex-col overflow-hidden">
 	<!-- 面包屑导航 -->
-	<div class="border-b">
+	<div>
 		<BreadcrumbBar onNavigate={handleNavigate} {homePath} />
 	</div>
 
@@ -1220,8 +1220,8 @@
 			<div
 				class="hover:bg-primary/20 absolute z-20 transition-colors {$folderTreeConfig.layout ===
 				'left'
-					? 'bottom-0 top-0 -ml-1 w-2 cursor-ew-resize'
-					: 'left-0 right-0 -mt-1 h-2 cursor-ns-resize'}"
+					? 'top-0 bottom-0 -ml-1 w-2 cursor-ew-resize'
+					: 'right-0 left-0 -mt-1 h-2 cursor-ns-resize'}"
 				style={$folderTreeConfig.layout === 'left'
 					? `left: ${$folderTreeConfig.size}px;`
 					: `top: ${$folderTreeConfig.size}px;`}

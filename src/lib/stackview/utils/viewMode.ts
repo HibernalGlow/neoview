@@ -60,6 +60,16 @@ export interface SplitState {
   half: 'left' | 'right';
 }
 
+/** 分割页面导航结果 */
+export interface SplitNavigationResult {
+  /** 新的页面索引 */
+  pageIndex: number;
+  /** 新的分割半边（null 表示不分割） */
+  splitHalf: 'left' | 'right' | null;
+  /** 步长（0.5 表示半页，1 表示整页） */
+  step: number;
+}
+
 /**
  * 判断图片是否为横向
  */
@@ -407,6 +417,150 @@ export function buildFrameImages(
 /**
  * 计算双页模式的翻页步进
  */
+/**
+ * 判断页面是否应该被分割（单页模式下的横向图）
+ */
+export function shouldSplitPage(
+  page: PageData,
+  divideLandscape: boolean
+): boolean {
+  if (!divideLandscape) return false;
+  const size: ImageSize = {
+    width: page.width || 0,
+    height: page.height || 0,
+  };
+  // 需要有有效尺寸且为横向
+  return size.width > 0 && size.height > 0 && isLandscape(size);
+}
+
+/**
+ * 计算单页模式下的下一步导航（支持分割横向页）
+ * 
+ * @param currentIndex 当前页面索引
+ * @param currentSplitHalf 当前分割半边（null 表示非分割状态）
+ * @param totalPages 总页数
+ * @param direction 阅读方向
+ * @param getPageData 获取页面数据的函数
+ * @param divideLandscape 是否启用分割横向页
+ */
+export function getNextSplitNavigation(
+  currentIndex: number,
+  currentSplitHalf: 'left' | 'right' | null,
+  totalPages: number,
+  direction: Direction,
+  getPageData: (index: number) => PageData | null,
+  divideLandscape: boolean
+): SplitNavigationResult {
+  const currentPage = getPageData(currentIndex);
+  if (!currentPage) {
+    return { pageIndex: currentIndex, splitHalf: null, step: 0 };
+  }
+
+  const isCurrentSplit = shouldSplitPage(currentPage, divideLandscape);
+
+  // 当前页是分割页
+  if (isCurrentSplit) {
+    // 根据阅读方向决定分割顺序
+    // LTR: left -> right -> next page
+    // RTL: right -> left -> next page
+    const firstHalf: 'left' | 'right' = direction === 'ltr' ? 'left' : 'right';
+    const secondHalf: 'left' | 'right' = direction === 'ltr' ? 'right' : 'left';
+
+    if (currentSplitHalf === null || currentSplitHalf === firstHalf) {
+      // 当前显示第一半，下一步显示第二半
+      return { pageIndex: currentIndex, splitHalf: secondHalf, step: 0.5 };
+    } else {
+      // 当前显示第二半，跳到下一页
+      const nextIndex = currentIndex + 1;
+      if (nextIndex >= totalPages) {
+        // 已经是最后一页
+        return { pageIndex: currentIndex, splitHalf: secondHalf, step: 0 };
+      }
+      const nextPage = getPageData(nextIndex);
+      if (nextPage && shouldSplitPage(nextPage, divideLandscape)) {
+        // 下一页也是分割页，从第一半开始
+        return { pageIndex: nextIndex, splitHalf: firstHalf, step: 0.5 };
+      } else {
+        // 下一页不是分割页
+        return { pageIndex: nextIndex, splitHalf: null, step: 1 };
+      }
+    }
+  }
+
+  // 当前页不是分割页，正常跳到下一页
+  const nextIndex = currentIndex + 1;
+  if (nextIndex >= totalPages) {
+    return { pageIndex: currentIndex, splitHalf: null, step: 0 };
+  }
+  const nextPage = getPageData(nextIndex);
+  const firstHalf: 'left' | 'right' = direction === 'ltr' ? 'left' : 'right';
+  if (nextPage && shouldSplitPage(nextPage, divideLandscape)) {
+    // 下一页是分割页，从第一半开始
+    return { pageIndex: nextIndex, splitHalf: firstHalf, step: 0.5 };
+  } else {
+    return { pageIndex: nextIndex, splitHalf: null, step: 1 };
+  }
+}
+
+/**
+ * 计算单页模式下的上一步导航（支持分割横向页）
+ */
+export function getPrevSplitNavigation(
+  currentIndex: number,
+  currentSplitHalf: 'left' | 'right' | null,
+  totalPages: number,
+  direction: Direction,
+  getPageData: (index: number) => PageData | null,
+  divideLandscape: boolean
+): SplitNavigationResult {
+  const currentPage = getPageData(currentIndex);
+  if (!currentPage) {
+    return { pageIndex: currentIndex, splitHalf: null, step: 0 };
+  }
+
+  const isCurrentSplit = shouldSplitPage(currentPage, divideLandscape);
+
+  // 根据阅读方向决定分割顺序
+  const firstHalf: 'left' | 'right' = direction === 'ltr' ? 'left' : 'right';
+  const secondHalf: 'left' | 'right' = direction === 'ltr' ? 'right' : 'left';
+
+  // 当前页是分割页
+  if (isCurrentSplit) {
+    if (currentSplitHalf === secondHalf) {
+      // 当前显示第二半，上一步显示第一半
+      return { pageIndex: currentIndex, splitHalf: firstHalf, step: 0.5 };
+    } else {
+      // 当前显示第一半或null，跳到上一页
+      const prevIndex = currentIndex - 1;
+      if (prevIndex < 0) {
+        // 已经是第一页
+        return { pageIndex: currentIndex, splitHalf: firstHalf, step: 0 };
+      }
+      const prevPage = getPageData(prevIndex);
+      if (prevPage && shouldSplitPage(prevPage, divideLandscape)) {
+        // 上一页也是分割页，从第二半开始（反向）
+        return { pageIndex: prevIndex, splitHalf: secondHalf, step: 0.5 };
+      } else {
+        // 上一页不是分割页
+        return { pageIndex: prevIndex, splitHalf: null, step: 1 };
+      }
+    }
+  }
+
+  // 当前页不是分割页，正常跳到上一页
+  const prevIndex = currentIndex - 1;
+  if (prevIndex < 0) {
+    return { pageIndex: currentIndex, splitHalf: null, step: 0 };
+  }
+  const prevPage = getPageData(prevIndex);
+  if (prevPage && shouldSplitPage(prevPage, divideLandscape)) {
+    // 上一页是分割页，从第二半开始（反向）
+    return { pageIndex: prevIndex, splitHalf: secondHalf, step: 0.5 };
+  } else {
+    return { pageIndex: prevIndex, splitHalf: null, step: 1 };
+  }
+}
+
 export function getPageStep(
   currentPage: PageData,
   nextPage: PageData | null,

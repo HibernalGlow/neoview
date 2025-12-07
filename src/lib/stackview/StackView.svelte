@@ -22,6 +22,9 @@
 		isLandscape,
 		buildFrameImages,
 		getPageStep,
+		getNextSplitNavigation,
+		getPrevSplitNavigation,
+		shouldSplitPage,
 		type FrameBuildConfig,
 		type PageData
 	} from './utils/viewMode';
@@ -299,6 +302,14 @@
 	);
 	let autoRotateMode = $derived(settings.view.autoRotate?.mode ?? 'none');
 
+	// 横向页面分割设置
+	let splitHorizontalPages = $derived(
+		settings.view.pageLayout?.splitHorizontalPages ?? false
+	);
+
+	// 分割状态：当前显示的半边（仅在单页模式下启用分割时有效）
+	let currentSplitHalf = $state<'left' | 'right' | null>(null);
+
 
 	// 是否为视频
 	let isVideoMode = $derived.by(() => {
@@ -332,7 +343,7 @@
 			layout: pageMode,
 			orientation: orientation,
 			direction: direction,
-			divideLandscape: false,
+			divideLandscape: splitHorizontalPages && pageMode === 'single',
 			treatHorizontalAsDoublePage: treatHorizontalAsDoublePage,
 			autoRotate: autoRotateMode
 		})
@@ -341,6 +352,50 @@
 	// ============================================================================
 	// 帧数据
 	// ============================================================================
+
+	// 获取页面数据的辅助函数
+	function getPageData(index: number): PageData | null {
+		const book = bookStore.currentBook;
+		if (!book || !book.pages || index < 0 || index >= book.pages.length) {
+			return null;
+		}
+		const page = book.pages[index];
+		return {
+			url: '',
+			pageIndex: index,
+			width: page?.width ?? 0,
+			height: page?.height ?? 0
+		};
+	}
+
+	// 判断当前页是否为分割页
+	let isCurrentPageSplit = $derived.by(() => {
+		if (pageMode !== 'single' || !splitHorizontalPages) return false;
+		const pageData = getPageData(bookStore.currentPageIndex);
+		return pageData ? shouldSplitPage(pageData, true) : false;
+	});
+
+	// 当页面或模式变化时，初始化分割状态
+	let lastSplitPageIndex = $state<number>(-1);
+	$effect(() => {
+		const currentIndex = bookStore.currentPageIndex;
+		const isSplit = isCurrentPageSplit;
+		
+		// 如果页面索引变化了（不是通过分割导航），初始化分割状态
+		if (currentIndex !== lastSplitPageIndex) {
+			lastSplitPageIndex = currentIndex;
+			if (isSplit) {
+				// 分割页面，根据阅读方向初始化为第一半
+				const firstHalf: 'left' | 'right' = direction === 'ltr' ? 'left' : 'right';
+				if (currentSplitHalf === null) {
+					currentSplitHalf = firstHalf;
+				}
+			} else {
+				// 非分割页面
+				currentSplitHalf = null;
+			}
+		}
+	});
 
 	let currentFrameData = $derived.by((): Frame => {
 		const { currentUrl, secondUrl, dimensions } = imageStore.state;
@@ -379,10 +434,15 @@
 				}
 			: null;
 
-		// 使用 buildFrameImages 构建图片列表
-		const images = buildFrameImages(currentPage, nextPage, frameConfig, null);
+		// 构建分割状态（单页分割模式）
+		const splitState = (pageMode === 'single' && splitHorizontalPages && currentSplitHalf)
+			? { pageIndex: bookStore.currentPageIndex, half: currentSplitHalf }
+			: null;
 
-		return { id: `frame-${bookStore.currentPageIndex}`, images, layout: pageMode };
+		// 使用 buildFrameImages 构建图片列表
+		const images = buildFrameImages(currentPage, nextPage, frameConfig, splitState);
+
+		return { id: `frame-${bookStore.currentPageIndex}-${currentSplitHalf ?? 'full'}`, images, layout: pageMode };
 	});
 
 	// 实际显示模式：当双页模式下只有一张图时（横向图独占），使用 single 布局
@@ -485,9 +545,35 @@
 
 	function handlePrevPage() {
 		console.log(
-			`⬅️ handlePrevPage: pageMode=${pageMode}, pageStep=${pageStep}, currentIndex=${bookStore.currentPageIndex}`
+			`⬅️ handlePrevPage: pageMode=${pageMode}, pageStep=${pageStep}, currentIndex=${bookStore.currentPageIndex}, splitHalf=${currentSplitHalf}`
 		);
 		resetScrollPosition();
+
+		// 单页模式下启用分割时，使用分割导航
+		if (pageMode === 'single' && splitHorizontalPages) {
+			const nav = getPrevSplitNavigation(
+				bookStore.currentPageIndex,
+				currentSplitHalf,
+				bookStore.totalPages,
+				direction,
+				getPageData,
+				true
+			);
+			console.log(`⬅️ handlePrevPage (split): nav=`, nav);
+			
+			if (nav.step > 0) {
+				if (nav.pageIndex !== bookStore.currentPageIndex) {
+					// 跳到不同页面
+					currentSplitHalf = nav.splitHalf;
+					lastSplitPageIndex = nav.pageIndex;
+					bookStore.navigateToPage(nav.pageIndex);
+				} else {
+					// 同一页面，切换半边
+					currentSplitHalf = nav.splitHalf;
+				}
+			}
+			return;
+		}
 
 		// 直接使用 pageStep 翻页
 		const targetIndex = Math.max(0, bookStore.currentPageIndex - pageStep);
@@ -497,9 +583,35 @@
 
 	function handleNextPage() {
 		console.log(
-			`➡️ handleNextPage: pageMode=${pageMode}, pageStep=${pageStep}, currentIndex=${bookStore.currentPageIndex}`
+			`➡️ handleNextPage: pageMode=${pageMode}, pageStep=${pageStep}, currentIndex=${bookStore.currentPageIndex}, splitHalf=${currentSplitHalf}`
 		);
 		resetScrollPosition();
+
+		// 单页模式下启用分割时，使用分割导航
+		if (pageMode === 'single' && splitHorizontalPages) {
+			const nav = getNextSplitNavigation(
+				bookStore.currentPageIndex,
+				currentSplitHalf,
+				bookStore.totalPages,
+				direction,
+				getPageData,
+				true
+			);
+			console.log(`➡️ handleNextPage (split): nav=`, nav);
+			
+			if (nav.step > 0) {
+				if (nav.pageIndex !== bookStore.currentPageIndex) {
+					// 跳到不同页面
+					currentSplitHalf = nav.splitHalf;
+					lastSplitPageIndex = nav.pageIndex;
+					bookStore.navigateToPage(nav.pageIndex);
+				} else {
+					// 同一页面，切换半边
+					currentSplitHalf = nav.splitHalf;
+				}
+			}
+			return;
+		}
 
 		// 直接使用 pageStep 翻页
 		const targetIndex = Math.min(bookStore.totalPages - 1, bookStore.currentPageIndex + pageStep);
@@ -770,8 +882,8 @@
 		currentIndex={bookStore.currentPageIndex}
 		totalPages={bookStore.totalPages}
 		isLoading={isPanorama ? panoramaStore.state.loading : imageStore.state.loading}
-		isDivided={false}
-		splitHalf={null}
+		isDivided={isCurrentPageSplit}
+		splitHalf={currentSplitHalf}
 		showPageInfo={$viewerPageInfoVisible && showPageInfo}
 		{showLoading}
 	/>

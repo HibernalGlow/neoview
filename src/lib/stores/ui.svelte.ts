@@ -554,15 +554,26 @@ export async function pageRight() {
 	try {
 		const currentIndex = bookStore.currentPageIndex;
 		const currentSub = get(subPageIndex);
+		const shouldSplit = shouldSplitPage(currentIndex);
+
+		console.log('📖 pageRight:', {
+			currentIndex,
+			currentSub,
+			shouldSplit,
+			splitEnabled: settingsManager.getSettings().view.pageLayout.splitHorizontalPages,
+			viewMode: get(viewMode)
+		});
 
 		// 如果当前页面支持分割
-		if (shouldSplitPage(currentIndex)) {
+		if (shouldSplit) {
 			// 如果处于前半部分(0)，则翻到后半部分(1)
 			if (currentSub === 0) {
+				console.log('📖 pageRight: 切换到后半部分(1)');
 				subPageIndex.set(1);
 				return;
 			}
 			// 如果处于后半部分(1)，则继续翻到下一页
+			console.log('📖 pageRight: 已在后半部分，继续翻到下一页');
 		}
 
 		const step = getPageStep();
@@ -570,8 +581,12 @@ export async function pageRight() {
 		const targetIndex = Math.min(currentIndex + step, maxIndex);
 
 		// 如果目标只能是当前页（已经是最后一页），则不做任何操作
-		if (targetIndex === currentIndex) return;
+		if (targetIndex === currentIndex) {
+			console.log('📖 pageRight: 已是最后一页');
+			return;
+		}
 
+		console.log('📖 pageRight: 导航到页面', targetIndex);
 		await bookStore.navigateToPage(targetIndex);
 
 		// 翻到下一页，总是从前半部分(0)开始

@@ -18,7 +18,6 @@
 	import CanvasFrame from './components/CanvasFrame.svelte';
 	import { type FrameSlot, type SlotImage, createEmptySlot, SlotZIndex } from './types/frameSlot';
 	import { subPageIndex } from '$lib/stores/ui.svelte';
-	import { getClipPath, getSplitTransform } from '$lib/stackview/utils/transform';
 
 	// ============================================================================
 	// Props
@@ -114,23 +113,47 @@
 		}
 	});
 
-	// 计算 Transform 和 ClipPath
-	// getSplitTransform/getClipPath 接受 'left' | 'right'
-	type SplitHalf = 'left' | 'right' | null;
-	let clipStyle = $derived(getClipPath(visualSplitHalf as SplitHalf));
+	// 分割模式：使用 clip-path 裁剪 + scale(2,1) 放大
+	// clip-path 裁掉一半，scale(2,1) 让剩余的一半填满视口宽度
+	let clipStyle = $derived.by(() => {
+		if (!isSplit) return 'none';
+		// 显示左半边：裁掉右半 (inset: top right bottom left)
+		// 显示右半边：裁掉左半
+		return visualSplitHalf === 'left' ? 'inset(0 50% 0 0)' : 'inset(0 0 0 50%)';
+	});
 
-	// 计算 transform（包含 scale、rotation 和 split）
+	// 计算 transform（包含 scale、rotation）
+	// 分割模式下，水平方向放大 2 倍，让裁剪的一半填满视口
 	let transformStyle = $derived.by(() => {
 		const parts: string[] = [];
-		// Split shift - 注意顺序，先 scale 再 translate 可能更符合直觉？或者反过来
-		// getSplitTransform 返回 translate(25%) 等。百分比是相对于元素自身的。
-		const splitTr = getSplitTransform(visualSplitHalf as SplitHalf);
-
-		if (scale !== 1) parts.push(`scale(${scale})`);
-		if (splitTr) parts.push(splitTr);
+		
+		// 分割模式：水平放大 2 倍
+		if (isSplit) {
+			// 组合用户缩放和分割放大
+			// scale(2, 1) 水平放大 2 倍，垂直不变
+			// 然后应用用户的均匀缩放
+			parts.push(`scale(${scale * 2}, ${scale})`);
+		} else if (scale !== 1) {
+			parts.push(`scale(${scale})`);
+		}
+		
 		if (rotation !== 0) parts.push(`rotate(${rotation}deg)`);
 
 		return parts.length > 0 ? parts.join(' ') : 'none';
+	});
+
+	// Debug: 监控分割状态变化
+	$effect(() => {
+		if (isSplit) {
+			console.log('🖼️ StackViewer split state:', {
+				subPageIndex: $subPageIndex,
+				isSplit,
+				visualSplitHalf,
+				clipStyle,
+				transformStyle,
+				currentImageDimensions: currentImage?.dimensions
+			});
+		}
 	});
 
 	/**
@@ -640,4 +663,5 @@
 		max-width: calc(50% - 2px);
 		max-height: 100%;
 	}
+
 </style>

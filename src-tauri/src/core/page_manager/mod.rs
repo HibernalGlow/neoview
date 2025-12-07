@@ -229,21 +229,22 @@ impl PageContentManager {
         use std::fs;
 
         let image_extensions = ["jpg", "jpeg", "png", "gif", "webp", "avif", "jxl", "bmp"];
+        let video_extensions = ["mp4", "mkv", "webm", "avi", "mov", "wmv", "asf", "flv", "m4v", "ts"];
 
-        let mut images: Vec<String> = fs::read_dir(path)
+        let mut files: Vec<String> = fs::read_dir(path)
             .map_err(|e| format!("读取目录失败: {}", e))?
             .filter_map(|entry| entry.ok())
             .filter(|entry| {
                 entry.path().extension().map_or(false, |ext| {
                     let ext = ext.to_string_lossy().to_lowercase();
-                    image_extensions.contains(&ext.as_str())
+                    image_extensions.contains(&ext.as_str()) || video_extensions.contains(&ext.as_str())
                 })
             })
             .map(|entry| entry.path().to_string_lossy().to_string())
             .collect();
 
-        images.sort();
-        Ok(images)
+        files.sort();
+        Ok(files)
     }
 
     /// 跳转到指定页面

@@ -61,40 +61,85 @@ function handleThumbnailReady(event: ThumbnailReadyEvent): void {
 // 核心加载逻辑
 // ===========================================================================
 
+// 防抖计时器
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+const DEBOUNCE_MS = 150;
+
 /**
  * 加载缩略图（中央优先策略）
  *
  * 使用后端 API 生成缩略图，结果通过事件推送
+ * 内置防抖和去重逻辑
  */
 async function loadThumbnails(centerIndex: number): Promise<void> {
 	const currentBook = bookStore.currentBook;
 	if (!currentBook) return;
 
+	// 清除之前的防抖计时器
+	if (debounceTimer) {
+		clearTimeout(debounceTimer);
+	}
+
 	// 增加版本号，取消之前的预加载
 	const currentVersion = ++preloadVersion;
 
-	try {
-		const indices = await preloadThumbnails(centerIndex, PRELOAD_RANGE, THUMBNAIL_MAX_SIZE);
+	// 防抖
+	debounceTimer = setTimeout(async () => {
+		debounceTimer = null;
 
-		// 检查版本，如果已被取消则忽略
+		// 版本检查
 		if (currentVersion !== preloadVersion) {
-			console.log('🖼️ ThumbnailService: Preload cancelled (version mismatch)');
 			return;
 		}
 
-		// 标记为加载中
-		for (const idx of indices) {
-			loadingIndices.add(idx);
+		// 计算需要加载的索引（过滤掉已缓存的）
+		const totalPages = currentBook.pages?.length || 0;
+		const needLoad: number[] = [];
+
+		for (let offset = 0; offset <= PRELOAD_RANGE; offset++) {
+			if (offset === 0) {
+				if (!thumbnailCacheStore.hasThumbnail(centerIndex) && !loadingIndices.has(centerIndex)) {
+					needLoad.push(centerIndex);
+				}
+			} else {
+				const before = centerIndex - offset;
+				const after = centerIndex + offset;
+				if (before >= 0 && !thumbnailCacheStore.hasThumbnail(before) && !loadingIndices.has(before)) {
+					needLoad.push(before);
+				}
+				if (after < totalPages && !thumbnailCacheStore.hasThumbnail(after) && !loadingIndices.has(after)) {
+					needLoad.push(after);
+				}
+			}
 		}
 
-		if (indices.length > 0) {
-			console.log(
-				`🖼️ ThumbnailService: Preloading ${indices.length} thumbnails from center ${centerIndex}`
-			);
+		// 没有需要加载的，直接返回
+		if (needLoad.length === 0) {
+			return;
 		}
-	} catch (error) {
-		console.error('Failed to preload thumbnails:', error);
-	}
+
+		try {
+			// 标记为加载中
+			for (const idx of needLoad) {
+				loadingIndices.add(idx);
+			}
+
+			const indices = await preloadThumbnails(needLoad, THUMBNAIL_MAX_SIZE);
+
+			// 检查版本，如果已被取消则忽略
+			if (currentVersion !== preloadVersion) {
+				return;
+			}
+
+			if (indices.length > 0) {
+				console.debug(
+					`🖼️ ThumbnailService: Preloading ${indices.length} thumbnails from center ${centerIndex}`
+				);
+			}
+		} catch (error) {
+			console.error('Failed to preload thumbnails:', error);
+		}
+	}, DEBOUNCE_MS);
 }
 
 /**
@@ -110,6 +155,10 @@ async function loadThumbnail(pageIndex: number): Promise<void> {
  */
 function cancelLoading(): void {
 	preloadVersion++;
+	if (debounceTimer) {
+		clearTimeout(debounceTimer);
+		debounceTimer = null;
+	}
 }
 
 // ===========================================================================

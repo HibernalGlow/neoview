@@ -193,54 +193,32 @@ pub async fn pm_set_large_file_threshold(
 
 /// 预加载缩略图（异步，通过事件推送结果）
 /// 
-/// 按中央优先策略生成缩略图，生成后通过 "thumbnail-ready" 事件推送到前端
-/// 返回开始预加载的页面索引列表
+/// 接受需要生成的页面索引列表，生成后通过 "thumbnail-ready" 事件推送到前端
+/// 前端负责过滤已缓存的页面，避免重复生成
 #[tauri::command]
 pub async fn pm_preload_thumbnails(
-    center: usize,
-    range: usize,
+    indices: Vec<usize>,
     max_size: Option<u32>,
     app: AppHandle,
     state: State<'_, PageManagerState>,
 ) -> Result<Vec<usize>, String> {
     let size = max_size.unwrap_or(256);
     
-    // 获取书籍信息和需要加载的页面索引
-    let (total_pages, pages_to_load) = {
+    // 验证书籍已打开
+    {
         let manager = state.manager.lock().await;
-        let book_info = manager.current_book_info()
+        manager.current_book_info()
             .ok_or("没有打开的书籍")?;
-        
-        let total = book_info.total_pages;
-        
-        // 中央优先策略：从 center 向两侧扩展
-        let mut indices: Vec<usize> = Vec::new();
-        for offset in 0..=range {
-            if offset == 0 {
-                if center < total {
-                    indices.push(center);
-                }
-            } else {
-                // 向前
-                if center >= offset && center - offset < total {
-                    indices.push(center - offset);
-                }
-                // 向后
-                if center + offset < total {
-                    indices.push(center + offset);
-                }
-            }
-        }
-        
-        (total, indices)
-    };
+    }
     
-    if pages_to_load.is_empty() {
+    if indices.is_empty() {
         return Ok(vec![]);
     }
     
-    log::debug!("🖼️ [PageCommand] preload_thumbnails: center={}, range={}, loading {} pages",
-        center, range, pages_to_load.len());
+    let pages_to_load = indices.clone();
+    
+    log::debug!("🖼️ [PageCommand] preload_thumbnails: loading {} pages: {:?}",
+        pages_to_load.len(), pages_to_load);
     
     let result_indices = pages_to_load.clone();
     let manager_arc = Arc::clone(&state.manager);

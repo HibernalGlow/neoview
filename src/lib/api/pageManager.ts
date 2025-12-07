@@ -238,19 +238,18 @@ export interface ThumbnailReadyEvent {
 /**
  * 预加载缩略图（异步，结果通过事件推送）
  * 
- * 按中央优先策略生成缩略图，生成后通过 "thumbnail-ready" 事件推送
+ * 接受需要生成的页面索引列表，生成后通过 "thumbnail-ready" 事件推送
+ * 前端负责过滤已缓存的页面，避免重复生成
  * 
- * @param center 中心页面索引
- * @param range 预加载范围（向两侧各扩展多少页）
+ * @param indices 需要生成缩略图的页面索引列表
  * @param maxSize 缩略图最大尺寸（默认 256）
  * @returns 开始预加载的页面索引列表
  */
 export async function preloadThumbnails(
-	center: number,
-	range: number,
+	indices: number[],
 	maxSize: number = 256
 ): Promise<number[]> {
-	return invoke<number[]>('pm_preload_thumbnails', { center, range, maxSize });
+	return invoke<number[]>('pm_preload_thumbnails', { indices, maxSize });
 }
 
 // ===== 工具函数 =====

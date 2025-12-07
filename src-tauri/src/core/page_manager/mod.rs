@@ -123,6 +123,10 @@ pub struct PageContentManager {
     temp_manager: Arc<TempFileManager>,
     /// 当前书籍上下文
     current_book: Option<BookContext>,
+    /// 缩略图缓存（书籍路径 -> 页索引 -> 缩略图数据）
+    thumbnail_cache: std::collections::HashMap<usize, ThumbnailItem>,
+    /// 当前缩略图缓存对应的书籍路径
+    thumbnail_cache_book: Option<String>,
 }
 
 impl PageContentManager {
@@ -138,6 +142,8 @@ impl PageContentManager {
             archive_manager,
             temp_manager: Arc::new(TempFileManager::new(temp_dir)),
             current_book: None,
+            thumbnail_cache: std::collections::HashMap::new(),
+            thumbnail_cache_book: None,
         }
     }
 
@@ -154,6 +160,8 @@ impl PageContentManager {
             archive_manager,
             temp_manager: Arc::new(TempFileManager::new(temp_dir)),
             current_book: None,
+            thumbnail_cache: std::collections::HashMap::new(),
+            thumbnail_cache_book: None,
         }
     }
 

@@ -294,7 +294,7 @@
 	<!-- 右键菜单 -->
 	{#if contextMenuVisible && selectedTab}
 		<div
-			class="bg-popover/80 backdrop-blur-md fixed z-50 min-w-[150px] rounded-md border py-1 shadow-lg"
+			class="bg-popover/80 fixed z-50 min-w-[150px] rounded-md border py-1 shadow-lg backdrop-blur-md"
 			style="left: {contextMenuPosition.x}px; top: {contextMenuPosition.y}px;"
 			role="menu"
 			onclick={(e) => e.stopPropagation()}
@@ -370,11 +370,11 @@
 					title={tab.label}
 				>
 					<div
-						class="bg-muted-foreground absolute bottom-0 left-0 top-0 w-1 opacity-0 transition-opacity group-hover:opacity-50"
+						class="bg-muted-foreground absolute top-0 bottom-0 left-0 w-1 opacity-0 transition-opacity group-hover:opacity-50"
 					></div>
 					<IconComponent class="h-5 w-5" />
 					<div
-						class="bg-popover text-popover-foreground pointer-events-none absolute left-full z-50 ml-2 whitespace-nowrap rounded px-2 py-1 text-sm opacity-0 shadow-md transition-opacity group-hover:opacity-100"
+						class="bg-popover text-popover-foreground pointer-events-none absolute left-full z-50 ml-2 rounded px-2 py-1 text-sm whitespace-nowrap opacity-0 shadow-md transition-opacity group-hover:opacity-100"
 					>
 						{tab.label}
 					</div>
@@ -390,8 +390,9 @@
 
 		<button
 			type="button"
-			class="hover:bg-accent text-muted-foreground absolute right-0 top-1/2 z-50 -translate-y-1/2 cursor-ew-resize rounded-l-md p-1 transition-colors"
+			class="hover:bg-accent text-muted-foreground absolute top-1/2 right-0 z-50 -translate-y-1/2 cursor-ew-resize rounded-l-md p-1 transition-colors"
 			onmousedown={handleResizeStart}
+			oncontextmenu={handlePinContextMenu}
 			aria-label="调整侧边栏宽度"
 		>
 			<GripVertical class="h-4 w-4" />
@@ -400,8 +401,9 @@
 		<!-- 右侧布局：拖拽条 | 内容 | 图标栏 -->
 		<button
 			type="button"
-			class="hover:bg-accent text-muted-foreground absolute left-0 top-1/2 z-50 -translate-y-1/2 cursor-ew-resize rounded-r-md p-1 transition-colors"
+			class="hover:bg-accent text-muted-foreground absolute top-1/2 left-0 z-50 -translate-y-1/2 cursor-ew-resize rounded-r-md p-1 transition-colors"
 			onmousedown={handleResizeStart}
+			oncontextmenu={handlePinContextMenu}
 			aria-label="调整侧边栏宽度"
 		>
 			<GripVertical class="h-4 w-4" />
@@ -461,11 +463,11 @@
 					title={tab.label}
 				>
 					<div
-						class="bg-muted-foreground absolute bottom-0 right-0 top-0 w-1 opacity-0 transition-opacity group-hover:opacity-50"
+						class="bg-muted-foreground absolute top-0 right-0 bottom-0 w-1 opacity-0 transition-opacity group-hover:opacity-50"
 					></div>
 					<IconComponent class="h-5 w-5" />
 					<div
-						class="bg-popover text-popover-foreground pointer-events-none absolute right-full z-50 mr-2 whitespace-nowrap rounded px-2 py-1 text-sm opacity-0 shadow-md transition-opacity group-hover:opacity-100"
+						class="bg-popover text-popover-foreground pointer-events-none absolute right-full z-50 mr-2 rounded px-2 py-1 text-sm whitespace-nowrap opacity-0 shadow-md transition-opacity group-hover:opacity-100"
 					>
 						{tab.label}
 					</div>

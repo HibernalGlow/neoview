@@ -30,6 +30,8 @@
 		showSizeAndModified = false,
 		currentPage = undefined,
 		totalPages = undefined,
+		videoPosition = undefined,
+		videoDuration = undefined,
 		timestamp = undefined,
 		thumbnailSize = 48,
 		onClick = undefined,
@@ -52,6 +54,8 @@
 		showSizeAndModified?: boolean;
 		currentPage?: number;
 		totalPages?: number;
+		videoPosition?: number;
+		videoDuration?: number;
 		timestamp?: number;
 		thumbnailSize?: number;
 		onClick?: () => void;
@@ -361,6 +365,8 @@
 		showSizeAndModified={viewMode === 'content' || showSizeAndModified}
 		{currentPage}
 		{totalPages}
+		{videoPosition}
+		{videoDuration}
 		{timestamp}
 		{thumbnailSize}
 		{folderTotalSize}
@@ -402,6 +408,8 @@
 		{showSizeAndModified}
 		{currentPage}
 		{totalPages}
+		{videoPosition}
+		{videoDuration}
 		{timestamp}
 		{folderTotalSize}
 		{folderSizeLoading}

@@ -5,6 +5,14 @@ import { isVideoFile } from '$lib/utils/videoUtils';
 import { folderPanelActions } from '$lib/components/panels/folderPanel/stores/folderPanelStore.svelte';
 
 /**
+ * 判断是否为图片文件
+ */
+function isImageFile(path: string): boolean {
+    const ext = path.split('.').pop()?.toLowerCase() || '';
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'jxl', 'bmp', 'tiff', 'tif', 'ico', 'svg'].includes(ext);
+}
+
+/**
  * Opens a file system item (file or folder) with support for "Silent Sync" (updating file browser without switching tabs).
  * 
  * @param path Absolute path to the item
@@ -43,7 +51,7 @@ export async function openFileSystemItem(
             }
 
             console.log('🌳 Syncing file tree to:', targetPath);
-            
+
             // 导航到新文件浏览面板
             await folderPanelActions.navigateToPath(targetPath);
         } catch (err) {
@@ -75,15 +83,18 @@ export async function openFileSystemItem(
     } else {
         // File
         try {
-            // Check if it is a supported archive/book or a standalone video file
+            // Check if it is a supported archive/book or a standalone video/image file
             const isArchive = await FileSystemAPI.isSupportedArchive(path);
             const isVideo = !isArchive && isVideoFile(path);
+            const isImage = !isArchive && !isVideo && isImageFile(path);
 
             if (isArchive) {
                 // 压缩包：作为书籍直接打开
                 await bookStore.openBook(path, { initialPage: page });
-            } else if (isVideo) {
-                console.log('🎬 openFileSystemItem: opening video via parent folder book', path);
+            } else if (isVideo || isImage) {
+                // 视频或图片：打开父文件夹作为书籍，然后跳转到该文件
+                const fileType = isVideo ? '🎬 video' : '🖼️ image';
+                console.log(`${fileType} openFileSystemItem: opening via parent folder book`, path);
                 let parentDir = path;
                 const lastBackslash = path.lastIndexOf('\\');
                 const lastSlash = path.lastIndexOf('/');
@@ -91,7 +102,7 @@ export async function openFileSystemItem(
                 if (lastSeparator > 0) {
                     parentDir = path.substring(0, lastSeparator);
                 }
-                console.log('📁 Video parent directory:', parentDir);
+                console.log('📁 Parent directory:', parentDir);
                 await bookStore.openDirectoryAsBook(parentDir);
                 await bookStore.navigateToImage(path);
                 try {
@@ -99,10 +110,10 @@ export async function openFileSystemItem(
                     const name = path.split(/[\\/]/).pop() || path;
                     historyStore.add(path, name, 0, 1);
                 } catch (historyError) {
-                    console.error('Failed to add video history entry from openFileSystemItem:', historyError);
+                    console.error('Failed to add history entry from openFileSystemItem:', historyError);
                 }
             } else {
-                // Open with system default application
+                // Open with system default application (for unsupported file types)
                 await FileSystemAPI.openWithSystem(path);
             }
         } catch (err) {

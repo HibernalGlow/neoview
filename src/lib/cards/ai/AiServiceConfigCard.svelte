@@ -8,7 +8,7 @@ import { Label } from '$lib/components/ui/label';
 import * as Select from '$lib/components/ui/select';
 import { aiTranslationStore, type TranslationServiceType } from '$lib/stores/ai/translationStore.svelte';
 import { testConnection } from '$lib/services/translationService';
-import { Settings, Server, Bot, CheckCircle, XCircle, Loader2 } from '@lucide/svelte';
+import { Settings, Server, Bot, CheckCircle, XCircle, Loader2, Copy, Check, Terminal } from '@lucide/svelte';
 
 let config = $state(aiTranslationStore.getConfig());
 let isTesting = $state(false);
@@ -89,6 +89,48 @@ const targetLanguageOptions = [
 	{ value: 'zh', label: '中文' },
 	{ value: 'en', label: '英语' },
 ];
+
+// 生成 LibreTranslate 启动命令
+let copied = $state(false);
+
+const startCommand = $derived.by(() => {
+	if (config.type !== 'libretranslate') return '';
+	
+	try {
+		const url = new URL(config.libreTranslateUrl || 'http://localhost:5000');
+		const host = url.hostname;
+		const port = url.port || '5000';
+		
+		// 收集需要的语言
+		const langs = new Set<string>();
+		if (config.sourceLanguage && config.sourceLanguage !== 'auto') {
+			langs.add(config.sourceLanguage);
+		} else {
+			// 自动检测时默认加载日语
+			langs.add('ja');
+		}
+		langs.add(config.targetLanguage || 'zh');
+		// 英语作为中转语言
+		langs.add('en');
+		
+		const langList = Array.from(langs).sort().join(',');
+		
+		return `libretranslate --host ${host} --port ${port} --load-only ${langList}`;
+	} catch {
+		return 'libretranslate --host 0.0.0.0 --port 5000 --load-only en,ja,zh';
+	}
+});
+
+async function copyCommand() {
+	if (!startCommand) return;
+	try {
+		await navigator.clipboard.writeText(startCommand);
+		copied = true;
+		setTimeout(() => { copied = false; }, 2000);
+	} catch (e) {
+		console.error('复制失败:', e);
+	}
+}
 </script>
 
 <div class="space-y-4">
@@ -133,6 +175,35 @@ const targetLanguageOptions = [
 					type="password"
 					placeholder="留空表示不使用"
 				/>
+			</div>
+
+			<!-- 启动命令 -->
+			<div class="space-y-2 border-t pt-3">
+				<div class="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+					<Terminal class="h-3 w-3" />
+					启动命令
+				</div>
+				<div class="flex items-center gap-2">
+					<code class="flex-1 rounded bg-muted px-2 py-1.5 text-xs font-mono break-all">
+						{startCommand}
+					</code>
+					<Button
+						variant="ghost"
+						size="sm"
+						class="h-8 w-8 shrink-0 p-0"
+						onclick={copyCommand}
+						title="复制命令"
+					>
+						{#if copied}
+							<Check class="h-4 w-4 text-green-500" />
+						{:else}
+							<Copy class="h-4 w-4" />
+						{/if}
+					</Button>
+				</div>
+				<p class="text-xs text-muted-foreground">
+					在终端运行此命令启动 LibreTranslate 服务
+				</p>
 			</div>
 		</div>
 	{:else if config.type === 'ollama'}

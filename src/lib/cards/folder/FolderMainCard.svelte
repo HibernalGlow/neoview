@@ -144,7 +144,8 @@ function openConfirmDialog(config: { title: string; description: string; confirm
 
 // ==================== 导航操作 ====================
 function handleRefresh() {
-	const path = get(currentPath);
+	// 虚拟实例使用自己的路径，不使用全局 store
+	const path = isVirtualInstance ? propInitialPath : get(currentPath);
 	if (path) {
 		if (!isVirtualPath(path)) directoryTreeCache.invalidate(path);
 		navigationCommand.set({ type: 'init', path });
@@ -156,11 +157,15 @@ function handleNavigate(path: string) {
 }
 
 function handleGoBack() {
+	// 虚拟实例不支持历史导航
+	if (isVirtualInstance) return;
 	const result = folderTabActions.goBack();
 	if (result) navigationCommand.set({ type: 'history', path: result.path });
 }
 
 function handleGoForward() {
+	// 虚拟实例不支持历史导航
+	if (isVirtualInstance) return;
 	const result = folderTabActions.goForward();
 	if (result) navigationCommand.set({ type: 'history', path: result.path });
 }
@@ -178,11 +183,18 @@ function handleGoUp() {
 }
 
 function handleGoHome() {
+	// 虚拟实例的主页就是自己
+	if (isVirtualInstance) {
+		navigationCommand.set({ type: 'init', path: propInitialPath! });
+		return;
+	}
 	const home = folderTabActions.goHome();
 	if (home) navigationCommand.set({ type: 'init', path: home });
 }
 
 function handleSetHome() {
+	// 虚拟实例不能设置主页
+	if (isVirtualInstance) return;
 	const path = get(currentPath);
 	if (path && !isVirtualPath(path)) {
 		localStorage.setItem('neoview-homepage-path', path);
@@ -507,7 +519,7 @@ onMount(() => {
 					{:else if $inlineTreeMode}
 						<InlineTreeList onItemClick={handleItemOpen} onItemDoubleClick={handleItemOpen} onItemContextMenu={handleContextMenu} />
 					{:else}
-						<FolderStack tabId={tab.id} initialPath={tab.currentPath || tab.homePath} {navigationCommand} onItemOpen={handleItemOpen} onItemDelete={handleDelete} onItemContextMenu={handleContextMenu} onOpenFolderAsBook={handleOpenFolderAsBook} onOpenInNewTab={handleOpenInNewTab} forceActive={isVirtualInstance} />
+						<FolderStack tabId={tab.id} initialPath={tab.currentPath || tab.homePath} {navigationCommand} onItemOpen={handleItemOpen} onItemDelete={handleDelete} onItemContextMenu={handleContextMenu} onOpenFolderAsBook={handleOpenFolderAsBook} onOpenInNewTab={handleOpenInNewTab} forceActive={isVirtualInstance} skipGlobalStore={isVirtualInstance} />
 					{/if}
 				</div>
 			{/each}

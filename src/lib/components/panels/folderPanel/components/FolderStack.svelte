@@ -74,6 +74,8 @@
 		onOpenInNewTab?: (item: FsItem) => void;
 		/** 强制激活模式，用于虚拟路径实例，始终响应导航命令 */
 		forceActive?: boolean;
+		/** 跳过全局 store 更新，用于虚拟路径实例避免污染全局状态 */
+		skipGlobalStore?: boolean;
 	}
 
 	let {
@@ -85,7 +87,8 @@
 		onItemContextMenu,
 		onOpenFolderAsBook,
 		onOpenInNewTab,
-		forceActive = false
+		forceActive = false,
+		skipGlobalStore = false
 	}: Props = $props();
 
 	// 层叠数据结构
@@ -104,6 +107,16 @@
 
 	// 当前活跃层索引
 	let activeIndex = $state(0);
+	
+	// 条件执行全局 store 操作（虚拟实例跳过）
+	const globalStore = {
+		setPath: (path: string, addToHistory = true) => { if (!skipGlobalStore) folderTabActions.setPath(path, addToHistory); },
+		setItems: (items: FsItem[]) => { if (!skipGlobalStore) folderTabActions.setItems(items); },
+		selectItem: (...args: Parameters<typeof folderTabActions.selectItem>) => { if (!skipGlobalStore) folderTabActions.selectItem(...args); },
+		setSelectedItems: (items: Set<string>) => { if (!skipGlobalStore) folderTabActions.setSelectedItems(items); },
+		selectRange: (...args: Parameters<typeof folderTabActions.selectRange>) => { if (!skipGlobalStore) folderTabActions.selectRange(...args); },
+		deselectAll: () => { if (!skipGlobalStore) folderTabActions.deselectAll(); }
+	};
 
 	// 动画状态
 	let isAnimating = $state(false);
@@ -251,9 +264,9 @@
 		const layer = await createLayer(path);
 		layers = [layer];
 		activeIndex = 0;
-		folderTabActions.setPath(path);
+		globalStore.setPath(path);
 		// 同步 items 到 store（用于工具栏显示计数）
-		folderTabActions.setItems(layer.items);
+		globalStore.setItems(layer.items);
 	}
 
 	// 初始化根层（不添加历史记录，用于历史导航）
@@ -262,9 +275,9 @@
 		layers = [layer];
 		activeIndex = 0;
 		// 使用 setPath 的第二个参数禁止添加历史记录
-		folderTabActions.setPath(path, false);
+		globalStore.setPath(path, false);
 		// 同步 items 到 store（用于工具栏显示计数）
-		folderTabActions.setItems(layer.items);
+		globalStore.setItems(layer.items);
 	}
 
 	// 虚拟路径订阅清理函数
@@ -299,7 +312,7 @@
 					const currentLayer = layers.find((l) => l.path === path);
 					if (currentLayer) {
 						currentLayer.items = newItems;
-						folderTabActions.setItems(newItems);
+						globalStore.setItems(newItems);
 					}
 				});
 
@@ -492,11 +505,11 @@
 		}
 
 		// 更新 store 中的路径
-		folderTabActions.setPath(path);
+		globalStore.setPath(path);
 		// 同步 items 到 store（用于工具栏显示计数）
 		const activeLayer = layers[activeIndex];
 		if (activeLayer) {
-			folderTabActions.setItems(activeLayer.items);
+			globalStore.setItems(activeLayer.items);
 		}
 
 		setTimeout(() => {
@@ -530,9 +543,9 @@
 
 			const prevLayer = layers[activeIndex];
 			if (prevLayer) {
-				folderTabActions.setPath(prevLayer.path);
+				globalStore.setPath(prevLayer.path);
 				// 同步 items 到 store（用于工具栏显示计数）
-				folderTabActions.setItems(prevLayer.items);
+				globalStore.setItems(prevLayer.items);
 			}
 
 			setTimeout(() => {
@@ -556,7 +569,7 @@
 				// 但我们要切换到新插入的层
 				activeIndex = 0;
 
-				folderTabActions.setPath(parentPath);
+				globalStore.setPath(parentPath);
 
 				setTimeout(() => {
 					isAnimating = false;
@@ -578,9 +591,9 @@
 
 		const layer = layers[index];
 		if (layer) {
-			folderTabActions.setPath(layer.path);
+			globalStore.setPath(layer.path);
 			// 同步 items 到 store（用于工具栏显示计数）
-			folderTabActions.setItems(layer.items);
+			globalStore.setItems(layer.items);
 		}
 
 		setTimeout(() => {
@@ -612,7 +625,7 @@
 
 		// 同步到 store
 		if (currentLayer) {
-			folderTabActions.setItems(currentLayer.items);
+			globalStore.setItems(currentLayer.items);
 		}
 
 		// 调用外部删除处理
@@ -653,8 +666,8 @@
 						isAnimating = true;
 						activeIndex = targetIndex;
 						const layer = layers[targetIndex];
-						folderTabActions.setPath(layer.path, false);
-						folderTabActions.setItems(layer.items);
+						globalStore.setPath(layer.path, false);
+						globalStore.setItems(layer.items);
 						setTimeout(() => {
 							isAnimating = false;
 						}, 300);
@@ -736,7 +749,7 @@
 				// 还没有锚点，设置当前点击位置为锚点并选中该项
 				console.log('[FolderStack] 设置锚点为:', payload.index);
 				setChainAnchor(tabId, payload.index);
-				folderTabActions.selectItem(payload.item.path, true, payload.index);
+				globalStore.selectItem(payload.item.path, true, payload.index);
 			} else {
 				// 有锚点，选中从锚点到当前位置的所有项目
 				const startIndex = Math.min(anchor, payload.index);
@@ -759,7 +772,7 @@
 					}
 				}
 				// 一次性设置所有选中项
-				folderTabActions.setSelectedItems(newSelected);
+				globalStore.setSelectedItems(newSelected);
 				console.log('[FolderStack] 批量选中完成，共选中:', newSelected.size, '项');
 
 				// 更新锚点为当前位置，方便继续链选
@@ -771,10 +784,10 @@
 		// 检查是否需要范围选择（勾选模式 + Shift 键）
 		if (($multiSelectMode || payload.multiSelect) && payload.shiftKey) {
 			// Shift + 点击：范围选择
-			folderTabActions.selectRange(payload.index, displayItems);
+			globalStore.selectRange(payload.index, displayItems);
 		} else if (payload.multiSelect || $multiSelectMode) {
 			// 多选模式：切换选中状态并更新锚点，不导航
-			folderTabActions.selectItem(payload.item.path, true, payload.index);
+			globalStore.selectItem(payload.item.path, true, payload.index);
 		} else {
 			if (payload.item.isDir) {
 				// 文件夹：进入目录，不加入选中列表
@@ -794,12 +807,12 @@
 					}
 				}
 				// 进入目录前清除选中状态
-				folderTabActions.deselectAll();
+				globalStore.deselectAll();
 				// 正常进入目录
 				pushLayer(payload.item.path);
 			} else {
 				// 文件：加入选中列表并打开
-				folderTabActions.selectItem(payload.item.path);
+				globalStore.selectItem(payload.item.path);
 				onItemOpen?.(payload.item);
 			}
 		}
@@ -878,7 +891,7 @@
 						onItemDoubleClick={(payload) => handleItemDoubleClick(index, payload)}
 						onSelectedIndexChange={(payload) => handleSelectedIndexChange(index, payload)}
 						onSelectionChange={(payload) =>
-							folderTabActions.setSelectedItems(payload.selectedItems)}
+							globalStore.setSelectedItems(payload.selectedItems)}
 						on:itemContextMenu={(e) => handleItemContextMenu(index, e.detail)}
 						on:openFolderAsBook={(e) => handleOpenFolderAsBook(index, e.detail.item)}
 						on:openInNewTab={(e) => {

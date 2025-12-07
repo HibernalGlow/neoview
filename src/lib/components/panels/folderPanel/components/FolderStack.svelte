@@ -151,8 +151,8 @@
 	*/
 	});
 
-	// 排序函数
-	function sortItems(items: FsItem[], field: string, order: string): FsItem[] {
+	// 排序函数 - skipFolderFirst 用于虚拟路径，让文件夹和文件平等排序
+	function sortItems(items: FsItem[], field: string, order: string, skipFolderFirst = false): FsItem[] {
 		// 随机排序特殊处理
 		if (field === 'random') {
 			const shuffled = [...items];
@@ -164,12 +164,12 @@
 		}
 
 		// rating 排序特殊处理
-		// 规则：文件夹在前，无 rating 使用默认评分，用户自定义 rating 优先
+		// 规则：文件夹在前（除非 skipFolderFirst），无 rating 使用默认评分，用户自定义 rating 优先
 		if (field === 'rating') {
 			const defaultRating = getDefaultRating();
 			const sorted = [...items].sort((a, b) => {
-				// 文件夹优先
-				if (a.isDir !== b.isDir) {
+				// 文件夹优先（虚拟路径下跳过）
+				if (!skipFolderFirst && a.isDir !== b.isDir) {
 					return a.isDir ? -1 : 1;
 				}
 
@@ -191,8 +191,8 @@
 		// collectTagCount 排序特殊处理
 		if (field === 'collectTagCount') {
 			const sorted = [...items].sort((a, b) => {
-				// 文件夹优先
-				if (a.isDir !== b.isDir) {
+				// 文件夹优先（虚拟路径下跳过）
+				if (!skipFolderFirst && a.isDir !== b.isDir) {
 					return a.isDir ? -1 : 1;
 				}
 
@@ -211,8 +211,8 @@
 		}
 
 		const sorted = [...items].sort((a, b) => {
-			// 文件夹始终在前
-			if (a.isDir !== b.isDir) {
+			// 文件夹始终在前（虚拟路径下跳过）
+			if (!skipFolderFirst && a.isDir !== b.isDir) {
 				return a.isDir ? -1 : 1;
 			}
 
@@ -255,7 +255,9 @@
 		const config = $sortConfig;
 		let result = layer.items;
 		// 不再根据 searchKeyword 过滤，搜索结果在独立的 SearchResultList 中显示
-		result = sortItems(result, config.field, config.order);
+		// 虚拟路径下文件夹和文件平等排序
+		const skipFolderFirst = isVirtualPath(layer.path);
+		result = sortItems(result, config.field, config.order, skipFolderFirst);
 		return result;
 	}
 

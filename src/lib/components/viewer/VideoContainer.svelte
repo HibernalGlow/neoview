@@ -14,7 +14,6 @@
 		getPossibleSubtitleNames,
 		getSubtitleType,
 		parseSubtitleContent,
-		createSubtitleBlobUrl,
 		revokeSubtitleBlobUrl,
 		type SubtitleData
 	} from '$lib/utils/subtitleUtils';
@@ -162,9 +161,7 @@
 							const content = new TextDecoder('utf-8').decode(new Uint8Array(subData));
 							const type = getSubtitleType(subPage.innerPath);
 							if (type && content) {
-								const parsed = parseSubtitleContent(content, type);
-								parsed.vttUrl = createSubtitleBlobUrl(parsed.vttContent);
-								subtitleData = parsed;
+								subtitleData = parseSubtitleContent(content, type, subPage.innerPath);
 								console.log(`[VideoContainer] 加载压缩包内字幕: ${subPage.innerPath}`);
 								return;
 							}
@@ -183,9 +180,7 @@
 						const content = await readTextFile(subPath);
 						const type = getSubtitleType(subName);
 						if (type && content) {
-							const parsed = parseSubtitleContent(content, type);
-							parsed.vttUrl = createSubtitleBlobUrl(parsed.vttContent);
-							subtitleData = parsed;
+							subtitleData = parseSubtitleContent(content, type, subName);
 							console.log(`[VideoContainer] 加载文件系统字幕: ${subPath}`);
 							return;
 						}

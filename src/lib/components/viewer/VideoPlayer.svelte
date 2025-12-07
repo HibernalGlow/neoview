@@ -13,7 +13,9 @@
 		Repeat1,
 		FastForward,
 		Pin,
-		PinOff
+		PinOff,
+		Captions,
+		CaptionsOff
 	} from '@lucide/svelte';
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
 	import type { SubtitleData } from '$lib/utils/subtitleUtils';
@@ -538,6 +540,18 @@
 				>
 					<FastForward class="h-5 w-5 text-primary {seekMode ? '' : 'opacity-40'}" />
 				</button>
+
+				<!-- 字幕状态 -->
+				<div
+					class="control-btn rounded-full p-2 {subtitle ? 'bg-white/20' : ''}"
+					title={subtitle ? `字幕: ${subtitle.filename}` : '无字幕'}
+				>
+					{#if subtitle}
+						<Captions class="h-5 w-5 text-primary" />
+					{:else}
+						<CaptionsOff class="h-5 w-5 text-primary opacity-40" />
+					{/if}
+				</div>
 
 				<!-- 固定控件 -->
 				<button

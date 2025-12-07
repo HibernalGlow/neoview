@@ -73,12 +73,12 @@
 					</p>
 				</div>
 			</div>
-			<div
+			<!-- <div
 				class="text-muted-foreground group-hover:text-primary flex items-center gap-1 transition-colors"
 			>
 				<ExternalLink class="h-4 w-4" />
 				<span class="text-xs">在 GitHub 上查看</span>
-			</div>
+			</div> -->
 		</div>
 
 		<!-- 描述 -->

@@ -16,9 +16,6 @@
     direction = 'ltr',
     currentPageIndex = 0,
     scale = 1,
-    // 悬停滚动位置
-    viewPositionX = 50,
-    viewPositionY = 50,
     onScroll,
   }: {
     units: PanoramaUnit[];
@@ -27,8 +24,6 @@
     direction?: 'ltr' | 'rtl';
     currentPageIndex?: number;
     scale?: number;
-    viewPositionX?: number;
-    viewPositionY?: number;
     onScroll?: (e: Event) => void;
   } = $props();
   
@@ -75,7 +70,7 @@
     }
   });
   
-  // 【性能优化】使用 CSS 变量传递位置，避免高频 DOM 属性更新
+  // 【性能优化】transform-origin 通过 CSS 变量由 HoverLayer 直接操作 DOM
   
   let containerClass = $derived.by(() => {
     const classes = ['panorama-frame-layer'];
@@ -102,8 +97,6 @@
     class={containerClass}
     data-layer="PanoramaFrameLayer"
     style:z-index={LayerZIndex.CURRENT_FRAME}
-    style:--view-x="{viewPositionX}%"
-    style:--view-y="{viewPositionY}%"
     style:transform={scale !== 1 ? `scale(${scale})` : 'none'}
   >
     {#each units as unit (unit.id)}

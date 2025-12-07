@@ -21,9 +21,6 @@
 		orientation = 'horizontal',
 		scale = 1,
 		rotation = 0,
-		// 视口位置百分比（0-100）
-		viewPositionX = 50,
-		viewPositionY = 50,
 		// 视口和图片尺寸（用于计算边界）
 		viewportSize = { width: 0, height: 0 },
 		imageSize = { width: 0, height: 0 },
@@ -37,16 +34,14 @@
 		orientation?: 'horizontal' | 'vertical';
 		scale?: number;
 		rotation?: number;
-		viewPositionX?: number;
-		viewPositionY?: number;
 		viewportSize?: { width: number; height: number };
 		imageSize?: { width: number; height: number };
 		alignMode?: 'center' | 'left' | 'right';
 		onImageLoad?: (e: Event, index: number) => void;
 	} = $props();
 
-	// 【性能优化】使用 CSS 变量传递位置，避免高频 DOM 属性更新
-	// transform-origin 通过 CSS var() 在样式中引用
+	// 【性能优化】transform-origin 通过 CSS 变量由 HoverLayer 直接操作 DOM
+	// 不再在模板中设置，避免 Svelte 渲染覆盖
 
 	// 计算 transform（只包含 scale 和 rotation）
 	let transformStyle = $derived.by(() => {
@@ -95,8 +90,6 @@
 		data-layer-id="current"
 		style:z-index={LayerZIndex.CURRENT_FRAME}
 		style:transform={transformStyle}
-		style:--view-x="{viewPositionX}%"
-		style:--view-y="{viewPositionY}%"
 	>
 		{#each frame.images as img, i (i)}
 			<FrameImage

@@ -27,8 +27,6 @@
 		transitionDuration = 150,
 		scale = 1,
 		rotation = 0,
-		viewPositionX = 50,
-		viewPositionY = 50,
 		viewportSize = { width: 0, height: 0 },
 		useCanvas = false, // 使用 Canvas 预渲染模式
 		pageMode = 'single', // 页面模式：单页/双页
@@ -41,8 +39,6 @@
 		transitionDuration?: number;
 		scale?: number;
 		rotation?: number;
-		viewPositionX?: number;
-		viewPositionY?: number;
 		viewportSize?: { width: number; height: number };
 		useCanvas?: boolean;
 		pageMode?: 'single' | 'double';
@@ -85,8 +81,8 @@
 	// 上一次的页面模式（用于检测模式变化）
 	let lastPageMode = $state<'single' | 'double'>('single');
 
-	// 【性能优化】transform-origin 通过 CSS 变量 (--view-x, --view-y) 传递
-	// 不再使用 $derived，减少不必要的计算
+	// 【性能优化】transform-origin 通过 CSS 变量由 HoverLayer 直接操作 DOM
+	// 不再在模板中设置，避免 Svelte 渲染覆盖
 
 	// 计算 transform（只包含 scale 和 rotation）
 	let transformStyle = $derived.by(() => {
@@ -436,7 +432,6 @@
 				targetHeight={viewportSize.height}
 				{scale}
 				{rotation}
-				transformOrigin="{viewPositionX}% {viewPositionY}%"
 				opacity={1}
 				zIndex={SlotZIndex.CURRENT}
 			/>
@@ -448,8 +443,6 @@
 				style:opacity={1}
 				style:transition={`opacity ${transitionDuration}ms ease`}
 				style:transform={transformStyle}
-				style:--view-x="{viewPositionX}%"
-				style:--view-y="{viewPositionY}%"
 				data-page-index={currentSlot.pageIndex}
 			>
 				{#each currentSlot.images as img, i (img.pageIndex)}
@@ -502,8 +495,6 @@
 			style:opacity={1}
 			style:transition={`opacity ${transitionDuration}ms ease`}
 			style:transform={transformStyle}
-			style:--view-x="{viewPositionX}%"
-			style:--view-y="{viewPositionY}%"
 		>
 			<img src={upscaleUrl} alt="Upscaled" class="frame-image" draggable="false" />
 		</div>

@@ -10,6 +10,7 @@
   import { preRenderManager } from '../utils/preRenderManager';
   
   // Props
+  // 【性能优化】transformOrigin 通过 CSS 变量由 HoverLayer 直接操作 DOM
   let {
     imageUrl = '',
     imageBlob,          // 直接传入 Blob，跳过 fetch
@@ -17,7 +18,6 @@
     targetHeight = 0,
     scale = 1,
     rotation = 0,
-    transformOrigin = '50% 50%',
     opacity = 1,
     zIndex = 0,
     onReady,
@@ -28,7 +28,6 @@
     targetHeight?: number;
     scale?: number;
     rotation?: number;
-    transformOrigin?: string;
     opacity?: number;
     zIndex?: number;
     onReady?: () => void;
@@ -162,11 +161,10 @@
 </script>
 
 <div 
-  class="canvas-frame"
+  class="canvas-frame frame-layer"
   style:z-index={zIndex}
   style:opacity={opacity}
   style:transform={transformStyle}
-  style:transform-origin={transformOrigin}
 >
   <canvas 
     bind:this={canvasRef}
@@ -183,6 +181,8 @@
     align-items: center;
     justify-content: center;
     pointer-events: none;
+    /* 【性能优化】使用 CSS 变量控制 transform-origin */
+    transform-origin: var(--view-x, 50%) var(--view-y, 50%);
   }
   
   .frame-canvas {

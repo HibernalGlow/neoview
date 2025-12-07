@@ -9,9 +9,16 @@
   - 纯事件驱动，无持续 RAF 循环
   - 边界计算使用 $derived 缓存
   - 单次 RAF 批量更新，避免重复触发
+  - mousemove 节流减少计算频率
+  - ResizeObserver 自动失效缓存
 -->
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  
+  // 【性能优化】常量配置
+  const RECT_CACHE_DURATION = 200; // rect 缓存时间 (ms)，增加到 200ms
+  const MOUSEMOVE_THROTTLE = 16;   // mousemove 节流 (~60fps)
+  const POSITION_EPSILON = 0.5;    // 位置变化阈值，避免微小抖动
   
   let {
     enabled = false,
@@ -31,10 +38,19 @@
   
   let layerRef: HTMLDivElement | null = $state(null);
   
-  // 缓存 rect，避免频繁调用 getBoundingClientRect
+  // 【性能优化】缓存 rect，避免频繁调用 getBoundingClientRect
   let cachedRect: DOMRect | null = null;
   let rectCacheTime = 0;
-  const RECT_CACHE_DURATION = 100; // 100ms 缓存
+  
+  // 【性能优化】mousemove 节流
+  let lastMouseMoveTime = 0;
+  
+  // 【性能优化】上次发送的位置，避免重复更新
+  let lastSentX = 50;
+  let lastSentY = 50;
+  
+  // 【性能优化】ResizeObserver 实例
+  let resizeObserver: ResizeObserver | null = null;
   
   function getCachedRect(): DOMRect | null {
     const now = performance.now();
@@ -45,6 +61,11 @@
       }
     }
     return cachedRect;
+  }
+  
+  // 【性能优化】失效缓存
+  function invalidateRectCache() {
+    cachedRect = null;
   }
   
   // 单次 RAF 调度器
@@ -73,6 +94,11 @@
   
   // 调度单次 RAF 更新
   function scheduleUpdate(x: number, y: number) {
+    // 【性能优化】检查位置变化是否显著
+    if (Math.abs(x - lastSentX) < POSITION_EPSILON && Math.abs(y - lastSentY) < POSITION_EPSILON) {
+      return; // 变化太小，跳过更新
+    }
+    
     pendingUpdate = { x, y };
     if (rafId === null) {
       rafId = requestAnimationFrame(flushUpdate);
@@ -82,6 +108,8 @@
   function flushUpdate() {
     rafId = null;
     if (pendingUpdate) {
+      lastSentX = pendingUpdate.x;
+      lastSentY = pendingUpdate.y;
       onPositionChange?.(pendingUpdate.x, pendingUpdate.y);
       pendingUpdate = null;
     }
@@ -90,6 +118,13 @@
   // 直接在 mousemove 中计算并调度更新
   function onMouseMove(e: MouseEvent) {
     if (!enabled || !layerRef) return;
+    
+    // 【性能优化】节流 mousemove
+    const now = performance.now();
+    if (now - lastMouseMoveTime < MOUSEMOVE_THROTTLE) {
+      return;
+    }
+    lastMouseMoveTime = now;
     
     const rect = getCachedRect();
     if (!rect) return;
@@ -130,12 +165,24 @@
   
   onMount(() => {
     window.addEventListener('mousemove', onMouseMove, { passive: true });
+    
+    // 【性能优化】使用 ResizeObserver 自动失效缓存
+    if (layerRef) {
+      resizeObserver = new ResizeObserver(() => {
+        invalidateRectCache();
+      });
+      resizeObserver.observe(layerRef);
+    }
   });
   
   onDestroy(() => {
     window.removeEventListener('mousemove', onMouseMove);
     if (rafId !== null) {
       cancelAnimationFrame(rafId);
+    }
+    if (resizeObserver) {
+      resizeObserver.disconnect();
+      resizeObserver = null;
     }
   });
 </script>

@@ -28,9 +28,10 @@ export async function openFileSystemItem(
         totalPages?: number; // For books: total pages (for validation if needed)
         forceBookOpen?: boolean;
         folderSyncMode?: 'enter' | 'select';
+        forceInApp?: boolean; // 强制在应用内打开（命令行启动时使用）
     } = {}
 ) {
-    const { syncFileTree = false, page = 0, folderSyncMode = 'enter' } = options;
+    const { syncFileTree = false, page = 0, folderSyncMode = 'enter', forceInApp = false } = options;
 
     console.log(`📂 Open Item: ${path}, isDir: ${isDir}, sync: ${syncFileTree}`);
 
@@ -113,8 +114,22 @@ export async function openFileSystemItem(
                     console.error('Failed to add history entry from openFileSystemItem:', historyError);
                 }
             } else {
-                // Open with system default application (for unsupported file types)
-                await FileSystemAPI.openWithSystem(path);
+                // 如果强制在应用内打开，尝试作为普通文件夹书籍的一部分打开
+                if (forceInApp) {
+                    console.log('📁 forceInApp: attempting to open via parent folder book', path);
+                    let parentDir = path;
+                    const lastBackslash = path.lastIndexOf('\\');
+                    const lastSlash = path.lastIndexOf('/');
+                    const lastSeparator = Math.max(lastBackslash, lastSlash);
+                    if (lastSeparator > 0) {
+                        parentDir = path.substring(0, lastSeparator);
+                    }
+                    await bookStore.openDirectoryAsBook(parentDir);
+                    await bookStore.navigateToImage(path);
+                } else {
+                    // Open with system default application (for unsupported file types)
+                    await FileSystemAPI.openWithSystem(path);
+                }
             }
         } catch (err) {
             console.error('Failed to open file:', err);

@@ -38,8 +38,11 @@ async function handleCliStartup() {
 		if (!path) {
 			return;
 		}
+		console.log('📂 CLI startup: opening path:', path);
 		const meta = await getFileMetadata(path);
-		await openFileSystemItem(path, meta.isDir);
+		console.log('📂 CLI startup: metadata:', meta);
+		// 强制在应用内打开，不使用系统默认程序
+		await openFileSystemItem(path, meta.isDir, { forceInApp: true });
 	} catch (error) {
 		console.error('CLI startup failed', error);
 	}

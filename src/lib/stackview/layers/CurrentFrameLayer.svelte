@@ -76,16 +76,10 @@
 			return 'max-width: 100%; max-height: 100%;';
 		}
 		
-		// 双页模式：根据 orientation 决定分割方向
-		// 横向双页：宽度减半；纵向双页：高度减半
-		let effectiveVp = vp;
-		if (layout === 'double') {
-			if (orientation === 'vertical') {
-				effectiveVp = { width: vp.width, height: (vp.height - 4) / 2 };
-			} else {
-				effectiveVp = { width: (vp.width - 4) / 2, height: vp.height };
-			}
-		}
+		// 双页模式：两张图片左右排列，每张最多占宽度的一半
+		const effectiveVp = layout === 'double' 
+			? { width: (vp.width - 4) / 2, height: vp.height }
+			: vp;
 		
 		const imgAspect = size.width / size.height;
 		
@@ -155,17 +149,8 @@
 		const classes: string[] = [];
 
 		if (layout === 'double') {
-			// 双页模式：始终左右排列，不受 orientation 影响
+			// 双页模式：始终左右排列
 			classes.push('frame-double');
-			if (direction === 'rtl') {
-				classes.push('frame-rtl');
-			}
-		} else if (layout === 'panorama') {
-			// 全景模式：orientation 控制滚动方向
-			classes.push('frame-panorama');
-			if (orientation === 'vertical') {
-				classes.push('frame-vertical');
-			}
 			if (direction === 'rtl') {
 				classes.push('frame-rtl');
 			}
@@ -255,7 +240,7 @@
 		opacity: 1;
 	}
 
-	/* 双页模式 */
+	/* 双页模式（始终左右排列） */
 	.scroll-frame-container.frame-double .scroll-frame-content {
 		flex-direction: row;
 		gap: 4px;

@@ -815,6 +815,21 @@
 
 	// 执行批量删除
 	async function executeBatchDelete(paths: string[]) {
+		// 虚拟路径模式：从书签/历史中移除
+		if (isVirtualInstance && propInitialPath) {
+			const { removeVirtualPathItem } = await import('$lib/components/panels/folderPanel/utils/virtualPathLoader');
+			let successCount = 0;
+			for (const path of paths) {
+				if (removeVirtualPathItem(propInitialPath, path)) {
+					successCount++;
+				}
+			}
+			folderTabActions.deselectAll();
+			const typeText = propInitialPath.includes('bookmark') ? '书签' : '历史';
+			showSuccessToast(`移除成功`, `已从${typeText}中移除 ${successCount} 项`);
+			return;
+		}
+
 		const strategy = $deleteStrategy;
 		const actionText = strategy === 'trash' ? '删除' : '永久删除';
 
@@ -845,6 +860,15 @@
 
 	// 执行单个删除
 	async function executeSingleDelete(item: FsItem) {
+		// 虚拟路径模式：从书签/历史中移除
+		if (isVirtualInstance && propInitialPath) {
+			const { removeVirtualPathItem } = await import('$lib/components/panels/folderPanel/utils/virtualPathLoader');
+			removeVirtualPathItem(propInitialPath, item.path);
+			const typeText = propInitialPath.includes('bookmark') ? '书签' : '历史';
+			showSuccessToast(`移除成功`, `已从${typeText}中移除`);
+			return;
+		}
+
 		const strategy = $deleteStrategy;
 		const actionText = strategy === 'trash' ? '删除' : '永久删除';
 
@@ -867,9 +891,12 @@
 
 	// 处理删除（勾选模式下批量删除，删除模式下不需要确认）
 	function handleDelete(item: FsItem) {
-		const strategy = $deleteStrategy;
-		const actionText = strategy === 'trash' ? '删除' : '永久删除';
 		const selected = $selectedItems;
+		
+		// 虚拟路径模式：使用不同的提示文字
+		const isVirtual = isVirtualInstance && propInitialPath;
+		const typeText = isVirtual ? (propInitialPath!.includes('bookmark') ? '书签' : '历史') : '';
+		const actionText = isVirtual ? `从${typeText}移除` : ($deleteStrategy === 'trash' ? '删除' : '永久删除');
 
 		// 勾选模式下且有选中项时，批量删除选中项
 		if ($multiSelectMode && selected.size > 0) {
@@ -881,9 +908,11 @@
 			const paths = Array.from(selected);
 			openConfirmDialog({
 				title: `${actionText}确认`,
-				description: `确定要${actionText}选中的 ${paths.length} 个项目吗？`,
-				confirmText: actionText,
-				variant: 'destructive',
+				description: isVirtual 
+					? `确定要从${typeText}中移除选中的 ${paths.length} 项吗？`
+					: `确定要${actionText}选中的 ${paths.length} 个项目吗？`,
+				confirmText: isVirtual ? '移除' : actionText,
+				variant: isVirtual ? 'warning' : 'destructive',
 				onConfirm: () => executeBatchDelete(paths)
 			});
 			return;
@@ -896,9 +925,11 @@
 		} else {
 			openConfirmDialog({
 				title: `${actionText}确认`,
-				description: `确定要${actionText} "${item.name}" 吗？`,
-				confirmText: actionText,
-				variant: 'destructive',
+				description: isVirtual
+					? `确定要从${typeText}中移除 "${item.name}" 吗？`
+					: `确定要${actionText} "${item.name}" 吗？`,
+				confirmText: isVirtual ? '移除' : actionText,
+				variant: isVirtual ? 'warning' : 'destructive',
 				onConfirm: () => executeSingleDelete(item)
 			});
 		}
@@ -912,15 +943,19 @@
 			return;
 		}
 
-		const strategy = $deleteStrategy;
-		const actionText = strategy === 'trash' ? '删除' : '永久删除';
+		// 虚拟路径模式：使用不同的提示文字
+		const isVirtual = isVirtualInstance && propInitialPath;
+		const typeText = isVirtual ? (propInitialPath!.includes('bookmark') ? '书签' : '历史') : '';
+		const actionText = isVirtual ? `从${typeText}移除` : ($deleteStrategy === 'trash' ? '删除' : '永久删除');
 		const paths = Array.from(selected);
 
 		openConfirmDialog({
 			title: `${actionText}确认`,
-			description: `确定要${actionText}选中的 ${paths.length} 个项目吗？`,
-			confirmText: actionText,
-			variant: 'destructive',
+			description: isVirtual
+				? `确定要从${typeText}中移除选中的 ${paths.length} 项吗？`
+				: `确定要${actionText}选中的 ${paths.length} 个项目吗？`,
+			confirmText: isVirtual ? '移除' : actionText,
+			variant: isVirtual ? 'warning' : 'destructive',
 			onConfirm: () => executeBatchDelete(paths)
 		});
 	}

@@ -245,22 +245,16 @@ pub async fn pm_preload_thumbnails(
     let result_indices = pages_to_load.clone();
     let manager_arc = Arc::clone(&state.manager);
     
-    // 在低优先级后台任务中生成缩略图并推送事件
-    // 使用 yield 和延迟避免干扰主页面加载
+    // 在后台任务中生成缩略图并推送事件
     tokio::spawn(async move {
-        log::debug!("🖼️ [PageCommand] 开始生成 {} 个缩略图", pages_to_load.len());
+        log::info!("🖼️ [PageCommand] 开始生成 {} 个缩略图", pages_to_load.len());
         
-        for (i, index) in pages_to_load.iter().enumerate() {
-            // 每个缩略图之间让出控制权，避免阻塞翻页
-            if i > 0 {
-                tokio::task::yield_now().await;
-                // 添加小延迟，降低 CPU 占用
-                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-            }
+        for index in pages_to_load {
+            log::debug!("🖼️ [PageCommand] 生成缩略图: page {}", index);
             
             let result = {
                 let manager = manager_arc.lock().await;
-                manager.generate_page_thumbnail(*index, size).await
+                manager.generate_page_thumbnail(index, size).await
             };
 
             match result {
@@ -270,26 +264,26 @@ pub async fn pm_preload_thumbnails(
                     let data_base64 = STANDARD.encode(&item.data);
 
                     let event = ThumbnailReadyEvent {
-                        index: *index,
+                        index,
                         data: format!("data:image/webp;base64,{}", data_base64),
                         width: item.width,
                         height: item.height,
                     };
 
-                    log::trace!("🖼️ 推送缩略图: page {}, {}x{}", 
-                        index, item.width, item.height);
+                    log::info!("🖼️ 推送缩略图事件: page {}, {}x{}, data_len={}", 
+                        index, item.width, item.height, data_base64.len());
 
                     if let Err(e) = app.emit("thumbnail-ready", &event) {
                         log::error!("🖼️ 推送缩略图事件失败: {}", e);
                     }
                 }
                 Err(e) => {
-                    log::debug!("🖼️ 生成缩略图失败: page {}: {}", index, e);
+                    log::warn!("🖼️ 生成缩略图失败: page {}: {}", index, e);
                 }
             }
         }
         
-        log::debug!("🖼️ [PageCommand] 缩略图生成任务完成");
+        log::info!("🖼️ [PageCommand] 缩略图生成任务完成");
     });
     
     Ok(result_indices)

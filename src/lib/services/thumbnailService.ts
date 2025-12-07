@@ -20,10 +20,9 @@ import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 // 配置
 // ===========================================================================
 
-const PRELOAD_RANGE = 5; // 前后各预加载 5 页
+const PRELOAD_RANGE = 3; // 前后各预加载 20 页
 const THUMBNAIL_MAX_SIZE = 256; // 缩略图最大尺寸
-const INITIAL_DELAY_MS = 500; // 切书后的初始延迟（让主页面先加载）
-const DEBOUNCE_MS = 200; // 翻页防抖延迟
+const INITIAL_DELAY_MS = 300; // 切书后的初始延迟（让主页面先加载）
 
 // ===========================================================================
 // 状态
@@ -39,9 +38,6 @@ let eventUnlisten: UnlistenFn | null = null;
 // 当前预加载请求版本（用于取消旧请求）
 let preloadVersion = 0;
 
-// 防抖定时器
-let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-
 // ===========================================================================
 // 事件监听
 // ===========================================================================
@@ -51,6 +47,8 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
  */
 function handleThumbnailReady(event: ThumbnailReadyEvent): void {
 	const { index, data, width, height } = event;
+
+	console.log(`🖼️ ThumbnailService: Received thumbnail for page ${index}, ${width}x${height}`);
 
 	// 写入缓存
 	thumbnailCacheStore.setThumbnail(index, data, width, height);
@@ -64,64 +62,47 @@ function handleThumbnailReady(event: ThumbnailReadyEvent): void {
 // ===========================================================================
 
 /**
- * 加载缩略图（中央优先策略，带防抖）
+ * 加载缩略图（中央优先策略）
  *
  * 使用后端 API 生成缩略图，结果通过事件推送
  */
-function loadThumbnails(centerIndex: number): void {
+async function loadThumbnails(centerIndex: number): Promise<void> {
 	const currentBook = bookStore.currentBook;
-	if (!currentBook) {
-		console.debug('🖼️ loadThumbnails: no book');
-		return;
-	}
-
-	// 清除之前的防抖定时器
-	if (debounceTimer) {
-		clearTimeout(debounceTimer);
-	}
+	if (!currentBook) return;
 
 	// 增加版本号，取消之前的预加载
-	preloadVersion++;
-	const currentVersion = preloadVersion;
+	const currentVersion = ++preloadVersion;
 
-	console.debug(`🖼️ loadThumbnails: scheduling for center=${centerIndex}, version=${currentVersion}`);
+	try {
+		const indices = await preloadThumbnails(centerIndex, PRELOAD_RANGE, THUMBNAIL_MAX_SIZE);
 
-	// 防抖：等待一段时间再发起请求
-	debounceTimer = setTimeout(async () => {
-		// 再次检查版本，如果已被取消则忽略
+		// 检查版本，如果已被取消则忽略
 		if (currentVersion !== preloadVersion) {
-			console.debug(`🖼️ loadThumbnails: cancelled (${currentVersion} vs ${preloadVersion})`);
+			console.log('🖼️ ThumbnailService: Preload cancelled (version mismatch)');
 			return;
 		}
 
-		console.debug(`🖼️ loadThumbnails: executing for center=${centerIndex}`);
-
-		try {
-			const indices = await preloadThumbnails(centerIndex, PRELOAD_RANGE, THUMBNAIL_MAX_SIZE);
-
-			// 检查版本，如果已被取消则忽略
-			if (currentVersion !== preloadVersion) {
-				return;
-			}
-
-			console.debug(`🖼️ loadThumbnails: got ${indices.length} indices`);
-
-			// 标记为加载中
-			for (const idx of indices) {
-				loadingIndices.add(idx);
-			}
-		} catch (error) {
-			console.error('Failed to preload thumbnails:', error);
+		// 标记为加载中
+		for (const idx of indices) {
+			loadingIndices.add(idx);
 		}
-	}, DEBOUNCE_MS);
+
+		if (indices.length > 0) {
+			console.log(
+				`🖼️ ThumbnailService: Preloading ${indices.length} thumbnails from center ${centerIndex}`
+			);
+		}
+	} catch (error) {
+		console.error('Failed to preload thumbnails:', error);
+	}
 }
 
 /**
  * 加载单个页面的缩略图（兼容旧接口）
  */
-function loadThumbnail(pageIndex: number): void {
+async function loadThumbnail(pageIndex: number): Promise<void> {
 	// 单个加载直接使用 loadThumbnails
-	loadThumbnails(pageIndex);
+	await loadThumbnails(pageIndex);
 }
 
 /**
@@ -129,10 +110,6 @@ function loadThumbnail(pageIndex: number): void {
  */
 function cancelLoading(): void {
 	preloadVersion++;
-	if (debounceTimer) {
-		clearTimeout(debounceTimer);
-		debounceTimer = null;
-	}
 }
 
 // ===========================================================================
@@ -145,6 +122,7 @@ function cancelLoading(): void {
 function handleBookChange(bookPath: string): void {
 	if (currentBookPath === bookPath) return;
 
+	console.log(`🖼️ ThumbnailService: Book changed to ${bookPath}`);
 	currentBookPath = bookPath;
 
 	// 取消旧的加载任务
@@ -186,6 +164,7 @@ export async function initThumbnailService(): Promise<void> {
 		});
 
 		isInitialized = true;
+		console.log('🖼️ ThumbnailService: Initialized with backend event listener');
 	} catch (error) {
 		console.error('Failed to initialize ThumbnailService:', error);
 	}
@@ -203,6 +182,7 @@ export function destroyThumbnailService(): void {
 	currentBookPath = null;
 	isInitialized = false;
 	preloadVersion = 0;
+	console.log('🖼️ ThumbnailService: Destroyed');
 }
 
 // ===========================================================================

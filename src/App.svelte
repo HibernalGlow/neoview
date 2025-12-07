@@ -35,6 +35,7 @@
 	} from '$lib/stores';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { FolderOpen } from '@lucide/svelte';
+	import ProjectCard from '$lib/components/ui/ProjectCard.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
 	import { isVideoFile } from '$lib/utils/videoUtils';
@@ -113,11 +114,7 @@
 			const matches = await getMatches();
 			const arg = matches.args?.path?.value as string | string[] | undefined;
 			const cliPath =
-				typeof arg === 'string'
-					? arg
-					: Array.isArray(arg) && arg.length > 0
-						? arg[0]
-						: undefined;
+				typeof arg === 'string' ? arg : Array.isArray(arg) && arg.length > 0 ? arg[0] : undefined;
 
 			if (cliPath) {
 				console.log('📂 CLI 启动: 打开路径:', cliPath);
@@ -657,15 +654,19 @@
 	<!-- 仅使用传统布局模式，禁用 Flow 画布以提升性能 -->
 	<MainLayout>
 		<Empty class="h-full w-full border-0">
-			<EmptyHeader>
+			<!-- <EmptyHeader>
 				<EmptyTitle class="mb-4 text-4xl font-bold">NeoView</EmptyTitle>
-				<EmptyDescription class="mb-8 text-base">Modern Image & Comic Viewer</EmptyDescription>
-			</EmptyHeader>
+				<EmptyDescription class="mb-6 text-base">Modern Image & Comic Viewer</EmptyDescription>
+			</EmptyHeader> -->
 			<EmptyContent>
-				<Button onclick={handleOpenFolder} disabled={loading} size="lg">
+				<!-- 项目卡片 -->
+				<ProjectCard class="mb-6" />
+
+				<!-- 操作按钮 -->
+				<!-- <Button onclick={handleOpenFolder} disabled={loading} size="lg">
 					<FolderOpen class="mr-2 h-5 w-5" />
 					{loading ? 'Opening...' : 'Open Folder'}
-				</Button>
+				</Button> -->
 			</EmptyContent>
 		</Empty>
 	</MainLayout>

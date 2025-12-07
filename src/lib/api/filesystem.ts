@@ -434,21 +434,26 @@ export async function getImagesFromArchive(archivePath: string): Promise<string[
 
 /**
  * 预热压缩包文件列表（不等待结果）
+ * 【已禁用】功能已注释掉
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function preheatArchiveList(archivePath: string): void {
-  // 检查是否已缓存
-  const cached = archiveListCache.get(archivePath);
-  if (cached && Date.now() - cached.timestamp < ARCHIVE_LIST_CACHE_TTL) {
-    return; // 已缓存，无需预热
-  }
+  // 功能已禁用
+  return;
   
-  // 异步预热
-  invoke<string[]>('get_images_from_archive', { archivePath })
-    .then(list => {
-      archiveListCache.set(archivePath, { list, timestamp: Date.now() });
-      console.log(`📦 压缩包列表预热完成: ${archivePath} (${list.length} 项)`);
-    })
-    .catch(() => {}); // 忽略错误
+  // // 检查是否已缓存
+  // const cached = archiveListCache.get(archivePath);
+  // if (cached && Date.now() - cached.timestamp < ARCHIVE_LIST_CACHE_TTL) {
+  //   return; // 已缓存，无需预热
+  // }
+  // 
+  // // 异步预热
+  // invoke<string[]>('get_images_from_archive', { archivePath })
+  //   .then(list => {
+  //     archiveListCache.set(archivePath, { list, timestamp: Date.now() });
+  //     console.log(`📦 压缩包列表预热完成: ${archivePath} (${list.length} 项)`);
+  //   })
+  //   .catch(() => {}); // 忽略错误
 }
 
 /**

@@ -5,14 +5,46 @@
 import { Button } from '$lib/components/ui/button';
 import { Input } from '$lib/components/ui/input';
 import { Label } from '$lib/components/ui/label';
-import * as Select from '$lib/components/ui/select';
 import { aiTranslationStore, type TranslationServiceType } from '$lib/stores/ai/translationStore.svelte';
 import { testConnection } from '$lib/services/translationService';
-import { Settings, Server, Bot, CheckCircle, XCircle, Loader2, Copy, Check, Terminal } from '@lucide/svelte';
+import { Settings, Server, Bot, CheckCircle, XCircle, Loader2, Copy, Check, Terminal, Ban, ExternalLink, Circle } from '@lucide/svelte';
 
 let config = $state(aiTranslationStore.getConfig());
 let isTesting = $state(false);
 let testResult = $state<{ success: boolean; message: string } | null>(null);
+let serviceOnline = $state<boolean | null>(null);
+let checkingStatus = $state(false);
+
+// 检查服务状态
+async function checkServiceStatus() {
+	if (config.type !== 'libretranslate') return;
+	checkingStatus = true;
+	try {
+		const response = await fetch(`${config.libreTranslateUrl}/languages`, {
+			method: 'GET',
+			signal: AbortSignal.timeout(3000)
+		});
+		serviceOnline = response.ok;
+	} catch {
+		serviceOnline = false;
+	} finally {
+		checkingStatus = false;
+	}
+}
+
+// 初始检查和配置变化时检查
+$effect(() => {
+	if (config.type === 'libretranslate' && config.libreTranslateUrl) {
+		checkServiceStatus();
+	} else {
+		serviceOnline = null;
+	}
+});
+
+// 在浏览器中打开
+function openInBrowser() {
+	window.open(config.libreTranslateUrl, '_blank');
+}
 
 // 订阅 store 更新
 $effect(() => {
@@ -134,30 +166,78 @@ async function copyCommand() {
 </script>
 
 <div class="space-y-4">
-	<!-- 服务类型选择 -->
+	<!-- 服务类型选择 - Tab 切换 -->
 	<div class="space-y-2">
 		<Label>翻译服务</Label>
-		<Select.Root
-			selected={{ value: config.type, label: serviceTypeOptions.find(o => o.value === config.type)?.label || '禁用' }}
-			onSelectedChange={(v) => v && handleServiceTypeChange(v.value)}
-		>
-			<Select.Trigger class="w-full">
-				<Select.Value placeholder="选择翻译服务" />
-			</Select.Trigger>
-			<Select.Content>
-				{#each serviceTypeOptions as option}
-					<Select.Item value={option.value}>{option.label}</Select.Item>
-				{/each}
-			</Select.Content>
-		</Select.Root>
+		<div class="flex rounded-md border bg-muted/30 p-1">
+			<button
+				class="flex flex-1 items-center justify-center gap-1 rounded px-2 py-1.5 text-xs transition-colors {config.type === 'disabled' ? 'bg-background shadow-sm' : 'hover:bg-muted'}"
+				onclick={() => handleServiceTypeChange('disabled')}
+			>
+				<Ban class="h-3 w-3" />
+				禁用
+			</button>
+			<button
+				class="flex flex-1 items-center justify-center gap-1 rounded px-2 py-1.5 text-xs transition-colors {config.type === 'libretranslate' ? 'bg-background shadow-sm' : 'hover:bg-muted'}"
+				onclick={() => handleServiceTypeChange('libretranslate')}
+			>
+				<Server class="h-3 w-3" />
+				LibreTranslate
+			</button>
+			<button
+				class="flex flex-1 items-center justify-center gap-1 rounded px-2 py-1.5 text-xs transition-colors {config.type === 'ollama' ? 'bg-background shadow-sm' : 'hover:bg-muted'}"
+				onclick={() => handleServiceTypeChange('ollama')}
+			>
+				<Bot class="h-3 w-3" />
+				Ollama
+			</button>
+		</div>
 	</div>
 
 	{#if config.type === 'libretranslate'}
 		<!-- LibreTranslate 配置 -->
 		<div class="space-y-3 rounded-md border bg-muted/20 p-3">
-			<div class="flex items-center gap-2 text-sm font-medium">
-				<Server class="h-4 w-4" />
-				LibreTranslate 配置
+			<div class="flex items-center justify-between">
+				<div class="flex items-center gap-2 text-sm font-medium">
+					<Server class="h-4 w-4" />
+					LibreTranslate 配置
+				</div>
+				<!-- 服务状态和操作 -->
+				<div class="flex items-center gap-2">
+					<!-- 状态指示器 -->
+					<div class="flex items-center gap-1 text-xs" title={serviceOnline === null ? '未检测' : serviceOnline ? '服务在线' : '服务离线'}>
+						{#if checkingStatus}
+							<Loader2 class="h-3 w-3 animate-spin text-muted-foreground" />
+						{:else if serviceOnline === true}
+							<Circle class="h-2 w-2 fill-green-500 text-green-500" />
+							<span class="text-green-600 dark:text-green-400">在线</span>
+						{:else if serviceOnline === false}
+							<Circle class="h-2 w-2 fill-red-500 text-red-500" />
+							<span class="text-red-600 dark:text-red-400">离线</span>
+						{/if}
+					</div>
+					<!-- 打开浏览器 -->
+					<Button
+						variant="ghost"
+						size="sm"
+						class="h-6 w-6 p-0"
+						onclick={openInBrowser}
+						title="在浏览器中打开"
+					>
+						<ExternalLink class="h-3 w-3" />
+					</Button>
+					<!-- 刷新状态 -->
+					<Button
+						variant="ghost"
+						size="sm"
+						class="h-6 w-6 p-0"
+						onclick={checkServiceStatus}
+						disabled={checkingStatus}
+						title="刷新状态"
+					>
+						<Settings class="h-3 w-3 {checkingStatus ? 'animate-spin' : ''}" />
+					</Button>
+				</div>
 			</div>
 			<div class="space-y-2">
 				<Label class="text-xs">API 地址</Label>
@@ -235,38 +315,32 @@ async function copyCommand() {
 
 	{#if config.type !== 'disabled'}
 		<!-- 语言设置 -->
-		<div class="grid grid-cols-2 gap-3">
+		<div class="space-y-3">
 			<div class="space-y-2">
 				<Label class="text-xs">源语言</Label>
-				<Select.Root
-					selected={{ value: config.sourceLanguage, label: languageOptions.find(o => o.value === config.sourceLanguage)?.label || '自动' }}
-					onSelectedChange={(v) => v && updateSourceLanguage(v.value)}
-				>
-					<Select.Trigger class="w-full">
-						<Select.Value />
-					</Select.Trigger>
-					<Select.Content>
-						{#each languageOptions as option}
-							<Select.Item value={option.value}>{option.label}</Select.Item>
-						{/each}
-					</Select.Content>
-				</Select.Root>
+				<div class="flex rounded-md border bg-muted/30 p-1">
+					{#each languageOptions as option}
+						<button
+							class="flex-1 rounded px-2 py-1 text-xs transition-colors {config.sourceLanguage === option.value ? 'bg-background shadow-sm' : 'hover:bg-muted'}"
+							onclick={() => updateSourceLanguage(option.value)}
+						>
+							{option.label}
+						</button>
+					{/each}
+				</div>
 			</div>
 			<div class="space-y-2">
 				<Label class="text-xs">目标语言</Label>
-				<Select.Root
-					selected={{ value: config.targetLanguage, label: targetLanguageOptions.find(o => o.value === config.targetLanguage)?.label || '中文' }}
-					onSelectedChange={(v) => v && updateTargetLanguage(v.value)}
-				>
-					<Select.Trigger class="w-full">
-						<Select.Value />
-					</Select.Trigger>
-					<Select.Content>
-						{#each targetLanguageOptions as option}
-							<Select.Item value={option.value}>{option.label}</Select.Item>
-						{/each}
-					</Select.Content>
-				</Select.Root>
+				<div class="flex rounded-md border bg-muted/30 p-1">
+					{#each targetLanguageOptions as option}
+						<button
+							class="flex-1 rounded px-2 py-1 text-xs transition-colors {config.targetLanguage === option.value ? 'bg-background shadow-sm' : 'hover:bg-muted'}"
+							onclick={() => updateTargetLanguage(option.value)}
+						>
+							{option.label}
+						</button>
+					{/each}
+				</div>
 			</div>
 		</div>
 

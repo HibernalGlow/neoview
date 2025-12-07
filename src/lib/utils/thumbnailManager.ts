@@ -101,10 +101,11 @@ export const thumbnailManager = {
 
   // V3: 缩略图就绪回调 - 由事件系统处理
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  setOnThumbnailReady(_callback: (path: string, dataUrl: string) => void) {
-    // V3 使用 Tauri 事件推送，回调已在 thumbnailStoreV3 中处理
-    console.log('[thumbnailManager] 兼容层: setOnThumbnailReady() - V3 使用事件推送');
-  },
+  // setOnThumbnailReady(_callback: (path: string, dataUrl: string) => void) {
+  //   // V3 使用 Tauri 事件推送，回调已在 thumbnailStoreV3 中处理
+  //   console.log('[thumbnailManager] 兼容层: setOnThumbnailReady() - V3 使用事件推送');
+  // },
+  setOnThumbnailReady: undefined,
 
   // V3: 设置当前目录
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -174,7 +175,7 @@ export const thumbnailStore = {
   subscribe(_callback: (thumbnails: Map<string, string>) => void) {
     // V3 使用事件推送，这里提供一个空的订阅
     console.log('[thumbnailManager] 兼容层: thumbnailStore.subscribe() 已弃用');
-    return () => {};
+    return () => { };
   },
 };
 
@@ -194,7 +195,7 @@ export async function generateArchiveThumbnailAsync(path: string): Promise<void>
 export function setupThumbnailEventListener(): () => void {
   // V3 事件监听已在 initThumbnailServiceV3 中设置
   console.log('[thumbnailManager] 兼容层: setupThumbnailEventListener() 已弃用');
-  return () => {};
+  return () => { };
 }
 
 // 默认导出

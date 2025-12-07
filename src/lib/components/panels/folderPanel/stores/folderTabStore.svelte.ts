@@ -231,10 +231,26 @@ function loadTabsState(): FolderTabsState | null {
 
 function saveTabsState(state: FolderTabsState) {
 	try {
+		// 过滤掉虚拟路径页签，只保存真实文件系统路径的页签
+		const realTabs = state.tabs.filter(tab => !isVirtualPath(tab.currentPath) && !isVirtualPath(tab.homePath));
+		
+		// 如果所有页签都被过滤掉了，保留一个空状态
+		if (realTabs.length === 0) {
+			localStorage.removeItem(TAB_STORAGE_KEY);
+			return;
+		}
+		
+		// 确保 activeTabId 指向真实页签
+		let activeId = state.activeTabId;
+		const activeTab = realTabs.find(t => t.id === activeId);
+		if (!activeTab) {
+			activeId = realTabs[0].id;
+		}
+		
 		// 序列化前转换 Set 为数组
 		const toSave = {
-			...state,
-			tabs: state.tabs.map((tab) => ({
+			activeTabId: activeId,
+			tabs: realTabs.map((tab) => ({
 				...tab,
 				// 只保存必要状态，不保存临时数据
 				items: [], // 不保存文件列表

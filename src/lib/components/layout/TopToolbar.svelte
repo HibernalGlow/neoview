@@ -1050,6 +1050,7 @@
 			type="button"
 			class="text-muted-foreground hover:bg-accent absolute bottom-0 left-1/2 z-50 -translate-x-1/2 cursor-ns-resize rounded-md p-1 transition-colors"
 			onmousedown={handleResizeStart}
+			oncontextmenu={handlePinContextMenu}
 			aria-label="拖拽调整工具栏高度"
 		>
 			<GripHorizontal class="h-4 w-4" />

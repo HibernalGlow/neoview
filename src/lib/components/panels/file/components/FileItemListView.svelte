@@ -416,15 +416,16 @@
 		{/if}
 
 		<div class="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-sm">
+			<!-- 进度信息始终显示（当存在时） -->
+			{#if currentPage !== undefined && totalPages !== undefined && totalPages > 0}
+				<span>进度: {currentPage}/{totalPages}</span>
+			{/if}
 			{#if showSizeAndModified}
 				<span>{item.isDir ? getFolderSizeDisplay() : formatSize(item.size || 0, false)}</span>
 				{#if timestamp}
 					<span>· {formatTime(timestamp)}</span>
 				{/if}
 			{:else}
-				{#if currentPage !== undefined && totalPages !== undefined}
-					<span>页码: {currentPage}/{totalPages}</span>
-				{/if}
 				{#if timestamp}
 					<span>{formatTime(timestamp)}</span>
 				{/if}

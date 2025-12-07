@@ -24,6 +24,7 @@
 		getNextSplitHalf,
 		getPrevSplitHalf,
 		buildFrameImages,
+		getPageStep,
 		type SplitState,
 		type FrameBuildConfig,
 		type PageData
@@ -379,10 +380,16 @@
 		};
 
 		// 构建下一页数据（双页模式需要）
+		// 需要包含尺寸信息，以便 buildFrameImages 判断横竖方向
+		const nextPageIndex = bookStore.currentPageIndex + 1;
+		const nextBookPage = bookStore.currentBook?.pages?.[nextPageIndex];
+		const { secondDimensions } = imageStore.state;
 		const nextPage: PageData | null = secondUrl
 			? {
 					url: secondUrl,
-					pageIndex: bookStore.currentPageIndex + 1
+					pageIndex: nextPageIndex,
+					width: secondDimensions?.width ?? nextBookPage?.width ?? 0,
+					height: secondDimensions?.height ?? nextBookPage?.height ?? 0
 				}
 			: null;
 
@@ -438,8 +445,47 @@
 		}
 	}
 
-	// 计算翻页步进：双页模式翻 2 页，单页模式翻 1 页
-	let pageStep = $derived(pageMode === 'double' ? 2 : 1);
+	// 计算翻页步进：根据当前/下一页的横竖状态动态计算
+	// 只有两张竖屏图片才能拼成双页，横向图必须单独显示
+	let pageStep = $derived.by(() => {
+		if (pageMode !== 'double' || !treatHorizontalAsDoublePage) {
+			// 未开启"横向视为双页"时，使用固定步进
+			return pageMode === 'double' ? 2 : 1;
+		}
+
+		// 双页模式 + 开启"横向视为双页"：动态计算
+		const book = bookStore.currentBook;
+		if (!book || !book.pages) return 2;
+
+		const currentIndex = bookStore.currentPageIndex;
+		const currentPage = book.pages[currentIndex];
+		if (!currentPage) return 1;
+
+		// 构建页面数据
+		const currentPageData: PageData = {
+			url: '',
+			pageIndex: currentIndex,
+			width: currentPage.width ?? 0,
+			height: currentPage.height ?? 0
+		};
+
+		// 获取下一页
+		const nextIndex = currentIndex + 1;
+		let nextPageData: PageData | null = null;
+		if (nextIndex < book.pages.length) {
+			const nextPage = book.pages[nextIndex];
+			if (nextPage) {
+				nextPageData = {
+					url: '',
+					pageIndex: nextIndex,
+					width: nextPage.width ?? 0,
+					height: nextPage.height ?? 0
+				};
+			}
+		}
+
+		return getPageStep(currentPageData, nextPageData, frameConfig);
+	});
 
 	function handlePrevPage() {
 		console.log(

@@ -21,36 +21,6 @@
 		return path.replace(/\\/g, '/');
 	}
 
-	function enqueueVisible(path: string, items: any[], options?: any): void {
-		const priority = options?.priority || 'normal';
-		items.forEach((item) => {
-			const isArchive =
-				item.name.endsWith('.zip') ||
-				item.name.endsWith('.cbz') ||
-				item.name.endsWith('.rar') ||
-				item.name.endsWith('.cbr');
-			const isVideo = isVideoFile(item.path);
-
-			if (item.isDir) {
-				// 文件夹：只从数据库加载，不主动查找（避免超多子文件夹影响性能）
-				// 文件夹缩略图由反向查找策略自动更新（当子文件/压缩包生成缩略图时）
-				thumbnailManager.getThumbnail(item.path, undefined, false, priority).then((dataUrl) => {
-					if (dataUrl) {
-						const key = toRelativeKey(item.path);
-						fileBrowserStore.addThumbnail(key, dataUrl);
-					}
-					// 如果没有找到，不主动查找，避免性能问题
-				});
-			} else if (item.isImage || isArchive || isVideo) {
-				thumbnailManager.getThumbnail(item.path, undefined, isArchive, priority);
-			}
-		});
-	}
-
-	function bumpPriority(path: string): void {
-		thumbnailManager.setCurrentDirectory(path);
-	}
-
 	const {
 		items = [],
 		currentPath = '',
@@ -161,7 +131,7 @@
 
 	/**
 	 * 核心加载逻辑：加载可见区域的缩略图
-	 * 抽取为独立函数，供 debounce 和立即调用使用
+	 * 【优化】直接调用 V3 API，一次请求完成
 	 */
 	function loadVisibleThumbnails() {
 		if (!currentPath || items.length === 0) return;
@@ -188,35 +158,11 @@
 		});
 
 		if (needThumbnails.length > 0) {
-			// 按虚拟列表顺序处理：视野上方的先加载
-			const itemsWithOrder = needThumbnails.map((item) => {
-				const itemIndex = items.findIndex((i) => i.path === item.path);
-				const distanceFromTop = itemIndex - startIndex;
-				return { item, distanceFromTop };
-			});
-
-			// 按距离顶部距离排序
-			itemsWithOrder.sort((a, b) => a.distanceFromTop - b.distanceFromTop);
-			const paths = itemsWithOrder.map(({ item }) => item.path);
-
-			// 设置当前目录优先级
-			thumbnailManager.setCurrentDirectory(currentPath);
-
-			// 直接异步处理，无延迟
-			(async () => {
-				try {
-					// 1. 先从数据库批量加载已缓存的
-					const loaded = await thumbnailManager.batchLoadFromDb(paths);
-					
-					// 2. 找出未命中的，直接并行生成（无延迟）
-					const notLoaded = paths.filter(p => !loaded.has(p));
-					if (notLoaded.length > 0) {
-						thumbnailManager.batchGenerate(notLoaded);
-					}
-				} catch (err) {
-					console.debug('批量加载缩略图失败:', err);
-				}
-			})();
+			// 【优化】直接收集路径，按可见区域顺序排列（靠前的先加载）
+			const paths = needThumbnails.map(item => item.path);
+			
+			// 直接调用 requestVisibleThumbnails，V3 后端会处理优先级和缓存
+			thumbnailManager.requestVisibleThumbnails(paths, currentPath);
 		}
 	}
 

@@ -83,6 +83,13 @@
 	let hideControlsTimeout: ReturnType<typeof setTimeout> | null = null;
 	let videoUrl = $state<string>('');
 
+	// 字幕设置
+	let showSubtitleSettings = $state(false);
+	let subtitleFontSize = $state(1.2); // em 单位
+	let subtitleColor = $state('#ffffff');
+	let subtitleBgColor = $state('rgba(0, 0, 0, 0.7)');
+	let subtitleBgOpacity = $state(0.7);
+
 	// 当有新的 blob 时创建 URL
 	$effect(() => {
 		if (videoBlob) {
@@ -340,6 +347,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
 	class="video-player-container relative flex h-full w-full items-center justify-center bg-black"
+	style="--subtitle-font-size: {subtitleFontSize}em; --subtitle-color: {subtitleColor}; --subtitle-bg: rgba(0, 0, 0, {subtitleBgOpacity});"
 	onmousemove={handleMouseMove}
 	onmouseleave={() => isPlaying && !controlsPinned && (showControls = false)}
 	role="region"
@@ -544,21 +552,117 @@
 				</button>
 
 				<!-- 字幕状态/选择 -->
-				<button
-					class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {subtitle ? 'bg-white/20' : ''}"
-					onclick={(event) => {
-						event.stopPropagation();
-						onSelectSubtitle?.();
-					}}
-					title={subtitle ? `字幕: ${subtitle.filename}（点击更换）` : '点击选择字幕'}
-					aria-label={subtitle ? '更换字幕' : '选择字幕'}
-				>
-					{#if subtitle}
-						<Captions class="h-5 w-5 text-primary" />
-					{:else}
-						<CaptionsOff class="h-5 w-5 text-primary opacity-40" />
+				<div class="relative">
+					<button
+						class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {subtitle ? 'bg-white/20' : ''}"
+						onclick={(event) => {
+							event.stopPropagation();
+							onSelectSubtitle?.();
+						}}
+						oncontextmenu={(event) => {
+							event.preventDefault();
+							event.stopPropagation();
+							showSubtitleSettings = !showSubtitleSettings;
+						}}
+						title={subtitle ? `字幕: ${subtitle.filename}（左键更换，右键设置）` : '左键选择字幕，右键设置'}
+						aria-label={subtitle ? '更换字幕' : '选择字幕'}
+					>
+						{#if subtitle}
+							<Captions class="h-5 w-5 text-primary" />
+						{:else}
+							<CaptionsOff class="h-5 w-5 text-primary opacity-40" />
+						{/if}
+					</button>
+
+					<!-- 字幕设置面板 -->
+					{#if showSubtitleSettings}
+						<div
+							class="absolute bottom-full right-0 mb-2 w-64 rounded-lg bg-black/90 p-4 shadow-lg backdrop-blur-sm"
+							onclick={(e) => e.stopPropagation()}
+							onmousedown={(e) => e.stopPropagation()}
+						>
+							<div class="mb-3 flex items-center justify-between">
+								<span class="text-sm font-medium text-white">字幕设置</span>
+								<button
+									class="text-white/60 hover:text-white"
+									onclick={() => (showSubtitleSettings = false)}
+								>
+									✕
+								</button>
+							</div>
+
+							<!-- 字体大小 -->
+							<div class="mb-3">
+								<label class="mb-1 block text-xs text-white/70">字体大小</label>
+								<div class="flex items-center gap-2">
+									<input
+										type="range"
+										min="0.8"
+										max="2.5"
+										step="0.1"
+										bind:value={subtitleFontSize}
+										class="subtitle-slider h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/20"
+									/>
+									<span class="w-10 text-right text-xs text-white">{subtitleFontSize.toFixed(1)}em</span>
+								</div>
+							</div>
+
+							<!-- 字幕颜色 -->
+							<div class="mb-3">
+								<label class="mb-1 block text-xs text-white/70">字幕颜色</label>
+								<div class="flex gap-2">
+									{#each ['#ffffff', '#ffff00', '#00ff00', '#00ffff', '#ff9900'] as color}
+										<button
+											class="h-6 w-6 rounded border-2 transition-transform hover:scale-110 {subtitleColor === color ? 'border-primary' : 'border-transparent'}"
+											style="background-color: {color}"
+											onclick={() => (subtitleColor = color)}
+										></button>
+									{/each}
+								</div>
+							</div>
+
+							<!-- 背景透明度 -->
+							<div class="mb-3">
+								<label class="mb-1 block text-xs text-white/70">背景透明度</label>
+								<div class="flex items-center gap-2">
+									<input
+										type="range"
+										min="0"
+										max="1"
+										step="0.1"
+										bind:value={subtitleBgOpacity}
+										class="subtitle-slider h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/20"
+									/>
+									<span class="w-10 text-right text-xs text-white">{Math.round(subtitleBgOpacity * 100)}%</span>
+								</div>
+							</div>
+
+							<!-- 预设按钮 -->
+							<div class="flex gap-2">
+								<button
+									class="flex-1 rounded bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20"
+									onclick={() => {
+										subtitleFontSize = 1.2;
+										subtitleColor = '#ffffff';
+										subtitleBgOpacity = 0.7;
+									}}
+								>
+									重置
+								</button>
+								<button
+									class="flex-1 rounded bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20"
+									onclick={() => {
+										subtitleFontSize = 1.5;
+										subtitleColor = '#ffff00';
+										subtitleBgOpacity = 0.8;
+									}}
+								>
+									大号黄色
+								</button>
+							</div>
+						</div>
 					{/if}
-				</button>
+				</div>
 
 				<!-- 固定控件 -->
 				<button
@@ -618,5 +722,25 @@
 
 	.progress-fill {
 		pointer-events: none;
+	}
+
+	/* 字幕样式 - 使用 CSS 变量实现动态样式 */
+	:global(video::cue) {
+		background-color: var(--subtitle-bg, rgba(0, 0, 0, 0.7));
+		color: var(--subtitle-color, white);
+		font-size: var(--subtitle-font-size, 1.2em);
+		line-height: 1.4;
+		padding: 0.2em 0.4em;
+		border-radius: 4px;
+		text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+	}
+
+	.subtitle-slider::-webkit-slider-thumb {
+		appearance: none;
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		background: var(--primary);
+		cursor: pointer;
 	}
 </style>

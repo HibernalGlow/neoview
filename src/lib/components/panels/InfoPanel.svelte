@@ -132,7 +132,7 @@
 	{#if contextMenu.open}
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="context-menu fixed z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground p-1 shadow-md"
+			class="context-menu fixed z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover/80 backdrop-blur-md text-popover-foreground p-1 shadow-md"
 			style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
 			role="menu"
 			tabindex="-1"

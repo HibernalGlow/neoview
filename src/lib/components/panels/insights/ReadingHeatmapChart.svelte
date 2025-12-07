@@ -85,7 +85,7 @@
 
 {#if tooltip.visible}
 	<div
-		class="pointer-events-none fixed z-50 rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md"
+		class="pointer-events-none fixed z-50 rounded-md border bg-popover/80 backdrop-blur-md px-2 py-1 text-xs text-popover-foreground shadow-md"
 		style={`left: ${tooltip.x + 12}px; top: ${tooltip.y + 12}px;`}
 	>
 		{tooltip.text}

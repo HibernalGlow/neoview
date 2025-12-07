@@ -340,7 +340,7 @@
 		
 		<!-- 搜索历史下拉 -->
 		{#if showHistory && searchHistory.length > 0}
-			<div class="search-history absolute top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+			<div class="search-history absolute top-full left-0 right-0 mt-1 bg-popover/80 backdrop-blur-md border border-border rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
 				{#each searchHistory as item (item.query)}
 					<div
 						class="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center justify-between group cursor-pointer"
@@ -381,7 +381,7 @@
 		
 		<!-- 搜索设置下拉 -->
 		{#if showSettings && searchSettings && onSettingsChange}
-			<div class="search-settings absolute top-full right-0 mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 min-w-[200px] p-2">
+			<div class="search-settings absolute top-full right-0 mt-1 bg-popover/80 backdrop-blur-md border border-border rounded-lg shadow-lg z-50 min-w-[200px] p-2">
 				<div class="space-y-3">
 					<div class="pb-2">
 						<h4 class="text-xs font-semibold text-foreground mb-2">搜索选项</h4>

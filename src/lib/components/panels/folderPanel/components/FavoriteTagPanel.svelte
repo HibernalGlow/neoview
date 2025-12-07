@@ -165,7 +165,7 @@ function stopResize() {
 
 {#if visible}
 	<div 
-		class="favorite-tag-panel absolute top-full left-0 right-0 z-50 mt-1 rounded-lg border bg-popover shadow-lg"
+		class="favorite-tag-panel absolute top-full left-0 right-0 z-50 mt-1 rounded-lg border bg-popover/80 backdrop-blur-md shadow-lg"
 		style="height: {panelHeight}px; max-height: 500px; min-height: 120px;"
 	>
 		<!-- 头部 -->

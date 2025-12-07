@@ -294,7 +294,7 @@
 	<!-- 右键菜单 -->
 	{#if contextMenuVisible && selectedTab}
 		<div
-			class="bg-popover fixed z-50 min-w-[150px] rounded-md border py-1 shadow-lg"
+			class="bg-popover/80 backdrop-blur-md fixed z-50 min-w-[150px] rounded-md border py-1 shadow-lg"
 			style="left: {contextMenuPosition.x}px; top: {contextMenuPosition.y}px;"
 			role="menu"
 			onclick={(e) => e.stopPropagation()}

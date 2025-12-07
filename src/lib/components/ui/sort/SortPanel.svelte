@@ -76,7 +76,7 @@
 
   <!-- 排序菜单 -->
   {#if showSortMenu}
-    <div class="absolute top-full right-0 mt-1 z-50 min-w-[180px] rounded-md border bg-popover text-popover-foreground shadow-lg py-1">
+    <div class="absolute top-full right-0 mt-1 z-50 min-w-[180px] rounded-md border bg-popover/80 backdrop-blur-md text-popover-foreground shadow-lg py-1">
       {#each sortOptions as option}
         {@const IconComponent = option.icon}
         {@const SortIconComponent = getSortIcon(option.field)}

@@ -382,7 +382,7 @@
 		<!-- 预览弹窗 -->
 		{#if item.isDir && showPreview}
 			<div
-				class="border-border bg-popover absolute left-0 top-full z-50 mt-1 w-64 rounded-md border p-2 shadow-lg"
+				class="border-border bg-popover/80 backdrop-blur-md absolute left-0 top-full z-50 mt-1 w-64 rounded-md border p-2 shadow-lg"
 				role="tooltip"
 				tabindex="-1"
 				onmouseenter={onPreviewEnter}

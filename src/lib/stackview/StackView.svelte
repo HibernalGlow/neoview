@@ -399,6 +399,17 @@
 		return { id: `frame-${bookStore.currentPageIndex}`, images, layout: pageMode };
 	});
 
+	// 实际显示模式：当双页模式下只有一张图时（横向图独占），使用 single 布局
+	// 这样图片可以占满视口宽度，而不是被限制在 50%
+	let effectivePageMode = $derived.by((): 'single' | 'double' => {
+		if (pageMode !== 'double') return pageMode;
+		// 双页模式下，如果实际只显示一张图，使用 single 布局
+		if (currentFrameData.images.length === 1) {
+			return 'single';
+		}
+		return 'double';
+	});
+
 	let upscaledFrameData = $derived.by((): Frame => {
 		const url = bookStore.upscaledImageData;
 		if (!url) return emptyFrame;
@@ -765,7 +776,7 @@
 			{rotation}
 			{viewportSize}
 			useCanvas={false}
-			{pageMode}
+			pageMode={effectivePageMode}
 			{direction}
 			{alignMode}
 			onImageLoad={handleImageLoad}
@@ -775,7 +786,7 @@
 		<!-- 【性能优化】viewPosition 通过 CSS 变量由 HoverLayer 直接操作 -->
 		<CurrentFrameLayer
 			frame={currentFrameData}
-			layout={pageMode}
+			layout={effectivePageMode}
 			{direction}
 			{orientation}
 			scale={1}

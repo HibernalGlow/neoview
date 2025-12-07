@@ -20,12 +20,8 @@
 	import PanoramaFrameLayer from './layers/PanoramaFrameLayer.svelte';
 	import {
 		isLandscape,
-		getInitialSplitHalf,
-		getNextSplitHalf,
-		getPrevSplitHalf,
 		buildFrameImages,
 		getPageStep,
-		type SplitState,
 		type FrameBuildConfig,
 		type PageData
 	} from './utils/viewMode';
@@ -78,7 +74,6 @@
 	const panoramaStore = getPanoramaStore();
 	const zoomModeManager = createZoomModeManager();
 
-	let splitState = $state<SplitState | null>(null);
 	let containerRef: HTMLDivElement | null = $state(null);
 	let viewportSize = $state<ViewportSize>({ width: 0, height: 0 });
 	let cursorAutoHide: CursorAutoHideController | null = null;
@@ -299,16 +294,11 @@
 	let direction = $derived<'ltr' | 'rtl'>(
 		settings.book.readingDirection === 'right-to-left' ? 'rtl' : 'ltr'
 	);
-	let divideLandscape = $derived(settings.view.pageLayout?.splitHorizontalPages ?? false);
 	let treatHorizontalAsDoublePage = $derived(
 		settings.view.pageLayout?.treatHorizontalAsDoublePage ?? false
 	);
 	let autoRotateMode = $derived(settings.view.autoRotate?.mode ?? 'none');
 
-	// 判断当前图是否横向
-	let isCurrentLandscape = $derived(
-		imageStore.state.dimensions ? isLandscape(imageStore.state.dimensions) : false
-	);
 
 	// 是否为视频
 	let isVideoMode = $derived.by(() => {
@@ -329,10 +319,6 @@
 	// 视频容器引用
 	let videoContainerRef: any = null;
 
-	// 是否处于分割模式
-	let isInSplitMode = $derived(
-		divideLandscape && isCurrentLandscape && pageMode === 'single' && !isPanorama && !isVideoMode
-	);
 
 	// ============================================================================
 	// 帧配置（使用方案 B 的 pageMode）
@@ -343,10 +329,10 @@
 
 	let frameConfig = $derived.by(
 		(): FrameBuildConfig => ({
-			layout: pageMode, // 使用 pageMode 而不是 layout
+			layout: pageMode,
 			orientation: orientation,
 			direction: direction,
-			divideLandscape: divideLandscape,
+			divideLandscape: false,
 			treatHorizontalAsDoublePage: treatHorizontalAsDoublePage,
 			autoRotate: autoRotateMode
 		})
@@ -394,7 +380,7 @@
 			: null;
 
 		// 使用 buildFrameImages 构建图片列表
-		const images = buildFrameImages(currentPage, nextPage, frameConfig, splitState);
+		const images = buildFrameImages(currentPage, nextPage, frameConfig, null);
 
 		return { id: `frame-${bookStore.currentPageIndex}`, images, layout: pageMode };
 	});
@@ -441,7 +427,6 @@
 		manualScale = 1.0;
 		rotation = 0;
 		resetScrollPosition();
-		splitState = null;
 	}
 
 	// 图片加载完成回调 - 更新尺寸并触发自动旋转重计算
@@ -504,16 +489,6 @@
 		);
 		resetScrollPosition();
 
-		// 处理横向分割模式
-		if (isInSplitMode && splitState) {
-			const prevHalf = getPrevSplitHalf(splitState.half, direction);
-			if (prevHalf !== 'prev') {
-				splitState = { pageIndex: splitState.pageIndex, half: prevHalf };
-				return;
-			}
-		}
-		splitState = null;
-
 		// 直接使用 pageStep 翻页
 		const targetIndex = Math.max(0, bookStore.currentPageIndex - pageStep);
 		console.log(`⬅️ handlePrevPage: targetIndex=${targetIndex}`);
@@ -525,23 +500,6 @@
 			`➡️ handleNextPage: pageMode=${pageMode}, pageStep=${pageStep}, currentIndex=${bookStore.currentPageIndex}`
 		);
 		resetScrollPosition();
-
-		// 处理横向分割模式
-		if (isInSplitMode) {
-			if (!splitState) {
-				splitState = {
-					pageIndex: bookStore.currentPageIndex,
-					half: getInitialSplitHalf(direction)
-				};
-				return;
-			}
-			const nextHalf = getNextSplitHalf(splitState.half, direction);
-			if (nextHalf !== 'next') {
-				splitState = { pageIndex: splitState.pageIndex, half: nextHalf };
-				return;
-			}
-		}
-		splitState = null;
 
 		// 直接使用 pageStep 翻页
 		const targetIndex = Math.min(bookStore.totalPages - 1, bookStore.currentPageIndex + pageStep);
@@ -580,7 +538,6 @@
 				panoramaStore.reset();
 				zoomModeManager.reset();
 				resetScrollPosition();
-				splitState = null;
 				loadedImageSize = null; // 重置尺寸，等待新书第一页加载
 
 				// 通知 upscaleStore 书籍切换
@@ -609,10 +566,6 @@
 		console.log(
 			`🔁 StackView effect: pageIndex=${pageIndex}, pageMode=${currentPageMode}, isPanorama=${currentPanorama}, lastPageMode=${lastPageMode}`
 		);
-
-		if (splitState && splitState.pageIndex !== pageIndex) {
-			splitState = null;
-		}
 
 		if (book && page) {
 			// 检测模式是否变化
@@ -817,8 +770,8 @@
 		currentIndex={bookStore.currentPageIndex}
 		totalPages={bookStore.totalPages}
 		isLoading={isPanorama ? panoramaStore.state.loading : imageStore.state.loading}
-		isDivided={isInSplitMode}
-		splitHalf={splitState?.half ?? null}
+		isDivided={false}
+		splitHalf={null}
 		showPageInfo={$viewerPageInfoVisible && showPageInfo}
 		{showLoading}
 	/>

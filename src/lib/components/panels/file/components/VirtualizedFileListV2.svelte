@@ -140,6 +140,18 @@
 		}
 	});
 
+	// 当 items 或 viewMode 变化时强制刷新 virtualizer
+	$effect(() => {
+		// 显式依赖 items.length, rowCount 和 viewMode
+		const _ = items.length;
+		const __ = rowCount;
+		const ___ = viewMode;
+		if (mounted && container) {
+			// 强制触发重新测量
+			$virtualizer._willUpdate();
+		}
+	});
+
 	// --- Effects ---
 
 	// Scroll to selected item
@@ -149,7 +161,9 @@
 		if (scrollToSelectedToken > lastScrollToken) {
 			lastScrollToken = scrollToSelectedToken;
 			if (selectedIndex >= 0) {
-				$virtualizer.scrollToIndex(selectedIndex, { align: 'center', behavior: 'smooth' });
+				// 需要将项目索引转换为行索引
+				const rowIndex = Math.floor(selectedIndex / columns);
+				$virtualizer.scrollToIndex(rowIndex, { align: 'center', behavior: 'smooth' });
 			}
 		}
 	});
@@ -272,7 +286,8 @@
 			if (next !== selectedIndex) {
 				onSelectedIndexChange({ index: next });
 				dispatch('selectedIndexChange', { index: next });
-				$virtualizer.scrollToIndex(next, { align: 'auto', behavior: 'smooth' });
+				const rowIndex = Math.floor(next / columns);
+				$virtualizer.scrollToIndex(rowIndex, { align: 'auto', behavior: 'smooth' });
 			}
 		};
 
@@ -301,7 +316,8 @@
 				const last = items.length - 1;
 				if (selectedIndex !== last) {
 					onSelectedIndexChange({ index: last });
-					$virtualizer.scrollToIndex(last, { align: 'end', behavior: 'smooth' });
+					const lastRowIndex = Math.floor(last / columns);
+					$virtualizer.scrollToIndex(lastRowIndex, { align: 'end', behavior: 'smooth' });
 				}
 				break;
 			default:

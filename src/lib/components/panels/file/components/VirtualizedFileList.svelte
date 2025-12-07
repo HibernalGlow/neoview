@@ -158,11 +158,28 @@
 		});
 
 		if (needThumbnails.length > 0) {
-			// 【优化】直接收集路径，按可见区域顺序排列（靠前的先加载）
-			const paths = needThumbnails.map(item => item.path);
+			// 【优化】中央优先策略：从可见区域中心向两侧扩展
+			// 参考 PageManager 的 pm_preload_thumbnails 实现
+			const center = Math.floor(needThumbnails.length / 2);
+			const centeredPaths: string[] = [];
+			
+			for (let offset = 0; offset <= needThumbnails.length; offset++) {
+				if (offset === 0) {
+					centeredPaths.push(needThumbnails[center].path);
+				} else {
+					// 向前
+					if (center - offset >= 0) {
+						centeredPaths.push(needThumbnails[center - offset].path);
+					}
+					// 向后
+					if (center + offset < needThumbnails.length) {
+						centeredPaths.push(needThumbnails[center + offset].path);
+					}
+				}
+			}
 			
 			// 直接调用 requestVisibleThumbnails，V3 后端会处理优先级和缓存
-			thumbnailManager.requestVisibleThumbnails(paths, currentPath);
+			thumbnailManager.requestVisibleThumbnails(centeredPaths, currentPath);
 		}
 	}
 

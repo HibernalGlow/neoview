@@ -3,7 +3,7 @@
  * 统一定义所有卡片的元数据，支持动态发现和跨面板移动
  */
 import type { PanelId } from '$lib/stores/sidebarConfig.svelte';
-import { Eye, Timer, Layers, FolderOpen, FileText, Image, Cpu, History, Tags, Search, Activity, Gauge, Archive, Globe, ListChecks, BarChart3 } from '@lucide/svelte';
+import { Eye, Timer, Layers, FolderOpen, FileText, Image, Cpu, History, Tags, Search, Activity, Gauge, Archive, Globe, ListChecks, BarChart3, Languages, Settings } from '@lucide/svelte';
 
 // 卡片定义
 export interface CardDefinition {
@@ -371,6 +371,36 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		canHide: false,
 		fullHeight: true,
 		hideHeader: true, // 隐藏卡片头部，面板本身有完整 UI
+	},
+
+	// ==================== AI 面板卡片 ====================
+	'aiTitleTranslation': {
+		id: 'aiTitleTranslation',
+		title: '标题翻译',
+		icon: Languages,
+		defaultPanel: 'ai',
+		canHide: false,
+	},
+	'aiServiceConfig': {
+		id: 'aiServiceConfig',
+		title: '翻译服务配置',
+		icon: Settings,
+		defaultPanel: 'ai',
+		canHide: true,
+	},
+	'aiTranslationCache': {
+		id: 'aiTranslationCache',
+		title: '翻译缓存',
+		icon: History,
+		defaultPanel: 'ai',
+		canHide: true,
+	},
+	'aiTranslationTest': {
+		id: 'aiTranslationTest',
+		title: '翻译测试',
+		icon: Languages,
+		defaultPanel: 'ai',
+		canHide: true,
 	},
 };
 

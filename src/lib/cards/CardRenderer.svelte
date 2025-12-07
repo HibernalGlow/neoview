@@ -64,7 +64,12 @@
 		sourceBreakdown: () => import('./insights/SourceBreakdownCard.svelte'),
 		emmTagsHot: () => import('./insights/EmmTagsHotCard.svelte'),
 		// Folder
-		folderMain: () => import('./folder/FolderMainCard.svelte')
+		folderMain: () => import('./folder/FolderMainCard.svelte'),
+		// AI
+		aiTitleTranslation: () => import('./ai/AiTitleTranslationCard.svelte'),
+		aiServiceConfig: () => import('./ai/AiServiceConfigCard.svelte'),
+		aiTranslationCache: () => import('./ai/AiTranslationCacheCard.svelte'),
+		aiTranslationTest: () => import('./ai/AiTranslationTestCard.svelte')
 	};
 
 	// 组件缓存（避免重复加载）

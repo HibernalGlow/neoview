@@ -18,6 +18,7 @@ export { default as DataInsightsPanel } from './DataInsightsPanel.svelte';
 // 其他面板
 export { default as SidebarManagementPanel } from './SidebarManagementPanel.svelte';
 export { default as BenchmarkPanel } from './BenchmarkPanel.svelte';
+export { default as AiPanel } from './AiPanel.svelte';
 
 // 面板组件映射 - 使用 any 类型避免复杂的类型问题
 import FolderPanel from './folderPanel/FolderPanel.svelte';
@@ -29,6 +30,7 @@ import ImagePropertiesPanel from './ImagePropertiesPanel.svelte';
 import UpscalePanel from './UpscalePanel.svelte';
 import DataInsightsPanel from './DataInsightsPanel.svelte';
 import BenchmarkPanel from './BenchmarkPanel.svelte';
+import AiPanel from './AiPanel.svelte';
 
 import type { PanelId } from '$lib/stores/sidebarConfig.svelte';
 
@@ -52,7 +54,9 @@ export const PANEL_COMPONENTS: Record<PanelId, any> = {
 	// 其他
 	settings: FolderPanel, // 占位，后续实现
 	// 开发/测试面板
-	benchmark: BenchmarkPanel
+	benchmark: BenchmarkPanel,
+	// AI 面板
+	ai: AiPanel
 };
 
 /**

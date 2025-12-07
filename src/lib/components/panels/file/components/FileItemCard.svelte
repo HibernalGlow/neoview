@@ -16,6 +16,8 @@
 	import { getFileMetadata } from '$lib/api';
 	import FileItemListView from './FileItemListView.svelte';
 	import FileItemGridView from './FileItemGridView.svelte';
+	import { aiTranslationStore } from '$lib/stores/ai/translationStore.svelte';
+	import { translateText, containsJapanese } from '$lib/services/translationService';
 
 	let {
 		item,
@@ -97,6 +99,20 @@
 	let metadataLoading = $state(false);
 	let lastLoadedPath = $state<string | null>(null);
 
+	// AI 翻译状态
+	let aiTranslatedTitle = $state<string | null>(null);
+	let aiTranslationEnabled = $state(false);
+	let aiAutoTranslate = $state(true);
+
+	// 订阅 AI 翻译设置
+	$effect(() => {
+		const unsubscribe = aiTranslationStore.subscribe((state) => {
+			aiTranslationEnabled = state.config.enabled;
+			aiAutoTranslate = state.config.autoTranslate;
+		});
+		return unsubscribe;
+	});
+
 	// 订阅全局 EMM 设置
 	let enableEMM = $state(true);
 	let fileListTagDisplayMode = $state<'all' | 'collect' | 'none'>('collect');
@@ -163,6 +179,7 @@
 		) {
 			metadataLoading = true;
 			lastLoadedPath = item.path;
+			aiTranslatedTitle = null; // 重置 AI 翻译
 
 			// console.debug('[FileItemCard] 开始加载 EMM 元数据 (Archive):', item.name);
 
@@ -193,6 +210,35 @@
 			emmMetadata = null;
 			lastLoadedPath = null;
 		}
+	});
+
+	// AI 自动翻译：当没有 EMM 翻译标题且文件名包含日文时
+	$effect(() => {
+		// 条件检查
+		if (!aiTranslationEnabled || !aiAutoTranslate) return;
+		if (metadataLoading) return;
+		if (emmMetadata?.translatedTitle) return; // 已有 EMM 翻译，不需要 AI 翻译
+		if (aiTranslatedTitle) return; // 已有 AI 翻译
+
+		// 获取文件名（不含扩展名）
+		const nameWithoutExt = item.name.replace(/\.[^.]+$/, '');
+		
+		// 只对包含日文的文件名进行翻译
+		if (!containsJapanese(nameWithoutExt)) return;
+
+		// 检查缓存
+		const cached = aiTranslationStore.getCachedTranslation(nameWithoutExt);
+		if (cached) {
+			aiTranslatedTitle = cached;
+			return;
+		}
+
+		// 异步翻译（不阻塞）
+		translateText(nameWithoutExt).then((result) => {
+			if (result.success && result.translated && item.path === lastLoadedPath) {
+				aiTranslatedTitle = result.translated;
+			}
+		});
 	});
 
 	// 性别类别（用于混合匹配）
@@ -350,6 +396,30 @@
 			totalPages > 0 &&
 			currentPage >= totalPages - 1
 	);
+
+	// 合并 EMM 元数据和 AI 翻译
+	// 如果有 AI 翻译但没有 EMM 翻译，则使用 AI 翻译并标记为 AI 翻译
+	const mergedEmmMetadata = $derived.by(() => {
+		if (!emmMetadata && !aiTranslatedTitle) return null;
+		
+		const base = emmMetadata || { tags: undefined, rating: undefined };
+		
+		// 如果已有 EMM 翻译标题，直接使用
+		if (base.translatedTitle) {
+			return base;
+		}
+		
+		// 如果有 AI 翻译标题，使用 AI 翻译并添加标记
+		if (aiTranslatedTitle) {
+			return {
+				...base,
+				translatedTitle: `🤖 ${aiTranslatedTitle}`,
+				isAiTranslated: true
+			};
+		}
+		
+		return base;
+	});
 </script>
 
 {#if viewMode === 'list' || viewMode === 'content'}
@@ -374,7 +444,7 @@
 		{isBookmarked}
 		{isArchive}
 		{isReadCompleted}
-		{emmMetadata}
+		emmMetadata={mergedEmmMetadata}
 		folderAverageRating={itemRating}
 		folderManualRating={null}
 		{displayTags}
@@ -416,7 +486,7 @@
 		{isBookmarked}
 		{isArchive}
 		{isReadCompleted}
-		{emmMetadata}
+		emmMetadata={mergedEmmMetadata}
 		folderAverageRating={itemRating}
 		folderManualRating={null}
 		{displayTags}

@@ -777,27 +777,49 @@ impl PageContentManager {
     }
 
     /// 从图片数据生成缩略图
+    /// 优先使用 WIC（支持 AVIF/HEIC/JXL），失败时回退到 image crate
     fn generate_thumbnail_from_data(data: &[u8], max_size: u32) -> Result<ThumbnailItem, String> {
+        // Windows: 优先使用 WIC 内置缩放（支持 AVIF/HEIC/JXL 等）
+        #[cfg(target_os = "windows")]
+        {
+            use crate::core::wic_decoder::{decode_and_scale_with_wic, wic_result_to_dynamic_image};
+            use image::ImageFormat;
+            use std::io::Cursor;
+
+            if let Ok(result) = decode_and_scale_with_wic(data, max_size, max_size) {
+                if let Ok(img) = wic_result_to_dynamic_image(result) {
+                    let width = img.width();
+                    let height = img.height();
+                    
+                    let mut buffer = Vec::new();
+                    if img.write_to(&mut Cursor::new(&mut buffer), ImageFormat::WebP).is_ok() {
+                        return Ok(ThumbnailItem {
+                            data: buffer,
+                            width,
+                            height,
+                        });
+                    }
+                }
+            }
+        }
+
+        // 回退到 image crate
         use image::ImageReader;
         use std::io::Cursor;
 
-        // 解码图片
         let img = ImageReader::new(Cursor::new(data))
             .with_guessed_format()
             .map_err(|e| format!("无法识别图片格式: {}", e))?
             .decode()
             .map_err(|e| format!("解码图片失败: {}", e))?;
 
-        // 计算缩放尺寸
         let (orig_width, orig_height) = (img.width(), img.height());
         let scale = (max_size as f32 / orig_width.max(orig_height) as f32).min(1.0);
         let new_width = (orig_width as f32 * scale) as u32;
         let new_height = (orig_height as f32 * scale) as u32;
 
-        // 缩放图片
         let thumbnail = img.thumbnail(new_width, new_height);
 
-        // 编码为 WebP
         let mut buffer = Vec::new();
         {
             use image::codecs::webp::WebPEncoder;

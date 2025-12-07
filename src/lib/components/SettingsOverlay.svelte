@@ -45,12 +45,11 @@
 		<!-- 设置窗口（居中 80%，半透明背景以显示模糊效果） -->
 		<div 
 			class="relative flex h-[80vh] w-[80vw] max-w-5xl flex-col overflow-hidden rounded-xl border text-foreground shadow-2xl"
-			style="background-color: color-mix(in oklch, var(--background) {topToolbarOpacity}%, transparent); backdrop-filter: blur({topToolbarBlur}px);"
 		>
 			<!-- 标题栏（与顶栏风格一致） -->
 			<div 
 				class="flex h-10 shrink-0 items-center justify-between border-b px-4"
-				style="background-color: color-mix(in oklch, var(--sidebar) {topToolbarOpacity}%, transparent); color: var(--sidebar-foreground);"
+				style="background-color: color-mix(in oklch, var(--sidebar) {topToolbarOpacity}%, transparent); backdrop-filter: blur({topToolbarBlur}px); color: var(--sidebar-foreground);"
 			>
 				<span class="text-sm font-medium">设置</span>
 				<Button

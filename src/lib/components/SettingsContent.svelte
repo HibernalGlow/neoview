@@ -18,6 +18,7 @@
 		Bell,
 		LayoutGrid
 	} from '@lucide/svelte';
+	import { settingsManager } from '$lib/settings/settingsManager';
 
 	// 导入所有设置面板组件
 	import GeneralSettingsPanel from '$lib/components/panels/GeneralSettingsPanel.svelte';
@@ -51,17 +52,32 @@
 
 	let activeTab = $state<string>('general');
 
+	// 侧栏透明度和模糊度
+	let settings = $state(settingsManager.getSettings());
+	let sidebarOpacity = $derived(settings.panels?.sidebarOpacity ?? 85);
+	let sidebarBlur = $derived(settings.panels?.sidebarBlur ?? 12);
+	// 内容区使用 popover 透明度
+	let popoverOpacity = $derived(settings.panels?.topToolbarOpacity ?? 85);
+	let popoverBlur = $derived(settings.panels?.topToolbarBlur ?? 12);
+	
+	settingsManager.addListener((newSettings) => {
+		settings = newSettings;
+	});
+
 	function switchTab(tabValue: string) {
 		activeTab = tabValue;
 	}
 </script>
 
 <!-- 设置内容（无固定定位，填充父容器） -->
-<div class="flex h-full w-full flex-col bg-background text-foreground">
+<div class="flex h-full w-full flex-col text-foreground">
 	<!-- 主内容区 -->
 	<div class="flex flex-1 overflow-hidden">
 		<!-- 左侧标签栏 -->
-		<div class="bg-secondary/30 w-48 shrink-0 space-y-1 border-r p-2 overflow-auto">
+		<div 
+			class="w-48 shrink-0 space-y-1 border-r p-2 overflow-auto"
+			style="background-color: color-mix(in oklch, var(--sidebar) {sidebarOpacity}%, transparent); backdrop-filter: blur({sidebarBlur}px);"
+		>
 			{#each tabs as tab}
 				{@const IconComponent = tab.icon}
 				<button
@@ -79,7 +95,10 @@
 		</div>
 
 		<!-- 右侧内容区 - 路由到对应的面板组件 -->
-		<div class="flex-1 overflow-auto">
+		<div 
+			class="flex-1 overflow-auto"
+			style="background-color: color-mix(in oklch, var(--popover) {popoverOpacity}%, transparent); backdrop-filter: blur({popoverBlur}px);"
+		>
 			{#if activeTab === 'general'}
 				<GeneralSettingsPanel />
 			{:else if activeTab === 'view'}

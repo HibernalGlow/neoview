@@ -346,5 +346,56 @@
 				{/if}
 			</div>
 		</div>
+
+		<!-- 悬停滚动设置 -->
+		<div class="space-y-3">
+			<h4 class="flex items-center gap-2 text-sm font-semibold">
+				<Mouse class="h-4 w-4" />
+				悬停滚动
+			</h4>
+			<div class="space-y-2">
+				<div class="flex items-center justify-between">
+					<span class="text-sm">滚动倍率</span>
+					<div class="flex items-center gap-2">
+						<Input
+							type="number"
+							min="0.5"
+							max="10"
+							step="0.5"
+							value={currentSettings.image.hoverScrollSpeed ?? 2.0}
+							onchange={(event) => {
+								const target = event.target as HTMLInputElement;
+								const raw = parseFloat(target.value);
+								const value = Number.isNaN(raw) ? 2.0 : raw;
+								const clamped = Math.max(0.5, Math.min(value, 10));
+								settingsManager.updateNestedSettings('image', {
+									hoverScrollSpeed: clamped
+								});
+							}}
+							class="w-20"
+						/>
+						<span class="text-muted-foreground text-xs">倍</span>
+					</div>
+				</div>
+				<Slider
+					min={0.5}
+					max={10}
+					step={0.5}
+					value={[currentSettings.image.hoverScrollSpeed ?? 2.0]}
+					onValueChange={(values) => {
+						if (values && values.length > 0) {
+							settingsManager.updateNestedSettings('image', {
+								hoverScrollSpeed: values[0]
+							});
+						}
+					}}
+					class="w-full max-w-xs"
+					type="single"
+				/>
+				<p class="text-muted-foreground text-xs">
+					控制鼠标悬停滚动的速度倍率，数值越大滚动越快。
+				</p>
+			</div>
+		</div>
 	</div>
 </div>

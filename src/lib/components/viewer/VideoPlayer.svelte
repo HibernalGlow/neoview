@@ -90,6 +90,9 @@
 	let subtitleBgOpacity = $state(settings.subtitle?.bgOpacity ?? 0.7);
 	let subtitleBottom = $state(settings.subtitle?.bottom ?? 5); // 底部距离百分比
 
+	// 自定义字幕渲染状态
+	let currentSubtitleText = $state<string>('');
+
 	// 保存字幕设置
 	function saveSubtitleSettings() {
 		settingsManager.updateSettings({
@@ -101,6 +104,42 @@
 			}
 		});
 	}
+
+	// 监听字幕轨道变化，获取当前字幕文本
+	$effect(() => {
+		if (!videoElement || !subtitle?.vttUrl) {
+			currentSubtitleText = '';
+			return;
+		}
+
+		const track = videoElement.textTracks[0];
+		if (!track) return;
+
+		// 隐藏原生字幕渲染，使用自定义渲染
+		track.mode = 'hidden';
+
+		const handleCueChange = () => {
+			const activeCues = track.activeCues;
+			if (activeCues && activeCues.length > 0) {
+				const texts: string[] = [];
+				for (let i = 0; i < activeCues.length; i++) {
+					const cue = activeCues[i] as VTTCue;
+					if (cue.text) {
+						texts.push(cue.text);
+					}
+				}
+				currentSubtitleText = texts.join('\n');
+			} else {
+				currentSubtitleText = '';
+			}
+		};
+
+		track.addEventListener('cuechange', handleCueChange);
+
+		return () => {
+			track.removeEventListener('cuechange', handleCueChange);
+		};
+	});
 
 	// 当有新的 blob 时创建 URL
 	$effect(() => {
@@ -385,6 +424,27 @@
 				<track kind="captions" />
 			{/if}
 		</video>
+
+		<!-- 自定义字幕渲染层 -->
+		{#if currentSubtitleText}
+			<div
+				class="pointer-events-none absolute left-0 right-0 flex justify-center px-4"
+				style="bottom: {subtitleBottom}%;"
+			>
+				<div
+					class="max-w-[80%] whitespace-pre-wrap rounded px-3 py-1 text-center"
+					style="
+						font-size: {subtitleFontSize}em;
+						color: {subtitleColor};
+						background-color: rgba(0, 0, 0, {subtitleBgOpacity});
+						text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+						line-height: 1.4;
+					"
+				>
+					{@html currentSubtitleText.replace(/\n/g, '<br>')}
+				</div>
+			</div>
+		{/if}
 
 		<!-- 控制栏 -->
 		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->

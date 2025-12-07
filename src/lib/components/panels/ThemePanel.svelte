@@ -814,49 +814,43 @@
 		</button>
 
 		{#if isPresetsOpen}
-			<div class="grid grid-cols-1 gap-3 md:grid-cols-2" transition:slide>
+			<div class="grid grid-cols-1 gap-2 md:grid-cols-2" transition:slide>
 				{#each presetThemes as theme}
 					<button
 						onclick={() => selectPresetTheme(theme)}
-						class="hover:bg-accent group relative flex flex-col items-start gap-2 rounded-lg border p-4 text-left transition-colors {selectedTheme.name ===
+						class="hover:bg-accent group relative flex items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors {selectedTheme.name ===
 						theme.name
 							? 'border-primary bg-primary/5'
 							: ''}"
 					>
-						<div
-							class="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
-						>
+						<div class="flex gap-1.5">
+							<div
+								class="h-5 w-5 rounded-full border"
+								style="background: {theme.colors.light.primary}"
+								title="浅色主色"
+							></div>
+							<div
+								class="h-5 w-5 rounded-full border"
+								style="background: {theme.colors.dark.primary}"
+								title="深色主色"
+							></div>
+						</div>
+
+						<h4 class="flex-1 text-sm font-medium">{theme.name}</h4>
+
+						<div class="flex items-center gap-1">
+							{#if selectedTheme.name === theme.name}
+								<Check class="text-primary h-4 w-4" />
+							{/if}
 							<Button
 								variant="ghost"
 								size="icon"
-								class="h-6 w-6"
+								class="h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
 								onclick={(e) => duplicateTheme(theme, e)}
 								title="复制主题"
 							>
 								<Copy class="h-3 w-3" />
 							</Button>
-						</div>
-
-						<div class="flex w-full items-center justify-between">
-							<h4 class="font-medium">{theme.name}</h4>
-							{#if selectedTheme.name === theme.name}
-								<Check class="text-primary h-4 w-4" />
-							{/if}
-						</div>
-						<p class="text-muted-foreground text-sm">{theme.description}</p>
-
-						<!-- 颜色预览 -->
-						<div class="mt-2 flex gap-2">
-							<div
-								class="h-6 w-6 rounded-full border"
-								style="background: {theme.colors.light.primary}"
-								title="浅色主色"
-							></div>
-							<div
-								class="h-6 w-6 rounded-full border"
-								style="background: {theme.colors.dark.primary}"
-								title="深色主色"
-							></div>
 						</div>
 					</button>
 				{/each}
@@ -882,22 +876,38 @@
 			</button>
 
 			{#if isCustomThemesOpen}
-				<div class="grid grid-cols-1 gap-3 md:grid-cols-2" transition:slide>
+				<div class="grid grid-cols-1 gap-2 md:grid-cols-2" transition:slide>
 					{#each customThemes as theme}
 						<button
 							onclick={() => selectPresetTheme(theme)}
-							class="hover:bg-accent group relative flex flex-col items-start gap-2 rounded-lg border p-4 text-left transition-colors {selectedTheme.name ===
+							class="hover:bg-accent group relative flex items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors {selectedTheme.name ===
 							theme.name
 								? 'border-primary bg-primary/5'
 								: ''}"
 						>
-							<div
-								class="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
-							>
+							<div class="flex gap-1.5">
+								<div
+									class="h-5 w-5 rounded-full border"
+									style="background: {theme.colors.light.primary}"
+									title="浅色主色"
+								></div>
+								<div
+									class="h-5 w-5 rounded-full border"
+									style="background: {theme.colors.dark.primary}"
+									title="深色主色"
+								></div>
+							</div>
+
+							<h4 class="flex-1 text-sm font-medium">{theme.name}</h4>
+
+							<div class="flex items-center gap-1">
+								{#if selectedTheme.name === theme.name}
+									<Check class="text-primary h-4 w-4" />
+								{/if}
 								<Button
 									variant="ghost"
 									size="icon"
-									class="h-6 w-6"
+									class="h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
 									onclick={(e) => duplicateTheme(theme, e)}
 									title="复制主题"
 								>
@@ -906,33 +916,12 @@
 								<Button
 									variant="ghost"
 									size="icon"
-									class="text-destructive h-6 w-6 hover:text-red-600"
+									class="text-destructive h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-600"
 									onclick={(e) => deleteCustomTheme(theme, e)}
 									title="删除主题"
 								>
 									<Trash2 class="h-3 w-3" />
 								</Button>
-							</div>
-
-							<div class="flex w-full items-center justify-between">
-								<h4 class="font-medium">{theme.name}</h4>
-								{#if selectedTheme.name === theme.name}
-									<Check class="text-primary h-4 w-4" />
-								{/if}
-							</div>
-							<p class="text-muted-foreground text-sm">{theme.description}</p>
-
-							<div class="mt-2 flex gap-2">
-								<div
-									class="h-6 w-6 rounded-full border"
-									style="background: {theme.colors.light.primary}"
-									title="浅色主色"
-								></div>
-								<div
-									class="h-6 w-6 rounded-full border"
-									style="background: {theme.colors.dark.primary}"
-									title="深色主色"
-								></div>
 							</div>
 						</button>
 					{/each}

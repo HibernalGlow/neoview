@@ -367,11 +367,76 @@
 	const THUMBNAIL_HEIGHT = 120;
 
 	/**
+	 * 从视频 Blob 创建缩略图 Data URL（使用 video 元素和 canvas）
+	 */
+	async function createThumbnailFromVideoBlob(
+		blob: Blob
+	): Promise<{ url: string; width: number; height: number }> {
+		return new Promise((resolve, reject) => {
+			const objectUrl = URL.createObjectURL(blob);
+			const video = document.createElement('video');
+			video.muted = true;
+			video.preload = 'metadata';
+
+			video.onloadedmetadata = () => {
+				// 跳转到视频开头一点的位置以获取更好的帧
+				video.currentTime = Math.min(1, video.duration * 0.1);
+			};
+
+			video.onseeked = () => {
+				URL.revokeObjectURL(objectUrl);
+
+				// 计算缩放尺寸
+				const scale = THUMBNAIL_HEIGHT / video.videoHeight;
+				const thumbWidth = Math.round(video.videoWidth * scale);
+				const thumbHeight = THUMBNAIL_HEIGHT;
+
+				// 使用 canvas 绘制视频帧
+				const canvas = document.createElement('canvas');
+				canvas.width = thumbWidth;
+				canvas.height = thumbHeight;
+
+				const ctx = canvas.getContext('2d');
+				if (!ctx) {
+					reject(new Error('Failed to get canvas context'));
+					return;
+				}
+
+				ctx.drawImage(video, 0, 0, thumbWidth, thumbHeight);
+
+				// 转换为 data URL（使用 webp 格式以获得更好的压缩）
+				const dataUrl = canvas.toDataURL('image/webp', 0.8);
+				resolve({ url: dataUrl, width: thumbWidth, height: thumbHeight });
+			};
+
+			video.onerror = () => {
+				URL.revokeObjectURL(objectUrl);
+				reject(new Error('Failed to load video'));
+			};
+
+			video.src = objectUrl;
+		});
+	}
+
+	/**
+	 * 检查 Blob 是否为视频类型
+	 */
+	function isVideoBlobType(blob: Blob): boolean {
+		return blob.type.startsWith('video/');
+	}
+
+	/**
 	 * 从 Blob 创建缩略图 Data URL（canvas 缩放）
+	 * 自动检测 Blob 类型，对图片使用 img 元素，对视频使用 video 元素
 	 */
 	async function createThumbnailFromBlob(
 		blob: Blob
 	): Promise<{ url: string; width: number; height: number }> {
+		// 如果是视频 Blob，使用视频专用的缩略图生成函数
+		if (isVideoBlobType(blob)) {
+			return createThumbnailFromVideoBlob(blob);
+		}
+
 		return new Promise((resolve, reject) => {
 			const objectUrl = URL.createObjectURL(blob);
 			const img = new Image();
@@ -693,7 +758,7 @@
 {#if bookStore.currentBook && bookStore.currentBook.pages.length > 0}
 	<!-- 缩略图栏触发区域（独立） -->
 	<div
-		class="fixed bottom-0 left-0 right-0 z-[57]"
+		class="fixed right-0 bottom-0 left-0 z-[57]"
 		style={`height: ${hoverAreas?.bottomTriggerHeight ?? 4}px;`}
 		onmouseenter={handleMouseEnter}
 		onmouseleave={handleMouseLeave}
@@ -704,7 +769,7 @@
 	<!-- 缩略图栏内容 -->
 	<div
 		data-bottom-bar="true"
-		class="absolute bottom-0 left-0 right-0 z-[58] transition-transform duration-300 {isVisible
+		class="absolute right-0 bottom-0 left-0 z-[58] transition-transform duration-300 {isVisible
 			? 'translate-y-0'
 			: 'translate-y-full'}"
 		onmouseenter={handleMouseEnter}
@@ -720,7 +785,7 @@
 
 			<button
 				type="button"
-				class="text-muted-foreground hover:bg-accent absolute left-1/2 top-0 z-50 -translate-x-1/2 cursor-ns-resize rounded-md p-1 transition-colors"
+				class="text-muted-foreground hover:bg-accent absolute top-0 left-1/2 z-50 -translate-x-1/2 cursor-ns-resize rounded-md p-1 transition-colors"
 				onmousedown={handleResizeStart}
 				aria-label="拖拽调整缩略图栏高度"
 			>
@@ -728,7 +793,7 @@
 			</button>
 
 			<!-- 控制按钮 -->
-			<div class="flex justify-center gap-2 px-2 pb-1 pt-3">
+			<div class="flex justify-center gap-2 px-2 pt-3 pb-1">
 				<Button
 					variant={$bottomThumbnailBarPinned ? 'default' : 'ghost'}
 					size="sm"
@@ -853,7 +918,7 @@
 
 									{#if windowBadgeLabel(originalIndex)}
 										<div
-											class={`absolute right-0 top-0 px-1 py-[1px] font-mono text-[10px] text-white ${windowBadgeClass(originalIndex)}`}
+											class={`absolute top-0 right-0 px-1 py-[1px] font-mono text-[10px] text-white ${windowBadgeClass(originalIndex)}`}
 										>
 											{windowBadgeLabel(originalIndex)}
 										</div>
@@ -862,7 +927,7 @@
 									<!-- 页码标签 -->
 									{#if showPageNumbers}
 										<div
-											class="bg-primary/90 text-primary-foreground absolute bottom-0 left-0 right-0 py-0.5 text-center font-mono text-[10px] font-medium"
+											class="bg-primary/90 text-primary-foreground absolute right-0 bottom-0 left-0 py-0.5 text-center font-mono text-[10px] font-medium"
 										>
 											{originalIndex + 1}
 										</div>
@@ -870,11 +935,11 @@
 
 									<!-- 状态角标 -->
 									{#if status === 'done'}
-										<span class="bg-primary absolute right-1 top-1 h-2 w-2 rounded-full"></span>
+										<span class="bg-primary absolute top-1 right-1 h-2 w-2 rounded-full"></span>
 									{:else if status === 'preupscaled'}
-										<span class="bg-accent absolute right-1 top-1 h-2 w-2 rounded-full"></span>
+										<span class="bg-accent absolute top-1 right-1 h-2 w-2 rounded-full"></span>
 									{:else if status === 'failed'}
-										<span class="bg-destructive absolute right-1 top-1 h-2 w-2 rounded-full"></span>
+										<span class="bg-destructive absolute top-1 right-1 h-2 w-2 rounded-full"></span>
 									{/if}
 								</button>
 							</Tooltip.Trigger>
@@ -894,7 +959,7 @@
 				</div>
 			</div>
 			<!-- 底部进度滑块（可交互） -->
-			<div class="z-60 absolute bottom-0 left-0 right-0">
+			<div class="absolute right-0 bottom-0 left-0 z-60">
 				<HorizontalListSlider
 					totalItems={bookStore.currentBook.pages.length}
 					currentIndex={bookStore.currentPageIndex}

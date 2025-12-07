@@ -24,13 +24,24 @@ interface BookmarkEntry {
  * 将书签条目转换为 FsItem
  */
 function bookmarkToFsItem(bookmark: BookmarkEntry): FsItem {
+	// createdAt 可能是 Date 对象或字符串（从 JSON 反序列化）
+	let modified = 0;
+	if (bookmark.createdAt) {
+		if (bookmark.createdAt instanceof Date) {
+			modified = bookmark.createdAt.getTime();
+		} else if (typeof bookmark.createdAt === 'string') {
+			modified = new Date(bookmark.createdAt).getTime();
+		} else if (typeof bookmark.createdAt === 'number') {
+			modified = bookmark.createdAt;
+		}
+	}
 	return {
 		path: bookmark.path,
 		name: bookmark.name,
 		isDir: bookmark.type === 'folder',
 		isImage: false,
 		size: 0,
-		modified: bookmark.createdAt ? bookmark.createdAt.getTime() : 0
+		modified
 	};
 }
 

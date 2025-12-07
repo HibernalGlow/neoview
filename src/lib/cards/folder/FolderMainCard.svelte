@@ -105,6 +105,9 @@
 	import { get } from 'svelte/store';
 	let currentActiveTabId = $state(get(activeTabId));
 	let currentAllTabs = $state(get(allTabs));
+	
+	// 记录是否为虚拟路径实例的页签 ID（用于隔离）
+	let virtualInstanceTabId = $state<string | null>(null);
 
 	$effect(() => {
 		const unsubActiveTab = activeTabId.subscribe((v) => {
@@ -118,6 +121,18 @@
 			unsubAllTabs();
 		};
 	});
+	
+	// 获取当前实例应该显示的页签列表
+	let displayTabs = $derived(
+		virtualInstanceTabId 
+			? currentAllTabs.filter(t => t.id === virtualInstanceTabId)
+			: currentAllTabs
+	);
+	
+	// 获取当前实例应该激活的页签 ID
+	let displayActiveTabId = $derived(
+		virtualInstanceTabId || currentActiveTabId
+	);
 
 	// sortedItems 需要从 tabItems 派生
 	import { derived } from 'svelte/store';
@@ -1062,13 +1077,28 @@
 	// Home 路径（用于新建页签）
 	let homePath = $state('');
 
+	// 记录是否为虚拟路径实例（独立页签）
+	let isVirtualInstance = $state(false);
+	let ownTabId = $state<string | null>(null);
+
 	// 初始化
 	onMount(() => {
 		// 异步初始化
 		(async () => {
 			try {
 				// 检查是否有传入的初始路径（用于书签/历史虚拟路径）
-				if (propInitialPath) {
+				if (propInitialPath && isVirtualPath(propInitialPath)) {
+					// 虚拟路径实例：创建独立的页签
+					isVirtualInstance = true;
+					ownTabId = folderTabActions.createTab(propInitialPath);
+					virtualInstanceTabId = ownTabId; // 设置隔离的页签 ID
+					homePath = propInitialPath;
+					folderTabActions.setHomePath(propInitialPath);
+					// 稍等页签创建完成后再导航
+					await new Promise(r => setTimeout(r, 50));
+					navigationCommand.set({ type: 'init', path: propInitialPath });
+				} else if (propInitialPath) {
+					// 普通路径作为初始路径
 					homePath = propInitialPath;
 					folderTabActions.setHomePath(propInitialPath);
 					navigationCommand.set({ type: 'init', path: propInitialPath });
@@ -1094,12 +1124,20 @@
 			}
 		})();
 
-		// 添加键盘事件监听
-		document.addEventListener('keydown', handleKeydown);
+		// 添加键盘事件监听（仅非虚拟实例）
+		if (!propInitialPath || !isVirtualPath(propInitialPath)) {
+			document.addEventListener('keydown', handleKeydown);
+		}
 
 		return () => {
-			// 清理键盘事件监听
-			document.removeEventListener('keydown', handleKeydown);
+			// 清理
+			if (!propInitialPath || !isVirtualPath(propInitialPath)) {
+				document.removeEventListener('keydown', handleKeydown);
+			}
+			// 如果是虚拟实例，关闭独立页签
+			if (isVirtualInstance && ownTabId) {
+				folderTabActions.closeTab(ownTabId);
+			}
 		};
 	});
 </script>
@@ -1110,8 +1148,8 @@
 		<BreadcrumbBar onNavigate={handleNavigate} {homePath} />
 	</div>
 
-	<!-- 页签栏（仅在有多个页签时显示） -->
-	{#if currentAllTabs.length > 1}
+	<!-- 页签栏（仅在有多个页签且非虚拟实例时显示） -->
+	{#if displayTabs.length > 1 && !isVirtualInstance}
 		<FolderTabBar {homePath} />
 	{/if}
 
@@ -1257,11 +1295,11 @@
 				: ''}
 		>
 			<!-- 每个页签独立的 FolderStack 实例 -->
-			{#each currentAllTabs as tab (tab.id)}
+			{#each displayTabs as tab (tab.id)}
 				<div
 					class="absolute inset-0"
-					class:hidden={tab.id !== currentActiveTabId}
-					class:pointer-events-none={tab.id !== currentActiveTabId}
+					class:hidden={tab.id !== displayActiveTabId}
+					class:pointer-events-none={tab.id !== displayActiveTabId}
 				>
 					{#if $isSearching || $searchResults.length > 0}
 						<!-- 搜索结果模式 - 点击在新标签页打开 -->

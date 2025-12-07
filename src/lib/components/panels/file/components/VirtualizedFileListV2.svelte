@@ -426,6 +426,8 @@
 									showSizeAndModified={true}
 									currentPage={historyEntry?.currentPage}
 									totalPages={historyEntry?.totalPages}
+									videoPosition={historyEntry?.videoPosition}
+									videoDuration={historyEntry?.videoDuration}
 									timestamp={item.modified ? item.modified * 1000 : undefined}
 									{thumbnailSize}
 									onClick={() => handleItemClick(item, itemIndex)}

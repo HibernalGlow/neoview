@@ -27,6 +27,8 @@
 		showSizeAndModified?: boolean;
 		currentPage?: number;
 		totalPages?: number;
+		videoPosition?: number;
+		videoDuration?: number;
 		timestamp?: number;
 		// 文件夹总大小（异步加载）
 		folderTotalSize?: number | null;
@@ -55,6 +57,8 @@
 		showSizeAndModified = false,
 		currentPage,
 		totalPages,
+		videoPosition,
+		videoDuration,
 		timestamp,
 		folderTotalSize = null,
 		folderSizeLoading = false,
@@ -71,6 +75,18 @@
 		onOpenAsBook,
 		onSetRating
 	}: Props = $props();
+
+	// 格式化视频时长（秒转为 时:分:秒 格式）
+	function formatDuration(seconds?: number): string {
+		if (seconds === undefined || seconds === null || !isFinite(seconds) || seconds < 0) return '';
+		const h = Math.floor(seconds / 3600);
+		const m = Math.floor((seconds % 3600) / 60);
+		const s = Math.floor(seconds % 60);
+		if (h > 0) {
+			return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+		}
+		return `${m}:${s.toString().padStart(2, '0')}`;
+	}
 
 	// 格式化时间
 	function formatTime(ts?: number): string {
@@ -281,8 +297,10 @@
 		{/if}
 
 		<div class="text-muted-foreground mt-1 text-xs">
-			<!-- 进度信息始终显示（当存在时） -->
-			{#if currentPage !== undefined && totalPages !== undefined && totalPages > 0}
+			<!-- 视频进度信息（时:分:秒格式） -->
+			{#if videoPosition !== undefined && videoDuration !== undefined && videoDuration > 0}
+				<span>{formatDuration(videoPosition)}/{formatDuration(videoDuration)}</span>
+			{:else if currentPage !== undefined && totalPages !== undefined && totalPages > 0}
 				<span>{currentPage}/{totalPages}</span>
 			{/if}
 			{#if showSizeAndModified}

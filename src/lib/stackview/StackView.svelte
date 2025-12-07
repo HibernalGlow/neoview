@@ -763,14 +763,12 @@
 	/>
 
 	<!-- 悬停滚动层 -->
-	<!-- 【性能优化】Translate 方案：直接操作 transform: translate() -->
+	<!-- 【性能优化】原生滚动方案：直接操作 scrollLeft/scrollTop -->
 	<HoverScrollLayer
 		enabled={hoverScrollEnabled}
 		sidebarMargin={20}
 		deadZoneRatio={0.15}
-		{viewportSize}
-		{displaySize}
-		targetSelector=".scroll-frame-content"
+		targetSelector=".scroll-frame-container"
 	/>
 
 	<!-- 图片信息浮窗 -->

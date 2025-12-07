@@ -61,8 +61,8 @@
 
 <style>
   .frame-image {
-    max-width: 100%;
-    max-height: 100%;
+    /* 【原生滚动】允许父组件通过 style prop 覆盖默认尺寸限制 */
+    /* 默认情况下 contain 模式 */
     object-fit: contain;
     user-select: none;
     -webkit-user-drag: none;

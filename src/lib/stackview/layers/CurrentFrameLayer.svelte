@@ -43,6 +43,15 @@
 	// 【性能优化】原生滚动方案：不再使用 transform-origin
 	// HoverScrollLayer 直接操作容器的 scrollLeft/scrollTop
 
+	// 本地存储图片实际尺寸（从 onload 事件获取）
+	let loadedImageSize = $state<{ width: number; height: number }>({ width: 0, height: 0 });
+
+	// 优先使用 loadedImageSize，其次使用 props 传入的 imageSize
+	let effectiveImageSize = $derived({
+		width: loadedImageSize.width || imageSize.width,
+		height: loadedImageSize.height || imageSize.height
+	});
+
 	// 计算 transform（只包含 scale 和 rotation）
 	let transformStyle = $derived.by(() => {
 		const parts: string[] = [];
@@ -52,22 +61,37 @@
 	});
 
 	// 计算图片尺寸（用于滚动区域）
+	// 原生滚动方案：根据宽高比决定填充方向，使用具体像素值
 	let imageDisplayStyle = $derived.by(() => {
-		if (!imageSize.width || !imageSize.height || !viewportSize.width || !viewportSize.height) {
-			return '';
+		const size = effectiveImageSize;
+		
+		if (!size.width || !size.height || !viewportSize.width || !viewportSize.height) {
+			// 没有尺寸信息时使用默认 contain 模式
+			return 'max-width: 100%; max-height: 100%;';
 		}
-		// 计算图片显示尺寸（保持宽高比）
-		const imgAspect = imageSize.width / imageSize.height;
+		
+		const imgAspect = size.width / size.height;
 		const vpAspect = viewportSize.width / viewportSize.height;
 		
 		if (imgAspect > vpAspect) {
-			// 横向图片：高度填满，宽度溢出
-			return `height: 100%; width: auto;`;
+			// 横向图片：高度填满视口，宽度按比例计算
+			const width = viewportSize.height * imgAspect;
+			return `height: ${viewportSize.height}px; width: ${width}px;`;
 		} else {
-			// 竖向图片：宽度填满，高度溢出
-			return `width: 100%; height: auto;`;
+			// 竖向图片：宽度填满视口，高度按比例计算
+			const height = viewportSize.width / imgAspect;
+			return `width: ${viewportSize.width}px; height: ${height}px;`;
 		}
 	});
+
+	// 图片加载完成时更新本地尺寸
+	function handleImageLoad(e: Event, index: number) {
+		const img = e.target as HTMLImageElement;
+		if (img && img.naturalWidth && img.naturalHeight) {
+			loadedImageSize = { width: img.naturalWidth, height: img.naturalHeight };
+		}
+		onImageLoad?.(e, index);
+	}
 
 	let layoutClass = $derived.by(() => {
 		const classes: string[] = [];
@@ -121,7 +145,7 @@
 					transform={getImageTransform(img)}
 					clipPath={getClipPath(img.splitHalf)}
 					style={imageDisplayStyle}
-					onload={(e) => onImageLoad?.(e, i)}
+					onload={(e) => handleImageLoad(e, i)}
 				/>
 			{/each}
 		</div>
@@ -142,7 +166,10 @@
 	.scroll-frame-container {
 		position: absolute;
 		inset: 0;
-		overflow: hidden; /* 隐藏滚动条但保留滚动能力 */
+		overflow: auto; /* 允许滚动 */
+		/* 隐藏滚动条 */
+		scrollbar-width: none; /* Firefox */
+		-ms-overflow-style: none; /* IE/Edge */
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -151,10 +178,18 @@
 		-webkit-overflow-scrolling: touch;
 	}
 
+	/* 隐藏 Webkit 滚动条 */
+	.scroll-frame-container::-webkit-scrollbar {
+		display: none;
+	}
+
 	.scroll-frame-content {
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		/* 确保内容区域有足够的尺寸 */
+		width: max-content;
+		height: max-content;
 		min-width: 100%;
 		min-height: 100%;
 		/* GPU 加速 */

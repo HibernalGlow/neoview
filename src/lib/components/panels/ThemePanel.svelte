@@ -25,37 +25,41 @@
 		sidebarOpacity = value;
 		settingsManager.updateNestedSettings('panels', { sidebarOpacity: value });
 	}
-	
+
 	function updateTopToolbarOpacity(value: number) {
 		topToolbarOpacity = value;
 		settingsManager.updateNestedSettings('panels', { topToolbarOpacity: value });
 	}
-	
+
 	function updateBottomBarOpacity(value: number) {
 		bottomBarOpacity = value;
 		settingsManager.updateNestedSettings('panels', { bottomBarOpacity: value });
 	}
-	
+
 	function updateSidebarBlur(value: number) {
 		sidebarBlur = value;
 		settingsManager.updateNestedSettings('panels', { sidebarBlur: value });
 	}
-	
+
 	function updateTopToolbarBlur(value: number) {
 		topToolbarBlur = value;
 		settingsManager.updateNestedSettings('panels', { topToolbarBlur: value });
 	}
-	
+
 	function updateBottomBarBlur(value: number) {
 		bottomBarBlur = value;
 		settingsManager.updateNestedSettings('panels', { bottomBarBlur: value });
 	}
-	
+
 	// 字体设置
-	import { applyFontSettings, broadcastFontSettings, type FontSettings } from '$lib/utils/fontManager';
+	import {
+		applyFontSettings,
+		broadcastFontSettings,
+		type FontSettings
+	} from '$lib/utils/fontManager';
 	import { Type, Plus, X } from '@lucide/svelte';
 	import Switch from '$lib/components/ui/switch/switch.svelte';
-	
+
 	let fontSettings = $state<FontSettings>({
 		enabled: false,
 		fontFamilies: [],
@@ -64,12 +68,12 @@
 	});
 	let newMainFont = $state('');
 	let newMonoFont = $state('');
-	
+
 	function loadFontSettings() {
 		const settings = settingsManager.getSettings().theme.customFont;
 		fontSettings = { ...settings };
 	}
-	
+
 	function saveFontSettings() {
 		settingsManager.updateNestedSettings('theme', {
 			customFont: { ...fontSettings }
@@ -77,12 +81,12 @@
 		applyFontSettings(fontSettings);
 		broadcastFontSettings(fontSettings);
 	}
-	
+
 	function toggleFontEnabled(enabled: boolean) {
 		fontSettings.enabled = enabled;
 		saveFontSettings();
 	}
-	
+
 	function addMainFont() {
 		if (newMainFont.trim() && !fontSettings.fontFamilies.includes(newMainFont.trim())) {
 			fontSettings.fontFamilies = [...fontSettings.fontFamilies, newMainFont.trim()];
@@ -90,12 +94,12 @@
 			saveFontSettings();
 		}
 	}
-	
+
 	function removeMainFont(font: string) {
-		fontSettings.fontFamilies = fontSettings.fontFamilies.filter(f => f !== font);
+		fontSettings.fontFamilies = fontSettings.fontFamilies.filter((f) => f !== font);
 		saveFontSettings();
 	}
-	
+
 	function addMonoFont() {
 		if (newMonoFont.trim() && !fontSettings.monoFontFamilies.includes(newMonoFont.trim())) {
 			fontSettings.monoFontFamilies = [...fontSettings.monoFontFamilies, newMonoFont.trim()];
@@ -103,15 +107,16 @@
 			saveFontSettings();
 		}
 	}
-	
+
 	function removeMonoFont(font: string) {
-		fontSettings.monoFontFamilies = fontSettings.monoFontFamilies.filter(f => f !== font);
+		fontSettings.monoFontFamilies = fontSettings.monoFontFamilies.filter((f) => f !== font);
 		saveFontSettings();
 	}
-	
+
 	let themeJson = $state('');
 	let customThemeName = $state('');
-	const placeholderText = '{"name":"My Theme","cssVars":{"theme":{},"light":{},"dark":{}}}';
+	const placeholderText =
+		'JSON 或 CSS 格式\n\nJSON: {"name":"...","cssVars":{...}}\n\nCSS:\n:root {\n  --background: ...;\n}';
 	let editingVariant = $state<'light' | 'dark'>('light');
 
 	type ThemeColorsVariant = Record<string, string>;
@@ -232,7 +237,7 @@
 			localStorage.setItem('theme-mode', mode);
 			localStorage.setItem('theme-name', theme.name);
 			localStorage.setItem('runtime-theme', JSON.stringify(runtimeThemePayload));
-			
+
 			// 通过 Tauri 事件广播主题变更到所有窗口
 			emit('theme-changed', runtimeThemePayload).catch(() => {});
 		} catch {}
@@ -259,11 +264,7 @@
 	function addCustomTheme(theme: ThemeConfig) {
 		const index = customThemes.findIndex((t) => t.name === theme.name);
 		if (index >= 0) {
-			customThemes = [
-				...customThemes.slice(0, index),
-				theme,
-				...customThemes.slice(index + 1)
-			];
+			customThemes = [...customThemes.slice(0, index), theme, ...customThemes.slice(index + 1)];
 		} else {
 			customThemes = [...customThemes, theme];
 		}
@@ -339,38 +340,75 @@
 		}
 	}
 
-	async function importThemeFromJson() {
+	function parseCssTheme(css: string) {
+		const cleanCss = css.replace(/\/\*[\s\S]*?\*\//g, '');
+		const light: Record<string, string> = {};
+		const dark: Record<string, string> = {};
+
+		const parseVars = (str: string, target: Record<string, string>) => {
+			const regex = /--([a-zA-Z0-9-]+)\s*:\s*([^;]+);/g;
+			let match;
+			while ((match = regex.exec(str)) !== null) {
+				target[match[1]] = match[2].trim();
+			}
+		};
+
+		const rootMatch = cleanCss.match(/:root\s*{([^}]*)}/);
+		if (rootMatch) parseVars(rootMatch[1], light);
+
+		const darkMatch = cleanCss.match(/\.dark\s*{([^}]*)}/);
+		if (darkMatch) parseVars(darkMatch[1], dark);
+
+		if (Object.keys(light).length === 0 && Object.keys(dark).length === 0) {
+			parseVars(cleanCss, light);
+		}
+
+		if (Object.keys(light).length === 0 && Object.keys(dark).length === 0) return null;
+
+		if (Object.keys(dark).length === 0) Object.assign(dark, light);
+		if (Object.keys(light).length === 0) Object.assign(light, dark);
+
+		return { light, dark };
+	}
+
+	async function importThemeFromInput() {
 		const raw = themeJson.trim();
 		if (!raw) return;
-		try {
-			const parsed = JSON.parse(raw) as {
-				name?: string;
-				cssVars?: {
-					light?: Record<string, string>;
-					dark?: Record<string, string>;
-					theme?: Record<string, string>;
-				};
-			};
-			if (!parsed || !parsed.cssVars || !parsed.cssVars.light || !parsed.cssVars.dark) {
-				console.error('JSON 格式不正确，缺少 cssVars.light / cssVars.dark');
-				return;
-			}
-			const base = parsed.cssVars.theme ?? {};
-			const light = { ...base, ...parsed.cssVars.light };
-			const dark = { ...base, ...parsed.cssVars.dark };
-			const importedTheme: ThemeConfig = {
-				name: parsed.name || 'Custom Theme',
-				description: '来自 JSON 的主题',
-				colors: {
-					light,
-					dark
+
+		if (raw.startsWith('{')) {
+			try {
+				const parsed = JSON.parse(raw) as any;
+				if (parsed.cssVars && parsed.cssVars.light) {
+					const base = parsed.cssVars.theme ?? {};
+					const light = { ...base, ...parsed.cssVars.light };
+					const dark = { ...base, ...(parsed.cssVars.dark ?? parsed.cssVars.light) };
+					const importedTheme: ThemeConfig = {
+						name: parsed.name || 'Custom Theme',
+						description: '来自 JSON 的主题',
+						colors: { light, dark }
+					};
+					addCustomTheme(importedTheme);
+					selectedTheme = importedTheme;
+					applyTheme(currentMode, selectedTheme);
+					return;
 				}
+			} catch (e) {
+				console.log('JSON parse failed, trying CSS');
+			}
+		}
+
+		const cssTheme = parseCssTheme(raw);
+		if (cssTheme) {
+			const importedTheme: ThemeConfig = {
+				name: 'Custom Theme (CSS)',
+				description: '来自 CSS 的主题',
+				colors: cssTheme
 			};
 			addCustomTheme(importedTheme);
 			selectedTheme = importedTheme;
 			applyTheme(currentMode, selectedTheme);
-		} catch (error) {
-			console.error('从 JSON 导入主题失败', error);
+		} else {
+			console.error('无法识别的主题格式');
 		}
 	}
 
@@ -398,9 +436,7 @@
 		}
 
 		if (savedThemeName) {
-			let theme = presetThemes.find((t) => t.name === savedThemeName) as
-				| ThemeConfig
-				| undefined;
+			let theme = presetThemes.find((t) => t.name === savedThemeName) as ThemeConfig | undefined;
 			if (!theme) {
 				theme = customThemes.find((t) => t.name === savedThemeName);
 			}
@@ -491,7 +527,7 @@
 
 	<!-- 侧边栏透明度 -->
 	<div class="space-y-3">
-		<Label class="text-sm font-semibold flex items-center gap-2">
+		<Label class="flex items-center gap-2 text-sm font-semibold">
 			<Layers class="h-4 w-4" />
 			侧边栏透明度
 		</Label>
@@ -505,11 +541,9 @@
 				class="flex-1"
 				onValueChange={updateSidebarOpacity}
 			/>
-			<span class="text-sm text-muted-foreground w-12 text-right">{sidebarOpacity}%</span>
+			<span class="text-muted-foreground w-12 text-right text-sm">{sidebarOpacity}%</span>
 		</div>
-		<p class="text-muted-foreground text-xs">
-			调整侧边栏和面板的背景透明度，数值越低越透明
-		</p>
+		<p class="text-muted-foreground text-xs">调整侧边栏和面板的背景透明度，数值越低越透明</p>
 	</div>
 
 	<!-- 顶部工具栏透明度 -->
@@ -525,7 +559,7 @@
 				class="flex-1"
 				onValueChange={updateTopToolbarOpacity}
 			/>
-			<span class="text-sm text-muted-foreground w-12 text-right">{topToolbarOpacity}%</span>
+			<span class="text-muted-foreground w-12 text-right text-sm">{topToolbarOpacity}%</span>
 		</div>
 	</div>
 
@@ -542,14 +576,14 @@
 				class="flex-1"
 				onValueChange={updateBottomBarOpacity}
 			/>
-			<span class="text-sm text-muted-foreground w-12 text-right">{bottomBarOpacity}%</span>
+			<span class="text-muted-foreground w-12 text-right text-sm">{bottomBarOpacity}%</span>
 		</div>
 	</div>
 
 	<!-- 模糊程度设置 -->
-	<div class="space-y-4 pt-2 border-t">
+	<div class="space-y-4 border-t pt-2">
 		<h4 class="text-sm font-semibold">模糊程度</h4>
-		
+
 		<div class="space-y-3">
 			<Label class="text-sm">侧边栏模糊</Label>
 			<div class="flex items-center gap-4">
@@ -562,7 +596,7 @@
 					class="flex-1"
 					onValueChange={updateSidebarBlur}
 				/>
-				<span class="text-sm text-muted-foreground w-12 text-right">{sidebarBlur}px</span>
+				<span class="text-muted-foreground w-12 text-right text-sm">{sidebarBlur}px</span>
 			</div>
 		</div>
 
@@ -578,7 +612,7 @@
 					class="flex-1"
 					onValueChange={updateTopToolbarBlur}
 				/>
-				<span class="text-sm text-muted-foreground w-12 text-right">{topToolbarBlur}px</span>
+				<span class="text-muted-foreground w-12 text-right text-sm">{topToolbarBlur}px</span>
 			</div>
 		</div>
 
@@ -594,7 +628,7 @@
 					class="flex-1"
 					onValueChange={updateBottomBarBlur}
 				/>
-				<span class="text-sm text-muted-foreground w-12 text-right">{bottomBarBlur}px</span>
+				<span class="text-muted-foreground w-12 text-right text-sm">{bottomBarBlur}px</span>
 			</div>
 		</div>
 	</div>
@@ -602,20 +636,20 @@
 	<!-- 自定义字体 -->
 	<div class="space-y-3">
 		<div class="flex items-center justify-between">
-			<Label class="text-sm font-semibold flex items-center gap-2">
+			<Label class="flex items-center gap-2 text-sm font-semibold">
 				<Type class="h-4 w-4" />
 				自定义字体
 			</Label>
 			<Switch checked={fontSettings.enabled} onCheckedChange={toggleFontEnabled} />
 		</div>
-		
+
 		{#if fontSettings.enabled}
 			<!-- 主字体 -->
 			<div class="space-y-2">
-				<Label class="text-xs text-muted-foreground">主字体（按优先级排序）</Label>
+				<Label class="text-muted-foreground text-xs">主字体（按优先级排序）</Label>
 				<div class="flex gap-2">
-					<Input 
-						bind:value={newMainFont} 
+					<Input
+						bind:value={newMainFont}
 						placeholder="输入字体名称，如 Microsoft YaHei"
 						class="flex-1"
 						onkeydown={(e: KeyboardEvent) => e.key === 'Enter' && addMainFont()}
@@ -627,7 +661,9 @@
 				{#if fontSettings.fontFamilies.length > 0}
 					<div class="flex flex-wrap gap-2">
 						{#each fontSettings.fontFamilies as font}
-							<span class="inline-flex items-center gap-1 rounded-md bg-secondary px-2 py-1 text-xs">
+							<span
+								class="bg-secondary inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs"
+							>
 								{font}
 								<button onclick={() => removeMainFont(font)} class="hover:text-destructive">
 									<X class="h-3 w-3" />
@@ -637,13 +673,13 @@
 					</div>
 				{/if}
 			</div>
-			
+
 			<!-- 等宽字体 -->
 			<div class="space-y-2">
-				<Label class="text-xs text-muted-foreground">等宽字体（代码等）</Label>
+				<Label class="text-muted-foreground text-xs">等宽字体（代码等）</Label>
 				<div class="flex gap-2">
-					<Input 
-						bind:value={newMonoFont} 
+					<Input
+						bind:value={newMonoFont}
 						placeholder="输入字体名称，如 Cascadia Code"
 						class="flex-1"
 						onkeydown={(e: KeyboardEvent) => e.key === 'Enter' && addMonoFont()}
@@ -655,7 +691,9 @@
 				{#if fontSettings.monoFontFamilies.length > 0}
 					<div class="flex flex-wrap gap-2">
 						{#each fontSettings.monoFontFamilies as font}
-							<span class="inline-flex items-center gap-1 rounded-md bg-secondary px-2 py-1 text-xs font-mono">
+							<span
+								class="bg-secondary inline-flex items-center gap-1 rounded-md px-2 py-1 font-mono text-xs"
+							>
 								{font}
 								<button onclick={() => removeMonoFont(font)} class="hover:text-destructive">
 									<X class="h-3 w-3" />
@@ -747,10 +785,7 @@
 	<div class="space-y-3">
 		<Label class="text-sm font-semibold">保存当前主题</Label>
 		<div class="flex gap-2">
-			<Input
-				placeholder="自定义主题名称"
-				bind:value={customThemeName}
-			/>
+			<Input placeholder="自定义主题名称" bind:value={customThemeName} />
 			<Button size="sm" onclick={saveCurrentThemeAsCustom}>保存</Button>
 		</div>
 	</div>
@@ -758,24 +793,21 @@
 	<div class="space-y-3">
 		<Label class="text-sm font-semibold">从 URL 导入主题</Label>
 		<div class="flex gap-2">
-			<Input
-				placeholder="https://tweakcn.com/r/themes/perpetuity.json"
-				bind:value={themeUrl}
-			/>
+			<Input placeholder="https://tweakcn.com/r/themes/perpetuity.json" bind:value={themeUrl} />
 			<Button size="sm" onclick={importThemeFromUrl}>导入</Button>
 		</div>
 	</div>
 
 	<div class="space-y-3">
-		<Label class="text-sm font-semibold">从 JSON 导入主题</Label>
+		<Label class="text-sm font-semibold">导入主题 (JSON / CSS)</Label>
 		<div class="flex flex-col gap-2">
 			<textarea
-				class="font-mono text-xs bg-muted/50 rounded-md border p-2 min-h-[120px] resize-y outline-none focus-visible:ring-1 focus-visible:ring-ring"
+				class="bg-muted/50 focus-visible:ring-ring min-h-[120px] resize-y rounded-md border p-2 font-mono text-xs outline-none focus-visible:ring-1"
 				bind:value={themeJson}
 				placeholder={placeholderText}
 			></textarea>
 			<div class="flex justify-end">
-				<Button size="sm" onclick={importThemeFromJson}>导入 JSON</Button>
+				<Button size="sm" onclick={importThemeFromInput}>导入</Button>
 			</div>
 		</div>
 	</div>
@@ -822,17 +854,12 @@
 		<div class="grid gap-2 md:grid-cols-2">
 			{#each Object.entries(selectedTheme.colors[editingVariant] || {}) as [key, value]}
 				<div class="flex items-center gap-3 rounded-md border px-3 py-2">
-					<div
-						class="h-6 w-6 rounded border"
-						style="background: {value}"
-						title={key}
-					></div>
+					<div class="h-6 w-6 rounded border" style="background: {value}" title={key}></div>
 					<div class="flex-1 space-y-1">
 						<div class="text-xs font-medium">{key}</div>
 						<Input
-							value={value}
-							on:input={(e) =>
-								updateThemeColor(editingVariant, key, e.currentTarget.value)}
+							{value}
+							on:input={(e) => updateThemeColor(editingVariant, key, e.currentTarget.value)}
 						/>
 					</div>
 				</div>

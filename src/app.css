@@ -111,11 +111,6 @@
 		@apply bg-background;
 	}
 	
-	/* 所有 Lucide 图标使用主题色 */
-	svg[class*="lucide"] {
-		color: var(--primary);
-	}
-	
 	/* 自定义字体应用（当 data-custom-font="enabled" 时生效） */
 	html[data-custom-font="enabled"] {
 		font-family: var(--font-custom-sans, inherit);

@@ -67,6 +67,12 @@ export async function openFileSystemItem(
     }
 
     if (isDir) {
+        // 如果是强制在应用内打开（CLI 启动），在 viewer 中打开文件夹作为书籍
+        if (forceInApp) {
+            console.log('📂 forceInApp: opening directory as book in viewer', path);
+            await bookStore.openDirectoryAsBook(path);
+            return;
+        }
         // If NOT syncing silently, we assume the user wants to switch to the file browser and see the folder.
         if (!syncFileTree) {
             // We use the same logic as above to ensure we enter the folder

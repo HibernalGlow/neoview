@@ -50,6 +50,9 @@
 	import SettingsOverlay from '$lib/components/SettingsOverlay.svelte';
 	import { settingsOverlayOpen } from '$lib/stores/settingsOverlay.svelte';
 	import { onMount } from 'svelte';
+	import { getMatches } from '@tauri-apps/plugin-cli';
+	import { getFileMetadata } from '$lib/api/filesystem';
+	import { openFileSystemItem } from '$lib/utils/navigationUtils';
 
 	let loading = $state(false);
 
@@ -94,29 +97,37 @@
 		}
 	}
 
-	// TODO: 缩略图功能已移除，待重新实现
-	// 初始化缩略图管理器
+	// 初始化缩略图管理器和处理 CLI 启动参数
 	onMount(async () => {
 		try {
-			// console.log('🔧 初始化缩略图管理器...');
-
-			// TODO: 缩略图功能已移除，待重新实现
-			// 使用统一的缩略图路径
-			// const thumbnailPath = 'D:\\temp\\neoview';
-
-			// 设置根目录为系统根目录，这样可以处理任何路径
-			// const rootPath = 'C:\\';
-
-			// console.log('📁 缩略图路径:', thumbnailPath);
-			// console.log('📂 根目录路径:', rootPath);
-			// console.log('⚠️ 使用系统根目录，支持任意路径的缩略图生成');
-
 			// V3 缩略图系统初始化
 			const thumbnailPath = 'D:\\temp\\neoview';
 			await initThumbnailServiceV3(thumbnailPath, 256);
 			console.log('✅ ThumbnailServiceV3 初始化成功');
 		} catch (error) {
-			console.error('❌ 初始化失败:', error);
+			console.error('❌ 缩略图初始化失败:', error);
+		}
+
+		// CLI 启动参数处理（类似 NeeView 的 FirstLoader）
+		try {
+			const matches = await getMatches();
+			const arg = matches.args?.path?.value as string | string[] | undefined;
+			const cliPath =
+				typeof arg === 'string'
+					? arg
+					: Array.isArray(arg) && arg.length > 0
+						? arg[0]
+						: undefined;
+
+			if (cliPath) {
+				console.log('📂 CLI 启动: 打开路径:', cliPath);
+				const meta = await getFileMetadata(cliPath);
+				console.log('📂 CLI 启动: 文件元数据:', meta);
+				// 强制在应用内打开，不使用系统默认程序
+				await openFileSystemItem(cliPath, meta.isDir, { forceInApp: true });
+			}
+		} catch (error) {
+			console.error('❌ CLI 启动失败:', error);
 		}
 	});
 

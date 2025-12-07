@@ -12,6 +12,32 @@
 	import { RefreshCw, Activity } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 
+	// 持久化存储 key
+	const STORAGE_KEY_MONITORING = 'neoview-monitor-isMonitoring';
+	const STORAGE_KEY_INTERVAL = 'neoview-monitor-refreshInterval';
+
+	// 从 localStorage 加载状态
+	function loadFromStorage<T>(key: string, defaultValue: T): T {
+		try {
+			const saved = localStorage.getItem(key);
+			if (saved !== null) {
+				return JSON.parse(saved);
+			}
+		} catch (e) {
+			console.error(`Failed to load ${key} from storage:`, e);
+		}
+		return defaultValue;
+	}
+
+	// 保存状态到 localStorage
+	function saveToStorage<T>(key: string, value: T) {
+		try {
+			localStorage.setItem(key, JSON.stringify(value));
+		} catch (e) {
+			console.error(`Failed to save ${key} to storage:`, e);
+		}
+	}
+
 	// 系统统计数据接口
 	interface SystemStats {
 		cpu_usage: number[];
@@ -28,10 +54,10 @@
 		disk_free_bytes: number;
 	}
 
-	// 状态变量
+	// 状态变量 - 从 localStorage 恢复
 	let stats = $state<SystemStats | null>(null);
-	let isMonitoring = $state(false);
-	let refreshInterval = $state(1000); // 默认 1 秒刷新一次
+	let isMonitoring = $state(loadFromStorage(STORAGE_KEY_MONITORING, true)); // 默认开启监控
+	let refreshInterval = $state(loadFromStorage(STORAGE_KEY_INTERVAL, 1000)); // 默认 1 秒刷新一次
 	let intervalId: number | null = null;
 	let error = $state<string | null>(null);
 
@@ -77,6 +103,8 @@
 		} else {
 			startMonitoring();
 		}
+		// 保存监控状态
+		saveToStorage(STORAGE_KEY_MONITORING, isMonitoring);
 	}
 
 	// 手动刷新
@@ -86,8 +114,10 @@
 
 	// 生命周期
 	onMount(() => {
-		// 默认启动监控
-		startMonitoring();
+		// 如果保存的状态是开启监控，则启动监控
+		if (isMonitoring) {
+			startMonitoring();
+		}
 	});
 
 	onDestroy(() => {
@@ -131,6 +161,8 @@
 				bind:value={refreshInterval}
 				class="bg-background rounded border px-2 py-1 text-xs"
 				onchange={() => {
+					// 保存刷新间隔
+					saveToStorage(STORAGE_KEY_INTERVAL, refreshInterval);
 					if (isMonitoring) {
 						stopMonitoring();
 						startMonitoring();

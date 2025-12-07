@@ -81,7 +81,7 @@
 	let playbackRate = $state(initialPlaybackRate);
 	let loopMode: LoopMode = $state(initialLoopMode);
 	let hideControlsTimeout: ReturnType<typeof setTimeout> | null = null;
-	let videoUrl = $state<string>('');
+	let videoUrl = $state<string>(src || '');
 
 	// 字幕设置 - 从 settings 读取初始值
 	let showSubtitleSettings = $state(false);
@@ -796,8 +796,6 @@
 				</button>
 			</div>
 		</div>
-	{:else}
-		<div class="text-white">加载视频中...</div>
 	{/if}
 </div>
 

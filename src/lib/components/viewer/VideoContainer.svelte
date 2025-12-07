@@ -96,33 +96,32 @@
 				videoStartTime = 0;
 			}
 
-			// 加载视频数据
+			// 加载视频数据 - 统一使用 convertFileSrc 处理
 			if (videoPage.data) {
-				// 已有 base64 数据
+				// 已有 base64 数据（仍使用 Blob URL）
 				const mimeType = getVideoMimeType(videoPage.name) || 'video/mp4';
 				const blob = await fetch(`data:${mimeType};base64,${videoPage.data}`).then(r => r.blob());
 				if (requestId !== currentVideoRequestId) return;
 				const url = URL.createObjectURL(blob);
 				setVideoUrl(url, true);
 			} else if (videoPage.innerPath && bookStore.currentBook?.type === 'archive') {
-				// 从压缩包加载
+				// 从压缩包加载 - 提取到临时文件后使用 convertFileSrc
 				const archivePath = bookStore.currentBook.path;
-				const videoData: number[] = await invoke('load_video_from_archive', {
+				const tempPath: string = await invoke('extract_video_to_temp', {
 					archivePath,
-					filePath: videoPage.innerPath
+					filePath: videoPage.innerPath,
+					traceId: `video-${Date.now()}`
 				});
 				if (requestId !== currentVideoRequestId) return;
-				const mimeType = getVideoMimeType(videoPage.name) || 'video/mp4';
-				const blob = new Blob([new Uint8Array(videoData)], { type: mimeType });
-				const url = URL.createObjectURL(blob);
-				setVideoUrl(url, true);
+				const url = convertFileSrc(tempPath);
+				setVideoUrl(url, false); // 临时文件不需要 revoke
 			} else {
-				// 从文件系统加载
+				// 从文件系统加载 - 直接使用 convertFileSrc
 				const url = convertFileSrc(videoPage.path);
 				if (requestId !== currentVideoRequestId) return;
 				setVideoUrl(url, false);
 			}
-		// 加载字幕
+			// 加载字幕
 			await loadSubtitle(videoPage);
 		} catch (err) {
 			console.error('加载视频失败:', err);
@@ -380,10 +379,6 @@
 			subtitle={subtitleData}
 			onSelectSubtitle={handleSelectSubtitle}
 		/>
-	{:else}
-		<div class="flex h-full w-full items-center justify-center text-white">
-			加载视频中...
-		</div>
 	{/if}
 </div>
 

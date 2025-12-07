@@ -249,12 +249,12 @@
 		flex-direction: row-reverse;
 	}
 
-	/* 对齐模式 */
-	.scroll-frame-container.frame-align-left {
+	/* 对齐模式 - 应用到 flex 容器 .scroll-frame-content 上 */
+	.scroll-frame-container.frame-align-left .scroll-frame-content {
 		justify-content: flex-start;
 	}
 
-	.scroll-frame-container.frame-align-right {
+	.scroll-frame-container.frame-align-right .scroll-frame-content {
 		justify-content: flex-end;
 	}
 </style>

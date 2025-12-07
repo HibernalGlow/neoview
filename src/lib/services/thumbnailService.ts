@@ -12,6 +12,7 @@
 import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 import { thumbnailCacheStore } from '$lib/stores/thumbnailCache.svelte';
 import { bookStore } from '$lib/stores/book.svelte';
+import { invoke } from '@tauri-apps/api/core';
 
 // ============================================================================
 // 配置
@@ -142,10 +143,26 @@ async function loadThumbnail(pageIndex: number): Promise<void> {
 			return;
 		}
 
-		// 检查blob类型，跳过视频文件
+		// 检查blob类型，视频文件使用系统缩略图
 		if (blob.type.startsWith('video/')) {
-			console.debug(`Skipping thumbnail for video page ${pageIndex} (${blob.type})`);
-			// TODO: 未来可以实现从视频提取第一帧作为缩略图
+			console.debug(`Using system thumbnail for video page ${pageIndex}`);
+			// 获取视频文件路径
+			const page = bookStore.currentBook?.pages[pageIndex];
+			if (!page?.path) {
+				console.warn(`No path for video page ${pageIndex}`);
+				return;
+			}
+
+			// 调用后端系统缩略图API
+			try {
+				const blobKey = await invoke<string>('generate_file_thumbnail_new', { filePath: page.path });
+				const thumbnailUrl = `neoview://${blobKey}`;
+				// 写入缓存（视频缩略图尺寸未知，使用默认值）
+				thumbnailCacheStore.setThumbnail(pageIndex, thumbnailUrl, 120, 120);
+				console.debug(`✅ Video thumbnail loaded for page ${pageIndex}`);
+			} catch (error) {
+				console.error(`Failed to generate system thumbnail for video page ${pageIndex}:`, error);
+			}
 			return;
 		}
 

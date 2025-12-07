@@ -363,14 +363,15 @@
 							max="10"
 							step="0.5"
 							value={currentSettings.image.hoverScrollSpeed ?? 2.0}
-							onchange={(event) => {
+							oninput={(event) => {
 								const target = event.target as HTMLInputElement;
 								const raw = parseFloat(target.value);
-								const value = Number.isNaN(raw) ? 2.0 : raw;
-								const clamped = Math.max(0.5, Math.min(value, 10));
-								settingsManager.updateNestedSettings('image', {
-									hoverScrollSpeed: clamped
-								});
+								if (!Number.isNaN(raw)) {
+									const clamped = Math.max(0.5, Math.min(raw, 10));
+									settingsManager.updateNestedSettings('image', {
+										hoverScrollSpeed: clamped
+									});
+								}
 							}}
 							class="w-20"
 						/>
@@ -381,14 +382,7 @@
 					min={0.5}
 					max={10}
 					step={0.5}
-					value={[currentSettings.image.hoverScrollSpeed ?? 2.0]}
-					onValueChange={(values) => {
-						if (values && values.length > 0) {
-							settingsManager.updateNestedSettings('image', {
-								hoverScrollSpeed: values[0]
-							});
-						}
-					}}
+					bind:value={currentSettings.image.hoverScrollSpeed as any}
 					class="w-full max-w-xs"
 					type="single"
 				/>

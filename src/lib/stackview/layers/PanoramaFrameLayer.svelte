@@ -62,23 +62,23 @@
     }, 100);
   });
   
-  // 计算图片尺寸：全景模式使用视口尺寸
-  // 水平方向：高度填满视口，宽度自适应
-  // 垂直方向：宽度填满视口，高度自适应
+  // 计算图片尺寸：全景模式
+  // 水平全景：高度固定为视口高度，宽度自适应（与非全景 fitHeight 一致）
+  // 纵向全景：宽度固定为视口宽度，高度自适应（与非全景 fitWidth 一致）
   let imageStyle = $derived.by(() => {
     const vp = viewportSize;
     if (!vp.width || !vp.height) {
-      return orientation === 'vertical' 
-        ? 'width: 100%; height: auto; max-width: none; max-height: none;'
-        : 'height: 100%; width: auto; max-width: none; max-height: none;';
+      return orientation === 'vertical'
+        ? 'width: 100%; height: auto;'
+        : 'height: 100%; width: auto;';
     }
     
     if (orientation === 'vertical') {
-      // 垂直滚动：宽度填满视口
-      return `width: ${vp.width}px; height: auto; max-width: none; max-height: none;`;
+      // 纵向全景：宽度固定，高度自适应
+      return `width: ${vp.width}px; height: auto;`;
     } else {
-      // 水平滚动：高度填满视口
-      return `height: ${vp.height}px; width: auto; max-width: none; max-height: none;`;
+      // 水平全景：高度固定，宽度自适应
+      return `height: ${vp.height}px; width: auto;`;
     }
   });
   

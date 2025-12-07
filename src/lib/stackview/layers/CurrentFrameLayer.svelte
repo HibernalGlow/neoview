@@ -71,8 +71,11 @@
 		const size = effectiveImageSize;
 		const vp = viewportSize;
 		
+		console.log('📐 imageDisplayStyle:', { zoomMode, size, vp });
+		
 		if (!size.width || !size.height || !vp.width || !vp.height) {
 			// 没有尺寸信息时使用默认 contain 模式
+			console.log('📐 使用默认样式（尺寸无效）');
 			return 'max-width: 100%; max-height: 100%;';
 		}
 		
@@ -207,9 +210,6 @@
 		/* 隐藏滚动条 */
 		scrollbar-width: none; /* Firefox */
 		-ms-overflow-style: none; /* IE/Edge */
-		display: flex;
-		align-items: center;
-		justify-content: center;
 		/* GPU 加速 */
 		will-change: scroll-position;
 		-webkit-overflow-scrolling: touch;
@@ -221,18 +221,16 @@
 	}
 
 	.scroll-frame-content {
-		display: flex;
+		/* 使用 inline-block 让容器紧贴内容 */
+		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		/* 确保内容区域有足够的尺寸 */
-		width: max-content;
-		height: max-content;
+		/* 最小尺寸为视口大小，确保居中效果 */
 		min-width: 100%;
 		min-height: 100%;
 		/* GPU 加速 */
 		will-change: transform;
 		transform: translateZ(0);
-		backface-visibility: hidden;
 	}
 
 	.frame-empty {

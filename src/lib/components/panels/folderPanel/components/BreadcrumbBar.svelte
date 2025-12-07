@@ -11,15 +11,28 @@ import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 import * as Tooltip from '$lib/components/ui/tooltip';
 import { tabCurrentPath, folderTabActions, isVirtualPath, getVirtualPathType, VIRTUAL_PATHS } from '../stores/folderTabStore.svelte';
 
-// 使用页签 store 的 currentPath
-const currentPath = tabCurrentPath;
-
 interface Props {
 	onNavigate?: (path: string) => void;
 	homePath?: string;
+	/** 外部传入的路径（用于虚拟实例独立显示） */
+	externalPath?: string;
 }
 
-let { onNavigate, homePath = '' }: Props = $props();
+let { onNavigate, homePath = '', externalPath }: Props = $props();
+
+// 使用外部路径或全局 store 的 currentPath
+import { get } from 'svelte/store';
+let displayPath = $state(externalPath || get(tabCurrentPath));
+
+$effect(() => {
+	// 如果有外部路径，使用它；否则订阅全局 store
+	if (externalPath !== undefined) {
+		displayPath = externalPath;
+	} else {
+		const unsub = tabCurrentPath.subscribe(v => { displayPath = v; });
+		return unsub;
+	}
+});
 
 function handleCreateTab() {
 	folderTabActions.createTab(homePath);
@@ -31,7 +44,7 @@ let editValue = $state('');
 let inputRef: HTMLInputElement | null = $state(null);
 
 function startEditing() {
-	editValue = $currentPath;
+	editValue = displayPath;
 	isEditing = true;
 	// 下一帧聚焦输入框
 	requestAnimationFrame(() => {
@@ -163,7 +176,7 @@ $effect(() => {
 	return () => observer.disconnect();
 });
 
-let breadcrumbItems = $derived(parsePath($currentPath));
+let breadcrumbItems = $derived(parsePath(displayPath));
 
 let visibleItems = $derived(() => {
 	if (breadcrumbItems.length <= maxVisibleItems) {

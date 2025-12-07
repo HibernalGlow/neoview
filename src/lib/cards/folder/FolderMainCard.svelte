@@ -457,7 +457,7 @@ onMount(() => {
 </script>
 
 <div class="bg-muted/10 flex h-full flex-col overflow-hidden">
-	<BreadcrumbBar onNavigate={handleNavigate} {homePath} />
+	<BreadcrumbBar onNavigate={handleNavigate} {homePath} externalPath={isVirtualInstance ? propInitialPath : undefined} />
 	
 	{#if displayTabs.length > 1 && !isVirtualInstance}
 		<FolderTabBar {homePath} />

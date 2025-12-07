@@ -76,10 +76,16 @@
 			return 'max-width: 100%; max-height: 100%;';
 		}
 		
-		// 双页模式：每张图片最多占视口宽度的一半（减去间隙）
-		const effectiveVp = layout === 'double' 
-			? { width: (vp.width - 4) / 2, height: vp.height }
-			: vp;
+		// 双页模式：根据 orientation 决定分割方向
+		// 横向双页：宽度减半；纵向双页：高度减半
+		let effectiveVp = vp;
+		if (layout === 'double') {
+			if (orientation === 'vertical') {
+				effectiveVp = { width: vp.width, height: (vp.height - 4) / 2 };
+			} else {
+				effectiveVp = { width: (vp.width - 4) / 2, height: vp.height };
+			}
+		}
 		
 		const imgAspect = size.width / size.height;
 		

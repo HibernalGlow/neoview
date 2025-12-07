@@ -64,9 +64,11 @@ interface Props {
 	onItemContextMenu?: (event: MouseEvent, item: FsItem) => void;
 	onOpenFolderAsBook?: (item: FsItem) => void;
 	onOpenInNewTab?: (item: FsItem) => void;
+	/** 强制激活模式，用于虚拟路径实例，始终响应导航命令 */
+	forceActive?: boolean;
 }
 
-let { tabId, initialPath, navigationCommand, onItemOpen, onItemDelete, onItemContextMenu, onOpenFolderAsBook, onOpenInNewTab }: Props = $props();
+let { tabId, initialPath, navigationCommand, onItemOpen, onItemDelete, onItemContextMenu, onOpenFolderAsBook, onOpenInNewTab, forceActive = false }: Props = $props();
 
 // 层叠数据结构
 interface FolderLayer {
@@ -569,14 +571,16 @@ function handleDeleteItem(layerIndex: number, item: FsItem) {
 	onItemDelete?.(item);
 }
 
-// 监听导航命令（只有当前活动页签才响应）
+// 监听导航命令（只有当前活动页签才响应，或强制激活模式）
 $effect(() => {
 	const cmd = $navigationCommand;
 	if (!cmd) return;
 	
-	// 只有活动页签才响应导航命令
-	const currentActiveTabId = get(activeTabId);
-	if (tabId !== currentActiveTabId) return;
+	// 强制激活模式始终响应，否则只有活动页签才响应导航命令
+	if (!forceActive) {
+		const currentActiveTabId = get(activeTabId);
+		if (tabId !== currentActiveTabId) return;
+	}
 	
 	switch (cmd.type) {
 		case 'init':

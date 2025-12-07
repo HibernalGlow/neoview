@@ -1326,6 +1326,7 @@
 							onItemContextMenu={handleContextMenu}
 							onOpenFolderAsBook={handleOpenFolderAsBook}
 							onOpenInNewTab={handleOpenInNewTab}
+							forceActive={isVirtualInstance}
 						/>
 					{/if}
 				</div>

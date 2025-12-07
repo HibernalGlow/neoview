@@ -21,7 +21,7 @@
 	}
 </script>
 
-<div class="bg-card text-card-foreground rounded-lg border p-3">
+<div class="bg-muted/50 rounded p-3">
 	<!-- 头部 -->
 	<div class="mb-3 flex items-center justify-between">
 		<div class="flex items-center gap-2">

@@ -49,7 +49,7 @@
 
 <div class="space-y-3">
 	<!-- 网络 IO -->
-	<div class="bg-card text-card-foreground rounded-lg border p-3">
+	<div class="bg-muted/50 rounded p-3">
 		<div class="mb-3 flex items-center gap-2">
 			<Network class="text-primary h-4 w-4" />
 			<span class="text-sm font-semibold">网络</span>
@@ -72,7 +72,7 @@
 	</div>
 
 	<!-- 磁盘 IO -->
-	<div class="bg-card text-card-foreground rounded-lg border p-3">
+	<div class="bg-muted/50 rounded p-3">
 		<div class="mb-3 flex items-center justify-between">
 			<div class="flex items-center gap-2">
 				<HardDrive class="text-primary h-4 w-4" />

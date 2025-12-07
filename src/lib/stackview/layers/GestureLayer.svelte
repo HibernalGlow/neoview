@@ -69,18 +69,44 @@
 	let isPanning = $state(false);
 	let lastPoint: Point | null = null;
 
+	// 检查鼠标位置是否在视频控件区域
+	function isOverVideoControls(x: number, y: number): boolean {
+		// 临时禁用手势层的 pointer-events，以便检测下方元素
+		if (layerRef) {
+			const gestureLayer = layerRef;
+			const originalPointerEvents = gestureLayer.style.pointerEvents;
+			gestureLayer.style.pointerEvents = 'none';
+			
+			const elementBelow = document.elementFromPoint(x, y);
+			
+			gestureLayer.style.pointerEvents = originalPointerEvents;
+			
+			if (elementBelow) {
+				// 检查元素是否有 data-video-controls 属性或在视频控件内
+				return !!(
+					elementBelow.closest('[data-video-controls]') ||
+					elementBelow.closest('.video-controls')
+				);
+			}
+		}
+		return false;
+	}
+
 	function handlePointerDown(e: PointerEvent) {
 		if (!enablePan) return;
 
-		// 忽略来自下拉菜单、弹出层、视频控件等 UI 组件的事件
+		// 检查鼠标位置是否在视频控件区域
+		if (isOverVideoControls(e.clientX, e.clientY)) {
+			return;
+		}
+
+		// 忽略来自下拉菜单、弹出层等 UI 组件的事件
 		const target = e.target as HTMLElement;
 		if (
 			target.closest('[data-slot="dropdown-menu-content"]') ||
 			target.closest('[data-slot="popover-content"]') ||
 			target.closest('[role="menu"]') ||
-			target.closest('[data-radix-popper-content-wrapper]') ||
-			target.closest('.video-controls') ||
-			target.closest('.video-player-container')
+			target.closest('[data-radix-popper-content-wrapper]')
 		) {
 			return;
 		}
@@ -118,15 +144,18 @@
 		// 如果有拖拽，不触发点击
 		if (isPanning) return;
 
-		// 忽略来自下拉菜单、弹出层、视频控件等 UI 组件的事件
+		// 检查鼠标位置是否在视频控件区域
+		if (isOverVideoControls(e.clientX, e.clientY)) {
+			return;
+		}
+
+		// 忽略来自下拉菜单、弹出层等 UI 组件的事件
 		const target = e.target as HTMLElement;
 		if (
 			target.closest('[data-slot="dropdown-menu-content"]') ||
 			target.closest('[data-slot="popover-content"]') ||
 			target.closest('[role="menu"]') ||
-			target.closest('[data-radix-popper-content-wrapper]') ||
-			target.closest('.video-controls') ||
-			target.closest('.video-player-container')
+			target.closest('[data-radix-popper-content-wrapper]')
 		) {
 			return;
 		}

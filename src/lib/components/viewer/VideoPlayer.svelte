@@ -361,6 +361,7 @@
 			class="video-controls absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300"
 			class:opacity-0={!showControls}
 			class:opacity-100={showControls}
+			data-video-controls="true"
 			onclick={(event) => event.stopPropagation()}
 			onmousedown={(event) => event.stopPropagation()}
 			onmousemove={() => {
@@ -565,6 +566,13 @@
 <style>
 	.video-player-container {
 		user-select: none;
+		position: relative;
+	}
+
+	/* 视频控件使用更高的 z-index，覆盖手势层 (z-index: 90) */
+	.video-controls {
+		z-index: 91;
+		pointer-events: auto;
 	}
 
 	.volume-slider {

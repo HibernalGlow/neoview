@@ -714,7 +714,7 @@
 			layout={pageMode}
 			{direction}
 			{orientation}
-			scale={manualScale}
+			scale={1}
 			{rotation}
 			{viewportSize}
 			imageSize={imageStore.state.dimensions ?? { width: 0, height: 0 }}
@@ -728,7 +728,7 @@
 				frame={upscaledFrameData}
 				layout="single"
 				{direction}
-				scale={manualScale}
+				scale={1}
 				{rotation}
 				{viewportSize}
 				imageSize={imageStore.state.dimensions ?? { width: 0, height: 0 }}

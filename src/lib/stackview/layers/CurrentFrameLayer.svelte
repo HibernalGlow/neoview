@@ -94,29 +94,29 @@
 				if (imgAspect > vpAspect) {
 					// 横向图片：高度填满，宽度溢出可滚动
 					const width = vp.height * imgAspect;
-					return `width: ${width}px; height: ${vp.height}px;`;
+					return `width: ${width}px; height: ${vp.height}px; max-width: none; max-height: none;`;
 				} else {
 					// 竖向图片：宽度填满，高度溢出可滚动
 					const height = vp.width / imgAspect;
-					return `width: ${vp.width}px; height: ${height}px;`;
+					return `width: ${vp.width}px; height: ${height}px; max-width: none; max-height: none;`;
 				}
 			}
 			
 			case 'fitWidth': {
 				// FitWidth: 宽度填满，高度可滚动
 				const height = vp.width / imgAspect;
-				return `width: ${vp.width}px; height: ${height}px;`;
+				return `width: ${vp.width}px; height: ${height}px; max-width: none; max-height: none;`;
 			}
 			
 			case 'fitHeight': {
 				// FitHeight: 高度填满，宽度可滚动
 				const width = vp.height * imgAspect;
-				return `width: ${width}px; height: ${vp.height}px;`;
+				return `width: ${width}px; height: ${vp.height}px; max-width: none; max-height: none;`;
 			}
 			
 			case 'original': {
 				// Original: 原始尺寸，两个方向都可滚动
-				return `width: ${size.width}px; height: ${size.height}px;`;
+				return `width: ${size.width}px; height: ${size.height}px; max-width: none; max-height: none;`;
 			}
 			
 			default:

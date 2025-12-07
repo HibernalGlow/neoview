@@ -46,7 +46,7 @@
     }
   }
   
-  // 核心滚动逻辑
+  // 核心滚动逻辑 - 直接映射鼠标位置到滚动位置
   function scrollStep() {
     rafId = null;
     
@@ -77,43 +77,31 @@
       return;
     }
     
-    // 死区检测
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-    const relX = localX - centerX;
-    const relY = localY - centerY;
-    const deadZoneSizeX = (rect.width * deadZoneRatio) / 2;
-    const deadZoneSizeY = (rect.height * deadZoneRatio) / 2;
-    
-    // 在死区内不滚动
-    if (Math.abs(relX) < deadZoneSizeX && Math.abs(relY) < deadZoneSizeY) {
-      return;
-    }
-    
-    // 计算目标滚动位置（直接映射鼠标位置到滚动范围）
-    // 考虑侧边栏和死区
+    // 直接映射鼠标位置到滚动范围（无死区）
+    // X 轴考虑侧边栏
     const effectiveWidth = rect.width - 2 * sidebarMargin;
     const effectiveX = localX - sidebarMargin;
     const normalizedX = Math.max(0, Math.min(1, effectiveX / effectiveWidth));
     
-    const effectiveHeight = rect.height;
-    const normalizedY = Math.max(0, Math.min(1, localY / effectiveHeight));
+    // Y 轴直接映射
+    const normalizedY = Math.max(0, Math.min(1, localY / rect.height));
     
-    // 应用死区平滑过渡
-    let targetScrollX = normalizedX * maxScrollLeft;
-    let targetScrollY = normalizedY * maxScrollTop;
+    // 计算目标滚动位置
+    const targetScrollX = normalizedX * maxScrollLeft;
+    const targetScrollY = normalizedY * maxScrollTop;
     
-    // 只滚动有内容的方向
+    // 使用 lerp 平滑过渡（增加速度）
+    const lerpFactor = 0.15;
+    
     if (maxScrollLeft > 0) {
-      // 使用 lerp 平滑过渡
       const currentX = targetContainer.scrollLeft;
-      const newX = currentX + (targetScrollX - currentX) * 0.1;
+      const newX = currentX + (targetScrollX - currentX) * lerpFactor;
       targetContainer.scrollLeft = newX;
     }
     
     if (maxScrollTop > 0) {
       const currentY = targetContainer.scrollTop;
-      const newY = currentY + (targetScrollY - currentY) * 0.1;
+      const newY = currentY + (targetScrollY - currentY) * lerpFactor;
       targetContainer.scrollTop = newY;
     }
     

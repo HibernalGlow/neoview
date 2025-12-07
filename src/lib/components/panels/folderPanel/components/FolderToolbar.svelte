@@ -98,9 +98,11 @@ interface Props {
 	onToggleInlineTree?: () => void;
 	showRandomTagBar?: boolean;
 	onToggleRandomTagBar?: () => void;
+	/** 虚拟模式类型，用于显示正确的排序标签 */
+	virtualMode?: 'bookmark' | 'history' | null;
 }
 
-let { onRefresh, onToggleFolderTree, onGoBack, onGoForward, onGoUp, onGoHome, onSetHome, onToggleDeleteStrategy, onToggleInlineTree, showRandomTagBar = false, onToggleRandomTagBar }: Props = $props();
+let { onRefresh, onToggleFolderTree, onGoBack, onGoForward, onGoUp, onGoHome, onSetHome, onToggleDeleteStrategy, onToggleInlineTree, showRandomTagBar = false, onToggleRandomTagBar, virtualMode = null }: Props = $props();
 
 const viewStyles: { value: FolderViewStyle; icon: typeof List; label: string }[] = [
 	{ value: 'list', icon: List, label: '列表' },
@@ -109,19 +111,25 @@ const viewStyles: { value: FolderViewStyle; icon: typeof List; label: string }[]
 	{ value: 'thumbnail', icon: Grid3x3, label: '缩略图' }
 ];
 
-const sortFields: { value: FolderSortField; label: string; icon: typeof ALargeSmall }[] = [
-	{ value: 'name', label: '名称', icon: ALargeSmall },
-	{ value: 'path', label: '路径', icon: FolderTree },
-	{ value: 'date', label: '日期', icon: Calendar },
-	{ value: 'size', label: '大小', icon: HardDrive },
-	{ value: 'type', label: '类型', icon: FileType },
-	{ value: 'random', label: '随机', icon: Shuffle },
-	{ value: 'rating', label: '评分', icon: Star },
-	{ value: 'collectTagCount', label: '收藏标签', icon: Heart }
-];
+// 排序字段定义 - 虚拟模式下 date 显示为"添加时间"
+function getSortFields() {
+	const dateLabel = virtualMode ? '添加时间' : '日期';
+	return [
+		{ value: 'name' as FolderSortField, label: '名称', icon: ALargeSmall },
+		{ value: 'path' as FolderSortField, label: '路径', icon: FolderTree },
+		{ value: 'date' as FolderSortField, label: dateLabel, icon: Calendar },
+		{ value: 'size' as FolderSortField, label: '大小', icon: HardDrive },
+		{ value: 'type' as FolderSortField, label: '类型', icon: FileType },
+		{ value: 'random' as FolderSortField, label: '随机', icon: Shuffle },
+		{ value: 'rating' as FolderSortField, label: '评分', icon: Star },
+		{ value: 'collectTagCount' as FolderSortField, label: '收藏标签', icon: Heart }
+	];
+}
+let sortFields = $derived(getSortFields());
 
 function getCurrentSortIcon() {
-	const current = sortFields.find((f) => f.value === $sortConfig.field);
+	const fields = getSortFields();
+	const current = fields.find((f) => f.value === $sortConfig.field);
 	return current?.icon ?? ALargeSmall;
 }
 

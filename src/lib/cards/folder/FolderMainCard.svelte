@@ -475,7 +475,7 @@ onMount(() => {
 		<FolderTabBar {homePath} />
 	{/if}
 
-	<FolderToolbar onRefresh={handleRefresh} onToggleFolderTree={handleToggleFolderTree} onGoBack={handleGoBack} onGoForward={handleGoForward} onGoUp={handleGoUp} onGoHome={handleGoHome} onSetHome={handleSetHome} onToggleDeleteStrategy={handleToggleDeleteStrategy} onToggleInlineTree={handleToggleInlineTree} {showRandomTagBar} onToggleRandomTagBar={handleToggleRandomTagBar} />
+	<FolderToolbar onRefresh={handleRefresh} onToggleFolderTree={handleToggleFolderTree} onGoBack={handleGoBack} onGoForward={handleGoForward} onGoUp={handleGoUp} onGoHome={handleGoHome} onSetHome={handleSetHome} onToggleDeleteStrategy={handleToggleDeleteStrategy} onToggleInlineTree={handleToggleInlineTree} {showRandomTagBar} onToggleRandomTagBar={handleToggleRandomTagBar} virtualMode={isVirtualInstance ? (propInitialPath?.includes('bookmark') ? 'bookmark' : 'history') : null} />
 
 	{#if $showSearchBar}
 		<div class="relative">

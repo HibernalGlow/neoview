@@ -83,12 +83,24 @@
 	let hideControlsTimeout: ReturnType<typeof setTimeout> | null = null;
 	let videoUrl = $state<string>('');
 
-	// 字幕设置
+	// 字幕设置 - 从 settings 读取初始值
 	let showSubtitleSettings = $state(false);
-	let subtitleFontSize = $state(1.2); // em 单位
-	let subtitleColor = $state('#ffffff');
-	let subtitleBgColor = $state('rgba(0, 0, 0, 0.7)');
-	let subtitleBgOpacity = $state(0.7);
+	let subtitleFontSize = $state(settings.subtitle?.fontSize ?? 1.0); // em 单位
+	let subtitleColor = $state(settings.subtitle?.color ?? '#ffffff');
+	let subtitleBgOpacity = $state(settings.subtitle?.bgOpacity ?? 0.7);
+	let subtitleBottom = $state(settings.subtitle?.bottom ?? 5); // 底部距离百分比
+
+	// 保存字幕设置
+	function saveSubtitleSettings() {
+		settingsManager.updateSettings({
+			subtitle: {
+				fontSize: subtitleFontSize,
+				color: subtitleColor,
+				bgOpacity: subtitleBgOpacity,
+				bottom: subtitleBottom
+			}
+		});
+	}
 
 	// 当有新的 blob 时创建 URL
 	$effect(() => {
@@ -347,7 +359,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
 	class="video-player-container relative flex h-full w-full items-center justify-center bg-black"
-	style="--subtitle-font-size: {subtitleFontSize}em; --subtitle-color: {subtitleColor}; --subtitle-bg: rgba(0, 0, 0, {subtitleBgOpacity});"
+	style="--subtitle-font-size: {subtitleFontSize}em; --subtitle-color: {subtitleColor}; --subtitle-bg: rgba(0, 0, 0, {subtitleBgOpacity}); --subtitle-bottom: {subtitleBottom}%;"
 	onmousemove={handleMouseMove}
 	onmouseleave={() => isPlaying && !controlsPinned && (showControls = false)}
 	role="region"
@@ -593,12 +605,12 @@
 
 							<!-- 字体大小 -->
 							<div class="mb-3">
-								<label class="mb-1 block text-xs text-white/70">字体大小</label>
+								<span class="mb-1 block text-xs text-white/70">字体大小</span>
 								<div class="flex items-center gap-2">
 									<input
 										type="range"
-										min="0.8"
-										max="2.5"
+										min="0.5"
+										max="3"
 										step="0.1"
 										bind:value={subtitleFontSize}
 										class="subtitle-slider h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/20"
@@ -607,15 +619,32 @@
 								</div>
 							</div>
 
+							<!-- 字幕位置 -->
+							<div class="mb-3">
+								<span class="mb-1 block text-xs text-white/70">底部距离</span>
+								<div class="flex items-center gap-2">
+									<input
+										type="range"
+										min="0"
+										max="30"
+										step="1"
+										bind:value={subtitleBottom}
+										class="subtitle-slider h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/20"
+									/>
+									<span class="w-10 text-right text-xs text-white">{subtitleBottom}%</span>
+								</div>
+							</div>
+
 							<!-- 字幕颜色 -->
 							<div class="mb-3">
-								<label class="mb-1 block text-xs text-white/70">字幕颜色</label>
+								<span class="mb-1 block text-xs text-white/70">字幕颜色</span>
 								<div class="flex gap-2">
 									{#each ['#ffffff', '#ffff00', '#00ff00', '#00ffff', '#ff9900'] as color}
 										<button
 											class="h-6 w-6 rounded border-2 transition-transform hover:scale-110 {subtitleColor === color ? 'border-primary' : 'border-transparent'}"
 											style="background-color: {color}"
 											onclick={() => (subtitleColor = color)}
+											title={color}
 										></button>
 									{/each}
 								</div>
@@ -623,7 +652,7 @@
 
 							<!-- 背景透明度 -->
 							<div class="mb-3">
-								<label class="mb-1 block text-xs text-white/70">背景透明度</label>
+								<span class="mb-1 block text-xs text-white/70">背景透明度</span>
 								<div class="flex items-center gap-2">
 									<input
 										type="range"
@@ -637,25 +666,41 @@
 								</div>
 							</div>
 
-							<!-- 预设按钮 -->
+							<!-- 预设和保存按钮 -->
 							<div class="flex gap-2">
 								<button
 									class="flex-1 rounded bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20"
 									onclick={() => {
-										subtitleFontSize = 1.2;
+										subtitleFontSize = 1.0;
 										subtitleColor = '#ffffff';
 										subtitleBgOpacity = 0.7;
+										subtitleBottom = 5;
 									}}
+									title="重置为默认值"
 								>
 									重置
 								</button>
+								<button
+									class="flex-1 rounded bg-primary/50 px-2 py-1 text-xs text-white hover:bg-primary/70"
+									onclick={() => {
+										saveSubtitleSettings();
+										showSubtitleSettings = false;
+									}}
+									title="保存设置"
+								>
+									保存
+								</button>
+							</div>
+							<div class="mt-2 flex gap-2">
 								<button
 									class="flex-1 rounded bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20"
 									onclick={() => {
 										subtitleFontSize = 1.5;
 										subtitleColor = '#ffff00';
 										subtitleBgOpacity = 0.8;
+										subtitleBottom = 8;
 									}}
+									title="大号黄色字幕"
 								>
 									大号黄色
 								</button>

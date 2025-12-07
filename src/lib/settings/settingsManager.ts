@@ -200,6 +200,18 @@ export interface NeoViewSettings {
     random: boolean;
     fadeTransition: boolean;
   };
+  /** 字幕设置 */
+  subtitle?: {
+    fontSize: number; // em 单位
+    color: string;
+    bgOpacity: number; // 0-1
+    bottom: number; // 底部距离百分比
+  };
+  // 兼容旧版扁平化字段
+  subtitleFontSize?: number;
+  subtitleColor?: string;
+  subtitleBgOpacity?: number;
+  subtitleBottom?: number;
 }
 
 const defaultSettings: NeoViewSettings = {
@@ -472,7 +484,8 @@ export class SettingsManager {
       before: this.settings[category]
     });
 
-    this.settings[category] = { ...this.settings[category], ...updates } as NeoViewSettings[K];
+    const current = (this.settings[category] ?? {}) as object;
+    this.settings[category] = { ...current, ...updates } as NeoViewSettings[K];
 
     console.log('✅ updateNestedSettings 完成:', {
       category,

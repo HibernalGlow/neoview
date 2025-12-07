@@ -8,7 +8,6 @@ import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { historyStore, type HistoryEntry } from '$lib/stores/history.svelte';
 import { get } from 'svelte/store';
 import { getVirtualPathType, type VirtualPathType } from '../stores/folderTabStore.svelte';
-import { isVideoFile } from '$lib/utils/videoUtils';
 
 // 书签条目类型（与 bookmarkStore 中的 Bookmark 类型一致）
 interface BookmarkEntry {
@@ -46,23 +45,37 @@ function bookmarkToFsItem(bookmark: BookmarkEntry): FsItem {
 }
 
 /**
- * 判断是否为压缩包
+ * 判断路径是否为文件夹
+ * 使用反向逻辑：只有没有常见文件扩展名的路径才可能是文件夹
  */
-function isArchivePath(path: string): boolean {
-	const ext = path.toLowerCase();
-	return ext.endsWith('.zip') || ext.endsWith('.cbz') || ext.endsWith('.rar') ||
-		ext.endsWith('.cbr') || ext.endsWith('.7z') || ext.endsWith('.cb7');
+function isDirectoryPath(path: string): boolean {
+	const lastDot = path.lastIndexOf('.');
+	const lastSep = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+
+	// 如果没有点号，或者点号在最后一个路径分隔符之前（意味着扩展名属于父目录），则是文件夹
+	if (lastDot < 0 || lastDot < lastSep) {
+		return true;
+	}
+
+	// 获取扩展名
+	const ext = path.substring(lastDot + 1).toLowerCase();
+
+	// 如果扩展名为空或太长（超过10字符），可能是文件夹
+	if (!ext || ext.length > 10) {
+		return true;
+	}
+
+	// 其他情况都视为文件（有扩展名）
+	return false;
 }
 
 /**
  * 将历史条目转换为 FsItem
- * 正确识别压缩包和视频文件，将它们标记为文件而非目录
+ * 使用反向逻辑：只有没有文件扩展名的路径才是文件夹，其他都是文件
  */
 function historyToFsItem(entry: HistoryEntry): FsItem {
-	const isArchive = isArchivePath(entry.path);
-	const isVideo = isVideoFile(entry.path);
-	// 压缩包和视频文件是文件（isDir = false），其他是目录
-	const isDirectory = !isArchive && !isVideo;
+	// 使用反向逻辑判断是否为目录
+	const isDirectory = isDirectoryPath(entry.path);
 	return {
 		path: entry.path,
 		name: entry.name,

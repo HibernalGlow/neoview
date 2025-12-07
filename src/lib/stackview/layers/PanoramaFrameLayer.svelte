@@ -75,8 +75,7 @@
     }
   });
   
-  // 计算 transform-origin 用于悬停滚动
-  let transformOrigin = $derived(`${viewPositionX}% ${viewPositionY}%`);
+  // 【性能优化】使用 CSS 变量传递位置，避免高频 DOM 属性更新
   
   let containerClass = $derived.by(() => {
     const classes = ['panorama-frame-layer'];
@@ -103,7 +102,8 @@
     class={containerClass}
     data-layer="PanoramaFrameLayer"
     style:z-index={LayerZIndex.CURRENT_FRAME}
-    style:transform-origin={transformOrigin}
+    style:--view-x="{viewPositionX}%"
+    style:--view-y="{viewPositionY}%"
     style:transform={scale !== 1 ? `scale(${scale})` : 'none'}
   >
     {#each units as unit (unit.id)}
@@ -141,10 +141,12 @@
     overflow: hidden;
     align-items: center;
     justify-content: flex-start;
-    /* GPU 加速 */
+    /* GPU 加速 + CSS 变量优化 */
     will-change: transform;
     transform: translateZ(0);
+    transform-origin: var(--view-x, 50%) var(--view-y, 50%);
     backface-visibility: hidden;
+    contain: layout style paint;
   }
   
   .panorama-frame-layer.vertical {

@@ -1,4 +1,5 @@
 <!--
+  保留旧的 StackViewer，用于兼容 默认使用FrameImage
   StackViewer - 层叠式图片渲染器
   
   核心设计：

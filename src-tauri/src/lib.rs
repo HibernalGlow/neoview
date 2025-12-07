@@ -407,6 +407,7 @@ pub fn run() {
             commands::page_commands::pm_get_temp_stats,
             commands::page_commands::pm_get_large_file_threshold,
             commands::page_commands::pm_set_large_file_threshold,
+            commands::page_commands::pm_preload_thumbnails,
             // System Monitor commands
             commands::get_system_stats,
         ])

@@ -1,261 +1,120 @@
 /**
  * Thumbnail Service
- * 
- * 独立缩略图管理服�?
- * 
- * 策略：主动推送模�?
- * - 监听 imagePool 的图片加�?
- * - 自动生成缩略图并写入 thumbnailCacheStore
+ *
+ * 独立缩略图管理服务
+ *
+ * 策略：后端推送模式
+ * - 使用后端 API 生成缩略图
+ * - 通过 Tauri 事件接收缩略图推送
  * - 支持中央优先加载策略
+ * - 快速翻页取消机制
  */
 
-import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { preloadThumbnails, type ThumbnailReadyEvent } from '$lib/api/pageManager';
 import { thumbnailCacheStore } from '$lib/stores/thumbnailCache.svelte';
 import { bookStore } from '$lib/stores/book.svelte';
-import { invoke } from '@tauri-apps/api/core';
+import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 
-// ============================================================================
+// ===========================================================================
 // 配置
-// ============================================================================
+// ===========================================================================
 
-const THUMBNAIL_HEIGHT = 120;
-const PRELOAD_RANGE = 20;  // 前后各预加载 20 �?
-const BATCH_SIZE = 2;      // 每批次加载数量（减小以降低卡顿）
-const BATCH_DELAY_MS = 100; // 每批次之间的延迟（毫秒）
-const INITIAL_DELAY_MS = 500; // 切书后的初始延迟（让主页面先加载�?
+const PRELOAD_RANGE = 3; // 前后各预加载 20 页
+const THUMBNAIL_MAX_SIZE = 256; // 缩略图最大尺寸
+const INITIAL_DELAY_MS = 300; // 切书后的初始延迟（让主页面先加载）
 
-const VIDEO_EXTENSIONS = ['mp4', 'mkv', 'avi', 'mov', 'flv', 'webm', 'wmv', 'm4v', 'mpg', 'mpeg', 'ts', 'asf'];
-
-/** 检查是否是视频文件路径 */
-function isVideoPath(path: string | undefined | null): boolean {
-	if (!path) return false;
-	const ext = path.split('.').pop()?.toLowerCase() || '';
-	return VIDEO_EXTENSIONS.includes(ext);
-}
-
-// ============================================================================
-// 状�?
-// ============================================================================
+// ===========================================================================
+// 状态
+// ===========================================================================
 
 let currentBookPath: string | null = null;
 const loadingIndices = new Set<number>();
 let isInitialized = false;
 
-// ============================================================================
-// 缩略图生�?
-// ============================================================================
+// 事件监听器
+let eventUnlisten: UnlistenFn | null = null;
+
+// 当前预加载请求版本（用于取消旧请求）
+let preloadVersion = 0;
+
+// ===========================================================================
+// 事件监听
+// ===========================================================================
 
 /**
- * �?Blob 创建缩略�?Data URL（canvas 缩放�?
+ * 处理缩略图就绪事件
  */
-async function createThumbnailFromBlob(blob: Blob): Promise<{ url: string; width: number; height: number }> {
-	return new Promise((resolve, reject) => {
-		const objectUrl = URL.createObjectURL(blob);
-		const img = new Image();
+function handleThumbnailReady(event: ThumbnailReadyEvent): void {
+	const { index, data, width, height } = event;
 
-		img.onload = () => {
-			URL.revokeObjectURL(objectUrl);
+	console.log(`🖼️ ThumbnailService: Received thumbnail for page ${index}, ${width}x${height}`);
 
-			// 计算缩放尺寸
-			const scale = THUMBNAIL_HEIGHT / img.naturalHeight;
-			const thumbWidth = Math.round(img.naturalWidth * scale);
-			const thumbHeight = THUMBNAIL_HEIGHT;
+	// 写入缓存
+	thumbnailCacheStore.setThumbnail(index, data, width, height);
 
-			// 使用 canvas 缩放
-			const canvas = document.createElement('canvas');
-			canvas.width = thumbWidth;
-			canvas.height = thumbHeight;
-
-			const ctx = canvas.getContext('2d');
-			if (!ctx) {
-				reject(new Error('Failed to get canvas context'));
-				return;
-			}
-
-			ctx.drawImage(img, 0, 0, thumbWidth, thumbHeight);
-
-			// 转换�?data URL（使�?webp 格式�?
-			const dataUrl = canvas.toDataURL('image/webp', 0.8);
-			resolve({ url: dataUrl, width: thumbWidth, height: thumbHeight });
-		};
-
-		img.onerror = () => {
-			URL.revokeObjectURL(objectUrl);
-			reject(new Error('Failed to load image'));
-		};
-
-		img.src = objectUrl;
-	});
+	// 清除加载状态
+	loadingIndices.delete(index);
 }
 
-// ============================================================================
-// 中央优先加载策略
-// ============================================================================
-
-/**
- * 生成中央优先加载顺序
- * 从中心页开始，交替向前后方向扩�?
- */
-function generateCentralPriorityOrder(center: number, totalPages: number, range: number): number[] {
-	const indices: number[] = [];
-
-	// 先加载中心页
-	if (center >= 0 && center < totalPages) {
-		indices.push(center);
-	}
-
-	// 交替向前后方向扩�?
-	for (let offset = 1; offset <= range; offset++) {
-		// 向后
-		if (center + offset < totalPages) {
-			indices.push(center + offset);
-		}
-		// 向前
-		if (center - offset >= 0) {
-			indices.push(center - offset);
-		}
-	}
-
-	return indices;
-}
-
-// ============================================================================
+// ===========================================================================
 // 核心加载逻辑
-// ============================================================================
+// ===========================================================================
 
 /**
- * 加载单个页面的缩略图
- */
-async function loadThumbnail(pageIndex: number): Promise<void> {
-	// 检查是否已有缓存或正在加载
-	if (thumbnailCacheStore.hasThumbnail(pageIndex) || loadingIndices.has(pageIndex)) {
-		return;
-	}
-
-	loadingIndices.add(pageIndex);
-
-	try {
-		// 优先�?imagePool 缓存获取 Blob
-		let blob: Blob | undefined;
-
-		const cached = imagePool.getSync(pageIndex);
-		if (cached?.blob) {
-			blob = cached.blob;
-		} else {
-			// 缓存未命中：异步加载
-			const pooled = await imagePool.get(pageIndex);
-			blob = pooled?.blob;
-		}
-
-		if (!blob) {
-			console.debug(`No blob for page ${pageIndex}`);
-			return;
-		}
-
-		// 检查是否是视频文件（通过blob类型或文件扩展名�?
-		const page = bookStore.currentBook?.pages[pageIndex];
-		const isVideo = blob.type.startsWith('video/') || isVideoPath(page?.path);
-
-		if (isVideo) {
-			console.debug(`Using system thumbnail for video page ${pageIndex}`);
-			// 获取视频文件路径
-			const page = bookStore.currentBook?.pages[pageIndex];
-			if (!page?.path) {
-				console.warn(`No path for video page ${pageIndex}`);
-				return;
-			}
-
-			// 调用后端系统缩略图API
-			try {
-				const blobKey = await invoke<string>('generate_file_thumbnail_new', { filePath: page.path });
-				const thumbnailUrl = `neoview://${blobKey}`;
-				// 写入缓存（视频缩略图尺寸未知，使用默认值）
-				thumbnailCacheStore.setThumbnail(pageIndex, thumbnailUrl, 120, 120);
-				console.debug(`�?Video thumbnail loaded for page ${pageIndex}`);
-			} catch (error) {
-				console.error(`Failed to generate system thumbnail for video page ${pageIndex}:`, error);
-			}
-			return;
-		}
-
-		// 生成缩略�?
-		const thumb = await createThumbnailFromBlob(blob);
-
-		// 写入缓存
-		thumbnailCacheStore.setThumbnail(pageIndex, thumb.url, thumb.width, thumb.height);
-	} catch (error) {
-		console.debug(`Failed to load thumbnail for page ${pageIndex}:`, error);
-	} finally {
-		loadingIndices.delete(pageIndex);
-	}
-}
-
-// 当前加载版本号（用于取消过期请求�?
-let loadVersion = 0;
-
-/**
- * 加载缩略图（中央优先策略�?
- * 
- * 特点�?
- * - 完全异步，不阻塞主线�?
- * - 支持取消过期请求（翻页时自动取消旧请求）
- * - 每批次之间让出控制权
+ * 加载缩略图（中央优先策略）
+ *
+ * 使用后端 API 生成缩略图，结果通过事件推送
  */
 async function loadThumbnails(centerIndex: number): Promise<void> {
 	const currentBook = bookStore.currentBook;
 	if (!currentBook) return;
 
-	// 增加版本号，取消旧的加载任务
-	const thisVersion = ++loadVersion;
+	// 增加版本号，取消之前的预加载
+	const currentVersion = ++preloadVersion;
 
-	const totalPages = currentBook.totalPages;
+	try {
+		const indices = await preloadThumbnails(centerIndex, PRELOAD_RANGE, THUMBNAIL_MAX_SIZE);
 
-	// 使用中央优先策略生成加载顺序
-	const loadOrder = generateCentralPriorityOrder(centerIndex, totalPages, PRELOAD_RANGE);
-
-	// 过滤已缓存和正在加载�?
-	const toLoad = loadOrder.filter(
-		(i) => !thumbnailCacheStore.hasThumbnail(i) && !loadingIndices.has(i)
-	);
-
-	if (toLoad.length === 0) {
-		return;
-	}
-
-	console.log(`🖼�?ThumbnailService: Loading ${toLoad.length} thumbnails (center: ${centerIndex}, v${thisVersion})`);
-
-	// 分批加载，每批之间延迟以避免卡顿
-	for (let i = 0; i < toLoad.length; i += BATCH_SIZE) {
-		// 检查是否被取消
-		if (loadVersion !== thisVersion) {
-			console.log(`🖼�?ThumbnailService: Cancelled (v${thisVersion} -> v${loadVersion})`);
+		// 检查版本，如果已被取消则忽略
+		if (currentVersion !== preloadVersion) {
+			console.log('🖼️ ThumbnailService: Preload cancelled (version mismatch)');
 			return;
 		}
 
-		const batch = toLoad.slice(i, i + BATCH_SIZE);
-
-		// 加载当前批次
-		await Promise.all(batch.map(loadThumbnail));
-
-		// 批次之间延迟，让出控制权给主页面加载
-		if (i + BATCH_SIZE < toLoad.length) {
-			await new Promise<void>((resolve) => {
-				setTimeout(resolve, BATCH_DELAY_MS);
-			});
+		// 标记为加载中
+		for (const idx of indices) {
+			loadingIndices.add(idx);
 		}
+
+		if (indices.length > 0) {
+			console.log(
+				`🖼️ ThumbnailService: Preloading ${indices.length} thumbnails from center ${centerIndex}`
+			);
+		}
+	} catch (error) {
+		console.error('Failed to preload thumbnails:', error);
 	}
 }
 
 /**
- * 取消当前加载任务
+ * 加载单个页面的缩略图（兼容旧接口）
  */
-function cancelLoading(): void {
-	loadVersion++;
+async function loadThumbnail(pageIndex: number): Promise<void> {
+	// 单个加载直接使用 loadThumbnails
+	await loadThumbnails(pageIndex);
 }
 
-// ============================================================================
+/**
+ * 取消当前预加载
+ */
+function cancelLoading(): void {
+	preloadVersion++;
+}
+
+// ===========================================================================
 // 服务初始化和事件监听
-// ============================================================================
+// ===========================================================================
 
 /**
  * 处理书籍变化
@@ -263,7 +122,7 @@ function cancelLoading(): void {
 function handleBookChange(bookPath: string): void {
 	if (currentBookPath === bookPath) return;
 
-	console.log(`🖼�?ThumbnailService: Book changed to ${bookPath}`);
+	console.log(`🖼️ ThumbnailService: Book changed to ${bookPath}`);
 	currentBookPath = bookPath;
 
 	// 取消旧的加载任务
@@ -273,10 +132,10 @@ function handleBookChange(bookPath: string): void {
 	// 设置 imagePool 当前书籍
 	imagePool.setCurrentBook(bookPath);
 
-	// 设置 thumbnailCacheStore 当前书籍（清空旧缓存�?
+	// 设置 thumbnailCacheStore 当前书籍（清空旧缓存）
 	thumbnailCacheStore.setBook(bookPath);
 
-	// 延迟加载缩略图，让主页面先加�?
+	// 延迟加载缩略图，让主页面先加载
 	setTimeout(() => {
 		const centerIndex = bookStore.currentPageIndex;
 		void loadThumbnails(centerIndex);
@@ -287,35 +146,48 @@ function handleBookChange(bookPath: string): void {
  * 处理页面变化
  */
 function handlePageChange(pageIndex: number): void {
-	// 当前页变化时，加载附近的缩略�?
+	// 当前页变化时，加载附近的缩略图
 	void loadThumbnails(pageIndex);
 }
 
 /**
- * 初始化服�?
+ * 初始化服务
+ *
+ * 设置 Tauri 事件监听，接收后端推送的缩略图
  */
-export function initThumbnailService(): void {
+export async function initThumbnailService(): Promise<void> {
 	if (isInitialized) return;
 
-	console.log('🖼�?ThumbnailService: Initializing...');
+	try {
+		eventUnlisten = await listen<ThumbnailReadyEvent>('thumbnail-ready', (event) => {
+			handleThumbnailReady(event.payload);
+		});
 
-	// 监听书籍和页面变化（使用 $effect 在组件中调用�?
-	isInitialized = true;
+		isInitialized = true;
+		console.log('🖼️ ThumbnailService: Initialized with backend event listener');
+	} catch (error) {
+		console.error('Failed to initialize ThumbnailService:', error);
+	}
 }
 
 /**
- * 销毁服�?
+ * 销毁服务
  */
 export function destroyThumbnailService(): void {
+	if (eventUnlisten) {
+		eventUnlisten();
+		eventUnlisten = null;
+	}
 	loadingIndices.clear();
 	currentBookPath = null;
 	isInitialized = false;
-	console.log('🖼�?ThumbnailService: Destroyed');
+	preloadVersion = 0;
+	console.log('🖼️ ThumbnailService: Destroyed');
 }
 
-// ============================================================================
+// ===========================================================================
 // 导出 API
-// ============================================================================
+// ===========================================================================
 
 export const thumbnailService = {
 	init: initThumbnailService,
@@ -326,7 +198,7 @@ export const thumbnailService = {
 	handlePageChange,
 	cancelLoading,
 
-	/** 获取加载状�?*/
+	/** 获取加载状态 */
 	isLoading: (pageIndex: number) => loadingIndices.has(pageIndex),
 
 	/** 获取统计信息 */

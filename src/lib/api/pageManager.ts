@@ -219,6 +219,36 @@ export async function setLargeFileThreshold(thresholdMb: number): Promise<void> 
 	return invoke('pm_set_large_file_threshold', { thresholdMb });
 }
 
+// ===== 缩略图 =====
+
+/**
+ * 缩略图就绪事件数据
+ */
+export interface ThumbnailReadyEvent {
+	index: number;
+	data: string; // data:image/webp;base64,...
+	width: number;
+	height: number;
+}
+
+/**
+ * 预加载缩略图（异步，结果通过事件推送）
+ * 
+ * 按中央优先策略生成缩略图，生成后通过 "thumbnail-ready" 事件推送
+ * 
+ * @param center 中心页面索引
+ * @param range 预加载范围（向两侧各扩展多少页）
+ * @param maxSize 缩略图最大尺寸（默认 256）
+ * @returns 开始预加载的页面索引列表
+ */
+export async function preloadThumbnails(
+	center: number,
+	range: number,
+	maxSize: number = 256
+): Promise<number[]> {
+	return invoke<number[]>('pm_preload_thumbnails', { center, range, maxSize });
+}
+
 // ===== 工具函数 =====
 
 /**

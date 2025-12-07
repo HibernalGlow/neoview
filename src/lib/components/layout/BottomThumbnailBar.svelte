@@ -663,7 +663,11 @@
 		return `height:${containerHeight}px;width:${width}px;min-width:${width}px;`;
 	}
 
-	onMount(() => {
+	onMount(async () => {
+		// 初始化缩略图服务（设置 Tauri 事件监听）
+		// 必须先等待事件监听器设置完成，再触发加载
+		await thumbnailService.init();
+
 		// 订阅全局缩略图缓存
 		unsubscribeThumbnailCache = thumbnailCacheStore.subscribe(() => {
 			thumbnailSnapshot = thumbnailCacheStore.getAllThumbnails();
@@ -675,6 +679,9 @@
 	});
 
 	onDestroy(() => {
+		// 销毁缩略图服务
+		thumbnailService.destroy();
+
 		if (unsubscribeThumbnailCache) {
 			unsubscribeThumbnailCache();
 			unsubscribeThumbnailCache = null;

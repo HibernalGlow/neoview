@@ -3,9 +3,10 @@
 
 use crate::core::page_manager::{
     BookInfo, MemoryPoolStats, PageContentManager, PageLoadResult, PageManagerStats,
+    ThumbnailReadyEvent,
 };
 use std::sync::Arc;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
 /// 页面管理器状态
@@ -188,6 +189,106 @@ pub async fn pm_set_large_file_threshold(
     Ok(())
 }
 
+// ===== 缩略图命令 =====
+
+/// 预加载缩略图（异步，通过事件推送结果）
+/// 
+/// 按中央优先策略生成缩略图，生成后通过 "thumbnail-ready" 事件推送到前端
+/// 返回开始预加载的页面索引列表
+#[tauri::command]
+pub async fn pm_preload_thumbnails(
+    center: usize,
+    range: usize,
+    max_size: Option<u32>,
+    app: AppHandle,
+    state: State<'_, PageManagerState>,
+) -> Result<Vec<usize>, String> {
+    let size = max_size.unwrap_or(256);
+    
+    // 获取书籍信息和需要加载的页面索引
+    let (total_pages, pages_to_load) = {
+        let manager = state.manager.lock().await;
+        let book_info = manager.current_book_info()
+            .ok_or("没有打开的书籍")?;
+        
+        let total = book_info.total_pages;
+        
+        // 中央优先策略：从 center 向两侧扩展
+        let mut indices: Vec<usize> = Vec::new();
+        for offset in 0..=range {
+            if offset == 0 {
+                if center < total {
+                    indices.push(center);
+                }
+            } else {
+                // 向前
+                if center >= offset && center - offset < total {
+                    indices.push(center - offset);
+                }
+                // 向后
+                if center + offset < total {
+                    indices.push(center + offset);
+                }
+            }
+        }
+        
+        (total, indices)
+    };
+    
+    if pages_to_load.is_empty() {
+        return Ok(vec![]);
+    }
+    
+    log::debug!("🖼️ [PageCommand] preload_thumbnails: center={}, range={}, loading {} pages",
+        center, range, pages_to_load.len());
+    
+    let result_indices = pages_to_load.clone();
+    let manager_arc = Arc::clone(&state.manager);
+    
+    // 在后台任务中生成缩略图并推送事件
+    tokio::spawn(async move {
+        log::info!("🖼️ [PageCommand] 开始生成 {} 个缩略图", pages_to_load.len());
+        
+        for index in pages_to_load {
+            log::debug!("🖼️ [PageCommand] 生成缩略图: page {}", index);
+            
+            let result = {
+                let manager = manager_arc.lock().await;
+                manager.generate_page_thumbnail(index, size).await
+            };
+
+            match result {
+                Ok(item) => {
+                    // Base64 编码缩略图数据
+                    use base64::{Engine as _, engine::general_purpose::STANDARD};
+                    let data_base64 = STANDARD.encode(&item.data);
+
+                    let event = ThumbnailReadyEvent {
+                        index,
+                        data: format!("data:image/webp;base64,{}", data_base64),
+                        width: item.width,
+                        height: item.height,
+                    };
+
+                    log::info!("🖼️ 推送缩略图事件: page {}, {}x{}, data_len={}", 
+                        index, item.width, item.height, data_base64.len());
+
+                    if let Err(e) = app.emit("thumbnail-ready", &event) {
+                        log::error!("🖼️ 推送缩略图事件失败: {}", e);
+                    }
+                }
+                Err(e) => {
+                    log::warn!("🖼️ 生成缩略图失败: page {}: {}", index, e);
+                }
+            }
+        }
+        
+        log::info!("🖼️ [PageCommand] 缩略图生成任务完成");
+    });
+    
+    Ok(result_indices)
+}
+
 // ===== 辅助函数 =====
 
 /// 收集所有页面命令
@@ -206,5 +307,6 @@ pub fn get_page_commands() -> Vec<&'static str> {
         "pm_get_temp_stats",
         "pm_get_large_file_threshold",
         "pm_set_large_file_threshold",
+        "pm_preload_thumbnails",
     ]
 }

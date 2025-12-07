@@ -16,6 +16,31 @@ pub use book_context::{BookContext, BookInfo, BookType, PageContentType, PageInf
 pub use file_proxy::{FileProxy, TempFileManager, TempFileStats};
 pub use memory_pool::{CachedPage, MemoryPool, MemoryPoolStats, PageKey};
 
+/// 缩略图就绪事件（通过 Tauri 事件推送到前端）
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThumbnailReadyEvent {
+    /// 页面索引
+    pub index: usize,
+    /// 缩略图数据（data:image/webp;base64,...）
+    pub data: String,
+    /// 缩略图宽度
+    pub width: u32,
+    /// 缩略图高度
+    pub height: u32,
+}
+
+/// 缩略图项
+#[derive(Debug, Clone)]
+pub struct ThumbnailItem {
+    /// 缩略图数据（WebP 格式）
+    pub data: Vec<u8>,
+    /// 宽度
+    pub width: u32,
+    /// 高度
+    pub height: u32,
+}
+
 use crate::core::archive::ArchiveManager;
 use crate::core::job_engine::{Job, JobEngine, JobOutput, JobPriority, JobResult};
 use std::path::Path;
@@ -733,5 +758,68 @@ impl PageContentManager {
     /// 清除所有缓存
     pub async fn clear_cache(&mut self) {
         self.memory_pool.lock().await.clear_all();
+    }
+
+    /// 生成页面缩略图
+    /// 
+    /// 从页面数据生成 WebP 格式的缩略图
+    pub async fn generate_page_thumbnail(&self, index: usize, max_size: u32) -> Result<ThumbnailItem, String> {
+        let book = self.current_book.as_ref().ok_or("没有打开的书籍")?;
+        let page_info = book.get_page(index).ok_or("页面不存在")?;
+        let book_path = &book.path;
+        let book_type = book.book_type;
+
+        // 加载页面数据
+        let (data, _mime_type) = self.load_page_data(book_path, book_type, page_info).await?;
+
+        // 使用 image crate 生成缩略图
+        Self::generate_thumbnail_from_data(&data, max_size)
+    }
+
+    /// 从图片数据生成缩略图
+    fn generate_thumbnail_from_data(data: &[u8], max_size: u32) -> Result<ThumbnailItem, String> {
+        use image::ImageReader;
+        use std::io::Cursor;
+
+        // 解码图片
+        let img = ImageReader::new(Cursor::new(data))
+            .with_guessed_format()
+            .map_err(|e| format!("无法识别图片格式: {}", e))?
+            .decode()
+            .map_err(|e| format!("解码图片失败: {}", e))?;
+
+        // 计算缩放尺寸
+        let (orig_width, orig_height) = (img.width(), img.height());
+        let scale = (max_size as f32 / orig_width.max(orig_height) as f32).min(1.0);
+        let new_width = (orig_width as f32 * scale) as u32;
+        let new_height = (orig_height as f32 * scale) as u32;
+
+        // 缩放图片
+        let thumbnail = img.thumbnail(new_width, new_height);
+
+        // 编码为 WebP
+        let mut buffer = Vec::new();
+        {
+            use image::codecs::webp::WebPEncoder;
+            use image::ImageEncoder;
+            let encoder = WebPEncoder::new_lossless(&mut buffer);
+            encoder.write_image(
+                thumbnail.as_bytes(),
+                thumbnail.width(),
+                thumbnail.height(),
+                thumbnail.color().into(),
+            ).map_err(|e| format!("编码 WebP 失败: {}", e))?;
+        }
+
+        Ok(ThumbnailItem {
+            data: buffer,
+            width: thumbnail.width(),
+            height: thumbnail.height(),
+        })
+    }
+
+    /// 获取总页数
+    pub fn total_pages(&self) -> usize {
+        self.current_book.as_ref().map(|b| b.total_pages).unwrap_or(0)
     }
 }

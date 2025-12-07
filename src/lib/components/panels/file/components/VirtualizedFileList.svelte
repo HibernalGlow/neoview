@@ -159,13 +159,12 @@
 		handleVisibleRangeChange();
 	}
 
-	// 处理可见范围变化（防抖）
-	const handleVisibleRangeChange = debounce(() => {
+	/**
+	 * 核心加载逻辑：加载可见区域的缩略图
+	 * 抽取为独立函数，供 debounce 和立即调用使用
+	 */
+	function loadVisibleThumbnails() {
 		if (!currentPath || items.length === 0) return;
-
-		const now = performance.now();
-		if (now - lastScrollTime < scrollThrottleDelay) return;
-		lastScrollTime = now;
 
 		const visibleItems = items.slice(startIndex, endIndex + 1);
 
@@ -219,7 +218,23 @@
 				}
 			})();
 		}
+	}
+
+	// 处理可见范围变化（防抖）- 滚动时使用
+	const handleVisibleRangeChange = debounce(() => {
+		const now = performance.now();
+		if (now - lastScrollTime < scrollThrottleDelay) return;
+		lastScrollTime = now;
+		loadVisibleThumbnails();
 	}, 50); // 50ms 防抖延迟
+
+	/**
+	 * 【优化】立即加载可见区域缩略图（跳过 debounce）
+	 * 用于路径切换时快速响应
+	 */
+	function triggerImmediateVisibleLoad() {
+		loadVisibleThumbnails();
+	}
 
 	// 处理滚动事件（节流 + 预测性加载）
 	const handleScroll = throttle(() => {
@@ -396,13 +411,22 @@
 		calculateVisibleRange();
 	});
 
-	// 监听路径变化，预热目录缩略图
+	// 监听路径变化，立即加载可见区域缩略图（不预热整个目录）
 	$effect(() => {
 		if (!currentPath || currentPath === lastPath) return;
 		
-		// 预热目录缩略图（异步，不阻塞 UI）
+		// 【优化】路径切换时立即加载可见区域缩略图
+		// 不再预热整个目录，避免与可见区域加载竞争资源
 		if (items.length > 0) {
-			thumbnailManager.warmupDirectory(items, currentPath);
+			// warmupDirectory 已禁用，优先可见区域加载
+			// thumbnailManager.warmupDirectory(items, currentPath);
+			
+			// 立即计算并触发可见区域加载（不等 debounce）
+			requestAnimationFrame(() => {
+				calculateVisibleRange();
+				// 直接调用加载逻辑，绕过 debounce
+				triggerImmediateVisibleLoad();
+			});
 		}
 		
 		lastPath = currentPath;

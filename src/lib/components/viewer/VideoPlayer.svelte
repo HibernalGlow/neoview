@@ -16,6 +16,7 @@
 		PinOff
 	} from '@lucide/svelte';
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
+	import type { SubtitleData } from '$lib/utils/subtitleUtils';
 
 	type LoopMode = 'none' | 'list' | 'single';
 	type PlayerSettings = {
@@ -38,7 +39,8 @@
 		initialMuted = false,
 		onSettingsChange = () => {},
 		seekMode = false,
-		onSeekModeChange = () => {}
+		onSeekModeChange = () => {},
+		subtitle = null
 	}: {
 		src?: string;
 		videoBlob?: Blob | null;
@@ -53,6 +55,7 @@
 		onSettingsChange?: (settings: PlayerSettings) => void;
 		seekMode?: boolean;
 		onSeekModeChange?: (enabled: boolean) => void;
+		subtitle?: SubtitleData | null;
 	} = $props();
 
 	let settings = $state<NeoViewSettings>(settingsManager.getSettings());
@@ -350,8 +353,13 @@
 			onpause={handlePause}
 			onended={handleEnded}
 			onerror={handleError}
+			crossorigin="anonymous"
 		>
-			<track kind="captions" />
+			{#if subtitle?.vttUrl}
+				<track kind="subtitles" src={subtitle.vttUrl} srclang="zh" label="字幕" default />
+			{:else}
+				<track kind="captions" />
+			{/if}
 		</video>
 
 		<!-- 控制栏 -->

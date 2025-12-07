@@ -10,7 +10,17 @@
 	import { historyStore } from '$lib/stores/history.svelte';
 	import { bookStore } from '$lib/stores';
 	import { isVideoFile, getVideoMimeType } from '$lib/utils/videoUtils';
+	import {
+		getPossibleSubtitleNames,
+		getSubtitleType,
+		parseSubtitleContent,
+		createSubtitleBlobUrl,
+		revokeSubtitleBlobUrl,
+		type SubtitleData
+	} from '$lib/utils/subtitleUtils';
 	import { invoke, convertFileSrc } from '@tauri-apps/api/core';
+	import { readTextFile } from '@tauri-apps/plugin-fs';
+	import { dirname, join } from '@tauri-apps/api/path';
 	import type { Page } from '$lib/types';
 
 	// 视频操作事件监听器
@@ -37,6 +47,9 @@
 	let lastVideoHistoryUpdateAt = 0;
 	let currentVideoRequestId = 0;
 
+	// 字幕状态
+	let subtitleData = $state<SubtitleData | null>(null);
+
 	// 清理视频URL
 	function clearVideoUrl() {
 		if (videoUrlRevokeNeeded && videoUrl) {
@@ -44,6 +57,14 @@
 		}
 		videoUrl = null;
 		videoUrlRevokeNeeded = false;
+	}
+
+	// 清理字幕
+	function clearSubtitle() {
+		if (subtitleData?.vttUrl) {
+			revokeSubtitleBlobUrl(subtitleData.vttUrl);
+		}
+		subtitleData = null;
 	}
 
 	// 设置视频URL
@@ -102,9 +123,79 @@
 				if (requestId !== currentVideoRequestId) return;
 				setVideoUrl(url, false);
 			}
+		// 加载字幕
+			await loadSubtitle(videoPage);
 		} catch (err) {
 			console.error('加载视频失败:', err);
 			onError(err);
+		}
+	}
+
+	// 加载字幕文件
+	async function loadSubtitle(videoPage: Page) {
+		clearSubtitle();
+
+		try {
+			const filename = videoPage.name || videoPage.innerPath || '';
+			if (!filename) return;
+
+			const possibleNames = getPossibleSubtitleNames(filename);
+
+			if (videoPage.innerPath && bookStore.currentBook?.type === 'archive') {
+				// 压缩包内查找字幕
+				const archivePath = bookStore.currentBook.path;
+				const pages = bookStore.currentBook.pages || [];
+
+				// 在压缩包的页面列表中查找匹配的字幕文件
+				for (const subName of possibleNames) {
+					const subPage = pages.find((p) => {
+						const pName = p.name || p.innerPath || '';
+						return pName.toLowerCase() === subName.toLowerCase();
+					});
+
+					if (subPage?.innerPath) {
+						try {
+							const subData: number[] = await invoke('load_text_from_archive', {
+								archivePath,
+								filePath: subPage.innerPath
+							});
+							const content = new TextDecoder('utf-8').decode(new Uint8Array(subData));
+							const type = getSubtitleType(subPage.innerPath);
+							if (type && content) {
+								const parsed = parseSubtitleContent(content, type);
+								parsed.vttUrl = createSubtitleBlobUrl(parsed.vttContent);
+								subtitleData = parsed;
+								console.log(`[VideoContainer] 加载压缩包内字幕: ${subPage.innerPath}`);
+								return;
+							}
+						} catch (e) {
+							// 该字幕文件不存在或无法读取，继续尝试下一个
+						}
+					}
+				}
+			} else {
+				// 文件系统中查找字幕
+				const videoDir = await dirname(videoPage.path);
+
+				for (const subName of possibleNames) {
+					try {
+						const subPath = await join(videoDir, subName);
+						const content = await readTextFile(subPath);
+						const type = getSubtitleType(subName);
+						if (type && content) {
+							const parsed = parseSubtitleContent(content, type);
+							parsed.vttUrl = createSubtitleBlobUrl(parsed.vttContent);
+							subtitleData = parsed;
+							console.log(`[VideoContainer] 加载文件系统字幕: ${subPath}`);
+							return;
+						}
+					} catch (e) {
+						// 该字幕文件不存在，继续尝试下一个
+					}
+				}
+			}
+		} catch (err) {
+			console.warn('加载字幕失败:', err);
 		}
 	}
 
@@ -207,6 +298,8 @@
 	onDestroy(() => {
 		// 清理视频URL
 		clearVideoUrl();
+		// 清理字幕
+		clearSubtitle();
 		// 移除事件监听
 		if (viewerActionListener) {
 			window.removeEventListener('neoview-viewer-action', viewerActionListener as EventListener);
@@ -253,6 +346,7 @@
 			onSeekModeChange={(enabled) => {
 				videoStore.setSeekMode(enabled);
 			}}
+			subtitle={subtitleData}
 		/>
 	{:else}
 		<div class="flex h-full w-full items-center justify-center text-white">

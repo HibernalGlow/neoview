@@ -30,6 +30,7 @@
 	} from './utils/viewMode';
 	import { createZoomModeManager, type ViewportSize } from './utils/zoomModeHandler';
 	import type { ZoomMode } from '$lib/settings/settingsManager';
+	import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoomMode';
 	import type { Frame, FrameLayout, FrameImage } from './types/frame';
 	import { emptyFrame } from './types/frame';
 	import { getImageStore } from './stores/imageStore.svelte';
@@ -595,18 +596,23 @@
 		}
 	}
 
-	// 应用缩放模式（同时同步 currentZoomMode）
+	// 当设置的 defaultZoomMode 变化时，同步到 currentZoomMode
+	// 这样用户在设置中更改缩放模式会生效
+	let lastDefaultZoomMode = $state(settingsManager.getSettings().view.defaultZoomMode ?? 'fit');
+	$effect(() => {
+		const newDefault = settings.view.defaultZoomMode ?? 'fit';
+		if (newDefault !== lastDefaultZoomMode) {
+			lastDefaultZoomMode = newDefault;
+			currentZoomMode = newDefault as ZoomMode;
+		}
+	});
+
+	// 应用缩放模式
 	$effect(() => {
 		const dims = imageStore.state.dimensions;
-		const defaultZoomMode = (settings.view.defaultZoomMode as ZoomMode) ?? 'fit';
-
-		// 同步设置中的 zoomMode 到本地状态
-		if (currentZoomMode !== defaultZoomMode) {
-			currentZoomMode = defaultZoomMode;
-		}
 
 		if (dims && viewportSize.width > 0 && viewportSize.height > 0) {
-			zoomModeManager.apply(defaultZoomMode, dims, viewportSize);
+			zoomModeManager.apply(currentZoomMode, dims, viewportSize);
 		}
 	});
 
@@ -643,9 +649,22 @@
 		};
 	});
 
+	// 监听 zoomMode 变化事件
+	function handleApplyZoomMode(event: Event) {
+		const detail = (event as CustomEvent<ApplyZoomModeDetail>).detail;
+		const mode = detail.mode ?? settingsManager.getSettings().view.defaultZoomMode ?? 'fit';
+		console.log('[StackView] 收到 zoomMode 事件:', mode, '当前:', currentZoomMode);
+		if (currentZoomMode !== mode) {
+			currentZoomMode = mode as ZoomMode;
+			console.log('[StackView] 更新 currentZoomMode 为:', currentZoomMode);
+		}
+	}
+
 	onMount(async () => {
 		// 初始化超分服务
 		await upscaleStore.init();
+		// 监听 zoomMode 变化事件
+		window.addEventListener(applyZoomModeEventName, handleApplyZoomMode);
 	});
 
 	onDestroy(() => {
@@ -654,6 +673,7 @@
 		zoomModeManager.reset();
 		cursorAutoHide?.destroy();
 		upscaleStore.destroy();
+		window.removeEventListener(applyZoomModeEventName, handleApplyZoomMode);
 	});
 
 	let isRTL = $derived(settings.book.readingDirection === 'right-to-left');

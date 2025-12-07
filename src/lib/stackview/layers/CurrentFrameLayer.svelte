@@ -2,10 +2,10 @@
   CurrentFrameLayer - 当前帧层
   z-index: 40
   
-  整合 StackViewer 优化：
-  - 支持超分图无缝替换
-  - GPU 加速
-  - 支持单页/双页/全景布局
+  【性能优化】原生滚动方案：
+  - 使用浏览器原生滚动，硬件加速
+  - HoverScrollLayer 直接操作 scrollLeft/scrollTop
+  - 无需 transform-origin，性能最优
 -->
 <script lang="ts">
 	import { LayerZIndex } from '../types/layer';
@@ -40,8 +40,8 @@
 		onImageLoad?: (e: Event, index: number) => void;
 	} = $props();
 
-	// 【性能优化】transform-origin 通过 CSS 变量由 HoverLayer 直接操作 DOM
-	// 不再在模板中设置，避免 Svelte 渲染覆盖
+	// 【性能优化】原生滚动方案：不再使用 transform-origin
+	// HoverScrollLayer 直接操作容器的 scrollLeft/scrollTop
 
 	// 计算 transform（只包含 scale 和 rotation）
 	let transformStyle = $derived.by(() => {
@@ -49,6 +49,24 @@
 		if (scale !== 1) parts.push(`scale(${scale})`);
 		if (rotation !== 0) parts.push(`rotate(${rotation}deg)`);
 		return parts.length > 0 ? parts.join(' ') : 'none';
+	});
+
+	// 计算图片尺寸（用于滚动区域）
+	let imageDisplayStyle = $derived.by(() => {
+		if (!imageSize.width || !imageSize.height || !viewportSize.width || !viewportSize.height) {
+			return '';
+		}
+		// 计算图片显示尺寸（保持宽高比）
+		const imgAspect = imageSize.width / imageSize.height;
+		const vpAspect = viewportSize.width / viewportSize.height;
+		
+		if (imgAspect > vpAspect) {
+			// 横向图片：高度填满，宽度溢出
+			return `height: 100%; width: auto;`;
+		} else {
+			// 竖向图片：宽度填满，高度溢出
+			return `width: 100%; height: auto;`;
+		}
 	});
 
 	let layoutClass = $derived.by(() => {
@@ -84,27 +102,33 @@
 </script>
 
 {#if frame.images.length > 0}
+	<!-- 【性能优化】可滚动容器，用于原生滚动 -->
 	<div
-		class="frame-layer current-frame-layer {layoutClass}"
+		class="scroll-frame-container {layoutClass}"
 		data-layer="CurrentFrameLayer"
 		data-layer-id="current"
 		style:z-index={LayerZIndex.CURRENT_FRAME}
-		style:transform={transformStyle}
 	>
-		{#each frame.images as img, i (i)}
-			<FrameImage
-				pageIndex={img.physicalIndex}
-				url={img.url}
-				alt="Current {i}"
-				transform={getImageTransform(img)}
-				clipPath={getClipPath(img.splitHalf)}
-				onload={(e) => onImageLoad?.(e, i)}
-			/>
-		{/each}
+		<div
+			class="scroll-frame-content"
+			style:transform={transformStyle}
+		>
+			{#each frame.images as img, i (i)}
+				<FrameImage
+					pageIndex={img.physicalIndex}
+					url={img.url}
+					alt="Current {i}"
+					transform={getImageTransform(img)}
+					clipPath={getClipPath(img.splitHalf)}
+					style={imageDisplayStyle}
+					onload={(e) => onImageLoad?.(e, i)}
+				/>
+			{/each}
+		</div>
 	</div>
 {:else}
 	<div
-		class="frame-layer current-frame-layer frame-empty"
+		class="scroll-frame-container frame-empty"
 		data-layer="CurrentFrameLayer"
 		data-layer-id="current"
 		style:z-index={LayerZIndex.CURRENT_FRAME}
@@ -114,9 +138,51 @@
 {/if}
 
 <style>
-	/* 当前帧层特有样式（基础样式来自 frameLayer.css） */
-	.current-frame-layer {
+	/* 【性能优化】可滚动容器 - 原生滚动方案 */
+	.scroll-frame-container {
+		position: absolute;
+		inset: 0;
+		overflow: hidden; /* 隐藏滚动条但保留滚动能力 */
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		/* GPU 加速 */
+		will-change: scroll-position;
+		-webkit-overflow-scrolling: touch;
+	}
+
+	.scroll-frame-content {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 100%;
+		min-height: 100%;
+		/* GPU 加速 */
+		will-change: transform;
+		transform: translateZ(0);
+		backface-visibility: hidden;
+	}
+
+	.frame-empty {
 		opacity: 1;
-		transition: opacity 0.15s ease;
+	}
+
+	/* 双页模式 */
+	.scroll-frame-container.frame-double .scroll-frame-content {
+		flex-direction: row;
+		gap: 4px;
+	}
+
+	.scroll-frame-container.frame-double.frame-rtl .scroll-frame-content {
+		flex-direction: row-reverse;
+	}
+
+	/* 对齐模式 */
+	.scroll-frame-container.frame-align-left {
+		justify-content: flex-start;
+	}
+
+	.scroll-frame-container.frame-align-right {
+		justify-content: flex-end;
 	}
 </style>

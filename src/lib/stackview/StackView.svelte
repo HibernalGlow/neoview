@@ -10,12 +10,12 @@
 		CurrentFrameLayer,
 		InfoLayer,
 		GestureLayer,
-		HoverLayer,
 		UpscaleLayer,
 		ImageInfoLayer,
 		ProgressBarLayer,
 		SidebarControlLayer
 	} from './layers';
+	import HoverScrollLayer from './layers/HoverScrollLayer.svelte';
 	import StackViewer from '$lib/viewer/StackViewer.svelte';
 	import PanoramaFrameLayer from './layers/PanoramaFrameLayer.svelte';
 	import {
@@ -405,19 +405,23 @@
 	// 方法
 	// ============================================================================
 
-	// 【性能优化】直接操作 DOM 重置位置，绕过 Svelte 响应式
-	function resetHoverPosition() {
-		const elements = document.querySelectorAll('.frame-layer, .panorama-frame-layer');
-		for (const el of elements) {
-			(el as HTMLElement).style.setProperty('--view-x', '50%');
-			(el as HTMLElement).style.setProperty('--view-y', '50%');
+	// 【性能优化】重置滚动位置到中心
+	function resetScrollPosition() {
+		const containers = document.querySelectorAll('.scroll-frame-container');
+		for (const el of containers) {
+			const container = el as HTMLElement;
+			// 计算中心位置
+			const centerX = (container.scrollWidth - container.clientWidth) / 2;
+			const centerY = (container.scrollHeight - container.clientHeight) / 2;
+			container.scrollLeft = centerX;
+			container.scrollTop = centerY;
 		}
 	}
 
 	function resetView() {
 		manualScale = 1.0;
 		rotation = 0;
-		resetHoverPosition();
+		resetScrollPosition();
 		splitState = null;
 	}
 
@@ -440,7 +444,7 @@
 		console.log(
 			`⬅️ handlePrevPage: pageMode=${pageMode}, pageStep=${pageStep}, currentIndex=${bookStore.currentPageIndex}`
 		);
-		resetHoverPosition();
+		resetScrollPosition();
 
 		// 处理横向分割模式
 		if (isInSplitMode && splitState) {
@@ -462,7 +466,7 @@
 		console.log(
 			`➡️ handleNextPage: pageMode=${pageMode}, pageStep=${pageStep}, currentIndex=${bookStore.currentPageIndex}`
 		);
-		resetHoverPosition();
+		resetScrollPosition();
 
 		// 处理横向分割模式
 		if (isInSplitMode) {
@@ -517,7 +521,7 @@
 				imageStore.reset();
 				panoramaStore.reset();
 				zoomModeManager.reset();
-				resetHoverPosition();
+				resetScrollPosition();
 				splitState = null;
 				loadedImageSize = null; // 重置尺寸，等待新书第一页加载
 
@@ -759,14 +763,14 @@
 	/>
 
 	<!-- 悬停滚动层 -->
-	<!-- 【性能优化】HoverLayer 直接操作 DOM CSS 变量，不通过 Svelte 响应式 -->
-	<HoverLayer
+	<!-- 【性能优化】Translate 方案：直接操作 transform: translate() -->
+	<HoverScrollLayer
 		enabled={hoverScrollEnabled}
 		sidebarMargin={20}
 		deadZoneRatio={0.15}
 		{viewportSize}
 		{displaySize}
-		targetSelector=".frame-layer, .panorama-frame-layer"
+		targetSelector=".scroll-frame-content"
 	/>
 
 	<!-- 图片信息浮窗 -->

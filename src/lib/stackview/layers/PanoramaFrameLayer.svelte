@@ -1,7 +1,10 @@
 <!--
   PanoramaFrameLayer - 全景帧层
   显示多个帧单元，支持滚动
-  支持超分图无缝替换
+  
+  【性能优化】原生滚动方案：
+  - 使用浏览器原生滚动，硬件加速
+  - HoverScrollLayer 直接操作 scrollLeft/scrollTop
 -->
 <script lang="ts">
   import { LayerZIndex } from '../types/layer';
@@ -70,7 +73,7 @@
     }
   });
   
-  // 【性能优化】transform-origin 通过 CSS 变量由 HoverLayer 直接操作 DOM
+  // 【性能优化】原生滚动方案，不再使用 transform-origin
   
   let containerClass = $derived.by(() => {
     const classes = ['panorama-frame-layer'];
@@ -92,30 +95,32 @@
 </script>
 
 {#if units.length > 0}
+  <!-- 【性能优化】可滚动容器 -->
   <div 
     bind:this={containerRef}
-    class={containerClass}
+    class="scroll-frame-container {containerClass}"
     data-layer="PanoramaFrameLayer"
     style:z-index={LayerZIndex.CURRENT_FRAME}
-    style:transform={scale !== 1 ? `scale(${scale})` : 'none'}
   >
-    {#each units as unit (unit.id)}
-      <div class="panorama-unit" data-unit-id={unit.id}>
-        {#each unit.images as img, i (img.pageIndex)}
-          <FrameImage
-            pageIndex={img.pageIndex}
-            url={img.url}
-            alt="Page {img.pageIndex + 1}"
-            class="panorama-image"
-            style={imageStyle}
-          />
-        {/each}
-      </div>
-    {/each}
+    <div class="scroll-frame-content" style:transform={scale !== 1 ? `scale(${scale})` : 'none'}>
+      {#each units as unit (unit.id)}
+        <div class="panorama-unit" data-unit-id={unit.id}>
+          {#each unit.images as img, i (img.pageIndex)}
+            <FrameImage
+              pageIndex={img.pageIndex}
+              url={img.url}
+              alt="Page {img.pageIndex + 1}"
+              class="panorama-image"
+              style={imageStyle}
+            />
+          {/each}
+        </div>
+      {/each}
+    </div>
   </div>
 {:else}
   <div 
-    class="panorama-frame-layer empty"
+    class="scroll-frame-container panorama-frame-layer empty"
     data-layer="PanoramaFrameLayer"
     style:z-index={LayerZIndex.CURRENT_FRAME}
   >
@@ -124,33 +129,46 @@
 {/if}
 
 <style>
-  .panorama-frame-layer {
+  /* 【性能优化】可滚动容器 - 原生滚动方案 */
+  .scroll-frame-container {
     position: absolute;
     inset: 0;
+    overflow: hidden; /* 隐藏滚动条但保留滚动能力 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* GPU 加速 */
+    will-change: scroll-position;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .scroll-frame-content {
     display: flex;
     flex-direction: row;
     gap: 0;
     padding: 0;
-    overflow: hidden;
     align-items: center;
     justify-content: flex-start;
-    /* GPU 加速 + CSS 变量优化 */
+    min-width: 100%;
+    min-height: 100%;
+    /* GPU 加速 */
     will-change: transform;
     transform: translateZ(0);
-    transform-origin: var(--view-x, 50%) var(--view-y, 50%);
     backface-visibility: hidden;
-    contain: layout style paint;
   }
+
+  /* .panorama-frame-layer 作为容器的修饰类，样式由子选择器定义 */
   
-  .panorama-frame-layer.vertical {
+  /* vertical 和 rtl 应用于 scroll-frame-content */
+  .panorama-frame-layer.vertical .scroll-frame-content {
     flex-direction: column;
   }
   
-  .panorama-frame-layer.rtl {
+  .panorama-frame-layer.rtl .scroll-frame-content {
     flex-direction: row-reverse;
   }
   
-  .panorama-frame-layer.vertical.rtl {
+  .panorama-frame-layer.vertical.rtl .scroll-frame-content {
     flex-direction: column-reverse;
   }
   

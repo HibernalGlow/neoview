@@ -71,11 +71,8 @@
 		const size = effectiveImageSize;
 		const vp = viewportSize;
 		
-		console.log('📐 imageDisplayStyle:', { zoomMode, size, vp });
-		
 		if (!size.width || !size.height || !vp.width || !vp.height) {
 			// 没有尺寸信息时使用默认 contain 模式
-			console.log('📐 使用默认样式（尺寸无效）');
 			return 'max-width: 100%; max-height: 100%;';
 		}
 		
@@ -84,9 +81,19 @@
 		switch (zoomMode) {
 			case 'fit':
 			case 'fitLeftAlign':
-			case 'fitRightAlign':
-				// Fit: 图片完全适应视口，不滚动
-				return 'max-width: 100%; max-height: 100%;';
+			case 'fitRightAlign': {
+				// Fit: 图片完全适应视口（contain 模式），不滚动
+				const vpAspect = vp.width / vp.height;
+				if (imgAspect > vpAspect) {
+					// 横向图片：宽度受限，高度按比例
+					const height = vp.width / imgAspect;
+					return `width: ${vp.width}px; height: ${height}px;`;
+				} else {
+					// 竖向图片：高度受限，宽度按比例
+					const width = vp.height * imgAspect;
+					return `width: ${width}px; height: ${vp.height}px;`;
+				}
+			}
 			
 			case 'fill': {
 				// Fill: 图片填满视口（cover模式），可滚动查看溢出部分

@@ -653,10 +653,8 @@
 	function handleApplyZoomMode(event: Event) {
 		const detail = (event as CustomEvent<ApplyZoomModeDetail>).detail;
 		const mode = detail.mode ?? settingsManager.getSettings().view.defaultZoomMode ?? 'fit';
-		console.log('[StackView] 收到 zoomMode 事件:', mode, '当前:', currentZoomMode);
 		if (currentZoomMode !== mode) {
 			currentZoomMode = mode as ZoomMode;
-			console.log('[StackView] 更新 currentZoomMode 为:', currentZoomMode);
 		}
 	}
 

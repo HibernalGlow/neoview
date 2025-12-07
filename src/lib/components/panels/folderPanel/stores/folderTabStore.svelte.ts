@@ -111,8 +111,46 @@ function generateTabId(): string {
 	return `tab-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
 
+// ============ Virtual Path Support ============
+
+export const VIRTUAL_PATHS = {
+	BOOKMARK: 'virtual://bookmark',
+	HISTORY: 'virtual://history'
+} as const;
+
+export type VirtualPathType = 'bookmark' | 'history' | null;
+
+/**
+ * 判断是否为虚拟路径
+ */
+export function isVirtualPath(path: string): boolean {
+	return path.startsWith('virtual://');
+}
+
+/**
+ * 获取虚拟路径类型
+ */
+export function getVirtualPathType(path: string): VirtualPathType {
+	if (path === VIRTUAL_PATHS.BOOKMARK) return 'bookmark';
+	if (path === VIRTUAL_PATHS.HISTORY) return 'history';
+	return null;
+}
+
+/**
+ * 获取虚拟路径的显示名称
+ */
+function getVirtualDisplayName(path: string): string {
+	const type = getVirtualPathType(path);
+	switch (type) {
+		case 'bookmark': return '📑 书签';
+		case 'history': return '🕒 历史';
+		default: return path;
+	}
+}
+
 function getDisplayName(path: string): string {
 	if (!path) return '新标签页';
+	if (isVirtualPath(path)) return getVirtualDisplayName(path);
 	const normalized = path.replace(/\\/g, '/');
 	const parts = normalized.split('/').filter(Boolean);
 	return parts[parts.length - 1] || path;

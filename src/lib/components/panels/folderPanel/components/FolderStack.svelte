@@ -25,8 +25,11 @@ import {
 	tabOpenInNewTabMode,
 	tabCurrentPath,
 	activeTabId,
-	tabThumbnailWidthPercent
+	tabThumbnailWidthPercent,
+	isVirtualPath,
+	getVirtualPathType
 } from '../stores/folderTabStore.svelte';
+import { loadVirtualPathData, subscribeVirtualPathData, removeVirtualPathItem } from '../utils/virtualPathLoader';
 
 // 别名映射
 const viewStyle = tabViewStyle;
@@ -239,6 +242,9 @@ async function initRootWithoutHistory(path: string) {
 	folderTabActions.setItems(layer.items);
 }
 
+// 虚拟路径订阅清理函数
+let virtualPathUnsubscribe: (() => void) | null = null;
+
 // 创建新层
 async function createLayer(path: string): Promise<FolderLayer> {
 	const layer: FolderLayer = {
@@ -252,16 +258,47 @@ async function createLayer(path: string): Promise<FolderLayer> {
 	};
 
 	try {
-		// 使用全局目录树缓存
-		const items = await directoryTreeCache.getDirectory(path);
-		layer.items = items;
-		layer.loading = false;
-		
-		// 异步加载缩略图
-		loadThumbnailsForLayer(items, path);
-		
-		// 异步加载收藏标签匹配数（用于排序）
-		loadCollectTagCountsForLayer(layer);
+		// 检查是否为虚拟路径
+		if (isVirtualPath(path)) {
+			// 虚拟路径：从书签/历史 store 加载数据
+			const items = loadVirtualPathData(path);
+			layer.items = items;
+			layer.loading = false;
+			
+			// 订阅数据变化
+			if (virtualPathUnsubscribe) {
+				virtualPathUnsubscribe();
+			}
+			virtualPathUnsubscribe = subscribeVirtualPathData(path, (newItems) => {
+				// 更新当前层的数据
+				const currentLayer = layers.find(l => l.path === path);
+				if (currentLayer) {
+					currentLayer.items = newItems;
+					folderTabActions.setItems(newItems);
+				}
+			});
+			
+			// 加载缩略图
+			loadThumbnailsForLayer(items, path);
+		} else {
+			// 正常文件系统路径
+			// 清理虚拟路径订阅
+			if (virtualPathUnsubscribe) {
+				virtualPathUnsubscribe();
+				virtualPathUnsubscribe = null;
+			}
+			
+			// 使用全局目录树缓存
+			const items = await directoryTreeCache.getDirectory(path);
+			layer.items = items;
+			layer.loading = false;
+			
+			// 异步加载缩略图
+			loadThumbnailsForLayer(items, path);
+			
+			// 异步加载收藏标签匹配数（用于排序）
+			loadCollectTagCountsForLayer(layer);
+		}
 	} catch (err) {
 		layer.error = err instanceof Error ? err.message : String(err);
 		layer.loading = false;
@@ -308,8 +345,11 @@ async function loadCollectTagCountsForLayer(layer: FolderLayer) {
 
 // 加载缩略图 - 【优化】只预加载前30项，其余由 VirtualizedFileList 可见范围加载
 async function loadThumbnailsForLayer(items: FsItem[], path: string) {
-	// 设置当前目录（用于优先级判断）
-	thumbnailManager.setCurrentDirectory(path);
+	// 虚拟路径不设置当前目录
+	if (!isVirtualPath(path)) {
+		// 设置当前目录（用于优先级判断）
+		thumbnailManager.setCurrentDirectory(path);
+	}
 
 	// 【优化】只预加载前30项，避免大量并发请求
 	const PRELOAD_COUNT = 30;
@@ -500,6 +540,15 @@ function goToLayer(index: number) {
 
 // 处理删除项目（先从层叠栈移除，再调用外部删除处理）
 function handleDeleteItem(layerIndex: number, item: FsItem) {
+	const currentLayer = layers[layerIndex];
+	
+	// 检查是否为虚拟路径
+	if (currentLayer && isVirtualPath(currentLayer.path)) {
+		// 虚拟路径：从 store 中删除
+		removeVirtualPathItem(currentLayer.path, item.path);
+		return;
+	}
+	
 	// 立即从层叠栈中移除（乐观更新）
 	layers = layers.map((layer, idx) => {
 		if (idx === layerIndex) {
@@ -512,7 +561,6 @@ function handleDeleteItem(layerIndex: number, item: FsItem) {
 	});
 	
 	// 同步到 store
-	const currentLayer = layers[layerIndex];
 	if (currentLayer) {
 		folderTabActions.setItems(currentLayer.items);
 	}

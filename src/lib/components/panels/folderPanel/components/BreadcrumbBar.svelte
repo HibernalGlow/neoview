@@ -4,12 +4,12 @@
  * 参考 NeeView 的 BreadcrumbBar 设计
  * 支持点击导航和直接输入路径
  */
-import { ChevronRight, Folder, HardDrive, MoreHorizontal, Edit2, Plus } from '@lucide/svelte';
+import { ChevronRight, Folder, HardDrive, MoreHorizontal, Edit2, Plus, Bookmark, Clock } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import { Input } from '$lib/components/ui/input';
 import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 import * as Tooltip from '$lib/components/ui/tooltip';
-import { tabCurrentPath, folderTabActions } from '../stores/folderTabStore.svelte';
+import { tabCurrentPath, folderTabActions, isVirtualPath, getVirtualPathType, VIRTUAL_PATHS } from '../stores/folderTabStore.svelte';
 
 // 使用页签 store 的 currentPath
 const currentPath = tabCurrentPath;
@@ -91,6 +91,16 @@ interface BreadcrumbItem {
 // 解析路径为面包屑项
 function parsePath(path: string): BreadcrumbItem[] {
 	if (!path) return [];
+
+	// 虚拟路径特殊处理
+	if (isVirtualPath(path)) {
+		const type = getVirtualPathType(path);
+		return [{
+			name: type === 'bookmark' ? '书签' : type === 'history' ? '历史' : path,
+			path: path,
+			isRoot: true
+		}];
+	}
 
 	// 统一使用反斜杠处理
 	const normalized = path.replace(/\//g, '\\');
@@ -197,13 +207,18 @@ function handleNavigate(path: string) {
 		<!-- 面包屑模式 -->
 		<!-- 根图标 -->
 		{#if breadcrumbItems.length > 0}
+			{@const virtualType = isVirtualPath(breadcrumbItems[0].path) ? getVirtualPathType(breadcrumbItems[0].path) : null}
 			<Button
 				variant="ghost"
 				size="sm"
 				class="h-6 gap-1 px-1.5"
 				onclick={() => handleNavigate(breadcrumbItems[0].path)}
 			>
-				{#if breadcrumbItems[0].isRoot}
+				{#if virtualType === 'bookmark'}
+					<Bookmark class="h-3.5 w-3.5 text-amber-500" />
+				{:else if virtualType === 'history'}
+					<Clock class="h-3.5 w-3.5 text-blue-500" />
+				{:else if breadcrumbItems[0].isRoot}
 					<HardDrive class="h-3.5 w-3.5" />
 				{:else}
 					<Folder class="h-3.5 w-3.5" />

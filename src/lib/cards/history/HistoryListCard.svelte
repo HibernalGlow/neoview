@@ -1,9 +1,10 @@
 <script lang="ts">
 /**
- * 历史记录卡片 - 包装器版
- * 使用 UnifiedDataCard 统一组件
+ * 历史记录卡片
+ * 直接复用 FolderMainCard，共享所有工具栏和浏览功能
  */
-import UnifiedDataCard from '$lib/cards/shared/UnifiedDataCard.svelte';
+import FolderMainCard from '$lib/cards/folder/FolderMainCard.svelte';
+import { VIRTUAL_PATHS } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
 </script>
 
-<UnifiedDataCard mode="history" />
+<FolderMainCard initialPath={VIRTUAL_PATHS.HISTORY} />

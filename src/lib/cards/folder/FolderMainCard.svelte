@@ -3,6 +3,7 @@
 	 * FolderPanel - 文件面板主组件
 	 * 采用层叠式导航，每个目录是独立的层
 	 * 进入子目录推入新层，返回弹出当前层，上一层保持原状
+	 * 支持虚拟路径（书签/历史）作为初始路径
 	 */
 	import { onMount } from 'svelte';
 	import type { FsItem } from '$lib/types';
@@ -75,8 +76,15 @@
 		tabItems,
 		activeTabId,
 		allTabs,
-		type FolderTabState
+		type FolderTabState,
+		isVirtualPath
 	} from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
+
+	// Props - 支持可选的初始路径（用于书签/历史虚拟路径）
+	interface Props {
+		initialPath?: string;
+	}
+	let { initialPath: propInitialPath }: Props = $props();
 
 	// 使用页签 store 作为主要状态源
 	const currentPath = tabCurrentPath;
@@ -1059,16 +1067,23 @@
 		// 异步初始化
 		(async () => {
 			try {
-				// 从 localStorage 读取保存的主页路径，如果没有则使用用户目录
-				const savedHomePath = localStorage.getItem('neoview-homepage-path');
-				const defaultHome = await homeDir();
-				const home = savedHomePath || defaultHome;
-				homePath = home;
-				folderTabActions.setHomePath(home);
+				// 检查是否有传入的初始路径（用于书签/历史虚拟路径）
+				if (propInitialPath) {
+					homePath = propInitialPath;
+					folderTabActions.setHomePath(propInitialPath);
+					navigationCommand.set({ type: 'init', path: propInitialPath });
+				} else {
+					// 从 localStorage 读取保存的主页路径，如果没有则使用用户目录
+					const savedHomePath = localStorage.getItem('neoview-homepage-path');
+					const defaultHome = await homeDir();
+					const home = savedHomePath || defaultHome;
+					homePath = home;
+					folderTabActions.setHomePath(home);
 
-				// 初始化层叠导航
-				const initialPath = $currentPath || home;
-				navigationCommand.set({ type: 'init', path: initialPath });
+					// 初始化层叠导航
+					const initialPath = $currentPath || home;
+					navigationCommand.set({ type: 'init', path: initialPath });
+				}
 
 				// 自动加载 EMM 收藏标签（如果尚未加载）
 				if (!favoriteTagStore.isEMMLoaded()) {

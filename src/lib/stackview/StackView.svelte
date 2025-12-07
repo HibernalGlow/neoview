@@ -719,6 +719,7 @@
 			{viewportSize}
 			imageSize={imageStore.state.dimensions ?? { width: 0, height: 0 }}
 			{alignMode}
+			zoomMode={currentZoomMode}
 			onImageLoad={handleImageLoad}
 		/>
 
@@ -732,6 +733,7 @@
 				{viewportSize}
 				imageSize={imageStore.state.dimensions ?? { width: 0, height: 0 }}
 				{alignMode}
+				zoomMode={currentZoomMode}
 			/>
 		{/if}
 	{/if}

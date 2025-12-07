@@ -14,6 +14,8 @@
 	import FrameImage from '../components/FrameImage.svelte';
 	import '../styles/frameLayer.css';
 
+	import type { ZoomMode } from '$lib/settings/settingsManager';
+
 	let {
 		frame,
 		layout = 'single',
@@ -26,6 +28,8 @@
 		imageSize = { width: 0, height: 0 },
 		// 对齐模式：center（默认居中）、left（居左）、right（居右）
 		alignMode = 'center',
+		// 缩放模式：用于决定图片如何填充视口
+		zoomMode = 'fit' as ZoomMode,
 		onImageLoad
 	}: {
 		frame: Frame;
@@ -37,6 +41,7 @@
 		viewportSize?: { width: number; height: number };
 		imageSize?: { width: number; height: number };
 		alignMode?: 'center' | 'left' | 'right';
+		zoomMode?: ZoomMode;
 		onImageLoad?: (e: Event, index: number) => void;
 	} = $props();
 
@@ -61,26 +66,58 @@
 	});
 
 	// 计算图片尺寸（用于滚动区域）
-	// 原生滚动方案：根据宽高比决定填充方向，使用具体像素值
+	// 原生滚动方案：根据 zoomMode 决定填充方式
 	let imageDisplayStyle = $derived.by(() => {
 		const size = effectiveImageSize;
+		const vp = viewportSize;
 		
-		if (!size.width || !size.height || !viewportSize.width || !viewportSize.height) {
+		if (!size.width || !size.height || !vp.width || !vp.height) {
 			// 没有尺寸信息时使用默认 contain 模式
 			return 'max-width: 100%; max-height: 100%;';
 		}
 		
 		const imgAspect = size.width / size.height;
-		const vpAspect = viewportSize.width / viewportSize.height;
 		
-		if (imgAspect > vpAspect) {
-			// 横向图片：高度填满视口，宽度按比例计算
-			const width = viewportSize.height * imgAspect;
-			return `height: ${viewportSize.height}px; width: ${width}px;`;
-		} else {
-			// 竖向图片：宽度填满视口，高度按比例计算
-			const height = viewportSize.width / imgAspect;
-			return `width: ${viewportSize.width}px; height: ${height}px;`;
+		switch (zoomMode) {
+			case 'fit':
+			case 'fitLeftAlign':
+			case 'fitRightAlign':
+				// Fit: 图片完全适应视口，不滚动
+				return 'max-width: 100%; max-height: 100%;';
+			
+			case 'fill': {
+				// Fill: 图片填满视口（cover模式），可滚动查看溢出部分
+				const vpAspect = vp.width / vp.height;
+				if (imgAspect > vpAspect) {
+					// 横向图片：高度填满，宽度溢出可滚动
+					const width = vp.height * imgAspect;
+					return `width: ${width}px; height: ${vp.height}px;`;
+				} else {
+					// 竖向图片：宽度填满，高度溢出可滚动
+					const height = vp.width / imgAspect;
+					return `width: ${vp.width}px; height: ${height}px;`;
+				}
+			}
+			
+			case 'fitWidth': {
+				// FitWidth: 宽度填满，高度可滚动
+				const height = vp.width / imgAspect;
+				return `width: ${vp.width}px; height: ${height}px;`;
+			}
+			
+			case 'fitHeight': {
+				// FitHeight: 高度填满，宽度可滚动
+				const width = vp.height * imgAspect;
+				return `width: ${width}px; height: ${vp.height}px;`;
+			}
+			
+			case 'original': {
+				// Original: 原始尺寸，两个方向都可滚动
+				return `width: ${size.width}px; height: ${size.height}px;`;
+			}
+			
+			default:
+				return 'max-width: 100%; max-height: 100%;';
 		}
 	});
 

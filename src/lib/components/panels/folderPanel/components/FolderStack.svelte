@@ -32,7 +32,8 @@
 	import {
 		loadVirtualPathData,
 		subscribeVirtualPathData,
-		removeVirtualPathItem
+		removeVirtualPathItem,
+		getVirtualPathConfig
 	} from '../utils/virtualPathLoader';
 
 	// 别名映射
@@ -107,6 +108,12 @@
 
 	// 当前活跃层索引
 	let activeIndex = $state(0);
+	
+	// 虚拟路径本地排序配置（虚拟实例使用，不影响全局 store）
+	let localSortConfig = $state<{ field: string; order: string } | null>(null);
+	
+	// 获取有效排序配置：虚拟实例使用本地配置，否则使用全局配置
+	let effectiveSortConfig = $derived(skipGlobalStore && localSortConfig ? localSortConfig : $sortConfig);
 	
 	// 条件执行全局 store 操作（虚拟实例跳过）
 	const globalStore = {
@@ -252,7 +259,8 @@
 
 	// 获取层的显示项（应用排序，不过滤 - 搜索在 SearchResultList 中处理）
 	function getDisplayItems(layer: FolderLayer): FsItem[] {
-		const config = $sortConfig;
+		// 虚拟实例使用本地排序配置，否则使用全局配置
+		const config = effectiveSortConfig;
 		let result = layer.items;
 		// 不再根据 searchKeyword 过滤，搜索结果在独立的 SearchResultList 中显示
 		// 虚拟路径下文件夹和文件平等排序
@@ -300,6 +308,13 @@
 		try {
 			// 检查是否为虚拟路径
 			if (isVirtualPath(path)) {
+				// 设置虚拟路径默认排序配置（按时间倒序）
+				const virtualType = getVirtualPathType(path);
+				const config = getVirtualPathConfig(virtualType);
+				if (config && skipGlobalStore) {
+					localSortConfig = { field: config.defaultSortField, order: config.defaultSortOrder };
+				}
+				
 				// 虚拟路径：从书签/历史 store 加载数据
 				const items = loadVirtualPathData(path);
 				layer.items = items;

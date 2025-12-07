@@ -36,3 +36,4 @@ test_image_upscaled.png
 /model_outputs/
 *.jpg
 src-tauri/.cache/thumbnails/thumbnails.db
+request.md

@@ -24,8 +24,7 @@ import {
 	tabItems,
 	activeTabId,
 	allTabs,
-	isVirtualPath,
-	type FolderTabState
+	isVirtualPath
 } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
 
 /**

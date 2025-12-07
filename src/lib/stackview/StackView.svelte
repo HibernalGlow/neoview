@@ -688,7 +688,7 @@
 			{orientation}
 			{direction}
 			currentPageIndex={bookStore.currentPageIndex}
-			scale={manualScale}
+			{viewportSize}
 		/>
 	{:else if useStackRenderer}
 		<!-- 层叠渲染模式：使用 StackViewer（支持双页） -->

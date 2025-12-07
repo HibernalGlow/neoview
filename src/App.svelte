@@ -653,12 +653,16 @@
 
 	<!-- 仅使用传统布局模式，禁用 Flow 画布以提升性能 -->
 	<MainLayout>
-		<Empty class="h-full w-full border-0">
+		<Empty class="relative h-full w-full border-0">
+			<!-- 网点背景 -->
+			<div
+				class="pointer-events-none absolute inset-0 z-0 h-full w-full bg-[radial-gradient(#00000026_1px,transparent_1px)] [background-size:20px_20px] dark:bg-[radial-gradient(#ffffff26_1px,transparent_1px)]"
+			></div>
 			<!-- <EmptyHeader>
 				<EmptyTitle class="mb-4 text-4xl font-bold">NeoView</EmptyTitle>
 				<EmptyDescription class="mb-6 text-base">Modern Image & Comic Viewer</EmptyDescription>
 			</EmptyHeader> -->
-			<EmptyContent>
+			<EmptyContent class="relative z-10">
 				<!-- 项目卡片 -->
 				<ProjectCard class="mb-6" />
 

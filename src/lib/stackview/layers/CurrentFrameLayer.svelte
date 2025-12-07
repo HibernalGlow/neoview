@@ -217,6 +217,10 @@
 		/* 隐藏滚动条 */
 		scrollbar-width: none; /* Firefox */
 		-ms-overflow-style: none; /* IE/Edge */
+		/* 居中 */
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		/* GPU 加速 */
 		will-change: scroll-position;
 		-webkit-overflow-scrolling: touch;
@@ -228,13 +232,9 @@
 	}
 
 	.scroll-frame-content {
-		/* 使用 inline-block 让容器紧贴内容 */
-		display: inline-flex;
+		display: flex;
 		align-items: center;
 		justify-content: center;
-		/* 最小尺寸为视口大小，确保居中效果 */
-		min-width: 100%;
-		min-height: 100%;
 		/* GPU 加速 */
 		will-change: transform;
 		transform: translateZ(0);

@@ -1,10 +1,7 @@
 <!--
   PanoramaFrameLayer - 全景帧层
   显示多个帧单元，支持滚动
-  
-  【性能优化】原生滚动方案：
-  - 使用浏览器原生滚动，硬件加速
-  - HoverScrollLayer 直接操作 scrollLeft/scrollTop
+  支持超分图无缝替换
 -->
 <script lang="ts">
   import { LayerZIndex } from '../types/layer';
@@ -18,7 +15,10 @@
     orientation = 'horizontal',
     direction = 'ltr',
     currentPageIndex = 0,
-    viewportSize = { width: 0, height: 0 },
+    scale = 1,
+    // 悬停滚动位置
+    viewPositionX = 50,
+    viewPositionY = 50,
     onScroll,
   }: {
     units: PanoramaUnit[];
@@ -26,7 +26,9 @@
     orientation?: 'horizontal' | 'vertical';
     direction?: 'ltr' | 'rtl';
     currentPageIndex?: number;
-    viewportSize?: { width: number; height: number };
+    scale?: number;
+    viewPositionX?: number;
+    viewPositionY?: number;
     onScroll?: (e: Event) => void;
   } = $props();
   
@@ -62,27 +64,19 @@
     }, 100);
   });
   
-  // 计算图片尺寸：全景模式使用视口尺寸
-  // 水平方向：高度填满视口，宽度自适应
-  // 垂直方向：宽度填满视口，高度自适应
+  // 计算图片尺寸：全景模式下根据 scale 调整
   let imageStyle = $derived.by(() => {
-    const vp = viewportSize;
-    if (!vp.width || !vp.height) {
-      return orientation === 'vertical' 
-        ? 'width: 100%; height: auto; max-width: none; max-height: none;'
-        : 'height: 100%; width: auto; max-width: none; max-height: none;';
-    }
-    
     if (orientation === 'vertical') {
-      // 垂直滚动：宽度填满视口
-      return `width: ${vp.width}px; height: auto; max-width: none; max-height: none;`;
+      const height = scale < 1 ? `${scale * 100}%` : 'auto';
+      return `width: 100%; height: ${height};`;
     } else {
-      // 水平滚动：高度填满视口
-      return `height: ${vp.height}px; width: auto; max-width: none; max-height: none;`;
+      const width = scale < 1 ? `${scale * 100}%` : 'auto';
+      return `height: 100%; width: ${width};`;
     }
   });
   
-  // 【性能优化】原生滚动方案，不再使用 transform-origin
+  // 计算 transform-origin 用于悬停滚动
+  let transformOrigin = $derived(`${viewPositionX}% ${viewPositionY}%`);
   
   let containerClass = $derived.by(() => {
     const classes = ['panorama-frame-layer'];
@@ -104,32 +98,31 @@
 </script>
 
 {#if units.length > 0}
-  <!-- 【性能优化】可滚动容器 -->
   <div 
     bind:this={containerRef}
-    class="scroll-frame-container {containerClass}"
+    class={containerClass}
     data-layer="PanoramaFrameLayer"
     style:z-index={LayerZIndex.CURRENT_FRAME}
+    style:transform-origin={transformOrigin}
+    style:transform={scale !== 1 ? `scale(${scale})` : 'none'}
   >
-    <div class="scroll-frame-content">
-      {#each units as unit (unit.id)}
-        <div class="panorama-unit" data-unit-id={unit.id}>
-          {#each unit.images as img, i (img.pageIndex)}
-            <FrameImage
-              pageIndex={img.pageIndex}
-              url={img.url}
-              alt="Page {img.pageIndex + 1}"
-              class="panorama-image"
-              style={imageStyle}
-            />
-          {/each}
-        </div>
-      {/each}
-    </div>
+    {#each units as unit (unit.id)}
+      <div class="panorama-unit" data-unit-id={unit.id}>
+        {#each unit.images as img, i (img.pageIndex)}
+          <FrameImage
+            pageIndex={img.pageIndex}
+            url={img.url}
+            alt="Page {img.pageIndex + 1}"
+            class="panorama-image"
+            style={imageStyle}
+          />
+        {/each}
+      </div>
+    {/each}
   </div>
 {:else}
   <div 
-    class="scroll-frame-container panorama-frame-layer empty"
+    class="panorama-frame-layer empty"
     data-layer="PanoramaFrameLayer"
     style:z-index={LayerZIndex.CURRENT_FRAME}
   >
@@ -138,48 +131,31 @@
 {/if}
 
 <style>
-  /* 【性能优化】可滚动容器 - 原生滚动方案，支持双向滚动 */
-  .scroll-frame-container {
+  .panorama-frame-layer {
     position: absolute;
     inset: 0;
-    overflow: auto; /* 双向滚动 */
-    /* 隐藏滚动条 */
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none; /* IE/Edge */
-    /* GPU 加速 */
-    will-change: scroll-position;
-    -webkit-overflow-scrolling: touch;
-  }
-  
-  .scroll-frame-container::-webkit-scrollbar {
-    display: none;
-  }
-
-  .scroll-frame-content {
     display: flex;
     flex-direction: row;
     gap: 0;
     padding: 0;
+    overflow: hidden;
     align-items: center;
-    justify-content: center; /* 居中显示 */
+    justify-content: flex-start;
     /* GPU 加速 */
     will-change: transform;
     transform: translateZ(0);
     backface-visibility: hidden;
   }
-
-  /* .panorama-frame-layer 作为容器的修饰类，样式由子选择器定义 */
   
-  /* vertical 和 rtl 应用于 scroll-frame-content */
-  .panorama-frame-layer.vertical .scroll-frame-content {
+  .panorama-frame-layer.vertical {
     flex-direction: column;
   }
   
-  .panorama-frame-layer.rtl .scroll-frame-content {
+  .panorama-frame-layer.rtl {
     flex-direction: row-reverse;
   }
   
-  .panorama-frame-layer.vertical.rtl .scroll-frame-content {
+  .panorama-frame-layer.vertical.rtl {
     flex-direction: column-reverse;
   }
   

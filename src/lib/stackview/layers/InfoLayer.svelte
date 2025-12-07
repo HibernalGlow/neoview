@@ -50,13 +50,6 @@
     </div>
   {/if}
   
-  <!-- 加载指示器 -->
-  {#if showLoading && isLoading}
-    <div class="loading-indicator">
-      <div class="spinner"></div>
-    </div>
-  {/if}
-  
 </div>
 
 <style>
@@ -90,24 +83,5 @@
     font-size: 10px;
   }
   
-  .loading-indicator {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-  }
-  
-  .spinner {
-    width: 32px;
-    height: 32px;
-    border: 3px solid rgba(255, 255, 255, 0.3);
-    border-top-color: white;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-  }
-  
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
   
 </style>

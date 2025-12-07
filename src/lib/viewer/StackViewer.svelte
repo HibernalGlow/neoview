@@ -461,10 +461,6 @@
 				{/each}
 			</div>
 		{/if}
-	{:else if currentSlot.loading}
-		<div class="frame-layer loading-layer" style:z-index={SlotZIndex.CURRENT}>
-			<div class="loading-spinner"></div>
-		</div>
 	{:else}
 		<div class="frame-layer empty-layer" style:z-index={SlotZIndex.CURRENT}>
 			<span class="text-muted-foreground">暂无图片</span>
@@ -559,27 +555,6 @@
 	.current-layer,
 	.upscale-layer {
 		visibility: visible;
-	}
-
-	.loading-layer {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.loading-spinner {
-		width: 40px;
-		height: 40px;
-		border: 3px solid rgba(255, 255, 255, 0.2);
-		border-top-color: rgba(255, 255, 255, 0.8);
-		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
-	}
-
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
 	}
 
 	.empty-layer {

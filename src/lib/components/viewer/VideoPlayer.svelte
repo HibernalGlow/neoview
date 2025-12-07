@@ -42,7 +42,8 @@
 		onSettingsChange = () => {},
 		seekMode = false,
 		onSeekModeChange = () => {},
-		subtitle = null
+		subtitle = null,
+		onSelectSubtitle = undefined
 	}: {
 		src?: string;
 		videoBlob?: Blob | null;
@@ -58,6 +59,7 @@
 		seekMode?: boolean;
 		onSeekModeChange?: (enabled: boolean) => void;
 		subtitle?: SubtitleData | null;
+		onSelectSubtitle?: () => void;
 	} = $props();
 
 	let settings = $state<NeoViewSettings>(settingsManager.getSettings());
@@ -541,17 +543,22 @@
 					<FastForward class="h-5 w-5 text-primary {seekMode ? '' : 'opacity-40'}" />
 				</button>
 
-				<!-- 字幕状态 -->
-				<div
-					class="control-btn rounded-full p-2 {subtitle ? 'bg-white/20' : ''}"
-					title={subtitle ? `字幕: ${subtitle.filename}` : '无字幕'}
+				<!-- 字幕状态/选择 -->
+				<button
+					class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {subtitle ? 'bg-white/20' : ''}"
+					onclick={(event) => {
+						event.stopPropagation();
+						onSelectSubtitle?.();
+					}}
+					title={subtitle ? `字幕: ${subtitle.filename}（点击更换）` : '点击选择字幕'}
+					aria-label={subtitle ? '更换字幕' : '选择字幕'}
 				>
 					{#if subtitle}
 						<Captions class="h-5 w-5 text-primary" />
 					{:else}
 						<CaptionsOff class="h-5 w-5 text-primary opacity-40" />
 					{/if}
-				</div>
+				</button>
 
 				<!-- 固定控件 -->
 				<button

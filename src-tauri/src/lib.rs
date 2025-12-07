@@ -162,6 +162,7 @@ pub fn run() {
             commands::read_directory,
             commands::get_file_info,
             commands::path_exists,
+            commands::read_text_file,
             // File system commands (new)
             commands::browse_directory,
             commands::fs_commands::load_directory_snapshot,

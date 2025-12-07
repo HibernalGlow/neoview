@@ -4,7 +4,7 @@
   负责：视频URL管理、历史进度追踪、VideoPlayer 渲染
 -->
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, untrack } from 'svelte';
 	import VideoPlayer from './VideoPlayer.svelte';
 	import { videoStore } from '$lib/stores/video.svelte';
 	import { historyStore } from '$lib/stores/history.svelte';
@@ -18,8 +18,8 @@
 		type SubtitleData
 	} from '$lib/utils/subtitleUtils';
 	import { invoke, convertFileSrc } from '@tauri-apps/api/core';
-	import { readTextFile } from '@tauri-apps/plugin-fs';
-	import { dirname, join } from '@tauri-apps/api/path';
+	import { dirname, join, basename } from '@tauri-apps/api/path';
+	import { open } from '@tauri-apps/plugin-dialog';
 	import type { Page } from '$lib/types';
 
 	// 视频操作事件监听器
@@ -177,7 +177,7 @@
 				for (const subName of possibleNames) {
 					try {
 						const subPath = await join(videoDir, subName);
-						const content = await readTextFile(subPath);
+						const content: string = await invoke('read_text_file', { path: subPath });
 						const type = getSubtitleType(subName);
 						if (type && content) {
 							subtitleData = parseSubtitleContent(content, type, subName);
@@ -237,10 +237,16 @@
 	$effect(() => {
 		// 使用与 StackView 一致的检测逻辑：优先 name，然后 innerPath
 		const filename = page?.name || page?.innerPath || '';
-		if (page && filename && isVideoFile(filename)) {
-			loadVideo(page);
+		const currentPage = page;
+		if (currentPage && filename && isVideoFile(filename)) {
+			// 使用 untrack 防止 loadVideo 内部的状态修改触发循环
+			untrack(() => {
+				loadVideo(currentPage);
+			});
 		} else {
-			clearVideoUrl();
+			untrack(() => {
+				clearVideoUrl();
+			});
 		}
 	});
 
@@ -320,6 +326,36 @@
 			videoPlayerRef.seekBackward();
 		}
 	}
+
+	// 手动选择字幕文件
+	async function handleSelectSubtitle() {
+		try {
+			const selected = await open({
+				title: '选择字幕文件',
+				multiple: false,
+				filters: [
+					{
+						name: '字幕文件',
+						extensions: ['srt', 'ass', 'ssa', 'vtt']
+					}
+				]
+			});
+
+			if (selected && typeof selected === 'string') {
+				const content: string = await invoke('read_text_file', { path: selected });
+				const filename = await basename(selected);
+				const type = getSubtitleType(filename);
+
+				if (type && content) {
+					clearSubtitle();
+					subtitleData = parseSubtitleContent(content, type, filename);
+					console.log(`[VideoContainer] 手动加载字幕: ${filename}`);
+				}
+			}
+		} catch (err) {
+			console.error('选择字幕失败:', err);
+		}
+	}
 </script>
 
 <div class="video-container h-full w-full">
@@ -342,6 +378,7 @@
 				videoStore.setSeekMode(enabled);
 			}}
 			subtitle={subtitleData}
+			onSelectSubtitle={handleSelectSubtitle}
 		/>
 	{:else}
 		<div class="flex h-full w-full items-center justify-center text-white">

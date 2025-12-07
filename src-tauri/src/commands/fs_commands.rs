@@ -157,6 +157,18 @@ pub async fn path_exists(path: String) -> Result<bool, String> {
     Ok(Path::new(&path).exists())
 }
 
+/// 读取文本文件内容
+#[tauri::command]
+pub async fn read_text_file(path: String) -> Result<String, String> {
+    let path = Path::new(&path);
+    
+    if !path.exists() {
+        return Err(format!("文件不存在: {}", path.display()));
+    }
+    
+    fs::read_to_string(path).map_err(|e| format!("读取文件失败: {}", e))
+}
+
 /// 浏览目录内容（使用新的 FsManager）
 #[tauri::command]
 pub async fn browse_directory(

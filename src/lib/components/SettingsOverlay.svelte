@@ -9,10 +9,10 @@
 	import { X } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 
-	// 共用顶栏的模糊和透明度设置
+	// 设置界面的模糊和透明度设置
 	let settings = $state(settingsManager.getSettings());
-	let topToolbarOpacity = $derived(settings.panels?.topToolbarOpacity ?? 85);
-	let topToolbarBlur = $derived(settings.panels?.topToolbarBlur ?? 12);
+	let settingsOpacity = $derived(settings.panels?.settingsOpacity ?? 85);
+	let settingsBlur = $derived(settings.panels?.settingsBlur ?? 12);
 	
 	settingsManager.addListener((newSettings) => {
 		settings = newSettings;
@@ -49,7 +49,7 @@
 			<!-- 标题栏（与顶栏风格一致） -->
 			<div 
 				class="flex h-10 shrink-0 items-center justify-between border-b px-4"
-				style="background-color: color-mix(in oklch, var(--sidebar) {topToolbarOpacity}%, transparent); backdrop-filter: blur({topToolbarBlur}px); color: var(--sidebar-foreground);"
+				style="background-color: color-mix(in oklch, var(--sidebar) {settingsOpacity}%, transparent); backdrop-filter: blur({settingsBlur}px); color: var(--sidebar-foreground);"
 			>
 				<span class="text-sm font-medium">设置</span>
 				<Button

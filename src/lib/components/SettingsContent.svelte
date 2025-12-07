@@ -52,13 +52,10 @@
 
 	let activeTab = $state<string>('general');
 
-	// 侧栏透明度和模糊度
+	// 设置界面透明度和模糊度
 	let settings = $state(settingsManager.getSettings());
-	let sidebarOpacity = $derived(settings.panels?.sidebarOpacity ?? 85);
-	let sidebarBlur = $derived(settings.panels?.sidebarBlur ?? 12);
-	// 内容区使用 popover 透明度
-	let popoverOpacity = $derived(settings.panels?.topToolbarOpacity ?? 85);
-	let popoverBlur = $derived(settings.panels?.topToolbarBlur ?? 12);
+	let settingsOpacity = $derived(settings.panels?.settingsOpacity ?? 85);
+	let settingsBlur = $derived(settings.panels?.settingsBlur ?? 12);
 	
 	settingsManager.addListener((newSettings) => {
 		settings = newSettings;
@@ -76,7 +73,7 @@
 		<!-- 左侧标签栏 -->
 		<div 
 			class="w-48 shrink-0 space-y-1 border-r p-2 overflow-auto"
-			style="background-color: color-mix(in oklch, var(--sidebar) {sidebarOpacity}%, transparent); backdrop-filter: blur({sidebarBlur}px);"
+			style="background-color: color-mix(in oklch, var(--sidebar) {settingsOpacity}%, transparent); backdrop-filter: blur({settingsBlur}px);"
 		>
 			{#each tabs as tab}
 				{@const IconComponent = tab.icon}
@@ -97,7 +94,7 @@
 		<!-- 右侧内容区 - 路由到对应的面板组件 -->
 		<div 
 			class="flex-1 overflow-auto"
-			style="background-color: color-mix(in oklch, var(--popover) {popoverOpacity}%, transparent); backdrop-filter: blur({popoverBlur}px);"
+			style="background-color: color-mix(in oklch, var(--popover) {settingsOpacity}%, transparent); backdrop-filter: blur({settingsBlur}px);"
 		>
 			{#if activeTab === 'general'}
 				<GeneralSettingsPanel />

@@ -163,6 +163,10 @@ export interface NeoViewSettings {
     topToolbarBlur: number;
     /** 底部缩略图栏模糊程度 0-20 */
     bottomBarBlur: number;
+    /** 设置界面透明度 0-100 */
+    settingsOpacity: number;
+    /** 设置界面模糊程度 0-20 */
+    settingsBlur: number;
     hoverAreas: {
       topTriggerHeight: number;
       bottomTriggerHeight: number;
@@ -349,6 +353,8 @@ const defaultSettings: NeoViewSettings = {
     sidebarBlur: 12,
     topToolbarBlur: 12,
     bottomBarBlur: 12,
+    settingsOpacity: 85,
+    settingsBlur: 12,
     hoverAreas: {
       topTriggerHeight: 32,
       bottomTriggerHeight: 32,

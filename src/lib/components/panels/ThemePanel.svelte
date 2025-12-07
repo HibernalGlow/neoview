@@ -32,6 +32,8 @@
 	let sidebarBlur = $state(settingsManager.getSettings().panels.sidebarBlur ?? 12);
 	let topToolbarBlur = $state(settingsManager.getSettings().panels.topToolbarBlur ?? 12);
 	let bottomBarBlur = $state(settingsManager.getSettings().panels.bottomBarBlur ?? 12);
+	let settingsOpacity = $state(settingsManager.getSettings().panels.settingsOpacity ?? 85);
+	let settingsBlur = $state(settingsManager.getSettings().panels.settingsBlur ?? 12);
 
 	function updateSidebarOpacity(value: number) {
 		sidebarOpacity = value;
@@ -61,6 +63,16 @@
 	function updateBottomBarBlur(value: number) {
 		bottomBarBlur = value;
 		settingsManager.updateNestedSettings('panels', { bottomBarBlur: value });
+	}
+
+	function updateSettingsOpacity(value: number) {
+		settingsOpacity = value;
+		settingsManager.updateNestedSettings('panels', { settingsOpacity: value });
+	}
+
+	function updateSettingsBlur(value: number) {
+		settingsBlur = value;
+		settingsManager.updateNestedSettings('panels', { settingsBlur: value });
 	}
 
 	// 字体设置
@@ -672,6 +684,41 @@
 					onValueChange={updateBottomBarBlur}
 				/>
 				<span class="text-muted-foreground w-12 text-right text-sm">{bottomBarBlur}px</span>
+			</div>
+		</div>
+	</div>
+
+	<!-- 设置界面透明度与模糊 -->
+	<div class="space-y-3">
+		<Label class="text-sm font-semibold">设置界面透明度与模糊</Label>
+		<div class="space-y-2">
+			<Label class="text-muted-foreground text-xs">设置界面透明度</Label>
+			<div class="flex items-center gap-4">
+				<Slider
+					type="single"
+					value={settingsOpacity}
+					min={50}
+					max={100}
+					step={5}
+					class="flex-1"
+					onValueChange={updateSettingsOpacity}
+				/>
+				<span class="text-muted-foreground w-12 text-right text-sm">{settingsOpacity}%</span>
+			</div>
+		</div>
+		<div class="space-y-2">
+			<Label class="text-muted-foreground text-xs">设置界面模糊程度</Label>
+			<div class="flex items-center gap-4">
+				<Slider
+					type="single"
+					value={settingsBlur}
+					min={0}
+					max={20}
+					step={2}
+					class="flex-1"
+					onValueChange={updateSettingsBlur}
+				/>
+				<span class="text-muted-foreground w-12 text-right text-sm">{settingsBlur}px</span>
 			</div>
 		</div>
 	</div>

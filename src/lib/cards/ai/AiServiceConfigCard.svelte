@@ -642,6 +642,54 @@ async function copyCommand() {
 				/>
 				<p class="text-xs text-muted-foreground">推荐: qwen2.5:7b, llama3.2:3b</p>
 			</div>
+			
+			<!-- 启动命令 -->
+			<div class="space-y-2 border-t pt-3">
+				<div class="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+					<Terminal class="h-3 w-3" />
+					终端命令
+				</div>
+				<!-- 启动服务 -->
+				<div class="flex items-center gap-2">
+					<code class="flex-1 rounded bg-muted px-2 py-1.5 text-xs font-mono">
+						ollama serve
+					</code>
+					<Button
+						variant="ghost"
+						size="sm"
+						class="h-8 w-8 shrink-0 p-0"
+						onclick={async () => {
+							await navigator.clipboard.writeText('ollama serve');
+							toast.success('已复制命令');
+						}}
+						title="复制命令"
+					>
+						<Copy class="h-4 w-4" />
+					</Button>
+				</div>
+				<!-- 运行模型 -->
+				<div class="flex items-center gap-2">
+					<code class="flex-1 rounded bg-muted px-2 py-1.5 text-xs font-mono">
+						ollama run {config.ollamaModel || 'qwen2.5:7b'}
+					</code>
+					<Button
+						variant="ghost"
+						size="sm"
+						class="h-8 w-8 shrink-0 p-0"
+						onclick={async () => {
+							await navigator.clipboard.writeText(`ollama run ${config.ollamaModel || 'qwen2.5:7b'}`);
+							toast.success('已复制命令');
+						}}
+						title="复制命令"
+					>
+						<Copy class="h-4 w-4" />
+					</Button>
+				</div>
+				<p class="text-xs text-muted-foreground">
+					1. 启动服务  2. 运行模型（自动下载）
+				</p>
+			</div>
+			
 			<!-- Prompt 模板 -->
 			<div class="space-y-2">
 				<div class="flex items-center justify-between">

@@ -1,5 +1,7 @@
 /**
  * useSearchActions - 搜索相关操作
+ * 注意：此模块只处理普通文件系统路径的后端搜索
+ * 虚拟路径（书签/历史）的前端搜索在 ToolbarCard 中处理
  */
 
 import { get } from 'svelte/store';
@@ -7,11 +9,8 @@ import { invoke } from '@tauri-apps/api/core';
 import {
 	folderTabActions,
 	tabCurrentPath,
-	tabSearchSettings,
-	isVirtualPath
+	tabSearchSettings
 } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
-import { directoryTreeCache } from '$lib/components/panels/folderPanel/utils/directoryTreeCache';
-import { loadVirtualPathData } from '$lib/components/panels/folderPanel/utils/virtualPathLoader';
 import {
 	parseSearchTags,
 	hasTagSearch,
@@ -24,7 +23,10 @@ import type { SearchSettings } from '../types';
  * 创建搜索操作
  */
 export function createSearchActions() {
-	// 执行搜索 - 普通路径在新标签页显示，虚拟路径在当前标签页前端过滤
+	/**
+	 * 后端搜索 - 只用于普通文件系统路径
+	 * 在新标签页中显示搜索结果
+	 */
 	async function handleSearch(keyword: string) {
 		if (!keyword.trim()) {
 			folderTabActions.clearSearch();
@@ -33,39 +35,14 @@ export function createSearchActions() {
 
 		const searchPath = get(tabCurrentPath);
 		if (!searchPath) {
+			console.error('[useSearchActions] 搜索路径为空');
 			return;
 		}
 
 		// 保存当前搜索设置
 		const searchSettings = get(tabSearchSettings);
 
-		// 虚拟路径（书签/历史）：在当前标签页进行前端过滤
-		if (isVirtualPath(searchPath)) {
-			folderTabActions.setSearchKeyword(keyword);
-			folderTabActions.setIsSearching(true);
-
-			try {
-				// 从虚拟路径加载数据
-				const items = loadVirtualPathData(searchPath);
-				const lowerKeyword = keyword.toLowerCase();
-				
-				// 前端过滤：按文件名和路径匹配
-				const results = items.filter(item => 
-					item.name.toLowerCase().includes(lowerKeyword) ||
-					item.path.toLowerCase().includes(lowerKeyword)
-				);
-				folderTabActions.setSearchResults(results);
-			} catch (err) {
-				console.error('[Search] 虚拟路径搜索失败:', err);
-				folderTabActions.setSearchResults([]);
-			} finally {
-				folderTabActions.setIsSearching(false);
-			}
-			return;
-		}
-
-		// 普通文件系统路径：在新标签页显示搜索结果
-		console.log('[useSearchActions] 普通路径搜索', { searchPath, keyword });
+		console.log('[useSearchActions] 后端搜索', { searchPath, keyword, searchSettings });
 		
 		// 清除当前标签页的搜索状态，保持正常浏览状态
 		folderTabActions.clearSearch();
@@ -83,11 +60,12 @@ export function createSearchActions() {
 			const hasTagInSearch = hasTagSearch(keyword);
 
 			if (hasTagInSearch) {
-				// 标签搜索模式
+				// 标签搜索模式 - 使用后端 EMM 搜索
 				const tags = parseSearchTags(keyword);
 				const textPart = removeTagsFromSearch(keyword);
 
 				if (tags.length > 0) {
+					console.log('[useSearchActions] EMM 标签搜索', { tags, textPart });
 					const results: FsItem[] = await invoke('search_emm_items', {
 						searchPath: searchPath,
 						searchTags: tags,
@@ -97,16 +75,20 @@ export function createSearchActions() {
 					folderTabActions.setSearchResults(results);
 				}
 			} else {
-				// 普通文本搜索
-				const items = await directoryTreeCache.getDirectory(searchPath);
-				const lowerKeyword = keyword.toLowerCase();
-				const results = items.filter(item => 
-					item.name.toLowerCase().includes(lowerKeyword)
-				);
+				// 普通文本搜索 - 使用后端文件搜索
+				console.log('[useSearchActions] 后端文件搜索', { searchPath, keyword });
+				const results: FsItem[] = await invoke('search_files', {
+					path: searchPath,
+					query: keyword,
+					options: {
+						include_subfolders: searchSettings.includeSubfolders,
+						search_in_path: searchSettings.searchInPath
+					}
+				});
 				folderTabActions.setSearchResults(results);
 			}
 		} catch (err) {
-			console.error('[Search] 搜索失败:', err);
+			console.error('[useSearchActions] 后端搜索失败:', err);
 			folderTabActions.setSearchResults([]);
 		} finally {
 			folderTabActions.setIsSearching(false);

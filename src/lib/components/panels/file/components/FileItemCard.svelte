@@ -134,7 +134,8 @@
 
 	// 穿透模式：文件夹显示内部压缩包信息
 	let penetrateModeEnabled = $state(false);
-	let penetrateShowInnerFile = $state<'none' | 'single' | 'all'>('single');
+	let penetrateShowInnerFile = $state<'none' | 'penetrate' | 'always'>('penetrate');
+	let penetrateInnerFileCount = $state<'single' | 'all'>('single');
 	let penetrateChildFile = $state<{ name: string; path: string } | null>(null);
 	let penetrateChildMetadata = $state<{ translatedTitle?: string } | null>(null);
 	let penetrateAiTranslatedTitle = $state<string | null>(null);
@@ -151,6 +152,7 @@
 	$effect(() => {
 		const unsubscribe = fileBrowserStore.subscribe((state) => {
 			penetrateShowInnerFile = state.penetrateShowInnerFile;
+			penetrateInnerFileCount = state.penetrateInnerFileCount;
 		});
 		return unsubscribe;
 	});
@@ -173,45 +175,49 @@
 			return;
 		}
 
-		// 配置为 'single' 时只在穿透模式开启时显示
-		// 配置为 'all' 时始终显示
-		if (penetrateShowInnerFile === 'single' && !penetrateModeEnabled) {
+		// 配置为 'penetrate' 时只在穿透模式开启时显示
+		// 配置为 'always' 时始终显示
+		if (penetrateShowInnerFile === 'penetrate' && !penetrateModeEnabled) {
 			penetrateChildFile = null;
 			penetrateChildMetadata = null;
 			penetrateAiTranslatedTitle = null;
 			return;
 		}
 
-		// 加载文件夹内容，找单个压缩包
+		// 加载文件夹内容
 		FileSystemAPI.browseDirectory(item.path).then((children) => {
-			// 只有一个文件且是压缩包时才穿透显示
-			if (children.length === 1 && !children[0].isDir) {
-				const child = children[0];
-				const isChildArchive = /\.(zip|cbz|rar|cbr|7z|cb7)$/i.test(child.name);
-				if (isChildArchive) {
-					penetrateChildFile = { name: child.name, path: child.path };
-					// 加载 EMM 元数据
-					if (enableEMM) {
-						emmMetadataStore.loadMetadataByPath(child.path).then((metadata) => {
-							if (metadata) {
-								penetrateChildMetadata = { translatedTitle: metadata.translated_title };
+			// 过滤出压缩包文件
+			const archives = children.filter(c => !c.isDir && /\.(zip|cbz|rar|cbr|7z|cb7)$/i.test(c.name));
+			
+			// penetrateInnerFileCount: 'single' 只处理单个压缩包，'all' 处理第一个（UI 只显示一个）
+			const shouldShow = penetrateInnerFileCount === 'single' 
+				? archives.length === 1 
+				: archives.length > 0;
+			
+			if (shouldShow && archives[0]) {
+				const child = archives[0];
+				penetrateChildFile = { name: child.name, path: child.path };
+				// 加载 EMM 元数据
+				if (enableEMM) {
+					emmMetadataStore.loadMetadataByPath(child.path).then((metadata) => {
+						if (metadata) {
+							penetrateChildMetadata = { translatedTitle: metadata.translated_title };
+						}
+					});
+				}
+				// AI 翻译
+				if (aiTranslationEnabled && aiAutoTranslate) {
+					const nameWithoutExt = child.name.replace(/\.[^.]+$/, '');
+					const childExt = child.name.split('.').pop()?.toLowerCase() || 'archive';
+					const cached = aiTranslationStore.getCachedTranslation(nameWithoutExt);
+					if (cached) {
+						penetrateAiTranslatedTitle = cached;
+					} else if (needsTranslation(nameWithoutExt, aiTargetLanguage)) {
+						translateText(nameWithoutExt, { fileExtension: childExt }).then((result) => {
+							if (result.success && result.translated) {
+								penetrateAiTranslatedTitle = result.translated;
 							}
 						});
-					}
-					// AI 翻译
-					if (aiTranslationEnabled && aiAutoTranslate) {
-						const nameWithoutExt = child.name.replace(/\.[^.]+$/, '');
-						const childExt = child.name.split('.').pop()?.toLowerCase() || 'archive';
-						const cached = aiTranslationStore.getCachedTranslation(nameWithoutExt);
-						if (cached) {
-							penetrateAiTranslatedTitle = cached;
-						} else if (needsTranslation(nameWithoutExt, aiTargetLanguage)) {
-							translateText(nameWithoutExt, { fileExtension: childExt }).then((result) => {
-								if (result.success && result.translated) {
-									penetrateAiTranslatedTitle = result.translated;
-								}
-							});
-						}
 					}
 				}
 			}

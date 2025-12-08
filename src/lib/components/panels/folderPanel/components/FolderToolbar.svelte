@@ -621,11 +621,19 @@ function cancelWarmup() {
 						<select 
 							class="h-6 bg-background border rounded text-xs px-1"
 							value={$fileBrowserStore.penetrateShowInnerFile}
-							onchange={(e) => fileBrowserStore.setPenetrateShowInnerFile((e.target as HTMLSelectElement).value as 'none' | 'single' | 'all')}
+							onchange={(e) => fileBrowserStore.setPenetrateShowInnerFile((e.target as HTMLSelectElement).value as 'none' | 'penetrate' | 'always')}
 						>
 							<option value="none">不显示</option>
-							<option value="single">穿透时显示</option>
-							<option value="all">始终显示</option>
+							<option value="penetrate">穿透时</option>
+							<option value="always">始终</option>
+						</select>
+						<select 
+							class="h-6 bg-background border rounded text-xs px-1"
+							value={$fileBrowserStore.penetrateInnerFileCount}
+							onchange={(e) => fileBrowserStore.setPenetrateInnerFileCount((e.target as HTMLSelectElement).value as 'single' | 'all')}
+						>
+							<option value="single">单文件</option>
+							<option value="all">多文件</option>
 						</select>
 					</div>
 

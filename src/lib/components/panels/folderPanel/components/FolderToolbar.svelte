@@ -484,6 +484,34 @@ function cancelWarmup() {
 	<!-- 分隔 -->
 	<div class="bg-border mx-1 h-5 w-px"></div>
 
+	<!-- 同步文件夹按钮（仅在书签/历史模式下显示） -->
+	{#if virtualMode}
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={virtualMode === 'history' 
+						? (historySettingsStore.syncFileTreeOnHistorySelect ? 'default' : 'ghost')
+						: (historySettingsStore.syncFileTreeOnBookmarkSelect ? 'default' : 'ghost')}
+					size="icon"
+					class="h-7 w-7"
+					onclick={() => {
+						if (virtualMode === 'history') {
+							historySettingsStore.setSyncFileTreeOnHistorySelect(!historySettingsStore.syncFileTreeOnHistorySelect);
+						} else {
+							historySettingsStore.setSyncFileTreeOnBookmarkSelect(!historySettingsStore.syncFileTreeOnBookmarkSelect);
+						}
+					}}
+				>
+					<FolderSync class="h-4 w-4" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>同步文件夹 {#if virtualMode === 'history'}{historySettingsStore.syncFileTreeOnHistorySelect ? '(已开启)' : '(已关闭)'}{:else}{historySettingsStore.syncFileTreeOnBookmarkSelect ? '(已开启)' : '(已关闭)'}{/if}</p>
+				<p class="text-muted-foreground text-xs">点击项目时自动在文件夹页签打开所在目录</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+	{/if}
+
 	<!-- 排序下拉（使用排序字段图标 + 升降序箭头） -->
 	<DropdownMenu.Root>
 		<DropdownMenu.Trigger>

@@ -275,18 +275,35 @@
 			return;
 		}
 		const strategy = get(deleteStrategy);
-		let count = 0;
+		let successCount = 0;
+		let failCount = 0;
+		const successPaths: string[] = [];
+		
 		for (const p of paths) {
 			try {
 				strategy === 'trash'
 					? await FileSystemAPI.moveToTrash(p)
 					: await FileSystemAPI.deletePath(p);
-				count++;
-			} catch {}
+				successCount++;
+				successPaths.push(p);
+			} catch {
+				failCount++;
+			}
 		}
+		
+		// 异步同步内存树（批量移除成功的项目）
+		if (successPaths.length > 0) {
+			directoryTreeCache.removeItemsFromCache(successPaths);
+		}
+		
 		folderTabActions.deselectAll();
-		handleRefresh();
-		showSuccessToast('删除成功', `已删除 ${count} 个文件`);
+		
+		// 显示结果 toast
+		if (failCount > 0) {
+			showErrorToast('部分删除失败', `成功 ${successCount} 个，失败 ${failCount} 个`);
+		} else {
+			showSuccessToast('删除成功', `已删除 ${successCount} 个文件`);
+		}
 	}
 
 	async function executeSingleDelete(item: FsItem) {
@@ -304,8 +321,11 @@
 			strategy === 'trash'
 				? await FileSystemAPI.moveToTrash(item.path)
 				: await FileSystemAPI.deletePath(item.path);
+			// 异步同步内存树（删除成功后）
+			directoryTreeCache.removeItemFromCache(item.path);
 			showSuccessToast('删除成功', item.name);
 		} catch (err) {
+			// 删除失败，显示错误 toast 并刷新
 			showErrorToast('删除失败', err instanceof Error ? err.message : String(err));
 			handleRefresh();
 		}

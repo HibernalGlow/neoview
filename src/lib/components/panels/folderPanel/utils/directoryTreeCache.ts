@@ -178,6 +178,39 @@ class DirectoryTreeCache {
 	}
 	
 	/**
+	 * 从父目录缓存中移除指定项目
+	 * 删除文件后调用，异步同步内存树
+	 */
+	removeItemFromCache(itemPath: string): void {
+		// 获取父目录路径
+		const normalizedPath = itemPath.replace(/\\/g, '/');
+		const lastSlash = normalizedPath.lastIndexOf('/');
+		if (lastSlash < 0) return;
+		
+		const parentPath = normalizedPath.slice(0, lastSlash);
+		const parentKey = this.normalizePath(parentPath);
+		
+		const cached = this.cache.get(parentKey);
+		if (cached && !cached.loading) {
+			// 从缓存中过滤掉已删除的项目
+			cached.items = cached.items.filter(item => 
+				this.normalizePath(item.path) !== this.normalizePath(itemPath)
+			);
+			// 触发更新通知
+			this.notifyUpdate(parentPath, cached.items);
+		}
+	}
+	
+	/**
+	 * 批量从缓存中移除项目
+	 */
+	removeItemsFromCache(itemPaths: string[]): void {
+		for (const path of itemPaths) {
+			this.removeItemFromCache(path);
+		}
+	}
+	
+	/**
 	 * 使目录及其子目录缓存失效
 	 */
 	invalidateTree(path: string) {

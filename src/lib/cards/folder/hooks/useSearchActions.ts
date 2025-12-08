@@ -14,7 +14,8 @@ import {
 import {
 	parseSearchTags,
 	hasTagSearch,
-	removeTagsFromSearch
+	removeTagsFromSearch,
+	mixedGenderStore
 } from '$lib/stores/emm/favoriteTagStore.svelte';
 import type { FsItem } from '$lib/types';
 import type { SearchSettings } from '../types';
@@ -60,18 +61,53 @@ export function createSearchActions() {
 			const hasTagInSearch = hasTagSearch(keyword);
 
 			if (hasTagInSearch) {
-				// 标签搜索模式 - 使用后端 EMM 搜索
+				// 标签搜索模式 - 使用后端 search_by_tags
 				const tags = parseSearchTags(keyword);
 				const textPart = removeTagsFromSearch(keyword);
 
 				if (tags.length > 0) {
-					console.log('[useSearchActions] EMM 标签搜索', { tags, textPart });
-					const results: FsItem[] = await invoke('search_emm_items', {
-						searchPath: searchPath,
-						searchTags: tags,
-						searchText: textPart.trim(),
-						includeSubfolders: searchSettings.includeSubfolders
+					// 转换为后端期望的格式: [namespace, tag, prefix]
+					const searchTags: [string, string, string][] = tags.map(t => [t.cat, t.tag, t.prefix]);
+					
+					console.log('[useSearchActions] 标签搜索', { searchTags, textPart, enableMixed: mixedGenderStore.enabled });
+					
+					// 调用后端标签搜索，返回匹配的路径列表
+					const matchedPaths: string[] = await invoke('search_by_tags', {
+						searchTags,
+						enableMixedGender: mixedGenderStore.enabled,
+						basePath: searchSettings.includeSubfolders ? searchPath : null
 					});
+					
+					// 将路径转换为 FsItem（获取文件信息）
+					let results: FsItem[] = [];
+					if (matchedPaths.length > 0) {
+						// 如果有文本部分，再过滤
+						const filteredPaths = textPart.trim()
+							? matchedPaths.filter(p => p.toLowerCase().includes(textPart.toLowerCase()))
+							: matchedPaths;
+						
+						// 限制结果数量，避免性能问题
+						const limitedPaths = filteredPaths.slice(0, 200);
+						
+						// 转换为 FsItem
+						results = limitedPaths.map(path => {
+							const name = path.split(/[\\/]/).pop() || path;
+							return {
+								name,
+								path,
+								is_dir: true, // 标签搜索通常返回文件夹
+								isDir: true,
+								isImage: false,
+								size: 0,
+								modified: 0,
+								created: 0,
+								is_hidden: false,
+								extension: null
+							} as FsItem;
+						});
+					}
+					
+					console.log('[useSearchActions] 标签搜索结果:', results.length);
 					folderTabActions.setSearchResults(results);
 				}
 			} else {

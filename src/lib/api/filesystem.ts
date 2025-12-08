@@ -172,24 +172,49 @@ export async function createDirectory(path: string): Promise<void> {
 }
 
 /**
+ * 带重试的 invoke 包装（解决 IPC 协议偶发失败问题）
+ */
+async function invokeWithRetry<T>(
+  cmd: string,
+  args: Record<string, unknown>,
+  maxRetries = 2
+): Promise<T> {
+  let lastError: Error | null = null;
+  for (let i = 0; i <= maxRetries; i++) {
+    try {
+      return await invoke<T>(cmd, args);
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+      // 如果是 IPC 连接错误，等待后重试
+      if (i < maxRetries && lastError.message.includes('Failed to fetch')) {
+        await new Promise(r => setTimeout(r, 50 * (i + 1)));
+        continue;
+      }
+      throw lastError;
+    }
+  }
+  throw lastError;
+}
+
+/**
  * 删除文件或目录
  */
 export async function deletePath(path: string): Promise<void> {
-  await invoke('delete_path', { path });
+  await invokeWithRetry('delete_path', { path });
 }
 
 /**
  * 重命名文件或目录
  */
 export async function renamePath(from: string, to: string): Promise<void> {
-  await invoke('rename_path', { from, to });
+  await invokeWithRetry('rename_path', { from, to });
 }
 
 /**
  * 移动到回收站
  */
 export async function moveToTrash(path: string): Promise<void> {
-  await invoke('move_to_trash', { path });
+  await invokeWithRetry('move_to_trash', { path });
 }
 
 

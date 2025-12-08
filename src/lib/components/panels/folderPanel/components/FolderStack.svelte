@@ -305,8 +305,9 @@
 
 	// 创建新层
 	async function createLayer(path: string): Promise<FolderLayer> {
+		const layerId = crypto.randomUUID();
 		const layer: FolderLayer = {
-			id: crypto.randomUUID(),
+			id: layerId,
 			path,
 			items: [],
 			loading: true,
@@ -318,15 +319,9 @@
 		try {
 			// 检查是否为虚拟路径（包括书签、历史、搜索）
 			if (isVirtualPath(path)) {
-				// 设置虚拟路径默认排序配置（按时间倒序）
-				const virtualType = getVirtualPathType(path);
-				const config = getVirtualPathConfig(virtualType);
-				if (config) {
-					// 直接设置全局排序配置
-					folderTabActions.setSort(config.defaultSortField as any, config.defaultSortOrder as any);
-				}
+				// 注意：不再强制设置排序配置，让用户可以自由排序
 				
-				// 虚拟路径：从书签/历史 store 加载数据
+				// 虚拟路径：从书签/历史/搜索 store 加载数据
 				const items = loadVirtualPathData(path);
 				layer.items = items;
 				layer.loading = false;
@@ -337,7 +332,7 @@
 				}
 				virtualPathUnsubscribe = subscribeVirtualPathData(path, (newItems) => {
 					// 更新当前层的数据
-					const currentLayer = layers.find((l) => l.id === layer.id);
+					const currentLayer = layers.find((l) => l.id === layerId);
 					if (currentLayer) {
 						currentLayer.items = newItems;
 						globalStore.setItems(newItems);

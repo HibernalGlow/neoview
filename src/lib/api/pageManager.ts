@@ -135,6 +135,32 @@ function toArrayBuffer(data: unknown): ArrayBuffer {
 }
 
 /**
+ * 将 base64 字符串解码为 ArrayBuffer
+ */
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+	const binaryString = atob(base64);
+	const bytes = new Uint8Array(binaryString.length);
+	for (let i = 0; i < binaryString.length; i++) {
+		bytes[i] = binaryString.charCodeAt(i);
+	}
+	return bytes.buffer;
+}
+
+// 是否使用 base64 模式（当 ipc.localhost 不可用时）
+let useBase64Mode = false;
+
+/**
+ * 检测并设置是否使用 base64 模式
+ * 在第一次 IPC 调用失败后自动切换
+ */
+export function setBase64Mode(enabled: boolean): void {
+	if (useBase64Mode !== enabled) {
+		console.log(`📦 [PageManager] Base64 模式: ${enabled ? '启用' : '禁用'}`);
+		useBase64Mode = enabled;
+	}
+}
+
+/**
  * 跳转到指定页面
  * 
  * 后端自动：
@@ -145,7 +171,16 @@ function toArrayBuffer(data: unknown): ArrayBuffer {
  * @returns Blob 数据
  */
 export async function gotoPage(index: number): Promise<Blob> {
-	console.log('📄 [PageManager] gotoPage:', index);
+	console.log('📄 [PageManager] gotoPage:', index, useBase64Mode ? '(base64)' : '');
+	
+	if (useBase64Mode) {
+		// Base64 模式：传输更小的数据
+		const base64 = await invoke<string>('pm_goto_page_base64', { index });
+		const buffer = base64ToArrayBuffer(base64);
+		return new Blob([buffer]);
+	}
+	
+	// 标准模式
 	const result = await invoke<ArrayBuffer>('pm_goto_page', { index });
 	const buffer = toArrayBuffer(result);
 	return new Blob([buffer]);
@@ -157,6 +192,12 @@ export async function gotoPage(index: number): Promise<Blob> {
  * @returns Blob 数据
  */
 export async function getPage(index: number): Promise<Blob> {
+	if (useBase64Mode) {
+		const base64 = await invoke<string>('pm_get_page_base64', { index });
+		const buffer = base64ToArrayBuffer(base64);
+		return new Blob([buffer]);
+	}
+	
 	const result = await invoke<ArrayBuffer>('pm_get_page', { index });
 	const buffer = toArrayBuffer(result);
 	return new Blob([buffer]);
@@ -166,6 +207,11 @@ export async function getPage(index: number): Promise<Blob> {
  * 跳转到指定页面（返回原始 ArrayBuffer，用于延迟追踪）
  */
 export async function gotoPageRaw(index: number): Promise<ArrayBuffer> {
+	if (useBase64Mode) {
+		const base64 = await invoke<string>('pm_goto_page_base64', { index });
+		return base64ToArrayBuffer(base64);
+	}
+	
 	const result = await invoke<ArrayBuffer>('pm_goto_page', { index });
 	return toArrayBuffer(result);
 }
@@ -174,6 +220,11 @@ export async function gotoPageRaw(index: number): Promise<ArrayBuffer> {
  * 获取页面数据（返回原始 ArrayBuffer，用于延迟追踪）
  */
 export async function getPageRaw(index: number): Promise<ArrayBuffer> {
+	if (useBase64Mode) {
+		const base64 = await invoke<string>('pm_get_page_base64', { index });
+		return base64ToArrayBuffer(base64);
+	}
+	
 	const result = await invoke<ArrayBuffer>('pm_get_page', { index });
 	return toArrayBuffer(result);
 }

@@ -403,6 +403,8 @@ pub fn run() {
             commands::page_commands::pm_get_book_info,
             commands::page_commands::pm_goto_page,
             commands::page_commands::pm_get_page,
+            commands::page_commands::pm_goto_page_base64,
+            commands::page_commands::pm_get_page_base64,
             commands::page_commands::pm_get_page_info,
             commands::page_commands::pm_get_stats,
             commands::page_commands::pm_get_memory_stats,

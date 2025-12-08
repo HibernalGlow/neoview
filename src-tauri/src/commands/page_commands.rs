@@ -90,6 +90,45 @@ pub async fn pm_get_page(
     Ok(tauri::ipc::Response::new(data))
 }
 
+// ===== Base64 版本（用于 postMessage 回退时优化传输） =====
+
+use base64::{engine::general_purpose::STANDARD, Engine};
+
+/// 跳转到指定页面（Base64 编码，用于 postMessage 优化）
+#[tauri::command]
+pub async fn pm_goto_page_base64(
+    index: usize,
+    state: State<'_, PageManagerState>,
+) -> Result<String, String> {
+    log::debug!("📄 [PageCommand] goto_page_base64: {}", index);
+
+    let mut manager = state.manager.lock().await;
+    let (data, result) = manager.goto_page(index).await?;
+
+    log::debug!(
+        "📄 [PageCommand] goto_page_base64 complete: index={}, size={}, cache_hit={}",
+        result.index,
+        result.size,
+        result.cache_hit
+    );
+
+    Ok(STANDARD.encode(&data))
+}
+
+/// 获取页面数据（Base64 编码，用于 postMessage 优化）
+#[tauri::command]
+pub async fn pm_get_page_base64(
+    index: usize,
+    state: State<'_, PageManagerState>,
+) -> Result<String, String> {
+    log::debug!("📄 [PageCommand] get_page_base64: {}", index);
+
+    let mut manager = state.manager.lock().await;
+    let (data, _result) = manager.get_page(index).await?;
+
+    Ok(STANDARD.encode(&data))
+}
+
 /// 获取页面信息（元数据，不含图片数据）
 #[tauri::command]
 pub async fn pm_get_page_info(

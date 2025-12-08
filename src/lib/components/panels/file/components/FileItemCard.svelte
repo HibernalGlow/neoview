@@ -163,31 +163,38 @@
 
 	// 穿透模式：加载文件夹内的压缩包信息
 	$effect(() => {
+		// 在 effect 开始时读取所有依赖，确保被追踪
+		const showMode = penetrateShowInnerFile;
+		const countMode = penetrateInnerFileCount;
+		const isPenetrate = penetrateModeEnabled;
+		const itemPath = item.path;
+		const isDir = item.isDir;
+		
 		// 不是文件夹则跳过
-		if (!item.isDir) {
+		if (!isDir) {
 			penetrateChildFiles = [];
 			return;
 		}
 		
 		// 配置为 'none' 时不显示
-		if (penetrateShowInnerFile === 'none') {
+		if (showMode === 'none') {
 			penetrateChildFiles = [];
 			return;
 		}
 
 		// 配置为 'penetrate' 时只在穿透模式开启时显示
-		if (penetrateShowInnerFile === 'penetrate' && !penetrateModeEnabled) {
+		if (showMode === 'penetrate' && !isPenetrate) {
 			penetrateChildFiles = [];
 			return;
 		}
 
 		// 加载文件夹内容
-		FileSystemAPI.browseDirectory(item.path).then(async (children) => {
+		FileSystemAPI.browseDirectory(itemPath).then(async (children) => {
 			// 过滤出压缩包文件
 			const archives = children.filter(c => !c.isDir && /\.(zip|cbz|rar|cbr|7z|cb7)$/i.test(c.name));
 			
-			// penetrateInnerFileCount: 'single' 只处理单个压缩包
-			if (penetrateInnerFileCount === 'single' && archives.length !== 1) {
+			// countMode: 'single' 只处理单个压缩包，'all' 处理所有
+			if (countMode === 'single' && archives.length !== 1) {
 				penetrateChildFiles = [];
 				return;
 			}
@@ -197,9 +204,8 @@
 				return;
 			}
 			
-			// 处理多个压缩包
-			const results: typeof penetrateChildFiles = [];
-			for (const child of archives) {
+			// 并行处理多个压缩包以提高速度
+			const results = await Promise.all(archives.map(async (child) => {
 				const entry: typeof penetrateChildFiles[0] = {
 					name: child.name,
 					path: child.path,
@@ -207,10 +213,12 @@
 				
 				// 加载 EMM 元数据
 				if (enableEMM) {
-					const metadata = await emmMetadataStore.loadMetadataByPath(child.path);
-					if (metadata?.translated_title) {
-						entry.translatedTitle = metadata.translated_title;
-					}
+					try {
+						const metadata = await emmMetadataStore.loadMetadataByPath(child.path);
+						if (metadata?.translated_title) {
+							entry.translatedTitle = metadata.translated_title;
+						}
+					} catch { /* 忽略错误 */ }
 				}
 				
 				// AI 翻译（如果没有 EMM 翻译）
@@ -222,16 +230,18 @@
 						entry.translatedTitle = cached;
 						entry.isAiTranslated = true;
 					} else if (needsTranslation(nameWithoutExt, aiTargetLanguage)) {
-						const result = await translateText(nameWithoutExt, { fileExtension: childExt });
-						if (result.success && result.translated) {
-							entry.translatedTitle = result.translated;
-							entry.isAiTranslated = true;
-						}
+						try {
+							const result = await translateText(nameWithoutExt, { fileExtension: childExt });
+							if (result.success && result.translated) {
+								entry.translatedTitle = result.translated;
+								entry.isAiTranslated = true;
+							}
+						} catch { /* 忽略错误 */ }
 					}
 				}
 				
-				results.push(entry);
-			}
+				return entry;
+			}));
 			
 			penetrateChildFiles = results;
 		}).catch(() => {

@@ -58,6 +58,13 @@ export interface FolderContextValue {
 	readonly searchSettings: typeof tabSearchSettings;
 	readonly items: typeof tabItems;
 	
+	// ============ 本地搜索状态（虚拟路径独立）============
+	readonly localSearchStore: {
+		keyword: ReturnType<typeof writable<string>>;
+		results: ReturnType<typeof writable<FsItem[]>>;
+		isSearching: ReturnType<typeof writable<boolean>>;
+	};
+	
 	// ============ 页签相关 ============
 	readonly activeTabId: typeof activeTabId;
 	readonly allTabs: typeof allTabs;
@@ -111,6 +118,11 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 	
 	// 导航命令
 	const navigationCommand = writable<NavigationCommand | null>(null);
+	
+	// 本地搜索状态（虚拟路径独立使用）
+	const localSearchKeyword = writable<string>('');
+	const localSearchResults = writable<FsItem[]>([]);
+	const localIsSearching = writable<boolean>(false);
 	
 	// 实例状态
 	let homePath = $state('');
@@ -227,10 +239,10 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 		get localTabState() { return localTabState; },
 		set localTabState(v) { localTabState = v; },
 		
-		// 全局 Store 引用
+		// 全局 Store 引用（虚拟路径使用本地 store）
 		currentPath: tabCurrentPath,
 		folderTreeConfig: tabFolderTreeConfig,
-		searchKeyword: tabSearchKeyword,
+		searchKeyword: isVirtual ? localSearchKeyword : tabSearchKeyword,
 		showSearchBar: tabShowSearchBar,
 		showMigrationBar: tabShowMigrationBar,
 		selectedItems: tabSelectedItems,
@@ -238,10 +250,17 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 		deleteStrategy: tabDeleteStrategy,
 		multiSelectMode: tabMultiSelectMode,
 		inlineTreeMode: tabInlineTreeMode,
-		searchResults: tabSearchResults,
-		isSearching: tabIsSearching,
+		searchResults: isVirtual ? localSearchResults : tabSearchResults,
+		isSearching: isVirtual ? localIsSearching : tabIsSearching,
 		searchSettings: tabSearchSettings,
 		items: tabItems,
+		
+		// 本地搜索状态
+		localSearchStore: {
+			keyword: localSearchKeyword,
+			results: localSearchResults,
+			isSearching: localIsSearching
+		},
 		
 		// 页签
 		activeTabId,

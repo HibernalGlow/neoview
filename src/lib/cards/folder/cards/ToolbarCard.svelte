@@ -15,10 +15,12 @@
 	import { getFolderContext } from '../context/FolderContext.svelte';
 	import { folderTabActions, isVirtualPath } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
 	import { directoryTreeCache } from '$lib/components/panels/folderPanel/utils/directoryTreeCache';
+	import { loadVirtualPathData } from '$lib/components/panels/folderPanel/utils/virtualPathLoader';
 	import { showSuccessToast } from '$lib/utils/toast';
 	import { createSearchActions } from '../hooks/useSearchActions';
 	import { createTagActions, type RandomTag } from '../hooks/useTagActions.svelte';
 	import { mixedGenderStore, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
+	import type { FsItem } from '$lib/types';
 
 	// ==================== Props ====================
 	interface Props {
@@ -39,7 +41,9 @@
 		panelMode,
 		searchKeyword,
 		searchSettings,
-		deleteStrategy
+		deleteStrategy,
+		localSearchStore,
+		initialPath
 	} = ctx;
 	
 	// 转换为 FolderToolbar 需要的 virtualMode 格式
@@ -47,9 +51,19 @@
 
 	// ==================== Hooks ====================
 	const searchActions = createSearchActions();
+	
+	// 虚拟路径使用本地 store 设置关键词
+	function setSearchKeyword(kw: string) {
+		if (isVirtualInstance) {
+			localSearchStore.keyword.set(kw);
+		} else {
+			folderTabActions.setSearchKeyword(kw);
+		}
+	}
+	
 	const tagActions = createTagActions(
 		() => get(searchKeyword),
-		(kw) => folderTabActions.setSearchKeyword(kw)
+		setSearchKeyword
 	);
 	let randomTags = $derived(tagActions.randomTags);
 
@@ -91,7 +105,7 @@
 	}
 
 	function handleRandomTagClick(tag: FavoriteTag) {
-		tagActions.handleRandomTagClick(tag, searchActions.handleSearch);
+		tagActions.handleRandomTagClick(tag, handleSearch);
 	}
 
 	function refreshRandomTags() {
@@ -100,6 +114,36 @@
 
 	// ==================== 搜索 ====================
 	function handleSearch(keyword: string) {
+		// 虚拟路径：使用本地 store 进行前端过滤
+		if (isVirtualInstance && initialPath) {
+			if (!keyword.trim()) {
+				localSearchStore.keyword.set('');
+				localSearchStore.results.set([]);
+				localSearchStore.isSearching.set(false);
+				return;
+			}
+			
+			localSearchStore.keyword.set(keyword);
+			localSearchStore.isSearching.set(true);
+			
+			try {
+				const items = loadVirtualPathData(initialPath);
+				const lowerKeyword = keyword.toLowerCase();
+				const results = items.filter((item: FsItem) => 
+					item.name.toLowerCase().includes(lowerKeyword) ||
+					item.path.toLowerCase().includes(lowerKeyword)
+				);
+				localSearchStore.results.set(results);
+			} catch (err) {
+				console.error('[Search] 虚拟路径搜索失败:', err);
+				localSearchStore.results.set([]);
+			} finally {
+				localSearchStore.isSearching.set(false);
+			}
+			return;
+		}
+		
+		// 普通路径：使用全局搜索（新标签页）
 		searchActions.handleSearch(keyword);
 	}
 
@@ -133,7 +177,7 @@
 					placeholder="搜索文件..."
 					value={$searchKeyword}
 					onSearch={handleSearch}
-					onSearchChange={(q) => folderTabActions.setSearchKeyword(q)}
+					onSearchChange={setSearchKeyword}
 					storageKey="neoview-folder-search-history"
 					searchSettings={{
 						includeSubfolders: $searchSettings.includeSubfolders,

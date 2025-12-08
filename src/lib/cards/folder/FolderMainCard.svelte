@@ -57,6 +57,7 @@
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 	import { historySettingsStore } from '$lib/stores/historySettings.svelte';
+	import { virtualPanelSettingsStore } from '$lib/stores/virtualPanelSettings.svelte';
 	import { FileSystemAPI } from '$lib/api';
 	import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
 	import { createKeyboardHandler } from '$lib/components/panels/folderPanel/utils/keyboardHandler';
@@ -99,6 +100,75 @@
 	} | null>(null);
 	let currentActiveTabId = $state(get(activeTabId));
 	let currentAllTabs = $state(get(allTabs));
+
+	// ==================== 虚拟/全局状态订阅 ====================
+	// 全局 store 订阅的本地值
+	let globalShowSearchBarValue = $state(false);
+	let globalShowMigrationBarValue = $state(false);
+	let globalMultiSelectModeValue = $state(false);
+	let globalDeleteModeValue = $state(false);
+	let globalInlineTreeModeValue = $state(false);
+
+	// 订阅全局 store
+	$effect(() => {
+		const unsubs = [
+			showSearchBar.subscribe(v => globalShowSearchBarValue = v),
+			showMigrationBar.subscribe(v => globalShowMigrationBarValue = v),
+			multiSelectMode.subscribe(v => globalMultiSelectModeValue = v),
+			deleteMode.subscribe(v => globalDeleteModeValue = v),
+			inlineTreeMode.subscribe(v => globalInlineTreeModeValue = v)
+		];
+		return () => unsubs.forEach(u => u());
+	});
+
+	// 计算当前使用的状态值（虚拟实例使用 virtualPanelSettingsStore）
+	function getVirtualMode(): 'history' | 'bookmark' | null {
+		if (!isVirtualInstance || !propInitialPath) return null;
+		return propInitialPath.includes('bookmark') ? 'bookmark' : 'history';
+	}
+	
+	let effectiveShowSearchBar = $derived(() => {
+		const mode = getVirtualMode();
+		if (mode === 'history') return virtualPanelSettingsStore.historyShowSearchBar;
+		if (mode === 'bookmark') return virtualPanelSettingsStore.bookmarkShowSearchBar;
+		return globalShowSearchBarValue;
+	});
+	let effectiveShowMigrationBar = $derived(() => {
+		const mode = getVirtualMode();
+		if (mode === 'history') return virtualPanelSettingsStore.historyShowMigrationBar;
+		if (mode === 'bookmark') return virtualPanelSettingsStore.bookmarkShowMigrationBar;
+		return globalShowMigrationBarValue;
+	});
+	let effectiveMultiSelectMode = $derived(() => {
+		const mode = getVirtualMode();
+		if (mode === 'history') return virtualPanelSettingsStore.historyMultiSelectMode;
+		if (mode === 'bookmark') return virtualPanelSettingsStore.bookmarkMultiSelectMode;
+		return globalMultiSelectModeValue;
+	});
+	let effectiveDeleteMode = $derived(() => {
+		const mode = getVirtualMode();
+		if (mode === 'history') return virtualPanelSettingsStore.historyDeleteMode;
+		if (mode === 'bookmark') return virtualPanelSettingsStore.bookmarkDeleteMode;
+		return globalDeleteModeValue;
+	});
+	let effectiveInlineTreeMode = $derived(() => {
+		const mode = getVirtualMode();
+		if (mode === 'history') return virtualPanelSettingsStore.historyInlineTreeMode;
+		if (mode === 'bookmark') return virtualPanelSettingsStore.bookmarkInlineTreeMode;
+		return globalInlineTreeModeValue;
+	});
+	let effectiveViewStyle = $derived(() => {
+		const mode = getVirtualMode();
+		if (mode === 'history') return virtualPanelSettingsStore.historyViewStyle;
+		if (mode === 'bookmark') return virtualPanelSettingsStore.bookmarkViewStyle;
+		return undefined; // 非虚拟模式使用全局 store
+	});
+	let effectiveSortConfig = $derived(() => {
+		const mode = getVirtualMode();
+		if (mode === 'history') return { field: virtualPanelSettingsStore.historySortField, order: virtualPanelSettingsStore.historySortOrder };
+		if (mode === 'bookmark') return { field: virtualPanelSettingsStore.bookmarkSortField, order: virtualPanelSettingsStore.bookmarkSortOrder };
+		return undefined; // 非虚拟模式使用全局 store
+	});
 
 	// 导航命令
 	const navigationCommand = writable<{
@@ -545,8 +615,8 @@
 	const handleKeydown = createKeyboardHandler(() => ({
 		selectedItems: get(selectedItems),
 		sortedItems: get(tabItems),
-		multiSelectMode: get(multiSelectMode),
-		deleteMode: get(deleteMode),
+		multiSelectMode: effectiveMultiSelectMode(),
+		deleteMode: effectiveDeleteMode(),
 		onNavigate: handleNavigate,
 		onOpenItem: handleItemOpen,
 		onGoBack: handleGoBack,
@@ -653,7 +723,7 @@
 			: null}
 	/>
 
-	{#if $showSearchBar}
+	{#if effectiveShowSearchBar()}
 		<div class="relative">
 			<div class="flex items-center gap-1">
 				<div class="flex-1">
@@ -692,7 +762,7 @@
 		</div>
 	{/if}
 
-	{#if $showMigrationBar}<MigrationBar
+	{#if effectiveShowMigrationBar()}<MigrationBar
 			showManager={showMigrationManager}
 			onToggleManager={handleToggleMigrationManager}
 		/>{/if}
@@ -718,7 +788,7 @@
 		</div>
 	{/if}
 
-	{#if $multiSelectMode}<SelectionBar onDelete={handleBatchDelete} />{/if}
+	{#if effectiveMultiSelectMode()}<SelectionBar onDelete={handleBatchDelete} />{/if}
 
 	<div class="relative flex-1 overflow-hidden">
 		{#if $folderTreeConfig.visible}
@@ -766,7 +836,7 @@
 							onItemDoubleClick={handleSearchResultClick}
 							onItemContextMenu={handleContextMenu}
 						/>
-					{:else if $inlineTreeMode}
+					{:else if effectiveInlineTreeMode()}
 						<InlineTreeList
 							onItemClick={handleItemOpen}
 							onItemDoubleClick={handleItemOpen}
@@ -784,6 +854,10 @@
 							onOpenInNewTab={handleOpenInNewTab}
 							forceActive={isVirtualInstance}
 							skipGlobalStore={isVirtualInstance}
+							overrideMultiSelectMode={isVirtualInstance ? effectiveMultiSelectMode() : undefined}
+							overrideDeleteMode={isVirtualInstance ? effectiveDeleteMode() : undefined}
+							overrideViewStyle={isVirtualInstance ? effectiveViewStyle() : undefined}
+							overrideSortConfig={isVirtualInstance ? effectiveSortConfig() : undefined}
 						/>
 					{/if}
 				</div>

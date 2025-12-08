@@ -77,6 +77,11 @@
 		forceActive?: boolean;
 		/** 跳过全局 store 更新，用于虚拟路径实例避免污染全局状态 */
 		skipGlobalStore?: boolean;
+		/** 覆盖全局 store 的状态值（用于虚拟实例独立状态）*/
+		overrideMultiSelectMode?: boolean;
+		overrideDeleteMode?: boolean;
+		overrideViewStyle?: 'list' | 'content' | 'banner' | 'thumbnail';
+		overrideSortConfig?: { field: string; order: 'asc' | 'desc' };
 	}
 
 	let {
@@ -89,8 +94,18 @@
 		onOpenFolderAsBook,
 		onOpenInNewTab,
 		forceActive = false,
-		skipGlobalStore = false
+		skipGlobalStore = false,
+		overrideMultiSelectMode,
+		overrideDeleteMode,
+		overrideViewStyle,
+		overrideSortConfig
 	}: Props = $props();
+	
+	// 计算实际使用的状态值（支持覆盖）
+	let effectiveMultiSelectMode = $derived(overrideMultiSelectMode !== undefined ? overrideMultiSelectMode : get(multiSelectMode));
+	let effectiveDeleteMode = $derived(overrideDeleteMode !== undefined ? overrideDeleteMode : get(deleteMode));
+	let effectiveViewStyle = $derived(overrideViewStyle !== undefined ? overrideViewStyle : get(viewStyle));
+	let effectiveSortConfig = $derived(overrideSortConfig !== undefined ? overrideSortConfig : get(sortConfig));
 
 	// 层叠数据结构
 	interface FolderLayer {
@@ -137,7 +152,7 @@
 	});
 
 	// 视图模式映射 - 支持 list/content/banner/thumbnail 四种模式
-	let viewMode = $derived($viewStyle as 'list' | 'content' | 'banner' | 'thumbnail');
+	let viewMode = $derived(effectiveViewStyle as 'list' | 'content' | 'banner' | 'thumbnail');
 
 	// 将路径转换为相对 key（用于缩略图存储）- 与老面板保持一致
 	function toRelativeKey(path: string): string {
@@ -256,7 +271,7 @@
 
 	// 获取层的显示项（应用排序，不过滤 - 搜索在 SearchResultList 中处理）
 	function getDisplayItems(layer: FolderLayer): FsItem[] {
-		const config = $sortConfig;
+		const config = effectiveSortConfig;
 		let result = layer.items;
 		// 不再根据 searchKeyword 过滤，搜索结果在独立的 SearchResultList 中显示
 		// 虚拟路径下文件夹和文件平等排序
@@ -896,8 +911,8 @@
 						currentPath={layer.path}
 						{thumbnails}
 						selectedIndex={layer.selectedIndex}
-						isCheckMode={$multiSelectMode}
-						isDeleteMode={$deleteMode}
+						isCheckMode={effectiveMultiSelectMode}
+						isDeleteMode={effectiveDeleteMode}
 						selectedItems={$selectedItems}
 						{viewMode}
 						thumbnailWidthPercent={$thumbnailWidthPercent}

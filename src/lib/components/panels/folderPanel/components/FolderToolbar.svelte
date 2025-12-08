@@ -45,6 +45,7 @@ import {
 } from '@lucide/svelte';
 import { hoverPreviewSettings, hoverPreviewEnabled, hoverPreviewDelayMs } from '$lib/stores/hoverPreviewSettings.svelte';
 import { historySettingsStore } from '$lib/stores/historySettings.svelte';
+import { virtualPanelSettingsStore } from '$lib/stores/virtualPanelSettings.svelte';
 import { getDefaultRating, saveDefaultRating } from '$lib/stores/emm/storage';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 import { folderThumbnailLoader, type WarmupProgress } from '$lib/utils/thumbnail';
@@ -55,6 +56,7 @@ import { Button } from '$lib/components/ui/button';
 import * as Tooltip from '$lib/components/ui/tooltip';
 import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 import * as Tabs from '$lib/components/ui/tabs';
+import { get } from 'svelte/store';
 import {
 	folderTabActions,
 	tabCanGoBack,
@@ -76,23 +78,23 @@ import {
 } from '../stores/folderTabStore.svelte';
 import type { FolderViewStyle, FolderSortField } from '../stores/folderPanelStore.svelte';
 
-// 别名映射，保持与原有代码的兼容性
+// 全局 store 别名（非虚拟模式使用）
 const currentPathStore = tabCurrentPath;
-const canGoBack = tabCanGoBack;
-const canGoForward = tabCanGoForward;
-const canGoUp = tabCanGoUp;
-const viewStyle = tabViewStyle;
-const multiSelectMode = tabMultiSelectMode;
-const deleteMode = tabDeleteMode;
-const sortConfig = tabSortConfig;
-const itemCount = tabItemCount;
-const showSearchBar = tabShowSearchBar;
-const showMigrationBar = tabShowMigrationBar;
-const penetrateMode = tabPenetrateMode;
-const openInNewTabMode = tabOpenInNewTabMode;
-const deleteStrategy = tabDeleteStrategy;
-const inlineTreeMode = tabInlineTreeMode;
-const thumbnailWidthPercent = tabThumbnailWidthPercent;
+const globalCanGoBack = tabCanGoBack;
+const globalCanGoForward = tabCanGoForward;
+const globalCanGoUp = tabCanGoUp;
+const globalViewStyle = tabViewStyle;
+const globalMultiSelectMode = tabMultiSelectMode;
+const globalDeleteMode = tabDeleteMode;
+const globalSortConfig = tabSortConfig;
+const globalItemCount = tabItemCount;
+const globalShowSearchBar = tabShowSearchBar;
+const globalShowMigrationBar = tabShowMigrationBar;
+const globalPenetrateMode = tabPenetrateMode;
+const globalOpenInNewTabMode = tabOpenInNewTabMode;
+const globalDeleteStrategy = tabDeleteStrategy;
+const globalInlineTreeMode = tabInlineTreeMode;
+const globalThumbnailWidthPercent = tabThumbnailWidthPercent;
 
 interface Props {
 	onRefresh?: () => void;
@@ -111,6 +113,178 @@ interface Props {
 }
 
 let { onRefresh, onToggleFolderTree, onGoBack, onGoForward, onGoUp, onGoHome, onSetHome, onToggleDeleteStrategy, onToggleInlineTree, showRandomTagBar = false, onToggleRandomTagBar, virtualMode = null }: Props = $props();
+
+// ==================== 根据模式选择状态 ====================
+// 虚拟模式使用独立的 virtualPanelSettingsStore，非虚拟模式使用全局 store
+
+// 全局 store 订阅的本地状态
+let globalViewStyleValue = $state<FolderViewStyle>('list');
+let globalMultiSelectModeValue = $state(false);
+let globalDeleteModeValue = $state(false);
+let globalSortConfigValue = $state<{ field: FolderSortField; order: 'asc' | 'desc' }>({ field: 'name', order: 'asc' });
+let globalShowSearchBarValue = $state(false);
+let globalShowMigrationBarValue = $state(false);
+let globalPenetrateModeValue = $state(false);
+let globalInlineTreeModeValue = $state(false);
+let globalThumbnailWidthPercentValue = $state(20);
+let globalItemCountValue = $state(0);
+let globalDeleteStrategyValue = $state<'trash' | 'permanent'>('trash');
+let globalOpenInNewTabModeValue = $state(false);
+let globalCanGoBackValue = $state(false);
+let globalCanGoForwardValue = $state(false);
+let globalCanGoUpValue = $state(false);
+
+// 订阅全局 store（非虚拟模式使用）
+$effect(() => {
+	if (virtualMode) return; // 虚拟模式不需要订阅全局 store
+	const unsubs = [
+		globalViewStyle.subscribe(v => globalViewStyleValue = v),
+		globalMultiSelectMode.subscribe(v => globalMultiSelectModeValue = v),
+		globalDeleteMode.subscribe(v => globalDeleteModeValue = v),
+		globalSortConfig.subscribe(v => globalSortConfigValue = v),
+		globalShowSearchBar.subscribe(v => globalShowSearchBarValue = v),
+		globalShowMigrationBar.subscribe(v => globalShowMigrationBarValue = v),
+		globalPenetrateMode.subscribe(v => globalPenetrateModeValue = v),
+		globalInlineTreeMode.subscribe(v => globalInlineTreeModeValue = v),
+		globalThumbnailWidthPercent.subscribe(v => globalThumbnailWidthPercentValue = v),
+		globalItemCount.subscribe(v => globalItemCountValue = v),
+		globalDeleteStrategy.subscribe(v => globalDeleteStrategyValue = v),
+		globalOpenInNewTabMode.subscribe(v => globalOpenInNewTabModeValue = v),
+		globalCanGoBack.subscribe(v => globalCanGoBackValue = v),
+		globalCanGoForward.subscribe(v => globalCanGoForwardValue = v),
+		globalCanGoUp.subscribe(v => globalCanGoUpValue = v)
+	];
+	return () => unsubs.forEach(u => u());
+});
+
+// 计算当前使用的状态值
+let viewStyle = $derived(virtualMode 
+	? (virtualMode === 'history' ? virtualPanelSettingsStore.historyViewStyle : virtualPanelSettingsStore.bookmarkViewStyle)
+	: globalViewStyleValue);
+let multiSelectMode = $derived(virtualMode 
+	? (virtualMode === 'history' ? virtualPanelSettingsStore.historyMultiSelectMode : virtualPanelSettingsStore.bookmarkMultiSelectMode)
+	: globalMultiSelectModeValue);
+let deleteMode = $derived(virtualMode 
+	? (virtualMode === 'history' ? virtualPanelSettingsStore.historyDeleteMode : virtualPanelSettingsStore.bookmarkDeleteMode)
+	: globalDeleteModeValue);
+let sortConfig = $derived(virtualMode 
+	? { 
+		field: virtualMode === 'history' ? virtualPanelSettingsStore.historySortField : virtualPanelSettingsStore.bookmarkSortField, 
+		order: virtualMode === 'history' ? virtualPanelSettingsStore.historySortOrder : virtualPanelSettingsStore.bookmarkSortOrder 
+	}
+	: globalSortConfigValue);
+let showSearchBar = $derived(virtualMode 
+	? (virtualMode === 'history' ? virtualPanelSettingsStore.historyShowSearchBar : virtualPanelSettingsStore.bookmarkShowSearchBar)
+	: globalShowSearchBarValue);
+let showMigrationBar = $derived(virtualMode 
+	? (virtualMode === 'history' ? virtualPanelSettingsStore.historyShowMigrationBar : virtualPanelSettingsStore.bookmarkShowMigrationBar)
+	: globalShowMigrationBarValue);
+let penetrateMode = $derived(virtualMode 
+	? (virtualMode === 'history' ? virtualPanelSettingsStore.historyPenetrateMode : virtualPanelSettingsStore.bookmarkPenetrateMode)
+	: globalPenetrateModeValue);
+let inlineTreeMode = $derived(virtualMode 
+	? (virtualMode === 'history' ? virtualPanelSettingsStore.historyInlineTreeMode : virtualPanelSettingsStore.bookmarkInlineTreeMode)
+	: globalInlineTreeModeValue);
+let thumbnailWidthPercent = $derived(virtualMode 
+	? (virtualMode === 'history' ? virtualPanelSettingsStore.historyThumbnailWidthPercent : virtualPanelSettingsStore.bookmarkThumbnailWidthPercent)
+	: globalThumbnailWidthPercentValue);
+let itemCount = $derived(virtualMode ? 0 : globalItemCountValue);
+let deleteStrategy = $derived(globalDeleteStrategyValue);
+let openInNewTabMode = $derived(globalOpenInNewTabModeValue);
+let canGoBack = $derived(globalCanGoBackValue);
+let canGoForward = $derived(globalCanGoForwardValue);
+let canGoUp = $derived(globalCanGoUpValue);
+
+// ==================== 状态修改函数 ====================
+function handleSetViewStyle(style: FolderViewStyle) {
+	if (virtualMode === 'history') {
+		virtualPanelSettingsStore.setHistoryViewStyle(style);
+	} else if (virtualMode === 'bookmark') {
+		virtualPanelSettingsStore.setBookmarkViewStyle(style);
+	} else {
+		folderTabActions.setViewStyle(style);
+	}
+}
+
+function handleSetSort(field: FolderSortField) {
+	if (virtualMode === 'history') {
+		virtualPanelSettingsStore.setHistorySort(field);
+	} else if (virtualMode === 'bookmark') {
+		virtualPanelSettingsStore.setBookmarkSort(field);
+	} else {
+		folderTabActions.setSort(field);
+	}
+}
+
+function handleToggleMultiSelectMode() {
+	if (virtualMode === 'history') {
+		virtualPanelSettingsStore.toggleHistoryMultiSelectMode();
+	} else if (virtualMode === 'bookmark') {
+		virtualPanelSettingsStore.toggleBookmarkMultiSelectMode();
+	} else {
+		folderTabActions.toggleMultiSelectMode();
+	}
+}
+
+function handleToggleDeleteMode() {
+	if (virtualMode === 'history') {
+		virtualPanelSettingsStore.toggleHistoryDeleteMode();
+	} else if (virtualMode === 'bookmark') {
+		virtualPanelSettingsStore.toggleBookmarkDeleteMode();
+	} else {
+		folderTabActions.toggleDeleteMode();
+	}
+}
+
+function handleToggleShowSearchBar() {
+	if (virtualMode === 'history') {
+		virtualPanelSettingsStore.toggleHistoryShowSearchBar();
+	} else if (virtualMode === 'bookmark') {
+		virtualPanelSettingsStore.toggleBookmarkShowSearchBar();
+	} else {
+		folderTabActions.toggleShowSearchBar();
+	}
+}
+
+function handleToggleShowMigrationBar() {
+	if (virtualMode === 'history') {
+		virtualPanelSettingsStore.toggleHistoryShowMigrationBar();
+	} else if (virtualMode === 'bookmark') {
+		virtualPanelSettingsStore.toggleBookmarkShowMigrationBar();
+	} else {
+		folderTabActions.toggleShowMigrationBar();
+	}
+}
+
+function handleTogglePenetrateMode() {
+	if (virtualMode === 'history') {
+		virtualPanelSettingsStore.toggleHistoryPenetrateMode();
+	} else if (virtualMode === 'bookmark') {
+		virtualPanelSettingsStore.toggleBookmarkPenetrateMode();
+	} else {
+		folderTabActions.togglePenetrateMode();
+	}
+}
+
+function handleToggleInlineTreeMode() {
+	if (virtualMode === 'history') {
+		virtualPanelSettingsStore.toggleHistoryInlineTreeMode();
+	} else if (virtualMode === 'bookmark') {
+		virtualPanelSettingsStore.toggleBookmarkInlineTreeMode();
+	} else {
+		onToggleInlineTree?.();
+	}
+}
+
+function handleSetThumbnailWidthPercent(value: number) {
+	if (virtualMode === 'history') {
+		virtualPanelSettingsStore.setHistoryThumbnailWidthPercent(value);
+	} else if (virtualMode === 'bookmark') {
+		virtualPanelSettingsStore.setBookmarkThumbnailWidthPercent(value);
+	} else {
+		folderTabActions.setThumbnailWidthPercent(value);
+	}
+}
 
 const viewStyles: { value: FolderViewStyle; icon: typeof List; label: string }[] = [
 	{ value: 'list', icon: List, label: '列表' },
@@ -137,9 +311,8 @@ let sortFields = $derived(getSortFields());
 
 function getCurrentSortIcon() {
 	const fields = getSortFields();
-	const current = fields.find((f) => f.value === $sortConfig.field);
-	return current?.icon ?? ALargeSmall;
-}
+	const current = fields.find((f) => f.value === sortConfig.field);
+	return current?.icon ?? ALargeSmall;}
 
 function handleGoBack() {
 	onGoBack?.();
@@ -163,17 +336,9 @@ function handleSetHome(e: MouseEvent) {
 	onSetHome?.();
 }
 
-function handleSetViewStyle(style: FolderViewStyle) {
-	folderTabActions.setViewStyle(style);
-}
-
-function handleSetSort(field: FolderSortField) {
-	folderTabActions.setSort(field);
-}
-
 function handleToggleSortOrder() {
-	const newOrder = $sortConfig.order === 'asc' ? 'desc' : 'asc';
-	folderTabActions.setSort($sortConfig.field, newOrder);
+	const newOrder = sortConfig.order === 'asc' ? 'desc' : 'asc';
+	handleSetSort(sortConfig.field);
 }
 
 function handleToggleDeleteStrategy(e: MouseEvent) {
@@ -191,9 +356,8 @@ function handleClearTreeCache() {
 }
 
 function getCurrentViewIcon() {
-	const current = viewStyles.find((v) => v.value === $viewStyle);
-	return current?.icon ?? List;
-}
+	const current = viewStyles.find((v) => v.value === viewStyle);
+	return current?.icon ?? List;}
 
 // 预热状态
 let isWarming = $state(false);
@@ -208,7 +372,7 @@ function toggleMoreSettings() {
 }
 
 async function startWarmup() {
-	const path = $currentPathStore;
+	const path = get(currentPathStore);
 	if (!path || isWarming) return;
 	
 	isWarming = true;
@@ -260,7 +424,7 @@ function cancelWarmup() {
 					variant="ghost"
 					size="icon"
 					class="h-7 w-7"
-					disabled={!$canGoBack && !$canGoUp}
+					disabled={!canGoBack && !canGoUp}
 					onclick={handleGoBack}
 				>
 					<ChevronLeft class="h-4 w-4" />
@@ -277,7 +441,7 @@ function cancelWarmup() {
 					variant="ghost"
 					size="icon"
 					class="h-7 w-7"
-					disabled={!$canGoForward}
+					disabled={!canGoForward}
 					onclick={handleGoForward}
 				>
 					<ChevronRight class="h-4 w-4" />
@@ -294,7 +458,7 @@ function cancelWarmup() {
 					variant="ghost"
 					size="icon"
 					class="h-7 w-7"
-					disabled={!$canGoUp}
+					disabled={!canGoUp}
 					onclick={handleGoUp}
 				>
 					<ChevronUp class="h-4 w-4" />
@@ -328,8 +492,8 @@ function cancelWarmup() {
 					<Button variant="ghost" size="sm" class="h-7 gap-0.5 px-1.5">
 						{@const SortIcon = getCurrentSortIcon()}
 						<SortIcon class="h-3.5 w-3.5" />
-						{#if $sortConfig.field !== 'random'}
-							{#if $sortConfig.order === 'asc'}
+						{#if sortConfig.field !== 'random'}
+							{#if sortConfig.order === 'asc'}
 								<ArrowUp class="h-3 w-3" />
 							{:else}
 								<ArrowDown class="h-3 w-3" />
@@ -338,7 +502,7 @@ function cancelWarmup() {
 					</Button>
 				</Tooltip.Trigger>
 				<Tooltip.Content>
-					<p>排序: {sortFields.find((f) => f.value === $sortConfig.field)?.label} {$sortConfig.field !== 'random' ? ($sortConfig.order === 'asc' ? '升序' : '降序') : ''}</p>
+					<p>排序: {sortFields.find((f) => f.value === sortConfig.field)?.label} {sortConfig.field !== 'random' ? (sortConfig.order === 'asc' ? '升序' : '降序') : ''}</p>
 				</Tooltip.Content>
 			</Tooltip.Root>
 		</DropdownMenu.Trigger>
@@ -346,14 +510,14 @@ function cancelWarmup() {
 			{#each sortFields as field}
 				<DropdownMenu.Item onclick={() => handleSetSort(field.value)}>
 					<span class="flex-1">{field.label}</span>
-					{#if $sortConfig.field === field.value}
+					{#if sortConfig.field === field.value}
 						<span class="text-primary">✓</span>
 					{/if}
 				</DropdownMenu.Item>
 			{/each}
 			<DropdownMenu.Separator />
 			<DropdownMenu.Item onclick={handleToggleSortOrder}>
-				{#if $sortConfig.order === 'asc'}
+				{#if sortConfig.order === 'asc'}
 					<ArrowUp class="mr-2 h-4 w-4" />
 					<span>升序</span>
 				{:else}
@@ -372,10 +536,10 @@ function cancelWarmup() {
 		<Tooltip.Root>
 			<Tooltip.Trigger>
 				<Button
-					variant={$multiSelectMode ? 'default' : 'ghost'}
+					variant={multiSelectMode ? 'default' : 'ghost'}
 					size="icon"
 					class="h-7 w-7"
-					onclick={() => folderTabActions.toggleMultiSelectMode()}
+					onclick={handleToggleMultiSelectMode}
 				>
 					<CheckSquare class="h-4 w-4" />
 				</Button>
@@ -388,17 +552,17 @@ function cancelWarmup() {
 		<Tooltip.Root>
 			<Tooltip.Trigger>
 				<Button
-					variant={$deleteMode ? 'default' : 'ghost'}
+					variant={deleteMode ? 'default' : 'ghost'}
 					size="icon"
 					class="h-7 w-7"
-					onclick={() => folderTabActions.toggleDeleteMode()}
+					onclick={handleToggleDeleteMode}
 					oncontextmenu={handleToggleDeleteStrategy}
 				>
-					<Trash2 class={$deleteStrategy === 'permanent' ? 'h-4 w-4 text-accent-foreground' : 'h-4 w-4'} />
+					<Trash2 class={deleteStrategy === 'permanent' ? 'h-4 w-4 text-accent-foreground' : 'h-4 w-4'} />
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
-				<p>删除模式 ({$deleteStrategy === 'trash' ? '回收站' : '永久'})</p>
+				<p>删除模式 ({deleteStrategy === 'trash' ? '回收站' : '永久'})</p>
 				<p class="text-muted-foreground text-xs">右键切换策略</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
@@ -406,13 +570,13 @@ function cancelWarmup() {
 		<Tooltip.Root>
 			<Tooltip.Trigger>
 				<Button 
-					variant={$inlineTreeMode ? 'default' : 'ghost'} 
+					variant={inlineTreeMode ? 'default' : 'ghost'} 
 					size="icon" 
 					class="h-7 w-7" 
 					onclick={onToggleFolderTree}
 					oncontextmenu={(e: MouseEvent) => { e.preventDefault(); onToggleInlineTree?.(); }}
 				>
-					{#if $inlineTreeMode}
+					{#if inlineTreeMode}
 						<ListTree class="h-4 w-4" />
 					{:else}
 						<FolderTree class="h-4 w-4" />
@@ -420,7 +584,7 @@ function cancelWarmup() {
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
-				<p>文件夹树 {$inlineTreeMode ? '(主视图树模式)' : ''}</p>
+				<p>文件夹树 {inlineTreeMode ? '(主视图树模式)' : ''}</p>
 				<p class="text-muted-foreground text-xs">右键切换主视图树</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
@@ -428,32 +592,32 @@ function cancelWarmup() {
 		<Tooltip.Root>
 			<Tooltip.Trigger>
 				<Button
-					variant={$showSearchBar ? 'default' : 'ghost'}
+					variant={showSearchBar ? 'default' : 'ghost'}
 					size="icon"
 					class="h-7 w-7"
-					onclick={() => folderTabActions.toggleShowSearchBar()}
+					onclick={handleToggleShowSearchBar}
 				>
 					<Search class="h-4 w-4" />
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
-				<p>{$showSearchBar ? '隐藏搜索栏' : '显示搜索栏'}</p>
+				<p>{showSearchBar ? '隐藏搜索栏' : '显示搜索栏'}</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 
 		<Tooltip.Root>
 			<Tooltip.Trigger>
 				<Button
-					variant={$showMigrationBar ? 'default' : 'ghost'}
+					variant={showMigrationBar ? 'default' : 'ghost'}
 					size="icon"
 					class="h-7 w-7"
-					onclick={() => folderTabActions.toggleShowMigrationBar()}
+					onclick={handleToggleShowMigrationBar}
 				>
 					<ClipboardPaste class="h-4 w-4" />
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
-				<p>{$showMigrationBar ? '隐藏迁移栏' : '显示迁移栏'}</p>
+				<p>{showMigrationBar ? '隐藏迁移栏' : '显示迁移栏'}</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 
@@ -476,25 +640,25 @@ function cancelWarmup() {
 		<Tooltip.Root>
 			<Tooltip.Trigger>
 				<Button
-					variant={$penetrateMode ? 'default' : 'ghost'}
+					variant={penetrateMode ? 'default' : 'ghost'}
 					size="icon"
 					class="h-7 w-7"
-					onclick={() => folderTabActions.togglePenetrateMode()}
+					onclick={handleTogglePenetrateMode}
 					oncontextmenu={(e: MouseEvent) => {
 						e.preventDefault();
 						// 只有穿透模式开启时，右键才能切换新标签打开功能
-						if ($penetrateMode) {
+						if (penetrateMode) {
 							folderTabActions.toggleOpenInNewTabMode();
 						}
 					}}
 				>
-					<CornerDownRight class={$openInNewTabMode ? 'h-4 w-4 text-accent-foreground' : 'h-4 w-4'} />
+					<CornerDownRight class={openInNewTabMode ? 'h-4 w-4 text-accent-foreground' : 'h-4 w-4'} />
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
-				<p>{$penetrateMode ? '穿透模式：当文件夹只有一个子文件时直接打开' : '穿透模式'}</p>
-				{#if $penetrateMode}
-					<p class="text-muted-foreground text-xs">右键切换穿透失败时新标签打开 {$openInNewTabMode ? '(已开启)' : ''}</p>
+				<p>{penetrateMode ? '穿透模式：当文件夹只有一个子文件时直接打开' : '穿透模式'}</p>
+				{#if penetrateMode}
+					<p class="text-muted-foreground text-xs">右键切换穿透失败时新标签打开 {openInNewTabMode ? '(已开启)' : ''}</p>
 				{/if}
 			</Tooltip.Content>
 		</Tooltip.Root>
@@ -513,7 +677,7 @@ function cancelWarmup() {
 						{@const StyleIcon = style.icon}
 						<StyleIcon class="mr-2 h-4 w-4" />
 						<span>{style.label}</span>
-						{#if $viewStyle === style.value}
+						{#if viewStyle === style.value}
 							<span class="text-primary ml-auto">✓</span>
 						{/if}
 					</DropdownMenu.Item>
@@ -551,7 +715,7 @@ function cancelWarmup() {
 					<Tabs.Trigger value="other" class="text-xs px-3 py-1 h-7">其他</Tabs.Trigger>
 				</Tabs.List>
 				<div class="flex-1"></div>
-				<span class="text-[10px] text-muted-foreground">文件数: {$itemCount}</span>
+				<span class="text-[10px] text-muted-foreground">文件数: {itemCount}</span>
 			</div>
 
 			<Tabs.Content value="action" class="px-2 py-2 mt-0">
@@ -647,11 +811,11 @@ function cancelWarmup() {
 							type="range"
 							min="10"
 							max="90"
-							value={$thumbnailWidthPercent}
-							oninput={(e) => folderTabActions.setThumbnailWidthPercent(parseInt((e.target as HTMLInputElement).value))}
+							value={thumbnailWidthPercent}
+							oninput={(e) => handleSetThumbnailWidthPercent(parseInt((e.target as HTMLInputElement).value))}
 							class="w-20 h-4 accent-primary"
 						/>
-						<span class="text-muted-foreground w-10">{Math.round(48 + ($thumbnailWidthPercent - 10) * 3)}px</span>
+						<span class="text-muted-foreground w-10">{Math.round(48 + (thumbnailWidthPercent - 10) * 3)}px</span>
 					</div>
 				</div>
 			</Tabs.Content>

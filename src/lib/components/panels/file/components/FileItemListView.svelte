@@ -47,8 +47,8 @@
 		isArchive: boolean;
 		isReadCompleted: boolean;
 		emmMetadata: { translatedTitle?: string; tags?: Record<string, string[]>; rating?: number } | null;
-		// 穿透模式：内部压缩包信息
-		penetrateInfo?: { originalName: string; translatedTitle?: string | null; isAiTranslated: boolean } | null;
+		// 穿透模式：内部压缩包信息列表（支持多个）
+		penetrateInfoList?: Array<{ originalName: string; translatedTitle?: string | null; isAiTranslated: boolean }>;
 		folderAverageRating: number | null;
 		folderManualRating: number | null;
 		displayTags: () => { tag: string; display: string; isCollect: boolean; color?: string; isMixedVariant?: boolean }[];
@@ -91,7 +91,7 @@
 		isArchive,
 		isReadCompleted,
 		emmMetadata,
-		penetrateInfo = null,
+		penetrateInfoList = [],
 		folderAverageRating,
 		folderManualRating,
 		displayTags,
@@ -434,20 +434,24 @@
 			</div>
 		{/if}
 
-		<!-- 穿透模式：内部压缩包信息（允许换行显示完整） -->
-		{#if penetrateInfo}
-			<div class="mt-1 space-y-0.5">
-				<div class="flex items-start gap-1">
-					<Package class="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
-					<span class="text-xs text-muted-foreground break-all leading-tight">
-						{penetrateInfo.originalName}
-					</span>
-				</div>
-				{#if penetrateInfo.translatedTitle}
-					<div class="pl-4 text-xs text-primary break-all leading-tight">
-						{penetrateInfo.isAiTranslated ? '🤖 ' : ''}{penetrateInfo.translatedTitle}
+		<!-- 穿透模式：内部压缩包信息列表（允许换行显示完整） -->
+		{#if penetrateInfoList && penetrateInfoList.length > 0}
+			<div class="mt-1 space-y-1">
+				{#each penetrateInfoList as info, idx}
+					<div class="space-y-0.5 {idx > 0 ? 'pt-0.5 border-t border-dashed border-muted' : ''}">
+						<div class="flex items-start gap-1">
+							<Package class="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
+							<span class="text-xs text-muted-foreground break-all leading-tight">
+								{info.originalName}
+							</span>
+						</div>
+						{#if info.translatedTitle}
+							<div class="pl-4 text-xs text-primary break-all leading-tight">
+								{info.isAiTranslated ? '🤖 ' : ''}{info.translatedTitle}
+							</div>
+						{/if}
 					</div>
-				{/if}
+				{/each}
 			</div>
 		{/if}
 

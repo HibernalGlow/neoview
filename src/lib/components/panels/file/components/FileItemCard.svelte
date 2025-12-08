@@ -136,9 +136,13 @@
 	let penetrateModeEnabled = $state(false);
 	let penetrateShowInnerFile = $state<'none' | 'penetrate' | 'always'>('penetrate');
 	let penetrateInnerFileCount = $state<'single' | 'all'>('single');
-	let penetrateChildFile = $state<{ name: string; path: string } | null>(null);
-	let penetrateChildMetadata = $state<{ translatedTitle?: string } | null>(null);
-	let penetrateAiTranslatedTitle = $state<string | null>(null);
+	// 支持多个内部文件
+	let penetrateChildFiles = $state<Array<{
+		name: string;
+		path: string;
+		translatedTitle?: string;
+		isAiTranslated?: boolean;
+	}>>([]);
 
 	// 订阅穿透模式
 	$effect(() => {
@@ -157,72 +161,81 @@
 		return unsubscribe;
 	});
 
-	// 穿透模式：加载文件夹内的单个文件信息
+	// 穿透模式：加载文件夹内的压缩包信息
 	$effect(() => {
 		// 不是文件夹则跳过
 		if (!item.isDir) {
-			penetrateChildFile = null;
-			penetrateChildMetadata = null;
-			penetrateAiTranslatedTitle = null;
+			penetrateChildFiles = [];
 			return;
 		}
 		
 		// 配置为 'none' 时不显示
 		if (penetrateShowInnerFile === 'none') {
-			penetrateChildFile = null;
-			penetrateChildMetadata = null;
-			penetrateAiTranslatedTitle = null;
+			penetrateChildFiles = [];
 			return;
 		}
 
 		// 配置为 'penetrate' 时只在穿透模式开启时显示
-		// 配置为 'always' 时始终显示
 		if (penetrateShowInnerFile === 'penetrate' && !penetrateModeEnabled) {
-			penetrateChildFile = null;
-			penetrateChildMetadata = null;
-			penetrateAiTranslatedTitle = null;
+			penetrateChildFiles = [];
 			return;
 		}
 
 		// 加载文件夹内容
-		FileSystemAPI.browseDirectory(item.path).then((children) => {
+		FileSystemAPI.browseDirectory(item.path).then(async (children) => {
 			// 过滤出压缩包文件
 			const archives = children.filter(c => !c.isDir && /\.(zip|cbz|rar|cbr|7z|cb7)$/i.test(c.name));
 			
-			// penetrateInnerFileCount: 'single' 只处理单个压缩包，'all' 处理第一个（UI 只显示一个）
-			const shouldShow = penetrateInnerFileCount === 'single' 
-				? archives.length === 1 
-				: archives.length > 0;
+			// penetrateInnerFileCount: 'single' 只处理单个压缩包
+			if (penetrateInnerFileCount === 'single' && archives.length !== 1) {
+				penetrateChildFiles = [];
+				return;
+			}
 			
-			if (shouldShow && archives[0]) {
-				const child = archives[0];
-				penetrateChildFile = { name: child.name, path: child.path };
+			if (archives.length === 0) {
+				penetrateChildFiles = [];
+				return;
+			}
+			
+			// 处理多个压缩包
+			const results: typeof penetrateChildFiles = [];
+			for (const child of archives) {
+				const entry: typeof penetrateChildFiles[0] = {
+					name: child.name,
+					path: child.path,
+				};
+				
 				// 加载 EMM 元数据
 				if (enableEMM) {
-					emmMetadataStore.loadMetadataByPath(child.path).then((metadata) => {
-						if (metadata) {
-							penetrateChildMetadata = { translatedTitle: metadata.translated_title };
-						}
-					});
+					const metadata = await emmMetadataStore.loadMetadataByPath(child.path);
+					if (metadata?.translated_title) {
+						entry.translatedTitle = metadata.translated_title;
+					}
 				}
-				// AI 翻译
-				if (aiTranslationEnabled && aiAutoTranslate) {
+				
+				// AI 翻译（如果没有 EMM 翻译）
+				if (!entry.translatedTitle && aiTranslationEnabled && aiAutoTranslate) {
 					const nameWithoutExt = child.name.replace(/\.[^.]+$/, '');
 					const childExt = child.name.split('.').pop()?.toLowerCase() || 'archive';
 					const cached = aiTranslationStore.getCachedTranslation(nameWithoutExt);
 					if (cached) {
-						penetrateAiTranslatedTitle = cached;
+						entry.translatedTitle = cached;
+						entry.isAiTranslated = true;
 					} else if (needsTranslation(nameWithoutExt, aiTargetLanguage)) {
-						translateText(nameWithoutExt, { fileExtension: childExt }).then((result) => {
-							if (result.success && result.translated) {
-								penetrateAiTranslatedTitle = result.translated;
-							}
-						});
+						const result = await translateText(nameWithoutExt, { fileExtension: childExt });
+						if (result.success && result.translated) {
+							entry.translatedTitle = result.translated;
+							entry.isAiTranslated = true;
+						}
 					}
 				}
+				
+				results.push(entry);
 			}
+			
+			penetrateChildFiles = results;
 		}).catch(() => {
-			// 忽略错误
+			penetrateChildFiles = [];
 		});
 	});
 
@@ -500,18 +513,18 @@
 	);
 
 	// 穿透模式：内部压缩包信息（独立显示，不覆盖文件夹标题）
-	const penetrateInfo = $derived.by(() => {
-		if (!item.isDir || !penetrateModeEnabled || !penetrateChildFile) return null;
+	// 支持多个内部文件
+	const penetrateInfoList = $derived.by(() => {
+		if (!item.isDir || penetrateChildFiles.length === 0) return [];
 		
-		const childNameWithoutExt = penetrateChildFile.name.replace(/\.[^.]+$/, '');
-		const childTitle = penetrateChildMetadata?.translatedTitle || penetrateAiTranslatedTitle;
-		const isAiTranslated = !!(penetrateAiTranslatedTitle && !penetrateChildMetadata?.translatedTitle);
-		
-		return {
-			originalName: childNameWithoutExt,
-			translatedTitle: childTitle,
-			isAiTranslated
-		};
+		return penetrateChildFiles.map(child => {
+			const childNameWithoutExt = child.name.replace(/\.[^.]+$/, '');
+			return {
+				originalName: childNameWithoutExt,
+				translatedTitle: child.translatedTitle,
+				isAiTranslated: child.isAiTranslated || false
+			};
+		});
 	});
 
 	// 合并 EMM 元数据和 AI 翻译
@@ -562,7 +575,7 @@
 		{isArchive}
 		{isReadCompleted}
 		emmMetadata={mergedEmmMetadata}
-		{penetrateInfo}
+		penetrateInfoList={penetrateInfoList}
 		folderAverageRating={itemRating}
 		folderManualRating={null}
 		{displayTags}

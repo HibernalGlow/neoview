@@ -59,16 +59,22 @@ import io
 import numpy as np
 from PIL import Image
 
-# 全局变量存储模型
-_colorizer = None
-_denoiser = None
-_device = None
-_model_dir = None
+# 使用独立模块存储全局状态，避免代码重新执行时丢失
+_STATE_MODULE_NAME = '_neoview_colorizer_state'
+if _STATE_MODULE_NAME not in sys.modules:
+    import types
+    _state_mod = types.ModuleType(_STATE_MODULE_NAME)
+    _state_mod.colorizer = None
+    _state_mod.denoiser = None
+    _state_mod.device = None
+    _state_mod.model_dir = None
+    sys.modules[_STATE_MODULE_NAME] = _state_mod
+
+_state = sys.modules[_STATE_MODULE_NAME]
 
 def set_model_dir(model_dir):
     """设置模型目录"""
-    global _model_dir
-    _model_dir = model_dir
+    _state.model_dir = model_dir
     # 添加到 Python 路径
     if model_dir not in sys.path:
         sys.path.insert(0, model_dir)
@@ -89,14 +95,12 @@ def check_models_exist(model_dir):
 
 def load_model(model_dir, device_str="cuda"):
     """加载上色模型"""
-    global _colorizer, _denoiser, _device, _model_dir
-    
     import torch
     
-    _model_dir = model_dir
-    _device = device_str if torch.cuda.is_available() and device_str == "cuda" else "cpu"
+    _state.model_dir = model_dir
+    _state.device = device_str if torch.cuda.is_available() and device_str == "cuda" else "cpu"
     
-    print(f"[Colorizer] Loading model on device: {_device}")
+    print(f"[Colorizer] Loading model on device: {_state.device}")
     print(f"[Colorizer] Model directory: {model_dir}")
     
     # 检查模型文件
@@ -118,29 +122,28 @@ def load_model(model_dir, device_str="cuda"):
         raise ImportError(f"Cannot import colorization modules. Please ensure manga_colorization_v2_utils is in {model_dir}")
     
     # 加载 Generator
-    _colorizer = Colorizer().to(_device)
-    _colorizer.generator.load_state_dict(
-        torch.load(generator_path, map_location=_device)
+    _state.colorizer = Colorizer().to(_state.device)
+    _state.colorizer.generator.load_state_dict(
+        torch.load(generator_path, map_location=_state.device)
     )
-    _colorizer = _colorizer.eval()
+    _state.colorizer = _state.colorizer.eval()
     
     # 加载 Denoiser
-    _denoiser = FFDNetDenoiser(_device, _weights_dir=model_dir)
+    _state.denoiser = FFDNetDenoiser(_state.device, _weights_dir=model_dir)
     
     print("[Colorizer] Model loaded successfully")
     return True
 
 def unload_model():
     """卸载模型释放内存"""
-    global _colorizer, _denoiser
     import torch
     
-    if _colorizer is not None:
-        del _colorizer
-        _colorizer = None
-    if _denoiser is not None:
-        del _denoiser
-        _denoiser = None
+    if _state.colorizer is not None:
+        del _state.colorizer
+        _state.colorizer = None
+    if _state.denoiser is not None:
+        del _state.denoiser
+        _state.denoiser = None
     
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -182,13 +185,11 @@ def colorize_image(image_data, colorization_size=576, denoise_sigma=25):
     Returns:
         上色后的图像字节数据 (WebP格式)
     """
-    global _colorizer, _denoiser, _device
-    
     import torch
     import cv2
     from torchvision.transforms import ToTensor
     
-    if _colorizer is None:
+    if _state.colorizer is None:
         raise RuntimeError("Colorizer model not loaded. Call load_model() first.")
     
     # 解码图像
@@ -221,7 +222,7 @@ def colorize_image(image_data, colorization_size=576, denoise_sigma=25):
     
     # 降噪处理
     if 0 <= denoise_sigma <= 255:
-        img = _denoiser.get_denoised_image(img, sigma=denoise_sigma)
+        img = _state.denoiser.get_denoised_image(img, sigma=denoise_sigma)
     
     # 恢复尺寸
     if img.shape[:2] != img_shape_before:
@@ -232,12 +233,12 @@ def colorize_image(image_data, colorization_size=576, denoise_sigma=25):
     
     # 转换为 Tensor
     transform = ToTensor()
-    current_image = transform(img).unsqueeze(0).to(_device)
-    current_hint = torch.zeros(1, 4, current_image.shape[2], current_image.shape[3]).float().to(_device)
+    current_image = transform(img).unsqueeze(0).to(_state.device)
+    current_hint = torch.zeros(1, 4, current_image.shape[2], current_image.shape[3]).float().to(_state.device)
     
     # 推理
     with torch.no_grad():
-        fake_color, _ = _colorizer(torch.cat([current_image, current_hint], 1))
+        fake_color, _ = _state.colorizer(torch.cat([current_image, current_hint], 1))
         fake_color = fake_color.detach()
     
     # 后处理
@@ -265,7 +266,7 @@ def colorize_image(image_data, colorization_size=576, denoise_sigma=25):
 
 def is_model_loaded():
     """检查模型是否已加载"""
-    return _colorizer is not None
+    return _state.colorizer is not None
 "#;
 
 /// PyO3 上色管理器
@@ -455,8 +456,8 @@ impl PyO3Colorizer {
     ) -> Result<Vec<u8>, String> {
         // 确保模型已加载
         if !self.is_model_loaded() {
-            // 尝试自动加载
-            self.load_model("cuda")?;
+            // 尝试自动加载 (暂时用 CPU，CUDA 有兼容问题)
+            self.load_model("cpu")?;
         }
 
         println!("🎨 开始上色处理");

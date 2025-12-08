@@ -10,6 +10,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import { Switch } from '$lib/components/ui/switch';
+	import { Input } from '$lib/components/ui/input';
 	import { colorizationManager } from '$lib/stores/colorization';
 	import { settingsManager } from '$lib/settings/settingsManager';
 
@@ -29,6 +30,10 @@
 	let denoiseSigma = $state(25);
 	let autoSkipColor = $state(true); // 自动跳过彩色图
 	let isGrayscale = $state<boolean | null>(null); // 检测结果
+
+	// 环境配置
+	let modelDir = $state('D:/temp/neoview/colorize-models');
+	let useGpu = $state(false); // 暂时默认 CPU，CUDA 有兼容问题
 
 	/**
 	 * 选择压缩包
@@ -91,7 +96,7 @@
 			// 加载预览（使用现有的压缩包图片加载命令）
 			const imageData = await invoke<number[]>('load_image_from_archive_binary', {
 				archivePath: selectedArchive,
-				innerPath: firstImage.path
+				filePath: firstImage.path
 			});
 
 			// 转换为 Blob URL 预览
@@ -122,7 +127,7 @@
 			// 加载图片数据（复用 WIC 内存流）
 			const imageData = await invoke<number[]>('load_image_from_archive_binary', {
 				archivePath: selectedArchive,
-				innerPath: firstImageName
+				filePath: firstImageName
 			});
 
 			console.log('📦 从压缩包提取图片:', imageData.length, 'bytes');
@@ -148,10 +153,7 @@
 
 			// 初始化上色管理器（如果未初始化）
 			if (!colorizationManager.isInitialized()) {
-				const globalSettings = settingsManager.getSettings();
-				const appDataDir = globalSettings.system?.thumbnailDirectory || 'C:/NeoView/cache';
-				const modelDir = `${appDataDir}/colorize-models`;
-				await colorizationManager.initialize(modelDir, appDataDir);
+				await colorizationManager.initialize(modelDir, modelDir);
 			}
 
 			// 设置参数
@@ -229,6 +231,31 @@
 			</div>
 		</div>
 	{/if}
+
+	<!-- 环境配置 -->
+	<details class="text-xs">
+		<summary class="cursor-pointer text-muted-foreground hover:text-foreground">⚙️ 环境配置</summary>
+		<div class="mt-2 space-y-2 rounded bg-muted/30 p-2">
+			<div>
+				<Label class="text-[10px]">模型目录</Label>
+				<Input
+					type="text"
+					bind:value={modelDir}
+					class="h-6 text-[10px]"
+					disabled={isProcessing}
+				/>
+			</div>
+			<div class="flex items-center justify-between">
+				<Label class="text-[10px]">使用 GPU (CUDA)</Label>
+				<Switch
+					checked={useGpu}
+					onCheckedChange={(v) => (useGpu = v)}
+					disabled={isProcessing}
+				/>
+			</div>
+			<p class="text-[10px] text-muted-foreground">{useGpu ? '⚠️ CUDA 可能不稳定' : '✓ CPU 模式稳定'}</p>
+		</div>
+	</details>
 
 	<!-- 参数设置 -->
 	<div class="space-y-2">

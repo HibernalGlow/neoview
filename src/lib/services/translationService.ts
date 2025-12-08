@@ -4,6 +4,47 @@
  */
 
 import { aiTranslationStore } from '$lib/stores/ai/translationStore.svelte';
+import { invoke } from '@tauri-apps/api/core';
+
+// AI 翻译数据库缓存接口
+interface AiTranslationCache {
+	title: string;
+	service: 'libre' | 'ollama';
+	model?: string;
+	timestamp: number;
+}
+
+/**
+ * 从数据库读取 AI 翻译缓存
+ */
+async function loadAiTranslationFromDb(key: string, modelFilter?: string): Promise<AiTranslationCache | null> {
+	try {
+		const json = await invoke<string | null>('load_ai_translation', { key, modelFilter });
+		if (json) {
+			return JSON.parse(json);
+		}
+	} catch (e) {
+		// 数据库读取失败，忽略
+	}
+	return null;
+}
+
+/**
+ * 保存 AI 翻译到数据库
+ */
+async function saveAiTranslationToDb(key: string, title: string, service: 'libre' | 'ollama', model?: string): Promise<void> {
+	try {
+		const cache: AiTranslationCache = {
+			title,
+			service,
+			model,
+			timestamp: Date.now(),
+		};
+		await invoke('save_ai_translation', { key, aiTranslationJson: JSON.stringify(cache) });
+	} catch (e) {
+		console.warn('[翻译] 保存到数据库失败:', e);
+	}
+}
 
 export interface TranslationResult {
 	success: boolean;
@@ -298,10 +339,20 @@ export async function translateText(
 		}
 	}
 
-	// 检查缓存（使用原始文本作为 key）
+	// 检查内存缓存（使用原始文本作为 key）
 	const cached = aiTranslationStore.getCachedTranslation(text);
 	if (cached) {
 		return { success: true, translated: cached };
+	}
+
+	// 检查数据库缓存（ollama 需要匹配模型）
+	const modelFilter = config.type === 'ollama' ? config.ollamaModel : undefined;
+	const dbCached = await loadAiTranslationFromDb(text, modelFilter);
+	if (dbCached) {
+		// 同步到内存缓存（转换服务类型）
+		const serviceType = dbCached.service === 'libre' ? 'libretranslate' : 'ollama';
+		aiTranslationStore.addToCache(text, dbCached.title, serviceType);
+		return { success: true, translated: dbCached.title };
 	}
 
 	// 检测源语言（使用清理后的文本）
@@ -353,8 +404,12 @@ export async function translateText(
 		}
 
 		if (result.success && result.translated) {
-			// 缓存成功的翻译
+			// 缓存成功的翻译（内存）
 			aiTranslationStore.addToCache(text, result.translated, config.type);
+			// 保存到数据库（异步，不阻塞）
+			const dbService = config.type === 'libretranslate' ? 'libre' : 'ollama';
+			const dbModel = config.type === 'ollama' ? config.ollamaModel : undefined;
+			saveAiTranslationToDb(text, result.translated, dbService, dbModel);
 		} else if (result.error) {
 			aiTranslationStore.setError(result.error);
 		}

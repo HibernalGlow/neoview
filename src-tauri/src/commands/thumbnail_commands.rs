@@ -1336,3 +1336,41 @@ pub async fn batch_count_matching_collect_tags(
     state.db.batch_count_matching_collect_tags(&keys, &collect_tags, enable_mixed_gender)
         .map_err(|e| format!("批量统计收藏标签失败: {}", e))
 }
+
+/// 保存 AI 翻译到缩略图数据库
+/// ai_translation_json 格式: { title: string, service: 'libre'|'ollama', model?: string, timestamp: number }
+#[tauri::command]
+pub async fn save_ai_translation(
+    app: tauri::AppHandle,
+    key: String,
+    ai_translation_json: String,
+) -> Result<(), String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.save_ai_translation(&key, &ai_translation_json)
+        .map_err(|e| format!("保存 AI 翻译失败: {}", e))
+}
+
+/// 读取 AI 翻译（支持按模型筛选）
+/// model_filter: 对于 ollama 服务，只返回匹配该模型的翻译
+#[tauri::command]
+pub async fn load_ai_translation(
+    app: tauri::AppHandle,
+    key: String,
+    model_filter: Option<String>,
+) -> Result<Option<String>, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.load_ai_translation(&key, model_filter.as_deref())
+        .map_err(|e| format!("读取 AI 翻译失败: {}", e))
+}
+
+/// 批量读取 AI 翻译
+#[tauri::command]
+pub async fn batch_load_ai_translations(
+    app: tauri::AppHandle,
+    keys: Vec<String>,
+    model_filter: Option<String>,
+) -> Result<HashMap<String, String>, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.batch_load_ai_translations(&keys, model_filter.as_deref())
+        .map_err(|e| format!("批量读取 AI 翻译失败: {}", e))
+}

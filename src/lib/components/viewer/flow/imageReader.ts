@@ -21,7 +21,6 @@ import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 import * as pm from '$lib/api/pageManager';
 
 // IPC 模式检测：检查是否需要使用 base64 模式
-// eslint-disable-next-line prefer-const
 let ipcModeChecked = false;
 
 /**

@@ -15,7 +15,7 @@ use std::sync::Mutex;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use tauri::async_runtime::spawn_blocking;
-use tauri::State;
+use tauri::{Emitter, State};
 
 /// 文件系统状态
 pub struct FsState {
@@ -561,6 +561,35 @@ pub async fn move_to_trash(path: String, state: State<'_, FsState>) -> Result<()
 
     let path = PathBuf::from(path);
     fs_manager.move_to_trash(&path)
+}
+
+/// 异步移动到回收站（绕开 IPC 协议问题）
+/// 使用事件通知结果，前端不需要等待返回
+#[tauri::command]
+pub async fn move_to_trash_async(
+    path: String,
+    request_id: String,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    let path_clone = path.clone();
+    let path_buf = PathBuf::from(path);
+    
+    // 在后台线程执行删除操作（使用 trash crate 直接调用）
+    tokio::spawn(async move {
+        let result = trash::delete(&path_buf);
+        
+        // 通过事件通知前端
+        let payload = serde_json::json!({
+            "requestId": request_id,
+            "path": path_clone,
+            "success": result.is_ok(),
+            "error": result.err().map(|e| e.to_string())
+        });
+        
+        let _ = app_handle.emit("trash-result", payload);
+    });
+    
+    Ok(())
 }
 
 // ===== 压缩包相关命令 =====

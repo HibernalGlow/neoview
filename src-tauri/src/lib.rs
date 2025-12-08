@@ -182,6 +182,7 @@ pub fn run() {
             commands::delete_path,
             commands::rename_path,
             commands::move_to_trash,
+            commands::move_to_trash_async,
             // Archive commands
             commands::list_archive_contents,
             commands::load_image_from_archive,

@@ -145,7 +145,8 @@ export function createFolderActions(state: FolderState, initialPath?: string) {
 		for (const path of paths) {
 			try {
 				if (strategy === 'trash') {
-					await FileSystemAPI.moveToTrash(path);
+					// 使用异步删除，绕开 IPC 协议问题
+					await FileSystemAPI.moveToTrashAsync(path);
 				} else {
 					await FileSystemAPI.deletePath(path);
 				}
@@ -182,7 +183,8 @@ export function createFolderActions(state: FolderState, initialPath?: string) {
 
 		try {
 			if (strategy === 'trash') {
-				await FileSystemAPI.moveToTrash(item.path);
+				// 使用异步删除，绕开 IPC 协议问题
+				await FileSystemAPI.moveToTrashAsync(item.path);
 			} else {
 				await FileSystemAPI.deletePath(item.path);
 			}

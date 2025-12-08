@@ -24,6 +24,34 @@ export function containsJapanese(text: string): boolean {
 }
 
 /**
+ * 检测文本是否需要翻译（源语言与目标语言不同）
+ */
+export function needsTranslation(text: string, targetLanguage: string): boolean {
+	const detected = detectLanguage(text);
+	// 如果检测结果是 unknown，默认需要翻译
+	if (detected === 'unknown') return true;
+	// 源语言与目标语言相同，不需要翻译
+	return detected !== targetLanguage;
+}
+
+/**
+ * 使用正则模式清理标题（去除不需要翻译的部分）
+ */
+export function cleanupTitle(title: string, patterns: string[]): string {
+	let cleaned = title;
+	for (const pattern of patterns) {
+		try {
+			const regex = new RegExp(pattern, 'g');
+			cleaned = cleaned.replace(regex, '');
+		} catch (e) {
+			console.warn('[翻译] 无效的裁剪正则:', pattern, e);
+		}
+	}
+	// 清理多余空格
+	return cleaned.replace(/\s+/g, ' ').trim();
+}
+
+/**
  * 检测文本的主要语言
  */
 export function detectLanguage(text: string): 'ja' | 'zh' | 'en' | 'unknown' {
@@ -131,24 +159,36 @@ ${text}`;
 
 /**
  * 翻译文本（自动选择服务）
+ * @param text 原始文本
+ * @param skipCleanup 是否跳过标题清理（默认 false）
  */
-export async function translateText(text: string): Promise<TranslationResult> {
+export async function translateText(text: string, skipCleanup = false): Promise<TranslationResult> {
 	const config = aiTranslationStore.getConfig();
 
 	if (!config.enabled || config.type === 'disabled') {
 		return { success: false, error: '翻译服务未启用' };
 	}
 
-	// 检查缓存
+	// 应用标题清理（如果配置了裁剪正则）
+	let textToTranslate = text;
+	if (!skipCleanup && config.titleCleanupPatterns?.length > 0) {
+		textToTranslate = cleanupTitle(text, config.titleCleanupPatterns);
+		// 如果清理后为空，返回原文
+		if (!textToTranslate) {
+			return { success: true, translated: text };
+		}
+	}
+
+	// 检查缓存（使用原始文本作为 key）
 	const cached = aiTranslationStore.getCachedTranslation(text);
 	if (cached) {
 		return { success: true, translated: cached };
 	}
 
-	// 检测源语言
+	// 检测源语言（使用清理后的文本）
 	let sourceLang = config.sourceLanguage;
 	if (sourceLang === 'auto') {
-		const detected = detectLanguage(text);
+		const detected = detectLanguage(textToTranslate);
 		if (detected === 'unknown') {
 			sourceLang = 'ja'; // 默认假设日语
 		} else {
@@ -172,7 +212,7 @@ export async function translateText(text: string): Promise<TranslationResult> {
 		switch (config.type) {
 			case 'libretranslate':
 				result = await translateWithLibreTranslate(
-					text,
+					textToTranslate,
 					sourceLang,
 					config.targetLanguage,
 					config.libreTranslateUrl,
@@ -181,7 +221,7 @@ export async function translateText(text: string): Promise<TranslationResult> {
 				break;
 			case 'ollama':
 				result = await translateWithOllama(
-					text,
+					textToTranslate,
 					sourceLang,
 					config.targetLanguage,
 					config.ollamaUrl,

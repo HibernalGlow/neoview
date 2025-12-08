@@ -22,6 +22,8 @@ export interface TranslationServiceConfig {
 	targetLanguage: string; // 'zh' | 'en' | ...
 	enabled: boolean;
 	autoTranslate: boolean; // 自动翻译无 EMM 翻译的标题
+	// 标题裁剪正则（去除不需要翻译的部分）
+	titleCleanupPatterns: string[]; // 例如: ["\\[.*?\\]", "\\(.*?\\)"]
 }
 
 // 翻译缓存条目
@@ -59,6 +61,8 @@ const defaultConfig: TranslationServiceConfig = {
 	targetLanguage: 'zh',
 	enabled: false,
 	autoTranslate: true,
+	// 默认裁剪方括号和圆括号内的内容
+	titleCleanupPatterns: ['\\[.*?\\]', '\\(.*?\\)'],
 };
 
 // 从 localStorage 加载配置

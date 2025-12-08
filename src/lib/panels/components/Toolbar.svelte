@@ -1,16 +1,17 @@
 <script lang="ts">
 /**
- * Toolbar - 工具栏组件
+ * Toolbar - 工具栏组件（完整版）
  * 接收 store，直接读写 store 状态
  */
 import { 
     RefreshCw, List, LayoutGrid, Image, Grid3x3,
-    ArrowUp, ArrowDown, ALargeSmall, Calendar, HardDrive, FileType, Shuffle, Star,
-    CheckSquare, Trash2, Search, FolderSync
+    ArrowUp, ArrowDown, ALargeSmall, Calendar, HardDrive, FileType, Shuffle, Star, Heart,
+    CheckSquare, Trash2, Search, FolderSync, Settings2, SlidersHorizontal
 } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import * as Tooltip from '$lib/components/ui/tooltip';
 import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+import { Slider } from '$lib/components/ui/slider';
 import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 import type { historyViewStore } from '$lib/stores/historyViewStore.svelte';
 import type { bookmarkViewStore } from '$lib/stores/bookmarkViewStore.svelte';
@@ -23,6 +24,9 @@ interface Props {
 }
 
 let { store, onRefresh }: Props = $props();
+
+// 设置面板状态
+let showSettings = $state(false);
 
 // 视图样式选项
 const viewStyles = [
@@ -193,6 +197,41 @@ function toggleSync() {
                         {/if}
                     </DropdownMenu.Item>
                 {/each}
+            </DropdownMenu.Content>
+        </DropdownMenu.Root>
+
+        <!-- 设置下拉 -->
+        <DropdownMenu.Root>
+            <DropdownMenu.Trigger>
+                <Button variant="ghost" size="icon" class="h-7 w-7">
+                    <Settings2 class="h-4 w-4" />
+                </Button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content class="w-64" align="end">
+                <div class="p-2 space-y-3">
+                    <div class="text-xs font-medium text-muted-foreground">显示设置</div>
+                    
+                    <!-- 缩略图宽度 -->
+                    <div class="space-y-1">
+                        <div class="flex items-center justify-between text-xs">
+                            <span>缩略图宽度</span>
+                            <span class="font-medium">{store.thumbnailWidth}%</span>
+                        </div>
+                        <Slider
+                            value={[store.thumbnailWidth]}
+                            min={10}
+                            max={90}
+                            step={5}
+                            onValueChange={(v) => store.setThumbnailWidth(v[0])}
+                        />
+                    </div>
+                    
+                    <!-- 项目数量 -->
+                    <div class="flex items-center justify-between text-xs pt-1 border-t">
+                        <span class="text-muted-foreground">项目数量</span>
+                        <span class="font-medium">{store.itemCount}</span>
+                    </div>
+                </div>
             </DropdownMenu.Content>
         </DropdownMenu.Root>
     </div>

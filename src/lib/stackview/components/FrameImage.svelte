@@ -40,14 +40,6 @@
     const result = hasUpscaled 
       ? imagePool.getUpscaledUrl(pageIndex) ?? url 
       : url;
-    
-    // 【调试】打印接收到的 URL
-    console.log(`🎨 FrameImage[${pageIndex}] displayUrl: ${result?.substring(0, 70) ?? 'NULL'}...`);
-    
-    // 调试日志：仅当确实有超分图时打印
-    if (hasUpscaled) {
-      console.log(`🖼️ FrameImage[${pageIndex}] 使用超分图 (v${version}): ${result.slice(0, 60)}...`);
-    }
     return result;
   });
 </script>
@@ -59,13 +51,7 @@
   style:transform={transform || undefined}
   style:clip-path={clipPath || undefined}
   style={style || undefined}
-  onload={(e) => {
-    console.log(`✅ FrameImage[${pageIndex}] onload 成功`);
-    onload?.(e);
-  }}
-  onerror={(e) => {
-    console.error(`❌ FrameImage[${pageIndex}] onerror! src=${displayUrl?.substring(0, 60)}`);
-  }}
+  onload={onload}
   draggable="false"
 />
 

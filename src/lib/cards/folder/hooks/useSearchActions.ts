@@ -65,6 +65,8 @@ export function createSearchActions() {
 		}
 
 		// 普通文件系统路径：在新标签页显示搜索结果
+		console.log('[useSearchActions] 普通路径搜索', { searchPath, keyword });
+		
 		// 清除当前标签页的搜索状态，保持正常浏览状态
 		folderTabActions.clearSearch();
 

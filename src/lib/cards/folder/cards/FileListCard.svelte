@@ -108,6 +108,9 @@
 						onItemClick={handleSearchResultClick}
 						onItemDoubleClick={handleSearchResultClick}
 						onItemContextMenu={onItemContextMenu}
+						externalSearchResults={ctx.searchResults}
+						externalIsSearching={ctx.isSearching}
+						externalSearchKeyword={ctx.searchKeyword}
 					/>
 				{:else if ctx.effectiveInlineTreeMode}
 					<InlineTreeList

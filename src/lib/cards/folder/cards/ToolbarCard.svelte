@@ -114,9 +114,17 @@
 
 	// ==================== 搜索 ====================
 	function handleSearch(keyword: string) {
+		console.log('[ToolbarCard.handleSearch] 开始搜索', {
+			keyword,
+			isVirtualInstance,
+			initialPath,
+			panelMode
+		});
+		
 		// 虚拟路径：使用本地 store 进行前端过滤
 		if (isVirtualInstance && initialPath) {
 			if (!keyword.trim()) {
+				console.log('[ToolbarCard.handleSearch] 清空搜索');
 				localSearchStore.keyword.set('');
 				localSearchStore.results.set([]);
 				localSearchStore.isSearching.set(false);
@@ -128,14 +136,18 @@
 			
 			try {
 				const items = loadVirtualPathData(initialPath);
+				console.log('[ToolbarCard.handleSearch] 虚拟路径数据:', items.length, '项');
+				
 				const lowerKeyword = keyword.toLowerCase();
 				const results = items.filter((item: FsItem) => 
 					item.name.toLowerCase().includes(lowerKeyword) ||
 					item.path.toLowerCase().includes(lowerKeyword)
 				);
+				
+				console.log('[ToolbarCard.handleSearch] 搜索结果:', results.length, '项');
 				localSearchStore.results.set(results);
 			} catch (err) {
-				console.error('[Search] 虚拟路径搜索失败:', err);
+				console.error('[ToolbarCard.handleSearch] 虚拟路径搜索失败:', err);
 				localSearchStore.results.set([]);
 			} finally {
 				localSearchStore.isSearching.set(false);
@@ -144,6 +156,7 @@
 		}
 		
 		// 普通路径：使用全局搜索（新标签页）
+		console.log('[ToolbarCard.handleSearch] 普通路径搜索');
 		searchActions.handleSearch(keyword);
 	}
 

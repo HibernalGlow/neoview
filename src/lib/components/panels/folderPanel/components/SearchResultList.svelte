@@ -4,6 +4,7 @@
  * 显示后端搜索返回的文件列表，支持排序和 ListSlider
  */
 import type { FsItem } from '$lib/types';
+import type { Readable } from 'svelte/store';
 import { tabSearchResults, tabIsSearching, tabSearchKeyword, tabViewStyle, tabSortConfig, tabThumbnailWidthPercent } from '../stores/folderTabStore.svelte';
 import { Loader2, Search, FolderOpen, ArrowUpDown } from '@lucide/svelte';
 import FileItemCard from '$lib/components/panels/file/components/FileItemCard.svelte';
@@ -13,10 +14,29 @@ import { thumbnailManager } from '$lib/utils/thumbnailManager';
 import { Button } from '$lib/components/ui/button';
 import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 
-// 使用页签 store
-const searchResults = tabSearchResults;
-const isSearching = tabIsSearching;
-const searchKeyword = tabSearchKeyword;
+interface Props {
+	onItemClick?: (item: FsItem) => void | Promise<void>;
+	onItemDoubleClick?: (item: FsItem) => void | Promise<void>;
+	onItemContextMenu?: (event: MouseEvent, item: FsItem) => void;
+	// 支持外部传入搜索结果（虚拟路径使用）
+	externalSearchResults?: Readable<FsItem[]>;
+	externalIsSearching?: Readable<boolean>;
+	externalSearchKeyword?: Readable<string>;
+}
+
+let { 
+	onItemClick = () => {}, 
+	onItemDoubleClick = () => {}, 
+	onItemContextMenu = () => {},
+	externalSearchResults,
+	externalIsSearching,
+	externalSearchKeyword
+}: Props = $props();
+
+// 使用外部 store 或全局 store
+const searchResults = externalSearchResults ?? tabSearchResults;
+const isSearching = externalIsSearching ?? tabIsSearching;
+const searchKeyword = externalSearchKeyword ?? tabSearchKeyword;
 const viewStyle = tabViewStyle;
 const sortConfig = tabSortConfig;
 const thumbnailWidthPercent = tabThumbnailWidthPercent;
@@ -107,17 +127,6 @@ let sortedResults = $derived.by(() => {
 	return results;
 });
 
-interface Props {
-	onItemClick?: (item: FsItem) => void | Promise<void>;
-	onItemDoubleClick?: (item: FsItem) => void | Promise<void>;
-	onItemContextMenu?: (event: MouseEvent, item: FsItem) => void;
-}
-
-let { 
-	onItemClick = () => {}, 
-	onItemDoubleClick = () => {}, 
-	onItemContextMenu = () => {} 
-}: Props = $props();
 
 // 缩略图
 let thumbnails = $derived(fileBrowserStore.getState().thumbnails);

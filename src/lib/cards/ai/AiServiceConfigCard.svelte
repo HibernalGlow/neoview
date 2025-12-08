@@ -168,6 +168,60 @@ function removeRule(ruleId: string) {
 	aiTranslationStore.updateConfig({ cleanupRules: rules });
 }
 
+// 导出配置
+function exportConfig() {
+	const exportData = {
+		version: 1,
+		exportedAt: new Date().toISOString(),
+		config: {
+			type: config.type,
+			ollamaUrl: config.ollamaUrl,
+			ollamaModel: config.ollamaModel,
+			ollamaPromptTemplate: config.ollamaPromptTemplate,
+			libreTranslateUrl: config.libreTranslateUrl,
+			sourceLanguage: config.sourceLanguage,
+			targetLanguage: config.targetLanguage,
+			cleanupRules: config.cleanupRules,
+		},
+	};
+	const json = JSON.stringify(exportData, null, 2);
+	const blob = new Blob([json], { type: 'application/json' });
+	const url = URL.createObjectURL(blob);
+	const a = document.createElement('a');
+	a.href = url;
+	a.download = `ai-translation-config-${new Date().toISOString().split('T')[0]}.json`;
+	a.click();
+	URL.revokeObjectURL(url);
+}
+
+// 导入配置
+let importInput: HTMLInputElement | null = null;
+
+function handleImportClick() {
+	importInput?.click();
+}
+
+function handleImportFile(e: Event) {
+	const file = (e.target as HTMLInputElement).files?.[0];
+	if (!file) return;
+	
+	const reader = new FileReader();
+	reader.onload = (event) => {
+		try {
+			const data = JSON.parse(event.target?.result as string);
+			if (data.config) {
+				aiTranslationStore.updateConfig(data.config);
+				testResult = { success: true, message: '配置导入成功' };
+			}
+		} catch (err) {
+			testResult = { success: false, message: '导入失败：无效的配置文件' };
+		}
+	};
+	reader.readAsText(file);
+	// 重置 input
+	if (importInput) importInput.value = '';
+}
+
 // Prompt 模板
 let promptTemplateText = $state('');
 
@@ -611,6 +665,33 @@ async function copyCommand() {
 					<span class="flex-1">{testResult.message}</span>
 				</div>
 			{/if}
+			
+			<!-- 导出/导入配置 -->
+			<div class="flex gap-2">
+				<Button
+					variant="outline"
+					size="sm"
+					onclick={exportConfig}
+					class="flex-1"
+				>
+					导出配置
+				</Button>
+				<Button
+					variant="outline"
+					size="sm"
+					onclick={handleImportClick}
+					class="flex-1"
+				>
+					导入配置
+				</Button>
+				<input
+					type="file"
+					accept=".json"
+					class="hidden"
+					bind:this={importInput}
+					onchange={handleImportFile}
+				/>
+			</div>
 		</div>
 	{/if}
 </div>

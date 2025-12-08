@@ -1,9 +1,9 @@
 /**
  * StackView 专用图片加载器
- * 使用 ImageLoaderCore 的独立实例，不干扰 ImageViewer
+ * 共享 ImageLoaderCore 实例，复用主加载器的缓存
  */
 
-import { ImageLoaderCore } from '$lib/components/viewer/flow/imageLoaderCore';
+import { getImageLoaderCore, type ImageLoaderCore } from '$lib/components/viewer/flow/imageLoaderCore';
 import { getImageDimensions } from '$lib/components/viewer/flow/imageReader';
 import { bookStore } from '$lib/stores/book.svelte';
 import { computeAutoBackgroundColor } from '$lib/utils/autoBackground';
@@ -24,7 +24,6 @@ export interface LoadResult {
 // ============================================================================
 
 export class StackImageLoader {
-  private core: ImageLoaderCore;
   private currentBookPath: string | null = null;
   // 尺寸缓存
   private dimensionsCache = new Map<number, { width: number; height: number }>();
@@ -35,17 +34,21 @@ export class StackImageLoader {
   // 是否使用超分图
   private useUpscaledMap = new Map<number, boolean>();
 
-  constructor() {
-    // 创建独立的 ImageLoaderCore 实例
-    this.core = new ImageLoaderCore();
+  /**
+   * 获取共享的 ImageLoaderCore 实例
+   * 每次调用都获取当前活跃的实例，确保切书后使用正确的实例
+   */
+  private get core(): ImageLoaderCore {
+    return getImageLoaderCore();
   }
 
   /**
-   * 设置当前书本（切换时重置）
+   * 设置当前书本（切换时重置本地缓存）
+   * 注意：ImageLoaderCore 的重置由主加载器管理，这里只清理本地缓存
    */
   setCurrentBook(bookPath: string): void {
     if (this.currentBookPath !== bookPath) {
-      this.core.reset();
+      // 只清理本地缓存，共享的 core 由主加载器管理
       this.dimensionsCache.clear();
       this.backgroundColorCache.clear();
       this.upscaledUrlCache.clear();

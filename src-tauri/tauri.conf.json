@@ -23,7 +23,7 @@
         "incognito": false,
         "zoomHotkeysEnabled": true,
         "backgroundThrottling": "disabled",
-        "useHttpsScheme": true
+        "useHttpsScheme": false
       }
     ],
     "security": {

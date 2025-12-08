@@ -20,6 +20,7 @@
 	import { translateText, needsTranslation } from '$lib/services/translationService';
 	import { tabPenetrateMode } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
 	import { FileSystemAPI } from '$lib/api';
+	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 
 	let {
 		item,
@@ -133,6 +134,7 @@
 
 	// 穿透模式：文件夹显示内部压缩包信息
 	let penetrateModeEnabled = $state(false);
+	let penetrateShowInnerFile = $state<'none' | 'single' | 'all'>('single');
 	let penetrateChildFile = $state<{ name: string; path: string } | null>(null);
 	let penetrateChildMetadata = $state<{ translatedTitle?: string } | null>(null);
 	let penetrateAiTranslatedTitle = $state<string | null>(null);
@@ -145,9 +147,26 @@
 		return unsubscribe;
 	});
 
+	// 订阅穿透显示配置
+	$effect(() => {
+		const unsubscribe = fileBrowserStore.subscribe((state) => {
+			penetrateShowInnerFile = state.penetrateShowInnerFile;
+		});
+		return unsubscribe;
+	});
+
 	// 穿透模式：加载文件夹内的单个文件信息
 	$effect(() => {
-		if (!penetrateModeEnabled || !item.isDir) {
+		// 配置为 'none' 时不显示
+		if (penetrateShowInnerFile === 'none' || !item.isDir) {
+			penetrateChildFile = null;
+			penetrateChildMetadata = null;
+			penetrateAiTranslatedTitle = null;
+			return;
+		}
+
+		// 配置为 'single' 时只在穿透模式开启时显示
+		if (penetrateShowInnerFile === 'single' && !penetrateModeEnabled) {
 			penetrateChildFile = null;
 			penetrateChildMetadata = null;
 			penetrateAiTranslatedTitle = null;

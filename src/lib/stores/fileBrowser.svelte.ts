@@ -32,6 +32,8 @@ interface FileBrowserState {
   isDeleteMode: boolean;
   // 持久化的 UI 模式开关
   isPenetrateMode: boolean;
+  // 穿透模式下显示内部压缩包信息: 'none' | 'single' | 'all'
+  penetrateShowInnerFile: 'none' | 'single' | 'all';
   showSearchBar: boolean;
   showMigrationBar: boolean;
   showMigrationManager: boolean;
@@ -104,6 +106,7 @@ const initialState: FileBrowserState = {
   isCheckMode: false,
   isDeleteMode: false,
   isPenetrateMode: false,
+  penetrateShowInnerFile: 'single',
   showSearchBar: false,
   showMigrationBar: false,
   showMigrationManager: false,
@@ -208,6 +211,7 @@ function createFileBrowserStore() {
     setDeleteMode: (value: boolean) => update(state => ({ ...state, isDeleteMode: value })),
     setDeleteStrategy: (value: DeleteStrategy) => update(state => ({ ...state, deleteStrategy: value })),
     setPenetrateMode: (value: boolean) => update(state => ({ ...state, isPenetrateMode: value })),
+    setPenetrateShowInnerFile: (value: 'none' | 'single' | 'all') => update(state => ({ ...state, penetrateShowInnerFile: value })),
     setShowSearchBar: (value: boolean) => update(state => ({ ...state, showSearchBar: value })),
     setShowMigrationBar: (value: boolean) => update(state => ({ ...state, showMigrationBar: value })),
     setShowMigrationManager: (value: boolean) => update(state => ({ ...state, showMigrationManager: value })),

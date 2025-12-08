@@ -36,10 +36,12 @@ import {
 	FileType,
 	Shuffle,
 	Star,
-	Heart
+	Heart,
+	Package
 } from '@lucide/svelte';
 import { hoverPreviewSettings, hoverPreviewEnabled, hoverPreviewDelayMs } from '$lib/stores/hoverPreviewSettings.svelte';
 import { getDefaultRating, saveDefaultRating } from '$lib/stores/emm/storage';
+import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 import { folderThumbnailLoader, type WarmupProgress } from '$lib/utils/thumbnail';
 import { addExcludedPath, isPathExcluded, removeExcludedPath, getExcludedPaths } from '$lib/stores/excludedPaths.svelte';
 import { directoryTreeCache } from '../utils/directoryTreeCache';
@@ -558,6 +560,31 @@ function cancelWarmup() {
 								1200ms (很慢)
 							</DropdownMenu.RadioItem>
 						</DropdownMenu.RadioGroup>
+					</DropdownMenu.SubContent>
+				</DropdownMenu.Sub>
+				<!-- 穿透模式-内部文件显示 -->
+				<DropdownMenu.Sub>
+					<DropdownMenu.SubTrigger>
+						<Package class="mr-2 h-4 w-4" />
+						穿透内部文件显示
+					</DropdownMenu.SubTrigger>
+					<DropdownMenu.SubContent>
+						<DropdownMenu.Label class="text-xs text-muted-foreground">文件夹显示内部压缩包信息</DropdownMenu.Label>
+						<DropdownMenu.RadioGroup value={$fileBrowserStore.penetrateShowInnerFile}>
+							<DropdownMenu.RadioItem value="none" onclick={() => fileBrowserStore.setPenetrateShowInnerFile('none')}>
+								不显示
+							</DropdownMenu.RadioItem>
+							<DropdownMenu.RadioItem value="single" onclick={() => fileBrowserStore.setPenetrateShowInnerFile('single')}>
+								仅单文件
+							</DropdownMenu.RadioItem>
+							<DropdownMenu.RadioItem value="all" onclick={() => fileBrowserStore.setPenetrateShowInnerFile('all')}>
+								全部显示
+							</DropdownMenu.RadioItem>
+						</DropdownMenu.RadioGroup>
+						<DropdownMenu.Separator />
+						<DropdownMenu.Label class="text-xs text-muted-foreground">
+							{$penetrateMode ? '穿透模式已开启' : '穿透模式已关闭'}
+						</DropdownMenu.Label>
 					</DropdownMenu.SubContent>
 				</DropdownMenu.Sub>
 				<!-- 默认评分设置 -->

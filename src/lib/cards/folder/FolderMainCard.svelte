@@ -373,8 +373,8 @@
 	const handleKeydown = createKeyboardHandler(() => ({
 		selectedItems: get(ctx.selectedItems),
 		sortedItems: get(ctx.items),
-		multiSelectMode: ctx.getEffectiveMultiSelectMode(),
-		deleteMode: ctx.getEffectiveDeleteMode(),
+		multiSelectMode: ctx.effectiveMultiSelectMode,
+		deleteMode: ctx.effectiveDeleteMode,
 		onNavigate: handleNavigate,
 		onOpenItem: handleItemOpen,
 		onGoBack: handleGoBack,

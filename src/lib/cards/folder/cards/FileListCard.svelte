@@ -109,7 +109,7 @@
 						onItemDoubleClick={handleSearchResultClick}
 						onItemContextMenu={onItemContextMenu}
 					/>
-				{:else if ctx.getEffectiveInlineTreeMode()}
+				{:else if ctx.effectiveInlineTreeMode}
 					<InlineTreeList
 						onItemClick={onItemOpen}
 						onItemDoubleClick={onItemOpen}
@@ -127,10 +127,10 @@
 						onOpenInNewTab={onOpenInNewTab}
 						forceActive={ctx.isVirtualInstance}
 						skipGlobalStore={ctx.isVirtualInstance}
-						overrideMultiSelectMode={ctx.isVirtualInstance ? ctx.getEffectiveMultiSelectMode() : undefined}
-						overrideDeleteMode={ctx.isVirtualInstance ? ctx.getEffectiveDeleteMode() : undefined}
-						overrideViewStyle={ctx.isVirtualInstance ? ctx.getEffectiveViewStyle() : undefined}
-						overrideSortConfig={ctx.isVirtualInstance ? ctx.getEffectiveSortConfig() : undefined}
+						overrideMultiSelectMode={ctx.isVirtualInstance ? ctx.effectiveMultiSelectMode : undefined}
+						overrideDeleteMode={ctx.isVirtualInstance ? ctx.effectiveDeleteMode : undefined}
+						overrideViewStyle={ctx.isVirtualInstance ? ctx.effectiveViewStyle : undefined}
+						overrideSortConfig={ctx.isVirtualInstance ? ctx.effectiveSortConfig : undefined}
 					/>
 				{/if}
 			</div>

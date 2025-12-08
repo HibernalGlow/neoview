@@ -36,11 +36,14 @@
 	const ctx = getFolderContext();
 	const { 
 		isVirtualInstance, 
-		virtualMode,
+		panelMode,
 		searchKeyword,
 		searchSettings,
 		deleteStrategy
 	} = ctx;
+	
+	// 转换为 FolderToolbar 需要的 virtualMode 格式
+	const virtualMode = $derived(panelMode === 'folder' ? null : panelMode);
 
 	// ==================== Hooks ====================
 	const searchActions = createSearchActions();
@@ -122,7 +125,7 @@
 />
 
 <!-- 搜索栏 -->
-{#if ctx.getEffectiveShowSearchBar()}
+{#if ctx.effectiveShowSearchBar}
 	<div class="relative">
 		<div class="flex items-center gap-1">
 			<div class="flex-1">
@@ -161,7 +164,7 @@
 {/if}
 
 <!-- 迁移栏 -->
-{#if ctx.getEffectiveShowMigrationBar()}
+{#if ctx.effectiveShowMigrationBar}
 	<MigrationBar
 		showManager={ctx.showMigrationManager}
 		onToggleManager={handleToggleMigrationManager}
@@ -195,6 +198,6 @@
 {/if}
 
 <!-- 选择栏 -->
-{#if ctx.getEffectiveMultiSelectMode()}
+{#if ctx.effectiveMultiSelectMode}
 	<SelectionBar onDelete={onBatchDelete} />
 {/if}

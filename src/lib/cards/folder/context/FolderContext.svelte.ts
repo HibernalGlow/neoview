@@ -29,12 +29,12 @@ import { virtualPanelSettingsStore } from '$lib/stores/virtualPanelSettings.svel
 
 const FOLDER_CONTEXT_KEY = Symbol('folder-context');
 
-export type VirtualMode = 'history' | 'bookmark' | null;
+export type PanelMode = 'folder' | 'history' | 'bookmark';
 
 export interface FolderContextValue {
 	// ============ 实例信息 ============
 	readonly isVirtualInstance: boolean;
-	readonly virtualMode: VirtualMode;
+	readonly panelMode: PanelMode;
 	readonly initialPath: string | undefined;
 	
 	// ============ 导航相关 ============
@@ -64,14 +64,14 @@ export interface FolderContextValue {
 	currentActiveTabId: string;
 	currentAllTabs: Array<{ id: string; title: string; currentPath: string; homePath: string }>;
 	
-	// ============ 有效状态（虚拟实例使用独立设置）============
-	readonly getEffectiveShowSearchBar: () => boolean;
-	readonly getEffectiveShowMigrationBar: () => boolean;
-	readonly getEffectiveMultiSelectMode: () => boolean;
-	readonly getEffectiveDeleteMode: () => boolean;
-	readonly getEffectiveInlineTreeMode: () => boolean;
-	readonly getEffectiveViewStyle: () => string | undefined;
-	readonly getEffectiveSortConfig: () => { field: string; order: string } | undefined;
+	// ============ 有效状态（响应式派生值）============
+	readonly effectiveShowSearchBar: boolean;
+	readonly effectiveShowMigrationBar: boolean;
+	readonly effectiveMultiSelectMode: boolean;
+	readonly effectiveDeleteMode: boolean;
+	readonly effectiveInlineTreeMode: boolean;
+	readonly effectiveViewStyle: string | undefined;
+	readonly effectiveSortConfig: { field: string; order: string } | undefined;
 	
 	// ============ UI 状态 ============
 	contextMenu: ContextMenuState;
@@ -105,9 +105,9 @@ export interface FolderContextValue {
  */
 export function createFolderContext(initialPath?: string): FolderContextValue {
 	const isVirtual = !!(initialPath && isVirtualPath(initialPath));
-	const virtualMode: VirtualMode = isVirtual
+	const panelMode: PanelMode = isVirtual
 		? (initialPath?.includes('bookmark') ? 'bookmark' : 'history')
-		: null;
+		: 'folder';
 	
 	// 导航命令
 	const navigationCommand = writable<NavigationCommand | null>(null);
@@ -145,52 +145,48 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 		return () => { unsub1(); unsub2(); };
 	});
 	
-	// 有效状态计算函数
-	function getEffectiveShowSearchBar(): boolean {
-		if (virtualMode === 'history') return virtualPanelSettingsStore.historyShowSearchBar;
-		if (virtualMode === 'bookmark') return virtualPanelSettingsStore.bookmarkShowSearchBar;
-		return globalShowSearchBarValue;
-	}
+	// 有效状态（响应式派生值）
+	const effectiveShowSearchBar = $derived(
+		panelMode === 'history' ? virtualPanelSettingsStore.historyShowSearchBar :
+		panelMode === 'bookmark' ? virtualPanelSettingsStore.bookmarkShowSearchBar :
+		globalShowSearchBarValue
+	);
 	
-	function getEffectiveShowMigrationBar(): boolean {
-		if (virtualMode === 'history') return virtualPanelSettingsStore.historyShowMigrationBar;
-		if (virtualMode === 'bookmark') return virtualPanelSettingsStore.bookmarkShowMigrationBar;
-		return globalShowMigrationBarValue;
-	}
+	const effectiveShowMigrationBar = $derived(
+		panelMode === 'history' ? virtualPanelSettingsStore.historyShowMigrationBar :
+		panelMode === 'bookmark' ? virtualPanelSettingsStore.bookmarkShowMigrationBar :
+		globalShowMigrationBarValue
+	);
 	
-	function getEffectiveMultiSelectMode(): boolean {
-		if (virtualMode === 'history') return virtualPanelSettingsStore.historyMultiSelectMode;
-		if (virtualMode === 'bookmark') return virtualPanelSettingsStore.bookmarkMultiSelectMode;
-		return globalMultiSelectModeValue;
-	}
+	const effectiveMultiSelectMode = $derived(
+		panelMode === 'history' ? virtualPanelSettingsStore.historyMultiSelectMode :
+		panelMode === 'bookmark' ? virtualPanelSettingsStore.bookmarkMultiSelectMode :
+		globalMultiSelectModeValue
+	);
 	
-	function getEffectiveDeleteMode(): boolean {
-		if (virtualMode === 'history') return virtualPanelSettingsStore.historyDeleteMode;
-		if (virtualMode === 'bookmark') return virtualPanelSettingsStore.bookmarkDeleteMode;
-		return globalDeleteModeValue;
-	}
+	const effectiveDeleteMode = $derived(
+		panelMode === 'history' ? virtualPanelSettingsStore.historyDeleteMode :
+		panelMode === 'bookmark' ? virtualPanelSettingsStore.bookmarkDeleteMode :
+		globalDeleteModeValue
+	);
 	
-	function getEffectiveInlineTreeMode(): boolean {
-		if (virtualMode === 'history') return virtualPanelSettingsStore.historyInlineTreeMode;
-		if (virtualMode === 'bookmark') return virtualPanelSettingsStore.bookmarkInlineTreeMode;
-		return globalInlineTreeModeValue;
-	}
+	const effectiveInlineTreeMode = $derived(
+		panelMode === 'history' ? virtualPanelSettingsStore.historyInlineTreeMode :
+		panelMode === 'bookmark' ? virtualPanelSettingsStore.bookmarkInlineTreeMode :
+		globalInlineTreeModeValue
+	);
 	
-	function getEffectiveViewStyle(): string | undefined {
-		if (virtualMode === 'history') return virtualPanelSettingsStore.historyViewStyle;
-		if (virtualMode === 'bookmark') return virtualPanelSettingsStore.bookmarkViewStyle;
-		return undefined;
-	}
+	const effectiveViewStyle = $derived<string | undefined>(
+		panelMode === 'history' ? virtualPanelSettingsStore.historyViewStyle :
+		panelMode === 'bookmark' ? virtualPanelSettingsStore.bookmarkViewStyle :
+		undefined
+	);
 	
-	function getEffectiveSortConfig(): { field: string; order: string } | undefined {
-		if (virtualMode === 'history') {
-			return { field: virtualPanelSettingsStore.historySortField, order: virtualPanelSettingsStore.historySortOrder };
-		}
-		if (virtualMode === 'bookmark') {
-			return { field: virtualPanelSettingsStore.bookmarkSortField, order: virtualPanelSettingsStore.bookmarkSortOrder };
-		}
-		return undefined;
-	}
+	const effectiveSortConfig = $derived<{ field: string; order: string } | undefined>(
+		panelMode === 'history' ? { field: virtualPanelSettingsStore.historySortField, order: virtualPanelSettingsStore.historySortOrder } :
+		panelMode === 'bookmark' ? { field: virtualPanelSettingsStore.bookmarkSortField, order: virtualPanelSettingsStore.bookmarkSortOrder } :
+		undefined
+	);
 	
 	// UI 状态
 	let contextMenu = $state<ContextMenuState>({ x: 0, y: 0, item: null, visible: false });
@@ -221,7 +217,7 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 	const context: FolderContextValue = {
 		// 实例信息
 		isVirtualInstance: isVirtual,
-		virtualMode,
+		panelMode,
 		initialPath,
 		
 		// 导航
@@ -256,13 +252,13 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 		set currentAllTabs(v) { currentAllTabs = v; },
 		
 		// 有效状态
-		getEffectiveShowSearchBar,
-		getEffectiveShowMigrationBar,
-		getEffectiveMultiSelectMode,
-		getEffectiveDeleteMode,
-		getEffectiveInlineTreeMode,
-		getEffectiveViewStyle,
-		getEffectiveSortConfig,
+		get effectiveShowSearchBar() { return effectiveShowSearchBar; },
+		get effectiveShowMigrationBar() { return effectiveShowMigrationBar; },
+		get effectiveMultiSelectMode() { return effectiveMultiSelectMode; },
+		get effectiveDeleteMode() { return effectiveDeleteMode; },
+		get effectiveInlineTreeMode() { return effectiveInlineTreeMode; },
+		get effectiveViewStyle() { return effectiveViewStyle; },
+		get effectiveSortConfig() { return effectiveSortConfig; },
 		
 		// UI 状态
 		get contextMenu() { return contextMenu; },

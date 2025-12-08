@@ -6,15 +6,23 @@ import { Button } from '$lib/components/ui/button';
 import { Input } from '$lib/components/ui/input';
 import { Label } from '$lib/components/ui/label';
 import { aiTranslationStore, type TranslationServiceType, BUILTIN_PRESETS, type TranslationPreset, FILE_TYPE_GROUPS, type CleanupRule, type FileTypeKey } from '$lib/stores/ai/translationStore.svelte';
-import { testConnection } from '$lib/services/translationService';
-import { Settings, Server, Bot, CheckCircle, XCircle, Loader2, Copy, Check, Terminal, Ban, ExternalLink, Circle, Sparkles, BookOpen } from '@lucide/svelte';
+import { testConnection, clearOllamaStatusCache } from '$lib/services/translationService';
+import { Settings, Server, Bot, CheckCircle, XCircle, Loader2, Copy, Check, Terminal, Ban, ExternalLink, Circle, Sparkles, BookOpen, Play, Power } from '@lucide/svelte';
 import * as Select from '$lib/components/ui/select';
+import { invoke } from '@tauri-apps/api/core';
+import { Command } from '@tauri-apps/plugin-shell';
+import { toast } from 'svelte-sonner';
 
 let config = $state(aiTranslationStore.getConfig());
 let isTesting = $state(false);
 let testResult = $state<{ success: boolean; message: string } | null>(null);
 let serviceOnline = $state<boolean | null>(null);
 let checkingStatus = $state(false);
+
+// Ollama 状态
+let ollamaOnline = $state<boolean | null>(null);
+let checkingOllamaStatus = $state(false);
+let startingOllama = $state(false);
 
 // 检查服务状态
 async function checkServiceStatus() {
@@ -33,12 +41,66 @@ async function checkServiceStatus() {
 	}
 }
 
+// 检查 Ollama 服务状态
+async function checkOllamaStatus() {
+	if (config.type !== 'ollama') return;
+	checkingOllamaStatus = true;
+	try {
+		const response = await fetch(`${config.ollamaUrl}/api/tags`, {
+			method: 'GET',
+			signal: AbortSignal.timeout(3000)
+		});
+		ollamaOnline = response.ok;
+	} catch {
+		ollamaOnline = false;
+	} finally {
+		checkingOllamaStatus = false;
+	}
+}
+
+// 启动 Ollama 服务
+async function startOllama() {
+	startingOllama = true;
+	try {
+		// 使用 Tauri shell 命令启动 ollama serve
+		const command = Command.create('ollama', ['serve']);
+		command.on('error', (error) => {
+			console.error('Ollama 启动错误:', error);
+			toast.error('Ollama 启动失败: ' + error);
+		});
+		command.spawn();
+		toast.success('正在启动 Ollama 服务...');
+		
+		// 清除翻译服务中的状态缓存
+		clearOllamaStatusCache();
+		
+		// 等待几秒后检查状态
+		setTimeout(() => {
+			checkOllamaStatus();
+		}, 3000);
+	} catch (e) {
+		console.error('启动 Ollama 失败:', e);
+		toast.error('启动 Ollama 失败: ' + e);
+	} finally {
+		startingOllama = false;
+	}
+}
+
 // 初始检查和配置变化时检查
 $effect(() => {
 	if (config.type === 'libretranslate' && config.libreTranslateUrl) {
 		checkServiceStatus();
 	} else {
 		serviceOnline = null;
+	}
+});
+
+// Ollama 服务状态检查
+$effect(() => {
+	if (config.type === 'ollama' && config.ollamaUrl) {
+		checkOllamaStatus();
+	} else {
+		ollamaOnline = null;
 	}
 });
 
@@ -505,20 +567,63 @@ async function copyCommand() {
 					<Bot class="h-4 w-4" />
 					Ollama 配置
 				</div>
-				<!-- 预设选择 -->
+				<!-- 服务状态和操作 -->
 				<div class="flex items-center gap-2">
-					<BookOpen class="h-3 w-3 text-muted-foreground" />
-					<select
-						class="h-7 rounded border bg-background px-2 text-xs"
-						value={config.activePreset}
-						onchange={(e) => handlePresetChange((e.target as HTMLSelectElement).value)}
+					<!-- 状态指示器 -->
+					<div class="flex items-center gap-1 text-xs" title={ollamaOnline === null ? '未检测' : ollamaOnline ? '服务在线' : '服务离线'}>
+						{#if checkingOllamaStatus}
+							<Loader2 class="h-3 w-3 animate-spin text-muted-foreground" />
+						{:else if ollamaOnline === true}
+							<Circle class="h-2 w-2 fill-green-500 text-green-500" />
+							<span class="text-green-600 dark:text-green-400">在线</span>
+						{:else if ollamaOnline === false}
+							<Circle class="h-2 w-2 fill-red-500 text-red-500" />
+							<span class="text-red-600 dark:text-red-400">离线</span>
+						{/if}
+					</div>
+					<!-- 启动按钮 -->
+					<Button
+						variant="ghost"
+						size="sm"
+						class="h-6 px-2 text-xs gap-1"
+						onclick={startOllama}
+						disabled={startingOllama || ollamaOnline === true}
+						title={ollamaOnline ? '服务已在运行' : '启动 Ollama 服务'}
 					>
-						<option value="custom">自定义</option>
-						{#each BUILTIN_PRESETS.filter(p => p.type === 'ollama') as preset}
-							<option value={preset.id}>{preset.name}</option>
-						{/each}
-					</select>
+						{#if startingOllama}
+							<Loader2 class="h-3 w-3 animate-spin" />
+						{:else}
+							<Play class="h-3 w-3" />
+						{/if}
+						启动
+					</Button>
+					<!-- 刷新状态 -->
+					<Button
+						variant="ghost"
+						size="sm"
+						class="h-6 w-6 p-0"
+						onclick={checkOllamaStatus}
+						disabled={checkingOllamaStatus}
+						title="刷新状态"
+					>
+						<Settings class="h-3 w-3 {checkingOllamaStatus ? 'animate-spin' : ''}" />
+					</Button>
 				</div>
+			</div>
+			
+			<!-- 预设选择 -->
+			<div class="flex items-center gap-2">
+				<BookOpen class="h-3 w-3 text-muted-foreground" />
+				<select
+					class="h-7 flex-1 rounded border bg-background px-2 text-xs"
+					value={config.activePreset}
+					onchange={(e) => handlePresetChange((e.target as HTMLSelectElement).value)}
+				>
+					<option value="custom">自定义</option>
+					{#each BUILTIN_PRESETS.filter(p => p.type === 'ollama') as preset}
+						<option value={preset.id}>{preset.name}</option>
+					{/each}
+				</select>
 			</div>
 			<div class="space-y-2">
 				<Label class="text-xs">API 地址</Label>
@@ -551,6 +656,24 @@ async function copyCommand() {
 					placeholder="请将以下{'{source_lang}'}文本翻译成{'{target_lang}'}，只返回翻译结果：{'{text}'}"
 				></textarea>
 			</div>
+			
+			<!-- 自动启动开关 -->
+			<div class="flex items-center justify-between border-t pt-3">
+				<div class="flex items-center gap-2">
+					<Power class="h-3 w-3 text-muted-foreground" />
+					<Label class="text-xs">自动启动 Ollama</Label>
+				</div>
+				<button
+					class="h-5 w-9 rounded-full transition-colors {config.ollamaAutoStart ? 'bg-primary' : 'bg-muted'}"
+					onclick={() => aiTranslationStore.updateConfig({ ollamaAutoStart: !config.ollamaAutoStart })}
+					title="开启后，当翻译需要 Ollama 但服务未运行时自动启动"
+				>
+					<div class="h-4 w-4 rounded-full bg-background shadow transition-transform {config.ollamaAutoStart ? 'translate-x-4' : 'translate-x-0.5'}"></div>
+				</button>
+			</div>
+			<p class="text-xs text-muted-foreground">
+				开启后，翻译时若 Ollama 未运行将自动启动服务
+			</p>
 		</div>
 	{/if}
 

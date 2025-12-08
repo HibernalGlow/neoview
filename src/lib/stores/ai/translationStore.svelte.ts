@@ -19,6 +19,8 @@ export interface TranslationServiceConfig {
 	ollamaModel: string;
 	// Ollama prompt 模板（支持变量：{text}, {source_lang}, {target_lang}）
 	ollamaPromptTemplate: string;
+	// Ollama 自动启动
+	ollamaAutoStart: boolean;
 	// 通用配置
 	sourceLanguage: string; // 'auto' | 'ja' | 'en' | ...
 	targetLanguage: string; // 'zh' | 'en' | ...
@@ -135,6 +137,7 @@ const defaultConfig: TranslationServiceConfig = {
 	ollamaUrl: 'http://localhost:11434',
 	ollamaModel: 'qwen2.5:7b',
 	ollamaPromptTemplate: '请将以下{source_lang}文本翻译成{target_lang}，只返回翻译结果，不要解释：\n{text}',
+	ollamaAutoStart: false,
 	sourceLanguage: 'auto',
 	targetLanguage: 'zh',
 	enabled: false,

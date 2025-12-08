@@ -5,6 +5,81 @@
 
 import { aiTranslationStore } from '$lib/stores/ai/translationStore.svelte';
 import { invoke } from '@tauri-apps/api/core';
+import { toast } from 'svelte-sonner';
+import { Command } from '@tauri-apps/plugin-shell';
+
+// 服务状态缓存
+let ollamaStatusCache: { online: boolean; checkedAt: number } | null = null;
+const STATUS_CACHE_TTL = 30000; // 30 秒缓存
+
+/**
+ * 检查 Ollama 服务是否在线
+ */
+async function checkOllamaOnline(apiUrl: string): Promise<boolean> {
+	// 使用缓存避免频繁检查
+	if (ollamaStatusCache && Date.now() - ollamaStatusCache.checkedAt < STATUS_CACHE_TTL) {
+		return ollamaStatusCache.online;
+	}
+	
+	try {
+		const response = await fetch(`${apiUrl}/api/tags`, {
+			method: 'GET',
+			signal: AbortSignal.timeout(3000)
+		});
+		const online = response.ok;
+		ollamaStatusCache = { online, checkedAt: Date.now() };
+		return online;
+	} catch {
+		ollamaStatusCache = { online: false, checkedAt: Date.now() };
+		return false;
+	}
+}
+
+/**
+ * 清除服务状态缓存（在启动服务后调用）
+ */
+export function clearOllamaStatusCache() {
+	ollamaStatusCache = null;
+}
+
+// 标记是否已尝试自动启动（避免重复启动）
+let autoStartAttempted = false;
+
+/**
+ * 尝试自动启动 Ollama 服务
+ */
+async function tryAutoStartOllama(): Promise<boolean> {
+	if (autoStartAttempted) {
+		return false;
+	}
+	autoStartAttempted = true;
+	
+	try {
+		const command = Command.create('ollama', ['serve']);
+		command.on('error', (error: string) => {
+			console.error('Ollama 自动启动错误:', error);
+		});
+		command.spawn();
+		toast.info('正在自动启动 Ollama 服务...');
+		
+		// 等待服务启动
+		await new Promise(resolve => setTimeout(resolve, 3000));
+		
+		// 清除缓存并重新检查
+		ollamaStatusCache = null;
+		return true;
+	} catch (e) {
+		console.error('自动启动 Ollama 失败:', e);
+		return false;
+	}
+}
+
+/**
+ * 重置自动启动标记（用于测试或用户手动重试）
+ */
+export function resetAutoStartFlag() {
+	autoStartAttempted = false;
+}
 
 // AI 翻译数据库缓存接口
 interface AiTranslationCache {
@@ -23,7 +98,7 @@ async function loadAiTranslationFromDb(key: string, modelFilter?: string): Promi
 		if (json) {
 			return JSON.parse(json);
 		}
-	} catch (e) {
+	} catch {
 		// 数据库读取失败，忽略
 	}
 	return null;
@@ -322,6 +397,26 @@ export async function translateText(
 
 	if (!config.enabled || config.type === 'disabled') {
 		return { success: false, error: '翻译服务未启用' };
+	}
+
+	// 检查 Ollama 服务是否在线
+	if (config.type === 'ollama') {
+		let isOnline = await checkOllamaOnline(config.ollamaUrl);
+		if (!isOnline) {
+			// 如果开启了自动启动，尝试启动服务
+			if (config.ollamaAutoStart) {
+				const started = await tryAutoStartOllama();
+				if (started) {
+					// 重新检查状态
+					isOnline = await checkOllamaOnline(config.ollamaUrl);
+				}
+			}
+			
+			if (!isOnline) {
+				toast.error('Ollama 服务未启动，请先启动 Ollama 服务');
+				return { success: false, error: 'Ollama 服务未启动' };
+			}
+		}
 	}
 
 	// 根据文件类型获取裁剪规则

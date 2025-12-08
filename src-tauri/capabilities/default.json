@@ -20,6 +20,18 @@
 		"dialog:allow-open",
 		"dialog:allow-save",
 		"dialog:default",
-		"cli:default"
+		"cli:default",
+		{
+			"identifier": "shell:allow-spawn",
+			"allow": [
+				{ "name": "ollama", "cmd": "ollama", "args": true }
+			]
+		},
+		{
+			"identifier": "shell:allow-execute",
+			"allow": [
+				{ "name": "ollama", "cmd": "ollama", "args": true }
+			]
+		}
 	]
 }

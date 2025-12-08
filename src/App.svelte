@@ -741,11 +741,9 @@
 				<!-- 控制按钮组 - 默认隐藏，悬停显示 -->
 				<div class="empty-controls opacity-0 transition-opacity duration-300 hover:opacity-100 flex items-center gap-2">
 					<!-- 隐藏/显示卡片按钮 -->
-					<Button
+					<button
 						onclick={toggleProjectCard}
-						variant="outline"
-						size="icon"
-						class="h-9 w-9 backdrop-blur-sm"
+						class="empty-control-btn h-9 w-9 rounded-lg flex items-center justify-center transition-all hover:scale-105"
 						title={showProjectCard ? '隐藏卡片' : '显示卡片'}
 					>
 						{#if showProjectCard}
@@ -753,30 +751,26 @@
 						{:else}
 							<Eye class="h-4 w-4" />
 						{/if}
-					</Button>
+					</button>
 
 					<!-- 上传背景图按钮 -->
-					<Button
+					<button
 						onclick={() => fileInputRef?.click()}
-						variant="outline"
-						size="icon"
-						class="h-9 w-9 backdrop-blur-sm"
+						class="empty-control-btn h-9 w-9 rounded-lg flex items-center justify-center transition-all hover:scale-105"
 						title="上传背景图"
 					>
 						<ImageUp class="h-4 w-4" />
-					</Button>
+					</button>
 
 					<!-- 清除背景图按钮（仅当有背景图时显示） -->
 					{#if backgroundImageUrl}
-						<Button
+						<button
 							onclick={clearBackgroundImage}
-							variant="outline"
-							size="icon"
-							class="h-9 w-9 backdrop-blur-sm"
+							class="empty-control-btn h-9 w-9 rounded-lg flex items-center justify-center transition-all hover:scale-105"
 							title="清除背景图"
 						>
 							<X class="h-4 w-4" />
-						</Button>
+						</button>
 					{/if}
 				</div>
 
@@ -798,3 +792,25 @@
 		</Empty>
 	</MainLayout>
 </Tooltip.Provider>
+
+<style>
+	/* 控制按钮毛玻璃样式 - 与卡片一致 */
+	.empty-control-btn {
+		background: hsl(var(--card) / 0.6);
+		backdrop-filter: blur(12px);
+		border: 1px solid hsl(var(--border) / 0.5);
+		color: hsl(var(--foreground));
+		cursor: pointer;
+	}
+
+	.empty-control-btn:hover {
+		background: hsl(var(--card) / 0.8);
+		border-color: hsl(var(--primary) / 0.3);
+		box-shadow: 0 4px 12px rgb(0 0 0 / 0.1);
+	}
+
+	.empty-control-btn:focus-visible {
+		outline: 2px solid hsl(var(--primary));
+		outline-offset: 2px;
+	}
+</style>

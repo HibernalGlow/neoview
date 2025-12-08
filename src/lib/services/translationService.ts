@@ -51,6 +51,35 @@ export function cleanupTitle(title: string, patterns: string[]): string {
 	return cleaned.replace(/\s+/g, ' ').trim();
 }
 
+// 文件类型扩展名映射
+const FILE_TYPE_EXT_MAP: Record<string, string[]> = {
+	folder: ['folder'],
+	archive: ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'cbz', 'cbr', 'cb7'],
+	image: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'tiff', 'jxl', 'avif'],
+	video: ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm'],
+};
+
+/**
+ * 根据扩展名获取文件类型 key
+ */
+function getFileTypeKey(extension: string): string | null {
+	const ext = extension.toLowerCase();
+	for (const [typeKey, exts] of Object.entries(FILE_TYPE_EXT_MAP)) {
+		if (exts.includes(ext)) {
+			return typeKey;
+		}
+	}
+	return null;
+}
+
+interface CleanupRule {
+	id: string;
+	pattern: string;
+	enabled: boolean;
+	applyTo: string[];
+	description?: string;
+}
+
 /**
  * 根据文件扩展名获取适用的裁剪规则
  * @param extension 文件扩展名（不含点），文件夹传 'folder'
@@ -58,44 +87,47 @@ export function cleanupTitle(title: string, patterns: string[]): string {
  */
 export function getCleanupPatternsForType(
 	extension: string,
-	config: { titleCleanupPatterns: string[]; titleCleanupByType?: Record<string, string[]> }
+	config: {
+		titleCleanupPatterns: string[];
+		titleCleanupByType?: Record<string, string[]>;
+		cleanupRules?: CleanupRule[];
+	}
 ): string[] {
 	const ext = extension.toLowerCase();
+	const typeKey = getFileTypeKey(ext);
+	
+	// 优先使用新版 cleanupRules
+	if (config.cleanupRules && config.cleanupRules.length > 0) {
+		const patterns: string[] = [];
+		for (const rule of config.cleanupRules) {
+			if (!rule.enabled) continue;
+			
+			// 检查是否适用于当前文件类型
+			const applies = rule.applyTo.includes('all') ||
+				(typeKey && rule.applyTo.includes(typeKey)) ||
+				rule.applyTo.includes(ext); // 支持直接指定扩展名
+			
+			if (applies) {
+				patterns.push(rule.pattern);
+			}
+		}
+		return patterns;
+	}
+	
+	// 旧版兼容：使用 titleCleanupByType
 	const byType = config.titleCleanupByType;
-	
-	if (!byType) {
-		return config.titleCleanupPatterns;
+	if (byType && Object.keys(byType).length > 0) {
+		// 直接匹配扩展名
+		if (ext in byType) {
+			return byType[ext];
+		}
+		// 类型匹配
+		if (typeKey && typeKey in byType) {
+			return byType[typeKey];
+		}
 	}
 	
-	// 1. 直接匹配扩展名
-	if (ext in byType) {
-		return byType[ext];
-	}
-	
-	// 2. 按类型分组匹配
-	if (ext === 'folder' && 'folder' in byType) {
-		return byType.folder;
-	}
-	
-	// 压缩包
-	const archiveExts = ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz'];
-	if (archiveExts.includes(ext) && 'archive' in byType) {
-		return byType.archive;
-	}
-	
-	// 图片
-	const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'tiff'];
-	if (imageExts.includes(ext) && 'image' in byType) {
-		return byType.image;
-	}
-	
-	// 视频
-	const videoExts = ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm'];
-	if (videoExts.includes(ext) && 'video' in byType) {
-		return byType.video;
-	}
-	
-	// 3. 使用默认规则
+	// 使用默认规则
 	return config.titleCleanupPatterns;
 }
 

@@ -5,7 +5,7 @@
 import { Button } from '$lib/components/ui/button';
 import { Input } from '$lib/components/ui/input';
 import { Label } from '$lib/components/ui/label';
-import { aiTranslationStore, type TranslationServiceType, BUILTIN_PRESETS, type TranslationPreset, FILE_TYPE_GROUPS } from '$lib/stores/ai/translationStore.svelte';
+import { aiTranslationStore, type TranslationServiceType, BUILTIN_PRESETS, type TranslationPreset, FILE_TYPE_GROUPS, type CleanupRule, type FileTypeKey } from '$lib/stores/ai/translationStore.svelte';
 import { testConnection } from '$lib/services/translationService';
 import { Settings, Server, Bot, CheckCircle, XCircle, Loader2, Copy, Check, Terminal, Ban, ExternalLink, Circle, Sparkles, BookOpen } from '@lucide/svelte';
 import * as Select from '$lib/components/ui/select';
@@ -105,36 +105,67 @@ function updateCleanupPatterns() {
 	aiTranslationStore.updateConfig({ titleCleanupPatterns: patterns });
 }
 
-// 按类型区分的裁剪规则
-let cleanupByTypeTexts = $state<Record<string, string>>({});
-let showTypeCleanup = $state(false);
+// 裁剪规则管理
+let showRulesEditor = $state(false);
 
-// 初始化按类型裁剪规则
-$effect(() => {
-	if (config.titleCleanupByType) {
-		const texts: Record<string, string> = {};
-		for (const [key, patterns] of Object.entries(config.titleCleanupByType)) {
-			texts[key] = patterns.join('\n');
-		}
-		cleanupByTypeTexts = texts;
+function toggleRuleEnabled(ruleId: string) {
+	const rules = [...(config.cleanupRules || [])];
+	const idx = rules.findIndex(r => r.id === ruleId);
+	if (idx >= 0) {
+		rules[idx] = { ...rules[idx], enabled: !rules[idx].enabled };
+		aiTranslationStore.updateConfig({ cleanupRules: rules });
 	}
-});
-
-function updateCleanupByType(typeKey: string, text: string) {
-	cleanupByTypeTexts[typeKey] = text;
-	const patterns = text
-		.split('\n')
-		.map(p => p.trim())
-		.filter(p => p.length > 0);
-	const updated = { ...config.titleCleanupByType, [typeKey]: patterns };
-	aiTranslationStore.updateConfig({ titleCleanupByType: updated });
 }
 
-function removeCleanupByType(typeKey: string) {
-	const updated = { ...config.titleCleanupByType };
-	delete updated[typeKey];
-	delete cleanupByTypeTexts[typeKey];
-	aiTranslationStore.updateConfig({ titleCleanupByType: updated });
+function updateRulePattern(ruleId: string, pattern: string) {
+	const rules = [...(config.cleanupRules || [])];
+	const idx = rules.findIndex(r => r.id === ruleId);
+	if (idx >= 0) {
+		rules[idx] = { ...rules[idx], pattern };
+		aiTranslationStore.updateConfig({ cleanupRules: rules });
+	}
+}
+
+function toggleRuleApplyTo(ruleId: string, typeKey: FileTypeKey) {
+	const rules = [...(config.cleanupRules || [])];
+	const idx = rules.findIndex(r => r.id === ruleId);
+	if (idx >= 0) {
+		const applyTo = [...rules[idx].applyTo];
+		const typeIdx = applyTo.indexOf(typeKey);
+		if (typeIdx >= 0) {
+			applyTo.splice(typeIdx, 1);
+		} else {
+			// 如果添加 'all'，清除其他
+			if (typeKey === 'all') {
+				applyTo.length = 0;
+			} else {
+				// 如果已有 'all'，移除它
+				const allIdx = applyTo.indexOf('all');
+				if (allIdx >= 0) applyTo.splice(allIdx, 1);
+			}
+			applyTo.push(typeKey);
+		}
+		rules[idx] = { ...rules[idx], applyTo };
+		aiTranslationStore.updateConfig({ cleanupRules: rules });
+	}
+}
+
+function addRule() {
+	const rules = [...(config.cleanupRules || [])];
+	const newRule: CleanupRule = {
+		id: `rule-${Date.now()}`,
+		pattern: '',
+		enabled: true,
+		applyTo: ['all'],
+		description: '',
+	};
+	rules.push(newRule);
+	aiTranslationStore.updateConfig({ cleanupRules: rules });
+}
+
+function removeRule(ruleId: string) {
+	const rules = (config.cleanupRules || []).filter(r => r.id !== ruleId);
+	aiTranslationStore.updateConfig({ cleanupRules: rules });
 }
 
 // Prompt 模板
@@ -473,61 +504,82 @@ async function copyCommand() {
 			</div>
 		</div>
 
-		<!-- 标题裁剪正则 -->
+		<!-- 标题裁剪规则 -->
 		<div class="space-y-2">
 			<div class="flex items-center justify-between">
-				<Label class="text-xs">标题裁剪正则（默认）</Label>
-				<button
-					class="text-xs text-primary hover:underline"
-					onclick={() => showTypeCleanup = !showTypeCleanup}
-				>
-					{showTypeCleanup ? '隐藏类型配置' : '按类型配置'}
-				</button>
-			</div>
-			<textarea
-				class="w-full rounded-md border bg-transparent px-3 py-2 text-xs font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-				rows="2"
-				placeholder="\\[.*?\\]&#10;\\(.*?\\)"
-				bind:value={cleanupPatternsText}
-				onblur={updateCleanupPatterns}
-			></textarea>
-			
-			{#if showTypeCleanup}
-				<div class="space-y-2 rounded border bg-muted/20 p-2">
-					<p class="text-[10px] text-muted-foreground">按文件类型配置裁剪规则（空=不裁剪，留空使用默认）</p>
-					
-					<!-- 文件夹 -->
-					<div class="space-y-1">
-						<div class="flex items-center gap-2">
-							<span class="text-xs w-14">📁 文件夹</span>
-							<textarea
-								class="flex-1 rounded border bg-background px-2 py-1 text-xs font-mono min-h-[28px]"
-								rows="1"
-								placeholder="不裁剪（保留画师名）"
-								value={cleanupByTypeTexts['folder'] || ''}
-								oninput={(e) => updateCleanupByType('folder', (e.target as HTMLTextAreaElement).value)}
-							></textarea>
-						</div>
-					</div>
-					
-					<!-- 压缩包 -->
-					<div class="space-y-1">
-						<div class="flex items-center gap-2">
-							<span class="text-xs w-14">📦 压缩包</span>
-							<textarea
-								class="flex-1 rounded border bg-background px-2 py-1 text-xs font-mono min-h-[28px]"
-								rows="1"
-								placeholder="使用默认规则"
-								value={cleanupByTypeTexts['archive'] || ''}
-								oninput={(e) => updateCleanupByType('archive', (e.target as HTMLTextAreaElement).value)}
-							></textarea>
-						</div>
-					</div>
+				<Label class="text-xs">标题裁剪规则</Label>
+				<div class="flex items-center gap-2">
+					<button
+						class="text-xs text-primary hover:underline"
+						onclick={addRule}
+					>
+						+ 添加规则
+					</button>
 				</div>
-			{/if}
+			</div>
+			
+			<!-- 规则列表 -->
+			<div class="space-y-2">
+				{#each config.cleanupRules || [] as rule (rule.id)}
+					<div class="flex items-start gap-2 rounded border bg-muted/20 p-2">
+						<!-- 开关 -->
+						<button
+							class="mt-1 h-4 w-4 rounded border flex items-center justify-center text-xs {rule.enabled ? 'bg-primary text-primary-foreground' : 'bg-background'}"
+							onclick={() => toggleRuleEnabled(rule.id)}
+							title={rule.enabled ? '已启用' : '已禁用'}
+						>
+							{rule.enabled ? '✓' : ''}
+						</button>
+						
+						<div class="flex-1 space-y-1">
+							<!-- 正则表达式 -->
+							<input
+								type="text"
+								class="w-full rounded border bg-background px-2 py-1 text-xs font-mono"
+								value={rule.pattern}
+								placeholder="正则表达式，如 \\[.*?\\]"
+								oninput={(e) => updateRulePattern(rule.id, (e.target as HTMLInputElement).value)}
+							/>
+							
+							<!-- 生效类型选择 -->
+							<div class="flex flex-wrap gap-1">
+								<button
+									class="px-1.5 py-0.5 text-[10px] rounded border {rule.applyTo.includes('all') ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}"
+									onclick={() => toggleRuleApplyTo(rule.id, 'all')}
+								>
+									全部
+								</button>
+								{#each Object.entries(FILE_TYPE_GROUPS) as [key, group]}
+									<button
+										class="px-1.5 py-0.5 text-[10px] rounded border {rule.applyTo.includes(key as FileTypeKey) ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}"
+										onclick={() => toggleRuleApplyTo(rule.id, key as FileTypeKey)}
+									>
+										{group.icon} {group.label}
+									</button>
+								{/each}
+							</div>
+						</div>
+						
+						<!-- 删除按钮 -->
+						<button
+							class="mt-1 text-xs text-muted-foreground hover:text-destructive"
+							onclick={() => removeRule(rule.id)}
+							title="删除规则"
+						>
+							✕
+						</button>
+					</div>
+				{/each}
+				
+				{#if !config.cleanupRules || config.cleanupRules.length === 0}
+					<p class="text-xs text-muted-foreground text-center py-2">
+						暂无裁剪规则，点击"添加规则"创建
+					</p>
+				{/if}
+			</div>
 			
 			<p class="text-xs text-muted-foreground">
-				翻译前去除匹配的内容。例如 <code class="bg-muted px-1 rounded">\\[.*?\\]</code> 去除方括号
+				翻译前去除匹配的内容。可按文件类型选择生效范围。
 			</p>
 		</div>
 

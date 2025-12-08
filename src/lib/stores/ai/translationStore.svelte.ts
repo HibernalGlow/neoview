@@ -24,22 +24,34 @@ export interface TranslationServiceConfig {
 	targetLanguage: string; // 'zh' | 'en' | ...
 	enabled: boolean;
 	autoTranslate: boolean; // 自动翻译无 EMM 翻译的标题
-	// 标题裁剪正则（去除不需要翻译的部分）
+	// 标题裁剪正则（去除不需要翻译的部分）- 旧版兼容
 	titleCleanupPatterns: string[]; // 例如: ["\\[.*?\\]", "\\(.*?\\)"]
-	// 按文件类型区分的裁剪规则（扩展名 -> 正则数组）
-	// 空数组表示不裁剪，"default" 表示使用默认规则
+	// 按文件类型区分的裁剪规则 - 旧版兼容
 	titleCleanupByType: Record<string, string[]>;
+	// 新版裁剪规则（每个规则单独配置）
+	cleanupRules: CleanupRule[];
 	// 当前使用的预设名称
 	activePreset: string;
 }
 
 // 文件类型分类
 export const FILE_TYPE_GROUPS = {
-	folder: { label: '文件夹', extensions: ['folder'] },
-	archive: { label: '压缩包', extensions: ['zip', 'rar', '7z', 'tar', 'gz'] },
-	image: { label: '图片', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'jxl', 'avif'] },
-	video: { label: '视频', extensions: ['mp4', 'mkv', 'avi', 'mov','nov', 'wmv', 'flv'] },
+	folder: { label: '文件夹', extensions: ['folder'], icon: '📁' },
+	archive: { label: '压缩包', extensions: ['zip', 'rar', '7z', 'tar', 'gz', 'cbz', 'cbr', 'cb7'], icon: '📦' },
+	image: { label: '图片', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'jxl', 'avif'], icon: '🖼️' },
+	video: { label: '视频', extensions: ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm'], icon: '🎬' },
 } as const;
+
+export type FileTypeKey = keyof typeof FILE_TYPE_GROUPS | 'all';
+
+// 单个裁剪规则配置
+export interface CleanupRule {
+	id: string;
+	pattern: string; // 正则表达式
+	enabled: boolean;
+	applyTo: FileTypeKey[]; // 生效的文件类型，'all' 表示全部
+	description?: string; // 可选描述
+}
 
 // 翻译预设
 export interface TranslationPreset {
@@ -129,12 +141,18 @@ const defaultConfig: TranslationServiceConfig = {
 	autoTranslate: true,
 	// 默认裁剪方括号和圆括号内的内容
 	titleCleanupPatterns: ['\\[.*?\\]', '\\(.*?\\)'],
-	// 按类型区分的裁剪规则：文件夹不裁剪（保留画师名），压缩包/文件裁剪
-	titleCleanupByType: {
-		folder: [], // 文件夹不裁剪
-		archive: ['\\[.*?\\]', '\\(.*?\\)'], // 压缩包裁剪
-		// 未指定的类型使用 titleCleanupPatterns
-	},
+	// 按类型区分的裁剪规则（旧版兼容）
+	titleCleanupByType: {},
+	// 新版裁剪规则
+	cleanupRules: [
+		{
+			id: 'default-all-brackets',
+			pattern: '\\s*(\\[[^\\]]*\\]|\\([^\\)]*\\)|【[^】]*】|（[^）]*）)\\s*',
+			enabled: true,
+			applyTo: ['archive'], // 只对压缩包生效（文件夹保留画师名）
+			description: '去除各类括号内容（中英文）',
+		},
+	],
 	activePreset: 'custom',
 };
 

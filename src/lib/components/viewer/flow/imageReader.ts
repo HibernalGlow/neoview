@@ -20,36 +20,6 @@ import { pipelineLatencyStore } from '$lib/stores/pipelineLatency.svelte';
 import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 import * as pm from '$lib/api/pageManager';
 
-// IPC 模式检测：检查是否需要使用 base64 模式
-let ipcModeChecked = false;
-
-/**
- * 检测 IPC 返回的数据是否有效（是否是真正的二进制数据）
- * 如果返回的是 JSON 数组文本，则需要切换到 base64 模式
- */
-function checkBlobValidity(blob: Blob): Promise<boolean> {
-	return new Promise((resolve) => {
-		blob.slice(0, 12).arrayBuffer().then(buf => {
-			const header = new Uint8Array(buf);
-			// 检查是否是有效的图片头部（而不是 JSON 数组的 ASCII 码）
-			// JPEG: ff d8 ff, PNG: 89 50 4e 47, GIF: 47 49 46, WebP: 52 49 46 46
-			const isJpeg = header[0] === 0xFF && header[1] === 0xD8 && header[2] === 0xFF;
-			const isPng = header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47;
-			const isGif = header[0] === 0x47 && header[1] === 0x49 && header[2] === 0x46;
-			const isWebP = header[0] === 0x52 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x46;
-			const isBmp = header[0] === 0x42 && header[1] === 0x4D;
-			
-			if (isJpeg || isPng || isGif || isWebP || isBmp) {
-				resolve(true);
-			} else {
-				// 可能是 JSON 数组的 ASCII 码（如 "255,216," = 32 35 35 2c...）
-				console.warn(`⚠️ IPC 返回的数据可能无效，头部: ${Array.from(header.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
-				resolve(false);
-			}
-		}).catch(() => resolve(false));
-	});
-}
-
 // Tempfile 模式缓存（URL -> blob）
 const tempfileCache = new Map<string, { url: string; blob: Blob }>();
 const TEMPFILE_CACHE_LIMIT = 100;
@@ -346,24 +316,8 @@ export async function readPageBlobV2(
 		
 		// Blob 创建计时
 		const blobStart = performance.now();
-		let blob = new Blob([buffer]);
+		const blob = new Blob([buffer]);
 		const blobCreateMs = performance.now() - blobStart;
-		
-		// 【自动检测】首次加载时检查数据是否有效，如果无效则切换到 base64 模式
-		if (!ipcModeChecked) {
-			ipcModeChecked = true;
-			const isValid = await checkBlobValidity(blob);
-			if (!isValid) {
-				console.warn('⚠️ 检测到 IPC 返回数据无效，自动切换到 Base64 模式');
-				pm.setBase64Mode(true);
-				// 使用 base64 模式重新加载
-				const retryBuffer = isCurrentPage 
-					? await pm.gotoPageRaw(pageIndex)
-					: await pm.getPageRaw(pageIndex);
-				blob = new Blob([retryBuffer]);
-				console.log('✅ Base64 模式加载成功，size=', blob.size);
-			}
-		}
 		
 		const totalMs = performance.now() - startTime;
 		

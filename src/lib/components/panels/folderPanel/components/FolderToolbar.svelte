@@ -41,8 +41,7 @@ import {
 	Settings2,
 	ChevronDown,
 	ChevronUp as ChevronUpIcon,
-	FolderSync,
-	Minimize2
+	FolderSync
 } from '@lucide/svelte';
 import { hoverPreviewSettings, hoverPreviewEnabled, hoverPreviewDelayMs } from '$lib/stores/hoverPreviewSettings.svelte';
 import { historySettingsStore } from '$lib/stores/historySettings.svelte';
@@ -52,7 +51,6 @@ import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 import { folderThumbnailLoader, type WarmupProgress } from '$lib/utils/thumbnail';
 import { addExcludedPath, isPathExcluded, removeExcludedPath, getExcludedPaths } from '$lib/stores/excludedPaths.svelte';
 import { directoryTreeCache } from '../utils/directoryTreeCache';
-import { detectOverflow, TOOLBAR_BUTTONS, type ToolbarButtonId } from '../utils/toolbarOverflow';
 import * as Progress from '$lib/components/ui/progress';
 import { Button } from '$lib/components/ui/button';
 import * as Tooltip from '$lib/components/ui/tooltip';
@@ -367,96 +365,7 @@ let warmupProgress = $state<WarmupProgress | null>(null);
 
 // 更多设置栏展开状态
 let showMoreSettings = $state(false);
-let settingsTab = $state<'action' | 'display' | 'other' | 'overflow'>('action');
-
-// ==================== 工具栏自动折叠 ====================
-let autoCollapseEnabled = $state(true); // 自动折叠开关
-let toolbarRef = $state<HTMLElement | null>(null);
-let overflowButtonIds = $state<Set<ToolbarButtonId>>(new Set());
-
-// 检测溢出并更新隐藏按钮
-async function checkOverflow() {
-	if (!autoCollapseEnabled || !toolbarRef) {
-		overflowButtonIds = new Set();
-		return;
-	}
-	
-	// 先清空溢出列表，让所有按钮显示
-	overflowButtonIds = new Set();
-	await tick();
-	
-	// 检测是否溢出
-	if (!detectOverflow(toolbarRef)) {
-		return;
-	}
-	
-	// 收集未激活的按钮ID（只隐藏未激活的）
-	const inactiveButtons: ToolbarButtonId[] = [];
-	
-	// 检查各按钮状态，未激活的加入候选
-	if (!multiSelectMode) inactiveButtons.push('multiSelect');
-	if (!deleteMode) inactiveButtons.push('deleteMode');
-	if (!inlineTreeMode) inactiveButtons.push('folderTree');
-	if (!showSearchBar) inactiveButtons.push('search');
-	if (!showMigrationBar) inactiveButtons.push('migration');
-	if (!showRandomTagBar) inactiveButtons.push('randomTag');
-	if (!penetrateMode) inactiveButtons.push('penetrate');
-	
-	// 按优先级排序（优先级数字大的先折叠，即优先级低的先隐藏）
-	inactiveButtons.sort((a, b) => 
-		(TOOLBAR_BUTTONS[b]?.priority ?? 0) - (TOOLBAR_BUTTONS[a]?.priority ?? 0)
-	);
-	
-	// 逐步折叠直到不再溢出
-	const newOverflow = new Set<ToolbarButtonId>();
-	for (const id of inactiveButtons) {
-		newOverflow.add(id);
-		overflowButtonIds = new Set(newOverflow);
-		// 等待 DOM 更新
-		await tick();
-		// 检查是否不再溢出
-		if (toolbarRef && !detectOverflow(toolbarRef)) {
-			break;
-		}
-	}
-}
-
-// 使用 tick 进行异步检测
-import { tick } from 'svelte';
-
-// 监听相关状态变化，重新检测溢出
-$effect(() => {
-	// 依赖这些状态
-	void multiSelectMode;
-	void deleteMode;
-	void inlineTreeMode;
-	void showSearchBar;
-	void showMigrationBar;
-	void showRandomTagBar;
-	void penetrateMode;
-	void autoCollapseEnabled;
-	
-	// 延迟检测，等待 DOM 更新
-	setTimeout(() => checkOverflow(), 50);
-});
-
-// 窗口大小变化时重新检测
-$effect(() => {
-	if (typeof window === 'undefined') return;
-	
-	const handleResize = () => {
-		setTimeout(() => checkOverflow(), 100);
-	};
-	
-	window.addEventListener('resize', handleResize);
-	return () => window.removeEventListener('resize', handleResize);
-});
-
-// 判断按钮是否应该显示
-function shouldShowButton(id: ToolbarButtonId): boolean {
-	if (!autoCollapseEnabled) return true;
-	return !overflowButtonIds.has(id);
-}
+let settingsTab = $state<'action' | 'display' | 'other'>('action');
 
 function toggleMoreSettings() {
 	showMoreSettings = !showMoreSettings;
@@ -489,7 +398,7 @@ function cancelWarmup() {
 }
 </script>
 
-<div class="flex items-center gap-1 px-2 py-1.5 overflow-hidden" class:flex-wrap={!autoCollapseEnabled} bind:this={toolbarRef}>
+<div class="flex flex-wrap items-center gap-1 px-2 py-1.5">
 	<!-- 导航按钮组 -->
 	<div class="flex items-center gap-0.5">
 		<Tooltip.Root>
@@ -624,168 +533,135 @@ function cancelWarmup() {
 
 	<!-- 功能按钮组 -->
 	<div class="flex items-center gap-0.5">
-		{#if shouldShowButton('multiSelect')}
-			<Tooltip.Root>
-				<Tooltip.Trigger>
-					<Button
-						variant={multiSelectMode ? 'default' : 'ghost'}
-						size="icon"
-						class="h-7 w-7"
-						onclick={handleToggleMultiSelectMode}
-					>
-						<CheckSquare class="h-4 w-4" />
-					</Button>
-				</Tooltip.Trigger>
-				<Tooltip.Content>
-					<p>多选模式</p>
-				</Tooltip.Content>
-			</Tooltip.Root>
-		{/if}
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={multiSelectMode ? 'default' : 'ghost'}
+					size="icon"
+					class="h-7 w-7"
+					onclick={handleToggleMultiSelectMode}
+				>
+					<CheckSquare class="h-4 w-4" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>多选模式</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
 
-		{#if shouldShowButton('deleteMode')}
-			<Tooltip.Root>
-				<Tooltip.Trigger>
-					<Button
-						variant={deleteMode ? 'default' : 'ghost'}
-						size="icon"
-						class="h-7 w-7"
-						onclick={handleToggleDeleteMode}
-						oncontextmenu={handleToggleDeleteStrategy}
-					>
-						<Trash2 class={deleteStrategy === 'permanent' ? 'h-4 w-4 text-accent-foreground' : 'h-4 w-4'} />
-					</Button>
-				</Tooltip.Trigger>
-				<Tooltip.Content>
-					<p>删除模式 ({deleteStrategy === 'trash' ? '回收站' : '永久'})</p>
-					<p class="text-muted-foreground text-xs">右键切换策略</p>
-				</Tooltip.Content>
-			</Tooltip.Root>
-		{/if}
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={deleteMode ? 'default' : 'ghost'}
+					size="icon"
+					class="h-7 w-7"
+					onclick={handleToggleDeleteMode}
+					oncontextmenu={handleToggleDeleteStrategy}
+				>
+					<Trash2 class={deleteStrategy === 'permanent' ? 'h-4 w-4 text-accent-foreground' : 'h-4 w-4'} />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>删除模式 ({deleteStrategy === 'trash' ? '回收站' : '永久'})</p>
+				<p class="text-muted-foreground text-xs">右键切换策略</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
 
-		{#if shouldShowButton('folderTree')}
-			<Tooltip.Root>
-				<Tooltip.Trigger>
-					<Button 
-						variant={inlineTreeMode ? 'default' : 'ghost'} 
-						size="icon" 
-						class="h-7 w-7" 
-						onclick={onToggleFolderTree}
-						oncontextmenu={(e: MouseEvent) => { e.preventDefault(); onToggleInlineTree?.(); }}
-					>
-						{#if inlineTreeMode}
-							<ListTree class="h-4 w-4" />
-						{:else}
-							<FolderTree class="h-4 w-4" />
-						{/if}
-					</Button>
-				</Tooltip.Trigger>
-				<Tooltip.Content>
-					<p>文件夹树 {inlineTreeMode ? '(主视图树模式)' : ''}</p>
-					<p class="text-muted-foreground text-xs">右键切换主视图树</p>
-				</Tooltip.Content>
-			</Tooltip.Root>
-		{/if}
-
-		{#if shouldShowButton('search')}
-			<Tooltip.Root>
-				<Tooltip.Trigger>
-					<Button
-						variant={showSearchBar ? 'default' : 'ghost'}
-						size="icon"
-						class="h-7 w-7"
-						onclick={handleToggleShowSearchBar}
-					>
-						<Search class="h-4 w-4" />
-					</Button>
-				</Tooltip.Trigger>
-				<Tooltip.Content>
-					<p>{showSearchBar ? '隐藏搜索栏' : '显示搜索栏'}</p>
-				</Tooltip.Content>
-			</Tooltip.Root>
-		{/if}
-
-		{#if shouldShowButton('migration')}
-			<Tooltip.Root>
-				<Tooltip.Trigger>
-					<Button
-						variant={showMigrationBar ? 'default' : 'ghost'}
-						size="icon"
-						class="h-7 w-7"
-						onclick={handleToggleShowMigrationBar}
-					>
-						<ClipboardPaste class="h-4 w-4" />
-					</Button>
-				</Tooltip.Trigger>
-				<Tooltip.Content>
-					<p>{showMigrationBar ? '隐藏迁移栏' : '显示迁移栏'}</p>
-				</Tooltip.Content>
-			</Tooltip.Root>
-		{/if}
-
-		{#if shouldShowButton('randomTag')}
-			<Tooltip.Root>
-				<Tooltip.Trigger>
-					<Button
-						variant={showRandomTagBar ? 'default' : 'ghost'}
-						size="icon"
-						class="h-7 w-7"
-						onclick={() => onToggleRandomTagBar?.()}
-					>
-						<Tags class="h-4 w-4" />
-					</Button>
-				</Tooltip.Trigger>
-				<Tooltip.Content>
-					<p>{showRandomTagBar ? '隐藏标签推荐' : '显示标签推荐'}</p>
-				</Tooltip.Content>
-			</Tooltip.Root>
-		{/if}
-
-		{#if shouldShowButton('penetrate')}
-			<Tooltip.Root>
-				<Tooltip.Trigger>
-					<Button
-						variant={penetrateMode ? 'default' : 'ghost'}
-						size="icon"
-						class="h-7 w-7"
-						onclick={handleTogglePenetrateMode}
-						oncontextmenu={(e: MouseEvent) => {
-							e.preventDefault();
-							// 只有穿透模式开启时，右键才能切换新标签打开功能
-							if (penetrateMode) {
-								folderTabActions.toggleOpenInNewTabMode();
-							}
-						}}
-					>
-						<CornerDownRight class={openInNewTabMode ? 'h-4 w-4 text-accent-foreground' : 'h-4 w-4'} />
-					</Button>
-				</Tooltip.Trigger>
-				<Tooltip.Content>
-					<p>{penetrateMode ? '穿透模式：当文件夹只有一个子文件时直接打开' : '穿透模式'}</p>
-					{#if penetrateMode}
-						<p class="text-muted-foreground text-xs">右键切换穿透失败时新标签打开 {openInNewTabMode ? '(已开启)' : ''}</p>
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button 
+					variant={inlineTreeMode ? 'default' : 'ghost'} 
+					size="icon" 
+					class="h-7 w-7" 
+					onclick={onToggleFolderTree}
+					oncontextmenu={(e: MouseEvent) => { e.preventDefault(); onToggleInlineTree?.(); }}
+				>
+					{#if inlineTreeMode}
+						<ListTree class="h-4 w-4" />
+					{:else}
+						<FolderTree class="h-4 w-4" />
 					{/if}
-				</Tooltip.Content>
-			</Tooltip.Root>
-		{/if}
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>文件夹树 {inlineTreeMode ? '(主视图树模式)' : ''}</p>
+				<p class="text-muted-foreground text-xs">右键切换主视图树</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
 
-		<!-- 溢出指示器：当有按钮被折叠时显示数字 -->
-		{#if overflowButtonIds.size > 0}
-			<Tooltip.Root>
-				<Tooltip.Trigger>
-					<Button
-						variant="outline"
-						size="icon"
-						class="h-7 w-7 text-xs font-medium"
-						onclick={() => { showMoreSettings = true; settingsTab = 'overflow'; }}
-					>
-						+{overflowButtonIds.size}
-					</Button>
-				</Tooltip.Trigger>
-				<Tooltip.Content>
-					<p>点击查看收起的 {overflowButtonIds.size} 个按钮</p>
-				</Tooltip.Content>
-			</Tooltip.Root>
-		{/if}
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={showSearchBar ? 'default' : 'ghost'}
+					size="icon"
+					class="h-7 w-7"
+					onclick={handleToggleShowSearchBar}
+				>
+					<Search class="h-4 w-4" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>{showSearchBar ? '隐藏搜索栏' : '显示搜索栏'}</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={showMigrationBar ? 'default' : 'ghost'}
+					size="icon"
+					class="h-7 w-7"
+					onclick={handleToggleShowMigrationBar}
+				>
+					<ClipboardPaste class="h-4 w-4" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>{showMigrationBar ? '隐藏迁移栏' : '显示迁移栏'}</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={showRandomTagBar ? 'default' : 'ghost'}
+					size="icon"
+					class="h-7 w-7"
+					onclick={() => onToggleRandomTagBar?.()}
+				>
+					<Tags class="h-4 w-4" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>{showRandomTagBar ? '隐藏标签推荐' : '显示标签推荐'}</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={penetrateMode ? 'default' : 'ghost'}
+					size="icon"
+					class="h-7 w-7"
+					onclick={handleTogglePenetrateMode}
+					oncontextmenu={(e: MouseEvent) => {
+						e.preventDefault();
+						// 只有穿透模式开启时，右键才能切换新标签打开功能
+						if (penetrateMode) {
+							folderTabActions.toggleOpenInNewTabMode();
+						}
+					}}
+				>
+					<CornerDownRight class={openInNewTabMode ? 'h-4 w-4 text-accent-foreground' : 'h-4 w-4'} />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>{penetrateMode ? '穿透模式：当文件夹只有一个子文件时直接打开' : '穿透模式'}</p>
+				{#if penetrateMode}
+					<p class="text-muted-foreground text-xs">右键切换穿透失败时新标签打开 {openInNewTabMode ? '(已开启)' : ''}</p>
+				{/if}
+			</Tooltip.Content>
+		</Tooltip.Root>
 
 		<!-- 视图样式下拉 -->
 		<DropdownMenu.Root>
@@ -834,11 +710,6 @@ function cancelWarmup() {
 		<Tabs.Root value={settingsTab} onValueChange={(v) => settingsTab = v as typeof settingsTab} class="w-full">
 			<div class="flex items-center px-2">
 				<Tabs.List class="h-8 bg-transparent">
-					{#if overflowButtonIds.size > 0}
-						<Tabs.Trigger value="overflow" class="text-xs px-3 py-1 h-7">
-							收起的按钮 ({overflowButtonIds.size})
-						</Tabs.Trigger>
-					{/if}
 					<Tabs.Trigger value="action" class="text-xs px-3 py-1 h-7">快捷操作</Tabs.Trigger>
 					<Tabs.Trigger value="display" class="text-xs px-3 py-1 h-7">显示设置</Tabs.Trigger>
 					<Tabs.Trigger value="other" class="text-xs px-3 py-1 h-7">其他</Tabs.Trigger>
@@ -881,106 +752,8 @@ function cancelWarmup() {
 				</div>
 			</Tabs.Content>
 
-			<!-- 溢出按钮区 -->
-			<Tabs.Content value="overflow" class="px-2 py-2 mt-0">
-				<div class="flex flex-wrap items-center gap-2">
-					{#if overflowButtonIds.has('multiSelect')}
-						<Button
-							variant={multiSelectMode ? 'default' : 'outline'}
-							size="sm"
-							class="h-7 text-xs"
-							onclick={handleToggleMultiSelectMode}
-						>
-							<CheckSquare class="h-3 w-3 mr-1" />
-							多选
-						</Button>
-					{/if}
-					{#if overflowButtonIds.has('deleteMode')}
-						<Button
-							variant={deleteMode ? 'default' : 'outline'}
-							size="sm"
-							class="h-7 text-xs"
-							onclick={handleToggleDeleteMode}
-						>
-							<Trash2 class="h-3 w-3 mr-1" />
-							删除
-						</Button>
-					{/if}
-					{#if overflowButtonIds.has('folderTree')}
-						<Button
-							variant={inlineTreeMode ? 'default' : 'outline'}
-							size="sm"
-							class="h-7 text-xs"
-							onclick={onToggleFolderTree}
-						>
-							<FolderTree class="h-3 w-3 mr-1" />
-							文件夹树
-						</Button>
-					{/if}
-					{#if overflowButtonIds.has('search')}
-						<Button
-							variant={showSearchBar ? 'default' : 'outline'}
-							size="sm"
-							class="h-7 text-xs"
-							onclick={handleToggleShowSearchBar}
-						>
-							<Search class="h-3 w-3 mr-1" />
-							搜索
-						</Button>
-					{/if}
-					{#if overflowButtonIds.has('migration')}
-						<Button
-							variant={showMigrationBar ? 'default' : 'outline'}
-							size="sm"
-							class="h-7 text-xs"
-							onclick={handleToggleShowMigrationBar}
-						>
-							<ClipboardPaste class="h-3 w-3 mr-1" />
-							迁移
-						</Button>
-					{/if}
-					{#if overflowButtonIds.has('randomTag')}
-						<Button
-							variant={showRandomTagBar ? 'default' : 'outline'}
-							size="sm"
-							class="h-7 text-xs"
-							onclick={() => onToggleRandomTagBar?.()}
-						>
-							<Tags class="h-3 w-3 mr-1" />
-							标签
-						</Button>
-					{/if}
-					{#if overflowButtonIds.has('penetrate')}
-						<Button
-							variant={penetrateMode ? 'default' : 'outline'}
-							size="sm"
-							class="h-7 text-xs"
-							onclick={handleTogglePenetrateMode}
-						>
-							<CornerDownRight class="h-3 w-3 mr-1" />
-							穿透
-						</Button>
-					{/if}
-				</div>
-			</Tabs.Content>
-
 			<Tabs.Content value="display" class="px-2 py-2 mt-0">
 				<div class="flex flex-wrap items-center gap-4 text-xs">
-					<!-- 工具栏自动折叠 -->
-					<div class="flex items-center gap-2">
-						<Minimize2 class="h-3.5 w-3.5 text-muted-foreground" />
-						<span class="text-muted-foreground">自动折叠:</span>
-						<Button 
-							variant={autoCollapseEnabled ? 'default' : 'outline'} 
-							size="sm" 
-							class="h-6 text-xs px-2"
-							onclick={() => autoCollapseEnabled = !autoCollapseEnabled}
-						>
-							{autoCollapseEnabled ? '开' : '关'}
-						</Button>
-						<span class="text-muted-foreground/60 text-[10px]">检测折行时收起未激活按钮</span>
-					</div>
-
 					<!-- 悬停预览 -->
 					<div class="flex items-center gap-2">
 						<Eye class="h-3.5 w-3.5 text-muted-foreground" />

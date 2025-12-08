@@ -107,6 +107,7 @@ export function createImageStore() {
     // 优先使用缓存
     const cached = imagePool.getSync(currentIndex);
     if (cached) {
+      console.log(`🖼️ ImageStore: 使用缓存 page=${currentIndex} url=${cached.url?.substring(0, 60)}...`);
       state.currentUrl = cached.url;
       state.dimensions = cached.width && cached.height 
         ? { width: cached.width, height: cached.height } 
@@ -143,6 +144,7 @@ export function createImageStore() {
     if (!cached) {
       try {
         const image = await imagePool.get(currentIndex);
+        console.log(`🖼️ ImageStore: 异步加载完成 page=${currentIndex} url=${image?.url?.substring(0, 60)}...`);
         if (image && lastLoadedIndex === currentIndex) {
           state.currentUrl = image.url;
           state.dimensions = image.width && image.height 

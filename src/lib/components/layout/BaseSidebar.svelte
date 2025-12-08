@@ -259,8 +259,8 @@
 
 	const containerClass = $derived(
 		position === 'left'
-			? `h-full flex bg-background transition-all duration-300 ${isVisible ? 'translate-x-0' : '-translate-x-full'} ${!isVisible ? 'opacity-0 pointer-events-none' : ''} border-0`
-			: `h-full flex bg-background transition-all duration-300 ${isVisible ? 'translate-x-0' : 'translate-x-full'} ${!isVisible ? 'opacity-0 pointer-events-none' : ''} border-0`
+			? `h-full flex bg-background/80 backdrop-blur-md sidebar-animate ${isVisible ? 'translate-x-0 opacity-100 scale-100' : '-translate-x-full opacity-0 scale-95 pointer-events-none'} border-0`
+			: `h-full flex bg-background/80 backdrop-blur-md sidebar-animate ${isVisible ? 'translate-x-0 opacity-100 scale-100' : 'translate-x-full opacity-0 scale-95 pointer-events-none'} border-0`
 	);
 
 	const iconBarClass = $derived(
@@ -476,3 +476,19 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	/* 侧边栏平滑动画 */
+	.sidebar-animate {
+		transition:
+			transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+			opacity 0.3s ease-out,
+			scale 0.3s ease-out;
+		transform-origin: left center;
+	}
+
+	/* 右侧边栏动画原点 */
+	:global([class*='translate-x-full']).sidebar-animate {
+		transform-origin: right center;
+	}
+</style>

@@ -4,9 +4,26 @@
  */
 import { Button } from '$lib/components/ui/button';
 import { aiTranslationStore } from '$lib/stores/ai/translationStore.svelte';
-import { Database, Trash2, Download, Upload, RefreshCcw } from '@lucide/svelte';
+import { Database, Trash2, Download, Upload, RefreshCcw, HardDrive } from '@lucide/svelte';
+import { invoke } from '@tauri-apps/api/core';
+import { onMount } from 'svelte';
 
 let stats = $state(aiTranslationStore.getCacheStats());
+let dbCacheCount = $state<number | null>(null);
+
+// 加载数据库缓存统计
+async function loadDbCacheStats() {
+	try {
+		const count = await invoke<number>('get_ai_translation_count');
+		dbCacheCount = count;
+	} catch {
+		dbCacheCount = null;
+	}
+}
+
+onMount(() => {
+	loadDbCacheStats();
+});
 
 // 订阅 store 更新
 $effect(() => {
@@ -98,6 +115,22 @@ function formatCacheHitRate(): string {
 		<div class="flex justify-between">
 			<span class="text-muted-foreground">API 调用:</span>
 			<span>{formatNumber(stats.apiCalls)}</span>
+		</div>
+		<div class="flex justify-between items-center">
+			<span class="text-muted-foreground flex items-center gap-1">
+				<HardDrive class="h-3 w-3" />
+				数据库缓存:
+			</span>
+			<span class="flex items-center gap-1">
+				{dbCacheCount !== null ? formatNumber(dbCacheCount) : '加载中...'}
+				<button
+					class="p-0.5 rounded hover:bg-muted"
+					onclick={() => loadDbCacheStats()}
+					title="刷新数据库缓存数量"
+				>
+					<RefreshCcw class="h-3 w-3 text-muted-foreground" />
+				</button>
+			</span>
 		</div>
 	</div>
 

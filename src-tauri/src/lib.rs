@@ -371,6 +371,7 @@ pub fn run() {
             commands::save_ai_translation,
             commands::load_ai_translation,
             commands::batch_load_ai_translations,
+            commands::get_ai_translation_count,
             commands::get_video_duration,
             commands::is_video_file,
             commands::load_video,

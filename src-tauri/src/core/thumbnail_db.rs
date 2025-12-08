@@ -1802,6 +1802,21 @@ impl ThumbnailDb {
         Ok(result)
     }
     
+    /// 获取 AI 翻译缓存数量
+    pub fn get_ai_translation_count(&self) -> SqliteResult<usize> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+        
+        let count: usize = conn.query_row(
+            "SELECT COUNT(*) FROM thumbs WHERE ai_translation IS NOT NULL",
+            [],
+            |row| row.get(0),
+        )?;
+        
+        Ok(count)
+    }
+    
     /// 批量读取 AI 翻译
     pub fn batch_load_ai_translations(&self, keys: &[String], model_filter: Option<&str>) -> SqliteResult<HashMap<String, String>> {
         self.open()?;

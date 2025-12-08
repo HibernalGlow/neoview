@@ -1374,3 +1374,13 @@ pub async fn batch_load_ai_translations(
     state.db.batch_load_ai_translations(&keys, model_filter.as_deref())
         .map_err(|e| format!("批量读取 AI 翻译失败: {}", e))
 }
+
+/// 获取数据库中 AI 翻译缓存数量
+#[tauri::command]
+pub async fn get_ai_translation_count(
+    app: tauri::AppHandle,
+) -> Result<usize, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.get_ai_translation_count()
+        .map_err(|e| format!("获取 AI 翻译数量失败: {}", e))
+}

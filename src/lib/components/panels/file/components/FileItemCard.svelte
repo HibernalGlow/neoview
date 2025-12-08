@@ -461,29 +461,24 @@
 			currentPage >= totalPages - 1
 	);
 
+	// 穿透模式：内部压缩包信息（独立显示，不覆盖文件夹标题）
+	const penetrateInfo = $derived.by(() => {
+		if (!item.isDir || !penetrateModeEnabled || !penetrateChildFile) return null;
+		
+		const childNameWithoutExt = penetrateChildFile.name.replace(/\.[^.]+$/, '');
+		const childTitle = penetrateChildMetadata?.translatedTitle || penetrateAiTranslatedTitle;
+		const isAiTranslated = !!(penetrateAiTranslatedTitle && !penetrateChildMetadata?.translatedTitle);
+		
+		return {
+			originalName: childNameWithoutExt,
+			translatedTitle: childTitle,
+			isAiTranslated
+		};
+	});
+
 	// 合并 EMM 元数据和 AI 翻译
 	// 如果有 AI 翻译但没有 EMM 翻译，则使用 AI 翻译并标记为 AI 翻译
-	// 穿透模式：显示原文件夹名 + 内部压缩包翻译
 	const mergedEmmMetadata = $derived.by(() => {
-		// 穿透模式：文件夹显示内部压缩包信息
-		if (item.isDir && penetrateModeEnabled && penetrateChildFile) {
-			const childTitle = penetrateChildMetadata?.translatedTitle || penetrateAiTranslatedTitle;
-			const childNameWithoutExt = penetrateChildFile.name.replace(/\.[^.]+$/, '');
-			
-			// 格式：原压缩包名 + 翻译（如果有）
-			let displayTitle = childNameWithoutExt;
-			if (childTitle) {
-				const prefix = penetrateAiTranslatedTitle && !penetrateChildMetadata?.translatedTitle ? '🤖 ' : '';
-				displayTitle = `${prefix}${childTitle}`;
-			}
-			
-			return {
-				translatedTitle: displayTitle,
-				originalChildName: childNameWithoutExt,
-				isPenetrated: true
-			};
-		}
-
 		if (!emmMetadata && !aiTranslatedTitle) return null;
 		
 		const base = emmMetadata || { tags: undefined, rating: undefined };
@@ -529,6 +524,7 @@
 		{isArchive}
 		{isReadCompleted}
 		emmMetadata={mergedEmmMetadata}
+		{penetrateInfo}
 		folderAverageRating={itemRating}
 		folderManualRating={null}
 		{displayTags}

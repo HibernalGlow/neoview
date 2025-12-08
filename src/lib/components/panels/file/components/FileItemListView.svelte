@@ -47,6 +47,8 @@
 		isArchive: boolean;
 		isReadCompleted: boolean;
 		emmMetadata: { translatedTitle?: string; tags?: Record<string, string[]>; rating?: number } | null;
+		// 穿透模式：内部压缩包信息
+		penetrateInfo?: { originalName: string; translatedTitle?: string | null; isAiTranslated: boolean } | null;
 		folderAverageRating: number | null;
 		folderManualRating: number | null;
 		displayTags: () => { tag: string; display: string; isCollect: boolean; color?: string; isMixedVariant?: boolean }[];
@@ -89,6 +91,7 @@
 		isArchive,
 		isReadCompleted,
 		emmMetadata,
+		penetrateInfo = null,
 		folderAverageRating,
 		folderManualRating,
 		displayTags,
@@ -428,6 +431,21 @@
 				>
 					{emmMetadata.translatedTitle}
 				</span>
+			</div>
+		{/if}
+
+		<!-- 穿透模式：内部压缩包信息 -->
+		{#if penetrateInfo}
+			<div class="mt-1 flex items-center gap-1">
+				<Package class="h-3 w-3 text-muted-foreground shrink-0" />
+				<span class="text-xs text-muted-foreground truncate" title={penetrateInfo.originalName}>
+					{penetrateInfo.originalName}
+				</span>
+				{#if penetrateInfo.translatedTitle}
+					<span class="text-xs text-primary truncate" title={penetrateInfo.translatedTitle}>
+						→ {penetrateInfo.isAiTranslated ? '🤖 ' : ''}{penetrateInfo.translatedTitle}
+					</span>
+				{/if}
 			</div>
 		{/if}
 

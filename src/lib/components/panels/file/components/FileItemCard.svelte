@@ -161,7 +161,7 @@
 		return unsubscribe;
 	});
 
-	// 穿透模式：加载文件夹内的压缩包信息
+	// 穿透模式：加载文件夹内的压缩包信息（延迟加载避免影响初始渲染）
 	$effect(() => {
 		// 在 effect 开始时读取所有依赖，确保被追踪
 		const showMode = penetrateShowInnerFile;
@@ -188,8 +188,10 @@
 			return;
 		}
 
-		// 加载文件夹内容
-		FileSystemAPI.browseDirectory(itemPath).then(async (children) => {
+		// 延迟加载，避免影响初始列表渲染
+		const timeoutId = setTimeout(() => {
+			// 加载文件夹内容
+			FileSystemAPI.browseDirectory(itemPath).then(async (children) => {
 			// 过滤出压缩包文件
 			const archives = children.filter(c => !c.isDir && /\.(zip|cbz|rar|cbr|7z|cb7)$/i.test(c.name));
 			
@@ -261,8 +263,11 @@
 				penetrateChildFiles = newResults;
 			});
 		}).catch(() => {
-			penetrateChildFiles = [];
-		});
+				penetrateChildFiles = [];
+			});
+		}, 50); // 50ms 延迟，让主列表先渲染
+		
+		return () => clearTimeout(timeoutId);
 	});
 
 	// 评分（文件夹和文件都使用统一的 ratingStore）

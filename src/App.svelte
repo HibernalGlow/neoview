@@ -735,10 +735,8 @@
 				<EmptyDescription class="mb-6 text-base">Modern Image & Comic Viewer</EmptyDescription>
 			</EmptyHeader> -->
 			<EmptyContent class="relative z-10">
-				<!-- 项目卡片 -->
-				{#if showProjectCard}
-					<ProjectCard class="mb-6" />
-				{/if}
+				<!-- 项目卡片 - 隐藏时变透明，保持布局 -->
+				<ProjectCard class="mb-6 transition-opacity duration-300 {showProjectCard ? 'opacity-100' : 'opacity-0 pointer-events-none'}" />
 
 				<!-- 控制按钮组 - 默认隐藏，悬停显示 -->
 				<div class="empty-controls opacity-0 transition-opacity duration-300 hover:opacity-100 flex items-center gap-2">

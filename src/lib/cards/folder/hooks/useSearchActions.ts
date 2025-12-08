@@ -89,20 +89,25 @@ export function createSearchActions() {
 						// 限制结果数量，避免性能问题
 						const limitedPaths = filteredPaths.slice(0, 200);
 						
-						// 转换为 FsItem
+						// 转换为 FsItem - 根据扩展名判断类型
+						const archiveExts = ['zip', 'rar', '7z', 'cbz', 'cbr', 'cb7', 'epub'];
+						const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'bmp', 'jxl'];
+						
 						results = limitedPaths.map(path => {
 							const name = path.split(/[\\/]/).pop() || path;
+							const ext = name.split('.').pop()?.toLowerCase() || '';
+							const isArchive = archiveExts.includes(ext);
+							const isImage = imageExts.includes(ext);
+							const isDir = !isArchive && !isImage && !ext; // 没有扩展名视为文件夹
+							
 							return {
 								name,
 								path,
-								is_dir: true, // 标签搜索通常返回文件夹
-								isDir: true,
-								isImage: false,
+								isDir,
+								isImage,
 								size: 0,
-								modified: 0,
-								created: 0,
-								is_hidden: false,
-								extension: null
+								modified: Date.now(),
+								created: Date.now()
 							} as FsItem;
 						});
 					}

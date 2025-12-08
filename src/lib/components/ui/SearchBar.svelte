@@ -234,11 +234,11 @@
 	});
 </script>
 
-<div class="search-bar-container flex items-center gap-2 border-b border-border px-2 py-2 bg-background/50">
+<div class="search-bar-container flex items-center gap-2 border-b border-border px-2 py-2">
 	<div class="relative flex-1">
 		<!-- 搜索输入框 -->
 		<div class="flex gap-1">
-			<div class="relative flex-1 flex items-center gap-1 flex-wrap min-h-[36px] border rounded-md bg-background border-border px-2 py-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+			<div class="relative flex-1 flex items-center gap-1 flex-wrap min-h-[36px] border rounded-md bg-transparent border-border px-2 py-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
 				<Search class="h-4 w-4 text-muted-foreground shrink-0" />
 				
 				<!-- 标签 Chips -->

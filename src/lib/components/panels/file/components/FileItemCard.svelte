@@ -157,8 +157,16 @@
 
 	// 穿透模式：加载文件夹内的单个文件信息
 	$effect(() => {
+		// 不是文件夹则跳过
+		if (!item.isDir) {
+			penetrateChildFile = null;
+			penetrateChildMetadata = null;
+			penetrateAiTranslatedTitle = null;
+			return;
+		}
+		
 		// 配置为 'none' 时不显示
-		if (penetrateShowInnerFile === 'none' || !item.isDir) {
+		if (penetrateShowInnerFile === 'none') {
 			penetrateChildFile = null;
 			penetrateChildMetadata = null;
 			penetrateAiTranslatedTitle = null;
@@ -166,6 +174,7 @@
 		}
 
 		// 配置为 'single' 时只在穿透模式开启时显示
+		// 配置为 'all' 时始终显示
 		if (penetrateShowInnerFile === 'single' && !penetrateModeEnabled) {
 			penetrateChildFile = null;
 			penetrateChildMetadata = null;

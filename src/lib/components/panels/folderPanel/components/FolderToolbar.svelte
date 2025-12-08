@@ -624,8 +624,8 @@ function cancelWarmup() {
 							onchange={(e) => fileBrowserStore.setPenetrateShowInnerFile((e.target as HTMLSelectElement).value as 'none' | 'single' | 'all')}
 						>
 							<option value="none">不显示</option>
-							<option value="single">仅单文件</option>
-							<option value="all">全显示</option>
+							<option value="single">穿透时显示</option>
+							<option value="all">始终显示</option>
 						</select>
 					</div>
 

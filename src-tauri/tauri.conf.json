@@ -23,11 +23,12 @@
         "incognito": false,
         "zoomHotkeysEnabled": true,
         "backgroundThrottling": "disabled",
-        "useHttpsScheme": false
+        "useHttpsScheme": true
       }
     ],
     "security": {
       "csp": null,
+      "dangerousDisableAssetCspModification": true,
       "assetProtocol": {
         "enable": true,
         "scope": [

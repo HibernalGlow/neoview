@@ -204,46 +204,62 @@
 				return;
 			}
 			
-			// 并行处理多个压缩包以提高速度
-			const results = await Promise.all(archives.map(async (child) => {
-				const entry: typeof penetrateChildFiles[0] = {
-					name: child.name,
-					path: child.path,
-				};
+			// 先立即显示文件列表（无翻译），然后异步加载翻译
+			const initialResults = archives.map(child => ({
+				name: child.name,
+				path: child.path,
+				translatedTitle: undefined as string | undefined,
+				isAiTranslated: false,
+			}));
+			
+			// 立即显示（不等待翻译）
+			penetrateChildFiles = initialResults;
+			
+			// 异步加载翻译（不阻塞显示）
+			Promise.all(archives.map(async (child, idx) => {
+				let translatedTitle: string | undefined;
+				let isAiTranslated = false;
 				
 				// 加载 EMM 元数据
 				if (enableEMM) {
 					try {
 						const metadata = await emmMetadataStore.loadMetadataByPath(child.path);
 						if (metadata?.translated_title) {
-							entry.translatedTitle = metadata.translated_title;
+							translatedTitle = metadata.translated_title;
 						}
-					} catch { /* 忽略错误 */ }
+					} catch { /* 忽略 */ }
 				}
 				
 				// AI 翻译（如果没有 EMM 翻译）
-				if (!entry.translatedTitle && aiTranslationEnabled && aiAutoTranslate) {
+				if (!translatedTitle && aiTranslationEnabled && aiAutoTranslate) {
 					const nameWithoutExt = child.name.replace(/\.[^.]+$/, '');
 					const childExt = child.name.split('.').pop()?.toLowerCase() || 'archive';
 					const cached = aiTranslationStore.getCachedTranslation(nameWithoutExt);
 					if (cached) {
-						entry.translatedTitle = cached;
-						entry.isAiTranslated = true;
+						translatedTitle = cached;
+						isAiTranslated = true;
 					} else if (needsTranslation(nameWithoutExt, aiTargetLanguage)) {
 						try {
 							const result = await translateText(nameWithoutExt, { fileExtension: childExt });
 							if (result.success && result.translated) {
-								entry.translatedTitle = result.translated;
-								entry.isAiTranslated = true;
+								translatedTitle = result.translated;
+								isAiTranslated = true;
 							}
-						} catch { /* 忽略错误 */ }
+						} catch { /* 忽略 */ }
 					}
 				}
 				
-				return entry;
-			}));
-			
-			penetrateChildFiles = results;
+				return { idx, translatedTitle, isAiTranslated };
+			})).then(updates => {
+				// 更新翻译结果
+				const newResults = [...penetrateChildFiles];
+				for (const { idx, translatedTitle, isAiTranslated } of updates) {
+					if (newResults[idx] && translatedTitle) {
+						newResults[idx] = { ...newResults[idx], translatedTitle, isAiTranslated };
+					}
+				}
+				penetrateChildFiles = newResults;
+			});
 		}).catch(() => {
 			penetrateChildFiles = [];
 		});

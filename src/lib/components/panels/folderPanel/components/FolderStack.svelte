@@ -920,6 +920,7 @@
 						selectedItems={$selectedItems}
 						{viewMode}
 						thumbnailWidthPercent={$thumbnailWidthPercent}
+						showFullPath={getVirtualPathType(layer.path) === 'search'}
 						onItemSelect={(payload) => handleItemSelect(index, payload)}
 						onItemDoubleClick={(payload) => handleItemDoubleClick(index, payload)}
 						onSelectedIndexChange={(payload) => handleSelectedIndexChange(index, payload)}

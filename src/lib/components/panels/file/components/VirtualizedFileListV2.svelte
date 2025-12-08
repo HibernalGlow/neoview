@@ -35,7 +35,8 @@
 		onSelectionChange = (payload: { selectedItems: Set<string> }) => {},
 		onSelectedIndexChange = (payload: { index: number }) => {},
 		onItemSelect = (payload: { item: FsItem; index: number; multiSelect: boolean }) => {},
-		onItemDoubleClick = (payload: { item: FsItem; index: number }) => {}
+		onItemDoubleClick = (payload: { item: FsItem; index: number }) => {},
+		showFullPath = false
 	}: {
 		items?: FsItem[];
 		currentPath?: string;
@@ -51,6 +52,7 @@
 		onSelectedIndexChange?: (payload: { index: number }) => void;
 		onItemSelect?: (payload: { item: FsItem; index: number; multiSelect: boolean }) => void;
 		onItemDoubleClick?: (payload: { item: FsItem; index: number }) => void;
+		showFullPath?: boolean;
 	} = $props();
 
 	const dispatch = createEventDispatcher();
@@ -454,6 +456,11 @@
 									onOpenAsBook={() => dispatch('openFolderAsBook', { item })}
 									onOpenInNewTab={() => dispatch('openInNewTab', { item })}
 								/>
+								{#if showFullPath}
+									<p class="text-[10px] text-muted-foreground/70 truncate px-1" title={item.path}>
+										{item.path}
+									</p>
+								{/if}
 							</div>
 						{/if}
 					{/each}

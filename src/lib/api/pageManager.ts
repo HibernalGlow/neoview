@@ -110,6 +110,31 @@ export async function getBookInfo(): Promise<BookInfo | null> {
 }
 
 /**
+ * 将 IPC 返回的数据转换为 ArrayBuffer
+ * 【修复】postMessage 回退时，invoke 可能返回 number[] 而不是 ArrayBuffer
+ */
+function toArrayBuffer(data: unknown): ArrayBuffer {
+	if (data instanceof ArrayBuffer) {
+		return data;
+	}
+	if (ArrayBuffer.isView(data)) {
+		const view = data as Uint8Array;
+		// 使用 Uint8Array 构造来避免 SharedArrayBuffer 类型问题
+		return new Uint8Array(view).buffer;
+	}
+	if (Array.isArray(data)) {
+		// postMessage 回退时返回的是 number[] 数组
+		return new Uint8Array(data as number[]).buffer;
+	}
+	if (typeof data === 'object' && data !== null) {
+		// 可能是类数组对象
+		const values = Object.values(data) as number[];
+		return new Uint8Array(values).buffer;
+	}
+	throw new Error(`Cannot convert to ArrayBuffer: ${typeof data}`);
+}
+
+/**
  * 跳转到指定页面
  * 
  * 后端自动：
@@ -121,7 +146,8 @@ export async function getBookInfo(): Promise<BookInfo | null> {
  */
 export async function gotoPage(index: number): Promise<Blob> {
 	console.log('📄 [PageManager] gotoPage:', index);
-	const buffer = await invoke<ArrayBuffer>('pm_goto_page', { index });
+	const result = await invoke<ArrayBuffer>('pm_goto_page', { index });
+	const buffer = toArrayBuffer(result);
 	return new Blob([buffer]);
 }
 
@@ -131,7 +157,8 @@ export async function gotoPage(index: number): Promise<Blob> {
  * @returns Blob 数据
  */
 export async function getPage(index: number): Promise<Blob> {
-	const buffer = await invoke<ArrayBuffer>('pm_get_page', { index });
+	const result = await invoke<ArrayBuffer>('pm_get_page', { index });
+	const buffer = toArrayBuffer(result);
 	return new Blob([buffer]);
 }
 
@@ -139,14 +166,16 @@ export async function getPage(index: number): Promise<Blob> {
  * 跳转到指定页面（返回原始 ArrayBuffer，用于延迟追踪）
  */
 export async function gotoPageRaw(index: number): Promise<ArrayBuffer> {
-	return invoke<ArrayBuffer>('pm_goto_page', { index });
+	const result = await invoke<ArrayBuffer>('pm_goto_page', { index });
+	return toArrayBuffer(result);
 }
 
 /**
  * 获取页面数据（返回原始 ArrayBuffer，用于延迟追踪）
  */
 export async function getPageRaw(index: number): Promise<ArrayBuffer> {
-	return invoke<ArrayBuffer>('pm_get_page', { index });
+	const result = await invoke<ArrayBuffer>('pm_get_page', { index });
+	return toArrayBuffer(result);
 }
 
 /**

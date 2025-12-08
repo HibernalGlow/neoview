@@ -56,6 +56,7 @@
 	} from '$lib/stores/emm/favoriteTagStore.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
+	import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 	import { FileSystemAPI } from '$lib/api';
 	import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
 	import { createKeyboardHandler } from '$lib/components/panels/folderPanel/utils/keyboardHandler';
@@ -234,6 +235,25 @@
 	// ==================== 文件操作 ====================
 	async function handleItemOpen(item: FsItem) {
 		if (item.isDir) return;
+		
+		// 如果是虚拟实例且开启了同步文件夹功能，则同步导航到文件所在目录
+		if (isVirtualInstance && propInitialPath) {
+			const isHistoryMode = propInitialPath.includes('history');
+			const isBookmarkMode = propInitialPath.includes('bookmark');
+			
+			const shouldSync = 
+				(isHistoryMode && historySettingsStore.syncFileTreeOnHistorySelect) ||
+				(isBookmarkMode && historySettingsStore.syncFileTreeOnBookmarkSelect);
+			
+			if (shouldSync) {
+				// 获取文件所在目录
+				const lastSep = Math.max(item.path.lastIndexOf('/'), item.path.lastIndexOf('\\'));
+				const parentPath = lastSep > 0 ? item.path.substring(0, lastSep) : item.path;
+				// 触发文件夹面板导航
+				externalNavigationRequest.set({ path: parentPath, timestamp: Date.now() });
+			}
+		}
+		
 		try {
 			const isArchive = await FileSystemAPI.isSupportedArchive(item.path);
 			if (isArchive) {
@@ -552,12 +572,18 @@
 		};
 	});
 
+	// 监听外部导航请求（仅非虚拟实例响应）
 	$effect(() => {
-		const req = get(externalNavigationRequest);
-		if (req) {
-			navigationCommand.set({ type: 'push', path: req.path });
-			externalNavigationRequest.set(null);
-		}
+		// 虚拟实例不监听外部导航请求（避免自己触发自己）
+		if (isVirtualInstance) return;
+		
+		const unsub = externalNavigationRequest.subscribe((req) => {
+			if (req) {
+				navigationCommand.set({ type: 'push', path: req.path });
+				externalNavigationRequest.set(null);
+			}
+		});
+		return unsub;
 	});
 
 	onMount(() => {

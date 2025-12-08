@@ -40,9 +40,11 @@ import {
 	Package,
 	Settings2,
 	ChevronDown,
-	ChevronUp as ChevronUpIcon
+	ChevronUp as ChevronUpIcon,
+	FolderSync
 } from '@lucide/svelte';
 import { hoverPreviewSettings, hoverPreviewEnabled, hoverPreviewDelayMs } from '$lib/stores/hoverPreviewSettings.svelte';
+import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 import { getDefaultRating, saveDefaultRating } from '$lib/stores/emm/storage';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 import { folderThumbnailLoader, type WarmupProgress } from '$lib/utils/thumbnail';
@@ -656,6 +658,36 @@ function cancelWarmup() {
 
 			<Tabs.Content value="other" class="px-2 py-2 mt-0">
 				<div class="flex flex-wrap items-center gap-4 text-xs">
+					<!-- 同步文件夹开关（仅在历史/书签模式下显示） -->
+					{#if virtualMode}
+						<div class="flex items-center gap-2">
+							<FolderSync class="h-3.5 w-3.5 text-muted-foreground" />
+							<span class="text-muted-foreground">同步文件夹:</span>
+							<Button 
+								variant={virtualMode === 'history' 
+									? (historySettingsStore.syncFileTreeOnHistorySelect ? 'default' : 'outline')
+									: (historySettingsStore.syncFileTreeOnBookmarkSelect ? 'default' : 'outline')} 
+								size="sm" 
+								class="h-6 text-xs px-2"
+								onclick={() => {
+									if (virtualMode === 'history') {
+										historySettingsStore.setSyncFileTreeOnHistorySelect(!historySettingsStore.syncFileTreeOnHistorySelect);
+									} else {
+										historySettingsStore.setSyncFileTreeOnBookmarkSelect(!historySettingsStore.syncFileTreeOnBookmarkSelect);
+									}
+								}}
+							>
+								{#if virtualMode === 'history'}
+									{historySettingsStore.syncFileTreeOnHistorySelect ? '开' : '关'}
+								{:else}
+									{historySettingsStore.syncFileTreeOnBookmarkSelect ? '开' : '关'}
+								{/if}
+							</Button>
+							<span class="text-muted-foreground/60 text-[10px]">
+								点击项目时自动在文件夹页签打开所在目录
+							</span>
+						</div>
+					{/if}
 					<!-- 默认评分 -->
 					<div class="flex items-center gap-2">
 						<Star class="h-3.5 w-3.5 text-muted-foreground" />

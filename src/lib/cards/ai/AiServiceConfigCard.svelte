@@ -168,6 +168,33 @@ function removeRule(ruleId: string) {
 	aiTranslationStore.updateConfig({ cleanupRules: rules });
 }
 
+// 正则测试
+let testInputText = $state('');
+let testResultText = $state('');
+
+function testCleanupRules() {
+	if (!testInputText) {
+		testResultText = '';
+		return;
+	}
+	
+	let result = testInputText;
+	const rules = config.cleanupRules || [];
+	
+	for (const rule of rules) {
+		if (!rule.enabled || !rule.pattern) continue;
+		try {
+			const regex = new RegExp(rule.pattern, 'g');
+			result = result.replace(regex, '');
+		} catch (e) {
+			// 忽略无效正则
+		}
+	}
+	
+	// 清理多余空格
+	testResultText = result.replace(/\s+/g, ' ').trim();
+}
+
 // 导出配置
 function exportConfig() {
 	const exportData = {
@@ -635,6 +662,25 @@ async function copyCommand() {
 			<p class="text-xs text-muted-foreground">
 				翻译前去除匹配的内容。可按文件类型选择生效范围。
 			</p>
+			
+			<!-- 正则测试 -->
+			<div class="rounded border bg-muted/20 p-2 space-y-2">
+				<div class="flex items-center gap-2">
+					<input
+						type="text"
+						class="flex-1 rounded border bg-background px-2 py-1 text-xs"
+						placeholder="输入文本测试裁剪效果..."
+						bind:value={testInputText}
+						oninput={testCleanupRules}
+					/>
+				</div>
+				{#if testInputText}
+					<div class="text-xs">
+						<span class="text-muted-foreground">结果：</span>
+						<span class="text-primary font-medium">{testResultText || '(空)'}</span>
+					</div>
+				{/if}
+			</div>
 		</div>
 
 		<!-- 测试连接 -->

@@ -9,7 +9,8 @@ import { invoke } from '@tauri-apps/api/core';
 import {
 	folderTabActions,
 	tabCurrentPath,
-	tabSearchSettings
+	tabSearchSettings,
+	VIRTUAL_PATHS
 } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
 import {
 	parseSearchTags,
@@ -45,18 +46,13 @@ export function createSearchActions() {
 
 		console.log('[useSearchActions] 后端搜索', { searchPath, keyword, searchSettings });
 		
-		// 清除当前标签页的搜索状态，保持正常浏览状态
-		folderTabActions.clearSearch();
-
-		// 创建新标签页用于显示搜索结果
-		folderTabActions.createTab(searchPath);
-
-		// 在新标签页中设置搜索状态（createTab 已经激活了新标签）
-		folderTabActions.setSearchKeyword(keyword);
+		// 在当前标签页显示搜索中状态
 		folderTabActions.setIsSearching(true);
-		folderTabActions.setSearchResults([]);
+		folderTabActions.setSearchKeyword(keyword);
 
 		try {
+			let results: FsItem[] = [];
+			
 			// 检查是否包含标签搜索
 			const hasTagInSearch = hasTagSearch(keyword);
 
@@ -79,7 +75,6 @@ export function createSearchActions() {
 					});
 					
 					// 将路径转换为 FsItem（获取文件信息）
-					let results: FsItem[] = [];
 					if (matchedPaths.length > 0) {
 						// 如果有文本部分，再过滤
 						const filteredPaths = textPart.trim()
@@ -111,14 +106,12 @@ export function createSearchActions() {
 							} as FsItem;
 						});
 					}
-					
 					console.log('[useSearchActions] 标签搜索结果:', results.length);
-					folderTabActions.setSearchResults(results);
 				}
 			} else {
 				// 普通文本搜索 - 使用后端文件搜索
 				console.log('[useSearchActions] 后端文件搜索', { searchPath, keyword });
-				const results: FsItem[] = await invoke('search_files', {
+				results = await invoke('search_files', {
 					path: searchPath,
 					query: keyword,
 					options: {
@@ -126,12 +119,22 @@ export function createSearchActions() {
 						searchInPath: searchSettings.searchInPath
 					}
 				});
-				folderTabActions.setSearchResults(results);
+				console.log('[useSearchActions] 文件搜索结果:', results.length);
 			}
+			
+			// 搜索完成：先设置结果，再创建新标签页
+			folderTabActions.setSearchResults(results);
+			
+			// 清除当前标签页的搜索状态
+			folderTabActions.setIsSearching(false);
+			folderTabActions.clearSearch();
+			
+			// 创建新标签页显示搜索结果（此时 searchResults 已有数据）
+			folderTabActions.createTab(VIRTUAL_PATHS.SEARCH);
+			folderTabActions.setSearchKeyword(keyword);
+			
 		} catch (err) {
 			console.error('[useSearchActions] 后端搜索失败:', err);
-			folderTabActions.setSearchResults([]);
-		} finally {
 			folderTabActions.setIsSearching(false);
 		}
 	}

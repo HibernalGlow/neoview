@@ -9,7 +9,6 @@
 	import FolderStack from '$lib/components/panels/folderPanel/components/FolderStack.svelte';
 	import FolderTree from '$lib/components/panels/folderPanel/components/FolderTree.svelte';
 	import InlineTreeList from '$lib/components/panels/folderPanel/components/InlineTreeList.svelte';
-	import SearchResultList from '$lib/components/panels/folderPanel/components/SearchResultList.svelte';
 	
 	import { getFolderContext } from '../context/FolderContext.svelte';
 	import { folderTabActions } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
@@ -29,7 +28,7 @@
 	const ctx = getFolderContext();
 	
 	// Store 引用（需要用 $ 前缀）
-	const { folderTreeConfig, isSearching, searchResults } = ctx;
+	const { folderTreeConfig } = ctx;
 
 	// ==================== 树调整 ====================
 	function startTreeResize(e: MouseEvent) {
@@ -55,11 +54,7 @@
 		document.removeEventListener('mouseup', stopTreeResize);
 	}
 
-	// ==================== 搜索结果点击 ====================
-	function handleSearchResultClick(item: FsItem) {
-		onItemOpen(item);
-	}
-</script>
+	</script>
 
 <div class="relative flex-1 overflow-hidden">
 	<!-- 文件夹树 -->
@@ -103,16 +98,7 @@
 				class:hidden={tab.id !== ctx.displayActiveTabId}
 				class:pointer-events-none={tab.id !== ctx.displayActiveTabId}
 			>
-				{#if $isSearching || $searchResults.length > 0}
-					<SearchResultList
-						onItemClick={handleSearchResultClick}
-						onItemDoubleClick={handleSearchResultClick}
-						onItemContextMenu={onItemContextMenu}
-						externalSearchResults={ctx.searchResults}
-						externalIsSearching={ctx.isSearching}
-						externalSearchKeyword={ctx.searchKeyword}
-					/>
-				{:else if ctx.effectiveInlineTreeMode}
+				{#if ctx.effectiveInlineTreeMode}
 					<InlineTreeList
 						onItemClick={onItemOpen}
 						onItemDoubleClick={onItemOpen}

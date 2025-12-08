@@ -7,7 +7,7 @@ import type { FsItem } from '$lib/types';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { historyStore, type HistoryEntry } from '$lib/stores/history.svelte';
 import { get } from 'svelte/store';
-import { getVirtualPathType, type VirtualPathType } from '../stores/folderTabStore.svelte';
+import { getVirtualPathType, tabSearchResults, type VirtualPathType } from '../stores/folderTabStore.svelte';
 
 // 书签条目类型（与 bookmarkStore 中的 Bookmark 类型一致）
 interface BookmarkEntry {
@@ -101,6 +101,10 @@ export function loadVirtualPathData(path: string): FsItem[] {
 			const history = get(historyStore) as HistoryEntry[];
 			return history.map(historyToFsItem);
 		}
+		case 'search': {
+			// 搜索结果从 tabSearchResults 获取
+			return get(tabSearchResults) as FsItem[];
+		}
 		default:
 			return [];
 	}
@@ -124,6 +128,12 @@ export function subscribeVirtualPathData(
 		case 'history': {
 			return historyStore.subscribe((history: HistoryEntry[]) => {
 				callback(history.map(historyToFsItem));
+			});
+		}
+		case 'search': {
+			// 搜索结果订阅
+			return tabSearchResults.subscribe((results: FsItem[]) => {
+				callback(results);
 			});
 		}
 		default:
@@ -199,6 +209,15 @@ export function getVirtualPathConfig(type: VirtualPathType) {
 				showMigrationBar: false,
 				defaultSortField: 'date' as const,
 				defaultSortOrder: 'desc' as const
+			};
+		case 'search':
+			return {
+				canClear: false,
+				canAddBookmark: true,
+				showFolderTree: false,
+				showMigrationBar: false,
+				defaultSortField: 'name' as const,
+				defaultSortOrder: 'asc' as const
 			};
 		default:
 			return null;

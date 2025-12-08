@@ -115,10 +115,11 @@ function generateTabId(): string {
 
 export const VIRTUAL_PATHS = {
 	BOOKMARK: 'virtual://bookmark',
-	HISTORY: 'virtual://history'
+	HISTORY: 'virtual://history',
+	SEARCH: 'virtual://search'
 } as const;
 
-export type VirtualPathType = 'bookmark' | 'history' | null;
+export type VirtualPathType = 'bookmark' | 'history' | 'search' | null;
 
 /**
  * 判断是否为虚拟路径
@@ -133,6 +134,7 @@ export function isVirtualPath(path: string): boolean {
 export function getVirtualPathType(path: string): VirtualPathType {
 	if (path === VIRTUAL_PATHS.BOOKMARK) return 'bookmark';
 	if (path === VIRTUAL_PATHS.HISTORY) return 'history';
+	if (path.startsWith(VIRTUAL_PATHS.SEARCH)) return 'search';
 	return null;
 }
 
@@ -144,6 +146,7 @@ function getVirtualDisplayName(path: string): string {
 	switch (type) {
 		case 'bookmark': return '📑 书签';
 		case 'history': return '🕒 历史';
+		case 'search': return '🔍 搜索结果';
 		default: return path;
 	}
 }
@@ -309,7 +312,11 @@ export const tabSortConfig = derived(activeTab, ($tab) => ({
 export const tabMultiSelectMode = derived(activeTab, ($tab) => $tab?.multiSelectMode || false);
 export const tabDeleteMode = derived(activeTab, ($tab) => $tab?.deleteMode || false);
 export const tabSearchKeyword = derived(activeTab, ($tab) => $tab?.searchKeyword || '');
-export const tabSearchResults = derived(activeTab, ($tab) => $tab?.searchResults || []);
+
+// 全局搜索结果 store（独立于标签页，用于虚拟路径 virtual://search）
+export const globalSearchResults = writable<FsItem[]>([]);
+export const tabSearchResults = globalSearchResults; // 使用全局 store
+
 export const tabIsSearching = derived(activeTab, ($tab) => $tab?.isSearching || false);
 export const tabShowSearchBar = derived(activeTab, ($tab) => $tab?.showSearchBar || false);
 export const tabShowMigrationBar = derived(activeTab, ($tab) => $tab?.showMigrationBar || false);
@@ -775,10 +782,10 @@ export const folderTabActions = {
 	},
 
 	/**
-	 * 设置搜索结果
+	 * 设置搜索结果（更新全局 store）
 	 */
 	setSearchResults(results: FsItem[]) {
-		updateActiveTab((tab) => ({ ...tab, searchResults: results }));
+		globalSearchResults.set(results);
 	},
 
 	/**

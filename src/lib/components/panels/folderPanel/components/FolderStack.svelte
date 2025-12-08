@@ -26,6 +26,7 @@
 		tabCurrentPath,
 		activeTabId,
 		tabThumbnailWidthPercent,
+		tabItems,
 		isVirtualPath,
 		getVirtualPathType
 	} from '../stores/folderTabStore.svelte';
@@ -269,11 +270,11 @@
 		return items.filter((item) => item.name.toLowerCase().includes(lowerKeyword));
 	}
 
-	// 获取层的显示项（应用排序，不过滤 - 搜索在 SearchResultList 中处理）
+	// 获取层的显示项（应用排序）
 	function getDisplayItems(layer: FolderLayer): FsItem[] {
 		const config = effectiveSortConfig;
 		let result = layer.items;
-		// 不再根据 searchKeyword 过滤，搜索结果在独立的 SearchResultList 中显示
+		// 搜索结果现在也通过 FolderStack 显示，不需要额外过滤
 		// 虚拟路径下文件夹和文件平等排序
 		const skipFolderFirst = isVirtualPath(layer.path);
 		result = sortItems(result, config.field, config.order, skipFolderFirst);
@@ -286,7 +287,6 @@
 		layers = [layer];
 		activeIndex = 0;
 		globalStore.setPath(path);
-		// 同步 items 到 store（用于工具栏显示计数）
 		globalStore.setItems(layer.items);
 	}
 
@@ -297,7 +297,6 @@
 		activeIndex = 0;
 		// 使用 setPath 的第二个参数禁止添加历史记录
 		globalStore.setPath(path, false);
-		// 同步 items 到 store（用于工具栏显示计数）
 		globalStore.setItems(layer.items);
 	}
 
@@ -317,7 +316,7 @@
 		};
 
 		try {
-			// 检查是否为虚拟路径
+			// 检查是否为虚拟路径（包括书签、历史、搜索）
 			if (isVirtualPath(path)) {
 				// 设置虚拟路径默认排序配置（按时间倒序）
 				const virtualType = getVirtualPathType(path);
@@ -338,15 +337,20 @@
 				}
 				virtualPathUnsubscribe = subscribeVirtualPathData(path, (newItems) => {
 					// 更新当前层的数据
-					const currentLayer = layers.find((l) => l.path === path);
+					const currentLayer = layers.find((l) => l.id === layer.id);
 					if (currentLayer) {
 						currentLayer.items = newItems;
 						globalStore.setItems(newItems);
+						// 加载缩略图
+						loadThumbnailsForLayer(newItems, path);
 					}
 				});
 
 				// 加载缩略图
 				loadThumbnailsForLayer(items, path);
+
+				// 异步加载收藏标签匹配数（用于排序）
+				loadCollectTagCountsForLayer(layer);
 			} else {
 				// 正常文件系统路径
 				// 清理虚拟路径订阅
@@ -360,10 +364,10 @@
 				layer.items = items;
 				layer.loading = false;
 
-				// 异步加载缩略图
+				// 加载缩略图
 				loadThumbnailsForLayer(items, path);
 
-				// 异步加载收藏标签匹配数（用于排序）
+				// 加载收藏标签匹配数（用于排序）
 				loadCollectTagCountsForLayer(layer);
 			}
 		} catch (err) {

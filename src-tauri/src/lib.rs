@@ -17,6 +17,7 @@ mod tray;
 use commands::fs_commands::{CacheIndexState, DirectoryCacheState, FsState};
 use commands::generic_upscale_commands::GenericUpscalerState;
 use commands::page_commands::PageManagerState;
+use commands::pyo3_colorize_commands::PyO3ColorizerState;
 use commands::pyo3_upscale_commands::PyO3UpscalerState;
 use commands::task_queue_commands::BackgroundSchedulerState;
 use commands::upscale_commands::UpscaleManagerState;
@@ -107,6 +108,9 @@ pub fn run() {
             app.manage(UpscaleSchedulerState {
                 scheduler: Arc::new(scheduler),
             });
+
+            // 初始化 PyO3 上色管理器
+            app.manage(PyO3ColorizerState::default());
 
             // 初始化设置管理器
             app.manage(UpscaleSettingsState::default());
@@ -259,6 +263,20 @@ pub fn run() {
             commands::cleanup_pyo3_cache,
             commands::pyo3_cancel_job,
             commands::test_pyo3_upscaler,
+            // PyO3 Colorize commands
+            commands::init_pyo3_colorizer,
+            commands::check_pyo3_colorizer_availability,
+            commands::check_colorize_models_exist,
+            commands::load_colorize_model,
+            commands::unload_colorize_model,
+            commands::is_colorize_model_loaded,
+            commands::pyo3_colorize_image_memory,
+            commands::pyo3_save_colorize_cache,
+            commands::check_pyo3_colorize_cache,
+            commands::read_colorize_cache_file,
+            commands::get_pyo3_colorize_cache_stats,
+            commands::cleanup_pyo3_colorize_cache,
+            commands::pyo3_colorize_and_upscale,
             // Upscale scheduler commands
             commands::enqueue_upscale_job,
             commands::cancel_upscale_job,

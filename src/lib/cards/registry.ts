@@ -3,7 +3,7 @@
  * 统一定义所有卡片的元数据，支持动态发现和跨面板移动
  */
 import type { PanelId } from '$lib/stores/sidebarConfig.svelte';
-import { Eye, Timer, Layers, FolderOpen, FileText, Image, Cpu, History, Tags, Search, Activity, Gauge, Archive, Globe, ListChecks, BarChart3, Languages, Settings } from '@lucide/svelte';
+import { Eye, Timer, Layers, FolderOpen, FileText, Image, Cpu, History, Tags, Search, Activity, Gauge, Archive, Globe, ListChecks, BarChart3, Languages, Settings, Palette } from '@lucide/svelte';
 
 // 卡片定义
 export interface CardDefinition {
@@ -281,6 +281,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		id: 'upscaleConditions',
 		title: '条件超分',
 		icon: Activity,
+		defaultPanel: 'upscale',
+		canHide: true,
+	},
+	'colorizeControl': {
+		id: 'colorizeControl',
+		title: '漫画上色',
+		icon: Palette,
 		defaultPanel: 'upscale',
 		canHide: true,
 	},

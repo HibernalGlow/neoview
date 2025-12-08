@@ -21,6 +21,7 @@ pub mod generic_upscaler;
 pub mod image_cache;
 pub mod image_loader;
 pub mod path_utils;
+pub mod pyo3_colorizer;
 pub mod pyo3_upscaler;
 pub mod python_upscale_wrapper;
 pub mod sr_vulkan_manager;

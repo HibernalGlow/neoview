@@ -11,6 +11,7 @@ import {
 	isVirtualPath
 } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
 import { directoryTreeCache } from '$lib/components/panels/folderPanel/utils/directoryTreeCache';
+import { loadVirtualPathData } from '$lib/components/panels/folderPanel/utils/virtualPathLoader';
 import {
 	parseSearchTags,
 	hasTagSearch,
@@ -23,7 +24,7 @@ import type { SearchSettings } from '../types';
  * 创建搜索操作
  */
 export function createSearchActions() {
-	// 执行搜索 - 在新标签页中显示搜索结果
+	// 执行搜索 - 普通路径在新标签页显示，虚拟路径在当前标签页前端过滤
 	async function handleSearch(keyword: string) {
 		if (!keyword.trim()) {
 			folderTabActions.clearSearch();
@@ -31,13 +32,39 @@ export function createSearchActions() {
 		}
 
 		const searchPath = get(tabCurrentPath);
-		if (!searchPath || isVirtualPath(searchPath)) {
+		if (!searchPath) {
 			return;
 		}
 
 		// 保存当前搜索设置
 		const searchSettings = get(tabSearchSettings);
 
+		// 虚拟路径（书签/历史）：在当前标签页进行前端过滤
+		if (isVirtualPath(searchPath)) {
+			folderTabActions.setSearchKeyword(keyword);
+			folderTabActions.setIsSearching(true);
+
+			try {
+				// 从虚拟路径加载数据
+				const items = loadVirtualPathData(searchPath);
+				const lowerKeyword = keyword.toLowerCase();
+				
+				// 前端过滤：按文件名和路径匹配
+				const results = items.filter(item => 
+					item.name.toLowerCase().includes(lowerKeyword) ||
+					item.path.toLowerCase().includes(lowerKeyword)
+				);
+				folderTabActions.setSearchResults(results);
+			} catch (err) {
+				console.error('[Search] 虚拟路径搜索失败:', err);
+				folderTabActions.setSearchResults([]);
+			} finally {
+				folderTabActions.setIsSearching(false);
+			}
+			return;
+		}
+
+		// 普通文件系统路径：在新标签页显示搜索结果
 		// 清除当前标签页的搜索状态，保持正常浏览状态
 		folderTabActions.clearSearch();
 

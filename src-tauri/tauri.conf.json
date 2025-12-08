@@ -27,7 +27,7 @@
       }
     ],
     "security": {
-      "csp": null,
+      "csp": "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src *; img-src * data: blob:; media-src * data: blob:;",
       "assetProtocol": {
         "enable": true,
         "scope": [

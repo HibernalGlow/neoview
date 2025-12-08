@@ -10,7 +10,7 @@ import { testConnection, clearOllamaStatusCache } from '$lib/services/translatio
 import { Settings, Server, Bot, CheckCircle, XCircle, Loader2, Copy, Check, Terminal, Ban, ExternalLink, Circle, Sparkles, BookOpen, Play, Power } from '@lucide/svelte';
 import * as Select from '$lib/components/ui/select';
 import { invoke } from '@tauri-apps/api/core';
-import { Command } from '@tauri-apps/plugin-shell';
+import { Command, type Child } from '@tauri-apps/plugin-shell';
 import { toast } from 'svelte-sonner';
 
 let config = $state(aiTranslationStore.getConfig());
@@ -23,6 +23,54 @@ let checkingStatus = $state(false);
 let ollamaOnline = $state<boolean | null>(null);
 let checkingOllamaStatus = $state(false);
 let startingOllama = $state(false);
+
+// Ollama 进程输出
+let ollamaLogs = $state<string[]>([]);
+let ollamaProcess = $state<Child | null>(null);
+let showLogs = $state(false);
+
+// Ollama 统计信息
+interface OllamaModel {
+	name: string;
+	model: string;
+	size: number;
+	digest: string;
+	details?: {
+		parameter_size?: string;
+		quantization_level?: string;
+	};
+	size_vram?: number;
+}
+let ollamaStats = $state<OllamaModel[] | null>(null);
+let loadingStats = $state(false);
+
+// 获取 Ollama 运行统计
+async function fetchOllamaStats() {
+	if (!ollamaOnline) return;
+	loadingStats = true;
+	try {
+		const response = await fetch(`${config.ollamaUrl}/api/ps`, {
+			method: 'GET',
+			signal: AbortSignal.timeout(5000)
+		});
+		if (response.ok) {
+			const data = await response.json();
+			ollamaStats = data.models || [];
+		}
+	} catch {
+		ollamaStats = null;
+	} finally {
+		loadingStats = false;
+	}
+}
+
+// 格式化字节大小
+function formatBytes(bytes: number): string {
+	if (bytes < 1024) return bytes + ' B';
+	if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+	if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+	return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+}
 
 // 检查服务状态
 async function checkServiceStatus() {
@@ -689,6 +737,59 @@ async function copyCommand() {
 					1. 启动服务  2. 运行模型（自动下载）
 				</p>
 			</div>
+			
+			<!-- 运行统计 -->
+			{#if ollamaOnline}
+				<div class="space-y-2 border-t pt-3">
+					<div class="flex items-center justify-between">
+						<div class="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+							<Sparkles class="h-3 w-3" />
+							运行状态
+						</div>
+						<Button
+							variant="ghost"
+							size="sm"
+							class="h-6 px-2 text-xs"
+							onclick={fetchOllamaStats}
+							disabled={loadingStats}
+						>
+							{#if loadingStats}
+								<Loader2 class="h-3 w-3 animate-spin" />
+							{:else}
+								刷新
+							{/if}
+						</Button>
+					</div>
+					{#if ollamaStats !== null}
+						{#if ollamaStats.length === 0}
+							<p class="text-xs text-muted-foreground">当前无运行中的模型</p>
+						{:else}
+							<div class="space-y-1">
+								{#each ollamaStats as model}
+									<div class="rounded bg-muted/50 p-2 text-xs">
+										<div class="flex items-center justify-between">
+											<span class="font-medium">{model.name}</span>
+											<span class="text-muted-foreground">{formatBytes(model.size)}</span>
+										</div>
+										{#if model.size_vram}
+											<div class="mt-1 text-muted-foreground">
+												VRAM: {formatBytes(model.size_vram)}
+											</div>
+										{/if}
+										{#if model.details}
+											<div class="mt-1 text-muted-foreground">
+												{model.details.parameter_size || ''} {model.details.quantization_level || ''}
+											</div>
+										{/if}
+									</div>
+								{/each}
+							</div>
+						{/if}
+					{:else}
+						<p class="text-xs text-muted-foreground">点击刷新查看运行状态</p>
+					{/if}
+				</div>
+			{/if}
 			
 			<!-- Prompt 模板 -->
 			<div class="space-y-2">

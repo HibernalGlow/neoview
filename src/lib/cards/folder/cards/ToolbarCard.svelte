@@ -10,6 +10,7 @@
 	import MigrationBar from '$lib/components/panels/folderPanel/components/MigrationBar.svelte';
 	import SelectionBar from '$lib/components/panels/folderPanel/components/SelectionBar.svelte';
 	import SearchBar from '$lib/components/ui/SearchBar.svelte';
+	import VirtualSearchBar from '$lib/components/ui/VirtualSearchBar.svelte';
 	import FavoriteTagPanel from '$lib/components/panels/folderPanel/components/FavoriteTagPanel.svelte';
 	
 	import { getFolderContext } from '../context/FolderContext.svelte';
@@ -113,50 +114,34 @@
 	}
 
 	// ==================== 搜索 ====================
-	function handleSearch(keyword: string) {
-		console.log('[ToolbarCard.handleSearch] 开始搜索', {
-			keyword,
-			isVirtualInstance,
-			initialPath,
-			panelMode
-		});
-		
-		// 虚拟路径：使用本地 store 进行前端过滤
-		if (isVirtualInstance && initialPath) {
-			if (!keyword.trim()) {
-				console.log('[ToolbarCard.handleSearch] 清空搜索');
-				localSearchStore.keyword.set('');
-				localSearchStore.results.set([]);
-				localSearchStore.isSearching.set(false);
-				return;
-			}
-			
-			localSearchStore.keyword.set(keyword);
-			localSearchStore.isSearching.set(true);
-			
-			try {
-				const items = loadVirtualPathData(initialPath);
-				console.log('[ToolbarCard.handleSearch] 虚拟路径数据:', items.length, '项');
-				
-				const lowerKeyword = keyword.toLowerCase();
-				const results = items.filter((item: FsItem) => 
-					item.name.toLowerCase().includes(lowerKeyword) ||
-					item.path.toLowerCase().includes(lowerKeyword)
-				);
-				
-				console.log('[ToolbarCard.handleSearch] 搜索结果:', results.length, '项');
-				localSearchStore.results.set(results);
-			} catch (err) {
-				console.error('[ToolbarCard.handleSearch] 虚拟路径搜索失败:', err);
-				localSearchStore.results.set([]);
-			} finally {
-				localSearchStore.isSearching.set(false);
-			}
-			return;
+	
+	// 获取虚拟路径数据源
+	function getVirtualItems(): FsItem[] {
+		if (!initialPath) return [];
+		try {
+			return loadVirtualPathData(initialPath);
+		} catch (err) {
+			console.error('[ToolbarCard] 加载虚拟路径数据失败:', err);
+			return [];
 		}
-		
-		// 普通路径：使用全局搜索（新标签页）
-		console.log('[ToolbarCard.handleSearch] 普通路径搜索');
+	}
+	
+	// 虚拟路径搜索处理（用于 VirtualSearchBar）
+	function handleVirtualSearch(results: FsItem[], keyword: string) {
+		console.log('[ToolbarCard.handleVirtualSearch]', { keyword, resultCount: results.length });
+		localSearchStore.keyword.set(keyword);
+		localSearchStore.results.set(results);
+		localSearchStore.isSearching.set(false);
+	}
+	
+	// 虚拟路径搜索值变化
+	function handleVirtualSearchValueChange(val: string) {
+		localSearchStore.keyword.set(val);
+	}
+	
+	// 普通路径搜索处理（用于 SearchBar）
+	function handleSearch(keyword: string) {
+		console.log('[ToolbarCard.handleSearch] 普通路径搜索', { keyword });
 		searchActions.handleSearch(keyword);
 	}
 
@@ -183,41 +168,53 @@
 
 <!-- 搜索栏 -->
 {#if ctx.effectiveShowSearchBar}
-	<div class="relative">
-		<div class="flex items-center gap-1">
-			<div class="flex-1">
-				<SearchBar
-					placeholder="搜索文件..."
-					value={$searchKeyword}
-					onSearch={handleSearch}
-					onSearchChange={setSearchKeyword}
-					storageKey="neoview-folder-search-history"
-					searchSettings={{
-						includeSubfolders: $searchSettings.includeSubfolders,
-						showHistoryOnFocus: $searchSettings.showHistoryOnFocus,
-						searchInPath: $searchSettings.searchInPath
-					}}
-					onSettingsChange={handleSearchSettingsChange}
-				/>
-			</div>
-			<button
-				class="hover:bg-accent shrink-0 rounded border p-1.5 {ctx.showFavoriteTagPanel
-					? 'bg-primary/10 border-primary text-primary'
-					: 'border-border'}"
-				onclick={handleToggleFavoriteTagPanel}
-				title="收藏标签"
-			>
-				<Star class="h-4 w-4 {ctx.showFavoriteTagPanel ? 'fill-primary' : ''}" />
-			</button>
-		</div>
-		<FavoriteTagPanel
-			visible={ctx.showFavoriteTagPanel}
-			enableMixed={mixedGenderStore.enabled}
-			onClose={handleCloseFavoriteTagPanel}
-			onAppendTag={handleAppendTag}
-			onUpdateEnableMixed={(v) => { mixedGenderStore.enabled = v; }}
+	{#if isVirtualInstance}
+		<!-- 虚拟路径（历史/书签）：使用简单的前端搜索组件 -->
+		<VirtualSearchBar
+			placeholder={panelMode === 'history' ? '搜索历史记录...' : '搜索书签...'}
+			value={$searchKeyword}
+			items={getVirtualItems()}
+			onSearch={handleVirtualSearch}
+			onValueChange={handleVirtualSearchValueChange}
 		/>
-	</div>
+	{:else}
+		<!-- 普通文件夹：使用完整的后端搜索组件 -->
+		<div class="relative">
+			<div class="flex items-center gap-1">
+				<div class="flex-1">
+					<SearchBar
+						placeholder="搜索文件..."
+						value={$searchKeyword}
+						onSearch={handleSearch}
+						onSearchChange={setSearchKeyword}
+						storageKey="neoview-folder-search-history"
+						searchSettings={{
+							includeSubfolders: $searchSettings.includeSubfolders,
+							showHistoryOnFocus: $searchSettings.showHistoryOnFocus,
+							searchInPath: $searchSettings.searchInPath
+						}}
+						onSettingsChange={handleSearchSettingsChange}
+					/>
+				</div>
+				<button
+					class="hover:bg-accent shrink-0 rounded border p-1.5 {ctx.showFavoriteTagPanel
+						? 'bg-primary/10 border-primary text-primary'
+						: 'border-border'}"
+					onclick={handleToggleFavoriteTagPanel}
+					title="收藏标签"
+				>
+					<Star class="h-4 w-4 {ctx.showFavoriteTagPanel ? 'fill-primary' : ''}" />
+				</button>
+			</div>
+			<FavoriteTagPanel
+				visible={ctx.showFavoriteTagPanel}
+				enableMixed={mixedGenderStore.enabled}
+				onClose={handleCloseFavoriteTagPanel}
+				onAppendTag={handleAppendTag}
+				onUpdateEnableMixed={(v) => { mixedGenderStore.enabled = v; }}
+			/>
+		</div>
+	{/if}
 {/if}
 
 <!-- 迁移栏 -->

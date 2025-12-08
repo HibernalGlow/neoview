@@ -107,6 +107,36 @@ async function translateWithLibreTranslate(
 	}
 }
 
+// 语言代码到名称的映射
+const LANG_NAMES: Record<string, string> = {
+	ja: '日语',
+	en: '英语',
+	zh: '中文',
+	ko: '韩语',
+	auto: '原文',
+};
+
+/**
+ * 解析 prompt 模板，替换变量
+ * 支持变量: {text}, {source_lang}, {target_lang}, {filename}
+ */
+function parsePromptTemplate(
+	template: string,
+	text: string,
+	sourceLang: string,
+	targetLang: string,
+	filename?: string
+): string {
+	const sourceLangName = LANG_NAMES[sourceLang] || sourceLang;
+	const targetLangName = LANG_NAMES[targetLang] || targetLang;
+	
+	return template
+		.replace(/\{text\}/g, text)
+		.replace(/\{source_lang\}/g, sourceLangName)
+		.replace(/\{target_lang\}/g, targetLangName)
+		.replace(/\{filename\}/g, filename || text);
+}
+
 /**
  * 使用 Ollama 本地模型翻译
  */
@@ -115,14 +145,12 @@ async function translateWithOllama(
 	sourceLang: string,
 	targetLang: string,
 	apiUrl: string,
-	model: string
+	model: string,
+	promptTemplate?: string
 ): Promise<TranslationResult> {
-	const sourceLangName = sourceLang === 'ja' ? '日语' : sourceLang === 'en' ? '英语' : '原文';
-	const targetLangName = targetLang === 'zh' ? '中文' : targetLang === 'en' ? '英语' : '目标语言';
-
-	const prompt = `请将以下${sourceLangName}文本翻译成${targetLangName}，只输出翻译结果，不要解释：
-
-${text}`;
+	// 使用自定义模板或默认模板
+	const template = promptTemplate || '请将以下{source_lang}文本翻译成{target_lang}，只返回翻译结果，不要解释：\n{text}';
+	const prompt = parsePromptTemplate(template, text, sourceLang, targetLang);
 
 	try {
 		const response = await fetch(`${apiUrl}/api/generate`, {
@@ -225,7 +253,8 @@ export async function translateText(text: string, skipCleanup = false): Promise<
 					sourceLang,
 					config.targetLanguage,
 					config.ollamaUrl,
-					config.ollamaModel
+					config.ollamaModel,
+					config.ollamaPromptTemplate
 				);
 				break;
 			default:

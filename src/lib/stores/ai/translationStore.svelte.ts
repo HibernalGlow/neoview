@@ -17,6 +17,8 @@ export interface TranslationServiceConfig {
 	// Ollama 配置
 	ollamaUrl: string;
 	ollamaModel: string;
+	// Ollama prompt 模板（支持变量：{text}, {source_lang}, {target_lang}）
+	ollamaPromptTemplate: string;
 	// 通用配置
 	sourceLanguage: string; // 'auto' | 'ja' | 'en' | ...
 	targetLanguage: string; // 'zh' | 'en' | ...
@@ -24,7 +26,59 @@ export interface TranslationServiceConfig {
 	autoTranslate: boolean; // 自动翻译无 EMM 翻译的标题
 	// 标题裁剪正则（去除不需要翻译的部分）
 	titleCleanupPatterns: string[]; // 例如: ["\\[.*?\\]", "\\(.*?\\)"]
+	// 当前使用的预设名称
+	activePreset: string;
 }
+
+// 翻译预设
+export interface TranslationPreset {
+	id: string;
+	name: string;
+	description?: string;
+	type: TranslationServiceType;
+	// Ollama 配置
+	ollamaUrl?: string;
+	ollamaModel?: string;
+	ollamaPromptTemplate?: string;
+	// LibreTranslate 配置
+	libreTranslateUrl?: string;
+	// 语言配置
+	sourceLanguage?: string;
+	targetLanguage?: string;
+	titleCleanupPatterns?: string[];
+}
+
+// 内置预设
+export const BUILTIN_PRESETS: TranslationPreset[] = [
+	{
+		id: 'default-ollama',
+		name: 'Ollama 默认',
+		description: '使用 Ollama 本地模型翻译',
+		type: 'ollama',
+		ollamaUrl: 'http://localhost:11434',
+		ollamaModel: 'qwen2.5:7b',
+		ollamaPromptTemplate: '请将以下{source_lang}文本翻译成{target_lang}，只返回翻译结果，不要解释：\n{text}',
+		sourceLanguage: 'auto',
+		targetLanguage: 'zh',
+		titleCleanupPatterns: ['\\[.*?\\]', '\\(.*?\\)'],
+	},
+	{
+		id: 'ollama-concise',
+		name: 'Ollama 简洁',
+		description: '简洁翻译模式',
+		type: 'ollama',
+		ollamaPromptTemplate: '翻译成{target_lang}：{text}',
+	},
+	{
+		id: 'default-libretranslate',
+		name: 'LibreTranslate 默认',
+		description: '使用 LibreTranslate 本地服务',
+		type: 'libretranslate',
+		libreTranslateUrl: 'http://localhost:5000',
+		sourceLanguage: 'auto',
+		targetLanguage: 'zh',
+	},
+];
 
 // 翻译缓存条目
 export interface TranslationCacheEntry {
@@ -57,12 +111,14 @@ const defaultConfig: TranslationServiceConfig = {
 	libreTranslateApiKey: '',
 	ollamaUrl: 'http://localhost:11434',
 	ollamaModel: 'qwen2.5:7b',
-	sourceLanguage: 'ja',
+	ollamaPromptTemplate: '请将以下{source_lang}文本翻译成{target_lang}，只返回翻译结果，不要解释：\n{text}',
+	sourceLanguage: 'auto',
 	targetLanguage: 'zh',
 	enabled: false,
 	autoTranslate: true,
 	// 默认裁剪方括号和圆括号内的内容
 	titleCleanupPatterns: ['\\[.*?\\]', '\\(.*?\\)'],
+	activePreset: 'custom',
 };
 
 // 从 localStorage 加载配置

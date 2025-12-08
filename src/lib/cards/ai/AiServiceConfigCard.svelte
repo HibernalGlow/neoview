@@ -5,9 +5,10 @@
 import { Button } from '$lib/components/ui/button';
 import { Input } from '$lib/components/ui/input';
 import { Label } from '$lib/components/ui/label';
-import { aiTranslationStore, type TranslationServiceType } from '$lib/stores/ai/translationStore.svelte';
+import { aiTranslationStore, type TranslationServiceType, BUILTIN_PRESETS, type TranslationPreset } from '$lib/stores/ai/translationStore.svelte';
 import { testConnection } from '$lib/services/translationService';
-import { Settings, Server, Bot, CheckCircle, XCircle, Loader2, Copy, Check, Terminal, Ban, ExternalLink, Circle } from '@lucide/svelte';
+import { Settings, Server, Bot, CheckCircle, XCircle, Loader2, Copy, Check, Terminal, Ban, ExternalLink, Circle, Sparkles, BookOpen } from '@lucide/svelte';
+import * as Select from '$lib/components/ui/select';
 
 let config = $state(aiTranslationStore.getConfig());
 let isTesting = $state(false);
@@ -102,6 +103,54 @@ function updateCleanupPatterns() {
 		.map(p => p.trim())
 		.filter(p => p.length > 0);
 	aiTranslationStore.updateConfig({ titleCleanupPatterns: patterns });
+}
+
+// Prompt 模板
+let promptTemplateText = $state('');
+
+$effect(() => {
+	if (config.ollamaPromptTemplate) {
+		promptTemplateText = config.ollamaPromptTemplate;
+	}
+});
+
+function updatePromptTemplate() {
+	aiTranslationStore.updateConfig({ ollamaPromptTemplate: promptTemplateText, activePreset: 'custom' });
+}
+
+// 预设选择
+function applyPreset(preset: TranslationPreset) {
+	const updates: Partial<typeof config> = {
+		activePreset: preset.id,
+		type: preset.type,
+	};
+	
+	if (preset.ollamaUrl) updates.ollamaUrl = preset.ollamaUrl;
+	if (preset.ollamaModel) updates.ollamaModel = preset.ollamaModel;
+	if (preset.ollamaPromptTemplate) {
+		updates.ollamaPromptTemplate = preset.ollamaPromptTemplate;
+		promptTemplateText = preset.ollamaPromptTemplate;
+	}
+	if (preset.libreTranslateUrl) updates.libreTranslateUrl = preset.libreTranslateUrl;
+	if (preset.sourceLanguage) updates.sourceLanguage = preset.sourceLanguage;
+	if (preset.targetLanguage) updates.targetLanguage = preset.targetLanguage;
+	if (preset.titleCleanupPatterns) {
+		updates.titleCleanupPatterns = preset.titleCleanupPatterns;
+		cleanupPatternsText = preset.titleCleanupPatterns.join('\n');
+	}
+	
+	aiTranslationStore.updateConfig(updates);
+}
+
+function handlePresetChange(presetId: string) {
+	if (presetId === 'custom') {
+		aiTranslationStore.updateConfig({ activePreset: 'custom' });
+		return;
+	}
+	const preset = BUILTIN_PRESETS.find(p => p.id === presetId);
+	if (preset) {
+		applyPreset(preset);
+	}
 }
 
 async function handleTestConnection() {
@@ -307,9 +356,25 @@ async function copyCommand() {
 	{:else if config.type === 'ollama'}
 		<!-- Ollama 配置 -->
 		<div class="space-y-3 rounded-md border bg-muted/20 p-3">
-			<div class="flex items-center gap-2 text-sm font-medium">
-				<Bot class="h-4 w-4" />
-				Ollama 配置
+			<div class="flex items-center justify-between">
+				<div class="flex items-center gap-2 text-sm font-medium">
+					<Bot class="h-4 w-4" />
+					Ollama 配置
+				</div>
+				<!-- 预设选择 -->
+				<div class="flex items-center gap-2">
+					<BookOpen class="h-3 w-3 text-muted-foreground" />
+					<select
+						class="h-7 rounded border bg-background px-2 text-xs"
+						value={config.activePreset}
+						onchange={(e) => handlePresetChange((e.target as HTMLSelectElement).value)}
+					>
+						<option value="custom">自定义</option>
+						{#each BUILTIN_PRESETS.filter(p => p.type === 'ollama') as preset}
+							<option value={preset.id}>{preset.name}</option>
+						{/each}
+					</select>
+				</div>
 			</div>
 			<div class="space-y-2">
 				<Label class="text-xs">API 地址</Label>
@@ -327,6 +392,20 @@ async function copyCommand() {
 					placeholder="qwen2.5:7b"
 				/>
 				<p class="text-xs text-muted-foreground">推荐: qwen2.5:7b, llama3.2:3b</p>
+			</div>
+			<!-- Prompt 模板 -->
+			<div class="space-y-2">
+				<div class="flex items-center justify-between">
+					<Label class="text-xs">Prompt 模板</Label>
+					<span class="text-[10px] text-muted-foreground">变量: {'{'+'text}'} {'{'+'source_lang}'} {'{'+'target_lang}'} {'{'+'filename}'}</span>
+				</div>
+				<textarea
+					class="w-full rounded border bg-background p-2 text-xs min-h-[60px] resize-y"
+					value={promptTemplateText}
+					oninput={(e) => promptTemplateText = (e.target as HTMLTextAreaElement).value}
+					onblur={updatePromptTemplate}
+					placeholder="请将以下{'{source_lang}'}文本翻译成{'{target_lang}'}，只返回翻译结果：{'{text}'}"
+				></textarea>
 			</div>
 		</div>
 	{/if}

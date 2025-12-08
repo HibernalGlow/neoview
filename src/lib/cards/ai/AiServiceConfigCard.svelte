@@ -86,6 +86,24 @@ function updateTargetLanguage(value: string) {
 	aiTranslationStore.updateConfig({ targetLanguage: value });
 }
 
+// 标题裁剪正则
+let cleanupPatternsText = $state('');
+
+// 初始化正则文本
+$effect(() => {
+	if (config.titleCleanupPatterns) {
+		cleanupPatternsText = config.titleCleanupPatterns.join('\n');
+	}
+});
+
+function updateCleanupPatterns() {
+	const patterns = cleanupPatternsText
+		.split('\n')
+		.map(p => p.trim())
+		.filter(p => p.length > 0);
+	aiTranslationStore.updateConfig({ titleCleanupPatterns: patterns });
+}
+
 async function handleTestConnection() {
 	isTesting = true;
 	testResult = null;
@@ -342,6 +360,21 @@ async function copyCommand() {
 					{/each}
 				</div>
 			</div>
+		</div>
+
+		<!-- 标题裁剪正则 -->
+		<div class="space-y-2">
+			<Label class="text-xs">标题裁剪正则（每行一个）</Label>
+			<textarea
+				class="w-full rounded-md border bg-transparent px-3 py-2 text-xs font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+				rows="3"
+				placeholder="\\[.*?\\]&#10;\\(.*?\\)"
+				bind:value={cleanupPatternsText}
+				onblur={updateCleanupPatterns}
+			></textarea>
+			<p class="text-xs text-muted-foreground">
+				翻译前去除匹配的内容。例如 <code class="bg-muted px-1 rounded">\\[.*?\\]</code> 去除方括号内容
+			</p>
 		</div>
 
 		<!-- 测试连接 -->

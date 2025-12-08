@@ -86,7 +86,7 @@ impl ThumbnailDb {
         Ok(())
     }
 
-    /// 初始化数据库表结构（仅创建基础表，迁移由手动触发）
+    /// 初始化数据库表结构（自动创建表和添加缺失列）
     fn initialize_db(conn: &Connection) -> SqliteResult<()> {
         // 设置 PRAGMA（使用 execute_batch 避免返回值问题）
         conn.execute_batch(
@@ -141,6 +141,37 @@ impl ThumbnailDb {
             [],
         )?;
 
+        // 自动迁移：检查版本并添加缺失的列
+        Self::auto_migrate(conn)?;
+
+        Ok(())
+    }
+
+    /// 自动迁移数据库（基于版本号）
+    fn auto_migrate(conn: &Connection) -> SqliteResult<()> {
+        let current_version = Self::get_db_version(conn);
+        let target_version = Self::DB_VERSION;
+        
+        // 如果版本相同，跳过迁移
+        if let Some(ref ver) = current_version {
+            if ver == target_version {
+                return Ok(());
+            }
+        }
+        
+        println!("🔄 自动迁移数据库: {:?} -> {}", current_version, target_version);
+        
+        // 检查并添加 ai_translation 列 (v2.3 新增)
+        let has_ai_translation: bool = conn.prepare("SELECT ai_translation FROM thumbs LIMIT 1").is_ok();
+        if !has_ai_translation {
+            conn.execute("ALTER TABLE thumbs ADD COLUMN ai_translation TEXT", [])?;
+            println!("✅ 添加 ai_translation 列");
+        }
+        
+        // 更新版本号
+        Self::set_db_version(conn, target_version)?;
+        println!("✅ 数据库版本更新为 {}", target_version);
+        
         Ok(())
     }
 

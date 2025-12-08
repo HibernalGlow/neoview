@@ -158,6 +158,7 @@ pub fn run() {
             commands::set_book_sort_mode,
             // Image commands
             commands::load_image,
+            commands::load_image_base64,
             commands::get_image_dimensions,
             // File system commands (old)
             commands::read_directory,
@@ -187,6 +188,7 @@ pub fn run() {
             commands::list_archive_contents,
             commands::load_image_from_archive,
             commands::load_image_from_archive_binary,
+            commands::load_image_from_archive_base64,
             commands::extract_image_to_temp,
             commands::batch_extract_archive,
             commands::get_images_from_archive,

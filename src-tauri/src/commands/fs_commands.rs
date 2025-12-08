@@ -684,6 +684,61 @@ pub async fn load_image_from_archive_binary(
     }
 }
 
+/// 【优化】从压缩包加载图片 - 使用 Base64 编码传输
+/// 避免 IPC 协议问题导致的数据损坏
+#[tauri::command]
+pub async fn load_image_from_archive_base64(
+    archive_path: String,
+    file_path: String,
+    trace_id: Option<String>,
+    page_index: Option<i32>,
+    state: State<'_, FsState>,
+) -> Result<String, String> {
+    let trace_id = trace_id.unwrap_or_else(|| {
+        let millis = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or_default();
+        format!("rust-archive-b64-{}-{}", page_index.unwrap_or(-1), millis)
+    });
+
+    info!(
+        "📥 [ImagePipeline:{}] load_image_from_archive_base64 request archive={} inner={}",
+        trace_id, archive_path, file_path
+    );
+
+    let archive_manager = Arc::clone(&state.archive_manager);
+    let archive_path_buf = PathBuf::from(&archive_path);
+    let inner_path = file_path.clone();
+    let result = spawn_blocking(move || {
+        let manager = archive_manager
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        manager.load_image_from_archive_binary(&archive_path_buf, &inner_path)
+    })
+    .await
+    .map_err(|e| format!("load_image_from_archive_base64 join error: {}", e))?;
+
+    match result {
+        Ok(bytes) => {
+            use base64::{engine::general_purpose::STANDARD, Engine};
+            let encoded = STANDARD.encode(&bytes);
+            info!(
+                "📤 [ImagePipeline:{}] load_image_from_archive_base64 success bytes={} base64_len={}",
+                trace_id, bytes.len(), encoded.len()
+            );
+            Ok(encoded)
+        },
+        Err(err) => {
+            warn!(
+                "⚠️ [ImagePipeline:{}] load_image_from_archive_base64 failed: {}",
+                trace_id, err
+            );
+            Err(err)
+        }
+    }
+}
+
 /// 从压缩包加载图片 (兼容旧版)
 #[tauri::command]
 pub async fn load_image_from_archive(

@@ -121,6 +121,27 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
 	return bytes.buffer;
 }
 
+// 是否已显示 base64 模式通知（避免重复通知）
+let base64ToastShown = false;
+
+/**
+ * 显示 base64 模式通知（仅首次）
+ */
+function showBase64ModeToast(): void {
+	if (base64ToastShown) return;
+	base64ToastShown = true;
+	
+	// 延迟导入避免循环依赖
+	import('$lib/utils/toast').then(({ showToast }) => {
+		showToast({
+			title: '已启用 Base64 传输模式',
+			description: '检测到 IPC 协议受限，已自动切换到兼容模式',
+			variant: 'info',
+			duration: 5000
+		});
+	});
+}
+
 /**
  * 跳转到指定页面（使用 Base64 传输，避免 IPC 协议问题）
  * 
@@ -133,6 +154,7 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
  */
 export async function gotoPage(index: number): Promise<Blob> {
 	console.log('📄 [PageManager] gotoPage:', index);
+	showBase64ModeToast(); // 首次调用时显示通知
 	const base64 = await invoke<string>('pm_goto_page_base64', { index });
 	const buffer = base64ToArrayBuffer(base64);
 	return new Blob([buffer]);

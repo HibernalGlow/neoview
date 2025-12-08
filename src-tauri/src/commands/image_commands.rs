@@ -142,6 +142,94 @@ pub async fn load_image(
     result
 }
 
+/// Base64 版本的图片加载（避免 IPC 协议问题）
+#[tauri::command]
+pub async fn load_image_base64(
+    path: String,
+    trace_id: Option<String>,
+    page_index: Option<i32>,
+    image_loader: State<'_, Mutex<ImageLoader>>,
+    book_manager: State<'_, Mutex<BookManager>>,
+) -> Result<String, String> {
+    let trace_id = trace_id.unwrap_or_else(|| fallback_trace_id("rust-load-b64", page_index));
+    
+    // 调用原有的 load_image 获取数据
+    let bytes = load_image_internal(
+        &path,
+        &trace_id,
+        page_index,
+        &image_loader,
+        &book_manager,
+    )?;
+    
+    // 编码为 Base64
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let encoded = STANDARD.encode(&bytes);
+    info!(
+        "📤 [ImagePipeline:{}] load_image_base64 success bytes={} base64_len={}",
+        trace_id, bytes.len(), encoded.len()
+    );
+    
+    Ok(encoded)
+}
+
+/// 内部图片加载函数（供 load_image 和 load_image_base64 共用）
+fn load_image_internal(
+    path: &str,
+    trace_id: &str,
+    page_index: Option<i32>,
+    image_loader: &State<'_, Mutex<ImageLoader>>,
+    book_manager: &State<'_, Mutex<BookManager>>,
+) -> Result<Vec<u8>, String> {
+    info!(
+        "📥 [ImagePipeline:{}] load_image_internal request path={} page_index={:?}",
+        trace_id, path, page_index
+    );
+
+    // 检查当前书籍类型
+    let book_manager_lock = book_manager.lock().map_err(|e| e.to_string())?;
+
+    if let Some(book) = book_manager_lock.get_current_book() {
+        match book.book_type {
+            BookType::Archive => {
+                let book_path = book.path.clone();
+                drop(book_manager_lock);
+                let archive_manager = ArchiveManager::new();
+                return archive_manager.load_image_from_archive_binary(Path::new(&book_path), path);
+            }
+            BookType::Epub => {
+                let book_path = book.path.clone();
+                drop(book_manager_lock);
+                
+                let inner_path = if let Some(colon_pos) = path.find(':') {
+                    if colon_pos == 1 {
+                        if let Some(second_colon) = path[2..].find(':') {
+                            &path[second_colon + 3..]
+                        } else {
+                            return Err(format!("Invalid EPUB path format: {}", path));
+                        }
+                    } else {
+                        &path[colon_pos + 1..]
+                    }
+                } else {
+                    return Err(format!("Invalid EPUB path format: {}", path));
+                };
+                
+                use crate::core::ebook::EbookManager;
+                return EbookManager::get_epub_image(&book_path, inner_path).map(|(data, _)| data);
+            }
+            _ => {
+                drop(book_manager_lock);
+                let loader = image_loader.lock().map_err(|e| e.to_string())?;
+                return loader.load_image_as_binary(path);
+            }
+        }
+    }
+    
+    let loader = image_loader.lock().map_err(|e| e.to_string())?;
+    loader.load_image_as_binary(path)
+}
+
 #[tauri::command]
 pub async fn get_image_dimensions(
     path: String,

@@ -5,11 +5,13 @@
 import { onMount } from 'svelte';
 import { createPanelStore, panelEventBus, DEFAULT_CONFIGS } from './core';
 import PanelToolbar from './components/PanelToolbar.svelte';
+import VirtualizedFileList from '$lib/components/panels/file/components/VirtualizedFileListV2.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { historyStore } from '$lib/stores/history.svelte';
 import { bookStore } from '$lib/stores/book.svelte';
 import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 import type { FsItem } from '$lib/types';
+import { SvelteSet } from 'svelte/reactivity';
 
 // 创建书签面板专用的 store
 const store = createPanelStore('bookmark', 'virtual://bookmark');
@@ -120,40 +122,30 @@ onMount(() => {
     />
     
     <!-- 文件列表区域 -->
-    <div class="flex-1 overflow-auto p-2">
+    <div class="flex-1 overflow-hidden">
         {#if store.items.length === 0}
             <div class="flex h-full items-center justify-center text-muted-foreground">
                 <p>暂无书签</p>
             </div>
         {:else}
-            <div class="space-y-1">
-                {#each store.items as item (item.path)}
-                    <button
-                        class="flex w-full items-center gap-2 rounded p-2 text-left hover:bg-muted/50
-                            {store.selectedItems.has(item.path) ? 'bg-primary/10' : ''}"
-                        onclick={() => {
-                            if (store.multiSelectMode) {
-                                store.toggleSelect(item.path);
-                            } else {
-                                handleItemOpen(item);
-                            }
-                        }}
-                    >
-                        {#if store.multiSelectMode || store.deleteMode}
-                            <input
-                                type="checkbox"
-                                checked={store.selectedItems.has(item.path)}
-                                onchange={() => store.toggleSelect(item.path)}
-                                class="h-4 w-4"
-                            />
-                        {/if}
-                        <span class="flex-1 truncate text-sm">{item.name}</span>
-                        <span class="text-xs text-muted-foreground">
-                            {item.modified ? new Date(item.modified).toLocaleDateString() : '-'}
-                        </span>
-                    </button>
-                {/each}
-            </div>
+            <VirtualizedFileList
+                items={store.items}
+                currentPath="virtual://bookmark"
+                isCheckMode={store.multiSelectMode}
+                isDeleteMode={store.deleteMode}
+                selectedItems={store.selectedItems}
+                viewMode={store.viewStyle}
+                thumbnailWidthPercent={store.thumbnailWidthPercent}
+                onItemSelect={({ item }) => {
+                    if (store.multiSelectMode) {
+                        store.toggleSelect(item.path);
+                    }
+                }}
+                onItemDoubleClick={({ item }) => handleItemOpen(item)}
+                onSelectionChange={({ selectedItems: newItems }) => {
+                    store.state.selectedItems = new SvelteSet(newItems);
+                }}
+            />
         {/if}
     </div>
     

@@ -1,10 +1,9 @@
 <script lang="ts">
 /**
  * 历史记录卡片
- * 直接复用 FolderMainCard，共享所有工具栏和浏览功能
+ * 使用新的模块化面板系统
  */
-import FolderMainCard from '$lib/cards/folder/FolderMainCard.svelte';
-import { VIRTUAL_PATHS } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
+import { HistoryPanel } from '$lib/panels';
 </script>
 
-<FolderMainCard initialPath={VIRTUAL_PATHS.HISTORY} />
+<HistoryPanel />

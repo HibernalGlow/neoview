@@ -11,3 +11,4 @@ export { default as PanelToolbar } from './components/PanelToolbar.svelte';
 // 面板实现
 export { default as HistoryPanel } from './HistoryPanel.svelte';
 export { default as BookmarkPanel } from './BookmarkPanel.svelte';
+export { default as FolderPanel } from './FolderPanel.svelte';

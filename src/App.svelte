@@ -34,7 +34,7 @@
 		toggleTemporaryFitZoom
 	} from '$lib/stores';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
-	import { FolderOpen } from '@lucide/svelte';
+	import { FolderOpen, Eye, EyeOff, ImageUp, X } from '@lucide/svelte';
 	import ProjectCard from '$lib/components/ui/ProjectCard.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
@@ -56,6 +56,68 @@
 	import { openFileSystemItem } from '$lib/utils/navigationUtils';
 
 	let loading = $state(false);
+
+	// 卡片显示/隐藏状态
+	let showProjectCard = $state(true);
+	// 背景图片URL
+	let backgroundImageUrl = $state<string | null>(null);
+	// 隐藏的文件输入引用
+	let fileInputRef: HTMLInputElement | null = null;
+
+	// 从 localStorage 加载设置
+	function loadEmptySettings() {
+		try {
+			const saved = localStorage.getItem('neoview-empty-settings');
+			if (saved) {
+				const settings = JSON.parse(saved);
+				showProjectCard = settings.showProjectCard ?? true;
+				backgroundImageUrl = settings.backgroundImageUrl ?? null;
+			}
+		} catch (e) {
+			console.error('加载空页面设置失败:', e);
+		}
+	}
+
+	// 保存设置到 localStorage
+	function saveEmptySettings() {
+		try {
+			localStorage.setItem(
+				'neoview-empty-settings',
+				JSON.stringify({
+					showProjectCard,
+					backgroundImageUrl
+				})
+			);
+		} catch (e) {
+			console.error('保存空页面设置失败:', e);
+		}
+	}
+
+	// 切换卡片显示
+	function toggleProjectCard() {
+		showProjectCard = !showProjectCard;
+		saveEmptySettings();
+	}
+
+	// 处理背景图片上传
+	function handleBackgroundUpload(event: Event) {
+		const input = event.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+
+		const reader = new FileReader();
+		reader.onload = (e) => {
+			backgroundImageUrl = e.target?.result as string;
+			saveEmptySettings();
+		};
+		reader.readAsDataURL(file);
+	}
+
+	// 清除背景图片
+	function clearBackgroundImage() {
+		backgroundImageUrl = null;
+		saveEmptySettings();
+	}
 
 	async function handleDeleteCurrentArchivePage() {
 		const book = bookStore.currentBook;
@@ -100,6 +162,8 @@
 
 	// 初始化缩略图管理器和处理 CLI 启动参数
 	onMount(async () => {
+		// 加载空页面设置
+		loadEmptySettings();
 		try {
 			// V3 缩略图系统初始化
 			const thumbnailPath = 'D:\\temp\\neoview';
@@ -654,17 +718,78 @@
 	<!-- 仅使用传统布局模式，禁用 Flow 画布以提升性能 -->
 	<MainLayout>
 		<Empty class="relative h-full w-full border-0">
-			<!-- 网点背景 -->
-			<div
-				class="pointer-events-none absolute inset-0 z-0 h-full w-full bg-[radial-gradient(#00000026_1px,transparent_1px)] [background-size:20px_20px] dark:bg-[radial-gradient(#ffffff26_1px,transparent_1px)]"
-			></div>
+			<!-- 自定义背景图片 -->
+			{#if backgroundImageUrl}
+				<div
+					class="pointer-events-none absolute inset-0 z-0 h-full w-full bg-cover bg-center bg-no-repeat"
+					style="background-image: url({backgroundImageUrl});"
+				></div>
+			{:else}
+				<!-- 网点背景 -->
+				<div
+					class="pointer-events-none absolute inset-0 z-0 h-full w-full bg-[radial-gradient(#00000026_1px,transparent_1px)] [background-size:20px_20px] dark:bg-[radial-gradient(#ffffff26_1px,transparent_1px)]"
+				></div>
+			{/if}
 			<!-- <EmptyHeader>
 				<EmptyTitle class="mb-4 text-4xl font-bold">NeoView</EmptyTitle>
 				<EmptyDescription class="mb-6 text-base">Modern Image & Comic Viewer</EmptyDescription>
 			</EmptyHeader> -->
 			<EmptyContent class="relative z-10">
 				<!-- 项目卡片 -->
-				<ProjectCard class="mb-6" />
+				{#if showProjectCard}
+					<ProjectCard class="mb-6" />
+				{/if}
+
+				<!-- 控制按钮组 - 默认隐藏，悬停显示 -->
+				<div class="empty-controls opacity-0 transition-opacity duration-300 hover:opacity-100 flex items-center gap-2">
+					<!-- 隐藏/显示卡片按钮 -->
+					<Button
+						onclick={toggleProjectCard}
+						variant="outline"
+						size="icon"
+						class="h-9 w-9 backdrop-blur-sm"
+						title={showProjectCard ? '隐藏卡片' : '显示卡片'}
+					>
+						{#if showProjectCard}
+							<EyeOff class="h-4 w-4" />
+						{:else}
+							<Eye class="h-4 w-4" />
+						{/if}
+					</Button>
+
+					<!-- 上传背景图按钮 -->
+					<Button
+						onclick={() => fileInputRef?.click()}
+						variant="outline"
+						size="icon"
+						class="h-9 w-9 backdrop-blur-sm"
+						title="上传背景图"
+					>
+						<ImageUp class="h-4 w-4" />
+					</Button>
+
+					<!-- 清除背景图按钮（仅当有背景图时显示） -->
+					{#if backgroundImageUrl}
+						<Button
+							onclick={clearBackgroundImage}
+							variant="outline"
+							size="icon"
+							class="h-9 w-9 backdrop-blur-sm"
+							title="清除背景图"
+						>
+							<X class="h-4 w-4" />
+						</Button>
+					{/if}
+				</div>
+
+				<!-- 隐藏的文件输入 -->
+				<input
+					type="file"
+					accept="image/*"
+					class="hidden"
+					bind:this={fileInputRef}
+					onchange={handleBackgroundUpload}
+				/>
 
 				<!-- 操作按钮 -->
 				<!-- <Button onclick={handleOpenFolder} disabled={loading} size="lg">

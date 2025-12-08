@@ -69,20 +69,6 @@ export class BlobCache {
 		}
 
 		const url = URL.createObjectURL(blob);
-		console.log(`✅ BlobCache.set: page=${pageIndex} size=${blob.size} type=${blob.type} url=${url.substring(0, 50)}...`);
-		
-		// 【调试】验证 Blob 内容的前几个字节（检查图片魔数）
-		blob.slice(0, 12).arrayBuffer().then(buf => {
-			const header = new Uint8Array(buf);
-			const hex = Array.from(header.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' ');
-			console.log(`🔍 BlobCache[${pageIndex}] header: ${hex}`);
-		});
-		
-		// 【调试】测试 Blob URL 是否可用
-		const testImg = new Image();
-		testImg.onload = () => console.log(`✅ BlobCache[${pageIndex}] testImg onload 成功! ${testImg.naturalWidth}x${testImg.naturalHeight}`);
-		testImg.onerror = () => console.error(`❌ BlobCache[${pageIndex}] testImg onerror! Blob URL 无法加载`);
-		testImg.src = url;
 
 		const item: BlobCacheItem = {
 			blob,
@@ -157,9 +143,21 @@ export class BlobCache {
 	 * 执行 LRU 淘汰
 	 */
 	private enforceLimit(): void {
-		// 【调试】暂时禁用 LRU 淘汰
-		console.log(`⚠️ BlobCache: LRU 已禁用，当前缓存: ${this.cache.size} 项, ${Math.round(this.currentSize / 1024 / 1024)}MB`);
-		return;
+		if (this.currentSize <= this.config.maxSizeBytes) {
+			return;
+		}
+
+		// 按访问时间排序（最旧的在前）
+		const entries = Array.from(this.cache.entries())
+			.sort(([, a], [, b]) => a.lastAccessed - b.lastAccessed);
+
+		// 淘汰直到满足限制
+		for (const [pageIndex] of entries) {
+			if (this.currentSize <= this.config.maxSizeBytes) {
+				break;
+			}
+			this.delete(pageIndex);
+		}
 	}
 
 	/**

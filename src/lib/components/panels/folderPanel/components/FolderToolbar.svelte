@@ -401,73 +401,76 @@ function cancelWarmup() {
 <div class="flex flex-wrap items-center gap-1 px-2 py-1.5">
 	<!-- 导航按钮组 -->
 	<div class="flex items-center gap-0.5">
-		<Tooltip.Root>
-			<Tooltip.Trigger>
-				<Button
-					variant="ghost"
-					size="icon"
-					class="h-7 w-7"
-					onclick={handleGoHome}
-					oncontextmenu={handleSetHome}
-				>
-					<Home class="h-4 w-4" />
-				</Button>
-			</Tooltip.Trigger>
-			<Tooltip.Content>
-				<p>主页 (单击返回主页，右键设置当前路径为主页)</p>
-			</Tooltip.Content>
-		</Tooltip.Root>
+		{#if !virtualMode}
+			<!-- 普通文件夹模式：显示所有导航按钮 -->
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					<Button
+						variant="ghost"
+						size="icon"
+						class="h-7 w-7"
+						onclick={handleGoHome}
+						oncontextmenu={handleSetHome}
+					>
+						<Home class="h-4 w-4" />
+					</Button>
+				</Tooltip.Trigger>
+				<Tooltip.Content>
+					<p>主页 (单击返回主页，右键设置当前路径为主页)</p>
+				</Tooltip.Content>
+			</Tooltip.Root>
 
-		<Tooltip.Root>
-			<Tooltip.Trigger>
-				<Button
-					variant="ghost"
-					size="icon"
-					class="h-7 w-7"
-					disabled={!canGoBack && !canGoUp}
-					onclick={handleGoBack}
-				>
-					<ChevronLeft class="h-4 w-4" />
-				</Button>
-			</Tooltip.Trigger>
-			<Tooltip.Content>
-				<p>后退 (Alt+←)</p>
-			</Tooltip.Content>
-		</Tooltip.Root>
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					<Button
+						variant="ghost"
+						size="icon"
+						class="h-7 w-7"
+						disabled={!canGoBack && !canGoUp}
+						onclick={handleGoBack}
+					>
+						<ChevronLeft class="h-4 w-4" />
+					</Button>
+				</Tooltip.Trigger>
+				<Tooltip.Content>
+					<p>后退 (Alt+←)</p>
+				</Tooltip.Content>
+			</Tooltip.Root>
 
-		<Tooltip.Root>
-			<Tooltip.Trigger>
-				<Button
-					variant="ghost"
-					size="icon"
-					class="h-7 w-7"
-					disabled={!canGoForward}
-					onclick={handleGoForward}
-				>
-					<ChevronRight class="h-4 w-4" />
-				</Button>
-			</Tooltip.Trigger>
-			<Tooltip.Content>
-				<p>前进 (Alt+→)</p>
-			</Tooltip.Content>
-		</Tooltip.Root>
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					<Button
+						variant="ghost"
+						size="icon"
+						class="h-7 w-7"
+						disabled={!canGoForward}
+						onclick={handleGoForward}
+					>
+						<ChevronRight class="h-4 w-4" />
+					</Button>
+				</Tooltip.Trigger>
+				<Tooltip.Content>
+					<p>前进 (Alt+→)</p>
+				</Tooltip.Content>
+			</Tooltip.Root>
 
-		<Tooltip.Root>
-			<Tooltip.Trigger>
-				<Button
-					variant="ghost"
-					size="icon"
-					class="h-7 w-7"
-					disabled={!canGoUp}
-					onclick={handleGoUp}
-				>
-					<ChevronUp class="h-4 w-4" />
-				</Button>
-			</Tooltip.Trigger>
-			<Tooltip.Content>
-				<p>向上 (Alt+↑)</p>
-			</Tooltip.Content>
-		</Tooltip.Root>
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					<Button
+						variant="ghost"
+						size="icon"
+						class="h-7 w-7"
+						disabled={!canGoUp}
+						onclick={handleGoUp}
+					>
+						<ChevronUp class="h-4 w-4" />
+					</Button>
+				</Tooltip.Trigger>
+				<Tooltip.Content>
+					<p>向上 (Alt+↑)</p>
+				</Tooltip.Content>
+			</Tooltip.Root>
+		{/if}
 
 		<Tooltip.Root>
 			<Tooltip.Trigger>
@@ -476,7 +479,7 @@ function cancelWarmup() {
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
-				<p>刷新</p>
+				<p>{virtualMode === 'history' ? '重新加载历史' : virtualMode === 'bookmark' ? '重新加载书签' : '刷新'}</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 	</div>

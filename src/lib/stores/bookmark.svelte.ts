@@ -92,6 +92,25 @@ export const bookmarkStore = {
   },
 
   /**
+   * 检查路径是否已收藏
+   */
+  has(path: string): boolean {
+    const bookmarks = this.getAll();
+    return bookmarks.some(b => b.path === path);
+  },
+
+  /**
+   * 按路径移除书签
+   */
+  removeByPath(path: string) {
+    update(bookmarks => {
+      const newBookmarks = bookmarks.filter(b => b.path !== path);
+      saveToStorage(newBookmarks);
+      return newBookmarks;
+    });
+  },
+
+  /**
    * 清空所有书签
    */
   clear() {

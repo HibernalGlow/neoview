@@ -8,9 +8,9 @@ import { bookStore } from '$lib/stores/book.svelte';
 import { logImageTrace } from '$lib/utils/imageTrace';
 import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte';
 import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
-import { BlobCache, getBlobCache } from './blobCache';
+import { BlobCache } from './blobCache';
 import { LoadQueueManager, LoadPriority, QueueClearedError, TaskCancelledError } from './loadQueue';
-import { readPageBlobV2, getImageDimensions, createThumbnailDataURL } from './imageReader';
+import { readPageBlobV2, getImageDimensions, createThumbnailDataURL, clearExtractCache } from './imageReader';
 import { pipelineLatencyStore } from '$lib/stores/pipelineLatency.svelte';
 import { calculatePreloadPlan, trackPageDirection, planToQueue, type PreloadConfig } from './preloadStrategy';
 
@@ -465,6 +465,8 @@ export class ImageLoaderCore {
 		this.invalidate();
 		this.clearCache();
 		this.pendingLoads.clear();
+		// 【修复】重置 imageReader 的书籍同步状态，避免切书后显示旧书内容
+		clearExtractCache();
 		// 重置 invalidated 标记，允许新的加载
 		this.invalidated = false;
 		console.log('📦 ImageLoaderCore 已重置');
@@ -473,7 +475,7 @@ export class ImageLoaderCore {
 
 // 【架构优化】实例池轮换，避免竞争
 const POOL_SIZE = 2;
-let instancePool: ImageLoaderCore[] = [];
+const instancePool: ImageLoaderCore[] = [];
 let currentIndex = 0;
 let savedOptions: ImageLoaderCoreOptions | undefined;
 

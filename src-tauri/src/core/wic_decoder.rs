@@ -502,3 +502,96 @@ impl WicDecoder {
     // 注意：编码功能已移除
     // PyO3 超分器直接返回 WebP 格式，不需要额外编码
 }
+
+/// 快速检测图像是否为灰度图（黑白漫画）
+/// 通过采样像素判断 RGB 值是否相近
+/// 返回 true 表示是灰度图，false 表示是彩色图
+#[cfg(target_os = "windows")]
+pub fn is_grayscale_image_from_memory(data: &[u8]) -> Result<bool, String> {
+    // 解码图像到较小尺寸以加速检测
+    let result = decode_and_scale_with_wic(data, 128, 128)?;
+    
+    let pixels = &result.pixels;
+    let pixel_count = (result.width * result.height) as usize;
+    
+    if pixel_count == 0 {
+        return Ok(true); // 空图像视为灰度
+    }
+    
+    // 采样检测：每隔几个像素检查一次
+    let sample_step = std::cmp::max(1, pixel_count / 1000); // 最多采样 1000 个像素
+    let mut color_diff_sum = 0u64;
+    let mut sample_count = 0u64;
+    
+    // BGRA 格式：每 4 字节一个像素
+    for i in (0..pixel_count).step_by(sample_step) {
+        let offset = i * 4;
+        if offset + 2 < pixels.len() {
+            let b = pixels[offset] as i32;
+            let g = pixels[offset + 1] as i32;
+            let r = pixels[offset + 2] as i32;
+            
+            // 计算 RGB 通道之间的差异
+            let diff_rg = (r - g).abs();
+            let diff_rb = (r - b).abs();
+            let diff_gb = (g - b).abs();
+            let max_diff = diff_rg.max(diff_rb).max(diff_gb);
+            
+            color_diff_sum += max_diff as u64;
+            sample_count += 1;
+        }
+    }
+    
+    if sample_count == 0 {
+        return Ok(true);
+    }
+    
+    // 平均色差阈值：小于 10 视为灰度图
+    let avg_diff = color_diff_sum / sample_count;
+    Ok(avg_diff < 10)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn is_grayscale_image_from_memory(data: &[u8]) -> Result<bool, String> {
+    use image::GenericImageView;
+    
+    let img = image::load_from_memory(data)
+        .map_err(|e| format!("加载图片失败: {}", e))?;
+    
+    // 缩小图像加速检测
+    let small = img.thumbnail(128, 128);
+    let (width, height) = small.dimensions();
+    
+    let pixel_count = (width * height) as usize;
+    if pixel_count == 0 {
+        return Ok(true);
+    }
+    
+    let sample_step = std::cmp::max(1, pixel_count / 1000);
+    let mut color_diff_sum = 0u64;
+    let mut sample_count = 0u64;
+    
+    for (i, pixel) in small.pixels().enumerate() {
+        if i % sample_step == 0 {
+            let rgba = pixel.2;
+            let r = rgba[0] as i32;
+            let g = rgba[1] as i32;
+            let b = rgba[2] as i32;
+            
+            let diff_rg = (r - g).abs();
+            let diff_rb = (r - b).abs();
+            let diff_gb = (g - b).abs();
+            let max_diff = diff_rg.max(diff_rb).max(diff_gb);
+            
+            color_diff_sum += max_diff as u64;
+            sample_count += 1;
+        }
+    }
+    
+    if sample_count == 0 {
+        return Ok(true);
+    }
+    
+    let avg_diff = color_diff_sum / sample_count;
+    Ok(avg_diff < 10)
+}

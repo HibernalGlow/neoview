@@ -51,6 +51,7 @@
 		upscaleCache: () => import('./upscale/UpscaleCacheCard.svelte'),
 		upscaleConditions: () => import('./upscale/UpscaleConditionsCard.svelte'),
 		colorizeControl: () => import('./upscale/ColorizeControlCard.svelte'),
+		colorizeTest: () => import('./upscale/ColorizeTestCard.svelte'),
 		// History
 		historyList: () => import('./history/HistoryListCard.svelte'),
 		// Bookmark

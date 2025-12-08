@@ -370,6 +370,15 @@ pub async fn cleanup_pyo3_colorize_cache(
     Err("PyO3 上色管理器未初始化".to_string())
 }
 
+/// 快速检测图像是否为灰度图（黑白漫画）
+/// 用于自动跳过彩色图
+#[command]
+pub async fn check_image_is_grayscale(image_data: Vec<u8>) -> Result<bool, String> {
+    use crate::core::wic_decoder::is_grayscale_image_from_memory;
+    
+    is_grayscale_image_from_memory(&image_data)
+}
+
 /// 上色并超分组合处理
 /// 先上色，然后可选择是否超分
 #[command]

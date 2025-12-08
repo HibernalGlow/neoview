@@ -277,6 +277,7 @@ pub fn run() {
             commands::get_pyo3_colorize_cache_stats,
             commands::cleanup_pyo3_colorize_cache,
             commands::pyo3_colorize_and_upscale,
+            commands::check_image_is_grayscale,
             // Upscale scheduler commands
             commands::enqueue_upscale_job,
             commands::cancel_upscale_job,

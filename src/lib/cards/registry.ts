@@ -291,6 +291,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'upscale',
 		canHide: true,
 	},
+	'colorizeTest': {
+		id: 'colorizeTest',
+		title: '上色测试',
+		icon: Palette,
+		defaultPanel: 'upscale',
+		canHide: true,
+	},
 
 	// ==================== History 面板卡片 ====================
 	'historyList': {

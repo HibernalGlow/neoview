@@ -223,6 +223,92 @@
 		</div>
 	</div>
 
+	<!-- 悬停触发区域设置 -->
+	<div class="mt-4 grid grid-cols-2 gap-4 rounded-lg border bg-card/40 p-4">
+		<div class="space-y-2">
+			<h4 class="text-sm font-medium">顶部/底部触发高度</h4>
+			<div class="space-y-2">
+				<div>
+					<label class="text-muted-foreground flex items-center justify-between text-xs">
+						<span>顶部高度 (px)</span>
+						<span class="font-mono text-[11px]">{hoverAreas.topTriggerHeight}</span>
+					</label>
+					<input
+						type="range"
+						min="2"
+						max="32"
+						step="1"
+						value={hoverAreas.topTriggerHeight}
+						oninput={(event) =>
+							updateHoverAreas({
+								topTriggerHeight: Number((event.currentTarget as HTMLInputElement).value)
+							})}
+						class="mt-1 w-full"
+					/>
+				</div>
+				<div>
+					<label class="text-muted-foreground flex items-center justify-between text-xs">
+						<span>底部高度 (px)</span>
+						<span class="font-mono text-[11px]">{hoverAreas.bottomTriggerHeight}</span>
+					</label>
+					<input
+						type="range"
+						min="2"
+						max="32"
+						step="1"
+						value={hoverAreas.bottomTriggerHeight}
+						oninput={(event) =>
+							updateHoverAreas({
+								bottomTriggerHeight: Number((event.currentTarget as HTMLInputElement).value)
+							})}
+						class="mt-1 w-full"
+					/>
+				</div>
+			</div>
+		</div>
+		<div class="space-y-2">
+			<h4 class="text-sm font-medium">左右侧边栏触发宽度</h4>
+			<div class="space-y-2">
+				<div>
+					<label class="text-muted-foreground flex items-center justify-between text-xs">
+						<span>左侧宽度 (px)</span>
+						<span class="font-mono text-[11px]">{hoverAreas.leftTriggerWidth}</span>
+					</label>
+					<input
+						type="range"
+						min="4"
+						max="48"
+						step="1"
+						value={hoverAreas.leftTriggerWidth}
+						oninput={(event) =>
+							updateHoverAreas({
+								leftTriggerWidth: Number((event.currentTarget as HTMLInputElement).value)
+							})}
+						class="mt-1 w-full"
+					/>
+				</div>
+				<div>
+					<label class="text-muted-foreground flex items-center justify-between text-xs">
+						<span>右侧宽度 (px)</span>
+						<span class="font-mono text-[11px]">{hoverAreas.rightTriggerWidth}</span>
+					</label>
+					<input
+						type="range"
+						min="4"
+						max="48"
+						step="1"
+						value={hoverAreas.rightTriggerWidth}
+						oninput={(event) =>
+							updateHoverAreas({
+								rightTriggerWidth: Number((event.currentTarget as HTMLInputElement).value)
+							})}
+						class="mt-1 w-full"
+					/>
+				</div>
+			</div>
+		</div>
+	</div>
+
 	<!-- 操作按钮 -->
 	<div class="flex items-center gap-2">
 		<button

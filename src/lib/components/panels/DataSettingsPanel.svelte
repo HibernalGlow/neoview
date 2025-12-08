@@ -30,6 +30,7 @@
 	import { settingsManager, type FullExportPayload } from '$lib/stores/settingsManager.svelte';
 	import { getPerformanceSettings } from '$lib/api/performance';
 	import StartupConfigPanel from './StartupConfigPanel.svelte';
+	import GistSyncPanel from './GistSyncPanel.svelte';
 
 	type ModuleId =
 		| 'nativeSettings'
@@ -744,4 +745,7 @@
 
 	<!-- 启动配置 -->
 	<StartupConfigPanel />
+
+	<!-- GitHub Gist 同步 -->
+	<GistSyncPanel />
 </div>

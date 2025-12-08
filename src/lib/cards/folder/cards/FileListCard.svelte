@@ -103,7 +103,7 @@
 				class:hidden={tab.id !== ctx.displayActiveTabId}
 				class:pointer-events-none={tab.id !== ctx.displayActiveTabId}
 			>
-				{#if $isSearching || $searchResults.length > 0}
+				{#if !ctx.isVirtualInstance && ($isSearching || $searchResults.length > 0)}
 					<SearchResultList
 						onItemClick={handleSearchResultClick}
 						onItemDoubleClick={handleSearchResultClick}

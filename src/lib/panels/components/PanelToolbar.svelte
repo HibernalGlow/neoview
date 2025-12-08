@@ -1,29 +1,31 @@
 <script lang="ts">
 /**
  * 通用面板工具栏
- * 可配置的工具栏，根据 PanelConfig 显示不同功能
+ * 模块化设计，根据 PanelConfig 显示不同功能
  */
 import { 
-    RefreshCw, Home, ChevronLeft, ChevronRight, ChevronUp,
+    RefreshCw, Home, ChevronLeft, ChevronRight,
     List, LayoutGrid, Image, Grid3x3,
     ArrowUp, ArrowDown, ALargeSmall, Calendar, HardDrive, FileType, Shuffle, Star, Heart,
-    CheckSquare, Trash2, FolderTree, ListTree, Search, ClipboardPaste, CornerDownRight, Settings2
+    CheckSquare, Trash2, Search, FolderSync
 } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import * as Tooltip from '$lib/components/ui/tooltip';
 import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 import type { PanelStore } from '../core/createPanelStore.svelte';
 import type { PanelConfig, ViewStyle, SortField } from '../core/types';
+import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 
 interface Props {
     store: PanelStore;
     config: PanelConfig;
     onRefresh?: () => void;
     onGoHome?: () => void;
-    onToggleFolderTree?: () => void;
+    onGoBack?: () => void;
+    onGoForward?: () => void;
 }
 
-let { store, config, onRefresh, onGoHome, onToggleFolderTree }: Props = $props();
+let { store, config, onRefresh, onGoHome, onGoBack, onGoForward }: Props = $props();
 
 // 视图样式选项
 const viewStyles: { value: ViewStyle; icon: typeof List; label: string }[] = [
@@ -176,27 +178,6 @@ function getCurrentViewIcon() {
             </Tooltip.Root>
         {/if}
 
-        <!-- 文件夹树 (仅 folder 模式) -->
-        {#if config.enableFolderTree}
-            <Tooltip.Root>
-                <Tooltip.Trigger>
-                    <Button
-                        variant={store.inlineTreeMode ? 'default' : 'ghost'}
-                        size="icon"
-                        class="h-7 w-7"
-                        onclick={onToggleFolderTree}
-                    >
-                        {#if store.inlineTreeMode}
-                            <ListTree class="h-4 w-4" />
-                        {:else}
-                            <FolderTree class="h-4 w-4" />
-                        {/if}
-                    </Button>
-                </Tooltip.Trigger>
-                <Tooltip.Content><p>文件夹树</p></Tooltip.Content>
-            </Tooltip.Root>
-        {/if}
-
         <!-- 搜索栏 -->
         {#if config.enableSearch}
             <Tooltip.Root>
@@ -214,37 +195,28 @@ function getCurrentViewIcon() {
             </Tooltip.Root>
         {/if}
 
-        <!-- 迁移栏 (仅 folder 模式) -->
-        {#if config.enableMigration}
+        <!-- 同步文件夹开关 (仅历史/书签模式) -->
+        {#if config.mode === 'history' || config.mode === 'bookmark'}
             <Tooltip.Root>
                 <Tooltip.Trigger>
                     <Button
-                        variant={store.showMigrationBar ? 'default' : 'ghost'}
+                        variant={config.mode === 'history' 
+                            ? (historySettingsStore.syncFileTreeOnHistorySelect ? 'default' : 'ghost')
+                            : (historySettingsStore.syncFileTreeOnBookmarkSelect ? 'default' : 'ghost')}
                         size="icon"
                         class="h-7 w-7"
-                        onclick={() => store.toggleShowMigrationBar()}
+                        onclick={() => {
+                            if (config.mode === 'history') {
+                                historySettingsStore.setSyncFileTreeOnHistorySelect(!historySettingsStore.syncFileTreeOnHistorySelect);
+                            } else {
+                                historySettingsStore.setSyncFileTreeOnBookmarkSelect(!historySettingsStore.syncFileTreeOnBookmarkSelect);
+                            }
+                        }}
                     >
-                        <ClipboardPaste class="h-4 w-4" />
+                        <FolderSync class="h-4 w-4" />
                     </Button>
                 </Tooltip.Trigger>
-                <Tooltip.Content><p>迁移栏</p></Tooltip.Content>
-            </Tooltip.Root>
-        {/if}
-
-        <!-- 穿透模式 (仅 folder 模式) -->
-        {#if config.enableNavigation}
-            <Tooltip.Root>
-                <Tooltip.Trigger>
-                    <Button
-                        variant={store.penetrateMode ? 'default' : 'ghost'}
-                        size="icon"
-                        class="h-7 w-7"
-                        onclick={() => store.togglePenetrateMode()}
-                    >
-                        <CornerDownRight class="h-4 w-4" />
-                    </Button>
-                </Tooltip.Trigger>
-                <Tooltip.Content><p>穿透模式</p></Tooltip.Content>
+                <Tooltip.Content><p>同步文件夹</p></Tooltip.Content>
             </Tooltip.Root>
         {/if}
 

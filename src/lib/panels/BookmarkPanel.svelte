@@ -5,6 +5,7 @@
 import { onMount } from 'svelte';
 import { createPanelStore, panelEventBus, DEFAULT_CONFIGS } from './core';
 import PanelToolbar from './components/PanelToolbar.svelte';
+import PanelBreadcrumb from './components/PanelBreadcrumb.svelte';
 import VirtualizedFileList from '$lib/components/panels/file/components/VirtualizedFileListV2.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { historyStore } from '$lib/stores/history.svelte';
@@ -114,9 +115,12 @@ onMount(() => {
 </script>
 
 <div class="flex h-full flex-col overflow-hidden">
+    <!-- 面包屑导航 -->
+    <PanelBreadcrumb mode="bookmark" />
+    
     <!-- 工具栏 -->
-    <PanelToolbar 
-        {store} 
+    <PanelToolbar
+        {store}
         {config}
         onRefresh={handleRefresh}
     />

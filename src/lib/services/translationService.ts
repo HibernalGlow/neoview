@@ -22,11 +22,8 @@ async function checkOllamaOnline(apiUrl: string): Promise<boolean> {
 	}
 	
 	try {
-		const response = await fetch(`${apiUrl}/api/tags`, {
-			method: 'GET',
-			signal: AbortSignal.timeout(3000)
-		});
-		const online = response.ok;
+		// 使用 Tauri 命令代理请求，绕过 CORS
+		const online = await invoke<boolean>('ollama_check_status', { apiUrl });
 		ollamaStatusCache = { online, checkedAt: Date.now() };
 		return online;
 	} catch {
@@ -349,29 +346,16 @@ async function translateWithOllama(
 	const prompt = parsePromptTemplate(template, text, sourceLang, targetLang);
 
 	try {
-		const response = await fetch(`${apiUrl}/api/generate`, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				model,
-				prompt,
-				stream: false,
-				options: {
-					temperature: 0.3,
-					num_predict: 256,
-				},
-			}),
+		// 使用 Tauri 命令代理请求，绕过 CORS
+		const response = await invoke<string>('ollama_generate', {
+			apiUrl,
+			model,
+			prompt,
+			temperature: 0.3,
+			numPredict: 256,
 		});
 
-		if (!response.ok) {
-			const errorText = await response.text();
-			return { success: false, error: `Ollama 错误: ${response.status} - ${errorText}` };
-		}
-
-		const data = await response.json();
-		const translated = data.response?.trim();
+		const translated = response?.trim();
 		if (!translated) {
 			return { success: false, error: 'Ollama 返回空结果' };
 		}

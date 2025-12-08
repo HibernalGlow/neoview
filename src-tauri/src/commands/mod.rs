@@ -23,6 +23,7 @@ pub mod video_commands;
 pub mod benchmark_commands;
 pub mod page_commands;
 pub mod system_monitor_commands;
+pub mod ollama_commands;
 
 pub use book_commands::*;
 pub use comparison_commands::*;
@@ -42,3 +43,4 @@ pub use upscale_settings_commands::*;
 pub use video_commands::*;
 pub use page_commands::*;
 pub use system_monitor_commands::*;
+pub use ollama_commands::*;

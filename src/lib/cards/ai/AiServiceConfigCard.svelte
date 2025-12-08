@@ -49,14 +49,9 @@ async function fetchOllamaStats() {
 	if (!ollamaOnline) return;
 	loadingStats = true;
 	try {
-		const response = await fetch(`${config.ollamaUrl}/api/ps`, {
-			method: 'GET',
-			signal: AbortSignal.timeout(5000)
-		});
-		if (response.ok) {
-			const data = await response.json();
-			ollamaStats = data.models || [];
-		}
+		// TODO: 添加 ollama_get_ps 命令支持
+		// 暂时禁用，因为 ps 接口不常用
+		ollamaStats = [];
 	} catch {
 		ollamaStats = null;
 	} finally {
@@ -94,11 +89,8 @@ async function checkOllamaStatus() {
 	if (config.type !== 'ollama') return;
 	checkingOllamaStatus = true;
 	try {
-		const response = await fetch(`${config.ollamaUrl}/api/tags`, {
-			method: 'GET',
-			signal: AbortSignal.timeout(3000)
-		});
-		ollamaOnline = response.ok;
+		// 使用 Tauri 命令代理请求，绕过 CORS
+		ollamaOnline = await invoke<boolean>('ollama_check_status', { apiUrl: config.ollamaUrl });
 	} catch {
 		ollamaOnline = false;
 	} finally {

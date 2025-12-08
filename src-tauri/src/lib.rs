@@ -415,6 +415,10 @@ pub fn run() {
             commands::page_commands::pm_preload_thumbnails,
             // System Monitor commands
             commands::get_system_stats,
+            // Ollama proxy commands
+            commands::ollama_check_status,
+            commands::ollama_get_models,
+            commands::ollama_generate,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

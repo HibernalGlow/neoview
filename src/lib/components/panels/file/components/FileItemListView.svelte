@@ -434,17 +434,19 @@
 			</div>
 		{/if}
 
-		<!-- 穿透模式：内部压缩包信息 -->
+		<!-- 穿透模式：内部压缩包信息（允许换行显示完整） -->
 		{#if penetrateInfo}
-			<div class="mt-1 flex items-center gap-1">
-				<Package class="h-3 w-3 text-muted-foreground shrink-0" />
-				<span class="text-xs text-muted-foreground truncate" title={penetrateInfo.originalName}>
-					{penetrateInfo.originalName}
-				</span>
-				{#if penetrateInfo.translatedTitle}
-					<span class="text-xs text-primary truncate" title={penetrateInfo.translatedTitle}>
-						→ {penetrateInfo.isAiTranslated ? '🤖 ' : ''}{penetrateInfo.translatedTitle}
+			<div class="mt-1 space-y-0.5">
+				<div class="flex items-start gap-1">
+					<Package class="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
+					<span class="text-xs text-muted-foreground break-all leading-tight">
+						{penetrateInfo.originalName}
 					</span>
+				</div>
+				{#if penetrateInfo.translatedTitle}
+					<div class="pl-4 text-xs text-primary break-all leading-tight">
+						{penetrateInfo.isAiTranslated ? '🤖 ' : ''}{penetrateInfo.translatedTitle}
+					</div>
 				{/if}
 			</div>
 		{/if}

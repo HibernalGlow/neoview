@@ -37,7 +37,10 @@ import {
 	Shuffle,
 	Star,
 	Heart,
-	Package
+	Package,
+	Settings2,
+	ChevronDown,
+	ChevronUp as ChevronUpIcon
 } from '@lucide/svelte';
 import { hoverPreviewSettings, hoverPreviewEnabled, hoverPreviewDelayMs } from '$lib/stores/hoverPreviewSettings.svelte';
 import { getDefaultRating, saveDefaultRating } from '$lib/stores/emm/storage';
@@ -192,6 +195,13 @@ function getCurrentViewIcon() {
 // 预热状态
 let isWarming = $state(false);
 let warmupProgress = $state<WarmupProgress | null>(null);
+
+// 更多设置栏展开状态
+let showMoreSettings = $state(false);
+
+function toggleMoreSettings() {
+	showMoreSettings = !showMoreSettings;
+}
 
 async function startWarmup() {
 	const path = $currentPathStore;
@@ -507,211 +517,160 @@ function cancelWarmup() {
 			</DropdownMenu.Content>
 		</DropdownMenu.Root>
 
-		<!-- 更多菜单 -->
-		<DropdownMenu.Root>
-			<DropdownMenu.Trigger>
-				<Button variant="ghost" size="icon" class="h-7 w-7">
-					<MoreVertical class="h-4 w-4" />
+		<!-- 更多设置按钮（展开/折叠设置栏） -->
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button 
+					variant={showMoreSettings ? 'secondary' : 'ghost'} 
+					size="icon" 
+					class="h-7 w-7"
+					onclick={toggleMoreSettings}
+				>
+					<Settings2 class="h-4 w-4" />
 				</Button>
-			</DropdownMenu.Trigger>
-			<DropdownMenu.Content align="end">
-				<DropdownMenu.Item disabled class="text-muted-foreground">
-					文件数量: {$itemCount}
-				</DropdownMenu.Item>
-				<DropdownMenu.Separator />
-				<DropdownMenu.Item onclick={isWarming ? cancelWarmup : startWarmup}>
-					<Flame class="mr-2 h-4 w-4 {isWarming ? 'text-orange-500' : ''}" />
-					{isWarming ? '取消预热' : '预热当前目录'}
-				</DropdownMenu.Item>
-				<DropdownMenu.Item onclick={() => folderTabActions.toggleRecursiveMode()}>
-					递归显示子文件夹
-				</DropdownMenu.Item>
-				<DropdownMenu.Item onclick={handleClearTreeCache}>
-					<RefreshCw class="mr-2 h-4 w-4" />
-					刷新内存树
-				</DropdownMenu.Item>
-				<DropdownMenu.Separator />
-				<!-- 悬停预览设置 -->
-				<DropdownMenu.Sub>
-					<DropdownMenu.SubTrigger>
-						<Eye class="mr-2 h-4 w-4" />
-						悬停预览
-					</DropdownMenu.SubTrigger>
-					<DropdownMenu.SubContent>
-						<DropdownMenu.CheckboxItem
-							checked={$hoverPreviewEnabled}
-							onCheckedChange={() => hoverPreviewSettings.toggle()}
-						>
-							启用悬停预览
-						</DropdownMenu.CheckboxItem>
-						<DropdownMenu.Separator />
-						<DropdownMenu.Label class="text-xs text-muted-foreground">延迟时间</DropdownMenu.Label>
-						<DropdownMenu.RadioGroup value={String($hoverPreviewDelayMs)}>
-							<DropdownMenu.RadioItem value="200" onclick={() => hoverPreviewSettings.setDelayMs(200)}>
-								200ms (快)
-							</DropdownMenu.RadioItem>
-							<DropdownMenu.RadioItem value="500" onclick={() => hoverPreviewSettings.setDelayMs(500)}>
-								500ms (默认)
-							</DropdownMenu.RadioItem>
-							<DropdownMenu.RadioItem value="800" onclick={() => hoverPreviewSettings.setDelayMs(800)}>
-								800ms (慢)
-							</DropdownMenu.RadioItem>
-							<DropdownMenu.RadioItem value="1200" onclick={() => hoverPreviewSettings.setDelayMs(1200)}>
-								1200ms (很慢)
-							</DropdownMenu.RadioItem>
-						</DropdownMenu.RadioGroup>
-					</DropdownMenu.SubContent>
-				</DropdownMenu.Sub>
-				<!-- 穿透模式-内部文件显示 -->
-				<DropdownMenu.Sub>
-					<DropdownMenu.SubTrigger>
-						<Package class="mr-2 h-4 w-4" />
-						穿透内部文件显示
-					</DropdownMenu.SubTrigger>
-					<DropdownMenu.SubContent>
-						<DropdownMenu.Label class="text-xs text-muted-foreground">文件夹显示内部压缩包信息</DropdownMenu.Label>
-						<DropdownMenu.RadioGroup value={$fileBrowserStore.penetrateShowInnerFile}>
-							<DropdownMenu.RadioItem value="none" onclick={() => fileBrowserStore.setPenetrateShowInnerFile('none')}>
-								不显示
-							</DropdownMenu.RadioItem>
-							<DropdownMenu.RadioItem value="single" onclick={() => fileBrowserStore.setPenetrateShowInnerFile('single')}>
-								仅单文件
-							</DropdownMenu.RadioItem>
-							<DropdownMenu.RadioItem value="all" onclick={() => fileBrowserStore.setPenetrateShowInnerFile('all')}>
-								全部显示
-							</DropdownMenu.RadioItem>
-						</DropdownMenu.RadioGroup>
-						<DropdownMenu.Separator />
-						<DropdownMenu.Label class="text-xs text-muted-foreground">
-							{$penetrateMode ? '穿透模式已开启' : '穿透模式已关闭'}
-						</DropdownMenu.Label>
-					</DropdownMenu.SubContent>
-				</DropdownMenu.Sub>
-				<!-- 默认评分设置 -->
-				<DropdownMenu.Sub>
-					<DropdownMenu.SubTrigger>
-						<Star class="mr-2 h-4 w-4" />
-						默认评分 ({getDefaultRating().toFixed(1)})
-					</DropdownMenu.SubTrigger>
-					<DropdownMenu.SubContent>
-						<DropdownMenu.Label class="text-xs text-muted-foreground">无评分项目的默认值</DropdownMenu.Label>
-						<div class="px-2 py-1">
-							<input
-								type="number"
-								min="0"
-								max="5"
-								step="0.1"
-								value={getDefaultRating()}
-								onchange={(e) => {
-									const value = parseFloat((e.target as HTMLInputElement).value);
-									if (!isNaN(value) && value >= 0 && value <= 5) {
-										saveDefaultRating(value);
-									}
-								}}
-								class="w-full h-7 px-2 text-sm rounded border bg-background"
-							/>
-						</div>
-						<DropdownMenu.Separator />
-						<DropdownMenu.Label class="text-xs text-muted-foreground">快捷选择</DropdownMenu.Label>
-						<div class="flex gap-1 px-2 py-1">
-							{#each [3.0, 3.5, 4.0, 4.2, 4.5, 5.0] as rating}
-								<button
-									class="px-2 py-0.5 text-xs rounded hover:bg-accent {getDefaultRating() === rating ? 'bg-primary text-primary-foreground' : ''}"
-									onclick={() => saveDefaultRating(rating)}
-								>
-									{rating}
-								</button>
-							{/each}
-						</div>
-					</DropdownMenu.SubContent>
-				</DropdownMenu.Sub>
-				<DropdownMenu.Separator />
-				<!-- 缩略图宽度设置 -->
-				<DropdownMenu.Sub>
-					<DropdownMenu.SubTrigger>
-						<Grid3x3 class="mr-2 h-4 w-4" />
-						缩略图大小 ({Math.round(48 + ($thumbnailWidthPercent - 10) * 3)}px)
-					</DropdownMenu.SubTrigger>
-					<DropdownMenu.SubContent>
-						<DropdownMenu.Label class="text-xs text-muted-foreground">
-							调整缩略图大小
-						</DropdownMenu.Label>
-						<div class="px-2 py-1">
-							<input
-								type="range"
-								min="10"
-								max="50"
-								step="1"
-								value={$thumbnailWidthPercent}
-								oninput={(e) => {
-									const value = parseInt((e.target as HTMLInputElement).value);
-									folderTabActions.setThumbnailWidthPercent(value);
-								}}
-								class="w-full h-2 rounded-lg appearance-none cursor-pointer bg-muted"
-							/>
-							<div class="flex justify-between text-xs text-muted-foreground mt-1">
-								<span>小</span>
-								<span class="font-medium text-foreground">{Math.round(48 + ($thumbnailWidthPercent - 10) * 3)}px</span>
-								<span>大</span>
-							</div>
-						</div>
-						<DropdownMenu.Separator />
-						<DropdownMenu.Label class="text-xs text-muted-foreground">快捷选择</DropdownMenu.Label>
-						<div class="flex gap-1 px-2 py-1">
-							{#each [10, 15, 20, 25, 33, 50] as percent}
-								<button
-									class="px-2 py-0.5 text-xs rounded hover:bg-accent {$thumbnailWidthPercent === percent ? 'bg-primary text-primary-foreground' : ''}"
-									onclick={() => folderTabActions.setThumbnailWidthPercent(percent)}
-								>
-									{Math.round(48 + (percent - 10) * 3)}px
-								</button>
-							{/each}
-						</div>
-						<DropdownMenu.Separator />
-						<DropdownMenu.Item onclick={() => folderTabActions.setThumbnailWidthPercent(20)}>
-							<RotateCcw class="mr-2 h-4 w-4" />
-							恢复默认 (78px)
-						</DropdownMenu.Item>
-					</DropdownMenu.SubContent>
-				</DropdownMenu.Sub>
-				<!-- 排除路径设置 -->
-				<DropdownMenu.Sub>
-					<DropdownMenu.SubTrigger>
-						<Trash2 class="mr-2 h-4 w-4" />
-						排除路径
-					</DropdownMenu.SubTrigger>
-					<DropdownMenu.SubContent>
-						{#if $currentPathStore && !isPathExcluded($currentPathStore)}
-							<DropdownMenu.Item onclick={() => $currentPathStore && addExcludedPath($currentPathStore)}>
-								排除当前目录
-							</DropdownMenu.Item>
-						{:else if $currentPathStore}
-							<DropdownMenu.Item onclick={() => $currentPathStore && removeExcludedPath($currentPathStore)}>
-								取消排除当前目录
-							</DropdownMenu.Item>
-						{/if}
-						<DropdownMenu.Separator />
-						<DropdownMenu.Label class="text-xs text-muted-foreground">已排除目录</DropdownMenu.Label>
-						{#each getExcludedPaths() as path}
-							<DropdownMenu.Item onclick={() => removeExcludedPath(path)}>
-								<span class="truncate max-w-[200px]">{path}</span>
-								<span class="ml-auto text-xs text-muted-foreground">✕</span>
-							</DropdownMenu.Item>
-						{:else}
-							<DropdownMenu.Item disabled class="text-muted-foreground">
-								暂无排除目录
-							</DropdownMenu.Item>
-						{/each}
-					</DropdownMenu.SubContent>
-				</DropdownMenu.Sub>
-				<DropdownMenu.Separator />
-				<DropdownMenu.Item onclick={() => folderTabActions.clearHistory()}>
-					清除历史记录
-				</DropdownMenu.Item>
-			</DropdownMenu.Content>
-		</DropdownMenu.Root>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>{showMoreSettings ? '收起设置' : '展开设置'}</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
 	</div>
 </div>
+
+<!-- 可展开的更多设置栏（在主工具栏下方） -->
+{#if showMoreSettings}
+	<div class="border-t bg-muted/20 px-2 py-2 space-y-2">
+		<!-- 第一行：快捷操作 -->
+		<div class="flex flex-wrap items-center gap-2 text-xs">
+			<span class="text-muted-foreground">文件数: {$itemCount}</span>
+			<div class="h-3 w-px bg-border"></div>
+			<button 
+				class="hover:text-primary transition-colors {isWarming ? 'text-orange-500' : 'text-muted-foreground'}"
+				onclick={isWarming ? cancelWarmup : startWarmup}
+			>
+				<Flame class="inline h-3 w-3 mr-0.5" />
+				{isWarming ? '取消预热' : '预热'}
+			</button>
+			<button 
+				class="hover:text-primary transition-colors text-muted-foreground"
+				onclick={() => folderTabActions.toggleRecursiveMode()}
+			>
+				递归显示
+			</button>
+			<button 
+				class="hover:text-primary transition-colors text-muted-foreground"
+				onclick={handleClearTreeCache}
+			>
+				<RefreshCw class="inline h-3 w-3 mr-0.5" />
+				刷新树
+			</button>
+		</div>
+
+		<!-- 第二行：设置项 -->
+		<div class="flex flex-wrap items-center gap-3 text-xs">
+			<!-- 悬停预览 -->
+			<div class="flex items-center gap-1">
+				<Eye class="h-3 w-3 text-muted-foreground" />
+				<button 
+					class="hover:text-primary transition-colors {$hoverPreviewEnabled ? 'text-primary' : 'text-muted-foreground'}"
+					onclick={() => hoverPreviewSettings.toggle()}
+				>
+					预览{$hoverPreviewEnabled ? '开' : '关'}
+				</button>
+				{#if $hoverPreviewEnabled}
+					<select 
+						class="h-5 bg-transparent border rounded text-[10px] px-1"
+						value={$hoverPreviewDelayMs}
+						onchange={(e) => hoverPreviewSettings.setDelayMs(parseInt((e.target as HTMLSelectElement).value))}
+					>
+						<option value="200">200ms</option>
+						<option value="500">500ms</option>
+						<option value="800">800ms</option>
+						<option value="1200">1200ms</option>
+					</select>
+				{/if}
+			</div>
+
+			<div class="h-3 w-px bg-border"></div>
+
+			<!-- 穿透内部显示 -->
+			<div class="flex items-center gap-1">
+				<Package class="h-3 w-3 text-muted-foreground" />
+				<select 
+					class="h-5 bg-transparent border rounded text-[10px] px-1"
+					value={$fileBrowserStore.penetrateShowInnerFile}
+					onchange={(e) => fileBrowserStore.setPenetrateShowInnerFile((e.target as HTMLSelectElement).value as 'none' | 'single' | 'all')}
+				>
+					<option value="none">不显示</option>
+					<option value="single">仅单文件</option>
+					<option value="all">全显示</option>
+				</select>
+			</div>
+
+			<div class="h-3 w-px bg-border"></div>
+
+			<!-- 默认评分 -->
+			<div class="flex items-center gap-1">
+				<Star class="h-3 w-3 text-muted-foreground" />
+				<input
+					type="number"
+					min="0"
+					max="5"
+					step="0.1"
+					value={getDefaultRating()}
+					onchange={(e) => {
+						const value = parseFloat((e.target as HTMLInputElement).value);
+						if (!isNaN(value) && value >= 0 && value <= 5) {
+							saveDefaultRating(value);
+						}
+					}}
+					class="w-12 h-5 bg-transparent border rounded text-[10px] px-1 text-center"
+				/>
+			</div>
+
+			<div class="h-3 w-px bg-border"></div>
+
+			<!-- 缩略图大小 -->
+			<div class="flex items-center gap-1">
+				<Grid3x3 class="h-3 w-3 text-muted-foreground" />
+				<input
+					type="range"
+					min="10"
+					max="90"
+					value={$thumbnailWidthPercent}
+					oninput={(e) => folderTabActions.setThumbnailWidthPercent(parseInt((e.target as HTMLInputElement).value))}
+					class="w-16 h-3"
+				/>
+				<span class="text-[10px] text-muted-foreground w-8">{Math.round(48 + ($thumbnailWidthPercent - 10) * 3)}px</span>
+			</div>
+		</div>
+
+		<!-- 第三行：排除路径等 -->
+		<div class="flex flex-wrap items-center gap-2 text-xs">
+			<button 
+				class="hover:text-primary transition-colors text-muted-foreground"
+				onclick={() => folderTabActions.clearHistory()}
+			>
+				清除历史
+			</button>
+			{#if $currentPathStore && !isPathExcluded($currentPathStore)}
+				<button 
+					class="hover:text-primary transition-colors text-muted-foreground"
+					onclick={() => $currentPathStore && addExcludedPath($currentPathStore)}
+				>
+					<Trash2 class="inline h-3 w-3 mr-0.5" />
+					排除当前目录
+				</button>
+			{:else if $currentPathStore}
+				<button 
+					class="hover:text-destructive transition-colors text-muted-foreground"
+					onclick={() => $currentPathStore && removeExcludedPath($currentPathStore)}
+				>
+					取消排除
+				</button>
+			{/if}
+		</div>
+	</div>
+{/if}
 
 <!-- 预热进度条 -->
 {#if warmupProgress}

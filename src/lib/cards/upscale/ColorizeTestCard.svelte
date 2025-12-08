@@ -74,7 +74,7 @@
 			});
 
 			// 过滤图片文件
-			const imageExts = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'];
+			const imageExts = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.avif', '.jxl', '.heic', '.heif'];
 			const images = contents.filter((item) =>
 				imageExts.some((ext) => item.path.toLowerCase().endsWith(ext))
 			);

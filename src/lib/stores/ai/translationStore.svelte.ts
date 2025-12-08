@@ -26,9 +26,20 @@ export interface TranslationServiceConfig {
 	autoTranslate: boolean; // 自动翻译无 EMM 翻译的标题
 	// 标题裁剪正则（去除不需要翻译的部分）
 	titleCleanupPatterns: string[]; // 例如: ["\\[.*?\\]", "\\(.*?\\)"]
+	// 按文件类型区分的裁剪规则（扩展名 -> 正则数组）
+	// 空数组表示不裁剪，"default" 表示使用默认规则
+	titleCleanupByType: Record<string, string[]>;
 	// 当前使用的预设名称
 	activePreset: string;
 }
+
+// 文件类型分类
+export const FILE_TYPE_GROUPS = {
+	folder: { label: '文件夹', extensions: ['folder'] },
+	archive: { label: '压缩包', extensions: ['zip', 'rar', '7z', 'tar', 'gz'] },
+	image: { label: '图片', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'jxl', 'avif'] },
+	video: { label: '视频', extensions: ['mp4', 'mkv', 'avi', 'mov','nov', 'wmv', 'flv'] },
+} as const;
 
 // 翻译预设
 export interface TranslationPreset {
@@ -118,6 +129,12 @@ const defaultConfig: TranslationServiceConfig = {
 	autoTranslate: true,
 	// 默认裁剪方括号和圆括号内的内容
 	titleCleanupPatterns: ['\\[.*?\\]', '\\(.*?\\)'],
+	// 按类型区分的裁剪规则：文件夹不裁剪（保留画师名），压缩包/文件裁剪
+	titleCleanupByType: {
+		folder: [], // 文件夹不裁剪
+		archive: ['\\[.*?\\]', '\\(.*?\\)'], // 压缩包裁剪
+		// 未指定的类型使用 titleCleanupPatterns
+	},
 	activePreset: 'custom',
 };
 

@@ -192,11 +192,12 @@
 					// AI 翻译
 					if (aiTranslationEnabled && aiAutoTranslate) {
 						const nameWithoutExt = child.name.replace(/\.[^.]+$/, '');
+						const childExt = child.name.split('.').pop()?.toLowerCase() || 'archive';
 						const cached = aiTranslationStore.getCachedTranslation(nameWithoutExt);
 						if (cached) {
 							penetrateAiTranslatedTitle = cached;
 						} else if (needsTranslation(nameWithoutExt, aiTargetLanguage)) {
-							translateText(nameWithoutExt).then((result) => {
+							translateText(nameWithoutExt, { fileExtension: childExt }).then((result) => {
 								if (result.success && result.translated) {
 									penetrateAiTranslatedTitle = result.translated;
 								}
@@ -316,8 +317,11 @@
 			return;
 		}
 
+		// 获取扩展名：文件夹用 'folder'，文件用实际扩展名
+		const itemExt = item.isDir ? 'folder' : (item.name.split('.').pop()?.toLowerCase() || '');
+		
 		// 异步翻译（不阻塞）
-		translateText(nameWithoutExt).then((result) => {
+		translateText(nameWithoutExt, { fileExtension: itemExt }).then((result) => {
 			if (result.success && result.translated && item.path === lastLoadedPath) {
 				aiTranslatedTitle = result.translated;
 			}

@@ -5,7 +5,7 @@
 import { Button } from '$lib/components/ui/button';
 import { Input } from '$lib/components/ui/input';
 import { Label } from '$lib/components/ui/label';
-import { aiTranslationStore, type TranslationServiceType, BUILTIN_PRESETS, type TranslationPreset } from '$lib/stores/ai/translationStore.svelte';
+import { aiTranslationStore, type TranslationServiceType, BUILTIN_PRESETS, type TranslationPreset, FILE_TYPE_GROUPS } from '$lib/stores/ai/translationStore.svelte';
 import { testConnection } from '$lib/services/translationService';
 import { Settings, Server, Bot, CheckCircle, XCircle, Loader2, Copy, Check, Terminal, Ban, ExternalLink, Circle, Sparkles, BookOpen } from '@lucide/svelte';
 import * as Select from '$lib/components/ui/select';
@@ -103,6 +103,38 @@ function updateCleanupPatterns() {
 		.map(p => p.trim())
 		.filter(p => p.length > 0);
 	aiTranslationStore.updateConfig({ titleCleanupPatterns: patterns });
+}
+
+// 按类型区分的裁剪规则
+let cleanupByTypeTexts = $state<Record<string, string>>({});
+let showTypeCleanup = $state(false);
+
+// 初始化按类型裁剪规则
+$effect(() => {
+	if (config.titleCleanupByType) {
+		const texts: Record<string, string> = {};
+		for (const [key, patterns] of Object.entries(config.titleCleanupByType)) {
+			texts[key] = patterns.join('\n');
+		}
+		cleanupByTypeTexts = texts;
+	}
+});
+
+function updateCleanupByType(typeKey: string, text: string) {
+	cleanupByTypeTexts[typeKey] = text;
+	const patterns = text
+		.split('\n')
+		.map(p => p.trim())
+		.filter(p => p.length > 0);
+	const updated = { ...config.titleCleanupByType, [typeKey]: patterns };
+	aiTranslationStore.updateConfig({ titleCleanupByType: updated });
+}
+
+function removeCleanupByType(typeKey: string) {
+	const updated = { ...config.titleCleanupByType };
+	delete updated[typeKey];
+	delete cleanupByTypeTexts[typeKey];
+	aiTranslationStore.updateConfig({ titleCleanupByType: updated });
 }
 
 // Prompt 模板
@@ -443,16 +475,59 @@ async function copyCommand() {
 
 		<!-- 标题裁剪正则 -->
 		<div class="space-y-2">
-			<Label class="text-xs">标题裁剪正则（每行一个）</Label>
+			<div class="flex items-center justify-between">
+				<Label class="text-xs">标题裁剪正则（默认）</Label>
+				<button
+					class="text-xs text-primary hover:underline"
+					onclick={() => showTypeCleanup = !showTypeCleanup}
+				>
+					{showTypeCleanup ? '隐藏类型配置' : '按类型配置'}
+				</button>
+			</div>
 			<textarea
 				class="w-full rounded-md border bg-transparent px-3 py-2 text-xs font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-				rows="3"
+				rows="2"
 				placeholder="\\[.*?\\]&#10;\\(.*?\\)"
 				bind:value={cleanupPatternsText}
 				onblur={updateCleanupPatterns}
 			></textarea>
+			
+			{#if showTypeCleanup}
+				<div class="space-y-2 rounded border bg-muted/20 p-2">
+					<p class="text-[10px] text-muted-foreground">按文件类型配置裁剪规则（空=不裁剪，留空使用默认）</p>
+					
+					<!-- 文件夹 -->
+					<div class="space-y-1">
+						<div class="flex items-center gap-2">
+							<span class="text-xs w-14">📁 文件夹</span>
+							<textarea
+								class="flex-1 rounded border bg-background px-2 py-1 text-xs font-mono min-h-[28px]"
+								rows="1"
+								placeholder="不裁剪（保留画师名）"
+								value={cleanupByTypeTexts['folder'] || ''}
+								oninput={(e) => updateCleanupByType('folder', (e.target as HTMLTextAreaElement).value)}
+							></textarea>
+						</div>
+					</div>
+					
+					<!-- 压缩包 -->
+					<div class="space-y-1">
+						<div class="flex items-center gap-2">
+							<span class="text-xs w-14">📦 压缩包</span>
+							<textarea
+								class="flex-1 rounded border bg-background px-2 py-1 text-xs font-mono min-h-[28px]"
+								rows="1"
+								placeholder="使用默认规则"
+								value={cleanupByTypeTexts['archive'] || ''}
+								oninput={(e) => updateCleanupByType('archive', (e.target as HTMLTextAreaElement).value)}
+							></textarea>
+						</div>
+					</div>
+				</div>
+			{/if}
+			
 			<p class="text-xs text-muted-foreground">
-				翻译前去除匹配的内容。例如 <code class="bg-muted px-1 rounded">\\[.*?\\]</code> 去除方括号内容
+				翻译前去除匹配的内容。例如 <code class="bg-muted px-1 rounded">\\[.*?\\]</code> 去除方括号
 			</p>
 		</div>
 

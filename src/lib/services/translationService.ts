@@ -52,6 +52,54 @@ export function cleanupTitle(title: string, patterns: string[]): string {
 }
 
 /**
+ * 根据文件扩展名获取适用的裁剪规则
+ * @param extension 文件扩展名（不含点），文件夹传 'folder'
+ * @param config 翻译配置
+ */
+export function getCleanupPatternsForType(
+	extension: string,
+	config: { titleCleanupPatterns: string[]; titleCleanupByType?: Record<string, string[]> }
+): string[] {
+	const ext = extension.toLowerCase();
+	const byType = config.titleCleanupByType;
+	
+	if (!byType) {
+		return config.titleCleanupPatterns;
+	}
+	
+	// 1. 直接匹配扩展名
+	if (ext in byType) {
+		return byType[ext];
+	}
+	
+	// 2. 按类型分组匹配
+	if (ext === 'folder' && 'folder' in byType) {
+		return byType.folder;
+	}
+	
+	// 压缩包
+	const archiveExts = ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz'];
+	if (archiveExts.includes(ext) && 'archive' in byType) {
+		return byType.archive;
+	}
+	
+	// 图片
+	const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'tiff'];
+	if (imageExts.includes(ext) && 'image' in byType) {
+		return byType.image;
+	}
+	
+	// 视频
+	const videoExts = ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm'];
+	if (videoExts.includes(ext) && 'video' in byType) {
+		return byType.video;
+	}
+	
+	// 3. 使用默认规则
+	return config.titleCleanupPatterns;
+}
+
+/**
  * 检测文本的主要语言
  */
 export function detectLanguage(text: string): 'ja' | 'zh' | 'en' | 'unknown' {
@@ -188,19 +236,30 @@ async function translateWithOllama(
 /**
  * 翻译文本（自动选择服务）
  * @param text 原始文本
- * @param skipCleanup 是否跳过标题清理（默认 false）
+ * @param options 可选配置
+ * @param options.skipCleanup 是否跳过标题清理（默认 false）
+ * @param options.fileExtension 文件扩展名，用于选择裁剪规则（文件夹传 'folder'）
  */
-export async function translateText(text: string, skipCleanup = false): Promise<TranslationResult> {
+export async function translateText(
+	text: string,
+	options: { skipCleanup?: boolean; fileExtension?: string } = {}
+): Promise<TranslationResult> {
+	const { skipCleanup = false, fileExtension } = options;
 	const config = aiTranslationStore.getConfig();
 
 	if (!config.enabled || config.type === 'disabled') {
 		return { success: false, error: '翻译服务未启用' };
 	}
 
+	// 根据文件类型获取裁剪规则
+	const patterns = fileExtension
+		? getCleanupPatternsForType(fileExtension, config)
+		: config.titleCleanupPatterns;
+
 	// 应用标题清理（如果配置了裁剪正则）
 	let textToTranslate = text;
-	if (!skipCleanup && config.titleCleanupPatterns?.length > 0) {
-		textToTranslate = cleanupTitle(text, config.titleCleanupPatterns);
+	if (!skipCleanup && patterns?.length > 0) {
+		textToTranslate = cleanupTitle(text, patterns);
 		// 如果清理后为空，返回原文
 		if (!textToTranslate) {
 			return { success: true, translated: text };

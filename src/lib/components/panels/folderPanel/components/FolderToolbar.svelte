@@ -198,6 +198,7 @@ let warmupProgress = $state<WarmupProgress | null>(null);
 
 // 更多设置栏展开状态
 let showMoreSettings = $state(false);
+let settingsTab = $state<'action' | 'display' | 'other'>('action');
 
 function toggleMoreSettings() {
 	showMoreSettings = !showMoreSettings;
@@ -536,137 +537,171 @@ function cancelWarmup() {
 	</div>
 </div>
 
-<!-- 可展开的更多设置栏（在主工具栏下方） -->
+<!-- 可展开的更多设置栏（Tab 形式） -->
 {#if showMoreSettings}
-	<div class="border-t bg-muted/20 px-2 py-2 space-y-2">
-		<!-- 第一行：快捷操作 -->
-		<div class="flex flex-wrap items-center gap-2 text-xs">
-			<span class="text-muted-foreground">文件数: {$itemCount}</span>
-			<div class="h-3 w-px bg-border"></div>
-			<button 
-				class="hover:text-primary transition-colors {isWarming ? 'text-orange-500' : 'text-muted-foreground'}"
-				onclick={isWarming ? cancelWarmup : startWarmup}
+	<div class="border-t bg-muted/20">
+		<!-- Tab 标签 -->
+		<div class="flex border-b px-2">
+			<button
+				class="px-3 py-1 text-xs border-b-2 transition-colors {settingsTab === 'action' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}"
+				onclick={() => settingsTab = 'action'}
 			>
-				<Flame class="inline h-3 w-3 mr-0.5" />
-				{isWarming ? '取消预热' : '预热'}
+				快捷操作
 			</button>
-			<button 
-				class="hover:text-primary transition-colors text-muted-foreground"
-				onclick={() => folderTabActions.toggleRecursiveMode()}
+			<button
+				class="px-3 py-1 text-xs border-b-2 transition-colors {settingsTab === 'display' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}"
+				onclick={() => settingsTab = 'display'}
 			>
-				递归显示
+				显示设置
 			</button>
-			<button 
-				class="hover:text-primary transition-colors text-muted-foreground"
-				onclick={handleClearTreeCache}
+			<button
+				class="px-3 py-1 text-xs border-b-2 transition-colors {settingsTab === 'other' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}"
+				onclick={() => settingsTab = 'other'}
 			>
-				<RefreshCw class="inline h-3 w-3 mr-0.5" />
-				刷新树
+				其他
 			</button>
+			<div class="flex-1"></div>
+			<span class="text-[10px] text-muted-foreground self-center">文件数: {$itemCount}</span>
 		</div>
 
-		<!-- 第二行：设置项 -->
-		<div class="flex flex-wrap items-center gap-3 text-xs">
-			<!-- 悬停预览 -->
-			<div class="flex items-center gap-1">
-				<Eye class="h-3 w-3 text-muted-foreground" />
-				<button 
-					class="hover:text-primary transition-colors {$hoverPreviewEnabled ? 'text-primary' : 'text-muted-foreground'}"
-					onclick={() => hoverPreviewSettings.toggle()}
-				>
-					预览{$hoverPreviewEnabled ? '开' : '关'}
-				</button>
-				{#if $hoverPreviewEnabled}
-					<select 
-						class="h-5 bg-transparent border rounded text-[10px] px-1"
-						value={$hoverPreviewDelayMs}
-						onchange={(e) => hoverPreviewSettings.setDelayMs(parseInt((e.target as HTMLSelectElement).value))}
+		<!-- Tab 内容 -->
+		<div class="px-2 py-2">
+			{#if settingsTab === 'action'}
+				<!-- 快捷操作 -->
+				<div class="flex flex-wrap items-center gap-2 text-xs">
+					<button 
+						class="px-2 py-1 rounded border hover:bg-accent transition-colors {isWarming ? 'text-orange-500 border-orange-500' : ''}"
+						onclick={isWarming ? cancelWarmup : startWarmup}
 					>
-						<option value="200">200ms</option>
-						<option value="500">500ms</option>
-						<option value="800">800ms</option>
-						<option value="1200">1200ms</option>
-					</select>
-				{/if}
-			</div>
+						<Flame class="inline h-3 w-3 mr-1" />
+						{isWarming ? '取消预热' : '预热目录'}
+					</button>
+					<button 
+						class="px-2 py-1 rounded border hover:bg-accent transition-colors"
+						onclick={() => folderTabActions.toggleRecursiveMode()}
+					>
+						递归显示
+					</button>
+					<button 
+						class="px-2 py-1 rounded border hover:bg-accent transition-colors"
+						onclick={handleClearTreeCache}
+					>
+						<RefreshCw class="inline h-3 w-3 mr-1" />
+						刷新树
+					</button>
+					<button 
+						class="px-2 py-1 rounded border hover:bg-accent transition-colors"
+						onclick={() => folderTabActions.clearHistory()}
+					>
+						清除历史
+					</button>
+					{#if $currentPathStore && !isPathExcluded($currentPathStore)}
+						<button 
+							class="px-2 py-1 rounded border hover:bg-accent transition-colors"
+							onclick={() => $currentPathStore && addExcludedPath($currentPathStore)}
+						>
+							<Trash2 class="inline h-3 w-3 mr-1" />
+							排除目录
+						</button>
+					{:else if $currentPathStore}
+						<button 
+							class="px-2 py-1 rounded border border-destructive text-destructive hover:bg-destructive/10 transition-colors"
+							onclick={() => $currentPathStore && removeExcludedPath($currentPathStore)}
+						>
+							取消排除
+						</button>
+					{/if}
+				</div>
+			{:else if settingsTab === 'display'}
+				<!-- 显示设置 -->
+				<div class="flex flex-wrap items-center gap-4 text-xs">
+					<!-- 悬停预览 -->
+					<div class="flex items-center gap-2">
+						<Eye class="h-3.5 w-3.5 text-muted-foreground" />
+						<span class="text-muted-foreground">预览:</span>
+						<button 
+							class="px-2 py-0.5 rounded border transition-colors {$hoverPreviewEnabled ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}"
+							onclick={() => hoverPreviewSettings.toggle()}
+						>
+							{$hoverPreviewEnabled ? '开' : '关'}
+						</button>
+						{#if $hoverPreviewEnabled}
+							<select 
+								class="h-6 bg-transparent border rounded text-xs px-1"
+								value={$hoverPreviewDelayMs}
+								onchange={(e) => hoverPreviewSettings.setDelayMs(parseInt((e.target as HTMLSelectElement).value))}
+							>
+								<option value="200">200ms</option>
+								<option value="500">500ms</option>
+								<option value="800">800ms</option>
+								<option value="1200">1200ms</option>
+							</select>
+						{/if}
+					</div>
 
-			<div class="h-3 w-px bg-border"></div>
+					<!-- 穿透内部显示 -->
+					<div class="flex items-center gap-2">
+						<Package class="h-3.5 w-3.5 text-muted-foreground" />
+						<span class="text-muted-foreground">内部文件:</span>
+						<select 
+							class="h-6 bg-transparent border rounded text-xs px-1"
+							value={$fileBrowserStore.penetrateShowInnerFile}
+							onchange={(e) => fileBrowserStore.setPenetrateShowInnerFile((e.target as HTMLSelectElement).value as 'none' | 'single' | 'all')}
+						>
+							<option value="none">不显示</option>
+							<option value="single">仅单文件</option>
+							<option value="all">全显示</option>
+						</select>
+					</div>
 
-			<!-- 穿透内部显示 -->
-			<div class="flex items-center gap-1">
-				<Package class="h-3 w-3 text-muted-foreground" />
-				<select 
-					class="h-5 bg-transparent border rounded text-[10px] px-1"
-					value={$fileBrowserStore.penetrateShowInnerFile}
-					onchange={(e) => fileBrowserStore.setPenetrateShowInnerFile((e.target as HTMLSelectElement).value as 'none' | 'single' | 'all')}
-				>
-					<option value="none">不显示</option>
-					<option value="single">仅单文件</option>
-					<option value="all">全显示</option>
-				</select>
-			</div>
-
-			<div class="h-3 w-px bg-border"></div>
-
-			<!-- 默认评分 -->
-			<div class="flex items-center gap-1">
-				<Star class="h-3 w-3 text-muted-foreground" />
-				<input
-					type="number"
-					min="0"
-					max="5"
-					step="0.1"
-					value={getDefaultRating()}
-					onchange={(e) => {
-						const value = parseFloat((e.target as HTMLInputElement).value);
-						if (!isNaN(value) && value >= 0 && value <= 5) {
-							saveDefaultRating(value);
-						}
-					}}
-					class="w-12 h-5 bg-transparent border rounded text-[10px] px-1 text-center"
-				/>
-			</div>
-
-			<div class="h-3 w-px bg-border"></div>
-
-			<!-- 缩略图大小 -->
-			<div class="flex items-center gap-1">
-				<Grid3x3 class="h-3 w-3 text-muted-foreground" />
-				<input
-					type="range"
-					min="10"
-					max="90"
-					value={$thumbnailWidthPercent}
-					oninput={(e) => folderTabActions.setThumbnailWidthPercent(parseInt((e.target as HTMLInputElement).value))}
-					class="w-16 h-3"
-				/>
-				<span class="text-[10px] text-muted-foreground w-8">{Math.round(48 + ($thumbnailWidthPercent - 10) * 3)}px</span>
-			</div>
-		</div>
-
-		<!-- 第三行：排除路径等 -->
-		<div class="flex flex-wrap items-center gap-2 text-xs">
-			<button 
-				class="hover:text-primary transition-colors text-muted-foreground"
-				onclick={() => folderTabActions.clearHistory()}
-			>
-				清除历史
-			</button>
-			{#if $currentPathStore && !isPathExcluded($currentPathStore)}
-				<button 
-					class="hover:text-primary transition-colors text-muted-foreground"
-					onclick={() => $currentPathStore && addExcludedPath($currentPathStore)}
-				>
-					<Trash2 class="inline h-3 w-3 mr-0.5" />
-					排除当前目录
-				</button>
-			{:else if $currentPathStore}
-				<button 
-					class="hover:text-destructive transition-colors text-muted-foreground"
-					onclick={() => $currentPathStore && removeExcludedPath($currentPathStore)}
-				>
-					取消排除
-				</button>
+					<!-- 缩略图大小 -->
+					<div class="flex items-center gap-2">
+						<Grid3x3 class="h-3.5 w-3.5 text-muted-foreground" />
+						<span class="text-muted-foreground">缩略图:</span>
+						<input
+							type="range"
+							min="10"
+							max="90"
+							value={$thumbnailWidthPercent}
+							oninput={(e) => folderTabActions.setThumbnailWidthPercent(parseInt((e.target as HTMLInputElement).value))}
+							class="w-20 h-4"
+						/>
+						<span class="text-muted-foreground w-10">{Math.round(48 + ($thumbnailWidthPercent - 10) * 3)}px</span>
+					</div>
+				</div>
+			{:else}
+				<!-- 其他设置 -->
+				<div class="flex flex-wrap items-center gap-4 text-xs">
+					<!-- 默认评分 -->
+					<div class="flex items-center gap-2">
+						<Star class="h-3.5 w-3.5 text-muted-foreground" />
+						<span class="text-muted-foreground">默认评分:</span>
+						<input
+							type="number"
+							min="0"
+							max="5"
+							step="0.1"
+							value={getDefaultRating()}
+							onchange={(e) => {
+								const value = parseFloat((e.target as HTMLInputElement).value);
+								if (!isNaN(value) && value >= 0 && value <= 5) {
+									saveDefaultRating(value);
+								}
+							}}
+							class="w-14 h-6 bg-transparent border rounded text-xs px-2 text-center"
+						/>
+						<div class="flex gap-1">
+							{#each [3.5, 4.0, 4.5, 5.0] as rating}
+								<button
+									class="px-1.5 py-0.5 text-[10px] rounded hover:bg-accent {getDefaultRating() === rating ? 'bg-primary text-primary-foreground' : 'border'}"
+									onclick={() => saveDefaultRating(rating)}
+								>
+									{rating}
+								</button>
+							{/each}
+						</div>
+					</div>
+				</div>
 			{/if}
 		</div>
 	</div>

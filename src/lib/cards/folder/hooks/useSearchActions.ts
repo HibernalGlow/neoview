@@ -81,8 +81,8 @@ export function createSearchActions() {
 					path: searchPath,
 					query: keyword,
 					options: {
-						include_subfolders: searchSettings.includeSubfolders,
-						search_in_path: searchSettings.searchInPath
+						includeSubfolders: searchSettings.includeSubfolders,
+						searchInPath: searchSettings.searchInPath
 					}
 				});
 				folderTabActions.setSearchResults(results);

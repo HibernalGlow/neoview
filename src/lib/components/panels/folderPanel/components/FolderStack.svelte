@@ -106,7 +106,7 @@
 	let effectiveMultiSelectMode = $derived(overrideMultiSelectMode !== undefined ? overrideMultiSelectMode : get(multiSelectMode));
 	let effectiveDeleteMode = $derived(overrideDeleteMode !== undefined ? overrideDeleteMode : get(deleteMode));
 	let effectiveViewStyle = $derived(overrideViewStyle !== undefined ? overrideViewStyle : get(viewStyle));
-	let effectiveSortConfig = $derived(overrideSortConfig !== undefined ? overrideSortConfig : get(sortConfig));
+	let effectiveSortConfig = $derived(overrideSortConfig !== undefined ? overrideSortConfig : $sortConfig);
 
 	// 层叠数据结构
 	interface FolderLayer {

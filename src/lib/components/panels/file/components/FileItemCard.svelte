@@ -17,7 +17,9 @@
 	import FileItemListView from './FileItemListView.svelte';
 	import FileItemGridView from './FileItemGridView.svelte';
 	import { aiTranslationStore } from '$lib/stores/ai/translationStore.svelte';
-	import { translateText, containsJapanese } from '$lib/services/translationService';
+	import { translateText, needsTranslation } from '$lib/services/translationService';
+	import { tabPenetrateMode } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
+	import { FileSystemAPI } from '$lib/api';
 
 	let {
 		item,
@@ -103,12 +105,14 @@
 	let aiTranslatedTitle = $state<string | null>(null);
 	let aiTranslationEnabled = $state(false);
 	let aiAutoTranslate = $state(true);
+	let aiTargetLanguage = $state('zh');
 
 	// 订阅 AI 翻译设置
 	$effect(() => {
 		const unsubscribe = aiTranslationStore.subscribe((state) => {
 			aiTranslationEnabled = state.config.enabled;
 			aiAutoTranslate = state.config.autoTranslate;
+			aiTargetLanguage = state.config.targetLanguage;
 		});
 		return unsubscribe;
 	});
@@ -125,6 +129,66 @@
 			translationDict = state.translationDict;
 		});
 		return unsubscribe;
+	});
+
+	// 穿透模式：文件夹显示内部压缩包信息
+	let penetrateModeEnabled = $state(false);
+	let penetrateChildFile = $state<{ name: string; path: string } | null>(null);
+	let penetrateChildMetadata = $state<{ translatedTitle?: string } | null>(null);
+	let penetrateAiTranslatedTitle = $state<string | null>(null);
+
+	// 订阅穿透模式
+	$effect(() => {
+		const unsubscribe = tabPenetrateMode.subscribe((enabled) => {
+			penetrateModeEnabled = enabled;
+		});
+		return unsubscribe;
+	});
+
+	// 穿透模式：加载文件夹内的单个文件信息
+	$effect(() => {
+		if (!penetrateModeEnabled || !item.isDir) {
+			penetrateChildFile = null;
+			penetrateChildMetadata = null;
+			penetrateAiTranslatedTitle = null;
+			return;
+		}
+
+		// 加载文件夹内容，找单个压缩包
+		FileSystemAPI.browseDirectory(item.path).then((children) => {
+			// 只有一个文件且是压缩包时才穿透显示
+			if (children.length === 1 && !children[0].isDir) {
+				const child = children[0];
+				const isChildArchive = /\.(zip|cbz|rar|cbr|7z|cb7)$/i.test(child.name);
+				if (isChildArchive) {
+					penetrateChildFile = { name: child.name, path: child.path };
+					// 加载 EMM 元数据
+					if (enableEMM) {
+						emmMetadataStore.loadMetadataByPath(child.path).then((metadata) => {
+							if (metadata) {
+								penetrateChildMetadata = { translatedTitle: metadata.translated_title };
+							}
+						});
+					}
+					// AI 翻译
+					if (aiTranslationEnabled && aiAutoTranslate) {
+						const nameWithoutExt = child.name.replace(/\.[^.]+$/, '');
+						const cached = aiTranslationStore.getCachedTranslation(nameWithoutExt);
+						if (cached) {
+							penetrateAiTranslatedTitle = cached;
+						} else if (needsTranslation(nameWithoutExt, aiTargetLanguage)) {
+							translateText(nameWithoutExt).then((result) => {
+								if (result.success && result.translated) {
+									penetrateAiTranslatedTitle = result.translated;
+								}
+							});
+						}
+					}
+				}
+			}
+		}).catch(() => {
+			// 忽略错误
+		});
 	});
 
 	// 评分（文件夹和文件都使用统一的 ratingStore）
@@ -212,7 +276,7 @@
 		}
 	});
 
-	// AI 自动翻译：当没有 EMM 翻译标题且文件名包含日文时
+	// AI 自动翻译：当没有 EMM 翻译标题且需要翻译时
 	$effect(() => {
 		// 条件检查
 		if (!aiTranslationEnabled || !aiAutoTranslate) return;
@@ -223,8 +287,8 @@
 		// 获取文件名（不含扩展名）
 		const nameWithoutExt = item.name.replace(/\.[^.]+$/, '');
 		
-		// 只对包含日文的文件名进行翻译
-		if (!containsJapanese(nameWithoutExt)) return;
+		// 检测是否需要翻译（源语言 ≠ 目标语言）
+		if (!needsTranslation(nameWithoutExt, aiTargetLanguage)) return;
 
 		// 检查缓存
 		const cached = aiTranslationStore.getCachedTranslation(nameWithoutExt);
@@ -399,7 +463,27 @@
 
 	// 合并 EMM 元数据和 AI 翻译
 	// 如果有 AI 翻译但没有 EMM 翻译，则使用 AI 翻译并标记为 AI 翻译
+	// 穿透模式：显示原文件夹名 + 内部压缩包翻译
 	const mergedEmmMetadata = $derived.by(() => {
+		// 穿透模式：文件夹显示内部压缩包信息
+		if (item.isDir && penetrateModeEnabled && penetrateChildFile) {
+			const childTitle = penetrateChildMetadata?.translatedTitle || penetrateAiTranslatedTitle;
+			const childNameWithoutExt = penetrateChildFile.name.replace(/\.[^.]+$/, '');
+			
+			// 格式：原压缩包名 + 翻译（如果有）
+			let displayTitle = childNameWithoutExt;
+			if (childTitle) {
+				const prefix = penetrateAiTranslatedTitle && !penetrateChildMetadata?.translatedTitle ? '🤖 ' : '';
+				displayTitle = `${prefix}${childTitle}`;
+			}
+			
+			return {
+				translatedTitle: displayTitle,
+				originalChildName: childNameWithoutExt,
+				isPenetrated: true
+			};
+		}
+
 		if (!emmMetadata && !aiTranslatedTitle) return null;
 		
 		const base = emmMetadata || { tags: undefined, rating: undefined };

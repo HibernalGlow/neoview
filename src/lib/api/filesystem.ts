@@ -261,7 +261,7 @@ export async function loadImage(
   const traceId = options.traceId ?? createImageTraceId('ipc', options.pageIndex);
   logImageTrace(traceId, 'invoke load_image', { path, pageIndex: options.pageIndex });
 
-  const result = await invoke<ArrayBuffer>('load_image', {
+  const result = await invokeWithRetry<ArrayBuffer>('load_image', {
     path,
     traceId,
     pageIndex: options.pageIndex
@@ -334,8 +334,8 @@ export async function loadImageFromArchiveAsBlob(
   const mimeType = getMimeTypeFromPath(filePath);
 
   try {
-    // 【优化】使用二进制传输命令，返回 ArrayBuffer
-    const result = await invoke<ArrayBuffer>('load_image_from_archive_binary', {
+    // 【优化】使用二进制传输命令，返回 ArrayBuffer（带重试）
+    const result = await invokeWithRetry<ArrayBuffer>('load_image_from_archive_binary', {
       archivePath,
       filePath,
       traceId,
@@ -385,7 +385,7 @@ export async function loadImageFromArchiveAsBlob(
     // 回退到旧命令（JSON 数组方式，更稳定但效率较低）
     logImageTrace(traceId, 'binary command failed, fallback to JSON', { error: String(error) });
     
-    const binaryData = await invoke<number[]>('load_image_from_archive', {
+    const binaryData = await invokeWithRetry<number[]>('load_image_from_archive', {
       archivePath,
       filePath,
       traceId,

@@ -35,6 +35,7 @@
 		removeVirtualPathItem,
 		getVirtualPathConfig
 	} from '../utils/virtualPathLoader';
+	import { virtualPanelSettingsStore } from '$lib/stores/virtualPanelSettings.svelte';
 
 	// 别名映射
 	const viewStyle = tabViewStyle;

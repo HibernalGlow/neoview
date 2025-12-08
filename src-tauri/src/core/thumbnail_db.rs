@@ -1783,7 +1783,7 @@ impl ThumbnailDb {
         let mut stmt = conn.prepare("SELECT ai_translation FROM thumbs WHERE key = ?1 LIMIT 1")?;
         let result: Option<String> = stmt.query_row(params![key], |row| {
             row.get::<_, Option<String>>(0)
-        }).unwrap_or(None).flatten();
+        }).ok().flatten();
         
         // 如果有模型过滤器，检查模型是否匹配
         if let (Some(json_str), Some(filter)) = (&result, model_filter) {
@@ -1829,7 +1829,7 @@ impl ThumbnailDb {
             let mut stmt = conn.prepare("SELECT ai_translation FROM thumbs WHERE key = ?1 LIMIT 1")?;
             let result: Option<String> = stmt.query_row(params![key], |row| {
                 row.get::<_, Option<String>>(0)
-            }).unwrap_or(None).flatten();
+            }).ok().flatten();
             
             if let Some(json_str) = result {
                 // 如果有模型过滤器，检查模型是否匹配

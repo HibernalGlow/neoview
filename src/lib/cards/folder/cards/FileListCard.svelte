@@ -127,8 +127,8 @@
 						onOpenInNewTab={onOpenInNewTab}
 						forceActive={ctx.isVirtualInstance}
 						skipGlobalStore={ctx.isVirtualInstance}
-						overrideMultiSelectMode={ctx.isVirtualInstance ? ctx.effectiveMultiSelectMode : undefined}
-						overrideDeleteMode={ctx.isVirtualInstance ? ctx.effectiveDeleteMode : undefined}
+						overrideMultiSelectMode={ctx.effectiveMultiSelectMode}
+						overrideDeleteMode={ctx.effectiveDeleteMode}
 						overrideViewStyle={ctx.isVirtualInstance ? ctx.effectiveViewStyle : undefined}
 						overrideSortConfig={ctx.isVirtualInstance ? ctx.effectiveSortConfig : undefined}
 					/>

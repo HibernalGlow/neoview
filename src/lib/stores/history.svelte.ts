@@ -157,6 +157,17 @@ export const historyStore = {
   },
 
   /**
+   * 按路径移除历史记录
+   */
+  removeByPath(path: string) {
+    update(history => {
+      const newHistory = history.filter(h => h.path !== path);
+      saveToStorage(newHistory);
+      return newHistory;
+    });
+  },
+
+  /**
    * 更新视频观看进度（基于路径），并同步到 currentPage/totalPages 以复用进度条和已读标记
    */
   updateVideoProgress(

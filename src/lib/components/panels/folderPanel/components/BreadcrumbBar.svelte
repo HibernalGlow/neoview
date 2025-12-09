@@ -60,18 +60,27 @@ function cancelEditing() {
 
 function confirmEditing() {
 	if (editValue.trim()) {
-		// 规范化路径：Windows 使用反斜杠
-		let normalizedPath = editValue.trim().replace(/\//g, '\\');
-		// 确保 Windows 盘符格式正确
-		if (/^[a-zA-Z]:$/.test(normalizedPath)) {
-			normalizedPath += '\\';
+		let finalPath = editValue.trim();
+		
+		// 检测是否为虚拟路径
+		if (isVirtualPath(finalPath)) {
+			// 虚拟路径直接使用，不做规范化
+			folderTabActions.setPath(finalPath);
+			onNavigate?.(finalPath);
+		} else {
+			// 规范化路径：Windows 使用反斜杠
+			let normalizedPath = finalPath.replace(/\//g, '\\');
+			// 确保 Windows 盘符格式正确
+			if (/^[a-zA-Z]:$/.test(normalizedPath)) {
+				normalizedPath += '\\';
+			}
+			// 确保 Windows 盘符后有反斜杠
+			if (/^[a-zA-Z]:[^\\]/.test(normalizedPath)) {
+				normalizedPath = normalizedPath.slice(0, 2) + '\\' + normalizedPath.slice(2);
+			}
+			folderTabActions.setPath(normalizedPath);
+			onNavigate?.(normalizedPath);
 		}
-		// 确保 Windows 盘符后有反斜杠
-		if (/^[a-zA-Z]:[^\\]/.test(normalizedPath)) {
-			normalizedPath = normalizedPath.slice(0, 2) + '\\' + normalizedPath.slice(2);
-		}
-		folderTabActions.setPath(normalizedPath);
-		onNavigate?.(normalizedPath);
 	}
 	isEditing = false;
 }

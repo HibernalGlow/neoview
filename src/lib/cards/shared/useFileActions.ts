@@ -69,7 +69,7 @@ export function createNavigationActions(
 	initialPath?: string
 ): NavigationActions {
 	const handleRefresh = () => {
-		const path = ctx.isVirtualInstance ? initialPath : get(ctx.currentPath);
+		const path = ctx.isVirtualInstance ? initialPath : get(ctx.currentPath) as string;
 		if (path) {
 			if (!isVirtualPath(path)) directoryTreeCache.invalidate(path);
 			ctx.navigationCommand.set({ type: 'init', path });
@@ -113,7 +113,7 @@ export function createNavigationActions(
 	};
 
 	const handleGoUp = () => {
-		const path = get(ctx.currentPath);
+		const path = get(ctx.currentPath) as string;
 		if (!path || isVirtualPath(path)) return;
 		const normalized = path.replace(/\//g, '\\');
 		const parts = normalized.split('\\').filter(Boolean);
@@ -135,7 +135,7 @@ export function createNavigationActions(
 
 	const handleSetHome = () => {
 		if (ctx.isVirtualInstance) return;
-		const path = get(ctx.currentPath);
+		const path = get(ctx.currentPath) as string;
 		if (path && !isVirtualPath(path)) {
 			localStorage.setItem('neoview-homepage-path', path);
 			ctx.homePath = path;
@@ -308,12 +308,13 @@ export function createDeleteActions(
 
 	const handleDelete = (item: FsItem) => {
 		const isVirtual = ctx.isVirtualInstance && initialPath;
-		const actionText = isVirtual ? '移除' : get(ctx.deleteStrategy) === 'trash' ? '删除' : '永久删除';
-		const selected = get(ctx.selectedItems);
+		const strategy = get(ctx.deleteStrategy) as string;
+		const actionText = isVirtual ? '移除' : strategy === 'trash' ? '删除' : '永久删除';
+		const selected = get(ctx.selectedItems) as Set<string>;
 
-		if (get(ctx.multiSelectMode) && selected.size > 0) {
+		if ((get(ctx.multiSelectMode) as boolean) && selected.size > 0) {
 			if (!selected.has(item.path)) selected.add(item.path);
-			const paths = Array.from(selected);
+			const paths = Array.from(selected) as string[];
 			openConfirmDialog({
 				title: `${actionText}确认`,
 				description: `确定要${actionText}选中的 ${paths.length} 项吗？`,
@@ -324,7 +325,7 @@ export function createDeleteActions(
 			return;
 		}
 
-		if (get(ctx.deleteMode)) {
+		if (get(ctx.deleteMode) as boolean) {
 			executeSingleDelete(item);
 		} else {
 			openConfirmDialog({
@@ -338,12 +339,12 @@ export function createDeleteActions(
 	};
 
 	const handleBatchDelete = () => {
-		const selected = get(ctx.selectedItems);
+		const selected = get(ctx.selectedItems) as Set<string>;
 		if (selected.size === 0) {
 			showErrorToast('没有选中', '请先选择');
 			return;
 		}
-		const paths = Array.from(selected);
+		const paths = Array.from(selected) as string[];
 		const isVirtual = ctx.isVirtualInstance && initialPath;
 		const actionText = isVirtual ? '移除' : '删除';
 		openConfirmDialog({
@@ -410,7 +411,7 @@ export function createClipboardActions(
 	};
 
 	const handlePaste = async () => {
-		const target = get(ctx.currentPath);
+		const target = get(ctx.currentPath) as string;
 		if (!target || isVirtualPath(target)) return;
 
 		try {

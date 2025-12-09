@@ -1,6 +1,6 @@
 /**
  * FolderContext - 文件夹面板共享上下文
- * 提供卡片间通信，但 store 直接交给功能 hooks 而非面板
+ * 提供卡片间通信，支持独立 store 和混合模式标签页
  */
 import { getContext, setContext } from 'svelte';
 import { writable, get } from 'svelte/store';

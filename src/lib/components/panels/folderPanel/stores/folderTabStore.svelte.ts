@@ -550,18 +550,23 @@ export const folderTabActions = {
 	// ============ Navigation ============
 
 	/**
-	 * 设置当前路径
+	 * 设置当前路径（支持虚拟路径）
 	 */
 	setPath(path: string, addToHistory = true) {
-		// 规范化路径：Windows 使用反斜杠
-		let normalizedPath = path.replace(/\//g, '\\');
-		// 确保 Windows 盘符后有反斜杠 (E: -> E:\)
-		if (/^[a-zA-Z]:$/.test(normalizedPath)) {
-			normalizedPath += '\\';
-		}
-		// 确保 Windows 盘符格式正确 (E:abc -> E:\abc)
-		if (/^[a-zA-Z]:[^\\]/.test(normalizedPath)) {
-			normalizedPath = normalizedPath.slice(0, 2) + '\\' + normalizedPath.slice(2);
+		let normalizedPath = path;
+		
+		// 虚拟路径不做规范化
+		if (!isVirtualPath(path)) {
+			// 规范化路径：Windows 使用反斜杠
+			normalizedPath = path.replace(/\//g, '\\');
+			// 确保 Windows 盘符后有反斜杠 (E: -> E:\)
+			if (/^[a-zA-Z]:$/.test(normalizedPath)) {
+				normalizedPath += '\\';
+			}
+			// 确保 Windows 盘符格式正确 (E:abc -> E:\abc)
+			if (/^[a-zA-Z]:[^\\]/.test(normalizedPath)) {
+				normalizedPath = normalizedPath.slice(0, 2) + '\\' + normalizedPath.slice(2);
+			}
 		}
 		
 		updateActiveTab((tab) => {

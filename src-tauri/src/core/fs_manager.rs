@@ -143,15 +143,15 @@ impl FsManager {
 
         let entries = fs::read_dir(path).map_err(|e| format!("读取目录失败: {}", e))?;
 
-        // 收集有效条目
+        // 收集有效条目（优化：使用 OsStr 字节比较避免 String 转换）
         let valid_entries: Vec<_> = entries
             .filter_map(|entry| {
                 let entry = entry.ok()?;
                 let entry_path = entry.path();
                 
-                // 跳过隐藏文件
+                // 优化：直接检查第一个字节是否为 '.'
                 let name = entry_path.file_name()?;
-                if name.to_string_lossy().starts_with('.') {
+                if name.as_encoded_bytes().first() == Some(&b'.') {
                     return None;
                 }
                 
@@ -217,9 +217,9 @@ impl FsManager {
             })
             .collect();
 
-        // 排序：目录优先，然后按名称（使用自然排序）
+        // 排序：目录优先，然后按名称（使用并行自然排序，大量条目时更快）
         let mut sorted_items = items;
-        sorted_items.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        sorted_items.par_sort_by(|a, b| match (a.is_dir, b.is_dir) {
             (true, false) => std::cmp::Ordering::Less,
             (false, true) => std::cmp::Ordering::Greater,
             _ => {
@@ -232,33 +232,36 @@ impl FsManager {
         Ok(sorted_items)
     }
 
-    /// 快速统计目录内的项目数量
+    /// 快速统计目录内的项目数量（优化版本）
+    #[inline]
     fn count_directory_items(path: &Path) -> DirStats {
         let mut stats = DirStats::default();
 
         if let Ok(sub_entries) = fs::read_dir(path) {
             for sub_entry in sub_entries.flatten() {
-                // 跳过隐藏文件
-                if let Some(sub_name) = sub_entry.file_name().to_str() {
-                    if sub_name.starts_with('.') {
-                        continue;
-                    }
+                // 优化：使用字节比较跳过隐藏文件
+                let name = sub_entry.file_name();
+                if name.as_encoded_bytes().first() == Some(&b'.') {
+                    continue;
                 }
 
                 stats.total += 1;
-                let sub_path = sub_entry.path();
-
-                if sub_path.is_dir() {
-                    stats.folders += 1;
-                } else {
-                    if Self::is_image_file(&sub_path) {
-                        stats.images += 1;
-                    }
-                    if Self::is_archive_file(&sub_path) {
-                        stats.archives += 1;
-                    }
-                    if Self::is_video_file(&sub_path) {
-                        stats.videos += 1;
+                
+                // 优化：使用 file_type() 代替 is_dir()，避免额外的 stat 调用
+                if let Ok(ft) = sub_entry.file_type() {
+                    if ft.is_dir() {
+                        stats.folders += 1;
+                    } else {
+                        let sub_path = sub_entry.path();
+                        if Self::is_image_file(&sub_path) {
+                            stats.images += 1;
+                        }
+                        if Self::is_archive_file(&sub_path) {
+                            stats.archives += 1;
+                        }
+                        if Self::is_video_file(&sub_path) {
+                            stats.videos += 1;
+                        }
                     }
                 }
             }

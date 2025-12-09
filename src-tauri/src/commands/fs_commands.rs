@@ -249,9 +249,9 @@ fn list_subfolders_sync(path: &Path) -> Result<Vec<SubfolderItem>, String> {
         })
         .collect();
 
-    // 使用自然排序
+    // 使用并行自然排序（大量条目时更快）
     let mut sorted = subfolders;
-    sorted.sort_by(|a, b| {
+    sorted.par_sort_by(|a, b| {
         natural_sort_rs::natural_cmp::<str, String>(&a.name.to_lowercase(), &b.name.to_lowercase())
     });
 
@@ -259,24 +259,23 @@ fn list_subfolders_sync(path: &Path) -> Result<Vec<SubfolderItem>, String> {
 }
 
 /// 快速检查目录是否有子目录（找到第一个就返回）
+/// 优化：直接使用 OsStr 比较避免 String 转换
+#[inline]
 fn has_subdirectory(path: &Path) -> bool {
-    if let Ok(mut entries) = std::fs::read_dir(path) {
-        entries.any(|e| {
-            if let Ok(entry) = e {
-                // 跳过隐藏文件
+    std::fs::read_dir(path)
+        .map(|entries| {
+            entries.filter_map(Result::ok).any(|entry| {
+                // 快速检查隐藏文件（第一个字节是 '.'）
                 let name = entry.file_name();
-                if name.to_string_lossy().starts_with('.') {
+                let name_bytes = name.as_encoded_bytes();
+                if name_bytes.first() == Some(&b'.') {
                     return false;
                 }
-                // 检查是否是目录
+                // 使用 file_type() 而不是 metadata()，更快
                 entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false)
-            } else {
-                false
-            }
+            })
         })
-    } else {
-        false
-    }
+        .unwrap_or(false)
 }
 
 #[derive(Debug, Clone, Serialize)]

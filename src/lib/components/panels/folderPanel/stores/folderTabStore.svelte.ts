@@ -209,6 +209,9 @@ function createDefaultTabState(id: string, homePath: string = ''): FolderTabStat
 interface FolderTabsState {
 	tabs: FolderTabState[];
 	activeTabId: string;
+	// 标签页导航历史（用于跨标签页后退/前进）
+	tabNavHistory: string[];
+	tabNavHistoryIndex: number;
 }
 
 function loadTabsState(): FolderTabsState | null {
@@ -276,8 +279,16 @@ const firstTabId = generateTabId();
 
 const initialState: FolderTabsState = savedState || {
 	tabs: [createDefaultTabState(firstTabId)],
-	activeTabId: firstTabId
+	activeTabId: firstTabId,
+	tabNavHistory: [firstTabId],
+	tabNavHistoryIndex: 0
 };
+
+// 确保 tabNavHistory 存在（兼容旧数据）
+if (!initialState.tabNavHistory) {
+	initialState.tabNavHistory = [initialState.activeTabId];
+	initialState.tabNavHistoryIndex = 0;
+}
 
 // 确保至少有一个标签
 if (initialState.tabs.length === 0) {
@@ -356,6 +367,10 @@ export const tabStackActiveIndex = derived(activeTab, ($tab) => $tab?.stackActiv
 // 缩略图宽度百分比
 export const tabThumbnailWidthPercent = derived(activeTab, ($tab) => $tab?.thumbnailWidthPercent || 20);
 
+// 标签页导航历史状态
+export const tabCanGoBackTab = derived(store, ($store) => $store.tabNavHistoryIndex > 0);
+export const tabCanGoForwardTab = derived(store, ($store) => $store.tabNavHistoryIndex < $store.tabNavHistory.length - 1);
+
 // ============ Actions ============
 
 function updateActiveTab(updater: (tab: FolderTabState) => FolderTabState) {
@@ -383,9 +398,14 @@ export const folderTabActions = {
 		const newId = generateTabId();
 		store.update(($store) => {
 			const newTab = createDefaultTabState(newId, homePath);
-			const newState = {
+			// 截断当前位置之后的标签页历史，然后添加新标签页
+			const newTabNavHistory = $store.tabNavHistory.slice(0, $store.tabNavHistoryIndex + 1);
+			newTabNavHistory.push(newId);
+			const newState: FolderTabsState = {
 				tabs: [...$store.tabs, newTab],
-				activeTabId: newId
+				activeTabId: newId,
+				tabNavHistory: newTabNavHistory,
+				tabNavHistoryIndex: newTabNavHistory.length - 1
 			};
 			saveTabsState(newState);
 			return newState;
@@ -413,23 +433,57 @@ export const folderTabActions = {
 				newActiveId = newTabs[newIndex].id;
 			}
 
-			const newState = { tabs: newTabs, activeTabId: newActiveId };
+			// 从标签页历史中移除已关闭的标签页
+			const newTabNavHistory = $store.tabNavHistory.filter(id => id !== tabId);
+			let newTabNavHistoryIndex = $store.tabNavHistoryIndex;
+			// 调整索引
+			if (newTabNavHistory.length === 0) {
+				newTabNavHistory.push(newActiveId);
+				newTabNavHistoryIndex = 0;
+			} else {
+				// 找到新活动标签页在历史中的最后一个位置
+				const lastIndex = newTabNavHistory.lastIndexOf(newActiveId);
+				newTabNavHistoryIndex = lastIndex >= 0 ? lastIndex : newTabNavHistory.length - 1;
+			}
+
+			const newState: FolderTabsState = {
+				tabs: newTabs,
+				activeTabId: newActiveId,
+				tabNavHistory: newTabNavHistory,
+				tabNavHistoryIndex: newTabNavHistoryIndex
+			};
 			saveTabsState(newState);
 			return newState;
 		});
 	},
 
 	/**
-	 * 切换页签
+	 * 切换页签（记录到历史）
 	 */
-	switchTab(tabId: string) {
+	switchTab(tabId: string, addToHistory = true) {
 		store.update(($store) => {
-			if ($store.tabs.some((t) => t.id === tabId)) {
-				const newState = { ...$store, activeTabId: tabId };
-				saveTabsState(newState);
-				return newState;
+			if (!$store.tabs.some((t) => t.id === tabId)) {
+				return $store;
 			}
-			return $store;
+			
+			let tabNavHistory = $store.tabNavHistory;
+			let tabNavHistoryIndex = $store.tabNavHistoryIndex;
+			
+			if (addToHistory && tabId !== $store.activeTabId) {
+				// 截断当前位置之后的历史，添加新标签页
+				tabNavHistory = tabNavHistory.slice(0, tabNavHistoryIndex + 1);
+				tabNavHistory.push(tabId);
+				tabNavHistoryIndex = tabNavHistory.length - 1;
+			}
+			
+			const newState: FolderTabsState = {
+				...$store,
+				activeTabId: tabId,
+				tabNavHistory,
+				tabNavHistoryIndex
+			};
+			saveTabsState(newState);
+			return newState;
 		});
 	},
 
@@ -456,7 +510,16 @@ export const folderTabActions = {
 			const newTabs = [...$store.tabs];
 			newTabs.splice(sourceIndex + 1, 0, newTab);
 
-			const newState = { tabs: newTabs, activeTabId: newId };
+			// 添加到标签页历史
+			const newTabNavHistory = $store.tabNavHistory.slice(0, $store.tabNavHistoryIndex + 1);
+			newTabNavHistory.push(newId);
+
+			const newState: FolderTabsState = {
+				tabs: newTabs,
+				activeTabId: newId,
+				tabNavHistory: newTabNavHistory,
+				tabNavHistoryIndex: newTabNavHistory.length - 1
+			};
 			saveTabsState(newState);
 			return newState;
 		});
@@ -661,6 +724,72 @@ export const folderTabActions = {
 		}));
 
 		return { path: entry.path };
+	},
+
+	// ============ Tab Navigation History ============
+
+	/**
+	 * 检查是否可以后退到上一个标签页
+	 */
+	canGoBackTab(): boolean {
+		const state = get(store);
+		return state.tabNavHistoryIndex > 0;
+	},
+
+	/**
+	 * 检查是否可以前进到下一个标签页
+	 */
+	canGoForwardTab(): boolean {
+		const state = get(store);
+		return state.tabNavHistoryIndex < state.tabNavHistory.length - 1;
+	},
+
+	/**
+	 * 后退到上一个标签页
+	 */
+	goBackTab(): string | null {
+		const state = get(store);
+		if (state.tabNavHistoryIndex <= 0) return null;
+
+		const newIndex = state.tabNavHistoryIndex - 1;
+		const targetTabId = state.tabNavHistory[newIndex];
+
+		// 检查目标标签页是否存在
+		if (!state.tabs.some(t => t.id === targetTabId)) {
+			return null;
+		}
+
+		store.update(($store) => ({
+			...$store,
+			activeTabId: targetTabId,
+			tabNavHistoryIndex: newIndex
+		}));
+
+		return targetTabId;
+	},
+
+	/**
+	 * 前进到下一个标签页
+	 */
+	goForwardTab(): string | null {
+		const state = get(store);
+		if (state.tabNavHistoryIndex >= state.tabNavHistory.length - 1) return null;
+
+		const newIndex = state.tabNavHistoryIndex + 1;
+		const targetTabId = state.tabNavHistory[newIndex];
+
+		// 检查目标标签页是否存在
+		if (!state.tabs.some(t => t.id === targetTabId)) {
+			return null;
+		}
+
+		store.update(($store) => ({
+			...$store,
+			activeTabId: targetTabId,
+			tabNavHistoryIndex: newIndex
+		}));
+
+		return targetTabId;
 	},
 
 	/**

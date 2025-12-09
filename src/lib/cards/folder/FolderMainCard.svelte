@@ -86,14 +86,40 @@
 
 	function handleGoBack() {
 		if (ctx.isVirtualInstance) return;
+		// 先尝试在当前标签页内后退
 		const result = folderTabActions.goBack();
-		if (result) ctx.navigationCommand.set({ type: 'history', path: result.path });
+		if (result) {
+			ctx.navigationCommand.set({ type: 'history', path: result.path });
+			return;
+		}
+		// 当前标签页历史已到头，尝试切换到上一个标签页
+		const prevTab = folderTabActions.goBackTab();
+		if (prevTab) {
+			// 切换标签页后，加载该标签页的当前路径
+			const tab = folderTabActions.getActiveTab();
+			if (tab) {
+				ctx.navigationCommand.set({ type: 'init', path: tab.currentPath });
+			}
+		}
 	}
 
 	function handleGoForward() {
 		if (ctx.isVirtualInstance) return;
+		// 先尝试在当前标签页内前进
 		const result = folderTabActions.goForward();
-		if (result) ctx.navigationCommand.set({ type: 'history', path: result.path });
+		if (result) {
+			ctx.navigationCommand.set({ type: 'history', path: result.path });
+			return;
+		}
+		// 当前标签页历史已到头，尝试切换到下一个标签页
+		const nextTab = folderTabActions.goForwardTab();
+		if (nextTab) {
+			// 切换标签页后，加载该标签页的当前路径
+			const tab = folderTabActions.getActiveTab();
+			if (tab) {
+				ctx.navigationCommand.set({ type: 'init', path: tab.currentPath });
+			}
+		}
 	}
 
 	function handleGoUp() {

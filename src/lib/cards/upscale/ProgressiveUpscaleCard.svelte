@@ -117,10 +117,29 @@ function stopDwellTimer() {
 async function triggerProgressiveUpscale() {
 	if (!upscaleEnabled || !progressiveUpscaleEnabled.value) return;
 	
+	// 停止倒计时
+	if (countdownTimer) {
+		clearInterval(countdownTimer);
+		countdownTimer = null;
+	}
+	
 	isProgressiveRunning = true;
-	console.log(`📈 递进超分触发: 当前页 ${currentPageIndex + 1}`);
-	await upscaleStore.triggerCurrentPageUpscale();
+	countdown = 0;
+	
+	// 递进超分：向后扩展超分范围
+	const maxPages = progressiveMaxPages.value === 999 ? totalPages : progressiveMaxPages.value;
+	console.log(`📈 递进超分触发: 当前页 ${currentPageIndex + 1}, 最大页数 ${maxPages}`);
+	
+	// 调用递进超分方法
+	await upscaleStore.triggerProgressiveUpscale(currentPageIndex, maxPages);
+	
 	isProgressiveRunning = false;
+	isTimerActive = false;
+	
+	// 触发完成后重新启动计时器，继续递进
+	if (progressiveUpscaleEnabled.value && autoUpscaleEnabled.value) {
+		startDwellTimer();
+	}
 }
 
 // 监听页面变化，重置计时器

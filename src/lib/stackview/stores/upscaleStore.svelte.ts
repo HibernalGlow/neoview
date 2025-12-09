@@ -381,6 +381,83 @@ class UpscaleStore {
     );
   }
 
+  /** 触发递进超分（从已超分的最后一页向后扩展） */
+  async triggerProgressiveUpscale(currentPageIndex: number, maxPages: number) {
+    if (!this.state.enabled || !this.state.currentBookPath) {
+      console.log('⏭️ 跳过递进超分: enabled=', this.state.enabled, 'bookPath=', this.state.currentBookPath);
+      return;
+    }
+
+    // 动态导入避免循环依赖
+    const { bookStore } = await import('$lib/stores/book.svelte');
+    
+    const book = bookStore.currentBook;
+    if (!book || !book.pages) {
+      console.log('⏭️ 跳过递进超分: 无有效书籍');
+      return;
+    }
+
+    // 找到已超分的最后一页（从当前页开始向后查找）
+    let lastUpscaledIndex = currentPageIndex - 1;
+    for (let i = currentPageIndex; i < book.pages.length; i++) {
+      if (imagePool.hasUpscaled(i)) {
+        lastUpscaledIndex = i;
+      } else {
+        break; // 遇到未超分的页面就停止
+      }
+    }
+
+    // 从已超分的最后一页的下一页开始
+    const startPage = lastUpscaledIndex + 1;
+    
+    if (startPage >= book.pages.length) {
+      console.log('📸 递进超分: 已到达书籍末尾');
+      return;
+    }
+
+    // 构建图片信息列表
+    const imageInfos: Array<{ pageIndex: number; imagePath: string; hash: string }> = [];
+    
+    // 判断是否是压缩包
+    const bookPath = book.path ?? '';
+    const isArchive = /\.(zip|cbz|rar|cbr|7z)$/i.test(bookPath);
+
+    // 从起始页向后扩展，最多 maxPages 页
+    const endPage = Math.min(startPage + maxPages, book.pages.length);
+    for (let i = startPage; i < endPage; i++) {
+      // 跳过已超分的页面
+      if (imagePool.hasUpscaled(i)) continue;
+      
+      const page = book.pages[i];
+      if (page) {
+        const imagePath = isArchive 
+          ? `${bookPath} inner=${page.path}`
+          : page.path;
+        
+        imageInfos.push({
+          pageIndex: i,
+          imagePath,
+          hash: `${bookPath}_${page.path}`,
+        });
+      }
+    }
+
+    if (imageInfos.length === 0) {
+      console.log('📸 递进超分: 范围内所有页面已超分');
+      return;
+    }
+
+    console.log(`📸 递进超分: 从第 ${startPage + 1} 页开始，共 ${imageInfos.length} 页待处理`);
+
+    // 请求超分
+    await this.requestPreloadRange(
+      this.state.currentBookPath,
+      startPage,
+      book.pages.length,
+      imageInfos,
+    );
+  }
+
   /** 切换启用状态 */
   async toggle() {
     await this.setEnabled(!this.state.enabled);

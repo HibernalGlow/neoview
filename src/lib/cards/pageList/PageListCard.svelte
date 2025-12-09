@@ -71,9 +71,13 @@ const currentPageIndex = $derived(bookStore.currentPageIndex);
 
 // 获取超分状态
 // 使用 imagePool.hasUpscaled() 判断，与 UpscaleLayer 保持一致
+// 依赖 imagePool.version 触发响应式更新
 const upscaleEnabled = $derived(upscaleStore.enabled);
+const upscaleVersion = $derived(imagePool.version);
 
 function isPageUpscaled(pageIndex: number): boolean {
+	// 依赖 version 触发更新
+	void upscaleVersion;
 	return imagePool.hasUpscaled(pageIndex);
 }
 

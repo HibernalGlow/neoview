@@ -373,7 +373,7 @@
 			</Tooltip.Content>
 		</Tooltip.Root>
 
-		<img src="/app-icon.svg" alt="NeoView" class="ml-2 h-5 w-5 rounded" />
+		<span class="ml-2 text-sm font-semibold">NeoView</span>
 	</div>
 
 	<!-- 中间：功能按钮 -->

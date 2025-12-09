@@ -408,10 +408,12 @@ let settingsTab = $state<'action' | 'display' | 'other'>('action');
 // 展开面板状态
 let sortPanelExpanded = $state(false);
 let viewPanelExpanded = $state(false);
+let treePanelExpanded = $state(false);
 
 function closePanels() {
 	sortPanelExpanded = false;
 	viewPanelExpanded = false;
+	treePanelExpanded = false;
 }
 
 function toggleSortPanel() {
@@ -424,6 +426,12 @@ function toggleViewPanel() {
 	const wasExpanded = viewPanelExpanded;
 	closePanels();
 	viewPanelExpanded = !wasExpanded;
+}
+
+function toggleTreePanel() {
+	const wasExpanded = treePanelExpanded;
+	closePanels();
+	treePanelExpanded = !wasExpanded;
 }
 
 function toggleMoreSettings() {
@@ -694,56 +702,27 @@ async function handleCleanupInvalid() {
 			</Tooltip.Content>
 		</Tooltip.Root>
 
-		<!-- 文件夹树按钮（带位置下拉菜单） -->
-		<DropdownMenu.Root>
-			<DropdownMenu.Trigger>
-				{#snippet child({ props })}
-					<Button 
-						{...props}
-						variant={folderTreeConfig.visible || inlineTreeMode ? 'default' : 'ghost'} 
-						size="icon" 
-						class="h-7 w-7"
-					>
-						{#if inlineTreeMode}
-							<ListTree class="h-4 w-4" />
-						{:else}
-							{@const PositionIcon = treePositionIcons[folderTreeConfig.layout]}
-							<PositionIcon class="h-4 w-4" />
-						{/if}
-					</Button>
-				{/snippet}
-			</DropdownMenu.Trigger>
-			<DropdownMenu.Content align="end" class="w-40">
-				<DropdownMenu.Label class="text-xs">文件树</DropdownMenu.Label>
-				<DropdownMenu.Separator />
-				<DropdownMenu.Item
-					class="text-xs"
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button 
+					variant={folderTreeConfig.visible || inlineTreeMode || treePanelExpanded ? 'default' : 'ghost'} 
+					size="icon" 
+					class="h-7 w-7" 
 					onclick={onToggleFolderTree}
+					oncontextmenu={(e: MouseEvent) => { e.preventDefault(); toggleTreePanel(); }}
 				>
-					<FolderTree class="mr-2 h-3.5 w-3.5" />
-					{folderTreeConfig.visible ? '隐藏文件树' : '显示文件树'}
-				</DropdownMenu.Item>
-				<DropdownMenu.Item
-					class="text-xs {inlineTreeMode ? 'bg-accent' : ''}"
-					onclick={() => onToggleInlineTree?.()}
-				>
-					<ListTree class="mr-2 h-3.5 w-3.5" />
-					主视图树模式
-				</DropdownMenu.Item>
-				<DropdownMenu.Separator />
-				<DropdownMenu.Label class="text-xs">停靠位置</DropdownMenu.Label>
-				{#each Object.entries(treePositionLabels) as [pos, label]}
-					{@const Icon = treePositionIcons[pos as TreePosition]}
-					<DropdownMenu.Item
-						class="text-xs {folderTreeConfig.layout === pos ? 'bg-accent' : ''}"
-						onclick={() => folderTabActions.setFolderTreeLayout(pos as TreePosition)}
-					>
-						<Icon class="mr-2 h-3.5 w-3.5" />
-						{label}
-					</DropdownMenu.Item>
-				{/each}
-			</DropdownMenu.Content>
-		</DropdownMenu.Root>
+					{#if inlineTreeMode}
+						<ListTree class="h-4 w-4" />
+					{:else}
+						<FolderTree class="h-4 w-4" />
+					{/if}
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>文件夹树 {folderTreeConfig.visible ? '(已显示)' : ''} {inlineTreeMode ? '(主视图树模式)' : ''}</p>
+				<p class="text-muted-foreground text-xs">右键打开位置设置栏</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
 
 		<Tooltip.Root>
 			<Tooltip.Trigger>
@@ -927,6 +906,50 @@ async function handleCleanupInvalid() {
 				</Tooltip.Root>
 			{/each}
 		</div>
+	</div>
+{/if}
+
+<!-- 文件树位置展开面板 -->
+{#if treePanelExpanded}
+	<div class="flex flex-wrap items-center gap-1 border-t border-border/50 px-2 py-1">
+		<span class="text-muted-foreground text-xs mr-1">文件树位置</span>
+		<div class="bg-muted/60 inline-flex items-center gap-0.5 rounded-full p-0.5 shadow-inner">
+			{#each Object.entries(treePositionLabels) as [pos, label]}
+				{@const Icon = treePositionIcons[pos as TreePosition]}
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant={folderTreeConfig.layout === pos ? 'default' : 'ghost'}
+							size="icon"
+							class="h-6 w-6 rounded-full"
+							onclick={() => folderTabActions.setFolderTreeLayout(pos as TreePosition)}
+						>
+							<Icon class="h-3 w-3" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>{label}</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+			{/each}
+		</div>
+		<div class="mx-2 h-4 w-px bg-border"></div>
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={inlineTreeMode ? 'default' : 'ghost'}
+					size="sm"
+					class="h-6 text-xs px-2"
+					onclick={() => onToggleInlineTree?.()}
+				>
+					<ListTree class="h-3 w-3 mr-1" />
+					主视图树
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>主视图树模式</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
 	</div>
 {/if}
 

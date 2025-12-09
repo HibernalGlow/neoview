@@ -373,7 +373,7 @@
 			</Tooltip.Content>
 		</Tooltip.Root>
 
-		<span class="ml-2 text-sm font-semibold">NeoView</span>
+		<!-- <span class="ml-2 text-sm font-semibold">NeoView</span> -->
 	</div>
 
 	<!-- 中间：功能按钮 -->

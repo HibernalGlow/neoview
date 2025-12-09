@@ -20,7 +20,6 @@ let emmSettingPath = $state<string>('');
 let emmTranslationDictPath = $state<string>('');
 let emmDatabasePathInput = $state<string>('');
 let enableEMM = $state(true);
-let fileListTagDisplayMode = $state<'all' | 'collect' | 'none'>('collect');
 
 function loadEMMConfig() {
 	emmDatabasePaths = emmMetadataStore.getManualDatabasePaths();
@@ -30,7 +29,6 @@ function loadEMMConfig() {
 
 	const unsubscribe = emmMetadataStore.subscribe((state) => {
 		enableEMM = state.enableEMM;
-		fileListTagDisplayMode = state.fileListTagDisplayMode;
 	});
 	unsubscribe();
 }
@@ -215,7 +213,6 @@ async function saveEMMConfig() {
 	}
 
 	emmMetadataStore.setEnableEMM(enableEMM);
-	emmMetadataStore.setFileListTagDisplayMode(fileListTagDisplayMode);
 
 	if (bookInfo?.path && enableEMM) {
 		const metadata = await emmMetadataStore.loadMetadataByPath(bookInfo.path);
@@ -387,41 +384,7 @@ onMount(() => {
 				class="scale-75"
 			/>
 		</div>
-		<div class="space-y-1">
-			<div class="flex items-center justify-between">
-				<span>文件列表标签显示</span>
-				<div class="flex gap-1">
-					<Button.Root
-						variant={fileListTagDisplayMode === 'all' ? 'default' : 'outline'}
-						size="sm"
-						class="h-7 px-2 text-[10px]"
-						onclick={() => (fileListTagDisplayMode = 'all')}
-					>
-						全部
-					</Button.Root>
-					<Button.Root
-						variant={fileListTagDisplayMode === 'collect' ? 'default' : 'outline'}
-						size="sm"
-						class="h-7 px-2 text-[10px]"
-						onclick={() => (fileListTagDisplayMode = 'collect')}
-					>
-						收藏
-					</Button.Root>
-					<Button.Root
-						variant={fileListTagDisplayMode === 'none' ? 'default' : 'outline'}
-						size="sm"
-						class="h-7 px-2 text-[10px]"
-						onclick={() => (fileListTagDisplayMode = 'none')}
-					>
-						隐藏
-					</Button.Root>
-				</div>
-			</div>
-			<p class="text-[11px] text-muted-foreground">
-				仅影响文件列表中的标签显示，不影响当前属性面板的标签视图。
-			</p>
 		</div>
-	</div>
 
 	<div class="flex justify-end pt-1">
 		<Button.Root

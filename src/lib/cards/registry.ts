@@ -254,6 +254,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'properties',
 		canHide: true,
 	},
+	'fileListTagDisplay': {
+		id: 'fileListTagDisplay',
+		title: '文件列表标签',
+		icon: Tags,
+		defaultPanel: 'properties',
+		canHide: true,
+	},
 
 	// ==================== Upscale 面板卡片 ====================
 	'upscaleControl': {

@@ -45,6 +45,7 @@
 		thumbnailMaintenance: () => import('./properties/ThumbnailMaintenanceCard.svelte'),
 		emmRawData: () => import('./properties/EmmRawDataCard.svelte'),
 		emmConfig: () => import('./properties/EmmConfigCard.svelte'),
+		fileListTagDisplay: () => import('./properties/FileListTagDisplayCard.svelte'),
 		// Upscale
 		upscaleControl: () => import('./upscale/UpscaleControlCard.svelte'),
 		upscaleModel: () => import('./upscale/UpscaleModelCard.svelte'),

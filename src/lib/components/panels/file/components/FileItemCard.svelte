@@ -11,6 +11,7 @@
 		collectTagMap,
 		emmTranslationStore
 	} from '$lib/stores/emmMetadata.svelte';
+	import { fileListTagSettings, type FileListTagDisplayMode } from '$lib/stores/fileListTagSettings.svelte';
 	import { mixedGenderStore, categoryColors } from '$lib/stores/emm/favoriteTagStore.svelte';
 	import type { EMMTranslationDict } from '$lib/api/emm';
 	import { getFileMetadata } from '$lib/api';
@@ -120,14 +121,22 @@
 
 	// 订阅全局 EMM 设置
 	let enableEMM = $state(true);
-	let fileListTagDisplayMode = $state<'all' | 'collect' | 'none'>('collect');
 	let translationDict = $state<EMMTranslationDict | undefined>(undefined);
 
 	$effect(() => {
 		const unsubscribe = emmMetadataStore.subscribe((state) => {
 			enableEMM = state.enableEMM;
-			fileListTagDisplayMode = state.fileListTagDisplayMode;
 			translationDict = state.translationDict;
+		});
+		return unsubscribe;
+	});
+
+	// 独立的文件列表标签显示设置（直接从 localStorage 读取，不依赖 emmMetadataStore 初始化）
+	let fileListTagDisplayMode = $state<FileListTagDisplayMode>(fileListTagSettings.mode);
+
+	$effect(() => {
+		const unsubscribe = fileListTagSettings.subscribe((mode) => {
+			fileListTagDisplayMode = mode;
 		});
 		return unsubscribe;
 	});

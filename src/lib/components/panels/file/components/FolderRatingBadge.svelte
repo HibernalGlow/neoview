@@ -54,7 +54,7 @@
 
 <DropdownMenu.Root>
 	<DropdownMenu.Trigger onclick={(e) => e.stopPropagation()}>
-		<span class="inline-flex items-center gap-0.5 rounded bg-amber-500/10 {classes.badge} text-amber-600 dark:text-amber-400 cursor-pointer hover:bg-amber-500/20 transition-colors">
+		<span class="inline-flex items-center gap-0.5 rounded bg-accent {classes.badge} text-accent-foreground cursor-pointer hover:bg-accent/80 transition-colors">
 			<Star class="{classes.star} {effectiveRating !== null ? 'fill-current' : ''}" />
 			{#if effectiveRating !== null}
 				<span class="font-medium">{effectiveRating.toFixed(1)}</span>

@@ -523,7 +523,7 @@
 					icon={Star}
 					tooltip="评分: {emmMetadata.rating.toFixed(2)}"
 					size="sm"
-					variant="purple"
+					variant="accent"
 				/>
 			{/if}
 		</div>

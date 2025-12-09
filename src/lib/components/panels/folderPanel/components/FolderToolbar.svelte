@@ -29,6 +29,9 @@ import {
 	Tags,
 	RotateCcw,
 	PanelRight,
+	PanelLeft,
+	PanelTop,
+	PanelBottom,
 	// 排序图标
 	ALargeSmall,
 	Calendar,
@@ -78,8 +81,10 @@ import {
 	tabDeleteStrategy,
 	tabInlineTreeMode,
 	tabCurrentPath,
-	tabThumbnailWidthPercent
+	tabThumbnailWidthPercent,
+	tabFolderTreeConfig
 } from '../stores/folderTabStore.svelte';
+import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 import type { FolderViewStyle, FolderSortField } from '../stores/folderPanelStore.svelte';
 
 // 全局 store 别名（非虚拟模式使用）
@@ -90,6 +95,22 @@ const globalCanGoUp = tabCanGoUp;
 const globalCanGoBackTab = tabCanGoBackTab;
 const globalCanGoForwardTab = tabCanGoForwardTab;
 const globalViewStyle = tabViewStyle;
+const globalFolderTreeConfig = tabFolderTreeConfig;
+
+// 文件树位置配置
+type TreePosition = 'left' | 'right' | 'top' | 'bottom';
+const treePositionLabels: Record<TreePosition, string> = {
+	left: '左侧',
+	right: '右侧',
+	top: '顶部',
+	bottom: '底部'
+};
+const treePositionIcons: Record<TreePosition, typeof PanelLeft> = {
+	left: PanelLeft,
+	right: PanelRight,
+	top: PanelTop,
+	bottom: PanelBottom
+};
 const globalMultiSelectMode = tabMultiSelectMode;
 const globalDeleteMode = tabDeleteMode;
 const globalSortConfig = tabSortConfig;
@@ -141,6 +162,7 @@ let globalCanGoForwardValue = $state(false);
 let globalCanGoUpValue = $state(false);
 let globalCanGoBackTabValue = $state(false);
 let globalCanGoForwardTabValue = $state(false);
+let globalFolderTreeConfigValue = $state<{ visible: boolean; layout: TreePosition; size: number }>({ visible: false, layout: 'left', size: 200 });
 
 // 订阅全局 store（非虚拟模式使用）
 $effect(() => {
@@ -162,10 +184,14 @@ $effect(() => {
 		globalCanGoForward.subscribe(v => globalCanGoForwardValue = v),
 		globalCanGoUp.subscribe(v => globalCanGoUpValue = v),
 		globalCanGoBackTab.subscribe(v => globalCanGoBackTabValue = v),
-		globalCanGoForwardTab.subscribe(v => globalCanGoForwardTabValue = v)
+		globalCanGoForwardTab.subscribe(v => globalCanGoForwardTabValue = v),
+		globalFolderTreeConfig.subscribe(v => globalFolderTreeConfigValue = v)
 	];
 	return () => unsubs.forEach(u => u());
 });
+
+// 文件树配置
+let folderTreeConfig = $derived(globalFolderTreeConfigValue);
 
 // 计算当前使用的状态值
 let viewStyle = $derived(virtualMode 
@@ -668,27 +694,56 @@ async function handleCleanupInvalid() {
 			</Tooltip.Content>
 		</Tooltip.Root>
 
-		<Tooltip.Root>
-			<Tooltip.Trigger>
-				<Button 
-					variant={inlineTreeMode ? 'default' : 'ghost'} 
-					size="icon" 
-					class="h-7 w-7" 
+		<!-- 文件夹树按钮（带位置下拉菜单） -->
+		<DropdownMenu.Root>
+			<DropdownMenu.Trigger>
+				{#snippet child({ props })}
+					<Button 
+						{...props}
+						variant={folderTreeConfig.visible || inlineTreeMode ? 'default' : 'ghost'} 
+						size="icon" 
+						class="h-7 w-7"
+					>
+						{#if inlineTreeMode}
+							<ListTree class="h-4 w-4" />
+						{:else}
+							{@const PositionIcon = treePositionIcons[folderTreeConfig.layout]}
+							<PositionIcon class="h-4 w-4" />
+						{/if}
+					</Button>
+				{/snippet}
+			</DropdownMenu.Trigger>
+			<DropdownMenu.Content align="end" class="w-40">
+				<DropdownMenu.Label class="text-xs">文件树</DropdownMenu.Label>
+				<DropdownMenu.Separator />
+				<DropdownMenu.Item
+					class="text-xs"
 					onclick={onToggleFolderTree}
-					oncontextmenu={(e: MouseEvent) => { e.preventDefault(); onToggleInlineTree?.(); }}
 				>
-					{#if inlineTreeMode}
-						<ListTree class="h-4 w-4" />
-					{:else}
-						<FolderTree class="h-4 w-4" />
-					{/if}
-				</Button>
-			</Tooltip.Trigger>
-			<Tooltip.Content>
-				<p>文件夹树 {inlineTreeMode ? '(主视图树模式)' : ''}</p>
-				<p class="text-muted-foreground text-xs">右键切换主视图树</p>
-			</Tooltip.Content>
-		</Tooltip.Root>
+					<FolderTree class="mr-2 h-3.5 w-3.5" />
+					{folderTreeConfig.visible ? '隐藏文件树' : '显示文件树'}
+				</DropdownMenu.Item>
+				<DropdownMenu.Item
+					class="text-xs {inlineTreeMode ? 'bg-accent' : ''}"
+					onclick={() => onToggleInlineTree?.()}
+				>
+					<ListTree class="mr-2 h-3.5 w-3.5" />
+					主视图树模式
+				</DropdownMenu.Item>
+				<DropdownMenu.Separator />
+				<DropdownMenu.Label class="text-xs">停靠位置</DropdownMenu.Label>
+				{#each Object.entries(treePositionLabels) as [pos, label]}
+					{@const Icon = treePositionIcons[pos as TreePosition]}
+					<DropdownMenu.Item
+						class="text-xs {folderTreeConfig.layout === pos ? 'bg-accent' : ''}"
+						onclick={() => folderTabActions.setFolderTreeLayout(pos as TreePosition)}
+					>
+						<Icon class="mr-2 h-3.5 w-3.5" />
+						{label}
+					</DropdownMenu.Item>
+				{/each}
+			</DropdownMenu.Content>
+		</DropdownMenu.Root>
 
 		<Tooltip.Root>
 			<Tooltip.Trigger>

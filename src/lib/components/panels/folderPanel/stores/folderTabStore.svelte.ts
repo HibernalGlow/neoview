@@ -89,7 +89,7 @@ export interface FolderTabState {
 	expandedFolders: SvelteSet<string>;
 	// 文件夹树配置
 	folderTreeVisible: boolean;
-	folderTreeLayout: 'top' | 'left';
+	folderTreeLayout: 'top' | 'left' | 'right' | 'bottom';
 	folderTreeSize: number;
 	// 导航历史
 	historyStack: FolderHistoryEntry[];
@@ -972,7 +972,7 @@ export const folderTabActions = {
 	/**
 	 * 设置文件夹树布局
 	 */
-	setFolderTreeLayout(layout: 'top' | 'left') {
+	setFolderTreeLayout(layout: 'top' | 'left' | 'right' | 'bottom') {
 		updateActiveTab((tab) => ({ ...tab, folderTreeLayout: layout }));
 	},
 

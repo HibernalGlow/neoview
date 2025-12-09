@@ -2,6 +2,7 @@
 	/**
 	 * FileListCard - 文件列表卡片
 	 * 独立管理文件列表相关的 UI 状态
+	 * 文件树支持上下左右四个位置
 	 */
 	import { get } from 'svelte/store';
 	import type { FsItem } from '$lib/types';
@@ -35,7 +36,8 @@
 		e.preventDefault();
 		ctx.isResizingTree = true;
 		const layout = get(ctx.folderTreeConfig).layout;
-		ctx.resizeStartPos = layout === 'left' ? e.clientX : e.clientY;
+		// 水平布局（左/右）使用 X 坐标，垂直布局（上/下）使用 Y 坐标
+		ctx.resizeStartPos = (layout === 'left' || layout === 'right') ? e.clientX : e.clientY;
 		ctx.resizeStartSize = get(ctx.folderTreeConfig).size;
 		document.addEventListener('mousemove', onTreeResize);
 		document.addEventListener('mouseup', stopTreeResize);
@@ -44,7 +46,25 @@
 	function onTreeResize(e: MouseEvent) {
 		if (!ctx.isResizingTree) return;
 		const layout = get(ctx.folderTreeConfig).layout;
-		const delta = layout === 'left' ? e.clientX - ctx.resizeStartPos : e.clientY - ctx.resizeStartPos;
+		let delta: number;
+		
+		switch (layout) {
+			case 'left':
+				delta = e.clientX - ctx.resizeStartPos;
+				break;
+			case 'right':
+				delta = ctx.resizeStartPos - e.clientX;
+				break;
+			case 'top':
+				delta = e.clientY - ctx.resizeStartPos;
+				break;
+			case 'bottom':
+				delta = ctx.resizeStartPos - e.clientY;
+				break;
+			default:
+				delta = 0;
+		}
+		
 		folderTabActions.setFolderTreeSize(Math.max(100, Math.min(500, ctx.resizeStartSize + delta)));
 	}
 
@@ -54,7 +74,60 @@
 		document.removeEventListener('mouseup', stopTreeResize);
 	}
 
-	</script>
+	// 根据布局计算树容器样式
+	function getTreeContainerStyle(layout: string, size: number): string {
+		switch (layout) {
+			case 'left':
+				return `top: 0; left: 0; bottom: 0; width: ${size}px;`;
+			case 'right':
+				return `top: 0; right: 0; bottom: 0; width: ${size}px;`;
+			case 'top':
+				return `top: 0; left: 0; right: 0; height: ${size}px;`;
+			case 'bottom':
+				return `bottom: 0; left: 0; right: 0; height: ${size}px;`;
+			default:
+				return '';
+		}
+	}
+
+	// 根据布局计算调整手柄样式
+	function getResizeHandleStyle(layout: string, size: number): string {
+		switch (layout) {
+			case 'left':
+				return `left: ${size}px;`;
+			case 'right':
+				return `right: ${size}px;`;
+			case 'top':
+				return `top: ${size}px;`;
+			case 'bottom':
+				return `bottom: ${size}px;`;
+			default:
+				return '';
+		}
+	}
+
+	// 根据布局计算文件列表容器样式
+	function getFileListStyle(visible: boolean, layout: string, size: number): string {
+		if (!visible) return '';
+		switch (layout) {
+			case 'left':
+				return `left: ${size}px;`;
+			case 'right':
+				return `right: ${size}px;`;
+			case 'top':
+				return `top: ${size}px;`;
+			case 'bottom':
+				return `bottom: ${size}px;`;
+			default:
+				return '';
+		}
+	}
+
+	// 判断是否为水平布局（左/右）
+	function isHorizontalLayout(layout: string): boolean {
+		return layout === 'left' || layout === 'right';
+	}
+</script>
 
 <div class="relative flex-1 overflow-hidden">
 	<!-- 文件夹树 -->
@@ -62,35 +135,30 @@
 		<div
 			class="border-muted bg-muted/10 absolute z-10 overflow-auto"
 			class:border-b={$folderTreeConfig.layout === 'top'}
+			class:border-t={$folderTreeConfig.layout === 'bottom'}
 			class:border-r={$folderTreeConfig.layout === 'left'}
-			style={$folderTreeConfig.layout === 'top'
-				? `top: 0; left: 0; right: 0; height: ${$folderTreeConfig.size}px;`
-				: `top: 0; left: 0; bottom: 0; width: ${$folderTreeConfig.size}px;`}
+			class:border-l={$folderTreeConfig.layout === 'right'}
+			style={getTreeContainerStyle($folderTreeConfig.layout, $folderTreeConfig.size)}
 		>
 			<FolderTree onNavigate={onNavigate} onContextMenu={onItemContextMenu} />
 		</div>
 		<!-- 调整手柄 -->
 		<div
-			class="hover:bg-primary/20 absolute z-20 transition-colors {$folderTreeConfig.layout === 'left'
-				? 'top-0 bottom-0 -ml-1 w-2 cursor-ew-resize'
-				: 'right-0 left-0 -mt-1 h-2 cursor-ns-resize'}"
-			style={$folderTreeConfig.layout === 'left'
-				? `left: ${$folderTreeConfig.size}px;`
-				: `top: ${$folderTreeConfig.size}px;`}
+			class="hover:bg-primary/20 absolute z-20 transition-colors {isHorizontalLayout($folderTreeConfig.layout)
+				? 'top-0 bottom-0 w-2 cursor-ew-resize'
+				: 'right-0 left-0 h-2 cursor-ns-resize'}"
+			style={getResizeHandleStyle($folderTreeConfig.layout, $folderTreeConfig.size)}
 			onmousedown={startTreeResize}
 			role="separator"
-			tabindex="0"
+			aria-orientation={isHorizontalLayout($folderTreeConfig.layout) ? 'vertical' : 'horizontal'}
+			tabindex="-1"
 		></div>
 	{/if}
 
 	<!-- 文件列表区域 -->
 	<div
 		class="file-list-container bg-muted/10 absolute inset-0 overflow-hidden"
-		style={$folderTreeConfig.visible
-			? $folderTreeConfig.layout === 'top'
-				? `top: ${$folderTreeConfig.size}px;`
-				: `left: ${$folderTreeConfig.size}px;`
-			: ''}
+		style={getFileListStyle($folderTreeConfig.visible, $folderTreeConfig.layout, $folderTreeConfig.size)}
 	>
 		{#each ctx.displayTabs as tab (tab.id)}
 			<div

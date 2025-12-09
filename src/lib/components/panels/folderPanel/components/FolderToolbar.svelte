@@ -41,8 +41,11 @@ import {
 	Settings2,
 	ChevronDown,
 	ChevronUp as ChevronUpIcon,
-	FolderSync
+	FolderSync,
+	FilterX
 } from '@lucide/svelte';
+import { bookmarkStore } from '$lib/stores/bookmark.svelte';
+import { historyStore } from '$lib/stores/history.svelte';
 import { hoverPreviewSettings, hoverPreviewEnabled, hoverPreviewDelayMs } from '$lib/stores/hoverPreviewSettings.svelte';
 import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 import { virtualPanelSettingsStore } from '$lib/stores/virtualPanelSettings.svelte';
@@ -416,6 +419,40 @@ async function startWarmup() {
 function cancelWarmup() {
 	folderThumbnailLoader.cancelWarmup();
 }
+
+// 清理失效条目
+let isCleaningInvalid = $state(false);
+let cleanupResult = $state<{ removed: number } | null>(null);
+
+async function handleCleanupInvalid() {
+	if (isCleaningInvalid) return;
+	isCleaningInvalid = true;
+	cleanupResult = null;
+	
+	try {
+		let removed = 0;
+		if (virtualMode === 'history') {
+			removed = await historyStore.cleanupInvalid();
+		} else if (virtualMode === 'bookmark') {
+			removed = await bookmarkStore.cleanupInvalid();
+		}
+		cleanupResult = { removed };
+		
+		// 3秒后自动隐藏结果
+		setTimeout(() => {
+			cleanupResult = null;
+		}, 3000);
+		
+		// 刷新列表
+		if (removed > 0) {
+			onRefresh?.();
+		}
+	} catch (e) {
+		console.error('清理失效条目失败:', e);
+	} finally {
+		isCleaningInvalid = false;
+	}
+}
 </script>
 
 <div class="flex flex-wrap items-center gap-1 px-2 py-1.5">
@@ -531,6 +568,28 @@ function cancelWarmup() {
 			<Tooltip.Content>
 				<p>同步文件夹 {#if virtualMode === 'history'}{historySettingsStore.syncFileTreeOnHistorySelect ? '(已开启)' : '(已关闭)'}{:else}{historySettingsStore.syncFileTreeOnBookmarkSelect ? '(已开启)' : '(已关闭)'}{/if}</p>
 				<p class="text-muted-foreground text-xs">点击项目时自动在文件夹页签打开所在目录</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
+		<!-- 清理失效条目按钮 -->
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant="ghost"
+					size="icon"
+					class="h-7 w-7 {isCleaningInvalid ? 'animate-pulse' : ''}"
+					onclick={handleCleanupInvalid}
+					disabled={isCleaningInvalid}
+				>
+					<FilterX class="h-4 w-4 {cleanupResult ? (cleanupResult.removed > 0 ? 'text-green-500' : 'text-muted-foreground') : ''}" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>清理失效{virtualMode === 'history' ? '历史' : '书签'}</p>
+				<p class="text-muted-foreground text-xs">移除已不存在的文件和文件夹</p>
+				{#if cleanupResult}
+					<p class="text-green-500 text-xs">已清理 {cleanupResult.removed} 条</p>
+				{/if}
 			</Tooltip.Content>
 		</Tooltip.Root>
 	{/if}

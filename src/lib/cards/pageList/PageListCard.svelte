@@ -10,6 +10,7 @@ import { Search, Grid3x3, List, Image as ImageIcon } from '@lucide/svelte';
 import { bookStore } from '$lib/stores/book.svelte';
 import { thumbnailCacheStore, type ThumbnailEntry } from '$lib/stores/thumbnailCache.svelte';
 import { thumbnailManager } from '$lib/utils/thumbnailManager';
+import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
 import type { Page } from '$lib/types';
 import PageContextMenu from './PageContextMenu.svelte';
 
@@ -66,6 +67,13 @@ const filteredItems = $derived(
 );
 
 const currentPageIndex = $derived(bookStore.currentPageIndex);
+
+// 获取超分状态
+const upscaleEnabled = $derived(upscaleStore.enabled);
+
+function isPageUpscaled(pageIndex: number): boolean {
+	return bookStore.getPageUpscaleStatus(pageIndex) === 'done';
+}
 
 // 自动滚动到当前页
 $effect(() => {
@@ -197,9 +205,11 @@ async function requestThumbnail(pageIndex: number) {
 			<!-- 纯文本列表 -->
 			<div class="space-y-0.5">
 				{#each filteredItems as item (item.index)}
+					{@const isUpscaled = upscaleEnabled && isPageUpscaled(item.index)}
+					{@const isCurrentAndUpscaled = currentPageIndex === item.index && isUpscaled}
 					<button
 						data-page-index={item.index}
-						class="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors flex items-center gap-2 {currentPageIndex === item.index ? 'bg-primary/10' : ''}"
+						class="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors flex items-center gap-2 {currentPageIndex === item.index ? 'bg-primary/10' : ''} {isCurrentAndUpscaled ? 'upscaled-glow' : ''}"
 						onclick={() => goToPage(item.index)}
 						oncontextmenu={(e) => handleContextMenu(e, item)}
 					>
@@ -216,9 +226,11 @@ async function requestThumbnail(pageIndex: number) {
 			<div class="space-y-1">
 				{#each filteredItems as item (item.index)}
 					{@const thumb = getThumbnail(item.index)}
+					{@const isUpscaled = upscaleEnabled && isPageUpscaled(item.index)}
+					{@const isCurrentAndUpscaled = currentPageIndex === item.index && isUpscaled}
 					<button
 						data-page-index={item.index}
-						class="w-full text-left p-1.5 rounded hover:bg-muted transition-colors flex items-center gap-2 {currentPageIndex === item.index ? 'bg-primary/10' : ''}"
+						class="w-full text-left p-1.5 rounded hover:bg-muted transition-colors flex items-center gap-2 {currentPageIndex === item.index ? 'bg-primary/10' : ''} {isCurrentAndUpscaled ? 'upscaled-glow' : ''}"
 						onclick={() => goToPage(item.index)}
 						oncontextmenu={(e) => handleContextMenu(e, item)}
 						onmouseenter={() => requestThumbnail(item.index)}
@@ -249,9 +261,11 @@ async function requestThumbnail(pageIndex: number) {
 			<div class="grid grid-cols-3 gap-1">
 				{#each filteredItems as item (item.index)}
 					{@const thumb = getThumbnail(item.index)}
+					{@const isUpscaled = upscaleEnabled && isPageUpscaled(item.index)}
+					{@const isCurrentAndUpscaled = currentPageIndex === item.index && isUpscaled}
 					<button
 						data-page-index={item.index}
-						class="flex flex-col gap-1 p-1 rounded hover:bg-muted transition-colors {currentPageIndex === item.index ? 'ring-2 ring-primary' : ''}"
+						class="flex flex-col gap-1 p-1 rounded hover:bg-muted transition-colors {currentPageIndex === item.index ? 'ring-2 ring-primary' : ''} {isCurrentAndUpscaled ? 'upscaled-glow-grid' : ''}"
 						onclick={() => goToPage(item.index)}
 						oncontextmenu={(e) => handleContextMenu(e, item)}
 						onmouseenter={() => requestThumbnail(item.index)}
@@ -287,3 +301,25 @@ async function requestThumbnail(pageIndex: number) {
 	onClose={closeContextMenu}
 	onGoToPage={goToPage}
 />
+
+<style>
+	/* 已超分的当前页 - 主色描边荧光效果 */
+	:global(.upscaled-glow) {
+		box-shadow: 0 0 0 1.5px hsl(var(--primary)), 0 0 8px hsl(var(--primary) / 0.5), 0 0 16px hsl(var(--primary) / 0.3);
+		animation: upscaled-pulse 2s ease-in-out infinite;
+	}
+
+	:global(.upscaled-glow-grid) {
+		box-shadow: 0 0 0 2px hsl(var(--primary)), 0 0 10px hsl(var(--primary) / 0.6), 0 0 20px hsl(var(--primary) / 0.3);
+		animation: upscaled-pulse 2s ease-in-out infinite;
+	}
+
+	@keyframes upscaled-pulse {
+		0%, 100% {
+			box-shadow: 0 0 0 1.5px hsl(var(--primary)), 0 0 8px hsl(var(--primary) / 0.5), 0 0 16px hsl(var(--primary) / 0.3);
+		}
+		50% {
+			box-shadow: 0 0 0 2px hsl(var(--primary)), 0 0 12px hsl(var(--primary) / 0.7), 0 0 24px hsl(var(--primary) / 0.4);
+		}
+	}
+</style>

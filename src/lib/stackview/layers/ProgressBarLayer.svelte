@@ -6,6 +6,7 @@
 <script lang="ts">
   import { bookStore } from '$lib/stores/book.svelte';
   import { upscaleState } from '$lib/stores/upscale/upscaleState.svelte';
+  import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
   import { settingsManager } from '$lib/settings/settingsManager';
   import type { ReadingDirection } from '$lib/settings/settingsManager';
   import { LayerZIndex } from '../types/layer';
@@ -48,6 +49,27 @@
     preUpscaleProgress > 0 ? preUpscaleProgress : preUpscaleExtent
   );
 
+  // 计算已完成超分的页面数（用于超分实时进度条）
+  const upscaleEnabled = $derived(upscaleStore.enabled);
+  const upscaledPagesCount = $derived(() => {
+    let count = 0;
+    for (let i = 0; i < totalPages; i++) {
+      const status = bookStore.getPageUpscaleStatus(i);
+      if (status === 'done') {
+        count++;
+      }
+    }
+    return count;
+  });
+  const upscaleProgressPercent = $derived(
+    totalPages > 0 ? (upscaledPagesCount() / totalPages) * 100 : 0
+  );
+  
+  // 检查是否有正在处理中的超分任务
+  const hasActiveUpscale = $derived(
+    upscaleStore.stats.processingTasks > 0 || upscaleStore.stats.pendingTasks > 0
+  );
+
   // 根据当前页面状态和全局状态计算进度条状态
   const currentPageStatus = $derived(
     totalPages > 0 ? bookStore.getPageUpscaleStatus(currentPageIndex) : 'none'
@@ -86,12 +108,22 @@
     style:z-index={LayerZIndex.INFO - 5}
   >
     <div class="bar-track" class:rtl={readingDirection === 'right-to-left'}>
-      <!-- 下层：预超分覆盖进度条 -->
+      <!-- 最底层：预超分覆盖进度条 -->
       {#if preUpscaleBarWidth > 0}
         <div
           class="preup-bar"
           class:rtl={readingDirection === 'right-to-left'}
           style:width="{Math.min(preUpscaleBarWidth, 100)}%"
+        ></div>
+      {/if}
+
+      <!-- 中层：超分实时进度条（青色并行处理颜色）-->
+      {#if upscaleEnabled && upscaleProgressPercent > 0}
+        <div
+          class="upscale-progress-bar"
+          class:rtl={readingDirection === 'right-to-left'}
+          class:processing={hasActiveUpscale}
+          style:width="{Math.min(upscaleProgressPercent, 100)}%"
         ></div>
       {/if}
 
@@ -147,6 +179,37 @@
     left: auto;
     right: 0;
     border-radius: 2px 0 0 2px;
+  }
+
+  /* 超分实时进度条 - 青色（并行处理颜色，类似 jwalk 的并行特性） */
+  .upscale-progress-bar {
+    position: absolute;
+    left: 0;
+    bottom: -5px;
+    height: 3px;
+    background: linear-gradient(90deg, #06b6d4 0%, #22d3ee 50%, #67e8f9 100%);
+    transition: width 0.4s ease;
+    border-radius: 0 2px 2px 0;
+    box-shadow: 0 0 8px rgba(6, 182, 212, 0.6), 0 0 16px rgba(6, 182, 212, 0.3);
+  }
+
+  .upscale-progress-bar.rtl {
+    left: auto;
+    right: 0;
+    border-radius: 2px 0 0 2px;
+  }
+
+  .upscale-progress-bar.processing {
+    animation: upscale-glow 1.5s ease-in-out infinite;
+  }
+
+  @keyframes upscale-glow {
+    0%, 100% {
+      box-shadow: 0 0 8px rgba(6, 182, 212, 0.6), 0 0 16px rgba(6, 182, 212, 0.3);
+    }
+    50% {
+      box-shadow: 0 0 12px rgba(6, 182, 212, 0.9), 0 0 24px rgba(6, 182, 212, 0.5);
+    }
   }
 
   .reading-bar {

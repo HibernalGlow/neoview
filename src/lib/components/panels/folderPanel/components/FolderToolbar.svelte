@@ -70,6 +70,7 @@ import {
 	tabCanGoForward,
 	tabCanGoUp,
 	tabSelectedItems,
+	tabItems,
 	tabCanGoBackTab,
 	tabCanGoForwardTab,
 	tabViewStyle,
@@ -525,15 +526,15 @@ async function handleCleanupInvalid() {
 let isReloadingThumbnails = $state(false);
 let reloadThumbnailsProgress = $state<{ current: number; total: number } | null>(null);
 
-// 批量重载当前文件夹下所有缩略图
+// 强制重载当前目录所有项目的缩略图
 async function handleReloadAllThumbnails() {
 	const path = get(currentPathStore);
 	if (!path || isReloadingThumbnails) return;
 	
-	// 获取当前目录下的文件
-	const items = get(fileBrowserStore).items;
+	// 获取当前目录下的项目（文件和文件夹）
+	const items = get(tabItems);
 	if (items.length === 0) {
-		showErrorToast('重载缩略图', '当前目录没有文件');
+		showErrorToast('重载缩略图', '当前目录为空');
 		return;
 	}
 	
@@ -1104,7 +1105,7 @@ async function handleReloadSelectedThumbnails() {
 							取消排除
 						</Button>
 					{/if}
-					<!-- 批量重载缩略图 -->
+					<!-- 强制重载当前目录所有缩略图 -->
 					<Button 
 						variant="outline" 
 						size="sm" 

@@ -48,6 +48,8 @@
 		cleanup as cleanupThumbnailService
 	} from '$lib/stores/thumbnailStoreV3.svelte';
 	import Toast from '$lib/components/ui/toast.svelte';
+	import GlobalConfirmDialog from '$lib/components/ui/GlobalConfirmDialog.svelte';
+	import { confirm as confirmDialog } from '$lib/stores/confirmDialog.svelte';
 	import SettingsOverlay from '$lib/components/SettingsOverlay.svelte';
 	import { settingsOverlayOpen } from '$lib/stores/settingsOverlay.svelte';
 	import { onMount } from 'svelte';
@@ -146,7 +148,13 @@
 		}
 
 		if (archiveSettings.confirmBeforeDelete) {
-			const confirmed = confirm(`确定从压缩包中删除当前页面吗？\n文件：${currentPage.name}`);
+			const confirmed = await confirmDialog({
+				title: '确定从压缩包中删除当前页面',
+				description: `文件：${currentPage.name}`,
+				confirmText: '删除',
+				cancelText: '取消',
+				variant: 'destructive'
+			});
 			if (!confirmed) return;
 		}
 
@@ -713,6 +721,7 @@
 
 <Tooltip.Provider>
 	<Toast />
+	<GlobalConfirmDialog />
 	<SettingsOverlay />
 
 	<!-- 仅使用传统布局模式，禁用 Flow 画布以提升性能 -->

@@ -2,10 +2,12 @@
 /**
  * ConfirmDialog - 确认对话框组件
  * 用于替代原生 confirm()，提供更好的 UI 体验
+ * 使用 alert-dialog 组件实现
  */
-import * as Dialog from '$lib/components/ui/dialog';
-import { Button } from '$lib/components/ui/button';
+import * as AlertDialog from '$lib/components/ui/alert-dialog';
+import { buttonVariants } from '$lib/components/ui/button';
 import { AlertTriangle, Info, Trash2 } from '@lucide/svelte';
+import { cn } from '$lib/utils';
 
 interface Props {
 	open: boolean;
@@ -46,35 +48,36 @@ function handleOpenChange(newOpen: boolean) {
 }
 </script>
 
-<Dialog.Root bind:open onOpenChange={handleOpenChange}>
-	<Dialog.Content class="sm:max-w-[400px]">
-		{#snippet children()}
-			<Dialog.Header>
-				<Dialog.Title class="flex items-center gap-2">
-					{#if variant === 'destructive'}
-						<Trash2 class="h-5 w-5 text-destructive" />
-					{:else if variant === 'warning'}
-						<AlertTriangle class="h-5 w-5 text-yellow-500" />
-					{:else}
-						<Info class="h-5 w-5 text-primary" />
-					{/if}
-					{title}
-				</Dialog.Title>
-				<Dialog.Description>
-					{description}
-				</Dialog.Description>
-			</Dialog.Header>
-			<Dialog.Footer class="gap-2 sm:gap-0">
-				<Button variant="outline" onclick={handleCancel}>
-					{cancelText}
-				</Button>
-				<Button 
-					variant={variant === 'destructive' ? 'destructive' : 'default'}
-					onclick={handleConfirm}
-				>
-					{confirmText}
-				</Button>
-			</Dialog.Footer>
-		{/snippet}
-	</Dialog.Content>
-</Dialog.Root>
+<AlertDialog.Root bind:open onOpenChange={handleOpenChange}>
+	<AlertDialog.Content class="sm:max-w-[400px]">
+		<AlertDialog.Header>
+			<AlertDialog.Title class="flex items-center gap-2">
+				{#if variant === 'destructive'}
+					<Trash2 class="h-5 w-5 text-destructive" />
+				{:else if variant === 'warning'}
+					<AlertTriangle class="h-5 w-5 text-yellow-500" />
+				{:else}
+					<Info class="h-5 w-5 text-primary" />
+				{/if}
+				{title}
+			</AlertDialog.Title>
+			<AlertDialog.Description>
+				{description}
+			</AlertDialog.Description>
+		</AlertDialog.Header>
+		<AlertDialog.Footer class="gap-2 sm:gap-0">
+			<AlertDialog.Cancel 
+				class={cn(buttonVariants({ variant: "outline" }))}
+				onclick={handleCancel}
+			>
+				{cancelText}
+			</AlertDialog.Cancel>
+			<AlertDialog.Action 
+				class={cn(buttonVariants({ variant: variant === 'destructive' ? 'destructive' : 'default' }))}
+				onclick={handleConfirm}
+			>
+				{confirmText}
+			</AlertDialog.Action>
+		</AlertDialog.Footer>
+	</AlertDialog.Content>
+</AlertDialog.Root>

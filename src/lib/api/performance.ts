@@ -4,6 +4,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { confirm } from '$lib/stores/confirmDialog.svelte';
 
 export interface PerformanceSettings {
   cache_memory_size: number;         // MB
@@ -34,7 +35,13 @@ export async function savePerformanceSettings(settings: PerformanceSettings): Pr
   await invoke('save_performance_settings', { settings });
   
   // 提示用户重启应用
-  const confirmed = confirm('性能设置已保存，需要重启应用才能生效。是否立即重启？');
+  const confirmed = await confirm({
+    title: '重启应用',
+    description: '性能设置已保存，需要重启应用才能生效。是否立即重启？',
+    confirmText: '重启',
+    cancelText: '稍后',
+    variant: 'warning'
+  });
   if (confirmed) {
     await invoke('tauri', { __tauriModule: 'Process', message: { cmd: 'restart' } });
   }

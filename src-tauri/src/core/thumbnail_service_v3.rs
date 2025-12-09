@@ -84,7 +84,24 @@ struct GenerateTask {
     path: String,
     directory: String,
     file_type: ThumbnailFileType,
-    priority: usize,
+    /// 距离中心的距离（越小优先级越高）
+    center_distance: usize,
+    /// 原始索引（用于平局时保持原顺序）
+    original_index: usize,
+}
+
+impl GenerateTask {
+    /// 比较优先级：中心距离越小优先级越高
+    fn priority_cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // 先按中心距离升序（距离小的优先）
+        match self.center_distance.cmp(&other.center_distance) {
+            std::cmp::Ordering::Equal => {
+                // 距离相同时，按原始索引排序
+                self.original_index.cmp(&other.original_index)
+            }
+            other_order => other_order,
+        }
+    }
 }
 
 /// 缩略图就绪事件 payload
@@ -470,12 +487,16 @@ impl ThumbnailServiceV3 {
     
     /// 请求可见区域缩略图（核心方法，不阻塞）
     /// 优化：批量处理，减少锁竞争和数据库访问
+    /// center_index: 可见区域中心索引，用于优先级排序（中心优先加载）
     pub fn request_visible_thumbnails(
         &self,
         app: &AppHandle,
         paths: Vec<String>,
         current_dir: String,
+        center_index: Option<usize>,
     ) {
+        // 计算中心索引（如果未提供，使用列表中间位置）
+        let center = center_index.unwrap_or(paths.len() / 2);
         // 更新当前目录
         {
             if let Ok(mut dir) = self.current_dir.write() {
@@ -557,6 +578,9 @@ impl ThumbnailServiceV3 {
             tokio::spawn(async move {
                 // 流式加载：每加载一个立即发送，不等待批量完成
                 // 这样前端可以尽快显示已缓存的缩略图
+                // 同时收集需要更新访问时间的路径
+                let mut paths_to_update_access_time: Vec<String> = Vec::new();
+                
                 for path in db_paths.iter() {
                     // 从数据库加载单个
                     let category = if std::path::Path::new(path).is_dir() || !path.contains('.') {
@@ -578,31 +602,66 @@ impl ThumbnailServiceV3 {
                             path: path.clone(),
                             blob,
                         });
+                        
+                        // 记录需要更新访问时间的路径（延迟批量更新）
+                        paths_to_update_access_time.push(path.clone());
+                    }
+                }
+                
+                // 批量更新访问时间（参考 NeeView：超过1天时更新）
+                // 由于没有记录具体的访问时间，这里简化为：每次访问都更新
+                // 数据库操作会自动去重（SQLite UPDATE）
+                if !paths_to_update_access_time.is_empty() {
+                    // 异步更新访问时间，不阻塞主流程
+                    for path in paths_to_update_access_time {
+                        let _ = db.update_access_time(&path);
                     }
                 }
             });
         }
         
-        // 3. 入队生成任务（批量加锁一次，带去重）
+        // 3. 入队生成任务（批量加锁一次，带去重，按中心距离排序）
         if !generate_paths.is_empty() {
             if let Ok(mut queue) = self.task_queue.lock() {
                 // 收集已有路径用于去重
                 let existing: std::collections::HashSet<_> = queue.iter().map(|t| t.path.clone()).collect();
                 
-                for (path, file_type, priority) in generate_paths {
-                    // 去重：跳过已在队列中的路径
-                    if existing.contains(&path) {
-                        continue;
-                    }
-                    
-                    queue.push_back(GenerateTask {
-                        path,
-                        directory: current_dir.clone(),
-                        file_type,
-                        priority,
-                    });
+                // 计算每个路径到中心的距离并创建任务
+                let mut new_tasks: Vec<GenerateTask> = generate_paths
+                    .into_iter()
+                    .filter(|(path, _, _)| !existing.contains(path))
+                    .map(|(path, file_type, original_index)| {
+                        let center_distance = if original_index >= center {
+                            original_index - center
+                        } else {
+                            center - original_index
+                        };
+                        GenerateTask {
+                            path,
+                            directory: current_dir.clone(),
+                            file_type,
+                            center_distance,
+                            original_index,
+                        }
+                    })
+                    .collect();
+                
+                // 按优先级排序（中心距离小的优先）
+                new_tasks.sort_by(|a, b| a.priority_cmp(b));
+                
+                // 插入到队列前端（新任务优先于旧任务）
+                for task in new_tasks.into_iter().rev() {
+                    queue.push_front(task);
                 }
             }
+        }
+        
+        // 执行内存压力检查（每 100 次请求检查一次）
+        static REQUEST_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let count = REQUEST_COUNT.fetch_add(1, Ordering::Relaxed);
+        if count % 100 == 0 {
+            // 两阶段缓存清理：最大 256MB 内存缓存
+            self.two_phase_cache_cleanup(256 * 1024 * 1024);
         }
     }
     
@@ -870,6 +929,70 @@ impl ThumbnailServiceV3 {
                 self.memory_cache_bytes.store(new_bytes, Ordering::SeqCst);
                 
                 log_debug!("✅ 清理后缓存大小: {} 条, {} bytes", cache.len(), new_bytes);
+            }
+        }
+    }
+    
+    /// 两阶段智能缓存清理（参考 NeeView ThumbnailPool 策略）
+    /// 
+    /// 阶段1（150%阈值）：仅清理无效引用（已被释放的条目）
+    /// 阶段2（120%阈值）：清理最老的条目直到回到限制
+    /// 
+    /// max_bytes: 缓存大小限制（字节）
+    pub fn two_phase_cache_cleanup(&self, max_bytes: usize) {
+        let current_bytes = self.memory_cache_bytes.load(Ordering::SeqCst);
+        let cache_len = self.memory_cache.read().map(|c| c.len()).unwrap_or(0);
+        let limit = self.config.memory_cache_size;
+        
+        // 阈值计算
+        let tolerance_150 = limit * 150 / 100; // 150% 触发第一阶段
+        let tolerance_120 = limit * 120 / 100; // 120% 触发第二阶段
+        
+        // 阶段1：超过 150% 容量时，清理无效条目
+        if cache_len >= tolerance_150 {
+            log_debug!("🧹 两阶段清理 - 阶段1: {} 条 >= {}（150%）", cache_len, tolerance_150);
+            
+            // LRU 缓存自动维护有效性，这里主要清理内存中可能的无效引用
+            // 在 Rust 中，LRU 不需要显式清理无效引用，但我们可以触发一次 GC
+            if let Ok(mut cache) = self.memory_cache.write() {
+                // 移除一些最老的条目（模拟 NeeView 的无效条目清理）
+                let remove_count = cache_len.saturating_sub(tolerance_120);
+                for _ in 0..remove_count {
+                    cache.pop_lru();
+                }
+                
+                let new_bytes: usize = cache.iter().map(|(_, v)| v.len()).sum();
+                self.memory_cache_bytes.store(new_bytes, Ordering::SeqCst);
+                
+                log_debug!("✅ 阶段1清理完成: {} 条, {} bytes", cache.len(), new_bytes);
+            }
+        }
+        
+        // 阶段2：超过 120% 容量或内存超限时，强制清理到限制
+        let cache_len_after = self.memory_cache.read().map(|c| c.len()).unwrap_or(0);
+        let current_bytes_after = self.memory_cache_bytes.load(Ordering::SeqCst);
+        
+        if cache_len_after >= tolerance_120 || current_bytes_after > max_bytes {
+            log_debug!("🧹 两阶段清理 - 阶段2: {} 条 >= {} 或 {} bytes > {} bytes", 
+                      cache_len_after, tolerance_120, current_bytes_after, max_bytes);
+            
+            if let Ok(mut cache) = self.memory_cache.write() {
+                // 清理到限制大小
+                let erase_count = cache.len().saturating_sub(limit);
+                for _ in 0..erase_count {
+                    cache.pop_lru();
+                }
+                
+                // 如果仍然超过内存限制，继续清理
+                let mut new_bytes: usize = cache.iter().map(|(_, v)| v.len()).sum();
+                while new_bytes > max_bytes && cache.len() > 0 {
+                    cache.pop_lru();
+                    new_bytes = cache.iter().map(|(_, v)| v.len()).sum();
+                }
+                
+                self.memory_cache_bytes.store(new_bytes, Ordering::SeqCst);
+                
+                log_debug!("✅ 阶段2清理完成: {} 条, {} bytes", cache.len(), new_bytes);
             }
         }
     }

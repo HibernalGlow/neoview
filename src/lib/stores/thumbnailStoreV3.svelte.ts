@@ -120,10 +120,12 @@ export async function initThumbnailServiceV3(
  * 请求可见区域缩略图（核心方法，带节流）
  * @param paths 可见区域的路径列表（已按优先级排序）
  * @param currentDir 当前目录
+ * @param centerIndex 可见区域中心索引（用于优先级排序）
  */
 export async function requestVisibleThumbnails(
   paths: string[],
-  currentDir: string
+  currentDir: string,
+  centerIndex?: number
 ): Promise<void> {
   if (!initialized) {
     console.warn('⚠️ ThumbnailStoreV3 not initialized');
@@ -163,9 +165,13 @@ export async function requestVisibleThumbnails(
     pendingPaths.length = 0;
 
     try {
+      // 计算中心索引（如果未提供，使用列表中间位置）
+      const center = centerIndex ?? Math.floor(pathsToRequest.length / 2);
+      
       await invoke('request_visible_thumbnails_v3', {
         paths: pathsToRequest,
         currentDir: throttleState.dir,
+        centerIndex: center,
       });
     } catch (error) {
       console.error('❌ requestVisibleThumbnails failed:', error);
@@ -427,6 +433,9 @@ export async function requestVisibleThumbnailsWithPrefetch(
     return requestVisibleThumbnails(visiblePaths, currentDir);
   }
 
+  // 计算可见区域中心索引
+  const centerIndex = Math.floor((firstVisibleIndex + lastVisibleIndex) / 2);
+
   // 计算预取范围
   const prefetchStart = Math.max(0, firstVisibleIndex - prefetchCount);
   const prefetchEnd = Math.min(allPaths.length, lastVisibleIndex + prefetchCount + 1);
@@ -438,7 +447,8 @@ export async function requestVisibleThumbnailsWithPrefetch(
     ...prefetchPaths.filter((p) => !visiblePaths.includes(p)),
   ];
 
-  return requestVisibleThumbnails(pathsToRequest, currentDir);
+  // 传递中心索引给后端，用于优先级排序
+  return requestVisibleThumbnails(pathsToRequest, currentDir, centerIndex);
 }
 
 /**

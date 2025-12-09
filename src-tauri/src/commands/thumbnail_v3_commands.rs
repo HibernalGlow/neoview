@@ -102,11 +102,13 @@ pub async fn init_thumbnail_service_v3(
 }
 
 /// 请求可见区域缩略图（核心命令，不阻塞）
+/// center_index: 可见区域中心索引，用于优先级排序（中心优先加载）
 #[tauri::command]
 pub async fn request_visible_thumbnails_v3(
     app: AppHandle,
     paths: Vec<String>,
     current_dir: String,
+    center_index: Option<usize>,
 ) -> Result<(), String> {
     // 安全获取 State（使用 try_state 避免 panic）
     let state = match app.try_state::<ThumbnailServiceV3State>() {
@@ -116,8 +118,8 @@ pub async fn request_visible_thumbnails_v3(
             return Ok(());
         }
     };
-    // 不阻塞，直接返回
-    state.service.request_visible_thumbnails(&app, paths, current_dir);
+    // 不阻塞，直接返回，传递中心索引用于优先级排序
+    state.service.request_visible_thumbnails(&app, paths, current_dir, center_index);
     Ok(())
 }
 
@@ -186,9 +188,9 @@ pub async fn preload_directory_thumbnails_v3(
     let mut paths = Vec::new();
     collect_paths(&dir, 0, max_depth, &mut paths);
     
-    // 请求预加载
+    // 请求预加载（无中心索引，使用默认顺序）
     if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
-        state.service.request_visible_thumbnails(&app, paths, dir);
+        state.service.request_visible_thumbnails(&app, paths, dir, None);
     }
     
     Ok(())

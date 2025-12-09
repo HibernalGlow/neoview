@@ -252,15 +252,21 @@
 					<Sidebar.Content>
 						<Sidebar.Group class="px-0">
 							<Sidebar.GroupContent>
-								<!-- 使用 CSS 隐藏而非条件渲染，保持组件实例不被销毁 -->
-								{#each leftPanels as panel (panel.id)}
-									{@const PanelComponent = panelComponents[panel.id]}
-									{#if PanelComponent}
-										<div class={activePanelId === panel.id ? '' : 'hidden'}>
-											<PanelComponent />
-										</div>
-									{/if}
-								{/each}
+								<!-- 使用 visibility: hidden 而非 display: none，保持布局信息避免切换时重新计算尺寸 -->
+								<div class="relative h-full w-full">
+									{#each leftPanels as panel (panel.id)}
+										{@const PanelComponent = panelComponents[panel.id]}
+										{#if PanelComponent}
+											<div 
+												class="absolute inset-0 h-full w-full overflow-hidden"
+												class:invisible={activePanelId !== panel.id}
+												class:pointer-events-none={activePanelId !== panel.id}
+											>
+												<PanelComponent />
+											</div>
+										{/if}
+									{/each}
+								</div>
 							</Sidebar.GroupContent>
 						</Sidebar.Group>
 					</Sidebar.Content>

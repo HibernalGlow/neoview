@@ -115,7 +115,7 @@ async function requestThumbnail(pageIndex: number) {
 	
 	thumbnailCacheStore.setLoading(pageIndex);
 	try {
-		const pagePath = page.path || page.url || '';
+		const pagePath = page.path || '';
 		const url = await thumbnailManager.getThumbnail(pagePath);
 		if (url) {
 			thumbnailCacheStore.setThumbnail(pageIndex, url, 0, 0);

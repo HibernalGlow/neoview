@@ -123,14 +123,15 @@ function getArchiveInfo(pageItem: PageItem): { isArchive: boolean; archivePath?:
  */
 async function handleCopy() {
 	if (!item) return;
+	const currentItem = item; // 保存引用
 	onClose();
 
 	try {
-		const archiveInfo = getArchiveInfo(item);
+		const archiveInfo = getArchiveInfo(currentItem);
 		
 		if (archiveInfo.isArchive && archiveInfo.archivePath && archiveInfo.innerPath) {
 			// 压缩包内文件：先提取到临时文件
-			showSuccessToast('正在提取...', item.name);
+			showSuccessToast('正在提取...', currentItem.name);
 			
 			const tempPath = await invoke<string>('extract_image_to_temp', {
 				archivePath: archiveInfo.archivePath,
@@ -139,11 +140,11 @@ async function handleCopy() {
 			
 			// 复制临时文件到剪贴板
 			await ClipboardAPI.copyFiles([tempPath]);
-			showSuccessToast('已复制', `${item.name} (提取自压缩包)`);
+			showSuccessToast('已复制', `${currentItem.name} (提取自压缩包)`);
 		} else {
 			// 普通文件：直接复制
-			await ClipboardAPI.copyFiles([item.path]);
-			showSuccessToast('已复制', item.name);
+			await ClipboardAPI.copyFiles([currentItem.path]);
+			showSuccessToast('已复制', currentItem.name);
 		}
 	} catch (err) {
 		console.error('[PageContextMenu] Copy failed:', err);
@@ -156,16 +157,17 @@ async function handleCopy() {
  */
 async function handleShowInExplorer() {
 	if (!item) return;
+	const currentItem = item;
 	onClose();
 
 	try {
-		const archiveInfo = getArchiveInfo(item);
+		const archiveInfo = getArchiveInfo(currentItem);
 		
 		if (archiveInfo.isArchive && archiveInfo.archivePath) {
 			// 压缩包内文件：显示压缩包所在位置
 			await FileSystemAPI.showInFileManager(archiveInfo.archivePath);
 		} else {
-			await FileSystemAPI.showInFileManager(item.path);
+			await FileSystemAPI.showInFileManager(currentItem.path);
 		}
 	} catch (err) {
 		showErrorToast('打开失败', err instanceof Error ? err.message : String(err));
@@ -177,10 +179,11 @@ async function handleShowInExplorer() {
  */
 async function handleOpenWithSystem() {
 	if (!item) return;
+	const currentItem = item;
 	onClose();
 
 	try {
-		const archiveInfo = getArchiveInfo(item);
+		const archiveInfo = getArchiveInfo(currentItem);
 		
 		if (archiveInfo.isArchive && archiveInfo.archivePath && archiveInfo.innerPath) {
 			// 压缩包内文件：先提取到临时文件
@@ -190,7 +193,7 @@ async function handleOpenWithSystem() {
 			});
 			await FileSystemAPI.openWithSystem(tempPath);
 		} else {
-			await FileSystemAPI.openWithSystem(item.path);
+			await FileSystemAPI.openWithSystem(currentItem.path);
 		}
 	} catch (err) {
 		showErrorToast('打开失败', err instanceof Error ? err.message : String(err));

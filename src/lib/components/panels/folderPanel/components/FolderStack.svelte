@@ -103,9 +103,10 @@
 	}: Props = $props();
 	
 	// 计算实际使用的状态值（支持覆盖）
-	let effectiveMultiSelectMode = $derived(overrideMultiSelectMode !== undefined ? overrideMultiSelectMode : get(multiSelectMode));
-	let effectiveDeleteMode = $derived(overrideDeleteMode !== undefined ? overrideDeleteMode : get(deleteMode));
-	let effectiveViewStyle = $derived(overrideViewStyle !== undefined ? overrideViewStyle : get(viewStyle));
+	// 使用 $ 前缀订阅 store，确保响应式更新
+	let effectiveMultiSelectMode = $derived(overrideMultiSelectMode !== undefined ? overrideMultiSelectMode : $multiSelectMode);
+	let effectiveDeleteMode = $derived(overrideDeleteMode !== undefined ? overrideDeleteMode : $deleteMode);
+	let effectiveViewStyle = $derived(overrideViewStyle !== undefined ? overrideViewStyle : $viewStyle);
 	let effectiveSortConfig = $derived(overrideSortConfig !== undefined ? overrideSortConfig : $sortConfig);
 
 	// 层叠数据结构

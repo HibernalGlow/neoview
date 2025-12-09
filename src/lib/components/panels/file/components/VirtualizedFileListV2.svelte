@@ -103,7 +103,7 @@
 			return rowCount;
 		},
 		getScrollElement: () => container ?? null,
-		estimateSize: () => itemHeight,
+		estimateSize: (index) => itemHeight,
 		overscan: 3,
 		// 启用动态测量
 		measureElement: (element) => {
@@ -142,13 +142,29 @@
 		}
 	});
 
+	// 追踪上一次的视图模式，用于检测变化
+	let lastViewMode = $state(viewMode);
+	
 	// 当 items 或 viewMode 变化时强制刷新 virtualizer
 	$effect(() => {
 		// 显式依赖 items.length, rowCount 和 viewMode
 		const _ = items.length;
 		const __ = rowCount;
-		const ___ = viewMode;
+		const currentViewMode = viewMode;
+		
 		if (mounted && container) {
+			// 检测视图模式是否变化
+			const viewModeChanged = currentViewMode !== lastViewMode;
+			
+			if (viewModeChanged) {
+				// 视图模式变化时，重置测量缓存并滚动到顶部
+				lastViewMode = currentViewMode;
+				// 重置所有行的测量缓存
+				$virtualizer.measure();
+				// 滚动到顶部
+				container.scrollTop = 0;
+			}
+			
 			// 强制触发重新测量
 			$virtualizer._willUpdate();
 		}

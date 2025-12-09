@@ -7,6 +7,7 @@ import { Button } from '$lib/components/ui/button';
 import { cacheStats, formatFileSize } from '$lib/stores/upscale/upscalePanelStore.svelte';
 import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
 import { FileSystemAPI } from '$lib/api';
+import { confirm } from '$lib/stores/confirmDialog.svelte';
 
 let isRefreshing = $state(false);
 let isClearing = $state(false);
@@ -30,11 +31,18 @@ async function refreshCacheStats() {
 }
 
 async function clearCache() {
-	if (!confirm('确定要清除所有超分缓存吗？此操作不可撤销。')) return;
+	const confirmed = await confirm({
+		title: '确认清除',
+		description: '确定要清除所有超分缓存吗？此操作不可撤销。',
+		confirmText: '清除',
+		cancelText: '取消',
+		variant: 'destructive'
+	});
+	if (!confirmed) return;
 	
 	isClearing = true;
 	try {
-		await pyo3UpscaleManager.clearCache();
+		await pyo3UpscaleManager.cleanupCache();
 		await refreshCacheStats();
 	} catch (err) {
 		console.error('清除缓存失败:', err);

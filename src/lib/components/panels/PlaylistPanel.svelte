@@ -14,6 +14,7 @@
 		FileArchive,
 		GripVertical
 	} from '@lucide/svelte';
+	import { confirm } from '$lib/stores/confirmDialog.svelte';
 
 	interface PlaylistItem {
 		path: string;
@@ -84,8 +85,15 @@
 		}
 	}
 
-	function deletePlaylist(id: string) {
-		if (confirm('确定要删除此播放列表吗？')) {
+	async function deletePlaylist(id: string) {
+		const confirmed = await confirm({
+			title: '确认删除',
+			description: '确定要删除此播放列表吗？',
+			confirmText: '删除',
+			cancelText: '取消',
+			variant: 'destructive'
+		});
+		if (confirmed) {
 			playlists = playlists.filter((p) => p.id !== id);
 			if (activePlaylist === id) {
 				activePlaylist = playlists[0]?.id || null;

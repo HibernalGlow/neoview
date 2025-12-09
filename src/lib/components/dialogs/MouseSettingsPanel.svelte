@@ -11,6 +11,7 @@
 	import { mouseGestureBindings, mouseWheelBindings } from '$lib/stores';
 	import type { MouseGestureBinding, MouseWheelBinding } from '$lib/types/keyboard';
 	import { RotateCcw, Trash2, Plus } from '@lucide/svelte';
+	import { confirm } from '$lib/stores/confirmDialog.svelte';
 
 	// 设置状态
 	let mouseGestureEnabled = $state(true);
@@ -67,8 +68,15 @@
 		);
 	}
 
-	function resetMouseSettings() {
-		if (confirm('确定要重置所有鼠标设置为默认值吗？')) {
+	async function resetMouseSettings() {
+		const confirmed = await confirm({
+			title: '确认重置',
+			description: '确定要重置所有鼠标设置为默认值吗？',
+			confirmText: '重置',
+			cancelText: '取消',
+			variant: 'warning'
+		});
+		if (confirmed) {
 			// TODO: 从 keyboard store 导入默认值
 			mouseGestureEnabled = true;
 			gestureMinDistance = 50;

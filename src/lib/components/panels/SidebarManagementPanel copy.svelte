@@ -13,6 +13,7 @@
 	import { get } from 'svelte/store';
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
 	import { onMount } from 'svelte';
+	import { confirm } from '$lib/stores/confirmDialog.svelte';
 
 	// 边栏管理状态
 	let sidebarManagement = $state({
@@ -196,22 +197,26 @@
 			// 默认将所有面板放入等待区
 			sidebarManagement.waitingArea = [...sidebarManagement.availablePanels];
 		}
+	} else {
+		// 默认将所有面板放入等待区
+		sidebarManagement.waitingArea = [...sidebarManagement.availablePanels];
 	}
+}
 
-	// 重置布局
-	function resetLayout() {
-		if (confirm('确定要重置所有面板布局吗？')) {
-			sidebarManagement.waitingArea = [...sidebarManagement.availablePanels];
-			sidebarManagement.leftSidebar = [];
-			sidebarManagement.rightSidebar = [];
-			saveSidebarLayout();
-			syncPanelsStoreFromSidebarLayout();
-		}
-	}
-
-	// 初始化（仅在组件挂载时运行一次，避免循环）
-	onMount(() => {
-		initializeSidebarPanels();
+// 重置布局
+async function resetLayout() {
+	const confirmed = await confirm({
+		title: '确认重置',
+		description: '确定要重置所有面板布局吗？',
+		confirmText: '重置',
+		cancelText: '取消',
+		variant: 'warning'
+	});
+	if (confirmed) {
+		sidebarManagement.waitingArea = [...sidebarManagement.availablePanels];
+		sidebarManagement.leftSidebar = [];
+		sidebarManagement.rightSidebar = [];
+		saveSidebarLayout();
 		syncPanelsStoreFromSidebarLayout();
 	});
 

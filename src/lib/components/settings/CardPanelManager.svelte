@@ -11,6 +11,7 @@
 		getCardSupportingPanels,
 		getPanelTitle
 	} from '$lib/stores/cardConfig.svelte';
+	import { confirm } from '$lib/stores/confirmDialog.svelte';
 
 	// 获取所有支持卡片的面板 ID
 	const allPanelIds = getCardSupportingPanels();
@@ -103,8 +104,15 @@
 	let saveMessage = $state<string | null>(null);
 
 	// 重置布局
-	function resetLayout() {
-		if (confirm('确定要重置所有卡片布局吗？')) {
+	async function resetLayout() {
+		const confirmed = await confirm({
+			title: '确认重置',
+			description: '确定要重置所有卡片布局吗？',
+			confirmText: '重置',
+			cancelText: '取消',
+			variant: 'warning'
+		});
+		if (confirmed) {
 			cardConfigStore.resetAll();
 			saveMessage = '✓ 布局已重置';
 			setTimeout(() => {

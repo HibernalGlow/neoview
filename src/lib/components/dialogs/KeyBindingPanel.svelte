@@ -8,21 +8,24 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { RotateCcw, Plus, X, Keyboard, Mouse, Hand } from '@lucide/svelte';
+	import { confirm } from '$lib/stores/confirmDialog.svelte';
 
 	let searchQuery = $state('');
 	let selectedAction = $state<string | null>(null);
 	let recordingType = $state<'keyboard' | 'mouse' | 'touch' | null>(null);
 
 	// 获取所有绑定
-	$: allBindings = keyBindingsStore.bindings;
-	$: categories = keyBindingsStore.getCategories();
-	$: filteredBindings = searchQuery 
-		? allBindings.filter(b => 
-			b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			b.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			b.action.toLowerCase().includes(searchQuery.toLowerCase())
-		)
-		: allBindings;
+	const allBindings = $derived(keyBindingsStore.bindings);
+	const categories = $derived(keyBindingsStore.getCategories());
+	const filteredBindings = $derived(
+		searchQuery 
+			? allBindings.filter(b => 
+				b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+				b.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+				b.action.toLowerCase().includes(searchQuery.toLowerCase())
+			)
+			: allBindings
+	);
 
 	// 开始录制
 	function startRecording(action: string, type: 'keyboard' | 'mouse' | 'touch') {
@@ -188,8 +191,15 @@
 	}
 
 	// 重置为默认
-	function resetToDefault() {
-		if (confirm('确定要重置所有绑定为默认设置吗？')) {
+	async function resetToDefault() {
+		const confirmed = await confirm({
+			title: '确认重置',
+			description: '确定要重置所有绑定为默认设置吗？',
+			confirmText: '重置',
+			cancelText: '取消',
+			variant: 'warning'
+		});
+		if (confirmed) {
 			keyBindingsStore.resetToDefault();
 		}
 	}

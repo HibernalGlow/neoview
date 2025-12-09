@@ -9,6 +9,7 @@ import * as Input from '$lib/components/ui/input';
 import * as Tooltip from '$lib/components/ui/tooltip';
 import { folderRatingStore } from '$lib/stores/emm/folderRating';
 import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
+import { confirm } from '$lib/stores/confirmDialog.svelte';
 
 let folderRatingStats = $state<{ count: number; lastUpdated: string | null }>({ count: 0, lastUpdated: null });
 let isUpdatingRatings = $state(false);
@@ -51,8 +52,15 @@ function handleExportFolderRatings() {
 }
 
 // 重置文件夹评分缓存
-function handleClearFolderRatings() {
-	if (confirm('确定要清除所有文件夹评分缓存吗？')) {
+async function handleClearFolderRatings() {
+	const confirmed = await confirm({
+		title: '确认清除',
+		description: '确定要清除所有文件夹评分缓存吗？',
+		confirmText: '清除',
+		cancelText: '取消',
+		variant: 'destructive'
+	});
+	if (confirmed) {
 		folderRatingStore.clearCache();
 	}
 }

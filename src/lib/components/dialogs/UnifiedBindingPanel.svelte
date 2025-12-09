@@ -9,6 +9,7 @@
 	import { keyBindingsStore, type InputBinding, type KeyBinding, type MouseGesture, type TouchGesture, type AreaClick } from '$lib/stores/keybindings.svelte';
 	import { Keyboard, Mouse, Hand, Plus, Trash2, Search, RotateCcw, Target } from '@lucide/svelte';
 	import GestureVisualizer from './GestureVisualizer.svelte';
+	import { confirm } from '$lib/stores/confirmDialog.svelte';
 	import MouseGestureRecorder from './MouseGestureRecorder.svelte';
 	import MouseKeyRecorder from './MouseKeyRecorder.svelte';
 	import AreaClickRecorder from './AreaClickRecorder.svelte';
@@ -173,8 +174,15 @@
 	}
 
 	// 重置
-	function resetAll() {
-		if (confirm('确定要重置所有绑定为默认设置吗？')) {
+	async function resetAll() {
+		const confirmed = await confirm({
+			title: '确认重置',
+			description: '确定要重置所有绑定为默认设置吗？',
+			confirmText: '重置',
+			cancelText: '取消',
+			variant: 'warning'
+		});
+		if (confirmed) {
 			keyBindingsStore.resetToDefault();
 		}
 	}

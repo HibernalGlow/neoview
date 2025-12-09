@@ -15,6 +15,7 @@
 	import { onMount } from 'svelte';
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
 	import { emit } from '@tauri-apps/api/event';
+	import { confirm } from '$lib/stores/confirmDialog.svelte';
 
 	let settings = $state<NeoViewSettings>(settingsManager.getSettings());
 	let hoverAreas = $derived(settings.panels.hoverAreas);
@@ -117,8 +118,15 @@
 	}
 
 	// 重置布局
-	function resetLayout() {
-		if (confirm('确定要重置所有面板布局吗？')) {
+	async function resetLayout() {
+		const confirmed = await confirm({
+			title: '确认重置',
+			description: '确定要重置所有面板布局吗？',
+			confirmText: '重置',
+			cancelText: '取消',
+			variant: 'warning'
+		});
+		if (confirmed) {
 			sidebarConfigStore.resetPanels();
 			saveMessage = '✓ 布局已重置';
 			setTimeout(() => {

@@ -20,6 +20,7 @@
 	import EmmSyncCard from './EmmSyncCard.svelte';
 	import ThumbnailDbMaintenanceCard from './ThumbnailDbMaintenanceCard.svelte';
 	import { favoriteTagStore, categoryColors, mixedGenderStore, cat2letter, createTagValue, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
+	import { confirm } from '$lib/stores/confirmDialog.svelte';
 
 // 性别类别列表
 const genderCategories = ['female', 'male', 'mixed'];
@@ -173,8 +174,15 @@ interface ExtendedFavoriteTag extends FavoriteTag {
 	}
 
 	// 重置文件夹评分缓存
-	function handleClearFolderRatings() {
-		if (confirm('确定要清除所有文件夹评分缓存吗？')) {
+	async function handleClearFolderRatings() {
+		const confirmed = await confirm({
+			title: '确认清除',
+			description: '确定要清除所有文件夹评分缓存吗？',
+			confirmText: '清除',
+			cancelText: '取消',
+			variant: 'destructive'
+		});
+		if (confirmed) {
 			folderRatingStore.clearCache();
 		}
 	}

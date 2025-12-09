@@ -7,6 +7,7 @@ import { aiTranslationStore } from '$lib/stores/ai/translationStore.svelte';
 import { Database, Trash2, Download, Upload, RefreshCcw, HardDrive } from '@lucide/svelte';
 import { invoke } from '@tauri-apps/api/core';
 import { onMount } from 'svelte';
+import { confirm } from '$lib/stores/confirmDialog.svelte';
 
 let stats = $state(aiTranslationStore.getCacheStats());
 let dbCacheCount = $state<number | null>(null);
@@ -36,8 +37,15 @@ $effect(() => {
 	return unsubscribe;
 });
 
-function handleClearCache() {
-	if (confirm('确定要清空所有翻译缓存吗？')) {
+async function handleClearCache() {
+	const confirmed = await confirm({
+		title: '确认清空',
+		description: '确定要清空所有翻译缓存吗？',
+		confirmText: '清空',
+		cancelText: '取消',
+		variant: 'destructive'
+	});
+	if (confirmed) {
 		aiTranslationStore.clearCache();
 	}
 }

@@ -11,6 +11,7 @@
 	import { gestureBindings } from '$lib/stores';
 	import type { GestureBinding } from '$lib/types/keyboard';
 	import { RotateCcw, Trash2, Plus, Info } from '@lucide/svelte';
+	import { confirm } from '$lib/stores/confirmDialog.svelte';
 
 	// 设置状态
 	let touchGestureEnabled = $state(true);
@@ -32,8 +33,15 @@
 		return grouped;
 	});
 
-	function resetGestureSettings() {
-		if (confirm('确定要重置所有手势设置为默认值吗？')) {
+	async function resetGestureSettings() {
+		const confirmed = await confirm({
+			title: '确认重置',
+			description: '确定要重置所有手势设置为默认值吗？',
+			confirmText: '重置',
+			cancelText: '取消',
+			variant: 'warning'
+		});
+		if (confirmed) {
 			touchGestureEnabled = true;
 			swipeThreshold = 50;
 			longPressDuration = 500;

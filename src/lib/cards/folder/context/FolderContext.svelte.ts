@@ -170,8 +170,8 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 		};
 		localTabs = [...localTabs, newTab];
 		localActiveTabId = newId;
-		// 触发导航到新标签页
-		navigationCommand.set({ type: 'init', path: tabPath });
+		// 触发导航到新标签页（指定目标标签页 ID）
+		navigationCommand.set({ type: 'init', path: tabPath, targetTabId: newId });
 	}
 	
 	// 关闭标签页
@@ -190,7 +190,7 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 			const newTab = localTabs[newIdx];
 			if (newTab) {
 				localActiveTabId = newTab.id;
-				navigationCommand.set({ type: 'init', path: newTab.currentPath });
+				navigationCommand.set({ type: 'init', path: newTab.currentPath, targetTabId: newTab.id });
 			}
 		}
 	}
@@ -198,9 +198,10 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 	// 切换标签页
 	function switchLocalTab(tabId: string) {
 		const tab = localTabs.find(t => t.id === tabId);
-		if (!tab) return;
+		if (!tab || localActiveTabId === tabId) return; // 避免重复切换
 		localActiveTabId = tabId;
-		navigationCommand.set({ type: 'init', path: tab.currentPath });
+		// 不发送导航命令，因为每个标签页的 FolderStack 已经有自己的状态
+		// 只需要切换显示即可（通过 displayActiveTabId 控制）
 	}
 	
 	// 全局 store 订阅的本地值

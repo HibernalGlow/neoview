@@ -668,8 +668,11 @@
 		const cmd = $navigationCommand;
 		if (!cmd) return;
 
+		// 如果命令指定了目标标签页，只有目标标签页响应
+		if (cmd.targetTabId && cmd.targetTabId !== tabId) return;
+
 		// 强制激活模式始终响应，否则只有活动页签才响应导航命令
-		if (!forceActive) {
+		if (!forceActive && !cmd.targetTabId) {
 			const currentActiveTabId = get(activeTabId);
 			if (tabId !== currentActiveTabId) return;
 		}

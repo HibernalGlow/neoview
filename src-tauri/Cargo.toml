@@ -62,6 +62,12 @@ epub = "2.1"  # EPUB 解析（纯 Rust）
 natural-sort-rs = "0.1"  # 自然排序
 regex = "1.10"  # 正则表达式支持
 sysinfo = "0.32"  # 系统监控
+
+# 性能优化库
+jwalk = "0.8"  # 并行目录遍历，比 walkdir 快 5-10x
+dashmap = "6.1"  # 无锁并发 HashMap
+memmap2 = "0.9"  # 内存映射文件，加速大文件读取
+parking_lot = "0.12"  # 更快的 Mutex/RwLock
 reqwest = { version = "0.12", features = ["json"] }  # HTTP 客户端（Ollama 代理）
 tauri-plugin-clipboard-x = "2"  # 系统剪贴板操作（文件复制/粘贴）
 # PDF: 前端使用 pdf.js 渲染

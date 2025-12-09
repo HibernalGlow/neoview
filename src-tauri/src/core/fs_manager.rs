@@ -1,5 +1,6 @@
 use super::file_indexer::FileIndexer;
 use super::video_exts;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -42,6 +43,16 @@ pub struct SearchOptions {
     pub max_results: Option<usize>,
     /// 是否在完整路径中搜索（而不仅仅是文件名）
     pub search_in_path: Option<bool>,
+}
+
+/// 子目录统计结果
+#[derive(Default)]
+struct DirStats {
+    total: u64,
+    folders: u32,
+    images: u32,
+    archives: u32,
+    videos: u32,
 }
 
 /// 文件系统管理器
@@ -91,8 +102,19 @@ impl FsManager {
         Err("路径不在允许的根目录下".to_string())
     }
 
-    /// 读取目录内容
+    /// 读取目录内容（快速模式，不扫描子目录统计）
     pub fn read_directory(&self, path: &Path) -> Result<Vec<FsItem>, String> {
+        self.read_directory_impl(path, false)
+    }
+
+    /// 读取目录内容（带子目录统计）
+    pub fn read_directory_with_stats(&self, path: &Path) -> Result<Vec<FsItem>, String> {
+        self.read_directory_impl(path, true)
+    }
+
+    /// 读取目录内容的内部实现
+    /// `with_stats`: 是否扫描子目录统计（会显著增加 I/O）
+    fn read_directory_impl(&self, path: &Path, with_stats: bool) -> Result<Vec<FsItem>, String> {
         // 安全验证
         self.validate_path(path)?;
 
@@ -102,130 +124,128 @@ impl FsManager {
 
         let entries = fs::read_dir(path).map_err(|e| format!("读取目录失败: {}", e))?;
 
-        let mut items = Vec::new();
-        let mut skipped_count = 0u32;
-
-        for entry in entries {
-            // 优雅处理单个条目的错误（如权限问题）
-            let entry = match entry {
-                Ok(e) => e,
-                Err(e) => {
-                    log::warn!("⚠️ 跳过无法读取的条目: {} (目录: {:?})", e, path);
-                    skipped_count += 1;
-                    continue;
-                }
-            };
-            let entry_path = entry.path();
-
-            // 跳过隐藏文件（以 . 开头）
-            if let Some(name) = entry_path.file_name() {
+        // 收集有效条目
+        let valid_entries: Vec<_> = entries
+            .filter_map(|entry| {
+                let entry = entry.ok()?;
+                let entry_path = entry.path();
+                
+                // 跳过隐藏文件
+                let name = entry_path.file_name()?;
                 if name.to_string_lossy().starts_with('.') {
-                    continue;
+                    return None;
                 }
+                
+                // 获取元数据
+                let metadata = entry.metadata().ok()?;
+                Some((entry, entry_path, metadata))
+            })
+            .collect();
+
+        // 使用 rayon 并行处理条目
+        let items: Vec<FsItem> = valid_entries
+            .par_iter()
+            .map(|(entry, entry_path, metadata)| {
+                let name = entry.file_name().to_string_lossy().to_string();
+                let is_dir = metadata.is_dir();
+
+                // 子目录统计：仅在 with_stats=true 时计算
+                let (size, folder_count, image_count, archive_count, video_count) = if is_dir {
+                    if with_stats {
+                        // 并行统计子项
+                        let stats = Self::count_directory_items(entry_path);
+                        (
+                            stats.total,
+                            Some(stats.folders),
+                            Some(stats.images),
+                            Some(stats.archives),
+                            Some(stats.videos),
+                        )
+                    } else {
+                        // 快速模式：不统计，返回 0 和 None
+                        (0, None, None, None, None)
+                    }
+                } else {
+                    (metadata.len(), None, None, None, None)
+                };
+
+                let modified = metadata
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs());
+                let created = metadata
+                    .created()
+                    .ok()
+                    .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs());
+
+                let is_image = !is_dir && Self::is_image_file(entry_path);
+
+                FsItem {
+                    name,
+                    path: entry_path.to_string_lossy().to_string(),
+                    is_dir,
+                    size,
+                    modified,
+                    created,
+                    is_image,
+                    folder_count,
+                    image_count,
+                    archive_count,
+                    video_count,
+                }
+            })
+            .collect();
+
+        // 排序：目录优先，然后按名称（使用自然排序）
+        let mut sorted_items = items;
+        sorted_items.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => {
+                let name_a = a.name.to_lowercase();
+                let name_b = b.name.to_lowercase();
+                natural_sort_rs::natural_cmp::<str, String>(&name_a, &name_b)
             }
+        });
 
-            // 优雅处理元数据获取失败（如权限问题）
-            let metadata = match entry.metadata() {
-                Ok(m) => m,
-                Err(e) => {
-                    log::warn!("⚠️ 跳过无法获取元数据的条目 {:?}: {}", entry_path, e);
-                    skipped_count += 1;
-                    continue;
-                }
-            };
+        Ok(sorted_items)
+    }
 
-            let name = entry.file_name().to_string_lossy().to_string();
-            let is_dir = metadata.is_dir();
+    /// 快速统计目录内的项目数量
+    fn count_directory_items(path: &Path) -> DirStats {
+        let mut stats = DirStats::default();
 
-            // 对于目录，统计子项信息
-            let (size, folder_count, image_count, archive_count, video_count) = if is_dir {
-                // 统计子项
-                let mut folders = 0u32;
-                let mut images = 0u32;
-                let mut archives = 0u32;
-                let mut videos = 0u32;
-                let mut total = 0u64;
-
-                if let Ok(sub_entries) = fs::read_dir(&entry_path) {
-                    for sub_entry in sub_entries.flatten() {
-                        // 跳过隐藏文件
-                        if let Some(sub_name) = sub_entry.file_name().to_str() {
-                            if sub_name.starts_with('.') {
-                                continue;
-                            }
-                        }
-
-                        total += 1;
-                        let sub_path = sub_entry.path();
-
-                        if sub_path.is_dir() {
-                            folders += 1;
-                        } else {
-                            if Self::is_image_file(&sub_path) {
-                                images += 1;
-                            }
-                            if Self::is_archive_file(&sub_path) {
-                                archives += 1;
-                            }
-                            if Self::is_video_file(&sub_path) {
-                                videos += 1;
-                            }
-                        }
+        if let Ok(sub_entries) = fs::read_dir(path) {
+            for sub_entry in sub_entries.flatten() {
+                // 跳过隐藏文件
+                if let Some(sub_name) = sub_entry.file_name().to_str() {
+                    if sub_name.starts_with('.') {
+                        continue;
                     }
                 }
 
-                (
-                    total,
-                    Some(folders),
-                    Some(images),
-                    Some(archives),
-                    Some(videos),
-                )
-            } else {
-                (metadata.len(), None, None, None, None)
-            };
+                stats.total += 1;
+                let sub_path = sub_entry.path();
 
-            let modified = metadata
-                .modified()
-                .ok()
-                .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
-                .map(|d| d.as_secs());
-            let created = metadata
-                .created()
-                .ok()
-                .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
-                .map(|d| d.as_secs());
-
-            let is_image = !is_dir && Self::is_image_file(&entry_path);
-
-            items.push(FsItem {
-                name,
-                path: entry_path.to_string_lossy().to_string(),
-                is_dir,
-                size,
-                modified,
-                created,
-                is_image,
-                folder_count,
-                image_count,
-                archive_count,
-                video_count,
-            });
+                if sub_path.is_dir() {
+                    stats.folders += 1;
+                } else {
+                    if Self::is_image_file(&sub_path) {
+                        stats.images += 1;
+                    }
+                    if Self::is_archive_file(&sub_path) {
+                        stats.archives += 1;
+                    }
+                    if Self::is_video_file(&sub_path) {
+                        stats.videos += 1;
+                    }
+                }
+            }
         }
 
-        // 排序：目录优先，然后按名称
-        items.sort_by(|a, b| match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-        });
-
-        // 如果有跳过的条目，记录日志
-        if skipped_count > 0 {
-            log::warn!("📁 目录 {:?} 扫描完成: {} 个条目, {} 个跳过(权限问题)", path, items.len(), skipped_count);
-        }
-
-        Ok(items)
+        stats
     }
 
     /// 计算目录的总大小

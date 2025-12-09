@@ -70,6 +70,16 @@ export interface FolderContextValue {
 	readonly allTabs: typeof allTabs;
 	currentActiveTabId: string;
 	currentAllTabs: Array<{ id: string; title: string; currentPath: string; homePath: string }>;
+	/** 本地标签页数组（用于虚拟面板独立多标签） */
+	localTabs: LocalTabState[];
+	/** 本地活动标签页 ID */
+	localActiveTabId: string;
+	/** 创建新标签页 */
+	readonly createLocalTab: (path?: string) => void;
+	/** 关闭标签页 */
+	readonly closeLocalTab: (tabId: string) => void;
+	/** 切换标签页 */
+	readonly switchLocalTab: (tabId: string) => void;
 	
 	// ============ 有效状态（响应式派生值）============
 	readonly effectiveShowSearchBar: boolean;
@@ -130,6 +140,68 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 	let localTabState = $state<LocalTabState | null>(null);
 	let currentActiveTabId = $state(get(activeTabId));
 	let currentAllTabs = $state(get(allTabs));
+	
+	// 本地标签页管理（用于虚拟面板独立多标签）
+	// 为虚拟实例创建初始标签页
+	const initialTabId = isVirtual ? `local-init-${Date.now()}` : '';
+	const initialTab: LocalTabState | null = isVirtual && initialPath ? {
+		id: initialTabId,
+		title: panelMode === 'bookmark' ? '书签' : panelMode === 'history' ? '历史' : 'Tab',
+		currentPath: initialPath,
+		homePath: initialPath
+	} : null;
+	let localTabs = $state<LocalTabState[]>(initialTab ? [initialTab] : []);
+	let localActiveTabId = $state<string>(initialTabId);
+	
+	// 生成标签页 ID
+	function generateTabId(): string {
+		return `local-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+	}
+	
+	// 创建新标签页
+	function createLocalTab(path?: string) {
+		const tabPath = path || initialPath || '';
+		const newId = generateTabId();
+		const newTab: LocalTabState = {
+			id: newId,
+			title: panelMode === 'bookmark' ? '书签' : panelMode === 'history' ? '历史' : 'New',
+			currentPath: tabPath,
+			homePath: tabPath
+		};
+		localTabs = [...localTabs, newTab];
+		localActiveTabId = newId;
+		// 触发导航到新标签页
+		navigationCommand.set({ type: 'init', path: tabPath });
+	}
+	
+	// 关闭标签页
+	function closeLocalTab(tabId: string) {
+		const idx = localTabs.findIndex(t => t.id === tabId);
+		if (idx === -1) return;
+		
+		// 至少保留一个标签页
+		if (localTabs.length <= 1) return;
+		
+		localTabs = localTabs.filter(t => t.id !== tabId);
+		
+		// 如果关闭的是当前活动标签，切换到相邻标签
+		if (localActiveTabId === tabId) {
+			const newIdx = Math.min(idx, localTabs.length - 1);
+			const newTab = localTabs[newIdx];
+			if (newTab) {
+				localActiveTabId = newTab.id;
+				navigationCommand.set({ type: 'init', path: newTab.currentPath });
+			}
+		}
+	}
+	
+	// 切换标签页
+	function switchLocalTab(tabId: string) {
+		const tab = localTabs.find(t => t.id === tabId);
+		if (!tab) return;
+		localActiveTabId = tabId;
+		navigationCommand.set({ type: 'init', path: tab.currentPath });
+	}
 	
 	// 全局 store 订阅的本地值
 	let globalShowSearchBarValue = $state(false);
@@ -230,8 +302,17 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 	let resizeStartSize = $state(0);
 	
 	// 计算属性
-	const displayTabs = $derived(localTabState ? [localTabState] : currentAllTabs);
-	const displayActiveTabId = $derived(localTabState?.id || currentActiveTabId);
+	// 虚拟实例使用本地标签页数组，非虚拟实例使用全局 store
+	const displayTabs = $derived(
+		isVirtual
+			? (localTabs.length > 0 ? localTabs : (localTabState ? [localTabState] : []))
+			: currentAllTabs
+	);
+	const displayActiveTabId = $derived(
+		isVirtual
+			? (localActiveTabId || localTabState?.id || '')
+			: currentActiveTabId
+	);
 	
 	const context: FolderContextValue = {
 		// 实例信息
@@ -276,6 +357,15 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 		set currentActiveTabId(v) { currentActiveTabId = v; },
 		get currentAllTabs() { return currentAllTabs; },
 		set currentAllTabs(v) { currentAllTabs = v; },
+		
+		// 本地标签页管理
+		get localTabs() { return localTabs; },
+		set localTabs(v) { localTabs = v; },
+		get localActiveTabId() { return localActiveTabId; },
+		set localActiveTabId(v) { localActiveTabId = v; },
+		createLocalTab,
+		closeLocalTab,
+		switchLocalTab,
 		
 		// 有效状态
 		get effectiveShowSearchBar() { return effectiveShowSearchBar; },

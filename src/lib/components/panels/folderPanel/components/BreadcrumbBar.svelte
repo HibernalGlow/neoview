@@ -13,12 +13,14 @@ import { tabCurrentPath, folderTabActions, isVirtualPath, getVirtualPathType, VI
 
 interface Props {
 	onNavigate?: (path: string) => void;
+	/** 新建标签页回调（可选，默认使用全局 store） */
+	onCreateTab?: () => void;
 	homePath?: string;
 	/** 外部传入的路径（用于虚拟实例独立显示） */
 	externalPath?: string;
 }
 
-let { onNavigate, homePath = '', externalPath }: Props = $props();
+let { onNavigate, onCreateTab, homePath = '', externalPath }: Props = $props();
 
 // 使用外部路径或全局 store 的 currentPath
 import { get } from 'svelte/store';
@@ -35,7 +37,11 @@ $effect(() => {
 });
 
 function handleCreateTab() {
-	folderTabActions.createTab(homePath);
+	if (onCreateTab) {
+		onCreateTab();
+	} else {
+		folderTabActions.createTab(homePath);
+	}
 }
 
 // 编辑模式状态

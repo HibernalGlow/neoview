@@ -51,7 +51,7 @@ import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { historyStore } from '$lib/stores/history.svelte';
 import { hoverPreviewSettings, hoverPreviewEnabled, hoverPreviewDelayMs } from '$lib/stores/hoverPreviewSettings.svelte';
 import { historySettingsStore } from '$lib/stores/historySettings.svelte';
-import { virtualPanelSettingsStore } from '$lib/stores/virtualPanelSettings.svelte';
+import { virtualPanelSettingsStore, type TreePosition } from '$lib/stores/virtualPanelSettings.svelte';
 import { getDefaultRating, saveDefaultRating } from '$lib/stores/emm/storage';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 import { folderThumbnailLoader, type WarmupProgress } from '$lib/utils/thumbnail';
@@ -99,7 +99,6 @@ const globalViewStyle = tabViewStyle;
 const globalFolderTreeConfig = tabFolderTreeConfig;
 
 // 文件树位置配置
-type TreePosition = 'left' | 'right' | 'top' | 'bottom';
 const treePositionLabels: Record<TreePosition, string> = {
 	left: '左侧',
 	right: '右侧',
@@ -194,8 +193,10 @@ $effect(() => {
 	return () => unsubs.forEach(u => u());
 });
 
-// 文件树配置
-let folderTreeConfig = $derived(globalFolderTreeConfigValue);
+// 文件树配置（根据模式选择）
+let folderTreeConfig = $derived(virtualMode 
+	? (virtualMode === 'history' ? virtualPanelSettingsStore.historyFolderTreeConfig : virtualPanelSettingsStore.bookmarkFolderTreeConfig)
+	: globalFolderTreeConfigValue);
 
 // 计算当前使用的状态值
 let viewStyle = $derived(virtualMode 
@@ -331,6 +332,16 @@ function handleSetThumbnailWidthPercent(value: number) {
 
 function handleSetBannerWidthPercent(value: number) {
 	folderTabActions.setBannerWidthPercent(value);
+}
+
+function handleSetFolderTreeLayout(layout: TreePosition) {
+	if (virtualMode === 'history') {
+		virtualPanelSettingsStore.setHistoryFolderTreeLayout(layout);
+	} else if (virtualMode === 'bookmark') {
+		virtualPanelSettingsStore.setBookmarkFolderTreeLayout(layout);
+	} else {
+		folderTabActions.setFolderTreeLayout(layout);
+	}
 }
 
 const viewStyles: { value: FolderViewStyle; icon: typeof List; label: string }[] = [
@@ -931,7 +942,7 @@ async function handleCleanupInvalid() {
 							variant={folderTreeConfig.layout === pos ? 'default' : 'ghost'}
 							size="icon"
 							class="h-6 w-6 rounded-full"
-							onclick={() => folderTabActions.setFolderTreeLayout(pos as TreePosition)}
+							onclick={() => handleSetFolderTreeLayout(pos as TreePosition)}
 						>
 							<Icon class="h-3 w-3" />
 						</Button>

@@ -31,6 +31,8 @@
 	interface Props {
 		item: FsItem;
 		thumbnail?: string;
+		/** 视图模式: list=列表, content=内容, banner=横幅, thumbnail=缩略图 */
+		viewMode?: 'list' | 'content' | 'banner' | 'thumbnail';
 		isSelected?: boolean;
 		isChecked?: boolean;
 		isCheckMode?: boolean;
@@ -77,6 +79,7 @@
 	let {
 		item,
 		thumbnail,
+		viewMode = 'list',
 		isSelected = false,
 		isChecked = false,
 		isCheckMode = false,
@@ -165,12 +168,20 @@
 		// 回退到项目数
 		return item.size === 0 ? '空文件夹' : `${item.size} 项`;
 	}
+
+	// 是否为网格布局（banner/thumbnail）
+	const isGridLayout = $derived(viewMode === 'banner' || viewMode === 'thumbnail');
+	
+	// 容器样式类
+	const containerClass = $derived(
+		isGridLayout
+			? `border-border group relative flex flex-col cursor-pointer rounded-md border overflow-hidden transition-colors ${isSelected ? 'bg-accent text-accent-foreground border-accent' : 'hover:bg-accent/40'}`
+			: `border-border group relative flex min-h-16 cursor-pointer items-center gap-3 rounded-md border p-2 transition-colors ${isSelected ? 'bg-accent text-accent-foreground border-accent' : 'hover:bg-accent/40'}`
+	);
 </script>
 
 <div
-	class="border-border group relative flex min-h-16 cursor-pointer items-center gap-3 rounded-md border p-2 transition-colors {isSelected
-		? 'bg-accent text-accent-foreground border-accent'
-		: 'hover:bg-accent/40'}"
+	class={containerClass}
 	onclick={(e) => {
 		e.stopPropagation();
 		onClick?.();

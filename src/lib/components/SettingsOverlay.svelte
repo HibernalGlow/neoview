@@ -37,7 +37,7 @@
 	<!-- 背景遮罩 -->
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_interactive_supports_focus -->
 	<div
-		class="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
 		onclick={handleBackdropClick}
 		role="dialog"
 		aria-modal="true"

@@ -12,6 +12,7 @@ import { fileBrowserStore } from './fileBrowser.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
 import { showToast } from '$lib/utils/toast';
 import type { EMMMetadata } from '$lib/api/emm';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
 const PAGE_WINDOW_PADDING = 8;
 const JUMP_HISTORY_LIMIT = 20;
@@ -21,10 +22,7 @@ interface BookState {
   loading: boolean;
   error: string;
   viewerOpen: boolean;
-  currentImage: Page | null;
   upscaledImageData: string | null; // 保持兼容性，用于显示
-  upscaledImageBlob: Blob | null; // 新增：存储二进制数据
-  currentPageUpscaled: boolean; // 当前页面是否已超分成功
 }
 
 interface OpenBookOptions {
@@ -72,24 +70,21 @@ class BookStore {
     loading: false,
     error: '',
     viewerOpen: false,
-    currentImage: null,
     upscaledImageData: null,
-    upscaledImageBlob: null,
-    currentPageUpscaled: false,
   });
 
   // 每页超分状态映射: pageIndex -> 'none' | 'preupscaled' | 'done' | 'failed'
-  private upscaleStatusByPage = $state<Map<number, 'none' | 'preupscaled' | 'done' | 'failed'>>(new Map());
+  private upscaleStatusByPage = $state<SvelteMap<number, 'none' | 'preupscaled' | 'done' | 'failed'>>(new SvelteMap());
 
   // 超分缓存映射: bookPath -> (hash -> cacheEntry)
-  private upscaleCacheMapByBook = $state<Map<string, Map<string, {
+  private upscaleCacheMapByBook = $state<SvelteMap<string, SvelteMap<string, {
     model: string;
     scale: number;
     cachePath: string;
     originalPath: string;
     innerPath?: string;
     timestamp: number;
-  }>>>(new Map());
+  }>>>(new SvelteMap());
 
   private lastEmmMetadataForCurrentBook: EMMMetadata | null = null;
 
@@ -140,20 +135,8 @@ class BookStore {
     return this.state.viewerOpen;
   }
 
-  get currentImage() {
-    return this.state.currentImage;
-  }
-
   get upscaledImageData() {
     return this.state.upscaledImageData;
-  }
-
-  get upscaledImageBlob() {
-    return this.state.upscaledImageBlob;
-  }
-
-  get currentPageUpscaled() {
-    return this.state.currentPageUpscaled;
   }
 
   get currentPage(): Page | null {
@@ -195,10 +178,7 @@ class BookStore {
       this.state.error = '';
 
       // 清除旧书的状态
-      this.state.currentImage = null;
       this.state.upscaledImageData = null;
-      this.state.upscaledImageBlob = null;
-      this.state.currentPageUpscaled = false;
       infoPanelStore.resetAll();
 
       // 使用通用的 openBook API (它会自动检测类型)
@@ -263,10 +243,7 @@ class BookStore {
     this.state.currentBook = null;
     this.syncAppStateBookSlice();
     this.lastEmmMetadataForCurrentBook = null;
-    this.state.currentImage = null;
     this.state.upscaledImageData = null;
-    this.state.upscaledImageBlob = null;
-    this.state.currentPageUpscaled = false;
     infoPanelStore.resetAll();
 
     // 重置页面超分状态
@@ -277,41 +254,11 @@ class BookStore {
   }
 
   /**
-   * 设置当前图片
-   */
-  setCurrentImage(page: Page | null) {
-    this.state.currentImage = page;
-    // 切换图片时立即清除超分结果，让系统重新检查缓存
-    this.state.upscaledImageData = null;
-    this.state.upscaledImageBlob = null;
-    this.state.currentPageUpscaled = false;
-  }
-
-  /**
-   * 设置当前页面超分状态
-   */
-  setCurrentPageUpscaled(upscaled: boolean) {
-    this.state.currentPageUpscaled = upscaled;
-  }
-
-  /**
    * 设置超分图片数据
    * @deprecated 旧系统已弃用，超分图由 upscaleStore 写入 imagePool
    */
   setUpscaledImage(data: string | null) {
     this.state.upscaledImageData = data;
-    
-    // 旧系统已弃用，不再写入 imagePool
-    // 超分图现在由 upscaleStore.handleUpscaleReadyPublic() 写入
-    // 使用 convertFileSrc(cachePath) 生成稳定的 asset URL
-    // console.log(`[DEPRECATED] setUpscaledImage 已弃用，跳过写入 imagePool`);
-  }
-
-  /**
-   * 设置超分图片二进制数据
-   */
-  setUpscaledImageBlob(blob: Blob | null) {
-    this.state.upscaledImageBlob = blob;
   }
 
   /**
@@ -595,7 +542,7 @@ class BookStore {
 
   private getOrCreateBookCache(bookPath: string) {
     if (!this.upscaleCacheMapByBook.has(bookPath)) {
-      this.upscaleCacheMapByBook.set(bookPath, new Map());
+      this.upscaleCacheMapByBook.set(bookPath, new SvelteMap());
     }
     return this.upscaleCacheMapByBook.get(bookPath)!;
   }
@@ -695,7 +642,7 @@ class BookStore {
    * 设置指定页面的超分状态
    */
   setPageUpscaleStatus(pageIndex: number, status: 'none' | 'preupscaled' | 'done' | 'failed') {
-    const nextMap = new Map(this.upscaleStatusByPage);
+    const nextMap = new SvelteMap(this.upscaleStatusByPage);
     nextMap.set(pageIndex, status);
     this.upscaleStatusByPage = nextMap;
     console.log(`📄 页面 ${pageIndex + 1} 超分状态更新为:`, status);
@@ -712,7 +659,7 @@ class BookStore {
    * 重置所有页面的超分状态（书籍切换时调用）
    */
   resetAllPageUpscaleStatus() {
-    this.upscaleStatusByPage = new Map();
+    this.upscaleStatusByPage = new SvelteMap();
     console.log('🔄 已重置所有页面超分状态');
   }
 
@@ -733,7 +680,7 @@ class BookStore {
    * 获取已预超分的页面集合
    */
   getPreUpscaledPages(): Set<number> {
-    const pages = new Set<number>();
+    const pages = new SvelteSet<number>();
     for (const [pageIndex, status] of this.upscaleStatusByPage.entries()) {
       if (status === 'preupscaled' || status === 'done') {
         pages.add(pageIndex);

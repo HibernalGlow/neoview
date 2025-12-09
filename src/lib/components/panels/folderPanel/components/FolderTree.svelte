@@ -2,6 +2,7 @@
 	/**
 	 * FolderTree - 文件夹树组件
 	 * 使用 shadcn tree-view 组件重构，带层级线和彩色图标
+	 * 支持 IndexedDB 缓存和增量更新
 	 */
 	import { onMount } from 'svelte';
 	import {
@@ -16,8 +17,8 @@
 	import type { FsItem } from '$lib/types';
 	import { tabCurrentPath, folderTabActions } from '../stores/folderTabStore.svelte';
 	import * as TreeView from '$lib/components/ui/tree-view';
-	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { cn } from '$lib/utils';
+	import * as TreeCache from '$lib/stores/folderTreeCache';
 
 	// 别名映射
 	const currentPath = tabCurrentPath;
@@ -37,21 +38,24 @@
 		loading: boolean;
 		children: TreeNode[];
 		error?: string;
+		/** 是否有子目录（用于显示展开箭头，来自缓存） */
+		hasChildren?: boolean;
 	}
 
 	// 树状态
 	let roots = $state<TreeNode[]>([]);
 	let loadingRoots = $state(true);
+	// 缓存是否已初始化
+	let cacheInitialized = $state(false);
 
 	// 根据深度生成颜色（使用主题色，深度越深颜色越深）
 	function getDepthColor(depth: number): string {
-		// 使用主题色，通过不同的透明度/亮度表示层级
 		const opacities = [
-			'text-primary/60', // 根目录 - 较浅
-			'text-primary/70', // 深度1
-			'text-primary/80', // 深度2
-			'text-primary/90', // 深度3
-			'text-primary' // 深度4+ - 最深
+			'text-primary/60',
+			'text-primary/70',
+			'text-primary/80',
+			'text-primary/90',
+			'text-primary'
 		];
 		return opacities[Math.min(depth, opacities.length - 1)];
 	}
@@ -59,53 +63,173 @@
 	// 获取层级线颜色（使用主题色边框）
 	function getLineColor(depth: number): string {
 		const opacities = [
-			'border-primary/20', // 浅
+			'border-primary/20',
 			'border-primary/30',
 			'border-primary/40',
 			'border-primary/50',
-			'border-primary/60' // 深
+			'border-primary/60'
 		];
 		return opacities[Math.min(depth, opacities.length - 1)];
+	}
+
+	// 从缓存恢复树结构
+	async function restoreFromCache(): Promise<boolean> {
+		try {
+			const stats = await TreeCache.getCacheStats();
+			if (stats.totalNodes === 0) {
+				console.log('[FolderTree] 缓存为空，需要初始化');
+				return false;
+			}
+
+			console.log(`[FolderTree] 从缓存恢复: ${stats.totalNodes} 节点, ${stats.expandedNodes} 展开`);
+
+			// 获取所有展开的路径
+			const expandedPaths = await TreeCache.getExpandedPaths();
+			const expandedSet = new Set(expandedPaths);
+
+			// 恢复根节点
+			const commonDrives = ['C:\\', 'D:\\', 'E:\\', 'F:\\', 'G:\\'];
+			const cachedRoots = await TreeCache.getCachedNodes(commonDrives);
+
+			roots = await Promise.all(
+				commonDrives.map(async (drive) => {
+					const cached = cachedRoots.get(drive);
+					const node: TreeNode = {
+						path: drive,
+						name: drive.replace('\\', ''),
+						isRoot: true,
+						expanded: cached?.expanded ?? false,
+						loading: false,
+						children: [],
+						hasChildren: cached?.hasChildren ?? true
+					};
+
+					// 如果节点已展开，递归恢复子节点
+					if (node.expanded && cached?.childPaths.length) {
+						node.children = await restoreChildren(cached.childPaths, expandedSet);
+					}
+
+					return node;
+				})
+			);
+
+			cacheInitialized = true;
+			return true;
+		} catch (e) {
+			console.error('[FolderTree] 缓存恢复失败:', e);
+			return false;
+		}
+	}
+
+	// 递归恢复子节点
+	async function restoreChildren(childPaths: string[], expandedSet: Set<string>): Promise<TreeNode[]> {
+		if (childPaths.length === 0) return [];
+
+		const cachedNodes = await TreeCache.getCachedNodes(childPaths);
+		const children: TreeNode[] = [];
+
+		for (const path of childPaths) {
+			const cached = cachedNodes.get(path);
+			if (!cached) continue;
+
+			const node: TreeNode = {
+				path: cached.path,
+				name: cached.name,
+				isRoot: false,
+				expanded: cached.expanded,
+				loading: false,
+				children: [],
+				hasChildren: cached.hasChildren
+			};
+
+			// 递归恢复展开的子节点
+			if (node.expanded && cached.childPaths.length > 0) {
+				node.children = await restoreChildren(cached.childPaths, expandedSet);
+			}
+
+			children.push(node);
+		}
+
+		return children;
 	}
 
 	// 加载根目录（Windows 盘符）
 	async function loadRoots() {
 		loadingRoots = true;
-		try {
-			// 使用常见盘符作为根目录（需要加反斜杠确保是绝对路径）
-			const commonDrives = ['C:\\', 'D:\\', 'E:\\', 'F:\\', 'G:\\'];
-			roots = commonDrives.map((drive) => ({
-				path: drive,
-				name: drive.replace('\\', ''),
-				isRoot: true,
-				expanded: false,
-				loading: false,
-				children: []
-			}));
-		} catch (err) {
-			console.error('[FolderTree] Failed to load drives:', err);
-			roots = ['C:\\', 'D:\\', 'E:\\'].map((drive) => ({
-				path: drive,
-				name: drive.replace('\\', ''),
-				isRoot: true,
-				expanded: false,
-				loading: false,
-				children: []
-			}));
+
+		// 先尝试从缓存恢复
+		const restored = await restoreFromCache();
+		if (restored) {
+			loadingRoots = false;
+			// 启动后台 GC
+			TreeCache.runGC().catch(() => {});
+			return;
 		}
+
+		// 缓存为空，初始化根节点
+		const commonDrives = ['C:\\', 'D:\\', 'E:\\', 'F:\\', 'G:\\'];
+		roots = commonDrives.map((drive) => ({
+			path: drive,
+			name: drive.replace('\\', ''),
+			isRoot: true,
+			expanded: false,
+			loading: false,
+			children: [],
+			hasChildren: true
+		}));
+
+		// 保存根节点到缓存
+		const cacheNodes = commonDrives.map((drive) =>
+			TreeCache.createCachedNode(drive, drive.replace('\\', ''), true, [])
+		);
+		TreeCache.saveNodes(cacheNodes).catch(() => {});
+
+		cacheInitialized = true;
 		loadingRoots = false;
 	}
 
-	// 加载子目录
-	async function loadChildren(node: TreeNode) {
+	// 加载子目录（带缓存）
+	async function loadChildren(node: TreeNode, forceRefresh = false) {
 		if (node.loading) return;
+
+		// 检查缓存
+		if (!forceRefresh) {
+			const cached = await TreeCache.getCachedNode(node.path);
+			if (cached && cached.childPaths.length > 0) {
+				// 从缓存恢复子节点
+				const cachedChildren = await TreeCache.getCachedNodes(cached.childPaths);
+				node.children = cached.childPaths
+					.map((path) => {
+						const child = cachedChildren.get(path);
+						if (!child) return null;
+						return {
+							path: child.path,
+							name: child.name,
+							isRoot: false,
+							expanded: child.expanded,
+							loading: false,
+							children: [],
+							hasChildren: child.hasChildren
+						} as TreeNode;
+					})
+					.filter((n): n is TreeNode => n !== null);
+
+				if (node.children.length > 0) {
+					console.log(`[FolderTree] 缓存命中: ${node.path} (${node.children.length} 子节点)`);
+					roots = [...roots];
+					return;
+				}
+			}
+		}
 
 		node.loading = true;
 		node.error = undefined;
+		roots = [...roots];
 
 		try {
-			const items = await FileSystemAPI.browseDirectory(node.path);
-			const folders = items.filter((item) => item.isDir);
+			// 使用带缓存的 API
+			const snapshot = await FileSystemAPI.loadDirectorySnapshot(node.path);
+			const folders = snapshot.items.filter((item) => item.isDir);
 
 			node.children = folders.map((folder) => ({
 				path: folder.path,
@@ -113,8 +237,33 @@
 				isRoot: false,
 				expanded: false,
 				loading: false,
-				children: []
+				children: [],
+				hasChildren: true // 默认假设有子目录
 			}));
+
+			// 保存到缓存
+			const childPaths = folders.map((f) => f.path);
+			const parentCacheNode = TreeCache.createCachedNode(
+				node.path,
+				node.name,
+				node.isRoot,
+				childPaths,
+				snapshot.mtime
+			);
+			parentCacheNode.expanded = node.expanded;
+			parentCacheNode.hasChildren = childPaths.length > 0;
+
+			const childCacheNodes = folders.map((f) =>
+				TreeCache.createCachedNode(f.path, f.name, false, [])
+			);
+
+			// 异步保存，不阻塞 UI
+			Promise.all([
+				TreeCache.saveNode(parentCacheNode),
+				TreeCache.saveNodes(childCacheNodes)
+			]).catch(() => {});
+
+			console.log(`[FolderTree] 加载目录: ${node.path} (${folders.length} 子目录)`);
 		} catch (err) {
 			console.error('[FolderTree] Failed to load children:', err);
 			node.error = err instanceof Error ? err.message : '加载失败';
@@ -122,7 +271,6 @@
 		}
 
 		node.loading = false;
-		// 触发响应式更新
 		roots = [...roots];
 	}
 
@@ -130,6 +278,9 @@
 	async function toggleNode(node: TreeNode, e?: MouseEvent) {
 		e?.stopPropagation();
 		node.expanded = !node.expanded;
+
+		// 更新缓存中的展开状态
+		TreeCache.updateNodeExpanded(node.path, node.expanded).catch(() => {});
 
 		if (node.expanded && node.children.length === 0 && !node.error) {
 			await loadChildren(node);
@@ -148,7 +299,6 @@
 	function handleContextMenu(node: TreeNode, e: MouseEvent) {
 		e.preventDefault();
 		e.stopPropagation();
-		// 转换为 FsItem 格式
 		const item: FsItem = {
 			path: node.path,
 			name: node.name,
@@ -173,47 +323,163 @@
 		return current === node;
 	}
 
+	// 后台校验 mtime 变化（增量更新）
+	async function validateExpandedNodes() {
+		// 收集所有展开的节点
+		const expandedNodes: TreeNode[] = [];
+		function collectExpanded(nodes: TreeNode[]) {
+			for (const node of nodes) {
+				if (node.expanded && node.children.length > 0) {
+					expandedNodes.push(node);
+					collectExpanded(node.children);
+				}
+			}
+		}
+		collectExpanded(roots);
+
+		if (expandedNodes.length === 0) return;
+
+		// 批量检查 mtime（使用后端的目录快照 API）
+		const paths = expandedNodes.map(n => n.path);
+		try {
+			const results = await FileSystemAPI.batchLoadDirectorySnapshots(paths);
+			
+			for (const result of results) {
+				if (result.error || !result.snapshot) continue;
+				
+				// 找到对应的节点
+				const node = expandedNodes.find(n => n.path === result.path);
+				if (!node) continue;
+
+				// 检查是否有变化（通过比较子节点数量和名称）
+				const currentChildPaths = new Set(node.children.map(c => c.path));
+				const newFolders = result.snapshot.items.filter(item => item.isDir);
+				const newChildPaths = new Set(newFolders.map(f => f.path));
+
+				// 检查是否有新增或删除
+				let hasChanges = currentChildPaths.size !== newChildPaths.size;
+				if (!hasChanges) {
+					for (const path of currentChildPaths) {
+						if (!newChildPaths.has(path)) {
+							hasChanges = true;
+							break;
+						}
+					}
+				}
+
+				if (hasChanges) {
+					console.log(`[FolderTree] 检测到变化: ${node.path}`);
+					// 更新节点的子节点
+					node.children = newFolders.map((folder) => {
+						// 保留已展开的子节点状态
+						const existing = node.children.find(c => c.path === folder.path);
+						return {
+							path: folder.path,
+							name: folder.name,
+							isRoot: false,
+							expanded: existing?.expanded ?? false,
+							loading: false,
+							children: existing?.children ?? [],
+							hasChildren: true
+						};
+					});
+
+					// 更新缓存
+					const childPaths = newFolders.map(f => f.path);
+					const parentCacheNode = TreeCache.createCachedNode(
+						node.path,
+						node.name,
+						node.isRoot,
+						childPaths,
+						result.snapshot.mtime
+					);
+					parentCacheNode.expanded = node.expanded;
+					parentCacheNode.hasChildren = childPaths.length > 0;
+					TreeCache.saveNode(parentCacheNode).catch(() => {});
+				}
+			}
+
+			roots = [...roots];
+		} catch (e) {
+			console.error('[FolderTree] 后台校验失败:', e);
+		}
+	}
+
+	let validationInterval: ReturnType<typeof setInterval> | null = null;
+
 	onMount(() => {
 		loadRoots();
+
+		// 启动后台校验（每 30 秒检查一次）
+		validationInterval = setInterval(() => {
+			if (cacheInitialized && roots.length > 0) {
+				validateExpandedNodes().catch(() => {});
+			}
+		}, 30000);
+
+		return () => {
+			if (validationInterval) {
+				clearInterval(validationInterval);
+			}
+		};
 	});
 
 	// 上一次展开的路径，避免重复展开
 	let lastExpandedPath = '';
 
-	// 当路径变化时，自动展开到当前路径
+	// 当路径变化时，自动展开到当前路径（使用缓存加速）
 	$effect(() => {
 		const path = $currentPath;
-		if (!path || roots.length === 0) return;
+		if (!path || roots.length === 0 || !cacheInitialized) return;
 
 		// 避免重复展开同一路径
 		if (path === lastExpandedPath) return;
 		lastExpandedPath = path;
 
-		// 找到并展开路径上的所有节点
 		const normalized = path.replace(/\\/g, '/').toLowerCase();
 
-		async function expandToPath(nodes: TreeNode[], targetPath: string): Promise<boolean> {
+		// 收集需要展开的路径段
+		const pathSegments: string[] = [];
+		let currentSegment = '';
+		const parts = path.replace(/\\/g, '/').split('/').filter(Boolean);
+		
+		for (let i = 0; i < parts.length; i++) {
+			currentSegment += (i === 0 ? '' : '/') + parts[i];
+			// Windows 盘符需要加反斜杠
+			if (i === 0 && /^[a-zA-Z]:$/.test(parts[0])) {
+				currentSegment = parts[0] + '\\';
+			}
+			pathSegments.push(currentSegment.replace(/\//g, '\\'));
+		}
+
+		async function expandToPath(nodes: TreeNode[], targetPath: string, depth = 0): Promise<boolean> {
 			let changed = false;
+			const targetSegment = pathSegments[depth];
+
 			for (const node of nodes) {
-				const nodePath = node.path.replace(/\\/g, '/').toLowerCase();
-				if (targetPath.startsWith(nodePath)) {
+				const nodePath = node.path.replace(/\//g, '\\');
+				if (nodePath.toLowerCase() === targetSegment?.toLowerCase()) {
 					if (!node.expanded) {
 						node.expanded = true;
 						changed = true;
+						TreeCache.updateNodeExpanded(node.path, true).catch(() => {});
+						
 						if (node.children.length === 0) {
 							await loadChildren(node);
 						}
 					}
-					if (node.children.length > 0) {
-						const childChanged: boolean = await expandToPath(node.children, targetPath);
+					
+					if (depth + 1 < pathSegments.length && node.children.length > 0) {
+						const childChanged = await expandToPath(node.children, targetPath, depth + 1);
 						changed = changed || childChanged;
 					}
+					break;
 				}
 			}
 			return changed;
 		}
 
-		expandToPath(roots, normalized).then((changed: boolean) => {
+		expandToPath(roots, normalized).then((changed) => {
 			if (changed) {
 				roots = [...roots];
 			}

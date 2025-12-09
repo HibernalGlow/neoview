@@ -434,7 +434,7 @@
 									thumbnail={getThumbnailUrl(item.path) ?? thumbnails.get(toRelativeKey(item.path))}
 									viewMode={viewMode === 'thumbnails' || viewMode === 'grid'
 										? 'thumbnail'
-										: viewMode}
+										: (viewMode as 'list' | 'content' | 'banner' | 'thumbnail')}
 									{isSelected}
 									{isChecked}
 									{isCheckMode}

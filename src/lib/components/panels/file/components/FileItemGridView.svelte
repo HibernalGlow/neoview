@@ -308,7 +308,7 @@
 					icon={Play}
 					tooltip="视频进度"
 					size="xs"
-					variant="info"
+					variant="primary"
 				/>
 			{:else if currentPage !== undefined && totalPages !== undefined && totalPages > 0}
 				<MetadataBadge
@@ -316,7 +316,7 @@
 					icon={BookOpen}
 					tooltip="阅读进度"
 					size="xs"
-					variant="info"
+					variant="primary"
 				/>
 			{/if}
 			{#if showSizeAndModified}
@@ -325,6 +325,7 @@
 					icon={HardDrive}
 					tooltip="文件大小"
 					size="xs"
+					variant="secondary"
 				/>
 				{#if timestamp}
 					<MetadataBadge
@@ -332,6 +333,7 @@
 						icon={Clock}
 						tooltip="修改时间"
 						size="xs"
+						variant="secondary"
 					/>
 				{/if}
 			{:else if timestamp}
@@ -340,6 +342,7 @@
 					icon={Clock}
 					tooltip="修改时间"
 					size="xs"
+					variant="secondary"
 				/>
 			{:else if !(currentPage !== undefined && totalPages !== undefined && totalPages > 0)}
 				<MetadataBadge
@@ -347,6 +350,7 @@
 					icon={HardDrive}
 					tooltip="文件大小"
 					size="xs"
+					variant="secondary"
 				/>
 			{/if}
 		</div>

@@ -22,7 +22,7 @@
 		/** 尺寸变体 */
 		size?: 'xs' | 'sm' | 'md';
 		/** 颜色变体 */
-		variant?: 'muted' | 'primary' | 'secondary' | 'success' | 'warning' | 'amber';
+		variant?: 'muted' | 'primary' | 'secondary' | 'success' | 'warning' | 'amber' | 'purple' | 'cyan';
 	}
 
 	let {
@@ -54,7 +54,9 @@
 		secondary: 'bg-secondary text-secondary-foreground border-secondary-foreground/20',
 		success: 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30',
 		warning: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/30',
-		amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+		amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30',
+		purple: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30',
+		cyan: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/30'
 	};
 
 	const sizeClass = $derived(sizeClasses[size]);

@@ -296,7 +296,7 @@
 	style="background-color: color-mix(in oklch, var(--sidebar) {opacity}%, transparent); color: var(--sidebar-foreground); backdrop-filter: blur({blur}px);"
 >
 	<!-- 左侧：四边栏控制和应用名 -->
-	<div class="flex items-center gap-0.5">
+	<div class="flex flex-1 items-center gap-0.5">
 		<!-- 上边栏 -->
 		<Tooltip.Root>
 			<Tooltip.Trigger>
@@ -585,7 +585,7 @@
 	</div>
 
 	<!-- 右侧：窗口控制按钮 -->
-	<div class="flex items-center gap-1">
+	<div class="flex flex-1 items-center justify-end gap-1">
 		<Button
 			variant="ghost"
 			size="icon"

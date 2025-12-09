@@ -85,9 +85,14 @@ impl CacheIndexDb {
         }
 
         let conn = Connection::open(&self.db_path)?;
+        // SQLite 性能优化
         conn.execute_batch(
             "PRAGMA journal_mode = WAL;
              PRAGMA synchronous = NORMAL;
+             PRAGMA cache_size = -64000;
+             PRAGMA mmap_size = 268435456;
+             PRAGMA temp_store = MEMORY;
+             PRAGMA page_size = 4096;
              CREATE TABLE IF NOT EXISTS directory_cache (
                 path TEXT PRIMARY KEY,
                 payload TEXT NOT NULL,

@@ -8,7 +8,14 @@
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { openSettingsOverlay } from '$lib/stores/settingsOverlay.svelte';
-	import { toggleLeftSidebar, topToolbarPinned } from '$lib/stores';
+	import {
+		topToolbarPinned,
+		bottomThumbnailBarPinned,
+		leftSidebarPinned,
+		rightSidebarPinned,
+		leftSidebarOpen,
+		rightSidebarOpen
+	} from '$lib/stores/ui.svelte';
 	import { showToast } from '$lib/utils/toast';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import {
@@ -35,7 +42,11 @@
 		Zap,
 		HardDrive,
 		Image,
-		PaintbrushVertical
+		PaintbrushVertical,
+		PanelTop,
+		PanelBottom,
+		PanelLeft,
+		PanelRight
 	} from '@lucide/svelte';
 	import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 
@@ -203,6 +214,26 @@
 		topToolbarPinned.update((v) => !v);
 	}
 
+	// 边栏控制函数
+	function toggleTopPinned() {
+		topToolbarPinned.update((v) => !v);
+	}
+	function toggleBottomPinned() {
+		bottomThumbnailBarPinned.update((v) => !v);
+	}
+	function toggleLeftPinned() {
+		leftSidebarPinned.update((v) => !v);
+	}
+	function toggleRightPinned() {
+		rightSidebarPinned.update((v) => !v);
+	}
+	function toggleLeftOpen() {
+		leftSidebarOpen.update((v) => !v);
+	}
+	function toggleRightOpen() {
+		rightSidebarOpen.update((v) => !v);
+	}
+
 	function handlePinContextMenu(e: MouseEvent) {
 		e.preventDefault();
 		if (onPinContextMenu) {
@@ -264,17 +295,84 @@
 	class="flex h-8 select-none items-center justify-between border-b px-2"
 	style="background-color: color-mix(in oklch, var(--sidebar) {opacity}%, transparent); color: var(--sidebar-foreground); backdrop-filter: blur({blur}px);"
 >
-	<!-- 左侧：菜单和应用名 -->
-	<div class="flex items-center gap-1">
-		<Button
-			variant="ghost"
-			size="icon"
-			class="h-6 w-6"
-			onclick={toggleLeftSidebar}
-			style="pointer-events: auto;"
-		>
-			<Menu class="h-4 w-4" />
-		</Button>
+	<!-- 左侧：四边栏控制和应用名 -->
+	<div class="flex items-center gap-0.5">
+		<!-- 上边栏 -->
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={$topToolbarPinned ? 'default' : 'ghost'}
+					size="icon"
+					class="h-5 w-5"
+					style="pointer-events: auto;"
+					onclick={toggleTopPinned}
+				>
+					<PanelTop class="h-3 w-3" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>顶栏{$topToolbarPinned ? '（已固定）' : '（自动隐藏）'}</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
+		<!-- 下边栏 -->
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={$bottomThumbnailBarPinned ? 'default' : 'ghost'}
+					size="icon"
+					class="h-5 w-5"
+					style="pointer-events: auto;"
+					onclick={toggleBottomPinned}
+				>
+					<PanelBottom class="h-3 w-3" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>底栏{$bottomThumbnailBarPinned ? '（已固定）' : '（自动隐藏）'}</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
+		<!-- 左边栏 -->
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={$leftSidebarPinned ? 'default' : ($leftSidebarOpen ? 'secondary' : 'ghost')}
+					size="icon"
+					class="h-5 w-5"
+					style="pointer-events: auto;"
+					onclick={toggleLeftOpen}
+					oncontextmenu={(e: MouseEvent) => { e.preventDefault(); toggleLeftPinned(); }}
+				>
+					<PanelLeft class="h-3 w-3" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>左栏{$leftSidebarPinned ? '（已固定）' : $leftSidebarOpen ? '（已打开）' : '（已关闭）'}</p>
+				<p class="text-muted-foreground text-xs">右键切换固定</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
+		<!-- 右边栏 -->
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={$rightSidebarPinned ? 'default' : ($rightSidebarOpen ? 'secondary' : 'ghost')}
+					size="icon"
+					class="h-5 w-5"
+					style="pointer-events: auto;"
+					onclick={toggleRightOpen}
+					oncontextmenu={(e: MouseEvent) => { e.preventDefault(); toggleRightPinned(); }}
+				>
+					<PanelRight class="h-3 w-3" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>右栏{$rightSidebarPinned ? '（已固定）' : $rightSidebarOpen ? '（已打开）' : '（已关闭）'}</p>
+				<p class="text-muted-foreground text-xs">右键切换固定</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
 		<span class="ml-2 text-sm font-semibold">NeoView</span>
 	</div>
 

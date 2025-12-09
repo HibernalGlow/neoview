@@ -20,7 +20,7 @@ import {
 	Check
 } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
-import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+import * as Tooltip from '$lib/components/ui/tooltip';
 
 // 排序字段类型
 export type SortField = 'name' | 'timestamp' | 'path' | 'starred' | 'type' | 'random' | 'rating';
@@ -110,6 +110,13 @@ function handleSortChange(field: SortField) {
 function getSortIcon() {
 	return sortOrder === 'asc' ? ArrowUp : ArrowDown;
 }
+
+// 排序面板展开状态
+let sortPanelExpanded = $state(false);
+
+function toggleSortPanel() {
+	sortPanelExpanded = !sortPanelExpanded;
+}
 </script>
 
 <div class="flex items-center gap-1">
@@ -141,53 +148,85 @@ function getSortIcon() {
 		</Button>
 	{/if}
 
-	<!-- 排序下拉菜单 -->
+	<!-- 排序按钮 -->
 	{#if showSort}
-		<DropdownMenu.Root>
-			<DropdownMenu.Trigger>
-				{#snippet child({ props })}
-					<Button {...props} variant="ghost" size="icon" class="h-7 w-7" title="排序">
-						<ArrowUpDown class="h-4 w-4" />
-					</Button>
-				{/snippet}
-			</DropdownMenu.Trigger>
-			<DropdownMenu.Content class="w-44" align="end">
-				{#each sortOptions as option}
-					{@const Icon = option.icon}
-					{@const SortIcon = sortField === option.field ? getSortIcon() : ArrowUpDown}
-					<DropdownMenu.Item onclick={() => handleSortChange(option.field)}>
-						<Icon class="h-4 w-4 mr-2" />
-						<span class="flex-1">{option.label}</span>
-						{#if sortField === option.field}
-							<SortIcon class="h-3 w-3 text-primary" />
-						{/if}
-					</DropdownMenu.Item>
-				{/each}
-				
-				{#if showGroupOption || showCurrentFolderOption}
-					<DropdownMenu.Separator />
-				{/if}
-				
-				{#if showGroupOption}
-					<DropdownMenu.Item onclick={() => onGroupChange?.(!isGrouped)}>
-						<Layers class="h-4 w-4 mr-2" />
-						<span class="flex-1">按日期分组</span>
-						{#if isGrouped}
-							<Check class="h-3 w-3 text-primary" />
-						{/if}
-					</DropdownMenu.Item>
-				{/if}
-				
-				{#if showCurrentFolderOption}
-					<DropdownMenu.Item onclick={() => onCurrentFolderChange?.(!isCurrentFolderOnly)}>
-						<FolderOpen class="h-4 w-4 mr-2" />
-						<span class="flex-1">仅当前文件夹</span>
-						{#if isCurrentFolderOnly}
-							<Check class="h-3 w-3 text-primary" />
-						{/if}
-					</DropdownMenu.Item>
-				{/if}
-			</DropdownMenu.Content>
-		</DropdownMenu.Root>
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button 
+					variant={sortPanelExpanded ? 'default' : 'ghost'} 
+					size="icon" 
+					class="h-7 w-7" 
+					onclick={toggleSortPanel}
+				>
+					<ArrowUpDown class="h-4 w-4" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>排序</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
 	{/if}
 </div>
+
+<!-- 排序展开面板 -->
+{#if sortPanelExpanded && showSort}
+	<div class="flex flex-wrap items-center gap-1 border-t border-border/50 pt-1 mt-1">
+		<span class="text-muted-foreground text-xs mr-1">排序</span>
+		<div class="bg-muted/60 inline-flex items-center gap-0.5 rounded-full p-0.5 shadow-inner">
+			{#each sortOptions as option}
+				{@const Icon = option.icon}
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant={sortField === option.field ? 'default' : 'ghost'}
+							size="icon"
+							class="h-6 w-6 rounded-full"
+							onclick={() => handleSortChange(option.field)}
+						>
+							<Icon class="h-3 w-3" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>{option.label}{sortField === option.field ? (sortOrder === 'asc' ? ' ↑' : ' ↓') : ''}</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+			{/each}
+		</div>
+
+		{#if showGroupOption}
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					<Button
+						variant={isGrouped ? 'default' : 'ghost'}
+						size="icon"
+						class="h-6 w-6"
+						onclick={() => onGroupChange?.(!isGrouped)}
+					>
+						<Layers class="h-3 w-3" />
+					</Button>
+				</Tooltip.Trigger>
+				<Tooltip.Content>
+					<p>按日期分组{isGrouped ? '（开）' : '（关）'}</p>
+				</Tooltip.Content>
+			</Tooltip.Root>
+		{/if}
+
+		{#if showCurrentFolderOption}
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					<Button
+						variant={isCurrentFolderOnly ? 'default' : 'ghost'}
+						size="icon"
+						class="h-6 w-6"
+						onclick={() => onCurrentFolderChange?.(!isCurrentFolderOnly)}
+					>
+						<FolderOpen class="h-3 w-3" />
+					</Button>
+				</Tooltip.Trigger>
+				<Tooltip.Content>
+					<p>仅当前文件夹{isCurrentFolderOnly ? '（开）' : '（关）'}</p>
+				</Tooltip.Content>
+			</Tooltip.Root>
+		{/if}
+	</div>
+{/if}

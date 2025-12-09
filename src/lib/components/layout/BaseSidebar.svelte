@@ -390,7 +390,7 @@
 
 		<button
 			type="button"
-			class="hover:bg-accent text-muted-foreground absolute top-1/2 right-0 z-50 -translate-y-1/2 cursor-ew-resize rounded-l-md p-1 transition-colors"
+			class="hover:bg-accent text-muted-foreground absolute top-1/2 right-0 z-50 -translate-y-1/2 cursor-ew-resize rounded-l-md p-1 opacity-0 transition-all hover:opacity-100"
 			onmousedown={handleResizeStart}
 			oncontextmenu={handlePinContextMenu}
 			aria-label="调整侧边栏宽度"
@@ -401,7 +401,7 @@
 		<!-- 右侧布局：拖拽条 | 内容 | 图标栏 -->
 		<button
 			type="button"
-			class="hover:bg-accent text-muted-foreground absolute top-1/2 left-0 z-50 -translate-y-1/2 cursor-ew-resize rounded-r-md p-1 transition-colors"
+			class="hover:bg-accent text-muted-foreground absolute top-1/2 left-0 z-50 -translate-y-1/2 cursor-ew-resize rounded-r-md p-1 opacity-0 transition-all hover:opacity-100"
 			onmousedown={handleResizeStart}
 			oncontextmenu={handlePinContextMenu}
 			aria-label="调整侧边栏宽度"

@@ -367,6 +367,13 @@ let warmupProgress = $state<WarmupProgress | null>(null);
 let showMoreSettings = $state(false);
 let settingsTab = $state<'action' | 'display' | 'other'>('action');
 
+// 排序面板展开状态
+let sortPanelExpanded = $state(false);
+
+function toggleSortPanel() {
+	sortPanelExpanded = !sortPanelExpanded;
+}
+
 function toggleMoreSettings() {
 	showMoreSettings = !showMoreSettings;
 }
@@ -515,49 +522,30 @@ function cancelWarmup() {
 		</Tooltip.Root>
 	{/if}
 
-	<!-- 排序下拉（使用排序字段图标 + 升降序箭头） -->
-	<DropdownMenu.Root>
-		<DropdownMenu.Trigger>
-			<Tooltip.Root>
-				<Tooltip.Trigger>
-					<Button variant="ghost" size="sm" class="h-7 gap-0.5 px-1.5">
-						{@const SortIcon = getCurrentSortIcon()}
-						<SortIcon class="h-3.5 w-3.5" />
-						{#if sortConfig.field !== 'random'}
-							{#if sortConfig.order === 'asc'}
-								<ArrowUp class="h-3 w-3" />
-							{:else}
-								<ArrowDown class="h-3 w-3" />
-							{/if}
-						{/if}
-					</Button>
-				</Tooltip.Trigger>
-				<Tooltip.Content>
-					<p>排序: {sortFields.find((f) => f.value === sortConfig.field)?.label} {sortConfig.field !== 'random' ? (sortConfig.order === 'asc' ? '升序' : '降序') : ''}</p>
-				</Tooltip.Content>
-			</Tooltip.Root>
-		</DropdownMenu.Trigger>
-		<DropdownMenu.Content align="start">
-			{#each sortFields as field}
-				<DropdownMenu.Item onclick={() => handleSetSort(field.value)}>
-					<span class="flex-1">{field.label}</span>
-					{#if sortConfig.field === field.value}
-						<span class="text-primary">✓</span>
+	<!-- 排序按钮 -->
+	<Tooltip.Root>
+		<Tooltip.Trigger>
+			<Button 
+				variant={sortPanelExpanded ? 'default' : 'ghost'} 
+				size="sm" 
+				class="h-7 gap-0.5 px-1.5"
+				onclick={toggleSortPanel}
+			>
+				{@const SortIcon = getCurrentSortIcon()}
+				<SortIcon class="h-3.5 w-3.5" />
+				{#if sortConfig.field !== 'random'}
+					{#if sortConfig.order === 'asc'}
+						<ArrowUp class="h-3 w-3" />
+					{:else}
+						<ArrowDown class="h-3 w-3" />
 					{/if}
-				</DropdownMenu.Item>
-			{/each}
-			<DropdownMenu.Separator />
-			<DropdownMenu.Item onclick={handleToggleSortOrder}>
-				{#if sortConfig.order === 'asc'}
-					<ArrowUp class="mr-2 h-4 w-4" />
-					<span>升序</span>
-				{:else}
-					<ArrowDown class="mr-2 h-4 w-4" />
-					<span>降序</span>
 				{/if}
-			</DropdownMenu.Item>
-		</DropdownMenu.Content>
-	</DropdownMenu.Root>
+			</Button>
+		</Tooltip.Trigger>
+		<Tooltip.Content>
+			<p>排序: {sortFields.find((f) => f.value === sortConfig.field)?.label} {sortConfig.field !== 'random' ? (sortConfig.order === 'asc' ? '升序' : '降序') : ''}</p>
+		</Tooltip.Content>
+	</Tooltip.Root>
 
 	<!-- 弹性空间 -->
 	<div class="flex-1"></div>
@@ -734,6 +722,53 @@ function cancelWarmup() {
 		</Tooltip.Root>
 	</div>
 </div>
+
+<!-- 排序展开面板 -->
+{#if sortPanelExpanded}
+	<div class="flex flex-wrap items-center gap-1 border-t border-border/50 px-2 py-1">
+		<span class="text-muted-foreground text-xs mr-1">排序</span>
+		<div class="bg-muted/60 inline-flex items-center gap-0.5 rounded-full p-0.5 shadow-inner">
+			{#each sortFields as field}
+				{@const Icon = field.icon}
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant={sortConfig.field === field.value ? 'default' : 'ghost'}
+							size="icon"
+							class="h-6 w-6 rounded-full"
+							onclick={() => handleSetSort(field.value)}
+						>
+							<Icon class="h-3 w-3" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>{field.label}{sortConfig.field === field.value ? (sortConfig.order === 'asc' ? ' ↑' : ' ↓') : ''}</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+			{/each}
+		</div>
+		
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant="ghost"
+					size="icon"
+					class="h-6 w-6"
+					onclick={handleToggleSortOrder}
+				>
+					{#if sortConfig.order === 'asc'}
+						<ArrowUp class="h-3 w-3" />
+					{:else}
+						<ArrowDown class="h-3 w-3" />
+					{/if}
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>{sortConfig.order === 'asc' ? '升序' : '降序'}（点击切换）</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+	</div>
+{/if}
 
 <!-- 可展开的更多设置栏（shadcn Tabs） -->
 {#if showMoreSettings}

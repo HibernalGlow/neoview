@@ -237,7 +237,7 @@ function handleDelete() {
 		onmousedown={(e) => e.stopPropagation()}
 	>
 		<div
-			class="bg-popover/80 backdrop-blur-md text-popover-foreground min-w-[160px] overflow-hidden rounded-md border shadow-md"
+			class=" backdrop-blur-md text-popover-foreground min-w-[160px] overflow-hidden rounded-md border shadow-md"
 			style="max-height: {maxHeight}px;"
 		>
 			<div class="overflow-y-auto p-1" style="max-height: {maxHeight}px;">

@@ -136,10 +136,7 @@ async function triggerProgressiveUpscale() {
 	isProgressiveRunning = false;
 	isTimerActive = false;
 	
-	// 触发完成后重新启动计时器，继续递进
-	if (progressiveUpscaleEnabled.value && autoUpscaleEnabled.value) {
-		startDwellTimer();
-	}
+	// 不再自动重启计时器，等待页面切换时再重新启动
 }
 
 // 监听页面变化，重置计时器

@@ -31,7 +31,7 @@
 
 <div class="flex h-full flex-col overflow-hidden">
 	<!-- 面板头部 -->
-	<div class="bg-muted/30 flex items-center gap-2 px-3 py-2">
+	<div class="flex items-center gap-2 px-3 py-2">
 		<Sparkles class="text-primary h-4 w-4" />
 		<h2 class="text-sm font-semibold">超分</h2>
 		{#if !isPyO3Available.value}

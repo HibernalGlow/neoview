@@ -9,10 +9,11 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { SvelteMap } from 'svelte/reactivity';
 import { fileBrowserStore } from './fileBrowser.svelte';
 
-// 缩略图缓存 (path -> blob URL)
-const thumbnails = $state<Map<string, string>>(new Map());
+// 缩略图缓存 (path -> blob URL) - 使用 SvelteMap 响应式状态以支持动态刷新
+const thumbnails = new SvelteMap<string, string>();
 
 // 路径转换：统一使用正斜杠作为 key
 function toRelativeKey(path: string): string {

@@ -11,9 +11,9 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
-use parking_lot::Mutex;
 use tauri::async_runtime::spawn_blocking;
 use tauri::{Emitter, State};
 
@@ -1925,7 +1925,7 @@ pub async fn start_directory_stream(
     };
 
     // 存储流状态
-    let mut streams = STREAMS.lock();
+    let mut streams = STREAMS.lock().unwrap();
     streams.insert(stream_id.clone(), stream);
 
     Ok(DirectoryStreamStartResult {
@@ -1939,7 +1939,7 @@ pub async fn start_directory_stream(
 /// 获取流的下一批数据
 #[tauri::command]
 pub async fn get_next_stream_batch(stream_id: String) -> Result<StreamBatchResult, String> {
-    let mut streams = STREAMS.lock();
+    let mut streams = STREAMS.lock().unwrap();
 
     if let Some(stream) = streams.get_mut(&stream_id) {
         if stream.current_index >= stream.entries.len() {
@@ -2004,7 +2004,7 @@ pub async fn enqueue_cache_maintenance(
 /// 取消目录流
 #[tauri::command]
 pub async fn cancel_directory_stream(stream_id: String) -> Result<(), String> {
-    let mut streams = STREAMS.lock();
+    let mut streams = STREAMS.lock().unwrap();
     if streams.remove(&stream_id).is_some() {
         Ok(())
     } else {

@@ -236,21 +236,18 @@
 					<Sidebar.Content class="h-full">
 						<Sidebar.Group class="h-full flex-1 p-0">
 							<Sidebar.GroupContent class="h-full">
-								<!-- 使用 visibility: hidden 而非 display: none，保持布局信息避免切换时重新计算尺寸 -->
-								<div class="relative h-full w-full">
-									{#each rightPanels as panel (panel.id)}
-										{@const PanelComponent = panelComponents[panel.id]}
-										{#if PanelComponent}
-											<div 
-												class="absolute inset-0 h-full w-full overflow-hidden"
-												class:invisible={activePanelId !== panel.id}
-												class:pointer-events-none={activePanelId !== panel.id}
-											>
-												<PanelComponent />
-											</div>
-										{/if}
-									{/each}
-								</div>
+								<!-- 使用 content-visibility: hidden 保持布局信息，避免切换时重新计算尺寸 -->
+								{#each rightPanels as panel (panel.id)}
+									{@const PanelComponent = panelComponents[panel.id]}
+									{#if PanelComponent}
+										<div 
+											class="panel-content-wrapper"
+											class:panel-content-hidden={activePanelId !== panel.id}
+										>
+											<PanelComponent />
+										</div>
+									{/if}
+								{/each}
 							</Sidebar.GroupContent>
 						</Sidebar.Group>
 					</Sidebar.Content>
@@ -270,3 +267,17 @@
 		</Sidebar.Provider>
 	</div>
 </HoverWrapper>
+
+<style>
+	.panel-content-wrapper {
+		height: 100%;
+		contain: layout style;
+	}
+	.panel-content-hidden {
+		content-visibility: hidden;
+		/* 保留固有尺寸，避免切换时重新计算 */
+		contain-intrinsic-size: auto 100%;
+		height: 0;
+		overflow: hidden;
+	}
+</style>

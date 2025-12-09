@@ -48,6 +48,7 @@
 		ZoomIn,
 		ZoomOut,
 		RotateCw,
+		RotateCcw,
 		RectangleVertical,
 		Columns2,
 		PanelsTopLeft,
@@ -80,7 +81,10 @@
 		SplitSquareHorizontal,
 		Rows2,
 		AlignLeft,
-		AlignRight
+		AlignRight,
+		Ban,
+		Smartphone,
+		MonitorSmartphone
 	} from '@lucide/svelte';
 
 	import { showToast } from '$lib/utils/toast';
@@ -146,6 +150,7 @@
 	let currentZoomDisplayMode: ZoomMode = $derived(
 		$viewerState.lockedZoomMode ?? $viewerState.currentZoomMode ?? defaultZoomMode
 	);
+	let CurrentZoomIcon = $derived(getZoomModeIcon(currentZoomDisplayMode));
 
 	// 页面布局和自动旋转设置
 	let splitHorizontalPages = $derived(settings.view.pageLayout?.splitHorizontalPages ?? false);
@@ -277,6 +282,39 @@
 	let resizeStartY = 0;
 	let resizeStartHeight = 0;
 	let hoverCount = $state(0); // 追踪悬停区域的计数
+
+	// 展开面板状态
+	let sortPanelExpanded = $state(false);
+	let zoomPanelExpanded = $state(false);
+	let rotatePanelExpanded = $state(false);
+
+	function closePanels() {
+		sortPanelExpanded = false;
+		zoomPanelExpanded = false;
+		rotatePanelExpanded = false;
+	}
+
+	function toggleSortPanel() {
+		const wasExpanded = sortPanelExpanded;
+		closePanels();
+		sortPanelExpanded = !wasExpanded;
+	}
+
+	function toggleZoomPanel() {
+		const wasExpanded = zoomPanelExpanded;
+		closePanels();
+		zoomPanelExpanded = !wasExpanded;
+	}
+
+	function toggleRotatePanel() {
+		const wasExpanded = rotatePanelExpanded;
+		closePanels();
+		rotatePanelExpanded = !wasExpanded;
+	}
+
+	function setAutoRotateMode(mode: 'none' | 'left' | 'right' | 'horizontalLeft' | 'horizontalRight' | 'forcedLeft' | 'forcedRight') {
+		settingsManager.updateNestedSettings('view', { autoRotate: { mode } });
+	}
 
 	// 响应钉住状态、锁定状态和 open 状态
 	$effect(() => {
@@ -501,59 +539,22 @@
 			<!-- 第二行：排序下拉框 + 工具栏按钮（自动换行） -->
 			{#if bookStore.currentBook}
 				<div class="flex flex-wrap items-center justify-start gap-1 md:justify-center">
-					<!-- 排序下拉框 -->
-					<div class="flex items-center gap-1">
-						<DropdownMenu.Root>
-							<Tooltip.Root>
-								<Tooltip.Trigger>
-									<DropdownMenu.Trigger>
-										<Button
-											variant="ghost"
-											size="icon"
-											class="h-8 w-8"
-											style="pointer-events: auto;"
-										>
-											<ArrowDownUp class="h-3.5 w-3.5" />
-										</Button>
-									</DropdownMenu.Trigger>
-								</Tooltip.Trigger>
-								<Tooltip.Content>
-									<p>页面排序：{currentSortModeLabel}</p>
-								</Tooltip.Content>
-							</Tooltip.Root>
-							<DropdownMenu.Content
-								side="right"
-								align="start"
-								class="z-60 w-60"
-								onmouseenter={handleMouseEnter}
-								onmouseleave={handleMouseLeave}
-								onclick={(e) => e.stopPropagation()}
-								onpointerdown={(e) => e.stopPropagation()}
-								onpointerup={(e) => e.stopPropagation()}
+					<!-- 排序切换 -->
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							<Button
+								variant={sortPanelExpanded ? 'default' : 'ghost'}
+								size="icon"
+								class="h-8 w-8"
+								onclick={toggleSortPanel}
 							>
-								<DropdownMenu.Label>页面排序</DropdownMenu.Label>
-								<DropdownMenu.Separator />
-								{#each sortModeOptions as option}
-									<DropdownMenu.Item
-										class={bookStore.currentBook?.sortMode === option.value ? 'bg-accent' : ''}
-										onclick={() => handleSortModeChange(option.value)}
-									>
-										<div class="flex flex-col gap-0.5 text-left">
-											<div class="flex items-center gap-2">
-												<div class="flex h-4 w-4 items-center justify-center">
-													{#if bookStore.currentBook?.sortMode === option.value}
-														<Check class="h-3 w-3" />
-													{/if}
-												</div>
-												<span class="text-xs font-medium">{option.label}</span>
-											</div>
-											<span class="text-muted-foreground text-[10px]">{option.description}</span>
-										</div>
-									</DropdownMenu.Item>
-								{/each}
-							</DropdownMenu.Content>
-						</DropdownMenu.Root>
-					</div>
+								<ArrowDownUp class="h-3.5 w-3.5" />
+							</Button>
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							<p>页面排序：{currentSortModeLabel}</p>
+						</Tooltip.Content>
+					</Tooltip.Root>
 
 					<!-- 分隔线 -->
 					<Separator.Root orientation="vertical" class="mx-1 h-6" />
@@ -635,93 +636,28 @@
 					</Tooltip.Root>
 
 					<!-- 缩放模式切换 -->
-					<DropdownMenu.Root>
-						{@const CurrentZoomIcon = getZoomModeIcon(currentZoomDisplayMode)}
-						<Tooltip.Root>
-							<Tooltip.Trigger>
-								<DropdownMenu.Trigger>
-									<Button
-										variant="ghost"
-										size="icon"
-										class={`h-8 w-8 ${$viewerState.lockedZoomMode ? 'ring-primary bg-primary/10 text-primary rounded-full ring-2' : ''}`}
-										style="pointer-events: auto;"
-										oncontextmenu={(event) => {
-											event.preventDefault();
-											toggleZoomModeLock(currentZoomDisplayMode);
-										}}
-									>
-										<CurrentZoomIcon class="h-4 w-4" />
-									</Button>
-								</DropdownMenu.Trigger>
-							</Tooltip.Trigger>
-							<Tooltip.Content>
-								<p>
-									缩放模式：{getZoomModeLabel(currentZoomDisplayMode)}
-									{$viewerState.lockedZoomMode ? '（已锁定）' : ''}
-								</p>
-							</Tooltip.Content>
-						</Tooltip.Root>
-
-						<DropdownMenu.Content
-							side="right"
-							align="start"
-							class="z-60 w-56"
-							onmouseenter={handleMouseEnter}
-							onmouseleave={handleMouseLeave}
-							onclick={(e) => e.stopPropagation()}
-							onpointerdown={(e) => e.stopPropagation()}
-							onpointerup={(e) => e.stopPropagation()}
-						>
-							<DropdownMenu.Label>缩放模式</DropdownMenu.Label>
-							<DropdownMenu.Separator />
-							{#each zoomModeOptions as { mode, label }}
-								{@const ZoomIcon = getZoomModeIcon(mode)}
-								<DropdownMenu.Item onclick={() => handleZoomModeChange(mode)}>
-									<div class="flex items-center gap-2">
-										<div class="flex h-4 w-4 items-center justify-center">
-											{#if currentZoomDisplayMode === mode}
-												<Check class="h-3 w-3" />
-											{/if}
-										</div>
-										<ZoomIcon class="text-muted-foreground h-3.5 w-3.5" />
-										<span class="text-xs">
-											{label}
-											{$viewerState.lockedZoomMode === mode ? '（锁定）' : ''}
-										</span>
-									</div>
-								</DropdownMenu.Item>
-							{/each}
-
-							<DropdownMenu.Separator />
-							<DropdownMenu.Label>页面布局</DropdownMenu.Label>
-
-							<!-- 自动分割横向页 -->
-							<DropdownMenu.Item onclick={toggleSplitHorizontalPages}>
-								<div class="flex items-center gap-2">
-									<div class="flex h-4 w-4 items-center justify-center">
-										{#if splitHorizontalPages}
-											<Check class="h-3 w-3" />
-										{/if}
-									</div>
-									<SplitSquareHorizontal class="text-muted-foreground h-3.5 w-3.5" />
-									<span class="text-xs">自动分割横向页</span>
-								</div>
-							</DropdownMenu.Item>
-
-							<!-- 横向页视为双页 -->
-							<DropdownMenu.Item onclick={toggleTreatHorizontalAsDoublePage}>
-								<div class="flex items-center gap-2">
-									<div class="flex h-4 w-4 items-center justify-center">
-										{#if treatHorizontalAsDoublePage}
-											<Check class="h-3 w-3" />
-										{/if}
-									</div>
-									<Rows2 class="text-muted-foreground h-3.5 w-3.5" />
-									<span class="text-xs">横向页视为双页</span>
-								</div>
-							</DropdownMenu.Item>
-						</DropdownMenu.Content>
-					</DropdownMenu.Root>
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							<Button
+								variant={zoomPanelExpanded ? 'default' : 'ghost'}
+								size="icon"
+								class={`h-8 w-8 ${$viewerState.lockedZoomMode ? 'ring-primary bg-primary/10 text-primary rounded-full ring-2' : ''}`}
+								onclick={toggleZoomPanel}
+								oncontextmenu={(e: MouseEvent) => {
+									e.preventDefault();
+									toggleZoomModeLock(currentZoomDisplayMode);
+								}}
+							>
+								<CurrentZoomIcon class="h-4 w-4" />
+							</Button>
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							<p>
+								缩放模式：{getZoomModeLabel(currentZoomDisplayMode)}
+								{$viewerState.lockedZoomMode ? '（已锁定）' : ''}
+							</p>
+						</Tooltip.Content>
+					</Tooltip.Root>
 
 					<!-- 分隔线 -->
 					<Separator.Root orientation="vertical" class="mx-1 h-6" />
@@ -744,7 +680,7 @@
 												setViewMode('panorama');
 											}
 										}}
-										oncontextmenu={(event) => {
+										oncontextmenu={(event: MouseEvent) => {
 											event.preventDefault();
 											toggleViewModeLock('panorama');
 										}}
@@ -806,7 +742,7 @@
 												setViewMode(newPageMode);
 											}
 										}}
-										oncontextmenu={(event) => {
+										oncontextmenu={(event: MouseEvent) => {
 											event.preventDefault();
 											const mode = isDoublePage ? 'double' : 'single';
 											toggleViewModeLock(mode);
@@ -842,7 +778,7 @@
 								size="icon"
 								class={`h-8 w-8 ${$lockedReadingDirection ? 'ring-primary bg-primary/20 text-primary rounded-full ring-2' : ''}`}
 								onclick={toggleReadingDirection}
-								oncontextmenu={(event) => {
+								oncontextmenu={(event: MouseEvent) => {
 									event.preventDefault();
 									toggleReadingDirectionLock(readingDirection);
 								}}
@@ -870,160 +806,26 @@
 					<!-- 分隔线 -->
 					<Separator.Root orientation="vertical" class="mx-1 h-6" />
 
-					<!-- 旋转下拉菜单 -->
-					<DropdownMenu.Root>
-						<Tooltip.Root>
-							<Tooltip.Trigger>
-								<DropdownMenu.Trigger>
-									<Button
-										variant={autoRotateMode !== 'none' ? 'default' : 'ghost'}
-										size="icon"
-										class="h-8 w-8"
-										style="pointer-events: auto;"
-									>
-										<RotateCw class="h-4 w-4" />
-									</Button>
-								</DropdownMenu.Trigger>
-							</Tooltip.Trigger>
-							<Tooltip.Content>
-								<p>
-									旋转{autoRotateMode !== 'none'
-										? `（自动：${getAutoRotateLabel(autoRotateMode)}）`
-										: ''}
-								</p>
-							</Tooltip.Content>
-						</Tooltip.Root>
-
-						<DropdownMenu.Content
-							side="right"
-							align="start"
-							class="z-60 w-48"
-							onmouseenter={handleMouseEnter}
-							onmouseleave={handleMouseLeave}
-							onclick={(e) => e.stopPropagation()}
-							onpointerdown={(e) => e.stopPropagation()}
-							onpointerup={(e) => e.stopPropagation()}
-						>
-							<DropdownMenu.Label>手动旋转</DropdownMenu.Label>
-							<DropdownMenu.Item onclick={rotateClockwise}>
-								<div class="flex items-center gap-2">
-									<RotateCw class="text-muted-foreground h-3.5 w-3.5" />
-									<span class="text-xs">顺时针旋转 90°</span>
-								</div>
-							</DropdownMenu.Item>
-
-							<DropdownMenu.Separator />
-							<DropdownMenu.Label>自动旋转</DropdownMenu.Label>
-
-							<DropdownMenu.Item
-								onclick={() =>
-									settingsManager.updateNestedSettings('view', { autoRotate: { mode: 'none' } })}
+					<!-- 旋转设置 -->
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							<Button
+								variant={rotatePanelExpanded || autoRotateMode !== 'none' ? 'default' : 'ghost'}
+								size="icon"
+								class="h-8 w-8"
+								onclick={toggleRotatePanel}
 							>
-								<div class="flex items-center gap-2">
-									<div class="flex h-4 w-4 items-center justify-center">
-										{#if autoRotateMode === 'none'}
-											<Check class="h-3 w-3" />
-										{/if}
-									</div>
-									<span class="text-xs">关闭</span>
-								</div>
-							</DropdownMenu.Item>
-							<DropdownMenu.Item
-								onclick={() =>
-									settingsManager.updateNestedSettings('view', { autoRotate: { mode: 'left' } })}
-							>
-								<div class="flex items-center gap-2">
-									<div class="flex h-4 w-4 items-center justify-center">
-										{#if autoRotateMode === 'left'}
-											<Check class="h-3 w-3" />
-										{/if}
-									</div>
-									<span class="text-xs">纵向左旋</span>
-								</div>
-							</DropdownMenu.Item>
-							<DropdownMenu.Item
-								onclick={() =>
-									settingsManager.updateNestedSettings('view', { autoRotate: { mode: 'right' } })}
-							>
-								<div class="flex items-center gap-2">
-									<div class="flex h-4 w-4 items-center justify-center">
-										{#if autoRotateMode === 'right'}
-											<Check class="h-3 w-3" />
-										{/if}
-									</div>
-									<span class="text-xs">纵向右旋</span>
-								</div>
-							</DropdownMenu.Item>
-
-							<DropdownMenu.Separator />
-							<DropdownMenu.Label>横屏图片自动旋转</DropdownMenu.Label>
-
-							<DropdownMenu.Item
-								onclick={() =>
-									settingsManager.updateNestedSettings('view', {
-										autoRotate: { mode: 'horizontalLeft' }
-									})}
-							>
-								<div class="flex items-center gap-2">
-									<div class="flex h-4 w-4 items-center justify-center">
-										{#if autoRotateMode === 'horizontalLeft'}
-											<Check class="h-3 w-3" />
-										{/if}
-									</div>
-									<span class="text-xs">横屏左旋 90°</span>
-								</div>
-							</DropdownMenu.Item>
-							<DropdownMenu.Item
-								onclick={() =>
-									settingsManager.updateNestedSettings('view', {
-										autoRotate: { mode: 'horizontalRight' }
-									})}
-							>
-								<div class="flex items-center gap-2">
-									<div class="flex h-4 w-4 items-center justify-center">
-										{#if autoRotateMode === 'horizontalRight'}
-											<Check class="h-3 w-3" />
-										{/if}
-									</div>
-									<span class="text-xs">横屏右旋 90°</span>
-								</div>
-							</DropdownMenu.Item>
-
-							<DropdownMenu.Separator />
-							<DropdownMenu.Label>强制旋转</DropdownMenu.Label>
-
-							<DropdownMenu.Item
-								onclick={() =>
-									settingsManager.updateNestedSettings('view', {
-										autoRotate: { mode: 'forcedLeft' }
-									})}
-							>
-								<div class="flex items-center gap-2">
-									<div class="flex h-4 w-4 items-center justify-center">
-										{#if autoRotateMode === 'forcedLeft'}
-											<Check class="h-3 w-3" />
-										{/if}
-									</div>
-									<span class="text-xs">始终左旋 90°</span>
-								</div>
-							</DropdownMenu.Item>
-							<DropdownMenu.Item
-								onclick={() =>
-									settingsManager.updateNestedSettings('view', {
-										autoRotate: { mode: 'forcedRight' }
-									})}
-							>
-								<div class="flex items-center gap-2">
-									<div class="flex h-4 w-4 items-center justify-center">
-										{#if autoRotateMode === 'forcedRight'}
-											<Check class="h-3 w-3" />
-										{/if}
-									</div>
-									<span class="text-xs">始终右旋 90°</span>
-								</div>
-							</DropdownMenu.Item>
-						</DropdownMenu.Content>
-					</DropdownMenu.Root>
+								<RotateCw class="h-4 w-4" />
+							</Button>
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							<p>
+								旋转{autoRotateMode !== 'none'
+									? `（自动：${getAutoRotateLabel(autoRotateMode)}）`
+									: ''}
+							</p>
+						</Tooltip.Content>
+					</Tooltip.Root>
 
 					<Tooltip.Root>
 						<Tooltip.Trigger>
@@ -1040,6 +842,224 @@
 							<p>{hoverScrollEnabled ? '悬停滚动：开' : '悬停滚动：关'}</p>
 						</Tooltip.Content>
 					</Tooltip.Root>
+				</div>
+			{/if}
+
+			<!-- 排序展开面板 -->
+			{#if sortPanelExpanded && bookStore.currentBook}
+				<div class="flex flex-wrap items-center justify-center gap-1 border-t border-border/50 pt-1">
+					<span class="text-muted-foreground mr-2 text-xs">页面排序</span>
+					<div class="bg-muted/60 inline-flex items-center gap-0.5 rounded-full p-0.5 shadow-inner">
+						{#each sortModeOptions as option}
+							<Tooltip.Root>
+								<Tooltip.Trigger>
+									<Button
+										variant={bookStore.currentBook?.sortMode === option.value ? 'default' : 'ghost'}
+										size="sm"
+										class="h-7 rounded-full px-2 text-xs"
+										onclick={() => handleSortModeChange(option.value)}
+									>
+										{option.label}
+									</Button>
+								</Tooltip.Trigger>
+								<Tooltip.Content>
+									<p>{option.description}</p>
+								</Tooltip.Content>
+							</Tooltip.Root>
+						{/each}
+					</div>
+				</div>
+			{/if}
+
+			<!-- 缩放模式展开面板 -->
+			{#if zoomPanelExpanded && bookStore.currentBook}
+				<div class="flex flex-wrap items-center justify-center gap-1 border-t border-border/50 pt-1">
+					<span class="text-muted-foreground mr-2 text-xs">缩放模式</span>
+					<div class="bg-muted/60 inline-flex items-center gap-0.5 rounded-full p-0.5 shadow-inner">
+						{#each zoomModeOptions as { mode, label }}
+							{@const ZoomIcon = getZoomModeIcon(mode)}
+							<Tooltip.Root>
+								<Tooltip.Trigger>
+									<Button
+										variant={currentZoomDisplayMode === mode ? 'default' : 'ghost'}
+										size="icon"
+										class={`h-7 w-7 rounded-full ${$viewerState.lockedZoomMode === mode ? 'ring-primary ring-2' : ''}`}
+										onclick={() => handleZoomModeChange(mode)}
+									>
+										<ZoomIcon class="h-3.5 w-3.5" />
+									</Button>
+								</Tooltip.Trigger>
+								<Tooltip.Content>
+									<p>{label}{$viewerState.lockedZoomMode === mode ? '（锁定）' : ''}</p>
+								</Tooltip.Content>
+							</Tooltip.Root>
+						{/each}
+					</div>
+
+					<Separator.Root orientation="vertical" class="mx-2 h-5" />
+
+					<span class="text-muted-foreground mr-2 text-xs">页面布局</span>
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							<Button
+								variant={splitHorizontalPages ? 'default' : 'ghost'}
+								size="icon"
+								class="h-7 w-7"
+								onclick={toggleSplitHorizontalPages}
+							>
+								<SplitSquareHorizontal class="h-3.5 w-3.5" />
+							</Button>
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							<p>自动分割横向页{splitHorizontalPages ? '（开）' : '（关）'}</p>
+						</Tooltip.Content>
+					</Tooltip.Root>
+
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							<Button
+								variant={treatHorizontalAsDoublePage ? 'default' : 'ghost'}
+								size="icon"
+								class="h-7 w-7"
+								onclick={toggleTreatHorizontalAsDoublePage}
+							>
+								<Rows2 class="h-3.5 w-3.5" />
+							</Button>
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							<p>横向页视为双页{treatHorizontalAsDoublePage ? '（开）' : '（关）'}</p>
+						</Tooltip.Content>
+					</Tooltip.Root>
+				</div>
+			{/if}
+
+			<!-- 旋转设置展开面板 -->
+			{#if rotatePanelExpanded && bookStore.currentBook}
+				<div class="flex flex-wrap items-center justify-center gap-1 border-t border-border/50 pt-1">
+					<span class="text-muted-foreground mr-2 text-xs">手动旋转</span>
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							<Button variant="ghost" size="icon" class="h-7 w-7" onclick={rotateClockwise}>
+								<RotateCw class="h-3.5 w-3.5" />
+							</Button>
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							<p>顺时针旋转 90°</p>
+						</Tooltip.Content>
+					</Tooltip.Root>
+
+					<Separator.Root orientation="vertical" class="mx-2 h-5" />
+
+					<span class="text-muted-foreground mr-2 text-xs">自动旋转</span>
+					<div class="bg-muted/60 inline-flex items-center gap-0.5 rounded-full p-0.5 shadow-inner">
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<Button
+									variant={autoRotateMode === 'none' ? 'default' : 'ghost'}
+									size="icon"
+									class="h-7 w-7 rounded-full"
+									onclick={() => setAutoRotateMode('none')}
+								>
+									<Ban class="h-3.5 w-3.5" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content><p>关闭自动旋转</p></Tooltip.Content>
+						</Tooltip.Root>
+
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<Button
+									variant={autoRotateMode === 'left' ? 'default' : 'ghost'}
+									size="icon"
+									class="h-7 w-7 rounded-full"
+									onclick={() => setAutoRotateMode('left')}
+								>
+									<RotateCcw class="h-3.5 w-3.5" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content><p>纵向左旋</p></Tooltip.Content>
+						</Tooltip.Root>
+
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<Button
+									variant={autoRotateMode === 'right' ? 'default' : 'ghost'}
+									size="icon"
+									class="h-7 w-7 rounded-full"
+									onclick={() => setAutoRotateMode('right')}
+								>
+									<RotateCw class="h-3.5 w-3.5" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content><p>纵向右旋</p></Tooltip.Content>
+						</Tooltip.Root>
+					</div>
+
+					<Separator.Root orientation="vertical" class="mx-2 h-5" />
+
+					<span class="text-muted-foreground mr-2 text-xs">横屏</span>
+					<div class="bg-muted/60 inline-flex items-center gap-0.5 rounded-full p-0.5 shadow-inner">
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<Button
+									variant={autoRotateMode === 'horizontalLeft' ? 'default' : 'ghost'}
+									size="icon"
+									class="h-7 w-7 rounded-full"
+									onclick={() => setAutoRotateMode('horizontalLeft')}
+								>
+									<Smartphone class="h-3.5 w-3.5 -rotate-90" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content><p>横屏左旋 90°</p></Tooltip.Content>
+						</Tooltip.Root>
+
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<Button
+									variant={autoRotateMode === 'horizontalRight' ? 'default' : 'ghost'}
+									size="icon"
+									class="h-7 w-7 rounded-full"
+									onclick={() => setAutoRotateMode('horizontalRight')}
+								>
+									<Smartphone class="h-3.5 w-3.5 rotate-90" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content><p>横屏右旋 90°</p></Tooltip.Content>
+						</Tooltip.Root>
+					</div>
+
+					<Separator.Root orientation="vertical" class="mx-2 h-5" />
+
+					<span class="text-muted-foreground mr-2 text-xs">强制</span>
+					<div class="bg-muted/60 inline-flex items-center gap-0.5 rounded-full p-0.5 shadow-inner">
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<Button
+									variant={autoRotateMode === 'forcedLeft' ? 'default' : 'ghost'}
+									size="icon"
+									class="h-7 w-7 rounded-full"
+									onclick={() => setAutoRotateMode('forcedLeft')}
+								>
+									<RotateCcw class="h-3.5 w-3.5" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content><p>始终左旋 90°</p></Tooltip.Content>
+						</Tooltip.Root>
+
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<Button
+									variant={autoRotateMode === 'forcedRight' ? 'default' : 'ghost'}
+									size="icon"
+									class="h-7 w-7 rounded-full"
+									onclick={() => setAutoRotateMode('forcedRight')}
+								>
+									<RotateCw class="h-3.5 w-3.5" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content><p>始终右旋 90°</p></Tooltip.Content>
+						</Tooltip.Root>
+					</div>
 				</div>
 			{/if}
 		</div>

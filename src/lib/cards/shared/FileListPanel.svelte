@@ -160,6 +160,7 @@
 	onCopyName={actions.handleCopyName}
 	onOpenInExplorer={actions.handleOpenInExplorer}
 	onOpenWithSystem={actions.handleOpenWithSystem}
+	onReloadThumbnail={actions.handleReloadThumbnail}
 />
 
 <!-- 确认对话框 -->

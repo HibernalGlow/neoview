@@ -18,7 +18,8 @@
 		Pencil,
 		Play,
 		FolderOpen,
-		PanelRight
+		PanelRight,
+		RefreshCw
 	} from '@lucide/svelte';
 
 	interface Props {
@@ -40,6 +41,7 @@
 		onCopyName?: (item: FsItem) => void;
 		onOpenInExplorer?: (item: FsItem) => void;
 		onOpenWithSystem?: (item: FsItem) => void;
+		onReloadThumbnail?: (item: FsItem) => void;
 	}
 
 	let {
@@ -60,7 +62,8 @@
 		onCopyPath,
 		onCopyName,
 		onOpenInExplorer,
-		onOpenWithSystem
+		onOpenWithSystem,
+		onReloadThumbnail
 	}: Props = $props();
 
 	// 菜单位置状态（经过边界检查调整）
@@ -188,6 +191,11 @@
 
 	function handleOpenWithSystem() {
 		if (item) onOpenWithSystem?.(item);
+		onClose();
+	}
+
+	function handleReloadThumbnail() {
+		if (item) onReloadThumbnail?.(item);
 		onClose();
 	}
 </script>
@@ -333,6 +341,16 @@
 				>
 					<File class="h-4 w-4" />
 					<span>复制文件名</span>
+				</button>
+
+				<div class="bg-border my-1 h-px"></div>
+
+				<button
+					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
+					onclick={handleReloadThumbnail}
+				>
+					<RefreshCw class="h-4 w-4" />
+					<span>重载缩略图</span>
 				</button>
 			</div>
 		</div>

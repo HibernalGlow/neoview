@@ -13,7 +13,8 @@
 		Scissors,
 		Copy as CopyIcon,
 		ClipboardPaste,
-		Pencil
+		Pencil,
+		RefreshCw
 	} from '@lucide/svelte';
 
 	type FileContextMenuEvents = {
@@ -26,6 +27,7 @@
 		rename: { item: FsItem };
 		openInExplorer: { item: FsItem };
 		openWithExternal: { item: FsItem };
+		reloadThumbnail: { item: FsItem };
 	};
 
 	const dispatch = createEventDispatcher<FileContextMenuEvents>();
@@ -88,4 +90,11 @@
 <ContextMenuItem on:click={() => emit('openWithExternal')}>
 	<ExternalLink class="mr-2 h-4 w-4" />
 	<span>在外部应用中打开</span>
+</ContextMenuItem>
+
+<ContextMenuSeparator />
+
+<ContextMenuItem on:click={() => emit('reloadThumbnail')}>
+	<RefreshCw class="mr-2 h-4 w-4" />
+	<span>重载缩略图</span>
 </ContextMenuItem>

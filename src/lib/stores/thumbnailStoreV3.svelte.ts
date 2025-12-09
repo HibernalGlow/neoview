@@ -211,6 +211,43 @@ export function getThumbnailUrl(path: string): string | undefined {
 }
 
 /**
+ * 重载单个文件的缩略图（删除缓存并重新请求）
+ * @param path 文件路径
+ * @param currentDir 当前目录（用于后端优先级）
+ */
+export async function reloadThumbnail(
+  path: string,
+  currentDir?: string
+): Promise<void> {
+  if (!initialized) {
+    console.warn('⚠️ ThumbnailStoreV3 not initialized');
+    return;
+  }
+
+  // 1. 删除本地缓存（释放 blob URL）
+  const existingUrl = thumbnails.get(path);
+  if (existingUrl) {
+    URL.revokeObjectURL(existingUrl);
+    thumbnails.delete(path);
+  }
+
+  // 2. 同步删除 fileBrowserStore 缓存
+  const key = toRelativeKey(path);
+  fileBrowserStore.removeThumbnail(key);
+
+  // 3. 调用后端删除数据库缓存并重新生成
+  try {
+    await invoke('reload_thumbnail_v3', { path });
+    console.log(`🔄 Reloading thumbnail: ${path}`);
+  } catch (error) {
+    console.error('❌ reloadThumbnail failed:', error);
+  }
+
+  // 4. 请求重新生成（后端会推送结果）
+  await requestVisibleThumbnails([path], currentDir || '');
+}
+
+/**
  * 检查是否有缓存
  */
 export function hasThumbnail(path: string): boolean {

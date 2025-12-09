@@ -376,6 +376,15 @@ function createFileBrowserStore() {
         newThumbnails.set(path, normalized);
         return { ...state, thumbnails: newThumbnails };
       }),
+    removeThumbnail: (path: string) =>
+      update(state => {
+        if (!state.thumbnails.has(path)) {
+          return state;
+        }
+        const newThumbnails = new Map(state.thumbnails);
+        newThumbnails.delete(path);
+        return { ...state, thumbnails: newThumbnails };
+      }),
     setThumbnails: (thumbnails: Map<string, string>) =>
       update(state => ({ ...state, thumbnails: new Map(thumbnails) })),
     clearThumbnails: () => update(state => ({ ...state, thumbnails: new Map() })),

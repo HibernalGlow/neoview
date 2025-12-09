@@ -16,6 +16,7 @@ import {
   preloadDirectory,
   cleanup,
   useThumbnails,
+  reloadThumbnail,
 } from '$lib/stores/thumbnailStoreV3.svelte';
 import { isPathExcluded } from '$lib/stores/excludedPaths.svelte';
 
@@ -40,6 +41,7 @@ export {
   preloadDirectory,
   cleanup,
   useThumbnails,
+  reloadThumbnail,
 };
 
 // ============================================

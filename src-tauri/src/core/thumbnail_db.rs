@@ -1743,6 +1743,21 @@ impl ThumbnailDb {
         Ok(count)
     }
     
+    /// 删除单个缩略图记录
+    pub fn delete_thumbnail(&self, key: &str) -> SqliteResult<()> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+        
+        // 删除缩略图记录
+        conn.execute("DELETE FROM thumbs WHERE key = ?1", params![key])?;
+        
+        // 同时删除失败记录（允许重新生成）
+        let _ = conn.execute("DELETE FROM failed_thumbnails WHERE key = ?1", params![key]);
+        
+        Ok(())
+    }
+    
     /// 获取数据库详细统计信息（包含文件夹数量和数据库大小）
     pub fn get_detailed_stats(&self) -> SqliteResult<(usize, usize, i64)> {
         self.open()?;

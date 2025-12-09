@@ -350,6 +350,7 @@ pub fn run() {
             commands::cleanup_expired_entries_v3,
             commands::cleanup_by_path_prefix_v3,
             commands::vacuum_thumbnail_db_v3,
+            commands::reload_thumbnail_v3,
             // EMM JSON 缓存命令
             commands::save_emm_json,
             commands::batch_save_emm_json,

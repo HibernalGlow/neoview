@@ -909,6 +909,38 @@ impl ThumbnailServiceV3 {
             .map_err(|e| format!("压缩失败: {}", e))
     }
     
+    /// 删除单个缩略图缓存（内存 + 数据库 + 索引）
+    pub fn remove_thumbnail(&self, path: &str) -> Result<(), String> {
+        // 1. 从内存缓存中删除
+        if let Ok(mut cache) = self.memory_cache.write() {
+            if let Some(blob) = cache.pop(path) {
+                self.memory_cache_bytes.fetch_sub(blob.len(), Ordering::SeqCst);
+            }
+        }
+        
+        // 2. 从保存队列中删除（可能还未持久化）
+        if let Ok(mut queue) = self.save_queue.lock() {
+            queue.remove(path);
+        }
+        
+        // 3. 从数据库索引中删除
+        if let Ok(mut index) = self.db_index.write() {
+            index.remove(path);
+        }
+        if let Ok(mut index) = self.folder_db_index.write() {
+            index.remove(path);
+        }
+        
+        // 4. 从失败索引中删除（允许重新生成）
+        if let Ok(mut index) = self.failed_index.write() {
+            index.remove(path);
+        }
+        
+        // 5. 从数据库中删除
+        self.db.delete_thumbnail(path)
+            .map_err(|e| format!("删除数据库缓存失败: {}", e))
+    }
+    
     /// 检查内存压力并自动清理（当超过阈值时清理一半缓存）
     pub fn check_memory_pressure(&self, max_bytes: usize) {
         let current_bytes = self.memory_cache_bytes.load(Ordering::SeqCst);

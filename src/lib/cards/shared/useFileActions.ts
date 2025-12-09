@@ -539,6 +539,7 @@ export interface SystemActions {
 	handleOpenInExplorer: (item: FsItem) => Promise<void>;
 	handleOpenWithSystem: (item: FsItem) => Promise<void>;
 	handleAddBookmark: (item: FsItem) => void;
+	handleReloadThumbnail: (item: FsItem) => Promise<void>;
 }
 
 export function createSystemActions(): SystemActions {
@@ -555,10 +556,24 @@ export function createSystemActions(): SystemActions {
 		showSuccessToast('已添加书签', item.name);
 	};
 
+	const handleReloadThumbnail = async (item: FsItem) => {
+		try {
+			const { reloadThumbnail } = await import('$lib/stores/thumbnailStoreV3.svelte');
+			// 获取父目录作为 currentDir
+			const lastSep = Math.max(item.path.lastIndexOf('/'), item.path.lastIndexOf('\\'));
+			const parentDir = lastSep > 0 ? item.path.substring(0, lastSep) : '';
+			await reloadThumbnail(item.path, parentDir);
+			showSuccessToast('缩略图已重载', item.name);
+		} catch (err) {
+			showErrorToast('重载失败', err instanceof Error ? err.message : String(err));
+		}
+	};
+
 	return {
 		handleOpenInExplorer,
 		handleOpenWithSystem,
-		handleAddBookmark
+		handleAddBookmark,
+		handleReloadThumbnail
 	};
 }
 

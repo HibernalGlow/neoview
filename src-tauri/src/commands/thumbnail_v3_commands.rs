@@ -309,3 +309,19 @@ pub async fn vacuum_thumbnail_db_v3(
         Err("缩略图服务未初始化".to_string())
     }
 }
+
+/// 重载单个缩略图（删除缓存并请求重新生成）
+#[tauri::command]
+pub async fn reload_thumbnail_v3(
+    app: AppHandle,
+    path: String,
+) -> Result<(), String> {
+    if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
+        // 删除内存缓存和数据库记录
+        state.service.remove_thumbnail(&path)?;
+        log_info!("🔄 Removed thumbnail cache for: {}", path);
+        Ok(())
+    } else {
+        Err("缩略图服务未初始化".to_string())
+    }
+}

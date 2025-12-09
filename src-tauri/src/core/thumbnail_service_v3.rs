@@ -16,7 +16,7 @@ use std::num::NonZeroUsize;
 use std::panic;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Condvar, Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
@@ -78,27 +78,12 @@ pub enum ThumbnailFileType {
     Other,
 }
 
-/// 任务优先级（参考 NeeView JobCategories）
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum TaskPriority {
-    /// 最高优先级：当前可见区域中心 (10)
-    ViewCenter = 10,
-    /// 高优先级：当前可见区域 (8)
-    Visible = 8,
-    /// 中优先级：预加载区域 (5)
-    Prefetch = 5,
-    /// 低优先级：文件夹缩略图 (0)
-    Background = 0,
-}
-
 /// 生成任务
 #[derive(Clone)]
 struct GenerateTask {
     path: String,
     directory: String,
     file_type: ThumbnailFileType,
-    /// 任务优先级（参考 NeeView）
-    priority: TaskPriority,
     /// 距离中心的距离（越小优先级越高）
     center_distance: usize,
     /// 原始索引（用于平局时保持原顺序）
@@ -106,20 +91,15 @@ struct GenerateTask {
 }
 
 impl GenerateTask {
-    /// 比较优先级：优先级高的先处理，同优先级按中心距离
+    /// 比较优先级：中心距离越小优先级越高
     fn priority_cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // 先按优先级降序（数字大的优先）
-        match (other.priority as u8).cmp(&(self.priority as u8)) {
+        // 先按中心距离升序（距离小的优先）
+        match self.center_distance.cmp(&other.center_distance) {
             std::cmp::Ordering::Equal => {
-                // 同优先级按中心距离升序（距离小的优先）
-                match self.center_distance.cmp(&other.center_distance) {
-                    std::cmp::Ordering::Equal => {
-                        self.original_index.cmp(&other.original_index)
-                    }
-                    dist_order => dist_order,
-                }
+                // 距离相同时，按原始索引排序
+                self.original_index.cmp(&other.original_index)
             }
-            prio_order => prio_order,
+            other_order => other_order,
         }
     }
 }
@@ -197,9 +177,6 @@ pub struct ThumbnailServiceV3 {
     
     /// 最后一次保存队列刷新时间
     last_flush: Arc<Mutex<Instant>>,
-    
-    /// 任务队列条件变量（事件驱动，参考 NeeView ManualResetEventSlim）
-    task_condvar: Arc<(Mutex<bool>, Condvar)>,
 }
 
 impl ThumbnailServiceV3 {
@@ -231,7 +208,6 @@ impl ThumbnailServiceV3 {
             failed_index: Arc::new(RwLock::new(failed_index)),
             save_queue: Arc::new(Mutex::new(HashMap::new())),
             last_flush: Arc::new(Mutex::new(Instant::now())),
-            task_condvar: Arc::new((Mutex::new(false), Condvar::new())),
         }
     }
     
@@ -288,7 +264,6 @@ impl ThumbnailServiceV3 {
             let folder_db_index = Arc::clone(&self.folder_db_index);
             let failed_index = Arc::clone(&self.failed_index);
             let save_queue = Arc::clone(&self.save_queue);
-            let task_condvar = Arc::clone(&self.task_condvar);
             
             let handle = thread::spawn(move || {
                 log_debug!("🔧 Worker {} started", i);
@@ -423,12 +398,8 @@ impl ThumbnailServiceV3 {
                         
                         active_workers.fetch_sub(1, Ordering::SeqCst);
                     } else {
-                        // 队列为空，使用 Condvar 等待（事件驱动，参考 NeeView ManualResetEventSlim）
-                        let (lock, cvar) = &*task_condvar;
-                        if let Ok(guard) = lock.lock() {
-                            // 等待最多 50ms，避免饥饿但仍保持响应
-                            let _ = cvar.wait_timeout(guard, Duration::from_millis(50));
-                        }
+                        // 队列为空，短暂休眠
+                        thread::sleep(Duration::from_millis(10));
                     }
                 }
                 
@@ -655,7 +626,7 @@ impl ThumbnailServiceV3 {
                 // 收集已有路径用于去重
                 let existing: std::collections::HashSet<_> = queue.iter().map(|t| t.path.clone()).collect();
                 
-                // 计算每个路径到中心的距离并创建任务（参考 NeeView 优先级策略）
+                // 计算每个路径到中心的距离并创建任务
                 let mut new_tasks: Vec<GenerateTask> = generate_paths
                     .into_iter()
                     .filter(|(path, _, _)| !existing.contains(path))
@@ -665,27 +636,10 @@ impl ThumbnailServiceV3 {
                         } else {
                             center - original_index
                         };
-                        
-                        // 根据 NeeView 策略设置优先级：
-                        // - 文件夹始终为 Background (0)
-                        // - 中心位置为 ViewCenter (10)
-                        // - 可见区域（距离<=5）为 Visible (8)
-                        // - 预加载区域为 Prefetch (5)
-                        let priority = if matches!(file_type, ThumbnailFileType::Folder) {
-                            TaskPriority::Background
-                        } else if center_distance == 0 {
-                            TaskPriority::ViewCenter
-                        } else if center_distance <= 5 {
-                            TaskPriority::Visible
-                        } else {
-                            TaskPriority::Prefetch
-                        };
-                        
                         GenerateTask {
                             path,
                             directory: current_dir.clone(),
                             file_type,
-                            priority,
                             center_distance,
                             original_index,
                         }
@@ -696,15 +650,8 @@ impl ThumbnailServiceV3 {
                 new_tasks.sort_by(|a, b| a.priority_cmp(b));
                 
                 // 插入到队列前端（新任务优先于旧任务）
-                let has_new_tasks = !new_tasks.is_empty();
                 for task in new_tasks.into_iter().rev() {
                     queue.push_front(task);
-                }
-                
-                // 通知 worker 有新任务（事件驱动，参考 NeeView QueueChanged 事件）
-                if has_new_tasks {
-                    let (_, cvar) = &*self.task_condvar;
-                    cvar.notify_all();
                 }
             }
         }

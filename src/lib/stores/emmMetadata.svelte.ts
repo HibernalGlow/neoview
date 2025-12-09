@@ -653,3 +653,13 @@ export const collectTagMap = derived(emmMetadataStore, ($state) => {
 export { isCollectTagHelper } from './emm/helpers';
 export { emmTranslationStore } from './emm/translation';
 
+// 自动初始化 EMM 数据库（应用启动时）
+// 使用 setTimeout 确保在 DOM 准备好后执行
+if (typeof window !== 'undefined') {
+	setTimeout(() => {
+		console.debug('[EMMStore] 自动初始化 EMM 元数据...');
+		emmMetadataStore.initialize().catch((err) => {
+			console.error('[EMMStore] 自动初始化失败:', err);
+		});
+	}, 100);
+}

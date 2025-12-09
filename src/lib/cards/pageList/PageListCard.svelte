@@ -11,6 +11,7 @@ import { bookStore } from '$lib/stores/book.svelte';
 import { thumbnailCacheStore, type ThumbnailEntry } from '$lib/stores/thumbnailCache.svelte';
 import { thumbnailManager } from '$lib/utils/thumbnailManager';
 import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
+import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 import type { Page } from '$lib/types';
 import PageContextMenu from './PageContextMenu.svelte';
 
@@ -69,10 +70,11 @@ const filteredItems = $derived(
 const currentPageIndex = $derived(bookStore.currentPageIndex);
 
 // 获取超分状态
+// 使用 imagePool.hasUpscaled() 判断，与 UpscaleLayer 保持一致
 const upscaleEnabled = $derived(upscaleStore.enabled);
 
 function isPageUpscaled(pageIndex: number): boolean {
-	return bookStore.getPageUpscaleStatus(pageIndex) === 'done';
+	return imagePool.hasUpscaled(pageIndex);
 }
 
 // 自动滚动到当前页

@@ -7,6 +7,7 @@
   import { bookStore } from '$lib/stores/book.svelte';
   import { upscaleState } from '$lib/stores/upscale/upscaleState.svelte';
   import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
+  import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
   import { settingsManager } from '$lib/settings/settingsManager';
   import type { ReadingDirection } from '$lib/settings/settingsManager';
   import { LayerZIndex } from '../types/layer';
@@ -50,12 +51,12 @@
   );
 
   // 计算已完成超分的页面数（用于超分实时进度条）
+  // 使用 imagePool.hasUpscaled() 判断，与 UpscaleLayer 保持一致
   const upscaleEnabled = $derived(upscaleStore.enabled);
   const upscaledPagesCount = $derived(() => {
     let count = 0;
     for (let i = 0; i < totalPages; i++) {
-      const status = bookStore.getPageUpscaleStatus(i);
-      if (status === 'done') {
+      if (imagePool.hasUpscaled(i)) {
         count++;
       }
     }

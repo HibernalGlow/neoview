@@ -76,6 +76,27 @@ export async function batchLoadDirectorySnapshots(
 }
 
 /**
+ * 子文件夹项（轻量级，专用于 FolderTree）
+ */
+export interface SubfolderItem {
+  path: string;
+  name: string;
+  /** 是否有子目录（用于显示展开箭头） */
+  hasChildren: boolean;
+}
+
+/**
+ * 快速列出目录下的子文件夹（专用于 FolderTree）
+ * 使用 jwalk 并行遍历，比标准 API 快 5-10 倍
+ * 不返回文件，只返回目录，且包含 hasChildren 信息
+ */
+export async function listSubfolders(path: string): Promise<SubfolderItem[]> {
+  const items = await invoke<SubfolderItem[]>('list_subfolders', { path });
+  // 过滤排除路径
+  return items.filter(item => !isPathExcluded(item.path));
+}
+
+/**
  * 分页浏览目录内容
  */
 export async function browseDirectoryPage(

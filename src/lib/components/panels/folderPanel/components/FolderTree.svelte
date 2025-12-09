@@ -227,35 +227,35 @@
 		roots = [...roots];
 
 		try {
-			// 使用带缓存的 API
-			const snapshot = await FileSystemAPI.loadDirectorySnapshot(node.path);
-			const folders = snapshot.items.filter((item) => item.isDir);
+			// 使用轻量级 API（只返回子目录，带 hasChildren 信息）
+			const subfolders = await FileSystemAPI.listSubfolders(node.path);
 
-			node.children = folders.map((folder) => ({
+			node.children = subfolders.map((folder) => ({
 				path: folder.path,
 				name: folder.name,
 				isRoot: false,
 				expanded: false,
 				loading: false,
 				children: [],
-				hasChildren: true // 默认假设有子目录
+				hasChildren: folder.hasChildren
 			}));
 
 			// 保存到缓存
-			const childPaths = folders.map((f) => f.path);
+			const childPaths = subfolders.map((f) => f.path);
 			const parentCacheNode = TreeCache.createCachedNode(
 				node.path,
 				node.name,
 				node.isRoot,
-				childPaths,
-				snapshot.mtime
+				childPaths
 			);
 			parentCacheNode.expanded = node.expanded;
 			parentCacheNode.hasChildren = childPaths.length > 0;
 
-			const childCacheNodes = folders.map((f) =>
-				TreeCache.createCachedNode(f.path, f.name, false, [])
-			);
+			const childCacheNodes = subfolders.map((f) => {
+				const cacheNode = TreeCache.createCachedNode(f.path, f.name, false, []);
+				cacheNode.hasChildren = f.hasChildren;
+				return cacheNode;
+			});
 
 			// 异步保存，不阻塞 UI
 			Promise.all([
@@ -263,7 +263,7 @@
 				TreeCache.saveNodes(childCacheNodes)
 			]).catch(() => {});
 
-			console.log(`[FolderTree] 加载目录: ${node.path} (${folders.length} 子目录)`);
+			console.log(`[FolderTree] 加载目录: ${node.path} (${subfolders.length} 子目录)`);
 		} catch (err) {
 			console.error('[FolderTree] Failed to load children:', err);
 			node.error = err instanceof Error ? err.message : '加载失败';

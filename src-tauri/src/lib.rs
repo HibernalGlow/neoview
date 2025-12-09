@@ -170,6 +170,7 @@ pub fn run() {
             commands::browse_directory,
             commands::fs_commands::load_directory_snapshot,
             commands::fs_commands::batch_load_directory_snapshots,
+            commands::fs_commands::list_subfolders,
             commands::get_images_in_directory,
             // File system commands (paginated/streaming)
             commands::fs_commands::browse_directory_page,

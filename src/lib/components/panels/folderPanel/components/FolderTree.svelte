@@ -121,16 +121,16 @@
 		}
 	}
 
-	// 递归恢复子节点
+	// 递归恢复子节点（优化：并行恢复）
 	async function restoreChildren(childPaths: string[], expandedSet: Set<string>): Promise<TreeNode[]> {
 		if (childPaths.length === 0) return [];
 
 		const cachedNodes = await TreeCache.getCachedNodes(childPaths);
-		const children: TreeNode[] = [];
-
-		for (const path of childPaths) {
+		
+		// 并行处理所有子节点
+		const nodePromises = childPaths.map(async (path) => {
 			const cached = cachedNodes.get(path);
-			if (!cached) continue;
+			if (!cached) return null;
 
 			const node: TreeNode = {
 				path: cached.path,
@@ -142,20 +142,24 @@
 				hasChildren: cached.hasChildren
 			};
 
-			// 递归恢复展开的子节点
+			// 并行递归恢复展开的子节点
 			if (node.expanded && cached.childPaths.length > 0) {
 				node.children = await restoreChildren(cached.childPaths, expandedSet);
 			}
 
-			children.push(node);
-		}
+			return node;
+		});
 
-		return children;
+		const results = await Promise.all(nodePromises);
+		return results.filter((n): n is TreeNode => n !== null);
 	}
 
 	// 加载根目录（Windows 盘符）
 	async function loadRoots() {
 		loadingRoots = true;
+
+		// 优化：预加载缓存到内存（一次性读取所有节点）
+		await TreeCache.preloadCache();
 
 		// 先尝试从缓存恢复
 		const restored = await restoreFromCache();

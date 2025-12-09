@@ -39,6 +39,37 @@ const META_STORE = 'meta';
 // 缓存有效期: 7天
 const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 
+// ============ Memory Cache ============
+// 内存缓存层：避免频繁访问 IndexedDB
+const memoryCache = new Map<string, CachedTreeNode>();
+let memoryCachePopulated = false;
+
+/**
+ * 预加载所有缓存节点到内存（启动时调用一次）
+ */
+export async function preloadCache(): Promise<void> {
+  if (memoryCachePopulated) return;
+  
+  try {
+    const db = await getDb();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const allNodes = await store.getAll();
+    
+    const now = Date.now();
+    for (const node of allNodes) {
+      if (now - node.cachedAt <= CACHE_TTL) {
+        memoryCache.set(node.path, node);
+      }
+    }
+    
+    memoryCachePopulated = true;
+    console.log(`[FolderTreeCache] 预加载 ${memoryCache.size} 节点到内存`);
+  } catch (e) {
+    console.error('[FolderTreeCache] preloadCache error:', e);
+  }
+}
+
 // ============ Database ============
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
@@ -66,9 +97,22 @@ async function getDb(): Promise<IDBPDatabase> {
 // ============ Cache API ============
 
 /**
- * 获取缓存的节点
+ * 获取缓存的节点（优化：先查内存缓存）
  */
 export async function getCachedNode(path: string): Promise<CachedTreeNode | null> {
+  // 优先从内存缓存获取
+  if (memoryCachePopulated) {
+    const cached = memoryCache.get(path);
+    if (cached) {
+      if (Date.now() - cached.cachedAt <= CACHE_TTL) {
+        return cached;
+      }
+      memoryCache.delete(path);
+    }
+    return null;
+  }
+  
+  // 回退到 IndexedDB
   try {
     const db = await getDb();
     const node = await db.get(STORE_NAME, path);
@@ -89,12 +133,25 @@ export async function getCachedNode(path: string): Promise<CachedTreeNode | null
 }
 
 /**
- * 批量获取缓存的节点（优化：并行获取）
+ * 批量获取缓存的节点（优化：内存缓存 + 并行获取）
  */
 export async function getCachedNodes(paths: string[]): Promise<Map<string, CachedTreeNode>> {
   const result = new Map<string, CachedTreeNode>();
   if (paths.length === 0) return result;
   
+  // 优先从内存缓存获取
+  if (memoryCachePopulated) {
+    const now = Date.now();
+    for (const path of paths) {
+      const cached = memoryCache.get(path);
+      if (cached && now - cached.cachedAt <= CACHE_TTL) {
+        result.set(path, cached);
+      }
+    }
+    return result;
+  }
+  
+  // 回退到 IndexedDB
   try {
     const db = await getDb();
     const tx = db.transaction(STORE_NAME, 'readonly');
@@ -133,31 +190,41 @@ export async function getCachedNodes(paths: string[]): Promise<Map<string, Cache
 }
 
 /**
- * 保存节点到缓存
+ * 保存节点到缓存（同时更新内存缓存）
  */
 export async function saveNode(node: CachedTreeNode): Promise<void> {
+  const nodeWithTime = { ...node, cachedAt: Date.now() };
+  
+  // 更新内存缓存
+  memoryCache.set(node.path, nodeWithTime);
+  
+  // 异步写入 IndexedDB
   try {
     const db = await getDb();
-    await db.put(STORE_NAME, {
-      ...node,
-      cachedAt: Date.now(),
-    });
+    await db.put(STORE_NAME, nodeWithTime);
   } catch (e) {
     console.error('[FolderTreeCache] saveNode error:', e);
   }
 }
 
 /**
- * 批量保存节点（优化：并行写入）
+ * 批量保存节点（优化：内存缓存 + 并行写入 IndexedDB）
  */
 export async function saveNodes(nodes: CachedTreeNode[]): Promise<void> {
   if (nodes.length === 0) return;
   
+  const now = Date.now();
+  
+  // 先更新内存缓存（同步，立即生效）
+  for (const node of nodes) {
+    memoryCache.set(node.path, { ...node, cachedAt: now });
+  }
+  
+  // 异步写入 IndexedDB
   try {
     const db = await getDb();
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
-    const now = Date.now();
     
     // 优化：并行写入所有节点
     const putPromises = nodes.map(node => 
@@ -175,9 +242,16 @@ export async function saveNodes(nodes: CachedTreeNode[]): Promise<void> {
 }
 
 /**
- * 更新节点的展开状态
+ * 更新节点的展开状态（同时更新内存缓存）
  */
 export async function updateNodeExpanded(path: string, expanded: boolean): Promise<void> {
+  // 先更新内存缓存
+  const cached = memoryCache.get(path);
+  if (cached) {
+    cached.expanded = expanded;
+  }
+  
+  // 异步更新 IndexedDB
   try {
     const db = await getDb();
     const node = await db.get(STORE_NAME, path);
@@ -272,9 +346,21 @@ async function cleanupExpiredNodes(paths: string[]): Promise<void> {
 }
 
 /**
- * 获取所有展开的节点路径
+ * 获取所有展开的节点路径（优化：使用内存缓存）
  */
 export async function getExpandedPaths(): Promise<string[]> {
+  // 优先从内存缓存获取
+  if (memoryCachePopulated) {
+    const paths: string[] = [];
+    for (const [path, node] of memoryCache) {
+      if (node.expanded) {
+        paths.push(path);
+      }
+    }
+    return paths;
+  }
+  
+  // 回退到 IndexedDB
   try {
     const db = await getDb();
     const tx = db.transaction(STORE_NAME, 'readonly');
@@ -290,9 +376,21 @@ export async function getExpandedPaths(): Promise<string[]> {
 }
 
 /**
- * 获取缓存统计信息
+ * 获取缓存统计信息（优化：使用内存缓存）
  */
 export async function getCacheStats(): Promise<TreeCacheStats> {
+  // 优先从内存缓存获取
+  if (memoryCachePopulated) {
+    let expandedCount = 0;
+    let lastUpdated = 0;
+    for (const node of memoryCache.values()) {
+      if (node.expanded) expandedCount++;
+      if (node.cachedAt > lastUpdated) lastUpdated = node.cachedAt;
+    }
+    return { totalNodes: memoryCache.size, expandedNodes: expandedCount, lastUpdated };
+  }
+  
+  // 回退到 IndexedDB
   try {
     const db = await getDb();
     const tx = db.transaction(STORE_NAME, 'readonly');

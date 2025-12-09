@@ -15,12 +15,16 @@
 		Eye,
 		BookOpen,
 		PanelRight,
-		X
+		X,
+		HardDrive,
+		Clock,
+		Play
 	} from '@lucide/svelte';
 	import type { FsItem } from '$lib/types';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import FolderRatingBadge from './FolderRatingBadge.svelte';
 	import TagChip from '$lib/components/ui/TagChip.svelte';
+	import MetadataBadge from '$lib/components/ui/MetadataBadge.svelte';
 	import type { EMMTranslationDict } from '$lib/api/emm';
 	import { hoverPreviewEnabled, hoverPreviewDelayMs } from '$lib/stores/hoverPreviewSettings.svelte';
 
@@ -455,38 +459,68 @@
 			</div>
 		{/if}
 
-		<div class="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-sm">
+		<div class="mt-1 flex flex-wrap items-center gap-1.5">
 			<!-- 视频进度信息（时:分:秒格式） -->
 			{#if videoPosition !== undefined && videoDuration !== undefined && videoDuration > 0}
-				<span>视频: {formatDuration(videoPosition)}/{formatDuration(videoDuration)}</span>
+				<MetadataBadge
+					text="{formatDuration(videoPosition)}/{formatDuration(videoDuration)}"
+					icon={Play}
+					tooltip="视频进度"
+					size="sm"
+					variant="info"
+				/>
 			{:else if currentPage !== undefined && totalPages !== undefined && totalPages > 0}
 				<!-- 非视频进度信息 -->
-				<span>进度: {currentPage}/{totalPages}</span>
+				<MetadataBadge
+					text="{currentPage}/{totalPages}"
+					icon={BookOpen}
+					tooltip="阅读进度"
+					size="sm"
+					variant="info"
+				/>
 			{/if}
 			{#if showSizeAndModified}
-				<span>{item.isDir ? getFolderSizeDisplay() : formatSize(item.size || 0, false)}</span>
+				<MetadataBadge
+					text={item.isDir ? getFolderSizeDisplay() : formatSize(item.size || 0, false)}
+					icon={HardDrive}
+					tooltip="文件大小"
+					size="sm"
+				/>
 				{#if timestamp}
-					<span>· {formatTime(timestamp)}</span>
+					<MetadataBadge
+						text={formatTime(timestamp)}
+						icon={Clock}
+						tooltip="修改时间"
+						size="sm"
+					/>
 				{/if}
 			{:else}
 				{#if timestamp}
-					<span>{formatTime(timestamp)}</span>
+					<MetadataBadge
+						text={formatTime(timestamp)}
+						icon={Clock}
+						tooltip="修改时间"
+						size="sm"
+					/>
 				{/if}
 				{#if !currentPage && !timestamp}
-					<span>{item.isDir ? getFolderSizeDisplay() : formatSize(item.size || 0, false)}</span>
+					<MetadataBadge
+						text={item.isDir ? getFolderSizeDisplay() : formatSize(item.size || 0, false)}
+						icon={HardDrive}
+						tooltip="文件大小"
+						size="sm"
+					/>
 				{/if}
 			{/if}
 			<!-- 评分放在大小和时间后面 -->
 			{#if emmMetadata?.rating !== undefined && emmMetadata.rating > 0}
-				<Tooltip.Root>
-					<Tooltip.Trigger>
-						<span class="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-600 dark:text-amber-400">
-							<Star class="h-3 w-3 fill-current" />
-							<span class="font-medium">{emmMetadata.rating.toFixed(1)}</span>
-						</span>
-					</Tooltip.Trigger>
-					<Tooltip.Content><p>评分: {emmMetadata.rating.toFixed(2)}</p></Tooltip.Content>
-				</Tooltip.Root>
+				<MetadataBadge
+					text={emmMetadata.rating.toFixed(1)}
+					icon={Star}
+					tooltip="评分: {emmMetadata.rating.toFixed(2)}"
+					size="sm"
+					variant="warning"
+				/>
 			{/if}
 		</div>
 

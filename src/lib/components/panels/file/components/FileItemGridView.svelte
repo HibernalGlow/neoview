@@ -12,12 +12,16 @@
 		FolderOpen,
 		Package,
 		Video,
-		BookOpen
+		BookOpen,
+		HardDrive,
+		Clock,
+		Play
 	} from '@lucide/svelte';
 	import type { FsItem } from '$lib/types';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import FolderRatingBadge from './FolderRatingBadge.svelte';
 	import TagChip from '$lib/components/ui/TagChip.svelte';
+	import MetadataBadge from '$lib/components/ui/MetadataBadge.svelte';
 
 	interface Props {
 		item: FsItem;
@@ -296,22 +300,54 @@
 			</div>
 		{/if}
 
-		<div class="text-muted-foreground mt-1 text-xs">
+		<div class="mt-1 flex flex-wrap items-center gap-1">
 			<!-- 视频进度信息（时:分:秒格式） -->
 			{#if videoPosition !== undefined && videoDuration !== undefined && videoDuration > 0}
-				<span>{formatDuration(videoPosition)}/{formatDuration(videoDuration)}</span>
+				<MetadataBadge
+					text="{formatDuration(videoPosition)}/{formatDuration(videoDuration)}"
+					icon={Play}
+					tooltip="视频进度"
+					size="xs"
+					variant="info"
+				/>
 			{:else if currentPage !== undefined && totalPages !== undefined && totalPages > 0}
-				<span>{currentPage}/{totalPages}</span>
+				<MetadataBadge
+					text="{currentPage}/{totalPages}"
+					icon={BookOpen}
+					tooltip="阅读进度"
+					size="xs"
+					variant="info"
+				/>
 			{/if}
 			{#if showSizeAndModified}
-				<span>{item.isDir ? getFolderSizeDisplay() : formatSize(item.size || 0, false)}</span>
+				<MetadataBadge
+					text={item.isDir ? getFolderSizeDisplay() : formatSize(item.size || 0, false)}
+					icon={HardDrive}
+					tooltip="文件大小"
+					size="xs"
+				/>
 				{#if timestamp}
-					<span>· {formatTime(timestamp)}</span>
+					<MetadataBadge
+						text={formatTime(timestamp)}
+						icon={Clock}
+						tooltip="修改时间"
+						size="xs"
+					/>
 				{/if}
 			{:else if timestamp}
-				<span>{formatTime(timestamp)}</span>
+				<MetadataBadge
+					text={formatTime(timestamp)}
+					icon={Clock}
+					tooltip="修改时间"
+					size="xs"
+				/>
 			{:else if !(currentPage !== undefined && totalPages !== undefined && totalPages > 0)}
-				<span>{item.isDir ? getFolderSizeDisplay() : formatSize(item.size || 0, false)}</span>
+				<MetadataBadge
+					text={item.isDir ? getFolderSizeDisplay() : formatSize(item.size || 0, false)}
+					icon={HardDrive}
+					tooltip="文件大小"
+					size="xs"
+				/>
 			{/if}
 		</div>
 

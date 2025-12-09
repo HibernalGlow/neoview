@@ -81,6 +81,36 @@ function isPageUpscaled(pageIndex: number): boolean {
 	return imagePool.hasUpscaled(pageIndex);
 }
 
+// 获取页面超分状态类型
+type UpscaleStatusType = 'none' | 'pending' | 'processing' | 'completed' | 'skipped' | 'failed';
+
+function getPageUpscaleStatus(pageIndex: number): UpscaleStatusType {
+	void upscaleVersion;
+	if (!upscaleEnabled) return 'none';
+	
+	// 先检查是否已完成（imagePool 中有超分图）
+	if (imagePool.hasUpscaled(pageIndex)) return 'completed';
+	
+	// 获取 upscaleStore 中的状态
+	const status = upscaleStore.getPageStatus(pageIndex);
+	if (status === 'pending' || status === 'checking') return 'pending';
+	if (status === 'processing') return 'processing';
+	if (status === 'skipped') return 'skipped';
+	if (status === 'failed') return 'failed';
+	
+	return 'none';
+}
+
+// 状态标签配置
+const statusConfig: Record<UpscaleStatusType, { label: string; class: string } | null> = {
+	'none': null,
+	'pending': { label: '队列中', class: 'bg-amber-500/80 text-white' },
+	'processing': { label: '处理中', class: 'bg-blue-500/80 text-white animate-pulse' },
+	'completed': { label: '已超分', class: 'bg-green-500/80 text-white' },
+	'skipped': { label: '已跳过', class: 'bg-gray-500/80 text-white' },
+	'failed': { label: '失败', class: 'bg-red-500/80 text-white' },
+};
+
 // 自动滚动到当前页
 $effect(() => {
 	const idx = currentPageIndex;
@@ -213,6 +243,8 @@ async function requestThumbnail(pageIndex: number) {
 				{#each filteredItems as item (item.index)}
 					{@const isUpscaled = upscaleEnabled && isPageUpscaled(item.index)}
 					{@const isCurrentAndUpscaled = currentPageIndex === item.index && isUpscaled}
+					{@const upscaleStatus = getPageUpscaleStatus(item.index)}
+					{@const statusCfg = statusConfig[upscaleStatus]}
 					<button
 						data-page-index={item.index}
 						class="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors flex items-center gap-2 {currentPageIndex === item.index ? 'bg-primary/10' : ''} {isCurrentAndUpscaled ? 'upscaled-glow' : ''}"
@@ -221,6 +253,9 @@ async function requestThumbnail(pageIndex: number) {
 					>
 						<span class="text-xs font-mono font-semibold text-primary">#{item.index + 1}</span>
 						<span class="truncate flex-1">{item.name}</span>
+						{#if statusCfg}
+							<span class="px-1 py-0.5 text-[10px] font-medium rounded shrink-0 {statusCfg.class}">{statusCfg.label}</span>
+						{/if}
 						{#if currentPageIndex === item.index}
 							<span class="px-1 py-0.5 text-[10px] font-semibold bg-primary text-primary-foreground rounded shrink-0">当前</span>
 						{/if}
@@ -234,6 +269,8 @@ async function requestThumbnail(pageIndex: number) {
 					{@const thumb = getThumbnail(item.index)}
 					{@const isUpscaled = upscaleEnabled && isPageUpscaled(item.index)}
 					{@const isCurrentAndUpscaled = currentPageIndex === item.index && isUpscaled}
+					{@const upscaleStatus = getPageUpscaleStatus(item.index)}
+					{@const statusCfg = statusConfig[upscaleStatus]}
 					<button
 						data-page-index={item.index}
 						class="w-full text-left p-1.5 rounded hover:bg-muted transition-colors flex items-center gap-2 {currentPageIndex === item.index ? 'bg-primary/10' : ''} {isCurrentAndUpscaled ? 'upscaled-glow' : ''}"
@@ -251,8 +288,11 @@ async function requestThumbnail(pageIndex: number) {
 							{/if}
 						</div>
 						<div class="flex-1 min-w-0">
-							<div class="flex items-center gap-1">
+							<div class="flex items-center gap-1 flex-wrap">
 								<span class="text-xs font-mono font-semibold text-primary">#{item.index + 1}</span>
+								{#if statusCfg}
+									<span class="px-1 py-0.5 text-[10px] font-medium rounded {statusCfg.class}">{statusCfg.label}</span>
+								{/if}
 								{#if currentPageIndex === item.index}
 									<span class="px-1 py-0.5 text-[10px] font-semibold bg-primary text-primary-foreground rounded">当前</span>
 								{/if}

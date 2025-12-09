@@ -79,6 +79,7 @@ export interface FolderContextValue {
 	readonly effectiveInlineTreeMode: boolean;
 	readonly effectiveViewStyle: 'list' | 'content' | 'banner' | 'thumbnail' | undefined;
 	readonly effectiveSortConfig: { field: string; order: 'asc' | 'desc' } | undefined;
+	readonly effectiveFolderTreeConfig: { visible: boolean; layout: string; size: number } | null;
 	
 	// ============ UI 状态 ============
 	contextMenu: ContextMenuState;
@@ -200,6 +201,12 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 		undefined
 	);
 	
+	const effectiveFolderTreeConfig = $derived(
+		panelMode === 'history' ? virtualPanelSettingsStore.historyFolderTreeConfig :
+		panelMode === 'bookmark' ? virtualPanelSettingsStore.bookmarkFolderTreeConfig :
+		null // null 表示使用全局 store
+	);
+	
 	// UI 状态
 	let contextMenu = $state<ContextMenuState>({ x: 0, y: 0, item: null, visible: false });
 	let clipboardItem = $state<ClipboardState | null>(null);
@@ -278,6 +285,7 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 		get effectiveInlineTreeMode() { return effectiveInlineTreeMode; },
 		get effectiveViewStyle() { return effectiveViewStyle; },
 		get effectiveSortConfig() { return effectiveSortConfig; },
+		get effectiveFolderTreeConfig() { return effectiveFolderTreeConfig; },
 		
 		// UI 状态
 		get contextMenu() { return contextMenu; },

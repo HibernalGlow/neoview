@@ -28,24 +28,38 @@
 	// ==================== Context ====================
 	const ctx = getFolderContext();
 	
-	// Store 引用（需要用 $ 前缀）
+	// Store 引用
 	const { folderTreeConfig } = ctx;
+	
+	// 全局 store 订阅的本地状态
+	let globalFolderTreeConfigValue = $state<{ visible: boolean; layout: string; size: number }>({ visible: false, layout: 'left', size: 200 });
+	
+	// 订阅全局 store
+	$effect(() => {
+		const unsub = folderTreeConfig.subscribe(v => globalFolderTreeConfigValue = v);
+		return () => unsub();
+	});
+	
+	// 有效的文件树配置（虚拟模式使用 effectiveFolderTreeConfig，否则使用全局 store）
+	let effectiveTreeConfig = $derived(
+		ctx.effectiveFolderTreeConfig ?? globalFolderTreeConfigValue
+	);
 
 	// ==================== 树调整 ====================
 	function startTreeResize(e: MouseEvent) {
 		e.preventDefault();
 		ctx.isResizingTree = true;
-		const layout = get(ctx.folderTreeConfig).layout;
+		const layout = effectiveTreeConfig.layout;
 		// 水平布局（左/右）使用 X 坐标，垂直布局（上/下）使用 Y 坐标
 		ctx.resizeStartPos = (layout === 'left' || layout === 'right') ? e.clientX : e.clientY;
-		ctx.resizeStartSize = get(ctx.folderTreeConfig).size;
+		ctx.resizeStartSize = effectiveTreeConfig.size;
 		document.addEventListener('mousemove', onTreeResize);
 		document.addEventListener('mouseup', stopTreeResize);
 	}
 
 	function onTreeResize(e: MouseEvent) {
 		if (!ctx.isResizingTree) return;
-		const layout = get(ctx.folderTreeConfig).layout;
+		const layout = effectiveTreeConfig.layout;
 		let delta: number;
 		
 		switch (layout) {
@@ -131,26 +145,26 @@
 
 <div class="relative flex-1 overflow-hidden">
 	<!-- 文件夹树 -->
-	{#if $folderTreeConfig.visible}
+	{#if effectiveTreeConfig.visible}
 		<div
 			class="border-muted bg-muted/10 absolute z-10 overflow-auto"
-			class:border-b={$folderTreeConfig.layout === 'top'}
-			class:border-t={$folderTreeConfig.layout === 'bottom'}
-			class:border-r={$folderTreeConfig.layout === 'left'}
-			class:border-l={$folderTreeConfig.layout === 'right'}
-			style={getTreeContainerStyle($folderTreeConfig.layout, $folderTreeConfig.size)}
+			class:border-b={effectiveTreeConfig.layout === 'top'}
+			class:border-t={effectiveTreeConfig.layout === 'bottom'}
+			class:border-r={effectiveTreeConfig.layout === 'left'}
+			class:border-l={effectiveTreeConfig.layout === 'right'}
+			style={getTreeContainerStyle(effectiveTreeConfig.layout, effectiveTreeConfig.size)}
 		>
 			<FolderTree onNavigate={onNavigate} onContextMenu={onItemContextMenu} />
 		</div>
 		<!-- 调整手柄 -->
 		<div
-			class="hover:bg-primary/20 absolute z-20 transition-colors {isHorizontalLayout($folderTreeConfig.layout)
+			class="hover:bg-primary/20 absolute z-20 transition-colors {isHorizontalLayout(effectiveTreeConfig.layout)
 				? 'top-0 bottom-0 w-2 cursor-ew-resize'
 				: 'right-0 left-0 h-2 cursor-ns-resize'}"
-			style={getResizeHandleStyle($folderTreeConfig.layout, $folderTreeConfig.size)}
+			style={getResizeHandleStyle(effectiveTreeConfig.layout, effectiveTreeConfig.size)}
 			onmousedown={startTreeResize}
 			role="separator"
-			aria-orientation={isHorizontalLayout($folderTreeConfig.layout) ? 'vertical' : 'horizontal'}
+			aria-orientation={isHorizontalLayout(effectiveTreeConfig.layout) ? 'vertical' : 'horizontal'}
 			tabindex="-1"
 		></div>
 	{/if}
@@ -158,7 +172,7 @@
 	<!-- 文件列表区域 -->
 	<div
 		class="file-list-container bg-muted/10 absolute inset-0 overflow-hidden"
-		style={getFileListStyle($folderTreeConfig.visible, $folderTreeConfig.layout, $folderTreeConfig.size)}
+		style={getFileListStyle(effectiveTreeConfig.visible, effectiveTreeConfig.layout, effectiveTreeConfig.size)}
 	>
 		{#each ctx.displayTabs as tab (tab.id)}
 			<div

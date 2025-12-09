@@ -15,6 +15,7 @@
 	
 	import { getFolderContext } from '../context/FolderContext.svelte';
 	import { folderTabActions, isVirtualPath } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
+	import { virtualPanelSettingsStore } from '$lib/stores/virtualPanelSettings.svelte';
 	import { directoryTreeCache } from '$lib/components/panels/folderPanel/utils/directoryTreeCache';
 	import { loadVirtualPathData } from '$lib/components/panels/folderPanel/utils/virtualPathLoader';
 	import { showSuccessToast } from '$lib/utils/toast';
@@ -70,7 +71,13 @@
 
 	// ==================== 工具栏操作 ====================
 	function handleToggleFolderTree() {
-		folderTabActions.toggleFolderTree();
+		if (virtualMode === 'history') {
+			virtualPanelSettingsStore.toggleHistoryFolderTreeVisible();
+		} else if (virtualMode === 'bookmark') {
+			virtualPanelSettingsStore.toggleBookmarkFolderTreeVisible();
+		} else {
+			folderTabActions.toggleFolderTree();
+		}
 	}
 
 	function handleToggleDeleteStrategy() {
@@ -79,7 +86,13 @@
 	}
 
 	function handleToggleInlineTree() {
-		folderTabActions.toggleInlineTreeMode();
+		if (virtualMode === 'history') {
+			virtualPanelSettingsStore.toggleHistoryInlineTreeMode();
+		} else if (virtualMode === 'bookmark') {
+			virtualPanelSettingsStore.toggleBookmarkInlineTreeMode();
+		} else {
+			folderTabActions.toggleInlineTreeMode();
+		}
 	}
 
 	function handleToggleMigrationManager() {

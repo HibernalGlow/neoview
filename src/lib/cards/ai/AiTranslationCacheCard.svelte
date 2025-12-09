@@ -8,6 +8,7 @@ import { Database, Trash2, Download, Upload, RefreshCcw, HardDrive } from '@luci
 import { invoke } from '@tauri-apps/api/core';
 import { onMount } from 'svelte';
 import { confirm } from '$lib/stores/confirmDialog.svelte';
+import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
 
 let stats = $state(aiTranslationStore.getCacheStats());
 let dbCacheCount = $state<number | null>(null);
@@ -78,10 +79,10 @@ function handleImportCache() {
 			const entries = JSON.parse(text);
 			if (Array.isArray(entries)) {
 				aiTranslationStore.importCache(entries);
-				alert(`成功导入 ${entries.length} 条翻译缓存`);
+				showSuccessToast('导入成功', `成功导入 ${entries.length} 条翻译缓存`);
 			}
 		} catch (err) {
-			alert('导入失败，请检查文件格式');
+			showErrorToast('导入失败', '请检查文件格式');
 		}
 	};
 	input.click();

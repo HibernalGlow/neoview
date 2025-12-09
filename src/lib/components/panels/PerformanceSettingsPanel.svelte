@@ -8,6 +8,7 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import { Slider } from '$lib/components/ui/slider';
 	import { Button } from '$lib/components/ui/button';
+	import { showErrorToast } from '$lib/utils/toast';
 
 	// 使用独立字段，避免直接在对象属性上双向绑定造成复杂副作用
 	let cacheMemorySize = $state(512);
@@ -59,7 +60,7 @@
 			await savePerformanceSettings(settings);
 		} catch (err) {
 			console.error('Failed to save performance settings:', err);
-			alert('保存性能设置失败');
+			showErrorToast('保存性能设置失败');
 		}
 	}
 </script>

@@ -15,6 +15,7 @@
 		GripVertical
 	} from '@lucide/svelte';
 	import { confirm } from '$lib/stores/confirmDialog.svelte';
+	import { showInfoToast } from '$lib/utils/toast';
 
 	interface PlaylistItem {
 		path: string;
@@ -117,7 +118,7 @@
 
 	function addToPlaylist() {
 		// TODO: 打开文件选择对话框
-		alert('功能开发中：选择要添加的文件或文件夹');
+		showInfoToast('功能开发中', '选择要添加的文件或文件夹');
 	}
 </script>
 

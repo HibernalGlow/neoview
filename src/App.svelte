@@ -50,6 +50,7 @@
 	import Toast from '$lib/components/ui/toast.svelte';
 	import GlobalConfirmDialog from '$lib/components/ui/GlobalConfirmDialog.svelte';
 	import { confirm as confirmDialog } from '$lib/stores/confirmDialog.svelte';
+	import { showInfoToast, showErrorToast } from '$lib/utils/toast';
 	import SettingsOverlay from '$lib/components/SettingsOverlay.svelte';
 	import { settingsOverlayOpen } from '$lib/stores/settingsOverlay.svelte';
 	import { onMount } from 'svelte';
@@ -143,7 +144,7 @@
 
 		const archiveSettings = settingsManager.getSettings().archive;
 		if (!archiveSettings?.allowFileOperations) {
-			alert('请先在设置 > 压缩包中启用“允许压缩包文件操作”。');
+			showInfoToast('请先启用压缩包操作', '设置 > 压缩包 > 允许压缩包文件操作');
 			return;
 		}
 
@@ -164,7 +165,7 @@
 			console.info('✅ 压缩包页面已删除');
 		} catch (error) {
 			console.error('❌ 删除压缩包页面失败:', error);
-			alert('删除失败，请查看控制台日志。');
+			showErrorToast('删除失败', '请查看控制台日志');
 		}
 	}
 

@@ -12,6 +12,7 @@
 	import type { MouseGestureBinding, MouseWheelBinding } from '$lib/types/keyboard';
 	import { RotateCcw, Trash2, Plus } from '@lucide/svelte';
 	import { confirm } from '$lib/stores/confirmDialog.svelte';
+	import { showInfoToast } from '$lib/utils/toast';
 
 	// 设置状态
 	let mouseGestureEnabled = $state(true);
@@ -49,7 +50,7 @@
 	function startRecordingGesture(binding: MouseGestureBinding) {
 		recordingGesture = binding;
 		// TODO: 实际录制逻辑需要在 ImageViewer 中实现
-		alert('请在图像查看器中右键拖拽来录制手势');
+		showInfoToast('请在图像查看器中右键拖拽来录制手势');
 	}
 
 	function deleteGesture(pattern: string) {
@@ -230,7 +231,7 @@
 				</div>
 			{/each}
 
-			<Button variant="outline" class="w-full" onclick={() => alert('添加新手势功能即将推出')}>
+			<Button variant="outline" class="w-full" onclick={() => showInfoToast('添加新手势功能即将推出')}>
 				<Plus class="h-4 w-4 mr-2" />
 				添加新手势
 			</Button>
@@ -273,7 +274,7 @@
 			{/each}
 		</div>
 
-		<Button variant="outline" class="w-full" onclick={() => alert('添加新滚轮绑定功能即将推出')}>
+		<Button variant="outline" class="w-full" onclick={() => showInfoToast('添加新滚轮绑定功能即将推出')}>
 			<Plus class="h-4 w-4 mr-2" />
 			添加滚轮绑定
 		</Button>

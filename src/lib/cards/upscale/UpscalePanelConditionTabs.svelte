@@ -19,6 +19,7 @@ import ConditionHeader from './ConditionHeader.svelte';
 import ConditionMatchEditor from './ConditionMatchEditor.svelte';
 import ConditionActionEditor from './ConditionActionEditor.svelte';
 import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
+import { showErrorToast, showInfoToast } from '$lib/utils/toast';
 
 interface Props {
 	conditions: UpscaleCondition[];
@@ -72,7 +73,7 @@ function addPresetCondition(key: ConditionPresetKey) {
 }
 
 function deleteCondition(id: string) {
-	if (conditions.length <= 1) { alert('至少保留一个条件'); return; }
+	if (conditions.length <= 1) { showInfoToast('至少保留一个条件'); return; }
 	const next = conditions.filter(c => c.id !== id);
 	persistConditions(next);
 	if (activeTab === id) activeTab = next[0]?.id || '';
@@ -141,7 +142,7 @@ function confirmImport() {
 		activeTab = normalized[0]?.id ?? '';
 		persistConditions(normalized);
 	} catch (e) {
-		alert(`导入失败: ${e instanceof Error ? e.message : e}`);
+		showErrorToast('导入失败', e instanceof Error ? e.message : String(e));
 	}
 }
 

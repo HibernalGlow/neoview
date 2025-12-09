@@ -12,6 +12,7 @@
 	import { settingsManager } from '$lib/stores/settingsManager.svelte';
 	import { Upload, Download, RotateCcw } from '@lucide/svelte';
 	import { confirm } from '$lib/stores/confirmDialog.svelte';
+	import { showSuccessToast, showErrorToast, showInfoToast } from '$lib/utils/toast';
 
 	// 设置状态
 	let settings = $state({
@@ -125,7 +126,7 @@
 	function saveSettings() {
 		localStorage.setItem('neoview-settings', JSON.stringify(settings));
 		localStorage.setItem('neoview-keybindings', JSON.stringify(keyBindings));
-		alert('设置已保存！');
+		showSuccessToast('设置已保存');
 	}
 
 	async function resetSettings() {
@@ -148,10 +149,10 @@
 	async function exportSettings() {
 		try {
 			await settingsManager.exportToFile();
-			alert('设置已导出！');
+			showSuccessToast('设置已导出');
 		} catch (error) {
 			console.error('导出设置失败:', error);
-			alert('导出设置失败，请检查控制台。');
+			showErrorToast('导出设置失败', '请检查控制台');
 		}
 	}
 
@@ -166,11 +167,11 @@
 
 			try {
 				await settingsManager.importFromFile(file);
-				alert('设置已导入！页面将重新加载。');
+				showSuccessToast('设置已导入', '页面将重新加载');
 				location.reload();
 			} catch (error) {
 				console.error('导入设置失败:', error);
-				alert('导入设置失败，请检查文件格式。');
+				showErrorToast('导入设置失败', '请检查文件格式');
 			}
 		};
 		input.click();

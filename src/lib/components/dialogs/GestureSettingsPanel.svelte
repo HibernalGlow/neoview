@@ -12,6 +12,7 @@
 	import type { GestureBinding } from '$lib/types/keyboard';
 	import { RotateCcw, Trash2, Plus, Info } from '@lucide/svelte';
 	import { confirm } from '$lib/stores/confirmDialog.svelte';
+	import { showInfoToast } from '$lib/utils/toast';
 
 	// 设置状态
 	let touchGestureEnabled = $state(true);
@@ -269,7 +270,7 @@
 			<Button
 				variant="outline"
 				class="w-full"
-				onclick={() => alert('添加新手势绑定功能即将推出')}
+				onclick={() => showInfoToast('添加新手势绑定功能即将推出')}
 			>
 				<Plus class="h-4 w-4 mr-2" />
 				添加手势绑定
@@ -303,7 +304,7 @@
 		<Button
 			variant="outline"
 			class="w-full"
-			onclick={() => alert('手势测试功能需要在图像查看器中进行')}
+			onclick={() => showInfoToast('手势测试功能需要在图像查看器中进行')}
 		>
 			测试手势识别
 		</Button>

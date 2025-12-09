@@ -23,6 +23,16 @@ export function showErrorToast(title: string, description?: string) {
 	}));
 }
 
+export function showInfoToast(title: string, description?: string) {
+	window.dispatchEvent(new CustomEvent('show-toast', {
+		detail: {
+			type: 'info',
+			title,
+			description
+		}
+	}));
+}
+
 export function showToast(options: {
 	title: string;
 	description?: string;

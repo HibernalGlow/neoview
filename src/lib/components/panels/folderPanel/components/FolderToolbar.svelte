@@ -57,6 +57,8 @@ import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 import { folderThumbnailLoader, type WarmupProgress } from '$lib/utils/thumbnail';
 import { addExcludedPath, isPathExcluded, removeExcludedPath, getExcludedPaths } from '$lib/stores/excludedPaths.svelte';
 import { directoryTreeCache } from '../utils/directoryTreeCache';
+import { reloadThumbnail, hasThumbnail } from '$lib/stores/thumbnailStoreV3.svelte';
+import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
 import * as Progress from '$lib/components/ui/progress';
 import { Button } from '$lib/components/ui/button';
 import * as Tooltip from '$lib/components/ui/tooltip';
@@ -67,6 +69,7 @@ import {
 	tabCanGoBack,
 	tabCanGoForward,
 	tabCanGoUp,
+	tabSelectedItems,
 	tabCanGoBackTab,
 	tabCanGoForwardTab,
 	tabViewStyle,
@@ -515,6 +518,89 @@ async function handleCleanupInvalid() {
 		console.error('清理失效条目失败:', e);
 	} finally {
 		isCleaningInvalid = false;
+	}
+}
+
+// 批量重载缩略图状态
+let isReloadingThumbnails = $state(false);
+let reloadThumbnailsProgress = $state<{ current: number; total: number } | null>(null);
+
+// 批量重载当前文件夹下所有缩略图
+async function handleReloadAllThumbnails() {
+	const path = get(currentPathStore);
+	if (!path || isReloadingThumbnails) return;
+	
+	// 获取当前目录下的文件
+	const items = get(fileBrowserStore).items;
+	if (items.length === 0) {
+		showErrorToast('重载缩略图', '当前目录没有文件');
+		return;
+	}
+	
+	isReloadingThumbnails = true;
+	reloadThumbnailsProgress = { current: 0, total: items.length };
+	
+	try {
+		let reloadedCount = 0;
+		for (let i = 0; i < items.length; i++) {
+			const item = items[i];
+			reloadThumbnailsProgress = { current: i + 1, total: items.length };
+			
+			try {
+				await reloadThumbnail(item.path, path);
+				reloadedCount++;
+			} catch (e) {
+				console.debug(`重载缩略图失败: ${item.path}`, e);
+			}
+		}
+		
+		showSuccessToast('重载缩略图', `已重载 ${reloadedCount} 个缩略图`);
+	} catch (e) {
+		console.error('批量重载缩略图失败:', e);
+		showErrorToast('重载缩略图', '操作失败');
+	} finally {
+		isReloadingThumbnails = false;
+		reloadThumbnailsProgress = null;
+	}
+}
+
+// 批量重载选中项的缩略图
+async function handleReloadSelectedThumbnails() {
+	const path = get(currentPathStore);
+	if (!path || isReloadingThumbnails) return;
+	
+	// 获取选中的文件（使用正确的 store）
+	const selectedItemsSet = get(tabSelectedItems);
+	if (selectedItemsSet.size === 0) {
+		showErrorToast('重载缩略图', '没有选中的文件');
+		return;
+	}
+	
+	isReloadingThumbnails = true;
+	reloadThumbnailsProgress = { current: 0, total: selectedItemsSet.size };
+	
+	try {
+		let reloadedCount = 0;
+		let i = 0;
+		for (const itemPath of selectedItemsSet) {
+			i++;
+			reloadThumbnailsProgress = { current: i, total: selectedItemsSet.size };
+			
+			try {
+				await reloadThumbnail(itemPath, path);
+				reloadedCount++;
+			} catch (e) {
+				console.debug(`重载缩略图失败: ${itemPath}`, e);
+			}
+		}
+		
+		showSuccessToast('重载缩略图', `已重载 ${reloadedCount} 个缩略图`);
+	} catch (e) {
+		console.error('批量重载选中缩略图失败:', e);
+		showErrorToast('重载缩略图', '操作失败');
+	} finally {
+		isReloadingThumbnails = false;
+		reloadThumbnailsProgress = null;
 	}
 }
 </script>
@@ -1016,6 +1102,31 @@ async function handleCleanupInvalid() {
 					{:else if $currentPathStore}
 						<Button variant="destructive" size="sm" class="h-7 text-xs" onclick={() => $currentPathStore && removeExcludedPath($currentPathStore)}>
 							取消排除
+						</Button>
+					{/if}
+					<!-- 批量重载缩略图 -->
+					<Button 
+						variant="outline" 
+						size="sm" 
+						class="h-7 text-xs {isReloadingThumbnails ? 'text-blue-500 border-blue-500' : ''}"
+						onclick={handleReloadAllThumbnails}
+						disabled={isReloadingThumbnails}
+					>
+						<RefreshCw class="h-3 w-3 mr-1 {isReloadingThumbnails ? 'animate-spin' : ''}" />
+						{isReloadingThumbnails && reloadThumbnailsProgress 
+							? `重载中 (${reloadThumbnailsProgress.current}/${reloadThumbnailsProgress.total})` 
+							: '重载所有缩略图'}
+					</Button>
+					{#if multiSelectMode}
+						<Button 
+							variant="outline" 
+							size="sm" 
+							class="h-7 text-xs {isReloadingThumbnails ? 'text-blue-500 border-blue-500' : ''}"
+							onclick={handleReloadSelectedThumbnails}
+							disabled={isReloadingThumbnails}
+						>
+							<RefreshCw class="h-3 w-3 mr-1 {isReloadingThumbnails ? 'animate-spin' : ''}" />
+							重载选中缩略图
 						</Button>
 					{/if}
 				</div>

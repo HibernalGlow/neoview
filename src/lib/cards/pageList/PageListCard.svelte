@@ -71,13 +71,14 @@ const currentPageIndex = $derived(bookStore.currentPageIndex);
 
 // 获取超分状态
 // 使用 imagePool.hasUpscaled() 判断，与 UpscaleLayer 保持一致
-// 依赖 imagePool.version 触发响应式更新
+// 依赖 imagePool.version 和 upscaleStore.version 触发响应式更新
 const upscaleEnabled = $derived(upscaleStore.enabled);
-const upscaleVersion = $derived(imagePool.version);
+const imagePoolVersion = $derived(imagePool.version);
+const upscaleStoreVersion = $derived(upscaleStore.version);
 
 function isPageUpscaled(pageIndex: number): boolean {
 	// 依赖 version 触发更新
-	void upscaleVersion;
+	void imagePoolVersion;
 	return imagePool.hasUpscaled(pageIndex);
 }
 
@@ -85,7 +86,9 @@ function isPageUpscaled(pageIndex: number): boolean {
 type UpscaleStatusType = 'none' | 'pending' | 'processing' | 'completed' | 'skipped' | 'failed';
 
 function getPageUpscaleStatus(pageIndex: number): UpscaleStatusType {
-	void upscaleVersion;
+	// 依赖两个版本号触发更新
+	void imagePoolVersion;
+	void upscaleStoreVersion;
 	if (!upscaleEnabled) return 'none';
 	
 	// 先检查是否已完成（imagePool 中有超分图）

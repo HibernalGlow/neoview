@@ -52,12 +52,14 @@
 
   // 计算已完成超分的页面数（用于超分实时进度条）
   // 使用 imagePool.hasUpscaled() 判断，与 UpscaleLayer 保持一致
-  // 依赖 imagePool.version 触发响应式更新
+  // 依赖 imagePool.version 和 upscaleStore.version 触发响应式更新
   const upscaleEnabled = $derived(upscaleStore.enabled);
-  const upscaleVersion = $derived(imagePool.version);
+  const imagePoolVersion = $derived(imagePool.version);
+  const upscaleStoreVersion = $derived(upscaleStore.version);
   const upscaledPagesCount = $derived(() => {
-    // 依赖 version 触发更新
-    void upscaleVersion;
+    // 依赖两个 version 触发更新
+    void imagePoolVersion;
+    void upscaleStoreVersion;
     let count = 0;
     for (let i = 0; i < totalPages; i++) {
       if (imagePool.hasUpscaled(i)) {

@@ -95,6 +95,9 @@ class UpscaleStore {
     },
   });
 
+  // 版本计数器，用于触发响应式更新
+  private _version = $state(0);
+
   private unlistenReady: UnlistenFn | null = null;
   private initialized = false;
 
@@ -118,6 +121,11 @@ class UpscaleStore {
 
   get stats() {
     return this.state.stats;
+  }
+
+  /** 版本号，用于触发响应式更新 */
+  get version(): number {
+    return this._version;
   }
 
   /** 获取当前页面的超分状态 */
@@ -569,6 +577,8 @@ class UpscaleStore {
     const newStatus = new SvelteMap(this.state.pageStatus);
     newStatus.set(pageIndex, status);
     this.state.pageStatus = newStatus;
+    // 增加版本号触发响应式更新
+    this._version++;
   }
 
   /** 清除所有超分状态和 imagePool 中的超分图 */

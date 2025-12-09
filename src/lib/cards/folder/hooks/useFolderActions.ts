@@ -11,6 +11,7 @@ import { folderTabActions, isVirtualPath } from '$lib/components/panels/folderPa
 import { bookStore } from '$lib/stores/book.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { FileSystemAPI } from '$lib/api';
+import { ClipboardAPI } from '$lib/api/clipboard';
 import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
 import { directoryTreeCache } from '$lib/components/panels/folderPanel/utils/directoryTreeCache';
 
@@ -280,28 +281,44 @@ export function createFolderActions(state: FolderState, initialPath?: string) {
 
 	// ============ 剪贴板操作 ============
 
-	function handleCopy(item: FsItem) {
-		state.clipboardItem = { paths: [item.path], operation: 'copy' };
+	/**
+	 * 复制文件到系统剪贴板
+	 */
+	async function handleCopy(item: FsItem) {
 		try {
-			navigator.clipboard.writeText(item.path);
-		} catch {}
+			await ClipboardAPI.copyFiles([item.path]);
+			state.clipboardItem = { paths: [item.path], operation: 'copy' };
+			showSuccessToast('已复制', item.name);
+		} catch (err) {
+			console.error('[Clipboard] Copy failed:', err);
+			state.clipboardItem = { paths: [item.path], operation: 'copy' };
+			showSuccessToast('已复制', '(仅应用内)');
+		}
 	}
 
-	function handleCut(item: FsItem) {
-		state.clipboardItem = { paths: [item.path], operation: 'cut' };
+	/**
+	 * 剪切文件到系统剪贴板
+	 */
+	async function handleCut(item: FsItem) {
 		try {
-			navigator.clipboard.writeText(item.path);
-		} catch {}
+			await ClipboardAPI.cutFiles([item.path]);
+			state.clipboardItem = { paths: [item.path], operation: 'cut' };
+			showSuccessToast('已剪切', item.name);
+		} catch (err) {
+			console.error('[Clipboard] Cut failed:', err);
+			state.clipboardItem = { paths: [item.path], operation: 'cut' };
+			showSuccessToast('已剪切', '(仅应用内)');
+		}
 	}
 
 	function handleCopyPath(item: FsItem) {
 		navigator.clipboard.writeText(item.path);
-		showSuccessToast('已复制', '路径已复制到剪贴板');
+		showSuccessToast('已复制', '路径');
 	}
 
 	function handleCopyName(item: FsItem) {
 		navigator.clipboard.writeText(item.name);
-		showSuccessToast('已复制', '文件名已复制到剪贴板');
+		showSuccessToast('已复制', '文件名');
 	}
 
 	// ============ 系统操作 ============

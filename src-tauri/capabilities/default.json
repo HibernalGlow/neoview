@@ -5,6 +5,7 @@
 	"windows": ["main", "settings"],
 	"permissions": [
 		"core:default",
+		"clipboard-x:default",
 		"core:window:allow-start-dragging",
 		"core:window:allow-create",
 		"core:window:allow-center",

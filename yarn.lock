@@ -753,6 +753,11 @@
   resolved "https://registry.npmmirror.com/@tanstack/virtual-core/-/virtual-core-3.13.12.tgz#1dff176df9cc8f93c78c5e46bcea11079b397578"
   integrity sha512-1YBOJfRHV4sXUmWsFSf5rQor4Ss82G8dQWLRbnk3GA4jeP8hQt1hxXh0tmflpC0dz3VgEv/1+qwPyLeWkQuPFA==
 
+"@tauri-apps/api@^2.4.1":
+  version "2.9.1"
+  resolved "https://registry.npmmirror.com/@tauri-apps/api/-/api-2.9.1.tgz#e539bfa437e53864fd5e7ed0f28e8217fbc74de1"
+  integrity sha512-IGlhP6EivjXHepbBic618GOmiWe4URJiIeZFlB7x3czM0yDHHYviH1Xvoiv4FefdkQtn6v7TuwWCRfOGdnVUGw==
+
 "@tauri-apps/api@^2.5.0", "@tauri-apps/api@^2.8.0":
   version "2.9.0"
   resolved "https://registry.npmmirror.com/@tauri-apps/api/-/api-2.9.0.tgz#047fcbfec05a719b0cec997eee244cee453fb2fc"
@@ -2679,6 +2684,13 @@ tapable@^2.2.0:
   version "2.3.0"
   resolved "https://registry.npmmirror.com/tapable/-/tapable-2.3.0.tgz#7e3ea6d5ca31ba8e078b560f0d83ce9a14aa8be6"
   integrity sha512-g9ljZiwki/LfxmQADO3dEY1CbpmXT5Hm2fJ+QaGKwSXUylMybePR7/67YW7jOrrvjEgL1Fmz5kzyAjWVWLlucg==
+
+tauri-plugin-clipboard-x-api@^2.0.1:
+  version "2.0.1"
+  resolved "https://registry.npmmirror.com/tauri-plugin-clipboard-x-api/-/tauri-plugin-clipboard-x-api-2.0.1.tgz#9e05ce62f2e9eac9693828ee5d309a3858a32fbe"
+  integrity sha512-et15SZlA0XiYzrXOXn9GekOP4WBV4wKEh7poapkiqpQjQVLyecFUjAzFVTSXOLmw3lNf7AdcpB3cBfMESx8duQ==
+  dependencies:
+    "@tauri-apps/api" "^2.4.1"
 
 tiny-case@^1.0.3:
   version "1.0.3"

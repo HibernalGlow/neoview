@@ -32,6 +32,7 @@
 	import { historyStore } from '$lib/stores/history.svelte';
 	import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 	import { FileSystemAPI } from '$lib/api';
+	import { ClipboardAPI } from '$lib/api/clipboard';
 	import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
 	import { createKeyboardHandler } from '$lib/components/panels/folderPanel/utils/keyboardHandler';
 	import { directoryTreeCache } from '$lib/components/panels/folderPanel/utils/directoryTreeCache';
@@ -332,12 +333,42 @@
 	}
 
 	// ==================== 剪贴板操作 ====================
-	function handleCopy(item: FsItem) {
-		ctx.clipboardItem = { paths: [item.path], operation: 'copy' };
+	/**
+	 * 复制文件到系统剪贴板
+	 * 支持在资源管理器中粘贴
+	 */
+	async function handleCopy(item: FsItem) {
+		try {
+			// 复制到系统剪贴板
+			await ClipboardAPI.copyFiles([item.path]);
+			// 同时更新本地状态（用于应用内粘贴）
+			ctx.clipboardItem = { paths: [item.path], operation: 'copy' };
+			showSuccessToast('已复制', item.name);
+		} catch (err) {
+			console.error('[Clipboard] Copy failed:', err);
+			// 回退到本地剪贴板
+			ctx.clipboardItem = { paths: [item.path], operation: 'copy' };
+			showSuccessToast('已复制', '(仅应用内)');
+		}
 	}
 
-	function handleCut(item: FsItem) {
-		ctx.clipboardItem = { paths: [item.path], operation: 'cut' };
+	/**
+	 * 剪切文件到系统剪贴板
+	 * 粘贴后会移动文件
+	 */
+	async function handleCut(item: FsItem) {
+		try {
+			// 剪切到系统剪贴板
+			await ClipboardAPI.cutFiles([item.path]);
+			// 同时更新本地状态
+			ctx.clipboardItem = { paths: [item.path], operation: 'cut' };
+			showSuccessToast('已剪切', item.name);
+		} catch (err) {
+			console.error('[Clipboard] Cut failed:', err);
+			// 回退到本地剪贴板
+			ctx.clipboardItem = { paths: [item.path], operation: 'cut' };
+			showSuccessToast('已剪切', '(仅应用内)');
+		}
 	}
 
 	function handleCopyPath(item: FsItem) {
@@ -350,20 +381,88 @@
 		showSuccessToast('已复制', '文件名');
 	}
 
+	/**
+	 * 从系统剪贴板粘贴文件
+	 * 支持从资源管理器复制的文件
+	 */
 	async function handlePaste() {
-		if (!ctx.clipboardItem) return;
 		const target = get(ctx.currentPath);
 		if (!target || isVirtualPath(target)) return;
+
 		try {
-			for (const src of ctx.clipboardItem.paths) {
-				if (ctx.clipboardItem.operation === 'copy') await FileSystemAPI.copyPath(src, target);
-				else await FileSystemAPI.movePath(src, target);
+			// 首先尝试从系统剪贴板读取
+			const clipboardState = await ClipboardAPI.readFiles();
+			
+			if (clipboardState && clipboardState.files.length > 0) {
+				// 系统剪贴板有文件
+				const { files, isCut } = clipboardState;
+				let successCount = 0;
+				
+				for (const src of files) {
+					try {
+						if (isCut) {
+							await FileSystemAPI.movePath(src, target);
+						} else {
+							await FileSystemAPI.copyPath(src, target);
+						}
+						successCount++;
+					} catch (err) {
+						console.error('[Clipboard] Paste failed for:', src, err);
+					}
+				}
+				
+				// 剪切完成后清除状态
+				if (isCut) {
+					ClipboardAPI.clearCutState();
+					ctx.clipboardItem = null;
+				}
+				
+				handleRefresh();
+				const actionText = isCut ? '移动' : '复制';
+				if (successCount === files.length) {
+					showSuccessToast(`${actionText}成功`, `${successCount} 个文件`);
+				} else {
+					showErrorToast(`部分${actionText}失败`, `成功 ${successCount}/${files.length}`);
+				}
+				return;
 			}
-			if (ctx.clipboardItem.operation === 'cut') ctx.clipboardItem = null;
-			handleRefresh();
-			showSuccessToast('操作成功', `已${ctx.clipboardItem?.operation === 'copy' ? '复制' : '移动'}`);
+			
+			// 回退到应用内剪贴板
+			if (ctx.clipboardItem) {
+				const { paths, operation } = ctx.clipboardItem;
+				let successCount = 0;
+				
+				for (const src of paths) {
+					try {
+						if (operation === 'cut') {
+							await FileSystemAPI.movePath(src, target);
+						} else {
+							await FileSystemAPI.copyPath(src, target);
+						}
+						successCount++;
+					} catch (err) {
+						console.error('[Clipboard] Paste failed for:', src, err);
+					}
+				}
+				
+				if (operation === 'cut') {
+					ctx.clipboardItem = null;
+				}
+				
+				handleRefresh();
+				const actionText = operation === 'cut' ? '移动' : '复制';
+				if (successCount === paths.length) {
+					showSuccessToast(`${actionText}成功`, `${successCount} 个文件`);
+				} else {
+					showErrorToast(`部分${actionText}失败`, `成功 ${successCount}/${paths.length}`);
+				}
+				return;
+			}
+			
+			showErrorToast('剪贴板为空', '没有可粘贴的文件');
 		} catch (err) {
-			showErrorToast('操作失败', err instanceof Error ? err.message : String(err));
+			console.error('[Clipboard] Paste error:', err);
+			showErrorToast('粘贴失败', err instanceof Error ? err.message : String(err));
 		}
 	}
 

@@ -44,6 +44,7 @@
 		emmSync: () => import('./properties/EmmSyncCard.svelte'),
 		thumbnailMaintenance: () => import('./properties/ThumbnailMaintenanceCard.svelte'),
 		emmRawData: () => import('./properties/EmmRawDataCard.svelte'),
+		emmConfig: () => import('./properties/EmmConfigCard.svelte'),
 		// Upscale
 		upscaleControl: () => import('./upscale/UpscaleControlCard.svelte'),
 		upscaleModel: () => import('./upscale/UpscaleModelCard.svelte'),

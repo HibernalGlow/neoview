@@ -247,6 +247,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'properties',
 		canHide: true,
 	},
+	'emmConfig': {
+		id: 'emmConfig',
+		title: 'EMM 配置',
+		icon: Settings,
+		defaultPanel: 'properties',
+		canHide: true,
+	},
 
 	// ==================== Upscale 面板卡片 ====================
 	'upscaleControl': {

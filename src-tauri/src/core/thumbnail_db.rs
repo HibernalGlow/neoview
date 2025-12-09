@@ -402,8 +402,9 @@ impl ThumbnailDb {
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
 
+        // 排除 value 为 NULL 的记录（表示已被清空待重载）
         let mut stmt =
-            conn.prepare("SELECT value FROM thumbs WHERE key = ?1 AND category = ?2 LIMIT 1")?;
+            conn.prepare("SELECT value FROM thumbs WHERE key = ?1 AND category = ?2 AND value IS NOT NULL LIMIT 1")?;
 
         let mut rows =
             stmt.query_map(params![key, category], |row| Ok(row.get::<_, Vec<u8>>(0)?))?;
@@ -504,10 +505,10 @@ impl ThumbnailDb {
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
 
-        // 如果指定了类别，只在对应类别中搜索
+        // 如果指定了类别，只在对应类别中搜索（排除 NULL 值）
         let result = if let Some(cat) = category {
             let mut stmt = conn.prepare(
-                "SELECT value FROM thumbs WHERE key = ?1 AND size = ?2 AND ghash = ?3 AND category = ?4"
+                "SELECT value FROM thumbs WHERE key = ?1 AND size = ?2 AND ghash = ?3 AND category = ?4 AND value IS NOT NULL"
             )?;
             let mut rows = stmt.query_map(params![key, size, ghash, cat], |row| {
                 Ok(row.get::<_, Vec<u8>>(0)?)
@@ -515,7 +516,7 @@ impl ThumbnailDb {
             rows.next().transpose()
         } else {
             let mut stmt = conn
-                .prepare("SELECT value FROM thumbs WHERE key = ?1 AND size = ?2 AND ghash = ?3")?;
+                .prepare("SELECT value FROM thumbs WHERE key = ?1 AND size = ?2 AND ghash = ?3 AND value IS NOT NULL")?;
             let mut rows = stmt.query_map(params![key, size, ghash], |row| {
                 Ok(row.get::<_, Vec<u8>>(0)?)
             })?;
@@ -1743,17 +1744,21 @@ impl ThumbnailDb {
         Ok(count)
     }
     
-    /// 删除单个缩略图记录
+    /// 清空单个缩略图的 blob 数据（保留元数据记录）
     pub fn delete_thumbnail(&self, key: &str) -> SqliteResult<()> {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
         
-        // 删除缩略图记录
-        conn.execute("DELETE FROM thumbs WHERE key = ?1", params![key])?;
+        // 清空 blob 数据（设为 NULL），保留其他元数据
+        let rows_updated = conn.execute("UPDATE thumbs SET value = NULL WHERE key = ?1", params![key])?;
+        eprintln!("[DEBUG] 🗑️ 清空缩略图 blob: key={}, 更新行数={}", key, rows_updated);
         
         // 同时删除失败记录（允许重新生成）
-        let _ = conn.execute("DELETE FROM failed_thumbnails WHERE key = ?1", params![key]);
+        let failed_deleted = conn.execute("DELETE FROM failed_thumbnails WHERE key = ?1", params![key]).unwrap_or(0);
+        if failed_deleted > 0 {
+            eprintln!("[DEBUG] 🗑️ 删除失败记录: key={}, 删除行数={}", key, failed_deleted);
+        }
         
         Ok(())
     }

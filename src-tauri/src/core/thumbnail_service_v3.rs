@@ -1131,8 +1131,10 @@ impl ThumbnailServiceV3 {
             return Ok(blob);
         }
         
-        // 4. 递归查找第一张图片/压缩包/视频
-        if let Some(first) = Self::find_first_image_recursive(folder_path, max_depth)? {
+        // 4. 递归查找第一张图片/压缩包/视频（带权限错误重试）
+        let files_found = Self::find_all_images_recursive(folder_path, max_depth, 5)?; // 最多找5个文件
+        
+        for first in files_found {
             // 判断文件类型
             let first_lower = first.to_lowercase();
             let is_archive = first_lower.ends_with(".zip") || first_lower.ends_with(".cbz") 
@@ -1145,21 +1147,27 @@ impl ThumbnailServiceV3 {
             
             let gen = generator.lock().map_err(|e| format!("获取生成器锁失败: {}", e))?;
             
-            let blob = if is_archive {
+            let result = if is_archive {
                 // 压缩包需要提取第一张图
-                gen.generate_archive_thumbnail(&first)?
+                gen.generate_archive_thumbnail(&first)
             } else if is_video {
-                // 视频文件使用视频缩略图生成（调用 generate_file_thumbnail 会自动处理视频）
-                gen.generate_file_thumbnail(&first)?
+                // 视频文件使用视频缩略图生成
+                gen.generate_file_thumbnail(&first)
             } else {
                 // 图片文件
-                gen.generate_file_thumbnail(&first)?
+                gen.generate_file_thumbnail(&first)
             };
             
-            // 保存到数据库
-            let _ = db.save_thumbnail_with_category(folder_path, 0, 0, &blob, Some("folder"));
-            
-            return Ok(blob);
+            // 如果成功生成，保存并返回
+            if let Ok(blob) = result {
+                if !blob.is_empty() {
+                    let _ = db.save_thumbnail_with_category(folder_path, 0, 0, &blob, Some("folder"));
+                    return Ok(blob);
+                }
+            } else {
+                // 权限错误等，尝试下一个文件
+                log_debug!("⚠️ 跳过无法访问的文件: {} - {:?}", first, result.err());
+            }
         }
         
         // 5. 没有找到图片，记录失败并返回错误
@@ -1206,10 +1214,17 @@ impl ThumbnailServiceV3 {
         Ok(None)
     }
     
-    /// 递归查找第一张图片/压缩包/视频
-    fn find_first_image_recursive(folder: &str, depth: u32) -> Result<Option<String>, String> {
-        if depth == 0 {
-            return Ok(None);
+    /// 递归查找多张图片/压缩包/视频（用于权限错误重试）
+    fn find_all_images_recursive(folder: &str, depth: u32, max_count: usize) -> Result<Vec<String>, String> {
+        let mut results = Vec::new();
+        Self::find_images_recursive_impl(folder, depth, max_count, &mut results);
+        Ok(results)
+    }
+    
+    /// 递归查找图片的内部实现
+    fn find_images_recursive_impl(folder: &str, depth: u32, max_count: usize, results: &mut Vec<String>) {
+        if depth == 0 || results.len() >= max_count {
+            return;
         }
         
         let image_exts = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "avif", "jxl"];
@@ -1221,7 +1236,7 @@ impl ThumbnailServiceV3 {
             Ok(e) => e,
             Err(e) => {
                 log_debug!("⚠️ 无法读取目录 (可能权限不足): {} - {}", folder, e);
-                return Ok(None); // 返回空结果而不是错误
+                return; // 返回空结果
             }
         };
         
@@ -1230,6 +1245,10 @@ impl ThumbnailServiceV3 {
         sorted_entries.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
         
         for entry in sorted_entries {
+            if results.len() >= max_count {
+                break;
+            }
+            
             let path = entry.path();
             
             if path.is_file() {
@@ -1239,21 +1258,19 @@ impl ThumbnailServiceV3 {
                     if image_exts.contains(&ext.as_str()) 
                         || archive_exts.contains(&ext.as_str()) 
                         || video_exts.contains(&ext.as_str()) {
-                        return Ok(Some(path.to_string_lossy().to_string()));
+                        results.push(path.to_string_lossy().to_string());
                     }
                 }
             } else if path.is_dir() {
                 // 递归子目录
-                if let Ok(Some(found)) = Self::find_first_image_recursive(
+                Self::find_images_recursive_impl(
                     &path.to_string_lossy(),
                     depth - 1,
-                ) {
-                    return Ok(Some(found));
-                }
+                    max_count,
+                    results,
+                );
             }
         }
-        
-        Ok(None)
     }
 }
 

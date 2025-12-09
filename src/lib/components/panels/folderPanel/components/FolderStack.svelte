@@ -26,6 +26,7 @@
 		tabCurrentPath,
 		activeTabId,
 		tabThumbnailWidthPercent,
+		tabBannerWidthPercent,
 		tabItems,
 		isVirtualPath,
 		getVirtualPathType
@@ -47,6 +48,7 @@
 	const penetrateMode = tabPenetrateMode;
 	const openInNewTabMode = tabOpenInNewTabMode;
 	const thumbnailWidthPercent = tabThumbnailWidthPercent;
+	const bannerWidthPercent = tabBannerWidthPercent;
 	import { Loader2, FolderOpen, AlertCircle } from '@lucide/svelte';
 	import {
 		getChainSelectMode,
@@ -916,6 +918,7 @@
 						selectedItems={$selectedItems}
 						{viewMode}
 						thumbnailWidthPercent={$thumbnailWidthPercent}
+						bannerWidthPercent={$bannerWidthPercent}
 						showFullPath={getVirtualPathType(layer.path) === 'search'}
 						onItemSelect={(payload) => handleItemSelect(index, payload)}
 						onItemDoubleClick={(payload) => handleItemDoubleClick(index, payload)}

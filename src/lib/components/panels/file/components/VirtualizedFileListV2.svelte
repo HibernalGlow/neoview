@@ -32,6 +32,7 @@
 		selectedItems = new Set<string>(),
 		viewMode = 'list',
 		thumbnailWidthPercent = 20,
+		bannerWidthPercent = 50,
 		onSelectionChange = (payload: { selectedItems: Set<string> }) => {},
 		onSelectedIndexChange = (payload: { index: number }) => {},
 		onItemSelect = (payload: { item: FsItem; index: number; multiSelect: boolean }) => {},
@@ -48,6 +49,7 @@
 		selectedItems?: Set<string>;
 		viewMode?: 'list' | 'thumbnails' | 'grid' | 'content' | 'banner' | 'thumbnail';
 		thumbnailWidthPercent?: number;
+		bannerWidthPercent?: number;
 		onSelectionChange?: (payload: { selectedItems: Set<string> }) => void;
 		onSelectedIndexChange?: (payload: { index: number }) => void;
 		onItemSelect?: (payload: { item: FsItem; index: number; multiSelect: boolean }) => void;
@@ -77,12 +79,16 @@
 
 	// --- TanStack Virtual ---
 	const itemHeight = $derived(viewMode === 'list' ? 96 : 240);
-	// 列数根据缩略图宽度百分比动态计算
-	// 注意：thumbnailWidthPercent 表示每个缩略图占 card 宽度的百分比
-	// 例如 20% = 5 列，50% = 2 列
+	
+	// 根据视图模式选择使用的宽度百分比
+	// banner 视图使用 bannerWidthPercent，其他网格视图使用 thumbnailWidthPercent
+	const effectiveWidthPercent = $derived(viewMode === 'banner' ? bannerWidthPercent : thumbnailWidthPercent);
+	
+	// 列数根据宽度百分比动态计算
+	// 例如 20% = 5 列，50% = 2 列，100% = 1 列
 	const columns = $derived.by(() => {
 		if (viewMode === 'list') return 1;
-		const cols = Math.max(1, Math.floor(100 / thumbnailWidthPercent));
+		const cols = Math.max(1, Math.floor(100 / effectiveWidthPercent));
 		return cols;
 	});
 	const rowCount = $derived(Math.ceil(items.length / columns));

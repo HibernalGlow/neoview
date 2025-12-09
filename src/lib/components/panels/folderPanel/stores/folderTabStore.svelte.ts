@@ -101,6 +101,8 @@ export interface FolderTabState {
 	stackActiveIndex: number;
 	// 缩略图宽度百分比 (10-50%)
 	thumbnailWidthPercent: number;
+	// 横幅视图宽度百分比 (20-100%)
+	bannerWidthPercent: number;
 }
 
 // ============ Initial State ============
@@ -200,7 +202,8 @@ function createDefaultTabState(id: string, homePath: string = ''): FolderTabStat
 		homePath,
 		stackLayers: [],
 		stackActiveIndex: 0,
-		thumbnailWidthPercent: 20
+		thumbnailWidthPercent: 20,
+		bannerWidthPercent: 50
 	};
 }
 
@@ -366,6 +369,9 @@ export const tabStackActiveIndex = derived(activeTab, ($tab) => $tab?.stackActiv
 
 // 缩略图宽度百分比
 export const tabThumbnailWidthPercent = derived(activeTab, ($tab) => $tab?.thumbnailWidthPercent || 20);
+
+// 横幅视图宽度百分比
+export const tabBannerWidthPercent = derived(activeTab, ($tab) => $tab?.bannerWidthPercent || 50);
 
 // 标签页导航历史状态
 export const tabCanGoBackTab = derived(store, ($store) => $store.tabNavHistoryIndex > 0);
@@ -1220,6 +1226,18 @@ export const folderTabActions = {
 		updateActiveTab((tab) => ({
 			...tab,
 			thumbnailWidthPercent: clampedPercent
+		}));
+	},
+
+	/**
+	 * 设置横幅视图宽度百分比
+	 */
+	setBannerWidthPercent(percent: number) {
+		// 限制在 20-100% 范围内
+		const clampedPercent = Math.max(20, Math.min(100, percent));
+		updateActiveTab((tab) => ({
+			...tab,
+			bannerWidthPercent: clampedPercent
 		}));
 	}
 };

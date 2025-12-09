@@ -78,7 +78,7 @@ export interface FolderContextValue {
 	readonly effectiveDeleteMode: boolean;
 	readonly effectiveInlineTreeMode: boolean;
 	readonly effectiveViewStyle: 'list' | 'content' | 'banner' | 'thumbnail' | undefined;
-	readonly effectiveSortConfig: { field: string; order: string } | undefined;
+	readonly effectiveSortConfig: { field: string; order: 'asc' | 'desc' } | undefined;
 	
 	// ============ UI 状态 ============
 	contextMenu: ContextMenuState;
@@ -194,9 +194,9 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 		undefined
 	);
 	
-	const effectiveSortConfig = $derived<{ field: string; order: string } | undefined>(
-		panelMode === 'history' ? { field: virtualPanelSettingsStore.historySortField, order: virtualPanelSettingsStore.historySortOrder } :
-		panelMode === 'bookmark' ? { field: virtualPanelSettingsStore.bookmarkSortField, order: virtualPanelSettingsStore.bookmarkSortOrder } :
+	const effectiveSortConfig = $derived<{ field: string; order: 'asc' | 'desc' } | undefined>(
+		panelMode === 'history' ? { field: virtualPanelSettingsStore.historySortField, order: virtualPanelSettingsStore.historySortOrder as 'asc' | 'desc' } :
+		panelMode === 'bookmark' ? { field: virtualPanelSettingsStore.bookmarkSortField, order: virtualPanelSettingsStore.bookmarkSortOrder as 'asc' | 'desc' } :
 		undefined
 	);
 	

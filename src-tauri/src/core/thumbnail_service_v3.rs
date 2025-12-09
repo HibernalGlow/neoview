@@ -780,11 +780,28 @@ impl ThumbnailServiceV3 {
             return ThumbnailFileType::Image;
         }
         
-        // 检查是否是文件夹（纯字符串分析，不调用文件系统）
-        // 如果没有扩展名，默认认为是文件夹
+        // 检查是否是文件夹（使用文件系统检查，因为文件夹名可能包含点号）
         let path_obj = Path::new(path);
+        
+        // 首选：使用文件系统检查（最准确）
+        if let Ok(metadata) = std::fs::metadata(path) {
+            if metadata.is_dir() {
+                return ThumbnailFileType::Folder;
+            }
+        }
+        
+        // 备选：如果没有扩展名，默认认为是文件夹
         if path_obj.extension().is_none() {
             return ThumbnailFileType::Folder;
+        }
+        
+        // 检查扩展名是否可能是误判（文件夹名包含点号）
+        // 如果扩展名长度超过 5 或包含空格/特殊字符，可能是文件夹名的一部分
+        if let Some(ext) = path_obj.extension() {
+            let ext_str = ext.to_string_lossy();
+            if ext_str.len() > 5 || ext_str.contains(' ') || ext_str.contains('(') || ext_str.contains(')') {
+                return ThumbnailFileType::Folder;
+            }
         }
         
         ThumbnailFileType::Other
@@ -1120,19 +1137,27 @@ impl ThumbnailServiceV3 {
             return Ok(blob);
         }
         
-        // 3. 查找封面图片（cover.*, folder.*, thumb.*）
+        // 3. 查找封面图片（cover.*, folder.*, thumb.*）- 带权限错误处理
         if let Some(cover) = Self::find_cover_image(folder_path)? {
             let gen = generator.lock().map_err(|e| format!("获取生成器锁失败: {}", e))?;
-            let blob = gen.generate_file_thumbnail(&cover)?;
-            
-            // 保存到数据库
-            let _ = db.save_thumbnail_with_category(folder_path, 0, 0, &blob, Some("folder"));
-            
-            return Ok(blob);
+            match gen.generate_file_thumbnail(&cover) {
+                Ok(blob) if !blob.is_empty() => {
+                    // 保存到数据库
+                    let _ = db.save_thumbnail_with_category(folder_path, 0, 0, &blob, Some("folder"));
+                    return Ok(blob);
+                }
+                Ok(_) => {
+                    log_debug!("⚠️ 封面图片生成为空: {}", cover);
+                }
+                Err(e) => {
+                    log_debug!("⚠️ 封面图片读取失败 (继续尝试其他方法): {} - {}", cover, e);
+                }
+            }
         }
         
         // 4. 递归查找第一张图片/压缩包/视频（带权限错误重试）
         let files_found = Self::find_all_images_recursive(folder_path, max_depth, 5)?; // 最多找5个文件
+        log_debug!("📂 文件夹 {} 找到 {} 个候选文件", folder_path, files_found.len());
         
         for first in files_found {
             // 判断文件类型
@@ -1170,15 +1195,16 @@ impl ThumbnailServiceV3 {
             }
         }
         
-        // 5. 没有找到图片，记录失败并返回错误
+        // 5. 没有找到可访问的图片，记录失败并返回错误
         // 这样下次不会重复尝试
+        log_debug!("📭 文件夹 {} 中没有找到可访问的图片", folder_path);
         let _ = db.save_failed_thumbnail(
             folder_path,
-            "no_image",
+            "no_accessible_image",
             0,
-            Some("文件夹中没有找到图片")
+            Some("文件夹中没有找到可访问的图片")
         );
-        Err("文件夹中没有找到图片".to_string())
+        Err("文件夹中没有找到可访问的图片".to_string())
     }
     
     /// 查找封面图片（cover.*, folder.*, thumb.*）

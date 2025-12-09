@@ -3,12 +3,22 @@
 	 * FolderTabBar - 文件面板页签栏
 	 * 使用 shadcn Tabs 组件实现多页签管理
 	 */
-	import { X, Plus, Copy } from '@lucide/svelte';
+	import { X, Plus, Copy, Bookmark, Clock, Folder } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import { allTabs, activeTabId, folderTabActions } from '../stores/folderTabStore.svelte';
+	import { allTabs, activeTabId, folderTabActions, isVirtualPath, getVirtualPathType } from '../stores/folderTabStore.svelte';
+
+	// 根据路径获取图标类型
+	function getTabIconType(path: string): 'bookmark' | 'history' | 'folder' {
+		if (isVirtualPath(path)) {
+			const type = getVirtualPathType(path);
+			if (type === 'bookmark') return 'bookmark';
+			if (type === 'history') return 'history';
+		}
+		return 'folder';
+	}
 
 	interface Props {
 		homePath?: string;
@@ -56,6 +66,13 @@
 							onauxclick={(e) => handleMiddleClick(tab.id, e)}
 							title={tab.currentPath || tab.title}
 						>
+							{#if getTabIconType(tab.currentPath) === 'bookmark'}
+								<Bookmark class="h-3.5 w-3.5 shrink-0 text-amber-500" />
+							{:else if getTabIconType(tab.currentPath) === 'history'}
+								<Clock class="h-3.5 w-3.5 shrink-0 text-blue-500" />
+							{:else}
+								<Folder class="h-3.5 w-3.5 shrink-0" />
+							{/if}
 							<span class="flex-1 truncate text-left">{tab.title}</span>
 							{#if $allTabs.length > 1}
 								<span

@@ -146,9 +146,9 @@ export function getVirtualPathType(path: string): VirtualPathType {
 function getVirtualDisplayName(path: string): string {
 	const type = getVirtualPathType(path);
 	switch (type) {
-		case 'bookmark': return '📑 书签';
-		case 'history': return '🕒 历史';
-		case 'search': return '🔍 搜索结果';
+		case 'bookmark': return '书签';
+		case 'history': return '历史';
+		case 'search': return '搜索结果';
 		default: return path;
 	}
 }

@@ -4,7 +4,7 @@
 	 * 独立管理导航相关的 UI 状态
 	 * 支持全局标签（folder）和本地标签（bookmark/history）
 	 */
-	import { X, Plus, Copy } from '@lucide/svelte';
+	import { X, Plus, Copy, Bookmark, Clock, Folder } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
@@ -74,6 +74,13 @@
 								onauxclick={(e) => handleLocalMiddleClick(tab.id, e)}
 								title={tab.currentPath || tab.title}
 							>
+								{#if ctx.panelMode === 'bookmark'}
+									<Bookmark class="h-3.5 w-3.5 shrink-0 text-amber-500" />
+								{:else if ctx.panelMode === 'history'}
+									<Clock class="h-3.5 w-3.5 shrink-0 text-blue-500" />
+								{:else}
+									<Folder class="h-3.5 w-3.5 shrink-0" />
+								{/if}
 								<span class="flex-1 truncate text-left">{tab.title}</span>
 								{#if ctx.localTabs.length > 1}
 									<span

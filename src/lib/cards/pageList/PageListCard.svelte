@@ -27,6 +27,7 @@ let thumbnailSnapshot = $state<Map<number, ThumbnailEntry>>(new Map());
 let unsubscribeThumbnailCache: (() => void) | null = null;
 let searchQuery = $state('');
 let viewMode = $state<ViewMode>('list');
+let scrollContainer: HTMLDivElement | undefined;
 
 // 右键菜单状态
 let contextMenu = $state<{
@@ -65,6 +66,19 @@ const filteredItems = $derived(
 );
 
 const currentPageIndex = $derived(bookStore.currentPageIndex);
+
+// 自动滚动到当前页
+$effect(() => {
+	const idx = currentPageIndex;
+	if (idx < 0 || !scrollContainer) return;
+	// 延迟执行确保DOM已更新
+	requestAnimationFrame(() => {
+		const el = scrollContainer?.querySelector(`[data-page-index="${idx}"]`) as HTMLElement | null;
+		if (el) {
+			el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+		}
+	});
+});
 
 // 监听书籍变化
 $effect(() => {
@@ -174,7 +188,7 @@ async function requestThumbnail(pageIndex: number) {
 	</div>
 
 	<!-- 页面列表 -->
-	<div class="flex-1 min-h-0 overflow-y-auto">
+	<div class="flex-1 min-h-0 overflow-y-auto" bind:this={scrollContainer}>
 		{#if filteredItems.length === 0}
 			<p class="text-center text-xs text-muted-foreground py-4">
 				{items.length === 0 ? '未加载书籍' : '未找到匹配的页面'}
@@ -184,6 +198,7 @@ async function requestThumbnail(pageIndex: number) {
 			<div class="space-y-0.5">
 				{#each filteredItems as item (item.index)}
 					<button
+						data-page-index={item.index}
 						class="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors flex items-center gap-2 {currentPageIndex === item.index ? 'bg-primary/10' : ''}"
 						onclick={() => goToPage(item.index)}
 						oncontextmenu={(e) => handleContextMenu(e, item)}
@@ -202,6 +217,7 @@ async function requestThumbnail(pageIndex: number) {
 				{#each filteredItems as item (item.index)}
 					{@const thumb = getThumbnail(item.index)}
 					<button
+						data-page-index={item.index}
 						class="w-full text-left p-1.5 rounded hover:bg-muted transition-colors flex items-center gap-2 {currentPageIndex === item.index ? 'bg-primary/10' : ''}"
 						onclick={() => goToPage(item.index)}
 						oncontextmenu={(e) => handleContextMenu(e, item)}
@@ -234,6 +250,7 @@ async function requestThumbnail(pageIndex: number) {
 				{#each filteredItems as item (item.index)}
 					{@const thumb = getThumbnail(item.index)}
 					<button
+						data-page-index={item.index}
 						class="flex flex-col gap-1 p-1 rounded hover:bg-muted transition-colors {currentPageIndex === item.index ? 'ring-2 ring-primary' : ''}"
 						onclick={() => goToPage(item.index)}
 						oncontextmenu={(e) => handleContextMenu(e, item)}

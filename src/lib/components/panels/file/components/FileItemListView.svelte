@@ -171,6 +171,23 @@
 
 	// 是否为网格布局（banner/thumbnail）
 	const isGridLayout = $derived(viewMode === 'banner' || viewMode === 'thumbnail');
+
+	// 文件类型检测（用于标题前的 icon）
+	const fileType = $derived.by(() => {
+		if (item.isDir) return 'folder';
+		const ext = item.name.split('.').pop()?.toLowerCase() || '';
+		// 压缩包
+		if (['zip', 'cbz', 'rar', 'cbr', '7z', 'cb7', 'tar', 'gz'].includes(ext)) return 'archive';
+		// 图片
+		if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico', 'avif', 'heic', 'heif', 'jxl'].includes(ext)) return 'image';
+		// 视频
+		if (['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v', 'ts'].includes(ext)) return 'video';
+		// 音频
+		if (['mp3', 'wav', 'flac', 'aac', 'ogg', 'wma', 'm4a'].includes(ext)) return 'audio';
+		// 文档
+		if (['pdf', 'doc', 'docx', 'txt', 'md', 'epub', 'mobi'].includes(ext)) return 'document';
+		return 'file';
+	});
 	
 	// 容器样式类
 	const containerClass = $derived(
@@ -471,6 +488,22 @@
 		{/if}
 
 		<div class="mt-1 flex flex-wrap items-center gap-1.5">
+			<!-- 文件类型 icon -->
+			{#if fileType === 'folder'}
+				<Folder class="h-3.5 w-3.5 shrink-0 text-amber-500" />
+			{:else if fileType === 'archive'}
+				<FileArchive class="h-3.5 w-3.5 shrink-0 text-purple-500" />
+			{:else if fileType === 'image'}
+				<Image class="h-3.5 w-3.5 shrink-0 text-green-500" />
+			{:else if fileType === 'video'}
+				<Video class="h-3.5 w-3.5 shrink-0 text-red-500" />
+			{:else if fileType === 'audio'}
+				<Play class="h-3.5 w-3.5 shrink-0 text-blue-500" />
+			{:else if fileType === 'document'}
+				<File class="h-3.5 w-3.5 shrink-0 text-orange-500" />
+			{:else}
+				<File class="h-3.5 w-3.5 shrink-0 text-gray-500" />
+			{/if}
 			<!-- 视频进度信息（时:分:秒格式） -->
 			{#if videoPosition !== undefined && videoDuration !== undefined && videoDuration > 0}
 				<MetadataBadge

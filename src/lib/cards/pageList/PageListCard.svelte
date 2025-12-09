@@ -11,6 +11,7 @@ import { bookStore } from '$lib/stores/book.svelte';
 import { thumbnailCacheStore, type ThumbnailEntry } from '$lib/stores/thumbnailCache.svelte';
 import { thumbnailManager } from '$lib/utils/thumbnailManager';
 import type { Page } from '$lib/types';
+import PageContextMenu from './PageContextMenu.svelte';
 
 type ViewMode = 'list' | 'grid' | 'thumb';
 
@@ -18,6 +19,7 @@ interface PageItem {
 	index: number;
 	name: string;
 	path: string;
+	innerPath?: string;
 }
 
 let items = $state<PageItem[]>([]);
@@ -25,6 +27,33 @@ let thumbnailSnapshot = $state<Map<number, ThumbnailEntry>>(new Map());
 let unsubscribeThumbnailCache: (() => void) | null = null;
 let searchQuery = $state('');
 let viewMode = $state<ViewMode>('list');
+
+// 右键菜单状态
+let contextMenu = $state<{
+	visible: boolean;
+	x: number;
+	y: number;
+	item: PageItem | null;
+}>({
+	visible: false,
+	x: 0,
+	y: 0,
+	item: null
+});
+
+function handleContextMenu(event: MouseEvent, item: PageItem) {
+	event.preventDefault();
+	contextMenu = {
+		visible: true,
+		x: event.clientX,
+		y: event.clientY,
+		item
+	};
+}
+
+function closeContextMenu() {
+	contextMenu = { ...contextMenu, visible: false, item: null };
+}
 
 const filteredItems = $derived(
 	searchQuery.trim()
@@ -44,7 +73,8 @@ $effect(() => {
 		items = book.pages.map((page: Page, index: number) => ({
 			index,
 			name: page.name || `第 ${index + 1} 页`,
-			path: page.path || page.url || ''
+			path: page.path || '',
+			innerPath: page.innerPath
 		}));
 	} else {
 		items = [];
@@ -156,6 +186,7 @@ async function requestThumbnail(pageIndex: number) {
 					<button
 						class="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors flex items-center gap-2 {currentPageIndex === item.index ? 'bg-primary/10' : ''}"
 						onclick={() => goToPage(item.index)}
+						oncontextmenu={(e) => handleContextMenu(e, item)}
 					>
 						<span class="text-xs font-mono font-semibold text-primary">#{item.index + 1}</span>
 						<span class="truncate flex-1">{item.name}</span>
@@ -173,6 +204,7 @@ async function requestThumbnail(pageIndex: number) {
 					<button
 						class="w-full text-left p-1.5 rounded hover:bg-muted transition-colors flex items-center gap-2 {currentPageIndex === item.index ? 'bg-primary/10' : ''}"
 						onclick={() => goToPage(item.index)}
+						oncontextmenu={(e) => handleContextMenu(e, item)}
 						onmouseenter={() => requestThumbnail(item.index)}
 					>
 						<div class="w-12 h-16 rounded bg-muted flex items-center justify-center overflow-hidden relative shrink-0">
@@ -204,6 +236,7 @@ async function requestThumbnail(pageIndex: number) {
 					<button
 						class="flex flex-col gap-1 p-1 rounded hover:bg-muted transition-colors {currentPageIndex === item.index ? 'ring-2 ring-primary' : ''}"
 						onclick={() => goToPage(item.index)}
+						oncontextmenu={(e) => handleContextMenu(e, item)}
 						onmouseenter={() => requestThumbnail(item.index)}
 					>
 						<div class="bg-muted rounded overflow-hidden relative w-full aspect-3/4 flex items-center justify-center">
@@ -227,3 +260,13 @@ async function requestThumbnail(pageIndex: number) {
 		{/if}
 	</div>
 </div>
+
+<!-- 右键菜单 -->
+<PageContextMenu
+	item={contextMenu.item}
+	x={contextMenu.x}
+	y={contextMenu.y}
+	visible={contextMenu.visible}
+	onClose={closeContextMenu}
+	onGoToPage={goToPage}
+/>

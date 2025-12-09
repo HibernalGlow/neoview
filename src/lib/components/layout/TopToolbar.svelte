@@ -8,8 +8,7 @@
 	import TitleBarSection from './TitleBarSection.svelte';
 	import * as Separator from '$lib/components/ui/separator';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	// Progress component removed — not used in this toolbar
+		// Progress component removed — not used in this toolbar
 
 	import { bookStore } from '$lib/stores/book.svelte';
 	import {

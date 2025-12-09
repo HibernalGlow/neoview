@@ -54,7 +54,6 @@ import { directoryTreeCache } from '../utils/directoryTreeCache';
 import * as Progress from '$lib/components/ui/progress';
 import { Button } from '$lib/components/ui/button';
 import * as Tooltip from '$lib/components/ui/tooltip';
-import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 import * as Tabs from '$lib/components/ui/tabs';
 import { get } from 'svelte/store';
 import {
@@ -367,11 +366,25 @@ let warmupProgress = $state<WarmupProgress | null>(null);
 let showMoreSettings = $state(false);
 let settingsTab = $state<'action' | 'display' | 'other'>('action');
 
-// 排序面板展开状态
+// 展开面板状态
 let sortPanelExpanded = $state(false);
+let viewPanelExpanded = $state(false);
+
+function closePanels() {
+	sortPanelExpanded = false;
+	viewPanelExpanded = false;
+}
 
 function toggleSortPanel() {
-	sortPanelExpanded = !sortPanelExpanded;
+	const wasExpanded = sortPanelExpanded;
+	closePanels();
+	sortPanelExpanded = !wasExpanded;
+}
+
+function toggleViewPanel() {
+	const wasExpanded = viewPanelExpanded;
+	closePanels();
+	viewPanelExpanded = !wasExpanded;
 }
 
 function toggleMoreSettings() {
@@ -682,27 +695,23 @@ function cancelWarmup() {
 			</Tooltip.Content>
 		</Tooltip.Root>
 
-		<!-- 视图样式下拉 -->
-		<DropdownMenu.Root>
-			<DropdownMenu.Trigger>
-				<Button variant="ghost" size="icon" class="h-7 w-7">
+		<!-- 视图样式按钮 -->
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button 
+					variant={viewPanelExpanded ? 'default' : 'ghost'} 
+					size="icon" 
+					class="h-7 w-7"
+					onclick={toggleViewPanel}
+				>
 					{@const ViewIcon = getCurrentViewIcon()}
 					<ViewIcon class="h-4 w-4" />
 				</Button>
-			</DropdownMenu.Trigger>
-			<DropdownMenu.Content align="end">
-				{#each viewStyles as style}
-					<DropdownMenu.Item onclick={() => handleSetViewStyle(style.value)}>
-						{@const StyleIcon = style.icon}
-						<StyleIcon class="mr-2 h-4 w-4" />
-						<span>{style.label}</span>
-						{#if viewStyle === style.value}
-							<span class="text-primary ml-auto">✓</span>
-						{/if}
-					</DropdownMenu.Item>
-				{/each}
-			</DropdownMenu.Content>
-		</DropdownMenu.Root>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>视图样式</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
 
 		<!-- 更多设置按钮（展开/折叠设置栏） -->
 		<Tooltip.Root>
@@ -767,6 +776,33 @@ function cancelWarmup() {
 				<p>{sortConfig.order === 'asc' ? '升序' : '降序'}（点击切换）</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
+	</div>
+{/if}
+
+<!-- 视图展开面板 -->
+{#if viewPanelExpanded}
+	<div class="flex flex-wrap items-center gap-1 border-t border-border/50 px-2 py-1">
+		<span class="text-muted-foreground text-xs mr-1">视图</span>
+		<div class="bg-muted/60 inline-flex items-center gap-0.5 rounded-full p-0.5 shadow-inner">
+			{#each viewStyles as style}
+				{@const StyleIcon = style.icon}
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant={viewStyle === style.value ? 'default' : 'ghost'}
+							size="icon"
+							class="h-6 w-6 rounded-full"
+							onclick={() => handleSetViewStyle(style.value)}
+						>
+							<StyleIcon class="h-3 w-3" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>{style.label}</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+			{/each}
+		</div>
 	</div>
 {/if}
 

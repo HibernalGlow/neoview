@@ -104,6 +104,13 @@ function getPageUpscaleStatus(pageIndex: number): UpscaleStatusType {
 	return 'none';
 }
 
+// 获取页面匹配的条件名称
+function getPageConditionName(pageIndex: number): string | null {
+	void upscaleStoreVersion;
+	if (!upscaleEnabled) return null;
+	return upscaleStore.getPageConditionName(pageIndex);
+}
+
 // 状态标签配置
 const statusConfig: Record<UpscaleStatusType, { label: string; class: string } | null> = {
 	'none': null,
@@ -248,6 +255,7 @@ async function requestThumbnail(pageIndex: number) {
 					{@const isCurrentAndUpscaled = currentPageIndex === item.index && isUpscaled}
 					{@const upscaleStatus = getPageUpscaleStatus(item.index)}
 					{@const statusCfg = statusConfig[upscaleStatus]}
+					{@const conditionName = getPageConditionName(item.index)}
 					<button
 						data-page-index={item.index}
 						class="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors flex items-center gap-2 {currentPageIndex === item.index ? 'bg-primary/10' : ''} {isCurrentAndUpscaled ? 'upscaled-glow' : ''}"
@@ -256,6 +264,9 @@ async function requestThumbnail(pageIndex: number) {
 					>
 						<span class="text-xs font-mono font-semibold text-primary">#{item.index + 1}</span>
 						<span class="truncate flex-1">{item.name}</span>
+						{#if conditionName}
+							<span class="px-1 py-0.5 text-[10px] font-medium rounded shrink-0 bg-purple-500/80 text-white" title="条件: {conditionName}">{conditionName}</span>
+						{/if}
 						{#if statusCfg}
 							<span class="px-1 py-0.5 text-[10px] font-medium rounded shrink-0 {statusCfg.class}">{statusCfg.label}</span>
 						{/if}
@@ -274,6 +285,7 @@ async function requestThumbnail(pageIndex: number) {
 					{@const isCurrentAndUpscaled = currentPageIndex === item.index && isUpscaled}
 					{@const upscaleStatus = getPageUpscaleStatus(item.index)}
 					{@const statusCfg = statusConfig[upscaleStatus]}
+					{@const conditionName = getPageConditionName(item.index)}
 					<button
 						data-page-index={item.index}
 						class="w-full text-left p-1.5 rounded hover:bg-muted transition-colors flex items-center gap-2 {currentPageIndex === item.index ? 'bg-primary/10' : ''} {isCurrentAndUpscaled ? 'upscaled-glow' : ''}"
@@ -293,6 +305,9 @@ async function requestThumbnail(pageIndex: number) {
 						<div class="flex-1 min-w-0">
 							<div class="flex items-center gap-1 flex-wrap">
 								<span class="text-xs font-mono font-semibold text-primary">#{item.index + 1}</span>
+								{#if conditionName}
+									<span class="px-1 py-0.5 text-[10px] font-medium rounded bg-purple-500/80 text-white" title="条件: {conditionName}">{conditionName}</span>
+								{/if}
 								{#if statusCfg}
 									<span class="px-1 py-0.5 text-[10px] font-medium rounded {statusCfg.class}">{statusCfg.label}</span>
 								{/if}

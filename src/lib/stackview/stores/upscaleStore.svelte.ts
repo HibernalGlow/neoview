@@ -45,12 +45,20 @@ export interface UpscaleReadyPayload {
   originalSize: [number, number] | null;
   upscaledSize: [number, number] | null;
   isPreload: boolean;
+  /** 匹配的条件ID */
+  conditionId?: string | null;
+  /** 匹配的条件名称 */
+  conditionName?: string | null;
 }
 
 /** 页面超分状态（简化版） */
 export interface PageUpscaleStatus {
   status: UpscaleStatus;
   cachePath: string | null;
+  /** 匹配的条件ID */
+  conditionId?: string | null;
+  /** 匹配的条件名称 */
+  conditionName?: string | null;
 }
 
 /** Store 状态（V2：简化，超分图进入 imagePool） */
@@ -146,6 +154,16 @@ class UpscaleStore {
   /** 获取指定页面的状态 */
   getPageStatus(pageIndex: number): UpscaleStatus | null {
     return this.state.pageStatus.get(pageIndex)?.status ?? null;
+  }
+
+  /** 获取指定页面的完整状态信息 */
+  getPageFullStatus(pageIndex: number): PageUpscaleStatus | null {
+    return this.state.pageStatus.get(pageIndex) ?? null;
+  }
+
+  /** 获取指定页面匹配的条件名称 */
+  getPageConditionName(pageIndex: number): string | null {
+    return this.state.pageStatus.get(pageIndex)?.conditionName ?? null;
   }
 
   // === Actions ===
@@ -549,10 +567,10 @@ class UpscaleStore {
       return;
     }
 
-    const { pageIndex, status, cachePath } = payload;
+    const { pageIndex, status, cachePath, conditionId, conditionName } = payload;
 
-    // 更新状态
-    this.updatePageStatus(pageIndex, { status, cachePath });
+    // 更新状态（包含条件信息）
+    this.updatePageStatus(pageIndex, { status, cachePath, conditionId, conditionName });
 
     // 如果完成且有缓存路径，将超分图放入 imagePool
     if (status === 'completed' && cachePath) {

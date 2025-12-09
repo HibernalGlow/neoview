@@ -27,6 +27,7 @@ let isProgressiveRunning = $state(false);
 
 // 响应式依赖
 const upscaleEnabled = $derived(upscaleStore.enabled);
+const isAutoUpscaleEnabled = $derived(autoUpscaleEnabled.value);
 const totalPages = $derived(bookStore.totalPages);
 const currentPageIndex = $derived(bookStore.currentPageIndex);
 const imagePoolVersion = $derived(imagePool.version);
@@ -131,13 +132,20 @@ onDestroy(() => {
 			checked={preUpscaleEnabled.value}
 			onCheckedChange={handlePreUpscaleChange}
 			class="scale-90"
+			disabled={!isAutoUpscaleEnabled}
 		/>
 	</div>
 	<p class="text-[10px] text-muted-foreground -mt-1">
 		预加载相邻页面并后台超分
 	</p>
 
-	{#if preUpscaleEnabled.value}
+	{#if !isAutoUpscaleEnabled}
+		<div class="text-[10px] text-amber-500 bg-amber-500/10 rounded p-2">
+			⚠️ 需要先启用「自动超分」才能生效
+		</div>
+	{/if}
+
+	{#if preUpscaleEnabled.value && isAutoUpscaleEnabled}
 		<!-- 预加载页数 -->
 		<div class="flex items-center justify-between">
 			<span class="text-xs text-muted-foreground">预加载页数</span>
@@ -189,7 +197,7 @@ onDestroy(() => {
 		</p>
 	</div>
 
-	{#if progressiveUpscaleEnabled.value}
+	{#if progressiveUpscaleEnabled.value && isAutoUpscaleEnabled}
 		<!-- 停留时间 -->
 		<div class="flex items-center justify-between">
 			<span class="text-xs text-muted-foreground">停留时间</span>
@@ -217,12 +225,6 @@ onDestroy(() => {
 				{/each}
 			</select>
 		</div>
-
-		{#if !autoUpscaleEnabled.value}
-			<div class="text-[10px] text-amber-500 bg-amber-500/10 rounded p-2">
-				⚠️ 需要先启用「自动超分」才能生效
-			</div>
-		{/if}
 	{/if}
 
 	<!-- 状态统计 -->

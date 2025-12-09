@@ -6,8 +6,11 @@
 import { ChevronDown, ChevronUp, Settings2 } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import UpscalePanelConditionTabs from './UpscalePanelConditionTabs.svelte';
+import { Switch } from '$lib/components/ui/switch';
+import { Label } from '$lib/components/ui/label';
 import {
 	conditionalUpscaleEnabled,
+	autoUpscaleEnabled,
 	conditionsList,
 	availableModels,
 	saveSettings,
@@ -20,6 +23,15 @@ import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
 
 let expanded = $state(false);
 
+// 受全局自动超分开关控制
+const isAutoUpscaleEnabled = $derived(autoUpscaleEnabled.value);
+
+async function handleEnabledChange(checked: boolean) {
+	conditionalUpscaleEnabled.value = checked;
+	saveSettings();
+	await upscaleStore.syncConditionSettings();
+}
+
 async function handleConditionsChange(event: CustomEvent) {
 	// 条件列表已通过 bindable 更新
 	saveSettings();
@@ -28,20 +40,39 @@ async function handleConditionsChange(event: CustomEvent) {
 }
 </script>
 
-<div class="space-y-2 text-xs">
-	<!-- 摘要信息 -->
+<div class="space-y-3 text-xs">
+	<!-- 条件超分开关 -->
 	<div class="flex items-center justify-between">
-		<div class="flex items-center gap-2">
-			<span class="text-muted-foreground">条件数量:</span>
-			<span class="font-medium">{conditionsList.value.length}</span>
-		</div>
-		<div class="flex items-center gap-2">
-			<span class="text-muted-foreground">状态:</span>
-			<span class={conditionalUpscaleEnabled.value ? 'text-green-500' : 'text-muted-foreground'}>
-				{conditionalUpscaleEnabled.value ? '已启用' : '已禁用'}
-			</span>
-		</div>
+		<Label class="text-xs font-medium">条件超分</Label>
+		<Switch
+			checked={conditionalUpscaleEnabled.value}
+			onCheckedChange={handleEnabledChange}
+			class="scale-90"
+			disabled={!isAutoUpscaleEnabled}
+		/>
 	</div>
+	<p class="text-[10px] text-muted-foreground -mt-1">
+		根据图片尺寸等条件决定是否超分
+	</p>
+
+	{#if !isAutoUpscaleEnabled}
+		<div class="text-[10px] text-amber-500 bg-amber-500/10 rounded p-2">
+			⚠️ 需要先启用「自动超分」才能生效
+		</div>
+	{/if}
+
+	<!-- 摘要信息 -->
+	{#if conditionalUpscaleEnabled.value && isAutoUpscaleEnabled}
+		<div class="flex items-center justify-between">
+			<div class="flex items-center gap-2">
+				<span class="text-muted-foreground">条件数量:</span>
+				<span class="font-medium">{conditionsList.value.length}</span>
+			</div>
+			<div class="flex items-center gap-2">
+				<span class="text-muted-foreground">状态:</span>
+				<span class="text-green-500">已启用</span>
+			</div>
+		</div>
 
 	<!-- 启用的条件列表预览 -->
 	{#if conditionsList.value.length > 0}
@@ -57,6 +88,7 @@ async function handleConditionsChange(event: CustomEvent) {
 				</span>
 			{/if}
 		</div>
+	{/if}
 	{/if}
 
 	<!-- 展开/折叠按钮 -->

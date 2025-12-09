@@ -3,8 +3,11 @@ use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use image::GenericImageView;
 use log::info;
 use natural_sort_rs::natural_cmp;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
+use std::collections::HashSet;
+use std::ffi::OsStr;
 use std::fs::{self, File};
 use std::io::{self, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
@@ -13,6 +16,20 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tempfile::NamedTempFile;
 use zip::write::{FileOptions, SimpleFileOptions};
 use zip::{ZipArchive, ZipWriter};
+
+/// 预编译的图片扩展名集合（压缩包内部使用）
+static ARCHIVE_IMAGE_EXTENSIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    [
+        "jpg", "jpeg", "png", "gif", "bmp", "webp", "avif", "jxl", "tiff", "tif",
+    ]
+    .into_iter()
+    .collect()
+});
+
+/// 预编译的压缩包扩展名映射
+static ZIP_EXTENSIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| ["zip", "cbz"].into_iter().collect());
+static RAR_EXTENSIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| ["rar", "cbr"].into_iter().collect());
+static SEVENZ_EXTENSIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| ["7z", "cb7"].into_iter().collect());
 
 /// 压缩包格式类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,18 +41,25 @@ pub enum ArchiveFormat {
 }
 
 impl ArchiveFormat {
-    /// 根据文件扩展名判断格式
+    /// 根据文件扩展名判断格式（使用预编译 HashSet，O(1) 查找）
+    #[inline]
     pub fn from_extension(path: &Path) -> Self {
-        if let Some(ext) = path.extension() {
-            match ext.to_string_lossy().to_lowercase().as_str() {
-                "zip" | "cbz" => ArchiveFormat::Zip,
-                "rar" | "cbr" => ArchiveFormat::Rar,
-                "7z" | "cb7" => ArchiveFormat::SevenZ,
-                _ => ArchiveFormat::Unknown,
-            }
-        } else {
-            ArchiveFormat::Unknown
-        }
+        path.extension()
+            .and_then(OsStr::to_str)
+            .map(|ext| {
+                let lower = ext.to_ascii_lowercase();
+                let s = lower.as_str();
+                if ZIP_EXTENSIONS.contains(s) {
+                    ArchiveFormat::Zip
+                } else if RAR_EXTENSIONS.contains(s) {
+                    ArchiveFormat::Rar
+                } else if SEVENZ_EXTENSIONS.contains(s) {
+                    ArchiveFormat::SevenZ
+                } else {
+                    ArchiveFormat::Unknown
+                }
+            })
+            .unwrap_or(ArchiveFormat::Unknown)
     }
     
     /// 检查格式是否受支持
@@ -186,14 +210,14 @@ impl ArchiveManager {
         Ok(cached)
     }
 
-    /// 检查是否为图片文件
+    /// 检查是否为图片文件（使用预编译 HashSet，O(1) 查找）
+    #[inline]
     fn is_image_file(&self, path: &str) -> bool {
-        if let Some(ext) = Path::new(path).extension() {
-            let ext = ext.to_string_lossy().to_lowercase();
-            self.image_extensions.contains(&ext)
-        } else {
-            false
-        }
+        Path::new(path)
+            .extension()
+            .and_then(OsStr::to_str)
+            .map(|ext| ARCHIVE_IMAGE_EXTENSIONS.contains(ext.to_ascii_lowercase().as_str()))
+            .unwrap_or(false)
     }
 
     /// 读取压缩包内容列表（自动检测格式）

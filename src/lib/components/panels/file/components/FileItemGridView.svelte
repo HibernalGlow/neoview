@@ -84,7 +84,7 @@
 </script>
 
 <div
-	class="border-border group relative flex cursor-pointer flex-col overflow-hidden rounded border transition-all hover:shadow-md {isSelected
+	class="border-border group/card relative flex cursor-pointer flex-col overflow-hidden rounded border transition-all hover:shadow-md {isSelected
 		? 'border-primary ring-2'
 		: ''}"
 	onclick={(e) => {
@@ -107,7 +107,7 @@
 			<img
 				src={thumbnail}
 				alt={item.name}
-				class="h-full w-full object-cover transition-transform group-hover:scale-105"
+				class="h-full w-full object-cover transition-transform group-hover/card:scale-105"
 			/>
 		{:else if item.isDir}
 			<div class="flex h-full w-full items-center justify-center">

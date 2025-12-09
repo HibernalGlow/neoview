@@ -126,8 +126,8 @@
 	// 容器样式类
 	const containerClass = $derived(
 		isGridLayout
-			? `border-border group relative flex flex-col cursor-pointer rounded-md border overflow-hidden transition-colors ${isSelected ? 'bg-accent text-accent-foreground border-accent' : 'hover:bg-accent/40'}`
-			: `border-border group relative flex min-h-16 cursor-pointer items-center gap-3 rounded-md border p-2 transition-colors ${isSelected ? 'bg-accent text-accent-foreground border-accent' : 'hover:bg-accent/40'}`
+			? `border-border group/item relative flex flex-col cursor-pointer rounded-md border overflow-hidden transition-colors ${isSelected ? 'bg-accent text-accent-foreground border-accent' : 'hover:bg-accent/40'}`
+			: `border-border group/item relative flex min-h-16 cursor-pointer items-center gap-3 rounded-md border p-2 transition-colors ${isSelected ? 'bg-accent text-accent-foreground border-accent' : 'hover:bg-accent/40'}`
 	);
 </script>
 
@@ -199,16 +199,16 @@
 					<img
 						src={thumbnail}
 						alt={item.name}
-						class="h-full w-full object-cover transition-transform group-hover:scale-105"
+						class="h-full w-full object-cover transition-transform group-hover/item:scale-105"
 					/>
 				{:else if item.isDir}
-					<Folder class="text-primary group-hover:text-primary h-8 w-8 transition-colors" />
+					<Folder class="text-primary group-hover/item:text-primary h-8 w-8 transition-colors" />
 				{:else if isArchive}
-					<FileArchive class="text-primary group-hover:text-primary h-8 w-8 transition-colors" />
+					<FileArchive class="text-primary group-hover/item:text-primary h-8 w-8 transition-colors" />
 				{:else if item.isImage}
-					<Image class="text-primary group-hover:text-primary h-8 w-8 transition-colors" />
+					<Image class="text-primary group-hover/item:text-primary h-8 w-8 transition-colors" />
 				{:else}
-					<File class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500" />
+					<File class="h-8 w-8 text-gray-400 transition-colors group-hover/item:text-gray-500" />
 				{/if}
 
 				<!-- 阅读标记 -->

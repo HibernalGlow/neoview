@@ -10,7 +10,8 @@ import {
 	readText,
 	hasFiles,
 	hasText,
-	clear
+	clear,
+	type ReadFile
 } from 'tauri-plugin-clipboard-x-api';
 
 export interface ClipboardState {
@@ -31,6 +32,7 @@ export async function copyFilesToClipboard(paths: string[]): Promise<void> {
 	await writeFiles(paths);
 	// 清除剪切状态
 	localCutState.clear();
+	console.log('[Clipboard] Copied files to system clipboard:', paths);
 }
 
 /**
@@ -42,6 +44,7 @@ export async function cutFilesToClipboard(paths: string[]): Promise<void> {
 	await writeFiles(paths);
 	// 设置剪切状态
 	localCutState = new Set(paths);
+	console.log('[Clipboard] Cut files to system clipboard:', paths);
 }
 
 /**
@@ -51,17 +54,25 @@ export async function cutFilesToClipboard(paths: string[]): Promise<void> {
 export async function readFilesFromClipboard(): Promise<ClipboardState | null> {
 	try {
 		const hasFilesInClipboard = await hasFiles();
+		console.log('[Clipboard] Has files in clipboard:', hasFilesInClipboard);
+		
 		if (!hasFilesInClipboard) {
 			return null;
 		}
 		
-		const files = await readFiles();
-		if (!files || files.length === 0) {
+		// readFiles 返回 { paths: string[], size: number }
+		const result: ReadFile = await readFiles();
+		console.log('[Clipboard] Read files result:', result);
+		
+		if (!result || !result.paths || result.paths.length === 0) {
 			return null;
 		}
 		
+		const files = result.paths;
+		
 		// 检查是否是我们之前剪切的文件
-		const isCut = files.every((f: string) => localCutState.has(f));
+		const isCut = files.length > 0 && files.every((f: string) => localCutState.has(f));
+		console.log('[Clipboard] Is cut operation:', isCut, 'localCutState:', Array.from(localCutState));
 		
 		return {
 			files,

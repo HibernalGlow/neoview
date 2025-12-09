@@ -23,7 +23,10 @@ import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 
 // 递进超分状态
 let dwellTimer: ReturnType<typeof setTimeout> | null = null;
+let countdownTimer: ReturnType<typeof setInterval> | null = null;
 let isProgressiveRunning = $state(false);
+let countdown = $state(0); // 倒计时秒数
+let isTimerActive = $state(false); // 计时器是否激活
 
 // 响应式依赖
 const upscaleEnabled = $derived(upscaleStore.enabled);
@@ -84,6 +87,15 @@ function startDwellTimer() {
 	stopDwellTimer();
 	if (!progressiveUpscaleEnabled.value || !autoUpscaleEnabled.value) return;
 	
+	// 设置倒计时
+	countdown = progressiveDwellTime.value;
+	isTimerActive = true;
+	
+	// 每秒更新倒计时
+	countdownTimer = setInterval(() => {
+		countdown = Math.max(0, countdown - 1);
+	}, 1000);
+	
 	dwellTimer = setTimeout(() => {
 		triggerProgressiveUpscale();
 	}, progressiveDwellTime.value * 1000);
@@ -94,6 +106,12 @@ function stopDwellTimer() {
 		clearTimeout(dwellTimer);
 		dwellTimer = null;
 	}
+	if (countdownTimer) {
+		clearInterval(countdownTimer);
+		countdownTimer = null;
+	}
+	isTimerActive = false;
+	countdown = 0;
 }
 
 async function triggerProgressiveUpscale() {
@@ -121,6 +139,15 @@ onMount(() => {
 
 onDestroy(() => {
 	stopDwellTimer();
+});
+
+// 计算递进超分状态文本
+const progressiveStatusText = $derived(() => {
+	if (!progressiveUpscaleEnabled.value || !isAutoUpscaleEnabled) return null;
+	if (isProgressiveRunning) return '触发中...';
+	if (isTimerActive && countdown > 0) return `${countdown}秒后触发`;
+	if (isTimerActive) return '即将触发';
+	return '待机';
 });
 </script>
 
@@ -245,10 +272,25 @@ onDestroy(() => {
 			<Progress value={(upscaledCount() / totalPages) * 100} class="h-1.5" />
 		{/if}
 
-		{#if isProgressiveRunning}
-			<div class="flex items-center gap-2">
-				<div class="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></div>
-				<span class="text-[10px] text-cyan-500">递进超分中...</span>
+		<!-- 递进超分状态 -->
+		{#if progressiveUpscaleEnabled.value && isAutoUpscaleEnabled}
+			<div class="flex items-center justify-between">
+				<span class="text-xs text-muted-foreground">递进状态</span>
+				<div class="flex items-center gap-1.5">
+					{#if isProgressiveRunning}
+						<div class="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></div>
+						<span class="text-xs font-mono text-cyan-500">触发中</span>
+					{:else if isTimerActive && countdown > 0}
+						<div class="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
+						<span class="text-xs font-mono text-amber-500">{countdown}s</span>
+					{:else if isTimerActive}
+						<div class="w-2 h-2 bg-green-500 rounded-full"></div>
+						<span class="text-xs font-mono text-green-500">即将触发</span>
+					{:else}
+						<div class="w-2 h-2 bg-gray-400 rounded-full"></div>
+						<span class="text-xs font-mono text-muted-foreground">待机</span>
+					{/if}
+				</div>
 			</div>
 		{/if}
 	</div>

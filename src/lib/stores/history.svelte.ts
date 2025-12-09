@@ -127,11 +127,14 @@ export const historyStore = {
   },
 
   /**
-   * 根据路径查找历史记录
+   * 根据路径查找历史记录（标准化路径比较）
    */
   findByPath(path: string): HistoryEntry | undefined {
     const history = this.getAll();
-    return history.find(h => h.path === path);
+    // 标准化路径：统一斜杠方向和大小写
+    const normalizePath = (p: string) => p.replace(/\\/g, '/').toLowerCase();
+    const normalizedPath = normalizePath(path);
+    return history.find(h => normalizePath(h.path) === normalizedPath);
   },
 
   /**

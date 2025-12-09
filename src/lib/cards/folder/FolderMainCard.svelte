@@ -29,6 +29,7 @@
 	import { favoriteTagStore } from '$lib/stores/emm/favoriteTagStore.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
+	import { historyStore } from '$lib/stores/history.svelte';
 	import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 	import { FileSystemAPI } from '$lib/api';
 	import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
@@ -149,14 +150,20 @@
 		try {
 			const isArchive = await FileSystemAPI.isSupportedArchive(item.path);
 			if (isArchive) {
-				await bookStore.openBook(item.path);
+				// 从历史记录获取上次阅读的页码
+				const historyEntry = historyStore.findByPath(item.path);
+				const initialPage = historyEntry?.currentPage ?? 0;
+				await bookStore.openBook(item.path, { initialPage });
 			} else if (isVideoPath(item.path) || item.isImage || isImagePath(item.path)) {
 				const lastSep = Math.max(item.path.lastIndexOf('/'), item.path.lastIndexOf('\\'));
 				const parentPath = lastSep > 0 ? item.path.substring(0, lastSep) : item.path;
 				await bookStore.openDirectoryAsBook(parentPath);
 				await bookStore.navigateToImage(item.path);
 			} else {
-				await bookStore.openBook(item.path);
+				// 其他类型文件也尝试从历史记录获取页码
+				const historyEntry = historyStore.findByPath(item.path);
+				const initialPage = historyEntry?.currentPage ?? 0;
+				await bookStore.openBook(item.path, { initialPage });
 			}
 		} catch (err) {
 			showErrorToast('打开失败', err instanceof Error ? err.message : String(err));

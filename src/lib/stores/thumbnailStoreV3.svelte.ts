@@ -235,16 +235,17 @@ export async function reloadThumbnail(
   const key = toRelativeKey(path);
   fileBrowserStore.removeThumbnail(key);
 
-  // 3. 调用后端删除数据库缓存并重新生成
+  // 3. 调用后端删除数据库缓存并立即重新生成
   try {
-    await invoke('reload_thumbnail_v3', { path });
+    await invoke('reload_thumbnail_v3', { 
+      path, 
+      currentDir: currentDir || '' 
+    });
     console.log(`🔄 Reloading thumbnail: ${path}`);
   } catch (error) {
     console.error('❌ reloadThumbnail failed:', error);
   }
-
-  // 4. 请求重新生成（后端会推送结果）
-  await requestVisibleThumbnails([path], currentDir || '');
+  // 后端会自动触发重新生成并通过事件推送结果
 }
 
 /**

@@ -315,11 +315,17 @@ pub async fn vacuum_thumbnail_db_v3(
 pub async fn reload_thumbnail_v3(
     app: AppHandle,
     path: String,
+    current_dir: Option<String>,
 ) -> Result<(), String> {
     if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
-        // 删除内存缓存和数据库记录
+        // 1. 删除内存缓存和数据库记录
         state.service.remove_thumbnail(&path)?;
         log_info!("🔄 Removed thumbnail cache for: {}", path);
+        
+        // 2. 立即触发重新生成（使用提供的当前目录或空字符串）
+        let dir = current_dir.unwrap_or_default();
+        state.service.regenerate_thumbnail(&app, &path, &dir);
+        
         Ok(())
     } else {
         Err("缩略图服务未初始化".to_string())

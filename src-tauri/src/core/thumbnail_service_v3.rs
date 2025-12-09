@@ -941,6 +941,30 @@ impl ThumbnailServiceV3 {
             .map_err(|e| format!("删除数据库缓存失败: {}", e))
     }
     
+    /// 强制重新生成缩略图（跳过缓存检查，直接入队）
+    pub fn regenerate_thumbnail(&self, app: &AppHandle, path: &str, current_dir: &str) {
+        // 检测文件类型
+        let file_type = Self::detect_file_type(path);
+        
+        // 创建高优先级任务
+        let task = GenerateTask {
+            path: path.to_string(),
+            directory: current_dir.to_string(),
+            file_type,
+            center_distance: 0, // 最高优先级
+            original_index: 0,
+        };
+        
+        // 直接入队，不检查缓存
+        if let Ok(mut queue) = self.task_queue.lock() {
+            // 移除已有的同路径任务（如果有）
+            queue.retain(|t| t.path != path);
+            // 添加到队列前面（高优先级）
+            queue.push_front(task);
+            log_info!("🔄 强制重新生成缩略图: {}", path);
+        }
+    }
+    
     /// 检查内存压力并自动清理（当超过阈值时清理一半缓存）
     pub fn check_memory_pressure(&self, max_bytes: usize) {
         let current_bytes = self.memory_cache_bytes.load(Ordering::SeqCst);

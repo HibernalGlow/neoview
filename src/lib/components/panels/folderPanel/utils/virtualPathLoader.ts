@@ -9,6 +9,36 @@ import { historyStore, type HistoryEntry } from '$lib/stores/history.svelte';
 import { get } from 'svelte/store';
 import { getVirtualPathType, tabSearchResults, type VirtualPathType } from '../stores/folderTabStore.svelte';
 
+// 清理状态追踪，避免重复清理
+let bookmarkCleanedUp = false;
+let historyCleanedUp = false;
+
+/**
+ * 触发书签清理（首次加载时执行一次）
+ */
+async function triggerBookmarkCleanup(): Promise<void> {
+	if (bookmarkCleanedUp) return;
+	bookmarkCleanedUp = true;
+	try {
+		await bookmarkStore.cleanupInvalid();
+	} catch (e) {
+		console.error('[VirtualPathLoader] 书签清理失败:', e);
+	}
+}
+
+/**
+ * 触发历史清理（首次加载时执行一次）
+ */
+async function triggerHistoryCleanup(): Promise<void> {
+	if (historyCleanedUp) return;
+	historyCleanedUp = true;
+	try {
+		await historyStore.cleanupInvalid();
+	} catch (e) {
+		console.error('[VirtualPathLoader] 历史清理失败:', e);
+	}
+}
+
 // 书签条目类型（与 bookmarkStore 中的 Bookmark 类型一致）
 interface BookmarkEntry {
 	id: string;
@@ -94,10 +124,14 @@ export function loadVirtualPathData(path: string): FsItem[] {
 
 	switch (type) {
 		case 'bookmark': {
+			// 触发后台清理（首次加载时执行一次，不阻塞）
+			triggerBookmarkCleanup();
 			const bookmarks = get(bookmarkStore) as BookmarkEntry[];
 			return bookmarks.map(bookmarkToFsItem);
 		}
 		case 'history': {
+			// 触发后台清理（首次加载时执行一次，不阻塞）
+			triggerHistoryCleanup();
 			const history = get(historyStore) as HistoryEntry[];
 			return history.map(historyToFsItem);
 		}

@@ -4,6 +4,7 @@
 
 import { writable } from 'svelte/store';
 import type { FsItem } from '$lib/types';
+import { pathExists } from '$lib/api/filesystem';
 
 interface Bookmark {
   id: string;
@@ -98,5 +99,42 @@ export const bookmarkStore = {
     const newBookmarks: Bookmark[] = [];
     set(newBookmarks);
     saveToStorage(newBookmarks);
+  },
+
+  /**
+   * 清理失效的书签（文件/文件夹不存在）
+   * 返回清理的条目数量
+   */
+  async cleanupInvalid(): Promise<number> {
+    const bookmarks = this.getAll();
+    if (bookmarks.length === 0) return 0;
+
+    // 并发检查所有路径是否存在
+    const checkResults = await Promise.all(
+      bookmarks.map(async (bookmark) => {
+        try {
+          const exists = await pathExists(bookmark.path);
+          return { bookmark, exists };
+        } catch {
+          // 检查失败时保留条目
+          return { bookmark, exists: true };
+        }
+      })
+    );
+
+    // 过滤出存在的条目
+    const validBookmarks = checkResults
+      .filter(r => r.exists)
+      .map(r => r.bookmark);
+
+    const removedCount = bookmarks.length - validBookmarks.length;
+
+    if (removedCount > 0) {
+      set(validBookmarks);
+      saveToStorage(validBookmarks);
+      console.log(`[Bookmark] 清理了 ${removedCount} 条失效书签`);
+    }
+
+    return removedCount;
   }
 };

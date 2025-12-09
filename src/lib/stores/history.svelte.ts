@@ -3,6 +3,7 @@
  */
 
 import { writable } from 'svelte/store';
+import { pathExists } from '$lib/api/filesystem';
 
 export interface HistoryEntry {
   id: string;
@@ -208,6 +209,43 @@ export const historyStore = {
       saveToStorage(reordered);
       return reordered;
     });
+  },
+
+  /**
+   * 清理失效的历史记录（文件/文件夹不存在）
+   * 返回清理的条目数量
+   */
+  async cleanupInvalid(): Promise<number> {
+    const history = this.getAll();
+    if (history.length === 0) return 0;
+
+    // 并发检查所有路径是否存在
+    const checkResults = await Promise.all(
+      history.map(async (entry) => {
+        try {
+          const exists = await pathExists(entry.path);
+          return { entry, exists };
+        } catch {
+          // 检查失败时保留条目
+          return { entry, exists: true };
+        }
+      })
+    );
+
+    // 过滤出存在的条目
+    const validEntries = checkResults
+      .filter(r => r.exists)
+      .map(r => r.entry);
+
+    const removedCount = history.length - validEntries.length;
+
+    if (removedCount > 0) {
+      set(validEntries);
+      saveToStorage(validEntries);
+      console.log(`[History] 清理了 ${removedCount} 条失效记录`);
+    }
+
+    return removedCount;
   }
 };
 

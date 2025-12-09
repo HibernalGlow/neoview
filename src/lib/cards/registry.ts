@@ -300,7 +300,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 	},
 	'progressiveUpscale': {
 		id: 'progressiveUpscale',
-		title: '递进超分',
+		title: '预超分',
 		icon: Timer,
 		defaultPanel: 'upscale',
 		canHide: true,

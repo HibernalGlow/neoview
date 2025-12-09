@@ -800,32 +800,7 @@ class BookStore {
         totalPages > 0 ? (safeCurrent / totalPages) * 100 : null;
 
       const emmRaw: Record<string, unknown> | undefined = emm
-        ? {
-            id: emm.id,
-            title: emm.title,
-            title_jpn: emm.title_jpn,
-            hash: emm.hash,
-            coverPath: emm.cover_path,
-            filepath: emm.filepath,
-            type: emm.type,
-            pageCount: emm.page_count,
-            bundleSize: emm.bundle_size,
-            mtime: emm.mtime,
-            coverHash: emm.cover_hash,
-            status: emm.status,
-            date: emm.date,
-            filecount: emm.filecount,
-            posted: emm.posted,
-            filesize: emm.filesize,
-            category: emm.category,
-            url: emm.url,
-            mark: emm.mark,
-            hiddenBook: emm.hidden_book,
-            readCount: emm.read_count,
-            exist: emm.exist,
-            createdAt: emm.created_at,
-            updatedAt: emm.updated_at
-          }
+        ? this.mapEmmToRaw(emm)
         : undefined;
 
       const emmTranslatedTitle = emm?.translated_title;
@@ -1042,6 +1017,38 @@ class BookStore {
     }
   }
 
+  /**
+   * 将 EMM 元数据转换为原始记录对象
+   */
+  private mapEmmToRaw(emm: EMMMetadata): Record<string, unknown> {
+    return {
+      id: emm.id,
+      title: emm.title,
+      title_jpn: emm.title_jpn,
+      hash: emm.hash,
+      coverPath: emm.cover_path,
+      filepath: emm.filepath,
+      type: emm.type,
+      pageCount: emm.page_count,
+      bundleSize: emm.bundle_size,
+      mtime: emm.mtime,
+      coverHash: emm.cover_hash,
+      status: emm.status,
+      date: emm.date,
+      filecount: emm.filecount,
+      posted: emm.posted,
+      filesize: emm.filesize,
+      category: emm.category,
+      url: emm.url,
+      mark: emm.mark,
+      hiddenBook: emm.hidden_book,
+      readCount: emm.read_count,
+      exist: emm.exist,
+      createdAt: emm.created_at,
+      updatedAt: emm.updated_at
+    };
+  }
+
   private async syncInfoPanelBookInfo() {
     const book = this.state.currentBook;
     if (!book) {
@@ -1068,33 +1075,7 @@ class BookStore {
           translatedTitle: emmMetadata.translated_title,
           tags: emmMetadata.tags,
           rating: emmMetadata.rating,
-          raw: {
-            id: emmMetadata.id,
-            title: emmMetadata.title,
-            title_jpn: emmMetadata.title_jpn,
-            hash: emmMetadata.hash,
-            coverPath: emmMetadata.cover_path,
-            filepath: emmMetadata.filepath,
-            type: emmMetadata.type,
-            pageCount: emmMetadata.page_count,
-            bundleSize: emmMetadata.bundle_size,
-            mtime: emmMetadata.mtime,
-            coverHash: emmMetadata.cover_hash,
-            status: emmMetadata.status,
-            date: emmMetadata.date,
-            filecount: emmMetadata.filecount,
-            posted: emmMetadata.posted,
-            filesize: emmMetadata.filesize,
-            category: emmMetadata.category,
-            url: emmMetadata.url,
-            mark: emmMetadata.mark,
-            hiddenBook: emmMetadata.hidden_book,
-            readCount: emmMetadata.read_count,
-            exist: emmMetadata.exist,
-            createdAt: emmMetadata.created_at,
-            updatedAt: emmMetadata.updated_at,
-            // rating 和 tags 在外层已有，这里不重复
-          },
+          raw: this.mapEmmToRaw(emmMetadata),
         }
         : undefined,
     };

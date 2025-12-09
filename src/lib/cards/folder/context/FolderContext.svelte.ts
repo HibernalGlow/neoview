@@ -77,7 +77,7 @@ export interface FolderContextValue {
 	readonly effectiveMultiSelectMode: boolean;
 	readonly effectiveDeleteMode: boolean;
 	readonly effectiveInlineTreeMode: boolean;
-	readonly effectiveViewStyle: string | undefined;
+	readonly effectiveViewStyle: 'list' | 'content' | 'banner' | 'thumbnail' | undefined;
 	readonly effectiveSortConfig: { field: string; order: string } | undefined;
 	
 	// ============ UI 状态 ============
@@ -188,9 +188,9 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 		globalInlineTreeModeValue
 	);
 	
-	const effectiveViewStyle = $derived<string | undefined>(
-		panelMode === 'history' ? virtualPanelSettingsStore.historyViewStyle :
-		panelMode === 'bookmark' ? virtualPanelSettingsStore.bookmarkViewStyle :
+	const effectiveViewStyle = $derived<'list' | 'content' | 'banner' | 'thumbnail' | undefined>(
+		panelMode === 'history' ? virtualPanelSettingsStore.historyViewStyle as 'list' | 'content' | 'banner' | 'thumbnail' :
+		panelMode === 'bookmark' ? virtualPanelSettingsStore.bookmarkViewStyle as 'list' | 'content' | 'banner' | 'thumbnail' :
 		undefined
 	);
 	

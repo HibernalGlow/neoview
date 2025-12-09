@@ -186,7 +186,7 @@
 						skipGlobalStore={ctx.isVirtualInstance}
 						overrideMultiSelectMode={ctx.effectiveMultiSelectMode}
 						overrideDeleteMode={ctx.effectiveDeleteMode}
-						overrideViewStyle={ctx.isVirtualInstance ? ctx.effectiveViewStyle : undefined}
+						overrideViewStyle={ctx.isVirtualInstance ? ctx.effectiveViewStyle as 'list' | 'content' | 'banner' | 'thumbnail' | undefined : undefined}
 						overrideSortConfig={ctx.isVirtualInstance ? ctx.effectiveSortConfig : undefined}
 					/>
 				{/if}

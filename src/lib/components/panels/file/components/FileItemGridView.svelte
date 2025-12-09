@@ -287,15 +287,13 @@
 					</span>
 				{/if}
 				{#if emmMetadata.rating !== undefined && emmMetadata.rating > 0}
-					<Tooltip.Root>
-						<Tooltip.Trigger>
-							<span class="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1 py-0.5 text-[10px] text-amber-600 dark:text-amber-400">
-								<Star class="h-2.5 w-2.5 fill-current" />
-								<span class="font-medium">{emmMetadata.rating.toFixed(1)}</span>
-							</span>
-						</Tooltip.Trigger>
-						<Tooltip.Content><p>评分: {emmMetadata.rating.toFixed(2)}</p></Tooltip.Content>
-					</Tooltip.Root>
+					<MetadataBadge
+						text={emmMetadata.rating.toFixed(1)}
+						icon={Star}
+						tooltip="评分: {emmMetadata.rating.toFixed(2)}"
+						size="xs"
+						variant="purple"
+					/>
 				{/if}
 			</div>
 		{/if}

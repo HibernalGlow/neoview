@@ -20,16 +20,30 @@ let cleanupDays = $state(30);
 async function refreshCacheStats() {
 	isRefreshing = true;
 	try {
-		const stats = await pyo3UpscaleManager.getCacheStats();
+		// 直接调用 Tauri 命令获取缓存统计
+		const stats = await invoke<{ total_files: number; total_size: number; cache_dir: string }>('get_pyo3_cache_stats');
 		if (stats) {
 			cacheStats.value = {
-				totalFiles: stats.totalFiles,
-				totalSize: stats.totalSize,
-				cacheDir: stats.cacheDir
+				totalFiles: stats.total_files,
+				totalSize: stats.total_size,
+				cacheDir: stats.cache_dir
 			};
 		}
 	} catch (err) {
 		console.error('刷新缓存统计失败:', err);
+		// 尝试使用 pyo3UpscaleManager 作为备选
+		try {
+			const stats = await pyo3UpscaleManager.getCacheStats();
+			if (stats) {
+				cacheStats.value = {
+					totalFiles: stats.totalFiles,
+					totalSize: stats.totalSize,
+					cacheDir: stats.cacheDir
+				};
+			}
+		} catch (e) {
+			console.error('备选方案也失败:', e);
+		}
 	} finally {
 		isRefreshing = false;
 	}

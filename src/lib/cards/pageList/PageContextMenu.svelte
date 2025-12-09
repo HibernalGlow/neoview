@@ -136,11 +136,11 @@ async function handleCopy() {
 		console.log('[PageContextMenu] archiveInfo:', archiveInfo, 'currentItem:', currentItem);
 		
 		if (archiveInfo.isArchive && archiveInfo.archivePath && archiveInfo.innerPath) {
-			// 压缩包内文件：先提取到临时文件
+			// 压缩包内文件：先提取到临时文件（使用友好的文件名格式）
 			showSuccessToast('正在提取...', currentItem.name);
 			console.log('[PageContextMenu] Extracting from archive:', archiveInfo.archivePath, archiveInfo.innerPath);
 			
-			const tempPath = await invoke<string>('extract_image_to_temp', {
+			const tempPath = await invoke<string>('extract_for_clipboard', {
 				archivePath: archiveInfo.archivePath,
 				filePath: archiveInfo.innerPath
 			});

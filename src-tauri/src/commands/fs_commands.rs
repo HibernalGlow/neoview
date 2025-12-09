@@ -872,6 +872,79 @@ pub async fn extract_image_to_temp(
     result
 }
 
+/// 从压缩包提取文件用于复制到剪贴板
+/// 使用友好的文件名格式：压缩包名_内部文件名.扩展名
+#[tauri::command]
+pub async fn extract_for_clipboard(
+    archive_path: String,
+    file_path: String,
+    state: State<'_, FsState>,
+) -> Result<String, String> {
+    info!(
+        "📥 [Clipboard] extract_for_clipboard request archive={} inner={}",
+        archive_path, file_path
+    );
+
+    let archive_manager = Arc::clone(&state.archive_manager);
+    let archive_path_buf = PathBuf::from(&archive_path);
+    let inner_path = file_path.clone();
+    
+    let result = spawn_blocking(move || {
+        // 使用 unwrap_or_else 恢复被污染的锁
+        let manager = archive_manager
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        
+        // 读取图片数据（支持 ZIP/RAR/7z）
+        let bytes = manager.load_image_from_archive_binary(&archive_path_buf, &inner_path)?;
+        
+        // 获取文件扩展名
+        let ext = Path::new(&inner_path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("jpg");
+        
+        // 创建临时目录
+        let temp_dir = std::env::temp_dir().join("neoview_clipboard");
+        std::fs::create_dir_all(&temp_dir).map_err(|e| format!("创建临时目录失败: {}", e))?;
+        
+        // 获取压缩包名称（不含扩展名）
+        let archive_stem = archive_path_buf
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("archive");
+        
+        // 获取内部文件名（不含路径）
+        let inner_name = Path::new(&inner_path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("file");
+        
+        // 文件名格式：压缩包名_内部文件名.扩展名
+        let temp_path = temp_dir.join(format!("{}_{}.{}", archive_stem, inner_name, ext));
+        
+        // 写入临时文件（始终覆盖）
+        std::fs::write(&temp_path, &bytes).map_err(|e| format!("写入临时文件失败: {}", e))?;
+        
+        Ok(temp_path.to_string_lossy().to_string())
+    })
+    .await
+    .map_err(|e| format!("extract_for_clipboard join error: {}", e))?;
+
+    match &result {
+        Ok(path) => info!(
+            "📤 [Clipboard] extract_for_clipboard success path={}",
+            path
+        ),
+        Err(err) => warn!(
+            "⚠️ [Clipboard] extract_for_clipboard failed: {}",
+            err
+        ),
+    }
+
+    result
+}
+
 /// 获取压缩包中的所有图片
 #[tauri::command]
 pub async fn get_images_from_archive(

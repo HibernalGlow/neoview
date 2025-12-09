@@ -191,6 +191,7 @@ pub fn run() {
             commands::load_image_from_archive_binary,
             commands::load_image_from_archive_base64,
             commands::extract_image_to_temp,
+            commands::extract_for_clipboard,
             commands::batch_extract_archive,
             commands::get_images_from_archive,
             commands::is_supported_archive,

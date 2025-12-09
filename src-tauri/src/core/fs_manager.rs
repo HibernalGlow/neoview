@@ -1,12 +1,31 @@
 use super::file_indexer::FileIndexer;
 use super::video_exts;
+use once_cell::sync::Lazy;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
 use trash;
+
+/// 预编译的图片扩展名集合（O(1) 查找）
+static IMAGE_EXTENSIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    [
+        "jpg", "jpeg", "png", "gif", "bmp", "webp", "avif", "jxl", "tiff", "tif",
+    ]
+    .into_iter()
+    .collect()
+});
+
+/// 预编译的压缩包扩展名集合
+static ARCHIVE_EXTENSIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    ["zip", "cbz", "rar", "cbr", "7z", "cb7"]
+        .into_iter()
+        .collect()
+});
 
 /// 文件系统项（文件或目录）
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -326,27 +345,22 @@ impl FsManager {
         })
     }
 
-    /// 检查是否为图片文件
+    /// 检查是否为图片文件（使用预编译 HashSet，O(1) 查找）
+    #[inline]
     fn is_image_file(path: &Path) -> bool {
-        if let Some(ext) = path.extension() {
-            let ext = ext.to_string_lossy().to_lowercase();
-            matches!(
-                ext.as_str(),
-                "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "avif" | "jxl" | "tiff" | "tif"
-            )
-        } else {
-            false
-        }
+        path.extension()
+            .and_then(OsStr::to_str)
+            .map(|ext| IMAGE_EXTENSIONS.contains(ext.to_ascii_lowercase().as_str()))
+            .unwrap_or(false)
     }
 
-    /// 检查是否为压缩包文件
+    /// 检查是否为压缩包文件（使用预编译 HashSet，O(1) 查找）
+    #[inline]
     fn is_archive_file(path: &Path) -> bool {
-        if let Some(ext) = path.extension() {
-            let ext = ext.to_string_lossy().to_lowercase();
-            matches!(ext.as_str(), "zip" | "cbz" | "rar" | "cbr" | "7z" | "cb7")
-        } else {
-            false
-        }
+        path.extension()
+            .and_then(OsStr::to_str)
+            .map(|ext| ARCHIVE_EXTENSIONS.contains(ext.to_ascii_lowercase().as_str()))
+            .unwrap_or(false)
     }
 
     /// 检查是否为视频文件

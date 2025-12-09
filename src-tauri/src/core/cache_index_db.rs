@@ -1,7 +1,6 @@
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use parking_lot::Mutex;
 
 use chrono::Utc;
 use rusqlite::{params, Connection, Result as SqliteResult};
@@ -76,7 +75,7 @@ impl CacheIndexDb {
     }
 
     fn open(&self) -> SqliteResult<()> {
-        let mut conn_guard = self.connection.lock();
+        let mut conn_guard = self.connection.lock().unwrap();
         if conn_guard.is_some() {
             return Ok(());
         }
@@ -124,7 +123,7 @@ impl CacheIndexDb {
     ) -> Result<T, String> {
         self.open()
             .map_err(|e| format!("打开缓存数据库失败: {}", e))?;
-        let guard = self.connection.lock();
+        let guard = self.connection.lock().unwrap();
         let conn = guard.as_ref().unwrap();
         f(conn).map_err(|e| format!("缓存数据库操作失败: {}", e))
     }

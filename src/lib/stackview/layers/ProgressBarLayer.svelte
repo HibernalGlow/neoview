@@ -153,7 +153,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    height: 2.5rem;
+    height: 1.8rem;
     background: transparent;
     transition: opacity 0.3s ease;
     pointer-events: none;
@@ -165,20 +165,20 @@
     right: 0;
     bottom: 0;
     width: 100%;
-    height: 10px; /* 增加高度以容纳两个进度条 */
-    background: transparent;
+    height: 4px;
+    background: color-mix(in srgb, var(--muted), transparent 50%);
   }
 
   .bar-track.rtl {
     direction: rtl;
   }
 
-  /* 预超分覆盖进度条在主进度条同层 */
+  /* 预超分覆盖进度条 */
   .preup-bar {
     position: absolute;
     left: 0;
-    bottom: 4px;
-    height: 4px;
+    bottom: 0;
+    height: 100%;
     background-color: rgba(250, 204, 21, 0.7);
     transition: width 0.4s ease;
     border-radius: 0 2px 2px 0;
@@ -190,14 +190,14 @@
     border-radius: 2px 0 0 2px;
   }
 
-  /* 超分进度条轨道 - 始终显示于主进度条下方 */
+  /* 超分进度条轨道 - 与主进度条重叠位置 */
   .upscale-track {
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-    height: 3px;
-    background: rgba(6, 182, 212, 0.15);
+    height: 100%;
+    background: rgba(6, 182, 212, 0.2);
     border-radius: 2px;
   }
 
@@ -206,12 +206,12 @@
   }
 
   /* 超分实时进度条 - 青色（并行处理颜色，类似 jwalk 的并行特性） */
-  /* 位于主进度条下方，重叠显示 */
+  /* 与主进度条重叠，作为背景层 */
   .upscale-progress-bar {
     position: absolute;
     left: 0;
     bottom: 0;
-    height: 3px;
+    height: 100%;
     background: linear-gradient(90deg, #06b6d4 0%, #22d3ee 50%, #67e8f9 100%);
     transition: width 0.4s ease;
     border-radius: 0 2px 2px 0;
@@ -237,12 +237,12 @@
     }
   }
 
-  /* 主阅读进度条在上层 */
+  /* 主阅读进度条在最上层，覆盖超分进度条 */
   .reading-bar {
     position: absolute;
     left: 0;
-    bottom: 4px; /* 在超分进度条上方 */
-    height: 4px;
+    bottom: 0;
+    height: 100%;
     border-radius: 0 2px 2px 0;
     transition:
       width 0.3s ease,

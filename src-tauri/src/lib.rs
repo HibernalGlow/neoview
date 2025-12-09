@@ -63,12 +63,17 @@ pub fn run() {
                 archive_manager: Arc::new(Mutex::new(archive_manager)),
             });
 
+            // 优化：增加目录缓存容量和TTL
+            // 容量从 128 增加到 512，TTL 从 30s 增加到 120s
             let directory_cache =
-                core::directory_cache::DirectoryCache::new(128, Duration::from_secs(30));
+                core::directory_cache::DirectoryCache::new(512, Duration::from_secs(120));
+            // 优化：增加 SQLite 缓存 TTL
+            // directory_ttl: 300s -> 600s (10分钟)
+            // thumbnail_ttl: 3600s -> 7200s (2小时)
             let cache_index_db = CacheIndexDb::new(
                 app_data_root.join("directory_cache.db"),
-                Duration::from_secs(300),
-                Duration::from_secs(3600),
+                Duration::from_secs(600),
+                Duration::from_secs(7200),
             );
             app.manage(DirectoryCacheState {
                 cache: Mutex::new(directory_cache),

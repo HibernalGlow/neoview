@@ -98,20 +98,25 @@ $effect(() => {
  * 检查页面是否在压缩包内
  */
 function getArchiveInfo(pageItem: PageItem): { isArchive: boolean; archivePath?: string; innerPath?: string } {
-	// 如果有 innerPath，说明是压缩包内文件
-	if (pageItem.innerPath) {
-		return { isArchive: true, archivePath: pageItem.path, innerPath: pageItem.innerPath };
-	}
+	const book = bookStore.currentBook;
 	
 	// 检查当前书籍是否是压缩包
-	const book = bookStore.currentBook;
 	if (book?.isArchive && book.path) {
-		// 对于压缩包，path 应该是压缩包路径，需要从页面数据获取 innerPath
-		// 由于 page.path 可能是压缩包路径，我们需要检查
+		// 从当前页面获取 innerPath
 		const page = book.pages?.[pageItem.index];
 		if (page?.innerPath) {
+			// 使用书籍路径作为压缩包路径，page.innerPath 作为内部路径
 			return { isArchive: true, archivePath: book.path, innerPath: page.innerPath };
 		}
+		// 如果没有 innerPath，尝试使用 page.path（可能是相对路径）
+		if (page?.path) {
+			return { isArchive: true, archivePath: book.path, innerPath: page.path };
+		}
+	}
+	
+	// 如果 pageItem 有 innerPath，说明是压缩包内文件
+	if (pageItem.innerPath && book?.path) {
+		return { isArchive: true, archivePath: book.path, innerPath: pageItem.innerPath };
 	}
 	
 	return { isArchive: false };
@@ -128,10 +133,12 @@ async function handleCopy() {
 
 	try {
 		const archiveInfo = getArchiveInfo(currentItem);
+		console.log('[PageContextMenu] archiveInfo:', archiveInfo, 'currentItem:', currentItem);
 		
 		if (archiveInfo.isArchive && archiveInfo.archivePath && archiveInfo.innerPath) {
 			// 压缩包内文件：先提取到临时文件
 			showSuccessToast('正在提取...', currentItem.name);
+			console.log('[PageContextMenu] Extracting from archive:', archiveInfo.archivePath, archiveInfo.innerPath);
 			
 			const tempPath = await invoke<string>('extract_image_to_temp', {
 				archivePath: archiveInfo.archivePath,

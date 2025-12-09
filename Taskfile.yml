@@ -12,10 +12,14 @@ tasks:
       - task: version:show
 
 
-  dev:
+  tdev:
     desc: Start Tauri development server
     cmds:
       - yarn tauri dev
+  ydev:
+    desc: Start development server
+    cmds:
+      - yarn  dev  
   buildebug:
     desc: Start Tauri development server
     cmds:

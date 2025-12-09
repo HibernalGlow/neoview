@@ -256,14 +256,6 @@ class BookStore {
   }
 
   /**
-   * 打开压缩包作为 Book
-   */
-  async openArchiveAsBook(path: string, options: OpenBookOptions = {}) {
-    console.log('📦 Opening archive as book:', path);
-    await this.openBook(path, options);
-  }
-
-  /**
    * 关闭查看器
    */
   closeViewer() {
@@ -428,13 +420,6 @@ class BookStore {
       console.error('❌ Error going to next page:', err);
       this.state.error = String(err);
     }
-  }
-
-  /**
-   * 上一页 (别名)
-   */
-  async prevPage() {
-    return await this.previousPage();
   }
 
   /**

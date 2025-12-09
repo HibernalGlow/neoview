@@ -77,6 +77,11 @@ export const gpuId = $state({ value: 0 });
 export const preloadPages = $state({ value: 3 });
 export const backgroundConcurrency = $state({ value: 2 });
 
+// 递进超分配置
+export const progressiveUpscaleEnabled = $state({ value: false });
+export const progressiveDwellTime = $state({ value: 3 }); // 秒
+export const progressiveMaxPages = $state({ value: 20 }); // 最多向后超分页数
+
 // 条件配置
 export const conditionalMinWidth = $state({ value: 0 });
 export const conditionalMinHeight = $state({ value: 0 });
@@ -266,6 +271,9 @@ export const upscalePanelStore = {
 	gpuId,
 	preloadPages,
 	backgroundConcurrency,
+	progressiveUpscaleEnabled,
+	progressiveDwellTime,
+	progressiveMaxPages,
 	conditionalMinWidth,
 	conditionalMinHeight,
 	conditionsList,

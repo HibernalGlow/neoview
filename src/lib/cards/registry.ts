@@ -298,6 +298,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'upscale',
 		canHide: true,
 	},
+	'progressiveUpscale': {
+		id: 'progressiveUpscale',
+		title: '递进超分',
+		icon: Timer,
+		defaultPanel: 'upscale',
+		canHide: true,
+	},
 
 	// ==================== History 面板卡片 ====================
 	'historyList': {

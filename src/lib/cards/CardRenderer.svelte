@@ -52,6 +52,7 @@
 		upscaleStatus: () => import('./upscale/UpscaleStatusCard.svelte'),
 		upscaleCache: () => import('./upscale/UpscaleCacheCard.svelte'),
 		upscaleConditions: () => import('./upscale/UpscaleConditionsCard.svelte'),
+		progressiveUpscale: () => import('./upscale/ProgressiveUpscaleCard.svelte'),
 		// History
 		historyList: () => import('./history/HistoryListCard.svelte'),
 		// Bookmark

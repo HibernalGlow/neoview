@@ -82,6 +82,7 @@ import {
 	tabInlineTreeMode,
 	tabCurrentPath,
 	tabThumbnailWidthPercent,
+	tabBannerWidthPercent,
 	tabFolderTreeConfig
 } from '../stores/folderTabStore.svelte';
 import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -122,6 +123,7 @@ const globalOpenInNewTabMode = tabOpenInNewTabMode;
 const globalDeleteStrategy = tabDeleteStrategy;
 const globalInlineTreeMode = tabInlineTreeMode;
 const globalThumbnailWidthPercent = tabThumbnailWidthPercent;
+const globalBannerWidthPercent = tabBannerWidthPercent;
 
 interface Props {
 	onRefresh?: () => void;
@@ -154,6 +156,7 @@ let globalShowMigrationBarValue = $state(false);
 let globalPenetrateModeValue = $state(false);
 let globalInlineTreeModeValue = $state(false);
 let globalThumbnailWidthPercentValue = $state(20);
+let globalBannerWidthPercentValue = $state(50);
 let globalItemCountValue = $state(0);
 let globalDeleteStrategyValue = $state<'trash' | 'permanent'>('trash');
 let globalOpenInNewTabModeValue = $state(false);
@@ -177,6 +180,7 @@ $effect(() => {
 		globalPenetrateMode.subscribe(v => globalPenetrateModeValue = v),
 		globalInlineTreeMode.subscribe(v => globalInlineTreeModeValue = v),
 		globalThumbnailWidthPercent.subscribe(v => globalThumbnailWidthPercentValue = v),
+		globalBannerWidthPercent.subscribe(v => globalBannerWidthPercentValue = v),
 		globalItemCount.subscribe(v => globalItemCountValue = v),
 		globalDeleteStrategy.subscribe(v => globalDeleteStrategyValue = v),
 		globalOpenInNewTabMode.subscribe(v => globalOpenInNewTabModeValue = v),
@@ -224,6 +228,7 @@ let inlineTreeMode = $derived(virtualMode
 let thumbnailWidthPercent = $derived(virtualMode 
 	? (virtualMode === 'history' ? virtualPanelSettingsStore.historyThumbnailWidthPercent : virtualPanelSettingsStore.bookmarkThumbnailWidthPercent)
 	: globalThumbnailWidthPercentValue);
+let bannerWidthPercent = $derived(globalBannerWidthPercentValue);
 let itemCount = $derived(virtualMode ? 0 : globalItemCountValue);
 let deleteStrategy = $derived(globalDeleteStrategyValue);
 let openInNewTabMode = $derived(globalOpenInNewTabModeValue);
@@ -322,6 +327,10 @@ function handleSetThumbnailWidthPercent(value: number) {
 	} else {
 		folderTabActions.setThumbnailWidthPercent(value);
 	}
+}
+
+function handleSetBannerWidthPercent(value: number) {
+	folderTabActions.setBannerWidthPercent(value);
 }
 
 const viewStyles: { value: FolderViewStyle; icon: typeof List; label: string }[] = [
@@ -1065,6 +1074,22 @@ async function handleCleanupInvalid() {
 							class="w-20 h-4 accent-primary"
 						/>
 						<span class="text-muted-foreground w-10">{Math.round(48 + (thumbnailWidthPercent - 10) * 3)}px</span>
+					</div>
+
+					<!-- 横幅大小 -->
+					<div class="flex items-center gap-2">
+						<Image class="h-3.5 w-3.5 text-muted-foreground" />
+						<span class="text-muted-foreground">横幅:</span>
+						<input
+							type="range"
+							min="20"
+							max="100"
+							step="10"
+							value={bannerWidthPercent}
+							oninput={(e) => handleSetBannerWidthPercent(parseInt((e.target as HTMLInputElement).value))}
+							class="w-20 h-4 accent-primary"
+						/>
+						<span class="text-muted-foreground w-10">{Math.floor(100 / bannerWidthPercent)}列</span>
 					</div>
 				</div>
 			</Tabs.Content>

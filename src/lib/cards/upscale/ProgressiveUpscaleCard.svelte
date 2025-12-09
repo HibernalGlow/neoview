@@ -1,13 +1,16 @@
 <script lang="ts">
 /**
- * 递进超分卡片
- * 根据停留时间自动向后超分
+ * 预超分管理卡片
+ * 包含预超分开关、预加载配置、递进超分等功能
  */
 import { onMount, onDestroy } from 'svelte';
 import { Switch } from '$lib/components/ui/switch';
 import { Label } from '$lib/components/ui/label';
 import { Progress } from '$lib/components/ui/progress';
 import {
+	preUpscaleEnabled,
+	preloadPages,
+	backgroundConcurrency,
 	progressiveUpscaleEnabled,
 	progressiveDwellTime,
 	progressiveMaxPages,
@@ -20,15 +23,14 @@ import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 
 // 递进超分状态
 let dwellTimer: ReturnType<typeof setTimeout> | null = null;
-let currentTargetPage = $state(0);
 let isProgressiveRunning = $state(false);
-let progressedPages = $state(0);
 
 // 响应式依赖
 const upscaleEnabled = $derived(upscaleStore.enabled);
 const totalPages = $derived(bookStore.totalPages);
 const currentPageIndex = $derived(bookStore.currentPageIndex);
 const imagePoolVersion = $derived(imagePool.version);
+const upscaleStoreVersion = $derived(upscaleStore.version);
 
 // 计算已超分页数
 const upscaledCount = $derived(() => {
@@ -42,7 +44,18 @@ const upscaledCount = $derived(() => {
 	return count;
 });
 
-function handleEnabledChange(checked: boolean) {
+// 计算队列中的页数
+const pendingCount = $derived(() => {
+	void upscaleStoreVersion;
+	return upscaleStore.stats.pendingTasks + upscaleStore.stats.processingTasks;
+});
+
+function handlePreUpscaleChange(checked: boolean) {
+	preUpscaleEnabled.value = checked;
+	saveSettings();
+}
+
+function handleProgressiveChange(checked: boolean) {
 	progressiveUpscaleEnabled.value = checked;
 	saveSettings();
 	
@@ -56,7 +69,6 @@ function handleEnabledChange(checked: boolean) {
 function handleDwellTimeChange(value: number) {
 	progressiveDwellTime.value = value;
 	saveSettings();
-	// 重启计时器
 	if (progressiveUpscaleEnabled.value && autoUpscaleEnabled.value) {
 		startDwellTimer();
 	}
@@ -69,7 +81,6 @@ function handleMaxPagesChange(value: number) {
 
 function startDwellTimer() {
 	stopDwellTimer();
-	
 	if (!progressiveUpscaleEnabled.value || !autoUpscaleEnabled.value) return;
 	
 	dwellTimer = setTimeout(() => {
@@ -87,20 +98,9 @@ function stopDwellTimer() {
 async function triggerProgressiveUpscale() {
 	if (!upscaleEnabled || !progressiveUpscaleEnabled.value) return;
 	
-	const startPage = currentPageIndex + 1;
-	const endPage = Math.min(startPage + progressiveMaxPages.value, totalPages);
-	
-	if (startPage >= totalPages) return;
-	
 	isProgressiveRunning = true;
-	currentTargetPage = startPage;
-	progressedPages = 0;
-	
-	console.log(`📈 递进超分: 从第 ${startPage + 1} 页到第 ${endPage} 页`);
-	
-	// 触发超分请求
+	console.log(`📈 递进超分触发: 当前页 ${currentPageIndex + 1}`);
 	await upscaleStore.triggerCurrentPageUpscale();
-	
 	isProgressiveRunning = false;
 }
 
@@ -124,21 +124,73 @@ onDestroy(() => {
 </script>
 
 <div class="space-y-3 text-xs">
-	<!-- 递进超分开关 -->
+	<!-- 预超分开关 -->
 	<div class="flex items-center justify-between">
-		<Label class="text-xs font-medium">递进超分</Label>
+		<Label class="text-xs font-medium">预超分</Label>
 		<Switch
-			checked={progressiveUpscaleEnabled.value}
-			onCheckedChange={handleEnabledChange}
+			checked={preUpscaleEnabled.value}
+			onCheckedChange={handlePreUpscaleChange}
 			class="scale-90"
 		/>
 	</div>
 	<p class="text-[10px] text-muted-foreground -mt-1">
-		停留 {progressiveDwellTime.value} 秒后自动向后超分
+		预加载相邻页面并后台超分
 	</p>
 
+	{#if preUpscaleEnabled.value}
+		<!-- 预加载页数 -->
+		<div class="flex items-center justify-between">
+			<span class="text-xs text-muted-foreground">预加载页数</span>
+			<select
+				class="h-6 px-2 text-xs bg-muted rounded border-0"
+				value={preloadPages.value}
+				onchange={(e) => {
+					preloadPages.value = parseInt(e.currentTarget.value);
+					saveSettings();
+				}}
+			>
+				{#each [1, 2, 3, 5, 10, 20] as n}
+					<option value={n}>{n} 页</option>
+				{/each}
+			</select>
+		</div>
+
+		<!-- 后台并发数 -->
+		<div class="flex items-center justify-between">
+			<span class="text-xs text-muted-foreground">后台并发数</span>
+			<select
+				class="h-6 px-2 text-xs bg-muted rounded border-0"
+				value={backgroundConcurrency.value}
+				onchange={(e) => {
+					backgroundConcurrency.value = parseInt(e.currentTarget.value);
+					saveSettings();
+				}}
+			>
+				{#each [1, 2, 3, 4] as n}
+					<option value={n}>{n}</option>
+				{/each}
+			</select>
+		</div>
+	{/if}
+
+	<!-- 分隔线 -->
+	<div class="border-t pt-3">
+		<!-- 递进超分开关 -->
+		<div class="flex items-center justify-between">
+			<Label class="text-xs font-medium">递进超分</Label>
+			<Switch
+				checked={progressiveUpscaleEnabled.value}
+				onCheckedChange={handleProgressiveChange}
+				class="scale-90"
+			/>
+		</div>
+		<p class="text-[10px] text-muted-foreground mt-1">
+			停留 {progressiveDwellTime.value} 秒后自动向后超分
+		</p>
+	</div>
+
 	{#if progressiveUpscaleEnabled.value}
-		<!-- 停留时间配置 -->
+		<!-- 停留时间 -->
 		<div class="flex items-center justify-between">
 			<span class="text-xs text-muted-foreground">停留时间</span>
 			<select
@@ -152,7 +204,7 @@ onDestroy(() => {
 			</select>
 		</div>
 
-		<!-- 最大页数配置 -->
+		<!-- 最大页数 -->
 		<div class="flex items-center justify-between">
 			<span class="text-xs text-muted-foreground">最大页数</span>
 			<select
@@ -166,30 +218,36 @@ onDestroy(() => {
 			</select>
 		</div>
 
-		<!-- 状态显示 -->
-		<div class="pt-2 border-t space-y-2">
-			<div class="flex items-center justify-between">
-				<span class="text-xs text-muted-foreground">已超分</span>
-				<span class="text-xs font-mono">{upscaledCount()} / {totalPages}</span>
+		{#if !autoUpscaleEnabled.value}
+			<div class="text-[10px] text-amber-500 bg-amber-500/10 rounded p-2">
+				⚠️ 需要先启用「自动超分」才能生效
 			</div>
-			
-			{#if totalPages > 0}
-				<Progress value={(upscaledCount() / totalPages) * 100} class="h-1.5" />
-			{/if}
-
-			{#if isProgressiveRunning}
-				<div class="flex items-center gap-2">
-					<div class="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></div>
-					<span class="text-[10px] text-cyan-500">递进超分中...</span>
-				</div>
-			{/if}
-		</div>
+		{/if}
 	{/if}
 
-	<!-- 提示 -->
-	{#if !autoUpscaleEnabled.value && progressiveUpscaleEnabled.value}
-		<div class="text-[10px] text-amber-500 bg-amber-500/10 rounded p-2">
-			⚠️ 需要先启用「自动超分」才能生效
+	<!-- 状态统计 -->
+	<div class="pt-2 border-t space-y-2">
+		<div class="flex items-center justify-between">
+			<span class="text-xs text-muted-foreground">已超分</span>
+			<span class="text-xs font-mono text-green-500">{upscaledCount()} / {totalPages}</span>
 		</div>
-	{/if}
+		
+		{#if pendingCount() > 0}
+			<div class="flex items-center justify-between">
+				<span class="text-xs text-muted-foreground">队列中</span>
+				<span class="text-xs font-mono text-cyan-500">{pendingCount()}</span>
+			</div>
+		{/if}
+		
+		{#if totalPages > 0}
+			<Progress value={(upscaledCount() / totalPages) * 100} class="h-1.5" />
+		{/if}
+
+		{#if isProgressiveRunning}
+			<div class="flex items-center gap-2">
+				<div class="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></div>
+				<span class="text-[10px] text-cyan-500">递进超分中...</span>
+			</div>
+		{/if}
+	</div>
 </div>

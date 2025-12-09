@@ -119,7 +119,7 @@ function hideCard(e: MouseEvent) {
 }
 </script>
 
-<div class="collapsible-card group/card {hideHeader ? '' : 'rounded-lg border bg-muted/10 hover:border-primary/60'} transition-all {fullHeight ? 'flex flex-col flex-1 min-h-0' : ''} {orientation === 'horizontal' ? 'flex flex-row' : ''} {className}">
+<div class="collapsible-card {hideHeader ? '' : 'rounded-lg border bg-muted/10 hover:border-primary/60'} transition-all {fullHeight ? 'flex flex-col flex-1 min-h-0' : ''} {orientation === 'horizontal' ? 'flex flex-row' : ''} {className}">
 	<!-- 标题栏（可隐藏） -->
 	{#if !hideHeader}
 		<div class="flex items-center justify-between {compact ? 'px-2 py-1' : 'px-3 py-2'} {orientation === 'horizontal' ? 'flex-col border-r py-2 px-1' : ''}">
@@ -141,12 +141,12 @@ function hideCard(e: MouseEvent) {
 				{/if}
 			</button>
 			
-			<div class="flex items-center gap-0.5 {orientation === 'horizontal' ? 'flex-col mt-1' : ''}">
-				<!-- 隐藏卡片按钮（悬停显示） -->
+			<div class="group/buttons flex items-center gap-0.5 {orientation === 'horizontal' ? 'flex-col mt-1' : ''}">
+				<!-- 隐藏卡片按钮（悬停按钮区域显示） -->
 				{#if canHide}
 					<button
 						type="button"
-						class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground opacity-0 group-hover/card:opacity-100 hover:bg-destructive/20 hover:text-destructive transition-opacity"
+						class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground opacity-0 group-hover/buttons:opacity-100 hover:bg-destructive/20 hover:text-destructive transition-opacity"
 						onclick={hideCard}
 						title="隐藏卡片"
 					>

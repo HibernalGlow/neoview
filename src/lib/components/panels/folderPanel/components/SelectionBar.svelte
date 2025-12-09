@@ -54,7 +54,7 @@ function handleClose() {
 }
 </script>
 
-<div class="flex items-center gap-2 px-3 py-2 bg-muted/50 border-b">
+<div class="flex items-center gap-2 px-3 py-2 border-b">
 	<!-- 选中计数 -->
 	<span class="text-sm font-medium">
 		已选择 <span class="text-primary">{selectedCount}</span> / {totalCount} 项

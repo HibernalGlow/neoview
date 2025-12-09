@@ -28,8 +28,6 @@ export interface NavigationCommand {
 	type: 'init' | 'push' | 'pop' | 'goto' | 'history';
 	path?: string;
 	index?: number;
-	/** 目标标签页 ID（用于本地多标签页导航） */
-	targetTabId?: string;
 }
 
 // ============ 右键菜单 ============

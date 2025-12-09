@@ -89,7 +89,7 @@ export async function getCachedNode(path: string): Promise<CachedTreeNode | null
 }
 
 /**
- * 批量获取缓存的节点
+ * 批量获取缓存的节点（优化：并行获取）
  */
 export async function getCachedNodes(paths: string[]): Promise<Map<string, CachedTreeNode>> {
   const result = new Map<string, CachedTreeNode>();
@@ -100,16 +100,20 @@ export async function getCachedNodes(paths: string[]): Promise<Map<string, Cache
     const tx = db.transaction(STORE_NAME, 'readonly');
     const store = tx.objectStore(STORE_NAME);
     
+    // 优化：并行获取所有节点，而不是串行
+    const nodePromises = paths.map(path => store.get(path));
+    const nodes = await Promise.all(nodePromises);
+    
     const now = Date.now();
     const expired: string[] = [];
     
-    for (const path of paths) {
-      const node = await store.get(path);
+    for (let i = 0; i < paths.length; i++) {
+      const node = nodes[i];
       if (node) {
         if (now - node.cachedAt > CACHE_TTL) {
-          expired.push(path);
+          expired.push(paths[i]);
         } else {
-          result.set(path, node);
+          result.set(paths[i], node);
         }
       }
     }
@@ -144,7 +148,7 @@ export async function saveNode(node: CachedTreeNode): Promise<void> {
 }
 
 /**
- * 批量保存节点
+ * 批量保存节点（优化：并行写入）
  */
 export async function saveNodes(nodes: CachedTreeNode[]): Promise<void> {
   if (nodes.length === 0) return;
@@ -155,12 +159,14 @@ export async function saveNodes(nodes: CachedTreeNode[]): Promise<void> {
     const store = tx.objectStore(STORE_NAME);
     const now = Date.now();
     
-    for (const node of nodes) {
-      await store.put({
+    // 优化：并行写入所有节点
+    const putPromises = nodes.map(node => 
+      store.put({
         ...node,
         cachedAt: now,
-      });
-    }
+      })
+    );
+    await Promise.all(putPromises);
     
     await tx.done;
   } catch (e) {
@@ -185,7 +191,7 @@ export async function updateNodeExpanded(path: string, expanded: boolean): Promi
 }
 
 /**
- * 批量更新展开状态
+ * 批量更新展开状态（优化：并行读取和写入）
  */
 export async function updateNodesExpanded(updates: { path: string; expanded: boolean }[]): Promise<void> {
   if (updates.length === 0) return;
@@ -195,13 +201,21 @@ export async function updateNodesExpanded(updates: { path: string; expanded: boo
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     
-    for (const { path, expanded } of updates) {
-      const node = await store.get(path);
+    // 并行获取所有节点
+    const paths = updates.map(u => u.path);
+    const nodePromises = paths.map(path => store.get(path));
+    const nodes = await Promise.all(nodePromises);
+    
+    // 并行更新所有节点
+    const putPromises: Promise<IDBValidKey>[] = [];
+    for (let i = 0; i < updates.length; i++) {
+      const node = nodes[i];
       if (node) {
-        node.expanded = expanded;
-        await store.put(node);
+        node.expanded = updates[i].expanded;
+        putPromises.push(store.put(node));
       }
     }
+    await Promise.all(putPromises);
     
     await tx.done;
   } catch (e) {

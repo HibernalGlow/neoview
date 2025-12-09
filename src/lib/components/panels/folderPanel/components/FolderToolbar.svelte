@@ -64,6 +64,8 @@ import {
 	tabCanGoBack,
 	tabCanGoForward,
 	tabCanGoUp,
+	tabCanGoBackTab,
+	tabCanGoForwardTab,
 	tabViewStyle,
 	tabMultiSelectMode,
 	tabDeleteMode,
@@ -85,6 +87,8 @@ const currentPathStore = tabCurrentPath;
 const globalCanGoBack = tabCanGoBack;
 const globalCanGoForward = tabCanGoForward;
 const globalCanGoUp = tabCanGoUp;
+const globalCanGoBackTab = tabCanGoBackTab;
+const globalCanGoForwardTab = tabCanGoForwardTab;
 const globalViewStyle = tabViewStyle;
 const globalMultiSelectMode = tabMultiSelectMode;
 const globalDeleteMode = tabDeleteMode;
@@ -135,6 +139,8 @@ let globalOpenInNewTabModeValue = $state(false);
 let globalCanGoBackValue = $state(false);
 let globalCanGoForwardValue = $state(false);
 let globalCanGoUpValue = $state(false);
+let globalCanGoBackTabValue = $state(false);
+let globalCanGoForwardTabValue = $state(false);
 
 // 订阅全局 store（非虚拟模式使用）
 $effect(() => {
@@ -154,7 +160,9 @@ $effect(() => {
 		globalOpenInNewTabMode.subscribe(v => globalOpenInNewTabModeValue = v),
 		globalCanGoBack.subscribe(v => globalCanGoBackValue = v),
 		globalCanGoForward.subscribe(v => globalCanGoForwardValue = v),
-		globalCanGoUp.subscribe(v => globalCanGoUpValue = v)
+		globalCanGoUp.subscribe(v => globalCanGoUpValue = v),
+		globalCanGoBackTab.subscribe(v => globalCanGoBackTabValue = v),
+		globalCanGoForwardTab.subscribe(v => globalCanGoForwardTabValue = v)
 	];
 	return () => unsubs.forEach(u => u());
 });
@@ -193,8 +201,10 @@ let thumbnailWidthPercent = $derived(virtualMode
 let itemCount = $derived(virtualMode ? 0 : globalItemCountValue);
 let deleteStrategy = $derived(globalDeleteStrategyValue);
 let openInNewTabMode = $derived(globalOpenInNewTabModeValue);
-let canGoBack = $derived(globalCanGoBackValue);
-let canGoForward = $derived(globalCanGoForwardValue);
+// 后退可用：当前标签页内可后退 或 可切换到上一个标签页
+let canGoBack = $derived(globalCanGoBackValue || globalCanGoBackTabValue);
+// 前进可用：当前标签页内可前进 或 可切换到下一个标签页
+let canGoForward = $derived(globalCanGoForwardValue || globalCanGoForwardTabValue);
 let canGoUp = $derived(globalCanGoUpValue);
 
 // ==================== 状态修改函数 ====================

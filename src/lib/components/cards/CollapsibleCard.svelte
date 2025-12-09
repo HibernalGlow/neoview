@@ -4,7 +4,8 @@
  * 从 cardConfig 读取展开状态，支持拖拽手柄和移动按钮
  */
 import { cardConfigStore, type PanelId } from '$lib/stores/cardConfig.svelte';
-import { ChevronDown, ChevronRight, ChevronUp, ChevronLeft, GripVertical, ArrowUp, ArrowDown, RotateCcw } from '@lucide/svelte';
+import { cardRegistry } from '$lib/cards/registry';
+import { ChevronDown, ChevronRight, ChevronUp, ChevronLeft, GripVertical, ArrowUp, ArrowDown, RotateCcw, EyeOff } from '@lucide/svelte';
 import { slide } from 'svelte/transition';
 
 interface Props {
@@ -66,6 +67,7 @@ const isExpanded = $derived(cardConfig?.expanded ?? defaultExpanded);
 const cardOrder = $derived(cardConfig?.order ?? 0);
 const canMoveUp = $derived(cardOrder > 0);
 const canMoveDown = $derived(cardOrder < panelCards.length - 1);
+const canHide = $derived(cardRegistry[id]?.canHide ?? true);
 
 function toggleExpanded() {
 	cardConfigStore.setCardExpanded(panelId, id, !isExpanded);
@@ -110,9 +112,14 @@ function resetHeight(e: MouseEvent) {
 	e.stopPropagation();
 	onHeightChange?.(undefined);
 }
+
+function hideCard(e: MouseEvent) {
+	e.stopPropagation();
+	if (canHide) cardConfigStore.setCardVisible(panelId, id, false);
+}
 </script>
 
-<div class="collapsible-card {hideHeader ? '' : 'rounded-lg border bg-muted/10 hover:border-primary/60'} transition-all {fullHeight ? 'flex flex-col flex-1 min-h-0' : ''} {orientation === 'horizontal' ? 'flex flex-row' : ''} {className}">
+<div class="collapsible-card group/card {hideHeader ? '' : 'rounded-lg border bg-muted/10 hover:border-primary/60'} transition-all {fullHeight ? 'flex flex-col flex-1 min-h-0' : ''} {orientation === 'horizontal' ? 'flex flex-row' : ''} {className}">
 	<!-- 标题栏（可隐藏） -->
 	{#if !hideHeader}
 		<div class="flex items-center justify-between {compact ? 'px-2 py-1' : 'px-3 py-2'} {orientation === 'horizontal' ? 'flex-col border-r py-2 px-1' : ''}">
@@ -135,6 +142,17 @@ function resetHeight(e: MouseEvent) {
 			</button>
 			
 			<div class="flex items-center gap-0.5 {orientation === 'horizontal' ? 'flex-col mt-1' : ''}">
+				<!-- 隐藏卡片按钮（悬停显示） -->
+				{#if canHide}
+					<button
+						type="button"
+						class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground opacity-0 group-hover/card:opacity-100 hover:bg-destructive/20 hover:text-destructive transition-opacity"
+						onclick={hideCard}
+						title="隐藏卡片"
+					>
+						<EyeOff class="h-3 w-3" />
+					</button>
+				{/if}
 				<!-- 恢复默认高度按钮 -->
 				{#if height && onHeightChange}
 					<button

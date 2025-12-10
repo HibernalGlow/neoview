@@ -14,6 +14,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { SvelteMap } from 'svelte/reactivity';
 import { imagePool } from './imagePool.svelte';
+import { isVideoFile } from '$lib/utils/videoUtils';
 
 // 全局标记防止 HMR 导致多次监听
 let globalListenerInitialized = false;
@@ -356,6 +357,12 @@ class UpscaleStore {
     for (let i = Math.max(0, pageIndex - preloadRange); i <= Math.min(book.pages.length - 1, pageIndex + preloadRange); i++) {
       const page = book.pages[i];
       if (page) {
+        // 【关键】跳过视频文件，视频不支持超分
+        const filename = page.name || page.path || '';
+        if (isVideoFile(filename)) {
+          continue;
+        }
+
         // 构造 imagePath：压缩包格式 "xxx.zip inner=内部路径"，普通文件直接用完整路径
         const imagePath = isArchive 
           ? `${bookPath} inner=${page.path}`
@@ -430,6 +437,12 @@ class UpscaleStore {
       
       const page = book.pages[i];
       if (page) {
+        // 【关键】跳过视频文件，视频不支持超分
+        const filename = page.name || page.path || '';
+        if (isVideoFile(filename)) {
+          continue;
+        }
+
         const imagePath = isArchive 
           ? `${bookPath} inner=${page.path}`
           : page.path;

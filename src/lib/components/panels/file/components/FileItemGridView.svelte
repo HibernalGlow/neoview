@@ -24,6 +24,7 @@
 	import MetadataBadge from '$lib/components/ui/MetadataBadge.svelte';
 	import FileTypeIcon from '$lib/components/ui/FileTypeIcon.svelte';
 	import { formatDuration, formatRelativeTime, formatBytes, formatSize, getFolderSizeDisplay } from '$lib/utils/formatters';
+	import Item from '$lib/components/ui/item/item.svelte';
 
 	interface Props {
 		item: FsItem;
@@ -83,8 +84,8 @@
 	}: Props = $props();
 </script>
 
-<div
-	class="border-border group/card relative flex cursor-pointer flex-col overflow-hidden rounded border transition-all hover:shadow-md {isSelected
+<Item
+	class="border-border group/card relative flex cursor-pointer flex-col p-0 items-stretch overflow-hidden rounded border transition-all hover:shadow-md {isSelected
 		? 'border-primary ring-2'
 		: ''}"
 	onclick={(e) => {
@@ -321,4 +322,4 @@
 			</div>
 		{/if}
 	</div>
-</div>
+</Item>

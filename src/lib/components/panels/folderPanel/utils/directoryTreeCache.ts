@@ -75,35 +75,123 @@ class DirectoryTreeCache {
 				setTimeout(() => {
 					clearInterval(checkInterval);
 					resolve([]);
-				}, 5000);
+				}, 10000);
 			});
 		}
 		
-		// 开始加载
+		// 统一使用流式加载（兼容旧 API 返回 Promise<FsItem[]>）
+		return new Promise((resolve, reject) => {
+			const items: FsItem[] = [];
+			this.streamDirectory(path, {
+				onBatch: (batch) => items.push(...batch),
+				onError: (err) => reject(err),
+				onComplete: (allItems) => resolve(allItems),
+				forceRefresh
+			});
+		});
+	}
+
+	/**
+	 * 流式获取目录内容（优化大量子文件夹加载体验）
+	 * 优先返回缓存，否则启动流式加载，分批返回数据
+	 */
+	async streamDirectory(
+		path: string, 
+		handlers: {
+			onBatch: (items: FsItem[]) => void,
+			onComplete: (items: FsItem[]) => void,
+			onError: (error: unknown) => void,
+			forceRefresh?: boolean
+		}
+	): Promise<void> {
+		const key = this.normalizePath(path);
+		const now = Date.now();
+		const forceRefresh = handlers.forceRefresh ?? false;
+
+		// 1. 检查有效缓存
+		if (!forceRefresh) {
+			const cached = this.cache.get(key);
+			if (cached && (now - cached.timestamp < this.CACHE_TTL)) {
+				if (cached.loading) {
+					// 正在加载中，等待完成后一次性返回
+					const wait = async () => {
+						try {
+							const items = await this.getDirectory(path, false);
+							handlers.onBatch(items); // 模拟一次性 batch
+							handlers.onComplete(items);
+						} catch (e) {
+							handlers.onError(e);
+						}
+					};
+					wait();
+					return;
+				} else {
+					// 缓存命中，直接返回所有
+					handlers.onBatch(cached.items);
+					handlers.onComplete(cached.items);
+					return;
+				}
+			}
+		}
+
+		// 2. 标记加载中
 		this.loadingPaths.add(key);
-		this.cache.set(key, { items: [], timestamp: now, loading: true });
-		
+		this.cache.set(key, { items: [], timestamp: Date.now(), loading: true });
+
 		try {
-			const items = await FileSystemAPI.browseDirectory(path);
+			// 3. 启动后端流（首批 100 个，平衡响应速度和 IPC 开销）
+			// startDirectoryStream 在后端只从 direntry 获取 path，此处延迟获取 metadata
+			const { streamId, initialBatch, hasMore } = await FileSystemAPI.startDirectoryStream(path, {
+				batchSize: 100, 
+			});
+
+			const allItems = [...initialBatch];
 			
-			// 更新缓存
-			this.cache.set(key, { items, timestamp: Date.now(), loading: false });
+			// 发送首批数据（立即渲染）
+			if (initialBatch.length > 0) {
+				handlers.onBatch(initialBatch);
+			}
+
+			// 如果还有更多，循环获取后续批次
+			if (hasMore) {
+				let currentHasMore = true;
+				while (currentHasMore) {
+					// 检查是否已被新的加载请求打断（可选优化）
+					// const currentKeys = this.loadingPaths.has(key); ...
+
+					const result = await FileSystemAPI.getNextStreamBatch(streamId);
+					if (result.items.length > 0) {
+						allItems.push(...result.items);
+						handlers.onBatch(result.items);
+						
+						// 实时更新缓存中的数据，以便于如果有其他地方读取缓存
+						const processingCache = this.cache.get(key);
+						if (processingCache && processingCache.loading) {
+							processingCache.items = allItems;
+						}
+					}
+					currentHasMore = result.hasMore;
+				}
+			}
+
+			// 4. 加载完成: 正式更新缓存状态
+			this.cache.set(key, { items: allItems, timestamp: Date.now(), loading: false });
 			this.loadingPaths.delete(key);
-			
-			// 清理过期缓存
 			this.cleanup();
 			
-			// 触发更新回调
-			this.notifyUpdate(path, items);
+			// 触发全局更新回调
+			this.notifyUpdate(path, allItems);
+			
+			// 触发完成回调
+			handlers.onComplete(allItems);
 			
 			// 后台预加载子目录
-			this.preloadChildren(path, items);
-			
-			return items;
+			this.preloadChildren(path, allItems);
+
 		} catch (err) {
 			this.loadingPaths.delete(key);
 			this.cache.delete(key);
-			throw err;
+			handlers.onError(err);
 		}
 	}
 	

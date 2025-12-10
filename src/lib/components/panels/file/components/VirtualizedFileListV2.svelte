@@ -104,13 +104,14 @@
 	const showSlider = $derived(items.length > 5);
 
 	// TanStack Virtual - 按行虚拟化（支持动态高度）
+	// 优化：增加 overscan 从 3 到 5，快速滚动时提前加载更多
 	const virtualizer = createVirtualizer({
 		get count() {
 			return rowCount;
 		},
 		getScrollElement: () => container ?? null,
 		estimateSize: (index) => itemHeight,
-		overscan: 3,
+		overscan: 5, // 增加预加载行数，优化快速滚动体验
 		// 启用动态测量
 		measureElement: (element) => {
 			return element.getBoundingClientRect().height;

@@ -199,6 +199,20 @@
 		} catch (error) {
 			console.error('❌ CLI 启动失败:', error);
 		}
+
+		// 语音命令事件监听器
+		const handleVoiceCommand = (event: CustomEvent<{ action: string; transcript: string }>) => {
+			const { action, transcript } = event.detail;
+			console.log(`🎤 语音命令: "${transcript}" -> ${action}`);
+			dispatchAction(action);
+		};
+
+		window.addEventListener('neoview-voice-command', handleVoiceCommand as EventListener);
+
+		// 返回清理函数
+		return () => {
+			window.removeEventListener('neoview-voice-command', handleVoiceCommand as EventListener);
+		};
 	});
 
 	async function handleOpenFolder() {

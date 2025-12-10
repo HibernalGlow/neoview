@@ -53,7 +53,7 @@
 	import { showInfoToast, showErrorToast } from '$lib/utils/toast';
 	import SettingsOverlay from '$lib/components/SettingsOverlay.svelte';
 	import { settingsOverlayOpen } from '$lib/stores/settingsOverlay.svelte';
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { getMatches } from '@tauri-apps/plugin-cli';
 	import { getFileMetadata } from '$lib/api/filesystem';
 	import { openFileSystemItem } from '$lib/utils/navigationUtils';
@@ -170,6 +170,9 @@
 	}
 
 	// 初始化缩略图管理器和处理 CLI 启动参数
+	// 语音命令事件监听器
+	let voiceCommandHandler: ((event: Event) => void) | null = null;
+	
 	onMount(async () => {
 		// 加载空页面设置
 		loadEmptySettings();
@@ -201,18 +204,21 @@
 		}
 
 		// 语音命令事件监听器
-		const handleVoiceCommand = (event: CustomEvent<{ action: string; transcript: string }>) => {
-			const { action, transcript } = event.detail;
+		voiceCommandHandler = (event: Event) => {
+			const customEvent = event as CustomEvent<{ action: string; transcript: string }>;
+			const { action, transcript } = customEvent.detail;
 			console.log(`🎤 语音命令: "${transcript}" -> ${action}`);
 			dispatchAction(action);
 		};
 
-		window.addEventListener('neoview-voice-command', handleVoiceCommand as EventListener);
+		window.addEventListener('neoview-voice-command', voiceCommandHandler);
+	});
 
-		// 返回清理函数
-		return () => {
-			window.removeEventListener('neoview-voice-command', handleVoiceCommand as EventListener);
-		};
+	// 清理语音命令监听器
+	onDestroy(() => {
+		if (voiceCommandHandler) {
+			window.removeEventListener('neoview-voice-command', voiceCommandHandler);
+		}
 	});
 
 	async function handleOpenFolder() {

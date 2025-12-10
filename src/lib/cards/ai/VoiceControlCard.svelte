@@ -21,6 +21,7 @@ let isEnabled = $state(false);
 let isListening = $state(false);
 let status = $state<'idle' | 'listening' | 'processing' | 'error'>('idle');
 let lastRecognizedText = $state('');
+let interimText = $state(''); // 实时识别中的文字
 let errorMessage = $state<string | null>(null);
 let showSettings = $state(false);
 let showHistory = $state(false);
@@ -47,6 +48,32 @@ const supportedCommandsCount = Object.keys(VOICE_COMMANDS).length;
 // 全局 dispatchAction 函数引用
 let dispatchAction: ((action: string) => void) | null = null;
 
+// 定时更新中间结果
+let interimUpdateInterval: ReturnType<typeof setInterval> | null = null;
+
+// 启动中间结果更新
+function startInterimUpdate() {
+	stopInterimUpdate();
+	interimUpdateInterval = setInterval(() => {
+		const interim = voiceStore.getService().getInterimTranscript();
+		if (interim) {
+			interimText = interim;
+		}
+	}, 100);
+}
+
+// 停止中间结果更新
+function stopInterimUpdate() {
+	if (interimUpdateInterval) {
+		clearInterval(interimUpdateInterval);
+		interimUpdateInterval = null;
+	}
+}
+
+function handleVoiceExecute(event: CustomEvent) {
+	// 用于外部触发语音命令执行
+}
+
 onMount(() => {
 	// 初始化语音服务
 	voiceStore.initialize();
@@ -64,9 +91,17 @@ onMount(() => {
 				errorMessage = null;
 			}
 			isListening = newStatus === 'listening';
+			
+			// 开始监听时，启动中间结果更新
+			if (newStatus === 'listening') {
+				startInterimUpdate();
+			} else {
+				stopInterimUpdate();
+			}
 		},
 		onCommandRecognized: (match) => {
 			lastRecognizedText = match.transcript;
+			interimText = ''; // 清除中间结果
 			
 			// 执行命令
 			executeCommand(match.action, match.transcript);
@@ -76,7 +111,8 @@ onMount(() => {
 			toast.error(error);
 		},
 		onSpeechStart: () => {
-			// 检测到语音
+			// 检测到语音开始
+			interimText = '正在识别...';
 		},
 		onSpeechEnd: () => {
 			// 语音结束
@@ -91,14 +127,11 @@ onMount(() => {
 });
 
 onDestroy(() => {
+	stopInterimUpdate();
 	if (typeof window !== 'undefined') {
 		window.removeEventListener('neoview-voice-execute', handleVoiceExecute as EventListener);
 	}
 });
-
-function handleVoiceExecute(event: CustomEvent) {
-	// 用于外部触发语音命令执行
-}
 
 function syncState() {
 	isSupported = voiceStore.isSupported;
@@ -289,12 +322,23 @@ const statusText = {
 				</Button>
 			</div>
 
-			<!-- 识别文本显示 -->
+			<!-- 实时识别文字显示 -->
+			{#if isListening && interimText}
+				<div class="flex items-start gap-2 rounded-md border border-blue-500/30 bg-blue-500/10 p-3">
+					<Mic class="h-4 w-4 text-blue-500 animate-pulse mt-0.5" />
+					<div class="flex-1">
+						<p class="text-xs text-muted-foreground">正在识别...</p>
+						<p class="text-sm font-medium text-blue-700 dark:text-blue-300">"{interimText}"</p>
+					</div>
+				</div>
+			{/if}
+
+			<!-- 最近识别结果显示 -->
 			{#if lastRecognizedText}
 				<div class="flex items-start gap-2 rounded-md border border-green-500/30 bg-green-500/10 p-3">
 					<Volume2 class="h-4 w-4 text-green-500 mt-0.5" />
 					<div class="flex-1">
-						<p class="text-xs text-muted-foreground">最近识别</p>
+						<p class="text-xs text-muted-foreground">最近识别 (已执行)</p>
 						<p class="text-sm font-medium">"{lastRecognizedText}"</p>
 					</div>
 				</div>

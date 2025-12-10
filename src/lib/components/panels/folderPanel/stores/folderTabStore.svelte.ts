@@ -108,6 +108,42 @@ export interface FolderTabState {
 // ============ Initial State ============
 
 const TAB_STORAGE_KEY = 'neoview-folder-tabs';
+const SHARED_TREE_SETTINGS_KEY = 'neoview-folder-tree-shared';
+
+// ============ Shared Folder Tree Settings ============
+// 这些设置在所有文件夹面板页签之间共享
+interface SharedFolderTreeSettings {
+	folderTreeVisible: boolean;
+	folderTreeLayout: 'top' | 'left' | 'right' | 'bottom';
+	folderTreeSize: number;
+}
+
+function loadSharedTreeSettings(): SharedFolderTreeSettings {
+	try {
+		const saved = localStorage.getItem(SHARED_TREE_SETTINGS_KEY);
+		if (saved) {
+			return JSON.parse(saved);
+		}
+	} catch (e) {
+		console.error('[FolderTabStore] Failed to load shared tree settings:', e);
+	}
+	return {
+		folderTreeVisible: false,
+		folderTreeLayout: 'left',
+		folderTreeSize: 200
+	};
+}
+
+function saveSharedTreeSettings(settings: SharedFolderTreeSettings) {
+	try {
+		localStorage.setItem(SHARED_TREE_SETTINGS_KEY, JSON.stringify(settings));
+	} catch (e) {
+		console.error('[FolderTabStore] Failed to save shared tree settings:', e);
+	}
+}
+
+// 加载共享设置
+let sharedTreeSettings = loadSharedTreeSettings();
 
 function generateTabId(): string {
 	return `tab-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -162,6 +198,8 @@ function getDisplayName(path: string): string {
 }
 
 function createDefaultTabState(id: string, homePath: string = ''): FolderTabState {
+	// 从共享设置中获取文件树配置
+	const treeSettings = sharedTreeSettings;
 	return {
 		id,
 		title: 'New',
@@ -194,9 +232,10 @@ function createDefaultTabState(id: string, homePath: string = ''): FolderTabStat
 		},
 		inlineTreeMode: false,
 		expandedFolders: new SvelteSet(),
-		folderTreeVisible: false,
-		folderTreeLayout: 'left',
-		folderTreeSize: 200,
+		// 使用共享的文件树设置
+		folderTreeVisible: treeSettings.folderTreeVisible,
+		folderTreeLayout: treeSettings.folderTreeLayout,
+		folderTreeSize: treeSettings.folderTreeSize,
 		historyStack: [],
 		historyIndex: -1,
 		homePath,
@@ -974,24 +1013,73 @@ export const folderTabActions = {
 	// ============ Folder Tree ============
 
 	/**
-	 * 切换文件夹树可见性
+	 * 切换文件夹树可见性（同步到所有页签）
 	 */
 	toggleFolderTree() {
-		updateActiveTab((tab) => ({ ...tab, folderTreeVisible: !tab.folderTreeVisible }));
+		const currentTab = this.getActiveTab();
+		const newVisible = !currentTab?.folderTreeVisible;
+		
+		// 更新共享设置
+		sharedTreeSettings.folderTreeVisible = newVisible;
+		saveSharedTreeSettings(sharedTreeSettings);
+		
+		// 同步到所有页签
+		store.update(($store) => {
+			const tabs = $store.tabs.map((tab) => {
+				// 只更新非虚拟路径的页签
+				if (!isVirtualPath(tab.currentPath) && !isVirtualPath(tab.homePath)) {
+					return { ...tab, folderTreeVisible: newVisible };
+				}
+				return tab;
+			});
+			const newState = { ...$store, tabs };
+			requestAnimationFrame(() => saveTabsState(newState));
+			return newState;
+		});
 	},
 
 	/**
-	 * 设置文件夹树布局
+	 * 设置文件夹树布局（同步到所有页签）
 	 */
 	setFolderTreeLayout(layout: 'top' | 'left' | 'right' | 'bottom') {
-		updateActiveTab((tab) => ({ ...tab, folderTreeLayout: layout }));
+		// 更新共享设置
+		sharedTreeSettings.folderTreeLayout = layout;
+		saveSharedTreeSettings(sharedTreeSettings);
+		
+		// 同步到所有页签
+		store.update(($store) => {
+			const tabs = $store.tabs.map((tab) => {
+				if (!isVirtualPath(tab.currentPath) && !isVirtualPath(tab.homePath)) {
+					return { ...tab, folderTreeLayout: layout };
+				}
+				return tab;
+			});
+			const newState = { ...$store, tabs };
+			requestAnimationFrame(() => saveTabsState(newState));
+			return newState;
+		});
 	},
 
 	/**
-	 * 设置文件夹树大小
+	 * 设置文件夹树大小（同步到所有页签）
 	 */
 	setFolderTreeSize(size: number) {
-		updateActiveTab((tab) => ({ ...tab, folderTreeSize: size }));
+		// 更新共享设置
+		sharedTreeSettings.folderTreeSize = size;
+		saveSharedTreeSettings(sharedTreeSettings);
+		
+		// 同步到所有页签
+		store.update(($store) => {
+			const tabs = $store.tabs.map((tab) => {
+				if (!isVirtualPath(tab.currentPath) && !isVirtualPath(tab.homePath)) {
+					return { ...tab, folderTreeSize: size };
+				}
+				return tab;
+			});
+			const newState = { ...$store, tabs };
+			requestAnimationFrame(() => saveTabsState(newState));
+			return newState;
+		});
 	},
 
 	/**

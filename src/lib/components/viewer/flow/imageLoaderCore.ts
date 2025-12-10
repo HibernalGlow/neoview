@@ -121,6 +121,10 @@ export class ImageLoaderCore {
 				// 正常取消（切书、清理队列等），静默处理
 				throw error;
 			}
+			// 视频文件跳过是正常行为，不打印警告
+			if (error instanceof Error && error.message.includes('Video file skipped')) {
+				throw error;
+			}
 			// 【关键】真正的错误才打印警告
 			console.warn(`加载页面 ${pageIndex} 失败:`, error);
 			throw error;

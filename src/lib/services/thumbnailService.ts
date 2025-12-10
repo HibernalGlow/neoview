@@ -15,6 +15,7 @@ import { preloadThumbnails, type ThumbnailReadyEvent } from '$lib/api/pageManage
 import { thumbnailCacheStore } from '$lib/stores/thumbnailCache.svelte';
 import { bookStore } from '$lib/stores/book.svelte';
 import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
+import { isVideoFile } from '$lib/utils/videoUtils';
 
 // ===========================================================================
 // 配置
@@ -92,22 +93,32 @@ async function loadThumbnails(centerIndex: number): Promise<void> {
 			return;
 		}
 
-		// 计算需要加载的索引（过滤掉已缓存的）
+		// 计算需要加载的索引（过滤掉已缓存的和视频文件）
 		const totalPages = currentBook.pages?.length || 0;
 		const needLoad: number[] = [];
 
+		// 检查页面是否为视频文件
+		const isVideoPage = (index: number): boolean => {
+			const page = currentBook.pages?.[index];
+			if (!page) return false;
+			const filename = page.name || page.path || '';
+			return isVideoFile(filename);
+		};
+
 		for (let offset = 0; offset <= PRELOAD_RANGE; offset++) {
 			if (offset === 0) {
-				if (!thumbnailCacheStore.hasThumbnail(centerIndex) && !loadingIndices.has(centerIndex)) {
+				// 【关键】跳过视频页面
+				if (!isVideoPage(centerIndex) && !thumbnailCacheStore.hasThumbnail(centerIndex) && !loadingIndices.has(centerIndex)) {
 					needLoad.push(centerIndex);
 				}
 			} else {
 				const before = centerIndex - offset;
 				const after = centerIndex + offset;
-				if (before >= 0 && !thumbnailCacheStore.hasThumbnail(before) && !loadingIndices.has(before)) {
+				// 【关键】跳过视频页面
+				if (before >= 0 && !isVideoPage(before) && !thumbnailCacheStore.hasThumbnail(before) && !loadingIndices.has(before)) {
 					needLoad.push(before);
 				}
-				if (after < totalPages && !thumbnailCacheStore.hasThumbnail(after) && !loadingIndices.has(after)) {
+				if (after < totalPages && !isVideoPage(after) && !thumbnailCacheStore.hasThumbnail(after) && !loadingIndices.has(after)) {
 					needLoad.push(after);
 				}
 			}

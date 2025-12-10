@@ -288,15 +288,11 @@
 		onItemDoubleClick({ item, index });
 	}
 
-	function toggleItemSelection(path: string) {
-		const next = new Set(selectedItems);
-		if (next.has(path)) {
-			next.delete(path);
-		} else {
-			next.add(path);
-		}
-		onSelectionChange({ selectedItems: next });
-		dispatch('selectionChange', { selectedItems: next });
+	// 处理勾选框切换 - 通过 onItemSelect 路由以支持链选模式
+	function handleToggleSelection(item: FsItem, index: number) {
+		// 使用 multiSelect: true 触发链选逻辑
+		onItemSelect({ item, index, multiSelect: true });
+		dispatch('itemSelect', { item, index, multiSelect: true });
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
@@ -473,7 +469,7 @@
 									onClick={() => handleItemClick(item, itemIndex)}
 									onDoubleClick={() => handleItemDoubleClick(item, itemIndex)}
 									onContextMenu={(e) => handleItemContextMenu(e, item)}
-									onToggleSelection={() => toggleItemSelection(item.path)}
+									onToggleSelection={() => handleToggleSelection(item, itemIndex)}
 									onDelete={() => dispatch('deleteItem', { item })}
 									onOpenAsBook={() => dispatch('openFolderAsBook', { item })}
 									onOpenInNewTab={() => dispatch('openInNewTab', { item })}

@@ -779,10 +779,35 @@
 			tabId
 		);
 		if (isChainSelectMode && ($multiSelectMode || payload.multiSelect)) {
-			const anchor = getChainAnchor(tabId);
+			let anchor = getChainAnchor(tabId);
 			console.log('[FolderStack] 链选模式激活 - anchor:', anchor, 'currentIndex:', payload.index);
+			
+			// 如果没有锚点，尝试从已选中项中找到最近的一个作为锚点
 			if (anchor === -1) {
-				// 还没有锚点，设置当前点击位置为锚点并选中该项
+				const currentSelected = get(tabSelectedItems);
+				if (currentSelected.size > 0) {
+					// 找到离当前点击位置最近的已选中项作为锚点
+					let nearestIndex = -1;
+					let nearestDistance = Infinity;
+					for (let i = 0; i < displayItems.length; i++) {
+						if (currentSelected.has(displayItems[i].path)) {
+							const distance = Math.abs(i - payload.index);
+							if (distance < nearestDistance) {
+								nearestDistance = distance;
+								nearestIndex = i;
+							}
+						}
+					}
+					if (nearestIndex !== -1) {
+						anchor = nearestIndex;
+						setChainAnchor(tabId, anchor);
+						console.log('[FolderStack] 从已选中项设置锚点为:', anchor);
+					}
+				}
+			}
+			
+			if (anchor === -1) {
+				// 真的没有锚点也没有已选中项，设置当前点击位置为锚点并选中该项
 				console.log('[FolderStack] 设置锚点为:', payload.index);
 				setChainAnchor(tabId, payload.index);
 				globalStore.selectItem(payload.item.path, true, payload.index);

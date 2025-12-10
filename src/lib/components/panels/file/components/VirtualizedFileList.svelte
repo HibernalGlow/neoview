@@ -318,16 +318,11 @@
 		return date.toLocaleString();
 	}
 
-	// 切换项目选中状态
-	function toggleItemSelection(path: string) {
-		const next = new Set(selectedItems);
-		if (next.has(path)) {
-			next.delete(path);
-		} else {
-			next.add(path);
-		}
-		onSelectionChange({ selectedItems: next });
-		dispatch('selectionChange', { selectedItems: next });
+	// 处理勾选框切换 - 通过 onItemSelect 路由以支持链选模式
+	function handleToggleSelection(item: FsItem, index: number) {
+		// 使用 multiSelect: true 触发链选逻辑
+		onItemSelect({ item, index, multiSelect: true });
+		dispatch('itemSelect', { item, index, multiSelect: true });
 	}
 
 	// 获取项目在列表中的实际索引
@@ -548,7 +543,7 @@
 						onClick={() => handleItemClick(item, actualIndex)}
 						onDoubleClick={() => handleItemDoubleClick(item, actualIndex)}
 						onContextMenu={(e) => handleItemContextMenu(e, item)}
-						onToggleSelection={() => toggleItemSelection(item.path)}
+						onToggleSelection={() => handleToggleSelection(item, actualIndex)}
 						onDelete={() => dispatch('deleteItem', { item })}
 						onOpenAsBook={item.isDir ? () => handleOpenFolderAsBook(item, actualIndex) : undefined}
 					/>
@@ -597,7 +592,7 @@
 							onClick={() => handleItemClick(item, actualIndex)}
 							onDoubleClick={() => handleItemDoubleClick(item, actualIndex)}
 							onContextMenu={(e) => handleItemContextMenu(e, item)}
-							onToggleSelection={() => toggleItemSelection(item.path)}
+							onToggleSelection={() => handleToggleSelection(item, actualIndex)}
 							onDelete={() => dispatch('deleteItem', { item })}
 							onOpenAsBook={item.isDir
 								? () => handleOpenFolderAsBook(item, actualIndex)

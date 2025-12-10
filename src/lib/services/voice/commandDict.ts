@@ -3,11 +3,11 @@
  * 将语音识别的自然语言映射到操作ID
  */
 
-// 命令词典：action -> 可接受的中文命令数组
-export const VOICE_COMMANDS: Record<string, string[]> = {
+// 默认命令词典：action -> 可接受的中文命令数组
+export const DEFAULT_VOICE_COMMANDS: Record<string, string[]> = {
 	// === 导航操作 ===
-	nextPage: ['下一页', '翻页', '下一张', '往后翻', '后面'],
-	prevPage: ['上一页', '前一页', '上一张', '往前翻', '前面'],
+	nextPage: ['下一页', '翻页', '下一张', '往后', '后面'],
+	prevPage: ['上一页', '前一页', '上一张', '往前', '前面'],
 	firstPage: ['第一页', '首页', '开头', '最前面'],
 	lastPage: ['最后一页', '末页', '结尾', '最后面'],
 	pageLeft: ['向左翻页', '左翻', '往左'],
@@ -56,12 +56,48 @@ export const VOICE_COMMANDS: Record<string, string[]> = {
 	toggleAutoUpscale: ['自动超分', '超分开关', '开启超分', '关闭超分'],
 };
 
+// 当前生效的命令词典
+let activeVoiceCommands: Record<string, string[]> = JSON.parse(JSON.stringify(DEFAULT_VOICE_COMMANDS));
+
 // 反向映射：命令短语 -> action
-const phraseToActionMap = new Map<string, string>();
-for (const [action, phrases] of Object.entries(VOICE_COMMANDS)) {
-	for (const phrase of phrases) {
-		phraseToActionMap.set(phrase.toLowerCase(), action);
+let phraseToActionMap = new Map<string, string>();
+
+// 初始化映射
+function rebuildMap() {
+	phraseToActionMap.clear();
+	for (const [action, phrases] of Object.entries(activeVoiceCommands)) {
+		for (const phrase of phrases) {
+			phraseToActionMap.set(phrase.toLowerCase(), action);
+		}
 	}
+}
+rebuildMap();
+
+/**
+ * 更新命令词典
+ * @param customCommands 用户自定义的命令映射（覆盖默认值）
+ */
+export function updateCommandDict(customCommands: Record<string, string[]>) {
+	// 深拷贝默认配置
+	activeVoiceCommands = JSON.parse(JSON.stringify(DEFAULT_VOICE_COMMANDS));
+	
+	// 合并自定义配置
+	for (const [action, phrases] of Object.entries(customCommands)) {
+		if (phrases && phrases.length > 0) {
+			activeVoiceCommands[action] = phrases;
+		}
+	}
+	
+	// 重建索引
+	rebuildMap();
+	console.log('[VoiceControl] 命令词典已更新', activeVoiceCommands);
+}
+
+/**
+ * 获取当前的命令词典
+ */
+export function getActiveCommands(): Record<string, string[]> {
+	return JSON.parse(JSON.stringify(activeVoiceCommands));
 }
 
 /**
@@ -105,19 +141,19 @@ export function findMatchingAction(transcript: string): { action: string; matche
  * 获取操作对应的所有命令短语
  */
 export function getPhrasesForAction(action: string): string[] {
-	return VOICE_COMMANDS[action] || [];
+	return activeVoiceCommands[action] || [];
 }
 
 /**
  * 获取所有支持的操作
  */
 export function getAllSupportedActions(): string[] {
-	return Object.keys(VOICE_COMMANDS);
+	return Object.keys(activeVoiceCommands);
 }
 
 /**
  * 检查操作是否支持语音控制
  */
 export function isActionSupported(action: string): boolean {
-	return action in VOICE_COMMANDS;
+	return action in activeVoiceCommands;
 }

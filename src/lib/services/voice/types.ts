@@ -31,6 +31,7 @@ export interface VoiceControlConfig {
 	continuous: boolean;
 	showFeedback: boolean;
 	playSound: boolean;
+	customCommands?: Record<string, string[]>;
 }
 
 // 语音控制统计
@@ -62,6 +63,7 @@ export const DEFAULT_VOICE_CONFIG: VoiceControlConfig = {
 	continuous: false,
 	showFeedback: true,
 	playSound: true,
+	customCommands: {},
 };
 
 // 默认统计

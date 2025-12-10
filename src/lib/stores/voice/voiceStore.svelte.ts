@@ -3,6 +3,7 @@
  */
 
 import { voiceControlService } from '$lib/services/voice/VoiceControlService';
+import { updateCommandDict } from '$lib/services/voice/commandDict';
 import type {
 	VoiceRecognitionStatus,
 	VoiceCommandMatch,
@@ -72,6 +73,11 @@ function initialize(): boolean {
 
 	// 加载保存的配置
 	loadFromStorage();
+	
+	// 应用自定义命令
+	if (config.customCommands) {
+		updateCommandDict(config.customCommands);
+	}
 
 	// 应用配置到服务
 	voiceControlService.updateConfig(config);
@@ -142,6 +148,16 @@ function updateConfig(newConfig: Partial<VoiceControlConfig>): void {
 	config = { ...config, ...newConfig };
 	voiceControlService.updateConfig(config);
 	saveToStorage();
+}
+
+/**
+ * 更新特定操作的命令短语
+ */
+function updateCommandPhrases(action: string, phrases: string[]): void {
+	const currentCustom = config.customCommands || {};
+	currentCustom[action] = phrases;
+	updateConfig({ customCommands: currentCustom });
+	updateCommandDict(currentCustom);
 }
 
 /**
@@ -230,6 +246,7 @@ export const voiceStore = {
 	stopListening,
 	toggleListening,
 	updateConfig,
+	updateCommandPhrases,
 	setEnabled,
 	recordCommand,
 	resetStats,

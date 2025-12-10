@@ -9,9 +9,9 @@ import { Button } from '$lib/components/ui/button';
 import { Label } from '$lib/components/ui/label';
 import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select';
 import { voiceStore } from '$lib/stores/voice/voiceStore.svelte';
-import { VOICE_COMMANDS } from '$lib/services/voice/commandDict';
+import { DEFAULT_VOICE_COMMANDS, getActiveCommands } from '$lib/services/voice/commandDict';
 import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
-import { Mic, MicOff, Volume2, AlertCircle, CheckCircle, Settings, History, Info } from '@lucide/svelte';
+import { Mic, MicOff, Volume2, AlertCircle, CheckCircle, Settings, History, Info, Edit2, Save, RotateCcw } from '@lucide/svelte';
 import * as Tooltip from '$lib/components/ui/tooltip';
 import { toast } from 'svelte-sonner';
 
@@ -25,6 +25,7 @@ let interimText = $state(''); // 实时识别中的文字
 let errorMessage = $state<string | null>(null);
 let showSettings = $state(false);
 let showHistory = $state(false);
+let showCommandEditor = $state(false);
 
 // 配置状态
 let triggerMode = $state<'button' | 'hotkey' | 'wakeword' | 'always'>('button');
@@ -32,6 +33,10 @@ let minConfidence = $state(0.6);
 let showFeedback = $state(true);
 let playSound = $state(true);
 let continuous = $state(false);
+
+// 自定义命令编辑状态
+let editingAction = $state<string>(Object.keys(DEFAULT_VOICE_COMMANDS)[0]);
+let editingPhrases = $state<string>('');
 
 // 统计数据
 let totalCommands = $state(0);
@@ -44,7 +49,7 @@ let commandHistory = $state<Array<{
 }>>([]);
 
 // 支持的命令数量
-const supportedCommandsCount = Object.keys(VOICE_COMMANDS).length;
+const supportedCommandsCount = Object.keys(DEFAULT_VOICE_COMMANDS).length;
 
 // 全局 dispatchAction 函数引用
 let dispatchAction: ((action: string) => void) | null = null;
@@ -256,6 +261,45 @@ function resetStats() {
 	toast.success('统计数据已重置');
 }
 
+// 保存自定义命令
+function saveCustomCommand() {
+	if (!editingPhrases.trim()) {
+		toast.error('命令短语不能为空');
+		return;
+	}
+	
+	const phrases = editingPhrases.split(/[,，\n]/).map(p => p.trim()).filter(p => p);
+	if (phrases.length === 0) {
+		toast.error('有效命令短语不能为空');
+		return;
+	}
+	
+	voiceStore.updateCommandPhrases(editingAction, phrases);
+	toast.success(`已更新 "${getActionName(editingAction)}" 的语音命令`);
+}
+
+// 重置自定义命令
+function resetCustomCommand() {
+	const defaultPhrases = DEFAULT_VOICE_COMMANDS[editingAction];
+	if (defaultPhrases) {
+		editingPhrases = defaultPhrases.join(', ');
+		saveCustomCommand();
+	}
+}
+
+// 下拉选项
+const commandOptions = Object.keys(DEFAULT_VOICE_COMMANDS).map(action => ({
+	value: action,
+	get label() { return getActionName(action); }
+})).sort((a, b) => a.value.localeCompare(b.value));
+
+// 监听编辑动作变化
+$effect(() => {
+	const activeMap = getActiveCommands();
+	const phrases = activeMap[editingAction] || DEFAULT_VOICE_COMMANDS[editingAction] || [];
+	editingPhrases = phrases.join(', ');
+});
+
 function formatTime(timestamp: number): string {
 	const date = new Date(timestamp);
 	return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -400,12 +444,59 @@ const statusText = {
 					variant="outline"
 					size="sm"
 					class="flex-1 text-xs"
+					onclick={() => showCommandEditor = !showCommandEditor}
+				>
+					<Edit2 class="h-3 w-3 mr-1" />
+					{showCommandEditor ? '收起编辑' : '命令编辑'}
+				</Button>
+				<Button
+					variant="outline"
+					size="sm"
+					class="flex-1 text-xs"
 					onclick={() => showHistory = !showHistory}
 				>
 					<History class="h-3 w-3 mr-1" />
 					{showHistory ? '收起历史' : '命令历史'}
 				</Button>
 			</div>
+			
+			<!-- 命令编辑区域 -->
+			{#if showCommandEditor}
+				<div class="space-y-3 rounded-md border bg-muted/20 p-3">
+					<h4 class="text-xs font-medium text-muted-foreground">自定义命令字典</h4>
+					
+					<div class="space-y-2">
+						<Label class="text-xs">选择操作</Label>
+						<NativeSelect 
+							class="w-full h-8 text-xs"
+							value={editingAction}
+							onchange={(e) => editingAction = (e.target as HTMLSelectElement).value}
+						>
+							{#each commandOptions as option}
+								<NativeSelectOption value={option.value}>{option.label}</NativeSelectOption>
+							{/each}
+						</NativeSelect>
+					</div>
+
+					<div class="space-y-2">
+						<Label class="text-xs">语音指令 (用逗号分隔)</Label>
+						<textarea
+							class="w-full h-20 rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+							bind:value={editingPhrases}
+							placeholder="例如：放大, 变大, 放大图片"
+						></textarea>
+					</div>
+
+					<div class="flex gap-2">
+						<Button size="sm" class="flex-1 text-xs" onclick={saveCustomCommand}>
+							<Save class="w-3 h-3 mr-1" /> 保存
+						</Button>
+						<Button variant="outline" size="sm" class="flex-1 text-xs" onclick={resetCustomCommand}>
+							<RotateCcw class="w-3 h-3 mr-1" /> 重置默认
+						</Button>
+					</div>
+				</div>
+			{/if}
 
 			<!-- 高级设置 -->
 			{#if showSettings}

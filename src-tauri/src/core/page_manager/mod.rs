@@ -474,12 +474,12 @@ impl PageContentManager {
                 Ok((data, mime_type))
             }
             BookType::SingleVideo => {
-                // 单个视频文件 - 返回文件数据（前端需要特殊处理）
-                let data = std::fs::read(&page_info.inner_path)
-                    .map_err(|e| format!("读取视频失败: {}", e))?;
-
-                let mime_type = Self::detect_video_mime(&page_info.inner_path);
-                Ok((data, mime_type))
+                // 单个视频文件 - 不读取到内存，返回错误让前端使用 convertFileSrc
+                // 视频应该直接通过文件路径访问，不通过 IPC 传输
+                Err(format!(
+                    "视频文件不通过 IPC 加载，请使用 get_file_path 获取路径: {}",
+                    page_info.inner_path
+                ))
             }
             BookType::Epub => {
                 // EPUB 电子书 - 从 EPUB 中提取图片

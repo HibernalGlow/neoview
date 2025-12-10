@@ -65,19 +65,14 @@ pub async fn is_video_file(file_path: String) -> Result<bool, String> {
     Ok(video_exts::is_video_path(&path))
 }
 
-/// 直接加载视频文件
+/// 获取视频文件路径（前端使用 convertFileSrc 加载）
+/// 注意：不要将视频读入内存通过 IPC 传输，会导致大文件卡死
 #[command]
 pub async fn load_video(
     path: String,
     trace_id: Option<String>,
     _page_index: Option<usize>,
-) -> Result<Vec<u8>, String> {
-    if let Some(ref id) = trace_id {
-        println!("[{}] 开始加载视频文件: {}", id, path);
-    }
-
-    use std::fs::File;
-    use std::io::Read;
+) -> Result<String, String> {
     use std::path::Path;
 
     let path_obj = Path::new(&path);
@@ -85,69 +80,25 @@ pub async fn load_video(
         return Err(format!("视频文件不存在: {}", path));
     }
 
-    let metadata = path_obj
-        .metadata()
-        .map_err(|e| format!("无法读取文件信息: {}", e))?;
-
-    if metadata.len() > 500 * 1024 * 1024 {
-        // 限制视频大小为500MB
-        return Err(format!(
-            "视频文件过大: {} MB (最大 500MB)",
-            metadata.len() / 1024 / 1024
-        ));
-    }
-
-    let mut file = File::open(path_obj).map_err(|e| format!("无法打开视频文件: {}", e))?;
-
-    let mut buffer = Vec::with_capacity(metadata.len() as usize);
-    file.read_to_end(&mut buffer)
-        .map_err(|e| format!("读取视频文件失败: {}", e))?;
-
     if let Some(ref id) = trace_id {
-        println!("[{}] 视频加载成功: {} bytes", id, buffer.len());
+        println!("[{}] 返回视频路径: {}", id, path);
     }
 
-    Ok(buffer)
+    // 直接返回路径，前端使用 convertFileSrc 加载
+    Ok(path)
 }
 
-/// 从压缩包加载视频文件（支持 ZIP/RAR/7z）
+/// 从压缩包加载视频文件（提取到临时文件，返回路径）
+/// 注意：不要将视频读入内存通过 IPC 传输，会导致大文件卡死
 #[command]
 pub async fn load_video_from_archive(
     archive_path: String,
     file_path: String,
     trace_id: Option<String>,
     _page_index: Option<usize>,
-) -> Result<Vec<u8>, String> {
-    use crate::core::archive::ArchiveManager;
-    use std::path::PathBuf;
-
-    if let Some(ref id) = trace_id {
-        println!(
-            "[{}] 开始从压缩包加载视频: {} -> {}",
-            id, archive_path, file_path
-        );
-    }
-
-    let archive_path_buf = PathBuf::from(&archive_path);
-    let manager = ArchiveManager::new();
-    
-    // 使用 extract_file 支持 ZIP/RAR/7z
-    let buffer = manager.extract_file(&archive_path_buf, &file_path)?;
-
-    // 检查文件大小
-    let size = buffer.len();
-    if size > 500 * 1024 * 1024 {
-        return Err(format!(
-            "视频文件过大: {} MB (最大 500MB)",
-            size / 1024 / 1024
-        ));
-    }
-
-    if let Some(ref id) = trace_id {
-        println!("[{}] 视频加载成功: {} bytes", id, size);
-    }
-
-    Ok(buffer)
+) -> Result<String, String> {
+    // 直接调用 extract_video_to_temp，返回临时文件路径
+    extract_video_to_temp(archive_path, file_path, trace_id).await
 }
 
 /// 从压缩包提取视频到临时文件，返回临时文件路径

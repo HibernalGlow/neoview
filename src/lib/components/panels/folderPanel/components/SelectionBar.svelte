@@ -72,7 +72,7 @@ function handleClose() {
 <div class="flex items-center gap-2 px-3 py-2 border-b">
 	<!-- 选中计数 -->
 	<span class="text-sm font-medium">
-		已选择 <span class="text-primary">{selectedCount}</span> / {totalCount} 项
+		<span class="text-primary">{selectedCount}</span> / {totalCount} 
 	</span>
 	
 	<div class="flex-1" />
@@ -90,7 +90,6 @@ function handleClose() {
 					disabled={allSelected}
 				>
 					<CheckSquare class="h-4 w-4 mr-1" />
-					全选
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content><p>选择全部项目</p></Tooltip.Content>
@@ -106,7 +105,6 @@ function handleClose() {
 					onclick={handleInvertSelection}
 				>
 					<Square class="h-4 w-4 mr-1" />
-					反选
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content><p>反转选择状态</p></Tooltip.Content>
@@ -123,7 +121,6 @@ function handleClose() {
 					disabled={selectedCount === 0}
 				>
 					<SquareX class="h-4 w-4 mr-1" />
-					取消
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content><p>取消全部选择</p></Tooltip.Content>
@@ -142,7 +139,6 @@ function handleClose() {
 				}}
 				>
 					<Link class="h-4 w-4 mr-1" />
-					链选
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>

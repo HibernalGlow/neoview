@@ -800,31 +800,23 @@
 					}
 					if (nearestIndex !== -1) {
 						anchor = nearestIndex;
-						setChainAnchor(tabId, anchor);
 						console.log('[FolderStack] 从已选中项设置锚点为:', anchor);
 					}
 				}
 			}
 			
-			if (anchor === -1) {
-				// 真的没有锚点也没有已选中项，设置当前点击位置为锚点并选中该项
-				console.log('[FolderStack] 设置锚点为:', payload.index);
-				setChainAnchor(tabId, payload.index);
+			if (anchor === -1 || anchor === payload.index) {
+				// 没有锚点，或点击的是锚点本身：切换该项的选中状态并设置为新锚点
+				console.log('[FolderStack] 切换选中状态并设置锚点为:', payload.index);
 				globalStore.selectItem(payload.item.path, true, payload.index);
+				setChainAnchor(tabId, payload.index);
 			} else {
-				// 有锚点，选中从锚点到当前位置的所有项目
+				// 有锚点且点击不同位置，选中从锚点到当前位置的所有项目
 				const startIndex = Math.min(anchor, payload.index);
 				const endIndex = Math.max(anchor, payload.index);
-				console.log(
-					'[FolderStack] 链选范围:',
-					startIndex,
-					'->',
-					endIndex,
-					'displayItems.length:',
-					displayItems.length
-				);
+				console.log('[FolderStack] 链选范围:', startIndex, '->', endIndex);
 
-				// 批量收集需要选中的路径，避免逐个调用导致性能问题
+				// 批量收集需要选中的路径
 				const currentSelected = get(tabSelectedItems);
 				const newSelected = new Set(currentSelected);
 				for (let i = startIndex; i <= endIndex; i++) {

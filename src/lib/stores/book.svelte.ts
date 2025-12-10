@@ -362,19 +362,20 @@ class BookStore {
       this.syncAppStateBookSlice('user');
       this.syncInfoPanelBookInfo();
 
-      // 【单文件模式】更新当前文件路径
+      // 【单文件模式】更新当前文件路径并添加历史记录
       if (this.state.singleFileMode) {
         const currentPage = this.state.currentBook.pages?.[index];
         if (currentPage) {
           this.state.originalFilePath = currentPage.path;
+          // 单文件模式下，为每个文件添加/更新历史记录
+          const { historyStore } = await import('$lib/stores/history.svelte');
+          const name = currentPage.name || currentPage.path.split(/[\\/]/).pop() || currentPage.path;
+          historyStore.add(currentPage.path, name, index, this.state.currentBook.totalPages);
         }
-      }
-
-      // 【优化】更新历史记录（支持单文件模式）
-      const historyPath = this.getHistoryPath();
-      if (historyPath) {
+      } else {
+        // 非单文件模式，更新 book 的历史记录
         const { historyStore } = await import('$lib/stores/history.svelte');
-        historyStore.update(historyPath, index, this.state.currentBook.totalPages);
+        historyStore.update(this.state.currentBook.path, index, this.state.currentBook.totalPages);
       }
 
       this.showPageSwitchToastIfEnabled();
@@ -422,19 +423,19 @@ class BookStore {
         await this.syncInfoPanelBookInfo();
         this.syncAppStateBookSlice('user');
 
-        // 【单文件模式】更新当前文件路径
+        // 【单文件模式】更新当前文件路径并添加历史记录
         if (this.state.singleFileMode) {
           const currentPage = this.state.currentBook.pages?.[newIndex];
           if (currentPage) {
             this.state.originalFilePath = currentPage.path;
+            const { historyStore } = await import('$lib/stores/history.svelte');
+            const name = currentPage.name || currentPage.path.split(/[\\/]/).pop() || currentPage.path;
+            historyStore.add(currentPage.path, name, newIndex, this.state.currentBook.totalPages);
           }
-        }
-
-        // 【优化】更新历史记录（支持单文件模式）
-        const historyPath = this.getHistoryPath();
-        if (historyPath) {
+        } else {
+          // 非单文件模式，更新 book 的历史记录
           const { historyStore } = await import('$lib/stores/history.svelte');
-          historyStore.update(historyPath, newIndex, this.state.currentBook.totalPages);
+          historyStore.update(this.state.currentBook.path, newIndex, this.state.currentBook.totalPages);
         }
       }
 
@@ -462,19 +463,19 @@ class BookStore {
         await this.syncInfoPanelBookInfo();
         this.syncAppStateBookSlice('user');
 
-        // 【单文件模式】更新当前文件路径
+        // 【单文件模式】更新当前文件路径并添加历史记录
         if (this.state.singleFileMode) {
           const currentPage = this.state.currentBook.pages?.[newIndex];
           if (currentPage) {
             this.state.originalFilePath = currentPage.path;
+            const { historyStore } = await import('$lib/stores/history.svelte');
+            const name = currentPage.name || currentPage.path.split(/[\\/]/).pop() || currentPage.path;
+            historyStore.add(currentPage.path, name, newIndex, this.state.currentBook.totalPages);
           }
-        }
-
-        // 【优化】更新历史记录（支持单文件模式）
-        const historyPath = this.getHistoryPath();
-        if (historyPath) {
+        } else {
+          // 非单文件模式，更新 book 的历史记录
           const { historyStore } = await import('$lib/stores/history.svelte');
-          historyStore.update(historyPath, newIndex, this.state.currentBook.totalPages);
+          historyStore.update(this.state.currentBook.path, newIndex, this.state.currentBook.totalPages);
         }
       }
       return newIndex;

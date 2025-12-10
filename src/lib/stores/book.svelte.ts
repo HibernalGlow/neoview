@@ -529,10 +529,20 @@ class BookStore {
   }
 
   async openNextBook() {
+    // 单文件模式下不切换书籍，保持在当前文件夹内
+    if (this.state.singleFileMode) {
+      console.log('📘 Single file mode: staying in current folder');
+      return;
+    }
     await this.openAdjacentBook('next');
   }
 
   async openPreviousBook() {
+    // 单文件模式下不切换书籍，保持在当前文件夹内
+    if (this.state.singleFileMode) {
+      console.log('📘 Single file mode: staying in current folder');
+      return;
+    }
     await this.openAdjacentBook('previous');
   }
 

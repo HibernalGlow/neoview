@@ -321,30 +321,39 @@ export class VoiceControlService {
 	private processTranscript(result: VoiceRecognitionResult): void {
 		if (!result.isFinal) return;
 
+		// 预处理文本：去除末尾标点
+		const cleanTranscript = result.transcript.replace(/[。，、！？.?! ]+$/, '');
+		
+		// 查找匹配的命令（优先匹配，再检查置信度）
+		const match = findMatchingAction(cleanTranscript);
+
 		// 检查置信度
-		if (result.confidence < this.config.minConfidence) {
+		// 如果置信度为 0（某些引擎不返回置信度）且有匹配结果，则允许通过
+		// 否则需要满足最小置信度要求
+		const isConfidenceAcceptable = result.confidence === 0 || result.confidence >= this.config.minConfidence;
+		
+		if (!isConfidenceAcceptable) {
 			console.log(`[VoiceControl] 置信度过低，忽略: ${result.confidence}`);
+			return;
+		}
+
+		// 如果只是置信度够高但没匹配到命令，我们也可以记录或提示，但这里只处理匹配到的情况
+		if (!match) {
+			console.log(`[VoiceControl] 未匹配到命令: "${result.transcript}"`);
 			return;
 		}
 
 		this.setStatus('processing');
 
-		// 查找匹配的命令
-		const match = findMatchingAction(result.transcript);
+		const commandMatch: VoiceCommandMatch = {
+			action: match.action,
+			transcript: result.transcript,
+			confidence: result.confidence,
+			matchedPhrase: match.matchedPhrase,
+		};
 
-		if (match) {
-			const commandMatch: VoiceCommandMatch = {
-				action: match.action,
-				transcript: result.transcript,
-				confidence: result.confidence,
-				matchedPhrase: match.matchedPhrase,
-			};
-
-			console.log(`[VoiceControl] 匹配命令: ${match.action} (短语: "${match.matchedPhrase}")`);
-			this.callbacks.onCommandRecognized?.(commandMatch);
-		} else {
-			console.log(`[VoiceControl] 未匹配到命令: "${result.transcript}"`);
-		}
+		console.log(`[VoiceControl] 匹配命令: ${match.action} (短语: "${match.matchedPhrase}")`);
+		this.callbacks.onCommandRecognized?.(commandMatch);
 
 		// 恢复监听状态
 		if (this.status === 'processing') {

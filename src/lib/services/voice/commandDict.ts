@@ -70,7 +70,8 @@ for (const [action, phrases] of Object.entries(VOICE_COMMANDS)) {
  * @returns 匹配结果或null
  */
 export function findMatchingAction(transcript: string): { action: string; matchedPhrase: string } | null {
-	const normalizedTranscript = transcript.toLowerCase().trim();
+	// 归一化：转小写，移除首尾空白，移除常见标点符号
+	const normalizedTranscript = transcript.toLowerCase().trim().replace(/[。，、！？.?!,\s]/g, '');
 	
 	// 1. 精确匹配
 	if (phraseToActionMap.has(normalizedTranscript)) {

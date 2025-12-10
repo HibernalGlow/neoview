@@ -14,6 +14,7 @@
 	} from '$lib/components/ui/empty';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { open } from '@tauri-apps/plugin-dialog';
+	import { convertFileSrc } from '@tauri-apps/api/core';
 	import {
 		bookStore,
 		zoomIn,
@@ -34,7 +35,7 @@
 		toggleTemporaryFitZoom
 	} from '$lib/stores';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
-	import { FolderOpen, Eye, EyeOff, ImageUp, X, Video } from '@lucide/svelte';
+	import { FolderOpen, Eye, EyeOff, ImageUp, X, Video, Settings2 } from '@lucide/svelte';
 	import ProjectCard from '$lib/components/ui/ProjectCard.svelte';
 	import BackgroundVideo from '$lib/components/viewer/BackgroundVideo.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
@@ -73,7 +74,19 @@
 	let videoPlaybackRate = $state(1.0);
 	// 隐藏的文件输入引用
 	let fileInputRef: HTMLInputElement | null = null;
-	let videoInputRef: HTMLInputElement | null = null;
+	// 视频设置面板显示状态
+	let showVideoSettings = $state(false);
+
+	// 转换视频 URL，如果是文件路径则使用 convertFileSrc
+	let convertedVideoUrl = $derived.by(() => {
+		if (!backgroundVideoUrl) return null;
+		// 如果是 data: URL 或 http(s): URL，直接返回
+		if (backgroundVideoUrl.startsWith('data:') || backgroundVideoUrl.startsWith('http')) {
+			return backgroundVideoUrl;
+		}
+		// 否则是文件路径，使用 convertFileSrc 转换
+		return convertFileSrc(backgroundVideoUrl);
+	});
 
 	// 从 localStorage 加载设置
 	function loadEmptySettings() {
@@ -139,17 +152,26 @@
 	}
 
 	// 处理背景视频上传
-	function handleBackgroundVideoUpload(event: Event) {
-		const input = event.target as HTMLInputElement;
-		const file = input.files?.[0];
-		if (!file) return;
+	async function handleBackgroundVideoUpload() {
+		// 使用 Tauri 的 open 对话框选择文件，直接获取文件路径
+		try {
+			const selected = await open({
+				multiple: false,
+				filters: [{
+					name: '视频文件',
+					extensions: ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv']
+				}]
+			});
 
-		const reader = new FileReader();
-		reader.onload = (e) => {
-			backgroundVideoUrl = e.target?.result as string;
-			saveEmptySettings();
-		};
-		reader.readAsDataURL(file);
+			if (selected) {
+				// 保存原始文件路径，显示时会通过 convertedVideoUrl 自动转换
+				backgroundVideoUrl = selected as string;
+				saveEmptySettings();
+				console.log('✅ 视频背景路径已保存:', selected);
+			}
+		} catch (error) {
+			console.error('❌ 选择视频文件失败:', error);
+		}
 	}
 
 	// 清除背景视频
@@ -785,10 +807,10 @@
 	<MainLayout>
 		<Empty class="relative h-full w-full border-0">
 			<!-- 背景视频 (最底层) -->
-			{#if backgroundVideoUrl}
+			{#if convertedVideoUrl}
 				<div class="absolute inset-0" style="z-index: -10;">
 					<BackgroundVideo
-						src={backgroundVideoUrl}
+						src={convertedVideoUrl}
 						opacity={videoOpacity}
 						blur={videoBlur}
 						playbackRate={videoPlaybackRate}
@@ -817,8 +839,9 @@
 				<!-- 项目卡片 - 隐藏时变透明，保持布局 -->
 				<ProjectCard class="mb-6 transition-opacity duration-300 {showProjectCard ? 'opacity-100' : 'opacity-0 pointer-events-none'}" />
 
-				<!-- 控制按钮组 - 默认隐藏，悬停显示 -->
-				<div class="empty-controls opacity-0 transition-opacity duration-300 hover:opacity-100 flex items-center gap-2">
+				<!-- 控制按钮组容器 - 使用group实现悬停显示 -->
+				<div class="empty-controls-container group">
+					<div class="empty-controls opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center gap-2">
 					<!-- 隐藏/显示卡片按钮 -->
 					<button
 						onclick={toggleProjectCard}
@@ -854,7 +877,7 @@
 
 					<!-- 上传背景视频按钮 -->
 					<button
-						onclick={() => videoInputRef?.click()}
+						onclick={handleBackgroundVideoUpload}
 						class="empty-control-btn h-9 w-9 rounded-lg flex items-center justify-center transition-all hover:scale-105"
 						title="上传背景视频"
 					>
@@ -871,6 +894,105 @@
 							<X class="h-4 w-4" />
 						</button>
 					{/if}
+
+					<!-- 视频设置按钮（仅当有背景视频时显示） -->
+					{#if backgroundVideoUrl}
+						<div class="relative">
+							<button
+								onclick={() => showVideoSettings = !showVideoSettings}
+								class="empty-control-btn h-9 w-9 rounded-lg flex items-center justify-center transition-all hover:scale-105 {showVideoSettings ? 'bg-primary/20' : ''}"
+								title="视频设置"
+							>
+								<Settings2 class="h-4 w-4" />
+							</button>
+
+							<!-- 视频设置面板 -->
+							{#if showVideoSettings}
+								<div
+									class="absolute bottom-full left-0 mb-2 w-64 rounded-lg p-4 shadow-lg"
+									style="background: hsl(var(--card) / 0.95); backdrop-filter: blur(16px); border: 1px solid hsl(var(--border) / 0.5);"
+									onclick={(e) => e.stopPropagation()}
+								>
+									<div class="mb-3 flex items-center justify-between">
+										<span class="text-sm font-medium">视频设置</span>
+										<button
+											class="text-muted-foreground hover:text-foreground transition-colors"
+											onclick={() => showVideoSettings = false}
+										>
+											<X class="h-4 w-4" />
+										</button>
+									</div>
+
+									<!-- 透明度 -->
+									<div class="mb-4">
+										<div class="mb-1 flex items-center justify-between">
+											<span class="text-xs text-muted-foreground">透明度</span>
+											<span class="text-xs font-mono">{Math.round(videoOpacity * 100)}%</span>
+										</div>
+										<input
+											type="range"
+											min="0"
+											max="1"
+											step="0.05"
+											bind:value={videoOpacity}
+											oninput={saveEmptySettings}
+											class="w-full h-1 bg-primary/20 rounded-lg appearance-none cursor-pointer"
+										/>
+									</div>
+
+									<!-- 模糊度 -->
+									<div class="mb-4">
+										<div class="mb-1 flex items-center justify-between">
+											<span class="text-xs text-muted-foreground">模糊度</span>
+											<span class="text-xs font-mono">{videoBlur}px</span>
+										</div>
+										<input
+											type="range"
+											min="0"
+											max="20"
+											step="1"
+											bind:value={videoBlur}
+											oninput={saveEmptySettings}
+											class="w-full h-1 bg-primary/20 rounded-lg appearance-none cursor-pointer"
+										/>
+									</div>
+
+									<!-- 播放速率 -->
+									<div>
+										<div class="mb-1 flex items-center justify-between">
+											<span class="text-xs text-muted-foreground">播放速率</span>
+											<span class="text-xs font-mono">{videoPlaybackRate.toFixed(2)}x</span>
+										</div>
+										<input
+											type="range"
+											min="0.25"
+											max="2"
+											step="0.1"
+											bind:value={videoPlaybackRate}
+											oninput={saveEmptySettings}
+											class="w-full h-1 bg-primary/20 rounded-lg appearance-none cursor-pointer"
+										/>
+									</div>
+
+									<!-- 重置按钮 -->
+									<div class="mt-4 pt-3 border-t border-border/50">
+										<button
+											onclick={() => {
+												videoOpacity = 0.3;
+												videoBlur = 0;
+												videoPlaybackRate = 1.0;
+												saveEmptySettings();
+											}}
+											class="w-full px-3 py-1.5 text-xs rounded-md bg-primary/10 hover:bg-primary/20 transition-colors"
+										>
+											重置为默认值
+										</button>
+									</div>
+								</div>
+							{/if}
+						</div>
+					{/if}
+					</div>
 				</div>
 
 				<!-- 隐藏的文件输入 -->
@@ -880,15 +1002,6 @@
 					class="hidden"
 					bind:this={fileInputRef}
 					onchange={handleBackgroundUpload}
-				/>
-
-				<!-- 隐藏的视频输入 -->
-				<input
-					type="file"
-					accept="video/*"
-					class="hidden"
-					bind:this={videoInputRef}
-					onchange={handleBackgroundVideoUpload}
 				/>
 
 				<!-- 操作按钮 -->
@@ -920,5 +1033,11 @@
 	.empty-control-btn:focus-visible {
 		outline: 2px solid hsl(var(--primary));
 		outline-offset: 2px;
+	}
+
+	/* 控制按钮容器 - 扩大悬停区域 */
+	.empty-controls-container {
+		padding: 2rem;
+		display: inline-block;
 	}
 </style>

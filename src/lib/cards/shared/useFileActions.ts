@@ -208,8 +208,10 @@ export function createItemOpenActions(
 				const name = item.name || item.path.split(/[\\/]/).pop() || item.path;
 				const currentPage = bookStore.currentPageIndex;
 				const totalPages = bookStore.currentBook?.totalPages || 1;
-				console.log('📝 [History] Adding video/image history:', { path: item.path, name, currentPage, totalPages });
-				historyStore.add(item.path, name, currentPage, totalPages);
+				// 使用 pathStack 精确记录历史
+				const pathStack = bookStore.buildPathStack();
+				console.log('📝 [History] Adding video/image history with pathStack:', { pathStack, name, currentPage, totalPages });
+				historyStore.addWithPathStack(pathStack, name, currentPage, totalPages);
 			} else {
 				const historyEntry = historyStore.findByPath(item.path);
 				const initialPage = historyEntry?.currentPage ?? 0;

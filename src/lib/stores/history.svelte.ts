@@ -1,9 +1,18 @@
 /**
  * 历史记录管理 Store
+ * 支持 pathStack 精确定位
  */
 
 import { writable } from 'svelte/store';
 import { pathExists } from '$lib/api/filesystem';
+
+/**
+ * 内容引用（用于路径栈）
+ */
+export interface ContentRef {
+  path: string;
+  innerPath?: string;
+}
 
 export interface HistoryEntry {
   id: string;
@@ -16,6 +25,8 @@ export interface HistoryEntry {
   videoPosition?: number;
   videoDuration?: number;
   videoCompleted?: boolean;
+  /** 路径栈（支持嵌套定位） */
+  pathStack?: ContentRef[];
 }
 
 const STORAGE_KEY = 'neoview-history';
@@ -27,7 +38,7 @@ function loadHistory(): HistoryEntry[] {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      return parsed.map((h: any) => ({
+      return parsed.map((h: Partial<HistoryEntry>) => ({
         ...h,
         timestamp: h.timestamp || Date.now()
       }));
@@ -94,6 +105,118 @@ export const historyStore = {
 
       saveToStorage(newHistory);
       return newHistory;
+    });
+  },
+
+  /**
+   * 添加历史记录（使用路径栈）
+   * 用于精确记录单个文件（视频/图片）的历史
+   */
+  addWithPathStack(
+    pathStack: ContentRef[],
+    name: string,
+    currentPage: number = 0,
+    totalPages: number = 0,
+    thumbnail?: string
+  ) {
+    if (pathStack.length === 0) return;
+
+    // 使用路径栈的字符串表示作为唯一键
+    const pathStackKey = pathStack.map(r => r.innerPath ? `${r.path}::${r.innerPath}` : r.path).join('>>');
+    // 主路径使用第一个引用的 path
+    const mainPath = pathStack[0].path;
+
+    update(history => {
+      // 按路径栈查找
+      const existingIndex = history.findIndex(h => {
+        if (!h.pathStack || h.pathStack.length === 0) {
+          // 兼容旧格式
+          return h.path === mainPath;
+        }
+        const existingKey = h.pathStack.map(r => r.innerPath ? `${r.path}::${r.innerPath}` : r.path).join('>>');
+        return existingKey === pathStackKey;
+      });
+
+      const existing = existingIndex >= 0 ? history[existingIndex] : undefined;
+
+      const entry: HistoryEntry = {
+        ...existing,
+        id: existing?.id ?? crypto.randomUUID(),
+        path: mainPath,
+        pathStack,
+        name,
+        timestamp: Date.now(),
+        currentPage,
+        totalPages,
+        thumbnail: thumbnail ?? existing?.thumbnail,
+        videoPosition: existing?.videoPosition,
+        videoDuration: existing?.videoDuration,
+        videoCompleted: existing?.videoCompleted
+      };
+
+      let newHistory: HistoryEntry[];
+      if (existingIndex >= 0) {
+        newHistory = [...history];
+        newHistory[existingIndex] = entry;
+        newHistory = [entry, ...newHistory.filter((_, i) => i !== existingIndex)];
+      } else {
+        newHistory = [entry, ...history];
+      }
+
+      saveToStorage(newHistory);
+      return newHistory;
+    });
+  },
+
+  /**
+   * 根据路径栈查找历史记录
+   */
+  findByPathStack(pathStack: ContentRef[]): HistoryEntry | undefined {
+    if (pathStack.length === 0) return undefined;
+    
+    const pathStackKey = pathStack.map(r => r.innerPath ? `${r.path}::${r.innerPath}` : r.path).join('>>');
+    const history = this.getAll();
+    
+    return history.find(h => {
+      if (!h.pathStack || h.pathStack.length === 0) {
+        // 兼容旧格式：仅比较主路径
+        return h.path === pathStack[0].path && pathStack.length === 1;
+      }
+      const existingKey = h.pathStack.map(r => r.innerPath ? `${r.path}::${r.innerPath}` : r.path).join('>>');
+      return existingKey === pathStackKey;
+    });
+  },
+
+  /**
+   * 更新历史记录的页数（使用路径栈）
+   */
+  updateWithPathStack(pathStack: ContentRef[], currentPage: number, totalPages: number) {
+    if (pathStack.length === 0) return;
+    
+    const pathStackKey = pathStack.map(r => r.innerPath ? `${r.path}::${r.innerPath}` : r.path).join('>>');
+    
+    update(history => {
+      const existingIndex = history.findIndex(h => {
+        if (!h.pathStack || h.pathStack.length === 0) {
+          return h.path === pathStack[0].path && pathStack.length === 1;
+        }
+        const existingKey = h.pathStack.map(r => r.innerPath ? `${r.path}::${r.innerPath}` : r.path).join('>>');
+        return existingKey === pathStackKey;
+      });
+      
+      if (existingIndex >= 0) {
+        const entry = history[existingIndex];
+        const updatedEntry: HistoryEntry = {
+          ...entry,
+          currentPage,
+          totalPages
+        };
+        const newHistory = [...history];
+        newHistory[existingIndex] = updatedEntry;
+        saveToStorage(newHistory);
+        return newHistory;
+      }
+      return history;
     });
   },
 
@@ -179,7 +302,7 @@ export const historyStore = {
       const clampedPos = safeDuration > 0 ? Math.max(0, Math.min(position, safeDuration)) : 0;
 
       let derivedCurrentPage = progressPage ?? 0;
-      let derivedTotalPages = scale;
+      const derivedTotalPages = scale;
 
       if (safeDuration > 0) {
         const ratio = clampedPos / safeDuration;

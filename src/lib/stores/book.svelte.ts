@@ -3,7 +3,7 @@
  * 书籍状态管理 Store (Svelte 5 Runes)
  */
 
-import type { BookInfo, Page, PageSortMode } from '../types';
+import type { Page, PageSortMode } from '../types';
 import * as bookApi from '../api/book';
 import { infoPanelStore } from './infoPanel.svelte';
 import { appState, type ViewerJumpSource } from '$lib/core/state/appState';
@@ -14,60 +14,26 @@ import { showToast } from '$lib/utils/toast';
 import type { EMMMetadata } from '$lib/api/emm';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
-const PAGE_WINDOW_PADDING = 8;
-const JUMP_HISTORY_LIMIT = 20;
+// 从子模块导入
+import {
+  PAGE_WINDOW_PADDING,
+  JUMP_HISTORY_LIMIT,
+  formatBytesShort,
+  formatBookTypeLabel,
+  mapEmmToRaw,
+  clampInitialPage,
+} from './book/utils';
+import type {
+  BookState,
+  OpenBookOptions,
+  SwitchToastContext,
+  SwitchToastBookContext,
+  SwitchToastPageContext,
+  ContentRef,
+} from './book/types';
 
-interface BookState {
-  currentBook: BookInfo | null;
-  loading: boolean;
-  error: string;
-  viewerOpen: boolean;
-  upscaledImageData: string | null; // 保持兼容性，用于显示
-  // 【视频/图片单文件模式】用于正确记录历史
-  singleFileMode: boolean;
-  originalFilePath: string | null; // 原始文件路径（视频/图片）
-}
-
-interface OpenBookOptions {
-  /** 打开时希望跳转到的页面 */
-  initialPage?: number;
-  /** 跳过添加历史记录（用于视频/图片单独记录场景） */
-  skipHistory?: boolean;
-}
-
-interface SwitchToastBookContext {
-  name: string;
-  displayName: string;
-  path: string;
-  type: string;
-  totalPages: number;
-  currentPageIndex: number;
-  currentPageDisplay: number;
-  progressPercent: number | null;
-  emmTranslatedTitle?: string;
-  emmRating?: number | null;
-  emmTags?: Record<string, string[]> | undefined;
-  emmRaw?: Record<string, unknown> | undefined;
-}
-
-interface SwitchToastPageContext {
-  name: string;
-  displayName: string;
-  path: string;
-  innerPath?: string;
-  index: number;
-  indexDisplay: number;
-  width?: number;
-  height?: number;
-  dimensionsFormatted?: string;
-  size?: number;
-  sizeFormatted?: string;
-}
-
-export interface SwitchToastContext {
-  book: SwitchToastBookContext | null;
-  page: SwitchToastPageContext | null;
-}
+// Re-export SwitchToastContext for external use
+export type { SwitchToastContext };
 
 class BookStore {
   private state = $state<BookState>({
@@ -76,6 +42,7 @@ class BookStore {
     error: '',
     viewerOpen: false,
     upscaledImageData: null,
+    pathStack: [],
     singleFileMode: false,
     originalFilePath: null,
   });
@@ -213,6 +180,40 @@ class BookStore {
     return this.state.currentBook?.name ?? '';
   }
 
+  /** 获取当前路径栈 */
+  get pathStack(): ContentRef[] {
+    return this.state.pathStack;
+  }
+
+  /**
+   * 构建完整路径栈（包含当前页面）
+   * 用于精确历史记录
+   */
+  buildPathStack(): ContentRef[] {
+    const stack: ContentRef[] = [...this.state.pathStack];
+    const book = this.state.currentBook;
+    const page = this.currentPage;
+    
+    // 确保 book 在栈中
+    if (book && (stack.length === 0 || stack[0].path !== book.path)) {
+      stack.unshift({ path: book.path });
+    }
+    
+    // 如果是单文件模式，添加当前文件
+    if (this.state.singleFileMode && page) {
+      stack.push({ path: page.path, innerPath: page.innerPath });
+    }
+    
+    return stack;
+  }
+
+  /**
+   * 更新路径栈
+   */
+  private updatePathStack(newStack: ContentRef[]) {
+    this.state.pathStack = newStack;
+  }
+
   // === Actions ===
 
   /**
@@ -229,13 +230,15 @@ class BookStore {
       // 【重要】正常打开 book 时重置单文件模式（由调用方决定是否设置）
       this.state.singleFileMode = false;
       this.state.originalFilePath = null;
+      // 初始化路径栈
+      this.state.pathStack = [{ path }];
       infoPanelStore.resetAll();
 
       // 使用通用的 openBook API (它会自动检测类型)
       const book = await bookApi.openBook(path);
       console.log('✅ Book opened:', book.name, 'with', book.totalPages, 'pages');
 
-      const targetPage = this.clampInitialPage(book.totalPages, options.initialPage);
+      const targetPage = clampInitialPage(book.totalPages, options.initialPage);
       book.currentPage = targetPage;
 
       this.state.currentBook = book;
@@ -846,7 +849,7 @@ class BookStore {
         totalPages > 0 ? (safeCurrent / totalPages) * 100 : null;
 
       const emmRaw: Record<string, unknown> | undefined = emm
-        ? this.mapEmmToRaw(emm)
+        ? mapEmmToRaw(emm)
         : undefined;
 
       const emmTranslatedTitle = emm?.translated_title;
@@ -876,7 +879,7 @@ class BookStore {
         page.width && page.height ? `${page.width} × ${page.height}` : undefined;
       const sizeFormatted =
         typeof page.size === 'number'
-          ? this.formatBytesShort(page.size) ?? undefined
+          ? formatBytesShort(page.size) ?? undefined
           : undefined;
       const indexDisplay = page.index + 1;
 
@@ -968,7 +971,7 @@ class BookStore {
     }
 
     if (cfg.showBookType && book.type) {
-      const label = this.formatBookTypeLabel(book.type as string);
+      const label = formatBookTypeLabel(book.type as string);
       if (label) parts.push(label);
     }
 
@@ -1026,7 +1029,7 @@ class BookStore {
     }
 
     if (cfg.showPageSize && typeof page.size === 'number') {
-      const sizeStr = this.formatBytesShort(page.size);
+      const sizeStr = formatBytesShort(page.size);
       if (sizeStr) parts.push(sizeStr);
     }
 
@@ -1039,61 +1042,7 @@ class BookStore {
     });
   }
 
-  private formatBytesShort(bytes?: number): string | null {
-    if (bytes === undefined || bytes === null) return null;
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
-    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-  }
-
-  private formatBookTypeLabel(type?: string): string | null {
-    if (!type) return null;
-    switch (type.toLowerCase()) {
-      case 'folder':
-        return '文件夹';
-      case 'archive':
-        return '压缩包';
-      case 'pdf':
-        return 'PDF';
-      case 'media':
-        return '媒体';
-      default:
-        return type;
-    }
-  }
-
-  /**
-   * 将 EMM 元数据转换为原始记录对象
-   */
-  private mapEmmToRaw(emm: EMMMetadata): Record<string, unknown> {
-    return {
-      id: emm.id,
-      title: emm.title,
-      title_jpn: emm.title_jpn,
-      hash: emm.hash,
-      coverPath: emm.cover_path,
-      filepath: emm.filepath,
-      type: emm.type,
-      pageCount: emm.page_count,
-      bundleSize: emm.bundle_size,
-      mtime: emm.mtime,
-      coverHash: emm.cover_hash,
-      status: emm.status,
-      date: emm.date,
-      filecount: emm.filecount,
-      posted: emm.posted,
-      filesize: emm.filesize,
-      category: emm.category,
-      url: emm.url,
-      mark: emm.mark,
-      hiddenBook: emm.hidden_book,
-      readCount: emm.read_count,
-      exist: emm.exist,
-      createdAt: emm.created_at,
-      updatedAt: emm.updated_at
-    };
-  }
+  // formatBytesShort, formatBookTypeLabel, mapEmmToRaw 已移至 ./book/utils.ts
 
   private async syncInfoPanelBookInfo() {
     const book = this.state.currentBook;
@@ -1121,7 +1070,7 @@ class BookStore {
           translatedTitle: emmMetadata.translated_title,
           tags: emmMetadata.tags,
           rating: emmMetadata.rating,
-          raw: this.mapEmmToRaw(emmMetadata),
+          raw: mapEmmToRaw(emmMetadata),
         }
         : undefined,
     };

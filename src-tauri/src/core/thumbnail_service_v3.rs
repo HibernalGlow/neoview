@@ -53,10 +53,29 @@ pub struct ThumbnailServiceConfig {
 
 impl Default for ThumbnailServiceConfig {
     fn default() -> Self {
+        // 根据 CPU 核心数动态调整线程数
+        let num_cores = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4);
+        
+        // 线程数 = CPU核心数 * 1.5，最少4，最多16
+        let worker_threads = ((num_cores * 3) / 2).max(4).min(16);
+        
+        // 动态内存缓存：基于可用系统内存的估算
+        // 假设每个缩略图平均 30KB，最少512，最多4096
+        // 默认 1024，如果核心数多则增加
+        let memory_cache_size = if num_cores >= 8 {
+            2048
+        } else if num_cores >= 4 {
+            1024
+        } else {
+            512
+        };
+        
         Self {
-            folder_search_depth: 2,
-            memory_cache_size: 1024,
-            worker_threads: 8,
+            folder_search_depth: 1,  // 优化：限制扫描深度为1，减少I/O
+            memory_cache_size,
+            worker_threads,
             thumbnail_size: 256,
             db_save_delay_ms: 2000,
         }
@@ -177,6 +196,9 @@ pub struct ThumbnailServiceV3 {
     
     /// 最后一次保存队列刷新时间
     last_flush: Arc<Mutex<Instant>>,
+    
+    /// 批量保存阈值（数量）
+    batch_save_threshold: usize,
 }
 
 impl ThumbnailServiceV3 {
@@ -208,6 +230,7 @@ impl ThumbnailServiceV3 {
             failed_index: Arc::new(RwLock::new(failed_index)),
             save_queue: Arc::new(Mutex::new(HashMap::new())),
             last_flush: Arc::new(Mutex::new(Instant::now())),
+            batch_save_threshold: 50, // 累积50个或2秒，以先到者为准
         }
     }
     
@@ -409,25 +432,46 @@ impl ThumbnailServiceV3 {
             workers.push(handle);
         }
         
-        // 启动保存队列刷新线程
+        // 启动保存队列刷新线程（优化：使用批量事务 + 双触发条件）
         {
             let running = Arc::clone(&self.running);
             let save_queue = Arc::clone(&self.save_queue);
             let db = Arc::clone(&self.db);
             let flush_interval_ms = self.config.db_save_delay_ms;
+            let batch_threshold = self.batch_save_threshold;
             
             let flush_handle = thread::spawn(move || {
-                log_debug!("🔧 SaveQueue flush thread started");
+                log_debug!("🔧 SaveQueue flush thread started (batch_threshold={})", batch_threshold);
+                
+                let mut last_flush_time = Instant::now();
                 
                 while running.load(Ordering::SeqCst) {
-                    thread::sleep(Duration::from_millis(flush_interval_ms));
+                    // 使用更短的检查间隔（500ms），但只在满足条件时保存
+                    thread::sleep(Duration::from_millis(500));
+                    
+                    // 检查是否应该保存：时间阈值 OR 数量阈值
+                    let (should_flush, queue_len) = {
+                        match save_queue.lock() {
+                            Ok(queue) => {
+                                let len = queue.len();
+                                let time_elapsed = last_flush_time.elapsed().as_millis() as u64 >= flush_interval_ms;
+                                let count_reached = len >= batch_threshold;
+                                (time_elapsed || count_reached, len)
+                            }
+                            Err(_) => (false, 0),
+                        }
+                    };
+                    
+                    if !should_flush || queue_len == 0 {
+                        continue;
+                    }
                     
                     // 获取并清空保存队列
-                    let items_to_save: Vec<(String, Vec<u8>, i64, i32)> = {
+                    let items_to_save: Vec<(String, i64, i32, Vec<u8>)> = {
                         match save_queue.lock() {
                             Ok(mut queue) => {
                                 let items: Vec<_> = queue.drain()
-                                    .map(|(k, (blob, size, ghash, _))| (k, blob, size, ghash))
+                                    .map(|(k, (blob, size, ghash, _))| (k, size, ghash, blob))
                                     .collect();
                                 items
                             }
@@ -439,12 +483,15 @@ impl ThumbnailServiceV3 {
                         continue;
                     }
                     
-                    log_debug!("💾 批量保存 {} 个缩略图到数据库", items_to_save.len());
+                    last_flush_time = Instant::now();
+                    log_debug!("💾 批量保存 {} 个缩略图到数据库（使用事务）", items_to_save.len());
                     
-                    // 批量保存到数据库
-                    for (path_key, blob, size, ghash) in items_to_save {
-                        if let Err(e) = db.save_thumbnail(&path_key, size, ghash, &blob) {
-                            log_debug!("⚠️ 保存缩略图失败: {} - {}", path_key, e);
+                    // 使用批量事务保存（性能提升10-100倍）
+                    if let Err(e) = db.save_thumbnails_batch(&items_to_save) {
+                        log_debug!("⚠️ 批量保存缩略图失败: {}", e);
+                        // 回退到逐个保存
+                        for (path_key, size, ghash, blob) in items_to_save {
+                            let _ = db.save_thumbnail(&path_key, size, ghash, &blob);
                         }
                     }
                 }
@@ -452,13 +499,16 @@ impl ThumbnailServiceV3 {
                 // 退出前刷新剩余的保存队列
                 if let Ok(mut queue) = save_queue.lock() {
                     let remaining: Vec<_> = queue.drain()
-                        .map(|(k, (blob, size, ghash, _))| (k, blob, size, ghash))
+                        .map(|(k, (blob, size, ghash, _))| (k, size, ghash, blob))
                         .collect();
                     
                     if !remaining.is_empty() {
-                        log_debug!("💾 退出前保存 {} 个缩略图", remaining.len());
-                        for (path_key, blob, size, ghash) in remaining {
-                            let _ = db.save_thumbnail(&path_key, size, ghash, &blob);
+                        log_debug!("💾 退出前批量保存 {} 个缩略图", remaining.len());
+                        if db.save_thumbnails_batch(&remaining).is_err() {
+                            // 回退到逐个保存
+                            for (path_key, size, ghash, blob) in remaining {
+                                let _ = db.save_thumbnail(&path_key, size, ghash, &blob);
+                            }
                         }
                     }
                 }
@@ -1135,6 +1185,16 @@ impl ThumbnailServiceV3 {
             // 保存到数据库（作为文件夹类别）
             let _ = db.save_thumbnail_with_category(folder_path, 0, 0, &blob, Some("folder"));
             return Ok(blob);
+        }
+        
+        // 2.5 【性能优化】大型文件夹跳过：超过1000个文件的目录直接返回错误
+        // 避免长时间扫描，用户可以手动进入子目录
+        if let Ok(entries) = std::fs::read_dir(folder_path) {
+            let count = entries.take(1001).count();
+            if count > 1000 {
+                log_debug!("⏭️ 大型文件夹跳过缩略图生成: {} (>{} 项)", folder_path, count);
+                return Err("大型文件夹，跳过缩略图生成".to_string());
+            }
         }
         
         // 3. 查找封面图片（cover.*, folder.*, thumb.*）- 带权限错误处理

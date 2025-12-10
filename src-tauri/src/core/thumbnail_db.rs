@@ -381,6 +381,54 @@ impl ThumbnailDb {
         Ok(())
     }
 
+    /// 批量保存缩略图（使用事务，性能提升10-100倍）
+    /// items: Vec<(key, size, ghash, blob)>
+    pub fn save_thumbnails_batch(
+        &self,
+        items: &[(String, i64, i32, Vec<u8>)],
+    ) -> SqliteResult<usize> {
+        if items.is_empty() {
+            return Ok(0);
+        }
+
+        self.open()?;
+        let mut conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_mut().unwrap();
+
+        let date = Self::current_timestamp_string();
+        let mut saved_count = 0;
+
+        // 使用事务进行批量插入
+        let tx = conn.transaction()?;
+        
+        {
+            let mut stmt = tx.prepare_cached(
+                "INSERT OR REPLACE INTO thumbs (key, size, date, ghash, category, value) VALUES (?1, ?2, ?3, ?4, ?5, ?6)"
+            )?;
+
+            for (key, size, ghash, blob) in items {
+                // 自动判断类别
+                let cat = if !key.contains("::") && !key.contains('.') {
+                    "folder"
+                } else {
+                    "file"
+                };
+
+                if stmt.execute(params![key, size, date, ghash, cat, blob]).is_ok() {
+                    saved_count += 1;
+                }
+            }
+        }
+
+        tx.commit()?;
+
+        if cfg!(debug_assertions) && saved_count > 0 {
+            println!("✅ 批量保存 {} 个缩略图到数据库", saved_count);
+        }
+
+        Ok(saved_count)
+    }
+
     /// 加载缩略图（减少日志输出）
     pub fn load_thumbnail(
         &self,

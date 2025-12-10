@@ -375,12 +375,18 @@ export class ImageLoaderCore {
 				try {
 					await this.loadPage(pageIndex, priority);
 				} catch (e) {
-					console.warn(`预加载页面 ${pageIndex} 失败:`, e);
+					// 视频文件跳过是正常行为，不打印警告
+					if (!(e instanceof Error && e.message.includes('Video file skipped'))) {
+						console.warn(`预加载页面 ${pageIndex} 失败:`, e);
+					}
 				}
 			} else {
 				loadPromises.push(
 					this.loadPage(pageIndex, priority).catch((e) => {
-						console.warn(`预加载页面 ${pageIndex} 失败:`, e);
+						// 视频文件跳过是正常行为，不打印警告
+						if (!(e instanceof Error && e.message.includes('Video file skipped'))) {
+							console.warn(`预加载页面 ${pageIndex} 失败:`, e);
+						}
 					})
 				);
 			}

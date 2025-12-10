@@ -61,12 +61,12 @@
 		const newWidth = Math.max(200, Math.min(600, startWidth + delta));
 
 		// console.log('[RightSidebar] handleMouseMove', {
-			clientX: e.clientX,
-			startX,
-			delta,
-			startWidth,
-			newWidth
-		});
+		// 	clientX: e.clientX,
+		// 	startX,
+		// 	delta,
+		// 	startWidth,
+		// 	newWidth
+		// });
 
 		rightSidebarWidth.set(newWidth);
 		onResize?.(newWidth);

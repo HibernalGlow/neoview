@@ -839,6 +839,13 @@
 		} else {
 			if (payload.item.isDir) {
 				// 文件夹：进入目录，不加入选中列表
+				
+				// 虚拟实例（历史/书签面板）：文件夹应该在 folder 面板打开，通过 onItemOpen 回调处理
+				if (skipGlobalStore) {
+					onItemOpen?.(payload.item);
+					return;
+				}
+				
 				// 检查穿透模式
 				if ($penetrateMode) {
 					const penetrated = await tryPenetrateFolder(payload.item.path);

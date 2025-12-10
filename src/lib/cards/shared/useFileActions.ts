@@ -169,7 +169,14 @@ export function createItemOpenActions(
 	initialPath?: string
 ): ItemOpenActions {
 	const handleItemOpen = async (item: FsItem) => {
-		if (item.isDir) return;
+		// 文件夹：在虚拟实例中需要导航到 folder 面板
+		if (item.isDir) {
+			if (ctx.isVirtualInstance && initialPath) {
+				// 虚拟实例（历史/书签面板）：发送导航请求到 folder 面板
+				externalNavigationRequest.set({ path: item.path, timestamp: Date.now() });
+			}
+			return;
+		}
 
 		// 虚拟实例同步文件夹
 		if (ctx.isVirtualInstance && initialPath) {
@@ -218,8 +225,14 @@ export function createItemOpenActions(
 
 	const handleOpenInNewTab = (item: FsItem) => {
 		if (item.isDir) {
+			// 创建新标签页并导航
 			folderTabActions.createTab(item.path);
-			handleNavigate(item.path);
+			if (ctx.isVirtualInstance && initialPath) {
+				// 虚拟实例（历史/书签面板）：发送导航请求到 folder 面板
+				externalNavigationRequest.set({ path: item.path, timestamp: Date.now() });
+			} else {
+				handleNavigate(item.path);
+			}
 		}
 	};
 

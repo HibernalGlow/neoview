@@ -275,9 +275,14 @@
 	}
 
 	function handleItemClick(item: FsItem, index: number) {
-		onItemSelect({ item, index, multiSelect: false });
+		// 检查勾选模式下点击行为设置
+		const state = get(fileBrowserStore);
+		const useSelectBehavior = isCheckMode && state.checkModeClickBehavior === 'select';
+		const multiSelect = useSelectBehavior;
+		
+		onItemSelect({ item, index, multiSelect });
 		dispatch('itemClick', { item, index });
-		dispatch('itemSelect', { item, index, multiSelect: false });
+		dispatch('itemSelect', { item, index, multiSelect });
 	}
 
 	function handleItemContextMenu(event: MouseEvent, item: FsItem) {

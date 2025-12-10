@@ -3,6 +3,7 @@
 	import type { FsItem } from '$lib/types';
 	import { thumbnailManager } from '$lib/utils/thumbnailManager';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
+	import { get } from 'svelte/store';
 	import { Folder, File, Image, FileArchive } from '@lucide/svelte';
 	import {
 		throttle,
@@ -238,8 +239,13 @@
 
 	// 处理项目点击
 	function handleItemClick(item: FsItem, index: number) {
+		// 检查勾选模式下点击行为设置
+		const state = get(fileBrowserStore);
+		const useSelectBehavior = isCheckMode && state.checkModeClickBehavior === 'select';
+		const multiSelect = useSelectBehavior;
+		
 		dispatch('itemClick', { item, index });
-		onItemSelect({ item, index, multiSelect: false });
+		onItemSelect({ item, index, multiSelect });
 	}
 
 	function handleOpenFolderAsBook(item: FsItem, index: number) {

@@ -14,6 +14,7 @@ import { getDefaultRating } from '$lib/stores/emm/storage';
 export type SortField = 'name' | 'modified' | 'size' | 'type' | 'path' | 'random' | 'rating';
 export type SortOrder = 'asc' | 'desc';
 export type DeleteStrategy = 'trash' | 'permanent';
+export type CheckModeClickBehavior = 'open' | 'select';
 
 interface FileBrowserState {
   currentPath: string;
@@ -55,6 +56,8 @@ interface FileBrowserState {
   inlineTreeRootPath: string;
   inlineTreeScrollTops: Record<string, number>;
   scrollPositions: Record<string, number>; // 保存文件列表的滚动位置
+  // 勾选模式下点击卡片的行为: 'open' = 打开项目, 'select' = 选中/取消选中
+  checkModeClickBehavior: CheckModeClickBehavior;
 }
 
 const archiveExtensions = ['.zip', '.cbz', '.rar', '.cbr', '.7z'];
@@ -123,7 +126,8 @@ const initialState: FileBrowserState = {
   inlineTreeState: {},
   inlineTreeRootPath: '',
   inlineTreeScrollTops: {},
-  scrollPositions: {}
+  scrollPositions: {},
+  checkModeClickBehavior: 'open'
 };
 
 /**
@@ -230,6 +234,7 @@ function createFileBrowserStore() {
     setInlineTreeScrollTops: (value: FileBrowserState['inlineTreeScrollTops']) =>
       update(state => ({ ...state, inlineTreeScrollTops: value })),
     setSort: (field: SortField, order: SortOrder) => update(state => ({ ...state, sortField: field, sortOrder: order })),
+    setCheckModeClickBehavior: (value: CheckModeClickBehavior) => update(state => ({ ...state, checkModeClickBehavior: value })),
     setVisibleItems: (items: FsItem[]) => update(state => ({
       ...state,
       visibleItems: items,

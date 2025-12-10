@@ -3,7 +3,7 @@
  * SelectionBar - 勾选操作栏
  * 在勾选模式下显示，提供全选、反选、取消等操作
  */
-import { CheckSquare, Square, SquareX, Trash2, Copy, Scissors, X, Link } from '@lucide/svelte';
+import { CheckSquare, Square, SquareX, Trash2, Copy, Scissors, X, Link, MousePointer } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import * as Tooltip from '$lib/components/ui/tooltip';
 import { 
@@ -13,6 +13,7 @@ import {
 	activeTabId
 } from '../stores/folderTabStore.svelte';
 import { chainSelectModeByTab, toggleChainSelectMode } from '../stores/chainSelectStore.svelte';
+import { fileBrowserStore, type CheckModeClickBehavior } from '$lib/stores/fileBrowser.svelte';
 
 // 别名映射
 const selectedItems = tabSelectedItems;
@@ -34,6 +35,20 @@ const allSelected = $derived(selectedCount > 0 && selectedCount === totalCount);
 
 // 链选模式状态 - 响应式订阅 store
 const isChainSelectMode = $derived($chainSelectModeByTab[$activeTabId] || false);
+
+// 点击行为设置 - 从 fileBrowserStore 获取
+let checkModeClickBehavior = $state<CheckModeClickBehavior>('open');
+$effect(() => {
+	const unsubscribe = fileBrowserStore.subscribe((state) => {
+		checkModeClickBehavior = state.checkModeClickBehavior;
+	});
+	return unsubscribe;
+});
+
+function toggleCheckModeClickBehavior() {
+	const newValue: CheckModeClickBehavior = checkModeClickBehavior === 'open' ? 'select' : 'open';
+	fileBrowserStore.setCheckModeClickBehavior(newValue);
+}
 
 function handleSelectAll() {
 	folderTabActions.selectAll();
@@ -133,6 +148,25 @@ function handleClose() {
 			<Tooltip.Content>
 				<p>链接选中模式</p>
 				<p class="text-muted-foreground text-xs">开启后，点击项目会选中从上一个选中项到当前项的所有项目</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+		
+		<!-- 点击行为切换 -->
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant={checkModeClickBehavior === 'select' ? 'default' : 'ghost'}
+					size="sm"
+					class="h-7 px-2"
+					onclick={toggleCheckModeClickBehavior}
+				>
+					<MousePointer class="h-4 w-4 mr-1" />
+					{checkModeClickBehavior === 'select' ? '点选' : '点开'}
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>点击卡片行为: {checkModeClickBehavior === 'select' ? '选中' : '打开'}</p>
+				<p class="text-muted-foreground text-xs">当前: 点击卡片会{checkModeClickBehavior === 'select' ? '选中/取消选中项目' : '打开项目'}</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 		

@@ -354,7 +354,7 @@
 
 	function handleMouseEnter() {
 		hoverCount++;
-		console.log('TopToolbar handleMouseEnter, hoverCount:', hoverCount);
+		// console.log('TopToolbar handleMouseEnter, hoverCount:', hoverCount);
 		// 锁定隐藏时，不响应悬停
 		if ($topToolbarLockState === false) return;
 		if ($topToolbarPinned || $topToolbarLockState === true) {

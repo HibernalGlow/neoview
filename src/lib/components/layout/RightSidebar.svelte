@@ -47,7 +47,7 @@
 	let startWidth = 0;
 
 	function handleMouseDown(e: MouseEvent) {
-		console.log('[RightSidebar] handleMouseDown called', e.clientX, $rightSidebarWidth);
+		// console.log('[RightSidebar] handleMouseDown called', e.clientX, $rightSidebarWidth);
 		isResizing = true;
 		startX = e.clientX;
 		startWidth = $rightSidebarWidth;
@@ -60,7 +60,7 @@
 		const delta = startX - e.clientX; // 右侧边栏，向左拖拽时delta为正（增加宽度）
 		const newWidth = Math.max(200, Math.min(600, startWidth + delta));
 
-		console.log('[RightSidebar] handleMouseMove', {
+		// console.log('[RightSidebar] handleMouseMove', {
 			clientX: e.clientX,
 			startX,
 			delta,
@@ -73,7 +73,7 @@
 	}
 
 	function handleMouseUp() {
-		console.log('[RightSidebar] handleMouseUp called, isResizing was:', isResizing);
+		// console.log('[RightSidebar] handleMouseUp called, isResizing was:', isResizing);
 		isResizing = false;
 	}
 
@@ -134,12 +134,12 @@
 
 	// 全局鼠标事件
 	$effect(() => {
-		console.log('[RightSidebar] Setting up global mouse event listeners');
+		// console.log('[RightSidebar] Setting up global mouse event listeners');
 		document.addEventListener('mousemove', handleMouseMove);
 		document.addEventListener('mouseup', handleMouseUp);
 
 		return () => {
-			console.log('[RightSidebar] Cleaning up global mouse event listeners');
+			// console.log('[RightSidebar] Cleaning up global mouse event listeners');
 			document.removeEventListener('mousemove', handleMouseMove);
 			document.removeEventListener('mouseup', handleMouseUp);
 		};

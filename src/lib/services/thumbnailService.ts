@@ -16,6 +16,7 @@ import { thumbnailCacheStore } from '$lib/stores/thumbnailCache.svelte';
 import { bookStore } from '$lib/stores/book.svelte';
 import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 import { isVideoFile } from '$lib/utils/videoUtils';
+import { getThumbnailUrl } from '$lib/stores/thumbnailStoreV3.svelte';
 
 // ===========================================================================
 // 配置
@@ -93,33 +94,59 @@ async function loadThumbnails(centerIndex: number): Promise<void> {
 			return;
 		}
 
-		// 计算需要加载的索引（过滤掉已缓存的和视频文件）
+		// 计算需要加载的索引（过滤掉已缓存的）
 		const totalPages = currentBook.pages?.length || 0;
 		const needLoad: number[] = [];
 
-		// 检查页面是否为视频文件
-		const isVideoPage = (index: number): boolean => {
+		// 【优化】尝试从 FileBrowser card 缓存复用缩略图（包括视频缩略图）
+		const tryReuseFromFileBrowser = (index: number): boolean => {
 			const page = currentBook.pages?.[index];
 			if (!page) return false;
-			const filename = page.name || page.path || '';
-			return isVideoFile(filename);
+			const existingThumb = getThumbnailUrl(page.path);
+			if (existingThumb) {
+				// 复用已有缩略图，不需要重新生成
+				// 使用默认尺寸（后续显示时会自动获取）
+				thumbnailCacheStore.setThumbnail(index, existingThumb, 120, 120);
+				return true;
+			}
+			return false;
 		};
 
 		for (let offset = 0; offset <= PRELOAD_RANGE; offset++) {
 			if (offset === 0) {
-				// 【关键】跳过视频页面
-				if (!isVideoPage(centerIndex) && !thumbnailCacheStore.hasThumbnail(centerIndex) && !loadingIndices.has(centerIndex)) {
-					needLoad.push(centerIndex);
+				if (!thumbnailCacheStore.hasThumbnail(centerIndex) && !loadingIndices.has(centerIndex)) {
+					// 【关键】先尝试复用 FileBrowser 缩略图，失败再加入生成队列
+					if (!tryReuseFromFileBrowser(centerIndex)) {
+						// 视频文件且没有已有缩略图时跳过（后端不能直接生成视频缩略图）
+						const page = currentBook.pages?.[centerIndex];
+						const filename = page?.name || page?.path || '';
+						if (!isVideoFile(filename)) {
+							needLoad.push(centerIndex);
+						}
+					}
 				}
 			} else {
 				const before = centerIndex - offset;
 				const after = centerIndex + offset;
-				// 【关键】跳过视频页面
-				if (before >= 0 && !isVideoPage(before) && !thumbnailCacheStore.hasThumbnail(before) && !loadingIndices.has(before)) {
-					needLoad.push(before);
+				// 处理 before 页
+				if (before >= 0 && !thumbnailCacheStore.hasThumbnail(before) && !loadingIndices.has(before)) {
+					if (!tryReuseFromFileBrowser(before)) {
+						const page = currentBook.pages?.[before];
+						const filename = page?.name || page?.path || '';
+						if (!isVideoFile(filename)) {
+							needLoad.push(before);
+						}
+					}
 				}
-				if (after < totalPages && !isVideoPage(after) && !thumbnailCacheStore.hasThumbnail(after) && !loadingIndices.has(after)) {
-					needLoad.push(after);
+				// 处理 after 页
+				if (after < totalPages && !thumbnailCacheStore.hasThumbnail(after) && !loadingIndices.has(after)) {
+					if (!tryReuseFromFileBrowser(after)) {
+						const page = currentBook.pages?.[after];
+						const filename = page?.name || page?.path || '';
+						if (!isVideoFile(filename)) {
+							needLoad.push(after);
+						}
+					}
 				}
 			}
 		}

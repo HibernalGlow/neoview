@@ -29,7 +29,6 @@
 	import { hoverPreviewEnabled, hoverPreviewDelayMs } from '$lib/stores/hoverPreviewSettings.svelte';
 	import FileTypeIcon from '$lib/components/ui/FileTypeIcon.svelte';
 	import { formatDuration, formatRelativeTime, formatBytes, formatSize, getFolderSizeDisplay } from '$lib/utils/formatters';
-	import Item from '$lib/components/ui/item/item.svelte';
 
 	interface Props {
 		item: FsItem;

@@ -260,8 +260,11 @@ class BookStore {
       if (!options.skipHistory) {
         import('$lib/stores/unifiedHistory.svelte').then(({ unifiedHistoryStore }) => {
           const pathStack = this.buildPathStack();
+          console.log('📚 [History] Adding history:', { pathStack, targetPage, totalPages: book.totalPages, displayName: book.name });
           unifiedHistoryStore.add(pathStack, targetPage, book.totalPages, { displayName: book.name });
-        }).catch(() => {});
+        }).catch((err) => {
+          console.error('❌ [History] Failed to add history:', err);
+        });
       }
 
       this.showBookSwitchToastIfEnabled();

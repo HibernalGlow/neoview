@@ -90,6 +90,7 @@ function saveToStorage(history: UnifiedHistoryEntry[]) {
   try {
     const toSave = history.slice(0, MAX_HISTORY_SIZE);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+    console.log('💾 [UnifiedHistory] Saved', toSave.length, 'entries to localStorage');
   } catch (err) {
     console.error('Failed to save history:', err);
   }
@@ -116,6 +117,11 @@ export const unifiedHistoryStore = {
       contentType?: ContentType;
     } = {}
   ) {
+    console.log('📝 [UnifiedHistory] add() called:', { pathStack, currentIndex, totalItems, options });
+    if (!pathStack || pathStack.length === 0) {
+      console.warn('⚠️ [UnifiedHistory] Empty pathStack, skipping add');
+      return;
+    }
     update(history => {
       // 生成唯一键
       const key = pathStack.map(refToString).join('>>');

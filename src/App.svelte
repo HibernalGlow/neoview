@@ -34,8 +34,9 @@
 		toggleTemporaryFitZoom
 	} from '$lib/stores';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
-	import { FolderOpen, Eye, EyeOff, ImageUp, X } from '@lucide/svelte';
+	import { FolderOpen, Eye, EyeOff, ImageUp, X, Video } from '@lucide/svelte';
 	import ProjectCard from '$lib/components/ui/ProjectCard.svelte';
+	import BackgroundVideo from '$lib/components/viewer/BackgroundVideo.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
 	import { isVideoFile } from '$lib/utils/videoUtils';
@@ -64,8 +65,15 @@
 	let showProjectCard = $state(true);
 	// 背景图片URL
 	let backgroundImageUrl = $state<string | null>(null);
+	// 背景视频URL
+	let backgroundVideoUrl = $state<string | null>(null);
+	// 背景视频设置
+	let videoOpacity = $state(0.3);
+	let videoBlur = $state(0);
+	let videoPlaybackRate = $state(1.0);
 	// 隐藏的文件输入引用
 	let fileInputRef: HTMLInputElement | null = null;
+	let videoInputRef: HTMLInputElement | null = null;
 
 	// 从 localStorage 加载设置
 	function loadEmptySettings() {
@@ -75,6 +83,10 @@
 				const settings = JSON.parse(saved);
 				showProjectCard = settings.showProjectCard ?? true;
 				backgroundImageUrl = settings.backgroundImageUrl ?? null;
+				backgroundVideoUrl = settings.backgroundVideoUrl ?? null;
+				videoOpacity = settings.videoOpacity ?? 0.3;
+				videoBlur = settings.videoBlur ?? 0;
+				videoPlaybackRate = settings.videoPlaybackRate ?? 1.0;
 			}
 		} catch (e) {
 			console.error('加载空页面设置失败:', e);
@@ -88,7 +100,11 @@
 				'neoview-empty-settings',
 				JSON.stringify({
 					showProjectCard,
-					backgroundImageUrl
+					backgroundImageUrl,
+					backgroundVideoUrl,
+					videoOpacity,
+					videoBlur,
+					videoPlaybackRate
 				})
 			);
 		} catch (e) {
@@ -119,6 +135,26 @@
 	// 清除背景图片
 	function clearBackgroundImage() {
 		backgroundImageUrl = null;
+		saveEmptySettings();
+	}
+
+	// 处理背景视频上传
+	function handleBackgroundVideoUpload(event: Event) {
+		const input = event.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+
+		const reader = new FileReader();
+		reader.onload = (e) => {
+			backgroundVideoUrl = e.target?.result as string;
+			saveEmptySettings();
+		};
+		reader.readAsDataURL(file);
+	}
+
+	// 清除背景视频
+	function clearBackgroundVideo() {
+		backgroundVideoUrl = null;
 		saveEmptySettings();
 	}
 
@@ -748,16 +784,29 @@
 	<!-- 仅使用传统布局模式，禁用 Flow 画布以提升性能 -->
 	<MainLayout>
 		<Empty class="relative h-full w-full border-0">
+			<!-- 背景视频 (最底层) -->
+			{#if backgroundVideoUrl}
+				<div class="absolute inset-0" style="z-index: -10;">
+					<BackgroundVideo
+						src={backgroundVideoUrl}
+						opacity={videoOpacity}
+						blur={videoBlur}
+						playbackRate={videoPlaybackRate}
+					/>
+				</div>
+			{/if}
+
 			<!-- 自定义背景图片 -->
 			{#if backgroundImageUrl}
 				<div
-					class="pointer-events-none absolute inset-0 z-0 h-full w-full bg-cover bg-center bg-no-repeat"
-					style="background-image: url({backgroundImageUrl});"
+					class="pointer-events-none absolute inset-0 h-full w-full bg-cover bg-center bg-no-repeat"
+					style="background-image: url({backgroundImageUrl}); z-index: -5;"
 				></div>
-			{:else}
-				<!-- 网点背景 -->
+			{:else if !backgroundVideoUrl}
+				<!-- 网点背景 (仅当没有图片和视频时显示) -->
 				<div
-					class="pointer-events-none absolute inset-0 z-0 h-full w-full bg-[radial-gradient(#00000026_1px,transparent_1px)] [background-size:20px_20px] dark:bg-[radial-gradient(#ffffff26_1px,transparent_1px)]"
+					class="pointer-events-none absolute inset-0 h-full w-full bg-[radial-gradient(#00000026_1px,transparent_1px)] [background-size:20px_20px] dark:bg-[radial-gradient(#ffffff26_1px,transparent_1px)]"
+					style="z-index: -5;"
 				></div>
 			{/if}
 			<!-- <EmptyHeader>
@@ -802,6 +851,26 @@
 							<X class="h-4 w-4" />
 						</button>
 					{/if}
+
+					<!-- 上传背景视频按钮 -->
+					<button
+						onclick={() => videoInputRef?.click()}
+						class="empty-control-btn h-9 w-9 rounded-lg flex items-center justify-center transition-all hover:scale-105"
+						title="上传背景视频"
+					>
+						<Video class="h-4 w-4" />
+					</button>
+
+					<!-- 清除背景视频按钮（仅当有背景视频时显示） -->
+					{#if backgroundVideoUrl}
+						<button
+							onclick={clearBackgroundVideo}
+							class="empty-control-btn h-9 w-9 rounded-lg flex items-center justify-center transition-all hover:scale-105"
+							title="清除背景视频"
+						>
+							<X class="h-4 w-4" />
+						</button>
+					{/if}
 				</div>
 
 				<!-- 隐藏的文件输入 -->
@@ -811,6 +880,15 @@
 					class="hidden"
 					bind:this={fileInputRef}
 					onchange={handleBackgroundUpload}
+				/>
+
+				<!-- 隐藏的视频输入 -->
+				<input
+					type="file"
+					accept="video/*"
+					class="hidden"
+					bind:this={videoInputRef}
+					onchange={handleBackgroundVideoUpload}
 				/>
 
 				<!-- 操作按钮 -->

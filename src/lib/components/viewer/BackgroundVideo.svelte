@@ -83,7 +83,7 @@
 
 <!-- 背景视频容器 -->
 <div
-	class="absolute inset-0 overflow-hidden"
+	class="absolute inset-0 overflow-hidden pointer-events-none"
 	style="opacity: {opacity}; filter: blur({blur}px);"
 >
 	{#if videoUrl}

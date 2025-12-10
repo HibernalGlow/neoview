@@ -28,6 +28,8 @@ interface BookState {
 interface OpenBookOptions {
   /** 打开时希望跳转到的页面 */
   initialPage?: number;
+  /** 跳过添加历史记录（用于视频/图片单独记录场景） */
+  skipHistory?: boolean;
 }
 
 interface SwitchToastBookContext {
@@ -203,10 +205,12 @@ class BookStore {
       this.syncInfoPanelBookInfo().catch(() => {});
       this.syncFileBrowserSelection(path);
 
-      // 【优化】异步添加历史记录，不阻塞
-      import('$lib/stores/history.svelte').then(({ historyStore }) => {
-        historyStore.add(path, book.name, targetPage, book.totalPages);
-      }).catch(() => {});
+      // 【优化】异步添加历史记录，不阻塞（如果 skipHistory 为 true 则跳过）
+      if (!options.skipHistory) {
+        import('$lib/stores/history.svelte').then(({ historyStore }) => {
+          historyStore.add(path, book.name, targetPage, book.totalPages);
+        }).catch(() => {});
+      }
 
       this.showBookSwitchToastIfEnabled();
 

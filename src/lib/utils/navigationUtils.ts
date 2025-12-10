@@ -110,12 +110,16 @@ export async function openFileSystemItem(
                     parentDir = path.substring(0, lastSeparator);
                 }
                 console.log('📁 Parent directory:', parentDir);
-                await bookStore.openDirectoryAsBook(parentDir);
+                // 【优化】跳过文件夹的历史记录，只记录视频/图片文件
+                await bookStore.openDirectoryAsBook(parentDir, { skipHistory: true });
                 await bookStore.navigateToImage(path);
                 try {
                     const { historyStore } = await import('$lib/stores/history.svelte');
                     const name = path.split(/[\\/]/).pop() || path;
-                    historyStore.add(path, name, 0, 1);
+                    // 获取当前页面索引和总页数
+                    const currentPage = bookStore.currentPageIndex;
+                    const totalPages = bookStore.currentBook?.totalPages || 1;
+                    historyStore.add(path, name, currentPage, totalPages);
                 } catch (historyError) {
                     console.error('Failed to add history entry from openFileSystemItem:', historyError);
                 }

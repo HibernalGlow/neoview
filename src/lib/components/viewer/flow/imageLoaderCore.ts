@@ -8,6 +8,7 @@ import { bookStore } from '$lib/stores/book.svelte';
 import { logImageTrace } from '$lib/utils/imageTrace';
 import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte';
 import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
+import { isVideoFile } from '$lib/utils/videoUtils';
 import { BlobCache } from './blobCache';
 import { LoadQueueManager, LoadPriority, QueueClearedError, TaskCancelledError } from './loadQueue';
 import { readPageBlobV2, getImageDimensions, createThumbnailDataURL, clearExtractCache } from './imageReader';
@@ -183,6 +184,15 @@ export class ImageLoaderCore {
 				}
 
 				try {
+					// 【关键】检查是否为视频文件，视频不走这个加载流程（避免大文件通过 IPC 传输卡死）
+					const currentBook = bookStore.currentBook;
+					const page = currentBook?.pages?.[pageIndex];
+					if (page && (isVideoFile(page.name || '') || isVideoFile(page.path || ''))) {
+						// 视频文件跳过预加载，由 VideoContainer 使用 convertFileSrc 加载
+						reject(new Error(`Video file skipped from preload: ${page.path}`));
+						return;
+					}
+
 					// 读取图片（使用 PageManager，后端自动缓存和预加载）
 					const isCurrentPage = priority === LoadPriority.CRITICAL;
 					const { blob, traceId } = await readPageBlobV2(pageIndex, { 

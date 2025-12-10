@@ -27,7 +27,6 @@
 	import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
 	import { isVideoFile } from '$lib/utils/videoUtils';
-	import { getThumbnailUrl } from '$lib/stores/thumbnailStoreV3.svelte';
 
 	function createAppStateStore<T>(selector: StateSelector<T>) {
 		const initial = selector(appState.getSnapshot());
@@ -493,35 +492,44 @@
 			return;
 		}
 
-		// 检测是否为视频页面
+		// 视频页面：使用视频缩略图 API
 		const isVideoPage =
 			!!currentBook && !!page && (isVideoFile(page.name || '') || isVideoFile(page.path || ''));
 
-		// 【优化】优先从 FileBrowser 缩略图缓存获取（复用 card 已有的缩略图，避免重复生成）
-		const existingThumb = getThumbnailUrl(page.path);
-		if (existingThumb) {
-			// 直接使用已有缩略图，获取尺寸后存入底栏缓存
+		if (isVideoPage) {
+			// 压缩包中的视频暂时不生成独立缩略图
+			if (currentBook.type === 'archive') {
+				if (pathKey) {
+					noThumbnailPaths.add(pathKey);
+				}
+				return;
+			}
+
 			loadingIndices.add(pageIndex);
 			try {
-				const thumb = await getThumbnailDimensions(existingThumb);
+				const videoThumbDataUrl = await generateVideoThumbnail(page.path);
+				const thumb = await getThumbnailDimensions(videoThumbDataUrl);
 				thumbnailCacheStore.setThumbnail(pageIndex, thumb.url, thumb.width, thumb.height);
 				if (pathKey) {
 					noThumbnailPaths.delete(pathKey);
 				}
-				return;
-			} catch (err) {
-				console.debug(`Failed to use existing thumbnail for page ${pageIndex}, fallback to generation`);
+			} catch (videoErr) {
+				console.error(`Failed to generate video thumbnail for page ${pageIndex}:`, videoErr);
+				if (pathKey) {
+					noThumbnailPaths.add(pathKey);
+				}
 			} finally {
 				loadingIndices.delete(pageIndex);
 			}
+			return;
 		}
 
 		loadingIndices.add(pageIndex);
 		try {
-			// 从 imagePool 缓存获取 Blob（图片和视频都走这条路径）
+			// 优先从 imagePool 缓存获取 Blob
 			const cached = imagePool.getSync(pageIndex);
 			if (cached?.blob) {
-				// 缓存命中：直接用 canvas/video 元素生成缩略图（createThumbnailFromBlob 自动处理视频 Blob）
+				// 缓存命中：直接用 canvas 缩放生成缩略图
 				const thumb = await createThumbnailFromBlob(cached.blob);
 				thumbnailCacheStore.setThumbnail(pageIndex, thumb.url, thumb.width, thumb.height);
 				if (pathKey) {
@@ -542,26 +550,6 @@
 			}
 
 			// imagePool 加载失败，使用 fallback
-			// 视频页面：压缩包内视频跳过，普通视频文件用 FFmpeg（仅在 imagePool 无缓存时）
-			if (isVideoPage) {
-				if (currentBook.type === 'archive') {
-					// 压缩包中的视频暂时不生成缩略图
-					if (pathKey) {
-						noThumbnailPaths.add(pathKey);
-					}
-					return;
-				}
-				// 普通视频文件：fallback 到 FFmpeg
-				const videoThumbDataUrl = await generateVideoThumbnail(page.path);
-				const thumb = await getThumbnailDimensions(videoThumbDataUrl);
-				thumbnailCacheStore.setThumbnail(pageIndex, thumb.url, thumb.width, thumb.height);
-				if (pathKey) {
-					noThumbnailPaths.delete(pathKey);
-				}
-				return;
-			}
-
-			// 图片页面：imagePool 加载失败时的 fallback
 			throw new Error('imagePool load failed');
 		} catch (err) {
 			console.debug(`imagePool load failed for page ${pageIndex}, using fallback`);

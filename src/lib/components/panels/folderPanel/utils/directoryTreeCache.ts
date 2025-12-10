@@ -11,6 +11,7 @@ interface CacheEntry {
 	items: FsItem[];
 	timestamp: number;
 	loading: boolean;
+	accessCount: number; // 访问计数，用于智能淘汰
 }
 
 interface TreeNode {
@@ -28,9 +29,9 @@ class DirectoryTreeCache {
 	private root: TreeNode | null = null;
 	
 	// 配置
-	private readonly MAX_CACHE_SIZE = 200; // 最多缓存 200 个目录
+	private readonly MAX_CACHE_SIZE = 500; // 最多缓存 500 个目录（从200提升）
 	private readonly CACHE_TTL = 10 * 60 * 1000; // 10 分钟缓存有效期
-	private readonly PRELOAD_DEPTH = 2; // 预加载深度
+	private readonly PRELOAD_DEPTH = 3; // 预加载深度（从2提升到3）
 	
 	// 正在加载的路径
 	private loadingPaths = new Set<string>();
@@ -56,6 +57,8 @@ class DirectoryTreeCache {
 		if (!forceRefresh) {
 			const cached = this.cache.get(key);
 			if (cached && (now - cached.timestamp < this.CACHE_TTL) && !cached.loading) {
+				// 增加访问计数
+				cached.accessCount = (cached.accessCount || 0) + 1;
 				return cached.items;
 			}
 		}
@@ -81,13 +84,13 @@ class DirectoryTreeCache {
 		
 		// 开始加载
 		this.loadingPaths.add(key);
-		this.cache.set(key, { items: [], timestamp: now, loading: true });
+		this.cache.set(key, { items: [], timestamp: now, loading: true, accessCount: 0 });
 		
 		try {
 			const items = await FileSystemAPI.browseDirectory(path);
 			
-			// 更新缓存
-			this.cache.set(key, { items, timestamp: Date.now(), loading: false });
+			// 更新缓存，初始访问计数为1
+			this.cache.set(key, { items, timestamp: Date.now(), loading: false, accessCount: 1 });
 			this.loadingPaths.delete(key);
 			
 			// 清理过期缓存
@@ -281,6 +284,59 @@ class DirectoryTreeCache {
 				// 忽略回调错误
 			}
 		}
+	}
+	
+	/**
+	 * 后台预热子树（递归预加载多层子目录）
+	 * @param rootPath 根路径
+	 * @param maxDepth 最大深度，默认3层
+	 * @param onProgress 进度回调
+	 */
+	async warmupSubtree(
+		rootPath: string, 
+		maxDepth = 3,
+		onProgress?: (loaded: number, total: number) => void
+	): Promise<void> {
+		const queue: Array<{path: string, depth: number}> = [{path: rootPath, depth: 0}];
+		const visited = new Set<string>();
+		let loaded = 0;
+		let total = 1;
+		
+		console.log(`🔥 开始预热子树: ${rootPath} (深度: ${maxDepth})`);
+		
+		while (queue.length > 0) {
+			const {path, depth} = queue.shift()!;
+			const key = this.normalizePath(path);
+			
+			// 避免重复访问
+			if (visited.has(key) || depth >= maxDepth) continue;
+			visited.add(key);
+			
+			try {
+				// 静默加载（如果已缓存则跳过）
+				const items = await this.getDirectory(path).catch(() => [] as FsItem[]);
+				loaded++;
+				onProgress?.(loaded, total);
+				
+				// 收集子目录
+				const dirs = items.filter(i => i.isDir);
+				
+				// 限制每层最多预热20个子目录，避免爆炸
+				const subDirs = dirs.slice(0, 20);
+				subDirs.forEach(dir => {
+					queue.push({path: dir.path, depth: depth + 1});
+				});
+				
+				total += subDirs.length;
+				
+				// 避免阻塞UI，每处理一项暂停10ms
+				await new Promise(r => setTimeout(r, 10));
+			} catch (error) {
+				console.debug(`预热失败: ${path}`, error);
+			}
+		}
+		
+		console.log(`✅ 子树预热完成: ${rootPath} (已加载 ${loaded}/${total})`);
 	}
 	
 	/**

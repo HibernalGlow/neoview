@@ -417,7 +417,7 @@
 		// collectTagCountStore 的更新会触发重新渲染（通过 collectTagVersion）
 	}
 
-	// 加载缩略图 - 【优化】只预加载前30项，其余由 VirtualizedFileList 可见范围加载
+	// 加载缩略图 - 【优化】只预加载前10项，其余由 VirtualizedFileList 可见范围加载
 	async function loadThumbnailsForLayer(items: FsItem[], path: string) {
 		// 虚拟路径不设置当前目录
 		if (!isVirtualPath(path)) {
@@ -425,8 +425,8 @@
 			thumbnailManager.setCurrentDirectory(path);
 		}
 
-		// 【优化】只预加载前30项，避免大量并发请求
-		const PRELOAD_COUNT = 30;
+		// 【优化】只预加载前10项，避免大量并发请求，减轻大目录压力
+		const PRELOAD_COUNT = 10;
 		const preloadItems = items.slice(0, PRELOAD_COUNT);
 
 		// 过滤出需要缩略图的项目
@@ -480,14 +480,12 @@
 
 		// 【优化】使用 normal 优先级而非 immediate，减少并发压力
 		itemsNeedingThumbnails.forEach((item, index) => {
-			// 前10项使用 high 优先级，其余使用 normal
-			const priority = index < 10 ? 'high' : 'normal';
+			// V3: getThumbnail 只需要 path 和 currentPath 参数
+			// 优先级和压缩包判断已由后端自动处理
+			thumbnailManager.getThumbnail(item.path, path);
 
-			if (item.isDir) {
-				// 文件夹
-				thumbnailManager.getThumbnail(item.path, undefined, false, priority);
-			} else {
-				// 文件：检查是否为压缩包
+			// 【优化】预热压缩包文件列表，加速切书
+			if (!item.isDir) {
 				const nameLower = item.name.toLowerCase();
 				const isArchive =
 					nameLower.endsWith('.zip') ||
@@ -496,10 +494,7 @@
 					nameLower.endsWith('.cbr') ||
 					nameLower.endsWith('.7z') ||
 					nameLower.endsWith('.cb7');
-
-				thumbnailManager.getThumbnail(item.path, undefined, isArchive, priority);
-
-				// 【优化】预热压缩包文件列表，加速切书
+					
 				if (isArchive) {
 					FileSystemAPI.preheatArchiveList(item.path);
 				}

@@ -383,58 +383,23 @@
 				// 异步加载收藏标签匹配数（用于排序）
 				loadCollectTagCountsForLayer(layer);
 			} else {
-				// 正常文件系统路径: 使用流式加载优化渲染速度
+				// 正常文件系统路径
 				// 清理虚拟路径订阅
 				if (virtualPathUnsubscribe) {
 					virtualPathUnsubscribe();
 					virtualPathUnsubscribe = null;
 				}
 
-				// 启动流式加载，不等待 Promise 完成，直接返回 layer 让 UI 显示加载状态
-				directoryTreeCache.streamDirectory(path, {
-					onBatch: (batch) => {
-						// 查找当前层（因为它已经被添加到 layers state 中了）
-						const currentLayer = layers.find((l) => l.id === layerId);
-						if (currentLayer) {
-							if (currentLayer.loading) {
-								// 首批数据：替换并取消加载状态
-								currentLayer.items = batch;
-								currentLayer.loading = false;
-							} else {
-								// 后续批次：追加
-								currentLayer.items = [...currentLayer.items, ...batch];
-							}
-							
-							// 如果是当前活动层，同步到 globalStore
-							const activeLayer = layers[activeIndex];
-							if (activeLayer && activeLayer.id === layerId) {
-								globalStore.setItems(currentLayer.items);
-							}
+				// 使用全局目录树缓存
+				const items = await directoryTreeCache.getDirectory(path);
+				layer.items = items;
+				layer.loading = false;
 
-							// 加载缩略图（仅为新加载的批次）
-							loadThumbnailsForLayer(batch, path);
-						}
-					},
-					onComplete: (allItems) => {
-						const currentLayer = layers.find((l) => l.id === layerId);
-						if (currentLayer) {
-							// 最终一致性确认
-							currentLayer.items = allItems;
-							currentLayer.loading = false;
-							loadCollectTagCountsForLayer(currentLayer);
-						}
-					},
-					onError: (err) => {
-						const currentLayer = layers.find((l) => l.id === layerId);
-						if (currentLayer) {
-							currentLayer.error = err instanceof Error ? err.message : String(err);
-							currentLayer.loading = false;
-						}
-					}
-				});
-				
-				// 注意：这里不再 await 结果，而是让 layer 保持 loading=true 返回
-				// UI 会显示加载圈，一旦首批数据到达，onBatch 会更新 UI
+				// 加载缩略图
+				loadThumbnailsForLayer(items, path);
+
+				// 加载收藏标签匹配数（用于排序）
+				loadCollectTagCountsForLayer(layer);
 			}
 		} catch (err) {
 			layer.error = err instanceof Error ? err.message : String(err);

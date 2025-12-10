@@ -4,8 +4,6 @@
 	 * 参考 iOS UINavigationController 的设计
 	 * 每个目录是一个独立的层，进入子目录推入新层，返回弹出当前层
 	 * 上一层的 DOM 和状态保持不变，实现秒切换
-	 * 
-	 * 【性能优化】支持虚拟化分页加载，大目录(>500项)自动启用
 	 */
 	import { tick, onMount } from 'svelte';
 	import type { FsItem } from '$lib/types';
@@ -39,7 +37,6 @@
 		removeVirtualPathItem,
 		getVirtualPathConfig
 	} from '../utils/virtualPathLoader';
-	import { VirtualDirectoryLoader } from '../utils/virtualDirectoryLoader';
 
 	// 别名映射
 	const viewStyle = tabViewStyle;
@@ -115,10 +112,6 @@
 	let effectiveViewStyle = $derived(overrideViewStyle !== undefined ? overrideViewStyle : $viewStyle);
 	let effectiveSortConfig = $derived(overrideSortConfig !== undefined ? overrideSortConfig : $sortConfig);
 
-	// 虚拟化分页加载配置
-	const VIRTUALIZ_THRESHOLD = 500;  // 超过500项启用虚拟化
-	const VIRTUAL_PAGE_SIZE = 100;     // 每页100项
-
 	// 层叠数据结构
 	interface FolderLayer {
 		id: string;
@@ -128,10 +121,6 @@
 		error: string | null;
 		selectedIndex: number;
 		scrollTop: number;
-		// 虚拟化支持
-		virtualLoader?: VirtualDirectoryLoader;
-		isVirtualized?: boolean;
-		totalItems?: number;
 	}
 
 	// 层叠栈
@@ -360,8 +349,7 @@
 			loading: true,
 			error: null,
 			selectedIndex: -1,
-			scrollTop: 0,
-			isVirtualized: false,
+			scrollTop: 0
 		};
 
 		try {
@@ -402,57 +390,16 @@
 					virtualPathUnsubscribe = null;
 				}
 
-				// 【虚拟化优化】先加载第一页判断总数
-				console.log(`📂 FolderStack: 加载目录 ${path}`);
-				const firstPageResult = await FileSystemAPI.browseDirectoryPage(path, {
-					offset: 0,
-					limit: VIRTUAL_PAGE_SIZE,
-				});
+				// 使用全局目录树缓存
+				const items = await directoryTreeCache.getDirectory(path);
+				layer.items = items;
+				layer.loading = false;
 
-				const totalItems = firstPageResult.total;
-				layer.totalItems = totalItems;
+				// 加载缩略图
+				loadThumbnailsForLayer(items, path);
 
-				// 判断是否启用虚拟化
-				if (totalItems > VIRTUALIZ_THRESHOLD) {
-					// 【虚拟化模式】大目录，使用分页加载
-					console.log(`🚀 FolderStack: 大目录检测到 (${totalItems} 项)，启用虚拟化分页加载`);
-					
-					const virtualLoader = new VirtualDirectoryLoader(path, {
-						pageSize: VIRTUAL_PAGE_SIZE,
-						preloadPages: 1,
-					});
-
-					// 预加载第一页（已经加载过了，直接使用结果）
-					layer.items = firstPageResult.items;
-					layer.virtualLoader = virtualLoader;
-					layer.isVirtualized = true;
-					layer.loading = false;
-
-					// 手动设置虚拟加载器的缓存
-					virtualLoader['cache'].set(0, firstPageResult.items);
-					virtualLoader['totalItems'] = totalItems;
-					virtualLoader['totalPages'] = Math.ceil(totalItems / VIRTUAL_PAGE_SIZE);
-
-					console.log(`✅ FolderStack: 虚拟化初始化完成，首页 ${firstPageResult.items.length} 项，总计 ${totalItems} 项`);
-
-					// 只加载第一页的缩略图
-					loadThumbnailsForLayer(firstPageResult.items, path);
-				} else {
-					// 【全量模式】小目录，全量加载（复用现有缓存机制）
-					console.log(`📁 FolderStack: 小目录 (${totalItems} 项)，使用全量加载`);
-					
-					// 使用全局目录树缓存
-					const items = await directoryTreeCache.getDirectory(path);
-					layer.items = items;
-					layer.isVirtualized = false;
-					layer.loading = false;
-
-					// 加载缩略图
-					loadThumbnailsForLayer(items, path);
-
-					// 加载收藏标签匹配数（用于排序）
-					loadCollectTagCountsForLayer(layer);
-				}
+				// 加载收藏标签匹配数（用于排序）
+				loadCollectTagCountsForLayer(layer);
 			}
 		} catch (err) {
 			layer.error = err instanceof Error ? err.message : String(err);

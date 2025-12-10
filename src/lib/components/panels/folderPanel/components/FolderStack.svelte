@@ -60,6 +60,7 @@
 	import { getDefaultRating } from '$lib/stores/emm/storage';
 	import { invoke } from '@tauri-apps/api/core';
 	import { favoriteTagStore, mixedGenderStore } from '$lib/stores/emm/favoriteTagStore.svelte';
+	import { collectTagCountStore } from '$lib/stores/emm/collectTagCountStore';
 
 	export interface NavigationCommand {
 		type: 'init' | 'push' | 'pop' | 'goto' | 'history';
@@ -155,6 +156,33 @@
 		return unsubscribe;
 	});
 
+	// 订阅 collectTagCountStore，当缓存更新且当前排序为 collectTagCount 时触发重新渲染
+	// 使用防抖机制避免频繁更新
+	let collectTagVersion = $state(0);
+	let collectTagDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+	$effect(() => {
+		const unsubscribe = collectTagCountStore.subscribe((cache) => {
+			// 当缓存更新时，使用防抖触发重新渲染
+			if (cache.lastUpdated > 0 && effectiveSortConfig.field === 'collectTagCount') {
+				// 清除之前的定时器
+				if (collectTagDebounceTimer) {
+					clearTimeout(collectTagDebounceTimer);
+				}
+				// 300ms 防抖
+				collectTagDebounceTimer = setTimeout(() => {
+					collectTagVersion = cache.lastUpdated;
+					collectTagDebounceTimer = null;
+				}, 300);
+			}
+		});
+		return () => {
+			unsubscribe();
+			if (collectTagDebounceTimer) {
+				clearTimeout(collectTagDebounceTimer);
+			}
+		};
+	});
+
 	// 视图模式映射 - 支持 list/content/banner/thumbnail 四种模式
 	let viewMode = $derived(effectiveViewStyle as 'list' | 'content' | 'banner' | 'thumbnail');
 
@@ -212,6 +240,7 @@
 		}
 
 		// collectTagCount 排序特殊处理
+		// 类似 rating 排序，从缓存中同步获取数据
 		if (field === 'collectTagCount') {
 			const sorted = [...items].sort((a, b) => {
 				// 文件夹优先（虚拟路径下跳过）
@@ -219,8 +248,9 @@
 					return a.isDir ? -1 : 1;
 				}
 
-				const countA = a.collectTagCount ?? 0;
-				const countB = b.collectTagCount ?? 0;
+				// 从缓存获取收藏标签匹配数
+				const countA = collectTagCountStore.getCount(a.path);
+				const countB = collectTagCountStore.getCount(b.path);
 
 				// 计数相同则按名称排序
 				if (countA === countB) {
@@ -274,8 +304,11 @@
 	}
 
 	// 获取层的显示项（应用排序）
+	// 注意：collectTagVersion 用于触发 collectTagCount 排序时的重新计算
 	function getDisplayItems(layer: FolderLayer): FsItem[] {
 		const config = effectiveSortConfig;
+		// 依赖 collectTagVersion，当收藏标签缓存更新时触发重新排序
+		const _version = collectTagVersion;
 		let result = layer.items;
 		// 搜索结果现在也通过 FolderStack 显示，不需要额外过滤
 		// 虚拟路径下文件夹和文件平等排序
@@ -376,40 +409,12 @@
 		return layer;
 	}
 
-	// 加载收藏标签匹配数（异步，不阻塞 UI）
-	async function loadCollectTagCountsForLayer(layer: FolderLayer) {
-		const favTags = favoriteTagStore.tags;
-		if (favTags.length === 0) return;
-
-		// 只获取文件夹的 collectTagCount
-		const folderItems = layer.items.filter((item) => item.isDir);
-		if (folderItems.length === 0) return;
-
-		try {
-			const collectTags: [string, string][] = favTags.map((t) => [t.cat, t.tag]);
-			const enableMixed = mixedGenderStore.enabled;
-			const keys = folderItems.map((item) => item.path);
-
-			const countResults = await invoke<[string, number][]>('batch_count_matching_collect_tags', {
-				keys,
-				collectTags,
-				enableMixedGender: enableMixed
-			});
-
-			// 创建路径到计数的映射
-			const countMap = new Map<string, number>();
-			for (const [path, count] of countResults) {
-				countMap.set(path.toLowerCase(), count);
-			}
-
-			// 更新 layer.items 中的 collectTagCount
-			layer.items = layer.items.map((item) => ({
-				...item,
-				collectTagCount: countMap.get(item.path.toLowerCase()) ?? 0
-			}));
-		} catch (e) {
-			console.warn('[FolderStack] 加载收藏标签数失败:', e);
-		}
+	// 加载收藏标签匹配数（已废弃，保留函数签名以兼容）
+	// 收藏标签数现在由 FileItemCard 在渲染时从 EMM 元数据计算，并更新到 collectTagCountStore
+	// 排序时从 collectTagCountStore 同步读取
+	async function loadCollectTagCountsForLayer(_layer: FolderLayer) {
+		// 不再需要从后端加载，FileItemCard 会在渲染时计算并更新缓存
+		// collectTagCountStore 的更新会触发重新渲染（通过 collectTagVersion）
 	}
 
 	// 加载缩略图 - 【优化】只预加载前30项，其余由 VirtualizedFileList 可见范围加载

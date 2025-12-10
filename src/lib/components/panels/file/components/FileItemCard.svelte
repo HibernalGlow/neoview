@@ -13,6 +13,7 @@
 	} from '$lib/stores/emmMetadata.svelte';
 	import { fileListTagSettings, type FileListTagDisplayMode } from '$lib/stores/fileListTagSettings.svelte';
 	import { mixedGenderStore, categoryColors } from '$lib/stores/emm/favoriteTagStore.svelte';
+	import { collectTagCountStore } from '$lib/stores/emm/collectTagCountStore';
 	import type { EMMTranslationDict } from '$lib/api/emm';
 	import { getFileMetadata } from '$lib/api';
 	import FileItemListView from './FileItemListView.svelte';
@@ -471,6 +472,20 @@
 
 		// 如果有收藏标签，优先展示收藏标签；否则展示普通标签
 		return [...collectTagsList, ...normalTagsList];
+	});
+
+	// 当 displayTags 计算完成后，更新 collectTagCount 到缓存（用于排序）
+	$effect(() => {
+		// 只对压缩包（book）更新 collectTagCount
+		if (!isArchive || item.isDir) return;
+		
+		const tags = displayTags();
+		const collectCount = tags.filter(t => t.isCollect).length;
+		
+		// 更新到缓存（直接调用内部更新方法）
+		if (collectCount > 0) {
+			collectTagCountStore.setCount(item.path, collectCount);
+		}
 	});
 
 	// 文件夹预览相关

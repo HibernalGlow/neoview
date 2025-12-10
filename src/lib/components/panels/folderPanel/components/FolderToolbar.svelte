@@ -45,7 +45,9 @@ import {
 	ChevronDown,
 	ChevronUp as ChevronUpIcon,
 	FolderSync,
-	FilterX
+	FilterX,
+	Lock,
+	Unlock
 } from '@lucide/svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { historyStore } from '$lib/stores/history.svelte';
@@ -87,7 +89,9 @@ import {
 	tabCurrentPath,
 	tabThumbnailWidthPercent,
 	tabBannerWidthPercent,
-	tabFolderTreeConfig
+	tabFolderTreeConfig,
+	type SharedSortSettings,
+	type SortInheritStrategy
 } from '../stores/folderTabStore.svelte';
 import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 import type { FolderViewStyle, FolderSortField } from '../stores/folderPanelStore.svelte';
@@ -434,6 +438,14 @@ let sortPanelExpanded = $state(false);
 let viewPanelExpanded = $state(false);
 let treePanelExpanded = $state(false);
 
+// 排序锁定状态（仅用于非虚拟模式）
+let sortLockSettings = $state<SharedSortSettings>(folderTabActions.getSortSettings());
+
+// 刷新排序锁定状态
+function refreshSortLockSettings() {
+	sortLockSettings = folderTabActions.getSortSettings();
+}
+
 function closePanels() {
 	sortPanelExpanded = false;
 	viewPanelExpanded = false;
@@ -444,6 +456,10 @@ function toggleSortPanel() {
 	const wasExpanded = sortPanelExpanded;
 	closePanels();
 	sortPanelExpanded = !wasExpanded;
+	// 刷新排序锁定状态
+	if (!wasExpanded) {
+		refreshSortLockSettings();
+	}
 }
 
 function toggleViewPanel() {
@@ -461,6 +477,29 @@ function toggleTreePanel() {
 function toggleMoreSettings() {
 	showMoreSettings = !showMoreSettings;
 }
+
+// 切换排序锁定（通过右键排序按钮触发）
+function handleToggleSortLock(e: MouseEvent) {
+	e.preventDefault();
+	if (virtualMode) return; // 虚拟模式不支持排序锁定
+	folderTabActions.toggleSortLock();
+	refreshSortLockSettings();
+}
+
+// 设置排序继承策略
+function handleSetSortStrategy(strategy: SortInheritStrategy) {
+	if (virtualMode) return;
+	folderTabActions.setSortStrategy(strategy);
+	refreshSortLockSettings();
+}
+
+// 设置排序锁定状态
+function handleSetSortLocked(locked: boolean) {
+	if (virtualMode) return;
+	folderTabActions.setSortLocked(locked);
+	refreshSortLockSettings();
+}
+
 
 async function startWarmup() {
 	const path = get(currentPathStore);
@@ -749,11 +788,15 @@ async function handleReloadSelectedThumbnails() {
 	<Tooltip.Root>
 		<Tooltip.Trigger>
 			<Button 
-				variant={sortPanelExpanded ? 'default' : 'ghost'} 
+				variant={sortPanelExpanded ? 'default' : (sortLockSettings.locked && !virtualMode ? 'secondary' : 'ghost')} 
 				size="sm" 
 				class="h-7 gap-0.5 px-1.5"
 				onclick={toggleSortPanel}
+				oncontextmenu={handleToggleSortLock}
 			>
+				{#if sortLockSettings.locked && !virtualMode}
+					<Lock class="h-3 w-3 text-amber-500" />
+				{/if}
 				{@const SortIcon = getCurrentSortIcon()}
 				<SortIcon class="h-3.5 w-3.5" />
 				{#if sortConfig.field !== 'random'}
@@ -767,6 +810,9 @@ async function handleReloadSelectedThumbnails() {
 		</Tooltip.Trigger>
 		<Tooltip.Content>
 			<p>排序: {sortFields.find((f) => f.value === sortConfig.field)?.label} {sortConfig.field !== 'random' ? (sortConfig.order === 'asc' ? '升序' : '降序') : ''}</p>
+			{#if !virtualMode}
+				<p class="text-muted-foreground text-xs">{sortLockSettings.locked ? '🔒 已锁定 (右键解锁)' : '右键锁定排序'}</p>
+			{/if}
 		</Tooltip.Content>
 	</Tooltip.Root>
 
@@ -986,6 +1032,69 @@ async function handleReloadSelectedThumbnails() {
 				<p>{sortConfig.order === 'asc' ? '升序' : '降序'}（点击切换）</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
+
+		<!-- 排序锁定设置（仅非虚拟模式） -->
+		{#if !virtualMode}
+			<div class="bg-border mx-1 h-4 w-px"></div>
+			
+			<!-- 锁定按钮 -->
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					<Button
+						variant={sortLockSettings.locked ? 'default' : 'ghost'}
+						size="icon"
+						class="h-6 w-6 {sortLockSettings.locked ? 'text-amber-500' : ''}"
+						onclick={() => handleSetSortLocked(!sortLockSettings.locked)}
+					>
+						{#if sortLockSettings.locked}
+							<Lock class="h-3 w-3" />
+						{:else}
+							<Unlock class="h-3 w-3" />
+						{/if}
+					</Button>
+				</Tooltip.Trigger>
+				<Tooltip.Content>
+					<p>{sortLockSettings.locked ? '点击解锁排序' : '点击锁定当前排序'}</p>
+					<p class="text-muted-foreground text-xs">锁定后新标签页将使用锁定的排序方式</p>
+				</Tooltip.Content>
+			</Tooltip.Root>
+
+			<!-- 策略选择（仅当未锁定时显示） -->
+			{#if !sortLockSettings.locked}
+				<div class="bg-muted/60 inline-flex items-center gap-0.5 rounded-full p-0.5 shadow-inner ml-1">
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							<Button
+								variant={sortLockSettings.strategy === 'default' ? 'default' : 'ghost'}
+								size="sm"
+								class="h-5 px-2 rounded-full text-[10px]"
+								onclick={() => handleSetSortStrategy('default')}
+							>
+								默认
+							</Button>
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							<p>新标签页使用默认排序（名称升序）</p>
+						</Tooltip.Content>
+					</Tooltip.Root>
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							<Button
+								variant={sortLockSettings.strategy === 'inherit' ? 'default' : 'ghost'}
+								size="sm"
+								class="h-5 px-2 rounded-full text-[10px]"
+								onclick={() => handleSetSortStrategy('inherit')}
+							>
+								继承
+							</Button>
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							<p>新标签页继承上一个标签页的排序</p>
+						</Tooltip.Content>
+					</Tooltip.Root>
+				</div>
+			{/if}
+		{/if}
 	</div>
 {/if}
 

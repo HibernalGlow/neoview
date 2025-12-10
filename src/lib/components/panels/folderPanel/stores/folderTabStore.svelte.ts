@@ -109,6 +109,7 @@ export interface FolderTabState {
 
 const TAB_STORAGE_KEY = 'neoview-folder-tabs';
 const SHARED_TREE_SETTINGS_KEY = 'neoview-folder-tree-shared';
+const SHARED_SORT_SETTINGS_KEY = 'neoview-folder-sort-shared';
 
 // ============ Shared Folder Tree Settings ============
 // 这些设置在所有文件夹面板页签之间共享
@@ -116,6 +117,21 @@ interface SharedFolderTreeSettings {
 	folderTreeVisible: boolean;
 	folderTreeLayout: 'top' | 'left' | 'right' | 'bottom';
 	folderTreeSize: number;
+}
+
+// ============ Shared Sort Settings ============
+// 排序设置：锁定、策略、当前排序字段和顺序
+export type SortInheritStrategy = 'default' | 'inherit';
+
+export interface SharedSortSettings {
+	/** 是否锁定排序（锁定后新标签页使用锁定的排序设置） */
+	locked: boolean;
+	/** 未锁定时的策略：default=使用默认排序，inherit=继承上一个标签页的排序 */
+	strategy: SortInheritStrategy;
+	/** 锁定的排序字段 */
+	lockedSortField: FolderSortField;
+	/** 锁定的排序顺序 */
+	lockedSortOrder: FolderSortOrder;
 }
 
 function loadSharedTreeSettings(): SharedFolderTreeSettings {
@@ -142,8 +158,40 @@ function saveSharedTreeSettings(settings: SharedFolderTreeSettings) {
 	}
 }
 
+function loadSharedSortSettings(): SharedSortSettings {
+	try {
+		const saved = localStorage.getItem(SHARED_SORT_SETTINGS_KEY);
+		if (saved) {
+			const parsed = JSON.parse(saved);
+			return {
+				locked: parsed.locked ?? false,
+				strategy: parsed.strategy ?? 'default',
+				lockedSortField: parsed.lockedSortField ?? 'name',
+				lockedSortOrder: parsed.lockedSortOrder ?? 'asc'
+			};
+		}
+	} catch (e) {
+		console.error('[FolderTabStore] Failed to load shared sort settings:', e);
+	}
+	return {
+		locked: false,
+		strategy: 'default',
+		lockedSortField: 'name',
+		lockedSortOrder: 'asc'
+	};
+}
+
+function saveSharedSortSettings(settings: SharedSortSettings) {
+	try {
+		localStorage.setItem(SHARED_SORT_SETTINGS_KEY, JSON.stringify(settings));
+	} catch (e) {
+		console.error('[FolderTabStore] Failed to save shared sort settings:', e);
+	}
+}
+
 // 加载共享设置
 let sharedTreeSettings = loadSharedTreeSettings();
+const sharedSortSettings = loadSharedSortSettings();
 
 function generateTabId(): string {
 	return `tab-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -197,9 +245,43 @@ function getDisplayName(path: string): string {
 	return parts[parts.length - 1] || path;
 }
 
-function createDefaultTabState(id: string, homePath: string = ''): FolderTabState {
+/**
+ * 获取新标签页应该使用的排序设置
+ * @param sourceTab 可选的源标签页，用于继承策略
+ */
+function getSortSettingsForNewTab(sourceTab?: FolderTabState): { sortField: FolderSortField; sortOrder: FolderSortOrder } {
+	const sortSettings = sharedSortSettings;
+	
+	// 如果锁定，使用锁定的排序设置
+	if (sortSettings.locked) {
+		return {
+			sortField: sortSettings.lockedSortField,
+			sortOrder: sortSettings.lockedSortOrder
+		};
+	}
+	
+	// 未锁定时根据策略决定
+	if (sortSettings.strategy === 'inherit' && sourceTab) {
+		// 继承源标签页的排序
+		return {
+			sortField: sourceTab.sortField,
+			sortOrder: sourceTab.sortOrder
+		};
+	}
+	
+	// 默认策略或没有源标签页
+	return {
+		sortField: 'name',
+		sortOrder: 'asc'
+	};
+}
+
+function createDefaultTabState(id: string, homePath: string = '', sourceTab?: FolderTabState): FolderTabState {
 	// 从共享设置中获取文件树配置
 	const treeSettings = sharedTreeSettings;
+	// 获取排序设置
+	const sortSettings = getSortSettingsForNewTab(sourceTab);
+	
 	return {
 		id,
 		title: 'New',
@@ -211,8 +293,8 @@ function createDefaultTabState(id: string, homePath: string = ''): FolderTabStat
 		loading: false,
 		error: null,
 		viewStyle: 'list',
-		sortField: 'name',
-		sortOrder: 'asc',
+		sortField: sortSettings.sortField,
+		sortOrder: sortSettings.sortOrder,
 		ratingVersion: 0,
 		multiSelectMode: false,
 		deleteMode: false,
@@ -442,7 +524,9 @@ export const folderTabActions = {
 	createTab(homePath: string = ''): string {
 		const newId = generateTabId();
 		store.update(($store) => {
-			const newTab = createDefaultTabState(newId, homePath);
+			// 获取当前活动标签页作为继承排序的源
+			const sourceTab = $store.tabs.find(t => t.id === $store.activeTabId);
+			const newTab = createDefaultTabState(newId, homePath, sourceTab);
 			// 截断当前位置之后的标签页历史，然后添加新标签页
 			const newTabNavHistory = $store.tabNavHistory.slice(0, $store.tabNavHistoryIndex + 1);
 			newTabNavHistory.push(newId);
@@ -893,9 +977,72 @@ export const folderTabActions = {
 	setSort(field: FolderSortField, order?: FolderSortOrder) {
 		updateActiveTab((tab) => {
 			const newOrder = order ?? (tab.sortField === field && tab.sortOrder === 'asc' ? 'desc' : 'asc');
+			
+			// 如果排序已锁定，同步更新锁定的排序设置
+			if (sharedSortSettings.locked) {
+				sharedSortSettings.lockedSortField = field;
+				sharedSortSettings.lockedSortOrder = newOrder;
+				saveSharedSortSettings(sharedSortSettings);
+			}
+			
 			return { ...tab, sortField: field, sortOrder: newOrder };
 		});
 	},
+
+	// ============ Sort Lock ============
+
+	/**
+	 * 获取共享排序设置
+	 */
+	getSortSettings(): SharedSortSettings {
+		return { ...sharedSortSettings };
+	},
+
+	/**
+	 * 切换排序锁定
+	 * 锁定时会使用当前活动标签页的排序设置作为锁定值
+	 */
+	toggleSortLock() {
+		const tab = this.getActiveTab();
+		if (!tab) return;
+		
+		sharedSortSettings.locked = !sharedSortSettings.locked;
+		
+		// 锁定时，使用当前标签页的排序设置作为锁定值
+		if (sharedSortSettings.locked) {
+			sharedSortSettings.lockedSortField = tab.sortField;
+			sharedSortSettings.lockedSortOrder = tab.sortOrder;
+		}
+		
+		saveSharedSortSettings(sharedSortSettings);
+	},
+
+	/**
+	 * 设置排序锁定状态
+	 */
+	setSortLocked(locked: boolean) {
+		const tab = this.getActiveTab();
+		if (!tab) return;
+		
+		sharedSortSettings.locked = locked;
+		
+		// 锁定时，使用当前标签页的排序设置作为锁定值
+		if (locked) {
+			sharedSortSettings.lockedSortField = tab.sortField;
+			sharedSortSettings.lockedSortOrder = tab.sortOrder;
+		}
+		
+		saveSharedSortSettings(sharedSortSettings);
+	},
+
+	/**
+	 * 设置排序继承策略
+	 */
+	setSortStrategy(strategy: SortInheritStrategy) {
+		sharedSortSettings.strategy = strategy;
+		saveSharedSortSettings(sharedSortSettings);
+	},
+
 
 	// ============ Modes ============
 

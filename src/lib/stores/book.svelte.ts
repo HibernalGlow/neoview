@@ -325,7 +325,7 @@ class BookStore {
     }
   }
 
-  async navigateToImage(imagePath: string) {
+  async navigateToImage(imagePath: string, options: { skipHistoryUpdate?: boolean } = {}) {
     if (!this.state.currentBook) return;
 
     try {
@@ -336,8 +336,11 @@ class BookStore {
       this.syncAppStateBookSlice('user');
       await this.syncInfoPanelBookInfo();
 
-      const { historyStore } = await import('$lib/stores/history.svelte');
-      historyStore.update(this.state.currentBook.path, index, this.state.currentBook.totalPages);
+      // 【优化】允许调用方跳过历史更新（用于视频/图片单独记录场景）
+      if (!options.skipHistoryUpdate) {
+        const { historyStore } = await import('$lib/stores/history.svelte');
+        historyStore.update(this.state.currentBook.path, index, this.state.currentBook.totalPages);
+      }
     } catch (err) {
       console.error('❌ Error navigating to image:', err);
       this.state.error = String(err);

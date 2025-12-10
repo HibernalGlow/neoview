@@ -112,7 +112,7 @@ export async function openFileSystemItem(
                 console.log('📁 Parent directory:', parentDir);
                 // 【优化】跳过文件夹的历史记录，只记录视频/图片文件
                 await bookStore.openDirectoryAsBook(parentDir, { skipHistory: true });
-                await bookStore.navigateToImage(path);
+                await bookStore.navigateToImage(path, { skipHistoryUpdate: true });
                 try {
                     const { historyStore } = await import('$lib/stores/history.svelte');
                     const name = path.split(/[\\/]/).pop() || path;

@@ -23,6 +23,9 @@ interface BookState {
   error: string;
   viewerOpen: boolean;
   upscaledImageData: string | null; // 保持兼容性，用于显示
+  // 【视频/图片单文件模式】用于正确记录历史
+  singleFileMode: boolean;
+  originalFilePath: string | null; // 原始文件路径（视频/图片）
 }
 
 interface OpenBookOptions {
@@ -73,6 +76,8 @@ class BookStore {
     error: '',
     viewerOpen: false,
     upscaledImageData: null,
+    singleFileMode: false,
+    originalFilePath: null,
   });
 
   // 每页超分状态映射: pageIndex -> 'none' | 'preupscaled' | 'done' | 'failed'
@@ -168,6 +173,46 @@ class BookStore {
     return book !== null && book.currentPage > 0;
   }
 
+  /** 是否为单文件模式（视频/图片直接打开） */
+  get isSingleFileMode(): boolean {
+    return this.state.singleFileMode;
+  }
+
+  /** 原始文件路径（单文件模式下使用） */
+  get originalFilePath(): string | null {
+    return this.state.originalFilePath;
+  }
+
+  /**
+   * 设置单文件模式
+   * 用于视频/图片打开时正确记录历史
+   */
+  setSingleFileMode(enabled: boolean, filePath: string | null = null) {
+    this.state.singleFileMode = enabled;
+    this.state.originalFilePath = filePath;
+  }
+
+  /**
+   * 获取历史记录应该使用的路径
+   * 单文件模式返回原始文件路径，否则返回 book 路径
+   */
+  getHistoryPath(): string | null {
+    if (this.state.singleFileMode && this.state.originalFilePath) {
+      return this.state.originalFilePath;
+    }
+    return this.state.currentBook?.path ?? null;
+  }
+
+  /**
+   * 获取历史记录应该使用的名称
+   */
+  getHistoryName(): string {
+    if (this.state.singleFileMode && this.state.originalFilePath) {
+      return this.state.originalFilePath.split(/[\\/]/).pop() || this.state.originalFilePath;
+    }
+    return this.state.currentBook?.name ?? '';
+  }
+
   // === Actions ===
 
   /**
@@ -181,6 +226,9 @@ class BookStore {
 
       // 清除旧书的状态
       this.state.upscaledImageData = null;
+      // 【重要】正常打开 book 时重置单文件模式（由调用方决定是否设置）
+      this.state.singleFileMode = false;
+      this.state.originalFilePath = null;
       infoPanelStore.resetAll();
 
       // 使用通用的 openBook API (它会自动检测类型)
@@ -314,9 +362,20 @@ class BookStore {
       this.syncAppStateBookSlice('user');
       this.syncInfoPanelBookInfo();
 
-      // 更新历史记录的页数
-      const { historyStore } = await import('$lib/stores/history.svelte');
-      historyStore.update(this.state.currentBook.path, index, this.state.currentBook.totalPages);
+      // 【单文件模式】更新当前文件路径
+      if (this.state.singleFileMode) {
+        const currentPage = this.state.currentBook.pages?.[index];
+        if (currentPage) {
+          this.state.originalFilePath = currentPage.path;
+        }
+      }
+
+      // 【优化】更新历史记录（支持单文件模式）
+      const historyPath = this.getHistoryPath();
+      if (historyPath) {
+        const { historyStore } = await import('$lib/stores/history.svelte');
+        historyStore.update(historyPath, index, this.state.currentBook.totalPages);
+      }
 
       this.showPageSwitchToastIfEnabled();
     } catch (err) {
@@ -363,9 +422,20 @@ class BookStore {
         await this.syncInfoPanelBookInfo();
         this.syncAppStateBookSlice('user');
 
-        // 更新历史记录的页数
-        const { historyStore } = await import('$lib/stores/history.svelte');
-        historyStore.update(this.state.currentBook.path, newIndex, this.state.currentBook.totalPages);
+        // 【单文件模式】更新当前文件路径
+        if (this.state.singleFileMode) {
+          const currentPage = this.state.currentBook.pages?.[newIndex];
+          if (currentPage) {
+            this.state.originalFilePath = currentPage.path;
+          }
+        }
+
+        // 【优化】更新历史记录（支持单文件模式）
+        const historyPath = this.getHistoryPath();
+        if (historyPath) {
+          const { historyStore } = await import('$lib/stores/history.svelte');
+          historyStore.update(historyPath, newIndex, this.state.currentBook.totalPages);
+        }
       }
 
       this.showPageSwitchToastIfEnabled();
@@ -392,9 +462,20 @@ class BookStore {
         await this.syncInfoPanelBookInfo();
         this.syncAppStateBookSlice('user');
 
-        // 更新历史记录的页数
-        const { historyStore } = await import('$lib/stores/history.svelte');
-        historyStore.update(this.state.currentBook.path, newIndex, this.state.currentBook.totalPages);
+        // 【单文件模式】更新当前文件路径
+        if (this.state.singleFileMode) {
+          const currentPage = this.state.currentBook.pages?.[newIndex];
+          if (currentPage) {
+            this.state.originalFilePath = currentPage.path;
+          }
+        }
+
+        // 【优化】更新历史记录（支持单文件模式）
+        const historyPath = this.getHistoryPath();
+        if (historyPath) {
+          const { historyStore } = await import('$lib/stores/history.svelte');
+          historyStore.update(historyPath, newIndex, this.state.currentBook.totalPages);
+        }
       }
       return newIndex;
     } catch (err) {

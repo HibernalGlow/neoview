@@ -204,6 +204,7 @@ export function createItemOpenActions(
 				const parentPath = lastSep > 0 ? item.path.substring(0, lastSep) : item.path;
 				await bookStore.openDirectoryAsBook(parentPath, { skipHistory: true });
 				await bookStore.navigateToImage(item.path, { skipHistoryUpdate: true });
+				bookStore.setSingleFileMode(true, item.path);
 				const name = item.name || item.path.split(/[\\/]/).pop() || item.path;
 				const currentPage = bookStore.currentPageIndex;
 				const totalPages = bookStore.currentBook?.totalPages || 1;

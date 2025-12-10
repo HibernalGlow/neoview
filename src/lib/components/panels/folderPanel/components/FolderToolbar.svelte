@@ -842,11 +842,11 @@ async function handleReloadSelectedThumbnails() {
 				<Button
 					variant={deleteMode ? 'default' : 'ghost'}
 					size="icon"
-					class="h-7 w-7"
+					class="h-7 w-7 {deleteStrategy === 'permanent' && deleteMode ? 'ring-2 ring-primary ring-offset-1 ring-offset-background' : ''}"
 					onclick={handleToggleDeleteMode}
 					oncontextmenu={handleToggleDeleteStrategy}
 				>
-					<Trash2 class={deleteStrategy === 'permanent' ? 'h-4 w-4 text-accent-foreground' : 'h-4 w-4'} />
+					<Trash2 class="h-4 w-4" />
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
@@ -930,7 +930,7 @@ async function handleReloadSelectedThumbnails() {
 				<Button
 					variant={penetrateMode ? 'default' : 'ghost'}
 					size="icon"
-					class="h-7 w-7"
+					class="h-7 w-7 {openInNewTabMode && penetrateMode ? 'ring-2 ring-primary ring-offset-1 ring-offset-background' : ''}"
 					onclick={handleTogglePenetrateMode}
 					oncontextmenu={(e: MouseEvent) => {
 						e.preventDefault();
@@ -940,7 +940,7 @@ async function handleReloadSelectedThumbnails() {
 						}
 					}}
 				>
-					<CornerDownRight class={openInNewTabMode ? 'h-4 w-4 text-accent-foreground' : 'h-4 w-4'} />
+					<CornerDownRight class="h-4 w-4" />
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>

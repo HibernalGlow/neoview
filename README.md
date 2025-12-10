@@ -1,14 +1,14 @@
 # NeoView (Tauri + Svelte 5)
- 
- ![NeoView 图标](./src-tauri/icons/128x128.png)
- 
- [![zread](https://img.shields.io/badge/Ask_Zread-_.svg?style=flat&color=00b0aa&labelColor=000000&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQuOTYxNTYgMS42MDAxSDIuMjQxNTZDMS44ODgxIDEuNjAwMSAxLjYwMTU2IDEuODg2NjQgMS42MDE1NiAyLjI0MDFWNC45NjAxQzEuNjAxNTYgNS4zMTM1NiAxLjg4ODEgNS42MDAxIDIuMjQxNTYgNS42MDAxSDQuOTYxNTZDNS4zMTUwMiA1LjYwMDEgNS42MDE1NiA1LjMxMzU2IDUuNjAxNTYgNC45NjAxVjIuMjQwMUM1LjYwMTU2IDEuODg2NjQgNS4zMTUwMiAxLjYwMDEgNC45NjE1NiAxLjYwMDFaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00Ljk2MTU2IDEwLjM5OTlIMi4yNDE1NkMxLjg4ODEgMTAuMzk5OSAxLjYwMTU2IDEwLjY4NjQgMS42MDE1NiAxMS4wMzk5VjEzLjc1OTlDMS42MDE1NiAxNC4xMTM0IDEuODg4MSAxNC4zOTk5IDIuMjQxNTYgMTQuMzk5OUg0Ljk2MTU2QzUuMzE1MDIgMTQuMzk5OSA1LjYwMTU2IDE0LjExMzQgNS42MDE1NiAxMy43NTk5VjExLjAzOTlDNS42MDE1NiAxMC42ODY0IDUuMzE1MDIgMTAuMzk5OSA0Ljk2MTU2IDEwLjM5OTlaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik0xMy43NTg0IDEuNjAwMUgxMS4wMzg0QzEwLjY4NSAxLjYwMDEgMTAuMzk4NCAxLjg4NjY0IDEwLjM5ODQgMi4yNDAxVjQuOTYwMUMxMC4zOTg0IDUuMzEzNTYgMTAuNjg1IDUuNjAwMSAxMS4wMzg0IDUuNjAwMUgxMy43NTg0QzE0LjExMTkgNS42MDAxIDE0LjM5ODQgNS4zMTM1NiAxNC4zOTg0IDQuOTYwMVYyLjI0MDFDMTQuMzk4NCAxLjg4NjY0IDE0LjExMTkgMS42MDAxIDEzLjc1ODQgMS42MDAxWiIgZmlsbD0iI2ZmZiIvPgo8cGF0aCBkPSJNNCAxMkwxMiA0TDQgMTJaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00IDEyTDEyIDQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K&logoColor=ffffff)](https://zread.ai/HibernalGlow/neoview)
- 
- [English README](./readme_en.md)
- 
-  NeoView 是一个桌面端图片 / 漫画查看器应用。
-  本目录基于 **Tauri 2 + Svelte 5 + Rust + PyO3**，目标是在现代技术栈上复刻 [NeeView](https://github.com/neelabo/NeeView)阅读器的核心体验，同时针对大体积本地图库做了大量性能优化（缩略图缓存、批量加载、后台任务调度等）。
-  
+
+![NeoView 图标](./src-tauri/icons/128x128.png)
+
+[![zread](https://img.shields.io/badge/Ask_Zread-_.svg?style=flat&color=00b0aa&labelColor=000000&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQuOTYxNTYgMS42MDAxSDIuMjQxNTZDMS44ODgxIDEuNjAwMSAxLjYwMTU2IDEuODg2NjQgMS42MDE1NiAyLjI0MDFWNC45NjAxQzEuNjAxNTYgNS4zMTM1NiAxLjg4ODEgNS42MDAxIDIuMjQxNTYgNS42MDAxSDQuOTYxNTZDNS4zMTUwMiA1LjYwMDEgNS42MDE1NiA1LjMxMzU2IDUuNjAxNTYgNC45NjAxVjIuMjQwMUM1LjYwMTU2IDEuODg2NjQgNS4zMTUwMiAxLjYwMDEgNC45NjE1NiAxLjYwMDFaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00Ljk2MTU2IDEwLjM5OTlIMi4yNDE1NkMxLjg4ODEgMTAuMzk5OSAxLjYwMTU2IDEwLjY4NjQgMS42MDE1NiAxMS4wMzk5VjEzLjc1OTlDMS42MDE1NiAxNC4xMTM0IDEuODg4MSAxNC4zOTk5IDIuMjQxNTYgMTQuMzk5OUg0Ljk2MTU2QzUuMzE1MDIgMTQuMzk5OSA1LjYwMTU2IDE0LjExMzQgNS42MDE1NiAxMy43NTk5VjExLjAzOTlDNS42MDE1NiAxMC42ODY0IDUuMzE1MDIgMTAuMzk5OSA0Ljk2MTU2IDEwLjM5OTlaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik0xMy43NTg0IDEuNjAwMUgxMS4wMzg0QzEwLjY4NSAxLjYwMDEgMTAuMzk4NCAxLjg4NjY0IDEwLjM5ODQgMi4yNDAxVjQuOTYwMUMxMC4zOTg0IDUuMzEzNTYgMTAuNjg1IDUuNjAwMSAxMS4wMzg0IDUuNjAwMUgxMy43NTg0QzE0LjExMTkgNS42MDAxIDE0LjM5ODQgNS4zMTM1NiAxNC4zOTg0IDQuOTYwMVYyLjI0MDFDMTQuMzk4NCAxLjg4NjY0IDE0LjExMTkgMS42MDAxIDEzLjc1ODQgMS42MDAxWiIgZmlsbD0iI2ZmZiIvPgo8cGF0aCBkPSJNNCAxMkwxMiA0TDQgMTJaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00IDEyTDEyIDQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K&logoColor=ffffff)](https://zread.ai/HibernalGlow/neoview)
+
+[English README](./readme_en.md)
+
+NeoView 是一个桌面端图片 / 漫画查看器应用。
+本目录基于 **Tauri 2 + Svelte 5 + Rust + PyO3**，目标是在现代技术栈上复刻 [NeeView](https://github.com/neelabo/NeeView)阅读器的核心体验，同时针对大体积本地图库做了大量性能优化（缩略图缓存、批量加载、后台任务调度等）。
+
 ## 功能概览
 
 - **高性能本地图库浏览**
@@ -26,9 +26,14 @@
   - 内置多套预设主题（Amethyst Haze / Ocean Breeze / Forest Mist / Sunset Glow）
   - 支持从 [tweakcn.com](https://tweakcn.com/editor/theme) 导入自定义主题
   - 跟随系统 / 浅色 / 深色模式切换
+  - 支持 UI 组件（弹窗、菜单）背景磨砂/模糊效果
 - **超分与图像处理（规划中）**
   - 通过 PyO3 调用 Python 模型（如 RealCUGAN / Waifu2x 等）
   - 计划支持多模型管理与比较模式
+- **智能语音控制**
+  - 基于 Web Speech API 的实时语音指令系统
+  - 支持自然语言控制翻页、缩放、视图切换、文件导航等
+  - 可视化语音状态悬浮窗与指令反馈
 
 更多架构与规划请参考：`docs/neeview_revamp_plan.md`。
 
@@ -71,7 +76,7 @@
 请先确保本机满足 Tauri 2 的官方先决条件。
 
 - **Node.js**：建议 20+（推荐通过 nvm / nvm-windows 安装）
-- **Yarn**：作为前端包管理器  
+- **Yarn**：作为前端包管理器
   - Node 16+ 可直接使用 `corepack enable` 启用 Yarn
 - **Rust**：通过 [rustup](https://www.rust-lang.org/) 安装最新版 Rust
 - **Windows 额外依赖**（推荐，因为本项目主要在 Windows 上开发调试）
@@ -201,4 +206,3 @@ uv run python scripts/thumbnail_batch_cli.py D:/Comics/Series1 \
 
 如果你只作为用户体验图片/漫画浏览功能，当前版本已经可以日常使用；  
 如果你希望参与开发，建议从 `docs/neeview_revamp_plan.md` 与缩略图 / 主题相关文档开始阅读。
-

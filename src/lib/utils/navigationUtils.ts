@@ -119,7 +119,15 @@ export async function openFileSystemItem(
                     // 获取当前页面索引和总页数
                     const currentPage = bookStore.currentPageIndex;
                     const totalPages = bookStore.currentBook?.totalPages || 1;
+                    console.log('📝 [History Debug] Adding video/image history:', {
+                        path,
+                        name,
+                        currentPage,
+                        totalPages,
+                        bookPath: bookStore.currentBook?.path
+                    });
                     historyStore.add(path, name, currentPage, totalPages);
+                    console.log('✅ [History Debug] History added successfully');
                 } catch (historyError) {
                     console.error('Failed to add history entry from openFileSystemItem:', historyError);
                 }

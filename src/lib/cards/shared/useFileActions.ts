@@ -195,8 +195,13 @@ export function createItemOpenActions(
 			} else if (isVideoPath(item.path) || item.isImage || isImagePath(item.path)) {
 				const lastSep = Math.max(item.path.lastIndexOf('/'), item.path.lastIndexOf('\\'));
 				const parentPath = lastSep > 0 ? item.path.substring(0, lastSep) : item.path;
-				await bookStore.openDirectoryAsBook(parentPath);
-				await bookStore.navigateToImage(item.path);
+				await bookStore.openDirectoryAsBook(parentPath, { skipHistory: true });
+				await bookStore.navigateToImage(item.path, { skipHistoryUpdate: true });
+				const name = item.name || item.path.split(/[\\/]/).pop() || item.path;
+				const currentPage = bookStore.currentPageIndex;
+				const totalPages = bookStore.currentBook?.totalPages || 1;
+				console.log('📝 [History] Adding video/image history:', { path: item.path, name, currentPage, totalPages });
+				historyStore.add(item.path, name, currentPage, totalPages);
 			} else {
 				const historyEntry = historyStore.findByPath(item.path);
 				const initialPage = historyEntry?.currentPage ?? 0;

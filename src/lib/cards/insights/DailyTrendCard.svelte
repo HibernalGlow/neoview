@@ -2,12 +2,12 @@
 /**
  * 最近 7 日阅读趋势卡片
  */
-import { historyStore, type HistoryEntry } from '$lib/stores/history.svelte';
+import { unifiedHistoryStore, type UnifiedHistoryEntry } from '$lib/stores/unifiedHistory.svelte';
 
-let historyEntries = $state<HistoryEntry[]>([]);
+let historyEntries = $state<UnifiedHistoryEntry[]>([]);
 
 $effect(() => {
-	const unsubscribe = historyStore.subscribe((value) => {
+	const unsubscribe = unifiedHistoryStore.subscribe((value) => {
 		historyEntries = value ?? [];
 	});
 	return unsubscribe;

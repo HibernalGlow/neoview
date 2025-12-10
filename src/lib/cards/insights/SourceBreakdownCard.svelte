@@ -2,13 +2,13 @@
 /**
  * 来源拆分卡片
  */
-import { historyStore, type HistoryEntry } from '$lib/stores/history.svelte';
+import { unifiedHistoryStore, type UnifiedHistoryEntry } from '$lib/stores/unifiedHistory.svelte';
 import { Progress } from '$lib/components/ui/progress';
 
-let historyEntries = $state<HistoryEntry[]>([]);
+let historyEntries = $state<UnifiedHistoryEntry[]>([]);
 
 $effect(() => {
-	const unsubscribe = historyStore.subscribe((value) => {
+	const unsubscribe = unifiedHistoryStore.subscribe((value) => {
 		historyEntries = value ?? [];
 	});
 	return unsubscribe;
@@ -18,7 +18,7 @@ function buildSourceStats() {
 	const bySource: Record<string, number> = {};
 	for (const entry of historyEntries) {
 		// 从路径推断来源类型
-		const path = entry.path || '';
+		const path = entry.pathStack?.[0]?.path || '';
 		let source = '本地';
 		if (path.includes('.zip') || path.includes('.cbz') || path.includes('.cbr') || path.includes('.rar')) {
 			source = '压缩包';

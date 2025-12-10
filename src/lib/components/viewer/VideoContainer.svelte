@@ -7,7 +7,7 @@
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import VideoPlayer from './VideoPlayer.svelte';
 	import { videoStore } from '$lib/stores/video.svelte';
-	import { historyStore } from '$lib/stores/history.svelte';
+	import { unifiedHistoryStore } from '$lib/stores/unifiedHistory.svelte';
 	import { bookStore } from '$lib/stores';
 	import { isVideoFile, getVideoMimeType } from '$lib/utils/videoUtils';
 	import {
@@ -82,12 +82,13 @@
 
 		try {
 			// 尝试获取历史进度
-			const historyEntry = historyStore.findByPath(videoPage.path);
-			if (historyEntry?.videoPosition && historyEntry.videoPosition > 0) {
-				const duration = historyEntry.videoDuration || 0;
-				const progress = historyEntry.videoPosition;
+			const historyEntry = unifiedHistoryStore.findByPath(videoPage.path);
+			const vp = historyEntry?.videoProgress;
+			if (vp?.position && vp.position > 0) {
+				const duration = vp.duration || 0;
+				const progress = vp.position;
 				// 如果已完成，从头开始
-				if (historyEntry.videoCompleted || (duration > 0 && progress >= duration - 5)) {
+				if (vp.completed || (duration > 0 && progress >= duration - 5)) {
 					videoStartTime = 0;
 				} else {
 					videoStartTime = progress;
@@ -214,13 +215,13 @@
 		const finalPercent = completed ? 100 : progressPercent;
 
 		try {
-			historyStore.updateVideoProgress(
-				page.path,
+			// 使用 pathStack 更新视频进度
+			const pathStack = bookStore.buildPathStack();
+			unifiedHistoryStore.updateVideoProgress(
+				pathStack,
 				clampedTime,       // 真实的当前时间（秒）
 				safeDuration,      // 真实的总时长（秒）
-				completed,         // 是否已完成
-				finalPercent,      // 进度百分比（0-100）
-				100                // 总数为100（百分比）
+				completed          // 是否已完成
 			);
 		} catch (err) {
 			console.error('Failed to update video progress history:', err);

@@ -258,8 +258,9 @@ class BookStore {
 
       // 【优化】异步添加历史记录，不阻塞（如果 skipHistory 为 true 则跳过）
       if (!options.skipHistory) {
-        import('$lib/stores/history.svelte').then(({ historyStore }) => {
-          historyStore.add(path, book.name, targetPage, book.totalPages);
+        import('$lib/stores/unifiedHistory.svelte').then(({ unifiedHistoryStore }) => {
+          const pathStack = this.buildPathStack();
+          unifiedHistoryStore.add(pathStack, targetPage, book.totalPages, { displayName: book.name });
         }).catch(() => {});
       }
 
@@ -371,14 +372,16 @@ class BookStore {
         if (currentPage) {
           this.state.originalFilePath = currentPage.path;
           // 单文件模式下，为每个文件添加/更新历史记录
-          const { historyStore } = await import('$lib/stores/history.svelte');
+          const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
           const name = currentPage.name || currentPage.path.split(/[\\/]/).pop() || currentPage.path;
-          historyStore.add(currentPage.path, name, index, this.state.currentBook.totalPages);
+          const pathStack = this.buildPathStack();
+          unifiedHistoryStore.add(pathStack, index, this.state.currentBook.totalPages, { displayName: name });
         }
       } else {
         // 非单文件模式，更新 book 的历史记录
-        const { historyStore } = await import('$lib/stores/history.svelte');
-        historyStore.update(this.state.currentBook.path, index, this.state.currentBook.totalPages);
+        const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
+        const pathStack = this.buildPathStack();
+        unifiedHistoryStore.updateIndex(pathStack, index, this.state.currentBook.totalPages);
       }
 
       this.showPageSwitchToastIfEnabled();
@@ -401,8 +404,9 @@ class BookStore {
 
       // 【优化】允许调用方跳过历史更新（用于视频/图片单独记录场景）
       if (!options.skipHistoryUpdate) {
-        const { historyStore } = await import('$lib/stores/history.svelte');
-        historyStore.update(this.state.currentBook.path, index, this.state.currentBook.totalPages);
+        const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
+        const pathStack = this.buildPathStack();
+        unifiedHistoryStore.updateIndex(pathStack, index, this.state.currentBook.totalPages);
       }
     } catch (err) {
       console.error('❌ Error navigating to image:', err);
@@ -431,14 +435,16 @@ class BookStore {
           const currentPage = this.state.currentBook.pages?.[newIndex];
           if (currentPage) {
             this.state.originalFilePath = currentPage.path;
-            const { historyStore } = await import('$lib/stores/history.svelte');
+            const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
             const name = currentPage.name || currentPage.path.split(/[\\/]/).pop() || currentPage.path;
-            historyStore.add(currentPage.path, name, newIndex, this.state.currentBook.totalPages);
+            const pathStack = this.buildPathStack();
+            unifiedHistoryStore.add(pathStack, newIndex, this.state.currentBook.totalPages, { displayName: name });
           }
         } else {
           // 非单文件模式，更新 book 的历史记录
-          const { historyStore } = await import('$lib/stores/history.svelte');
-          historyStore.update(this.state.currentBook.path, newIndex, this.state.currentBook.totalPages);
+          const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
+          const pathStack = this.buildPathStack();
+          unifiedHistoryStore.updateIndex(pathStack, newIndex, this.state.currentBook.totalPages);
         }
       }
 
@@ -471,14 +477,16 @@ class BookStore {
           const currentPage = this.state.currentBook.pages?.[newIndex];
           if (currentPage) {
             this.state.originalFilePath = currentPage.path;
-            const { historyStore } = await import('$lib/stores/history.svelte');
+            const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
             const name = currentPage.name || currentPage.path.split(/[\\/]/).pop() || currentPage.path;
-            historyStore.add(currentPage.path, name, newIndex, this.state.currentBook.totalPages);
+            const pathStack = this.buildPathStack();
+            unifiedHistoryStore.add(pathStack, newIndex, this.state.currentBook.totalPages, { displayName: name });
           }
         } else {
           // 非单文件模式，更新 book 的历史记录
-          const { historyStore } = await import('$lib/stores/history.svelte');
-          historyStore.update(this.state.currentBook.path, newIndex, this.state.currentBook.totalPages);
+          const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
+          const pathStack = this.buildPathStack();
+          unifiedHistoryStore.updateIndex(pathStack, newIndex, this.state.currentBook.totalPages);
         }
       }
       return newIndex;
@@ -584,8 +592,9 @@ class BookStore {
       this.syncAppStateBookSlice('user');
       await this.syncInfoPanelBookInfo();
 
-      const { historyStore } = await import('$lib/stores/history.svelte');
-      historyStore.update(updatedBook.path, updatedBook.currentPage, updatedBook.totalPages);
+      const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
+      const pathStack = this.buildPathStack();
+      unifiedHistoryStore.updateIndex(pathStack, updatedBook.currentPage, updatedBook.totalPages);
     } catch (err) {
       console.error('❌ Error setting sort mode:', err);
       this.state.error = String(err);

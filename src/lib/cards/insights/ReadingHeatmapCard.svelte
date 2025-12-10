@@ -2,14 +2,14 @@
 /**
  * 阅读时段热力图卡片
  */
-import { historyStore, type HistoryEntry } from '$lib/stores/history.svelte';
+import { unifiedHistoryStore, type UnifiedHistoryEntry } from '$lib/stores/unifiedHistory.svelte';
 import ReadingHeatmapChart, { type HeatmapCell } from '$lib/components/panels/insights/ReadingHeatmapChart.svelte';
 
-let historyEntries = $state<HistoryEntry[]>([]);
+let historyEntries = $state<UnifiedHistoryEntry[]>([]);
 const weekdayLabelMap = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
 $effect(() => {
-	const unsubscribe = historyStore.subscribe((value) => {
+	const unsubscribe = unifiedHistoryStore.subscribe((value) => {
 		historyEntries = value ?? [];
 	});
 	return unsubscribe;

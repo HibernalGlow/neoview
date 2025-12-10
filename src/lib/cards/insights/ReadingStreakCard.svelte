@@ -2,14 +2,14 @@
 /**
  * 连续阅读 Streak 卡片
  */
-import { historyStore, type HistoryEntry } from '$lib/stores/history.svelte';
+import { unifiedHistoryStore, type UnifiedHistoryEntry } from '$lib/stores/unifiedHistory.svelte';
 import ReadingStreakChart, { type StreakPoint } from '$lib/components/panels/insights/ReadingStreakChart.svelte';
 
-let historyEntries = $state<HistoryEntry[]>([]);
+let historyEntries = $state<UnifiedHistoryEntry[]>([]);
 const DAY = 24 * 60 * 60 * 1000;
 
 $effect(() => {
-	const unsubscribe = historyStore.subscribe((value) => {
+	const unsubscribe = unifiedHistoryStore.subscribe((value) => {
 		historyEntries = value ?? [];
 	});
 	return unsubscribe;

@@ -7,7 +7,7 @@ import { keyBindingsStore } from './keybindings.svelte';
 import { emmMetadataStore } from './emmMetadata.svelte';
 import { fileBrowserStore } from './fileBrowser.svelte';
 import { bookmarkStore } from './bookmark.svelte';
-import { historyStore } from './history.svelte';
+import { unifiedHistoryStore } from './unifiedHistory.svelte';
 import { historySettingsStore } from './historySettings.svelte';
 import { applyRuntimeThemeFromStorage } from '$lib/utils/runtimeTheme';
 import type { RuntimeThemeMode, RuntimeThemePayload } from '$lib/utils/runtimeTheme';
@@ -370,7 +370,7 @@ class SettingsManager {
             }
 
             try {
-                extended.history = historyStore.getAll();
+                extended.history = unifiedHistoryStore.getAll();
             } catch (error) {
                 console.error('导出历史记录失败:', error);
             }
@@ -633,11 +633,18 @@ class SettingsManager {
         if (modules.history && extended.history && Array.isArray(extended.history)) {
             try {
                 if (strategy === 'overwrite') {
-                    historyStore.clear();
+                    unifiedHistoryStore.clear();
                 }
                 for (const h of extended.history as any[]) {
                     try {
-                        historyStore.add(h.path, h.name, h.currentPage, h.totalPages, h.thumbnail);
+                        // 兼容旧格式和新格式
+                        const pathStack = h.pathStack ?? [{ path: h.path }];
+                        const currentIndex = h.currentIndex ?? h.currentPage ?? 0;
+                        const totalItems = h.totalItems ?? h.totalPages ?? 0;
+                        unifiedHistoryStore.add(pathStack, currentIndex, totalItems, {
+                            displayName: h.displayName ?? h.name,
+                            thumbnail: h.thumbnail,
+                        });
                     } catch (error) {
                         console.error('导入单条历史失败:', error, h);
                     }

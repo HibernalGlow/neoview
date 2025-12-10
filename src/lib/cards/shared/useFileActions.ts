@@ -9,7 +9,7 @@ import { ClipboardAPI } from '$lib/api/clipboard';
 import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
 import { bookStore } from '$lib/stores/book.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
-import { historyStore } from '$lib/stores/history.svelte';
+import { unifiedHistoryStore } from '$lib/stores/unifiedHistory.svelte';
 import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 import { folderTabActions, isVirtualPath } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
 import { externalNavigationRequest } from '$lib/components/panels/folderPanel/stores/folderPanelStore.svelte';
@@ -196,8 +196,8 @@ export function createItemOpenActions(
 		try {
 			const isArchive = await FileSystemAPI.isSupportedArchive(item.path);
 			if (isArchive) {
-				const historyEntry = historyStore.findByPath(item.path);
-				const initialPage = historyEntry?.currentPage ?? 0;
+				const historyEntry = unifiedHistoryStore.findByPath(item.path);
+				const initialPage = historyEntry?.currentIndex ?? 0;
 				await bookStore.openBook(item.path, { initialPage });
 			} else if (isVideoPath(item.path) || item.isImage || isImagePath(item.path)) {
 				const lastSep = Math.max(item.path.lastIndexOf('/'), item.path.lastIndexOf('\\'));
@@ -211,10 +211,10 @@ export function createItemOpenActions(
 				// 使用 pathStack 精确记录历史
 				const pathStack = bookStore.buildPathStack();
 				console.log('📝 [History] Adding video/image history with pathStack:', { pathStack, name, currentPage, totalPages });
-				historyStore.addWithPathStack(pathStack, name, currentPage, totalPages);
+				unifiedHistoryStore.add(pathStack, currentPage, totalPages, { displayName: name });
 			} else {
-				const historyEntry = historyStore.findByPath(item.path);
-				const initialPage = historyEntry?.currentPage ?? 0;
+				const historyEntry = unifiedHistoryStore.findByPath(item.path);
+				const initialPage = historyEntry?.currentIndex ?? 0;
 				await bookStore.openBook(item.path, { initialPage });
 			}
 		} catch (err) {

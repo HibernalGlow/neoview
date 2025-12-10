@@ -31,6 +31,7 @@ let triggerMode = $state<'button' | 'hotkey' | 'wakeword' | 'always'>('button');
 let minConfidence = $state(0.6);
 let showFeedback = $state(true);
 let playSound = $state(true);
+let continuous = $state(false);
 
 // 统计数据
 let totalCommands = $state(0);
@@ -146,6 +147,7 @@ function syncState() {
 	minConfidence = voiceStore.config.minConfidence;
 	showFeedback = voiceStore.config.showFeedback;
 	playSound = voiceStore.config.playSound;
+	continuous = voiceStore.config.continuous;
 	
 	// 统计
 	totalCommands = voiceStore.stats.totalCommands;
@@ -234,6 +236,20 @@ function togglePlaySound() {
 	voiceStore.updateConfig({ playSound });
 }
 
+function toggleContinuous() {
+	continuous = !continuous;
+	voiceStore.updateConfig({ continuous });
+	
+	// 如果正在监听，需要重启才能生效
+	if (isListening) {
+		toast.info('重启监听以应用持续模式');
+		voiceStore.stopListening();
+		setTimeout(() => {
+			if (isEnabled) voiceStore.startListening();
+		}, 500);
+	}
+}
+
 function resetStats() {
 	voiceStore.resetStats();
 	syncState();
@@ -303,6 +319,11 @@ const statusText = {
 						</span>
 						<span class="text-sm font-medium">{statusText[status]}</span>
 					</div>
+				</div>
+				
+				<div class="flex items-center gap-2">
+					<Label class="text-xs cursor-pointer" for="continuous-mode">持续模式</Label>
+					<Switch id="continuous-mode" checked={continuous} onCheckedChange={toggleContinuous} class="scale-75 origin-right" />
 				</div>
 				
 				<!-- 监听按钮 -->

@@ -49,11 +49,25 @@
   let toasts = $state<ToastItem[]>([]);
   let toastIdCounter = 0;
 
+  // 去重机制
+  let lastToastKey = '';
+  let lastToastTime = 0;
+  const TOAST_DEBOUNCE_MS = 500;
+
   function addToast(toast: ToastEventDetail) {
     const cfg = getNotificationConfig();
     if (cfg.messageStyle === 'none') {
       return;
     }
+
+    // 去重检查：相同内容在短时间内不重复显示
+    const toastKey = `${toast.type}:${toast.title}:${toast.description || ''}`;
+    const now = Date.now();
+    if (toastKey === lastToastKey && now - lastToastTime < TOAST_DEBOUNCE_MS) {
+      return;
+    }
+    lastToastKey = toastKey;
+    lastToastTime = now;
 
     const id = `toast-${toastIdCounter++}`;
     const style: ToastStyle = (cfg.messageStyle as ToastStyle) ?? 'normal';

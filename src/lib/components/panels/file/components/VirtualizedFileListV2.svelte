@@ -465,7 +465,7 @@
 									{isDeleteMode}
 									showReadMark={!!historyEntry}
 									showBookmarkMark={true}
-									showSizeAndModified={true}
+									showSizeAndModified={!currentPath.startsWith('virtual://')}
 									currentPage={historyEntry?.currentIndex}
 									totalPages={historyEntry?.totalItems}
 									videoPosition={historyEntry?.videoProgress?.position}

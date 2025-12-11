@@ -170,6 +170,13 @@ impl ThumbnailDb {
             println!("✅ 添加 ai_translation 列");
         }
         
+        // 检查并添加 manual_tags 列 (v2.4 新增)
+        let has_manual_tags: bool = conn.prepare("SELECT manual_tags FROM thumbs LIMIT 1").is_ok();
+        if !has_manual_tags {
+            conn.execute("ALTER TABLE thumbs ADD COLUMN manual_tags TEXT", [])?;
+            println!("✅ 添加 manual_tags 列");
+        }
+        
         // 更新版本号
         Self::set_db_version(conn, target_version)?;
         println!("✅ 数据库版本更新为 {}", target_version);
@@ -178,7 +185,7 @@ impl ThumbnailDb {
     }
 
     /// 数据库版本常量
-    const DB_VERSION: &'static str = "2.3";
+    const DB_VERSION: &'static str = "2.4";
 
     /// 获取当前数据库版本
     fn get_db_version(conn: &Connection) -> Option<String> {

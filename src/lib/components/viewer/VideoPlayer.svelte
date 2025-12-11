@@ -83,6 +83,14 @@
 	let hideControlsTimeout: ReturnType<typeof setTimeout> | null = null;
 	let videoUrl = $state<string>(src || '');
 
+	// 进度条预览状态
+	let progressBarRef = $state<HTMLDivElement | null>(null);
+	let previewVisible = $state(false);
+	let previewTime = $state(0);
+	let previewX = $state(0);
+	let previewCanvas = $state<HTMLCanvasElement | null>(null);
+	let previewGenerating = $state(false);
+
 	// 字幕设置 - 从 settings 读取初始值
 	let showSubtitleSettings = $state(false);
 	let subtitleFontSize = $state(settings.subtitle?.fontSize ?? 1.0); // em 单位
@@ -260,6 +268,75 @@
 		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
 		const pos = (e.clientX - rect.left) / rect.width;
 		videoElement.currentTime = pos * duration;
+	}
+
+	// 进度条悬浮预览
+	function handleProgressHover(e: MouseEvent) {
+		if (!videoElement || !duration) return;
+		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+		previewTime = pos * duration;
+		previewX = e.clientX - rect.left;
+		previewVisible = true;
+		
+		// 生成预览帧
+		generatePreviewFrame(previewTime);
+	}
+
+	function handleProgressLeave() {
+		previewVisible = false;
+	}
+
+	// 生成预览帧缩略图
+	let previewDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+	function generatePreviewFrame(time: number) {
+		if (!videoElement || !previewCanvas) return;
+		
+		// 防抖，避免频繁生成
+		if (previewDebounceTimer) {
+			clearTimeout(previewDebounceTimer);
+		}
+		
+		previewDebounceTimer = setTimeout(() => {
+			if (!videoElement || !previewCanvas || previewGenerating) return;
+			
+			previewGenerating = true;
+			
+			// 创建临时 video 元素来获取指定时间的帧
+			const tempVideo = document.createElement('video');
+			tempVideo.src = videoUrl;
+			tempVideo.crossOrigin = 'anonymous';
+			tempVideo.muted = true;
+			tempVideo.preload = 'metadata';
+			
+			const handleSeeked = () => {
+				try {
+					const ctx = previewCanvas?.getContext('2d');
+					if (ctx && previewCanvas) {
+						// 计算缩略图尺寸，保持宽高比
+						const videoRatio = tempVideo.videoWidth / tempVideo.videoHeight;
+						const canvasWidth = 160;
+						const canvasHeight = canvasWidth / videoRatio;
+						previewCanvas.width = canvasWidth;
+						previewCanvas.height = canvasHeight;
+						ctx.drawImage(tempVideo, 0, 0, canvasWidth, canvasHeight);
+					}
+				} catch (err) {
+					console.warn('生成预览帧失败:', err);
+				} finally {
+					previewGenerating = false;
+					tempVideo.removeEventListener('seeked', handleSeeked);
+					tempVideo.src = '';
+				}
+			};
+			
+			tempVideo.addEventListener('seeked', handleSeeked);
+			tempVideo.addEventListener('error', () => {
+				previewGenerating = false;
+			});
+			
+			tempVideo.currentTime = time;
+		}, 50); // 50ms 防抖
 	}
 
 	function changeVolume(e: Event) {
@@ -486,14 +563,39 @@
 			<!-- 进度条 -->
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<div
-				class="progress-bar mb-4 h-0.5 w-full cursor-pointer rounded-full bg-primary/40 transition-all hover:h-1"
+				bind:this={progressBarRef}
+				class="progress-bar relative mb-4 h-1 w-full cursor-pointer rounded-full bg-primary/40 transition-all hover:h-1.5"
 				onclick={seek}
+				onmousemove={handleProgressHover}
+				onmouseleave={handleProgressLeave}
 				role="presentation"
 			>
 				<div
 					class="progress-fill h-full rounded-full bg-primary"
 					style="width: {duration > 0 ? (currentTime / duration) * 100 : 0}%"
 				></div>
+				
+				<!-- 进度条预览提示 -->
+				{#if previewVisible && duration > 0}
+					<div
+						class="preview-tooltip absolute bottom-full mb-2 -translate-x-1/2 transform"
+						style="left: {Math.max(80, Math.min(previewX, (progressBarRef?.offsetWidth ?? 0) - 80))}px;"
+					>
+						<!-- 预览缩略图 -->
+						<div class="preview-frame mb-1 overflow-hidden rounded border border-white/20 bg-black shadow-lg">
+							<canvas
+								bind:this={previewCanvas}
+								class="preview-canvas"
+								width="160"
+								height="90"
+							></canvas>
+						</div>
+						<!-- 时间显示 -->
+						<div class="preview-time rounded bg-black/80 px-2 py-0.5 text-center text-xs text-white">
+							{formatTime(previewTime)}
+						</div>
+					</div>
+				{/if}
 			</div>
 
 			<!-- 控制按钮 -->
@@ -825,6 +927,19 @@
 
 	.progress-fill {
 		pointer-events: none;
+	}
+
+	.preview-tooltip {
+		pointer-events: none;
+		z-index: 100;
+	}
+
+	.preview-canvas {
+		display: block;
+		width: 160px;
+		height: auto;
+		min-height: 60px;
+		background: #000;
 	}
 
 	/* 字幕样式 - 使用 CSS 变量实现动态样式 */

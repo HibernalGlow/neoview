@@ -9,6 +9,7 @@
 	import { videoStore } from '$lib/stores/video.svelte';
 	import { unifiedHistoryStore } from '$lib/stores/unifiedHistory.svelte';
 	import { bookStore } from '$lib/stores';
+	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { isVideoFile, getVideoMimeType } from '$lib/utils/videoUtils';
 	import {
 		getPossibleSubtitleNames,
@@ -233,17 +234,21 @@
 		onEnded();
 	}
 
-	// 监听 page 变化，加载视频
+	// 监听 page 变化，加载视频并切换上下文
 	$effect(() => {
 		// 使用与 StackView 一致的检测逻辑：优先 name，然后 innerPath
 		const filename = page?.name || page?.innerPath || '';
 		const currentPage = page;
 		if (currentPage && filename && isVideoFile(filename)) {
+			// 切换到视频上下文
+			keyBindingsStore.setContexts(['global', 'videoPlayer']);
 			// 使用 untrack 防止 loadVideo 内部的状态修改触发循环
 			untrack(() => {
 				loadVideo(currentPage);
 			});
 		} else {
+			// 切换回图片上下文
+			keyBindingsStore.setContexts(['global', 'viewer']);
 			untrack(() => {
 				clearVideoUrl();
 			});

@@ -856,46 +856,14 @@ class KeyBindingsStore {
 	}
 
 	// 根据按键组合字符串查找操作（支持包含修饰键的组合，例如 Ctrl+ArrowLeft）
+	// 使用上下文感知查找
 	findActionByKeyCombo(keyCombo: string): string | null {
-		// 归一化大小写，并兼容 ArrowLeft/← 等不同表示形式
-		const normalize = (value: string) =>
-			value
-				.toLowerCase()
-				.replace(/←/g, 'arrowleft')
-				.replace(/→/g, 'arrowright')
-				.replace(/↑/g, 'arrowup')
-				.replace(/↓/g, 'arrowdown');
-		const normalized = normalize(keyCombo);
-		for (const binding of this.bindings) {
-			if (!binding.bindings) continue;
-			const keyBinding = binding.bindings.find(
-				(b) =>
-					b.type === 'keyboard' &&
-					(typeof (b as KeyBinding).key === 'string' &&
-						normalize((b as KeyBinding).key) === normalized)
-			);
-			if (keyBinding) {
-				return binding.action;
-			}
-		}
-		return null;
+		return this.findActionByKeyInContext(keyCombo);
 	}
 
-	// 根据鼠标手势查找操作
+	// 根据鼠标手势查找操作（上下文感知）
 	findActionByMouseGesture(gesture: string, button: 'left' | 'right' | 'middle' = 'left', action?: string): string | null {
-		for (const binding of this.bindings) {
-			if (!binding.bindings) continue;
-			const mouseBinding = binding.bindings.find(
-				b => b.type === 'mouse' &&
-					(b as MouseGesture).gesture === gesture &&
-					((b as MouseGesture).button || 'left') === button &&
-					(!action || (b as MouseGesture).action === action)
-			);
-			if (mouseBinding) {
-				return binding.action;
-			}
-		}
-		return null;
+		return this.findActionByMouseGestureInContext(gesture, button, action);
 	}
 
 	// 根据鼠标滚轮查找操作
@@ -922,21 +890,9 @@ class KeyBindingsStore {
 		return null;
 	}
 
-	// 根据区域点击查找操作
+	// 根据区域点击查找操作（上下文感知）
 	findActionByAreaClick(area: ViewArea, button: 'left' | 'right' | 'middle' = 'left', action: 'click' | 'double-click' | 'press' = 'click'): string | null {
-		for (const binding of this.bindings) {
-			if (!binding.bindings) continue;
-			const areaBinding = binding.bindings.find(
-				b => b.type === 'area' &&
-					(b as AreaClick).area === area &&
-					((b as AreaClick).button || 'left') === button &&
-					((b as AreaClick).action || 'click') === action
-			);
-			if (areaBinding) {
-				return binding.action;
-			}
-		}
-		return null;
+		return this.findActionByAreaClickInContext(area, button, action);
 	}
 
 	// 根据坐标计算点击区域

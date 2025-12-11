@@ -277,12 +277,43 @@ export class StackImageLoader {
 
   /**
    * 预加载范围
+   * 【性能优化】使用 loadPage 预加载，确保尺寸被缓存
    */
   async preloadRange(centerIndex: number, range: number): Promise<void> {
-    await this.core.smartPreload({
-      preloadSize: range,
-      isDoublePage: false,
-      forwardRatio: 0.7,
+    const book = bookStore.currentBook;
+    if (!book) return;
+
+    const totalPages = book.pages.length;
+    const forwardCount = Math.ceil(range * 0.7);
+    const backwardCount = range - forwardCount;
+
+    // 计算需要预加载的页面索引
+    const pagesToPreload: number[] = [];
+    
+    // 前向预加载
+    for (let i = 1; i <= forwardCount; i++) {
+      const idx = centerIndex + i;
+      if (idx < totalPages && !this.hasCache(idx)) {
+        pagesToPreload.push(idx);
+      }
+    }
+    
+    // 后向预加载
+    for (let i = 1; i <= backwardCount; i++) {
+      const idx = centerIndex - i;
+      if (idx >= 0 && !this.hasCache(idx)) {
+        pagesToPreload.push(idx);
+      }
+    }
+
+    // 并行预加载（使用 loadPage 确保尺寸被缓存）
+    const loadPromises = pagesToPreload.map(idx => 
+      this.loadPage(idx, 5).catch(() => null)
+    );
+    
+    // 不阻塞，后台完成
+    Promise.allSettled(loadPromises).then(() => {
+      console.log(`✅ 预加载完成: ${pagesToPreload.length} 页（含尺寸缓存）`);
     });
   }
 

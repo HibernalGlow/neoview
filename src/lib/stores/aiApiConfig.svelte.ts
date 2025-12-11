@@ -1,24 +1,33 @@
 /**
  * AI API 配置存储
  * 共享给 AI 标签推断、翻译等功能使用
+ * 格式与 EMM 的 api_config.json 兼容
  */
 import { writable, get } from 'svelte/store';
 
-// API 提供商配置
+// API 提供商配置 - 与 EMM 格式兼容
 export interface AiProvider {
-	id: string;
 	name: string;
+	provider: 'openai' | 'gemini';  // API 类型
 	baseUrl: string;
 	apiKey: string;
 	model: string;
-	temperature?: number;
-	maxTokens?: number;
+	temperature: number;
+	maxTokens: number;
 }
 
-// 预设提供商
-export const AI_PROVIDER_PRESETS: Record<string, Omit<AiProvider, 'id' | 'apiKey'>> = {
+// JSON 配置格式 - 与 EMM 完全兼容
+export interface AiApiConfigJson {
+	providers: AiProvider[];
+	activeIndex: number;
+	comment?: string;
+}
+
+// 预设提供商模板
+export const AI_PROVIDER_PRESETS: Record<string, Omit<AiProvider, 'apiKey'>> = {
 	deepseek: {
 		name: 'DeepSeek',
+		provider: 'openai',
 		baseUrl: 'https://api.deepseek.com/v1/chat/completions',
 		model: 'deepseek-chat',
 		temperature: 0.3,
@@ -26,6 +35,7 @@ export const AI_PROVIDER_PRESETS: Record<string, Omit<AiProvider, 'id' | 'apiKey
 	},
 	openai: {
 		name: 'OpenAI',
+		provider: 'openai',
 		baseUrl: 'https://api.openai.com/v1/chat/completions',
 		model: 'gpt-3.5-turbo',
 		temperature: 0.3,
@@ -33,6 +43,7 @@ export const AI_PROVIDER_PRESETS: Record<string, Omit<AiProvider, 'id' | 'apiKey
 	},
 	ollama: {
 		name: 'Ollama (本地)',
+		provider: 'openai',
 		baseUrl: 'http://localhost:11434/v1/chat/completions',
 		model: 'qwen2.5:7b',
 		temperature: 0.3,
@@ -40,6 +51,7 @@ export const AI_PROVIDER_PRESETS: Record<string, Omit<AiProvider, 'id' | 'apiKey
 	},
 	gemini: {
 		name: 'Google Gemini',
+		provider: 'gemini',
 		baseUrl: 'https://generativelanguage.googleapis.com',
 		model: 'gemini-1.5-flash',
 		temperature: 0.3,
@@ -47,6 +59,7 @@ export const AI_PROVIDER_PRESETS: Record<string, Omit<AiProvider, 'id' | 'apiKey
 	},
 	qwen: {
 		name: '通义千问',
+		provider: 'openai',
 		baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
 		model: 'qwen-turbo',
 		temperature: 0.3,
@@ -54,6 +67,7 @@ export const AI_PROVIDER_PRESETS: Record<string, Omit<AiProvider, 'id' | 'apiKey
 	},
 	siliconflow: {
 		name: 'SiliconFlow',
+		provider: 'openai',
 		baseUrl: 'https://api.siliconflow.cn/v1/chat/completions',
 		model: 'Qwen/Qwen2.5-7B-Instruct',
 		temperature: 0.3,
@@ -61,10 +75,10 @@ export const AI_PROVIDER_PRESETS: Record<string, Omit<AiProvider, 'id' | 'apiKey
 	}
 };
 
-// 配置状态
+// 内部状态
 export interface AiApiConfigState {
 	providers: AiProvider[];
-	activeProviderId: string | null;
+	activeIndex: number;
 }
 
 const STORAGE_KEY = 'neoview-ai-api-config';
@@ -72,7 +86,7 @@ const STORAGE_KEY = 'neoview-ai-api-config';
 // 默认状态
 const defaultState: AiApiConfigState = {
 	providers: [],
-	activeProviderId: null
+	activeIndex: 0
 };
 
 // 从 localStorage 加载
@@ -80,7 +94,12 @@ function loadFromStorage(): AiApiConfigState {
 	try {
 		const saved = localStorage.getItem(STORAGE_KEY);
 		if (saved) {
-			return JSON.parse(saved);
+			const parsed = JSON.parse(saved);
+			// 兼容旧格式
+			if (parsed.activeProviderId !== undefined) {
+				return { providers: parsed.providers || [], activeIndex: 0 };
+			}
+			return parsed;
 		}
 	} catch (e) {
 		console.error('[aiApiConfig] 加载配置失败:', e);
@@ -99,7 +118,7 @@ function saveToStorage(state: AiApiConfigState) {
 
 // 创建 store
 function createAiApiConfigStore() {
-	const { subscribe, set, update } = writable<AiApiConfigState>(loadFromStorage());
+	const { subscribe, update } = writable<AiApiConfigState>(loadFromStorage());
 
 	return {
 		subscribe,
@@ -113,7 +132,7 @@ function createAiApiConfigStore() {
 				};
 				// 如果是第一个，自动设为活动
 				if (newState.providers.length === 1) {
-					newState.activeProviderId = provider.id;
+					newState.activeIndex = 0;
 				}
 				saveToStorage(newState);
 				return newState;
@@ -126,20 +145,19 @@ function createAiApiConfigStore() {
 			if (!preset) return;
 
 			const provider: AiProvider = {
-				id: `${presetId}-${Date.now()}`,
 				...preset,
 				apiKey
 			};
 			this.addProvider(provider);
 		},
 
-		// 更新提供商
-		updateProvider(id: string, updates: Partial<AiProvider>) {
+		// 更新提供商（按索引）
+		updateProvider(index: number, updates: Partial<AiProvider>) {
 			update(state => {
 				const newState = {
 					...state,
-					providers: state.providers.map(p => 
-						p.id === id ? { ...p, ...updates } : p
+					providers: state.providers.map((p, i) => 
+						i === index ? { ...p, ...updates } : p
 					)
 				};
 				saveToStorage(newState);
@@ -147,26 +165,29 @@ function createAiApiConfigStore() {
 			});
 		},
 
-		// 删除提供商
-		removeProvider(id: string) {
+		// 删除提供商（按索引）
+		removeProvider(index: number) {
 			update(state => {
-				const newProviders = state.providers.filter(p => p.id !== id);
+				const newProviders = state.providers.filter((_, i) => i !== index);
+				let newActiveIndex = state.activeIndex;
+				if (index === state.activeIndex) {
+					newActiveIndex = Math.min(0, newProviders.length - 1);
+				} else if (index < state.activeIndex) {
+					newActiveIndex = state.activeIndex - 1;
+				}
 				const newState = {
-					...state,
 					providers: newProviders,
-					activeProviderId: state.activeProviderId === id 
-						? (newProviders[0]?.id || null)
-						: state.activeProviderId
+					activeIndex: Math.max(0, newActiveIndex)
 				};
 				saveToStorage(newState);
 				return newState;
 			});
 		},
 
-		// 设置活动提供商
-		setActiveProvider(id: string | null) {
+		// 设置活动提供商（按索引）
+		setActiveIndex(index: number) {
 			update(state => {
-				const newState = { ...state, activeProviderId: id };
+				const newState = { ...state, activeIndex: Math.max(0, Math.min(index, state.providers.length - 1)) };
 				saveToStorage(newState);
 				return newState;
 			});
@@ -175,8 +196,30 @@ function createAiApiConfigStore() {
 		// 获取活动提供商
 		getActiveProvider(): AiProvider | null {
 			const state = get({ subscribe });
-			if (!state.activeProviderId) return null;
-			return state.providers.find(p => p.id === state.activeProviderId) || null;
+			if (state.providers.length === 0) return null;
+			return state.providers[state.activeIndex] || state.providers[0] || null;
+		},
+
+		// 导出配置（EMM 兼容格式）
+		exportConfig(): AiApiConfigJson {
+			const state = get({ subscribe });
+			return {
+				providers: state.providers,
+				activeIndex: state.activeIndex,
+				comment: '翻译和 AI 标签推断的 API 配置。请填写正确的 API Key 并设置 activeIndex 选择要使用的提供商。'
+			};
+		},
+
+		// 导入配置（EMM 兼容格式）
+		importConfig(config: AiApiConfigJson) {
+			update(() => {
+				const newState: AiApiConfigState = {
+					providers: config.providers || [],
+					activeIndex: config.activeIndex || 0
+				};
+				saveToStorage(newState);
+				return newState;
+			});
 		},
 
 		// 测试 API 连接

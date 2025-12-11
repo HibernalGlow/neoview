@@ -2,20 +2,21 @@
 /**
  * AiApiConfigCard - AI API 配置卡片
  * 统一管理 AI 提供商配置，供 AI 标签、翻译等功能使用
+ * 支持导入/导出，与 EMM 的 api_config.json 格式兼容
  */
-import { Settings, Plus, Trash2, Check, X, Loader2, ChevronDown, ChevronUp } from '@lucide/svelte';
+import { Settings, Plus, Trash2, Check, X, Loader2, ChevronDown, ChevronUp, Download, Upload } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import { Input } from '$lib/components/ui/input';
 import * as Select from '$lib/components/ui/select';
-import { aiApiConfigStore, AI_PROVIDER_PRESETS, type AiProvider } from '$lib/stores/aiApiConfig.svelte';
+import { aiApiConfigStore, AI_PROVIDER_PRESETS, type AiProvider, type AiApiConfigJson } from '$lib/stores/aiApiConfig.svelte';
 
 // 状态
 let providers = $state<AiProvider[]>([]);
-let activeProviderId = $state<string | null>(null);
+let activeIndex = $state(0);
 let showAddForm = $state(false);
-let testingId = $state<string | null>(null);
+let testingIndex = $state<number | null>(null);
 let testResult = $state<{ success: boolean; message: string } | null>(null);
-let editingId = $state<string | null>(null);
+let editingIndex = $state<number | null>(null);
 
 // 新提供商表单
 let newPreset = $state('deepseek');
@@ -25,7 +26,7 @@ let newApiKey = $state('');
 $effect(() => {
 	const unsub = aiApiConfigStore.subscribe(state => {
 		providers = state.providers;
-		activeProviderId = state.activeProviderId;
+		activeIndex = state.activeIndex;
 	});
 	return unsub;
 });
@@ -39,36 +40,70 @@ function handleAdd() {
 }
 
 // 删除提供商
-function handleRemove(id: string) {
-	aiApiConfigStore.removeProvider(id);
+function handleRemove(index: number) {
+	aiApiConfigStore.removeProvider(index);
+	if (editingIndex === index) editingIndex = null;
 }
 
 // 设置活动提供商
-function handleSetActive(id: string) {
-	aiApiConfigStore.setActiveProvider(id);
+function handleSetActive(index: number) {
+	aiApiConfigStore.setActiveIndex(index);
 }
 
 // 测试连接
-async function handleTest(provider: AiProvider) {
-	testingId = provider.id;
+async function handleTest(index: number, provider: AiProvider) {
+	testingIndex = index;
 	testResult = null;
 	
 	const result = await aiApiConfigStore.testConnection(provider);
 	testResult = result;
-	testingId = null;
+	testingIndex = null;
 	
-	// 3秒后清除结果
 	setTimeout(() => { testResult = null; }, 3000);
 }
 
-// 更新 API Key
-function handleUpdateApiKey(id: string, apiKey: string) {
-	aiApiConfigStore.updateProvider(id, { apiKey });
+// 更新提供商字段
+function handleUpdate(index: number, field: keyof AiProvider, value: string) {
+	aiApiConfigStore.updateProvider(index, { [field]: value });
 }
 
 // 切换编辑
-function toggleEdit(id: string) {
-	editingId = editingId === id ? null : id;
+function toggleEdit(index: number) {
+	editingIndex = editingIndex === index ? null : index;
+}
+
+// 导出配置
+function handleExport() {
+	const config = aiApiConfigStore.exportConfig();
+	const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+	const url = URL.createObjectURL(blob);
+	const a = document.createElement('a');
+	a.href = url;
+	a.download = 'api_config.json';
+	a.click();
+	URL.revokeObjectURL(url);
+}
+
+// 导入配置
+function handleImport() {
+	const input = document.createElement('input');
+	input.type = 'file';
+	input.accept = '.json';
+	input.onchange = async (e) => {
+		const file = (e.target as HTMLInputElement).files?.[0];
+		if (!file) return;
+		try {
+			const text = await file.text();
+			const config: AiApiConfigJson = JSON.parse(text);
+			aiApiConfigStore.importConfig(config);
+			testResult = { success: true, message: `导入成功: ${config.providers?.length || 0} 个提供商` };
+			setTimeout(() => { testResult = null; }, 3000);
+		} catch (err) {
+			testResult = { success: false, message: `导入失败: ${err instanceof Error ? err.message : '无效的 JSON'}` };
+			setTimeout(() => { testResult = null; }, 3000);
+		}
+	};
+	input.click();
 }
 </script>
 
@@ -79,18 +114,21 @@ function toggleEdit(id: string) {
 			<Settings class="h-4 w-4 text-blue-500" />
 			<span class="text-sm font-medium">AI API 配置</span>
 		</div>
-		<Button 
-			variant="ghost" 
-			size="icon" 
-			class="h-6 w-6"
-			onclick={() => { showAddForm = !showAddForm; }}
-		>
-			{#if showAddForm}
-				<X class="h-3.5 w-3.5" />
-			{:else}
-				<Plus class="h-3.5 w-3.5" />
-			{/if}
-		</Button>
+		<div class="flex items-center gap-1">
+			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={handleImport} title="导入配置">
+				<Upload class="h-3.5 w-3.5" />
+			</Button>
+			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={handleExport} title="导出配置" disabled={providers.length === 0}>
+				<Download class="h-3.5 w-3.5" />
+			</Button>
+			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={() => { showAddForm = !showAddForm; }} title="添加提供商">
+				{#if showAddForm}
+					<X class="h-3.5 w-3.5" />
+				{:else}
+					<Plus class="h-3.5 w-3.5" />
+				{/if}
+			</Button>
+		</div>
 	</div>
 
 	<!-- 添加表单 -->
@@ -127,14 +165,14 @@ function toggleEdit(id: string) {
 	{#if providers.length === 0}
 		<div class="text-xs text-muted-foreground text-center py-4">
 			<p>暂无配置</p>
-			<p class="mt-1">点击 + 添加 AI 提供商</p>
+			<p class="mt-1">点击 + 添加提供商，或导入 api_config.json</p>
 		</div>
 	{:else}
 		<div class="space-y-2">
-			{#each providers as provider (provider.id)}
-				{@const isActive = provider.id === activeProviderId}
-				{@const isEditing = provider.id === editingId}
-				{@const isTesting = provider.id === testingId}
+			{#each providers as provider, index (index)}
+				{@const isActive = index === activeIndex}
+				{@const isEditing = index === editingIndex}
+				{@const isTesting = index === testingIndex}
 				
 				<div class="rounded border {isActive ? 'border-primary bg-primary/5' : 'border-border'}">
 					<!-- 头部 -->
@@ -142,7 +180,7 @@ function toggleEdit(id: string) {
 						<button
 							type="button"
 							class="flex-1 flex items-center gap-2 text-left"
-							onclick={() => handleSetActive(provider.id)}
+							onclick={() => handleSetActive(index)}
 						>
 							<div class="w-2 h-2 rounded-full {isActive ? 'bg-green-500' : 'bg-muted-foreground/30'}"></div>
 							<span class="text-xs font-medium">{provider.name}</span>
@@ -152,7 +190,7 @@ function toggleEdit(id: string) {
 							variant="ghost"
 							size="icon"
 							class="h-6 w-6"
-							onclick={() => toggleEdit(provider.id)}
+							onclick={() => toggleEdit(index)}
 						>
 							{#if isEditing}
 								<ChevronUp class="h-3 w-3" />
@@ -170,19 +208,19 @@ function toggleEdit(id: string) {
 								placeholder="API Key"
 								type="password"
 								class="h-7 text-xs mt-2"
-								oninput={(e) => handleUpdateApiKey(provider.id, (e.target as HTMLInputElement).value)}
+								oninput={(e) => handleUpdate(index, 'apiKey', (e.target as HTMLInputElement).value)}
 							/>
 							<Input
 								value={provider.baseUrl}
 								placeholder="API URL"
 								class="h-7 text-xs"
-								oninput={(e) => aiApiConfigStore.updateProvider(provider.id, { baseUrl: (e.target as HTMLInputElement).value })}
+								oninput={(e) => handleUpdate(index, 'baseUrl', (e.target as HTMLInputElement).value)}
 							/>
 							<Input
 								value={provider.model}
 								placeholder="模型"
 								class="h-7 text-xs"
-								oninput={(e) => aiApiConfigStore.updateProvider(provider.id, { model: (e.target as HTMLInputElement).value })}
+								oninput={(e) => handleUpdate(index, 'model', (e.target as HTMLInputElement).value)}
 							/>
 							<div class="flex gap-2">
 								<Button
@@ -190,7 +228,7 @@ function toggleEdit(id: string) {
 									size="sm"
 									class="flex-1 h-7 text-xs"
 									disabled={isTesting}
-									onclick={() => handleTest(provider)}
+									onclick={() => handleTest(index, provider)}
 								>
 									{#if isTesting}
 										<Loader2 class="h-3 w-3 mr-1 animate-spin" />
@@ -203,7 +241,7 @@ function toggleEdit(id: string) {
 									variant="destructive"
 									size="icon"
 									class="h-7 w-7"
-									onclick={() => handleRemove(provider.id)}
+									onclick={() => handleRemove(index)}
 								>
 									<Trash2 class="h-3 w-3" />
 								</Button>
@@ -231,5 +269,6 @@ function toggleEdit(id: string) {
 	<div class="text-[10px] text-muted-foreground space-y-1">
 		<p>💡 推荐 DeepSeek (约¥0.001/次) 或 Ollama (免费本地)</p>
 		<p>🔗 此配置供 AI 标签推断、翻译等功能共享使用</p>
+		<p>📁 支持导入/导出 EMM 的 api_config.json 格式</p>
 	</div>
 </div>

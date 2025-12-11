@@ -29,7 +29,7 @@ let hasConfig = $state(false);
 // 订阅配置状态
 $effect(() => {
 	const unsub = aiApiConfigStore.subscribe(state => {
-		hasConfig = state.providers.length > 0 && state.activeProviderId !== null;
+		hasConfig = state.providers.length > 0;
 	});
 	return unsub;
 });

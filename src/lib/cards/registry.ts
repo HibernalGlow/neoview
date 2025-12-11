@@ -209,14 +209,14 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		id: 'aiTags',
 		title: 'AI 标签推断',
 		icon: Bot,
-		defaultPanel: 'properties',
+		defaultPanel: 'ai',
 		canHide: true,
 	},
 	'aiApiConfig': {
 		id: 'aiApiConfig',
 		title: 'AI API 配置',
 		icon: Settings,
-		defaultPanel: 'properties',
+		defaultPanel: 'ai',
 		canHide: true,
 	},
 	'bookSettings': {

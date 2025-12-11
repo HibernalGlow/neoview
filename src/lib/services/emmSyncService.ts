@@ -31,6 +31,10 @@ export interface EMMCacheEntry {
 
 	// 评分（从 EMM 数据库同步）
 	rating?: number;
+	// 手动评分（用户设置）
+	manual_rating?: number;
+	// 文件夹平均评分
+	folder_avg_rating?: number;
 
 	// 其他元数据
 	page_count?: number;
@@ -374,9 +378,12 @@ export async function syncEMMToThumbnailDb(): Promise<{ success: boolean; count:
 
 		// 处理单个路径的函数
 		const processPath = async (pathKey: string): Promise<[string, string, string | null] | null> => {
+			// 如果是压缩包内文件（包含 ::），提取压缩包路径
+			const archivePath = pathKey.includes('::') ? pathKey.split('::')[0] : pathKey;
+			
 			for (const dbPath of mainDbPaths) {
 				try {
-					const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, pathKey, translationDbPath);
+					const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, archivePath, translationDbPath);
 					if (metadata) {
 						const cacheEntry = convertToEMMCacheEntry(metadata, collectTags, translationDict, dbPath);
 						return [
@@ -521,9 +528,12 @@ export async function syncEMMIncremental(): Promise<{ success: boolean; count: n
 		};
 
 		const processPath = async (pathKey: string): Promise<[string, string, string | null] | null> => {
+			// 如果是压缩包内文件（包含 ::），提取压缩包路径
+			const archivePath = pathKey.includes('::') ? pathKey.split('::')[0] : pathKey;
+			
 			for (const dbPath of mainDbPaths) {
 				try {
-					const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, pathKey, translationDbPath);
+					const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, archivePath, translationDbPath);
 					if (metadata) {
 						const cacheEntry = convertToEMMCacheEntry(metadata, collectTags, translationDict, dbPath);
 						return [
@@ -649,8 +659,11 @@ export async function syncEMMForDirectory(
 			}));
 
 			try {
+				// 如果是压缩包内文件（包含 ::），提取压缩包路径
+				const archivePath = pathKey.includes('::') ? pathKey.split('::')[0] : pathKey;
+				
 				for (const dbPath of mainDbPaths) {
-					const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, pathKey, translationDbPath);
+					const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, archivePath, translationDbPath);
 					if (metadata) {
 						const cacheEntry = convertToEMMCacheEntry(metadata, collectTags, translationDict, dbPath);
 						entries.push([pathKey, JSON.stringify(cacheEntry)]);

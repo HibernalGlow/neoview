@@ -64,8 +64,8 @@ export class ImageLoaderCore {
 		this.blobCache = new BlobCache({
 			maxSizeBytes: (options.maxCacheSizeMB ?? 500) * 1024 * 1024
 		});
-		// 每个实例独立的队列，切书后旧队列任务不会执行到新实例
-		this.loadQueue = new LoadQueueManager(options.maxConcurrentLoads ?? 4);
+		// 【优化】提高默认并发数从 4 到 6，充分利用现代多核 CPU
+		this.loadQueue = new LoadQueueManager(options.maxConcurrentLoads ?? 6);
 	}
 	
 	/**

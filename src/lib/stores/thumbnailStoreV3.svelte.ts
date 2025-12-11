@@ -27,10 +27,12 @@ let initialized = $state(false);
 let unlistenThumbnailReady: UnlistenFn | null = null;
 let unlistenThumbnailBatchReady: UnlistenFn | null = null;
 
-// 节流相关
-const pendingPaths: string[] = [];
+// 节流相关 - 使用 Set 优化 O(1) 查找
+// eslint-disable-next-line -- 非响应式内部状态，普通 Set 比 SvelteSet 更高效
+const pendingPathsSet = new Set<string>();
+const pendingPathsOrder: string[] = []; // 保持顺序
 const throttleState = { dir: '', timer: null as ReturnType<typeof setTimeout> | null };
-const THROTTLE_MS = 10; // 10ms 节流（快速响应）
+const THROTTLE_MS = 8; // 8ms 节流（更快响应）
 
 // 动态预加载相关（根据停留时间指数扩展）
 const prefetchState = {
@@ -140,14 +142,16 @@ export async function requestVisibleThumbnails(
 
   // 如果目录变化，清空待处理列表
   if (throttleState.dir !== currentDir) {
-    pendingPaths.length = 0;
+    pendingPathsSet.clear();
+    pendingPathsOrder.length = 0;
     throttleState.dir = currentDir;
   }
 
-  // 合并到待处理列表（去重）
+  // 合并到待处理列表（使用 Set O(1) 去重）
   for (const p of uncachedPaths) {
-    if (!pendingPaths.includes(p)) {
-      pendingPaths.push(p);
+    if (!pendingPathsSet.has(p)) {
+      pendingPathsSet.add(p);
+      pendingPathsOrder.push(p);
     }
   }
 
@@ -159,11 +163,12 @@ export async function requestVisibleThumbnails(
 
   // 定义发送请求的函数
   const sendRequest = async () => {
-    if (pendingPaths.length === 0) return;
+    if (pendingPathsSet.size === 0) return;
 
     // 复制并清空待处理列表
-    const pathsToRequest = [...pendingPaths];
-    pendingPaths.length = 0;
+    const pathsToRequest = [...pendingPathsOrder];
+    pendingPathsSet.clear();
+    pendingPathsOrder.length = 0;
 
     try {
       // 计算中心索引（如果未提供，使用列表中间位置）

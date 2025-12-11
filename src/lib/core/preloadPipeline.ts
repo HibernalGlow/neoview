@@ -534,6 +534,7 @@ export class PreloadPipeline {
 
   /**
    * 手动请求加载图像
+   * 【优化】使用事件回调代替轮询
    */
   async requestImage(virtualIndex: number, priority: number = 0): Promise<Blob | null> {
     // 检查缓存
@@ -541,30 +542,47 @@ export class PreloadPipeline {
     if (cached) return cached;
 
     // 确保任务存在
-    this.ensureTask(virtualIndex, 'image', priority);
+    const taskId = this.ensureTask(virtualIndex, 'image', priority);
+    if (!taskId) {
+      // 已有缓存
+      return this.getCache(virtualIndex, 'image');
+    }
     this.processQueue();
 
-    // 等待完成
+    // 【优化】使用 Promise + 事件回调代替轮询
     return new Promise((resolve) => {
-      const checkInterval = setInterval(() => {
-        const cached = this.getCache(virtualIndex, 'image');
-        if (cached) {
-          clearInterval(checkInterval);
-          resolve(cached);
-        }
-
-        const status = this.getTaskStatus(virtualIndex, 'image');
-        if (status === 'error' || status === 'idle') {
-          clearInterval(checkInterval);
-          resolve(null);
-        }
-      }, 50);
-
-      // 超时
-      setTimeout(() => {
-        clearInterval(checkInterval);
+      const timeout = setTimeout(() => {
         resolve(null);
       }, 30000);
+
+      const originalOnComplete = this._events.onTaskComplete;
+      const checkComplete = (result: PreloadResult) => {
+        if (result.virtualIndex === virtualIndex && result.type === 'image') {
+          clearTimeout(timeout);
+          this._events.onTaskComplete = originalOnComplete;
+          resolve(result.success ? result.data ?? null : null);
+        }
+        originalOnComplete?.(result);
+      };
+      this._events.onTaskComplete = checkComplete;
+
+      // 快速轮询作为后备（100ms检查一次，比之前50ms更宽松）
+      const fallbackCheck = setInterval(() => {
+        const cached = this.getCache(virtualIndex, 'image');
+        if (cached) {
+          clearInterval(fallbackCheck);
+          clearTimeout(timeout);
+          this._events.onTaskComplete = originalOnComplete;
+          resolve(cached);
+        }
+        const status = this.getTaskStatus(virtualIndex, 'image');
+        if (status === 'error' || status === 'idle') {
+          clearInterval(fallbackCheck);
+          clearTimeout(timeout);
+          this._events.onTaskComplete = originalOnComplete;
+          resolve(null);
+        }
+      }, 100);
     });
   }
 

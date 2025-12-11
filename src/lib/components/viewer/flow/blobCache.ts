@@ -141,22 +141,47 @@ export class BlobCache {
 
 	/**
 	 * 执行 LRU 淘汰
+	 * 【优化】使用部分排序，只找到需要淘汰的最旧条目
 	 */
 	private enforceLimit(): void {
 		if (this.currentSize <= this.config.maxSizeBytes) {
 			return;
 		}
 
-		// 按访问时间排序（最旧的在前）
-		const entries = Array.from(this.cache.entries())
-			.sort(([, a], [, b]) => a.lastAccessed - b.lastAccessed);
+		// 计算需要释放的空间
+		const targetSize = Math.floor(this.config.maxSizeBytes * 0.8); // 释放到80%，避免频繁触发
+		
+		// 收集所有条目
+		const entries = Array.from(this.cache.entries());
+		
+		// 如果条目很少，直接排序
+		if (entries.length <= 20) {
+			entries.sort(([, a], [, b]) => a.lastAccessed - b.lastAccessed);
+			for (const [pageIndex] of entries) {
+				if (this.currentSize <= targetSize) break;
+				this.delete(pageIndex);
+			}
+			return;
+		}
 
-		// 淘汰直到满足限制
-		for (const [pageIndex] of entries) {
-			if (this.currentSize <= this.config.maxSizeBytes) {
+		// 【优化】使用选择淘汰：找到访问时间最早的条目批量删除
+		// 而不是排序整个数组
+		while (this.currentSize > targetSize && this.cache.size > 0) {
+			let oldestKey: number | null = null;
+			let oldestTime = Infinity;
+			
+			for (const [key, item] of this.cache) {
+				if (item.lastAccessed < oldestTime) {
+					oldestTime = item.lastAccessed;
+					oldestKey = key;
+				}
+			}
+			
+			if (oldestKey !== null) {
+				this.delete(oldestKey);
+			} else {
 				break;
 			}
-			this.delete(pageIndex);
 		}
 	}
 

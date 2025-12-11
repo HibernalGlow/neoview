@@ -28,7 +28,7 @@ export interface PreloadConfig {
 }
 
 const DEFAULT_CONFIG: PreloadConfig = {
-	preloadSize: 8,
+	preloadSize: 10, // 【优化】从 8 提升到 10，更激进的预加载
 	forwardRatio: 0.7, // 70% 前向，30% 后向
 	isDoublePage: false,
 	direction: 1

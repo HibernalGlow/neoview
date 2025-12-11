@@ -40,6 +40,7 @@ export const LoadPriority = {
 /**
  * 加载队列管理器
  * 控制并发数量和优先级调度
+ * 【优化】使用插入排序代替全量排序，O(n) vs O(n log n)
  */
 export class LoadQueueManager {
 	private queue: LoadTask[] = [];
@@ -52,6 +53,7 @@ export class LoadQueueManager {
 
 	/**
 	 * 添加加载任务到队列
+	 * 【优化】使用二分查找插入，保持有序，O(log n) 查找 + O(n) 插入
 	 */
 	enqueue(
 		pageIndex: number,
@@ -59,16 +61,26 @@ export class LoadQueueManager {
 		executor: () => Promise<void>
 	): Promise<void> {
 		return new Promise((resolve, reject) => {
-			this.queue.push({
+			const task: LoadTask = {
 				pageIndex,
 				priority,
 				resolve,
 				reject,
 				executor
-			});
+			};
 
-			// 按优先级排序（高优先级在前）
-			this.queue.sort((a, b) => b.priority - a.priority);
+			// 二分查找插入位置（高优先级在前）
+			let left = 0;
+			let right = this.queue.length;
+			while (left < right) {
+				const mid = (left + right) >>> 1;
+				if (this.queue[mid].priority > priority) {
+					left = mid + 1;
+				} else {
+					right = mid;
+				}
+			}
+			this.queue.splice(left, 0, task);
 
 			// 尝试处理队列
 			this.processQueue();

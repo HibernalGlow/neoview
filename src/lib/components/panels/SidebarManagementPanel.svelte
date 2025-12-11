@@ -16,6 +16,10 @@
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
 	import { emit } from '@tauri-apps/api/event';
 	import { confirm } from '$lib/stores/confirmDialog.svelte';
+	import { LayoutGrid, Settings2 } from '@lucide/svelte';
+	import * as Tabs from '$lib/components/ui/tabs';
+
+	let activeTab = $state('layout');
 
 	let settings = $state<NeoViewSettings>(settingsManager.getSettings());
 	let hoverAreas = $derived(settings.panels.hoverAreas);
@@ -199,12 +203,25 @@
 
 	</script>
 
-<div class="space-y-6 p-6">
+<div class="space-y-4 p-6">
 	<div class="space-y-2">
 		<h3 class="text-lg font-semibold">边栏管理</h3>
 		<p class="text-muted-foreground text-sm">拖拽面板到不同区域来自定义您的界面布局</p>
 	</div>
 
+	<Tabs.Root bind:value={activeTab} class="w-full">
+		<Tabs.List class="grid w-full grid-cols-2">
+			<Tabs.Trigger value="layout" class="gap-1.5 text-xs">
+				<LayoutGrid class="h-3.5 w-3.5" />
+				布局
+			</Tabs.Trigger>
+			<Tabs.Trigger value="settings" class="gap-1.5 text-xs">
+				<Settings2 class="h-3.5 w-3.5" />
+				设置
+			</Tabs.Trigger>
+		</Tabs.List>
+
+		<Tabs.Content value="settings" class="mt-4 space-y-4">
 	<!-- 自动隐藏时间设置 -->
 	<div class="mt-4 grid grid-cols-2 gap-4 rounded-lg border bg-card/40 p-4">
 		<div class="space-y-2">
@@ -317,6 +334,9 @@
 		</div>
 	</div>
 
+		</Tabs.Content>
+
+		<Tabs.Content value="layout" class="mt-4 space-y-4">
 	<!-- 操作按钮 -->
 	<div class="flex items-center gap-2">
 		<button
@@ -500,4 +520,6 @@
 			</div>
 		</div>
 	{/if}
+		</Tabs.Content>
+	</Tabs.Root>
 </div>

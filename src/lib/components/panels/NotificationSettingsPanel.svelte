@@ -1,10 +1,13 @@
 <script lang="ts">
-	import { Bell } from '@lucide/svelte';
+	import { Bell, Settings2, Clock, Filter } from '@lucide/svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { Label } from '$lib/components/ui/label';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select';
 	import { Switch } from '$lib/components/ui/switch';
 	import { Input } from '$lib/components/ui/input';
+	import * as Tabs from '$lib/components/ui/tabs';
+
+	let activeTab = $state('basic');
 
 	type MessageStyle = 'none' | 'normal' | 'normalIconOnly' | 'tiny' | 'tinyIconOnly';
 
@@ -101,7 +104,7 @@
 	}
 </script>
 
-<div class="space-y-6 p-6">
+<div class="space-y-4 p-6">
 	<div class="space-y-2">
 		<h3 class="flex items-center gap-2 text-lg font-semibold">
 			<Bell class="h-5 w-5" />
@@ -110,7 +113,23 @@
 		<p class="text-muted-foreground text-sm">配置 NeoView 全局通知 (toast) 的显示方式</p>
 	</div>
 
-	<div class="space-y-6">
+	<Tabs.Root bind:value={activeTab} class="w-full">
+		<Tabs.List class="grid w-full grid-cols-3">
+			<Tabs.Trigger value="basic" class="gap-1.5 text-xs">
+				<Settings2 class="h-3.5 w-3.5" />
+				基本
+			</Tabs.Trigger>
+			<Tabs.Trigger value="display" class="gap-1.5 text-xs">
+				<Clock class="h-3.5 w-3.5" />
+				显示
+			</Tabs.Trigger>
+			<Tabs.Trigger value="types" class="gap-1.5 text-xs">
+				<Filter class="h-3.5 w-3.5" />
+				类型
+			</Tabs.Trigger>
+		</Tabs.List>
+
+		<Tabs.Content value="basic" class="mt-4 space-y-4">
 		<!-- 显示通知 -->
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">显示通知</h4>
@@ -141,6 +160,9 @@
 			</p>
 		</div>
 
+		</Tabs.Content>
+
+		<Tabs.Content value="display" class="mt-4 space-y-4">
 		<!-- 显示时间 -->
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">显示时间</h4>
@@ -182,6 +204,9 @@
 			</div>
 		</div>
 
+		</Tabs.Content>
+
+		<Tabs.Content value="types" class="mt-4 space-y-4">
 		<!-- 其他通知占位 -->
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">其他通知（占位）</h4>
@@ -229,5 +254,6 @@
 				</div>
 			</div>
 		</div>
-	</div>
+		</Tabs.Content>
+	</Tabs.Root>
 </div>

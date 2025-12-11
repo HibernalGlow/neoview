@@ -1,14 +1,17 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Settings, FolderOpen } from '@lucide/svelte';
+	import { Settings, FolderOpen, Palette, Power, Link } from '@lucide/svelte';
 	import { Label } from '$lib/components/ui/label';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select';
 	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
 	import { Switch } from '$lib/components/ui/switch';
 	import { Button } from '$lib/components/ui/button';
+	import * as Tabs from '$lib/components/ui/tabs';
 	import * as FileSystemAPI from '$lib/api/filesystem';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { DEFAULT_THUMBNAIL_DIRECTORY } from '$lib/config/paths';
+
+	let activeTab = $state('basic');
 
 	let explorerContextMenuEnabled = $state(false);
 	let explorerContextMenuLoading = $state(true);
@@ -99,7 +102,7 @@
 	}
 </script>
 
-<div class="space-y-6 p-6">
+<div class="space-y-4 p-6">
 	<div class="space-y-2">
 		<h3 class="flex items-center gap-2 text-lg font-semibold">
 			<Settings class="h-5 w-5" />
@@ -108,7 +111,23 @@
 		<p class="text-muted-foreground text-sm">配置 NeoView 的基本行为和外观</p>
 	</div>
 
-	<div class="space-y-4">
+	<Tabs.Root bind:value={activeTab} class="w-full">
+		<Tabs.List class="grid w-full grid-cols-3">
+			<Tabs.Trigger value="basic" class="gap-1.5 text-xs">
+				<Palette class="h-3.5 w-3.5" />
+				基本
+			</Tabs.Trigger>
+			<Tabs.Trigger value="startup" class="gap-1.5 text-xs">
+				<Power class="h-3.5 w-3.5" />
+				启动
+			</Tabs.Trigger>
+			<Tabs.Trigger value="integration" class="gap-1.5 text-xs">
+				<Link class="h-3.5 w-3.5" />
+				集成
+			</Tabs.Trigger>
+		</Tabs.List>
+
+		<Tabs.Content value="basic" class="mt-4 space-y-4">
 		<!-- 语言设置 -->
 		<div class="space-y-2">
 			<Label class="text-sm font-semibold">语言</Label>
@@ -117,38 +136,6 @@
 				<NativeSelectOption value="en-US">English</NativeSelectOption>
 				<NativeSelectOption value="ja-JP">日本語</NativeSelectOption>
 			</NativeSelect>
-		</div>
-
-		<!-- 资源管理器集成 -->
-		<div class="space-y-2">
-			<div class="flex items-center gap-2">
-				<FolderOpen class="h-4 w-4 text-muted-foreground" />
-				<Label class="text-sm font-semibold">资源管理器集成</Label>
-			</div>
-			<div class="space-y-1">
-				<label class="flex items-center justify-between gap-2">
-					<span class="text-sm">在资源管理器右键菜单中添加“在 NeoView 中打开”</span>
-					<Switch
-						bind:checked={explorerContextMenuEnabled}
-						disabled={explorerContextMenuLoading}
-					/>
-				</label>
-				<div class="flex items-center justify-between gap-2">
-					<span class="text-xs text-muted-foreground">需要时可下载 .reg 手动导入注册表</span>
-					<Button variant="outline" size="xs" onclick={downloadExplorerContextMenuReg}>
-						导出 .reg
-					</Button>
-				</div>
-				{#if explorerContextMenuError}
-					<p class="text-xs text-destructive">{explorerContextMenuError}</p>
-				{:else if explorerContextMenuLoading}
-					<p class="text-xs text-muted-foreground">正在读取当前状态...</p>
-				{:else}
-					<p class="text-xs text-muted-foreground">
-						该设置使用当前可执行文件路径在 HKCU\Software\Classes 中注册右键菜单，适用于便携版。
-					</p>
-				{/if}
-			</div>
 		</div>
 
 		<!-- 主题设置 -->
@@ -160,10 +147,12 @@
 				<NativeSelectOption value="auto">跟随系统</NativeSelectOption>
 			</NativeSelect>
 		</div>
+		</Tabs.Content>
 
+		<Tabs.Content value="startup" class="mt-4 space-y-4">
 		<!-- 启动设置 -->
 		<div class="space-y-2">
-			<Label class="text-sm font-semibold">启动</Label>
+			<Label class="text-sm font-semibold">启动行为</Label>
 			<label class="flex items-center justify-between gap-2">
 				<span class="text-sm">启动时打开上次的文件</span>
 				<button
@@ -213,6 +202,40 @@
 				</button>
 			</label>
 		</div>
+		</Tabs.Content>
+
+		<Tabs.Content value="integration" class="mt-4 space-y-4">
+		<!-- 资源管理器集成 -->
+		<div class="space-y-2">
+			<div class="flex items-center gap-2">
+				<FolderOpen class="h-4 w-4 text-muted-foreground" />
+				<Label class="text-sm font-semibold">资源管理器集成</Label>
+			</div>
+			<div class="space-y-1">
+				<label class="flex items-center justify-between gap-2">
+					<span class="text-sm">在资源管理器右键菜单中添加“在 NeoView 中打开”</span>
+					<Switch
+						bind:checked={explorerContextMenuEnabled}
+						disabled={explorerContextMenuLoading}
+					/>
+				</label>
+				<div class="flex items-center justify-between gap-2">
+					<span class="text-xs text-muted-foreground">需要时可下载 .reg 手动导入注册表</span>
+					<Button variant="outline" size="xs" onclick={downloadExplorerContextMenuReg}>
+						导出 .reg
+					</Button>
+				</div>
+				{#if explorerContextMenuError}
+					<p class="text-xs text-destructive">{explorerContextMenuError}</p>
+				{:else if explorerContextMenuLoading}
+					<p class="text-xs text-muted-foreground">正在读取当前状态...</p>
+				{:else}
+					<p class="text-xs text-muted-foreground">
+						该设置使用当前可执行文件路径在 HKCU\Software\Classes 中注册右键菜单，适用于便携版。
+					</p>
+				{/if}
+			</div>
+		</div>
 
 		<!-- 缩略图目录 -->
 		<div class="space-y-2">
@@ -260,5 +283,6 @@
 				</label>
 			</div>
 		</div>
-	</div>
+		</Tabs.Content>
+	</Tabs.Root>
 </div>

@@ -654,3 +654,124 @@ pub async fn get_random_emm_tags(
 ) -> Result<Vec<(String, String)>, String> {
     state.db.get_random_tags(count).map_err(|e| e.to_string())
 }
+
+/// 直接从 EMM 数据库搜索标签（不使用缓存的 emm_json）
+/// search_tags: Vec<(namespace, tag, prefix)>，prefix 为 "" 表示必须包含，"-" 表示排除
+/// enable_mixed_gender: 是否启用混合性别匹配
+/// base_path: 可选的基础路径过滤
+/// db_paths: EMM 数据库路径列表
+#[tauri::command]
+pub async fn search_by_tags_from_emm(
+    db_paths: Vec<String>,
+    search_tags: Vec<(String, String, String)>,
+    enable_mixed_gender: bool,
+    base_path: Option<String>,
+) -> Result<Vec<String>, String> {
+    let gender_categories = ["female", "male", "mixed"];
+    let mut results = Vec::new();
+    
+    // 规范化基础路径
+    let normalized_base = base_path.as_ref().map(|p| p.to_lowercase().replace("/", "\\"));
+    
+    println!("🔍 EMM 标签搜索: {} 个数据库, {} 个标签条件", db_paths.len(), search_tags.len());
+    if let Some(ref base) = normalized_base {
+        println!("🔍 基础路径过滤: {}", base);
+    }
+    
+    for db_path in db_paths {
+        let path = PathBuf::from(&db_path);
+        if !path.exists() {
+            continue;
+        }
+        
+        let conn = match Connection::open(&path) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("打开 EMM 数据库失败: {} - {}", db_path, e);
+                continue;
+            }
+        };
+        
+        // 查询所有记录的 filepath 和 tags
+        let mut stmt = match conn.prepare("SELECT filepath, tags FROM Mangas WHERE filepath IS NOT NULL AND tags IS NOT NULL") {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("准备查询失败: {}", e);
+                continue;
+            }
+        };
+        
+        let rows: Vec<(String, String)> = stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .map_err(|e| format!("查询失败: {}", e))?
+            .filter_map(|r| r.ok())
+            .collect();
+        
+        println!("🔍 EMM 数据库 {} 查询到 {} 条记录", db_path, rows.len());
+        
+        for (filepath, tags_json) in rows {
+            // 路径过滤
+            if let Some(ref base) = normalized_base {
+                let normalized_filepath = filepath.to_lowercase().replace("/", "\\");
+                if !normalized_filepath.starts_with(base) {
+                    continue;
+                }
+            }
+            
+            // 解析标签 JSON
+            let book_tags: HashMap<String, Vec<String>> = match serde_json::from_str(&tags_json) {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+            
+            // 检查是否匹配所有搜索标签
+            let mut all_match = true;
+            for (ns, tag, prefix) in &search_tags {
+                let is_exclude = prefix == "-";
+                let mut matched = false;
+                
+                // 在目标类别中查找
+                if let Some(ns_tags) = book_tags.get(ns) {
+                    if ns_tags.iter().any(|t| t == tag) {
+                        matched = true;
+                    }
+                }
+                
+                // 混合性别匹配
+                if !matched && enable_mixed_gender && gender_categories.contains(&ns.as_str()) {
+                    for alt_ns in &gender_categories {
+                        if *alt_ns == ns.as_str() {
+                            continue;
+                        }
+                        if let Some(alt_tags) = book_tags.get(*alt_ns) {
+                            if alt_tags.iter().any(|t| t == tag) {
+                                matched = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // 处理匹配结果
+                if is_exclude {
+                    if matched {
+                        all_match = false;
+                        break;
+                    }
+                } else {
+                    if !matched {
+                        all_match = false;
+                        break;
+                    }
+                }
+            }
+            
+            if all_match && !results.contains(&filepath) {
+                results.push(filepath);
+            }
+        }
+    }
+    
+    println!("🔍 EMM 标签搜索完成: 找到 {} 个匹配", results.len());
+    Ok(results)
+}

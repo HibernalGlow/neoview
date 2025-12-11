@@ -18,6 +18,7 @@ import {
 	removeTagsFromSearch,
 	mixedGenderStore
 } from '$lib/stores/emm/favoriteTagStore.svelte';
+import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
 import type { FsItem } from '$lib/types';
 import type { SearchSettings } from '../types';
 
@@ -65,10 +66,14 @@ export function createSearchActions() {
 					// 转换为后端期望的格式: [namespace, tag, prefix]
 					const searchTags: [string, string, string][] = tags.map(t => [t.cat, t.tag, t.prefix]);
 					
-					console.log('[useSearchActions] 标签搜索', { searchTags, textPart, enableMixed: mixedGenderStore.enabled });
+					// 获取 EMM 数据库路径
+					const dbPaths = emmMetadataStore.getDatabasePaths();
 					
-					// 调用后端标签搜索，返回匹配的路径列表
-					const matchedPaths: string[] = await invoke('search_by_tags', {
+					console.log('[useSearchActions] 标签搜索', { searchTags, textPart, enableMixed: mixedGenderStore.enabled, dbPaths });
+					
+					// 调用后端标签搜索（直接查询 EMM 数据库）
+					const matchedPaths: string[] = await invoke('search_by_tags_from_emm', {
+						dbPaths,
 						searchTags,
 						enableMixedGender: mixedGenderStore.enabled,
 						basePath: searchSettings.includeSubfolders ? searchPath : null

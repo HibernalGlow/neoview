@@ -1,11 +1,14 @@
 /**
  * manualTagStore - 手动标签存储
  * 管理用户手动添加的标签，与 EMM 标签分开保存
+ * 使用 localStorage 存储，支持快速查询和搜索
  */
 
 import { writable, get } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
 import { SvelteMap } from 'svelte/reactivity';
+
+const STORAGE_KEY = 'neoview-manual-tags';
 
 /** 手动标签条目 */
 export interface ManualTag {
@@ -14,8 +17,14 @@ export interface ManualTag {
 	timestamp: number;
 }
 
-/** 手动标签缓存 */
-const manualTagCache = writable<SvelteMap<string, ManualTag[]>>(new SvelteMap());
+/** 手动标签数据结构：路径 -> 标签列表 */
+type ManualTagData = Record<string, ManualTag[]>;
+
+/** 手动标签存储 */
+const manualTagStore = writable<ManualTagData>({});
+
+/** 是否已从 localStorage 加载 */
+let isLoaded = false;
 
 /**
  * 规范化路径
@@ -25,32 +34,64 @@ function normalizePath(path: string): string {
 }
 
 /**
+ * 从 localStorage 加载数据
+ */
+function loadFromStorage(): ManualTagData {
+	if (isLoaded) return get(manualTagStore);
+	
+	try {
+		const json = localStorage.getItem(STORAGE_KEY);
+		const data: ManualTagData = json ? JSON.parse(json) : {};
+		manualTagStore.set(data);
+		isLoaded = true;
+		console.log('[ManualTagStore] 从 localStorage 加载数据, 条目数:', Object.keys(data).length);
+		return data;
+	} catch (e) {
+		console.error('[ManualTagStore] 加载失败:', e);
+		return {};
+	}
+}
+
+/**
+ * 保存到 localStorage
+ */
+function saveToStorage(data: ManualTagData): void {
+	try {
+		localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+	} catch (e) {
+		console.error('[ManualTagStore] 保存失败:', e);
+	}
+}
+
+/**
+ * 同时保存到后端数据库（异步，不阻塞）
+ */
+async function syncToBackend(path: string, tags: ManualTag[]): Promise<void> {
+	try {
+		const key = normalizePath(path);
+		const json = tags.length > 0 ? JSON.stringify(tags) : null;
+		await invoke('update_manual_tags', { key, manualTagsJson: json });
+	} catch (e) {
+		console.debug('[ManualTagStore] 后端同步失败:', e);
+	}
+}
+
+/**
  * 获取单个路径的手动标签
  */
 export async function getManualTags(path: string): Promise<ManualTag[]> {
 	const key = normalizePath(path);
-	
-	// 先检查缓存
-	const cache = get(manualTagCache);
-	if (cache.has(key)) {
-		return cache.get(key) || [];
-	}
-	
-	try {
-		const json = await invoke<string | null>('get_manual_tags', { key });
-		const tags: ManualTag[] = json ? JSON.parse(json) : [];
-		
-		// 更新缓存
-		manualTagCache.update(c => {
-			c.set(key, tags);
-			return c;
-		});
-		
-		return tags;
-	} catch (e) {
-		console.error('[ManualTagStore] 获取手动标签失败:', e);
-		return [];
-	}
+	const data = loadFromStorage();
+	return data[key] || [];
+}
+
+/**
+ * 同步获取手动标签（仅从 localStorage）
+ */
+export function getManualTagsSync(path: string): ManualTag[] {
+	const key = normalizePath(path);
+	const data = loadFromStorage();
+	return data[key] || [];
 }
 
 /**
@@ -59,25 +100,20 @@ export async function getManualTags(path: string): Promise<ManualTag[]> {
 export async function updateManualTags(path: string, tags: ManualTag[]): Promise<boolean> {
 	const key = normalizePath(path);
 	
-	try {
-		const json = tags.length > 0 ? JSON.stringify(tags) : null;
-		await invoke('update_manual_tags', { key, manualTagsJson: json });
-		
-		// 更新缓存
-		manualTagCache.update(c => {
-			if (tags.length > 0) {
-				c.set(key, tags);
-			} else {
-				c.delete(key);
-			}
-			return c;
-		});
-		
-		return true;
-	} catch (e) {
-		console.error('[ManualTagStore] 更新手动标签失败:', e);
-		return false;
-	}
+	manualTagStore.update(data => {
+		if (tags.length > 0) {
+			data[key] = tags;
+		} else {
+			delete data[key];
+		}
+		saveToStorage(data);
+		return data;
+	});
+	
+	// 异步同步到后端
+	syncToBackend(path, tags);
+	
+	return true;
 }
 
 /**
@@ -89,7 +125,7 @@ export async function addManualTag(path: string, namespace: string, tag: string)
 	// 检查是否已存在
 	const exists = existingTags.some(t => t.namespace === namespace && t.tag === tag);
 	if (exists) {
-		return true; // 已存在，视为成功
+		return true;
 	}
 	
 	const newTag: ManualTag = {
@@ -109,68 +145,96 @@ export async function removeManualTag(path: string, namespace: string, tag: stri
 	const filteredTags = existingTags.filter(t => !(t.namespace === namespace && t.tag === tag));
 	
 	if (filteredTags.length === existingTags.length) {
-		return true; // 不存在，视为成功
+		return true;
 	}
 	
 	return updateManualTags(path, filteredTags);
 }
 
 /**
- * 批量获取手动标签
+ * 获取所有手动标签数据
  */
-export async function batchGetManualTags(paths: string[]): Promise<SvelteMap<string, ManualTag[]>> {
-	const keys = paths.map(normalizePath);
-	const result = new SvelteMap<string, ManualTag[]>();
+export function getAllManualTags(): ManualTagData {
+	return loadFromStorage();
+}
+
+/**
+ * 按标签搜索路径
+ * @param namespace 命名空间（可选，不指定则搜索所有）
+ * @param tag 标签名
+ * @returns 匹配的路径列表
+ */
+export function searchByManualTag(namespace: string | null, tag: string): string[] {
+	const data = loadFromStorage();
+	const results: string[] = [];
+	const tagLower = tag.toLowerCase();
 	
-	// 先从缓存获取
-	const cache = get(manualTagCache);
-	const uncachedKeys: string[] = [];
-	
-	for (const key of keys) {
-		if (cache.has(key)) {
-			result.set(key, cache.get(key) || []);
-		} else {
-			uncachedKeys.push(key);
+	for (const [path, tags] of Object.entries(data)) {
+		const matched = tags.some(t => {
+			const tagMatch = t.tag.toLowerCase().includes(tagLower);
+			const nsMatch = namespace ? t.namespace === namespace : true;
+			return tagMatch && nsMatch;
+		});
+		if (matched) {
+			results.push(path);
 		}
 	}
 	
-	if (uncachedKeys.length === 0) {
-		return result;
-	}
+	return results;
+}
+
+/**
+ * 获取所有唯一的手动标签（用于自动完成）
+ */
+export function getAllUniqueManualTags(): Array<{ namespace: string; tag: string; count: number }> {
+	const data = loadFromStorage();
+	const tagMap = new SvelteMap<string, { namespace: string; tag: string; count: number }>();
 	
-	try {
-		const data = await invoke<Record<string, string | null>>('batch_get_manual_tags', { keys: uncachedKeys });
-		
-		manualTagCache.update(c => {
-			for (const key of uncachedKeys) {
-				const json = data[key];
-				const tags: ManualTag[] = json ? JSON.parse(json) : [];
-				result.set(key, tags);
-				c.set(key, tags);
+	for (const tags of Object.values(data)) {
+		for (const t of tags) {
+			const key = `${t.namespace}:${t.tag}`;
+			const existing = tagMap.get(key);
+			if (existing) {
+				existing.count++;
+			} else {
+				tagMap.set(key, { namespace: t.namespace, tag: t.tag, count: 1 });
 			}
-			return c;
-		});
-	} catch (e) {
-		console.error('[ManualTagStore] 批量获取手动标签失败:', e);
+		}
 	}
 	
-	return result;
+	return Array.from(tagMap.values()).sort((a, b) => b.count - a.count);
 }
 
 /**
- * 清除缓存
+ * 清除所有手动标签
  */
-export function clearManualTagCache(): void {
-	manualTagCache.set(new SvelteMap());
+export function clearAllManualTags(): void {
+	manualTagStore.set({});
+	localStorage.removeItem(STORAGE_KEY);
+	isLoaded = false;
 }
 
 /**
- * 同步获取手动标签（仅从缓存）
+ * 导出手动标签数据
  */
-export function getManualTagsSync(path: string): ManualTag[] | null {
-	const key = normalizePath(path);
-	const cache = get(manualTagCache);
-	return cache.get(key) ?? null;
+export function exportManualTags(): string {
+	return JSON.stringify(loadFromStorage(), null, 2);
+}
+
+/**
+ * 导入手动标签数据
+ */
+export function importManualTags(json: string): boolean {
+	try {
+		const data: ManualTagData = JSON.parse(json);
+		manualTagStore.set(data);
+		saveToStorage(data);
+		isLoaded = true;
+		return true;
+	} catch (e) {
+		console.error('[ManualTagStore] 导入失败:', e);
+		return false;
+	}
 }
 
 /**
@@ -209,5 +273,5 @@ export const NAMESPACE_LABELS: Record<string, string> = {
 	custom: '自定义'
 };
 
-// 导出缓存 store 供订阅
-export { manualTagCache };
+// 导出 store 供订阅
+export { manualTagStore };

@@ -6,20 +6,16 @@
 
 import { get } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
+import type { FsItem } from '$lib/types';
 import {
 	folderTabActions,
-	tabCurrentPath,
 	tabSearchSettings,
+	tabCurrentPath,
 	VIRTUAL_PATHS
 } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
-import {
-	parseSearchTags,
-	hasTagSearch,
-	removeTagsFromSearch,
-	mixedGenderStore
-} from '$lib/stores/emm/favoriteTagStore.svelte';
 import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
-import type { FsItem } from '$lib/types';
+import { mixedGenderStore, hasTagSearch, parseSearchTags, removeTagsFromSearch } from '$lib/stores/emm/favoriteTagStore.svelte';
+import { searchByManualTag } from '$lib/stores/emm/manualTagStore.svelte';
 import type { SearchSettings } from '../types';
 
 /**
@@ -72,15 +68,27 @@ export function createSearchActions() {
 					console.log('[useSearchActions] 标签搜索', { searchTags, textPart, enableMixed: mixedGenderStore.enabled, dbPaths });
 					
 					// 调用后端标签搜索（直接查询 EMM 数据库）
-					const matchedPaths: string[] = await invoke('search_by_tags_from_emm', {
+					const emmMatchedPaths: string[] = await invoke('search_by_tags_from_emm', {
 						dbPaths,
 						searchTags,
 						enableMixedGender: mixedGenderStore.enabled,
 						basePath: searchSettings.includeSubfolders ? searchPath : null
 					});
 					
+					// 同时搜索手动标签
+					const manualMatchedPaths: string[] = [];
+					for (const t of tags) {
+						const paths = searchByManualTag(t.cat || null, t.tag);
+						manualMatchedPaths.push(...paths);
+					}
+					
+					// 合并 EMM 和手动标签搜索结果（去重）
+					const allMatchedPaths = [...new Set([...emmMatchedPaths, ...manualMatchedPaths])];
+					console.log('[useSearchActions] EMM结果:', emmMatchedPaths.length, '手动标签结果:', manualMatchedPaths.length);
+					
 					// 将路径转换为 FsItem（获取文件信息）
-					if (matchedPaths.length > 0) {
+					if (allMatchedPaths.length > 0) {
+						const matchedPaths = allMatchedPaths;
 						// 如果有文本部分，再过滤
 						const filteredPaths = textPart.trim()
 							? matchedPaths.filter(p => p.toLowerCase().includes(textPart.toLowerCase()))

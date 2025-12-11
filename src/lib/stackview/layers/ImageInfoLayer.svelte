@@ -1,5 +1,5 @@
 <!--
-  ImageInfoLayer - 图片信息浮窗层
+  ImageInfoLayer - 媒体信息浮窗层（图片/视频）
   从 ImageInfoOverlay 移植，集成到 StackView 层系统
   z-index: 75
 -->
@@ -94,6 +94,22 @@
     return parsed.toLocaleString('zh-CN');
   }
 
+  function formatDuration(seconds?: number): string {
+    if (seconds == null || seconds <= 0) return '';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  function formatBitrate(bps?: number): string {
+    if (bps == null || bps <= 0) return '';
+    if (bps >= 1_000_000) return `${(bps / 1_000_000).toFixed(1)} Mbps`;
+    if (bps >= 1_000) return `${(bps / 1_000).toFixed(0)} Kbps`;
+    return `${bps} bps`;
+  }
+
   const backgroundOpacity = $derived(() => {
     return Math.min(1, Math.max(0, opacity));
   });
@@ -125,6 +141,11 @@
       >
         <div class="info-details">
           <div class="info-row">
+            {#if imageInfo.isVideo}
+              <span class="media-badge video">🎬</span>
+            {:else}
+              <span class="media-badge image">🖼️</span>
+            {/if}
             <span class="file-name" title={imageInfo.name}>
               {imageInfo.name}
             </span>
@@ -133,8 +154,25 @@
                 {imageInfo.width}×{imageInfo.height}
               </span>
             {/if}
+            {#if imageInfo.isVideo && imageInfo.duration}
+              <span class="duration">{formatDuration(imageInfo.duration)}</span>
+            {/if}
           </div>
           <div class="meta-row">
+            {#if imageInfo.isVideo}
+              {#if imageInfo.frameRate}
+                <span>{imageInfo.frameRate.toFixed(0)}fps</span>
+              {/if}
+              {#if imageInfo.bitrate}
+                <span>{formatBitrate(imageInfo.bitrate)}</span>
+              {/if}
+              {#if imageInfo.videoCodec}
+                <span>视频: {imageInfo.videoCodec}</span>
+              {/if}
+              {#if imageInfo.audioCodec}
+                <span>音频: {imageInfo.audioCodec}</span>
+              {/if}
+            {/if}
             {#if imageInfo.createdAt}
               <span>创建: {formatDate(imageInfo.createdAt)}</span>
             {/if}
@@ -231,6 +269,17 @@
   .dimensions {
     font-size: 11px;
     color: hsl(var(--muted-foreground));
+  }
+
+  .media-badge {
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+
+  .duration {
+    font-size: 11px;
+    color: hsl(var(--primary));
+    font-family: monospace;
   }
 
   .meta-row {

@@ -25,6 +25,7 @@
 	} from '@lucide/svelte';
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
 	import type { SubtitleData } from '$lib/utils/subtitleUtils';
+	import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
 
 	type LoopMode = 'none' | 'list' | 'single';
 	type PlayerSettings = {
@@ -267,6 +268,17 @@
 		if (initialTime && isFinite(initialTime) && initialTime > 0 && initialTime < duration) {
 			videoElement.currentTime = initialTime;
 		}
+		
+		// 更新信息面板 - 视频元数据
+		const fileName = src ? src.split('/').pop()?.split('\\').pop() || 'video' : 'video';
+		infoPanelStore.setImageInfo({
+			path: src || '',
+			name: fileName,
+			isVideo: true,
+			width: videoElement.videoWidth,
+			height: videoElement.videoHeight,
+			duration: videoElement.duration
+		});
 	}
 
 	function handlePlay() {
@@ -958,6 +970,23 @@
 										</button>
 									</div>
 								{/if}
+							</div>
+
+							<!-- 视频信息 -->
+							<div class="border-t border-white/10 pt-2 mt-2">
+								<div class="px-3 py-1 text-xs text-white/50">视频信息</div>
+								<div class="px-3 py-1 space-y-1 text-xs text-white/80">
+									{#if videoElement}
+										<div class="flex justify-between">
+											<span>分辨率</span>
+											<span>{videoElement.videoWidth}×{videoElement.videoHeight}</span>
+										</div>
+										<div class="flex justify-between">
+											<span>时长</span>
+											<span>{formatTime(duration)}</span>
+										</div>
+									{/if}
+								</div>
 							</div>
 						</div>
 					{/if}

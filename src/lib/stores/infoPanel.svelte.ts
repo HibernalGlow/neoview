@@ -31,6 +31,13 @@ export interface ViewerImageInfo {
 	colorDepth?: string;
 	createdAt?: string;
 	modifiedAt?: string;
+	// 视频特有属性
+	isVideo?: boolean;
+	duration?: number; // 秒
+	videoCodec?: string;
+	audioCodec?: string;
+	frameRate?: number;
+	bitrate?: number; // bps
 }
 
 /** 链路延迟追踪信息 */

@@ -2098,3 +2098,97 @@ fn convert_paths_to_file_info(paths: Vec<PathBuf>) -> Result<Vec<FileInfo>, Stri
 
     Ok(items)
 }
+
+// ===== 备份系统相关命令 =====
+
+/// 写入文本文件
+#[tauri::command]
+pub async fn write_text_file(path: String, content: String) -> Result<(), String> {
+    let path = Path::new(&path);
+    
+    // 确保父目录存在
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {}", e))?;
+    }
+    
+    fs::write(path, content).map_err(|e| format!("写入文件失败: {}", e))
+}
+
+/// 删除文件
+#[tauri::command]
+pub async fn delete_file(path: String) -> Result<(), String> {
+    let path = Path::new(&path);
+    
+    if !path.exists() {
+        return Err(format!("文件不存在: {}", path.display()));
+    }
+    
+    if path.is_dir() {
+        fs::remove_dir_all(path).map_err(|e| format!("删除目录失败: {}", e))
+    } else {
+        fs::remove_file(path).map_err(|e| format!("删除文件失败: {}", e))
+    }
+}
+
+/// 列出目录中匹配模式的文件
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupFileInfo {
+    pub name: String,
+    pub path: String,
+    pub size: u64,
+    pub modified: u64,
+}
+
+#[tauri::command]
+pub async fn list_directory_files(path: String, pattern: Option<String>) -> Result<Vec<BackupFileInfo>, String> {
+    let dir_path = Path::new(&path);
+    
+    if !dir_path.exists() {
+        return Ok(Vec::new());
+    }
+    
+    if !dir_path.is_dir() {
+        return Err(format!("路径不是目录: {}", path));
+    }
+    
+    let pattern = pattern.unwrap_or_else(|| "*".to_string());
+    let glob_pattern = format!("{}/{}", path.replace('\\', "/"), pattern);
+    
+    let mut files = Vec::new();
+    
+    match glob::glob(&glob_pattern) {
+        Ok(entries) => {
+            for entry in entries.filter_map(Result::ok) {
+                if entry.is_file() {
+                    if let Ok(metadata) = fs::metadata(&entry) {
+                        let modified = metadata
+                            .modified()
+                            .ok()
+                            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0);
+                        
+                        files.push(BackupFileInfo {
+                            name: entry.file_name()
+                                .and_then(|n| n.to_str())
+                                .unwrap_or("unknown")
+                                .to_string(),
+                            path: entry.to_string_lossy().to_string(),
+                            size: metadata.len(),
+                            modified,
+                        });
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            return Err(format!("Glob 模式错误: {}", e));
+        }
+    }
+    
+    // 按修改时间降序排序
+    files.sort_by(|a, b| b.modified.cmp(&a.modified));
+    
+    Ok(files)
+}

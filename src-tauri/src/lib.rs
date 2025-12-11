@@ -171,6 +171,9 @@ pub fn run() {
             commands::get_file_info,
             commands::path_exists,
             commands::read_text_file,
+            commands::fs_commands::write_text_file,
+            commands::fs_commands::delete_file,
+            commands::fs_commands::list_directory_files,
             // File system commands (new)
             commands::browse_directory,
             commands::fs_commands::load_directory_snapshot,

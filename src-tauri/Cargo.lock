@@ -3384,6 +3384,7 @@ dependencies = [
  "epub",
  "ffmpeg-sidecar",
  "futures",
+ "glob",
  "hex",
  "image",
  "js-sys",

@@ -470,7 +470,7 @@
 									totalPages={historyEntry?.totalItems}
 									videoPosition={historyEntry?.videoProgress?.position}
 									videoDuration={historyEntry?.videoProgress?.duration}
-									timestamp={item.modified ? item.modified * 1000 : undefined}
+									timestamp={item.modified ? (item.modified > 1e12 ? item.modified : item.modified * 1000) : undefined}
 									{thumbnailSize}
 									onClick={() => handleItemClick(item, itemIndex)}
 									onDoubleClick={() => handleItemDoubleClick(item, itemIndex)}

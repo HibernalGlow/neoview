@@ -234,6 +234,9 @@
 		onEnded();
 	}
 
+	// 追踪当前是否为视频模式
+	let isInVideoMode = false;
+
 	// 监听 page 变化，加载视频并切换上下文
 	$effect(() => {
 		// 使用与 StackView 一致的检测逻辑：优先 name，然后 innerPath
@@ -242,16 +245,25 @@
 		if (currentPage && filename && isVideoFile(filename)) {
 			// 切换到视频上下文
 			keyBindingsStore.setContexts(['global', 'videoPlayer']);
+			isInVideoMode = true;
 			// 使用 untrack 防止 loadVideo 内部的状态修改触发循环
 			untrack(() => {
 				loadVideo(currentPage);
 			});
-		} else {
-			// 切换回图片上下文
+		} else if (isInVideoMode) {
+			// 只有从视频模式退出时才切换回图片上下文
 			keyBindingsStore.setContexts(['global', 'viewer']);
+			isInVideoMode = false;
 			untrack(() => {
 				clearVideoUrl();
 			});
+		}
+	});
+
+	// 组件卸载时恢复图片上下文
+	onDestroy(() => {
+		if (isInVideoMode) {
+			keyBindingsStore.setContexts(['global', 'viewer']);
 		}
 	});
 

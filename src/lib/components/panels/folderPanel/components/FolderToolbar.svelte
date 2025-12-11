@@ -50,7 +50,7 @@ import {
 	Unlock
 } from '@lucide/svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
-import { historyStore } from '$lib/stores/history.svelte';
+import { unifiedHistoryStore } from '$lib/stores/unifiedHistory.svelte';
 import { hoverPreviewSettings, hoverPreviewEnabled, hoverPreviewDelayMs } from '$lib/stores/hoverPreviewSettings.svelte';
 import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 import { virtualPanelSettingsStore, type TreePosition } from '$lib/stores/virtualPanelSettings.svelte';
@@ -539,7 +539,7 @@ async function handleCleanupInvalid() {
 	try {
 		let removed = 0;
 		if (virtualMode === 'history') {
-			removed = await historyStore.cleanupInvalid();
+			removed = await unifiedHistoryStore.cleanupInvalid();
 		} else if (virtualMode === 'bookmark') {
 			removed = await bookmarkStore.cleanupInvalid();
 		}

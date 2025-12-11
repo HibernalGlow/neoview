@@ -160,8 +160,9 @@ async function handleVideoClick(item: FsItem) {
 		
 		// 添加到历史记录
 		try {
-			const { historyStore } = await import('$lib/stores/history.svelte');
-			historyStore.add(item.path, item.name, 0, 1);
+			const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
+			const pathStack = bookStore.buildPathStack();
+			unifiedHistoryStore.add(pathStack, 0, 1, { displayName: item.name });
 		} catch (historyError) {
 			console.error('Failed to add video history entry:', historyError);
 		}

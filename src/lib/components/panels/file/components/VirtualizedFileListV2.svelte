@@ -16,7 +16,7 @@
 	import { debounce, scheduleIdleTask, getAdaptivePerformanceConfig } from '$lib/utils/performance';
 	import FileItemCard from './FileItemCard.svelte';
 	import ListSlider from './ListSlider.svelte';
-	import { historyStore } from '$lib/stores/history.svelte';
+	import { unifiedHistoryStore } from '$lib/stores/unifiedHistory.svelte';
 	import { isVideoFile } from '$lib/utils/videoUtils';
 	import { updateVisibility } from '$lib/stores/visibilityMonitor.svelte';
 
@@ -451,7 +451,7 @@
 							{@const item = items[itemIndex]}
 							{@const isSelected = selectedIndex === itemIndex}
 							{@const isChecked = selectedItems.has(item.path)}
-							{@const historyEntry = historyStore.findByPath(item.path)}
+							{@const historyEntry = unifiedHistoryStore.findByPath(item.path)}
 							<div style="flex: 1; padding: 4px; box-sizing: border-box;">
 								<FileItemCard
 									{item}
@@ -466,10 +466,10 @@
 									showReadMark={!!historyEntry}
 									showBookmarkMark={true}
 									showSizeAndModified={true}
-									currentPage={historyEntry?.currentPage}
-									totalPages={historyEntry?.totalPages}
-									videoPosition={historyEntry?.videoPosition}
-									videoDuration={historyEntry?.videoDuration}
+									currentPage={historyEntry?.currentIndex}
+									totalPages={historyEntry?.totalItems}
+									videoPosition={historyEntry?.videoProgress?.position}
+									videoDuration={historyEntry?.videoProgress?.duration}
 									timestamp={item.modified ? item.modified * 1000 : undefined}
 									{thumbnailSize}
 									onClick={() => handleItemClick(item, itemIndex)}

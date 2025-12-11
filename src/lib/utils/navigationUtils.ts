@@ -114,19 +114,19 @@ export async function openFileSystemItem(
                 await bookStore.openDirectoryAsBook(parentDir, { skipHistory: true });
                 await bookStore.navigateToImage(path, { skipHistoryUpdate: true });
                 try {
-                    const { historyStore } = await import('$lib/stores/history.svelte');
+                    const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
                     const name = path.split(/[\\/]/).pop() || path;
                     // 获取当前页面索引和总页数
                     const currentPage = bookStore.currentPageIndex;
                     const totalPages = bookStore.currentBook?.totalPages || 1;
+                    const pathStack = bookStore.buildPathStack();
                     console.log('📝 [History Debug] Adding video/image history:', {
-                        path,
+                        pathStack,
                         name,
                         currentPage,
-                        totalPages,
-                        bookPath: bookStore.currentBook?.path
+                        totalPages
                     });
-                    historyStore.add(path, name, currentPage, totalPages);
+                    unifiedHistoryStore.add(pathStack, currentPage, totalPages, { displayName: name });
                     console.log('✅ [History Debug] History added successfully');
                 } catch (historyError) {
                     console.error('Failed to add history entry from openFileSystemItem:', historyError);

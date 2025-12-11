@@ -124,7 +124,7 @@ export interface FolderContextValue {
 export function createFolderContext(initialPath?: string): FolderContextValue {
 	const isVirtual = !!(initialPath && isVirtualPath(initialPath));
 	const panelMode: PanelMode = isVirtual
-		? (initialPath?.includes('bookmark') ? 'bookmark' : 'history')
+		? (initialPath?.includes('bookmark') ? 'bookmark' : initialPath?.includes('search') ? 'folder' : 'history')
 		: 'folder';
 	
 	// 导航命令

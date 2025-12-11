@@ -5,7 +5,7 @@
 
 import type { FsItem } from '$lib/types';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
-import { historyStore, type HistoryEntry } from '$lib/stores/history.svelte';
+import { unifiedHistoryStore, type UnifiedHistoryEntry } from '$lib/stores/unifiedHistory.svelte';
 import { get } from 'svelte/store';
 import { getVirtualPathType, tabSearchResults, type VirtualPathType } from '../stores/folderTabStore.svelte';
 
@@ -33,7 +33,7 @@ async function triggerHistoryCleanup(): Promise<void> {
 	if (historyCleanedUp) return;
 	historyCleanedUp = true;
 	try {
-		await historyStore.cleanupInvalid();
+		await unifiedHistoryStore.cleanupInvalid();
 	} catch (e) {
 		console.error('[VirtualPathLoader] 历史清理失败:', e);
 	}
@@ -103,12 +103,14 @@ function isDirectoryPath(path: string): boolean {
  * 将历史条目转换为 FsItem
  * 使用反向逻辑：只有没有文件扩展名的路径才是文件夹，其他都是文件
  */
-function historyToFsItem(entry: HistoryEntry): FsItem {
+function historyToFsItem(entry: UnifiedHistoryEntry): FsItem {
+	// 从 pathStack 获取主路径
+	const mainPath = entry.pathStack?.[0]?.path || '';
 	// 使用反向逻辑判断是否为目录
-	const isDirectory = isDirectoryPath(entry.path);
+	const isDirectory = isDirectoryPath(mainPath);
 	return {
-		path: entry.path,
-		name: entry.name,
+		path: mainPath,
+		name: entry.displayName || mainPath.split(/[\\/]/).pop() || mainPath,
 		isDir: isDirectory,
 		isImage: false,
 		size: 0,
@@ -132,7 +134,7 @@ export function loadVirtualPathData(path: string): FsItem[] {
 		case 'history': {
 			// 触发后台清理（首次加载时执行一次，不阻塞）
 			triggerHistoryCleanup();
-			const history = get(historyStore) as HistoryEntry[];
+			const history = get(unifiedHistoryStore) as UnifiedHistoryEntry[];
 			return history.map(historyToFsItem);
 		}
 		case 'search': {
@@ -160,7 +162,7 @@ export function subscribeVirtualPathData(
 			});
 		}
 		case 'history': {
-			return historyStore.subscribe((history: HistoryEntry[]) => {
+			return unifiedHistoryStore.subscribe((history: UnifiedHistoryEntry[]) => {
 				callback(history.map(historyToFsItem));
 			});
 		}
@@ -192,10 +194,10 @@ export function removeVirtualPathItem(path: string, itemPath: string): boolean {
 			return false;
 		}
 		case 'history': {
-			const history = get(historyStore) as HistoryEntry[];
-			const entry = history.find(h => h.path === itemPath);
+			const history = get(unifiedHistoryStore) as UnifiedHistoryEntry[];
+			const entry = history.find(h => (h.pathStack?.[0]?.path || '') === itemPath);
 			if (entry) {
-				historyStore.remove(entry.id);
+				unifiedHistoryStore.remove(entry.id);
 				return true;
 			}
 			return false;
@@ -213,7 +215,7 @@ export function clearVirtualPathData(path: string): boolean {
 
 	switch (type) {
 		case 'history': {
-			historyStore.clear();
+			unifiedHistoryStore.clear();
 			return true;
 		}
 		default:

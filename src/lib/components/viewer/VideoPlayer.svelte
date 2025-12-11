@@ -15,7 +15,8 @@
 		Pin,
 		PinOff,
 		Captions,
-		CaptionsOff
+		CaptionsOff,
+		PictureInPicture2
 	} from '@lucide/svelte';
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
 	import type { SubtitleData } from '$lib/utils/subtitleUtils';
@@ -478,6 +479,42 @@
 			videoElement.requestFullscreen();
 		}
 	}
+
+	// 画中画状态
+	let isPiP = $state(false);
+	
+	async function togglePictureInPicture() {
+		if (!videoElement) return;
+		
+		try {
+			if (document.pictureInPictureElement) {
+				await document.exitPictureInPicture();
+				isPiP = false;
+			} else if (document.pictureInPictureEnabled) {
+				await videoElement.requestPictureInPicture();
+				isPiP = true;
+			}
+		} catch (err) {
+			console.warn('画中画切换失败:', err);
+		}
+	}
+	
+	// 监听画中画状态变化
+	$effect(() => {
+		const video = videoElement;
+		if (!video) return;
+		
+		const handleEnterPiP = () => { isPiP = true; };
+		const handleLeavePiP = () => { isPiP = false; };
+		
+		video.addEventListener('enterpictureinpicture', handleEnterPiP);
+		video.addEventListener('leavepictureinpicture', handleLeavePiP);
+		
+		return () => {
+			video.removeEventListener('enterpictureinpicture', handleEnterPiP);
+			video.removeEventListener('leavepictureinpicture', handleLeavePiP);
+		};
+	});
 
 	function formatTime(seconds: number): string {
 		if (!isFinite(seconds)) return '0:00';
@@ -944,6 +981,19 @@
 					{:else}
 						<PinOff class="h-5 w-5 text-primary opacity-40" />
 					{/if}
+				</button>
+
+				<!-- 画中画 -->
+				<button
+					class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {isPiP ? 'bg-white/30' : ''}"
+					onclick={(event) => {
+						event.stopPropagation();
+						togglePictureInPicture();
+					}}
+					aria-label={isPiP ? '退出画中画' : '画中画'}
+					title={isPiP ? '退出画中画' : '画中画模式'}
+				>
+					<PictureInPicture2 class="h-5 w-5 text-primary {isPiP ? '' : 'opacity-70'}" />
 				</button>
 
 				<!-- 全屏 -->

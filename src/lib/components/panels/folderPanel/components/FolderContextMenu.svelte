@@ -19,7 +19,8 @@
 		Play,
 		FolderOpen,
 		PanelRight,
-		RefreshCw
+		RefreshCw,
+		Tags
 	} from '@lucide/svelte';
 
 	interface Props {
@@ -42,6 +43,7 @@
 		onOpenInExplorer?: (item: FsItem) => void;
 		onOpenWithSystem?: (item: FsItem) => void;
 		onReloadThumbnail?: (item: FsItem) => void;
+		onEditTags?: (item: FsItem) => void;
 	}
 
 	let {
@@ -63,7 +65,8 @@
 		onCopyName,
 		onOpenInExplorer,
 		onOpenWithSystem,
-		onReloadThumbnail
+		onReloadThumbnail,
+		onEditTags
 	}: Props = $props();
 
 	// 菜单位置状态（经过边界检查调整）
@@ -198,6 +201,11 @@
 		if (item) onReloadThumbnail?.(item);
 		onClose();
 	}
+
+	function handleEditTags() {
+		if (item) onEditTags?.(item);
+		onClose();
+	}
 </script>
 
 {#if visible && item}
@@ -283,6 +291,13 @@
 				>
 					<Star class="h-4 w-4" />
 					<span>添加书签</span>
+				</button>
+				<button
+					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
+					onclick={handleEditTags}
+				>
+					<Tags class="h-4 w-4" />
+					<span>编辑标签</span>
 				</button>
 
 				<div class="bg-border my-1 h-px"></div>

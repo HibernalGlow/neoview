@@ -17,6 +17,7 @@
 	import FolderContextMenu from '$lib/components/panels/folderPanel/components/FolderContextMenu.svelte';
 	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
 	import RenameDialog from '$lib/components/ui/rename/RenameDialog.svelte';
+	import ManualTagEditor from '$lib/components/ui/tag/ManualTagEditor.svelte';
 
 	// Context 和 Store
 	import { createFolderContext, type PanelMode } from '../folder/context/FolderContext.svelte';
@@ -45,6 +46,17 @@
 
 	// ==================== 共享操作初始化 ====================
 	const actions = createAllFileActions(ctx, propInitialPath);
+
+	// ==================== 标签编辑状态 ====================
+	let tagEditorOpen = $state(false);
+	let tagEditorPath = $state('');
+	let tagEditorEmmTags = $state<Array<{ namespace: string; tag: string; translated?: string }>>([]);
+
+	function handleEditTags(item: import('$lib/types').FsItem) {
+		tagEditorPath = item.path;
+		tagEditorEmmTags = []; // TODO: 从 emmMetadataStore 加载 EMM 标签
+		tagEditorOpen = true;
+	}
 
 	// ==================== 键盘处理 ====================
 	const handleKeydown = createKeyboardHandler(() => ({
@@ -161,6 +173,7 @@
 	onOpenInExplorer={actions.handleOpenInExplorer}
 	onOpenWithSystem={actions.handleOpenWithSystem}
 	onReloadThumbnail={actions.handleReloadThumbnail}
+	onEditTags={handleEditTags}
 />
 
 <!-- 确认对话框 -->
@@ -183,3 +196,10 @@
 		onCancel={() => { ctx.renameDialogItem = null; }}
 	/>
 {/if}
+
+<!-- 标签编辑器 -->
+<ManualTagEditor
+	bind:open={tagEditorOpen}
+	path={tagEditorPath}
+	emmTags={tagEditorEmmTags}
+/>

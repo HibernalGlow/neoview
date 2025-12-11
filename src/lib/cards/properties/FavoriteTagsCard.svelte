@@ -3,12 +3,21 @@
  * 收藏标签快选卡片
  * 从 EmmPanelSection 提取
  * 顶部添加手动标签区域
+ * 支持点击回调用于搜索
  */
 import { RefreshCcw, Tag } from '@lucide/svelte';
 import * as Button from '$lib/components/ui/button';
 import { favoriteTagStore, categoryColors, mixedGenderStore, cat2letter, createTagValue, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
 import { getAllUniqueManualTags, NAMESPACE_LABELS } from '$lib/stores/emm/manualTagStore.svelte';
 import { emmTranslationStore, emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
+
+// Props
+interface Props {
+	onTagClick?: (tag: FavoriteTag, modifier?: string) => void;
+	interactive?: boolean; // 是否可交互（点击标签）
+}
+
+let { onTagClick, interactive = false }: Props = $props();
 
 // 性别类别列表
 const genderCategories = ['female', 'male', 'mixed'];
@@ -20,6 +29,60 @@ interface ExtendedFavoriteTag extends FavoriteTag {
 }
 
 let isReloadingFavoriteTags = $state(false);
+
+// 处理标签点击
+function handleTagClick(tag: FavoriteTag, event: MouseEvent) {
+	if (!interactive || !onTagClick) return;
+	event.preventDefault();
+	event.stopPropagation();
+	onTagClick(tag, '');
+}
+
+// 处理标签右键
+function handleTagContextMenu(tag: FavoriteTag, event: MouseEvent) {
+	if (!interactive || !onTagClick) return;
+	event.preventDefault();
+	event.stopPropagation();
+	onTagClick(tag, '-');
+}
+
+// 处理手动标签点击
+function handleManualTagClick(mt: { namespace: string; tag: string; count: number }, event: MouseEvent) {
+	if (!interactive || !onTagClick) return;
+	event.preventDefault();
+	event.stopPropagation();
+	const translated = translateManualTag(mt.namespace, mt.tag);
+	const color = getManualTagColor(mt.namespace);
+	const fakeTag: FavoriteTag = {
+		id: `manual:${mt.namespace}:${mt.tag}`,
+		cat: mt.namespace,
+		tag: mt.tag,
+		letter: mt.namespace.slice(0, 1),
+		display: `${mt.namespace}:${translated}`,
+		value: `${mt.namespace}:"${mt.tag}"$`,
+		color
+	};
+	onTagClick(fakeTag, '');
+}
+
+// 处理手动标签右键
+function handleManualTagContextMenu(mt: { namespace: string; tag: string; count: number }, event: MouseEvent) {
+	if (!interactive || !onTagClick) return;
+	event.preventDefault();
+	event.stopPropagation();
+	const translated = translateManualTag(mt.namespace, mt.tag);
+	const color = getManualTagColor(mt.namespace);
+	const fakeTag: FavoriteTag = {
+		id: `manual:${mt.namespace}:${mt.tag}`,
+		cat: mt.namespace,
+		tag: mt.tag,
+		letter: mt.namespace.slice(0, 1),
+		display: `${mt.namespace}:${translated}`,
+		value: `${mt.namespace}:"${mt.tag}"$`,
+		color
+	};
+	onTagClick(fakeTag, '-');
+}
 
 // 全局手动标签（所有书籍的唯一标签，用于快速搜索）
 let allManualTags = $state<Array<{ namespace: string; tag: string; count: number }>>([]);
@@ -140,15 +203,18 @@ async function handleReloadFavoriteTags() {
 				{#each allManualTags as mt}
 					{@const translated = translateManualTag(mt.namespace, mt.tag)}
 					{@const color = getManualTagColor(mt.namespace)}
-					<span
-						class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border-2 border-dashed text-[10px]"
+					<button
+						type="button"
+						class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border-2 border-dashed text-[10px] {interactive ? 'cursor-pointer hover:opacity-80' : ''}"
 						style="border-color: {color}; background: color-mix(in srgb, {color} 12%, transparent); color: {color};"
-						title="{NAMESPACE_LABELS[mt.namespace]}: {mt.tag}{translated !== mt.tag ? ` (${translated})` : ''} ({mt.count}个文件)"
+						title="{NAMESPACE_LABELS[mt.namespace]}: {mt.tag}{translated !== mt.tag ? ` (${translated})` : ''} ({mt.count}个文件){interactive ? '\n左键添加，右键排除' : ''}"
+						onclick={(e) => handleManualTagClick(mt, e)}
+						oncontextmenu={(e) => handleManualTagContextMenu(mt, e)}
 					>
 						<span class="opacity-70">{mt.namespace.slice(0, 1)}:</span>
 						<span>{translated}</span>
 						<span class="opacity-50 text-[9px]">×{mt.count}</span>
-					</span>
+					</button>
 				{/each}
 			</div>
 		{/if}
@@ -197,17 +263,20 @@ async function handleReloadFavoriteTags() {
 						{#each group.tags as tag (tag.id)}
 							{@const isVariant = 'isMixedVariant' in tag && tag.isMixedVariant}
 							{@const origCat = 'originalCat' in tag ? tag.originalCat : ''}
-							<span
-								class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] {isVariant ? 'border-dashed opacity-70' : ''}"
+							<button
+								type="button"
+								class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] {isVariant ? 'border-dashed opacity-70' : ''} {interactive ? 'cursor-pointer hover:opacity-80' : ''}"
 								style="
 									border-color: {tag.color};
 									background: color-mix(in srgb, {tag.color} {isVariant ? '5%' : '10%'}, transparent);
 								"
-								title={isVariant ? `混合变体 (来自 ${origCat})\n${tag.value}` : tag.value}
+								title={isVariant ? `混合变体 (来自 ${origCat})\n${tag.value}${interactive ? '\n左键添加，右键排除' : ''}` : `${tag.value}${interactive ? '\n左键添加，右键排除' : ''}`}
+								onclick={(e) => handleTagClick(tag, e)}
+								oncontextmenu={(e) => handleTagContextMenu(tag, e)}
 							>
 								<span class="w-1.5 h-1.5 {isVariant ? 'rounded-sm' : 'rounded-full'}" style="background: {tag.color}"></span>
 								{tag.display.split(':')[1]}
-							</span>
+							</button>
 						{/each}
 					</div>
 				</div>

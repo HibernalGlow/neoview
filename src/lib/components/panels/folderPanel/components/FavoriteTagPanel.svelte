@@ -1,166 +1,32 @@
 <script lang="ts">
 /**
  * FavoriteTagPanel - 收藏标签快选面板
- * 显示用户收藏的 EMM 标签，支持点击添加到搜索
- * 参考 exhentai-manga-manager 的 SearchAgilePanel
+ * 直接渲染 FavoriteTagsCard 组件，点击标签添加到搜索
  */
-import { X, Lock, Unlock, Star, RefreshCw, Tag } from '@lucide/svelte';
-import { favoriteTagStore, categoryColors, cat2letter, createTagValue, mixedGenderStore, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
-import { getAllUniqueManualTags, NAMESPACE_LABELS } from '$lib/stores/emm/manualTagStore.svelte';
-import { emmTranslationStore, emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
-
-let isReloading = $state(false);
-
-// 全局手动标签
-let allManualTags = $state<Array<{ namespace: string; tag: string; count: number }>>([]);
-
-function refreshAllManualTags() {
-	allManualTags = getAllUniqueManualTags();
-}
-
-// 翻译手动标签
-function translateManualTag(namespace: string, tag: string): string {
-	const dict = emmMetadataStore.getTranslationDict();
-	return emmTranslationStore.translateTag(tag, namespace, dict);
-}
-
-// 获取手动标签颜色
-function getManualTagColor(namespace: string): string {
-	return categoryColors[namespace] || '#10b981';
-}
-
-// 性别类别列表
-const genderCategories = ['female', 'male', 'mixed'];
-
-// 扩展标签类型（支持混合变体标记）
-interface ExtendedFavoriteTag extends FavoriteTag {
-	isMixedVariant?: boolean; // 是否是混合变体
-	originalCat?: string; // 原始类别
-}
-
-async function handleReloadFromEMM() {
-	isReloading = true;
-	try {
-		const result = await favoriteTagStore.reloadFromEMM();
-		console.log('[FavoriteTagPanel] 重新加载 EMM 收藏标签:', result ? '成功' : '失败');
-	} catch (err) {
-		console.error('[FavoriteTagPanel] 重新加载失败:', err);
-	} finally {
-		isReloading = false;
-	}
-}
+import { X, Lock, Unlock, Star } from '@lucide/svelte';
+import FavoriteTagsCard from '$lib/cards/properties/FavoriteTagsCard.svelte';
+import type { FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
 
 interface Props {
 	visible: boolean;
-	enableMixed?: boolean;
 	onClose: () => void;
 	onAppendTag: (tag: FavoriteTag, modifier?: string) => void;
-	onUpdateEnableMixed?: (value: boolean) => void;
 }
 
 let {
 	visible,
-	enableMixed = false,
 	onClose,
-	onAppendTag,
-	onUpdateEnableMixed
+	onAppendTag
 }: Props = $props();
 
 let isPinned = $state(false);
-let panelHeight = $state(240);
-
-// 初始化加载手动标签
-refreshAllManualTags();
+let panelHeight = $state(300);
 let isResizing = $state(false);
 let startY = $state(0);
 let startHeight = $state(0);
 
-// 分组后的标签（支持混合性别变体）
-const groupedTags = $derived.by((): Array<{ name: string; tags: ExtendedFavoriteTag[] }> => {
-	const baseTags = favoriteTagStore.tags;
-	const isMixedEnabled = mixedGenderStore.enabled;
-	
-	if (!isMixedEnabled) {
-		// 不开启混合时，将 FavoriteTag 转换为 ExtendedFavoriteTag
-		const baseGroups = favoriteTagStore.groupedTags;
-		return baseGroups.map(group => ({
-			name: group.name,
-			tags: group.tags.map(tag => ({ ...tag } as ExtendedFavoriteTag))
-		}));
-	}
-	
-	// 开启混合时，为性别标签生成变体
-	const extendedTags: ExtendedFavoriteTag[] = [];
-	const addedIds = new Set<string>();
-	
-	for (const tag of baseTags) {
-		// 添加原始标签
-		if (!addedIds.has(tag.id)) {
-			extendedTags.push({ ...tag });
-			addedIds.add(tag.id);
-		}
-		
-		// 如果是性别类别标签，生成其他性别的变体
-		if (genderCategories.includes(tag.cat)) {
-			for (const otherCat of genderCategories) {
-				if (otherCat === tag.cat) continue;
-				
-				const variantId = `${otherCat}:${tag.tag}`;
-				if (addedIds.has(variantId)) continue;
-				
-				const letter = cat2letter[otherCat] || otherCat.charAt(0);
-				const variantTag: ExtendedFavoriteTag = {
-					id: variantId,
-					cat: otherCat,
-					tag: tag.tag,
-					letter,
-					display: `${otherCat}:${tag.display.split(':')[1] || tag.tag}`,
-					value: createTagValue(otherCat, tag.tag),
-					color: tag.color, // 保持原始标签的颜色
-					isMixedVariant: true,
-					originalCat: tag.cat
-				};
-				
-				extendedTags.push(variantTag);
-				addedIds.add(variantId);
-			}
-		}
-	}
-	
-	// 分组
-	const groups: Record<string, ExtendedFavoriteTag[]> = {};
-	for (const tag of extendedTags) {
-		if (!groups[tag.cat]) {
-			groups[tag.cat] = [];
-		}
-		groups[tag.cat].push(tag);
-	}
-	
-	return Object.entries(groups)
-		.map(([name, tags]) => ({ name, tags }))
-		.sort((a, b) => a.name.localeCompare(b.name));
-});
-
-function handleTagClick(tag: ExtendedFavoriteTag, event: MouseEvent) {
-	event.preventDefault();
-	event.stopPropagation();
-	onAppendTag(tag, '');
-}
-
-function handleTagContextMenu(tag: FavoriteTag, event: MouseEvent) {
-	event.preventDefault();
-	event.stopPropagation();
-	// 右键点击添加排除标签
-	onAppendTag(tag, '-');
-}
-
 function togglePin() {
 	isPinned = !isPinned;
-}
-
-function toggleMixed() {
-	mixedGenderStore.toggle();
-	onUpdateEnableMixed?.(mixedGenderStore.enabled);
 }
 
 function startResize(event: MouseEvent) {
@@ -176,7 +42,7 @@ function startResize(event: MouseEvent) {
 function handleResize(event: MouseEvent) {
 	if (!isResizing) return;
 	const deltaY = event.clientY - startY;
-	panelHeight = Math.max(120, Math.min(500, startHeight + deltaY));
+	panelHeight = Math.max(150, Math.min(500, startHeight + deltaY));
 }
 
 function stopResize() {
@@ -184,12 +50,17 @@ function stopResize() {
 	document.removeEventListener('mousemove', handleResize);
 	document.removeEventListener('mouseup', stopResize);
 }
+
+// 处理标签点击
+function handleTagClick(tag: FavoriteTag, modifier?: string) {
+	onAppendTag(tag, modifier);
+}
 </script>
 
 {#if visible}
 	<div 
 		class="favorite-tag-panel absolute top-full left-0 right-0 z-50 mt-1 rounded-lg border bg-popover/80 backdrop-blur-md shadow-lg"
-		style="height: {panelHeight}px; max-height: 500px; min-height: 120px;"
+		style="height: {panelHeight}px; max-height: 500px; min-height: 150px;"
 	>
 		<!-- 头部 -->
 		<div class="flex items-center justify-between gap-2 border-b px-3 py-2">
@@ -198,25 +69,6 @@ function stopResize() {
 				<span class="text-sm font-medium">收藏标签快选</span>
 			</div>
 			<div class="flex items-center gap-2">
-				<!-- 混合性别开关 -->
-				<label class="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
-					<input
-						type="checkbox"
-						checked={mixedGenderStore.enabled}
-						onchange={toggleMixed}
-						class="h-3.5 w-3.5 rounded accent-primary"
-					/>
-					<span>混合性别</span>
-				</label>
-				<!-- 刷新按钮 -->
-				<button
-					class="p-1 rounded hover:bg-accent {isReloading ? 'animate-spin' : ''}"
-					onclick={handleReloadFromEMM}
-					title="从 EMM 重新加载收藏标签"
-					disabled={isReloading}
-				>
-					<RefreshCw class="h-3.5 w-3.5" />
-				</button>
 				<!-- 固定按钮 -->
 				<button
 					class="p-1 rounded hover:bg-accent"
@@ -239,92 +91,12 @@ function stopResize() {
 			</div>
 		</div>
 
-		<!-- 内容区 -->
+		<!-- 内容区：直接渲染 FavoriteTagsCard -->
 		<div class="flex-1 overflow-y-auto p-3" style="height: calc(100% - 44px);">
-			<!-- 手动标签区域 -->
-			{#if allManualTags.length > 0}
-				<div class="mb-3 pb-3 border-b border-border/50">
-					<div class="flex items-center justify-between mb-1.5 px-2 py-1 rounded bg-muted/50">
-						<div class="flex items-center gap-1.5">
-							<Tag class="h-3.5 w-3.5 text-emerald-500" />
-							<span class="text-xs font-semibold text-emerald-600">手动标签</span>
-						</div>
-						<span class="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
-							{allManualTags.length}
-						</span>
-					</div>
-					<div class="flex flex-wrap gap-1.5 pl-1">
-						{#each allManualTags as mt}
-							{@const translated = translateManualTag(mt.namespace, mt.tag)}
-							{@const color = getManualTagColor(mt.namespace)}
-							<button
-								class="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border-2 border-dashed transition-all hover:-translate-y-0.5"
-								style="border-color: {color}; background: color-mix(in srgb, {color} 12%, transparent);"
-								onclick={() => onAppendTag({ id: `manual:${mt.namespace}:${mt.tag}`, cat: mt.namespace, tag: mt.tag, letter: mt.namespace.slice(0,1), display: `${mt.namespace}:${translated}`, value: `${mt.namespace}:"${mt.tag}"$`, color }, '')}
-								oncontextmenu={(e) => { e.preventDefault(); onAppendTag({ id: `manual:${mt.namespace}:${mt.tag}`, cat: mt.namespace, tag: mt.tag, letter: mt.namespace.slice(0,1), display: `${mt.namespace}:${translated}`, value: `${mt.namespace}:"${mt.tag}"$`, color }, '-'); }}
-								title="{NAMESPACE_LABELS[mt.namespace]}: {mt.tag}{translated !== mt.tag ? ` (${translated})` : ''} ({mt.count}个文件)"
-							>
-								<span class="w-2 h-2 rounded-sm shrink-0" style="background-color: {color}"></span>
-								<span class="font-medium truncate max-w-[100px]" style="color: {color}">{translated}</span>
-								<span class="text-[10px] opacity-50">×{mt.count}</span>
-							</button>
-						{/each}
-					</div>
-				</div>
-			{/if}
-			
-			{#if groupedTags.length === 0}
-				<div class="flex flex-col items-center justify-center h-full text-muted-foreground">
-					<Star class="h-8 w-8 mb-2 opacity-30" />
-					<p class="text-sm">暂无收藏标签</p>
-					<p class="text-xs mt-1">在文件详情中收藏标签后，可在此快速选择</p>
-				</div>
-			{:else}
-				{#each groupedTags as category}
-					<div class="mb-3">
-						<!-- 类别头部 -->
-						<div class="flex items-center justify-between mb-1.5 px-2 py-1 rounded bg-muted/50">
-							<span class="text-xs font-semibold" style="color: {categoryColors[category.name] || '#666'}">
-								{category.name}
-							</span>
-							<span class="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
-								{category.tags.length}
-							</span>
-						</div>
-						<!-- 标签列表 -->
-						<div class="flex flex-wrap gap-1.5 pl-1">
-							{#each category.tags as tag (tag.id)}
-								{@const isVariant = 'isMixedVariant' in tag && tag.isMixedVariant}
-								{@const origCat = 'originalCat' in tag ? tag.originalCat : ''}
-								<button
-									class="favorite-tag-chip inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded border transition-all hover:-translate-y-0.5 {isVariant ? 'border-dashed opacity-70' : ''}"
-									style="
-										--tag-color: {tag.color};
-										border-color: {tag.color};
-										background: color-mix(in srgb, {tag.color} {isVariant ? '6%' : '12%'}, transparent);
-									"
-									onclick={(e) => handleTagClick(tag, e)}
-									oncontextmenu={(e) => handleTagContextMenu(tag, e)}
-									title={isVariant ? `混合变体 (来自 ${origCat}) - 左键添加，右键排除` : '左键添加，右键排除'}
-								>
-									<span 
-										class="w-2 h-2 shrink-0 {isVariant ? 'rounded-sm' : 'rounded-full'}"
-										style="background-color: {tag.color}"
-									></span>
-									<span class="font-medium truncate max-w-[100px]">
-										{tag.display.split(':')[1]}
-									</span>
-								</button>
-							{/each}
-						</div>
-					</div>
-				{/each}
-			{/if}
-		</div>
-
-		<!-- 提示 -->
-		<div class="border-t px-3 py-1.5 text-[10px] text-muted-foreground">
-			左键点击添加标签，右键点击排除标签
+			<FavoriteTagsCard 
+				interactive={true}
+				onTagClick={handleTagClick}
+			/>
 		</div>
 
 		<!-- 拖拽调整大小 -->
@@ -338,10 +110,3 @@ function stopResize() {
 		></div>
 	</div>
 {/if}
-
-<style>
-	.favorite-tag-chip:hover {
-		border-color: color-mix(in srgb, var(--tag-color) 80%, transparent);
-		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-	}
-</style>

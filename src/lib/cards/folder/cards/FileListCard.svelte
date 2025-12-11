@@ -13,7 +13,7 @@
 	import InlineTreeList from '$lib/components/panels/folderPanel/components/InlineTreeList.svelte';
 	
 	import { getFolderContext } from '../context/FolderContext.svelte';
-	import { folderTabActions } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
+	import { folderTabActions, tabSearchResults } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 	import { loadVirtualPathData, subscribeVirtualPathData } from '$lib/components/panels/folderPanel/utils/virtualPathLoader';
 
@@ -39,11 +39,21 @@
 	
 	// 虚拟路径文件列表（用于树状视图）
 	let virtualItems = $state<FsItem[]>([]);
+	// 搜索结果（用于树状视图）
+	let searchResultItems = $state<FsItem[]>([]);
 	
 	// 订阅全局 store
 	$effect(() => {
 		const unsub = folderTreeConfig.subscribe(v => globalFolderTreeConfigValue = v);
 		return () => unsub();
+	});
+	
+	// 订阅搜索结果
+	$effect(() => {
+		const unsub = tabSearchResults.subscribe(results => {
+			searchResultItems = results;
+		});
+		return unsub;
 	});
 	
 	// 订阅虚拟路径数据（如果是虚拟实例）
@@ -57,6 +67,11 @@
 		});
 		return unsub;
 	});
+	
+	// 判断是否应该使用局部树（虚拟路径或有搜索结果时）
+	let shouldUseLocalTree = $derived(ctx.isVirtualInstance || searchResultItems.length > 0);
+	// 局部树的数据源
+	let localTreeItems = $derived(ctx.isVirtualInstance ? virtualItems : searchResultItems);
 	
 	// 有效的文件树配置（虚拟模式使用 effectiveFolderTreeConfig，否则使用全局 store）
 	let effectiveTreeConfig = $derived(
@@ -172,10 +187,10 @@
 			class:border-l={effectiveTreeConfig.layout === 'right'}
 			style={getTreeContainerStyle(effectiveTreeConfig.layout, effectiveTreeConfig.size)}
 		>
-			{#if ctx.isVirtualInstance}
-				<!-- 虚拟路径模式：显示基于当前文件列表的局部树 -->
+			{#if shouldUseLocalTree}
+				<!-- 虚拟路径/搜索结果模式：显示基于当前文件列表的局部树 -->
 				<FileTreeView
-					items={virtualItems}
+					items={localTreeItems}
 					thumbnails={fileBrowserStore.getState().thumbnails}
 					on:itemClick={(e) => onItemOpen(e.detail.item)}
 					on:itemDoubleClick={(e) => onItemOpen(e.detail.item)}

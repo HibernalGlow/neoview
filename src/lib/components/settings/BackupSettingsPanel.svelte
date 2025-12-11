@@ -20,7 +20,11 @@
 		HardDrive,
 		RefreshCw,
 		Save,
-		History
+		History,
+		Filter,
+		Plus,
+		X,
+		Search
 	} from '@lucide/svelte';
 	import { onMount } from 'svelte';
 
@@ -32,6 +36,11 @@
 	// 备份列表
 	let backups = $state<BackupInfo[]>([]);
 	let loadingBackups = $state(false);
+
+	// 排除配置
+	let newExcludedKey = $state('');
+	let showAnalysis = $state(false);
+	let analysisData = $state<Array<{ key: string; lines: number; size: number; excluded: boolean; reason?: string }>>([]);
 
 	// 间隔选项
 	const intervalOptions = [
@@ -137,6 +146,38 @@
 		return new Date(timestamp).toLocaleString('zh-CN');
 	}
 
+	// 添加排除键
+	function addExcludedKey() {
+		if (!newExcludedKey.trim()) return;
+		const exclusion = settings.exclusion || { excludedKeys: [], excludedModules: [], autoExcludeLargeData: true, maxLineCount: 1000 };
+		if (!exclusion.excludedKeys.includes(newExcludedKey.trim())) {
+			autoBackupStore.updateSettings({
+				exclusion: {
+					...exclusion,
+					excludedKeys: [...exclusion.excludedKeys, newExcludedKey.trim()]
+				}
+			});
+		}
+		newExcludedKey = '';
+	}
+
+	// 移除排除键
+	function removeExcludedKey(key: string) {
+		const exclusion = settings.exclusion || { excludedKeys: [], excludedModules: [], autoExcludeLargeData: true, maxLineCount: 1000 };
+		autoBackupStore.updateSettings({
+			exclusion: {
+				...exclusion,
+				excludedKeys: exclusion.excludedKeys.filter(k => k !== key)
+			}
+		});
+	}
+
+	// 分析 localStorage
+	function analyzeStorage() {
+		analysisData = autoBackupStore.analyzeLocalStorage();
+		showAnalysis = true;
+	}
+
 	onMount(() => {
 		if (settings.backupPath) {
 			loadBackups();
@@ -219,6 +260,116 @@
 					autoBackupStore.updateSettings({ includeAllLocalStorage: checked })}
 			/>
 		</div>
+
+		<!-- 排除配置 -->
+		{#if settings.includeAllLocalStorage}
+		<div class="space-y-3 rounded-lg border p-3">
+			<div class="flex items-center justify-between">
+				<div>
+					<Label class="flex items-center gap-2">
+						<Filter class="h-4 w-4" />
+						排除配置
+					</Label>
+					<p class="text-xs text-muted-foreground">配置备份时排除的数据项</p>
+				</div>
+				<Button variant="outline" size="sm" onclick={analyzeStorage}>
+					<Search class="mr-1 h-3 w-3" />
+					分析
+				</Button>
+			</div>
+
+			<!-- 自动排除大数据 -->
+			<div class="flex items-center justify-between">
+				<div>
+					<Label for="auto-exclude-large" class="text-sm">自动排除大数据</Label>
+					<p class="text-xs text-muted-foreground">自动排除超过指定行数的数据</p>
+				</div>
+				<Switch
+					id="auto-exclude-large"
+					checked={settings.exclusion?.autoExcludeLargeData ?? true}
+					onCheckedChange={(checked) => {
+						const exclusion = settings.exclusion || { excludedKeys: [], excludedModules: [], autoExcludeLargeData: true, maxLineCount: 1000 };
+						autoBackupStore.updateSettings({ exclusion: { ...exclusion, autoExcludeLargeData: !!checked } });
+					}}
+				/>
+			</div>
+
+			<!-- 最大行数 -->
+			{#if settings.exclusion?.autoExcludeLargeData ?? true}
+			<div class="flex items-center justify-between gap-2">
+				<Label class="text-sm">最大行数阈值</Label>
+				<Input
+					type="number"
+					min="100"
+					max="10000"
+					step="100"
+					value={settings.exclusion?.maxLineCount ?? 1000}
+					onchange={(e) => {
+						const target = e.target as HTMLInputElement;
+						const exclusion = settings.exclusion || { excludedKeys: [], excludedModules: [], autoExcludeLargeData: true, maxLineCount: 1000 };
+						autoBackupStore.updateSettings({ exclusion: { ...exclusion, maxLineCount: parseInt(target.value) || 1000 } });
+					}}
+					class="w-24"
+				/>
+			</div>
+			{/if}
+
+			<!-- 手动排除列表 -->
+			<div class="space-y-2">
+				<Label class="text-sm">手动排除的键名</Label>
+				<div class="flex gap-2">
+					<Input
+						bind:value={newExcludedKey}
+						placeholder="输入要排除的 localStorage 键名"
+						class="flex-1 text-sm"
+						onkeydown={(e) => e.key === 'Enter' && addExcludedKey()}
+					/>
+					<Button variant="outline" size="icon" onclick={addExcludedKey}>
+						<Plus class="h-4 w-4" />
+					</Button>
+				</div>
+				{#if (settings.exclusion?.excludedKeys?.length ?? 0) > 0}
+				<div class="flex flex-wrap gap-1.5">
+					{#each settings.exclusion?.excludedKeys ?? [] as key}
+					<span class="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs">
+						{key}
+						<button type="button" class="hover:text-destructive" onclick={() => removeExcludedKey(key)}>
+							<X class="h-3 w-3" />
+						</button>
+					</span>
+					{/each}
+				</div>
+				{/if}
+			</div>
+		</div>
+		{/if}
+
+		<!-- 数据分析弹窗 -->
+		{#if showAnalysis}
+		<div class="space-y-2 rounded-lg border p-3">
+			<div class="flex items-center justify-between">
+				<Label class="text-sm font-semibold">localStorage 数据分析</Label>
+				<Button variant="ghost" size="sm" onclick={() => showAnalysis = false}>
+					<X class="h-4 w-4" />
+				</Button>
+			</div>
+			<div class="max-h-48 overflow-y-auto space-y-1">
+				{#each analysisData as item}
+				<div class="flex items-center justify-between text-xs p-1.5 rounded {item.excluded ? 'bg-destructive/10 text-destructive' : 'hover:bg-muted'}">
+					<span class="truncate flex-1" title={item.key}>{item.key}</span>
+					<span class="text-muted-foreground mx-2">{item.lines}行</span>
+					<span class="text-muted-foreground">{formatSize(item.size)}</span>
+					{#if item.excluded}
+					<span class="ml-2 text-destructive">({item.reason})</span>
+					{/if}
+				</div>
+				{/each}
+			</div>
+			<p class="text-xs text-muted-foreground">
+				共 {analysisData.length} 项，排除 {analysisData.filter(i => i.excluded).length} 项
+			</p>
+		</div>
+		{/if}
 
 		<!-- 备份目录 -->
 		<div class="space-y-2">

@@ -10,6 +10,13 @@ import { settingsManager as coreSettingsManager } from '$lib/settings/settingsMa
 
 // ==================== 类型定义 ====================
 
+export interface BackupExclusionSettings {
+    excludedKeys: string[]; // 手动排除的 localStorage 键名
+    excludedModules: string[]; // 排除的模块名
+    autoExcludeLargeData: boolean; // 自动排除大数据
+    maxLineCount: number; // 超过此行数的数据将被排除
+}
+
 export interface BackupSettings {
     enabled: boolean;
     intervalMinutes: number; // 备份间隔（分钟）
@@ -17,6 +24,7 @@ export interface BackupSettings {
     backupPath: string; // 备份目录路径
     lastBackupTime: number | null; // 上次备份时间戳
     includeAllLocalStorage: boolean; // 是否包含所有 localStorage 数据
+    exclusion: BackupExclusionSettings; // 排除配置
 }
 
 export interface BackupInfo {
@@ -39,13 +47,25 @@ export interface FullBackupPayload {
 // ==================== 常量 ====================
 
 const SETTINGS_KEY = 'neoview-auto-backup-settings';
+const DEFAULT_EXCLUSION: BackupExclusionSettings = {
+    excludedKeys: [
+        'neoview-emm-folder-ratings',
+        'neoview-empty-settings',
+        'neoview-ai-translation-cache'
+    ],
+    excludedModules: [],
+    autoExcludeLargeData: true,
+    maxLineCount: 1000
+};
+
 const DEFAULT_SETTINGS: BackupSettings = {
     enabled: false,
     intervalMinutes: 60, // 默认每小时备份一次
     maxBackups: 10,
     backupPath: '',
     lastBackupTime: null,
-    includeAllLocalStorage: true
+    includeAllLocalStorage: true,
+    exclusion: DEFAULT_EXCLUSION
 };
 
 // ==================== Store ====================
@@ -186,7 +206,38 @@ class AutoBackupStore {
     // ==================== 备份功能 ====================
 
     /**
-     * 收集所有 localStorage 数据
+     * 计算字符串的行数
+     */
+    private countLines(str: string): number {
+        if (!str) return 0;
+        return str.split('\n').length;
+    }
+
+    /**
+     * 检查键名是否应被排除
+     */
+    private shouldExcludeKey(key: string, value: string): boolean {
+        const exclusion = this.settings.exclusion || DEFAULT_EXCLUSION;
+        
+        // 检查是否在手动排除列表中
+        if (exclusion.excludedKeys.includes(key)) {
+            return true;
+        }
+        
+        // 检查是否超过行数限制
+        if (exclusion.autoExcludeLargeData && exclusion.maxLineCount > 0) {
+            const lineCount = this.countLines(value);
+            if (lineCount > exclusion.maxLineCount) {
+                console.log(`[AutoBackup] 自动排除大数据: ${key} (行数: ${lineCount})`);
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * 收集所有 localStorage 数据（应用排除规则）
      */
     private collectAllLocalStorage(): Record<string, string> {
         const data: Record<string, string> = {};
@@ -196,12 +247,47 @@ class AutoBackupStore {
             const key = localStorage.key(i);
             if (key) {
                 const value = localStorage.getItem(key);
-                if (value !== null) {
+                if (value !== null && !this.shouldExcludeKey(key, value)) {
                     data[key] = value;
                 }
             }
         }
         return data;
+    }
+
+    /**
+     * 分析 localStorage 数据（用于显示给用户）
+     */
+    analyzeLocalStorage(): Array<{ key: string; lines: number; size: number; excluded: boolean; reason?: string }> {
+        const result: Array<{ key: string; lines: number; size: number; excluded: boolean; reason?: string }> = [];
+        if (typeof window === 'undefined' || !window.localStorage) return result;
+
+        const exclusion = this.settings.exclusion || DEFAULT_EXCLUSION;
+
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key) {
+                const value = localStorage.getItem(key) || '';
+                const lines = this.countLines(value);
+                const size = new Blob([value]).size;
+                
+                let excluded = false;
+                let reason: string | undefined;
+                
+                if (exclusion.excludedKeys.includes(key)) {
+                    excluded = true;
+                    reason = '手动排除';
+                } else if (exclusion.autoExcludeLargeData && lines > exclusion.maxLineCount) {
+                    excluded = true;
+                    reason = `超过${exclusion.maxLineCount}行`;
+                }
+                
+                result.push({ key, lines, size, excluded, reason });
+            }
+        }
+        
+        // 按大小排序
+        return result.sort((a, b) => b.size - a.size);
     }
 
     /**

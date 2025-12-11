@@ -46,7 +46,7 @@
 		emmMetadata: { translatedTitle?: string; tags?: Record<string, string[]>; rating?: number } | null;
 		folderAverageRating: number | null;
 		folderManualRating: number | null;
-		displayTags: () => { tag: string; display: string; isCollect: boolean; color?: string; isMixedVariant?: boolean }[];
+		displayTags: () => { tag: string; display: string; isCollect: boolean; color?: string; isMixedVariant?: boolean; isManual?: boolean }[];
 		getEffectiveRating: () => number | null;
 		// 事件
 		onClick?: () => void;
@@ -315,6 +315,7 @@
 						color={tagInfo.color}
 						isCollect={tagInfo.isCollect}
 						isMixedVariant={tagInfo.isMixedVariant}
+						isManual={tagInfo.isManual}
 						size="sm"
 					/>
 				{/each}

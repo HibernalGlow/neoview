@@ -59,7 +59,7 @@
 		penetrateInfoList?: Array<{ originalName: string; translatedTitle?: string | null; isAiTranslated: boolean }>;
 		folderAverageRating: number | null;
 		folderManualRating: number | null;
-		displayTags: () => { tag: string; display: string; isCollect: boolean; color?: string; isMixedVariant?: boolean }[];
+		displayTags: () => { tag: string; display: string; isCollect: boolean; color?: string; isMixedVariant?: boolean; isManual?: boolean }[];
 		getEffectiveRating: () => number | null;
 		// 预览相关
 		showPreview: boolean;
@@ -501,6 +501,7 @@
 						color={tagInfo.color}
 						isCollect={tagInfo.isCollect}
 						isMixedVariant={tagInfo.isMixedVariant}
+						isManual={tagInfo.isManual}
 						size="md"
 					/>
 				{/each}

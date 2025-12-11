@@ -15,6 +15,7 @@
 	import { mixedGenderStore, categoryColors } from '$lib/stores/emm/favoriteTagStore.svelte';
 	import { collectTagCountStore } from '$lib/stores/emm/collectTagCountStore';
 	import type { EMMTranslationDict } from '$lib/api/emm';
+	import { getManualTags, type ManualTag } from '$lib/stores/emm/manualTagStore.svelte';
 	import { getFileMetadata } from '$lib/api';
 	import FileItemListView from './FileItemListView.svelte';
 	import FileItemGridView from './FileItemGridView.svelte';
@@ -103,6 +104,9 @@
 	// let collectTags = $state<EMMCollectTag[]>([]); // No longer needed locally
 	let metadataLoading = $state(false);
 	let lastLoadedPath = $state<string | null>(null);
+
+	// 手动标签
+	let manualTags = $state<ManualTag[]>([]);
 
 	// AI 翻译状态
 	let aiTranslatedTitle = $state<string | null>(null);
@@ -355,6 +359,17 @@
 					metadataLoading = false;
 				});
 
+			// 同时加载手动标签
+			getManualTags(item.path)
+				.then((tags) => {
+					if (item.path === lastLoadedPath) {
+						manualTags = tags;
+					}
+				})
+				.catch((err) => {
+					console.debug('[FileItemCard] 手动标签加载失败:', err);
+				});
+
 			return () => {
 				metadataLoading = false;
 			};
@@ -400,78 +415,105 @@
 	// 性别类别（用于混合匹配）
 	const genderCategories = ['female', 'male', 'mixed'];
 
-	// 获取显示的标签（高亮收藏的，支持混合匹配）
+	// 获取显示的标签（高亮收藏的，支持混合匹配，包含手动标签）
 	const displayTags = $derived(() => {
-		if (!emmMetadata?.tags || fileListTagDisplayMode === 'none') return [];
+		if (fileListTagDisplayMode === 'none') return [];
 
 		const map = $collectTagMap; // Use the shared map
 		const normalize = (s: string) => s.trim().toLowerCase();
 		const isMixedEnabled = mixedGenderStore.enabled;
 
-		const allTags: Array<{ tag: string; isCollect: boolean; color?: string; display: string; isMixedVariant?: boolean }> = [];
+		const allTags: Array<{ tag: string; isCollect: boolean; color?: string; display: string; isMixedVariant?: boolean; isManual?: boolean }> = [];
 		const addedTagKeys = new Set<string>();
 
-		for (const [category, tags] of Object.entries(emmMetadata.tags)) {
-			for (const tag of tags) {
-				const fullTagKey = normalize(`${category}:${tag}`);
-				
-				// 避免重复添加
-				if (addedTagKeys.has(fullTagKey)) continue;
-				addedTagKeys.add(fullTagKey);
+		// 先添加 EMM 标签
+		if (emmMetadata?.tags) {
+			for (const [category, tags] of Object.entries(emmMetadata.tags)) {
+				for (const tag of tags) {
+					const fullTagKey = normalize(`${category}:${tag}`);
+					
+					// 避免重复添加
+					if (addedTagKeys.has(fullTagKey)) continue;
+					addedTagKeys.add(fullTagKey);
 
-				// 尝试多种组合查找
-				let collectTag = map.get(fullTagKey);
-				if (!collectTag) {
-					collectTag = map.get(normalize(tag));
-				}
+					// 尝试多种组合查找
+					let collectTag = map.get(fullTagKey);
+					if (!collectTag) {
+						collectTag = map.get(normalize(tag));
+					}
 
-				// 混合匹配：如果是性别类别，检查其他性别类别的收藏
-				let matchedByMixed = false;
-				let mixedCollectTag = collectTag;
-				if (!collectTag && isMixedEnabled && genderCategories.includes(category)) {
-					for (const altCat of genderCategories) {
-						if (altCat === category) continue;
-						const altKey = normalize(`${altCat}:${tag}`);
-						const altCollect = map.get(altKey);
-						if (altCollect) {
-							mixedCollectTag = altCollect;
-							matchedByMixed = true;
-							break;
+					// 混合匹配：如果是性别类别，检查其他性别类别的收藏
+					let matchedByMixed = false;
+					let mixedCollectTag = collectTag;
+					if (!collectTag && isMixedEnabled && genderCategories.includes(category)) {
+						for (const altCat of genderCategories) {
+							if (altCat === category) continue;
+							const altKey = normalize(`${altCat}:${tag}`);
+							const altCollect = map.get(altKey);
+							if (altCollect) {
+								mixedCollectTag = altCollect;
+								matchedByMixed = true;
+								break;
+							}
 						}
 					}
+
+					const isCollect = !!collectTag || matchedByMixed;
+
+					// 根据显示模式过滤
+					if (fileListTagDisplayMode === 'collect' && !isCollect) {
+						continue;
+					}
+
+					// 翻译和缩写
+					const translatedTag = emmTranslationStore.translateTag(tag, category, translationDict);
+					const shortCategory = emmTranslationStore.getShortNamespace(category);
+					const displayStr = `${shortCategory}:${translatedTag}`;
+
+					// 使用类别颜色或收藏颜色
+					const tagColor = collectTag?.color || (matchedByMixed ? mixedCollectTag?.color : categoryColors[category]);
+
+					allTags.push({
+						tag: `${category}:${tag}`,
+						isCollect,
+						color: tagColor,
+						display: displayStr,
+						isMixedVariant: matchedByMixed,
+						isManual: false
+					});
 				}
-
-				const isCollect = !!collectTag || matchedByMixed;
-
-				// 根据显示模式过滤
-				if (fileListTagDisplayMode === 'collect' && !isCollect) {
-					continue;
-				}
-
-				// 翻译和缩写
-				const translatedTag = emmTranslationStore.translateTag(tag, category, translationDict);
-				const shortCategory = emmTranslationStore.getShortNamespace(category);
-				const displayStr = `${shortCategory}:${translatedTag}`;
-
-				// 使用类别颜色或收藏颜色
-				const tagColor = collectTag?.color || (matchedByMixed ? mixedCollectTag?.color : categoryColors[category]);
-
-				allTags.push({
-					tag: `${category}:${tag}`,
-					isCollect,
-					color: tagColor,
-					display: displayStr,
-					isMixedVariant: matchedByMixed
-				});
 			}
 		}
 
-		// 收藏标签优先显示
-		const collectTagsList = allTags.filter((t) => t.isCollect);
-		const normalTagsList = allTags.filter((t) => !t.isCollect);
+		// 添加手动标签（虚线边框样式）
+		for (const mt of manualTags) {
+			const fullTagKey = normalize(`${mt.namespace}:${mt.tag}`);
+			
+			// 避免与 EMM 标签重复
+			if (addedTagKeys.has(fullTagKey)) continue;
+			addedTagKeys.add(fullTagKey);
 
-		// 如果有收藏标签，优先展示收藏标签；否则展示普通标签
-		return [...collectTagsList, ...normalTagsList];
+			// 翻译手动标签
+			const translatedTag = emmTranslationStore.translateTag(mt.tag, mt.namespace, translationDict);
+			const shortCategory = emmTranslationStore.getShortNamespace(mt.namespace);
+			const displayStr = `${shortCategory}:${translatedTag}`;
+
+			allTags.push({
+				tag: `${mt.namespace}:${mt.tag}`,
+				isCollect: false,
+				color: categoryColors[mt.namespace] || '#10b981', // 默认绿色
+				display: displayStr,
+				isMixedVariant: false,
+				isManual: true
+			});
+		}
+
+		// 收藏标签优先显示，手动标签次之
+		const collectTagsList = allTags.filter((t) => t.isCollect);
+		const manualTagsList = allTags.filter((t) => t.isManual && !t.isCollect);
+		const normalTagsList = allTags.filter((t) => !t.isCollect && !t.isManual);
+
+		return [...collectTagsList, ...manualTagsList, ...normalTagsList];
 	});
 
 	// 当 displayTags 计算完成后，更新 collectTagCount 到缓存（用于排序）

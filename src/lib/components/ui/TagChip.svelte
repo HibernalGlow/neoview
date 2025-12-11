@@ -13,6 +13,7 @@
 		color?: string;
 		isCollect?: boolean;
 		isMixedVariant?: boolean;
+		isManual?: boolean;
 		size?: 'sm' | 'md';
 		showRemove?: boolean;
 		onClick?: () => void;
@@ -27,6 +28,7 @@
 		color,
 		isCollect = false,
 		isMixedVariant = false,
+		isManual = false,
 		size = 'sm',
 		showRemove = false,
 		onClick,
@@ -45,17 +47,17 @@
 	<span
 		role="button"
 		tabindex="0"
-		class="tag-chip inline-flex items-center gap-0.5 rounded border transition-all hover:-translate-y-0.5 cursor-pointer {sizeClass} {isMixedVariant ? 'border-dashed' : ''} {isCollect && !isMixedVariant ? 'font-semibold' : ''}"
+		class="tag-chip inline-flex items-center gap-0.5 rounded border transition-all hover:-translate-y-0.5 cursor-pointer {sizeClass} {isMixedVariant || isManual ? 'border-dashed' : ''} {isManual ? 'border-2' : ''} {isCollect && !isMixedVariant ? 'font-semibold' : ''}"
 		style="
 			border-color: {tagColor};
-			background: color-mix(in srgb, {tagColor} {isMixedVariant ? '8%' : isCollect ? '15%' : '10%'}, transparent);
-			color: {isCollect || isMixedVariant ? tagColor : 'inherit'};
+			background: color-mix(in srgb, {tagColor} {isMixedVariant ? '8%' : isManual ? '12%' : isCollect ? '15%' : '10%'}, transparent);
+			color: {isCollect || isMixedVariant || isManual ? tagColor : 'inherit'};
 			opacity: {isMixedVariant ? '0.65' : '1'};
 		"
 		onclick={onClick}
 		onkeydown={(e) => e.key === 'Enter' && onClick?.()}
 		oncontextmenu={onContextMenu}
-		title={isMixedVariant ? `混合匹配 - ${tag}` : tag}
+		title={isManual ? `手动标签 - ${tag}` : isMixedVariant ? `混合匹配 - ${tag}` : tag}
 	>
 		<span class="w-1.5 h-1.5 rounded-full shrink-0" style="background: {tagColor}; opacity: {isMixedVariant ? '0.6' : '1'};"></span>
 		<span>{display}</span>
@@ -72,14 +74,14 @@
 	</span>
 {:else}
 	<span
-		class="tag-chip inline-flex items-center gap-0.5 rounded border {sizeClass} {isMixedVariant ? 'border-dashed' : ''} {isCollect && !isMixedVariant ? 'font-semibold' : ''}"
+		class="tag-chip inline-flex items-center gap-0.5 rounded border {sizeClass} {isMixedVariant || isManual ? 'border-dashed' : ''} {isManual ? 'border-2' : ''} {isCollect && !isMixedVariant ? 'font-semibold' : ''}"
 		style="
 			border-color: {tagColor};
-			background: color-mix(in srgb, {tagColor} {isMixedVariant ? '8%' : isCollect ? '15%' : '10%'}, transparent);
-			color: {isCollect || isMixedVariant ? tagColor : 'inherit'};
+			background: color-mix(in srgb, {tagColor} {isMixedVariant ? '8%' : isManual ? '12%' : isCollect ? '15%' : '10%'}, transparent);
+			color: {isCollect || isMixedVariant || isManual ? tagColor : 'inherit'};
 			opacity: {isMixedVariant ? '0.65' : '1'};
 		"
-		title={isMixedVariant ? `混合匹配 - ${tag}` : tag}
+		title={isManual ? `手动标签 - ${tag}` : isMixedVariant ? `混合匹配 - ${tag}` : tag}
 	>
 		<span class="w-1.5 h-1.5 rounded-full shrink-0" style="background: {tagColor}; opacity: {isMixedVariant ? '0.6' : '1'};"></span>
 		<span>{display}</span>

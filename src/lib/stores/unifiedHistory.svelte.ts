@@ -247,6 +247,7 @@ export const unifiedHistoryStore = {
 
   /**
    * 根据单个路径查找（兼容旧逻辑）
+   * 支持单文件模式：会检查 pathStack 中所有路径
    */
   findByPath(path: string): UnifiedHistoryEntry | undefined {
     const history = get({ subscribe });
@@ -254,9 +255,8 @@ export const unifiedHistoryStore = {
     const normalizedPath = normalizePath(path);
     
     return history.find(h => {
-      const firstRef = h.pathStack[0];
-      if (!firstRef) return false;
-      return normalizePath(firstRef.path) === normalizedPath;
+      // 检查 pathStack 中的所有路径
+      return h.pathStack.some(ref => normalizePath(ref.path) === normalizedPath);
     });
   },
 

@@ -32,7 +32,8 @@
 		bottomThumbnailBarPinned,
 		toggleReadingDirection,
 		toggleSinglePanoramaView,
-		toggleTemporaryFitZoom
+		toggleTemporaryFitZoom,
+		initFullscreenState
 	} from '$lib/stores';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { FolderOpen, Eye, EyeOff, ImageUp, X, Video, Settings2 } from '@lucide/svelte';
@@ -60,6 +61,7 @@
 	import { getMatches } from '@tauri-apps/plugin-cli';
 	import { getFileMetadata } from '$lib/api/filesystem';
 	import { openFileSystemItem } from '$lib/utils/navigationUtils';
+	import { windowManager } from '$lib/core/windows/windowManager';
 
 	let loading = $state(false);
 
@@ -266,6 +268,14 @@
 			console.error('❌ CLI 启动失败:', error);
 		}
 
+		// 初始化全屏状态同步（Requirements: 1.1, 1.2）
+		try {
+			await initFullscreenState();
+			console.log('✅ 全屏状态同步初始化成功');
+		} catch (error) {
+			console.error('❌ 全屏状态同步初始化失败:', error);
+		}
+
 		// 语音命令事件监听器
 		voiceCommandHandler = (event: Event) => {
 			const customEvent = event as CustomEvent<{ action: string; transcript: string }>;
@@ -277,11 +287,13 @@
 		window.addEventListener('neoview-voice-command', voiceCommandHandler);
 	});
 
-	// 清理语音命令监听器
+	// 清理语音命令监听器和全屏状态监听器
 	onDestroy(() => {
 		if (voiceCommandHandler) {
 			window.removeEventListener('neoview-voice-command', voiceCommandHandler);
 		}
+		// 清理全屏状态同步监听器（Requirements: 4.1）
+		windowManager.cleanupFullscreenSync();
 	});
 
 	async function handleOpenFolder() {

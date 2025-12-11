@@ -36,7 +36,6 @@
 	import { getImageStore } from './stores/imageStore.svelte';
 	import { getPanoramaStore } from './stores/panoramaStore.svelte';
 	import { createCursorAutoHide, type CursorAutoHideController } from '$lib/utils/cursorAutoHide';
-	import { stackImageLoader } from './utils/stackImageLoader';
 
 	// 导入外部 stores
 	import {
@@ -106,18 +105,34 @@
 		return { width: 0, height: 0 };
 	});
 
+	// 追踪上一个页面索引，用于检测页面切换
+	let lastPageIndex = $state<number>(-1);
+
+	// 【性能优化】页面索引变化时立即清除旧尺寸
+	// 这确保了在 URL 更新之前就使用 bookStore.currentPage 的预缓存尺寸
+	$effect.pre(() => {
+		const pageIndex = bookStore.currentPageIndex;
+		if (pageIndex !== lastPageIndex) {
+			loadedImageSize = null;
+			lastPageIndex = pageIndex;
+		}
+	});
+
 	// 【修复】主动获取图片尺寸，使用 $effect.pre 确保在渲染前更新
 	$effect.pre(() => {
 		const url = imageStore.state.currentUrl;
+		const pageIndex = bookStore.currentPageIndex;
 		if (!url) {
 			loadedImageSize = null;
 			return;
 		}
 
-		// 创建临时 Image 对象获取尺寸
+		// 创建临时 Image 对象获取精确尺寸
 		const img = new Image();
+		const capturedPageIndex = pageIndex;
 		img.onload = () => {
-			if (img.naturalWidth && img.naturalHeight) {
+			// 确保这是当前页面的图片（页面索引匹配）
+			if (capturedPageIndex === bookStore.currentPageIndex && img.naturalWidth && img.naturalHeight) {
 				const newWidth = img.naturalWidth;
 				const newHeight = img.naturalHeight;
 				if (loadedImageSize?.width !== newWidth || loadedImageSize?.height !== newHeight) {
@@ -144,70 +159,62 @@
 	let rotation = $state(0);
 
 	// 根据 zoomMode 计算的基础缩放
-	// 【性能优化】优先使用预计算缓存，避免每次翻页重新计算
+	// 【性能优化】优先使用 bookStore.currentPage 的预缓存尺寸，避免等待图片加载
 	let modeScale = $derived.by(() => {
-		const pageIndex = bookStore.currentPageIndex;
-		const dims = imageStore.state.dimensions;
-		if (!dims?.width || !dims?.height || !viewportSize.width || !viewportSize.height) {
+		// 优先级：loadedImageSize > imageStore.dimensions > bookStore.currentPage
+		const page = bookStore.currentPage;
+		const storeDims = imageStore.state.dimensions;
+		
+		// 使用最准确的尺寸源（加载后的尺寸最准确，但页面元数据尺寸最快可用）
+		const iw = loadedImageSize?.width ?? storeDims?.width ?? page?.width ?? 0;
+		const ih = loadedImageSize?.height ?? storeDims?.height ?? page?.height ?? 0;
+		
+		if (!iw || !ih || !viewportSize.width || !viewportSize.height) {
 			return 1;
 		}
 
-		// 尝试使用缓存的缩放比例
-		const cachedScale = stackImageLoader.getCachedScale(pageIndex, currentZoomMode);
-		if (cachedScale !== null) {
-			return cachedScale;
-		}
-
-		// 计算并缓存
-		const iw = dims.width;
-		const ih = dims.height;
 		const vw = viewportSize.width;
 		const vh = viewportSize.height;
 
 		const ratioW = vw / iw;
 		const ratioH = vh / ih;
 
-		let scale: number;
 		switch (currentZoomMode) {
 			case 'original':
-				scale = 1; // 原始大小
-				break;
+				return 1; // 原始大小
 			case 'fit':
 			case 'fitLeftAlign':
 			case 'fitRightAlign':
-				scale = Math.min(ratioW, ratioH); // 适应窗口
-				break;
+				return Math.min(ratioW, ratioH); // 适应窗口
 			case 'fill':
-				scale = Math.max(ratioW, ratioH); // 填充窗口
-				break;
+				return Math.max(ratioW, ratioH); // 填充窗口
 			case 'fitWidth':
-				scale = ratioW; // 适应宽度
-				break;
+				return ratioW; // 适应宽度
 			case 'fitHeight':
-				scale = ratioH; // 适应高度
-				break;
+				return ratioH; // 适应高度
 			default:
-				scale = Math.min(ratioW, ratioH);
+				return Math.min(ratioW, ratioH);
 		}
-
-		// 缓存计算结果（用于下次翻回来时快速获取）
-		stackImageLoader.precomputeScale(pageIndex, currentZoomMode);
-		return scale;
 	});
 
 	// 最终缩放 = modeScale * manualScale
 	let effectiveScale = $derived(modeScale * manualScale);
 
-	// 缩放后的实际显示尺寸（简化版：直接用原始尺寸 * effectiveScale）
+	// 缩放后的实际显示尺寸
+	// 【性能优化】使用与 modeScale 相同的尺寸优先级
 	let displaySize = $derived.by(() => {
-		const dims = imageStore.state.dimensions;
-		if (!dims?.width || !dims?.height) {
+		const page = bookStore.currentPage;
+		const storeDims = imageStore.state.dimensions;
+		const w = loadedImageSize?.width ?? storeDims?.width ?? page?.width ?? 0;
+		const h = loadedImageSize?.height ?? storeDims?.height ?? page?.height ?? 0;
+		
+		if (!w || !h) {
 			return { width: 0, height: 0 };
 		}
 
 		return {
-			width: dims.width * effectiveScale,
-			height: dims.height * effectiveScale
+			width: w * effectiveScale,
+			height: h * effectiveScale
 		};
 	});
 
@@ -768,8 +775,6 @@
 			const rect = containerRef.getBoundingClientRect();
 			if (rect.width !== viewportSize.width || rect.height !== viewportSize.height) {
 				viewportSize = { width: rect.width, height: rect.height };
-				// 【性能优化】同步视口尺寸到 stackImageLoader，用于预计算缩放
-				stackImageLoader.setViewportSize(rect.width, rect.height);
 			}
 		}
 	}
@@ -926,7 +931,7 @@
 			scale={1}
 			{rotation}
 			{viewportSize}
-			imageSize={imageStore.state.dimensions ?? { width: 0, height: 0 }}
+			imageSize={hoverImageSize}
 			{alignMode}
 			zoomMode={currentZoomMode}
 			onImageLoad={handleImageLoad}
@@ -940,7 +945,7 @@
 				scale={1}
 				{rotation}
 				{viewportSize}
-				imageSize={imageStore.state.dimensions ?? { width: 0, height: 0 }}
+				imageSize={hoverImageSize}
 				{alignMode}
 				zoomMode={currentZoomMode}
 			/>

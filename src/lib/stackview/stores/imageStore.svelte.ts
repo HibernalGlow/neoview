@@ -102,6 +102,13 @@ export function createImageStore() {
       return;
     }
     
+    // 【性能优化】页面切换时立即清除旧尺寸
+    // 这确保了不会使用旧页面的尺寸渲染新页面
+    if (currentIndex !== lastLoadedIndex) {
+      state.dimensions = null;
+      state.secondDimensions = null;
+    }
+    
     lastLoadedIndex = currentIndex;
     
     // 优先使用缓存

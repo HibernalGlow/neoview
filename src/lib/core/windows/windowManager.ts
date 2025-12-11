@@ -5,6 +5,7 @@
 
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 export interface WindowInfo {
 	id: string;
@@ -17,6 +18,7 @@ export interface WindowInfo {
 class WindowManager {
 	private windows = new Map<string, WebviewWindow>();
 	private windowCounter = 0;
+	private fullscreenUnlisten: UnlistenFn | null = null;
 
 	/**
 	 * 创建新窗口
@@ -168,6 +170,58 @@ class WindowManager {
 		const current = await this.isFullscreen();
 		await this.setFullscreen(!current);
 		return !current;
+	}
+
+	/**
+	 * 初始化全屏状态同步
+	 * 监听原生窗口的全屏状态变化事件，并在状态变化时调用回调
+	 * @param onStateChange 状态变化时的回调函数
+	 * Requirements: 4.1, 4.3
+	 */
+	async initFullscreenSync(onStateChange: (isFullscreen: boolean) => void): Promise<void> {
+		// 清理之前的监听器（如果存在）
+		if (this.fullscreenUnlisten) {
+			this.fullscreenUnlisten();
+			this.fullscreenUnlisten = null;
+		}
+
+		try {
+			const win = getCurrentWindow();
+			
+			// 监听窗口进入全屏事件
+			const unlistenEnter = await win.onResized(async () => {
+				// 当窗口大小变化时检查全屏状态
+				const isFs = await this.isFullscreen();
+				onStateChange(isFs);
+			});
+
+			// 存储 unlisten 函数用于清理
+			this.fullscreenUnlisten = unlistenEnter;
+		} catch (error) {
+			console.error('初始化全屏状态同步失败:', error);
+		}
+	}
+
+	/**
+	 * 同步全屏状态
+	 * 查询当前原生窗口的全屏状态并返回
+	 * @returns 当前全屏状态
+	 * Requirements: 1.1
+	 */
+	async syncFullscreenState(): Promise<boolean> {
+		return await this.isFullscreen();
+	}
+
+	/**
+	 * 清理全屏状态监听器
+	 * 移除之前注册的事件监听器
+	 * Requirements: 4.1
+	 */
+	cleanupFullscreenSync(): void {
+		if (this.fullscreenUnlisten) {
+			this.fullscreenUnlisten();
+			this.fullscreenUnlisten = null;
+		}
 	}
 }
 

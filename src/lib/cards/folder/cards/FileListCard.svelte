@@ -9,10 +9,13 @@
 	
 	import FolderStack from '$lib/components/panels/folderPanel/components/FolderStack.svelte';
 	import FolderTree from '$lib/components/panels/folderPanel/components/FolderTree.svelte';
+	import FileTreeView from '$lib/components/panels/file/components/FileTreeView.svelte';
 	import InlineTreeList from '$lib/components/panels/folderPanel/components/InlineTreeList.svelte';
 	
 	import { getFolderContext } from '../context/FolderContext.svelte';
 	import { folderTabActions } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
+	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
+	import { loadVirtualPathData, subscribeVirtualPathData } from '$lib/components/panels/folderPanel/utils/virtualPathLoader';
 
 	// ==================== Props ====================
 	interface Props {
@@ -34,10 +37,25 @@
 	// 全局 store 订阅的本地状态
 	let globalFolderTreeConfigValue = $state<{ visible: boolean; layout: string; size: number }>({ visible: false, layout: 'left', size: 200 });
 	
+	// 虚拟路径文件列表（用于树状视图）
+	let virtualItems = $state<FsItem[]>([]);
+	
 	// 订阅全局 store
 	$effect(() => {
 		const unsub = folderTreeConfig.subscribe(v => globalFolderTreeConfigValue = v);
 		return () => unsub();
+	});
+	
+	// 订阅虚拟路径数据（如果是虚拟实例）
+	$effect(() => {
+		if (!ctx.isVirtualInstance || !ctx.initialPath) return;
+		// 初始加载
+		virtualItems = loadVirtualPathData(ctx.initialPath);
+		// 订阅变化
+		const unsub = subscribeVirtualPathData(ctx.initialPath, (items) => {
+			virtualItems = items;
+		});
+		return unsub;
 	});
 	
 	// 有效的文件树配置（虚拟模式使用 effectiveFolderTreeConfig，否则使用全局 store）
@@ -154,7 +172,19 @@
 			class:border-l={effectiveTreeConfig.layout === 'right'}
 			style={getTreeContainerStyle(effectiveTreeConfig.layout, effectiveTreeConfig.size)}
 		>
-			<FolderTree onNavigate={onNavigate} onContextMenu={onItemContextMenu} />
+			{#if ctx.isVirtualInstance}
+				<!-- 虚拟路径模式：显示基于当前文件列表的局部树 -->
+				<FileTreeView
+					items={virtualItems}
+					thumbnails={fileBrowserStore.getState().thumbnails}
+					on:itemClick={(e) => onItemOpen(e.detail.item)}
+					on:itemDoubleClick={(e) => onItemOpen(e.detail.item)}
+					on:itemContextMenu={(e) => onItemContextMenu(e.detail.event, e.detail.item)}
+				/>
+			{:else}
+				<!-- 普通模式：显示完整的文件系统树 -->
+				<FolderTree onNavigate={onNavigate} onContextMenu={onItemContextMenu} />
+			{/if}
 		</div>
 		<!-- 调整手柄 -->
 		<div

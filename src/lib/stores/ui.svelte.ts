@@ -10,7 +10,6 @@ import { bookContextManager } from './bookContext.svelte';
 import { settingsManager, type ZoomMode } from '$lib/settings/settingsManager';
 import { windowManager } from '$lib/core/windows/windowManager';
 import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
-import { showInfoToast } from '$lib/utils/toast';
 
 // 从本地存储加载状态
 function loadFromStorage<T>(key: string, defaultValue: T): T {
@@ -531,14 +530,8 @@ export async function pageLeft() {
 		const targetIndex = Math.max(currentIndex - step, 0);
 
 		// 如果目标只能是当前页（已经是第一页），则不做任何操作
-		if (targetIndex === currentIndex) {
-			// 显示边界提示
-			const settings = settingsManager.getSettings();
-			if (settings.view?.switchToast?.enableBoundaryToast !== false) {
-				showInfoToast('已经是第一页');
-			}
-			return;
-		}
+		// 边界提示由 StackView 统一处理
+		if (targetIndex === currentIndex) return;
 
 		await bookStore.navigateToPage(targetIndex);
 
@@ -589,13 +582,9 @@ export async function pageRight() {
 		const targetIndex = Math.min(currentIndex + step, maxIndex);
 
 		// 如果目标只能是当前页（已经是最后一页），则不做任何操作
+		// 边界提示由 StackView 统一处理
 		if (targetIndex === currentIndex) {
 			console.log('📖 pageRight: 已是最后一页');
-			// 显示边界提示
-			const settings = settingsManager.getSettings();
-			if (settings.view?.switchToast?.enableBoundaryToast !== false) {
-				showInfoToast('已经是最后一页');
-			}
 			return;
 		}
 

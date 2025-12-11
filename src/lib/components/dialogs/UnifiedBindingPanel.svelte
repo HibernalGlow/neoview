@@ -258,15 +258,10 @@
 
 	// 获取上下文颜色
 	function getContextColor(context: BindingContext): string {
-		const colors: Record<string, string> = {
+		const colors: Record<BindingContext, string> = {
 			global: 'bg-gray-500',
 			viewer: 'bg-blue-500',
-			fileBrowser: 'bg-green-500',
-			thumbnailBar: 'bg-purple-500',
-			videoPlayer: 'bg-red-500',
-			zoomed: 'bg-yellow-500',
-			sidebar: 'bg-cyan-500',
-			settings: 'bg-orange-500'
+			videoPlayer: 'bg-red-500'
 		};
 		return colors[context] ?? 'bg-gray-500';
 	}

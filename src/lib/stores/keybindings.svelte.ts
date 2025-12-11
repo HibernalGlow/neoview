@@ -10,23 +10,12 @@ export type InputType = 'keyboard' | 'mouse' | 'touch' | 'area';
  * 绑定上下文/作用域
  * - global: 全局有效（最低优先级）
  * - viewer: 图片查看器模式
- * - fileBrowser: 文件浏览器面板
- * - thumbnailBar: 底部缩略图栏
  * - videoPlayer: 视频播放模式
- * - zoomed: 放大模式
- * - sidebar: 侧边栏活跃时
- * - settings: 设置页面
  */
 export type BindingContext =
 	| 'global'
 	| 'viewer'
-	| 'fileBrowser'
-	| 'thumbnailBar'
-	| 'videoPlayer'
-	| 'zoomed'
-	| 'sidebar'
-	| 'settings'
-	| string; // 支持自定义上下文
+	| 'videoPlayer';
 
 /**
  * 上下文优先级映射
@@ -35,12 +24,7 @@ export type BindingContext =
 const CONTEXT_PRIORITY: Record<string, number> = {
 	global: 0,
 	viewer: 10,
-	fileBrowser: 10,
-	thumbnailBar: 20,
-	videoPlayer: 30,
-	zoomed: 40,
-	sidebar: 15,
-	settings: 50
+	videoPlayer: 10
 };
 
 /** 获取上下文优先级 */
@@ -525,30 +509,39 @@ class KeyBindingsStore {
 		const actionBinding = this.bindings.find(b => b.action === action);
 		if (!actionBinding) return null;
 
-		// 检查冲突
+		// 检查冲突（同上下文内）
 		const conflict = this.checkConflict(binding, context, action);
 		if (conflict) {
-			// 返回冲突信息，由调用者决定如何处理
 			return conflict;
 		}
 
-		// 初始化数组
-		if (!actionBinding.contextBindings) {
-			actionBinding.contextBindings = [];
-		}
-
-		// 检查是否已存在完全相同的绑定
-		const exists = actionBinding.contextBindings.some(
-			cb => cb.context === context && JSON.stringify(cb.input) === JSON.stringify(binding)
-		);
-
-		if (!exists) {
-			actionBinding.contextBindings.push({
-				input: binding,
-				context,
-				priority
-			});
-			this.saveToStorage();
+		// global 上下文存入 bindings，其他上下文存入 contextBindings
+		if (context === 'global') {
+			if (!actionBinding.bindings) {
+				actionBinding.bindings = [];
+			}
+			const exists = actionBinding.bindings.some(
+				b => JSON.stringify(b) === JSON.stringify(binding)
+			);
+			if (!exists) {
+				actionBinding.bindings.push(binding);
+				this.saveToStorage();
+			}
+		} else {
+			if (!actionBinding.contextBindings) {
+				actionBinding.contextBindings = [];
+			}
+			const exists = actionBinding.contextBindings.some(
+				cb => cb.context === context && JSON.stringify(cb.input) === JSON.stringify(binding)
+			);
+			if (!exists) {
+				actionBinding.contextBindings.push({
+					input: binding,
+					context,
+					priority
+				});
+				this.saveToStorage();
+			}
 		}
 
 		return null;
@@ -1138,15 +1131,10 @@ class KeyBindingsStore {
 	 * 格式化上下文名称
 	 */
 	formatContext(context: BindingContext): string {
-		const contextNames: Record<string, string> = {
+		const contextNames: Record<BindingContext, string> = {
 			global: '全局',
-			viewer: '图片查看器',
-			fileBrowser: '文件浏览器',
-			thumbnailBar: '缩略图栏',
-			videoPlayer: '视频播放器',
-			zoomed: '放大模式',
-			sidebar: '侧边栏',
-			settings: '设置页面'
+			viewer: '图片模式',
+			videoPlayer: '视频模式'
 		};
 		return contextNames[context] ?? context;
 	}
@@ -1155,7 +1143,7 @@ class KeyBindingsStore {
 	 * 获取所有可用上下文
 	 */
 	getAvailableContexts(): BindingContext[] {
-		return ['global', 'viewer', 'fileBrowser', 'thumbnailBar', 'videoPlayer', 'zoomed', 'sidebar', 'settings'];
+		return ['global', 'viewer', 'videoPlayer'];
 	}
 
 	// 调试方法：打印所有绑定（包含上下文信息）
@@ -1186,8 +1174,8 @@ class KeyBindingsStore {
 					byContext[cb.context].push(cb.input);
 				}
 				
-				for (const ctx of Object.keys(byContext)) {
-					console.log(`  [${this.formatContext(ctx)}]:`);
+					for (const ctx of Object.keys(byContext)) {
+					console.log(`  [${this.formatContext(ctx as BindingContext)}]:`);
 					byContext[ctx].forEach(b => {
 						console.log(`    - ${this.formatBinding(b)}`);
 					});

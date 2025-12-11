@@ -39,12 +39,28 @@ export class StackImageLoader {
   // 当前视口尺寸（用于预计算）
   private lastViewportSize: { width: number; height: number } | null = null;
 
+  // 是否已注册尺寸回调
+  private dimensionsCallbackRegistered = false;
+
   /**
    * 获取共享的 ImageLoaderCore 实例
    * 每次调用都获取当前活跃的实例，确保切书后使用正确的实例
+   * 【性能优化】注册尺寸回调，确保预加载时尺寸被缓存
    */
   private get core(): ImageLoaderCore {
-    return getImageLoaderCore();
+    const core = getImageLoaderCore();
+    
+    // 注册尺寸回调（只注册一次）
+    if (!this.dimensionsCallbackRegistered) {
+      core.setOnDimensionsReady((pageIndex, dimensions) => {
+        if (dimensions) {
+          this.dimensionsCache.set(pageIndex, dimensions);
+        }
+      });
+      this.dimensionsCallbackRegistered = true;
+    }
+    
+    return core;
   }
 
   /**
@@ -60,6 +76,8 @@ export class StackImageLoader {
       this.useUpscaledMap.clear();
       this.precomputedScaleCache.clear();
       this.currentBookPath = bookPath;
+      // 切书后需要重新注册回调（因为 core 实例可能已切换）
+      this.dimensionsCallbackRegistered = false;
     }
   }
 

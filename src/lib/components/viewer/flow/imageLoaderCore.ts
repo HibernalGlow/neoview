@@ -76,6 +76,14 @@ export class ImageLoaderCore {
 		this.clearQueue();
 		console.log('📦 ImageLoaderCore 实例已失效');
 	}
+
+	/**
+	 * 【性能优化】注册尺寸就绪回调
+	 * 用于在预加载时缓存尺寸，避免翻页时重新计算
+	 */
+	setOnDimensionsReady(callback: (pageIndex: number, dimensions: { width: number; height: number } | null) => void): void {
+		this.options.onDimensionsReady = callback;
+	}
 	
 	/**
 	 * 检查实例是否有效

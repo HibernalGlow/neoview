@@ -104,8 +104,11 @@ function isDirectoryPath(path: string): boolean {
  * 使用反向逻辑：只有没有文件扩展名的路径才是文件夹，其他都是文件
  */
 function historyToFsItem(entry: UnifiedHistoryEntry): FsItem {
-	// 从 pathStack 获取主路径
-	const mainPath = entry.pathStack?.[0]?.path || '';
+	// 对于单文件模式（pathStack 长度 > 1），使用最后一个元素（实际文件）
+	// 对于普通模式（pathStack 长度 = 1），使用第一个元素（book路径）
+	const pathStack = entry.pathStack || [];
+	const targetRef = pathStack.length > 1 ? pathStack[pathStack.length - 1] : pathStack[0];
+	const mainPath = targetRef?.path || '';
 	// 使用反向逻辑判断是否为目录
 	const isDirectory = isDirectoryPath(mainPath);
 	return {

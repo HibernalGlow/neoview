@@ -279,12 +279,64 @@ export function setActiveRightPanel(panel: RightPanelType) {
 }
 
 /**
- * 切换全屏
+ * 设置全屏状态（不触发原生窗口更新）
+ * 用于外部状态同步，当原生窗口状态变化时更新 UI 状态
+ * Requirements: 4.1
  */
-export function toggleFullscreen() {
-	isFullscreen.update((fullscreen) => !fullscreen);
-	// 同步到原生窗口全屏状态（不阻塞 UI）
-	void windowManager.toggleFullscreen();
+export function setFullscreenState(fullscreen: boolean): void {
+	isFullscreen.set(fullscreen);
+}
+
+/**
+ * 初始化全屏状态
+ * 查询原生窗口状态并同步到 UI，同时注册状态变化监听器
+ * Requirements: 1.1, 1.2
+ */
+export async function initFullscreenState(): Promise<void> {
+	try {
+		// 1. 查询当前原生窗口的全屏状态
+		const nativeState = await windowManager.syncFullscreenState();
+		
+		// 2. 设置 UI 状态以匹配原生窗口状态
+		setFullscreenState(nativeState);
+		
+		// 3. 注册事件监听器，当原生窗口状态变化时更新 UI
+		await windowManager.initFullscreenSync((newState: boolean) => {
+			setFullscreenState(newState);
+		});
+	} catch (error) {
+		console.error('初始化全屏状态失败:', error);
+	}
+}
+
+/**
+ * 切换全屏
+ * 确保 UI 状态和原生窗口状态的一致性
+ * Requirements: 1.3, 4.2
+ */
+export async function toggleFullscreen(): Promise<void> {
+	const previousState = get(isFullscreen);
+	const newState = !previousState;
+	
+	// 先更新 UI 状态以提供即时反馈
+	isFullscreen.set(newState);
+	
+	try {
+		// 同步到原生窗口全屏状态
+		await windowManager.setFullscreen(newState);
+	} catch (error) {
+		console.error('切换全屏状态失败:', error);
+		// 回滚 UI 状态
+		isFullscreen.set(previousState);
+		
+		// 尝试从原生窗口获取实际状态并同步
+		try {
+			const actualState = await windowManager.isFullscreen();
+			isFullscreen.set(actualState);
+		} catch (syncError) {
+			console.error('同步全屏状态失败:', syncError);
+		}
+	}
 }
 
 /**

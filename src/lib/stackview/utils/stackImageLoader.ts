@@ -33,6 +33,11 @@ export class StackImageLoader {
   private upscaledUrlCache = new Map<number, string>();
   // 是否使用超分图
   private useUpscaledMap = new Map<number, boolean>();
+  // 【性能优化】预计算的缩放比例缓存：(pageIndex, viewportKey) -> scale
+  // viewportKey 格式：`${width}x${height}x${zoomMode}`
+  private precomputedScaleCache = new Map<string, number>();
+  // 当前视口尺寸（用于预计算）
+  private lastViewportSize: { width: number; height: number } | null = null;
 
   /**
    * 获取共享的 ImageLoaderCore 实例
@@ -53,8 +58,84 @@ export class StackImageLoader {
       this.backgroundColorCache.clear();
       this.upscaledUrlCache.clear();
       this.useUpscaledMap.clear();
+      this.precomputedScaleCache.clear();
       this.currentBookPath = bookPath;
     }
+  }
+
+  /**
+   * 【性能优化】设置当前视口尺寸（用于预计算缩放）
+   */
+  setViewportSize(width: number, height: number): void {
+    if (this.lastViewportSize?.width !== width || this.lastViewportSize?.height !== height) {
+      this.lastViewportSize = { width, height };
+      // 视口变化时清空缩放缓存（需要重新计算）
+      this.precomputedScaleCache.clear();
+    }
+  }
+
+  /**
+   * 【性能优化】预计算并缓存缩放比例
+   * @param pageIndex 页面索引
+   * @param zoomMode 缩放模式
+   * @returns 缩放比例，如果无法计算返回 null
+   */
+  precomputeScale(pageIndex: number, zoomMode: string): number | null {
+    const dims = this.dimensionsCache.get(pageIndex);
+    const vp = this.lastViewportSize;
+    if (!dims || !vp || !vp.width || !vp.height) return null;
+
+    const cacheKey = `${pageIndex}:${vp.width}x${vp.height}:${zoomMode}`;
+    
+    // 已缓存则直接返回
+    if (this.precomputedScaleCache.has(cacheKey)) {
+      return this.precomputedScaleCache.get(cacheKey)!;
+    }
+
+    // 计算缩放比例
+    const iw = dims.width;
+    const ih = dims.height;
+    const vw = vp.width;
+    const vh = vp.height;
+    const ratioW = vw / iw;
+    const ratioH = vh / ih;
+
+    let scale: number;
+    switch (zoomMode) {
+      case 'original':
+        scale = 1;
+        break;
+      case 'fit':
+      case 'fitLeftAlign':
+      case 'fitRightAlign':
+        scale = Math.min(ratioW, ratioH);
+        break;
+      case 'fill':
+        scale = Math.max(ratioW, ratioH);
+        break;
+      case 'fitWidth':
+        scale = ratioW;
+        break;
+      case 'fitHeight':
+        scale = ratioH;
+        break;
+      default:
+        scale = Math.min(ratioW, ratioH);
+    }
+
+    // 缓存
+    this.precomputedScaleCache.set(cacheKey, scale);
+    return scale;
+  }
+
+  /**
+   * 【性能优化】获取缓存的缩放比例
+   */
+  getCachedScale(pageIndex: number, zoomMode: string): number | null {
+    const vp = this.lastViewportSize;
+    if (!vp) return null;
+    const cacheKey = `${pageIndex}:${vp.width}x${vp.height}:${zoomMode}`;
+    return this.precomputedScaleCache.get(cacheKey) ?? null;
   }
 
   // ========================================================================
@@ -212,6 +293,7 @@ export class StackImageLoader {
     this.core.clearCache();
     this.dimensionsCache.clear();
     this.backgroundColorCache.clear();
+    this.precomputedScaleCache.clear();
   }
 }
 

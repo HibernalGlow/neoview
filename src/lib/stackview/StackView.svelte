@@ -36,6 +36,7 @@
 	import { getImageStore } from './stores/imageStore.svelte';
 	import { getPanoramaStore } from './stores/panoramaStore.svelte';
 	import { createCursorAutoHide, type CursorAutoHideController } from '$lib/utils/cursorAutoHide';
+	import { stackImageLoader } from './utils/stackImageLoader';
 
 	// 导入外部 stores
 	import {
@@ -143,12 +144,21 @@
 	let rotation = $state(0);
 
 	// 根据 zoomMode 计算的基础缩放
+	// 【性能优化】优先使用预计算缓存，避免每次翻页重新计算
 	let modeScale = $derived.by(() => {
+		const pageIndex = bookStore.currentPageIndex;
 		const dims = imageStore.state.dimensions;
 		if (!dims?.width || !dims?.height || !viewportSize.width || !viewportSize.height) {
 			return 1;
 		}
 
+		// 尝试使用缓存的缩放比例
+		const cachedScale = stackImageLoader.getCachedScale(pageIndex, currentZoomMode);
+		if (cachedScale !== null) {
+			return cachedScale;
+		}
+
+		// 计算并缓存
 		const iw = dims.width;
 		const ih = dims.height;
 		const vw = viewportSize.width;
@@ -157,22 +167,32 @@
 		const ratioW = vw / iw;
 		const ratioH = vh / ih;
 
+		let scale: number;
 		switch (currentZoomMode) {
 			case 'original':
-				return 1; // 原始大小
+				scale = 1; // 原始大小
+				break;
 			case 'fit':
 			case 'fitLeftAlign':
 			case 'fitRightAlign':
-				return Math.min(ratioW, ratioH); // 适应窗口（居左/居右使用相同缩放，只是对齐不同）
+				scale = Math.min(ratioW, ratioH); // 适应窗口
+				break;
 			case 'fill':
-				return Math.max(ratioW, ratioH); // 填充窗口
+				scale = Math.max(ratioW, ratioH); // 填充窗口
+				break;
 			case 'fitWidth':
-				return ratioW; // 适应宽度
+				scale = ratioW; // 适应宽度
+				break;
 			case 'fitHeight':
-				return ratioH; // 适应高度
+				scale = ratioH; // 适应高度
+				break;
 			default:
-				return Math.min(ratioW, ratioH);
+				scale = Math.min(ratioW, ratioH);
 		}
+
+		// 缓存计算结果（用于下次翻回来时快速获取）
+		stackImageLoader.precomputeScale(pageIndex, currentZoomMode);
+		return scale;
 	});
 
 	// 最终缩放 = modeScale * manualScale
@@ -748,6 +768,8 @@
 			const rect = containerRef.getBoundingClientRect();
 			if (rect.width !== viewportSize.width || rect.height !== viewportSize.height) {
 				viewportSize = { width: rect.width, height: rect.height };
+				// 【性能优化】同步视口尺寸到 stackImageLoader，用于预计算缩放
+				stackImageLoader.setViewportSize(rect.width, rect.height);
 			}
 		}
 	}

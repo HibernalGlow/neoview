@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Zap } from '@lucide/svelte';
+	import { Zap, HardDrive, Cpu, Image } from '@lucide/svelte';
 	import {
 		getPerformanceSettings,
 		savePerformanceSettings,
@@ -8,7 +8,10 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import { Slider } from '$lib/components/ui/slider';
 	import { Button } from '$lib/components/ui/button';
+	import * as Tabs from '$lib/components/ui/tabs';
 	import { showErrorToast } from '$lib/utils/toast';
+
+	let activeTab = $state('cache');
 
 	// 使用独立字段，避免直接在对象属性上双向绑定造成复杂副作用
 	let cacheMemorySize = $state(512);
@@ -65,7 +68,7 @@
 	}
 </script>
 
-<div class="space-y-6 p-6">
+<div class="space-y-4 p-6">
 	<div class="space-y-2">
 		<h3 class="flex items-center gap-2 text-lg font-semibold">
 			<Zap class="h-5 w-5" />
@@ -74,7 +77,23 @@
 		<p class="text-muted-foreground text-sm">优化应用性能和资源使用</p>
 	</div>
 
-	<div class="space-y-4">
+	<Tabs.Root bind:value={activeTab} class="w-full">
+		<Tabs.List class="grid w-full grid-cols-3">
+			<Tabs.Trigger value="cache" class="gap-1.5 text-xs">
+				<HardDrive class="h-3.5 w-3.5" />
+				缓存
+			</Tabs.Trigger>
+			<Tabs.Trigger value="hardware" class="gap-1.5 text-xs">
+				<Cpu class="h-3.5 w-3.5" />
+				硬件
+			</Tabs.Trigger>
+			<Tabs.Trigger value="thumbnail" class="gap-1.5 text-xs">
+				<Image class="h-3.5 w-3.5" />
+				缩略图
+			</Tabs.Trigger>
+		</Tabs.List>
+
+		<Tabs.Content value="cache" class="mt-4 space-y-4">
 		<!-- 缓存设置 -->
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">缓存</h4>
@@ -127,6 +146,9 @@
 			{/if}
 		</div>
 
+		</Tabs.Content>
+
+		<Tabs.Content value="hardware" class="mt-4 space-y-4">
 		<!-- GPU 加速 -->
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">硬件加速</h4>
@@ -166,6 +188,9 @@
 			</div>
 		</div>
 
+		</Tabs.Content>
+
+		<Tabs.Content value="thumbnail" class="mt-4 space-y-4">
 		<!-- 缩略图设置 -->
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">🖼️ 缩略图</h4>
@@ -231,13 +256,15 @@
 			</div>
 		</div>
 
-		<!-- 操作区（底部固定） -->
-		<div
-			class="sticky bottom-0 flex justify-end pt-2 border-t mt-2 border-border/60 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80"
-		>
-			<Button variant="outline" size="sm" onclick={saveSettings}>
-				保存性能设置（需重启）
-			</Button>
-		</div>
+		</Tabs.Content>
+	</Tabs.Root>
+
+	<!-- 操作区（底部固定） -->
+	<div
+		class="sticky bottom-0 flex justify-end pt-2 border-t mt-2 border-border/60 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80"
+	>
+		<Button variant="outline" size="sm" onclick={saveSettings}>
+			保存性能设置（需重启）
+		</Button>
 	</div>
 </div>

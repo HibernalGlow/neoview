@@ -1,9 +1,12 @@
 <script lang="ts">
-	import { Palette } from '@lucide/svelte';
+	import { Palette, Image, Video } from '@lucide/svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { Label } from '$lib/components/ui/label';
 	import { Switch } from '$lib/components/ui/switch';
 	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
+	import * as Tabs from '$lib/components/ui/tabs';
+
+	let activeTab = $state('image');
 
 	let currentSettings = $state(settingsManager.getSettings());
 
@@ -24,16 +27,28 @@
 	}
 </script>
 
-<div class="space-y-6 p-6">
+<div class="space-y-4 p-6">
 	<div class="space-y-2">
 		<h3 class="flex items-center gap-2 text-lg font-semibold">
 			<Palette class="h-5 w-5" />
-			影像综合管理图片和视频
+			影像综合管理
 		</h3>
 		<p class="text-muted-foreground text-sm">配置全局图片和视频的加载与播放行为</p>
 	</div>
 
-	<div class="space-y-4">
+	<Tabs.Root bind:value={activeTab} class="w-full">
+		<Tabs.List class="grid w-full grid-cols-2">
+			<Tabs.Trigger value="image" class="gap-1.5 text-xs">
+				<Image class="h-3.5 w-3.5" />
+				图片
+			</Tabs.Trigger>
+			<Tabs.Trigger value="video" class="gap-1.5 text-xs">
+				<Video class="h-3.5 w-3.5" />
+				视频
+			</Tabs.Trigger>
+		</Tabs.List>
+
+		<Tabs.Content value="image" class="mt-4 space-y-4">
 		<!-- 动画图片（GIF / APNG）自动播放 -->
 		<div class="space-y-3">
 			<div class="flex items-center justify-between gap-2">
@@ -85,6 +100,9 @@
 			</p>
 		</div>
 
+		</Tabs.Content>
+
+		<Tabs.Content value="video" class="mt-4 space-y-4">
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">支持的视频格式</h4>
 			<input
@@ -175,32 +193,6 @@
 			</div>
 		</div>
 
-		<!-- 悬停滚动倍率 -->
-		<div class="space-y-2">
-			<h4 class="text-sm font-semibold">悬停滚动倍率</h4>
-			<div class="flex items-center justify-between gap-2">
-				<Label class="text-sm">滚动速度</Label>
-				<input
-					type="number"
-					min="0.5"
-					max="10"
-					step="0.5"
-					value={currentSettings.image.hoverScrollSpeed ?? 2.0}
-					class="w-24 rounded border bg-background px-2 py-1 text-right text-sm"
-					onchange={(event) => {
-						const target = event.target as HTMLInputElement;
-						const raw = parseFloat(target.value);
-						const value = Number.isNaN(raw) ? 2.0 : raw;
-						const clamped = Math.max(0.5, Math.min(value, 10));
-						settingsManager.updateNestedSettings('image', {
-							hoverScrollSpeed: clamped
-						});
-					}}
-				/>
-			</div>
-			<p class="text-muted-foreground text-xs">
-				控制鼠标悬停滚动的速度倍率（0.5-10），数值越大滚动越快。
-			</p>
-		</div>
-	</div>
+		</Tabs.Content>
+	</Tabs.Root>
 </div>

@@ -86,11 +86,6 @@ let sortedResults = $derived.by(() => {
 	const { field, order } = $sortConfig;
 	
 	results.sort((a, b) => {
-		// 文件夹优先
-		if (a.isDir !== b.isDir) {
-			return a.isDir ? -1 : 1;
-		}
-		
 		let cmp = 0;
 		switch (field) {
 			case 'name':

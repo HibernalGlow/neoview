@@ -259,12 +259,12 @@
 		</Tabs.Content>
 	</Tabs.Root>
 
-	<!-- 操作区（底部固定） -->
-	<div
-		class="sticky bottom-0 flex justify-end pt-2 border-t mt-2 border-border/60 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80"
-	>
-		<Button variant="outline" size="sm" onclick={saveSettings}>
-			保存性能设置（需重启）
+	<!-- 操作区 -->
+	<div class="flex items-center justify-between pt-3 border-t border-border/40">
+		<p class="text-xs text-muted-foreground">部分设置需重启应用后生效</p>
+		<Button variant="default" size="sm" onclick={saveSettings} class="gap-1.5">
+			<Zap class="h-3.5 w-3.5" />
+			保存设置
 		</Button>
 	</div>
 </div>

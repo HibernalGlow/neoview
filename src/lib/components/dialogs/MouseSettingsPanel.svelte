@@ -49,7 +49,17 @@
 
 	function startRecordingGesture(binding: MouseGestureBinding) {
 		recordingGesture = binding;
-		// TODO: 实际录制逻辑需要在 ImageViewer 中实现
+		// 手势录制通过事件系统在 GestureLayer 中实现
+		window.dispatchEvent(new CustomEvent('neoview-start-gesture-recording', {
+			detail: { binding, callback: (pattern: string) => {
+				if (pattern && recordingGesture) {
+					mouseGestureBindings.update(bindings => 
+						bindings.map(b => b.pattern === recordingGesture!.pattern ? { ...b, pattern } : b)
+					);
+				}
+				recordingGesture = null;
+			}}
+		}));
 		showInfoToast('请在图像查看器中右键拖拽来录制手势');
 	}
 
@@ -78,11 +88,14 @@
 			variant: 'warning'
 		});
 		if (confirmed) {
-			// TODO: 从 keyboard store 导入默认值
+			// 重置所有鼠标设置为默认值
 			mouseGestureEnabled = true;
 			gestureMinDistance = 50;
 			gestureStrokeWidth = 3;
 			gestureStrokeColor = '#3b82f6';
+			mouseGestureBindings.set([]);
+			mouseWheelBindings.set([]);
+			showInfoToast('鼠标设置已重置');
 		}
 	}
 

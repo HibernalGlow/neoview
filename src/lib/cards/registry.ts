@@ -3,7 +3,7 @@
  * 统一定义所有卡片的元数据，支持动态发现和跨面板移动
  */
 import type { PanelId } from '$lib/stores/sidebarConfig.svelte';
-import { Eye, Timer, Layers, FolderOpen, FileText, Image, Cpu, History, Tags, Search, Activity, Gauge, Archive, Globe, ListChecks, BarChart3, Languages, Settings, Mic } from '@lucide/svelte';
+import { Eye, Timer, Layers, FolderOpen, FileText, Image, Cpu, History, Tags, Search, Activity, Gauge, Archive, Globe, ListChecks, BarChart3, Languages, Settings, Mic, Bot } from '@lucide/svelte';
 
 // 卡片定义
 export interface CardDefinition {
@@ -204,6 +204,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		icon: Tags,
 		defaultPanel: 'properties',
 		canHide: false,
+	},
+	'aiTags': {
+		id: 'aiTags',
+		title: 'AI 标签推断',
+		icon: Bot,
+		defaultPanel: 'properties',
+		canHide: true,
 	},
 	'bookSettings': {
 		id: 'bookSettings',

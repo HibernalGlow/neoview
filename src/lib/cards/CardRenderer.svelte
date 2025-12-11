@@ -37,6 +37,7 @@
 		sidebarControl: () => import('./info/SidebarControlCard.svelte'),
 		// Properties
 		emmTags: () => import('./properties/EmmTagsCard.svelte'),
+		aiTags: () => import('./properties/AiTagsCard.svelte'),
 		bookSettings: () => import('./properties/BookSettingsCard.svelte'),
 		folderRatings: () => import('./properties/FolderRatingsCard.svelte'),
 		favoriteTags: () => import('./properties/FavoriteTagsCard.svelte'),

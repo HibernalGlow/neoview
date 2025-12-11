@@ -17,6 +17,13 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2.2.0", features = [] }
 
+[profile.release]
+strip = true  # 自动剥离符号表
+opt-level = "z"  # 优化体积（可选"s"对比测试）
+lto = true  # 启用链接时优化
+codegen-units = 1  # 单代码生成单元提升优化空间
+panic = "abort"  # 移除panic unwind代码
+
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }

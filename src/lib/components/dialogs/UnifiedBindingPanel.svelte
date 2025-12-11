@@ -358,7 +358,7 @@
 		</div>
 
 		<!-- 搜索栏和图例 -->
-		<div class="flex items-center gap-4">
+		<div class="flex items-center justify-between gap-4">
 			<div class="relative flex-1 max-w-xs">
 				<Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
 				<Input
@@ -368,27 +368,15 @@
 					class="pl-9 h-8"
 				/>
 			</div>
-			<div class="flex items-center gap-3 text-xs text-muted-foreground">
-				<div class="flex items-center gap-1">
-					<Keyboard class="h-3 w-3 text-blue-500" />
-					<span>键盘</span>
-				</div>
-				<div class="flex items-center gap-1">
-					<Mouse class="h-3 w-3 text-green-500" />
-					<span>鼠标</span>
-				</div>
-				<div class="flex items-center gap-1">
-					<Hand class="h-3 w-3 text-purple-500" />
-					<span>触摸</span>
-				</div>
-				<div class="flex items-center gap-1">
-					<Target class="h-3 w-3 text-orange-500" />
-					<span>区域</span>
-				</div>
-				<div class="flex items-center gap-1">
-					<Layers class="h-3 w-3 text-cyan-500" />
-					<span>上下文</span>
-				</div>
+			<!-- 上下文颜色图例 -->
+			<div class="flex items-center gap-3 text-xs text-muted-foreground border rounded-md px-3 py-1.5 bg-muted/30">
+				<span class="font-medium">上下文:</span>
+				{#each availableContexts as ctx}
+					<div class="flex items-center gap-1">
+						<span class="w-2 h-2 rounded-full {getContextColor(ctx)}"></span>
+						<span>{keyBindingsStore.formatContext(ctx)}</span>
+					</div>
+				{/each}
 			</div>
 		</div>
 
@@ -432,125 +420,94 @@
 
 					<!-- 绑定列表 -->
 					<div class="space-y-2">
+						<div class="flex flex-wrap gap-1.5">
 						<!-- 全局绑定 -->
 						{#if binding.bindings && binding.bindings.length > 0}
-							{@const selectorKey = `${binding.action}-global-false`}
-							<div class="space-y-1">
-								<div class="flex items-center gap-1">
+							{#each binding.bindings as inputBinding, index}
+								{@const Icon = getBindingIcon(inputBinding.type)}
+								{@const selectorKey = `${binding.action}-global-${index}`}
+								<div
+									class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-secondary text-xs border group hover:border-primary transition-colors relative"
+								>
+									<!-- 颜色圆点，点击展开选择器 -->
 									<button
-										class="text-[10px] text-muted-foreground font-medium flex items-center gap-1 hover:opacity-70 transition-opacity"
+										class="w-2 h-2 rounded-full bg-gray-500 hover:ring-2 hover:ring-gray-400 transition-all"
 										onclick={() => toggleContextSelector(selectorKey)}
 										title="点击切换上下文"
-									>
-										<span class="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
-										全局
-									</button>
-									<!-- 横向展开的上下文选择器 -->
+									></button>
+									<!-- 横向展开选择器 -->
 									{#if expandedContextSelector === selectorKey}
-										<div class="flex items-center gap-1 ml-1 animate-in slide-in-from-left-2 duration-150">
-											<span class="text-[10px] text-muted-foreground">→</span>
+										<div class="flex items-center gap-0.5 animate-in slide-in-from-left-2 duration-150">
 											{#each availableContexts.filter(c => c !== 'global') as ctx}
 												<button
-													class="text-[10px] px-1.5 py-0.5 rounded {getContextColor(ctx)} text-white hover:opacity-80 transition-opacity"
-													onclick={() => {
-														binding.bindings?.forEach((b, i) => changeBindingContext(binding.action, b, 'global', i, false, ctx));
-													}}
-												>
-													{keyBindingsStore.formatContext(ctx)}
-												</button>
+													class="w-2 h-2 rounded-full {getContextColor(ctx)} hover:ring-2 hover:ring-offset-1 transition-all"
+													onclick={() => changeBindingContext(binding.action, inputBinding, 'global', index, false, ctx)}
+													title={keyBindingsStore.formatContext(ctx)}
+												></button>
 											{/each}
 										</div>
 									{/if}
-								</div>
-								<div class="flex flex-wrap gap-1.5">
-									{#each binding.bindings as inputBinding, index}
-										{@const Icon = getBindingIcon(inputBinding.type)}
-										<div
-											class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-secondary text-xs border group hover:border-primary transition-colors"
-										>
-											<Icon class="h-3 w-3 {getBindingColor(inputBinding.type)}" />
-											<span class="font-mono text-[11px]">
-												{keyBindingsStore.formatBinding(inputBinding)}
-											</span>
-											<button
-												class="opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity"
-												onclick={() => removeBinding(binding.action, index, false)}
-												title="删除"
-											>
-												<X class="h-3 w-3" />
-											</button>
-										</div>
-									{/each}
-								</div>
-							</div>
-						{/if}
-
-						<!-- 上下文绑定 - 按上下文分组 -->
-						{#if binding.contextBindings && binding.contextBindings.length > 0}
-							{@const groupedByContext = binding.contextBindings.reduce((acc, cb) => {
-								if (!acc[cb.context]) acc[cb.context] = [];
-								acc[cb.context].push(cb);
-								return acc;
-							}, {} as Record<string, typeof binding.contextBindings>)}
-							
-							{#each Object.entries(groupedByContext) as [context, contextBindings]}
-								{@const selectorKey = `${binding.action}-${context}-true`}
-								{@const typedContext = context as BindingContext}
-								<div class="space-y-1">
-									<div class="flex items-center gap-1">
-										<button
-											class="text-[10px] text-muted-foreground font-medium flex items-center gap-1 hover:opacity-70 transition-opacity"
-											onclick={() => toggleContextSelector(selectorKey)}
-											title="点击切换上下文"
-										>
-											<span class="w-1.5 h-1.5 rounded-full {getContextColor(context as BindingContext)}"></span>
-											{keyBindingsStore.formatContext(context as BindingContext)}
-										</button>
-										<!-- 横向展开的上下文选择器 -->
-										{#if expandedContextSelector === selectorKey}
-											<div class="flex items-center gap-1 ml-1 animate-in slide-in-from-left-2 duration-150">
-												<span class="text-[10px] text-muted-foreground">→</span>
-												{#each availableContexts.filter(c => c !== context) as ctx}
-													<button
-														class="text-[10px] px-1.5 py-0.5 rounded {getContextColor(ctx)} text-white hover:opacity-80 transition-opacity"
-														onclick={() => {
-															contextBindings.forEach((cb, i) => changeBindingContext(binding.action, cb.input, context as BindingContext, i, true, ctx));
-														}}
-													>
-														{keyBindingsStore.formatContext(ctx)}
-													</button>
-												{/each}
-											</div>
-										{/if}
-									</div>
-									<div class="flex flex-wrap gap-1.5">
-										{#each contextBindings as cb, index}
-											{@const Icon = getBindingIcon(cb.input.type)}
-											<div
-												class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-secondary text-xs border group hover:border-primary transition-colors"
-											>
-												<Icon class="h-3 w-3 {getBindingColor(cb.input.type)}" />
-												<span class="font-mono text-[11px]">
-													{keyBindingsStore.formatBinding(cb.input)}
-												</span>
-												<button
-													class="opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity"
-													onclick={() => removeBinding(binding.action, index, true, context as BindingContext)}
-													title="删除"
-												>
-													<X class="h-3 w-3" />
-												</button>
-											</div>
-										{/each}
-									</div>
+									<Icon class="h-3 w-3 {getBindingColor(inputBinding.type)}" />
+									<span class="font-mono text-[11px]">
+										{keyBindingsStore.formatBinding(inputBinding)}
+									</span>
+									<button
+										class="opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity"
+										onclick={() => removeBinding(binding.action, index, false)}
+										title="删除"
+									>
+										<X class="h-3 w-3" />
+									</button>
 								</div>
 							{/each}
+						{/if}
+
+						<!-- 上下文绑定 -->
+						{#if binding.contextBindings && binding.contextBindings.length > 0}
+							{#each binding.contextBindings as cb, index}
+								{@const Icon = getBindingIcon(cb.input.type)}
+								{@const selectorKey = `${binding.action}-ctx-${index}`}
+								<div
+									class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-secondary text-xs border group hover:border-primary transition-colors relative"
+								>
+									<!-- 颜色圆点，点击展开选择器 -->
+									<button
+										class="w-2 h-2 rounded-full {getContextColor(cb.context as BindingContext)} hover:ring-2 hover:ring-offset-1 transition-all"
+										onclick={() => toggleContextSelector(selectorKey)}
+										title="点击切换上下文"
+									></button>
+									<!-- 横向展开选择器 -->
+									{#if expandedContextSelector === selectorKey}
+										<div class="flex items-center gap-0.5 animate-in slide-in-from-left-2 duration-150">
+											{#each availableContexts.filter(c => c !== cb.context) as ctx}
+												<button
+													class="w-2 h-2 rounded-full {getContextColor(ctx)} hover:ring-2 hover:ring-offset-1 transition-all"
+													onclick={() => changeBindingContext(binding.action, cb.input, cb.context as BindingContext, index, true, ctx)}
+													title={keyBindingsStore.formatContext(ctx)}
+												></button>
+											{/each}
+										</div>
+									{/if}
+									<Icon class="h-3 w-3 {getBindingColor(cb.input.type)}" />
+									<span class="font-mono text-[11px]">
+										{keyBindingsStore.formatBinding(cb.input)}
+									</span>
+									<button
+										class="opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity"
+										onclick={() => removeBinding(binding.action, index, true, cb.context as BindingContext)}
+										title="删除"
+									>
+										<X class="h-3 w-3" />
+									</button>
+								</div>
+								{/each}
 						{/if}
 
 						<!-- 无绑定提示 -->
 						{#if (!binding.bindings || binding.bindings.length === 0) && (!binding.contextBindings || binding.contextBindings.length === 0)}
 							<div class="text-xs text-muted-foreground italic">暂无绑定</div>
 						{/if}
+						</div>
 
 						<!-- 添加绑定区域 - 单行布局 -->
 						<div class="flex items-center gap-2 pt-2 border-t mt-2 flex-wrap">

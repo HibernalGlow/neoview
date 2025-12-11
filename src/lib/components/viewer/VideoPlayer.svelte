@@ -966,55 +966,48 @@
 
 				<div class="flex-1"></div>
 
-				<!-- 音量控制 -->
-				<div class="volume-control flex items-center gap-2">
-					<button
-						class="control-btn rounded-full p-2 transition-colors hover:bg-white/20"
-						onclick={toggleMute}
-						aria-label={isMuted ? '取消静音' : '静音'}
-					>
-						{#if isMuted || volume === 0}
-							<VolumeX class="h-5 w-5 text-primary" />
-						{:else}
-							<Volume2 class="h-5 w-5 text-primary" />
-						{/if}
-					</button>
-					<input
-						type="range"
-						min="0"
-						max="1"
-						step="0.1"
-						value={volume}
-						oninput={changeVolume}
-						class="volume-slider w-20"
-					/>
-				</div>
+				<!-- 音量控制（紧凑模式：图标+数值） -->
+				<button
+					class="control-btn flex items-center gap-1 rounded-full px-2 py-1.5 transition-colors hover:bg-white/20"
+					onclick={toggleMute}
+					onwheel={(e) => {
+						e.preventDefault();
+						const delta = e.deltaY > 0 ? -0.1 : 0.1;
+						const newVol = Math.max(0, Math.min(1, volume + delta));
+						volume = newVol;
+						if (videoElement) videoElement.volume = newVol;
+						isMuted = newVol === 0;
+					}}
+					aria-label={isMuted ? '取消静音' : '静音'}
+					title="点击静音，滚轮调节音量"
+				>
+					{#if isMuted || volume === 0}
+						<VolumeX class="h-4 w-4 text-primary" />
+					{:else}
+						<Volume2 class="h-4 w-4 text-primary" />
+					{/if}
+					<span class="text-xs text-primary">{Math.round(volume * 100)}%</span>
+				</button>
 
-				<!-- 倍速 -->
-				<div class="playback-rate flex items-center gap-2 text-xs text-primary">
-					<button
-						class="control-btn rounded-full p-2 transition-colors hover:bg-white/20"
-						onclick={(event) => {
-							event.stopPropagation();
-							setPlaybackRate(1);
-						}}
-						aria-label="重置为1倍速"
-					>
-						<Gauge class="h-5 w-5 text-primary" />
-					</button>
-					<input
-						type="range"
-						min={getMinPlaybackRate()}
-						max={getMaxPlaybackRate()}
-						step={getPlaybackRateStep()}
-						value={playbackRate}
-						oninput={handlePlaybackSlider}
-						class="playback-slider w-28"
-					/>
-					<div class="w-10 text-right">
-						{playbackRate.toFixed(2)}x
-					</div>
-				</div>
+				<!-- 倍速控制（紧凑模式：图标+数值） -->
+				<button
+					class="control-btn flex items-center gap-1 rounded-full px-2 py-1.5 transition-colors hover:bg-white/20"
+					onclick={(event) => {
+						event.stopPropagation();
+						setPlaybackRate(1);
+					}}
+					onwheel={(e) => {
+						e.preventDefault();
+						const step = getPlaybackRateStep();
+						const delta = e.deltaY > 0 ? -step : step;
+						setPlaybackRate(playbackRate + delta);
+					}}
+					aria-label="点击重置为1倍速，滚轮调节"
+					title="点击重置1x，滚轮调节倍速"
+				>
+					<Gauge class="h-4 w-4 text-primary" />
+					<span class="text-xs text-primary">{playbackRate.toFixed(2)}x</span>
+				</button>
 
 				<!-- 快进模式 -->
 				<button

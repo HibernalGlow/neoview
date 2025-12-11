@@ -11,6 +11,7 @@ import { settingsManager } from '$lib/settings/settingsManager';
 let switchToastEnableBook = $state(false);
 let switchToastEnablePage = $state(false);
 let switchToastEnableAction = $state(false);  // 按键操作提示
+let switchToastEnableBoundary = $state(true);  // 边界提示（最后一页/第一页）
 let switchToastBookTitleTemplate = $state('');
 let switchToastBookDescriptionTemplate = $state('');
 let switchToastPageTitleTemplate = $state('');
@@ -22,6 +23,7 @@ function loadSwitchToastFromSettings() {
 		enableBook: s.view?.showBookSwitchToast ?? false,
 		enablePage: false,
 		enableAction: false,
+		enableBoundaryToast: true,
 		bookTitleTemplate: '已切换到 {{book.displayName}}（第 {{book.currentPageDisplay}} / {{book.totalPages}} 页）',
 		bookDescriptionTemplate: '路径：{{book.path}}',
 		pageTitleTemplate: '第 {{page.indexDisplay}} / {{book.totalPages}} 页',
@@ -30,6 +32,7 @@ function loadSwitchToastFromSettings() {
 	switchToastEnableBook = base.enableBook;
 	switchToastEnablePage = base.enablePage;
 	switchToastEnableAction = (base as { enableAction?: boolean }).enableAction ?? false;
+	switchToastEnableBoundary = (base as { enableBoundaryToast?: boolean }).enableBoundaryToast ?? true;
 	switchToastBookTitleTemplate = base.bookTitleTemplate ?? '';
 	switchToastBookDescriptionTemplate = base.bookDescriptionTemplate ?? '';
 	switchToastPageTitleTemplate = base.pageTitleTemplate ?? '';
@@ -44,6 +47,7 @@ function updateSwitchToast(partial: {
 	enableBook?: boolean;
 	enablePage?: boolean;
 	enableAction?: boolean;
+	enableBoundaryToast?: boolean;
 	bookTitleTemplate?: string;
 	bookDescriptionTemplate?: string;
 	pageTitleTemplate?: string;
@@ -53,12 +57,14 @@ function updateSwitchToast(partial: {
 	const prev = current.view?.switchToast ?? {
 		enableBook: current.view?.showBookSwitchToast ?? false,
 		enablePage: false,
-		enableAction: false
+		enableAction: false,
+		enableBoundaryToast: true
 	};
 	const next = { ...prev, ...partial };
 	switchToastEnableBook = next.enableBook ?? false;
 	switchToastEnablePage = next.enablePage ?? false;
 	switchToastEnableAction = (next as { enableAction?: boolean }).enableAction ?? false;
+	switchToastEnableBoundary = (next as { enableBoundaryToast?: boolean }).enableBoundaryToast ?? true;
 	switchToastBookTitleTemplate = next.bookTitleTemplate ?? '';
 	switchToastBookDescriptionTemplate = next.bookDescriptionTemplate ?? '';
 	switchToastPageTitleTemplate = next.pageTitleTemplate ?? '';
@@ -104,6 +110,20 @@ function updateSwitchToast(partial: {
 		</div>
 		<div class="text-[10px] text-muted-foreground/60">
 			如"键盘: 下一页"、"滚轮: 放大"等
+		</div>
+	</div>
+	<Separator.Root class="my-1" />
+	<div class="space-y-1">
+		<div class="flex items-center justify-between gap-2">
+			<span>边界翻页时显示提示</span>
+			<Switch.Root
+				checked={switchToastEnableBoundary}
+				onCheckedChange={(v) => updateSwitchToast({ enableBoundaryToast: v })}
+				class="scale-75"
+			/>
+		</div>
+		<div class="text-[10px] text-muted-foreground/60">
+			在最后一页继续后翻或第一页继续前翻时显示提示
 		</div>
 	</div>
 	<Separator.Root class="my-1" />

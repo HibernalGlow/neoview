@@ -99,6 +99,7 @@ export interface NeoViewSettings {
     switchToast?: {
       enableBook: boolean;
       enablePage: boolean;
+      enableBoundaryToast: boolean;
       showBookPath: boolean;
       showBookPageProgress: boolean;
       showBookType: boolean;
@@ -305,6 +306,7 @@ const defaultSettings: NeoViewSettings = {
     switchToast: {
       enableBook: false,
       enablePage: false,
+      enableBoundaryToast: true,
       showBookPath: true,
       showBookPageProgress: true,
       showBookType: false,

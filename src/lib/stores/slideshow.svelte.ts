@@ -224,10 +224,11 @@ class SlideshowStore {
 	}
 
 	private triggerNextPage() {
-		if (this._random && this.randomPageCallback && this.getTotalPages) {
+		const total = this.getTotalPages?.() ?? 0;
+		const current = this.getCurrentIndex?.() ?? 0;
+
+		if (this._random && this.randomPageCallback && total > 0) {
 			// 随机模式
-			const total = this.getTotalPages();
-			const current = this.getCurrentIndex?.() ?? 0;
 			let randomIndex: number;
 
 			// 避免跳转到当前页
@@ -236,18 +237,22 @@ class SlideshowStore {
 			} while (randomIndex === current && total > 1);
 
 			this.randomPageCallback(randomIndex);
-		} else if (this.nextPageCallback) {
+		} else {
 			// 顺序模式
-			this.nextPageCallback();
-		}
+			const isLastPage = current >= total - 1;
 
-		// 检查是否需要循环
-		if (!this._loop) {
-			const total = this.getTotalPages?.() ?? 0;
-			const current = this.getCurrentIndex?.() ?? 0;
-			// 如果已到最后一页且不循环，停止播放
-			if (current >= total - 1) {
-				this.stop();
+			if (isLastPage) {
+				if (this._loop && this.randomPageCallback) {
+					// 循环模式：跳回第一页
+					this.randomPageCallback(0);
+				} else if (!this._loop) {
+					// 非循环模式：停止播放
+					this.stop();
+					return;
+				}
+			} else if (this.nextPageCallback) {
+				// 还有下一页，正常翻页
+				this.nextPageCallback();
 			}
 		}
 	}

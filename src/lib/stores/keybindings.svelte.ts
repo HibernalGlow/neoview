@@ -414,7 +414,8 @@ class KeyBindingsStore {
 	bindings = $state<ActionBinding[]>([...defaultBindings]);
 	
 	// 当前活跃的上下文堆栈（支持多个同时活跃）
-	private _activeContexts = $state<BindingContext[]>(['global']);
+	// 默认包含 viewer，因为启动时通常是图片浏览模式
+	private _activeContexts = $state<BindingContext[]>(['global', 'viewer']);
 
 	constructor() {
 		// 从 localStorage 加载自定义绑定

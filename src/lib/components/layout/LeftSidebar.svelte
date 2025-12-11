@@ -1,3 +1,4 @@
+
 <script lang="ts">
 	/**
 	 * NeoView - Sidebar Component (shadcn-svelte 二级菜单重构 + 动态面板配置)
@@ -249,9 +250,9 @@
 					class="flex flex-1"
 					style="width: calc(var(--sidebar-width) - var(--sidebar-width-icon) - 1px);"
 				>
-					<Sidebar.Content>
-						<Sidebar.Group class="px-0">
-							<Sidebar.GroupContent>
+					<Sidebar.Content class="h-full">
+						<Sidebar.Group class="h-full flex-1 p-0">
+							<Sidebar.GroupContent class="h-full">
 								<!-- 使用 content-visibility: hidden 保持布局信息，避免切换时重新计算尺寸 -->
 								{#each leftPanels as panel (panel.id)}
 									{@const PanelComponent = panelComponents[panel.id]}

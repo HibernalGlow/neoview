@@ -2,9 +2,10 @@
 /**
  * ManualTagEditor - 手动标签编辑器
  * 用于添加/编辑/删除手动标签
+ * 支持中英文输入提示
  */
 import { createEventDispatcher } from 'svelte';
-import { X, Plus, Tag, Trash2 } from '@lucide/svelte';
+import { X, Plus, Tag } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import { Input } from '$lib/components/ui/input';
 import * as Dialog from '$lib/components/ui/dialog';
@@ -17,6 +18,14 @@ import {
 	addManualTag,
 	removeManualTag
 } from '$lib/stores/emm/manualTagStore.svelte';
+import { findEMMTranslationFile, loadEMMTranslationDict, type EMMTranslationDict } from '$lib/api/emm';
+
+/** 标签建议项 */
+interface TagSuggestion {
+	tag: string;       // 英文标签
+	translated: string; // 中文翻译
+	namespace: string; // 所属命名空间
+}
 
 interface Props {
 	open: boolean;
@@ -39,6 +48,110 @@ let newTag = $state<string>('');
 // 加载状态
 let isLoading = $state(false);
 
+// 翻译字典
+let translationDict = $state<EMMTranslationDict | null>(null);
+// 标签建议
+let suggestions = $state<TagSuggestion[]>([]);
+// 是否显示建议列表
+let showSuggestions = $state(false);
+// 当前选中的建议索引
+let selectedSuggestionIndex = $state(-1);
+
+// 加载翻译字典
+async function loadTranslationDict() {
+	try {
+		const dictPath = await findEMMTranslationFile();
+		if (dictPath) {
+			translationDict = await loadEMMTranslationDict(dictPath);
+			console.log('[ManualTagEditor] 已加载翻译字典');
+		}
+	} catch (e) {
+		console.error('[ManualTagEditor] 加载翻译字典失败:', e);
+	}
+}
+
+// 搜索标签建议
+function searchSuggestions(query: string) {
+	if (!query.trim() || !translationDict) {
+		suggestions = [];
+		showSuggestions = false;
+		return;
+	}
+	
+	const q = query.toLowerCase();
+	const results: TagSuggestion[] = [];
+	const maxResults = 20;
+	
+	// 在所有命名空间中搜索
+	for (const [namespace, tags] of Object.entries(translationDict)) {
+		if (namespace === 'rows') continue; // 跳过 rows（类别翻译）
+		
+		for (const [tag, record] of Object.entries(tags)) {
+			if (results.length >= maxResults) break;
+			
+			const translated = record.name || tag;
+			// 匹配英文标签或中文翻译
+			if (tag.toLowerCase().includes(q) || translated.toLowerCase().includes(q)) {
+				results.push({ tag, translated, namespace });
+			}
+		}
+		if (results.length >= maxResults) break;
+	}
+	
+	suggestions = results;
+	showSuggestions = results.length > 0;
+	selectedSuggestionIndex = -1;
+}
+
+// 选择建议
+function selectSuggestion(suggestion: TagSuggestion) {
+	newTag = suggestion.tag;
+	newNamespace = suggestion.namespace;
+	showSuggestions = false;
+	selectedSuggestionIndex = -1;
+}
+
+// 处理输入变化
+function handleInputChange(e: Event) {
+	const target = e.target as HTMLInputElement;
+	newTag = target.value;
+	searchSuggestions(newTag);
+}
+
+// 处理键盘事件
+function handleKeydown(e: KeyboardEvent) {
+	if (!showSuggestions) {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			handleAddTag();
+		}
+		return;
+	}
+	
+	switch (e.key) {
+		case 'ArrowDown':
+			e.preventDefault();
+			selectedSuggestionIndex = Math.min(selectedSuggestionIndex + 1, suggestions.length - 1);
+			break;
+		case 'ArrowUp':
+			e.preventDefault();
+			selectedSuggestionIndex = Math.max(selectedSuggestionIndex - 1, -1);
+			break;
+		case 'Enter':
+			e.preventDefault();
+			if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < suggestions.length) {
+				selectSuggestion(suggestions[selectedSuggestionIndex]);
+			} else {
+				handleAddTag();
+			}
+			break;
+		case 'Escape':
+			showSuggestions = false;
+			selectedSuggestionIndex = -1;
+			break;
+	}
+}
+
 // 加载手动标签
 async function loadTags() {
 	if (!path) return;
@@ -56,6 +169,9 @@ async function loadTags() {
 $effect(() => {
 	if (open && path) {
 		loadTags();
+		if (!translationDict) {
+			loadTranslationDict();
+		}
 	}
 });
 
@@ -184,16 +300,42 @@ function getManualTagStyle(): string {
 							{/each}
 						</Select.Content>
 					</Select.Root>
-					<Input
-						bind:value={newTag}
-						placeholder="输入标签..."
-						class="flex-1"
-						onkeydown={(e) => { if (e.key === 'Enter') handleAddTag(); }}
-					/>
+					<div class="relative flex-1">
+						<Input
+							value={newTag}
+							placeholder="输入标签（支持中英文搜索）..."
+							class="w-full"
+							oninput={handleInputChange}
+							onkeydown={handleKeydown}
+							onfocus={() => { if (newTag.trim()) searchSuggestions(newTag); }}
+							onblur={() => { setTimeout(() => { showSuggestions = false; }, 200); }}
+						/>
+						<!-- 建议列表 -->
+						{#if showSuggestions && suggestions.length > 0}
+							<div class="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg z-50 max-h-60 overflow-y-auto">
+								{#each suggestions as suggestion, index}
+									<button
+										type="button"
+										class="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center gap-2 {index === selectedSuggestionIndex ? 'bg-accent' : ''}"
+										onmousedown={() => selectSuggestion(suggestion)}
+									>
+										<span class="text-xs px-1.5 py-0.5 rounded {getNamespaceColor(suggestion.namespace)}">
+											{suggestion.namespace}
+										</span>
+										<span class="font-medium">{suggestion.tag}</span>
+										{#if suggestion.translated !== suggestion.tag}
+											<span class="text-muted-foreground">({suggestion.translated})</span>
+										{/if}
+									</button>
+								{/each}
+							</div>
+						{/if}
+					</div>
 					<Button variant="outline" size="icon" onclick={handleAddTag}>
 						<Plus class="h-4 w-4" />
 					</Button>
 				</div>
+				<p class="text-xs text-muted-foreground">输入中文或英文标签名，会显示匹配建议</p>
 			</div>
 		</div>
 

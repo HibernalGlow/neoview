@@ -21,7 +21,6 @@
 		archives: () => import('./benchmark/ArchivesCard.svelte'),
 		realworld: () => import('./benchmark/RealWorldCard.svelte'),
 		imageSource: () => import('./benchmark/ImageSourceCard.svelte'),
-		protocolTest: () => import('./benchmark/ProtocolTestCard.svelte'),
 		results: () => import('./benchmark/ResultsCard.svelte'),
 		summary: () => import('./benchmark/SummaryCard.svelte'),
 		pipelineLatency: () => import('./benchmark/PipelineLatencyCard.svelte'),
@@ -72,7 +71,6 @@
 		aiTitleTranslation: () => import('./ai/AiTitleTranslationCard.svelte'),
 		aiServiceConfig: () => import('./ai/AiServiceConfigCard.svelte'),
 		aiTranslationCache: () => import('./ai/AiTranslationCacheCard.svelte'),
-		aiTranslationTest: () => import('./ai/AiTranslationTestCard.svelte'),
 		voiceControl: () => import('./ai/VoiceControlCard.svelte')
 	};
 

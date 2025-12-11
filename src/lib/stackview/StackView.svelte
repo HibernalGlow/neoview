@@ -52,6 +52,8 @@
 	import VideoContainer from '$lib/components/viewer/VideoContainer.svelte';
 	import { isVideoFile } from '$lib/utils/videoUtils';
 	import { upscaleStore } from './stores/upscaleStore.svelte';
+	import SlideshowControl from '$lib/components/viewer/SlideshowControl.svelte';
+	import { slideshowStore } from '$lib/stores/slideshow.svelte';
 
 	// ============================================================================
 	// Props
@@ -329,6 +331,9 @@
 
 	// 视频容器引用
 	let videoContainerRef: any = null;
+
+	// 幻灯片模式
+	let slideshowVisible = $state(false);
 
 
 	// ============================================================================
@@ -622,6 +627,35 @@
 	// 悬停滚动状态
 	let hoverScrollEnabled = $derived(settings.image?.hoverScrollEnabled ?? false);
 
+	// 幻灯片控制
+	function toggleSlideshow() {
+		if (slideshowVisible) {
+			slideshowStore.stop();
+			slideshowVisible = false;
+		} else {
+			slideshowVisible = true;
+			slideshowStore.play();
+		}
+	}
+
+	function handleSlideshowNextPage() {
+		handleNextPage();
+		// 重置幻灯片计时器（用户手动翻页后重新计时）
+		slideshowStore.resetOnUserAction();
+	}
+
+	function handleSlideshowRandomPage(index: number) {
+		bookStore.navigateToPage(index);
+	}
+
+	function getSlideshowTotalPages(): number {
+		return bookStore.totalPages;
+	}
+
+	function getSlideshowCurrentIndex(): number {
+		return bookStore.currentPageIndex;
+	}
+
 	// 缩放控制
 	function zoomIn() {
 		manualScale = Math.min(manualScale * 1.25, 10);
@@ -780,11 +814,22 @@
 		}
 	}
 
+	// 监听 viewer action 事件（包括幻灯片控制）
+	function handleViewerAction(event: Event) {
+		const customEvent = event as CustomEvent<{ action: string }>;
+		const action = customEvent.detail?.action;
+		if (action === 'slideshowToggle') {
+			toggleSlideshow();
+		}
+	}
+
 	onMount(async () => {
 		// 初始化超分服务
 		await upscaleStore.init();
 		// 监听 zoomMode 变化事件
 		window.addEventListener(applyZoomModeEventName, handleApplyZoomMode);
+		// 监听 viewer action 事件
+		window.addEventListener('neoview-viewer-action', handleViewerAction);
 	});
 
 	onDestroy(() => {
@@ -793,12 +838,14 @@
 		zoomModeManager.reset();
 		cursorAutoHide?.destroy();
 		upscaleStore.destroy();
+		slideshowStore.destroy();
 		window.removeEventListener(applyZoomModeEventName, handleApplyZoomMode);
+		window.removeEventListener('neoview-viewer-action', handleViewerAction);
 	});
 
 	let isRTL = $derived(settings.book.readingDirection === 'right-to-left');
 
-	export { resetView, togglePageMode, togglePanorama, pageMode, isPanorama, bookContext };
+	export { resetView, togglePageMode, togglePanorama, toggleSlideshow, pageMode, isPanorama, bookContext, slideshowVisible };
 </script>
 
 <div class="stack-view" bind:this={containerRef}>
@@ -921,6 +968,19 @@
 
 	<!-- 边栏控制浮窗 -->
 	<SidebarControlLayer />
+
+	<!-- 幻灯片控制 -->
+	<SlideshowControl
+		visible={slideshowVisible}
+		onNextPage={handleSlideshowNextPage}
+		onRandomPage={handleSlideshowRandomPage}
+		getTotalPages={getSlideshowTotalPages}
+		getCurrentIndex={getSlideshowCurrentIndex}
+		onClose={() => {
+			slideshowVisible = false;
+			slideshowStore.stop();
+		}}
+	/>
 </div>
 
 <style>

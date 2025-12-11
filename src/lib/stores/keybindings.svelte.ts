@@ -376,6 +376,36 @@ const defaultBindings: ActionBinding[] = [
 		category: '超分',
 		description: '开启或关闭自动超分（全局超分设置）',
 		bindings: []
+	},
+
+	// === 幻灯片操作 ===
+	{
+		action: 'slideshowToggle',
+		name: '幻灯片开关',
+		category: '幻灯片',
+		description: '开启或关闭幻灯片播放模式',
+		bindings: []
+	},
+	{
+		action: 'slideshowPlayPause',
+		name: '幻灯片播放/暂停',
+		category: '幻灯片',
+		description: '播放或暂停幻灯片',
+		bindings: []
+	},
+	{
+		action: 'slideshowStop',
+		name: '幻灯片停止',
+		category: '幻灯片',
+		description: '停止幻灯片播放',
+		bindings: []
+	},
+	{
+		action: 'slideshowSkip',
+		name: '幻灯片跳过',
+		category: '幻灯片',
+		description: '跳过当前图片，立即切换下一张',
+		bindings: []
 	}
 ];
 

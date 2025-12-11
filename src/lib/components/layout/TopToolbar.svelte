@@ -83,7 +83,9 @@
 		AlignRight,
 		Ban,
 		Smartphone,
-		MonitorSmartphone
+		MonitorSmartphone,
+		Play,
+		Pause
 	} from '@lucide/svelte';
 
 	import { showToast } from '$lib/utils/toast';
@@ -91,6 +93,7 @@
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import type { ZoomMode } from '$lib/settings/settingsManager';
 	import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
+	import { slideshowStore } from '$lib/stores/slideshow.svelte';
 	import type { PageSortMode } from '$lib/types/book';
 
 	const appWindow = getCurrentWebviewWindow();
@@ -839,6 +842,33 @@
 						</Tooltip.Trigger>
 						<Tooltip.Content>
 							<p>{hoverScrollEnabled ? '悬停滚动：开' : '悬停滚动：关'}</p>
+						</Tooltip.Content>
+					</Tooltip.Root>
+
+					<!-- 幻灯片模式 -->
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							<Button
+								variant={slideshowStore.isPlaying ? 'default' : 'ghost'}
+								size="icon"
+								class="h-8 w-8"
+								onclick={() => {
+									window.dispatchEvent(
+										new CustomEvent('neoview-viewer-action', {
+											detail: { action: 'slideshowToggle' }
+										})
+									);
+								}}
+							>
+								{#if slideshowStore.isPlaying}
+									<Pause class="h-4 w-4" />
+								{:else}
+									<Play class="h-4 w-4" />
+								{/if}
+							</Button>
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							<p>{slideshowStore.isPlaying ? '幻灯片播放中' : '开始幻灯片'}</p>
 						</Tooltip.Content>
 					</Tooltip.Root>
 				</div>

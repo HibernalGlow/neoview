@@ -43,6 +43,7 @@
 	import { isVideoFile } from '$lib/utils/videoUtils';
 	import { videoStore } from '$lib/stores/video.svelte';
 	import { updateUpscaleSettings } from '$lib/utils/upscale/settings';
+	import { slideshowStore } from '$lib/stores/slideshow.svelte';
 	import { deleteArchiveEntry } from '$lib/api/archive';
 	// V3 缩略图系统（复刻 NeeView 架构）
 	import {
@@ -659,6 +660,23 @@
 			case 'videoSpeedToggle':
 			case 'videoSeekModeToggle':
 				// 已在 isVideoPage 块内处理，这里只是防止 default 警告
+				break;
+			// 幻灯片相关操作
+			case 'slideshowToggle':
+				console.log('执行幻灯片开关切换');
+				dispatchViewerAction('slideshowToggle');
+				break;
+			case 'slideshowPlayPause':
+				console.log('执行幻灯片播放/暂停');
+				slideshowStore.toggle();
+				break;
+			case 'slideshowStop':
+				console.log('执行幻灯片停止');
+				slideshowStore.stop();
+				break;
+			case 'slideshowSkip':
+				console.log('执行幻灯片跳过');
+				slideshowStore.skip();
 				break;
 			default:
 				console.warn('未实现的快捷操作：', action);

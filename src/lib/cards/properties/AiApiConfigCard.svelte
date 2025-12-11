@@ -1,12 +1,13 @@
 <script lang="ts">
 /**
  * AiApiConfigCard - AI API 配置卡片
- * 统一管理 AI 提供商配置，供 AI 标签、翻译等功能使用
+ * 使用 Tab 切换不同模型配置
  * 支持导入/导出，与 EMM 的 api_config.json 格式兼容
  */
-import { Settings, Plus, Trash2, Check, X, Loader2, ChevronDown, ChevronUp, Download, Upload } from '@lucide/svelte';
+import { Settings, Plus, Trash2, Check, X, Loader2, Download, Upload } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import { Input } from '$lib/components/ui/input';
+import * as Tabs from '$lib/components/ui/tabs';
 import * as Select from '$lib/components/ui/select';
 import { aiApiConfigStore, AI_PROVIDER_PRESETS, type AiProvider, type AiApiConfigJson } from '$lib/stores/aiApiConfig.svelte';
 
@@ -16,7 +17,6 @@ let activeIndex = $state(0);
 let showAddForm = $state(false);
 let testingIndex = $state<number | null>(null);
 let testResult = $state<{ success: boolean; message: string } | null>(null);
-let editingIndex = $state<number | null>(null);
 
 // 新提供商表单
 let newPreset = $state('deepseek');
@@ -42,12 +42,6 @@ function handleAdd() {
 // 删除提供商
 function handleRemove(index: number) {
 	aiApiConfigStore.removeProvider(index);
-	if (editingIndex === index) editingIndex = null;
-}
-
-// 设置活动提供商
-function handleSetActive(index: number) {
-	aiApiConfigStore.setActiveIndex(index);
 }
 
 // 测试连接
@@ -67,9 +61,12 @@ function handleUpdate(index: number, field: keyof AiProvider, value: string) {
 	aiApiConfigStore.updateProvider(index, { [field]: value });
 }
 
-// 切换编辑
-function toggleEdit(index: number) {
-	editingIndex = editingIndex === index ? null : index;
+// 切换 Tab 时设置活动提供商
+function handleTabChange(value: string) {
+	const index = parseInt(value);
+	if (!isNaN(index)) {
+		aiApiConfigStore.setActiveIndex(index);
+	}
 }
 
 // 导出配置
@@ -161,96 +158,73 @@ function handleImport() {
 		</div>
 	{/if}
 
-	<!-- 提供商列表 -->
+	<!-- 提供商列表 - Tab 切换 -->
 	{#if providers.length === 0}
 		<div class="text-xs text-muted-foreground text-center py-4">
 			<p>暂无配置</p>
 			<p class="mt-1">点击 + 添加提供商，或导入 api_config.json</p>
 		</div>
 	{:else}
-		<div class="space-y-2">
+		<Tabs.Root value={activeIndex.toString()} onValueChange={handleTabChange}>
+			<!-- Tab 列表 -->
+			<Tabs.List class="w-full flex flex-wrap gap-1 h-auto p-1">
+				{#each providers as provider, index (index)}
+					<Tabs.Trigger value={index.toString()} class="text-xs h-7 px-2 flex-shrink-0">
+						{provider.name}
+					</Tabs.Trigger>
+				{/each}
+			</Tabs.List>
+
+			<!-- Tab 内容 -->
 			{#each providers as provider, index (index)}
-				{@const isActive = index === activeIndex}
-				{@const isEditing = index === editingIndex}
 				{@const isTesting = index === testingIndex}
-				
-				<div class="rounded border {isActive ? 'border-primary bg-primary/5' : 'border-border'}">
-					<!-- 头部 -->
-					<div class="flex items-center gap-2 p-2">
-						<button
-							type="button"
-							class="flex-1 flex items-center gap-2 text-left"
-							onclick={() => handleSetActive(index)}
-						>
-							<div class="w-2 h-2 rounded-full {isActive ? 'bg-green-500' : 'bg-muted-foreground/30'}"></div>
-							<span class="text-xs font-medium">{provider.name}</span>
-							<span class="text-[10px] text-muted-foreground">{provider.model}</span>
-						</button>
+				<Tabs.Content value={index.toString()} class="space-y-2 pt-2">
+					<Input
+						value={provider.apiKey}
+						placeholder="API Key"
+						type="password"
+						class="h-7 text-xs"
+						oninput={(e) => handleUpdate(index, 'apiKey', (e.target as HTMLInputElement).value)}
+					/>
+					<Input
+						value={provider.baseUrl}
+						placeholder="API URL"
+						class="h-7 text-xs"
+						oninput={(e) => handleUpdate(index, 'baseUrl', (e.target as HTMLInputElement).value)}
+					/>
+					<Input
+						value={provider.model}
+						placeholder="模型名称"
+						class="h-7 text-xs"
+						oninput={(e) => handleUpdate(index, 'model', (e.target as HTMLInputElement).value)}
+					/>
+					<div class="flex gap-2">
 						<Button
-							variant="ghost"
-							size="icon"
-							class="h-6 w-6"
-							onclick={() => toggleEdit(index)}
+							variant="outline"
+							size="sm"
+							class="flex-1 h-7 text-xs"
+							disabled={isTesting}
+							onclick={() => handleTest(index, provider)}
 						>
-							{#if isEditing}
-								<ChevronUp class="h-3 w-3" />
+							{#if isTesting}
+								<Loader2 class="h-3 w-3 mr-1 animate-spin" />
+								测试中
 							{:else}
-								<ChevronDown class="h-3 w-3" />
+								测试连接
 							{/if}
 						</Button>
+						<Button
+							variant="destructive"
+							size="icon"
+							class="h-7 w-7"
+							onclick={() => handleRemove(index)}
+						>
+							<Trash2 class="h-3 w-3" />
+						</Button>
 					</div>
-
-					<!-- 展开详情 -->
-					{#if isEditing}
-						<div class="px-2 pb-2 space-y-2 border-t">
-							<Input
-								value={provider.apiKey}
-								placeholder="API Key"
-								type="password"
-								class="h-7 text-xs mt-2"
-								oninput={(e) => handleUpdate(index, 'apiKey', (e.target as HTMLInputElement).value)}
-							/>
-							<Input
-								value={provider.baseUrl}
-								placeholder="API URL"
-								class="h-7 text-xs"
-								oninput={(e) => handleUpdate(index, 'baseUrl', (e.target as HTMLInputElement).value)}
-							/>
-							<Input
-								value={provider.model}
-								placeholder="模型"
-								class="h-7 text-xs"
-								oninput={(e) => handleUpdate(index, 'model', (e.target as HTMLInputElement).value)}
-							/>
-							<div class="flex gap-2">
-								<Button
-									variant="outline"
-									size="sm"
-									class="flex-1 h-7 text-xs"
-									disabled={isTesting}
-									onclick={() => handleTest(index, provider)}
-								>
-									{#if isTesting}
-										<Loader2 class="h-3 w-3 mr-1 animate-spin" />
-										测试中
-									{:else}
-										测试连接
-									{/if}
-								</Button>
-								<Button
-									variant="destructive"
-									size="icon"
-									class="h-7 w-7"
-									onclick={() => handleRemove(index)}
-								>
-									<Trash2 class="h-3 w-3" />
-								</Button>
-							</div>
-						</div>
-					{/if}
-				</div>
+				</Tabs.Content>
 			{/each}
-		</div>
+		</Tabs.Root>
 	{/if}
 
 	<!-- 测试结果 -->

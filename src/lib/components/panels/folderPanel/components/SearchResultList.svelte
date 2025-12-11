@@ -13,6 +13,8 @@ import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 import { thumbnailManager } from '$lib/utils/thumbnailManager';
 import { Button } from '$lib/components/ui/button';
 import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+import { ratingCache, getSortableRating } from '$lib/services/ratingCache';
+import { getDefaultRating } from '$lib/stores/emm/storage';
 
 interface Props {
 	onItemClick?: (item: FsItem) => void | Promise<void>;
@@ -105,9 +107,15 @@ let sortedResults = $derived.by(() => {
 				const extB = b.name.includes('.') ? b.name.split('.').pop() || '' : '';
 				cmp = extA.localeCompare(extB);
 				break;
-			case 'rating':
-				cmp = ((a as any).rating || 0) - ((b as any).rating || 0);
+			case 'rating': {
+				const defRating = getDefaultRating();
+				const rInfoA = ratingCache.getRatingSync(a.path);
+				const rInfoB = ratingCache.getRatingSync(b.path);
+				const rA = getSortableRating(rInfoA ?? {}, defRating);
+				const rB = getSortableRating(rInfoB ?? {}, defRating);
+				cmp = rA - rB;
 				break;
+			}
 			case 'path':
 				cmp = a.path.localeCompare(b.path, 'zh-CN', { numeric: true });
 				break;

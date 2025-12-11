@@ -121,6 +121,10 @@
 	// 更多菜单
 	let showMoreMenu = $state(false);
 	
+	// 音量/倍速展开面板
+	let showVolumePanel = $state(false);
+	let showRatePanel = $state(false);
+	
 	// 字幕设置 - 从 settings 读取初始值
 	let showSubtitleSettings = $state(false);
 	let subtitleFontSize = $state(settings.subtitle?.fontSize ?? 1.0); // em 单位
@@ -966,48 +970,83 @@
 
 				<div class="flex-1"></div>
 
-				<!-- 音量控制（紧凑模式：图标+数值） -->
-				<button
-					class="control-btn flex items-center gap-1 rounded-full px-2 py-1.5 transition-colors hover:bg-white/20"
-					onclick={toggleMute}
-					onwheel={(e) => {
-						e.preventDefault();
-						const delta = e.deltaY > 0 ? -0.1 : 0.1;
-						const newVol = Math.max(0, Math.min(1, volume + delta));
-						volume = newVol;
-						if (videoElement) videoElement.volume = newVol;
-						isMuted = newVol === 0;
-					}}
-					aria-label={isMuted ? '取消静音' : '静音'}
-					title="点击静音，滚轮调节音量"
-				>
-					{#if isMuted || volume === 0}
-						<VolumeX class="h-4 w-4 text-primary" />
-					{:else}
-						<Volume2 class="h-4 w-4 text-primary" />
+				<!-- 音量控制（点击展开） -->
+				<div class="relative">
+					<button
+						class="control-btn flex items-center gap-1 rounded-full px-2 py-1.5 transition-colors hover:bg-white/20 {showVolumePanel ? 'bg-white/20' : ''}"
+						onclick={(e) => {
+							e.stopPropagation();
+							showVolumePanel = !showVolumePanel;
+							showRatePanel = false;
+						}}
+						aria-label="音量控制"
+						title="点击展开音量调节"
+					>
+						{#if isMuted || volume === 0}
+							<VolumeX class="h-4 w-4 text-primary" />
+						{:else}
+							<Volume2 class="h-4 w-4 text-primary" />
+						{/if}
+						<span class="text-xs text-primary">{Math.round(volume * 100)}%</span>
+					</button>
+					{#if showVolumePanel}
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<div class="absolute bottom-full right-0 mb-2 rounded-lg bg-black/95 p-3 shadow-lg"
+							style="min-width: 140px;"
+							onclick={(e) => e.stopPropagation()}
+							onmousedown={(e) => e.stopPropagation()}>
+							<div class="flex items-center gap-2">
+								<button onclick={toggleMute} class="shrink-0 p-1 hover:bg-white/20 rounded">
+									{#if isMuted || volume === 0}
+										<VolumeX class="h-4 w-4 text-white" />
+									{:else}
+										<Volume2 class="h-4 w-4 text-white" />
+									{/if}
+								</button>
+								<input type="range" min="0" max="1" step="0.05" value={volume}
+									oninput={changeVolume}
+									class="w-20 h-1 bg-white/20 rounded appearance-none cursor-pointer" />
+							</div>
+						</div>
 					{/if}
-					<span class="text-xs text-primary">{Math.round(volume * 100)}%</span>
-				</button>
+				</div>
 
-				<!-- 倍速控制（紧凑模式：图标+数值） -->
-				<button
-					class="control-btn flex items-center gap-1 rounded-full px-2 py-1.5 transition-colors hover:bg-white/20"
-					onclick={(event) => {
-						event.stopPropagation();
-						setPlaybackRate(1);
-					}}
-					onwheel={(e) => {
-						e.preventDefault();
-						const step = getPlaybackRateStep();
-						const delta = e.deltaY > 0 ? -step : step;
-						setPlaybackRate(playbackRate + delta);
-					}}
-					aria-label="点击重置为1倍速，滚轮调节"
-					title="点击重置1x，滚轮调节倍速"
-				>
-					<Gauge class="h-4 w-4 text-primary" />
-					<span class="text-xs text-primary">{playbackRate.toFixed(2)}x</span>
-				</button>
+				<!-- 倍速控制（点击展开） -->
+				<div class="relative">
+					<button
+						class="control-btn flex items-center gap-1 rounded-full px-2 py-1.5 transition-colors hover:bg-white/20 {showRatePanel ? 'bg-white/20' : ''}"
+						onclick={(e) => {
+							e.stopPropagation();
+							showRatePanel = !showRatePanel;
+							showVolumePanel = false;
+						}}
+						aria-label="倍速控制"
+						title="点击展开倍速调节"
+					>
+						<Gauge class="h-4 w-4 text-primary" />
+						<span class="text-xs text-primary">{playbackRate.toFixed(2)}x</span>
+					</button>
+					{#if showRatePanel}
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<div class="absolute bottom-full right-0 mb-2 rounded-lg bg-black/95 p-3 shadow-lg"
+							style="min-width: 160px;"
+							onclick={(e) => e.stopPropagation()}
+							onmousedown={(e) => e.stopPropagation()}>
+							<div class="flex items-center gap-2 mb-2">
+								<input type="range" min={getMinPlaybackRate()} max={getMaxPlaybackRate()} step={getPlaybackRateStep()}
+									value={playbackRate} oninput={handlePlaybackSlider}
+									class="w-24 h-1 bg-white/20 rounded appearance-none cursor-pointer" />
+								<span class="text-xs text-white shrink-0">{playbackRate.toFixed(2)}x</span>
+							</div>
+							<div class="flex flex-wrap gap-1">
+								{#each [0.5, 1, 1.5, 2] as rate}
+									<button class="px-2 py-0.5 text-xs rounded {playbackRate === rate ? 'bg-primary text-white' : 'bg-white/10 text-white hover:bg-white/20'}"
+										onclick={() => setPlaybackRate(rate)}>{rate}x</button>
+								{/each}
+							</div>
+						</div>
+					{/if}
+				</div>
 
 				<!-- 快进模式 -->
 				<button

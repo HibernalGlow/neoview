@@ -205,6 +205,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'properties',
 		canHide: false,
 	},
+	'manualTags': {
+		id: 'manualTags',
+		title: '手动标签',
+		icon: Tags,
+		defaultPanel: 'properties',
+		canHide: true,
+	},
 	'bookSettings': {
 		id: 'bookSettings',
 		title: '本书设置',

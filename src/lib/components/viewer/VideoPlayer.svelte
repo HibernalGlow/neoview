@@ -792,8 +792,8 @@
 				{/if}
 			</div>
 
-			<!-- 控制按钮 -->
-			<div class="controls-row flex items-center gap-4">
+			<!-- 控制按钮（响应式：窄屏时缩小间距） -->
+			<div class="controls-row flex flex-wrap items-center gap-2 sm:gap-3 md:gap-4">
 				<!-- 播放/暂停 -->
 				<button
 					class="control-btn rounded-full p-2 transition-colors hover:bg-white/20"

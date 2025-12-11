@@ -16,7 +16,17 @@
 		X
 	} from '@lucide/svelte';
 	import { slideshowStore } from '$lib/stores/slideshow.svelte';
+	import { settingsManager } from '$lib/settings/settingsManager';
 	import { fade, fly } from 'svelte/transition';
+
+	// 获取阅读方向
+	let settings = $state(settingsManager.getSettings());
+	let isRTL = $derived(settings.book.readingDirection === 'right-to-left');
+	
+	// 监听设置变化
+	settingsManager.addListener((newSettings) => {
+		settings = newSettings;
+	});
 
 	const {
 		onNextPage,
@@ -269,7 +279,7 @@
 		{/if}
 	</div>
 
-	<!-- 底部进度条（可选） -->
+	<!-- 底部进度条（可选）- 跟随阅读方向 -->
 	{#if slideshowStore.isPlaying && slideshowStore.showTimer}
 		<div
 			class="slideshow-progress fixed bottom-0 left-0 right-0 z-40 h-0.5 bg-white/20"
@@ -277,7 +287,7 @@
 		>
 			<div
 				class="h-full bg-primary transition-all duration-1000 ease-linear"
-				style="width: {slideshowStore.progress}%"
+				style="width: {slideshowStore.progress}%; {isRTL ? 'margin-left: auto;' : ''}"
 			></div>
 		</div>
 	{/if}

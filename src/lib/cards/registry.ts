@@ -212,6 +212,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'properties',
 		canHide: true,
 	},
+	'aiApiConfig': {
+		id: 'aiApiConfig',
+		title: 'AI API 配置',
+		icon: Settings,
+		defaultPanel: 'properties',
+		canHide: true,
+	},
 	'bookSettings': {
 		id: 'bookSettings',
 		title: '本书设置',

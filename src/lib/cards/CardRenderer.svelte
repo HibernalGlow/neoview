@@ -38,6 +38,7 @@
 		// Properties
 		emmTags: () => import('./properties/EmmTagsCard.svelte'),
 		aiTags: () => import('./properties/AiTagsCard.svelte'),
+		aiApiConfig: () => import('./properties/AiApiConfigCard.svelte'),
 		bookSettings: () => import('./properties/BookSettingsCard.svelte'),
 		folderRatings: () => import('./properties/FolderRatingsCard.svelte'),
 		favoriteTags: () => import('./properties/FavoriteTagsCard.svelte'),

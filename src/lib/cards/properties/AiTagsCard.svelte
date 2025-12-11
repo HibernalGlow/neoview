@@ -2,24 +2,16 @@
 /**
  * AiTagsCard - AI 标签推断卡片
  * 通过 AI API 根据文件名推断标签并添加到手动标签
+ * 使用共享的 aiApiConfigStore 配置
  */
-import { Bot, Play, Settings, Loader2, Check, X, Plus } from '@lucide/svelte';
+import { Bot, Play, Loader2, Check, Plus, AlertCircle } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
-import { Input } from '$lib/components/ui/input';
-import * as Select from '$lib/components/ui/select';
 import { addManualTag, NAMESPACE_LABELS, TAG_NAMESPACES } from '$lib/stores/emm/manualTagStore.svelte';
 import { emmTranslationStore, emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
 import { favoriteTagStore } from '$lib/stores/emm/favoriteTagStore.svelte';
 import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
+import { aiApiConfigStore } from '$lib/stores/aiApiConfig.svelte';
 import { get } from 'svelte/store';
-
-// AI API 配置
-interface AiApiConfig {
-	name: string;
-	baseUrl: string;
-	apiKey: string;
-	model: string;
-}
 
 // 推断结果
 interface InferredTag {
@@ -32,64 +24,15 @@ interface InferredTag {
 let isInferring = $state(false);
 let inferredTags = $state<InferredTag[]>([]);
 let errorMessage = $state('');
-let showSettings = $state(false);
+let hasConfig = $state(false);
 
-// API 配置（从 localStorage 加载）
-let apiConfig = $state<AiApiConfig>({
-	name: 'DeepSeek',
-	baseUrl: 'https://api.deepseek.com/v1/chat/completions',
-	apiKey: '',
-	model: 'deepseek-chat'
+// 订阅配置状态
+$effect(() => {
+	const unsub = aiApiConfigStore.subscribe(state => {
+		hasConfig = state.providers.length > 0 && state.activeProviderId !== null;
+	});
+	return unsub;
 });
-
-// 预设 API 提供商
-const API_PRESETS: Record<string, Partial<AiApiConfig>> = {
-	deepseek: {
-		name: 'DeepSeek',
-		baseUrl: 'https://api.deepseek.com/v1/chat/completions',
-		model: 'deepseek-chat'
-	},
-	openai: {
-		name: 'OpenAI',
-		baseUrl: 'https://api.openai.com/v1/chat/completions',
-		model: 'gpt-3.5-turbo'
-	},
-	ollama: {
-		name: 'Ollama (本地)',
-		baseUrl: 'http://localhost:11434/v1/chat/completions',
-		model: 'qwen2.5:7b'
-	}
-};
-
-// 加载配置
-function loadConfig() {
-	try {
-		const saved = localStorage.getItem('neoview-ai-tag-config');
-		if (saved) {
-			apiConfig = JSON.parse(saved);
-		}
-	} catch (e) {
-		console.error('[AiTagsCard] 加载配置失败:', e);
-	}
-}
-
-// 保存配置
-function saveConfig() {
-	try {
-		localStorage.setItem('neoview-ai-tag-config', JSON.stringify(apiConfig));
-	} catch (e) {
-		console.error('[AiTagsCard] 保存配置失败:', e);
-	}
-}
-
-// 应用预设
-function applyPreset(preset: string) {
-	const p = API_PRESETS[preset];
-	if (p) {
-		apiConfig = { ...apiConfig, ...p };
-		saveConfig();
-	}
-}
 
 // 获取当前文件路径
 function getCurrentPath(): string {
@@ -149,58 +92,16 @@ namespace 可选值：${TAG_NAMESPACES.join(', ')}
 只返回 JSON，不要其他文字。`;
 }
 
-// 调用 AI API
-async function callAiApi(prompt: string): Promise<InferredTag[]> {
-	const { baseUrl, apiKey, model } = apiConfig;
-	
-	if (!apiKey && !baseUrl.includes('localhost')) {
-		throw new Error('请先配置 API Key');
-	}
-
-	const response = await fetch(baseUrl, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			'Authorization': `Bearer ${apiKey}`
-		},
-		body: JSON.stringify({
-			model,
-			messages: [
-				{ role: 'system', content: '你是一个专业的漫画标签分类助手。只返回 JSON 格式。' },
-				{ role: 'user', content: prompt }
-			],
-			temperature: 0.3,
-			max_tokens: 500
-		})
-	});
-
-	if (!response.ok) {
-		const errorText = await response.text();
-		throw new Error(`API 请求失败: ${response.status} - ${errorText.slice(0, 200)}`);
-	}
-
-	const data = await response.json();
-	const content = data.choices?.[0]?.message?.content;
-	
-	if (!content) {
-		throw new Error('AI 返回空内容');
-	}
-
-	// 解析 JSON
-	const jsonMatch = content.match(/\{[\s\S]*\}/);
-	if (!jsonMatch) {
-		throw new Error('无法解析 AI 返回的 JSON');
-	}
-
-	const result = JSON.parse(jsonMatch[0]);
-	return result.tags || [];
-}
-
-// 执行推断
+// 执行推断 - 使用共享的 aiApiConfigStore
 async function handleInfer() {
 	const path = getCurrentPath();
 	if (!path) {
 		errorMessage = '请先打开一个文件';
+		return;
+	}
+
+	if (!hasConfig) {
+		errorMessage = '请先在「AI API 配置」卡片中添加提供商';
 		return;
 	}
 
@@ -211,7 +112,21 @@ async function handleInfer() {
 	try {
 		const fileName = getFileName(path);
 		const prompt = buildPrompt(fileName);
-		inferredTags = await callAiApi(prompt);
+		
+		// 使用共享的 API 配置
+		const response = await aiApiConfigStore.chat([
+			{ role: 'system', content: '你是一个专业的漫画标签分类助手。只返回 JSON 格式。' },
+			{ role: 'user', content: prompt }
+		], { jsonMode: true });
+
+		// 解析 JSON
+		const jsonMatch = response.match(/\{[\s\S]*\}/);
+		if (!jsonMatch) {
+			throw new Error('无法解析 AI 返回的 JSON');
+		}
+
+		const result = JSON.parse(jsonMatch[0]);
+		inferredTags = result.tags || [];
 		console.log('[AiTagsCard] 推断结果:', inferredTags);
 	} catch (e) {
 		console.error('[AiTagsCard] 推断失败:', e);
@@ -250,8 +165,11 @@ function translateTag(namespace: string, tag: string): string {
 	return emmTranslationStore.translateTag(tag, namespace, dict);
 }
 
-// 初始化
-loadConfig();
+// 获取活动提供商名称
+let activeProviderName = $derived.by(() => {
+	const provider = aiApiConfigStore.getActiveProvider();
+	return provider?.name || '';
+});
 </script>
 
 <div class="space-y-3">
@@ -261,53 +179,18 @@ loadConfig();
 			<Bot class="h-4 w-4 text-purple-500" />
 			<span class="text-sm font-medium">AI 标签推断</span>
 		</div>
-		<Button 
-			variant="ghost" 
-			size="icon" 
-			class="h-6 w-6"
-			onclick={() => { showSettings = !showSettings; }}
-		>
-			<Settings class="h-3.5 w-3.5" />
-		</Button>
+		{#if hasConfig}
+			<span class="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+				{activeProviderName}
+			</span>
+		{/if}
 	</div>
 
-	<!-- 设置面板 -->
-	{#if showSettings}
-		<div class="space-y-2 p-2 rounded border bg-muted/30">
-			<div class="flex gap-2">
-				<Select.Root type="single" onValueChange={(v) => { if (v) applyPreset(v); }}>
-					<Select.Trigger class="h-8 text-xs flex-1">
-						<span>预设: {apiConfig.name}</span>
-					</Select.Trigger>
-					<Select.Content>
-						<Select.Item value="deepseek">DeepSeek (推荐)</Select.Item>
-						<Select.Item value="openai">OpenAI</Select.Item>
-						<Select.Item value="ollama">Ollama 本地</Select.Item>
-					</Select.Content>
-				</Select.Root>
-			</div>
-			<Input
-				value={apiConfig.apiKey}
-				placeholder="API Key"
-				type="password"
-				class="h-8 text-xs"
-				oninput={(e) => { apiConfig.apiKey = (e.target as HTMLInputElement).value; saveConfig(); }}
-			/>
-			<Input
-				value={apiConfig.baseUrl}
-				placeholder="API URL"
-				class="h-8 text-xs"
-				oninput={(e) => { apiConfig.baseUrl = (e.target as HTMLInputElement).value; saveConfig(); }}
-			/>
-			<Input
-				value={apiConfig.model}
-				placeholder="模型名称"
-				class="h-8 text-xs"
-				oninput={(e) => { apiConfig.model = (e.target as HTMLInputElement).value; saveConfig(); }}
-			/>
-			<p class="text-[10px] text-muted-foreground">
-				推荐 DeepSeek，约 ¥0.001/次
-			</p>
+	<!-- 未配置提示 -->
+	{#if !hasConfig}
+		<div class="flex items-center gap-2 text-xs text-amber-500 bg-amber-500/10 px-2 py-1.5 rounded">
+			<AlertCircle class="h-3.5 w-3.5 shrink-0" />
+			<span>请先在「AI API 配置」卡片中添加提供商</span>
 		</div>
 	{/if}
 
@@ -316,7 +199,7 @@ loadConfig();
 		variant="outline" 
 		size="sm" 
 		class="w-full"
-		disabled={isInferring}
+		disabled={isInferring || !hasConfig}
 		onclick={handleInfer}
 	>
 		{#if isInferring}
@@ -364,7 +247,7 @@ loadConfig();
 	{/if}
 
 	<!-- 使用说明 -->
-	{#if !showSettings && inferredTags.length === 0 && !isInferring}
+	{#if hasConfig && inferredTags.length === 0 && !isInferring}
 		<p class="text-[10px] text-muted-foreground text-center py-2">
 			点击上方按钮，AI 将根据文件名推断标签
 		</p>

@@ -2,15 +2,16 @@
 /**
  * AiTagsCard - AI 标签推断卡片
  * 通过 AI API 根据文件名推断标签并添加到手动标签
- * 使用共享的 aiApiConfigStore 配置
+ * 支持自选模型和自定义 prompt
  */
-import { Bot, Play, Loader2, Check, Plus, AlertCircle } from '@lucide/svelte';
+import { Bot, Play, Loader2, Check, Plus, AlertCircle, Settings, ChevronDown, ChevronUp } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
+import * as Select from '$lib/components/ui/select';
 import { addManualTag, NAMESPACE_LABELS, TAG_NAMESPACES } from '$lib/stores/emm/manualTagStore.svelte';
 import { emmTranslationStore, emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
 import { favoriteTagStore } from '$lib/stores/emm/favoriteTagStore.svelte';
 import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
-import { aiApiConfigStore } from '$lib/stores/aiApiConfig.svelte';
+import { aiApiConfigStore, type AiProvider } from '$lib/stores/aiApiConfig.svelte';
 import { get } from 'svelte/store';
 
 // 推断结果
@@ -25,14 +26,38 @@ let isInferring = $state(false);
 let inferredTags = $state<InferredTag[]>([]);
 let errorMessage = $state('');
 let hasConfig = $state(false);
+let providers = $state<AiProvider[]>([]);
+let activeIndex = $state(0);
+let selectedProviderIndex = $state<number | null>(null); // null = 使用默认
+let showSettings = $state(false);
+let customPrompt = $state('');
+let useCustomPrompt = $state(false);
 
 // 订阅配置状态
 $effect(() => {
 	const unsub = aiApiConfigStore.subscribe(state => {
 		hasConfig = state.providers.length > 0;
+		providers = state.providers;
+		activeIndex = state.activeIndex;
 	});
 	return unsub;
 });
+
+// 获取选中的提供商
+function getSelectedProvider(): AiProvider | undefined {
+	if (selectedProviderIndex !== null) {
+		return providers[selectedProviderIndex];
+	}
+	return undefined; // 使用默认
+}
+
+// 获取显示名称
+function getProviderDisplayName(): string {
+	if (selectedProviderIndex !== null) {
+		return providers[selectedProviderIndex]?.name || '未知';
+	}
+	return providers[activeIndex]?.name || '默认';
+}
 
 // 获取当前文件路径
 function getCurrentPath(): string {
@@ -92,7 +117,7 @@ namespace 可选值：${TAG_NAMESPACES.join(', ')}
 只返回 JSON，不要其他文字。`;
 }
 
-// 执行推断 - 使用共享的 aiApiConfigStore
+// 执行推断
 async function handleInfer() {
 	const path = getCurrentPath();
 	if (!path) {
@@ -111,13 +136,15 @@ async function handleInfer() {
 
 	try {
 		const fileName = getFileName(path);
-		const prompt = buildPrompt(fileName);
+		const prompt = useCustomPrompt && customPrompt.trim() 
+			? customPrompt.replace('{fileName}', fileName)
+			: buildPrompt(fileName);
 		
-		// 使用共享的 API 配置
+		// 使用选中的提供商或默认
 		const response = await aiApiConfigStore.chat([
 			{ role: 'system', content: '你是一个专业的漫画标签分类助手。只返回 JSON 格式。' },
 			{ role: 'user', content: prompt }
-		], { jsonMode: true });
+		], { jsonMode: true, provider: getSelectedProvider() });
 
 		// 解析 JSON
 		const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -167,9 +194,23 @@ function translateTag(namespace: string, tag: string): string {
 
 // 获取活动提供商名称
 let activeProviderName = $derived.by(() => {
-	const provider = aiApiConfigStore.getActiveProvider();
-	return provider?.name || '';
+	return getProviderDisplayName();
 });
+
+// 默认 prompt 模板
+const DEFAULT_PROMPT_TEMPLATE = `根据文件名推断标签。
+
+文件名：{fileName}
+
+返回 JSON 格式：
+{
+  "tags": [
+    { "namespace": "artist", "tag": "xxx" },
+    { "namespace": "parody", "tag": "xxx" }
+  ]
+}
+
+namespace 可选值：artist, group, parody, character, female, male, mixed, other, cosplayer, language, reclass`;
 </script>
 
 <div class="space-y-3">
@@ -179,12 +220,64 @@ let activeProviderName = $derived.by(() => {
 			<Bot class="h-4 w-4 text-purple-500" />
 			<span class="text-sm font-medium">AI 标签推断</span>
 		</div>
-		{#if hasConfig}
-			<span class="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-				{activeProviderName}
-			</span>
-		{/if}
+		<div class="flex items-center gap-1">
+			{#if hasConfig}
+				<span class="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+					{activeProviderName}
+				</span>
+			{/if}
+			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={() => { showSettings = !showSettings; }}>
+				{#if showSettings}
+					<ChevronUp class="h-3.5 w-3.5" />
+				{:else}
+					<Settings class="h-3.5 w-3.5" />
+				{/if}
+			</Button>
+		</div>
 	</div>
+
+	<!-- 设置面板 -->
+	{#if showSettings && hasConfig}
+		<div class="space-y-2 p-2 rounded border bg-muted/30">
+			<!-- 模型选择 -->
+			<div class="space-y-1">
+				<label class="text-[10px] text-muted-foreground">使用模型</label>
+				<Select.Root type="single" value={selectedProviderIndex?.toString() ?? 'default'} onValueChange={(v) => { selectedProviderIndex = v === 'default' ? null : parseInt(v); }}>
+					<Select.Trigger class="h-7 text-xs">
+						<span>{selectedProviderIndex !== null ? providers[selectedProviderIndex]?.name : `默认 (${providers[activeIndex]?.name})`}</span>
+					</Select.Trigger>
+					<Select.Content>
+						<Select.Item value="default">默认 ({providers[activeIndex]?.name})</Select.Item>
+						{#each providers as provider, i (i)}
+							<Select.Item value={i.toString()}>{provider.name}</Select.Item>
+						{/each}
+					</Select.Content>
+				</Select.Root>
+			</div>
+			
+			<!-- 自定义 Prompt -->
+			<div class="space-y-1">
+				<div class="flex items-center justify-between">
+					<label class="text-[10px] text-muted-foreground">自定义 Prompt</label>
+					<button 
+						type="button" 
+						class="text-[10px] text-primary hover:underline"
+						onclick={() => { useCustomPrompt = !useCustomPrompt; }}
+					>
+						{useCustomPrompt ? '使用默认' : '自定义'}
+					</button>
+				</div>
+				{#if useCustomPrompt}
+					<textarea
+						bind:value={customPrompt}
+						placeholder="输入自定义 prompt，使用 &#123;fileName&#125; 代表文件名"
+						class="w-full text-xs min-h-[80px] p-2 rounded border bg-background resize-y"
+					></textarea>
+					<p class="text-[10px] text-muted-foreground">提示：使用 &#123;fileName&#125; 插入文件名</p>
+				{/if}
+			</div>
+		</div>
+	{/if}
 
 	<!-- 未配置提示 -->
 	{#if !hasConfig}

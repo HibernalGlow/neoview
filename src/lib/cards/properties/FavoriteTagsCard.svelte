@@ -7,7 +7,7 @@
 import { RefreshCcw, X, Plus, Tag } from '@lucide/svelte';
 import * as Button from '$lib/components/ui/button';
 import { favoriteTagStore, categoryColors, mixedGenderStore, cat2letter, createTagValue, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
-import { infoPanelStore, type ViewerBookInfo } from '$lib/stores/infoPanel.svelte';
+import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
 import { getManualTagsSync, addManualTag, removeManualTag, getAllUniqueManualTags, type ManualTag, TAG_NAMESPACES, NAMESPACE_LABELS } from '$lib/stores/emm/manualTagStore.svelte';
 import { emmTranslationStore } from '$lib/stores/emmMetadata.svelte';
 import * as Select from '$lib/components/ui/select';
@@ -24,28 +24,18 @@ interface ExtendedFavoriteTag extends FavoriteTag {
 let isReloadingFavoriteTags = $state(false);
 
 // 手动标签状态
-let bookInfo = $state<ViewerBookInfo | null>(null);
+let bookPath = $state<string | null>(null);
 let manualTags = $state<ManualTag[]>([]);
 let showAddForm = $state(false);
 let newNamespace = $state<string>('female');
 let newTagInput = $state('');
-let lastBookPath = $state<string | null>(null);
 
-// 订阅书籍信息（只订阅一次）
+// 订阅书籍信息（模块级，只执行一次）
 infoPanelStore.subscribe((state) => {
-	bookInfo = state.bookInfo;
-});
-
-// 当书籍路径变化时更新手动标签
-$effect(() => {
-	const path = bookInfo?.path;
-	if (path !== lastBookPath) {
-		lastBookPath = path ?? null;
-		if (path) {
-			manualTags = getManualTagsSync(path);
-		} else {
-			manualTags = [];
-		}
+	const newPath = state.bookInfo?.path ?? null;
+	if (newPath !== bookPath) {
+		bookPath = newPath;
+		manualTags = newPath ? getManualTagsSync(newPath) : [];
 	}
 });
 
@@ -63,18 +53,18 @@ function getManualTagColor(namespace: string): string {
 
 // 添加手动标签
 async function handleAddManualTag() {
-	if (!bookInfo?.path || !newTagInput.trim()) return;
-	await addManualTag(bookInfo.path, newNamespace, newTagInput.trim());
-	manualTags = getManualTagsSync(bookInfo.path);
+	if (!bookPath || !newTagInput.trim()) return;
+	await addManualTag(bookPath, newNamespace, newTagInput.trim());
+	manualTags = getManualTagsSync(bookPath);
 	newTagInput = '';
 	showAddForm = false;
 }
 
 // 删除手动标签
 async function handleRemoveManualTag(tag: ManualTag) {
-	if (!bookInfo?.path) return;
-	await removeManualTag(bookInfo.path, tag.namespace, tag.tag);
-	manualTags = getManualTagsSync(bookInfo.path);
+	if (!bookPath) return;
+	await removeManualTag(bookPath, tag.namespace, tag.tag);
+	manualTags = getManualTagsSync(bookPath);
 }
 
 // 收藏标签分组（支持混合变体）
@@ -152,7 +142,7 @@ async function handleReloadFavoriteTags() {
 
 <div class="space-y-2 text-[11px]">
 	<!-- 手动标签区域 -->
-	{#if bookInfo}
+	{#if bookPath}
 		<div class="pb-2 border-b border-border/50">
 			<div class="flex items-center justify-between mb-1">
 				<span class="font-medium flex items-center gap-1">

@@ -15,7 +15,7 @@
 	import { mixedGenderStore, categoryColors } from '$lib/stores/emm/favoriteTagStore.svelte';
 	import { collectTagCountStore } from '$lib/stores/emm/collectTagCountStore';
 	import type { EMMTranslationDict } from '$lib/api/emm';
-	import { getManualTags, type ManualTag } from '$lib/stores/emm/manualTagStore.svelte';
+	import { getManualTagsSync, type ManualTag } from '$lib/stores/emm/manualTagStore.svelte';
 	import { getFileMetadata } from '$lib/api';
 	import FileItemListView from './FileItemListView.svelte';
 	import FileItemGridView from './FileItemGridView.svelte';
@@ -359,16 +359,8 @@
 					metadataLoading = false;
 				});
 
-			// 同时加载手动标签
-			getManualTags(item.path)
-				.then((tags) => {
-					if (item.path === lastLoadedPath) {
-						manualTags = tags;
-					}
-				})
-				.catch((err) => {
-					console.debug('[FileItemCard] 手动标签加载失败:', err);
-				});
+			// 同时加载手动标签（同步，因为存储在 localStorage）
+			manualTags = getManualTagsSync(item.path);
 
 			return () => {
 				metadataLoading = false;

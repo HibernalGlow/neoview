@@ -54,6 +54,7 @@
 	import { upscaleStore } from './stores/upscaleStore.svelte';
 	import SlideshowControl from '$lib/components/viewer/SlideshowControl.svelte';
 	import { slideshowStore } from '$lib/stores/slideshow.svelte';
+	import { showInfoToast } from '$lib/utils/toast';
 
 	// ============================================================================
 	// Props
@@ -603,12 +604,24 @@
 					// 同一页面，切换半边
 					currentSplitHalf = nav.splitHalf;
 				}
+			} else {
+				// 已经是第一页，显示边界提示
+				if (settings.view?.switchToast?.enableBoundaryToast !== false) {
+					showInfoToast('已经是第一页');
+				}
 			}
 			return;
 		}
 
 		// 直接使用 pageStep 翻页
 		const targetIndex = Math.max(0, bookStore.currentPageIndex - pageStep);
+		if (targetIndex === bookStore.currentPageIndex) {
+			// 已经是第一页，显示边界提示
+			if (settings.view?.switchToast?.enableBoundaryToast !== false) {
+				showInfoToast('已经是第一页');
+			}
+			return;
+		}
 		console.log(`⬅️ handlePrevPage: targetIndex=${targetIndex}`);
 		bookStore.navigateToPage(targetIndex);
 	}
@@ -641,12 +654,24 @@
 					// 同一页面，切换半边
 					currentSplitHalf = nav.splitHalf;
 				}
+			} else {
+				// 已经是最后一页，显示边界提示
+				if (settings.view?.switchToast?.enableBoundaryToast !== false) {
+					showInfoToast('已经是最后一页');
+				}
 			}
 			return;
 		}
 
 		// 直接使用 pageStep 翻页
 		const targetIndex = Math.min(bookStore.totalPages - 1, bookStore.currentPageIndex + pageStep);
+		if (targetIndex === bookStore.currentPageIndex) {
+			// 已经是最后一页，显示边界提示
+			if (settings.view?.switchToast?.enableBoundaryToast !== false) {
+				showInfoToast('已经是最后一页');
+			}
+			return;
+		}
 		console.log(`➡️ handleNextPage: targetIndex=${targetIndex}`);
 		bookStore.navigateToPage(targetIndex);
 	}

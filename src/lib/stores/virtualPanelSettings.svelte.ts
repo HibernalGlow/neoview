@@ -20,6 +20,7 @@ export interface VirtualPanelSettings {
     thumbnailWidthPercent: number;
     folderTreeVisible: boolean;
     folderTreeLayout: TreePosition;
+    folderTreeSize: number;
 }
 
 const STORAGE_KEY_HISTORY = 'neoview-history-panel-settings';
@@ -38,7 +39,8 @@ function createDefaultSettings(): VirtualPanelSettings {
         inlineTreeMode: false,
         thumbnailWidthPercent: 20,
         folderTreeVisible: false,
-        folderTreeLayout: 'left'
+        folderTreeLayout: 'left',
+        folderTreeSize: 200
     };
 }
 
@@ -80,7 +82,8 @@ class VirtualPanelSettingsStore {
     get historyThumbnailWidthPercent() { return this.historySettings.thumbnailWidthPercent; }
     get historyFolderTreeVisible() { return this.historySettings.folderTreeVisible; }
     get historyFolderTreeLayout() { return this.historySettings.folderTreeLayout; }
-    get historyFolderTreeConfig() { return { visible: this.historySettings.folderTreeVisible, layout: this.historySettings.folderTreeLayout, size: 200 }; }
+    get historyFolderTreeSize() { return this.historySettings.folderTreeSize; }
+    get historyFolderTreeConfig() { return { visible: this.historySettings.folderTreeVisible, layout: this.historySettings.folderTreeLayout, size: this.historySettings.folderTreeSize }; }
 
     // Bookmark panel getters
     get bookmarkViewStyle() { return this.bookmarkSettings.viewStyle; }
@@ -95,7 +98,8 @@ class VirtualPanelSettingsStore {
     get bookmarkThumbnailWidthPercent() { return this.bookmarkSettings.thumbnailWidthPercent; }
     get bookmarkFolderTreeVisible() { return this.bookmarkSettings.folderTreeVisible; }
     get bookmarkFolderTreeLayout() { return this.bookmarkSettings.folderTreeLayout; }
-    get bookmarkFolderTreeConfig() { return { visible: this.bookmarkSettings.folderTreeVisible, layout: this.bookmarkSettings.folderTreeLayout, size: 200 }; }
+    get bookmarkFolderTreeSize() { return this.bookmarkSettings.folderTreeSize; }
+    get bookmarkFolderTreeConfig() { return { visible: this.bookmarkSettings.folderTreeVisible, layout: this.bookmarkSettings.folderTreeLayout, size: this.bookmarkSettings.folderTreeSize }; }
 
     // Generic getters by mode
     getSettings(mode: 'history' | 'bookmark'): VirtualPanelSettings {
@@ -149,6 +153,10 @@ class VirtualPanelSettingsStore {
     }
     setHistoryFolderTreeLayout(value: TreePosition) {
         this.historySettings.folderTreeLayout = value;
+        saveSettings(STORAGE_KEY_HISTORY, this.historySettings);
+    }
+    setHistoryFolderTreeSize(value: number) {
+        this.historySettings.folderTreeSize = Math.max(100, Math.min(500, value));
         saveSettings(STORAGE_KEY_HISTORY, this.historySettings);
     }
     setHistorySort(field: FolderSortField, order?: FolderSortOrder) {
@@ -205,6 +213,10 @@ class VirtualPanelSettingsStore {
     }
     setBookmarkFolderTreeLayout(value: TreePosition) {
         this.bookmarkSettings.folderTreeLayout = value;
+        saveSettings(STORAGE_KEY_BOOKMARK, this.bookmarkSettings);
+    }
+    setBookmarkFolderTreeSize(value: number) {
+        this.bookmarkSettings.folderTreeSize = Math.max(100, Math.min(500, value));
         saveSettings(STORAGE_KEY_BOOKMARK, this.bookmarkSettings);
     }
     setBookmarkSort(field: FolderSortField, order?: FolderSortOrder) {

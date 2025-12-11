@@ -16,6 +16,7 @@
 	import { folderTabActions, tabSearchResults } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 	import { loadVirtualPathData, subscribeVirtualPathData } from '$lib/components/panels/folderPanel/utils/virtualPathLoader';
+	import { virtualPanelSettingsStore } from '$lib/stores/virtualPanelSettings.svelte';
 
 	// ==================== Props ====================
 	interface Props {
@@ -112,7 +113,17 @@
 				delta = 0;
 		}
 		
-		folderTabActions.setFolderTreeSize(Math.max(100, Math.min(500, ctx.resizeStartSize + delta)));
+		const newSize = Math.max(100, Math.min(500, ctx.resizeStartSize + delta));
+		
+		// 根据面板模式调用相应的设置方法
+		if (ctx.panelMode === 'history') {
+			virtualPanelSettingsStore.setHistoryFolderTreeSize(newSize);
+		} else if (ctx.panelMode === 'bookmark') {
+			virtualPanelSettingsStore.setBookmarkFolderTreeSize(newSize);
+		} else {
+			// folder 面板使用全局 store
+			folderTabActions.setFolderTreeSize(newSize);
+		}
 	}
 
 	function stopTreeResize() {

@@ -2,10 +2,16 @@
 /**
  * 收藏标签快选卡片
  * 从 EmmPanelSection 提取
+ * 顶部添加手动标签区域
  */
-import { RefreshCcw } from '@lucide/svelte';
+import { RefreshCcw, X, Plus, Tag } from '@lucide/svelte';
 import * as Button from '$lib/components/ui/button';
 import { favoriteTagStore, categoryColors, mixedGenderStore, cat2letter, createTagValue, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
+import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
+import { get } from 'svelte/store';
+import { getManualTagsSync, addManualTag, removeManualTag, type ManualTag, TAG_NAMESPACES, NAMESPACE_LABELS } from '$lib/stores/emm/manualTagStore.svelte';
+import { emmTranslationStore } from '$lib/stores/emmMetadata.svelte';
+import * as Select from '$lib/components/ui/select';
 
 // 性别类别列表
 const genderCategories = ['female', 'male', 'mixed'];
@@ -17,6 +23,51 @@ interface ExtendedFavoriteTag extends FavoriteTag {
 }
 
 let isReloadingFavoriteTags = $state(false);
+
+// 手动标签状态
+let currentBookPath = $state<string | null>(null);
+let manualTags = $state<ManualTag[]>([]);
+let showAddForm = $state(false);
+let newNamespace = $state<string>('female');
+let newTagInput = $state('');
+
+// 刷新手动标签
+function refreshManualTags() {
+	const state = get(infoPanelStore);
+	const path = state.bookInfo?.path ?? null;
+	currentBookPath = path;
+	manualTags = path ? getManualTagsSync(path) : [];
+}
+
+// 初始加载
+refreshManualTags();
+
+// 翻译手动标签
+function translateManualTag(tag: ManualTag): string {
+	const dict = favoriteTagStore.translationDict;
+	return emmTranslationStore.translateTag(tag.tag, tag.namespace, dict);
+}
+
+// 获取手动标签颜色
+function getManualTagColor(namespace: string): string {
+	return categoryColors[namespace] || '#10b981';
+}
+
+// 添加手动标签
+async function handleAddManualTag() {
+	if (!currentBookPath || !newTagInput.trim()) return;
+	await addManualTag(currentBookPath, newNamespace, newTagInput.trim());
+	manualTags = getManualTagsSync(currentBookPath);
+	newTagInput = '';
+	showAddForm = false;
+}
+
+// 删除手动标签
+async function handleRemoveManualTag(tag: ManualTag) {
+	if (!currentBookPath) return;
+	await removeManualTag(currentBookPath, tag.namespace, tag.tag);
+	manualTags = getManualTagsSync(currentBookPath);
+}
 
 // 收藏标签分组（支持混合变体）
 const favoriteTagGroups = $derived.by((): Array<{ name: string; tags: ExtendedFavoriteTag[] }> => {
@@ -92,6 +143,87 @@ async function handleReloadFavoriteTags() {
 </script>
 
 <div class="space-y-2 text-[11px]">
+	<!-- 手动标签区域 -->
+	<div class="pb-2 border-b border-border/50">
+		<div class="flex items-center justify-between mb-1">
+			<button
+				type="button"
+				class="font-medium flex items-center gap-1 hover:text-primary"
+				onclick={refreshManualTags}
+				title="点击刷新"
+			>
+				<Tag class="h-3 w-3" />
+				手动标签
+			</button>
+			<span class="text-[10px] text-muted-foreground">{manualTags.length}</span>
+		</div>
+		
+		{#if !currentBookPath}
+			<p class="text-[10px] text-muted-foreground text-center py-1">打开书籍后可添加</p>
+		{:else}
+			{#if manualTags.length > 0}
+				<div class="flex flex-wrap gap-1 mb-1">
+					{#each manualTags as tag}
+						{@const translated = translateManualTag(tag)}
+						{@const color = getManualTagColor(tag.namespace)}
+						<span
+							class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border-2 border-dashed text-[10px]"
+							style="border-color: {color}; background: color-mix(in srgb, {color} 12%, transparent); color: {color};"
+							title="{NAMESPACE_LABELS[tag.namespace]}: {tag.tag}{translated !== tag.tag ? ` (${translated})` : ''}"
+						>
+							<span class="opacity-70">{tag.namespace.slice(0, 1)}:</span>
+							<span>{translated}</span>
+							<button
+								type="button"
+								class="ml-0.5 hover:opacity-70"
+								onclick={() => handleRemoveManualTag(tag)}
+							>
+								<X class="h-2.5 w-2.5" />
+							</button>
+						</span>
+					{/each}
+				</div>
+			{/if}
+			
+			{#if showAddForm}
+				<div class="flex gap-1 items-center">
+					<Select.Root type="single" bind:value={newNamespace}>
+						<Select.Trigger class="h-5 w-14 text-[10px] px-1">
+							{NAMESPACE_LABELS[newNamespace]?.slice(0, 2) || newNamespace.slice(0, 2)}
+						</Select.Trigger>
+						<Select.Content>
+							{#each TAG_NAMESPACES as ns}
+								<Select.Item value={ns} class="text-[10px]">{NAMESPACE_LABELS[ns]}</Select.Item>
+							{/each}
+						</Select.Content>
+					</Select.Root>
+					<input
+						type="text"
+						bind:value={newTagInput}
+						placeholder="标签名"
+						class="flex-1 h-5 px-1.5 text-[10px] rounded border border-input bg-background"
+						onkeydown={(e) => e.key === 'Enter' && handleAddManualTag()}
+					/>
+					<button type="button" class="h-5 w-5 flex items-center justify-center hover:bg-muted rounded" onclick={handleAddManualTag}>
+						<Plus class="h-3 w-3" />
+					</button>
+					<button type="button" class="h-5 w-5 flex items-center justify-center hover:bg-muted rounded" onclick={() => showAddForm = false}>
+						<X class="h-3 w-3" />
+					</button>
+				</div>
+			{:else}
+				<button
+					type="button"
+					class="w-full h-5 text-[10px] rounded border border-dashed border-border hover:bg-muted/50 flex items-center justify-center gap-1"
+					onclick={() => { refreshManualTags(); showAddForm = true; }}
+				>
+					<Plus class="h-3 w-3" />
+					添加
+				</button>
+			{/if}
+		{/if}
+	</div>
+
 	<!-- 控制栏 -->
 	<div class="flex items-center justify-between gap-2 py-1 border-b border-border/50">
 		<label class="flex items-center gap-1.5 cursor-pointer">

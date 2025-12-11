@@ -90,6 +90,14 @@
 	let previewX = $state(0);
 	let previewCanvas = $state<HTMLCanvasElement | null>(null);
 	let previewGenerating = $state(false);
+	
+	// 帧缓存：key 为时间戳（精确到0.5秒），value 为 dataURL
+	const frameCache = new Map<number, string>();
+	const CACHE_PRECISION = 0.5; // 缓存精度：0.5秒
+	const MAX_CACHE_SIZE = 100; // 最大缓存帧数
+	
+	// 复用的临时 video 元素
+	let tempVideoElement: HTMLVideoElement | null = null;
 
 	// 字幕设置 - 从 settings 读取初始值
 	let showSubtitleSettings = $state(false);
@@ -287,10 +295,33 @@
 		previewVisible = false;
 	}
 
-	// 生成预览帧缩略图
+	// 生成预览帧缩略图（带缓存）
 	let previewDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+	
+	function getCacheKey(time: number): number {
+		return Math.round(time / CACHE_PRECISION) * CACHE_PRECISION;
+	}
+	
 	function generatePreviewFrame(time: number) {
 		if (!videoElement || !previewCanvas) return;
+		
+		const cacheKey = getCacheKey(time);
+		
+		// 检查缓存
+		if (frameCache.has(cacheKey)) {
+			const cachedDataUrl = frameCache.get(cacheKey)!;
+			const img = new Image();
+			img.onload = () => {
+				const ctx = previewCanvas?.getContext('2d');
+				if (ctx && previewCanvas) {
+					previewCanvas.width = img.width;
+					previewCanvas.height = img.height;
+					ctx.drawImage(img, 0, 0);
+				}
+			};
+			img.src = cachedDataUrl;
+			return;
+		}
 		
 		// 防抖，避免频繁生成
 		if (previewDebounceTimer) {
@@ -302,41 +333,68 @@
 			
 			previewGenerating = true;
 			
-			// 创建临时 video 元素来获取指定时间的帧
-			const tempVideo = document.createElement('video');
-			tempVideo.src = videoUrl;
-			tempVideo.crossOrigin = 'anonymous';
-			tempVideo.muted = true;
-			tempVideo.preload = 'metadata';
+			// 复用或创建临时 video 元素
+			if (!tempVideoElement) {
+				tempVideoElement = document.createElement('video');
+				tempVideoElement.crossOrigin = 'anonymous';
+				tempVideoElement.muted = true;
+				tempVideoElement.preload = 'metadata';
+			}
+			
+			// 如果 src 变了才更新
+			if (tempVideoElement.src !== videoUrl) {
+				tempVideoElement.src = videoUrl;
+			}
 			
 			const handleSeeked = () => {
 				try {
 					const ctx = previewCanvas?.getContext('2d');
-					if (ctx && previewCanvas) {
+					if (ctx && previewCanvas && tempVideoElement) {
 						// 计算缩略图尺寸，保持宽高比
-						const videoRatio = tempVideo.videoWidth / tempVideo.videoHeight;
+						const videoRatio = tempVideoElement.videoWidth / tempVideoElement.videoHeight;
 						const canvasWidth = 160;
-						const canvasHeight = canvasWidth / videoRatio;
+						const canvasHeight = Math.round(canvasWidth / videoRatio);
 						previewCanvas.width = canvasWidth;
 						previewCanvas.height = canvasHeight;
-						ctx.drawImage(tempVideo, 0, 0, canvasWidth, canvasHeight);
+						ctx.drawImage(tempVideoElement, 0, 0, canvasWidth, canvasHeight);
+						
+						// 存入缓存
+						try {
+							const dataUrl = previewCanvas.toDataURL('image/jpeg', 0.7);
+							// 控制缓存大小
+							if (frameCache.size >= MAX_CACHE_SIZE) {
+								const firstKey = frameCache.keys().next().value;
+								if (firstKey !== undefined) frameCache.delete(firstKey);
+							}
+							frameCache.set(cacheKey, dataUrl);
+						} catch (e) {
+							// 跨域视频可能无法 toDataURL，忽略缓存
+						}
 					}
 				} catch (err) {
 					console.warn('生成预览帧失败:', err);
 				} finally {
 					previewGenerating = false;
-					tempVideo.removeEventListener('seeked', handleSeeked);
-					tempVideo.src = '';
+					tempVideoElement?.removeEventListener('seeked', handleSeeked);
 				}
 			};
 			
-			tempVideo.addEventListener('seeked', handleSeeked);
-			tempVideo.addEventListener('error', () => {
+			tempVideoElement.addEventListener('seeked', handleSeeked, { once: true });
+			tempVideoElement.addEventListener('error', () => {
 				previewGenerating = false;
-			});
+			}, { once: true });
 			
-			tempVideo.currentTime = time;
-		}, 50); // 50ms 防抖
+			tempVideoElement.currentTime = time;
+		}, 30); // 30ms 防抖（更快响应）
+	}
+	
+	// 清理帧缓存（视频切换时调用）
+	function clearFrameCache() {
+		frameCache.clear();
+		if (tempVideoElement) {
+			tempVideoElement.src = '';
+			tempVideoElement = null;
+		}
 	}
 
 	function changeVolume(e: Event) {

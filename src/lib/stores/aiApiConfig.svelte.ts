@@ -2,8 +2,11 @@
  * AI API 配置存储
  * 共享给 AI 标签推断、翻译等功能使用
  * 格式与 EMM 的 api_config.json 兼容
+ * 使用 openai 和 @google/genai SDK
  */
 import { writable, get } from 'svelte/store';
+import OpenAI from 'openai';
+import { GoogleGenAI } from '@google/genai';
 
 // API 提供商配置 - 与 EMM 格式兼容
 export interface AiProvider {
@@ -23,12 +26,12 @@ export interface AiApiConfigJson {
 	comment?: string;
 }
 
-// 预设提供商模板
+// 预设提供商模板 - baseUrl 不包含 /chat/completions，SDK 会自动添加
 export const AI_PROVIDER_PRESETS: Record<string, Omit<AiProvider, 'apiKey'>> = {
 	deepseek: {
 		name: 'DeepSeek',
 		provider: 'openai',
-		baseUrl: 'https://api.deepseek.com/v1/chat/completions',
+		baseUrl: 'https://api.deepseek.com/v1',
 		model: 'deepseek-chat',
 		temperature: 0.3,
 		maxTokens: 500
@@ -36,7 +39,7 @@ export const AI_PROVIDER_PRESETS: Record<string, Omit<AiProvider, 'apiKey'>> = {
 	openai: {
 		name: 'OpenAI',
 		provider: 'openai',
-		baseUrl: 'https://api.openai.com/v1/chat/completions',
+		baseUrl: 'https://api.openai.com/v1',
 		model: 'gpt-3.5-turbo',
 		temperature: 0.3,
 		maxTokens: 500
@@ -44,7 +47,7 @@ export const AI_PROVIDER_PRESETS: Record<string, Omit<AiProvider, 'apiKey'>> = {
 	ollama: {
 		name: 'Ollama (本地)',
 		provider: 'openai',
-		baseUrl: 'http://localhost:11434/v1/chat/completions',
+		baseUrl: 'http://localhost:11434/v1',
 		model: 'qwen2.5:7b',
 		temperature: 0.3,
 		maxTokens: 500
@@ -60,7 +63,7 @@ export const AI_PROVIDER_PRESETS: Record<string, Omit<AiProvider, 'apiKey'>> = {
 	qwen: {
 		name: '通义千问',
 		provider: 'openai',
-		baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+		baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
 		model: 'qwen-turbo',
 		temperature: 0.3,
 		maxTokens: 500
@@ -68,8 +71,16 @@ export const AI_PROVIDER_PRESETS: Record<string, Omit<AiProvider, 'apiKey'>> = {
 	siliconflow: {
 		name: 'SiliconFlow',
 		provider: 'openai',
-		baseUrl: 'https://api.siliconflow.cn/v1/chat/completions',
+		baseUrl: 'https://api.siliconflow.cn/v1',
 		model: 'Qwen/Qwen2.5-7B-Instruct',
+		temperature: 0.3,
+		maxTokens: 500
+	},
+	openrouter: {
+		name: 'OpenRouter',
+		provider: 'openai',
+		baseUrl: 'https://openrouter.ai/api/v1',
+		model: 'deepseek/deepseek-chat-v3-0324:free',
 		temperature: 0.3,
 		maxTokens: 500
 	}
@@ -248,8 +259,12 @@ function createAiApiConfigStore() {
 					}
 					return { success: true, message: `Gemini ${p.model} 连接成功` };
 				} else {
-					// OpenAI 兼容 API 测试
-					const response = await fetch(p.baseUrl, {
+					// OpenAI 兼容 API 测试 - 确保 URL 包含 /chat/completions
+					let testUrl = p.baseUrl;
+					if (!testUrl.endsWith('/chat/completions')) {
+						testUrl = testUrl.replace(/\/?$/, '/chat/completions');
+					}
+					const response = await fetch(testUrl, {
 						method: 'POST',
 						headers: {
 							'Content-Type': 'application/json',
@@ -273,7 +288,7 @@ function createAiApiConfigStore() {
 			}
 		},
 
-		// 调用 AI API (通用)
+		// 调用 AI API (通用) - 使用 SDK
 		async chat(
 			messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
 			options?: { jsonMode?: boolean; provider?: AiProvider }
@@ -283,60 +298,67 @@ function createAiApiConfigStore() {
 				throw new Error('没有配置 AI 提供商');
 			}
 
-			const isGemini = p.baseUrl.includes('googleapis.com');
+			if (p.provider === 'gemini') {
+				// 使用 Google GenAI SDK
+				console.log('[aiApiConfig] Using Google GenAI SDK...');
+				const genAI = new GoogleGenAI({ apiKey: p.apiKey });
+				
+				// 合并所有消息为一个 prompt
+				const prompt = messages.map(m => {
+					if (m.role === 'system') return `[System] ${m.content}`;
+					if (m.role === 'assistant') return `[Assistant] ${m.content}`;
+					return m.content;
+				}).join('\n\n');
 
-			if (isGemini) {
-				// Gemini API
-				const url = `${p.baseUrl}/v1beta/models/${p.model}:generateContent?key=${p.apiKey}`;
-				const contents = messages.map(m => ({
-					role: m.role === 'assistant' ? 'model' : 'user',
-					parts: [{ text: m.content }]
-				}));
-
-				const response = await fetch(url, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						contents,
-						generationConfig: {
-							temperature: p.temperature || 0.3,
-							maxOutputTokens: p.maxTokens || 500,
-							...(options?.jsonMode ? { response_mime_type: 'application/json' } : {})
-						}
-					})
-				});
-
-				if (!response.ok) {
-					const err = await response.text();
-					throw new Error(`Gemini API 错误: ${err.slice(0, 200)}`);
-				}
-
-				const data = await response.json();
-				return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-			} else {
-				// OpenAI 兼容 API
-				const response = await fetch(p.baseUrl, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						'Authorization': `Bearer ${p.apiKey}`
-					},
-					body: JSON.stringify({
-						model: p.model,
-						messages,
+				const response = await genAI.models.generateContent({
+					model: p.model,
+					contents: prompt,
+					config: {
 						temperature: p.temperature || 0.3,
-						max_tokens: p.maxTokens || 500,
-						...(options?.jsonMode ? { response_format: { type: 'json_object' } } : {})
-					})
+						maxOutputTokens: p.maxTokens || 500,
+						...(options?.jsonMode ? { responseMimeType: 'application/json' } : {})
+					}
 				});
 
-				if (!response.ok) {
-					const err = await response.text();
-					throw new Error(`API 错误: ${err.slice(0, 200)}`);
+				if (!response.text) {
+					throw new Error('Gemini API 返回空内容');
 				}
+				return response.text;
+			} else {
+				// 使用 OpenAI SDK (兼容所有 OpenAI-compatible APIs)
+				console.log('[aiApiConfig] Using OpenAI SDK...');
+				// baseURL 不应包含 /chat/completions，SDK 会自动添加
+				let baseURL = p.baseUrl;
+				if (baseURL.endsWith('/chat/completions')) {
+					baseURL = baseURL.slice(0, -'/chat/completions'.length);
+				}
+				console.log('[aiApiConfig] baseURL:', baseURL, 'model:', p.model);
+				
+				const openai = new OpenAI({
+					apiKey: p.apiKey,
+					baseURL,
+					dangerouslyAllowBrowser: true,
+					timeout: 30000,
+					maxRetries: 0
+				});
 
-				const data = await response.json();
-				return data.choices?.[0]?.message?.content || '';
+				const completion = await openai.chat.completions.create({
+					model: p.model,
+					messages: messages.map(m => ({
+						role: m.role,
+						content: m.content
+					})),
+					temperature: p.temperature || 0.3,
+					max_tokens: p.maxTokens || 500,
+					...(options?.jsonMode ? { response_format: { type: 'json_object' as const } } : {})
+				});
+
+				const content = completion.choices[0]?.message?.content;
+				if (!content) {
+					throw new Error('OpenAI API 返回空内容');
+				}
+				console.log('[aiApiConfig] OpenAI SDK call succeeded');
+				return content;
 			}
 		}
 	};

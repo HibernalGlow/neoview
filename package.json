@@ -52,6 +52,7 @@
     "vite": "^6.3.5"
   },
   "dependencies": {
+    "@google/genai": "^1.33.0",
     "@tailwindcss/vite": "^4.1.7",
     "@tanstack/svelte-virtual": "^3.13.12",
     "@tanstack/virtual-core": "^3.13.12",
@@ -64,6 +65,7 @@
     "@xyflow/svelte": "^1.4.2",
     "clsx": "^2.1.1",
     "idb": "^8.0.3",
+    "openai": "^6.10.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.7",

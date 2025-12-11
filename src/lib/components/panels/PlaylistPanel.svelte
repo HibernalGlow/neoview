@@ -31,38 +31,43 @@
 		createdAt: Date;
 	}
 
-	// 模拟数据 - 实际应从 localStorage 或数据库获取
-	let playlists = $state<Playlist[]>([
-		{
-			id: '1',
-			name: '我的收藏',
-			items: [
-				{
-					path: 'D:/Comics/Volume1.zip',
-					name: 'Volume 1',
-					type: 'archive',
-					pages: 200
-				},
-				{
-					path: 'D:/Comics/Volume2.zip',
-					name: 'Volume 2',
-					type: 'archive',
-					pages: 180
-				}
-			],
-			createdAt: new Date('2024-01-15')
-		},
-		{
-			id: '2',
-			name: '待看',
-			items: [
-				{ path: 'D:/Comics/NewSeries', name: 'New Series', type: 'folder', pages: 150 }
-			],
-			createdAt: new Date('2024-02-01')
-		}
-	]);
+	const STORAGE_KEY = 'neoview-playlists';
+	const ACTIVE_PLAYLIST_KEY = 'neoview-active-playlist';
 
-	let activePlaylist = $state<string | null>(playlists[0]?.id || null);
+	// 从 localStorage 加载播放列表
+	function loadPlaylists(): Playlist[] {
+		try {
+			const stored = localStorage.getItem(STORAGE_KEY);
+			if (stored) {
+				const parsed = JSON.parse(stored);
+				return parsed.map((p: any) => ({
+					...p,
+					createdAt: new Date(p.createdAt)
+				}));
+			}
+		} catch (e) {
+			console.error('Failed to load playlists:', e);
+		}
+		return [];
+	}
+
+	// 保存播放列表到 localStorage
+	function savePlaylists() {
+		try {
+			localStorage.setItem(STORAGE_KEY, JSON.stringify(playlists));
+			if (activePlaylist) {
+				localStorage.setItem(ACTIVE_PLAYLIST_KEY, activePlaylist);
+			}
+		} catch (e) {
+			console.error('Failed to save playlists:', e);
+		}
+	}
+
+	let playlists = $state<Playlist[]>(loadPlaylists());
+
+	let activePlaylist = $state<string | null>(
+		localStorage.getItem(ACTIVE_PLAYLIST_KEY) || playlists[0]?.id || null
+	);
 	let newPlaylistName = $state('');
 	let isCreating = $state(false);
 
@@ -81,8 +86,7 @@
 			activePlaylist = newList.id;
 			newPlaylistName = '';
 			isCreating = false;
-
-			// TODO: 保存到 localStorage
+			savePlaylists();
 		}
 	}
 
@@ -99,7 +103,7 @@
 			if (activePlaylist === id) {
 				activePlaylist = playlists[0]?.id || null;
 			}
-			// TODO: 保存到 localStorage
+			savePlaylists();
 		}
 	}
 
@@ -107,18 +111,36 @@
 		if (currentPlaylist) {
 			currentPlaylist.items = currentPlaylist.items.filter((item) => item.path !== itemPath);
 			playlists = [...playlists];
-			// TODO: 保存到 localStorage
+			savePlaylists();
 		}
 	}
 
-	function playItem(item: PlaylistItem) {
-		// TODO: 打开书籍
-		console.log('播放', item.path);
+	async function playItem(item: PlaylistItem) {
+		const { bookStore } = await import('$lib/stores/book.svelte');
+		await bookStore.openBook(item.path);
 	}
 
-	function addToPlaylist() {
-		// TODO: 打开文件选择对话框
-		showInfoToast('功能开发中', '选择要添加的文件或文件夹');
+	async function addToPlaylist() {
+		const { open } = await import('@tauri-apps/plugin-dialog');
+		const selected = await open({
+			multiple: true,
+			directory: false,
+			filters: [{ name: '压缩包', extensions: ['zip', 'rar', '7z', 'cbz', 'cbr'] }]
+		});
+		if (selected && currentPlaylist) {
+			const paths = Array.isArray(selected) ? selected : [selected];
+			for (const path of paths) {
+				const name = path.split(/[\\/]/).pop() || path;
+				currentPlaylist.items.push({
+					path,
+					name,
+					type: 'archive',
+					pages: 0
+				});
+			}
+			playlists = [...playlists];
+			savePlaylists();
+		}
 	}
 </script>
 

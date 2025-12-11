@@ -5,7 +5,7 @@
  * 支持中英文输入提示
  */
 import { createEventDispatcher } from 'svelte';
-import { X, Plus, Tag } from '@lucide/svelte';
+import { X, Plus, Minus, Tag } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import { Input } from '$lib/components/ui/input';
 import * as Dialog from '$lib/components/ui/dialog';
@@ -30,10 +30,16 @@ interface TagSuggestion {
 interface Props {
 	open: boolean;
 	path: string;
+	paths?: string[]; // 批量模式：多个文件路径
 	emmTags?: Array<{ namespace: string; tag: string; translated?: string }>;
 }
 
-let { open = $bindable(), path, emmTags = [] }: Props = $props();
+let { open = $bindable(), path, paths = [], emmTags = [] }: Props = $props();
+
+// 批量模式
+const isBatchMode = $derived(paths.length > 1);
+// 操作模式：添加或删除
+let operationMode = $state<'add' | 'remove'>('add');
 
 const dispatch = createEventDispatcher<{
 	close: void;
@@ -179,11 +185,50 @@ $effect(() => {
 async function handleAddTag() {
 	if (!newTag.trim()) return;
 	
-	const success = await addManualTag(path, newNamespace, newTag.trim());
-	if (success) {
+	const tagToProcess = newTag.trim();
+	const targetPaths = isBatchMode ? paths : [path];
+	
+	let successCount = 0;
+	for (const p of targetPaths) {
+		const success = await addManualTag(p, newNamespace, tagToProcess);
+		if (success) successCount++;
+	}
+	
+	if (successCount > 0) {
 		await loadTags();
 		dispatch('change', { manualTags });
 		newTag = '';
+		console.log(`[ManualTagEditor] 批量添加标签: ${successCount}/${targetPaths.length} 成功`);
+	}
+}
+
+// 批量删除标签
+async function handleBatchRemoveTag() {
+	if (!newTag.trim()) return;
+	
+	const tagToProcess = newTag.trim();
+	const targetPaths = isBatchMode ? paths : [path];
+	
+	let successCount = 0;
+	for (const p of targetPaths) {
+		const success = await removeManualTag(p, newNamespace, tagToProcess);
+		if (success) successCount++;
+	}
+	
+	if (successCount > 0) {
+		await loadTags();
+		dispatch('change', { manualTags });
+		newTag = '';
+		console.log(`[ManualTagEditor] 批量删除标签: ${successCount}/${targetPaths.length} 成功`);
+	}
+}
+
+// 执行操作（根据模式添加或删除）
+async function handleExecute() {
+	if (operationMode === 'add') {
+		await handleAddTag();
+	} else {
+		await handleBatchRemoveTag();
 	}
 }
 
@@ -296,9 +341,24 @@ function translateManualTag(tag: ManualTag): string {
 				{/if}
 			</div>
 
-			<!-- 添加新标签 -->
+			<!-- 添加/删除标签 -->
 			<div class="space-y-2">
-				<h4 class="text-sm font-medium">添加标签</h4>
+				<div class="flex items-center justify-between">
+					<h4 class="text-sm font-medium">{operationMode === 'add' ? '添加' : '删除'}标签</h4>
+					{#if isBatchMode}
+						<div class="flex items-center gap-2">
+							<span class="text-xs text-muted-foreground">已选 {paths.length} 个文件</span>
+							<Button 
+								variant={operationMode === 'add' ? 'default' : 'destructive'} 
+								size="sm"
+								class="h-7 px-2 text-xs"
+								onclick={() => { operationMode = operationMode === 'add' ? 'remove' : 'add'; }}
+							>
+								{operationMode === 'add' ? '切换删除' : '切换添加'}
+							</Button>
+						</div>
+					{/if}
+				</div>
 				<div class="flex gap-2">
 					<Select.Root type="single" bind:value={newNamespace}>
 						<Select.Trigger class="w-32">
@@ -341,11 +401,26 @@ function translateManualTag(tag: ManualTag): string {
 							</div>
 						{/if}
 					</div>
-					<Button variant="outline" size="icon" onclick={handleAddTag}>
-						<Plus class="h-4 w-4" />
+					<Button 
+						variant={operationMode === 'add' ? 'outline' : 'destructive'} 
+						size="icon" 
+						onclick={handleExecute}
+						title={operationMode === 'add' ? '添加标签' : '删除标签'}
+					>
+						{#if operationMode === 'add'}
+							<Plus class="h-4 w-4" />
+						{:else}
+							<Minus class="h-4 w-4" />
+						{/if}
 					</Button>
 				</div>
-				<p class="text-xs text-muted-foreground">输入中文或英文标签名，会显示匹配建议</p>
+				<p class="text-xs text-muted-foreground">
+					{#if isBatchMode}
+						批量模式：将{operationMode === 'add' ? '添加' : '删除'}标签到 {paths.length} 个选中文件
+					{:else}
+						输入中文或英文标签名，会显示匹配建议
+					{/if}
+				</p>
 			</div>
 		</div>
 

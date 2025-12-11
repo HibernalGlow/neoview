@@ -50,10 +50,22 @@
 	// ==================== 标签编辑状态 ====================
 	let tagEditorOpen = $state(false);
 	let tagEditorPath = $state('');
+	let tagEditorPaths = $state<string[]>([]); // 批量模式
 	let tagEditorEmmTags = $state<Array<{ namespace: string; tag: string; translated?: string }>>([]);
 
 	function handleEditTags(item: import('$lib/types').FsItem) {
-		tagEditorPath = item.path;
+		// 获取选中项
+		const selectedPaths = Array.from(get(ctx.selectedItems));
+		
+		if (selectedPaths.length > 1) {
+			// 批量模式：多个文件选中
+			tagEditorPath = selectedPaths[0]; // 第一个用于显示
+			tagEditorPaths = selectedPaths;
+		} else {
+			// 单个文件模式
+			tagEditorPath = item.path;
+			tagEditorPaths = [item.path];
+		}
 		tagEditorEmmTags = []; // TODO: 从 emmMetadataStore 加载 EMM 标签
 		tagEditorOpen = true;
 	}
@@ -201,5 +213,6 @@
 <ManualTagEditor
 	bind:open={tagEditorOpen}
 	path={tagEditorPath}
+	paths={tagEditorPaths}
 	emmTags={tagEditorEmmTags}
 />

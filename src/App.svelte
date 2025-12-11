@@ -235,6 +235,10 @@
 	onMount(async () => {
 		// 加载空页面设置
 		loadEmptySettings();
+		
+		// 初始化默认上下文为图片浏览模式
+		keyBindingsStore.setContexts(['global', 'viewer']);
+		
 		try {
 			// V3 缩略图系统初始化
 			const thumbnailPath = 'D:\\temp\\neoview';

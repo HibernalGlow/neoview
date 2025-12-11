@@ -3,10 +3,14 @@
 	 * NeoView - Viewer Settings Panel
 	 * 查看器设置面板
 	 */
+	import { Eye, Palette, ZoomIn } from '@lucide/svelte';
 	import { Label } from '$lib/components/ui/label';
 	import { Input } from '$lib/components/ui/input';
 	import { Switch } from '$lib/components/ui/switch';
 	import { Slider } from '$lib/components/ui/slider';
+	import * as Tabs from '$lib/components/ui/tabs';
+
+	let activeTab = $state('display');
 
 	let backgroundColor = $state('#000000');
 	let showGrid = $state(false);
@@ -15,9 +19,25 @@
 	let defaultZoom = $state<number[]>([100]);
 </script>
 
-<div class="space-y-6">
-	<h3 class="text-lg font-semibold">查看器设置</h3>
+<div class="space-y-4">
+	<h3 class="flex items-center gap-2 text-lg font-semibold">
+		<Eye class="h-5 w-5" />
+		查看器设置
+	</h3>
 
+	<Tabs.Root bind:value={activeTab} class="w-full">
+		<Tabs.List class="grid w-full grid-cols-2">
+			<Tabs.Trigger value="display" class="gap-1.5 text-xs">
+				<Palette class="h-3.5 w-3.5" />
+				显示
+			</Tabs.Trigger>
+			<Tabs.Trigger value="zoom" class="gap-1.5 text-xs">
+				<ZoomIn class="h-3.5 w-3.5" />
+				缩放
+			</Tabs.Trigger>
+		</Tabs.List>
+
+		<Tabs.Content value="display" class="mt-4 space-y-4">
 	<!-- 背景颜色 -->
 	<div class="space-y-2">
 		<Label for="bg-color">背景颜色</Label>
@@ -36,6 +56,9 @@
 		<Switch bind:checked={showGrid} />
 	</div>
 
+		</Tabs.Content>
+
+		<Tabs.Content value="zoom" class="mt-4 space-y-4">
 	<!-- 平滑缩放 -->
 	<div class="flex items-center justify-between">
 		<div class="space-y-1">
@@ -51,6 +74,8 @@
 			<Label>默认缩放级别</Label>
 			<span class="text-sm text-muted-foreground">{defaultZoom[0]}%</span>
 		</div>
-		<Slider min={10} max={500} step={10} type="single"  />
+		<Slider min={10} max={500} step={10} type="single" />
 	</div>
+		</Tabs.Content>
+	</Tabs.Root>
 </div>

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Palette, Image, Video } from '@lucide/svelte';
+	import { Palette, Image, Video, MousePointer } from '@lucide/svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { Label } from '$lib/components/ui/label';
 	import { Switch } from '$lib/components/ui/switch';
@@ -37,7 +37,7 @@
 	</div>
 
 	<Tabs.Root bind:value={activeTab} class="w-full">
-		<Tabs.List class="grid w-full grid-cols-2">
+		<Tabs.List class="grid w-full grid-cols-3">
 			<Tabs.Trigger value="image" class="gap-1.5 text-xs">
 				<Image class="h-3.5 w-3.5" />
 				图片
@@ -45,6 +45,10 @@
 			<Tabs.Trigger value="video" class="gap-1.5 text-xs">
 				<Video class="h-3.5 w-3.5" />
 				视频
+			</Tabs.Trigger>
+			<Tabs.Trigger value="interaction" class="gap-1.5 text-xs">
+				<MousePointer class="h-3.5 w-3.5" />
+				交互
 			</Tabs.Trigger>
 		</Tabs.List>
 
@@ -193,6 +197,9 @@
 			</div>
 		</div>
 
+		</Tabs.Content>
+
+		<Tabs.Content value="interaction" class="mt-4 space-y-4">
 		<!-- 悬停滚动倍率 -->
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">悬停滚动倍率</h4>

@@ -221,7 +221,7 @@
 				</label>
 				<div class="flex items-center justify-between gap-2">
 					<span class="text-xs text-muted-foreground">需要时可下载 .reg 手动导入注册表</span>
-					<Button variant="outline" size="xs" onclick={downloadExplorerContextMenuReg}>
+					<Button variant="outline" size="sm" onclick={downloadExplorerContextMenuReg}>
 						导出 .reg
 					</Button>
 				</div>

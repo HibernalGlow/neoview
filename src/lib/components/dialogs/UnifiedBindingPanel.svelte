@@ -27,7 +27,7 @@
 	let showContextSelector = $state(false); // 显示上下文选择器
 
 	// 当前选中的分类 Tab
-	let activeCategory = $state<string | null>(null);
+	let activeCategory = $state<string>('');
 
 	// 过滤操作
 	const filteredActions = $derived(
@@ -49,7 +49,7 @@
 
 	// 初始化默认分类
 	$effect(() => {
-		if (activeCategory === null && categories.length > 0) {
+		if (activeCategory === '' && categories.length > 0) {
 			activeCategory = categories[0];
 		}
 	});
@@ -487,77 +487,53 @@
 							<div class="text-xs text-muted-foreground italic">暂无绑定</div>
 						{/if}
 
-						<!-- 添加绑定按钮区域 -->
-						<div class="pt-2 border-t mt-2">
-							<div class="flex items-center gap-2 mb-2">
-								<span class="text-xs text-muted-foreground">添加到:</span>
-								<select 
-									class="text-xs border rounded px-2 py-1 bg-background"
-									bind:value={editingContext}
-								>
-									{#each availableContexts as ctx}
-										<option value={ctx}>{keyBindingsStore.formatContext(ctx)}</option>
-									{/each}
-								</select>
-							</div>
-							<div class="flex gap-1.5 flex-wrap">
-								<button
-									class="inline-flex items-center gap-1 h-6 px-2 text-[11px] rounded border border-input bg-background hover:bg-accent transition-colors"
-									onclick={(e) => {
-										e.preventDefault();
-										startEditing(binding.action, 'keyboard', editingContext);
-									}}
-								>
-									<Keyboard class="h-3 w-3" />
-									按键
-								</button>
-								<button
-									class="inline-flex items-center gap-1 h-6 px-2 text-[11px] rounded border border-input bg-background hover:bg-accent transition-colors"
-									onclick={(e) => {
-										e.preventDefault();
-										editingAction = binding.action;
-										editingType = 'mouse';
-										capturedInput = '';
-										showMouseGestureRecorder = true;
-									}}
-								>
-									<Mouse class="h-3 w-3" />
-									手势
-								</button>
-								<button
-									class="inline-flex items-center gap-1 h-6 px-2 text-[11px] rounded border border-input bg-background hover:bg-accent transition-colors"
-									onclick={(e) => {
-										e.preventDefault();
-										editingAction = binding.action;
-										editingType = 'mouse';
-										capturedInput = '';
-										showMouseKeyRecorder = true;
-									}}
-								>
-									<Mouse class="h-3 w-3" />
-									鼠标键
-								</button>
-								<button
-									class="inline-flex items-center gap-1 h-6 px-2 text-[11px] rounded border border-input bg-background hover:bg-accent transition-colors"
-									onclick={(e) => {
-										e.preventDefault();
-										startEditing(binding.action, 'touch', editingContext);
-									}}
-								>
-									<Hand class="h-3 w-3" />
-									触摸
-								</button>
-								<button
-									class="inline-flex items-center gap-1 h-6 px-2 text-[11px] rounded border border-input bg-background hover:bg-accent transition-colors"
-									onclick={(e) => {
-										e.preventDefault();
-										startEditing(binding.action, 'area', editingContext);
-									}}
-								>
-									<Target class="h-3 w-3" />
-									区域
-								</button>
-							</div>
+						<!-- 添加绑定区域 - 单行布局 -->
+						<div class="flex items-center gap-2 pt-2 border-t mt-2 flex-wrap">
+							<span class="text-[10px] text-muted-foreground shrink-0">添加到</span>
+							<select 
+								class="text-[10px] border rounded px-1.5 py-0.5 bg-background h-6"
+								bind:value={editingContext}
+							>
+								{#each availableContexts as ctx}
+									<option value={ctx}>{keyBindingsStore.formatContext(ctx)}</option>
+								{/each}
+							</select>
+							<span class="text-muted-foreground/30">|</span>
+							<button
+								class="inline-flex items-center gap-0.5 h-6 px-1.5 text-[10px] rounded border border-input bg-background hover:bg-accent transition-colors"
+								onclick={(e) => { e.preventDefault(); startEditing(binding.action, 'keyboard', editingContext); }}
+							>
+								<Keyboard class="h-3 w-3" />
+								键盘
+							</button>
+							<button
+								class="inline-flex items-center gap-0.5 h-6 px-1.5 text-[10px] rounded border border-input bg-background hover:bg-accent transition-colors"
+								onclick={(e) => { e.preventDefault(); editingAction = binding.action; editingType = 'mouse'; capturedInput = ''; showMouseGestureRecorder = true; }}
+							>
+								<Mouse class="h-3 w-3" />
+								手势
+							</button>
+							<button
+								class="inline-flex items-center gap-0.5 h-6 px-1.5 text-[10px] rounded border border-input bg-background hover:bg-accent transition-colors"
+								onclick={(e) => { e.preventDefault(); editingAction = binding.action; editingType = 'mouse'; capturedInput = ''; showMouseKeyRecorder = true; }}
+							>
+								<Mouse class="h-3 w-3" />
+								鼠标键
+							</button>
+							<button
+								class="inline-flex items-center gap-0.5 h-6 px-1.5 text-[10px] rounded border border-input bg-background hover:bg-accent transition-colors"
+								onclick={(e) => { e.preventDefault(); startEditing(binding.action, 'touch', editingContext); }}
+							>
+								<Hand class="h-3 w-3" />
+								触摸
+							</button>
+							<button
+								class="inline-flex items-center gap-0.5 h-6 px-1.5 text-[10px] rounded border border-input bg-background hover:bg-accent transition-colors"
+								onclick={(e) => { e.preventDefault(); startEditing(binding.action, 'area', editingContext); }}
+							>
+								<Target class="h-3 w-3" />
+								区域
+							</button>
 						</div>
 					</div>
 				</div>

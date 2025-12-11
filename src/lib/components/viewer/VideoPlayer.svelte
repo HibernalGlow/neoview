@@ -20,8 +20,8 @@
 		Camera,
 		RotateCcw,
 		Sun,
-		Contrast,
-		RefreshCw
+		RefreshCw,
+		MoreVertical
 	} from '@lucide/svelte';
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
 	import type { SubtitleData } from '$lib/utils/subtitleUtils';
@@ -117,6 +117,9 @@
 	let brightness = $state(100); // 0-200, 100 = 正常
 	let contrast = $state(100);   // 0-200, 100 = 正常
 	let saturate = $state(100);   // 0-200, 100 = 正常
+	
+	// 更多菜单
+	let showMoreMenu = $state(false);
 	
 	// 字幕设置 - 从 settings 读取初始值
 	let showSubtitleSettings = $state(false);
@@ -842,55 +845,119 @@
 					{/if}
 				</button>
 
-				<!-- AB循环 -->
-				<div class="ab-loop-controls flex items-center gap-1">
+				<!-- 更多功能菜单 -->
+				<div class="relative">
 					<button
-						class="control-btn rounded px-2 py-1 text-xs transition-colors hover:bg-white/20 {abLoop.a !== null ? 'bg-white/20 text-primary' : 'text-primary/60'}"
+						class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {showMoreMenu || abLoopActive ? 'bg-white/20' : ''}"
 						onclick={(event) => {
 							event.stopPropagation();
-							setLoopPointA();
+							showMoreMenu = !showMoreMenu;
 						}}
-						title={abLoop.a !== null ? `A: ${formatTime(abLoop.a)}` : '设置起点A'}
+						title="更多功能"
+						aria-label="更多功能"
 					>
-						A
+						<MoreVertical class="h-5 w-5 text-primary" />
 					</button>
-					<button
-						class="control-btn rounded px-2 py-1 text-xs transition-colors hover:bg-white/20 {abLoop.b !== null ? 'bg-white/20 text-primary' : 'text-primary/60'}"
-						onclick={(event) => {
-							event.stopPropagation();
-							setLoopPointB();
-						}}
-						title={abLoop.b !== null ? `B: ${formatTime(abLoop.b)}` : '设置终点B'}
-						disabled={abLoop.a === null}
-					>
-						B
-					</button>
-					{#if abLoopActive}
-						<button
-							class="control-btn rounded p-1 text-xs transition-colors hover:bg-white/20"
-							onclick={(event) => {
-								event.stopPropagation();
-								clearAbLoop();
-							}}
-							title="清除AB循环"
+
+					{#if showMoreMenu}
+						<div
+							class="absolute bottom-full left-0 mb-2 w-48 rounded-lg bg-black/95 p-2 shadow-lg backdrop-blur-sm"
+							onclick={(e) => e.stopPropagation()}
+							onmousedown={(e) => e.stopPropagation()}
 						>
-							<RotateCcw class="h-3 w-3 text-primary" />
-						</button>
+							<!-- 截图 -->
+							<button
+								class="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-white hover:bg-white/10"
+								onclick={() => {
+									captureScreenshot();
+									showMoreMenu = false;
+								}}
+							>
+								<Camera class="h-4 w-4" />
+								截图
+							</button>
+
+							<!-- AB循环 -->
+							<div class="border-t border-white/10 pt-2 mt-2">
+								<div class="px-3 py-1 text-xs text-white/50">AB循环</div>
+								<div class="flex items-center gap-1 px-3 py-1">
+									<button
+										class="rounded px-3 py-1 text-xs transition-colors {abLoop.a !== null ? 'bg-primary text-white' : 'bg-white/10 text-white hover:bg-white/20'}"
+										onclick={() => setLoopPointA()}
+									>
+										A{abLoop.a !== null ? `: ${formatTime(abLoop.a)}` : ''}
+									</button>
+									<button
+										class="rounded px-3 py-1 text-xs transition-colors {abLoop.b !== null ? 'bg-primary text-white' : 'bg-white/10 text-white hover:bg-white/20'}"
+										onclick={() => setLoopPointB()}
+										disabled={abLoop.a === null}
+									>
+										B{abLoop.b !== null ? `: ${formatTime(abLoop.b)}` : ''}
+									</button>
+									{#if abLoopActive}
+										<button
+											class="rounded bg-white/10 p-1 text-xs text-white hover:bg-white/20"
+											onclick={() => clearAbLoop()}
+											title="清除"
+										>
+											<RotateCcw class="h-3 w-3" />
+										</button>
+									{/if}
+								</div>
+							</div>
+
+							<!-- 滤镜 -->
+							<div class="border-t border-white/10 pt-2 mt-2">
+								<button
+									class="flex w-full items-center justify-between gap-2 rounded px-3 py-2 text-sm text-white hover:bg-white/10"
+									onclick={() => {
+										showFilterPanel = !showFilterPanel;
+									}}
+								>
+									<span class="flex items-center gap-2">
+										<Sun class="h-4 w-4" />
+										视频滤镜
+									</span>
+									{#if brightness !== 100 || contrast !== 100 || saturate !== 100}
+										<span class="text-xs text-primary">已调整</span>
+									{/if}
+								</button>
+								
+								{#if showFilterPanel}
+									<div class="px-3 py-2 space-y-2">
+										<div>
+											<div class="flex justify-between text-xs text-white/70 mb-1">
+												<span>亮度</span><span>{brightness}%</span>
+											</div>
+											<input type="range" min="0" max="200" step="5" bind:value={brightness}
+												class="w-full h-1 bg-white/20 rounded appearance-none cursor-pointer" />
+										</div>
+										<div>
+											<div class="flex justify-between text-xs text-white/70 mb-1">
+												<span>对比度</span><span>{contrast}%</span>
+											</div>
+											<input type="range" min="0" max="200" step="5" bind:value={contrast}
+												class="w-full h-1 bg-white/20 rounded appearance-none cursor-pointer" />
+										</div>
+										<div>
+											<div class="flex justify-between text-xs text-white/70 mb-1">
+												<span>饱和度</span><span>{saturate}%</span>
+											</div>
+											<input type="range" min="0" max="200" step="5" bind:value={saturate}
+												class="w-full h-1 bg-white/20 rounded appearance-none cursor-pointer" />
+										</div>
+										<button
+											class="w-full rounded bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20"
+											onclick={resetFilters}
+										>
+											重置滤镜
+										</button>
+									</div>
+								{/if}
+							</div>
+						</div>
 					{/if}
 				</div>
-
-				<!-- 截图 -->
-				<button
-					class="control-btn rounded-full p-2 transition-colors hover:bg-white/20"
-					onclick={(event) => {
-						event.stopPropagation();
-						captureScreenshot();
-					}}
-					aria-label="截图"
-					title="截取当前帧"
-				>
-					<Camera class="h-5 w-5 text-primary" />
-				</button>
 
 				<!-- 时间显示 -->
 				<div class="time-display text-sm text-primary">
@@ -961,97 +1028,6 @@
 				>
 					<FastForward class="h-5 w-5 text-primary {seekMode ? '' : 'opacity-40'}" />
 				</button>
-
-				<!-- 视频滤镜 -->
-				<div class="relative">
-					<button
-						class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {showFilterPanel || brightness !== 100 || contrast !== 100 || saturate !== 100 ? 'bg-white/20' : ''}"
-						onclick={(event) => {
-							event.stopPropagation();
-							showFilterPanel = !showFilterPanel;
-						}}
-						title="视频滤镜"
-						aria-label="视频滤镜设置"
-					>
-						<Sun class="h-5 w-5 text-primary {brightness !== 100 || contrast !== 100 || saturate !== 100 ? '' : 'opacity-70'}" />
-					</button>
-
-					<!-- 滤镜设置面板 -->
-					{#if showFilterPanel}
-						<div
-							class="absolute bottom-full right-0 mb-2 w-56 rounded-lg bg-black/90 p-4 shadow-lg backdrop-blur-sm"
-							onclick={(e) => e.stopPropagation()}
-							onmousedown={(e) => e.stopPropagation()}
-						>
-							<div class="mb-3 flex items-center justify-between">
-								<span class="text-sm font-medium text-white">视频滤镜</span>
-								<button
-									class="text-white/60 hover:text-white"
-									onclick={() => (showFilterPanel = false)}
-								>
-									✕
-								</button>
-							</div>
-
-							<!-- 亮度 -->
-							<div class="mb-3">
-								<span class="mb-1 block text-xs text-white/70">亮度</span>
-								<div class="flex items-center gap-2">
-									<input
-										type="range"
-										min="0"
-										max="200"
-										step="5"
-										bind:value={brightness}
-										class="filter-slider h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/20"
-									/>
-									<span class="w-10 text-right text-xs text-white">{brightness}%</span>
-								</div>
-							</div>
-
-							<!-- 对比度 -->
-							<div class="mb-3">
-								<span class="mb-1 block text-xs text-white/70">对比度</span>
-								<div class="flex items-center gap-2">
-									<input
-										type="range"
-										min="0"
-										max="200"
-										step="5"
-										bind:value={contrast}
-										class="filter-slider h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/20"
-									/>
-									<span class="w-10 text-right text-xs text-white">{contrast}%</span>
-								</div>
-							</div>
-
-							<!-- 饱和度 -->
-							<div class="mb-3">
-								<span class="mb-1 block text-xs text-white/70">饱和度</span>
-								<div class="flex items-center gap-2">
-									<input
-										type="range"
-										min="0"
-										max="200"
-										step="5"
-										bind:value={saturate}
-										class="filter-slider h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/20"
-									/>
-									<span class="w-10 text-right text-xs text-white">{saturate}%</span>
-								</div>
-							</div>
-
-							<!-- 重置按钮 -->
-							<button
-								class="w-full rounded bg-white/10 px-2 py-1.5 text-xs text-white hover:bg-white/20"
-								onclick={resetFilters}
-							>
-								<RefreshCw class="mr-1 inline h-3 w-3" />
-								重置滤镜
-							</button>
-						</div>
-					{/if}
-				</div>
 
 				<!-- 字幕状态/选择 -->
 				<div class="relative">

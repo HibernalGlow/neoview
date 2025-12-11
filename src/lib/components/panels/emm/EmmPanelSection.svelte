@@ -21,6 +21,7 @@
 	import ThumbnailDbMaintenanceCard from './ThumbnailDbMaintenanceCard.svelte';
 	import { favoriteTagStore, categoryColors, mixedGenderStore, cat2letter, createTagValue, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
 	import { confirm } from '$lib/stores/confirmDialog.svelte';
+	import { getAllUniqueManualTags, NAMESPACE_LABELS } from '$lib/stores/emm/manualTagStore.svelte';
 
 // 性别类别列表
 const genderCategories = ['female', 'male', 'mixed'];
@@ -59,6 +60,25 @@ interface ExtendedFavoriteTag extends FavoriteTag {
 
 	// 收藏标签面板状态
 	let isReloadingFavoriteTags = $state(false);
+
+	// 全局手动标签（所有书籍的唯一标签，用于快速搜索）
+	let allManualTags = $state<Array<{ namespace: string; tag: string; count: number }>>([]);
+	
+	// 刷新全局手动标签
+	function refreshAllManualTags() {
+		allManualTags = getAllUniqueManualTags();
+	}
+	
+	// 翻译手动标签
+	function translateManualTag(namespace: string, tag: string): string {
+		const dict = emmMetadataStore.getTranslationDict();
+		return emmTranslationStore.translateTag(tag, namespace, dict);
+	}
+	
+	// 获取手动标签颜色
+	function getManualTagColor(namespace: string): string {
+		return categoryColors[namespace] || '#10b981';
+	}
 
 	// 收藏标签分组（支持混合变体）
 	const favoriteTagGroups = $derived.by((): Array<{ name: string; tags: ExtendedFavoriteTag[] }> => {
@@ -1703,6 +1723,43 @@ interface ExtendedFavoriteTag extends FavoriteTag {
 	</button>
 	{#if showFavoriteTagsCard}
 		<div class="px-2 pb-2 space-y-2 text-[11px]">
+			<!-- 手动标签区域（全局唯一标签，用于搜索） -->
+			<div class="pb-2 border-b border-border/50">
+				<div class="flex items-center justify-between mb-1">
+					<button
+						type="button"
+						class="font-medium flex items-center gap-1 hover:text-primary"
+						onclick={refreshAllManualTags}
+						title="点击刷新"
+					>
+						<Tag class="h-3 w-3" />
+						手动标签
+					</button>
+					<span class="text-[10px] text-muted-foreground">{allManualTags.length} 种</span>
+				</div>
+				
+				{#if allManualTags.length === 0}
+					<p class="text-[10px] text-muted-foreground text-center py-1">暂无手动标签</p>
+					<p class="text-[9px] text-muted-foreground/70 text-center">右键文件 → 编辑标签</p>
+				{:else}
+					<div class="flex flex-wrap gap-1">
+						{#each allManualTags as mt}
+							{@const translated = translateManualTag(mt.namespace, mt.tag)}
+							{@const color = getManualTagColor(mt.namespace)}
+							<span
+								class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border-2 border-dashed text-[10px]"
+								style="border-color: {color}; background: color-mix(in srgb, {color} 12%, transparent); color: {color};"
+								title="{NAMESPACE_LABELS[mt.namespace]}: {mt.tag}{translated !== mt.tag ? ` (${translated})` : ''} ({mt.count}个文件)"
+							>
+								<span class="opacity-70">{mt.namespace.slice(0, 1)}:</span>
+								<span>{translated}</span>
+								<span class="opacity-50 text-[9px]">×{mt.count}</span>
+							</span>
+						{/each}
+					</div>
+				{/if}
+			</div>
+			
 			<!-- 控制栏 -->
 			<div class="flex items-center justify-between gap-2 py-1 border-b border-border/50">
 				<label class="flex items-center gap-1.5 cursor-pointer">

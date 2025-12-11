@@ -4,10 +4,30 @@
  * 显示用户收藏的 EMM 标签，支持点击添加到搜索
  * 参考 exhentai-manga-manager 的 SearchAgilePanel
  */
-import { X, Lock, Unlock, Star, RefreshCw } from '@lucide/svelte';
+import { X, Lock, Unlock, Star, RefreshCw, Tag } from '@lucide/svelte';
 import { favoriteTagStore, categoryColors, cat2letter, createTagValue, mixedGenderStore, type FavoriteTag } from '$lib/stores/emm/favoriteTagStore.svelte';
+import { getAllUniqueManualTags, NAMESPACE_LABELS } from '$lib/stores/emm/manualTagStore.svelte';
+import { emmTranslationStore, emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
 
 let isReloading = $state(false);
+
+// 全局手动标签
+let allManualTags = $state<Array<{ namespace: string; tag: string; count: number }>>([]);
+
+function refreshAllManualTags() {
+	allManualTags = getAllUniqueManualTags();
+}
+
+// 翻译手动标签
+function translateManualTag(namespace: string, tag: string): string {
+	const dict = emmMetadataStore.getTranslationDict();
+	return emmTranslationStore.translateTag(tag, namespace, dict);
+}
+
+// 获取手动标签颜色
+function getManualTagColor(namespace: string): string {
+	return categoryColors[namespace] || '#10b981';
+}
 
 // 性别类别列表
 const genderCategories = ['female', 'male', 'mixed'];
@@ -48,6 +68,9 @@ let {
 
 let isPinned = $state(false);
 let panelHeight = $state(240);
+
+// 初始化加载手动标签
+refreshAllManualTags();
 let isResizing = $state(false);
 let startY = $state(0);
 let startHeight = $state(0);
@@ -218,6 +241,38 @@ function stopResize() {
 
 		<!-- 内容区 -->
 		<div class="flex-1 overflow-y-auto p-3" style="height: calc(100% - 44px);">
+			<!-- 手动标签区域 -->
+			{#if allManualTags.length > 0}
+				<div class="mb-3 pb-3 border-b border-border/50">
+					<div class="flex items-center justify-between mb-1.5 px-2 py-1 rounded bg-muted/50">
+						<div class="flex items-center gap-1.5">
+							<Tag class="h-3.5 w-3.5 text-emerald-500" />
+							<span class="text-xs font-semibold text-emerald-600">手动标签</span>
+						</div>
+						<span class="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
+							{allManualTags.length}
+						</span>
+					</div>
+					<div class="flex flex-wrap gap-1.5 pl-1">
+						{#each allManualTags as mt}
+							{@const translated = translateManualTag(mt.namespace, mt.tag)}
+							{@const color = getManualTagColor(mt.namespace)}
+							<button
+								class="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border-2 border-dashed transition-all hover:-translate-y-0.5"
+								style="border-color: {color}; background: color-mix(in srgb, {color} 12%, transparent);"
+								onclick={() => onAppendTag({ id: `manual:${mt.namespace}:${mt.tag}`, cat: mt.namespace, tag: mt.tag, letter: mt.namespace.slice(0,1), display: `${mt.namespace}:${translated}`, value: `${mt.namespace}:"${mt.tag}"$`, color }, '')}
+								oncontextmenu={(e) => { e.preventDefault(); onAppendTag({ id: `manual:${mt.namespace}:${mt.tag}`, cat: mt.namespace, tag: mt.tag, letter: mt.namespace.slice(0,1), display: `${mt.namespace}:${translated}`, value: `${mt.namespace}:"${mt.tag}"$`, color }, '-'); }}
+								title="{NAMESPACE_LABELS[mt.namespace]}: {mt.tag}{translated !== mt.tag ? ` (${translated})` : ''} ({mt.count}个文件)"
+							>
+								<span class="w-2 h-2 rounded-sm shrink-0" style="background-color: {color}"></span>
+								<span class="font-medium truncate max-w-[100px]" style="color: {color}">{translated}</span>
+								<span class="text-[10px] opacity-50">×{mt.count}</span>
+							</button>
+						{/each}
+					</div>
+				</div>
+			{/if}
+			
 			{#if groupedTags.length === 0}
 				<div class="flex flex-col items-center justify-center h-full text-muted-foreground">
 					<Star class="h-8 w-8 mb-2 opacity-30" />

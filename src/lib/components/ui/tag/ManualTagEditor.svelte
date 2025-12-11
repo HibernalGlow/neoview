@@ -224,6 +224,15 @@ function getNamespaceColor(namespace: string): string {
 function getManualTagStyle(): string {
 	return 'border-dashed border-2';
 }
+
+// 翻译手动标签
+function translateManualTag(tag: ManualTag): string {
+	if (!translationDict) return tag.tag;
+	const nsDict = translationDict[tag.namespace];
+	if (!nsDict) return tag.tag;
+	const record = nsDict[tag.tag];
+	return record?.name || tag.tag;
+}
 </script>
 
 <Dialog.Root bind:open onOpenChange={(v) => { if (!v) handleClose(); }}>
@@ -267,12 +276,13 @@ function getManualTagStyle(): string {
 				{:else}
 					<div class="flex flex-wrap gap-1.5">
 						{#each manualTags as tag}
+							{@const translated = translateManualTag(tag)}
 							<span 
 								class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs border {getNamespaceColor(tag.namespace)} {getManualTagStyle()}"
-								title="{NAMESPACE_LABELS[tag.namespace] || tag.namespace}: {tag.tag}"
+								title="{NAMESPACE_LABELS[tag.namespace] || tag.namespace}: {tag.tag}{translated !== tag.tag ? ` (${translated})` : ''}"
 							>
 								<span class="opacity-70">{tag.namespace}:</span>
-								<span>{tag.tag}</span>
+								<span>{translated}</span>
 								<button
 									type="button"
 									class="ml-0.5 hover:text-destructive"

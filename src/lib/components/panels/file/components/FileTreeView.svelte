@@ -101,7 +101,22 @@
 	}
 
 	let treeRoot = $derived(buildTree(items));
+	
+	// 自动展开所有节点（用于搜索/书签/历史的局部树视图）
 	let expandedNodes = $state(new Set<string>());
+	
+	// 当树数据变化时，自动展开所有目录节点
+	$effect(() => {
+		const newExpanded = new Set<string>();
+		function collectAllDirPaths(node: TreeNode) {
+			if (node.isDir && node.path) {
+				newExpanded.add(node.path);
+			}
+			node.children.forEach(child => collectAllDirPaths(child));
+		}
+		collectAllDirPaths(treeRoot);
+		expandedNodes = newExpanded;
+	});
 
 	function normalizePath(path: string): string {
 		return path.replace(/\\/g, '/').replace(/\/+$/, '');

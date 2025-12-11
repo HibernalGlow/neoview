@@ -22,7 +22,7 @@
 
 	import HorizontalListSlider from '$lib/components/panels/file/components/HorizontalListSlider.svelte';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, Target, Hash } from '@lucide/svelte';
+	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, Target, Hash, Grid3X3 } from '@lucide/svelte';
 	import { thumbnailService } from '$lib/services/thumbnailService';
 	import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
@@ -842,7 +842,7 @@
 							class="h-6"
 							onclick={toggleAreaOverlay}
 						>
-							<Target class="mr-1 h-3 w-3" />
+							<Grid3X3 class="mr-1 h-3 w-3" />
 							<span class="text-xs">区域</span>
 						</Button>
 					</Tooltip.Trigger>

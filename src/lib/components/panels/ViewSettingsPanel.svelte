@@ -1,11 +1,14 @@
 <script lang="ts">
-	import { Eye, Mouse, Settings } from '@lucide/svelte';
+	import { Eye, Mouse, Settings, Monitor, BookOpen, Palette } from '@lucide/svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { Label } from '$lib/components/ui/label';
 	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select';
 	import { Switch } from '$lib/components/ui/switch';
 	import { Input } from '$lib/components/ui/input';
 	import { Slider } from '$lib/components/ui/slider';
+	import * as Tabs from '$lib/components/ui/tabs';
+
+	let activeTab = $state('display');
 
 	let currentSettings = $state(settingsManager.getSettings());
 
@@ -58,7 +61,7 @@
 	});
 </script>
 
-<div class="space-y-6 p-6">
+<div class="space-y-4 p-6">
 	<div class="space-y-2">
 		<h3 class="flex items-center gap-2 text-lg font-semibold">
 			<Eye class="h-5 w-5" />
@@ -67,7 +70,23 @@
 		<p class="text-muted-foreground text-sm">配置图片查看和显示选项</p>
 	</div>
 
-	<div class="space-y-4">
+	<Tabs.Root bind:value={activeTab} class="w-full">
+		<Tabs.List class="grid w-full grid-cols-3">
+			<Tabs.Trigger value="display" class="gap-1.5 text-xs">
+				<Monitor class="h-3.5 w-3.5" />
+				显示
+			</Tabs.Trigger>
+			<Tabs.Trigger value="page" class="gap-1.5 text-xs">
+				<BookOpen class="h-3.5 w-3.5" />
+				页面
+			</Tabs.Trigger>
+			<Tabs.Trigger value="mouse" class="gap-1.5 text-xs">
+				<Mouse class="h-3.5 w-3.5" />
+				鼠标
+			</Tabs.Trigger>
+		</Tabs.List>
+
+		<Tabs.Content value="display" class="mt-4 space-y-4">
 		<!-- 缩放模式 -->
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">默认缩放模式</h4>
@@ -120,6 +139,36 @@
 			</div>
 		</div>
 
+		<!-- 背景颜色 -->
+		<div class="space-y-2">
+			<h4 class="text-sm font-semibold">背景颜色</h4>
+			<div class="flex items-center gap-2">
+				<Input
+					type="color"
+					class="h-10 w-20"
+					bind:value={currentSettings.view.backgroundColor}
+					onchange={() =>
+						settingsManager.updateNestedSettings('view', {
+							backgroundColor: currentSettings.view.backgroundColor
+						})}
+					disabled={currentSettings.view.backgroundMode === 'auto'}
+				/>
+				<NativeSelect
+					class="w-full max-w-xs"
+					bind:value={currentSettings.view.backgroundMode}
+					onchange={() =>
+						settingsManager.updateNestedSettings('view', {
+							backgroundMode: currentSettings.view.backgroundMode
+						})}
+				>
+					<NativeSelectOption value="solid">固定颜色</NativeSelectOption>
+					<NativeSelectOption value="auto">自动匹配图片</NativeSelectOption>
+				</NativeSelect>
+			</div>
+		</div>
+		</Tabs.Content>
+
+		<Tabs.Content value="page" class="mt-4 space-y-4">
 		<!-- 横向页面设置 -->
 		<div class="space-y-2">
 			<h4 class="text-sm font-semibold">横向页面</h4>
@@ -235,40 +284,14 @@
 				</div>
 			</div>
 		</div>
+		</Tabs.Content>
 
-		<!-- 背景颜色 -->
-		<div class="space-y-2">
-			<h4 class="text-sm font-semibold">背景颜色</h4>
-			<div class="flex items-center gap-2">
-				<Input
-					type="color"
-					class="h-10 w-20"
-					bind:value={currentSettings.view.backgroundColor}
-					onchange={() =>
-						settingsManager.updateNestedSettings('view', {
-							backgroundColor: currentSettings.view.backgroundColor
-						})}
-					disabled={currentSettings.view.backgroundMode === 'auto'}
-				/>
-				<NativeSelect
-					class="w-full max-w-xs"
-					bind:value={currentSettings.view.backgroundMode}
-					onchange={() =>
-						settingsManager.updateNestedSettings('view', {
-							backgroundMode: currentSettings.view.backgroundMode
-						})}
-				>
-					<NativeSelectOption value="solid">固定颜色</NativeSelectOption>
-					<NativeSelectOption value="auto">自动匹配图片</NativeSelectOption>
-				</NativeSelect>
-			</div>
-		</div>
-
+		<Tabs.Content value="mouse" class="mt-4 space-y-4">
 		<!-- 鼠标设置 -->
 		<div class="space-y-4">
 			<h4 class="flex items-center gap-2 text-sm font-semibold">
 				<Mouse class="h-4 w-4" />
-				鼠标设置
+				鼠标光标
 			</h4>
 
 			<div class="space-y-3 pl-6">
@@ -391,5 +414,6 @@
 				</p>
 			</div>
 		</div>
-	</div>
+		</Tabs.Content>
+	</Tabs.Root>
 </div>

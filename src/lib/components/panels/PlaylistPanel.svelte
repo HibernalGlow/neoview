@@ -66,8 +66,15 @@
 	let playlists = $state<Playlist[]>(loadPlaylists());
 
 	let activePlaylist = $state<string | null>(
-		localStorage.getItem(ACTIVE_PLAYLIST_KEY) || playlists[0]?.id || null
+		localStorage.getItem(ACTIVE_PLAYLIST_KEY) || null
 	);
+	
+	// 初始化时设置默认活跃播放列表
+	$effect(() => {
+		if (activePlaylist === null && playlists.length > 0) {
+			activePlaylist = playlists[0].id;
+		}
+	});
 	let newPlaylistName = $state('');
 	let isCreating = $state(false);
 

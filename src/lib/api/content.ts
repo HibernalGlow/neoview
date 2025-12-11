@@ -56,10 +56,9 @@ export async function loadContentItem(path: string, innerPath?: string): Promise
 export async function expandContainer(
   path: string,
   innerPath?: string,
-  _sortMode: SortMode = 'name'  // TODO: 实现排序
+  sortMode: SortMode = 'name'
 ): Promise<ContentItem[]> {
   // 调用后端获取内容列表
-  // 暂时复用现有的 open_book API
   try {
     const bookInfo = await invoke<{
       pages: Array<{
@@ -75,7 +74,7 @@ export async function expandContainer(
     }>('open_book', { path });
 
     // 转换为 ContentItem[]
-    return bookInfo.pages.map((page): ContentItem => {
+    const items = bookInfo.pages.map((page): ContentItem => {
       const type = inferContentType(page.name);
       return {
         id: generateContentId(page.path, page.innerPath),
@@ -92,6 +91,21 @@ export async function expandContainer(
         stableHash: page.stableHash,
       };
     });
+
+    // 排序
+    if (sortMode === 'name') {
+      items.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    } else if (sortMode === 'size') {
+      items.sort((a, b) => (b.metadata?.size ?? 0) - (a.metadata?.size ?? 0));
+    } else if (sortMode === 'time') {
+      items.sort((a, b) => {
+        const dateA = a.metadata?.modified ? new Date(a.metadata.modified).getTime() : 0;
+        const dateB = b.metadata?.modified ? new Date(b.metadata.modified).getTime() : 0;
+        return dateB - dateA;
+      });
+    }
+
+    return items;
   } catch (err) {
     console.error('expandContainer error:', err);
     throw err;
@@ -101,11 +115,16 @@ export async function expandContainer(
 /**
  * 加载页面数据（复用现有 API）
  */
-export async function loadPageData(_path: string, _innerPath?: string): Promise<{
+export async function loadPageData(path: string, innerPath?: string): Promise<{
   data: Uint8Array;
   mimeType: string;
 }> {
-  // TODO: 复用现有的页面加载逻辑
-  // 实际实现会调用 load_page_data 等命令
-  throw new Error('Not implemented - use existing page loading');
+  const result = await invoke<{ data: number[]; mime_type: string }>('load_page_data', {
+    path,
+    innerPath
+  });
+  return {
+    data: new Uint8Array(result.data),
+    mimeType: result.mime_type
+  };
 }

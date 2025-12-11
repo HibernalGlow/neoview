@@ -8,7 +8,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import { keyBindingsStore, type InputBinding, type KeyBinding, type MouseGesture, type TouchGesture, type AreaClick, type BindingContext } from '$lib/stores/keybindings.svelte';
-	import { Keyboard, Mouse, Hand, Trash2, Search, RotateCcw, Target, Layers, X } from '@lucide/svelte';
+	import { Keyboard, Mouse, Hand, Trash2, Search, RotateCcw, Target, Layers, X, CheckCircle, AlertTriangle } from '@lucide/svelte';
 	import GestureVisualizer from './GestureVisualizer.svelte';
 	import { confirm } from '$lib/stores/confirmDialog.svelte';
 	import MouseGestureRecorder from './MouseGestureRecorder.svelte';
@@ -47,6 +47,51 @@
 
 	// 可用上下文列表
 	const availableContexts = $derived(keyBindingsStore.getAvailableContexts());
+
+	// 检测所有冲突
+	type ConflictInfo = { action1: string; action2: string; binding: string; context: BindingContext };
+	const allConflicts = $derived.by(() => {
+		const conflicts: ConflictInfo[] = [];
+		const bindingMap = new Map<string, { action: string; context: BindingContext }>();
+		
+		for (const actionBinding of keyBindingsStore.bindings) {
+			// 检查全局绑定
+			if (actionBinding.bindings) {
+				for (const b of actionBinding.bindings) {
+					const key = `global:${JSON.stringify(b)}`;
+					const existing = bindingMap.get(key);
+					if (existing && existing.action !== actionBinding.action) {
+						conflicts.push({
+							action1: existing.action,
+							action2: actionBinding.action,
+							binding: keyBindingsStore.formatBinding(b),
+							context: 'global'
+						});
+					} else {
+						bindingMap.set(key, { action: actionBinding.action, context: 'global' });
+					}
+				}
+			}
+			// 检查上下文绑定
+			if (actionBinding.contextBindings) {
+				for (const cb of actionBinding.contextBindings) {
+					const key = `${cb.context}:${JSON.stringify(cb.input)}`;
+					const existing = bindingMap.get(key);
+					if (existing && existing.action !== actionBinding.action) {
+						conflicts.push({
+							action1: existing.action,
+							action2: actionBinding.action,
+							binding: keyBindingsStore.formatBinding(cb.input),
+							context: cb.context as BindingContext
+						});
+					} else {
+						bindingMap.set(key, { action: actionBinding.action, context: cb.context as BindingContext });
+					}
+				}
+			}
+		}
+		return conflicts;
+	});
 
 	// 初始化默认分类
 	$effect(() => {
@@ -378,7 +423,38 @@
 					</div>
 				{/each}
 			</div>
+			<!-- 冲突状态 -->
+			{#if allConflicts.length === 0}
+				<div class="flex items-center gap-1 text-xs text-green-600 border border-green-200 rounded-md px-2 py-1 bg-green-50 dark:bg-green-950/30 dark:border-green-800">
+					<CheckCircle class="h-3.5 w-3.5" />
+					<span>无冲突</span>
+				</div>
+			{:else}
+				<div class="flex items-center gap-1 text-xs text-amber-600 border border-amber-200 rounded-md px-2 py-1 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 cursor-pointer" title="点击查看冲突详情">
+					<AlertTriangle class="h-3.5 w-3.5" />
+					<span>{allConflicts.length} 个冲突</span>
+				</div>
+			{/if}
 		</div>
+
+		<!-- 冲突详情（如果有） -->
+		{#if allConflicts.length > 0}
+			<div class="border border-amber-200 rounded-md p-2 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-800">
+				<div class="text-xs text-amber-700 dark:text-amber-400 space-y-1">
+					{#each allConflicts as conflict}
+						<div class="flex items-center gap-1">
+							<span class="w-2 h-2 rounded-full {getContextColor(conflict.context)}"></span>
+							<span class="font-mono">{conflict.binding}</span>
+							<span class="text-muted-foreground">:</span>
+							<span class="font-medium">{conflict.action1}</span>
+							<span class="text-muted-foreground">与</span>
+							<span class="font-medium">{conflict.action2}</span>
+							<span class="text-muted-foreground">冲突</span>
+						</div>
+					{/each}
+				</div>
+			</div>
+		{/if}
 
 	</div>
 

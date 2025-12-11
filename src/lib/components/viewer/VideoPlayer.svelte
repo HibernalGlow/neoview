@@ -16,7 +16,12 @@
 		PinOff,
 		Captions,
 		CaptionsOff,
-		PictureInPicture2
+		PictureInPicture2,
+		Camera,
+		RotateCcw,
+		Sun,
+		Contrast,
+		RefreshCw
 	} from '@lucide/svelte';
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
 	import type { SubtitleData } from '$lib/utils/subtitleUtils';
@@ -100,6 +105,19 @@
 	// 复用的临时 video 元素
 	let tempVideoElement: HTMLVideoElement | null = null;
 
+	// 截图功能
+	let screenshotCanvas: HTMLCanvasElement | null = null;
+	
+	// AB循环
+	let abLoop = $state<{ a: number | null; b: number | null }>({ a: null, b: null });
+	let abLoopActive = $derived(abLoop.a !== null && abLoop.b !== null);
+	
+	// 视频滤镜
+	let showFilterPanel = $state(false);
+	let brightness = $state(100); // 0-200, 100 = 正常
+	let contrast = $state(100);   // 0-200, 100 = 正常
+	let saturate = $state(100);   // 0-200, 100 = 正常
+	
 	// 字幕设置 - 从 settings 读取初始值
 	let showSubtitleSettings = $state(false);
 	let subtitleFontSize = $state(settings.subtitle?.fontSize ?? 1.0); // em 单位
@@ -516,6 +534,79 @@
 		};
 	});
 
+	// === 截图功能 ===
+	async function captureScreenshot() {
+		if (!videoElement) return;
+		
+		const canvas = document.createElement('canvas');
+		canvas.width = videoElement.videoWidth;
+		canvas.height = videoElement.videoHeight;
+		const ctx = canvas.getContext('2d');
+		if (!ctx) return;
+		
+		ctx.drawImage(videoElement, 0, 0);
+		
+		try {
+			const blob = await new Promise<Blob | null>((resolve) => 
+				canvas.toBlob(resolve, 'image/png')
+			);
+			if (!blob) return;
+			
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `screenshot_${formatTime(currentTime).replace(':', '-')}.png`;
+			a.click();
+			URL.revokeObjectURL(url);
+		} catch (err) {
+			console.warn('截图失败:', err);
+		}
+	}
+
+	// === AB循环功能 ===
+	function setLoopPointA() {
+		if (!videoElement) return;
+		abLoop = { ...abLoop, a: currentTime };
+	}
+	
+	function setLoopPointB() {
+		if (!videoElement) return;
+		if (abLoop.a !== null && currentTime > abLoop.a) {
+			abLoop = { ...abLoop, b: currentTime };
+		}
+	}
+	
+	function clearAbLoop() {
+		abLoop = { a: null, b: null };
+	}
+	
+	// AB循环时间检测
+	$effect(() => {
+		if (!videoElement || !abLoopActive) return;
+		
+		const checkAbLoop = () => {
+			if (abLoop.a !== null && abLoop.b !== null) {
+				if (videoElement!.currentTime >= abLoop.b) {
+					videoElement!.currentTime = abLoop.a;
+				}
+			}
+		};
+		
+		videoElement.addEventListener('timeupdate', checkAbLoop);
+		return () => videoElement?.removeEventListener('timeupdate', checkAbLoop);
+	});
+
+	// === 视频滤镜 ===
+	let videoFilter = $derived(
+		`brightness(${brightness}%) contrast(${contrast}%) saturate(${saturate}%)`
+	);
+	
+	function resetFilters() {
+		brightness = 100;
+		contrast = 100;
+		saturate = 100;
+	}
+
 	function formatTime(seconds: number): string {
 		if (!isFinite(seconds)) return '0:00';
 		const mins = Math.floor(seconds / 60);
@@ -580,6 +671,7 @@
 		<video
 			bind:this={videoElement}
 			class="h-full w-full"
+			style="filter: {videoFilter};"
 			src={videoUrl}
 			autoplay
 			ontimeupdate={handleTimeUpdate}
@@ -750,6 +842,56 @@
 					{/if}
 				</button>
 
+				<!-- AB循环 -->
+				<div class="ab-loop-controls flex items-center gap-1">
+					<button
+						class="control-btn rounded px-2 py-1 text-xs transition-colors hover:bg-white/20 {abLoop.a !== null ? 'bg-white/20 text-primary' : 'text-primary/60'}"
+						onclick={(event) => {
+							event.stopPropagation();
+							setLoopPointA();
+						}}
+						title={abLoop.a !== null ? `A: ${formatTime(abLoop.a)}` : '设置起点A'}
+					>
+						A
+					</button>
+					<button
+						class="control-btn rounded px-2 py-1 text-xs transition-colors hover:bg-white/20 {abLoop.b !== null ? 'bg-white/20 text-primary' : 'text-primary/60'}"
+						onclick={(event) => {
+							event.stopPropagation();
+							setLoopPointB();
+						}}
+						title={abLoop.b !== null ? `B: ${formatTime(abLoop.b)}` : '设置终点B'}
+						disabled={abLoop.a === null}
+					>
+						B
+					</button>
+					{#if abLoopActive}
+						<button
+							class="control-btn rounded p-1 text-xs transition-colors hover:bg-white/20"
+							onclick={(event) => {
+								event.stopPropagation();
+								clearAbLoop();
+							}}
+							title="清除AB循环"
+						>
+							<RotateCcw class="h-3 w-3 text-primary" />
+						</button>
+					{/if}
+				</div>
+
+				<!-- 截图 -->
+				<button
+					class="control-btn rounded-full p-2 transition-colors hover:bg-white/20"
+					onclick={(event) => {
+						event.stopPropagation();
+						captureScreenshot();
+					}}
+					aria-label="截图"
+					title="截取当前帧"
+				>
+					<Camera class="h-5 w-5 text-primary" />
+				</button>
+
 				<!-- 时间显示 -->
 				<div class="time-display text-sm text-primary">
 					{formatTime(currentTime)} / {formatTime(duration)}
@@ -819,6 +961,97 @@
 				>
 					<FastForward class="h-5 w-5 text-primary {seekMode ? '' : 'opacity-40'}" />
 				</button>
+
+				<!-- 视频滤镜 -->
+				<div class="relative">
+					<button
+						class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {showFilterPanel || brightness !== 100 || contrast !== 100 || saturate !== 100 ? 'bg-white/20' : ''}"
+						onclick={(event) => {
+							event.stopPropagation();
+							showFilterPanel = !showFilterPanel;
+						}}
+						title="视频滤镜"
+						aria-label="视频滤镜设置"
+					>
+						<Sun class="h-5 w-5 text-primary {brightness !== 100 || contrast !== 100 || saturate !== 100 ? '' : 'opacity-70'}" />
+					</button>
+
+					<!-- 滤镜设置面板 -->
+					{#if showFilterPanel}
+						<div
+							class="absolute bottom-full right-0 mb-2 w-56 rounded-lg bg-black/90 p-4 shadow-lg backdrop-blur-sm"
+							onclick={(e) => e.stopPropagation()}
+							onmousedown={(e) => e.stopPropagation()}
+						>
+							<div class="mb-3 flex items-center justify-between">
+								<span class="text-sm font-medium text-white">视频滤镜</span>
+								<button
+									class="text-white/60 hover:text-white"
+									onclick={() => (showFilterPanel = false)}
+								>
+									✕
+								</button>
+							</div>
+
+							<!-- 亮度 -->
+							<div class="mb-3">
+								<span class="mb-1 block text-xs text-white/70">亮度</span>
+								<div class="flex items-center gap-2">
+									<input
+										type="range"
+										min="0"
+										max="200"
+										step="5"
+										bind:value={brightness}
+										class="filter-slider h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/20"
+									/>
+									<span class="w-10 text-right text-xs text-white">{brightness}%</span>
+								</div>
+							</div>
+
+							<!-- 对比度 -->
+							<div class="mb-3">
+								<span class="mb-1 block text-xs text-white/70">对比度</span>
+								<div class="flex items-center gap-2">
+									<input
+										type="range"
+										min="0"
+										max="200"
+										step="5"
+										bind:value={contrast}
+										class="filter-slider h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/20"
+									/>
+									<span class="w-10 text-right text-xs text-white">{contrast}%</span>
+								</div>
+							</div>
+
+							<!-- 饱和度 -->
+							<div class="mb-3">
+								<span class="mb-1 block text-xs text-white/70">饱和度</span>
+								<div class="flex items-center gap-2">
+									<input
+										type="range"
+										min="0"
+										max="200"
+										step="5"
+										bind:value={saturate}
+										class="filter-slider h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/20"
+									/>
+									<span class="w-10 text-right text-xs text-white">{saturate}%</span>
+								</div>
+							</div>
+
+							<!-- 重置按钮 -->
+							<button
+								class="w-full rounded bg-white/10 px-2 py-1.5 text-xs text-white hover:bg-white/20"
+								onclick={resetFilters}
+							>
+								<RefreshCw class="mr-1 inline h-3 w-3" />
+								重置滤镜
+							</button>
+						</div>
+					{/if}
+				</div>
 
 				<!-- 字幕状态/选择 -->
 				<div class="relative">

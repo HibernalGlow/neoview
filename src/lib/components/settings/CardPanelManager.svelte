@@ -91,7 +91,6 @@
 		} else {
 			// 移动到某个面板
 			cardConfigStore.setCardVisible(card.panelId, card.id, true);
-			// TODO: 如果需要跨面板移动卡片，这里添加逻辑
 		}
 
 		draggedCard = null;

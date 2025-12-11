@@ -118,9 +118,10 @@ function handleDelete(e: MouseEvent) {
 	onDelete?.(item);
 }
 
-function handleOpenExternal(e: MouseEvent) {
+async function handleOpenExternal(e: MouseEvent) {
 	e.stopPropagation();
-	// TODO: 实现外部程序打开
+	const { open } = await import('@tauri-apps/plugin-shell');
+	await open(item.path);
 }
 
 function handleKeyDown(e: KeyboardEvent) {

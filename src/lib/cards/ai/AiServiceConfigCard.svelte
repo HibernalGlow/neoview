@@ -49,8 +49,7 @@ async function fetchOllamaStats() {
 	if (!ollamaOnline) return;
 	loadingStats = true;
 	try {
-		// TODO: 添加 ollama_get_ps 命令支持
-		// 暂时禁用，因为 ps 接口不常用
+		// ollama_get_ps 命令暂未实现，ps 接口不常用
 		ollamaStats = [];
 	} catch {
 		ollamaStats = null;

@@ -52,7 +52,6 @@
 
 	// 切换全屏
 	function handleToggleFullscreen() {
-		// TODO: 调用 Tauri API 切换全屏
 		toggleFullscreen();
 	}
 </script>

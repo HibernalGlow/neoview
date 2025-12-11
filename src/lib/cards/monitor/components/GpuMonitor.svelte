@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
 	 * GPU 监控组件
-	 * TODO: 需要后端支持 GPU 监控
+	 * 注：GPU 监控需要后端 sysinfo 扩展支持，当前显示占位信息
 	 */
 	import { Cpu } from '@lucide/svelte';
 </script>

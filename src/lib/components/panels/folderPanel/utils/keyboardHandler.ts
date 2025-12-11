@@ -36,13 +36,10 @@ export function createKeyboardHandler(getOptions: () => KeyboardHandlerOptions) 
 
 		switch (e.key) {
 			case 'ArrowDown':
-				e.preventDefault();
-				// TODO: 实现向下导航
-				break;
-
 			case 'ArrowUp':
+				// 键盘导航需要在 FolderPanel 中通过 onSelectItem 回调实现
+				// 当前版本暂不支持，可通过鼠标点击选择项目
 				e.preventDefault();
-				// TODO: 实现向上导航
 				break;
 
 			case 'Enter':

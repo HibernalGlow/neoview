@@ -36,10 +36,10 @@
 	}
 
 	// 跳转到指定页
-	function goToPage(index: number) {
+	async function goToPage(index: number) {
 		currentPage = index;
-		// TODO: 发送事件切换页面
-		console.log('跳转到页面', index);
+		const { bookStore } = await import('$lib/stores/book.svelte');
+		bookStore.goToPage(index);
 	}
 
 	// 自动滚动到当前页

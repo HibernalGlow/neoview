@@ -225,7 +225,7 @@
 			diskFree={stats.disk_free_bytes}
 		/>
 
-		<!-- GPU 监控 (TODO: 需要后端支持) -->
+		<!-- GPU 监控 (需要后端 sysinfo 扩展支持) -->
 		<GpuMonitor />
 	{:else}
 		<div class="text-muted-foreground py-8 text-center">

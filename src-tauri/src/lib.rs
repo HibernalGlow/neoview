@@ -389,6 +389,10 @@ pub fn run() {
             commands::load_ai_translation,
             commands::batch_load_ai_translations,
             commands::get_ai_translation_count,
+            // Manual Tags 命令
+            commands::update_manual_tags,
+            commands::get_manual_tags,
+            commands::batch_get_manual_tags,
             commands::get_video_duration,
             commands::is_video_file,
             commands::load_video,

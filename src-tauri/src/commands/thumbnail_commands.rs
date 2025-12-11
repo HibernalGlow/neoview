@@ -1384,3 +1384,40 @@ pub async fn get_ai_translation_count(
     state.db.get_ai_translation_count()
         .map_err(|e| format!("获取 AI 翻译数量失败: {}", e))
 }
+
+// ==================== Manual Tags 命令 ====================
+
+/// 更新单个记录的手动标签
+/// manual_tags_json 格式: [{ namespace: string, tag: string, timestamp: number }]
+#[tauri::command]
+pub async fn update_manual_tags(
+    app: tauri::AppHandle,
+    key: String,
+    manual_tags_json: Option<String>,
+) -> Result<(), String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.update_manual_tags(&key, manual_tags_json.as_deref())
+        .map_err(|e| format!("更新手动标签失败: {}", e))
+}
+
+/// 获取单个记录的手动标签
+#[tauri::command]
+pub async fn get_manual_tags(
+    app: tauri::AppHandle,
+    key: String,
+) -> Result<Option<String>, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.get_manual_tags(&key)
+        .map_err(|e| format!("获取手动标签失败: {}", e))
+}
+
+/// 批量获取手动标签
+#[tauri::command]
+pub async fn batch_get_manual_tags(
+    app: tauri::AppHandle,
+    keys: Vec<String>,
+) -> Result<HashMap<String, Option<String>>, String> {
+    let state = app.state::<ThumbnailState>();
+    state.db.batch_get_manual_tags(&keys)
+        .map_err(|e| format!("批量获取手动标签失败: {}", e))
+}

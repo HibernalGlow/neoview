@@ -97,6 +97,7 @@ impl ThumbnailDb {
 
         // 创建缩略图表（包含所有字段，新数据库直接创建完整表）
         // rating_data: JSON 格式存储评分信息 { value: number, source: 'emm'|'manual'|'calculated', timestamp: number }
+        // manual_tags: JSON 格式存储手动标签 [{ namespace: string, tag: string, timestamp: number }]
         conn.execute(
             "CREATE TABLE IF NOT EXISTS thumbs (
                 key TEXT NOT NULL PRIMARY KEY,
@@ -107,7 +108,8 @@ impl ThumbnailDb {
                 value BLOB,
                 emm_json TEXT,
                 rating_data TEXT,
-                ai_translation TEXT
+                ai_translation TEXT,
+                manual_tags TEXT
             )",
             [],
         )?;
@@ -236,6 +238,14 @@ impl ThumbnailDb {
             conn.execute("ALTER TABLE thumbs ADD COLUMN ai_translation TEXT", [])?;
             messages.push("添加 ai_translation 列");
             println!("✅ 添加 ai_translation 列");
+        }
+
+        // 检查 manual_tags 列是否存在 (v2.4)
+        let has_manual_tags: bool = conn.prepare("SELECT manual_tags FROM thumbs LIMIT 1").is_ok();
+        if !has_manual_tags {
+            conn.execute("ALTER TABLE thumbs ADD COLUMN manual_tags TEXT", [])?;
+            messages.push("添加 manual_tags 列");
+            println!("✅ 添加 manual_tags 列");
         }
 
         // 从 emm_json 中提取 rating 并填充到 rating_data（每次迁移都执行）
@@ -1162,6 +1172,65 @@ impl ThumbnailDb {
 
         println!("[ThumbnailDB] batch_save_emm_with_rating_data: 保存 {} 条记录", count);
         Ok(count)
+    }
+
+    // ==================== Manual Tags 读写方法 ====================
+
+    /// 更新单个记录的 manual_tags（JSON 格式）
+    /// manual_tags 格式: [{ namespace: string, tag: string, timestamp: number }]
+    pub fn update_manual_tags(&self, key: &str, manual_tags: Option<&str>) -> SqliteResult<()> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        conn.execute(
+            "UPDATE thumbs SET manual_tags = ?2 WHERE key = ?1",
+            params![key, manual_tags],
+        )?;
+
+        Ok(())
+    }
+
+    /// 获取单个记录的 manual_tags
+    pub fn get_manual_tags(&self, key: &str) -> SqliteResult<Option<String>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut stmt = conn.prepare("SELECT manual_tags FROM thumbs WHERE key = ?1")?;
+        let result: Option<String> = stmt.query_row(params![key], |row| row.get(0)).ok();
+
+        Ok(result)
+    }
+
+    /// 批量获取 manual_tags
+    pub fn batch_get_manual_tags(&self, keys: &[String]) -> SqliteResult<HashMap<String, Option<String>>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut results = HashMap::new();
+        if keys.is_empty() {
+            return Ok(results);
+        }
+
+        let placeholders: String = keys.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let query = format!(
+            "SELECT key, manual_tags FROM thumbs WHERE key IN ({})",
+            placeholders
+        );
+
+        let mut stmt = conn.prepare(&query)?;
+        let params: Vec<&dyn rusqlite::ToSql> = keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
+        let mut rows = stmt.query(params.as_slice())?;
+
+        while let Some(row) = rows.next()? {
+            let key: String = row.get(0)?;
+            let manual_tags: Option<String> = row.get(1)?;
+            results.insert(key, manual_tags);
+        }
+
+        Ok(results)
     }
 
     // ==================== 数据库维护方法 ====================

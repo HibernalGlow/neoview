@@ -4,6 +4,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { getStartupConfig } from '$lib/config/startupConfig';
 import { settingsManager } from './settingsManager.svelte';
 import { settingsManager as coreSettingsManager } from '$lib/settings/settingsManager';
 
@@ -54,11 +55,49 @@ class AutoBackupStore {
     private timer: number | null = null;
     private isBackingUp = $state(false);
     private lastError = $state<string | null>(null);
+    private initialized = false;
 
     constructor() {
-        // 初始化时启动定时器
+        // 初始化时启动定时器和默认路径
         if (typeof window !== 'undefined') {
+            this.initializeDefaultPath();
             this.startScheduler();
+        }
+    }
+
+    /**
+     * 初始化默认备份路径
+     */
+    private async initializeDefaultPath() {
+        if (this.initialized) return;
+        this.initialized = true;
+
+        // 如果没有设置备份路径，使用默认路径
+        if (!this.settings.backupPath) {
+            try {
+                const config = await getStartupConfig();
+                const cacheDir = config.cacheDir || '';
+                
+                if (!cacheDir) {
+                    console.warn('[AutoBackup] 未配置 cacheDir，无法设置默认备份路径');
+                    return;
+                }
+                
+                const defaultPath = `${cacheDir}/backups`;
+                
+                // 尝试创建目录
+                try {
+                    await invoke('create_directory', { path: defaultPath });
+                } catch {
+                    // 目录可能已存在，忽略错误
+                }
+                
+                this.settings = { ...this.settings, backupPath: defaultPath };
+                this.saveSettings();
+                console.log('[AutoBackup] 默认备份路径:', defaultPath);
+            } catch (e) {
+                console.error('[AutoBackup] 初始化默认路径失败:', e);
+            }
         }
     }
 

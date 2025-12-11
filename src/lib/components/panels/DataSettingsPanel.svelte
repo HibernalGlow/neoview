@@ -1,10 +1,11 @@
 <script lang="ts">
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
-	import { Database, Download, Upload, ListFilter, RefreshCcw } from '@lucide/svelte';
+	import { Database, Download, Upload, ListFilter, RefreshCcw, HardDrive, Cloud, Settings2 } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
 	import { Input } from '$lib/components/ui/input';
+	import * as Tabs from '$lib/components/ui/tabs';
 	import {
 		DropdownMenu,
 		DropdownMenuCheckboxItem,
@@ -31,6 +32,9 @@
 	import { getPerformanceSettings } from '$lib/api/performance';
 	import StartupConfigPanel from './StartupConfigPanel.svelte';
 	import GistSyncPanel from './GistSyncPanel.svelte';
+	import BackupSettingsPanel from '$lib/components/settings/BackupSettingsPanel.svelte';
+
+	let activeTab = $state('modules');
 
 	type ModuleId =
 		| 'nativeSettings'
@@ -501,17 +505,38 @@
 	}
 </script>
 
-<div class="space-y-6 p-6">
+<div class="space-y-4 p-6">
 	<div class="space-y-2">
 		<h3 class="flex items-center gap-2 text-lg font-semibold">
 			<Database class="h-5 w-5" />
 			数据与备份
 		</h3>
 		<p class="text-muted-foreground text-sm">
-			以模块为单位导出 / 导入 NeoView 的配置数据。可以精确控制原生设置、书签、布局、自定义主题等。
+			管理应用数据的导入导出、自动备份和云同步。
 		</p>
 	</div>
 
+	<Tabs.Root bind:value={activeTab} class="w-full">
+		<Tabs.List class="grid w-full grid-cols-4">
+			<Tabs.Trigger value="modules" class="gap-1.5 text-xs">
+				<Database class="h-3.5 w-3.5" />
+				数据模块
+			</Tabs.Trigger>
+			<Tabs.Trigger value="backup" class="gap-1.5 text-xs">
+				<HardDrive class="h-3.5 w-3.5" />
+				自动备份
+			</Tabs.Trigger>
+			<Tabs.Trigger value="cloud" class="gap-1.5 text-xs">
+				<Cloud class="h-3.5 w-3.5" />
+				云同步
+			</Tabs.Trigger>
+			<Tabs.Trigger value="startup" class="gap-1.5 text-xs">
+				<Settings2 class="h-3.5 w-3.5" />
+				启动配置
+			</Tabs.Trigger>
+		</Tabs.List>
+
+		<Tabs.Content value="modules" class="mt-4">
 	<div class="space-y-4">
 		<div class="flex items-center gap-3 py-1">
 			<div class="flex items-center gap-2 text-sm text-muted-foreground">
@@ -742,10 +767,18 @@
 	{#if lastMessage}
 		<p class="mt-2 text-xs text-muted-foreground">{lastMessage}</p>
 	{/if}
+</Tabs.Content>
 
-	<!-- 启动配置 -->
-	<StartupConfigPanel />
+		<Tabs.Content value="backup" class="mt-4">
+			<BackupSettingsPanel />
+		</Tabs.Content>
 
-	<!-- GitHub Gist 同步 -->
-	<GistSyncPanel />
+		<Tabs.Content value="cloud" class="mt-4">
+			<GistSyncPanel />
+		</Tabs.Content>
+
+		<Tabs.Content value="startup" class="mt-4">
+			<StartupConfigPanel />
+		</Tabs.Content>
+	</Tabs.Root>
 </div>

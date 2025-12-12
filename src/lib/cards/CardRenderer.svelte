@@ -73,6 +73,7 @@
 		aiTitleTranslation: () => import('./ai/AiTitleTranslationCard.svelte'),
 		aiServiceConfig: () => import('./ai/AiServiceConfigCard.svelte'),
 		aiTranslationCache: () => import('./ai/AiTranslationCacheCard.svelte'),
+		aiTranslationTest: () => import('./ai/AiTranslationTestCard.svelte'),
 		voiceControl: () => import('./ai/VoiceControlCard.svelte')
 	};
 

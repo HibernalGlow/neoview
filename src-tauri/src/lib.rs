@@ -152,6 +152,11 @@ pub fn run() {
             tray::init_tray(app.handle())?;
             log::info!("📌 系统托盘初始化完成");
 
+            // 初始化尺寸扫描器状态
+            let dimension_cache_path = app_data_root.join("dimension_cache.json");
+            app.manage(core::DimensionScannerState::new(dimension_cache_path));
+            log::info!("📐 尺寸扫描器初始化完成");
+
             Ok(())
         })
         .manage(Mutex::new(BookManager::new()))

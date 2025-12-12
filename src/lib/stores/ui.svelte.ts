@@ -645,40 +645,32 @@ function getPageStep(): number {
 	const currentPage = book.pages[currentIndex];
 	if (!currentPage) return 1;
 	
-	// 获取当前页尺寸
+	// 获取当前页尺寸（优先使用预加载的尺寸）
 	const currentDims = getPageDimensions(book, currentIndex);
 	const isCurrentLandscape = currentDims ? currentDims.width > currentDims.height : false;
 	
-	console.log(`📐 getPageStep: 当前页 ${currentIndex} 尺寸=${currentDims ? `${currentDims.width}x${currentDims.height}` : 'N/A'} 横向=${isCurrentLandscape}`);
-	
 	// 1. 当前页横向 → 步进 1（当前页独占显示）
 	if (treatHorizontalAsDoublePage && isCurrentLandscape) {
-		console.log(`📐 getPageStep: 当前页 ${currentIndex} 是横向，步进 1`);
 		return 1;
 	}
 	
 	// 2. 获取下一页（用于判断当前帧是否为双页）
 	const nextIndex = currentIndex + 1;
 	if (nextIndex >= book.pages.length) {
-		console.log(`📐 getPageStep: 没有下一页，步进 1`);
 		return 1;
 	}
 	
 	const nextPage = book.pages[nextIndex];
 	if (!nextPage) {
-		console.log(`📐 getPageStep: 下一页数据不存在，步进 1`);
 		return 1;
 	}
 	
-	// 获取下一页尺寸
+	// 获取下一页尺寸（优先使用预加载的尺寸）
 	const nextDims = getPageDimensions(book, nextIndex);
 	const isNextLandscape = nextDims ? nextDims.width > nextDims.height : false;
 	
-	console.log(`📐 getPageStep: 下一页 ${nextIndex} 尺寸=${nextDims ? `${nextDims.width}x${nextDims.height}` : 'N/A'} 横向=${isNextLandscape}`);
-	
 	// 3. 下一页横向 → 步进 1（当前页独占，下一页将独占）
 	if (treatHorizontalAsDoublePage && isNextLandscape) {
-		console.log(`📐 getPageStep: 下一页 ${nextIndex} 是横向，当前页独占，步进 1`);
 		return 1;
 	}
 	
@@ -688,12 +680,10 @@ function getPageStep(): number {
 	const isLast = currentIndex === totalPages - 1 || nextIndex === totalPages - 1;
 	
 	if ((singleFirstPage && isFirst) || (singleLastPage && isLast)) {
-		console.log(`📐 getPageStep: 首页/尾页单独显示，步进 1`);
 		return 1;
 	}
 	
 	// 5. 两张竖屏图片 → 步进 2（正常双页）
-	console.log(`📐 getPageStep: 正常双页 ${currentIndex}-${nextIndex}，步进 2`);
 	return 2;
 }
 

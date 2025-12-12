@@ -349,6 +349,39 @@ class BookStore {
   }
 
   /**
+   * 批量更新页面尺寸（用于后台扫描结果）
+   */
+  updatePageDimensionsBatch(updates: Array<{ pageIndex: number; width: number; height: number }>) {
+    const book = this.state.currentBook;
+    if (!book || !Array.isArray(book.pages)) return;
+
+    let currentPageUpdated = false;
+
+    for (const update of updates) {
+      const { pageIndex, width, height } = update;
+      if (pageIndex < 0 || pageIndex >= book.pages.length) continue;
+
+      const page = book.pages[pageIndex];
+      if (!page) continue;
+
+      if (width > 0 && page.width !== width) {
+        page.width = width;
+      }
+      if (height > 0 && page.height !== height) {
+        page.height = height;
+      }
+
+      if (pageIndex === book.currentPage) {
+        currentPageUpdated = true;
+      }
+    }
+
+    if (currentPageUpdated) {
+      void this.syncInfoPanelBookInfo();
+    }
+  }
+
+  /**
    * 翻到指定页
    */
   async navigateToPage(index: number) {

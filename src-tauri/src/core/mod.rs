@@ -37,8 +37,12 @@ pub mod video_exts;
 pub mod video_thumbnail;
 pub mod wic_decoder;
 pub mod directory_stream;
+pub mod dimension_cache;
+pub mod dimension_scanner;
 
 pub use book_manager::BookManager;
+pub use dimension_cache::DimensionCache;
+pub use dimension_scanner::{DimensionScanner, DimensionScannerState, ScanResult};
 pub use image_loader::ImageLoader;
 // ImageCache 仅供内部使用
 pub use archive::ArchiveManager;

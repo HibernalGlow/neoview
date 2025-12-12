@@ -51,6 +51,11 @@
 		initThumbnailServiceV3,
 		cleanup as cleanupThumbnailService
 	} from '$lib/stores/thumbnailStoreV3.svelte';
+	// 页面尺寸扫描事件监听
+	import {
+		initDimensionScanListener,
+		cleanupDimensionScanListener
+	} from '$lib/stores/dimensionScanListener';
 	import Toast from '$lib/components/ui/toast.svelte';
 	import GlobalConfirmDialog from '$lib/components/ui/GlobalConfirmDialog.svelte';
 	import { confirm as confirmDialog } from '$lib/stores/confirmDialog.svelte';
@@ -250,6 +255,14 @@
 			console.error('❌ 缩略图初始化失败:', error);
 		}
 
+		// 初始化页面尺寸扫描事件监听
+		try {
+			await initDimensionScanListener();
+			console.log('✅ 尺寸扫描监听器初始化成功');
+		} catch (error) {
+			console.error('❌ 尺寸扫描监听器初始化失败:', error);
+		}
+
 		// CLI 启动参数处理（类似 NeeView 的 FirstLoader）
 		try {
 			const matches = await getMatches();
@@ -294,6 +307,8 @@
 		}
 		// 清理全屏状态同步监听器（Requirements: 4.1）
 		windowManager.cleanupFullscreenSync();
+		// 清理尺寸扫描监听器
+		cleanupDimensionScanListener();
 	});
 
 	async function handleOpenFolder() {

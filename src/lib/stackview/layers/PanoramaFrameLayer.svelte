@@ -156,13 +156,23 @@
     return `max-width: ${effectiveWidth}px; max-height: ${vp.height}px;`;
   }
   
-  // 单页模式的图片样式（保持原有逻辑）
+  // 单页模式的图片样式
+  // 全景模式下图片应该铺满：
+  // - 水平全景：高度铺满视口，宽度自适应
+  // - 垂直全景：宽度铺满视口，高度自适应
   let singleImageStyle = $derived.by(() => {
     const vp = viewportSize;
     if (!vp.width || !vp.height) {
       return 'max-width: 100%; max-height: 100%;';
     }
-    return `max-width: ${vp.width}px; max-height: ${vp.height}px;`;
+    
+    if (orientation === 'vertical') {
+      // 垂直全景：宽度铺满，高度自适应
+      return `width: ${vp.width}px; height: auto; max-width: none; max-height: none;`;
+    } else {
+      // 水平全景：高度铺满，宽度自适应
+      return `width: auto; height: ${vp.height}px; max-width: none; max-height: none;`;
+    }
   });
   
   // 【性能优化】原生滚动方案，不再使用 transform-origin
@@ -279,14 +289,16 @@
     scroll-snap-align: center;
   }
   
-  /* 水平全景：单元高度100% */
+  /* 水平全景：单元高度铺满视口 */
   .panorama-frame-layer:not(.vertical) .panorama-unit {
     height: 100%;
+    min-height: 100%;
   }
   
-  /* 垂直全景：单元宽度100% */
+  /* 垂直全景：单元宽度铺满视口 */
   .panorama-frame-layer.vertical .panorama-unit {
     width: 100%;
+    min-width: 100%;
   }
   
   /* 双页模式：单元内图片并排 */
@@ -299,23 +311,24 @@
   }
   
   .panorama-image {
-    max-width: 100%;
-    max-height: 100%;
     object-fit: contain;
     user-select: none;
     -webkit-user-drag: none;
+    flex-shrink: 0;
   }
   
-  /* 水平全景：图片高度适应 */
+  /* 水平全景：图片高度铺满视口 */
   .panorama-frame-layer:not(.vertical) .panorama-image {
     height: 100%;
     width: auto;
+    max-height: none;
   }
   
-  /* 垂直全景：图片宽度适应 */
+  /* 垂直全景：图片宽度铺满视口 */
   .panorama-frame-layer.vertical .panorama-image {
     width: 100%;
     height: auto;
+    max-width: none;
   }
   
   /* 双页模式：每张图最多占50%宽度 */

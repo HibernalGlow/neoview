@@ -79,9 +79,12 @@ export function createPanoramaStore() {
     const step = pageMode === 'double' ? 2 : 1;
     const range = state.preloadRange;
     
-    // 计算新的范围
-    const newStartUnit = Math.max(0, Math.floor(centerIndex / step) - range);
-    const newEndUnit = Math.min(Math.ceil(totalPages / step) - 1, Math.floor(centerIndex / step) + range);
+    // 计算以 centerIndex 为中心的新范围
+    const centerUnit = Math.floor(centerIndex / step);
+    const newStartUnit = Math.max(0, centerUnit - range);
+    const newEndUnit = Math.min(Math.ceil(totalPages / step) - 1, centerUnit + range);
+    
+    console.log(`🎯 loadPanorama: centerIndex=${centerIndex}, centerUnit=${centerUnit}, newRange=[${newStartUnit}, ${newEndUnit}], lastRange=[${lastBuildParams.start}, ${lastBuildParams.end}]`);
     
     // 如果 pageMode 变化，重置
     if (lastBuildParams.pageMode !== pageMode) {
@@ -97,34 +100,23 @@ export function createPanoramaStore() {
       startUnit = newStartUnit;
       endUnit = newEndUnit;
     } else {
-      // 扩展范围：取并集
+      // 扩展范围：取并集，确保新范围被包含
       startUnit = Math.min(lastBuildParams.start, newStartUnit);
       endUnit = Math.max(lastBuildParams.end, newEndUnit);
     }
     
-    // 检查是否需要加载新内容
-    const needsExpansion = startUnit < lastBuildParams.start || 
-                           endUnit > lastBuildParams.end ||
-                           lastBuildParams.start === -1;
-    
-    if (!needsExpansion) {
-      // 范围没有扩展，只更新中心索引
-      state.centerIndex = centerIndex;
-      return;
-    }
-    
     state.centerIndex = centerIndex;
     
-    // 先用已缓存的构建单元（即时显示）
-    const cachedUnits: PanoramaUnit[] = [];
+    // 检查范围是否有变化
+    const rangeChanged = startUnit !== lastBuildParams.start || endUnit !== lastBuildParams.end;
+    
+    // 构建所有单元，收集缺失的页面
     const missingPages: number[] = [];
     
     for (let unitIdx = startUnit; unitIdx <= endUnit; unitIdx++) {
       const startPageIndex = unitIdx * step;
       const unit = buildUnit(startPageIndex, pageMode, totalPages);
-      if (unit && unit.images.length > 0) {
-        cachedUnits.push(unit);
-      } else {
+      if (!unit || unit.images.length === 0) {
         // 记录缺失的页面
         missingPages.push(startPageIndex);
         if (pageMode === 'double' && startPageIndex + 1 < totalPages) {
@@ -133,17 +125,15 @@ export function createPanoramaStore() {
       }
     }
     
-    // 即时显示已缓存的
-    if (cachedUnits.length > 0) {
-      state.units = cachedUnits;
-    }
-    
     // 如果有缺失，异步加载
     if (missingPages.length > 0) {
       state.loading = true;
       await imagePool.preload(missingPages);
-      
-      // 重新构建所有单元
+      state.loading = false;
+    }
+    
+    // 范围有变化或有新加载的页面时，重新构建所有单元
+    if (rangeChanged || missingPages.length > 0) {
       const newUnits: PanoramaUnit[] = [];
       for (let unitIdx = startUnit; unitIdx <= endUnit; unitIdx++) {
         const startPageIndex = unitIdx * step;
@@ -153,7 +143,6 @@ export function createPanoramaStore() {
         }
       }
       state.units = newUnits;
-      state.loading = false;
     }
     
     // 更新已加载范围

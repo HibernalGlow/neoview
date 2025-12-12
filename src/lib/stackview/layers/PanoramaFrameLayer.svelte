@@ -58,6 +58,11 @@
         const visibleUnit = units[visibleUnitIndex];
         // 更新本地页码（这会触发现有的预加载系统）
         bookStore.setCurrentPageIndexLocal(visibleUnit.startIndex);
+        
+        // 调试日志
+        const firstPage = units[0].startIndex;
+        const lastPage = units[units.length - 1].startIndex;
+        console.log(`📜 滚动状态: visibleIdx=${visibleUnitIndex}, pageIdx=${visibleUnit.startIndex}, range=[${firstPage}, ${lastPage}], direction=${direction}, totalUnits=${units.length}`);
       }
       
       // 检测是否接近边缘，需要加载更多
@@ -102,40 +107,53 @@
     return closestIndex;
   }
   
-  // 检测是否接近边缘（基于当前可见单元在 units 数组中的位置）
+  // 检测是否接近边缘，需要加载更多页面
+  // 使用数组索引检测视觉边缘，然后根据方向决定加载哪个方向的页码
   function checkNearEdge(): { needsPreload: boolean; targetPageIndex: number; nearEnd: boolean; nearStart: boolean } {
     if (!containerRef || units.length === 0) {
       return { needsPreload: false, targetPageIndex: 0, nearEnd: false, nearStart: false };
     }
     
-    // 获取当前可见的单元索引
     const visibleUnitIndex = calculateVisibleUnitIndex();
     const step = pageMode === 'double' ? 2 : 1;
+    const totalPages = bookStore.totalPages;
     
-    // 检查是否接近末尾（最后 2 个单元）
-    const nearEnd = visibleUnitIndex >= units.length - 2;
-    // 检查是否接近开头（前 2 个单元）
-    const nearStart = visibleUnitIndex <= 1;
-    
-    if (nearEnd) {
-      // 接近末尾，预加载后面的页面
-      const lastUnit = units[units.length - 1];
-      const targetPageIndex = lastUnit.startIndex + step;
-      // 检查是否还有更多页面可以加载
-      const totalPages = bookStore.totalPages;
-      if (targetPageIndex < totalPages) {
-        return { needsPreload: true, targetPageIndex, nearEnd: true, nearStart: false };
-      }
+    // 获取当前可见单元的页码
+    const visibleUnit = units[visibleUnitIndex];
+    if (!visibleUnit) {
+      return { needsPreload: false, targetPageIndex: 0, nearEnd: false, nearStart: false };
     }
     
-    if (nearStart) {
-      // 接近开头，预加载前面的页面
-      const firstUnit = units[0];
-      const targetPageIndex = Math.max(0, firstUnit.startIndex - step);
-      // 检查是否还有更多页面可以加载
-      if (firstUnit.startIndex > 0) {
-        return { needsPreload: true, targetPageIndex, nearEnd: false, nearStart: true };
-      }
+    const firstLoadedPage = units[0].startIndex;
+    const lastLoadedPage = units[units.length - 1].startIndex;
+    
+    // 使用数组索引检测视觉边缘（与方向无关）
+    const preloadThreshold = 3; // 距离数组边缘 3 个单元时触发
+    const nearArrayEnd = visibleUnitIndex >= units.length - preloadThreshold;
+    const nearArrayStart = visibleUnitIndex < preloadThreshold;
+    
+    // RTL 模式下：
+    // - 数组开头（索引小）= 视觉右边 = 低页码
+    // - 数组末尾（索引大）= 视觉左边 = 高页码
+    // LTR 模式下：
+    // - 数组开头（索引小）= 视觉左边 = 低页码
+    // - 数组末尾（索引大）= 视觉右边 = 高页码
+    
+    // 无论 LTR 还是 RTL，数组末尾总是对应高页码，数组开头总是对应低页码
+    // 因为 units 数组是按页码排序的
+    
+    // 接近数组末尾 = 需要加载更高页码
+    if (nearArrayEnd && lastLoadedPage + step < totalPages) {
+      const targetPageIndex = lastLoadedPage + step;
+      console.log(`📍 边缘检测: 接近数组末尾(高页码), visibleIdx=${visibleUnitIndex}, lastLoaded=${lastLoadedPage}, target=${targetPageIndex}, direction=${direction}`);
+      return { needsPreload: true, targetPageIndex, nearEnd: true, nearStart: false };
+    }
+    
+    // 接近数组开头 = 需要加载更低页码
+    if (nearArrayStart && firstLoadedPage > 0) {
+      const targetPageIndex = Math.max(0, firstLoadedPage - step);
+      console.log(`📍 边缘检测: 接近数组开头(低页码), visibleIdx=${visibleUnitIndex}, firstLoaded=${firstLoadedPage}, target=${targetPageIndex}, direction=${direction}`);
+      return { needsPreload: true, targetPageIndex, nearEnd: false, nearStart: true };
     }
     
     return { needsPreload: false, targetPageIndex: 0, nearEnd: false, nearStart: false };

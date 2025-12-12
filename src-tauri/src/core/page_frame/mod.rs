@@ -18,6 +18,7 @@ mod builder;
 mod calculator;
 mod context;
 mod error;
+mod stretch;
 
 pub use position::PagePosition;
 pub use range::PageRange;
@@ -28,6 +29,7 @@ pub use builder::PageFrameBuilder;
 pub use calculator::{ContentSizeCalculator, StretchMode, AutoRotateType};
 pub use context::PageFrameContext;
 pub use error::{PageFrameError, PageFrameResult, PageFrameErrorInfo};
+pub use stretch::{WidePageStretch, ContentScaleCalculator as WidePageScaleCalculator};
 
 /// 页面模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

@@ -19,6 +19,9 @@ export type AutoRotateMode = 'none' | 'left' | 'right' | 'horizontalLeft' | 'hor
 /** 渲染器模式：standard = 标准单图替换，stack = 层叠预加载 */
 export type RendererMode = 'standard' | 'stack';
 
+/** 宽页拉伸模式：双页模式下不同尺寸图片的对齐方式 */
+export type WidePageStretch = 'none' | 'uniformHeight' | 'uniformWidth';
+
 export interface NeoViewSettings {
   system: {
     language: string;
@@ -74,6 +77,8 @@ export interface NeoViewSettings {
       treatHorizontalAsDoublePage: boolean;
       singleFirstPageMode: BookSettingSelectMode;
       singleLastPageMode: BookSettingSelectMode;
+      /** 宽页拉伸模式（双页模式下的对齐方式） */
+      widePageStretch: WidePageStretch;
     };
     autoRotate: {
       mode: AutoRotateMode;
@@ -288,7 +293,8 @@ const defaultSettings: NeoViewSettings = {
       splitHorizontalPages: false,
       treatHorizontalAsDoublePage: false,
       singleFirstPageMode: 'restoreOrDefault',
-      singleLastPageMode: 'restoreOrDefault'
+      singleLastPageMode: 'restoreOrDefault',
+      widePageStretch: 'uniformHeight'
     },
     autoRotate: {
       mode: 'none'
@@ -593,7 +599,8 @@ export class SettingsManager {
       treatHorizontalAsDoublePage:
         layout.treatHorizontalAsDoublePage ?? defaultSettings.view.pageLayout.treatHorizontalAsDoublePage,
       singleFirstPageMode: layout.singleFirstPageMode ?? defaultSettings.view.pageLayout.singleFirstPageMode,
-      singleLastPageMode: layout.singleLastPageMode ?? defaultSettings.view.pageLayout.singleLastPageMode
+      singleLastPageMode: layout.singleLastPageMode ?? defaultSettings.view.pageLayout.singleLastPageMode,
+      widePageStretch: layout.widePageStretch ?? defaultSettings.view.pageLayout.widePageStretch
     };
 
     if (!this.settings.view.notification) {

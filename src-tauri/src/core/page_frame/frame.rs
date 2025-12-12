@@ -1,7 +1,7 @@
 //! PageFrame - 页面帧
 //! 当前显示的内容单位，可包含 1-2 个 PageFrameElement
 
-use super::{PageFrameElement, PageRange, ReadOrder, Size};
+use super::{PageFrameElement, PageRange, ReadOrder, Size, WidePageStretch, WidePageScaleCalculator};
 use serde::{Deserialize, Serialize};
 
 /// 页面帧
@@ -73,21 +73,32 @@ impl PageFrame {
         }
     }
 
-    /// 创建带高度对齐的双页帧
+    /// 创建带对齐的双页帧
     /// 
-    /// 两个元素会缩放到相同高度
-    pub fn double_aligned(mut e1: PageFrameElement, mut e2: PageFrameElement, direction: i32) -> Self {
-        // 计算缩放比例使两页高度一致
-        let h1 = e1.raw_size().height;
-        let h2 = e2.raw_size().height;
-        let max_height = h1.max(h2);
-
-        if max_height > 0.0 {
-            e1.scale = max_height / h1;
-            e2.scale = max_height / h2;
+    /// 根据 `WidePageStretch` 模式缩放两个元素
+    pub fn double_aligned(
+        mut e1: PageFrameElement, 
+        mut e2: PageFrameElement, 
+        direction: i32,
+        stretch_mode: WidePageStretch,
+    ) -> Self {
+        // 使用 `WidePageScaleCalculator` 计算各元素的缩放比例
+        let sizes = vec![e1.raw_size(), e2.raw_size()];
+        let scales = WidePageScaleCalculator::calculate(&sizes, stretch_mode);
+        
+        if scales.len() >= 2 {
+            e1.scale = scales[0];
+            e2.scale = scales[1];
         }
 
         Self::double(e1, e2, direction)
+    }
+    
+    /// 创建带高度对齐的双页帧（便捷方法）
+    /// 
+    /// 等同于 `double_aligned` 使用 `UniformHeight` 模式
+    pub fn double_height_aligned(e1: PageFrameElement, e2: PageFrameElement, direction: i32) -> Self {
+        Self::double_aligned(e1, e2, direction, WidePageStretch::UniformHeight)
     }
 
     /// 是否为单页帧

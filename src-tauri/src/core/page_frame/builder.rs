@@ -3,7 +3,7 @@
 
 use super::{
     CropRect, Page, PageFrame, PageFrameContext, PageFrameElement, PageMode, PagePosition,
-    PageRange, ReadOrder, Size,
+    PageRange, ReadOrder, Size, WidePageStretch,
 };
 
 /// 页面帧构建器
@@ -168,7 +168,7 @@ impl PageFrameBuilder {
         let e1 = PageFrameElement::full(page, PageRange::full_page(position.index));
         let e2 = PageFrameElement::full(next_page, PageRange::full_page(next_index));
 
-        Some(PageFrame::double_aligned(e1, e2, direction))
+        Some(PageFrame::double_aligned(e1, e2, direction, self.context.wide_page_stretch))
     }
 
     /// 检查页面是否应该单独显示

@@ -1,7 +1,7 @@
 //! PageFrameContext - 页面帧上下文配置
 //! 控制页面帧的构建行为
 
-use super::{PageMode, ReadOrder, Size, AutoRotateType, StretchMode};
+use super::{PageMode, ReadOrder, Size, AutoRotateType, StretchMode, WidePageStretch};
 use serde::{Deserialize, Serialize};
 
 /// 页面帧上下文配置
@@ -35,6 +35,8 @@ pub struct PageFrameContext {
     pub stretch_mode: StretchMode,
     /// 画布尺寸
     pub canvas_size: Size,
+    /// 宽页拉伸模式（双页模式下的对齐方式）
+    pub wide_page_stretch: WidePageStretch,
 }
 
 impl PageFrameContext {
@@ -103,6 +105,12 @@ impl PageFrameContext {
         self
     }
 
+    /// 设置宽页拉伸模式
+    pub fn with_wide_page_stretch(mut self, mode: WidePageStretch) -> Self {
+        self.wide_page_stretch = mode;
+        self
+    }
+
     /// 获取方向值 (1=LTR, -1=RTL)
     pub fn direction(&self) -> i32 {
         self.read_order.direction()
@@ -142,6 +150,7 @@ impl Default for PageFrameContext {
             auto_rotate: AutoRotateType::None,
             stretch_mode: StretchMode::Uniform,
             canvas_size: Size::zero(),
+            wide_page_stretch: WidePageStretch::UniformHeight,
         }
     }
 }

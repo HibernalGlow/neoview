@@ -3,7 +3,7 @@
 
 use crate::core::page_frame::{
     PageFrame, PageFrameBuilder, PageFrameContext, PageMode, PagePosition, ReadOrder,
-    Size, StretchMode, AutoRotateType,
+    Size, StretchMode, AutoRotateType, WidePageStretch,
 };
 use crate::core::page_manager::{
     BookInfo, MemoryPoolStats, PageContentManager, PageManagerStats,
@@ -338,7 +338,7 @@ pub struct PageFrameInfo {
     pub end_index: usize,
 }
 
-/// PageFrameElement 信息
+/// `PageFrameElement` 信息
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PageFrameElementInfo {
@@ -352,6 +352,12 @@ pub struct PageFrameElementInfo {
     pub is_landscape: bool,
     /// 是否为占位元素
     pub is_dummy: bool,
+    /// 内容缩放比例（用于双页对齐）
+    pub scale: f64,
+    /// 显示宽度
+    pub width: f64,
+    /// 显示高度
+    pub height: f64,
 }
 
 /// 裁剪区域信息
@@ -396,6 +402,9 @@ impl From<&PageFrame> for PageFrameInfo {
                 }),
                 is_landscape: e.is_landscape(),
                 is_dummy: e.is_dummy,
+                scale: e.scale,
+                width: e.width(),
+                height: e.height(),
             }).collect(),
             frame_range: PageRangeInfo {
                 min_index: frame.frame_range.min.index,
@@ -415,8 +424,9 @@ impl From<&PageFrame> for PageFrameInfo {
     }
 }
 
-/// 更新 PageFrame 上下文配置
+/// 更新 `PageFrame` 上下文配置
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn pf_update_context(
     page_mode: Option<String>,
     read_order: Option<String>,
@@ -427,6 +437,7 @@ pub async fn pf_update_context(
     divide_rate: Option<f64>,
     canvas_width: Option<f64>,
     canvas_height: Option<f64>,
+    wide_page_stretch: Option<String>,
     state: State<'_, PageFrameState>,
 ) -> Result<(), String> {
     let mut ctx = state.context.lock().await;
@@ -473,12 +484,21 @@ pub async fn pf_update_context(
         ctx.canvas_size.height = h;
     }
     
+    if let Some(stretch) = wide_page_stretch {
+        ctx.wide_page_stretch = match stretch.as_str() {
+            "uniformHeight" => WidePageStretch::UniformHeight,
+            "uniformWidth" => WidePageStretch::UniformWidth,
+            _ => WidePageStretch::None,
+        };
+    }
+    
     // 更新 builder 的上下文
     if let Some(ref mut builder) = *state.builder.lock().await {
         builder.set_context(ctx.clone());
     }
     
-    log::debug!("📐 [PageFrame] 更新上下文: mode={:?}, order={:?}", ctx.page_mode, ctx.read_order);
+    log::debug!("📐 [PageFrame] 更新上下文: mode={:?}, order={:?}, stretch={:?}", 
+        ctx.page_mode, ctx.read_order, ctx.wide_page_stretch);
     
     Ok(())
 }

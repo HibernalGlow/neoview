@@ -305,6 +305,9 @@ export function revokeObjectURL(url: string): void {
 
 // ===== PageFrame API =====
 
+/** 宽页拉伸模式 */
+export type WidePageStretch = 'none' | 'uniformHeight' | 'uniformWidth';
+
 /** 页面帧元素信息 */
 export interface PageFrameElementInfo {
 	pageIndex: number;
@@ -312,6 +315,12 @@ export interface PageFrameElementInfo {
 	cropRect?: { x: number; y: number; width: number; height: number };
 	isLandscape: boolean;
 	isDummy: boolean;
+	/** 内容缩放比例（用于双页对齐） */
+	scale: number;
+	/** 显示宽度 */
+	width: number;
+	/** 显示高度 */
+	height: number;
 }
 
 /** 页面帧信息 */
@@ -342,6 +351,8 @@ export interface PageFrameContext {
 	autoRotate: 'none' | 'left' | 'right' | 'auto';
 	stretchMode: string;
 	canvasSize: { width: number; height: number };
+	/** 宽页拉伸模式（双页模式下的对齐方式） */
+	widePageStretch: WidePageStretch;
 }
 
 /**
@@ -357,6 +368,8 @@ export async function updatePageFrameContext(updates: {
 	divideRate?: number;
 	canvasWidth?: number;
 	canvasHeight?: number;
+	/** 宽页拉伸模式 */
+	widePageStretch?: WidePageStretch;
 }): Promise<void> {
 	return invoke('pf_update_context', updates);
 }

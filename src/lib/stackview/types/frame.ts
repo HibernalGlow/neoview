@@ -34,6 +34,8 @@ export interface FrameImage {
   height?: number;
   /** 是否为视频 */
   isVideo?: boolean;
+  /** 内容缩放比例（用于双页对齐） */
+  scale?: number;
 }
 
 /**

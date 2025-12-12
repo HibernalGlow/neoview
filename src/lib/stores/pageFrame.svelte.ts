@@ -35,6 +35,9 @@ export interface CropRect {
 	height: number;
 }
 
+/** 宽页拉伸模式 */
+export type WidePageStretch = 'none' | 'uniformHeight' | 'uniformWidth';
+
 /** 页面帧元素信息 */
 export interface PageFrameElementInfo {
 	pageIndex: number;
@@ -42,6 +45,12 @@ export interface PageFrameElementInfo {
 	cropRect?: CropRect;
 	isLandscape: boolean;
 	isDummy: boolean;
+	/** 内容缩放比例（用于双页对齐） */
+	scale: number;
+	/** 显示宽度 */
+	width: number;
+	/** 显示高度 */
+	height: number;
 }
 
 /** 页面范围信息 */
@@ -81,6 +90,8 @@ export interface PageFrameContext {
 	autoRotate: AutoRotateType;
 	stretchMode: StretchMode;
 	canvasSize: SizeInfo;
+	/** 宽页拉伸模式（双页模式下的对齐方式） */
+	widePageStretch: WidePageStretch;
 }
 
 /** 页面位置 */
@@ -118,7 +129,8 @@ const defaultContext: PageFrameContext = {
 	dividePageRate: 1.0,
 	autoRotate: 'none',
 	stretchMode: 'uniform',
-	canvasSize: { width: 0, height: 0 }
+	canvasSize: { width: 0, height: 0 },
+	widePageStretch: 'uniformHeight'
 };
 
 const defaultState: PageFrameState = {
@@ -158,7 +170,8 @@ function createPageFrameStore() {
 					singleLast: updates.isSupportedSingleLast,
 					divideRate: updates.dividePageRate,
 					canvasWidth: updates.canvasSize?.width,
-					canvasHeight: updates.canvasSize?.height
+					canvasHeight: updates.canvasSize?.height,
+					widePageStretch: updates.widePageStretch
 				});
 
 				// 更新本地状态
@@ -340,6 +353,11 @@ function createPageFrameStore() {
 		/** 切换分割模式 */
 		async toggleDividePage(): Promise<void> {
 			await this.setDividePage(!state.context.isSupportedDividePage);
+		},
+
+		/** 设置宽页拉伸模式 */
+		async setWidePageStretch(mode: WidePageStretch): Promise<void> {
+			await this.updateContext({ widePageStretch: mode });
 		}
 	};
 }

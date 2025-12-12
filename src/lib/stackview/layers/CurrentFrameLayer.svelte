@@ -65,76 +65,98 @@
 		return parts.length > 0 ? parts.join(' ') : 'none';
 	});
 
-	// 计算图片尺寸（用于滚动区域）
-	// 原生滚动方案：根据 zoomMode 决定填充方式
-	let imageDisplayStyle = $derived.by(() => {
-		const size = effectiveImageSize;
+	// 计算单张图片的显示样式
+	// 双页模式下，每张图片有独立的 scale（用于高度对齐）
+	function getImageDisplayStyle(img: typeof frame.images[0], _index: number): string {
+		// 使用图片自带的尺寸和 scale
+		const imgWidth = img.width ?? 0;
+		const imgHeight = img.height ?? 0;
+		const imgScale = img.scale ?? 1.0;
+		
+		// 应用 scale 后的显示尺寸
+		const displayWidth = imgWidth * imgScale;
+		const displayHeight = imgHeight * imgScale;
+		
 		let vp = viewportSize;
 		
-		if (!size.width || !size.height || !vp.width || !vp.height) {
+		if (!displayWidth || !displayHeight || !vp.width || !vp.height) {
 			// 没有尺寸信息时使用默认 contain 模式
 			return 'max-width: 100%; max-height: 100%;';
 		}
 		
-		// 双页模式：两张图片左右排列，每张最多占宽度的一半
-		const effectiveVp = layout === 'double' 
-			? { width: (vp.width - 4) / 2, height: vp.height }
-			: vp;
+		// 双页模式：计算组合后的总尺寸，然后整体适应视口
+		if (layout === 'double' && frame.images.length === 2) {
+			// 计算两张图片的总宽度和最大高度
+			const img1 = frame.images[0];
+			const img2 = frame.images[1];
+			const w1 = (img1.width ?? 0) * (img1.scale ?? 1);
+			const h1 = (img1.height ?? 0) * (img1.scale ?? 1);
+			const w2 = (img2.width ?? 0) * (img2.scale ?? 1);
+			const h2 = (img2.height ?? 0) * (img2.scale ?? 1);
+			
+			const totalWidth = w1 + w2;
+			const maxHeight = Math.max(h1, h2);
+			
+			if (totalWidth > 0 && maxHeight > 0) {
+				// 计算整体缩放比例以适应视口
+				const scaleX = vp.width / totalWidth;
+				const scaleY = vp.height / maxHeight;
+				const frameScale = Math.min(scaleX, scaleY);
+				
+				// 应用帧缩放到当前图片
+				const finalWidth = displayWidth * frameScale;
+				const finalHeight = displayHeight * frameScale;
+				
+				return `width: ${finalWidth}px; height: ${finalHeight}px;`;
+			}
+		}
 		
-		const imgAspect = size.width / size.height;
+		// 单页模式：使用原有逻辑
+		const imgAspect = displayWidth / displayHeight;
 		
 		switch (zoomMode) {
 			case 'fit':
 			case 'fitLeftAlign':
 			case 'fitRightAlign': {
-				// Fit: 图片完全适应视口（contain 模式），不滚动
-				const vpAspect = effectiveVp.width / effectiveVp.height;
+				const vpAspect = vp.width / vp.height;
 				if (imgAspect > vpAspect) {
-					// 横向图片：宽度受限，高度按比例
-					const height = effectiveVp.width / imgAspect;
-					return `width: ${effectiveVp.width}px; height: ${height}px;`;
+					const height = vp.width / imgAspect;
+					return `width: ${vp.width}px; height: ${height}px;`;
 				} else {
-					// 竖向图片：高度受限，宽度按比例
-					const width = effectiveVp.height * imgAspect;
-					return `width: ${width}px; height: ${effectiveVp.height}px;`;
+					const width = vp.height * imgAspect;
+					return `width: ${width}px; height: ${vp.height}px;`;
 				}
 			}
 			
 			case 'fill': {
-				// Fill: 图片填满视口（cover模式），可滚动查看溢出部分
-				const vpAspect = effectiveVp.width / effectiveVp.height;
+				const vpAspect = vp.width / vp.height;
 				if (imgAspect > vpAspect) {
-					// 横向图片：高度填满，宽度溢出可滚动
-					const width = effectiveVp.height * imgAspect;
-					return `width: ${width}px; height: ${effectiveVp.height}px; max-width: none; max-height: none;`;
+					const width = vp.height * imgAspect;
+					return `width: ${width}px; height: ${vp.height}px; max-width: none; max-height: none;`;
 				} else {
-					// 竖向图片：宽度填满，高度溢出可滚动
-					const height = effectiveVp.width / imgAspect;
-					return `width: ${effectiveVp.width}px; height: ${height}px; max-width: none; max-height: none;`;
+					const height = vp.width / imgAspect;
+					return `width: ${vp.width}px; height: ${height}px; max-width: none; max-height: none;`;
 				}
 			}
 			
 			case 'fitWidth': {
-				// FitWidth: 宽度填满，高度可滚动
-				const height = effectiveVp.width / imgAspect;
-				return `width: ${effectiveVp.width}px; height: ${height}px; max-width: none; max-height: none;`;
+				const height = vp.width / imgAspect;
+				return `width: ${vp.width}px; height: ${height}px; max-width: none; max-height: none;`;
 			}
 			
 			case 'fitHeight': {
-				// FitHeight: 高度填满，宽度可滚动
-				const width = effectiveVp.height * imgAspect;
-				return `width: ${width}px; height: ${effectiveVp.height}px; max-width: none; max-height: none;`;
+				const width = vp.height * imgAspect;
+				return `width: ${width}px; height: ${vp.height}px; max-width: none; max-height: none;`;
 			}
 			
 			case 'original': {
-				// Original: 原始尺寸，两个方向都可滚动
-				return `width: ${size.width}px; height: ${size.height}px; max-width: none; max-height: none;`;
+				return `width: ${displayWidth}px; height: ${displayHeight}px; max-width: none; max-height: none;`;
 			}
 			
 			default:
 				return 'max-width: 100%; max-height: 100%;';
 		}
-	});
+	}
 
 	// 图片加载完成时更新本地尺寸
 	function handleImageLoad(e: Event, index: number) {
@@ -187,7 +209,7 @@
 					alt="Current {i}"
 					transform={getImageTransform(img)}
 					clipPath={getClipPath(img.splitHalf)}
-					style={imageDisplayStyle}
+					style={getImageDisplayStyle(img, i)}
 					onload={(e) => handleImageLoad(e, i)}
 				/>
 			{/each}

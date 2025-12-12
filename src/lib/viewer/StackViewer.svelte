@@ -660,7 +660,7 @@
 
 	/* 双页模式下每张图占50%宽度 */
 	.frame-double .frame-image {
-		max-width: calc(50% - 2px);
+		max-width: 50%;
 		max-height: 100%;
 	}
 

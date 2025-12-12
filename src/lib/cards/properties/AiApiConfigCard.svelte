@@ -113,10 +113,10 @@ function handleImport() {
 		</div>
 		<div class="flex items-center gap-1">
 			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={handleImport} title="导入配置">
-				<Upload class="h-3.5 w-3.5" />
+				<Download class="h-3.5 w-3.5" />
 			</Button>
 			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={handleExport} title="导出配置" disabled={providers.length === 0}>
-				<Download class="h-3.5 w-3.5" />
+				<Upload class="h-3.5 w-3.5" />
 			</Button>
 			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={() => { showAddForm = !showAddForm; }} title="添加提供商">
 				{#if showAddForm}

@@ -87,7 +87,14 @@
 		Play,
 		Pause,
 		SquareChevronLeft,
-		SquareChevronRight
+		SquareChevronRight,
+		ArrowUp,
+		ArrowDown,
+		Shuffle,
+		Clock,
+		FileText,
+		HardDrive,
+		List
 	} from '@lucide/svelte';
 
 	import { showToast } from '$lib/utils/toast';
@@ -106,16 +113,12 @@
 	}
 
 	const viewerState = createAppStateStore((state) => state.viewer);
-	const sortModeOptions: { value: PageSortMode; label: string; description: string }[] = [
-		{ value: 'fileName', label: '文件名 ↑', description: '按文件名升序排序' },
-		{ value: 'fileNameDescending', label: '文件名 ↓', description: '按文件名降序排序' },
-		{ value: 'fileSize', label: '文件大小 ↑', description: '按文件大小升序排序' },
-		{ value: 'fileSizeDescending', label: '文件大小 ↓', description: '按文件大小降序排序' },
-		{ value: 'timeStamp', label: '修改时间 ↑', description: '按修改时间从旧到新' },
-		{ value: 'timeStampDescending', label: '修改时间 ↓', description: '按修改时间从新到旧' },
-		{ value: 'entry', label: 'Entry 顺序 ↑', description: '按原始读取顺序' },
-		{ value: 'entryDescending', label: 'Entry 顺序 ↓', description: '原始顺序反向' },
-		{ value: 'random', label: '随机顺序', description: '随机排列所有页面' }
+	const sortCategories = [
+		{ value: 'fileName', label: '文件名', icon: FileText },
+		{ value: 'fileSize', label: '文件大小', icon: HardDrive },
+		{ value: 'timeStamp', label: '修改时间', icon: Clock },
+		{ value: 'entry', label: 'Entry 顺序', icon: List },
+		{ value: 'random', label: '随机', icon: Shuffle }
 	];
 
 	const zoomModeOptions: { mode: ZoomMode; label: string }[] = [
@@ -280,6 +283,35 @@
 	async function handleSortModeChange(mode: PageSortMode) {
 		if (!bookStore.currentBook || bookStore.currentBook.sortMode === mode) return;
 		await bookStore.setSortMode(mode);
+	}
+
+	function toggleSortDirection(categoryValue: string) {
+		const currentMode = bookStore.currentBook?.sortMode;
+		if (!currentMode) return;
+		
+		// 如果当前不是这个分类，切换到这个分类的升序
+		if (!currentMode.startsWith(categoryValue)) {
+			handleSortModeChange(categoryValue as PageSortMode);
+		} else {
+			// 如果是当前分类，切换升降序
+			const isDescending = currentMode.includes('Descending');
+			const newMode = isDescending 
+				? (categoryValue as PageSortMode) 
+				: (`${categoryValue}Descending` as PageSortMode);
+			handleSortModeChange(newMode);
+		}
+	}
+
+	function getCurrentSortCategory(): string {
+		const currentMode = bookStore.currentBook?.sortMode;
+		if (!currentMode) return 'fileName';
+		
+		// 移除 Descending 后缀获取分类
+		return currentMode.replace('Descending', '');
+	}
+
+	function isCurrentSortDescending(): boolean {
+		return bookStore.currentBook?.sortMode?.includes('Descending') ?? false;
 	}
 
 	function handleZoomReset() {
@@ -926,25 +958,79 @@
 			<!-- 排序展开面板 -->
 			{#if sortPanelExpanded && bookStore.currentBook}
 				<div class="flex flex-wrap items-center justify-center gap-1 border-t border-border/50 pt-1">
-					<span class="text-muted-foreground mr-2 text-xs">页面排序</span>
+					<span class="text-muted-foreground text-xs w-full text-center mb-1">页面排序</span>
+					
+					<!-- 合并的排序图标行 -->
 					<div class="bg-muted/60 inline-flex items-center gap-0.5 rounded-full p-0.5 shadow-inner">
-						{#each sortModeOptions as option}
+						{#each sortCategories as category}
 							<Tooltip.Root>
 								<Tooltip.Trigger>
 									<Button
-										variant={bookStore.currentBook?.sortMode === option.value ? 'default' : 'ghost'}
+										variant={getCurrentSortCategory() === category.value ? 'default' : 'ghost'}
 										size="sm"
-										class="h-7 rounded-full px-2 text-xs"
-										onclick={() => handleSortModeChange(option.value)}
+										class="h-7 w-7 rounded-full p-0 relative"
+										onclick={() => toggleSortDirection(category.value)}
 									>
-										{option.label}
+										<svelte:component this={category.icon} class="h-3 w-3" />
+										{#if getCurrentSortCategory() === category.value && category.value !== 'random'}
+											{#if isCurrentSortDescending()}
+												<ArrowDown class="h-2 w-2 absolute -bottom-0.5 -right-0.5 text-primary" />
+											{:else}
+												<ArrowUp class="h-2 w-2 absolute -bottom-0.5 -right-0.5 text-primary" />
+											{/if}
+										{/if}
 									</Button>
 								</Tooltip.Trigger>
 								<Tooltip.Content>
-									<p>{option.description}</p>
+									<p class="font-medium">{category.label}</p>
+									{#if getCurrentSortCategory() === category.value && category.value !== 'random'}
+										<p class="text-xs text-muted-foreground">
+											{isCurrentSortDescending() ? '降序' : '升序'} - 点击切换
+										</p>
+									{:else}
+										<p class="text-xs text-muted-foreground">点击切换排序</p>
+									{/if}
 								</Tooltip.Content>
 							</Tooltip.Root>
 						{/each}
+						
+						<!-- 分隔符 -->
+						<div class="w-px h-4 bg-border/50 mx-1"></div>
+						
+						<!-- 独立的升序降序按钮 -->
+						{#if getCurrentSortCategory() !== 'random'}
+							<Tooltip.Root>
+								<Tooltip.Trigger>
+									<Button
+										variant={!isCurrentSortDescending() ? 'default' : 'ghost'}
+										size="sm"
+										class="h-6 w-6 rounded-full p-0"
+										onclick={() => handleSortModeChange(getCurrentSortCategory() as PageSortMode)}
+									>
+										<ArrowUp class="h-3 w-3" />
+									</Button>
+								</Tooltip.Trigger>
+								<Tooltip.Content>
+									<p>升序</p>
+								</Tooltip.Content>
+							</Tooltip.Root>
+							
+							<Tooltip.Root>
+								<Tooltip.Trigger>
+									<Button
+										variant={isCurrentSortDescending() ? 'default' : 'ghost'}
+										size="sm"
+										class="h-6 w-6 rounded-full p-0"
+										onclick={() => handleSortModeChange(`${getCurrentSortCategory()}Descending` as PageSortMode)}
+									>
+										<ArrowDown class="h-3 w-3" />
+									</Button>
+								</Tooltip.Trigger>
+								<Tooltip.Content>
+									<p>降序</p>
+								</Tooltip.Content>
+							</Tooltip.Root>
+						{/if}
 					</div>
 				</div>
 			{/if}

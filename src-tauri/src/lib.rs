@@ -441,6 +441,7 @@ pub fn run() {
             commands::page_commands::pm_preload_thumbnails,
             // System Monitor commands
             commands::get_system_stats,
+            commands::get_system_info,
             // Ollama proxy commands
             commands::ollama_check_status,
             commands::ollama_get_models,

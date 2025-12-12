@@ -2,7 +2,7 @@
 
 ## 1. Core Infrastructure
 
-- [ ] 1.1 Create PerfMonitor utility class
+- [x] 1.1 Create PerfMonitor utility class
   - Create `src/lib/utils/perfMonitor.ts` with metrics tracking
   - Implement record, getStats, checkThresholds methods
   - Support configurable thresholds
@@ -12,7 +12,7 @@
   - **Property 21: Performance Threshold Warning**
   - **Validates: Requirements 7.2**
 
-- [ ] 1.3 Create SystemCapabilities detector
+- [x] 1.3 Create SystemCapabilities detector
   - Create `src/lib/utils/systemCapabilities.ts`
   - Detect memory, CPU cores via Tauri API
   - Calculate recommended preload count and cache size
@@ -24,7 +24,7 @@
 
 ## 2. ImagePool Implementation
 
-- [ ] 2.1 Create ImagePool core
+- [x] 2.1 Create ImagePool core
   - Create `src/lib/services/imagePool.ts`
   - Implement LRU cache with configurable max memory
   - Add get, preload, cancelPreload, evict methods
@@ -35,7 +35,7 @@
   - **Property 4: Cache Eviction on Memory Limit**
   - **Validates: Requirements 1.4**
 
-- [ ] 2.3 Implement preload priority system
+- [x] 2.3 Implement preload priority system
   - Add priority levels (high, normal, low)
   - Ensure current page has highest priority
   - Delay low priority requests by configurable amount
@@ -45,7 +45,7 @@
   - **Property 3: Preload Priority**
   - **Validates: Requirements 1.3**
 
-- [ ] 2.5 Implement memory pressure handling
+- [x] 2.5 Implement memory pressure handling
   - Listen for memory pressure events
   - Release cached resources when memory is low
   - Reduce preload count dynamically
@@ -62,7 +62,7 @@
 
 ## 4. Preloader Implementation
 
-- [ ] 4.1 Create Preloader class
+- [x] 4.1 Create Preloader class
   - Create `src/lib/services/preloader.ts`
   - Implement calculatePreloadPages method
   - Support configurable preload ahead/behind counts
@@ -72,7 +72,7 @@
   - **Property 2: Preload Queue Correctness**
   - **Validates: Requirements 1.2**
 
-- [ ] 4.3 Implement preload cancellation
+- [x] 4.3 Implement preload cancellation
   - Cancel pending preloads when user skips pages
   - Track pending requests by page index
   - Clean up cancelled requests properly
@@ -94,7 +94,7 @@
 
 ## 5. ThumbnailManager Implementation
 
-- [ ] 5.1 Create ThumbnailManager class
+- [x] 5.1 Create ThumbnailManager class
   - Create `src/lib/services/thumbnailManager.ts`
   - Implement request, requestBatch, cancel methods
   - Support priority-based loading
@@ -108,7 +108,7 @@
   - **Property 9: Thumbnail Priority by Visibility**
   - **Validates: Requirements 3.2**
 
-- [ ] 5.4 Implement visibility-based cancellation
+- [x] 5.4 Implement visibility-based cancellation
   - Track visible items via IntersectionObserver
   - Cancel requests for items that scroll out of view
   - Update priorities on scroll
@@ -118,7 +118,7 @@
   - **Property 10: Thumbnail Cancellation on Scroll**
   - **Validates: Requirements 3.4**
 
-- [ ] 5.6 Implement thumbnail caching
+- [x] 5.6 Implement thumbnail caching
   - Cache loaded thumbnails in memory
   - Return cached thumbnails on subsequent requests
   - Implement LRU eviction for thumbnail cache
@@ -204,7 +204,7 @@
 
 ## 10. IPC Optimization
 
-- [ ] 10.1 Implement request batching
+- [x] 10.1 Implement request batching
   - Create IPC request queue
   - Batch small requests within 50ms window
   - Merge requests into single IPC call
@@ -224,7 +224,7 @@
   - **Property 13: Large Data Streaming**
   - **Validates: Requirements 4.3**
 
-- [ ] 10.5 Implement retry with exponential backoff
+- [x] 10.5 Implement retry with exponential backoff
   - Retry failed IPC calls up to 3 times
   - Use exponential backoff (50ms, 100ms, 200ms)
   - Log retry attempts

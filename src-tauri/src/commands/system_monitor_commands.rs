@@ -1,6 +1,31 @@
 use serde::Serialize;
 use sysinfo::{System, Disks, Networks};
 
+/// 简化的系统信息（用于前端性能配置）
+#[derive(Serialize, Debug)]
+pub struct SystemInfo {
+    pub total_memory: u64,
+    pub available_memory: u64,
+    pub cpu_cores: usize,
+}
+
+/// 获取系统信息（用于前端自适应配置）
+#[tauri::command]
+pub async fn get_system_info() -> Result<SystemInfo, String> {
+    let mut sys = System::new_all();
+    sys.refresh_memory();
+    
+    let total_memory = sys.total_memory();
+    let available_memory = sys.available_memory();
+    let cpu_cores = sys.cpus().len();
+    
+    Ok(SystemInfo {
+        total_memory,
+        available_memory,
+        cpu_cores,
+    })
+}
+
 #[derive(Serialize, Debug)]
 pub struct SystemStats {
     pub cpu_usage: Vec<f32>,

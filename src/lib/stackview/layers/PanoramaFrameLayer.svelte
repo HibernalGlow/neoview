@@ -102,44 +102,40 @@
     return closestIndex;
   }
   
-  // 检测是否接近边缘
+  // 检测是否接近边缘（基于当前可见单元在 units 数组中的位置）
   function checkNearEdge(): { needsPreload: boolean; targetPageIndex: number; nearEnd: boolean; nearStart: boolean } {
     if (!containerRef || units.length === 0) {
       return { needsPreload: false, targetPageIndex: 0, nearEnd: false, nearStart: false };
     }
     
-    const isVertical = orientation === 'vertical';
-    const scrollPos = isVertical ? containerRef.scrollTop : containerRef.scrollLeft;
-    const scrollSize = isVertical ? containerRef.scrollHeight : containerRef.scrollWidth;
-    const clientSize = isVertical ? containerRef.clientHeight : containerRef.clientWidth;
+    // 获取当前可见的单元索引
+    const visibleUnitIndex = calculateVisibleUnitIndex();
+    const step = pageMode === 'double' ? 2 : 1;
     
-    // 计算滚动进度
-    const maxScroll = scrollSize - clientSize;
-    if (maxScroll <= 0) {
-      return { needsPreload: false, targetPageIndex: 0, nearEnd: false, nearStart: false };
-    }
-    
-    const scrollProgress = scrollPos / maxScroll;
-    
-    // 阈值：接近边缘 20% 时触发预加载
-    const threshold = 0.2;
-    const nearStart = scrollProgress < threshold;
-    const nearEnd = scrollProgress > (1 - threshold);
+    // 检查是否接近末尾（最后 2 个单元）
+    const nearEnd = visibleUnitIndex >= units.length - 2;
+    // 检查是否接近开头（前 2 个单元）
+    const nearStart = visibleUnitIndex <= 1;
     
     if (nearEnd) {
       // 接近末尾，预加载后面的页面
       const lastUnit = units[units.length - 1];
-      const step = pageMode === 'double' ? 2 : 1;
       const targetPageIndex = lastUnit.startIndex + step;
-      return { needsPreload: true, targetPageIndex, nearEnd: true, nearStart: false };
+      // 检查是否还有更多页面可以加载
+      const totalPages = bookStore.totalPages;
+      if (targetPageIndex < totalPages) {
+        return { needsPreload: true, targetPageIndex, nearEnd: true, nearStart: false };
+      }
     }
     
     if (nearStart) {
       // 接近开头，预加载前面的页面
       const firstUnit = units[0];
-      const step = pageMode === 'double' ? 2 : 1;
       const targetPageIndex = Math.max(0, firstUnit.startIndex - step);
-      return { needsPreload: true, targetPageIndex, nearEnd: false, nearStart: true };
+      // 检查是否还有更多页面可以加载
+      if (firstUnit.startIndex > 0) {
+        return { needsPreload: true, targetPageIndex, nearEnd: false, nearStart: true };
+      }
     }
     
     return { needsPreload: false, targetPageIndex: 0, nearEnd: false, nearStart: false };

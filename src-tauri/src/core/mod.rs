@@ -1,9 +1,10 @@
-//! NeoView - Core Module
+//! `NeoView` - Core Module
 //! 导出所有核心功能模块
 
 pub mod archive;
 pub mod ebook;
 pub mod job_engine;
+pub mod page_frame;
 pub mod page_manager;
 pub mod archive_manager;
 // pub mod archive_prefetcher; // TODO: 需要 archive_page_cache 模块

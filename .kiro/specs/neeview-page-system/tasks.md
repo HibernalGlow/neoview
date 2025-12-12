@@ -1,18 +1,56 @@
+设计文档已创建。让我请求你的反馈：
+
+设计文档已创建，请查看 .kiro/specs/neeview-page-system/design.md
+
+设计文档包含以下核心内容：
+
+架构设计：
+
+系统架构图（前端 ↔ IPC ↔ 后端）
+模块结构（job_engine, page_manager, page_frame）
+核心组件：
+
+JobEngine - 任务调度系统（JobScheduler + JobWorker）
+MemoryPool - 智能内存池（距离驱逐策略）
+PageFrame 三层架构 - Page → PageFrameElement → PageFrame
+PageFrameBuilder - 帧构建器（处理分割和双页）
+PageFrameContext - 配置上下文
+数据模型：
+
+后端：Page, CachedPage, BookContext, PagePosition, PageRange
+前端：PageFrameState, PageFrameContext
+正确性属性（15 个）：
+
+任务优先级排序、去重、Worker 过滤
+距离驱逐、页面锁定
+分割页面生成、方向顺序
+双页配对、横向隔离
+虚拟页数计算、步长计算
+拉伸模式、位置保持
+预加载窗口、缓存性能
+测试策略：
+
+Rust: proptest
+TypeScript: fast-check
+
 # Implementation Plan
 
 ## Phase 1: 后端 JobEngine 模块
 
 - [ ] 1. 创建 JobEngine 基础结构
-  - [ ] 1.1 创建 `src-tauri/src/core/job_engine/mod.rs` 模块入口
+  - [x] 1.1 创建 `src-tauri/src/core/job_engine/mod.rs` 模块入口
+
     - 定义 JobEngine 结构体和公共接口
     - 实现 new(), submit(), submit_batch(), cancel_book(), shutdown()
     - _Requirements: 1.1, 1.5_
-  - [ ] 1.2 实现 `job.rs` 任务定义
+  - [x] 1.2 实现 `job.rs` 任务定义
+
     - 定义 JobPriority 枚举 (Thumbnail=10, Preload=50, CurrentPage=90, Urgent=100)
     - 定义 JobCategory 枚举
     - 定义 Job 结构体 (key, priority, category, executor)
     - _Requirements: 1.1_
-  - [ ] 1.3 实现 `scheduler.rs` 优先级调度器
+  - [x] 1.3 实现 `scheduler.rs` 优先级调度器
+
     - 实现 BinaryHeap 优先级队列
     - 实现 enqueue() 自动取消相同 key 的旧任务
     - 实现 dequeue() 按优先级范围获取任务
@@ -24,7 +62,8 @@
   - [ ]* 1.5 编写 Job Deduplication 属性测试
     - **Property 2: Job Deduplication**
     - **Validates: Requirements 1.3**
-  - [ ] 1.6 实现 `worker.rs` 工作线程
+  - [x] 1.6 实现 `worker.rs` 工作线程
+
     - 实现 JobWorker 结构体
     - Primary Worker 只处理 priority >= 10
     - Secondary Worker 处理所有任务
@@ -40,12 +79,14 @@
 ## Phase 2: 后端 MemoryPool 模块
 
 - [ ] 3. 创建 MemoryPool 智能缓存
-  - [ ] 3.1 创建 `src-tauri/src/core/page_manager/memory_pool.rs`
+  - [x] 3.1 创建 `src-tauri/src/core/page_manager/memory_pool.rs`
+
     - 定义 PageKey 结构体 (book_path, page_index)
     - 定义 CachedPage 结构体 (data, page_index, size, last_accessed, is_locked)
     - 实现 MemoryPool 结构体
     - _Requirements: 2.1_
-  - [ ] 3.2 实现距离驱逐策略
+  - [x] 3.2 实现距离驱逐策略
+
     - 实现 evict_priority() 计算驱逐优先级
     - 实现 evict_one() 驱逐单个页面
     - 考虑阅读方向 (direction)
@@ -53,14 +94,16 @@
   - [ ]* 3.3 编写 Distance-Based Eviction 属性测试
     - **Property 4: Distance-Based Eviction**
     - **Validates: Requirements 2.2, 2.3**
-  - [ ] 3.4 实现页面锁定机制
+  - [x] 3.4 实现页面锁定机制
+
     - 实现 lock() 和 unlock() 方法
     - 驱逐时跳过锁定页面
     - _Requirements: 2.4_
   - [ ]* 3.5 编写 Page Lock Protection 属性测试
     - **Property 5: Page Lock Protection**
     - **Validates: Requirements 2.4**
-  - [ ] 3.6 实现缓存清理
+  - [x] 3.6 实现缓存清理
+
     - 实现 clear_book() 清除指定书籍缓存
     - 实现 stats() 获取统计信息
     - _Requirements: 2.5_
@@ -70,36 +113,46 @@
 
 ## Phase 3: 后端 PageFrame 模块
 
-- [ ] 5. 创建 PageFrame 核心类型
-  - [ ] 5.1 创建 `src-tauri/src/core/page_frame/position.rs`
+- [x] 5. 创建 PageFrame 核心类型
+
+
+  - [x] 5.1 创建 `src-tauri/src/core/page_frame/position.rs`
+
     - 定义 PagePosition 结构体 (index, part)
     - 实现 next(), prev() 方法
     - _Requirements: 4.1_
-  - [ ] 5.2 创建 `src-tauri/src/core/page_frame/range.rs`
+  - [x] 5.2 创建 `src-tauri/src/core/page_frame/range.rs`
+
     - 定义 PageRange 结构体 (min, max)
     - 实现 is_one_page(), next(), merge() 方法
     - _Requirements: 4.2_
-  - [ ] 5.3 创建 `src-tauri/src/core/page_frame/page.rs`
+  - [x] 5.3 创建 `src-tauri/src/core/page_frame/page.rs`
+
     - 定义 Page 结构体 (index, path, inner_path, name, size, width, height, aspect_ratio)
     - 实现 is_landscape() 方法
     - _Requirements: 3.1_
-  - [ ] 5.4 创建 `src-tauri/src/core/page_frame/element.rs`
+  - [x] 5.4 创建 `src-tauri/src/core/page_frame/element.rs`
+
     - 定义 PageFrameElement 结构体
     - 实现 width(), height(), is_landscape() 方法
     - 支持 crop_rect 裁剪区域
     - _Requirements: 3.2_
-  - [ ] 5.5 创建 `src-tauri/src/core/page_frame/frame.rs`
+  - [x] 5.5 创建 `src-tauri/src/core/page_frame/frame.rs`
+
     - 定义 PageFrame 结构体 (elements, frame_range, direction, angle, scale, size)
     - 实现 single(), double() 构造方法
     - 实现 contains(), get_directed_elements() 方法
     - _Requirements: 3.2_
 
-- [ ] 6. 实现 PageFrameBuilder
-  - [ ] 6.1 创建 `src-tauri/src/core/page_frame/builder.rs`
+- [-] 6. 实现 PageFrameBuilder
+
+  - [x] 6.1 创建 `src-tauri/src/core/page_frame/builder.rs`
+
     - 定义 PageFrameBuilder 结构体
     - 定义 PageFrameContext 配置结构体
     - _Requirements: 3.3, 3.4, 3.5, 3.6_
-  - [ ] 6.2 实现分割页面逻辑
+  - [x] 6.2 实现分割页面逻辑
+
     - 检测横向页面 (aspect_ratio > divide_page_rate)
     - 生成左右两个 PageFrameElement
     - 计算 crop_rect
@@ -107,33 +160,38 @@
   - [ ]* 6.3 编写 Split Page Generation 属性测试
     - **Property 6: Split Page Generation**
     - **Validates: Requirements 3.3, 5.1**
-  - [ ] 6.4 实现分割页面方向顺序
+  - [x] 6.4 实现分割页面方向顺序
+
     - LTR: 左半边先显示
     - RTL: 右半边先显示
     - _Requirements: 5.3, 5.4_
   - [ ]* 6.5 编写 Split Page Order 属性测试
     - **Property 7: Split Page Order by Direction**
     - **Validates: Requirements 5.3, 5.4**
-  - [ ] 6.6 实现双页配对逻辑
+  - [x] 6.6 实现双页配对逻辑
+
     - 两个竖向页面组成一帧
     - 首页/末页单独显示选项
     - _Requirements: 6.1, 6.5, 6.6_
   - [ ]* 6.7 编写 Double Page Pairing 属性测试
     - **Property 8: Double Page Pairing**
     - **Validates: Requirements 6.1, 6.5, 6.6**
-  - [ ] 6.8 实现横向页面独占逻辑
+  - [x] 6.8 实现横向页面独占逻辑
+
     - is_supported_wide_page 启用时横向页面独占
     - _Requirements: 6.2, 6.3_
   - [ ]* 6.9 编写 Landscape Page Isolation 属性测试
     - **Property 9: Landscape Page Isolation**
     - **Validates: Requirements 6.2, 6.3**
-  - [ ] 6.10 实现虚拟页数计算
+
+  - [x] 6.10 实现虚拟页数计算
     - 考虑分割页面的额外计数
     - _Requirements: 4.5_
   - [ ]* 6.11 编写 Virtual Page Count 属性测试
     - **Property 10: Virtual Page Count Calculation**
     - **Validates: Requirements 4.5**
-  - [ ] 6.12 实现导航步长计算
+
+  - [x] 6.12 实现导航步长计算
     - 分割页面步长 0.5
     - 双页模式步长 1 或 2
     - _Requirements: 4.3, 4.4_
@@ -183,11 +241,13 @@
 ## Phase 5: 后端 ContentSizeCalculator
 
 - [ ] 10. 实现 ContentSizeCalculator
-  - [ ] 10.1 创建 `src-tauri/src/core/page_frame/calculator.rs`
+  - [x] 10.1 创建 `src-tauri/src/core/page_frame/calculator.rs`
+
     - 定义 ContentSizeCalculator 结构体
     - 定义 StretchMode 枚举
     - _Requirements: 9.1_
-  - [ ] 10.2 实现各种 StretchMode 计算
+  - [x] 10.2 实现各种 StretchMode 计算
+
     - Uniform: 适应视口
     - UniformToFill: 填充视口
     - UniformToVertical: 适应高度
@@ -196,7 +256,8 @@
   - [ ]* 10.3 编写 Stretch Mode 属性测试
     - **Property 12: Stretch Mode Calculation**
     - **Validates: Requirements 9.2, 9.3, 9.4, 9.5**
-  - [ ] 10.4 实现自动旋转计算
+  - [x] 10.4 实现自动旋转计算
+
     - 根据图片和视口方向决定是否旋转
     - _Requirements: 9.6_
 
@@ -205,8 +266,10 @@
 
 ## Phase 6: 后端 Tauri Commands
 
-- [ ] 12. 创建 Tauri Commands
-  - [ ] 12.1 创建 `src-tauri/src/commands/page_commands.rs`
+- [-] 12. 创建 Tauri Commands
+
+  - [x] 12.1 创建 `src-tauri/src/commands/page_commands.rs`
+
     - 实现 open_book_v2 命令
     - 实现 goto_position 命令
     - 实现 get_page_image 命令
@@ -221,7 +284,8 @@
     - page_unloaded 事件
     - memory_pressure 事件
     - _Requirements: 11.3_
-  - [ ] 12.4 实现 update_context 命令
+  - [x] 12.4 实现 update_context 命令
+
     - 更新 PageFrameContext 配置
     - 触发帧重新计算
     - _Requirements: 10.4_
@@ -239,39 +303,43 @@
 ## Phase 7: 前端 Store 和 API
 
 - [ ] 14. 创建前端 API 封装
-  - [ ] 14.1 创建 `src/lib/api/pageManager.ts`
+  - [x] 14.1 创建 `src/lib/api/pageManager.ts`
+
     - 封装 openBook, gotoPosition, getPageImage 等 API
     - 处理二进制响应转 Blob
     - _Requirements: 11.1, 11.4_
-  - [ ] 14.2 实现事件监听
+  - [x] 14.2 实现事件监听
+
     - 监听 page_loaded, page_unloaded, memory_pressure 事件
     - _Requirements: 11.3_
 
 - [ ] 15. 创建 PageFrameStore
-  - [ ] 15.1 创建 `src/lib/stores/pageFrame.svelte.ts`
+  - [x] 15.1 创建 `src/lib/stores/pageFrame.svelte.ts`
+
     - 定义 PageFrameState 状态
     - 实现 openBook, nextFrame, prevFrame 方法
     - _Requirements: 11.5_
-  - [ ] 15.2 实现上下文配置管理
+  - [x] 15.2 实现上下文配置管理
+
     - 同步 PageFrameContext 到后端
     - 响应配置变化
     - _Requirements: 10.4_
 
-## Phase 8: 前端 StackViewer 组件
+## Phase 8: 前端 FrameLayer 组件
 
-- [ ] 16. 重构 StackViewer 组件
-  - [ ] 16.1 更新 `src/lib/viewer/StackViewer.svelte`
+- [ ] 16. 重构 FrameLayer 组件
+  - [ ] 16.1 更新 `src/lib/stackview/StackView.svelte`
     - 集成 PageFrameStore
-    - 实现层叠式渲染 (prev/current/next)
+    - 协调 CurrentFrameLayer/PrevFrameLayer/NextFrameLayer
     - _Requirements: 7.5_
-  - [ ] 16.2 实现分割页面渲染
-    - 使用 CSS clip-path 裁剪
-    - 共享图片缓存
-    - _Requirements: 5.2, 5.5_
-  - [ ] 16.3 实现双页布局
-    - 支持 LTR/RTL 方向
-    - CSS flex-direction 控制顺序
-    - _Requirements: 6.4_
+  - [ ] 16.2 更新 `src/lib/stackview/layers/CurrentFrameLayer.svelte`
+    - 支持分割页面渲染 (CSS clip-path)
+    - 支持双页布局
+    - _Requirements: 5.2, 5.5, 6.4_
+  - [ ] 16.3 更新 PrevFrameLayer/NextFrameLayer
+    - 同步分割页面和双页支持
+    - 预加载帧数据
+    - _Requirements: 7.5_
   - [ ] 16.4 实现无闪烁切换
     - 预缓存尺寸计算缩放
     - 原子切换图片和缩放

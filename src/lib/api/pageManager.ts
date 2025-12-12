@@ -302,3 +302,117 @@ export function createObjectURL(blob: Blob): string {
 export function revokeObjectURL(url: string): void {
 	URL.revokeObjectURL(url);
 }
+
+// ===== PageFrame API =====
+
+/** 页面帧元素信息 */
+export interface PageFrameElementInfo {
+	pageIndex: number;
+	part: number;
+	cropRect?: { x: number; y: number; width: number; height: number };
+	isLandscape: boolean;
+	isDummy: boolean;
+}
+
+/** 页面帧信息 */
+export interface PageFrameInfo {
+	elements: PageFrameElementInfo[];
+	frameRange: {
+		minIndex: number;
+		minPart: number;
+		maxIndex: number;
+		maxPart: number;
+	};
+	size: { width: number; height: number };
+	angle: number;
+	scale: number;
+	startIndex: number;
+	endIndex: number;
+}
+
+/** 页面帧上下文 */
+export interface PageFrameContext {
+	pageMode: 'single' | 'double';
+	readOrder: 'ltr' | 'rtl';
+	isSupportedDividePage: boolean;
+	isSupportedWidePage: boolean;
+	isSupportedSingleFirst: boolean;
+	isSupportedSingleLast: boolean;
+	dividePageRate: number;
+	autoRotate: 'none' | 'left' | 'right' | 'auto';
+	stretchMode: string;
+	canvasSize: { width: number; height: number };
+}
+
+/**
+ * 更新 PageFrame 上下文配置
+ */
+export async function updatePageFrameContext(updates: {
+	pageMode?: string;
+	readOrder?: string;
+	dividePage?: boolean;
+	widePage?: boolean;
+	singleFirst?: boolean;
+	singleLast?: boolean;
+	divideRate?: number;
+	canvasWidth?: number;
+	canvasHeight?: number;
+}): Promise<void> {
+	return invoke('pf_update_context', updates);
+}
+
+/**
+ * 获取 PageFrame 上下文
+ */
+export async function getPageFrameContext(): Promise<PageFrameContext> {
+	return invoke<PageFrameContext>('pf_get_context');
+}
+
+/**
+ * 构建指定位置的帧
+ */
+export async function buildFrame(index: number, part?: number): Promise<PageFrameInfo | null> {
+	return invoke<PageFrameInfo | null>('pf_build_frame', { index, part });
+}
+
+/**
+ * 获取下一帧位置
+ */
+export async function getNextFramePosition(index: number, part?: number): Promise<[number, number] | null> {
+	return invoke<[number, number] | null>('pf_next_position', { index, part });
+}
+
+/**
+ * 获取上一帧位置
+ */
+export async function getPrevFramePosition(index: number, part?: number): Promise<[number, number] | null> {
+	return invoke<[number, number] | null>('pf_prev_position', { index, part });
+}
+
+/**
+ * 获取总虚拟页数
+ */
+export async function getTotalVirtualPages(): Promise<number> {
+	return invoke<number>('pf_total_virtual_pages');
+}
+
+/**
+ * 检查页面是否分割
+ */
+export async function isPageSplit(index: number): Promise<boolean> {
+	return invoke<boolean>('pf_is_page_split', { index });
+}
+
+/**
+ * 从虚拟索引获取位置
+ */
+export async function positionFromVirtual(virtualIndex: number): Promise<[number, number]> {
+	return invoke<[number, number]>('pf_position_from_virtual', { virtualIndex });
+}
+
+/**
+ * 获取包含指定页面的帧位置
+ */
+export async function framePositionForIndex(pageIndex: number): Promise<[number, number]> {
+	return invoke<[number, number]>('pf_frame_position_for_index', { pageIndex });
+}

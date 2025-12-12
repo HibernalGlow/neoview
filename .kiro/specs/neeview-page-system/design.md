@@ -20,10 +20,11 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                    Frontend (Svelte)                        │
 │  ┌─────────────────────────────────────────────────────┐   │
-│  │              StackViewer Component                   │   │
-│  │  - Layer-based rendering (prev/current/next)        │   │
+│  │              StackView + FrameLayer Components       │   │
+│  │  - CurrentFrameLayer (当前帧)                        │   │
+│  │  - PrevFrameLayer / NextFrameLayer (预加载帧)        │   │
+│  │  - PanoramaFrameLayer (全景模式)                     │   │
 │  │  - CSS clip-path for split pages                    │   │
-│  │  - Blob URL management                              │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                            │                                │
 │  ┌─────────────────────────▼─────────────────────────────┐ │
@@ -107,10 +108,15 @@ src-tauri/src/core/
 src/lib/
 ├── stores/
 │   └── pageFrame.svelte.ts # PageFrameStore 前端状态
-├── viewer/
-│   ├── StackViewer.svelte  # 层叠式查看器
-│   └── types/
-│       └── frameSlot.ts    # 帧槽类型定义
+├── stackview/
+│   ├── StackView.svelte           # 主视图容器
+│   ├── layers/
+│   │   ├── CurrentFrameLayer.svelte  # 当前帧层
+│   │   ├── PrevFrameLayer.svelte     # 前帧层（预加载）
+│   │   ├── NextFrameLayer.svelte     # 后帧层（预加载）
+│   │   └── PanoramaFrameLayer.svelte # 全景帧层
+│   └── stores/
+│       └── imageStore.svelte.ts   # 图像状态管理
 └── api/
     └── pageManager.ts      # 后端 API 封装
 ```

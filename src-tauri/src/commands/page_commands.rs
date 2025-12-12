@@ -1,8 +1,12 @@
-//! NeoView - Page Commands
+//! `NeoView` - Page Commands
 //! 简化的页面加载 API，后端主导，前端只发请求
 
+use crate::core::page_frame::{
+    PageFrame, PageFrameBuilder, PageFrameContext, PageMode, PagePosition, ReadOrder,
+    Size, StretchMode, AutoRotateType,
+};
 use crate::core::page_manager::{
-    BookInfo, MemoryPoolStats, PageContentManager, PageLoadResult, PageManagerStats,
+    BookInfo, MemoryPoolStats, PageContentManager, PageManagerStats,
     ThumbnailReadyEvent,
 };
 use std::sync::Arc;
@@ -12,6 +16,12 @@ use tokio::sync::Mutex;
 /// 页面管理器状态
 pub struct PageManagerState {
     pub manager: Arc<Mutex<PageContentManager>>,
+}
+
+/// PageFrame 构建器状态
+pub struct PageFrameState {
+    pub builder: Arc<Mutex<Option<PageFrameBuilder>>>,
+    pub context: Arc<Mutex<PageFrameContext>>,
 }
 
 // ===== 书籍操作命令 =====
@@ -306,6 +316,280 @@ pub async fn pm_preload_thumbnails(
     Ok(result_indices)
 }
 
+// ===== PageFrame 命令 =====
+
+/// PageFrame 信息（用于前端）
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PageFrameInfo {
+    /// 帧内元素
+    pub elements: Vec<PageFrameElementInfo>,
+    /// 帧范围
+    pub frame_range: PageRangeInfo,
+    /// 显示尺寸
+    pub size: SizeInfo,
+    /// 旋转角度
+    pub angle: f64,
+    /// 缩放比例
+    pub scale: f64,
+    /// 起始页面索引
+    pub start_index: usize,
+    /// 结束页面索引
+    pub end_index: usize,
+}
+
+/// PageFrameElement 信息
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PageFrameElementInfo {
+    /// 页面索引
+    pub page_index: usize,
+    /// 分割部分 (0=左/完整, 1=右)
+    pub part: u8,
+    /// 裁剪区域
+    pub crop_rect: Option<CropRectInfo>,
+    /// 是否为横向
+    pub is_landscape: bool,
+    /// 是否为占位元素
+    pub is_dummy: bool,
+}
+
+/// 裁剪区域信息
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CropRectInfo {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+/// 页面范围信息
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PageRangeInfo {
+    pub min_index: usize,
+    pub min_part: u8,
+    pub max_index: usize,
+    pub max_part: u8,
+}
+
+/// 尺寸信息
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SizeInfo {
+    pub width: f64,
+    pub height: f64,
+}
+
+impl From<&PageFrame> for PageFrameInfo {
+    fn from(frame: &PageFrame) -> Self {
+        Self {
+            elements: frame.elements.iter().map(|e| PageFrameElementInfo {
+                page_index: e.page.index,
+                part: e.page_range.min.part,
+                crop_rect: e.crop_rect.map(|c| CropRectInfo {
+                    x: c.x,
+                    y: c.y,
+                    width: c.width,
+                    height: c.height,
+                }),
+                is_landscape: e.is_landscape(),
+                is_dummy: e.is_dummy,
+            }).collect(),
+            frame_range: PageRangeInfo {
+                min_index: frame.frame_range.min.index,
+                min_part: frame.frame_range.min.part,
+                max_index: frame.frame_range.max.index,
+                max_part: frame.frame_range.max.part,
+            },
+            size: SizeInfo {
+                width: frame.size.width,
+                height: frame.size.height,
+            },
+            angle: frame.angle,
+            scale: frame.scale,
+            start_index: frame.start_index(),
+            end_index: frame.end_index(),
+        }
+    }
+}
+
+/// 更新 PageFrame 上下文配置
+#[tauri::command]
+pub async fn pf_update_context(
+    page_mode: Option<String>,
+    read_order: Option<String>,
+    divide_page: Option<bool>,
+    wide_page: Option<bool>,
+    single_first: Option<bool>,
+    single_last: Option<bool>,
+    divide_rate: Option<f64>,
+    canvas_width: Option<f64>,
+    canvas_height: Option<f64>,
+    state: State<'_, PageFrameState>,
+) -> Result<(), String> {
+    let mut ctx = state.context.lock().await;
+    
+    if let Some(mode) = page_mode {
+        ctx.page_mode = match mode.as_str() {
+            "double" => PageMode::Double,
+            _ => PageMode::Single,
+        };
+    }
+    
+    if let Some(order) = read_order {
+        ctx.read_order = match order.as_str() {
+            "rtl" => ReadOrder::RightToLeft,
+            _ => ReadOrder::LeftToRight,
+        };
+    }
+    
+    if let Some(v) = divide_page {
+        ctx.is_supported_divide_page = v;
+    }
+    
+    if let Some(v) = wide_page {
+        ctx.is_supported_wide_page = v;
+    }
+    
+    if let Some(v) = single_first {
+        ctx.is_supported_single_first = v;
+    }
+    
+    if let Some(v) = single_last {
+        ctx.is_supported_single_last = v;
+    }
+    
+    if let Some(v) = divide_rate {
+        ctx.divide_page_rate = v;
+    }
+    
+    if let Some(w) = canvas_width {
+        ctx.canvas_size.width = w;
+    }
+    
+    if let Some(h) = canvas_height {
+        ctx.canvas_size.height = h;
+    }
+    
+    // 更新 builder 的上下文
+    if let Some(ref mut builder) = *state.builder.lock().await {
+        builder.set_context(ctx.clone());
+    }
+    
+    log::debug!("📐 [PageFrame] 更新上下文: mode={:?}, order={:?}", ctx.page_mode, ctx.read_order);
+    
+    Ok(())
+}
+
+/// 获取当前 PageFrame 上下文
+#[tauri::command]
+pub async fn pf_get_context(
+    state: State<'_, PageFrameState>,
+) -> Result<PageFrameContext, String> {
+    let ctx = state.context.lock().await;
+    Ok(ctx.clone())
+}
+
+/// 构建指定位置的帧
+#[tauri::command]
+pub async fn pf_build_frame(
+    index: usize,
+    part: Option<u8>,
+    state: State<'_, PageFrameState>,
+) -> Result<Option<PageFrameInfo>, String> {
+    let builder = state.builder.lock().await;
+    
+    let builder = builder.as_ref().ok_or("PageFrameBuilder 未初始化")?;
+    
+    let position = PagePosition::new(index, part.unwrap_or(0));
+    let frame = builder.build_frame(position);
+    
+    Ok(frame.as_ref().map(PageFrameInfo::from))
+}
+
+/// 获取下一帧位置
+#[tauri::command]
+pub async fn pf_next_position(
+    index: usize,
+    part: Option<u8>,
+    state: State<'_, PageFrameState>,
+) -> Result<Option<(usize, u8)>, String> {
+    let builder = state.builder.lock().await;
+    let builder = builder.as_ref().ok_or("PageFrameBuilder 未初始化")?;
+    
+    let current = PagePosition::new(index, part.unwrap_or(0));
+    let next = builder.next_frame_position(current);
+    
+    Ok(next.map(|p| (p.index, p.part)))
+}
+
+/// 获取上一帧位置
+#[tauri::command]
+pub async fn pf_prev_position(
+    index: usize,
+    part: Option<u8>,
+    state: State<'_, PageFrameState>,
+) -> Result<Option<(usize, u8)>, String> {
+    let builder = state.builder.lock().await;
+    let builder = builder.as_ref().ok_or("PageFrameBuilder 未初始化")?;
+    
+    let current = PagePosition::new(index, part.unwrap_or(0));
+    let prev = builder.prev_frame_position(current);
+    
+    Ok(prev.map(|p| (p.index, p.part)))
+}
+
+/// 获取总虚拟页数
+#[tauri::command]
+pub async fn pf_total_virtual_pages(
+    state: State<'_, PageFrameState>,
+) -> Result<usize, String> {
+    let builder = state.builder.lock().await;
+    let builder = builder.as_ref().ok_or("PageFrameBuilder 未初始化")?;
+    
+    Ok(builder.total_virtual_pages())
+}
+
+/// 检查页面是否应该分割
+#[tauri::command]
+pub async fn pf_is_page_split(
+    index: usize,
+    state: State<'_, PageFrameState>,
+) -> Result<bool, String> {
+    let builder = state.builder.lock().await;
+    let builder = builder.as_ref().ok_or("PageFrameBuilder 未初始化")?;
+    
+    Ok(builder.is_page_split(index))
+}
+
+/// 从虚拟索引获取位置
+#[tauri::command]
+pub async fn pf_position_from_virtual(
+    virtual_index: usize,
+    state: State<'_, PageFrameState>,
+) -> Result<(usize, u8), String> {
+    let builder = state.builder.lock().await;
+    let builder = builder.as_ref().ok_or("PageFrameBuilder 未初始化")?;
+    
+    let pos = builder.position_from_virtual(virtual_index);
+    Ok((pos.index, pos.part))
+}
+
+/// 获取包含指定页面的帧位置
+#[tauri::command]
+pub async fn pf_frame_position_for_index(
+    page_index: usize,
+    state: State<'_, PageFrameState>,
+) -> Result<(usize, u8), String> {
+    let builder = state.builder.lock().await;
+    let builder = builder.as_ref().ok_or("PageFrameBuilder 未初始化")?;
+    
+    let pos = builder.frame_position_for_index(page_index);
+    Ok((pos.index, pos.part))
+}
+
 // ===== 辅助函数 =====
 
 /// 收集所有页面命令
@@ -325,5 +609,15 @@ pub fn get_page_commands() -> Vec<&'static str> {
         "pm_get_large_file_threshold",
         "pm_set_large_file_threshold",
         "pm_preload_thumbnails",
+        // PageFrame 命令
+        "pf_update_context",
+        "pf_get_context",
+        "pf_build_frame",
+        "pf_next_position",
+        "pf_prev_position",
+        "pf_total_virtual_pages",
+        "pf_is_page_split",
+        "pf_position_from_virtual",
+        "pf_frame_position_for_index",
     ]
 }

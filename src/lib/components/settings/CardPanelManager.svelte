@@ -12,6 +12,7 @@
 		getPanelTitle
 	} from '$lib/stores/cardConfig.svelte';
 	import { confirm } from '$lib/stores/confirmDialog.svelte';
+	import { cardRegistry } from '$lib/cards/registry';
 
 	// 获取所有支持卡片的面板 ID
 	const allPanelIds = getCardSupportingPanels();
@@ -205,6 +206,7 @@
 			<h4 class="mb-3 text-center text-sm font-medium">等待区（隐藏）</h4>
 			<div class="flex min-h-[60px] flex-wrap content-start gap-1.5">
 				{#each hiddenCards as card (card.id)}
+					{@const cardDef = cardRegistry[card.id]}
 					<div
 						class="bg-muted/50 hover:bg-accent hover:border-accent group inline-flex cursor-grab select-none items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-all active:cursor-grabbing {isPointerDragging &&
 						draggedCard?.card.id === card.id
@@ -221,6 +223,9 @@
 								d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"
 							></path>
 						</svg>
+						{#if cardDef?.icon}
+							<svelte:component this={cardDef.icon} class="h-3.5 w-3.5" />
+						{/if}
 						<span>{card.title}</span>
 					</div>
 				{/each}
@@ -245,6 +250,7 @@
 				<h4 class="mb-3 text-center text-sm font-medium">{getPanelTitle(panelId)}</h4>
 				<div class="flex min-h-[60px] flex-wrap content-start gap-1.5">
 					{#each cards as card, index (card.id)}
+						{@const cardDef = cardRegistry[card.id]}
 						<div
 							class="bg-muted/50 hover:bg-accent hover:border-accent group inline-flex select-none items-center gap-1 rounded-full border px-1 py-0.5 text-xs font-medium transition-all {isPointerDragging &&
 							draggedCard?.card.id === card.id
@@ -273,6 +279,9 @@
 								class="cursor-grab px-1 active:cursor-grabbing"
 								onpointerdown={(e) => handlePointerDown(e, card, panelId)}
 							>
+								{#if cardDef?.icon}
+									<svelte:component this={cardDef.icon} class="mr-1 inline h-3.5 w-3.5" />
+								{/if}
 								<span>{card.title}</span>
 							</div>
 							<!-- 下移按钮 -->
@@ -304,6 +313,7 @@
 
 	<!-- 拖拽预览 -->
 	{#if isPointerDragging && dragPreview && draggedCard}
+		{@const cardDef = cardRegistry[draggedCard.card.id]}
 		<div
 			class="pointer-events-none fixed z-50"
 			style="left: {dragPreview.x}px; top: {dragPreview.y}px; transform: translate(-50%, -50%);"
@@ -311,6 +321,9 @@
 			<div
 				class="bg-accent inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium shadow-lg"
 			>
+				{#if cardDef?.icon}
+					<svelte:component this={cardDef.icon} class="h-3.5 w-3.5" />
+				{/if}
 				<span>{draggedCard.card.title}</span>
 			</div>
 		</div>

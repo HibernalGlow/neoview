@@ -7,7 +7,7 @@
  */
 
 import { writable, derived, get } from 'svelte/store';
-import { Folder, History, Bookmark, Info, FileText, File, Sparkles, BarChart3, Settings, ListMusic, Timer, Bot, FileJson  } from '@lucide/svelte';
+import { Folder, History, Bookmark, Info, FileText, File, Sparkles, BarChart3, Settings, ListMusic, Timer, Bot, Tag  } from '@lucide/svelte';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 // 面板位置
@@ -88,7 +88,7 @@ export const PANEL_DEFINITIONS = {
 	},
 	properties: {
 		title: '属性',
-		icon: FileJson,
+		icon: Tag,
 		emoji: '📑',
 		defaultPosition: 'right' as PanelPosition,
 		defaultVisible: true,

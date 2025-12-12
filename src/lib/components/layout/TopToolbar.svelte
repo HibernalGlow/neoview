@@ -72,7 +72,7 @@
 		Monitor,
 		Check,
 		Frame,
-		Scan,
+		MousePointer2,
 		StretchHorizontal,
 		StretchVertical,
 		Expand,
@@ -892,7 +892,7 @@
 								class="h-8 w-8"
 								onclick={toggleHoverScroll}
 							>
-								<Scan class="h-4 w-4" />
+								<MousePointer2 class="h-4 w-4" />
 							</Button>
 						</Tooltip.Trigger>
 						<Tooltip.Content>

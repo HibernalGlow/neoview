@@ -958,7 +958,6 @@
 			<!-- 排序展开面板 -->
 			{#if sortPanelExpanded && bookStore.currentBook}
 				<div class="flex flex-wrap items-center justify-center gap-1 border-t border-border/50 pt-1">
-					<span class="text-muted-foreground text-xs w-full text-center mb-1">页面排序</span>
 					
 					<!-- 合并的排序图标行 -->
 					<div class="bg-muted/60 inline-flex items-center gap-0.5 rounded-full p-0.5 shadow-inner">

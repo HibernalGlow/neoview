@@ -455,40 +455,87 @@
 	// ============================================================================
 
 	// 获取页面数据的辅助函数
+	// 对于当前页面，优先使用 loadedImageSize（图片加载后的实际尺寸）
 	function getPageData(index: number): PageData | null {
 		const book = bookStore.currentBook;
 		if (!book || !book.pages || index < 0 || index >= book.pages.length) {
 			return null;
 		}
 		const page = book.pages[index];
+		
+		// 如果是当前页面，优先使用加载后的实际尺寸
+		let width = page?.width ?? 0;
+		let height = page?.height ?? 0;
+		
+		if (index === bookStore.currentPageIndex) {
+			// 优先使用 loadedImageSize
+			if (loadedImageSize?.width && loadedImageSize?.height) {
+				width = loadedImageSize.width;
+				height = loadedImageSize.height;
+			} else {
+				// 其次使用 imageStore 的尺寸
+				const dims = imageStore.state.dimensions;
+				if (dims?.width && dims?.height) {
+					width = dims.width;
+					height = dims.height;
+				}
+			}
+		}
+		
 		return {
 			url: '',
 			pageIndex: index,
-			width: page?.width ?? 0,
-			height: page?.height ?? 0
+			width,
+			height
 		};
 	}
 
 	// 判断当前页是否为分割页
+	// 优先使用 loadedImageSize（图片加载后的实际尺寸），其次使用页面元数据
 	let isCurrentPageSplit = $derived.by(() => {
 		if (pageMode !== 'single' || !splitHorizontalPages) return false;
+		
+		// 优先使用加载后的实际尺寸
+		if (loadedImageSize?.width && loadedImageSize?.height) {
+			return loadedImageSize.width > loadedImageSize.height;
+		}
+		
+		// 其次使用 imageStore 的尺寸
+		const dims = imageStore.state.dimensions;
+		if (dims?.width && dims?.height) {
+			return dims.width > dims.height;
+		}
+		
+		// 最后使用页面元数据
 		const pageData = getPageData(bookStore.currentPageIndex);
 		return pageData ? shouldSplitPage(pageData, true) : false;
 	});
 
 	// 当页面或模式变化时，初始化分割状态
+	// 追踪上一次的分割状态，用于检测变化
 	let lastSplitPageIndex = $state<number>(-1);
+	let lastIsCurrentPageSplit = $state<boolean>(false);
 	$effect(() => {
 		const currentIndex = bookStore.currentPageIndex;
 		const isSplit = isCurrentPageSplit;
 		
-		// 如果页面索引变化了（不是通过分割导航），初始化分割状态
-		if (currentIndex !== lastSplitPageIndex) {
+		// 检测页面索引变化或分割状态变化
+		const pageChanged = currentIndex !== lastSplitPageIndex;
+		const splitStateChanged = isSplit !== lastIsCurrentPageSplit;
+		
+		if (pageChanged || splitStateChanged) {
 			lastSplitPageIndex = currentIndex;
+			lastIsCurrentPageSplit = isSplit;
+			
 			if (isSplit) {
 				// 分割页面，根据阅读方向初始化为第一半
 				const firstHalf: 'left' | 'right' = direction === 'ltr' ? 'left' : 'right';
-				if (currentSplitHalf === null) {
+				// 只有在页面变化时或 currentSplitHalf 为 null 时才初始化
+				// 这样通过分割导航设置的 splitHalf 不会被覆盖
+				if (pageChanged && currentSplitHalf === null) {
+					currentSplitHalf = firstHalf;
+				} else if (splitStateChanged && currentSplitHalf === null) {
+					// 分割状态从 false 变为 true（图片加载后检测到横向）
 					currentSplitHalf = firstHalf;
 				}
 			} else {

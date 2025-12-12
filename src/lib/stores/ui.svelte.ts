@@ -556,17 +556,96 @@ export function toggleReadingDirectionLock(direction: ReadingDirection) {
 }
 
 /**
- * 计算翻页步进：双页模式（包括全景+双页）翻 2 页，否则翻 1 页
+ * 计算翻页步进
+ * 
+ * 按照 NeeView 的逻辑：
+ * 1. 单页模式 → 步进 1
+ * 2. 双页模式：
+ *    - 当前页横向（且开启横向视为双页）→ 步进 1
+ *    - 下一页横向（且开启横向视为双页）→ 步进 1
+ *    - 首页/尾页单独显示 → 步进 1
+ *    - 正常双页 → 步进 2
  */
 function getPageStep(): number {
 	const snapshot = appState.getSnapshot();
-	const viewMode = snapshot.viewer.viewMode;
+	const currentViewMode = snapshot.viewer.viewMode;
+	
 	// 全景模式下从 bookContextManager 获取实际的 pageMode
-	if (viewMode === 'panorama') {
+	let pageMode: 'single' | 'double' = 'single';
+	if (currentViewMode === 'panorama') {
 		const ctx = bookContextManager.current;
-		return ctx?.pageMode === 'double' ? 2 : 1;
+		pageMode = ctx?.pageMode ?? 'single';
+	} else {
+		pageMode = currentViewMode === 'double' ? 'double' : 'single';
 	}
-	return viewMode === 'double' ? 2 : 1;
+	
+	// 单页模式 → 步进 1
+	if (pageMode !== 'double') {
+		return 1;
+	}
+	
+	// 双页模式：检查横向页面和首页/尾页
+	const settings = settingsManager.getSettings();
+	const treatHorizontalAsDoublePage = settings.view.pageLayout?.treatHorizontalAsDoublePage ?? false;
+	const singleFirstPageMode = settings.view.pageLayout?.singleFirstPageMode ?? 'restoreOrDefault';
+	const singleLastPageMode = settings.view.pageLayout?.singleLastPageMode ?? 'restoreOrDefault';
+	
+	// 解析首页/尾页设置
+	const singleFirstPage = singleFirstPageMode === 'default' ? true :
+		singleFirstPageMode === 'continue' ? false : true;
+	const singleLastPage = singleLastPageMode === 'default' ? false :
+		singleLastPageMode === 'continue' ? true : false;
+	
+	if (!bookStore.hasBook) return 2;
+	const book = bookStore.currentBook;
+	if (!book || !book.pages) return 2;
+	
+	const currentIndex = bookStore.currentPageIndex;
+	const currentPage = book.pages[currentIndex];
+	if (!currentPage) return 1;
+	
+	// 获取当前页尺寸
+	const currentWidth = currentPage.width ?? 0;
+	const currentHeight = currentPage.height ?? 0;
+	const hasCurrentSize = currentWidth > 0 && currentHeight > 0;
+	const isCurrentLandscape = hasCurrentSize && currentWidth > currentHeight;
+	
+	// 1. 当前页横向 → 步进 1
+	if (treatHorizontalAsDoublePage && isCurrentLandscape) {
+		return 1;
+	}
+	
+	// 2. 获取下一页
+	const nextIndex = currentIndex + 1;
+	if (nextIndex >= book.pages.length) {
+		return 1;
+	}
+	
+	const nextPage = book.pages[nextIndex];
+	if (!nextPage) return 1;
+	
+	// 获取下一页尺寸
+	const nextWidth = nextPage.width ?? 0;
+	const nextHeight = nextPage.height ?? 0;
+	const hasNextSize = nextWidth > 0 && nextHeight > 0;
+	const isNextLandscape = hasNextSize && nextWidth > nextHeight;
+	
+	// 3. 下一页横向 → 步进 1
+	if (treatHorizontalAsDoublePage && isNextLandscape) {
+		return 1;
+	}
+	
+	// 4. 首页/尾页单独显示
+	const totalPages = book.pages.length;
+	const isFirst = currentIndex === 0 || nextIndex === 0;
+	const isLast = currentIndex === totalPages - 1 || nextIndex === totalPages - 1;
+	
+	if ((singleFirstPage && isFirst) || (singleLastPage && isLast)) {
+		return 1;
+	}
+	
+	// 5. 正常双页 → 步进 2
+	return 2;
 }
 
 /**

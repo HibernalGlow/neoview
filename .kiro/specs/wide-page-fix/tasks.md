@@ -77,8 +77,8 @@
 ## 5. Checkpoint - 确保所有测试通过
 
 - [x] 5.1 Checkpoint
-  - yarn check 通过
-  - cargo check 通过
+  - yarn check 通过 ✅
+  - cargo check 通过 ✅
 
 ## 6. 属性测试补充
 

@@ -616,6 +616,20 @@ class BookStore {
   }
 
   /**
+   * 仅更新本地页码状态（不调用后端 API）
+   * 用于全景模式滚动时同步页码显示
+   */
+  setCurrentPageIndexLocal(index: number) {
+    if (!this.state.currentBook) return;
+    
+    const maxIndex = this.state.currentBook.totalPages - 1;
+    if (index < 0 || index > maxIndex) return;
+    
+    // 只更新本地状态，不调用后端
+    this.state.currentBook.currentPage = index;
+  }
+
+  /**
    * 切换页面排序模式
    */
   async setSortMode(sortMode: PageSortMode) {

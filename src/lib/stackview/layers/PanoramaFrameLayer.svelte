@@ -10,6 +10,7 @@
   import { LayerZIndex } from '../types/layer';
   import type { PanoramaUnit, PanoramaImage } from '../stores/panoramaStore.svelte';
   import { getPanoramaStore } from '../stores/panoramaStore.svelte';
+  import { bookStore } from '$lib/stores/book.svelte';
   import FrameImage from '../components/FrameImage.svelte';
   import '../styles/frameLayer.css';
   import type { WidePageStretch } from '$lib/settings/settingsManager';
@@ -41,9 +42,9 @@
   let scrollTimeout: ReturnType<typeof setTimeout> | null = null;
   let preloadTimeout: ReturnType<typeof setTimeout> | null = null;
   
-  // 滚动事件处理 - 直接触发预加载
+  // 滚动事件处理 - 更新页码并触发预加载
   function handleScroll(_e: Event) {
-    // 防抖预加载
+    // 防抖处理
     if (preloadTimeout) {
       clearTimeout(preloadTimeout);
     }
@@ -51,15 +52,54 @@
     preloadTimeout = setTimeout(() => {
       if (!containerRef || units.length === 0) return;
       
+      // 计算当前可见的单元，更新页码
+      const visibleUnitIndex = calculateVisibleUnitIndex();
+      if (visibleUnitIndex >= 0 && visibleUnitIndex < units.length) {
+        const visibleUnit = units[visibleUnitIndex];
+        // 更新本地页码（这会触发现有的预加载系统）
+        bookStore.setCurrentPageIndexLocal(visibleUnit.startIndex);
+      }
+      
       // 检测是否接近边缘，需要加载更多
       const edgeInfo = checkNearEdge();
       
       if (edgeInfo.needsPreload) {
         console.log(`🔄 全景滚动预加载: targetPageIndex=${edgeInfo.targetPageIndex}, nearEnd=${edgeInfo.nearEnd}, nearStart=${edgeInfo.nearStart}`);
-        // 直接调用 panoramaStore 触发预加载，不依赖回调
+        // 直接调用 panoramaStore 触发预加载
         panoramaStore.loadPanorama(edgeInfo.targetPageIndex, pageMode);
       }
-    }, 100); // 减少防抖时间，更快响应
+    }, 100);
+  }
+  
+  // 计算当前可见的单元索引
+  function calculateVisibleUnitIndex(): number {
+    if (!containerRef || units.length === 0) return 0;
+    
+    const unitElements = containerRef.querySelectorAll('.panorama-unit');
+    if (unitElements.length === 0) return 0;
+    
+    const containerRect = containerRef.getBoundingClientRect();
+    const containerCenter = orientation === 'vertical' 
+      ? containerRect.top + containerRect.height / 2
+      : containerRect.left + containerRect.width / 2;
+    
+    let closestIndex = 0;
+    let closestDistance = Infinity;
+    
+    unitElements.forEach((el, index) => {
+      const rect = el.getBoundingClientRect();
+      const unitCenter = orientation === 'vertical'
+        ? rect.top + rect.height / 2
+        : rect.left + rect.width / 2;
+      
+      const distance = Math.abs(unitCenter - containerCenter);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestIndex = index;
+      }
+    });
+    
+    return closestIndex;
   }
   
   // 检测是否接近边缘

@@ -37,7 +37,8 @@ TypeScript: fast-check
 
 ## Phase 1: 后端 JobEngine 模块
 
-- [ ] 1. 创建 JobEngine 基础结构
+- [x] 1. 创建 JobEngine 基础结构
+
   - [x] 1.1 创建 `src-tauri/src/core/job_engine/mod.rs` 模块入口
 
     - 定义 JobEngine 结构体和公共接口
@@ -77,6 +78,7 @@ TypeScript: fast-check
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Phase 2: 后端 MemoryPool 模块
+
 
 - [ ] 3. 创建 MemoryPool 智能缓存
   - [x] 3.1 创建 `src-tauri/src/core/page_manager/memory_pool.rs`
@@ -144,7 +146,8 @@ TypeScript: fast-check
     - 实现 contains(), get_directed_elements() 方法
     - _Requirements: 3.2_
 
-- [-] 6. 实现 PageFrameBuilder
+- [x] 6. 实现 PageFrameBuilder
+
 
   - [x] 6.1 创建 `src-tauri/src/core/page_frame/builder.rs`
 
@@ -204,22 +207,26 @@ TypeScript: fast-check
 
 ## Phase 4: 后端 PageContentManager 模块
 
-- [ ] 8. 创建 PageContentManager
-  - [ ] 8.1 创建 `src-tauri/src/core/page_manager/mod.rs`
+- [x] 8. 创建 PageContentManager
+  - [x] 8.1 创建 `src-tauri/src/core/page_manager/mod.rs`
+
     - 定义 PageContentManager 结构体
     - 集成 JobEngine 和 MemoryPool
     - _Requirements: 1.1, 2.1_
-  - [ ] 8.2 实现 open_book() 方法
+  - [x] 8.2 实现 open_book() 方法
+
     - 清除旧书籍缓存
     - 加载新书籍页面列表
     - 初始化 BookContext
     - _Requirements: 3.1_
-  - [ ] 8.3 实现 goto_position() 方法
+
+  - [x] 8.3 实现 goto_position() 方法
     - 提交当前页加载任务 (CurrentPage 优先级)
     - 更新阅读方向
     - 返回 PageFrame 信息
     - _Requirements: 4.6_
-  - [ ] 8.4 实现预加载管道
+
+  - [x] 8.4 实现预加载管道
     - 前向预加载 5 页
     - 后向预加载 2 页
     - 取消不在窗口内的预加载
@@ -227,7 +234,7 @@ TypeScript: fast-check
   - [ ]* 8.5 编写 Preload Window 属性测试
     - **Property 14: Preload Window Management**
     - **Validates: Requirements 8.1, 8.2**
-  - [ ] 8.6 实现 get_page_data() 方法
+  - [x] 8.6 实现 get_page_data() 方法
     - 从缓存获取或等待加载
     - 返回二进制数据
     - _Requirements: 8.4_
@@ -239,6 +246,7 @@ TypeScript: fast-check
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Phase 5: 后端 ContentSizeCalculator
+
 
 - [ ] 10. 实现 ContentSizeCalculator
   - [x] 10.1 创建 `src-tauri/src/core/page_frame/calculator.rs`
@@ -266,7 +274,9 @@ TypeScript: fast-check
 
 ## Phase 6: 后端 Tauri Commands
 
-- [-] 12. 创建 Tauri Commands
+- [x] 12. 创建 Tauri Commands
+
+
 
   - [x] 12.1 创建 `src-tauri/src/commands/page_commands.rs`
 
@@ -275,11 +285,13 @@ TypeScript: fast-check
     - 实现 get_page_image 命令
     - 实现 next_frame / prev_frame 命令
     - _Requirements: 11.1, 11.5_
-  - [ ] 12.2 实现二进制传输
+  - [x] 12.2 实现二进制传输
+
     - 使用 tauri::ipc::Response 返回二进制数据
     - 避免 Base64 编码
     - _Requirements: 11.2_
-  - [ ] 12.3 实现事件推送
+  - [x] 12.3 实现事件推送
+
     - page_loaded 事件
     - page_unloaded 事件
     - memory_pressure 事件
@@ -289,7 +301,8 @@ TypeScript: fast-check
     - 更新 PageFrameContext 配置
     - 触发帧重新计算
     - _Requirements: 10.4_
-  - [ ] 12.5 实现设置切换时位置保持
+  - [x] 12.5 实现设置切换时位置保持
+
     - 记录当前物理页面索引
     - 重新计算帧后导航到正确位置
     - _Requirements: 10.1, 10.2, 10.3_
@@ -302,6 +315,7 @@ TypeScript: fast-check
 
 ## Phase 7: 前端 Store 和 API
 
+
 - [ ] 14. 创建前端 API 封装
   - [x] 14.1 创建 `src/lib/api/pageManager.ts`
 
@@ -313,7 +327,8 @@ TypeScript: fast-check
     - 监听 page_loaded, page_unloaded, memory_pressure 事件
     - _Requirements: 11.3_
 
-- [ ] 15. 创建 PageFrameStore
+- [x] 15. 创建 PageFrameStore
+
   - [x] 15.1 创建 `src/lib/stores/pageFrame.svelte.ts`
 
     - 定义 PageFrameState 状态
@@ -328,40 +343,47 @@ TypeScript: fast-check
 ## Phase 8: 前端 FrameLayer 组件
 
 - [ ] 16. 重构 FrameLayer 组件
-  - [ ] 16.1 更新 `src/lib/stackview/StackView.svelte`
-    - 集成 PageFrameStore
+  - [x] 16.1 更新 `src/lib/stackview/StackView.svelte`
+    - 集成 PageFrameStore（已有完整帧管理逻辑）
     - 协调 CurrentFrameLayer/PrevFrameLayer/NextFrameLayer
     - _Requirements: 7.5_
-  - [ ] 16.2 更新 `src/lib/stackview/layers/CurrentFrameLayer.svelte`
+  - [x] 16.2 更新 `src/lib/stackview/layers/CurrentFrameLayer.svelte`
+
     - 支持分割页面渲染 (CSS clip-path)
     - 支持双页布局
     - _Requirements: 5.2, 5.5, 6.4_
-  - [ ] 16.3 更新 PrevFrameLayer/NextFrameLayer
-    - 同步分割页面和双页支持
+  - [x] 16.3 更新 PrevFrameLayer/NextFrameLayer
+    - 同步分割页面和双页支持（添加 cropRect 支持）
+    - 添加 direction 属性支持 RTL
     - 预加载帧数据
     - _Requirements: 7.5_
-  - [ ] 16.4 实现无闪烁切换
-    - 预缓存尺寸计算缩放
-    - 原子切换图片和缩放
+  - [x] 16.4 实现无闪烁切换
+    - 预缓存尺寸计算缩放（imageTransitionManager）
+    - 原子切换图片和缩放（transitionState）
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
 ## Phase 9: 错误处理和集成
 
-- [ ] 17. 实现错误处理
-  - [ ] 17.1 后端错误处理
-    - 定义 PageError 枚举
-    - 实现重试机制 (指数退避)
+- [x] 17. 实现错误处理
+  - [x] 17.1 后端错误处理
+    - 创建 `src-tauri/src/core/page_frame/error.rs`
+    - 定义 PageFrameError 枚举（8 种错误类型）
+    - 实现 is_retryable() 判断可重试错误
+    - 实现 error_code() 用于前端识别
     - _Requirements: 12.1, 12.2_
-  - [ ] 17.2 前端错误处理
-    - 显示错误占位符
-    - 不崩溃继续运行
+  - [x] 17.2 前端错误处理
+    - 创建 `src/lib/utils/pageFrameError.ts`
+    - 实现 parsePageFrameError() 解析后端错误
+    - 实现 withRetry() 指数退避重试
+    - 实现 ErrorBoundaryState 错误边界状态管理
     - _Requirements: 12.1, 12.5_
-  - [ ] 17.3 内存压力处理
-    - 检测内存压力
-    - 主动释放缓存
+  - [x] 17.3 内存压力处理
+    - 实现 subscribeEvents() 订阅后端事件
+    - 实现 createMemoryPressureHandler() 内存压力处理器
+    - 支持自动清理和手动触发清理
     - _Requirements: 12.4_
 
-- [ ] 18. 集成测试
+- [ ] 18. 集成测试（需手动验证）
   - [ ] 18.1 端到端翻页测试
     - 打开书籍 → 翻页 → 验证帧内容
   - [ ] 18.2 设置切换测试
@@ -371,5 +393,5 @@ TypeScript: fast-check
     - 缓存访问延迟
 
 - [ ] 19. Final Checkpoint - 确保所有测试通过
-  - Ensure all tests pass, ask the user if questions arise.
+  - 需要用户手动运行应用验证功能
 

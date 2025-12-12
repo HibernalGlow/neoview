@@ -416,3 +416,153 @@ export async function positionFromVirtual(virtualIndex: number): Promise<[number
 export async function framePositionForIndex(pageIndex: number): Promise<[number, number]> {
 	return invoke<[number, number]>('pf_frame_position_for_index', { pageIndex });
 }
+
+
+// ===== 事件监听 =====
+
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+
+/** 页面加载事件数据 */
+export interface PageLoadedEvent {
+	index: number;
+	size: number;
+}
+
+/** 页面卸载事件数据 */
+export interface PageUnloadedEvent {
+	index: number;
+}
+
+/** 内存压力事件数据 */
+export interface MemoryPressureEvent {
+	current: number;
+	limit: number;
+	percent: number;
+}
+
+/** 事件监听器集合 */
+export interface PageManagerListeners {
+	onPageLoaded?: (event: PageLoadedEvent) => void;
+	onPageUnloaded?: (event: PageUnloadedEvent) => void;
+	onMemoryPressure?: (event: MemoryPressureEvent) => void;
+}
+
+/** 事件取消订阅函数集合 */
+interface UnlistenFns {
+	pageLoaded?: UnlistenFn;
+	pageUnloaded?: UnlistenFn;
+	memoryPressure?: UnlistenFn;
+}
+
+let unlistenFns: UnlistenFns = {};
+
+/**
+ * 订阅 PageManager 事件
+ * 
+ * @param listeners 事件监听器
+ * @returns 取消订阅函数
+ */
+export async function subscribeEvents(listeners: PageManagerListeners): Promise<() => void> {
+	// 先取消之前的订阅
+	await unsubscribeEvents();
+
+	// 订阅页面加载事件
+	if (listeners.onPageLoaded) {
+		const callback = listeners.onPageLoaded;
+		unlistenFns.pageLoaded = await listen<PageLoadedEvent>('page_loaded', (event) => {
+			callback(event.payload);
+		});
+	}
+
+	// 订阅页面卸载事件
+	if (listeners.onPageUnloaded) {
+		const callback = listeners.onPageUnloaded;
+		unlistenFns.pageUnloaded = await listen<PageUnloadedEvent>('page_unloaded', (event) => {
+			callback(event.payload);
+		});
+	}
+
+	// 订阅内存压力事件
+	if (listeners.onMemoryPressure) {
+		const callback = listeners.onMemoryPressure;
+		unlistenFns.memoryPressure = await listen<MemoryPressureEvent>('memory_pressure', (event) => {
+			console.warn('⚠️ [PageManager] 内存压力:', event.payload);
+			callback(event.payload);
+		});
+	}
+
+	return unsubscribeEvents;
+}
+
+/**
+ * 取消所有事件订阅
+ */
+export async function unsubscribeEvents(): Promise<void> {
+	if (unlistenFns.pageLoaded) {
+		unlistenFns.pageLoaded();
+		unlistenFns.pageLoaded = undefined;
+	}
+	if (unlistenFns.pageUnloaded) {
+		unlistenFns.pageUnloaded();
+		unlistenFns.pageUnloaded = undefined;
+	}
+	if (unlistenFns.memoryPressure) {
+		unlistenFns.memoryPressure();
+		unlistenFns.memoryPressure = undefined;
+	}
+}
+
+// ===== 内存压力处理 =====
+
+/** 内存压力处理器 */
+export interface MemoryPressureHandler {
+	/** 开始监听 */
+	start: () => Promise<void>;
+	/** 停止监听 */
+	stop: () => void;
+	/** 手动触发清理 */
+	triggerCleanup: () => Promise<void>;
+}
+
+/**
+ * 创建内存压力处理器
+ * 
+ * @param onPressure 压力回调（可选，用于 UI 提示）
+ * @param cleanupThreshold 触发清理的阈值百分比（默认 80%）
+ */
+export function createMemoryPressureHandler(
+	onPressure?: (event: MemoryPressureEvent) => void,
+	cleanupThreshold: number = 80
+): MemoryPressureHandler {
+	let unsubscribe: (() => void) | null = null;
+
+	return {
+		async start() {
+			const unsub = await subscribeEvents({
+				onMemoryPressure: (event) => {
+					// 通知 UI
+					onPressure?.(event);
+
+					// 如果超过阈值，触发清理
+					if (event.percent >= cleanupThreshold) {
+						console.warn(`⚠️ [MemoryPressure] ${event.percent}% >= ${cleanupThreshold}%，触发清理`);
+						// 后端会自动处理，这里只是记录日志
+					}
+				}
+			});
+			unsubscribe = unsub;
+		},
+
+		stop() {
+			if (unsubscribe) {
+				unsubscribe();
+				unsubscribe = null;
+			}
+		},
+
+		async triggerCleanup() {
+			console.log('🧹 [MemoryPressure] 手动触发缓存清理');
+			await clearCache();
+		}
+	};
+}

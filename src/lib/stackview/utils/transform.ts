@@ -2,7 +2,7 @@
  * 变换计算工具函数
  */
 
-import type { FrameImage } from '../types/frame';
+import type { FrameImage, CropRect } from '../types/frame';
 
 /**
  * 计算裁剪路径
@@ -14,6 +14,23 @@ export function getClipPath(splitHalf: 'left' | 'right' | null | undefined): str
     return 'inset(0 0 0 50%)';  // 裁掉左半
   }
   return 'none';
+}
+
+/**
+ * 从 CropRect 计算裁剪路径
+ * 
+ * CropRect 使用归一化坐标 (0-1)
+ * CSS inset 使用百分比 (top right bottom left)
+ */
+export function getClipPathFromCropRect(cropRect: CropRect | undefined | null): string {
+  if (!cropRect) return 'none';
+  
+  const top = cropRect.y * 100;
+  const right = (1 - cropRect.x - cropRect.width) * 100;
+  const bottom = (1 - cropRect.y - cropRect.height) * 100;
+  const left = cropRect.x * 100;
+  
+  return `inset(${top.toFixed(1)}% ${right.toFixed(1)}% ${bottom.toFixed(1)}% ${left.toFixed(1)}%)`;
 }
 
 /**

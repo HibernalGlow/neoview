@@ -3,6 +3,16 @@
  */
 
 /**
+ * 裁剪区域（归一化坐标 0-1）
+ */
+export interface CropRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
  * 帧中的单张图片
  */
 export interface FrameImage {
@@ -12,8 +22,10 @@ export interface FrameImage {
   physicalIndex: number;
   /** 虚拟页面索引 */
   virtualIndex: number;
-  /** 分割半边 */
+  /** 分割半边（旧方式，兼容） */
   splitHalf?: 'left' | 'right' | null;
+  /** 裁剪区域（新方式，优先于 splitHalf） */
+  cropRect?: CropRect;
   /** 旋转角度 */
   rotation?: number;
   /** 图片宽度 */

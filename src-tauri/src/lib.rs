@@ -451,6 +451,8 @@ pub fn run() {
             commands::stream_commands::cancel_streams_for_path,
             commands::stream_commands::get_active_stream_count,
             commands::stream_commands::stream_search_v2,
+            // Metadata commands
+            commands::metadata_commands::get_image_metadata,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

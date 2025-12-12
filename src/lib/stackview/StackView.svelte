@@ -599,6 +599,27 @@
 			if (loadedImageSize?.width !== newWidth || loadedImageSize?.height !== newHeight) {
 				loadedImageSize = { width: newWidth, height: newHeight };
 			}
+
+			// 更新 MetadataService 中的尺寸信息
+			updateMetadataDimensions(newWidth, newHeight);
+		}
+	}
+
+	// 更新 MetadataService 中的图像尺寸
+	async function updateMetadataDimensions(width: number, height: number) {
+		const book = bookStore.currentBook;
+		const page = bookStore.currentPage;
+		if (!book || !page) return;
+
+		try {
+			const { metadataService } = await import('$lib/services/metadataService');
+			const isArchive = book.type === 'archive';
+			const path = isArchive ? book.path : page.path;
+			const innerPath = isArchive ? page.innerPath : undefined;
+
+			metadataService.updateDimensions(path, width, height, innerPath);
+		} catch (error) {
+			console.warn('[StackView] 更新元数据尺寸失败:', error);
 		}
 	}
 

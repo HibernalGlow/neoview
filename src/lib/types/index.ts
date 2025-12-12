@@ -8,3 +8,4 @@ export * from './content';
 export * from './settings';
 export * from './keyboard';
 export * from './fs';
+export * from './metadata';

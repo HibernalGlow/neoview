@@ -1061,6 +1061,7 @@ class BookStore {
     if (!book) {
       console.debug('[BookStore] syncInfoPanelBookInfo: 没有当前书籍');
       infoPanelStore.resetBookInfo();
+      infoPanelStore.resetImageInfo();
       return;
     }
 
@@ -1089,6 +1090,39 @@ class BookStore {
 
     console.debug('[BookStore] syncInfoPanelBookInfo: 设置书籍信息到 InfoPanel，bookInfo:', bookInfo);
     infoPanelStore.setBookInfo(bookInfo);
+
+    // 同步当前页面的图像元数据
+    await this.syncCurrentPageImageInfo();
+  }
+
+  /**
+   * 同步当前页面的图像元数据到 infoPanelStore
+   */
+  private async syncCurrentPageImageInfo() {
+    const book = this.state.currentBook;
+    const page = this.currentPage;
+
+    if (!book || !page) {
+      infoPanelStore.resetImageInfo();
+      return;
+    }
+
+    try {
+      // 动态导入 metadataService 避免循环依赖
+      const { metadataService } = await import('$lib/services/metadataService');
+
+      // 先从 Page 对象更新缓存（复用已有元数据）
+      metadataService.updateFromPage(page, book.path);
+
+      // 同步到 infoPanelStore
+      const isArchive = book.type === 'archive';
+      const path = isArchive ? book.path : page.path;
+      const innerPath = isArchive ? page.innerPath : undefined;
+
+      await metadataService.syncCurrentPageMetadata(path, innerPath, page.index);
+    } catch (error) {
+      console.warn('[BookStore] syncCurrentPageImageInfo 失败:', error);
+    }
   }
 
   private computePageWindowState(currentIndex: number, totalPages: number, radius: number) {

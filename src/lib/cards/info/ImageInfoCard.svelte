@@ -29,6 +29,14 @@ function formatBitrate(bps?: number): string {
 	if (bps >= 1_000) return `${(bps / 1_000).toFixed(0)} Kbps`;
 	return `${bps} bps`;
 }
+
+function formatFileSize(bytes?: number): string {
+	if (bytes == null || bytes <= 0) return '—';
+	if (bytes >= 1_073_741_824) return `${(bytes / 1_073_741_824).toFixed(2)} GB`;
+	if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(2)} MB`;
+	if (bytes >= 1_024) return `${(bytes / 1_024).toFixed(1)} KB`;
+	return `${bytes} B`;
+}
 </script>
 
 {#if imageInfo}
@@ -101,10 +109,12 @@ function formatBitrate(bps?: number): string {
 				<span class="text-muted-foreground">格式:</span>
 				<span>{imageInfo.format ?? '—'}</span>
 			</div>
-			<div class="flex justify-between">
-				<span class="text-muted-foreground">色深:</span>
-				<span>{imageInfo.colorDepth ?? '—'}</span>
-			</div>
+			{#if imageInfo.fileSize}
+				<div class="flex justify-between">
+					<span class="text-muted-foreground">大小:</span>
+					<span>{formatFileSize(imageInfo.fileSize)}</span>
+				</div>
+			{/if}
 		{/if}
 	</div>
 {:else}

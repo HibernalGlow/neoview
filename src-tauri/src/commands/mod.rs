@@ -25,6 +25,7 @@ pub mod page_commands;
 pub mod system_monitor_commands;
 pub mod ollama_commands;
 pub mod stream_commands;
+pub mod metadata_commands;
 
 pub use book_commands::*;
 pub use comparison_commands::*;
@@ -46,3 +47,4 @@ pub use page_commands::*;
 pub use system_monitor_commands::*;
 pub use ollama_commands::*;
 pub use stream_commands::*;
+pub use metadata_commands::*;

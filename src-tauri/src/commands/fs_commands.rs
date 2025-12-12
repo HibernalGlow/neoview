@@ -502,7 +502,7 @@ pub async fn batch_load_directory_snapshots(
         .map(|(idx, path, path_buf, mtime)| {
             let fs_manager = Arc::clone(&fs_manager);
             let cache_index_db = Arc::clone(&cache_index_db);
-            let cache_state_inner = cache_state.inner().clone();
+            let cache_state_inner = cache_state.inner();
 
             async move {
                 // 使用 spawn_blocking 避免阻塞 tokio 线程

@@ -86,7 +86,7 @@
 		
 		// 双页模式：计算组合后的总尺寸，然后整体适应视口
 		if (layout === 'double' && frame.images.length === 2) {
-			// 计算两张图片的总宽度和最大高度
+			// 计算两张图片的总宽度和最大高度（应用 scale 后）
 			const img1 = frame.images[0];
 			const img2 = frame.images[1];
 			const w1 = (img1.width ?? 0) * (img1.scale ?? 1);
@@ -107,7 +107,8 @@
 				const finalWidth = displayWidth * frameScale;
 				const finalHeight = displayHeight * frameScale;
 				
-				return `width: ${finalWidth}px; height: ${finalHeight}px;`;
+				// 必须添加 max-width/max-height: none 覆盖 FrameImage 的默认限制
+				return `width: ${finalWidth}px; height: ${finalHeight}px; max-width: none; max-height: none; object-fit: fill;`;
 			}
 		}
 		

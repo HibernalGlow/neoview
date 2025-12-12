@@ -300,6 +300,9 @@ export function computePanoramaRange(
 // 帧构建辅助
 // ============================================================================
 
+/** 宽页拉伸模式 */
+export type WidePageStretch = 'none' | 'uniformHeight' | 'uniformWidth';
+
 export interface FrameBuildConfig {
   layout: PageMode;
   orientation: Orientation;
@@ -311,6 +314,8 @@ export interface FrameBuildConfig {
   singleFirstPage: boolean;
   singleLastPage: boolean;
   totalPages: number;
+  /** 宽页拉伸模式（双页模式下的对齐方式） */
+  widePageStretch?: WidePageStretch;
 }
 
 export interface PageData {
@@ -318,6 +323,43 @@ export interface PageData {
   pageIndex: number;
   width?: number;
   height?: number;
+}
+
+/**
+ * 计算双页模式下的内容缩放比例
+ * 
+ * @param sizes 各元素的原始尺寸
+ * @param stretchMode 拉伸模式
+ * @returns 每个元素对应的缩放比例
+ */
+function calculateContentScales(
+  sizes: ImageSize[],
+  stretchMode: WidePageStretch
+): number[] {
+  if (sizes.length === 0) return [];
+  if (sizes.length === 1) return [1.0];
+  
+  switch (stretchMode) {
+    case 'none':
+      return sizes.map(() => 1.0);
+    
+    case 'uniformHeight': {
+      // 找到最大高度，然后每个元素的缩放比例 = 最大高度 / 该元素高度
+      const maxHeight = Math.max(...sizes.map(s => s.height));
+      if (maxHeight <= 0) return sizes.map(() => 1.0);
+      return sizes.map(s => s.height > 0 ? maxHeight / s.height : 1.0);
+    }
+    
+    case 'uniformWidth': {
+      // 计算平均宽度，然后每个元素的缩放比例 = 平均宽度 / 该元素宽度
+      const avgWidth = sizes.reduce((sum, s) => sum + s.width, 0) / sizes.length;
+      if (avgWidth <= 0) return sizes.map(() => 1.0);
+      return sizes.map(s => s.width > 0 ? avgWidth / s.width : 1.0);
+    }
+    
+    default:
+      return sizes.map(() => 1.0);
+  }
 }
 
 /**
@@ -422,6 +464,15 @@ export function buildFrameImages(
       width: nextPage.width,
       height: nextPage.height,
     };
+
+    // 计算双页对齐的 scale
+    const stretchMode = config.widePageStretch ?? 'uniformHeight';
+    if (stretchMode !== 'none') {
+      const sizes: ImageSize[] = [currentSize, nextSize];
+      const scales = calculateContentScales(sizes, stretchMode);
+      mainImage.scale = scales[0];
+      secondImage.scale = scales[1];
+    }
 
     // 根据方向排列
     // 注意：我们始终按逻辑顺序返回 [Current, Next]。

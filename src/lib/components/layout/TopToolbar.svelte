@@ -94,13 +94,16 @@
 		Clock,
 		FileText,
 		HardDrive,
-		List
+		List,
+		AlignVerticalSpaceAround,
+		AlignHorizontalSpaceAround,
+		Equal
 	} from '@lucide/svelte';
 
 	import { showToast } from '$lib/utils/toast';
 
 	import { settingsManager } from '$lib/settings/settingsManager';
-	import type { ZoomMode } from '$lib/settings/settingsManager';
+	import type { ZoomMode, WidePageStretch } from '$lib/settings/settingsManager';
 	import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
 	import { slideshowStore } from '$lib/stores/slideshow.svelte';
 	import type { PageSortMode } from '$lib/types/book';
@@ -174,6 +177,9 @@
 	let singleFirstPage = $derived(singleFirstPageMode !== 'continue');
 	let singleLastPage = $derived(singleLastPageMode === 'continue');
 
+	// 宽页拉伸模式（双页模式下的对齐方式）
+	let widePageStretch = $derived(settings.view.pageLayout?.widePageStretch ?? 'uniformHeight');
+
 	// 顶部工具栏透明度和模糊
 	let topToolbarOpacity = $derived(settings.panels?.topToolbarOpacity ?? 85);
 	let topToolbarBlur = $derived(settings.panels?.topToolbarBlur ?? 12);
@@ -228,6 +234,26 @@
 				singleLastPageMode: newMode
 			}
 		});
+	}
+
+	// 设置宽页拉伸模式
+	function setWidePageStretch(mode: WidePageStretch) {
+		settingsManager.updateNestedSettings('view', {
+			pageLayout: {
+				...settings.view.pageLayout,
+				widePageStretch: mode
+			}
+		});
+	}
+
+	// 获取宽页拉伸模式标签
+	function getWidePageStretchLabel(mode: WidePageStretch): string {
+		switch (mode) {
+			case 'none': return '无对齐';
+			case 'uniformHeight': return '高度对齐';
+			case 'uniformWidth': return '宽度对齐';
+			default: return '高度对齐';
+		}
 	}
 
 	function getAutoRotateLabel(mode: string): string {
@@ -1128,6 +1154,59 @@
 							<p>尾页独立显示{singleLastPage ? '（开）' : '（关）'}</p>
 						</Tooltip.Content>
 					</Tooltip.Root>
+
+					<Separator.Root orientation="vertical" class="mx-2 h-5" />
+
+					<span class="text-muted-foreground mr-2 text-xs">宽页拉伸</span>
+					<div class="bg-muted/60 inline-flex items-center gap-0.5 rounded-full p-0.5 shadow-inner">
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<Button
+									variant={widePageStretch === 'none' ? 'default' : 'ghost'}
+									size="icon"
+									class="h-7 w-7 rounded-full"
+									onclick={() => setWidePageStretch('none')}
+								>
+									<Equal class="h-3.5 w-3.5" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>无对齐（保持原始比例）</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
+
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<Button
+									variant={widePageStretch === 'uniformHeight' ? 'default' : 'ghost'}
+									size="icon"
+									class="h-7 w-7 rounded-full"
+									onclick={() => setWidePageStretch('uniformHeight')}
+								>
+									<AlignVerticalSpaceAround class="h-3.5 w-3.5" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>高度对齐（双页高度统一）</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
+
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<Button
+									variant={widePageStretch === 'uniformWidth' ? 'default' : 'ghost'}
+									size="icon"
+									class="h-7 w-7 rounded-full"
+									onclick={() => setWidePageStretch('uniformWidth')}
+								>
+									<AlignHorizontalSpaceAround class="h-3.5 w-3.5" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>宽度对齐（双页宽度统一）</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
+					</div>
 				</div>
 			{/if}
 

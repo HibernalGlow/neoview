@@ -452,6 +452,11 @@
 		settings.view.pageLayout?.singleLastPageMode === 'continue' ? true : false
 	);
 
+	// 宽页拉伸模式（双页模式下的对齐方式）
+	let widePageStretch = $derived(
+		settings.view.pageLayout?.widePageStretch ?? 'uniformHeight'
+	);
+
 	let frameConfig = $derived.by(
 		(): FrameBuildConfig => ({
 			layout: pageMode,
@@ -463,7 +468,9 @@
 			// 首页/尾页单独显示（参考 NeeView）
 			singleFirstPage: singleFirstPage,
 			singleLastPage: singleLastPage,
-			totalPages: bookStore.totalPages
+			totalPages: bookStore.totalPages,
+			// 宽页拉伸模式
+			widePageStretch: widePageStretch
 		})
 	);
 

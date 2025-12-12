@@ -8,9 +8,10 @@
 -->
 <script lang="ts">
   import { LayerZIndex } from '../types/layer';
-  import type { PanoramaUnit } from '../stores/panoramaStore.svelte';
+  import type { PanoramaUnit, PanoramaImage } from '../stores/panoramaStore.svelte';
   import FrameImage from '../components/FrameImage.svelte';
   import '../styles/frameLayer.css';
+  import type { WidePageStretch } from '$lib/settings/settingsManager';
   
   let {
     units = [],
@@ -19,6 +20,7 @@
     direction = 'ltr',
     currentPageIndex = 0,
     viewportSize = { width: 0, height: 0 },
+    widePageStretch = 'uniformHeight',
     onScroll,
   }: {
     units: PanoramaUnit[];
@@ -27,6 +29,7 @@
     direction?: 'ltr' | 'rtl';
     currentPageIndex?: number;
     viewportSize?: { width: number; height: number };
+    widePageStretch?: WidePageStretch;
     onScroll?: (e: Event) => void;
   } = $props();
   
@@ -62,20 +65,104 @@
     }, 100);
   });
   
-  // 计算图片尺寸：全景模式保持与非全景相同的缩放
-  // 使用 max-width + max-height 实现 contain 效果，与非全景 fit 模式一致
-  // 双页模式时宽度减半
-  let imageStyle = $derived.by(() => {
+  /**
+   * 计算宽页拉伸的 scale 值
+   * 参考 ContentScaleCalculator 的算法
+   */
+  function calculateStretchScales(images: PanoramaImage[], stretch: WidePageStretch): number[] {
+    if (images.length === 0) return [];
+    if (images.length === 1) return [1.0];
+    
+    const sizes = images.map(img => ({
+      width: img.width ?? 0,
+      height: img.height ?? 0
+    }));
+    
+    // 检查是否有有效尺寸
+    const hasValidSizes = sizes.every(s => s.width > 0 && s.height > 0);
+    if (!hasValidSizes) {
+      return images.map(() => 1.0);
+    }
+    
+    switch (stretch) {
+      case 'uniformHeight': {
+        // 高度统一：scale = maxHeight / elementHeight
+        const maxHeight = Math.max(...sizes.map(s => s.height));
+        return sizes.map(s => s.height > 0 ? maxHeight / s.height : 1.0);
+      }
+      case 'uniformWidth': {
+        // 宽度统一：scale = avgWidth / elementWidth
+        const avgWidth = sizes.reduce((sum, s) => sum + s.width, 0) / sizes.length;
+        return sizes.map(s => s.width > 0 ? avgWidth / s.width : 1.0);
+      }
+      default:
+        // none：不拉伸
+        return images.map(() => 1.0);
+    }
+  }
+  
+  /**
+   * 计算单张图片的显示样式
+   * 双页模式下应用宽页拉伸
+   */
+  function getImageStyle(img: PanoramaImage, unit: PanoramaUnit, imgIndex: number): string {
     const vp = viewportSize;
     if (!vp.width || !vp.height) {
       return 'max-width: 100%; max-height: 100%;';
     }
     
-    // 双页模式：每张图片最多占宽度的一半
-    const effectiveWidth = pageMode === 'double' ? (vp.width - 4) / 2 : vp.width;
+    const imgWidth = img.width ?? 0;
+    const imgHeight = img.height ?? 0;
     
-    // 使用 max-width + max-height 实现 contain 效果
+    // 单页模式或无尺寸信息：使用简单的 contain 模式
+    if (pageMode !== 'double' || !imgWidth || !imgHeight) {
+      const effectiveWidth = pageMode === 'double' ? (vp.width - 4) / 2 : vp.width;
+      return `max-width: ${effectiveWidth}px; max-height: ${vp.height}px;`;
+    }
+    
+    // 双页模式：应用宽页拉伸
+    const scales = calculateStretchScales(unit.images, widePageStretch);
+    const scale = scales[imgIndex] ?? 1.0;
+    
+    // 应用 scale 后的显示尺寸
+    const displayWidth = imgWidth * scale;
+    const displayHeight = imgHeight * scale;
+    
+    // 计算两张图片的总尺寸（应用 scale 后）
+    let totalWidth = 0;
+    let maxHeight = 0;
+    unit.images.forEach((uImg, i) => {
+      const w = (uImg.width ?? 0) * (scales[i] ?? 1.0);
+      const h = (uImg.height ?? 0) * (scales[i] ?? 1.0);
+      totalWidth += w;
+      maxHeight = Math.max(maxHeight, h);
+    });
+    
+    if (totalWidth > 0 && maxHeight > 0) {
+      // 计算整体缩放比例以适应视口
+      const scaleX = vp.width / totalWidth;
+      const scaleY = vp.height / maxHeight;
+      const frameScale = Math.min(scaleX, scaleY);
+      
+      // 应用帧缩放到当前图片
+      const finalWidth = displayWidth * frameScale;
+      const finalHeight = displayHeight * frameScale;
+      
+      return `width: ${finalWidth}px; height: ${finalHeight}px; max-width: none; max-height: none; object-fit: fill;`;
+    }
+    
+    // 回退到简单模式
+    const effectiveWidth = (vp.width - 4) / 2;
     return `max-width: ${effectiveWidth}px; max-height: ${vp.height}px;`;
+  }
+  
+  // 单页模式的图片样式（保持原有逻辑）
+  let singleImageStyle = $derived.by(() => {
+    const vp = viewportSize;
+    if (!vp.width || !vp.height) {
+      return 'max-width: 100%; max-height: 100%;';
+    }
+    return `max-width: ${vp.width}px; max-height: ${vp.height}px;`;
   });
   
   // 【性能优化】原生滚动方案，不再使用 transform-origin
@@ -116,7 +203,7 @@
               url={img.url}
               alt="Page {img.pageIndex + 1}"
               class="panorama-image"
-              style={imageStyle}
+              style={pageMode === 'double' ? getImageStyle(img, unit, i) : singleImageStyle}
             />
           {/each}
         </div>

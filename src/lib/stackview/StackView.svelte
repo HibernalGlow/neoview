@@ -1028,6 +1028,7 @@
 			{direction}
 			currentPageIndex={bookStore.currentPageIndex}
 			{viewportSize}
+			{widePageStretch}
 		/>
 	{:else if useStackRenderer}
 		<!-- 层叠渲染模式：使用 StackViewer（支持双页） -->

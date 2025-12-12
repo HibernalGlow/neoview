@@ -85,7 +85,9 @@
 		Smartphone,
 		MonitorSmartphone,
 		Play,
-		Pause
+		Pause,
+		SquareChevronLeft,
+		SquareChevronRight
 	} from '@lucide/svelte';
 
 	import { showToast } from '$lib/utils/toast';
@@ -160,6 +162,14 @@
 		settings.view.pageLayout?.treatHorizontalAsDoublePage ?? false
 	);
 	let autoRotateMode = $derived(settings.view.autoRotate?.mode ?? 'none');
+	
+	// 首页/尾页独立显示设置
+	// 'default' = 首页独立/尾页不独立, 'continue' = 首页不独立/尾页独立, 'restoreOrDefault' = 默认行为
+	let singleFirstPageMode = $derived(settings.view.pageLayout?.singleFirstPageMode ?? 'restoreOrDefault');
+	let singleLastPageMode = $derived(settings.view.pageLayout?.singleLastPageMode ?? 'restoreOrDefault');
+	// 简化为布尔值：是否启用首页/尾页独立显示
+	let singleFirstPage = $derived(singleFirstPageMode !== 'continue');
+	let singleLastPage = $derived(singleLastPageMode === 'continue');
 
 	// 顶部工具栏透明度和模糊
 	let topToolbarOpacity = $derived(settings.panels?.topToolbarOpacity ?? 85);
@@ -189,6 +199,30 @@
 			pageLayout: {
 				...settings.view.pageLayout,
 				treatHorizontalAsDoublePage: !treatHorizontalAsDoublePage
+			}
+		});
+	}
+
+	// 切换首页独立显示
+	function toggleSingleFirstPage() {
+		// 切换逻辑：当前启用 -> 禁用 (continue), 当前禁用 -> 启用 (default)
+		const newMode = singleFirstPage ? 'continue' : 'default';
+		settingsManager.updateNestedSettings('view', {
+			pageLayout: {
+				...settings.view.pageLayout,
+				singleFirstPageMode: newMode
+			}
+		});
+	}
+
+	// 切换尾页独立显示
+	function toggleSingleLastPage() {
+		// 切换逻辑：当前启用 -> 禁用 (default), 当前禁用 -> 启用 (continue)
+		const newMode = singleLastPage ? 'default' : 'continue';
+		settingsManager.updateNestedSettings('view', {
+			pageLayout: {
+				...settings.view.pageLayout,
+				singleLastPageMode: newMode
 			}
 		});
 	}
@@ -972,6 +1006,41 @@
 						</Tooltip.Trigger>
 						<Tooltip.Content>
 							<p>横向页视为双页{treatHorizontalAsDoublePage ? '（开）' : '（关）'}</p>
+						</Tooltip.Content>
+					</Tooltip.Root>
+
+					<Separator.Root orientation="vertical" class="mx-2 h-5" />
+
+					<span class="text-muted-foreground mr-2 text-xs">双页独立</span>
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							<Button
+								variant={singleFirstPage ? 'default' : 'ghost'}
+								size="icon"
+								class="h-7 w-7"
+								onclick={toggleSingleFirstPage}
+							>
+								<SquareChevronLeft class="h-3.5 w-3.5" />
+							</Button>
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							<p>首页独立显示{singleFirstPage ? '（开）' : '（关）'}</p>
+						</Tooltip.Content>
+					</Tooltip.Root>
+
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							<Button
+								variant={singleLastPage ? 'default' : 'ghost'}
+								size="icon"
+								class="h-7 w-7"
+								onclick={toggleSingleLastPage}
+							>
+								<SquareChevronRight class="h-3.5 w-3.5" />
+							</Button>
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							<p>尾页独立显示{singleLastPage ? '（开）' : '（关）'}</p>
 						</Tooltip.Content>
 					</Tooltip.Root>
 				</div>

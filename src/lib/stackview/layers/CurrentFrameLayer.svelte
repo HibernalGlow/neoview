@@ -242,7 +242,7 @@
 	/* 双页模式（始终左右排列） */
 	.scroll-frame-container.frame-double .scroll-frame-content {
 		flex-direction: row;
-		gap: 4px;
+		gap: 0;
 	}
 
 	.scroll-frame-container.frame-double.frame-rtl .scroll-frame-content {

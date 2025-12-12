@@ -7,6 +7,67 @@ import { bookStore } from '$lib/stores/book.svelte';
 import { imagePool } from './imagePool.svelte';
 import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte';
 import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
+import { settingsManager } from '$lib/settings/settingsManager';
+
+/**
+ * 检查是否应该加载第二张图片（双页模式）
+ * 
+ * 按照 NeeView 的逻辑：
+ * 1. 当前页横向 → 不加载第二张（当前页独占）
+ * 2. 下一页横向 → 不加载第二张（当前页独占，下一页将独占）
+ * 3. 首页/尾页单独显示 → 不加载第二张
+ * 4. 正常双页 → 加载第二张
+ */
+function shouldLoadSecondPage(currentIndex: number, nextIndex: number): boolean {
+  const book = bookStore.currentBook;
+  if (!book || !book.pages) return false;
+  if (nextIndex >= book.pages.length) return false;
+
+  const settings = settingsManager.getSettings();
+  const treatHorizontalAsDoublePage = settings.view.pageLayout?.treatHorizontalAsDoublePage ?? false;
+  const singleFirstPageMode = settings.view.pageLayout?.singleFirstPageMode ?? 'restoreOrDefault';
+  const singleLastPageMode = settings.view.pageLayout?.singleLastPageMode ?? 'restoreOrDefault';
+  
+  // 解析首页/尾页设置
+  const singleFirstPage = singleFirstPageMode !== 'continue';
+  const singleLastPage = singleLastPageMode === 'continue';
+
+  // 获取当前页尺寸
+  const currentPage = book.pages[currentIndex];
+  const currentWidth = currentPage?.width ?? 0;
+  const currentHeight = currentPage?.height ?? 0;
+  const hasCurrentSize = currentWidth > 0 && currentHeight > 0;
+  const isCurrentLandscape = hasCurrentSize && currentWidth > currentHeight;
+
+  // 1. 当前页横向 → 不加载第二张
+  if (treatHorizontalAsDoublePage && isCurrentLandscape) {
+    return false;
+  }
+
+  // 获取下一页尺寸
+  const nextPage = book.pages[nextIndex];
+  const nextWidth = nextPage?.width ?? 0;
+  const nextHeight = nextPage?.height ?? 0;
+  const hasNextSize = nextWidth > 0 && nextHeight > 0;
+  const isNextLandscape = hasNextSize && nextWidth > nextHeight;
+
+  // 2. 下一页横向 → 不加载第二张
+  if (treatHorizontalAsDoublePage && isNextLandscape) {
+    return false;
+  }
+
+  // 3. 首页/尾页单独显示
+  const totalPages = book.pages.length;
+  const isFirst = currentIndex === 0 || nextIndex === 0;
+  const isLast = currentIndex === totalPages - 1 || nextIndex === totalPages - 1;
+  
+  if ((singleFirstPage && isFirst) || (singleLastPage && isLast)) {
+    return false;
+  }
+
+  // 4. 正常双页 → 加载第二张
+  return true;
+}
 
 /**
  * 更新缓存命中时的延迟追踪
@@ -129,9 +190,12 @@ export function createImageStore() {
     }
     
     // 双页模式：获取第二张（同步尝试）
+    // 先检查是否应该加载第二张图片（考虑横向页面等情况）
     let secondCached: ReturnType<typeof imagePool.getSync> = null;
-    if (pageMode === 'double') {
-      const secondIndex = currentIndex + 1;
+    const secondIndex = currentIndex + 1;
+    const shouldLoadSecond = pageMode === 'double' && shouldLoadSecondPage(currentIndex, secondIndex);
+    
+    if (shouldLoadSecond) {
       if (secondIndex < book.pages.length) {
         secondCached = imagePool.getSync(secondIndex);
         state.secondUrl = secondCached?.url ?? null;
@@ -170,8 +234,8 @@ export function createImageStore() {
     }
     
     // 双页模式：异步加载第二张（独立于当前图片是否缓存）
-    if (pageMode === 'double' && !secondCached && lastLoadedIndex === currentIndex) {
-      const secondIndex = currentIndex + 1;
+    // 使用之前计算的 shouldLoadSecond 来决定是否加载
+    if (shouldLoadSecond && !secondCached && lastLoadedIndex === currentIndex) {
       if (secondIndex < book.pages.length) {
         try {
           const secondImage = await imagePool.get(secondIndex);

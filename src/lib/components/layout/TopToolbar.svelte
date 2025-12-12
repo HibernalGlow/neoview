@@ -382,13 +382,18 @@
 	let zoomPanelExpanded = $state(false);
 	let rotatePanelExpanded = $state(false);
 	let slideshowPanelExpanded = $state(false);
+	let hoverScrollPanelExpanded = $state(false);
 	let slideshowInterval = $state(slideshowStore.interval);
+	
+	// 悬停滚动速度（本地状态，用于滑块）
+	let hoverScrollSpeed = $derived(settings.image.hoverScrollSpeed ?? 2.0);
 
 	function closePanels() {
 		sortPanelExpanded = false;
 		zoomPanelExpanded = false;
 		rotatePanelExpanded = false;
 		slideshowPanelExpanded = false;
+		hoverScrollPanelExpanded = false;
 	}
 
 	function toggleSortPanel() {
@@ -413,6 +418,17 @@
 		const wasExpanded = slideshowPanelExpanded;
 		closePanels();
 		slideshowPanelExpanded = !wasExpanded;
+	}
+
+	function toggleHoverScrollPanel() {
+		const wasExpanded = hoverScrollPanelExpanded;
+		closePanels();
+		hoverScrollPanelExpanded = !wasExpanded;
+	}
+
+	function handleHoverScrollSpeedChange(value: number) {
+		const clamped = Math.max(0.5, Math.min(value, 10));
+		settingsManager.updateNestedSettings('image', { hoverScrollSpeed: clamped });
 	}
 
 	function handleSlideshowIntervalChange() {
@@ -945,16 +961,20 @@
 					<Tooltip.Root>
 						<Tooltip.Trigger>
 							<Button
-								variant={hoverScrollEnabled ? 'default' : 'ghost'}
+								variant={hoverScrollEnabled || hoverScrollPanelExpanded ? 'default' : 'ghost'}
 								size="icon"
 								class="h-8 w-8"
 								onclick={toggleHoverScroll}
+								oncontextmenu={(e) => {
+									e.preventDefault();
+									toggleHoverScrollPanel();
+								}}
 							>
 								<MousePointer2 class="h-4 w-4" />
 							</Button>
 						</Tooltip.Trigger>
 						<Tooltip.Content>
-							<p>{hoverScrollEnabled ? '悬停滚动：开' : '悬停滚动：关'}</p>
+							<p>{hoverScrollEnabled ? '悬停滚动：开' : '悬停滚动：关'}（右键设置）</p>
 						</Tooltip.Content>
 					</Tooltip.Root>
 
@@ -1336,6 +1356,40 @@
 							</Tooltip.Trigger>
 							<Tooltip.Content><p>始终右旋 90°</p></Tooltip.Content>
 						</Tooltip.Root>
+					</div>
+				</div>
+			{/if}
+
+			<!-- 悬停滚动设置展开面板 -->
+			{#if hoverScrollPanelExpanded && bookStore.currentBook}
+				<div class="flex flex-wrap items-center justify-center gap-2 border-t border-border/50 pt-1">
+					<span class="text-muted-foreground mr-2 text-xs">悬停滚动</span>
+					
+					<!-- 开关按钮 -->
+					<Button
+						variant={hoverScrollEnabled ? 'default' : 'outline'}
+						size="sm"
+						class="h-7 px-3"
+						onclick={toggleHoverScroll}
+					>
+						{hoverScrollEnabled ? '已启用' : '已禁用'}
+					</Button>
+
+					<Separator.Root orientation="vertical" class="mx-2 h-5" />
+
+					<!-- 滚动倍率 -->
+					<span class="text-muted-foreground text-xs">倍率</span>
+					<div class="flex items-center gap-1">
+						<input
+							type="range"
+							min="0.5"
+							max="10"
+							step="0.5"
+							value={hoverScrollSpeed}
+							oninput={(e) => handleHoverScrollSpeedChange(parseFloat((e.target as HTMLInputElement).value))}
+							class="h-1 w-20 cursor-pointer appearance-none rounded-full bg-muted"
+						/>
+						<span class="w-10 text-center text-xs">{hoverScrollSpeed.toFixed(1)}x</span>
 					</div>
 				</div>
 			{/if}
